@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(SolutionDir)ConfigurationDefs.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" Condition="'$(Platform)'=='Win32'">
+    <oesPlatform>Win32</oesPlatform>
+  </PropertyGroup>
+  <PropertyGroup Label="UserMacros" Condition="'$(Platform)'=='x86'">
+    <oesPlatform>Win32</oesPlatform>
+  </PropertyGroup>
+  <PropertyGroup Label="UserMacros" Condition="'$(Platform)'=='x64'">
+    <oesPlatform>Win64</oesPlatform>
+  </PropertyGroup>
+  <PropertyGroup Label="UserMacros" Condition="'$(oesPlatform)'==''">
+    <oesPlatform>$(Platform)</oesPlatform>
+  </PropertyGroup>
+
+  <!-- CxA – Configuration x Architecture -->
+  <PropertyGroup Label="UserMacros" Condition="'$(Configuration)'=='Debug'">
+    <oesBuildCxA>Mx64</oesBuildCxA>
+  </PropertyGroup>
+  <PropertyGroup Label="UserMacros" Condition="'$(Configuration)'=='Debug'">
+    <oesBuildCxA>Mx86</oesBuildCxA>
+  </PropertyGroup>
+
+  <PropertyGroup Label="UserMacros" Condition="'$(Configuration)|$(oesPlatform)'=='Debug|Win64'">
+    <oesBuildCxA>Dx64</oesBuildCxA>
+  </PropertyGroup>
+  <PropertyGroup Label="UserMacros" Condition="'$(Configuration)|$(oesPlatform)'=='Debug|Win32'">
+    <oesBuildCxA>Dx86</oesBuildCxA>
+  </PropertyGroup>
+
+  <PropertyGroup Label="UserMacros" Condition="'$(Configuration)|$(oesPlatform)'=='Release|Win64'">
+    <oesBuildCxA>Rx64</oesBuildCxA>
+  </PropertyGroup>
+  <PropertyGroup Label="UserMacros" Condition="'$(Configuration)|$(oesPlatform)'=='Release|Win32'">
+    <oesBuildCxA>Rx86</oesBuildCxA>
+  </PropertyGroup>
+
+  <PropertyGroup Label="UserMacros">
+    <oesBinRootDir>$(SolutionDir)..\bin\</oesBinRootDir>
+    <oesLibRootDir>$(SolutionDir)..\lib\</oesLibRootDir>
+    <oesBinDir>$(SolutionDir)..\bin\$(oesPlatform)\$(Configuration)\</oesBinDir>
+    <oesLibDir>$(SolutionDir)..\lib\$(oesPlatform)\$(Configuration)\</oesLibDir>
+    <oesIntDir>$(SolutionDir)..\intermediate\$(oesPlatform)\$(Configuration)\</oesIntDir>
+    <oes3rdParty>$(SolutionDir)3rdparty\</oes3rdParty>
+	<oesEngine>$(SolutionDir)engine\</oesEngine>
+  </PropertyGroup>
+
+  <PropertyGroup Label="OutputDirectories">
+    <OutDir Condition="'$(ConfigurationType)'=='Application'"   >$(oesBinDir)</OutDir>
+    <OutDir Condition="'$(ConfigurationType)'=='DynamicLibrary'">$(oesBinDir)</OutDir>
+    <OutDir Condition="'$(ConfigurationType)'=='StaticLibrary'" >$(oesLibDir)</OutDir>
+    <OutDir Condition="'$(ConfigurationType)'=='Makefile'"      >$(oesLibDir)</OutDir>
+
+    <IntDir>$(oesIntDir)$(ProjectName)\</IntDir>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(Configuration.StartsWith('Debug'  ))"> <UseDebugLibraries>true</UseDebugLibraries> </PropertyGroup>
+  <PropertyGroup Condition="$(Configuration.StartsWith('Mixed'  ))"> <UseDebugLibraries>false</UseDebugLibraries> </PropertyGroup>
+  <PropertyGroup Condition="$(Configuration.StartsWith('Release'))"> <UseDebugLibraries>false</UseDebugLibraries> </PropertyGroup>
+
+  <PropertyGroup Condition="$(Configuration.StartsWith('Debug'  ))"> <LinkIncremental>true</LinkIncremental> </PropertyGroup>
+  <PropertyGroup Condition="$(Configuration.StartsWith('Mixed'  ))"> <LinkIncremental>false</LinkIncremental> </PropertyGroup>
+  <PropertyGroup Condition="$(Configuration.StartsWith('Release'))"> <LinkIncremental>false</LinkIncremental> </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>
+        .;$(SolutionDir);$(oes3rdParty);$(oesEngine);$(ProjectDir);%(AdditionalIncludeDirectories)
+      </AdditionalIncludeDirectories>
+      <!-- MultiProcessorCompilation don't compatible with LinkIncremental and UseDebugLibraries -->
+      <MultiProcessorCompilation Condition="$(Configuration.StartsWith('Debug'  ))">false</MultiProcessorCompilation>
+      <MultiProcessorCompilation Condition="$(Configuration.StartsWith('Mixed'  ))">true</MultiProcessorCompilation>
+      <MultiProcessorCompilation Condition="$(Configuration.StartsWith('Release'))">true</MultiProcessorCompilation>
+      <!-- Optimization is automatically enabled when UseDebugLibraries == false. That's why we'll turn it off manually -->
+      <Optimization Condition="$(Configuration.StartsWith('Mixed'))">Disabled</Optimization>
+      <!--
+        4251 : class 'x' needs to have dll-interface to be used by clients of class 'y'
+        4275 : non dll-interface class 'x' used as base for dll-interface class 'y' 
+        4458 : declaration of 'x' hides class member
+      -->
+      <DisableSpecificWarnings>4251;4275;4458</DisableSpecificWarnings>
+      <!--
+        LUABIND_DYNAMIC_LINK : self-explanatory
+        MSVC;dSINGLE;WIN32 : for ODE
+        _SECURE_SCL=0;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE : temporary workaround for deprecated API
+      -->
+      <PreprocessorDefinitions>
+        LUABIND_DYNAMIC_LINK;
+        MSVC;
+        dSINGLE;
+        WIN32;
+        _SECURE_SCL=0;
+        _CRT_SECURE_NO_WARNINGS;
+	_CRT_SECURE_NO_DEPRECATE;
+	USE_TBB_PARALLEL;
+        %(PreprocessorDefinitions)
+      </PreprocessorDefinitions>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <WarningLevel>Level1</WarningLevel>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>
+        $(oesSdkDir)libraries;
+        $(oesSdkDir)libraries/$(PlatformShortName);
+        %(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <ImportLibrary>$(oesLibDir)$(TargetName).lib</ImportLibrary>
+      <LargeAddressAware>true</LargeAddressAware>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+    <Lib>
+      <AdditionalLibraryDirectories>
+        $(oesSdkDir)libraries;
+        $(oesSdkDir)libraries/$(PlatformShortName);
+        $(oesLibDir);
+        %(AdditionalLibraryDirectories)
+      </AdditionalLibraryDirectories>
+      <OutputFile>$(oesLibDir)$(TargetName).lib</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+</Project>

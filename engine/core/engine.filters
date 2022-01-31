@@ -1,0 +1,364 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="source">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="source\core">
+      <UniqueIdentifier>{3c320eb6-63d2-4b5e-bc55-3ef112787c9d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\designer">
+      <UniqueIdentifier>{1cf01918-0ca7-4581-b9b1-078d94c72048}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\common">
+      <UniqueIdentifier>{5f84f95d-d1c4-460f-ad3e-853c3516b1b4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="resources">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="source\designer\items">
+      <UniqueIdentifier>{bf0f188e-a510-4c91-9388-e40886815c6c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\common\form">
+      <UniqueIdentifier>{3c2a401f-794e-4fdc-b4cc-f76fcd86ec5c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\common\text">
+      <UniqueIdentifier>{079b5783-1f42-49e8-980c-047b63561f46}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\compiler">
+      <UniqueIdentifier>{cccaf807-7120-4487-acc2-ba0de9e763ff}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\compiler\ole">
+      <UniqueIdentifier>{e3cc776a-6709-4d63-9143-57c70eb6e764}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\module_manager">
+      <UniqueIdentifier>{72449c25-e240-4722-96e1-2b2e0dcc506c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\designer\window">
+      <UniqueIdentifier>{5cad9670-abe9-4eae-ab88-131f2c326585}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\compiler\spell">
+      <UniqueIdentifier>{a3974791-82a7-4cb7-979e-850071c9795e}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="stdafx.h">
+      <Filter>source\core</Filter>
+    </ClInclude>
+    <ClInclude Include="targetver.h">
+      <Filter>source\core</Filter>
+    </ClInclude>
+    <ClInclude Include="designer\designer.h">
+      <Filter>source\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="common\title.h">
+      <Filter>source\common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\splashscreen.h">
+      <Filter>source\common</Filter>
+    </ClInclude>
+    <ClInclude Include="main.h">
+      <Filter>source\core</Filter>
+    </ClInclude>
+    <ClInclude Include="designer\metadatatree.h">
+      <Filter>source\designer\items</Filter>
+    </ClInclude>
+    <ClInclude Include="common\app.h">
+      <Filter>source\common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\form\form.h">
+      <Filter>source\common\form</Filter>
+    </ClInclude>
+    <ClInclude Include="common\text\text.h">
+      <Filter>source\common\text</Filter>
+    </ClInclude>
+    <ClInclude Include="common\form\innerframe.h">
+      <Filter>source\common\form</Filter>
+    </ClInclude>
+    <ClInclude Include="common\form\window_buttons.h">
+      <Filter>source\common\form</Filter>
+    </ClInclude>
+    <ClInclude Include="common\form\visualeditor.h">
+      <Filter>source\common\form</Filter>
+    </ClInclude>
+    <ClInclude Include="common\utils.h">
+      <Filter>source\common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\viewform.h">
+      <Filter>source\common</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\Functions.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\Methods.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\OutToDebug.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ProcUnit.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\TranslateModule.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\Value.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueArray.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueComboBox.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueContext.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueControl.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueFileSystem.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueForm.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueGrid.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueGridExt.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueList.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueListBox.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueListControl.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueListLayers.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueMenu.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueMeta.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueMetaFile.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueModule.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueObject.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueOLE.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueSQL.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueText.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueToolBar.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ValueTreeCtrl.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ChooseValue.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\CompileModule.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\Definition.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\SPELL.h">
+      <Filter>source\compiler\spell</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ExtOleDispatchDriver.h">
+      <Filter>source\compiler\ole</Filter>
+    </ClInclude>
+    <ClInclude Include="module_manager\ModuleManager.h">
+      <Filter>source\module_manager</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\module_initialize.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\SystemFunctions.h">
+      <Filter>source\compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="designer\window\innerframeMDI.h">
+      <Filter>source\designer\window</Filter>
+    </ClInclude>
+    <ClInclude Include="designer\window\window_buttons.h">
+      <Filter>source\designer\window</Filter>
+    </ClInclude>
+    <ClInclude Include="module_manager\Metadata.h">
+      <Filter>source\module_manager</Filter>
+    </ClInclude>
+    <ClInclude Include="module_manager\MetaObject.h">
+      <Filter>source\module_manager</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="stdafx.cpp">
+      <Filter>source\core</Filter>
+    </ClCompile>
+    <ClCompile Include="designer\designer.cpp">
+      <Filter>source\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="common\title.cpp">
+      <Filter>source\common</Filter>
+    </ClCompile>
+    <ClCompile Include="common\splashscreen.cpp">
+      <Filter>source\common</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>source\core</Filter>
+    </ClCompile>
+    <ClCompile Include="designer\metadatatree.cpp">
+      <Filter>source\designer\items</Filter>
+    </ClCompile>
+    <ClCompile Include="common\app.cpp">
+      <Filter>source\common</Filter>
+    </ClCompile>
+    <ClCompile Include="common\form\form.cpp">
+      <Filter>source\common\form</Filter>
+    </ClCompile>
+    <ClCompile Include="common\text\text.cpp">
+      <Filter>source\common\text</Filter>
+    </ClCompile>
+    <ClCompile Include="common\form\innerframe.cpp">
+      <Filter>source\common\form</Filter>
+    </ClCompile>
+    <ClCompile Include="common\form\visualeditor.cpp">
+      <Filter>source\common\form</Filter>
+    </ClCompile>
+    <ClCompile Include="common\utils.cpp">
+      <Filter>source\common</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\Functions.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\Methods.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\OutToDebug.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ProcUnit.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\TranslateModule.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\Value.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueArray.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueComboBox.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueContext.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueControl.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueFileSystem.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueForm.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueGrid.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueGridExt.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueList.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueListBox.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueListLayers.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueMenu.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueMeta.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueMetaFile.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueModule.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueObject.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueOLE.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueSQL.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueText.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueToolBar.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ValueTreeCtrl.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\ChooseValue.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\CompileModule.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\SPELL.cpp">
+      <Filter>source\compiler\spell</Filter>
+    </ClCompile>
+    <ClCompile Include="module_manager\ModuleManager.cpp">
+      <Filter>source\module_manager</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\module_initialize.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\SystemFunctions.cpp">
+      <Filter>source\compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="designer\window\innerframeMDI.cpp">
+      <Filter>source\designer\window</Filter>
+    </ClCompile>
+    <ClCompile Include="module_manager\Metadata.cpp">
+      <Filter>source\module_manager</Filter>
+    </ClCompile>
+    <ClCompile Include="module_manager\MetaObject.cpp">
+      <Filter>source\module_manager</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="small.ico">
+      <Filter>resources</Filter>
+    </Image>
+  </ItemGroup>
+</Project>

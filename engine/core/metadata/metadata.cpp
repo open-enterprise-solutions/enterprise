@@ -1,0 +1,1447 @@
+////////////////////////////////////////////////////////////////////////////
+//	Author		: Maxim Kornienko
+//	Description : metadata 
+////////////////////////////////////////////////////////////////////////////
+
+#include "metadata.h"
+#include "metadata/objects/baseManager.h"
+#include "compiler/enumFactory.h"
+#include "compiler/systemObjects.h"
+#include "compiler/debugger/debugServer.h"
+#include "compiler/debugger/debugClient.h"
+#include "databaseLayer/databaseLayer.h"
+#include "databaseLayer/databaseErrorCodes.h"
+#include "appData.h"
+
+IConfigMetadata* IConfigMetadata::s_instance = NULL;
+
+IConfigMetadata* IConfigMetadata::Get()
+{
+	wxASSERT(s_instance);
+	return s_instance;
+}
+
+bool IConfigMetadata::Initialize(eRunMode mode)
+{
+	if (!s_instance) {
+		switch (mode)
+		{
+		case eRunMode::DESIGNER_MODE:
+			s_instance = new CConfigSaveMetadata(); 
+			break;
+		default: 
+			s_instance = new CConfigMetadata(); 
+			break;
+		}
+		return s_instance->CreateMetadata();
+	}
+
+	return false;
+}
+
+void IConfigMetadata::Destroy()
+{
+	debugServerDestroy();
+	debugClientDestroy();
+	enumFactoryDestroy();
+
+	wxDELETE(s_instance);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+bool IConfigMetadata::CreateMetadata()
+{
+	return databaseLayer->IsOpen();
+}
+
+wxString IConfigMetadata::GetConfigSaveTableName()
+{
+	return wxT("CONFIG_SAVE");
+}
+
+wxString IConfigMetadata::GetConfigTableName()
+{
+	return wxT("CONFIG");
+}
+
+wxString IConfigMetadata::GetCompileDataTableName()
+{
+	return wxT("COMPILE_DATA");
+}
+
+wxString IConfigMetadata::GetUsersTableName()
+{
+	return wxT("USERS");
+}
+
+wxString IConfigMetadata::GetActiveUsersTableName()
+{
+	return wxT("ACTIVE_USERS");
+}
+
+wxString IConfigMetadata::GetConfigParamsTableName()
+{
+	return wxT("CONFIG_PARAMS");
+}
+
+#include "utils/stringUtils.h"
+
+//**************************************************************************************************
+//*                                          IMetadata											   *
+//**************************************************************************************************
+
+//ID's 
+meta_identifier_t IMetadata::GenerateNewID()
+{
+	IMetaObject *commonObject = GetCommonMetaObject();
+	wxASSERT(commonObject);
+	meta_identifier_t id = commonObject->GetMetaID() + 1;
+	DoGenerateNewID(id, commonObject);
+	return id;
+}
+
+void IMetadata::DoGenerateNewID(meta_identifier_t &id, IMetaObject *top)
+{
+	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
+		IMetaObject *child = top->GetChild(idx);
+		wxASSERT(child);
+		meta_identifier_t newID = child->GetMetaID() + 1;
+		if (newID > id) {
+			id = newID;
+		}
+		DoGenerateNewID(id, child);
+	}
+}
+
+IMetaObject *IMetadata::CreateMetaObject(const CLASS_ID &clsid, IMetaObject *parentMetaObj)
+{
+	wxASSERT(clsid != 0);
+	wxString classType = CValue::GetNameObjectFromID(clsid);
+	wxASSERT(classType.Length() > 0);
+	IMetaObject *newMetaObject = CValue::CreateAndConvertObjectRef<IMetaObject>(classType);
+	wxASSERT(newMetaObject);
+
+	newMetaObject->SetClsid(clsid);
+	newMetaObject->SetName(GetNewName(clsid, parentMetaObj, newMetaObject->GetClassName()));
+
+	if (parentMetaObj) {
+		newMetaObject->SetParent(parentMetaObj);
+		parentMetaObj->AddChild(newMetaObject);
+	}
+	if (parentMetaObj) {
+		parentMetaObj->AppendChild(newMetaObject);
+	}
+
+	//always create metabject
+	bool m_bSuccess = newMetaObject->OnCreateMetaObject(this);
+
+	//first initialization
+	if (!m_bSuccess || !newMetaObject->OnLoadMetaObject(this)) {
+		if (parentMetaObj) {
+			parentMetaObj->RemoveChild(newMetaObject);
+		}
+		wxDELETE(newMetaObject);
+		return NULL;
+	}
+
+	//and running initialization
+	if (!m_bSuccess || !newMetaObject->OnRunMetaObject(metaNewObjectFlag)) {
+		if (parentMetaObj) {
+			parentMetaObj->RemoveChild(newMetaObject);
+		}
+		wxDELETE(newMetaObject);
+		return NULL;
+	}
+
+	Modify(true);
+
+	newMetaObject->ReadProperty();
+	newMetaObject->IncrRef();
+
+	return newMetaObject;
+}
+
+wxString IMetadata::GetNewName(const CLASS_ID &clsid, IMetaObject *metaParent, const wxString &prefix, bool forConstructor)
+{
+	unsigned int countRec = forConstructor ?
+		0 : 1;
+
+	wxString currPrefix = prefix.Length() > 0 ?
+		prefix : wxT("newItem");
+
+	wxString newName = forConstructor ?
+		wxString::Format("%s", currPrefix) :
+		wxString::Format("%s%d", currPrefix, countRec);
+
+	while (forConstructor ||
+		countRec > 0) {
+		bool foundedName = false;
+
+		if (metaParent) {
+			for (auto obj : metaParent->GetObjects(clsid)) {
+				if (obj->IsDeleted())
+					continue;
+				if (newName == obj->GetName()) {
+					foundedName = true; break;
+				}
+			}
+		}
+
+		if (!foundedName)
+			break;
+
+		newName = wxString::Format("%s%d", currPrefix, ++countRec);
+	}
+
+	return newName;
+}
+
+std::vector<IMetaObject*> IMetadata::GetMetaObjects(const CLASS_ID & clsid)
+{
+	std::vector<IMetaObject*> metaObjects;
+	DoGetMetaObjects(clsid, metaObjects, GetCommonMetaObject());
+	return metaObjects;
+}
+
+void IMetadata::DoGetMetaObjects(const CLASS_ID &clsid, std::vector<IMetaObject*> &metaObjects, IMetaObject *top)
+{
+	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
+		IMetaObject *child = top->GetChild(idx);
+		wxASSERT(child);
+		DoGetMetaObjects(clsid, metaObjects, child);
+	}
+
+	if (top->IsDeleted())
+		return;
+
+	if (clsid == top->GetClsid()) {
+		metaObjects.push_back(top);
+	}
+}
+
+IMetaObject *IMetadata::FindByName(const wxString &fullName)
+{
+	return DoFindByName(fullName, GetCommonMetaObject());
+}
+
+IMetaObject *IMetadata::DoFindByName(const wxString &fileName, IMetaObject *top)
+{
+	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
+		IMetaObject *child = top->GetChild(idx);
+		wxASSERT(child);
+		IMetaObject *foundedMeta = DoFindByName(fileName, child);
+		if (foundedMeta) {
+			return foundedMeta;
+		}
+	}
+
+	if (top->IsDeleted())
+		return NULL;
+
+	if (fileName == top->GetDocPath()) {
+		return top;
+	}
+
+	return NULL;
+}
+
+IMetaObject *IMetadata::GetMetaObject(meta_identifier_t id)
+{
+	return DoGetMetaObject(id, GetCommonMetaObject());
+}
+
+IMetaObject *IMetadata::DoGetMetaObject(meta_identifier_t id, IMetaObject *top)
+{
+	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
+		IMetaObject *child = top->GetChild(idx);
+		wxASSERT(child);
+		IMetaObject *foundedMeta = DoGetMetaObject(id, child);
+		if (foundedMeta) {
+			return foundedMeta;
+		}
+	}
+
+	if (id == top->GetMetaID()) {
+		return top;
+	}
+
+	return NULL;
+}
+
+bool IMetadata::RenameMetaObject(IMetaObject *pObj, const wxString &sNewName)
+{
+	bool foundedName = false;
+
+	for (auto obj : GetMetaObjects(pObj->GetClsid())) {
+		if (obj->GetParent() != pObj->GetParent()) {
+			continue;
+		}
+
+		if (sNewName == obj->GetName()) {
+			foundedName = true; break;
+		}
+	}
+
+	if (foundedName)
+		return false;
+
+	if (pObj->OnRenameMetaObject(sNewName)) {
+		Modify(true); return true;
+	}
+
+	return false;
+}
+
+void IMetadata::RemoveMetaObject(IMetaObject *obj, IMetaObject *parent)
+{
+	IMetaObject *objParent = parent ?
+		parent : obj->GetParent();
+
+	if (obj->OnCloseMetaObject()) {
+		if (obj->OnDeleteMetaObject()) {
+			for (auto child : obj->GetObjects()) {
+				RemoveMetaObject(child, obj);
+			}
+			obj->MarkAsDeleted();
+		}
+
+		obj->OnReloadMetaObject();
+		Modify(true);
+	}
+}
+
+#include "metadata/singleMetaTypes.h"
+
+CValue *IMetadata::CreateObjectRef(const wxString &className, CValue **aParams)
+{
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className](IObjectValueAbstract *singleObject) {
+		return StringUtils::CompareString(className, singleObject->GetClassName());
+	});
+
+	if (itFounded != m_aFactoryMetaObjects.end()) {
+		IObjectValueAbstract *singleObject = *itFounded;
+		wxASSERT(singleObject);
+		CValue* newObject = singleObject->CreateObject();
+		wxASSERT(newObject);
+		if (singleObject->GetObjectType() == eObjectType::eObjectType_object) {
+			if (aParams) {
+				if (!newObject->Init(aParams)) {
+					if (!appData->DesignerMode()) {
+						wxDELETE(newObject);
+						CTranslateError::Error(_("Error initializing object '%s'"), className.wc_str());
+					}
+				}
+			}
+			else {
+				if (!newObject->Init()) {
+					if (!appData->DesignerMode()) {
+						wxDELETE(newObject);
+						CTranslateError::Error(_("Error initializing object '%s'"), className.wc_str());
+					}
+				}
+			}
+		}
+		return newObject;
+	}
+
+	return CValue::CreateObjectRef(className, aParams);
+}
+
+void IMetadata::RegisterObject(const wxString &className, IMetaTypeObjectValueSingle *singleObject)
+{
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className](IMetaTypeObjectValueSingle *singleObject) {
+		return StringUtils::CompareString(className, singleObject->GetClassName());
+	});
+
+	if (itFounded != m_aFactoryMetaObjects.end()) {
+		CTranslateError::Error(_("Object '%s' is exist"), className.wc_str());
+	}
+
+	m_aFactoryMetaObjects.push_back(singleObject);
+}
+
+void IMetadata::UnRegisterObject(const wxString &className)
+{
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className](IMetaTypeObjectValueSingle *singleObject) {
+		return StringUtils::CompareString(className, singleObject->GetClassName());
+	});
+
+	IObjectValueAbstract *singleObject = *itFounded;
+	wxASSERT(singleObject);
+
+	if (itFounded != m_aFactoryMetaObjects.end()) {
+		m_aFactoryMetaObjects.erase(itFounded);
+	}
+
+	delete singleObject;
+}
+
+bool IMetadata::IsRegisterObject(const wxString &className)
+{
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className](IMetaTypeObjectValueSingle *singleObject) {
+		return StringUtils::CompareString(className, singleObject->GetClassName());
+	});
+
+	if (itFounded != m_aFactoryMetaObjects.end())
+		return true;
+
+	return CValue::IsRegisterObject(className);
+}
+
+bool IMetadata::IsRegisterObject(const wxString &className, eObjectType objectType)
+{
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className, objectType](IMetaTypeObjectValueSingle *singleObject) {
+		return StringUtils::CompareString(className, singleObject->GetClassName())
+			&& (objectType == singleObject->GetObjectType());
+	});
+
+	if (itFounded != m_aFactoryMetaObjects.end())
+		return true;
+
+	return CValue::IsRegisterObject(className, objectType);
+}
+
+bool IMetadata::IsRegisterObject(const wxString &className, eObjectType objectType, eMetaObjectType refType)
+{
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className, objectType, refType](IMetaTypeObjectValueSingle *singleObject) {
+		return StringUtils::CompareString(className, singleObject->GetClassName())
+			&& (objectType == singleObject->GetObjectType()
+				&& refType == singleObject->GetMetaType());
+	});
+
+	if (itFounded != m_aFactoryMetaObjects.end())
+		return true;
+
+	return CValue::IsRegisterObject(className);
+}
+
+CLASS_ID IMetadata::GetIDObjectFromString(const wxString &clsName)
+{
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsName](IObjectValueAbstract *singleObject) {
+		return StringUtils::CompareString(clsName, singleObject->GetClassName());
+	});
+
+	if (itFounded != m_aFactoryMetaObjects.end()) {
+		IObjectValueAbstract *singleObject = *itFounded;
+		wxASSERT(singleObject);
+		return singleObject->GetTypeID();
+	}
+
+	return CValue::GetIDObjectFromString(clsName);
+}
+
+wxString IMetadata::GetNameObjectFromID(const CLASS_ID &clsid, bool upper)
+{
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsid](IObjectValueAbstract *singleObject) {
+		return clsid == singleObject->GetTypeID();
+	});
+
+	if (itFounded != m_aFactoryMetaObjects.end()) {
+		IObjectValueAbstract *singleObject = *itFounded;
+		wxASSERT(singleObject);
+		return upper ? singleObject->GetClassName().Upper() : singleObject->GetClassName();
+	}
+
+	return CValue::GetNameObjectFromID(clsid, upper);
+}
+
+meta_identifier_t IMetadata::GetVTByID(const CLASS_ID &clsid)
+{
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsid](IObjectValueAbstract *singleObject) {
+		return clsid == singleObject->GetTypeID();
+	});
+
+	if (itFounded != m_aFactoryMetaObjects.end()) {
+		IMetaTypeObjectValueSingle *singleObject = *itFounded;
+		wxASSERT(singleObject);
+		IMetaObject *metaValue = singleObject->GetMetaObject();
+		wxASSERT(metaValue);
+		return metaValue->GetMetaID();
+	}
+
+	return CValue::GetVTByID(clsid);
+}
+
+CLASS_ID IMetadata::GetIDByVT(const meta_identifier_t &valueType, eMetaObjectType refType)
+{
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [valueType, refType](IMetaTypeObjectValueSingle *singleObject) {
+		IMetaObject *metaValue = singleObject->GetMetaObject();
+		wxASSERT(metaValue);
+		return refType == singleObject->GetMetaType() && valueType == metaValue->GetMetaID();
+	});
+
+	if (itFounded != m_aFactoryMetaObjects.end()) {
+		IObjectValueAbstract *singleObject = *itFounded;
+		wxASSERT(singleObject);
+		return singleObject->GetTypeID();
+	}
+
+	return CValue::GetIDByVT((eValueTypes &)valueType);
+}
+
+IMetaTypeObjectValueSingle *IMetadata::GetTypeObject(IMetaObject *metaValue, eMetaObjectType refType)
+{
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [metaValue, refType](IMetaTypeObjectValueSingle *singleObject) {
+		return refType == singleObject->GetMetaType() &&
+			metaValue == singleObject->GetMetaObject();
+	});
+
+	if (itFounded != m_aFactoryMetaObjects.end()) {
+		return *itFounded;
+	}
+
+	return NULL;
+}
+
+wxArrayString IMetadata::GetAvailableObjects(eMetaObjectType refType)
+{
+	wxArrayString classes;
+	for (auto singleObject : m_aFactoryMetaObjects) {
+		if (refType == singleObject->GetMetaType()) {
+			classes.push_back(singleObject->GetClassName());
+		}
+	}
+	classes.Sort();
+	return classes;
+}
+
+//**************************************************************************************************
+//*                                          ConfigMetadata										   *
+//**************************************************************************************************
+
+CConfigFileMetadata::CConfigFileMetadata(bool readOnly) : IConfigMetadata(readOnly),
+m_commonObject(NULL), m_version(version_oes_last)
+{
+	//create main metaObject
+	m_commonObject = new CMetaObject();
+	m_commonObject->SetClsid(g_metaCommonMetadataCLSID);
+
+	if (m_commonObject->OnCreateMetaObject(this)) {
+		m_moduleManager = new CModuleManager(this, m_commonObject);
+		m_moduleManager->IncrRef();
+
+		if (!m_commonObject->OnLoadMetaObject(this)) {
+			wxASSERT_MSG(false, "m_commonObject->OnLoadMetaObject() == false");
+		}
+	}
+
+	m_commonObject->ReadProperty();
+	m_commonObject->IncrRef();
+
+	wxASSERT(m_moduleManager);
+}
+
+CConfigFileMetadata::~CConfigFileMetadata()
+{
+	//clear data 
+	if (!ClearMetadata()) {
+		wxASSERT_MSG(false, "ClearMetadata() == false");
+	}
+
+	//delete module manager
+	wxDELETE(m_moduleManager);
+
+	//delete common metaObject
+	wxDELETE(m_commonObject);
+}
+
+void CConfigFileMetadata::DoGetTypelist(IMetaObject *top, OptionList *optionList) const
+{
+	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
+		IMetaObject *child = top->GetChild(idx);
+		wxASSERT(child);
+		DoGetTypelist(child, optionList);
+	}
+
+	if (top->IsDeleted())
+		return;
+
+	if (top->IsRefObject()) {
+		optionList->AddOption(
+			top->GetClassName() + wxT(".") + top->GetName(),
+			top->GetMetaID());
+	}
+}
+
+OptionList *CConfigFileMetadata::GetTypelist() const
+{
+	OptionList *optionList = new OptionList();
+	optionList->AddOption("bool", eValueTypes::TYPE_BOOLEAN);
+	optionList->AddOption("number", eValueTypes::TYPE_NUMBER);
+	optionList->AddOption("date", eValueTypes::TYPE_DATE);
+	optionList->AddOption("string", eValueTypes::TYPE_STRING);
+	DoGetTypelist(m_commonObject, optionList);
+	return optionList;
+}
+
+bool CConfigFileMetadata::RunMetadata()
+{
+	if (!m_commonObject->OnRunMetaObject(defaultFlag)) {
+		wxASSERT_MSG(false, "m_commonObject->OnRunMetaObject() == false");
+		return false;
+	}
+
+	for (auto obj : m_commonObject->GetObjects()) {
+		if (obj->IsDeleted())
+			continue;
+		if (!obj->OnRunMetaObject(defaultFlag))
+			return false;
+		if (!RunChildMetadata(obj))
+			return false;
+	}
+	if (m_moduleManager->CreateMainModule()) {
+		if (!m_moduleManager->StartMainModule())
+			return false;
+		return true;
+	}
+	return false;
+}
+
+bool CConfigFileMetadata::RunChildMetadata(IMetaObject *metaParent)
+{
+	for (auto obj : metaParent->GetObjects()) {
+		if (obj->IsDeleted())
+			continue;
+		if (!obj->OnRunMetaObject(defaultFlag))
+			return false;
+		if (!RunChildMetadata(obj))
+			return false;
+	}
+	return true;
+}
+
+bool CConfigFileMetadata::CloseMetadata(bool force)
+{
+	if (m_moduleManager->ExitMainModule(force)) {
+		if (!m_moduleManager->DestroyMainModule()) {
+			return false;
+		}
+		for (auto obj : m_commonObject->GetObjects()) {
+			if (obj->IsDeleted())
+				continue;
+			if (!obj->OnCloseMetaObject())
+				return false;
+			if (!CloseChildMetadata(obj, force))
+				return false;
+		}
+		if (!m_commonObject->OnCloseMetaObject()) {
+			wxASSERT_MSG(false, "m_commonObject->OnCloseMetaObject() == false");
+			return false;
+		}
+	}
+	return true;
+}
+
+bool CConfigFileMetadata::CloseChildMetadata(IMetaObject *metaParent, bool force)
+{
+	for (auto obj : metaParent->GetObjects()) {
+		if (obj->IsDeleted())
+			continue;
+		if (!obj->OnCloseMetaObject())
+			return false;
+		if (!CloseChildMetadata(obj, force))
+			return false;
+	}
+	return true;
+}
+
+bool CConfigFileMetadata::ClearMetadata()
+{
+	for (auto obj : m_commonObject->GetObjects()) {
+		if (!obj->OnDeleteMetaObject())
+			return false;
+		if (!ClearChildMetadata(obj))
+			return false;
+		m_commonObject->RemoveChild(obj);
+	}
+	if (!m_commonObject->OnDeleteMetaObject()) {
+		wxASSERT_MSG(false, "m_commonObject->OnDeleteMetaObject() == false");
+		return false;
+	}
+	return true;
+}
+
+bool CConfigFileMetadata::ClearChildMetadata(IMetaObject *metaParent)
+{
+	for (auto obj : metaParent->GetObjects()) {
+		if (!obj->OnDeleteMetaObject())
+			return false;
+		if (!ClearChildMetadata(obj))
+			return false;
+		metaParent->RemoveChild(obj);
+	}
+	metaParent->DecrRef();
+	return true;
+}
+
+#include <fstream>
+
+bool CConfigFileMetadata::LoadFromFile(const wxString &fileName)
+{
+	//close data 
+	if (!CloseMetadata(true)) {
+		wxASSERT_MSG(false, "CloseMetadata() == false");
+		return false;
+	}
+
+	//clear data 
+	if (!ClearMetadata()) {
+		wxASSERT_MSG(false, "ClearMetadata() == false");
+		return false;
+	}
+
+	std::ifstream in(fileName.ToStdWstring(), std::ios::in | std::ios::binary);
+
+	if (!in.is_open())
+		return false;
+
+	//go to end
+	in.seekg(0, in.end);
+	//get size of file
+	std::streamsize fsize = in.tellg();
+	//go to beginning
+	in.seekg(0, in.beg);
+
+	wxMemoryBuffer tempBuffer(fsize);
+	in.read((char *)tempBuffer.GetWriteBuf(fsize), fsize);
+
+	CMemoryReader readerData(tempBuffer.GetData(), tempBuffer.GetBufSize());
+
+	if (readerData.eof())
+		return false;
+
+	in.close();
+
+	//Save header info 
+	if (!LoadHeader(readerData))
+		return false;
+
+	//loading common metadata and child item
+	if (!LoadCommonMetadata(g_metaCommonMetadataCLSID, readerData)) {
+		//clear data 
+		if (!ClearMetadata()) {
+			wxASSERT_MSG(false, "ClearMetadata() == false");
+		}
+		return false;
+	}
+
+	return RunMetadata();
+}
+
+bool CConfigFileMetadata::LoadHeader(CMemoryReader &readerData)
+{
+	CMemoryReader *readerMemory = readerData.open_chunk(eHeaderBlock);
+
+	if (!readerMemory)
+		return false;
+
+	u64 metaSign = readerMemory->r_u64();
+
+	if (metaSign != sign_metadata)
+		return false;
+
+	m_version = readerMemory->r_u32();
+
+	wxString metaGuid;
+	readerMemory->r_stringZ(metaGuid);
+
+	readerMemory->close();
+	return true;
+}
+
+bool CConfigFileMetadata::LoadCommonMetadata(const CLASS_ID &clsid, CMemoryReader &readerData)
+{
+	CMemoryReader *readerMemory = readerData.open_chunk(clsid);
+
+	if (!readerMemory)
+		return false;
+
+	u64 meta_id = 0;
+	CMemoryReader *readerMetaMemory = readerMemory->open_chunk_iterator(meta_id);
+
+	if (!readerMetaMemory)
+		return true;
+
+	std::shared_ptr <CMemoryReader>readerDataMemory(readerMetaMemory->open_chunk(eDataBlock));
+
+	m_commonObject->SetReadOnly(!m_metaReadOnly);
+
+	if (!m_commonObject->LoadMetaObject(this, *readerDataMemory))
+		return false;
+
+	std::shared_ptr <CMemoryReader> readerChildMemory(readerMetaMemory->open_chunk(eChildBlock));
+
+	if (readerChildMemory) {
+		if (!LoadMetadata(clsid, *readerChildMemory, m_commonObject))
+			return false;
+	}
+
+	return true;
+}
+
+bool CConfigFileMetadata::LoadMetadata(const CLASS_ID &, CMemoryReader &readerData, IMetaObject *metaParent)
+{
+	CLASS_ID clsid = 0;
+	CMemoryReader *prevReaderMemory = NULL;
+
+	while (!readerData.eof())
+	{
+		CMemoryReader *readerMemory = readerData.open_chunk_iterator(clsid, &*prevReaderMemory);
+
+		if (!readerMemory)
+			break;
+
+		u64 meta_id = 0;
+		CMemoryReader *prevReaderMetaMemory = NULL;
+
+		while (!readerMemory->eof())
+		{
+			CMemoryReader *readerMetaMemory = readerMemory->open_chunk_iterator(meta_id, &*prevReaderMetaMemory);
+
+			if (!readerMetaMemory)
+				break;
+
+			wxASSERT(clsid != 0);
+			wxString classType = CValue::GetNameObjectFromID(clsid);
+			wxASSERT(classType.Length() > 0);
+			IMetaObject *newMetaObject = CValue::CreateAndConvertObjectRef<IMetaObject>(classType);
+			wxASSERT(newMetaObject);
+
+			newMetaObject->SetClsid(clsid);
+
+			if (metaParent) {
+				newMetaObject->SetParent(metaParent);
+				metaParent->AddChild(newMetaObject);
+			}
+
+			newMetaObject->SetReadOnly(!m_metaReadOnly);
+
+			if (metaParent) {
+				metaParent->AppendChild(newMetaObject);
+			}
+
+			std::shared_ptr <CMemoryReader>readerDataMemory(readerMetaMemory->open_chunk(eDataBlock));
+
+			if (!newMetaObject->LoadMetaObject(this, *readerDataMemory))
+				return false;
+
+			newMetaObject->ReadProperty();
+			newMetaObject->IncrRef();
+
+			std::shared_ptr <CMemoryReader> readerChildMemory(readerMetaMemory->open_chunk(eChildBlock));
+
+			if (readerChildMemory) {
+				if (!LoadChildMetadata(clsid, *readerChildMemory, newMetaObject))
+					return false;
+			}
+
+			prevReaderMetaMemory = readerMetaMemory;
+		}
+
+		prevReaderMemory = readerMemory;
+	};
+
+	return true;
+}
+
+bool CConfigFileMetadata::LoadChildMetadata(const CLASS_ID &, CMemoryReader &readerData, IMetaObject *metaParent)
+{
+	CLASS_ID clsid = 0;
+	CMemoryReader *prevReaderMemory = NULL;
+
+	while (!readerData.eof())
+	{
+		CMemoryReader *readerMemory = readerData.open_chunk_iterator(clsid, &*prevReaderMemory);
+
+		if (!readerMemory)
+			break;
+
+		u64 meta_id = 0;
+		CMemoryReader *prevReaderMetaMemory = NULL;
+
+		while (!readerData.eof())
+		{
+			CMemoryReader *readerMetaMemory = readerMemory->open_chunk_iterator(meta_id, &*prevReaderMetaMemory);
+
+			if (!readerMetaMemory)
+				break;
+
+			wxASSERT(clsid != 0);
+			wxString classType = CValue::GetNameObjectFromID(clsid);
+			wxASSERT(classType.Length() > 0);
+			IMetaObject *newMetaObject = CValue::CreateAndConvertObjectRef<IMetaObject>(classType);
+			wxASSERT(newMetaObject);
+
+			newMetaObject->SetClsid(clsid);
+			newMetaObject->SetReadOnly(!m_metaReadOnly);
+
+			if (metaParent) {
+				newMetaObject->SetParent(metaParent);
+				metaParent->AddChild(newMetaObject);
+			}
+
+			if (metaParent) {
+				metaParent->AppendChild(newMetaObject);
+			}
+
+			std::shared_ptr <CMemoryReader>readerDataMemory(readerMetaMemory->open_chunk(eDataBlock));
+			if (!newMetaObject->LoadMetaObject(this, *readerDataMemory))
+				return false;
+
+			newMetaObject->ReadProperty();
+			newMetaObject->IncrRef();
+
+			std::shared_ptr <CMemoryReader> readerChildMemory(readerMetaMemory->open_chunk(eChildBlock));
+			if (readerChildMemory) {
+				if (!LoadChildMetadata(clsid, *readerChildMemory, newMetaObject))
+					return false;
+			}
+
+			prevReaderMetaMemory = readerMetaMemory;
+		}
+
+		prevReaderMemory = readerMemory;
+	}
+
+	return true;
+}
+
+//**************************************************************************************************
+//*                                          ConfigSaveMetadata                                    *
+//**************************************************************************************************
+
+CConfigMetadata::CConfigMetadata(bool readOnly) : CConfigFileMetadata(readOnly)
+{
+	m_sConfigPath = wxT("sys.database");
+	m_sDefaultSource = GetConfigTableName();
+}
+
+#include "email/utils/wxmd5.hpp"
+#include <wx/base64.h>
+
+bool CConfigMetadata::LoadMetadata(int flags)
+{
+	if (!databaseLayer->IsOpen()) {
+		return false;
+	}
+
+	// load config params
+	DatabaseResultSet *resultConfigParams =
+		databaseLayer->RunQueryWithResults("SELECT guid, name FROM %s; ", GetConfigParamsTableName());
+
+	if (!resultConfigParams)
+		return false;
+
+	//load metadata from DB 
+	while (resultConfigParams->Next()) {
+		if (resultConfigParams->GetResultString(wxT("name")) == wxT("configuration_id")) {
+			m_metaGuid = resultConfigParams->GetResultString(wxT("guid"));
+		}
+	}
+
+	resultConfigParams->Close();
+
+	if ((flags & onlyLoadFlag) == 0) {
+		//Initialize debugger
+		if (!appData->DesignerMode()) {
+			debugServerInit();
+		}
+		else {
+			debugClientInit();
+		}
+	}
+
+	// load config
+	DatabaseResultSet *resultConfig =
+		databaseLayer->RunQueryWithResults("SELECT binaryData, dataSize FROM %s; ", m_sDefaultSource);
+
+	if (!resultConfig)
+		return false;
+
+	//load metadata from DB 
+	if (resultConfig->Next()) {
+
+		//clear data 
+		if (!ClearMetadata()) {
+			wxASSERT_MSG(false, "ClearMetadata() == false");
+			return false;
+		}
+
+		wxMemoryBuffer binaryData;
+		resultConfig->GetResultBlob(wxT("binaryData"), binaryData);
+		CMemoryReader metaReader(binaryData.GetData(), resultConfig->GetResultInt(wxT("dataSize")));
+
+		//check is file empty
+		if (metaReader.eof())
+			return false;
+
+		//check metadata 
+		if (!LoadHeader(metaReader))
+			return false;
+
+		//load metadata 
+		if (!LoadCommonMetadata(g_metaCommonMetadataCLSID, metaReader))
+			return false;
+
+		m_md5Hash = wxMD5::ComputeMd5(
+			wxBase64Encode(binaryData.GetData(), binaryData.GetDataLen())
+		);
+	}
+
+	resultConfig->Close();
+
+	if ((flags & onlyLoadFlag) == 0) {
+		return RunMetadata();
+	}
+
+	return true;
+}
+
+//**************************************************************************************************
+//*                                          ConfigSaveMetadata                                    *
+//**************************************************************************************************
+
+CConfigSaveMetadata::CConfigSaveMetadata(bool readOnly) : CConfigMetadata(readOnly),
+m_metaConfig(new CConfigMetadata(readOnly)), m_bConfigSave(true)
+{
+	m_sDefaultSource = GetConfigSaveTableName();
+}
+
+CConfigSaveMetadata::~CConfigSaveMetadata() { wxDELETE(m_metaConfig); }
+
+#include "objects/constant.h"
+
+bool CConfigSaveMetadata::CreateMetadata()
+{
+	if (!databaseLayer->IsOpen())
+		return false;
+
+	//new database
+	if (!databaseLayer->TableExists(GetConfigParamsTableName())) {
+		m_metaGuid = Guid::newGuid();
+	}
+
+	//db for designer 
+	if (!databaseLayer->TableExists(GetConfigSaveTableName())) {
+		databaseLayer->RunQuery("CREATE TABLE %s ("
+			"fileName VARCHAR(128) NOT NULL PRIMARY KEY,"
+			"attributes INTEGER,"
+			"dataSize INTEGER NOT NULL," 			//binary medatadata
+			"binaryData BLOB NOT NULL);", IConfigMetadata::GetConfigSaveTableName());         	//size of binary medatadata
+
+		databaseLayer->RunQuery("CREATE INDEX %s_INDEX ON %s ("
+			"fileName);", IConfigMetadata::GetConfigSaveTableName(), IConfigMetadata::GetConfigSaveTableName());
+	}
+
+	//db for enterprise - TODO
+	if (!databaseLayer->TableExists(GetConfigTableName())) {
+		databaseLayer->RunQuery("CREATE TABLE %s ("
+			"fileName VARCHAR(128) NOT NULL PRIMARY KEY,"
+			"attributes INTEGER,"
+			"dataSize INTEGER NOT NULL," 			//binary medatadata
+			"binaryData BLOB NOT NULL);", GetConfigTableName());         	//size of binary medatadata
+
+		databaseLayer->RunQuery("CREATE INDEX %s_INDEX ON %s ("
+			"fileName);", GetConfigTableName(), GetConfigTableName());
+	}
+
+	//compile data for better performance - TODO
+	if (!databaseLayer->TableExists(GetCompileDataTableName())) {
+		databaseLayer->RunQuery("CREATE TABLE %s ("
+			"fileName VARCHAR(128) NOT NULL,"
+			"dataSize INTEGER NOT NULL," 			//binary medatadata
+			"binaryData BLOB NOT NULL);", GetCompileDataTableName());         	//size of binary medatadata
+
+		databaseLayer->RunQuery("CREATE INDEX %s_INDEX ON %s ("
+			"fileName);", GetCompileDataTableName(), GetCompileDataTableName());
+	}
+
+	//create users or nothin 
+	if (!databaseLayer->TableExists(GetUsersTableName())) {
+		databaseLayer->RunQuery("CREATE TABLE %s ("
+			"guid              VARCHAR(36)   NOT NULL PRIMARY KEY,"
+			"name              VARCHAR(64)  NOT NULL,"
+			"fullName          VARCHAR(128)  NOT NULL,"
+			"changed		   TIMESTAMP  NOT NULL,"
+			"dataSize          INTEGER       NOT NULL,"
+			"binaryData        BLOB      NOT NULL);", GetUsersTableName());
+
+		databaseLayer->RunQuery("CREATE INDEX %s_INDEX ON %s ("
+			"guid,"
+			"name);", GetUsersTableName(), GetUsersTableName());
+	}
+
+	// active users
+	if (!databaseLayer->TableExists(GetActiveUsersTableName())) {
+		databaseLayer->RunQuery("CREATE TABLE %s ("
+			"session              VARCHAR(36)   NOT NULL PRIMARY KEY,"
+			"userName             VARCHAR(64)  NOT NULL,"
+			"application	   INTEGER  NOT NULL,"
+			"started		   TIMESTAMP  NOT NULL,"
+			"lastActive		   TIMESTAMP  NOT NULL,"
+			"computer          VARCHAR(128) NOT NULL);", GetActiveUsersTableName());
+
+		databaseLayer->RunQuery("CREATE INDEX %s_INDEX ON %s ("
+			"session,"
+			"userName);", GetActiveUsersTableName(), GetActiveUsersTableName());
+	}
+
+	//config params 
+	if (!databaseLayer->TableExists(GetConfigParamsTableName())) {
+		int retCode = databaseLayer->RunQuery("CREATE TABLE %s ("
+			"flags			   INTEGER       DEFAULT 0 NOT NULL,"
+			"guid              VARCHAR(36)   NOT NULL PRIMARY KEY,"
+			"name              VARCHAR(64)  NOT NULL,"
+			"dataSize          INTEGER    DEFAULT 0 NOT NULL,"
+			"binaryData        BLOB);", GetConfigParamsTableName());
+
+		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR) {
+			return false;
+		}
+		retCode = databaseLayer->RunQuery("INSERT INTO %s (guid, name) VALUES ('%s', '%s');", GetConfigParamsTableName(), m_metaGuid.str(), wxT("configuration_id"));
+		
+		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR) {
+			return false;
+		}
+	}
+
+	//create constat 
+	wxString constName =
+		CMetaConstantObject::GetTableNameDB();
+	if (!databaseLayer->TableExists(constName)) {
+		int retCode = databaseLayer->RunQuery("CREATE TABLE %s (RECORD_KEY CHAR DEFAULT '6');", constName);
+		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR) {
+			return false;
+		}
+		retCode = databaseLayer->RunQuery("INSERT INTO %s (RECORD_KEY) VALUES ('6');", constName);
+		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR) {
+			return false;
+		}
+	}
+
+	return databaseLayer->IsOpen();
+}
+
+bool CConfigSaveMetadata::SaveMetadata(int flags)
+{
+#if defined(_USE_SAVE_METADATA_IN_TRANSACTION)
+	//begin transaction 
+	databaseLayer->BeginTransaction();
+#endif 
+
+	//remove old tables (if need)
+	if ((flags & saveConfigFlag) != 0) {
+
+		//Delete common object
+		if (!DeleteCommonMetadata(g_metaCommonMetadataCLSID)) {
+#if defined(_USE_SAVE_METADATA_IN_TRANSACTION)
+			databaseLayer->RollBack(); return false;
+#else 
+			return false;
+#endif
+		}
+
+		IMetaObject *commonObject = m_metaConfig->GetCommonMetaObject();
+		wxASSERT(commonObject);
+
+		for (auto obj : commonObject->GetObjects()) {
+			IMetaObject *foundedMeta =
+				m_commonObject->FindByName(obj->GetDocPath());
+			if (foundedMeta == NULL) {
+				bool ret = obj->DeleteMetaTable(this);
+				if (!ret) {
+#if defined(_USE_SAVE_METADATA_IN_TRANSACTION)
+					databaseLayer->RollBack(); return false;
+#else 
+					return false;
+#endif
+				}
+			}
+		}
+
+		for (auto obj : m_commonObject->GetObjects()) {
+			IMetaObject *foundedMeta =
+				commonObject->FindByName(obj->GetDocPath());
+			wxASSERT(obj);
+			bool ret = true;
+			if (foundedMeta == NULL) {
+				ret = obj->CreateMetaTable(m_metaConfig);
+			}
+			else {
+				ret = obj->UpdateMetaTable(m_metaConfig, foundedMeta);
+			}
+
+			if (!ret) {
+#if defined(_USE_SAVE_METADATA_IN_TRANSACTION)
+				databaseLayer->RollBack(); return false;
+#else 
+				return false;
+#endif
+			}
+		}
+	}
+
+	//common data
+	CMemoryWriter writterData;
+
+	//Save header info 
+	if (!SaveHeader(writterData)) {
+#if defined(_USE_SAVE_METADATA_IN_TRANSACTION)
+		databaseLayer->RollBack(); return false;
+#else 
+		return false;
+#endif
+	}
+
+	//Save common object
+	if (!SaveCommonMetadata(g_metaCommonMetadataCLSID, writterData, flags)) {
+#if defined(_USE_SAVE_METADATA_IN_TRANSACTION)
+		databaseLayer->RollBack(); return false;
+#else 
+		return false;
+#endif
+	}
+
+	PreparedStatement *prepStatement =
+		databaseLayer->PrepareStatement("UPDATE OR INSERT INTO %s (fileName, dataSize, binaryData) VALUES(?, ?, ?) MATCHING (fileName); ", GetConfigSaveTableName());
+
+	if (!prepStatement)
+		return false;
+
+	prepStatement->SetParamString(1, m_sConfigPath);
+	prepStatement->SetParamInt(2, writterData.size());
+	prepStatement->SetParamBlob(3, writterData.pointer(), writterData.size());
+
+	if (prepStatement->RunQuery() == DATABASE_LAYER_QUERY_RESULT_ERROR) {
+#if defined(_USE_SAVE_METADATA_IN_TRANSACTION)
+		databaseLayer->RollBack();
+#else 
+		return false;
+#endif
+	}
+
+	m_md5Hash = wxMD5::ComputeMd5(
+		wxBase64Encode(writterData.pointer(), writterData.size())
+	);
+
+	m_bConfigSave = (flags & saveConfigFlag) != 0;
+
+	if (!databaseLayer->CloseStatement(prepStatement)) {
+#if defined(_USE_SAVE_METADATA_IN_TRANSACTION)
+		databaseLayer->RollBack();
+#else 
+		return false;
+#endif
+	}
+
+	Modify(false);
+
+	if ((flags & saveConfigFlag) != 0) {
+
+		bool hasError =
+			databaseLayer->RunQuery("DELETE FROM %s;", GetConfigTableName()) == DATABASE_LAYER_QUERY_RESULT_ERROR;
+		hasError = hasError ||
+			databaseLayer->RunQuery("INSERT INTO %s SELECT * FROM %s;", GetConfigTableName(), GetConfigSaveTableName()) == DATABASE_LAYER_QUERY_RESULT_ERROR;
+
+		if (hasError)
+			return false;
+
+		if (!m_metaConfig->LoadMetadata(onlyLoadFlag)) {
+#if defined(_USE_SAVE_METADATA_IN_TRANSACTION)
+			databaseLayer->RollBack();
+#else 
+			return false;
+#endif
+		}
+	}
+	else {
+		Modify(true);
+	}
+
+#if defined(_USE_SAVE_METADATA_IN_TRANSACTION)
+	databaseLayer->Commit();
+#endif 
+
+	return true;
+}
+
+bool CConfigSaveMetadata::RoolbackToConfigDatabase()
+{
+	bool hasError =
+		databaseLayer->RunQuery("DELETE FROM %s;", GetConfigSaveTableName()) == DATABASE_LAYER_QUERY_RESULT_ERROR;
+	hasError = hasError ||
+		databaseLayer->RunQuery("INSERT INTO %s SELECT * FROM %s;", GetConfigSaveTableName(), GetConfigTableName()) == DATABASE_LAYER_QUERY_RESULT_ERROR;
+
+	if (hasError)
+		return false;
+
+	//close data 
+	if (!CloseMetadata(true)) {
+		wxASSERT_MSG(false, "CloseMetadata() == false");
+		return false;
+	}
+
+	//clear data 
+	if (!ClearMetadata()) {
+		wxASSERT_MSG(false, "ClearMetadata() == false");
+		return false;
+	}
+
+	return LoadMetadata();
+}
+
+bool CConfigSaveMetadata::SaveToFile(const wxString &fileName)
+{
+	//common data
+	CMemoryWriter writterData;
+
+	//Save header info 
+	if (!SaveHeader(writterData))
+		return false;
+
+	//Save common object
+	if (!SaveCommonMetadata(g_metaCommonMetadataCLSID, writterData, saveToFileFlag))
+		return false;
+
+	std::ofstream datafile;
+	datafile.open(fileName.ToStdWstring(), std::ios::binary);
+	datafile.write(reinterpret_cast <char *> (writterData.pointer()), writterData.size());
+	datafile.close();
+
+	return true;
+}
+
+bool CConfigSaveMetadata::SaveHeader(CMemoryWriter &writterData)
+{
+	CMemoryWriter writterMemory;
+	writterMemory.w_u64(sign_metadata); //sign 
+	writterMemory.w_u32(m_version); // version 1 - DEFAULT
+	writterMemory.w_stringZ(m_commonObject->GetDocPath()); //guid conf 
+
+	writterData.w_chunk(eHeaderBlock, writterMemory.pointer(), writterMemory.size());
+	return true;
+}
+
+bool CConfigSaveMetadata::SaveCommonMetadata(const CLASS_ID &clsid, CMemoryWriter &writterData, int flags)
+{
+	//Save common object
+	CMemoryWriter writterMemory;
+
+	CMemoryWriter writterMetaMemory;
+	CMemoryWriter writterDataMemory;
+
+	if (!m_commonObject->SaveMetaObject(this, writterDataMemory, flags)) {
+		return false;
+	}
+
+	writterMetaMemory.w_chunk(eDataBlock, writterDataMemory.pointer(), writterDataMemory.size());
+
+	CMemoryWriter writterChildMemory;
+
+	if (!SaveMetadata(clsid, writterChildMemory, flags))
+		return false;
+
+	writterMetaMemory.w_chunk(eChildBlock, writterChildMemory.pointer(), writterChildMemory.size());
+	writterMemory.w_chunk(m_commonObject->GetMetaID(), writterMetaMemory.pointer(), writterMetaMemory.size());
+
+	writterData.w_chunk(clsid, writterMemory.pointer(), writterMemory.size());
+	return true;
+}
+
+bool CConfigSaveMetadata::SaveMetadata(const CLASS_ID &, CMemoryWriter &writterData, int flags)
+{
+	bool saveToFile = (flags & saveToFileFlag) != 0;
+
+	for (auto obj : m_commonObject->GetObjects()) {
+		if (saveToFile && obj->IsDeleted())
+			continue;
+		CMemoryWriter writterMemory;
+		CMemoryWriter writterMetaMemory;
+		CMemoryWriter writterDataMemory;
+		if (!obj->SaveMetaObject(this, writterDataMemory, flags)) {
+			return false;
+		}
+		writterMetaMemory.w_chunk(eDataBlock, writterDataMemory.pointer(), writterDataMemory.size());
+		CMemoryWriter writterChildMemory;
+		if (!SaveChildMetadata(obj->GetClsid(), writterChildMemory, obj, flags)) {
+			return false;
+		}
+		writterMetaMemory.w_chunk(eChildBlock, writterChildMemory.pointer(), writterChildMemory.size());
+		writterMemory.w_chunk(obj->GetMetaID(), writterMetaMemory.pointer(), writterMetaMemory.size());
+		writterData.w_chunk(obj->GetClsid(), writterMemory.pointer(), writterMemory.size());
+	}
+
+	return true;
+}
+
+bool CConfigSaveMetadata::SaveChildMetadata(const CLASS_ID &, CMemoryWriter &writterData, IMetaObject *metaParent, int flags)
+{
+	bool saveToFile = (flags & saveToFileFlag) != 0;
+
+	for (auto obj : metaParent->GetObjects()) {
+		if (saveToFile && obj->IsDeleted())
+			continue;
+		CMemoryWriter writterMemory;
+		CMemoryWriter writterMetaMemory;
+		CMemoryWriter writterDataMemory;
+		if (!obj->SaveMetaObject(this, writterDataMemory, flags)) {
+			return false;
+		}
+		writterMetaMemory.w_chunk(eDataBlock, writterDataMemory.pointer(), writterDataMemory.size());
+		CMemoryWriter writterChildMemory;
+		if (!SaveChildMetadata(obj->GetClsid(), writterChildMemory, obj, flags)) {
+			return false;
+		}
+		writterMetaMemory.w_chunk(eChildBlock, writterChildMemory.pointer(), writterChildMemory.size());
+		writterMemory.w_chunk(obj->GetMetaID(), writterMetaMemory.pointer(), writterMetaMemory.size());
+		writterData.w_chunk(obj->GetClsid(), writterMemory.pointer(), writterMemory.size());
+	}
+
+	return true;
+}
+
+bool CConfigSaveMetadata::DeleteCommonMetadata(const CLASS_ID &clsid)
+{
+	return DeleteMetadata(clsid);
+}
+
+bool CConfigSaveMetadata::DeleteMetadata(const CLASS_ID &clsid)
+{
+	for (auto obj : m_commonObject->GetObjects()) {
+		if (obj->IsDeleted()) {
+			if (!obj->DeleteMetaObject(this)) {
+				return false;
+			}
+		}
+		if (!DeleteChildMetadata(obj->GetClsid(), obj)) {
+			return false;
+		}
+		if (obj->IsDeleted()) {
+			m_commonObject->RemoveChild(obj);
+			obj->DecrRef();
+		}
+	}
+
+	return true;
+}
+
+bool CConfigSaveMetadata::DeleteChildMetadata(const CLASS_ID &clsid, IMetaObject *metaParent)
+{
+	for (auto obj : metaParent->GetObjects()) {
+		if (obj->IsDeleted()) {
+			if (!obj->DeleteMetaObject(this)) {
+				return false;
+			}
+		}
+		if (!DeleteChildMetadata(obj->GetClsid(), obj)) {
+			return false;
+		}
+		if (obj->IsDeleted()) {
+			metaParent->RemoveChild(obj);
+			obj->DecrRef();
+		}
+	}
+
+	return true;
+}

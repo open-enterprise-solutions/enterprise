@@ -1,0 +1,8 @@
+// Файлы указаний помогают среде IDE Visual Studio интерпретировать идентификаторы Visual C++
+// (например, имена функций и макросов).
+// Дополнительные сведения: https://go.microsoft.com/fwlink/?linkid=865984
+#define wxPG_IMPLEMENT_PROPERTY_CLASS(NAME, UPCLASS, EDITOR) wxIMPLEMENT_DYNAMIC_CLASS(NAME, UPCLASS); wxPG_IMPLEMENT_PROPERTY_CLASS_PLAIN(NAME, EDITOR)
+// Файлы указаний помогают среде IDE Visual Studio интерпретировать идентификаторы Visual C++
+// (например, имена функций и макросов).
+// Дополнительные сведения: https://go.microsoft.com/fwlink/?linkid=865984
+#define wxPG_IMPLEMENT_PROPERTY_CLASS(NAME, UPCLASS, EDITOR) wxIMPLEMENT_DYNAMIC_CLASS(NAME, UPCLASS); wxPG_IMPLEMENT_PROPERTY_CLASS_PLAIN(NAME, EDITOR)
