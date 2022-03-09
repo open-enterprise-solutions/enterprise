@@ -27,7 +27,7 @@ bool IConfigMetadata::Initialize(eRunMode mode)
 		switch (mode)
 		{
 		case eRunMode::DESIGNER_MODE:
-			s_instance = new CConfigSaveMetadata(); 
+			s_instance = new CConfigStorageMetadata(); 
 			break;
 		default: 
 			s_instance = new CConfigMetadata(); 
@@ -1002,17 +1002,17 @@ bool CConfigMetadata::LoadMetadata(int flags)
 //*                                          ConfigSaveMetadata                                    *
 //**************************************************************************************************
 
-CConfigSaveMetadata::CConfigSaveMetadata(bool readOnly) : CConfigMetadata(readOnly),
+CConfigStorageMetadata::CConfigStorageMetadata(bool readOnly) : CConfigMetadata(readOnly),
 m_metaConfig(new CConfigMetadata(readOnly)), m_bConfigSave(true)
 {
 	m_sDefaultSource = GetConfigSaveTableName();
 }
 
-CConfigSaveMetadata::~CConfigSaveMetadata() { wxDELETE(m_metaConfig); }
+CConfigStorageMetadata::~CConfigStorageMetadata() { wxDELETE(m_metaConfig); }
 
 #include "objects/constant.h"
 
-bool CConfigSaveMetadata::CreateMetadata()
+bool CConfigStorageMetadata::CreateMetadata()
 {
 	if (!databaseLayer->IsOpen())
 		return false;
@@ -1123,7 +1123,7 @@ bool CConfigSaveMetadata::CreateMetadata()
 	return databaseLayer->IsOpen();
 }
 
-bool CConfigSaveMetadata::SaveMetadata(int flags)
+bool CConfigStorageMetadata::SaveMetadata(int flags)
 {
 #if defined(_USE_SAVE_METADATA_IN_TRANSACTION)
 	//begin transaction 
@@ -1266,7 +1266,7 @@ bool CConfigSaveMetadata::SaveMetadata(int flags)
 	return true;
 }
 
-bool CConfigSaveMetadata::RoolbackToConfigDatabase()
+bool CConfigStorageMetadata::RoolbackToConfigDatabase()
 {
 	bool hasError =
 		databaseLayer->RunQuery("DELETE FROM %s;", GetConfigSaveTableName()) == DATABASE_LAYER_QUERY_RESULT_ERROR;
@@ -1291,7 +1291,7 @@ bool CConfigSaveMetadata::RoolbackToConfigDatabase()
 	return LoadMetadata();
 }
 
-bool CConfigSaveMetadata::SaveToFile(const wxString &fileName)
+bool CConfigStorageMetadata::SaveToFile(const wxString &fileName)
 {
 	//common data
 	CMemoryWriter writterData;
@@ -1312,7 +1312,7 @@ bool CConfigSaveMetadata::SaveToFile(const wxString &fileName)
 	return true;
 }
 
-bool CConfigSaveMetadata::SaveHeader(CMemoryWriter &writterData)
+bool CConfigStorageMetadata::SaveHeader(CMemoryWriter &writterData)
 {
 	CMemoryWriter writterMemory;
 	writterMemory.w_u64(sign_metadata); //sign 
@@ -1323,7 +1323,7 @@ bool CConfigSaveMetadata::SaveHeader(CMemoryWriter &writterData)
 	return true;
 }
 
-bool CConfigSaveMetadata::SaveCommonMetadata(const CLASS_ID &clsid, CMemoryWriter &writterData, int flags)
+bool CConfigStorageMetadata::SaveCommonMetadata(const CLASS_ID &clsid, CMemoryWriter &writterData, int flags)
 {
 	//Save common object
 	CMemoryWriter writterMemory;
@@ -1349,7 +1349,7 @@ bool CConfigSaveMetadata::SaveCommonMetadata(const CLASS_ID &clsid, CMemoryWrite
 	return true;
 }
 
-bool CConfigSaveMetadata::SaveMetadata(const CLASS_ID &, CMemoryWriter &writterData, int flags)
+bool CConfigStorageMetadata::SaveMetadata(const CLASS_ID &, CMemoryWriter &writterData, int flags)
 {
 	bool saveToFile = (flags & saveToFileFlag) != 0;
 
@@ -1375,7 +1375,7 @@ bool CConfigSaveMetadata::SaveMetadata(const CLASS_ID &, CMemoryWriter &writterD
 	return true;
 }
 
-bool CConfigSaveMetadata::SaveChildMetadata(const CLASS_ID &, CMemoryWriter &writterData, IMetaObject *metaParent, int flags)
+bool CConfigStorageMetadata::SaveChildMetadata(const CLASS_ID &, CMemoryWriter &writterData, IMetaObject *metaParent, int flags)
 {
 	bool saveToFile = (flags & saveToFileFlag) != 0;
 
@@ -1401,12 +1401,12 @@ bool CConfigSaveMetadata::SaveChildMetadata(const CLASS_ID &, CMemoryWriter &wri
 	return true;
 }
 
-bool CConfigSaveMetadata::DeleteCommonMetadata(const CLASS_ID &clsid)
+bool CConfigStorageMetadata::DeleteCommonMetadata(const CLASS_ID &clsid)
 {
 	return DeleteMetadata(clsid);
 }
 
-bool CConfigSaveMetadata::DeleteMetadata(const CLASS_ID &clsid)
+bool CConfigStorageMetadata::DeleteMetadata(const CLASS_ID &clsid)
 {
 	for (auto obj : m_commonObject->GetObjects()) {
 		if (obj->IsDeleted()) {
@@ -1426,7 +1426,7 @@ bool CConfigSaveMetadata::DeleteMetadata(const CLASS_ID &clsid)
 	return true;
 }
 
-bool CConfigSaveMetadata::DeleteChildMetadata(const CLASS_ID &clsid, IMetaObject *metaParent)
+bool CConfigStorageMetadata::DeleteChildMetadata(const CLASS_ID &clsid, IMetaObject *metaParent)
 {
 	for (auto obj : metaParent->GetObjects()) {
 		if (obj->IsDeleted()) {

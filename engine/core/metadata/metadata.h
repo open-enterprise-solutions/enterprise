@@ -270,13 +270,13 @@ protected:
 	wxString m_sDefaultSource;
 };
 
-class CConfigSaveMetadata : public CConfigMetadata {
+class CConfigStorageMetadata : public CConfigMetadata {
 	bool m_bConfigSave;
 	CConfigMetadata *m_metaConfig;
 public:
 
-	CConfigSaveMetadata(bool readOnly = false);
-	virtual ~CConfigSaveMetadata();
+	CConfigStorageMetadata(bool readOnly = false);
+	virtual ~CConfigStorageMetadata();
 
 	//is config save
 	virtual bool IsConfigSave() const { return m_bConfigSave; }
