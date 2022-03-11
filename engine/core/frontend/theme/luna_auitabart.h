@@ -11,7 +11,8 @@ public:
 	wxAuiTabArt* Clone() override;
 	void SetFlags(unsigned int flags) override;
 	void SetSizingInfo(const wxSize& tabCtrlSize,
-		size_t tabCount) override;
+		size_t tabCount,
+		wxWindow* wnd = NULL) override;
 
 	void SetNormalFont(const wxFont& font) override;
 	void SetSelectedFont(const wxFont& font) override;
@@ -55,11 +56,11 @@ public:
 	int GetAdditionalBorderSpace(
 		wxWindow* wnd) override;
 
-	wxSize GetTabSize(
+	virtual wxSize GetTabSize(
 		wxDC& dc,
 		wxWindow* wnd,
 		const wxString& caption,
-		const wxBitmap& bitmap,
+		const wxBitmapBundle& bitmap,
 		bool active,
 		int closeButtonState,
 		int* xExtent) override;
@@ -88,14 +89,15 @@ protected:
 
 	wxBrush m_baseColourBrush;
 	wxColour m_activeColour;
-	wxBitmap m_activeCloseBmp;
-	wxBitmap m_disabledCloseBmp;
-	wxBitmap m_activeLeftBmp;
-	wxBitmap m_disabledLeftBmp;
-	wxBitmap m_activeRightBmp;
-	wxBitmap m_disabledRightBmp;
-	wxBitmap m_activeWindowListBmp;
-	wxBitmap m_disabledWindowListBmp;
+	
+	wxBitmapBundle m_activeCloseBmp;
+	wxBitmapBundle m_disabledCloseBmp;
+	wxBitmapBundle m_activeLeftBmp;
+	wxBitmapBundle m_disabledLeftBmp;
+	wxBitmapBundle m_activeRightBmp;
+	wxBitmapBundle m_disabledRightBmp;
+	wxBitmapBundle m_activeWindowListBmp;
+	wxBitmapBundle m_disabledWindowListBmp;
 
 	int m_fixedTabWidth;
 	int m_tabCtrlHeight;

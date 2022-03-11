@@ -1,6 +1,8 @@
 #ifndef _EDITORS_H__
 #define _EDITORS_H__
 
+#include <wx/bmpbndl.h>
+
 #include <wx/propgrid/propgriddefs.h>
 #include <wx/propgrid/editors.h>
 

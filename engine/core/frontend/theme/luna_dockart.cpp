@@ -63,6 +63,27 @@ wxColor wxAuiLightContrastColour(const wxColour& c)
 	return c.ChangeLightness(amount);
 }
 
+inline float wxAuiGetSRGB(float r) {
+	return r <= 0.03928f ? r / 12.92f : std::pow((r + 0.055f) / 1.055f, 2.4f);
+}
+
+float wxAuiGetRelativeLuminance(const wxColour& c)
+{
+	// based on https://www.w3.org/TR/2008/REC-WCAG20-20081211/#relativeluminancedef
+	return
+		0.2126f * wxAuiGetSRGB(c.Red() / 255.0f) +
+		0.7152f * wxAuiGetSRGB(c.Green() / 255.0f) +
+		0.0722f * wxAuiGetSRGB(c.Blue() / 255.0f);
+}
+
+float wxAuiGetColourContrast(const wxColour& c1, const wxColour& c2)
+{
+	// based on https://www.w3.org/TR/UNDERSTANDING-WCAG20/visual-audio-contrast7.html
+	float L1 = wxAuiGetRelativeLuminance(c1);
+	float L2 = wxAuiGetRelativeLuminance(c2);
+	return L1 > L2 ? (L1 + 0.05f) / (L2 + 0.05f) : (L2 + 0.05f) / (L1 + 0.05f);
+}
+
 // wxAuiBitmapFromBits() is a utility function that creates a
 // masked bitmap from raw bits (XBM format)
 wxBitmap wxAuiBitmapFromBits(const unsigned char bits[], int w, int h,
@@ -112,7 +133,25 @@ static void DrawGradientRectangle(wxDC& dc,
 	}
 }
 
+// This function is defined in dockart.cpp.
+float wxAuiGetColourContrast(const wxColour& c1, const wxColour& c2);
+
 wxString wxAuiChopText(wxDC& dc, const wxString& text, int max_size);
+
+// Check if the color has sufficient contrast ratio (4.5 recommended)
+// (based on https://www.w3.org/TR/UNDERSTANDING-WCAG20/visual-audio-contrast7.html)
+static bool wxAuiHasSufficientContrast(const wxColour& c1, const wxColour& c2)
+{
+	return wxAuiGetColourContrast(c1, c2) >= 4.5f;
+}
+
+// Pick a color that provides better contrast against the background
+static wxColour wxAuiGetBetterContrastColour(const wxColour& back_color,
+	const wxColour& c1, const wxColour& c2)
+{
+	return wxAuiGetColourContrast(back_color, c1)
+	> wxAuiGetColourContrast(back_color, c2) ? c1 : c2;
+}
 
 CLunaDockArt::CLunaDockArt() : wxAuiDockArt()
 {
@@ -570,7 +609,8 @@ void CLunaDockArt::DrawCaption(wxDC& dc,
 	{
 		DrawIcon(dc, window, rect, pane);
 
-		caption_offset += pane.icon.GetScaledWidth() + window->FromDIP(3);
+		const wxBitmap& icon = pane.icon.GetBitmapFor(window);
+		caption_offset += icon.GetLogicalWidth() + window->FromDIP(3);
 	}
 
 	if (pane.state & wxAuiPaneInfo::optionActive)
@@ -609,10 +649,24 @@ void CLunaDockArt::DrawIcon(wxDC& dc, const wxRect& rect, wxAuiPaneInfo& pane)
 void
 CLunaDockArt::DrawIcon(wxDC& dc, wxWindow *window, const wxRect& rect, wxAuiPaneInfo& pane)
 {
+	if (!window)
+	{
+		window = wxTheApp->GetTopWindow();
+		wxCHECK_RET(window, "must have some window");
+	}
+
+	// Ensure the icon fits into the title bar.
+	wxSize iconSize = pane.icon.GetPreferredLogicalSizeFor(window);
+	if (iconSize.y > rect.height)
+	{
+		iconSize *= static_cast<double>(rect.height) / iconSize.y;
+	}
+
 	// Draw the icon centered vertically
-	int xOffset = window ? window->FromDIP(2) : 2;
-	dc.DrawBitmap(pane.icon,
-		rect.x + xOffset, rect.y + (rect.height - pane.icon.GetScaledHeight()) / 2,
+	int xOffset = window->FromDIP(2);
+	const wxBitmap& icon = pane.icon.GetBitmap(window->ToPhys(iconSize));
+	dc.DrawBitmap(icon,
+		rect.x + xOffset, rect.y + (rect.height - icon.GetLogicalHeight()) / 2,
 		true);
 }
 
