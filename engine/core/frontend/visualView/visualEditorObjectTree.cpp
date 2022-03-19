@@ -40,6 +40,8 @@ CVisualEditorContextForm::CVisualEditorObjectTree::CVisualEditorObjectTree(CVisu
 	sizer_1->Fit(this);
 	sizer_1->SetSizeHints(this);
 
+	m_tcObjects->SetDoubleBuffered(true);
+
 	Connect(wxID_ANY, wxEVT_OBJECT_EXPANDED, wxFrameObjectEventHandler(CVisualEditorContextForm::CVisualEditorObjectTree::OnObjectExpanded));
 	Connect(wxID_ANY, wxEVT_OBJECT_SELECTED, wxFrameObjectEventHandler(CVisualEditorContextForm::CVisualEditorObjectTree::OnObjectSelected));
 	Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(CVisualEditorContextForm::CVisualEditorObjectTree::OnExpansionChange));

@@ -46,6 +46,8 @@ KeyBinderDialog::KeyBinderDialog(wxWindow* parent, int id, wxPoint pos, wxSize s
 	m_commandTreeCtrl = new wxTreeCtrl(this, ID_CommandTree, wxDefaultPosition, wxDefaultSize, wxTR_DEFAULT_STYLE);
 	fgSizer3->Add(m_commandTreeCtrl, 0, wxALL | wxEXPAND, 5);
 
+	m_commandTreeCtrl->SetDoubleBuffered(true);
+
 	fgSizer2->Add(fgSizer3, 1, wxEXPAND, 5);
 
 	wxFlexGridSizer* fgSizer5 = new wxFlexGridSizer(8, 1, 0, 0);

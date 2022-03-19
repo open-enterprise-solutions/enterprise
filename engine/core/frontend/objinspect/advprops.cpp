@@ -1040,11 +1040,13 @@ wxPGEditorDialogAdapter *wxPGSourceProperty::GetEditorDialog() const
 
 			wxTreeCtrl* tc = new wxTreeCtrl(dlg, wxID_ANY,
 				wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_SINGLE | wxSUNKEN_BORDER);
-
+		
 			tc->SetImageList(::GetImageList());
 
 			rowsizer->Add(tc, wxSizerFlags(1).Expand().Border(wxALL, spacing));
 			topsizer->Add(rowsizer, wxSizerFlags(1).Expand());
+
+			tc->SetDoubleBuffered(true);
 
 			wxStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
 			topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));
@@ -1265,6 +1267,8 @@ wxPGEditorDialogAdapter *wxPGTypeSelectorProperty::GetEditorDialog() const
 
 			rowsizer->Add(tc, wxSizerFlags(1).Expand().Border(wxALL, spacing));
 			topsizer->Add(rowsizer, wxSizerFlags(1).Expand());
+
+			tc->SetDoubleBuffered(true);
 
 			wxStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
 			topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));

@@ -37,6 +37,8 @@ void CMainFrameEnterprise::OnClickAllOperaions(wxCommandEvent &event)
 			//bSizer->Add(m_buttonOpen, 0, wxALL | wxEXPAND, 5);
 
 			m_treeCtrlElements = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_SINGLE | wxTR_HIDE_ROOT);
+			m_treeCtrlElements->SetDoubleBuffered(true);
+
 			bSizer->Add(m_treeCtrlElements, 1, wxALL | wxEXPAND, 5);
 
 			// Connect Events
