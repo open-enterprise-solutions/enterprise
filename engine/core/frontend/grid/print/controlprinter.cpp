@@ -5,7 +5,7 @@
 
 #include "controlprinter.h"
 
-wxGridPrintout::wxGridPrintout(const wxString& title) : wxPrintout(title)
+CGridPrintout::CGridPrintout(const wxString& title) : wxPrintout(title)
 {
 	m_grid = NULL;
 	SetStyle(wxGP_SHOW_NONE);
@@ -22,7 +22,7 @@ wxGridPrintout::wxGridPrintout(const wxString& title) : wxPrintout(title)
 	m_rightMargin = 50;
 }
 
-wxGridPrintout::wxGridPrintout(wxGrid* gridCtrl, int style, const wxString& title) : wxPrintout(title)
+CGridPrintout::CGridPrintout(wxGrid* gridCtrl, int style, const wxString& title) : wxPrintout(title)
 {
 	m_grid = gridCtrl;
 	SetStyle(style);
@@ -40,17 +40,17 @@ wxGridPrintout::wxGridPrintout(wxGrid* gridCtrl, int style, const wxString& titl
 
 }
 
-void wxGridPrintout::SetGrid(wxGrid* gridCtrl)
+void CGridPrintout::SetGrid(wxGrid* gridCtrl)
 {
 	m_grid = gridCtrl;
 }
 
-wxGrid* wxGridPrintout::GetGrid() const
+wxGrid* CGridPrintout::GetGrid() const
 {
 	return m_grid;
 }
 
-void wxGridPrintout::SetStyle(int style)
+void CGridPrintout::SetStyle(int style)
 {
 	m_style = style;
 
@@ -77,12 +77,12 @@ void wxGridPrintout::SetStyle(int style)
 		m_showRlAlways = true;
 }
 
-int wxGridPrintout::GetStyle() const
+int CGridPrintout::GetStyle() const
 {
 	return m_style;
 }
 
-bool wxGridPrintout::OnPrintPage(int page)
+bool CGridPrintout::OnPrintPage(int page)
 {
 	wxDC* dc = GetDC();
 
@@ -95,12 +95,12 @@ bool wxGridPrintout::OnPrintPage(int page)
 	return DrawPage(dc, page);
 }
 
-bool wxGridPrintout::HasPage(int page)
+bool CGridPrintout::HasPage(int page)
 {
 	return true;
 }
 
-void wxGridPrintout::GetPageInfo(int *minPage, int *maxPage, int *selPageFrom, int *selPageTo)
+void CGridPrintout::GetPageInfo(int *minPage, int *maxPage, int *selPageFrom, int *selPageTo)
 {
 	*minPage = m_minPage;
 	*maxPage = m_maxPage;
@@ -108,7 +108,7 @@ void wxGridPrintout::GetPageInfo(int *minPage, int *maxPage, int *selPageFrom, i
 	*selPageTo = m_selPageTo;
 }
 
-bool wxGridPrintout::DrawPage(wxDC *dc, int page)
+bool CGridPrintout::DrawPage(wxDC *dc, int page)
 {
 	dc->SetBrush(*wxTRANSPARENT_BRUSH);
 	dc->SetPen(*wxBLACK_PEN);
@@ -210,7 +210,7 @@ bool wxGridPrintout::DrawPage(wxDC *dc, int page)
 	return true;
 }
 
-void wxGridPrintout::OnPreparePrinting()
+void CGridPrintout::OnPreparePrinting()
 {
 	wxDC* dc = GetDC();
 	CalculateScale(dc);
@@ -270,7 +270,7 @@ void wxGridPrintout::OnPreparePrinting()
 	return;
 }
 
-void wxGridPrintout::CalculateScale(wxDC *dc)
+void CGridPrintout::CalculateScale(wxDC *dc)
 {
 	// You might use THIS code to set the printer DC to roughly
 	// reflect the screen text size. This page also draws lines of
@@ -301,23 +301,23 @@ void wxGridPrintout::CalculateScale(wxDC *dc)
 	m_screenScale = screenScale;
 }
 
-void wxGridPrintout::SetUserScale(float scale)
+void CGridPrintout::SetUserScale(float scale)
 {
 	m_userScale = scale;
 	m_overallScale = m_screenScale * m_userScale;
 }
 
-void wxGridPrintout::AddColBrake(int col)
+void CGridPrintout::AddColBrake(int col)
 {
 	m_colBrakes.Add(col);
 }
 
-void wxGridPrintout::AddRowBrake(int row)
+void CGridPrintout::AddRowBrake(int row)
 {
 	m_rowBrakes.Add(row);
 }
 
-bool wxGridPrintout::IsColBrake(int col)
+bool CGridPrintout::IsColBrake(int col)
 {
 	for (unsigned int i = 0; i < m_colBrakes.Count(); i++)
 	{
@@ -327,7 +327,7 @@ bool wxGridPrintout::IsColBrake(int col)
 	return false;
 }
 
-bool wxGridPrintout::IsRowBrake(int row)
+bool CGridPrintout::IsRowBrake(int row)
 {
 	for (unsigned int i = 0; i < m_rowBrakes.Count(); i++)
 	{
@@ -337,7 +337,7 @@ bool wxGridPrintout::IsRowBrake(int row)
 	return false;
 }
 
-void wxGridPrintout::DrawTextInRectangle(wxDC& dc, wxString& str, wxRect& rect, wxFont& font, wxBrush& fontbrush, int horizAlign, int vertAlign, int textOrientation)
+void CGridPrintout::DrawTextInRectangle(wxDC& dc, wxString& str, wxRect& rect, wxFont& font, wxBrush& fontbrush, int horizAlign, int vertAlign, int textOrientation)
 {
 	dc.DrawRectangle(rect.x, rect.y, rect.width, rect.height);
 
@@ -360,7 +360,7 @@ void wxGridPrintout::DrawTextInRectangle(wxDC& dc, wxString& str, wxRect& rect, 
 	DrawTextRectangle(dc, lines, rect, horizAlign, vertAlign, textOrientation);
 }
 
-void wxGridPrintout::DrawTextRectangle(wxDC& dc, const wxArrayString& lines, const wxRect& rect, int horizAlign, int vertAlign, int textOrientation)
+void CGridPrintout::DrawTextRectangle(wxDC& dc, const wxArrayString& lines, const wxRect& rect, int horizAlign, int vertAlign, int textOrientation)
 {
 
 	long textWidth, textHeight;
@@ -450,7 +450,7 @@ void wxGridPrintout::DrawTextRectangle(wxDC& dc, const wxArrayString& lines, con
 	dc.DestroyClippingRegion();
 }
 
-void wxGridPrintout::GetTextBoxSize(wxDC& dc, const wxArrayString& lines, long *width, long *height)
+void CGridPrintout::GetTextBoxSize(wxDC& dc, const wxArrayString& lines, long *width, long *height)
 {
 	long w = 0;
 	long h = 0;
@@ -468,7 +468,7 @@ void wxGridPrintout::GetTextBoxSize(wxDC& dc, const wxArrayString& lines, long *
 	*height = h;
 }
 
-void wxGridPrintout::StringToLines(const wxString& value, wxArrayString& lines)
+void CGridPrintout::StringToLines(const wxString& value, wxArrayString& lines)
 {
 	int startPos = 0;
 	int pos;
@@ -498,7 +498,7 @@ void wxGridPrintout::StringToLines(const wxString& value, wxArrayString& lines)
 	}
 }
 
-wxArrayString wxGridPrintout::GetTextLines(wxDC& dc, const wxString& data, wxFont& font, const wxRect& rect)
+wxArrayString CGridPrintout::GetTextLines(wxDC& dc, const wxString& data, wxFont& font, const wxRect& rect)
 {
 	wxArrayString lines;
 

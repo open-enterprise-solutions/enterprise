@@ -66,7 +66,7 @@ protected:
 	}
 
 	friend class CSectionCtrl;
-	friend class wxGridSectionTable;
+	friend class CGridSectionTable;
 
 public:
 

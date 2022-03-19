@@ -9,20 +9,19 @@
 #include "compiler/functions.h"
 #include "utils/stringUtils.h"
 
-CSectionCtrl::CSectionCtrl(CGrid *grid, eSectionMode setMode) : m_grid(grid), nMode(setMode) {}
+CSectionCtrl::CSectionCtrl(CGrid* grid, eSectionMode setMode) : m_grid(grid), m_nMode(setMode) {}
 
 CSectionCtrl::~CSectionCtrl() {}
 
-wxPoint CSectionCtrl::GetRange(const wxString &sectionName)
+wxPoint CSectionCtrl::GetRange(const wxString& sectionName)
 {
 	wxString sSectionName = StringUtils::MakeUpper(sectionName);
 
-	for (unsigned int n = 0; n < aSections.size(); n++)
+	for (unsigned int n = 0; n < m_aSections.size(); n++)
 	{
-		CSection Section = aSections[n];
-		if (sSectionName == StringUtils::MakeUpper(Section.sSectionName))
-		{
-			return wxPoint(Section.nRangeFrom, Section.nRangeTo);
+		CSection& currSection = m_aSections[n];
+		if (sSectionName == StringUtils::MakeUpper(currSection.sSectionName)) {
+			return wxPoint(currSection.nRangeFrom, currSection.nRangeTo);
 		}
 	}
 
@@ -30,21 +29,20 @@ wxPoint CSectionCtrl::GetRange(const wxString &sectionName)
 	return wxPoint();
 }
 
-int CSectionCtrl::FindInSection(int nCurNumber, wxString &csStr)
+int CSectionCtrl::FindInSection(int nCurNumber, wxString& csStr)
 {
-	for (unsigned int n = 0; n < aSections.size(); n++)
+	for (unsigned int n = 0; n < m_aSections.size(); n++)
 	{
 		int nRes = 0;
 
-		CSection Section = aSections[n];
+		CSection& currSection = m_aSections[n];
 
-		if (nCurNumber >= Section.nRangeFrom&&nCurNumber <= Section.nRangeTo) nRes += 1;
-		if (nCurNumber == Section.nRangeFrom) nRes += 2;
-		if (nCurNumber == Section.nRangeTo) nRes += 4;
+		if (nCurNumber >= currSection.nRangeFrom && nCurNumber <= currSection.nRangeTo) nRes += 1;
+		if (nCurNumber == currSection.nRangeFrom) nRes += 2;
+		if (nCurNumber == currSection.nRangeTo) nRes += 4;
 
-		if (nRes)
-		{
-			csStr = Section.sSectionName;
+		if (nRes) {
+			csStr = currSection.sSectionName;
 			return nRes;
 		}
 	}
@@ -54,17 +52,17 @@ int CSectionCtrl::FindInSection(int nCurNumber, wxString &csStr)
 
 CSection CSectionCtrl::FindSectionByPos(int pos)
 {
-	for (unsigned int n = 0; n < aSections.size(); n++)
+	for (unsigned int n = 0; n < m_aSections.size(); n++)
 	{
 		int nRes = 0;
 
-		CSection Section = aSections[n];
+		CSection& currSection = m_aSections[n];
 
-		if (pos >= Section.nRangeFrom&&pos <= Section.nRangeTo) nRes += 1;
-		if (pos == Section.nRangeFrom) nRes += 2;
-		if (pos == Section.nRangeTo) nRes += 4;
+		if (pos >= currSection.nRangeFrom && pos <= currSection.nRangeTo) nRes += 1;
+		if (pos == currSection.nRangeFrom) nRes += 2;
+		if (pos == currSection.nRangeTo) nRes += 4;
 
-		if (nRes & 4) return Section;
+		if (nRes & 4) return currSection;
 	}
 
 	return CSection();
@@ -75,14 +73,14 @@ int CSectionCtrl::GetNSectionFromPoint(wxPoint point)
 	wxGridCellCoords idCurrentCell = m_grid->GetCellFromPoint(point);
 
 	int nCurRow = NONE_MODE;
-	if (LEFT_MODE == nMode)	nCurRow = idCurrentCell.GetRow();
-	else if (UPPER_MODE == nMode) nCurRow = idCurrentCell.GetCol();
+	if (LEFT_MODE == m_nMode)	nCurRow = idCurrentCell.GetRow();
+	else if (UPPER_MODE == m_nMode) nCurRow = idCurrentCell.GetCol();
 
-	for (unsigned int n = 0; n < aSections.size(); n++)
+	for (unsigned int n = 0; n < m_aSections.size(); n++)
 	{
 		int nRes = 0;
-		CSection &Section = aSections[n];
-		if (nCurRow >= Section.nRangeFrom&&nCurRow <= Section.nRangeTo)
+		CSection& currSection = m_aSections[n];
+		if (nCurRow >= currSection.nRangeFrom && nCurRow <= currSection.nRangeTo)
 		{
 			return n;
 		}
@@ -93,80 +91,82 @@ int CSectionCtrl::GetNSectionFromPoint(wxPoint point)
 
 void CSectionCtrl::Add(int nRangeFrom, int nRangeTo)
 {
-	for (unsigned int n = 0; n < aSections.size(); n++)
+	for (unsigned int n = 0; n < m_aSections.size(); n++)
 	{
-		CSection Section = aSections[n];
+		CSection& currSection = m_aSections[n];
 
-		if (nRangeFrom >= Section.nRangeFrom && nRangeFrom <= Section.nRangeTo)
+		if (nRangeFrom >= currSection.nRangeFrom && nRangeFrom <= currSection.nRangeTo)
 		{
-			if (nRangeTo > Section.nRangeTo)//расширение нижней границы
+			if (nRangeTo > currSection.nRangeTo)//расширение нижней границы
 			{
-				Section.nRangeTo = nRangeTo;
-				aSections[n] = Section;
+				currSection.nRangeTo = nRangeTo;
+				m_aSections[n] = currSection;
 				return;
 			}
 		}
 
-		if (nRangeTo >= Section.nRangeFrom && nRangeTo <= Section.nRangeTo)
+		if (nRangeTo >= currSection.nRangeFrom && nRangeTo <= currSection.nRangeTo)
 		{
-			if (nRangeFrom < Section.nRangeFrom)//расширение верхней границы
+			if (nRangeFrom < currSection.nRangeFrom)//расширение верхней границы
 			{
-				Section.nRangeFrom = nRangeFrom;
-				aSections[n] = Section;
+				currSection.nRangeFrom = nRangeFrom;
+				m_aSections[n] = currSection;
 				return;
 			}
 		}
 
-		if (nRangeFrom >= Section.nRangeFrom && nRangeFrom <= Section.nRangeTo)
+		if (nRangeFrom >= currSection.nRangeFrom && nRangeFrom <= currSection.nRangeTo)
 			return;
 
-		if (nRangeTo >= Section.nRangeFrom && nRangeTo <= Section.nRangeTo)
+		if (nRangeTo >= currSection.nRangeFrom && nRangeTo <= currSection.nRangeTo)
 			return;
 	}
 
 
 	wxString num;
-	num << aSections.size() + 1;
+	num << m_aSections.size() + 1;
 
 	//добавление новой секции
-	CSection Section;
-	Section.sSectionName = wxT("Section_") + num;
-	Section.nRangeFrom = nRangeFrom;
-	Section.nRangeTo = nRangeTo;
-	aSections.push_back(Section);
+	CSection currSection;
+	currSection.sSectionName = wxT("Section_") + num;
+	currSection.nRangeFrom = nRangeFrom;
+	currSection.nRangeTo = nRangeTo;
+	m_aSections.push_back(currSection);
 
-	if (!EditName(aSections.size() - 1)) aSections.erase(aSections.begin() + aSections.size() - 1);
+	if (!EditName(m_aSections.size() - 1)) {
+		m_aSections.erase(m_aSections.begin() + m_aSections.size() - 1);
+	}
 }
 
 void CSectionCtrl::Remove(int nRangeFrom, int nRangeTo)
 {
-	for (unsigned int n = 0; n < aSections.size(); n++)
+	for (unsigned int n = 0; n < m_aSections.size(); n++)
 	{
-		CSection Section = aSections[n];
+		CSection& currSection = m_aSections[n];
 
-		if (nRangeFrom == Section.nRangeFrom && nRangeTo == Section.nRangeTo)
+		if (nRangeFrom == currSection.nRangeFrom && nRangeTo == currSection.nRangeTo)
 		{
 			//удаление секции
-			aSections.erase(aSections.begin() + n);
+			m_aSections.erase(m_aSections.begin() + n);
 			return;
 		}
 
-		if (nRangeFrom >= Section.nRangeFrom && nRangeFrom <= Section.nRangeTo)
+		if (nRangeFrom >= currSection.nRangeFrom && nRangeFrom <= currSection.nRangeTo)
 		{
-			if (nRangeTo >= Section.nRangeTo)//удаление нижней границы
+			if (nRangeTo >= currSection.nRangeTo)//удаление нижней границы
 			{
-				Section.nRangeTo = nRangeFrom - 1;
-				aSections[n] = Section;
+				currSection.nRangeTo = nRangeFrom - 1;
+				m_aSections[n] = currSection;
 				return;
 			}
 		}
 
-		if (nRangeTo >= Section.nRangeFrom&&nRangeTo <= Section.nRangeTo)
+		if (nRangeTo >= currSection.nRangeFrom && nRangeTo <= currSection.nRangeTo)
 		{
-			if (nRangeFrom <= Section.nRangeFrom)//удаление верхней границы
+			if (nRangeFrom <= currSection.nRangeFrom)//удаление верхней границы
 			{
-				Section.nRangeFrom = nRangeTo + 1;
-				aSections[n] = Section;
+				currSection.nRangeFrom = nRangeTo + 1;
+				m_aSections[n] = currSection;
 				return;
 			}
 		}
@@ -177,14 +177,14 @@ void CSectionCtrl::InsertRow(int nRow)
 {
 	if (nRow > 0)
 	{
-		for (unsigned int n = 0; n < aSections.size(); n++)
+		for (unsigned int n = 0; n < m_aSections.size(); n++)
 		{
-			CSection Section = aSections[n];
-			if (nRow < Section.nRangeFrom)
-				Section.nRangeFrom++;
-			if (nRow <= Section.nRangeTo)
-				Section.nRangeTo++;
-			aSections[n] = Section;
+			CSection& currSection = m_aSections[n];
+			if (nRow < currSection.nRangeFrom)
+				currSection.nRangeFrom++;
+			if (nRow <= currSection.nRangeTo)
+				currSection.nRangeTo++;
+			m_aSections[n] = currSection;
 		}
 	}
 }
@@ -193,21 +193,21 @@ void CSectionCtrl::RemoveRow(int nRow)
 {
 	if (nRow > 0)
 	{
-		for (unsigned int n = 0; n < aSections.size(); n++)
+		for (unsigned int n = 0; n < m_aSections.size(); n++)
 		{
-			CSection Section = aSections[n];
-			if (nRow < Section.nRangeFrom)
-				Section.nRangeFrom--;
-			if (nRow <= Section.nRangeTo)
-				Section.nRangeTo--;
-			if (Section.nRangeTo < Section.nRangeFrom)
+			CSection& currSection = m_aSections[n];
+			if (nRow < currSection.nRangeFrom)
+				currSection.nRangeFrom--;
+			if (nRow <= currSection.nRangeTo)
+				currSection.nRangeTo--;
+			if (currSection.nRangeTo < currSection.nRangeFrom)
 			{
-				aSections.erase(aSections.begin() + n);
+				m_aSections.erase(m_aSections.begin() + n);
 				n--;
 			}
 			else
 			{
-				aSections[n] = Section;
+				m_aSections[n] = currSection;
 			}
 		}
 	}
@@ -217,16 +217,16 @@ bool CSectionCtrl::EditName(int row)
 {
 	if (row >= 0)
 	{
-		CSection Section = aSections[row];
+		CSection& currSection = m_aSections[row];
 
-		CInputSectionDialog *dlg = new CInputSectionDialog(m_grid, wxID_ANY);
+		CInputSectionWnd* dlg = new CInputSectionWnd(m_grid, wxID_ANY);
 		dlg->SetTitle("Identifier section");
-		dlg->SetSection(Section.sSectionName);
+		dlg->SetSection(currSection.sSectionName);
 
 		if (dlg->ShowModal() == wxID_OK)
 		{
-			Section.sSectionName = dlg->GetSection();
-			aSections[row] = Section;
+			currSection.sSectionName = dlg->GetSection();
+			m_aSections[row] = currSection;
 			return true;
 		}
 	}
@@ -238,14 +238,14 @@ unsigned int CSectionCtrl::GetSize()
 {
 	int nCount = 0;
 
-	if (nMode == eSectionMode::LEFT_MODE)
+	if (m_nMode == eSectionMode::LEFT_MODE)
 	{
-		nCount = aSections.size();
+		nCount = m_aSections.size();
 		return nCount > 0 ? 80 : 0;
 	}
 	else
 	{
-		nCount = aSections.size();
+		nCount = m_aSections.size();
 		return nCount > 0 ? 20 : 0;
 	}
 

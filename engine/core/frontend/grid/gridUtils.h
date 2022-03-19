@@ -12,7 +12,7 @@
 #include <wx/button.h>
 #include <wx/dialog.h>
 
-class CInputSectionDialog : public wxDialog
+class CInputSectionWnd : public wxDialog
 {
 private:
 
@@ -23,8 +23,8 @@ private:
 
 public:
 
-	CInputSectionDialog(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxEmptyString, const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize, long style = wxDEFAULT_DIALOG_STYLE);
-	~CInputSectionDialog();
+	CInputSectionWnd(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxEmptyString, const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize, long style = wxDEFAULT_DIALOG_STYLE);
+	~CInputSectionWnd();
 
 	void SetSection(const wxString &section) { m_section->SetValue(section); }
 	wxString GetSection() { return m_section->GetValue(); }

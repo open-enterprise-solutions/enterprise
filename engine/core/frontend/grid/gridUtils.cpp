@@ -5,7 +5,7 @@
 
 #include "gridUtils.h"
 
-CInputSectionDialog::CInputSectionDialog(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : wxDialog(parent, id, title, pos, size, style)
+CInputSectionWnd::CInputSectionWnd(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : wxDialog(parent, id, title, pos, size, style)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
@@ -31,6 +31,6 @@ CInputSectionDialog::CInputSectionDialog(wxWindow* parent, wxWindowID id, const 
 	this->Centre(wxBOTH);
 }
 
-CInputSectionDialog::~CInputSectionDialog()
+CInputSectionWnd::~CInputSectionWnd()
 {
 }

@@ -35,9 +35,9 @@ class CSectionCtrl
 private:
 
 	//section array 
-	std::vector<CSection> aSections; 
+	std::vector<CSection> m_aSections; 
 	//section mode 
-	eSectionMode nMode;
+	eSectionMode m_nMode;
 
 public:
 
@@ -49,7 +49,7 @@ public:
 	CSection FindSectionByPos(int pos);
 	int GetNSectionFromPoint(wxPoint point);
 
-	CSection GetSection(int index) { return aSections[index]; }
+	CSection GetSection(int index) { return m_aSections[index]; }
 
 	void Add(int nRangeFrom, int nRangeTo);
 	void Remove(int nRangeFrom, int nRangeTo);
@@ -60,7 +60,7 @@ public:
 	bool EditName(int row);
 	unsigned int GetSize();
 
-	void ClearSections() { aSections.clear(); }
+	void ClearSections() { m_aSections.clear(); }
 };
 
 #endif 

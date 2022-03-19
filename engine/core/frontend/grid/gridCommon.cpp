@@ -22,11 +22,11 @@ EVT_SCROLLWIN(CGrid::OnScroll)
 EVT_SIZE(CGrid::OnSize)
 wxEND_EVENT_TABLE()
 
-class wxGridSectionTable : public wxGridStringTable {
-	CGrid *m_grid;
+class CGridSectionTable : public wxGridStringTable {
+	CGrid* m_grid;
 public:
 
-	wxGridSectionTable(CGrid *grid) : wxGridStringTable(50, 20), m_grid(grid) {}
+	CGridSectionTable(CGrid* grid) : wxGridStringTable(50, 20), m_grid(grid) {}
 
 	// overridden functions from wxGridStringTable
 	//
@@ -93,34 +93,30 @@ public:
 	{
 		wxGridCellStringRenderer::Draw(grid, attr, dc, rect, row, col, isSelected);
 
-		CGrid *m_grid = dynamic_cast<CGrid *>(&grid);
+		CGrid* m_grid = dynamic_cast<CGrid*>(&grid);
 		wxString csSection;
 		int nFind = m_grid->GetSectionLeft()->FindInSection(row, csSection);
 		// top line
-		if (nFind & 2)
-		{
+		if (nFind & 2) {
 			//dc.SetBrush(*wxTRANSPARENT_BRUSH);
 			dc.SetPen(wxPen(wxColour(255, 0, 0), 1, wxPENSTYLE_SOLID));
 			dc.DrawLine(rect.x, rect.y, rect.x + rect.width, rect.y);
 		}
 		// bottom line
-		if (nFind & 4)
-		{
+		if (nFind & 4) {
 			//dc.SetBrush(*wxTRANSPARENT_BRUSH);
 			dc.SetPen(wxPen(wxColour(255, 0, 0), 1, wxPENSTYLE_SOLID));
 			dc.DrawLine(rect.x - rect.width, rect.y + rect.height, rect.x + rect.width, rect.y + rect.height - 1);
 		}
 		// left hand line
 		nFind = m_grid->GetSectionUpper()->FindInSection(col, csSection);
-		if (nFind & 2)
-		{
+		if (nFind & 2) {
 			//dc.SetBrush(*wxTRANSPARENT_BRUSH);
 			dc.SetPen(wxPen(wxColour(255, 0, 0), 1, wxPENSTYLE_SOLID));
 			dc.DrawLine(rect.x, rect.y, rect.x, rect.y + rect.height);
 		}
 		// right hand line
-		if (nFind & 4)
-		{
+		if (nFind & 4) {
 			//dc.SetBrush(*wxTRANSPARENT_BRUSH);
 			dc.SetPen(wxPen(wxColour(255, 0, 0), 1, wxPENSTYLE_SOLID));
 			dc.DrawLine(rect.x + rect.width, rect.y - rect.height, rect.x + rect.width - 1, rect.y + rect.height);
@@ -128,24 +124,23 @@ public:
 	}
 };
 
-bool CGrid::GetWorkSection(int &nRangeFrom, int &nRangeTo, CSectionCtrl *&pSectionCtrl)
+bool CGrid::GetWorkSection(int& nRangeFrom, int& nRangeTo, CSectionCtrl*& pSectionCtrl)
 {
 	CGridCellRange selection = GetSelectedCellRange();
 
-	if (selection.Count() > 0)
-	{
-		if (selection.GetRowSpan() < selection.GetColSpan())//гориз. секции
-		{
+	if (selection.Count() > 0) {
+
+		if (selection.GetRowSpan() < selection.GetColSpan() && selection.GetRowSpan() > 0) { //гориз. секции
 			pSectionCtrl = m_sectionLeft;
 			nRangeFrom = selection.GetMinRow();
 			nRangeTo = selection.GetMaxRow();
 		}
-		else//верт. секции
-		{
+		else { //верт. секции
 			pSectionCtrl = m_sectionUpper;
 			nRangeFrom = selection.GetMinCol();
 			nRangeTo = selection.GetMaxCol();
 		}
+
 		return true;
 	}
 
@@ -159,9 +154,9 @@ CGrid::CGrid() : wxGrid()
 	GetGridWindow()->SetDoubleBuffered(true);
 }
 
-CGrid::CGrid(wxWindow *parent,
+CGrid::CGrid(wxWindow* parent,
 	wxWindowID id, const wxPoint& pos,
-	const wxSize& size) : wxGrid(parent, id, pos, size), 
+	const wxSize& size) : wxGrid(parent, id, pos, size),
 	m_propertyCell(new CPropertyCell(this)), m_idTopLeftCell(1, 1)
 {
 	m_bViewSection = true;
@@ -200,7 +195,10 @@ CGrid::CGrid(wxWindow *parent,
 
 	// Cell Defaults
 	this->SetDefaultCellAlignment(wxALIGN_LEFT, wxALIGN_TOP);
-	SetTable(new wxGridSectionTable(this), true, wxGridSelectCells);
+	SetTable(new CGridSectionTable(this), true, wxGridSelectCells);
+
+	m_selectionBackground = wxColour(211, 217, 239);
+	m_selectionForeground = wxColour(0, 0, 0);
 
 	SetDefaultRenderer(new wxGridCellSectionRenderer);
 }
@@ -213,12 +211,12 @@ void CGrid::ViewSection()
 	CalcDimensions();
 }
 
-void CGrid::SetParent(wxWindowBase *parent)
+void CGrid::SetParent(wxWindowBase* parent)
 {
 	wxGrid::SetParent(parent);
 }
 
-bool CGrid::Reparent(wxWindowBase *newParent)
+bool CGrid::Reparent(wxWindowBase* newParent)
 {
 	ViewSection();
 	return wxGrid::Reparent(newParent);
@@ -231,9 +229,10 @@ void CGrid::AddSection()
 	m_bViewSection = true;
 
 	int nRangeFrom, nRangeTo;
-	CSectionCtrl *pSectionCtrl;
+	CSectionCtrl* pSectionCtrl = NULL;
+	if (!GetWorkSection(nRangeFrom, nRangeTo, pSectionCtrl))
+		return;
 
-	if (!GetWorkSection(nRangeFrom, nRangeTo, pSectionCtrl)) return;
 	pSectionCtrl->Add(nRangeFrom, nRangeTo);
 
 	ViewSection();
@@ -248,7 +247,7 @@ void CGrid::RemoveSection()
 	m_bViewSection = false;
 
 	int nRange1, nRange2;
-	CSectionCtrl *pSectionCtrl;
+	CSectionCtrl* pSectionCtrl;
 
 	if (!GetWorkSection(nRange1, nRange2, pSectionCtrl)) return;
 	pSectionCtrl->Remove(nRange1, nRange2);
@@ -278,7 +277,7 @@ struct DefaultHeaderRenderers
 	wxGridCornerHeaderRendererDefault cornerRenderer;
 } gs_defaultHeaderRenderers;
 
-void CGrid::DrawCellHighlight(wxDC& dc, const wxGridCellAttr *attr)
+void CGrid::DrawCellHighlight(wxDC& dc, const wxGridCellAttr* attr)
 {
 	// don't show highlight when the grid doesn't have focus
 	//if (!HasFocus())
@@ -303,7 +302,7 @@ void CGrid::DrawCornerLabel(wxDC& dc)
 {
 	wxRect rect(m_sectionLeft->GetSize(), m_sectionUpper->GetSize(), m_rowLabelWidth, m_colLabelHeight);
 
-	wxGridCellAttrProvider * const
+	wxGridCellAttrProvider* const
 		attrProvider = m_table ? m_table->GetAttrProvider() : NULL;
 	const wxGridCornerHeaderRenderer&
 		rend = attrProvider ? attrProvider->GetCornerRenderer()
@@ -355,7 +354,7 @@ void CGrid::DrawColLabel(wxDC& dc, int col)
 	int colLeft = GetColLeft(col);
 
 	wxRect rect(colLeft, m_sectionUpper->GetSize(), GetColWidth(col), m_colLabelHeight - m_sectionUpper->GetSize());
-	wxGridCellAttrProvider * const
+	wxGridCellAttrProvider* const
 		attrProvider = m_table ? m_table->GetAttrProvider() : NULL;
 	const wxGridColumnHeaderRenderer&
 		rend = attrProvider ? attrProvider->GetColumnHeaderRenderer(col)
@@ -434,7 +433,7 @@ void CGrid::DrawRowLabel(wxDC& dc, int row)
 	if (GetRowHeight(row) <= 0 || m_rowLabelWidth <= 0)
 		return;
 
-	wxGridCellAttrProvider * const
+	wxGridCellAttrProvider* const
 		attrProvider = m_table ? m_table->GetAttrProvider() : NULL;
 
 	// notice that an explicit static_cast is needed to avoid a compilation
@@ -564,7 +563,9 @@ CGridCellRange CGrid::GetVisibleCellRange()
 
 CGridCellRange CGrid::GetSelectedCellRange()
 {
-	return CGridCellRange(m_topLeftSelectedCoords.GetRow(), m_topLeftSelectedCoords.GetCol(), m_bottomRightSelectedCoords.GetRow(), m_bottomRightSelectedCoords.GetCol());
+	return CGridCellRange(m_topLeftSelectedCoords.GetRow(), m_topLeftSelectedCoords.GetCol(),
+		m_bottomRightSelectedCoords.GetRow(), m_bottomRightSelectedCoords.GetCol()
+	);
 }
 
 void CGrid::OnMouseLeftDown(wxMouseEvent& event)
@@ -646,16 +647,16 @@ void CGrid::OnKeyUp(wxKeyEvent& event)
 	event.Skip();
 }
 
-void CGrid::OnSelectCell(wxGridEvent &event)
+void CGrid::OnSelectCell(wxGridEvent& event)
 {
-	m_propertyCell->SetReadOnly(IsEditable()); 
+	m_propertyCell->SetReadOnly(IsEditable());
 
-	if (event.Selecting())
-	{
+	if (event.Selecting()) {
+
 		wxGridCellCoords coords;
 		coords.Set(event.GetRow(), event.GetCol());
 
-		wxGridCellAttr *attr = m_table->GetAttr(event.GetRow(), event.GetCol(), wxGridCellAttr::Cell);
+		wxGridCellAttr* attr = m_table->GetAttr(event.GetRow(), event.GetCol(), wxGridCellAttr::Default);
 
 		m_topLeftSelectedCoords = coords;
 
@@ -675,27 +676,32 @@ void CGrid::OnSelectCell(wxGridEvent &event)
 		objectInspector->SelectObject(m_propertyCell);
 	}
 
-	m_gridWin->Refresh(); 
+	m_gridWin->Refresh();
 
 	this->SetFocus();
 	event.Skip();
 }
 
-void CGrid::OnSelectCells(wxGridRangeSelectEvent &event)
+void CGrid::OnSelectCells(wxGridRangeSelectEvent& event)
 {
 	m_propertyCell->SetReadOnly(IsEditable());
 
-	if (event.Selecting())
-	{
+	if (event.Selecting()) {
+
 		auto m_colSelection = GetSelectedCols();
 		auto m_rowSelection = GetSelectedRows();
 
-		if (m_colSelection.size() || m_rowSelection.size())
-		{
+		if (m_colSelection.size() || m_rowSelection.size()) {
+
 			int minCol = m_numCols - 1, minRow = m_numRows - 1;
 
-			for (auto col : m_colSelection) { if (col - 1 < minCol) minCol = col; }
-			for (auto row : m_rowSelection) { if (row - 1 < minRow) minRow = row; }
+			for (auto col : m_colSelection) {
+				if (col - 1 < minCol) minCol = col;
+			}
+
+			for (auto row : m_rowSelection) {
+				if (row - 1 < minRow) minRow = row;
+			}
 
 			if (m_colSelection.size() == 0) minCol = 0;
 			if (m_rowSelection.size() == 0) minRow = 0;

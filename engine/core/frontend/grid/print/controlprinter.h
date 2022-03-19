@@ -16,7 +16,7 @@
 #define wxGP_SHOW_RL_ALWAYS 0x0008 //show row labels on all pages
 #define wxGP_DEFAULT		0x0010 //default, shows all labels on all the pages.
 
-class wxGridPrintout : public wxPrintout
+class CGridPrintout : public wxPrintout
 {
 	wxGrid* m_grid;
 	int m_style;
@@ -50,8 +50,8 @@ class wxGridPrintout : public wxPrintout
 
 public:
 
-	wxGridPrintout(const wxString& title = wxT("wxGridPrintout"));
-	wxGridPrintout(wxGrid* gridCtrl, int style = wxGP_SHOW_NONE, const wxString& title = wxT("wxGridPrintout"));
+	CGridPrintout(const wxString& title = wxT("CGridPrintout"));
+	CGridPrintout(wxGrid* gridCtrl, int style = wxGP_SHOW_NONE, const wxString& title = wxT("CGridPrintout"));
 
 	void SetGrid(wxGrid* gridCtrl);
 	wxGrid* GetGrid()const;

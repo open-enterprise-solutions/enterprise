@@ -41,7 +41,7 @@ void CGridEditView::OnDraw(wxDC *WXUNUSED(dc))
 
 wxPrintout *CGridEditView::OnCreatePrintout()
 {
-	wxGridPrintout* printOutForPrinting = new wxGridPrintout(m_grid, wxGP_DEFAULT);
+	CGridPrintout* printOutForPrinting = new CGridPrintout(m_grid, wxGP_DEFAULT);
 	printOutForPrinting->SetUserScale(0.75); //set the scale you want to use, default 1.0
 	printOutForPrinting->AddColBrake(15); //at col 15 a new page will begin
 	return printOutForPrinting;
