@@ -1,7 +1,7 @@
 #ifndef _CODEPROC_H__
 #define _CODEPROC_H__
 
-#include "frontend/autocomplete/autoComplectionCtrl.h"
+#include "frontend/codeEditor/codeEditorCtrl.h"
 
 class ICodeInfo
 {

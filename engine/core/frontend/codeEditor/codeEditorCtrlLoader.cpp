@@ -3,17 +3,17 @@
 //	Description : autoComplete loader  
 ////////////////////////////////////////////////////////////////////////////
 
-#include "autocomplectionctrl.h"
+#include "codeEditorCtrl.h"
 #include "compiler/definition.h"
 #include "compiler/debugger/debugClient.h"
 #include "common/docInfo.h"
 #include "common/managerInfo.h"
 #include "utils/stringUtils.h"
 
-#include "autoComplectionParser.h"
+#include "codeEditorParser.h"
 #include "metadata/metaObjects/metaModuleObject.h"
 
-void CAutocomplectionCtrl::AddKeywordFromObject(const CValue &vObject)
+void CCodeEditorCtrl::AddKeywordFromObject(const CValue &vObject)
 {
 	if (vObject.GetType() != eValueTypes::TYPE_EMPTY &&
 		vObject.GetType() != eValueTypes::TYPE_OLE) {
@@ -69,7 +69,7 @@ void CAutocomplectionCtrl::AddKeywordFromObject(const CValue &vObject)
 	}
 }
 
-bool CAutocomplectionCtrl::PrepareExpression(unsigned int currPos, wxString &sExpression, wxString &sKeyWord, wxString &sCurrWord, bool &hasPoint)
+bool CCodeEditorCtrl::PrepareExpression(unsigned int currPos, wxString &sExpression, wxString &sKeyWord, wxString &sCurrWord, bool &hasPoint)
 {
 	bool m_hasPoint = false, m_hasKeyword = false;
 	for (unsigned int i = 0; i < m_precompileModule->m_aLexemList.size(); i++)
@@ -130,7 +130,7 @@ bool CAutocomplectionCtrl::PrepareExpression(unsigned int currPos, wxString &sEx
 	hasPoint = m_hasPoint; return m_hasKeyword;
 }
 
-void CAutocomplectionCtrl::PrepareTooTipExpression(unsigned int currPos, wxString &sExpression, wxString &sCurrWord, bool &hasPoint)
+void CCodeEditorCtrl::PrepareTooTipExpression(unsigned int currPos, wxString &sExpression, wxString &sCurrWord, bool &hasPoint)
 {
 	bool m_hasPoint = false;
 
@@ -172,7 +172,7 @@ void CAutocomplectionCtrl::PrepareTooTipExpression(unsigned int currPos, wxStrin
 	hasPoint = m_hasPoint;
 }
 
-void CAutocomplectionCtrl::PrepareTABs()
+void CCodeEditorCtrl::PrepareTABs()
 {
 	unsigned int realPos = GetRealPosition(); int nFoldLevels = 0;
 
@@ -320,7 +320,7 @@ void CAutocomplectionCtrl::PrepareTABs()
 	}
 }
 
-void CAutocomplectionCtrl::CalculateFoldLevels()
+void CCodeEditorCtrl::CalculateFoldLevels()
 {
 	int nFoldLevels = 0; unsigned int nLastPos = 0;
 
@@ -378,7 +378,7 @@ void CAutocomplectionCtrl::CalculateFoldLevels()
 	}
 }
 
-void CAutocomplectionCtrl::LoadAutoComplete()
+void CCodeEditorCtrl::LoadAutoComplete()
 {
 	int realPos = GetRealPosition();
 
@@ -415,7 +415,7 @@ void CAutocomplectionCtrl::LoadAutoComplete()
 	ac.Show(position);
 }
 
-void CAutocomplectionCtrl::LoadToolTip(wxPoint pos)
+void CCodeEditorCtrl::LoadToolTip(wxPoint pos)
 {
 	if (debugClient->IsEnterLoop())
 	{
@@ -441,7 +441,7 @@ void CAutocomplectionCtrl::LoadToolTip(wxPoint pos)
 
 #include "compiler/methods.h"
 
-void CAutocomplectionCtrl::LoadCallTip()
+void CCodeEditorCtrl::LoadCallTip()
 {
 	// Find the word start
 	int currentPos = GetRealPosition();
@@ -542,7 +542,7 @@ void CAutocomplectionCtrl::LoadCallTip()
 	m_precompileModule->Clear();
 }
 
-void CAutocomplectionCtrl::LoadSysKeyword()
+void CCodeEditorCtrl::LoadSysKeyword()
 {
 	m_precompileModule->m_nCurrentPos = GetRealPosition();
 
@@ -598,7 +598,7 @@ void CAutocomplectionCtrl::LoadSysKeyword()
 	m_precompileModule->Clear();
 }
 
-void CAutocomplectionCtrl::LoadIntelliList()
+void CCodeEditorCtrl::LoadIntelliList()
 {
 	m_precompileModule->m_nCurrentPos = GetRealPosition();
 	m_precompileModule->m_bCalcValue = true;
@@ -615,7 +615,7 @@ void CAutocomplectionCtrl::LoadIntelliList()
 #include "metadata/metadata.h"
 #include "metadata/singleMetaTypes.h"
 
-void CAutocomplectionCtrl::LoadFromKeyWord(const wxString &keyWord)
+void CCodeEditorCtrl::LoadFromKeyWord(const wxString &keyWord)
 {
 	if (StringUtils::CompareString(keyWord, wxT("new")))
 	{
@@ -673,7 +673,7 @@ void CAutocomplectionCtrl::LoadFromKeyWord(const wxString &keyWord)
 
 #include "utils/fs/fs.h"
 
-void CAutocomplectionCtrl::ShowAutoCompleteFromDebugger(CMemoryReader &commandReader)
+void CCodeEditorCtrl::ShowAutoCompleteFromDebugger(CMemoryReader &commandReader)
 {
 	wxString sExpression, sKeyWord;
 	commandReader.r_stringZ(sExpression);

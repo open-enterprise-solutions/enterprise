@@ -3,22 +3,22 @@
 //	Description : autocomplete printout
 ////////////////////////////////////////////////////////////////////////////
 
-#include "autoComplectionPrintOut.h"
+#include "codeEditorCtrlPrintOut.h"
 #include "appData.h"
 
 #if wxUSE_PRINTING_ARCHITECTURE
 
 //----------------------------------------------------------------------------
-// CAutocomplectionPrint
+// CCodeEditorPrintout
 //----------------------------------------------------------------------------
 
-CAutocomplectionPrint::CAutocomplectionPrint(CAutocomplectionCtrl *edit, const wxString& title)
+CCodeEditorPrintout::CCodeEditorPrintout(CCodeEditorCtrl *edit, const wxString& title)
 	: wxPrintout(title)
 	, m_edit(edit)
 {
 }
 
-bool CAutocomplectionPrint::OnPrintPage(int page) {
+bool CCodeEditorPrintout::OnPrintPage(int page) {
 
 	wxDC *dc = GetDC();
 	if (!dc) return false;
@@ -32,7 +32,7 @@ bool CAutocomplectionPrint::OnPrintPage(int page) {
 	return true;
 }
 
-bool CAutocomplectionPrint::OnBeginDocument(int startPage, int endPage) {
+bool CCodeEditorPrintout::OnBeginDocument(int startPage, int endPage) {
 
 	if (!wxPrintout::OnBeginDocument(startPage, endPage)) {
 		return false;
@@ -43,7 +43,7 @@ bool CAutocomplectionPrint::OnBeginDocument(int startPage, int endPage) {
 
 #include "common/reportManager.h"
 
-void CAutocomplectionPrint::GetPageInfo(int *minPage, int *maxPage, int *selPageFrom, int *selPageTo) {
+void CCodeEditorPrintout::GetPageInfo(int *minPage, int *maxPage, int *selPageFrom, int *selPageTo) {
 
 	// initialize values
 	*minPage = 0;
@@ -107,12 +107,12 @@ void CAutocomplectionPrint::GetPageInfo(int *minPage, int *maxPage, int *selPage
 	*selPageTo = *maxPage;
 }
 
-bool CAutocomplectionPrint::HasPage(int page)
+bool CCodeEditorPrintout::HasPage(int page)
 {
 	return page <= (int)m_pageEnds.Count();
 }
 
-bool CAutocomplectionPrint::PrintScaling(wxDC *dc) {
+bool CCodeEditorPrintout::PrintScaling(wxDC *dc) {
 
 	// check for dc, return if none
 	if (!dc) return false;

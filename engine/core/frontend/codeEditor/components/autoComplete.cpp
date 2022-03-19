@@ -181,7 +181,7 @@ void CAutoComplete::MoveDown()
 	lb->GetListBox()->Select(current);
 }
 
-#include "../autoComplectionCtrl.h"
+#include "../codeEditorCtrl.h"
 
 void CAutoComplete::Select(int index)
 {
@@ -218,7 +218,7 @@ void CAutoComplete::Select(int index)
 
 	if (m_bNeedCallTip)
 	{
-		CAutocomplectionCtrl *m_autoComplete = dynamic_cast<CAutocomplectionCtrl *>(m_owner);
+		CCodeEditorCtrl *m_autoComplete = dynamic_cast<CCodeEditorCtrl *>(m_owner);
 		if (m_autoComplete) m_autoComplete->ShowCallTip(sDescription);
 	}
 }

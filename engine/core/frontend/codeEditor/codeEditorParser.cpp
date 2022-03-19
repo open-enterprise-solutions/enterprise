@@ -3,7 +3,7 @@
 //	Description : parser for autocomplete 
 ////////////////////////////////////////////////////////////////////////////
 
-#include "autoComplectionParser.h"
+#include "codeEditorParser.h"
 #include "compiler/definition.h"
 
 #pragma warning(disable : 4018)

@@ -3,7 +3,7 @@
 //	Description : calculate compile value
 ////////////////////////////////////////////////////////////////////////////
 
-#include "autoComplectionCompile.h"
+#include "codeEditorInterpreter.h"
 #include "compiler/definition.h"
 #include "metadata/metadata.h"
 #include "utils/stringUtils.h"
@@ -73,7 +73,7 @@ void CPrecompileModule::Clear() //—брос данных дл€ повторного использовани€ объе
 #include "compiler/methods.h"
 #include "compiler/enumFactory.h"
 
-#include "autoComplectionParser.h"
+#include "codeEditorParser.h"
 
 void CPrecompileModule::PrepareModuleData()
 {

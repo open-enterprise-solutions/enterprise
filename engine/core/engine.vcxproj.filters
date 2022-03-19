@@ -118,33 +118,6 @@
     <ClCompile Include="compiler\debugger\debugClient.cpp">
       <Filter>compiler\debugger</Filter>
     </ClCompile>
-    <ClCompile Include="frontend\autocomplete\autoComplectionCompile.cpp">
-      <Filter>frontend\autocomplete\precompiler</Filter>
-    </ClCompile>
-    <ClCompile Include="frontend\autocomplete\autoComplectionCompileContext.cpp">
-      <Filter>frontend\autocomplete\precompiler</Filter>
-    </ClCompile>
-    <ClCompile Include="frontend\autocomplete\components\callTip.cpp">
-      <Filter>frontend\autocomplete\components</Filter>
-    </ClCompile>
-    <ClCompile Include="frontend\autocomplete\components\autoComplete.cpp">
-      <Filter>frontend\autocomplete\components</Filter>
-    </ClCompile>
-    <ClCompile Include="frontend\autocomplete\components\helpers\listBoxWnd.cpp">
-      <Filter>frontend\autocomplete\components\helpers</Filter>
-    </ClCompile>
-    <ClCompile Include="frontend\autocomplete\components\helpers\popupWnd.cpp">
-      <Filter>frontend\autocomplete\components\helpers</Filter>
-    </ClCompile>
-    <ClCompile Include="frontend\autocomplete\components\helpers\listBoxVisualData.cpp">
-      <Filter>frontend\autocomplete\components\helpers</Filter>
-    </ClCompile>
-    <ClCompile Include="frontend\autocomplete\autoComplectionParser.cpp">
-      <Filter>frontend\autocomplete\parser</Filter>
-    </ClCompile>
-    <ClCompile Include="frontend\autocomplete\autoComplectionCtrlLoader.cpp">
-      <Filter>frontend\autocomplete</Filter>
-    </ClCompile>
     <ClCompile Include="compiler\valueExtended.cpp">
       <Filter>compiler\value</Filter>
     </ClCompile>
@@ -391,12 +364,6 @@
     </ClCompile>
     <ClCompile Include="compiler\valueType.cpp">
       <Filter>compiler\value\system</Filter>
-    </ClCompile>
-    <ClCompile Include="frontend\autocomplete\autoComplectionCtrl.cpp">
-      <Filter>frontend\autocomplete</Filter>
-    </ClCompile>
-    <ClCompile Include="frontend\autocomplete\autoComplectionPrintOut.cpp">
-      <Filter>frontend\autocomplete\printout</Filter>
     </ClCompile>
     <ClCompile Include="common\templates\formDesigner_doc.cpp">
       <Filter>common\templates</Filter>
@@ -1611,6 +1578,39 @@
     <ClCompile Include="frontend\theme\luna_auitoolbar.cpp">
       <Filter>frontend\theme</Filter>
     </ClCompile>
+    <ClCompile Include="frontend\codeEditor\components\callTip.cpp">
+      <Filter>frontend\codeEditor\components</Filter>
+    </ClCompile>
+    <ClCompile Include="frontend\codeEditor\components\autoComplete.cpp">
+      <Filter>frontend\codeEditor\components</Filter>
+    </ClCompile>
+    <ClCompile Include="frontend\codeEditor\components\helpers\listBoxVisualData.cpp">
+      <Filter>frontend\codeEditor\components\helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="frontend\codeEditor\components\helpers\listBoxWnd.cpp">
+      <Filter>frontend\codeEditor\components\helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="frontend\codeEditor\components\helpers\popupWnd.cpp">
+      <Filter>frontend\codeEditor\components\helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="frontend\codeEditor\codeEditorCtrl.cpp">
+      <Filter>frontend\codeEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="frontend\codeEditor\codeEditorCtrlLoader.cpp">
+      <Filter>frontend\codeEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="frontend\codeEditor\codeEditorCtrlPrintOut.cpp">
+      <Filter>frontend\codeEditor\printout</Filter>
+    </ClCompile>
+    <ClCompile Include="frontend\codeEditor\codeEditorParser.cpp">
+      <Filter>frontend\codeEditor\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="frontend\codeEditor\codeEditorInterpreterContext.cpp">
+      <Filter>frontend\codeEditor\interpreter</Filter>
+    </ClCompile>
+    <ClCompile Include="frontend\codeEditor\codeEditorInterpreter.cpp">
+      <Filter>frontend\codeEditor\interpreter</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="compiler\Methods.h">
@@ -1749,30 +1749,6 @@
     <ClInclude Include="compiler\debugger\debugServer.h">
       <Filter>compiler\debugger</Filter>
     </ClInclude>
-    <ClInclude Include="frontend\autocomplete\autoComplectionCompile.h">
-      <Filter>frontend\autocomplete\precompiler</Filter>
-    </ClInclude>
-    <ClInclude Include="frontend\autocomplete\components\callTip.h">
-      <Filter>frontend\autocomplete\components</Filter>
-    </ClInclude>
-    <ClInclude Include="frontend\autocomplete\components\autoComplete.h">
-      <Filter>frontend\autocomplete\components</Filter>
-    </ClInclude>
-    <ClInclude Include="frontend\autocomplete\components\helpers\listBoxVisualData.h">
-      <Filter>frontend\autocomplete\components\helpers</Filter>
-    </ClInclude>
-    <ClInclude Include="frontend\autocomplete\components\helpers\listBoxWnd.h">
-      <Filter>frontend\autocomplete\components\helpers</Filter>
-    </ClInclude>
-    <ClInclude Include="frontend\autocomplete\components\helpers\popupWnd.h">
-      <Filter>frontend\autocomplete\components\helpers</Filter>
-    </ClInclude>
-    <ClInclude Include="frontend\autocomplete\autoComplectionParser.h">
-      <Filter>frontend\autocomplete\parser</Filter>
-    </ClInclude>
-    <ClInclude Include="frontend\autocomplete\components\helpers\fontAscent.h">
-      <Filter>frontend\autocomplete\components\helpers</Filter>
-    </ClInclude>
     <ClInclude Include="common\actionInfo.h">
       <Filter>common</Filter>
     </ClInclude>
@@ -1855,9 +1831,6 @@
     <ClInclude Include="frontend\mainFrame.h">
       <Filter>frontend</Filter>
     </ClInclude>
-    <ClInclude Include="frontend\autocomplete\autoComplectionCtrl.h">
-      <Filter>frontend\autocomplete</Filter>
-    </ClInclude>
     <ClInclude Include="compiler\valueGuid.h">
       <Filter>compiler\value</Filter>
     </ClInclude>
@@ -1923,9 +1896,6 @@
     </ClInclude>
     <ClInclude Include="compiler\valueType.h">
       <Filter>compiler\value\system</Filter>
-    </ClInclude>
-    <ClInclude Include="frontend\autocomplete\autoComplectionPrintOut.h">
-      <Filter>frontend\autocomplete\printout</Filter>
     </ClInclude>
     <ClInclude Include="frontend\visualView\printout\formPrintOut.h">
       <Filter>frontend\visualView\printout</Filter>
@@ -3059,9 +3029,6 @@
     <ClInclude Include="common\clsid.h">
       <Filter>common</Filter>
     </ClInclude>
-    <ClInclude Include="frontend\autocomplete\bitmaps_res.h">
-      <Filter>frontend\autocomplete</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\3rdparty\guid\guid.h">
       <Filter>3rdparty\guid</Filter>
     </ClInclude>
@@ -3148,6 +3115,39 @@
     </ClInclude>
     <ClInclude Include="frontend\theme\luna_auitoolbar.h">
       <Filter>frontend\theme</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\codeEditor\components\callTip.h">
+      <Filter>frontend\codeEditor\components</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\codeEditor\components\autoComplete.h">
+      <Filter>frontend\codeEditor\components</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\codeEditor\components\helpers\listBoxVisualData.h">
+      <Filter>frontend\codeEditor\components\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\codeEditor\components\helpers\listBoxWnd.h">
+      <Filter>frontend\codeEditor\components\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\codeEditor\components\helpers\popupWnd.h">
+      <Filter>frontend\codeEditor\components\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\codeEditor\components\helpers\fontAscent.h">
+      <Filter>frontend\codeEditor\components\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\codeEditor\res\bitmaps_res.h">
+      <Filter>frontend\codeEditor\res</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\codeEditor\codeEditorCtrl.h">
+      <Filter>frontend\codeEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\codeEditor\codeEditorCtrlPrintOut.h">
+      <Filter>frontend\codeEditor\printout</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\codeEditor\codeEditorParser.h">
+      <Filter>frontend\codeEditor\parser</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\codeEditor\codeEditorInterpreter.h">
+      <Filter>frontend\codeEditor\interpreter</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -3249,24 +3249,6 @@
     </Filter>
     <Filter Include="frontend\bottom\watch">
       <UniqueIdentifier>{c449dc6b-15ab-4bbd-93a3-d9491ef98d70}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="frontend\autocomplete">
-      <UniqueIdentifier>{adeff735-b233-4319-ab1d-d1b21a0d1530}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="frontend\autocomplete\precompiler">
-      <UniqueIdentifier>{cc06a6e8-8498-45bc-837c-6c53e171620a}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="frontend\autocomplete\components">
-      <UniqueIdentifier>{a334e282-7bf0-4e91-80a6-669cac3d816e}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="frontend\autocomplete\components\helpers">
-      <UniqueIdentifier>{755f4c93-93d6-4664-b156-0ecd0b5f2f2d}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="frontend\autocomplete\parser">
-      <UniqueIdentifier>{1739f256-7dcf-4a4f-92c0-d3076ecb281d}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="frontend\autocomplete\printout">
-      <UniqueIdentifier>{5a170183-f77b-4846-84ab-63a447e1d475}</UniqueIdentifier>
     </Filter>
     <Filter Include="frontend\top">
       <UniqueIdentifier>{e4ced762-edea-492a-abd7-a0453e0cfd65}</UniqueIdentifier>
@@ -3420,6 +3402,27 @@
     </Filter>
     <Filter Include="frontend\windows\functionlist">
       <UniqueIdentifier>{bcf75dbd-0308-476b-b1eb-635c2c8ce877}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="frontend\codeEditor">
+      <UniqueIdentifier>{adeff735-b233-4319-ab1d-d1b21a0d1530}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="frontend\codeEditor\components">
+      <UniqueIdentifier>{a334e282-7bf0-4e91-80a6-669cac3d816e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="frontend\codeEditor\components\helpers">
+      <UniqueIdentifier>{755f4c93-93d6-4664-b156-0ecd0b5f2f2d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="frontend\codeEditor\parser">
+      <UniqueIdentifier>{1739f256-7dcf-4a4f-92c0-d3076ecb281d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="frontend\codeEditor\printout">
+      <UniqueIdentifier>{5a170183-f77b-4846-84ab-63a447e1d475}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="frontend\codeEditor\res">
+      <UniqueIdentifier>{b4e0c60a-d006-4fd9-8acd-ae7f51beb378}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="frontend\codeEditor\interpreter">
+      <UniqueIdentifier>{cc06a6e8-8498-45bc-837c-6c53e171620a}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

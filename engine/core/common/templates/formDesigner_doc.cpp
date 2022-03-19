@@ -50,7 +50,7 @@ bool CFormDocument::OnSaveModified()
 
 bool CFormDocument::OnCloseDocument()
 {
-	CAutocomplectionCtrl *autocomplete = GetCodeCtrl();
+	CCodeEditorCtrl *autocomplete = GetCodeCtrl();
 
 	if (autocomplete->IsEditable()) {
 
@@ -119,7 +119,7 @@ void CFormDocument::Modify(bool modified)
 
 bool CFormDocument::Save()
 {
-	CAutocomplectionCtrl *autocomplete = GetCodeCtrl();
+	CCodeEditorCtrl *autocomplete = GetCodeCtrl();
 
 	if (autocomplete &&
 		autocomplete->IsEditable()) {
@@ -174,6 +174,6 @@ void CFormEditDocument::SetCurrentLine(int lineBreakpoint, bool setBreakpoint)
 	wxASSERT(m_designerForm);
 	m_designerForm->ActivateEditor();
 
-	CAutocomplectionCtrl *autoComplete = m_designerForm->GetCodeCtrl();
+	CCodeEditorCtrl *autoComplete = m_designerForm->GetCodeCtrl();
 	autoComplete->SetCurrentLine(lineBreakpoint, setBreakpoint);
 }

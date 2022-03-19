@@ -1,4 +1,4 @@
-#include "autoComplectionCompile.h"
+#include "codeEditorInterpreter.h"
 #include "compiler/definition.h"
 #include "compiler/systemObjects.h"
 #include "utils/stringUtils.h"

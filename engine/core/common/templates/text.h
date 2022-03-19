@@ -6,7 +6,7 @@
 // ----------------------------------------------------------------------------
 
 #include "common/docInfo.h"
-#include "frontend/autocomplete/autocomplectionctrl.h"
+#include "frontend/codeEditor/codeEditorCtrl.h"
 
 // The view using a standard wxTextCtrl to show its contents
 class CTextEditView : public CView

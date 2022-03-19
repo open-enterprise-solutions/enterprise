@@ -13,7 +13,7 @@
 #include "frontend/stack/stackWindow.h"
 #include "frontend/watch/watchwindow.h"
 #include "frontend/output/outputWindow.h"
-#include "frontend/autocomplete/autoComplectionCtrl.h"
+#include "frontend/codeEditor/codeEditorCtrl.h"
 #include "frontend/metatree/metatreeWnd.h"
 #include "utils/stringUtils.h"
 
@@ -877,9 +877,9 @@ void CDebuggerClient::CClientSocketThread::RecvCommand(void *pointer, unsigned i
 	}
 	else if (commandFromClient == CommandId_EvalAutocomplete) {
 #if defined(_USE_64_BIT_POINT_IN_DEBUGGER)
-		CAutocomplectionCtrl *autocompleteCtrl = reinterpret_cast<CAutocomplectionCtrl *>(commandReader.r_u64());
+		CCodeEditorCtrl *autocompleteCtrl = reinterpret_cast<CCodeEditorCtrl *>(commandReader.r_u64());
 #else 
-		CAutocomplectionCtrl *autocompleteCtrl = reinterpret_cast<CAutocomplectionCtrl *>(commandReader.r_u32());
+		CCodeEditorCtrl *autocompleteCtrl = reinterpret_cast<CCodeEditorCtrl *>(commandReader.r_u32());
 #endif 
 		if (autocompleteCtrl) autocompleteCtrl->ShowAutoCompleteFromDebugger(commandReader);
 	}

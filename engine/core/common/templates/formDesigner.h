@@ -22,7 +22,7 @@ class CFormPalette;
 class CFormEditView : public CView
 {
 	wxAuiNotebook *m_notebook;
-	CAutocomplectionCtrl *m_code;
+	CCodeEditorCtrl *m_code;
 
 private :
 
@@ -58,7 +58,7 @@ public:
 	void ActivateDesigner() { m_notebook->SetSelection(0); }
 	void ActivateEditor() { m_notebook->SetSelection(1); }
 
-	CAutocomplectionCtrl *GetCodeCtrl() { return m_code; }
+	CCodeEditorCtrl *GetCodeCtrl() { return m_code; }
 
 public:
 
@@ -114,7 +114,7 @@ public:
 	bool IsDesignerActivate() { return GetFormDesigner()->IsDesignerActivate(); }
 	bool IsEditorActivate() { return GetFormDesigner()->IsEditorActivate(); }
 
-	CAutocomplectionCtrl *GetCodeCtrl() { return GetFormDesigner()->GetCodeCtrl(); }
+	CCodeEditorCtrl *GetCodeCtrl() { return GetFormDesigner()->GetCodeCtrl(); }
 
 	//get common value object (read only)
 	virtual CValue GetCommonValueObject();

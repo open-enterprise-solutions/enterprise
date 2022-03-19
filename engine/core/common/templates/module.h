@@ -9,7 +9,7 @@
 // The view using a standard wxTextCtrl to show its contents
 class CModuleView : public CView
 {
-	CAutocomplectionCtrl *m_code;
+	CCodeEditorCtrl *m_code;
 
 public:
 
@@ -25,7 +25,7 @@ public:
 	virtual void OnCreateToolbar(wxAuiToolBar *m_toolbar) override;
 	virtual void OnRemoveToolbar(wxAuiToolBar *toolbar) override;
 
-	CAutocomplectionCtrl *GetText() const { return m_code; }
+	CCodeEditorCtrl *GetText() const { return m_code; }
 
 private:
 	
@@ -61,7 +61,7 @@ public:
 	virtual bool OnSaveModified() override;
 	virtual bool OnCloseDocument() override;
 
-	virtual CAutocomplectionCtrl *GetTextCtrl() const = 0;
+	virtual CCodeEditorCtrl *GetTextCtrl() const = 0;
 
 	virtual bool IsModified() const override;
 	virtual void Modify(bool mod) override;
@@ -86,7 +86,7 @@ class CModuleEditDocument : public CModuleDocument,
 {
 public:
 	CModuleEditDocument() : CModuleDocument() { }
-	virtual CAutocomplectionCtrl *GetTextCtrl() const override;
+	virtual CCodeEditorCtrl *GetTextCtrl() const override;
 
 	virtual void SetCurrentLine(int lineBreakpoint, bool setBreakpoint) override;
 

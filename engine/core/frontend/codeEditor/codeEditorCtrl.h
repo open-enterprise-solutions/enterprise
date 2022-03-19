@@ -9,18 +9,18 @@
 #include <vector>
 #include <map>
 
-#include "autoComplectionCompile.h"
+#include "codeEditorInterpreter.h"
 #include "frontend/settings/editorsettings.h"
 #include "frontend/settings/fontcolorsettings.h"
 #include "compiler/debugger/debugEvent.h"
 
-#include "frontend/autocomplete/components/autoComplete.h"
-#include "frontend/autocomplete/components/callTip.h"
+#include "frontend/codeEditor/components/autoComplete.h"
+#include "frontend/codeEditor/components/callTip.h"
 
 class CDocument;
 class CMemoryReader;
 
-class CAutocomplectionCtrl : public wxStyledTextCtrl
+class CCodeEditorCtrl : public wxStyledTextCtrl
 {
 	CDocument *m_document;
 
@@ -30,7 +30,7 @@ class CAutocomplectionCtrl : public wxStyledTextCtrl
 	friend class CDebuggerClient;
 	friend class CAutoComplete;
 	friend class CCallTip;
-	friend class CAutocomplectionPrint;
+	friend class CCodeEditorPrintout;
 	friend class CMetadataTree;
 
 private:
@@ -106,8 +106,8 @@ public:
 		BreakLine,
 	};
 
-	CAutocomplectionCtrl();
-	CAutocomplectionCtrl(CDocument *document, wxWindow *parent, wxWindowID id = wxID_ANY,
+	CCodeEditorCtrl();
+	CCodeEditorCtrl(CDocument *document, wxWindow *parent, wxWindowID id = wxID_ANY,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize, long style = 0,
 		const wxString& name = wxSTCNameStr);
@@ -147,7 +147,7 @@ public:
 
 	void SetCurrentLine(int line, bool setLine = true);
 
-	~CAutocomplectionCtrl();
+	~CCodeEditorCtrl();
 };
 
 #endif 

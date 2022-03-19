@@ -2,7 +2,7 @@
 #define _MODULE_CMD_H__
 
 #include "common/cmdProc.h"
-#include "frontend/autocomplete/autocomplectionctrl.h"
+#include "frontend/codeEditor/codeEditorCtrl.h"
 
 class CModuleCommandProcessor : public CCommandProcessor
 {

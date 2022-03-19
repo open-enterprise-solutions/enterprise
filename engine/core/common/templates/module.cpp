@@ -19,7 +19,7 @@ wxEND_EVENT_TABLE()
 
 bool CModuleView::OnCreate(CDocument *doc, long flags)
 {
-	m_code = new CAutocomplectionCtrl(doc, m_viewFrame, wxID_ANY,
+	m_code = new CCodeEditorCtrl(doc, m_viewFrame, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
 
 	m_code->SetEditorSettings(mainFrame->GetEditorSettings());
@@ -113,11 +113,11 @@ bool CModuleView::OnClose(bool deleteWindow)
 	return CView::OnClose(deleteWindow);
 }
 
-#include "frontend/autocomplete/autoComplectionPrintOut.h"
+#include "frontend/codeEditor/codeEditorCtrlPrintOut.h"
 
 wxPrintout *CModuleView::OnCreatePrintout()
 {
-	return new CAutocomplectionPrint(m_code, this->GetViewName());
+	return new CCodeEditorPrintout(m_code, this->GetViewName());
 }
 
 #include "metadata/metadata.h"
@@ -236,7 +236,7 @@ wxIMPLEMENT_CLASS(CModuleDocument, CDocument);
 
 CCommandProcessor *CModuleDocument::CreateCommandProcessor()
 {
-	CAutocomplectionCtrl* m_context = GetTextCtrl();
+	CCodeEditorCtrl* m_context = GetTextCtrl();
 	CModuleCommandProcessor *commandProcessor = new CModuleCommandProcessor(m_context);
 
 	commandProcessor->SetEditMenu(mainFrame->GetDefaultMenu(wxID_EDIT));
@@ -270,7 +270,7 @@ bool CModuleDocument::OnSaveModified()
 
 bool CModuleDocument::OnCloseDocument()
 {
-	CAutocomplectionCtrl *autocomplete = GetTextCtrl();
+	CCodeEditorCtrl *autocomplete = GetTextCtrl();
 
 	if (autocomplete &&
 		autocomplete->IsEditable()) {
@@ -334,7 +334,7 @@ void CModuleDocument::Modify(bool modified)
 
 bool CModuleDocument::Save()
 {
-	CAutocomplectionCtrl *autocomplete = GetTextCtrl();
+	CCodeEditorCtrl *autocomplete = GetTextCtrl();
 
 	if (autocomplete &&
 		autocomplete->IsEditable()) {
@@ -377,7 +377,7 @@ bool CModuleDocument::Save()
 
 wxIMPLEMENT_DYNAMIC_CLASS(CModuleEditDocument, CModuleDocument);
 
-CAutocomplectionCtrl* CModuleEditDocument::GetTextCtrl() const
+CCodeEditorCtrl* CModuleEditDocument::GetTextCtrl() const
 {
 	wxView* view = GetFirstView();
 	return view ? wxDynamicCast(view, CModuleView)->GetText() : NULL;
@@ -385,7 +385,7 @@ CAutocomplectionCtrl* CModuleEditDocument::GetTextCtrl() const
 
 void CModuleEditDocument::SetCurrentLine(int lineBreakpoint, bool setBreakpoint)
 {
-	CAutocomplectionCtrl *autoComplete = GetTextCtrl();
+	CCodeEditorCtrl *autoComplete = GetTextCtrl();
 	wxASSERT(autoComplete);
 	autoComplete->SetCurrentLine(lineBreakpoint, setBreakpoint);
 }

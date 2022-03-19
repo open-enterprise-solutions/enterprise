@@ -3,7 +3,7 @@
 //	Description : autoComplete window 
 ////////////////////////////////////////////////////////////////////////////
 
-#include "autocomplectionctrl.h"
+#include "codeEditorCtrl.h"
 #include "frontend/mainFrame.h"
 #include "compiler/debugger/debugClient.h"
 #include "compiler/translateModule.h"
@@ -11,7 +11,7 @@
 #include "metadata/moduleManager/moduleManager.h"
 #include "metadata/metadata.h"
 #include "common/docInfo.h" 
-#include "bitmaps_res.h"
+#include "res/bitmaps_res.h"
 #include "utils/stringUtils.h"
 
 #define DEF_LINENUMBER_ID 0
@@ -21,7 +21,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                                          Styling                                                                       //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void CAutocomplectionCtrl::OnStyleNeeded(wxStyledTextEvent& event)
+void CCodeEditorCtrl::OnStyleNeeded(wxStyledTextEvent& event)
 {
 	for (int line_start = LineFromPosition(GetEndStyled()); line_start < GetLineCount(); line_start++)
 	{
@@ -50,7 +50,7 @@ void CAutocomplectionCtrl::OnStyleNeeded(wxStyledTextEvent& event)
      }\
 } \
 
-void CAutocomplectionCtrl::HighlightSyntax(unsigned int fromPos, unsigned int toPos, wxString &code)
+void CCodeEditorCtrl::HighlightSyntax(unsigned int fromPos, unsigned int toPos, wxString &code)
 {
 	//Syntax coloring overrides
 	struct CTextBlock
@@ -149,7 +149,7 @@ void CAutocomplectionCtrl::HighlightSyntax(unsigned int fromPos, unsigned int to
 	}
 }
 
-void CAutocomplectionCtrl::OnMarginClick(wxStyledTextEvent& event)
+void CCodeEditorCtrl::OnMarginClick(wxStyledTextEvent& event)
 {
 	int line = LineFromPosition(event.GetPosition());
 
@@ -164,13 +164,13 @@ void CAutocomplectionCtrl::OnMarginClick(wxStyledTextEvent& event)
 			//Обновляем список точек останова
 			wxString sModuleName = m_document->GetFilename();
 
-			if ((dwFlags & (1 << CAutocomplectionCtrl::Breakpoint))) {
+			if ((dwFlags & (1 << CCodeEditorCtrl::Breakpoint))) {
 				if (debugClient->RemoveBreakpoint(sModuleName, line))
-					MarkerDelete(line, CAutocomplectionCtrl::Breakpoint);
+					MarkerDelete(line, CCodeEditorCtrl::Breakpoint);
 			}
 			else {
 				if (debugClient->ToggleBreakpoint(sModuleName, line))
-					MarkerAdd(line, CAutocomplectionCtrl::Breakpoint);
+					MarkerAdd(line, CCodeEditorCtrl::Breakpoint);
 			}
 		}
 		break;
@@ -181,7 +181,7 @@ void CAutocomplectionCtrl::OnMarginClick(wxStyledTextEvent& event)
 	event.Skip();
 }
 
-void CAutocomplectionCtrl::OnTextChange(wxStyledTextEvent& event)
+void CCodeEditorCtrl::OnTextChange(wxStyledTextEvent& event)
 {
 	int modFlags = event.GetModificationType();
 
@@ -293,7 +293,7 @@ void CAutocomplectionCtrl::OnTextChange(wxStyledTextEvent& event)
 }
 }
 
-void CAutocomplectionCtrl::OnKeyDown(wxKeyEvent &event)
+void CCodeEditorCtrl::OnKeyDown(wxKeyEvent &event)
 {
 	if (!IsEditable()) {
 		event.Skip(); return;
@@ -365,11 +365,11 @@ void CAutocomplectionCtrl::OnKeyDown(wxKeyEvent &event)
 	}
 }
 
-void CAutocomplectionCtrl::OnDebugEvent(wxDebugEvent& event)
+void CCodeEditorCtrl::OnDebugEvent(wxDebugEvent& event)
 {
 	switch (event.GetEventId())
 	{
-	case EventId_SessionStart: MarkerDeleteAll(CAutocomplectionCtrl::BreakLine); break;
+	case EventId_SessionStart: MarkerDeleteAll(CCodeEditorCtrl::BreakLine); break;
 	case EventId_EnterLoop:
 	{
 		wxString sModuleName = event.GetModuleName();
@@ -378,12 +378,12 @@ void CAutocomplectionCtrl::OnDebugEvent(wxDebugEvent& event)
 		}
 		break;
 	}
-	case EventId_LeaveLoop: MarkerDeleteAll(CAutocomplectionCtrl::BreakLine); SetToolTip(NULL); m_aExpressions.clear(); break;
-	case EventId_SessionEnd: MarkerDeleteAll(CAutocomplectionCtrl::BreakLine); SetToolTip(NULL); m_aExpressions.clear(); break;
+	case EventId_LeaveLoop: MarkerDeleteAll(CCodeEditorCtrl::BreakLine); SetToolTip(NULL); m_aExpressions.clear(); break;
+	case EventId_SessionEnd: MarkerDeleteAll(CCodeEditorCtrl::BreakLine); SetToolTip(NULL); m_aExpressions.clear(); break;
 	}
 }
 
-void CAutocomplectionCtrl::OnDebugToolTipEvent(wxDebugToolTipEvent &event)
+void CCodeEditorCtrl::OnDebugToolTipEvent(wxDebugToolTipEvent &event)
 {
 	wxString sModuleName = event.GetModuleName();
 	switch (event.GetEventId())
@@ -398,7 +398,7 @@ void CAutocomplectionCtrl::OnDebugToolTipEvent(wxDebugToolTipEvent &event)
 	}
 }
 
-void CAutocomplectionCtrl::OnDebugAutocompleteEvent(wxDebugAutocompleteEvent &event)
+void CCodeEditorCtrl::OnDebugAutocompleteEvent(wxDebugAutocompleteEvent &event)
 {
 	switch (event.GetEventId())
 	{
@@ -414,19 +414,19 @@ void CAutocomplectionCtrl::OnDebugAutocompleteEvent(wxDebugAutocompleteEvent &ev
 	}
 }
 
-void CAutocomplectionCtrl::OnMouseMove(wxMouseEvent& event)
+void CCodeEditorCtrl::OnMouseMove(wxMouseEvent& event)
 {
 	LoadToolTip(event.GetPosition()); event.Skip();
 }
 
-void CAutocomplectionCtrl::EditDebugPoint(int line)
+void CCodeEditorCtrl::EditDebugPoint(int line)
 {
 	//Обновляем список точек останова
 	wxString sModuleName = m_document->GetFilename();
 
 	int dwFlags = MarkerGet(line);
 
-	if ((dwFlags & (1 << CAutocomplectionCtrl::Breakpoint))) {
+	if ((dwFlags & (1 << CCodeEditorCtrl::Breakpoint))) {
 		debugClient->RemoveBreakpoint(sModuleName, line);
 	}
 	else {
@@ -434,9 +434,9 @@ void CAutocomplectionCtrl::EditDebugPoint(int line)
 	}
 }
 
-void CAutocomplectionCtrl::UpdateBreakpoints(bool deleteCurrentBreakline)
+void CCodeEditorCtrl::UpdateBreakpoints(bool deleteCurrentBreakline)
 {
-	MarkerDeleteAll(CAutocomplectionCtrl::Breakpoint);
+	MarkerDeleteAll(CCodeEditorCtrl::Breakpoint);
 
 	//Обновляем список точек останова
 	wxString sModuleName = m_document->GetFilename();
@@ -445,22 +445,22 @@ void CAutocomplectionCtrl::UpdateBreakpoints(bool deleteCurrentBreakline)
 	{
 		int dwFlags = MarkerGet(line);
 
-		if (!(dwFlags & (1 << CAutocomplectionCtrl::Breakpoint))) {
-			MarkerAdd(line, CAutocomplectionCtrl::Breakpoint);
+		if (!(dwFlags & (1 << CCodeEditorCtrl::Breakpoint))) {
+			MarkerAdd(line, CCodeEditorCtrl::Breakpoint);
 		}
 	}
 }
 
-void CAutocomplectionCtrl::SetCurrentLine(int lineBreakpoint, bool setBreakLine)
+void CCodeEditorCtrl::SetCurrentLine(int lineBreakpoint, bool setBreakLine)
 {
 	if (!GetSTCFocus()) {
 		SetSTCFocus(true);
 	}
 
-	MarkerDeleteAll(CAutocomplectionCtrl::BreakLine);
+	MarkerDeleteAll(CCodeEditorCtrl::BreakLine);
 
 	if (setBreakLine) {
-		MarkerAdd(lineBreakpoint - 1, CAutocomplectionCtrl::BreakLine);
+		MarkerAdd(lineBreakpoint - 1, CCodeEditorCtrl::BreakLine);
 	}
 
 	int nFirstVisibleLine = GetFirstVisibleLine(), nLinesOnScreen = LinesOnScreen();
@@ -473,7 +473,7 @@ void CAutocomplectionCtrl::SetCurrentLine(int lineBreakpoint, bool setBreakLine)
 	}
 }
 
-void CAutocomplectionCtrl::SetEditorSettings(const EditorSettings & settings)
+void CCodeEditorCtrl::SetEditorSettings(const EditorSettings & settings)
 {
 	m_bIndentationSize = settings.GetIndentSize();
 
@@ -542,7 +542,7 @@ inline wxColour GetInverse(const wxColour& color)
 	return wxColour(r ^ 0xFF, g ^ 0xFF, b ^ 0xFF);
 }
 
-void CAutocomplectionCtrl::SetFontColorSettings(const FontColorSettings &settings)
+void CCodeEditorCtrl::SetFontColorSettings(const FontColorSettings &settings)
 {
 	// For some reason StyleSetFont takes a (non-const) reference, so we need to make
 	// a copy before passing it in.
@@ -620,7 +620,7 @@ void CAutocomplectionCtrl::SetFontColorSettings(const FontColorSettings &setting
 	SetCaretForeground(GetInverse(settings.GetColors(FontColorSettings::DisplayItem_Default).backColor));
 }
 
-void CAutocomplectionCtrl::AppendText(const wxString &text)
+void CCodeEditorCtrl::AppendText(const wxString &text)
 {
 	int lastLine = wxStyledTextCtrl::GetLineCount() - 1;
 
@@ -669,7 +669,7 @@ void CAutocomplectionCtrl::AppendText(const wxString &text)
 	CalculateFoldLevels();
 }
 
-void CAutocomplectionCtrl::Replace(long from, long to, const wxString &text)
+void CCodeEditorCtrl::Replace(long from, long to, const wxString &text)
 {
 	int lineStart = wxStyledTextCtrl::LineFromPosition(from); 
 	int lineEnd = wxStyledTextCtrl::LineFromPosition(to);
@@ -731,9 +731,9 @@ void CAutocomplectionCtrl::Replace(long from, long to, const wxString &text)
 	CalculateFoldLevels();
 }
 
-CAutocomplectionCtrl::CAutocomplectionCtrl() : wxStyledTextCtrl(), ac(this), ct(this) {}
+CCodeEditorCtrl::CCodeEditorCtrl() : wxStyledTextCtrl(), ac(this), ct(this) {}
 
-CAutocomplectionCtrl::CAutocomplectionCtrl(CDocument *document, wxWindow *parent, wxWindowID id, const wxPoint & pos, const wxSize & size, long style, const wxString & name)
+CCodeEditorCtrl::CCodeEditorCtrl(CDocument *document, wxWindow *parent, wxWindowID id, const wxPoint & pos, const wxSize & size, long style, const wxString & name)
 	: wxStyledTextCtrl(parent, id, pos, size, style, name), m_document(document), ac(this), ct(this), m_precompileModule(NULL), m_bInitialized(false)
 {
 	debugClient->AddHandler(this);
@@ -749,17 +749,17 @@ CAutocomplectionCtrl::CAutocomplectionCtrl(CDocument *document, wxWindow *parent
 		SetMarginCursor(margin, wxSTC_CURSORARROW);
 
 	//register event
-	Connect(wxEVT_STC_MARGINCLICK, wxStyledTextEventHandler(CAutocomplectionCtrl::OnMarginClick), NULL, this);
-	Connect(wxEVT_STC_STYLENEEDED, wxStyledTextEventHandler(CAutocomplectionCtrl::OnStyleNeeded), NULL, this);
-	Connect(wxEVT_STC_MODIFIED, wxStyledTextEventHandler(CAutocomplectionCtrl::OnTextChange), NULL, this);
+	Connect(wxEVT_STC_MARGINCLICK, wxStyledTextEventHandler(CCodeEditorCtrl::OnMarginClick), NULL, this);
+	Connect(wxEVT_STC_STYLENEEDED, wxStyledTextEventHandler(CCodeEditorCtrl::OnStyleNeeded), NULL, this);
+	Connect(wxEVT_STC_MODIFIED, wxStyledTextEventHandler(CCodeEditorCtrl::OnTextChange), NULL, this);
 
-	Connect(wxEVT_KEY_DOWN, wxKeyEventHandler(CAutocomplectionCtrl::OnKeyDown), NULL, this);
+	Connect(wxEVT_KEY_DOWN, wxKeyEventHandler(CCodeEditorCtrl::OnKeyDown), NULL, this);
 
-	Connect(wxEVT_DEBUG_EVENT, wxDebugEventHandler(CAutocomplectionCtrl::OnDebugEvent), NULL, this);
-	Connect(wxEVT_DEBUG_TOOLTIP_EVENT, wxDebugToolTipEventHandler(CAutocomplectionCtrl::OnDebugToolTipEvent), NULL, this);
-	Connect(wxEVT_DEBUG_AUTOCOMPLETE_EVENT, wxDebugAutocompleteEventHandler(CAutocomplectionCtrl::OnDebugAutocompleteEvent), NULL, this);
+	Connect(wxEVT_DEBUG_EVENT, wxDebugEventHandler(CCodeEditorCtrl::OnDebugEvent), NULL, this);
+	Connect(wxEVT_DEBUG_TOOLTIP_EVENT, wxDebugToolTipEventHandler(CCodeEditorCtrl::OnDebugToolTipEvent), NULL, this);
+	Connect(wxEVT_DEBUG_AUTOCOMPLETE_EVENT, wxDebugAutocompleteEventHandler(CCodeEditorCtrl::OnDebugAutocompleteEvent), NULL, this);
 
-	Connect(wxEVT_MOTION, wxMouseEventHandler(CAutocomplectionCtrl::OnMouseMove), NULL, this);
+	Connect(wxEVT_MOTION, wxMouseEventHandler(CCodeEditorCtrl::OnMouseMove), NULL, this);
 
 	//set edge mode
 	SetEdgeMode(wxSTC_EDGE_MULTILINE);
@@ -802,7 +802,7 @@ CAutocomplectionCtrl::CAutocomplectionCtrl(CDocument *document, wxWindow *parent
 	MarkerEnableHighlight(true);
 }
 
-bool CAutocomplectionCtrl::LoadModule()
+bool CCodeEditorCtrl::LoadModule()
 {
 	ClearAll();
 
@@ -838,7 +838,7 @@ bool CAutocomplectionCtrl::LoadModule()
 	return m_document != NULL;
 }
 
-bool CAutocomplectionCtrl::SaveModule()
+bool CCodeEditorCtrl::SaveModule()
 {
 	if (m_document) {
 		CMetaModuleObject *m_moduleObject = wxStaticCast(m_document->GetMetaObject(), CMetaModuleObject);
@@ -853,35 +853,35 @@ bool CAutocomplectionCtrl::SaveModule()
 	return m_document != NULL;
 }
 
-int CAutocomplectionCtrl::GetRealPosition()
+int CCodeEditorCtrl::GetRealPosition()
 {
 	wxString sCode = GetTextRange(0, GetCurrentPos());
 	return sCode.Length();
 }
 
-int CAutocomplectionCtrl::GetRealPositionFromPoint(wxPoint pt)
+int CCodeEditorCtrl::GetRealPositionFromPoint(wxPoint pt)
 {
 	int currentPos = PositionFromPoint(pt);
 	wxString sCode = GetTextRange(0, currentPos);
 	return sCode.Length();
 }
 
-CAutocomplectionCtrl::~CAutocomplectionCtrl()
+CCodeEditorCtrl::~CCodeEditorCtrl()
 {
 	if (m_precompileModule) delete m_precompileModule;
 
 	//Events: 
-	Disconnect(wxEVT_STC_MARGINCLICK, wxStyledTextEventHandler(CAutocomplectionCtrl::OnMarginClick), NULL, this);
-	Disconnect(wxEVT_STC_STYLENEEDED, wxStyledTextEventHandler(CAutocomplectionCtrl::OnStyleNeeded), NULL, this);
-	Disconnect(wxEVT_STC_MODIFIED, wxStyledTextEventHandler(CAutocomplectionCtrl::OnTextChange), NULL, this);
+	Disconnect(wxEVT_STC_MARGINCLICK, wxStyledTextEventHandler(CCodeEditorCtrl::OnMarginClick), NULL, this);
+	Disconnect(wxEVT_STC_STYLENEEDED, wxStyledTextEventHandler(CCodeEditorCtrl::OnStyleNeeded), NULL, this);
+	Disconnect(wxEVT_STC_MODIFIED, wxStyledTextEventHandler(CCodeEditorCtrl::OnTextChange), NULL, this);
 
-	Disconnect(wxEVT_KEY_DOWN, wxKeyEventHandler(CAutocomplectionCtrl::OnKeyDown), NULL, this);
+	Disconnect(wxEVT_KEY_DOWN, wxKeyEventHandler(CCodeEditorCtrl::OnKeyDown), NULL, this);
 
-	Disconnect(wxEVT_DEBUG_EVENT, wxDebugEventHandler(CAutocomplectionCtrl::OnDebugEvent), NULL, this);
-	Disconnect(wxEVT_DEBUG_TOOLTIP_EVENT, wxDebugToolTipEventHandler(CAutocomplectionCtrl::OnDebugToolTipEvent), NULL, this);
-	Disconnect(wxEVT_DEBUG_AUTOCOMPLETE_EVENT, wxDebugAutocompleteEventHandler(CAutocomplectionCtrl::OnDebugAutocompleteEvent), NULL, this);
+	Disconnect(wxEVT_DEBUG_EVENT, wxDebugEventHandler(CCodeEditorCtrl::OnDebugEvent), NULL, this);
+	Disconnect(wxEVT_DEBUG_TOOLTIP_EVENT, wxDebugToolTipEventHandler(CCodeEditorCtrl::OnDebugToolTipEvent), NULL, this);
+	Disconnect(wxEVT_DEBUG_AUTOCOMPLETE_EVENT, wxDebugAutocompleteEventHandler(CCodeEditorCtrl::OnDebugAutocompleteEvent), NULL, this);
 
-	Disconnect(wxEVT_MOTION, wxMouseEventHandler(CAutocomplectionCtrl::OnMouseMove), NULL, this);
+	Disconnect(wxEVT_MOTION, wxMouseEventHandler(CCodeEditorCtrl::OnMouseMove), NULL, this);
 
 	//remove handler from debugger
 	debugClient->RemoveHandler(this);

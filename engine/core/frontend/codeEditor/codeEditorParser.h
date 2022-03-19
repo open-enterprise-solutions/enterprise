@@ -1,7 +1,7 @@
 #ifndef _AUTOCOMPLETE_PARSER_H__
 #define _AUTOCOMPLETE_PARSER_H__
 
-#include "autoComplectionCtrl.h"
+#include "codeEditorCtrl.h"
 
 enum eContentType
 {

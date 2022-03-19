@@ -279,7 +279,17 @@
     <ClInclude Include="compiler\valueType.h" />
     <ClInclude Include="compiler\valueTypeDescription.h" />
     <ClInclude Include="core.h" />
-    <ClInclude Include="frontend\autocomplete\bitmaps_res.h" />
+    <ClInclude Include="frontend\codeEditor\codeEditorCtrl.h" />
+    <ClInclude Include="frontend\codeEditor\codeEditorCtrlPrintOut.h" />
+    <ClInclude Include="frontend\codeEditor\codeEditorInterpreter.h" />
+    <ClInclude Include="frontend\codeEditor\codeEditorParser.h" />
+    <ClInclude Include="frontend\codeEditor\components\autoComplete.h" />
+    <ClInclude Include="frontend\codeEditor\components\callTip.h" />
+    <ClInclude Include="frontend\codeEditor\components\helpers\fontAscent.h" />
+    <ClInclude Include="frontend\codeEditor\components\helpers\listBoxVisualData.h" />
+    <ClInclude Include="frontend\codeEditor\components\helpers\listBoxWnd.h" />
+    <ClInclude Include="frontend\codeEditor\components\helpers\popupWnd.h" />
+    <ClInclude Include="frontend\codeEditor\res\bitmaps_res.h" />
     <ClInclude Include="frontend\theme\luna_auitoolbar.h" />
     <ClInclude Include="frontend\visualView\title.h" />
     <ClInclude Include="frontend\objinspect\advprops.h" />
@@ -482,16 +492,6 @@
     <ClInclude Include="frontend\visualView\controls\window.h" />
     <ClInclude Include="metadata\metadata.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="frontend\autocomplete\autoComplectionCompile.h" />
-    <ClInclude Include="frontend\autocomplete\autoComplectionCtrl.h" />
-    <ClInclude Include="frontend\autocomplete\autoComplectionParser.h" />
-    <ClInclude Include="frontend\autocomplete\autoComplectionPrintOut.h" />
-    <ClInclude Include="frontend\autocomplete\components\autoComplete.h" />
-    <ClInclude Include="frontend\autocomplete\components\callTip.h" />
-    <ClInclude Include="frontend\autocomplete\components\helpers\fontAscent.h" />
-    <ClInclude Include="frontend\autocomplete\components\helpers\listBoxVisualData.h" />
-    <ClInclude Include="frontend\autocomplete\components\helpers\listBoxWnd.h" />
-    <ClInclude Include="frontend\autocomplete\components\helpers\popupWnd.h" />
     <ClInclude Include="frontend\controls\checkBoxCtrl.h" />
     <ClInclude Include="frontend\controls\dynamicBorder.h" />
     <ClInclude Include="frontend\controls\textCtrl.h" />
@@ -761,6 +761,17 @@
     <ClCompile Include="compiler\valueType.cpp" />
     <ClCompile Include="compiler\valueTypeDescription.cpp" />
     <ClCompile Include="core.cpp" />
+    <ClCompile Include="frontend\codeEditor\codeEditorCtrl.cpp" />
+    <ClCompile Include="frontend\codeEditor\codeEditorCtrlLoader.cpp" />
+    <ClCompile Include="frontend\codeEditor\codeEditorCtrlPrintOut.cpp" />
+    <ClCompile Include="frontend\codeEditor\codeEditorInterpreter.cpp" />
+    <ClCompile Include="frontend\codeEditor\codeEditorInterpreterContext.cpp" />
+    <ClCompile Include="frontend\codeEditor\codeEditorParser.cpp" />
+    <ClCompile Include="frontend\codeEditor\components\autoComplete.cpp" />
+    <ClCompile Include="frontend\codeEditor\components\callTip.cpp" />
+    <ClCompile Include="frontend\codeEditor\components\helpers\listBoxVisualData.cpp" />
+    <ClCompile Include="frontend\codeEditor\components\helpers\listBoxWnd.cpp" />
+    <ClCompile Include="frontend\codeEditor\components\helpers\popupWnd.cpp" />
     <ClCompile Include="frontend\controls\controls.cpp" />
     <ClCompile Include="frontend\theme\luna_auitoolbar.cpp" />
     <ClCompile Include="frontend\visualView\dvc\dvc.cpp" />
@@ -1010,29 +1021,6 @@
     <ClCompile Include="frontend\visualView\controls\window.cpp" />
     <ClCompile Include="frontend\visualView\controls\itemsizer.cpp" />
     <ClCompile Include="metadata\metadata.cpp" />
-    <ClCompile Include="frontend\autocomplete\autoComplectionCompile.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-      </ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="frontend\autocomplete\autoComplectionCompileContext.cpp" />
-    <ClCompile Include="frontend\autocomplete\autoComplectionCtrl.cpp" />
-    <ClCompile Include="frontend\autocomplete\autoComplectionCtrlLoader.cpp" />
-    <ClCompile Include="frontend\autocomplete\autoComplectionParser.cpp" />
-    <ClCompile Include="frontend\autocomplete\autoComplectionPrintOut.cpp" />
-    <ClCompile Include="frontend\autocomplete\components\autoComplete.cpp" />
-    <ClCompile Include="frontend\autocomplete\components\callTip.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-      </ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-      </ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-      </ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-      </ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="frontend\autocomplete\components\helpers\listBoxVisualData.cpp" />
-    <ClCompile Include="frontend\autocomplete\components\helpers\listBoxWnd.cpp" />
-    <ClCompile Include="frontend\autocomplete\components\helpers\popupWnd.cpp" />
     <ClCompile Include="frontend\controls\treelistctrl.cpp" />
     <ClCompile Include="frontend\formSelector\formSelector.cpp" />
     <ClCompile Include="frontend\grid\gridCommon.cpp" />

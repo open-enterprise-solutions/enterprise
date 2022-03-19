@@ -1,18 +1,18 @@
 #ifndef _EDIT_H_
 #define _EDIT_H_
 
-#include "autoComplectionCtrl.h"
+#include "codeEditorCtrl.h"
 
 #if wxUSE_PRINTING_ARCHITECTURE
 
 //----------------------------------------------------------------------------
 //! EditPrint
-class CAutocomplectionPrint : public wxPrintout {
+class CCodeEditorPrintout : public wxPrintout {
 
 public:
 
 	//! constructor
-	CAutocomplectionPrint(CAutocomplectionCtrl *edit, const wxString& title = "");
+	CCodeEditorPrintout(CCodeEditorCtrl *edit, const wxString& title = "");
 
 	//! event handlers
 	bool OnPrintPage(int page) wxOVERRIDE;
@@ -23,7 +23,7 @@ public:
 	void GetPageInfo(int *minPage, int *maxPage, int *selPageFrom, int *selPageTo) wxOVERRIDE;
 
 private:
-	CAutocomplectionCtrl *m_edit;
+	CCodeEditorCtrl *m_edit;
 	wxArrayInt m_pageEnds;
 	wxRect m_pageRect;
 	wxRect m_printRect;

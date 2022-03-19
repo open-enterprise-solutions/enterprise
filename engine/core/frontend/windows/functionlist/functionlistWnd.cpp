@@ -6,7 +6,7 @@
 #include "functionlistWnd.h"
 #include "common/docInfo.h"
 
-#include "frontend/autocomplete/autoComplectionParser.h"
+#include "frontend/codeEditor/codeEditorParser.h"
 #include "metadata/metaObjectsDefines.h"
 
 wxBEGIN_EVENT_TABLE(CFunctionList, wxDialog)
@@ -14,7 +14,7 @@ wxEND_EVENT_TABLE()
 
 wxImageList *GetImageList();
 
-CFunctionList::CFunctionList(CDocument *moduleDoc, CAutocomplectionCtrl* parent)
+CFunctionList::CFunctionList(CDocument *moduleDoc, CCodeEditorCtrl* parent)
 	: wxDialog(parent, wxID_ANY, _("Procedures and functions")), m_docModule(moduleDoc), m_codeEditor(parent)
 {
 	m_OK = new wxButton(this, wxID_ANY, _("OK"));

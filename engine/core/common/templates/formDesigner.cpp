@@ -227,19 +227,19 @@ void CFormEditView::OnSelectAll(wxCommandEvent& WXUNUSED(event))
 	}
 }
 
-#include "frontend/autocomplete/autoComplectionPrintOut.h"
+#include "frontend/codeEditor/codeEditorCtrlPrintOut.h"
 #include "frontend/visualView/printout/formPrintOut.h"
 
 wxPrintout *CFormEditView::OnCreatePrintout()
 {
 	if (IsEditorActivate()) {
-		return new CAutocomplectionPrint(m_code, this->GetViewName());
+		return new CCodeEditorPrintout(m_code, this->GetViewName());
 	}
 
 	return new CFormPrintout(m_visualEditor->GetVisualEditor());
 }
 
-#include "frontend/autocomplete/autoComplectionParser.h"
+#include "frontend/codeEditor/codeEditorParser.h"
 #include "utils/stringUtils.h"
 
 void CFormEditView::OnEventHandlerModified(wxFrameEventHandlerEvent &event)
@@ -471,7 +471,7 @@ void CFormEditView::InitializeFormDesigner(long flags)
 
 void CFormEditView::InitializeCodeView(long flags)
 {
-	m_code = new CAutocomplectionCtrl(GetDocument(), m_notebook, wxID_ANY,
+	m_code = new CCodeEditorCtrl(GetDocument(), m_notebook, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
 
 	m_code->SetEditorSettings(mainFrame->GetEditorSettings());

@@ -8,7 +8,7 @@
 #include <wx/listctrl.h>
 
 class CDocument;
-class CAutocomplectionCtrl;
+class CCodeEditorCtrl;
 
 #include <map>
 
@@ -24,7 +24,7 @@ struct CFunctionList : public wxDialog
 	wxListCtrl *m_listProcedures;
 
 	CDocument *m_docModule;
-	CAutocomplectionCtrl *m_codeEditor;
+	CCodeEditorCtrl *m_codeEditor;
 
 	struct offset_proc_t {
 		int m_line;
@@ -35,7 +35,7 @@ struct CFunctionList : public wxDialog
 
 public:
 
-	CFunctionList(CDocument *moduleDoc, CAutocomplectionCtrl* parent);   // standard constructor
+	CFunctionList(CDocument *moduleDoc, CCodeEditorCtrl* parent);   // standard constructor
 
 	void OnButtonOk(wxCommandEvent &event);
 	void OnButtonCancel(wxCommandEvent &event);

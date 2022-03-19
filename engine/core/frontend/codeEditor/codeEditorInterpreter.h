@@ -159,7 +159,7 @@ class CPrecompileModule : public CTranslateModule
 
 	unsigned int m_nCurrentPos;
 
-	friend class CAutocomplectionCtrl;
+	friend class CCodeEditorCtrl;
 
 public:
 
