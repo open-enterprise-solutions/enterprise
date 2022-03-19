@@ -68,8 +68,6 @@ CDocChildFrame::~CDocChildFrame()
 
 	this->Unbind(wxEVT_ACTIVATE, &CDocChildFrame::OnActivate, this);
 	this->Unbind(wxEVT_CLOSE_WINDOW, &CDocChildFrame::OnCloseWindow, this);
-
-	m_pMDIParentFrame = NULL;
 }
 
 void CDocChildFrame::SetLabel(const wxString& label)

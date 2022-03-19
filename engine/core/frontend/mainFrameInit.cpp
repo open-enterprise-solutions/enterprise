@@ -12,8 +12,8 @@
 
 CMainFrame* CMainFrame::s_instance = NULL;
 
-CMainFrame* CMainFrame::Get() { 
-	return s_instance; 
+CMainFrame* CMainFrame::Get() {
+	return s_instance;
 }
 
 #include "frontend/mainFrameDesigner.h"

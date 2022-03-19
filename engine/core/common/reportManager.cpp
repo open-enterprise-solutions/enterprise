@@ -823,39 +823,18 @@ CDocument* CReportManager::OpenForm(IMetaObject *metaObject, CDocument *docParen
 
 bool CReportManager::CloseDocument(wxDocument* doc, bool force)
 {
-	auto m_documentViews = doc->GetViews();
+	if (!doc->Close() && !force)
+		return false;
 
-	// first check if all views agree to be closed
-	const wxList::iterator end = m_documentViews.end();
-	for (wxList::iterator i = m_documentViews.begin(); i != end; ++i)
-	{
-		wxView *view = (wxView *)*i;
-		if (!view->Close(false)) {
-			return false;
-		}
-		else
-		{
-			view->GetFrame()->Destroy();
-			view->SetFrame(NULL);
-		}
-	}
+	// To really force the document to close, we must ensure that it isn't
+	// modified, otherwise it would ask the user about whether it should be
+	// destroyed (again, it had been already done by Close() above) and might
+	// not destroy it at all, while we must do it here.
+	doc->Modify(false);
 
-	// as we delete elements we iterate over, don't use the usual "from
-	// begin to end" loop
-	for (;;)
-	{
-		wxView *view = (wxView *)*m_documentViews.begin();
-
-		bool isLastOne = m_documentViews.size() == 1;
-
-		// this always deletes the node implicitly and if this is the last
-		// view also deletes this object itself (also implicitly, great),
-		// so we can't test for m_documentViews.empty() after calling this!
-		delete view;
-
-		if (isLastOne)
-			break;
-	}
+	// Implicitly deletes the document when
+	// the last view is deleted
+	doc->DeleteAllViews();
 
 	wxASSERT(!m_docs.Member(doc));
 
@@ -865,10 +844,9 @@ bool CReportManager::CloseDocument(wxDocument* doc, bool force)
 bool CReportManager::CloseDocuments(bool force)
 {
 	wxList::compatibility_iterator node = m_docs.GetFirst();
-
 	while (node)
 	{
-		wxDocument *doc = (wxDocument *)node->GetData();
+		wxDocument* doc = (wxDocument*)node->GetData();
 		wxList::compatibility_iterator next = node->GetNext();
 
 		if (!CloseDocument(doc, force))
@@ -879,7 +857,6 @@ bool CReportManager::CloseDocuments(bool force)
 		// delete another.
 		node = next;
 	}
-
 	return true;
 }
 

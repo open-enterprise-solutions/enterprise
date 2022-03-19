@@ -197,7 +197,6 @@ void CTranslateError::ProcessError(const wxString &fileName,
 
 			//close window
 			if (retCode > 2) {
-				mainFrameDestroy();
 				appDataDestroy();
 				std::exit(1);
 			}
