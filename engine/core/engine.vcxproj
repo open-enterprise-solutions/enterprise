@@ -280,6 +280,7 @@
     <ClInclude Include="compiler\valueTypeDescription.h" />
     <ClInclude Include="core.h" />
     <ClInclude Include="frontend\autocomplete\bitmaps_res.h" />
+    <ClInclude Include="frontend\theme\luna_auitoolbar.h" />
     <ClInclude Include="frontend\visualView\title.h" />
     <ClInclude Include="frontend\objinspect\advprops.h" />
     <ClInclude Include="frontend\objinspect\editors.h" />
@@ -761,6 +762,7 @@
     <ClCompile Include="compiler\valueTypeDescription.cpp" />
     <ClCompile Include="core.cpp" />
     <ClCompile Include="frontend\controls\controls.cpp" />
+    <ClCompile Include="frontend\theme\luna_auitoolbar.cpp" />
     <ClCompile Include="frontend\visualView\dvc\dvc.cpp" />
     <ClCompile Include="frontend\visualView\controls\formDatabase.cpp" />
     <ClCompile Include="frontend\visualView\controls\tableBoxColumnEvents.cpp" />

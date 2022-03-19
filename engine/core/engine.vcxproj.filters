@@ -1608,6 +1608,9 @@
     <ClCompile Include="frontend\windows\functionlist\functionlistWnd.cpp">
       <Filter>frontend\windows\functionlist</Filter>
     </ClCompile>
+    <ClCompile Include="frontend\theme\luna_auitoolbar.cpp">
+      <Filter>frontend\theme</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="compiler\Methods.h">
@@ -3142,6 +3145,9 @@
     </ClInclude>
     <ClInclude Include="frontend\windows\functionlist\functionlistWnd.h">
       <Filter>frontend\windows\functionlist</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\theme\luna_auitoolbar.h">
+      <Filter>frontend\theme</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

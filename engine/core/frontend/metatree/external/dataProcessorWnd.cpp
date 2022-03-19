@@ -5,6 +5,7 @@
 
 #include "dataProcessorWnd.h"
 #include "compiler/debugger/debugClient.h"
+#include "frontend/theme/luna_auitoolbar.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CDataProcessorTree, wxPanel);
 
@@ -77,7 +78,7 @@ CDataProcessorTree::CDataProcessorTree(CDocument *docParent, wxWindow* parent, w
 	m_metaTreeToolbar->AddTool(ID_METATREE_REMOVE, _("remove"), wxGetImageBMPFromResource(IDB_EDIT_CUT), wxNullBitmap, wxItemKind::wxITEM_NORMAL, _("remove item"), _("remove item"), NULL);
 	m_metaTreeToolbar->Realize();
 
-	m_metaTreeToolbar->SetArtProvider(new wxAuiGenericToolBarArt());
+	m_metaTreeToolbar->SetArtProvider(new CAuiGenericToolBarArt());
 
 	sbSizerTree->Add(m_metaTreeToolbar, 0, wxALL | wxEXPAND, 0);
 

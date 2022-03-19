@@ -1,5 +1,6 @@
 #include "userListWnd.h"
 #include "databaseLayer/databaseLayer.h"
+#include "frontend/theme/luna_auitoolbar.h"
 #include "metadata/metadata.h"
 #include "appData.h"
 
@@ -78,7 +79,7 @@ CUsersListWnd::CUsersListWnd(wxWindow* parent, wxWindowID id, const wxString& ti
 	wxBoxSizer* sizerList = new wxBoxSizer(wxVERTICAL);
 
 	m_auiToolBarUsers = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_TEXT);
-	m_auiToolBarUsers->SetArtProvider(new wxAuiGenericToolBarArt());
+	m_auiToolBarUsers->SetArtProvider(new CAuiGenericToolBarArt());
 
 	m_toolAdd = m_auiToolBarUsers->AddTool(wxID_USERS_TOOL_ADD, _("add"), wxNullBitmap, wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, NULL);
 	m_toolCopy = m_auiToolBarUsers->AddTool(wxID_USERS_TOOL_COPY, _("copy"), wxNullBitmap, wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, NULL);

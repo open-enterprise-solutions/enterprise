@@ -1,6 +1,7 @@
 #include "toolbar.h"
 #include "frontend/visualView/visualEditor.h"
 #include "frontend/visualView/visualEditorView.h"
+#include "frontend/theme/luna_auitoolbar.h"
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
@@ -75,7 +76,7 @@ wxObject* CValueToolbar::Create(wxObject* parent, IVisualHost *visualHost)
 	if (!IsNull(wxT("packing"))) toolbar->SetToolPacking(m_packing);
 	if (!IsNull(wxT("separation"))) toolbar->SetToolSeparation(m_separation);*/
 
-	toolbar->SetArtProvider(new wxAuiGenericToolBarArt());
+	toolbar->SetArtProvider(new CAuiGenericToolBarArt());
 	toolbar->Bind(wxEVT_TOOL, &CValueToolbar::OnTool, this);
 
 	return toolbar;

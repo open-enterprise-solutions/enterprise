@@ -5,6 +5,7 @@
 
 #include "metatreeWnd.h"
 #include "compiler/debugger/debugClient.h"
+#include "frontend/theme/luna_auitoolbar.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CMetadataTree, wxPanel);
 
@@ -40,7 +41,7 @@ CMetadataTree::CMetadataTree(wxWindow *parent, int id)
 	m_metaTreeToolbar->AddTool(ID_METATREE_REMOVE, _("remove"), wxGetImageBMPFromResource(IDB_EDIT_CUT), wxNullBitmap, wxItemKind::wxITEM_NORMAL, _("remove item"), _("remove item"), NULL);
 	m_metaTreeToolbar->Realize();
 
-	m_metaTreeToolbar->SetArtProvider(new wxAuiGenericToolBarArt());
+	m_metaTreeToolbar->SetArtProvider(new CAuiGenericToolBarArt());
 
 	//Create main tree
 	m_metaTreeWnd = new CMetadataTreeWnd(this);
@@ -81,7 +82,7 @@ CMetadataTree::CMetadataTree(CDocument *docParent, wxWindow *parent, int id)
 	m_metaTreeToolbar->AddTool(ID_METATREE_REMOVE, _("remove"), wxGetImageBMPFromResource(IDB_EDIT_CUT), wxNullBitmap, wxItemKind::wxITEM_NORMAL, _("remove item"), _("remove item"), NULL);
 	m_metaTreeToolbar->Realize();
 
-	m_metaTreeToolbar->SetArtProvider(new wxAuiGenericToolBarArt());
+	m_metaTreeToolbar->SetArtProvider(new CAuiGenericToolBarArt());
 
 	//Create main tree
 	m_metaTreeWnd = new CMetadataTreeWnd(this);
