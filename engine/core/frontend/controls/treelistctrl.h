@@ -274,7 +274,7 @@ public:
 	// accessors (most properties have a default at row/item level)
 	// ---------
 
-	wxString GetItemText(const wxTreeItemId& item)             const { return GetItemText(item, GetMainColumn()); };
+	wxString GetItemText(const wxTreeItemId& item)             const { return GetItemText(item, GetMainColumn()); }
 	wxString GetItemText(const wxTreeItemId& item, int column) const;
 
 	int GetItemImage(const wxTreeItemId& item, wxTreeItemIcon which = wxTreeItemIcon_Normal) const;
@@ -342,8 +342,8 @@ public:
 	// is this item currently selected (the same as has focus)?
 	bool IsSelected(const wxTreeItemId& item) const;
 	// is item text in bold font?
-	bool IsBold(const wxTreeItemId& item)             const { return IsBold(item, GetMainColumn()); };
-	bool IsBold(const wxTreeItemId& item, int column) const { return GetItemBold(item, column); };
+	bool IsBold(const wxTreeItemId& item)             const { return IsBold(item, GetMainColumn()); }
+	bool IsBold(const wxTreeItemId& item, int column) const { return GetItemBold(item, column); }
 	// does the layout include space for a button?
 
 
@@ -534,7 +534,7 @@ public:
 	void SortChildren(const wxTreeItemId& item, int column = -1, bool reverseOrder = false);
 
 	// searching (by column only)
-	wxTreeItemId FindItem(const wxTreeItemId& item, const wxString& str, int mode = 0) { return FindItem(item, -1, str, mode); };
+	wxTreeItemId FindItem(const wxTreeItemId& item, const wxString& str, int mode = 0) { return FindItem(item, -1, str, mode); }
 	wxTreeItemId FindItem(const wxTreeItemId& item, int column, const wxString& str, int mode = 0);
 
 	// overridden base class virtuals

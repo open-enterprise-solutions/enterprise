@@ -12,9 +12,9 @@
 wxBEGIN_EVENT_TABLE(CFunctionList, wxDialog)
 wxEND_EVENT_TABLE()
 
-wxImageList *GetImageList();
+wxImageList* GetImageList();
 
-CFunctionList::CFunctionList(CDocument *moduleDoc, CCodeEditorCtrl* parent)
+CFunctionList::CFunctionList(CDocument* moduleDoc, CCodeEditorCtrl* parent)
 	: wxDialog(parent, wxID_ANY, _("Procedures and functions")), m_docModule(moduleDoc), m_codeEditor(parent)
 {
 	m_OK = new wxButton(this, wxID_ANY, _("OK"));
@@ -25,7 +25,7 @@ CFunctionList::CFunctionList(CDocument *moduleDoc, CCodeEditorCtrl* parent)
 	m_Sort = new wxCheckBox(this, wxID_ANY, _("Sort"));
 	m_Sort->Connect(wxEVT_CHECKBOX, wxCommandEventHandler(CFunctionList::OnCheckBoxSort), NULL, this);
 
-	wxBoxSizer *boxsizerList = new wxBoxSizer(wxHORIZONTAL);
+	wxBoxSizer* boxsizerList = new wxBoxSizer(wxHORIZONTAL);
 
 	m_listProcedures = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_NO_HEADER);
 	m_listProcedures->AppendColumn(_("Procedures and functions"), wxLIST_FORMAT_LEFT, GetSize().x - 10);
@@ -34,7 +34,7 @@ CFunctionList::CFunctionList(CDocument *moduleDoc, CCodeEditorCtrl* parent)
 
 	m_listProcedures->SetImageList(::GetImageList(), wxIMAGE_LIST_SMALL);
 
-	CMetaModuleObject *metaModule = dynamic_cast<CMetaModuleObject *>(moduleDoc->GetMetaObject());
+	CMetaModuleObject* metaModule = dynamic_cast<CMetaModuleObject*>(moduleDoc->GetMetaObject());
 	wxASSERT(metaModule);
 
 	CParserModule moduleParser; std::vector<wxString> arrayProcedures; int maxLine = 0;
@@ -92,7 +92,7 @@ CFunctionList::CFunctionList(CDocument *moduleDoc, CCodeEditorCtrl* parent)
 		m_aOffsets.insert_or_assign(item, offset_proc_t{ maxLine,  wxNOT_FOUND });
 	}
 
-	wxBoxSizer *boxsizerButton = new wxBoxSizer(wxVERTICAL);
+	wxBoxSizer* boxsizerButton = new wxBoxSizer(wxVERTICAL);
 	boxsizerButton->Add(m_OK, 0, wxEXPAND);
 	boxsizerButton->Add(m_Cancel, 0, wxEXPAND);
 	boxsizerButton->AddSpacer(10);
@@ -106,7 +106,7 @@ CFunctionList::CFunctionList(CDocument *moduleDoc, CCodeEditorCtrl* parent)
 
 #include "metadata/metadata.h"
 
-void CFunctionList::OnButtonOk(wxCommandEvent &event)
+void CFunctionList::OnButtonOk(wxCommandEvent& event)
 {
 	long lSelectedItem = m_listProcedures->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
 
@@ -115,7 +115,7 @@ void CFunctionList::OnButtonOk(wxCommandEvent &event)
 
 	m_codeEditor->SetSTCFocus(true);
 
-	CMetaModuleObject *metaModule = wxDynamicCast(
+	CMetaModuleObject* metaModule = wxDynamicCast(
 		m_docModule->GetMetaObject(), CMetaModuleObject
 	);
 
@@ -156,8 +156,8 @@ void CFunctionList::OnButtonOk(wxCommandEvent &event)
 
 			int endPos = m_codeEditor->GetLineEndPosition(line.m_line);
 
-			wxString offset = endPos > 0 ? 
-				"\r\n\r\n" : ""; 
+			wxString offset = endPos > 0 ?
+				"\r\n\r\n" : "";
 
 			m_codeEditor->Replace(endPos, endPos,
 				offset +
@@ -166,14 +166,14 @@ void CFunctionList::OnButtonOk(wxCommandEvent &event)
 				"endProcedure"
 			);
 
-			m_codeEditor->GotoLine(line.m_line + (endPos > 0 ? 2 : 0) );
+			m_codeEditor->GotoLine(line.m_line + (endPos > 0 ? 2 : 0));
 		}
 	}
 
 	EndModal(0); event.Skip();
 }
 
-void CFunctionList::OnButtonCancel(wxCommandEvent &event)
+void CFunctionList::OnButtonCancel(wxCommandEvent& event)
 {
 	m_codeEditor->Raise();
 	m_codeEditor->SetFocus();
@@ -185,14 +185,14 @@ void CFunctionList::OnButtonCancel(wxCommandEvent &event)
 
 struct sortInfo_t
 {
-	wxListCtrl *m_listCtrl;
+	wxListCtrl* m_listCtrl;
 	bool m_sortOrder;
 };
 
 int wxCALLBACK CompareFunction(wxIntPtr item1, wxIntPtr item2, wxIntPtr sortData)
 {
-	sortInfo_t *sortInfo = (sortInfo_t *)sortData;
-	wxListCtrl *listCtrl = sortInfo->m_listCtrl;
+	sortInfo_t* sortInfo = (sortInfo_t*)sortData;
+	wxListCtrl* listCtrl = sortInfo->m_listCtrl;
 
 	long index1 = listCtrl->FindItem(-1, item1); // gets index of the first item
 	long index2 = listCtrl->FindItem(-1, item2); // gets index of the second item
@@ -202,12 +202,10 @@ int wxCALLBACK CompareFunction(wxIntPtr item1, wxIntPtr item2, wxIntPtr sortData
 		wxString string1 = listCtrl->GetItemText(index1);
 		wxString string2 = listCtrl->GetItemText(index2);
 
-		if (string1.Cmp(string2) < 0)
-		{
+		if (string1.Cmp(string2) < 0) {
 			return -1;
 		}
-		else if (string1.Cmp(string2) > 0)
-		{
+		else if (string1.Cmp(string2) > 0) {
 			return 1;
 		}
 
@@ -228,7 +226,7 @@ int wxCALLBACK CompareFunction(wxIntPtr item1, wxIntPtr item2, wxIntPtr sortData
 
 static sortInfo_t m_sortInfo;
 
-void CFunctionList::OnCheckBoxSort(wxCommandEvent &event)
+void CFunctionList::OnCheckBoxSort(wxCommandEvent& event)
 {
 	m_sortInfo.m_listCtrl = m_listProcedures;
 	m_sortInfo.m_sortOrder = m_Sort->GetValue();
@@ -237,7 +235,7 @@ void CFunctionList::OnCheckBoxSort(wxCommandEvent &event)
 	event.Skip();
 }
 
-void CFunctionList::OnItemSelected(wxListEvent &event)
+void CFunctionList::OnItemSelected(wxListEvent& event)
 {
 	/*long lSelectedItem = m_listProcedures->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
 

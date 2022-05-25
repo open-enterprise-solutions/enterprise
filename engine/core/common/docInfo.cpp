@@ -50,7 +50,7 @@ wxString CDocument::GetModuleName() const
 }
 
 CDocument::CDocument(CDocument *docParent) :
-	wxDocument(), m_metaObject(NULL), m_bChildDoc(true)
+	wxDocument(), m_metaObject(NULL), m_childDoc(true)
 {
 	m_docParent = docParent;
 	if (docParent) {
@@ -100,13 +100,13 @@ bool CDocument::OnSaveDocument(const wxString& filename)
 	return wxDocument::OnSaveDocument(filename);
 }
 
-#include "reportManager.h"
+#include "docManager.h"
 #include "frontend/metatree/metatreeWnd.h"
 
 bool CDocument::OnCloseDocument()
 {
 	if (!m_docParent) {
-		reportManager->RemoveDocument(this);
+		docManager->RemoveDocument(this);
 	}
 
 	if (appData->DesignerMode()) {
@@ -224,6 +224,21 @@ bool CDocument::Close()
 	}
 
 	return OnCloseDocument();
+}
+
+void CDocument::UpdateAllViews(wxView* sender, wxObject* hint)
+{
+	wxList::compatibility_iterator node = m_documentViews.GetFirst();
+	while (node) {
+		wxView* view = (wxView*)node->GetData();
+		if (view != sender)
+			view->OnUpdate(sender, hint);
+		node = node->GetNext();
+	}
+
+	for (auto childDoc : m_childDocs) {
+		childDoc->UpdateAllViews(sender, hint);
+	}
 }
 
 bool CDocument::DeleteAllViews()

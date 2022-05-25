@@ -10,7 +10,7 @@ FirebirdParameterCollection::FirebirdParameterCollection(FirebirdInterface* pInt
 FirebirdParameterCollection::~FirebirdParameterCollection()
 {
 	if (m_FirebirdParameters) FreeParameterSpace();
-	
+
 	FirebirdParameterArray::iterator start = m_Parameters.begin();
 	FirebirdParameterArray::iterator stop = m_Parameters.end();
 
@@ -21,7 +21,7 @@ FirebirdParameterCollection::~FirebirdParameterCollection()
 		(*start) = NULL;
 		start++;
 	}
-	
+
 	m_Parameters.clear();
 }
 
@@ -57,9 +57,9 @@ void FirebirdParameterCollection::SetParam(int nPosition)
 	SetParam(nPosition, pParameter);
 }
 
-void FirebirdParameterCollection::SetParam(int nPosition, isc_db_handle pDatabase, isc_tr_handle pTransaction, const void* pData, long nDataLength)
+void FirebirdParameterCollection::SetParam(int nPosition, const void* pData, long nDataLength)
 {
-	FirebirdParameter* pParameter = new FirebirdParameter(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], pDatabase, pTransaction, pData, nDataLength);
+	FirebirdParameter* pParameter = new FirebirdParameter(m_pInterface, &m_FirebirdParameters->sqlvar[nPosition - 1], pData, nDataLength);
 	SetParam(nPosition, pParameter);
 }
 
@@ -91,10 +91,10 @@ void FirebirdParameterCollection::SetParam(int nPosition, FirebirdParameter* pPa
 	m_Parameters[nPosition - 1] = pParameter;
 }
 
-void FirebirdParameterCollection::ResetBlobParameters()
+bool FirebirdParameterCollection::ResetBlobParameters(isc_db_handle database, isc_tr_handle transaction)
 {
 	if (m_FirebirdParameters == NULL)
-		return;
+		return false;
 
 	FirebirdParameterArray::iterator start = m_Parameters.begin();
 	FirebirdParameterArray::iterator stop = m_Parameters.end();
@@ -104,10 +104,14 @@ void FirebirdParameterCollection::ResetBlobParameters()
 		const XSQLVAR* pVar = ((FirebirdParameter*)(*start))->GetFirebirdSqlVarPtr();
 		if ((pVar->sqltype & ~1) == SQL_BLOB)
 		{
-			((FirebirdParameter*)(*start))->ResetBlob();
+			bool result = ((FirebirdParameter*)(*start))->ResetBlob(database, transaction);
+			if (!result)
+				return false;
 		}
 		start++;
 	}
+
+	return true;
 }
 
 void FirebirdParameterCollection::AllocateParameterSpace()

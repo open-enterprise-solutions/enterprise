@@ -7,15 +7,20 @@
 //*                                       Base collection variant                                   *
 //***************************************************************************************************
 
-class IEnumerationMethods : public CValue {
-	CMethods *m_methods;
+class IEnumerationWrapper : public CValue {
+	CMethods* m_methods;
 public:
 
-	IEnumerationMethods(bool createInstance = false);
-	virtual ~IEnumerationMethods();
+	IEnumerationWrapper(bool createInstance = false);
+	virtual ~IEnumerationWrapper();
 
-	virtual CMethods* GetPMethods() const { return m_methods; }
+	virtual CMethods* GetPMethods() const {
+		return m_methods;
+	}
+
 	virtual void PrepareNames() const;
+
+	virtual CValue* GetEnumVariantValue() const = 0;
 
 	virtual wxString GetTypeString() const = 0;
 	virtual wxString GetString() const = 0;
@@ -25,13 +30,26 @@ protected:
 };
 
 template <typename valT>
-class IEnumerationValue : public IEnumerationMethods
+class IEnumerationValue : public IEnumerationWrapper
 {
 public:
 
-	IEnumerationValue(bool createInstance = false) : IEnumerationMethods(createInstance) {}
+	IEnumerationValue(bool createInstance = false) :
+		IEnumerationWrapper(createInstance)
+	{
+	}
 
-	virtual valT GetEnumValue() = 0;
+	virtual bool Init() {
+		return true;
+	}
+
+	virtual bool Init(CValue** aParams) {
+		valT defValue = static_cast<valT>(aParams[0]->ToInt());
+		SetEnumValue(defValue);
+		return true;
+	}
+
+	virtual valT GetEnumValue() const = 0;
 	virtual void SetEnumValue(valT val) = 0;
 };
 
@@ -46,7 +64,7 @@ public:
 
 	IEnumerationVariant() : CValue(eValueTypes::TYPE_ENUM, true) {}
 
-	virtual valT GetEnumValue() = 0;
+	virtual valT GetEnumValue() const = 0;
 	virtual void SetEnumValue(valT val) = 0;
 };
 

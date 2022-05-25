@@ -1,70 +1,93 @@
 #include "tableBox.h"
 #include "metadata/metadata.h"
 #include "metadata/singleMetaTypes.h"
-#include "form.h"
 
-CLASS_ID CValueTableBoxColumn::GetTypeClsid()
+bool CValueTableBoxColumn::TextProcessing(CValue& newValue, const wxString& strData)
 {
-	CLASS_ID clsid = 0;
+	CValue selValue = GetControlValue();
 
-	if (m_colSource != wxNOT_FOUND) {
-		IMetaAttributeObject *metaObject = NULL;
-		if (m_formOwner) {
-			IMetaObjectValue *metaObjectValue = m_formOwner->GetMetaObject();
-			if (metaObjectValue) {
-				metaObject = wxDynamicCast(
-					metaObjectValue->FindMetaObjectByID(m_colSource), IMetaAttributeObject
-				);
-			}
-			if (metaObject != NULL) {
-				clsid = metaObject->GetClassTypeObject();
-			}
+	if (selValue.GetType() == eValueTypes::TYPE_EMPTY) {
+		//wxMessageBox(_("please select field type"));
+		return false;
+	}
+
+	if (strData.Length() > 0) {
+		std::vector<CValue> foundedObjects;
+		if (selValue.FindValue(strData, foundedObjects)) {
+			newValue = foundedObjects.at(0);
 		}
 	}
 	else {
-		IMetadata *metaData = GetMetaData();
-		if (m_typeDescription.GetTypeObject() >= defaultMetaID) {
-			IMetaObjectValue *metaObject = wxDynamicCast(
-				metaData->GetMetaObject(m_typeDescription.GetTypeObject()), IMetaObjectValue
-			);
-			wxASSERT(metaObject);
-
-			IMetaTypeObjectValueSingle *clsFactory =
-				metaObject->GetTypeObject(eMetaObjectType::enReference);
-			wxASSERT(clsFactory);
-			clsid = clsFactory->GetTypeID();
-		}
-		else {
-			clsid = CValue::GetIDByVT((const eValueTypes)m_typeDescription.GetTypeObject());
-		}
+		newValue = CValue();
 	}
 
-	return clsid;
+	SetControlValue(newValue);
+	return true;
 }
 
-bool CValueTableBoxColumn::TextProcessing(CValue &selValue,  const wxString &stringData)
+void CValueTableBoxColumn::ChoiceProcessing(CValue& vSelected)
 {
-	CLASS_ID clsid = GetTypeClsid();
-	if (clsid > 0) {
-		IMetadata *metaData = GetMetaData();
-		wxString className =
-			metaData->GetNameObjectFromID(clsid);
-		CValue newValue = metaData->CreateObject(className);
-		if (stringData.Length() > 0) {
-			std::vector<CValue> foundedObjects;
-			if (newValue.FindValue(stringData, foundedObjects)) {
-				selValue = foundedObjects.at(0);
-			}
+	CValueTableBox* tableBox = wxDynamicCast(
+		GetParent(),
+		CValueTableBox
+	);
+
+	wxASSERT(tableBox);
+
+	if (tableBox->m_tableCurrentLine) {
+		if (m_dataSource != wxNOT_FOUND) {
+			tableBox->m_tableCurrentLine->SetValueByMetaID(m_dataSource, vSelected);
 		}
-		else {
-			selValue = newValue;
-		}
-		return true;
 	}
-	return false;
+
+	CDataViewColumnObject* columnObject =
+		dynamic_cast<CDataViewColumnObject*>(GetWxObject());
+
+	if (columnObject) {
+		CValueViewRenderer* renderer = columnObject->GetRenderer();
+		wxASSERT(renderer);
+		wxVariant valVariant = vSelected.GetString();
+		renderer->FinishSelecting(valVariant);
+	}
 }
 
-void CValueTableBoxColumn::OnSelectButtonPressed(wxCommandEvent &event)
+///////////////////////////////////////////////////////////////////////
+
+void CValueTableBoxColumn::OnTextEnter(wxCommandEvent& event)
+{
+	wxTextCtrl* textCtrl = wxDynamicCast(
+		event.GetEventObject(), wxTextCtrl
+	);
+
+	CValue selValue;
+	if (TextProcessing(selValue, textCtrl->GetValue())) {
+		textCtrl->SetValue(selValue.GetString());
+	}
+	else {
+		textCtrl->SetValue(wxEmptyString);
+	}
+
+	event.Skip();
+}
+
+void CValueTableBoxColumn::OnKillFocus(wxFocusEvent& event)
+{
+	wxTextCtrl* textCtrl = wxDynamicCast(
+		event.GetEventObject(), wxTextCtrl
+	);
+
+	CValue selValue;
+	if (TextProcessing(selValue, textCtrl->GetValue())) {
+		textCtrl->SetValue(selValue.GetString());
+	}
+	else {
+		textCtrl->SetValue(wxEmptyString);
+	}
+
+	event.Skip();
+}
+
+void CValueTableBoxColumn::OnSelectButtonPressed(wxCommandEvent& event)
 {
 	CValue selfControl = this; CValue standartProcessing = true;
 	IValueControl::CallEvent("startChoice", selfControl, standartProcessing);
@@ -72,30 +95,32 @@ void CValueTableBoxColumn::OnSelectButtonPressed(wxCommandEvent &event)
 		return;
 	}
 
-	if (m_colSource != wxNOT_FOUND) {
-		IMetaObject *metaObject = NULL;
-		if (m_formOwner) {
-			IMetaObjectValue *metaObjectValue = m_formOwner->GetMetaObject();
-			if (metaObjectValue) {
-				metaObject = metaObjectValue->FindMetaObjectByID(m_colSource);
-			}
-		}
-		if (metaObject) {
-			metaObject->ProcessChoice(this, m_choiceForm);
-		}
+	CValue selValue = GetControlValue();
+
+	if (selValue.GetType() == eValueTypes::TYPE_EMPTY) {
+
+		CLASS_ID clsid = GetDataType();
+		if (clsid == 0)
+			return;
+
+		IMetadata* metaData = GetMetaData();
+		CValue newValue = metaData->CreateObject(
+			metaData->GetNameObjectFromID(clsid)
+		);
+
+		SetControlValue(newValue);
+		return;
 	}
-	else {
-		IMetadata *metaData = GetMetaData();
-		if (metaData) {
-			IMetaObject* metaObject = metaData->GetMetaObject(m_typeDescription.GetTypeObject());
-			if (metaObject) {
-				metaObject->ProcessChoice(this, m_choiceForm);
-			}
-		}
+
+	IMetaObject* metaObject =
+		IAttributeControl::GetMetaObjectById(selValue.GetClassType());
+
+	if (metaObject) {
+		metaObject->ProcessChoice(this, m_choiceForm);
 	}
 }
 
-void CValueTableBoxColumn::OnListButtonPressed(wxCommandEvent &event)
+void CValueTableBoxColumn::OnListButtonPressed(wxCommandEvent& event)
 {
 	CValue selfControl = this; CValue standartProcessing = true;
 	IValueControl::CallEvent("startListChoice", selfControl, standartProcessing);
@@ -105,7 +130,9 @@ void CValueTableBoxColumn::OnListButtonPressed(wxCommandEvent &event)
 
 }
 
-void CValueTableBoxColumn::OnClearButtonPressed(wxCommandEvent &event)
+#include "frontend/controls/textEditor.h"
+
+void CValueTableBoxColumn::OnClearButtonPressed(wxCommandEvent& event)
 {
 	CValue selfControl = this; CValue standartProcessing = true;
 	IValueControl::CallEvent("clearing", selfControl, standartProcessing);
@@ -113,7 +140,7 @@ void CValueTableBoxColumn::OnClearButtonPressed(wxCommandEvent &event)
 		return;
 	}
 
-	CValueTableBox *tableBox = wxDynamicCast(
+	CValueTableBox* tableBox = wxDynamicCast(
 		GetParent(),
 		CValueTableBox
 	);
@@ -121,72 +148,23 @@ void CValueTableBoxColumn::OnClearButtonPressed(wxCommandEvent &event)
 	wxASSERT(tableBox);
 
 	if (tableBox->m_tableCurrentLine) {
-		if (m_colSource != wxNOT_FOUND) {
-			tableBox->m_tableCurrentLine->SetValueByMetaID(m_colSource, CValue());
+		if (m_dataSource != wxNOT_FOUND) {
+			tableBox->m_tableCurrentLine->SetValueByMetaID(m_dataSource, CValue());
 		}
 	}
 
-	CDataViewColumnObject *columnObject =
-		dynamic_cast<CDataViewColumnObject *>(GetWxObject());
+	CDataViewColumnObject* columnObject =
+		dynamic_cast<CDataViewColumnObject*>(GetWxObject());
 	if (columnObject) {
-		CValueViewRenderer *renderer = columnObject->GetRenderer();
+		CValueViewRenderer* renderer = columnObject->GetRenderer();
 		wxASSERT(renderer);
-		wxVariant valVariant = wxEmptyString;
-		renderer->FinishSelecting(valVariant);
-	}
-}
-
-#include "frontend/controls/textCtrl.h"
-
-void CValueTableBoxColumn::OnTextEnter(wxCommandEvent &event)
-{
-	wxTextCtrl *textCtrl = wxDynamicCast(
-		event.GetEventObject(), wxTextCtrl
-	);
-
-	CValue selValue;
-	if (TextProcessing(selValue, textCtrl->GetValue())) {
-		textCtrl->SetValue(selValue.GetString());
-	}
-
-	event.Skip();
-}
-
-void CValueTableBoxColumn::OnKillFocus(wxFocusEvent &event)
-{
-	wxTextCtrl *textCtrl = wxDynamicCast(
-		event.GetEventObject(), wxTextCtrl
-	);
-
-	CValue selValue;
-	if (TextProcessing(selValue, textCtrl->GetValue())) {
-		textCtrl->SetValue(selValue.GetString());
-	}
-
-	event.Skip();
-}
-
-void CValueTableBoxColumn::ChoiceProcessing(CValue &vSelected)
-{
-	CValueTableBox *tableBox = wxDynamicCast(
-		GetParent(),
-		CValueTableBox
-	);
-
-	wxASSERT(tableBox);
-
-	if (tableBox->m_tableCurrentLine) {
-		if (m_colSource != wxNOT_FOUND) {
-			tableBox->m_tableCurrentLine->SetValueByMetaID(m_colSource, vSelected);
+		CTextCtrl* textEditor = dynamic_cast<CTextCtrl*>(renderer->GetEditorCtrl());
+		if (textEditor) {
+			textEditor->SetTextValue(wxEmptyString);
 		}
-	}
-
-	CDataViewColumnObject *columnObject =
-		dynamic_cast<CDataViewColumnObject *>(GetWxObject());
-	if (columnObject) {
-		CValueViewRenderer *renderer = columnObject->GetRenderer();
-		wxASSERT(renderer);
-		wxVariant valVariant = vSelected.GetString();
-		renderer->FinishSelecting(valVariant);
+		else {
+			wxVariant valVariant = wxEmptyString;
+			renderer->FinishSelecting(valVariant);
+		}
 	}
 }

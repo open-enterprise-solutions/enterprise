@@ -5,7 +5,7 @@
 
 #include "dataReportWnd.h"
 #include "frontend/objinspect/objinspect.h"
-#include "common/reportManager.h"
+#include "common/docManager.h"
 #include "appData.h"
 
 #define SETITEMTYPE(hItem,xnType,xnChildImage)\
@@ -257,14 +257,14 @@ void CDataReportTree::UpdateChoiceSelection()
 	m_defaultFormValue->Clear();
 	m_defaultFormValue->AppendString(_("<not selected>"));
 
-	CMetaObjectReportValue *commonMetadata = m_metaData->GetReport();
+	CMetaObjectReport *commonMetadata = m_metaData->GetReport();
 	wxASSERT(commonMetadata);
 
 	int defSelection = 0;
 
 	for (auto metaForm : commonMetadata->GetObjectForms())
 	{
-		if (CMetaObjectReportValue::eFormReport != metaForm->GetTypeForm())
+		if (CMetaObjectReport::eFormReport != metaForm->GetTypeForm())
 			continue;
 
 		int selection_id = m_defaultFormValue->Append(metaForm->GetName(), reinterpret_cast<void *>(metaForm->GetMetaID()));
@@ -293,7 +293,7 @@ bool CDataReportTree::OpenFormMDI(IMetaObject *obj)
 	//не найден в списке уже существующих
 	if (foundedDoc == NULL)
 	{
-		foundedDoc = reportManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? wxDOC_READONLY : wxDOC_NEW);
+		foundedDoc = docManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? wxDOC_READONLY : wxDOC_NEW);
 
 		//Значит, подходящего шаблона не было! 
 		if (foundedDoc)
@@ -318,7 +318,7 @@ bool CDataReportTree::OpenFormMDI(IMetaObject *obj, CDocument *&foundedDoc)
 	//не найден в списке уже существующих
 	if (foundedDoc == NULL)
 	{
-		foundedDoc = reportManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? wxDOC_READONLY : wxDOC_NEW);
+		foundedDoc = docManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? wxDOC_READONLY : wxDOC_NEW);
 
 		//Значит, подходящего шаблона не было! 
 		if (foundedDoc)
@@ -459,7 +459,7 @@ void CDataReportTree::ClearTree()
 
 void CDataReportTree::FillData()
 {
-	CMetaObjectReportValue *commonMetadata = m_metaData->GetReport();
+	CMetaObjectReport *commonMetadata = m_metaData->GetReport();
 	wxASSERT(commonMetadata);
 	m_metaTreeWnd->SetItemText(m_treeREPORTS, commonMetadata->GetName());
 
@@ -551,7 +551,7 @@ bool CDataReportTree::Load(CMetadataReport *metaData)
 
 bool CDataReportTree::Save()
 {
-	CMetaObjectReportValue *m_commonMetadata = m_metaData->GetReport();
+	CMetaObjectReport *m_commonMetadata = m_metaData->GetReport();
 	wxASSERT(m_commonMetadata);
 
 	m_commonMetadata->SetName(m_nameValue->GetValue());

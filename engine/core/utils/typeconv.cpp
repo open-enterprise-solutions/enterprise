@@ -888,21 +888,14 @@ wxArrayString TypeConv::StringToArrayString(const wxString& str)
 	wxArrayString result;
 
 	WX_PG_TOKENIZER2_BEGIN(str, wxT('"'))
-
-		result.Add(token);
-
+	result.Add(token);
 	WX_PG_TOKENIZER2_END()
-
-		return result;
+	return result;
 }
 
 wxString TypeConv::ArrayStringToString(const wxArrayString &arrayStr)
 {
-	wxString result;
-
-	wxArrayStringProperty::ArrayStringToString(result, arrayStr, '"', 1);
-
-	return result;
+	return wxArrayStringProperty::ArrayStringToString(arrayStr, '"', 1);
 }
 
 wxString TypeConv::ReplaceSynonymous(const wxString &bitlist)

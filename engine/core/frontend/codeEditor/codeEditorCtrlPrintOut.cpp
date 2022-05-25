@@ -41,7 +41,7 @@ bool CCodeEditorPrintout::OnBeginDocument(int startPage, int endPage) {
 	return true;
 }
 
-#include "common/reportManager.h"
+#include "common/docManager.h"
 
 void CCodeEditorPrintout::GetPageInfo(int *minPage, int *maxPage, int *selPageFrom, int *selPageTo) {
 
@@ -56,7 +56,7 @@ void CCodeEditorPrintout::GetPageInfo(int *minPage, int *maxPage, int *selPageFr
 	if (!dc) return;
 	PrintScaling(dc);
 
-	wxPageSetupDialogData *m_pageSetupData = &reportManager->GetPageSetupDialogData();
+	wxPageSetupDialogData *m_pageSetupData = &docManager->GetPageSetupDialogData();
 
 	// get print page informations and convert to printer pixels
 	wxSize ppiScr;

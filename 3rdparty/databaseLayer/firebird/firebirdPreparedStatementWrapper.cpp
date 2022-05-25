@@ -119,7 +119,7 @@ void FirebirdPreparedStatementWrapper::SetParam(int nPosition, double dblValue)
 	m_pParameterCollection->SetParam(nPosition, dblValue);
 }
 
-void FirebirdPreparedStatementWrapper::SetParam(int nPosition, const number_t &dblValue)
+void FirebirdPreparedStatementWrapper::SetParam(int nPosition, const number_t& dblValue)
 {
 	m_pParameterCollection->SetParam(nPosition, dblValue);
 }
@@ -136,7 +136,7 @@ void FirebirdPreparedStatementWrapper::SetParam(int nPosition)
 
 void FirebirdPreparedStatementWrapper::SetParam(int nPosition, const void* pData, long nDataLength)
 {
-	m_pParameterCollection->SetParam(nPosition, m_pDatabase, m_pTransaction, pData, nDataLength);
+	m_pParameterCollection->SetParam(nPosition, pData, nDataLength);
 }
 
 void FirebirdPreparedStatementWrapper::SetParam(int nPosition, const wxDateTime& dateValue)
@@ -162,7 +162,12 @@ int FirebirdPreparedStatementWrapper::RunQuery()
 	ResetErrorCodes();
 
 	// Blob ID values are invalidated between execute calls, so re-create any BLOB parameters now
-	m_pParameterCollection->ResetBlobParameters();
+	if(!m_pParameterCollection->ResetBlobParameters(m_pDatabase, m_pTransaction))
+	{
+		InterpretErrorCodes();
+		ThrowDatabaseException();
+		return DATABASE_LAYER_QUERY_RESULT_ERROR;
+	}
 
 	int nReturn = m_pInterface->GetIscDsqlExecute()(m_Status, &m_pTransaction, &m_pStatement, SQL_DIALECT_CURRENT, m_pParameters);
 	if (nReturn != 0)
@@ -258,10 +263,15 @@ DatabaseResultSet* FirebirdPreparedStatementWrapper::RunQueryWithResults()
 #endif
 
 		ThrowDatabaseException();
-		}
+	}
 
 	// Blob ID values are invalidated between execute calls, so re-create any BLOB parameters now
-	m_pParameterCollection->ResetBlobParameters();
+	if (!m_pParameterCollection->ResetBlobParameters(m_pDatabase, m_pTransaction)) {
+		
+		ThrowDatabaseException();
+		
+		return NULL;
+	}
 
 	// Now execute the SQL
 	//nReturn = isc_dsql_execute2(m_Status, &m_pTransaction, &m_pStatement, 1, m_pParameters, pOutputSqlda);
@@ -285,13 +295,13 @@ DatabaseResultSet* FirebirdPreparedStatementWrapper::RunQueryWithResults()
 #endif
 		ThrowDatabaseException();
 		return NULL;
-		}
+	}
 
 	m_bManageStatement = true;
 	m_bManageTransaction = false;
 
 	return pResultSet;
-	}
+}
 
 bool FirebirdPreparedStatementWrapper::IsSelectQuery()
 {

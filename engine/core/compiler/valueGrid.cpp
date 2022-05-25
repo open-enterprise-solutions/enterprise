@@ -42,7 +42,7 @@ CValue CValueGrid::GetAttribute(attributeArg_t &aParams)
 	return CValue();
 }
 
-#include "common/reportManager.h"
+#include "common/docManager.h"
 
 CValue CValueGrid::Method(methodArg_t &aParams)
 {
@@ -50,7 +50,7 @@ CValue CValueGrid::Method(methodArg_t &aParams)
 
 	switch (aParams.GetIndex())
 	{
-	case enShowGrid: ShowGrid(aParams[0].GetType() == eValueTypes::TYPE_EMPTY ? reportManager->MakeNewDocumentName() : aParams[0].ToString()); break;
+	case enShowGrid: ShowGrid(aParams[0].GetType() == eValueTypes::TYPE_EMPTY ? docManager->MakeNewDocumentName() : aParams[0].ToString()); break;
 	}
 
 	return ret;
@@ -60,13 +60,13 @@ CValue CValueGrid::Method(methodArg_t &aParams)
 #include "frontend/mainFrame.h"
 #include "frontend/mainFrameChild.h"
 #include "common/templates/template.h"
-#include "common/reportManager.h"
+#include "common/docManager.h"
 
 bool CValueGrid::ShowGrid(const wxString &sTitle)
 {
 	CGridEditDocument *m_document = new CGridEditDocument();
 
-	reportManager->AddDocument(m_document);
+	docManager->AddDocument(m_document);
 
 	m_document->SetCommandProcessor(m_document->CreateCommandProcessor());
 

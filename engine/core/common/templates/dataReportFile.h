@@ -107,7 +107,7 @@ class CReportEditDocument : public CDocument,
 
 public:
 
-	CReportEditDocument() : CDocument() { m_bChildDoc = false; }
+	CReportEditDocument() : CDocument() { m_childDoc = false; }
 	virtual ~CReportEditDocument() { wxDELETE(m_metaData); }
 
 	virtual IMetadata *GetMetadata() const { return m_metaData; }

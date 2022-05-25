@@ -107,7 +107,7 @@ class CDataProcessorEditDocument : public CDocument,
 
 public:
 
-	CDataProcessorEditDocument() : CDocument() { m_bChildDoc = false; }
+	CDataProcessorEditDocument() : CDocument() { m_childDoc = false; }
 	virtual ~CDataProcessorEditDocument() { wxDELETE(m_metaData); }
 
 	virtual IMetadata *GetMetadata() const { return m_metaData; }

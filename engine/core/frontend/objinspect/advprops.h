@@ -37,7 +37,7 @@ class wxPGPointProperty : public wxPGProperty
 public:
 	wxPGPointProperty(const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
-		const wxPoint&  value = wxPoint());
+		const wxPoint& value = wxPoint());
 	~wxPGPointProperty() override;
 
 	wxVariant ChildChanged(wxVariant& thisValue, int childIndex,
@@ -64,13 +64,13 @@ public:
 
 	virtual ~wxPGBitmapProperty();
 
-	wxPGProperty *CreatePropertySource(int sourceIndex = 0);
+	wxPGProperty* CreatePropertySource(int sourceIndex = 0);
 
-	wxPGProperty *CreatePropertyArtId();
-	wxPGProperty *CreatePropertyArtClient();
+	wxPGProperty* CreatePropertyArtId();
+	wxPGProperty* CreatePropertyArtClient();
 
-	wxString SetupImage(const wxString &imgPath = wxEmptyString);
-	wxString SetupResource(const wxString &resName = wxEmptyString);
+	wxString SetupImage(const wxString& imgPath = wxEmptyString);
+	wxString SetupResource(const wxString& resName = wxEmptyString);
 
 	int prevSrc;
 	void SetPrevSource(int src) { prevSrc = src; }
@@ -138,10 +138,8 @@ public:
 // wxEventControlProperty
 // -----------------------------------------------------------------------
 
-class wxEventControlProperty : public wxStringProperty
-{
+class wxEventControlProperty : public wxStringProperty {
 	WX_PG_DECLARE_PROPERTY_CLASS(wxEventControlProperty)
-
 public:
 
 	wxEventControlProperty(const wxString& label = wxPG_LABEL,
@@ -165,14 +163,9 @@ public:
 
 #include "frontend/visualView/controls/baseControl.h"
 
-class wxPGToolActionProperty : public wxPGProperty
-{
+class wxPGToolActionProperty : public wxPGProperty {
 	WX_PG_DECLARE_PROPERTY_CLASS(wxPGToolActionProperty)
-
 private:
-
-	IObjectBase *GetObject() const { return m_currentObject; }
-
 	mutable class toolData_t {
 		bool m_bCustomEvent = false;
 		int m_toolID = wxNOT_FOUND;
@@ -184,7 +177,7 @@ private:
 			m_bCustomEvent = false; m_toolID = number; m_strEvent = wxEmptyString;
 		}
 		int GetNumber() const { return m_toolID; }
-		void SetString(const wxString &string) {
+		void SetString(const wxString& string) {
 			m_bCustomEvent = true; m_strEvent = string; m_toolID = wxNOT_FOUND;
 		}
 		wxString GetString() const { return m_strEvent; }
@@ -193,11 +186,19 @@ private:
 		}
 
 	} m_toolData;
-
 public:
 
-	int GetNumber() const { return m_toolData.GetNumber(); }
-	wxString GetString() const { return m_toolData.GetString(); }
+	IObjectBase* GetObject() const {
+		return m_curObject;
+	}
+
+	int GetNumber() const {
+		return m_toolData.GetNumber();
+	}
+
+	wxString GetString() const {
+		return m_toolData.GetString();
+	}
 
 	bool IsCustomEvent() const {
 		return m_toolData.IsCustomEvent();
@@ -205,9 +206,9 @@ public:
 
 	wxPGToolActionProperty(const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
-		wxPGChoices &choices = wxPGChoices(),
+		wxPGChoices& choices = wxPGChoices(),
 		const wxString& value = wxEmptyString,
-		IObjectBase *currentObject = NULL);
+		IObjectBase* currentObject = NULL);
 
 	virtual ~wxPGToolActionProperty();
 
@@ -227,75 +228,181 @@ public:
 
 protected:
 
-	IObjectBase *m_currentObject;
-};
-
-// -----------------------------------------------------------------------
-// wxPGSourceProperty
-// -----------------------------------------------------------------------
-
-class wxPGSourceProperty : public wxPGProperty
-{
-	WX_PG_DECLARE_PROPERTY_CLASS(wxPGSourceProperty)
-
-private:
-
-	IObjectBase *GetObject() const { return m_currentObject; }
-
-public:
-
-	wxPGSourceProperty(const wxString& label = wxPG_LABEL,
-		const wxString& name = wxPG_LABEL,
-		const long& value = 0,
-		IObjectBase *currentObject = NULL);
-
-	virtual ~wxPGSourceProperty();
-
-	virtual wxString ValueToString(wxVariant& value, int argFlags = 0) const override;
-
-	virtual bool StringToValue(wxVariant& variant,
-		const wxString& text,
-		int argFlags = 0) const override;
-
-	virtual wxPGEditorDialogAdapter* GetEditorDialog() const override;
-
-protected:
-
-	IObjectBase *m_currentObject;
+	IObjectBase* m_curObject;
 };
 
 // -----------------------------------------------------------------------
 // wxPGTypeSelectorProperty
 // -----------------------------------------------------------------------
 
-class wxPGTypeSelectorProperty : public wxEnumProperty
-{
-	WX_PG_DECLARE_PROPERTY_CLASS(wxPGTypeSelectorProperty)
-
+class wxPGTypeSelectorProperty : public wxStringProperty {
+	WX_PG_DECLARE_PROPERTY_CLASS(wxPGTypeSelectorProperty);
 private:
-
-	IObjectBase *GetObject() const { return m_currentObject; }
-
+	wxPGChoices GetDateTime();
+	void FillByClsid(const CLASS_ID& clsid);
 public:
 
-	wxPGTypeSelectorProperty(const wxString& label = wxPG_LABEL,
-		const wxString& name = wxPG_LABEL,
-		wxPGChoices& choices = wxPGChoices(),
-		int value = 0,
-		IObjectBase *currentObject = NULL) : wxEnumProperty(label, name, choices, value), m_currentObject(currentObject)
-	{
+	IObjectBase* GetObject() const {
+		return m_curObject;
 	}
+
+	eSelectorDataType GetSelectorDataType() const {
+		return m_selectorDataType;
+	}
+
+	wxPGTypeSelectorProperty(const wxString& label = wxPG_LABEL,
+		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant,
+		eSelectorDataType dataType = eSelectorDataType::eSelectorDataType_reference,
+		IObjectBase* currentObject = NULL);
 
 	virtual wxString ValueToString(wxVariant& value, int argFlags = 0) const override;
 	virtual bool StringToValue(wxVariant& variant,
 		const wxString& text,
 		int argFlags = 0) const override;
 
+	virtual bool IntToValue(wxVariant& value,
+		int number,
+		int argFlags = 0) const override;
+
+	virtual wxVariant ChildChanged(wxVariant& thisValue,
+		int childIndex,
+		wxVariant& childValue) const override;
+
+	virtual void RefreshChildren() override;
+
+	// GetChoiceSelection needs to overridden since m_choices is
+	// used and value is integer, but it is not index.
+	virtual int GetChoiceSelection() const override {
+		return wxNOT_FOUND;
+	}
+
 	virtual wxPGEditorDialogAdapter* GetEditorDialog() const override;
 
 protected:
 
-	IObjectBase *m_currentObject;
+	eSelectorDataType m_selectorDataType;
+
+	std::map<int, CLASS_ID> m_valChoices;
+
+	wxUIntProperty* m_precision;
+	wxUIntProperty* m_scale;
+	wxEnumProperty* m_date_time;
+	wxUIntProperty* m_length;
+
+	IObjectBase* m_curObject;
+};
+
+// -----------------------------------------------------------------------
+// wxPGTypeSelectorProperty
+// -----------------------------------------------------------------------
+
+class wxPGRecordSelectorProperty : public wxStringProperty {
+	WX_PG_DECLARE_PROPERTY_CLASS(wxPGRecordSelectorProperty);
+private:
+	void FillByClsid(const CLASS_ID& clsid);
+public:
+
+	IObjectBase* GetObject() const {
+		return m_curObject;
+	}
+
+	wxPGRecordSelectorProperty(const wxString& label = wxPG_LABEL,
+		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant,
+		IObjectBase* currentObject = NULL);
+
+	virtual wxString ValueToString(wxVariant& value, int argFlags = 0) const override;
+	virtual bool StringToValue(wxVariant& variant,
+		const wxString& text,
+		int argFlags = 0) const override;
+
+	virtual bool IntToValue(wxVariant& value,
+		int number,
+		int argFlags = 0) const override;
+
+	virtual wxPGEditorDialogAdapter* GetEditorDialog() const override;
+
+protected:
+
+	IObjectBase* m_curObject;
+};
+
+// -----------------------------------------------------------------------
+// wxPGTypeSelectorProperty
+// -----------------------------------------------------------------------
+
+class wxPGOwnerSelectorProperty : public wxStringProperty {
+	WX_PG_DECLARE_PROPERTY_CLASS(wxPGOwnerSelectorProperty);
+private:
+	void FillByClsid(const CLASS_ID& clsid);
+public:
+
+	IObjectBase* GetObject() const {
+		return m_curObject;
+	}
+
+	wxPGOwnerSelectorProperty(const wxString& label = wxPG_LABEL,
+		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant,
+		IObjectBase* currentObject = NULL);
+
+	virtual wxString ValueToString(wxVariant& value, int argFlags = 0) const override;
+	virtual bool StringToValue(wxVariant& variant,
+		const wxString& text,
+		int argFlags = 0) const override;
+
+	virtual bool IntToValue(wxVariant& value,
+		int number,
+		int argFlags = 0) const override;
+
+	virtual wxPGEditorDialogAdapter* GetEditorDialog() const override;
+
+protected:
+
+	IObjectBase* m_curObject;
+};
+
+// -----------------------------------------------------------------------
+// wxPGSourceDataProperty
+// -----------------------------------------------------------------------
+
+class wxPGSourceDataProperty : public wxPGProperty {
+	WX_PG_DECLARE_PROPERTY_CLASS(wxPGSourceDataProperty)
+public:
+
+	eSourceDataType GetSourceDataType() const {
+		return m_srcDataType;
+	}
+
+	IObjectBase* GetObject() const {
+		return m_curObject;
+	}
+
+	wxPGSourceDataProperty(const wxString& label = wxPG_LABEL,
+		const wxString& name = wxPG_LABEL,
+		const wxVariant& value = wxNullVariant,
+		IObjectBase* currentObject = NULL);
+
+	virtual ~wxPGSourceDataProperty();
+
+	virtual wxString ValueToString(wxVariant& value, int argFlags = 0) const override;
+
+	virtual bool StringToValue(wxVariant& variant,
+		const wxString& text,
+		int argFlags = 0) const override;
+
+	virtual wxVariant ChildChanged(wxVariant& thisValue,
+		int childIndex,
+		wxVariant& childValue) const override;
+
+	virtual void RefreshChildren() override;
+
+	virtual wxPGEditorDialogAdapter* GetEditorDialog() const override;
+
+protected:
+
+	eSourceDataType m_srcDataType;
+
+	IObjectBase* m_curObject;
+	wxPGTypeSelectorProperty* m_typeSelector;
 };
 
 #endif

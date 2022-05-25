@@ -44,7 +44,7 @@ private:
 class CTextDocument : public CDocument
 {
 public:
-	CTextDocument() : CDocument() { m_bChildDoc = false; }
+	CTextDocument() : CDocument() { m_childDoc = false; }
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
 

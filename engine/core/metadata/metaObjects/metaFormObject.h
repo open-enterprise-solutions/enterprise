@@ -2,13 +2,14 @@
 #define _METAFORMOBJECT_H__
 
 #include "metaModuleObject.h"
+#include "common/uniqueKey.h"
 
 class CValueForm;
 
 #define defaultFormType 100
 #define formDefaultName _("form")
 
-class IDataObjectSource;
+class ISourceDataObject;
 
 class IMetaFormObject : public CMetaModuleObject {
 	wxDECLARE_ABSTRACT_CLASS(IMetaFormObject);
@@ -26,36 +27,36 @@ private:
 	};
 
 	//loader/saver/deleter:
-	CValueForm *LoadControl(const wxString &formData);
-	bool LoadChildControl(CValueForm *valueForm, CMemoryReader &readerData, IValueFrame *parentObj);
-	wxString SaveControl(CValueForm *valueForm);
-	bool SaveChildControl(CValueForm *valueForm, CMemoryWriter &writterData, IValueFrame *parentObj);
+	CValueForm* LoadControl(const wxString& formData);
+	bool LoadChildControl(CValueForm* valueForm, CMemoryReader& readerData, IValueFrame* parentObj);
+	wxString SaveControl(CValueForm* valueForm);
+	bool SaveChildControl(CValueForm* valueForm, CMemoryWriter& writterData, IValueFrame* parentObj);
 
 public:
 
-	void SaveFormData(CValueForm *valueForm);
+	void SaveFormData(CValueForm* valueForm);
 
-	IMetaFormObject(const wxString &name = wxEmptyString, const wxString &synonym = wxEmptyString, const wxString &comment = wxEmptyString);
+	IMetaFormObject(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
 
 	/**
 	* Get type form
 	*/
-	form_identifier_t GetTypeForm() const { return m_typeFrom; };
+	form_identifier_t GetTypeForm() const { return m_typeFrom; }
 
-	CValueForm *GenerateForm(IValueFrame *ownerControl = NULL,
-		IDataObjectSource *ownerSrc = NULL, const Guid &guidForm = Guid());
+	CValueForm* GenerateForm(IValueFrame* ownerControl = NULL,
+		ISourceDataObject* ownerSrc = NULL, const CUniqueKey& guidForm = Guid());
 
-	CValueForm *GenerateFormAndRun(IValueFrame *ownerControl = NULL,
-		IDataObjectSource *ownerSrc = NULL, const Guid &guidForm = Guid());
+	CValueForm* GenerateFormAndRun(IValueFrame* ownerControl = NULL,
+		ISourceDataObject* ownerSrc = NULL, const CUniqueKey& guidForm = Guid());
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu *defultMenu);
+	virtual bool PrepareContextMenu(wxMenu* defultMenu);
 	virtual void ProcessCommand(unsigned int id);
 
 protected:
 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 protected:
 
@@ -70,17 +71,17 @@ private:
 
 	friend class CVisualEditorContextForm;
 
-	friend class IMetaObjectValue;
-	friend class IDataObjectList;
-	friend class IDataObjectValue;
+	friend class IMetaObjectRecordData;
+	friend class IListDataObject;
+	friend class IRecordDataObject;
 
 private:
 
-	OptionList *GetFormType(Property*);
+	OptionList* GetFormType(Property*);
 
 public:
 
-	CMetaFormObject(const wxString &name = wxEmptyString, const wxString &synonym = wxEmptyString, const wxString &comment = wxEmptyString);
+	CMetaFormObject(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
 
 	virtual wxString GetClassName() const override { return wxT("form"); }
 
@@ -91,34 +92,37 @@ public:
 	/**
 	* Property events
 	*/
-	virtual void OnPropertyCreated(Property *property);
-	virtual void OnPropertySelected(Property *property);
-	virtual void OnPropertyChanged(Property *property);
+	virtual void OnPropertyCreated(Property* property);
+	virtual void OnPropertySelected(Property* property);
+	virtual void OnPropertyChanged(Property* property);
 
 	//events:
-	virtual bool OnCreateMetaObject(IMetadata *metaData);
-	virtual bool OnLoadMetaObject(IMetadata *metaData);
+	virtual bool OnCreateMetaObject(IMetadata* metaData);
+	virtual bool OnLoadMetaObject(IMetadata* metaData);
 	virtual bool OnSaveMetaObject();
 	virtual bool OnDeleteMetaObject();
 
 	//module manager is started or exit 
-	virtual bool OnRunMetaObject(int flags);
-	virtual bool OnCloseMetaObject();
+	virtual bool OnBeforeRunMetaObject(int flags);
+	virtual bool OnAfterRunMetaObject(int flags);
+
+	virtual bool OnBeforeCloseMetaObject();
+	virtual bool OnAfterCloseMetaObject();
 
 	virtual void ReadProperty() override;
 	virtual void SaveProperty() override;
 
 protected:
 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 };
 
 class CMetaCommonFormObject : public IMetaFormObject {
 	wxDECLARE_DYNAMIC_CLASS(CMetaCommonFormObject);
 public:
 
-	CMetaCommonFormObject(const wxString &name = wxEmptyString, const wxString &synonym = wxEmptyString, const wxString &comment = wxEmptyString);
+	CMetaCommonFormObject(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
 	virtual wxString GetClassName() const override { return wxT("commonForm"); }
 
 	//support icons
@@ -126,11 +130,11 @@ public:
 	static wxIcon GetIconGroup();
 
 	//events:
-	virtual bool OnCreateMetaObject(IMetadata *metaData);
+	virtual bool OnCreateMetaObject(IMetadata* metaData);
 
 	//module manager is started or exit 
-	virtual bool OnRunMetaObject(int flags);
-	virtual bool OnCloseMetaObject();
+	virtual bool OnBeforeRunMetaObject(int flags);
+	virtual bool OnAfterCloseMetaObject();
 };
 
 #endif 

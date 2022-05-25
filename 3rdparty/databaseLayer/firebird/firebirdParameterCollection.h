@@ -39,12 +39,12 @@ public:
 	void SetParam(int nPosition, const number_t &numValue);
 	void SetParam(int nPosition, const wxString& strValue);
 	void SetParam(int nPosition);
-	void SetParam(int nPosition, isc_db_handle pDatabase, isc_tr_handle pTransaction, const void* pData, long nDataLength);
+	void SetParam(int nPosition, const void* pData, long nDataLength);
 	void SetParam(int nPosition, const wxDateTime& dateValue);
 	void SetParam(int nPosition, bool bValue);
 	void SetParam(int nPosition, FirebirdParameter* pParameter);
 
-	void ResetBlobParameters();
+	bool ResetBlobParameters(isc_db_handle database, isc_tr_handle transaction);
 	void AllocateParameterSpace();
 	void FreeParameterSpace();
 

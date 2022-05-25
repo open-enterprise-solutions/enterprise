@@ -1,5 +1,5 @@
 ﻿#include "widgets.h"
-#include "frontend/controls/textCtrl.h"
+#include "frontend/controls/textEditor.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CValueTextCtrl, IValueWindow)
 
@@ -7,37 +7,41 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueTextCtrl, IValueWindow)
 
 #include "form.h"
 #include "metadata/metadata.h"
+#include "metadata/singleMetaTypes.h"
 
-OptionList *CValueTextCtrl::GetChoiceForm(Property *property)
+OptionList* CValueTextCtrl::GetChoiceForm(Property* property)
 {
-	OptionList *optList = new OptionList;
+	OptionList* optList = new OptionList;
 	optList->AddOption(_("default"), wxNOT_FOUND);
 
-	IMetadata *metaData = GetMetaData();
-	if (metaData) {	
-		IMetaObjectRefValue* metaObject = NULL; 
-
-		if (m_source != wxNOT_FOUND) {
-			IMetaObjectValue *metaObjectValue = 
+	IMetadata* metaData = GetMetaData();
+	if (metaData != NULL) {
+		IMetaObjectRecordDataRef* metaObject = NULL;
+		if (m_dataSource != wxNOT_FOUND) {
+			IMetaObjectWrapperData* metaObjectValue =
 				m_formOwner->GetMetaObject();
 			if (metaObjectValue) {
-				IMetaAttributeObject *metaAttribute = wxDynamicCast(
-					metaObjectValue->FindMetaObjectByID(m_source), IMetaAttributeObject
+				IMetaAttributeObject* metaAttribute = wxDynamicCast(
+					metaObjectValue->FindMetaObjectByID(m_dataSource), IMetaAttributeObject
 				);
 				wxASSERT(metaAttribute);
-				metaObject = wxDynamicCast(
-					metaData->GetMetaObject(metaAttribute->GetTypeObject()), IMetaObjectRefValue);
+				IMetaTypeObjectValueSingle *so = metaData->GetTypeObject(metaAttribute->GetFirstClsid()); 
+				if (so != NULL) {
+					metaObject = wxDynamicCast(so->GetMetaObject(), IMetaObjectRecordDataRef);
+				}
 			}
 		}
 		else {
-			metaObject = wxDynamicCast(
-				metaData->GetMetaObject(m_typeDescription.GetTypeObject()), IMetaObjectRefValue);
+			IMetaTypeObjectValueSingle* so = metaData->GetTypeObject(IAttributeControl::GetFirstClsid());
+			if (so != NULL) {
+				metaObject = wxDynamicCast(so->GetMetaObject(), IMetaObjectRecordDataRef);
+			}
 		}
 
-		if (metaObject) {
+		if (metaObject != NULL) {
 			for (auto form : metaObject->GetObjectForms()) {
 				optList->AddOption(
-					form->GetSynonym(), 
+					form->GetSynonym(),
 					form->GetMetaID()
 				);
 			}
@@ -47,16 +51,22 @@ OptionList *CValueTextCtrl::GetChoiceForm(Property *property)
 	return optList;
 }
 
+ISourceDataObject* CValueTextCtrl::GetSourceObject() const
+{
+	return m_formOwner ? m_formOwner->GetSourceObject()
+		: NULL;
+}
+
 //****************************************************************************
 //*                              TextCtrl                                    *
 //****************************************************************************
 
-CValueTextCtrl::CValueTextCtrl() : IValueWindow(), IAttributeInfo(eValueTypes::TYPE_STRING), 
-m_selbutton(true), m_listbutton(false), m_clearbutton(false),
+CValueTextCtrl::CValueTextCtrl() : IValueWindow(), IAttributeControl(),
+m_selbutton(true), m_listbutton(false), m_clearbutton(true),
 m_passwordMode(false), m_multilineMode(false), m_textEditMode(true),
-m_source(wxNOT_FOUND), m_choiceForm(wxNOT_FOUND)
+m_choiceForm(wxNOT_FOUND)
 {
-	PropertyContainer *categoryText = IObjectBase::CreatePropertyContainer("TextControl");
+	PropertyContainer* categoryText = IObjectBase::CreatePropertyContainer("TextControl");
 
 	//property
 	categoryText->AddProperty("name", PropertyType::PT_WXNAME);
@@ -70,20 +80,13 @@ m_source(wxNOT_FOUND), m_choiceForm(wxNOT_FOUND)
 	m_category->AddCategory(categoryText);
 
 	//source from object 
-	PropertyContainer *propertySource = IObjectBase::CreatePropertyContainer("Data");
-	propertySource->AddProperty("source", PropertyType::PT_SOURCE);
-	
-	propertySource->AddProperty("type", PropertyType::PT_TYPE_SELECT);
-	propertySource->AddProperty("precision", PropertyType::PT_UINT);
-	propertySource->AddProperty("scale", PropertyType::PT_UINT);
-	propertySource->AddProperty("date_time", PropertyType::PT_OPTION, &CValueTextCtrl::GetDateTimeFormat);
-	propertySource->AddProperty("length", PropertyType::PT_UINT);
-
+	PropertyContainer* propertySource = IObjectBase::CreatePropertyContainer("Data");
+	propertySource->AddProperty("source", PropertyType::PT_SOURCE_DATA);
 	propertySource->AddProperty("choice_form", PropertyType::PT_OPTION, &CValueTextCtrl::GetChoiceForm);
 
 	m_category->AddCategory(propertySource);
 
-	PropertyContainer *categoryButton = IObjectBase::CreatePropertyContainer("Button");
+	PropertyContainer* categoryButton = IObjectBase::CreatePropertyContainer("Button");
 	categoryButton->AddProperty("button_select", PropertyType::PT_BOOL);
 	categoryButton->AddProperty("button_list", PropertyType::PT_BOOL);
 	categoryButton->AddProperty("button_clear", PropertyType::PT_BOOL);
@@ -92,7 +95,7 @@ m_source(wxNOT_FOUND), m_choiceForm(wxNOT_FOUND)
 	m_category->AddCategory(categoryButton);
 
 	//category 
-	PropertyContainer *propertyEvents = IObjectBase::CreatePropertyContainer("Events");
+	PropertyContainer* propertyEvents = IObjectBase::CreatePropertyContainer("Events");
 
 	//default events
 	propertyEvents->AddEvent("onChange", { "control" });
@@ -108,120 +111,145 @@ m_source(wxNOT_FOUND), m_choiceForm(wxNOT_FOUND)
 
 #include "metadata/singleMetaTypes.h"
 
-wxObject* CValueTextCtrl::Create(wxObject* parent, IVisualHost *visualHost)
+wxObject* CValueTextCtrl::Create(wxObject* parent, IVisualHost* visualHost)
 {
-	CTextCtrl *textCtrl = new CTextCtrl((wxWindow *)parent, wxID_ANY,
+	CTextCtrl* textCtrl = new CTextCtrl((wxWindow*)parent, wxID_ANY,
 		m_selValue.GetString(),
 		m_pos,
 		m_size,
 		m_style | m_window_style);
 
-	if (m_source != wxNOT_FOUND) {
-		IDataObjectSource *srcObject = m_formOwner->GetSourceObject();
+	if (m_dataSource != wxNOT_FOUND) {
+		ISourceDataObject* srcObject = m_formOwner->GetSourceObject();
 		if (srcObject) {
-			IMetaObjectValue *objMetaValue = srcObject->GetMetaObject();
-			wxASSERT(objMetaValue);
-			IMetaObject *metaObject = objMetaValue->FindMetaObjectByID(m_source);
+			IMetaObject* metaObject = GetMetaSource();
 			wxASSERT(metaObject);
-			m_selValue = srcObject->GetValueByMetaID(m_source);
+			m_selValue = srcObject->GetValueByMetaID(m_dataSource);
 		}
 	}
 	else {
-		IMetadata *metaData = GetMetaData();
-		if (metaData) {
-			CLASS_ID clsid = 0;
-			if (m_typeDescription.GetTypeObject() >= defaultMetaID) {
-				IMetaObjectValue *metaObject = wxDynamicCast(
-					metaData->GetMetaObject(m_typeDescription.GetTypeObject()), IMetaObjectValue
-				);
-				wxASSERT(metaObject);
 
-				IMetaTypeObjectValueSingle *clsFactory =
-					metaObject->GetTypeObject(eMetaObjectType::enReference);
-				wxASSERT(clsFactory);
-				clsid = clsFactory->GetTypeID();
-			}
-			else {
-				clsid = CValue::GetIDByVT((const eValueTypes)m_typeDescription.GetTypeObject());
-			}
-			wxASSERT(clsid > 0);
-			wxString className = metaData->GetNameObjectFromID(clsid);
-			m_selValue = metaData->CreateObject(className);
-		}
+		m_selValue = IAttributeControl::CreateValue();
 	}
 
 	return textCtrl;
 }
 
-void CValueTextCtrl::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool firstСreated)
+void CValueTextCtrl::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool firstСreated)
 {
 }
 
-#include "wx/valnum.h"
+#include "appData.h"
 
-void CValueTextCtrl::Update(wxObject* wxobject, IVisualHost *visualHost)
+void CValueTextCtrl::Update(wxObject* wxobject, IVisualHost* visualHost)
 {
-	CTextCtrl *textCtrl = dynamic_cast<CTextCtrl *>(wxobject);
+	CTextCtrl* textCtrl = dynamic_cast<CTextCtrl*>(wxobject);
 
 	if (textCtrl) {
 		wxString textCaption = wxEmptyString;
-		if (m_source != wxNOT_FOUND) {
-			IDataObjectSource *srcObject = m_formOwner->GetSourceObject();
-			if (srcObject) {
-				IMetaObjectValue *objMetaValue = srcObject->GetMetaObject();
-				IMetaObject *metaObject = objMetaValue->FindMetaObjectByID(m_source);
-				if (metaObject) {
-					textCaption = metaObject->GetSynonym() + wxT(":");
-				}
+		if (m_dataSource != wxNOT_FOUND) {
+			IMetaObject* metaObject = GetMetaSource();
+			if (metaObject) {
+				textCaption = metaObject->GetSynonym() + wxT(":");
 			}
 		}
 
 		textCtrl->SetTextLabel(m_caption.IsEmpty() ?
 			textCaption : m_caption);
 
-		if (m_source != wxNOT_FOUND) {
-			IDataObjectSource *srcObject = m_formOwner->GetSourceObject();
+		if (m_dataSource != wxNOT_FOUND) {
+			ISourceDataObject* srcObject = m_formOwner->GetSourceObject();
 			if (srcObject) {
-				IMetaObjectValue *objMetaValue = srcObject->GetMetaObject();
-				wxASSERT(objMetaValue);
-				IMetaObject *metaObject = objMetaValue->FindMetaObjectByID(m_source);
+				IMetaObject* metaObject = GetMetaSource();
 				wxASSERT(metaObject);
-				m_selValue = srcObject->GetValueByMetaID(m_source);
+				m_selValue = srcObject->GetValueByMetaID(m_dataSource);
 			}
 		}
 
-		textCtrl->SetTextValue(m_selValue.GetString());
+		if (!appData->DesignerMode()) {
+			textCtrl->SetTextValue(m_selValue.GetString());
+		}
 
 		textCtrl->SetPasswordMode(m_passwordMode);
 		textCtrl->SetMultilineMode(m_multilineMode);
 		textCtrl->SetTextEditMode(m_textEditMode);
 
-		textCtrl->SetButtonSelect(m_selbutton);
-		textCtrl->BindButtonSelect(&CValueTextCtrl::OnSelectButtonPressed, this);
-		textCtrl->SetButtonList(m_listbutton);
-		textCtrl->BindButtonList(&CValueTextCtrl::OnListButtonPressed, this);
-		textCtrl->SetButtonClear(m_clearbutton);
-		textCtrl->BindButtonClear(&CValueTextCtrl::OnClearButtonPressed, this);
+		if (!appData->DesignerMode()) {
+			textCtrl->SetButtonSelect(m_selbutton);
+			textCtrl->BindButtonSelect(&CValueTextCtrl::OnSelectButtonPressed, this);
+			textCtrl->SetButtonList(m_listbutton);
+			textCtrl->BindButtonList(&CValueTextCtrl::OnListButtonPressed, this);
+			textCtrl->SetButtonClear(m_clearbutton);
+			textCtrl->BindButtonClear(&CValueTextCtrl::OnClearButtonPressed, this);
 
-		textCtrl->BindTextCtrl(&CValueTextCtrl::OnTextEnter, this);
-		textCtrl->BindKillFocus(&CValueTextCtrl::OnKillFocus, this);
+			textCtrl->BindTextCtrl(&CValueTextCtrl::OnTextEnter, this);
+			textCtrl->BindKillFocus(&CValueTextCtrl::OnKillFocus, this);
+		}
+		else {
+			textCtrl->SetButtonSelect(m_selbutton);
+			textCtrl->SetButtonList(m_listbutton);
+			textCtrl->SetButtonClear(m_clearbutton);
+		}
 	}
 
 	UpdateWindow(textCtrl);
 	UpdateLabelSize(textCtrl);
 }
 
-void CValueTextCtrl::Cleanup(wxObject* wxobject, IVisualHost *visualHost)
+void CValueTextCtrl::Cleanup(wxObject* wxobject, IVisualHost* visualHost)
 {
-	CTextCtrl *textCtrl = dynamic_cast<CTextCtrl *>(wxobject);
+	CTextCtrl* textCtrl = dynamic_cast<CTextCtrl*>(wxobject);
 
 	if (textCtrl) {
-		textCtrl->UnbindButtonSelect(&CValueTextCtrl::OnSelectButtonPressed, this);
-		textCtrl->UnbindButtonList(&CValueTextCtrl::OnListButtonPressed, this);
-		textCtrl->UnbindButtonClear(&CValueTextCtrl::OnClearButtonPressed, this);
+		if (!appData->DesignerMode()) {
+			textCtrl->UnbindButtonSelect(&CValueTextCtrl::OnSelectButtonPressed, this);
+			textCtrl->UnbindButtonList(&CValueTextCtrl::OnListButtonPressed, this);
+			textCtrl->UnbindButtonClear(&CValueTextCtrl::OnClearButtonPressed, this);
 
-		textCtrl->UnbindTextCtrl(&CValueTextCtrl::OnTextEnter, this);
-		textCtrl->UnbindKillFocus(&CValueTextCtrl::OnKillFocus, this);
+			textCtrl->UnbindTextCtrl(&CValueTextCtrl::OnTextEnter, this);
+			textCtrl->UnbindKillFocus(&CValueTextCtrl::OnKillFocus, this);
+		}
+	}
+}
+
+//*******************************************************************
+//*							 Control value	                        *
+//*******************************************************************
+
+CValue CValueTextCtrl::GetControlValue() const
+{
+	CValueForm* ownerForm = GetOwnerForm();
+
+	if (m_dataSource != wxNOT_FOUND && m_formOwner->GetSourceObject()) {
+		ISourceDataObject* srcObject = ownerForm->GetSourceObject();
+		if (srcObject != NULL) {
+			return srcObject->GetValueByMetaID(m_dataSource);
+		}
+	}
+
+	return m_selValue;
+}
+
+void CValueTextCtrl::SetControlValue(CValue& vSelected)
+{
+	if (m_dataSource != wxNOT_FOUND && m_formOwner->GetSourceObject()) {
+		IMetaAttributeObject* metaObject = wxDynamicCast(
+			GetMetaSource(), IMetaAttributeObject
+		);
+		wxASSERT(metaObject);
+		ISourceDataObject* srcObject = m_formOwner->GetSourceObject();
+		if (srcObject != NULL) {
+			srcObject->SetValueByMetaID(m_dataSource, vSelected);
+		}
+		m_selValue = metaObject->AdjustValue(vSelected);
+	}
+	else {
+		m_selValue = IAttributeInfo::AdjustValue(vSelected);
+	}
+
+	CTextCtrl* textCtrl = dynamic_cast<CTextCtrl*>(GetWxObject());
+	if (textCtrl != NULL) {
+		textCtrl->SetTextValue(m_selValue.GetString());
 	}
 }
 
@@ -229,7 +257,7 @@ void CValueTextCtrl::Cleanup(wxObject* wxobject, IVisualHost *visualHost)
 //*                            Data		                            *
 //*******************************************************************
 
-bool CValueTextCtrl::LoadData(CMemoryReader &reader)
+bool CValueTextCtrl::LoadData(CMemoryReader& reader)
 {
 	reader.r_stringZ(m_caption);
 
@@ -241,14 +269,15 @@ bool CValueTextCtrl::LoadData(CMemoryReader &reader)
 	m_listbutton = reader.r_u8();
 	m_clearbutton = reader.r_u8();
 
-	m_source = reader.r_s32();
 	m_choiceForm = reader.r_s32();
 
-	reader.r(&m_typeDescription, sizeof(typeDescription_t));
+	if (!IAttributeControl::LoadData(reader))
+		return false;
+
 	return IValueWindow::LoadData(reader);
 }
 
-bool CValueTextCtrl::SaveData(CMemoryWriter &writer)
+bool CValueTextCtrl::SaveData(CMemoryWriter& writer)
 {
 	writer.w_stringZ(m_caption);
 
@@ -260,10 +289,11 @@ bool CValueTextCtrl::SaveData(CMemoryWriter &writer)
 	writer.w_u8(m_listbutton);
 	writer.w_u8(m_clearbutton);
 
-	writer.w_s32(m_source);
 	writer.w_s32(m_choiceForm);
 
-	writer.w(&m_typeDescription, sizeof(typeDescription_t));
+	if (!IAttributeControl::SaveData(writer))
+		return false;
+
 	return IValueWindow::SaveData(writer);
 }
 
@@ -286,24 +316,11 @@ void CValueTextCtrl::ReadProperty()
 	IObjectBase::SetPropertyValue("button_list", m_listbutton);
 	IObjectBase::SetPropertyValue("button_clear", m_clearbutton);
 
-	IObjectBase::SetPropertyValue("source", m_source);
 	IObjectBase::SetPropertyValue("choice_form", m_choiceForm);
 
-	IObjectBase::SetPropertyValue("type", m_typeDescription.GetTypeObject());
-
-	switch (m_typeDescription.GetTypeObject())
-	{
-	case eValueTypes::TYPE_NUMBER:
-		IObjectBase::SetPropertyValue("precision", m_typeDescription.GetPrecision(), true);
-		IObjectBase::SetPropertyValue("scale", m_typeDescription.GetScale(), true);
-		break;
-	case eValueTypes::TYPE_DATE:
-		IObjectBase::SetPropertyValue("date_time", m_typeDescription.GetDateTime(), true);
-		break;
-	case eValueTypes::TYPE_STRING:
-		IObjectBase::SetPropertyValue("length", m_typeDescription.GetLength(), true);
-		break;
-	}
+	SaveToVariant(
+		GetPropertyAsVariant("source"), GetMetaData()
+	);
 }
 
 void CValueTextCtrl::SaveProperty()
@@ -321,53 +338,9 @@ void CValueTextCtrl::SaveProperty()
 	IObjectBase::GetPropertyValue("button_list", m_listbutton);
 	IObjectBase::GetPropertyValue("button_clear", m_clearbutton);
 
-	IObjectBase::GetPropertyValue("source", m_source);
 	IObjectBase::GetPropertyValue("choice_form", m_choiceForm);
 
-	meta_identifier_t metaType = 0;
-	if (IObjectBase::GetPropertyValue("type", metaType)) {
-
-		if (metaType != m_typeDescription.GetTypeObject()) {
-			m_typeDescription.SetDefaultMetatype(metaType);
-			switch (m_typeDescription.GetTypeObject())
-			{
-			case eValueTypes::TYPE_NUMBER:
-				IObjectBase::SetPropertyValue("precision", m_typeDescription.GetPrecision(), true);
-				IObjectBase::SetPropertyValue("scale", m_typeDescription.GetScale(), true);
-				break;
-			case eValueTypes::TYPE_DATE:
-				IObjectBase::SetPropertyValue("date_time", m_typeDescription.GetDateTime(), true);
-				break;
-			case eValueTypes::TYPE_STRING:
-				IObjectBase::SetPropertyValue("length", m_typeDescription.GetLength(), true);
-				break;
-			}
-		}
-
-		switch (m_typeDescription.GetTypeObject())
-		{
-		case eValueTypes::TYPE_NUMBER:
-		{
-			unsigned char precision = 10, scale = 0;
-			IObjectBase::GetPropertyValue("precision", precision, true);
-			IObjectBase::GetPropertyValue("scale", scale, true);
-			m_typeDescription.SetNumber(precision, scale);
-			break;
-		}
-		case eValueTypes::TYPE_DATE:
-		{
-			eDateFractions dateTime = eDateFractions::eDateTime;
-			IObjectBase::GetPropertyValue("date_time", dateTime, true);
-			m_typeDescription.SetDate(dateTime);
-			break;
-		}
-		case eValueTypes::TYPE_STRING:
-		{
-			unsigned short length = 0;
-			IObjectBase::GetPropertyValue("length", length, true);
-			m_typeDescription.SetString(length);
-			break;
-		}
-		}
-	}
+	LoadFromVariant(
+		GetPropertyAsVariant("source")
+	);
 }

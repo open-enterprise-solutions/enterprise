@@ -77,7 +77,7 @@ public:
 		const wxSize& size = wxDefaultSize);
 
 	void ViewSection();
-	bool IsViewSection() { return m_bViewSection; };
+	bool IsViewSection() { return m_bViewSection; }
 
 	CSectionCtrl *GetSectionLeft() { return m_sectionLeft; }
 	CSectionCtrl *GetSectionUpper() { return m_sectionUpper; }

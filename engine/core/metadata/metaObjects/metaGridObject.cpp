@@ -27,19 +27,19 @@ bool CMetaGridObject::SaveData(CMemoryWriter &writer)
 //*                           read & save events                        *
 //***********************************************************************
 
-bool CMetaGridObject::OnRunMetaObject(int flags)
+bool CMetaGridObject::OnBeforeRunMetaObject(int flags)
 {
-	return IMetaObject::OnRunMetaObject(flags);
+	return IMetaObject::OnBeforeRunMetaObject(flags);
 }
 
-bool CMetaGridObject::OnCloseMetaObject()
+bool CMetaGridObject::OnAfterCloseMetaObject()
 {
-	return IMetaObject::OnCloseMetaObject();
+	return IMetaObject::OnAfterCloseMetaObject();
 }
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
-METADATA_REGISTER(CMetaGridObject, "metaTemplate", g_metaTemplateCLSID);
-METADATA_REGISTER(CMetaCommonGridObject, "metaCommonTemplate", g_metaCommonTemplateCLSID);
+METADATA_REGISTER(CMetaGridObject, "baseTemplate", g_metaTemplateCLSID);
+METADATA_REGISTER(CMetaCommonGridObject, "commonTemplate", g_metaCommonTemplateCLSID);

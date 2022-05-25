@@ -32,7 +32,7 @@ public:
 	FirebirdParameter(FirebirdInterface* pInterface, XSQLVAR* pVar, double dblValue);
 	FirebirdParameter(FirebirdInterface* pInterface, XSQLVAR* pVar, bool bValue);
 	FirebirdParameter(FirebirdInterface* pInterface, XSQLVAR* pVar, const wxDateTime& dateValue);
-	FirebirdParameter(FirebirdInterface* pInterface, XSQLVAR* pVar, isc_db_handle pDatabase, isc_tr_handle pTransaction, const void* pData, long nDataLength);
+	FirebirdParameter(FirebirdInterface* pInterface, XSQLVAR* pVar, const void* pData, long nDataLength);
 
 	// dtor
 	virtual ~FirebirdParameter();
@@ -56,8 +56,8 @@ public:
 
 	short GetBufferType();
 
-	const XSQLVAR* GetFirebirdSqlVarPtr() { return m_pParameter; }
-	void ResetBlob();
+	const XSQLVAR* GetFirebirdSqlVarPtr() const { return m_pParameter; }
+	bool ResetBlob(isc_db_handle database, isc_tr_handle transaction);
 
 private:
 
@@ -79,8 +79,6 @@ private:
 	short m_nNullFlag;
 	ISC_QUAD m_BlobId;
 	isc_blob_handle m_pBlob;
-	isc_db_handle m_pDatabase;
-	isc_tr_handle m_pTransaction;
 
 	XSQLVAR* m_pParameter;
 	FirebirdInterface* m_pInterface;

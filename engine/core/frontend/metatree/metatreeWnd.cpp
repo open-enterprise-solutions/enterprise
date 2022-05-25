@@ -45,6 +45,7 @@ CMetadataTree::CMetadataTree(wxWindow *parent, int id)
 
 	//Create main tree
 	m_metaTreeWnd = new CMetadataTreeWnd(this);
+	m_metaTreeWnd->SetBackgroundColour(RGB(250, 250, 250));
 
 	//set image list
 	m_metaTreeWnd->SetImageList(::GetImageList());

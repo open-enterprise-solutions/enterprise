@@ -6,20 +6,29 @@
 class IModuleInfo
 {
 public:
-	CMetaModuleObject *GetMetaObject() const { return GetCompileModule() ? GetCompileModule()->GetModuleObject() : NULL; }
+
+	CMetaModuleObject* GetMetaObject() const {
+		return GetCompileModule() ? GetCompileModule()->GetModuleObject() : NULL;
+	}
+
 	//גûחמג לועמהא
-	CValue ExecuteMethod(methodArg_t &aParams);
+	CValue ExecuteMethod(methodArg_t& aParams);
 
 	IModuleInfo();
-	IModuleInfo(CCompileModule *compileModule);
+	IModuleInfo(CCompileModule* compileModule);
 	virtual ~IModuleInfo();
 
-	virtual CCompileModule *GetCompileModule() const { return m_compileModule; }
-	virtual CProcUnit *GetProcUnit() const { return m_procUnit; }
+	virtual CCompileModule* GetCompileModule() const {
+		return m_compileModule;
+	}
+
+	virtual CProcUnit* GetProcUnit() const {
+		return m_procUnit;
+	}
 
 protected:
-	CCompileModule *m_compileModule;
-	CProcUnit *m_procUnit;
+	CCompileModule* m_compileModule;
+	CProcUnit* m_procUnit;
 };
 
 #endif 

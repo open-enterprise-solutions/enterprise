@@ -1,39 +1,105 @@
-#include "metadata/objects/reference/reference.h"
-#include "metadata/objects/list/objectList.h"
+#include "metadata/metaObjects/objects/reference/reference.h"
+#include "metadata/metaObjects/objects/list/objectList.h"
+#include "metadata/metaObjects/objects/constant.h"
 
 #include "singleMetaTypes.h"
 
-//reference class 
-wxClassInfo *CMetaTypeRefObjectValueSingle::GetClassInfo() const
+wxBitmap IMetaTypeObjectValueSingle::GetClassIcon() const
 {
-	return CLASSINFO(CValueReference);
+	IMetaObject* metaObject = GetMetaObject();
+	wxASSERT(metaObject);
+	return metaObject->GetIcon();
 }
 
-CValue *CMetaTypeRefObjectValueSingle::CreateObject() const
+//reference class 
+wxClassInfo* CMetaTypeRefObjectValueSingle::GetClassInfo() const
 {
-	return new CValueReference(m_metaValue);
+	return CLASSINFO(CReferenceDataObject);
+}
+
+CValue* CMetaTypeRefObjectValueSingle::CreateObject() const
+{
+	return new CReferenceDataObject(m_metaValue);
 }
 
 //list class 
-wxClassInfo *CMetaTypeListObjectValueSingle::GetClassInfo() const
+wxClassInfo* CMetaTypeListObjectValueSingle::GetClassInfo() const
 {
-	return CLASSINFO(CDataObjectList);
+	return CLASSINFO(CListDataObjectRef);
 }
 
-CValue *CMetaTypeListObjectValueSingle::CreateObject() const
+CValue* CMetaTypeListObjectValueSingle::CreateObject() const
 {
-	return new CDataObjectList(m_metaValue, 0);
+	return new CListDataObjectRef(m_metaValue);
+}
+
+wxClassInfo* CMetaTypeListRegisterValueSingle::GetClassInfo() const
+{
+	return CLASSINFO(CListRegisterObject);
+}
+
+CValue* CMetaTypeListRegisterValueSingle::CreateObject() const
+{
+	return new CListRegisterObject(m_metaValue);
 }
 
 //object class
-wxClassInfo *CMetaTypeObjectValueSingle::GetClassInfo() const
+wxClassInfo* CMetaTypeObjectValueSingle::GetClassInfo() const
 {
-	IDataObjectValue *dataObject = m_metaValue->CreateObjectValue();
-	wxASSERT(dataObject); wxClassInfo *classInfo = dataObject->GetClassInfo();
+	IRecordDataObject* dataObject = m_metaValue->CreateObjectValue();
+	wxASSERT(dataObject); wxClassInfo* classInfo = dataObject->GetClassInfo();
 	delete dataObject; return classInfo;
 }
 
-CValue *CMetaTypeObjectValueSingle::CreateObject() const
+CValue* CMetaTypeObjectValueSingle::CreateObject() const
 {
 	return m_metaValue->CreateObjectValue();
+}
+
+//const-object class
+wxClassInfo* CMetaTypeConstObjectValueSingle::GetClassInfo() const
+{
+	return CLASSINFO(CConstantObject);
+}
+
+CValue* CMetaTypeConstObjectValueSingle::CreateObject() const
+{
+	return m_metaValue->CreateObjectValue();
+}
+
+//object record key
+wxClassInfo* CMetaTypeRecordKeyValueSingle::GetClassInfo() const
+{
+	return CLASSINFO(CRecordKeyObject);
+}
+
+CValue* CMetaTypeRecordKeyValueSingle::CreateObject() const
+{
+	return new CRecordKeyObject(m_metaValue);
+}
+
+//object record manager
+wxClassInfo* CMetaTypeRecordManagerValueSingle::GetClassInfo() const
+{
+	IRecordManagerObject* dataObject = m_metaValue->CreateRecordManagerValue();
+	wxASSERT(dataObject); wxClassInfo* classInfo = dataObject->GetClassInfo();
+	delete dataObject; return classInfo;
+}
+
+CValue* CMetaTypeRecordManagerValueSingle::CreateObject() const
+{
+	return m_metaValue->CreateRecordManagerValue();
+}
+
+//object record set
+wxClassInfo* CMetaTypeRecordSetValueSingle::GetClassInfo() const
+{
+	IRecordSetObject* dataObject = m_metaValue->CreateRecordSetValue();
+	wxASSERT(dataObject); wxClassInfo* classInfo = dataObject->GetClassInfo();
+	delete dataObject; return classInfo;
+}
+
+CValue* CMetaTypeRecordSetValueSingle::CreateObject() const
+{
+	return m_metaValue->CreateRecordSetValue();
 }

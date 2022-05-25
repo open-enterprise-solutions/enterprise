@@ -16,7 +16,7 @@ static bool bInitialize = false;
 //Массив приоритетов математических операций
 static int aPriority[256];
 
-CPrecompileModule::CPrecompileModule(CMetaModuleObject *moduleObject) :
+CPrecompileModule::CPrecompileModule(CMetaModuleObject* moduleObject) :
 	CTranslateModule(moduleObject->GetFullName(), moduleObject->GetDocPath()),
 	m_moduleObject(moduleObject), m_pContext(NULL), m_pCurrentContext(NULL),
 	m_nCurrentCompile(wxNOT_FOUND), m_nCurrentPos(0), nLastPosition(0),
@@ -58,7 +58,7 @@ void CPrecompileModule::Clear() //Сброс данных для повторного использования объе
 
 	for (auto function : cContext.cFunctions)
 	{
-		CPrecompileFunction *pFunction = static_cast<CPrecompileFunction *>(function.second);
+		CPrecompileFunction* pFunction = static_cast<CPrecompileFunction*>(function.second);
 		if (pFunction) delete pFunction;
 	}
 
@@ -77,12 +77,12 @@ void CPrecompileModule::Clear() //Сброс данных для повторного использования объе
 
 void CPrecompileModule::PrepareModuleData()
 {
-	IModuleInfo *contextVariable = NULL;
+	IModuleInfo* contextVariable = NULL;
 
 	if (m_moduleObject) {
-		IMetadata *metaData = m_moduleObject->GetMetadata();
+		IMetadata* metaData = m_moduleObject->GetMetadata();
 		wxASSERT(metaData);
-		IModuleManager *moduleManager = metaData->GetModuleManager();
+		IModuleManager* moduleManager = metaData->GetModuleManager();
 		wxASSERT(moduleManager);
 
 		if (!moduleManager->FindCompileModule(m_moduleObject, contextVariable)) {
@@ -92,7 +92,7 @@ void CPrecompileModule::PrepareModuleData()
 		for (auto pair : moduleManager->GetContextVariables())
 		{
 			//добавляем переменные из менеджера
-			CValue *m_managerVariable = pair.second;
+			CValue* m_managerVariable = pair.second;
 
 			for (unsigned int i = 0; i < m_managerVariable->GetNAttributes(); i++)
 			{
@@ -117,7 +117,7 @@ void CPrecompileModule::PrepareModuleData()
 			{
 				wxString sMethodName = m_managerVariable->GetMethodName(i);
 
-				CPrecompileFunction *pFunction = new CPrecompileFunction(sMethodName);
+				CPrecompileFunction* pFunction = new CPrecompileFunction(sMethodName);
 				pFunction->sRealName = sMethodName;
 				pFunction->sShortDescription = m_managerVariable->GetMethodDescription(i);
 				pFunction->nStart = i;
@@ -167,11 +167,11 @@ void CPrecompileModule::PrepareModuleData()
 							wxString sMethodName = code.sName;
 							if (cContext.FindFunction(sMethodName)) continue;
 
-							CPrecompileContext *procContext = new CPrecompileContext(GetContext());//создаем новый контекст, в котором будем компилировать тело функции
+							CPrecompileContext* procContext = new CPrecompileContext(GetContext());//создаем новый контекст, в котором будем компилировать тело функции
 							procContext->SetModule(this);
 							procContext->nReturn = RETURN_PROCEDURE;
 
-							CPrecompileFunction *pFunction = new CPrecompileFunction(sMethodName, procContext);
+							CPrecompileFunction* pFunction = new CPrecompileFunction(sMethodName, procContext);
 							pFunction->sRealName = sMethodName;
 							pFunction->sShortDescription = code.sShortDescription;
 
@@ -189,11 +189,11 @@ void CPrecompileModule::PrepareModuleData()
 							wxString sMethodName = code.sName;
 							if (cContext.FindFunction(sMethodName)) continue;
 
-							CPrecompileContext *procContext = new CPrecompileContext(GetContext());//создаем новый контекст, в котором будем компилировать тело функции
+							CPrecompileContext* procContext = new CPrecompileContext(GetContext());//создаем новый контекст, в котором будем компилировать тело функции
 							procContext->SetModule(this);
 							procContext->nReturn = RETURN_FUNCTION;
 
-							CPrecompileFunction *pFunction = new CPrecompileFunction(sMethodName, procContext);
+							CPrecompileFunction* pFunction = new CPrecompileFunction(sMethodName, procContext);
 							pFunction->sRealName = sMethodName;
 							pFunction->sShortDescription = code.sShortDescription;
 
@@ -213,14 +213,14 @@ void CPrecompileModule::PrepareModuleData()
 	}
 
 	if (contextVariable) {
-		CValue *pRefData = NULL;
-		CCompileModule *compileModule = contextVariable->GetCompileModule();
+		CValue* pRefData = NULL;
+		CCompileModule* compileModule = contextVariable->GetCompileModule();
 		while (compileModule) {
-			CMetaModuleObject *moduleObject = compileModule->GetModuleObject();
+			CMetaModuleObject* moduleObject = compileModule->GetModuleObject();
 			if (moduleObject) {
-				IMetadata *metaData = moduleObject->GetMetadata();
+				IMetadata* metaData = moduleObject->GetMetadata();
 				wxASSERT(metaData);
-				IModuleManager *moduleManager = metaData->GetModuleManager();
+				IModuleManager* moduleManager = metaData->GetModuleManager();
 				if (moduleManager->FindCompileModule(moduleObject, pRefData))
 				{
 					//добавляем переменные из контекста
@@ -251,7 +251,7 @@ void CPrecompileModule::PrepareModuleData()
 						if (cContext.FindFunction(sMethodName))
 							continue;
 
-						CPrecompileFunction *pFunction = new CPrecompileFunction(sMethodName);
+						CPrecompileFunction* pFunction = new CPrecompileFunction(sMethodName);
 						pFunction->sRealName = sMethodName;
 						pFunction->sShortDescription = pRefData->GetMethodDescription(i);
 						pFunction->nStart = i;
@@ -298,11 +298,11 @@ void CPrecompileModule::PrepareModuleData()
 									wxString sMethodName = code.sName;
 									if (cContext.FindFunction(sMethodName)) continue;
 
-									CPrecompileContext *procContext = new CPrecompileContext(GetContext());//создаем новый контекст, в котором будем компилировать тело функции
+									CPrecompileContext* procContext = new CPrecompileContext(GetContext());//создаем новый контекст, в котором будем компилировать тело функции
 									procContext->SetModule(this);
 									procContext->nReturn = RETURN_PROCEDURE;
 
-									CPrecompileFunction *pFunction = new CPrecompileFunction(sMethodName, procContext);
+									CPrecompileFunction* pFunction = new CPrecompileFunction(sMethodName, procContext);
 									pFunction->sRealName = sMethodName;
 									pFunction->sShortDescription = code.sShortDescription;
 
@@ -320,11 +320,11 @@ void CPrecompileModule::PrepareModuleData()
 									wxString sMethodName = code.sName;
 									if (cContext.FindFunction(sMethodName)) continue;
 
-									CPrecompileContext *procContext = new CPrecompileContext(GetContext());//создаем новый контекст, в котором будем компилировать тело функции
+									CPrecompileContext* procContext = new CPrecompileContext(GetContext());//создаем новый контекст, в котором будем компилировать тело функции
 									procContext->SetModule(this);
 									procContext->nReturn = RETURN_FUNCTION;
 
-									CPrecompileFunction *pFunction = new CPrecompileFunction(sMethodName, procContext);
+									CPrecompileFunction* pFunction = new CPrecompileFunction(sMethodName, procContext);
 									pFunction->sRealName = sMethodName;
 									pFunction->sShortDescription = code.sShortDescription;
 
@@ -690,9 +690,9 @@ bool CPrecompileModule::Compile()
 	Clear();
 
 	//Добавление глобальных констант
-	IMetadata *metaData = m_moduleObject->GetMetadata();
+	IMetadata* metaData = m_moduleObject->GetMetadata();
 	wxASSERT(metaData);
-	IModuleManager *moduleManager = metaData->GetModuleManager();
+	IModuleManager* moduleManager = metaData->GetModuleManager();
 	wxASSERT(moduleManager);
 
 	for (auto variable : moduleManager->GetGlobalVariables())
@@ -713,7 +713,7 @@ bool CPrecompileModule::CompileModule()
 
 	while ((lex = PreviewGetLexem()).m_nType != ERRORTYPE)
 	{
-		if ((KEYWORD == lex.m_nType&& KEY_VAR == lex.m_nData) || (IDENTIFIER == lex.m_nType && IsTypeVar(lex.m_sData)))
+		if ((KEYWORD == lex.m_nType && KEY_VAR == lex.m_nData) || (IDENTIFIER == lex.m_nType && IsTypeVar(lex.m_sData)))
 		{
 			CompileDeclaration();//загружаем объявление переменных
 		}
@@ -799,7 +799,7 @@ bool CPrecompileModule::CompileFunction()
 	wxString sFuncName = StringUtils::MakeUpper(csFuncName0);
 	int nError = m_nCurrentCompile;
 
-	CPrecompileFunction *pFunction = new CPrecompileFunction(sFuncName, m_pContext);
+	CPrecompileFunction* pFunction = new CPrecompileFunction(sFuncName, m_pContext);
 
 	pFunction->sRealName = csFuncName0;
 	pFunction->sShortDescription = sShortDescription;
@@ -998,7 +998,7 @@ bool CPrecompileModule::CompileBlock()
 
 					if (!cContext.sCurFuncName.IsEmpty())
 					{
-						CPrecompileFunction *m_precompile = static_cast<CPrecompileFunction *>(cContext.cFunctions[cContext.sCurFuncName]);
+						CPrecompileFunction* m_precompile = static_cast<CPrecompileFunction*>(cContext.cFunctions[cContext.sCurFuncName]);
 						m_precompile->RealRetValue = returnValue;
 					}
 				}
@@ -1379,7 +1379,7 @@ CValue CPrecompileModule::GETConstant()
 }
 
 //получение номера константой строки (для определения номера метода)
-int CPrecompileModule::GetConstString(const wxString &sMethod)
+int CPrecompileModule::GetConstString(const wxString& sMethod)
 {
 	if (!m_aHashConstList[sMethod])
 	{
@@ -1388,7 +1388,7 @@ int CPrecompileModule::GetConstString(const wxString &sMethod)
 	return ((int)m_aHashConstList[sMethod]) - 1;
 }
 
-int CPrecompileModule::IsTypeVar(const wxString &sType)
+int CPrecompileModule::IsTypeVar(const wxString& sType)
 {
 	if (!sType.IsEmpty())
 	{
@@ -1405,7 +1405,7 @@ int CPrecompileModule::IsTypeVar(const wxString &sType)
 	return false;
 }
 
-wxString CPrecompileModule::GetTypeVar(const wxString &sType)
+wxString CPrecompileModule::GetTypeVar(const wxString& sType)
 {
 	if (!sType.IsEmpty())
 	{
@@ -1474,7 +1474,7 @@ SParamValue CPrecompileModule::GetExpression(int nPriority)
 
 		if (aParamList.size() > 0)
 		{
-			CValue **pRefLocVars = new CValue*[aParamList.size() ? aParamList.size() : 1];
+			CValue** pRefLocVars = new CValue * [aParamList.size() ? aParamList.size() : 1];
 			for (unsigned int i = 0; i < aParamList.size(); i++) { pRefLocVars[i] = &aParamList[i].vObject; }
 			if (aParamList.size() == 0)
 			{
@@ -1678,7 +1678,7 @@ MOperation:
  * nIsSet - на выходе: 1 - признак того что точно ожидается присваивание выражения (т.е. должен встретиться знак '=')
  * номер идекса переменной, где лежит значение идентификатора
 */
-SParamValue CPrecompileModule::GetCurrentIdentifier(int &nIsSet)
+SParamValue CPrecompileModule::GetCurrentIdentifier(int& nIsSet)
 {
 	int nPrevSet = nIsSet;
 
@@ -1733,7 +1733,7 @@ SParamValue CPrecompileModule::GetCurrentIdentifier(int &nIsSet)
 			int iName = vContext.FindMethod(sName);
 			if (iName != wxNOT_FOUND)
 			{
-				CValue **pRefLocVars = new CValue*[aParamList.size() ? aParamList.size() : 1];
+				CValue** pRefLocVars = new CValue * [aParamList.size() ? aParamList.size() : 1];
 
 				for (unsigned int i = 0; i < aParamList.size(); i++)
 				{
@@ -1782,14 +1782,10 @@ SParamValue CPrecompileModule::GetCurrentIdentifier(int &nIsSet)
 			bCheckError = true;
 
 		CValue vContext;
-		if (cContext.FindVariable(sRealName, vContext, true))
-		{
+		if (cContext.FindVariable(sRealName, vContext, true)) {
 			nIsSet = 0;
-
-			if (IsNextDelimeter('=') && nPrevSet == 1)
-			{
+			if (IsNextDelimeter('=') && nPrevSet == 1) {
 				GETDelimeter('=');
-
 				SParamValue Param = GetExpression();
 				Variable.vObject = Param.vObject;
 				return Variable;
@@ -1797,8 +1793,7 @@ SParamValue CPrecompileModule::GetCurrentIdentifier(int &nIsSet)
 			else
 			{
 				int iName = vContext.FindAttribute(sName);
-				if (iName != wxNOT_FOUND)
-				{
+				if (iName != wxNOT_FOUND) {
 					attributeArg_t aParams(iName, sName);
 					try
 					{
@@ -1905,7 +1900,7 @@ MLabel:
 
 			int iName = parentValue.FindMethod(sMethod);
 			if (iName != wxNOT_FOUND) {
-				CValue **aParams = new CValue*[aParamList.size() ? aParamList.size() : 1];
+				CValue** aParams = new CValue * [aParamList.size() ? aParamList.size() : 1];
 				for (unsigned int i = 0; i < aParamList.size(); i++) { aParams[i] = &aParamList[i].vObject; }
 				methodArg_t aMethParams(aParams, aParamList.size(), iName, sRealMethod);
 
@@ -1988,7 +1983,7 @@ MLabel:
 /**
  * обработка вызова функции или процедуры
  */
-SParamValue CPrecompileModule::GetCallFunction(const wxString &sName)
+SParamValue CPrecompileModule::GetCallFunction(const wxString& sName)
 {
 	std::vector<SParamValue> aParamList;
 
@@ -2018,7 +2013,7 @@ SParamValue CPrecompileModule::GetCallFunction(const wxString &sName)
 
 	if (cContext.cFunctions.find(sName) != cContext.cFunctions.end())
 	{
-		CPrecompileFunction *pDefFunction = cContext.cFunctions[sName];
+		CPrecompileFunction* pDefFunction = cContext.cFunctions[sName];
 		pDefFunction->aParamList = aParamList;
 		retValue = pDefFunction->RealRetValue.vObject;
 	}
@@ -2033,7 +2028,7 @@ SParamValue CPrecompileModule::GetCallFunction(const wxString &sName)
  * Назначение:
  * Добавить имя и адрес внешней перменной в специальный массив для дальнейшего использования
  */
-void CPrecompileModule::AddVariable(const wxString &sName, CValue vObject)
+void CPrecompileModule::AddVariable(const wxString& sName, CValue vObject)
 {
 	if (sName.IsEmpty()) return;
 
@@ -2044,7 +2039,7 @@ void CPrecompileModule::AddVariable(const wxString &sName, CValue vObject)
 /**
  * Функция возвращает номер переменной по строковому имени
  */
-SParamValue CPrecompileModule::GetVariable(const wxString &sName, bool bCheckError)
+SParamValue CPrecompileModule::GetVariable(const wxString& sName, bool bCheckError)
 {
 	return m_pContext->GetVariable(sName, true, bCheckError);
 }
@@ -2064,7 +2059,7 @@ SParamValue CPrecompileModule::GetVariable()
  * Получает номер константы из уникального списка значений
  * (если такого значения в списке нет, то оно создается)
  */
-SParamValue CPrecompileModule::FindConst(CValue &vData)
+SParamValue CPrecompileModule::FindConst(CValue& vData)
 {
 	SParamValue Const;
 	wxString sType = vData.GetTypeString();

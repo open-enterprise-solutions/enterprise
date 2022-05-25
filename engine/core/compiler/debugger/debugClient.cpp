@@ -359,7 +359,7 @@ bool CDebuggerClient::RemoveBreakpoint(const wxString &sModuleName, unsigned int
 	return true;
 }
 
-#include "common/reportManager.h"
+#include "common/docManager.h"
 
 void CDebuggerClient::RemoveAllBreakPoints()
 {
@@ -368,7 +368,7 @@ void CDebuggerClient::RemoveAllBreakPoints()
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 	if (RemoveAllBreakPointsInDB()) {
 		m_aBreakpoints.clear();
-		for (auto m_document : reportManager->GetDocumentsVector()) {
+		for (auto m_document : docManager->GetDocumentsVector()) {
 			m_document->UpdateAllViews();
 		}
 	}
@@ -530,9 +530,9 @@ void CDebuggerClient::OnDebugEvent(wxDebugEvent &event)
 
 	if (event.GetEventId() == EventId::EventId_EnterLoop) {
 		if (!fileName.IsEmpty()) {
-			wxDocument * const foundedDoc = reportManager->FindDocumentByPath(fileName);
+			wxDocument * const foundedDoc = docManager->FindDocumentByPath(fileName);
 			if (foundedDoc == NULL) {
-				reportManager->CreateDocument(fileName, wxDOC_SILENT);
+				docManager->CreateDocument(fileName, wxDOC_SILENT);
 			}
 		}
 	}
@@ -544,11 +544,11 @@ void CDebuggerClient::OnDebugEvent(wxDebugEvent &event)
 		}
 		if (!fileName.IsEmpty()) {
 			IMetaDocument *foundedDoc = dynamic_cast<IMetaDocument *>(
-				reportManager->FindDocumentByPath(fileName)
+				docManager->FindDocumentByPath(fileName)
 				);
 			if (!foundedDoc) {
 				foundedDoc = dynamic_cast<IMetaDocument *>(
-					reportManager->CreateDocument(fileName, wxDOC_SILENT)
+					docManager->CreateDocument(fileName, wxDOC_SILENT)
 					);
 			}
 			if (foundedDoc) {
@@ -931,7 +931,7 @@ void CDebuggerClient::CClientSocketThread::SendCommand(void *pointer, unsigned i
 	}
 	free(dest);
 #else
-	if (m_socketClient && m_socketClient->IsOk()) {
+	if (m_socketClient && CClientSocketThread::IsConnected()) {
 		m_socketClient->WriteMsg(&length, sizeof(unsigned int));
 		m_socketClient->WriteMsg(pointer, length);
 }

@@ -105,19 +105,19 @@ public:
 	inline implementation_type&impl() { return *(implementation_type*)this; }
 	inline const implementation_type&impl() const { return *(implementation_type*)this; }
 
-	inline bool			eof()	const { return impl().elapsed() <= 0; };
+	inline bool			eof()	const { return impl().elapsed() <= 0; }
 
 	inline void			r(void *p, int cnt) { impl().r(p, cnt); }
 
-	inline u64			r_u64() { u64 tmp;	r(&tmp, sizeof(tmp)); return tmp; };
-	inline u32			r_u32() { u32 tmp;	r(&tmp, sizeof(tmp)); return tmp; };
-	inline u16			r_u16() { u16 tmp;	r(&tmp, sizeof(tmp)); return tmp; };
-	inline u8			r_u8() { u8 tmp;		r(&tmp, sizeof(tmp)); return tmp; };
-	inline s64			r_s64() { s64 tmp;	r(&tmp, sizeof(tmp)); return tmp; };
-	inline s32			r_s32() { s32 tmp;	r(&tmp, sizeof(tmp)); return tmp; };
-	inline s16			r_s16() { s16 tmp;	r(&tmp, sizeof(tmp)); return tmp; };
-	inline s8			r_s8() { s8 tmp;		r(&tmp, sizeof(tmp)); return tmp; };
-	inline float		r_float() { float tmp;	r(&tmp, sizeof(tmp)); return tmp; };
+	inline u64			r_u64() { u64 tmp;	r(&tmp, sizeof(tmp)); return tmp; }
+	inline u32			r_u32() { u32 tmp;	r(&tmp, sizeof(tmp)); return tmp; }
+	inline u16			r_u16() { u16 tmp;	r(&tmp, sizeof(tmp)); return tmp; }
+	inline u8			r_u8() { u8 tmp;		r(&tmp, sizeof(tmp)); return tmp; }
+	inline s64			r_s64() { s64 tmp;	r(&tmp, sizeof(tmp)); return tmp; }
+	inline s32			r_s32() { s32 tmp;	r(&tmp, sizeof(tmp)); return tmp; }
+	inline s16			r_s16() { s16 tmp;	r(&tmp, sizeof(tmp)); return tmp; }
+	inline s8			r_s8() { s8 tmp;		r(&tmp, sizeof(tmp)); return tmp; }
+	inline float		r_float() { float tmp;	r(&tmp, sizeof(tmp)); return tmp; }
 
 	// Set file pointer to start of chunk data (0 for root chunk)
 	inline	void		rewind() { impl().seek(0); }
@@ -185,12 +185,12 @@ protected:
 	u32 			advance_term_string();
 
 public:
-	inline int			elapsed()	const { return Size - Pos; };
-	inline int			tell()	const { return Pos; };
-	inline void			seek(int ptr) { Pos = ptr; wxASSERT((Pos <= Size) && (Pos >= 0)); };
-	inline int			length()	const { return Size; };
-	inline void*		pointer()	const { return &(data[Pos]); };
-	inline void			advance(int cnt) { Pos += cnt; wxASSERT((Pos <= Size) && (Pos >= 0)); };
+	inline int			elapsed()	const { return Size - Pos; }
+	inline int			tell()	const { return Pos; }
+	inline void			seek(int ptr) { Pos = ptr; wxASSERT((Pos <= Size) && (Pos >= 0)); }
+	inline int			length()	const { return Size; }
+	inline void*		pointer()	const { return &(data[Pos]); }
+	inline void			advance(int cnt) { Pos += cnt; wxASSERT((Pos <= Size) && (Pos >= 0)); }
 
 public:
 	void			r(void *p, int cnt);

@@ -17,20 +17,20 @@ private:
 
 public:
 
-	~CEnumFactory();
+	virtual ~CEnumFactory();
 
 	static CEnumFactory* Get();
 	static void Destroy();
 
 	//эти методы нужно переопределить в ваших агрегатных объектах:
-	virtual CMethods* GetPMethods() const { return m_methods; };//получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethods* GetPMethods() const { return m_methods; }//получить ссылку на класс помощник разбора имен атрибутов и методов
 
 	//этот метод автоматически вызывается для инициализации имен атрибутов и методов
 	virtual CValue Method(const wxString &sName, CValue **aParams) { return CValue(); }
 	virtual CValue GetAttribute(attributeArg_t &aParams);                   //значение атрибута
 
-	virtual wxString GetString() const { return wxT("enumFactory"); };
-	virtual wxString GetTypeString() const { return wxT("enumFactory"); };
+	virtual wxString GetString() const { return wxT("enumFactory"); }
+	virtual wxString GetTypeString() const { return wxT("enumFactory"); }
 
 public:
 
@@ -39,7 +39,6 @@ public:
 	void RemoveEnumeration(const wxString &enumName);
 
 protected:
-
 	CMethods *m_methods;
 };
 

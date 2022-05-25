@@ -5,7 +5,7 @@
 
 #include "mainFrame.h" 
 #include "metadata/metadata.h"
-#include "common/reportManager.h"
+#include "common/docManager.h"
 
 bool CMainFrame::ProcessEvent(wxEvent &event)
 {
@@ -114,7 +114,7 @@ void CMainFrame::OnExit(wxCommandEvent& WXUNUSED(event))
 
 void CMainFrame::OnCloseWindow(wxCloseEvent& event)
 {
-	bool allowClose = true;//reportManager->Clear(!event.CanVeto());
+	bool allowClose = true;//docManager->Clear(!event.CanVeto());
 
 	// The user decided not to close finally, abort.
 	if (allowClose) event.Skip();

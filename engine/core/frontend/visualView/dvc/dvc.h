@@ -11,16 +11,16 @@
 class CValueTableBoxColumn;
 
 class CValueViewRenderer : public wxDataViewCustomRenderer {
-	CValueTableBoxColumn *m_colControl;
+	CValueTableBoxColumn* m_colControl;
 public:
 
-	void FinishSelecting(wxVariant &valVariant) {
+	void FinishSelecting(wxVariant& valVariant) {
 
 		if (m_editorCtrl) {
 			// Remove our event handler first to prevent it from (recursively) calling
 			// us again as it would do via a call to FinishEditing() when the editor
 			// loses focus when we hide it below.
-			wxEvtHandler *const handler = m_editorCtrl->PopEventHandler();
+			wxEvtHandler* const handler = m_editorCtrl->PopEventHandler();
 
 			// Hide the control immediately but don't delete it yet as there could be
 			// some pending messages for it.
@@ -41,12 +41,12 @@ public:
 	// purposes. In real programs, you should select whether the user should be
 	// able to activate or edit the cell and it doesn't make sense to switch
 	// between the two -- but this is just an example, so it doesn't stop us.
-	explicit CValueViewRenderer(CValueTableBoxColumn *col)
+	explicit CValueViewRenderer(CValueTableBoxColumn* col)
 		: wxDataViewCustomRenderer(wxT("string"), wxDATAVIEW_CELL_EDITABLE, wxALIGN_LEFT), m_colControl(col)
 	{
 	}
 
-	virtual bool Render(wxRect rect, wxDC *dc, int state) override
+	virtual bool Render(wxRect rect, wxDC* dc, int state) override
 	{
 		RenderText(m_valueVariant,
 			0, // no offset
@@ -58,10 +58,10 @@ public:
 	}
 
 	virtual bool ActivateCell(const wxRect& cell,
-		wxDataViewModel *model,
-		const wxDataViewItem &item,
+		wxDataViewModel* model,
+		const wxDataViewItem& item,
 		unsigned int col,
-		const wxMouseEvent *mouseEvent) override
+		const wxMouseEvent* mouseEvent) override
 	{
 		return false;
 	}
@@ -77,13 +77,13 @@ public:
 		}
 	}
 
-	virtual bool SetValue(const wxVariant &value) override
+	virtual bool SetValue(const wxVariant& value) override
 	{
 		m_valueVariant = value.GetString();
 		return true;
 	}
 
-	virtual bool GetValue(wxVariant &WXUNUSED(value)) const override
+	virtual bool GetValue(wxVariant& WXUNUSED(value)) const override
 	{
 		return true;
 	}
@@ -114,10 +114,11 @@ private:
 
 class CDataViewColumnObject : public wxObject,
 	public wxDataViewColumn {
-	unsigned int m_controlId;
+	unsigned int m_controlId; 
+	CValueTableBoxColumn* m_valColumn;
 public:
 
-	CDataViewColumnObject(CValueTableBoxColumn *col,
+	CDataViewColumnObject(CValueTableBoxColumn* col,
 		const wxString& title,
 		unsigned int model_column,
 		int width = wxDVC_DEFAULT_WIDTH,
@@ -127,7 +128,7 @@ public:
 	{
 	}
 
-	CDataViewColumnObject(CValueTableBoxColumn *col,
+	CDataViewColumnObject(CValueTableBoxColumn* col,
 		const wxBitmap& bitmap,
 		unsigned int model_column,
 		int width = wxDVC_DEFAULT_WIDTH,
@@ -137,12 +138,25 @@ public:
 	{
 	}
 
-	CValueViewRenderer* GetRenderer() const { 
-		return dynamic_cast<CValueViewRenderer *>(m_renderer); 
+	CValueViewRenderer* GetRenderer() const {
+		return dynamic_cast<CValueViewRenderer*>(m_renderer);
 	}
 
-	void SetControlID(unsigned int obj_id) { wxASSERT(m_controlId == 0); m_controlId = obj_id; }
-	unsigned int GetControlID() const { return m_controlId; }
+	void SetControlID(unsigned int obj_id) {
+		wxASSERT(m_controlId == 0); m_controlId = obj_id; 
+	}
+
+	void SetControl(CValueTableBoxColumn* control) {
+		m_valColumn = control;
+	}
+
+	CValueTableBoxColumn* GetControl() const {
+		return m_valColumn; 
+	}
+
+	unsigned int GetControlID() const { 
+		return m_controlId; 
+	}
 
 	void SetColModel(unsigned int col_model) {
 		m_model_column = col_model;

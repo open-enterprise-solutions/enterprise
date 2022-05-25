@@ -26,7 +26,7 @@ IModuleInfo::~IModuleInfo()
 
 CValue IModuleInfo::ExecuteMethod(methodArg_t &aParams)
 {
-	if (m_procUnit)
+	if (m_procUnit != NULL)
 	{
 		if (m_procUnit->FindFunction(aParams.GetName()) != wxNOT_FOUND) {
 			return m_procUnit->CallFunction(aParams);

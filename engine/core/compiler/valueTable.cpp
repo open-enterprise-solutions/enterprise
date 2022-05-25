@@ -20,16 +20,17 @@ CMethods CValueTable::m_methods;
 
 CValueTable::CValueTable() : IValueTable()
 {
-	m_aDataColumns = new CValueTableColumns(this);
-	m_aDataColumns->IncrRef();
+	m_dataColumnCollection = new CValueTableColumnCollection(this);
+	m_dataColumnCollection->IncrRef();
 
 	//delete only in CValue
 	//wxRefCounter::IncrRef(); 
 }
 
-CValueTable::CValueTable(const CValueTable& valueTable) : IValueTable(), m_aDataColumns(valueTable.m_aDataColumns)
+CValueTable::CValueTable(const CValueTable& valueTable) : IValueTable(), 
+m_dataColumnCollection(valueTable.m_dataColumnCollection)
 {
-	m_aDataColumns->IncrRef();
+	m_dataColumnCollection->IncrRef();
 
 	//delete only in CValue
 	//wxRefCounter::IncrRef();
@@ -37,8 +38,8 @@ CValueTable::CValueTable(const CValueTable& valueTable) : IValueTable(), m_aData
 
 CValueTable::~CValueTable()
 {
-	if (m_aDataColumns)
-		m_aDataColumns->DecrRef();
+	if (m_dataColumnCollection)
+		m_dataColumnCollection->DecrRef();
 }
 
 // methods:
@@ -79,19 +80,19 @@ void CValueTable::PrepareNames() const
 	m_methods.PrepareAttributes(aAttributes, nCountA);
 }
 
-CValue CValueTable::GetAttribute(attributeArg_t &aParams)
+CValue CValueTable::GetAttribute(attributeArg_t& aParams)
 {
 	CValue ret;
 
 	switch (aParams.GetIndex())
 	{
-	case enColumns: return m_aDataColumns;
+	case enColumns: return m_dataColumnCollection;
 	}
 
 	return ret;
 }
 
-CValue CValueTable::Method(methodArg_t &aParams)
+CValue CValueTable::Method(methodArg_t& aParams)
 {
 	CValue ret;
 
@@ -108,7 +109,7 @@ CValue CValueTable::Method(methodArg_t &aParams)
 
 #include "appData.h"
 
-CValue CValueTable::GetAt(const CValue &cKey)
+CValue CValueTable::GetAt(const CValue& cKey)
 {
 	unsigned int index = cKey.ToUInt();
 
@@ -119,14 +120,14 @@ CValue CValueTable::GetAt(const CValue &cKey)
 }
 
 //////////////////////////////////////////////////////////////////////
-//               CValueTableColumns                                  //
+//               CValueTableColumnCollection                                  //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(CValueTable::CValueTableColumns, IValueTable::IValueTableColumns);
+wxIMPLEMENT_DYNAMIC_CLASS(CValueTable::CValueTableColumnCollection, IValueTable::IValueTableColumnCollection);
 
-CValueTable::CValueTableColumns::CValueTableColumns() : IValueTableColumns(), m_methods(NULL), m_ownerTable(NULL) {}
-CValueTable::CValueTableColumns::CValueTableColumns(CValueTable *ownerTable) : IValueTableColumns(), m_methods(new CMethods()), m_ownerTable(ownerTable) {}
-CValueTable::CValueTableColumns::~CValueTableColumns()
+CValueTable::CValueTableColumnCollection::CValueTableColumnCollection() : IValueTableColumnCollection(), m_methods(NULL), m_ownerTable(NULL) {}
+CValueTable::CValueTableColumnCollection::CValueTableColumnCollection(CValueTable* ownerTable) : IValueTableColumnCollection(), m_methods(new CMethods()), m_ownerTable(ownerTable) {}
+CValueTable::CValueTableColumnCollection::~CValueTableColumnCollection()
 {
 	for (auto& colInfo : m_aColumnInfo) {
 		wxASSERT(colInfo);
@@ -144,7 +145,7 @@ enum
 	enRemoveColumn
 };
 
-void CValueTable::CValueTableColumns::PrepareNames() const
+void CValueTable::CValueTableColumnCollection::PrepareNames() const
 {
 	std::vector<SEng> aMethods =
 	{
@@ -157,13 +158,13 @@ void CValueTable::CValueTableColumns::PrepareNames() const
 
 #include "valueType.h"
 
-CValue CValueTable::CValueTableColumns::Method(methodArg_t &aParams)
+CValue CValueTable::CValueTableColumnCollection::Method(methodArg_t& aParams)
 {
 	switch (aParams.GetIndex())
 	{
 	case enAddColumn:
 	{
-		CValueType *m_valueType = NULL;
+		CValueType* m_valueType = NULL;
 
 		if (aParams.GetParamCount() > 1)
 			aParams[1].ConvertToValue(m_valueType);
@@ -182,10 +183,10 @@ CValue CValueTable::CValueTableColumns::Method(methodArg_t &aParams)
 	{
 		wxString columnName = aParams[0].ToString();
 		auto itFounded = std::find_if(m_aColumnInfo.begin(), m_aColumnInfo.end(),
-			[columnName](CValueTableColumnInfo * colData)
-		{
-			return StringUtils::CompareString(columnName, colData->GetColumnName());
-		});
+			[columnName](CValueTableColumnInfo* colData)
+			{
+				return StringUtils::CompareString(columnName, colData->GetColumnName());
+			});
 		if (itFounded != m_aColumnInfo.end()) {
 			RemoveColumn((*itFounded)->GetColumnID());
 		}
@@ -196,11 +197,11 @@ CValue CValueTable::CValueTableColumns::Method(methodArg_t &aParams)
 	return CValue();
 }
 
-void CValueTable::CValueTableColumns::SetAt(const CValue &cKey, CValue &cVal)//индекс массива должен начинаться с 0
+void CValueTable::CValueTableColumnCollection::SetAt(const CValue& cKey, CValue& cVal)//индекс массива должен начинаться с 0
 {
 }
 
-CValue CValueTable::CValueTableColumns::GetAt(const CValue &cKey) //индекс массива должен начинаться с 0
+CValue CValueTable::CValueTableColumnCollection::GetAt(const CValue& cKey) //индекс массива должен начинаться с 0
 {
 	unsigned int index = cKey.ToUInt();
 
@@ -216,64 +217,11 @@ CValue CValueTable::CValueTableColumns::GetAt(const CValue &cKey) //индекс масси
 //               CValueTableColumnInfo                              //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(CValueTable::CValueTableColumns::CValueTableColumnInfo, IValueTable::IValueTableColumns::IValueTableColumnsInfo);
+wxIMPLEMENT_DYNAMIC_CLASS(CValueTable::CValueTableColumnCollection::CValueTableColumnInfo, IValueTable::IValueTableColumnCollection::IValueTableColumnInfo);
 
-CValueTable::CValueTableColumns::CValueTableColumnInfo::CValueTableColumnInfo() : IValueTableColumnsInfo(), m_methods(NULL) {}
-CValueTable::CValueTableColumns::CValueTableColumnInfo::CValueTableColumnInfo(unsigned int colID, const wxString &colName, CValueTypeDescription *types, const wxString &caption, int width) : IValueTableColumnsInfo(), m_methods(new CMethods()), m_columnID(colID), m_columnName(colName), m_columnTypes(types), m_columnCaption(caption), m_columnWidth(width) { if (m_columnTypes) m_columnTypes->IncrRef(); }
-CValueTable::CValueTableColumns::CValueTableColumnInfo::~CValueTableColumnInfo() { if (m_columnTypes) m_columnTypes->DecrRef(); if (m_methods) delete m_methods; }
-
-enum
-{
-	enColumnName,
-	enColumnTypes,
-	enColumnCaption,
-	enColumnWidth
-};
-
-void CValueTable::CValueTableColumns::CValueTableColumnInfo::PrepareNames() const
-{
-	std::vector<SEng> aAttributes;
-
-	{
-		SEng aAttribute;
-		aAttribute.sName = wxT("name");
-		aAttribute.sSynonym = wxT("default");
-		aAttributes.push_back(aAttribute);
-	}
-	{
-		SEng aAttribute;
-		aAttribute.sName = wxT("types");
-		aAttribute.sSynonym = wxT("default");
-		aAttributes.push_back(aAttribute);
-	}
-	{
-		SEng aAttribute;
-		aAttribute.sName = wxT("caption");
-		aAttribute.sSynonym = wxT("default");
-		aAttributes.push_back(aAttribute);
-	}
-	{
-		SEng aAttribute;
-		aAttribute.sName = wxT("width");
-		aAttribute.sSynonym = wxT("default");
-		aAttributes.push_back(aAttribute);
-	}
-
-	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
-}
-
-CValue CValueTable::CValueTableColumns::CValueTableColumnInfo::GetAttribute(attributeArg_t &aParams)
-{
-	switch (aParams.GetIndex())
-	{
-	case enColumnName: return m_columnName;
-	case enColumnTypes: return m_columnTypes ? m_columnTypes : CValue();
-	case enColumnCaption: return m_columnCaption;
-	case enColumnWidth: return m_columnWidth;
-	}
-
-	return CValue();
-}
+CValueTable::CValueTableColumnCollection::CValueTableColumnInfo::CValueTableColumnInfo() : IValueTableColumnInfo() {}
+CValueTable::CValueTableColumnCollection::CValueTableColumnInfo::CValueTableColumnInfo(unsigned int colID, const wxString& colName, CValueTypeDescription* types, const wxString& caption, int width) : IValueTableColumnInfo(), m_columnID(colID), m_columnName(colName), m_columnTypes(types), m_columnCaption(caption), m_columnWidth(width) { if (m_columnTypes) m_columnTypes->IncrRef(); }
+CValueTable::CValueTableColumnCollection::CValueTableColumnInfo::~CValueTableColumnInfo() { if (m_columnTypes) m_columnTypes->DecrRef(); }
 
 //////////////////////////////////////////////////////////////////////
 //               CValueTableReturnLine                              //
@@ -282,19 +230,21 @@ CValue CValueTable::CValueTableColumns::CValueTableColumnInfo::GetAttribute(attr
 wxIMPLEMENT_DYNAMIC_CLASS(CValueTable::CValueTableReturnLine, IValueTable::IValueTableReturnLine);
 
 CValueTable::CValueTableReturnLine::CValueTableReturnLine() : IValueTableReturnLine(), m_methods(NULL), m_ownerTable(NULL), m_lineTable(wxNOT_FOUND) {}
-CValueTable::CValueTableReturnLine::CValueTableReturnLine(CValueTable *ownerTable, int line) : IValueTableReturnLine(), m_methods(new CMethods()), m_ownerTable(ownerTable), m_lineTable(line) {}
+CValueTable::CValueTableReturnLine::CValueTableReturnLine(CValueTable* ownerTable, int line) : IValueTableReturnLine(), m_methods(new CMethods()), m_ownerTable(ownerTable), m_lineTable(line) {}
 CValueTable::CValueTableReturnLine::~CValueTableReturnLine() { if (m_methods) delete m_methods; }
 
-void CValueTable::CValueTableReturnLine::SetValueByMetaID(meta_identifier_t id, const CValue & cVal)
+void CValueTable::CValueTableReturnLine::SetValueByMetaID(const meta_identifier_t &id, const CValue& cVal)
 {
 	auto itFoundedByLine = m_ownerTable->m_aObjectValues.begin();
 	std::advance(itFoundedByLine, m_lineTable);
 
-	CValueTypeDescription *m_typeDescription = m_ownerTable->m_aDataColumns->GetColumnType(id);
-	itFoundedByLine->insert_or_assign(id, m_typeDescription ? m_typeDescription->AdjustValue(cVal) : cVal);
+	CValueTypeDescription* typeDescription = 
+		m_ownerTable->m_dataColumnCollection->GetColumnType(id);
+
+	itFoundedByLine->insert_or_assign(id, typeDescription ? typeDescription->AdjustValue(cVal) : cVal);
 }
 
-CValue CValueTable::CValueTableReturnLine::GetValueByMetaID(meta_identifier_t id) const
+CValue CValueTable::CValueTableReturnLine::GetValueByMetaID(const meta_identifier_t &id) const
 {
 	auto itFoundedByLine = m_ownerTable->m_aObjectValues.begin();
 	std::advance(itFoundedByLine, m_lineTable);
@@ -311,7 +261,7 @@ void CValueTable::CValueTableReturnLine::PrepareNames() const
 {
 	std::vector<SEng> aAttributes;
 
-	for (auto &colInfo : m_ownerTable->m_aDataColumns->m_aColumnInfo)
+	for (auto& colInfo : m_ownerTable->m_dataColumnCollection->m_aColumnInfo)
 	{
 		wxASSERT(colInfo);
 
@@ -327,7 +277,7 @@ void CValueTable::CValueTableReturnLine::PrepareNames() const
 	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
 }
 
-void CValueTable::CValueTableReturnLine::SetAttribute(attributeArg_t &aParams, CValue &cVal)
+void CValueTable::CValueTableReturnLine::SetAttribute(attributeArg_t& aParams, CValue& cVal)
 {
 	if (appData->DesignerMode())
 		return;
@@ -338,7 +288,7 @@ void CValueTable::CValueTableReturnLine::SetAttribute(attributeArg_t &aParams, C
 	);
 }
 
-CValue CValueTable::CValueTableReturnLine::GetAttribute(attributeArg_t &aParams)
+CValue CValueTable::CValueTableReturnLine::GetAttribute(attributeArg_t& aParams)
 {
 	if (appData->DesignerMode())
 		return CValue();
@@ -352,8 +302,8 @@ CValue CValueTable::CValueTableReturnLine::GetAttribute(attributeArg_t &aParams)
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_REGISTER(CValueTable, "table", TEXT2CLSID("VL_TABL"));
+VALUE_REGISTER(CValueTable, "table", g_valueTableCLSID);
 
-SO_VALUE_REGISTER(CValueTable::CValueTableColumns, "tableValueColumn", CValueTableColumns, TEXT2CLSID("VL_TAVC"));
-SO_VALUE_REGISTER(CValueTable::CValueTableColumns::CValueTableColumnInfo, "tableValueColumnInfo", CValueTableColumnInfo, TEXT2CLSID("VL_TVCI"));
+SO_VALUE_REGISTER(CValueTable::CValueTableColumnCollection, "tableValueColumn", CValueTableColumnCollection, TEXT2CLSID("VL_TAVC"));
+SO_VALUE_REGISTER(CValueTable::CValueTableColumnCollection::CValueTableColumnInfo, "tableValueColumnInfo", CValueTableColumnInfo, TEXT2CLSID("VL_TVCI"));
 SO_VALUE_REGISTER(CValueTable::CValueTableReturnLine, "tableValueRow", CValueTableReturnLine, TEXT2CLSID("VL_TVCR"));

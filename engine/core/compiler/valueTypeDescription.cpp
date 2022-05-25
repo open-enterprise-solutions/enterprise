@@ -14,22 +14,24 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueTypeDescription, CValue);
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-CMethods CValueTypeDescription::m_methods;
-
 CValueTypeDescription::CValueTypeDescription() : CValue(eValueTypes::TYPE_VALUE, true),
 m_qNumber(NULL), m_qDate(NULL), m_qString(NULL)
 {
+	m_methods = new CMethods();
 }
 
-CValueTypeDescription::CValueTypeDescription(CValueType *valueType) : CValue(eValueTypes::TYPE_VALUE, true),
+CValueTypeDescription::CValueTypeDescription(CValueType* valueType) : CValue(eValueTypes::TYPE_VALUE, true),
 m_qNumber(NULL), m_qDate(NULL), m_qString(NULL)
 {
-	m_aTypes.push_back(valueType->GetOwnerType());
+	m_methods = new CMethods();
+	m_clsids.insert(valueType->GetOwnerType());
 }
 
-CValueTypeDescription::CValueTypeDescription(CValueType *valueType, CValueQualifierNumber *qNumber, CValueQualifierDate *qDate, CValueQualifierString *qString) : CValue(eValueTypes::TYPE_VALUE, true),
+CValueTypeDescription::CValueTypeDescription(CValueType* valueType, CValueQualifierNumber* qNumber, CValueQualifierDate* qDate, CValueQualifierString* qString) : CValue(eValueTypes::TYPE_VALUE, true),
 m_qNumber(qNumber), m_qDate(qDate), m_qString(qString)
 {
+	m_methods = new CMethods();
+
 	if (m_qNumber) {
 		m_qNumber->IncrRef();
 	}
@@ -42,18 +44,20 @@ m_qNumber(qNumber), m_qDate(qDate), m_qString(qString)
 		m_qString->IncrRef();
 	}
 
-	m_aTypes.push_back(valueType->GetOwnerType());
+	m_clsids.insert(valueType->GetOwnerType());
 }
 
-CValueTypeDescription::CValueTypeDescription(const CLASS_ID &clsid) : CValue(eValueTypes::TYPE_VALUE, true),
-m_qNumber(NULL), m_qDate(NULL), m_qString(NULL)
+CValueTypeDescription::CValueTypeDescription(const std::set<CLASS_ID>& clsid) : CValue(eValueTypes::TYPE_VALUE, true),
+m_qNumber(NULL), m_qDate(NULL), m_qString(NULL), m_clsids(clsid)
 {
-	m_aTypes.push_back(clsid);
+	m_methods = new CMethods();
 }
 
-CValueTypeDescription::CValueTypeDescription(const CLASS_ID &clsid, CValueQualifierNumber *qNumber, CValueQualifierDate *qDate, CValueQualifierString *qString) : CValue(eValueTypes::TYPE_VALUE, true),
-m_qNumber(qNumber), m_qDate(qDate), m_qString(qString)
+CValueTypeDescription::CValueTypeDescription(const std::set<CLASS_ID>& clsid, CValueQualifierNumber* qNumber, CValueQualifierDate* qDate, CValueQualifierString* qString) : CValue(eValueTypes::TYPE_VALUE, true),
+m_qNumber(qNumber), m_qDate(qDate), m_qString(qString), m_clsids(clsid)
 {
+	m_methods = new CMethods();
+
 	if (m_qNumber) {
 		m_qNumber->IncrRef();
 	}
@@ -65,12 +69,12 @@ m_qNumber(qNumber), m_qDate(qDate), m_qString(qString)
 	if (m_qString) {
 		m_qString->IncrRef();
 	}
-
-	m_aTypes.push_back(clsid);
 }
 
 CValueTypeDescription::~CValueTypeDescription()
 {
+	wxDELETE(m_methods);
+
 	if (m_qNumber) {
 		m_qNumber->DecrRef();
 	}
@@ -93,7 +97,7 @@ enum
 
 void CValueTypeDescription::PrepareNames() const
 {
-	m_methods.AppendConstructor("typeDescription", "typeDescription(type, qNumber, qDate, qString)");
+	m_methods->AppendConstructor("typeDescription", "typeDescription(type, qNumber, qDate, qString)");
 
 	SEng aMethods[] = {
 		{"containsType","containsType(type)"},
@@ -101,10 +105,10 @@ void CValueTypeDescription::PrepareNames() const
 		{"types","types()"},
 	};
 	int nCountM = sizeof(aMethods) / sizeof(aMethods[0]);
-	m_methods.PrepareMethods(aMethods, nCountM);
+	m_methods->PrepareMethods(aMethods, nCountM);
 }
 
-CValue CValueTypeDescription::Method(methodArg_t &aParams)
+CValue CValueTypeDescription::Method(methodArg_t& aParams)
 {
 	switch (aParams.GetIndex())
 	{
@@ -123,13 +127,13 @@ CValue CValueTypeDescription::Method(methodArg_t &aParams)
 
 #include "metadata/metadata.h"
 
-bool CValueTypeDescription::Init(CValue **aParams)
+bool CValueTypeDescription::Init(CValue** aParams)
 {
 	if (aParams[0]->GetType() == eValueTypes::TYPE_STRING) {
 		wxString classType = aParams[0]->GetString();
 		if (metadata->IsRegisterObject(classType)) {
 
-			int argCount = sizeof(aParams) / sizeof(aParams[0]); 
+			int argCount = sizeof(aParams) / sizeof(aParams[0]);
 
 			if (argCount > 1 && aParams[1]->ConvertToValue(m_qNumber)) {
 				m_qNumber->IncrRef();
@@ -143,12 +147,14 @@ bool CValueTypeDescription::Init(CValue **aParams)
 				m_qString->IncrRef();
 			}
 
-			m_aTypes.push_back(metadata->GetIDObjectFromString(classType));
+			m_clsids.insert(
+				metadata->GetIDObjectFromString(classType)
+			);
 			return true;
 		}
 	}
 
-	CValueArray *valArray = NULL;
+	CValueArray* valArray = NULL;
 
 	if (aParams[0]->ConvertToValue(valArray)) {
 
@@ -167,15 +173,21 @@ bool CValueTypeDescription::Init(CValue **aParams)
 		}
 
 		for (unsigned int i = 0; i < valArray->Count(); i++) {
-			CValueType *valType = value_cast<CValueType>(valArray->GetAt(i));
+			CValueType* valType = value_cast<CValueType>(valArray->GetAt(i));
 			wxASSERT(valType);
-			m_aTypes.push_back(valType->GetOwnerType());
+			m_clsids.insert(
+				valType->GetOwnerType()
+			);
 		}
-		std::sort(m_aTypes.begin(), m_aTypes.end());
+
+		/*std::sort(m_clsids.begin(), m_clsids.end(), [](const CLASS_ID& a, const CLASS_ID& b) {
+			return a < b; }
+		);*/
+
 		return true;
 	}
 
-	CValueType *valType = NULL;
+	CValueType* valType = NULL;
 	if (aParams[0]->ConvertToValue(valType)) {
 
 		int argCount = sizeof(aParams) / sizeof(aParams[0]);
@@ -192,25 +204,29 @@ bool CValueTypeDescription::Init(CValue **aParams)
 			m_qString->IncrRef();
 		}
 
-		m_aTypes.push_back(valType->GetOwnerType());
+		m_clsids.insert(
+			valType->GetOwnerType()
+		);
 		return true;
 	}
 
 	return false;
 }
 
-bool CValueTypeDescription::ContainsType(const CValue &cType) const
+bool CValueTypeDescription::ContainsType(const CValue& cType) const
 {
-	CValueType *valueType = value_cast<CValueType>(cType);
+	CValueType* valueType = value_cast<CValueType>(cType);
 	wxASSERT(valueType);
-	auto itFounded = std::find(m_aTypes.begin(), m_aTypes.begin(), valueType->GetOwnerType());
-	return itFounded != m_aTypes.end();
+	auto itFounded = std::find(m_clsids.begin(), m_clsids.begin(), valueType->GetOwnerType());
+	return itFounded != m_clsids.end();
 }
 
 CValue CValueTypeDescription::AdjustValue() const
 {
-	if (1 == m_aTypes.size()) {
-		wxString metaName = metadata->GetNameObjectFromID(m_aTypes[0]);
+	if (1 == m_clsids.size()) {
+		auto posIt = m_clsids.begin();
+		std::advance(posIt, 0);
+		wxString metaName = metadata->GetNameObjectFromID(*posIt);
 		return metadata->CreateObject(metaName);
 	}
 
@@ -219,22 +235,22 @@ CValue CValueTypeDescription::AdjustValue() const
 
 #include "compiler/systemObjects.h"
 
-CValue CValueTypeDescription::AdjustValue(const CValue &cVal) const
+CValue CValueTypeDescription::AdjustValue(const CValue& cVal) const
 {
-	auto foundedIt = std::find(m_aTypes.begin(), m_aTypes.end(), cVal.GetTypeID());
-	if (foundedIt != m_aTypes.end()) {
-		meta_identifier_t vt = metadata->GetVTByID(cVal.GetTypeID());
-		if (vt < defaultMetaID) {
+	auto foundedIt = std::find(m_clsids.begin(), m_clsids.end(), cVal.GetClassType());
+	if (foundedIt != m_clsids.end()) {
+		eValueTypes vt = CValue::GetVTByID(cVal.GetClassType());
+		if (vt < eValueTypes::TYPE_REFFER) {
 			if (vt == eValueTypes::TYPE_NUMBER &&
 				m_qNumber) {
 				return CSystemObjects::Round(cVal, m_qNumber->m_scale);
 			}
 			else if (vt == eValueTypes::TYPE_DATE &&
 				m_qDate) {
-				if (m_qDate->m_dateTime == eDateFractions::eDate) {
+				if (m_qDate->m_dateTime == eDateFractions::eDateFractions_Date) {
 					return cVal;
 				}
-				else if (m_qDate->m_dateTime == eDateFractions::eTime) {
+				else if (m_qDate->m_dateTime == eDateFractions::eDateFractions_Time) {
 					return cVal;
 				}
 				return cVal;
@@ -247,49 +263,14 @@ CValue CValueTypeDescription::AdjustValue(const CValue &cVal) const
 		return cVal;
 	}
 
-	for (auto type_id : m_aTypes) {
-		meta_identifier_t vt = metadata->GetVTByID(type_id);
-		if (vt < defaultMetaID) {
-			
-			if (vt == eValueTypes::TYPE_NUMBER &&
-				m_qNumber) {
-				return CSystemObjects::Round(cVal, m_qNumber->m_scale);
-			}
-			else if (vt == eValueTypes::TYPE_DATE &&
-				m_qDate) {
-				if (m_qDate->m_dateTime == eDateFractions::eDate) {
-					return cVal;
-				}
-				else if (m_qDate->m_dateTime == eDateFractions::eTime) {
-					return cVal;
-				}
-				return cVal;
-			}
-			else if (vt == eValueTypes::TYPE_STRING &&
-				m_qString) {
-				return CSystemObjects::Left(cVal, m_qString->m_length);
-			}
+	if (m_clsids.size() == 1) {
+		auto posIt = m_clsids.begin();
+		std::advance(posIt, 0);
 
-			else if (vt == eValueTypes::TYPE_BOOLEAN) {
-				return cVal.GetBoolean();
-			}
-			else if (vt == eValueTypes::TYPE_NUMBER) {
-				return cVal.GetNumber();
-			}
-			else if (vt == eValueTypes::TYPE_STRING) {
-				return cVal.GetString();
-			}
-			else if (vt == eValueTypes::TYPE_DATE) {
-				return cVal.GetDate();
-			}
-			
-			return CValue(cVal.m_typeClass);
+		if (metadata->IsRegisterObject(*posIt)) {
+			wxString metaName = metadata->GetNameObjectFromID(*posIt);
+			return metadata->CreateObject(metaName);
 		}
-	}
-
-	if (m_aTypes.size() == 1) {
-		wxString metaName = metadata->GetNameObjectFromID(m_aTypes[0]);
-		return metadata->CreateObject(metaName);
 	}
 
 	return CValue();
@@ -298,7 +279,7 @@ CValue CValueTypeDescription::AdjustValue(const CValue &cVal) const
 CValue CValueTypeDescription::Types() const
 {
 	std::vector<CValue> allTypes;
-	for (auto type_id : m_aTypes) {
+	for (auto type_id : m_clsids) {
 		allTypes.push_back(new CValueType(type_id));
 	}
 	return new CValueArray(allTypes);

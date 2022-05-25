@@ -58,11 +58,11 @@ public:
 		DoRunQueryWchar, DoRunQueryUtf8);
 
 	///  Run a select query on the database
-	WX_DEFINE_VARARG_FUNC(DatabaseResultSet *, RunQueryWithResults, 1, (const wxFormatString&),
+	WX_DEFINE_VARARG_FUNC(DatabaseResultSet*, RunQueryWithResults, 1, (const wxFormatString&),
 		DoRunQueryWithResultsWchar, DoRunQueryWithResultsUtf8);
 
 	/// PreparedStatement support
-	WX_DEFINE_VARARG_FUNC(PreparedStatement *, PrepareStatement, 1, (const wxFormatString&),
+	WX_DEFINE_VARARG_FUNC(PreparedStatement*, PrepareStatement, 1, (const wxFormatString&),
 		DoPrepareStatementWchar, DoPrepareStatementUtf8);
 
 	// function names more consistent with JDBC and wxSQLite3
@@ -73,7 +73,7 @@ public:
 		DoRunQueryWchar, DoRunQueryUtf8);
 
 	/// See RunQueryWithResults
-	WX_DEFINE_VARARG_FUNC(DatabaseResultSet *, ExecuteQuery, 1, (const wxFormatString&),
+	WX_DEFINE_VARARG_FUNC(DatabaseResultSet*, ExecuteQuery, 1, (const wxFormatString&),
 		DoRunQueryWithResultsWchar, DoRunQueryWithResultsUtf8);
 
 	/// Run an insert, update, or delete query on the database
@@ -86,7 +86,7 @@ public:
 	virtual bool CloseResultSet(DatabaseResultSet* pResultSet);
 
 	// PreparedStatement support
-	
+
 	/// Prepare a SQL statement which can be reused with different parameters
 	virtual PreparedStatement* PrepareStatement(const wxString& strQuery) = 0;
 
@@ -206,14 +206,14 @@ private:
 	DatabaseStatementHashSet m_Statements;
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-	int DoRunQueryWchar(const wxChar *format, ...);
-	DatabaseResultSet *DoRunQueryWithResultsWchar(const wxChar *format, ...);
-	PreparedStatement *DoPrepareStatementWchar(const wxChar *format, ...);
+	int DoRunQueryWchar(const wxChar* format, ...);
+	DatabaseResultSet* DoRunQueryWithResultsWchar(const wxChar* format, ...);
+	PreparedStatement* DoPrepareStatementWchar(const wxChar* format, ...);
 #endif
 #if wxUSE_UNICODE_UTF8
-	int DoRunQueryUtf8(const wxChar *format, ...);
-	DatabaseResultSet *DoRunQueryWithResultsUtf8(const wxChar *format, ...);
-	PreparedStatement *DoPrepareStatementUtf8(const wxChar *format, ...);
+	int DoRunQueryUtf8(const wxChar* format, ...);
+	DatabaseResultSet* DoRunQueryWithResultsUtf8(const wxChar* format, ...);
+	PreparedStatement* DoPrepareStatementUtf8(const wxChar* format, ...);
 #endif
 };
 

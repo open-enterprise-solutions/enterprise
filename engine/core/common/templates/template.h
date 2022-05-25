@@ -44,7 +44,7 @@ private:
 class CGridDocument : public CDocument
 {
 public:
-	CGridDocument() : CDocument() { m_bChildDoc = false; }
+	CGridDocument() : CDocument() { m_childDoc = false; }
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
 

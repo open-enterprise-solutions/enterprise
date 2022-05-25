@@ -166,7 +166,7 @@ int COutputWindow::GetCurrentLine() const
 	return y;
 }
 
-#include "common/reportManager.h"
+#include "common/docManager.h"
 #include "metadata/metadata.h"
 #include "frontend/metatree/metatreeWnd.h"
 
@@ -189,12 +189,12 @@ void COutputWindow::OnDoubleClick(wxMouseEvent& event)
 
 			if (!code.m_fileName.IsEmpty()) {
 				IMetaDocument *foundedDoc = dynamic_cast<IMetaDocument *>(
-					reportManager->FindDocumentByPath(code.m_fileName)
+					docManager->FindDocumentByPath(code.m_fileName)
 					);
 
 				if (!foundedDoc) {
 					foundedDoc = dynamic_cast<IMetaDocument *>(
-						reportManager->CreateDocument(code.m_fileName, wxDOC_SILENT)
+						docManager->CreateDocument(code.m_fileName, wxDOC_SILENT)
 						);
 				}
 

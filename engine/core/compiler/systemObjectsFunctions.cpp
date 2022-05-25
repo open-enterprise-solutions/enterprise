@@ -13,37 +13,39 @@
 #include "systemObjectsEnums.h"
 
 //--- Базовые:
-bool CSystemObjects::Boolean(const CValue &cValue)
+bool CSystemObjects::Boolean(const CValue& cValue)
 {
 	return cValue.GetBoolean();
 }
 
-number_t CSystemObjects::Number(const CValue &cValue)
+number_t CSystemObjects::Number(const CValue& cValue)
 {
 	return cValue.GetNumber();
 }
 
-wxLongLong_t CSystemObjects::Date(const CValue &cValue)
+wxLongLong_t CSystemObjects::Date(const CValue& cValue)
 {
 	return cValue.GetDate();
 }
 
-wxString CSystemObjects::String(const CValue &cValue)
+wxString CSystemObjects::String(const CValue& cValue)
 {
 	return cValue.GetString();
 }
 
 //---Математические:
-number_t CSystemObjects::Round(const CValue &cValue, int precision, eRoundMode mode)
+number_t CSystemObjects::Round(const CValue& cValue, int precision, eRoundMode mode)
 {
 	number_t fNumber = cValue.GetNumber();
 
-	if (precision > MAX_PRECISION) {
-		precision = MAX_PRECISION;
+	if (precision > MAX_PRECISION_NUMBER) {
+		precision = MAX_PRECISION_NUMBER;
 	}
 
 	ttmath::Int<TTMATH_BITS(128)> nDelta;
-	if (!fNumber.ToInt(nDelta)) fNumber = fNumber - nDelta;
+	if (!fNumber.ToInt(nDelta)) {
+		fNumber = fNumber - nDelta;
+	}
 
 	number_t fTemp = 10;
 	fTemp.Pow(precision + 1);
@@ -53,14 +55,13 @@ number_t CSystemObjects::Round(const CValue &cValue, int precision, eRoundMode m
 	fTemp.ToInt(N);
 
 	//округление - в зависимости от метода
-	if (mode == eRoundMode::eRoundMode_Round15as20)
-	{
+	if (mode == eRoundMode::eRoundMode_Round15as20) {
 		if (N % 10 >= 5) N = N / 10 + 1;
 		else N = N / 10;
 	}
-	else
-	{
-		if (N % 10 >= 6) N = N / 10 + 1;
+	else {
+		if (N % 10 >= 6)
+			N = N / 10 + 1;
 		else N = N / 10;
 	}
 
@@ -77,7 +78,7 @@ number_t CSystemObjects::Round(const CValue &cValue, int precision, eRoundMode m
 	return 0;
 }
 
-CValue CSystemObjects::Int(const CValue &cValue)
+CValue CSystemObjects::Int(const CValue& cValue)
 {
 	ttmath::Int<TTMATH_BITS(128)> int128;
 	number_t fNumber = cValue.GetNumber();
@@ -85,35 +86,35 @@ CValue CSystemObjects::Int(const CValue &cValue)
 	else return 0;
 }
 
-number_t CSystemObjects::Log10(const CValue &cValue)
+number_t CSystemObjects::Log10(const CValue& cValue)
 {
 	number_t fNumber = cValue.GetNumber();
 	return std::log10(fNumber.ToDouble());
 }
 
-number_t CSystemObjects::Ln(const CValue &cValue)
+number_t CSystemObjects::Ln(const CValue& cValue)
 {
 	number_t fNumber = cValue.GetNumber();
 	return std::log(fNumber.ToDouble());
 }
 
-CValue CSystemObjects::Max(CValue **aParams)
+CValue CSystemObjects::Max(CValue** aParams)
 {
 	int i = 1;
-	const CValue *pRes = aParams[0];
+	const CValue* pRes = aParams[0];
 	while (aParams[i]->GetType() != TYPE_EMPTY) { if (aParams[i]->GetNumber() > pRes->GetNumber()) pRes = aParams[i]; i++; }
 	return *pRes;
 }
 
-CValue CSystemObjects::Min(CValue **aParams)
+CValue CSystemObjects::Min(CValue** aParams)
 {
 	int i = 1;
-	const CValue *pRes = aParams[0];
+	const CValue* pRes = aParams[0];
 	while (aParams[i]->GetType() != TYPE_EMPTY) { if (aParams[i]->GetNumber() < pRes->GetNumber()) pRes = aParams[i]; i++; }
 	return *pRes;
 }
 
-CValue CSystemObjects::Sqrt(const CValue &cValue)
+CValue CSystemObjects::Sqrt(const CValue& cValue)
 {
 	number_t fNumber = cValue.GetNumber();
 	if (fNumber.Sqrt() == 0) {
@@ -124,13 +125,13 @@ CValue CSystemObjects::Sqrt(const CValue &cValue)
 }
 
 //---Строковые:
-int CSystemObjects::StrLen(const CValue &cValue)
+int CSystemObjects::StrLen(const CValue& cValue)
 {
 	wxString csString = cValue.GetString();
 	return csString.Length();
 }
 
-bool CSystemObjects::IsBlankString(const CValue &cValue)
+bool CSystemObjects::IsBlankString(const CValue& cValue)
 {
 	wxString csString = cValue.GetString();
 	csString.Trim(true);
@@ -138,21 +139,21 @@ bool CSystemObjects::IsBlankString(const CValue &cValue)
 	return csString.IsEmpty();
 }
 
-wxString CSystemObjects::TrimL(const CValue &cValue)
+wxString CSystemObjects::TrimL(const CValue& cValue)
 {
 	wxString csString = cValue.GetString();
 	csString.Trim(false);
 	return csString;
 }
 
-wxString CSystemObjects::TrimR(const CValue &cValue)
+wxString CSystemObjects::TrimR(const CValue& cValue)
 {
 	wxString csString = cValue.GetString();
 	csString.Trim(true);
 	return csString;
 }
 
-wxString CSystemObjects::TrimAll(const CValue &cValue)
+wxString CSystemObjects::TrimAll(const CValue& cValue)
 {
 	wxString csString = cValue.GetString();
 	csString.Trim(true);
@@ -160,51 +161,51 @@ wxString CSystemObjects::TrimAll(const CValue &cValue)
 	return csString;
 }
 
-wxString CSystemObjects::Left(const CValue &cValue, unsigned int nCount)
+wxString CSystemObjects::Left(const CValue& cValue, unsigned int nCount)
 {
 	wxString csString = cValue.GetString();
 	return csString.Left(nCount);
 }
 
-wxString CSystemObjects::Right(const CValue &cValue, unsigned int nCount)
+wxString CSystemObjects::Right(const CValue& cValue, unsigned int nCount)
 {
 	wxString csString = cValue.GetString();
 	return csString.Right(nCount);
 }
 
-wxString CSystemObjects::Mid(const CValue &cValue, unsigned int nFirst, unsigned int nCount)
+wxString CSystemObjects::Mid(const CValue& cValue, unsigned int nFirst, unsigned int nCount)
 {
 	wxString csString = cValue.GetString();
 	return csString.Mid(nFirst, nCount);
 }
 
-unsigned int CSystemObjects::Find(const CValue &cValue, const CValue &cValue2, unsigned int nStart)
+unsigned int CSystemObjects::Find(const CValue& cValue, const CValue& cValue2, unsigned int nStart)
 {
 	if (nStart < 1) nStart = 1;
 	wxString csStr = cValue.GetString();
 	return csStr.find(cValue2.GetString(), nStart - 1) + 1;
 }
 
-wxString CSystemObjects::StrReplace(const CValue &cSource, const CValue &cValue1, const CValue &cValue2)
+wxString CSystemObjects::StrReplace(const CValue& cSource, const CValue& cValue1, const CValue& cValue2)
 {
 	wxString csSource = cSource.GetString();
 	csSource.Replace(cValue1.GetString(), cValue2.GetString());
 	return csSource;
 }
 
-int CSystemObjects::StrCountOccur(const CValue &cSource, const CValue &cValue1)
+int CSystemObjects::StrCountOccur(const CValue& cSource, const CValue& cValue1)
 {
 	wxString csSource = cSource.GetString();
 	return csSource.find(cValue1.GetString());
 }
 
-int CSystemObjects::StrLineCount(const CValue &cSource)
+int CSystemObjects::StrLineCount(const CValue& cSource)
 {
 	wxString csSource = cSource.GetString();
 	return csSource.find('\n') + 1;
 }
 
-wxString CSystemObjects::StrGetLine(const CValue &cValue, unsigned int nLine)
+wxString CSystemObjects::StrGetLine(const CValue& cValue, unsigned int nLine)
 {
 	wxString csSource = cValue.GetString() + wxT("\r\n");
 
@@ -248,14 +249,14 @@ wxString CSystemObjects::StrGetLine(const CValue &cValue, unsigned int nLine)
 	return wxEmptyString;
 }
 
-wxString CSystemObjects::Upper(const CValue &cSource)
+wxString CSystemObjects::Upper(const CValue& cSource)
 {
 	wxString csSource = cSource.GetString();
 	csSource.MakeUpper();
 	return csSource;
 }
 
-wxString CSystemObjects::Lower(const CValue &cSource)
+wxString CSystemObjects::Lower(const CValue& cSource)
 {
 	wxString csSource = cSource.GetString();
 	csSource.MakeLower();
@@ -267,7 +268,7 @@ wxString CSystemObjects::Chr(short nCode)
 	return wxString(static_cast<wchar_t>(nCode));
 }
 
-short CSystemObjects::Asc(const CValue &cSource)
+short CSystemObjects::Asc(const CValue& cSource)
 {
 	wxString csSource = cSource.GetString();
 	if (!csSource.Length()) return 0;
@@ -294,7 +295,7 @@ CValue CSystemObjects::WorkingDate()
 	return m_workDate;
 }
 
-CValue CSystemObjects::AddMonth(const CValue &cData, int nMonthAdd)
+CValue CSystemObjects::AddMonth(const CValue& cData, int nMonthAdd)
 {
 	int nYear, nMonth, nDay;
 	cData.FromDate(nYear, nMonth, nDay);
@@ -306,14 +307,14 @@ CValue CSystemObjects::AddMonth(const CValue &cData, int nMonthAdd)
 	return CValue(nYear, nMonth, nDay);
 }
 
-CValue CSystemObjects::BegOfMonth(const CValue &cData)
+CValue CSystemObjects::BegOfMonth(const CValue& cData)
 {
 	int nYear, nMonth, nDay;
 	cData.FromDate(nYear, nMonth, nDay);
 	return CValue(nYear, nMonth, 1);
 }
 
-CValue CSystemObjects::EndOfMonth(const CValue &cData)
+CValue CSystemObjects::EndOfMonth(const CValue& cData)
 {
 	int nYear, nMonth, nDay;
 	cData.FromDate(nYear, nMonth, nDay);
@@ -322,33 +323,33 @@ CValue CSystemObjects::EndOfMonth(const CValue &cData)
 	return AddMonth(m_date, 1) - 1;
 }
 
-CValue CSystemObjects::BegOfQuart(const CValue &cData)
+CValue CSystemObjects::BegOfQuart(const CValue& cData)
 {
 	int nYear, nMonth, nDay;
 	cData.FromDate(nYear, nMonth, nDay);
 	return CValue(nYear, 1 + ((nMonth - 1) / 3) * 3, 1);
 }
 
-CValue CSystemObjects::EndOfQuart(const CValue &cData)
+CValue CSystemObjects::EndOfQuart(const CValue& cData)
 {
 	return AddMonth(BegOfQuart(cData), 3) - 1;
 }
 
-CValue CSystemObjects::BegOfYear(const CValue &cData)
+CValue CSystemObjects::BegOfYear(const CValue& cData)
 {
 	int nYear, nMonth, nDay;
 	cData.FromDate(nYear, nMonth, nDay);
 	return CValue(nYear, 1, 1);
 }
 
-CValue CSystemObjects::EndOfYear(const CValue &cData)
+CValue CSystemObjects::EndOfYear(const CValue& cData)
 {
 	int nYear, nMonth, nDay;
 	cData.FromDate(nYear, nMonth, nDay);
 	return CValue(nYear, 12, 31, 23, 59, 59);
 }
 
-CValue CSystemObjects::BegOfWeek(const CValue &cData)
+CValue CSystemObjects::BegOfWeek(const CValue& cData)
 {
 	int nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear;
 	cData.FromDate(nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear);
@@ -356,91 +357,91 @@ CValue CSystemObjects::BegOfWeek(const CValue &cData)
 	return Date1;
 }
 
-CValue CSystemObjects::EndOfWeek(const CValue &cData)
+CValue CSystemObjects::EndOfWeek(const CValue& cData)
 {
 	int nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear;
 	cData.FromDate(nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear);
 	return CValue(nYear, nMonth, nDay) + (7 - DayOfWeek);
 }
 
-CValue CSystemObjects::BegOfDay(const CValue &cData)
+CValue CSystemObjects::BegOfDay(const CValue& cData)
 {
 	int nYear, nMonth, nDay;
 	cData.FromDate(nYear, nMonth, nDay);
 	return CValue(nYear, nMonth, nDay, 0, 0, 0);
 }
 
-CValue CSystemObjects::EndOfDay(const CValue &cData)
+CValue CSystemObjects::EndOfDay(const CValue& cData)
 {
 	int nYear, nMonth, nDay;
 	cData.FromDate(nYear, nMonth, nDay);
 	return CValue(nYear, nMonth, nDay, 23, 59, 59);
 }
 
-int CSystemObjects::GetYear(const CValue &cData)
+int CSystemObjects::GetYear(const CValue& cData)
 {
 	int nYear, nMonth, nDay;
 	cData.FromDate(nYear, nMonth, nDay);
 	return nYear;
 }
 
-int CSystemObjects::GetMonth(const CValue &cData)
+int CSystemObjects::GetMonth(const CValue& cData)
 {
 	int nYear, nMonth, nDay;
 	cData.FromDate(nYear, nMonth, nDay);
 	return nMonth;
 }
 
-int CSystemObjects::GetDay(const CValue &cData)
+int CSystemObjects::GetDay(const CValue& cData)
 {
 	int nYear, nMonth, nDay;
 	cData.FromDate(nYear, nMonth, nDay);
 	return nDay;
 }
 
-int CSystemObjects::GetHour(const CValue &cData)
+int CSystemObjects::GetHour(const CValue& cData)
 {
 	int nYear, nMonth, nDay; unsigned short nHour, nMinutes, nSeconds;
 	cData.FromDate(nYear, nMonth, nDay, nHour, nMinutes, nSeconds);
 	return nHour;
 }
 
-int CSystemObjects::GetMinute(const CValue &cData)
+int CSystemObjects::GetMinute(const CValue& cData)
 {
 	int nYear, nMonth, nDay; unsigned short nHour, nMinutes, nSeconds;
 	cData.FromDate(nYear, nMonth, nDay, nHour, nMinutes, nSeconds);
 	return nMinutes;
 }
 
-int CSystemObjects::GetSecond(const CValue &cData)
+int CSystemObjects::GetSecond(const CValue& cData)
 {
 	int nYear, nMonth, nDay; unsigned short nHour, nMinutes, nSeconds;
 	cData.FromDate(nYear, nMonth, nDay, nHour, nMinutes, nSeconds);
 	return nSeconds;
 }
 
-int CSystemObjects::GetWeekOfYear(const CValue &cData)
+int CSystemObjects::GetWeekOfYear(const CValue& cData)
 {
 	int nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear;
 	cData.FromDate(nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear);
 	return WeekOfYear;
 }
 
-int CSystemObjects::GetDayOfYear(const CValue &cData)
+int CSystemObjects::GetDayOfYear(const CValue& cData)
 {
 	int nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear;
 	cData.FromDate(nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear);
 	return DayOfYear;
 }
 
-int CSystemObjects::GetDayOfWeek(const CValue &cData)
+int CSystemObjects::GetDayOfWeek(const CValue& cData)
 {
 	int nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear;
 	cData.FromDate(nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear);
 	return DayOfWeek;
 }
 
-int CSystemObjects::GetQuartOfYear(const CValue &cData)
+int CSystemObjects::GetQuartOfYear(const CValue& cData)
 {
 	int nYear, nMonth, nDay;
 	cData.FromDate(nYear, nMonth, nDay);
@@ -451,12 +452,12 @@ int CSystemObjects::GetQuartOfYear(const CValue &cData)
 
 #include <wx/filename.h>
 
-bool CSystemObjects::CopyFile(const wxString &src, const wxString &dst)
+bool CSystemObjects::CopyFile(const wxString& src, const wxString& dst)
 {
 	return wxCopyFile(src, dst);
 }
 
-bool CSystemObjects::DeleteFile(const wxString&file)
+bool CSystemObjects::DeleteFile(const wxString& file)
 {
 	return wxRemoveFile(file);
 }
@@ -473,8 +474,25 @@ wxString CSystemObjects::GetTempFileName()
 	);
 }
 
+//--- Работа с окнами: 
+CValueForm* CSystemObjects::ActiveWindow()
+{
+	if (CMainFrame::Get()) {
+		wxDocChildFrameAnyBase* activeChild =
+			dynamic_cast<wxDocChildFrameAnyBase*>(mainFrame->GetActiveChild());
+		if (activeChild != NULL) {
+			CVisualView* formView = dynamic_cast<CVisualView*>(activeChild->GetView());
+			if (formView != NULL) {
+				return formView->GetValueForm();
+			}
+		}
+	}
+
+	return NULL;
+}
+
 //--- Специальные:
-void CSystemObjects::Message(const wxString &sMessage, eStatusMessage status)
+void CSystemObjects::Message(const wxString& sMessage, eStatusMessage status)
 {
 	if (CTranslateError::IsSimpleMode()) {
 		return;
@@ -491,7 +509,7 @@ void CSystemObjects::Message(const wxString &sMessage, eStatusMessage status)
 	}
 }
 
-void CSystemObjects::Alert(const wxString &sMessage)//Предупреждение
+void CSystemObjects::Alert(const wxString& sMessage)//Предупреждение
 {
 	if (CTranslateError::IsSimpleMode()) {
 		return;
@@ -500,7 +518,7 @@ void CSystemObjects::Alert(const wxString &sMessage)//Предупреждени
 	wxMessageBox(sMessage, wxT("Warning"), wxICON_WARNING, CMainFrame::Get());
 }
 
-CValue CSystemObjects::Question(const wxString &sMessage, eQuestionMode mode)//Вопрос
+CValue CSystemObjects::Question(const wxString& sMessage, eQuestionMode mode)//Вопрос
 {
 	if (CTranslateError::IsSimpleMode()) {
 		return CValue();
@@ -531,7 +549,7 @@ CValue CSystemObjects::Question(const wxString &sMessage, eQuestionMode mode)//�
 	return CValue();
 }
 
-void CSystemObjects::SetStatus(const wxString &sStatus)
+void CSystemObjects::SetStatus(const wxString& sStatus)
 {
 	if (CTranslateError::IsSimpleMode()) return;
 	mainFrame->SetStatusText(sStatus);
@@ -543,13 +561,13 @@ void CSystemObjects::ClearMessages()
 	outputWindow->Clear();
 }
 
-void CSystemObjects::SetError(const wxString &sError)
+void CSystemObjects::SetError(const wxString& sError)
 {
 	if (CTranslateError::IsSimpleMode()) return;
 	CTranslateError::Error(sError);
 }
 
-void CSystemObjects::Raise(const wxString &sError)
+void CSystemObjects::Raise(const wxString& sError)
 {
 	if (CTranslateError::IsSimpleMode()) return;
 	CProcUnit::Raise(); CTranslateError::Error(sError);
@@ -557,24 +575,24 @@ void CSystemObjects::Raise(const wxString &sError)
 
 wxString CSystemObjects::ErrorDescription()
 {
-	if (CTranslateError::IsSimpleMode()) 
+	if (CTranslateError::IsSimpleMode())
 		return wxEmptyString;
 	return CTranslateError::GetLastError();
 }
 
-bool CSystemObjects::IsEmptyValue(const CValue &cData)
+bool CSystemObjects::IsEmptyValue(const CValue& cData)
 {
 	return cData.IsEmpty();
 }
 
-CValue CSystemObjects::Evaluate(const wxString &sExpression)
+CValue CSystemObjects::Evaluate(const wxString& sExpression)
 {
 	return CProcUnit::Evaluate(sExpression, CProcUnit::GetCurrentRunContext(), false);
 }
 
-void CSystemObjects::Execute(const wxString &sExpression)
+void CSystemObjects::Execute(const wxString& sExpression)
 {
-	if (CTranslateError::IsSimpleMode()) 
+	if (CTranslateError::IsSimpleMode())
 		return;
 	CProcUnit::Evaluate(sExpression, CProcUnit::GetCurrentRunContext(), true);
 }
@@ -597,7 +615,7 @@ void CSystemObjects::Execute(const wxString &sExpression)
 #define DF wxT("DF")
 #define DE wxT("DE")
 
-wxString CSystemObjects::Format(CValue &cData, const wxString &fmt)
+wxString CSystemObjects::Format(CValue& cData, const wxString& fmt)
 {
 	wxString leftParam, rightParam;
 	std::map<wxString, wxString> aParams;
@@ -777,7 +795,7 @@ wxString CSystemObjects::Format(CValue &cData, const wxString &fmt)
 
 #include "valueType.h"
 
-CValue CSystemObjects::Type(const CValue &cTypeName)
+CValue CSystemObjects::Type(const CValue& cTypeName)
 {
 	if (cTypeName.GetType() != eValueTypes::TYPE_STRING) {
 		Raise(_("Cannot convert value"));
@@ -789,7 +807,7 @@ CValue CSystemObjects::Type(const CValue &cTypeName)
 	return new CValueType(typeName);
 }
 
-CValue CSystemObjects::TypeOf(const CValue &cData)
+CValue CSystemObjects::TypeOf(const CValue& cData)
 {
 	return new CValueType(cData);
 }
@@ -815,30 +833,30 @@ wxString CSystemObjects::ComputerName()//ИмяКомпьютера
 	return wxGetHostName();
 }
 
-void CSystemObjects::RunApp(const wxString &sCommand)//ЗапуститьПриложение
+void CSystemObjects::RunApp(const wxString& sCommand)//ЗапуститьПриложение
 {
-	if (CTranslateError::IsSimpleMode()) 
+	if (CTranslateError::IsSimpleMode())
 		return;
 	wxExecute(sCommand);
 }
 
-void CSystemObjects::SetAppTitle(const wxString &sTitle)//ЗаголовокСистемы
+void CSystemObjects::SetAppTitle(const wxString& sTitle)//ЗаголовокСистемы
 {
-	if (CTranslateError::IsSimpleMode()) 
+	if (CTranslateError::IsSimpleMode())
 		return;
 	mainFrame->SetTitle(sTitle);
 }
 
-wxString CSystemObjects::UserDir() { 
-	return appData->GetApplicationPath(); 
+wxString CSystemObjects::UserDir() {
+	return appData->GetApplicationPath();
 }
 
-wxString CSystemObjects::UserName() { 
-	return appData->GetUserName(); 
+wxString CSystemObjects::UserName() {
+	return appData->GetUserName();
 }
 
 wxString CSystemObjects::UserPassword() {
-	return appData->GetUserPassword(); 
+	return appData->GetUserPassword();
 }
 
 bool CSystemObjects::SingleMode() { return appData->SingleMode(); }
@@ -859,7 +877,7 @@ void CSystemObjects::EndJob(bool force)//ЗавершитьРаботуСист�
 		std::exit(EXIT_SUCCESS);
 	}
 	else {
-		IModuleManager *moduleManager = metadata->GetModuleManager();
+		IModuleManager* moduleManager = metadata->GetModuleManager();
 		if (moduleManager->DestroyMainModule()) {
 			appDataDestroy();
 			std::exit(EXIT_SUCCESS);
@@ -869,18 +887,18 @@ void CSystemObjects::EndJob(bool force)//ЗавершитьРаботуСист�
 
 void CSystemObjects::UserInterruptProcessing()
 {
-	bool bNeedInterruptProcessing = wxGetKeyState(WXK_CONTROL) 
+	bool bNeedInterruptProcessing = wxGetKeyState(WXK_CONTROL)
 		&& wxGetKeyState(WXK_CANCEL);
 	if (bNeedInterruptProcessing) {
 		throw (new CInterruptBreak());
 	}
 }
 
-CValueForm *CSystemObjects::GetCommonForm(const wxString &sFormName, IValueFrame *owner, CValueGuid *unique)
+CValueForm* CSystemObjects::GetCommonForm(const wxString& sFormName, IValueFrame* owner, CValueGuid* unique)
 {
 	for (auto commonForm : metadata->GetMetaObjects(g_metaCommonFormCLSID)) {
 		if (StringUtils::MakeUpper(sFormName) == StringUtils::MakeUpper(commonForm->GetName())) {
-			CValueForm *valueForm = static_cast<CMetaFormObject *>(commonForm)->GenerateForm(owner, NULL, unique ? *unique : Guid());
+			CValueForm* valueForm = static_cast<CMetaFormObject*>(commonForm)->GenerateForm(owner, NULL, unique ? ((Guid)*unique) : Guid());
 			if (valueForm) {
 				unsigned int nRefOld = valueForm->GetRefCount();
 				valueForm->IncrRef();
@@ -893,16 +911,16 @@ CValueForm *CSystemObjects::GetCommonForm(const wxString &sFormName, IValueFrame
 		}
 	}
 
-	Raise("Сommon form not found '" + sFormName + "'");
+	Raise(_("Сommon form not found '") + sFormName + "'");
 	return NULL;
 }
 
-void CSystemObjects::ShowCommonForm(const wxString &sFormName, IValueFrame *owner, CValueGuid *unique)
+void CSystemObjects::ShowCommonForm(const wxString& sFormName, IValueFrame* owner, CValueGuid* unique)
 {
 	if (CTranslateError::IsSimpleMode())
 		return;
 
-	CValueForm *generatedForm = GetCommonForm(sFormName, owner, unique);
+	CValueForm* generatedForm = GetCommonForm(sFormName, owner, unique);
 	if (generatedForm) {
 		generatedForm->ShowForm();
 	}
@@ -910,14 +928,14 @@ void CSystemObjects::ShowCommonForm(const wxString &sFormName, IValueFrame *owne
 
 void CSystemObjects::BeginTransaction()
 {
-	if (CTranslateError::IsSimpleMode()) 
+	if (CTranslateError::IsSimpleMode())
 		return;
 	databaseLayer->BeginTransaction();
 }
 
 void CSystemObjects::CommitTransaction()
 {
-	if (CTranslateError::IsSimpleMode()) 
+	if (CTranslateError::IsSimpleMode())
 		return;
 	databaseLayer->Commit();
 }

@@ -40,7 +40,7 @@ class CSelectTypeForm : public wxDialog
 
 public:
 
-	CSelectTypeForm(class IMetaObjectValue *metaValue, IMetaFormObject *metaObject);
+	CSelectTypeForm(class IMetaObject*metaValue, IMetaFormObject *metaObject);
 	virtual ~CSelectTypeForm();
 
 	void CreateSelector();

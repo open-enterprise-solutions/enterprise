@@ -5,13 +5,13 @@
 
 #include "formSelector.h"
 #include "metadata/metaObjects/metaFormObject.h"
-#include "metadata/objects/baseObject.h"
+#include "metadata/metaObjects/objects/baseObject.h"
 #include "frontend/mainFrame.h"
 
-CSelectTypeForm::CSelectTypeForm(IMetaObjectValue *metaValue, IMetaFormObject *metaObject)
+CSelectTypeForm::CSelectTypeForm(IMetaObject*metaValue, IMetaFormObject *metaObject)
 	: wxDialog(CMainFrame::Get(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(480, 320), wxDEFAULT_DIALOG_STYLE | wxDIALOG_ADAPTATION_ANY_SIZER), m_metaObject(metaObject)
 {
-	SetTitle(_(metaValue->GetClassName() + " form wizard"));
+	SetTitle(_(metaValue->GetClassName() + _(" form wizard")));
 }
 
 CSelectTypeForm::~CSelectTypeForm()

@@ -7,30 +7,30 @@
 #include "metadata/metadata.h"
 #include "utils/typeconv.h"
 
-void IMetaObject::OnPropertyCreated(Property *property)
+void IMetaObject::OnPropertyCreated(Property* property)
 {
 }
 
-void IMetaObject::OnPropertySelected(Property *property)
+void IMetaObject::OnPropertySelected(Property* property)
 {
 }
 
 #include "common/docInfo.h"
 
-void IMetaObject::OnPropertyChanged(Property *property)
+void IMetaObject::OnPropertyChanged(Property* property)
 {
 	m_metaData->Modify(true);
 
-	IMetadataTree *metaTree = m_metaData->GetMetaTree();
-	if (metaTree) {
-		CDocument *metaDoc = metaTree->GetDocument(this);
-		if (metaDoc) {
-			metaDoc->UpdateAllViews(); 
+	IMetadataTree* metaTree = m_metaData->GetMetaTree();
+	if (metaTree != NULL) {
+		CDocument* metaDoc = metaTree->GetDocument(this);
+		if (metaDoc != NULL) {
+			metaDoc->UpdateAllViews();
 		}
 	}
 }
 
-void IMetaObject::SetPropertyData(Property *property, const CValue &srcValue)
+void IMetaObject::SetPropertyData(Property* property, const CValue& srcValue)
 {
 	switch (property->GetType())
 	{
@@ -52,7 +52,7 @@ void IMetaObject::SetPropertyData(Property *property, const CValue &srcValue)
 	case PropertyType::PT_OPTION:
 	{
 		const int m_intVal = srcValue.ToInt();
-		OptionList *m_opt_list = property->GetOptionList();
+		OptionList* m_opt_list = property->GetOptionList();
 		for (auto option : m_opt_list->GetOptions())
 		{
 			if (option.m_intVal == m_intVal) {
@@ -69,7 +69,7 @@ void IMetaObject::SetPropertyData(Property *property, const CValue &srcValue)
 #include "frontend/visualView/special/valuePoint.h"
 #include "frontend/visualView/special/valueColour.h"
 
-CValue IMetaObject::GetPropertyData(Property *property)
+CValue IMetaObject::GetPropertyData(Property* property)
 {
 	wxString m_value = property->GetValue();
 

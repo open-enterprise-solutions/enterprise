@@ -104,7 +104,7 @@ struct CErrorPlace
 	CByteCode* m_pByteCode;
 	CByteCode* pSkipByteCode;
 
-	CErrorPlace() { Reset(); };
+	CErrorPlace() { Reset(); }
 
 	bool IsEmpty() { return nLine == wxNOT_FOUND; }
 

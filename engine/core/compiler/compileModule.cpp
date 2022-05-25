@@ -16,8 +16,8 @@
 //                           Constants
 //////////////////////////////////////////////////////////////////////
 
-std::map<wxString, void *> aHelpDescription;//описание ключевых слов и системных функций
-std::map<wxString, void *> aHashKeywordList;
+std::map<wxString, void*> aHelpDescription;//описание ключевых слов и системных функций
+std::map<wxString, void*> aHashKeywordList;
 
 //Массив приоритетов математических операций
 static int aPriority[256];
@@ -30,7 +30,7 @@ static int aPriority[256];
  * Добавляет новую переменную в список
  * Возвращает добавленную переменную в виде SParam
  */
-SParam CCompileContext::AddVariable(const wxString &name, const wxString &typeVar, bool exportVar, bool contextVar, bool tempVar)
+SParam CCompileContext::AddVariable(const wxString& name, const wxString& typeVar, bool exportVar, bool contextVar, bool tempVar)
 {
 	if (FindVariable(name))//было объявление + повторное объявление = ошибка
 		m_compileModule->SetError(ERROR_IDENTIFIER_DUPLICATE, name);
@@ -62,7 +62,7 @@ SParam CCompileContext::AddVariable(const wxString &name, const wxString &typeVa
  * Поиск определения переменной, начиная с текущего контекста до всех родительских
  * Если требуемой переменной нет, то создается новое определение переменной
  */
-SParam CCompileContext::GetVariable(const wxString &name, bool bFindInParent, bool bCheckError, bool contextVar, bool tempVar)
+SParam CCompileContext::GetVariable(const wxString& name, bool bFindInParent, bool bCheckError, bool contextVar, bool tempVar)
 {
 	int nCanUseLocalInParent = m_nFindLocalInParent;
 	SParam variable;
@@ -73,7 +73,7 @@ SParam CCompileContext::GetVariable(const wxString &name, bool bFindInParent, bo
 		{
 			int nParentNumber = 0;
 
-			CCompileContext *pCurContext = m_parentContext;
+			CCompileContext* pCurContext = m_parentContext;
 
 			while (pCurContext) {
 				nParentNumber++;
@@ -131,7 +131,7 @@ SParam CCompileContext::GetVariable(const wxString &name, bool bFindInParent, bo
  * Поиск переменной в хэш массиве
  * Возвращает 1 - если переменная найдена
  */
-bool CCompileContext::FindVariable(const wxString &name, wxString &sContextVariable, bool contextVar)
+bool CCompileContext::FindVariable(const wxString& name, wxString& sContextVariable, bool contextVar)
 {
 	if (contextVar)
 	{
@@ -158,7 +158,7 @@ bool CCompileContext::FindVariable(const wxString &name, wxString &sContextVaria
  * Поиск переменной в хэш массиве
  * Возвращает 1 - если переменная найдена
  */
-bool CCompileContext::FindFunction(const wxString &name, wxString &sContextVariable, bool contextVar)
+bool CCompileContext::FindFunction(const wxString& name, wxString& sContextVariable, bool contextVar)
 {
 	if (contextVar)
 	{
@@ -186,7 +186,7 @@ bool CCompileContext::FindFunction(const wxString &name, wxString &sContextVaria
  */
 void CCompileContext::DoLabels()
 {
-	wxASSERT(m_compileModule);
+	wxASSERT(m_compileModule != NULL);
 
 	for (unsigned int i = 0; i < m_cLabels.size(); i++)
 	{
@@ -220,10 +220,10 @@ void CCompileContext::StartDoList()
 /**
  * Установка адресов перехода для команд Continue и Break
  */
-void CCompileContext::FinishDoList(CByteCode &m_cByteCode, int nGotoContinue, int nGotoBreak)
+void CCompileContext::FinishDoList(CByteCode& m_cByteCode, int nGotoContinue, int nGotoBreak)
 {
-	CDefIntList *pListC = (CDefIntList *)aContinueList[m_nDoNumber];
-	CDefIntList *pListB = (CDefIntList *)aBreakList[m_nDoNumber];
+	CDefIntList* pListC = (CDefIntList*)aContinueList[m_nDoNumber];
+	CDefIntList* pListB = (CDefIntList*)aBreakList[m_nDoNumber];
 
 	if (pListC == 0 || pListB == 0) {
 #ifdef _DEBUG 
@@ -252,7 +252,7 @@ void CCompileContext::FinishDoList(CByteCode &m_cByteCode, int nGotoContinue, in
 CCompileContext::~CCompileContext()
 {
 	for (auto it = m_cFunctions.begin(); it != m_cFunctions.end(); it++) {
-		CFunction *pFunction = static_cast<CFunction *>(it->second);
+		CFunction* pFunction = static_cast<CFunction*>(it->second);
 		if (pFunction)
 			delete pFunction;
 	}
@@ -275,7 +275,7 @@ CCompileModule::CCompileModule() :
 	InitializeCompileModule();
 }
 
-CCompileModule::CCompileModule(CMetaModuleObject *moduleObject, bool commonModule) :
+CCompileModule::CCompileModule(CMetaModuleObject* moduleObject, bool commonModule) :
 	CTranslateModule(moduleObject->GetFullName(), moduleObject->GetDocPath()),
 	m_pContext(GetContext()),
 	m_moduleObject(moduleObject), m_pParent(NULL),
@@ -344,7 +344,7 @@ void CCompileModule::Reset()
 
 	//clear functions & variables 
 	for (auto function : m_cContext.m_cFunctions) {
-		CFunction *pFunction = static_cast<CFunction *>(function.second);
+		CFunction* pFunction = static_cast<CFunction*>(function.second);
 		if (pFunction) delete pFunction;
 	}
 
@@ -393,7 +393,7 @@ void CCompileModule::PrepareModuleData()
 			wxString sMethodName = contextValue.second->GetMethodName(i);
 
 			//определяем номер и тип функции
-			CFunction *pFunction = new CFunction(sMethodName);
+			CFunction* pFunction = new CFunction(sMethodName);
 			pFunction->m_nStart = i;
 			pFunction->m_bContext = true;
 			pFunction->m_bExport = true;
@@ -413,7 +413,7 @@ void CCompileModule::PrepareModuleData()
  * Возвращаемое значение:
  * Метод не возвращает управление!
  */
-void CCompileModule::SetError(int codeError, const wxString &errorDesc)
+void CCompileModule::SetError(int codeError, const wxString& errorDesc)
 {
 	wxString fileName, moduleName, docPath; int currPos = 0, currLine = 0;
 
@@ -460,7 +460,7 @@ void CCompileModule::SetError(int nErr, char c)
 /**
  *добавление в байт код информации о текущей строке
  */
-void CCompileModule::AddLineInfo(CByte &code)
+void CCompileModule::AddLineInfo(CByte& code)
 {
 	code.m_sModuleName = m_sModuleName;
 	code.m_sDocPath = m_sDocPath;
@@ -684,7 +684,7 @@ CValue CCompileModule::GETConstant()
 }
 
 //получение номера константой строки (для определения номера метода)
-int CCompileModule::GetConstString(const wxString &sMethod)
+int CCompileModule::GetConstString(const wxString& sMethod)
 {
 	if (!m_aHashConstList[sMethod]) {
 		m_cByteCode.m_aConstList.push_back(sMethod);
@@ -699,14 +699,14 @@ int CCompileModule::GetConstString(const wxString &sMethod)
  * Назначение:
  * Добавить имя и адрес внешней переменной в специальный массив для дальнейшего использования
  */
-void CCompileModule::AddVariable(const wxString &nameVariable, const CValue &vObject)
+void CCompileModule::AddVariable(const wxString& nameVariable, const CValue& vObject)
 {
 	if (nameVariable.IsEmpty())
 		return;
 
 	//учитываем внешние переменные при компиляции
-	m_aExternValues[nameVariable.Upper()] = vObject.m_typeClass == eValueTypes::TYPE_REFFER 
-		? vObject.GetRef() : const_cast<CValue *>(&vObject);
+	m_aExternValues[nameVariable.Upper()] = vObject.m_typeClass == eValueTypes::TYPE_REFFER
+		? vObject.GetRef() : const_cast<CValue*>(&vObject);
 
 	//ставим флаг для перекомпиляции
 	m_bNeedRecompile = true;
@@ -717,7 +717,7 @@ void CCompileModule::AddVariable(const wxString &nameVariable, const CValue &vOb
  * Назначение:
  * Добавить имя и адрес внешней перменной в специальный массив для дальнейшего использования
  */
-void CCompileModule::AddVariable(const wxString &nameVariable, CValue *pValue)
+void CCompileModule::AddVariable(const wxString& nameVariable, CValue* pValue)
 {
 	if (nameVariable.IsEmpty())
 		return;
@@ -734,13 +734,13 @@ void CCompileModule::AddVariable(const wxString &nameVariable, CValue *pValue)
  * Назначение:
  * Добавить имя и адрес внешней перменной в специальный массив для дальнейшего использования
  */
-void CCompileModule::AddContextVariable(const wxString &nameVariable, const CValue &vObject)
+void CCompileModule::AddContextVariable(const wxString& nameVariable, const CValue& vObject)
 {
 	if (nameVariable.IsEmpty())
 		return;
 
 	//добавляем переменные из контекста
-	m_aContextValues[nameVariable.Upper()] = vObject.m_typeClass == eValueTypes::TYPE_REFFER ? vObject.GetRef() : const_cast<CValue *>(&vObject);
+	m_aContextValues[nameVariable.Upper()] = vObject.m_typeClass == eValueTypes::TYPE_REFFER ? vObject.GetRef() : const_cast<CValue*>(&vObject);
 
 	//ставим флаг для перекомпиляции
 	m_bNeedRecompile = true;
@@ -751,7 +751,7 @@ void CCompileModule::AddContextVariable(const wxString &nameVariable, const CVal
  * Назначение:
  * Добавить имя и адрес внешней перменной в специальный массив для дальнейшего использования
  */
-void CCompileModule::AddContextVariable(const wxString &nameVariable, CValue *pValue)
+void CCompileModule::AddContextVariable(const wxString& nameVariable, CValue* pValue)
 {
 	if (nameVariable.IsEmpty())
 		return;
@@ -768,7 +768,7 @@ void CCompileModule::AddContextVariable(const wxString &nameVariable, CValue *pV
  * Назначение:
  * Удалить имя и адрес внешней перменной
  */
-void CCompileModule::RemoveVariable(const wxString &nameVariable)
+void CCompileModule::RemoveVariable(const wxString& nameVariable)
 {
 	if (nameVariable.IsEmpty())
 		return;
@@ -880,9 +880,9 @@ bool CCompileModule::Compile()
 	//рекурсивно компилируем модули на случай каких-либо изменений 
 	if (m_pParent) {
 
-		std::stack<CCompileModule *> aCompileModules;
+		std::stack<CCompileModule*> aCompileModules;
 
-		CCompileModule *parentModule = m_pParent; bool needRecompile = false;
+		CCompileModule* parentModule = m_pParent; bool needRecompile = false;
 
 		while (parentModule)
 		{
@@ -899,7 +899,7 @@ bool CCompileModule::Compile()
 
 		while (!aCompileModules.empty())
 		{
-			CCompileModule *compileModule = aCompileModules.top();
+			CCompileModule* compileModule = aCompileModules.top();
 
 			if (!compileModule->Recompile()) {
 				return false;
@@ -943,7 +943,7 @@ bool CCompileModule::Compile()
 	return false;
 }
 
-bool CCompileModule::IsTypeVar(const wxString &typeVar)
+bool CCompileModule::IsTypeVar(const wxString& typeVar)
 {
 	if (!typeVar.IsEmpty()) {
 		if (CValue::IsRegisterObject(typeVar, eObjectType::eObjectType_simple))
@@ -959,7 +959,7 @@ bool CCompileModule::IsTypeVar(const wxString &typeVar)
 	return false;
 }
 
-wxString CCompileModule::GetTypeVar(const wxString &sType)
+wxString CCompileModule::GetTypeVar(const wxString& sType)
 {
 	if (!sType.IsEmpty()) {
 		if (!CValue::IsRegisterObject(sType, eObjectType::eObjectType_simple))
@@ -994,11 +994,12 @@ bool CCompileModule::CompileDeclaration()
 	}
 
 	while (true) {
+
 		wxString sName0 = GETIdentifier(true);
 		wxString sName = StringUtils::MakeUpper(sName0);
 
 		int nParentNumber = 0;
-		CCompileContext *pCurContext = GetContext();
+		CCompileContext* pCurContext = GetContext();
 
 		while (pCurContext) {
 			nParentNumber++;
@@ -1187,13 +1188,13 @@ bool CCompileModule::CompileModule()
 }
 
 //поиск определения функции в текущем модуле и во всех родительских
-CFunction *CCompileModule::GetFunction(const wxString &name, int *pNumber)
+CFunction* CCompileModule::GetFunction(const wxString& name, int* pNumber)
 {
 	int nCanUseLocalInParent = m_cContext.m_nFindLocalInParent - 1;
 	int nNumber = 0;
 
 	//ищем в текущем модуле
-	CFunction *pDefFunction = NULL;
+	CFunction* pDefFunction = NULL;
 
 	if (GetContext()->FindFunction(name)) {
 		pDefFunction = GetContext()->m_cFunctions[name];//ищем в текущем модуле
@@ -1201,7 +1202,7 @@ CFunction *CCompileModule::GetFunction(const wxString &name, int *pNumber)
 
 	if (!pDefFunction)
 	{
-		CCompileModule *pCurModule = m_pParent;
+		CCompileModule* pCurModule = m_pParent;
 
 		while (pCurModule)
 		{
@@ -1237,7 +1238,7 @@ bool CCompileModule::AddCallFunction(CCallFunction* pRealCall)
 	int nModuleNumber = 0;
 
 	//находим определение функции
-	CFunction *pDefFunction = GetFunction(pRealCall->m_sName, &nModuleNumber);
+	CFunction* pDefFunction = GetFunction(pRealCall->m_sName, &nModuleNumber);
 	if (!pDefFunction) {
 		m_nCurrentCompile = pRealCall->m_nError;
 		SetError(ERROR_CALL_FUNCTION, pRealCall->m_sRealName);//нет такой функции в модуле
@@ -1383,7 +1384,7 @@ bool CCompileModule::CompileFunction()
 
 	int errorPlace = m_nCurrentCompile;
 
-	CFunction *pFunction = new CFunction(sFuncName, m_pContext);
+	CFunction* pFunction = new CFunction(sFuncName, m_pContext);
 	pFunction->m_sRealName = sFuncName0;
 	pFunction->m_sShortDescription = sShortDescription;
 	pFunction->m_nNumberLine = m_nNumberLine;
@@ -1440,7 +1441,7 @@ bool CCompileModule::CompileFunction()
 	}
 
 	int nParentNumber = 0;
-	CCompileContext *pCurContext = GetContext();
+	CCompileContext* pCurContext = GetContext();
 
 	while (pCurContext)
 	{
@@ -1455,7 +1456,7 @@ bool CCompileModule::CompileFunction()
 
 		if (pCurContext->FindFunction(sFuncName))//нашли
 		{
-			CFunction *m_pCurrentFunc = pCurContext->m_cFunctions[sFuncName];
+			CFunction* m_pCurrentFunc = pCurContext->m_cFunctions[sFuncName];
 			if (m_pCurrentFunc->m_bExport ||
 				pCurContext->m_compileModule == this)
 			{
@@ -1548,7 +1549,7 @@ bool CCompileModule::CompileFunction()
 /**
  * записываем информацию о типе переменной
  */
-void CCompileModule::AddTypeSet(const SParam &sVariable)
+void CCompileModule::AddTypeSet(const SParam& sVariable)
 {
 	wxString typeName = sVariable.m_sType;
 
@@ -1608,10 +1609,11 @@ bool CCompileModule::CompileBlock()
 	CLexem lex;
 	while ((lex = PreviewGetLexem()).m_nType != ERRORTYPE)
 	{
-		if (IDENTIFIER == lex.m_nType&&IsTypeVar(lex.m_sData))
+		/*if (IDENTIFIER == lex.m_nType && IsTypeVar(lex.m_sData))
 		{
 			CompileDeclaration();
 		}
+		else*/
 		if (KEYWORD == lex.m_nType)
 		{
 			switch (lex.m_nData)
@@ -1693,7 +1695,7 @@ bool CCompileModule::CompileBlock()
 				GETKeyWord(KEY_RAISE);
 				CByte code;
 				AddLineInfo(code);
-				if (IsNextDelimeter('(')){ 		
+				if (IsNextDelimeter('(')) {
 					code.m_nOper = OPER_RAISE_T;
 					GETDelimeter('(');
 					code.m_param1 = GetExpression();
@@ -1714,7 +1716,7 @@ bool CCompileModule::CompileBlock()
 					code.m_nOper = OPER_GOTO;
 					m_cByteCode.m_aCodeList.push_back(code);
 					int nAddrLine = m_cByteCode.m_aCodeList.size() - 1;
-					CDefIntList *pList = m_pContext->aContinueList[m_pContext->m_nDoNumber];
+					CDefIntList* pList = m_pContext->aContinueList[m_pContext->m_nDoNumber];
 					pList->push_back(nAddrLine);
 				}
 				else {
@@ -1732,7 +1734,7 @@ bool CCompileModule::CompileBlock()
 					code.m_nOper = OPER_GOTO;
 					m_cByteCode.m_aCodeList.push_back(code);
 					int nAddrLine = m_cByteCode.m_aCodeList.size() - 1;
-					CDefIntList *pList = m_pContext->aBreakList[m_pContext->m_nDoNumber];
+					CDefIntList* pList = m_pContext->aBreakList[m_pContext->m_nDoNumber];
 					pList->push_back(nAddrLine);
 				}
 				else SetError(ERROR_USE_BREAK);//Опереатор Break(Прервать)  может употребляться только внутри цикла
@@ -1930,7 +1932,7 @@ bool CCompileModule::CompileGoto()
  * nIsSet - на выходе: 1 - признак того что точно ожидается присваивание выражения (т.е. должен встретиться знак '=')
  * номер идекса переменной, где лежит значение идентификатора
 */
-SParam CCompileModule::GetCurrentIdentifier(int &nIsSet)
+SParam CCompileModule::GetCurrentIdentifier(int& nIsSet)
 {
 	SParam variable; int nPrevSet = nIsSet;
 
@@ -1990,7 +1992,7 @@ SParam CCompileModule::GetCurrentIdentifier(int &nIsSet)
 		}
 		else
 		{
-			CFunction *pDefFunction = NULL;
+			CFunction* pDefFunction = NULL;
 
 			if (m_bExpressionOnly) {
 				pDefFunction = GetFunction(name);
@@ -2454,12 +2456,12 @@ bool CCompileModule::CompileForeach()
 /**
  * обработка вызова функции или процедуры
  */
-SParam CCompileModule::GetCallFunction(const wxString &realName)
+SParam CCompileModule::GetCallFunction(const wxString& realName)
 {
-	CCallFunction *pRealCall = new CCallFunction();
+	CCallFunction* pRealCall = new CCallFunction();
 	wxString name = StringUtils::MakeUpper(realName);
 
-	CFunction *pDefFunction = NULL;
+	CFunction* pDefFunction = NULL;
 
 	if (m_bExpressionOnly)
 		pDefFunction = GetFunction(name);
@@ -2525,7 +2527,7 @@ SParam CCompileModule::GetCallFunction(const wxString &realName)
  * Получает номер константы из уникального списка значений
  * (если такого значения в списке нет, то оно создается)
  */
-SParam CCompileModule::FindConst(CValue &m_vData)
+SParam CCompileModule::FindConst(CValue& m_vData)
 {
 	SParam Const; Const.m_nArray = DEF_VAR_CONST;
 
@@ -2806,7 +2808,7 @@ MOperation:
 	return variable;
 }
 
-void CCompileModule::SetParent(CCompileModule *setParent)
+void CCompileModule::SetParent(CCompileModule* setParent)
 {
 	m_cByteCode.m_pParent = NULL;
 
@@ -2821,7 +2823,7 @@ void CCompileModule::SetParent(CCompileModule *setParent)
 	OnSetParent(setParent);
 }
 
-SParam CCompileModule::AddVariable(const wxString &name, const wxString &typeVar, bool exportVar, bool contextVar, bool tempVar)
+SParam CCompileModule::AddVariable(const wxString& name, const wxString& typeVar, bool exportVar, bool contextVar, bool tempVar)
 {
 	return m_pContext->AddVariable(name, typeVar, exportVar, contextVar, tempVar);
 }
@@ -2829,7 +2831,7 @@ SParam CCompileModule::AddVariable(const wxString &name, const wxString &typeVar
 /**
  * Функция возвращает номер переменной по строковому имени
  */
-SParam CCompileModule::GetVariable(const wxString &name, bool bCheckError, bool bLoadFromContext)
+SParam CCompileModule::GetVariable(const wxString& name, bool bCheckError, bool bLoadFromContext)
 {
 	return m_pContext->GetVariable(name, true, bCheckError, bLoadFromContext);
 }

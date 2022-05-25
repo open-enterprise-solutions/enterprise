@@ -5,14 +5,14 @@
 
 #include "tableInfo.h"
 
-static int my_sort(int *v1, int *v2)
+static int my_sort(int* v1, int* v2)
 {
 	return *v2 - *v1;
 }
 
 wxIMPLEMENT_ABSTRACT_CLASS(IValueTable, CValue);
-wxIMPLEMENT_ABSTRACT_CLASS(IValueTable::IValueTableColumns, CValue);
-wxIMPLEMENT_ABSTRACT_CLASS(IValueTable::IValueTableColumns::IValueTableColumnsInfo, CValue);
+wxIMPLEMENT_ABSTRACT_CLASS(IValueTable::IValueTableColumnCollection, CValue);
+wxIMPLEMENT_ABSTRACT_CLASS(IValueTable::IValueTableColumnCollection::IValueTableColumnInfo, CValue);
 wxIMPLEMENT_ABSTRACT_CLASS(IValueTable::IValueTableReturnLine, CValue);
 
 IValueTable::IValueTable(unsigned int initial_size)
@@ -52,12 +52,12 @@ void IValueTable::Reset(unsigned int new_size)
 wxDataViewItem IValueTable::GetSelection() const
 {
 	if (m_srcNotifier == NULL) {
-		return wxDataViewItem(0); 
+		return wxDataViewItem(0);
 	}
 	return m_srcNotifier->GetSelection();
 }
 
-void IValueTable::RowValueStartEdit(const wxDataViewItem &item, unsigned int col)
+void IValueTable::RowValueStartEdit(const wxDataViewItem& item, unsigned int col)
 {
 	if (m_srcNotifier == NULL) {
 		return;
@@ -73,17 +73,17 @@ enum
 	eDeleteValue
 };
 
-IValueTable::actionData_t IValueTable::GetActions(form_identifier_t formType)
+IValueTable::actionData_t IValueTable::GetActions(const form_identifier_t &formType)
 {
 	actionData_t action(this);
-	action.AddAction("add", eAddValue);
-	action.AddAction("copy", eCopyValue);
-	action.AddAction("edit", eEditValue);
-	action.AddAction("delete", eDeleteValue);
+	action.AddAction("add", _("Add"), eAddValue);
+	action.AddAction("copy", _("Copy"), eCopyValue);
+	action.AddAction("edit", _("Edit"), eEditValue);
+	action.AddAction("delete", _("Delete"), eDeleteValue);
 	return action;
 }
 
-void IValueTable::ExecuteAction(action_identifier_t action, CValueForm *srcForm)
+void IValueTable::ExecuteAction(const action_identifier_t &action, CValueForm* srcForm)
 {
 	switch (action)
 	{
@@ -104,6 +104,10 @@ void IValueTable::RowPrepended()
 	wxDataViewItem item(wxUIntToPtr(id));
 	m_hash.Insert(item, 0);
 	ItemAdded(wxDataViewItem(0), item);
+
+	/*if (m_srcNotifier != NULL) {
+		m_srcNotifier->Select(item);
+	}*/
 }
 
 void IValueTable::RowInserted(unsigned int before)
@@ -116,6 +120,10 @@ void IValueTable::RowInserted(unsigned int before)
 	wxDataViewItem item(wxUIntToPtr(id));
 	m_hash.Insert(item, before);
 	ItemAdded(wxDataViewItem(0), item);
+
+	/*if (m_srcNotifier != NULL) {
+		m_srcNotifier->Select(item);
+	}*/
 }
 
 void IValueTable::RowAppended()
@@ -126,6 +134,10 @@ void IValueTable::RowAppended()
 	wxDataViewItem item(wxUIntToPtr(id));
 	m_hash.Add(item);
 	ItemAdded(wxDataViewItem(0), item);
+
+	/*if (m_srcNotifier != NULL) {
+		m_srcNotifier->Select(item);
+	}*/
 }
 
 void IValueTable::RowDeleted(unsigned int row)
@@ -137,7 +149,7 @@ void IValueTable::RowDeleted(unsigned int row)
 	/* wxDataViewModel:: */ ItemDeleted(wxDataViewItem(0), item);
 }
 
-void IValueTable::RowsDeleted(const wxArrayInt &rows)
+void IValueTable::RowsDeleted(const wxArrayInt& rows)
 {
 	m_ordered = false;
 
@@ -167,7 +179,7 @@ void IValueTable::RowValueChanged(unsigned int row, unsigned int col)
 	/* wxDataViewModel:: */ ValueChanged(GetItem(row), col);
 }
 
-unsigned int IValueTable::GetRow(const wxDataViewItem &item) const
+unsigned int IValueTable::GetRow(const wxDataViewItem& item) const
 {
 	if (m_ordered)
 		return wxPtrToUInt(item.GetID()) - 1;
@@ -182,7 +194,7 @@ wxDataViewItem IValueTable::GetItem(unsigned int row) const
 	return wxDataViewItem(m_hash[row]);
 }
 
-unsigned int IValueTable::GetChildren(const wxDataViewItem &item, wxDataViewItemArray &children) const
+unsigned int IValueTable::GetChildren(const wxDataViewItem& item, wxDataViewItemArray& children) const
 {
 	if (item.IsOk())
 		return 0;
@@ -192,16 +204,86 @@ unsigned int IValueTable::GetChildren(const wxDataViewItem &item, wxDataViewItem
 	return m_hash.GetCount();
 }
 
-bool IValueTable::IValueTableColumns::HasColumnID(unsigned int col_id)
+///////////////////////////////////////////////////////////////////////////////////////s
+
+bool IValueTable::IValueTableColumnCollection::HasColumnID(unsigned int col_id)
 {
 	return GetColumnByID(col_id) != NULL;
 }
 
-IValueTable::IValueTableColumns::IValueTableColumnsInfo *IValueTable::IValueTableColumns::GetColumnByID(unsigned int col_id)
+///////////////////////////////////////////////////////////////////////////////////////
+
+#include "compiler/methods.h"
+
+IValueTable::IValueTableColumnCollection::IValueTableColumnInfo::IValueTableColumnInfo() : CValue(eValueTypes::TYPE_VALUE, true)
+{
+	m_methods = new CMethods();
+}
+
+IValueTable::IValueTableColumnCollection::IValueTableColumnInfo::~IValueTableColumnInfo()
+{
+	wxDELETE(m_methods);
+}
+
+enum
+{
+	enColumnName,
+	enColumnTypes,
+	enColumnCaption,
+	enColumnWidth
+};
+
+void IValueTable::IValueTableColumnCollection::IValueTableColumnInfo::PrepareNames() const
+{
+	std::vector<SEng> aAttributes;
+
+	{
+		SEng aAttribute;
+		aAttribute.sName = wxT("name");
+		aAttribute.sSynonym = wxT("default");
+		aAttributes.push_back(aAttribute);
+	}
+	{
+		SEng aAttribute;
+		aAttribute.sName = wxT("types");
+		aAttribute.sSynonym = wxT("default");
+		aAttributes.push_back(aAttribute);
+	}
+	{
+		SEng aAttribute;
+		aAttribute.sName = wxT("caption");
+		aAttribute.sSynonym = wxT("default");
+		aAttributes.push_back(aAttribute);
+	}
+	{
+		SEng aAttribute;
+		aAttribute.sName = wxT("width");
+		aAttribute.sSynonym = wxT("default");
+		aAttributes.push_back(aAttribute);
+	}
+
+	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
+}
+
+CValue IValueTable::IValueTableColumnCollection::IValueTableColumnInfo::GetAttribute(attributeArg_t& aParams)
+{
+	switch (aParams.GetIndex())
+	{
+	case enColumnName: return GetColumnName();
+	case enColumnTypes: return GetColumnTypes();
+	case enColumnCaption: return GetColumnCaption();
+	case enColumnWidth: return GetColumnWidth();
+	}
+
+	return CValue();
+}
+
+
+IValueTable::IValueTableColumnCollection::IValueTableColumnInfo* IValueTable::IValueTableColumnCollection::GetColumnByID(unsigned int col_id)
 {
 	for (unsigned int idx = 0; idx < GetColumnCount(); idx++)
 	{
-		IValueTableColumnsInfo *columnInfo = GetColumnInfo(idx);
+		IValueTableColumnInfo* columnInfo = GetColumnInfo(idx);
 		wxASSERT(columnInfo);
 
 		if (col_id == columnInfo->GetColumnID())
@@ -213,11 +295,11 @@ IValueTable::IValueTableColumns::IValueTableColumnsInfo *IValueTable::IValueTabl
 
 #include "utils/stringUtils.h"
 
-IValueTable::IValueTableColumns::IValueTableColumnsInfo* IValueTable::IValueTableColumns::GetColumnByName(const wxString &colName)
+IValueTable::IValueTableColumnCollection::IValueTableColumnInfo* IValueTable::IValueTableColumnCollection::GetColumnByName(const wxString& colName)
 {
 	for (unsigned int idx = 0; idx < GetColumnCount(); idx++)
 	{
-		IValueTableColumnsInfo *columnInfo = GetColumnInfo(idx);
+		IValueTableColumnInfo* columnInfo = GetColumnInfo(idx);
 		wxASSERT(columnInfo);
 		if (StringUtils::CompareString(colName, columnInfo->GetColumnName()))
 			return columnInfo;
@@ -226,13 +308,15 @@ IValueTable::IValueTableColumns::IValueTableColumnsInfo* IValueTable::IValueTabl
 	return NULL;
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 IValueTable::IValueTableReturnLine::IValueTableReturnLine() : CValue(eValueTypes::TYPE_VALUE, true) {}
 
 IValueTable::IValueTableReturnLine::~IValueTableReturnLine() { }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool CDataViewCtrl::AssociateModel(IValueTable *model)
+bool CDataViewCtrl::AssociateModel(IValueTable* model)
 {
 	if (model) {
 		m_genNotitfier = new CTableModelNotifier(this);
@@ -249,26 +333,31 @@ bool CDataViewCtrl::AssociateModel(IValueTable *model)
 	return wxDataViewCtrl::AssociateModel(model);
 }
 
-void CDataViewCtrl::Select(const wxDataViewItem &item)
+void CDataViewCtrl::Select(const wxDataViewItem& item)
 {
 	wxDataViewCtrl::Select(item);
 }
 
+void CTableModelNotifier::Select(const wxDataViewItem& sel) const
+{
+	m_mainWindow->Select(sel);
+}
+
 wxDataViewItem CTableModelNotifier::GetSelection() const
 {
-	return m_mainWindow->GetSelection(); 
+	return m_mainWindow->GetSelection();
 }
 
-int CTableModelNotifier::GetSelections(wxDataViewItemArray & sel) const
+int CTableModelNotifier::GetSelections(wxDataViewItemArray& sel) const
 {
-	return m_mainWindow->GetSelections(sel); 
+	return m_mainWindow->GetSelections(sel);
 }
 
-void CTableModelNotifier::StartEditing(const wxDataViewItem &item, unsigned int col) const
+void CTableModelNotifier::StartEditing(const wxDataViewItem& item, unsigned int col) const
 {
 	int viewColumn = m_mainWindow->GetModelColumnIndex(col);
 	if (viewColumn != wxNOT_FOUND) {
-		m_mainWindow->EditItem(item, 
+		m_mainWindow->EditItem(item,
 			m_mainWindow->GetColumn(viewColumn)
 		);
 	}

@@ -72,8 +72,8 @@ public:
 	virtual bool Init() { return false; }
 	virtual bool Init(CValue **aParams);
 
-	virtual wxString GetString() const { return m_sObjectName; };
-	virtual wxString GetTypeString() const { return wxT("comObject"); };
+	virtual wxString GetString() const { return m_sObjectName; }
+	virtual wxString GetTypeString() const { return wxT("comObject"); }
 
 	//operator '=='
 	virtual inline bool CompareValueEQ(const CValue &cParam) const

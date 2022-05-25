@@ -1,4 +1,4 @@
-#include "textCtrl.h"
+#include "textEditor.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CTextCtrl, wxWindow);
 wxIMPLEMENT_DYNAMIC_CLASS(CTextCtrl::CPanelButtons, wxTextCtrl);

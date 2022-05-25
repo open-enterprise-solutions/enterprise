@@ -35,7 +35,7 @@ public:
 
 	void ResetConstructors() { m_aTreeConstructors.clear(); m_aConstructors.clear(); }
 	void ResetAttributes() { m_aTreeAttributes.clear();  m_aAttributes.clear(); }
-	void ReseteMethods() { m_aTreeMethods.clear(); m_aMethods.clear(); }
+	void ResetMethods() { m_aTreeMethods.clear(); m_aMethods.clear(); }
 
 	void PrepareConstructors(SEng *Constructors, unsigned int nCount);
 

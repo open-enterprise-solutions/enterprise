@@ -8,7 +8,7 @@ class CValueFile : public CValue {
 public:
 
 	//эти методы нужно переопределить в ваших агрегатных объектах:
-	virtual CMethods* GetPMethods() const { return &m_methods; };//получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethods* GetPMethods() const { return &m_methods; }//получить ссылку на класс помощник разбора имен атрибутов и методов
 	virtual void PrepareNames() const;//этот метод автоматически вызывается для инициализации имен атрибутов и методов
 	virtual CValue Method(methodArg_t &aParams);//вызов метода
 

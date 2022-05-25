@@ -32,6 +32,8 @@ enum
 	enEnumerations,
 	enDataProcessors,
 	enReports,
+	enInformationRegisters, 
+	enAccumulationRegisters,
 };
 
 void IModuleManager::CMetadataValue::PrepareNames() const
@@ -46,6 +48,8 @@ void IModuleManager::CMetadataValue::PrepareNames() const
 			{"enumerations","enumerations"},
 			{"dataProcessors","dataProcessors"},
 			{"reports","reports"},
+			{"informationRegisters","informationRegisters"},
+			{"accumulationRegisters","accumulationRegisters"},
 	};
 
 	int nCountA = sizeof(aAttributes) / sizeof(aAttributes[0]);
@@ -130,6 +134,20 @@ CValue IModuleManager::CMetadataValue::GetAttribute(attributeArg_t &aParams)//зн
 	case enReports:
 	{
 		for (auto obj : m_metaData->GetMetaObjects(g_metaReportCLSID))
+		{
+			m_aMetaObjects.insert_or_assign(obj->GetName(), obj);
+		}
+	} break;
+	case enInformationRegisters:
+	{
+		for (auto obj : m_metaData->GetMetaObjects(g_metaInformationRegisterCLSID))
+		{
+			m_aMetaObjects.insert_or_assign(obj->GetName(), obj);
+		}
+	} break;
+	case enAccumulationRegisters:
+	{
+		for (auto obj : m_metaData->GetMetaObjects(g_metaAccumulationRegisterCLSID))
 		{
 			m_aMetaObjects.insert_or_assign(obj->GetName(), obj);
 		}

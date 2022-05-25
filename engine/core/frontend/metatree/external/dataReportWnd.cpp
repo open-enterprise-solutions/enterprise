@@ -9,12 +9,12 @@
 
 wxIMPLEMENT_DYNAMIC_CLASS(CDataReportTree, wxPanel);
 
-extern wxImageList *GetImageList();
+extern wxImageList* GetImageList();
 
 wxBEGIN_EVENT_TABLE(CDataReportTree, wxPanel)
 wxEND_EVENT_TABLE()
 
-CDataReportTree::CDataReportTree(CDocument *docParent, wxWindow* parent, wxWindowID id)
+CDataReportTree::CDataReportTree(CDocument* docParent, wxWindow* parent, wxWindowID id)
 	: wxPanel(parent, id), m_docParent(docParent), m_initialize(false)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
@@ -83,6 +83,7 @@ CDataReportTree::CDataReportTree(CDocument *docParent, wxWindow* parent, wxWindo
 	sbSizerTree->Add(m_metaTreeToolbar, 0, wxALL | wxEXPAND, 0);
 
 	m_metaTreeWnd = new CDataReportTreeWnd(sbSizerTree->GetStaticBox(), this);
+	m_metaTreeWnd->SetBackgroundColour(RGB(250, 250, 250));
 
 	//set image list
 	m_metaTreeWnd->SetImageList(::GetImageList());
@@ -124,7 +125,7 @@ CDataReportTree::~CDataReportTree()
 
 #include "utils/stringUtils.h"
 
-void CDataReportTree::OnEditCaptionName(wxCommandEvent &event)
+void CDataReportTree::OnEditCaptionName(wxCommandEvent& event)
 {
 	wxString systemName = m_nameValue->GetValue();
 
@@ -140,7 +141,7 @@ void CDataReportTree::OnEditCaptionName(wxCommandEvent &event)
 	m_docParent->SetFilename(systemName);
 	m_docParent->SetTitle(systemName);
 
-	CMetaObjectReportValue *report = m_metaData->GetReport();
+	CMetaObjectReport* report = m_metaData->GetReport();
 	wxASSERT(report);
 	report->SetName(systemName);
 	report->SetSynonym(synonym);
@@ -154,9 +155,9 @@ void CDataReportTree::OnEditCaptionName(wxCommandEvent &event)
 	}
 }
 
-void CDataReportTree::OnEditCaptionSynonym(wxCommandEvent &event)
+void CDataReportTree::OnEditCaptionSynonym(wxCommandEvent& event)
 {
-	CMetaObjectReportValue *report = m_metaData->GetReport();
+	CMetaObjectReport* report = m_metaData->GetReport();
 	wxASSERT(report);
 	report->SetSynonym(m_synonymValue->GetValue());
 
@@ -165,9 +166,9 @@ void CDataReportTree::OnEditCaptionSynonym(wxCommandEvent &event)
 	}
 }
 
-void CDataReportTree::OnEditCaptionComment(wxCommandEvent &event)
+void CDataReportTree::OnEditCaptionComment(wxCommandEvent& event)
 {
-	CMetaObjectReportValue *report = m_metaData->GetReport();
+	CMetaObjectReport* report = m_metaData->GetReport();
 	wxASSERT(report);
 	report->SetComment(m_commentValue->GetValue());
 
@@ -176,14 +177,14 @@ void CDataReportTree::OnEditCaptionComment(wxCommandEvent &event)
 	}
 }
 
-void CDataReportTree::OnChoiceDefForm(wxCommandEvent &event)
+void CDataReportTree::OnChoiceDefForm(wxCommandEvent& event)
 {
-	CMetaObjectReportValue *report = m_metaData->GetReport();
+	CMetaObjectReport* report = m_metaData->GetReport();
 	wxASSERT(report);
 
-	meta_identifier_t meta_id = reinterpret_cast<meta_identifier_t>(event.GetClientData());
-	if (meta_id > 0) {
-		report->m_defaultFormObject = meta_id;
+	const meta_identifier_t id = reinterpret_cast<meta_identifier_t>(event.GetClientData());
+	if (id > 0) {
+		report->m_defaultFormObject = id;
 	}
 	else {
 		report->m_defaultFormObject = wxNOT_FOUND;
@@ -194,9 +195,9 @@ void CDataReportTree::OnChoiceDefForm(wxCommandEvent &event)
 	}
 }
 
-void CDataReportTree::OnButtonModuleClicked(wxCommandEvent &event)
+void CDataReportTree::OnButtonModuleClicked(wxCommandEvent& event)
 {
-	CMetaObjectReportValue *report = m_metaData->GetReport();
+	CMetaObjectReport* report = m_metaData->GetReport();
 	wxASSERT(report);
 	OpenFormMDI(report->GetModuleObject());
 }
@@ -246,7 +247,7 @@ CDataReportTree::CDataReportTreeWnd::CDataReportTreeWnd()
 	SetDoubleBuffered(true);
 }
 
-CDataReportTree::CDataReportTreeWnd::CDataReportTreeWnd(wxWindow *parentWnd, CDataReportTree *ownerWnd)
+CDataReportTree::CDataReportTreeWnd::CDataReportTreeWnd(wxWindow* parentWnd, CDataReportTree* ownerWnd)
 	: wxTreeCtrl(parentWnd, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT), m_ownerTree(ownerWnd)
 {
 	debugClient->AddHandler(this);

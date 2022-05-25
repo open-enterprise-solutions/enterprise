@@ -116,7 +116,7 @@ private:
 
 	void OnBitmapPropertyChanged(wxCommandEvent& event);
 
-	bool ModifyProperty(Property* prop, const wxString& str);
+	bool ModifyProperty(Property* prop, const wxVariant& str);
 	void RestoreLastSelectedPropItem();
 
 	void OnChildFocus(wxChildFocusEvent& event);

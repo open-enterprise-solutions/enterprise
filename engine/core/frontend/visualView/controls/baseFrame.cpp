@@ -38,7 +38,7 @@ IValueFrame *IValueFrame::GetChild(unsigned int idx, const wxString & type)
 bool IValueFrame::LoadControl(IMetaFormObject *metaForm, CMemoryReader &dataReader)
 {
 	//Save meta version 
-	version_identifier_t version = dataReader.r_u32(); //reserved 
+	const version_identifier_t &version = dataReader.r_u32(); //reserved 
 
 	//Load unique guid 
 	wxString strGuid;
@@ -55,17 +55,8 @@ bool IValueFrame::LoadControl(IMetaFormObject *metaForm, CMemoryReader &dataRead
 	m_expanded = dataReader.r_u8();
 
 	//load events 
-	unsigned int eventCount = dataReader.r_u32();
-
-	// ...and the event handlers
-	for (unsigned i = 0; i < eventCount; i++) {
-		wxString eventName, eventValue;
-		dataReader.r_stringZ(eventName);
-		dataReader.r_stringZ(eventValue);
-		Event *objEvent = GetEvent(eventName);
-		if (objEvent) {
-			objEvent->SetValue(eventValue);
-		}
+	if (!LoadEvent(dataReader)) {
+		return false;
 	}
 
 	if (LoadData(dataReader)) {
@@ -74,6 +65,25 @@ bool IValueFrame::LoadControl(IMetaFormObject *metaForm, CMemoryReader &dataRead
 	}
 
 	return false;
+}
+
+bool IValueFrame::LoadEvent(CMemoryReader& dataReader)
+{
+	//load events 
+	unsigned int eventCount = dataReader.r_u32();
+
+	// ...and the event handlers
+	for (unsigned i = 0; i < eventCount; i++) {
+		wxString eventName, eventValue;
+		dataReader.r_stringZ(eventName);
+		dataReader.r_stringZ(eventValue);
+		Event* objEvent = GetEvent(eventName);
+		if (objEvent) {
+			objEvent->SetValue(eventValue);
+		}
+	}
+
+	return true;
 }
 
 bool IValueFrame::SaveControl(IMetaFormObject *metaForm, CMemoryWriter &dataWritter)
@@ -94,14 +104,8 @@ bool IValueFrame::SaveControl(IMetaFormObject *metaForm, CMemoryWriter &dataWrit
 	dataWritter.w_u8(m_expanded);
 
 	//save events 
-	unsigned int eventCount = GetEventCount();
-	dataWritter.w_u32(eventCount);
-	// ...and the event handlers
-	for (unsigned i = 0; i < eventCount; i++) {
-		Event *objEvent = GetEvent(i);
-		wxASSERT(objEvent);
-		dataWritter.w_stringZ(objEvent->GetName());
-		dataWritter.w_stringZ(objEvent->GetValue());
+	if (!SaveEvent(dataWritter)) {
+		return false; 
 	}
 
 	//save other data
@@ -111,6 +115,22 @@ bool IValueFrame::SaveControl(IMetaFormObject *metaForm, CMemoryWriter &dataWrit
 	}
 
 	return false;
+}
+
+bool IValueFrame::SaveEvent(CMemoryWriter& dataWritter)
+{
+	//save events 
+	unsigned int eventCount = GetEventCount();
+	dataWritter.w_u32(eventCount);
+	// ...and the event handlers
+	for (unsigned i = 0; i < eventCount; i++) {
+		Event* objEvent = GetEvent(i);
+		wxASSERT(objEvent);
+		dataWritter.w_stringZ(objEvent->GetName());
+		dataWritter.w_stringZ(objEvent->GetValue());
+	}
+
+	return true;
 }
 
 wxString IValueFrame::GetTypeString() const
@@ -311,7 +331,7 @@ void IValueFrame::CallFunction(const wxString &functionName, CValue &value1, CVa
 	}
 }
 
-#include "frontend/visualView/visualEditorView.h"
+#include "frontend/visualView/visualHost.h"
 
 wxObject *IValueFrame::GetWxObject()
 {
@@ -321,14 +341,14 @@ wxObject *IValueFrame::GetWxObject()
 	//if run designer form search in own visualHost 
 	if (m_visualHostContext)
 	{
-		CVisualEditorContextForm::CVisualEditor *visualEditor =
+		CVisualEditorContextForm::CVisualEditorHost *visualEditor =
 			m_visualHostContext->GetVisualEditor();
 		return visualEditor->GetWxObject(this);
 	}
 	CVisualDocument *m_visualDoc = m_valueForm->GetVisualDocument();
 	if (!m_visualDoc)
 		return NULL;
-	CVisualView *m_visualView = m_visualDoc->GetVisualView();
+	CVisualHost *m_visualView = m_visualDoc->GetVisualView();
 	if (!m_visualView)
 		return NULL;
 	return m_visualView->GetWxObject(this);
@@ -380,7 +400,7 @@ void IValueFrame::SetAttribute(attributeArg_t &aParams, CValue &cVal)
 	if (!visualDoc)
 		return;
 
-	CVisualView *visualView = visualDoc->GetVisualView();
+	CVisualHost *visualView = visualDoc->GetVisualView();
 
 	if (!visualView)
 		return;
@@ -392,7 +412,8 @@ void IValueFrame::SetAttribute(attributeArg_t &aParams, CValue &cVal)
 		Update(object, visualView);
 		IValueFrame* nextParent = GetParent();
 		while (!parentWnd && nextParent) {
-			if (nextParent->GetComponentType() == COMPONENT_TYPE_WINDOW) {
+			if (nextParent->GetComponentType() == COMPONENT_TYPE_WINDOW || 
+				nextParent->GetComponentType() == COMPONENT_TYPE_WINDOW_TABLE) {
 				parentWnd = dynamic_cast<wxWindow *>(visualView->GetWxObject(nextParent));
 				break;
 			}
@@ -441,9 +462,10 @@ int IValueFrame::FindAttribute(const wxString &sName) const
 	return GetPropertyIndex(sName) + 1;
 }
 
-#include "metadata/objects/baseObject.h"
+#include "metadata/metaObjects/objects/baseObject.h"
+#include "common/srcExplorer.h"
 
-bool IValueFrame::FilterSource(const CSourceExplorer &src, meta_identifier_t id)
+bool IValueFrame::FilterSource(const CSourceExplorer &src, const meta_identifier_t &id)
 {
 	return !src.IsTableSection();
 }

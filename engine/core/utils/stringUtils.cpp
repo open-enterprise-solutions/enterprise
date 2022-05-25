@@ -51,7 +51,7 @@ namespace StringUtils
 		return result;
 	}
 
-	wxString TrimLeft(const wxString &Source, wxChar c)
+	wxString TrimLeft(const wxString& Source, wxChar c)
 	{
 		wxString sRes(Source);
 		unsigned int pos = sRes.find_first_not_of(c);
@@ -63,7 +63,7 @@ namespace StringUtils
 		return sRes;
 	}
 
-	wxString TrimLeft(wxString &Source, wxChar c)
+	wxString TrimLeft(wxString& Source, wxChar c)
 	{
 		unsigned int pos = Source.find_first_not_of(c);
 		if (pos == 0)
@@ -72,7 +72,7 @@ namespace StringUtils
 		return Source;
 	}
 
-	wxString TrimRight(const wxString &Source, wxChar c)
+	wxString TrimRight(const wxString& Source, wxChar c)
 	{
 		wxString sRes(Source);
 		unsigned int pos = sRes.find_last_not_of(c) + 1;
@@ -82,7 +82,7 @@ namespace StringUtils
 		return Source;
 	}
 
-	wxString TrimRight(wxString &Source, wxChar c)
+	wxString TrimRight(wxString& Source, wxChar c)
 	{
 		unsigned int pos = Source.find_last_not_of(c) + 1;
 		if (pos == Source.Length())
@@ -91,7 +91,7 @@ namespace StringUtils
 		return Source;
 	}
 
-	wxString TrimAll(const wxString &Source, wxChar c)
+	wxString TrimAll(const wxString& Source, wxChar c)
 	{
 		wxString sRes = Source;
 		sRes = TrimLeft(sRes, c);
@@ -99,21 +99,21 @@ namespace StringUtils
 		return sRes;
 	}
 
-	wxString TrimAll(wxString &Source, wxChar c)
+	wxString TrimAll(wxString& Source, wxChar c)
 	{
 		TrimLeft(Source, c);
 		TrimRight(Source, c);
 		return Source;
 	}
 
-	wxString MakeUpper(const wxString &Source)
+	wxString MakeUpper(const wxString& Source)
 	{
 		wxString sRet = TrimAll(Source);
 		sRet.MakeUpper();
 		return sRet;
 	}
 
-	wxString MakeUpper(wxString &Source)
+	wxString MakeUpper(wxString& Source)
 	{
 		wxString sRet(Source);
 		TrimAll(sRet);
@@ -121,7 +121,7 @@ namespace StringUtils
 		return sRet;
 	}
 
-	int CheckCorrectName(const wxString &systemName)
+	int CheckCorrectName(const wxString& systemName)
 	{
 		for (unsigned int i = 0; i < systemName.length(); i++) {
 			if (!((systemName[i] == '_') ||
@@ -137,16 +137,18 @@ namespace StringUtils
 		return wxNOT_FOUND;
 	}
 
-	wxString GenerateSynonym(const wxString &systemName)
+	wxString GenerateSynonym(const wxString& systemName)
 	{
 		wxString newSynonym;
 		for (unsigned int i = 0; i < systemName.length(); i++) {
 
 			wxUniChar c = systemName[i];
 
-			if (c >= 'A' && c <= 'Z' ||
-				(c >= 'À' && c <= 'ß'))
-			{
+			if (i == 0) {
+				newSynonym += wxToupper(c);
+			}
+			else if (c >= 'A' && c <= 'Z' ||
+				(c >= 'À' && c <= 'ß')) {
 				newSynonym += ' ';
 				newSynonym += wxTolower(c);
 			}

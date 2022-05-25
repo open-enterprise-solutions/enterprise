@@ -610,16 +610,32 @@ void CGrid::OnMouseDClick(wxMouseEvent& event)
 
 void CGrid::OnMouseWheel(wxMouseEvent& event)
 {
-	int maxCol = 0, maxRow = 0;
+	int ux, uy,
+		sx, sy;
 
-	if (maxCol < m_currentCellCoords.GetCol()) maxCol = m_currentCellCoords.GetCol();
-	if (maxRow < m_currentCellCoords.GetRow()) maxRow = m_currentCellCoords.GetRow();
+	wxGrid::GetScrollPixelsPerUnit(&ux, &uy);
+	wxGrid::GetViewStart(&sx, &sy);
+
+	sx *= ux; sy *= uy;
+
+	int w, h;
+	m_gridWin->GetClientSize(&w, &h);
+
+	int x0 = wxGrid::XToCol(sx);
+	int y0 = wxGrid::YToRow(sy);
+	int x1 = wxGrid::XToCol(sx + w, true);
+	int y1 = wxGrid::YToRow(sy + h, true);
 
 	switch (event.GetWheelAxis())
 	{
-	case wxMouseWheelAxis::wxMOUSE_WHEEL_VERTICAL: if (maxRow == this->GetNumberRows() - 1) this->GetTable()->AppendRows(); break;
-	case wxMouseWheelAxis::wxMOUSE_WHEEL_HORIZONTAL: if (maxCol == this->GetNumberCols() - 1) this->GetTable()->AppendCols(); break;
+	case wxMouseWheelAxis::wxMOUSE_WHEEL_VERTICAL: 
+		if (y1 == this->GetNumberRows() - 1) this->GetTable()->AppendRows(10); 
+	break;
+	case wxMouseWheelAxis::wxMOUSE_WHEEL_HORIZONTAL: 
+		if (x1 == this->GetNumberCols() - 1) this->GetTable()->AppendCols(2); 
+	break;
 	}
+
 	event.Skip();
 }
 

@@ -104,7 +104,7 @@ void CMainFrameDesigner::OnConfiguration(wxCommandEvent &event)
 			if (metatreeWnd->Load()) {
 				objectInspector->SelectObject(metadata->GetCommonMetaObject());
 				if (metadata->IsModified()) {
-					if (wxMessageBox("Configuration '" + metadata->GetMetadataName() + "' has been changed.\nDo you want to save?", wxT("Save project"), wxYES_NO | wxCENTRE | wxICON_QUESTION, this) == wxYES) {
+					if (wxMessageBox("Configuration '" + metadata->GetMetadataName() + "' has been changed.\nDo you want to save?", _("Save project"), wxYES_NO | wxCENTRE | wxICON_QUESTION, this) == wxYES) {
 						metadata->SaveMetadata(saveConfigFlag);
 					}
 				}

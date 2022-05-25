@@ -50,7 +50,7 @@ public:
 	/// Set the parameter at the 1-based position to a Blob value
 	virtual void SetParamBlob(int nPosition, const void* pData, long nDataLength) = 0;
 	/// Set the parameter at the 1-based position to a wxDateTime value
-	virtual void SetParamDate(int nPosition, const wxLongLong_t& dateValue) { SetParamDate(nPosition, wxDateTime(wxLongLong(dateValue))); };
+	virtual void SetParamDate(int nPosition, const wxLongLong_t& dateValue) { SetParamDate(nPosition, wxDateTime(wxLongLong(dateValue))); }
 	/// Set the parameter at the 1-based position to a wxDateTime value
 	virtual void SetParamDate(int nPosition, const wxDateTime& dateValue) = 0;
 	/// Set the parameter at the 1-based position to a boolean value
@@ -71,7 +71,7 @@ public:
 	DatabaseResultSet* ExecuteQuery() { return RunQueryWithResults(); }
 
 	/// Close a result set returned by the database or a prepared statement previously
-	virtual bool CloseResultSet(DatabaseResultSet* pResultSet) { return false; };
+	virtual bool CloseResultSet(DatabaseResultSet* pResultSet) { return false; }
 
 protected:
 	/// Close all result set objects that have been generated but not yet closed

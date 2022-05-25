@@ -11,7 +11,7 @@ void IModuleManager::PrepareNames() const
 {
 	std::vector<SEng> aMethods, aAttributes;
 
-	if (m_procUnit)
+	if (m_procUnit != NULL)
 	{
 		CByteCode *m_byteCode = m_procUnit->GetByteCode();
 
@@ -45,20 +45,20 @@ CValue IModuleManager::Method(methodArg_t &aParams)
 
 void IModuleManager::SetAttribute(attributeArg_t &aParams, CValue &cVal)        //установка атрибута
 {
-	if (m_procUnit)
+	if (m_procUnit != NULL)
 		m_procUnit->SetAttribute(aParams, cVal);
 }
 
 CValue IModuleManager::GetAttribute(attributeArg_t &aParams)                   //значение атрибута
 {
-	if (m_procUnit)
+	if (m_procUnit != NULL)
 		return m_procUnit->GetAttribute(aParams);
 	return CValue();
 }
 
 int IModuleManager::FindAttribute(const wxString &sName) const
 {
-	if (m_procUnit) {
+	if (m_procUnit != NULL) {
 		return m_procUnit->FindAttribute(sName);
 	}
 
@@ -90,7 +90,7 @@ void CExternalDataProcessorModuleManager::PrepareNames() const
 		}
 	}
 
-	if (m_procUnit) {
+	if (m_procUnit != NULL) {
 		CByteCode *m_byteCode = m_procUnit->GetByteCode();
 		for (auto exportFunction : m_byteCode->m_aExportFuncList)
 		{
@@ -131,7 +131,7 @@ void CExternalDataProcessorModuleManager::SetAttribute(attributeArg_t &aParams, 
 		m_objectValue->SetAttribute(aParams, cVal);
 	}
 
-	if (m_procUnit) {
+	if (m_procUnit != NULL) {
 		m_procUnit->SetAttribute(aParams, cVal);
 	}
 }
@@ -143,7 +143,7 @@ CValue CExternalDataProcessorModuleManager::GetAttribute(attributeArg_t &aParams
 		return m_objectValue->GetAttribute(aParams);
 	}
 
-	if (m_procUnit) {
+	if (m_procUnit != NULL) {
 		return m_procUnit->GetAttribute(aParams);
 	}
 
@@ -157,7 +157,7 @@ int CExternalDataProcessorModuleManager::FindAttribute(const wxString &sName) co
 		return m_objectValue->FindAttribute(sName);
 	}
 
-	if (m_procUnit) {
+	if (m_procUnit != NULL) {
 		return m_procUnit->FindAttribute(sName);
 	}
 
@@ -192,7 +192,7 @@ void CExternalReportModuleManager::PrepareNames() const
 		}
 	}
 
-	if (m_procUnit)
+	if (m_procUnit != NULL)
 	{
 		CByteCode *m_byteCode = m_procUnit->GetByteCode();
 
@@ -236,7 +236,7 @@ void CExternalReportModuleManager::SetAttribute(attributeArg_t &aParams, CValue 
 		m_objectValue->SetAttribute(aParams, cVal);
 	}
 
-	if (m_procUnit) {
+	if (m_procUnit != NULL) {
 		m_procUnit->SetAttribute(aParams, cVal);
 	}
 }
@@ -248,7 +248,7 @@ CValue CExternalReportModuleManager::GetAttribute(attributeArg_t &aParams)      
 		return m_objectValue->GetAttribute(aParams);
 	}
 
-	if (m_procUnit) {
+	if (m_procUnit != NULL) {
 		return m_procUnit->GetAttribute(aParams);
 	}
 
@@ -262,7 +262,7 @@ int CExternalReportModuleManager::FindAttribute(const wxString &sName) const
 		return m_objectValue->FindAttribute(sName);
 	}
 
-	if (m_procUnit) {
+	if (m_procUnit != NULL) {
 		return m_procUnit->FindAttribute(sName);
 	}
 

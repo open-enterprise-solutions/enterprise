@@ -1,6 +1,6 @@
 #include "toolbar.h"
 #include "frontend/visualView/visualEditor.h"
-#include "frontend/visualView/visualEditorView.h"
+#include "frontend/visualView/visualHost.h"
 #include "frontend/theme/luna_auitoolbar.h"
 
 //***********************************************************************************

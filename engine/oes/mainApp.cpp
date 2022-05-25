@@ -153,6 +153,7 @@ int CMainApp::OnRun()
 		wxBORDER_SIMPLE);
 
 	wxApp::SetTopWindow(splashWnd);
+
 	//Needed to get the splashscreen to paint
 	splashWnd->Update();
 
@@ -246,13 +247,27 @@ int CMainApp::OnRun()
 		return wxApp::OnRun();
 	}
 
-	return false;
+	return 0;
 }
 
 #include "core/compiler/valueOLE.h"
 
 void CMainApp::OnUnhandledException()
 {
+	//release all created com-objects
+	CValueOLE::ReleaseCoObjects();
+
+	//close connection to db
+	databaseLayer->Close();
+
+	// Allow clipboard data to persist after close
+	if (wxTheClipboard->IsOpened()) {
+		if (wxTheClipboard->Open()) {
+			wxTheClipboard->Flush();
+			wxTheClipboard->Close();
+		}
+	}
+
 	wxApp::OnUnhandledException();
 }
 
@@ -269,7 +284,7 @@ void CMainApp::OnFatalException()
 	databaseLayer->Close();
 
 	//decr socket
-	if (wxThread::IsMain()) {
+	if (wxSocketBase::IsInitialized()) {
 		wxSocketBase::Shutdown();
 	}
 
@@ -288,7 +303,9 @@ void CMainApp::OnFatalException()
 
 int CMainApp::OnExit()
 {
-	wxSocketBase::Shutdown();
+	if (wxSocketBase::IsInitialized()) {
+		wxSocketBase::Shutdown();
+	}
 
 	appDataDestroy();
 

@@ -14,11 +14,11 @@
 
 static const int ID_TIMER_SCAN = wxWindow::NewControlId();
 
-wxBEGIN_EVENT_TABLE(CVisualEditorContextForm::CVisualEditor, wxScrolledWindow)
-EVT_INNER_FRAME_RESIZED(wxID_ANY, CVisualEditorContextForm::CVisualEditor::OnResizeBackPanel)
+wxBEGIN_EVENT_TABLE(CVisualEditorContextForm::CVisualEditorHost, wxScrolledWindow)
+EVT_INNER_FRAME_RESIZED(wxID_ANY, CVisualEditorContextForm::CVisualEditorHost::OnResizeBackPanel)
 wxEND_EVENT_TABLE()
 
-CVisualEditorContextForm::CVisualEditor::CVisualEditor(CVisualEditorContextForm *handler, wxWindow *parent) :
+CVisualEditorContextForm::CVisualEditorHost::CVisualEditorHost(CVisualEditorContextForm *handler, wxWindow *parent) :
 	IVisualHost(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize),
 	m_stopSelectedEvent(false),
 	m_stopModifiedEvent(false),
@@ -35,20 +35,20 @@ CVisualEditorContextForm::CVisualEditor::CVisualEditor(CVisualEditorContextForm 
 #endif
 
 	m_back = new CDesignerWindow(this, wxID_ANY, wxPoint(10, 10));
-	m_back->GetEventHandler()->Connect(wxID_ANY, wxEVT_LEFT_DOWN, wxMouseEventHandler(CVisualEditorContextForm::CVisualEditor::OnClickBackPanel), NULL, this);
+	m_back->GetEventHandler()->Connect(wxID_ANY, wxEVT_LEFT_DOWN, wxMouseEventHandler(CVisualEditorContextForm::CVisualEditorHost::OnClickBackPanel), NULL, this);
 }
 
-CValueForm *CVisualEditorContextForm::CVisualEditor::GetValueForm()
+CValueForm *CVisualEditorContextForm::CVisualEditorHost::GetValueForm() const
 {
 	return m_formHandler->GetValueForm();
 }
 
-void CVisualEditorContextForm::CVisualEditor::SetValueForm(CValueForm *valueForm)
+void CVisualEditorContextForm::CVisualEditorHost::SetValueForm(CValueForm *valueForm)
 {
 	m_formHandler->SetValueForm(valueForm);
 }
 
-CVisualEditorContextForm::CVisualEditor::~CVisualEditor()
+CVisualEditorContextForm::CVisualEditorHost::~CVisualEditorHost()
 {
 	CValueForm *valueForm = m_formHandler->GetValueForm();
 
@@ -68,7 +68,7 @@ CVisualEditorContextForm::CVisualEditor::~CVisualEditor()
 	m_formHandler->RemoveHandler(GetEventHandler());
 }
 
-void CVisualEditorContextForm::CVisualEditor::OnClickBackPanel(wxMouseEvent& event)
+void CVisualEditorContextForm::CVisualEditorHost::OnClickBackPanel(wxMouseEvent& event)
 {
 	if (m_formHandler->GetValueForm()) {
 		m_formHandler->SelectObject(m_formHandler->GetValueForm());
@@ -77,7 +77,7 @@ void CVisualEditorContextForm::CVisualEditor::OnClickBackPanel(wxMouseEvent& eve
 	event.Skip();
 }
 
-void CVisualEditorContextForm::CVisualEditor::OnResizeBackPanel(wxCommandEvent &)
+void CVisualEditorContextForm::CVisualEditorHost::OnResizeBackPanel(wxCommandEvent &)
 {
 	CValueForm *valueForm = m_formHandler->GetSelectedForm();
 
@@ -93,7 +93,7 @@ void CVisualEditorContextForm::CVisualEditor::OnResizeBackPanel(wxCommandEvent &
 /**
 * Crea la vista preliminar borrando la previa.
 */
-void CVisualEditorContextForm::CVisualEditor::CreateVisualEditor()
+void CVisualEditorContextForm::CVisualEditorHost::CreateVisualEditor()
 {
 #if !defined(__WXGTK__ )
 	if (IsShown()) {
@@ -207,7 +207,7 @@ void CVisualEditorContextForm::CVisualEditor::CreateVisualEditor()
 /**
 * Crea la vista preliminar borrando la previa.
 */
-void CVisualEditorContextForm::CVisualEditor::UpdateVisualEditor()
+void CVisualEditorContextForm::CVisualEditorHost::UpdateVisualEditor()
 {
 #if !defined(__WXGTK__ )
 	if (IsShown())
@@ -311,7 +311,7 @@ void CVisualEditorContextForm::CVisualEditor::UpdateVisualEditor()
 	UpdateVirtualSize();
 }
 
-void CVisualEditorContextForm::CVisualEditor::ClearVisualEditor()
+void CVisualEditorContextForm::CVisualEditorHost::ClearVisualEditor()
 {
 	CValueForm *m_valueForm = m_formHandler->GetValueForm();
 	wxASSERT(m_valueForm);
@@ -326,17 +326,17 @@ void CVisualEditorContextForm::CVisualEditor::ClearVisualEditor()
 	m_back->GetFrameContentPanel()->SetSizer(NULL); // *!*
 }
 
-void CVisualEditorContextForm::CVisualEditor::PreventOnSelected(bool prevent)
+void CVisualEditorContextForm::CVisualEditorHost::PreventOnSelected(bool prevent)
 {
 	m_stopSelectedEvent = prevent;
 }
 
-void CVisualEditorContextForm::CVisualEditor::PreventOnModified(bool prevent)
+void CVisualEditorContextForm::CVisualEditorHost::PreventOnModified(bool prevent)
 {
 	m_stopModifiedEvent = prevent;
 }
 
-void CVisualEditorContextForm::CVisualEditor::OnClickFromApp(wxWindow *currentWindow, wxMouseEvent &event)
+void CVisualEditorContextForm::CVisualEditorHost::OnClickFromApp(wxWindow *currentWindow, wxMouseEvent &event)
 {
 	if (event.GetEventType() == wxEVT_LEFT_DOWN) {
 		OnLeftClickFromApp(currentWindow);
@@ -346,7 +346,7 @@ void CVisualEditorContextForm::CVisualEditor::OnClickFromApp(wxWindow *currentWi
 	}
 }
 
-bool CVisualEditorContextForm::CVisualEditor::OnLeftClickFromApp(wxWindow *currentWindow)
+bool CVisualEditorContextForm::CVisualEditorHost::OnLeftClickFromApp(wxWindow *currentWindow)
 {
 	wxWindow *m_wnd = currentWindow;
 	while (m_wnd)
@@ -373,7 +373,7 @@ bool CVisualEditorContextForm::CVisualEditor::OnLeftClickFromApp(wxWindow *curre
 	return true;
 }
 
-bool CVisualEditorContextForm::CVisualEditor::OnRightClickFromApp(wxWindow *currentWindow, wxMouseEvent &event)
+bool CVisualEditorContextForm::CVisualEditorHost::OnRightClickFromApp(wxWindow *currentWindow, wxMouseEvent &event)
 {
 	wxWindow *m_window = currentWindow;
 	while (m_window)
@@ -407,7 +407,7 @@ bool CVisualEditorContextForm::CVisualEditor::OnRightClickFromApp(wxWindow *curr
 	return true;
 }
 
-void CVisualEditorContextForm::CVisualEditor::SetObjectSelect(IValueFrame *obj)
+void CVisualEditorContextForm::CVisualEditorHost::SetObjectSelect(IValueFrame *obj)
 {
 	// It is only necessary to Create() if the selected object is on a different form
 	if (m_formHandler->m_valueForm != m_formHandler->GetSelectedForm()) CreateVisualEditor();
@@ -445,7 +445,10 @@ void CVisualEditorContextForm::CVisualEditor::SetObjectSelect(IValueFrame *obj)
 	// Fire selection event in plugin
 	if (!m_stopSelectedEvent) OnSelected(obj, item);
 
-	if (componentType != COMPONENT_TYPE_WINDOW) item = NULL;
+	if (componentType != COMPONENT_TYPE_WINDOW &&
+		componentType != COMPONENT_TYPE_WINDOW_TABLE) {
+		item = NULL;
+	}
 
 	// Fire selection event in plugin for all parents
 	if (!m_stopSelectedEvent)
@@ -472,7 +475,8 @@ void CVisualEditorContextForm::CVisualEditor::SetObjectSelect(IValueFrame *obj)
 	IValueFrame* nextParent = obj->GetParent();
 	while (nextParent)
 	{
-		if (nextParent->GetComponentType() == COMPONENT_TYPE_WINDOW)
+		if (nextParent->GetComponentType() == COMPONENT_TYPE_WINDOW ||
+			nextParent->GetComponentType() == COMPONENT_TYPE_WINDOW_TABLE)
 		{
 			if (!item)
 			{
@@ -534,7 +538,8 @@ void CVisualEditorContextForm::CVisualEditor::SetObjectSelect(IValueFrame *obj)
 			if (it != m_baseObjects.end()) { sizer = wxDynamicCast(it->second, wxSizer); }
 			break;
 		}
-		else if (nextObj->GetComponentType() == COMPONENT_TYPE_WINDOW) break;
+		else if (nextObj->GetComponentType() == COMPONENT_TYPE_WINDOW
+			|| nextObj->GetComponentType() == COMPONENT_TYPE_WINDOW_TABLE) break;
 
 		nextObj = nextObj->GetParent();
 	}
@@ -683,7 +688,10 @@ void CDesignerWindow::HighlightSelection(wxDC& dc)
 		// This is the closest parent of type COMPONENT_TYPE_WINDOW
 		while (object)
 		{
-			if (object->GetComponentType() == COMPONENT_TYPE_WINDOW) break;
+			if (object->GetComponentType() == COMPONENT_TYPE_WINDOW || 
+				object->GetComponentType() == COMPONENT_TYPE_WINDOW_TABLE) 
+				break;
+
 			object = object->GetParent();
 		}
 

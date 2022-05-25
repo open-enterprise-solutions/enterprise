@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metadata.h"
-#include "metadata/objects/baseManager.h"
+#include "metadata/metaObjects/objects/systemManager.h"
 #include "compiler/enumFactory.h"
 #include "compiler/systemObjects.h"
 #include "compiler/debugger/debugServer.h"
@@ -27,10 +27,10 @@ bool IConfigMetadata::Initialize(eRunMode mode)
 		switch (mode)
 		{
 		case eRunMode::DESIGNER_MODE:
-			s_instance = new CConfigStorageMetadata(); 
+			s_instance = new CConfigStorageMetadata();
 			break;
-		default: 
-			s_instance = new CConfigMetadata(); 
+		default:
+			s_instance = new CConfigMetadata();
 			break;
 		}
 		return s_instance->CreateMetadata();
@@ -94,17 +94,17 @@ wxString IConfigMetadata::GetConfigParamsTableName()
 //ID's 
 meta_identifier_t IMetadata::GenerateNewID()
 {
-	IMetaObject *commonObject = GetCommonMetaObject();
+	IMetaObject* commonObject = GetCommonMetaObject();
 	wxASSERT(commonObject);
 	meta_identifier_t id = commonObject->GetMetaID() + 1;
 	DoGenerateNewID(id, commonObject);
 	return id;
 }
 
-void IMetadata::DoGenerateNewID(meta_identifier_t &id, IMetaObject *top)
+void IMetadata::DoGenerateNewID(meta_identifier_t& id, IMetaObject* top)
 {
 	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
-		IMetaObject *child = top->GetChild(idx);
+		IMetaObject* child = top->GetChild(idx);
 		wxASSERT(child);
 		meta_identifier_t newID = child->GetMetaID() + 1;
 		if (newID > id) {
@@ -114,16 +114,18 @@ void IMetadata::DoGenerateNewID(meta_identifier_t &id, IMetaObject *top)
 	}
 }
 
-IMetaObject *IMetadata::CreateMetaObject(const CLASS_ID &clsid, IMetaObject *parentMetaObj)
+IMetaObject* IMetadata::CreateMetaObject(const CLASS_ID& clsid, IMetaObject* parentMetaObj)
 {
 	wxASSERT(clsid != 0);
 	wxString classType = CValue::GetNameObjectFromID(clsid);
 	wxASSERT(classType.Length() > 0);
-	IMetaObject *newMetaObject = CValue::CreateAndConvertObjectRef<IMetaObject>(classType);
+	IMetaObject* newMetaObject = CValue::CreateAndConvertObjectRef<IMetaObject>(classType);
 	wxASSERT(newMetaObject);
 
 	newMetaObject->SetClsid(clsid);
-	newMetaObject->SetName(GetNewName(clsid, parentMetaObj, newMetaObject->GetClassName()));
+	newMetaObject->SetName(
+		GetNewName(clsid, parentMetaObj, newMetaObject->GetClassName())
+	);
 
 	if (parentMetaObj) {
 		newMetaObject->SetParent(parentMetaObj);
@@ -146,7 +148,7 @@ IMetaObject *IMetadata::CreateMetaObject(const CLASS_ID &clsid, IMetaObject *par
 	}
 
 	//and running initialization
-	if (!m_bSuccess || !newMetaObject->OnRunMetaObject(metaNewObjectFlag)) {
+	if (!m_bSuccess || !newMetaObject->OnBeforeRunMetaObject(metaNewObjectFlag)) {
 		if (parentMetaObj) {
 			parentMetaObj->RemoveChild(newMetaObject);
 		}
@@ -156,13 +158,21 @@ IMetaObject *IMetadata::CreateMetaObject(const CLASS_ID &clsid, IMetaObject *par
 
 	Modify(true);
 
+	if (!m_bSuccess || !newMetaObject->OnAfterRunMetaObject(metaNewObjectFlag)) {
+		if (parentMetaObj) {
+			parentMetaObj->RemoveChild(newMetaObject);
+		}
+		wxDELETE(newMetaObject);
+		return NULL;
+	}
+
 	newMetaObject->ReadProperty();
 	newMetaObject->IncrRef();
 
 	return newMetaObject;
 }
 
-wxString IMetadata::GetNewName(const CLASS_ID &clsid, IMetaObject *metaParent, const wxString &prefix, bool forConstructor)
+wxString IMetadata::GetNewName(const CLASS_ID& clsid, IMetaObject* metaParent, const wxString& prefix, bool forConstructor)
 {
 	unsigned int countRec = forConstructor ?
 		0 : 1;
@@ -197,17 +207,17 @@ wxString IMetadata::GetNewName(const CLASS_ID &clsid, IMetaObject *metaParent, c
 	return newName;
 }
 
-std::vector<IMetaObject*> IMetadata::GetMetaObjects(const CLASS_ID & clsid)
+std::vector<IMetaObject*> IMetadata::GetMetaObjects(const CLASS_ID& clsid)
 {
 	std::vector<IMetaObject*> metaObjects;
 	DoGetMetaObjects(clsid, metaObjects, GetCommonMetaObject());
 	return metaObjects;
 }
 
-void IMetadata::DoGetMetaObjects(const CLASS_ID &clsid, std::vector<IMetaObject*> &metaObjects, IMetaObject *top)
+void IMetadata::DoGetMetaObjects(const CLASS_ID& clsid, std::vector<IMetaObject*>& metaObjects, IMetaObject* top)
 {
 	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
-		IMetaObject *child = top->GetChild(idx);
+		IMetaObject* child = top->GetChild(idx);
 		wxASSERT(child);
 		DoGetMetaObjects(clsid, metaObjects, child);
 	}
@@ -220,20 +230,19 @@ void IMetadata::DoGetMetaObjects(const CLASS_ID &clsid, std::vector<IMetaObject*
 	}
 }
 
-IMetaObject *IMetadata::FindByName(const wxString &fullName)
+IMetaObject* IMetadata::FindByName(const wxString& fullName)
 {
 	return DoFindByName(fullName, GetCommonMetaObject());
 }
 
-IMetaObject *IMetadata::DoFindByName(const wxString &fileName, IMetaObject *top)
+IMetaObject* IMetadata::DoFindByName(const wxString& fileName, IMetaObject* top)
 {
 	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
-		IMetaObject *child = top->GetChild(idx);
+		IMetaObject* child = top->GetChild(idx);
 		wxASSERT(child);
-		IMetaObject *foundedMeta = DoFindByName(fileName, child);
-		if (foundedMeta) {
+		IMetaObject* foundedMeta = DoFindByName(fileName, child);
+		if (foundedMeta != NULL)
 			return foundedMeta;
-		}
 	}
 
 	if (top->IsDeleted())
@@ -246,20 +255,19 @@ IMetaObject *IMetadata::DoFindByName(const wxString &fileName, IMetaObject *top)
 	return NULL;
 }
 
-IMetaObject *IMetadata::GetMetaObject(meta_identifier_t id)
+IMetaObject* IMetadata::GetMetaObject(const meta_identifier_t& id)
 {
 	return DoGetMetaObject(id, GetCommonMetaObject());
 }
 
-IMetaObject *IMetadata::DoGetMetaObject(meta_identifier_t id, IMetaObject *top)
+IMetaObject* IMetadata::DoGetMetaObject(const meta_identifier_t& id, IMetaObject* top)
 {
 	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
-		IMetaObject *child = top->GetChild(idx);
+		IMetaObject* child = top->GetChild(idx);
 		wxASSERT(child);
-		IMetaObject *foundedMeta = DoGetMetaObject(id, child);
-		if (foundedMeta) {
+		IMetaObject* foundedMeta = DoGetMetaObject(id, child);
+		if (foundedMeta != NULL)
 			return foundedMeta;
-		}
 	}
 
 	if (id == top->GetMetaID()) {
@@ -269,7 +277,7 @@ IMetaObject *IMetadata::DoGetMetaObject(meta_identifier_t id, IMetaObject *top)
 	return NULL;
 }
 
-bool IMetadata::RenameMetaObject(IMetaObject *pObj, const wxString &sNewName)
+bool IMetadata::RenameMetaObject(IMetaObject* pObj, const wxString& sNewName)
 {
 	bool foundedName = false;
 
@@ -293,12 +301,12 @@ bool IMetadata::RenameMetaObject(IMetaObject *pObj, const wxString &sNewName)
 	return false;
 }
 
-void IMetadata::RemoveMetaObject(IMetaObject *obj, IMetaObject *parent)
+void IMetadata::RemoveMetaObject(IMetaObject* obj, IMetaObject* parent)
 {
-	IMetaObject *objParent = parent ?
+	IMetaObject* objParent = parent ?
 		parent : obj->GetParent();
 
-	if (obj->OnCloseMetaObject()) {
+	if (obj->OnAfterCloseMetaObject()) {
 		if (obj->OnDeleteMetaObject()) {
 			for (auto child : obj->GetObjects()) {
 				RemoveMetaObject(child, obj);
@@ -313,33 +321,21 @@ void IMetadata::RemoveMetaObject(IMetaObject *obj, IMetaObject *parent)
 
 #include "metadata/singleMetaTypes.h"
 
-CValue *IMetadata::CreateObjectRef(const wxString &className, CValue **aParams)
+CValue* IMetadata::CreateObjectRef(const wxString& className, CValue** aParams)
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className](IObjectValueAbstract *singleObject) {
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className](IObjectValueAbstract* singleObject) {
 		return StringUtils::CompareString(className, singleObject->GetClassName());
-	});
+		});
 
 	if (itFounded != m_aFactoryMetaObjects.end()) {
-		IObjectValueAbstract *singleObject = *itFounded;
+		IObjectValueAbstract* singleObject = *itFounded;
 		wxASSERT(singleObject);
 		CValue* newObject = singleObject->CreateObject();
 		wxASSERT(newObject);
-		if (singleObject->GetObjectType() == eObjectType::eObjectType_object) {
-			if (aParams) {
-				if (!newObject->Init(aParams)) {
-					if (!appData->DesignerMode()) {
-						wxDELETE(newObject);
-						CTranslateError::Error(_("Error initializing object '%s'"), className.wc_str());
-					}
-				}
-			}
-			else {
-				if (!newObject->Init()) {
-					if (!appData->DesignerMode()) {
-						wxDELETE(newObject);
-						CTranslateError::Error(_("Error initializing object '%s'"), className.wc_str());
-					}
-				}
+		if (!newObject->Init()) {
+			if (!appData->DesignerMode()) {
+				wxDELETE(newObject);
+				CTranslateError::Error(_("Error initializing object '%s'"), className.wc_str());
 			}
 		}
 		return newObject;
@@ -348,26 +344,30 @@ CValue *IMetadata::CreateObjectRef(const wxString &className, CValue **aParams)
 	return CValue::CreateObjectRef(className, aParams);
 }
 
-void IMetadata::RegisterObject(const wxString &className, IMetaTypeObjectValueSingle *singleObject)
+void IMetadata::RegisterObject(const wxString& className, IMetaTypeObjectValueSingle* singleObject)
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className](IMetaTypeObjectValueSingle *singleObject) {
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className](IMetaTypeObjectValueSingle* singleObject) {
 		return StringUtils::CompareString(className, singleObject->GetClassName());
-	});
+		});
 
-	if (itFounded != m_aFactoryMetaObjects.end()) {
+	if (IMetadata::IsRegisterObject(className)) {
+		CTranslateError::Error(_("Object '%s' is exist"), className.wc_str());
+	}
+
+	if (IMetadata::IsRegisterObject(singleObject->GetClassType())) {
 		CTranslateError::Error(_("Object '%s' is exist"), className.wc_str());
 	}
 
 	m_aFactoryMetaObjects.push_back(singleObject);
 }
 
-void IMetadata::UnRegisterObject(const wxString &className)
+void IMetadata::UnRegisterObject(const wxString& className)
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className](IMetaTypeObjectValueSingle *singleObject) {
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className](IMetaTypeObjectValueSingle* singleObject) {
 		return StringUtils::CompareString(className, singleObject->GetClassName());
-	});
+		});
 
-	IObjectValueAbstract *singleObject = *itFounded;
+	IObjectValueAbstract* singleObject = *itFounded;
 	wxASSERT(singleObject);
 
 	if (itFounded != m_aFactoryMetaObjects.end()) {
@@ -377,11 +377,11 @@ void IMetadata::UnRegisterObject(const wxString &className)
 	delete singleObject;
 }
 
-bool IMetadata::IsRegisterObject(const wxString &className)
+bool IMetadata::IsRegisterObject(const wxString& className) const
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className](IMetaTypeObjectValueSingle *singleObject) {
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className](IMetaTypeObjectValueSingle* singleObject) {
 		return StringUtils::CompareString(className, singleObject->GetClassName());
-	});
+		});
 
 	if (itFounded != m_aFactoryMetaObjects.end())
 		return true;
@@ -389,12 +389,12 @@ bool IMetadata::IsRegisterObject(const wxString &className)
 	return CValue::IsRegisterObject(className);
 }
 
-bool IMetadata::IsRegisterObject(const wxString &className, eObjectType objectType)
+bool IMetadata::IsRegisterObject(const wxString& className, eObjectType objectType) const
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className, objectType](IMetaTypeObjectValueSingle *singleObject) {
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className, objectType](IMetaTypeObjectValueSingle* singleObject) {
 		return StringUtils::CompareString(className, singleObject->GetClassName())
 			&& (objectType == singleObject->GetObjectType());
-	});
+		});
 
 	if (itFounded != m_aFactoryMetaObjects.end())
 		return true;
@@ -402,13 +402,13 @@ bool IMetadata::IsRegisterObject(const wxString &className, eObjectType objectTy
 	return CValue::IsRegisterObject(className, objectType);
 }
 
-bool IMetadata::IsRegisterObject(const wxString &className, eObjectType objectType, eMetaObjectType refType)
+bool IMetadata::IsRegisterObject(const wxString& className, eObjectType objectType, eMetaObjectType refType) const
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className, objectType, refType](IMetaTypeObjectValueSingle *singleObject) {
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className, objectType, refType](IMetaTypeObjectValueSingle* singleObject) {
 		return StringUtils::CompareString(className, singleObject->GetClassName())
 			&& (objectType == singleObject->GetObjectType()
 				&& refType == singleObject->GetMetaType());
-	});
+		});
 
 	if (itFounded != m_aFactoryMetaObjects.end())
 		return true;
@@ -416,29 +416,41 @@ bool IMetadata::IsRegisterObject(const wxString &className, eObjectType objectTy
 	return CValue::IsRegisterObject(className);
 }
 
-CLASS_ID IMetadata::GetIDObjectFromString(const wxString &clsName)
+bool IMetadata::IsRegisterObject(const CLASS_ID& clsid) const
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsName](IObjectValueAbstract *singleObject) {
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsid](IMetaTypeObjectValueSingle* singleObject) {
+		return clsid == singleObject->GetClassType();
+		});
+
+	if (itFounded != m_aFactoryMetaObjects.end())
+		return true;
+
+	return CValue::IsRegisterObject(clsid);
+}
+
+CLASS_ID IMetadata::GetIDObjectFromString(const wxString& clsName) const
+{
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsName](IObjectValueAbstract* singleObject) {
 		return StringUtils::CompareString(clsName, singleObject->GetClassName());
-	});
+		});
 
 	if (itFounded != m_aFactoryMetaObjects.end()) {
-		IObjectValueAbstract *singleObject = *itFounded;
+		IObjectValueAbstract* singleObject = *itFounded;
 		wxASSERT(singleObject);
-		return singleObject->GetTypeID();
+		return singleObject->GetClassType();
 	}
 
 	return CValue::GetIDObjectFromString(clsName);
 }
 
-wxString IMetadata::GetNameObjectFromID(const CLASS_ID &clsid, bool upper)
+wxString IMetadata::GetNameObjectFromID(const CLASS_ID& clsid, bool upper) const
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsid](IObjectValueAbstract *singleObject) {
-		return clsid == singleObject->GetTypeID();
-	});
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsid](IObjectValueAbstract* singleObject) {
+		return clsid == singleObject->GetClassType();
+		});
 
 	if (itFounded != m_aFactoryMetaObjects.end()) {
-		IObjectValueAbstract *singleObject = *itFounded;
+		IObjectValueAbstract* singleObject = *itFounded;
 		wxASSERT(singleObject);
 		return upper ? singleObject->GetClassName().Upper() : singleObject->GetClassName();
 	}
@@ -446,16 +458,16 @@ wxString IMetadata::GetNameObjectFromID(const CLASS_ID &clsid, bool upper)
 	return CValue::GetNameObjectFromID(clsid, upper);
 }
 
-meta_identifier_t IMetadata::GetVTByID(const CLASS_ID &clsid)
+meta_identifier_t IMetadata::GetVTByID(const CLASS_ID& clsid) const
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsid](IObjectValueAbstract *singleObject) {
-		return clsid == singleObject->GetTypeID();
-	});
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsid](IObjectValueAbstract* singleObject) {
+		return clsid == singleObject->GetClassType();
+		});
 
 	if (itFounded != m_aFactoryMetaObjects.end()) {
-		IMetaTypeObjectValueSingle *singleObject = *itFounded;
+		IMetaTypeObjectValueSingle* singleObject = *itFounded;
 		wxASSERT(singleObject);
-		IMetaObject *metaValue = singleObject->GetMetaObject();
+		IMetaObject* metaValue = singleObject->GetMetaObject();
 		wxASSERT(metaValue);
 		return metaValue->GetMetaID();
 	}
@@ -463,29 +475,28 @@ meta_identifier_t IMetadata::GetVTByID(const CLASS_ID &clsid)
 	return CValue::GetVTByID(clsid);
 }
 
-CLASS_ID IMetadata::GetIDByVT(const meta_identifier_t &valueType, eMetaObjectType refType)
+CLASS_ID IMetadata::GetIDByVT(const meta_identifier_t& valueType, eMetaObjectType refType) const
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [valueType, refType](IMetaTypeObjectValueSingle *singleObject) {
-		IMetaObject *metaValue = singleObject->GetMetaObject();
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [valueType, refType](IMetaTypeObjectValueSingle* singleObject) {
+		IMetaObject* metaValue = singleObject->GetMetaObject();
 		wxASSERT(metaValue);
 		return refType == singleObject->GetMetaType() && valueType == metaValue->GetMetaID();
-	});
+		});
 
 	if (itFounded != m_aFactoryMetaObjects.end()) {
-		IObjectValueAbstract *singleObject = *itFounded;
+		IObjectValueAbstract* singleObject = *itFounded;
 		wxASSERT(singleObject);
-		return singleObject->GetTypeID();
+		return singleObject->GetClassType();
 	}
 
-	return CValue::GetIDByVT((eValueTypes &)valueType);
+	return CValue::GetIDByVT((eValueTypes&)valueType);
 }
 
-IMetaTypeObjectValueSingle *IMetadata::GetTypeObject(IMetaObject *metaValue, eMetaObjectType refType)
+IMetaTypeObjectValueSingle* IMetadata::GetTypeObject(const CLASS_ID& clsid) const
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [metaValue, refType](IMetaTypeObjectValueSingle *singleObject) {
-		return refType == singleObject->GetMetaType() &&
-			metaValue == singleObject->GetMetaObject();
-	});
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsid](IMetaTypeObjectValueSingle* singleObject) {
+		return clsid == singleObject->GetClassType();
+		});
 
 	if (itFounded != m_aFactoryMetaObjects.end()) {
 		return *itFounded;
@@ -494,7 +505,21 @@ IMetaTypeObjectValueSingle *IMetadata::GetTypeObject(IMetaObject *metaValue, eMe
 	return NULL;
 }
 
-wxArrayString IMetadata::GetAvailableObjects(eMetaObjectType refType)
+IMetaTypeObjectValueSingle* IMetadata::GetTypeObject(const IMetaObject* metaValue, eMetaObjectType refType) const
+{
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [metaValue, refType](IMetaTypeObjectValueSingle* singleObject) {
+		return refType == singleObject->GetMetaType() &&
+			metaValue == singleObject->GetMetaObject();
+		});
+
+	if (itFounded != m_aFactoryMetaObjects.end()) {
+		return *itFounded;
+	}
+
+	return NULL;
+}
+
+wxArrayString IMetadata::GetAvailableObjects(eMetaObjectType refType) const
 {
 	wxArrayString classes;
 	for (auto singleObject : m_aFactoryMetaObjects) {
@@ -506,12 +531,98 @@ wxArrayString IMetadata::GetAvailableObjects(eMetaObjectType refType)
 	return classes;
 }
 
+IObjectValueAbstract* IMetadata::GetAvailableObject(const CLASS_ID& clsid) const
+{
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsid](IMetaTypeObjectValueSingle* singleObject) {
+		return clsid == singleObject->GetClassType();
+		});
+
+	if (itFounded != m_aFactoryMetaObjects.end()) {
+		return *itFounded;
+	}
+
+	return CValue::GetAvailableObject(clsid);
+}
+
+IObjectValueAbstract* IMetadata::GetAvailableObject(const wxString& className) const
+{
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className](IMetaTypeObjectValueSingle* singleObject) {
+		return StringUtils::CompareString(className, singleObject->GetClassName());
+		});
+
+	if (itFounded != m_aFactoryMetaObjects.end()) {
+		return *itFounded;
+	}
+
+	return CValue::GetAvailableObject(className);
+}
+
+std::vector<IMetaTypeObjectValueSingle*> IMetadata::GetAvailableSingleObjects() const
+{
+	std::vector<IMetaTypeObjectValueSingle*> classes;
+
+	for (auto singleObject : m_aFactoryMetaObjects) {
+		classes.push_back(singleObject);
+	}
+
+	std::sort(classes.begin(), classes.end(),
+		[](IMetaTypeObjectValueSingle* a, IMetaTypeObjectValueSingle* b) {
+			IMetaObject* ma = a->GetMetaObject(); IMetaObject* mb = b->GetMetaObject();
+			return ma->GetName() > mb->GetName() &&
+				a->GetMetaType() > b->GetMetaType();
+		});
+
+	return classes;
+}
+
+std::vector<IMetaTypeObjectValueSingle*> IMetadata::GetAvailableSingleObjects(const CLASS_ID& clsid, eMetaObjectType refType) const
+{
+	std::vector<IMetaTypeObjectValueSingle*> classes;
+
+	for (auto singleObject : m_aFactoryMetaObjects) {
+		IMetaObject* metaObject = singleObject->GetMetaObject();
+		if (refType == singleObject->GetMetaType()
+			&& clsid == metaObject->GetClsid()) {
+			classes.push_back(singleObject);
+		}
+	}
+
+	std::sort(classes.begin(), classes.end(),
+		[](IMetaTypeObjectValueSingle* a, IMetaTypeObjectValueSingle* b) {
+			IMetaObject* ma = a->GetMetaObject(); IMetaObject* mb = b->GetMetaObject();
+			return ma->GetName() > mb->GetName() &&
+				a->GetMetaType() > b->GetMetaType();
+		});
+
+	return classes;
+}
+
+std::vector<IMetaTypeObjectValueSingle*> IMetadata::GetAvailableSingleObjects(eMetaObjectType refType) const
+{
+	std::vector<IMetaTypeObjectValueSingle*> classes;
+
+	for (auto singleObject : m_aFactoryMetaObjects) {
+		if (refType == singleObject->GetMetaType()) {
+			classes.push_back(singleObject);
+		}
+	}
+
+	std::sort(classes.begin(), classes.end(),
+		[](IMetaTypeObjectValueSingle* a, IMetaTypeObjectValueSingle* b) {
+			IMetaObject* ma = a->GetMetaObject(); IMetaObject* mb = b->GetMetaObject();
+			return ma->GetName() > mb->GetName() &&
+				a->GetMetaType() > b->GetMetaType();
+		});
+
+	return classes;
+}
+
 //**************************************************************************************************
 //*                                          ConfigMetadata										   *
 //**************************************************************************************************
 
 CConfigFileMetadata::CConfigFileMetadata(bool readOnly) : IConfigMetadata(readOnly),
-m_commonObject(NULL), m_version(version_oes_last)
+m_commonObject(NULL), m_configOpened(false), m_version(version_oes_last)
 {
 	//create main metaObject
 	m_commonObject = new CMetaObject();
@@ -546,10 +657,10 @@ CConfigFileMetadata::~CConfigFileMetadata()
 	wxDELETE(m_commonObject);
 }
 
-void CConfigFileMetadata::DoGetTypelist(IMetaObject *top, OptionList *optionList) const
+void CConfigFileMetadata::DoGetTypelist(IMetaObject* top, OptionList* optionList) const
 {
 	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
-		IMetaObject *child = top->GetChild(idx);
+		IMetaObject* child = top->GetChild(idx);
 		wxASSERT(child);
 		DoGetTypelist(child, optionList);
 	}
@@ -557,16 +668,14 @@ void CConfigFileMetadata::DoGetTypelist(IMetaObject *top, OptionList *optionList
 	if (top->IsDeleted())
 		return;
 
-	if (top->IsRefObject()) {
-		optionList->AddOption(
-			top->GetClassName() + wxT(".") + top->GetName(),
-			top->GetMetaID());
-	}
+	optionList->AddOption(
+		top->GetClassName() + wxT(".") + top->GetName(),
+		top->GetMetaID());
 }
 
-OptionList *CConfigFileMetadata::GetTypelist() const
+OptionList* CConfigFileMetadata::GetTypelist() const
 {
-	OptionList *optionList = new OptionList();
+	OptionList* optionList = new OptionList();
 	optionList->AddOption("bool", eValueTypes::TYPE_BOOLEAN);
 	optionList->AddOption("number", eValueTypes::TYPE_NUMBER);
 	optionList->AddOption("date", eValueTypes::TYPE_DATE);
@@ -575,114 +684,195 @@ OptionList *CConfigFileMetadata::GetTypelist() const
 	return optionList;
 }
 
-bool CConfigFileMetadata::RunMetadata()
+bool CConfigFileMetadata::RunMetadata(int flags)
 {
-	if (!m_commonObject->OnRunMetaObject(defaultFlag)) {
-		wxASSERT_MSG(false, "m_commonObject->OnRunMetaObject() == false");
+	wxASSERT(!m_configOpened);
+
+	if (!m_commonObject->OnBeforeRunMetaObject(flags)) {
+		wxASSERT_MSG(false, "m_commonObject->OnBeforeRunMetaObject() == false");
 		return false;
 	}
 
 	for (auto obj : m_commonObject->GetObjects()) {
+
 		if (obj->IsDeleted())
 			continue;
-		if (!obj->OnRunMetaObject(defaultFlag))
+
+		if (!obj->OnBeforeRunMetaObject(flags))
 			return false;
-		if (!RunChildMetadata(obj))
+
+		if (!RunChildMetadata(obj, flags, true))
 			return false;
 	}
+
 	if (m_moduleManager->CreateMainModule()) {
+
+		if (!m_commonObject->OnAfterRunMetaObject(flags)) {
+			wxASSERT_MSG(false, "m_commonObject->OnBeforeRunMetaObject() == false");
+			return false;
+		}
+
+		for (auto obj : m_commonObject->GetObjects()) {
+
+			if (obj->IsDeleted())
+				continue;
+
+			if (!obj->OnAfterRunMetaObject(flags))
+				return false;
+
+			if (!RunChildMetadata(obj, flags, false))
+				return false;
+		}
+
 		if (!m_moduleManager->StartMainModule())
 			return false;
+
+		m_configOpened = true;
 		return true;
 	}
+
 	return false;
 }
 
-bool CConfigFileMetadata::RunChildMetadata(IMetaObject *metaParent)
+bool CConfigFileMetadata::RunChildMetadata(IMetaObject* metaParent, int flags, bool before)
 {
 	for (auto obj : metaParent->GetObjects()) {
+
 		if (obj->IsDeleted())
 			continue;
-		if (!obj->OnRunMetaObject(defaultFlag))
+
+		if (before && !obj->OnBeforeRunMetaObject(flags))
 			return false;
-		if (!RunChildMetadata(obj))
+
+		if (!before && !obj->OnAfterRunMetaObject(flags))
+			return false;
+
+		if (!RunChildMetadata(obj, flags, before))
 			return false;
 	}
+
 	return true;
 }
 
-bool CConfigFileMetadata::CloseMetadata(bool force)
+bool CConfigFileMetadata::CloseMetadata(int flags)
 {
-	if (m_moduleManager->ExitMainModule(force)) {
+	wxASSERT(m_configOpened);
+
+	for (auto obj : m_commonObject->GetObjects()) {
+
+		if (obj->IsDeleted())
+			continue;
+
+		if (!obj->OnBeforeCloseMetaObject())
+			return false;
+
+		if (!CloseChildMetadata(obj, (flags & forceCloseFlag) != 0, true))
+			return false;
+	}
+
+	if (!m_commonObject->OnBeforeCloseMetaObject()) {
+		wxASSERT_MSG(false, "m_commonObject->OnAfterCloseMetaObject() == false");
+		return false;
+	}
+
+	if (m_moduleManager->ExitMainModule((flags & forceCloseFlag) != 0)) {
+
 		if (!m_moduleManager->DestroyMainModule()) {
 			return false;
 		}
+
 		for (auto obj : m_commonObject->GetObjects()) {
+
 			if (obj->IsDeleted())
 				continue;
-			if (!obj->OnCloseMetaObject())
+
+			if (!obj->OnAfterCloseMetaObject())
 				return false;
-			if (!CloseChildMetadata(obj, force))
+
+			if (!CloseChildMetadata(obj, (flags & forceCloseFlag) != 0, false))
 				return false;
 		}
-		if (!m_commonObject->OnCloseMetaObject()) {
-			wxASSERT_MSG(false, "m_commonObject->OnCloseMetaObject() == false");
+
+		if (!m_commonObject->OnAfterCloseMetaObject()) {
+			wxASSERT_MSG(false, "m_commonObject->OnAfterCloseMetaObject() == false");
 			return false;
 		}
 	}
+
+	m_configOpened = false;
+
 	return true;
 }
 
-bool CConfigFileMetadata::CloseChildMetadata(IMetaObject *metaParent, bool force)
+bool CConfigFileMetadata::CloseChildMetadata(IMetaObject* metaParent, int flags, bool before)
 {
 	for (auto obj : metaParent->GetObjects()) {
+
 		if (obj->IsDeleted())
 			continue;
-		if (!obj->OnCloseMetaObject())
+
+		if (before && !obj->OnBeforeCloseMetaObject())
 			return false;
-		if (!CloseChildMetadata(obj, force))
+
+		if (!before && !obj->OnAfterCloseMetaObject())
+			return false;
+
+		if (!CloseChildMetadata(obj, flags, before))
 			return false;
 	}
+
 	return true;
 }
 
 bool CConfigFileMetadata::ClearMetadata()
 {
 	for (auto obj : m_commonObject->GetObjects()) {
+
 		if (!obj->OnDeleteMetaObject())
 			return false;
+
 		if (!ClearChildMetadata(obj))
 			return false;
+
 		m_commonObject->RemoveChild(obj);
 	}
+
 	if (!m_commonObject->OnDeleteMetaObject()) {
 		wxASSERT_MSG(false, "m_commonObject->OnDeleteMetaObject() == false");
 		return false;
 	}
+
 	return true;
 }
 
-bool CConfigFileMetadata::ClearChildMetadata(IMetaObject *metaParent)
+bool CConfigFileMetadata::ClearChildMetadata(IMetaObject* metaParent)
 {
 	for (auto obj : metaParent->GetObjects()) {
+
 		if (!obj->OnDeleteMetaObject())
 			return false;
+
 		if (!ClearChildMetadata(obj))
 			return false;
+
 		metaParent->RemoveChild(obj);
 	}
+
 	metaParent->DecrRef();
 	return true;
 }
 
 #include <fstream>
 
-bool CConfigFileMetadata::LoadFromFile(const wxString &fileName)
+bool CConfigFileMetadata::LoadFromFile(const wxString& fileName)
 {
 	//close data 
-	if (!CloseMetadata(true)) {
-		wxASSERT_MSG(false, "CloseMetadata() == false");
-		return false;
+	if (CConfigFileMetadata::ConfigOpened()) {
+		if (!CloseMetadata(forceCloseFlag)) {
+			wxASSERT_MSG(false, "CloseMetadata() == false");
+			return false;
+
+		}
 	}
 
 	//clear data 
@@ -704,7 +894,7 @@ bool CConfigFileMetadata::LoadFromFile(const wxString &fileName)
 	in.seekg(0, in.beg);
 
 	wxMemoryBuffer tempBuffer(fsize);
-	in.read((char *)tempBuffer.GetWriteBuf(fsize), fsize);
+	in.read((char*)tempBuffer.GetWriteBuf(fsize), fsize);
 
 	CMemoryReader readerData(tempBuffer.GetData(), tempBuffer.GetBufSize());
 
@@ -726,12 +916,12 @@ bool CConfigFileMetadata::LoadFromFile(const wxString &fileName)
 		return false;
 	}
 
-	return RunMetadata();
+	return RunMetadata(onlyLoadFlag);
 }
 
-bool CConfigFileMetadata::LoadHeader(CMemoryReader &readerData)
+bool CConfigFileMetadata::LoadHeader(CMemoryReader& readerData)
 {
-	CMemoryReader *readerMemory = readerData.open_chunk(eHeaderBlock);
+	CMemoryReader* readerMemory = readerData.open_chunk(eHeaderBlock);
 
 	if (!readerMemory)
 		return false;
@@ -750,15 +940,15 @@ bool CConfigFileMetadata::LoadHeader(CMemoryReader &readerData)
 	return true;
 }
 
-bool CConfigFileMetadata::LoadCommonMetadata(const CLASS_ID &clsid, CMemoryReader &readerData)
+bool CConfigFileMetadata::LoadCommonMetadata(const CLASS_ID& clsid, CMemoryReader& readerData)
 {
-	CMemoryReader *readerMemory = readerData.open_chunk(clsid);
+	CMemoryReader* readerMemory = readerData.open_chunk(clsid);
 
 	if (!readerMemory)
 		return false;
 
 	u64 meta_id = 0;
-	CMemoryReader *readerMetaMemory = readerMemory->open_chunk_iterator(meta_id);
+	CMemoryReader* readerMetaMemory = readerMemory->open_chunk_iterator(meta_id);
 
 	if (!readerMetaMemory)
 		return true;
@@ -780,24 +970,24 @@ bool CConfigFileMetadata::LoadCommonMetadata(const CLASS_ID &clsid, CMemoryReade
 	return true;
 }
 
-bool CConfigFileMetadata::LoadMetadata(const CLASS_ID &, CMemoryReader &readerData, IMetaObject *metaParent)
+bool CConfigFileMetadata::LoadMetadata(const CLASS_ID&, CMemoryReader& readerData, IMetaObject* metaParent)
 {
 	CLASS_ID clsid = 0;
-	CMemoryReader *prevReaderMemory = NULL;
+	CMemoryReader* prevReaderMemory = NULL;
 
 	while (!readerData.eof())
 	{
-		CMemoryReader *readerMemory = readerData.open_chunk_iterator(clsid, &*prevReaderMemory);
+		CMemoryReader* readerMemory = readerData.open_chunk_iterator(clsid, &*prevReaderMemory);
 
 		if (!readerMemory)
 			break;
 
 		u64 meta_id = 0;
-		CMemoryReader *prevReaderMetaMemory = NULL;
+		CMemoryReader* prevReaderMetaMemory = NULL;
 
 		while (!readerMemory->eof())
 		{
-			CMemoryReader *readerMetaMemory = readerMemory->open_chunk_iterator(meta_id, &*prevReaderMetaMemory);
+			CMemoryReader* readerMetaMemory = readerMemory->open_chunk_iterator(meta_id, &*prevReaderMetaMemory);
 
 			if (!readerMetaMemory)
 				break;
@@ -805,7 +995,7 @@ bool CConfigFileMetadata::LoadMetadata(const CLASS_ID &, CMemoryReader &readerDa
 			wxASSERT(clsid != 0);
 			wxString classType = CValue::GetNameObjectFromID(clsid);
 			wxASSERT(classType.Length() > 0);
-			IMetaObject *newMetaObject = CValue::CreateAndConvertObjectRef<IMetaObject>(classType);
+			IMetaObject* newMetaObject = CValue::CreateAndConvertObjectRef<IMetaObject>(classType);
 			wxASSERT(newMetaObject);
 
 			newMetaObject->SetClsid(clsid);
@@ -845,24 +1035,24 @@ bool CConfigFileMetadata::LoadMetadata(const CLASS_ID &, CMemoryReader &readerDa
 	return true;
 }
 
-bool CConfigFileMetadata::LoadChildMetadata(const CLASS_ID &, CMemoryReader &readerData, IMetaObject *metaParent)
+bool CConfigFileMetadata::LoadChildMetadata(const CLASS_ID&, CMemoryReader& readerData, IMetaObject* metaParent)
 {
 	CLASS_ID clsid = 0;
-	CMemoryReader *prevReaderMemory = NULL;
+	CMemoryReader* prevReaderMemory = NULL;
 
 	while (!readerData.eof())
 	{
-		CMemoryReader *readerMemory = readerData.open_chunk_iterator(clsid, &*prevReaderMemory);
+		CMemoryReader* readerMemory = readerData.open_chunk_iterator(clsid, &*prevReaderMemory);
 
 		if (!readerMemory)
 			break;
 
 		u64 meta_id = 0;
-		CMemoryReader *prevReaderMetaMemory = NULL;
+		CMemoryReader* prevReaderMetaMemory = NULL;
 
 		while (!readerData.eof())
 		{
-			CMemoryReader *readerMetaMemory = readerMemory->open_chunk_iterator(meta_id, &*prevReaderMetaMemory);
+			CMemoryReader* readerMetaMemory = readerMemory->open_chunk_iterator(meta_id, &*prevReaderMetaMemory);
 
 			if (!readerMetaMemory)
 				break;
@@ -870,7 +1060,7 @@ bool CConfigFileMetadata::LoadChildMetadata(const CLASS_ID &, CMemoryReader &rea
 			wxASSERT(clsid != 0);
 			wxString classType = CValue::GetNameObjectFromID(clsid);
 			wxASSERT(classType.Length() > 0);
-			IMetaObject *newMetaObject = CValue::CreateAndConvertObjectRef<IMetaObject>(classType);
+			IMetaObject* newMetaObject = CValue::CreateAndConvertObjectRef<IMetaObject>(classType);
 			wxASSERT(newMetaObject);
 
 			newMetaObject->SetClsid(clsid);
@@ -927,7 +1117,7 @@ bool CConfigMetadata::LoadMetadata(int flags)
 	}
 
 	// load config params
-	DatabaseResultSet *resultConfigParams =
+	DatabaseResultSet* resultConfigParams =
 		databaseLayer->RunQueryWithResults("SELECT guid, name FROM %s; ", GetConfigParamsTableName());
 
 	if (!resultConfigParams)
@@ -953,7 +1143,7 @@ bool CConfigMetadata::LoadMetadata(int flags)
 	}
 
 	// load config
-	DatabaseResultSet *resultConfig =
+	DatabaseResultSet* resultConfig =
 		databaseLayer->RunQueryWithResults("SELECT binaryData, dataSize FROM %s; ", m_sDefaultSource);
 
 	if (!resultConfig)
@@ -961,6 +1151,13 @@ bool CConfigMetadata::LoadMetadata(int flags)
 
 	//load metadata from DB 
 	if (resultConfig->Next()) {
+
+		//close if opened
+		if (CConfigMetadata::ConfigOpened()) {
+			if (!CloseMetadata(forceCloseFlag)) {
+				return false;
+			}
+		}
 
 		//clear data 
 		if (!ClearMetadata()) {
@@ -991,11 +1188,7 @@ bool CConfigMetadata::LoadMetadata(int flags)
 
 	resultConfig->Close();
 
-	if ((flags & onlyLoadFlag) == 0) {
-		return RunMetadata();
-	}
-
-	return true;
+	return RunMetadata(flags);
 }
 
 //**************************************************************************************************
@@ -1003,14 +1196,16 @@ bool CConfigMetadata::LoadMetadata(int flags)
 //**************************************************************************************************
 
 CConfigStorageMetadata::CConfigStorageMetadata(bool readOnly) : CConfigMetadata(readOnly),
-m_metaConfig(new CConfigMetadata(readOnly)), m_bConfigSave(true)
+m_metaConfig(new CConfigMetadata(readOnly)), m_configSave(true)
 {
 	m_sDefaultSource = GetConfigSaveTableName();
 }
 
-CConfigStorageMetadata::~CConfigStorageMetadata() { wxDELETE(m_metaConfig); }
+CConfigStorageMetadata::~CConfigStorageMetadata() {
+	wxDELETE(m_metaConfig);
+}
 
-#include "objects/constant.h"
+#include "metaObjects/objects/constant.h"
 
 bool CConfigStorageMetadata::CreateMetadata()
 {
@@ -1100,7 +1295,7 @@ bool CConfigStorageMetadata::CreateMetadata()
 			return false;
 		}
 		retCode = databaseLayer->RunQuery("INSERT INTO %s (guid, name) VALUES ('%s', '%s');", GetConfigParamsTableName(), m_metaGuid.str(), wxT("configuration_id"));
-		
+
 		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR) {
 			return false;
 		}
@@ -1142,11 +1337,11 @@ bool CConfigStorageMetadata::SaveMetadata(int flags)
 #endif
 		}
 
-		IMetaObject *commonObject = m_metaConfig->GetCommonMetaObject();
+		IMetaObject* commonObject = m_metaConfig->GetCommonMetaObject();
 		wxASSERT(commonObject);
 
 		for (auto obj : commonObject->GetObjects()) {
-			IMetaObject *foundedMeta =
+			IMetaObject* foundedMeta =
 				m_commonObject->FindByName(obj->GetDocPath());
 			if (foundedMeta == NULL) {
 				bool ret = obj->DeleteMetaTable(this);
@@ -1161,7 +1356,7 @@ bool CConfigStorageMetadata::SaveMetadata(int flags)
 		}
 
 		for (auto obj : m_commonObject->GetObjects()) {
-			IMetaObject *foundedMeta =
+			IMetaObject* foundedMeta =
 				commonObject->FindByName(obj->GetDocPath());
 			wxASSERT(obj);
 			bool ret = true;
@@ -1203,7 +1398,7 @@ bool CConfigStorageMetadata::SaveMetadata(int flags)
 #endif
 	}
 
-	PreparedStatement *prepStatement =
+	PreparedStatement* prepStatement =
 		databaseLayer->PrepareStatement("UPDATE OR INSERT INTO %s (fileName, dataSize, binaryData) VALUES(?, ?, ?) MATCHING (fileName); ", GetConfigSaveTableName());
 
 	if (!prepStatement)
@@ -1225,7 +1420,7 @@ bool CConfigStorageMetadata::SaveMetadata(int flags)
 		wxBase64Encode(writterData.pointer(), writterData.size())
 	);
 
-	m_bConfigSave = (flags & saveConfigFlag) != 0;
+	m_configSave = (flags & saveConfigFlag) != 0;
 
 	if (!databaseLayer->CloseStatement(prepStatement)) {
 #if defined(_USE_SAVE_METADATA_IN_TRANSACTION)
@@ -1277,9 +1472,11 @@ bool CConfigStorageMetadata::RoolbackToConfigDatabase()
 		return false;
 
 	//close data 
-	if (!CloseMetadata(true)) {
-		wxASSERT_MSG(false, "CloseMetadata() == false");
-		return false;
+	if (CConfigMetadata::ConfigOpened()) {
+		if (!CloseMetadata(forceCloseFlag)) {
+			wxASSERT_MSG(false, "CloseMetadata() == false");
+			return false;
+		}
 	}
 
 	//clear data 
@@ -1291,7 +1488,7 @@ bool CConfigStorageMetadata::RoolbackToConfigDatabase()
 	return LoadMetadata();
 }
 
-bool CConfigStorageMetadata::SaveToFile(const wxString &fileName)
+bool CConfigStorageMetadata::SaveToFile(const wxString& fileName)
 {
 	//common data
 	CMemoryWriter writterData;
@@ -1306,13 +1503,13 @@ bool CConfigStorageMetadata::SaveToFile(const wxString &fileName)
 
 	std::ofstream datafile;
 	datafile.open(fileName.ToStdWstring(), std::ios::binary);
-	datafile.write(reinterpret_cast <char *> (writterData.pointer()), writterData.size());
+	datafile.write(reinterpret_cast <char*> (writterData.pointer()), writterData.size());
 	datafile.close();
 
 	return true;
 }
 
-bool CConfigStorageMetadata::SaveHeader(CMemoryWriter &writterData)
+bool CConfigStorageMetadata::SaveHeader(CMemoryWriter& writterData)
 {
 	CMemoryWriter writterMemory;
 	writterMemory.w_u64(sign_metadata); //sign 
@@ -1323,7 +1520,7 @@ bool CConfigStorageMetadata::SaveHeader(CMemoryWriter &writterData)
 	return true;
 }
 
-bool CConfigStorageMetadata::SaveCommonMetadata(const CLASS_ID &clsid, CMemoryWriter &writterData, int flags)
+bool CConfigStorageMetadata::SaveCommonMetadata(const CLASS_ID& clsid, CMemoryWriter& writterData, int flags)
 {
 	//Save common object
 	CMemoryWriter writterMemory;
@@ -1349,7 +1546,7 @@ bool CConfigStorageMetadata::SaveCommonMetadata(const CLASS_ID &clsid, CMemoryWr
 	return true;
 }
 
-bool CConfigStorageMetadata::SaveMetadata(const CLASS_ID &, CMemoryWriter &writterData, int flags)
+bool CConfigStorageMetadata::SaveMetadata(const CLASS_ID&, CMemoryWriter& writterData, int flags)
 {
 	bool saveToFile = (flags & saveToFileFlag) != 0;
 
@@ -1375,7 +1572,7 @@ bool CConfigStorageMetadata::SaveMetadata(const CLASS_ID &, CMemoryWriter &writt
 	return true;
 }
 
-bool CConfigStorageMetadata::SaveChildMetadata(const CLASS_ID &, CMemoryWriter &writterData, IMetaObject *metaParent, int flags)
+bool CConfigStorageMetadata::SaveChildMetadata(const CLASS_ID&, CMemoryWriter& writterData, IMetaObject* metaParent, int flags)
 {
 	bool saveToFile = (flags & saveToFileFlag) != 0;
 
@@ -1401,12 +1598,12 @@ bool CConfigStorageMetadata::SaveChildMetadata(const CLASS_ID &, CMemoryWriter &
 	return true;
 }
 
-bool CConfigStorageMetadata::DeleteCommonMetadata(const CLASS_ID &clsid)
+bool CConfigStorageMetadata::DeleteCommonMetadata(const CLASS_ID& clsid)
 {
 	return DeleteMetadata(clsid);
 }
 
-bool CConfigStorageMetadata::DeleteMetadata(const CLASS_ID &clsid)
+bool CConfigStorageMetadata::DeleteMetadata(const CLASS_ID& clsid)
 {
 	for (auto obj : m_commonObject->GetObjects()) {
 		if (obj->IsDeleted()) {
@@ -1426,7 +1623,7 @@ bool CConfigStorageMetadata::DeleteMetadata(const CLASS_ID &clsid)
 	return true;
 }
 
-bool CConfigStorageMetadata::DeleteChildMetadata(const CLASS_ID &clsid, IMetaObject *metaParent)
+bool CConfigStorageMetadata::DeleteChildMetadata(const CLASS_ID& clsid, IMetaObject* metaParent)
 {
 	for (auto obj : metaParent->GetObjects()) {
 		if (obj->IsDeleted()) {

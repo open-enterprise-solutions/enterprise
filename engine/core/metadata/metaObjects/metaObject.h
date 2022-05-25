@@ -6,6 +6,7 @@
 #include "utils/fs/fs.h"
 #include "guid/guid.h"
 
+class IMetaFormObject;
 class CMetaModuleObject;
 
 //*******************************************************************************
@@ -28,6 +29,8 @@ const CLASS_ID g_metaModuleCLSID = TEXT2CLSID("MD_MOD");
 const CLASS_ID g_metaManagerCLSID = TEXT2CLSID("MD_MNGR");
 const CLASS_ID g_metaTableCLSID = TEXT2CLSID("MD_TBL");
 const CLASS_ID g_metaEnumCLSID = TEXT2CLSID("MD_ENUM");
+const CLASS_ID g_metaDimensionCLSID = TEXT2CLSID("MD_DMNT");
+const CLASS_ID g_metaResourceCLSID = TEXT2CLSID("MD_RESS");
 
 //SPECIAL OBJECTS
 const CLASS_ID g_metaDefaultAttributeCLSID = TEXT2CLSID("MD_DATT");
@@ -39,6 +42,8 @@ const CLASS_ID g_metaDocumentCLSID = TEXT2CLSID("MD_DOC");
 const CLASS_ID g_metaEnumerationCLSID = TEXT2CLSID("MD_ENM");
 const CLASS_ID g_metaDataProcessorCLSID = TEXT2CLSID("MD_DPR");
 const CLASS_ID g_metaReportCLSID = TEXT2CLSID("MD_RPT");
+const CLASS_ID g_metaInformationRegisterCLSID = TEXT2CLSID("MD_INFR");
+const CLASS_ID g_metaAccumulationRegisterCLSID = TEXT2CLSID("MD_ACCR");
 
 // EXTERNAL
 const CLASS_ID g_metaExternalDataProcessorCLSID = TEXT2CLSID("MD_EDPR");
@@ -56,11 +61,13 @@ const CLASS_ID g_metaExternalReportCLSID = TEXT2CLSID("MD_ERPT");
 #define onlyLoadFlag	  0x0001000
 #define saveConfigFlag	  0x0002000
 #define saveToFileFlag	  0x0004000
+#define forceCloseFlag	  0x0008000
 
 //flags metaobject 
 #define metaDeletedFlag	  0x0001000
 #define metaCanSaveFlag	  0x0002000
 #define metaNewObjectFlag 0x0004000
+#define metaDisableObjectFlag 0x0008000
 
 #define metaDefaultFlag	  metaCanSaveFlag
 
@@ -70,65 +77,104 @@ const CLASS_ID g_metaExternalReportCLSID = TEXT2CLSID("MD_ERPT");
 #define deleteMetaTable	 0x0004000	
 
 class IMetaObject : public IObjectBase,
-	public CValue
-{
+	public CValue {
 	wxDECLARE_ABSTRACT_CLASS(IMetaObject);
-
 public:
 
 	CLASS_ID GetClsid() const { return m_metaClsid; }
-	void SetClsid(CLASS_ID clsid) { m_metaClsid = clsid; }
+	void SetClsid(const CLASS_ID& clsid) { m_metaClsid = clsid; }
 
 	meta_identifier_t GetMetaID() const { return m_metaId; }
-	void SetMetaID(meta_identifier_t id) { m_metaId = id; }
+	void SetMetaID(const meta_identifier_t& id) { m_metaId = id; }
 
 	wxString GetName() const { return m_metaName; }
-	void SetName(const wxString &name) { m_metaName = name; }
+	void SetName(const wxString& name) { m_metaName = name; }
 
 	wxString GetSynonym() const { return (m_metaSynonym.Length() > 0) ? m_metaSynonym : m_metaName; }
-	void SetSynonym(const wxString &synonym) { m_metaSynonym = synonym; }
+	void SetSynonym(const wxString& synonym) { m_metaSynonym = synonym; }
 
 	wxString GetComment() const { return m_metaComment; }
-	void SetComment(const wxString &comment) { m_metaComment = comment; }
+	void SetComment(const wxString& comment) { m_metaComment = comment; }
 
-	void SetMetadata(IMetadata *metaData) { m_metaData = metaData; }
-	IMetadata *GetMetadata() const { return m_metaData; }
+	void SetMetadata(IMetadata* metaData) { m_metaData = metaData; }
+	IMetadata* GetMetadata() const { return m_metaData; }
 
-	void GenerateGuid() { wxASSERT(!m_metaGuid.isValid()); m_metaGuid = Guid::newGuid(); }
-
-public:
-
-	bool IsDeleted() const { return (m_metaFlags & metaDeletedFlag) != 0; }
-	void MarkAsDeleted() { m_metaFlags |= metaDeletedFlag; }
+	void GenerateGuid() {
+		wxASSERT(!m_metaGuid.isValid());
+		m_metaGuid = Guid::newGuid();
+	}
 
 public:
 
-	IMetaObject(const wxString &name = wxEmptyString, const wxString &synonym = wxEmptyString, const wxString &comment = wxEmptyString);
+	bool IsAllowed() const {
+		return IsEnabled()
+			&& !IsDeleted();
+	}
+
+	bool IsEnabled() const {
+		return (m_metaFlags & metaDisableObjectFlag) == 0;
+	}
+
+	bool IsDeleted() const {
+		return (m_metaFlags & metaDeletedFlag) != 0;
+	}
+
+public:
+
+	void MarkAsDeleted() {
+		m_metaFlags |= metaDeletedFlag;
+	}
+
+public:
+
+	void SetFlag(int flag) {
+		m_metaFlags |= flag;
+	}
+
+	void ClearFlag(int flag) {
+		m_metaFlags &= ~(flag);
+	}
+
+public:
+
+	IMetaObject(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
 	virtual ~IMetaObject();
 
-	//if object have composite collection
-	virtual bool IsRefObject() const { return false; }
-
 	//system override 
-	virtual int GetComponentType() override { return COMPONENT_TYPE_METADATA; }
-	virtual wxString GetObjectTypeName() const override { return wxT("metadata"); }
+	virtual int GetComponentType() const override {
+		return COMPONENT_TYPE_METADATA;
+	}
 
-	virtual wxString GetFileName();
-	virtual wxString GetFullName();
+	virtual wxString GetObjectTypeName() const override {
+		return wxT("metadata");
+	}
 
-	virtual wxString GetModuleName();
-	virtual wxString GetDocPath();
+	virtual Guid GetGuid() const {
+		return m_metaGuid;
+	}
+
+	virtual wxString GetFileName() const;
+	virtual wxString GetFullName() const;
+
+	virtual wxString GetModuleName() const;
+	virtual wxString GetDocPath() const;
 
 	virtual void ReadProperty() override;
 	virtual void SaveProperty() override;
 
-	virtual void AppendChild(IMetaObject *childObj) {}
-	virtual void RemoveChild(IMetaObject *childObj) {}
+	virtual void AppendChild(IMetaObject* childObj) {}
+	virtual void RemoveChild(IMetaObject* childObj) {}
 
-	virtual bool ProcessChoice(IValueFrame *ownerValue, meta_identifier_t id = wxNOT_FOUND) { return true; }
-	virtual bool ProcessListChoice(IValueFrame *ownerValue, meta_identifier_t id = wxNOT_FOUND) { return true; }
+	//process choice 
+	virtual bool ProcessChoice(IValueFrame* ownerValue, const meta_identifier_t& id = wxNOT_FOUND) { 
+		return true; 
+	}
+	
+	virtual bool ProcessListChoice(IValueFrame* ownerValue, const meta_identifier_t& id = wxNOT_FOUND) { 
+		return true; 
+	}
 
-	virtual IMetaObject *FindByName(const CLASS_ID &clsid, const wxString &docPath) const 
+	virtual IMetaObject* FindByName(const CLASS_ID& clsid, const wxString& docPath) const
 	{
 		for (auto obj : GetObjects(clsid)) {
 			if (docPath == obj->GetDocPath())
@@ -138,9 +184,9 @@ public:
 		return NULL;
 	}
 
-	virtual std::vector<IMetaObject *> GetObjects(const CLASS_ID &clsid) const
+	virtual std::vector<IMetaObject*> GetObjects(const CLASS_ID& clsid) const
 	{
-		std::vector<IMetaObject *> metaObjects;
+		std::vector<IMetaObject*> metaObjects;
 
 		for (auto obj : GetObjects()) {
 			if (clsid == obj->GetClsid()) {
@@ -151,7 +197,7 @@ public:
 		return metaObjects;
 	}
 
-	virtual IMetaObject *FindByName(const wxString &docPath) const 
+	virtual IMetaObject* FindByName(const wxString& docPath) const
 	{
 		for (auto obj : GetObjects()) {
 			if (docPath == obj->GetDocPath())
@@ -161,68 +207,81 @@ public:
 		return NULL;
 	}
 
-	virtual std::vector<IMetaObject *> GetObjects() const { return std::vector<IMetaObject *>(); }
+	virtual std::vector<IMetaObject*> GetObjects() const {
+		return std::vector<IMetaObject*>();
+	}
 
 	//methods 
-	virtual CMethods* GetPMethods() const { PrepareNames();  return m_methods; }; //получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethods* GetPMethods() const { PrepareNames();  return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
 	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t &aParams);       //вызов метода
+	virtual CValue Method(methodArg_t& aParams);       //вызов метода
 
 	//attributes 
-	virtual void SetAttribute(attributeArg_t &aParams, CValue &cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t &aParams);                   //значение атрибута
-	virtual int  FindAttribute(const wxString &sName) const;
+	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);        //установка атрибута
+	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
+	virtual int  FindAttribute(const wxString& sName) const;
 
-	virtual wxString GetTypeString() const { return GetObjectTypeName() << wxT(".") << GetClassName(); }
-	virtual wxString GetString() const { return m_metaName; }
+	virtual wxString GetTypeString() const { 
+		return GetObjectTypeName() << wxT(".") << GetClassName(); 
+	}
+
+	virtual wxString GetString() const { 
+		return m_metaName; 
+	}
 
 	//support icons
 	virtual wxIcon GetIcon() { return wxIcon(); }
 	static wxIcon GetIconGroup() { return wxIcon(); }
 
 	//load & save object in metaObject 
-	bool LoadMeta(CMemoryReader &dataReader);
-	bool SaveMeta(CMemoryWriter &dataWritter = CMemoryWriter());
+	bool LoadMeta(CMemoryReader& dataReader);
+	bool SaveMeta(CMemoryWriter& dataWritter = CMemoryWriter());
 
 	//load & save object
-	bool LoadMetaObject(IMetadata *metaData, CMemoryReader &dataReader);
-	bool SaveMetaObject(IMetadata *metaData, CMemoryWriter &dataWritter, int flags = defaultFlag);
-	bool DeleteMetaObject(IMetadata *metaData);
+	bool LoadMetaObject(IMetadata* metaData, CMemoryReader& dataReader);
+	bool SaveMetaObject(IMetadata* metaData, CMemoryWriter& dataWritter, int flags = defaultFlag);
+	bool DeleteMetaObject(IMetadata* metaData);
 
 	// save & delete object in DB 
-	bool CreateMetaTable(IConfigMetadata *srcMetaData);
-	bool UpdateMetaTable(IConfigMetadata *srcMetaData, IMetaObject *srcMetaObject);
-	bool DeleteMetaTable(IConfigMetadata *srcMetaData);
+	bool CreateMetaTable(IConfigMetadata* srcMetaData);
+	bool UpdateMetaTable(IConfigMetadata* srcMetaData, IMetaObject* srcMetaObject);
+	bool DeleteMetaTable(IConfigMetadata* srcMetaData);
 
 	//events: 
-	virtual bool OnCreateMetaObject(IMetadata *metaData);
-	virtual bool OnLoadMetaObject(IMetadata *metaData);
+	virtual bool OnCreateMetaObject(IMetadata* metaData);
+	virtual bool OnLoadMetaObject(IMetadata* metaData);
 	virtual bool OnSaveMetaObject() { return true; }
 	virtual bool OnDeleteMetaObject();
-	virtual bool OnRenameMetaObject(const wxString &sNewName) { return true; }
+	virtual bool OnRenameMetaObject(const wxString& sNewName) { return true; }
 
 	//for designer 
 	virtual bool OnReloadMetaObject() { return true; }
 
 	//module manager is started or exit 
-	virtual bool OnRunMetaObject(int flags) { return true; }
-	virtual bool OnCloseMetaObject() { return true; }
+	//after and before for designer 
+	virtual bool OnBeforeRunMetaObject(int flags) { return true; }
+	virtual bool OnAfterRunMetaObject(int flags) { return true; }
+
+	virtual bool OnBeforeCloseMetaObject() { return true; }
+	virtual bool OnAfterCloseMetaObject();
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu *defultMenu) { return false; }
+	virtual bool PrepareContextMenu(wxMenu* defultMenu) { return false; }
 	virtual void ProcessCommand(unsigned int id) {}
 
 	// Gets the parent object
-	IMetaObject* GetParent() const { return wxDynamicCast(m_parent, IMetaObject); }
+	IMetaObject* GetParent() const {
+		return wxDynamicCast(m_parent, IMetaObject);
+	}
 
 	/**
 	* Obtiene un hijo del objeto.
 	*/
-	virtual IMetaObject* GetChild(unsigned int idx) { return dynamic_cast<IMetaObject *>(IObjectBase::GetChild(idx)); }
-	virtual IMetaObject* GetChild(unsigned int idx, const wxString& type) { return dynamic_cast<IMetaObject *>(IObjectBase::GetChild(idx, type)); }
+	virtual IMetaObject* GetChild(unsigned int idx) { return dynamic_cast<IMetaObject*>(IObjectBase::GetChild(idx)); }
+	virtual IMetaObject* GetChild(unsigned int idx, const wxString& type) { return dynamic_cast<IMetaObject*>(IObjectBase::GetChild(idx, type)); }
 
 	//get module object in compose object 
-	virtual CMetaModuleObject *GetModuleObject() { return NULL; }
+	virtual CMetaModuleObject* GetModuleObject() const { return NULL; }
 
 	//check is empty
 	virtual inline bool IsEmpty() const override { return false; }
@@ -230,36 +289,36 @@ public:
 	/**
 	* Property events
 	*/
-	virtual void OnPropertyCreated(Property *property);
-	virtual void OnPropertySelected(Property *property);
-	virtual void OnPropertyChanged(Property *property);
+	virtual void OnPropertyCreated(Property* property);
+	virtual void OnPropertySelected(Property* property);
+	virtual void OnPropertyChanged(Property* property);
 
 	/**
 	* Set property data
 	*/
-	virtual void SetPropertyData(Property *property, const CValue &srcValue);
+	virtual void SetPropertyData(Property* property, const CValue& srcValue);
 
 	/**
 	* Get property data
 	*/
-	virtual CValue GetPropertyData(Property *property);
+	virtual CValue GetPropertyData(Property* property);
 
 private:
 
 	//get metadata
-	virtual IMetadata *GetMetaData() const override;
+	virtual IMetadata* GetMetaData() const override;
 
 	//get typelist 
-	virtual OptionList *GetTypelist() const override;
+	virtual OptionList* GetTypelist() const override;
 
 protected:
 
 	//create and update table 
-	virtual bool CreateAndUpdateTableDB(IConfigMetadata *srcMetaData, IMetaObject *srcMetaObject, int flags) { return true; }
+	virtual bool CreateAndUpdateTableDB(IConfigMetadata* srcMetaData, IMetaObject* srcMetaObject, int flags) { return true; }
 
 	//load & save metadata from DB 
-	virtual bool LoadData(CMemoryReader &reader) { return true; }
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter()) { return true; }
+	virtual bool LoadData(CMemoryReader& reader) { return true; }
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter()) { return true; }
 	virtual bool DeleteData() { return true; }
 
 protected:
@@ -274,8 +333,8 @@ protected:
 	meta_identifier_t m_metaId;			//type id (default is undefined)
 	Guid m_metaGuid;
 
-	IMetadata *m_metaData;
-	CMethods *m_methods;
+	IMetadata* m_metaData;
+	CMethods* m_methods;
 };
 
 #endif

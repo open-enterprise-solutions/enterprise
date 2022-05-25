@@ -54,8 +54,8 @@ public:
 	virtual bool OnDeleteMetaObject();
 
 	//module manager is started or exit 
-	virtual bool OnRunMetaObject(int flags);
-	virtual bool OnCloseMetaObject();
+	virtual bool OnBeforeRunMetaObject(int flags);
+	virtual bool OnAfterCloseMetaObject();
 
 	//read&save property
 	virtual void ReadProperty() override;

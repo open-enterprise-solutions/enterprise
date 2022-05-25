@@ -5,7 +5,7 @@
 
 #include "metaModuleObject.h"
 #include "databaseLayer/databaseLayer.h"
-#include "metadata/objects/baseObject.h"
+#include "metadata/metaObjects/objects/baseObject.h"
 #include "appData.h"
 
 //***********************************************************************
@@ -78,14 +78,14 @@ bool CMetaModuleObject::OnDeleteMetaObject()
 	return IMetaObject::OnDeleteMetaObject();
 }
 
-bool CMetaModuleObject::OnRunMetaObject(int flags)
+bool CMetaModuleObject::OnBeforeRunMetaObject(int flags)
 {
-	return IMetaObject::OnRunMetaObject(flags);
+	return IMetaObject::OnBeforeRunMetaObject(flags);
 }
 
-bool CMetaModuleObject::OnCloseMetaObject()
+bool CMetaModuleObject::OnAfterCloseMetaObject()
 {
-	return IMetaObject::OnCloseMetaObject();
+	return IMetaObject::OnAfterCloseMetaObject();
 }
 
 //***********************************************************************
@@ -102,7 +102,7 @@ void CMetaModuleObject::SetDefaultProcedure(const wxString &procname, eContentHe
 //***********************************************************************
 
 CMetaCommonModuleObject::CMetaCommonModuleObject(const wxString &name, const wxString &synonym, const wxString &comment) : CMetaModuleObject(name, synonym, comment),
-m_bGlobalModule(false)
+m_globalModule(false)
 {
 	PropertyContainer *moduleCategory = IObjectBase::CreatePropertyContainer("Module");
 	moduleCategory->AddProperty("global_module", PropertyType::PT_BOOL);
@@ -112,21 +112,21 @@ m_bGlobalModule(false)
 bool CMetaCommonModuleObject::LoadData(CMemoryReader &reader)
 {
 	reader.r_stringZ(m_moduleData);
-	m_bGlobalModule = reader.r_u8();
+	m_globalModule = reader.r_u8();
 	return true;
 }
 
 bool CMetaCommonModuleObject::SaveData(CMemoryWriter &writer)
 {
 	writer.w_stringZ(m_moduleData);
-	writer.w_u8(m_bGlobalModule);
+	writer.w_u8(m_globalModule);
 	return true;
 }
 
-bool CMetaCommonModuleObject::OnPropertyChanging(Property *property, const wxString &oldValue)
+bool CMetaCommonModuleObject::OnPropertyChanging(Property *property, const wxVariant& oldValue)
 {
 	if (property->GetName() == wxT("global_module")) {
-		return CMetaCommonModuleObject::OnCloseMetaObject();
+		return CMetaCommonModuleObject::OnAfterCloseMetaObject();
 	}
 
 	return CMetaModuleObject::OnPropertyChanging(property, oldValue);
@@ -135,7 +135,7 @@ bool CMetaCommonModuleObject::OnPropertyChanging(Property *property, const wxStr
 void CMetaCommonModuleObject::OnPropertyChanged(Property *property)
 {
 	if (property->GetName() == wxT("global_module")) {
-		CMetaCommonModuleObject::OnRunMetaObject(metaNewObjectFlag);
+		CMetaCommonModuleObject::OnBeforeRunMetaObject(metaNewObjectFlag);
 	}
 
 	CMetaModuleObject::OnPropertyChanged(property);
@@ -148,13 +148,13 @@ void CMetaCommonModuleObject::OnPropertyChanged(Property *property)
 void CMetaCommonModuleObject::ReadProperty()
 {
 	CMetaModuleObject::ReadProperty();
-	IObjectBase::SetPropertyValue("global_module", m_bGlobalModule);
+	IObjectBase::SetPropertyValue("global_module", m_globalModule);
 }
 
 void CMetaCommonModuleObject::SaveProperty()
 {
 	CMetaModuleObject::SaveProperty();
-	IObjectBase::GetPropertyValue("global_module", m_bGlobalModule);
+	IObjectBase::GetPropertyValue("global_module", m_globalModule);
 }
 
 //***********************************************************************
@@ -192,7 +192,7 @@ bool CMetaCommonModuleObject::OnRenameMetaObject(const wxString &sNewName)
 	return CMetaModuleObject::OnRenameMetaObject(sNewName);
 }
 
-bool CMetaCommonModuleObject::OnRunMetaObject(int flags)
+bool CMetaCommonModuleObject::OnBeforeRunMetaObject(int flags)
 {
 	IModuleManager *moduleManager = m_metaData->GetModuleManager();
 	wxASSERT(moduleManager);
@@ -200,10 +200,10 @@ bool CMetaCommonModuleObject::OnRunMetaObject(int flags)
 	if (!moduleManager->AddCommonModule(this, false, (flags & metaNewObjectFlag) != 0))
 		return false;
 
-	return CMetaModuleObject::OnRunMetaObject(flags);
+	return CMetaModuleObject::OnBeforeRunMetaObject(flags);
 }
 
-bool CMetaCommonModuleObject::OnCloseMetaObject()
+bool CMetaCommonModuleObject::OnAfterCloseMetaObject()
 {
 	IModuleManager *moduleManager = m_metaData->GetModuleManager();
 	wxASSERT(moduleManager);
@@ -211,14 +211,14 @@ bool CMetaCommonModuleObject::OnCloseMetaObject()
 	if (!moduleManager->RemoveCommonModule(this))
 		return false;
 
-	return CMetaModuleObject::OnCloseMetaObject();
+	return CMetaModuleObject::OnAfterCloseMetaObject();
 }
 
 //***********************************************************************
 //*                          manager value object                       *
 //***********************************************************************
 
-bool CMetaManagerModuleObject::OnRunMetaObject(int flags)
+bool CMetaManagerModuleObject::OnBeforeRunMetaObject(int flags)
 {
 	IModuleManager *moduleManager = m_metaData->GetModuleManager();
 	wxASSERT(moduleManager);
@@ -226,10 +226,10 @@ bool CMetaManagerModuleObject::OnRunMetaObject(int flags)
 	if (!moduleManager->AddCommonModule(this, true, (flags & metaNewObjectFlag) != 0))
 		return false;
 
-	return CMetaModuleObject::OnRunMetaObject(flags);
+	return CMetaModuleObject::OnBeforeRunMetaObject(flags);
 }
 
-bool CMetaManagerModuleObject::OnCloseMetaObject()
+bool CMetaManagerModuleObject::OnAfterCloseMetaObject()
 {
 	IModuleManager *moduleManager = m_metaData->GetModuleManager();
 	wxASSERT(moduleManager);
@@ -237,13 +237,13 @@ bool CMetaManagerModuleObject::OnCloseMetaObject()
 	if (!moduleManager->RemoveCommonModule(this))
 		return false;
 
-	return CMetaModuleObject::OnCloseMetaObject();
+	return CMetaModuleObject::OnAfterCloseMetaObject();
 }
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
-METADATA_REGISTER(CMetaCommonModuleObject, "metaCommonModule", g_metaCommonModuleCLSID);
-METADATA_REGISTER(CMetaManagerModuleObject, "metaManagerModule", g_metaManagerCLSID);
-METADATA_REGISTER(CMetaModuleObject, "metaModule", g_metaModuleCLSID);
+METADATA_REGISTER(CMetaCommonModuleObject, "commonModule", g_metaCommonModuleCLSID);
+METADATA_REGISTER(CMetaManagerModuleObject, "managerModule", g_metaManagerCLSID);
+METADATA_REGISTER(CMetaModuleObject, "baseModule", g_metaModuleCLSID);

@@ -76,7 +76,7 @@ bool CDataProcessorDocument::OnCreate(const wxString& path, long flags)
 
 bool CDataProcessorDocument::OnCloseDocument()
 {
-	if (!m_metaData->CloseMetadata(true)) {
+	if (!m_metaData->CloseMetadata(forceCloseFlag)) {
 		return false;
 	}
 
@@ -127,7 +127,7 @@ bool CDataProcessorEditDocument::OnCreate(const wxString& path, long flags)
 
 bool CDataProcessorEditDocument::OnCloseDocument()
 {
-	if (!m_metaData->CloseMetadata(true)) {
+	if (!m_metaData->CloseMetadata(forceCloseFlag)) {
 		return false;
 	}
 

@@ -49,7 +49,7 @@ void CVisualEditorContextForm::CreateWideGui()
 
 	wxASSERT(m_visualEditor);
 
-	m_visualEditor = new CVisualEditor(this, m_panelDesigner);
+	m_visualEditor = new CVisualEditorHost(this, m_panelDesigner);
 
 	designersizer->Add(m_visualEditor, 1, wxEXPAND, 0);
 
@@ -82,7 +82,7 @@ void CVisualEditorContextForm::DeactivateObject()
 
 #include "common/docInfo.h" 
 #include "compiler/value.h"
-#include "metadata/objects/baseObject.h"
+#include "metadata/metaObjects/objects/baseObject.h"
 #include "metadata/metadata.h"
 #include "metadata/metaObjectsDefines.h"
 
@@ -137,7 +137,7 @@ bool CVisualEditorContextForm::SaveForm()
 	return true;
 }
 
-#include "visualEditorView.h"
+#include "visualHost.h"
 
 void CVisualEditorContextForm::RunForm()
 {

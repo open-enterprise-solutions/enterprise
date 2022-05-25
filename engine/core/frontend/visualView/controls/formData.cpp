@@ -169,7 +169,7 @@ void CValueForm::CValueFormData::PrepareNames() const
 	m_methods->PrepareAttributes(attributes.data(), attributes.size());
 }
 
-#include "frontend/visualView/visualEditorView.h"
+#include "frontend/visualView/visualHost.h"
 
 void CValueForm::CValueFormData::SetAttribute(attributeArg_t &aParams, CValue &cVal)
 {
@@ -185,7 +185,7 @@ void CValueForm::CValueFormData::SetAttribute(attributeArg_t &aParams, CValue &c
 		CVisualDocument *visualDoc = m_formOwner->GetVisualDocument();
 		if (!visualDoc)
 			return;
-		CVisualView *visualView = visualDoc->GetVisualView();
+		CVisualHost *visualView = visualDoc->GetVisualView();
 		if (!visualView)
 			return;
 		wxObject *object = visualView->GetWxObject(currentControl);
@@ -194,7 +194,8 @@ void CValueForm::CValueFormData::SetAttribute(attributeArg_t &aParams, CValue &c
 			currentControl->Update(object, visualView);
 			IValueFrame* nextParent = currentControl->GetParent();
 			while (!parentWnd && nextParent) {
-				if (nextParent->GetComponentType() == COMPONENT_TYPE_WINDOW) {
+				if (nextParent->GetComponentType() == COMPONENT_TYPE_WINDOW
+					|| nextParent->GetComponentType() == COMPONENT_TYPE_WINDOW_TABLE) {
 					parentWnd = dynamic_cast<wxWindow *>(visualView->GetWxObject(nextParent));
 					break;
 				}

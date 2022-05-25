@@ -4173,7 +4173,7 @@ namespace ttmath
 
 		void Mul2Big(const UInt<0> &, UInt<0> &) { TTMATH_ASSERT(false) };
 		void SetZero() { TTMATH_ASSERT(false) };
-		uint AddTwoInts(uint, uint, uint) { TTMATH_ASSERT(false) return 0; };
+		uint AddTwoInts(uint, uint, uint) { TTMATH_ASSERT(false) return 0; }
 	};
 
 

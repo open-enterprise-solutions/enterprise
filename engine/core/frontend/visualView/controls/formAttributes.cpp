@@ -30,7 +30,7 @@ void CValueForm::SetAttribute(attributeArg_t &aParams, CValue &cVal)
 	wxString sSynonym = m_methods->GetAttributeSynonym(aParams.GetIndex());
 
 	if (sSynonym == wxT("procUnit")) {
-		if (m_procUnit) {
+		if (m_procUnit != NULL) {
 			m_procUnit->SetAttribute(aParams.GetName(), cVal);
 		}
 	}
@@ -53,7 +53,7 @@ CValue CValueForm::GetAttribute(attributeArg_t &aParams)
 	wxString sSynonym = m_methods->GetAttributeSynonym(aParams.GetIndex());
 
 	if (sSynonym == wxT("procUnit")) {
-		if (m_procUnit) {
+		if (m_procUnit != NULL) {
 			return m_procUnit->GetAttribute(aParams.GetName());
 		}
 	}
@@ -68,7 +68,7 @@ CValue CValueForm::GetAttribute(attributeArg_t &aParams)
 		case eDataSources: return m_formData;
 		case eModified: return IsModified(); 
 		case eFormOwner: return m_formOwner ? m_formOwner : CValue(); 
-		case eUniqueKey: return new CValueGuid(m_formGuid); 
+		case eUniqueKey: return new CValueGuid(m_formKey); 
 		}
 	}
 

@@ -441,16 +441,16 @@ void CFormEditView::OnMenuClicked(wxCommandEvent& event)
 			}
 		}
 		else if (event.GetId() == wxID_GOTOLINE) {
-			CLineInput *m_lineInput = new CLineInput(m_code);
-			int ret = m_lineInput->ShowModal();
+			CLineInput *lineInput = new CLineInput(m_code);
+			int ret = lineInput->ShowModal();
 			if (ret != wxNOT_FOUND) {
 				m_code->SetFocus();
 				m_code->GotoLine(ret - 1);
 			}
 		}
 		else if (event.GetId() == wxID_PROCEDURES_FUNCTIONS) {
-			CFunctionList *m_funcList = new CFunctionList(GetDocument(), m_code);
-			int ret = m_funcList->ShowModal();
+			CFunctionList *funcList = new CFunctionList(GetDocument(), m_code);
+			int ret = funcList->ShowModal();
 		}
 	}
 	else {

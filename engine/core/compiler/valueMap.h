@@ -13,8 +13,8 @@ public:
 	//јтрибут -> —троковый ключ
 	//работа с массивом как с агрегатным объектом:
 
-	virtual CValue GetAt(const CValue &cKey);
-	virtual void SetAt(const CValue &cKey, CValue &cValue);
+	virtual CValue GetAt(const CValue& cKey);
+	virtual void SetAt(const CValue& cKey, CValue& cValue);
 
 	virtual wxString GetTypeString() const { return wxT("container"); }
 	virtual wxString GetString() const { return wxT("container"); }
@@ -34,13 +34,13 @@ public:
 	public:
 
 		CValueReturnContainer() : CValue(eValueTypes::TYPE_VALUE, true) { PrepareNames(); }
-		CValueReturnContainer(const CValue &key, CValue &value) : CValue(eValueTypes::TYPE_VALUE, true), m_key(key), m_value(value) { PrepareNames(); }
+		CValueReturnContainer(const CValue& key, CValue& value) : CValue(eValueTypes::TYPE_VALUE, true), m_key(key), m_value(value) { PrepareNames(); }
 
-		virtual CMethods* GetPMethods() const { return &m_methods; }; //получить ссылку на класс помощник разбора имен атрибутов и методов
+		virtual CMethods* GetPMethods() const { return &m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
 		virtual void PrepareNames() const;
 
-		virtual void SetAttribute(attributeArg_t &aParams, CValue &cValue);        //установка атрибута
-		virtual CValue GetAttribute(attributeArg_t &aParams);                   //значение атрибута
+		virtual void SetAttribute(attributeArg_t& aParams, CValue& cValue);        //установка атрибута
+		virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
 
 		virtual wxString GetTypeString() const { return wxT("keyValue"); }
 		virtual wxString GetString() const { return wxT("keyValue"); }
@@ -49,24 +49,24 @@ public:
 public:
 
 	CValueContainer();
-	CValueContainer(const std::map<CValue, CValue> &containerValues);
+	CValueContainer(const std::map<CValue, CValue>& containerValues);
 	CValueContainer(bool readOnly);
 
 	~CValueContainer();
 
 	static CMethods m_methods;
 
-	virtual void SetAttribute(attributeArg_t &aParams, CValue &cValue);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t &aParams);                   //значение атрибута
+	virtual void SetAttribute(attributeArg_t& aParams, CValue& cValue);        //установка атрибута
+	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
 
-	virtual CMethods* GetPMethods() const { PrepareNames();  return &m_methods; }; //получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethods* GetPMethods() const { PrepareNames();  return &m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
 	virtual void PrepareNames() const;                         //этот метод автоматически вызываетс€ дл€ инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t &aParams);       //вызов метода
+	virtual CValue Method(methodArg_t& aParams);       //вызов метода
 
 	//–асширенные методы:
-	virtual void Insert(const CValue &cKey, CValue &cValue);
-	virtual void Delete(const CValue &cKey);
-	virtual bool Property(const CValue &cKey, CValue &cValueFound);
+	virtual void Insert(const CValue& cKey, CValue& cValue);
+	virtual void Delete(const CValue& cKey);
+	virtual bool Property(const CValue& cKey, CValue& cValueFound);
 	unsigned int Count() const { return m_containerValues.size(); }
 	void Clear() { m_containerValues.clear(); }
 
@@ -94,16 +94,16 @@ class CValueStructure : public CValueContainer
 public:
 
 	CValueStructure() : CValueContainer(false) {}
-	CValueStructure(const std::map<wxString, CValue> &structureValues) : CValueContainer(true) { for (auto &strBVal : structureValues) m_containerValues.insert_or_assign(strBVal.first, strBVal.second); }
+	CValueStructure(const std::map<wxString, CValue>& structureValues) : CValueContainer(true) { for (auto& strBVal : structureValues) m_containerValues.insert_or_assign(strBVal.first, strBVal.second); }
 
 	CValueStructure(bool readOnly) : CValueContainer(readOnly) {}
 
-	virtual void Delete(const CValue &cKey) override;
-	virtual void Insert(const CValue &cKey, CValue &cValue) override;
-	virtual bool Property(const CValue &cKey, CValue &cValueFound) override;
+	virtual void Delete(const CValue& cKey) override;
+	virtual void Insert(const CValue& cKey, CValue& cValue = CValue()) override;
+	virtual bool Property(const CValue& cKey, CValue& cValueFound) override;
 
-	virtual CValue GetAt(const CValue &cKey);
-	virtual void SetAt(const CValue &cKey, CValue &cValue);
+	virtual CValue GetAt(const CValue& cKey);
+	virtual void SetAt(const CValue& cKey, CValue& cValue);
 
 	virtual wxString GetTypeString() const { return wxT("structure"); }
 	virtual wxString GetString() const { return wxT("structure"); }

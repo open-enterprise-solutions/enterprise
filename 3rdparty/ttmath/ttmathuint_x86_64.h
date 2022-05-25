@@ -1063,7 +1063,7 @@ namespace ttmath
 		-  result_high - higher word of the result
 		-  result_low  - lower word of the result
 
-		this methos never returns a carry
+		this methods never returns a carry
 		this method is used in the second version of the multiplication algorithms
 
 		***this method is created only on a 64bit platform***

@@ -900,7 +900,7 @@ void CDebuggerServer::CServerSocketThread::SendCommand(void *pointer, unsigned i
 	}
 	free(dest);
 #else
-	if (m_socketClient && m_socketClient->IsOk()) {
+	if (m_socketClient && CServerSocketThread::IsConnected()) {
 		m_socketClient->WriteMsg(&length, sizeof(unsigned int));
 		m_socketClient->WriteMsg(pointer, length);
 	}

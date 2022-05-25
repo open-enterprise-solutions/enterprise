@@ -1,5 +1,5 @@
 #include "toolbar.h"
-#include "metadata/objects/baseObject.h"
+#include "metadata/metaObjects/objects/baseObject.h"
 #include "form.h"
 
 OptionList *CValueToolBarItem::GetActions(Property *)

@@ -18,7 +18,7 @@ bool CModuleManager::BeforeStart()
 		try
 		{
 			CValue bCancel = false;
-			if (m_procUnit) m_procUnit->CallFunction("beforeStart", bCancel);
+			if (m_procUnit != NULL) m_procUnit->CallFunction("beforeStart", bCancel);
 			return !bCancel.GetBoolean();
 		}
 		catch (...)
@@ -37,7 +37,7 @@ void CModuleManager::OnStart()
 	{
 		try
 		{
-			if (m_procUnit) m_procUnit->CallFunction("onStart");
+			if (m_procUnit != NULL) m_procUnit->CallFunction("onStart");
 		}
 		catch (...)
 		{
@@ -53,7 +53,7 @@ bool CModuleManager::BeforeExit()
 		try
 		{
 			CValue bCancel = false;
-			if (m_procUnit) m_procUnit->CallFunction("beforeExit", bCancel);
+			if (m_procUnit != NULL) m_procUnit->CallFunction("beforeExit", bCancel);
 			return !bCancel.GetBoolean();
 		}
 		catch (...)
@@ -72,7 +72,7 @@ void CModuleManager::OnExit()
 	{
 		try
 		{
-			if (m_procUnit) m_procUnit->CallFunction("onExit");
+			if (m_procUnit != NULL) m_procUnit->CallFunction("onExit");
 		}
 		catch (...)
 		{

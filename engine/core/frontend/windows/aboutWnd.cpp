@@ -15,14 +15,13 @@ END_EVENT_TABLE()
 
 CAboutDialogWnd::CAboutDialogWnd(wxWindow *parent, int id) : wxDialog(parent, id, _("About..."))
 {
-	wxBoxSizer *sizer2;
-	sizer2 = new wxBoxSizer(wxVERTICAL);
+	wxBoxSizer *sizer2 = new wxBoxSizer(wxVERTICAL);
 	m_staticText2 = new wxStaticText(this, wxID_ANY, wxString::Format("Open enterprise solutions, build %i", GetBuildId()), wxDefaultPosition, wxDefaultSize, 0);
-	m_staticText2->SetFont(wxFont(12, 74, 90, 92, false, wxT("Arial")));
+	m_staticText2->SetFont(wxFont(12, (wxFontFamily)74, (wxFontStyle)90, (wxFontWeight)92, false, wxT("Arial")));
 	sizer2->Add(m_staticText2, 0, wxALL | wxALIGN_CENTER_HORIZONTAL, 5);
-	m_staticText3 = new wxStaticText(this, wxID_ANY, wxT("a RAD tool powered by wxWidgets framework"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticText3 = new wxStaticText(this, wxID_ANY, _("a RAD tool powered by wxWidgets framework"), wxDefaultPosition, wxDefaultSize, 0);
 	sizer2->Add(m_staticText3, 0, wxALL | wxALIGN_CENTER_HORIZONTAL, 5);
-	m_staticText6 = new wxStaticText(this, wxID_ANY, wxT("(C) 2022 Maxim 'nouverbe' Kornienko"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticText6 = new wxStaticText(this, wxID_ANY, _("(C) 2022 Maxim 'nouverbe' Kornienko"), wxDefaultPosition, wxDefaultSize, 0);
 	sizer2->Add(m_staticText6, 0, wxALL | wxALIGN_CENTER_HORIZONTAL, 5);
 	window1 = new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_HORIZONTAL);
 	sizer2->Add(window1, 0, wxALL | wxEXPAND, 5);

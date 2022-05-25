@@ -5,7 +5,7 @@
 
 #include "metatreeWnd.h"
 #include "frontend/objinspect/objinspect.h"
-#include "common/reportManager.h"
+#include "common/docManager.h"
 #include "appData.h"
 
 #define SETITEMTYPE(hItem,xnType,xnChildImage)\
@@ -30,11 +30,16 @@ m_aMetaClassObj[hItem]=m_dataObj;\
 #define enumerationsName _("enumerations")
 #define dataProcessorName _("data processors")
 #define reportsName _("reports")
+#define informationRegisterName _("information Registers")
+#define accumulationRegisterName _("accumulation Registers")
 
 #define	objectFormsName _("forms")
 #define	objectModulesName _("modules")
 #define	objectTemplatesName _("templates")
 #define objectAttributesName _("attributes")
+#define objectDimensionsName _("dimensions")
+#define objectResourcesName _("resources")
+
 #define objectTablesName _("tables")
 #define objectEnumerationsName _("enums")
 
@@ -57,9 +62,9 @@ m_aMetaClassObj[hItem]=m_dataObj;\
 //*                         metadata                                    * 
 //***********************************************************************
 
-void CMetadataTree::ActivateItem(const wxTreeItemId &item)
+void CMetadataTree::ActivateItem(const wxTreeItemId& item)
 {
-	IMetaObject *m_currObject = GetMetaObject(item);
+	IMetaObject* m_currObject = GetMetaObject(item);
 
 	if (!m_currObject)
 		return;
@@ -69,7 +74,7 @@ void CMetadataTree::ActivateItem(const wxTreeItemId &item)
 
 void CMetadataTree::CreateItem()
 {
-	IMetaObject *metaParent = NULL;
+	IMetaObject* metaParent = NULL;
 
 	wxTreeItemId hSelItem = m_metaTreeWnd->GetSelection();
 	wxTreeItemId hParentItem = hSelItem;
@@ -103,7 +108,7 @@ void CMetadataTree::CreateItem()
 	}
 
 	wxASSERT(metaParent);
-	IMetaObject *newObject = m_metaData->CreateMetaObject(objData.m_clsid, metaParent);
+	IMetaObject* newObject = m_metaData->CreateMetaObject(objData.m_clsid, metaParent);
 	if (!newObject) {
 		return;
 	}
@@ -121,6 +126,10 @@ void CMetadataTree::CreateItem()
 		AddDataProcessorItem(newObject, hNewItem);
 	else if (objData.m_clsid == g_metaReportCLSID)
 		AddReportItem(newObject, hNewItem);
+	else if (objData.m_clsid == g_metaInformationRegisterCLSID)
+		AddInformationRegisterItem(newObject, hNewItem);
+	else if (objData.m_clsid == g_metaAccumulationRegisterCLSID)
+		AddAccumulationRegisterItem(newObject, hNewItem);
 
 	if (objData.m_clsid == g_metaTableCLSID)
 		SETITEMTYPE(hNewItem, g_metaAttributeCLSID, ICON_ATTRIBUTE);
@@ -141,7 +150,7 @@ void CMetadataTree::EditItem()
 	wxTreeItemId selection = m_metaTreeWnd->GetSelection();
 	if (!selection.IsOk())
 		return;
-	IMetaObject *m_currObject = GetMetaObject(selection);
+	IMetaObject* m_currObject = GetMetaObject(selection);
 	if (!m_currObject)
 		return;
 	OpenFormMDI(m_currObject);
@@ -157,13 +166,12 @@ void CMetadataTree::RemoveItem()
 	wxTreeItemIdValue m_cookie;
 	wxTreeItemId hItem = m_metaTreeWnd->GetFirstChild(selection, m_cookie);
 
-	while (hItem)
-	{
+	while (hItem) {
 		EraseItem(hItem);
 		hItem = m_metaTreeWnd->GetNextChild(hItem, m_cookie);
 	}
 
-	IMetaObject *metaObject = GetMetaObject(selection);
+	IMetaObject* metaObject = GetMetaObject(selection);
 	wxASSERT(metaObject);
 	EraseItem(selection);
 	m_metaData->RemoveMetaObject(metaObject);
@@ -178,20 +186,19 @@ void CMetadataTree::RemoveItem()
 	}
 }
 
-void CMetadataTree::EraseItem(const wxTreeItemId &item)
+void CMetadataTree::EraseItem(const wxTreeItemId& item)
 {
-	IMetaObject *metaObject = GetMetaObject(item);
+	IMetaObject* metaObject = GetMetaObject(item);
 
 	if (metaObject)
 	{
 		auto itFounded = std::find_if(m_aMetaOpenedForms.begin(), m_aMetaOpenedForms.end(),
-			[metaObject](CDocument *currDoc) {
-			return metaObject == currDoc->GetMetaObject();
-		});
+			[metaObject](CDocument* currDoc) {
+				return metaObject == currDoc->GetMetaObject();
+			});
 
-		if (itFounded != m_aMetaOpenedForms.end())
-		{
-			CDocument *m_foundedDoc = *itFounded;
+		if (itFounded != m_aMetaOpenedForms.end()) {
+			CDocument* m_foundedDoc = *itFounded;
 			m_aMetaOpenedForms.erase(itFounded);
 			m_foundedDoc->DeleteAllViews();
 		}
@@ -207,7 +214,7 @@ void CMetadataTree::PropertyItem()
 		return;
 
 	wxTreeItemId sel = m_metaTreeWnd->GetSelection();
-	IMetaObject *metaObject = GetMetaObject(sel);
+	IMetaObject* metaObject = GetMetaObject(sel);
 
 	objectInspector->ClearProperty();
 	UpdateToolbar(metaObject, sel);
@@ -223,7 +230,7 @@ void CMetadataTree::PropertyItem()
 
 void CMetadataTree::InsertItem()
 {
-	IMetaObject *commonMetaObject = m_metaData->GetCommonMetaObject(); wxTreeItemId hSelItem = m_metaTreeWnd->GetSelection();
+	IMetaObject* commonMetaObject = m_metaData->GetCommonMetaObject(); wxTreeItemId hSelItem = m_metaTreeWnd->GetSelection();
 
 	if (hSelItem == m_treeDATAPROCESSORS) {
 		wxFileDialog openFileDialog(this, _("Open data processor file"), "", "",
@@ -234,7 +241,7 @@ void CMetadataTree::InsertItem()
 
 		wxString classType = CValue::GetNameObjectFromID(g_metaDataProcessorCLSID);
 		wxASSERT(classType.Length() > 0);
-		CMetaObjectDataProcessorValue *newDataProcessor = CValue::CreateAndConvertObjectRef<CMetaObjectDataProcessorValue>(classType);
+		CMetaObjectDataProcessor* newDataProcessor = CValue::CreateAndConvertObjectRef<CMetaObjectDataProcessor>(classType);
 		wxASSERT(newDataProcessor);
 		newDataProcessor->SetClsid(g_metaDataProcessorCLSID);
 
@@ -284,7 +291,7 @@ void CMetadataTree::InsertItem()
 
 		wxString classType = CValue::GetNameObjectFromID(g_metaReportCLSID);
 		wxASSERT(classType.Length() > 0);
-		CMetaObjectReportValue *newDataProcessor = CValue::CreateAndConvertObjectRef<CMetaObjectReportValue>(classType);
+		CMetaObjectReport* newDataProcessor = CValue::CreateAndConvertObjectRef<CMetaObjectReport>(classType);
 		wxASSERT(newDataProcessor);
 		newDataProcessor->SetClsid(g_metaReportCLSID);
 
@@ -334,7 +341,7 @@ void CMetadataTree::ReplaceItem()
 #pragma message("nouverbe to nouverbe: доработать замену обработки/отчёта")
 
 	wxTreeItemId hSelItem = m_metaTreeWnd->GetSelection();
-	IMetaObject *currentMetaObject = GetMetaObject(m_metaTreeWnd->GetSelection());
+	IMetaObject* currentMetaObject = GetMetaObject(m_metaTreeWnd->GetSelection());
 
 	if (currentMetaObject->GetClsid() == g_metaDataProcessorCLSID) {
 
@@ -344,7 +351,7 @@ void CMetadataTree::ReplaceItem()
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
 
-		CMetaObjectDataProcessorValue *newDataProcessor = dynamic_cast<CMetaObjectDataProcessorValue *>(
+		CMetaObjectDataProcessor* newDataProcessor = dynamic_cast<CMetaObjectDataProcessor*>(
 			currentMetaObject
 			);
 
@@ -411,7 +418,7 @@ void CMetadataTree::ReplaceItem()
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
 
-		CMetaObjectReportValue *newDataProcessor = dynamic_cast<CMetaObjectReportValue *>(
+		CMetaObjectReport* newDataProcessor = dynamic_cast<CMetaObjectReport*>(
 			currentMetaObject
 			);
 
@@ -476,7 +483,7 @@ void CMetadataTree::ReplaceItem()
 
 void CMetadataTree::SaveItem()
 {
-	IMetaObject *currentMetaObject = GetMetaObject(m_metaTreeWnd->GetSelection());
+	IMetaObject* currentMetaObject = GetMetaObject(m_metaTreeWnd->GetSelection());
 
 	if (currentMetaObject->GetClsid() == g_metaDataProcessorCLSID) {
 
@@ -488,7 +495,7 @@ void CMetadataTree::SaveItem()
 		if (saveFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
 
-		CMetaObjectDataProcessorValue *newDataProcessor = dynamic_cast<CMetaObjectDataProcessorValue *>(
+		CMetaObjectDataProcessor* newDataProcessor = dynamic_cast<CMetaObjectDataProcessor*>(
 			currentMetaObject
 			);
 
@@ -526,7 +533,7 @@ void CMetadataTree::SaveItem()
 		if (saveFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
 
-		CMetaObjectReportValue *newDataProcessor = dynamic_cast<CMetaObjectReportValue *>(
+		CMetaObjectReport* newDataProcessor = dynamic_cast<CMetaObjectReport*>(
 			currentMetaObject
 			);
 
@@ -562,7 +569,7 @@ void CMetadataTree::CommandItem(unsigned int id)
 	if (appData->GetAppMode() != eRunMode::DESIGNER_MODE)
 		return;
 
-	IMetaObject *metaObject = GetMetaObject(m_metaTreeWnd->GetSelection());
+	IMetaObject* metaObject = GetMetaObject(m_metaTreeWnd->GetSelection());
 
 	if (!metaObject)
 		return;
@@ -570,17 +577,17 @@ void CMetadataTree::CommandItem(unsigned int id)
 	metaObject->ProcessCommand(id);
 }
 
-void CMetadataTree::PrepareReplaceMenu(wxMenu *defultMenu)
+void CMetadataTree::PrepareReplaceMenu(wxMenu* defultMenu)
 {
-	wxMenuItem *menuItem = defultMenu->Append(ID_METATREE_REPLACE, _("replace data processor, report..."));
+	wxMenuItem* menuItem = defultMenu->Append(ID_METATREE_REPLACE, _("replace data processor, report..."));
 	menuItem->Enable(!m_bReadOnly);
 	menuItem = defultMenu->Append(ID_METATREE_SAVE, _("save data processor, report..."));
 	defultMenu->AppendSeparator();
 }
 
-void CMetadataTree::PrepareContextMenu(wxMenu *defultMenu, const wxTreeItemId &item)
+void CMetadataTree::PrepareContextMenu(wxMenu* defultMenu, const wxTreeItemId& item)
 {
-	IMetaObject *metaObject = GetMetaObject(item);
+	IMetaObject* metaObject = GetMetaObject(item);
 
 	if (metaObject
 		&& !metaObject->PrepareContextMenu(defultMenu))
@@ -590,7 +597,7 @@ void CMetadataTree::PrepareContextMenu(wxMenu *defultMenu, const wxTreeItemId &i
 			PrepareReplaceMenu(defultMenu);
 		}
 
-		wxMenuItem *m_menuItem = defultMenu->Append(ID_METATREE_NEW, _("new"));
+		wxMenuItem* m_menuItem = defultMenu->Append(ID_METATREE_NEW, _("new"));
 		m_menuItem->SetBitmap(wxGetImageBMPFromResource(IDB_EDIT_NEW));
 		m_menuItem->Enable(!m_bReadOnly);
 		m_menuItem = defultMenu->Append(ID_METATREE_EDIT, _("edit"));
@@ -603,20 +610,20 @@ void CMetadataTree::PrepareContextMenu(wxMenu *defultMenu, const wxTreeItemId &i
 	}
 	else if (!metaObject && item != m_treeCOMMON)
 	{
-		wxMenuItem *m_menuItem = defultMenu->Append(ID_METATREE_NEW, _("new"));
+		wxMenuItem* m_menuItem = defultMenu->Append(ID_METATREE_NEW, _("new"));
 		m_menuItem->SetBitmap(wxGetImageBMPFromResource(IDB_EDIT_NEW));
 		m_menuItem->Enable(!m_bReadOnly);
 
 		if (item == m_treeDATAPROCESSORS
 			|| item == m_treeREPORTS) {
 			defultMenu->AppendSeparator();
-			wxMenuItem *menuItem = defultMenu->Append(ID_METATREE_INSERT, _("insert data processor, report..."));
+			wxMenuItem* menuItem = defultMenu->Append(ID_METATREE_INSERT, _("insert data processor, report..."));
 			menuItem->Enable(!m_bReadOnly);
 		}
 	}
 }
 
-void CMetadataTree::UpdateToolbar(IMetaObject *obj, const wxTreeItemId &item)
+void CMetadataTree::UpdateToolbar(IMetaObject* obj, const wxTreeItemId& item)
 {
 	m_metaTreeToolbar->EnableTool(ID_METATREE_NEW, item != m_metaTreeWnd->GetRootItem() && !m_bReadOnly && item != m_treeCOMMON);
 	m_metaTreeToolbar->EnableTool(ID_METATREE_EDIT, obj != NULL && item != m_metaTreeWnd->GetRootItem());
@@ -625,7 +632,7 @@ void CMetadataTree::UpdateToolbar(IMetaObject *obj, const wxTreeItemId &item)
 	m_metaTreeToolbar->Refresh();
 }
 
-void CMetadataTree::OnCloseDocument(CDocument *doc)
+void CMetadataTree::OnCloseDocument(CDocument* doc)
 {
 	auto itFounded = std::find(m_aMetaOpenedForms.begin(), m_aMetaOpenedForms.end(), doc);
 
@@ -645,13 +652,13 @@ void CMetadataTree::Modify(bool modify)
 	}
 }
 
-bool CMetadataTree::OpenFormMDI(IMetaObject *obj)
+bool CMetadataTree::OpenFormMDI(IMetaObject* obj)
 {
-	CDocument *foundedDoc = GetDocument(obj);
+	CDocument* foundedDoc = GetDocument(obj);
 
 	//не найден в списке уже существующих
 	if (foundedDoc == NULL) {
-		foundedDoc = reportManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? wxDOC_READONLY : wxDOC_NEW);
+		foundedDoc = docManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? wxDOC_READONLY : wxDOC_NEW);
 		//Значит, подходящего шаблона не было! 
 		if (foundedDoc) {
 			m_aMetaOpenedForms.push_back(foundedDoc); foundedDoc->Activate();
@@ -666,13 +673,13 @@ bool CMetadataTree::OpenFormMDI(IMetaObject *obj)
 	return false;
 }
 
-bool CMetadataTree::OpenFormMDI(IMetaObject *obj, CDocument *&foundedDoc)
+bool CMetadataTree::OpenFormMDI(IMetaObject* obj, CDocument*& foundedDoc)
 {
 	foundedDoc = GetDocument(obj);
 
 	//не найден в списке уже существующих
 	if (foundedDoc == NULL) {
-		foundedDoc = reportManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? wxDOC_READONLY : wxDOC_NEW);
+		foundedDoc = docManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? wxDOC_READONLY : wxDOC_NEW);
 		//Значит, подходящего шаблона не было! 
 		if (foundedDoc) {
 			m_aMetaOpenedForms.push_back(foundedDoc); foundedDoc->Activate();
@@ -687,9 +694,9 @@ bool CMetadataTree::OpenFormMDI(IMetaObject *obj, CDocument *&foundedDoc)
 	return false;
 }
 
-bool CMetadataTree::CloseFormMDI(IMetaObject *obj)
+bool CMetadataTree::CloseFormMDI(IMetaObject* obj)
 {
-	CDocument *foundedDoc = GetDocument(obj);
+	CDocument* foundedDoc = GetDocument(obj);
 
 	//не найден в списке уже существующих
 	if (foundedDoc != NULL) {
@@ -703,17 +710,17 @@ bool CMetadataTree::CloseFormMDI(IMetaObject *obj)
 	return false;
 }
 
-CDocument *CMetadataTree::GetDocument(IMetaObject *obj)
+CDocument* CMetadataTree::GetDocument(IMetaObject* obj)
 {
-	CDocument *m_foundedDoc = NULL;
-	auto itFounded = std::find_if(m_aMetaOpenedForms.begin(), m_aMetaOpenedForms.end(), [obj](CDocument *currDoc) {return obj == currDoc->GetMetaObject(); });
+	CDocument* m_foundedDoc = NULL;
+	auto itFounded = std::find_if(m_aMetaOpenedForms.begin(), m_aMetaOpenedForms.end(), [obj](CDocument* currDoc) {return obj == currDoc->GetMetaObject(); });
 	if (itFounded != m_aMetaOpenedForms.end()) {
 		m_foundedDoc = *itFounded;
 	}
 	return m_foundedDoc;
 }
 
-bool CMetadataTree::RenameMetaObject(IMetaObject *obj, const wxString &sNewName)
+bool CMetadataTree::RenameMetaObject(IMetaObject* obj, const wxString& sNewName)
 {
 	wxTreeItemId curItem = m_metaTreeWnd->GetSelection();
 
@@ -723,7 +730,7 @@ bool CMetadataTree::RenameMetaObject(IMetaObject *obj, const wxString &sNewName)
 
 	if (m_metaData->RenameMetaObject(obj, sNewName))
 	{
-		CDocument *m_currDocument = GetDocument(obj);
+		CDocument* m_currDocument = GetDocument(obj);
 		if (m_currDocument) {
 			m_currDocument->SetTitle(obj->GetClassName() + wxT(": ") + sNewName);
 			m_currDocument->OnChangeFilename(true);
@@ -735,12 +742,12 @@ bool CMetadataTree::RenameMetaObject(IMetaObject *obj, const wxString &sNewName)
 }
 
 #include "common/codeproc.h"
-#include "metadata/objects/baseObject.h"
+#include "metadata/metaObjects/objects/baseObject.h"
 #include "metadata/metaObjects/tables/metaTableObject.h"
 
-void CMetadataTree::AddCatalogItem(IMetaObject *metaObject, const wxTreeItemId &hParentID)
+void CMetadataTree::AddCatalogItem(IMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
-	IMetaObjectRefValue *metaObjectValue = dynamic_cast<IMetaObjectRefValue *>(metaObject);
+	IMetaObjectRecordDataRef* metaObjectValue = dynamic_cast<IMetaObjectRecordDataRef*>(metaObject);
 	wxASSERT(metaObject);
 
 	//Список аттрибутов 
@@ -802,9 +809,9 @@ void CMetadataTree::AddCatalogItem(IMetaObject *metaObject, const wxTreeItemId &
 	}
 }
 
-void CMetadataTree::AddDocumentItem(IMetaObject *metaObject, const wxTreeItemId &hParentID)
+void CMetadataTree::AddDocumentItem(IMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
-	IMetaObjectRefValue *metaObjectValue = dynamic_cast<IMetaObjectRefValue *>(metaObject);
+	IMetaObjectRecordDataRef* metaObjectValue = dynamic_cast<IMetaObjectRecordDataRef*>(metaObject);
 	wxASSERT(metaObjectValue);
 
 	//Список аттрибутов 
@@ -866,9 +873,9 @@ void CMetadataTree::AddDocumentItem(IMetaObject *metaObject, const wxTreeItemId 
 	}
 }
 
-void CMetadataTree::AddEnumerationItem(IMetaObject *metaObject, const wxTreeItemId &hParentID)
+void CMetadataTree::AddEnumerationItem(IMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
-	IMetaObjectRefValue *metaObjectValue = dynamic_cast<IMetaObjectRefValue *>(metaObject);
+	IMetaObjectRecordDataRef* metaObjectValue = dynamic_cast<IMetaObjectRecordDataRef*>(metaObject);
 	wxASSERT(metaObjectValue);
 
 	//Enumerations
@@ -905,9 +912,9 @@ void CMetadataTree::AddEnumerationItem(IMetaObject *metaObject, const wxTreeItem
 	}
 }
 
-void CMetadataTree::AddDataProcessorItem(IMetaObject *metaObject, const wxTreeItemId &hParentID)
+void CMetadataTree::AddDataProcessorItem(IMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
-	IMetaObjectValue *metaObjectValue = dynamic_cast<IMetaObjectValue *>(metaObject);
+	IMetaObjectRecordData* metaObjectValue = dynamic_cast<IMetaObjectRecordData*>(metaObject);
 	wxASSERT(metaObjectValue);
 
 	//Список аттрибутов 
@@ -967,9 +974,9 @@ void CMetadataTree::AddDataProcessorItem(IMetaObject *metaObject, const wxTreeIt
 	}
 }
 
-void CMetadataTree::AddReportItem(IMetaObject *metaObject, const wxTreeItemId &hParentID)
+void CMetadataTree::AddReportItem(IMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
-	IMetaObjectValue *metaObjectValue = dynamic_cast<IMetaObjectValue *>(metaObject);
+	IMetaObjectRecordData* metaObjectValue = dynamic_cast<IMetaObjectRecordData*>(metaObject);
 	wxASSERT(metaObjectValue);
 
 	//Список аттрибутов 
@@ -1031,9 +1038,149 @@ void CMetadataTree::AddReportItem(IMetaObject *metaObject, const wxTreeItemId &h
 	}
 }
 
-void CMetadataTree::EditModule(const wxString &fullName, int lineNumber, bool setRunLine)
+void CMetadataTree::AddInformationRegisterItem(IMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
-	IMetaObject *metaObject = m_metaData->FindByName(fullName);
+	IMetaObjectRegisterData* metaObjectValue = dynamic_cast<IMetaObjectRegisterData*>(metaObject);
+	wxASSERT(metaObjectValue);
+
+	//Список измерений 
+	wxTreeItemId hDimentions = m_metaTreeWnd->AppendItem(hParentID, objectDimensionsName, 211, 211);
+	SETITEMTYPE(hDimentions, g_metaDimensionCLSID, 214);
+
+	for (auto metaDimension : metaObjectValue->GetObjectDimensions()) {
+		if (metaDimension->IsDeleted())
+			continue;
+		if (metaDimension->DefaultAttribute())
+			continue;
+
+		wxTreeItemId hItem = m_metaTreeWnd->AppendItem(hDimentions, metaDimension->GetName(), 214, 214);
+		m_aMetaObj.insert_or_assign(hItem, metaDimension);
+	}
+
+	//Список ресурсов 
+	wxTreeItemId hResources = m_metaTreeWnd->AppendItem(hParentID, objectResourcesName, 212, 212);
+	SETITEMTYPE(hResources, g_metaResourceCLSID, 214);
+
+	for (auto metaResource : metaObjectValue->GetObjectResources()) {
+		if (metaResource->IsDeleted())
+			continue;
+		if (metaResource->DefaultAttribute())
+			continue;
+
+		wxTreeItemId hItem = m_metaTreeWnd->AppendItem(hResources, metaResource->GetName(), 214, 214);
+		m_aMetaObj.insert_or_assign(hItem, metaResource);
+	}
+
+	//Список аттрибутов 
+	wxTreeItemId hAttributes = m_metaTreeWnd->AppendItem(hParentID, objectAttributesName, 213, 213);
+	SETITEMTYPE(hAttributes, g_metaAttributeCLSID, ICON_ATTRIBUTE);
+
+	for (auto metaAttribute : metaObjectValue->GetObjectAttributes()) {
+		if (metaAttribute->IsDeleted())
+			continue;
+		if (metaAttribute->DefaultAttribute())
+			continue;
+
+		wxTreeItemId hItem = m_metaTreeWnd->AppendItem(hAttributes, metaAttribute->GetName(), ICON_ATTRIBUTE, ICON_ATTRIBUTE);
+		m_aMetaObj.insert_or_assign(hItem, metaAttribute);
+	}
+
+	//Формы
+	wxTreeItemId hForm = m_metaTreeWnd->AppendItem(hParentID, objectFormsName, ICON_FORMGROUP, ICON_FORMGROUP);
+	SETITEMTYPE(hForm, g_metaFormCLSID, ICON_FORM);
+
+	for (auto metaForm : metaObjectValue->GetObjectForms()) {
+		if (metaForm->IsDeleted())
+			continue;
+		wxTreeItemId hItem = m_metaTreeWnd->AppendItem(hForm, metaForm->GetName(), ICON_FORM, ICON_FORM);
+		m_aMetaObj.insert_or_assign(hItem, metaForm);
+	}
+
+	//Таблицы
+	wxTreeItemId hTemplates = m_metaTreeWnd->AppendItem(hParentID, objectTablesName, ICON_MAKETGROUP, ICON_MAKETGROUP);
+	SETITEMTYPE(hTemplates, g_metaTemplateCLSID, ICON_MAKET);
+
+	for (auto metaTemplates : metaObjectValue->GetObjectTemplates()) {
+		if (metaTemplates->IsDeleted())
+			continue;
+		wxTreeItemId hItem = m_metaTreeWnd->AppendItem(hTemplates, metaTemplates->GetName(), ICON_MAKET, ICON_MAKET);
+		m_aMetaObj.insert_or_assign(hItem, metaTemplates);
+	}
+}
+
+void CMetadataTree::AddAccumulationRegisterItem(IMetaObject* metaObject, const wxTreeItemId& hParentID)
+{
+	IMetaObjectRegisterData* metaObjectValue = dynamic_cast<IMetaObjectRegisterData*>(metaObject);
+	wxASSERT(metaObjectValue);
+
+	//Список измерений 
+	wxTreeItemId hDimentions = m_metaTreeWnd->AppendItem(hParentID, objectDimensionsName, 211, 211);
+	SETITEMTYPE(hDimentions, g_metaDimensionCLSID, 214);
+
+	for (auto metaDimension : metaObjectValue->GetObjectDimensions()) {
+		if (metaDimension->IsDeleted())
+			continue;
+		if (metaDimension->DefaultAttribute())
+			continue;
+
+		wxTreeItemId hItem = m_metaTreeWnd->AppendItem(hDimentions, metaDimension->GetName(), 214, 214);
+		m_aMetaObj.insert_or_assign(hItem, metaDimension);
+	}
+
+	//Список ресурсов 
+	wxTreeItemId hResources = m_metaTreeWnd->AppendItem(hParentID, objectResourcesName, 212, 212);
+	SETITEMTYPE(hResources, g_metaResourceCLSID, 214);
+
+	for (auto metaResource : metaObjectValue->GetObjectResources()) {
+		if (metaResource->IsDeleted())
+			continue;
+		if (metaResource->DefaultAttribute())
+			continue;
+
+		wxTreeItemId hItem = m_metaTreeWnd->AppendItem(hResources, metaResource->GetName(), 214, 214);
+		m_aMetaObj.insert_or_assign(hItem, metaResource);
+	}
+
+	//Список аттрибутов 
+	wxTreeItemId hAttributes = m_metaTreeWnd->AppendItem(hParentID, objectAttributesName, 213, 213);
+	SETITEMTYPE(hAttributes, g_metaAttributeCLSID, ICON_ATTRIBUTE);
+
+	for (auto metaAttribute : metaObjectValue->GetObjectAttributes()) {
+		if (metaAttribute->IsDeleted())
+			continue;
+		if (metaAttribute->DefaultAttribute())
+			continue;
+
+		wxTreeItemId hItem = m_metaTreeWnd->AppendItem(hAttributes, metaAttribute->GetName(), ICON_ATTRIBUTE, ICON_ATTRIBUTE);
+		m_aMetaObj.insert_or_assign(hItem, metaAttribute);
+	}
+
+	//Формы
+	wxTreeItemId hForm = m_metaTreeWnd->AppendItem(hParentID, objectFormsName, ICON_FORMGROUP, ICON_FORMGROUP);
+	SETITEMTYPE(hForm, g_metaFormCLSID, ICON_FORM);
+
+	for (auto metaForm : metaObjectValue->GetObjectForms()) {
+		if (metaForm->IsDeleted())
+			continue;
+		wxTreeItemId hItem = m_metaTreeWnd->AppendItem(hForm, metaForm->GetName(), ICON_FORM, ICON_FORM);
+		m_aMetaObj.insert_or_assign(hItem, metaForm);
+	}
+
+	//Таблицы
+	wxTreeItemId hTemplates = m_metaTreeWnd->AppendItem(hParentID, objectTablesName, ICON_MAKETGROUP, ICON_MAKETGROUP);
+	SETITEMTYPE(hTemplates, g_metaTemplateCLSID, ICON_MAKET);
+
+	for (auto metaTemplates : metaObjectValue->GetObjectTemplates()) {
+		if (metaTemplates->IsDeleted())
+			continue;
+		wxTreeItemId hItem = m_metaTreeWnd->AppendItem(hTemplates, metaTemplates->GetName(), ICON_MAKET, ICON_MAKET);
+		m_aMetaObj.insert_or_assign(hItem, metaTemplates);
+	}
+}
+
+void CMetadataTree::EditModule(const wxString& fullName, int lineNumber, bool setRunLine)
+{
+	IMetaObject* metaObject = m_metaData->FindByName(fullName);
 
 	if (!metaObject)
 		return;
@@ -1041,12 +1188,12 @@ void CMetadataTree::EditModule(const wxString &fullName, int lineNumber, bool se
 	if (m_bReadOnly)
 		return;
 
-	CDocument *m_foundedDoc = NULL;
+	CDocument* m_foundedDoc = NULL;
 
 	if (!OpenFormMDI(metaObject, m_foundedDoc))
 		return;
 
-	ICodeInfo *m_codeInfo = dynamic_cast<ICodeInfo *>(m_foundedDoc);
+	ICodeInfo* m_codeInfo = dynamic_cast<ICodeInfo*>(m_foundedDoc);
 
 	if (m_codeInfo) {
 		m_codeInfo->SetCurrentLine(lineNumber, setRunLine);
@@ -1094,6 +1241,12 @@ void CMetadataTree::InitTree()
 	m_treeREPORTS = m_metaTreeWnd->AppendItem(m_treeMETADATA, reportsName, 87, 87);
 	SETITEMTYPE(m_treeREPORTS, g_metaReportCLSID, 597);
 
+	m_treeINFORMATION_REGISTERS = m_metaTreeWnd->AppendItem(m_treeMETADATA, informationRegisterName, 209, 209);
+	SETITEMTYPE(m_treeINFORMATION_REGISTERS, g_metaInformationRegisterCLSID, 210);
+
+	m_treeACCUMULATION_REGISTERS = m_metaTreeWnd->AppendItem(m_treeMETADATA, accumulationRegisterName, 209, 209);
+	SETITEMTYPE(m_treeACCUMULATION_REGISTERS, g_metaAccumulationRegisterCLSID, 210);
+
 	//Set item bold and name
 	m_metaTreeWnd->SetItemText(m_treeMETADATA, wxT("configuration"));
 	m_metaTreeWnd->SetItemBold(m_treeMETADATA);
@@ -1126,6 +1279,8 @@ void CMetadataTree::ClearTree()
 	if (m_treeENUMERATIONS.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeENUMERATIONS);
 	if (m_treeDATAPROCESSORS.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeDATAPROCESSORS);
 	if (m_treeREPORTS.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeREPORTS);
+	if (m_treeINFORMATION_REGISTERS.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeINFORMATION_REGISTERS);
+	if (m_treeACCUMULATION_REGISTERS.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeACCUMULATION_REGISTERS);
 
 	//delete all items
 	m_metaTreeWnd->DeleteAllItems();
@@ -1136,7 +1291,7 @@ void CMetadataTree::ClearTree()
 
 void CMetadataTree::FillData()
 {
-	IMetaObject *m_commonMetadata = m_metaData->GetCommonMetaObject();
+	IMetaObject* m_commonMetadata = m_metaData->GetCommonMetaObject();
 	wxASSERT(m_commonMetadata);
 	m_metaTreeWnd->SetItemText(m_treeMETADATA, m_metaData->GetMetadataName());
 
@@ -1238,6 +1393,28 @@ void CMetadataTree::FillData()
 		m_aMetaObj.insert_or_assign(hItem, report);
 	}
 
+	//****************************************************************
+	//*                          Information register			     *
+	//****************************************************************
+	for (auto informationRegister : m_metaData->GetMetaObjects(g_metaInformationRegisterCLSID)) {
+		if (informationRegister->IsDeleted())
+			continue;
+		wxTreeItemId hItem = m_metaTreeWnd->AppendItem(m_treeINFORMATION_REGISTERS, informationRegister->GetName(), 210, 210);
+		AddInformationRegisterItem(informationRegister, hItem);
+		m_aMetaObj.insert_or_assign(hItem, informationRegister);
+	}
+
+	//****************************************************************
+	//*                          Accumulation register			     *
+	//****************************************************************
+	for (auto accumulationRegister : m_metaData->GetMetaObjects(g_metaAccumulationRegisterCLSID)) {
+		if (accumulationRegister->IsDeleted())
+			continue;
+		wxTreeItemId hItem = m_metaTreeWnd->AppendItem(m_treeACCUMULATION_REGISTERS, accumulationRegister->GetName(), 210, 210);
+		AddAccumulationRegisterItem(accumulationRegister, hItem);
+		m_aMetaObj.insert_or_assign(hItem, accumulationRegister);
+	}
+
 	//set modify 
 	Modify(m_metaData->IsModified());
 
@@ -1245,7 +1422,7 @@ void CMetadataTree::FillData()
 	UpdateToolbar(m_commonMetadata, m_treeMETADATA);
 }
 
-bool CMetadataTree::Load(CConfigFileMetadata *metadataObj)
+bool CMetadataTree::Load(CConfigFileMetadata* metadataObj)
 {
 	ClearTree();
 	m_metaData = metadataObj ? metadataObj : IConfigMetadata::Get();

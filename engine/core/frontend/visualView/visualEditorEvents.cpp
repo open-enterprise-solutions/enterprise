@@ -86,7 +86,7 @@ void CVisualEditorContextForm::NotifyObjectRemoved(IValueFrame* obj)
 
 void CVisualEditorContextForm::NotifyPropertyModified(Property* prop)
 {
-	wxFramePropertyEvent event(wxEVT_PROPERTY_MODIFIED, prop, "");
+	wxFramePropertyEvent event(wxEVT_PROPERTY_MODIFIED, prop, wxNullVariant);
 	NotifyEvent(event, false);
 }
 

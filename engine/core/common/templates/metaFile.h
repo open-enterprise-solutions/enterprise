@@ -64,7 +64,7 @@ class CMetataEditDocument : public CMetadataDocument
 {
 public:
 
-	CMetataEditDocument() : CMetadataDocument() { m_bChildDoc = false; }
+	CMetataEditDocument() : CMetadataDocument() { m_childDoc = false; }
 	virtual CMetadataTree *GetMetaTree() const;
 
 	wxDECLARE_NO_COPY_CLASS(CMetataEditDocument);

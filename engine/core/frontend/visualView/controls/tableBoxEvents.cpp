@@ -1,14 +1,18 @@
 #include "tableBox.h" 
 #include "frontend/visualView/visualEditor.h"
+#include "appData.h"
 
-void CValueTableBox::OnColumnClick(wxDataViewEvent &event)
+void CValueTableBox::OnColumnClick(wxDataViewEvent& event)
 {
-	CDataViewColumnObject *columnValue = dynamic_cast<CDataViewColumnObject *>(event.GetDataViewColumn());
+	CDataViewColumnObject* columnValue = dynamic_cast<CDataViewColumnObject*>(event.GetDataViewColumn());
 	wxASSERT(columnValue);
-	if (m_visualHostContext) {
-		CVisualEditorContextForm::CVisualEditor *visualEditor = m_visualHostContext->GetVisualEditor();
+
+	if (m_visualHostContext != NULL) {
+
+		CVisualEditorContextForm::CVisualEditorHost* visualEditor = m_visualHostContext->GetVisualEditor();
 		wxASSERT(visualEditor);
-		IValueFrame *columnControl = visualEditor->GetObjectBase(columnValue);
+
+		IValueFrame* columnControl = visualEditor->GetObjectBase(columnValue);
 		wxASSERT(columnControl);
 		m_visualHostContext->SelectObject(columnControl);
 	}
@@ -16,18 +20,28 @@ void CValueTableBox::OnColumnClick(wxDataViewEvent &event)
 	event.Skip();
 }
 
-void CValueTableBox::OnColumnReordered(wxDataViewEvent &event)
+void CValueTableBox::OnColumnReordered(wxDataViewEvent& event)
 {
-	CDataViewColumnObject *columnValue = dynamic_cast<CDataViewColumnObject *>(event.GetDataViewColumn());
-	wxASSERT(columnValue);
-	if (m_visualHostContext) {
-		CVisualEditorContextForm::CVisualEditor *visualEditor = m_visualHostContext->GetVisualEditor();
-		wxASSERT(visualEditor);
-		IValueFrame *columnControl = visualEditor->GetObjectBase(columnValue);
-		wxASSERT(columnControl);
+	CDataViewColumnObject* columnValue =
+		dynamic_cast<CDataViewColumnObject*>(event.GetDataViewColumn());
 
-		if (ChangeChildPosition(columnControl, event.GetColumn()))
+	wxASSERT(columnValue);
+
+	if (m_visualHostContext != NULL) {
+
+		CVisualEditorContextForm::CVisualEditorHost* visualEditor = m_visualHostContext->GetVisualEditor();
+		wxASSERT(visualEditor);
+		IValueFrame* columnControl = visualEditor->GetObjectBase(columnValue);
+		wxASSERT(columnControl);
+		if (ChangeChildPosition(columnControl, event.GetColumn())) {
 			m_visualHostContext->RefreshEditor();
+		}
+	}
+	else if (!appData->DesignerMode()) {
+
+		CValueTableBoxColumn* columnControl = columnValue->GetControl();
+		wxASSERT(columnControl);
+		ChangeChildPosition(columnControl, event.GetColumn());
 	}
 
 	event.Skip();
@@ -37,9 +51,9 @@ void CValueTableBox::OnColumnReordered(wxDataViewEvent &event)
 //*                          System event                             *
 //*********************************************************************
 
-#include "metadata/objects/baseObject.h"
+#include "metadata/metaObjects/objects/baseObject.h"
 
-void CValueTableBox::OnSelectionChanged(wxDataViewEvent &event)
+void CValueTableBox::OnSelectionChanged(wxDataViewEvent& event)
 {
 	// event is a wxDataViewEvent
 	wxDataViewItem item = event.GetItem();
@@ -53,11 +67,11 @@ void CValueTableBox::OnSelectionChanged(wxDataViewEvent &event)
 		CValue(this), // control
 		CValue(m_tableModel->GetRowAt(item)), // rowSelected
 		standardProcessing //standardProcessing
-	); 
+	);
 
 	if (standardProcessing.GetBoolean()) {
 
-		if (m_tableCurrentLine)
+		if (m_tableCurrentLine != NULL)
 			m_tableCurrentLine->DecrRef();
 
 		m_tableCurrentLine = m_tableModel->GetRowAt(item);
@@ -70,7 +84,7 @@ void CValueTableBox::OnSelectionChanged(wxDataViewEvent &event)
 	}
 }
 
-void CValueTableBox::OnItemActivated(wxDataViewEvent &event)
+void CValueTableBox::OnItemActivated(wxDataViewEvent& event)
 {
 	// event is a wxDataViewEvent
 	wxDataViewItem item = event.GetItem();
@@ -79,7 +93,7 @@ void CValueTableBox::OnItemActivated(wxDataViewEvent &event)
 		return;
 
 	if (m_tableModel) {
-		m_tableModel->ActivateItem(m_formOwner, 
+		m_tableModel->ActivateItem(m_formOwner,
 			item, event.GetColumn()
 		);
 	}
@@ -91,27 +105,27 @@ void CValueTableBox::OnItemActivated(wxDataViewEvent &event)
 	event.Skip();
 }
 
-void CValueTableBox::OnItemCollapsed(wxDataViewEvent &event)
+void CValueTableBox::OnItemCollapsed(wxDataViewEvent& event)
 {
 	event.Skip();
 }
 
-void CValueTableBox::OnItemExpanded(wxDataViewEvent &event)
+void CValueTableBox::OnItemExpanded(wxDataViewEvent& event)
 {
 	event.Skip();
 }
 
-void CValueTableBox::OnItemCollapsing(wxDataViewEvent &event)
+void CValueTableBox::OnItemCollapsing(wxDataViewEvent& event)
 {
 	event.Skip();
 }
 
-void CValueTableBox::OnItemExpanding(wxDataViewEvent &event)
+void CValueTableBox::OnItemExpanding(wxDataViewEvent& event)
 {
 	event.Skip();
 }
 
-void CValueTableBox::OnItemStartEditing(wxDataViewEvent &event)
+void CValueTableBox::OnItemStartEditing(wxDataViewEvent& event)
 {
 	// event is a wxDataViewEvent
 	wxDataViewItem item = event.GetItem();
@@ -125,28 +139,28 @@ void CValueTableBox::OnItemStartEditing(wxDataViewEvent &event)
 		event.Veto(); /*!!!*/
 }
 
-void CValueTableBox::OnItemEditingStarted(wxDataViewEvent &event)
+void CValueTableBox::OnItemEditingStarted(wxDataViewEvent& event)
 {
 	event.Skip();
 }
 
-void CValueTableBox::OnItemEditingDone(wxDataViewEvent &event)
+void CValueTableBox::OnItemEditingDone(wxDataViewEvent& event)
 {
 	event.Skip();
 }
 
-void CValueTableBox::OnItemValueChanged(wxDataViewEvent &event)
+void CValueTableBox::OnItemValueChanged(wxDataViewEvent& event)
 {
 	event.Skip();
 }
 
 #if wxUSE_DRAG_AND_DROP
 
-void CValueTableBox::OnItemBeginDrag(wxDataViewEvent &event)
+void CValueTableBox::OnItemBeginDrag(wxDataViewEvent& event)
 {
 }
 
-void CValueTableBox::OnItemDropPossible(wxDataViewEvent &event)
+void CValueTableBox::OnItemDropPossible(wxDataViewEvent& event)
 {
 	if (event.GetDataFormat() != wxDF_UNICODETEXT)
 		event.Veto();
@@ -154,7 +168,7 @@ void CValueTableBox::OnItemDropPossible(wxDataViewEvent &event)
 		event.SetDropEffect(wxDragMove);	// check 'move' drop effect
 }
 
-void CValueTableBox::OnItemDrop(wxDataViewEvent &event)
+void CValueTableBox::OnItemDrop(wxDataViewEvent& event)
 {
 	wxDataViewItem item(event.GetItem());
 
@@ -167,12 +181,12 @@ void CValueTableBox::OnItemDrop(wxDataViewEvent &event)
 
 #endif // wxUSE_DRAG_AND_DROP
 
-void CValueTableBox::OnCommandMenu(wxCommandEvent &event)
+void CValueTableBox::OnCommandMenu(wxCommandEvent& event)
 {
 	CValueTableBox::ExecuteAction(event.GetId(), m_formOwner);
 }
 
-void CValueTableBox::OnContextMenu(wxDataViewEvent &event)
+void CValueTableBox::OnContextMenu(wxDataViewEvent& event)
 {
 	wxMenu menu;
 
@@ -184,7 +198,7 @@ void CValueTableBox::OnContextMenu(wxDataViewEvent &event)
 		menu.Append(id, actions.GetNameByID(id));
 	}
 
-	wxDataViewCtrl *wnd = wxDynamicCast(
+	wxDataViewCtrl* wnd = wxDynamicCast(
 		event.GetEventObject(), wxDataViewCtrl
 	);
 

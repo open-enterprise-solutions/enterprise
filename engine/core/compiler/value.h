@@ -13,7 +13,7 @@ public:
 
 	ITypeValue(eValueTypes type) : wxObject(), m_typeClass(type) {}
 
-	virtual CValue *GetRef() const = 0;
+	virtual CValue* GetRef() const = 0;
 
 	//Виртуальные методы:
 	virtual void SetType(eValueTypes type);
@@ -24,7 +24,7 @@ public:
 
 public:
 
-	virtual CLASS_ID GetTypeID() const;
+	virtual CLASS_ID GetClassType() const;
 
 public:
 
@@ -44,7 +44,7 @@ public:
 		bool          m_bData;  //TYPE_BOOL
 		number_t      m_fData;  //TYPE_NUMBER
 		wxLongLong_t  m_dData;  //TYPE_DATE
-		CValue        *m_pRef;  //TYPE_REFFER
+		CValue* m_pRef;  //TYPE_REFFER
 	};
 
 	wxString m_sData;  //TYPE_STRING
@@ -63,12 +63,12 @@ public:
 	CValue(signed int cParam); //number 
 	CValue(unsigned int cParam); //number
 	CValue(double cParam); //number 
-	CValue(const number_t &cParam); //number 
+	CValue(const number_t& cParam); //number 
 	CValue(wxLongLong_t cParam); //date 
-	CValue(const wxDateTime &cParam); //date 
+	CValue(const wxDateTime& cParam); //date 
 	CValue(int nYear, int nMonth, int nDay, unsigned short nHour = 0, unsigned short nMinute = 0, unsigned short nSecond = 0); //date 
-	CValue(const wxString &sParam); //string 
-	CValue(char *sParam); //string 
+	CValue(const wxString& sParam); //string 
+	CValue(char* sParam); //string 
 
 	//деструктор:
 	virtual ~CValue();
@@ -84,25 +84,25 @@ public:
 	virtual void DecrRef();
 
 	//операторы:
-	void operator = (const CValue &cParam);
+	void operator = (const CValue& cParam);
 
 	void operator = (bool cParam);
 	void operator = (int cParam);
 	void operator = (unsigned int cParam);
 	void operator = (double cParam);
-	void operator = (const wxString &cParam);
+	void operator = (const wxString& cParam);
 	void operator = (eValueTypes cParam);
-	void operator = (CValue *pParam);
-	void operator = (const wxDateTime &cParam);
+	void operator = (CValue* pParam);
+	void operator = (const wxDateTime& cParam);
 	void operator = (wxLongLong_t cParam);
 
 	//Реализация операторов сравнения:
-	bool operator > (const CValue &cParam) const { return CompareValueGT(cParam); }
-	bool operator >= (const CValue &cParam) const { return CompareValueGE(cParam); }
-	bool operator < (const CValue &cParam) const { return CompareValueLS(cParam); }
-	bool operator <= (const CValue &cParam) const { return CompareValueLE(cParam); }
-	bool operator == (const CValue &cParam) const { return CompareValueEQ(cParam); }
-	bool operator != (const CValue &cParam) const { return CompareValueNE(cParam); }
+	bool operator > (const CValue& cParam) const { return CompareValueGT(cParam); }
+	bool operator >= (const CValue& cParam) const { return CompareValueGE(cParam); }
+	bool operator < (const CValue& cParam) const { return CompareValueLS(cParam); }
+	bool operator <= (const CValue& cParam) const { return CompareValueLE(cParam); }
+	bool operator == (const CValue& cParam) const { return CompareValueEQ(cParam); }
+	bool operator != (const CValue& cParam) const { return CompareValueNE(cParam); }
 
 	const CValue& operator+(const CValue& cParam);
 	const CValue& operator-(const CValue& cParam);
@@ -117,35 +117,35 @@ public:
 	wxDateTime ToDateTime() const;
 
 	//Реализация операторов сравнения:
-	virtual inline bool CompareValueGT(const CValue &cParam) const;
-	virtual inline bool CompareValueGE(const CValue &cParam) const;
-	virtual inline bool CompareValueLS(const CValue &cParam) const;
-	virtual inline bool CompareValueLE(const CValue &cParam) const;
-	virtual inline bool CompareValueEQ(const CValue &cParam) const;
-	virtual inline bool CompareValueNE(const CValue &cParam) const;
+	virtual inline bool CompareValueGT(const CValue& cParam) const;
+	virtual inline bool CompareValueGE(const CValue& cParam) const;
+	virtual inline bool CompareValueLS(const CValue& cParam) const;
+	virtual inline bool CompareValueLE(const CValue& cParam) const;
+	virtual inline bool CompareValueEQ(const CValue& cParam) const;
+	virtual inline bool CompareValueNE(const CValue& cParam) const;
 
 	//special converting
-	template <typename valueType> inline valueType *ConvertToType() {
+	template <typename valueType> inline valueType* ConvertToType() {
 		return value_cast<valueType>(this);
 	}
 
 	template <typename enumType > inline enumType ConvertToEnumType()
 	{
-		class IEnumerationVariant<enumType> *enumValue =
+		class IEnumerationVariant<enumType>* enumValue =
 			value_cast<class IEnumerationVariant<enumType>>(this);
 		wxASSERT(enumValue);
 		return enumValue->GetEnumValue();
 	};
 
 	//convert to value
-	template <typename retType> inline bool ConvertToValue(retType &refValue) const
+	template <typename retType> inline bool ConvertToValue(retType& refValue) const
 	{
 		if (m_typeClass == eValueTypes::TYPE_REFFER) {
-			refValue = dynamic_cast<retType> (m_pRef);
+			refValue = dynamic_cast<retType> (GetRef());
 			return refValue != NULL;
 		}
 		else if (m_typeClass != eValueTypes::TYPE_EMPTY) {
-			CValue *refData = const_cast<CValue *>(this);
+			CValue* refData = const_cast<CValue*>(this);
 			wxASSERT(refData);
 			refValue = dynamic_cast<retType> (refData);
 			return refValue != NULL;
@@ -157,94 +157,114 @@ public:
 public:
 
 	//runtime support:
-	static CValue CreateObject(const wxString &className, CValue **aParams = NULL) { 
-		return CreateObjectRef(className, aParams); 
+	static CValue CreateObject(const wxString& className, CValue** aParams = NULL) {
+		return CreateObjectRef(className, aParams);
 	}
-	
-	static CValue *CreateObjectRef(const wxString &className, CValue **aParams = NULL);
+
+	static CValue* CreateObjectRef(const wxString& className, CValue** aParams = NULL);
 
 	template<class retType = CValue>
-	static retType* CreateAndConvertObjectRef(const wxString &className, CValue **aParams = NULL) {
-		return value_cast<retType>(CreateObjectRef(className, aParams)); 
+	static retType* CreateAndConvertObjectRef(const wxString& className, CValue** aParams = NULL) {
+		return value_cast<retType>(CreateObjectRef(className, aParams));
 	}
 
-	static void RegisterObject(const wxString &className, IObjectValueAbstract *singleObject);
-	static void UnRegisterObject(const wxString &className);
+	static void RegisterObject(const wxString& className, IObjectValueAbstract* singleObject);
+	static void UnRegisterObject(const wxString& className);
 
-	static bool IsRegisterObject(const wxString &className);
-	static bool IsRegisterObject(const wxString &className, eObjectType objectType);
+	static bool IsRegisterObject(const wxString& className);
+	static bool IsRegisterObject(const wxString& className, eObjectType objectType);
+	static bool IsRegisterObject(const CLASS_ID& clsid);
 
-	static CLASS_ID GetTypeIDByRef(const wxClassInfo *classInfo);
-	static CLASS_ID GetTypeIDByRef(const ITypeValue *objectRef);
+	static CLASS_ID GetTypeIDByRef(const wxClassInfo* classInfo);
+	static CLASS_ID GetTypeIDByRef(const ITypeValue* objectRef);
 
-	static CLASS_ID GetIDObjectFromString(const wxString &className);
-	static bool CompareObjectName(const wxString &className, eValueTypes valueType);
-	static wxString GetNameObjectFromID(const CLASS_ID &clsid, bool upper = false);
+	static CLASS_ID GetIDObjectFromString(const wxString& className);
+	static bool CompareObjectName(const wxString& className, eValueTypes valueType);
+	static wxString GetNameObjectFromID(const CLASS_ID& clsid, bool upper = false);
 	static wxString GetNameObjectFromVT(eValueTypes valueType, bool upper = false);
-	static eValueTypes GetVTByID(const CLASS_ID &clsid);
-	static CLASS_ID GetIDByVT(const eValueTypes &valueType);
+	static eValueTypes GetVTByID(const CLASS_ID& clsid);
+	static CLASS_ID GetIDByVT(const eValueTypes& valueType);
 
-	static IObjectValueAbstract *GetAvailableObject(const wxString &className);
+	static IObjectValueAbstract* GetAvailableObject(const CLASS_ID& clsid);
+	static IObjectValueAbstract* GetAvailableObject(const wxString& className);
+
 	static wxArrayString GetAvailableObjects(eObjectType objectType = eObjectType::eObjectType_object);
 
 	//special copy function
 	inline void Copy(const CValue& cOld);
 
-	void FromDate(int &nYear, int &nMonth, int &nDay) const;
-	void FromDate(int &nYear, int &nMonth, int &nDay, unsigned short &nHour, unsigned short &nMinute, unsigned short &nSecond) const;
-	void FromDate(int &nYear, int &nMonth, int &nDay, int &DayOfWeek, int &DayOfYear, int &WeekOfYear) const;
+	void FromDate(int& nYear, int& nMonth, int& nDay) const;
+	void FromDate(int& nYear, int& nMonth, int& nDay, unsigned short& nHour, unsigned short& nMinute, unsigned short& nSecond) const;
+	void FromDate(int& nYear, int& nMonth, int& nDay, int& DayOfWeek, int& DayOfYear, int& WeekOfYear) const;
 
-	virtual void Attach(void *pObj);
+	virtual void Attach(void* pObj);
 	virtual void Detach();
-	virtual void *GetAttach();
+	virtual void* GetAttach();
 
 	//Виртуальные методы:
 	virtual inline bool IsEmpty() const;
 	virtual wxString GetTypeString() const;
 
-	virtual bool Init() { return true; }
-	virtual bool Init(CValue **aParams) { return true; }
+	virtual bool Init() { 
 
-	virtual void SetValue(const CValue &cVal);
+		if (m_typeClass == eValueTypes::TYPE_REFFER) {
+			CValue *refValue = GetRef();
+			if (refValue != NULL) {
+				return refValue->Init(); 
+			}
+		}
 
-	virtual void SetString(const wxString &sValue);
-	virtual void SetNumber(const wxString &sValue);
-	virtual void SetBoolean(const wxString &sValue);
-	virtual void SetDate(const wxString &Value);
+		return true; 
+	}
+	
+	virtual bool Init(CValue** aParams) {
 
-	virtual bool FindValue(const wxString &findData, std::vector<CValue> &foundedObjects);
+		if (m_typeClass == eValueTypes::TYPE_REFFER) {
+			CValue* refValue = GetRef();
+			if (refValue != NULL) {
+				return refValue->Init(aParams);
+			}
+		}
 
-	void SetData(const CValue &cVal);//установка значения без изменения типа
+		return true;
+	}
 
-	virtual CValue GetValue(bool bThis = false);
+	virtual void SetValue(const CValue& cVal);
+
+	virtual void SetString(const wxString& sValue);
+	virtual void SetNumber(const wxString& sValue);
+	virtual void SetBoolean(const wxString& sValue);
+	virtual void SetDate(const wxString& Value);
+
+	virtual bool FindValue(const wxString& findData, std::vector<CValue>& foundedObjects);
+
+	void SetData(const CValue& cVal);//установка значения без изменения типа
+
+	virtual CValue GetValue(bool getThis = false);
 
 	virtual bool GetBoolean() const;
 	virtual number_t GetNumber() const;
 	virtual wxString GetString() const;
 	virtual wxLongLong_t GetDate() const;
 
-	virtual CValue *GetRef() const;
-
-	//special
-	virtual void SetBinaryData(int nPosition, PreparedStatement *prepare);
-	virtual void GetBinaryData(int nPosition, DatabaseResultSet *databaseResultSet);
+	virtual CValue* GetRef() const;
 
 	//РАБОТА КАК АГРЕГАТНОГО ОБЪЕКТА:
 	//эти методы нужно переопределить в ваших агрегатных объектах:
 	virtual CMethods* GetPMethods() const { return NULL; }//получить ссылку на класс помощник разбора имен атрибутов и методов
 	virtual void PrepareNames() const {}//этот метод автоматически вызывается для инициализации имен атрибутов и методов
 
-	virtual CValue Method(methodArg_t &aParams);
-	virtual void SetAttribute(attributeArg_t &aParams, CValue &cVal);//установка атрибута
-	virtual CValue GetAttribute(attributeArg_t &aParams);//значение атрибута
+	virtual CValue Method(methodArg_t& aParams);
+	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);//установка атрибута
+	virtual CValue GetAttribute(attributeArg_t& aParams);//значение атрибута
 
 	//а эти методы необязательны для переопределения (т.к. они автоматически поддерживаются данным базовым классом):
-	CValue Method(const wxString &sName, CValue **aParams);
-	void SetAttribute(const wxString &sName, CValue &cVal);//установка атрибута
-	CValue GetAttribute(const wxString &sName);//значение атрибута
+	CValue Method(const wxString& sName, CValue** aParams);
+	void SetAttribute(const wxString& sName, CValue& cVal);//установка атрибута
+	CValue GetAttribute(const wxString& sName);//значение атрибута
 
-	virtual int FindMethod(const wxString &sName) const;
-	virtual int FindAttribute(const wxString &sName) const;
+	virtual int FindMethod(const wxString& sName) const;
+	virtual int FindAttribute(const wxString& sName) const;
 
 	virtual wxString GetMethodName(unsigned int nNumber) const;
 	virtual wxString GetMethodDescription(unsigned int nNumber) const;
@@ -254,15 +274,20 @@ public:
 	virtual unsigned int GetNAttributes() const;
 
 	CValue CallFunction(const wxString sName, ...);
-	CValue CallFunctionV(const wxString &sName, CValue **p);
+	CValue CallFunctionV(const wxString& sName, CValue** p);
 
+	//support icons
+	virtual wxIcon GetIcon();
+	static wxIcon GetIconGroup();
+
+	//check value
 	virtual void CheckValue();
 	virtual void ShowValue();
 
-	virtual void SetAt(const CValue &cKey, CValue &cVal);
-	virtual CValue GetAt(const CValue &cKey);
+	virtual void SetAt(const CValue& cKey, CValue& cVal);
+	virtual CValue GetAt(const CValue& cKey);
 
-	CValue operator[](const CValue &cKey) { return GetAt(cKey); }
+	CValue operator[](const CValue& cKey) { return GetAt(cKey); }
 
 	virtual CValue GetItEmpty();
 	virtual CValue GetItAt(unsigned int idx);
@@ -285,7 +310,7 @@ class CValueNoRet : public CValue
 
 public:
 
-	CValueNoRet(const wxString &procedure) : CValue(eValueTypes::TYPE_VALUE, true), sProcedure(procedure) {}
+	CValueNoRet(const wxString& procedure) : CValue(eValueTypes::TYPE_VALUE, true), sProcedure(procedure) {}
 	virtual void CheckValue() override;
 };
 
@@ -300,7 +325,7 @@ private:
 	attributeArg_t() {}
 	attributeArg_t(const attributeArg_t& src) {}
 public:
-	attributeArg_t(int index, const wxString &name);
+	attributeArg_t(int index, const wxString& name);
 	int GetIndex() const { return m_index; }
 	wxString GetName() const { return m_name; }
 };
@@ -310,7 +335,7 @@ public:
 //*************************************************************************************************************************************
 
 class methodArg_t {
-	CValue **m_aParams;
+	CValue** m_aParams;
 	unsigned int m_varCount;
 	std::set<int> m_setParams;
 	int m_index;
@@ -318,14 +343,14 @@ class methodArg_t {
 private:
 	inline void CheckValue(unsigned int idx);
 	methodArg_t() {}
-	methodArg_t(const methodArg_t&src) {}
+	methodArg_t(const methodArg_t& src) {}
 public:
-	methodArg_t(CValue **params, unsigned int varCount, int iName, const wxString &sName);
+	methodArg_t(CValue** params, unsigned int varCount, int iName, const wxString& sName);
 	unsigned int GetParamCount() const { return m_varCount; }
 	wxString GetName(bool makeUpper = false) const { if (makeUpper) { return m_name.Upper(); } else return m_name; }
 	int GetIndex() const { return m_index; }
-	CValue *GetAt(unsigned int idx);
-	CValue **GetParams() { for (unsigned int i = 0; i < m_varCount; i++) { m_setParams.insert(i); } return m_aParams; }
+	CValue* GetAt(unsigned int idx);
+	CValue** GetParams() { for (unsigned int i = 0; i < m_varCount; i++) { m_setParams.insert(i); } return m_aParams; }
 	CValue operator[](unsigned int idx);
 	void CheckParams();
 };
@@ -335,24 +360,26 @@ public:
 //*************************************************************************************************************************************
 
 template <typename retType,
-	typename retRef = retType * >
+	typename retRef = retType* >
 	class value_cast {
-	CValue *m_castValue;
+	CValue* m_castValue;
 	public:
 
-		operator retRef() const { return cast_value(); }
+		operator retRef() const {
+			return cast_value(); 
+		}
 
-		explicit value_cast(const CValue &cValue) : m_castValue(NULL)
+		explicit value_cast(const CValue& cValue) : m_castValue(NULL)
 		{
 			if (cValue.m_typeClass == eValueTypes::TYPE_REFFER) {
 				m_castValue = cValue.GetRef();
 			}
 			else {
-				m_castValue = const_cast<CValue *>(&cValue);
+				m_castValue = const_cast<CValue*>(&cValue);
 			}
 		}
 
-		explicit value_cast(CValue *refValue) : m_castValue(NULL)
+		explicit value_cast(CValue* refValue) : m_castValue(NULL)
 		{
 			if (refValue->m_typeClass == eValueTypes::TYPE_REFFER) {
 				m_castValue = refValue->GetRef();

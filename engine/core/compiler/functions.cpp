@@ -97,7 +97,7 @@ bool CTranslateError::bSimpleMode = false;
 
 CTranslateError::CTranslateError(const wxString &sErrorString) : std::exception(sErrorString) {}
 
-#include "common/reportManager.h"
+#include "common/docManager.h"
 #include "frontend/output/outputWindow.h"
 #include "metadata/metaObjects/metaModuleObject.h"
 
@@ -128,7 +128,7 @@ void CTranslateError::ProcessError(const CByte &error, const wxString &descError
 			if (moduleData.IsEmpty() &&
 				!fileName.IsEmpty()) {
 				IMetaDocument *const foundedDoc = dynamic_cast<IMetaDocument *>(
-					reportManager->FindDocumentByPath(fileName)
+					docManager->FindDocumentByPath(fileName)
 					);
 				if (foundedDoc) {
 					IMetadata *metaData = foundedDoc->GetMetadata();

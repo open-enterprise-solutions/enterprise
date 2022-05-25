@@ -97,9 +97,9 @@ bool CMetaObject::OnDeleteMetaObject()
 	return IMetaObject::OnDeleteMetaObject();
 }
 
-bool CMetaObject::OnRunMetaObject(int flags)
+bool CMetaObject::OnBeforeRunMetaObject(int flags)
 {
-	if (!m_commonModule->OnRunMetaObject(flags))
+	if (!m_commonModule->OnBeforeRunMetaObject(flags))
 		return false;
 
 	IModuleManager *moduleManager = m_metaData->GetModuleManager();
@@ -108,12 +108,12 @@ bool CMetaObject::OnRunMetaObject(int flags)
 	if (!moduleManager->AddCompileModule(m_commonModule, moduleManager))
 		return false;
 
-	return IMetaObject::OnRunMetaObject(flags);
+	return IMetaObject::OnBeforeRunMetaObject(flags);
 }
 
-bool CMetaObject::OnCloseMetaObject()
+bool CMetaObject::OnAfterCloseMetaObject()
 {
-	if (!m_commonModule->OnCloseMetaObject())
+	if (!m_commonModule->OnAfterCloseMetaObject())
 		return false;
 
 	IModuleManager *moduleManager = m_metaData->GetModuleManager();
@@ -122,7 +122,7 @@ bool CMetaObject::OnCloseMetaObject()
 	if (!moduleManager->RemoveCompileModule(m_commonModule))
 		return false;
 
-	return IMetaObject::OnCloseMetaObject();
+	return IMetaObject::OnAfterCloseMetaObject();
 }
 
 //***********************************************************************
@@ -152,4 +152,4 @@ void CMetaObject::SaveProperty()
 //*                       Register in runtime                           *
 //***********************************************************************
 
-METADATA_REGISTER(CMetaObject, "metaCommonMetadata", g_metaCommonMetadataCLSID);
+METADATA_REGISTER(CMetaObject, "commonMetadata", g_metaCommonMetadataCLSID);

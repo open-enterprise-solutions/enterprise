@@ -103,7 +103,9 @@ public:
 
 	virtual bool CanDeleteControl() const;
 
-	virtual int GetComponentType() override { return COMPONENT_TYPE_WINDOW; }
+	virtual int GetComponentType() const override { 
+		return COMPONENT_TYPE_WINDOW; 
+	}
 	virtual bool IsItem() override { return false; }
 
 	//load & save object in control 

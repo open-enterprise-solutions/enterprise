@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "moduleManager.h"
-#include "metadata/objects/baseManager.h"
+#include "metadata/metaObjects/objects/systemManager.h"
 #include "compiler/enumFactory.h"
 #include "compiler/methods.h"
 #include "compiler/systemObjects.h"
@@ -25,7 +25,7 @@
 
 #include "metadata/metadata.h"
 
-IModuleManager::IModuleManager(IMetadata *metaData, CMetaModuleObject *obj) :
+IModuleManager::IModuleManager(IMetadata* metaData, CMetaModuleObject* obj) :
 	CValue(eValueTypes::TYPE_MODULE), IModuleInfo(new CGlobalCompileModule(obj)),
 	m_methods(new CMethods()),
 	m_initialized(false)
@@ -48,7 +48,7 @@ void IModuleManager::Clear()
 {
 	for (auto compileModule : m_aCompileModules)
 	{
-		CValue *dataRef = compileModule.second;
+		CValue* dataRef = compileModule.second;
 		wxASSERT(dataRef);
 		dataRef->DecrRef();
 	}
@@ -78,12 +78,12 @@ IModuleManager::~IModuleManager()
 //************************************************  support compile module ************************************************
 //*************************************************************************************************************************
 
-bool IModuleManager::AddCompileModule(IMetaObject *mobj, CValue *object)
+bool IModuleManager::AddCompileModule(IMetaObject* mobj, CValue* object)
 {
 	if (!appData->DesignerMode() || !object)
 		return true;
 
-	std::map<IMetaObject *, CValue *>::iterator founded = m_aCompileModules.find(mobj);
+	std::map<IMetaObject*, CValue*>::iterator founded = m_aCompileModules.find(mobj);
 
 	if (founded == m_aCompileModules.end()) {
 		m_aCompileModules.insert_or_assign(mobj, object);
@@ -94,15 +94,15 @@ bool IModuleManager::AddCompileModule(IMetaObject *mobj, CValue *object)
 	return false;
 }
 
-bool IModuleManager::RemoveCompileModule(IMetaObject *obj)
+bool IModuleManager::RemoveCompileModule(IMetaObject* obj)
 {
 	if (!appData->DesignerMode())
 		return true;
 
-	std::map<IMetaObject *, CValue *>::iterator founded = m_aCompileModules.find(obj);
+	std::map<IMetaObject*, CValue*>::iterator founded = m_aCompileModules.find(obj);
 
 	if (founded != m_aCompileModules.end()) {
-		CValue *dataRef = founded->second;
+		CValue* dataRef = founded->second;
 		m_aCompileModules.erase(founded);
 		dataRef->DecrRef();
 		return true;
@@ -111,9 +111,9 @@ bool IModuleManager::RemoveCompileModule(IMetaObject *obj)
 	return false;
 }
 
-bool IModuleManager::AddCommonModule(CMetaCommonModuleObject *commonModule, bool managerModule, bool runModule)
+bool IModuleManager::AddCommonModule(CMetaCommonModuleObject* commonModule, bool managerModule, bool runModule)
 {
-	CModuleValue *moduleValue = new CModuleValue(this, commonModule, managerModule);
+	CModuleValue* moduleValue = new CModuleValue(this, commonModule, managerModule);
 	moduleValue->IncrRef();
 
 	if (!IModuleManager::AddCompileModule(commonModule, moduleValue))
@@ -137,17 +137,22 @@ bool IModuleManager::AddCommonModule(CMetaCommonModuleObject *commonModule, bool
 			try {
 				m_compileModule->Compile();
 			}
-			catch (const CTranslateError *) {
+			catch (const CTranslateError*) {
 			};
 		}
 		return moduleValue->CreateCommonModule();
 	}
+
 	return true;
 }
 
-IModuleManager::CModuleValue *IModuleManager::FindCommonModule(CMetaCommonModuleObject *commonModule)
+IModuleManager::CModuleValue* IModuleManager::FindCommonModule(CMetaCommonModuleObject* commonModule)
 {
-	auto moduleObjectIt = std::find_if(m_aCommonModules.begin(), m_aCommonModules.end(), [commonModule](CModuleValue *valueModule) { return commonModule == valueModule->GetModuleObject(); });
+	auto moduleObjectIt = std::find_if(m_aCommonModules.begin(), m_aCommonModules.end(),
+		[commonModule](CModuleValue* valueModule) {
+			return commonModule == valueModule->GetModuleObject();
+		}
+	);
 
 	if (moduleObjectIt != m_aCommonModules.end())
 		return *moduleObjectIt;
@@ -155,9 +160,9 @@ IModuleManager::CModuleValue *IModuleManager::FindCommonModule(CMetaCommonModule
 	return NULL;
 }
 
-bool IModuleManager::RenameCommonModule(CMetaCommonModuleObject *commonModule, const wxString &newName)
+bool IModuleManager::RenameCommonModule(CMetaCommonModuleObject* commonModule, const wxString& newName)
 {
-	CValue *moduleValue = FindCommonModule(commonModule);
+	CValue* moduleValue = FindCommonModule(commonModule);
 	wxASSERT(moduleValue);
 
 	if (!commonModule->IsGlobalModule()) {
@@ -166,7 +171,7 @@ bool IModuleManager::RenameCommonModule(CMetaCommonModuleObject *commonModule, c
 			m_compileModule->RemoveVariable(commonModule->GetName());
 			m_compileModule->Compile();
 		}
-		catch (const CTranslateError *) {
+		catch (const CTranslateError*) {
 		};
 
 		m_aValueGlVariables.insert_or_assign(newName, moduleValue);
@@ -176,9 +181,9 @@ bool IModuleManager::RenameCommonModule(CMetaCommonModuleObject *commonModule, c
 	return true;
 }
 
-bool IModuleManager::RemoveCommonModule(CMetaCommonModuleObject *commonModule)
+bool IModuleManager::RemoveCommonModule(CMetaCommonModuleObject* commonModule)
 {
-	IModuleManager::CModuleValue *moduleValue = FindCommonModule(commonModule);
+	IModuleManager::CModuleValue* moduleValue = FindCommonModule(commonModule);
 	wxASSERT(moduleValue);
 
 	if (!IModuleManager::RemoveCompileModule(commonModule))
@@ -207,7 +212,7 @@ bool IModuleManager::RemoveCommonModule(CMetaCommonModuleObject *commonModule)
 //  CModuleManager
 //////////////////////////////////////////////////////////////////////////////////
 
-CModuleManager::CModuleManager(IMetadata *metaData, CMetaObject *metaObject)
+CModuleManager::CModuleManager(IMetadata* metaData, CMetaObject* metaObject)
 	: IModuleManager(metaData, metaObject->GetModuleObject())
 {
 }
@@ -239,7 +244,7 @@ bool CModuleManager::CreateMainModule()
 		try {
 			m_compileModule->Compile();
 		}
-		catch (const CTranslateError *)
+		catch (const CTranslateError*)
 		{
 			return false;
 		};
@@ -328,31 +333,31 @@ bool CModuleManager::ExitMainModule(bool force)
 //  CExternalDataProcessorModuleManager
 //////////////////////////////////////////////////////////////////////////////////
 
-CCompileModule *CExternalDataProcessorModuleManager::GetCompileModule() const
+CCompileModule* CExternalDataProcessorModuleManager::GetCompileModule() const
 {
-	IModuleManager *moduleManager = metadata->GetModuleManager();
+	IModuleManager* moduleManager = metadata->GetModuleManager();
 	wxASSERT(moduleManager);
 	return moduleManager->GetCompileModule();
 }
 
-CProcUnit *CExternalDataProcessorModuleManager::GetProcUnit() const
+CProcUnit* CExternalDataProcessorModuleManager::GetProcUnit() const
 {
-	IModuleManager *moduleManager = metadata->GetModuleManager();
+	IModuleManager* moduleManager = metadata->GetModuleManager();
 	wxASSERT(moduleManager);
 	return moduleManager->GetProcUnit();
 }
 
 std::map<wxString, CValue*>& CExternalDataProcessorModuleManager::GetContextVariables()
 {
-	IModuleManager *moduleManager = metadata->GetModuleManager();
+	IModuleManager* moduleManager = metadata->GetModuleManager();
 	wxASSERT(moduleManager);
 	return moduleManager->GetContextVariables();
 }
 
-CExternalDataProcessorModuleManager::CExternalDataProcessorModuleManager(IMetadata *metaData, CMetaObjectDataProcessorValue *metaObject)
+CExternalDataProcessorModuleManager::CExternalDataProcessorModuleManager(IMetadata* metaData, CMetaObjectDataProcessor* metaObject)
 	: IModuleManager(CConfigMetadata::Get(), metaObject->GetModuleObject())
 {
-	m_objectValue = new CObjectDataProcessorValue(metaObject);
+	m_objectValue = new CObjectDataProcessor(metaObject);
 	//set complile module 
 	m_objectValue->m_compileModule = m_compileModule;
 	//set proc unit 
@@ -368,7 +373,7 @@ bool CExternalDataProcessorModuleManager::CreateMainModule()
 	if (m_initialized)
 		return true;
 
-	IModuleManager *moduleManager = metadata->GetModuleManager();
+	IModuleManager* moduleManager = metadata->GetModuleManager();
 	wxASSERT(moduleManager);
 
 	m_compileModule->SetParent(moduleManager->GetCompileModule());
@@ -393,7 +398,7 @@ bool CExternalDataProcessorModuleManager::CreateMainModule()
 		{
 			m_compileModule->Compile();
 		}
-		catch (const CTranslateError *)
+		catch (const CTranslateError*)
 		{
 			return false;
 		};
@@ -454,15 +459,15 @@ bool CExternalDataProcessorModuleManager::StartMainModule()
 	//incrRef - for control delete 
 	m_objectValue->IncrRef();
 
-	IMetaObjectValue *commonObject = m_objectValue->GetMetaObject();
+	IMetaObjectRecordData* commonObject = m_objectValue->GetMetaObject();
 	wxASSERT(commonObject);
-	IMetaFormObject *defFormObject = commonObject->GetDefaultFormByID(
-		CMetaObjectDataProcessorValue::eFormDataProcessor
+	IMetaFormObject* defFormObject = commonObject->GetDefaultFormByID(
+		CMetaObjectDataProcessor::eFormDataProcessor
 	);
 
 	if (defFormObject) {
 
-		CValueForm *valueForm = NULL;
+		CValueForm* valueForm = NULL;
 
 		if (!IModuleManager::FindCompileModule(defFormObject, valueForm)) {
 
@@ -512,31 +517,31 @@ bool CExternalDataProcessorModuleManager::ExitMainModule(bool force)
 //  CExternalReportModuleManager
 //////////////////////////////////////////////////////////////////////////////////
 
-CCompileModule *CExternalReportModuleManager::GetCompileModule() const
+CCompileModule* CExternalReportModuleManager::GetCompileModule() const
 {
-	IModuleManager *moduleManager = metadata->GetModuleManager();
+	IModuleManager* moduleManager = metadata->GetModuleManager();
 	wxASSERT(moduleManager);
 	return moduleManager->GetCompileModule();
 }
 
-CProcUnit *CExternalReportModuleManager::GetProcUnit() const
+CProcUnit* CExternalReportModuleManager::GetProcUnit() const
 {
-	IModuleManager *moduleManager = metadata->GetModuleManager();
+	IModuleManager* moduleManager = metadata->GetModuleManager();
 	wxASSERT(moduleManager);
 	return moduleManager->GetProcUnit();
 }
 
 std::map<wxString, CValue*>& CExternalReportModuleManager::GetContextVariables()
 {
-	IModuleManager *moduleManager = metadata->GetModuleManager();
+	IModuleManager* moduleManager = metadata->GetModuleManager();
 	wxASSERT(moduleManager);
 	return moduleManager->GetContextVariables();
 }
 
-CExternalReportModuleManager::CExternalReportModuleManager(IMetadata *metaData, CMetaObjectReportValue *metaObject)
+CExternalReportModuleManager::CExternalReportModuleManager(IMetadata* metaData, CMetaObjectReport* metaObject)
 	: IModuleManager(CConfigMetadata::Get(), metaObject->GetModuleObject())
 {
-	m_objectValue = new CObjectReportValue(metaObject);
+	m_objectValue = new CObjectReport(metaObject);
 	//set complile module 
 	m_objectValue->m_compileModule = m_compileModule;
 	//set proc unit 
@@ -552,7 +557,7 @@ bool CExternalReportModuleManager::CreateMainModule()
 	if (m_initialized)
 		return true;
 
-	IModuleManager *moduleManager = metadata->GetModuleManager();
+	IModuleManager* moduleManager = metadata->GetModuleManager();
 	wxASSERT(moduleManager);
 
 	m_compileModule->SetParent(moduleManager->GetCompileModule());
@@ -577,7 +582,7 @@ bool CExternalReportModuleManager::CreateMainModule()
 		{
 			m_compileModule->Compile();
 		}
-		catch (const CTranslateError *)
+		catch (const CTranslateError*)
 		{
 			return false;
 		};
@@ -639,16 +644,16 @@ bool CExternalReportModuleManager::StartMainModule()
 	//incrRef - for control delete 
 	m_objectValue->IncrRef();
 
-	IMetaObjectValue *commonObject = m_objectValue->GetMetaObject();
+	IMetaObjectRecordData* commonObject = m_objectValue->GetMetaObject();
 	wxASSERT(commonObject);
-	IMetaFormObject *defFormObject = commonObject->GetDefaultFormByID
+	IMetaFormObject* defFormObject = commonObject->GetDefaultFormByID
 	(
-		CMetaObjectReportValue::eFormReport
+		CMetaObjectReport::eFormReport
 	);
 
 	if (defFormObject) {
 
-		CValueForm *valueForm = NULL;
+		CValueForm* valueForm = NULL;
 
 		if (!IModuleManager::FindCompileModule(defFormObject, valueForm)) {
 

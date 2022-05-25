@@ -30,6 +30,8 @@ private:
 	wxTreeItemId m_treeENUMERATIONS;
 	wxTreeItemId m_treeDATAPROCESSORS;
 	wxTreeItemId m_treeREPORTS;
+	wxTreeItemId m_treeINFORMATION_REGISTERS;
+	wxTreeItemId m_treeACCUMULATION_REGISTERS;
 
 private:
 
@@ -145,6 +147,8 @@ private:
 	void AddEnumerationItem(IMetaObject *obj, const wxTreeItemId &item);
 	void AddDataProcessorItem(IMetaObject *obj, const wxTreeItemId &item);
 	void AddReportItem(IMetaObject *obj, const wxTreeItemId &item);
+	void AddInformationRegisterItem(IMetaObject* obj, const wxTreeItemId& item);
+	void AddAccumulationRegisterItem(IMetaObject* obj, const wxTreeItemId& item);
 
 	void EditModule(const wxString &fullName, int lineNumber, bool setRunLine = true);
 	void FillData();

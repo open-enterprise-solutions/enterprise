@@ -224,19 +224,18 @@ void CCodeEditorCtrl::OnTextChange(wxStyledTextEvent& event)
 			IMetadata *metaData = metaObject->GetMetadata();
 			wxASSERT(metaData);
 
-			if (hasChanged)
-			{
-				IModuleInfo *m_pRefData = NULL;
+			if (hasChanged) {
+				
+				IModuleInfo *pRefData = NULL;
 
 				IModuleManager *moduleManager = metaData->GetModuleManager();
 				wxASSERT(moduleManager);
 
-				if (moduleManager->FindCompileModule(m_document->GetMetaObject(), m_pRefData))
-				{
-					CCompileModule *m_compileModule = m_pRefData->GetCompileModule();
-					wxASSERT(m_compileModule);
-					if (!m_compileModule->m_bNeedRecompile)
-						m_compileModule->m_bNeedRecompile = true;
+				if (moduleManager->FindCompileModule(m_document->GetMetaObject(), pRefData)) {
+					CCompileModule *compileModule = pRefData->GetCompileModule();
+					wxASSERT(compileModule);
+					if (!compileModule->m_bNeedRecompile)
+						compileModule->m_bNeedRecompile = true;
 				}
 			}
 
@@ -268,7 +267,7 @@ void CCodeEditorCtrl::OnTextChange(wxStyledTextEvent& event)
 				debugClient->PatchBreakpoints(m_moduleObject->GetDocPath(), needChangePos ? currLine + 1 : currLine, patchLine);
 			}
 
-#ifndef _USE_OLD_TEXT_PARSER_IN_AUTOCOMPLETE 	
+#ifndef _USE_OLD_TEXT_PARSER_IN_CODE_EDITOR 	
 			m_precompileModule->Load(sCode);
 			m_precompileModule->m_nCurLine = currLine > 0 ? currLine - 1 : 0;
 			m_precompileModule->m_nCurPos = wxString::FromUTF8(m_strBuffer.substr(0, startPos)).Length();

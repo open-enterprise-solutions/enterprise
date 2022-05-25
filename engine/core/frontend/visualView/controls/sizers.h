@@ -33,7 +33,9 @@ public:
 		}
 	}
 
-	virtual int GetComponentType() override { return COMPONENT_TYPE_SIZER; }
+	virtual int GetComponentType() const override { 
+		return COMPONENT_TYPE_SIZER; 
+	}
 	virtual bool IsItem() override { return false; }
 
 	//load & save object in control 
@@ -77,7 +79,9 @@ public:
 	virtual wxString GetClassName() const override { return wxT("sizerItem"); }
 	virtual wxString GetObjectTypeName() const override { return wxT("sizer"); }
 
-	virtual int GetComponentType() override { return COMPONENT_TYPE_SIZERITEM; }
+	virtual int GetComponentType() const override { 
+		return COMPONENT_TYPE_SIZERITEM; 
+	}
 	virtual bool IsItem() override { return true; }
 
 	//load & save object in control 

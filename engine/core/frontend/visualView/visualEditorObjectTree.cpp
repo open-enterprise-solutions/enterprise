@@ -352,14 +352,14 @@ void CVisualEditorContextForm::CVisualEditorObjectTree::UpdateItem(wxTreeItemId 
 	Property* prop = obj->GetProperty(wxT("name"));
 
 	wxString obj_name;
-	if (prop) obj_name = prop->GetValue();
+	if (prop) obj_name = prop->GetValueAsString();
 	wxString text = obj_name + wxT(" : ") + class_name;
 
 	// actualizamos el item
 	m_tcObjects->SetItemText(id, text);
 }
 
-#define ICON_SIZE 22
+#define ICON_SIZE 20
 
 void CVisualEditorContextForm::CVisualEditorObjectTree::Create()
 {

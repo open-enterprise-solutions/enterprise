@@ -76,7 +76,7 @@ bool CReportDocument::OnCreate(const wxString& path, long flags)
 
 bool CReportDocument::OnCloseDocument()
 {
-	if (!m_metaData->CloseMetadata(true)) {
+	if (!m_metaData->CloseMetadata(forceCloseFlag)) {
 		return false;
 	}
 
@@ -127,7 +127,7 @@ bool CReportEditDocument::OnCreate(const wxString& path, long flags)
 
 bool CReportEditDocument::OnCloseDocument()
 {
-	if (!m_metaData->CloseMetadata(true)) {
+	if (!m_metaData->CloseMetadata(forceCloseFlag)) {
 		return false;
 	}
 

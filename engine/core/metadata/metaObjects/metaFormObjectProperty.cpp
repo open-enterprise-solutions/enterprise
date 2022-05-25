@@ -4,9 +4,9 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaFormObject.h"
-#include "frontend/visualView/visualEditorView.h"
+#include "frontend/visualView/visualHost.h"
 #include "metadata/metadata.h"
-#include "metadata/objects/baseObject.h"
+#include "metadata/metaObjects/objects/baseObject.h"
 #include "appData.h"
 
 void CMetaFormObject::OnPropertyCreated(Property *property)
@@ -23,7 +23,7 @@ void CMetaFormObject::OnPropertyChanged(Property *property)
 		if (appData->DesignerMode()) {		
 			IModuleManager *moduleManager = m_metaData->GetModuleManager();
 			wxASSERT(moduleManager);
-			IMetaObjectValue *metaObjectValue = wxStaticCast(m_parent, IMetaObjectValue);
+			IMetaObjectWrapperData *metaObjectValue = wxStaticCast(m_parent, IMetaObjectWrapperData);
 			wxASSERT(metaObjectValue);
 			IMetadataTree *metaTree = m_metaData->GetMetaTree();		
 			if (metaTree) {

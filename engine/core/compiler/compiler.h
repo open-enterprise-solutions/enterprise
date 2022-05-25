@@ -20,11 +20,12 @@ class CValue;
 class CConfigMetadata;
 
 class IMetaObject;
-class IMetaObjectValue;
-class IMetaObjectRefValue;
+class IMetaObjectWrapperData;
+class IMetaObjectRecordData;
+class IMetaObjectRecordDataRef;
 
-class IDataObjectValue;
-class IDataObjectRefValue;
+class IRecordDataObject;
+class IRecordDataObjectRef;
 
 class IMetadata;
 class IConfigMetadata;
@@ -43,11 +44,13 @@ class DatabaseResultSet;
 #include "resource.h"
 
 extern wxBitmap wxGetImageBMPFromResource(long id);
-extern inline void ThrowErrorTypeOperation(const wxString &fromType, wxClassInfo *clsInfo);
+extern inline void ThrowErrorTypeOperation(const wxString& fromType, wxClassInfo* clsInfo);
 
 //*******************************************************************************************
 //*                                 Special structures                                      *
 //*******************************************************************************************
+
+#define emptyDate -62135604000000ll
 
 typedef int meta_identifier_t;
 typedef int form_identifier_t;
@@ -69,7 +72,7 @@ struct reference_t
 	meta_identifier_t m_id; // id of metadata 
 	guid_t m_guid;
 
-	reference_t(meta_identifier_t id, guid_t guid) : m_id(id), m_guid(guid) {}
+	reference_t(const meta_identifier_t &id, const guid_t &guid) : m_id(id), m_guid(guid) {}
 };
 
 typedef unsigned wxLongLong_t CLASS_ID;
@@ -116,8 +119,8 @@ enum eValueTypes
 //*                                 Register new objects                                    *
 //*******************************************************************************************
 
-extern void CLSID2TEXT(CLASS_ID id, const wxString &clsidText);
-extern CLASS_ID TEXT2CLSID(const wxString &clsidText);
+extern void CLSID2TEXT(CLASS_ID id, const wxString& clsidText);
+extern CLASS_ID TEXT2CLSID(const wxString& clsidText);
 
 #define S_VALUE_REGISTER(class_info, class_name, class_type, class_id, clsid)\
 class CAuto_##class_info##class_id \
@@ -239,7 +242,7 @@ typedef ttmath::Big<TTMATH_BITS(128), TTMATH_BITS(128)> number_t;
 //firebird doesn't support multiple transaction 
 //#define _USE_SAVE_METADATA_IN_TRANSACTION 
 // full parser is very slowly ...
-//#define _USE_OLD_TEXT_PARSER_IN_AUTOCOMPLETE
+//#define _USE_OLD_TEXT_PARSER_IN_CODE_EDITOR
 
 #if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
 #define _USE_64_BIT_POINT_IN_DEBUGGER
@@ -251,7 +254,7 @@ typedef ttmath::Big<TTMATH_BITS(128), TTMATH_BITS(128)> number_t;
 //#define _USE_NET_COMPRESSOR 
 
 //max precision 
-#define MAX_PRECISION 32
+#define MAX_PRECISION_NUMBER 32
 //max precision 
 #define MAX_LENGTH_STRING 1024
 //stack guard

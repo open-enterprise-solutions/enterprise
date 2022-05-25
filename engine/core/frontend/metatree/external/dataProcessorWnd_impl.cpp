@@ -5,7 +5,7 @@
 
 #include "dataProcessorWnd.h"
 #include "frontend/objinspect/objinspect.h"
-#include "common/reportManager.h"
+#include "common/docManager.h"
 #include "appData.h"
 
 #define SETITEMTYPE(hItem,xnType,xnChildImage)\
@@ -257,14 +257,14 @@ void CDataProcessorTree::UpdateChoiceSelection()
 	m_defaultFormValue->Clear();
 	m_defaultFormValue->AppendString(_("<not selected>"));
 
-	CMetaObjectDataProcessorValue *commonMetadata = m_metaData->GetDataProcessor();
+	CMetaObjectDataProcessor *commonMetadata = m_metaData->GetDataProcessor();
 	wxASSERT(commonMetadata);
 
 	int defSelection = 0;
 
 	for (auto metaForm : commonMetadata->GetObjectForms())
 	{
-		if (CMetaObjectDataProcessorValue::eFormDataProcessor != metaForm->GetTypeForm())
+		if (CMetaObjectDataProcessor::eFormDataProcessor != metaForm->GetTypeForm())
 			continue;
 
 		int selection_id = m_defaultFormValue->Append(metaForm->GetName(), reinterpret_cast<void *>(metaForm->GetMetaID()));
@@ -291,19 +291,17 @@ bool CDataProcessorTree::OpenFormMDI(IMetaObject *obj)
 	CDocument *foundedDoc = GetDocument(obj);
 
 	//не найден в списке уже существующих
-	if (foundedDoc == NULL)
-	{
-		foundedDoc = reportManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? wxDOC_READONLY : wxDOC_NEW);
+	if (foundedDoc == NULL) {
+		
+		foundedDoc = docManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? wxDOC_READONLY : wxDOC_NEW);
 
 		//Значит, подходящего шаблона не было! 
-		if (foundedDoc)
-		{
+		if (foundedDoc) {
 			m_aMetaOpenedForms.push_back(foundedDoc); foundedDoc->Activate();
 			return true;
 		}
 	}
-	else
-	{
+	else {
 		foundedDoc->Activate();
 		return true;
 	}
@@ -316,19 +314,17 @@ bool CDataProcessorTree::OpenFormMDI(IMetaObject *obj, CDocument *&foundedDoc)
 	foundedDoc = GetDocument(obj);
 
 	//не найден в списке уже существующих
-	if (foundedDoc == NULL)
-	{
-		foundedDoc = reportManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? wxDOC_READONLY : wxDOC_NEW);
+	if (foundedDoc == NULL) {
+		
+		foundedDoc = docManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? wxDOC_READONLY : wxDOC_NEW);
 
 		//Значит, подходящего шаблона не было! 
-		if (foundedDoc)
-		{
+		if (foundedDoc) {
 			m_aMetaOpenedForms.push_back(foundedDoc); foundedDoc->Activate();
 			return true;
 		}
 	}
-	else
-	{
+	else {
 		foundedDoc->Activate();
 		return true;
 	}
@@ -373,12 +369,11 @@ bool CDataProcessorTree::RenameMetaObject(IMetaObject *obj, const wxString &sNew
 	if (!curItem.IsOk())
 		return false;
 
-	if (m_metaData->RenameMetaObject(obj, sNewName))
-	{
+	if (m_metaData->RenameMetaObject(obj, sNewName)) {
+
 		CDocument *currDocument = GetDocument(obj);
 
-		if (currDocument)
-		{
+		if (currDocument) {
 			currDocument->SetTitle(obj->GetClassName() + wxT(": ") + sNewName);
 			currDocument->OnChangeFilename(true);
 		}
@@ -459,7 +454,7 @@ void CDataProcessorTree::ClearTree()
 
 void CDataProcessorTree::FillData()
 {
-	CMetaObjectDataProcessorValue *commonMetadata = m_metaData->GetDataProcessor();
+	CMetaObjectDataProcessor *commonMetadata = m_metaData->GetDataProcessor();
 	wxASSERT(commonMetadata);
 	m_metaTreeWnd->SetItemText(m_treeDATAPROCESSORS, commonMetadata->GetName());
 
@@ -550,7 +545,7 @@ bool CDataProcessorTree::Load(CMetadataDataProcessor *metaData)
 
 bool CDataProcessorTree::Save()
 {
-	CMetaObjectDataProcessorValue *m_commonMetadata = m_metaData->GetDataProcessor();
+	CMetaObjectDataProcessor *m_commonMetadata = m_metaData->GetDataProcessor();
 	wxASSERT(m_commonMetadata);
 
 	m_commonMetadata->SetName(m_nameValue->GetValue());

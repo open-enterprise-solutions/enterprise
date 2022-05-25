@@ -15,10 +15,10 @@ class CDesignerWindow : public CInnerFrame
 	int m_x;
 	int m_y;
 
-	wxSizer *m_selSizer = NULL;
-	wxObject *m_selItem = NULL;
-	IValueFrame*m_selObj = NULL;
-	wxWindow *m_actPanel = NULL;
+	wxSizer* m_selSizer = NULL;
+	wxObject* m_selItem = NULL;
+	IValueFrame* m_selObj = NULL;
+	wxWindow* m_actPanel = NULL;
 
 private:
 
@@ -32,30 +32,30 @@ private:
 	{
 		wxDECLARE_EVENT_TABLE();
 
-		wxWindow *m_dsgnWin;
+		wxWindow* m_dsgnWin;
 
 	public:
-		HighlightPaintHandler(wxWindow *win);
-		void OnPaint(wxPaintEvent &event);
+		HighlightPaintHandler(wxWindow* win);
+		void OnPaint(wxPaintEvent& event);
 	};
 
 public:
-	CDesignerWindow(wxWindow *parent, int id, const wxPoint& pos, const wxSize &size = wxDefaultSize,
-		long style = 0, const wxString &name = wxT("designer_win"));
+	CDesignerWindow(wxWindow* parent, int id, const wxPoint& pos, const wxSize& size = wxDefaultSize,
+		long style = 0, const wxString& name = wxT("designer_win"));
 	~CDesignerWindow();
 	void SetGrid(int x, int y);
-	void SetSelectedSizer(wxSizer *sizer) { m_selSizer = sizer; }
-	void SetSelectedItem(wxObject *item) { m_selItem = item; }
+	void SetSelectedSizer(wxSizer* sizer) { m_selSizer = sizer; }
+	void SetSelectedItem(wxObject* item) { m_selItem = item; }
 	void SetSelectedObject(IValueFrame* object) { m_selObj = object; }
-	void SetSelectedPanel(wxWindow *actPanel) { m_actPanel = actPanel; }
-	wxSizer *GetSelectedSizer() { return m_selSizer; }
+	void SetSelectedPanel(wxWindow* actPanel) { m_actPanel = actPanel; }
+	wxSizer* GetSelectedSizer() { return m_selSizer; }
 	wxObject* GetSelectedItem() { return m_selItem; }
 	IValueFrame* GetSelectedObject() { return m_selObj; }
 	wxWindow* GetActivePanel() { return m_actPanel; }
 	static wxMenu* GetMenuFromObject(IValueFrame* menu);
-	void SetFrameWidgets(IValueFrame* menubar, wxWindow *toolbar, wxWindow* statusbar);
+	void SetFrameWidgets(IValueFrame* menubar, wxWindow* toolbar, wxWindow* statusbar);
 	void HighlightSelection(wxDC& dc);
-	void OnPaint(wxPaintEvent &event);
+	void OnPaint(wxPaintEvent& event);
 
 protected:
 	wxDECLARE_EVENT_TABLE();
@@ -96,21 +96,21 @@ class CORE_API CVisualEditorContextForm : public wxPanel
 
 public:
 
-	class CORE_API CVisualEditor : public IVisualHost
+	class CORE_API CVisualEditorHost : public IVisualHost
 	{
 		friend class CVisualEditorContextForm;
 		friend class CVisualEditorObjectTree;
 
 	private:
 
-		CDesignerWindow *m_back;
+		CDesignerWindow* m_back;
 
 		// Prevent OnSelected in components
 		bool m_stopSelectedEvent;
 		// Prevent OnModified in components
 		bool m_stopModifiedEvent;
 
-		IValueFrame *m_activeControl;
+		IValueFrame* m_activeControl;
 
 	public:
 
@@ -123,29 +123,37 @@ public:
 		friend class CutObjectCmd;
 		friend class ReparentObjectCmd;
 
-		CVisualEditor(CVisualEditorContextForm *handler, wxWindow *parent);
-		virtual ~CVisualEditor() override;
+		CVisualEditorHost(CVisualEditorContextForm* handler, wxWindow* parent);
+		virtual ~CVisualEditorHost() override;
 
-		void OnResizeBackPanel(wxCommandEvent &event);
+		void OnResizeBackPanel(wxCommandEvent& event);
 		void OnClickBackPanel(wxMouseEvent& event);
 		void PreventOnSelected(bool prevent = true);
 		void PreventOnModified(bool prevent = true);
 
-		bool OnLeftClickFromApp(wxWindow *currentWindow);
-		bool OnRightClickFromApp(wxWindow *currentWindow, wxMouseEvent &event);
+		bool OnLeftClickFromApp(wxWindow* currentWindow);
+		bool OnRightClickFromApp(wxWindow* currentWindow, wxMouseEvent& event);
 
-		virtual void OnClickFromApp(wxWindow *currentWindow, wxMouseEvent &event);
+		virtual void OnClickFromApp(wxWindow* currentWindow, wxMouseEvent& event);
 
-		wxWindow *GetParentBackgroundWindow() { return m_back; }
-		wxWindow *GetBackgroundWindow() { return m_back->GetFrameContentPanel(); }
+		virtual wxWindow* GetParentBackgroundWindow() const {
+			return m_back;
+		}
+
+		virtual wxWindow* GetBackgroundWindow() const {
+			return m_back->GetFrameContentPanel();
+		}
 
 		//override designer host  
-		virtual bool IsDesignerHost() override { return true; }
-		virtual CValueForm *GetValueForm() override;
-		virtual void SetValueForm(class CValueForm *valueForm) override;
+		virtual bool IsDesignerHost() const {
+			return true;
+		}
+
+		virtual CValueForm* GetValueForm() const;
+		virtual void SetValueForm(class CValueForm* valueForm);
 
 		//set and create window
-		void SetObjectSelect(IValueFrame *obj);
+		void SetObjectSelect(IValueFrame* obj);
 		//Setup window 
 		void CreateVisualEditor();
 		//Update window 
@@ -162,13 +170,13 @@ public:
 
 	class CVisualEditorObjectTree : public wxPanel
 	{
-		CVisualEditorContextForm *m_formHandler = NULL;
+		CVisualEditorContextForm* m_formHandler = NULL;
 
 	private:
 
-		wxImageList *m_iconList = NULL;
+		wxImageList* m_iconList = NULL;
 
-		std::map< IValueFrame *, wxTreeItemId> m_aItems;
+		std::map< IValueFrame*, wxTreeItemId> m_aItems;
 		std::map<wxString, int> m_iconIdx;
 
 		wxTreeCtrl* m_tcObjects = NULL;
@@ -180,40 +188,40 @@ public:
 		 * Crea el arbol completamente.
 		 */
 		void RebuildTree();
-		void AddChildren(IValueFrame *child, const wxTreeItemId &parent, bool is_root = false);
-		int GetImageIndex(const wxString &type);
-		void UpdateItem(const wxTreeItemId id, IValueFrame *obj);
-		void RestoreItemStatus(IValueFrame *obj);
-		void AddItem(IValueFrame *item, IValueFrame *parent);
-		void RemoveItem(IValueFrame *item);
-		void ClearMap(IValueFrame *obj);
+		void AddChildren(IValueFrame* child, const wxTreeItemId& parent, bool is_root = false);
+		int GetImageIndex(const wxString& type);
+		void UpdateItem(const wxTreeItemId id, IValueFrame* obj);
+		void RestoreItemStatus(IValueFrame* obj);
+		void AddItem(IValueFrame* item, IValueFrame* parent);
+		void RemoveItem(IValueFrame* item);
+		void ClearMap(IValueFrame* obj);
 
-		IValueFrame *GetObjectFromTreeItem(const wxTreeItemId &item);
+		IValueFrame* GetObjectFromTreeItem(const wxTreeItemId& item);
 
 		wxDECLARE_EVENT_TABLE();
 
 	public:
 
-		CVisualEditorObjectTree(CVisualEditorContextForm *handler, wxWindow *parent, int id = wxID_ANY);
+		CVisualEditorObjectTree(CVisualEditorContextForm* handler, wxWindow* parent, int id = wxID_ANY);
 		virtual ~CVisualEditorObjectTree() override;
 
 		void Create();
 
-		void OnSelChanged(wxTreeEvent &event);
-		void OnRightClick(wxTreeEvent &event);
-		void OnBeginDrag(wxTreeEvent &event);
-		void OnEndDrag(wxTreeEvent &event);
-		void OnExpansionChange(wxTreeEvent &event);
+		void OnSelChanged(wxTreeEvent& event);
+		void OnRightClick(wxTreeEvent& event);
+		void OnBeginDrag(wxTreeEvent& event);
+		void OnEndDrag(wxTreeEvent& event);
+		void OnExpansionChange(wxTreeEvent& event);
 
-		void OnProjectLoaded(wxFrameEvent &event);
-		void OnProjectSaved(wxFrameEvent &event);
+		void OnProjectLoaded(wxFrameEvent& event);
+		void OnProjectSaved(wxFrameEvent& event);
 		void OnObjectExpanded(wxFrameObjectEvent& event);
-		void OnObjectSelected(wxFrameObjectEvent &event);
-		void OnObjectCreated(wxFrameObjectEvent &event);
-		void OnObjectRemoved(wxFrameObjectEvent &event);
-		void OnPropertyModified(wxFramePropertyEvent &event);
-		void OnProjectRefresh(wxFrameEvent &event);
-		void OnKeyDown(wxTreeEvent &event);
+		void OnObjectSelected(wxFrameObjectEvent& event);
+		void OnObjectCreated(wxFrameObjectEvent& event);
+		void OnObjectRemoved(wxFrameObjectEvent& event);
+		void OnPropertyModified(wxFramePropertyEvent& event);
+		void OnProjectRefresh(wxFrameEvent& event);
+		void OnKeyDown(wxTreeEvent& event);
 	};
 
 	/**
@@ -224,10 +232,10 @@ public:
 	class CVisualEditorObjectTreeItemData : public wxTreeItemData
 	{
 	private:
-		IValueFrame * m_object = NULL;
+		IValueFrame* m_object = NULL;
 	public:
-		CVisualEditorObjectTreeItemData(IValueFrame * obj);
-		IValueFrame * GetObject() { return m_object; }
+		CVisualEditorObjectTreeItemData(IValueFrame* obj);
+		IValueFrame* GetObject() { return m_object; }
 	};
 
 	/**
@@ -239,7 +247,7 @@ public:
 	class CVisualEditorItemPopupMenu : public wxMenu
 	{
 		IValueFrame* m_object = NULL;
-		CVisualEditorContextForm *m_formHandler = NULL;
+		CVisualEditorContextForm* m_formHandler = NULL;
 
 		int m_selID;
 
@@ -248,10 +256,10 @@ public:
 		bool HasDeleteObject();
 		int GetSelectedID() { return m_selID; }
 
-		CVisualEditorItemPopupMenu(CVisualEditorContextForm *handler, wxWindow *parent, IValueFrame * obj);
+		CVisualEditorItemPopupMenu(CVisualEditorContextForm* handler, wxWindow* parent, IValueFrame* obj);
 
 		void OnUpdateEvent(wxUpdateUIEvent& e);
-		void OnMenuEvent(wxCommandEvent & event);
+		void OnMenuEvent(wxCommandEvent& event);
 
 	protected:
 
@@ -269,15 +277,15 @@ public:
 	bool m_copyOnPaste; // flag que indica si hay que copiar el objeto al pegar
 
 	// Procesador de comandos Undo/Redo
-	CCommandProcessor *m_cmdProc;
+	CCommandProcessor* m_cmdProc;
 
 	//Elements form 
-	CVisualEditor *m_visualEditor;
-	CVisualEditorObjectTree *m_objectTree;
+	CVisualEditorHost* m_visualEditor;
+	CVisualEditorObjectTree* m_objectTree;
 
 	//Document & view 
-	CDocument *m_document;
-	CView *m_view;
+	CDocument* m_document;
+	CView* m_view;
 
 	//access to private object  
 	friend class CValueNotebook;
@@ -297,22 +305,32 @@ public:
 
 private:
 
-	CValueForm *m_valueForm;
+	CValueForm* m_valueForm;
 
-	friend class CVisualEditor;
+	friend class CVisualEditorHost;
 	friend class CVisualEditorObjectTree;
 
 private:
 
-	wxSplitterWindow *m_splitter = NULL;
+	wxSplitterWindow* m_splitter = NULL;
 
 public:
 
-	CVisualEditor *GetVisualEditor() { return m_visualEditor; }
-	CVisualEditorObjectTree *GetObjectTree() { return m_objectTree; }
+	CVisualEditorHost* GetVisualEditor() const {
+		return m_visualEditor;
+	}
 
-	CValueForm *GetValueForm() { return m_valueForm; }
-	void SetValueForm(CValueForm *valueForm) { m_valueForm = valueForm; }
+	CVisualEditorObjectTree* GetObjectTree() const {
+		return m_objectTree;
+	}
+
+	CValueForm* GetValueForm() const {
+		return m_valueForm;
+	}
+
+	void SetValueForm(CValueForm* valueForm) {
+		m_valueForm = valueForm;
+	}
 
 	bool IsEditable() { return !m_bReadOnly; }
 	void SetReadOnly(bool readOnly = true) { m_bReadOnly = readOnly; }
@@ -337,15 +355,15 @@ protected:
 	/*
 	* Check name conflict
 	*/
-	bool IsCorrectName(const wxString &name);
+	bool IsCorrectName(const wxString& name);
 
 	//Execute command 
-	void Execute(CCommand *cmd);
+	void Execute(CCommand* cmd);
 
 	/**
 	* Search a size in the hierarchy of an object
 	*/
-	IValueFrame *SearchSizerInto(IValueFrame *obj);
+	IValueFrame* SearchSizerInto(IValueFrame* obj);
 
 	void PropagateExpansion(IValueFrame* obj, bool expand, bool up);
 
@@ -357,7 +375,7 @@ protected:
 public:
 
 	CVisualEditorContextForm();
-	CVisualEditorContextForm(CDocument *document, CView *view, wxWindow *parent, int id = wxID_ANY);
+	CVisualEditorContextForm(CDocument* document, CView* view, wxWindow* parent, int id = wxID_ANY);
 
 	// Procedures for register/unregister wxEvtHandlers to be notified of wxOESEvents
 	void AddHandler(wxEvtHandler* handler);
@@ -371,7 +389,7 @@ public:
 	IValueFrame* GetClipboardObject() { return m_clipboard; }
 
 	//Objects 
-	IValueFrame *CreateObject(const wxString &name);
+	IValueFrame* CreateObject(const wxString& name);
 	void RemoveObject(IValueFrame* obj);
 	void CutObject(IValueFrame* obj, bool force = false);
 	void CopyObject(IValueFrame* obj);
@@ -379,8 +397,8 @@ public:
 	void InsertObject(IValueFrame* obj, IValueFrame* parent);
 	void ExpandObject(IValueFrame* obj, bool expand);
 
-	void ModifyProperty(Property* prop, const wxString &value);
-	void ModifyEventHandler(Event* evt, const wxString &value);
+	void ModifyProperty(Property* prop, const wxVariant& value);
+	void ModifyEventHandler(Event* evt, const wxVariant& value);
 
 	void CreateWideGui();
 
@@ -390,8 +408,8 @@ public:
 	// Returns true if selection changed, false if already selected
 	bool SelectObject(IValueFrame* obj, bool force = false, bool notify = true);
 
-	void MovePosition(IValueFrame *obj, unsigned int toPos);
-	void MovePosition(IValueFrame *obj, bool right, unsigned int num = 1);
+	void MovePosition(IValueFrame* obj, unsigned int toPos);
+	void MovePosition(IValueFrame* obj, bool right, unsigned int num = 1);
 
 	// Servicios para los observadores
 	IValueFrame* GetSelectedObject();
@@ -427,26 +445,26 @@ public:
 	*/
 	int CalcPositionOfInsertion(IValueFrame* selected, IValueFrame* parent);
 
-	void ToggleBorderFlag(IValueFrame *obj, int border);
-	void CreateBoxSizerWithObject(IValueFrame *obj);
+	void ToggleBorderFlag(IValueFrame* obj, int border);
+	void CreateBoxSizerWithObject(IValueFrame* obj);
 
 	bool LoadForm();
 	bool SaveForm();
 	void RunForm();
 
-	void SetCommandProcessor(CCommandProcessor *cmdProc) { m_cmdProc = cmdProc; }
+	void SetCommandProcessor(CCommandProcessor* cmdProc) { m_cmdProc = cmdProc; }
 
 	~CVisualEditorContextForm();
 
 	// Events
-	void OnProjectLoaded(wxFrameEvent &event);
-	void OnProjectSaved(wxFrameEvent &event);
-	void OnObjectSelected(wxFrameObjectEvent &event);
-	void OnObjectCreated(wxFrameObjectEvent &event);
-	void OnObjectRemoved(wxFrameObjectEvent &event);
-	void OnPropertyModified(wxFramePropertyEvent &event);
-	void OnProjectRefresh(wxFrameEvent &event);
-	void OnCodeGeneration(wxFrameEventHandlerEvent &event);
+	void OnProjectLoaded(wxFrameEvent& event);
+	void OnProjectSaved(wxFrameEvent& event);
+	void OnObjectSelected(wxFrameObjectEvent& event);
+	void OnObjectCreated(wxFrameObjectEvent& event);
+	void OnObjectRemoved(wxFrameObjectEvent& event);
+	void OnPropertyModified(wxFramePropertyEvent& event);
+	void OnProjectRefresh(wxFrameEvent& event);
+	void OnCodeGeneration(wxFrameEventHandlerEvent& event);
 
 	wxDECLARE_EVENT_TABLE();
 };

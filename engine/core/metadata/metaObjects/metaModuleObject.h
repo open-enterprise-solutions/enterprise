@@ -3,7 +3,7 @@
 
 #include "metaObject.h"
 
-enum eContentHelper{
+enum eContentHelper {
 	eProcedureHelper = 1,
 	eFunctionHelper,
 
@@ -16,7 +16,7 @@ class CMetaModuleObject : public IMetaObject
 
 public:
 
-	CMetaModuleObject(const wxString &name = wxEmptyString, const wxString &synonym = wxEmptyString, const wxString &comment = wxEmptyString);
+	CMetaModuleObject(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
 
 	virtual wxString GetClassName() const override { return wxT("module"); }
 
@@ -25,34 +25,34 @@ public:
 	static wxIcon GetIconGroup();
 
 	//events:
-	virtual bool OnCreateMetaObject(IMetadata *metaData);
-	virtual bool OnLoadMetaObject(IMetadata *metaData);
+	virtual bool OnCreateMetaObject(IMetadata* metaData);
+	virtual bool OnLoadMetaObject(IMetadata* metaData);
 	virtual bool OnSaveMetaObject();
 	virtual bool OnDeleteMetaObject();
 
 	//module manager is started or exit 
-	virtual bool OnRunMetaObject(int flags);
-	virtual bool OnCloseMetaObject();
+	virtual bool OnBeforeRunMetaObject(int flags);
+	virtual bool OnAfterCloseMetaObject();
 
-	virtual void SetModuleText(const wxString &moduleText) { m_moduleData = moduleText; }
+	virtual void SetModuleText(const wxString& moduleText) { m_moduleData = moduleText; }
 	virtual wxString GetModuleText() { return m_moduleData; }
 
 	//set default procedures 
-	void SetDefaultProcedure(const wxString &procname, eContentHelper contentHelper, std::vector<wxString> args = {});
-	
-	size_t GetDefaultProcedureCount() const 
+	void SetDefaultProcedure(const wxString& procname, eContentHelper contentHelper, std::vector<wxString> args = {});
+
+	size_t GetDefaultProcedureCount() const
 	{
 		return m_contentHelper.size();
 	}
-	
-	wxString GetDefaultProcedureName(size_t idx) const 
+
+	wxString GetDefaultProcedureName(size_t idx) const
 	{
 		if (idx > m_contentHelper.size())
 			return wxEmptyString;
 
-		auto it = m_contentHelper.begin(); 
-		std::advance(it, idx); 
-		return it->first; 
+		auto it = m_contentHelper.begin();
+		std::advance(it, idx);
+		return it->first;
 	}
 
 	eContentHelper GetDefaultProcedureType(size_t idx) const
@@ -79,8 +79,8 @@ public:
 
 protected:
 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 protected:
 
@@ -90,8 +90,8 @@ private:
 
 	struct ContentData
 	{
-		eContentHelper m_contentType; 
-		std::vector<wxString> m_args; 
+		eContentHelper m_contentType;
+		std::vector<wxString> m_args;
 	};
 
 	std::map<wxString, ContentData> m_contentHelper;
@@ -106,11 +106,11 @@ class CMetaCommonModuleObject : public CMetaModuleObject
 		ID_METATREE_OPEN_MODULE = 19000,
 	};
 
-	bool m_bGlobalModule;
+	bool m_globalModule;
 
 public:
 
-	CMetaCommonModuleObject(const wxString &name = wxEmptyString, const wxString &synonym = wxEmptyString, const wxString &comment = wxEmptyString);
+	CMetaCommonModuleObject(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
 
 	virtual wxString GetClassName() const override { return wxT("commonModule"); }
 
@@ -119,44 +119,44 @@ public:
 	static wxIcon GetIconGroup();
 
 	//events:
-	virtual bool OnCreateMetaObject(IMetadata *metaData);
-	virtual bool OnLoadMetaObject(IMetadata *metaData);
+	virtual bool OnCreateMetaObject(IMetadata* metaData);
+	virtual bool OnLoadMetaObject(IMetadata* metaData);
 	virtual bool OnSaveMetaObject();
 	virtual bool OnDeleteMetaObject();
 
-	virtual bool OnRenameMetaObject(const wxString &sNewName);
+	virtual bool OnRenameMetaObject(const wxString& sNewName);
 
 	//module manager is started or exit 
-	virtual bool OnRunMetaObject(int flags);
-	virtual bool OnCloseMetaObject();
+	virtual bool OnBeforeRunMetaObject(int flags);
+	virtual bool OnAfterCloseMetaObject();
 
 	//read&save property
 	virtual void ReadProperty() override;
 	virtual void SaveProperty() override;
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu *defultMenu);
+	virtual bool PrepareContextMenu(wxMenu* defultMenu);
 	virtual void ProcessCommand(unsigned int id);
 
 	// check gm
-	virtual bool IsGlobalModule() const { return m_bGlobalModule; }
+	virtual bool IsGlobalModule() const { return m_globalModule; }
 
 	/**
 	* Property events
 	*/
-	virtual bool OnPropertyChanging(Property *property, const wxString &oldValue);
-	virtual void OnPropertyChanged(Property *property);
+	virtual bool OnPropertyChanging(Property* property, const wxVariant& oldValue);
+	virtual void OnPropertyChanged(Property* property);
 
 protected:
 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 };
 
 class CMetaManagerModuleObject : public CMetaCommonModuleObject {
 	wxDECLARE_DYNAMIC_CLASS(CMetaManagerModuleObject);
 public:
-	CMetaManagerModuleObject(const wxString &name = wxEmptyString, const wxString &synonym = wxEmptyString, const wxString &comment = wxEmptyString)
+	CMetaManagerModuleObject(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString)
 		: CMetaCommonModuleObject(name, synonym, comment)
 	{
 	}
@@ -168,8 +168,8 @@ public:
 	static wxIcon GetIconGroup();
 
 	//module manager is started or exit 
-	virtual bool OnRunMetaObject(int flags);
-	virtual bool OnCloseMetaObject();
+	virtual bool OnBeforeRunMetaObject(int flags);
+	virtual bool OnAfterCloseMetaObject();
 };
 
 #endif

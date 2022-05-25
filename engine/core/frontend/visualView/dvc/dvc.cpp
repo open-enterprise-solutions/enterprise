@@ -2,10 +2,12 @@
 
 #include <wx/radiobut.h>
 
-#include "frontend/controls/checkBoxCtrl.h"
-#include "frontend/controls/textCtrl.h"
+#include "frontend/controls/checkBox.h"
+#include "frontend/controls/textEditor.h"
 
 #include "frontend/visualView/controls/tableBox.h"
+
+#include "appData.h"
 
 wxWindow* CValueViewRenderer::CreateEditorCtrl(wxWindow* parent,
 	wxRect labelRect,
@@ -26,9 +28,18 @@ wxWindow* CValueViewRenderer::CreateEditorCtrl(wxWindow* parent,
 		labelRect.GetPosition(),
 		labelRect.GetSize());
 
-	textCtrl->BindButtonSelect(&CValueTableBoxColumn::OnSelectButtonPressed, m_colControl);
-	textCtrl->BindButtonList(&CValueTableBoxColumn::OnListButtonPressed, m_colControl);
-	textCtrl->BindButtonClear(&CValueTableBoxColumn::OnClearButtonPressed, m_colControl);
+	textCtrl->SetBackgroundColour(parent->GetBackgroundColour());
+	textCtrl->SetForegroundColour(parent->GetForegroundColour());
+
+	textCtrl->SetFont(parent->GetFont());
+
+	if (!appData->DesignerMode()) {
+		textCtrl->BindButtonSelect(&CValueTableBoxColumn::OnSelectButtonPressed, m_colControl);
+		textCtrl->BindButtonList(&CValueTableBoxColumn::OnListButtonPressed, m_colControl);
+		textCtrl->BindButtonClear(&CValueTableBoxColumn::OnClearButtonPressed, m_colControl);
+		textCtrl->BindTextCtrl(&CValueTableBoxColumn::OnTextEnter, m_colControl);
+		textCtrl->BindKillFocus(&CValueTableBoxColumn::OnKillFocus, m_colControl);
+	}
 
 	textCtrl->SetInsertionPointEnd(); 
 
@@ -42,9 +53,13 @@ bool CValueViewRenderer::GetValueFromEditorCtrl(wxWindow* ctrl, wxVariant& value
 	if (!textCtrl)
 		return false;
 
-	textCtrl->UnbindButtonSelect(&CValueTableBoxColumn::OnSelectButtonPressed, m_colControl);
-	textCtrl->UnbindButtonList(&CValueTableBoxColumn::OnListButtonPressed, m_colControl);
-	textCtrl->UnbindButtonClear(&CValueTableBoxColumn::OnClearButtonPressed, m_colControl);
+	if (!appData->DesignerMode()) {
+		textCtrl->UnbindButtonSelect(&CValueTableBoxColumn::OnSelectButtonPressed, m_colControl);
+		textCtrl->UnbindButtonList(&CValueTableBoxColumn::OnListButtonPressed, m_colControl);
+		textCtrl->UnbindButtonClear(&CValueTableBoxColumn::OnClearButtonPressed, m_colControl);
+		textCtrl->UnbindTextCtrl(&CValueTableBoxColumn::OnTextEnter, m_colControl);
+		textCtrl->UnbindKillFocus(&CValueTableBoxColumn::OnKillFocus, m_colControl);
+	}
 
 	value = textCtrl->GetTextValue();	
 	return true;

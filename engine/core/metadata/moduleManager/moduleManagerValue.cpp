@@ -73,7 +73,7 @@ void IModuleManager::CModuleValue::PrepareNames() const
 {
 	std::vector<SEng> aMethods, aAttributes;
 
-	if (m_procUnit)
+	if (m_procUnit != NULL)
 	{
 		CByteCode *m_byteCode = m_procUnit->GetByteCode();
 

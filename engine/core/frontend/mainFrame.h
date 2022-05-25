@@ -7,7 +7,7 @@
 #include <wx/stc/stc.h>
 
 class IMetaObject;
-class CReportManager;
+class CDocManager;
 class CDocChildFrame;
 
 #include "appData.h"
@@ -76,7 +76,7 @@ public:
 
 	static CDocChildFrame *CreateChildFrame(CView *view, wxPoint pos_wnd, wxSize size_wnd, long style = wxDEFAULT_FRAME_STYLE);
 
-	KeyBinder             GetKeyBinder() { return m_keyBinder; };
+	KeyBinder             GetKeyBinder() { return m_keyBinder; }
 	FontColorSettings     GetFontColorSettings() { return m_fontColorSettings; }
 	EditorSettings        GetEditorSettings() { return m_editorSettings; }
 

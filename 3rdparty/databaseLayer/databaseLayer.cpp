@@ -16,7 +16,7 @@ DatabaseLayer::~DatabaseLayer()
 }
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-int DatabaseLayer::DoRunQueryWchar(const wxChar *format, ...)
+int DatabaseLayer::DoRunQueryWchar(const wxChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -28,7 +28,7 @@ int DatabaseLayer::DoRunQueryWchar(const wxChar *format, ...)
 	return RunQuery(strQuery, true);
 }
 
-DatabaseResultSet *DatabaseLayer::DoRunQueryWithResultsWchar(const wxChar *format, ...)
+DatabaseResultSet* DatabaseLayer::DoRunQueryWithResultsWchar(const wxChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -40,7 +40,7 @@ DatabaseResultSet *DatabaseLayer::DoRunQueryWithResultsWchar(const wxChar *forma
 	return RunQueryWithResults(strQuery);
 }
 
-PreparedStatement *DatabaseLayer::DoPrepareStatementWchar(const wxChar *format, ...)
+PreparedStatement* DatabaseLayer::DoPrepareStatementWchar(const wxChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -54,7 +54,7 @@ PreparedStatement *DatabaseLayer::DoPrepareStatementWchar(const wxChar *format, 
 #endif
 
 #if wxUSE_UNICODE_UTF8
-int DatabaseLayer::DoRunQueryUtf8(const wxChar *format, ...)
+int DatabaseLayer::DoRunQueryUtf8(const wxChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -66,7 +66,7 @@ int DatabaseLayer::DoRunQueryUtf8(const wxChar *format, ...)
 	return RunQuery(strQuery, true);
 }
 
-DatabaseResultSet *DatabaseLayer::DoRunQueryWithResultsUtf8(const wxChar *format, ...)
+DatabaseResultSet* DatabaseLayer::DoRunQueryWithResultsUtf8(const wxChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -78,7 +78,7 @@ DatabaseResultSet *DatabaseLayer::DoRunQueryWithResultsUtf8(const wxChar *format
 	return RunQueryWithResults(strQuery);
 }
 
-PreparedStatement *DatabaseLayer::DoPrepareStatementUtf8(const wxChar *format, ...)
+PreparedStatement* DatabaseLayer::DoPrepareStatementUtf8(const wxChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);

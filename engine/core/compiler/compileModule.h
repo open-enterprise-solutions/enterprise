@@ -90,7 +90,7 @@ struct CByteCode
 		Reset();
 	};
 
-	void SetModule(CCompileModule *pSetModule) { m_pModule = pSetModule; };
+	void SetModule(CCompileModule *pSetModule) { m_pModule = pSetModule; }
 
 	void Reset()
 	{

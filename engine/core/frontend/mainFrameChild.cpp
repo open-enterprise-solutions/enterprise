@@ -94,7 +94,7 @@ void CDocChildFrame::OnActivate(wxActivateEvent& event)
 	}
 }
 
-#include "common/reportManager.h"
+#include "common/docManager.h"
 
 void CDocChildFrame::OnCloseWindow(wxCloseEvent& event)
 {

@@ -19,38 +19,40 @@ public:
 
 	virtual void Modify(bool modify) = 0;
 
-	virtual void EditModule(const wxString &fullName, int lineNumber, bool setRunLine = true) = 0;
+	virtual void EditModule(const wxString& fullName, int lineNumber, bool setRunLine = true) = 0;
 
-	virtual bool OpenFormMDI(IMetaObject *obj) = 0;
-	virtual bool OpenFormMDI(IMetaObject *obj, CDocument *&foundedDoc) = 0;
+	virtual bool OpenFormMDI(IMetaObject* obj) = 0;
+	virtual bool OpenFormMDI(IMetaObject* obj, CDocument*& foundedDoc) = 0;
 
-	virtual bool CloseFormMDI(IMetaObject *obj) = 0;
+	virtual bool CloseFormMDI(IMetaObject* obj) = 0;
 
-	virtual CDocument *GetDocument(IMetaObject *obj) = 0;
+	virtual CDocument* GetDocument(IMetaObject* obj) = 0;
 
 	virtual void OnPropertyChanged() = 0;
 
-	virtual void CloseMetaObject(IMetaObject *obj) = 0;
-	virtual void OnCloseDocument(CDocument *doc) = 0;
+	virtual void CloseMetaObject(IMetaObject* obj) = 0;
+	virtual void OnCloseDocument(CDocument* doc) = 0;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 
 class IMetadata {
-	IMetadataTree *m_metaTree;
+	IMetadataTree* m_metaTree;
 private:
-	void DoGenerateNewID(meta_identifier_t &id, IMetaObject *top);
+	void DoGenerateNewID(meta_identifier_t& id, IMetaObject* top);
 	//Get metaobjects 
-	void DoGetMetaObjects(const CLASS_ID &clsid, std::vector<IMetaObject*> &metaObjects, IMetaObject *top);
+	void DoGetMetaObjects(const CLASS_ID& clsid, std::vector<IMetaObject*>& metaObjects, IMetaObject* top);
 	//find object
-	IMetaObject *DoFindByName(const wxString &fullName, IMetaObject *top);
+	IMetaObject* DoFindByName(const wxString& fullName, IMetaObject* top);
 	//get metaObject 
-	IMetaObject *DoGetMetaObject(meta_identifier_t id, IMetaObject *top);
+	IMetaObject* DoGetMetaObject(const meta_identifier_t &id, IMetaObject* top);
 public:
 	IMetadata(bool readOnly = false) : m_moduleManager(NULL), m_metaTree(NULL), m_metaReadOnly(readOnly), m_metaModify(false) {}
 	virtual ~IMetadata() {}
 
-	virtual IModuleManager *GetModuleManager() const { return m_moduleManager; };
+	virtual IModuleManager* GetModuleManager() const {
+		return m_moduleManager;
+	}
 
 	virtual bool IsModified() const { return m_metaModify; }
 	virtual void Modify(bool modify) {
@@ -59,64 +61,79 @@ public:
 		m_metaModify = modify;
 	}
 
-	virtual void SetVersion(version_identifier_t version) = 0;
+	virtual void SetVersion(const version_identifier_t &version) = 0;
 	virtual version_identifier_t GetVersion() const = 0;
 
 	virtual wxString GetFileName() const { return wxEmptyString; }
-	virtual IMetaObject *GetCommonMetaObject() const { return NULL; }
+	virtual IMetaObject* GetCommonMetaObject() const { return NULL; }
 
 	//runtime support:
-	CValue CreateObject(const wxString &className, CValue **aParams = NULL) { return CreateObjectRef(className, aParams); }
-	virtual CValue *CreateObjectRef(const wxString &className, CValue **aParams = NULL);
+	CValue CreateObject(const wxString& className, CValue** aParams = NULL) {
+		return CreateObjectRef(className, aParams);
+	}
+	
+	virtual CValue* CreateObjectRef(const wxString& className, CValue** aParams = NULL);
 
-	template<class T = CValue * >
-	static T CreateAndConvertObjectRef(const wxString &className, CValue **aParams = NULL) { return value_cast<T>(CreateObjectRef(className, aParams)); }
+	template<class retType = CValue>
+	retType* CreateAndConvertObjectRef(const wxString& className, CValue** aParams = NULL) {
+		return value_cast<retType>(CreateObjectRef(className, aParams));
+	}
 
-	void RegisterObject(const wxString &className, IMetaTypeObjectValueSingle *singleObject);
-	void UnRegisterObject(const wxString &className);
+	void RegisterObject(const wxString& className, IMetaTypeObjectValueSingle* singleObject);
+	void UnRegisterObject(const wxString& className);
 
-	bool IsRegisterObject(const wxString &className);
-	bool IsRegisterObject(const wxString &className, eObjectType objectType);
-	bool IsRegisterObject(const wxString &className, eObjectType objectType, enum eMetaObjectType refType);
+	bool IsRegisterObject(const wxString& className) const;
+	bool IsRegisterObject(const wxString& className, eObjectType objectType) const;
+	bool IsRegisterObject(const wxString& className, eObjectType objectType, enum eMetaObjectType refType) const;
+	bool IsRegisterObject(const CLASS_ID& clsid) const;
 
-	virtual CLASS_ID GetIDObjectFromString(const wxString &clsName);
-	virtual wxString GetNameObjectFromID(const CLASS_ID &clsid, bool upper = false);
+	virtual CLASS_ID GetIDObjectFromString(const wxString& clsName) const;
+	virtual wxString GetNameObjectFromID(const CLASS_ID& clsid, bool upper = false) const;
 
-	meta_identifier_t GetVTByID(const CLASS_ID &clsid);
-	CLASS_ID GetIDByVT(const meta_identifier_t &valueType, enum eMetaObjectType refType);
+	meta_identifier_t GetVTByID(const CLASS_ID& clsid) const;
+	CLASS_ID GetIDByVT(const meta_identifier_t& valueType, enum eMetaObjectType refType) const;
 
-	virtual IMetaTypeObjectValueSingle *GetTypeObject(IMetaObject *metaValue, enum eMetaObjectType refType);
-	virtual wxArrayString GetAvailableObjects(enum eMetaObjectType refType);
+	virtual IMetaTypeObjectValueSingle* GetTypeObject(const CLASS_ID& clsid) const;
+	virtual IMetaTypeObjectValueSingle* GetTypeObject(const IMetaObject* metaValue, enum eMetaObjectType refType) const;
+
+	virtual wxArrayString GetAvailableObjects(enum eMetaObjectType refType) const;
+
+	virtual IObjectValueAbstract* GetAvailableObject(const CLASS_ID& clsid) const;
+	virtual IObjectValueAbstract* GetAvailableObject(const wxString& className) const;
+
+	virtual std::vector<IMetaTypeObjectValueSingle*> GetAvailableSingleObjects() const;
+	virtual std::vector<IMetaTypeObjectValueSingle*> GetAvailableSingleObjects(const CLASS_ID& clsid, eMetaObjectType refType) const;
+	virtual std::vector<IMetaTypeObjectValueSingle*> GetAvailableSingleObjects(enum eMetaObjectType refType) const;
 
 	//Available types 
-	virtual OptionList *GetTypelist() const = 0;
+	virtual OptionList* GetTypelist() const = 0;
 
 	//run/close 
-	virtual bool RunMetadata() = 0;
-	virtual bool CloseMetadata(bool force = false) = 0;
+	virtual bool RunMetadata(int flags = defaultFlag) = 0;
+	virtual bool CloseMetadata(int flags = defaultFlag) = 0;
 
 	//metaobject
-	IMetaObject *CreateMetaObject(const CLASS_ID &clsid, IMetaObject *parentMetaObj);
+	IMetaObject* CreateMetaObject(const CLASS_ID& clsid, IMetaObject* parentMetaObj);
 
-	bool RenameMetaObject(IMetaObject *obj, const wxString &sNewName);
-	void RemoveMetaObject(IMetaObject *obj, IMetaObject *objParent = NULL);
+	bool RenameMetaObject(IMetaObject* obj, const wxString& sNewName);
+	void RemoveMetaObject(IMetaObject* obj, IMetaObject* objParent = NULL);
 
 	//Get metaobjects 
-	virtual std::vector<IMetaObject *> GetMetaObjects(const CLASS_ID &clsid);
+	virtual std::vector<IMetaObject*> GetMetaObjects(const CLASS_ID& clsid);
 	//find object
-	virtual IMetaObject *FindByName(const wxString &fullName);
+	virtual IMetaObject* FindByName(const wxString& fullName);
 	//get metaObject 
-	virtual IMetaObject *GetMetaObject(meta_identifier_t meta_id);
+	virtual IMetaObject* GetMetaObject(const meta_identifier_t &id);
 
 	//Associate this metadata with 
-	virtual IMetadataTree *GetMetaTree() const { return m_metaTree; }
-	virtual void SetMetaTree(IMetadataTree *metaTree) { m_metaTree = metaTree; }
+	virtual IMetadataTree* GetMetaTree() const { return m_metaTree; }
+	virtual void SetMetaTree(IMetadataTree* metaTree) { m_metaTree = metaTree; }
 
 	//ID's 
 	virtual meta_identifier_t GenerateNewID();
 
 	//Generate new name
-	virtual wxString GetNewName(const CLASS_ID &clsid, IMetaObject *metaParent, const wxString &sPrefix = wxEmptyString, bool forConstructor = false);
+	virtual wxString GetNewName(const CLASS_ID& clsid, IMetaObject* metaParent, const wxString& sPrefix = wxEmptyString, bool forConstructor = false);
 
 protected:
 
@@ -131,10 +148,10 @@ protected:
 	};
 
 	//custom types
-	std::vector<IMetaTypeObjectValueSingle *> m_aFactoryMetaObjects;
+	std::vector<IMetaTypeObjectValueSingle*> m_aFactoryMetaObjects;
 
 	//common module manager
-	IModuleManager *m_moduleManager;
+	IModuleManager* m_moduleManager;
 };
 
 class IConfigMetadata : public IMetadata {
@@ -168,11 +185,11 @@ public:
 	virtual bool RoolbackToConfigDatabase() { return true; }
 
 	//load/save form file
-	virtual bool LoadFromFile(const wxString &fileName) { return true; }
-	virtual bool SaveToFile(const wxString &fileName) { return true; }
+	virtual bool LoadFromFile(const wxString& fileName) { return true; }
+	virtual bool SaveToFile(const wxString& fileName) { return true; }
 
 	// get config metadata 
-	virtual IConfigMetadata *GetConfigMetadata() const { return NULL; }
+	virtual IConfigMetadata* GetConfigMetadata() const { return NULL; }
 
 public:
 	static IConfigMetadata* Get();
@@ -183,70 +200,76 @@ public:
 
 class CConfigFileMetadata : public IConfigMetadata {
 	//Available types 
-	void DoGetTypelist(IMetaObject *top, OptionList *optionList) const;
+	void DoGetTypelist(IMetaObject* top, OptionList* optionList) const;
 
 public:
+
+	bool ConfigOpened() const {
+		return m_configOpened;
+	}
 
 	CConfigFileMetadata(bool readOnly = false);
 	virtual ~CConfigFileMetadata();
 
-	virtual Guid GetMetadataGuid() const { return m_commonObject->GetDocPath(); };
-	virtual wxString GetMetadataMD5() const { return m_md5Hash; };
+	virtual Guid GetMetadataGuid() const { return m_commonObject->GetDocPath(); }
+	virtual wxString GetMetadataMD5() const { return m_md5Hash; }
 
 	virtual wxString GetMetadataName() const { return m_commonObject->GetName(); }
 	virtual wxString GetConfigPath() const { return wxEmptyString; }
 	virtual wxString GetDefaultSource() const { return wxEmptyString; }
 
-	virtual void SetVersion(version_identifier_t version) { m_version = version; }
+	virtual void SetVersion(const version_identifier_t &version) { m_version = version; }
 	version_identifier_t GetVersion() const { return m_version; }
 
 	//Available types 
-	virtual OptionList *GetTypelist() const;
+	virtual OptionList* GetTypelist() const;
 
 	//compare metadata
-	virtual bool CompareMetadata(CConfigFileMetadata *dst) const {
+	virtual bool CompareMetadata(CConfigFileMetadata* dst) const {
 		return m_md5Hash == dst->m_md5Hash;
 	}
 
 	//run/close 
-	virtual bool RunMetadata();
-	virtual bool CloseMetadata(bool force = false);
+	virtual bool RunMetadata(int flags = defaultFlag);
+	virtual bool CloseMetadata(int flags = defaultFlag);
+
 	virtual bool ClearMetadata();
 
 	//load/save form file
-	virtual bool LoadFromFile(const wxString &fileName);
+	virtual bool LoadFromFile(const wxString& fileName);
 
-	virtual IMetaObject *GetCommonMetaObject() const { return m_commonObject; }
+	virtual IMetaObject* GetCommonMetaObject() const { return m_commonObject; }
 
 protected:
 
 	//header loader/saver 
-	bool LoadHeader(CMemoryReader &readerData);
+	bool LoadHeader(CMemoryReader& readerData);
 
 	//loader/saver/deleter: 
-	bool LoadCommonMetadata(const CLASS_ID &clsid, CMemoryReader &readerData);
-	bool LoadMetadata(const CLASS_ID &clsid, CMemoryReader &readerData, IMetaObject *parentObj);
-	bool LoadChildMetadata(const CLASS_ID &clsid, CMemoryReader &readerData, IMetaObject *parentObj);
+	bool LoadCommonMetadata(const CLASS_ID& clsid, CMemoryReader& readerData);
+	bool LoadMetadata(const CLASS_ID& clsid, CMemoryReader& readerData, IMetaObject* parentObj);
+	bool LoadChildMetadata(const CLASS_ID& clsid, CMemoryReader& readerData, IMetaObject* parentObj);
 
 	//run/close recursively:
-	bool RunChildMetadata(IMetaObject *parentObj);
-	bool CloseChildMetadata(IMetaObject *parentObj, bool force = false);
+	bool RunChildMetadata(IMetaObject* parentObj, int flags, bool before);
+	bool CloseChildMetadata(IMetaObject* parentObj, int flags, bool before);
 	//clear recursively:
-	bool ClearChildMetadata(IMetaObject *parentObj);
+	bool ClearChildMetadata(IMetaObject* parentObj);
 
 protected:
 
+	bool m_configOpened;
 	version_identifier_t m_version;
 
 	wxString m_md5Hash;
 	//common meta object
-	CMetaObject *m_commonObject;
+	CMetaObject* m_commonObject;
 };
 
 class CConfigMetadata : public CConfigFileMetadata {
 public:
 	CConfigMetadata(bool readOnly = false);
-	virtual bool LoadFromFile(const wxString &fileName) {
+	virtual bool LoadFromFile(const wxString& fileName) {
 		if (CConfigFileMetadata::LoadFromFile(fileName)) {
 			Modify(true); //set modify for check metadata
 			return true;
@@ -271,15 +294,15 @@ protected:
 };
 
 class CConfigStorageMetadata : public CConfigMetadata {
-	bool m_bConfigSave;
-	CConfigMetadata *m_metaConfig;
+	bool m_configSave;
+	CConfigMetadata* m_metaConfig;
 public:
 
 	CConfigStorageMetadata(bool readOnly = false);
 	virtual ~CConfigStorageMetadata();
 
 	//is config save
-	virtual bool IsConfigSave() const { return m_bConfigSave; }
+	virtual bool IsConfigSave() const { return m_configSave; }
 
 	//metadata 
 	virtual bool CreateMetadata();
@@ -290,9 +313,9 @@ public:
 		}
 		if (m_metaConfig->LoadMetadata(onlyLoadFlag)) {
 			if (CConfigMetadata::LoadMetadata()) {
-				m_bConfigSave =
+				m_configSave =
 					CompareMetadata(m_metaConfig);
-				Modify(!m_bConfigSave);
+				Modify(!m_configSave);
 				return true;
 			}
 		}
@@ -301,27 +324,42 @@ public:
 
 	virtual bool SaveMetadata(int flags = defaultFlag);
 
+	//run/close 
+	virtual bool RunMetadata(int flags = defaultFlag) {
+		return CConfigMetadata::RunMetadata(flags);
+	}
+
+	virtual bool CloseMetadata(int flags = defaultFlag) {
+
+		if (!CConfigMetadata::CloseMetadata(flags))
+			return false;
+
+		return m_metaConfig->CloseMetadata(flags);
+	}
+
 	//rollback to config db
 	virtual bool RoolbackToConfigDatabase();
 
 	//save form file
-	virtual bool SaveToFile(const wxString &fileName);
+	virtual bool SaveToFile(const wxString& fileName);
 
 	// get config metadata 
-	virtual IConfigMetadata *GetConfigMetadata() const { return m_metaConfig; }
+	virtual IConfigMetadata* GetConfigMetadata() const {
+		return m_metaConfig;
+	}
 
 protected:
 
 	//header saver 
-	bool SaveHeader(CMemoryWriter &writterData);
+	bool SaveHeader(CMemoryWriter& writterData);
 
 	//loader/saver/deleter: 
-	bool SaveCommonMetadata(const CLASS_ID &clsid, CMemoryWriter &writterData, int flags = defaultFlag);
-	bool SaveMetadata(const CLASS_ID &clsid, CMemoryWriter &writterData, int flags = defaultFlag);
-	bool SaveChildMetadata(const CLASS_ID &clsid, CMemoryWriter &writterData, IMetaObject *parentObj, int flags = defaultFlag);
-	bool DeleteCommonMetadata(const CLASS_ID &clsid);
-	bool DeleteMetadata(const CLASS_ID &clsid);
-	bool DeleteChildMetadata(const CLASS_ID &clsid, IMetaObject *parentObj);
+	bool SaveCommonMetadata(const CLASS_ID& clsid, CMemoryWriter& writterData, int flags = defaultFlag);
+	bool SaveMetadata(const CLASS_ID& clsid, CMemoryWriter& writterData, int flags = defaultFlag);
+	bool SaveChildMetadata(const CLASS_ID& clsid, CMemoryWriter& writterData, IMetaObject* parentObj, int flags = defaultFlag);
+	bool DeleteCommonMetadata(const CLASS_ID& clsid);
+	bool DeleteMetadata(const CLASS_ID& clsid);
+	bool DeleteChildMetadata(const CLASS_ID& clsid, IMetaObject* parentObj);
 };
 
 #define sign_metadata 0x1236F362122FE

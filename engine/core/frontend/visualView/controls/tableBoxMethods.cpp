@@ -1,6 +1,6 @@
 #include "tableBox.h"
 #include "form.h"
-#include "metadata/objects/baseObject.h"
+#include "metadata/metaObjects/objects/baseObject.h"
 #include "compiler/methods.h"
 #include "utils/stringUtils.h"
 

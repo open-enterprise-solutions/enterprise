@@ -39,10 +39,10 @@ eValueTypes ITypeValue::GetType() const
 		return m_typeClass;
 }
 
-CLASS_ID ITypeValue::GetTypeID() const
+CLASS_ID ITypeValue::GetClassType() const
 {
 	if (m_typeClass == eValueTypes::TYPE_REFFER)
-		return GetRef()->GetTypeID();
+		return GetRef()->GetClassType();
 	else if (m_typeClass == eValueTypes::TYPE_VALUE)
 		return CValue::GetTypeIDByRef(this);
 	else
@@ -61,8 +61,6 @@ static unsigned int m_nCreateCount = 0;
 
 #define _DEBUG_VALUE_CREATE() \
 	wxLogDebug("Create %d", m_nCreateCount++);\
-
-#define emptyDate -62135604000000ll
 
 CValue::CValue()
 	: ITypeValue(eValueTypes::TYPE_EMPTY), m_refCount(0), m_pRef(NULL), m_bReadOnly(false)
@@ -90,7 +88,7 @@ CValue::CValue(CValue* pValue)
 	_DEBUG_VALUE_CREATE();
 }
 
-CValue::CValue(const wxDateTime &cParam)
+CValue::CValue(const wxDateTime& cParam)
 	: ITypeValue(eValueTypes::TYPE_DATE), m_refCount(0), m_pRef(NULL), m_bReadOnly(false)
 {
 	wxLongLong m_llData = cParam.GetValue();
@@ -148,12 +146,12 @@ CVALUE_BYTYPE(bool, eValueTypes::TYPE_BOOLEAN, m_bData);
 CVALUE_BYTYPE(signed int, eValueTypes::TYPE_NUMBER, m_fData);
 CVALUE_BYTYPE(unsigned int, eValueTypes::TYPE_NUMBER, m_fData);
 CVALUE_BYTYPE(double, eValueTypes::TYPE_NUMBER, m_fData);
-CVALUE_BYTYPE(const number_t &, eValueTypes::TYPE_NUMBER, m_fData);
+CVALUE_BYTYPE(const number_t&, eValueTypes::TYPE_NUMBER, m_fData);
 
 CVALUE_BYTYPE(wxLongLong_t, eValueTypes::TYPE_DATE, m_dData);
 
-CVALUE_BYTYPE_MOVE(char *, eValueTypes::TYPE_STRING, m_sData);
-CVALUE_BYTYPE_MOVE(const wxString &, eValueTypes::TYPE_STRING, m_sData);
+CVALUE_BYTYPE_MOVE(char*, eValueTypes::TYPE_STRING, m_sData);
+CVALUE_BYTYPE_MOVE(const wxString&, eValueTypes::TYPE_STRING, m_sData);
 
 #undef CVALUE_BYTYPE
 #undef CVALUE_BYTYPE_MOVE
@@ -201,9 +199,15 @@ void CValue::Copy(const CValue& cOld)
 
 	case eValueTypes::TYPE_VALUE:
 	case eValueTypes::TYPE_ENUM:
-	case eValueTypes::TYPE_MODULE: m_pRef = const_cast<CValue *>(&cOld); m_pRef->IncrRef(); m_typeClass = eValueTypes::TYPE_REFFER; break;
+	case eValueTypes::TYPE_MODULE:
+		m_pRef = const_cast<CValue*>(&cOld); m_pRef->IncrRef();
+		m_typeClass = eValueTypes::TYPE_REFFER;
+		break;
 
-	case eValueTypes::TYPE_REFFER: { if (cOld.m_pRef) { m_pRef = cOld.m_pRef; m_pRef->IncrRef(); } break; }
+	case eValueTypes::TYPE_REFFER:
+		if (cOld.m_pRef) {
+			m_pRef = cOld.m_pRef; m_pRef->IncrRef();
+		} break;
 	default: m_typeClass = eValueTypes::TYPE_EMPTY;
 	}
 }
@@ -228,12 +232,12 @@ void CValue::operator = (double dValue)
 	SetValue(dValue);
 }
 
-void CValue::operator = (const wxString &sValue)
+void CValue::operator = (const wxString& sValue)
 {
 	SetValue(sValue);
 }
 
-void CValue::operator = (const CValue &cVal)
+void CValue::operator = (const CValue& cVal)
 {
 	if (this != &cVal && !m_bReadOnly) Copy(cVal);
 }
@@ -260,7 +264,7 @@ void CValue::operator = (eValueTypes type)
 	}
 }
 
-void CValue::operator = (CValue *pParam)
+void CValue::operator = (CValue* pParam)
 {
 	if (this != pParam && !m_bReadOnly) {
 		if (pParam) {
@@ -274,7 +278,7 @@ void CValue::operator = (CValue *pParam)
 	}
 }
 
-void CValue::operator = (const wxDateTime &cParam)
+void CValue::operator = (const wxDateTime& cParam)
 {
 	SetValue(cParam);
 }
@@ -284,7 +288,7 @@ void CValue::operator = (wxLongLong_t cParam)
 	SetValue(cParam);
 }
 
-void CValue::SetValue(const CValue &cVal)
+void CValue::SetValue(const CValue& cVal)
 {
 	if (this == &cVal) return;
 
@@ -296,7 +300,7 @@ void CValue::SetValue(const CValue &cVal)
 	}
 }
 
-void CValue::SetData(const CValue &cVal)
+void CValue::SetData(const CValue& cVal)
 {
 	if (this == &cVal) return;
 
@@ -322,7 +326,7 @@ void CValue::SetData(const CValue &cVal)
 	SetValue(cVal);
 }
 
-void CValue::SetBoolean(const wxString &sBoolean)
+void CValue::SetBoolean(const wxString& sBoolean)
 {
 	if (m_bReadOnly && m_typeClass == eValueTypes::TYPE_REFFER) {
 		m_pRef->SetBoolean(sBoolean);
@@ -335,9 +339,9 @@ void CValue::SetBoolean(const wxString &sBoolean)
 	m_bData = sBoolean.CompareTo(wxT("true"), wxString::ignoreCase) == 0;
 }
 
-void CValue::SetNumber(const wxString &sNumber)
+void CValue::SetNumber(const wxString& sNumber)
 {
-	if (m_bReadOnly&&m_typeClass == eValueTypes::TYPE_REFFER) {
+	if (m_bReadOnly && m_typeClass == eValueTypes::TYPE_REFFER) {
 		m_pRef->SetNumber(sNumber); return;
 	}
 
@@ -350,9 +354,9 @@ void CValue::SetNumber(const wxString &sNumber)
 	m_typeClass = eValueTypes::TYPE_NUMBER;
 }
 
-void CValue::SetString(const wxString &sString)
+void CValue::SetString(const wxString& sString)
 {
-	if (m_bReadOnly&&m_typeClass == eValueTypes::TYPE_REFFER)
+	if (m_bReadOnly && m_typeClass == eValueTypes::TYPE_REFFER)
 	{
 		m_pRef->SetString(sString);
 		return;
@@ -364,7 +368,7 @@ void CValue::SetString(const wxString &sString)
 	m_sData = sString;
 }
 
-void CValue::SetDate(const wxString &strDate)
+void CValue::SetDate(const wxString& strDate)
 {
 	wxDateTime strTime; CValue cRes = eValueTypes::TYPE_DATE;
 
@@ -391,7 +395,7 @@ void CValue::SetDate(const wxString &strDate)
 	Copy(cRes);
 }
 
-bool CValue::FindValue(const wxString &findData, std::vector<CValue>& foundedObjects)
+bool CValue::FindValue(const wxString& findData, std::vector<CValue>& foundedObjects)
 {
 	try {
 		switch (m_typeClass)
@@ -401,8 +405,8 @@ bool CValue::FindValue(const wxString &findData, std::vector<CValue>& foundedObj
 		case eValueTypes::TYPE_STRING: SetString(findData); foundedObjects.push_back(this); return true;
 		case eValueTypes::TYPE_DATE: SetDate(findData); foundedObjects.push_back(this); return true;
 
-		case eValueTypes::TYPE_REFFER: if (m_pRef) { 
-			return m_pRef->FindValue(findData, foundedObjects); 
+		case eValueTypes::TYPE_REFFER: if (m_pRef) {
+			return m_pRef->FindValue(findData, foundedObjects);
 		}
 		}
 	}
@@ -485,8 +489,9 @@ wxString CValue::GetString() const
 	}
 	case eValueTypes::TYPE_REFFER:
 	{
-		if (m_pRef) return m_pRef->GetString();
-		else wxEmptyString;
+		if (m_pRef != NULL)
+			return m_pRef->GetString();
+		wxEmptyString;
 	}
 	};
 
@@ -532,15 +537,15 @@ wxLongLong_t CValue::GetDate() const
 	return emptyDate;
 }
 
-CValue *CValue::GetRef() const
+CValue* CValue::GetRef() const
 {
 	if (m_typeClass == eValueTypes::TYPE_REFFER)
-		return m_pRef;
+		return m_pRef->GetRef();
 
-	return const_cast<CValue *>(this);
+	return const_cast<CValue*>(this);
 }
 
-void CValue::FromDate(int &nYear, int &nMonth, int &nDay) const
+void CValue::FromDate(int& nYear, int& nMonth, int& nDay) const
 {
 	wxLongLong nCurDate = wxLongLong(GetDate());
 	wxDateTime currentTime(nCurDate);
@@ -550,7 +555,7 @@ void CValue::FromDate(int &nYear, int &nMonth, int &nDay) const
 	nDay = currentTime.GetDay();
 }
 
-void CValue::FromDate(int &nYear, int &nMonth, int &nDay, unsigned short &nHour, unsigned short &nMinute, unsigned short &nSecond) const
+void CValue::FromDate(int& nYear, int& nMonth, int& nDay, unsigned short& nHour, unsigned short& nMinute, unsigned short& nSecond) const
 {
 	wxLongLong nCurDate = wxLongLong(GetDate());
 	wxDateTime currentTime(nCurDate);
@@ -563,7 +568,7 @@ void CValue::FromDate(int &nYear, int &nMonth, int &nDay, unsigned short &nHour,
 	nSecond = currentTime.GetSecond();
 }
 
-void CValue::FromDate(int &nYear, int &nMonth, int &nDay, int &DayOfWeek, int &DayOfYear, int &WeekOfYear) const
+void CValue::FromDate(int& nYear, int& nMonth, int& nDay, int& DayOfWeek, int& DayOfYear, int& WeekOfYear) const
 {
 	wxLongLong nCurDate = wxLongLong(GetDate());
 	wxDateTime currentTime(nCurDate);
@@ -592,13 +597,13 @@ void CValue::Detach()
 		m_pRef->Detach();
 }
 
-void CValue::Attach(void *pObj)
+void CValue::Attach(void* pObj)
 {
 	if (m_typeClass == eValueTypes::TYPE_REFFER)
 		m_pRef->Attach(pObj);
 }
 
-void *CValue::GetAttach()
+void* CValue::GetAttach()
 {
 	return NULL;
 }
@@ -646,7 +651,7 @@ wxString CValue::GetTypeString() const
 //*                        array support                      *
 //*************************************************************
 
-void CValue::SetAt(const CValue &cKey, CValue &cVal)
+void CValue::SetAt(const CValue& cKey, CValue& cVal)
 {
 	switch (m_typeClass)
 	{
@@ -656,7 +661,7 @@ void CValue::SetAt(const CValue &cKey, CValue &cVal)
 	SetAttribute(cKey.GetString(), cVal);
 }
 
-CValue CValue::GetAt(const CValue &cKey)
+CValue CValue::GetAt(const CValue& cKey)
 {
 	switch (m_typeClass)
 	{
@@ -699,7 +704,7 @@ unsigned int CValue::GetItSize() const
 //*************************************************************
 
 // compare '>'
-bool CValue::CompareValueGT(const CValue &cParam) const
+bool CValue::CompareValueGT(const CValue& cParam) const
 {
 	switch (m_typeClass)
 	{
@@ -723,7 +728,7 @@ bool CValue::CompareValueGT(const CValue &cParam) const
 }
 
 // compare '>='
-bool CValue::CompareValueGE(const CValue &cParam) const
+bool CValue::CompareValueGE(const CValue& cParam) const
 {
 	switch (m_typeClass)
 	{
@@ -747,7 +752,7 @@ bool CValue::CompareValueGE(const CValue &cParam) const
 }
 
 // compare '<'
-bool CValue::CompareValueLS(const CValue &cParam) const
+bool CValue::CompareValueLS(const CValue& cParam) const
 {
 	switch (m_typeClass)
 	{
@@ -771,7 +776,7 @@ bool CValue::CompareValueLS(const CValue &cParam) const
 }
 
 // compare '<='
-bool CValue::CompareValueLE(const CValue &cParam) const
+bool CValue::CompareValueLE(const CValue& cParam) const
 {
 	switch (m_typeClass)
 	{
@@ -795,7 +800,7 @@ bool CValue::CompareValueLE(const CValue &cParam) const
 }
 
 // compare '=='
-bool CValue::CompareValueEQ(const CValue &cParam) const
+bool CValue::CompareValueEQ(const CValue& cParam) const
 {
 	switch (m_typeClass)
 	{
@@ -819,7 +824,7 @@ bool CValue::CompareValueEQ(const CValue &cParam) const
 }
 
 // compare '!='
-bool CValue::CompareValueNE(const CValue &cParam) const
+bool CValue::CompareValueNE(const CValue& cParam) const
 {
 	switch (m_typeClass)
 	{
@@ -969,7 +974,7 @@ if(m_typeClass==eValueTypes::TYPE_REFFER&&m_pRef)\
 else\
 	pThis=this;
 
-CValue CValue::Method(const wxString &sName, CValue **aParams)
+CValue CValue::Method(const wxString& sName, CValue** aParams)
 {
 	GET_THIS
 		int iName = FindMethod(sName);
@@ -983,7 +988,7 @@ CValue CValue::Method(const wxString &sName, CValue **aParams)
 	return *this;
 }
 
-CValue CValue::Method(methodArg_t &aParams)
+CValue CValue::Method(methodArg_t& aParams)
 {
 	GET_THIS
 		if (aParams.GetIndex() != wxNOT_FOUND) {
@@ -994,7 +999,7 @@ CValue CValue::Method(methodArg_t &aParams)
 	return *this;
 }
 
-void CValue::SetAttribute(const wxString &sName, CValue &cVal)
+void CValue::SetAttribute(const wxString& sName, CValue& cVal)
 {
 	int iName = FindAttribute(sName);
 	GET_THIS
@@ -1005,7 +1010,7 @@ void CValue::SetAttribute(const wxString &sName, CValue &cVal)
 	pThis->SetAttribute(aParams, cVal);
 }
 
-void CValue::SetAttribute(attributeArg_t &aParams, CValue &cVal)
+void CValue::SetAttribute(attributeArg_t& aParams, CValue& cVal)
 {
 	GET_THIS
 		if (aParams.GetIndex() == wxNOT_FOUND || pThis == NULL)
@@ -1013,7 +1018,7 @@ void CValue::SetAttribute(attributeArg_t &aParams, CValue &cVal)
 	pThis->SetAttribute(aParams, cVal);
 }
 
-CValue CValue::GetAttribute(const wxString &sName)
+CValue CValue::GetAttribute(const wxString& sName)
 {
 	int iName = FindAttribute(sName);
 	GET_THIS
@@ -1024,7 +1029,7 @@ CValue CValue::GetAttribute(const wxString &sName)
 	return pThis->GetAttribute(aParams);
 }
 
-CValue CValue::GetAttribute(attributeArg_t &aParams)
+CValue CValue::GetAttribute(attributeArg_t& aParams)
 {
 	GET_THIS
 		if (aParams.GetIndex() != wxNOT_FOUND && pThis)
@@ -1037,9 +1042,9 @@ CValue CValue::GetAttribute(attributeArg_t &aParams)
 const CValue *pThis = m_typeClass==eValueTypes::TYPE_REFFER ? m_pRef : this; \
 CMethods* pMethods=pThis->GetPMethods(); \
 
-int CValue::FindMethod(const wxString &sName) const
+int CValue::FindMethod(const wxString& sName) const
 {
-	if (m_pRef&&m_typeClass == eValueTypes::TYPE_REFFER) {
+	if (m_pRef && m_typeClass == eValueTypes::TYPE_REFFER) {
 		if (m_pRef->m_typeClass == eValueTypes::TYPE_OLE)
 			return m_pRef->FindMethod(sName);
 	}
@@ -1047,15 +1052,15 @@ int CValue::FindMethod(const wxString &sName) const
 	GET_PMETHODS
 		if (pMethods) return pMethods->FindMethod(sName);
 
-	if (m_pRef&&m_typeClass == eValueTypes::TYPE_REFFER)
+	if (m_pRef && m_typeClass == eValueTypes::TYPE_REFFER)
 		return m_pRef->FindMethod(sName);
 
 	return wxNOT_FOUND;
 }
 
-int CValue::FindAttribute(const wxString &sName) const
+int CValue::FindAttribute(const wxString& sName) const
 {
-	if (m_pRef&&m_typeClass == eValueTypes::TYPE_REFFER) {
+	if (m_pRef && m_typeClass == eValueTypes::TYPE_REFFER) {
 		if (m_pRef->m_typeClass == eValueTypes::TYPE_OLE) return m_pRef->FindAttribute(sName);
 	}
 
@@ -1066,7 +1071,7 @@ int CValue::FindAttribute(const wxString &sName) const
 				return nRes;
 		}
 
-	if (m_pRef&&m_typeClass == eValueTypes::TYPE_REFFER)
+	if (m_pRef && m_typeClass == eValueTypes::TYPE_REFFER)
 		return m_pRef->FindAttribute(sName);
 
 	return wxNOT_FOUND;
@@ -1077,7 +1082,7 @@ wxString CValue::GetMethodName(unsigned int nNumber) const
 	GET_PMETHODS
 		if (pMethods) return pMethods->GetMethodName(nNumber);
 
-	if (m_pRef&&m_typeClass == eValueTypes::TYPE_REFFER) return pThis->GetMethodName(nNumber);
+	if (m_pRef && m_typeClass == eValueTypes::TYPE_REFFER) return pThis->GetMethodName(nNumber);
 	return wxEmptyString;
 }
 
@@ -1087,7 +1092,7 @@ wxString CValue::GetMethodDescription(unsigned int nNumber) const
 		if (pMethods)
 			return pMethods->GetMethodDescription(nNumber);
 
-	if (m_pRef&&m_typeClass == eValueTypes::TYPE_REFFER)
+	if (m_pRef && m_typeClass == eValueTypes::TYPE_REFFER)
 		return pThis->GetMethodDescription(nNumber);
 
 	return wxEmptyString;
@@ -1101,7 +1106,7 @@ wxString CValue::GetAttributeName(unsigned int nNumber) const
 			if (!sResult.empty()) return sResult;
 		}
 
-	if (m_pRef&&m_typeClass == eValueTypes::TYPE_REFFER)
+	if (m_pRef && m_typeClass == eValueTypes::TYPE_REFFER)
 		return pThis->GetAttributeName(nNumber);
 
 	return wxEmptyString;
@@ -1113,7 +1118,7 @@ unsigned int CValue::GetNMethods() const
 		if (pMethods)
 			return pMethods->GetNMethods();
 
-	if (m_pRef&&m_typeClass == eValueTypes::TYPE_REFFER)
+	if (m_pRef && m_typeClass == eValueTypes::TYPE_REFFER)
 		return pThis->GetNMethods();
 
 	return 0;
@@ -1128,7 +1133,7 @@ unsigned int CValue::GetNAttributes() const
 				return nRes;
 		}
 
-	if (m_pRef&&m_typeClass == eValueTypes::TYPE_REFFER) {
+	if (m_pRef && m_typeClass == eValueTypes::TYPE_REFFER) {
 		return pThis->GetNAttributes();
 	}
 
@@ -1136,17 +1141,19 @@ unsigned int CValue::GetNAttributes() const
 }
 
 //получить текущее значение (актуального для агрегатных объектов или объектов диалога)
-CValue CValue::GetValue(bool bThis)
+CValue CValue::GetValue(bool getThis)
 {
-	if (bThis) return this;
+	if (getThis) 
+		return this;
+
 	if (m_typeClass == eValueTypes::TYPE_REFFER) {
-		return m_pRef->GetValue(true);// true - признак создания новой переменной - ссылки на агрегатный объект
+		return m_pRef->GetValue(true); // true - признак создания новой переменной - ссылки на агрегатный объект
 	}
 
 	return *this;
 }
 
-CValue CValue::CallFunctionV(const wxString &sName, CValue **p)
+CValue CValue::CallFunctionV(const wxString& sName, CValue** p)
 {
 	return Method(sName, p);
 }
@@ -1155,7 +1162,7 @@ CValue CValue::CallFunction(const wxString sName, ...)
 {
 	va_list lst;
 	va_start(lst, sName);
-	CValue **ppParams = (CValue**)lst;
+	CValue** ppParams = (CValue**)lst;
 	va_end(lst);
 	return Method(sName, ppParams);
 }

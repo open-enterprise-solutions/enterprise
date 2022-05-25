@@ -6,25 +6,27 @@
 #include "enum.h"
 #include "methods.h"
 
-IEnumerationMethods::IEnumerationMethods(bool createInstance) : CValue(eValueTypes::TYPE_VALUE, true), m_methods(NULL)
+IEnumerationWrapper::IEnumerationWrapper(bool createInstance) :
+	CValue(eValueTypes::TYPE_VALUE, true), m_methods(NULL)
 {
 	if (createInstance) {
 		m_methods = new CMethods();
 	}
 }
 
-IEnumerationMethods::~IEnumerationMethods()
+IEnumerationWrapper::~IEnumerationWrapper()
 {
-	if (m_methods) 
-		delete m_methods;
+	wxDELETE(m_methods);
 }
- 
-void IEnumerationMethods::PrepareNames() const
+
+void IEnumerationWrapper::PrepareNames() const
 {
-	if (!m_methods) 
+	if (m_methods == NULL)
 		return;
 
 	std::vector<SEng> aAttributes;
-	for (auto enumVal : m_aEnumsString) aAttributes.push_back(enumVal);
+	for (auto enumVal : m_aEnumsString) {
+		aAttributes.push_back(enumVal);
+	}
 	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
 }

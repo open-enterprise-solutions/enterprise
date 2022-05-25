@@ -145,13 +145,12 @@ void CValueForm::ResolveNameConflict(IValueFrame *control)
 	}
 
 	control->SetControlName(name);
-	control->ReadProperty(); 
 }
 
 IValueControl *CValueForm::CreateObject(const wxString &className, IValueFrame *controlParent)
 {
 	IValueControl *object = NULL;
-	wxString classType = GetClassType(className);
+	wxString classType = ::GetClassType(className);
 
 	if (controlParent) {
 		bool bSizer = false;

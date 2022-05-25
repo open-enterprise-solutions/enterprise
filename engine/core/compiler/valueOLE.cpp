@@ -549,7 +549,7 @@ bool CValueOLE::Create(const wxString &sName)
 #endif
 }
 
-CMethods *CValueOLE::GetPMethods() const { return m_methods; }; //получить ссылку на класс помощник разбора имен атрибутов и методов
+CMethods *CValueOLE::GetPMethods() const { return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
 
 void CValueOLE::PrepareNames() const
 {

@@ -6,53 +6,74 @@
 #include "metaAttributeObject.h"
 #include "metadata/metadata.h"
 
-wxIMPLEMENT_ABSTRACT_CLASS(IMetaAttributeObject, IMetaObject)
-wxIMPLEMENT_DYNAMIC_CLASS(CMetaAttributeObject, IMetaAttributeObject)
-wxIMPLEMENT_DYNAMIC_CLASS(CMetaDefaultAttributeObject, IMetaAttributeObject)
+////////////////////////////////////////////////////////////////////////////
+
+wxIMPLEMENT_ABSTRACT_CLASS(IMetaAttributeObject, IMetaObject);
+
+wxIMPLEMENT_DYNAMIC_CLASS(CMetaAttributeObject, IMetaAttributeObject);
+wxIMPLEMENT_DYNAMIC_CLASS(CMetaDefaultAttributeObject, IMetaAttributeObject);
 
 //***********************************************************************
 //*                         Attributes                                  * 
 //***********************************************************************
 
-bool IMetaAttributeObject::ProcessChoice(IValueFrame *ownerValue, meta_identifier_t id)
+#include "metadata/singleMetaTypes.h"
+
+bool IMetaAttributeObject::ContainMetaType(eMetaObjectType type) const
 {
-	IMetaObject* metaObject
-		= m_metaData->GetMetaObject(GetTypeObject());
-	if (metaObject) {
-		return metaObject->ProcessChoice(ownerValue, id);
+	for (auto clsid : m_clsids) {
+		IMetaTypeObjectValueSingle* singleObject = m_metaData->GetTypeObject(clsid);
+		if (singleObject && singleObject->GetMetaType() == type) {
+			return true;
+		}
 	}
+
 	return false;
 }
 
-CMetaAttributeObject::CMetaAttributeObject() : IMetaAttributeObject()
+/////////////////////////////////////////////////////////////////////////
+
+CMetaAttributeObject::CMetaAttributeObject(const eValueTypes& valType) : IMetaAttributeObject(valType)
 {
 	//types of category 
-	PropertyContainer *categoryType = IObjectBase::CreatePropertyContainer("Type");
+	PropertyContainer* categoryType = IObjectBase::CreatePropertyContainer("Data");
 	categoryType->AddProperty("type", PropertyType::PT_TYPE_SELECT);
-	categoryType->AddProperty("precision", PropertyType::PT_UINT);
-	categoryType->AddProperty("scale", PropertyType::PT_UINT);
-	categoryType->AddProperty("date_time", PropertyType::PT_OPTION, &CMetaAttributeObject::GetDateTimeFormat);
-	categoryType->AddProperty("length", PropertyType::PT_UINT);
 	m_category->AddCategory(categoryType);
 
-	PropertyContainer *categoryAttribute = IObjectBase::CreatePropertyContainer("Attribute");
+	PropertyContainer* categoryAttribute = IObjectBase::CreatePropertyContainer("Attribute");
 	categoryAttribute->AddProperty("fill_check", PropertyType::PT_BOOL);
 	m_category->AddCategory(categoryAttribute);
+}
+
+/////////////////////////////////////////////////////////////////////////
+
+CValue IMetaAttributeObject::CreateValue() const
+{
+	CValue* refData = CreateValueRef();
+	return refData ? 
+		refData : CValue();
+}
+
+CValue* IMetaAttributeObject::CreateValueRef() const
+{
+	if (m_defValue.IsEmpty()) {
+		return IAttributeInfo::CreateValueRef();
+	}
+
+	return new CValue(m_defValue);
 }
 
 //***********************************************************************
 //*								Events								    *
 //***********************************************************************
 
-bool IMetaAttributeObject::OnCreateMetaObject(IMetadata *metaData)
+bool IMetaAttributeObject::OnCreateMetaObject(IMetadata* metaData)
 {
-	IMetaObject *metaObject = GetParent();
+	IMetaObject* metaObject = GetParent();
 	wxASSERT(metaObject);
 
 	if (IMetaObject::OnCreateMetaObject(metaData)) {
-		if (metaObject->OnReloadMetaObject()) {
-			return true;
-		}
+		return metaObject->OnReloadMetaObject();
 	}
 
 	return false;
@@ -63,24 +84,33 @@ bool IMetaAttributeObject::OnDeleteMetaObject()
 	return IMetaObject::OnDeleteMetaObject();
 }
 
-wxString IMetaAttributeObject::GetSQLTypeObject()
+wxString IMetaAttributeObject::GetSQLTypeObject(const CLASS_ID& clsid) const
 {
-	switch (IMetaAttributeObject::GetTypeObject())
+	switch (CValue::GetVTByID(clsid))
 	{
-	case eValueTypes::TYPE_BOOLEAN: return wxString::Format("SMALLINT"); break;
+	case eValueTypes::TYPE_BOOLEAN:
+		return wxString::Format("SMALLINT");
 	case eValueTypes::TYPE_NUMBER:
-	{
-		if (m_typeDescription.GetScale() > 0) {
-			return wxString::Format("NUMERIC(%i,%i)", m_typeDescription.GetPrecision(), m_typeDescription.GetScale());
-		}
-		else {
-			return wxString::Format("NUMERIC(%i)", m_typeDescription.GetPrecision());
-		}
-		break;
-	}
-	case eValueTypes::TYPE_DATE: return wxString::Format("TIMESTAMP"); break;
-	case eValueTypes::TYPE_STRING: return wxString::Format("VARCHAR(%i)", m_typeDescription.GetLength()); break;
-	default: return wxString::Format("BLOB"); break;
+		if (GetScale() > 0)
+			return wxString::Format("NUMERIC(%i,%i)", GetPrecision(), GetScale());
+		else
+			return wxString::Format("NUMERIC(%i)", GetPrecision());
+	case eValueTypes::TYPE_DATE:
+		if (GetDateTime() == eDateFractions::eDateFractions_Date)
+			return wxString::Format("DATE");
+		else if (GetDateTime() == eDateFractions::eDateFractions_DateTime)
+			return wxString::Format("TIMESTAMP");
+		else
+			return wxString::Format("TIME");
+	case eValueTypes::TYPE_STRING:
+		if (GetAllowedLength() == eAllowedLength::eAllowedLength_Variable)
+			return wxString::Format("VARCHAR(%i)", GetLength());
+		else
+			return wxString::Format("CHAR(%i)", GetLength());
+	case eValueTypes::TYPE_ENUM:
+		return wxString::Format("INTEGER");
+	default:
+		return wxString::Format("BLOB");
 	}
 
 	return wxEmptyString;
@@ -90,17 +120,21 @@ wxString IMetaAttributeObject::GetSQLTypeObject()
 //*                               Data				                    *
 //***********************************************************************
 
-bool IMetaAttributeObject::LoadData(CMemoryReader &reader)
+bool IMetaAttributeObject::LoadData(CMemoryReader& reader)
 {
-	m_bFillCheck = reader.r_u8();
-	reader.r(&m_typeDescription, sizeof(typeDescription_t));
+	if (!IAttributeWrapper::LoadData(reader))
+		return false;
+
+	m_fillCheck = reader.r_u8();
 	return true;
 }
 
-bool IMetaAttributeObject::SaveData(CMemoryWriter &writer)
+bool IMetaAttributeObject::SaveData(CMemoryWriter& writer)
 {
-	writer.w_u8(m_bFillCheck);
-	writer.w(&m_typeDescription, sizeof(typeDescription_t));
+	if (!IAttributeWrapper::SaveData(writer))
+		return false;
+
+	writer.w_u8(m_fillCheck);
 	return true;
 }
 
@@ -111,82 +145,28 @@ bool IMetaAttributeObject::SaveData(CMemoryWriter &writer)
 void CMetaAttributeObject::ReadProperty()
 {
 	IMetaObject::ReadProperty();
-	IObjectBase::SetPropertyValue("type", m_typeDescription.GetTypeObject());
 
-	switch (m_typeDescription.GetTypeObject())
-	{
-	case eValueTypes::TYPE_NUMBER:
-		IObjectBase::SetPropertyValue("precision", m_typeDescription.GetPrecision(), true);
-		IObjectBase::SetPropertyValue("scale", m_typeDescription.GetScale(), true);
-		break;
-	case eValueTypes::TYPE_DATE:
-		IObjectBase::SetPropertyValue("date_time", m_typeDescription.GetDateTime(), true);
-		break;
-	case eValueTypes::TYPE_STRING:
-		IObjectBase::SetPropertyValue("length", m_typeDescription.GetLength(), true);
-		break;
-	}
+	SaveToVariant(
+		GetPropertyAsVariant("type"), m_metaData
+	);
 
-	IObjectBase::SetPropertyValue("fill_check", m_bFillCheck);
+	IObjectBase::SetPropertyValue("fill_check", m_fillCheck);
 }
 
 void CMetaAttributeObject::SaveProperty()
 {
 	IMetaObject::SaveProperty();
 
-	meta_identifier_t metaType = 0;
-	if (IObjectBase::GetPropertyValue("type", metaType)) {
+	LoadFromVariant(
+		GetPropertyAsVariant("type")
+	);
 
-		if (metaType != m_typeDescription.GetTypeObject()) {
-			m_typeDescription.SetDefaultMetatype(metaType);
-			switch (m_typeDescription.GetTypeObject())
-			{
-			case eValueTypes::TYPE_NUMBER:
-				IObjectBase::SetPropertyValue("precision", m_typeDescription.GetPrecision(), true);
-				IObjectBase::SetPropertyValue("scale", m_typeDescription.GetScale(), true);
-				break;
-			case eValueTypes::TYPE_DATE:
-				IObjectBase::SetPropertyValue("date_time", m_typeDescription.GetDateTime(), true);
-				break;
-			case eValueTypes::TYPE_STRING:
-				IObjectBase::SetPropertyValue("length", m_typeDescription.GetLength(), true);
-				break;
-			}
-		}
-
-		switch (m_typeDescription.GetTypeObject())
-		{
-		case eValueTypes::TYPE_NUMBER:
-		{
-			unsigned char precision = 10, scale = 0;
-			IObjectBase::GetPropertyValue("precision", precision, true);
-			IObjectBase::GetPropertyValue("scale", scale, true);
-			m_typeDescription.SetNumber(precision, scale);
-			break;
-		}
-		case eValueTypes::TYPE_DATE:
-		{
-			eDateFractions dateTime = eDateFractions::eDateTime;
-			IObjectBase::GetPropertyValue("date_time", dateTime, true);
-			m_typeDescription.SetDate(dateTime);
-			break;
-		}
-		case eValueTypes::TYPE_STRING:
-		{
-			unsigned short length = 0;
-			IObjectBase::GetPropertyValue("length", length, true);
-			m_typeDescription.SetString(length);
-			break;
-		}
-		}
-	}
-
-	IObjectBase::GetPropertyValue("fill_check", m_bFillCheck);
+	IObjectBase::GetPropertyValue("fill_check", m_fillCheck);
 }
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
-METADATA_REGISTER(CMetaAttributeObject, "metaAttribute", TEXT2CLSID("MD_ATTR"));
-METADATA_REGISTER(CMetaDefaultAttributeObject, "metaDefaultAttribute", TEXT2CLSID("MD_DATT"));
+METADATA_REGISTER(CMetaAttributeObject, "attribute", TEXT2CLSID("MD_ATTR"));
+METADATA_REGISTER(CMetaDefaultAttributeObject, "defaultAttribute", TEXT2CLSID("MD_DATT"));

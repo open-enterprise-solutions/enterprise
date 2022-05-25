@@ -93,7 +93,7 @@ void CValueForm::PrepareNames() const
 		aAttributes.push_back(attributes);
 	}
 
-	if (m_procUnit) {
+	if (m_procUnit != NULL) {
 		CByteCode *m_byteCode = m_procUnit->GetByteCode();
 		for (auto exportFunction : m_byteCode->m_aExportFuncList) {
 			SEng methods;

@@ -10,7 +10,7 @@ WX_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(ComboBoxAndButton,
 	wxPGComboBoxAndButtonEditor,
 	wxPGComboBoxEditor)
 
-wxPGWindowList wxPGComboBoxAndButtonEditor::CreateControls(wxPropertyGrid* propGrid,
+	wxPGWindowList wxPGComboBoxAndButtonEditor::CreateControls(wxPropertyGrid* propGrid,
 		wxPGProperty* property,
 		const wxPoint& pos,
 		const wxSize& sz) const
@@ -57,18 +57,17 @@ bool wxPGComboBoxAndButtonEditor::OnEvent(wxPropertyGrid* propGrid,
 	wxWindow* ctrl,
 	wxEvent& event) const
 {
-	wxOwnerDrawnComboBox* cb = NULL;
-	wxWindow* textCtrl = NULL;
+	wxOwnerDrawnComboBox* cb =
+		dynamic_cast<wxOwnerDrawnComboBox*>(ctrl);
 
-	if (ctrl) {
-		cb = (wxOwnerDrawnComboBox*)ctrl;
-		textCtrl = cb->GetTextCtrl();
-	}
-	wxWindow *wndEditor2 =
+	wxWindow* textCtrl = cb ?
+		cb->GetTextCtrl() : NULL;
+
+	wxWindow* wndEditor2 =
 		propGrid->GetEditorControlSecondary();
 
-	if (wndEditor2) {
-		bool needButton = property->HasFlag(wxPG_PROP_ACTIVE_BTN); 
+	if (wndEditor2 != NULL) {
+		bool needButton = property->HasFlag(wxPG_PROP_ACTIVE_BTN);
 		if (needButton != wndEditor2->IsEnabled()) {
 			wndEditor2->Enable(needButton);
 		}
@@ -80,7 +79,7 @@ bool wxPGComboBoxAndButtonEditor::OnEvent(wxPropertyGrid* propGrid,
 	return wxPGChoiceEditor::OnEvent(propGrid, property, ctrl, event);
 }
 
-void wxPGComboBoxAndButtonEditor::UpdateControl(wxPGProperty *property, wxWindow *ctrl) const
+void wxPGComboBoxAndButtonEditor::UpdateControl(wxPGProperty* property, wxWindow* ctrl) const
 {
 	wxOwnerDrawnComboBox* cb = (wxOwnerDrawnComboBox*)ctrl;
 	const int index = property->GetChoiceSelection();
@@ -135,9 +134,9 @@ wxPGSliderEditor::~wxPGSliderEditor()
 
 // Create controls and initialize event handling.
 wxPGWindowList wxPGSliderEditor::CreateControls(wxPropertyGrid* propgrid,
-	wxPGProperty*   property,
-	const wxPoint&  pos,
-	const wxSize&   sz) const
+	wxPGProperty* property,
+	const wxPoint& pos,
+	const wxSize& sz) const
 {
 	wxCHECK_MSG(property->IsKindOf(wxCLASSINFO(wxFloatProperty)),
 		NULL,
@@ -181,7 +180,7 @@ wxPGWindowList wxPGSliderEditor::CreateControls(wxPropertyGrid* propgrid,
 // Copies value from property to control
 void wxPGSliderEditor::UpdateControl(wxPGProperty* property, wxWindow* wnd) const
 {
-	wxSlider *ctrl = (wxSlider*)wnd;
+	wxSlider* ctrl = (wxSlider*)wnd;
 	assert(ctrl && ctrl->IsKindOf(CLASSINFO(wxSlider)));
 
 	double val = property->GetValue().GetDouble();
@@ -199,7 +198,7 @@ bool wxPGSliderEditor::OnEvent(wxPropertyGrid* WXUNUSED(propgrid),
 {
 	if (event.GetEventType() == wxEVT_SCROLL_THUMBTRACK)
 	{
-		wxSlider *ctrl = wxDynamicCast(wnd, wxSlider);
+		wxSlider* ctrl = wxDynamicCast(wnd, wxSlider);
 		if (ctrl)
 		{
 			double val = (double)(ctrl->GetValue()) / (double)(m_max);

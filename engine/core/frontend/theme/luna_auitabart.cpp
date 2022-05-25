@@ -331,7 +331,8 @@ void CLunaTabArt::DrawBackground(wxDC& dc,
 
 	if (m_flags &wxAUI_NB_BOTTOM)
 	{
-		dc.SetBrush(wxBrush(bottom_color));
+		//dc.SetBrush(wxBrush(bottom_color));
+		dc.SetBrush(m_baseColourBrush);
 		dc.DrawRectangle(-1, 0, w + 2, 4);
 	}
 	// TODO: else if (m_flags &wxAUI_NB_LEFT) {}
@@ -576,6 +577,7 @@ void CLunaTabArt::DrawTab(wxDC& dc,
 		// TODO: else if (m_flags &wxAUI_NB_RIGHT) {}
 		else //for wxAUI_NB_TOP
 			dc.SetPen(m_baseColourPen);
+
 		dc.DrawLine(border_points[0].x + 1,
 			border_points[0].y,
 			border_points[5].x,

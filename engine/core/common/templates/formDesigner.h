@@ -2,7 +2,7 @@
 #define _FORMDESIGNER_H__
 
 class ObjectTree;
-class CVisualEditor;
+class CVisualEditorHost;
 class CFormPalette;
 
 #include "common/formdefs.h"

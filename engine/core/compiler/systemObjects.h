@@ -79,6 +79,9 @@ public:
 	static wxString GetTempDir();
 	static wxString GetTempFileName();
 
+	//--- Работа с окнами: 
+	static class CValueForm* ActiveWindow();
+
 	//--- Специальные:
 	static void Message(const wxString &sMessage, eStatusMessage status = eStatusMessage::eStatusMessage_Information);
 	static void Alert(const wxString &sMessage);

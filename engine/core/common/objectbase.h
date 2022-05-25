@@ -24,7 +24,7 @@ class OptionList
 
 public:
 
-	void AddOption(const wxString &option, long l) { m_options.emplace_back(option, l); }
+	void AddOption(const wxString& option, long l) { m_options.emplace_back(option, l); }
 	unsigned int GetOptionCount() { return (unsigned int)m_options.size(); }
 	const std::vector< Option >& GetOptions() { return m_options; }
 };
@@ -37,23 +37,23 @@ class Property
 	{
 	public:
 
-		virtual OptionList* Invoke(Property *property) = 0;
+		virtual OptionList* Invoke(Property* property) = 0;
 	};
 
 	template <typename optClass>
 	class ObjectPropertyFunctor : public PropertyFunctor {
 
-		OptionList*(optClass::*m_funcHandler)(Property *);
-		optClass *m_handler;
+		OptionList* (optClass::* m_funcHandler)(Property*);
+		optClass* m_handler;
 
 	public:
 
-		ObjectPropertyFunctor(OptionList*(optClass::*funcHandler)(Property *), optClass *handler)
+		ObjectPropertyFunctor(OptionList* (optClass::* funcHandler)(Property*), optClass* handler)
 			: m_funcHandler(funcHandler), m_handler(handler)
 		{
 		}
 
-		virtual OptionList *Invoke(Property *property) override
+		virtual OptionList* Invoke(Property* property) override
 		{
 			return (m_handler->*m_funcHandler)(property);
 		}
@@ -62,23 +62,23 @@ class Property
 	wxString        m_name;
 	PropertyType    m_type;
 	wxString		m_description;
-	IObjectBase*    m_object; // pointer to the owner object
-	wxString        m_value;
+	IObjectBase* m_object; // pointer to the owner object
+	wxVariant       m_value;
 
-	PropertyFunctor *m_functor;
+	PropertyFunctor* m_functor;
 
 public:
 
 	Property() {}
 
-	Property(const wxString &name, PropertyType type, IObjectBase* obj)
+	Property(const wxString& name, PropertyType type, IObjectBase* obj)
 		: m_name(name), m_type(type), m_object(obj)
 	{
 		m_functor = NULL;
 	}
 
 	template <typename optClass>
-	Property(const wxString &name, PropertyType type, OptionList*(optClass::*funcHandler)(Property *), optClass* obj)
+	Property(const wxString& name, PropertyType type, OptionList* (optClass::* funcHandler)(Property*), optClass* obj)
 		: m_name(name), m_type(type), m_object(obj)
 	{
 		m_functor = new ObjectPropertyFunctor<optClass>(funcHandler, obj);
@@ -88,44 +88,46 @@ public:
 
 	bool IsEditable();
 
-	IObjectBase* GetObject() { return m_object; }
-	wxString GetName() { return m_name; }
-	wxString GetValue() { return m_value; }
-	PropertyType GetType() { return m_type; }
-	wxString GetDescription() { return m_description; }
+	IObjectBase* GetObject() const { return m_object; }
+	wxString GetName() const { return m_name; }
+	PropertyType GetType() const { return m_type; }
+	wxString GetDescription() const { return m_description; }
+
+	wxVariant& GetValue() { return m_value; }
 
 	////////////////////
 
+	void SetValue(const wxVariant& val) { m_value = val; }
 	void SetValue(wxString& val) { m_value = val; }
 	void SetValue(const wxChar* val) { m_value = val; }
 
 	////////////////////
 
-	void SetValue(const wxArrayString &str);
-	void SetValue(const wxFontContainer &font);
-	void SetValue(const wxColour &colour);
-	void SetValue(const wxBitmap &bmp);
-	void SetValue(const wxString &str, bool format = false);
-	void SetValue(const wxPoint &point);
-	void SetValue(const wxSize &size);
+	void SetValue(const wxArrayString& str);
+	void SetValue(const wxFontContainer& font);
+	void SetValue(const wxColour& colour);
+	void SetValue(const wxBitmap& bmp);
+	void SetValue(const wxString& str, bool format = false);
+	void SetValue(const wxPoint& point);
+	void SetValue(const wxSize& size);
 	void SetValue(const int integer);
 	void SetValue(const long long integer);
 	void SetValue(const double val);
 
-	wxFontContainer GetValueAsFont();
-	wxColour GetValueAsColour();
-	wxPoint  GetValueAsPoint();
-	wxSize   GetValueAsSize();
-	int      GetValueAsInteger();
-	wxString GetValueAsString();
-	wxBitmap GetValueAsBitmap();
-	wxString GetValueAsText();   // sustituye los ('\n',...) por ("\\n",...)
-	wxArrayString GetValueAsArrayString();
-	double GetValueAsFloat();
+	wxFontContainer GetValueAsFont() const;
+	wxColour GetValueAsColour() const;
+	wxPoint  GetValueAsPoint() const;
+	wxSize   GetValueAsSize() const;
+	int      GetValueAsInteger() const;
+	wxString GetValueAsString() const;
+	wxBitmap GetValueAsBitmap() const;
+	wxString GetValueAsText() const;   // sustituye los ('\n',...) por ("\\n",...)
+	wxArrayString GetValueAsArrayString() const;
+	double GetValueAsFloat() const;
 
 	////////////////////
 
-	OptionList *GetOptionList()
+	OptionList* GetOptionList()
 	{
 		if (m_functor)
 			return m_functor->Invoke(this);
@@ -133,9 +135,8 @@ public:
 		return NULL;
 	}
 
-	OptionList *GetTypelist();
-
-	bool IsNull();
+	OptionList* GetTypelist() const;
+	bool IsNull() const;
 };
 
 class Event
@@ -145,14 +146,14 @@ class Event
 
 	std::vector<wxString> m_args;
 
-	IObjectBase *m_object; // pointer to the owner object
+	IObjectBase* m_object; // pointer to the owner object
 	wxString m_value;  // handler function name
 
 public:
 
 	Event() {}
-	Event(const wxString &eventName, std::vector<wxString> &args,
-		const wxString &description,
+	Event(const wxString& eventName, std::vector<wxString>& args,
+		const wxString& description,
 		IObjectBase* obj) :
 		m_name(eventName), m_args(args),
 		m_description(description),
@@ -162,21 +163,36 @@ public:
 
 public:
 
-	void SetValue(const wxString &value) { m_value = value; }
+	void SetValue(const wxString& value) { m_value = value; }
 	wxString GetValue() { return m_value; }
-	std::vector<wxString> &GetArgs() { return m_args; }
+	std::vector<wxString>& GetArgs() { return m_args; }
 
 	wxString GetName() { return m_name; }
-	IObjectBase *GetObject() { return m_object; }
+	IObjectBase* GetObject() { return m_object; }
 	wxString GetDescription() { return m_description; }
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+enum eSelectorDataType {
+	eSelectorDataType_any,
+	eSelectorDataType_reference,
+	eSelectorDataType_table,
+	eSelectorDataType_resource,
+};
+
+enum eSourceDataType {
+	eSourceDataVariant_table,
+	eSourceDataVariant_tableColumn,
+	eSourceDataVariant_attribute,
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 
 class IObjectBase
 {
-	std::map<wxString, Property *> m_properties;
-	std::map<wxString, Event *> m_events;
+	std::map<wxString, Property*> m_properties;
+	std::map<wxString, Event*> m_events;
 
 protected:
 
@@ -193,20 +209,20 @@ protected:
 
 		std::vector< PropertyContainer* > m_categories;
 
-		IObjectBase *m_ownerCategory;
+		IObjectBase* m_ownerCategory;
 
 	protected:
 
-		PropertyContainer(IObjectBase *ownerCategory) : m_name("propertyEvents"), m_description("Property and events"), m_helpString("Property and events"),
+		PropertyContainer(IObjectBase* ownerCategory) : m_name("propertyEvents"), m_description("Property and events"), m_helpString("Property and events"),
 			m_ownerCategory(ownerCategory) {}
 
-		PropertyContainer(const wxString &name, IObjectBase *ownerCategory) : m_name(name), m_ownerCategory(ownerCategory) {}
-		PropertyContainer(const wxString &name, const wxString &description, IObjectBase *ownerCategory) : m_name(name), m_description(description), m_ownerCategory(ownerCategory) {}
-		PropertyContainer(const wxString &name, const wxString &description, const wxString &helpString, IObjectBase *ownerCategory) : m_name(name), m_description(description), m_helpString(helpString), m_ownerCategory(ownerCategory) {}
+		PropertyContainer(const wxString& name, IObjectBase* ownerCategory) : m_name(name), m_ownerCategory(ownerCategory) {}
+		PropertyContainer(const wxString& name, const wxString& description, IObjectBase* ownerCategory) : m_name(name), m_description(description), m_ownerCategory(ownerCategory) {}
+		PropertyContainer(const wxString& name, const wxString& description, const wxString& helpString, IObjectBase* ownerCategory) : m_name(name), m_description(description), m_helpString(helpString), m_ownerCategory(ownerCategory) {}
 
 	public:
 
-		void AddProperty(const wxString &name, PropertyType type, bool visible = true)
+		void AddProperty(const wxString& name, PropertyType type, bool visible = true)
 		{
 			m_ownerCategory->AddProperty(new Property(name, type, m_ownerCategory));
 
@@ -218,9 +234,9 @@ protected:
 		}
 
 		template <typename optClass>
-		void AddProperty(const wxString &name, PropertyType type, OptionList*(optClass::*oFunc)(Property *property), bool visible = true)
+		void AddProperty(const wxString& name, PropertyType type, OptionList* (optClass::* oFunc)(Property* property), bool visible = true)
 		{
-			m_ownerCategory->AddProperty(new Property(name, type, oFunc, dynamic_cast<optClass *>(m_ownerCategory)));
+			m_ownerCategory->AddProperty(new Property(name, type, oFunc, dynamic_cast<optClass*>(m_ownerCategory)));
 
 			if (visible) {
 				m_propertiesVisible.insert(name);
@@ -229,13 +245,13 @@ protected:
 			m_properties.push_back(name);
 		}
 
-		void ShowProperty(const wxString &name) { m_propertiesVisible.insert(name); }
-		void HideProperty(const wxString &name) { m_propertiesVisible.erase(name); }
+		void ShowProperty(const wxString& name) { m_propertiesVisible.insert(name); }
+		void HideProperty(const wxString& name) { m_propertiesVisible.erase(name); }
 
-		bool IsVisibleProperty(const wxString &name) { return m_propertiesVisible.count(name) != 0; }
+		bool IsVisibleProperty(const wxString& name) { return m_propertiesVisible.count(name) != 0; }
 
-		void AddEvent(const wxString &name, std::vector<wxString> args = {},
-			const wxString &description = wxEmptyString, bool visible = true)
+		void AddEvent(const wxString& name, std::vector<wxString> args = {},
+			const wxString& description = wxEmptyString, bool visible = true)
 		{
 			m_ownerCategory->AddEvent(new Event(name, args, description, m_ownerCategory));
 
@@ -246,11 +262,11 @@ protected:
 			m_events.push_back(name);
 		}
 
-		void ShowEvent(const wxString &name) { m_eventsVisible.insert(name); }
+		void ShowEvent(const wxString& name) { m_eventsVisible.insert(name); }
 
-		void HideEvent(const wxString &name) { m_eventsVisible.erase(name); }
+		void HideEvent(const wxString& name) { m_eventsVisible.erase(name); }
 
-		bool IsVisibleEvent(const wxString &name) { return m_eventsVisible.count(name) != 0; }
+		bool IsVisibleEvent(const wxString& name) { return m_eventsVisible.count(name) != 0; }
 
 		void AddCategory(PropertyContainer* category) { m_categories.push_back(category); }
 
@@ -292,18 +308,18 @@ protected:
 		friend class IObjectBase;
 	};
 
-	PropertyContainer *CreatePropertyContainer(const wxString &name) { return new PropertyContainer(name, this); }
-	PropertyContainer *CreatePropertyContainer(const wxString &name, const wxString &description) { return new PropertyContainer(name, description, this); }
-	PropertyContainer *CreatePropertyContainer(const wxString &name, const wxString &description, const wxString &helpString) { return new PropertyContainer(name, description, helpString, this); }
+	PropertyContainer* CreatePropertyContainer(const wxString& name) { return new PropertyContainer(name, this); }
+	PropertyContainer* CreatePropertyContainer(const wxString& name, const wxString& description) { return new PropertyContainer(name, description, this); }
+	PropertyContainer* CreatePropertyContainer(const wxString& name, const wxString& description, const wxString& helpString) { return new PropertyContainer(name, description, helpString, this); }
 
 protected:
 
 	bool m_enabled = true;
 
-	IObjectBase  *m_parent = NULL;
-	PropertyContainer *m_category;
+	IObjectBase* m_parent = NULL;
+	PropertyContainer* m_category;
 
-	std::vector<IObjectBase *> m_children;
+	std::vector<IObjectBase*> m_children;
 
 protected:
 
@@ -311,8 +327,8 @@ protected:
 	static const int INDENT;  // size of indent
 	wxString GetIndentString(int indent); // obtiene la cadena con el indentado
 
-	std::vector<IObjectBase *>& GetChildren() { return m_children; };
-	std::map<wxString, Property *>& GetProperties() { return m_properties; };
+	std::vector<IObjectBase*>& GetChildren() { return m_children; }
+	std::map<wxString, Property*>& GetProperties() { return m_properties; }
 
 	// devuelve el puntero "this"
 	IObjectBase* GetThis() { return this; }
@@ -348,8 +364,8 @@ public:
 	* @note Notar que no existe el método SetProperty, ya que la modificación
 	*       se hace a través de la referencia.
 	*/
-	Property* GetProperty(const wxString &nameParam) const;
-	Event* GetEvent(const wxString &nameParam) const;
+	Property* GetProperty(const wxString& nameParam) const;
+	Event* GetEvent(const wxString& nameParam) const;
 
 	/**
 	* Añade una propiedad al objeto.
@@ -376,8 +392,8 @@ public:
 	*
 	* Será útil para encontrar el widget padre.
 	*/
-	IObjectBase* FindNearAncestor(const wxString &type);
-	IObjectBase* FindNearAncestorByBaseClass(const wxString &type);
+	IObjectBase* FindNearAncestor(const wxString& type);
+	IObjectBase* FindNearAncestorByBaseClass(const wxString& type);
 
 	/**
 	* Añade un hijo al objeto.
@@ -416,12 +432,12 @@ public:
 		return (unsigned int)m_children.size();
 	}
 
-	unsigned int GetPropertyIndex(const wxString &paramName) const
+	unsigned int GetPropertyIndex(const wxString& paramName) const
 	{
 		return std::distance(m_properties.begin(), m_properties.find(paramName.Lower()));
 	}
 
-	Property *GetPropertyByIndex(unsigned int idx)
+	Property* GetPropertyByIndex(unsigned int idx)
 	{
 		if (m_properties.size() < idx)
 			return NULL;
@@ -441,7 +457,7 @@ public:
 	/**
 	* Devuelve la profundidad  del objeto en el arbol.
 	*/
-	virtual int GetComponentType() = 0;
+	virtual int GetComponentType() const = 0;
 
 	virtual void ReadProperty() = 0;
 	virtual void SaveProperty() = 0;
@@ -456,11 +472,11 @@ public:
 	*/
 	virtual void OnPropertyCreated() {}
 
-	virtual void OnPropertyCreated(Property *property) {}
-	virtual void OnPropertySelected(Property *property) {}
+	virtual void OnPropertyCreated(Property* property) {}
+	virtual void OnPropertySelected(Property* property) {}
 
-	virtual bool OnPropertyChanging(Property *property, const wxString &oldValue) { return true; }
-	virtual void OnPropertyChanged(Property *property) {}
+	virtual bool OnPropertyChanging(Property* property, const wxVariant& oldValue) { return true; }
+	virtual void OnPropertyChanged(Property* property) {}
 
 	/**
 	* Comprueba si el tipo es derivado del que se pasa como parámetro.
@@ -468,53 +484,57 @@ public:
 
 	bool IsSubclassOf(wxString classname);
 
-	PropertyContainer *GetCategory() const { return m_category; }
+	PropertyContainer* GetCategory() const { return m_category; }
 
 	// get metadata from object
-	virtual IMetadata *GetMetaData() const { return NULL; }
+	virtual IMetadata* GetMetaData() const { return NULL; }
 
 	//get typelist from metadata 
-	virtual OptionList *GetTypelist() const { return NULL; }
+	virtual OptionList* GetTypelist() const { return NULL; }
+
+	//get data selector 
+	virtual eSelectorDataType GetSelectorDataType() const {
+		return eSelectorDataType::eSelectorDataType_reference;
+	}
 
 	////////////////////////////////////////////////////////////////////////////
 
 	bool IsNull(const wxString& propertyName);
 
-	bool SetPropertyValue(const wxString& propertyName, const wxArrayString &str);
-	bool SetPropertyValue(const wxString& propertyName, const wxFontContainer &font);
-	bool SetPropertyValue(const wxString& propertyName, const wxFont &font);
-	bool SetPropertyValue(const wxString& propertyName, const wxColour &colour);
-	bool SetPropertyValue(const wxString& propertyName, const wxBitmap &bmp);
-	bool SetPropertyValue(const wxString& propertyName, const wxString &str, bool format = false);
-	bool SetPropertyValue(const wxString& propertyName, const wxPoint &point);
-	bool SetPropertyValue(const wxString& propertyName, const wxSize &size);
+	bool SetPropertyValue(const wxString& propertyName, const wxArrayString& str);
+	bool SetPropertyValue(const wxString& propertyName, const wxFontContainer& font);
+	bool SetPropertyValue(const wxString& propertyName, const wxFont& font);
+	bool SetPropertyValue(const wxString& propertyName, const wxColour& colour);
+	bool SetPropertyValue(const wxString& propertyName, const wxBitmap& bmp);
+	bool SetPropertyValue(const wxString& propertyName, const wxString& str, bool format = false);
+	bool SetPropertyValue(const wxString& propertyName, const wxPoint& point);
+	bool SetPropertyValue(const wxString& propertyName, const wxSize& size);
 	bool SetPropertyValue(const wxString& propertyName, const bool integer);
 	bool SetPropertyValue(const wxString& propertyName, const int integer);
 	bool SetPropertyValue(const wxString& propertyName, const long integer);
 	bool SetPropertyValue(const wxString& propertyName, const double val);
 
 	template<class convType>
-	bool SetPropertyValue(const wxString& propertyName, const convType &val, bool needConvert)
-	{
+	bool SetPropertyValue(const wxString& propertyName, const convType& val, bool needConvert) {
 		return SetPropertyValue(propertyName, (int)val);
 	}
 
-	bool GetPropertyValue(const wxString& propertyName, wxArrayInt &ineger);
-	bool GetPropertyValue(const wxString& propertyName, wxArrayString &str);
-	bool GetPropertyValue(const wxString& propertyName, wxFontContainer &font);
-	bool GetPropertyValue(const wxString& propertyName, wxFont &font);
-	bool GetPropertyValue(const wxString& propertyName, wxColour &colour);
-	bool GetPropertyValue(const wxString& propertyName, wxBitmap &bmp);
-	bool GetPropertyValue(const wxString& propertyName, wxString &str);
-	bool GetPropertyValue(const wxString& propertyName, wxPoint &point);
-	bool GetPropertyValue(const wxString& propertyName, wxSize &size);
-	bool GetPropertyValue(const wxString& propertyName, bool &integer);
-	bool GetPropertyValue(const wxString& propertyName, int &integer);
-	bool GetPropertyValue(const wxString& propertyName, long &integer);
-	bool GetPropertyValue(const wxString& propertyName, double &val);
+	bool GetPropertyValue(const wxString& propertyName, wxArrayInt& ineger);
+	bool GetPropertyValue(const wxString& propertyName, wxArrayString& str);
+	bool GetPropertyValue(const wxString& propertyName, wxFontContainer& font);
+	bool GetPropertyValue(const wxString& propertyName, wxFont& font);
+	bool GetPropertyValue(const wxString& propertyName, wxColour& colour);
+	bool GetPropertyValue(const wxString& propertyName, wxBitmap& bmp);
+	bool GetPropertyValue(const wxString& propertyName, wxString& str);
+	bool GetPropertyValue(const wxString& propertyName, wxPoint& point);
+	bool GetPropertyValue(const wxString& propertyName, wxSize& size);
+	bool GetPropertyValue(const wxString& propertyName, bool& integer);
+	bool GetPropertyValue(const wxString& propertyName, int& integer);
+	bool GetPropertyValue(const wxString& propertyName, long& integer);
+	bool GetPropertyValue(const wxString& propertyName, double& val);
 
 	template<class convType>
-	bool GetPropertyValue(const wxString& propertyName, convType &val, bool needConvert)
+	bool GetPropertyValue(const wxString& propertyName, convType& val, bool needConvert)
 	{
 		int conv_value = 0;
 		if (GetPropertyValue(propertyName, conv_value)) {
@@ -523,17 +543,19 @@ public:
 		return false;
 	}
 
-	int GetPropertyAsInteger(const wxString& pname);
-	wxFontContainer GetPropertyAsFont(const wxString& pname);
-	wxColour GetPropertyAsColour(const wxString& pname);
-	wxString GetPropertyAsString(const wxString& pname);
-	wxPoint GetPropertyAsPoint(const wxString& pname);
-	wxSize GetPropertyAsSize(const wxString& pname);
-	wxBitmap GetPropertyAsBitmap(const wxString& pname);
-	double GetPropertyAsFloat(const wxString& pname);
+	int GetPropertyAsInteger(const wxString& propertyName);
+	wxFontContainer GetPropertyAsFont(const wxString& propertyName);
+	wxColour GetPropertyAsColour(const wxString& propertyName);
+	wxString GetPropertyAsString(const wxString& propertyName);
+	wxPoint GetPropertyAsPoint(const wxString& propertyName);
+	wxSize GetPropertyAsSize(const wxString& propertyName);
+	wxBitmap GetPropertyAsBitmap(const wxString& propertyName);
+	double GetPropertyAsFloat(const wxString& propertyName);
 
-	wxArrayInt GetPropertyAsArrayInt(const wxString& pname);
-	wxArrayString GetPropertyAsArrayString(const wxString& pname);
+	wxVariant& GetPropertyAsVariant(const wxString& propertyName);
+
+	wxArrayInt GetPropertyAsArrayInt(const wxString& propertyName);
+	wxArrayString GetPropertyAsArrayString(const wxString& propertyName);
 
 	IObjectBase* GetChildPtr(unsigned int idx)
 	{

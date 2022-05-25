@@ -3,9 +3,14 @@
 
 enum eDateFractions
 {
-	eDate = 0,
-	eDateTime,
-	eTime
+	eDateFractions_Date = 0,
+	eDateFractions_DateTime,
+	eDateFractions_Time
+};
+
+enum eAllowedLength {
+	eAllowedLength_Variable,
+	eAllowedLength_Fixed
 };
 
 class CValueTypeDescription;
@@ -59,202 +64,665 @@ public:
 	}
 };
 
-class Property;
-class OptionList;
+class Property; class OptionList;
 
-class IAttributeInfo {
+class CMemoryReader;
+class CMemoryWriter;
+
+////////////////////////////////////////////////////////////////////////////////
+
+class IAttributeWrapper {
+protected:
+	std::set<CLASS_ID> m_clsids;
+	struct metaDescription_t {
+		eDateFractions m_dateTime;
+		struct typeNumber_t {
+			bool m_nonNegative;
+			unsigned char m_precision;
+			unsigned char m_scale;
+			typeNumber_t(unsigned char precision, char scale, bool nonNegative = false) : m_precision(precision), m_scale(scale), m_nonNegative(nonNegative) {}
+		} m_number;
+
+		struct typeString_t {
+			unsigned short m_length;
+			eAllowedLength m_allowedLength;
+			typeString_t(unsigned short length, eAllowedLength allowedLength = eAllowedLength::eAllowedLength_Variable) : m_length(length), m_allowedLength(allowedLength) {}
+		} m_string;
+
+		metaDescription_t() : m_number(10, 0), m_dateTime(eDateFractions::eDateFractions_Date), m_string(10) {} //empty 
+		metaDescription_t(unsigned char precision, unsigned char scale, bool nonnegative = false) : m_number(precision, scale, nonnegative), m_dateTime(eDateFractions::eDateFractions_Date), m_string(10) {}
+		metaDescription_t(eDateFractions dateTime) : m_number(10, 0), m_dateTime(dateTime), m_string(10) {}
+		metaDescription_t(unsigned short length, eAllowedLength allowedLength = eAllowedLength::eAllowedLength_Variable) : m_number(10, 0), m_dateTime(eDateFractions::eDateFractions_Date), m_string(length, allowedLength) {}
+
+		//get special data number 
+		unsigned char GetPrecision() const { return m_number.m_precision; }
+		unsigned char GetScale() const { return m_number.m_scale; }
+		bool IsNonNegative() const { return m_number.m_nonNegative; }
+		//get special data date  
+		eDateFractions GetDateTime() const { return m_dateTime; }
+		//get special data string  
+		unsigned short GetLength() const { return m_string.m_length; }
+		eAllowedLength GetAllowedLength() const { return m_string.m_allowedLength; }
+
+		void SetNumber(unsigned char precision, unsigned char scale, bool nonNegative = false) { m_number.m_precision = precision; m_number.m_scale = scale; m_number.m_nonNegative = nonNegative; }
+		void SetDate(eDateFractions dateTime) { m_dateTime = dateTime; }
+		void SetString(unsigned short length, eAllowedLength allowedLength = eAllowedLength::eAllowedLength_Variable) { m_string.m_length = length; m_string.m_allowedLength = allowedLength; }
+
+	} m_metaDescription;
 public:
 
-	IAttributeInfo(eValueTypes defType = eValueTypes::TYPE_STRING) : m_typeDescription(defType) {}
-
-	//get ref type 
-	virtual meta_identifier_t GetTypeObject() const { return m_typeDescription.GetTypeObject(); }
-	virtual CLASS_ID GetClassTypeObject() const;
-
-	//get special data number 
-	virtual unsigned char GetPrecision() const { return m_typeDescription.GetPrecision(); }
-	virtual unsigned char GetScale() const { return m_typeDescription.GetScale(); }
-
-	//get special data date  
-	virtual eDateFractions GetDateTime() const { return m_typeDescription.GetDateTime(); }
-
-	//get special data string  
-	unsigned short GetLength() const { return m_typeDescription.GetLength(); }
-
-	//get metadata
-	virtual IMetadata *GetMetadata() const = 0;
-
-	//qualifers:
-	CValueQualifierNumber *GetNumberQualifier() const {
-		if (m_typeDescription.GetTypeObject() != eValueTypes::TYPE_NUMBER)
-			return NULL;
-		return new CValueQualifierNumber(m_typeDescription.GetPrecision(), m_typeDescription.GetScale());
-	}
-
-	CValueQualifierDate *GetDateQualifier() const {
-		if (m_typeDescription.GetTypeObject() != eValueTypes::TYPE_DATE)
-			return NULL;
-		return new CValueQualifierDate(m_typeDescription.GetDateTime());
-	}
-
-	CValueQualifierString *GetStringQualifier() const {
-		if (m_typeDescription.GetTypeObject() != eValueTypes::TYPE_STRING)
-			return NULL;
-		return new CValueQualifierString(m_typeDescription.GetLength());
-	}
-
-	void SetDefaultMetatype(meta_identifier_t id) {
-		m_typeDescription.SetDefaultMetatype(id);
-	}
-
-	void SetMetatype(meta_identifier_t id, CValueQualifierNumber *qNumber, CValueQualifierDate *qDate, CValueQualifierString *qString) {
-		m_typeDescription.SetMetatype(id, qNumber, qDate, qString);
-	}
-
-protected:
-
-	class typeDescription_t {
-		meta_identifier_t m_typeObject;
-		union metaDescription_t {
-			eDateFractions m_dateTime;
-			struct typeNumber_t {
-				unsigned char m_precision;
-				unsigned char m_scale;
-				typeNumber_t(unsigned char precision, char scale) : m_precision(precision), m_scale(scale) {}
-			} m_number;
-			unsigned short m_length = 10;
-
-			metaDescription_t() {} //empty 
-			metaDescription_t(unsigned char precision, unsigned char scale) : m_number(precision, scale) {}
-			metaDescription_t(eDateFractions dateTime) : m_dateTime(dateTime) {}
-			metaDescription_t(unsigned short length) : m_length(length) {}
-
-			//get special data number 
-			unsigned char GetPrecision() const { return m_number.m_precision; }
-			unsigned char GetScale() const { return m_number.m_scale; }
-			//get special data date  
-			eDateFractions GetDateTime() const { return m_dateTime; }
-			//get special data string  
-			unsigned short GetLength() const { return m_length; }
-
-			void SetNumber(unsigned char precision, unsigned char scale) { m_number.m_precision = precision; m_number.m_scale = scale; }
-			void SetDate(eDateFractions dateTime) { m_dateTime = dateTime; }
-			void SetString(unsigned short length) { m_length = length; }
-		} m_metaDescription;
-
-	public:
-
-		bool operator == (const typeDescription_t& rhs) const
-		{
-			if (m_typeObject == rhs.m_typeObject) {
-
-				if (m_typeObject == eValueTypes::TYPE_NUMBER) {
-					return m_metaDescription.m_number.m_precision == rhs.m_metaDescription.m_number.m_precision &&
-						m_metaDescription.m_number.m_scale == rhs.m_metaDescription.m_number.m_scale;
-				}
-				else if (m_typeObject == eValueTypes::TYPE_DATE) {
-					return m_metaDescription.m_dateTime == rhs.m_metaDescription.m_dateTime;
-				}
-				else if (m_typeObject == eValueTypes::TYPE_STRING) {
-					return m_metaDescription.m_length == rhs.m_metaDescription.m_length;
-				}
-
-				return true;
-			}
-
-			return false;
+	bool EqualsType(const CLASS_ID& clsid,
+		const metaDescription_t& rhs) const {
+		eValueTypes valType = CValue::GetVTByID(clsid);
+		if (valType == eValueTypes::TYPE_NUMBER) {
+			bool result = m_metaDescription.m_number.m_precision == rhs.m_number.m_precision &&
+				m_metaDescription.m_number.m_scale == rhs.m_number.m_scale &&
+				m_metaDescription.m_number.m_nonNegative == rhs.m_number.m_nonNegative;
+			if (!result)
+				return false;
+		}
+		else if (valType == eValueTypes::TYPE_DATE) {
+			bool result = m_metaDescription.m_dateTime == rhs.m_dateTime;
+			if (!result)
+				return false;
+		}
+		else if (valType == eValueTypes::TYPE_STRING) {
+			bool result = m_metaDescription.m_string.m_length == rhs.m_string.m_length &&
+				m_metaDescription.m_string.m_allowedLength == rhs.m_string.m_allowedLength;
+			if (!result)
+				return false;
 		}
 
-		bool operator != (const typeDescription_t& rhs) const
-		{
-			if (m_typeObject == rhs.m_typeObject) {
+		return ContainType(clsid);
+	}
 
-				if (m_typeObject == eValueTypes::TYPE_NUMBER) {
-					return m_metaDescription.m_number.m_precision != rhs.m_metaDescription.m_number.m_precision ||
-						m_metaDescription.m_number.m_scale != rhs.m_metaDescription.m_number.m_scale;
-				}
-				else if (m_typeObject == eValueTypes::TYPE_DATE) {
-					return m_metaDescription.m_dateTime != rhs.m_metaDescription.m_dateTime;
-				}
-				else if (m_typeObject == eValueTypes::TYPE_STRING) {
-					return m_metaDescription.m_length != rhs.m_metaDescription.m_length;
-				}
+	bool operator == (const IAttributeWrapper& rhs) const
+	{
+		if (m_clsids == rhs.m_clsids) {
 
-				return false;
+			for (auto clsid : m_clsids) {
+				eValueTypes valType = CValue::GetVTByID(clsid);
+				if (valType == eValueTypes::TYPE_NUMBER) {
+					bool result = m_metaDescription.m_number.m_precision == rhs.m_metaDescription.m_number.m_precision &&
+						m_metaDescription.m_number.m_scale == rhs.m_metaDescription.m_number.m_scale &&
+						m_metaDescription.m_number.m_nonNegative == rhs.m_metaDescription.m_number.m_nonNegative;
+					if (!result)
+						return false;
+				}
+				else if (valType == eValueTypes::TYPE_DATE) {
+					bool result = m_metaDescription.m_dateTime == rhs.m_metaDescription.m_dateTime;
+					if (!result)
+						return false;
+				}
+				else if (valType == eValueTypes::TYPE_STRING) {
+					bool result = m_metaDescription.m_string.m_length == rhs.m_metaDescription.m_string.m_length &&
+						m_metaDescription.m_string.m_allowedLength == rhs.m_metaDescription.m_string.m_allowedLength;
+					if (!result)
+						return false;
+				}
 			}
 
 			return true;
 		}
 
-		meta_identifier_t GetTypeObject() const { return m_typeObject; }
-		//get special data number 
-		unsigned char GetPrecision() const { return m_metaDescription.GetPrecision(); }
-		unsigned char GetScale() const { return m_metaDescription.GetScale(); }
-		//get special data date  
-		eDateFractions GetDateTime() const { return m_metaDescription.GetDateTime(); }
-		//get special data string  
-		unsigned short GetLength() const { return m_metaDescription.GetLength(); }
+		return false;
+	}
 
-		void SetDefaultMetatype(meta_identifier_t typeObject)
-		{
-			if (typeObject == eValueTypes::TYPE_NUMBER) {
+	bool operator != (const IAttributeWrapper& rhs) const
+	{
+		if (m_clsids == rhs.m_clsids) {
+
+			for (auto clsid : m_clsids) {
+				eValueTypes valType = CValue::GetVTByID(clsid);
+				if (valType == eValueTypes::TYPE_NUMBER) {
+					bool result = m_metaDescription.m_number.m_precision != rhs.m_metaDescription.m_number.m_precision ||
+						m_metaDescription.m_number.m_scale != rhs.m_metaDescription.m_number.m_scale ||
+						m_metaDescription.m_number.m_nonNegative != rhs.m_metaDescription.m_number.m_nonNegative;
+					if (result)
+						return true;
+
+				}
+				else if (valType == eValueTypes::TYPE_DATE) {
+					bool result = m_metaDescription.m_dateTime != rhs.m_metaDescription.m_dateTime;
+					if (result)
+						return true;
+				}
+				else if (valType == eValueTypes::TYPE_STRING) {
+					bool result = m_metaDescription.m_string.m_length != rhs.m_metaDescription.m_string.m_length ||
+						m_metaDescription.m_string.m_allowedLength != rhs.m_metaDescription.m_string.m_allowedLength;
+					if (result)
+						return true;
+				}
+			}
+
+			return false;
+		}
+
+		return true;
+	}
+
+	CLASS_ID GetFirstClsid() const {
+		if (m_clsids.size() == 0)
+			return 0; 
+		auto itFounded = m_clsids.begin(); 
+		std::advance(itFounded, 0);
+		return *itFounded;
+	}
+
+	std::set<CLASS_ID> GetClsids() const {
+		return m_clsids;
+	}
+
+	bool ContainType(const eValueTypes& valType) const {
+		if (valType == eValueTypes::TYPE_ENUM) {
+			for (auto clsid : m_clsids) {
+				if (CValue::IsRegisterObject(clsid)) {
+					ISimpleObjectValueSingle* singleObject =
+						dynamic_cast<ISimpleObjectValueSingle*>(CValue::GetAvailableObject(clsid));
+					if (singleObject != NULL) {
+						if (singleObject->GetValueType() == eValueTypes::TYPE_ENUM) {
+							return true;
+						}
+					}
+				}
+			}
+			return false;
+		}
+		return m_clsids.find(CValue::GetIDByVT(valType)) != m_clsids.end();
+	}
+
+	bool ContainType(const CLASS_ID& clsid) const {
+		return m_clsids.find(clsid) != m_clsids.end();
+	}
+
+	//get special data number 
+	unsigned char GetPrecision() const {
+		return m_metaDescription.GetPrecision();
+	}
+
+	unsigned char GetScale() const {
+		return m_metaDescription.GetScale();
+	}
+
+	bool IsNonNegative() const {
+		return m_metaDescription.IsNonNegative();
+	}
+
+	//get special data date  
+	eDateFractions GetDateTime() const {
+		return m_metaDescription.GetDateTime();
+	}
+
+	//get special data string  
+	unsigned short GetLength() const {
+		return m_metaDescription.GetLength();
+	}
+
+	eAllowedLength GetAllowedLength() const {
+		return m_metaDescription.GetAllowedLength();
+	}
+
+	void SetDefaultMetatype(const eValueTypes& valType)
+	{
+		m_clsids.clear();
+		SetMetatype(valType);
+	}
+
+	void SetDefaultMetatype(const CLASS_ID& clsid)
+	{
+		m_clsids.clear();
+		SetMetatype(clsid);
+	}
+
+	void SetDefaultMetatype(const CLASS_ID& clsid, const metaDescription_t& descr)
+	{
+		m_clsids.clear();
+		SetMetatype(clsid, descr);
+	}
+
+	void SetDefaultMetatype(const std::set<CLASS_ID>& clsids)
+	{
+		m_clsids.clear();
+		SetMetatype(clsids);
+	}
+
+	void SetDefaultMetatype(const std::set<CLASS_ID>& clsids, const metaDescription_t& descr)
+	{
+		m_clsids.clear();
+		SetMetatype(clsids, descr);
+	}
+
+	void SetDefaultMetatype(const std::set<CLASS_ID>& clsids,
+		CValueQualifierNumber* qNumber, CValueQualifierDate* qDate, CValueQualifierString* qString)
+	{
+		m_clsids.clear();
+		SetMetatype(clsids,
+			qNumber, qDate, qString
+		);
+	}
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+
+	void SetMetatype(const eValueTypes& valType)
+	{
+		if (valType == eValueTypes::TYPE_NUMBER) {
+			m_metaDescription.SetNumber(10, 0);
+		}
+
+		if (valType == eValueTypes::TYPE_DATE) {
+			m_metaDescription.SetDate(eDateFractions::eDateFractions_DateTime);
+		}
+
+		if (valType == eValueTypes::TYPE_STRING) {
+			m_metaDescription.SetString(10);
+		}
+
+		m_clsids.insert(
+			CValue::GetIDByVT(valType)
+		);
+	}
+
+	void SetMetatype(const CLASS_ID& clsid)
+	{
+		if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_NUMBER)) {
+			m_metaDescription.SetNumber(10, 0);
+		}
+
+		if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_DATE)) {
+			m_metaDescription.SetDate(eDateFractions::eDateFractions_DateTime);
+		}
+
+		if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_STRING)) {
+			m_metaDescription.SetString(10);
+		}
+
+		m_clsids.insert(clsid);
+	}
+
+	void SetMetatype(const CLASS_ID& clsid, const metaDescription_t& descr)
+	{
+		if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_NUMBER)) {
+			m_metaDescription.SetNumber(descr.GetPrecision(), descr.GetScale(), descr.IsNonNegative());
+		}
+
+		if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_DATE)) {
+			m_metaDescription.SetDate(descr.GetDateTime());
+		}
+
+		if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_STRING)) {
+			m_metaDescription.SetString(descr.GetLength(), descr.GetAllowedLength());
+		}
+
+		m_clsids.insert(clsid);
+	}
+
+	void SetMetatype(const std::set<CLASS_ID>& clsids)
+	{
+		if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_NUMBER)) != clsids.end()) {
+			m_metaDescription.SetNumber(10, 0);
+		}
+
+		if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_DATE)) != clsids.end()) {
+			m_metaDescription.SetDate(eDateFractions::eDateFractions_DateTime);
+		}
+
+		if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_STRING)) != clsids.end()) {
+			m_metaDescription.SetString(10);
+		}
+
+		for (auto clsid : clsids) {
+			m_clsids.insert(clsid);
+		}
+	}
+
+	void SetMetatype(const std::set<CLASS_ID>& clsids, const metaDescription_t& descr)
+	{
+		if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_NUMBER)) != clsids.end()) {
+			m_metaDescription.SetNumber(descr.GetPrecision(), descr.GetScale(), descr.IsNonNegative());
+		}
+
+		if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_DATE)) != clsids.end()) {
+			m_metaDescription.SetDate(descr.GetDateTime());
+		}
+
+		if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_STRING)) != clsids.end()) {
+			m_metaDescription.SetString(descr.GetLength(), descr.GetAllowedLength());
+		}
+
+		for (auto clsid : clsids) {
+			m_clsids.insert(clsid);
+		}
+	}
+
+	void SetMetatype(const std::set<CLASS_ID>& clsids,
+		CValueQualifierNumber* qNumber, CValueQualifierDate* qDate, CValueQualifierString* qString)
+	{
+		if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_NUMBER)) != clsids.end()) {
+			m_metaDescription.SetNumber(qNumber ? qNumber->m_precision : 10, qNumber ? qNumber->m_scale : 0);
+		}
+		else if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_DATE)) != clsids.end()) {
+			m_metaDescription.SetDate(qDate ? qDate->m_dateTime : eDateFractions::eDateFractions_DateTime);
+		}
+		else if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_STRING)) != clsids.end()) {
+			m_metaDescription.SetString(qString ? qString->m_length : 10);
+		}
+
+		for (auto clsid : clsids) {
+			m_clsids.insert(clsid);
+		}
+	}
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+
+	void ClearAllMetatype() {
+
+		m_metaDescription.SetNumber(10, 0);
+		m_metaDescription.SetDate(eDateFractions::eDateFractions_DateTime);
+		m_metaDescription.SetString(10);
+
+		m_clsids.clear();
+	}
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+
+	void ClearMetatype(const CLASS_ID& clsid)
+	{
+		if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_NUMBER)) {
+			m_metaDescription.SetNumber(10, 0);
+		}
+
+		if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_DATE)) {
+			m_metaDescription.SetDate(eDateFractions::eDateFractions_DateTime);
+		}
+
+		if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_STRING)) {
+			m_metaDescription.SetString(10);
+		}
+
+		m_clsids.erase(clsid);
+	}
+
+	void ClearMetatype(const std::set<CLASS_ID>& clsids)
+	{
+		for (auto clsid : clsids) {
+
+			if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_NUMBER)) {
 				m_metaDescription.SetNumber(10, 0);
 			}
-			else if (typeObject == eValueTypes::TYPE_DATE) {
-				m_metaDescription.SetDate(eDateFractions::eDateTime);
+
+			if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_DATE)) {
+				m_metaDescription.SetDate(eDateFractions::eDateFractions_DateTime);
 			}
-			else if (typeObject == eValueTypes::TYPE_STRING) {
+
+			if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_STRING)) {
 				m_metaDescription.SetString(10);
 			}
-			m_typeObject = typeObject;
+
+			m_clsids.erase(clsid);
+		}
+	}
+
+	//////////////////////////////////////////////////
+
+	virtual bool LoadData(CMemoryReader& dataReader);
+
+	virtual bool LoadFromVariant(const wxVariant& variant);
+
+	virtual bool SaveData(CMemoryWriter& dataWritter);
+
+	virtual void SaveToVariant(wxVariant& variant, IMetadata* metaData) const;
+
+	//////////////////////////////////////////////////
+
+	//get meta decription 
+	metaDescription_t& GetDescription() {
+		return m_metaDescription;
+	}
+
+	//////////////////////////////////////////////////
+
+	void SetNumber(unsigned char precision, unsigned char scale, bool nonNegative = false)
+	{
+		auto foundedIt = m_clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_NUMBER));
+
+		if (foundedIt == m_clsids.end()) {
+			m_clsids.insert(CValue::GetIDByVT(eValueTypes::TYPE_NUMBER));
 		}
 
-		void SetMetatype(meta_identifier_t typeObject, CValueQualifierNumber *qNumber, CValueQualifierDate *qDate, CValueQualifierString *qString) {
-			if (typeObject == eValueTypes::TYPE_NUMBER) {
-				m_metaDescription.SetNumber(qNumber ? qNumber->m_precision : 10, qNumber ? qNumber->m_scale : 0);
-			}
-			else if (typeObject == eValueTypes::TYPE_DATE) {
-				m_metaDescription.SetDate(qDate ? qDate->m_dateTime : eDateFractions::eDateTime);
-			}
-			else if (typeObject == eValueTypes::TYPE_STRING) {
-				m_metaDescription.SetString(qString ? qString->m_length : 10);
-			}
-			m_typeObject = typeObject;
+		m_metaDescription.SetNumber(precision, scale, nonNegative);
+	}
+
+	void SetDate(eDateFractions dateTime)
+	{
+		auto foundedIt = m_clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_DATE));
+
+		if (foundedIt == m_clsids.end()) {
+			m_clsids.insert(CValue::GetIDByVT(eValueTypes::TYPE_DATE));
 		}
 
-		void SetNumber(unsigned char precision, unsigned char scale)
-		{
-			if (m_typeObject != eValueTypes::TYPE_NUMBER) {
-				m_typeObject = eValueTypes::TYPE_NUMBER;
-			}
-			m_metaDescription.SetNumber(precision, scale);
-		}
-		void SetDate(eDateFractions dateTime)
-		{
-			if (m_typeObject != eValueTypes::TYPE_DATE) {
-				m_typeObject = eValueTypes::TYPE_DATE;
-			}
-			m_metaDescription.SetDate(dateTime);
-		}
-		void SetString(unsigned short length)
-		{
-			if (m_typeObject != eValueTypes::TYPE_STRING) {
-				m_typeObject = eValueTypes::TYPE_STRING;
-			}
-			m_metaDescription.SetString(length);
+		m_metaDescription.SetDate(dateTime);
+	}
+
+	void SetString(unsigned short length, eAllowedLength allowedLength = eAllowedLength::eAllowedLength_Variable)
+	{
+		auto foundedIt = m_clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_STRING));
+
+		if (foundedIt == m_clsids.end()) {
+			m_clsids.insert(CValue::GetIDByVT(eValueTypes::TYPE_STRING));
 		}
 
-		typeDescription_t(meta_identifier_t typeObject) { SetDefaultMetatype(typeObject); }
+		m_metaDescription.SetString(length, allowedLength);
+	}
 
-	} m_typeDescription;
+	//////////////////////////////////////////////////
+
+	unsigned int GetTypeCount() const {
+		return m_clsids.size();
+	}
+
+	//////////////////////////////////////////////////
+
+	IAttributeWrapper() {
+	}
+
+	IAttributeWrapper(const eValueTypes& valType) {
+		SetDefaultMetatype(valType);
+	}
+
+	IAttributeWrapper(const CLASS_ID& clsid) {
+		SetDefaultMetatype(clsid);
+	}
+
+	IAttributeWrapper(const std::set<CLASS_ID>& clsids) {
+		SetDefaultMetatype(clsids);
+	}
+
+	IAttributeWrapper(const std::set<CLASS_ID>& clsids, const metaDescription_t& descr) {
+		SetDefaultMetatype(clsids, descr);
+	}
+};
+
+////////////////////////////////////////////////////////////////////////////////
+
+class wxVariantAttributeData :
+	public wxVariantData, public IAttributeWrapper {
+	wxString MakeString() const;
+protected:
+	virtual void DoSetFromMetaId(const meta_identifier_t& id);
+public:
+
+	void AppendRecord(const CLASS_ID& id) {
+		m_clsids.insert(id);
+	}
+
+	bool Contains(const CLASS_ID& id) const {
+		auto itFounded = m_clsids.find(id);
+		return itFounded != m_clsids.end();
+	}
+
+	CLASS_ID GetById(unsigned int idx) const {
+		if (m_clsids.size() == 0)
+			return wxNOT_FOUND;
+		auto itStart = m_clsids.begin();
+		std::advance(itStart, idx);
+		return *itStart;
+	}
+
+	//get special data number 
+	unsigned char GetPrecision() const {
+		return m_metaDescription.GetPrecision();
+	}
+
+	unsigned char GetScale() const {
+		return m_metaDescription.GetScale();
+	}
+
+	//get special data date  
+	eDateFractions GetDateTime() const {
+		return m_metaDescription.GetDateTime();
+	}
+
+	//get special data string  
+	unsigned short GetLength() const {
+		return m_metaDescription.GetLength();
+	}
+
+	void SetNumber(unsigned char precision, unsigned char scale) {
+		m_metaDescription.SetNumber(precision, scale);
+	}
+
+	void SetDate(eDateFractions dateTime) {
+		m_metaDescription.SetDate(dateTime);
+	}
+
+	void SetString(unsigned short length) {
+		m_metaDescription.SetString(length);
+	}
+
+	void LoadDescription(const metaDescription_t& descr) {
+		m_metaDescription = descr;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////////////////
+
+	void RefreshData(const meta_identifier_t& id) {
+		DoSetFromMetaId(id);
+	}
+
+	/////////////////////////////////////////////////////////////////////////////////////////
+
+	wxVariantAttributeData(IMetadata* metaData) : wxVariantData(),
+		IAttributeWrapper(),
+		m_metaData(metaData)
+	{
+	}
+
+	wxVariantAttributeData(IMetadata* metaData, const meta_identifier_t& id) : wxVariantData(),
+		IAttributeWrapper(),
+		m_metaData(metaData)
+	{
+		DoSetFromMetaId(id);
+	}
+
+	wxVariantAttributeData(const wxVariantAttributeData& list) : wxVariantData(),
+		IAttributeWrapper(list.m_clsids, list.m_metaDescription),
+		m_metaData(list.m_metaData)
+	{
+	}
+
+	virtual bool Eq(wxVariantData& data) const {
+		wxVariantAttributeData* srcAttr = dynamic_cast<wxVariantAttributeData*>(&data);
+		if (srcAttr != NULL) {
+			return *srcAttr == *this;
+		}
+		return false;
+	}
+
+#if wxUSE_STD_IOSTREAM
+	virtual bool Write(wxSTD ostream& str) const {
+		str << MakeString();
+		return true;
+	}
+#endif
+	virtual bool Write(wxString& str) const {
+		str = MakeString();
+		return true;
+	}
+
+	virtual wxString GetType() const {
+		return wxT("wxVariantAttributeData");
+	}
+
+	IMetadata* GetMetadata() const {
+		return m_metaData;
+	}
+
+protected:
+	IMetadata* m_metaData;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+
+class IAttributeInfo :
+	public IAttributeWrapper {
+public:
+
+	IAttributeInfo(const eValueTypes& defType) :
+		IAttributeWrapper(defType)
+	{
+	}
+
+	IAttributeInfo(const CLASS_ID& clsid) :
+		IAttributeWrapper(clsid)
+	{
+	}
+
+	//Create value by selected type
+	virtual CValue CreateValue() const;
+	virtual CValue* CreateValueRef() const;
+
+	//convert value
+	template<class retType = CValue>
+	retType* CreateAndConvertValueRef() {
+		return value_cast<retType>(CreateValueRef());
+	}
+
+	//Adjust value
+	virtual CValue AdjustValue() const;
+	virtual CValue AdjustValue(const CValue& cVal) const;
+
+	//Get data type 
+	virtual CLASS_ID GetDataType() const;
+
+	//get metadata
+	virtual IMetadata* GetMetadata() const = 0;
+
+	//qualifers:
+	CValueQualifierNumber* GetNumberQualifier() const {
+		if (!IAttributeWrapper::ContainType(eValueTypes::TYPE_NUMBER))
+			return NULL;
+		return new CValueQualifierNumber(IAttributeWrapper::GetPrecision(), IAttributeWrapper::GetScale());
+	}
+
+	CValueQualifierDate* GetDateQualifier() const {
+		if (!IAttributeWrapper::ContainType(eValueTypes::TYPE_DATE))
+			return NULL;
+		return new CValueQualifierDate(IAttributeWrapper::GetDateTime());
+	}
+
+	CValueQualifierString* GetStringQualifier() const {
+		if (!IAttributeWrapper::ContainType(eValueTypes::TYPE_STRING))
+			return NULL;
+		return new CValueQualifierString(IAttributeWrapper::GetLength());
+	}
+
+	const IAttributeWrapper& GetTypeDescription() const {
+		return *this;
+	}
 
 public:
 
-	typeDescription_t GetTypeDescription() const { 
-		return m_typeDescription; 
-	}
-	
-	CValueTypeDescription *GetValueTypeDescription() const;
+	CValueTypeDescription* GetValueTypeDescription() const;
 };
 
 #endif

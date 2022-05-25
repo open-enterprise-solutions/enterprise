@@ -5,7 +5,7 @@
 
 #include "metaEnumerationObject.h"
 #include "appData.h"
-#include "metadata/objects/baseObject.h"
+#include "metadata/metaObjects/objects/baseObject.h"
 #include "metadata/metadata.h"
 #include "databaseLayer/databaseLayer.h"
 
@@ -13,7 +13,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(CMetaEnumerationObject, IMetaObject)
 
 bool CMetaEnumerationObject::LoadData(CMemoryReader &reader)
 {
-	/*IMetaObjectValue *metaObject = wxStaticCast(GetParent(), IMetaObjectValue);
+	/*IMetaObjectRecordData *metaObject = wxStaticCast(GetParent(), IMetaObjectRecordData);
 
 	if (metaObject)
 	{
@@ -38,4 +38,4 @@ bool CMetaEnumerationObject::SaveData(CMemoryWriter &writer)
 //*                       Register in runtime                           *
 //***********************************************************************
 
-METADATA_REGISTER(CMetaEnumerationObject, "metaEnum", g_metaEnumCLSID);
+METADATA_REGISTER(CMetaEnumerationObject, "enum", g_metaEnumCLSID);

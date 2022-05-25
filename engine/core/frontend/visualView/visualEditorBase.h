@@ -15,7 +15,7 @@ class CORE_API IVisualHost : public wxScrolledCanvas {
 public:
 
 	IVisualHost() : wxScrolledCanvas(), m_formHandler(NULL), m_mainBoxSizer(NULL) { }
-	IVisualHost(wxWindow *parent,
+	IVisualHost(wxWindow* parent,
 		wxWindowID id,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
@@ -28,22 +28,22 @@ public:
 
 	virtual ~IVisualHost() {}
 
-	IValueFrame *GetObjectBase(wxObject* wxobject);
+	IValueFrame* GetObjectBase(wxObject* wxobject);
 	wxObject* GetWxObject(IValueFrame* baseobject);
 
-	wxBoxSizer *GetFrameSizer() { return m_mainBoxSizer; }
-	CVisualEditorContextForm *GetVisualHostContext() const { return m_formHandler; }
+	wxBoxSizer* GetFrameSizer() { return m_mainBoxSizer; }
+	CVisualEditorContextForm* GetVisualHostContext() const { return m_formHandler; }
 
-	virtual bool IsDemonstration() { return false; }
-	virtual bool IsDesignerHost() { return false; }
+	virtual bool IsDemonstration() const { return false; }
+	virtual bool IsDesignerHost() const { return false; }
 
-	virtual class CValueForm *GetValueForm() = 0;
-	virtual void SetValueForm(class CValueForm *valueForm) = 0;
+	virtual class CValueForm* GetValueForm() const = 0;
+	virtual void SetValueForm(class CValueForm* valueForm) = 0;
 
-	virtual wxWindow *GetParentBackgroundWindow() = 0;
-	virtual wxWindow *GetBackgroundWindow() = 0;
+	virtual wxWindow* GetParentBackgroundWindow() const = 0;
+	virtual wxWindow* GetBackgroundWindow() const = 0;
 
-	virtual void OnClickFromApp(wxWindow *currentWindow, wxMouseEvent &event) {}
+	virtual void OnClickFromApp(wxWindow* currentWindow, wxMouseEvent& event) {}
 
 protected:
 
@@ -55,17 +55,17 @@ protected:
 	friend class CVisualDocument;
 
 	//Insert new control
-	void CreateControl(IValueFrame *obj, IValueFrame *parent = NULL, bool firstCreated = false);
+	void CreateControl(IValueFrame* obj, IValueFrame* parent = NULL, bool firstCreated = false);
 	//Update exist control
-	void UpdateControl(IValueFrame *obj, IValueFrame *parent = NULL);
+	void UpdateControl(IValueFrame* obj, IValueFrame* parent = NULL);
 	//Remove control
-	void RemoveControl(IValueFrame *obj, IValueFrame *parent = NULL);
+	void RemoveControl(IValueFrame* obj, IValueFrame* parent = NULL);
 	//Generate component 
-	void GenerateControl(IValueFrame *obj, wxWindow* wxparent, wxObject* parentObject, bool firstCreated = false);
+	void GenerateControl(IValueFrame* obj, wxWindow* wxparent, wxObject* parentObject, bool firstCreated = false);
 	//Update component
-	void RefreshControl(IValueFrame *obj, wxWindow* wxparent, wxObject* parentObject);
+	void RefreshControl(IValueFrame* obj, wxWindow* wxparent, wxObject* parentObject);
 	// Give components an opportunity to cleanup
-	void DeleteRecursive(IValueFrame *control, bool force = false);
+	void DeleteRecursive(IValueFrame* control, bool force = false);
 	//Update virtual size
 	void UpdateVirtualSize();
 
@@ -76,7 +76,7 @@ protected:
 	/**
 	* Create an instance of the wxObject and return a pointer
 	*/
-	virtual wxObject* Create(IValueFrame *control, wxObject* parent);
+	virtual wxObject* Create(IValueFrame* control, wxObject* parent);
 
 	/**
 	* Allows components to do something after they have been created.
@@ -86,18 +86,18 @@ protected:
 	* @param wxobject The object which was just created.
 	* @param wxparent The wxWidgets parent - the wxObject that the created object was added to.
 	*/
-	virtual void OnCreated(IValueFrame *control, wxObject* obj, wxWindow* wndParent, bool first—reated = false);
+	virtual void OnCreated(IValueFrame* control, wxObject* obj, wxWindow* wndParent, bool first—reated = false);
 
 	/**
 	* Allows components to respond when selected in object tree.
 	* For example, when a wxNotebook's page is selected, it can switch to that page
 	*/
-	virtual void OnSelected(IValueFrame *control, wxObject* obj);
+	virtual void OnSelected(IValueFrame* control, wxObject* obj);
 
 	/**
 	* Allows components to do something after they have been updated.
 	*/
-	virtual void Update(IValueFrame *control, wxObject* obj);
+	virtual void Update(IValueFrame* control, wxObject* obj);
 
 	/**
 	* Allows components to do something after they have been updated.
@@ -107,24 +107,24 @@ protected:
 	* @param wxobject The object which was just updated.
 	* @param wxparent The wxWidgets parent - the wxObject that the updated object was added to.
 	*/
-	virtual void OnUpdated(IValueFrame *control, wxObject* obj, wxWindow* wndParent);
+	virtual void OnUpdated(IValueFrame* control, wxObject* obj, wxWindow* wndParent);
 
 	/**
 	 * Cleanup (do the reverse of Create)
 	 */
-	virtual void Cleanup(IValueFrame *control, wxObject* obj);
+	virtual void Cleanup(IValueFrame* control, wxObject* obj);
 
 protected:
 
 	//controls
-	wxBoxSizer *m_mainBoxSizer;
+	wxBoxSizer* m_mainBoxSizer;
 
-	std::map<wxObject*, IValueFrame *> m_wxObjects;
+	std::map<wxObject*, IValueFrame*> m_wxObjects;
 	std::map<IValueFrame*, wxObject* > m_baseObjects;
 
-	CVisualEditorContextForm *m_formHandler;
+	CVisualEditorContextForm* m_formHandler;
 };
 
-extern CVisualEditorContextForm *m_visualHostContext;
+extern CVisualEditorContextForm* m_visualHostContext;
 
 #endif 

@@ -7,7 +7,7 @@
 #include "mainFrameChild.h"
 
 //common 
-#include "common/reportManager.h"
+#include "common/docManager.h"
 #include "theme/luna_auitabart.h"
 #include "theme/luna_dockart.h"
 #include "frontend/objinspect/objinspect.h"
@@ -48,7 +48,7 @@ bool CMainFrame::Create(const wxString& title,
 	if (!wxAuiMDIParentFrame::Create(NULL, wxID_ANY, title, pos, size, style, name))
 		return false;
 
-	m_docManager = new CReportManager();
+	m_docManager = new CDocManager();
 
 	this->Bind(wxEVT_MENU, &CMainFrame::OnExit, this, wxID_EXIT);
 	this->Bind(wxEVT_CLOSE_WINDOW, &CMainFrame::OnCloseWindow, this);
@@ -76,6 +76,8 @@ CDocChildFrame *CMainFrame::CreateChildFrame(CView *view, wxPoint pos, wxSize si
 	subvalueFrame->Raise();        // bring window to front
 	subvalueFrame->Maximize();
 
+	subvalueFrame->Hide();
+
 	subvalueFrame->SetExtraStyle(wxWS_EX_BLOCK_EVENTS);
 	return subvalueFrame;
 }
@@ -92,7 +94,7 @@ void CMainFrame::Raise()
 CMainFrame::~CMainFrame()
 {
 	objectInspectorDestroy();
-	reportManagerDestroy();
+	docManagerDestroy();
 	
 	// deinitialize the valueForm manager
 	m_mgr.UnInit();

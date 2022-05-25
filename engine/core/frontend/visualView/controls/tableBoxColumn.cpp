@@ -10,46 +10,50 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueTableBoxColumn, IValueControl);
 
 #include "form.h"
 #include "metadata/metadata.h"
+#include "metadata/singleMetaTypes.h"
 
-OptionList *CValueTableBoxColumn::GetChoiceForm(Property *property)
+OptionList* CValueTableBoxColumn::GetChoiceForm(Property* property)
 {
-	OptionList *optList = new OptionList;
+	OptionList* optList = new OptionList;
 	optList->AddOption(_("default"), wxNOT_FOUND);
 
-	IMetadata *metaData = GetMetaData();
-	if (metaData) {
-		
-		IMetaObjectRefValue* metaObjectRefValue = NULL;
+	IMetadata* metaData = GetMetaData();
+	if (metaData != NULL) {
+		IMetaObjectRecordDataRef* metaObjectRefValue = NULL;
+		if (m_dataSource != wxNOT_FOUND) {
 
-		if (m_colSource != wxNOT_FOUND) {
-			
-			IMetaObjectValue *metaObjectValue =
+			IMetaObjectWrapperData* metaObjectValue =
 				m_formOwner->GetMetaObject();
-			
-			if (metaObjectValue) {
-				IMetaObject *metaobject =
-					metaObjectValue->FindMetaObjectByID(m_colSource);
 
-				IMetaAttributeObject *metaAttribute = wxDynamicCast(
+			if (metaObjectValue != NULL) {
+				IMetaObject* metaobject =
+					metaObjectValue->FindMetaObjectByID(m_dataSource);
+
+				IMetaAttributeObject* metaAttribute = wxDynamicCast(
 					metaobject, IMetaAttributeObject
 				);
-				if (metaAttribute) {
-					metaObjectValue = wxDynamicCast(
-						metaData->GetMetaObject(metaAttribute->GetTypeObject()), IMetaObjectRefValue);
+				if (metaAttribute != NULL) {
+
+					IMetaTypeObjectValueSingle* so = metaData->GetTypeObject(metaAttribute->GetFirstClsid());
+					if (so != NULL) {
+						metaObjectRefValue = wxDynamicCast(so->GetMetaObject(), IMetaObjectRecordDataRef);
+					}
 				}
 				else
 				{
-					metaObjectValue = wxDynamicCast(
-						metaobject, IMetaObjectRefValue);
+					metaObjectRefValue = wxDynamicCast(
+						metaobject, IMetaObjectRecordDataRef);
 				}
 			}
 		}
 		else {
-			metaObjectRefValue = wxDynamicCast(
-				metaData->GetMetaObject(m_typeDescription.GetTypeObject()), IMetaObjectRefValue);
+			IMetaTypeObjectValueSingle* so = metaData->GetTypeObject(IAttributeControl::GetFirstClsid());
+			if (so != NULL) {
+				metaObjectRefValue = wxDynamicCast(so->GetMetaObject(), IMetaObjectRecordDataRef);
+			}
 		}
 
-		if (metaObjectRefValue) {
+		if (metaObjectRefValue != NULL) {
 			for (auto form : metaObjectRefValue->GetObjectForms()) {
 				optList->AddOption(
 					form->GetSynonym(),
@@ -62,24 +66,29 @@ OptionList *CValueTableBoxColumn::GetChoiceForm(Property *property)
 	return optList;
 }
 
+ISourceDataObject* CValueTableBoxColumn::GetSourceObject() const
+{
+	return m_formOwner ? m_formOwner->GetSourceObject()
+		: NULL;
+}
+
 //***********************************************************************************
 //*                            CValueTableBoxColumn                                 *
 //***********************************************************************************
 
-CValueTableBoxColumn::CValueTableBoxColumn() : IValueControl(), IAttributeInfo(eValueTypes::TYPE_STRING),
+CValueTableBoxColumn::CValueTableBoxColumn() : IValueControl(), IAttributeControl(),
 m_markup(true),
 m_caption("newColumn"),
 m_width(wxDVC_DEFAULT_WIDTH),
 m_align(wxALIGN_LEFT),
-m_selbutton(true), m_listbutton(false), m_clearbutton(false),
+m_selbutton(true), m_listbutton(false), m_clearbutton(true),
 m_passwordMode(false), m_multilineMode(false), m_textEditMode(true),
-m_colSource(wxNOT_FOUND), m_choiceForm(wxNOT_FOUND), 
+m_choiceForm(wxNOT_FOUND),
 m_visible(true), m_resizable(true), m_sortable(false), m_reorderable(true)
 {
-	PropertyContainer *categoryInfo = IObjectBase::CreatePropertyContainer("Info");
+	PropertyContainer* categoryInfo = IObjectBase::CreatePropertyContainer("Info");
 	categoryInfo->AddProperty("name", PropertyType::PT_WXNAME);
 	categoryInfo->AddProperty("caption", PropertyType::PT_WXSTRING);
-
 
 	categoryInfo->AddProperty("password_mode", PropertyType::PT_BOOL);
 	categoryInfo->AddProperty("multiline_mode", PropertyType::PT_BOOL);
@@ -87,19 +96,12 @@ m_visible(true), m_resizable(true), m_sortable(false), m_reorderable(true)
 
 	m_category->AddCategory(categoryInfo);
 
-	PropertyContainer *categoryData = IObjectBase::CreatePropertyContainer("Data");
-	categoryData->AddProperty("source", PropertyType::PT_SOURCE);
-
-	categoryData->AddProperty("type", PropertyType::PT_TYPE_SELECT);
-	categoryData->AddProperty("precision", PropertyType::PT_UINT);
-	categoryData->AddProperty("scale", PropertyType::PT_UINT);
-	categoryData->AddProperty("date_time", PropertyType::PT_OPTION, &CValueTableBoxColumn::GetDateTimeFormat);
-	categoryData->AddProperty("length", PropertyType::PT_UINT);
-
+	PropertyContainer* categoryData = IObjectBase::CreatePropertyContainer("Data");
+	categoryData->AddProperty("source", PropertyType::PT_SOURCE_DATA);
 	categoryData->AddProperty("choice_form", PropertyType::PT_OPTION, &CValueTableBoxColumn::GetChoiceForm);
 	m_category->AddCategory(categoryData);
 
-	PropertyContainer *categoryButton = IObjectBase::CreatePropertyContainer("Button");
+	PropertyContainer* categoryButton = IObjectBase::CreatePropertyContainer("Button");
 
 	categoryButton->AddProperty("button_select", PropertyType::PT_BOOL);
 	categoryButton->AddProperty("button_list", PropertyType::PT_BOOL);
@@ -108,7 +110,7 @@ m_visible(true), m_resizable(true), m_sortable(false), m_reorderable(true)
 	//category 
 	m_category->AddCategory(categoryButton);
 
-	PropertyContainer *categoryStyle = IObjectBase::CreatePropertyContainer("Style");
+	PropertyContainer* categoryStyle = IObjectBase::CreatePropertyContainer("Style");
 	categoryStyle->AddProperty("width", PropertyType::PT_UINT);
 	categoryStyle->AddProperty("align", PropertyType::PT_OPTION, &CValueTableBoxColumn::GetAlign);
 	categoryStyle->AddProperty("icon", PropertyType::PT_BITMAP);
@@ -120,13 +122,15 @@ m_visible(true), m_resizable(true), m_sortable(false), m_reorderable(true)
 	m_category->AddCategory(categoryStyle);
 }
 
-wxObject* CValueTableBoxColumn::Create(wxObject* parent, IVisualHost *visualHost)
+wxObject* CValueTableBoxColumn::Create(wxObject* parent, IVisualHost* visualHost)
 {
-	CDataViewColumnObject *columnObject = new CDataViewColumnObject(this, m_caption,
-		m_colSource == wxNOT_FOUND ? m_controlId : m_colSource, m_width,
+	CDataViewColumnObject* columnObject = new CDataViewColumnObject(this, m_caption,
+		m_dataSource == wxNOT_FOUND ? m_controlId : m_dataSource, m_width,
 		(wxAlignment)m_align,
 		wxDATAVIEW_COL_REORDERABLE
 	);
+
+	columnObject->SetControl(this);
 
 	columnObject->SetTitle(m_caption);
 	columnObject->SetWidth(m_width);
@@ -139,37 +143,39 @@ wxObject* CValueTableBoxColumn::Create(wxObject* parent, IVisualHost *visualHost
 
 	columnObject->SetControlID(m_controlId);
 
-	CValueViewRenderer *colRenderer = columnObject->GetRenderer();
+	CValueViewRenderer* colRenderer = columnObject->GetRenderer();
 	wxASSERT(colRenderer);
 
 	return columnObject;
 }
 
-void CValueTableBoxColumn::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated)
+void CValueTableBoxColumn::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated)
 {
-	wxDataViewCtrl *m_tableCtrl = dynamic_cast<wxDataViewCtrl *>(wxparent);
-	wxASSERT(m_tableCtrl);
-	CDataViewColumnObject *columnObject = dynamic_cast<CDataViewColumnObject *>(wxobject);
+	wxDataViewCtrl* tableCtrl = dynamic_cast<wxDataViewCtrl*>(wxparent);
+	wxASSERT(tableCtrl);
+	CDataViewColumnObject* columnObject = dynamic_cast<CDataViewColumnObject*>(wxobject);
 	wxASSERT(columnObject);
-	m_tableCtrl->AppendColumn(columnObject);
+	tableCtrl->AppendColumn(columnObject);
 }
 
-void CValueTableBoxColumn::OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost)
+void CValueTableBoxColumn::OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost)
 {
-	IValueFrame *m_parentControl = GetParent(); int idx = wxNOT_FOUND;
+	IValueFrame* parentControl = GetParent(); int idx = wxNOT_FOUND;
 
-	for (unsigned int i = 0; i < m_parentControl->GetChildCount(); i++)
+	for (unsigned int i = 0; i < parentControl->GetChildCount(); i++)
 	{
-		CValueTableBoxColumn *child = dynamic_cast<CValueTableBoxColumn *>(m_parentControl->GetChild(i));
+		CValueTableBoxColumn* child = dynamic_cast<CValueTableBoxColumn*>(parentControl->GetChild(i));
 		wxASSERT(child);
-		if (m_colSource != wxNOT_FOUND && m_colSource == child->m_colSource) { idx = i; break; }
-		else if (m_colSource == wxNOT_FOUND && m_controlId == child->m_controlId) { idx = i; break; }
+		if (m_dataSource != wxNOT_FOUND && m_dataSource == child->m_dataSource) { idx = i; break; }
+		else if (m_dataSource == wxNOT_FOUND && m_controlId == child->m_controlId) { idx = i; break; }
 	}
 
-	wxDataViewCtrl *m_tableCtrl = dynamic_cast<wxDataViewCtrl *>(wxparent);
-	wxASSERT(m_tableCtrl);
-	CDataViewColumnObject *columnObject = dynamic_cast<CDataViewColumnObject *>(wxobject);
+	wxDataViewCtrl* tableCtrl = dynamic_cast<wxDataViewCtrl*>(wxparent);
+	wxASSERT(tableCtrl);
+	CDataViewColumnObject* columnObject = dynamic_cast<CDataViewColumnObject*>(wxobject);
 	wxASSERT(columnObject);
+
+	columnObject->SetControl(this);
 
 	columnObject->SetTitle(m_caption);
 	columnObject->SetWidth(m_width);
@@ -180,23 +186,23 @@ void CValueTableBoxColumn::OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVi
 	columnObject->SetSortable(m_sortable);
 	columnObject->SetResizeable(m_resizable);
 
-	columnObject->SetColModel(m_colSource == wxNOT_FOUND ? m_controlId : m_colSource);
+	columnObject->SetColModel(m_dataSource == wxNOT_FOUND ? m_controlId : m_dataSource);
 
-	CValueViewRenderer *colRenderer = columnObject->GetRenderer();
+	CValueViewRenderer* colRenderer = columnObject->GetRenderer();
 	wxASSERT(colRenderer);
 
-	m_tableCtrl->DeleteColumn(columnObject);
-	m_tableCtrl->InsertColumn(idx, columnObject);
+	tableCtrl->DeleteColumn(columnObject);
+	tableCtrl->InsertColumn(idx, columnObject);
 }
 
-void CValueTableBoxColumn::Cleanup(wxObject* obj, IVisualHost *visualHost)
+void CValueTableBoxColumn::Cleanup(wxObject* obj, IVisualHost* visualHost)
 {
-	wxDataViewCtrl *m_tableCtrl = dynamic_cast<wxDataViewCtrl *>(visualHost->GetWxObject(GetParent()));
-	wxASSERT(m_tableCtrl);
-	CDataViewColumnObject *columnObject = dynamic_cast<CDataViewColumnObject *>(obj);
+	wxDataViewCtrl* tableCtrl = dynamic_cast<wxDataViewCtrl*>(visualHost->GetWxObject(GetParent()));
+	wxASSERT(tableCtrl);
+	CDataViewColumnObject* columnObject = dynamic_cast<CDataViewColumnObject*>(obj);
 	wxASSERT(columnObject);
 	columnObject->SetHidden(true);
-	m_tableCtrl->DeleteColumn(columnObject);
+	tableCtrl->DeleteColumn(columnObject);
 }
 
 bool CValueTableBoxColumn::CanDeleteControl() const
@@ -204,23 +210,75 @@ bool CValueTableBoxColumn::CanDeleteControl() const
 	return m_parent->GetChildCount() > 1;
 }
 
-#include "metadata/objects/baseObject.h"
+#include "metadata/metaObjects/objects/baseObject.h"
 
-bool CValueTableBoxColumn::FilterSource(const CSourceExplorer &src, meta_identifier_t id)
+//*******************************************************************
+//*							 Control value	                        *
+//*******************************************************************
+
+bool CValueTableBoxColumn::FilterSource(const CSourceExplorer& src, const meta_identifier_t& id)
 {
-	CValueTableBox *tableBox = wxDynamicCast(
-		GetParent(),
+	CValueTableBox* tableBox = wxDynamicCast(
+		m_parent,
 		CValueTableBox
 	);
-
+	wxASSERT(tableBox);
 	return tableBox->m_dataSource == id;
+}
+
+CValue CValueTableBoxColumn::GetControlValue() const
+{
+	CValueTableBox* tableBox = wxDynamicCast(
+		m_parent,
+		CValueTableBox
+	);
+	wxASSERT(tableBox);
+	IValueTable::IValueTableReturnLine* retLine = tableBox->m_tableCurrentLine;
+	if (retLine) {
+		return retLine->GetValueByMetaID(
+			m_dataSource == wxNOT_FOUND ? m_controlId : m_dataSource
+		);
+	}
+	return CValue();
+}
+
+#include "frontend/controls/textEditor.h"
+
+void CValueTableBoxColumn::SetControlValue(CValue& vSelected)
+{
+	CValueTableBox* tableBox = wxDynamicCast(
+		m_parent,
+		CValueTableBox
+	);
+	wxASSERT(tableBox);
+	IValueTable::IValueTableReturnLine* retLine = tableBox->m_tableCurrentLine;
+	if (retLine) {
+		retLine->SetValueByMetaID(
+			m_dataSource == wxNOT_FOUND ? m_controlId : m_dataSource, vSelected
+		);
+	}
+
+	CDataViewColumnObject* columnObject =
+		dynamic_cast<CDataViewColumnObject*>(GetWxObject());
+	if (columnObject) {
+		CValueViewRenderer* renderer = columnObject->GetRenderer();
+		wxASSERT(renderer);
+		CTextCtrl* textEditor = dynamic_cast<CTextCtrl*>(renderer->GetEditorCtrl());
+		if (textEditor) {
+			textEditor->SetTextValue(vSelected.GetString());
+		}
+		else {
+			wxVariant valVariant = wxEmptyString;
+			renderer->FinishSelecting(valVariant);
+		}
+	}
 }
 
 //***********************************************************************************
 //*                                  Data											*
 //***********************************************************************************
 
-bool CValueTableBoxColumn::LoadData(CMemoryReader &reader)
+bool CValueTableBoxColumn::LoadData(CMemoryReader& reader)
 {
 	reader.r_stringZ(m_caption);
 
@@ -239,15 +297,15 @@ bool CValueTableBoxColumn::LoadData(CMemoryReader &reader)
 	m_sortable = reader.r_u8();
 	m_reorderable = reader.r_u8();
 
-	m_colSource = reader.r_s32();
 	m_choiceForm = reader.r_s32();
 
-	reader.r(&m_typeDescription, sizeof(typeDescription_t));
+	if (!IAttributeControl::LoadData(reader))
+		return false;
 
 	return IValueControl::LoadData(reader);
 }
 
-bool CValueTableBoxColumn::SaveData(CMemoryWriter &writer)
+bool CValueTableBoxColumn::SaveData(CMemoryWriter& writer)
 {
 	writer.w_stringZ(m_caption);
 
@@ -266,10 +324,10 @@ bool CValueTableBoxColumn::SaveData(CMemoryWriter &writer)
 	writer.w_u8(m_sortable);
 	writer.w_u8(m_reorderable);
 
-	writer.w_s32(m_colSource);
 	writer.w_s32(m_choiceForm);
 
-	writer.w(&m_typeDescription, sizeof(typeDescription_t));
+	if (!IAttributeControl::SaveData(writer))
+		return false;
 
 	return IValueControl::SaveData(writer);
 }
@@ -300,24 +358,11 @@ void CValueTableBoxColumn::ReadProperty()
 	IObjectBase::SetPropertyValue("sortable", m_sortable);
 	IObjectBase::SetPropertyValue("reorderable", m_reorderable);
 
-	IObjectBase::SetPropertyValue("source", m_colSource);
 	IObjectBase::SetPropertyValue("choice_form", m_choiceForm);
 
-	IObjectBase::SetPropertyValue("type", m_typeDescription.GetTypeObject());
-
-	switch (m_typeDescription.GetTypeObject())
-	{
-	case eValueTypes::TYPE_NUMBER:
-		IObjectBase::SetPropertyValue("precision", m_typeDescription.GetPrecision(), true);
-		IObjectBase::SetPropertyValue("scale", m_typeDescription.GetScale(), true);
-		break;
-	case eValueTypes::TYPE_DATE:
-		IObjectBase::SetPropertyValue("date_time", m_typeDescription.GetDateTime(), true);
-		break;
-	case eValueTypes::TYPE_STRING:
-		IObjectBase::SetPropertyValue("length", m_typeDescription.GetLength(), true);
-		break;
-	}
+	SaveToVariant(
+		GetPropertyAsVariant("source"), GetMetaData()
+	);
 }
 
 void CValueTableBoxColumn::SaveProperty()
@@ -341,53 +386,9 @@ void CValueTableBoxColumn::SaveProperty()
 	IObjectBase::GetPropertyValue("sortable", m_sortable);
 	IObjectBase::GetPropertyValue("reorderable", m_reorderable);
 
-	IObjectBase::GetPropertyValue("source", m_colSource);
 	IObjectBase::GetPropertyValue("choice_form", m_choiceForm);
 
-	meta_identifier_t metaType = 0;
-	if (IObjectBase::GetPropertyValue("type", metaType)) {
-
-		if (metaType != m_typeDescription.GetTypeObject()) {
-			m_typeDescription.SetDefaultMetatype(metaType);
-			switch (m_typeDescription.GetTypeObject())
-			{
-			case eValueTypes::TYPE_NUMBER:
-				IObjectBase::SetPropertyValue("precision", m_typeDescription.GetPrecision(), true);
-				IObjectBase::SetPropertyValue("scale", m_typeDescription.GetScale(), true);
-				break;
-			case eValueTypes::TYPE_DATE:
-				IObjectBase::SetPropertyValue("date_time", m_typeDescription.GetDateTime(), true);
-				break;
-			case eValueTypes::TYPE_STRING:
-				IObjectBase::SetPropertyValue("length", m_typeDescription.GetLength(), true);
-				break;
-			}
-		}
-
-		switch (m_typeDescription.GetTypeObject())
-		{
-		case eValueTypes::TYPE_NUMBER:
-		{
-			unsigned char precision = 10, scale = 0;
-			IObjectBase::GetPropertyValue("precision", precision, true);
-			IObjectBase::GetPropertyValue("scale", scale, true);
-			m_typeDescription.SetNumber(precision, scale);
-			break;
-		}
-		case eValueTypes::TYPE_DATE:
-		{
-			eDateFractions dateTime = eDateFractions::eDateTime;
-			IObjectBase::GetPropertyValue("date_time", dateTime, true);
-			m_typeDescription.SetDate(dateTime);
-			break;
-		}
-		case eValueTypes::TYPE_STRING:
-		{
-			unsigned short length = 0;
-			IObjectBase::GetPropertyValue("length", length, true);
-			m_typeDescription.SetString(length);
-			break;
-		}
-		}
-	}
+	LoadFromVariant(
+		GetPropertyAsVariant("source")
+	);
 }

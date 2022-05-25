@@ -30,7 +30,7 @@ CValueType::CValueType(const wxString &typeName) : CValue(eValueTypes::TYPE_VALU
 
 CValueType::CValueType(const CValue &cObject) : CValue(eValueTypes::TYPE_VALUE, true), m_classType(cObject.GetTypeString())
 {
-	m_type_id = cObject.GetTypeID();
+	m_type_id = cObject.GetClassType();
 }
 
 CValueType::CValueType(const CValueType &cType) : CValue(eValueTypes::TYPE_VALUE, true), m_classType(cType.m_classType)

@@ -37,7 +37,7 @@ struct CPrecompileVariable
 struct CPrecompileContext
 {
 	CPrecompileModule *pModule;
-	void SetModule(CPrecompileModule *pSetModule) { pModule = pSetModule; };
+	void SetModule(CPrecompileModule *pSetModule) { pModule = pSetModule; }
 
 	CPrecompileContext *pParent;//родительский контекст
 	CPrecompileContext *pStopParent;//начало запрещенной области прародителя

@@ -18,8 +18,8 @@ public:
 	Guid GetGuid() const { return m_metaGuid; }
 
 	//load & save metadata from DB 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 };
 
 #endif

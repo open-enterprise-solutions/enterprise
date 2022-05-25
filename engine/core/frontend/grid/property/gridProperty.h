@@ -32,7 +32,9 @@ public:
 	void SetCellCoords(const wxGridCellCoords &topLeftCoords, const wxGridCellCoords &bottomRightCoords);
 
 	//system override 
-	virtual int GetComponentType() override { return COMPONENT_TYPE_ABSTRACT; }
+	virtual int GetComponentType() const override { 
+		return COMPONENT_TYPE_ABSTRACT; 
+	}
 	
 	virtual wxString GetObjectTypeName() const override { return wxT("cells"); }
 	virtual wxString GetClassName() const override { return wxT("cells";) }

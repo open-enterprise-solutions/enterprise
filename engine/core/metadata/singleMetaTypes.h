@@ -9,14 +9,21 @@ enum eMetaObjectType {
 	enObject,
 	enManager,
 	enSelection,
-	enTabularSection
+	enTabularSection,
+	enRecordSet,
+	enRecordKey,
+	enRecordManager
 };
+
+#define def_offset 25
 
 class IMetaTypeObjectValueSingle : public IObjectValueAbstract {
 public:
-
-	virtual eObjectType GetObjectType() const { return eObjectType::eObjectType_value_metadata; }
-	virtual IMetaObject *GetMetaObject() const = 0;
+	virtual wxBitmap GetClassIcon() const;
+	virtual eObjectType GetObjectType() const {
+		return eObjectType::eObjectType_value_metadata;
+	}
+	virtual IMetaObject* GetMetaObject() const = 0;
 	virtual eMetaObjectType GetMetaType() const = 0;
 };
 
@@ -24,18 +31,18 @@ public:
 
 //reference class 
 class CMetaTypeRefObjectValueSingle : public IMetaTypeObjectValueSingle {
-	IMetaObjectRefValue *m_metaValue;
+	IMetaObjectRecordDataRef* m_metaValue;
 public:
-	CMetaTypeRefObjectValueSingle(IMetaObjectRefValue *metaRef) : IMetaTypeObjectValueSingle(),
+	CMetaTypeRefObjectValueSingle(IMetaObjectRecordDataRef* metaRef) : IMetaTypeObjectValueSingle(),
 		m_metaValue(metaRef) {}
 
 	virtual wxString GetClassName() const { return m_metaValue->GetClassName() + wxT("Ref.") + m_metaValue->GetName(); }
-	virtual CLASS_ID GetTypeID() const { return -((clsid_start + m_metaValue->GetMetaID() * 10) + 1); }
-	virtual wxClassInfo *GetClassInfo() const;
+	virtual CLASS_ID GetClassType() const { return -((clsid_start + m_metaValue->GetMetaID() * def_offset) + 1); }
+	virtual wxClassInfo* GetClassInfo() const;
 
-	virtual CValue *CreateObject() const;
-	virtual IMetaObject *GetMetaObject() const { return m_metaValue; };
-	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enReference; };
+	virtual CValue* CreateObject() const;
+	virtual IMetaObject* GetMetaObject() const { return m_metaValue; }
+	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enReference; }
 };
 
 #define registerReference()\
@@ -44,42 +51,64 @@ public:
 #define unregisterReference()\
 	m_metaData->UnRegisterObject(GetClassName() + wxT("Ref.") + GetName())\
 
-//list class 
+//list object class 
 class CMetaTypeListObjectValueSingle : public IMetaTypeObjectValueSingle {
-	IMetaObjectRefValue *m_metaValue;
+	IMetaObjectRecordDataRef* m_metaValue;
 public:
-	CMetaTypeListObjectValueSingle(IMetaObjectRefValue *metaRef) : IMetaTypeObjectValueSingle(),
+	CMetaTypeListObjectValueSingle(IMetaObjectRecordDataRef* metaRef) : IMetaTypeObjectValueSingle(),
 		m_metaValue(metaRef) {}
 
 	virtual wxString GetClassName() const { return m_metaValue->GetClassName() + wxT("List.") + m_metaValue->GetName(); }
-	virtual CLASS_ID GetTypeID() const { return -((clsid_start + m_metaValue->GetMetaID() * 10) + 2); }
-	virtual wxClassInfo *GetClassInfo() const;
+	virtual CLASS_ID GetClassType() const { return -((clsid_start + m_metaValue->GetMetaID() * def_offset) + 2); }
+	virtual wxClassInfo* GetClassInfo() const;
 
-	virtual CValue *CreateObject() const;
-	virtual IMetaObject *GetMetaObject() const { return m_metaValue; };
-	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enList; };
+	virtual CValue* CreateObject() const;
+	virtual IMetaObject* GetMetaObject() const { return m_metaValue; }
+	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enList; }
 };
 
-#define registerList()\
+#define registerRefList()\
 	m_metaData->RegisterObject(GetClassName() + wxT("List.") + GetName(), new CMetaTypeListObjectValueSingle(this))\
 
-#define unregisterList()\
+#define unregisteRefList()\
+	m_metaData->UnRegisterObject(GetClassName() + wxT("List.") + GetName())\
+
+//list register class
+class CMetaTypeListRegisterValueSingle : public IMetaTypeObjectValueSingle {
+	IMetaObjectRegisterData* m_metaValue;
+public:
+	CMetaTypeListRegisterValueSingle(IMetaObjectRegisterData* metaRef) : IMetaTypeObjectValueSingle(),
+		m_metaValue(metaRef) {}
+
+	virtual wxString GetClassName() const { return m_metaValue->GetClassName() + wxT("List.") + m_metaValue->GetName(); }
+	virtual CLASS_ID GetClassType() const { return -((clsid_start + m_metaValue->GetMetaID() * def_offset) + 2); }
+	virtual wxClassInfo* GetClassInfo() const;
+
+	virtual CValue* CreateObject() const;
+	virtual IMetaObject* GetMetaObject() const { return m_metaValue; }
+	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enList; }
+};
+
+#define registerRegList()\
+	m_metaData->RegisterObject(GetClassName() + wxT("List.") + GetName(), new CMetaTypeListRegisterValueSingle(this))\
+
+#define unregisterRegList()\
 	m_metaData->UnRegisterObject(GetClassName() + wxT("List.") + GetName())\
 
 //object class
 class CMetaTypeObjectValueSingle : public IMetaTypeObjectValueSingle {
-	IMetaObjectValue *m_metaValue;
+	IMetaObjectRecordData* m_metaValue;
 public:
-	CMetaTypeObjectValueSingle(IMetaObjectValue *metaRef) : IMetaTypeObjectValueSingle(),
+	CMetaTypeObjectValueSingle(IMetaObjectRecordData* metaRef) : IMetaTypeObjectValueSingle(),
 		m_metaValue(metaRef) {}
 
 	virtual wxString GetClassName() const { return m_metaValue->GetClassName() + wxT("Object.") + m_metaValue->GetName(); }
-	virtual CLASS_ID GetTypeID() const { return -((clsid_start + m_metaValue->GetMetaID() * 10) + 3); }
-	virtual wxClassInfo *GetClassInfo() const;
+	virtual CLASS_ID GetClassType() const { return -((clsid_start + m_metaValue->GetMetaID() * def_offset) + 3); }
+	virtual wxClassInfo* GetClassInfo() const;
 
-	virtual CValue *CreateObject() const;
-	virtual IMetaObject *GetMetaObject() const { return m_metaValue; };
-	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enObject; };
+	virtual CValue* CreateObject() const;
+	virtual IMetaObject* GetMetaObject() const { return m_metaValue; }
+	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enObject; }
 };
 
 #define registerObject()\
@@ -88,20 +117,41 @@ public:
 #define unregisterObject()\
 	m_metaData->UnRegisterObject(GetClassName() + wxT("Object.") + GetName())\
 
+class CMetaTypeConstObjectValueSingle : public IMetaTypeObjectValueSingle {
+	CMetaConstantObject* m_metaValue;
+public:
+	CMetaTypeConstObjectValueSingle(CMetaConstantObject* metaRef) : IMetaTypeObjectValueSingle(),
+		m_metaValue(metaRef) {}
+
+	virtual wxString GetClassName() const { return ((IMetaObject*)m_metaValue)->GetClassName() + wxT("Object.") + ((IMetaObject*)m_metaValue)->GetName(); }
+	virtual CLASS_ID GetClassType() const { return -((clsid_start + ((IMetaObject*)m_metaValue)->GetMetaID() * def_offset) + 3); }
+	virtual wxClassInfo* GetClassInfo() const;
+
+	virtual CValue* CreateObject() const;
+	virtual IMetaObject* GetMetaObject() const { return (IMetaObject*)m_metaValue; }
+	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enObject; }
+};
+
+#define registerConstObject()\
+	m_metaData->RegisterObject(GetClassName() + wxT("Object.") + GetName(), new CMetaTypeConstObjectValueSingle(this))\
+
+#define unregisterConstObject()\
+	m_metaData->UnRegisterObject(GetClassName() + wxT("Object.") + GetName())\
+
 //manager class 
 class CMetaTypeManagerValueSingle : public IMetaTypeObjectValueSingle {
-	IMetaObject *m_metaValue;
+	IMetaObject* m_metaValue;
 public:
-	CMetaTypeManagerValueSingle(IMetaObject *metaRef) : IMetaTypeObjectValueSingle(),
+	CMetaTypeManagerValueSingle(IMetaObject* metaRef) : IMetaTypeObjectValueSingle(),
 		m_metaValue(metaRef) {}
 
 	virtual wxString GetClassName() const { return m_metaValue->GetClassName() + wxT("Manager.") + m_metaValue->GetName(); }
-	virtual CLASS_ID GetTypeID() const { return -((clsid_start + m_metaValue->GetMetaID() * 10) + 4); }
-	virtual wxClassInfo *GetClassInfo() const { return NULL; }
+	virtual CLASS_ID GetClassType() const { return -((clsid_start + m_metaValue->GetMetaID() * def_offset) + 4); }
+	virtual wxClassInfo* GetClassInfo() const { return NULL; }
 
-	virtual CValue *CreateObject() const { return NULL; }
-	virtual IMetaObject *GetMetaObject() const { return m_metaValue; };
-	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enManager; };
+	virtual CValue* CreateObject() const { return NULL; }
+	virtual IMetaObject* GetMetaObject() const { return m_metaValue; }
+	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enManager; }
 };
 
 #define registerManager()\
@@ -112,18 +162,18 @@ public:
 
 //selection class
 class CMetaTypeSelectionValueSingle : public IMetaTypeObjectValueSingle {
-	IMetaObjectValue *m_metaValue;
+	IMetaObjectWrapperData* m_metaValue;
 public:
-	CMetaTypeSelectionValueSingle(IMetaObjectValue *metaRef) : IMetaTypeObjectValueSingle(),
+	CMetaTypeSelectionValueSingle(IMetaObjectWrapperData* metaRef) : IMetaTypeObjectValueSingle(),
 		m_metaValue(metaRef) {}
 
 	virtual wxString GetClassName() const { return m_metaValue->GetClassName() + wxT("Selection.") + m_metaValue->GetName(); }
-	virtual CLASS_ID GetTypeID() const { return -((clsid_start + m_metaValue->GetMetaID() * 10) + 5); }
-	virtual wxClassInfo *GetClassInfo() const { return NULL; }
+	virtual CLASS_ID GetClassType() const { return -((clsid_start + m_metaValue->GetMetaID() * def_offset) + 5); }
+	virtual wxClassInfo* GetClassInfo() const { return NULL; }
 
-	virtual CValue *CreateObject() const { return NULL; }
-	virtual IMetaObject *GetMetaObject() const { return m_metaValue; };
-	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enSelection; };
+	virtual CValue* CreateObject() const { return NULL; }
+	virtual IMetaObject* GetMetaObject() const { return m_metaValue; }
+	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enSelection; }
 };
 
 #define registerSelection()\
@@ -134,19 +184,19 @@ public:
 
 //tabular section class
 class CMetaTypeTabularSectionValueSingle : public IMetaTypeObjectValueSingle {
-	IMetaObjectValue *m_metaValue;
-	CMetaTableObject *m_metaTable;
+	IMetaObjectRecordData* m_metaValue;
+	CMetaTableObject* m_metaTable;
 public:
-	CMetaTypeTabularSectionValueSingle(IMetaObjectValue *metaRef, CMetaTableObject *metaTable) : IMetaTypeObjectValueSingle(),
+	CMetaTypeTabularSectionValueSingle(IMetaObjectRecordData* metaRef, CMetaTableObject* metaTable) : IMetaTypeObjectValueSingle(),
 		m_metaValue(metaRef), m_metaTable(metaTable) {}
 
 	virtual wxString GetClassName() const { return m_metaValue->GetClassName() + wxT("TabularSection.") + m_metaValue->GetName() + wxT(".") + m_metaTable->GetName(); }
-	virtual CLASS_ID GetTypeID() const { return -((clsid_start + m_metaValue->GetMetaID() * 10) + 6); }
-	virtual wxClassInfo *GetClassInfo() const { return NULL; }
+	virtual CLASS_ID GetClassType() const { return -((clsid_start + (m_metaValue->GetMetaID() + m_metaTable->GetMetaID()) * def_offset) + 6); }
+	virtual wxClassInfo* GetClassInfo() const { return NULL; }
 
-	virtual CValue *CreateObject() const { return NULL; }
-	virtual IMetaObject *GetMetaObject() const { return m_metaValue; };
-	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enTabularSection; };
+	virtual CValue* CreateObject() const { return NULL; }
+	virtual IMetaObject* GetMetaObject() const { return m_metaTable; }
+	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enTabularSection; }
 };
 
 #define registerTabularSection()\
@@ -154,5 +204,71 @@ public:
 
 #define unregisterTabularSection()\
 	m_metaData->UnRegisterObject(metaObject->GetClassName() + wxT("TabularSection.") + metaObject->GetName() + wxT(".") + GetName())\
+
+//record key class
+class CMetaTypeRecordKeyValueSingle : public IMetaTypeObjectValueSingle {
+	IMetaObjectRegisterData* m_metaValue;
+public:
+	CMetaTypeRecordKeyValueSingle(IMetaObjectRegisterData* metaRef) : IMetaTypeObjectValueSingle(),
+		m_metaValue(metaRef) {}
+
+	virtual wxString GetClassName() const { return m_metaValue->GetClassName() + wxT("RecordKey.") + m_metaValue->GetName(); }
+	virtual CLASS_ID GetClassType() const { return -((clsid_start + m_metaValue->GetMetaID() * def_offset) + 7); }
+	virtual wxClassInfo* GetClassInfo() const;
+
+	virtual CValue* CreateObject() const;
+	virtual IMetaObject* GetMetaObject() const { return m_metaValue; }
+	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enRecordKey; }
+};
+
+#define registerRecordKey()\
+	m_metaData->RegisterObject(GetClassName() + wxT("RecordKey.") + GetName(), new CMetaTypeRecordKeyValueSingle(this))\
+
+#define unregisterRecordKey()\
+	m_metaData->UnRegisterObject(GetClassName() + wxT("RecordKey.") + GetName())\
+
+//record manager class
+class CMetaTypeRecordManagerValueSingle : public IMetaTypeObjectValueSingle {
+	IMetaObjectRegisterData* m_metaValue;
+public:
+	CMetaTypeRecordManagerValueSingle(IMetaObjectRegisterData* metaRef) : IMetaTypeObjectValueSingle(),
+		m_metaValue(metaRef) {}
+
+	virtual wxString GetClassName() const { return m_metaValue->GetClassName() + wxT("RecordManager.") + m_metaValue->GetName(); }
+	virtual CLASS_ID GetClassType() const { return -((clsid_start + m_metaValue->GetMetaID() * def_offset) + 8); }
+	virtual wxClassInfo* GetClassInfo() const;
+
+	virtual CValue* CreateObject() const;
+	virtual IMetaObject* GetMetaObject() const { return m_metaValue; }
+	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enRecordManager; }
+};
+
+#define registerRecordManager()\
+	m_metaData->RegisterObject(GetClassName() + wxT("RecordManager.") + GetName(), new CMetaTypeRecordManagerValueSingle(this))\
+
+#define unregisterRecordManager()\
+	m_metaData->UnRegisterObject(GetClassName() + wxT("RecordManager.") + GetName())\
+
+//record set class
+class CMetaTypeRecordSetValueSingle : public IMetaTypeObjectValueSingle {
+	IMetaObjectRegisterData* m_metaValue;
+public:
+	CMetaTypeRecordSetValueSingle(IMetaObjectRegisterData* metaRef) : IMetaTypeObjectValueSingle(),
+		m_metaValue(metaRef) {}
+
+	virtual wxString GetClassName() const { return m_metaValue->GetClassName() + wxT("RecordSet.") + m_metaValue->GetName(); }
+	virtual CLASS_ID GetClassType() const { return -((clsid_start + m_metaValue->GetMetaID() * def_offset) + 9); }
+	virtual wxClassInfo* GetClassInfo() const;
+
+	virtual CValue* CreateObject() const;
+	virtual IMetaObject* GetMetaObject() const { return m_metaValue; }
+	virtual eMetaObjectType GetMetaType() const { return eMetaObjectType::enRecordSet; }
+};
+
+#define registerRecordSet()\
+	m_metaData->RegisterObject(GetClassName() + wxT("RecordSet.") + GetName(), new CMetaTypeRecordSetValueSingle(this))\
+
+#define unregisterRecordSet()\
+	m_metaData->UnRegisterObject(GetClassName() + wxT("RecordSet.") + GetName())\
 
 #endif 

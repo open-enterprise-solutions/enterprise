@@ -11,37 +11,37 @@
 
 wxIMPLEMENT_ABSTRACT_CLASS(IObjectBase, wxObject);
 
-OptionList *Property::GetTypelist()
+OptionList* Property::GetTypelist() const
 {
 	return m_object->GetTypelist();
 }
 
-bool Property::IsNull()
+bool Property::IsNull() const
 {
+	wxString m_strValue = m_value;
+
 	switch (GetType())
 	{
 	case PT_BITMAP:
 	{
 		wxString path;
-		unsigned int semicolonIndex = m_value.find_first_of(';');
-		if (semicolonIndex != m_value.npos)
-		{
-			path = m_value.substr(0, semicolonIndex);
+		unsigned int semicolonIndex = m_strValue.find_first_of(';');
+		if (semicolonIndex != m_strValue.npos) {
+			path = m_strValue.substr(0, semicolonIndex);
 		}
-		else
-		{
-			path = m_value;
+		else {
+			path = m_strValue;
 		}
 
 		return path.empty();
 	}
 	case PT_WXSIZE:
 	{
-		return (wxDefaultSize == TypeConv::StringToSize(m_value));
+		return (wxDefaultSize == TypeConv::StringToSize(m_strValue));
 	}
 	default:
 	{
-		return m_value.empty();
+		return m_strValue.empty();
 	}
 	}
 }
@@ -51,17 +51,17 @@ bool Property::IsEditable()
 	return m_object->IsEditable();
 }
 
-void Property::SetValue(const wxArrayString &str)
+void Property::SetValue(const wxArrayString& str)
 {
 	m_value = TypeConv::ArrayStringToString(str);
 }
 
-void Property::SetValue(const wxFontContainer &font)
+void Property::SetValue(const wxFontContainer& font)
 {
 	m_value = TypeConv::FontToString(font);
 }
 
-void Property::SetValue(const wxColour &colour)
+void Property::SetValue(const wxColour& colour)
 {
 	m_value = TypeConv::ColourToString(colour);
 }
@@ -69,7 +69,7 @@ void Property::SetValue(const wxColour &colour)
 #include <wx/base64.h> 
 #include <wx/mstream.h>
 
-void Property::SetValue(const wxBitmap &bmp)
+void Property::SetValue(const wxBitmap& bmp)
 {
 	if (!bmp.IsOk())
 		return;
@@ -84,17 +84,17 @@ void Property::SetValue(const wxBitmap &bmp)
 	////}
 }
 
-void Property::SetValue(const wxString &str, bool format)
+void Property::SetValue(const wxString& str, bool format)
 {
 	m_value = (format ? TypeConv::TextToString(str) : str);
 }
 
-void Property::SetValue(const wxPoint &point)
+void Property::SetValue(const wxPoint& point)
 {
 	m_value = TypeConv::PointToString(point);
 }
 
-void Property::SetValue(const wxSize &size)
+void Property::SetValue(const wxSize& size)
 {
 	m_value = TypeConv::SizeToString(size);
 }
@@ -116,30 +116,30 @@ void Property::SetValue(const double val)
 	m_value = TypeConv::FloatToString(val);
 }
 
-wxFontContainer Property::GetValueAsFont()
+wxFontContainer Property::GetValueAsFont() const
 {
 	return TypeConv::StringToFont(m_value);
 }
 
-wxColour Property::GetValueAsColour()
+wxColour Property::GetValueAsColour() const
 {
 	return TypeConv::StringToColour(m_value);
 }
-wxPoint Property::GetValueAsPoint()
+wxPoint Property::GetValueAsPoint() const
 {
 	return TypeConv::StringToPoint(m_value);
 }
-wxSize Property::GetValueAsSize()
+wxSize Property::GetValueAsSize() const
 {
 	return TypeConv::StringToSize(m_value);
 }
 
-wxBitmap Property::GetValueAsBitmap()
+wxBitmap Property::GetValueAsBitmap() const
 {
 	return TypeConv::StringToBitmap(m_value);
 }
 
-int Property::GetValueAsInteger()
+int Property::GetValueAsInteger() const
 {
 	int result = 0;
 
@@ -161,22 +161,22 @@ int Property::GetValueAsInteger()
 	return result;
 }
 
-wxString Property::GetValueAsString()
+wxString Property::GetValueAsString() const
 {
 	return m_value;
 }
 
-wxString Property::GetValueAsText()
+wxString Property::GetValueAsText() const
 {
 	return TypeConv::StringToText(m_value);
 }
 
-wxArrayString Property::GetValueAsArrayString()
+wxArrayString Property::GetValueAsArrayString() const
 {
 	return TypeConv::StringToArrayString(m_value);
 }
 
-double Property::GetValueAsFloat()
+double Property::GetValueAsFloat() const
 {
 	return TypeConv::StringToFloat(m_value);
 }
@@ -215,9 +215,9 @@ wxString IObjectBase::GetIndentString(int indent)
 	return s;
 }
 
-Property* IObjectBase::GetProperty(const wxString &nameParam) const
+Property* IObjectBase::GetProperty(const wxString& nameParam) const
 {
-	std::map<wxString, Property *>::const_iterator it = m_properties.find(nameParam.Lower());
+	std::map<wxString, Property*>::const_iterator it = m_properties.find(nameParam.Lower());
 
 	if (it != m_properties.end())
 		return it->second;
@@ -233,7 +233,7 @@ Property* IObjectBase::GetProperty(unsigned int idx) const
 {
 	assert(idx < m_properties.size());
 
-	std::map<wxString, Property *>::const_iterator it = m_properties.begin();
+	std::map<wxString, Property*>::const_iterator it = m_properties.begin();
 	unsigned int i = 0;
 	while (i < idx && it != m_properties.end())
 	{
@@ -247,9 +247,9 @@ Property* IObjectBase::GetProperty(unsigned int idx) const
 	return NULL;
 }
 
-Event* IObjectBase::GetEvent(const wxString &nameParam) const
+Event* IObjectBase::GetEvent(const wxString& nameParam) const
 {
-	std::map<wxString, Event *>::const_iterator it = m_events.find(nameParam);
+	std::map<wxString, Event*>::const_iterator it = m_events.find(nameParam);
 	if (it != m_events.end())
 		return it->second;
 
@@ -261,7 +261,7 @@ Event* IObjectBase::GetEvent(unsigned int idx) const
 {
 	assert(idx < m_events.size());
 
-	std::map<wxString, Event *>::const_iterator it = m_events.begin();
+	std::map<wxString, Event*>::const_iterator it = m_events.begin();
 	unsigned int i = 0;
 	while (i < idx && it != m_events.end())
 	{
@@ -277,15 +277,15 @@ Event* IObjectBase::GetEvent(unsigned int idx) const
 
 void IObjectBase::AddProperty(Property* prop)
 {
-	m_properties.insert(std::map<wxString, Property *>::value_type(prop->GetName(), prop));
+	m_properties.insert(std::map<wxString, Property*>::value_type(prop->GetName(), prop));
 }
 
 void IObjectBase::AddEvent(Event* event)
 {
-	m_events.insert(std::map<wxString, Event *>::value_type(event->GetName(), event));
+	m_events.insert(std::map<wxString, Event*>::value_type(event->GetName(), event));
 }
 
-IObjectBase* IObjectBase::FindNearAncestor(const wxString &type)
+IObjectBase* IObjectBase::FindNearAncestor(const wxString& type)
 {
 	IObjectBase* result = NULL;
 	IObjectBase* parent = GetParent();
@@ -300,7 +300,7 @@ IObjectBase* IObjectBase::FindNearAncestor(const wxString &type)
 	return result;
 }
 
-IObjectBase* IObjectBase::FindNearAncestorByBaseClass(const wxString &type)
+IObjectBase* IObjectBase::FindNearAncestorByBaseClass(const wxString& type)
 {
 	IObjectBase* result = NULL;
 	IObjectBase* parent = GetParent();
@@ -400,7 +400,7 @@ bool IObjectBase::IsNull(const wxString& propertyName)
 		return true;
 }
 
-bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxArrayString &str)
+bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxArrayString& str)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -410,7 +410,7 @@ bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxArraySt
 	return true;
 }
 
-bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxFontContainer &font)
+bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxFontContainer& font)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -420,7 +420,7 @@ bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxFontCon
 	return true;
 }
 
-bool IObjectBase::SetPropertyValue(const wxString & propertyName, const wxFont &font)
+bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxFont& font)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -430,7 +430,7 @@ bool IObjectBase::SetPropertyValue(const wxString & propertyName, const wxFont &
 	return true;
 }
 
-bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxColour &colour)
+bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxColour& colour)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -440,7 +440,7 @@ bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxColour 
 	return true;
 }
 
-bool IObjectBase::SetPropertyValue(const wxString &propertyName, const wxBitmap &bmp)
+bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxBitmap& bmp)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -450,7 +450,7 @@ bool IObjectBase::SetPropertyValue(const wxString &propertyName, const wxBitmap 
 	return true;
 }
 
-bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxString &str, bool format)
+bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxString& str, bool format)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -460,7 +460,7 @@ bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxString 
 	return true;
 }
 
-bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxPoint &point)
+bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxPoint& point)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -470,7 +470,7 @@ bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxPoint &
 	return true;
 }
 
-bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxSize &size)
+bool IObjectBase::SetPropertyValue(const wxString& propertyName, const wxSize& size)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -520,7 +520,7 @@ bool IObjectBase::SetPropertyValue(const wxString& propertyName, const double va
 	return true;
 }
 
-bool IObjectBase::GetPropertyValue(const wxString & propertyName, wxArrayInt &ineger)
+bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxArrayInt& ineger)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -536,7 +536,7 @@ bool IObjectBase::GetPropertyValue(const wxString & propertyName, wxArrayInt &in
 	return true;
 }
 
-bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxArrayString &str)
+bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxArrayString& str)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -546,7 +546,7 @@ bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxArrayString &
 	return true;
 }
 
-bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxFontContainer &font)
+bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxFontContainer& font)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -556,7 +556,7 @@ bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxFontContainer
 	return true;
 }
 
-bool IObjectBase::GetPropertyValue(const wxString & propertyName, wxFont &font)
+bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxFont& font)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -566,7 +566,7 @@ bool IObjectBase::GetPropertyValue(const wxString & propertyName, wxFont &font)
 	return true;
 }
 
-bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxColour &colour)
+bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxColour& colour)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -576,7 +576,7 @@ bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxColour &colou
 	return true;
 }
 
-bool IObjectBase::GetPropertyValue(const wxString &propertyName, wxBitmap &bmp)
+bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxBitmap& bmp)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -586,7 +586,7 @@ bool IObjectBase::GetPropertyValue(const wxString &propertyName, wxBitmap &bmp)
 	return true;
 }
 
-bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxString &str)
+bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxString& str)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -596,7 +596,7 @@ bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxString &str)
 	return true;
 }
 
-bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxPoint &point)
+bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxPoint& point)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -606,7 +606,7 @@ bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxPoint &point)
 	return true;
 }
 
-bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxSize &size)
+bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxSize& size)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -616,7 +616,7 @@ bool IObjectBase::GetPropertyValue(const wxString& propertyName, wxSize &size)
 	return true;
 }
 
-bool IObjectBase::GetPropertyValue(const wxString & propertyName, bool &integer)
+bool IObjectBase::GetPropertyValue(const wxString& propertyName, bool& integer)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -626,7 +626,7 @@ bool IObjectBase::GetPropertyValue(const wxString & propertyName, bool &integer)
 	return true;
 }
 
-bool IObjectBase::GetPropertyValue(const wxString& propertyName, int &integer)
+bool IObjectBase::GetPropertyValue(const wxString& propertyName, int& integer)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -636,7 +636,7 @@ bool IObjectBase::GetPropertyValue(const wxString& propertyName, int &integer)
 	return true;
 }
 
-bool IObjectBase::GetPropertyValue(const wxString& propertyName, long &integer)
+bool IObjectBase::GetPropertyValue(const wxString& propertyName, long& integer)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -646,7 +646,7 @@ bool IObjectBase::GetPropertyValue(const wxString& propertyName, long &integer)
 	return true;
 }
 
-bool IObjectBase::GetPropertyValue(const wxString& propertyName, double &val)
+bool IObjectBase::GetPropertyValue(const wxString& propertyName, double& val)
 {
 	Property* property = GetProperty(propertyName);
 	if (!property)
@@ -657,80 +657,91 @@ bool IObjectBase::GetPropertyValue(const wxString& propertyName, double &val)
 }
 
 
-int IObjectBase::GetPropertyAsInteger(const wxString& pname)
+int IObjectBase::GetPropertyAsInteger(const wxString& propertyName)
 {
-	Property* property = GetProperty(pname);
+	Property* property = GetProperty(propertyName);
 	if (property)
 		return property->GetValueAsInteger();
 	else
 		return 0;
 }
 
-wxFontContainer IObjectBase::GetPropertyAsFont(const wxString& pname)
+wxFontContainer IObjectBase::GetPropertyAsFont(const wxString& propertyName)
 {
-	Property* property = GetProperty(pname);
+	Property* property = GetProperty(propertyName);
 	if (property)
 		return property->GetValueAsFont();
 	else
 		return wxFontContainer();
 }
 
-wxColour IObjectBase::GetPropertyAsColour(const wxString& pname)
+wxColour IObjectBase::GetPropertyAsColour(const wxString& propertyName)
 {
-	Property* property = GetProperty(pname);
+	Property* property = GetProperty(propertyName);
 	if (property)
 		return property->GetValueAsColour();
 	else
 		return wxColour();
 }
 
-wxString IObjectBase::GetPropertyAsString(const wxString& pname)
+wxString IObjectBase::GetPropertyAsString(const wxString& propertyName)
 {
-	Property* property = GetProperty(pname);
+	Property* property = GetProperty(propertyName);
 	if (property)
 		return property->GetValueAsString();
 	else
 		return wxString();
 }
 
-wxPoint  IObjectBase::GetPropertyAsPoint(const wxString& pname)
+wxPoint  IObjectBase::GetPropertyAsPoint(const wxString& propertyName)
 {
-	Property* property = GetProperty(pname);
+	Property* property = GetProperty(propertyName);
 	if (property)
 		return property->GetValueAsPoint();
 	else
 		return wxPoint();
 }
 
-wxSize   IObjectBase::GetPropertyAsSize(const wxString& pname)
+wxSize   IObjectBase::GetPropertyAsSize(const wxString& propertyName)
 {
-	Property* property = GetProperty(pname);
+	Property* property = GetProperty(propertyName);
 	if (property)
 		return property->GetValueAsSize();
 	else
 		return wxDefaultSize;
 }
 
-wxBitmap IObjectBase::GetPropertyAsBitmap(const wxString& pname)
+wxBitmap IObjectBase::GetPropertyAsBitmap(const wxString& propertyName)
 {
-	Property* property = GetProperty(pname);
+	Property* property = GetProperty(propertyName);
 	if (property)
 		return property->GetValueAsBitmap();
 	else
 		return wxBitmap();
 }
-double IObjectBase::GetPropertyAsFloat(const wxString& pname)
+
+double IObjectBase::GetPropertyAsFloat(const wxString& propertyName)
 {
-	Property* property = GetProperty(pname);
+	Property* property = GetProperty(propertyName);
 	if (property)
 		return property->GetValueAsFloat();
 	else
 		return 0;
 }
-wxArrayInt IObjectBase::GetPropertyAsArrayInt(const wxString& pname)
+
+wxVariant &IObjectBase::GetPropertyAsVariant(const wxString& propertyName)
+{
+	Property* property = GetProperty(propertyName);
+	if (property)
+		return property->GetValue();
+	else
+		return wxNullVariant;
+}
+
+wxArrayInt IObjectBase::GetPropertyAsArrayInt(const wxString& propertyName)
 {
 	wxArrayInt array;
-	Property* property = GetProperty(pname);
+	Property* property = GetProperty(propertyName);
 	if (property)
 	{
 		IntList il(property->GetValue(), property->GetType() == PT_UINTLIST);
@@ -741,9 +752,9 @@ wxArrayInt IObjectBase::GetPropertyAsArrayInt(const wxString& pname)
 	return array;
 }
 
-wxArrayString IObjectBase::GetPropertyAsArrayString(const wxString& pname)
+wxArrayString IObjectBase::GetPropertyAsArrayString(const wxString& propertyName)
 {
-	Property* property = GetProperty(pname);
+	Property* property = GetProperty(propertyName);
 	if (property)
 		return property->GetValueAsArrayString();
 	else
@@ -760,7 +771,7 @@ bool IObjectBase::IsSubclassOf(wxString classname)
 	}
 	else
 	{
-		IObjectBase*m_parent = GetParent();
+		IObjectBase* m_parent = GetParent();
 
 		while (m_parent)
 		{

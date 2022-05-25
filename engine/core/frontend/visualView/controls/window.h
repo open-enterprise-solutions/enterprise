@@ -45,7 +45,9 @@ public:
 	virtual void ReadProperty() override;
 	virtual void SaveProperty() override;
 
-	virtual int GetComponentType() override { return COMPONENT_TYPE_WINDOW; }
+	virtual int GetComponentType() const override { 
+		return COMPONENT_TYPE_WINDOW; 
+	}
 	virtual bool IsItem() override { return false; }
 
 protected:

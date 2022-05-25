@@ -231,8 +231,9 @@
     <ClInclude Include="common\managerInfo.h" />
     <ClInclude Include="common\moduleInfo.h" />
     <ClInclude Include="common\objectbase.h" />
-    <ClInclude Include="Common\reportManager.h" />
+    <ClInclude Include="Common\docManager.h" />
     <ClInclude Include="common\srcExplorer.h" />
+    <ClInclude Include="common\tableAttributes.h" />
     <ClInclude Include="common\tableInfo.h" />
     <ClInclude Include="common\templates\dataProcessorFile.h" />
     <ClInclude Include="common\templates\dataReportFile.h" />
@@ -244,6 +245,7 @@
     <ClInclude Include="common\templates\module_cmd.h" />
     <ClInclude Include="common\templates\text.h" />
     <ClInclude Include="common\types.h" />
+    <ClInclude Include="common\uniqueKey.h" />
     <ClInclude Include="common\valueInfo.h" />
     <ClInclude Include="compiler\compileModule.h" />
     <ClInclude Include="compiler\compiler.h" />
@@ -290,7 +292,10 @@
     <ClInclude Include="frontend\codeEditor\components\helpers\listBoxWnd.h" />
     <ClInclude Include="frontend\codeEditor\components\helpers\popupWnd.h" />
     <ClInclude Include="frontend\codeEditor\res\bitmaps_res.h" />
+    <ClInclude Include="frontend\controls\checktree.h" />
     <ClInclude Include="frontend\theme\luna_auitoolbar.h" />
+    <ClInclude Include="frontend\visualView\controls\attributeControl.h" />
+    <ClInclude Include="frontend\visualView\special\valueFilter.h" />
     <ClInclude Include="frontend\visualView\title.h" />
     <ClInclude Include="frontend\objinspect\advprops.h" />
     <ClInclude Include="frontend\objinspect\editors.h" />
@@ -304,6 +309,7 @@
     <ClInclude Include="frontend\windows\functionlist\functionlistWnd.h" />
     <ClInclude Include="frontend\windows\lineInputWnd.h" />
     <ClInclude Include="frontend\windows\optionsWnd.h" />
+    <ClInclude Include="frontend\windows\selectDataWnd.h" />
     <ClInclude Include="frontend\windows\userListWnd.h" />
     <ClInclude Include="frontend\windows\userWnd.h" />
     <ClInclude Include="..\..\3rdparty\databaseLayer\databaseErrorCodes.h" />
@@ -448,38 +454,44 @@
     <ClInclude Include="frontend\visualView\special\valueSize.h" />
     <ClInclude Include="frontend\visualView\visualEditor.h" />
     <ClInclude Include="frontend\visualView\visualEditorBase.h" />
-    <ClInclude Include="frontend\visualView\visualEditorView.h" />
+    <ClInclude Include="frontend\visualView\visualHost.h" />
     <ClInclude Include="frontend\visualView\windowButtons.h" />
     <ClInclude Include="metadata\external\metadataDataProcessor.h" />
     <ClInclude Include="metadata\external\metadataReport.h" />
     <ClInclude Include="metadata\metaObjectsDefines.h" />
     <ClInclude Include="metadata\metaObjects\attributes\metaAttributeObject.h" />
+    <ClInclude Include="metadata\metaObjects\dimension\metaDimensionObject.h" />
     <ClInclude Include="metadata\metaObjects\enumeration\metaEnumerationObject.h" />
     <ClInclude Include="metadata\metaObjects\metaFormObject.h" />
     <ClInclude Include="metadata\metaObjects\metaGridObject.h" />
     <ClInclude Include="metadata\metaObjects\metaModuleObject.h" />
     <ClInclude Include="metadata\metaObjects\metaObject.h" />
     <ClInclude Include="metadata\metaObjects\metaObjectMetadata.h" />
+    <ClInclude Include="metadata\metaObjects\objects\accumulationRegister.h" />
+    <ClInclude Include="metadata\metaObjects\objects\accumulationRegisterManager.h" />
+    <ClInclude Include="metadata\metaObjects\objects\informationRegisterManager.h" />
+    <ClInclude Include="metadata\metaObjects\resource\metaResourceObject.h" />
     <ClInclude Include="metadata\metaObjects\tables\metaTableObject.h" />
     <ClInclude Include="metadata\moduleManager\moduleManager.h" />
-    <ClInclude Include="metadata\objects\baseManager.h" />
-    <ClInclude Include="metadata\objects\baseObject.h" />
-    <ClInclude Include="metadata\objects\catalog.h" />
-    <ClInclude Include="metadata\objects\catalogManager.h" />
-    <ClInclude Include="metadata\objects\constant.h" />
-    <ClInclude Include="metadata\objects\constantManager.h" />
-    <ClInclude Include="metadata\objects\dataProcessor.h" />
-    <ClInclude Include="metadata\objects\dataProcessorManager.h" />
-    <ClInclude Include="metadata\objects\document.h" />
-    <ClInclude Include="metadata\objects\documentManager.h" />
-    <ClInclude Include="metadata\objects\enumeration.h" />
-    <ClInclude Include="metadata\objects\enumerationManager.h" />
-    <ClInclude Include="metadata\objects\list\objectList.h" />
-    <ClInclude Include="metadata\objects\reference\reference.h" />
-    <ClInclude Include="metadata\objects\dataReport.h" />
-    <ClInclude Include="metadata\objects\dataReportManager.h" />
-    <ClInclude Include="metadata\objects\selector\objectSelector.h" />
-    <ClInclude Include="metadata\objects\tabularSection\tabularSection.h" />
+    <ClInclude Include="metadata\metaObjects\objects\systemManager.h" />
+    <ClInclude Include="metadata\metaObjects\objects\baseObject.h" />
+    <ClInclude Include="metadata\metaObjects\objects\catalog.h" />
+    <ClInclude Include="metadata\metaObjects\objects\catalogManager.h" />
+    <ClInclude Include="metadata\metaObjects\objects\constant.h" />
+    <ClInclude Include="metadata\metaObjects\objects\constantManager.h" />
+    <ClInclude Include="metadata\metaObjects\objects\dataProcessor.h" />
+    <ClInclude Include="metadata\metaObjects\objects\dataProcessorManager.h" />
+    <ClInclude Include="metadata\metaObjects\objects\document.h" />
+    <ClInclude Include="metadata\metaObjects\objects\documentManager.h" />
+    <ClInclude Include="metadata\metaObjects\objects\enumeration.h" />
+    <ClInclude Include="metadata\metaObjects\objects\enumerationManager.h" />
+    <ClInclude Include="metadata\metaObjects\objects\informationRegister.h" />
+    <ClInclude Include="metadata\metaObjects\objects\list\objectList.h" />
+    <ClInclude Include="metadata\metaObjects\objects\reference\reference.h" />
+    <ClInclude Include="metadata\metaObjects\objects\dataReport.h" />
+    <ClInclude Include="metadata\metaObjects\objects\dataReportManager.h" />
+    <ClInclude Include="metadata\metaObjects\objects\selector\objectSelector.h" />
+    <ClInclude Include="metadata\metaObjects\objects\tabularSection\tabularSection.h" />
     <ClInclude Include="metadata\singleMetaTypes.h" />
     <ClInclude Include="utils\fs\fs.h" />
     <ClInclude Include="utils\fs\lz\lzhuf.h" />
@@ -492,10 +504,10 @@
     <ClInclude Include="frontend\visualView\controls\window.h" />
     <ClInclude Include="metadata\metadata.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="frontend\controls\checkBoxCtrl.h" />
+    <ClInclude Include="frontend\controls\checkBox.h" />
     <ClInclude Include="frontend\controls\dynamicBorder.h" />
-    <ClInclude Include="frontend\controls\textCtrl.h" />
-    <ClInclude Include="frontend\controls\toolBarCtrl.h" />
+    <ClInclude Include="frontend\controls\textEditor.h" />
+    <ClInclude Include="frontend\controls\toolBar.h" />
     <ClInclude Include="frontend\controls\treelistctrl.h" />
     <ClInclude Include="frontend\formSelector\formSelector.h" />
     <ClInclude Include="frontend\grid\gridCellRange.h" />
@@ -712,7 +724,7 @@
     <ClCompile Include="common\docInfoCommands.cpp" />
     <ClCompile Include="common\moduleInfo.cpp" />
     <ClCompile Include="common\objectbase.cpp" />
-    <ClCompile Include="common\reportManager.cpp" />
+    <ClCompile Include="common\docManager.cpp" />
     <ClCompile Include="common\tableInfo.cpp" />
     <ClCompile Include="common\templates\dataProcessorFile.cpp" />
     <ClCompile Include="common\templates\dataReportFile.cpp" />
@@ -724,6 +736,7 @@
     <ClCompile Include="common\templates\module.cpp" />
     <ClCompile Include="common\templates\text.cpp" />
     <ClCompile Include="common\types.cpp" />
+    <ClCompile Include="common\uniqueKey.cpp" />
     <ClCompile Include="common\valueInfo.cpp" />
     <ClCompile Include="compiler\compileModule.cpp" />
     <ClCompile Include="compiler\compiler.cpp" />
@@ -752,10 +765,12 @@
     <ClCompile Include="compiler\valueFontDialog.cpp" />
     <ClCompile Include="compiler\valueGrid.cpp" />
     <ClCompile Include="compiler\valueGuid.cpp" />
+    <ClCompile Include="compiler\valueIcons.cpp" />
     <ClCompile Include="compiler\valueMap.cpp" />
     <ClCompile Include="compiler\valueQuery.cpp" />
     <ClCompile Include="compiler\valueTable.cpp" />
     <ClCompile Include="compiler\valueOLE.cpp" />
+    <ClCompile Include="compiler\valueTableIcons.cpp" />
     <ClCompile Include="compiler\valueTableMethods.cpp" />
     <ClCompile Include="compiler\valueTableModel.cpp" />
     <ClCompile Include="compiler\valueType.cpp" />
@@ -772,12 +787,14 @@
     <ClCompile Include="frontend\codeEditor\components\helpers\listBoxVisualData.cpp" />
     <ClCompile Include="frontend\codeEditor\components\helpers\listBoxWnd.cpp" />
     <ClCompile Include="frontend\codeEditor\components\helpers\popupWnd.cpp" />
+    <ClCompile Include="frontend\controls\checktree.cpp" />
     <ClCompile Include="frontend\controls\controls.cpp" />
     <ClCompile Include="frontend\theme\luna_auitoolbar.cpp" />
+    <ClCompile Include="frontend\visualView\controls\attributeControl.cpp" />
+    <ClCompile Include="frontend\visualView\controls\tableBoxProperty.cpp" />
     <ClCompile Include="frontend\visualView\dvc\dvc.cpp" />
     <ClCompile Include="frontend\visualView\controls\formDatabase.cpp" />
     <ClCompile Include="frontend\visualView\controls\tableBoxColumnEvents.cpp" />
-    <ClCompile Include="frontend\visualView\controls\tableBoxColumnProperty.cpp" />
     <ClCompile Include="frontend\visualView\title.cpp" />
     <ClCompile Include="frontend\objinspect\advprops.cpp" />
     <ClCompile Include="frontend\objinspect\editors.cpp" />
@@ -793,6 +810,7 @@
     <ClCompile Include="frontend\windows\functionlist\functionlistWnd.cpp" />
     <ClCompile Include="frontend\windows\lineInputWnd.cpp" />
     <ClCompile Include="frontend\windows\optionsWnd.cpp" />
+    <ClCompile Include="frontend\windows\selectDataWnd.cpp" />
     <ClCompile Include="frontend\windows\userListWnd.cpp" />
     <ClCompile Include="..\..\3rdparty\databaseLayer\databaseErrorReporter.cpp" />
     <ClCompile Include="..\..\3rdparty\databaseLayer\databaseLayer.cpp" />
@@ -883,7 +901,6 @@
     <ClCompile Include="frontend\visualView\controls\tableBoxMethods.cpp" />
     <ClCompile Include="frontend\visualView\controls\textctrl.cpp" />
     <ClCompile Include="frontend\visualView\controls\textctrlEvents.cpp" />
-    <ClCompile Include="frontend\visualView\controls\textctrlProperty.cpp" />
     <ClCompile Include="frontend\visualView\controls\toolBar.cpp" />
     <ClCompile Include="frontend\visualView\controls\toolBarActions.cpp" />
     <ClCompile Include="frontend\visualView\controls\toolBarEvents.cpp" />
@@ -906,16 +923,18 @@
     <ClCompile Include="frontend\visualView\visualEditorBaseEvents.cpp" />
     <ClCompile Include="frontend\visualView\visualEditorContext.cpp" />
     <ClCompile Include="frontend\visualView\visualEditorObjectTree.cpp" />
-    <ClCompile Include="frontend\visualView\visualEditorView_impl.cpp" />
+    <ClCompile Include="frontend\visualView\visualHost_impl.cpp" />
     <ClCompile Include="frontend\visualView\visualEditorEvents.cpp" />
     <ClCompile Include="frontend\visualView\visualEditorObjects.cpp" />
-    <ClCompile Include="frontend\visualView\visualEditorView.cpp" />
+    <ClCompile Include="frontend\visualView\visualHost.cpp" />
     <ClCompile Include="frontend\windows\userWnd.cpp" />
     <ClCompile Include="metadata\external\metadataDataProcessor.cpp" />
     <ClCompile Include="metadata\external\metadataReport.cpp" />
     <ClCompile Include="metadata\metaObjects\attributes\metaAttributeObject.cpp" />
+    <ClCompile Include="metadata\metaObjects\attributes\metaAttributeObjectDB.cpp" />
     <ClCompile Include="metadata\metaObjects\attributes\metaAttributeObjectProperty.cpp" />
     <ClCompile Include="metadata\metaObjects\attributes\metaAttributeObjectIcons.cpp" />
+    <ClCompile Include="metadata\metaObjects\dimension\metaDimensionObject.cpp" />
     <ClCompile Include="metadata\metaObjects\enumeration\metaEnumerationObject.cpp" />
     <ClCompile Include="metadata\metaObjects\enumeration\metaEnumerationObjectIcons.cpp" />
     <ClCompile Include="metadata\metaObjects\metaFormObject.cpp" />
@@ -935,6 +954,33 @@
     <ClCompile Include="metadata\metaObjects\metaObjectMetadataMenu.cpp" />
     <ClCompile Include="metadata\metaObjects\metaObjectMethods.cpp" />
     <ClCompile Include="metadata\metaObjects\metaObjectProperty.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterDB.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterManager.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterManagerAttributes.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterManagerMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterManager_impl.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterMetadata.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterMetadataIcons.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterMetadataMenu.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterObject.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterObjectAttributes.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterObjectMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterMetadataProperty.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\baseObjectAttributes.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\baseObjectMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\baseObjectModel.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\catalogMetadataProperty.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\constantActions.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\document.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\documentMetadataProperty.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterDB.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterManager_impl.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterManager.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterManagerAttributes.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterManagerMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterMetadataIcons.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterMetadataProperty.cpp" />
+    <ClCompile Include="metadata\metaObjects\resource\metaResourceObject.cpp" />
     <ClCompile Include="metadata\metaObjects\tables\metaTableObject.cpp" />
     <ClCompile Include="metadata\metaObjects\tables\metaTableObjectIcons.cpp" />
     <ClCompile Include="metadata\moduleManager\moduleManager.cpp" />
@@ -942,76 +988,82 @@
     <ClCompile Include="metadata\moduleManager\moduleManagerMetadata.cpp" />
     <ClCompile Include="metadata\moduleManager\moduleManagerMethods.cpp" />
     <ClCompile Include="metadata\moduleManager\moduleManagerValue.cpp" />
-    <ClCompile Include="metadata\objects\baseManager.cpp" />
-    <ClCompile Include="metadata\objects\baseObject.cpp" />
-    <ClCompile Include="metadata\objects\baseObjectDB.cpp" />
-    <ClCompile Include="metadata\objects\catalogActions.cpp" />
-    <ClCompile Include="metadata\objects\catalogManager.cpp" />
-    <ClCompile Include="metadata\objects\catalogManagerMethods.cpp" />
-    <ClCompile Include="metadata\objects\catalogManager_impl.cpp" />
-    <ClCompile Include="metadata\objects\catalogMetadata.cpp" />
-    <ClCompile Include="metadata\objects\catalogMetadataIcons.cpp" />
-    <ClCompile Include="metadata\objects\catalogMetadataMenu.cpp" />
-    <ClCompile Include="metadata\objects\catalogObject.cpp" />
-    <ClCompile Include="metadata\objects\catalogObjectAttributes.cpp" />
-    <ClCompile Include="metadata\objects\catalogObjectMethods.cpp" />
-    <ClCompile Include="metadata\objects\constant.cpp" />
-    <ClCompile Include="metadata\objects\constantDB.cpp" />
-    <ClCompile Include="metadata\objects\constantIcons.cpp" />
-    <ClCompile Include="metadata\objects\constantManager.cpp" />
-    <ClCompile Include="metadata\objects\constantManagerMethods.cpp" />
-    <ClCompile Include="metadata\objects\constantMenu.cpp" />
-    <ClCompile Include="metadata\objects\constantObject.cpp" />
-    <ClCompile Include="metadata\objects\dataProcessorActions.cpp" />
-    <ClCompile Include="metadata\objects\dataProcessorIcons.cpp" />
-    <ClCompile Include="metadata\objects\dataProcessorManager.cpp" />
-    <ClCompile Include="metadata\objects\dataProcessorManagerMethods.cpp" />
-    <ClCompile Include="metadata\objects\dataProcessorMetadata.cpp" />
-    <ClCompile Include="metadata\objects\dataProcessorMetadataMenu.cpp" />
-    <ClCompile Include="metadata\objects\dataProcessorObject.cpp" />
-    <ClCompile Include="metadata\objects\dataProcessorObjectAttributes.cpp" />
-    <ClCompile Include="metadata\objects\dataProcessorObjectMethods.cpp" />
-    <ClCompile Include="metadata\objects\dataReportMetadataIcons.cpp" />
-    <ClCompile Include="metadata\objects\documentActions.cpp" />
-    <ClCompile Include="metadata\objects\documentManager.cpp" />
-    <ClCompile Include="metadata\objects\documentManagerMethods.cpp" />
-    <ClCompile Include="metadata\objects\documentManager_impl.cpp" />
-    <ClCompile Include="metadata\objects\documentMetadata.cpp" />
-    <ClCompile Include="metadata\objects\documentMetadataIcons.cpp" />
-    <ClCompile Include="metadata\objects\documentMetadataMenu.cpp" />
-    <ClCompile Include="metadata\objects\documentObject.cpp" />
-    <ClCompile Include="metadata\objects\documentObjectAttributes.cpp" />
-    <ClCompile Include="metadata\objects\documentObjectMethods.cpp" />
-    <ClCompile Include="metadata\objects\enumerationActions.cpp" />
-    <ClCompile Include="metadata\objects\enumerationManager.cpp" />
-    <ClCompile Include="metadata\objects\enumerationManagerAttributes.cpp" />
-    <ClCompile Include="metadata\objects\enumerationManagerMethods.cpp" />
-    <ClCompile Include="metadata\objects\enumerationMetadata.cpp" />
-    <ClCompile Include="metadata\objects\enumerationMetadataIcons.cpp" />
-    <ClCompile Include="metadata\objects\enumerationMetadataMenu.cpp" />
-    <ClCompile Include="metadata\objects\list\objectList.cpp" />
-    <ClCompile Include="metadata\objects\list\objectListActions.cpp" />
-    <ClCompile Include="metadata\objects\list\objectListAttributes.cpp" />
-    <ClCompile Include="metadata\objects\list\objectListDB.cpp" />
-    <ClCompile Include="metadata\objects\list\objectListMethods.cpp" />
-    <ClCompile Include="metadata\objects\list\objectListModel.cpp" />
-    <ClCompile Include="metadata\objects\reference\reference.cpp" />
-    <ClCompile Include="metadata\objects\reference\referenceAttributes.cpp" />
-    <ClCompile Include="metadata\objects\reference\referenceDB.cpp" />
-    <ClCompile Include="metadata\objects\reference\referenceMethods.cpp" />
-    <ClCompile Include="metadata\objects\dataReportActions.cpp" />
-    <ClCompile Include="metadata\objects\dataReportManager.cpp" />
-    <ClCompile Include="metadata\objects\dataReportManagerMethods.cpp" />
-    <ClCompile Include="metadata\objects\dataReportMetadata.cpp" />
-    <ClCompile Include="metadata\objects\dataReportMetadataMenu.cpp" />
-    <ClCompile Include="metadata\objects\dataReportObject.cpp" />
-    <ClCompile Include="metadata\objects\dataReportObjectAttributes.cpp" />
-    <ClCompile Include="metadata\objects\dataReportObjectMethods.cpp" />
-    <ClCompile Include="metadata\objects\selector\objectSelector.cpp" />
-    <ClCompile Include="metadata\objects\tabularSection\tabularSection.cpp" />
-    <ClCompile Include="metadata\objects\tabularSection\tabularSectionAttribute.cpp" />
-    <ClCompile Include="metadata\objects\tabularSection\tabularSectionMethods.cpp" />
-    <ClCompile Include="metadata\objects\tabularSection\tabularSectionModel.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\systemManager.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\baseObject.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\baseObjectDB.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\catalogActions.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\catalogManager.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\catalogManagerMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\catalogManager_impl.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\catalogMetadata.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\catalogMetadataIcons.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\catalogMetadataMenu.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\catalogObject.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\catalogObjectAttributes.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\catalogObjectMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\constantMetadata.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\constantMetadataDB.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\constantMetadataIcons.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\constantManager.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\constantManagerMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\constantMenu.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\constantObject.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorActions.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorIcons.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorManager.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorManagerMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorMetadata.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorMetadataMenu.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorObject.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorObjectAttributes.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorObjectMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataReportMetadataIcons.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\documentActions.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\documentManager.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\documentManagerMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\documentManager_impl.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\documentMetadata.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\documentMetadataIcons.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\documentMetadataMenu.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\documentObject.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\documentObjectAttributes.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\documentObjectMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\enumerationActions.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\enumerationManager.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\enumerationManagerAttributes.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\enumerationManagerMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\enumerationMetadata.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\enumerationMetadataIcons.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\enumerationMetadataMenu.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterActions.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterMetadata.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterMetadataMenu.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterObject.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterObjectAttributes.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterObjectMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\list\objectList.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\list\objectListActions.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\list\objectListAttributes.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\list\objectListDB.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\list\objectListMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\list\objectListModel.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\reference\reference.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\reference\referenceAttributes.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\reference\referenceDB.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\reference\referenceMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataReportActions.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataReportManager.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataReportManagerMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataReportMetadata.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataReportMetadataMenu.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataReportObject.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataReportObjectAttributes.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\dataReportObjectMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\selector\objectSelector.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\tabularSection\tabularSection.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\tabularSection\tabularSectionAttributes.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\tabularSection\tabularSectionMethods.cpp" />
+    <ClCompile Include="metadata\metaObjects\objects\tabularSection\tabularSectionModel.cpp" />
     <ClCompile Include="metadata\singleMetaTypes.cpp" />
     <ClCompile Include="utils\fs\fs.cpp" />
     <ClCompile Include="utils\fs\lz\lzhuf.cpp" />
@@ -1082,10 +1134,17 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
     </MASM>
-    <None Include="cpp.hint" />
     <None Include="..\..\3rdparty\databaseLayer\mysql\engine\mysql.h.pp" />
     <None Include="..\..\3rdparty\databaseLayer\mysql\engine\mysql_version.h.in" />
     <None Include="..\..\3rdparty\databaseLayer\mysql\engine\my_config.h.in" />
+    <None Include="frontend\controls\res\checked2.xpm" />
+    <None Include="frontend\controls\res\checked_d.xpm" />
+    <None Include="frontend\controls\res\checked_ld.xpm" />
+    <None Include="frontend\controls\res\checked_mo.xpm" />
+    <None Include="frontend\controls\res\unchecked2.xpm" />
+    <None Include="frontend\controls\res\unchecked_d.xpm" />
+    <None Include="frontend\controls\res\unchecked_ld.xpm" />
+    <None Include="frontend\controls\res\unchecked_mo.xpm" />
     <None Include="frontend\visualView\controls\icons\animation.xpm" />
     <None Include="frontend\visualView\controls\icons\auitoolbar.xpm" />
     <None Include="frontend\visualView\controls\icons\bitmap_button.xpm" />
@@ -1176,38 +1235,37 @@
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>AutomationEnterprise</RootNamespace>
     <ProjectName>core</ProjectName>
-    <WindowsTargetPlatformVersion>7.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v141_xp</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
     <UseOfMfc>false</UseOfMfc>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v141_xp</PlatformToolset>
     <PreferredToolArchitecture>x64</PreferredToolArchitecture>
     <CharacterSet>Unicode</CharacterSet>
     <UseOfMfc>false</UseOfMfc>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v141_xp</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v141_xp</PlatformToolset>
     <PreferredToolArchitecture>x64</PreferredToolArchitecture>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -1255,7 +1313,6 @@
       <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <CompileAsManaged>false</CompileAsManaged>
-      <LanguageStandard>stdcpp17</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <FloatingPointModel>Fast</FloatingPointModel>
       <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
@@ -1266,6 +1323,7 @@
       <SupportJustMyCode>
       </SupportJustMyCode>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -1289,10 +1347,10 @@
       <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <CompileAsManaged>false</CompileAsManaged>
-      <LanguageStandard>stdcpp17</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <FloatingPointModel>Precise</FloatingPointModel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -1319,13 +1377,13 @@
       <OmitFramePointers>true</OmitFramePointers>
       <StringPooling>true</StringPooling>
       <FloatingPointModel>Fast</FloatingPointModel>
-      <LanguageStandard>stdcpp17</LanguageStandard>
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
       <CompileAsManaged>false</CompileAsManaged>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <ExceptionHandling>Sync</ExceptionHandling>
       <AdditionalOptions>/Gw %(AdditionalOptions)</AdditionalOptions>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -1360,12 +1418,12 @@
       <OmitFramePointers>true</OmitFramePointers>
       <StringPooling>true</StringPooling>
       <FloatingPointModel>Precise</FloatingPointModel>
-      <LanguageStandard>stdcpp17</LanguageStandard>
       <CompileAsManaged>false</CompileAsManaged>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <AdditionalOptions>/Gw %(AdditionalOptions)</AdditionalOptions>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

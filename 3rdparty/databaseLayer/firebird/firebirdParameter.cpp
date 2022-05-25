@@ -8,9 +8,6 @@ FirebirdParameter::FirebirdParameter(FirebirdInterface* pInterface, XSQLVAR* pVa
 	m_pInterface = pInterface;
 	m_pParameter = pVar;
 
-	m_pDatabase = NULL;
-	m_pTransaction = NULL;
-
 	m_nNullFlag = -1;
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
@@ -172,13 +169,10 @@ FirebirdParameter::FirebirdParameter(FirebirdInterface* pInterface, XSQLVAR* pVa
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-FirebirdParameter::FirebirdParameter(FirebirdInterface* pInterface, XSQLVAR* pVar, isc_db_handle pDatabase, isc_tr_handle pTransaction, const void* pData, long nDataLength) : m_nParameterType(FirebirdParameter::PARAM_BLOB)
+FirebirdParameter::FirebirdParameter(FirebirdInterface* pInterface, XSQLVAR* pVar, const void* pData, long nDataLength) : m_nParameterType(FirebirdParameter::PARAM_BLOB)
 {
 	m_pInterface = pInterface;
 	m_pParameter = pVar;
-
-	m_pDatabase = pDatabase;
-	m_pTransaction = pTransaction;
 
 	// Just copy the data into the memory buffer for now.  We'll move the data over to the blob in the call to ResetBlob
 	void* pBuffer = m_BufferValue.GetWriteBuf(nDataLength);
@@ -186,11 +180,11 @@ FirebirdParameter::FirebirdParameter(FirebirdInterface* pInterface, XSQLVAR* pVa
 	m_nBufferLength = nDataLength;
 }
 
-void FirebirdParameter::ResetBlob()
+bool FirebirdParameter::ResetBlob(isc_db_handle database, isc_tr_handle transaction)
 {
 	// If the databaes and transaction handles aren't valid then don't try to do anything
-	if ((m_pDatabase == NULL) || (m_pTransaction == NULL))
-		return;
+	if ((database == NULL) || (transaction == NULL))
+		return false;
 
 	//m_BlobId = NULL;
 	m_pBlob = NULL;
@@ -199,7 +193,7 @@ void FirebirdParameter::ResetBlob()
 	int nDataLength = m_nBufferLength;//m_BufferValue.GetDataLen();
 
 	memset(&m_BlobId, 0, sizeof(m_BlobId));
-	int nReturn = m_pInterface->GetIscCreateBlob2()(status, &m_pDatabase, &m_pTransaction, &m_pBlob, &m_BlobId, 0, NULL);
+	int nReturn = m_pInterface->GetIscCreateBlob2()(status, &database, &transaction, &m_pBlob, &m_BlobId, 0, NULL);
 	if (nReturn != 0)
 	{
 #ifndef DONT_USE_DATABASE_LAYER_EXCEPTIONS
@@ -209,9 +203,8 @@ void FirebirdParameter::ResetBlob()
 
 		throw error;
 #endif
-
 		//isc_print_status(status);
-		return;
+		return false;
 	}
 
 	int dataFetched = 0;
@@ -231,7 +224,7 @@ void FirebirdParameter::ResetBlob()
 #endif
 
 			//isc_print_status(status);
-			return;
+			return false;
 		}
 
 		dataFetched += segLen;
@@ -251,13 +244,15 @@ void FirebirdParameter::ResetBlob()
 #endif
 
 		//isc_print_status(status);
-		return;
+		return false;
 	}
 
 	m_pParameter->sqldata = (char*)&m_BlobId;
 
 	m_nNullFlag = 0;
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
+
+	return true;
 }
 
 FirebirdParameter::~FirebirdParameter()

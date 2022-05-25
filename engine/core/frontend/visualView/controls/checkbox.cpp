@@ -1,5 +1,5 @@
 #include "widgets.h"
-#include "frontend/controls/checkBoxCtrl.h"
+#include "frontend/controls/checkBox.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CValueCheckbox, IValueWindow)
 
@@ -8,14 +8,20 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueCheckbox, IValueWindow)
 #include "form.h"
 #include "metadata/metadata.h"
 
+ISourceDataObject* CValueCheckbox::GetSourceObject() const
+{
+	return m_formOwner ? m_formOwner->GetSourceObject()
+		: NULL;
+}
+
 //****************************************************************************
 //*                              Checkbox                                    *
 //****************************************************************************
 
-CValueCheckbox::CValueCheckbox() : IValueWindow(),
-m_titleLocation(2), m_source(wxNOT_FOUND)
+CValueCheckbox::CValueCheckbox() : IValueWindow(), IAttributeControl(),
+m_titleLocation(2)
 {
-	PropertyContainer *categoryCheckBox = IObjectBase::CreatePropertyContainer("Checkbox");
+	PropertyContainer* categoryCheckBox = IObjectBase::CreatePropertyContainer("Checkbox");
 	//property
 	categoryCheckBox->AddProperty("name", PropertyType::PT_WXNAME);
 	categoryCheckBox->AddProperty("caption", PropertyType::PT_WXSTRING);
@@ -24,23 +30,23 @@ m_titleLocation(2), m_source(wxNOT_FOUND)
 	//category 
 	m_category->AddCategory(categoryCheckBox);
 
-	PropertyContainer *propertySource = IObjectBase::CreatePropertyContainer("Data");
-	propertySource->AddProperty("source", PropertyType::PT_SOURCE);
+	PropertyContainer* propertySource = IObjectBase::CreatePropertyContainer("Data");
+	propertySource->AddProperty("source", PropertyType::PT_SOURCE_DATA);
 	//category 
 	m_category->AddCategory(propertySource);
 
 	//event
-	PropertyContainer *categoryEvent = IObjectBase::CreatePropertyContainer("Events");
+	PropertyContainer* categoryEvent = IObjectBase::CreatePropertyContainer("Events");
 	categoryEvent->AddEvent("onCheckboxClicked", { { "control" } });
 	m_category->AddCategory(categoryEvent);
 
 	//default value 
-	m_selValue = false; 
+	m_selValue = false;
 }
 
-wxObject* CValueCheckbox::Create(wxObject* parent, IVisualHost *visualHost)
+wxObject* CValueCheckbox::Create(wxObject* parent, IVisualHost* visualHost)
 {
-	CCheckBox *checkbox = new CCheckBox((wxWindow *)parent, wxID_ANY,
+	CCheckBox* checkbox = new CCheckBox((wxWindow*)parent, wxID_ANY,
 		m_caption,
 		m_pos,
 		m_size);
@@ -50,27 +56,27 @@ wxObject* CValueCheckbox::Create(wxObject* parent, IVisualHost *visualHost)
 	return checkbox;
 }
 
-void CValueCheckbox::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated)
+void CValueCheckbox::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated)
 {
 }
 
-void CValueCheckbox::Update(wxObject* wxobject, IVisualHost *visualHost)
+void CValueCheckbox::Update(wxObject* wxobject, IVisualHost* visualHost)
 {
-	CCheckBox *checkbox = dynamic_cast<CCheckBox *>(wxobject);
+	CCheckBox* checkbox = dynamic_cast<CCheckBox*>(wxobject);
 
 	if (checkbox) {
 
 		wxString textCaption = wxEmptyString;
 
-		if (m_source != wxNOT_FOUND) {
-			IDataObjectSource *srcObject = m_formOwner->GetSourceObject();
+		if (m_dataSource != wxNOT_FOUND) {
+			ISourceDataObject* srcObject = m_formOwner->GetSourceObject();
 			if (srcObject) {
-				IMetaObjectValue *objMetaValue = srcObject->GetMetaObject();
-				IMetaObject *metaObject = objMetaValue->FindMetaObjectByID(m_source);
+				IMetaObjectWrapperData* objMetaValue = srcObject->GetMetaObject();
+				IMetaObject* metaObject = objMetaValue->FindMetaObjectByID(m_dataSource);
 				if (metaObject) {
 					textCaption = metaObject->GetSynonym() + wxT(":");
 				}
-				m_selValue = srcObject->GetValueByMetaID(m_source);
+				m_selValue = srcObject->GetValueByMetaID(m_dataSource);
 			}
 		}
 
@@ -91,11 +97,49 @@ void CValueCheckbox::Update(wxObject* wxobject, IVisualHost *visualHost)
 	UpdateLabelSize(checkbox);
 }
 
-void CValueCheckbox::Cleanup(wxObject* obj, IVisualHost *visualHost)
+void CValueCheckbox::Cleanup(wxObject* obj, IVisualHost* visualHost)
 {
-	CCheckBox *checkbox = dynamic_cast<CCheckBox *>(obj);
+	CCheckBox* checkbox = dynamic_cast<CCheckBox*>(obj);
 	if (checkbox) {
 		checkbox->UnbindCheckBoxCtrl(&CValueCheckbox::OnClickedCheckbox, this);
+	}
+}
+
+//*******************************************************************
+//*							 Control value	                        *
+//*******************************************************************
+
+CValue CValueCheckbox::GetControlValue() const
+{
+	CValueForm* ownerForm = GetOwnerForm();
+
+	if (m_dataSource != wxNOT_FOUND && m_formOwner->GetSourceObject()) {
+		ISourceDataObject* srcObject = ownerForm->GetSourceObject();
+		if (srcObject) {
+			return srcObject->GetValueByMetaID(m_dataSource);
+		}
+	}
+
+	return m_selValue;
+}
+
+#include "compiler/valueTypeDescription.h"
+#include "frontend/controls/checkBox.h"
+
+void CValueCheckbox::SetControlValue(CValue& vSelected)
+{
+	if (m_dataSource != wxNOT_FOUND && m_formOwner->GetSourceObject()) {
+		ISourceDataObject* srcObject = m_formOwner->GetSourceObject();
+		if (srcObject) {
+			srcObject->SetValueByMetaID(m_dataSource, vSelected);
+		}
+	}
+
+	m_selValue = vSelected.GetBoolean();
+
+	CCheckBox* checkboxCtrl = dynamic_cast<CCheckBox*>(GetWxObject());
+	if (checkboxCtrl) {
+		checkboxCtrl->SetCheckBoxValue(vSelected.GetBoolean());
 	}
 }
 
@@ -103,19 +147,25 @@ void CValueCheckbox::Cleanup(wxObject* obj, IVisualHost *visualHost)
 //*							 Data	                                *
 //*******************************************************************
 
-bool CValueCheckbox::LoadData(CMemoryReader &reader)
+bool CValueCheckbox::LoadData(CMemoryReader& reader)
 {
 	reader.r_stringZ(m_caption);
 	m_titleLocation = reader.r_s32();
-	m_source = reader.r_s32();
+
+	if (!IAttributeControl::LoadData(reader))
+		return false;
+
 	return IValueWindow::LoadData(reader);
 }
 
-bool CValueCheckbox::SaveData(CMemoryWriter &writer)
+bool CValueCheckbox::SaveData(CMemoryWriter& writer)
 {
 	writer.w_stringZ(m_caption);
 	writer.w_s32(m_titleLocation);
-	writer.w_s32(m_source);
+
+	if (!IAttributeControl::SaveData(writer))
+		return false;
+
 	return IValueWindow::SaveData(writer);
 }
 
@@ -131,7 +181,9 @@ void CValueCheckbox::ReadProperty()
 	IObjectBase::SetPropertyValue("caption", m_caption);
 	IObjectBase::SetPropertyValue("title_location", m_titleLocation);
 
-	IObjectBase::SetPropertyValue("source", m_source);
+	SaveToVariant(
+		GetPropertyAsVariant("source"), GetMetaData()
+	);
 }
 
 void CValueCheckbox::SaveProperty()
@@ -142,5 +194,7 @@ void CValueCheckbox::SaveProperty()
 	IObjectBase::GetPropertyValue("caption", m_caption);
 	IObjectBase::GetPropertyValue("title_location", m_titleLocation);
 
-	IObjectBase::GetPropertyValue("source", m_source);
+	LoadFromVariant(
+		GetPropertyAsVariant("source")
+	);
 }

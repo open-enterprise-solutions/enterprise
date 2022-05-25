@@ -8,46 +8,55 @@
 
 void CMainFrame::ShowProperty()
 {
-	wxAuiPaneInfo &m_info = m_mgr.GetPane(objectInspector);
-	if (!m_info.IsOk()) 
+	wxAuiPaneInfo& infoToolBar = m_mgr.GetPane(objectInspector);
+	
+	if (!infoToolBar.IsOk())
 		return;
 
-	if (!m_info.IsShown()) {
-		m_info.Show();
+	if (!infoToolBar.IsShown()) {
+		
+		infoToolBar.Show();
 		objectInspector->SetFocus();
 		objectInspector->Raise();
+		
 		m_mgr.Update();
 	}
 }
 
 #include "common/docInfo.h"
 
-void CMainFrame::OnActivateView(bool activate, wxView *activeView, wxView *deactiveView)
+void CMainFrame::OnActivateView(bool activate, wxView* activeView, wxView* deactiveView)
 {
-	if (m_toolbarAdditional)
-	{
-		wxAuiPaneInfo &m_infoToolBar = m_mgr.GetPane(m_toolbarAdditional);
+	if (m_toolbarAdditional) {
 
-		wxDocument *m_activeDoc = activeView ? activeView->GetDocument() : NULL;
-		wxDocument *m_deactiveDoc = deactiveView ? deactiveView->GetDocument() : NULL;
+		wxAuiPaneInfo& infoToolBar = m_mgr.GetPane(m_toolbarAdditional);
 
-		wxDocTemplate *m_deactiveDocTemplate = m_deactiveDoc ? m_deactiveDoc->GetDocumentTemplate() : NULL;
+		wxDocument* activeDoc = activeView ? activeView->GetDocument() : NULL;
+		wxDocument* deactiveDoc = deactiveView ? deactiveView->GetDocument() : NULL;
 
-		CView *m_activeView = dynamic_cast<CView *>(activeView);
-		CView *m_deactiveView = dynamic_cast<CView *>(deactiveView);
+		wxDocTemplate* deactiveDocTemplate = deactiveDoc ?
+			deactiveDoc->GetDocumentTemplate() : NULL;
 
-		if (m_deactiveView) { 
-			m_deactiveView->OnRemoveToolbar(m_toolbarAdditional); 
+		CView* actView = dynamic_cast<CView*>(activeView);
+		CView* deactView = dynamic_cast<CView*>(deactiveView);
+
+		if (deactView != NULL) {
+			deactView->OnRemoveToolbar(m_toolbarAdditional);
 			m_toolbarAdditional->ClearTools();
 		}
 
-		if (m_deactiveDocTemplate != m_activeDoc->GetDocumentTemplate()) {
-			if (activate)
-				m_activeView->OnCreateToolbar(m_toolbarAdditional);
+		if (deactiveDocTemplate != activeDoc->GetDocumentTemplate()) {
 
-			if (m_toolbarAdditional->GetToolCount() > 0)
-				m_infoToolBar.Show();
-			else m_infoToolBar.Hide();
+			if (actView) {
+				actView->OnCreateToolbar(m_toolbarAdditional);
+			}
+
+			if (m_toolbarAdditional->GetToolCount() > 0) {
+				infoToolBar.Show();
+			}
+			else {
+				infoToolBar.Hide();
+			}
 
 			m_toolbarAdditional->Freeze();
 			m_toolbarAdditional->Realize();
@@ -55,21 +64,31 @@ void CMainFrame::OnActivateView(bool activate, wxView *activeView, wxView *deact
 		}
 		else {
 
-			if (activate) 
-				m_activeView->OnCreateToolbar(m_toolbarAdditional);
+			if (activate) {
+				actView->OnCreateToolbar(m_toolbarAdditional);
+			}
 
-			if (m_toolbarAdditional->GetToolCount() > 0) 
-				m_infoToolBar.Show();
-			else m_infoToolBar.Hide();
+			if (m_toolbarAdditional->GetToolCount() > 0) {
+				infoToolBar.Show();
+			}
+			else {
+				infoToolBar.Hide();
+			}
 
 			m_toolbarAdditional->Freeze();
 			m_toolbarAdditional->Realize();
 			m_toolbarAdditional->Thaw();
 		}
 
-		m_infoToolBar.BestSize(m_toolbarAdditional->GetSize());
-		m_infoToolBar.FloatingSize(m_toolbarAdditional->GetSize().x, m_toolbarAdditional->GetSize().y + 25);
+		infoToolBar.BestSize(m_toolbarAdditional->GetSize());
 
-		m_mgr.Update();
+		infoToolBar.FloatingSize(
+			m_toolbarAdditional->GetSize().x,
+			m_toolbarAdditional->GetSize().y + 25
+		);
+
+		if (activate) {
+			m_mgr.Update();
+		}
 	}
 }

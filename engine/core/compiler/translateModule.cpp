@@ -1159,7 +1159,7 @@ class CAutoLoader
 {
 public:
 	//старт программы
-	CAutoLoader() { CTranslateModule::LoadKeyWords(); };
+	CAutoLoader() { CTranslateModule::LoadKeyWords(); }
 
 	//завершение программы
 	~CAutoLoader() {}

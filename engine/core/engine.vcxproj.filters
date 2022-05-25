@@ -5,10 +5,10 @@
       <Filter>metadata</Filter>
     </ClCompile>
     <ClCompile Include="compiler\value.cpp">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valuearray.cpp">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClCompile>
     <ClCompile Include="compiler\procunit.cpp">
       <Filter>compiler</Filter>
@@ -23,7 +23,7 @@
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueOLE.cpp">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClCompile>
     <ClCompile Include="frontend\theme\luna_dockart.cpp">
       <Filter>frontend\theme</Filter>
@@ -71,13 +71,13 @@
       <Filter>frontend\settings</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueMap.cpp">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueQuery.cpp">
-      <Filter>compiler\value\sql</Filter>
+      <Filter>compiler\values\sql</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valuetable.cpp">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClCompile>
     <ClCompile Include="utils\fs\fs.cpp">
       <Filter>utils\fs</Filter>
@@ -92,7 +92,7 @@
       <Filter>frontend\bottom\watch</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueGrid.cpp">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClCompile>
     <ClCompile Include="common\moduleInfo.cpp">
       <Filter>common</Filter>
@@ -119,7 +119,7 @@
       <Filter>compiler\debugger</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueExtended.cpp">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClCompile>
     <ClCompile Include="compiler\compileModule.cpp">
       <Filter>compiler</Filter>
@@ -130,81 +130,81 @@
     <ClCompile Include="frontend\watch\watchWindowEvents.cpp">
       <Filter>frontend\bottom\watch</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\reference\reference.cpp">
-      <Filter>metadata\objects\reference</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\reference\reference.cpp">
+      <Filter>metadata\metaObjects\objects\reference</Filter>
     </ClCompile>
     <ClCompile Include="appData.cpp" />
-    <ClCompile Include="metadata\objects\reference\referenceMethods.cpp">
-      <Filter>metadata\objects\reference</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\reference\referenceMethods.cpp">
+      <Filter>metadata\metaObjects\objects\reference</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\reference\referenceAttributes.cpp">
-      <Filter>metadata\objects\reference</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\reference\referenceAttributes.cpp">
+      <Filter>metadata\metaObjects\objects\reference</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\enumerationManagerAttributes.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\enumerationManagerAttributes.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\enumerationManagerMethods.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\enumerationManagerMethods.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\enumerationMetadata.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\enumerationMetadata.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\baseManager.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\systemManager.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\baseObject.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\baseObject.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\baseObjectDB.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\baseObjectDB.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\catalogManager.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\catalogManager.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\catalogManager_impl.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\catalogManager_impl.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\catalogManagerMethods.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\catalogManagerMethods.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\catalogMetadata.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\catalogMetadata.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\catalogObject.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\catalogObject.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\documentManager.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\documentManager.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\documentManager_impl.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\documentManager_impl.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\documentManagerMethods.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\documentManagerMethods.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\documentMetadata.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\documentMetadata.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\documentObject.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\documentObject.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\enumerationManager.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\enumerationManager.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\list\objectListAttributes.cpp">
-      <Filter>metadata\objects\list</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\list\objectListAttributes.cpp">
+      <Filter>metadata\metaObjects\objects\list</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\list\objectListDB.cpp">
-      <Filter>metadata\objects\list</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\list\objectListDB.cpp">
+      <Filter>metadata\metaObjects\objects\list</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\list\objectListMethods.cpp">
-      <Filter>metadata\objects\list</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\list\objectListMethods.cpp">
+      <Filter>metadata\metaObjects\objects\list</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\list\objectListModel.cpp">
-      <Filter>metadata\objects\list</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\list\objectListModel.cpp">
+      <Filter>metadata\metaObjects\objects\list</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\list\objectList.cpp">
-      <Filter>metadata\objects\list</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\list\objectList.cpp">
+      <Filter>metadata\metaObjects\objects\list</Filter>
     </ClCompile>
     <ClCompile Include="frontend\visualView\visualEditorBase.cpp">
       <Filter>frontend\visualView</Filter>
@@ -227,7 +227,7 @@
     <ClCompile Include="frontend\visualView\innerFrame.cpp">
       <Filter>frontend\visualView\windows</Filter>
     </ClCompile>
-    <ClCompile Include="frontend\visualView\visualEditorView.cpp">
+    <ClCompile Include="frontend\visualView\visualHost.cpp">
       <Filter>frontend\visualView</Filter>
     </ClCompile>
     <ClCompile Include="metadata\metaObjects\metaObjectAttributes.cpp">
@@ -290,7 +290,7 @@
     <ClCompile Include="frontend\mainFrame.cpp">
       <Filter>frontend</Filter>
     </ClCompile>
-    <ClCompile Include="frontend\visualView\visualEditorView_impl.cpp">
+    <ClCompile Include="frontend\visualView\visualHost_impl.cpp">
       <Filter>frontend\visualView</Filter>
     </ClCompile>
     <ClCompile Include="compiler\systemObjectsMethods.cpp">
@@ -300,10 +300,10 @@
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueTableMethods.cpp">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueGuid.cpp">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClCompile>
     <ClCompile Include="common\docInfoCommands.cpp">
       <Filter>common</Filter>
@@ -314,7 +314,7 @@
     <ClCompile Include="common\cmdProc.cpp">
       <Filter>common</Filter>
     </ClCompile>
-    <ClCompile Include="common\reportManager.cpp">
+    <ClCompile Include="common\docManager.cpp">
       <Filter>common</Filter>
     </ClCompile>
     <ClCompile Include="common\templates\text.cpp">
@@ -363,7 +363,7 @@
       <Filter>frontend\visualView</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueType.cpp">
-      <Filter>compiler\value\system</Filter>
+      <Filter>compiler\values\system</Filter>
     </ClCompile>
     <ClCompile Include="common\templates\formDesigner_doc.cpp">
       <Filter>common\templates</Filter>
@@ -399,10 +399,10 @@
       <Filter>metadata\metaObjects</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueFactory.cpp">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueTableModel.cpp">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClCompile>
     <ClCompile Include="common\tableInfo.cpp">
       <Filter>common</Filter>
@@ -428,14 +428,14 @@
     <ClCompile Include="metadata\metaObjects\metaModuleObjectMenu.cpp">
       <Filter>metadata\metaObjects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\catalogMetadataMenu.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\catalogMetadataMenu.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\documentMetadataMenu.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\documentMetadataMenu.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\enumerationMetadataMenu.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\enumerationMetadataMenu.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
     <ClCompile Include="common\templates\template.cpp">
       <Filter>common\templates</Filter>
@@ -464,20 +464,20 @@
     <ClCompile Include="common\templates\module.cpp">
       <Filter>common\templates</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataProcessorMetadata.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorMetadata.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataProcessorObject.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorObject.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataProcessorMetadataMenu.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorMetadataMenu.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataProcessorManager.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorManager.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataProcessorManagerMethods.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorManagerMethods.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
     <ClCompile Include="common\templates\metaFile.cpp">
       <Filter>common\templates</Filter>
@@ -488,60 +488,60 @@
     <ClCompile Include="metadata\external\metadataDataProcessor.cpp">
       <Filter>metadata\external</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\catalogObjectMethods.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\catalogObjectMethods.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\catalogObjectAttributes.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\catalogObjectAttributes.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\documentObjectAttributes.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\documentObjectAttributes.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\documentObjectMethods.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\documentObjectMethods.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\reference\referenceDB.cpp">
-      <Filter>metadata\objects\reference</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\reference\referenceDB.cpp">
+      <Filter>metadata\metaObjects\objects\reference</Filter>
     </ClCompile>
     <ClCompile Include="frontend\formSelector\formSelector.cpp">
       <Filter>frontend\formSelector</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataProcessorObjectMethods.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorObjectMethods.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataProcessorObjectAttributes.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorObjectAttributes.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
     <ClCompile Include="metadata\metaObjects\metaFormObjectProperty.cpp">
       <Filter>metadata\metaObjects</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueTypeDescription.cpp">
-      <Filter>compiler\value\system</Filter>
+      <Filter>compiler\values\system</Filter>
     </ClCompile>
     <ClCompile Include="core.cpp" />
     <ClCompile Include="frontend\visualView\special\valueEvent.cpp">
       <Filter>frontend\visualView\special</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataReportManager.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataReportManager.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataReportManagerMethods.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataReportManagerMethods.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataReportMetadata.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataReportMetadata.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataReportMetadataMenu.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataReportMetadataMenu.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataReportObject.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataReportObject.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataReportObjectAttributes.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataReportObjectAttributes.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataReportObjectMethods.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataReportObjectMethods.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
     <ClCompile Include="metadata\external\metadataReport.cpp">
       <Filter>metadata\external</Filter>
@@ -573,41 +573,41 @@
     <ClCompile Include="metadata\metaObjects\metaGridObjectIcons.cpp">
       <Filter>metadata\metaObjects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\constant.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\constantMetadata.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\constantDB.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\constantMetadataDB.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\constantManager.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\constantManager.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\constantManagerMethods.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\constantManagerMethods.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\constantMenu.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\constantMenu.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\constantObject.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\constantObject.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\constantIcons.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\constantMetadataIcons.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\catalogMetadataIcons.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\catalogMetadataIcons.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\documentMetadataIcons.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\documentMetadataIcons.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\enumerationMetadataIcons.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\enumerationMetadataIcons.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataReportMetadataIcons.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataReportMetadataIcons.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataProcessorIcons.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorIcons.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
     <ClCompile Include="common\appBitmaps.cpp">
       <Filter>common</Filter>
@@ -618,35 +618,35 @@
     <ClCompile Include="frontend\metatree\external\dataProcessorWndEvents.cpp">
       <Filter>frontend\metatree\external</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\list\objectListActions.cpp">
-      <Filter>metadata\objects\list</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\list\objectListActions.cpp">
+      <Filter>metadata\metaObjects\objects\list</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\catalogActions.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\catalogActions.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataProcessorActions.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataProcessorActions.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\dataReportActions.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\dataReportActions.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\documentActions.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\documentActions.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\enumerationActions.cpp">
-      <Filter>metadata\objects</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\enumerationActions.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\tabularSection\tabularSectionModel.cpp">
-      <Filter>metadata\objects\tabularSection</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\tabularSection\tabularSectionModel.cpp">
+      <Filter>metadata\metaObjects\objects\tabularSection</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\tabularSection\tabularSection.cpp">
-      <Filter>metadata\objects\tabularSection</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\tabularSection\tabularSection.cpp">
+      <Filter>metadata\metaObjects\objects\tabularSection</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\tabularSection\tabularSectionAttribute.cpp">
-      <Filter>metadata\objects\tabularSection</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\tabularSection\tabularSectionAttributes.cpp">
+      <Filter>metadata\metaObjects\objects\tabularSection</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\tabularSection\tabularSectionMethods.cpp">
-      <Filter>metadata\objects\tabularSection</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\tabularSection\tabularSectionMethods.cpp">
+      <Filter>metadata\metaObjects\objects\tabularSection</Filter>
     </ClCompile>
     <ClCompile Include="metadata\metaObjects\attributes\metaAttributeObject.cpp">
       <Filter>metadata\metaObjects\attributes</Filter>
@@ -788,9 +788,6 @@
     </ClCompile>
     <ClCompile Include="..\..\3rdparty\databaseLayer\odbc\odbcDatabaseLayer.cpp">
       <Filter>3rdparty\databaseLayer\odbc</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\3rdparty\databaseLayer\odbc\odbcParameter.cpp">
-      <Filter>3rdparty\databaseLayer</Filter>
     </ClCompile>
     <ClCompile Include="..\..\3rdparty\databaseLayer\resultSetMetaData.cpp">
       <Filter>3rdparty\databaseLayer</Filter>
@@ -1309,16 +1306,16 @@
       <Filter>frontend\visualView\windows</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueFileDialog.cpp">
-      <Filter>compiler\value\system\dialogs</Filter>
+      <Filter>compiler\values\system\dialogs</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueFile.cpp">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueFontDialog.cpp">
-      <Filter>compiler\value\system\dialogs</Filter>
+      <Filter>compiler\values\system\dialogs</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueColourDialog.cpp">
-      <Filter>compiler\value\system\dialogs</Filter>
+      <Filter>compiler\values\system\dialogs</Filter>
     </ClCompile>
     <ClCompile Include="utils\stringUtils.cpp">
       <Filter>utils</Filter>
@@ -1437,9 +1434,6 @@
     <ClCompile Include="frontend\visualView\controls\toolBar.cpp">
       <Filter>frontend\visualView\controls</Filter>
     </ClCompile>
-    <ClCompile Include="frontend\visualView\controls\textctrlProperty.cpp">
-      <Filter>frontend\visualView\controls</Filter>
-    </ClCompile>
     <ClCompile Include="frontend\visualView\controls\textctrlEvents.cpp">
       <Filter>frontend\visualView\controls</Filter>
     </ClCompile>
@@ -1450,9 +1444,6 @@
       <Filter>frontend\visualView\controls</Filter>
     </ClCompile>
     <ClCompile Include="frontend\visualView\controls\tableBoxMenu.cpp">
-      <Filter>frontend\visualView\controls</Filter>
-    </ClCompile>
-    <ClCompile Include="frontend\visualView\controls\tableBoxColumnProperty.cpp">
       <Filter>frontend\visualView\controls</Filter>
     </ClCompile>
     <ClCompile Include="frontend\visualView\controls\tableBoxEvents.cpp">
@@ -1539,8 +1530,8 @@
     <ClCompile Include="frontend\visualView\controls\itemsizer.cpp">
       <Filter>frontend\visualView\controls\base</Filter>
     </ClCompile>
-    <ClCompile Include="metadata\objects\selector\objectSelector.cpp">
-      <Filter>metadata\objects\selector</Filter>
+    <ClCompile Include="metadata\metaObjects\objects\selector\objectSelector.cpp">
+      <Filter>metadata\metaObjects\objects\selector</Filter>
     </ClCompile>
     <ClCompile Include="frontend\windows\userWnd.cpp">
       <Filter>frontend\windows</Filter>
@@ -1611,6 +1602,133 @@
     <ClCompile Include="frontend\codeEditor\codeEditorInterpreter.cpp">
       <Filter>frontend\codeEditor\interpreter</Filter>
     </ClCompile>
+    <ClCompile Include="metadata\metaObjects\dimension\metaDimensionObject.cpp">
+      <Filter>metadata\metaObjects\dimension</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\resource\metaResourceObject.cpp">
+      <Filter>metadata\metaObjects\resource</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterMetadata.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterMetadataMenu.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterActions.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterObject.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterObjectAttributes.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterObjectMethods.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\baseObjectAttributes.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\baseObjectMethods.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\baseObjectModel.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterManager.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterManagerAttributes.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterManagerMethods.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterMetadataIcons.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="common\uniqueKey.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="frontend\controls\checktree.cpp">
+      <Filter>frontend\controls</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\document.cpp" />
+    <ClCompile Include="compiler\valueIcons.cpp">
+      <Filter>compiler\values</Filter>
+    </ClCompile>
+    <ClCompile Include="frontend\windows\selectDataWnd.cpp">
+      <Filter>frontend\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="frontend\visualView\controls\attributeControl.cpp">
+      <Filter>frontend\visualView\controls</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\valueTableIcons.cpp">
+      <Filter>compiler\values</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\attributes\metaAttributeObjectDB.cpp">
+      <Filter>metadata\metaObjects\attributes</Filter>
+    </ClCompile>
+    <ClCompile Include="frontend\visualView\controls\tableBoxProperty.cpp">
+      <Filter>frontend\visualView\controls</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rdparty\databaseLayer\odbc\odbcParameter.cpp">
+      <Filter>3rdparty\databaseLayer\odbc</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\documentMetadataProperty.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterManager_impl.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\constantActions.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterMetadataIcons.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterMetadataMenu.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterMetadata.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterObjectMethods.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterObject.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterObjectAttributes.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterManager_impl.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterManagerAttributes.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterManagerMethods.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterManager.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterDB.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterDB.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\accumulationRegisterMetadataProperty.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\informationRegisterMetadataProperty.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
+    <ClCompile Include="metadata\metaObjects\objects\catalogMetadataProperty.cpp">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="compiler\Methods.h">
@@ -1633,10 +1751,10 @@
     </ClInclude>
     <ClInclude Include="resource.h" />
     <ClInclude Include="compiler\ValueArray.h">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClInclude>
     <ClInclude Include="compiler\Value.h">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClInclude>
     <ClInclude Include="compiler\compileModule.h">
       <Filter>compiler</Filter>
@@ -1644,11 +1762,11 @@
     <ClInclude Include="compiler\compiler.h">
       <Filter>compiler</Filter>
     </ClInclude>
-    <ClInclude Include="Common\reportmanager.h">
+    <ClInclude Include="Common\docManager.h">
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="compiler\valueOLE.h">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClInclude>
     <ClInclude Include="frontend\theme\statusbar.h">
       <Filter>frontend\theme</Filter>
@@ -1699,13 +1817,13 @@
       <Filter>frontend\settings</Filter>
     </ClInclude>
     <ClInclude Include="compiler\valueMap.h">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClInclude>
     <ClInclude Include="compiler\valueQuery.h">
-      <Filter>compiler\value\sql</Filter>
+      <Filter>compiler\values\sql</Filter>
     </ClInclude>
     <ClInclude Include="compiler\valuetable.h">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClInclude>
     <ClInclude Include="utils\fs\types.h">
       <Filter>utils\fs</Filter>
@@ -1720,7 +1838,7 @@
       <Filter>frontend\bottom\watch</Filter>
     </ClInclude>
     <ClInclude Include="compiler\valueGrid.h">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClInclude>
     <ClInclude Include="common\moduleInfo.h">
       <Filter>common</Filter>
@@ -1755,39 +1873,39 @@
     <ClInclude Include="frontend\watch\watchWindowEvents.h">
       <Filter>frontend\bottom\watch</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\reference\reference.h">
-      <Filter>metadata\objects\reference</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\reference\reference.h">
+      <Filter>metadata\metaObjects\objects\reference</Filter>
     </ClInclude>
     <ClInclude Include="metadata\metaObjectsDefines.h">
       <Filter>metadata</Filter>
     </ClInclude>
     <ClInclude Include="appData.h" />
-    <ClInclude Include="metadata\objects\enumerationManager.h">
-      <Filter>metadata\objects</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\enumerationManager.h">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\baseManager.h">
-      <Filter>metadata\objects</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\systemManager.h">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\baseObject.h">
-      <Filter>metadata\objects</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\baseObject.h">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\catalog.h">
-      <Filter>metadata\objects</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\catalog.h">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\catalogManager.h">
-      <Filter>metadata\objects</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\catalogManager.h">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\document.h">
-      <Filter>metadata\objects</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\document.h">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\documentManager.h">
-      <Filter>metadata\objects</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\documentManager.h">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\enumeration.h">
-      <Filter>metadata\objects</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\enumeration.h">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\list\objectList.h">
-      <Filter>metadata\objects\list</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\list\objectList.h">
+      <Filter>metadata\metaObjects\objects\list</Filter>
     </ClInclude>
     <ClInclude Include="frontend\visualView\visualEditor.h">
       <Filter>frontend\visualView</Filter>
@@ -1804,7 +1922,7 @@
     <ClInclude Include="frontend\visualView\innerFrame.h">
       <Filter>frontend\visualView\windows</Filter>
     </ClInclude>
-    <ClInclude Include="frontend\visualView\visualEditorView.h">
+    <ClInclude Include="frontend\visualView\visualHost.h">
       <Filter>frontend\visualView</Filter>
     </ClInclude>
     <ClInclude Include="metadata\metaObjects\metaObject.h">
@@ -1832,7 +1950,7 @@
       <Filter>frontend</Filter>
     </ClInclude>
     <ClInclude Include="compiler\valueGuid.h">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClInclude>
     <ClInclude Include="common\docInfo.h">
       <Filter>common</Filter>
@@ -1891,11 +2009,11 @@
     <ClInclude Include="frontend\grid\property\gridProperty.h">
       <Filter>frontend\grid\property</Filter>
     </ClInclude>
-    <ClInclude Include="frontend\controls\toolBarCtrl.h">
+    <ClInclude Include="frontend\controls\toolBar.h">
       <Filter>frontend\controls</Filter>
     </ClInclude>
     <ClInclude Include="compiler\valueType.h">
-      <Filter>compiler\value\system</Filter>
+      <Filter>compiler\values\system</Filter>
     </ClInclude>
     <ClInclude Include="frontend\visualView\printout\formPrintOut.h">
       <Filter>frontend\visualView\printout</Filter>
@@ -1957,11 +2075,11 @@
     <ClInclude Include="metadata\moduleManager\moduleManager.h">
       <Filter>metadata\moduleManager</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\dataProcessor.h">
-      <Filter>metadata\objects</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\dataProcessor.h">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\dataProcessorManager.h">
-      <Filter>metadata\objects</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\dataProcessorManager.h">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClInclude>
     <ClInclude Include="common\templates\metaFile.h">
       <Filter>common\templates</Filter>
@@ -1979,7 +2097,7 @@
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="compiler\valueTypeDescription.h">
-      <Filter>compiler\value\system</Filter>
+      <Filter>compiler\values\system</Filter>
     </ClInclude>
     <ClInclude Include="..\..\3rdparty\ttmath\ttmathobjects.h">
       <Filter>3rdparty\ttmath</Filter>
@@ -2024,11 +2142,11 @@
     <ClInclude Include="frontend\visualView\special\valueEvent.h">
       <Filter>frontend\visualView\special</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\dataReport.h">
-      <Filter>metadata\objects</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\dataReport.h">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\dataReportManager.h">
-      <Filter>metadata\objects</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\dataReportManager.h">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClInclude>
     <ClInclude Include="metadata\external\metadataReport.h">
       <Filter>metadata\external</Filter>
@@ -2045,23 +2163,23 @@
     <ClInclude Include="frontend\mainFrameDefs.h">
       <Filter>frontend</Filter>
     </ClInclude>
-    <ClInclude Include="frontend\controls\textCtrl.h">
+    <ClInclude Include="frontend\controls\textEditor.h">
       <Filter>frontend\controls</Filter>
     </ClInclude>
     <ClInclude Include="common\srcExplorer.h">
       <Filter>common</Filter>
     </ClInclude>
-    <ClInclude Include="frontend\controls\checkBoxCtrl.h">
+    <ClInclude Include="frontend\controls\checkBox.h">
       <Filter>frontend\controls</Filter>
     </ClInclude>
     <ClInclude Include="frontend\controls\dynamicBorder.h">
       <Filter>frontend\controls</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\constant.h">
-      <Filter>metadata\objects</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\constant.h">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\constantManager.h">
-      <Filter>metadata\objects</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\constantManager.h">
+      <Filter>metadata\metaObjects\objects</Filter>
     </ClInclude>
     <ClInclude Include="common\appBitmaps.h">
       <Filter>common</Filter>
@@ -2069,8 +2187,8 @@
     <ClInclude Include="common\valueInfo.h">
       <Filter>common</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\tabularSection\tabularSection.h">
-      <Filter>metadata\objects\tabularSection</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\tabularSection\tabularSection.h">
+      <Filter>metadata\metaObjects\objects\tabularSection</Filter>
     </ClInclude>
     <ClInclude Include="metadata\metaObjects\attributes\metaAttributeObject.h">
       <Filter>metadata\metaObjects\attributes</Filter>
@@ -3012,16 +3130,16 @@
       <Filter>frontend\visualView\windows</Filter>
     </ClInclude>
     <ClInclude Include="compiler\valueFileDialog.h">
-      <Filter>compiler\value\system\dialogs</Filter>
+      <Filter>compiler\values\system\dialogs</Filter>
     </ClInclude>
     <ClInclude Include="compiler\valueFile.h">
-      <Filter>compiler\value</Filter>
+      <Filter>compiler\values</Filter>
     </ClInclude>
     <ClInclude Include="compiler\valueFontDialog.h">
-      <Filter>compiler\value\system\dialogs</Filter>
+      <Filter>compiler\values\system\dialogs</Filter>
     </ClInclude>
     <ClInclude Include="compiler\valueColourDialog.h">
-      <Filter>compiler\value\system\dialogs</Filter>
+      <Filter>compiler\values\system\dialogs</Filter>
     </ClInclude>
     <ClInclude Include="utils\stringUtils.h">
       <Filter>utils</Filter>
@@ -3086,8 +3204,8 @@
     <ClInclude Include="frontend\visualView\controls\icons\icons.h">
       <Filter>frontend\visualView\controls\icons</Filter>
     </ClInclude>
-    <ClInclude Include="metadata\objects\selector\objectSelector.h">
-      <Filter>metadata\objects\selector</Filter>
+    <ClInclude Include="metadata\metaObjects\objects\selector\objectSelector.h">
+      <Filter>metadata\metaObjects\objects\selector</Filter>
     </ClInclude>
     <ClInclude Include="frontend\windows\debugItemsWnd.h">
       <Filter>frontend\windows</Filter>
@@ -3149,6 +3267,42 @@
     <ClInclude Include="frontend\codeEditor\codeEditorInterpreter.h">
       <Filter>frontend\codeEditor\interpreter</Filter>
     </ClInclude>
+    <ClInclude Include="metadata\metaObjects\dimension\metaDimensionObject.h">
+      <Filter>metadata\metaObjects\dimension</Filter>
+    </ClInclude>
+    <ClInclude Include="metadata\metaObjects\resource\metaResourceObject.h">
+      <Filter>metadata\metaObjects\resource</Filter>
+    </ClInclude>
+    <ClInclude Include="metadata\metaObjects\objects\informationRegister.h">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClInclude>
+    <ClInclude Include="metadata\metaObjects\objects\informationRegisterManager.h">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClInclude>
+    <ClInclude Include="common\uniqueKey.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\controls\checktree.h">
+      <Filter>frontend\controls</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\windows\selectDataWnd.h">
+      <Filter>frontend\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\visualView\controls\attributeControl.h">
+      <Filter>frontend\visualView\controls</Filter>
+    </ClInclude>
+    <ClInclude Include="common\tableAttributes.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend\visualView\special\valueFilter.h">
+      <Filter>frontend\visualView\special</Filter>
+    </ClInclude>
+    <ClInclude Include="metadata\metaObjects\objects\accumulationRegister.h">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClInclude>
+    <ClInclude Include="metadata\metaObjects\objects\accumulationRegisterManager.h">
+      <Filter>metadata\metaObjects\objects</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="common">
@@ -3157,29 +3311,17 @@
     <Filter Include="compiler">
       <UniqueIdentifier>{7eb1fc81-584e-4255-8c01-7c63c669b5ba}</UniqueIdentifier>
     </Filter>
-    <Filter Include="compiler\value">
-      <UniqueIdentifier>{0a491bbc-78e9-4ba9-8db5-d951ad79865e}</UniqueIdentifier>
-    </Filter>
     <Filter Include="metadata">
       <UniqueIdentifier>{16b2256c-9d5d-433e-8ecc-d47244b9c4fc}</UniqueIdentifier>
     </Filter>
     <Filter Include="utils">
       <UniqueIdentifier>{6e59f26c-5079-4609-bf3c-3ce9b64bd91b}</UniqueIdentifier>
     </Filter>
-    <Filter Include="compiler\value\sql">
-      <UniqueIdentifier>{1edda21e-8101-4e32-8349-cd6e8eb3fc84}</UniqueIdentifier>
-    </Filter>
     <Filter Include="utils\fs">
       <UniqueIdentifier>{d93b63b5-9b0d-4bf6-aa58-8a0264784a89}</UniqueIdentifier>
     </Filter>
-    <Filter Include="compiler\value\system">
-      <UniqueIdentifier>{76125a04-884b-48e9-8e32-56276fd18218}</UniqueIdentifier>
-    </Filter>
     <Filter Include="compiler\debugger">
       <UniqueIdentifier>{56893071-f0cd-47e6-90b7-1aa172d89ca5}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="metadata\objects">
-      <UniqueIdentifier>{b4fbe95e-caa0-4e86-b046-e7d21786c3bb}</UniqueIdentifier>
     </Filter>
     <Filter Include="metadata\metaObjects">
       <UniqueIdentifier>{6f49ecca-7ed5-4ed2-bb1d-63954859d9ca}</UniqueIdentifier>
@@ -3189,12 +3331,6 @@
     </Filter>
     <Filter Include="metadata\metaObjects\tables">
       <UniqueIdentifier>{027b777e-5eec-405c-8f98-8998a47df91e}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="metadata\objects\reference">
-      <UniqueIdentifier>{bae06d94-fa4e-402f-8bf8-ad19e3d0dbd8}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="metadata\objects\list">
-      <UniqueIdentifier>{9865eb58-7324-42d0-b2d1-376cfa12f071}</UniqueIdentifier>
     </Filter>
     <Filter Include="metadata\metaObjects\enumeration">
       <UniqueIdentifier>{8cd657c1-9cf0-40c0-9726-84185577a920}</UniqueIdentifier>
@@ -3222,9 +3358,6 @@
     </Filter>
     <Filter Include="3rdparty\ttmath">
       <UniqueIdentifier>{47d64232-b8d8-46ff-96b3-ee40ccf4d0e4}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="metadata\objects\tabularSection">
-      <UniqueIdentifier>{e52bf6b3-9ca1-42b3-9446-7fc3edb9ef31}</UniqueIdentifier>
     </Filter>
     <Filter Include="3rdparty\formatValidator">
       <UniqueIdentifier>{c57240e9-253c-4b5f-ae75-76eeb5764a42}</UniqueIdentifier>
@@ -3334,9 +3467,6 @@
     <Filter Include="frontend\visualView\windows">
       <UniqueIdentifier>{b3815db9-5493-41bb-8a08-91ff099cde82}</UniqueIdentifier>
     </Filter>
-    <Filter Include="compiler\value\system\dialogs">
-      <UniqueIdentifier>{a19039d2-1967-4f9f-93f4-e9f8a8045fb9}</UniqueIdentifier>
-    </Filter>
     <Filter Include="3rdparty\guid">
       <UniqueIdentifier>{9e973632-a24a-4a91-87f7-c912c7b11b88}</UniqueIdentifier>
     </Filter>
@@ -3397,9 +3527,6 @@
     <Filter Include="3rdparty\databaseLayer\mysql\engine">
       <UniqueIdentifier>{33aaff30-0f15-4642-8a3e-862f3570e758}</UniqueIdentifier>
     </Filter>
-    <Filter Include="metadata\objects\selector">
-      <UniqueIdentifier>{ab925307-c1f7-4af2-a24f-08c1945a9407}</UniqueIdentifier>
-    </Filter>
     <Filter Include="frontend\windows\functionlist">
       <UniqueIdentifier>{bcf75dbd-0308-476b-b1eb-635c2c8ce877}</UniqueIdentifier>
     </Filter>
@@ -3424,6 +3551,45 @@
     <Filter Include="frontend\codeEditor\interpreter">
       <UniqueIdentifier>{cc06a6e8-8498-45bc-837c-6c53e171620a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="metadata\metaObjects\dimension">
+      <UniqueIdentifier>{01754ba9-62f8-42b9-9af4-a708c20cf903}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metadata\metaObjects\resource">
+      <UniqueIdentifier>{1cab5b5e-ce71-485b-87ed-055d51fed89a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="compiler\values">
+      <UniqueIdentifier>{0a491bbc-78e9-4ba9-8db5-d951ad79865e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="compiler\values\sql">
+      <UniqueIdentifier>{1edda21e-8101-4e32-8349-cd6e8eb3fc84}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="compiler\values\system">
+      <UniqueIdentifier>{76125a04-884b-48e9-8e32-56276fd18218}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="compiler\values\system\dialogs">
+      <UniqueIdentifier>{a19039d2-1967-4f9f-93f4-e9f8a8045fb9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metadata\metaObjects\objects">
+      <UniqueIdentifier>{b4fbe95e-caa0-4e86-b046-e7d21786c3bb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metadata\metaObjects\objects\reference">
+      <UniqueIdentifier>{bae06d94-fa4e-402f-8bf8-ad19e3d0dbd8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metadata\metaObjects\objects\list">
+      <UniqueIdentifier>{9865eb58-7324-42d0-b2d1-376cfa12f071}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metadata\metaObjects\objects\tabularSection">
+      <UniqueIdentifier>{e52bf6b3-9ca1-42b3-9446-7fc3edb9ef31}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metadata\metaObjects\objects\selector">
+      <UniqueIdentifier>{ab925307-c1f7-4af2-a24f-08c1945a9407}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metadata\metaObjects\objects\filter">
+      <UniqueIdentifier>{4936a09a-c19d-495f-a1e8-5cbff0bb3c5e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="frontend\controls\res">
+      <UniqueIdentifier>{8735b041-19ff-467d-aaa9-eb53947219af}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="resource.rc" />
@@ -3438,7 +3604,6 @@
     <None Include="res\cur00010.cur">
       <Filter>resources</Filter>
     </None>
-    <None Include="cpp.hint" />
     <None Include="..\..\3rdparty\databaseLayer\mysql\engine\my_config.h.in">
       <Filter>3rdparty\databaseLayer\mysql\engine</Filter>
     </None>
@@ -3558,6 +3723,30 @@
     </None>
     <None Include="frontend\visualView\controls\icons\toolSeparator.xpm">
       <Filter>frontend\visualView\controls\icons</Filter>
+    </None>
+    <None Include="frontend\controls\res\checked_ld.xpm">
+      <Filter>frontend\controls\res</Filter>
+    </None>
+    <None Include="frontend\controls\res\checked_mo.xpm">
+      <Filter>frontend\controls\res</Filter>
+    </None>
+    <None Include="frontend\controls\res\checked2.xpm">
+      <Filter>frontend\controls\res</Filter>
+    </None>
+    <None Include="frontend\controls\res\unchecked_d.xpm">
+      <Filter>frontend\controls\res</Filter>
+    </None>
+    <None Include="frontend\controls\res\unchecked_ld.xpm">
+      <Filter>frontend\controls\res</Filter>
+    </None>
+    <None Include="frontend\controls\res\unchecked_mo.xpm">
+      <Filter>frontend\controls\res</Filter>
+    </None>
+    <None Include="frontend\controls\res\unchecked2.xpm">
+      <Filter>frontend\controls\res</Filter>
+    </None>
+    <None Include="frontend\controls\res\checked_d.xpm">
+      <Filter>frontend\controls\res</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>

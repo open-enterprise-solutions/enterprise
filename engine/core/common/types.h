@@ -40,11 +40,12 @@ typedef enum
 	PT_PARENT,
 	PT_CLASS,
 	PT_EDIT_OPTION,
+	
 	PT_TYPE_SELECT,
-
+	PT_OWNER_SELECT,
+	PT_RECORD_SELECT,
 	PT_TOOL_ACTION,
-
-	PT_SOURCE
+	PT_SOURCE_DATA
 
 } PropertyType;
 
@@ -63,7 +64,7 @@ public:
 	IntList(wxString value, bool absolute_value = false);
 
 	unsigned int GetSize() { return (unsigned int)m_ints.size(); }
-	int GetValue(unsigned int idx) { return m_ints[idx]; };
+	int GetValue(unsigned int idx) { return m_ints[idx]; }
 
 	void Add(int value);
 	void DeleteList();

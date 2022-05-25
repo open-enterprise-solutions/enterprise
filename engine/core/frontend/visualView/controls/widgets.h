@@ -2,7 +2,7 @@
 #define _COMMON_H_
 
 #include "window.h"
-#include "common/attributeInfo.h"
+#include "attributeControl.h"
 
 /////////////////////////////////////////////////////////////////////////////////////
 //                                 COMMON ELEMENTS                                 //
@@ -26,17 +26,17 @@ public:
 
 	CValueButton();
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost *visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated)override;
-	virtual void Update(wxObject* wxobject, IVisualHost *visualHost) override;
-	virtual void Cleanup(wxObject* obj, IVisualHost *visualHost) override;
+	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated)override;
+	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
+	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
 
 	virtual wxString GetClassName() const override { return wxT("button"); }
 	virtual wxString GetObjectTypeName() const override { return wxT("widget"); }
 
 	//load & save object in control 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 	//property
 	virtual void ReadProperty() override;
@@ -44,7 +44,7 @@ public:
 
 protected:
 	//events 
-	void OnButtonPressed(wxCommandEvent &event);
+	void OnButtonPressed(wxCommandEvent& event);
 };
 
 #include <wx/stattext.h>
@@ -61,17 +61,17 @@ public:
 
 	CValueStaticText();
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost *visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated)override;
-	virtual void Update(wxObject* wxobject, IVisualHost *visualHost) override;
-	virtual void Cleanup(wxObject* obj, IVisualHost *visualHost) override;
+	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated)override;
+	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
+	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
 
 	virtual wxString GetClassName() const override { return wxT("statictext"); }
 	virtual wxString GetObjectTypeName() const override { return wxT("widget"); }
 
 	//load & save object in control 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 	//property
 	virtual void ReadProperty() override;
@@ -81,7 +81,7 @@ public:
 #include <wx/textctrl.h>
 
 class CValueTextCtrl : public IValueWindow,
-	public IAttributeInfo {
+	public IAttributeControl {
 	wxDECLARE_DYNAMIC_CLASS(CValueTextCtrl);
 private:
 	long m_style = 0;
@@ -93,44 +93,52 @@ private:
 	bool m_listbutton;
 	bool m_clearbutton;
 	CValue m_selValue;
-	meta_identifier_t m_source;
 	meta_identifier_t m_choiceForm;
 protected:
 
-	OptionList *GetDateTimeFormat(Property *) {
-		OptionList *optList = new OptionList;
-		optList->AddOption(_("date"), eDateFractions::eDate);
-		optList->AddOption(_("date and time"), eDateFractions::eDateTime);
-		optList->AddOption(_("time"), eDateFractions::eTime);
+	OptionList* GetDateTimeFormat(Property*) {
+		OptionList* optList = new OptionList;
+		optList->AddOption(_("date"), eDateFractions::eDateFractions_Date);
+		optList->AddOption(_("date and time"), eDateFractions::eDateFractions_DateTime);
+		optList->AddOption(_("time"), eDateFractions::eDateFractions_Time);
 		return optList;
 	}
 
-	OptionList *GetChoiceForm(Property *property);
+	OptionList* GetChoiceForm(Property* property);
 
 public:
 
 	CValueTextCtrl();
 
-	virtual IMetadata *GetMetadata() const { return GetMetaData(); }
+	//Get source object 
+	virtual ISourceDataObject* GetSourceObject() const;
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost *visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated) override;
-	virtual void Update(wxObject* wxobject, IVisualHost *visualHost) override;
-	virtual void Cleanup(wxObject* obj, IVisualHost *visualHost) override;
+	//get form owner 
+	virtual CValueForm* GetOwnerForm() const {
+		return m_formOwner;
+	}
 
-	virtual wxString GetClassName() const override { return wxT("textctrl"); }
-	virtual wxString GetObjectTypeName() const override { return wxT("widget"); }
+	//get metadata
+	virtual IMetadata* GetMetadata() const {
+		return GetMetaData();
+	}
 
-	/**
-	* Property events
-	*/
-	virtual void OnPropertyCreated();
-	virtual bool OnPropertyChanging(Property *property, const wxString &oldValue);
-	virtual void OnPropertyChanged(Property *property);
+	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated) override;
+	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
+	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
+
+	virtual wxString GetClassName() const override {
+		return wxT("textctrl");
+	}
+
+	virtual wxString GetObjectTypeName() const override {
+		return wxT("widget");
+	}
 
 	//load & save object in control 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 	//read & save property
 	virtual void ReadProperty() override;
@@ -141,24 +149,23 @@ public:
 	virtual bool HasValueInControl() const { return true; }
 
 	virtual CValue GetControlValue() const;
-	virtual void SetControlValue(CValue &vSelected);
+	virtual void SetControlValue(CValue& vSelected);
 
 public:
 
-	virtual void ChoiceProcessing(CValue &vSelected);
+	virtual void ChoiceProcessing(CValue& vSelected);
 
 protected:
 
-	CLASS_ID GetTypeClsid();
-	bool TextProcessing(const wxString &strData);
+	bool TextProcessing(const wxString& strData);
 
 	//Events:
-	void OnTextEnter(wxCommandEvent &event);
-	void OnKillFocus(wxFocusEvent &event);
+	void OnTextEnter(wxCommandEvent& event);
+	void OnKillFocus(wxFocusEvent& event);
 
-	void OnSelectButtonPressed(wxCommandEvent &event);
-	void OnListButtonPressed(wxCommandEvent &event);
-	void OnClearButtonPressed(wxCommandEvent &event);
+	void OnSelectButtonPressed(wxCommandEvent& event);
+	void OnListButtonPressed(wxCommandEvent& event);
+	void OnClearButtonPressed(wxCommandEvent& event);
 
 	friend class CValueForm;
 };
@@ -177,17 +184,17 @@ public:
 
 	CValueComboBox();
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost *visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated) override;
-	virtual void Update(wxObject* wxobject, IVisualHost *visualHost) override;
-	virtual void Cleanup(wxObject* obj, IVisualHost *visualHost) override;
+	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated) override;
+	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
+	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
 
 	virtual wxString GetClassName() const override { return wxT("combobox"); }
 	virtual wxString GetObjectTypeName() const override { return wxT("widget"); }
 
 	//load & save object in control 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 	//property
 	virtual void ReadProperty() override;
@@ -207,17 +214,17 @@ public:
 
 	CValueChoice();
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost *visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated) override;
-	virtual void Update(wxObject* wxobject, IVisualHost *visualHost) override;
-	virtual void Cleanup(wxObject* obj, IVisualHost *visualHost) override;
+	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated) override;
+	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
+	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
 
 	virtual wxString GetClassName() const override { return wxT("choice"); }
 	virtual wxString GetObjectTypeName() const override { return wxT("widget"); }
 
 	//load & save object in control 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 	//property
 	virtual void ReadProperty() override;
@@ -236,17 +243,17 @@ public:
 
 	CValueListBox();
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost *visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated) override;
-	virtual void Update(wxObject* wxobject, IVisualHost *visualHost) override;
-	virtual void Cleanup(wxObject* obj, IVisualHost *visualHost) override;
+	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated) override;
+	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
+	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
 
 	virtual wxString GetClassName() const override { return wxT("listbox"); }
 	virtual wxString GetObjectTypeName() const override { return wxT("widget"); }
 
 	//load & save object in control 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 	//property
 	virtual void ReadProperty() override;
@@ -255,11 +262,12 @@ public:
 
 #include <wx/checkbox.h>
 
-class CValueCheckbox : public IValueWindow {
+class CValueCheckbox : public IValueWindow,
+	public IAttributeControl {
 	wxDECLARE_DYNAMIC_CLASS(CValueCheckbox);
 
-	OptionList *GetTitleLocation(Property *) {
-		OptionList *optList = new OptionList;
+	OptionList* GetTitleLocation(Property*) {
+		OptionList* optList = new OptionList;
 		optList->AddOption(_("Left"), 1);
 		optList->AddOption(_("Right"), 2);
 		return optList;
@@ -267,25 +275,35 @@ class CValueCheckbox : public IValueWindow {
 protected:
 	wxString m_caption = "Check Me!";
 	CValue m_selValue;
-	meta_identifier_t m_source;
 	int m_titleLocation;
 public:
 
 	CValueCheckbox();
 
-	virtual IMetadata *GetMetadata() const { return GetMetaData(); }
+	//Get source object 
+	virtual ISourceDataObject* GetSourceObject() const;
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost *visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated) override;
-	virtual void Update(wxObject* wxobject, IVisualHost *visualHost) override;
-	virtual void Cleanup(wxObject* obj, IVisualHost *visualHost) override;
+	//get form owner 
+	virtual CValueForm* GetOwnerForm() const {
+		return m_formOwner;
+	}
+
+	//get metadata
+	virtual IMetadata* GetMetadata() const { 
+		return GetMetaData();
+	}
+
+	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated) override;
+	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
+	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
 
 	virtual wxString GetClassName() const override { return wxT("checkbox"); }
 	virtual wxString GetObjectTypeName() const override { return wxT("widget"); }
 
 	//load & save object in control 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 	//property
 	virtual void ReadProperty() override;
@@ -296,7 +314,7 @@ public:
 	virtual bool HasValueInControl() const { return true; }
 
 	virtual CValue GetControlValue() const;
-	virtual void SetControlValue(CValue &vSelected);
+	virtual void SetControlValue(CValue& vSelected);
 
 protected:
 
@@ -320,17 +338,17 @@ public:
 
 	CValueRadioButton();
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost *visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated) override;
-	virtual void Update(wxObject* wxobject, IVisualHost *visualHost) override;
-	virtual void Cleanup(wxObject* obj, IVisualHost *visualHost) override;
+	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated) override;
+	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
+	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
 
 	virtual wxString GetClassName() const override { return wxT("radiobutton"); }
 	virtual wxString GetObjectTypeName() const override { return wxT("widget"); }
 
 	//load & save object in control 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 	//property
 	virtual void ReadProperty() override;
@@ -347,17 +365,17 @@ public:
 
 	CValueStaticLine();
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost *visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated) override;
-	virtual void Update(wxObject* wxobject, IVisualHost *visualHost) override;
-	virtual void Cleanup(wxObject* obj, IVisualHost *visualHost) override;
+	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated) override;
+	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
+	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
 
 	virtual wxString GetClassName() const override { return wxT("staticline"); }
 	virtual wxString GetObjectTypeName() const override { return wxT("widget"); }
 
 	//load & save object in control 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 	//property
 	virtual void ReadProperty() override;
@@ -377,17 +395,17 @@ public:
 
 	CValueSlider();
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost *visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated) override;
-	virtual void Update(wxObject* wxobject, IVisualHost *visualHost) override;
-	virtual void Cleanup(wxObject* obj, IVisualHost *visualHost) override;
+	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated) override;
+	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
+	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
 
 	virtual wxString GetClassName() const override { return wxT("slider"); }
 	virtual wxString GetObjectTypeName() const override { return wxT("widget"); }
 
 	//load & save object in control 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 	//property
 	virtual void ReadProperty() override;
@@ -406,17 +424,17 @@ public:
 
 	CValueGauge();
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost *visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated) override;
-	virtual void Update(wxObject* wxobject, IVisualHost *visualHost) override;
-	virtual void Cleanup(wxObject* obj, IVisualHost *visualHost) override;
+	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated) override;
+	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
+	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
 
 	virtual wxString GetClassName() const override { return wxT("gauge"); }
 	virtual wxString GetObjectTypeName() const override { return wxT("widget"); }
 
 	//load & save object in control 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 	//property
 	virtual void ReadProperty() override;

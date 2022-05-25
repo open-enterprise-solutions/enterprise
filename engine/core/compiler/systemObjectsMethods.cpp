@@ -71,6 +71,8 @@ enum
 	enFileDelete,
 	enGetTempDir,
 	enGetTempFileName,
+	//--- Работа с окнами: 
+	enActiveWindow,
 	//--- Специальные:
 	enMessage,
 	enAlert,
@@ -169,6 +171,8 @@ void CSystemObjects::PrepareNames() const
 		{"fileCopy", "fileCopy(string, string)"},
 		{"getTempDir", "getTempDir()"},
 		{"getTempFileName", "getTempFileName()"},
+		//--- Работа с окнами: 
+		{"activeWindow", "activeWindow()"},
 		//--- Специальные:
 		{"message", "message(string, statusMessage)"},
 		{"alert", "alert(string)"},
@@ -214,7 +218,7 @@ void CSystemObjects::PrepareNames() const
 #include "frontend/visualView/controls/form.h"
 #include "valueGuid.h"
 
-CValue CSystemObjects::Method(methodArg_t &aParams)
+CValue CSystemObjects::Method(methodArg_t& aParams)
 {
 	if (!appData->DesignerMode())
 	{
@@ -280,6 +284,8 @@ CValue CSystemObjects::Method(methodArg_t &aParams)
 		case enFileDelete: return DeleteFile(aParams[0].GetString());
 		case enGetTempDir: return GetTempDir();
 		case enGetTempFileName: return GetTempFileName();
+			//--- Работа с окнами: 
+		case enActiveWindow: return ActiveWindow();
 			//--- Специальные:
 		case enMessage: Message(aParams[0].ToString(), aParams.GetParamCount() > 1 ? aParams[1].ConvertToEnumType<eStatusMessage>() : eStatusMessage::eStatusMessage_Information); break;
 		case enAlert: Alert(aParams[0].ToString()); break;

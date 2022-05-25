@@ -22,19 +22,19 @@ IValueControl::~IValueControl()
 	SetOwnerForm(NULL);
 }
 
-IValueControl *IValueControl::GetChild(unsigned int idx)
+IValueControl* IValueControl::GetChild(unsigned int idx)
 {
-	return dynamic_cast<IValueControl *>(IObjectBase::GetChild(idx));
+	return dynamic_cast<IValueControl*>(IObjectBase::GetChild(idx));
 }
 
-IValueControl *IValueControl::GetChild(unsigned int idx, const wxString &type)
+IValueControl* IValueControl::GetChild(unsigned int idx, const wxString& type)
 {
-	return dynamic_cast<IValueControl *>(IObjectBase::GetChild(idx, type));
+	return dynamic_cast<IValueControl*>(IObjectBase::GetChild(idx, type));
 }
 
 #include "metadata/metadata.h"
 
-void IValueControl::SetOwnerForm(CValueForm *ownerForm)
+void IValueControl::SetOwnerForm(CValueForm* ownerForm)
 {
 	if (ownerForm && !m_formOwner) {
 		wxString className = GetClassName();
@@ -56,17 +56,19 @@ void IValueControl::SetOwnerForm(CValueForm *ownerForm)
 	m_formOwner = ownerForm;
 }
 
-IMetadata *IValueControl::GetMetaData() const
+IMetadata* IValueControl::GetMetaData() const
 {
-	IMetaFormObject *metaFormObject = m_formOwner ?
+	IMetaFormObject* metaFormObject = m_formOwner ?
 		m_formOwner->GetFormMetaObject() :
 		NULL;
 
 	//for form buider
 	if (metaFormObject == NULL) {
-		IDataObjectSource *srcValue = m_formOwner->GetSourceObject();
-		if (srcValue) {
-			IMetaObjectValue *metaValue = srcValue->GetMetaObject();
+		ISourceDataObject* srcValue = m_formOwner ?
+			m_formOwner->GetSourceObject() :
+			NULL;
+		if (srcValue != NULL) {
+			IMetaObjectWrapperData* metaValue = srcValue->GetMetaObject();
 			wxASSERT(metaValue);
 			return metaValue->GetMetadata();
 		}
@@ -77,9 +79,9 @@ IMetadata *IValueControl::GetMetaData() const
 		NULL;
 }
 
-OptionList *IValueControl::GetTypelist() const
+OptionList* IValueControl::GetTypelist() const
 {
-	IMetadata *metaData = GetMetaData();
+	IMetadata* metaData = GetMetaData();
 
 	return metaData ?
 		metaData->GetTypelist() :
@@ -95,13 +97,13 @@ form_identifier_t IValueControl::GetTypeForm() const
 		return 0;
 	}
 
-	IMetaFormObject *metaFormObj =
+	IMetaFormObject* metaFormObj =
 		m_formOwner->GetFormMetaObject();
 	wxASSERT(metaFormObj);
 	return metaFormObj->GetTypeForm();
 }
 
-CProcUnit *IValueControl::GetFormProcUnit() const
+CProcUnit* IValueControl::GetFormProcUnit() const
 {
 	if (!m_formOwner) {
 		wxASSERT(m_formOwner);

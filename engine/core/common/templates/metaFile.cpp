@@ -44,14 +44,14 @@ bool CMetadataDocument::OnCreate(const wxString& path, long flags)
 		return false;
 
 	m_metaData = new CConfigFileMetadata(true);
-	return m_metaData->RunMetadata();
+	return m_metaData->RunMetadata(onlyLoadFlag);
 }
 
 #include "frontend/objinspect/objinspect.h"
 
 bool CMetadataDocument::OnCloseDocument()
 {
-	if (!m_metaData->CloseMetadata(true)) {
+	if (!m_metaData->CloseMetadata(forceCloseFlag)) {
 		return false;
 	}
 

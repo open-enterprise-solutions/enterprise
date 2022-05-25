@@ -97,7 +97,7 @@ void CMainFrameEnterprise::InitializeDefaultMenu()
 	SetDefaultHotKeys();
 	SetMenuBar(m_menuBar);
 
-	Bind(wxEVT_MENU, &CMainFrameEnterprise::OnClickAllOperaions, this, wxID_ENTERPRISE_ALL_OPERATIONS);
+	Bind(wxEVT_MENU, &CMainFrameEnterprise::OnClickAllOperation, this, wxID_ENTERPRISE_ALL_OPERATIONS);
 	Bind(wxEVT_MENU, &CMainFrameEnterprise::OnToolsSettings, this, wxID_APPLICATION_SETTING);
 	Bind(wxEVT_MENU, &CMainFrameEnterprise::OnActiveUsers, this, wxID_APPLICATION_ACTIVE_USERS);
 	Bind(wxEVT_MENU, &CMainFrameEnterprise::OnAbout, this, wxID_ENTERPRISE_ABOUT);

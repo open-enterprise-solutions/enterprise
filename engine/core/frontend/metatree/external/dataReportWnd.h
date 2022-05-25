@@ -166,7 +166,7 @@ public:
 
 	virtual void SetReadOnly(bool readOnly = true) { m_bReadOnly = readOnly; }
 
-	virtual void Modify(bool modify) { if (m_docParent) m_docParent->Modify(modify); };
+	virtual void Modify(bool modify) { if (m_docParent) m_docParent->Modify(modify); }
 
 	virtual bool OpenFormMDI(IMetaObject *obj);
 	virtual bool OpenFormMDI(IMetaObject *obj, CDocument *&foundedDoc);

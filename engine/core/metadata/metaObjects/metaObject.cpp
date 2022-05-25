@@ -17,10 +17,10 @@ wxIMPLEMENT_ABSTRACT_CLASS(IMetaObject, CValue)
 //*                                  MetaObject                                           *
 //*****************************************************************************************
 
-IMetaObject::IMetaObject(const wxString &name, const wxString &synonym, const wxString &comment) : CValue(eValueTypes::TYPE_VALUE, true), IObjectBase(), m_methods(new CMethods()), m_metaData(NULL),
+IMetaObject::IMetaObject(const wxString& name, const wxString& synonym, const wxString& comment) : CValue(eValueTypes::TYPE_VALUE, true), IObjectBase(), m_methods(new CMethods()), m_metaData(NULL),
 m_metaName(name), m_metaSynonym(synonym), m_metaComment(comment), m_metaFlags(metaDefaultFlag), m_metaId(0)
 {
-	PropertyContainer *commonCategory = IObjectBase::CreatePropertyContainer("Common");
+	PropertyContainer* commonCategory = IObjectBase::CreatePropertyContainer("Common");
 	commonCategory->AddProperty("name", PropertyType::PT_WXNAME);
 	commonCategory->AddProperty("synonym", PropertyType::PT_WXSTRING);
 	commonCategory->AddProperty("comment", PropertyType::PT_WXSTRING);
@@ -47,10 +47,10 @@ void IMetaObject::SaveProperty()
 	IObjectBase::GetPropertyValue("comment", m_metaComment);
 }
 
-bool IMetaObject::LoadMeta(CMemoryReader &dataReader)
+bool IMetaObject::LoadMeta(CMemoryReader& dataReader)
 {
 	//Save meta version 
-	version_identifier_t version = dataReader.r_u32(); //reserved 
+	const version_identifier_t &version = dataReader.r_u32(); //reserved 
 
 	//Load unique guid 
 	wxString strGuid;
@@ -73,7 +73,7 @@ bool IMetaObject::LoadMeta(CMemoryReader &dataReader)
 	return LoadData(dataReader);
 }
 
-bool IMetaObject::SaveMeta(CMemoryWriter &dataWritter)
+bool IMetaObject::SaveMeta(CMemoryWriter& dataWritter)
 {
 	//Save meta version 
 	dataWritter.w_u32(version_oes_last); //reserved 
@@ -95,7 +95,7 @@ bool IMetaObject::SaveMeta(CMemoryWriter &dataWritter)
 	return SaveData(dataWritter);
 }
 
-bool IMetaObject::LoadMetaObject(IMetadata *metaData, CMemoryReader &dataReader)
+bool IMetaObject::LoadMetaObject(IMetadata* metaData, CMemoryReader& dataReader)
 {
 	m_metaData = metaData;
 
@@ -108,7 +108,7 @@ bool IMetaObject::LoadMetaObject(IMetadata *metaData, CMemoryReader &dataReader)
 	return true;
 }
 
-bool IMetaObject::SaveMetaObject(IMetadata *metaData, CMemoryWriter &dataWritter, int flags)
+bool IMetaObject::SaveMetaObject(IMetadata* metaData, CMemoryWriter& dataWritter, int flags)
 {
 	bool saveToFile = (flags & saveToFileFlag) != 0;
 
@@ -128,7 +128,7 @@ bool IMetaObject::SaveMetaObject(IMetadata *metaData, CMemoryWriter &dataWritter
 	return true;
 }
 
-bool IMetaObject::DeleteMetaObject(IMetadata *metaData)
+bool IMetaObject::DeleteMetaObject(IMetadata* metaData)
 {
 	if (m_metaData != metaData) {
 		return false;
@@ -141,31 +141,36 @@ bool IMetaObject::DeleteMetaObject(IMetadata *metaData)
 	return true;
 }
 
-bool IMetaObject::CreateMetaTable(IConfigMetadata *srcMetaData)
+bool IMetaObject::CreateMetaTable(IConfigMetadata* srcMetaData)
 {
 	return CreateAndUpdateTableDB(srcMetaData, NULL, createMetaTable);
 }
 
-bool IMetaObject::UpdateMetaTable(IConfigMetadata *srcMetaData, IMetaObject *srcMetaObject)
+bool IMetaObject::UpdateMetaTable(IConfigMetadata* srcMetaData, IMetaObject* srcMetaObject)
 {
 	return CreateAndUpdateTableDB(srcMetaData, srcMetaObject, updateMetaTable);
 }
 
-bool IMetaObject::DeleteMetaTable(IConfigMetadata *srcMetaData)
+bool IMetaObject::DeleteMetaTable(IConfigMetadata* srcMetaData)
 {
 	return CreateAndUpdateTableDB(srcMetaData, NULL, deleteMetaTable);
 }
 
-bool IMetaObject::OnCreateMetaObject(IMetadata *metaData)
+bool IMetaObject::OnCreateMetaObject(IMetadata* metaData)
 {
 	GenerateGuid();
 	wxASSERT(metaData);
 	m_metaId = metaData->GenerateNewID();
 	m_metaData = metaData;
+#ifdef _DEBUG  
+	wxLogDebug("* Create metadata object %s with id %i", 
+		GetClassName(), GetMetaID()
+	);
+#endif
 	return true;
 }
 
-bool IMetaObject::OnLoadMetaObject(IMetadata *metaData)
+bool IMetaObject::OnLoadMetaObject(IMetadata* metaData)
 {
 	m_metaData = metaData;
 	return true;
@@ -176,25 +181,37 @@ bool IMetaObject::OnDeleteMetaObject()
 	return true;
 }
 
-IMetadata *IMetaObject::GetMetaData() const
+bool IMetaObject::OnAfterCloseMetaObject()
+{
+	IMetadataTree* metaTree =
+		m_metaData->GetMetaTree();
+
+	if (metaTree) {
+		metaTree->CloseMetaObject(this);
+	}
+
+	return true;
+}
+
+IMetadata* IMetaObject::GetMetaData() const
 {
 	return GetMetadata();
 }
 
-OptionList *IMetaObject::GetTypelist() const
+OptionList* IMetaObject::GetTypelist() const
 {
 	return m_metaData->GetTypelist();
 }
 
-wxString IMetaObject::GetModuleName()
+wxString IMetaObject::GetModuleName() const
 {
 	return GetClassName() + wxT(": ") + m_metaName;
 }
 
-wxString IMetaObject::GetFullName()
+wxString IMetaObject::GetFullName() const
 {
 	wxString m_metaFullName = GetModuleName();
-	IMetaObject *metaParent = GetParent();
+	IMetaObject* metaParent = GetParent();
 
 	while (metaParent)
 	{
@@ -209,12 +226,12 @@ wxString IMetaObject::GetFullName()
 	return m_metaFullName;
 }
 
-wxString IMetaObject::GetFileName()
+wxString IMetaObject::GetFileName() const
 {
 	return m_metaData->GetFileName();
 }
 
-wxString IMetaObject::GetDocPath()
+wxString IMetaObject::GetDocPath() const
 {
 	return m_metaGuid.str();
 }

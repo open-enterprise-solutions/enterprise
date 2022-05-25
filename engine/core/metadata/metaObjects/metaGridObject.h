@@ -21,8 +21,8 @@ public:
 	static wxIcon GetIconGroup();
 
 	//module manager is started or exit 
-	virtual bool OnRunMetaObject(int flags);
-	virtual bool OnCloseMetaObject();
+	virtual bool OnBeforeRunMetaObject(int flags);
+	virtual bool OnAfterCloseMetaObject();
 
 	//prepare menu for item
 	virtual bool PrepareContextMenu(wxMenu *defultMenu);

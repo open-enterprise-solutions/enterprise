@@ -23,15 +23,15 @@ void CValueNotebook::OnChangedPage(wxAuiNotebookEvent &event)
 			m_activePage = child;
 	}
 
-	if (!m_bInitialized)
-		return; 
-
 	if (m_visualHostContext && m_activePage) {
 		m_visualHostContext->SelectObject(m_activePage); 
 		event.Skip(); 
 	}
 	else {
-		CValue activePage = m_activePage;
-		event.Skip(CallEvent("onPageChanged", activePage));
+		if (!m_bInitialized)
+			return;
+		event.Skip(
+			CallEvent("onPageChanged", CValue(m_activePage))
+		);
 	}
 }

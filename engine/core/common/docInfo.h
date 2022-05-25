@@ -15,7 +15,7 @@ class CMetaModuleObject;
 class CMetaFormObject;
 class CMetaGridObject;
 
-class IMetaObjectValue;
+class IMetaObjectRecordData;
 
 class CView;
 class CCommandProcessor;
@@ -65,7 +65,7 @@ public:
 	virtual bool Close() override;
 
 	virtual bool IsChildDocument() const {
-		return m_bChildDoc;
+		return m_childDoc;
 	}
 
 	virtual void SetDocParent(CDocument *docParent)
@@ -88,6 +88,8 @@ public:
 		return wxDocument::GetDocumentManager();
 	}
 
+	virtual void UpdateAllViews(wxView* sender = NULL, wxObject* hint = NULL) override;
+	// Remove all views (because we're closing the document)
 	virtual bool DeleteAllViews() override;
 
 protected:
@@ -95,7 +97,7 @@ protected:
 	CDocument *m_docParent;
 	wxDList<CDocument> m_childDocs;
 
-	bool m_bChildDoc;
+	bool m_childDoc;
 
 	IMetaObject *m_metaObject;	//текущий объект метаданных
 };

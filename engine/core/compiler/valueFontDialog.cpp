@@ -70,4 +70,4 @@ CValueFontDialog::~CValueFontDialog()
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_REGISTER(CValueFontDialog, "fontDialog", TEXT2CLSID("VL_FONT"));
+VALUE_REGISTER(CValueFontDialog, "fontDialog", TEXT2CLSID("VL_FOTD"));

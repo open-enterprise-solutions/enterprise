@@ -43,7 +43,7 @@ public:
 	}
 
 	//events:
-	void OnClickAllOperaions(wxCommandEvent &event);
+	void OnClickAllOperation(wxCommandEvent &event);
 	void OnToolsSettings(wxCommandEvent& event);
 	void OnActiveUsers(wxCommandEvent& event);
 	void OnAbout(wxCommandEvent& event);

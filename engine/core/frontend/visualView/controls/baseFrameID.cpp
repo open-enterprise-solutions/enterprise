@@ -54,7 +54,7 @@ form_identifier_t IValueFrame::GenerateNewID()
 	return id;
 }
 
-IValueFrame *IValueFrame::DoFindControlByID(form_identifier_t id, IValueFrame *top)
+IValueFrame *IValueFrame::DoFindControlByID(const form_identifier_t &id, IValueFrame *top)
 {
 	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
 		IValueFrame *child = top->GetChild(idx);
@@ -72,7 +72,7 @@ IValueFrame *IValueFrame::DoFindControlByID(form_identifier_t id, IValueFrame *t
 	return NULL;
 }
 
-IValueFrame *IValueFrame::FindControlByID(form_identifier_t id)
+IValueFrame *IValueFrame::FindControlByID(const form_identifier_t &id)
 {
 	return DoFindControlByID(id, GetOwnerForm());
 }

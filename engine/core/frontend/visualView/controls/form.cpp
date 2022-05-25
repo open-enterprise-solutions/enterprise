@@ -5,7 +5,7 @@
 
 #include "form.h"
 #include "frontend/visualView/special/enums/valueOrient.h"
-#include "metadata/objects/baseObject.h"
+#include "metadata/metaObjects/objects/baseObject.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CValueForm, IValueFrame);
 
@@ -18,7 +18,7 @@ m_formOwner(NULL), m_sourceObject(NULL), m_metaFormObject(NULL), m_valueFormDocu
 m_orient(wxVERTICAL), m_defaultFormType(defaultFormType),
 m_formModified(false)
 {
-	PropertyContainer *categoryFrame = IObjectBase::CreatePropertyContainer("Frame");
+	PropertyContainer* categoryFrame = IObjectBase::CreatePropertyContainer("Frame");
 	categoryFrame->AddProperty("name", PropertyType::PT_WXNAME, false);
 	categoryFrame->AddProperty("caption", PropertyType::PT_WXSTRING);
 	categoryFrame->AddProperty("fg", PropertyType::PT_WXCOLOUR);
@@ -26,7 +26,7 @@ m_formModified(false)
 
 	m_category->AddCategory(categoryFrame);
 
-	PropertyContainer *categorySizer = IObjectBase::CreatePropertyContainer("Sizer");
+	PropertyContainer* categorySizer = IObjectBase::CreatePropertyContainer("Sizer");
 	categorySizer->AddProperty("orient", PropertyType::PT_OPTION, &CValueForm::GetOrient);
 	m_category->AddCategory(categorySizer);
 
@@ -44,13 +44,13 @@ m_formModified(false)
 	m_formData->IncrRef();
 }
 
-CValueForm::CValueForm(IValueFrame *ownerControl, IMetaFormObject *metaForm,
-	IDataObjectSource *ownerSrc, const Guid &formGuid, bool readOnly) : IValueFrame(), IModuleInfo(),
+CValueForm::CValueForm(IValueFrame* ownerControl, IMetaFormObject* metaForm,
+	ISourceDataObject* ownerSrc, const CUniqueKey& formGuid, bool readOnly) : IValueFrame(), IModuleInfo(),
 	m_valueFormDocument(NULL),
 	m_orient(wxVERTICAL), m_defaultFormType(defaultFormType),
 	m_formModified(false)
 {
-	PropertyContainer *categoryFrame = IObjectBase::CreatePropertyContainer("Frame");
+	PropertyContainer* categoryFrame = IObjectBase::CreatePropertyContainer("Frame");
 	categoryFrame->AddProperty("name", PropertyType::PT_WXNAME, false);
 	categoryFrame->AddProperty("caption", PropertyType::PT_WXSTRING);
 	categoryFrame->AddProperty("fg", PropertyType::PT_WXCOLOUR);
@@ -58,7 +58,7 @@ CValueForm::CValueForm(IValueFrame *ownerControl, IMetaFormObject *metaForm,
 
 	m_category->AddCategory(categoryFrame);
 
-	PropertyContainer *categorySizer = IObjectBase::CreatePropertyContainer("Sizer");
+	PropertyContainer* categorySizer = IObjectBase::CreatePropertyContainer("Sizer");
 	categorySizer->AddProperty("orient", PropertyType::PT_OPTION, &CValueForm::GetOrient);
 	m_category->AddCategory(categorySizer);
 
@@ -82,7 +82,7 @@ CValueForm::CValueForm(IValueFrame *ownerControl, IMetaFormObject *metaForm,
 CValueForm::~CValueForm()
 {
 	for (auto pair : m_aIdleHandlers) {
-		wxTimer *timer = pair.second;
+		wxTimer* timer = pair.second;
 		if (timer->IsRunning()) {
 			timer->Stop();
 		}
@@ -99,8 +99,8 @@ CValueForm::~CValueForm()
 	}
 
 	for (unsigned int idx = GetChildCount(); idx > 0; idx--) {
-		IValueFrame *controlChild =
-			dynamic_cast<IValueFrame *>(GetChild(idx - 1));
+		IValueFrame* controlChild =
+			dynamic_cast<IValueFrame*>(GetChild(idx - 1));
 		ClearRecursive(controlChild);
 		if (controlChild) {
 			controlChild->DecrRef();
@@ -112,26 +112,26 @@ CValueForm::~CValueForm()
 	}
 }
 
-void CValueForm::Update(wxObject* wxobject, IVisualHost *visualHost)
+void CValueForm::Update(wxObject* wxobject, IVisualHost* visualHost)
 {
 	UpdateForm();
 }
 
-void CValueForm::OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost)
+void CValueForm::OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost)
 {
 	//lay out parent window 
-	wxWindow *wndParent = visualHost->GetParent();
+	wxWindow* wndParent = visualHost->GetParent();
 	if (wndParent) {
 		wndParent->Layout();
 	}
 }
 
-void CValueForm::SetPropertyData(Property *property, const CValue &srcValue)
+void CValueForm::SetPropertyData(Property* property, const CValue& srcValue)
 {
 	IValueFrame::SetPropertyData(property, srcValue);
 }
 
-CValue CValueForm::GetPropertyData(Property *property)
+CValue CValueForm::GetPropertyData(Property* property)
 {
 	if (property->GetName() == wxT("orient")) {
 		return new CValueEnumOrient(m_orient);
@@ -146,7 +146,7 @@ CValue CValueForm::GetPropertyData(Property *property)
 
 #include "utils/typeconv.h"
 
-bool CValueForm::LoadData(CMemoryReader &reader)
+bool CValueForm::LoadData(CMemoryReader& reader)
 {
 	reader.r_stringZ(m_caption);
 	m_orient = (wxOrientation)reader.r_s32();
@@ -160,7 +160,7 @@ bool CValueForm::LoadData(CMemoryReader &reader)
 	return IValueFrame::LoadData(reader);
 }
 
-bool CValueForm::SaveData(CMemoryWriter &writer)
+bool CValueForm::SaveData(CMemoryWriter& writer)
 {
 	writer.w_stringZ(m_caption);
 	writer.w_s32(m_orient);
@@ -203,16 +203,16 @@ void CValueForm::SaveProperty()
 
 #include "metadata/metadata.h"
 
-IMetadata *CValueForm::GetMetaData() const
+IMetadata* CValueForm::GetMetaData() const
 {
 	return m_metaFormObject ?
 		m_metaFormObject->GetMetadata() :
 		NULL;
 }
 
-OptionList *CValueForm::GetTypelist() const
+OptionList* CValueForm::GetTypelist() const
 {
-	IMetadata *metaData = GetMetaData();
+	IMetadata* metaData = GetMetaData();
 
 	return metaData ?
 		metaData->GetTypelist() :

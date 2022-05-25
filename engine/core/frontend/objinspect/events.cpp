@@ -67,7 +67,7 @@ wxString wxFrameEvent::GetString()
 	return m_string;
 }
 
-wxFramePropertyEvent::wxFramePropertyEvent(wxEventType commandType, Property* property, const wxString &oldValue)
+wxFramePropertyEvent::wxFramePropertyEvent(wxEventType commandType, Property* property, const wxVariant& oldValue)
 	: wxFrameEvent(commandType), m_strValue(oldValue), m_property(property)
 {
 }
@@ -99,7 +99,7 @@ wxEvent* wxFrameObjectEvent::Clone() const
 	return new wxFrameObjectEvent(*this);
 }
 
-wxFrameEventHandlerEvent::wxFrameEventHandlerEvent(wxEventType commandType, const wxString &newValue, const wxString &prevValue, const std::vector<wxString> &args)
+wxFrameEventHandlerEvent::wxFrameEventHandlerEvent(wxEventType commandType, const wxString& newValue, const wxString& prevValue, const std::vector<wxString>& args)
 	: wxFrameEvent(commandType), m_args(args), m_value(newValue), m_prevValue(prevValue)
 {
 }

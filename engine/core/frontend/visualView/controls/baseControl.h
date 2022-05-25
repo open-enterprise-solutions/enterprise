@@ -15,14 +15,14 @@ public:
 	IValueControl* GetChild(unsigned int idx);
 	IValueControl* GetChild(unsigned int idx, const wxString& type);
 
-	IValueControl* FindNearAncestor(const wxString &type) { return wxDynamicCast(IObjectBase::FindNearAncestor(type), IValueControl); }
-	IValueControl* FindNearAncestorByBaseClass(const wxString &type) { return wxDynamicCast(IObjectBase::FindNearAncestorByBaseClass(type), IValueControl); }
+	IValueControl* FindNearAncestor(const wxString& type) { return wxDynamicCast(IObjectBase::FindNearAncestor(type), IValueControl); }
+	IValueControl* FindNearAncestorByBaseClass(const wxString& type) { return wxDynamicCast(IObjectBase::FindNearAncestorByBaseClass(type), IValueControl); }
 
 	/**
 	* Support form
 	*/
 	virtual CValueForm* GetOwnerForm() const { return m_formOwner; }
-	virtual void SetOwnerForm(CValueForm *ownerForm);
+	virtual void SetOwnerForm(CValueForm* ownerForm);
 
 	// allow getting value in control
 	virtual bool HasValueInControl() const { return false; }
@@ -30,13 +30,13 @@ public:
 	* Get/set value in control
 	*/
 	virtual CValue GetControlValue() const { return CValue(); }
-	virtual void SetControlValue(CValue &vSelected) {}
+	virtual void SetControlValue(CValue& vSelected) {}
 
 	//get metadata
-	virtual IMetadata *GetMetaData() const override;
+	virtual IMetadata* GetMetaData() const override;
 
 	//get typelist 
-	virtual OptionList *GetTypelist() const override;
+	virtual OptionList* GetTypelist() const override;
 
 	/**
 	* Can delete object
@@ -44,7 +44,7 @@ public:
 	virtual bool CanDeleteControl() const { return true; }
 
 	//runtime 
-	virtual CProcUnit *GetFormProcUnit() const;
+	virtual CProcUnit* GetFormProcUnit() const;
 
 	/**
 	* Get type form

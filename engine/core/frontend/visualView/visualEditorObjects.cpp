@@ -20,14 +20,14 @@ class BaseVisualCmd : public CCommand
 {
 public:
 
-	BaseVisualCmd(CVisualEditorContextForm *visualData = NULL) : m_visualData(visualData) {}
+	BaseVisualCmd(CVisualEditorContextForm* visualData = NULL) : m_visualData(visualData) {}
 
 	virtual void Execute() { CCommand::Execute(); }
 	virtual void Restore() { CCommand::Restore(); }
 
 protected:
 
-	CVisualEditorContextForm *m_visualData;
+	CVisualEditorContextForm* m_visualData;
 };
 
 /** Command for expanding an object in the object tree */
@@ -39,7 +39,7 @@ class ExpandObjectCmd : public BaseVisualCmd
 
 public:
 
-	ExpandObjectCmd(CVisualEditorContextForm *data, IValueFrame* object, bool expand);
+	ExpandObjectCmd(CVisualEditorContextForm* data, IValueFrame* object, bool expand);
 
 protected:
 
@@ -61,7 +61,7 @@ class InsertObjectCmd : public BaseVisualCmd
 
 public:
 
-	InsertObjectCmd(CVisualEditorContextForm *data, IValueFrame* object, IValueFrame* parent, int pos = -1, bool firstCreated = true);
+	InsertObjectCmd(CVisualEditorContextForm* data, IValueFrame* object, IValueFrame* parent, int pos = -1, bool firstCreated = true);
 
 protected:
 
@@ -86,7 +86,7 @@ class RemoveObjectCmd : public BaseVisualCmd,
 
 public:
 
-	RemoveObjectCmd(CVisualEditorContextForm *data, IValueFrame* object);
+	RemoveObjectCmd(CVisualEditorContextForm* data, IValueFrame* object);
 	~RemoveObjectCmd();
 
 protected:
@@ -94,7 +94,7 @@ protected:
 	void GenerateId();
 	void ResetId();
 
-	void OnObjectRemoved(wxFrameObjectEvent &event);
+	void OnObjectRemoved(wxFrameObjectEvent& event);
 
 	virtual void DoExecute() override;
 	virtual void DoRestore() override;
@@ -107,11 +107,11 @@ protected:
 class ModifyPropertyCmd : public BaseVisualCmd
 {
 	Property* m_property;
-	wxString m_oldValue, m_newValue;
+	wxVariant m_oldValue, m_newValue;
 
 public:
 
-	ModifyPropertyCmd(CVisualEditorContextForm *data, Property* prop, const wxString &value);
+	ModifyPropertyCmd(CVisualEditorContextForm* data, Property* prop, const wxVariant& value);
 
 protected:
 	virtual void DoExecute() override;
@@ -125,10 +125,10 @@ protected:
 class ModifyEventHandlerCmd : public BaseVisualCmd
 {
 	Event* m_event = NULL;
-	wxString m_oldValue, m_newValue;
+	wxVariant m_oldValue, m_newValue;
 
 public:
-	ModifyEventHandlerCmd(CVisualEditorContextForm *data, Event* event, const wxString &value);
+	ModifyEventHandlerCmd(CVisualEditorContextForm* data, Event* event, const wxString& value);
 
 protected:
 	virtual void DoExecute() override;
@@ -145,7 +145,7 @@ class ShiftChildCmd : public BaseVisualCmd
 	int m_oldPos, m_newPos;
 
 public:
-	ShiftChildCmd(CVisualEditorContextForm *data, IValueFrame* object, int pos);
+	ShiftChildCmd(CVisualEditorContextForm* data, IValueFrame* object, int pos);
 
 protected:
 	virtual void DoExecute() override;
@@ -171,7 +171,7 @@ class CutObjectCmd : public BaseVisualCmd,
 
 public:
 
-	CutObjectCmd(CVisualEditorContextForm *data, IValueFrame* object, bool force);
+	CutObjectCmd(CVisualEditorContextForm* data, IValueFrame* object, bool force);
 	~CutObjectCmd();
 
 protected:
@@ -179,7 +179,7 @@ protected:
 	void GenerateId();
 	void ResetId();
 
-	void OnObjectRemoved(wxFrameObjectEvent &event);
+	void OnObjectRemoved(wxFrameObjectEvent& event);
 
 	virtual void DoExecute() override;
 	virtual void DoRestore() override;
@@ -189,7 +189,7 @@ protected:
 // Implementacion de los Comandos
 ///////////////////////////////////////////////////////////////////////////////
 
-ExpandObjectCmd::ExpandObjectCmd(CVisualEditorContextForm *data, IValueFrame* object, bool expand) : BaseVisualCmd(data),
+ExpandObjectCmd::ExpandObjectCmd(CVisualEditorContextForm* data, IValueFrame* object, bool expand) : BaseVisualCmd(data),
 m_object(object), m_expand(expand)
 {
 }
@@ -204,7 +204,7 @@ void ExpandObjectCmd::DoRestore()
 	m_object->SetExpanded(!m_expand);
 }
 
-InsertObjectCmd::InsertObjectCmd(CVisualEditorContextForm *data, IValueFrame* object, IValueFrame* parent, int pos, bool firstCreated) : BaseVisualCmd(data),
+InsertObjectCmd::InsertObjectCmd(CVisualEditorContextForm* data, IValueFrame* object, IValueFrame* parent, int pos, bool firstCreated) : BaseVisualCmd(data),
 m_parent(parent), m_object(object), m_pos(pos), m_firstCreated(firstCreated)
 {
 	m_oldSelected = data->GetSelectedObject();
@@ -219,7 +219,7 @@ m_parent(parent), m_object(object), m_pos(pos), m_firstCreated(firstCreated)
 
 void InsertObjectCmd::GenerateId()
 {
-	std::function<void(IValueFrame *)> reset = [&reset](IValueFrame *object) {
+	std::function<void(IValueFrame*)> reset = [&reset](IValueFrame* object) {
 		wxASSERT(object);
 		for (unsigned int idx = 0; idx < object->GetChildCount(); idx++) {
 			reset(object->GetChild(idx));
@@ -235,7 +235,7 @@ void InsertObjectCmd::GenerateId()
 
 void InsertObjectCmd::ResetId()
 {
-	std::function<void(IValueFrame *)> reset = [&reset](IValueFrame *object) {
+	std::function<void(IValueFrame*)> reset = [&reset](IValueFrame* object) {
 		wxASSERT(object);
 		for (unsigned int idx = 0; idx < object->GetChildCount(); idx++) {
 			reset(object->GetChild(idx));
@@ -271,7 +271,7 @@ void InsertObjectCmd::DoExecute()
 	}
 
 	//create control in visual editor
-	CVisualEditorContextForm::CVisualEditor *visulEditor =
+	CVisualEditorContextForm::CVisualEditorHost* visulEditor =
 		m_visualData->GetVisualEditor();
 	wxASSERT(visulEditor);
 	visulEditor->CreateControl(m_object, NULL, m_firstCreated);
@@ -283,7 +283,7 @@ void InsertObjectCmd::DoExecute()
 void InsertObjectCmd::DoRestore()
 {
 	//remove control in visual editor
-	CVisualEditorContextForm::CVisualEditor *m_visualEditor =
+	CVisualEditorContextForm::CVisualEditorHost* m_visualEditor =
 		m_visualData->GetVisualEditor();
 
 	m_visualEditor->RemoveControl(m_object);
@@ -298,7 +298,7 @@ void InsertObjectCmd::DoRestore()
 
 //-----------------------------------------------------------------------------
 
-RemoveObjectCmd::RemoveObjectCmd(CVisualEditorContextForm *data, IValueFrame* object) : BaseVisualCmd(data)
+RemoveObjectCmd::RemoveObjectCmd(CVisualEditorContextForm* data, IValueFrame* object) : BaseVisualCmd(data)
 {
 	m_object = object;
 	m_parent = object->GetParent();
@@ -315,7 +315,7 @@ RemoveObjectCmd::~RemoveObjectCmd()
 
 void RemoveObjectCmd::GenerateId()
 {
-	std::function<void(IValueFrame *)> reset = [&reset](IValueFrame *object) {
+	std::function<void(IValueFrame*)> reset = [&reset](IValueFrame* object) {
 		wxASSERT(object);
 		for (unsigned int idx = 0; idx < object->GetChildCount(); idx++) {
 			reset(object->GetChild(idx));
@@ -331,7 +331,7 @@ void RemoveObjectCmd::GenerateId()
 
 void RemoveObjectCmd::ResetId()
 {
-	std::function<void(IValueFrame *)> reset = [&reset](IValueFrame *object) {
+	std::function<void(IValueFrame*)> reset = [&reset](IValueFrame* object) {
 		wxASSERT(object);
 		for (unsigned int idx = 0; idx < object->GetChildCount(); idx++) {
 			reset(object->GetChild(idx));
@@ -345,10 +345,10 @@ void RemoveObjectCmd::ResetId()
 	reset(m_object);
 }
 
-void RemoveObjectCmd::OnObjectRemoved(wxFrameObjectEvent &event)
+void RemoveObjectCmd::OnObjectRemoved(wxFrameObjectEvent& event)
 {
 	//remove control in visual editor
-	CVisualEditorContextForm::CVisualEditor *visulEditor = m_visualData->GetVisualEditor();
+	CVisualEditorContextForm::CVisualEditorHost* visulEditor = m_visualData->GetVisualEditor();
 
 	m_parent->AddChild(m_object);
 	m_object->SetParent(m_parent);
@@ -404,23 +404,23 @@ void RemoveObjectCmd::DoRestore()
 	m_visualData->SelectObject(m_oldSelected, true, false);
 
 	//create control in visual editor
-	CVisualEditorContextForm::CVisualEditor *visulEditor =
+	CVisualEditorContextForm::CVisualEditorHost* visulEditor =
 		m_visualData->GetVisualEditor();
 	visulEditor->CreateControl(m_object);
 }
 
 //-----------------------------------------------------------------------------
 
-ModifyPropertyCmd::ModifyPropertyCmd(CVisualEditorContextForm *data, Property* prop, const wxString &oldValue) : BaseVisualCmd(data),
+ModifyPropertyCmd::ModifyPropertyCmd(CVisualEditorContextForm* data, Property* prop, const wxVariant& oldValue) : BaseVisualCmd(data),
 m_property(prop), m_newValue(prop->GetValue()), m_oldValue(oldValue)
 {
 }
 
 void ModifyPropertyCmd::DoExecute()
 {
-	CVisualEditorContextForm::CVisualEditor *visulEditor = m_visualData->GetVisualEditor();
+	CVisualEditorContextForm::CVisualEditorHost* visulEditor = m_visualData->GetVisualEditor();
 	// Get the IValueFrame from the event
-	IValueFrame* m_object = dynamic_cast<IValueFrame *>(m_property->GetObject());
+	IValueFrame* m_object = dynamic_cast<IValueFrame*>(m_property->GetObject());
 	m_property->SetValue(m_newValue);
 	m_object->SaveProperty();
 
@@ -436,9 +436,9 @@ void ModifyPropertyCmd::DoExecute()
 
 void ModifyPropertyCmd::DoRestore()
 {
-	CVisualEditorContextForm::CVisualEditor *visulEditor = m_visualData->GetVisualEditor();
+	CVisualEditorContextForm::CVisualEditorHost* visulEditor = m_visualData->GetVisualEditor();
 	// Get the IValueFrame from the event
-	IValueFrame* m_object = dynamic_cast<IValueFrame *>(m_property->GetObject());
+	IValueFrame* m_object = dynamic_cast<IValueFrame*>(m_property->GetObject());
 
 	m_property->SetValue(m_oldValue);
 	m_object->SaveProperty();
@@ -455,7 +455,7 @@ void ModifyPropertyCmd::DoRestore()
 
 //-----------------------------------------------------------------------------
 
-ModifyEventHandlerCmd::ModifyEventHandlerCmd(CVisualEditorContextForm *data, Event* event, const wxString &value) : BaseVisualCmd(data),
+ModifyEventHandlerCmd::ModifyEventHandlerCmd(CVisualEditorContextForm* data, Event* event, const wxString& value) : BaseVisualCmd(data),
 m_event(event), m_newValue(value)
 {
 	m_oldValue = event->GetValue();
@@ -473,7 +473,7 @@ void ModifyEventHandlerCmd::DoRestore()
 
 //-----------------------------------------------------------------------------
 
-ShiftChildCmd::ShiftChildCmd(CVisualEditorContextForm *data, IValueFrame* object, int pos) : BaseVisualCmd(data)
+ShiftChildCmd::ShiftChildCmd(CVisualEditorContextForm* data, IValueFrame* object, int pos) : BaseVisualCmd(data)
 {
 	m_object = object;
 	IValueFrame* parent = object->GetParent();
@@ -486,7 +486,7 @@ ShiftChildCmd::ShiftChildCmd(CVisualEditorContextForm *data, IValueFrame* object
 
 void ShiftChildCmd::DoExecute()
 {
-	CVisualEditorContextForm::CVisualEditor *visulEditor =
+	CVisualEditorContextForm::CVisualEditorHost* visulEditor =
 		m_visualData->GetVisualEditor();
 
 	if (m_oldPos != m_newPos) {
@@ -499,7 +499,7 @@ void ShiftChildCmd::DoExecute()
 
 void ShiftChildCmd::DoRestore()
 {
-	CVisualEditorContextForm::CVisualEditor *visulEditor =
+	CVisualEditorContextForm::CVisualEditorHost* visulEditor =
 		m_visualData->GetVisualEditor();
 
 	if (m_oldPos != m_newPos) {
@@ -512,7 +512,7 @@ void ShiftChildCmd::DoRestore()
 
 //-----------------------------------------------------------------------------
 
-CutObjectCmd::CutObjectCmd(CVisualEditorContextForm *data, IValueFrame* object, bool force) : BaseVisualCmd(data), m_needEvent(!force)
+CutObjectCmd::CutObjectCmd(CVisualEditorContextForm* data, IValueFrame* object, bool force) : BaseVisualCmd(data), m_needEvent(!force)
 {
 	m_object = object;
 	m_parent = object->GetParent();
@@ -533,7 +533,7 @@ CutObjectCmd::~CutObjectCmd()
 
 void CutObjectCmd::GenerateId()
 {
-	std::function<void(IValueFrame *)> reset = [&reset](IValueFrame *object) {
+	std::function<void(IValueFrame*)> reset = [&reset](IValueFrame* object) {
 		wxASSERT(object);
 		for (unsigned int idx = 0; idx < object->GetChildCount(); idx++) {
 			reset(object->GetChild(idx));
@@ -549,7 +549,7 @@ void CutObjectCmd::GenerateId()
 
 void CutObjectCmd::ResetId()
 {
-	std::function<void(IValueFrame *)> reset = [&reset](IValueFrame *object) {
+	std::function<void(IValueFrame*)> reset = [&reset](IValueFrame* object) {
 		wxASSERT(object);
 		for (unsigned int idx = 0; idx < object->GetChildCount(); idx++) {
 			reset(object->GetChild(idx));
@@ -563,10 +563,10 @@ void CutObjectCmd::ResetId()
 	reset(m_object);
 }
 
-void CutObjectCmd::OnObjectRemoved(wxFrameObjectEvent &event)
+void CutObjectCmd::OnObjectRemoved(wxFrameObjectEvent& event)
 {
 	//remove control in visual editor
-	CVisualEditorContextForm::CVisualEditor *visulEditor =
+	CVisualEditorContextForm::CVisualEditorHost* visulEditor =
 		m_visualData->GetVisualEditor();
 
 	m_parent->AddChild(m_object);
@@ -585,7 +585,7 @@ void CutObjectCmd::DoExecute()
 
 	if (!m_needEvent) {
 		//remove control in visual editor
-		CVisualEditorContextForm::CVisualEditor *visulEditor =
+		CVisualEditorContextForm::CVisualEditorHost* visulEditor =
 			m_visualData->GetVisualEditor();
 		visulEditor->RemoveControl(m_object);
 	}
@@ -639,7 +639,7 @@ void CutObjectCmd::DoRestore()
 	m_visualData->SelectObject(m_oldSelected, true, false);
 
 	//create control in visual editor
-	CVisualEditorContextForm::CVisualEditor *visulEditor =
+	CVisualEditorContextForm::CVisualEditorHost* visulEditor =
 		m_visualData->GetVisualEditor();
 
 	visulEditor->CreateControl(m_object, m_parent);
@@ -647,7 +647,7 @@ void CutObjectCmd::DoRestore()
 
 //-----------------------------------------------------------------------------
 
-IValueFrame *CVisualEditorContextForm::CreateObject(const wxString &name)
+IValueFrame* CVisualEditorContextForm::CreateObject(const wxString& name)
 {
 	IValueFrame* obj = NULL;
 	wxASSERT(m_valueForm);
@@ -726,7 +726,7 @@ void CVisualEditorContextForm::CopyObject(IValueFrame* obj)
 	// Make a copy of the object on the clipboard, otherwise
 	// modifications to the object after the copy will also
 	// be made on the clipboard.
-	IValueFrame *objParent = obj->GetParent();
+	IValueFrame* objParent = obj->GetParent();
 	wxASSERT(m_valueForm);
 	if (objParent && objParent->IsItem()) {
 		m_clipboard = m_valueForm->CopyObject(objParent);
@@ -785,7 +785,7 @@ bool CVisualEditorContextForm::PasteObject(IValueFrame* dstObject, IValueFrame* 
 					obj->SetParent(NULL);
 					parentObject->RemoveChild(obj);
 				}
-				IValueFrame *clipParent = clipboard->GetParent();
+				IValueFrame* clipParent = clipboard->GetParent();
 				if (clipParent && clipParent->IsItem()) {
 					clipboard = clipParent;
 				}
@@ -851,9 +851,9 @@ bool CVisualEditorContextForm::PasteObject(IValueFrame* dstObject, IValueFrame* 
 	return true;
 }
 
-IValueFrame *CVisualEditorContextForm::SearchSizerInto(IValueFrame *obj)
+IValueFrame* CVisualEditorContextForm::SearchSizerInto(IValueFrame* obj)
 {
-	IValueFrame *theSizer = NULL;
+	IValueFrame* theSizer = NULL;
 
 	if (obj->IsSubclassOf(wxT("boxsizer")) || obj->IsSubclassOf(wxT("wrapsizer")) ||
 		obj->IsSubclassOf(wxT("staticboxsizer")) || obj->IsSubclassOf(wxT("gridsizer")))
@@ -896,7 +896,9 @@ bool CVisualEditorContextForm::SelectObject(IValueFrame* obj, bool force, bool n
 
 	m_visualEditor->SetObjectSelect(obj); m_selObj = obj;
 
-	if (notify) { NotifyObjectSelected(obj, force); }
+	if (notify) { 
+		NotifyObjectSelected(obj, force);
+	}
 
 	objectInspector->SelectObject(obj, this);
 	return true;
@@ -904,17 +906,17 @@ bool CVisualEditorContextForm::SelectObject(IValueFrame* obj, bool force, bool n
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-void CVisualEditorContextForm::MovePosition(IValueFrame *obj, unsigned int toPos)
+void CVisualEditorContextForm::MovePosition(IValueFrame* obj, unsigned int toPos)
 {
 	Execute(new ShiftChildCmd(this, obj, toPos));
 	NotifyProjectRefresh();
 	SelectObject(obj, true);
 }
 
-void CVisualEditorContextForm::MovePosition(IValueFrame *obj, bool right, unsigned int num)
+void CVisualEditorContextForm::MovePosition(IValueFrame* obj, bool right, unsigned int num)
 {
-	IValueFrame *noItemObj = obj;
-	IValueFrame *parent = obj->GetParent();
+	IValueFrame* noItemObj = obj;
+	IValueFrame* parent = obj->GetParent();
 
 	if (parent)
 	{
@@ -946,7 +948,7 @@ void CVisualEditorContextForm::MovePosition(IValueFrame *obj, bool right, unsign
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-void CVisualEditorContextForm::ModifyProperty(Property* prop, const wxString &oldValue)
+void CVisualEditorContextForm::ModifyProperty(Property* prop, const wxVariant& oldValue)
 {
 	IObjectBase* object = prop->GetObject();
 
@@ -956,7 +958,7 @@ void CVisualEditorContextForm::ModifyProperty(Property* prop, const wxString &ol
 	}
 }
 
-void CVisualEditorContextForm::ModifyEventHandler(Event* evt, const wxString &value)
+void CVisualEditorContextForm::ModifyEventHandler(Event* evt, const wxVariant& value)
 {
 	IObjectBase* object = evt->GetObject();
 
@@ -995,7 +997,7 @@ void CVisualEditorContextForm::PropagateExpansion(IValueFrame* obj, bool expand,
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-bool CVisualEditorContextForm::IsCorrectName(const wxString &controlName)
+bool CVisualEditorContextForm::IsCorrectName(const wxString& controlName)
 {
 	wxASSERT(m_valueForm);
 	return m_valueForm->FindControlByName(controlName) == NULL;
@@ -1128,16 +1130,16 @@ int CVisualEditorContextForm::CalcPositionOfInsertion(IValueFrame* selected, IVa
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-void CVisualEditorContextForm::ToggleBorderFlag(IValueFrame *obj, int border)
+void CVisualEditorContextForm::ToggleBorderFlag(IValueFrame* obj, int border)
 {
 	if (!obj) return;
 
-	IValueFrame *parent = obj->GetParent();
+	IValueFrame* parent = obj->GetParent();
 	if (!parent) return;
 
 	if (!parent->IsSubclassOf(wxT("sizerItem"))) return;
 
-	Property *propFlag = parent->GetProperty(wxT("flag"));
+	Property* propFlag = parent->GetProperty(wxT("flag"));
 	if (!propFlag) return;
 
 	wxString value = propFlag->GetValueAsString();

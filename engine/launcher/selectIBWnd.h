@@ -42,7 +42,7 @@ public:
 		m_textCtrlPath->SetValue(ibPath);
 	}
 
-	CSelectIBWnd(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("IB"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(500, 90), long style = wxCAPTION | wxCLOSE_BOX | wxDEFAULT_DIALOG_STYLE | wxTAB_TRAVERSAL);
+	CSelectIBWnd(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("IB"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(500, 110), long style = wxCAPTION | wxCLOSE_BOX | wxDEFAULT_DIALOG_STYLE | wxTAB_TRAVERSAL);
 	virtual ~CSelectIBWnd();
 
 protected:
