@@ -3,21 +3,21 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.27703.2035
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "core", "engine\core\engine.vcxproj", "{E5B4B7ED-A0D7-42A9-BFED-F527FD029F92}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "core", "src\engine\core\core.vcxproj", "{E5B4B7ED-A0D7-42A9-BFED-F527FD029F92}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "deamon", "engine\deamon\deamon.vcxproj", "{4AF26744-6E43-426E-85CF-FB566690A28A}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "deamon", "src\engine\deamon\deamon.vcxproj", "{4AF26744-6E43-426E-85CF-FB566690A28A}"
 	ProjectSection(ProjectDependencies) = postProject
 		{E5B4B7ED-A0D7-42A9-BFED-F527FD029F92} = {E5B4B7ED-A0D7-42A9-BFED-F527FD029F92}
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "services", "services", "{EC9549AB-F505-4D38-B127-CB1AD0DB1C7B}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "oes", "engine\oes\oes.vcxproj.vcxproj", "{6267B6E7-57A6-461F-87FD-82CDDDE51EAD}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "oes", "src\engine\oes\oes.vcxproj.vcxproj", "{6267B6E7-57A6-461F-87FD-82CDDDE51EAD}"
 	ProjectSection(ProjectDependencies) = postProject
 		{E5B4B7ED-A0D7-42A9-BFED-F527FD029F92} = {E5B4B7ED-A0D7-42A9-BFED-F527FD029F92}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "launcher", "engine\launcher\launcher.vcxproj.vcxproj", "{AEA57361-BEBB-4C8C-8E56-E9FBF7A23451}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "launcher", "src\engine\launcher\launcher.vcxproj.vcxproj", "{AEA57361-BEBB-4C8C-8E56-E9FBF7A23451}"
 	ProjectSection(ProjectDependencies) = postProject
 		{E5B4B7ED-A0D7-42A9-BFED-F527FD029F92} = {E5B4B7ED-A0D7-42A9-BFED-F527FD029F92}
 	EndProjectSection

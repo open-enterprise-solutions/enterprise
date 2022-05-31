@@ -39,13 +39,13 @@
   </PropertyGroup>
 
   <PropertyGroup Label="UserMacros">
-    <oesBinRootDir>$(SolutionDir)..\bin\</oesBinRootDir>
-    <oesLibRootDir>$(SolutionDir)..\lib\</oesLibRootDir>
-    <oesBinDir>$(SolutionDir)..\bin\$(oesPlatform)\$(Configuration)\</oesBinDir>
-    <oesLibDir>$(SolutionDir)..\lib\$(oesPlatform)\$(Configuration)\</oesLibDir>
-    <oesIntDir>$(SolutionDir)..\intermediate\$(oesPlatform)\$(Configuration)\</oesIntDir>
-    <oes3rdParty>$(SolutionDir)3rdparty\</oes3rdParty>
-	<oesEngine>$(SolutionDir)engine\</oesEngine>
+    <oesBinRootDir>$(SolutionDir)\bin\</oesBinRootDir>
+    <oesLibRootDir>$(SolutionDir)\lib\</oesLibRootDir>
+    <oesBinDir>$(SolutionDir)\bin\$(oesPlatform)\$(Configuration)\</oesBinDir>
+    <oesLibDir>$(SolutionDir)\lib\$(oesPlatform)\$(Configuration)\</oesLibDir>
+    <oesIntDir>$(SolutionDir)\intermediate\$(oesPlatform)\$(Configuration)\</oesIntDir>
+    <oes3rdParty>$(SolutionDir)src\3rdparty\</oes3rdParty>
+	<oesEngine>$(SolutionDir)src\engine\</oesEngine>
   </PropertyGroup>
 
   <PropertyGroup Label="OutputDirectories">
