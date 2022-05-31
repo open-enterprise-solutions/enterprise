@@ -1993,7 +1993,7 @@ wxPGEditorDialogAdapter* wxPGOwnerSelectorProperty::GetEditorDialog() const
 			IObjectBase* curObject = dlgProp->GetObject();
 
 			// launch editor dialog
-			wxDialog* dlg = new wxDialog(pg, wxID_ANY, _("Choice recorders"), wxDefaultPosition, wxDefaultSize,
+			wxDialog* dlg = new wxDialog(pg, wxID_ANY, _("Choice owners"), wxDefaultPosition, wxDefaultSize,
 				wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLIP_CHILDREN);
 
 			dlg->SetFont(pg->GetFont()); // To allow entering chars of the same set as the propGrid
