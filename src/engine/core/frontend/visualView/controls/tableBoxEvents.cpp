@@ -7,14 +7,14 @@ void CValueTableBox::OnColumnClick(wxDataViewEvent& event)
 	CDataViewColumnObject* columnValue = dynamic_cast<CDataViewColumnObject*>(event.GetDataViewColumn());
 	wxASSERT(columnValue);
 
-	if (m_visualHostContext != NULL) {
+	if (g_visualHostContext != NULL) {
 
-		CVisualEditorContextForm::CVisualEditorHost* visualEditor = m_visualHostContext->GetVisualEditor();
+		CVisualEditorContextForm::CVisualEditorHost* visualEditor = g_visualHostContext->GetVisualEditor();
 		wxASSERT(visualEditor);
 
 		IValueFrame* columnControl = visualEditor->GetObjectBase(columnValue);
 		wxASSERT(columnControl);
-		m_visualHostContext->SelectObject(columnControl);
+		g_visualHostContext->SelectObject(columnControl);
 	}
 
 	event.Skip();
@@ -27,14 +27,14 @@ void CValueTableBox::OnColumnReordered(wxDataViewEvent& event)
 
 	wxASSERT(columnValue);
 
-	if (m_visualHostContext != NULL) {
+	if (g_visualHostContext != NULL) {
 
-		CVisualEditorContextForm::CVisualEditorHost* visualEditor = m_visualHostContext->GetVisualEditor();
+		CVisualEditorContextForm::CVisualEditorHost* visualEditor = g_visualHostContext->GetVisualEditor();
 		wxASSERT(visualEditor);
 		IValueFrame* columnControl = visualEditor->GetObjectBase(columnValue);
 		wxASSERT(columnControl);
 		if (ChangeChildPosition(columnControl, event.GetColumn())) {
-			m_visualHostContext->RefreshEditor();
+			g_visualHostContext->RefreshEditor();
 		}
 	}
 	else if (!appData->DesignerMode()) {
@@ -51,7 +51,7 @@ void CValueTableBox::OnColumnReordered(wxDataViewEvent& event)
 //*                          System event                             *
 //*********************************************************************
 
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 
 void CValueTableBox::OnSelectionChanged(wxDataViewEvent& event)
 {
@@ -63,7 +63,7 @@ void CValueTableBox::OnSelectionChanged(wxDataViewEvent& event)
 
 	CValue standardProcessing = true;
 
-	CallEvent("selection",
+	CallEvent(m_eventSelection,
 		CValue(this), // control
 		CValue(m_tableModel->GetRowAt(item)), // rowSelected
 		standardProcessing //standardProcessing
@@ -92,13 +92,13 @@ void CValueTableBox::OnItemActivated(wxDataViewEvent& event)
 	if (!item.IsOk())
 		return;
 
-	if (m_tableModel) {
+	if (m_tableModel != NULL) {
 		m_tableModel->ActivateItem(m_formOwner,
 			item, event.GetColumn()
 		);
 	}
 
-	CallEvent("onActivateRow",
+	CallEvent(m_eventOnActivateRow,
 		CValue(this) // control
 	);
 
@@ -172,8 +172,7 @@ void CValueTableBox::OnItemDrop(wxDataViewEvent& event)
 {
 	wxDataViewItem item(event.GetItem());
 
-	if (event.GetDataFormat() != wxDF_UNICODETEXT)
-	{
+	if (event.GetDataFormat() != wxDF_UNICODETEXT) {
 		event.Veto();
 		return;
 	}
@@ -190,12 +189,12 @@ void CValueTableBox::OnContextMenu(wxDataViewEvent& event)
 {
 	wxMenu menu;
 
-	actionData_t actions =
+	actionData_t& actions =
 		CValueTableBox::GetActions(m_formOwner->GetTypeForm());
 
 	for (unsigned int idx = 0; idx < actions.GetCount(); idx++) {
-		action_identifier_t id = actions.GetID(idx);
-		menu.Append(id, actions.GetNameByID(id));
+		const action_identifier_t& id = actions.GetID(idx);
+		menu.Append(id, actions.GetCaptionByID(id));
 	}
 
 	wxDataViewCtrl* wnd = wxDynamicCast(

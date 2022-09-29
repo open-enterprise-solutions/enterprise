@@ -44,8 +44,9 @@ public:
 	}
 
 	virtual bool Init(CValue** aParams) {
-		valT defValue = static_cast<valT>(aParams[0]->ToInt());
-		SetEnumValue(defValue);
+		SetEnumValue(
+			static_cast<valT>(aParams[0]->ToInt())
+		);
 		return true;
 	}
 

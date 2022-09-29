@@ -9,47 +9,88 @@
 
 #define configurationDefaultName _("ñonfiguration")
 
-class CMetaObject : public IMetaObject
-{
+class CMetaObject : public IMetaObject {
 	wxDECLARE_DYNAMIC_CLASS(CMetaObject);
+private:
+	Role* m_roleAdministration = IMetaObject::CreateRole({ "administration", _("administration") });
+	Role* m_roleDataAdministration = IMetaObject::CreateRole({ "dataAdministration", _("data administration") });
+	Role* m_roleUpdateDatabaseConfiguration = IMetaObject::CreateRole({ "updateDatabaseConfiguration", _("update database configuration") });
+	Role* m_roleActiveUsers = IMetaObject::CreateRole({ "activeUsers", _("active users") });
+	Role* m_roleExclusiveMode = IMetaObject::CreateRole({ "exclusiveMode", _("exclusive mode") });
+	Role* m_roleModeAllFunction = IMetaObject::CreateRole({ "modeAllFunctions", _("mode \"All functions\"") });
 
+protected:
 	enum
 	{
 		ID_METATREE_OPEN_INIT_MODULE = 19000,
 	};
 
-	OptionList *GetVersions(Property *prop) {
+	OptionList* GetVersion(PropertyOption* prop) {
 
-		OptionList *opt = new OptionList;
+		OptionList* opt = new OptionList;
 		opt->AddOption(_("oes 1_0_0"), version_oes_1_0_0);
 		opt->AddOption(_("oes last"), version_oes_last);
 		return opt;
 	}
 
-	std::vector<IMetaObject *> m_aMetaObjects;
+	PropertyCategory* m_compatibilityCategory = IPropertyObject::CreatePropertyCategory({ "compatibility", _("compatibility") });
+	Property* m_propertyVersion = IPropertyObject::CreateProperty(m_compatibilityCategory, { "version", _("version")}, &CMetaObject::GetVersion, version_oes_last);
 
 public:
+
+	virtual bool FilterChild(const CLASS_ID &clsid) const {
+
+		if (
+			clsid == g_metaCommonModuleCLSID ||
+			clsid == g_metaCommonFormCLSID ||
+			clsid == g_metaCommonTemplateCLSID ||
+			clsid == g_metaRoleCLSID ||
+			clsid == g_metaInterfaceCLSID ||
+			clsid == g_metaConstantCLSID ||
+			clsid == g_metaCatalogCLSID ||
+			clsid == g_metaDocumentCLSID ||
+			clsid == g_metaEnumerationCLSID ||
+			clsid == g_metaDataProcessorCLSID ||
+			clsid == g_metaReportCLSID ||
+			clsid == g_metaInformationRegisterCLSID ||
+			clsid == g_metaAccumulationRegisterCLSID
+			)
+			return true; 
+
+		return false;
+	}
+
+	virtual void SetVersion(const version_identifier_t& version) {
+		m_propertyVersion->SetValue(version);
+	}
+
+	version_identifier_t GetVersion() const {
+		return m_propertyVersion->GetValueAsInteger();
+	}
 
 	CMetaObject();
 	virtual ~CMetaObject();
 
-	virtual wxString GetFullName() { return configurationDefaultName; }
-	virtual wxString GetModuleName() { return configurationDefaultName; }
+	virtual wxString GetFullName() const {
+		return configurationDefaultName;
+	}
 
-	//base objects 
-	virtual std::vector<IMetaObject *> GetObjects(const CLASS_ID &clsid) const { return IMetaObject::GetObjects(clsid); }
-	virtual std::vector<IMetaObject *> GetObjects() const { return m_aMetaObjects; }
+	virtual wxString GetModuleName() const {
+		return configurationDefaultName;
+	}
 
 	//get object class 
-	virtual wxString GetClassName() const override { return wxT("metadata"); }
+	virtual wxString GetClassName() const override {
+		return wxT("metadata");
+	}
 
 	//support icons
 	virtual wxIcon GetIcon();
 	static wxIcon GetIconGroup();
 
 	//events
-	virtual bool OnCreateMetaObject(IMetadata *metaData);
-	virtual bool OnLoadMetaObject(IMetadata *metaData);
+	virtual bool OnCreateMetaObject(IMetadata* metaData);
+	virtual bool OnLoadMetaObject(IMetadata* metaData);
 	virtual bool OnSaveMetaObject();
 	virtual bool OnDeleteMetaObject();
 
@@ -57,35 +98,25 @@ public:
 	virtual bool OnBeforeRunMetaObject(int flags);
 	virtual bool OnAfterCloseMetaObject();
 
-	//read&save property
-	virtual void ReadProperty() override;
-	virtual void SaveProperty() override;
-
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu *defultMenu);
+	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
 	virtual void ProcessCommand(unsigned int id);
-
-	//create in this metaObject 
-	virtual void AppendChild(IMetaObject *child) { m_aMetaObjects.push_back(child); }
-	virtual void RemoveChild(IMetaObject *child) {
-		auto itFounded = std::find(m_aMetaObjects.begin(), m_aMetaObjects.end(), child);
-		if (itFounded != m_aMetaObjects.end()) m_aMetaObjects.erase(itFounded);
-	}
 
 public:
 
-	virtual CMetaModuleObject *GetModuleObject() { return m_commonModule; }
+	virtual CMetaModuleObject* GetModuleObject() const {
+		return m_commonModule;
+	}
 
 protected:
 
-
 	//load & save metadata from DB 
-	virtual bool LoadData(CMemoryReader &reader);
-	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 private:
 
-	CMetaModuleObject *m_commonModule;
+	CMetaModuleObject* m_commonModule;
 };
 
 #endif 

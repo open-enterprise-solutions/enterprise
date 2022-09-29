@@ -18,9 +18,11 @@ void CVisualEditorContextForm::AddHandler(wxEvtHandler* handler)
 
 void CVisualEditorContextForm::RemoveHandler(wxEvtHandler* handler)
 {
-	for (auto it = m_handlers.begin(); it != m_handlers.end(); ++it)
-	{
-		if (*it == handler) { m_handlers.erase(it); break; }
+	for (auto it = m_handlers.begin(); it != m_handlers.end(); ++it) {
+		if (*it == handler) {
+			m_handlers.erase(it);
+			break;
+		}
 	}
 }
 
@@ -30,16 +32,14 @@ void CVisualEditorContextForm::NotifyEvent(wxFrameEvent& event, bool forcedelaye
 {
 	if (!forcedelayed) {
 		std::vector< wxEvtHandler* >::iterator handler;
-		for (handler = m_handlers.begin(); handler != m_handlers.end(); handler++)
-		{
+		for (handler = m_handlers.begin(); handler != m_handlers.end(); handler++) {
 			(*handler)->ProcessEvent(event);
 		}
 		m_view->ProcessEvent(event);
 	}
 	else {
 		std::vector< wxEvtHandler* >::iterator handler;
-		for (handler = m_handlers.begin(); handler != m_handlers.end(); handler++)
-		{
+		for (handler = m_handlers.begin(); handler != m_handlers.end(); handler++) {
 			(*handler)->AddPendingEvent(event);
 		}
 		m_view->AddPendingEvent(event);
@@ -110,18 +110,20 @@ void CVisualEditorContextForm::NotifyProjectRefresh()
 
 #include "metadata/metaObjectsDefines.h"
 
-void CVisualEditorContextForm::Execute(CCommand *cmd)
+void CVisualEditorContextForm::Execute(CCommand* cmd)
 {
-	if (m_cmdProc) {
+	if (m_cmdProc != NULL) {
 		m_cmdProc->Execute(cmd);
 	}
 
-	IMetaFormObject *formObject = dynamic_cast<IMetaFormObject *>(
+	IMetaFormObject* formObject = dynamic_cast<IMetaFormObject*>(
 		m_document->GetMetaObject()
-	);
+		);
+
 	wxASSERT(formObject);
+
 	// Create a std::string and copy your document data in to the string    
-	if (formObject) {
+	if (formObject != NULL) {
 		formObject->SaveFormData(m_valueForm);
 	}
 }

@@ -165,7 +165,7 @@ number_t SqliteResultSet::GetResultNumber(int nField)
 	return dblValue;
 }
 
-void* SqliteResultSet::GetResultBlob(int nField, wxMemoryBuffer& Buffer)
+void* SqliteResultSet::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 {
 	int nLength = 0;
 	if (m_pSqliteStatement == NULL)
@@ -176,7 +176,7 @@ void* SqliteResultSet::GetResultBlob(int nField, wxMemoryBuffer& Buffer)
 		wxMemoryBuffer tempBuffer(0);
 		tempBuffer.SetDataLen(0);
 		tempBuffer.SetBufSize(0);
-		Buffer = tempBuffer;
+		buffer = tempBuffer;
 
 		return NULL;
 	}
@@ -190,9 +190,8 @@ void* SqliteResultSet::GetResultBlob(int nField, wxMemoryBuffer& Buffer)
 	tempBuffer.SetDataLen(nLength);
 	tempBuffer.SetBufSize(nLength);
 
-	Buffer = tempBuffer;
-
-	return Buffer.GetData();
+	buffer = tempBuffer;
+	return buffer.GetData();
 }
 
 bool SqliteResultSet::IsFieldNull(int nField)

@@ -182,7 +182,7 @@ void COutputWindow::OnDoubleClick(wxMouseEvent& event)
 			auto code = pair.second; 
 
 			if (code.m_fileName.IsEmpty()) {
-				IMetadataTree *metaTree = metadata->GetMetaTree();
+				IMetadataWrapperTree *metaTree = metadata->GetMetaTree();
 				wxASSERT(metaTree);
 				metaTree->EditModule(code.m_docPath, code.m_currLine, false);
 			}
@@ -201,7 +201,7 @@ void COutputWindow::OnDoubleClick(wxMouseEvent& event)
 				if (foundedDoc) {
 					IMetadata *metaData = foundedDoc->GetMetadata();
 					wxASSERT(metaData);
-					IMetadataTree *metaTree = metaData->GetMetaTree();
+					IMetadataWrapperTree *metaTree = metaData->GetMetaTree();
 					wxASSERT(metaTree);
 					metaTree->EditModule(code.m_docPath, code.m_currLine, false);
 				}

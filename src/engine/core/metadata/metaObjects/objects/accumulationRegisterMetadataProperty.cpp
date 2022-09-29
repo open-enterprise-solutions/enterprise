@@ -2,10 +2,10 @@
 
 void CMetaObjectAccumulationRegister::OnPropertyChanged(Property* property)
 {
-	if (m_registerType == eRegisterType::eBalances) {
+	if (GetRegisterType() == eRegisterType::eBalances) {
 		m_attributeRecordType->ClearFlag(metaDisableObjectFlag);
 	}
-	else if (m_registerType == eRegisterType::eTurnovers) {
+	else if (GetRegisterType() == eRegisterType::eTurnovers) {
 		m_attributeRecordType->SetFlag(metaDisableObjectFlag);
 	}
 

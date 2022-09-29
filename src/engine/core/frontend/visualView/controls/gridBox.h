@@ -16,16 +16,17 @@ public:
 	virtual void Update(wxObject* wxobject, IVisualHost *visualHost) override;
 	virtual void Cleanup(wxObject* obj, IVisualHost *visualHost) override;
 
-	virtual wxString GetClassName() const override { return wxT("gridbox"); }
-	virtual wxString GetObjectTypeName() const override { return wxT("container"); }
+	virtual wxString GetClassName() const override { 
+		return wxT("gridbox"); 
+	}
+	
+	virtual wxString GetObjectTypeName() const override {
+		return wxT("container"); 
+	}
 
 	//load & save object in control 
 	virtual bool LoadData(CMemoryReader &reader);
 	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
-
-	//read&save propery 
-	virtual void ReadProperty() override;
-	virtual void SaveProperty() override;
 };
 
 #endif

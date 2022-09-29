@@ -3,6 +3,8 @@
 #include "databaseLayer/databaseErrorCodes.h"
 #include "appData.h"
 
+////////////////////////////////////////////////////////////////////////////////
+
 bool CMetaObjectAccumulationRegister::CreateAndUpdateBalancesTableDB(IConfigMetadata* srcMetaData, IMetaObject* srcMetaObject, int flags)
 {
 	wxString tableName = GetRegisterTableNameDB(eRegisterType::eBalances);
@@ -41,7 +43,8 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateBalancesTableDB(IConfigMeta
 		//if src is null then delete
 		IMetaObjectRegisterData* dstValue = NULL;
 		if (srcMetaObject->ConvertToValue(dstValue)) {
-
+			if (!UpdateCurrentRecords(tableName, dstValue))
+				return false;
 			//dimensions from dst 
 			for (auto dimension : dstValue->GetObjectDimensions()) {
 				IMetaObject* foundedMeta =
@@ -131,7 +134,8 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateTurnoverTableDB(IConfigMeta
 		//if src is null then delete
 		IMetaObjectRegisterData* dstValue = NULL;
 		if (srcMetaObject->ConvertToValue(dstValue)) {
-
+			if (!UpdateCurrentRecords(tableName, dstValue))
+				return false;
 			//dimensions from dst 
 			for (auto dimension : dstValue->GetObjectDimensions()) {
 				IMetaObject* foundedMeta =
@@ -192,26 +196,26 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateTableDB(IConfigMetadata* sr
 	if (srcMetaObject != NULL &&
 		srcMetaObject->ConvertToValue(dstValue)) {
 		eRegisterType dstRegType = dstValue->GetRegisterType();
-		if (dstRegType != m_registerType
-			&& m_registerType == eRegisterType::eBalances) {
+		if (dstRegType != GetRegisterType()
+			&& GetRegisterType() == eRegisterType::eBalances) {
 			tableBalancesFlags = createMetaTable;
 			tableTurnoverFlags = deleteMetaTable;
 		}
-		else if (dstRegType != m_registerType
-			&& m_registerType == eRegisterType::eTurnovers) {
+		else if (dstRegType != GetRegisterType()
+			&& GetRegisterType() == eRegisterType::eTurnovers) {
 			tableBalancesFlags = deleteMetaTable;
 			tableTurnoverFlags = createMetaTable;
 		}
-		else if (m_registerType == eRegisterType::eTurnovers) {
+		else if (GetRegisterType() == eRegisterType::eTurnovers) {
 			tableBalancesFlags = defaultFlag;
 		}
-		else if (m_registerType == eRegisterType::eBalances) {
+		else if (GetRegisterType() == eRegisterType::eBalances) {
 			tableTurnoverFlags = defaultFlag;
 		}
 	}
 	else if (srcMetaObject == NULL
 		&& flags == createMetaTable) {
-		if (m_registerType == eRegisterType::eBalances) {
+		if (GetRegisterType() == eRegisterType::eBalances) {
 			tableBalancesFlags = createMetaTable;
 			tableTurnoverFlags = defaultFlag;
 		}
@@ -222,7 +226,7 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateTableDB(IConfigMetadata* sr
 	}
 	else if (srcMetaObject == NULL
 		&& flags == deleteMetaTable) {
-		if (m_registerType == eRegisterType::eBalances) {
+		if (GetRegisterType() == eRegisterType::eBalances) {
 			tableBalancesFlags = deleteMetaTable;
 			tableTurnoverFlags = defaultFlag;
 		}
@@ -232,13 +236,13 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateTableDB(IConfigMetadata* sr
 		}
 	}
 
-	if (tableBalancesFlags != defaultFlag
-		&& !CMetaObjectAccumulationRegister::CreateAndUpdateBalancesTableDB(srcMetaData, srcMetaObject, tableBalancesFlags))
-		return false;
+	//if (tableBalancesFlags != defaultFlag
+	//	&& !CMetaObjectAccumulationRegister::CreateAndUpdateBalancesTableDB(srcMetaData, srcMetaObject, tableBalancesFlags))
+	//	return false;
 
-	if (tableTurnoverFlags != defaultFlag
-		&& !CMetaObjectAccumulationRegister::CreateAndUpdateTurnoverTableDB(srcMetaData, srcMetaObject, tableTurnoverFlags))
-		return false;
+	//if (tableTurnoverFlags != defaultFlag
+	//	&& !CMetaObjectAccumulationRegister::CreateAndUpdateTurnoverTableDB(srcMetaData, srcMetaObject, tableTurnoverFlags))
+	//	return false;
 
 	return IMetaObjectRegisterData::CreateAndUpdateTableDB(
 		srcMetaData,
@@ -251,14 +255,14 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateTableDB(IConfigMetadata* sr
 
 bool CRecordSetAccumulationRegister::SaveVirtualTable()
 {
-	CMetaObjectAccumulationRegister* metaObject = NULL;
+	/*CMetaObjectAccumulationRegister* metaObject = NULL;
 
 	if (!m_metaObject->ConvertToValue(metaObject))
 		return false;
 
-	CMetaDefaultAttributeObject *attributePeriod = metaObject->GetRegisterPeriod();
+	CMetaDefaultAttributeObject* attributePeriod = metaObject->GetRegisterPeriod();
 	wxASSERT(attributePeriod);
-	
+
 	wxString tableName = metaObject->GetRegisterTableNameDB(); bool firstUpdate = true;
 	wxString queryText = "UPDATE OR INSERT INTO " + tableName + "(" + IMetaAttributeObject::GetSQLFieldName(attributePeriod);
 
@@ -335,12 +339,13 @@ bool CRecordSetAccumulationRegister::SaveVirtualTable()
 	}
 
 	databaseLayer->CloseStatement(statement);
-	return !hasError;
+	return !hasError;*/
+	return true;
 }
 
 bool CRecordSetAccumulationRegister::DeleteVirtualTable()
 {
-	CMetaObjectAccumulationRegister* metaObject = NULL;
+	/*CMetaObjectAccumulationRegister* metaObject = NULL;
 
 	if (!m_metaObject->ConvertToValue(metaObject))
 		return false;
@@ -350,7 +355,7 @@ bool CRecordSetAccumulationRegister::DeleteVirtualTable()
 
 	wxString tableName = metaObject->GetRegisterTableNameDB();
 	wxString queryText = "DELETE FROM " + tableName; bool firstWhere = true;
-	
+
 	for (auto attribute : metaObject->GetObjectDimensions()) {
 		if (!IRecordSetObject::FindKeyValue(attribute->GetMetaID()))
 			continue;
@@ -381,7 +386,6 @@ bool CRecordSetAccumulationRegister::DeleteVirtualTable()
 	}
 
 	statement->RunQuery();
-	statement->Close();
-
+	statement->Close();*/
 	return true;
 }

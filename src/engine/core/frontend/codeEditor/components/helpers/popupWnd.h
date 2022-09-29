@@ -8,25 +8,25 @@
 #include "listBoxVisualData.h"
 
 //----------------------------------------------------------------------
-// wxSTCPopupWindow
+// COESPopupWindow
 
 #if defined(__WXOSX_COCOA__) || defined(__WXMSW__) || defined(__WXGTK__)
-#define wxSTC_POPUP_IS_CUSTOM 1
+#define wxOES_POPUP_IS_CUSTOM 1
 #else
-#define wxSTC_POPUP_IS_CUSTOM 0
+#define wxOES_POPUP_IS_CUSTOM 0
 #endif
 
-// Define the base class used for wxSTCPopupWindow.
+// Define the base class used for COESPopupWindow.
 #ifdef __WXOSX_COCOA__
 
 #include <wx/nonownedwnd.h>
-#define wxSTC_POPUP_IS_FRAME 0
+#define wxOES_POPUP_IS_FRAME 0
 
-class wxSTCPopupBase :public wxNonOwnedWindow
+class COESPopupBase :public wxNonOwnedWindow
 {
 public:
-	wxSTCPopupBase(wxWindow*);
-	virtual ~wxSTCPopupBase();
+	COESPopupBase(wxWindow*);
+	virtual ~COESPopupBase();
 	virtual bool Show(bool show = true) override;
 
 protected:
@@ -47,14 +47,14 @@ private:
 #elif wxUSE_POPUPWIN
 
 #include <wx/popupwin.h>
-#define wxSTC_POPUP_IS_FRAME 0
+#define wxOES_POPUP_IS_FRAME 0
 
-class wxSTCPopupBase : public wxPopupWindow
+class COESPopupBase : public wxPopupWindow
 {
 public:
-	wxSTCPopupBase(wxWindow*);
+	COESPopupBase(wxWindow*);
 #ifdef __WXGTK__
-	virtual ~wxSTCPopupBase();
+	virtual ~COESPopupBase();
 #elif defined(__WXMSW__)
 	virtual bool Show(bool show = true) override;
 	virtual bool MSWHandleMessage(WXLRESULT *result, WXUINT message,
@@ -66,18 +66,18 @@ public:
 #else
 
 #include <wx/valueForm.h>
-#define wxSTC_POPUP_IS_FRAME 1
+#define wxOES_POPUP_IS_FRAME 1
 
-class wxSTCPopupBase :public wxFrame
+class COESPopupBase :public wxFrame
 {
 public:
-	wxSTCPopupBase(wxWindow*);
+	COESPopupBase(wxWindow*);
 #ifdef __WXMSW__
 	virtual bool Show(bool show = true) override;
 	virtual bool MSWHandleMessage(WXLRESULT *result, WXUINT message,
 		WXWPARAM wParam, WXLPARAM lParam)
 		override;
-#elif !wxSTC_POPUP_IS_CUSTOM
+#elif !wxOES_POPUP_IS_CUSTOM
 	virtual bool Show(bool show = true) override;
 	void ActivateParent();
 #endif
@@ -85,12 +85,11 @@ public:
 
 #endif // __WXOSX_COCOA__
 
-
-class wxSTCPopupWindow : public wxSTCPopupBase
+class COESPopupWindow : public COESPopupBase
 {
 public:
-	wxSTCPopupWindow(wxWindow*);
-	virtual ~wxSTCPopupWindow();
+	COESPopupWindow(wxWindow*);
+	virtual ~COESPopupWindow();
 	virtual bool Destroy() override;
 	virtual bool AcceptsFocus() const override;
 
@@ -98,9 +97,9 @@ protected:
 	virtual void DoSetSize(int x, int y, int width, int height,
 		int sizeFlags = wxSIZE_AUTO) override;
 	void OnParentMove(wxMoveEvent& event);
-#if defined(__WXOSX_COCOA__) || (defined(__WXGTK__)&&!wxSTC_POPUP_IS_FRAME)
+#if defined(__WXOSX_COCOA__) || (defined(__WXGTK__)&&!wxOES_POPUP_IS_FRAME)
 	void OnIconize(wxIconizeEvent& event);
-#elif !wxSTC_POPUP_IS_CUSTOM
+#elif !wxOES_POPUP_IS_CUSTOM
 	void OnFocus(wxFocusEvent& event);
 #endif
 
@@ -109,16 +108,18 @@ private:
 	wxWindow* m_tlw;
 };
 
-// A popup window to place the wxSTCListBox upon
-class wxSTCListBoxWin : public wxSTCPopupWindow
+// A popup window to place the COESListBox upon
+class COESListBoxWin : public COESPopupWindow
 {
-	wxSTCListBox *m_listBox;
+	COESListBox *m_listBox;
 
 
 public:
 
-	wxSTCListBoxWin(wxWindow*, ÑListBoxVisualData *, int);
-	wxSTCListBox *GetListBox() { return m_listBox; }
+	COESListBoxWin(wxWindow*, ÑListBoxVisualData *, int);
+	COESListBox *GetListBox() const {
+		return m_listBox; 
+	}
 
 protected:
 

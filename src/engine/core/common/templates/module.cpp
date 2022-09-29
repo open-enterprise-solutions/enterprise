@@ -1,5 +1,5 @@
 #include "module.h"
-#include "module_cmd.h"
+#include "moduleCMD.h"
 #include "frontend/mainFrame.h"
 #include "metadata/metaObjectsDefines.h"
 
@@ -44,47 +44,36 @@ enum
 	wxID_PROCEDURES_FUNCTIONS
 };
 
-extern wxImageList *GetImageList();
+#include "core/resources/codeEditor/addComment.xpm"
+#include "core/resources/codeEditor/removeComment.xpm"
+#include "core/resources/codeEditor/syntaxControl.xpm"
+#include "core/resources/codeEditor/gotoLine.xpm"
+#include "core/resources/codeEditor/proceduresFunctions.xpm"
 
-void CModuleView::OnCreateToolbar(wxAuiToolBar *m_toolbar)
+void CModuleView::OnCreateToolbar(wxAuiToolBar *toolbar)
 {
 	if (m_code == NULL)
 		return;
 
-	if (!m_toolbar->GetToolCount())
-	{
-		/*for (int i = 0; i < GetImageList()->GetImageCount(); i++)
-		{
-			wxBitmap m_bmp = GetImageList()->GetBitmap(i);
-
-			wxString sFileName; sFileName << "D:/Icons/" << i;
-
-			m_bmp.SaveFile(sFileName + ".bmp", wxBitmapType::wxBITMAP_TYPE_BMP);
-			m_bmp.SaveFile(sFileName + ".png", wxBitmapType::wxBITMAP_TYPE_PNG);
-			m_bmp.SaveFile(sFileName + ".ico", wxBitmapType::wxBITMAP_TYPE_ICO);
-			m_bmp.SaveFile(sFileName + ".xpm", wxBitmapType::wxBITMAP_TYPE_XPM);
-		}*/
-
-		m_toolbar->AddTool(wxID_ADD_COMMENTS, _("Add comments"), GetImageList()->GetBitmap(622), _("Add"), wxItemKind::wxITEM_NORMAL);
-		m_toolbar->EnableTool(wxID_ADD_COMMENTS, m_code->IsEditable());
-		m_toolbar->AddTool(wxID_REMOVE_COMMENTS, _("Remove comments"), GetImageList()->GetBitmap(623), _("Remove"), wxItemKind::wxITEM_NORMAL);
-		m_toolbar->EnableTool(wxID_REMOVE_COMMENTS, m_code->IsEditable());
-		m_toolbar->AddSeparator();
-		m_toolbar->AddTool(wxID_SYSNTAX_CONTROL, _("Syntax control"), GetImageList()->GetBitmap(624), _("Syntax"), wxItemKind::wxITEM_NORMAL);
-		m_toolbar->EnableTool(wxID_SYSNTAX_CONTROL, m_code->IsEditable());
-		m_toolbar->AddSeparator();
-		m_toolbar->AddTool(wxID_GOTOLINE, _("Goto line"), GetImageList()->GetBitmap(626), _("Goto"), wxItemKind::wxITEM_NORMAL);
-		//m_toolbar->EnableTool(wxID_GOTOLINE, m_code->IsEditable());
-		m_toolbar->AddTool(wxID_PROCEDURES_FUNCTIONS, _("Procedures and functions"), GetImageList()->GetBitmap(627), _("Procedures and functions"), wxItemKind::wxITEM_NORMAL);
-		//m_toolbar->EnableTool(wxID_PROCEDURES_FUNCTIONS, m_code->IsEditable());
+	if (!toolbar->GetToolCount()) {
+		toolbar->AddTool(wxID_ADD_COMMENTS, _("Add comments"), wxIcon(s_addComment_xpm), _("Add"), wxItemKind::wxITEM_NORMAL);
+		toolbar->EnableTool(wxID_ADD_COMMENTS, m_code->IsEditable());
+		toolbar->AddTool(wxID_REMOVE_COMMENTS, _("Remove comments"), wxIcon(s_removeComment_xpm), _("Remove"), wxItemKind::wxITEM_NORMAL);
+		toolbar->EnableTool(wxID_REMOVE_COMMENTS, m_code->IsEditable());
+		toolbar->AddSeparator();
+		toolbar->AddTool(wxID_SYSNTAX_CONTROL, _("Syntax control"), wxIcon(s_syntaxControl_xpm), _("Syntax"), wxItemKind::wxITEM_NORMAL);
+		toolbar->EnableTool(wxID_SYSNTAX_CONTROL, m_code->IsEditable());
+		toolbar->AddSeparator();
+		toolbar->AddTool(wxID_GOTOLINE, _("Goto line"), wxIcon(s_gotoLine_xpm), _("Goto"), wxItemKind::wxITEM_NORMAL);
+		toolbar->AddTool(wxID_PROCEDURES_FUNCTIONS, _("Procedures and functions"), wxIcon(s_proceduresFunctions_xpm), _("Procedures and functions"), wxItemKind::wxITEM_NORMAL);
 	}
 
-	m_toolbar->Bind(wxEVT_MENU, &CModuleView::OnMenuClicked, this);
+	toolbar->Bind(wxEVT_MENU, &CModuleView::OnMenuClicked, this);
 }
 
-void CModuleView::OnRemoveToolbar(wxAuiToolBar *m_toolbar)
+void CModuleView::OnRemoveToolbar(wxAuiToolBar *toolbar)
 {
-	m_toolbar->Unbind(wxEVT_MENU, &CModuleView::OnMenuClicked, this);
+	toolbar->Unbind(wxEVT_MENU, &CModuleView::OnMenuClicked, this);
 }
 
 void CModuleView::OnDraw(wxDC *WXUNUSED(dc))

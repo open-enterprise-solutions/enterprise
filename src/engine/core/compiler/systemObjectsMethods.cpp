@@ -230,7 +230,11 @@ CValue CSystemObjects::Method(methodArg_t& aParams)
 		case enDate: return Date(aParams[0]);
 		case enString: return String(aParams[0]);
 			//--- Математические:
-		case enRound: return Round(aParams[0], aParams.GetParamCount() > 1 ? aParams[1].ToInt() : 0, aParams.GetParamCount() > 2 ? aParams[2].ConvertToEnumType<eRoundMode>() : eRoundMode::eRoundMode_Round15as20);
+		case enRound: return Round(aParams[0], 
+			aParams.GetParamCount() > 1 ? aParams[1].ToInt() : 0, 
+			aParams.GetParamCount() > 2 ?
+			aParams[2].ConvertToEnumType<eRoundMode>() : eRoundMode::eRoundMode_Round15as20
+		);
 		case enInt: return Int(aParams[0]);
 		case enLog10: return Log10(aParams[0]);
 		case enLn: return Ln(aParams[0]);

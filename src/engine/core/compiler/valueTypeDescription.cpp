@@ -266,8 +266,27 @@ CValue CValueTypeDescription::AdjustValue(const CValue& cVal) const
 	if (m_clsids.size() == 1) {
 		auto posIt = m_clsids.begin();
 		std::advance(posIt, 0);
-
 		if (metadata->IsRegisterObject(*posIt)) {
+			eValueTypes vt = CValue::GetVTByID(*posIt);
+			if (vt < eValueTypes::TYPE_REFFER) {
+				if (vt == eValueTypes::TYPE_NUMBER) {
+					return m_qNumber ? CSystemObjects::Round(cVal, m_qNumber->m_scale) : cVal.GetNumber();
+				}
+				else if (vt == eValueTypes::TYPE_DATE) {
+					if (m_qDate && m_qDate->m_dateTime == eDateFractions::eDateFractions_Date) {
+						return cVal;
+					}
+					else if (m_qDate && m_qDate->m_dateTime == eDateFractions::eDateFractions_Time) {
+						return cVal;
+					}
+					return cVal.GetDate();
+				}
+				else if (vt == eValueTypes::TYPE_STRING) {
+					return m_qString ? 
+						CSystemObjects::Left(cVal, m_qString->m_length) :
+						cVal.GetString();
+				}
+			}
 			wxString metaName = metadata->GetNameObjectFromID(*posIt);
 			return metadata->CreateObject(metaName);
 		}

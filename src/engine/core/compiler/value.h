@@ -5,12 +5,11 @@
 #include "compiler.h"
 #include "singleObject.h"
 
-class CORE_API ITypeValue : public wxObject
-{
+class CMethods;
+
+class CORE_API ITypeValue : public wxObject {
 	wxDECLARE_ABSTRACT_CLASS(ITypeValue);
-
 public:
-
 	ITypeValue(eValueTypes type) : wxObject(), m_typeClass(type) {}
 
 	virtual CValue* GetRef() const = 0;
@@ -31,6 +30,9 @@ public:
 	//ATTRIBUTES:
 	eValueTypes m_typeClass;
 };
+
+class attributeArg_t;
+class methodArg_t;
 
 //simple type date
 class CORE_API CValue : public ITypeValue {
@@ -97,12 +99,29 @@ public:
 	void operator = (wxLongLong_t cParam);
 
 	//Реализация операторов сравнения:
-	bool operator > (const CValue& cParam) const { return CompareValueGT(cParam); }
-	bool operator >= (const CValue& cParam) const { return CompareValueGE(cParam); }
-	bool operator < (const CValue& cParam) const { return CompareValueLS(cParam); }
-	bool operator <= (const CValue& cParam) const { return CompareValueLE(cParam); }
-	bool operator == (const CValue& cParam) const { return CompareValueEQ(cParam); }
-	bool operator != (const CValue& cParam) const { return CompareValueNE(cParam); }
+	bool operator > (const CValue& cParam) const { 
+		return CompareValueGT(cParam);
+	}
+	
+	bool operator >= (const CValue& cParam) const { 
+		return CompareValueGE(cParam); 
+	}
+	
+	bool operator < (const CValue& cParam) const {
+		return CompareValueLS(cParam); 
+	}
+	
+	bool operator <= (const CValue& cParam) const { 
+		return CompareValueLE(cParam); 
+	}
+	
+	bool operator == (const CValue& cParam) const { 
+		return CompareValueEQ(cParam);
+	}
+	
+	bool operator != (const CValue& cParam) const { 
+		return CompareValueNE(cParam); 
+	}
 
 	const CValue& operator+(const CValue& cParam);
 	const CValue& operator-(const CValue& cParam);
@@ -129,8 +148,7 @@ public:
 		return value_cast<valueType>(this);
 	}
 
-	template <typename enumType > inline enumType ConvertToEnumType()
-	{
+	template <typename enumType > inline enumType ConvertToEnumType() {
 		class IEnumerationVariant<enumType>* enumValue =
 			value_cast<class IEnumerationVariant<enumType>>(this);
 		wxASSERT(enumValue);
@@ -138,8 +156,7 @@ public:
 	};
 
 	//convert to value
-	template <typename retType> inline bool ConvertToValue(retType& refValue) const
-	{
+	template <typename retType> inline bool ConvertToValue(retType& refValue) const {
 		if (m_typeClass == eValueTypes::TYPE_REFFER) {
 			refValue = dynamic_cast<retType> (GetRef());
 			return refValue != NULL;
@@ -205,18 +222,18 @@ public:
 	virtual inline bool IsEmpty() const;
 	virtual wxString GetTypeString() const;
 
-	virtual bool Init() { 
+	virtual bool Init() {
 
 		if (m_typeClass == eValueTypes::TYPE_REFFER) {
-			CValue *refValue = GetRef();
+			CValue* refValue = GetRef();
 			if (refValue != NULL) {
-				return refValue->Init(); 
+				return refValue->Init();
 			}
 		}
 
-		return true; 
+		return true;
 	}
-	
+
 	virtual bool Init(CValue** aParams) {
 
 		if (m_typeClass == eValueTypes::TYPE_REFFER) {
@@ -359,56 +376,55 @@ public:
 //*                                                           value casting                                                           *
 //*************************************************************************************************************************************
 
+extern inline void ThrowErrorTypeOperation(const wxString& fromType, wxClassInfo* clsInfo);
+
 template <typename retType,
 	typename retRef = retType* >
-	class value_cast {
+class value_cast {
 	CValue* m_castValue;
-	public:
+public:
 
-		operator retRef() const {
-			return cast_value(); 
+	operator retRef() const {
+		return cast_value();
+	}
+
+	explicit value_cast(const CValue& cValue) : m_castValue(NULL)
+	{
+		if (cValue.m_typeClass == eValueTypes::TYPE_REFFER) {
+			m_castValue = cValue.GetRef();
 		}
+		else {
+			m_castValue = const_cast<CValue*>(&cValue);
+		}
+	}
 
-		explicit value_cast(const CValue& cValue) : m_castValue(NULL)
-		{
-			if (cValue.m_typeClass == eValueTypes::TYPE_REFFER) {
-				m_castValue = cValue.GetRef();
-			}
-			else {
-				m_castValue = const_cast<CValue*>(&cValue);
+	explicit value_cast(CValue* refValue) : m_castValue(NULL)
+	{
+		if (refValue->m_typeClass == eValueTypes::TYPE_REFFER) {
+			m_castValue = refValue->GetRef();
+		}
+		else {
+			m_castValue = refValue;
+		}
+	}
+
+protected:
+
+	inline retRef cast_value() const {
+		retRef retValue = NULL;
+		if (m_castValue) {
+			retValue = dynamic_cast<retRef>(m_castValue);
+			if (retValue != NULL) {
+				return retValue;
 			}
 		}
-
-		explicit value_cast(CValue* refValue) : m_castValue(NULL)
-		{
-			if (refValue->m_typeClass == eValueTypes::TYPE_REFFER) {
-				m_castValue = refValue->GetRef();
-			}
-			else {
-				m_castValue = refValue;
-			}
-		}
-
-	protected:
-
-		inline retRef cast_value() const
-		{
-			retRef retValue = NULL;
-
-			if (m_castValue) {
-				retValue = dynamic_cast<retRef>(m_castValue);
-				if (retValue != NULL) {
-					return retValue;
-				}
-			}
-
 #if defined(_USE_CONTROL_VALUECAST)
-			ThrowErrorTypeOperation(
-				m_castValue ? m_castValue->GetTypeString() : wxEmptyString, CLASSINFO(retType)
-			);
+		ThrowErrorTypeOperation(
+			m_castValue ? m_castValue->GetTypeString() : wxEmptyString, CLASSINFO(retType)
+		);
 #endif
-			return NULL;
-		}
+		return NULL;
+	}
 };
 
 #endif 

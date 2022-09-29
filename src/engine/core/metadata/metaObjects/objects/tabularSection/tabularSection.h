@@ -2,7 +2,7 @@
 
 #include "common/tableInfo.h"
 #include "common/valueInfo.h"
-#include "metadata/metaObjects/tables/metaTableObject.h"
+#include "metadata/metaObjects/table/metaTableObject.h"
 #include "guid/guid.h"
 
 class ITabularSectionDataObject : public IValueTable {
@@ -38,8 +38,13 @@ public:
 			CValueTabularSectionColumnInfo(IMetaAttributeObject* metaAttribute);
 			virtual ~CValueTabularSectionColumnInfo();
 
-			virtual wxString GetTypeString() const { return wxT("tabularSectionColumnInfo"); }
-			virtual wxString GetString() const { return wxT("tabularSectionColumnInfo"); }
+			virtual wxString GetTypeString() const { 
+				return wxT("tabularSectionColumnInfo");
+			}
+
+			virtual wxString GetString() const { 
+				return wxT("tabularSectionColumnInfo");
+			}
 
 			friend CTabularSectionDataObjectColumnCollection;
 		};

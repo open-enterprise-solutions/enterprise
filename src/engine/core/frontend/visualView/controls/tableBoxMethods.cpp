@@ -1,6 +1,6 @@
 #include "tableBox.h"
 #include "form.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 #include "compiler/methods.h"
 #include "utils/stringUtils.h"
 
@@ -14,28 +14,21 @@ void CValueTableBox::PrepareNames() const
 
 void CValueTableBox::SetAttribute(attributeArg_t &aParams, CValue &cVal)
 {
-	if (StringUtils::CompareString(aParams.GetName(), wxT("tableValue")))
-	{
-		if (m_tableModel)
+	if (StringUtils::CompareString(aParams.GetName(), wxT("tableValue"))) {
+		if (m_tableModel != NULL)
 			m_tableModel->DecrRef();
 
 		m_tableModel = cVal.ConvertToType<IValueTable>();
 		m_tableModel->IncrRef();
 	}
-	else if (StringUtils::CompareString(aParams.GetName(), wxT("currentRow")))
-	{
-		if (m_tableCurrentLine)
+	else if (StringUtils::CompareString(aParams.GetName(), wxT("currentRow"))) {
+		if (m_tableCurrentLine != NULL)
 			m_tableCurrentLine->DecrRef();
-
 		m_tableCurrentLine = NULL;
-
-		IValueTable::IValueTableReturnLine *m_tableReturnLine = NULL;
-
-		if (cVal.ConvertToValue(m_tableReturnLine))
-		{
-			if (m_tableModel == m_tableReturnLine->GetOwnerTable())
-			{
-				m_tableCurrentLine = m_tableReturnLine;
+		IValueTable::IValueTableReturnLine *tableReturnLine = NULL;
+		if (cVal.ConvertToValue(tableReturnLine)) {
+			if (m_tableModel == tableReturnLine->GetOwnerTable()) {
+				m_tableCurrentLine = tableReturnLine;
 				m_tableCurrentLine->IncrRef();
 			}
 		}

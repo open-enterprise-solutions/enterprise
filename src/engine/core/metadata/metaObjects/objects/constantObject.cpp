@@ -39,9 +39,9 @@ CConstantObject* CMetaConstantObject::CreateObjectValue()
 
 bool CConstantObject::InitializeObject(const CConstantObject* source)
 {
-	IMetadata* m_metaData = m_metaObject->GetMetadata();
-	wxASSERT(m_metaData);
-	IModuleManager* moduleManager = m_metaData->GetModuleManager();
+	IMetadata* metaData = m_metaObject->GetMetadata();
+	wxASSERT(metaData);
+	IModuleManager* moduleManager = metaData->GetModuleManager();
 	wxASSERT(moduleManager);
 
 	if (!m_compileModule) {
@@ -134,7 +134,7 @@ CSourceExplorer CConstantObject::GetSourceExplorer() const
 	return srcHelper;
 }
 
-bool CConstantObject::GetTable(IValueTable*& tableValue, const meta_identifier_t& id)
+bool CConstantObject::GetModel(IValueModel*& tableValue, const meta_identifier_t& id)
 {
 	return false;
 }
@@ -165,8 +165,7 @@ CValueForm* CConstantObject::GetFormValue()
 	CValueForm* valueForm = new CValueForm();
 	valueForm->InitializeForm(NULL, NULL,
 		this, m_metaObject->GetGuid()
-	);
-	valueForm->ReadProperty();
+	);;
 	valueForm->BuildForm(defaultFormType);
 	valueForm->Modify(false);
 

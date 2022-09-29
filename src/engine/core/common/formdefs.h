@@ -7,13 +7,15 @@
 
 #include <wx/wx.h>
 
-class IObjectBase;
+class IPropertyObject;
 class IValueFrame;
 
 class IMetadata; 
 
 class Property;
 class Event;
+
+class PropertyCategory;
 
 // Used to identify wxObject* that must be manually deleted
 class wxNoObject : public wxObject {};
@@ -28,6 +30,8 @@ class wxNoObject : public wxObject {};
 #define COMPONENT_TYPE_TABLE_COLUMN  4
 #define COMPONENT_TYPE_SIZER		 5
 #define COMPONENT_TYPE_SIZERITEM	 6
-#define COMPONENT_TYPE_METADATA		 7
+#define COMPONENT_TYPE_MENUBAR		 7
+#define COMPONENT_TYPE_MENUITEM		 8
+#define COMPONENT_TYPE_METADATA		 9
 
 #endif //_FORMDEFS_H__

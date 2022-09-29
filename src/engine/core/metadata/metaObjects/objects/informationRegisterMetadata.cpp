@@ -15,19 +15,8 @@ wxIMPLEMENT_DYNAMIC_CLASS(CMetaObjectInformationRegister, IMetaObjectRegisterDat
 /////////////////////////////////////////////////////////////////////////
 
 CMetaObjectInformationRegister::CMetaObjectInformationRegister() : IMetaObjectRegisterData(),
-m_defaultFormRecord(wxNOT_FOUND), m_defaultFormList(wxNOT_FOUND),
-m_writeMode(eWriteRegisterMode::eIndependent), m_periodicity(ePeriodicity::eNonPeriodic),
 m_metaRecordManager(new CMetaObjectRecordManager())
 {
-	PropertyContainer* categoryForm = IObjectBase::CreatePropertyContainer("DefaultForms");
-	categoryForm->AddProperty("default_record", PropertyType::PT_OPTION, &CMetaObjectInformationRegister::GetFormRecord);
-	categoryForm->AddProperty("default_list", PropertyType::PT_OPTION, &CMetaObjectInformationRegister::GetFormList);
-	m_category->AddCategory(categoryForm);
-
-	PropertyContainer* categoryData = IObjectBase::CreatePropertyContainer("Data");
-	categoryData->AddProperty("periodicity", PropertyType::PT_OPTION, &CMetaObjectInformationRegister::GetPeriodicity);
-	categoryData->AddProperty("write_mode", PropertyType::PT_OPTION, &CMetaObjectInformationRegister::GetWriteMode);
-	m_category->AddCategory(categoryData);
 
 	//create module
 	m_moduleObject = new CMetaModuleObject(objectModule);
@@ -59,16 +48,16 @@ CMetaObjectInformationRegister::~CMetaObjectInformationRegister()
 
 CMetaFormObject* CMetaObjectInformationRegister::GetDefaultFormByID(const form_identifier_t& id)
 {
-	if (id == eFormRecord && m_defaultFormRecord != wxNOT_FOUND) {
+	if (id == eFormRecord && m_propertyDefFormRecord->GetValueAsInteger() != wxNOT_FOUND) {
 		for (auto obj : GetObjectForms()) {
-			if (m_defaultFormRecord == obj->GetMetaID()) {
+			if (m_propertyDefFormRecord->GetValueAsInteger() == obj->GetMetaID()) {
 				return obj;
 			}
 		}
 	}
-	else if (id == eFormList && m_defaultFormList != wxNOT_FOUND) {
+	else if (id == eFormList && m_propertyDefFormList->GetValueAsInteger() != wxNOT_FOUND) {
 		for (auto obj : GetObjectForms()) {
-			if (m_defaultFormList == obj->GetMetaID()) {
+			if (m_propertyDefFormList->GetValueAsInteger() == obj->GetMetaID()) {
 				return obj;
 			}
 		}
@@ -100,15 +89,14 @@ CValueForm* CMetaObjectInformationRegister::GetRecordForm(const wxString& formNa
 	if (defList == NULL) {
 		CValueForm* valueForm = new CValueForm();
 		valueForm->InitializeForm(ownerControl, NULL,
-			CreateRecordManagerValue(), formGuid
+			CreateRecordManagerObjectValue(), formGuid
 		);
-		valueForm->ReadProperty();
 		valueForm->BuildForm(CMetaObjectInformationRegister::eFormRecord);
 		return valueForm;
 	}
 
 	return defList->GenerateFormAndRun(
-		ownerControl, CreateRecordManagerValue(), formGuid
+		ownerControl, CreateRecordManagerObjectValue(), formGuid
 	);
 
 	return NULL;
@@ -136,7 +124,6 @@ CValueForm* CMetaObjectInformationRegister::GetListForm(const wxString& formName
 		valueForm->InitializeForm(ownerControl, NULL,
 			new CListRegisterObject(this, CMetaObjectInformationRegister::eFormList), formGuid
 		);
-		valueForm->ReadProperty();
 		valueForm->BuildForm(CMetaObjectInformationRegister::eFormList);
 		return valueForm;
 	}
@@ -150,7 +137,7 @@ CValueForm* CMetaObjectInformationRegister::GetListForm(const wxString& formName
 
 /////////////////////////////////////////////////////////////////////////////
 
-OptionList* CMetaObjectInformationRegister::GetFormRecord(Property*)
+OptionList* CMetaObjectInformationRegister::GetFormRecord(PropertyOption*)
 {
 	OptionList* optlist = new OptionList();
 	optlist->AddOption(_("<not selected>"), wxNOT_FOUND);
@@ -164,7 +151,7 @@ OptionList* CMetaObjectInformationRegister::GetFormRecord(Property*)
 	return optlist;
 }
 
-OptionList* CMetaObjectInformationRegister::GetFormList(Property*)
+OptionList* CMetaObjectInformationRegister::GetFormList(PropertyOption*)
 {
 	OptionList* optlist = new OptionList();
 	optlist->AddOption(_("<not selected>"), wxNOT_FOUND);
@@ -204,12 +191,12 @@ CValueForm* CMetaObjectInformationRegister::GetRecordForm(const meta_identifier_
 bool CMetaObjectInformationRegister::LoadData(CMemoryReader& dataReader)
 {
 	//load default form 
-	m_defaultFormRecord = dataReader.r_u32();
-	m_defaultFormList = dataReader.r_u32();
+	m_propertyDefFormRecord->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
 
 	//load data 
-	m_writeMode = (eWriteRegisterMode)dataReader.r_u16();
-	m_periodicity = (ePeriodicity)dataReader.r_u16();
+	m_propertyWriteMode->SetValue(dataReader.r_u16());
+	m_propertyPeriodicity->SetValue(dataReader.r_u16());
 
 	//load object module
 	m_moduleObject->LoadMeta(dataReader);
@@ -221,12 +208,12 @@ bool CMetaObjectInformationRegister::LoadData(CMemoryReader& dataReader)
 bool CMetaObjectInformationRegister::SaveData(CMemoryWriter& dataWritter)
 {
 	//save default form 
-	dataWritter.w_u32(m_defaultFormRecord);
-	dataWritter.w_u32(m_defaultFormList);
+	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormRecord->GetValueAsInteger()));
+	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
 
 	//save data
-	dataWritter.w_u16(m_writeMode);
-	dataWritter.w_u16(m_periodicity);
+	dataWritter.w_u16(m_propertyWriteMode->GetValueAsInteger());
+	dataWritter.w_u16(m_propertyPeriodicity->GetValueAsInteger());
 
 	//Save object module
 	m_moduleObject->SaveMeta(dataWritter);
@@ -271,7 +258,7 @@ bool CMetaObjectInformationRegister::OnSaveMetaObject()
 		return false;
 
 #if defined(_USE_SAVE_METADATA_IN_TRANSACTION)
-	if (m_writeMode == eWriteRegisterMode::eSubordinateRecorder) {
+	if (GetWriteRegisterMode() == eWriteRegisterMode::eSubordinateRecorder) {
 		if (!(m_attributeRecorder->GetCount() > 0))
 			return false;
 	}
@@ -338,10 +325,10 @@ bool CMetaObjectInformationRegister::OnAfterRunMetaObject(int flags)
 
 		if (IMetaObjectRegisterData::OnAfterRunMetaObject(flags)) {
 
-			if (!moduleManager->AddCompileModule(m_metaRecordManager, CreateRecordManagerValue()))
+			if (!moduleManager->AddCompileModule(m_metaRecordManager, CreateRecordManagerObjectValue()))
 				return false;
 
-			if (!moduleManager->AddCompileModule(m_moduleObject, CreateRecordSetValue()))
+			if (!moduleManager->AddCompileModule(m_moduleObject, CreateRecordSetObjectValue()))
 				return false;
 
 			return true;
@@ -393,28 +380,28 @@ bool CMetaObjectInformationRegister::OnAfterCloseMetaObject()
 void CMetaObjectInformationRegister::OnCreateMetaForm(IMetaFormObject* metaForm)
 {
 	if (metaForm->GetTypeForm() == CMetaObjectInformationRegister::eFormRecord
-		&& m_defaultFormRecord == wxNOT_FOUND)
+		&& m_propertyDefFormRecord->GetValueAsInteger() == wxNOT_FOUND)
 	{
-		m_defaultFormRecord = metaForm->GetMetaID();
+		m_propertyDefFormRecord->SetValue( metaForm->GetMetaID());
 	}
 	else if (metaForm->GetTypeForm() == CMetaObjectInformationRegister::eFormList
-		&& m_defaultFormList == wxNOT_FOUND)
+		&& m_propertyDefFormList->GetValueAsInteger() == wxNOT_FOUND)
 	{
-		m_defaultFormList = metaForm->GetMetaID();
+		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
 	}
 }
 
 void CMetaObjectInformationRegister::OnRemoveMetaForm(IMetaFormObject* metaForm)
 {
 	if (metaForm->GetTypeForm() == CMetaObjectInformationRegister::eFormRecord
-		&& m_defaultFormRecord == metaForm->GetMetaID())
+		&& m_propertyDefFormRecord->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_defaultFormList = wxNOT_FOUND;
+		m_propertyDefFormRecord->SetValue(wxNOT_FOUND);
 	}
 	else if (metaForm->GetTypeForm() == CMetaObjectInformationRegister::eFormList
-		&& m_defaultFormList == metaForm->GetMetaID())
+		&& m_propertyDefFormList->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_defaultFormList = wxNOT_FOUND;
+		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
 	}
 }
 
@@ -422,16 +409,16 @@ std::vector<IMetaAttributeObject*> CMetaObjectInformationRegister::GetDefaultAtt
 {
 	std::vector<IMetaAttributeObject*> attributes;
 
-	if (m_writeMode == eWriteRegisterMode::eSubordinateRecorder) {
+	if (GetWriteRegisterMode() == eWriteRegisterMode::eSubordinateRecorder) {
 		attributes.push_back(m_attributeLineActive);
 	}
 
-	if (m_periodicity != ePeriodicity::eNonPeriodic ||
-		m_writeMode == eWriteRegisterMode::eSubordinateRecorder) {
+	if (GetPeriodicity() != ePeriodicity::eNonPeriodic ||
+		GetWriteRegisterMode() == eWriteRegisterMode::eSubordinateRecorder) {
 		attributes.push_back(m_attributePeriod);
 	}
 
-	if (m_writeMode == eWriteRegisterMode::eSubordinateRecorder) {
+	if (GetWriteRegisterMode() == eWriteRegisterMode::eSubordinateRecorder) {
 		attributes.push_back(m_attributeRecorder);
 		attributes.push_back(m_attributeLineNumber);
 	}
@@ -443,8 +430,8 @@ std::vector<IMetaAttributeObject*> CMetaObjectInformationRegister::GetGenericDim
 {
 	std::vector<IMetaAttributeObject*> attributes;
 
-	if (m_writeMode != eWriteRegisterMode::eSubordinateRecorder) {
-		if (m_periodicity != ePeriodicity::eNonPeriodic) {
+	if (GetWriteRegisterMode() != eWriteRegisterMode::eSubordinateRecorder) {
+		if (GetPeriodicity() != ePeriodicity::eNonPeriodic) {
 			attributes.push_back(m_attributePeriod);
 		}
 		for (auto dimension : GetObjectDimensions()) {
@@ -462,36 +449,14 @@ ISourceDataObject* CMetaObjectInformationRegister::CreateObjectData(IMetaFormObj
 {
 	switch (metaObject->GetTypeForm())
 	{
-	case eFormRecord: return CreateRecordManagerValue();
+	case eFormRecord: return CreateRecordManagerObjectValue();
 	case eFormList: return new CListRegisterObject(this, metaObject->GetTypeForm());
 	}
 
 	return NULL;
 }
 
-IRecordSetObject* CMetaObjectInformationRegister::CreateRecordSet()
-{
-	return new CRecordSetInformationRegister(this);
-}
-
-IRecordSetObject* CMetaObjectInformationRegister::CreateRecordSet(const CUniquePairKey& uniqueKey)
-{
-	return new CRecordSetInformationRegister(this, uniqueKey);
-}
-
-IRecordManagerObject* CMetaObjectInformationRegister::CreateRecordManager()
-{
-	return new CRecordManagerInformationRegister(this);
-}
-
-IRecordManagerObject* CMetaObjectInformationRegister::CreateRecordManager(const CUniquePairKey& uniqueKey)
-{
-	return new CRecordManagerInformationRegister(this, uniqueKey);
-}
-
-/////////////////////////////////////////////////////////////////////////
-
-IRecordSetObject* CMetaObjectInformationRegister::CreateRecordSetValue()
+IRecordSetObject* CMetaObjectInformationRegister::CreateRecordSetObjectRegValue(const CUniquePairKey& uniqueKey)
 {
 	IModuleManager* moduleManager = m_metaData->GetModuleManager();
 	wxASSERT(moduleManager);
@@ -499,14 +464,14 @@ IRecordSetObject* CMetaObjectInformationRegister::CreateRecordSetValue()
 	if (appData->DesignerMode()) {
 		IRecordSetObject* pDataRef = NULL;
 		if (!moduleManager->FindCompileModule(m_moduleObject, pDataRef)) {
-			return CreateRecordSet();
+			return new CRecordSetInformationRegister(this, uniqueKey);
 		}
 		return pDataRef;
 	}
-	return CreateRecordSet();
+	return new CRecordSetInformationRegister(this, uniqueKey);
 }
 
-IRecordManagerObject* CMetaObjectInformationRegister::CreateRecordManagerValue()
+IRecordManagerObject* CMetaObjectInformationRegister::CreateRecordManagerObjectRegValue(const CUniquePairKey& uniqueKey)
 {
 	IModuleManager* moduleManager = m_metaData->GetModuleManager();
 	wxASSERT(moduleManager);
@@ -514,35 +479,11 @@ IRecordManagerObject* CMetaObjectInformationRegister::CreateRecordManagerValue()
 	if (appData->DesignerMode()) {
 		IRecordManagerObject* pDataRef = NULL;
 		if (!moduleManager->FindCompileModule(m_metaRecordManager, pDataRef)) {
-			return CreateRecordManager();
+			return new CRecordManagerInformationRegister(this, uniqueKey);
 		}
 		return pDataRef;
 	}
-	return CreateRecordManager();
-}
-
-//***********************************************************************
-//*                           read & save property                      *
-//***********************************************************************
-
-void CMetaObjectInformationRegister::ReadProperty()
-{
-	IMetaObjectRegisterData::ReadProperty();
-
-	IObjectBase::SetPropertyValue("default_record", m_defaultFormRecord);
-	IObjectBase::SetPropertyValue("default_list", m_defaultFormList);
-	IObjectBase::SetPropertyValue("write_mode", m_writeMode);
-	IObjectBase::SetPropertyValue("periodicity", m_periodicity);
-}
-
-void CMetaObjectInformationRegister::SaveProperty()
-{
-	IMetaObjectRegisterData::SaveProperty();
-
-	IObjectBase::GetPropertyValue("default_record", m_defaultFormRecord);
-	IObjectBase::GetPropertyValue("default_list", m_defaultFormList);
-	IObjectBase::GetPropertyValue("write_mode", m_writeMode, true);
-	IObjectBase::GetPropertyValue("periodicity", m_periodicity, true);
+	return new CRecordManagerInformationRegister(this, uniqueKey);
 }
 
 //***********************************************************************

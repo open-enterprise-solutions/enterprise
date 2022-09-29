@@ -118,7 +118,7 @@ void DatabaseLayer::CloseStatements()
 	m_Statements.clear();
 }
 
-bool DatabaseLayer::CloseResultSet(DatabaseResultSet* pResultSet)
+bool DatabaseLayer::CloseResultSet(DatabaseResultSet*& pResultSet)
 {
 	if (pResultSet != NULL)
 	{
@@ -126,7 +126,7 @@ bool DatabaseLayer::CloseResultSet(DatabaseResultSet* pResultSet)
 		if (m_ResultSets.find(pResultSet) != m_ResultSets.end())
 		{
 			// Remove the result set pointer from the list and delete the pointer
-			m_ResultSets.erase(pResultSet); delete pResultSet;
+			m_ResultSets.erase(pResultSet); wxDELETE(pResultSet);
 			return true;
 		}
 
@@ -149,7 +149,7 @@ bool DatabaseLayer::CloseResultSet(DatabaseResultSet* pResultSet)
 
 		// If we don't know about the result set and the statements don't
 		//  know about it, the just delete it
-		delete pResultSet;
+		wxDELETE(pResultSet);
 		return true;
 	}
 	else
@@ -160,20 +160,19 @@ bool DatabaseLayer::CloseResultSet(DatabaseResultSet* pResultSet)
 
 }
 
-bool DatabaseLayer::CloseStatement(PreparedStatement* pStatement)
+bool DatabaseLayer::CloseStatement(PreparedStatement*& pStatement)
 {
 	if (pStatement != NULL)
 	{
 		// See if we know about this pointer, if so then remove it from the list
-		if (m_Statements.find(pStatement) != m_Statements.end())
-		{
+		if (m_Statements.find(pStatement) != m_Statements.end()) {
 			// Remove the statement pointer from the list and delete the pointer
-			m_Statements.erase(pStatement); delete pStatement;
+			m_Statements.erase(pStatement); wxDELETE(pStatement);
 			return true;
 		}
 
 		// Otherwise just delete it
-		delete pStatement;
+		wxDELETE(pStatement);
 		return true;
 	}
 	else
@@ -604,19 +603,19 @@ wxDateTime DatabaseLayer::GetSingleResultDate(const wxString& strSQL, const wxVa
 	return value;
 }
 
-void* DatabaseLayer::GetSingleResultBlob(const wxString& strSQL, int nField, wxMemoryBuffer& Buffer, bool bRequireUniqueResult /*= true*/)
+void* DatabaseLayer::GetSingleResultBlob(const wxString& strSQL, int nField, wxMemoryBuffer& buffer, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant((long)nField);
-	return GetSingleResultBlob(strSQL, &variant, Buffer, bRequireUniqueResult);
+	return GetSingleResultBlob(strSQL, &variant, buffer, bRequireUniqueResult);
 }
 
-void* DatabaseLayer::GetSingleResultBlob(const wxString& strSQL, const wxString& strField, wxMemoryBuffer& Buffer, bool bRequireUniqueResult /*= true*/)
+void* DatabaseLayer::GetSingleResultBlob(const wxString& strSQL, const wxString& strField, wxMemoryBuffer& buffer, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant(strField);
-	return GetSingleResultBlob(strSQL, &variant, Buffer, bRequireUniqueResult);
+	return GetSingleResultBlob(strSQL, &variant, buffer, bRequireUniqueResult);
 }
 
-void* DatabaseLayer::GetSingleResultBlob(const wxString& strSQL, const wxVariant* field, wxMemoryBuffer& Buffer, bool bRequireUniqueResult /*= true*/)
+void* DatabaseLayer::GetSingleResultBlob(const wxString& strSQL, const wxVariant* field, wxMemoryBuffer& buffer, bool bRequireUniqueResult /*= true*/)
 {
 	bool valueRetrievedFlag = false;
 	void* value = NULL;
@@ -644,9 +643,9 @@ void* DatabaseLayer::GetSingleResultBlob(const wxString& strSQL, const wxVariant
 			else
 			{
 				if (field->IsType(_("string")))
-					value = pResult->GetResultBlob(field->GetString(), Buffer);
+					value = pResult->GetResultBlob(field->GetString(), buffer);
 				else
-					value = pResult->GetResultBlob(field->GetLong(), Buffer);
+					value = pResult->GetResultBlob(field->GetLong(), buffer);
 				valueRetrievedFlag = true;
 
 				// If the user isn't concerned about returning a unique result,

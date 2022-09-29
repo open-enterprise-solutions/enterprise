@@ -2,24 +2,22 @@
 #define _METADATA_DOC_H__
 
 #include "common/docInfo.h"
-#include "common/codeproc.h"
-
 #include "frontend/metatree/metatreeWnd.h"
 
 // The view using a standard wxTextCtrl to show its contents
 class CMetadataView : public CView
 {
-	CMetadataTree *m_metaTree;
+	CMetadataTree* m_metaTree;
 
 public:
 
 	CMetadataView() : CView() {}
 
-	virtual bool OnCreate(CDocument *doc, long flags) override;
-	virtual void OnDraw(wxDC *dc) override;
+	virtual bool OnCreate(CDocument* doc, long flags) override;
+	virtual void OnDraw(wxDC* dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
-	CMetadataTree *GetMetaTree() const { return m_metaTree; }
+	CMetadataTree* GetMetaTree() const { return m_metaTree; }
 
 protected:
 
@@ -30,13 +28,20 @@ protected:
 // CTextDocument: wxDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-class CMetadataDocument : public CDocument
-{
-	CConfigFileMetadata *m_metaData;
-
+class CMetadataDocument : public CDocument {
+	CConfigFileMetadata* m_metaData;
 public:
 
-	CMetadataDocument() : CDocument() {}
+	virtual wxIcon GetIcon() const {
+		if (m_metaData != NULL) {
+			IMetaObject* metaObject = m_metaData->GetCommonMetaObject();
+			wxASSERT(metaObject);
+			return metaObject->GetIcon();
+		}
+		return wxNullIcon;
+	}
+
+	CMetadataDocument() : CDocument(), m_metaData(NULL) {}
 	virtual ~CMetadataDocument() { wxDELETE(m_metaData); }
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
@@ -45,7 +50,7 @@ public:
 	virtual bool IsModified() const override;
 	virtual void Modify(bool mod) override;
 
-	virtual CMetadataTree *GetMetaTree() const = 0;
+	virtual CMetadataTree* GetMetaTree() const = 0;
 
 protected:
 
@@ -65,7 +70,7 @@ class CMetataEditDocument : public CMetadataDocument
 public:
 
 	CMetataEditDocument() : CMetadataDocument() { m_childDoc = false; }
-	virtual CMetadataTree *GetMetaTree() const;
+	virtual CMetadataTree* GetMetaTree() const;
 
 	wxDECLARE_NO_COPY_CLASS(CMetataEditDocument);
 	wxDECLARE_DYNAMIC_CLASS(CMetataEditDocument);

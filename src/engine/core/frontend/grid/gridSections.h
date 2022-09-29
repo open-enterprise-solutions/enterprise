@@ -11,56 +11,66 @@ enum eSectionMode
 	UPPER_MODE,
 };
 
-struct CSection
-{
-	wxString sSectionName;
-	int nRangeFrom;
-	int nRangeTo;
-};
-
-class CSectionArray : public std::vector<CSection>
-{
-public:
-
-	void Load(wxFile &f);
-	void Save(wxFile &f);
-};
-
 class CGrid;
 
-class CSectionCtrl
-{
-	CGrid *m_grid; 
-	
+struct section_t {
+	wxString m_sectionName;
+	unsigned int m_rangeFrom;
+	unsigned int m_rangeTo;
+};
+
+class CSectionCtrl {
+	CGrid* m_grid;
 private:
-
 	//section array 
-	std::vector<CSection> m_aSections; 
+	std::vector<section_t> m_aSections;
 	//section mode 
-	eSectionMode m_nMode;
-
+	eSectionMode m_sectionMode;
 public:
 
-	CSectionCtrl(CGrid *grid, eSectionMode nSetMode);
-	~CSectionCtrl();
+	CSectionCtrl(CGrid* grid, eSectionMode setMode);
 
-	wxPoint GetRange(const wxString &sSectionName);
-	int FindInSection(int nCurRow, wxString &csStr);
-	CSection FindSectionByPos(int pos);
-	int GetNSectionFromPoint(wxPoint point);
+	wxPoint GetRange(const wxString& sectionName) const;
+	int FindInSection(unsigned int currRow, wxString& sectionName) const;
+	section_t *FindSectionByPos(unsigned int pos);
+	int GetNSectionFromPoint(const wxPoint& point) const;
 
-	CSection GetSection(int index) { return m_aSections[index]; }
+	section_t& GetSection(unsigned int index) {
+		return m_aSections[index];
+	}
 
-	void Add(int nRangeFrom, int nRangeTo);
-	void Remove(int nRangeFrom, int nRangeTo);
+	eSectionMode GetSectionMode() const {
+		return m_sectionMode; 
+	}
 
-	void InsertRow(int row);
-	void RemoveRow(int row);
+	bool Add(unsigned int rangeFrom, unsigned int rangeTo);
+	bool Remove(unsigned int rangeFrom, unsigned int rangeTo);
 
-	bool EditName(int row);
-	unsigned int GetSize();
+	void InsertRow(unsigned int row);
+	void RemoveRow(unsigned int row);
 
-	void ClearSections() { m_aSections.clear(); }
+	bool EditName(int pos);
+	bool EditName(section_t& section);
+
+	unsigned int CellSize() const {
+		if (m_sectionMode == eSectionMode::LEFT_MODE) {
+			unsigned int countSection = m_aSections.size();
+			return countSection > 0 ? 80 : 0;
+		}
+		else {
+			unsigned int countSection = m_aSections.size();
+			return countSection > 0 ? 20 : 0;
+		}
+		return 0;
+	}
+
+	unsigned int Count() const {
+		return m_aSections.size();
+	}
+
+	void Clear() {
+		m_aSections.clear();
+	}
 };
 
 #endif 

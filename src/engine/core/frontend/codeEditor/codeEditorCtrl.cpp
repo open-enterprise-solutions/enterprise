@@ -23,14 +23,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void CCodeEditorCtrl::OnStyleNeeded(wxStyledTextEvent& event)
 {
-	for (int line_start = LineFromPosition(GetEndStyled()); line_start < GetLineCount(); line_start++)
-	{
+	for (int line_start = LineFromPosition(GetEndStyled());
+		line_start < GetLineCount();
+		line_start++) {
 		//get exact start positions
 		int startpos = PositionFromLine(line_start);
 		int endpos = GetLineEndPosition(line_start);
-
 		wxString text = GetLine(line_start); //GetTextRange(startpos, endpos);
-
 		//call highlighting function
 		HighlightSyntax(startpos, endpos, text);
 	}
@@ -50,11 +49,10 @@ void CCodeEditorCtrl::OnStyleNeeded(wxStyledTextEvent& event)
      }\
 } \
 
-void CCodeEditorCtrl::HighlightSyntax(unsigned int fromPos, unsigned int toPos, wxString &code)
+void CCodeEditorCtrl::HighlightSyntax(unsigned int fromPos, unsigned int toPos, wxString& code)
 {
 	//Syntax coloring overrides
-	struct CTextBlock
-	{
+	struct CTextBlock {
 		unsigned int m_nCharPos;
 		unsigned int m_nColorIndex;
 	};
@@ -133,17 +131,15 @@ void CCodeEditorCtrl::HighlightSyntax(unsigned int fromPos, unsigned int toPos, 
 		SetStyling(toPos - fromPos, 0); //with that length and style -> cleared
 	}
 
-	for (unsigned int i = 0; i < aBlocks.size(); i++)
-	{
+	for (unsigned int i = 0; i < aBlocks.size(); i++) {
 		wxString sTextStart = code.Mid(0, aBlocks[i].m_nCharPos);
 		wxString sTextEnd = wxEmptyString;
-
-		if (i != aBlocks.size() - 1) sTextEnd = code.Mid(aBlocks[i].m_nCharPos, aBlocks[i + 1].m_nCharPos);
-		else sTextEnd = code.Mid(aBlocks[i].m_nCharPos, toPos);
-
+		if (i != aBlocks.size() - 1)
+			sTextEnd = code.Mid(aBlocks[i].m_nCharPos, aBlocks[i + 1].m_nCharPos);
+		else
+			sTextEnd = code.Mid(aBlocks[i].m_nCharPos, toPos);
 		const wxCharBuffer csBufferDataStart = sTextStart.utf8_str();
 		const wxCharBuffer csBufferDataEnd = sTextEnd.utf8_str();
-
 		StartStyling(fromPos + csBufferDataStart.length());
 		SetStyling(csBufferDataEnd.length(), aBlocks[i].m_nColorIndex);
 	}
@@ -158,18 +154,15 @@ void CCodeEditorCtrl::OnMarginClick(wxStyledTextEvent& event)
 	case DEF_BREAKPOINT_ID:
 	{
 		if (IsEditable()) {
-
 			int dwFlags = MarkerGet(line);
-
 			//Обновляем список точек останова
-			wxString sModuleName = m_document->GetFilename();
-
+			wxString moduleName = m_document->GetFilename();
 			if ((dwFlags & (1 << CCodeEditorCtrl::Breakpoint))) {
-				if (debugClient->RemoveBreakpoint(sModuleName, line))
+				if (debugClient->RemoveBreakpoint(moduleName, line))
 					MarkerDelete(line, CCodeEditorCtrl::Breakpoint);
 			}
 			else {
-				if (debugClient->ToggleBreakpoint(sModuleName, line))
+				if (debugClient->ToggleBreakpoint(moduleName, line))
 					MarkerAdd(line, CCodeEditorCtrl::Breakpoint);
 			}
 		}
@@ -189,12 +182,13 @@ void CCodeEditorCtrl::OnTextChange(wxStyledTextEvent& event)
 		(modFlags & (wxSTC_MOD_BEFOREDELETE)) == 0)
 		return;
 
-	if (m_bInitialized)
-	{
-		CMetaModuleObject *m_moduleObject = wxStaticCast(m_document->GetMetaObject(), CMetaModuleObject);
+	if (m_bInitialized) {
+		CMetaModuleObject* moduleObject = wxStaticCast(m_document->GetMetaObject(), CMetaModuleObject);
+		if (moduleObject != NULL) {
 
-		if (m_moduleObject)
-		{
+			IMetadata* metaData = moduleObject->GetMetadata();
+			wxASSERT(metaData);
+
 			std::string csCode = GetTextRaw();
 			unsigned int length = 0; int patchLine = 0; bool hasChanged = false;
 
@@ -219,20 +213,12 @@ void CCodeEditorCtrl::OnTextChange(wxStyledTextEvent& event)
 				}
 			}
 
-			IMetaObject *metaObject = m_document->GetMetaObject();
-			wxASSERT(metaObject);
-			IMetadata *metaData = metaObject->GetMetadata();
-			wxASSERT(metaData);
-
 			if (hasChanged) {
-				
-				IModuleInfo *pRefData = NULL;
-
-				IModuleManager *moduleManager = metaData->GetModuleManager();
+				IModuleManager* moduleManager = metaData->GetModuleManager();
 				wxASSERT(moduleManager);
-
+				IModuleInfo* pRefData = NULL;
 				if (moduleManager->FindCompileModule(m_document->GetMetaObject(), pRefData)) {
-					CCompileModule *compileModule = pRefData->GetCompileModule();
+					CCompileModule* compileModule = pRefData->GetCompileModule();
 					wxASSERT(compileModule);
 					if (!compileModule->m_bNeedRecompile)
 						compileModule->m_bNeedRecompile = true;
@@ -241,11 +227,15 @@ void CCodeEditorCtrl::OnTextChange(wxStyledTextEvent& event)
 
 			m_document->Modify(true);
 
-			if ((modFlags & wxSTC_MOD_BEFOREINSERT) != 0) length = sInsert.Length();
-			else length = wxString::FromUTF8(csCode.substr(event.GetPosition(), event.GetLength())).Length();
+			if ((modFlags & wxSTC_MOD_BEFOREINSERT) != 0)
+				length = sInsert.Length();
+			else
+				length = wxString::FromUTF8(csCode.substr(event.GetPosition(), event.GetLength())).Length();
 
-			if ((modFlags & wxSTC_MOD_BEFOREINSERT) != 0) csCode.insert(event.GetPosition(), sInsert.utf8_str());
-			else csCode.erase(event.GetPosition(), event.GetLength());
+			if ((modFlags & wxSTC_MOD_BEFOREINSERT) != 0)
+				csCode.insert(event.GetPosition(), sInsert.utf8_str());
+			else
+				csCode.erase(event.GetPosition(), event.GetLength());
 
 			wxString sCode = wxString::FromUTF8(csCode);
 
@@ -264,7 +254,7 @@ void CCodeEditorCtrl::OnTextChange(wxStyledTextEvent& event)
 			}
 
 			if (patchLine != 0) {
-				debugClient->PatchBreakpoints(m_moduleObject->GetDocPath(), needChangePos ? currLine + 1 : currLine, patchLine);
+				debugClient->PatchBreakpoints(moduleObject->GetDocPath(), needChangePos ? currLine + 1 : currLine, patchLine);
 			}
 
 #ifndef _USE_OLD_TEXT_PARSER_IN_CODE_EDITOR 	
@@ -287,12 +277,12 @@ void CCodeEditorCtrl::OnTextChange(wxStyledTextEvent& event)
 			{
 			}
 #endif
-			m_moduleObject->SetModuleText(sCode);
+			moduleObject->SetModuleText(sCode);
+		}
 	}
 }
-}
 
-void CCodeEditorCtrl::OnKeyDown(wxKeyEvent &event)
+void CCodeEditorCtrl::OnKeyDown(wxKeyEvent& event)
 {
 	if (!IsEditable()) {
 		event.Skip(); return;
@@ -300,8 +290,12 @@ void CCodeEditorCtrl::OnKeyDown(wxKeyEvent &event)
 
 	switch (event.GetKeyCode())
 	{
-	case WXK_LEFT: SetEmptySelection(GetCurrentPos() - 1); break;
-	case WXK_RIGHT: SetEmptySelection(GetCurrentPos() + 1); break;
+	case WXK_LEFT:
+		SetEmptySelection(GetCurrentPos() - 1);
+		break;
+	case WXK_RIGHT:
+		SetEmptySelection(GetCurrentPos() + 1);
+		break;
 	case WXK_UP:
 	{
 		int currentPos = GetCurrentPos();
@@ -315,12 +309,9 @@ void CCodeEditorCtrl::OnKeyDown(wxKeyEvent &event)
 		int startNewPos = PositionFromLine(line - 1);
 		int endNewPos = GetLineEndPosition(line - 1);
 
-		if (endNewPos - startNewPos < length)
-		{
+		if (endNewPos - startNewPos < length) {
 			std::string m_stringBuffer;
-
-			for (int c = 0; c < (length - (endNewPos - startNewPos)); c++)
-			{
+			for (int c = 0; c < (length - (endNewPos - startNewPos)); c++) {
 				m_stringBuffer.push_back(' ');
 			}
 
@@ -356,7 +347,9 @@ void CCodeEditorCtrl::OnKeyDown(wxKeyEvent &event)
 
 		SetEmptySelection(startNewPos + length); break;
 	}
+	case WXK_NUMPAD_ENTER:
 	case WXK_RETURN: PrepareTABs(); break;
+		//case '.': if (m_bEnableAutoComplete) LoadAutoComplete(); event.Skip(); break;
 	case ' ': if (m_bEnableAutoComplete && event.ControlDown()) LoadAutoComplete(); event.Skip(); break;
 	case '9': if (m_bEnableAutoComplete && event.ShiftDown()) LoadCallTip(); event.Skip(); break;
 	case '0': if (m_bEnableAutoComplete && event.ShiftDown()) ct.Cancel(); event.Skip(); break;
@@ -382,7 +375,7 @@ void CCodeEditorCtrl::OnDebugEvent(wxDebugEvent& event)
 	}
 }
 
-void CCodeEditorCtrl::OnDebugToolTipEvent(wxDebugToolTipEvent &event)
+void CCodeEditorCtrl::OnDebugToolTipEvent(wxDebugToolTipEvent& event)
 {
 	wxString sModuleName = event.GetModuleName();
 	switch (event.GetEventId())
@@ -397,7 +390,7 @@ void CCodeEditorCtrl::OnDebugToolTipEvent(wxDebugToolTipEvent &event)
 	}
 }
 
-void CCodeEditorCtrl::OnDebugAutocompleteEvent(wxDebugAutocompleteEvent &event)
+void CCodeEditorCtrl::OnDebugAutocompleteEvent(wxDebugAutocompleteEvent& event)
 {
 	switch (event.GetEventId())
 	{
@@ -464,15 +457,17 @@ void CCodeEditorCtrl::SetCurrentLine(int lineBreakpoint, bool setBreakLine)
 
 	int nFirstVisibleLine = GetFirstVisibleLine(), nLinesOnScreen = LinesOnScreen();
 
-	if (nFirstVisibleLine > (lineBreakpoint - 1)) ScrollToLine(lineBreakpoint - 1);
-	else if (nFirstVisibleLine + nLinesOnScreen < (lineBreakpoint - 1)) ScrollToLine(lineBreakpoint - 1);
+	if (nFirstVisibleLine > (lineBreakpoint - 1))
+		ScrollToLine(lineBreakpoint - 1);
+	else if (nFirstVisibleLine + nLinesOnScreen < (lineBreakpoint - 1))
+		ScrollToLine(lineBreakpoint - 1);
 
 	if (!setBreakLine) {
 		GotoLine(lineBreakpoint - 1);
 	}
 }
 
-void CCodeEditorCtrl::SetEditorSettings(const EditorSettings & settings)
+void CCodeEditorCtrl::SetEditorSettings(const EditorSettings& settings)
 {
 	m_bIndentationSize = settings.GetIndentSize();
 
@@ -541,7 +536,7 @@ inline wxColour GetInverse(const wxColour& color)
 	return wxColour(r ^ 0xFF, g ^ 0xFF, b ^ 0xFF);
 }
 
-void CCodeEditorCtrl::SetFontColorSettings(const FontColorSettings &settings)
+void CCodeEditorCtrl::SetFontColorSettings(const FontColorSettings& settings)
 {
 	// For some reason StyleSetFont takes a (non-const) reference, so we need to make
 	// a copy before passing it in.
@@ -619,7 +614,7 @@ void CCodeEditorCtrl::SetFontColorSettings(const FontColorSettings &settings)
 	SetCaretForeground(GetInverse(settings.GetColors(FontColorSettings::DisplayItem_Default).backColor));
 }
 
-void CCodeEditorCtrl::AppendText(const wxString &text)
+void CCodeEditorCtrl::AppendText(const wxString& text)
 {
 	int lastLine = wxStyledTextCtrl::GetLineCount() - 1;
 
@@ -627,7 +622,7 @@ void CCodeEditorCtrl::AppendText(const wxString &text)
 	wxStyledTextCtrl::AppendText(text);
 	m_bInitialized = true;
 
-	CMetaModuleObject *moduleObject = wxStaticCast(
+	CMetaModuleObject* moduleObject = wxStaticCast(
 		m_document->GetMetaObject(), CMetaModuleObject
 	);
 
@@ -643,7 +638,7 @@ void CCodeEditorCtrl::AppendText(const wxString &text)
 	SaveModule();
 
 	if (moduleObject) {
-		debugClient->PatchBreakpoints(moduleObject->GetDocPath(), 
+		debugClient->PatchBreakpoints(moduleObject->GetDocPath(),
 			lastLine, wxStyledTextCtrl::GetLineCount() - lastLine - 1
 		);
 	}
@@ -668,12 +663,12 @@ void CCodeEditorCtrl::AppendText(const wxString &text)
 	CalculateFoldLevels();
 }
 
-void CCodeEditorCtrl::Replace(long from, long to, const wxString &text)
+void CCodeEditorCtrl::Replace(long from, long to, const wxString& text)
 {
-	int lineStart = wxStyledTextCtrl::LineFromPosition(from); 
+	int lineStart = wxStyledTextCtrl::LineFromPosition(from);
 	int lineEnd = wxStyledTextCtrl::LineFromPosition(to);
 
-	int patchLine = 0; 
+	int patchLine = 0;
 
 	std::string m_strBuffer = text.utf8_str();
 
@@ -687,7 +682,7 @@ void CCodeEditorCtrl::Replace(long from, long to, const wxString &text)
 	wxStyledTextCtrl::Replace(from, to, text);
 	m_bInitialized = true;
 
-	CMetaModuleObject *moduleObject = wxStaticCast(
+	CMetaModuleObject* moduleObject = wxStaticCast(
 		m_document->GetMetaObject(), CMetaModuleObject
 	);
 
@@ -732,7 +727,7 @@ void CCodeEditorCtrl::Replace(long from, long to, const wxString &text)
 
 CCodeEditorCtrl::CCodeEditorCtrl() : wxStyledTextCtrl(), ac(this), ct(this) {}
 
-CCodeEditorCtrl::CCodeEditorCtrl(CDocument *document, wxWindow *parent, wxWindowID id, const wxPoint & pos, const wxSize & size, long style, const wxString & name)
+CCodeEditorCtrl::CCodeEditorCtrl(CDocument* document, wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style, const wxString& name)
 	: wxStyledTextCtrl(parent, id, pos, size, style, name), m_document(document), ac(this), ct(this), m_precompileModule(NULL), m_bInitialized(false)
 {
 	debugClient->AddHandler(this);
@@ -807,9 +802,8 @@ bool CCodeEditorCtrl::LoadModule()
 
 	wxDELETE(m_precompileModule);
 
-	if (m_document)
-	{
-		CMetaModuleObject *moduleObject = wxStaticCast(m_document->GetMetaObject(), CMetaModuleObject);
+	if (m_document != NULL) {
+		CMetaModuleObject* moduleObject = wxStaticCast(m_document->GetMetaObject(), CMetaModuleObject);
 		wxASSERT(moduleObject);
 		m_precompileModule = new CPrecompileModule(moduleObject);
 
@@ -824,8 +818,7 @@ bool CCodeEditorCtrl::LoadModule()
 
 		m_precompileModule->Load(moduleObject->GetModuleText());
 
-		try
-		{
+		try {
 			m_precompileModule->PrepareLexem();
 		}
 		catch (...)
@@ -839,13 +832,11 @@ bool CCodeEditorCtrl::LoadModule()
 
 bool CCodeEditorCtrl::SaveModule()
 {
-	if (m_document) {
-		CMetaModuleObject *m_moduleObject = wxStaticCast(m_document->GetMetaObject(), CMetaModuleObject);
-
-		wxASSERT(m_moduleObject);
-
-		if (m_moduleObject) {
-			m_moduleObject->SetModuleText(GetText());
+	if (m_document != NULL) {
+		CMetaModuleObject* moduleObject = wxStaticCast(m_document->GetMetaObject(), CMetaModuleObject);
+		wxASSERT(moduleObject);
+		if (moduleObject != NULL) {
+			moduleObject->SetModuleText(GetText());
 		}
 	}
 

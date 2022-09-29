@@ -9,44 +9,15 @@
 #define objectModule wxT("objectModule")
 #define managerModule wxT("managerModule")
 
-wxIMPLEMENT_DYNAMIC_CLASS(CMetaObjectDataProcessor, IMetaObjectRecordData)
+wxIMPLEMENT_DYNAMIC_CLASS(CMetaObjectDataProcessor, IMetaObjectRecordDataExt)
 wxIMPLEMENT_DYNAMIC_CLASS(CMetaObjectDataProcessorExternal, CMetaObjectDataProcessor)
 
 //********************************************************************************************
 //*                                      metadata                                            *
 //********************************************************************************************
 
-CMetaObjectDataProcessor::CMetaObjectDataProcessor() : IMetaObjectRecordData(),
-m_defaultFormObject(wxNOT_FOUND), m_objMode(METAOBJECT_NORMAL)
+CMetaObjectDataProcessor::CMetaObjectDataProcessor(int objMode) : IMetaObjectRecordDataExt(objMode)
 {
-	PropertyContainer* categoryForm = IObjectBase::CreatePropertyContainer("DefaultForms");
-	categoryForm->AddProperty("default_object", PropertyType::PT_OPTION, &CMetaObjectDataProcessor::GetFormObject);
-	m_category->AddCategory(categoryForm);
-
-	//create module
-	m_moduleObject = new CMetaModuleObject(objectModule);
-	m_moduleObject->SetClsid(g_metaModuleCLSID);
-
-	//set child/parent
-	m_moduleObject->SetParent(this);
-	AddChild(m_moduleObject);
-
-	m_moduleManager = new CMetaManagerModuleObject(managerModule);
-	m_moduleManager->SetClsid(g_metaManagerCLSID);
-
-	//set child/parent
-	m_moduleManager->SetParent(this);
-	AddChild(m_moduleManager);
-}
-
-
-CMetaObjectDataProcessor::CMetaObjectDataProcessor(int objMode) : IMetaObjectRecordData(),
-m_defaultFormObject(wxNOT_FOUND), m_objMode(objMode)
-{
-	PropertyContainer* categoryForm = IObjectBase::CreatePropertyContainer("DefaultForms");
-	categoryForm->AddProperty("default_object", PropertyType::PT_OPTION, &CMetaObjectDataProcessor::GetFormObject);
-	m_category->AddCategory(categoryForm);
-
 	//create module
 	m_moduleObject = new CMetaModuleObject(objectModule);
 	m_moduleObject->SetClsid(g_metaModuleCLSID);
@@ -69,12 +40,12 @@ CMetaObjectDataProcessor::~CMetaObjectDataProcessor()
 	wxDELETE(m_moduleManager);
 }
 
-CMetaFormObject* CMetaObjectDataProcessor::GetDefaultFormByID(const form_identifier_t &id)
+CMetaFormObject* CMetaObjectDataProcessor::GetDefaultFormByID(const form_identifier_t& id)
 {
 	if (id == eFormDataProcessor
-		&& m_defaultFormObject != wxNOT_FOUND) {
+		&& m_propertyDefFormObject->GetValueAsInteger() != wxNOT_FOUND) {
 		for (auto obj : GetObjectForms()) {
-			if (m_defaultFormObject == obj->GetMetaID()) {
+			if (m_propertyDefFormObject->GetValueAsInteger() == obj->GetMetaID()) {
 				return obj;
 			}
 		}
@@ -87,7 +58,8 @@ ISourceDataObject* CMetaObjectDataProcessor::CreateObjectData(IMetaFormObject* m
 {
 	switch (metaObject->GetTypeForm())
 	{
-	case eFormDataProcessor: return CreateObjectValue(); break;
+	case eFormDataProcessor:
+		return CreateObjectValue(); 
 	}
 
 	return NULL;
@@ -95,17 +67,15 @@ ISourceDataObject* CMetaObjectDataProcessor::CreateObjectData(IMetaFormObject* m
 
 #include "appData.h"
 
-IRecordDataObject* CMetaObjectDataProcessor::CreateObjectValue()
+IRecordDataObjectExt* CMetaObjectDataProcessor::CreateObjectExtValue()
 {
 	IModuleManager* moduleManager = m_metaData->GetModuleManager();
 	wxASSERT(moduleManager);
-
-	IRecordDataObject* pDataRef = NULL;
-
+	CObjectDataProcessor* pDataRef = NULL;
 	if (appData->DesignerMode()) {
 		if (m_objMode == METAOBJECT_NORMAL) {
 			if (!moduleManager->FindCompileModule(m_moduleObject, pDataRef))
-				return new CObjectDataProcessor(this);
+				return new CObjectDataProcessor(this);;
 		}
 		else {
 			return moduleManager->GetObjectValue();
@@ -156,7 +126,6 @@ CValueForm* CMetaObjectDataProcessor::GetObjectForm(const wxString& formName, IV
 		valueForm->InitializeForm(ownerControl, NULL,
 			objectData, formGuid
 		);
-		valueForm->ReadProperty();
 		valueForm->BuildForm(CMetaObjectDataProcessor::eFormDataProcessor);
 		return valueForm;
 	}
@@ -164,7 +133,7 @@ CValueForm* CMetaObjectDataProcessor::GetObjectForm(const wxString& formName, IV
 	return defList->GenerateFormAndRun();
 }
 
-OptionList* CMetaObjectDataProcessor::GetFormObject(Property*)
+OptionList* CMetaObjectDataProcessor::GetFormObject(PropertyOption*)
 {
 	OptionList* optlist = new OptionList;
 	optlist->AddOption(_("<not selected>"), wxNOT_FOUND);
@@ -189,7 +158,7 @@ bool CMetaObjectDataProcessor::LoadData(CMemoryReader& dataReader)
 	m_moduleManager->LoadMeta(dataReader);
 
 	//Load default form 
-	m_defaultFormObject = dataReader.r_u32();
+	m_propertyDefFormObject->SetValue(GetIdByGuid(dataReader.r_stringZ()));
 
 	return IMetaObjectRecordData::LoadData(dataReader);
 }
@@ -201,7 +170,7 @@ bool CMetaObjectDataProcessor::SaveData(CMemoryWriter& dataWritter)
 	m_moduleManager->SaveMeta(dataWritter);
 
 	//Save default form 
-	dataWritter.w_u32(m_defaultFormObject);
+	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()));
 
 	return IMetaObjectRecordData::SaveData(dataWritter);
 }
@@ -352,37 +321,19 @@ bool CMetaObjectDataProcessor::OnAfterCloseMetaObject()
 void CMetaObjectDataProcessor::OnCreateMetaForm(IMetaFormObject* metaForm)
 {
 	if (metaForm->GetTypeForm() == CMetaObjectDataProcessor::eFormDataProcessor
-		&& m_defaultFormObject == wxNOT_FOUND)
+		&& m_propertyDefFormObject->GetValueAsInteger() == wxNOT_FOUND)
 	{
-		m_defaultFormObject = metaForm->GetMetaID();
+		m_propertyDefFormObject->SetValue(metaForm->GetMetaID());
 	}
 }
 
 void CMetaObjectDataProcessor::OnRemoveMetaForm(IMetaFormObject* metaForm)
 {
 	if (metaForm->GetTypeForm() == CMetaObjectDataProcessor::eFormDataProcessor
-		&& m_defaultFormObject == metaForm->GetMetaID())
+		&& m_propertyDefFormObject->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_defaultFormObject = wxNOT_FOUND;
+		m_propertyDefFormObject->SetValue(metaForm->GetMetaID());
 	}
-}
-
-//***********************************************************************
-//*                           read & save property                      *
-//***********************************************************************
-
-void CMetaObjectDataProcessor::ReadProperty()
-{
-	IMetaObjectRecordData::ReadProperty();
-
-	IObjectBase::SetPropertyValue("default_object", m_defaultFormObject);
-}
-
-void CMetaObjectDataProcessor::SaveProperty()
-{
-	IMetaObjectRecordData::SaveProperty();
-
-	IObjectBase::GetPropertyValue("default_object", m_defaultFormObject);
 }
 
 //***********************************************************************

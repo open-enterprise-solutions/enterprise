@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "reference.h"
-#include "../baseObject.h"
+#include "../object.h"
 #include "compiler/methods.h"
 #include "metadata/metaObjects/objects/tabularSection/tabularSection.h"
 #include "utils/stringUtils.h"

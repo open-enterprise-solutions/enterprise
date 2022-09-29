@@ -899,7 +899,7 @@ wxLongLong_t CValue::ToDate() const
 
 wxDateTime CValue::ToDateTime() const
 {
-	return GetDate();
+	return wxLongLong(GetDate());
 }
 
 wxString CValue::ToString() const

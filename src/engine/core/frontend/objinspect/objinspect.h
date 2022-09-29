@@ -1,7 +1,7 @@
 #ifndef __OBJ_INSPECT__
 #define __OBJ_INSPECT__
 
-#include "common/objectbase.h"
+#include "common/propertyObject.h"
 
 #include <wx/aui/auibook.h>
 #include <wx/propgrid/manager.h>
@@ -26,17 +26,15 @@ class CObjectInspector;
 #define objectInspector           (CObjectInspector::Get())
 #define objectInspectorDestroy()  (CObjectInspector::Destroy())
 
-class CObjectInspector : public wxPanel
-{
-	static CObjectInspector *s_instance;
-
+class CObjectInspector : public wxPanel {
+	static CObjectInspector* s_instance;
 private:
 
 	std::map< wxPGProperty*, Property*> m_propMap;
 	std::map< wxPGProperty*, Event*> m_eventMap;
 
-	IObjectBase *m_currentSel;
-	wxEvtHandler *m_evthandler;
+	IPropertyObject* m_currentSel;
+	wxEvtHandler* m_evthandler;
 
 	//save the current selected property
 	wxString m_strSelPropItem;
@@ -50,23 +48,23 @@ private:
 	std::map< wxString, bool > m_isExpanded;
 
 	template < class ValueT >
-	void CreateCategory(const wxString& name, IObjectBase* obj, std::map< wxString, ValueT >& itemMap, bool addingEvents)
+	void CreateCategory(const wxString& name, IPropertyObject* obj, std::map< wxString, ValueT >& itemMap, bool addingEvents)
 	{
 		// Get Category
-		IObjectBase::PropertyContainer* category = obj->GetCategory();
+		PropertyCategory* category = obj->GetCategory();
 
-		if (!category) 
+		if (!category)
 			return;
 
 		// Prevent page creation if there are no properties
-		if (category->GetCategoryCount() == 0 && 
-			(addingEvents ? category->GetEventCount() : category->GetPropertyCount()) == 0) 
+		if (category->GetCategoryCount() == 0 &&
+			(addingEvents ? category->GetEventCount() : category->GetPropertyCount()) == 0)
 			return;
 
 		wxString pageName;
 
 		if (m_style == wxOES_OI_MULTIPAGE_STYLE) {
-			pageName = name; 
+			pageName = name;
 		}
 		else {
 			pageName = wxT("default");
@@ -82,14 +80,12 @@ private:
 		}
 
 		const wxString& catName = category->GetName();
-		wxPGProperty* id = pg->Append(new wxPropertyCategory(category->GetDescription(), catName));
+		wxPGProperty* id = pg->Append(new wxPropertyCategory(category->GetLabel(), catName));
 
 		AddItems(name, obj, category, itemMap);
 
 		std::map< wxString, bool >::iterator it = m_isExpanded.find(catName);
-
-		if (it != m_isExpanded.end())
-		{
+		if (it != m_isExpanded.end()) {
 			if (it->second) {
 				pg->Expand(id);
 			}
@@ -101,10 +97,10 @@ private:
 		pg->SetPropertyAttributeAll(wxPG_BOOL_USE_CHECKBOX, (long)1);
 	}
 
-	void GenerateSynonym(const wxString &name);
+	void GenerateSynonym(const wxString& name);
 
-	void AddItems(const wxString& name, IObjectBase* obj, IObjectBase::PropertyContainer* category, std::map<wxString, Property *>& map);
-	void AddItems(const wxString& name, IObjectBase* obj, IObjectBase::PropertyContainer* category, std::map<wxString, Event *>& map);
+	void AddItems(const wxString& name, IPropertyObject* obj, PropertyCategory* category, std::map<wxString, Property*>& map);
+	void AddItems(const wxString& name, IPropertyObject* obj, PropertyCategory* category, std::map<wxString, Event*>& map);
 
 	wxPGProperty* GetProperty(Property* prop);
 
@@ -116,18 +112,18 @@ private:
 
 	void OnBitmapPropertyChanged(wxCommandEvent& event);
 
-	bool ModifyProperty(Property* prop, const wxVariant& str);
+	bool ModifyProperty(Property* prop, const wxVariant& newValue);
 	void RestoreLastSelectedPropItem();
 
 	void OnChildFocus(wxChildFocusEvent& event);
 
-	CObjectInspector(wxWindow *parent, int id, int style = wxOES_OI_DEFAULT_STYLE);
+	CObjectInspector(wxWindow* parent, int id, int style = wxOES_OI_DEFAULT_STYLE);
 
 public:
 
 	virtual ~CObjectInspector();
 
-	static CObjectInspector* Get();
+	static CObjectInspector* Get(bool createIfNeed = true);
 	static void Destroy();
 
 	void OnObjectSelected(wxFrameObjectEvent& event);
@@ -135,19 +131,22 @@ public:
 	void OnPropertyModified(wxFramePropertyEvent& event);
 
 	// Servicios para los observadores
-	void SelectObject(IObjectBase *selobj, bool force = true);
-	void SelectObject(IObjectBase *selobj, wxEvtHandler *m_handler, bool force = true);
-	IObjectBase* GetSelectedObject();
+	void SelectObject(IPropertyObject* selobj, bool force = true);
+	void SelectObject(IPropertyObject* selobj, wxEvtHandler* m_handler, bool force = true);
+
+	IPropertyObject* GetSelectedObject() const {
+		return m_currentSel;
+	}
 
 	void ShowProperty();
 	void RefreshProperty();
 
-	wxPropertyGridManager* CreatePropertyGridManager(wxWindow *parent, wxWindowID id);
+	wxPropertyGridManager* CreatePropertyGridManager(wxWindow* parent, wxWindowID id);
 	void SavePosition();
 
 	void ClearProperty();
 
-	wxDECLARE_EVENT_TABLE(); 
+	wxDECLARE_EVENT_TABLE();
 };
 
 #endif //__OBJ_INSPECT__

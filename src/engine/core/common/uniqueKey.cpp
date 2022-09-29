@@ -1,5 +1,5 @@
 #include "uniqueKey.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 
 bool CUniqueKey::isValid() const
 {
@@ -79,7 +79,7 @@ bool CUniqueKey::operator!=(const Guid& other) const
 
 CUniqueKey::CUniqueKey() : CUniqueKey(enUniqueData::enUniqueGuid)
 {
-	m_objGuid = Guid();
+	m_objGuid = wxNullGuid;
 	m_metaObject = NULL;
 	m_aKeyValues = {};
 }
@@ -93,28 +93,35 @@ CUniqueKey::CUniqueKey(const Guid& guid) : CUniqueKey(enUniqueData::enUniqueGuid
 
 CUniquePairKey::CUniquePairKey(IMetaObjectRegisterData* metaObject) : CUniqueKey(enUniqueData::enUniqueKey)
 {
-	m_objGuid = Guid::newGuid();
+	m_objGuid = wxNewGuid;
 	m_metaObject = metaObject;
 	m_aKeyValues = {};
 
-	for (auto attributes : metaObject->GetGenericDimensions()) {
-		m_aKeyValues.insert_or_assign(
-			attributes->GetMetaID(), 
-			attributes->CreateValue()
-		);
+	if (metaObject != NULL) {
+		for (auto attributes : metaObject->GetGenericDimensions()) {
+			m_aKeyValues.insert_or_assign(
+				attributes->GetMetaID(),
+				attributes->CreateValue()
+			);
+		}
 	}
 }
 
 CUniquePairKey::CUniquePairKey(IMetaObjectRegisterData* metaObject, const std::map<meta_identifier_t, CValue>& keyValues) : CUniqueKey(enUniqueData::enUniqueKey)
 {
-	m_objGuid = Guid::newGuid();
+	m_objGuid = wxNewGuid;
 	m_metaObject = metaObject;
 	m_aKeyValues = {};
 
-	for (auto attributes : metaObject->GetGenericDimensions()) {
-		m_aKeyValues.insert_or_assign(
-			attributes->GetMetaID(), 
-			keyValues.at(attributes->GetMetaID())
-		);
+	if (metaObject != NULL) {
+		for (auto attributes : metaObject->GetGenericDimensions()) {
+			auto foundedIt = keyValues.find(attributes->GetMetaID());
+			if (foundedIt != keyValues.end()) {
+				m_aKeyValues.insert_or_assign(
+					attributes->GetMetaID(),
+					keyValues.at(attributes->GetMetaID())
+				);
+			}
+		}
 	}
 }

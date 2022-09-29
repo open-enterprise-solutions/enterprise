@@ -511,6 +511,7 @@ void CCallTip::OnKeyDown(wxKeyEvent &event)
 	{
 	case WXK_ESCAPE: Cancel(); break;
 	case WXK_BACK: Cancel(); break;
+	case WXK_NUMPAD_ENTER:
 	case WXK_RETURN: Cancel(); break;
 	}
 }

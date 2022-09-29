@@ -40,12 +40,11 @@ class Guid
 public:
 
 	explicit Guid(const std::array<unsigned char, 16> &bytes);
-	explicit Guid(std::array<unsigned char, 16> &&bytes);
-
-	explicit Guid(std::string_view fromString);
+	explicit Guid(const std::array<unsigned char, 16> &&bytes);
+	explicit Guid(const std::string_view &fromString);
 
 	Guid();
-	Guid(guid_t bytes);
+	Guid(const guid_t &bytes);
 	Guid(const wxString &fromString);
 
 	Guid(const Guid &other) = default;
@@ -85,5 +84,8 @@ private:
 	// make the << operator a friend so it can access _bytes
 	friend std::ostream &operator<<(std::ostream &s, const Guid &guid);
 };
+
+#define wxNullGuid	Guid()
+#define wxNewGuid	Guid::newGuid()
 
 #endif

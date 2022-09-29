@@ -15,15 +15,8 @@ wxIMPLEMENT_DYNAMIC_CLASS(CMetaObjectEnumeration, IMetaObjectRecordDataRef)
 //*                                      metadata                                            *
 //********************************************************************************************
 
-CMetaObjectEnumeration::CMetaObjectEnumeration() : IMetaObjectRecordDataRef(),
-m_defaultFormList(wxNOT_FOUND), m_defaultFormSelect(wxNOT_FOUND)
+CMetaObjectEnumeration::CMetaObjectEnumeration() : IMetaObjectRecordDataRef()
 {
-	PropertyContainer* categoryForm = IObjectBase::CreatePropertyContainer("DefaultForms");
-	categoryForm->AddProperty("default_list", PropertyType::PT_OPTION, &CMetaObjectEnumeration::GetFormList);
-	categoryForm->AddProperty("default_select", PropertyType::PT_OPTION, &CMetaObjectEnumeration::GetFormSelect);
-
-	m_category->AddCategory(categoryForm);
-
 	//create default attributes
 	m_attributeOrder = CMetaDefaultAttributeObject::CreateNumber(wxT("order"), _("Order"), wxEmptyString, 6, true);
 	m_attributeOrder->SetClsid(g_metaDefaultAttributeCLSID);
@@ -49,17 +42,17 @@ CMetaObjectEnumeration::~CMetaObjectEnumeration()
 CMetaFormObject* CMetaObjectEnumeration::GetDefaultFormByID(const form_identifier_t &id)
 {
 	if (id == eFormList
-		&& m_defaultFormList != wxNOT_FOUND) {
+		&& m_propertyDefFormList->GetValueAsInteger() != wxNOT_FOUND) {
 		for (auto obj : GetObjectForms()) {
-			if (m_defaultFormList == obj->GetMetaID()) {
+			if (m_propertyDefFormList->GetValueAsInteger() == obj->GetMetaID()) {
 				return obj;
 			}
 		}
 	}
 	else if (id == eFormSelect
-		&& m_defaultFormSelect != wxNOT_FOUND) {
+		&& m_propertyDefFormSelect->GetValueAsInteger() != wxNOT_FOUND) {
 		for (auto obj : GetObjectForms()) {
-			if (m_defaultFormSelect == obj->GetMetaID()) {
+			if (m_propertyDefFormSelect->GetValueAsInteger() == obj->GetMetaID()) {
 				return obj;
 			}
 		}
@@ -81,11 +74,6 @@ ISourceDataObject* CMetaObjectEnumeration::CreateObjectData(IMetaFormObject* met
 
 #include "frontend/visualView/controls/form.h"
 #include "utils/stringUtils.h"
-
-CValueForm* CMetaObjectEnumeration::GetObjectForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
-{
-	return NULL;
-}
 
 CValueForm* CMetaObjectEnumeration::GetListForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
 {
@@ -109,7 +97,6 @@ CValueForm* CMetaObjectEnumeration::GetListForm(const wxString& formName, IValue
 		valueForm->InitializeForm(ownerControl, NULL,
 			new CListDataObjectRef(this, CMetaObjectEnumeration::eFormList), formGuid
 		);
-		valueForm->ReadProperty();
 		valueForm->BuildForm(CMetaObjectEnumeration::eFormList);
 		return valueForm;
 	}
@@ -141,7 +128,6 @@ CValueForm* CMetaObjectEnumeration::GetSelectForm(const wxString& formName, IVal
 		valueForm->InitializeForm(ownerControl, NULL,
 			new CListDataObjectRef(this, CMetaObjectEnumeration::eFormSelect, true), formGuid
 		);
-		valueForm->ReadProperty();
 		valueForm->BuildForm(CMetaObjectEnumeration::eFormSelect);
 		return valueForm;
 	}
@@ -151,7 +137,7 @@ CValueForm* CMetaObjectEnumeration::GetSelectForm(const wxString& formName, IVal
 	);
 }
 
-OptionList* CMetaObjectEnumeration::GetFormList(Property*)
+OptionList* CMetaObjectEnumeration::GetFormList(PropertyOption*)
 {
 	OptionList* optlist = new OptionList();
 	optlist->AddOption(_("<not selected>"), wxNOT_FOUND);
@@ -165,7 +151,7 @@ OptionList* CMetaObjectEnumeration::GetFormList(Property*)
 	return optlist;
 }
 
-OptionList* CMetaObjectEnumeration::GetFormSelect(Property*)
+OptionList* CMetaObjectEnumeration::GetFormSelect(PropertyOption*)
 {
 	OptionList* optlist = new OptionList();
 	optlist->AddOption(_("<not selected>"), wxNOT_FOUND);
@@ -203,8 +189,8 @@ bool CMetaObjectEnumeration::LoadData(CMemoryReader& dataReader)
 	m_moduleManager->LoadMeta(dataReader);
 
 	//save default form 
-	m_defaultFormList = dataReader.r_u32();
-	m_defaultFormSelect = dataReader.r_u32();
+	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	m_propertyDefFormSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
 
 	return IMetaObjectRecordDataRef::LoadData(dataReader);
 }
@@ -218,8 +204,8 @@ bool CMetaObjectEnumeration::SaveData(CMemoryWriter& dataWritter)
 	m_moduleManager->SaveMeta(dataWritter);
 
 	//save default form 
-	dataWritter.w_u32(m_defaultFormList);
-	dataWritter.w_u32(m_defaultFormSelect);
+	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
+	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()));
 
 	//create or update table:
 	return IMetaObjectRecordDataRef::SaveData(dataWritter);
@@ -305,28 +291,28 @@ bool CMetaObjectEnumeration::OnAfterCloseMetaObject()
 void CMetaObjectEnumeration::OnCreateMetaForm(IMetaFormObject* metaForm)
 {
 	if (metaForm->GetTypeForm() == CMetaObjectEnumeration::eFormList
-		&& m_defaultFormList == wxNOT_FOUND)
+		&& m_propertyDefFormList->GetValueAsInteger() == wxNOT_FOUND)
 	{
-		m_defaultFormList = metaForm->GetMetaID();
+		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
 	}
 	else if (metaForm->GetTypeForm() == CMetaObjectEnumeration::eFormSelect
-		&& m_defaultFormSelect == wxNOT_FOUND)
+		&& m_propertyDefFormSelect->GetValueAsInteger() == wxNOT_FOUND)
 	{
-		m_defaultFormSelect = metaForm->GetMetaID();
+		m_propertyDefFormSelect->SetValue(metaForm->GetMetaID());
 	}
 }
 
 void CMetaObjectEnumeration::OnRemoveMetaForm(IMetaFormObject* metaForm)
 {
 	if (metaForm->GetTypeForm() == CMetaObjectEnumeration::eFormList
-		&& m_defaultFormList == metaForm->GetMetaID())
+		&& m_propertyDefFormList->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_defaultFormList = wxNOT_FOUND;
+		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
 	}
 	else if (metaForm->GetTypeForm() == CMetaObjectEnumeration::eFormSelect
-		&& m_defaultFormSelect == metaForm->GetMetaID())
+		&& m_propertyDefFormSelect->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_defaultFormSelect = wxNOT_FOUND;
+		m_propertyDefFormSelect->SetValue(metaForm->GetMetaID());
 	}
 }
 
@@ -341,26 +327,6 @@ std::vector<IMetaAttributeObject*> CMetaObjectEnumeration::GetDefaultAttributes(
 std::vector<IMetaAttributeObject*> CMetaObjectEnumeration::GetSearchedAttributes() const
 {
 	return std::vector<IMetaAttributeObject*>();
-}
-
-//***********************************************************************
-//*                           read & save property                      *
-//***********************************************************************
-
-void CMetaObjectEnumeration::ReadProperty()
-{
-	IMetaObjectRecordData::ReadProperty();
-
-	IObjectBase::SetPropertyValue("default_list", m_defaultFormList);
-	IObjectBase::SetPropertyValue("default_select", m_defaultFormSelect);
-}
-
-void CMetaObjectEnumeration::SaveProperty()
-{
-	IMetaObjectRecordData::SaveProperty();
-
-	IObjectBase::GetPropertyValue("default_list", m_defaultFormList);
-	IObjectBase::GetPropertyValue("default_select", m_defaultFormSelect);
 }
 
 //***********************************************************************

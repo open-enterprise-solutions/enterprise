@@ -1,7 +1,7 @@
 #ifndef _RESOURCE_H__
 #define _RESOURCE_H__
 
-#include "metadata/metaObjects/attributes/metaAttributeObject.h"
+#include "metadata/metaObjects/attribute/metaAttributeObject.h"
 
 class CMetaResourceObject : public CMetaAttributeObject {
 	wxDECLARE_DYNAMIC_CLASS(CMetaResourceObject);
@@ -10,8 +10,9 @@ public:
 	CMetaResourceObject() : CMetaAttributeObject(eValueTypes::TYPE_NUMBER) {
 	}
 
-	virtual ~CMetaResourceObject() {
-	}
+	//support icons
+	virtual wxIcon GetIcon();
+	static wxIcon GetIconGroup();
 
 	//get data selector 
 	virtual eSelectorDataType GetSelectorDataType() const {

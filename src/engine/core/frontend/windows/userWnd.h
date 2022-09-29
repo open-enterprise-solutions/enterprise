@@ -46,6 +46,11 @@ class CUserWnd : public wxDialog
 	wxButton* m_bottomOK;
 	wxButton* m_bottomCancel;
 
+	wxStaticText* m_staticRole;
+	wxStaticText* m_staticInterface;
+	wxChoice* m_choiceRole;
+	wxChoice* m_choiceInterface;
+
 	Guid m_userGuid; 
 
 private:

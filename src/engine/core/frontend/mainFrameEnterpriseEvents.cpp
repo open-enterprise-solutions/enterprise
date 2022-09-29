@@ -6,14 +6,14 @@
 #include "mainFrameEnterprise.h"
 #include "metadata/metadata.h"
 #include "metadata/metaObjectsDefines.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 #include "metadata/metaObjects/objects/constant.h"
 #include "frontend/visualView/controls/form.h"
 
 #include <wx/dialog.h>
 #include <wx/treectrl.h>
 
-extern wxImageList* GetImageList();
+#define ICON_SIZE 16
 
 void CMainFrameEnterprise::OnClickAllOperation(wxCommandEvent& event)
 {
@@ -26,6 +26,16 @@ void CMainFrameEnterprise::OnClickAllOperation(wxCommandEvent& event)
 		};
 		wxTreeCtrl* m_treeCtrlElements;
 	public:
+
+		wxTreeItemId AppendGroupItem(const wxTreeItemId& parent,
+			const CLASS_ID& clsid, const wxString& name = wxEmptyString) const {
+			IObjectValueAbstract* singleObject = CValue::GetAvailableObject(clsid);
+			wxASSERT(singleObject);
+			wxImageList* imageList = m_treeCtrlElements->GetImageList();
+			wxASSERT(imageList);
+			int imageIndex = imageList->Add(singleObject->GetClassIcon());
+			return m_treeCtrlElements->AppendItem(parent, name.IsEmpty() ? singleObject->GetClassName() : name, imageIndex, imageIndex);
+		}
 
 		virtual bool Show(bool show = true) override {
 			if (show) {
@@ -46,20 +56,17 @@ void CMainFrameEnterprise::OnClickAllOperation(wxCommandEvent& event)
 			this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
 			wxBoxSizer* bSizer = new wxBoxSizer(wxVERTICAL);
-
-			//m_buttonOpen = new wxButton(this, wxID_ANY, wxT("Open"), wxDefaultPosition, wxDefaultSize, 0);
-			//bSizer->Add(m_buttonOpen, 0, wxALL | wxEXPAND, 5);
-
 			m_treeCtrlElements = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_SINGLE | wxTR_HIDE_ROOT);
 			m_treeCtrlElements->SetDoubleBuffered(true);
-
 			bSizer->Add(m_treeCtrlElements, 1, wxALL | wxEXPAND, 5);
 
 			// Connect Events
 			m_treeCtrlElements->Connect(wxEVT_LEFT_DCLICK, wxMouseEventHandler(CDialogOperationWnd::OnTreeCtrlElementsOnLeftDClick), NULL, this);
 
 			//set image list
-			m_treeCtrlElements->SetImageList(::GetImageList());
+			m_treeCtrlElements->SetImageList(
+				new wxImageList(ICON_SIZE, ICON_SIZE)
+			);
 
 			wxDialog::SetSizer(bSizer);
 			wxDialog::Layout();
@@ -69,36 +76,43 @@ void CMainFrameEnterprise::OnClickAllOperation(wxCommandEvent& event)
 
 		void BuildOperation()
 		{
+			wxImageList* imageList = m_treeCtrlElements->GetImageList();
+			wxASSERT(imageList);
 			wxTreeItemId root = m_treeCtrlElements->AddRoot(wxEmptyString);
-
-			wxTreeItemId constants = m_treeCtrlElements->AppendItem(root, _("Constants"), 86, 86);
+			wxTreeItemId constants = AppendGroupItem(root, g_metaConstantCLSID, _("Constants"));
 			for (auto constant : metadata->GetMetaObjects(g_metaConstantCLSID)) {
-				m_treeCtrlElements->AppendItem(constants, constant->GetSynonym(), 219, 219, new CMetaDataItem(constant));
+				int imageIndex = imageList->Add(constant->GetIcon());
+				m_treeCtrlElements->AppendItem(constants, constant->GetSynonym(), imageIndex, imageIndex, new CMetaDataItem(constant));
 			}
-
-			wxTreeItemId catalogs = m_treeCtrlElements->AppendItem(root, _("Catalogs"), 85, 85);
+			wxTreeItemId catalogs = AppendGroupItem(root, g_metaCatalogCLSID, _("Catalogs"));
 			for (auto catalog : metadata->GetMetaObjects(g_metaCatalogCLSID)) {
-				m_treeCtrlElements->AppendItem(catalogs, catalog->GetSynonym(), 226, 226, new CMetaDataItem(catalog));
+				int imageIndex = imageList->Add(catalog->GetIcon());
+				m_treeCtrlElements->AppendItem(catalogs, catalog->GetSynonym(), imageIndex, imageIndex, new CMetaDataItem(catalog));
 			}
-			wxTreeItemId documents = m_treeCtrlElements->AppendItem(root, _("Documents"), 171, 171);
+			wxTreeItemId documents = AppendGroupItem(root, g_metaDocumentCLSID, _("Documents"));
 			for (auto document : metadata->GetMetaObjects(g_metaDocumentCLSID)) {
-				m_treeCtrlElements->AppendItem(documents, document->GetSynonym(), 216, 216, new CMetaDataItem(document));
+				int imageIndex = imageList->Add(document->GetIcon());
+				m_treeCtrlElements->AppendItem(documents, document->GetSynonym(), imageIndex, imageIndex, new CMetaDataItem(document));
 			}
-			wxTreeItemId dataProcessors = m_treeCtrlElements->AppendItem(root, _("Data processors"), 88, 88);
+			wxTreeItemId dataProcessors = AppendGroupItem(root, g_metaDataProcessorCLSID, _("Data processors"));
 			for (auto dataProcessor : metadata->GetMetaObjects(g_metaDataProcessorCLSID)) {
-				m_treeCtrlElements->AppendItem(dataProcessors, dataProcessor->GetSynonym(), 600, 600, new CMetaDataItem(dataProcessor));
+				int imageIndex = imageList->Add(dataProcessor->GetIcon());
+				m_treeCtrlElements->AppendItem(dataProcessors, dataProcessor->GetSynonym(), imageIndex, imageIndex, new CMetaDataItem(dataProcessor));
 			}
-			wxTreeItemId reports = m_treeCtrlElements->AppendItem(root, _("Reports"), 87, 87);
+			wxTreeItemId reports = AppendGroupItem(root, g_metaReportCLSID, _("Reports"));
 			for (auto report : metadata->GetMetaObjects(g_metaReportCLSID)) {
-				m_treeCtrlElements->AppendItem(reports, report->GetSynonym(), 598, 598, new CMetaDataItem(report));
+				int imageIndex = imageList->Add(report->GetIcon());
+				m_treeCtrlElements->AppendItem(reports, report->GetSynonym(), imageIndex, imageIndex, new CMetaDataItem(report));
 			}
-			wxTreeItemId informationRegisters = m_treeCtrlElements->AppendItem(root, _("Information registers"), 209, 209);
+			wxTreeItemId informationRegisters = AppendGroupItem(root, g_metaInformationRegisterCLSID, _("Information registers"));
 			for (auto informationRegister : metadata->GetMetaObjects(g_metaInformationRegisterCLSID)) {
-				m_treeCtrlElements->AppendItem(informationRegisters, informationRegister->GetSynonym(), 210, 210, new CMetaDataItem(informationRegister));
+				int imageIndex = imageList->Add(informationRegister->GetIcon());
+				m_treeCtrlElements->AppendItem(informationRegisters, informationRegister->GetSynonym(), imageIndex, imageIndex, new CMetaDataItem(informationRegister));
 			}
-			wxTreeItemId accumulationRegisters = m_treeCtrlElements->AppendItem(root, _("Accumulation registers"), 209, 209);
+			wxTreeItemId accumulationRegisters = AppendGroupItem(root, g_metaAccumulationRegisterCLSID, _("Accumulation registers"));
 			for (auto accumulationRegister : metadata->GetMetaObjects(g_metaAccumulationRegisterCLSID)) {
-				m_treeCtrlElements->AppendItem(accumulationRegisters, accumulationRegister->GetSynonym(), 210, 210, new CMetaDataItem(accumulationRegister));
+				int imageIndex = imageList->Add(accumulationRegister->GetIcon());
+				m_treeCtrlElements->AppendItem(accumulationRegisters, accumulationRegister->GetSynonym(), imageIndex, imageIndex, new CMetaDataItem(accumulationRegister));
 			}
 
 			m_treeCtrlElements->ExpandAll();

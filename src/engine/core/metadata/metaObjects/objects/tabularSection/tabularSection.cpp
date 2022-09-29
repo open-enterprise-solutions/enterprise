@@ -7,7 +7,7 @@
 #include "appData.h"
 #include "databaseLayer/databaseLayer.h"
 #include "databaseLayer/databaseErrorCodes.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 #include "utils/stringUtils.h"
 
 wxIMPLEMENT_ABSTRACT_CLASS(ITabularSectionDataObject, IValueTable);
@@ -64,7 +64,7 @@ wxString ITabularSectionDataObject::GetString() const
 
 #include "frontend/visualView/controls/form.h"
 
-void ITabularSectionDataObject::SetValueByMetaID(long line, const meta_identifier_t &id, const CValue& cVal)
+void ITabularSectionDataObject::SetValueByMetaID(long line, const meta_identifier_t& id, const CValue& cVal)
 {
 	if (m_metaTable->IsNumberLine(id)) {
 		return;
@@ -78,7 +78,7 @@ void ITabularSectionDataObject::SetValueByMetaID(long line, const meta_identifie
 	}
 }
 
-CValue ITabularSectionDataObject::GetValueByMetaID(long line, const meta_identifier_t &id) const
+CValue ITabularSectionDataObject::GetValueByMetaID(long line, const meta_identifier_t& id) const
 {
 	IMetaAttributeObject* metaAttribute = m_metaTable->FindAttribute(id);
 	wxASSERT(metaAttribute);
@@ -187,7 +187,7 @@ bool CTabularSectionDataObjectRef::SaveData()
 	IMetaObjectRecordData* metaObject = m_dataObject->GetMetaObject();
 	wxASSERT(metaObject);
 	reference_t* reference_impl = new reference_t(metaObject->GetMetaID(), m_dataObject->GetGuid());
-	
+
 	wxString tableName = m_metaTable->GetTableNameDB();
 	wxString queryText = "UPDATE OR INSERT INTO " + tableName + " (";
 	queryText += "UUID, UUIDREF";
@@ -203,19 +203,18 @@ bool CTabularSectionDataObjectRef::SaveData()
 	}
 	queryText += ") MATCHING (UUID, " + IMetaAttributeObject::GetSQLFieldName(numLine) + ");";
 	PreparedStatement* statement = databaseLayer->PrepareStatement(queryText);
-	
+
 	if (statement == NULL)
 		return false;
-	
+
 	number_t numberLine = 1;
-	
 	for (auto objectValue : m_aObjectValues) {
-		
-		if (hasError) 
+
+		if (hasError)
 			break;
 
 		int position = 3;
-		
+
 		statement->SetParamString(1, m_dataObject->GetGuid());
 		statement->SetParamBlob(2, reference_impl, sizeof(reference_t));
 		for (auto attribute : m_metaTable->GetObjectAttributes()) {
@@ -236,14 +235,13 @@ bool CTabularSectionDataObjectRef::SaveData()
 				);
 			}
 		}
-		
+
 		hasError = statement->RunQuery() == DATABASE_LAYER_QUERY_RESULT_ERROR;
 	}
-	
-	databaseLayer->CloseStatement(statement);	
-	
+
+	databaseLayer->CloseStatement(statement); 
 	delete reference_impl;
-	
+
 	return !hasError;
 }
 
@@ -263,8 +261,9 @@ bool CTabularSectionDataObjectRef::DeleteData()
 
 bool ITabularSectionDataObject::LoadDataFromTable(IValueTable* srcTable)
 {
-	IValueTableColumnCollection* colData = srcTable->GetColumns();
-
+	IValueTableColumnCollection* colData = srcTable ? 
+		srcTable->GetColumns() : NULL;
+	
 	if (colData == NULL)
 		return false;
 
@@ -320,7 +319,7 @@ IValueTable* ITabularSectionDataObject::SaveDataToTable() const
 	return valueTable;
 }
 
-void CTabularSectionDataObjectRef::SetValueByMetaID(long line, const meta_identifier_t &id, const CValue& cVal)
+void CTabularSectionDataObjectRef::SetValueByMetaID(long line, const meta_identifier_t& id, const CValue& cVal)
 {
 	CValueForm* foundedForm = CValueForm::FindFormByGuid(
 		m_dataObject->GetGuid()
@@ -328,12 +327,12 @@ void CTabularSectionDataObjectRef::SetValueByMetaID(long line, const meta_identi
 
 	ITabularSectionDataObject::SetValueByMetaID(line, id, cVal);
 
-	if (foundedForm) {
+	if (foundedForm != NULL) {
 		foundedForm->Modify(true);
 	}
 }
 
-CValue CTabularSectionDataObjectRef::GetValueByMetaID(long line, const meta_identifier_t &id) const
+CValue CTabularSectionDataObjectRef::GetValueByMetaID(long line, const meta_identifier_t& id) const
 {
 	return ITabularSectionDataObject::GetValueByMetaID(line, id);
 }
@@ -447,12 +446,12 @@ void ITabularSectionDataObject::CTabularSectionDataObjectReturnLine::PrepareName
 }
 
 
-void ITabularSectionDataObject::CTabularSectionDataObjectReturnLine::SetValueByMetaID(const meta_identifier_t &id, const CValue& cVal)
+void ITabularSectionDataObject::CTabularSectionDataObjectReturnLine::SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal)
 {
 	m_ownerTable->SetValueByMetaID(m_lineTable, id, cVal);
 }
 
-CValue ITabularSectionDataObject::CTabularSectionDataObjectReturnLine::GetValueByMetaID(const meta_identifier_t &id) const
+CValue ITabularSectionDataObject::CTabularSectionDataObjectReturnLine::GetValueByMetaID(const meta_identifier_t& id) const
 {
 	return m_ownerTable->GetValueByMetaID(m_lineTable, id);
 }

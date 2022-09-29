@@ -463,15 +463,15 @@ bool CMetaObjectInformationRegister::CreateAndUpdateSliceLastTableDB(IConfigMeta
 
 bool CMetaObjectInformationRegister::CreateAndUpdateTableDB(IConfigMetadata* srcMetaData, IMetaObject* srcMetaObject, int flags)
 {
-
-	if (!IMetaObjectRegisterData::CreateAndUpdateTableDB(srcMetaData, srcMetaObject, flags))
-		return false;
-
 	//if (!CMetaObjectInformationRegister::CreateAndUpdateSliceFirstTableDB(srcMetaData, srcMetaObject, flags))
 	//	return false;
 
 	//if (!CMetaObjectInformationRegister::CreateAndUpdateSliceLastTableDB(srcMetaData, srcMetaObject, flags))
 	//	return false;
 
-	return true;
+	return IMetaObjectRegisterData::CreateAndUpdateTableDB(
+		srcMetaData,
+		srcMetaObject,
+		flags
+	);
 }

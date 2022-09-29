@@ -66,19 +66,19 @@ FirebirdParameter::FirebirdParameter(FirebirdInterface* pInterface, XSQLVAR* pVa
 	else if (nType == SQL_INT64)
 	{
 		m_numValue = dblValue;
-		for (int i = 0; i < -pVar->sqlscale; i++) m_numValue *= 10;
-
+		for (int i = 0; i < -pVar->sqlscale; i++) 
+			m_numValue *= 10;
 		ttmath::Int<TTMATH_BITS(64)> int64val;
-		if (m_numValue.ToInt(int64val)) int64val = 0;
+		m_numValue.ToInt(int64val);
 		memcpy(m_pParameter->sqldata, &int64val, sizeof(int64val));
 	}
 	else if (nType == SQL_INT128)
 	{
 		m_numValue = dblValue;
-		for (int i = 0; i < -pVar->sqlscale; i++) m_numValue *= 10;
-
+		for (int i = 0; i < -pVar->sqlscale; i++) 
+			m_numValue *= 10;
 		ttmath::Int<TTMATH_BITS(128)> int128val;
-		if (m_numValue.ToInt(int128val)) int128val = 0;
+		m_numValue.ToInt(int128val);
 		memcpy(m_pParameter->sqldata, &int128val, sizeof(int128val));
 	}
 	else

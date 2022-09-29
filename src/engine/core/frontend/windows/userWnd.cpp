@@ -7,7 +7,7 @@
 #include <wx/base64.h>
 #include "email/utils/wxmd5.hpp"
 
-void CUserWnd::OnPasswordText(wxCommandEvent &event)
+void CUserWnd::OnPasswordText(wxCommandEvent& event)
 {
 	if (m_bInitialized) {
 		wxString newPassword = m_textPassword->GetValue();
@@ -21,18 +21,18 @@ void CUserWnd::OnPasswordText(wxCommandEvent &event)
 	event.Skip();
 }
 
-void CUserWnd::OnOKButtonClick(wxCommandEvent &event)
+void CUserWnd::OnOKButtonClick(wxCommandEvent& event)
 {
 	if (m_textName->IsEmpty()) {
-		return; 
+		return;
 	}
 
-	PreparedStatement *prepStatement =
+	PreparedStatement* prepStatement =
 		databaseLayer->PrepareStatement("UPDATE OR INSERT INTO %s (guid, name, fullName, changed, dataSize, binaryData) VALUES(?, ?, ?, ?, ?, ?) MATCHING (guid);", IConfigMetadata::GetUsersTableName());
 
 	if (prepStatement) {
 		if (!m_userGuid.isValid()) {
-			m_userGuid = Guid::newGuid();
+			m_userGuid = wxNewGuid;
 		}
 		prepStatement->SetParamString(1, m_userGuid.str());
 		prepStatement->SetParamString(2, m_textName->GetValue());
@@ -52,17 +52,17 @@ void CUserWnd::OnOKButtonClick(wxCommandEvent &event)
 	event.Skip();
 }
 
-void CUserWnd::OnCancelButtonClick(wxCommandEvent &event)
+void CUserWnd::OnCancelButtonClick(wxCommandEvent& event)
 {
 	event.Skip();
 }
 
-bool CUserWnd::ReadUserData(const Guid &guid, bool copy)
+bool CUserWnd::ReadUserData(const Guid& guid, bool copy)
 {
 	if (m_userGuid.isValid()) {
 		return false;
 	}
-	DatabaseResultSet *resultSet = databaseLayer->RunQueryWithResults("SELECT * FROM %s WHERE guid = '%s';", IConfigMetadata::GetUsersTableName(), guid.str());
+	DatabaseResultSet* resultSet = databaseLayer->RunQueryWithResults("SELECT * FROM %s WHERE guid = '%s';", IConfigMetadata::GetUsersTableName(), guid.str());
 	if (resultSet->Next()) {
 		m_textName->SetValue(resultSet->GetResultString("name"));
 		m_textFullName->SetValue(resultSet->GetResultString("fullName"));
@@ -85,21 +85,20 @@ bool CUserWnd::ReadUserData(const Guid &guid, bool copy)
 	return true;
 }
 
-CUserWnd::CUserWnd(wxWindow * parent, wxWindowID id, const wxString & title, const wxPoint & pos, const wxSize & size, long style) :
+#include "metadata/metadata.h"
+
+CUserWnd::CUserWnd(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) :
 	wxDialog(parent, id, title, pos, size, style), m_bInitialized(false)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
 	wxBoxSizer* m_mainSizer = new wxBoxSizer(wxVERTICAL);
-
 	m_mainNotebook = new wxAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_NB_TOP | wxAUI_NB_TAB_SPLIT | wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS);
 	m_mainNotebook->SetArtProvider(new CLunaTabArt());
 	m_main = new wxPanel(m_mainNotebook, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
+
 	wxBoxSizer* sizerUser = new wxBoxSizer(wxVERTICAL);
-
-	wxBoxSizer* m_sizerUserTop;
-	m_sizerUserTop = new wxBoxSizer(wxHORIZONTAL);
-
+	wxBoxSizer* m_sizerUserTop = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* m_sizerLabel = new wxBoxSizer(wxVERTICAL);
 
 	m_staticName = new wxStaticText(m_main, wxID_ANY, wxT("Name:"), wxDefaultPosition, wxDefaultSize, 0);
@@ -124,7 +123,7 @@ CUserWnd::CUserWnd(wxWindow * parent, wxWindowID id, const wxString & title, con
 	sizerUser->Add(m_staticline, 0, wxALL | wxEXPAND, 5);
 
 	wxBoxSizer* m_sizerUserBottom = new wxBoxSizer(wxHORIZONTAL);
-	m_staticPassword = new wxStaticText(m_main, wxID_ANY, wxT("Password:"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticPassword = new wxStaticText(m_main, wxID_ANY, _("Password:"), wxDefaultPosition, wxDefaultSize, 0);
 	m_staticPassword->Wrap(-1);
 	m_sizerUserBottom->Add(m_staticPassword, 0, wxALL, 10);
 	m_textPassword = new wxTextCtrl(m_main, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD);
@@ -137,7 +136,47 @@ CUserWnd::CUserWnd(wxWindow * parent, wxWindowID id, const wxString & title, con
 	sizerUser->Fit(m_main);
 	m_mainNotebook->AddPage(m_main, _("User"), false, wxNullBitmap);
 	m_other = new wxPanel(m_mainNotebook, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
-	m_mainNotebook->AddPage(m_other, _("Other"), true, wxNullBitmap);
+
+	wxBoxSizer* sizerOther = new wxBoxSizer(wxHORIZONTAL);
+	wxBoxSizer* sizerLabels = new wxBoxSizer(wxVERTICAL);
+
+	m_staticRole = new wxStaticText(m_other, wxID_ANY, _("Role:"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticRole->Wrap(-1);
+	sizerLabels->Add(m_staticRole, 0, wxALL | wxEXPAND, 5);
+
+	m_staticInterface = new wxStaticText(m_other, wxID_ANY, _("Interface:"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticInterface->Wrap(-1);
+	sizerLabels->Add(m_staticInterface, 0, wxALL | wxEXPAND, 5);
+
+	sizerOther->Add(sizerLabels, 0, wxEXPAND, 5);
+
+	wxBoxSizer* sizerChoice = new wxBoxSizer(wxVERTICAL);
+
+	wxArrayString m_choiceRoleChoices;
+	m_choiceRoleChoices.Add(_("not selected"));
+
+	for (auto metaRole : metadata->GetMetaObjects(g_metaRoleCLSID)) {
+		m_choiceRoleChoices.Add(metaRole->GetName());
+	}
+
+	m_choiceRole = new wxChoice(m_other, wxID_ANY, wxDefaultPosition, wxDefaultSize, m_choiceRoleChoices, 0);
+	m_choiceRole->SetSelection(0);
+	sizerChoice->Add(m_choiceRole, 0, wxTOP | wxRIGHT | wxLEFT | wxEXPAND, 5);
+
+	wxArrayString m_choiceInterfaceChoices;
+	m_choiceInterfaceChoices.Add(_("not selected"));
+
+	for (auto metaInterface : metadata->GetMetaObjects(g_metaInterfaceCLSID)) {
+		m_choiceInterfaceChoices.Add(metaInterface->GetName());
+	}
+	m_choiceInterface = new wxChoice(m_other, wxID_ANY, wxDefaultPosition, wxDefaultSize, m_choiceInterfaceChoices, 0);
+	m_choiceInterface->SetSelection(0);
+	sizerChoice->Add(m_choiceInterface, 0, wxRIGHT | wxLEFT | wxEXPAND, 5);
+
+	sizerOther->Add(sizerChoice, 1, wxEXPAND, 5);
+	m_other->SetSizer(sizerOther);
+
+	m_mainNotebook->AddPage(m_other, _("Role"), true, wxNullBitmap);
 
 	m_mainSizer->Add(m_mainNotebook, 1, wxEXPAND | wxALL, 5);
 

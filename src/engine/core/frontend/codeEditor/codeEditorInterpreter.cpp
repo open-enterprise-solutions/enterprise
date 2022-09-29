@@ -11,10 +11,8 @@
 #pragma warning(push)
 #pragma warning(disable : 4018)
 
-static bool bInitialize = false;
-
 //Массив приоритетов математических операций
-static int aPriority[256];
+static std::array<int, 256> s_aPriority = { 0 };
 
 CPrecompileModule::CPrecompileModule(CMetaModuleObject* moduleObject) :
 	CTranslateModule(moduleObject->GetFullName(), moduleObject->GetDocPath()),
@@ -22,25 +20,23 @@ CPrecompileModule::CPrecompileModule(CMetaModuleObject* moduleObject) :
 	m_nCurrentCompile(wxNOT_FOUND), m_nCurrentPos(0), nLastPosition(0),
 	m_bCalcValue(false)
 {
-	if (!bInitialize)
-	{
-		ZeroMemory(aPriority, sizeof(aPriority));
+	if (!s_aPriority[s_aPriority.size() - 1]) {
 
-		aPriority['+'] = 10;
-		aPriority['-'] = 10;
-		aPriority['*'] = 30;
-		aPriority['/'] = 30;
-		aPriority['%'] = 30;
-		aPriority['!'] = 50;
+		s_aPriority['+'] = 10;
+		s_aPriority['-'] = 10;
+		s_aPriority['*'] = 30;
+		s_aPriority['/'] = 30;
+		s_aPriority['%'] = 30;
+		s_aPriority['!'] = 50;
 
-		aPriority[KEY_OR] = 1;
-		aPriority[KEY_AND] = 2;
+		s_aPriority[KEY_OR] = 1;
+		s_aPriority[KEY_AND] = 2;
 
-		aPriority['>'] = 3;
-		aPriority['<'] = 3;
-		aPriority['='] = 3;
+		s_aPriority['>'] = 3;
+		s_aPriority['<'] = 3;
+		s_aPriority['='] = 3;
 
-		bInitialize = true;
+		s_aPriority[s_aPriority.size() - 1] = true;
 	}
 
 	m_sModuleName = m_moduleObject->GetFullName();
@@ -1434,14 +1430,13 @@ SParamValue CPrecompileModule::GetExpression(int nPriority)
 	CLexem lex = GETLexem();
 
 	//Сначала обрабатываем Левые операторы
-	if ((lex.m_nType == KEYWORD && lex.m_nData == KEY_NOT) || (lex.m_nType == DELIMITER && lex.m_nData == '!'))
-	{
+	if ((lex.m_nType == KEYWORD && lex.m_nData == KEY_NOT) || 
+		(lex.m_nType == DELIMITER && lex.m_nData == '!')) {
 		Variable = GetVariable();
-		SParamValue Variable2 = GetExpression(aPriority['!']);
+		SParamValue Variable2 = GetExpression(s_aPriority['!']);
 		Variable.sType = wxT("NUMBER");
 	}
-	else if ((lex.m_nType == KEYWORD && lex.m_nData == KEY_NEW))
-	{
+	else if ((lex.m_nType == KEYWORD && lex.m_nData == KEY_NEW)) {
 		wxString sObjectName = GETIdentifier();
 		std::vector <SParamValue> aParamList;
 
@@ -1540,7 +1535,7 @@ SParamValue CPrecompileModule::GetExpression(int nPriority)
 	else if ((lex.m_nType == DELIMITER && lex.m_nData == '+') || (lex.m_nType == DELIMITER && lex.m_nData == '-'))
 	{
 		//проверяем допустимость такого задания
-		int nCurPriority = aPriority[lex.m_nData];
+		int nCurPriority = s_aPriority[lex.m_nData];
 
 		if (nPriority >= nCurPriority) return Variable;//сравниваем приоритеты левой (предыдущей операции) и текущей выполняемой операции
 
@@ -1573,7 +1568,7 @@ MOperation:
 	{
 		if (lex.m_nData >= 0 && lex.m_nData <= 255)
 		{
-			int nCurPriority = aPriority[lex.m_nData]; int nOper = 0;
+			int nCurPriority = s_aPriority[lex.m_nData]; int nOper = 0;
 
 			if (nPriority < nCurPriority)//сравниваем приоритеты левой (предыдущей операции) и текущей выполняемой операции
 			{

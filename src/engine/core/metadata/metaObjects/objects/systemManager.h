@@ -18,8 +18,13 @@ public:
 	virtual CValue GetAttribute(attributeArg_t &aParams);                   //значение атрибута
 
 	//types 
-	virtual wxString GetTypeString() const { return wxT("systemManager"); }
-	virtual wxString GetString() const { return wxT("systemManager"); }
+	virtual wxString GetTypeString() const {
+		return wxT("systemManager"); 
+	}
+	
+	virtual wxString GetString() const { 
+		return wxT("systemManager"); 
+	}
 
 protected:
 	//methods 

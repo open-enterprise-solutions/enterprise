@@ -1,0 +1,28 @@
+/* XPM */
+static const char *s_gotoLine_xpm[] = {
+/* columns rows colors chars-per-pixel */
+"16 16 6 1",
+"o c Black",
+"X c #FFFFFF",
+"  c #808080",
+"O c #000080",
+"+ c #FF0000",
+". c #C0C0C0",
+/* pixels */
+"           .....",
+" XXXXXXXXXo....O",
+" XXXXXXXXXo....O",
+" XoooXXXXXo....O",
+" XXXXXXXXXo....O",
+" XX      Xo....O",
+" XXXXXXXXXo....O",
+" XX      Xo....O",
+" XXXXXXXXXo....O",
+" XXX    XXo..O.O",
+" XXXXXXXXXo.OO.O",
+" XX++++++XoOOOOO",
+" XXXXXXXXXo.OO..",
+" XXXXXXXXXo..O..",
+" oooooooooo.....",
+"oooooooooooooooo"
+};

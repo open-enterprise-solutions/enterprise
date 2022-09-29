@@ -20,7 +20,7 @@ std::map<wxString, void*> aHelpDescription;//описание ключевых слов и системных 
 std::map<wxString, void*> aHashKeywordList;
 
 //Массив приоритетов математических операций
-static int aPriority[256];
+static std::array<int, 256> s_aPriority = { 0 };
 
 //////////////////////////////////////////////////////////////////////
 // CCompileContext CCompileContext CCompileContext CCompileContext  //
@@ -271,8 +271,10 @@ CCompileModule::CCompileModule() :
 	m_bExpressionOnly(false), m_bNeedRecompile(false),
 	m_bCommonModule(false)
 {
-	m_cContext.m_nFindLocalInParent = 0; //у родительских контекстов локальные переменные не ищем!
 	InitializeCompileModule();
+
+	//у родительских контекстов локальные переменные не ищем!
+	m_cContext.m_nFindLocalInParent = 0;
 }
 
 CCompileModule::CCompileModule(CMetaModuleObject* moduleObject, bool commonModule) :
@@ -282,7 +284,6 @@ CCompileModule::CCompileModule(CMetaModuleObject* moduleObject, bool commonModul
 	m_bExpressionOnly(false), m_bNeedRecompile(false),
 	m_bCommonModule(commonModule)
 {
-	m_cContext.m_nFindLocalInParent = 0; //у родительских контекстов локальные переменные не ищем!
 	InitializeCompileModule();
 
 	m_cByteCode.m_sModuleName = m_moduleObject->GetFullName();
@@ -292,6 +293,9 @@ CCompileModule::CCompileModule(CMetaModuleObject* moduleObject, bool commonModul
 	m_sFileName = m_moduleObject->GetFileName();
 
 	Load(m_moduleObject->GetModuleText());
+
+	//у родительских контекстов локальные переменные не ищем!
+	m_cContext.m_nFindLocalInParent = 0;
 }
 
 CCompileModule::~CCompileModule()
@@ -302,29 +306,26 @@ CCompileModule::~CCompileModule()
 	m_aContextValues.clear();
 }
 
-static bool m_initModule = false;
-
 void CCompileModule::InitializeCompileModule()
 {
-	if (m_initModule) return;
+	if (s_aPriority[s_aPriority.size() - 1])
+		return;
 
-	ZeroMemory(aPriority, sizeof(aPriority));
+	s_aPriority['+'] = 10;
+	s_aPriority['-'] = 10;
+	s_aPriority['*'] = 30;
+	s_aPriority['/'] = 30;
+	s_aPriority['%'] = 30;
+	s_aPriority['!'] = 50;
 
-	aPriority['+'] = 10;
-	aPriority['-'] = 10;
-	aPriority['*'] = 30;
-	aPriority['/'] = 30;
-	aPriority['%'] = 30;
-	aPriority['!'] = 50;
+	s_aPriority[KEY_OR] = 1;
+	s_aPriority[KEY_AND] = 2;
 
-	aPriority[KEY_OR] = 1;
-	aPriority[KEY_AND] = 2;
+	s_aPriority['>'] = 3;
+	s_aPriority['<'] = 3;
+	s_aPriority['='] = 3;
 
-	aPriority['>'] = 3;
-	aPriority['<'] = 3;
-	aPriority['='] = 3;
-
-	m_initModule = true;
+	s_aPriority[s_aPriority.size() - 1] = true;
 }
 
 void CCompileModule::Reset()
@@ -2560,7 +2561,7 @@ SParam CCompileModule::GetExpression(int nPriority)
 	if ((lex.m_nType == KEYWORD && lex.m_nData == KEY_NOT) || (lex.m_nType == DELIMITER && lex.m_nData == '!'))
 	{
 		variable = GetVariable();
-		SParam Variable2 = GetExpression(aPriority['!']);
+		SParam Variable2 = GetExpression(s_aPriority['!']);
 		CByte code;
 		code.m_nOper = OPER_NOT;
 		AddLineInfo(code);
@@ -2664,7 +2665,7 @@ SParam CCompileModule::GetExpression(int nPriority)
 	else if ((lex.m_nType == DELIMITER && lex.m_nData == '+') || (lex.m_nType == DELIMITER && lex.m_nData == '-'))
 	{
 		//проверяем допустимость такого задания
-		int nCurPriority = aPriority[lex.m_nData];
+		int nCurPriority = s_aPriority[lex.m_nData];
 
 		if (nPriority >= nCurPriority) SetError(ERROR_EXPRESSION);//сравниваем приоритеты левой (предыдущей операции) и текущей выполняемой операции
 
@@ -2712,7 +2713,7 @@ MOperation:
 	{
 		if (lex.m_nData >= 0 && lex.m_nData <= 255)
 		{
-			int nCurPriority = aPriority[lex.m_nData];
+			int nCurPriority = s_aPriority[lex.m_nData];
 			if (nPriority < nCurPriority)//сравниваем приоритеты левой (предыдущей операции) и текущей выполняемой операции
 			{
 				CByte code;

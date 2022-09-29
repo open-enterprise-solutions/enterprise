@@ -52,9 +52,7 @@ CValue CReportManager::Method(methodArg_t &aParams)
 	switch (aParams.GetIndex())
 	{
 	case eCreate:
-	{
 		return m_metaObject->CreateObjectValue();
-	}
 	case eGetForm:
 	{
 		CValueGuid *guidVal = aParams.GetParamCount() > 2 ? aParams[2].ConvertToType<CValueGuid>() : NULL;

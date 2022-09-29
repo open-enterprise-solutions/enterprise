@@ -78,6 +78,6 @@ void CValueTable::Clear()
 {
 	if (CTranslateError::IsSimpleMode())
 		return;
-	m_aObjectValues.clear();
 	IValueTable::Reset(0);
+	m_aObjectValues.clear();
 }

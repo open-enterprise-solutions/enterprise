@@ -4,7 +4,7 @@
 #include "compiler/value.h"
 #include "common/valueInfo.h"
 
-class CTabularSectionDataObjectRef;
+struct reference_t;
 
 class CReferenceDataObject : public CValue,
 	public IObjectValueInfo {
@@ -12,8 +12,8 @@ class CReferenceDataObject : public CValue,
 private:
 
 	CReferenceDataObject() : CValue(eValueTypes::TYPE_VALUE, true), m_initializedRef(false)  {}
-	CReferenceDataObject(IMetadata* metaData, const meta_identifier_t& id, const Guid& objGuid = Guid());
-	CReferenceDataObject(IMetaObjectRecordDataRef* metaObject, const Guid& objGuid = Guid());
+	CReferenceDataObject(IMetadata* metaData, const meta_identifier_t& id, const Guid& objGuid = wxNullGuid);
+	CReferenceDataObject(IMetaObjectRecordDataRef* metaObject, const Guid& objGuid = wxNullGuid);
 
 public:
 
@@ -25,8 +25,8 @@ public:
 
 	virtual ~CReferenceDataObject();
 
-	static CReferenceDataObject* Create(IMetadata* metaData, const meta_identifier_t& id, const Guid& objGuid = Guid());
-	static CReferenceDataObject* Create(IMetaObjectRecordDataRef* metaObject, const Guid& objGuid = Guid());
+	static CReferenceDataObject* Create(IMetadata* metaData, const meta_identifier_t& id, const Guid& objGuid = wxNullGuid);
+	static CReferenceDataObject* Create(IMetaObjectRecordDataRef* metaObject, const Guid& objGuid = wxNullGuid);
 	
 	static CReferenceDataObject* Create(IMetadata* metaData, void* ptr);
 	static CReferenceDataObject* CreateFromPtr(IMetadata* metaData, void* ptr);

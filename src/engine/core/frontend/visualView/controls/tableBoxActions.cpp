@@ -1,5 +1,5 @@
 #include "tableBox.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 #include "form.h"
 
 //****************************************************************************
@@ -10,10 +10,10 @@ CValueTableBox::actionData_t CValueTableBox::GetActions(const form_identifier_t&
 {
 	if (m_tableModel == NULL) {
 		ISourceDataObject* srcObject = m_formOwner->GetSourceObject();
-		if (m_dataSource != wxNOT_FOUND) {
+		if (m_dataSource.isValid()) {
 			if (srcObject != NULL) {
-				IValueTable* tableModel = NULL;
-				if (srcObject->GetTable(tableModel, m_dataSource)) {
+				IValueModel* tableModel = NULL;
+				if (srcObject->GetModel(tableModel, GetIdByGuid(m_dataSource))) {
 					return tableModel->GetActions(formType);
 				}
 			}

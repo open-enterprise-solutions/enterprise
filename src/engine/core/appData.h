@@ -60,7 +60,7 @@ class CORE_API ApplicationData {
 	DatabaseLayer* m_objDb;  // Base de datos de objetos
 	wxTimer *m_sessionTimer;
 
-	wxCriticalSection m_sesssionLocker;
+	wxCriticalSection m_sessionLocker;
 
 private:
 

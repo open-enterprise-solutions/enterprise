@@ -4,13 +4,25 @@
 
 bool CSelectDataTypeWnd::ShowModal(CLASS_ID& clsid)
 {
+	if (m_listData->GetItemCount() == 0) {
+		CSelectDataTypeWnd::Destroy();
+		return false; 
+	}
+	else if (m_listData->GetItemCount() == 1) {
+		long lSelectedItem = m_listData->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_DONTCARE);
+		if (lSelectedItem != wxNOT_FOUND) {
+			clsid = m_clsids.at(lSelectedItem);
+			return true;
+		}
+		CSelectDataTypeWnd::Destroy();
+		return true;
+	}
+
 	int res = wxDialog::ShowModal();
 	if (res == wxID_OK) {
 		long lSelectedItem = m_listData->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
 		if (lSelectedItem != wxNOT_FOUND) {
-			auto foundedIt = m_clsids.begin();
-			std::advance(foundedIt, (size_t)lSelectedItem);
-			clsid = *foundedIt;
+			clsid = m_clsids.at(lSelectedItem);
 			return true;
 		}
 	}
@@ -20,10 +32,9 @@ bool CSelectDataTypeWnd::ShowModal(CLASS_ID& clsid)
 #define ICON_SIZE 16
 
 CSelectDataTypeWnd::CSelectDataTypeWnd(IMetadata* metaData, std::set<CLASS_ID>& clsids) :
-	wxDialog(CMainFrame::Get(), wxID_ANY, _("Select data type"), wxDefaultPosition, wxSize(315, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), m_clsids(clsids)
+	wxDialog(CMainFrame::Get(), wxID_ANY, _("Select data type"), wxDefaultPosition, wxSize(315, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
 	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
-
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);
 
 	m_listData = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_NO_HEADER | wxLC_SINGLE_SEL | wxLC_LIST);
@@ -36,11 +47,13 @@ CSelectDataTypeWnd::CSelectDataTypeWnd(IMetadata* metaData, std::set<CLASS_ID>& 
 	);
 
 	for (auto clsid : clsids) {
-		IObjectValueAbstract* singleObject = metaData->GetAvailableObject(clsid);
-		wxASSERT(singleObject);
-		wxImageList* imageList = m_listData->GetImageList(wxIMAGE_LIST_SMALL);
-		long lSelectedItem = m_listData->InsertItem(m_listData->GetItemCount(), singleObject->GetClassName(), imageList->Add(singleObject->GetClassIcon()));
-		m_listData->SetItemData(lSelectedItem, clsid);
+		if (metaData->IsRegisterObject(clsid)) {
+			IObjectValueAbstract* singleObject = metaData->GetAvailableObject(clsid);
+			wxASSERT(singleObject);
+			wxImageList* imageList = m_listData->GetImageList(wxIMAGE_LIST_SMALL);
+			long lSelectedItem = m_listData->InsertItem(m_listData->GetItemCount(), singleObject->GetClassName(), imageList->Add(singleObject->GetClassIcon()));
+			m_clsids.insert_or_assign(lSelectedItem, clsid);
+		}
 	}
 
 	// Connect Events

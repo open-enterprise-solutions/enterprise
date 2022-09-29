@@ -9,18 +9,11 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueGridSizer, IValueSizer)
 
 CValueGridSizer::CValueGridSizer() : IValueSizer()
 {
-	PropertyContainer *categoryGridSizer = IObjectBase::CreatePropertyContainer("GridSizer");
-
-	categoryGridSizer->AddProperty("name", PropertyType::PT_WXNAME);
-	categoryGridSizer->AddProperty("row", PropertyType::PT_INT);
-	categoryGridSizer->AddProperty("cols", PropertyType::PT_INT);
-
-	m_category->AddCategory(categoryGridSizer);
 }
 
 wxObject* CValueGridSizer::Create(wxObject* /*parent*/, IVisualHost* /*visualHost*/)
 {
-	return new wxGridSizer(m_row, m_cols, 0, 0);
+	return new wxGridSizer(m_propertyRows->GetValueAsInteger(), m_propertyCols->GetValueAsInteger(), 0, 0);
 }
 
 void CValueGridSizer::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated)
@@ -29,17 +22,16 @@ void CValueGridSizer::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualH
 
 void CValueGridSizer::Update(wxObject* wxobject, IVisualHost *visualHost)
 {
-	wxGridSizer *m_gridsizer = dynamic_cast<wxGridSizer *>(wxobject);
+	wxGridSizer *gridsizer = dynamic_cast<wxGridSizer *>(wxobject);
 
-	if (m_gridsizer)
-	{
-		m_gridsizer->SetRows(m_row);
-		m_gridsizer->SetCols(m_cols);
+	if (gridsizer != NULL) {
+		gridsizer->SetRows(m_propertyRows->GetValueAsInteger());
+		gridsizer->SetCols(m_propertyCols->GetValueAsInteger());
 
-		m_gridsizer->SetMinSize(m_minimum_size);
+		gridsizer->SetMinSize(m_propertyMinSize->GetValueAsSize());
 	}
 
-	UpdateSizer(m_gridsizer);
+	UpdateSizer(gridsizer);
 }
 
 void CValueGridSizer::Cleanup(wxObject* obj, IVisualHost *visualHost)
@@ -52,34 +44,16 @@ void CValueGridSizer::Cleanup(wxObject* obj, IVisualHost *visualHost)
 
 bool CValueGridSizer::LoadData(CMemoryReader &reader)
 {
-	m_row = reader.r_s32();
-	m_cols = reader.r_s32();
+	m_propertyRows->SetValue(reader.r_s32());
+	m_propertyCols->SetValue(reader.r_s32());
 
 	return IValueSizer::LoadData(reader);
 }
 
 bool CValueGridSizer::SaveData(CMemoryWriter &writer)
 {
-	writer.w_s32(m_row);
-	writer.w_s32(m_cols);
+	writer.w_s32(m_propertyRows->GetValueAsInteger());
+	writer.w_s32(m_propertyCols->GetValueAsInteger());
 
 	return IValueSizer::SaveData(writer);
-}
-
-void CValueGridSizer::ReadProperty()
-{
-	IValueSizer::ReadProperty();
-
-	IObjectBase::SetPropertyValue("name", m_controlName);
-	IObjectBase::SetPropertyValue("row", m_row);
-	IObjectBase::SetPropertyValue("cols", m_cols);
-}
-
-void CValueGridSizer::SaveProperty()
-{
-	IValueSizer::SaveProperty();
-
-	IObjectBase::GetPropertyValue("name", m_controlName);
-	IObjectBase::GetPropertyValue("row", m_row);
-	IObjectBase::GetPropertyValue("cols", m_cols);
 }

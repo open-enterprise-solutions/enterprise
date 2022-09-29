@@ -13,37 +13,35 @@
 //****************************************************************************
 void CObjectCatalog::SetAttribute(attributeArg_t& aParams, CValue& vObject) //установка атрибута
 {
-	wxString sName = GetAttributeName(aParams.GetIndex()), sSynonym = m_methods->GetAttributeSynonym(aParams.GetIndex());
+	wxString sName = GetAttributeName(aParams.GetIndex()), 
+		sSynonym = m_methods->GetAttributeSynonym(aParams.GetIndex());
 
 	if (sSynonym == wxT("procUnit")) {
-		if (m_procUnit != NULL) {
+		if (m_procUnit != NULL)
 			m_procUnit->SetAttribute(aParams.GetName(), vObject);
-		}
 	}
 	else if (sSynonym == wxT("attribute")) {
-		const meta_identifier_t &id =
+		const meta_identifier_t& id =
 			m_methods->GetAttributePosition(aParams.GetIndex());
-		if (!m_metaObject->IsDataReference(id)) {
+		if (!m_metaObject->IsDataReference(id))
 			SetValueByMetaID(id, vObject);
-		}
 	}
 }
 
 CValue CObjectCatalog::GetAttribute(attributeArg_t& aParams) //значение атрибута
 {
-	wxString sName = GetAttributeName(aParams.GetIndex()), sSynonym = m_methods->GetAttributeSynonym(aParams.GetIndex());
+	wxString sName = GetAttributeName(aParams.GetIndex()), 
+		sSynonym = m_methods->GetAttributeSynonym(aParams.GetIndex());
 
 	if (sSynonym == wxT("procUnit")) {
-		if (m_procUnit != NULL) {
+		if (m_procUnit != NULL)
 			return m_procUnit->GetAttribute(aParams.GetName());
-		}
 	}
 	else if (sSynonym == wxT("attribute") || sSynonym == wxT("table")) {
-		const meta_identifier_t &id = m_methods->GetAttributePosition(aParams.GetIndex());
+		const meta_identifier_t& id = m_methods->GetAttributePosition(aParams.GetIndex());
 		if (m_metaObject->IsDataReference(id)) {
-			if (m_newObject) {
+			if (m_newObject)
 				return CReferenceDataObject::Create(m_metaObject);
-			}
 			return CReferenceDataObject::Create(m_metaObject, m_objGuid);
 		}
 		return GetValueByMetaID(id);

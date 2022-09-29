@@ -1,0 +1,26 @@
+/* XPM */
+static const char *s_borders_xpm[] = {
+/* columns rows colors chars-per-pixel */
+"16 16 4 1",
+". c Black",
+"X c #FFFFFF",
+"o c #00FFFF",
+"  c #C0C0C0",
+/* pixels */
+"                ",
+"   ......       ",
+"   .XXXX.       ",
+"   .XXXX.       ",
+"   ..........   ",
+"       .oXoX.   ",
+"       .XoXo.   ",
+"   ..........   ",
+"   .XXXX.       ",
+"   .XXXX.       ",
+"   ......       ",
+"   .XXXX.       ",
+"   .XXXX.       ",
+"   ......       ",
+"                ",
+"................"
+};

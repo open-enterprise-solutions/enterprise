@@ -14,9 +14,9 @@ void IValueFrame::PrepareNames() const
 {
 	std::vector<SEng> aAttributes;
 
-	for (unsigned int idx = 0; idx < IObjectBase::GetPropertyCount(); idx++)
+	for (unsigned int idx = 0; idx < IPropertyObject::GetPropertyCount(); idx++)
 	{
-		Property *property = IObjectBase::GetProperty(idx);
+		Property *property = IPropertyObject::GetProperty(idx);
 
 		if (!property)
 			continue;

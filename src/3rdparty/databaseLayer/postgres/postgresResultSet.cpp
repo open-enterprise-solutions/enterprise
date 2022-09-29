@@ -186,7 +186,7 @@ wxDateTime PostgresResultSet::GetResultDate(int nField)
 	return dateValue;
 }
 
-void* PostgresResultSet::GetResultBlob(int nField, wxMemoryBuffer& Buffer)
+void* PostgresResultSet::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 {
 	//int nLength = m_pInterface->GetPQgetlength()(m_pResult, m_nCurrentRow, nIndex);
 	unsigned char* pBlob = (unsigned char*)m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1);
@@ -201,14 +201,14 @@ void* PostgresResultSet::GetResultBlob(int nField, wxMemoryBuffer& Buffer)
 
 	tempBuffer.SetBufSize(nUnescapedLength);
 	tempBuffer.SetDataLen(nUnescapedLength);
-	Buffer = tempBuffer;
-
-	Buffer.UngetWriteBuf(nUnescapedLength);
+	
+	buffer = tempBuffer;
+	buffer.UngetWriteBuf(nUnescapedLength);
 
 	if (nUnescapedLength < 1)
 		return NULL;
 
-	return Buffer.GetData();
+	return buffer.GetData();
 }
 
 double PostgresResultSet::GetResultDouble(int nField)

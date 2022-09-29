@@ -96,8 +96,8 @@ CValue CInformationRegisterManager::Method(methodArg_t& aParams)
 
 	switch (aParams.GetIndex())
 	{
-	case eCreateRecordSet: return m_metaObject->CreateRecordSetValue();
-	case eCreateRecordManager: return m_metaObject->CreateRecordManagerValue();
+	case eCreateRecordSet: return m_metaObject->CreateRecordSetObjectValue();
+	case eCreateRecordManager: return m_metaObject->CreateRecordManagerObjectValue();
 	case eCreateRecordKey: return new CRecordKeyObject(m_metaObject);
 
 	case eGet:

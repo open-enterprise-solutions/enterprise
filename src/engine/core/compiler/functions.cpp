@@ -95,13 +95,13 @@ bool CTranslateError::bSimpleMode = false;
 // ќбработка ошибок
 //////////////////////////////////////////////////////////////////////
 
-CTranslateError::CTranslateError(const wxString &sErrorString) : std::exception(sErrorString) {}
+CTranslateError::CTranslateError(const wxString& sErrorString) : std::exception(sErrorString) {}
 
 #include "common/docManager.h"
 #include "frontend/output/outputWindow.h"
 #include "metadata/metaObjects/metaModuleObject.h"
 
-void CTranslateError::ProcessError(const CByte &error, const wxString &descError)
+void CTranslateError::ProcessError(const CByte& error, const wxString& descError)
 {
 	bool isSimpleMode = CTranslateError::IsSimpleMode();
 
@@ -118,7 +118,7 @@ void CTranslateError::ProcessError(const CByte &error, const wxString &descError
 
 			if (moduleData.IsEmpty() &&
 				fileName.IsEmpty()) {
-				CMetaModuleObject *foundedDoc = dynamic_cast<CMetaModuleObject *>(
+				CMetaModuleObject* foundedDoc = dynamic_cast<CMetaModuleObject*>(
 					metadata->FindByName(error.m_sDocPath)
 					);
 				wxASSERT(foundedDoc);
@@ -127,13 +127,13 @@ void CTranslateError::ProcessError(const CByte &error, const wxString &descError
 
 			if (moduleData.IsEmpty() &&
 				!fileName.IsEmpty()) {
-				IMetaDocument *const foundedDoc = dynamic_cast<IMetaDocument *>(
+				IMetaDocument* const foundedDoc = dynamic_cast<IMetaDocument*>(
 					docManager->FindDocumentByPath(fileName)
 					);
 				if (foundedDoc) {
-					IMetadata *metaData = foundedDoc->GetMetadata();
+					IMetadata* metaData = foundedDoc->GetMetadata();
 					wxASSERT(metaData);
-					CMetaModuleObject *foundedDoc = dynamic_cast<CMetaModuleObject *>(
+					CMetaModuleObject* foundedDoc = dynamic_cast<CMetaModuleObject*>(
 						metaData->FindByName(error.m_sDocPath)
 						);
 					wxASSERT(foundedDoc);
@@ -153,17 +153,17 @@ void CTranslateError::ProcessError(const CByte &error, const wxString &descError
 	}
 }
 
-void CTranslateError::ProcessError(const wxString &fileName,
-	const wxString &moduleName, const wxString &docPath,
+void CTranslateError::ProcessError(const wxString& fileName,
+	const wxString& moduleName, const wxString& docPath,
 	unsigned int currPos, unsigned int currLine,
-	const wxString &codeLineError, int codeError, const wxString &descError)
+	const wxString& codeLineError, int codeError, const wxString& descError)
 {
 	bool isSimpleMode = CTranslateError::IsSimpleMode();
 
 	wxString errorMessage = wxT("{") + moduleName + wxT("(") + wxString::Format("%i", currLine) + wxT(")}: ") +
 		(codeError > 0 ?
 			CTranslateError::Format(codeError, wxT(""), descError.wc_str()) : descError) + '\n' +
-			(isSimpleMode ? wxEmptyString : codeLineError);
+		(isSimpleMode ? wxEmptyString : codeLineError);
 
 	if (isSimpleMode) {
 		errorMessage.Replace('\n', ' ');
@@ -177,7 +177,7 @@ void CTranslateError::ProcessError(const wxString &fileName,
 
 		if (!isSimpleMode) {
 			//open error dialog
-			CErrorDialog *m_errDlg = new CErrorDialog(CMainFrame::Get(), wxID_ANY);
+			CErrorDialog* m_errDlg = new CErrorDialog(CMainFrame::Get(), wxID_ANY);
 
 			m_errDlg->SetErrorMessage(
 				errorMessage
@@ -216,7 +216,9 @@ void CTranslateError::ProcessError(const wxString &fileName,
 	wxLogDebug(errorMessage);
 #endif // !_DEBUG
 
-	throw(new CTranslateError(errorMessage));
+	throw(
+		new CTranslateError(errorMessage)
+		);
 }
 
 wxString CTranslateError::Format(const wxString fmt, ...)
@@ -239,7 +241,7 @@ wxString CTranslateError::Format(int nErr, ...)
 	}
 }
 
-wxString CTranslateError::FormatV(const wxString &fmt, va_list &list)
+wxString CTranslateError::FormatV(const wxString& fmt, va_list& list)
 {
 	wxString sErrorBuffer = wxString::FormatV(fmt, list); va_end(list);
 
@@ -247,8 +249,8 @@ wxString CTranslateError::FormatV(const wxString &fmt, va_list &list)
 		sErrorBuffer.Replace("\n", "  ");
 	}
 
-	sErrorBuffer.Trim(true);
-	sErrorBuffer.Trim(false);
+	sErrorBuffer.Trim(true)
+		.Trim(false);
 
 	return sErrorBuffer;
 }
@@ -274,7 +276,7 @@ void CTranslateError::Error(int nErr, ...)
 }
 
 //служебные процедуры обработки ошибок
-void CTranslateError::ErrorV(const wxString &fmt, va_list &list)
+void CTranslateError::ErrorV(const wxString& fmt, va_list& list)
 {
 	wxString sErrorBuffer = wxString::FormatV(fmt, list); va_end(list);
 
@@ -282,8 +284,8 @@ void CTranslateError::ErrorV(const wxString &fmt, va_list &list)
 		sErrorBuffer.Replace("\n", "  ");
 	}
 
-	sErrorBuffer.Trim(true);
-	sErrorBuffer.Trim(false);
+	sErrorBuffer.Trim(true).
+		Trim(false);
 
 	m_sCurError = sErrorBuffer;
 
@@ -291,10 +293,12 @@ void CTranslateError::ErrorV(const wxString &fmt, va_list &list)
 	wxLogDebug(sErrorBuffer);
 #endif // !_DEBUG
 
-	throw(new CTranslateError(sErrorBuffer));
+	throw(
+		new CTranslateError(sErrorBuffer)
+		);
 }
 
-wxString CTranslateError::FindErrorCodeLine(const wxString &buffer, int currPos)
+wxString CTranslateError::FindErrorCodeLine(const wxString& buffer, int currPos)
 {
 	int sizeText = buffer.length();
 
@@ -314,9 +318,9 @@ wxString CTranslateError::FindErrorCodeLine(const wxString &buffer, int currPos)
 		};
 	}
 
-	for (int i = currPos + 1; i < sizeText; i++){ //ищем конец строки в которой выдаетс€ сообщение об ошибке трансл€ции
-		if (buffer[i] == '\n') { 
-			endPos = i; break; 
+	for (int i = currPos + 1; i < sizeText; i++) { //ищем конец строки в которой выдаетс€ сообщение об ошибке трансл€ции
+		if (buffer[i] == '\n') {
+			endPos = i; break;
 		};
 	}
 
@@ -328,8 +332,8 @@ wxString CTranslateError::FindErrorCodeLine(const wxString &buffer, int currPos)
 	strError.Replace("\r", "");
 	strError.Replace("\t", " ");
 
-	strError.Trim(true);
-	strError.Trim(false);
+	strError.Trim(true).
+		Trim(false);
 
 	return strError;
 }

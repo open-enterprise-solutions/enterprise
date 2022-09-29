@@ -44,8 +44,13 @@ public:
 			virtual int GetColumnWidth() const { return m_columnWidth; }
 			virtual void SetColumnWidth(int width) { m_columnWidth = width; }
 
-			virtual wxString GetTypeString() const { return wxT("tableValueColumnInfo"); }
-			virtual wxString GetString() const { return wxT("tableValueColumnInfo"); }
+			virtual wxString GetTypeString() const { 
+				return wxT("tableValueColumnInfo"); 
+			}
+		
+			virtual wxString GetString() const { 
+				return wxT("tableValueColumnInfo");
+			}
 
 			friend CValueTableColumnCollection;
 		};
@@ -59,31 +64,25 @@ public:
 		IValueTableColumnInfo* AddColumn(const wxString& colName, CValueTypeDescription* types, const wxString& caption, int width = wxDVC_DEFAULT_WIDTH)
 		{
 			unsigned int max_id = 0;
-
 			for (auto& col : m_aColumnInfo) {
 				if (max_id < col->GetColumnID()) {
 					max_id = col->GetColumnID();
 				}
 			}
-
 			CValueTableColumnInfo* columnInfo = new CValueTableColumnInfo(max_id + 1, colName, types, caption, width);
 			m_aColumnInfo.push_back(columnInfo);
-
 			for (auto& rowValue : m_ownerTable->m_aObjectValues)
 				rowValue.insert_or_assign(max_id + 1, types ? types->AdjustValue() : CValue());
-
 			columnInfo->IncrRef();
 			return columnInfo;
 		}
 
-		CValueTypeDescription* GetColumnType(unsigned int col_id) const
-		{
+		CValueTypeDescription* GetColumnType(unsigned int col_id) const {
 			for (auto& col : m_aColumnInfo) {
 				if (col_id == col->GetColumnID()) {
 					return col->GetColumnTypes();
 				}
 			}
-
 			return NULL;
 		}
 
@@ -119,8 +118,13 @@ public:
 		virtual CMethods* GetPMethods() const { PrepareNames(); return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
 		virtual void PrepareNames() const;
 
-		virtual wxString GetTypeString() const { return wxT("tableValueColumn"); }
-		virtual wxString GetString() const { return wxT("tableValueColumn"); }
+		virtual wxString GetTypeString() const {
+			return wxT("tableValueColumn");
+		}
+		
+		virtual wxString GetString() const { 
+			return wxT("tableValueColumn"); 
+		}
 
 		//РАБОТА КАК АГРЕГАТНОГО ОБЪЕКТА
 		virtual CValue Method(methodArg_t& aParams);
@@ -131,8 +135,7 @@ public:
 
 		//Работа с итераторами 
 		virtual bool HasIterator() const { return true; }
-		virtual CValue GetItAt(unsigned int idx)
-		{
+		virtual CValue GetItAt(unsigned int idx) {
 			auto itFounded = m_aColumnInfo.begin();
 			std::advance(itFounded, idx);
 			return *itFounded;
@@ -175,10 +178,15 @@ public:
 		virtual CValue GetValueByMetaID(const meta_identifier_t &id) const;
 
 		virtual CMethods* GetPMethods() const { PrepareNames(); return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
-		virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
+		virtual void PrepareNames() const; //этот метод автоматически вызывается для инициализации имен атрибутов и методов
 
-		virtual wxString GetTypeString() const { return wxT("tableValueRow"); }
-		virtual wxString GetString() const { return wxT("tableValueRow"); }
+		virtual wxString GetTypeString() const { 
+			return wxT("tableValueRow");
+		}
+	
+		virtual wxString GetString() const { 
+			return wxT("tableValueRow"); 
+		}
 
 		virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal); //установка атрибута
 		virtual CValue GetAttribute(attributeArg_t& aParams); //значение атрибута
@@ -210,16 +218,32 @@ public:
 	CValueTable(const CValueTable& val);
 	virtual ~CValueTable();
 
-	virtual void AddValue(unsigned int before = 0) { AddRow(before); }
-	virtual void CopyValue() { CopyRow(); }
-	virtual void EditValue() { EditRow(); }
-	virtual void DeleteValue() { DeleteRow(); }
+	virtual void AddValue(unsigned int before = 0) { 
+		AddRow(before);
+	}
+	
+	virtual void CopyValue() { 
+		CopyRow();
+	}
+	
+	virtual void EditValue() { 
+		EditRow(); 
+	}
+	
+	virtual void DeleteValue() { 
+		DeleteRow();
+	}
 
 	//array
 	virtual CValue GetAt(const CValue& cKey);
 
-	wxString GetTypeString() const { return wxT("tableValue"); }
-	wxString GetString() const { return wxT("tableValue"); }
+	wxString GetTypeString() const { 
+		return wxT("tableValue");
+	}
+	
+	wxString GetString() const {
+		return wxT("tableValue"); 
+	}
 
 	//check is empty
 	virtual inline bool IsEmpty() const override {
@@ -267,22 +291,23 @@ public:
 	static wxIcon GetIconGroup();
 
 	//Работа с итераторами 
-	virtual bool HasIterator() const override { return true; }
+	virtual bool HasIterator() const override { 
+		return true; 
+	}
 
-	virtual CValue GetItEmpty() override
-	{
+	virtual CValue GetItEmpty() override {
 		return new CValueTableReturnLine(this, wxNOT_FOUND);
 	}
 
-	virtual CValue GetItAt(unsigned int idx) override
-	{
+	virtual CValue GetItAt(unsigned int idx) override {
 		if (idx > m_aObjectValues.size())
 			return CValue();
-
 		return new CValueTableReturnLine(this, idx);
 	}
 
-	virtual unsigned int GetItSize() const override { return m_aObjectValues.size(); }
+	virtual unsigned int GetItSize() const override { 
+		return m_aObjectValues.size();
+	}
 
 protected:
 

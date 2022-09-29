@@ -8,7 +8,7 @@ class CProcUnit;
 
 #include "compiler/value.h"
 #include "frontend/visualView/visualEditorBase.h"
-#include "common/objectbase.h"
+#include "common/propertyObject.h"
 
 class ISourceDataObject;
 class IRecordDataObject;
@@ -27,32 +27,52 @@ class IMetaFormObject;
 
 class CSourceExplorer;
 
+#include "frontend/visualView/special/enums/valueOrient.h"
+
 class IValueFrame : public CValue,
-	public IObjectBase, public IActionSource {
+	public IPropertyObject, public IActionSource {
 	wxDECLARE_ABSTRACT_CLASS(IValueFrame);
 protected:
 	//object of methods 
 	CMethods* m_methods;
 private:
-	IValueFrame* DoFindControlByID(const form_identifier_t &id, IValueFrame* control);
+
+	IValueFrame* DoFindControlByID(const form_identifier_t& id, IValueFrame* control);
 	IValueFrame* DoFindControlByName(const wxString& controlName, IValueFrame* control);
 	void DoGenerateNewID(form_identifier_t& id, IValueFrame* top);
+
+public:
+
+	OptionList* GetOrient(PropertyEnumOption<CValueEnumOrient>* property) {
+		OptionList* optList = new OptionList();
+		optList->AddOption(_("vertical"), wxVERTICAL);
+		optList->AddOption(_("horizontal"), wxHORIZONTAL);
+		return optList;
+	}
+
 public:
 
 	IValueFrame();
 	virtual ~IValueFrame();
 
 	// Gets the parent object
-	IValueFrame* GetParent() const { return wxDynamicCast(m_parent, IValueFrame); }
+	IValueFrame* GetParent() const {
+		return wxDynamicCast(m_parent, IValueFrame);
+	}
 
 	/**
 	* Obtiene un hijo del objeto.
 	*/
-	IValueFrame* GetChild(unsigned int idx);
-	IValueFrame* GetChild(unsigned int idx, const wxString& type);
+	IValueFrame* GetChild(unsigned int idx) const;
+	IValueFrame* GetChild(unsigned int idx, const wxString& type) const;
 
-	IValueFrame* FindNearAncestor(const wxString& type) { return wxDynamicCast(IObjectBase::FindNearAncestor(type), IValueFrame); }
-	IValueFrame* FindNearAncestorByBaseClass(const wxString& type) { return wxDynamicCast(IObjectBase::FindNearAncestorByBaseClass(type), IValueFrame); }
+	IValueFrame* FindNearAncestor(const wxString& type) const {
+		return wxDynamicCast(IPropertyObject::FindNearAncestor(type), IValueFrame);
+	}
+
+	IValueFrame* FindNearAncestorByBaseClass(const wxString& type) const {
+		return wxDynamicCast(IPropertyObject::FindNearAncestorByBaseClass(type), IValueFrame);
+	}
 
 	/**
 	* Support generate id
@@ -62,7 +82,7 @@ public:
 	/**
 	* Support get/set object id
 	*/
-	virtual bool SetControlID(const form_identifier_t &id) {
+	virtual bool SetControlID(const form_identifier_t& id) {
 		if (id > 0) {
 			IValueFrame* foundedControl =
 				FindControlByID(id);
@@ -79,43 +99,32 @@ public:
 		return false;
 
 	}
-	virtual form_identifier_t GetControlID() const { return m_controlId; }
 
-	bool SetControlName(const wxString& controlName) {
-		IValueFrame* foundedControl =
-			FindControlByName(controlName);
-		wxASSERT(foundedControl == NULL);
-		if (foundedControl == NULL) {
-			Property* propName = GetProperty("name");
-			if (propName != NULL) {
-				propName->SetValue(controlName);
-			}
-			m_controlName = controlName;
-			return true;
-		}
-		return false;
+	virtual form_identifier_t GetControlID() const {
+		return m_controlId;
 	}
 
-	wxString GetControlName() const { return m_controlName; }
+	virtual void SetControlName(const wxString& controlName) {};
+	virtual wxString GetControlName() const = 0;
 
 	void ResetGuid() { wxASSERT(m_controlGuid.isValid()); m_controlGuid.reset(); }
-	void GenerateGuid() { wxASSERT(!m_controlGuid.isValid()); m_controlGuid = Guid::newGuid(); }
+	void GenerateGuid() { wxASSERT(!m_controlGuid.isValid()); m_controlGuid = wxNewGuid; }
 	Guid GetControlGuid() const { return m_controlGuid; }
 
 	CLASS_ID GetClsid() const { return m_controlClsid; }
-	void SetClsid(const CLASS_ID &clsid) { m_controlClsid = clsid; }
+	void SetClsid(const CLASS_ID& clsid) { m_controlClsid = clsid; }
 
 	/**
 	* Find by control id
 	*/
 	virtual IValueFrame* FindControlByName(const wxString& controlName);
-	virtual IValueFrame* FindControlByID(const form_identifier_t &id);
+	virtual IValueFrame* FindControlByID(const form_identifier_t& id);
 
 	/**
 	* Support form
 	*/
 	virtual CValueForm* GetOwnerForm() const = 0;
-	virtual void SetOwnerForm(CValueForm* ownerForm) = 0;
+	virtual void SetOwnerForm(CValueForm* ownerForm) {};
 
 	/**
 	* Support default menu
@@ -126,33 +135,24 @@ public:
 	/**
 	* Get wxObject from visual view (if exist)
 	*/
-	wxObject* GetWxObject();
+	wxObject* GetWxObject() const;
 
 	/**
 	Sets whether the object is expanded in the object tree or not.
 	*/
-	void SetExpanded(bool expanded) { m_expanded = expanded; }
+	void SetExpanded(bool expanded) {
+		m_expanded = expanded;
+	}
 
 	/**
 	Gets whether the object is expanded in the object tree or not.
 	*/
-	bool GetExpanded() { return m_expanded; }
-
-	/**
-	* Set property data
-	*/
-	virtual void SetPropertyData(Property* property, const CValue& srcValue);
-
-	/**
-	* Get property data
-	*/
-	virtual CValue GetPropertyData(Property* property);
+	bool GetExpanded() const {
+		return m_expanded;
+	}
 
 	//get metadata
 	virtual IMetadata* GetMetaData() const = 0;
-
-	//get typelist 
-	virtual OptionList* GetTypelist() const = 0;
 
 	/**
 	* Can delete object
@@ -160,7 +160,7 @@ public:
 	virtual bool CanDeleteControl() const = 0;
 
 	// filter data 
-	virtual bool FilterSource(const CSourceExplorer& src, const meta_identifier_t &id);
+	virtual bool FilterSource(const CSourceExplorer& src, const meta_identifier_t& id);
 
 public:
 
@@ -208,10 +208,10 @@ public:
 public:
 
 	// call current event
-	virtual bool CallEvent(const wxString& sEventName);
-	virtual bool CallEvent(const wxString& sEventName, CValue& value1);
-	virtual bool CallEvent(const wxString& sEventName, CValue& value1, CValue& value2);
-	virtual bool CallEvent(const wxString& sEventName, CValue& value1, CValue& value2, CValue& value3);
+	virtual bool CallEvent(const Event* event);
+	virtual bool CallEvent(const Event* event, CValue& value1);
+	virtual bool CallEvent(const Event* event, CValue& value1, CValue& value2);
+	virtual bool CallEvent(const Event* event, CValue& value1, CValue& value2, CValue& value3);
 
 	//call current form
 	virtual void CallFunction(const wxString& functionName);
@@ -225,22 +225,13 @@ public:
 
 public:
 
-	//read&save propery 
-	virtual void ReadProperty() override;
-	virtual void SaveProperty() override;
-
 	//support actions 
-	virtual actionData_t GetActions(const form_identifier_t &formType) { return actionData_t(); }
-	virtual void ExecuteAction(const action_identifier_t &action, CValueForm* srcForm) {}
-
-	//is item 
-	virtual bool IsItem() = 0;
+	virtual actionData_t GetActions(const form_identifier_t& formType) { return actionData_t(); }
+	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm) {}
 
 	class CValueEventContainer : public CValue {
-
 		CMethods* m_methods;
 		IValueFrame* m_controlEvent;
-
 	public:
 
 		CValueEventContainer();
@@ -274,7 +265,9 @@ public:
 		wxDECLARE_DYNAMIC_CLASS(CValueEventContainer);
 	};
 
-	virtual CValue GetControlValue() const { return CValue(); }
+	virtual CValue GetControlValue() const { 
+		return CValue(); 
+	}
 
 public:
 
@@ -287,7 +280,10 @@ public:
 	virtual CProcUnit* GetFormProcUnit() const = 0;
 
 	//methods 
-	virtual CMethods* GetPMethods() const { PrepareNames();  return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethods* GetPMethods() const { //получить ссылку на класс помощник разбора имен атрибутов и методов 
+		PrepareNames();
+		return m_methods;
+	}
 	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
 	virtual CValue Method(methodArg_t& aParams);       //вызов метода
 
@@ -305,8 +301,8 @@ public:
 public:
 
 	//load & save object in metaObject 
-	bool LoadControl(IMetaFormObject* metaForm, CMemoryReader& dataReader);
-	bool SaveControl(IMetaFormObject* metaForm, CMemoryWriter& dataWritter = CMemoryWriter());
+	bool LoadControl(const IMetaFormObject* metaForm, CMemoryReader& dataReader);
+	bool SaveControl(const IMetaFormObject* metaForm, CMemoryWriter& dataWritter = CMemoryWriter());
 
 protected:
 
@@ -320,12 +316,11 @@ protected:
 
 protected:
 
-	bool m_expanded = true; // is expanded in the object tree, allows for saving to file
-
 	CLASS_ID m_controlClsid; //type object name
 	form_identifier_t m_controlId;
 	Guid m_controlGuid;
-	wxString m_controlName;
+
+	bool m_expanded = true; // is expanded in the object tree, allows for saving to file
 };
 
 #endif // !_BASE_H_

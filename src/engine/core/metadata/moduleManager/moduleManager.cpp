@@ -46,15 +46,13 @@ IModuleManager::IModuleManager(IMetadata* metaData, CMetaModuleObject* obj) :
 
 void IModuleManager::Clear()
 {
-	for (auto compileModule : m_aCompileModules)
-	{
+	for (auto compileModule : m_aCompileModules) {
 		CValue* dataRef = compileModule.second;
 		wxASSERT(dataRef);
 		dataRef->DecrRef();
 	}
 
-	for (auto moduleValue : m_aCommonModules)
-	{
+	for (auto moduleValue : m_aCommonModules) {
 		moduleValue->DecrRef();
 	}
 
@@ -146,7 +144,7 @@ bool IModuleManager::AddCommonModule(CMetaCommonModuleObject* commonModule, bool
 	return true;
 }
 
-IModuleManager::CModuleValue* IModuleManager::FindCommonModule(CMetaCommonModuleObject* commonModule)
+IModuleManager::CModuleValue* IModuleManager::FindCommonModule(CMetaCommonModuleObject* commonModule) const
 {
 	auto moduleObjectIt = std::find_if(m_aCommonModules.begin(), m_aCommonModules.end(),
 		[commonModule](CModuleValue* valueModule) {
@@ -465,32 +463,42 @@ bool CExternalDataProcessorModuleManager::StartMainModule()
 		CMetaObjectDataProcessor::eFormDataProcessor
 	);
 
-	if (defFormObject) {
-
+	if (defFormObject != NULL) {
 		CValueForm* valueForm = NULL;
-
 		if (!IModuleManager::FindCompileModule(defFormObject, valueForm)) {
-
 			valueForm = defFormObject->GenerateForm(
 				NULL, m_objectValue
 			);
-
-			try
-			{
+			try {
 				if (valueForm->InitializeFormModule()) {
 					valueForm->ShowForm();
 				}
 			}
 			catch (...) {
-
 				wxDELETE(valueForm);
-
 				if (appData->EnterpriseMode() ||
 					appData->ServiceMode()) {
 					//decrRef - for control delete 
 					m_objectValue->DecrRef();
 					return false;
 				}
+			}
+		}
+	}
+	else {
+		CValueForm* valueForm = new CValueForm;
+		valueForm->InitializeForm(NULL, NULL, m_objectValue, Guid::newGuid());
+		valueForm->BuildForm(CMetaObjectDataProcessor::eFormDataProcessor);
+		try {
+			valueForm->ShowForm();
+		}
+		catch (...) {
+			wxDELETE(valueForm);
+			if (appData->EnterpriseMode() ||
+				appData->ServiceMode()) {
+				//decrRef - for control delete 
+				m_objectValue->DecrRef();
+				return false;
 			}
 		}
 	}
@@ -651,32 +659,42 @@ bool CExternalReportModuleManager::StartMainModule()
 		CMetaObjectReport::eFormReport
 	);
 
-	if (defFormObject) {
-
+	if (defFormObject != NULL) {
 		CValueForm* valueForm = NULL;
-
 		if (!IModuleManager::FindCompileModule(defFormObject, valueForm)) {
-
 			valueForm = defFormObject->GenerateForm(
 				NULL, m_objectValue
 			);
-
-			try
-			{
+			try {
 				if (valueForm->InitializeFormModule()) {
 					valueForm->ShowForm();
 				}
 			}
 			catch (...) {
-
 				wxDELETE(valueForm);
-
 				if (appData->EnterpriseMode() ||
 					appData->ServiceMode()) {
 					//decrRef - for control delete 
 					m_objectValue->DecrRef();
 					return false;
 				}
+			}
+		}
+	}
+	else {
+		CValueForm* valueForm = new CValueForm;
+		valueForm->InitializeForm(NULL, NULL, m_objectValue, Guid::newGuid());
+		valueForm->BuildForm(CMetaObjectReport::eFormReport);
+		try {
+			valueForm->ShowForm();
+		}
+		catch (...) {
+			wxDELETE(valueForm);
+			if (appData->EnterpriseMode() ||
+				appData->ServiceMode()) {
+				//decrRef - for control delete 
+				m_objectValue->DecrRef();
+				return false;
 			}
 		}
 	}

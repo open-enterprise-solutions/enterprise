@@ -55,12 +55,7 @@ CValue CValueForm::CValueFormData::GetItAt(unsigned int idx)
 
 	wxASSERT(valueControl);
 
-	wxString propertyName;
-	if (!valueControl->GetPropertyValue("name", propertyName)) {
-		return CValue();
-	}
-
-	return new CValueContainer::CValueReturnContainer(propertyName, 
+	return new CValueContainer::CValueReturnContainer(valueControl->GetControlName(),
 		CValue(valueControl)
 	);
 }
@@ -116,7 +111,7 @@ bool CValueForm::CValueFormData::Property(const CValue &cKey, CValue &cValueFoun
 	wxString key = cKey.GetString();
 	auto itFounded = std::find_if(m_formOwner->m_aControls.begin(), m_formOwner->m_aControls.end(), [key](IValueControl *control) { 
 		if (control->HasValueInControl()) {
-			return StringUtils::CompareString(key, control->GetPropertyAsString("name"));
+			return StringUtils::CompareString(key, control->GetControlName());
 		}
 		return false; 
 	});
@@ -161,7 +156,7 @@ void CValueForm::CValueFormData::PrepareNames() const
 			continue;
 		
 		SEng attr;
-		attr.sName = control->GetPropertyAsString("name");
+		attr.sName = control->GetControlName();
 		attr.iName = control->GetControlID();
 		attributes.push_back(attr);
 	}

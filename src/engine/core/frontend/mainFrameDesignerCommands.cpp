@@ -9,7 +9,7 @@
 
 #include <wx/artprov.h>
 
-extern wxImageList *GetImageList();
+#include "core/resources/saveMetadata.xpm"
 
 void CMainFrameDesigner::CreateWideGui()
 {
@@ -27,7 +27,7 @@ void CMainFrameDesigner::CreateWideGui()
 	m_toolbarDefault->AddTool(wxID_UNDO, _("Undo"), wxArtProvider::GetBitmap(wxART_UNDO, wxART_FRAME_ICON, wxSize(16, 16)), "Undo", wxItemKind::wxITEM_NORMAL);
 
 	m_toolbarDefault->AddSeparator();
-	m_toolbarDefault->AddTool(wxID_DESIGNER_UPDATE_METADATA, _("Save metadata"), GetImageList()->GetBitmap(339), _("Save metadata"), wxItemKind::wxITEM_NORMAL);
+	m_toolbarDefault->AddTool(wxID_DESIGNER_UPDATE_METADATA, _("Save metadata"), wxBitmap(s_saveMetadata_xpm), _("Save metadata"), wxItemKind::wxITEM_NORMAL);
 
 	m_toolbarDefault->Realize();
 
@@ -65,7 +65,7 @@ void CMainFrameDesigner::CreateWideGui()
 	CreatePropertyManager();
 	CreateMessageAndDebugBar();
 
-	SetStatusBar(new CStatusBar(this));
+	SetStatusBar(new CBottomStatusBar(this));
 	SetStatusText("Ready");
 	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(wxAUI_DOCKART_BACKGROUND_COLOUR, DEFAULT_COLOUR);
 	SetMinSize(wxSize(700, 380));

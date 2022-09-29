@@ -8,6 +8,8 @@
 
 #include <wx/artprov.h>
 
+#include "frontend/theme/luna_auitoolbar.h"
+
 void CMainFrameEnterprise::CreateWideGui()
 {
 	m_toolbarDefault = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
@@ -56,7 +58,7 @@ void CMainFrameEnterprise::CreateWideGui()
 	CreatePropertyManager();
 	CreateMessageAndDebugBar();
 
-	SetStatusBar(new CStatusBar(this));
+	SetStatusBar(new CBottomStatusBar(this));
 	SetStatusText("Ready");
 	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(wxAUI_DOCKART_BACKGROUND_COLOUR, DEFAULT_COLOUR);
 	SetMinSize(wxSize(700, 380));

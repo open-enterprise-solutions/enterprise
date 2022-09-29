@@ -14,6 +14,8 @@ void CDataProcessorTree::CDataProcessorTreeWnd::OnLeftDClick(wxMouseEvent &event
 	//event.Skip();
 }
 
+#include "frontend/objinspect/objinspect.h"
+
 void CDataProcessorTree::CDataProcessorTreeWnd::OnLeftUp(wxMouseEvent &event)
 {
 	event.Skip();
@@ -22,95 +24,71 @@ void CDataProcessorTree::CDataProcessorTreeWnd::OnLeftUp(wxMouseEvent &event)
 void CDataProcessorTree::CDataProcessorTreeWnd::OnLeftDown(wxMouseEvent &event)
 {
 	wxTreeItemId curItem = HitTest(event.GetPosition());
-	if (curItem.IsOk()) { SelectItem(curItem); /*m_ownerTree->PropertyItem();*/ }
+	if (curItem.IsOk()) { 
+		SelectItem(curItem); /*m_ownerTree->PropertyItem();*/ 
+	}
 	event.Skip();
 }
 
 void CDataProcessorTree::CDataProcessorTreeWnd::OnRightUp(wxMouseEvent &event)
 {
 	wxTreeItemId curItem = HitTest(event.GetPosition());
-
-	if (curItem.IsOk())
-	{
+	if (curItem.IsOk()) {
 		SelectItem(curItem); SetFocus();
-		wxMenu *m_defaultMenu = new wxMenu;
-		m_ownerTree->PrepareContextMenu(m_defaultMenu, curItem);
-
-		for (auto def_menu : m_defaultMenu->GetMenuItems())
-		{
+		wxMenu *defaultMenu = new wxMenu;
+		m_ownerTree->PrepareContextMenu(defaultMenu, curItem);
+		for (auto def_menu : defaultMenu->GetMenuItems()) {
 			if (def_menu->GetId() == ID_METATREE_NEW
 				|| def_menu->GetId() == ID_METATREE_EDIT
 				|| def_menu->GetId() == ID_METATREE_REMOVE
-				|| def_menu->GetId() == ID_METATREE_PROPERTY)
-			{
+				|| def_menu->GetId() == ID_METATREE_PROPERTY) {
 				continue;
 			}
-
 			GetEventHandler()->Bind(wxEVT_MENU, &CDataProcessorTree::CDataProcessorTreeWnd::OnCommandItem, this, def_menu->GetId());
 		}
-
-		PopupMenu(m_defaultMenu, event.GetPosition());
-
-		for (auto def_menu : m_defaultMenu->GetMenuItems())
-		{
+		PopupMenu(defaultMenu, event.GetPosition());
+		for (auto def_menu : defaultMenu->GetMenuItems()) {
 			if (def_menu->GetId() == ID_METATREE_NEW
 				|| def_menu->GetId() == ID_METATREE_EDIT
 				|| def_menu->GetId() == ID_METATREE_REMOVE
-				|| def_menu->GetId() == ID_METATREE_PROPERTY)
-			{
+				|| def_menu->GetId() == ID_METATREE_PROPERTY) {
 				continue;
 			}
-
 			GetEventHandler()->Unbind(wxEVT_MENU, &CDataProcessorTree::CDataProcessorTreeWnd::OnCommandItem, this, def_menu->GetId());
 		}
-
-		delete m_defaultMenu;
+		delete defaultMenu;
 	}
-
 	m_ownerTree->PropertyItem(); event.Skip();
 }
 
 void CDataProcessorTree::CDataProcessorTreeWnd::OnRightDown(wxMouseEvent &event)
 {
 	wxTreeItemId curItem = HitTest(event.GetPosition());
-
-	if (curItem.IsOk())
-	{
+	if (curItem.IsOk()) {
 		SelectItem(curItem); SetFocus();
 		wxMenu *defaultMenu = new wxMenu;
 		m_ownerTree->PrepareContextMenu(defaultMenu, curItem);
-
-		for (auto def_menu : defaultMenu->GetMenuItems())
-		{
+		for (auto def_menu : defaultMenu->GetMenuItems()) {
 			if (def_menu->GetId() == ID_METATREE_NEW
 				|| def_menu->GetId() == ID_METATREE_EDIT
 				|| def_menu->GetId() == ID_METATREE_REMOVE
-				|| def_menu->GetId() == ID_METATREE_PROPERTY)
-			{
+				|| def_menu->GetId() == ID_METATREE_PROPERTY) {
 				continue;
 			}
-
 			GetEventHandler()->Bind(wxEVT_MENU, &CDataProcessorTree::CDataProcessorTreeWnd::OnCommandItem, this, def_menu->GetId());
 		}
-
 		PopupMenu(defaultMenu, event.GetPosition());
-
-		for (auto def_menu : defaultMenu->GetMenuItems())
-		{
+		for (auto def_menu : defaultMenu->GetMenuItems()) {
 			if (def_menu->GetId() == ID_METATREE_NEW
 				|| def_menu->GetId() == ID_METATREE_EDIT
 				|| def_menu->GetId() == ID_METATREE_REMOVE
-				|| def_menu->GetId() == ID_METATREE_PROPERTY)
-			{
+				|| def_menu->GetId() == ID_METATREE_PROPERTY) {
 				continue;
 			}
-
 			GetEventHandler()->Unbind(wxEVT_MENU, &CDataProcessorTree::CDataProcessorTreeWnd::OnCommandItem, this, def_menu->GetId());
 		}
-
 		delete defaultMenu;
 	}
-
 	m_ownerTree->PropertyItem(); event.Skip();
 }
 
@@ -154,6 +132,21 @@ void CDataProcessorTree::CDataProcessorTreeWnd::OnPropertyItem(wxCommandEvent &e
 	m_ownerTree->PropertyItem(); event.Skip();
 }
 
+void CDataProcessorTree::CDataProcessorTreeWnd::OnUpItem(wxCommandEvent& event)
+{
+	m_ownerTree->UpItem(); event.Skip();
+}
+
+void CDataProcessorTree::CDataProcessorTreeWnd::OnDownItem(wxCommandEvent& event)
+{
+	m_ownerTree->DownItem(); event.Skip();
+}
+
+void CDataProcessorTree::CDataProcessorTreeWnd::OnSortItem(wxCommandEvent& event)
+{
+	m_ownerTree->SortItem(); event.Skip();
+}
+
 void CDataProcessorTree::CDataProcessorTreeWnd::OnCommandItem(wxCommandEvent &event)
 {
 	m_ownerTree->CommandItem(event.GetId()); event.Skip();
@@ -164,29 +157,22 @@ void CDataProcessorTree::CDataProcessorTreeWnd::OnCommandItem(wxCommandEvent &ev
 void CDataProcessorTree::CDataProcessorTreeWnd::OnCopyItem(wxCommandEvent &event)
 {
 	wxTreeItemId item = GetSelection();
-
 	if (!item.IsOk())
 		return;
-
 	// Write some text to the clipboard
-	if (wxTheClipboard->Open())
-	{
-		IMetaObject *metaObject = m_ownerTree->GetMetaObject(item);
-
-		if (metaObject)
-		{
+	if (wxTheClipboard->Open()) {
+		IMetaObject* metaObject = m_ownerTree->GetMetaObject(item);
+		if (metaObject != NULL) {
 			CMemoryWriter dataWritter;
-
-			if (metaObject->SaveMeta(dataWritter))
-			{
-				wxCustomDataObject *dataCustomObject = new wxCustomDataObject;
-				dataCustomObject->SetData(dataWritter.size(), dataWritter.pointer());
-
-				// This data objects are held by the clipboard,
-				// so do not delete them in the app.
-				wxTheClipboard->SetData(dataCustomObject);
-				wxTheClipboard->Close();
+			if (metaObject->CopyObject(dataWritter)) {
+				// create an RTF data object
+				wxCustomDataObject* pdo = new wxCustomDataObject(wxOES_Data);
+				// the +1 is used to force copy of the \0 character
+				pdo->SetData(dataWritter.size(), dataWritter.pointer());
+				// tell clipboard about our RTF
+				wxTheClipboard->SetData(pdo);
 			}
+			wxTheClipboard->Close();
 		}
 	}
 
@@ -195,28 +181,25 @@ void CDataProcessorTree::CDataProcessorTreeWnd::OnCopyItem(wxCommandEvent &event
 
 void CDataProcessorTree::CDataProcessorTreeWnd::OnPasteItem(wxCommandEvent &event)
 {
-	wxTreeItemId item = GetSelection();
-
-	if (!item.IsOk())
+	if (m_ownerTree->m_bReadOnly)
 		return;
 
-	// Read some text
-	if (wxTheClipboard->Open())
-	{
-		if (wxTheClipboard->IsSupported(wxDF_TEXT))
-		{
-			wxTextDataObject data;
-			wxTheClipboard->GetData(data);
+	wxTreeItemId item = GetSelection();
+	if (!item.IsOk())
+		return;
+	if (wxTheClipboard->Open()
+		&& wxTheClipboard->IsSupported(wxOES_Data)) {
+		wxCustomDataObject data(wxOES_Data);
+		if (wxTheClipboard->GetData(data)) {
+			IMetaObject* metaObject = m_ownerTree->CreateItem(false);
+			if (metaObject != NULL) {
+				CMemoryReader reader(data.GetData(), data.GetDataSize());
+				if (metaObject->PasteObject(reader)) {
+					objectInspector->RefreshProperty();
+				}
+				m_ownerTree->Load(m_ownerTree->m_metaData);
+			}
 		}
-		else
-		{
-			wxCustomDataObject data;
-			wxTheClipboard->GetData(data);
-
-			CMemoryReader dateReader(data.GetData(), data.GetDataSize());
-			m_ownerTree->CreateItem();
-		}
-
 		wxTheClipboard->Close();
 	}
 
@@ -227,7 +210,9 @@ void CDataProcessorTree::CDataProcessorTreeWnd::OnDebugEvent(wxDebugEvent &event
 {
 	switch (event.GetEventId())
 	{
-	case EventId_EnterLoop: m_ownerTree->EditModule(event.GetModuleName(), event.GetLine(), true); break;
+	case EventId_EnterLoop: 
+		m_ownerTree->EditModule(event.GetModuleName(), event.GetLine(), true); 	
+		break;
 	}
 }
 
@@ -235,11 +220,10 @@ void CDataProcessorTree::CDataProcessorTreeWnd::OnPropertyModified(wxFrameProper
 {
 	Property *p = event.GetFrameProperty();
 	wxASSERT(p);
-	if (p->GetType() == PropertyType::PT_WXNAME)
-	{
+	if (p->GetType() == PropertyType::PT_WXNAME) {
 		IMetaObject *obj = dynamic_cast<IMetaObject *>(p->GetObject());
 		wxASSERT(obj);
-		if (!m_ownerTree->RenameMetaObject(obj, p->GetValue()))
+		if (!m_ownerTree->RenameMetaObject(obj, event.GetValue()))
 			event.Skip();
 	}
 }

@@ -5,13 +5,13 @@
 
 #include "formSelector.h"
 #include "metadata/metaObjects/metaFormObject.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 #include "frontend/mainFrame.h"
 
 CSelectTypeForm::CSelectTypeForm(IMetaObject*metaValue, IMetaFormObject *metaObject)
 	: wxDialog(CMainFrame::Get(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(480, 320), wxDEFAULT_DIALOG_STYLE | wxDIALOG_ADAPTATION_ANY_SIZER), m_metaObject(metaObject)
 {
-	SetTitle(_(metaValue->GetClassName() + _(" form wizard")));
+	SetTitle(metaValue->GetSynonym() + _(" form wizard"));
 }
 
 CSelectTypeForm::~CSelectTypeForm()
@@ -21,10 +21,10 @@ CSelectTypeForm::~CSelectTypeForm()
 void CSelectTypeForm::CreateSelector()
 {
 	wxBoxSizer* bSizerMain = new wxBoxSizer(wxVERTICAL);
-	wxStaticBoxSizer* sbSizerMain = new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, wxT("Select form type")), wxVERTICAL);
+	wxStaticBoxSizer* sbSizerMain = new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, _("Select form type")), wxVERTICAL);
 
 	for (auto choice : m_aChoices) {
-		wxRadioButton *radioButton = new wxRadioButton(sbSizerMain->GetStaticBox(), choice.m_choice, choice.m_name, wxDefaultPosition, wxDefaultSize);
+		wxRadioButton *radioButton = new wxRadioButton(sbSizerMain->GetStaticBox(), choice.m_value, choice.m_label, wxDefaultPosition, wxDefaultSize);
 		radioButton->Connect(wxEVT_RADIOBUTTON, wxCommandEventHandler(CSelectTypeForm::OnFormTypeChanged), NULL, this);
 		sbSizerMain->Add(radioButton, 1, wxALL | wxEXPAND, 5);
 	}
@@ -38,17 +38,17 @@ void CSelectTypeForm::CreateSelector()
 	wxBoxSizer* bSizerHeader = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* bSizerLeft = new wxBoxSizer(wxVERTICAL);
 
-	m_staticTextName = new wxStaticText(this, wxID_ANY, wxT("Name"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticTextName = new wxStaticText(this, wxID_ANY, _("Name"), wxDefaultPosition, wxDefaultSize, 0);
 	m_staticTextName->Wrap(-1);
 
 	bSizerLeft->Add(m_staticTextName, 0, wxALL, 5);
 
-	m_staticTextSynonym = new wxStaticText(this, wxID_ANY, wxT("Synonym"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticTextSynonym = new wxStaticText(this, wxID_ANY, _("Synonym"), wxDefaultPosition, wxDefaultSize, 0);
 	m_staticTextSynonym->Wrap(-1);
 
 	bSizerLeft->Add(m_staticTextSynonym, 0, wxALL, 5);
 
-	m_staticTextComment = new wxStaticText(this, wxID_ANY, wxT("Comment"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticTextComment = new wxStaticText(this, wxID_ANY, _("Comment"), wxDefaultPosition, wxDefaultSize, 0);
 	m_staticTextComment->Wrap(-1);
 
 	bSizerLeft->Add(m_staticTextComment, 0, wxALL, 5);
@@ -71,12 +71,12 @@ void CSelectTypeForm::CreateSelector()
 
 	wxBoxSizer* bSizerBottom = new wxBoxSizer(wxHORIZONTAL);
 
-	m_sdbSizerOK = new wxButton(this, wxID_ANY, wxT("OK"), wxDefaultPosition, wxDefaultSize, 0);
+	m_sdbSizerOK = new wxButton(this, wxID_ANY, _("OK"), wxDefaultPosition, wxDefaultSize, 0);
 	m_sdbSizerOK->Connect(wxEVT_BUTTON, wxCommandEventHandler(CSelectTypeForm::OnButtonOk), NULL, this);
 
 	bSizerBottom->Add(m_sdbSizerOK, 0, wxALL, 5);
 
-	m_sdbSizerCancel = new wxButton(this, wxID_ANY, wxT("Cancel"), wxDefaultPosition, wxDefaultSize, 0);
+	m_sdbSizerCancel = new wxButton(this, wxID_ANY, _("Cancel"), wxDefaultPosition, wxDefaultSize, 0);
 	m_sdbSizerCancel->Connect(wxEVT_BUTTON, wxCommandEventHandler(CSelectTypeForm::OnButtonCancel), NULL, this);
 	bSizerBottom->Add(m_sdbSizerCancel, 0, wxALL, 5);
 
@@ -128,7 +128,7 @@ void CSelectTypeForm::OnFormTypeChanged(wxCommandEvent &event)
 	m_choice = event.GetId();
 
 	if ((m_choice - 1) < m_aChoices.size()) {
-		auto choiceData = m_aChoices.at(m_choice - 1);
+		auto &choiceData = m_aChoices.at(m_choice - 1);
 		IMetadata *metaData = m_metaObject->GetMetadata();
 		wxString newName = metaData->GetNewName(
 			m_metaObject->GetClsid(),
@@ -137,8 +137,9 @@ void CSelectTypeForm::OnFormTypeChanged(wxCommandEvent &event)
 			true
 		);
 		m_textCtrlName->SetValue(newName);
-		wxString newSynonym = StringUtils::GenerateSynonym(newName);
-		m_textCtrlSynonym->SetValue(newSynonym);
+		m_textCtrlSynonym->SetValue(
+			StringUtils::GenerateSynonym(newName)
+		);
 	}
 	else {
 		IMetadata *metaData = m_metaObject->GetMetadata();
@@ -149,8 +150,9 @@ void CSelectTypeForm::OnFormTypeChanged(wxCommandEvent &event)
 			true
 		);
 		m_textCtrlName->SetValue(newName);
-		wxString newSynonym = StringUtils::GenerateSynonym(newName);
-		m_textCtrlSynonym->SetValue(newSynonym);
+		m_textCtrlSynonym->SetValue(
+			StringUtils::GenerateSynonym(newName)
+		);
 	}
 
 	event.Skip();

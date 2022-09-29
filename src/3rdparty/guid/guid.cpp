@@ -77,15 +77,15 @@ std::string  Guid::str() const
 {
 	char one[10], two[6], three[6], four[6], five[14];
 
-	snprintf(one, 10, "%02x%02x%02x%02x",
+	wxSnprintf(one, 10, "%02x%02x%02x%02x",
 		_bytes[0], _bytes[1], _bytes[2], _bytes[3]);
-	snprintf(two, 6, "%02x%02x",
+	wxSnprintf(two, 6, "%02x%02x",
 		_bytes[4], _bytes[5]);
-	snprintf(three, 6, "%02x%02x",
+	wxSnprintf(three, 6, "%02x%02x",
 		_bytes[6], _bytes[7]);
-	snprintf(four, 6, "%02x%02x",
+	wxSnprintf(four, 6, "%02x%02x",
 		_bytes[8], _bytes[9]);
-	snprintf(five, 14, "%02x%02x%02x%02x%02x%02x",
+	wxSnprintf(five, 14, "%02x%02x%02x%02x%02x%02x",
 		_bytes[10], _bytes[11], _bytes[12], _bytes[13], _bytes[14], _bytes[15]);
 	const std::string  sep("-");
 	std::string out(one);
@@ -133,11 +133,11 @@ Guid::Guid(const std::array<unsigned char, 16> &bytes) : _bytes(bytes)
 { }
 
 // create a guid from vector of bytes
-Guid::Guid(std::array<unsigned char, 16> &&bytes) : _bytes(std::move(bytes))
+Guid::Guid(const std::array<unsigned char, 16> &&bytes) : _bytes(std::move(bytes))
 { }
 
 // converts a single hex char to a number (0 - 15)
-unsigned char hexDigitToChar(char ch)
+inline unsigned char hexDigitToChar(char ch)
 {
 	// 0-9
 	if (ch > 47 && ch < 58)
@@ -154,7 +154,7 @@ unsigned char hexDigitToChar(char ch)
 	return 0;
 }
 
-bool isValidHexChar(char ch)
+inline bool isValidHexChar(char ch)
 {
 	// 0-9
 	if (ch > 47 && ch < 58)
@@ -172,13 +172,13 @@ bool isValidHexChar(char ch)
 }
 
 // converts the two hexadecimal characters to an unsigned char (a byte)
-unsigned char hexPairToChar(char a, char b)
+inline unsigned char hexPairToChar(char a, char b)
 {
 	return hexDigitToChar(a) * 16 + hexDigitToChar(b);
 }
 
 // create a guid from string
-Guid::Guid(std::string_view fromString)
+Guid::Guid(const std::string_view &fromString)
 {
 	char charOne = '\0';
 	char charTwo = '\0';
@@ -261,7 +261,7 @@ Guid::Guid(const wxString &fromString)
 	}
 }
 
-Guid::Guid(guid_t guid)
+Guid::Guid(const guid_t &guid)
 {
 	_bytes = {
 		(unsigned char)((guid.m_data1 >> 24) & 0xFF),
@@ -382,7 +382,7 @@ Guid Guid::newGuid()
 Guid Guid::newGuid()
 {
 	GUID newId;
-	CoCreateGuid(&newId);
+	::CoCreateGuid(&newId);
 
 	std::array<unsigned char, 16> bytes =
 	{

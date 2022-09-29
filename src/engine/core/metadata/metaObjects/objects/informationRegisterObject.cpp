@@ -174,7 +174,6 @@ CValueForm* CRecordManagerInformationRegister::GetFormValue(const wxString& form
 		valueForm->InitializeForm(ownerControl, NULL,
 			this, m_objGuid
 		);
-		valueForm->ReadProperty();
 		valueForm->BuildForm(CMetaObjectInformationRegister::eFormRecord);
 		valueForm->Modify(m_recordSet->IsModified());
 	}

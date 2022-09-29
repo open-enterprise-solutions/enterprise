@@ -61,16 +61,16 @@ void CMainFrameDesigner::OnStartDebugWithoutDebug(wxCommandEvent& WXUNUSED(event
 
 #include "windows/debugItemsWnd.h"
 
-void CMainFrameDesigner::OnAttachForDebugging(wxCommandEvent & WXUNUSED)
+void CMainFrameDesigner::OnAttachForDebugging(wxCommandEvent& WXUNUSED)
 {
-	CDebugItemsWnd *debugItemsWnd = new CDebugItemsWnd(this, wxID_ANY);
+	CDebugItemsWnd* debugItemsWnd = new CDebugItemsWnd(this, wxID_ANY);
 	debugItemsWnd->Show();
 }
 
 #include "frontend/metatree/metatreeWnd.h"
 #include "frontend/objinspect/objinspect.h"
 
-void CMainFrameDesigner::OnRollbackConfiguration(wxCommandEvent & event)
+void CMainFrameDesigner::OnRollbackConfiguration(wxCommandEvent& event)
 {
 	objectInspector->ClearProperty();
 
@@ -81,16 +81,16 @@ void CMainFrameDesigner::OnRollbackConfiguration(wxCommandEvent & event)
 		if (metatreeWnd->Load()) {
 			objectInspector->SelectObject(metadata->GetCommonMetaObject());
 		}
-		wxMessageBox(_("Successfully rolled back to database configuration!"));
+		wxMessageBox(_("Successfully rolled back to database configuration!"), _("Designer"), wxOK | wxCENTRE, this);
 	}
 }
 
-void CMainFrameDesigner::OnConfiguration(wxCommandEvent &event)
+void CMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 {
 	if (wxID_DESIGNER_CONFIGURATION_LOAD == event.GetId())
 	{
-		wxFileDialog openFileDialog(this, _("Open metaData file"), "", "",
-			"metaData files (*.mtd)|*.mtd", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+		wxFileDialog openFileDialog(this, _("Open configuration file"), "", "",
+			"Configuration files (*.conf)|*.conf", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
@@ -113,8 +113,8 @@ void CMainFrameDesigner::OnConfiguration(wxCommandEvent &event)
 	}
 	else if (wxID_DESIGNER_CONFIGURATION_SAVE == event.GetId())
 	{
-		wxFileDialog saveFileDialog(this, _("Save metaData file"), "", "",
-			"metaData files (*.mtd)|*.mtd", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+		wxFileDialog saveFileDialog(this, _("Save configuration file"), "", "",
+			"Configuration files (*.conf)|*.conf", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 		if (saveFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
 
@@ -184,23 +184,23 @@ void CMainFrameDesigner::OnToolsSettings(wxCommandEvent& event)
 
 void CMainFrameDesigner::OnUsers(wxCommandEvent& event)
 {
-	CUsersListWnd *usersWnd = new CUsersListWnd(this, wxID_ANY);
+	CUsersListWnd* usersWnd = new CUsersListWnd(this, wxID_ANY);
 	usersWnd->Show();
 }
 
 #include "frontend/windows/activeUsersWnd.h"
 
-void CMainFrameDesigner::OnActiveUsers(wxCommandEvent & event)
+void CMainFrameDesigner::OnActiveUsers(wxCommandEvent& event)
 {
-	CActiveUsersWnd *activeUsers = new CActiveUsersWnd(this, wxID_ANY);
+	CActiveUsersWnd* activeUsers = new CActiveUsersWnd(this, wxID_ANY);
 	activeUsers->Show();
 }
 
 #include "frontend/windows/aboutWnd.h"
 
-void CMainFrameDesigner::OnAbout(wxCommandEvent & event)
+void CMainFrameDesigner::OnAbout(wxCommandEvent& event)
 {
-	CAboutDialogWnd *aboutDlg = new CAboutDialogWnd(this, wxID_ANY);
+	CAboutDialogWnd* aboutDlg = new CAboutDialogWnd(this, wxID_ANY);
 	aboutDlg->ShowModal();
 }
 
@@ -210,7 +210,7 @@ void CMainFrameDesigner::OnAbout(wxCommandEvent & event)
 
 #include "compiler/debugger/debugClient.h"
 
-void CMainFrameDesigner::OnDebugEvent(wxDebugEvent &event)
+void CMainFrameDesigner::OnDebugEvent(wxDebugEvent& event)
 {
 	if (event.GetEventId() == EventId::EventId_SessionStart) {
 		m_menuDebug->Enable(wxID_DESIGNER_DEBUG_STEP_INTO, true);
@@ -242,7 +242,7 @@ void CMainFrameDesigner::OnDebugEvent(wxDebugEvent &event)
 
 #include "metadata/metadata.h"
 
-void CMainFrameDesigner::OnToolbarClicked(wxEvent &event)
+void CMainFrameDesigner::OnToolbarClicked(wxEvent& event)
 {
 	if (event.GetId() == wxID_DESIGNER_UPDATE_METADATA)
 	{

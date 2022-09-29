@@ -82,8 +82,8 @@ void CValueForm::PrepareNames() const
 	aAttributes.push_back(attributesUniqueKey);
 
 	//from property 
-	for (unsigned int idx = 0; idx < IObjectBase::GetPropertyCount(); idx++) {
-	    Property *property = IObjectBase::GetProperty(idx); 
+	for (unsigned int idx = 0; idx < IPropertyObject::GetPropertyCount(); idx++) {
+	    Property *property = IPropertyObject::GetProperty(idx); 
 		if (!property)
 			continue;
 		SEng attributes;

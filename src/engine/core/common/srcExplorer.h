@@ -30,7 +30,7 @@ private:
 	}
 
 	CSourceExplorer(CMetaTableObject* tableSection) {
-		m_srcData = { tableSection->GetName(), tableSection->GetSynonym(), tableSection, tableSection->GetMetaID(), { tableSection->GetTableClsid() }, true, true, true };
+		m_srcData = { tableSection->GetName(), tableSection->GetSynonym(), tableSection, tableSection->GetMetaID(), { tableSection->GetClsidTable() }, true, true, true };
 		for (auto attribute : tableSection->GetObjectAttributes()) {
 			CSourceExplorer::AppendSource(attribute);
 		}

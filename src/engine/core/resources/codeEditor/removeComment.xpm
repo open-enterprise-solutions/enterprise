@@ -1,0 +1,27 @@
+/* XPM */
+static const char *s_removeComment_xpm[] = {
+/* columns rows colors chars-per-pixel */
+"16 16 5 1",
+"O c Black",
+". c #008000",
+"o c #800000",
+"X c #FF0000",
+"  c #C0C0C0",
+/* pixels */
+"                ",
+"      .   .     ",
+"      .   .     ",
+"     .   .      ",
+"     .   .      ",
+"    . X .       ",
+"    . Xo.    o  ",
+"   .   oo  Xo   ",
+"   .   .ooXo    ",
+"  .   .  oo     ",
+"  .   . Xooo    ",
+" .   . Xo  o    ",
+" .   .Xoo   o   ",
+"      Xo     o  ",
+"       o        ",
+"OOOOOOOOOOOOOOOO"
+};

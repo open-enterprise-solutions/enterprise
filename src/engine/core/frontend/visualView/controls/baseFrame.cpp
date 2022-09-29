@@ -9,13 +9,13 @@
 #include "compiler/methods.h"
 #include "utils/typeconv.h"
 
-wxIMPLEMENT_ABSTRACT_CLASS(IValueFrame, CValue)
+wxIMPLEMENT_ABSTRACT_CLASS(IValueFrame, CValue);
 
 //*************************************************************************
 //*                          ValueControl		                          *
 //*************************************************************************
 
-IValueFrame::IValueFrame() : IObjectBase(), CValue(eValueTypes::TYPE_VALUE),
+IValueFrame::IValueFrame() : IPropertyObject(), CValue(eValueTypes::TYPE_VALUE),
 m_methods(new CMethods()), m_controlId(0)
 {
 }
@@ -25,31 +25,29 @@ IValueFrame::~IValueFrame()
 	wxDELETE(m_methods);
 }
 
-IValueFrame *IValueFrame::GetChild(unsigned int idx)
+IValueFrame* IValueFrame::GetChild(unsigned int idx) const
 {
-	return dynamic_cast<IValueFrame *>(IObjectBase::GetChild(idx));
+	return dynamic_cast<IValueFrame*>(IPropertyObject::GetChild(idx));
 }
 
-IValueFrame *IValueFrame::GetChild(unsigned int idx, const wxString & type)
+IValueFrame* IValueFrame::GetChild(unsigned int idx, const wxString& type) const
 {
-	return dynamic_cast<IValueFrame *>(IObjectBase::GetChild(idx, type));
+	return dynamic_cast<IValueFrame*>(IPropertyObject::GetChild(idx, type));
 }
 
-bool IValueFrame::LoadControl(IMetaFormObject *metaForm, CMemoryReader &dataReader)
+bool IValueFrame::LoadControl(const IMetaFormObject* metaForm, CMemoryReader& dataReader)
 {
 	//Save meta version 
-	const version_identifier_t &version = dataReader.r_u32(); //reserved 
+	const version_identifier_t& version = dataReader.r_u32(); //reserved 
 
 	//Load unique guid 
-	wxString strGuid;
-	dataReader.r_stringZ(strGuid);
-	m_controlGuid = strGuid;
+	m_controlGuid = dataReader.r_stringZ();
 
 	//Load meta id
 	m_controlId = dataReader.r_u32();
 
 	//Load standart fields
-	dataReader.r_stringZ(m_controlName);
+	SetControlName(dataReader.r_stringZ());
 
 	//default value 
 	m_expanded = dataReader.r_u8();
@@ -60,7 +58,6 @@ bool IValueFrame::LoadControl(IMetaFormObject *metaForm, CMemoryReader &dataRead
 	}
 
 	if (LoadData(dataReader)) {
-		ReadProperty();
 		return true;
 	}
 
@@ -86,7 +83,7 @@ bool IValueFrame::LoadEvent(CMemoryReader& dataReader)
 	return true;
 }
 
-bool IValueFrame::SaveControl(IMetaFormObject *metaForm, CMemoryWriter &dataWritter)
+bool IValueFrame::SaveControl(const IMetaFormObject* metaForm, CMemoryWriter& dataWritter)
 {
 	//Save meta version 
 	dataWritter.w_u32(version_oes_last); //reserved 
@@ -98,19 +95,18 @@ bool IValueFrame::SaveControl(IMetaFormObject *metaForm, CMemoryWriter &dataWrit
 	dataWritter.w_u32(m_controlId);
 
 	//Save standart fields
-	dataWritter.w_stringZ(m_controlName);
+	dataWritter.w_stringZ(GetControlName());
 
 	//default value 
 	dataWritter.w_u8(m_expanded);
 
 	//save events 
 	if (!SaveEvent(dataWritter)) {
-		return false; 
+		return false;
 	}
 
 	//save other data
 	if (SaveData(dataWritter)) {
-		SaveProperty();
 		return true;
 	}
 
@@ -147,31 +143,20 @@ wxString IValueFrame::GetString() const
 //*                          Runtime                                *
 //*******************************************************************
 
-bool IValueFrame::CallEvent(const wxString &sEventName)
+bool IValueFrame::CallEvent(const Event* event)
 {
-	if (sEventName.IsEmpty())
+	if (event == NULL)
 		return false;
 
-	Event *event = IObjectBase::GetEvent(sEventName);
-
-	if (!event)
-		return false;
-
-	wxString m_sEventValue = event->GetValue();
-	CProcUnit *formProcUnit = GetFormProcUnit();
-
+	CProcUnit* formProcUnit = GetFormProcUnit();
 	CValue eventCancel = false;
 
-	ReadProperty();
-
-	if (formProcUnit) {
-		try
-		{
-			CValue m_controlElement = this;
-			formProcUnit->CallFunction(m_sEventValue, m_controlElement, eventCancel);
+	if (formProcUnit != NULL) {
+		try {
+			CValue controlElement = this;
+			formProcUnit->CallFunction(event->GetValue(), controlElement, eventCancel);
 		}
-		catch (...)
-		{
+		catch (...) {
 			return false;
 		}
 	}
@@ -179,30 +164,19 @@ bool IValueFrame::CallEvent(const wxString &sEventName)
 	return eventCancel.GetBoolean();
 }
 
-bool IValueFrame::CallEvent(const wxString &sEventName, CValue &value1)
+bool IValueFrame::CallEvent(const Event* event, CValue& value1)
 {
-	if (sEventName.IsEmpty())
+	if (event == NULL)
 		return false;
 
-	Event *event = IObjectBase::GetEvent(sEventName);
-
-	if (!event)
-		return false;
-
-	wxString m_sEventValue = event->GetValue();
-	CProcUnit *formProcUnit = GetFormProcUnit();
-
+	CProcUnit* formProcUnit = GetFormProcUnit();
 	CValue eventCancel = false;
 
-	ReadProperty();
-
-	if (formProcUnit) {
-		try
-		{
-			formProcUnit->CallFunction(m_sEventValue, value1, eventCancel);
+	if (formProcUnit != NULL) {
+		try {
+			formProcUnit->CallFunction(event->GetValue(), value1, eventCancel);
 		}
-		catch (...)
-		{
+		catch (...) {
 			return false;
 		}
 	}
@@ -210,30 +184,21 @@ bool IValueFrame::CallEvent(const wxString &sEventName, CValue &value1)
 	return eventCancel.GetBoolean();
 }
 
-bool IValueFrame::CallEvent(const wxString &sEventName, CValue &value1, CValue &value2)
+bool IValueFrame::CallEvent(const Event* event, CValue& value1, CValue& value2)
 {
-	if (sEventName.IsEmpty())
+	if (event == NULL)
 		return false;
 
-	Event *event = IObjectBase::GetEvent(sEventName);
-
-	if (!event)
-		return false;
-
-	wxString m_sEventValue = event->GetValue();
-	CProcUnit *formProcUnit = GetFormProcUnit();
+	wxString eventValue = event->GetValue();
+	CProcUnit* formProcUnit = GetFormProcUnit();
 
 	CValue eventCancel = false;
 
-	ReadProperty();
-
-	if (formProcUnit) {
-		try
-		{
-			formProcUnit->CallFunction(m_sEventValue, value1, value2, eventCancel);
+	if (formProcUnit != NULL) {
+		try {
+			formProcUnit->CallFunction(eventValue, value1, value2, eventCancel);
 		}
-		catch (...)
-		{
+		catch (...) {
 			return false;
 		}
 	}
@@ -241,30 +206,19 @@ bool IValueFrame::CallEvent(const wxString &sEventName, CValue &value1, CValue &
 	return eventCancel.GetBoolean();
 }
 
-bool IValueFrame::CallEvent(const wxString &sEventName, CValue &value1, CValue &value2, CValue &value3)
+bool IValueFrame::CallEvent(const Event* event, CValue& value1, CValue& value2, CValue& value3)
 {
-	if (sEventName.IsEmpty())
+	if (event == NULL)
 		return false;
 
-	Event *event = IObjectBase::GetEvent(sEventName);
-
-	if (!event)
-		return false;
-
-	wxString m_sEventValue = event->GetValue();
-	CProcUnit *formProcUnit = GetFormProcUnit();
-
+	CProcUnit* formProcUnit = GetFormProcUnit();
 	CValue eventCancel = false;
 
-	ReadProperty();
-
-	if (formProcUnit) {
-		try
-		{
-			formProcUnit->CallFunction(m_sEventValue, value1, value2, value3, eventCancel);
+	if (formProcUnit != NULL) {
+		try {
+			formProcUnit->CallFunction(event->GetValue(), value1, value2, value3, eventCancel);
 		}
-		catch (...)
-		{
+		catch (...) {
 			return false;
 		}
 	}
@@ -272,13 +226,12 @@ bool IValueFrame::CallEvent(const wxString &sEventName, CValue &value1, CValue &
 	return eventCancel.GetBoolean();
 }
 
-void IValueFrame::CallFunction(const wxString &functionName)
+void IValueFrame::CallFunction(const wxString& functionName)
 {
-	CProcUnit *formProcUnit = GetFormProcUnit();
+	CProcUnit* formProcUnit = GetFormProcUnit();
 
 	if (formProcUnit) {
-		try
-		{
+		try {
 			formProcUnit->CallFunction(functionName);
 		}
 		catch (...)
@@ -287,13 +240,12 @@ void IValueFrame::CallFunction(const wxString &functionName)
 	}
 }
 
-void IValueFrame::CallFunction(const wxString &functionName, CValue &value1)
+void IValueFrame::CallFunction(const wxString& functionName, CValue& value1)
 {
-	CProcUnit *formProcUnit = GetFormProcUnit();
+	CProcUnit* formProcUnit = GetFormProcUnit();
 
 	if (formProcUnit) {
-		try
-		{
+		try {
 			formProcUnit->CallFunction(functionName, value1);
 		}
 		catch (...)
@@ -302,13 +254,12 @@ void IValueFrame::CallFunction(const wxString &functionName, CValue &value1)
 	}
 }
 
-void IValueFrame::CallFunction(const wxString &functionName, CValue &value1, CValue &value2)
+void IValueFrame::CallFunction(const wxString& functionName, CValue& value1, CValue& value2)
 {
-	CProcUnit *formProcUnit = GetFormProcUnit();
+	CProcUnit* formProcUnit = GetFormProcUnit();
 
 	if (formProcUnit) {
-		try
-		{
+		try {
 			formProcUnit->CallFunction(functionName, value1, value2);
 		}
 		catch (...)
@@ -317,12 +268,11 @@ void IValueFrame::CallFunction(const wxString &functionName, CValue &value1, CVa
 	}
 }
 
-void IValueFrame::CallFunction(const wxString &functionName, CValue &value1, CValue &value2, CValue &value3)
+void IValueFrame::CallFunction(const wxString& functionName, CValue& value1, CValue& value2, CValue& value3)
 {
-	CProcUnit *formProcUnit = GetFormProcUnit();
+	CProcUnit* formProcUnit = GetFormProcUnit();
 	if (formProcUnit) {
-		try
-		{
+		try {
 			formProcUnit->CallFunction(functionName, value1, value2, value3);
 		}
 		catch (...)
@@ -333,25 +283,28 @@ void IValueFrame::CallFunction(const wxString &functionName, CValue &value1, CVa
 
 #include "frontend/visualView/visualHost.h"
 
-wxObject *IValueFrame::GetWxObject()
+wxObject* IValueFrame::GetWxObject() const
 {
-	CValueForm *m_valueForm = dynamic_cast<CValueForm *>(GetOwnerForm());
-	if (!m_valueForm) return NULL;
+	CValueForm* valueForm = dynamic_cast<CValueForm*>(GetOwnerForm());
+	if (valueForm == NULL)
+		return NULL;
 
 	//if run designer form search in own visualHost 
-	if (m_visualHostContext)
-	{
-		CVisualEditorContextForm::CVisualEditorHost *visualEditor =
-			m_visualHostContext->GetVisualEditor();
-		return visualEditor->GetWxObject(this);
+	if (g_visualHostContext) {
+		CVisualEditorContextForm::CVisualEditorHost* visualEditor =
+			g_visualHostContext->GetVisualEditor();
+		return visualEditor->GetWxObject((IValueFrame*)this);
 	}
-	CVisualDocument *m_visualDoc = m_valueForm->GetVisualDocument();
-	if (!m_visualDoc)
+
+	CVisualDocument* visualDoc = valueForm->GetVisualDocument();
+	if (visualDoc == NULL)
 		return NULL;
-	CVisualHost *m_visualView = m_visualDoc->GetVisualView();
-	if (!m_visualView)
+
+	CVisualHost* visualView = visualDoc->GetVisualView();
+	if (visualView == NULL)
 		return NULL;
-	return m_visualView->GetWxObject(this);
+
+	return visualView->GetWxObject((IValueFrame*)this);
 }
 
 //*******************************************************************
@@ -360,61 +313,51 @@ wxObject *IValueFrame::GetWxObject()
 
 #include "compiler/methods.h"
 
-void IValueFrame::SetAttribute(attributeArg_t &aParams, CValue &cVal)
+void IValueFrame::SetAttribute(attributeArg_t& aParams, CValue& cVal)
 {
 	wxString sSynonym = m_methods->GetAttributeSynonym(aParams.GetIndex());
 
 	if (sSynonym == wxT("attribute")) {
-		unsigned int idx = 
-			m_methods->GetAttributePosition(aParams.GetIndex());
-		Property *property =
-			GetPropertyByIndex(idx);
-		if (property) {
-			SetPropertyData(property, cVal);
-		}
+		unsigned int idx = m_methods->GetAttributePosition(aParams.GetIndex());
+		Property* property = GetPropertyByIndex(idx);
+		if (property != NULL)
+			property->SetDataValue(cVal);
 	}
 	else if (sSynonym == wxT("sizerItem")) {
 		//if we have sizerItem then call him savepropery 
-		IValueFrame *m_sizeritem = GetParent();
-		if (m_sizeritem && m_sizeritem->GetClassName() == wxT("sizerItem"))
-		{
-			Property *property =
-				m_sizeritem->GetPropertyByIndex(aParams.GetIndex());
-			if (property) {
-				SetPropertyData(property, cVal);
-			}
+		IValueFrame* sizerItem = GetParent();
+		if (sizerItem &&
+			sizerItem->GetClassName() == wxT("sizerItem")) {
+			Property* property = sizerItem->GetPropertyByIndex(aParams.GetIndex());
+			if (property != NULL)
+				property->SetDataValue(cVal);
 		}
 	}
 	else if (sSynonym == wxT("events")) {
 	}
 
-	SaveProperty();
-
-	CValueForm *ownerForm = GetOwnerForm();
-
-	if (!ownerForm)
+	CValueForm* ownerForm = GetOwnerForm();
+	if (ownerForm == NULL)
 		return;
 
-	CVisualDocument *visualDoc = ownerForm->GetVisualDocument();
-
-	if (!visualDoc)
+	CVisualDocument* visualDoc = ownerForm->GetVisualDocument();
+	if (visualDoc == NULL)
 		return;
 
-	CVisualHost *visualView = visualDoc->GetVisualView();
-
-	if (!visualView)
+	CVisualHost* visualView = visualDoc->GetVisualView();
+	if (visualView == NULL)
 		return;
 
-	wxObject *object = visualView->GetWxObject(this);
+	wxObject* object = visualView->GetWxObject(this);
 
-	if (object) {
-		wxWindow *parentWnd = NULL;
+	if (object != NULL) {
+		wxWindow* parentWnd = NULL;
 		Update(object, visualView);
 		IValueFrame* nextParent = GetParent();
 		while (!parentWnd && nextParent) {
-			if (nextParent->GetComponentType() == COMPONENT_TYPE_WINDOW || 
+			if (nextParent->GetComponentType() == COMPONENT_TYPE_WINDOW ||
 				nextParent->GetComponentType() == COMPONENT_TYPE_WINDOW_TABLE) {
-				parentWnd = dynamic_cast<wxWindow *>(visualView->GetWxObject(nextParent));
+				parentWnd = dynamic_cast<wxWindow*>(visualView->GetWxObject(nextParent));
 				break;
 			}
 			nextParent = nextParent->GetParent();
@@ -426,58 +369,41 @@ void IValueFrame::SetAttribute(attributeArg_t &aParams, CValue &cVal)
 	}
 }
 
-CValue IValueFrame::GetAttribute(attributeArg_t &aParams)
+CValue IValueFrame::GetAttribute(attributeArg_t& aParams)
 {
 	wxString sSynonym = m_methods->GetAttributeSynonym(aParams.GetIndex());
 	if (sSynonym == wxT("sizerItem")) {
 		//if we have sizerItem then call him savepropery 
-		IValueFrame *m_sizeritem = GetParent();
-		if (m_sizeritem && m_sizeritem->GetClassName() == wxT("sizerItem"))
-		{
+		IValueFrame* sizerItem = GetParent();
+		if (sizerItem && sizerItem->GetClassName() == wxT("sizerItem")) {
 			unsigned int idx = m_methods->GetAttributePosition(aParams.GetIndex());
-			Property *property =
-				m_sizeritem->GetPropertyByIndex(idx);
-			if (property)
-				return GetPropertyData(property);
+			Property* property = sizerItem->GetPropertyByIndex(idx);
+			if (property != NULL)
+				return property->GetDataValue();
 		}
 	}
 	else if (sSynonym == wxT("events")) {
 		return new IValueFrame::CValueEventContainer(this);
 	}
 	else {
-		unsigned int idx = 
-			m_methods->GetAttributePosition(aParams.GetIndex());
-		Property *property =
-			GetPropertyByIndex(idx);
-		if (property) {
-			return GetPropertyData(property);
-		}
+		unsigned int idx = m_methods->GetAttributePosition(aParams.GetIndex());
+		Property* property = GetPropertyByIndex(idx);
+		if (property != NULL)
+			return property->GetDataValue();
 	}
 
 	return CValue();
 }
 
-int IValueFrame::FindAttribute(const wxString &sName) const
+int IValueFrame::FindAttribute(const wxString& sName) const
 {
 	return GetPropertyIndex(sName) + 1;
 }
 
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 #include "common/srcExplorer.h"
 
-bool IValueFrame::FilterSource(const CSourceExplorer &src, const meta_identifier_t &id)
+bool IValueFrame::FilterSource(const CSourceExplorer& src, const meta_identifier_t& id)
 {
 	return !src.IsTableSection();
-}
-
-//*******************************************************************
-//*                           Property                              *
-//*******************************************************************
-
-void IValueFrame::ReadProperty()
-{
-}
-
-void IValueFrame::SaveProperty()
-{
 }

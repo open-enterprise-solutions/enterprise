@@ -17,31 +17,26 @@ wxIMPLEMENT_CLASS(CView, wxView);
 
 #include "metadata/metaObjectsDefines.h"
 
-CView *CDocument::DoCreateView()
+CView* CDocument::DoCreateView()
 {
-	wxClassInfo *m_viewClassInfo = m_documentTemplate->GetViewClassInfo();
-	if (!m_viewClassInfo)
+	wxClassInfo* viewClassInfo = m_documentTemplate->GetViewClassInfo();
+	if (viewClassInfo == NULL)
 		return NULL;
 
-	return static_cast<CView *>(m_viewClassInfo->CreateObject());
+	return static_cast<CView*>(viewClassInfo->CreateObject());
 }
 
-CCommandProcessor *CDocument::CreateCommandProcessor()
+CCommandProcessor* CDocument::CreateCommandProcessor()
 {
-	CCommandProcessor *commandProcessor = new CCommandProcessor();
+	CCommandProcessor* commandProcessor = new CCommandProcessor();
 	commandProcessor->SetEditMenu(mainFrame->GetDefaultMenu(wxID_EDIT));
 	commandProcessor->Initialize();
 	return  commandProcessor;
 }
 
-CCommandProcessor *CDocument::GetCommandProcessor()
+CCommandProcessor* CDocument::GetCommandProcessor()
 {
-	return dynamic_cast<CCommandProcessor *>(m_commandProcessor);
-}
-
-IMetaObject *CDocument::GetMetaObject() const
-{
-	return m_metaObject;
+	return dynamic_cast<CCommandProcessor*>(m_commandProcessor);
 }
 
 wxString CDocument::GetModuleName() const
@@ -49,7 +44,7 @@ wxString CDocument::GetModuleName() const
 	return m_metaObject->GetFullName();
 }
 
-CDocument::CDocument(CDocument *docParent) :
+CDocument::CDocument(CDocument* docParent) :
 	wxDocument(), m_metaObject(NULL), m_childDoc(true)
 {
 	m_docParent = docParent;
@@ -111,9 +106,9 @@ bool CDocument::OnCloseDocument()
 
 	if (appData->DesignerMode()) {
 		if (m_metaObject) {
-			IMetadata *metaData = m_metaObject->GetMetadata();
+			IMetadata* metaData = m_metaObject->GetMetadata();
 			wxASSERT(metaData);
-			IMetadataTree *metaTree = metaData->GetMetaTree();
+			IMetadataWrapperTree* metaTree = metaData->GetMetaTree();
 			wxASSERT(metaTree);
 			metaTree->OnCloseDocument(this);
 		}
@@ -127,8 +122,8 @@ bool CDocument::OnCloseDocument()
 
 bool CDocument::IsModified() const
 {
-	if (m_metaObject) {
-		IMetadata *metaData = m_metaObject->GetMetadata();
+	if (m_metaObject != NULL) {
+		IMetadata* metaData = m_metaObject->GetMetadata();
 		if (metaData) {
 			return metaData->IsModified();
 		}
@@ -139,8 +134,8 @@ bool CDocument::IsModified() const
 
 void CDocument::Modify(bool modify)
 {
-	if (m_metaObject) {
-		IMetadata *metaData = m_metaObject->GetMetadata();
+	if (m_metaObject != NULL) {
+		IMetadata* metaData = m_metaObject->GetMetadata();
 		if (metaData) {
 			metaData->Modify(modify);
 		}
@@ -160,12 +155,12 @@ bool CDocument::Save()
 	if (AlreadySaved())
 		return true;
 
-	if (m_docParent &&
+	if (m_docParent != NULL &&
 		!m_docParent->Save()) {
 		return false;
 	}
 
-	if (m_docParent == NULL && IsChildDocument() && 
+	if (m_docParent == NULL && IsChildDocument() &&
 		m_metaObject != NULL) {
 		if (metadata->SaveMetadata()) {
 			return false;
@@ -210,7 +205,7 @@ bool CDocument::Close()
 	// we iterate over it, don't use the usual for-style iteration here.
 	while (!m_childDocs.empty())
 	{
-		CDocument *const childDoc = m_childDocs.front();
+		CDocument* const childDoc = m_childDocs.front();
 
 		// This will call OnSaveModified() once again but it shouldn't do
 		// anything as the document was just saved or marked as not needing to
@@ -249,7 +244,7 @@ bool CDocument::DeleteAllViews()
 	const wxList::iterator end = m_documentViews.end();
 	for (wxList::iterator i = m_documentViews.begin(); i != end; ++i)
 	{
-		wxView *view = (wxView *)*i;
+		wxView* view = (wxView*)*i;
 		if (!view->Close())
 			return false;
 	}
@@ -267,7 +262,7 @@ bool CDocument::DeleteAllViews()
 		// as we delete elements we iterate over, don't use the usual "from
 		// begin to end" loop
 		for (;; ) {
-			wxView *view = (wxView *)*m_documentViews.begin();
+			wxView* view = (wxView*)*m_documentViews.begin();
 
 			bool isLastOne = m_documentViews.size() == 1;
 

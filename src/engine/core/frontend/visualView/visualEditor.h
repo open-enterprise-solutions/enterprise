@@ -1,5 +1,5 @@
-﻿#ifndef __VISUAL_EDITOR__
-#define __VISUAL_EDITOR__
+﻿#ifndef __VISUAL_EDITOR_H__
+#define __VISUAL_EDITOR_H__
 
 #include <set>
 
@@ -10,50 +10,60 @@
 /**
  * Extends the CInnerFrame to show the object highlight
  */
-class CDesignerWindow : public CInnerFrame
-{
+class CDesignerWindow : public CInnerFrame {
+	wxDECLARE_CLASS(CDesignerWindow);
+private:
 	int m_x;
 	int m_y;
-
 	wxSizer* m_selSizer = NULL;
 	wxObject* m_selItem = NULL;
-	IValueFrame* m_selObj = NULL;
+	IPropertyObject* m_selObj = NULL;
 	wxWindow* m_actPanel = NULL;
-
 private:
 
-	void DrawRectangle(wxDC& dc, const wxPoint& point, const wxSize& size, IValueFrame* object);
+	void DrawRectangle(wxDC& dc, const wxPoint& point, const wxSize& size, IPropertyObject* object);
 
-	DECLARE_CLASS(CDesignerWindow)
+public:
 
 	// Augh!, this class is needed to paint the highlight in the
 	// frame content panel.
-	class HighlightPaintHandler : public wxEvtHandler
-	{
+	class CHighlightPaintHandler : public wxEvtHandler {
 		wxDECLARE_EVENT_TABLE();
-
+	private:
 		wxWindow* m_dsgnWin;
-
 	public:
-		HighlightPaintHandler(wxWindow* win);
+		CHighlightPaintHandler(wxWindow* win);
 		void OnPaint(wxPaintEvent& event);
 	};
 
 public:
+
 	CDesignerWindow(wxWindow* parent, int id, const wxPoint& pos, const wxSize& size = wxDefaultSize,
 		long style = 0, const wxString& name = wxT("designer_win"));
-	~CDesignerWindow();
+	virtual ~CDesignerWindow();
+
 	void SetGrid(int x, int y);
 	void SetSelectedSizer(wxSizer* sizer) { m_selSizer = sizer; }
 	void SetSelectedItem(wxObject* item) { m_selItem = item; }
-	void SetSelectedObject(IValueFrame* object) { m_selObj = object; }
+	void SetSelectedObject(IPropertyObject* object) { m_selObj = object; }
 	void SetSelectedPanel(wxWindow* actPanel) { m_actPanel = actPanel; }
-	wxSizer* GetSelectedSizer() { return m_selSizer; }
-	wxObject* GetSelectedItem() { return m_selItem; }
-	IValueFrame* GetSelectedObject() { return m_selObj; }
-	wxWindow* GetActivePanel() { return m_actPanel; }
-	static wxMenu* GetMenuFromObject(IValueFrame* menu);
-	void SetFrameWidgets(IValueFrame* menubar, wxWindow* toolbar, wxWindow* statusbar);
+
+	wxSizer* GetSelectedSizer() const {
+		return m_selSizer;
+	}
+
+	wxObject* GetSelectedItem() const {
+		return m_selItem;
+	}
+
+	IPropertyObject* GetSelectedObject() const {
+		return m_selObj;
+	}
+
+	wxWindow* GetActivePanel() const {
+		return m_actPanel;
+	}
+
 	void HighlightSelection(wxDC& dc);
 	void OnPaint(wxPaintEvent& event);
 
@@ -68,6 +78,7 @@ class wxFrameObjectEvent;
 class CVisualEditorContextForm;
 
 #include "controls/form.h"
+
 #include "controls/sizers.h"
 #include "controls/widgets.h"
 
@@ -90,28 +101,22 @@ class CView;
 #include "core.h"
 #include <wx/docview.h>
 
-class CORE_API CVisualEditorContextForm : public wxPanel
-{
+class CORE_API CVisualEditorContextForm : public wxPanel {
 	wxDECLARE_DYNAMIC_CLASS(CVisualEditorContextForm);
-
 public:
 
-	class CORE_API CVisualEditorHost : public IVisualHost
-	{
+	class CORE_API CVisualEditorHost : public IVisualHost {
 		friend class CVisualEditorContextForm;
 		friend class CVisualEditorObjectTree;
-
-	private:
-
 		CDesignerWindow* m_back;
-
+		// Active control
+		IValueFrame* m_activeControl;
+		//form handler
+		CVisualEditorContextForm* m_formHandler;
 		// Prevent OnSelected in components
 		bool m_stopSelectedEvent;
 		// Prevent OnModified in components
 		bool m_stopModifiedEvent;
-
-		IValueFrame* m_activeControl;
-
 	public:
 
 		friend class ExpandObjectCmd;
@@ -123,7 +128,7 @@ public:
 		friend class CutObjectCmd;
 		friend class ReparentObjectCmd;
 
-		CVisualEditorHost(CVisualEditorContextForm* handler, wxWindow* parent);
+		CVisualEditorHost(CVisualEditorContextForm* handler, wxWindow* parent, wxWindowID id = wxID_ANY);
 		virtual ~CVisualEditorHost() override;
 
 		void OnResizeBackPanel(wxCommandEvent& event);
@@ -150,7 +155,7 @@ public:
 		}
 
 		virtual CValueForm* GetValueForm() const;
-		virtual void SetValueForm(class CValueForm* valueForm);
+		virtual void SetValueForm(CValueForm* valueForm);
 
 		//set and create window
 		void SetObjectSelect(IValueFrame* obj);
@@ -162,16 +167,13 @@ public:
 		void ClearVisualEditor();
 
 	protected:
-
 		wxDECLARE_EVENT_TABLE();
 	};
 
 	//////////////////////////////////////////////////////////////////////////////////////////
 
-	class CVisualEditorObjectTree : public wxPanel
-	{
+	class CVisualEditorObjectTree : public wxPanel {
 		CVisualEditorContextForm* m_formHandler = NULL;
-
 	private:
 
 		wxImageList* m_iconList = NULL;
@@ -190,7 +192,7 @@ public:
 		void RebuildTree();
 		void AddChildren(IValueFrame* child, const wxTreeItemId& parent, bool is_root = false);
 		int GetImageIndex(const wxString& type);
-		void UpdateItem(const wxTreeItemId id, IValueFrame* obj);
+		void UpdateItem(const wxTreeItemId &id, IValueFrame* obj);
 		void RestoreItemStatus(IValueFrame* obj);
 		void AddItem(IValueFrame* item, IValueFrame* parent);
 		void RemoveItem(IValueFrame* item);
@@ -244,17 +246,14 @@ public:
 	 * Este objeto ejecuta los comandos incluidos en el menu referentes al objeto
 	 * seleccionado.
 	 */
-	class CVisualEditorItemPopupMenu : public wxMenu
-	{
+	class CVisualEditorItemPopupMenu : public wxMenu {
 		IValueFrame* m_object = NULL;
 		CVisualEditorContextForm* m_formHandler = NULL;
-
 		int m_selID;
-
 	public:
 
 		bool HasDeleteObject();
-		int GetSelectedID() { return m_selID; }
+		int GetSelectedID() const { return m_selID; }
 
 		CVisualEditorItemPopupMenu(CVisualEditorContextForm* handler, wxWindow* parent, IValueFrame* obj);
 
@@ -262,7 +261,6 @@ public:
 		void OnMenuEvent(wxCommandEvent& event);
 
 	protected:
-
 		wxDECLARE_EVENT_TABLE();
 	};
 
@@ -332,8 +330,13 @@ public:
 		m_valueForm = valueForm;
 	}
 
-	bool IsEditable() { return !m_bReadOnly; }
-	void SetReadOnly(bool readOnly = true) { m_bReadOnly = readOnly; }
+	bool IsEditable() const { 
+		return !m_bReadOnly; 
+	}
+	
+	void SetReadOnly(bool readOnly = true) { 
+		m_bReadOnly = readOnly; 
+	}
 
 protected:
 
@@ -355,7 +358,7 @@ protected:
 	/*
 	* Check name conflict
 	*/
-	bool IsCorrectName(const wxString& name);
+	bool IsCorrectName(const wxString& controlName) const;
 
 	//Execute command 
 	void Execute(CCommand* cmd);
@@ -376,6 +379,7 @@ public:
 
 	CVisualEditorContextForm();
 	CVisualEditorContextForm(CDocument* document, CView* view, wxWindow* parent, int id = wxID_ANY);
+	virtual ~CVisualEditorContextForm();
 
 	// Procedures for register/unregister wxEvtHandlers to be notified of wxOESEvents
 	void AddHandler(wxEvtHandler* handler);
@@ -385,8 +389,13 @@ public:
 	void DeactivateObject();
 
 	// Servicios específicos, no definidos en DataObservable
-	void SetClipboardObject(IValueFrame* obj) { m_clipboard = obj; }
-	IValueFrame* GetClipboardObject() { return m_clipboard; }
+	void SetClipboardObject(IValueFrame* obj) {
+		m_clipboard = obj;
+	}
+	
+	IValueFrame* GetClipboardObject() const {
+		return m_clipboard; 
+	}
 
 	//Objects 
 	IValueFrame* CreateObject(const wxString& name);
@@ -412,21 +421,33 @@ public:
 	void MovePosition(IValueFrame* obj, bool right, unsigned int num = 1);
 
 	// Servicios para los observadores
-	IValueFrame* GetSelectedObject();
-	CValueForm* GetSelectedForm();
+	IValueFrame* GetSelectedObject() const {
+		return m_selObj;
+	}
 
-	void RefreshEditor() { NotifyProjectRefresh(); }
+	void RefreshEditor() {
+		if (m_visualEditor != NULL) {
+			// then update control 
+			m_visualEditor->UpdateVisualEditor();
+		}
+		NotifyProjectRefresh();
+	}
 
 	void Undo();
 	void Redo();
 
-	bool CanUndo() { return m_cmdProc->CanUndo(); }
-	bool CanRedo() { return m_cmdProc->CanRedo(); }
+	bool CanUndo() const {
+		return m_cmdProc->CanUndo();
+	}
 
-	bool CanPasteObject();
-	bool CanCopyObject();
+	bool CanRedo() const {
+		return m_cmdProc->CanRedo();
+	}
 
-	bool IsModified();
+	bool CanPasteObject() const;
+	bool CanCopyObject() const;
+
+	bool IsModified() const;
 
 	/**
 	* Calcula la posición donde deberá ser insertado el objeto.
@@ -450,11 +471,12 @@ public:
 
 	bool LoadForm();
 	bool SaveForm();
-	void RunForm();
 
-	void SetCommandProcessor(CCommandProcessor* cmdProc) { m_cmdProc = cmdProc; }
+	void TestForm();
 
-	~CVisualEditorContextForm();
+	void SetCommandProcessor(CCommandProcessor* cmdProc) {
+		m_cmdProc = cmdProc;
+	}
 
 	// Events
 	void OnProjectLoaded(wxFrameEvent& event);

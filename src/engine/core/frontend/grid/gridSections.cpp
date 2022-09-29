@@ -9,245 +9,230 @@
 #include "compiler/functions.h"
 #include "utils/stringUtils.h"
 
-CSectionCtrl::CSectionCtrl(CGrid* grid, eSectionMode setMode) : m_grid(grid), m_nMode(setMode) {}
+CSectionCtrl::CSectionCtrl(CGrid* grid, eSectionMode setMode) :
+	m_grid(grid),
+	m_sectionMode(setMode) {
+}
 
-CSectionCtrl::~CSectionCtrl() {}
-
-wxPoint CSectionCtrl::GetRange(const wxString& sectionName)
+wxPoint CSectionCtrl::GetRange(const wxString& sectionName) const
 {
-	wxString sSectionName = StringUtils::MakeUpper(sectionName);
-
-	for (unsigned int n = 0; n < m_aSections.size(); n++)
-	{
-		CSection& currSection = m_aSections[n];
-		if (sSectionName == StringUtils::MakeUpper(currSection.sSectionName)) {
-			return wxPoint(currSection.nRangeFrom, currSection.nRangeTo);
+	for (unsigned int n = 0; n < m_aSections.size(); n++) {
+		const section_t& currSection = m_aSections[n];
+		if (StringUtils::CompareString(sectionName, currSection.m_sectionName)) {
+			return wxPoint(currSection.m_rangeFrom, currSection.m_rangeTo);
 		}
 	}
 
-	CTranslateError::Error("Неправильно задана секция с именем \"" + sSectionName + "\"");
+	CTranslateError::Error(_("Wrong section named \"") + sectionName + "\"");
 	return wxPoint();
 }
 
-int CSectionCtrl::FindInSection(int nCurNumber, wxString& csStr)
+int CSectionCtrl::FindInSection(unsigned int currNumber, wxString& secName) const
 {
 	for (unsigned int n = 0; n < m_aSections.size(); n++)
 	{
-		int nRes = 0;
+		int result = 0;
 
-		CSection& currSection = m_aSections[n];
+		const section_t& currSection = m_aSections[n];
 
-		if (nCurNumber >= currSection.nRangeFrom && nCurNumber <= currSection.nRangeTo) nRes += 1;
-		if (nCurNumber == currSection.nRangeFrom) nRes += 2;
-		if (nCurNumber == currSection.nRangeTo) nRes += 4;
+		if (currNumber >= currSection.m_rangeFrom && currNumber <= currSection.m_rangeTo)
+			result += 1;
+		if (currNumber == currSection.m_rangeFrom)
+			result += 2;
+		if (currNumber == currSection.m_rangeTo)
+			result += 4;
 
-		if (nRes) {
-			csStr = currSection.sSectionName;
-			return nRes;
+		if (result > 0) {
+			secName = currSection.m_sectionName;
+			return result;
 		}
 	}
 
 	return 0;
 }
 
-CSection CSectionCtrl::FindSectionByPos(int pos)
+section_t *CSectionCtrl::FindSectionByPos(unsigned int pos)
 {
-	for (unsigned int n = 0; n < m_aSections.size(); n++)
-	{
-		int nRes = 0;
-
-		CSection& currSection = m_aSections[n];
-
-		if (pos >= currSection.nRangeFrom && pos <= currSection.nRangeTo) nRes += 1;
-		if (pos == currSection.nRangeFrom) nRes += 2;
-		if (pos == currSection.nRangeTo) nRes += 4;
-
-		if (nRes & 4) return currSection;
+	for (unsigned int n = 0; n < m_aSections.size(); n++) {
+		int result = 0;
+		section_t& currSection = m_aSections[n];
+		if (pos >= currSection.m_rangeFrom &&
+			pos <= currSection.m_rangeTo)
+			result += 1;
+		if (pos == currSection.m_rangeFrom)
+			result += 2;
+		if (pos == currSection.m_rangeTo)
+			result += 4;
+		if (result > 0) {
+			return &currSection;
+		}
 	}
-
-	return CSection();
+	return NULL;
 }
 
-int CSectionCtrl::GetNSectionFromPoint(wxPoint point)
+int CSectionCtrl::GetNSectionFromPoint(const wxPoint& point) const
 {
 	wxGridCellCoords idCurrentCell = m_grid->GetCellFromPoint(point);
 
-	int nCurRow = NONE_MODE;
-	if (LEFT_MODE == m_nMode)	nCurRow = idCurrentCell.GetRow();
-	else if (UPPER_MODE == m_nMode) nCurRow = idCurrentCell.GetCol();
+	unsigned int currCol = idCurrentCell.GetCol();
+	unsigned int currRow = idCurrentCell.GetRow();
 
-	for (unsigned int n = 0; n < m_aSections.size(); n++)
-	{
-		int nRes = 0;
-		CSection& currSection = m_aSections[n];
-		if (nCurRow >= currSection.nRangeFrom && nCurRow <= currSection.nRangeTo)
-		{
-			return n;
+	for (unsigned int n = 0; n < m_aSections.size(); n++) {
+		const section_t& currSection = m_aSections[n];
+		if (m_sectionMode == LEFT_MODE) {
+			if (currRow >= currSection.m_rangeFrom &&
+				currRow <= currSection.m_rangeTo) {
+				return n;
+			}
+		}
+		else if (m_sectionMode == UPPER_MODE) {
+			if (currCol >= currSection.m_rangeFrom &&
+				currCol <= currSection.m_rangeTo) {
+				return n;
+			}
 		}
 	}
 
-	return -1;
+	return wxNOT_FOUND;
 }
 
-void CSectionCtrl::Add(int nRangeFrom, int nRangeTo)
+bool CSectionCtrl::Add(unsigned int rangeFrom, unsigned int rangeTo)
 {
-	for (unsigned int n = 0; n < m_aSections.size(); n++)
-	{
-		CSection& currSection = m_aSections[n];
-
-		if (nRangeFrom >= currSection.nRangeFrom && nRangeFrom <= currSection.nRangeTo)
-		{
-			if (nRangeTo > currSection.nRangeTo)//расширение нижней границы
-			{
-				currSection.nRangeTo = nRangeTo;
+	for (unsigned int n = 0; n < m_aSections.size(); n++) {
+		section_t& currSection = m_aSections[n];
+		if (rangeFrom >= currSection.m_rangeFrom &&
+			rangeFrom <= currSection.m_rangeTo) {
+			if (rangeTo > currSection.m_rangeTo) {//расширение нижней границы
+				currSection.m_rangeTo = rangeTo;
 				m_aSections[n] = currSection;
-				return;
+				return false;
 			}
 		}
-
-		if (nRangeTo >= currSection.nRangeFrom && nRangeTo <= currSection.nRangeTo)
-		{
-			if (nRangeFrom < currSection.nRangeFrom)//расширение верхней границы
-			{
-				currSection.nRangeFrom = nRangeFrom;
+		if (rangeTo >= currSection.m_rangeFrom &&
+			rangeTo <= currSection.m_rangeTo) {
+			if (rangeFrom < currSection.m_rangeFrom) { //расширение верхней границы
+				currSection.m_rangeFrom = rangeFrom;
 				m_aSections[n] = currSection;
-				return;
+				return false;
 			}
 		}
-
-		if (nRangeFrom >= currSection.nRangeFrom && nRangeFrom <= currSection.nRangeTo)
-			return;
-
-		if (nRangeTo >= currSection.nRangeFrom && nRangeTo <= currSection.nRangeTo)
-			return;
+		if (rangeFrom >= currSection.m_rangeFrom &&
+			rangeFrom <= currSection.m_rangeTo)
+			return false;
+		if (rangeTo >= currSection.m_rangeFrom &&
+			rangeTo <= currSection.m_rangeTo)
+			return false;
 	}
-
 
 	wxString num;
 	num << m_aSections.size() + 1;
 
 	//добавление новой секции
-	CSection currSection;
-	currSection.sSectionName = wxT("Section_") + num;
-	currSection.nRangeFrom = nRangeFrom;
-	currSection.nRangeTo = nRangeTo;
-	m_aSections.push_back(currSection);
+	section_t currSection;
+	currSection.m_sectionName = _("Section_") + num;
+	currSection.m_rangeFrom = rangeFrom;
+	currSection.m_rangeTo = rangeTo;
 
-	if (!EditName(m_aSections.size() - 1)) {
-		m_aSections.erase(m_aSections.begin() + m_aSections.size() - 1);
+	if (CSectionCtrl::EditName(currSection)) {
+		m_aSections.push_back(currSection);
+		return true;
 	}
+
+	return false;
 }
 
-void CSectionCtrl::Remove(int nRangeFrom, int nRangeTo)
+bool CSectionCtrl::Remove(unsigned int rangeFrom, unsigned int rangeTo)
 {
-	for (unsigned int n = 0; n < m_aSections.size(); n++)
-	{
-		CSection& currSection = m_aSections[n];
-
-		if (nRangeFrom == currSection.nRangeFrom && nRangeTo == currSection.nRangeTo)
-		{
-			//удаление секции
+	for (unsigned int n = 0; n < m_aSections.size(); n++) {
+		section_t& currSection = m_aSections[n];
+		if (rangeFrom == currSection.m_rangeFrom &&
+			rangeTo == currSection.m_rangeTo) { //удаление секции
 			m_aSections.erase(m_aSections.begin() + n);
-			return;
-		}
-
-		if (nRangeFrom >= currSection.nRangeFrom && nRangeFrom <= currSection.nRangeTo)
-		{
-			if (nRangeTo >= currSection.nRangeTo)//удаление нижней границы
-			{
-				currSection.nRangeTo = nRangeFrom - 1;
-				m_aSections[n] = currSection;
-				return;
-			}
-		}
-
-		if (nRangeTo >= currSection.nRangeFrom && nRangeTo <= currSection.nRangeTo)
-		{
-			if (nRangeFrom <= currSection.nRangeFrom)//удаление верхней границы
-			{
-				currSection.nRangeFrom = nRangeTo + 1;
-				m_aSections[n] = currSection;
-				return;
-			}
-		}
-	}
-}
-
-void CSectionCtrl::InsertRow(int nRow)
-{
-	if (nRow > 0)
-	{
-		for (unsigned int n = 0; n < m_aSections.size(); n++)
-		{
-			CSection& currSection = m_aSections[n];
-			if (nRow < currSection.nRangeFrom)
-				currSection.nRangeFrom++;
-			if (nRow <= currSection.nRangeTo)
-				currSection.nRangeTo++;
-			m_aSections[n] = currSection;
-		}
-	}
-}
-
-void CSectionCtrl::RemoveRow(int nRow)
-{
-	if (nRow > 0)
-	{
-		for (unsigned int n = 0; n < m_aSections.size(); n++)
-		{
-			CSection& currSection = m_aSections[n];
-			if (nRow < currSection.nRangeFrom)
-				currSection.nRangeFrom--;
-			if (nRow <= currSection.nRangeTo)
-				currSection.nRangeTo--;
-			if (currSection.nRangeTo < currSection.nRangeFrom)
-			{
-				m_aSections.erase(m_aSections.begin() + n);
-				n--;
-			}
-			else
-			{
-				m_aSections[n] = currSection;
-			}
-		}
-	}
-}
-
-bool CSectionCtrl::EditName(int row)
-{
-	if (row >= 0)
-	{
-		CSection& currSection = m_aSections[row];
-
-		CInputSectionWnd* dlg = new CInputSectionWnd(m_grid, wxID_ANY);
-		dlg->SetTitle("Identifier section");
-		dlg->SetSection(currSection.sSectionName);
-
-		if (dlg->ShowModal() == wxID_OK)
-		{
-			currSection.sSectionName = dlg->GetSection();
-			m_aSections[row] = currSection;
 			return true;
+		}
+		if (rangeFrom >= currSection.m_rangeFrom &&
+			rangeFrom <= currSection.m_rangeTo) {
+			if (rangeTo >= currSection.m_rangeTo) { //удаление нижней границы
+				currSection.m_rangeTo = rangeFrom - 1;
+				m_aSections[n] = currSection;
+				return true;
+			}
+		}
+		if (rangeTo >= currSection.m_rangeFrom &&
+			rangeTo <= currSection.m_rangeTo) {
+			if (rangeFrom <= currSection.m_rangeFrom) { //удаление верхней границы
+				currSection.m_rangeFrom = rangeTo + 1;
+				m_aSections[n] = currSection;
+				return true;
+			}
 		}
 	}
 
 	return false;
 }
 
-unsigned int CSectionCtrl::GetSize()
+void CSectionCtrl::InsertRow(unsigned int nRow)
 {
-	int nCount = 0;
+	if (nRow < 0)
+		return;
 
-	if (m_nMode == eSectionMode::LEFT_MODE)
-	{
-		nCount = m_aSections.size();
-		return nCount > 0 ? 80 : 0;
+	for (unsigned int n = 0; n < m_aSections.size(); n++) {
+		section_t& currSection = m_aSections[n];
+		if (nRow < currSection.m_rangeFrom)
+			currSection.m_rangeFrom++;
+		if (nRow <= currSection.m_rangeTo)
+			currSection.m_rangeTo++;
+		m_aSections[n] = currSection;
 	}
-	else
-	{
-		nCount = m_aSections.size();
-		return nCount > 0 ? 20 : 0;
+}
+
+void CSectionCtrl::RemoveRow(unsigned int nRow)
+{
+	if (nRow < 0)
+		return;
+
+	for (unsigned int n = 0; n < m_aSections.size(); n++) {
+		section_t& currSection = m_aSections[n];
+		if (nRow < currSection.m_rangeFrom)
+			currSection.m_rangeFrom--;
+		if (nRow <= currSection.m_rangeTo)
+			currSection.m_rangeTo--;
+		if (currSection.m_rangeTo < currSection.m_rangeFrom) {
+			m_aSections.erase(m_aSections.begin() + n); n--;
+		}
+		else {
+			m_aSections[n] = currSection;
+		}
+	}
+}
+
+bool CSectionCtrl::EditName(int pos)
+{
+	if (pos >= 0 && pos < (int)CSectionCtrl::Count()) {
+		section_t& currSection =
+			CSectionCtrl::GetSection(pos);
+		return EditName(currSection);
 	}
 
-	return nCount;
+	return false;
+}
+
+#include "utils/stringUtils.h"
+
+bool CSectionCtrl::EditName(section_t& section)
+{
+	CInputSectionWnd* dlg = new CInputSectionWnd(m_grid, wxID_ANY);
+
+	dlg->SetTitle(_("Identifier section"));
+	dlg->SetSection(section.m_sectionName);
+
+	if (dlg->ShowModal() == wxID_OK) {
+		wxString sectionName = dlg->GetSection();
+		if (StringUtils::CheckCorrectName(sectionName) < 0) {
+			section.m_sectionName = sectionName;
+			return true;
+		}
+	}
+
+	return false;
 }

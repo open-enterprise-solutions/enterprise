@@ -14,9 +14,9 @@ void IMetaObject::PrepareNames() const
 {
 	std::vector<SEng> aAttributes;
 
-	for (unsigned idx = 0; idx < IObjectBase::GetPropertyCount(); idx++)
+	for (unsigned idx = 0; idx < IPropertyObject::GetPropertyCount(); idx++)
 	{
-		Property *property = IObjectBase::GetProperty(idx); 
+		Property *property = IPropertyObject::GetProperty(idx); 
 		if (!property) 
 			continue;
 

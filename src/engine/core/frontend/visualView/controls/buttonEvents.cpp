@@ -5,5 +5,7 @@
 //*******************************************************************
 void CValueButton::OnButtonPressed(wxCommandEvent &event)
 {
-	event.Skip(CallEvent("onButtonPressed"));
+	event.Skip(
+		CallEvent(m_onButtonPressed)
+	);
 }

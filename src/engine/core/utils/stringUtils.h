@@ -8,7 +8,8 @@ class wxArrayString;
 
 namespace StringUtils
 {
-	wxString IntToStr(int num);
+	wxString IntToStr(signed int num);
+	wxString UIntToStr(unsigned int num);
 
 	wxString TrimLeft(const wxString &Source, wxChar c = ' ');
 	wxString TrimLeft(wxString &Source, wxChar c = ' ');
@@ -39,6 +40,13 @@ namespace StringUtils
 	 * marks except _.
 	 */
 	bool IsSymbol(char c);
+
+
+	/**
+	* Returns truie if the character is a digit. Symbols include all of the punctuation
+	* marks except _.
+	*/
+	bool IsDigit(char c);
 
 	/**
 	* Reads a token from the input stream and stores it in result. If the end of the

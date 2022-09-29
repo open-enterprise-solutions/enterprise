@@ -10,9 +10,9 @@
 #include <vector>
 #include <algorithm>
 
-extern wxImageList *GetImageList();
+extern wxImageList* GetImageList();
 
-CAutoComplete::CAutoComplete(wxStyledTextCtrl *textCtrl) :
+CAutoComplete::CAutoComplete(wxStyledTextCtrl* textCtrl) :
 	active(false),
 	lb(NULL),
 	m_visualData(new ÑListBoxVisualData(5)),
@@ -39,13 +39,13 @@ bool CAutoComplete::Active() const
 	return active;
 }
 
-void CAutoComplete::Start(const wxString &sCurWord,
+void CAutoComplete::Start(const wxString& sCurWord,
 	int position, int startLen_,
 	int lineHeight)
 {
 	if (active) Cancel();
 
-	lb = new wxSTCListBoxWin(m_owner, m_visualData, m_owner->TextHeight(m_owner->GetCurrentLine()));
+	lb = new COESListBoxWin(m_owner, m_visualData, m_owner->TextHeight(m_owner->GetCurrentLine()));
 	lb->SetSize(225, 200);
 
 	active = true;
@@ -54,7 +54,7 @@ void CAutoComplete::Start(const wxString &sCurWord,
 
 	sCurrentWord = sCurWord;
 
-	wxSTCListBox *m_listBox = lb->GetListBox();
+	COESListBox* m_listBox = lb->GetListBox();
 	m_listBox->SetListBoxFont(m_owner->StyleGetFont(wxSTC_STYLE_DEFAULT));
 
 	m_listBox->Bind(wxEVT_LISTBOX, &CAutoComplete::OnSelection, this);
@@ -78,25 +78,25 @@ void CAutoComplete::Start(const wxString &sCurWord,
 	m_evtHandler->Bind(wxEVT_LEFT_DCLICK, &CAutoComplete::OnProcessMouse, this);
 	m_evtHandler->Bind(wxEVT_RIGHT_DCLICK, &CAutoComplete::OnProcessMouse, this);
 	m_evtHandler->Bind(wxEVT_MIDDLE_DCLICK, &CAutoComplete::OnProcessMouse, this);
-	
+
 	m_evtHandler->Bind(wxEVT_LEFT_UP, &CAutoComplete::OnProcessMouse, this);
 	m_evtHandler->Bind(wxEVT_RIGHT_UP, &CAutoComplete::OnProcessMouse, this);
 	m_evtHandler->Bind(wxEVT_MIDDLE_UP, &CAutoComplete::OnProcessMouse, this);
 }
 
-void CAutoComplete::Append(short type, const wxString &sName, const wxString &sDescription, int image)
+void CAutoComplete::Append(short type, const wxString& sName, const wxString& sDescription, int image)
 {
-	if (sName.IsEmpty()) 
+	if (sName.IsEmpty())
 		return;
 
 	if (!sCurrentWord.IsEmpty()) {
 		wxString sNameUpper = sName.Upper().Trim(true).Trim(false);
-		if (sNameUpper.Find(sCurrentWord.Upper().Trim(true).Trim(false)) < 0) 
+		if (sNameUpper.Find(sCurrentWord.Upper().Trim(true).Trim(false)) < 0)
 			return;
 	}
 
 	if (image != wxNOT_FOUND) {
-		const wxBitmap *m_bmp = m_visualData->GetImage(image);
+		const wxBitmap* m_bmp = m_visualData->GetImage(image);
 		if (!m_bmp) m_visualData->RegisterImage(image, GetImageList()->GetBitmap(image));
 	}
 
@@ -113,18 +113,18 @@ wxString CAutoComplete::GetValue(int item) const
 	return lb->GetListBox()->GetValue(item);
 }
 
-void CAutoComplete::Show(wxPoint position)
+void CAutoComplete::Show(const wxPoint& position)
 {
 	if (!active) return;
 	if (!aKeywords.size()) { Cancel(); return; }
 
-	wxSTCListBox *m_listBox = lb->GetListBox();
+	COESListBox* m_listBox = lb->GetListBox();
 
 	std::sort(aKeywords.begin(), aKeywords.end(),
 		[](keywordElement_t a, keywordElement_t b)
-	{
-		return a.name.CompareTo(b.name, wxString::caseCompare::ignoreCase) < 0;
-	});
+		{
+			return a.name.CompareTo(b.name, wxString::caseCompare::ignoreCase) < 0;
+		});
 
 	lb->SetPosition(position);
 
@@ -218,12 +218,12 @@ void CAutoComplete::Select(int index)
 
 	if (m_bNeedCallTip)
 	{
-		CCodeEditorCtrl *m_autoComplete = dynamic_cast<CCodeEditorCtrl *>(m_owner);
+		CCodeEditorCtrl* m_autoComplete = dynamic_cast<CCodeEditorCtrl*>(m_owner);
 		if (m_autoComplete) m_autoComplete->ShowCallTip(sDescription);
 	}
 }
 
-bool CAutoComplete::CallEvent(wxEvent &event)
+bool CAutoComplete::CallEvent(wxEvent& event)
 {
 	if (!active) return false;
 	bool result = m_evtHandler->ProcessEvent(event);
@@ -231,33 +231,37 @@ bool CAutoComplete::CallEvent(wxEvent &event)
 
 	if (event.GetEventType() == wxEVT_KEY_DOWN)
 	{
-		return ((wxKeyEvent &)event).GetKeyCode() == WXK_RETURN;
+		return ((wxKeyEvent&)event).GetKeyCode() == WXK_RETURN ||
+			((wxKeyEvent&)event).GetKeyCode() == WXK_NUMPAD_ENTER;
 	}
 
 	return false;
 }
 
-void CAutoComplete::OnSelection(wxCommandEvent &event)
+void CAutoComplete::OnSelection(wxCommandEvent& event)
 {
 	Select(event.GetSelection());
 }
 
-void CAutoComplete::OnKeyDown(wxKeyEvent &event)
+void CAutoComplete::OnKeyDown(wxKeyEvent& event)
 {
-	wxSTCListBox *m_listBox = lb->GetListBox();
+	COESListBox* m_listBox = lb->GetListBox();
 
 	switch (event.GetKeyCode())
 	{
 	case WXK_UP: MoveUp(); break;
 	case WXK_DOWN: MoveDown(); break;
-	case WXK_RETURN: Select(m_listBox->GetSelection()); break;
+	case WXK_NUMPAD_ENTER:
+	case WXK_RETURN:
+		Select(m_listBox->GetSelection());
+		break;
 	default: Cancel(); break;
 	}
 }
 
 void CAutoComplete::OnMouseMotion(wxMouseEvent& event)
 {
-	wxSTCListBox *m_listBox = lb->GetListBox();
+	COESListBox* m_listBox = lb->GetListBox();
 	int m_currentRow = m_listBox->VirtualHitTest(event.GetY());
 	if (m_currentRow != wxNOT_FOUND)
 	{
@@ -270,22 +274,22 @@ void CAutoComplete::OnMouseMotion(wxMouseEvent& event)
 	event.Skip();
 }
 
-void CAutoComplete::OnProcessFocus(wxFocusEvent &event)
+void CAutoComplete::OnProcessFocus(wxFocusEvent& event)
 {
 	Cancel();
 }
 
-void CAutoComplete::OnProcessChildFocus(wxChildFocusEvent &event)
+void CAutoComplete::OnProcessChildFocus(wxChildFocusEvent& event)
 {
 	Cancel();
 }
 
-void CAutoComplete::OnProcessSize(wxSizeEvent &event)
+void CAutoComplete::OnProcessSize(wxSizeEvent& event)
 {
 	Cancel();
 }
 
-void CAutoComplete::OnProcessMouse(wxMouseEvent &event)
+void CAutoComplete::OnProcessMouse(wxMouseEvent& event)
 {
 	Cancel();
 }

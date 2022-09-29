@@ -97,11 +97,11 @@ public:
 
 #include "helpers/popupWnd.h"
 
-class wxSTCCallTip : public wxSTCPopupWindow 
+class wxSTCCallTip : public COESPopupWindow 
 {
 public:
 	wxSTCCallTip(wxWindow* parent, CCallTip* ct) :
-		wxSTCPopupWindow(parent), m_ct(ct)
+		COESPopupWindow(parent), m_ct(ct)
 	{
 		Bind(wxEVT_LEFT_DOWN, &wxSTCCallTip::OnLeftDown, this);
 		Bind(wxEVT_SIZE, &wxSTCCallTip::OnSize, this);
@@ -130,7 +130,7 @@ public:
 		if (rect == NULL)
 			DrawBack(GetSize());
 
-		wxSTCPopupWindow::Refresh(eraseBg, rect);
+		COESPopupWindow::Refresh(eraseBg, rect);
 	}
 
 	void OnLeftDown(wxMouseEvent& event)

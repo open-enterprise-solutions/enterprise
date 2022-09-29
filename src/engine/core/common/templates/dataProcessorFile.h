@@ -2,8 +2,6 @@
 #define _DATA_PROC_H__
 
 #include "common/docInfo.h"
-#include "common/codeproc.h"
-
 #include "frontend/metatree/external/dataProcessorWnd.h"
 
 // The view using a standard wxTextCtrl to show its contents
@@ -13,8 +11,8 @@ public:
 
 	CDataProcessorView() : CView() {}
 
-	virtual bool OnCreate(CDocument *doc, long flags) override;
-	virtual void OnDraw(wxDC *dc) override;
+	virtual bool OnCreate(CDocument* doc, long flags) override;
+	virtual void OnDraw(wxDC* dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
 protected:
@@ -25,17 +23,17 @@ protected:
 // The view using a standard wxTextCtrl to show its contents
 class CDataProcessorEditView : public CView
 {
-	CDataProcessorTree *m_metaTree;
+	CDataProcessorTree* m_metaTree;
 
 public:
 
 	CDataProcessorEditView() : CView() {}
 
-	virtual bool OnCreate(CDocument *doc, long flags) override;
-	virtual void OnDraw(wxDC *dc) override;
+	virtual bool OnCreate(CDocument* doc, long flags) override;
+	virtual void OnDraw(wxDC* dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
-	CDataProcessorTree *GetMetaTree() const { return m_metaTree; }
+	CDataProcessorTree* GetMetaTree() const { return m_metaTree; }
 
 protected:
 
@@ -47,16 +45,16 @@ protected:
 // ----------------------------------------------------------------------------
 
 class CDataProcessorDocument : public CDocument,
-	public IMetaDocument
-{
-	CMetadataDataProcessor *m_metaData;
-
+	public IMetaDocument {
+	CMetadataDataProcessor* m_metaData;
 public:
 
 	CDataProcessorDocument() : CDocument() {}
 	virtual ~CDataProcessorDocument() { /*wxDELETE(m_metaData);*/ }
 
-	virtual IMetadata *GetMetadata() const { return m_metaData; }
+	virtual CMetadataDataProcessor* GetMetadata() const { 
+		return m_metaData;
+	}
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
 	virtual bool OnNewDocument() override
@@ -70,13 +68,13 @@ public:
 
 		SetDocumentSaved(false);
 
-		const wxString name = 
+		const wxString name =
 			GetDocumentManager()->MakeNewDocumentName();
 
 		SetTitle(name);
 		SetFilename(name, true);
 
-		IMetaObject *commonObject = m_metaData->GetCommonMetaObject();
+		IMetaObject* commonObject = m_metaData->GetCommonMetaObject();
 		wxASSERT(commonObject);
 		commonObject->SetName(name);
 
@@ -100,21 +98,35 @@ protected:
 	wxDECLARE_DYNAMIC_CLASS(CDataProcessorDocument);
 };
 
-class CDataProcessorEditDocument : public CDocument,
-	public IMetaDocument
-{
-	CMetadataDataProcessor *m_metaData;
+static int s_defaultDataProcessorNameCounter = 1;
 
+class CDataProcessorEditDocument : public CDocument,
+	public IMetaDocument {
+	CMetadataDataProcessor* m_metaData;
 public:
+
+	virtual wxIcon GetIcon() const {
+		if (m_metaData != NULL) {
+			IMetaObject* metaObject = m_metaData->GetCommonMetaObject();
+			wxASSERT(metaObject);
+			return metaObject->GetIcon();
+		}
+		return wxNullIcon;
+	}
 
 	CDataProcessorEditDocument() : CDocument() { m_childDoc = false; }
 	virtual ~CDataProcessorEditDocument() { wxDELETE(m_metaData); }
 
-	virtual IMetadata *GetMetadata() const { return m_metaData; }
+	virtual CMetadataDataProcessor* GetMetadata() const {
+		return m_metaData;
+	}
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
 	virtual bool OnNewDocument() override
 	{
+		IMetaObject* commonObject = m_metaData->GetCommonMetaObject();
+		wxASSERT(commonObject);
+
 		// notice that there is no need to neither reset nor even check the
 		// modified flag here as the document itself is a new object (this is only
 		// called from CreateDocument()) and so it shouldn't be saved anyhow even
@@ -124,16 +136,14 @@ public:
 
 		SetDocumentSaved(false);
 
-		const wxString name = 
-			GetDocumentManager()->MakeNewDocumentName();
+		const wxString name =
+			wxString::Format(commonObject->GetClassName() + wxT("%d"), s_defaultDataProcessorNameCounter++);
 
 		SetTitle(name);
 		SetFilename(name, true);
 
-		IMetaObject *commonObject = m_metaData->GetCommonMetaObject();
-		wxASSERT(commonObject);
 		commonObject->SetName(name);
-	
+
 		m_metaData->Modify(true);
 
 		if (!m_metaData->RunMetadata())
@@ -150,7 +160,7 @@ public:
 	virtual bool IsModified() const override;
 	virtual void Modify(bool mod) override;
 
-	virtual CDataProcessorTree *GetMetaTree() const;
+	virtual CDataProcessorTree* GetMetaTree() const;
 
 protected:
 

@@ -228,7 +228,7 @@ class CTextCtrl : public wxWindow,
 					colLight = 80;
 				}
 			}
-			if (m_buttonList->IsShown()) {
+			if (m_buttonClear->IsShown()) {
 				m_buttonClear->SetBackgroundColour(colour.ChangeLightness(colLight));
 				if (colLight == 80) {
 					colLight = 85;

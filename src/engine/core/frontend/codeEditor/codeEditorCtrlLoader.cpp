@@ -69,14 +69,14 @@ void CCodeEditorCtrl::AddKeywordFromObject(const CValue &vObject)
 	}
 }
 
-bool CCodeEditorCtrl::PrepareExpression(unsigned int currPos, wxString &sExpression, wxString &sKeyWord, wxString &sCurrWord, bool &hasPoint)
+bool CCodeEditorCtrl::PrepareExpression(unsigned int currPos, wxString &sExpression, wxString &sKeyWord, wxString &sCurrWord, bool &hPoint)
 {
-	bool m_hasPoint = false, m_hasKeyword = false;
+	bool hasPoint = false, hasKeyword = false;
 	for (unsigned int i = 0; i < m_precompileModule->m_aLexemList.size(); i++)
 	{
 		if (m_precompileModule->m_aLexemList[i].m_nType == IDENTIFIER)
 		{
-			if (m_hasPoint) sExpression += m_precompileModule->m_aLexemList[i].m_vData.GetString();
+			if (hasPoint) sExpression += m_precompileModule->m_aLexemList[i].m_vData.GetString();
 			else sExpression = m_precompileModule->m_aLexemList[i].m_vData.GetString();
 
 			sCurrWord = m_precompileModule->m_aLexemList[i].m_vData.GetString();
@@ -89,22 +89,22 @@ bool CCodeEditorCtrl::PrepareExpression(unsigned int currPos, wxString &sExpress
 				const CLexem &lex = m_precompileModule->m_aLexemList[i + 1];
 
 				if (lex.m_nType == DELIMITER && lex.m_nData == '(') sExpression = wxEmptyString;
-				if (lex.m_nType == DELIMITER && lex.m_nData == '(' && !m_hasPoint) sKeyWord = sCurrWord;
+				if (lex.m_nType == DELIMITER && lex.m_nData == '(' && !hasPoint) sKeyWord = sCurrWord;
 
-				if (lex.m_nType != ENDPROGRAM) m_hasPoint = lex.m_nType == DELIMITER && lex.m_nData == '.';
+				if (lex.m_nType != ENDPROGRAM) hasPoint = lex.m_nType == DELIMITER && lex.m_nData == '.';
 			}
 
-			m_hasKeyword = m_hasKeyword ? i == m_precompileModule->m_aLexemList.size() - 1 : false;
+			hasKeyword = hasKeyword ? i == m_precompileModule->m_aLexemList.size() - 1 : false;
 		}
 		else if (m_precompileModule->m_aLexemList[i].m_nType == KEYWORD && m_precompileModule->m_aLexemList[i].m_nData == KEY_NEW)
 		{
 			sExpression = wxEmptyString; sCurrWord = wxEmptyString;
-			sKeyWord = m_precompileModule->m_aLexemList[i].m_vData.GetString(); m_hasKeyword = true;
+			sKeyWord = m_precompileModule->m_aLexemList[i].m_vData.GetString(); hasKeyword = true;
 		}
 		else if (m_precompileModule->m_aLexemList[i].m_nType == CONSTANT)
 		{
 			sCurrWord = m_precompileModule->m_aLexemList[i].m_vData.GetString();
-			m_hasKeyword = StringUtils::CompareString(sKeyWord, wxT("type")) || StringUtils::CompareString(sKeyWord, wxT("showCommonForm")) || StringUtils::CompareString(sKeyWord, wxT("getCommonForm")) && !m_hasPoint;
+			hasKeyword = StringUtils::CompareString(sKeyWord, wxT("type")) || StringUtils::CompareString(sKeyWord, wxT("showCommonForm")) || StringUtils::CompareString(sKeyWord, wxT("getCommonForm")) && !hasPoint;
 		}
 		else if (m_precompileModule->m_aLexemList[i].m_nType == DELIMITER
 			&& m_precompileModule->m_aLexemList[i].m_nData == '.')
@@ -112,7 +112,7 @@ bool CCodeEditorCtrl::PrepareExpression(unsigned int currPos, wxString &sExpress
 			if (!sExpression.IsEmpty())
 				sExpression += '.';
 
-			sCurrWord = wxEmptyString; m_hasPoint = true; m_hasKeyword = false;
+			sCurrWord = wxEmptyString; hasPoint = true; hasKeyword = false;
 		}
 		else
 		{
@@ -120,28 +120,28 @@ bool CCodeEditorCtrl::PrepareExpression(unsigned int currPos, wxString &sExpress
 				sExpression = wxEmptyString; sCurrWord = wxEmptyString;
 			}
 
-			m_hasKeyword = false;
+			hasKeyword = false;
 		}
 
 		if (i < m_precompileModule->m_aLexemList.size() - 1 &&
 			m_precompileModule->m_aLexemList[i + 1].m_nNumberString >= currPos) break;
 	}
 
-	hasPoint = m_hasPoint; return m_hasKeyword;
+	hPoint = hasPoint; return hasKeyword;
 }
 
-void CCodeEditorCtrl::PrepareTooTipExpression(unsigned int currPos, wxString &sExpression, wxString &sCurrWord, bool &hasPoint)
+void CCodeEditorCtrl::PrepareTooTipExpression(unsigned int currPos, wxString &sExpression, wxString &sCurrWord, bool &hPoint)
 {
-	bool m_hasPoint = false;
+	bool hasPoint = false;
 
 	for (unsigned int i = 0; i < m_precompileModule->m_aLexemList.size(); i++)
 	{
 		if (m_precompileModule->m_aLexemList[i].m_nNumberString > currPos
-			&& !m_hasPoint) break;
+			&& !hasPoint) break;
 
 		if (m_precompileModule->m_aLexemList[i].m_nType == IDENTIFIER)
 		{
-			if (m_hasPoint) sExpression += m_precompileModule->m_aLexemList[i].m_vData.GetString();
+			if (hasPoint) sExpression += m_precompileModule->m_aLexemList[i].m_vData.GetString();
 			else sExpression = m_precompileModule->m_aLexemList[i].m_vData.GetString();
 
 			sCurrWord = m_precompileModule->m_aLexemList[i].m_vData.GetString();
@@ -151,9 +151,9 @@ void CCodeEditorCtrl::PrepareTooTipExpression(unsigned int currPos, wxString &sE
 				const CLexem &lex = m_precompileModule->m_aLexemList[i + 1];
 
 				if (lex.m_nType == DELIMITER && lex.m_nData == '(') sExpression = wxEmptyString;
-				m_hasPoint = lex.m_nType == DELIMITER && lex.m_nData == '.';
+				hasPoint = lex.m_nType == DELIMITER && lex.m_nData == '.';
 			}
-			else m_hasPoint = false;
+			else hasPoint = false;
 		}
 		else if (m_precompileModule->m_aLexemList[i].m_nType == DELIMITER
 			&& m_precompileModule->m_aLexemList[i].m_nData == '.')
@@ -161,7 +161,7 @@ void CCodeEditorCtrl::PrepareTooTipExpression(unsigned int currPos, wxString &sE
 			if (!sExpression.IsEmpty())
 				sExpression += '.';
 
-			sCurrWord = wxEmptyString; m_hasPoint = true;
+			sCurrWord = wxEmptyString; hasPoint = true;
 		}
 		else
 		{
@@ -169,7 +169,7 @@ void CCodeEditorCtrl::PrepareTooTipExpression(unsigned int currPos, wxString &sE
 		}
 	}
 
-	hasPoint = m_hasPoint;
+	hPoint = hasPoint;
 }
 
 void CCodeEditorCtrl::PrepareTABs()
@@ -391,14 +391,14 @@ void CCodeEditorCtrl::LoadAutoComplete()
 	// Display the autocompletion list
 	int lenEntered = currentPos - wordStartPos;
 
-	wxString sExpression, sKeyWord, sCurWord; bool m_hasPoint = true;
+	wxString sExpression, sKeyWord, sCurWord; bool hasPoint = true;
 
 	if (ct.Active())
 		ct.Cancel();
 
-	if (!PrepareExpression(realPos, sExpression, sKeyWord, sCurWord, m_hasPoint)) {
+	if (!PrepareExpression(realPos, sExpression, sKeyWord, sCurWord, hasPoint)) {
 		ac.Start(sCurWord, currentPos, lenEntered, TextHeight(GetCurrentLine()));
-		if (m_hasPoint) {
+		if (hasPoint) {
 			LoadIntelliList();
 		}
 		else {
@@ -421,9 +421,9 @@ void CCodeEditorCtrl::LoadToolTip(wxPoint pos)
 	{
 		int currentPos = GetRealPositionFromPoint(pos);
 
-		wxString sExpression, sCurWord; bool m_hasPoint = false;
+		wxString sExpression, sCurWord; bool hasPoint = false;
 
-		PrepareTooTipExpression(currentPos, sExpression, sCurWord, m_hasPoint);
+		PrepareTooTipExpression(currentPos, sExpression, sCurWord, hasPoint);
 
 		sExpression.Trim(true);
 		sExpression.Trim(false);
@@ -446,10 +446,10 @@ void CCodeEditorCtrl::LoadCallTip()
 	// Find the word start
 	int currentPos = GetRealPosition();
 
-	wxString sExpression, sKeyWord, sCurWord, sDescription; bool m_hasPoint = true;
+	wxString sExpression, sKeyWord, sCurWord, sDescription; bool hasPoint = true;
 
-	if (!PrepareExpression(currentPos, sExpression, sKeyWord, sCurWord, m_hasPoint)) {
-		if (m_hasPoint) {
+	if (!PrepareExpression(currentPos, sExpression, sKeyWord, sCurWord, hasPoint)) {
+		if (hasPoint) {
 			m_precompileModule->m_nCurrentPos = GetRealPosition();
 			//Cобираем текст
 			if (m_precompileModule->Compile()) {

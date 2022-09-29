@@ -7,15 +7,19 @@
 #include "compiler/debugger/debugClient.h"
 #include "frontend/theme/luna_auitoolbar.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(CDataProcessorTree, wxPanel);
+#include "common/templates/dataProcessorFile.h"
 
-extern wxImageList *GetImageList();
+#include <wx/artprov.h>
+
+wxIMPLEMENT_DYNAMIC_CLASS(CDataProcessorTree, wxPanel);
 
 wxBEGIN_EVENT_TABLE(CDataProcessorTree, wxPanel)
 wxEND_EVENT_TABLE()
 
-CDataProcessorTree::CDataProcessorTree(CDocument *docParent, wxWindow* parent, wxWindowID id)
-	: wxPanel(parent, id), m_docParent(docParent), m_initialize(false)
+#define ICON_SIZE 16
+
+CDataProcessorTree::CDataProcessorTree(CDocument* docParent, wxWindow* parent, wxWindowID id)
+	: IMetadataTree(docParent, parent, id), m_metaData(NULL), m_initialize(false)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
@@ -65,17 +69,20 @@ CDataProcessorTree::CDataProcessorTree(CDocument *docParent, wxWindow* parent, w
 
 	m_defaultFormValue->Connect(wxEVT_CHOICE, wxCommandEventHandler(CDataProcessorTree::OnChoiceDefForm), NULL, this);
 
-
 	bSizerValue->Add(m_defaultFormValue, 1, wxALL | wxEXPAND, 1);
 	bSizerHeader->Add(bSizerValue, 1, 0, 5);
 	bSizerMain->Add(bSizerHeader, 0, wxEXPAND, 5);
 
 	wxStaticBoxSizer* sbSizerTree = new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, wxT("")), wxVERTICAL);
 
-	m_metaTreeToolbar = new wxAuiToolBar(sbSizerTree->GetStaticBox(), wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_TEXT);
-	m_metaTreeToolbar->AddTool(ID_METATREE_NEW, _("new"), wxGetImageBMPFromResource(IDB_EDIT_NEW), wxNullBitmap, wxItemKind::wxITEM_NORMAL, _("new item"), _("new item"), NULL);
-	m_metaTreeToolbar->AddTool(ID_METATREE_EDIT, _("edit"), wxGetImageBMPFromResource(IDB_EDIT), wxNullBitmap, wxItemKind::wxITEM_NORMAL, _("edit item"), _("edit item"), NULL);
-	m_metaTreeToolbar->AddTool(ID_METATREE_REMOVE, _("remove"), wxGetImageBMPFromResource(IDB_EDIT_CUT), wxNullBitmap, wxItemKind::wxITEM_NORMAL, _("remove item"), _("remove item"), NULL);
+	m_metaTreeToolbar = new wxAuiToolBar(sbSizerTree->GetStaticBox(), wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
+	m_metaTreeToolbar->AddTool(ID_METATREE_NEW, _("New"), wxArtProvider::GetBitmap(wxART_PLUS, wxART_MENU), _("New item"));
+	m_metaTreeToolbar->AddTool(ID_METATREE_EDIT, _("Edit"), wxArtProvider::GetBitmap(wxART_EDIT, wxART_MENU), _("Edit item"));
+	m_metaTreeToolbar->AddTool(ID_METATREE_REMOVE, _("remove"), wxArtProvider::GetBitmap(wxART_DELETE, wxART_MENU), _("Remove item"));
+	m_metaTreeToolbar->AddSeparator();
+	m_metaTreeToolbar->AddTool(ID_METATREE_UP, _("Up"), wxArtProvider::GetBitmap(wxART_GO_UP, wxART_MENU), _("Up item"));
+	m_metaTreeToolbar->AddTool(ID_METATREE_DOWM, _("Down"), wxArtProvider::GetBitmap(wxART_GO_DOWN, wxART_MENU), _("Down item"));
+	m_metaTreeToolbar->AddTool(ID_METATREE_SORT, _("Sort"), wxArtProvider::GetBitmap(wxART_HELP_SETTINGS, wxART_MENU), _("Sort item"));
 	m_metaTreeToolbar->Realize();
 
 	m_metaTreeToolbar->SetArtProvider(new CAuiGenericToolBarArt());
@@ -86,18 +93,29 @@ CDataProcessorTree::CDataProcessorTree(CDocument *docParent, wxWindow* parent, w
 	m_metaTreeWnd->SetBackgroundColour(RGB(250, 250, 250));
 
 	//set image list
-	m_metaTreeWnd->SetImageList(::GetImageList());
+	m_metaTreeWnd->SetImageList(
+		new wxImageList(ICON_SIZE, ICON_SIZE)
+	);
 
 	m_metaTreeToolbar->Bind(wxEVT_MENU, &CDataProcessorTree::CDataProcessorTreeWnd::OnCreateItem, m_metaTreeWnd, ID_METATREE_NEW);
 	m_metaTreeToolbar->Bind(wxEVT_MENU, &CDataProcessorTree::CDataProcessorTreeWnd::OnEditItem, m_metaTreeWnd, ID_METATREE_EDIT);
 	m_metaTreeToolbar->Bind(wxEVT_MENU, &CDataProcessorTree::CDataProcessorTreeWnd::OnRemoveItem, m_metaTreeWnd, ID_METATREE_REMOVE);
 
+	m_metaTreeToolbar->Bind(wxEVT_MENU, &CDataProcessorTree::CDataProcessorTreeWnd::OnUpItem, m_metaTreeWnd, ID_METATREE_UP);
+	m_metaTreeToolbar->Bind(wxEVT_MENU, &CDataProcessorTree::CDataProcessorTreeWnd::OnDownItem, m_metaTreeWnd, ID_METATREE_DOWM);
+	m_metaTreeToolbar->Bind(wxEVT_MENU, &CDataProcessorTree::CDataProcessorTreeWnd::OnSortItem, m_metaTreeWnd, ID_METATREE_SORT);
+
 	sbSizerTree->Add(m_metaTreeWnd, 1, wxALL | wxEXPAND, 0);
 
 	bSizerMain->Add(sbSizerTree, 1, wxEXPAND, 5);
 
-	m_buttonModule = new wxButton(this, wxID_ANY, _("open module"));
+	CMetadataDataProcessor* metaData = ((CDataProcessorEditDocument*)docParent)->GetMetadata();
+	CMetaObjectDataProcessor* commonMeta = metaData->GetDataProcessor();
+	CMetaModuleObject *moduleMeta = commonMeta->GetModuleObject();
+
+	m_buttonModule = new wxButton(this, wxID_ANY, _("Open module"));
 	m_buttonModule->Connect(wxEVT_BUTTON, wxCommandEventHandler(CDataProcessorTree::OnButtonModuleClicked), NULL, this);
+	m_buttonModule->SetBitmap(moduleMeta->GetIcon());
 
 	bSizerMain->Add(m_buttonModule, 0, wxALL);
 
@@ -120,12 +138,16 @@ CDataProcessorTree::~CDataProcessorTree()
 	m_metaTreeToolbar->Unbind(wxEVT_MENU, &CDataProcessorTree::CDataProcessorTreeWnd::OnEditItem, m_metaTreeWnd, ID_METATREE_EDIT);
 	m_metaTreeToolbar->Unbind(wxEVT_MENU, &CDataProcessorTree::CDataProcessorTreeWnd::OnRemoveItem, m_metaTreeWnd, ID_METATREE_REMOVE);
 
-	m_buttonModule->Connect(wxEVT_BUTTON, wxCommandEventHandler(CDataProcessorTree::OnButtonModuleClicked), NULL, this);
+	m_metaTreeToolbar->Unbind(wxEVT_MENU, &CDataProcessorTree::CDataProcessorTreeWnd::OnUpItem, m_metaTreeWnd, ID_METATREE_UP);
+	m_metaTreeToolbar->Unbind(wxEVT_MENU, &CDataProcessorTree::CDataProcessorTreeWnd::OnDownItem, m_metaTreeWnd, ID_METATREE_DOWM);
+	m_metaTreeToolbar->Unbind(wxEVT_MENU, &CDataProcessorTree::CDataProcessorTreeWnd::OnSortItem, m_metaTreeWnd, ID_METATREE_SORT);
+
+	m_buttonModule->Disconnect(wxEVT_BUTTON, wxCommandEventHandler(CDataProcessorTree::OnButtonModuleClicked), NULL, this);
 }
 
 #include "utils/stringUtils.h"
 
-void CDataProcessorTree::OnEditCaptionName(wxCommandEvent &event)
+void CDataProcessorTree::OnEditCaptionName(wxCommandEvent& event)
 {
 	wxString systemName = m_nameValue->GetValue();
 
@@ -141,7 +163,7 @@ void CDataProcessorTree::OnEditCaptionName(wxCommandEvent &event)
 	m_docParent->SetFilename(systemName);
 	m_docParent->SetTitle(systemName);
 
-	CMetaObjectDataProcessor *dataProcessor = m_metaData->GetDataProcessor();
+	CMetaObjectDataProcessor* dataProcessor = m_metaData->GetDataProcessor();
 	wxASSERT(dataProcessor);
 	dataProcessor->SetName(systemName);
 	dataProcessor->SetSynonym(synonym);
@@ -155,9 +177,9 @@ void CDataProcessorTree::OnEditCaptionName(wxCommandEvent &event)
 	}
 }
 
-void CDataProcessorTree::OnEditCaptionSynonym(wxCommandEvent &event)
+void CDataProcessorTree::OnEditCaptionSynonym(wxCommandEvent& event)
 {
-	CMetaObjectDataProcessor *dataProcessor = m_metaData->GetDataProcessor();
+	CMetaObjectDataProcessor* dataProcessor = m_metaData->GetDataProcessor();
 	wxASSERT(dataProcessor);
 	dataProcessor->SetSynonym(m_synonymValue->GetValue());
 
@@ -166,9 +188,9 @@ void CDataProcessorTree::OnEditCaptionSynonym(wxCommandEvent &event)
 	}
 }
 
-void CDataProcessorTree::OnEditCaptionComment(wxCommandEvent &event)
+void CDataProcessorTree::OnEditCaptionComment(wxCommandEvent& event)
 {
-	CMetaObjectDataProcessor *dataProcessor = m_metaData->GetDataProcessor();
+	CMetaObjectDataProcessor* dataProcessor = m_metaData->GetDataProcessor();
 	wxASSERT(dataProcessor);
 	dataProcessor->SetComment(m_commentValue->GetValue());
 
@@ -177,17 +199,17 @@ void CDataProcessorTree::OnEditCaptionComment(wxCommandEvent &event)
 	}
 }
 
-void CDataProcessorTree::OnChoiceDefForm(wxCommandEvent &event)
+void CDataProcessorTree::OnChoiceDefForm(wxCommandEvent& event)
 {
-	CMetaObjectDataProcessor *dataProcessor = m_metaData->GetDataProcessor();
+	CMetaObjectDataProcessor* dataProcessor = m_metaData->GetDataProcessor();
 	wxASSERT(dataProcessor);
 
 	const meta_identifier_t id = reinterpret_cast<meta_identifier_t>(event.GetClientData());
 	if (id > 0) {
-		dataProcessor->m_defaultFormObject = id;
+		dataProcessor->SetDefFormObject(id);
 	}
 	else {
-		dataProcessor->m_defaultFormObject = wxNOT_FOUND;
+		dataProcessor->SetDefFormObject(wxNOT_FOUND);
 	}
 
 	if (m_initialize) {
@@ -195,9 +217,9 @@ void CDataProcessorTree::OnChoiceDefForm(wxCommandEvent &event)
 	}
 }
 
-void CDataProcessorTree::OnButtonModuleClicked(wxCommandEvent &event)
+void CDataProcessorTree::OnButtonModuleClicked(wxCommandEvent& event)
 {
-	CMetaObjectDataProcessor *dataProcessor = m_metaData->GetDataProcessor();
+	CMetaObjectDataProcessor* dataProcessor = m_metaData->GetDataProcessor();
 	wxASSERT(dataProcessor);
 	OpenFormMDI(dataProcessor->GetModuleObject());
 }
@@ -247,10 +269,17 @@ CDataProcessorTree::CDataProcessorTreeWnd::CDataProcessorTreeWnd()
 	SetDoubleBuffered(true);
 }
 
-CDataProcessorTree::CDataProcessorTreeWnd::CDataProcessorTreeWnd(wxWindow *parentWnd, CDataProcessorTree *ownerWnd)
+CDataProcessorTree::CDataProcessorTreeWnd::CDataProcessorTreeWnd(wxWindow* parentWnd, CDataProcessorTree* ownerWnd)
 	: wxTreeCtrl(parentWnd, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT), m_ownerTree(ownerWnd)
 {
 	debugClient->AddHandler(this);
+
+	wxAcceleratorEntry entries[2];
+	entries[0].Set(wxACCEL_CTRL, (int)'C', wxID_COPY);
+	entries[1].Set(wxACCEL_CTRL, (int)'V', wxID_PASTE);
+
+	wxAcceleratorTable accel(2, entries);
+	SetAcceleratorTable(accel);
 
 	//set double buffered
 	SetDoubleBuffered(true);

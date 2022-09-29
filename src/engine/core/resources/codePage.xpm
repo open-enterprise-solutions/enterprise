@@ -1,0 +1,26 @@
+/* XPM */
+static const char *s_codePage_xpm[] = {
+/* columns rows colors chars-per-pixel */
+"16 16 4 1",
+"o c #FFFFFF",
+". c #0000FF",
+"  c None",
+"X c #868686",
+/* pixels */
+"                ",
+"                ",
+"...........X    ",
+".oooooooo.o.X   ",
+".o......o.oo.X  ",
+".oooooooo.ooo.  ",
+".o......o.....X ",
+".oooooooooooo.X ",
+".o......ooooo.X ",
+".oooooooooooo.X ",
+".o......ooooo.X ",
+".oooooooooooo.X ",
+".oooooooooooo.X ",
+"..............X ",
+"XXXXXXXXXXXXXXX ",
+"                "
+};

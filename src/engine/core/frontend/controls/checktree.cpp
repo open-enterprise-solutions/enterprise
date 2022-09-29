@@ -52,7 +52,7 @@ void wxCheckTree::mohighlight(const wxTreeItemId& id, bool toggle)
 	}
 
 	int checkedCount = 0;
-	for (auto i : m_checkedItems) {
+	for (auto &i : m_checkedItems) {
 		checkedCount += i.second ? 1 : 0;
 	}
 
@@ -122,6 +122,7 @@ wxCheckTree::wxCheckTree(wxWindow* parent, const wxWindowID id, const wxPoint& p
 
 wxCheckTree::~wxCheckTree()
 {
+	wxTreeCtrl::UnselectAll();
 	m_colors.clear();
 }
 

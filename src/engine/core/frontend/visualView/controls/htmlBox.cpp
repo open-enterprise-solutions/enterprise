@@ -13,11 +13,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueHTMLBox, IValueWindow);
 
 CValueHTMLBox::CValueHTMLBox() : IValueWindow()
 {
-	PropertyContainer *categoryNotebook = IObjectBase::CreatePropertyContainer("HTML");
-	categoryNotebook->AddProperty("name", PropertyType::PT_WXNAME);
-	m_category->AddCategory(categoryNotebook);
-
-	m_minimum_size = wxSize(250, 150);
+	*m_propertyMinSize = wxSize(250, 150);
 }
 
 enum
@@ -52,8 +48,8 @@ CValue CValueHTMLBox::Method(methodArg_t &aParams)       //גûחמג לועמהא
 wxObject* CValueHTMLBox::Create(wxObject* parent, IVisualHost *visualHost)
 {
 	wxHtmlWindow *htmlBox = new wxHtmlWindow((wxWindow*)parent, wxID_ANY,
-		m_pos,
-		m_size);
+		wxDefaultPosition,
+		wxDefaultSize);
 
 	wxString dummy_page(
 		wxT("<b>wxHtmlWindow</b><br />")
@@ -100,23 +96,4 @@ bool CValueHTMLBox::LoadData(CMemoryReader &reader)
 bool CValueHTMLBox::SaveData(CMemoryWriter &writer)
 {
 	return IValueWindow::SaveData(writer);
-}
-
-//**********************************************************************************
-//*                                   Property                                     *
-//**********************************************************************************
-
-
-void CValueHTMLBox::ReadProperty()
-{
-	IValueWindow::ReadProperty();
-
-	IObjectBase::SetPropertyValue("name", m_controlName);
-}
-
-void CValueHTMLBox::SaveProperty()
-{
-	IValueWindow::SaveProperty();
-
-	IObjectBase::GetPropertyValue("name", m_controlName);
 }

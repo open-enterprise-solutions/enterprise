@@ -22,14 +22,14 @@ IValueControl::~IValueControl()
 	SetOwnerForm(NULL);
 }
 
-IValueControl* IValueControl::GetChild(unsigned int idx)
+IValueControl* IValueControl::GetChild(unsigned int idx) const
 {
-	return dynamic_cast<IValueControl*>(IObjectBase::GetChild(idx));
+	return dynamic_cast<IValueControl*>(IPropertyObject::GetChild(idx));
 }
 
-IValueControl* IValueControl::GetChild(unsigned int idx, const wxString& type)
+IValueControl* IValueControl::GetChild(unsigned int idx, const wxString& type) const
 {
-	return dynamic_cast<IValueControl*>(IObjectBase::GetChild(idx, type));
+	return dynamic_cast<IValueControl*>(IPropertyObject::GetChild(idx, type));
 }
 
 #include "metadata/metadata.h"
@@ -76,15 +76,6 @@ IMetadata* IValueControl::GetMetaData() const
 
 	return metaFormObject ?
 		metaFormObject->GetMetadata() :
-		NULL;
-}
-
-OptionList* IValueControl::GetTypelist() const
-{
-	IMetadata* metaData = GetMetaData();
-
-	return metaData ?
-		metaData->GetTypelist() :
 		NULL;
 }
 

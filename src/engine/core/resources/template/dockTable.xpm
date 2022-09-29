@@ -1,0 +1,26 @@
+/* XPM */
+static const char *s_dockTable_xpm[] = {
+/* columns rows colors chars-per-pixel */
+"16 16 4 1",
+". c #FFFFFF",
+"  c #040404",
+"X c #C0C0C0",
+"o c None",
+/* pixels */
+"  ............XX",
+"                ",
+" X XXXXXXXXXXXX ",
+" X XXXXXX     X ",
+" X XXXXXXXXXXXX ",
+" X XXXXXX  X  X ",
+" X XXXXXXXXXXXX ",
+" X XXXXXXXXXXXX ",
+" X XXXXXXXXXXXX ",
+" X XXXXXXXXXXXX ",
+" X XXXXXXXXXXXX ",
+"   XXXXXXXXXXXX ",
+" X XXXXXXXXXXXX ",
+" X XXXXXXXXXXXX ",
+"o               ",
+"oooooooooooooooo"
+};

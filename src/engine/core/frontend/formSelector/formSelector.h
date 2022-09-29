@@ -14,7 +14,7 @@ class IMetaFormObject;
 
 class CSelectTypeForm : public wxDialog
 {
-	IMetaFormObject *m_metaObject;
+	IMetaFormObject* m_metaObject;
 
 	wxStaticText* m_staticTextName;
 	wxStaticText* m_staticTextSynonym;
@@ -27,12 +27,15 @@ class CSelectTypeForm : public wxDialog
 	wxButton* m_sdbSizerOK;
 	wxButton* m_sdbSizerCancel;
 
-	struct choiceData_t
-	{
+	struct choiceData_t {
 		wxString m_name;
-		unsigned int m_choice;
-
-		choiceData_t(const wxString &name, unsigned int choice) : m_name(name), m_choice(choice) {}
+		wxString m_label;
+		int		 m_value;
+		choiceData_t(const wxString& name, const wxString& label,
+			const int& val) : m_name(name), m_label(label), 
+			m_value(val) 
+		{
+		}
 	};
 
 	std::vector<choiceData_t> m_aChoices;
@@ -40,13 +43,13 @@ class CSelectTypeForm : public wxDialog
 
 public:
 
-	CSelectTypeForm(class IMetaObject*metaValue, IMetaFormObject *metaObject);
+	CSelectTypeForm(class IMetaObject* metaValue, IMetaFormObject* metaObject);
 	virtual ~CSelectTypeForm();
 
 	void CreateSelector();
 
-	void AppendTypeForm(const wxString &name, unsigned int formType) {
-		m_aChoices.emplace_back(name, formType);
+	void AppendTypeForm(const wxString& name, const wxString &label, int index) {
+		m_aChoices.emplace_back(name, label, index);
 	}
 
 protected:

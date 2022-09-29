@@ -175,8 +175,8 @@ CValue CAccumulationRegisterManager::Balance(const CValue& cPeriod, const CValue
 			}
 		}
 
-		resultSet->Close();
-		statement->Close();
+		databaseLayer->CloseResultSet(resultSet);
+		databaseLayer->CloseStatement(statement);
 	}
 
 	return retTable;
@@ -406,8 +406,8 @@ CValue CAccumulationRegisterManager::Turnovers(const CValue& cBeginOfPeriod, con
 		}
 	}
 
-	resultSet->Close();
-	statement->Close();
+	databaseLayer->CloseResultSet(resultSet);
+	databaseLayer->CloseStatement(statement);
 
 	return retTable;
 }

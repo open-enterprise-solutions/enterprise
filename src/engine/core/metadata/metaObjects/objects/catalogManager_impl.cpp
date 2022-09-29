@@ -7,7 +7,7 @@
 #include "appData.h"
 #include "databaseLayer/databaseLayer.h"
 
-#include "metadata/metaObjects/attributes/metaAttributeObject.h"
+#include "metadata/metaObjects/attribute/metaAttributeObject.h"
 
 CReferenceDataObject* CCatalogManager::FindByCode(const CValue& vCode)
 {

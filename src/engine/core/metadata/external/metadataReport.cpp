@@ -7,6 +7,8 @@
 #include "appData.h"
 
 CMetadataReport::CMetadataReport() : IMetadata(),
+m_commonObject(NULL),
+m_ownerMeta(NULL),
 m_version(version_oes_last)
 {
 	//create main metaObject
@@ -24,23 +26,42 @@ m_version(version_oes_last)
 		}
 	}
 
-	m_commonObject->ReadProperty();
 	m_commonObject->IncrRef();
-
 	wxASSERT(m_moduleManager);
 
 	m_ownerMeta = this;
 }
 
-CMetadataReport::CMetadataReport(CMetaObjectReport* dataProcessor) : IMetadata(),
-m_commonObject(dataProcessor), m_ownerMeta(dataProcessor->GetMetadata()), m_version(version_oes_last)
+CMetadataReport::CMetadataReport(IMetadata* metaData, CMetaObjectReport* srcReport) : IMetadata(),
+m_commonObject(srcReport),
+m_ownerMeta(NULL),
+m_version(version_oes_last)
 {
-	wxASSERT(dataProcessor->m_objMode != METAOBJECT_EXTERNAL);
+	if (srcReport == NULL) {
+		IMetaObject* commonMetaObject = metaData->GetCommonMetaObject();
+		wxASSERT(commonMetaObject);
+		//create main metaObject
+		m_commonObject = new CMetaObjectReport();
+		m_commonObject->SetClsid(g_metaReportCLSID);
+		m_commonObject->SetName(
+			IMetadata::GetNewName(g_metaDataProcessorCLSID, NULL, m_commonObject->GetClassName())
+		);
+		if (commonMetaObject != NULL) {
+			m_commonObject->SetParent(commonMetaObject);
+			commonMetaObject->AddChild(m_commonObject);
+		}
+		if (commonMetaObject != NULL) {
+			commonMetaObject->AppendChild(m_commonObject);
+		}
+	}
+
+	m_commonObject->IncrRef();
+	m_ownerMeta = metaData;
 }
 
 CMetadataReport::~CMetadataReport()
 {
-	if (m_commonObject->m_objMode == METAOBJECT_EXTERNAL) {
+	if (m_commonObject->GetObjectMode() == METAOBJECT_EXTERNAL) {
 		if (!m_moduleManager->DestroyMainModule()) {
 			wxASSERT_MSG(false, "m_moduleManager->DestroyMainModule() == false");
 		}
@@ -56,15 +77,10 @@ CMetadataReport::~CMetadataReport()
 		m_moduleManager->DecrRef();
 	}
 
-	if (m_commonObject->m_objMode == METAOBJECT_EXTERNAL) {
+	if (m_commonObject->GetObjectMode() == METAOBJECT_EXTERNAL) {
 		//delete common metaObject
 		m_commonObject->DecrRef();
 	}
-}
-
-OptionList* CMetadataReport::GetTypelist() const
-{
-	return metadata->GetTypelist();
 }
 
 #include "metadata/singleMetaTypes.h"
@@ -105,6 +121,34 @@ CValue* CMetadataReport::CreateObjectRef(const wxString& className, CValue** aPa
 	return metadata->CreateObjectRef(className, aParams);
 }
 
+bool CMetadataReport::IsRegisterObject(const wxString& className) const
+{
+	if (!IMetadata::IsRegisterObject(className))
+		return metadata->IsRegisterObject(className);
+	return true;
+}
+
+bool CMetadataReport::IsRegisterObject(const wxString& className, eObjectType objectType) const
+{
+	if (!IMetadata::IsRegisterObject(className, objectType))
+		return metadata->IsRegisterObject(className);
+	return true;
+}
+
+bool CMetadataReport::IsRegisterObject(const wxString& className, eObjectType objectType, eMetaObjectType refType) const
+{
+	if (!IMetadata::IsRegisterObject(className, objectType, refType))
+		return metadata->IsRegisterObject(className, objectType, refType);
+	return true;
+}
+
+bool CMetadataReport::IsRegisterObject(const CLASS_ID& clsid) const
+{
+	if (!IMetadata::IsRegisterObject(clsid))
+		return metadata->IsRegisterObject(clsid);
+	return true;
+}
+
 CLASS_ID CMetadataReport::GetIDObjectFromString(const wxString& clsName) const
 {
 	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsName](IObjectValueAbstract* singleObject) {
@@ -135,9 +179,17 @@ wxString CMetadataReport::GetNameObjectFromID(const CLASS_ID& clsid, bool upper)
 	return metadata->GetNameObjectFromID(clsid, upper);
 }
 
-wxArrayString CMetadataReport::GetAvailableObjects(eMetaObjectType refType) const
+IMetaTypeObjectValueSingle* CMetadataReport::GetTypeObject(const CLASS_ID& clsid) const
 {
-	return metadata->GetAvailableObjects(refType);
+	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsid](IMetaTypeObjectValueSingle* singleObject) {
+		return clsid == singleObject->GetClassType(); }
+	);
+
+	if (itFounded != m_aFactoryMetaObjects.end()) {
+		return *itFounded;
+	}
+
+	return metadata->GetTypeObject(clsid);
 }
 
 IMetaTypeObjectValueSingle* CMetadataReport::GetTypeObject(const IMetaObject* metaValue, eMetaObjectType refType) const
@@ -152,6 +204,36 @@ IMetaTypeObjectValueSingle* CMetadataReport::GetTypeObject(const IMetaObject* me
 	}
 
 	return metadata->GetTypeObject(metaValue, refType);
+}
+
+wxArrayString CMetadataReport::GetAvailableObjects(eMetaObjectType refType) const
+{
+	return metadata->GetAvailableObjects(refType);
+}
+
+IObjectValueAbstract* CMetadataReport::GetAvailableObject(const CLASS_ID& clsid) const
+{
+	return metadata->GetAvailableObject(clsid);
+}
+
+IObjectValueAbstract* CMetadataReport::GetAvailableObject(const wxString& className) const
+{
+	return metadata->GetAvailableObject(className);
+}
+
+std::vector<IMetaTypeObjectValueSingle*> CMetadataReport::GetAvailableSingleObjects() const
+{
+	return metadata->GetAvailableSingleObjects();
+}
+
+std::vector<IMetaTypeObjectValueSingle*> CMetadataReport::GetAvailableSingleObjects(const CLASS_ID& clsid, eMetaObjectType refType) const
+{
+	return metadata->GetAvailableSingleObjects(clsid, refType);
+}
+
+std::vector<IMetaTypeObjectValueSingle*> CMetadataReport::GetAvailableSingleObjects(eMetaObjectType refType) const
+{
+	return metadata->GetAvailableSingleObjects(refType);
 }
 
 IMetaObject* CMetadataReport::GetMetaObject(const meta_identifier_t &id)
@@ -208,7 +290,7 @@ bool CMetadataReport::ClearChildMetadata(IMetaObject* metaParent)
 
 bool CMetadataReport::RunMetadata(int flags)
 {
-	if (m_commonObject->m_objMode == METAOBJECT_EXTERNAL) {
+	if (m_commonObject->GetObjectMode() == METAOBJECT_EXTERNAL) {
 
 		if (!m_commonObject->OnBeforeRunMetaObject(flags)) {
 			wxASSERT_MSG(false, "m_commonObject->OnBeforeRunMetaObject() == false");
@@ -237,7 +319,7 @@ bool CMetadataReport::RunMetadata(int flags)
 			return true;
 		}
 	}
-	else if (m_commonObject->m_objMode == METAOBJECT_NORMAL) {
+	else if (m_commonObject->GetObjectMode() == METAOBJECT_NORMAL) {
 
 		if (!m_commonObject->OnBeforeRunMetaObject(flags)) {
 			wxASSERT_MSG(false, "m_commonObject->OnBeforeRunMetaObject() == false");
@@ -322,7 +404,11 @@ bool CMetadataReport::CloseChildMetadata(IMetaObject* metaParent, int flags, boo
 
 bool CMetadataReport::LoadFromFile(const wxString& fileName)
 {
-	if (m_commonObject->m_objMode == METAOBJECT_EXTERNAL) {
+	if (m_commonObject->GetObjectMode() == METAOBJECT_NORMAL) {
+		if (!m_commonObject->OnCreateMetaObject(m_ownerMeta))
+			return false;
+	}
+	else if (m_commonObject->GetObjectMode() == METAOBJECT_EXTERNAL) {
 		//close data 
 		if (!CloseMetadata(forceCloseFlag)) {
 			wxASSERT_MSG(false, "CloseMetadata() == false");
@@ -366,13 +452,17 @@ bool CMetadataReport::LoadFromFile(const wxString& fileName)
 
 	//loading common metadata and child item
 	if (!LoadCommonMetadata(g_metaExternalReportCLSID, readerData)) {
-		if (m_commonObject->m_objMode == METAOBJECT_EXTERNAL) {
+		if (m_commonObject->GetObjectMode() == METAOBJECT_EXTERNAL) {
 			//clear data 
 			if (!ClearMetadata()) {
 				wxASSERT_MSG(false, "ClearMetadata() == false");
 			}
 		}
 		return false;
+	}
+
+	if (m_commonObject->GetObjectMode() == METAOBJECT_NORMAL) {
+		m_commonObject->BuildNewName();
 	}
 
 	return LoadMetadata();
@@ -439,22 +529,18 @@ bool CMetadataReport::LoadCommonMetadata(const CLASS_ID& clsid, CMemoryReader& r
 	if (!readerMetaMemory)
 		return true;
 
-	std::shared_ptr <CMemoryReader>readerDataMemory(readerMetaMemory->open_chunk(eDataBlock));
-
-	m_commonObject->SetReadOnly(!m_metaReadOnly);
-
-	if (!m_commonObject->LoadMetaObject(m_ownerMeta, *readerDataMemory))
-		return false;
-
-	if (m_commonObject->m_objMode == METAOBJECT_NORMAL) {
-		m_commonObject->SetMetaID(m_ownerMeta->GenerateNewID());
-	}
-
 	std::shared_ptr <CMemoryReader> readerChildMemory(readerMetaMemory->open_chunk(eChildBlock));
-
 	if (readerChildMemory) {
 		if (!LoadChildMetadata(clsid, *readerChildMemory, m_commonObject))
 			return false;
+	}
+
+	std::shared_ptr <CMemoryReader>readerDataMemory(readerMetaMemory->open_chunk(eDataBlock));
+	m_commonObject->SetReadOnly(!m_metaReadOnly);
+	if (!m_commonObject->LoadMetaObject(m_ownerMeta, *readerDataMemory))
+		return false;
+	if (m_commonObject->GetObjectMode() == METAOBJECT_NORMAL) {
+		m_commonObject->ResetId();
 	}
 
 	return true;
@@ -497,23 +583,23 @@ bool CMetadataReport::LoadChildMetadata(const CLASS_ID&, CMemoryReader& readerDa
 				newMetaObject->SetParent(metaParent);
 				metaParent->AddChild(newMetaObject);
 			}
-
-			std::shared_ptr <CMemoryReader>readerDataMemory(readerMetaMemory->open_chunk(eDataBlock));
-
-			if (!newMetaObject->LoadMetaObject(m_ownerMeta, *readerDataMemory))
-				return false;
-
-			if (metaParent)
-				metaParent->AppendChild(newMetaObject);
-
-			newMetaObject->ReadProperty();
 			newMetaObject->IncrRef();
 
 			std::shared_ptr <CMemoryReader> readerChildMemory(readerMetaMemory->open_chunk(eChildBlock));
-
 			if (readerChildMemory) {
 				if (!LoadChildMetadata(clsid, *readerChildMemory, newMetaObject))
 					return false;
+			}
+
+			std::shared_ptr <CMemoryReader>readerDataMemory(readerMetaMemory->open_chunk(eDataBlock));
+			if (!newMetaObject->LoadMetaObject(m_ownerMeta, *readerDataMemory))
+				return false;
+
+			if (m_commonObject->GetObjectMode() == METAOBJECT_NORMAL) {
+				newMetaObject->ResetId();
+			}
+			if (metaParent != NULL) {
+				metaParent->AppendChild(newMetaObject);
 			}
 
 			prevReaderMetaMemory = readerMetaMemory;

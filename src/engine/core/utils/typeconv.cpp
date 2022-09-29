@@ -72,11 +72,8 @@ public:
 static LocaleHolder s_locale;
 
 // Utility class for switching to "C" locale and back
-class LocaleSwitcher
-{
-private:
+class LocaleSwitcher {
 	const char* m_locale;
-
 public:
 	LocaleSwitcher()
 	{
@@ -94,35 +91,27 @@ public:
 
 using namespace TypeConv;
 
-wxString TypeConv::_StringToWxString(const std::string &str)
+wxString TypeConv::_StringToWxString(const std::string& str)
 {
 	return _StringToWxString(str.c_str());
 }
 
-wxString TypeConv::_StringToWxString(const char *str)
+wxString TypeConv::_StringToWxString(const char* str)
 {
-	wxString newstr(str, wxConvUTF8);
-	return newstr;
+	return wxString(str, wxConvUTF8);
 }
 
-std::string TypeConv::_WxStringToString(const wxString &str)
+std::string TypeConv::_WxStringToString(const wxString& str)
 {
-	std::string newstr(str.mb_str(wxConvUTF8));
-	return newstr;
+	return 	std::string(str.mb_str(wxConvUTF8));
 }
 
-std::string TypeConv::_WxStringToAnsiString(const wxString &str)
+std::string TypeConv::_WxStringToAnsiString(const wxString& str)
 {
-	std::string newstr(str.mb_str(wxConvISO8859_1));
-	return newstr;
-	//    setlocale(LC_ALL, "");
-	//    unsigned int len = wcstombs(NULL, str.char_str(), 0);
-	//    std::vector<char> buf(len + 1);
-	//    wcstombs(&buf[0], str.char_str(), len);
-	//    return std::string(&buf[0]);
+	return std::string(str.mb_str(wxConvISO8859_1));
 }
 
-bool TypeConv::StringToPoint(const wxString &val, wxPoint *point)
+bool TypeConv::StringToPoint(const wxString& val, wxPoint* point)
 {
 	wxPoint result;
 
@@ -130,11 +119,9 @@ bool TypeConv::StringToPoint(const wxString &val, wxPoint *point)
 	wxString str_x, str_y;
 	long val_x = -1, val_y = -1;
 
-	if (val != wxT(""))
-	{
+	if (val != wxT("")) {
 		wxStringTokenizer tkz(val, wxT(","));
-		if (tkz.HasMoreTokens())
-		{
+		if (tkz.HasMoreTokens()) {
 			str_x = tkz.GetNextToken();
 			str_x.Trim(true);
 			str_x.Trim(false);
@@ -171,20 +158,20 @@ bool TypeConv::StringToPoint(const wxString &val, wxPoint *point)
 	return !error;
 }
 
-wxPoint TypeConv::StringToPoint(const wxString &val)
+wxPoint TypeConv::StringToPoint(const wxString& val)
 {
 	wxPoint result;
 	StringToPoint(val, &result);
 	return result;
 }
 
-wxSize TypeConv::StringToSize(const wxString &val)
+wxSize TypeConv::StringToSize(const wxString& val)
 {
 	wxPoint point = StringToPoint(val);
 	return wxSize(point.x, point.y);
 }
 
-int TypeConv::BitlistToInt(const wxString &str)
+int TypeConv::BitlistToInt(const wxString& str)
 {
 	int result = 0;
 	wxStringTokenizer tkz(str, wxT("|"));
@@ -201,27 +188,27 @@ int TypeConv::BitlistToInt(const wxString &str)
 	return result;
 }
 
-wxString TypeConv::PointToString(const wxPoint &point)
+wxString TypeConv::PointToString(const wxPoint& point)
 {
 	return wxString::Format(wxT("%d,%d"), point.x, point.y);
 }
 
-wxString TypeConv::SizeToString(const wxSize &size)
+wxString TypeConv::SizeToString(const wxSize& size)
 {
 	return wxString::Format(wxT("%d,%d"), size.GetWidth(), size.GetHeight());
 }
 
-int TypeConv::GetMacroValue(const wxString &str)
+int TypeConv::GetMacroValue(const wxString& str)
 {
 	int value = 0;
 
-	MacroDictionary *dic = MacroDictionary::GetInstance();
+	MacroDictionary* dic = MacroDictionary::GetInstance();
 	dic->SearchMacro(str, &value);
 
 	return value;
 }
 
-int TypeConv::StringToInt(const wxString &str)
+int TypeConv::StringToInt(const wxString& str)
 {
 	long l = 0;
 	str.ToLong(&l);
@@ -229,7 +216,7 @@ int TypeConv::StringToInt(const wxString &str)
 	return (int)l;
 }
 
-wxFontContainer TypeConv::StringToFont(const wxString &str)
+wxFontContainer TypeConv::StringToFont(const wxString& str)
 {
 	wxFontContainer font;
 
@@ -348,7 +335,7 @@ wxFontContainer TypeConv::StringToFont(const wxString &str)
 	return font;
 }
 
-wxString TypeConv::FontToString(const wxFontContainer &font)
+wxString TypeConv::FontToString(const wxFontContainer& font)
 {
 	// face name, style, weight, point size, family, underlined
 	return wxString::Format(wxT("%s,%d,%d,%d,%d,%d"), font.GetFaceName().c_str(), font.GetStyle(), font.GetWeight(), font.GetPointSize(), font.GetFamily(), font.GetUnderlined() ? 1 : 0);
@@ -445,7 +432,7 @@ wxBitmap TypeConv::StringToBitmap(const wxString& filename)
 				// Create another bitmap of the appropriate size to show it's invalid.
 				// We can get here if the user entered a custom wxArtID which, presumably,
 				// they will have already installed in their app.
-				bmp = wxArtProvider::GetBitmap( wxT("wxART_MISSING_IMAGE"), cid + wxT("_C") );
+				bmp = wxArtProvider::GetBitmap(wxT("wxART_MISSING_IMAGE"), cid + wxT("_C"));
 
 				if (bmp.IsOk()) {
 					wxMemoryDC dc;
@@ -453,7 +440,7 @@ wxBitmap TypeConv::StringToBitmap(const wxString& filename)
 					dc.SetPen(wxPen(*wxRED, 3));
 					dc.DrawLine(wxPoint(0, 0), wxPoint(bmp.GetWidth(), bmp.GetHeight()));
 					dc.SelectObject(wxNullBitmap);
-				} 
+				}
 			}
 			else {
 				return bmp;
@@ -766,7 +753,17 @@ wxString TypeConv::SystemColourToString(long colour)
 	return s;
 }
 
-bool TypeConv::FlagSet(const wxString &flag, const wxString &currentValue)
+bool TypeConv::StringToBool(const wxString& str)
+{
+	return str == wxT("1") ? true : false;
+}
+
+wxString TypeConv::BoolToString(bool val)
+{
+	return val ? wxT("1") : wxT("0");
+}
+
+bool TypeConv::FlagSet(const wxString& flag, const wxString& currentValue)
 {
 	bool set = false;
 	wxStringTokenizer tkz(currentValue, wxT("|"));
@@ -784,7 +781,7 @@ bool TypeConv::FlagSet(const wxString &flag, const wxString &currentValue)
 	return set;
 }
 
-wxString TypeConv::ClearFlag(const wxString &flag, const wxString &currentValue)
+wxString TypeConv::ClearFlag(const wxString& flag, const wxString& currentValue)
 {
 	if (flag == wxT(""))
 		return currentValue;
@@ -810,7 +807,7 @@ wxString TypeConv::ClearFlag(const wxString &flag, const wxString &currentValue)
 	return result;
 }
 
-wxString TypeConv::SetFlag(const wxString &flag, const wxString &currentValue)
+wxString TypeConv::SetFlag(const wxString& flag, const wxString& currentValue)
 {
 	if (flag == wxT(""))
 		return currentValue;
@@ -888,17 +885,17 @@ wxArrayString TypeConv::StringToArrayString(const wxString& str)
 	wxArrayString result;
 
 	WX_PG_TOKENIZER2_BEGIN(str, wxT('"'))
-	result.Add(token);
+		result.Add(token);
 	WX_PG_TOKENIZER2_END()
-	return result;
+		return result;
 }
 
-wxString TypeConv::ArrayStringToString(const wxArrayString &arrayStr)
+wxString TypeConv::ArrayStringToString(const wxArrayString& arrayStr)
 {
 	return wxArrayStringProperty::ArrayStringToString(arrayStr, '"', 1);
 }
 
-wxString TypeConv::ReplaceSynonymous(const wxString &bitlist)
+wxString TypeConv::ReplaceSynonymous(const wxString& bitlist)
 {
 	wxMessageBox(wxT("Antes: ") + bitlist);
 	wxString result;
@@ -925,7 +922,7 @@ wxString TypeConv::ReplaceSynonymous(const wxString &bitlist)
 }
 
 
-wxString TypeConv::TextToString(const wxString &str)
+wxString TypeConv::TextToString(const wxString& str)
 {
 	wxString result;
 
@@ -965,7 +962,7 @@ wxString TypeConv::TextToString(const wxString &str)
 	return result;
 }
 
-wxString TypeConv::StringToText(const wxString &str)
+wxString TypeConv::StringToText(const wxString& str)
 {
 	wxString result;
 
@@ -995,23 +992,23 @@ wxString TypeConv::StringToText(const wxString &str)
 	return result;
 }
 
-double TypeConv::StringToFloat(const wxString& str)
+number_t TypeConv::StringToNumber(const wxString& str)
 {
 	// Numbers are stored in "C" locale
 	LocaleSwitcher switcher;
 
-	double out;
-	str.ToDouble(&out);
+	number_t out;
+	out.FromString(str.ToStdWstring());
 	return out;
 }
 
-wxString TypeConv::FloatToString(const double& val)
+wxString TypeConv::NumberToString(const number_t& val)
 {
 	// Numbers are stored in "C" locale
 	LocaleSwitcher switcher;
 
 	wxString convert;
-	convert << val;
+	convert << val.ToString();
 	return convert;
 }
 
@@ -1021,8 +1018,7 @@ MacroDictionary* MacroDictionary::s_instance = 0;
 
 MacroDictionary* MacroDictionary::GetInstance()
 {
-	if (!s_instance)
-	{
+	if (s_instance == NULL) {
 		s_instance = new MacroDictionary();
 	}
 
@@ -1034,12 +1030,11 @@ void MacroDictionary::Destroy()
 	wxDELETE(s_instance);
 }
 
-bool MacroDictionary::SearchMacro(wxString name, int *result)
+bool MacroDictionary::SearchMacro(const wxString& name, int* result)
 {
 	bool found = false;
 	MacroMap::iterator it = m_map.find(name);
-	if (it != m_map.end())
-	{
+	if (it != m_map.end()) {
 		found = true;
 		*result = it->second;
 	}
@@ -1047,28 +1042,24 @@ bool MacroDictionary::SearchMacro(wxString name, int *result)
 	return found;
 }
 
-bool MacroDictionary::SearchSynonymous(wxString synName, wxString& result)
+bool MacroDictionary::SearchSynonymous(const wxString& synName, wxString& result)
 {
 	bool found = false;
 	SynMap::iterator it = m_synMap.find(synName);
-	if (it != m_synMap.end())
-	{
+	if (it != m_synMap.end()) {
 		found = true;
 		result = it->second;
 	}
 
 	return found;
 }
-/*
-#define MACRO(x) m_map.insert(MacroMap::value_type(#x,x))
-#define MACRO2(x,y) m_map.insert(MacroMap::value_type(#x,y))*/
 
-void MacroDictionary::AddMacro(wxString name, int value)
+void MacroDictionary::AddMacro(const wxString& name, int value)
 {
 	m_map.insert(MacroMap::value_type(name, value));
 }
 
-void MacroDictionary::AddSynonymous(wxString synName, wxString name)
+void MacroDictionary::AddSynonymous(const wxString& synName, const wxString& name)
 {
 	m_synMap.insert(SynMap::value_type(synName, name));
 }

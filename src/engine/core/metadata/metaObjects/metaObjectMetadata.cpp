@@ -8,11 +8,11 @@
 
 #define initModuleName wxT("initModule")
 
-//***********************************************************************
-//*                         metadata                                    * 
-//***********************************************************************
+//*****************************************************************************************
+//*                         metadata													  * 
+//*****************************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(CMetaObject, IMetaObject)
+wxIMPLEMENT_DYNAMIC_CLASS(CMetaObject, IMetaObject);
 
 //*****************************************************************************************
 //*                                  MetadataObject                                       *
@@ -21,10 +21,6 @@ wxIMPLEMENT_DYNAMIC_CLASS(CMetaObject, IMetaObject)
 CMetaObject::CMetaObject() : IMetaObject(configurationDefaultName)
 {
 	m_metaId = defaultMetaID;
-
-	PropertyContainer *moduleCategory = IObjectBase::CreatePropertyContainer("Compatibility");
-	moduleCategory->AddProperty("version", PropertyType::PT_OPTION, &CMetaObject::GetVersions);
-	m_category->AddCategory(moduleCategory);
 
 	m_commonModule = new CMetaModuleObject(initModuleName);
 	m_commonModule->SetClsid(g_metaModuleCLSID);
@@ -45,13 +41,15 @@ CMetaObject::~CMetaObject()
 	wxDELETE(m_commonModule);
 }
 
-bool CMetaObject::LoadData(CMemoryReader &dataReader)
+bool CMetaObject::LoadData(CMemoryReader& dataReader)
 {
+	m_propertyVersion->SetValue(dataReader.r_s32());
 	return m_commonModule->LoadMeta(dataReader);
 }
 
-bool CMetaObject::SaveData(CMemoryWriter &dataWritter)
+bool CMetaObject::SaveData(CMemoryWriter& dataWritter)
 {
+	dataWritter.w_s32(m_propertyVersion->GetValueAsInteger());
 	return m_commonModule->SaveMeta(dataWritter);
 }
 
@@ -61,7 +59,7 @@ bool CMetaObject::SaveData(CMemoryWriter &dataWritter)
 
 #include "metadata/metadata.h"
 
-bool CMetaObject::OnCreateMetaObject(IMetadata *metaData)
+bool CMetaObject::OnCreateMetaObject(IMetadata* metaData)
 {
 	if (!m_commonModule->OnCreateMetaObject(metaData)) {
 		return false;
@@ -70,10 +68,10 @@ bool CMetaObject::OnCreateMetaObject(IMetadata *metaData)
 	return IMetaObject::OnCreateMetaObject(metaData);
 }
 
-bool CMetaObject::OnLoadMetaObject(IMetadata *metaData)
+bool CMetaObject::OnLoadMetaObject(IMetadata* metaData)
 {
 	if (!m_commonModule->OnLoadMetaObject(metaData)) {
-		return false; 
+		return false;
 	}
 
 	return IMetaObject::OnLoadMetaObject(metaData);
@@ -102,7 +100,7 @@ bool CMetaObject::OnBeforeRunMetaObject(int flags)
 	if (!m_commonModule->OnBeforeRunMetaObject(flags))
 		return false;
 
-	IModuleManager *moduleManager = m_metaData->GetModuleManager();
+	IModuleManager* moduleManager = m_metaData->GetModuleManager();
 	wxASSERT(moduleManager);
 
 	if (!moduleManager->AddCompileModule(m_commonModule, moduleManager))
@@ -116,36 +114,13 @@ bool CMetaObject::OnAfterCloseMetaObject()
 	if (!m_commonModule->OnAfterCloseMetaObject())
 		return false;
 
-	IModuleManager *moduleManager = m_metaData->GetModuleManager();
+	IModuleManager* moduleManager = m_metaData->GetModuleManager();
 	wxASSERT(moduleManager);
 
 	if (!moduleManager->RemoveCompileModule(m_commonModule))
 		return false;
 
 	return IMetaObject::OnAfterCloseMetaObject();
-}
-
-//***********************************************************************
-//*                           read & save property                      *
-//***********************************************************************
-
-void CMetaObject::ReadProperty()
-{
-	IMetaObject::ReadProperty();
-
-	int version = m_metaData->GetVersion();
-	if (IObjectBase::SetPropertyValue("version", version)) {
-	}
-}
-
-void CMetaObject::SaveProperty()
-{
-	IMetaObject::SaveProperty();
-
-	int version = 0;
-	if (IObjectBase::GetPropertyValue("version", version)) {
-		m_metaData->SetVersion(version);
-	}
 }
 
 //***********************************************************************

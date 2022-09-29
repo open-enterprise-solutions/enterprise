@@ -29,6 +29,10 @@ public:
 	CUniqueKey();
 	CUniqueKey(const Guid& guid);
 
+	virtual bool IsOk() const {
+		return m_metaObject != NULL;
+	}
+
 	bool operator > (const CUniqueKey& other) const;
 	bool operator >= (const CUniqueKey& other) const;
 	bool operator < (const CUniqueKey& other) const;
@@ -67,7 +71,7 @@ protected:
 class CUniquePairKey : public CUniqueKey {
 public:
 
-	CUniquePairKey(IMetaObjectRegisterData* metaObject);
+	CUniquePairKey(IMetaObjectRegisterData* metaObject = NULL);
 	CUniquePairKey(IMetaObjectRegisterData* metaObject, const std::map<meta_identifier_t, CValue>& keyValues);
 
 	void SetKeyPair(std::map<meta_identifier_t, CValue> &keys) {
@@ -78,5 +82,8 @@ public:
 		return m_aKeyValues;
 	}
 };
+
+#define wxNullUniqueKey CUniqueKey()
+#define wxNullUniquePairKey CUniquePairKey()
 
 #endif // !_UNIQUE_KEY_H__

@@ -16,8 +16,7 @@ public:
     bool m_underlined;		///< Underlined
     wxString m_faceName;	///< Face Name
 
-    inline void InitDefaults()
-    {
+    inline void InitDefaults() {
 		m_pointSize = -1;
 		m_family = wxFONTFAMILY_DEFAULT;
 		m_style = wxFONTSTYLE_NORMAL;
@@ -26,8 +25,7 @@ public:
 		m_faceName = wxT("Segoe UI");
     }
 
-    wxFontContainer()
-    {
+    wxFontContainer() {
     	InitDefaults();
 	}
 
@@ -67,12 +65,12 @@ public:
 		TYPE Get##NAME() const { return VARIABLE; }		\
 		void Set##NAME( TYPE value ){ VARIABLE = value; }
 
-	MAKE_GET_AND_SET( PointSize, int, m_pointSize )
-	MAKE_GET_AND_SET(Family, wxFontFamily, m_family)
-	MAKE_GET_AND_SET(Style, wxFontStyle, m_style)
-	MAKE_GET_AND_SET(Weight, wxFontWeight, m_weight)
-	MAKE_GET_AND_SET( Underlined, bool, m_underlined )
-	MAKE_GET_AND_SET( FaceName, wxString, m_faceName )
+	MAKE_GET_AND_SET(PointSize,  int,		   m_pointSize)
+	MAKE_GET_AND_SET(Family,	 wxFontFamily, m_family)
+	MAKE_GET_AND_SET(Style,		 wxFontStyle,  m_style)
+	MAKE_GET_AND_SET(Weight,	 wxFontWeight, m_weight)
+	MAKE_GET_AND_SET(Underlined, bool,		   m_underlined)
+	MAKE_GET_AND_SET(FaceName,	 wxString,	   m_faceName)
 
 	// Allow implicit cast to wxFont
 	operator wxFont() const

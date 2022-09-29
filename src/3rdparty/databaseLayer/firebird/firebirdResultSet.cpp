@@ -171,7 +171,15 @@ long long FirebirdResultSet::GetResultLong(int nField)
 		}
 		else if (nType == SQL_INT64)
 		{
-			nReturn = *((ISC_INT64*)pVar->sqldata);
+			ttmath::Int<TTMATH_BITS(64)> int64val;
+			memcpy(&int64val, pVar->sqldata, sizeof(int64val));
+			int64val.ToInt(nReturn);
+		}
+		else if (nType == SQL_INT128)
+		{
+			ttmath::Int<TTMATH_BITS(128)> int128val;
+			memcpy(&int128val, pVar->sqldata, sizeof(int128val));
+			int128val.ToInt(nReturn);
 		}
 		else
 		{
@@ -350,14 +358,16 @@ number_t FirebirdResultSet::GetResultNumber(int nField)
 			ttmath::Int<TTMATH_BITS(64)> int64val;
 			memcpy(&int64val, pVar->sqldata, sizeof(int64val));
 			dblReturn.FromInt(int64val);
-			for (int i = 0; i < -pVar->sqlscale; i++) dblReturn /= 10;
+			for (int i = 0; i < -pVar->sqlscale; i++) 
+				dblReturn /= 10;
 		}
 		else if (nType == SQL_INT128)
 		{
 			ttmath::Int<TTMATH_BITS(128)> int128val;
 			memcpy(&int128val, pVar->sqldata, sizeof(int128val));
 			dblReturn.FromInt(int128val);
-			for (int i = 0; i < -pVar->sqlscale; i++) dblReturn /= 10;
+			for (int i = 0; i < -pVar->sqlscale; i++) 
+				dblReturn /= 10;
 		}
 		else if (nType == SQL_SHORT)
 		{
@@ -380,7 +390,7 @@ number_t FirebirdResultSet::GetResultNumber(int nField)
 	return dblReturn;
 }
 
-void* FirebirdResultSet::GetResultBlob(int nField, wxMemoryBuffer& Buffer)
+void* FirebirdResultSet::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 {
 	ResetErrorCodes();
 
@@ -391,7 +401,7 @@ void* FirebirdResultSet::GetResultBlob(int nField, wxMemoryBuffer& Buffer)
 		wxMemoryBuffer tempBuffer(0);
 		tempBuffer.SetBufSize(0);
 		tempBuffer.SetDataLen(0);
-		Buffer = tempBuffer;
+		buffer = tempBuffer;
 		return NULL;
 	}
 	else
@@ -425,7 +435,7 @@ void* FirebirdResultSet::GetResultBlob(int nField, wxMemoryBuffer& Buffer)
 			tempBufferExactSize.UngetWriteBuf(bufferSize);
 			tempBufferExactSize.SetDataLen(bufferSize);
 			tempBufferExactSize.SetBufSize(bufferSize);
-			Buffer = tempBufferExactSize;
+			buffer = tempBufferExactSize;
 		}
 		else
 		{
@@ -434,7 +444,7 @@ void* FirebirdResultSet::GetResultBlob(int nField, wxMemoryBuffer& Buffer)
 			wxMemoryBuffer tempBuffer(0);
 			tempBuffer.SetBufSize(0);
 			tempBuffer.SetDataLen(0);
-			Buffer = tempBuffer;
+			buffer = tempBuffer;
 
 			SetErrorMessage(_("Invalid field type"));
 			SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
@@ -443,7 +453,7 @@ void* FirebirdResultSet::GetResultBlob(int nField, wxMemoryBuffer& Buffer)
 		}
 	}
 
-	return Buffer.GetData();
+	return buffer.GetData();
 }
 
 bool FirebirdResultSet::IsFieldNull(int nField)

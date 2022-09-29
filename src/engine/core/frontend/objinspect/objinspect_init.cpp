@@ -7,11 +7,12 @@
 
 CObjectInspector* CObjectInspector::s_instance = NULL;
 
-CObjectInspector* CObjectInspector::Get()
+CObjectInspector* CObjectInspector::Get(bool createIfNeed)
 {
-	wxASSERT(CMainFrame::Get());
-	if (!s_instance) {
-		s_instance = new CObjectInspector(CMainFrame::Get(), wxID_ANY);
+	if (createIfNeed) {
+		wxASSERT(CMainFrame::Get());
+		if (!s_instance)
+			s_instance = new CObjectInspector(CMainFrame::Get(), wxID_ANY);
 	}
 	return s_instance;
 }

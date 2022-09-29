@@ -83,7 +83,7 @@ CValue CAccumulationRegisterManager::Method(methodArg_t& aParams)
 
 	switch (aParams.GetIndex())
 	{
-	case eCreateRecordSet: return m_metaObject->CreateRecordSetValue();
+	case eCreateRecordSet: return m_metaObject->CreateRecordSetObjectValue();
 	case eCreateRecordKey: return new CRecordKeyObject(m_metaObject);
 
 	case eBalance: return aParams.GetParamCount() > 1 ?

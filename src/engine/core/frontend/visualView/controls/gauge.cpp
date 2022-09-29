@@ -8,47 +8,36 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueGauge, IValueWindow)
 //*                             Gauge                                        *
 //****************************************************************************
 
-CValueGauge::CValueGauge() : IValueWindow(), m_range(100), m_value(30)
-{
-	PropertyContainer *categoryButton = IObjectBase::CreatePropertyContainer("Gauge");
-
-	//property
-	categoryButton->AddProperty("name", PropertyType::PT_WXNAME);
-	categoryButton->AddProperty("range", PropertyType::PT_INT);
-	categoryButton->AddProperty("value", PropertyType::PT_INT);
-
-	//category 
-	m_category->AddCategory(categoryButton);
-}
-
-wxObject* CValueGauge::Create(wxObject* parent, IVisualHost *visualHost)
-{
-	wxGauge *m_gauge = new wxGauge((wxWindow *)parent, wxID_ANY,
-		m_range,
-		m_pos,
-		m_size,
-		m_style | m_window_style);
-
-	return m_gauge;
-}
-
-void CValueGauge::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated)
+CValueGauge::CValueGauge() : IValueWindow()
 {
 }
 
-void CValueGauge::Update(wxObject* wxobject, IVisualHost *visualHost)
+wxObject* CValueGauge::Create(wxObject* parent, IVisualHost* visualHost)
 {
-	wxGauge *m_gauge = dynamic_cast<wxGauge *>(wxobject);
+	return new wxGauge((wxWindow*)parent, wxID_ANY,
+		m_propertyRange->GetValueAsInteger(),
+		wxDefaultPosition,
+		wxDefaultSize,
+		m_propertyOrient->GetValueAsInteger());
+}
 
-	if (m_gauge) {
-		m_gauge->SetRange(m_range);
-		m_gauge->SetValue(m_value);
+void CValueGauge::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated)
+{
+}
+
+void CValueGauge::Update(wxObject* wxobject, IVisualHost* visualHost)
+{
+	wxGauge* gauge = dynamic_cast<wxGauge*>(wxobject);
+
+	if (gauge != NULL) {
+		gauge->SetRange(m_propertyRange->GetValueAsInteger());
+		gauge->SetValue(m_propertyValue->GetValueAsInteger());
 	}
 
-	UpdateWindow(m_gauge);
+	UpdateWindow(gauge);
 }
 
-void CValueGauge::Cleanup(wxObject* obj, IVisualHost *visualHost)
+void CValueGauge::Cleanup(wxObject* obj, IVisualHost* visualHost)
 {
 }
 
@@ -56,38 +45,18 @@ void CValueGauge::Cleanup(wxObject* obj, IVisualHost *visualHost)
 //*								Data                                *
 //*******************************************************************
 
-bool CValueGauge::LoadData(CMemoryReader &reader)
+bool CValueGauge::LoadData(CMemoryReader& reader)
 {
-	m_range = reader.r_s32();
-	m_value = reader.r_s32();
+	m_propertyRange->SetValue(reader.r_s32());
+	m_propertyValue->SetValue(reader.r_s32());
+	m_propertyOrient->SetValue(reader.r_s32());
 	return IValueWindow::LoadData(reader);
 }
 
-bool CValueGauge::SaveData(CMemoryWriter &writer)
+bool CValueGauge::SaveData(CMemoryWriter& writer)
 {
-	writer.w_s32(m_range);
-	writer.w_s32(m_value);
+	writer.w_s32(m_propertyRange->GetValueAsInteger());
+	writer.w_s32(m_propertyValue->GetValueAsInteger());
+	writer.w_s32(m_propertyOrient->GetValueAsInteger());
 	return IValueWindow::SaveData(writer);
-}
-
-//*******************************************************************
-//*							  Property                              *
-//*******************************************************************
-
-void CValueGauge::ReadProperty()
-{
-	IValueWindow::ReadProperty();
-
-	IObjectBase::SetPropertyValue("name", m_controlName);
-	IObjectBase::SetPropertyValue("range", m_range);
-	IObjectBase::SetPropertyValue("value", m_value);
-}
-
-void CValueGauge::SaveProperty()
-{
-	IValueWindow::SaveProperty();
-
-	IObjectBase::GetPropertyValue("name", m_controlName);
-	IObjectBase::GetPropertyValue("range", m_range);
-	IObjectBase::GetPropertyValue("value", m_value);
 }

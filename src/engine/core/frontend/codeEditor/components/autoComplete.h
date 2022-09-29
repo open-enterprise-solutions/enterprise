@@ -36,7 +36,7 @@ public:
 
 	wxString sCurrentWord;
 
-	wxSTCListBoxWin *lb;
+	COESListBoxWin *lb;
 	ÑListBoxVisualData* m_visualData;
 	wxStyledTextCtrl *m_owner;
 
@@ -73,7 +73,7 @@ public:
 	/// Return the value of an item in the list
 	wxString GetValue(int item) const;
 
-	void Show(wxPoint position);
+	void Show(const wxPoint &position);
 	void Cancel();
 
 	/// Move the current list element by delta, scrolling appropriately

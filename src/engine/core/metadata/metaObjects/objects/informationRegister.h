@@ -1,18 +1,9 @@
 #ifndef _INFORMATION_REGISTER_H__
 #define _INFORMATION_REGISTER_H__
 
-#include "baseObject.h"
+#include "object.h"
 
-enum eWriteRegisterMode {
-	eIndependent,
-	eSubordinateRecorder
-};
-
-enum ePeriodicity {
-	eNonPeriodic,
-	eWithinSecond,
-	eWithinDay,
-};
+#include "informationRegisterEnum.h"
 
 class CMetaObjectInformationRegister : public IMetaObjectRegisterData {
 	wxDECLARE_DYNAMIC_CLASS(CMetaObjectInformationRegister);
@@ -26,9 +17,8 @@ class CMetaObjectInformationRegister : public IMetaObjectRegisterData {
 	virtual OptionList* GetFormType() override
 	{
 		OptionList* optionlist = new OptionList;
-		optionlist->AddOption(_("formRecord"), eFormRecord);
-		optionlist->AddOption(_("formList"), eFormList);
-
+		optionlist->AddOption(wxT("formRecord"), _("Form record"), eFormRecord);
+		optionlist->AddOption(wxT("formList"), _("Form list"), eFormList);
 		return optionlist;
 	}
 
@@ -52,23 +42,19 @@ class CMetaObjectInformationRegister : public IMetaObjectRegisterData {
 
 	CMetaObjectRecordManager* m_metaRecordManager;
 
+protected:
+
+	PropertyCategory* m_categoryForm = IPropertyObject::CreatePropertyCategory({ "defaultForms", "default forms"});
+	Property* m_propertyDefFormRecord = IPropertyObject::CreateProperty(m_categoryForm, { "default_record", "default record" }, &CMetaObjectInformationRegister::GetFormRecord, wxNOT_FOUND);
+	Property* m_propertyDefFormList = IPropertyObject::CreateProperty(m_categoryForm, { "default_list", "default list" }, &CMetaObjectInformationRegister::GetFormList, wxNOT_FOUND);
+
+	PropertyCategory* m_categoryData = IPropertyObject::CreatePropertyCategory("data");
+	Property* m_propertyPeriodicity = IPropertyObject::CreateProperty(m_categoryData, { "periodicity", "periodicity" }, &CMetaObjectInformationRegister::GetPeriodicity, ePeriodicity::eNonPeriodic);
+	Property* m_propertyWriteMode = IPropertyObject::CreateProperty(m_categoryData, { "write_mode", "write mode" }, &CMetaObjectInformationRegister::GetWriteMode, eWriteRegisterMode::eIndependent);
+
 private:
 
-	//default form 
-	int m_defaultFormRecord;
-	int m_defaultFormList;
-
-	//data 
-	eWriteRegisterMode m_writeMode;
-	ePeriodicity m_periodicity;
-
-private:
-
-	OptionList* GetFormRecord(Property*);
-	OptionList* GetFormList(Property*);
-
-	OptionList* GetPeriodicity(Property*)
-	{
+	OptionList* GetPeriodicity(PropertyOption*) {
 		OptionList* optionlist = new OptionList;
 		optionlist->AddOption(_("non-periodic"), eNonPeriodic);
 		optionlist->AddOption(_("within a second"), eWithinSecond);
@@ -77,8 +63,7 @@ private:
 		return optionlist;
 	}
 
-	OptionList* GetWriteMode(Property*)
-	{
+	OptionList* GetWriteMode(PropertyOption*) {
 		OptionList* optionlist = new OptionList;
 		optionlist->AddOption(_("independent"), eIndependent);
 		optionlist->AddOption(_("subordinate to recorder"), eSubordinateRecorder);
@@ -86,23 +71,26 @@ private:
 		return optionlist;
 	}
 
+	OptionList* GetFormRecord(PropertyOption*);
+	OptionList* GetFormList(PropertyOption*);
+
 public:
+	
+	CMetaObjectInformationRegister();
+	virtual ~CMetaObjectInformationRegister();
 
 	eWriteRegisterMode GetWriteRegisterMode() const {
-		return m_writeMode;
+		return (eWriteRegisterMode)m_propertyWriteMode->GetValueAsInteger();
 	}
 
 	ePeriodicity GetPeriodicity() const {
-		return m_periodicity;
+		return (ePeriodicity)m_propertyPeriodicity->GetValueAsInteger();
 	}
 
 	bool CreateAndUpdateSliceFirstTableDB(IConfigMetadata* srcMetaData, IMetaObject* srcMetaObject, int flags);
 	bool CreateAndUpdateSliceLastTableDB(IConfigMetadata* srcMetaData, IMetaObject* srcMetaObject, int flags);
 
 	///////////////////////////////////////////////////////////////////
-
-	CMetaObjectInformationRegister();
-	virtual ~CMetaObjectInformationRegister();
 
 	virtual wxString GetClassName() const {
 		return wxT("informationRegister");
@@ -140,46 +128,42 @@ public:
 
 	//has record manager 
 	virtual bool HasRecordManager() const {
-		return m_writeMode == eWriteRegisterMode::eIndependent;
+		return GetWriteRegisterMode() == eWriteRegisterMode::eIndependent;
 	}
 
 	//has recorder 
 	virtual bool HasRecorder() const {
-		return m_writeMode == eWriteRegisterMode::eSubordinateRecorder;
+		return GetWriteRegisterMode() == eWriteRegisterMode::eSubordinateRecorder;
 	}
 
-	virtual IRecordSetObject* CreateRecordSet();
-	virtual IRecordSetObject* CreateRecordSet(const CUniquePairKey& uniqueKey);
-	virtual IRecordManagerObject* CreateRecordManager();
-	virtual IRecordManagerObject* CreateRecordManager(const CUniquePairKey& uniqueKey);
-
 	//get module object in compose object 
-	virtual CMetaModuleObject* GetModuleObject() const { return m_moduleObject; }
-	virtual CMetaCommonModuleObject* GetModuleManager() const { return m_moduleManager; }
+	virtual CMetaModuleObject* GetModuleObject() const { 
+		return m_moduleObject; 
+	}
+
+	virtual CMetaCommonModuleObject* GetModuleManager() const { 
+		return m_moduleManager;
+	}
 
 	//create associate value 
-	virtual CMetaFormObject* GetDefaultFormByID(const form_identifier_t &id);
+	virtual CMetaFormObject* GetDefaultFormByID(const form_identifier_t& id);
 
 	//create object data with metaForm
 	virtual ISourceDataObject* CreateObjectData(IMetaFormObject* metaObject);
 
-	//create associate value 
-	virtual IRecordSetObject* CreateRecordSetValue() override;
-	virtual IRecordManagerObject* CreateRecordManagerValue() override;
-
 	//create form with data 
-	virtual CValueForm* CreateObjectValue(IMetaFormObject* metaForm) override {
+	virtual CValueForm* CreateObjectForm(IMetaFormObject* metaForm) override {
 		return metaForm->GenerateFormAndRun(
 			NULL, CreateObjectData(metaForm)
 		);
 	}
 
 	//support form 
-	virtual CValueForm* GetRecordForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniquePairKey& formGuid = NULL);
-	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = Guid());
+	virtual CValueForm* GetRecordForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniquePairKey& formGuid = wxNullUniquePairKey);
+	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullUniqueKey);
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defultMenu);
+	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
 	virtual void ProcessCommand(unsigned int id);
 
 	//create and update table 
@@ -190,11 +174,10 @@ public:
 	*/
 	virtual void OnPropertyChanged(Property* property);
 
-	//read and write property 
-	virtual void ReadProperty() override;
-	virtual	void SaveProperty() override;
-
 protected:
+
+	virtual IRecordSetObject* CreateRecordSetObjectRegValue(const CUniquePairKey& uniqueKey = wxNullUniquePairKey);
+	virtual IRecordManagerObject* CreateRecordManagerObjectRegValue(const CUniquePairKey& uniqueKey = wxNullUniquePairKey);
 
 	//load & save metadata from DB 
 	virtual bool LoadData(CMemoryReader& reader);
@@ -204,6 +187,10 @@ protected:
 
 	//support form 
 	virtual CValueForm* GetRecordForm(const meta_identifier_t& id, IValueFrame* ownerControl, const CUniqueKey& formGuid);
+
+protected:
+	friend class CRecordSetInformationRegister;
+	friend class CRecordManagerInformationRegister;
 };
 
 //********************************************************************************************
@@ -213,14 +200,9 @@ protected:
 #define thisObject wxT("thisObject")
 
 class CRecordSetInformationRegister : public IRecordSetObject {
-public:
+protected:
 
-	CRecordSetInformationRegister(CMetaObjectInformationRegister* metaObject) :
-		IRecordSetObject(metaObject)
-	{
-	}
-
-	CRecordSetInformationRegister(CMetaObjectInformationRegister* metaObject, const CUniquePairKey& uniqueKey) :
+	CRecordSetInformationRegister(CMetaObjectInformationRegister* metaObject, const CUniquePairKey& uniqueKey = wxNullUniquePairKey) :
 		IRecordSetObject(metaObject, uniqueKey)
 	{
 	}
@@ -229,6 +211,8 @@ public:
 		IRecordSetObject(source)
 	{
 	}
+
+public:
 
 	//default methods
 	virtual IRecordSetObject* CopyRegisterValue() {
@@ -251,17 +235,14 @@ public:
 	//****************************************************************************
 	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);
 	virtual CValue GetAttribute(attributeArg_t& aParams);
+protected:
+	friend class CMetaObjectInformationRegister;
 };
 
 class CRecordManagerInformationRegister : public IRecordManagerObject {
 public:
 
-	CRecordManagerInformationRegister(CMetaObjectInformationRegister* metaObject) :
-		IRecordManagerObject(metaObject)
-	{
-	}
-
-	CRecordManagerInformationRegister(CMetaObjectInformationRegister* metaObject, const CUniquePairKey& uniqueKey) :
+	CRecordManagerInformationRegister(CMetaObjectInformationRegister* metaObject, const CUniquePairKey& uniqueKey = wxNullUniquePairKey) :
 		IRecordManagerObject(metaObject, uniqueKey)
 	{
 	}
@@ -269,11 +250,6 @@ public:
 	CRecordManagerInformationRegister(const CRecordManagerInformationRegister& source) :
 		IRecordManagerObject(source)
 	{
-	}
-
-	//default methods
-	virtual IRecordManagerObject* CopyRegisterValue() {
-		return new CRecordManagerInformationRegister(*this);
 	}
 
 	virtual CValue CopyRegister();
@@ -304,6 +280,9 @@ public:
 	//support actions
 	virtual actionData_t GetActions(const form_identifier_t& formType);
 	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm);
+
+protected:
+	friend class CMetaObjectInformationRegister;
 };
 
 #endif 

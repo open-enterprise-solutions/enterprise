@@ -1,37 +1,45 @@
 #include "dvc.h"
 
-#include <wx/radiobut.h>
-
-#include "frontend/controls/checkBox.h"
+#include "frontend/controls/checkBoxEditor.h"
 #include "frontend/controls/textEditor.h"
 
 #include "frontend/visualView/controls/tableBox.h"
 
 #include "appData.h"
 
-wxWindow* CValueViewRenderer::CreateEditorCtrl(wxWindow* parent,
+wxWindow* CValueViewRenderer::CreateEditorCtrl(wxWindow* dv,
 	wxRect labelRect,
-	const wxVariant& value) 
+	const wxVariant& value)
 {
 	CTextCtrl* textCtrl = new CTextCtrl;
 
 	textCtrl->SetDVCMode(true);
 
-	textCtrl->SetPasswordMode(m_colControl->m_passwordMode);
-	textCtrl->SetMultilineMode(m_colControl->m_multilineMode);
-	textCtrl->SetTextEditMode(m_colControl->m_textEditMode);
-	textCtrl->SetButtonSelect(m_colControl->m_selbutton);
-	textCtrl->SetButtonList(m_colControl->m_listbutton);
-	textCtrl->SetButtonClear(m_colControl->m_clearbutton);
+	textCtrl->SetPasswordMode(m_colControl->GetPasswordMode());
+	textCtrl->SetMultilineMode(m_colControl->GetMultilineMode());
+	textCtrl->SetTextEditMode(m_colControl->GetTextEditMode());
+	textCtrl->SetButtonSelect(m_colControl->GetSelectButton());
+	textCtrl->SetButtonList(m_colControl->GetListButton());
+	textCtrl->SetButtonClear(m_colControl->GetClearButton());
 
-	textCtrl->Create(parent, wxID_ANY, value,
+	bool result = textCtrl->Create(dv, wxID_ANY, value,
 		labelRect.GetPosition(),
 		labelRect.GetSize());
 
-	textCtrl->SetBackgroundColour(parent->GetBackgroundColour());
-	textCtrl->SetForegroundColour(parent->GetForegroundColour());
+	if (!result)
+		return NULL;
 
-	textCtrl->SetFont(parent->GetFont());
+	wxDataViewCtrl* parentWnd = dynamic_cast<wxDataViewCtrl*>(dv->GetParent());
+	if (parentWnd != NULL) {
+		textCtrl->SetBackgroundColour(parentWnd->GetBackgroundColour());
+		textCtrl->SetForegroundColour(parentWnd->GetForegroundColour());
+		textCtrl->SetFont(parentWnd->GetFont());
+	}
+	else {
+		textCtrl->SetBackgroundColour(dv->GetBackgroundColour());
+		textCtrl->SetForegroundColour(dv->GetForegroundColour());
+		textCtrl->SetFont(dv->GetFont());
+	}
 
 	if (!appData->DesignerMode()) {
 		textCtrl->BindButtonSelect(&CValueTableBoxColumn::OnSelectButtonPressed, m_colControl);
@@ -41,7 +49,7 @@ wxWindow* CValueViewRenderer::CreateEditorCtrl(wxWindow* parent,
 		textCtrl->BindKillFocus(&CValueTableBoxColumn::OnKillFocus, m_colControl);
 	}
 
-	textCtrl->SetInsertionPointEnd(); 
+	textCtrl->SetInsertionPointEnd();
 
 	return textCtrl;
 }
@@ -49,7 +57,7 @@ wxWindow* CValueViewRenderer::CreateEditorCtrl(wxWindow* parent,
 bool CValueViewRenderer::GetValueFromEditorCtrl(wxWindow* ctrl, wxVariant& value)
 {
 	CTextCtrl* textCtrl = wxDynamicCast(ctrl, CTextCtrl);
-	
+
 	if (!textCtrl)
 		return false;
 
@@ -61,6 +69,6 @@ bool CValueViewRenderer::GetValueFromEditorCtrl(wxWindow* ctrl, wxVariant& value
 		textCtrl->UnbindKillFocus(&CValueTableBoxColumn::OnKillFocus, m_colControl);
 	}
 
-	value = textCtrl->GetTextValue();	
+	value = textCtrl->GetTextValue();
 	return true;
 }

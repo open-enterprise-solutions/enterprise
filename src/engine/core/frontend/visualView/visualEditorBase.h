@@ -14,7 +14,7 @@ class CORE_API IVisualHost : public wxScrolledCanvas {
 	wxDECLARE_ABSTRACT_CLASS(IVisualHost);
 public:
 
-	IVisualHost() : wxScrolledCanvas(), m_formHandler(NULL), m_mainBoxSizer(NULL) { }
+	IVisualHost() : wxScrolledCanvas(), m_mainBoxSizer(NULL) { }
 	IVisualHost(wxWindow* parent,
 		wxWindowID id,
 		const wxPoint& pos = wxDefaultPosition,
@@ -26,19 +26,20 @@ public:
 		wxScrolledCanvas::SetScrollRate(5, 5);
 	}
 
-	virtual ~IVisualHost() {}
+	IValueFrame* GetObjectBase(wxObject* wxobject) const;
+	wxObject* GetWxObject(IValueFrame* baseobject) const;
 
-	IValueFrame* GetObjectBase(wxObject* wxobject);
-	wxObject* GetWxObject(IValueFrame* baseobject);
+	wxBoxSizer* GetFrameSizer() const {
+		return m_mainBoxSizer;
+	}
+	
+	virtual bool IsDemonstration() const {
+		return false;
+	}
 
-	wxBoxSizer* GetFrameSizer() { return m_mainBoxSizer; }
-	CVisualEditorContextForm* GetVisualHostContext() const { return m_formHandler; }
-
-	virtual bool IsDemonstration() const { return false; }
-	virtual bool IsDesignerHost() const { return false; }
-
-	virtual class CValueForm* GetValueForm() const = 0;
-	virtual void SetValueForm(class CValueForm* valueForm) = 0;
+	virtual bool IsDesignerHost() const {
+		return false;
+	}
 
 	virtual wxWindow* GetParentBackgroundWindow() const = 0;
 	virtual wxWindow* GetBackgroundWindow() const = 0;
@@ -121,10 +122,8 @@ protected:
 
 	std::map<wxObject*, IValueFrame*> m_wxObjects;
 	std::map<IValueFrame*, wxObject* > m_baseObjects;
-
-	CVisualEditorContextForm* m_formHandler;
 };
 
-extern CVisualEditorContextForm* m_visualHostContext;
+extern CVisualEditorContextForm* g_visualHostContext;
 
 #endif 

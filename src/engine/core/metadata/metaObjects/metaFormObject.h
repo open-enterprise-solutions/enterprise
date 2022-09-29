@@ -12,7 +12,7 @@ class CValueForm;
 class ISourceDataObject;
 
 class IMetaFormObject : public CMetaModuleObject {
-	wxDECLARE_ABSTRACT_CLASS(IMetaFormObject);
+	wxDECLARE_ABSTRACT_CLASS(IMetaFormObject);	
 private:
 
 	enum
@@ -27,10 +27,10 @@ private:
 	};
 
 	//loader/saver/deleter:
-	CValueForm* LoadControl(const wxString& formData);
-	bool LoadChildControl(CValueForm* valueForm, CMemoryReader& readerData, IValueFrame* parentObj);
-	wxString SaveControl(CValueForm* valueForm);
-	bool SaveChildControl(CValueForm* valueForm, CMemoryWriter& writterData, IValueFrame* parentObj);
+	CValueForm* LoadControl(const wxMemoryBuffer& formData) const;
+	bool LoadChildControl(CValueForm* valueForm, CMemoryReader& readerData, IValueFrame* parentObj) const;
+	wxMemoryBuffer SaveControl(CValueForm* valueForm) const;
+	bool SaveChildControl(CValueForm* valueForm, CMemoryWriter& writterData, IValueFrame* parentObj) const;
 
 public:
 
@@ -41,16 +41,16 @@ public:
 	/**
 	* Get type form
 	*/
-	form_identifier_t GetTypeForm() const { return m_typeFrom; }
+	virtual form_identifier_t GetTypeForm() const = 0;
 
 	CValueForm* GenerateForm(IValueFrame* ownerControl = NULL,
-		ISourceDataObject* ownerSrc = NULL, const CUniqueKey& guidForm = Guid());
+		ISourceDataObject* ownerSrc = NULL, const CUniqueKey& guidForm = wxNullGuid);
 
 	CValueForm* GenerateFormAndRun(IValueFrame* ownerControl = NULL,
-		ISourceDataObject* ownerSrc = NULL, const CUniqueKey& guidForm = Guid());
+		ISourceDataObject* ownerSrc = NULL, const CUniqueKey& guidForm = wxNullGuid);
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defultMenu);
+	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
 	virtual void ProcessCommand(unsigned int id);
 
 protected:
@@ -61,8 +61,7 @@ protected:
 protected:
 
 	bool m_firstInitialized;
-	form_identifier_t m_typeFrom;
-	wxString m_formData;
+	wxMemoryBuffer m_formData;
 };
 
 class CMetaFormObject : public IMetaFormObject {
@@ -75,15 +74,20 @@ private:
 	friend class IListDataObject;
 	friend class IRecordDataObject;
 
-private:
+protected:
 
-	OptionList* GetFormType(Property*);
+	OptionList* GetFormType(PropertyOption*);
+
+	PropertyCategory* m_categoryForm = IPropertyObject::CreatePropertyCategory("FormType");
+	Property* m_properyFormType = IPropertyObject::CreateProperty(m_categoryForm, "formType", &CMetaFormObject::GetFormType, wxNOT_FOUND);
 
 public:
 
 	CMetaFormObject(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
 
-	virtual wxString GetClassName() const override { return wxT("form"); }
+	virtual wxString GetClassName() const override {
+		return wxT("form");
+	}
 
 	//support icons
 	virtual wxIcon GetIcon();
@@ -109,8 +113,12 @@ public:
 	virtual bool OnBeforeCloseMetaObject();
 	virtual bool OnAfterCloseMetaObject();
 
-	virtual void ReadProperty() override;
-	virtual void SaveProperty() override;
+	/**
+	* Get type form
+	*/
+	virtual form_identifier_t GetTypeForm() const {
+		return m_properyFormType->GetValueAsInteger();
+	}
 
 protected:
 
@@ -120,10 +128,15 @@ protected:
 
 class CMetaCommonFormObject : public IMetaFormObject {
 	wxDECLARE_DYNAMIC_CLASS(CMetaCommonFormObject);
+protected:
+	Role* m_roleUse = IMetaObject::CreateRole({ "use", _("use") });
 public:
 
 	CMetaCommonFormObject(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
-	virtual wxString GetClassName() const override { return wxT("commonForm"); }
+
+	virtual wxString GetClassName() const override {
+		return wxT("commonForm");
+	}
 
 	//support icons
 	virtual wxIcon GetIcon();
@@ -135,6 +148,13 @@ public:
 	//module manager is started or exit 
 	virtual bool OnBeforeRunMetaObject(int flags);
 	virtual bool OnAfterCloseMetaObject();
+
+	/**
+	* Get type form
+	*/
+	virtual form_identifier_t GetTypeForm() const {
+		return defaultFormType;
+	}
 };
 
 #endif 

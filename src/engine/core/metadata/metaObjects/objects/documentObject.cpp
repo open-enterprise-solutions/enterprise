@@ -24,26 +24,22 @@
 
 void CObjectDocument::CRecordRegister::CreateRecordSet()
 {
-	CRecordRegister::ClearRecordSet();
-
 	CMetaObjectDocument* metaDocument = wxDynamicCast(
 		m_document->GetMetaObject(), CMetaObjectDocument
 	);
-
 	wxASSERT(metaDocument);
-
-	auto recordData = metaDocument->GetRecordData();
-
+	auto& recordData = metaDocument->GetRecordData();
 	IMetadata* metaData = metaDocument->GetMetadata();
 	wxASSERT(metaData);
-	for (auto id : recordData.GetData()) {
+	CRecordRegister::ClearRecordSet();
+	for (auto id : recordData.m_data) {
 		IMetaObjectRegisterData* metaObject =
 			dynamic_cast<IMetaObjectRegisterData*>(metaData->GetMetaObject(id));
 		if (metaObject == NULL || !metaObject->IsAllowed())
 			continue;
 		CMetaDefaultAttributeObject* registerRecord = metaObject->GetRegisterRecorder();
 		wxASSERT(registerRecord);
-		IRecordSetObject* recordSet = metaObject->CreateRecordSet();
+		IRecordSetObject* recordSet = metaObject->CreateRecordSetObjectValue();
 		wxASSERT(recordSet);
 		recordSet->SetKeyValue(
 			registerRecord->GetMetaID(), m_document->GetReference()
@@ -55,11 +51,9 @@ void CObjectDocument::CRecordRegister::CreateRecordSet()
 
 bool CObjectDocument::CRecordRegister::WriteRecordSet()
 {
-	for (auto pair : m_records) {
-
+	for (auto& pair : m_records) {
 		IRecordSetObject* record = pair.second;
 		wxASSERT(record);
-
 		try {
 			if (!record->WriteRecordSet()) {
 				return false;
@@ -75,11 +69,9 @@ bool CObjectDocument::CRecordRegister::WriteRecordSet()
 
 bool CObjectDocument::CRecordRegister::DeleteRecordSet()
 {
-	for (auto pair : m_records) {
-
+	for (auto& pair : m_records) {
 		IRecordSetObject* record = pair.second;
 		wxASSERT(record);
-
 		try {
 			if (!record->DeleteRecordSet()) {
 				return false;
@@ -95,7 +87,7 @@ bool CObjectDocument::CRecordRegister::DeleteRecordSet()
 
 void CObjectDocument::CRecordRegister::ClearRecordSet()
 {
-	for (auto pair : m_records) {
+	for (auto& pair : m_records) {
 		IRecordSetObject* record = pair.second;
 		wxASSERT(record);
 		record->DecrRef();
@@ -113,7 +105,6 @@ CObjectDocument::CRecordRegister::CRecordRegister(CObjectDocument* currentDoc) :
 CObjectDocument::CRecordRegister::~CRecordRegister()
 {
 	CRecordRegister::ClearRecordSet();
-
 	wxDELETE(m_methods);
 }
 
@@ -121,41 +112,43 @@ CObjectDocument::CRecordRegister::~CRecordRegister()
 //*                                  CObjectDocument	                                      *
 //*********************************************************************************************
 
+CObjectDocument::CObjectDocument(CMetaObjectDocument* metaObject, const Guid& objGuid) :
+	IRecordDataObjectRef(metaObject, objGuid), m_registerRecords(new CRecordRegister(this))
+{
+	if (m_registerRecords != NULL) {
+		m_registerRecords->IncrRef();
+	}
+}
+
 CObjectDocument::CObjectDocument(const CObjectDocument& source) :
 	IRecordDataObjectRef(source), m_registerRecords(new CRecordRegister(this))
 {
-	if (m_registerRecords) {
+	if (m_registerRecords != NULL) {
 		m_registerRecords->IncrRef();
 	}
-
-	InitializeObject(&source);
-}
-
-CObjectDocument::CObjectDocument(CMetaObjectDocument* metaObject) :
-	IRecordDataObjectRef(metaObject), m_registerRecords(new CRecordRegister(this))
-{
-	if (m_registerRecords) {
-		m_registerRecords->IncrRef();
-	}
-
-	InitializeObject();
-}
-
-CObjectDocument::CObjectDocument(CMetaObjectDocument* metaObject, const Guid& guid) :
-	IRecordDataObjectRef(metaObject, guid), m_registerRecords(new CRecordRegister(this))
-{
-	if (m_registerRecords) {
-		m_registerRecords->IncrRef();
-	}
-
-	InitializeObject();
 }
 
 CObjectDocument::~CObjectDocument()
 {
-	if (m_registerRecords) {
+	if (m_registerRecords != NULL) {
 		m_registerRecords->DecrRef();
 	}
+}
+
+bool CObjectDocument::IsPosted() const
+{
+	CMetaObjectDocument* metaDocRef = NULL;
+	if (m_metaObject->ConvertToValue(metaDocRef))
+		return GetValueByMetaID(*metaDocRef->GetDocumentPosted()).GetBoolean();
+	return false;
+}
+
+void CObjectDocument::SetDeletionMark(bool deletionMark)
+{
+	CMetaObjectDocument* metaDocRef = NULL;
+	if (m_metaObject->ConvertToValue(metaDocRef))
+		SetValueByMetaID(*metaDocRef->GetDocumentPosted(), false);
+	IRecordDataObjectRef::SetDeletionMark(deletionMark);
 }
 
 CSourceExplorer CObjectDocument::GetSourceExplorer() const
@@ -233,7 +226,6 @@ CValueForm* CObjectDocument::GetFormValue(const wxString& formName, IValueFrame*
 		valueForm->InitializeForm(ownerControl, NULL,
 			this, m_objGuid
 		);
-		valueForm->ReadProperty();
 		valueForm->BuildForm(CMetaObjectDocument::eFormObject);
 		valueForm->Modify(m_objModified);
 	}
@@ -247,11 +239,9 @@ CValueForm* CObjectDocument::GetFormValue(const wxString& formName, IValueFrame*
 //*                                   Document events                                            *
 //***********************************************************************************************
 
-void CObjectDocument::FillObject(CValue& vFillObject)
+bool CObjectDocument::FillObject(CValue& vFillObject) const
 {
-	if (appData->EnterpriseMode()) {
-		m_procUnit->CallFunction("Filling", vFillObject);
-	}
+	return Filling(vFillObject);
 }
 
 CValue CObjectDocument::CopyObject()

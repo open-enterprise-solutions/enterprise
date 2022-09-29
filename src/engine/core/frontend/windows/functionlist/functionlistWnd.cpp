@@ -80,7 +80,7 @@ CFunctionList::CFunctionList(CDocument* moduleDoc, CCodeEditorCtrl* parent)
 		int item_id = m_listProcedures->GetItemCount();
 
 		wxListItem info;
-		info.m_image = 0;//content.nImage;
+		info.m_image = wxNOT_FOUND;//content.nImage;
 		info.m_text = procedureName;
 		info.m_mask = wxLIST_MASK_TEXT | wxLIST_MASK_IMAGE | wxLIST_MASK_DATA;
 		info.m_itemId = item_id;

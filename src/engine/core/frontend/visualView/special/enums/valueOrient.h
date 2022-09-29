@@ -10,7 +10,9 @@ public:
 	CValueEnumOrient() : IEnumeration() { InitializeEnumeration(); }
 	CValueEnumOrient(wxOrientation orient) : IEnumeration(orient) { InitializeEnumeration(orient); }
 
-	wxString GetTypeString() const override { return wxT("orient"); }
+	virtual wxString GetTypeString() const override {
+		return wxT("orient"); 
+	}
 
 protected:
 

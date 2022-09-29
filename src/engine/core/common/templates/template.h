@@ -22,14 +22,15 @@ public:
 
 private:
 
-	void OnCopy(wxCommandEvent& WXUNUSED(event)) { /*m_grid->Copy();*/ }
-	void OnPaste(wxCommandEvent& WXUNUSED(event)) { /*m_grid->Paste();*/ }
+	void OnCopy(wxCommandEvent& WXUNUSED(event)) { m_grid->Copy(); }
+	void OnPaste(wxCommandEvent& WXUNUSED(event)) { m_grid->Paste(); }
 	void OnSelectAll(wxCommandEvent& WXUNUSED(event)) { m_grid->SelectAll(); }
 
 	virtual wxPrintout *OnCreatePrintout() override;
-	virtual void OnCreateToolbar(wxAuiToolBar *m_toolbar) override;
+	virtual void OnCreateToolbar(wxAuiToolBar *toolbar) override;
 
-	virtual void OnToolbarClicked(wxCommandEvent &event);
+	void OnToolClicked(wxCommandEvent &event);
+	void OnToolDropDown(wxAuiToolBarEvent& event);
 
 	CGrid *m_grid;
 
@@ -41,9 +42,11 @@ private:
 // CTextDocument: wxDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-class CGridDocument : public CDocument
-{
+#include "metadata/metaObjects/metaGridObject.h"
+
+class CGridDocument : public CDocument {
 public:
+
 	CGridDocument() : CDocument() { m_childDoc = false; }
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
@@ -66,8 +69,7 @@ protected:
 // A very simple text document class
 // ----------------------------------------------------------------------------
 
-class CGridEditDocument : public CGridDocument
-{
+class CGridEditDocument : public CGridDocument {
 public:
 	CGridEditDocument() : CGridDocument() { }
 	virtual wxGrid *GetGridCtrl()  const override;

@@ -43,7 +43,7 @@ public:
 	virtual long long GetResultLong(int nField);
 	virtual bool GetResultBool(int nField);
 	virtual wxDateTime GetResultDate(int nField);
-	virtual void* GetResultBlob(int nField, wxMemoryBuffer& Buffer);
+	virtual void* GetResultBlob(int nField, wxMemoryBuffer& buffer);
 	virtual double GetResultDouble(int nField);
 	virtual number_t GetResultNumber(int nField);
 	virtual bool IsFieldNull(int nField);

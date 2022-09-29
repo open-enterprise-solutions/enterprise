@@ -7,12 +7,12 @@
 #include "metaObjects/metaGridObject.h"
 
 //attributes 
-#include "metaObjects/attributes/metaAttributeObject.h"
+#include "metaObjects/attribute/metaAttributeObject.h"
 
 //enumeration 
 #include "metaObjects/enumeration/metaEnumerationObject.h"
 
 //tables 
-#include "metaObjects/tables/metaTableObject.h"
+#include "metaObjects/table/metaTableObject.h"
 
 #endif

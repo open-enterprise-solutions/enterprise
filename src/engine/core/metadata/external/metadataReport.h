@@ -15,7 +15,7 @@ class CMetadataReport : public IMetadata
 public:
 
 	CMetadataReport();
-	CMetadataReport(CMetaObjectReport* dataProcessor);
+	CMetadataReport(IMetadata* metaData, CMetaObjectReport* report = NULL);
 	virtual ~CMetadataReport();
 
 	virtual CMetaObjectReport* GetReport() const { return m_commonObject; }
@@ -28,12 +28,27 @@ public:
 
 	//runtime support:
 	virtual CValue* CreateObjectRef(const wxString& className, CValue** aParams = NULL);
+
+	virtual bool IsRegisterObject(const wxString& className) const;
+	virtual bool IsRegisterObject(const wxString& className, eObjectType objectType) const;
+	virtual bool IsRegisterObject(const wxString& className, eObjectType objectType, enum eMetaObjectType refType) const;
+
+	virtual bool IsRegisterObject(const CLASS_ID& clsid) const;
+
 	virtual CLASS_ID GetIDObjectFromString(const wxString& clsName) const;
 	virtual wxString GetNameObjectFromID(const CLASS_ID& clsid, bool upper = false) const;
+
+	virtual IMetaTypeObjectValueSingle* GetTypeObject(const CLASS_ID& clsid) const;
 	virtual IMetaTypeObjectValueSingle* GetTypeObject(const IMetaObject* metaValue, enum eMetaObjectType refType) const;
+
 	virtual wxArrayString GetAvailableObjects(enum eMetaObjectType refType) const;
 
-	virtual OptionList* GetTypelist() const;
+	virtual IObjectValueAbstract* GetAvailableObject(const CLASS_ID& clsid) const;
+	virtual IObjectValueAbstract* GetAvailableObject(const wxString& className) const;
+
+	virtual std::vector<IMetaTypeObjectValueSingle*> GetAvailableSingleObjects() const;
+	virtual std::vector<IMetaTypeObjectValueSingle*> GetAvailableSingleObjects(const CLASS_ID& clsid, eMetaObjectType refType) const;
+	virtual std::vector<IMetaTypeObjectValueSingle*> GetAvailableSingleObjects(enum eMetaObjectType refType) const;
 
 	//metadata 
 	virtual bool CreateMetadata();

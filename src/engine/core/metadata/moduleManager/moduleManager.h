@@ -26,7 +26,9 @@ public:
 		bool DestroyCommonModule();
 
 		//get common module 
-		CMetaModuleObject* GetModuleObject() const { return m_moduleObject; }
+		CMetaModuleObject* GetModuleObject() const {
+			return m_moduleObject;
+		}
 
 		//Is global module?
 		wxString GetModuleFullName() const { return m_moduleObject ? m_moduleObject->GetFullName() : wxEmptyString; }
@@ -39,7 +41,10 @@ public:
 		//РАБОТА КАК АГРЕГАТНОГО ОБЪЕКТА
 
 		//эти методы нужно переопределить в ваших агрегатных объектах:
-		virtual CMethods* GetPMethods() const { PrepareNames();  return m_methods; }//получить ссылку на класс помощник разбора имен атрибутов и методов
+		virtual CMethods* GetPMethods() const { //получить ссылку на класс помощник разбора имен атрибутов и методов
+			PrepareNames();
+			return m_methods;
+		}
 
 		//этот метод автоматически вызывается для инициализации имен атрибутов и методов
 		virtual void PrepareNames() const;
@@ -47,11 +52,18 @@ public:
 		//вызов метода
 		virtual CValue Method(methodArg_t& aParams) override;
 
-		virtual wxString GetString() const override { return m_moduleObject->GetName(); }
-		virtual wxString GetTypeString() const override { return wxT("module"); }
+		virtual wxString GetString() const override { 
+			return m_moduleObject->GetName();
+		}
+		
+		virtual wxString GetTypeString() const override { 
+			return wxT("module"); 
+		}
 
 		//check is empty
-		virtual inline bool IsEmpty() const override { return false; }
+		virtual inline bool IsEmpty() const override { 
+			return false;
+		}
 
 		//operator '=='
 		virtual inline bool CompareValueEQ(const CValue& cParam) const override
@@ -93,11 +105,18 @@ public:
 		//get common module 
 		IMetadata* GetMetadata() const { return m_metaData; }
 
-		virtual wxString GetTypeString() const override { return wxT("metadata"); }
-		virtual wxString GetString() const override { return wxT("metadata"); }
+		virtual wxString GetTypeString() const override { 
+			return wxT("metadata");
+		}
+		
+		virtual wxString GetString() const override { 
+			return wxT("metadata");
+		}
 
 		//check is empty
-		virtual inline bool IsEmpty() const override { return false; }
+		virtual inline bool IsEmpty() const override { 
+			return false; 
+		}
 
 		//operator '=='
 		virtual inline bool CompareValueEQ(const CValue& cParam) const override
@@ -174,54 +193,78 @@ public:
 	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
 	virtual int FindAttribute(const wxString& sName) const;
 
-	virtual wxString GetString() const { return wxT("moduleManager"); }
-	virtual wxString GetTypeString() const { return wxT("moduleManager"); }
+	virtual wxString GetString() const { 
+		return wxT("moduleManager"); 
+	}
+	
+	virtual wxString GetTypeString() const { 
+		return wxT("moduleManager"); 
+	}
 
 	//check is empty
-	virtual inline bool IsEmpty() const override { return false; }
+	virtual inline bool IsEmpty() const override {
+		return false;
+	}
 
 	//compile modules:
 	bool AddCompileModule(IMetaObject* moduleObject, CValue* object);
 	bool RemoveCompileModule(IMetaObject* moduleObject);
 
 	//templates:
-	template <class T> inline bool FindCompileModule(IMetaObject* moduleObject, T*& objValue)
-	{
-		if (m_aCompileModules.find(moduleObject) != m_aCompileModules.end()) {
-			objValue = dynamic_cast<T*>(m_aCompileModules[moduleObject]);
+	template <class T> inline bool FindCompileModule(IMetaObject* moduleObject, T*& objValue) const {
+		auto foundedIt = m_aCompileModules.find(moduleObject);
+		if (foundedIt != m_aCompileModules.end()) {
+			objValue = dynamic_cast<T*>(foundedIt->second);
 			return objValue != NULL;
 		}
 		objValue = NULL;
 		return false;
 	}
 
-	template <class T> inline bool FindParentCompileModule(IMetaObject* moduleObject, T*& objValue)
-	{
-		IMetaObject* m_parentMetadata = moduleObject ? moduleObject->GetParent() : NULL;
-		if (m_parentMetadata)
-			return FindCompileModule(m_parentMetadata, objValue);
+	template <class T> inline bool FindParentCompileModule(IMetaObject* moduleObject, T*& objValue) const {
+		IMetaObject* parentMetadata = moduleObject ? moduleObject->GetParent() : NULL;
+		if (parentMetadata != NULL)
+			return FindCompileModule(parentMetadata, objValue);
 		return false;
 	}
 
 	//common modules:
 	bool AddCommonModule(CMetaCommonModuleObject* commonModule, bool managerModule = false, bool runModule = false);
 
-	CModuleValue* FindCommonModule(CMetaCommonModuleObject* commonModule);
+	CModuleValue* FindCommonModule(CMetaCommonModuleObject* commonModule) const;
 	bool RenameCommonModule(CMetaCommonModuleObject* commonModule, const wxString& newName);
 	bool RemoveCommonModule(CMetaCommonModuleObject* commonModule);
 
 	//system object:
-	CValue* GetObjectManager() const { return m_objectManager; }
-	CValue* GetSysObjectManager() const { return m_objectSysManager; }
-	CMetadataValue* GetMetaManager() const { return m_metaManager; }
+	CValue* GetObjectManager() const {
+		return m_objectManager;
+	}
 
-	virtual std::vector<CModuleValue*>& GetCommonModules() { return m_aCommonModules; }
+	CValue* GetSysObjectManager() const {
+		return m_objectSysManager;
+	}
+
+	CMetadataValue* GetMetaManager() const {
+		return m_metaManager;
+	}
+
+	virtual std::vector<CModuleValue*>& GetCommonModules() {
+		return m_aCommonModules;
+	}
+
 	//associated map
-	virtual std::map<wxString, CValue*>& GetGlobalVariables() { return m_aValueGlVariables; }
-	virtual std::map<wxString, CValue*>& GetContextVariables() { return m_compileModule->m_aContextValues; }
+	virtual std::map<wxString, CValue*>& GetGlobalVariables() {
+		return m_aValueGlVariables;
+	}
+
+	virtual std::map<wxString, CValue*>& GetContextVariables() {
+		return m_compileModule->m_aContextValues;
+	}
 
 	//return external module
-	virtual IRecordDataObject* GetObjectValue() const { return NULL; }
+	virtual IRecordDataObjectExt* GetObjectValue() const {
+		return NULL;
+	}
 
 protected:
 
@@ -287,7 +330,9 @@ public:
 	virtual ~CExternalDataProcessorModuleManager();
 
 	//return external module
-	virtual IRecordDataObject* GetObjectValue() const { return m_objectValue; }
+	virtual IRecordDataObjectExt* GetObjectValue() const {
+		return m_objectValue;
+	}
 
 	//Create common module
 	virtual bool CreateMainModule();
@@ -325,7 +370,9 @@ public:
 	virtual ~CExternalReportModuleManager();
 
 	//return external module
-	virtual IRecordDataObject* GetObjectValue() const { return m_objectValue; }
+	virtual IRecordDataObjectExt* GetObjectValue() const {
+		return m_objectValue;
+	}
 
 	//Create common module
 	virtual bool CreateMainModule();

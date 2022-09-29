@@ -164,12 +164,14 @@ void CValueOLE::CreateStreamForDispatch()
 void CValueOLE::ReleaseCoObjects()
 {
 #ifdef __WXMSW__
-	for (auto dispOle : s_aOLEValues)
-	{
+	for (auto dispOle : s_aOLEValues) {
 		CValueOLE *oleValue = dispOle.second;
-		if (!oleValue->m_dispatch) continue;
+		if (!oleValue->m_dispatch)
+			continue;
 		unsigned int countRef = oleValue->m_dispatch->Release();
-		for (unsigned int i = 0; i < countRef; i++) { oleValue->m_dispatch->Release(); }
+		for (unsigned int i = 0; i < countRef; i++) { 
+			oleValue->m_dispatch->Release(); 
+		}
 		oleValue->m_dispatch = NULL;
 	}
 #endif

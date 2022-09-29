@@ -15,7 +15,7 @@ class CMetadataDataProcessor : public IMetadata
 public:
 
 	CMetadataDataProcessor();
-	CMetadataDataProcessor(CMetaObjectDataProcessor* dataProcessor);
+	CMetadataDataProcessor(IMetadata *metaData, CMetaObjectDataProcessor *srcDataProcessor = NULL);
 	virtual ~CMetadataDataProcessor();
 
 	virtual CMetaObjectDataProcessor* GetDataProcessor() const { return m_commonObject; }
@@ -24,16 +24,33 @@ public:
 	virtual void SetVersion(const version_identifier_t &version) { m_version = version; }
 	virtual version_identifier_t GetVersion() const { return m_version; }
 
-	virtual wxString GetFileName() const { return m_fullPath; }
+	virtual wxString GetFileName() const {
+		return m_fullPath; 
+	}
 
 	//runtime support:
 	virtual CValue* CreateObjectRef(const wxString& className, CValue** aParams = NULL);
+
+	virtual bool IsRegisterObject(const wxString& className) const;
+	virtual bool IsRegisterObject(const wxString& className, eObjectType objectType) const;
+	virtual bool IsRegisterObject(const wxString& className, eObjectType objectType, enum eMetaObjectType refType) const;
+
+	virtual bool IsRegisterObject(const CLASS_ID& clsid) const;
+
 	virtual CLASS_ID GetIDObjectFromString(const wxString& clsName) const;
 	virtual wxString GetNameObjectFromID(const CLASS_ID& clsid, bool upper = false) const;
+
+	virtual IMetaTypeObjectValueSingle* GetTypeObject(const CLASS_ID& clsid) const;
 	virtual IMetaTypeObjectValueSingle* GetTypeObject(const IMetaObject* metaValue, enum eMetaObjectType refType) const;
+	
 	virtual wxArrayString GetAvailableObjects(enum eMetaObjectType refType) const;
 
-	virtual OptionList* GetTypelist() const;
+	virtual IObjectValueAbstract* GetAvailableObject(const CLASS_ID& clsid) const;
+	virtual IObjectValueAbstract* GetAvailableObject(const wxString& className) const;
+
+	virtual std::vector<IMetaTypeObjectValueSingle*> GetAvailableSingleObjects() const;
+	virtual std::vector<IMetaTypeObjectValueSingle*> GetAvailableSingleObjects(const CLASS_ID& clsid, eMetaObjectType refType) const;
+	virtual std::vector<IMetaTypeObjectValueSingle*> GetAvailableSingleObjects(enum eMetaObjectType refType) const;
 
 	//metadata 
 	virtual bool CreateMetadata();
@@ -49,7 +66,9 @@ public:
 	bool LoadFromFile(const wxString& fileName);
 	bool SaveToFile(const wxString& fileName);
 
-	virtual IMetaObject* GetCommonMetaObject() const { return m_commonObject; }
+	virtual IMetaObject* GetCommonMetaObject() const { 
+		return m_commonObject; 
+	}
 
 	//get metaObject 
 	virtual IMetaObject* GetMetaObject(const meta_identifier_t &id);

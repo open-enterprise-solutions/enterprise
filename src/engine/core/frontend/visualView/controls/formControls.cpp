@@ -16,7 +16,7 @@ m_formOwner(NULL), m_methods(NULL)
 {
 }
 
-CValueForm::CValueFormControl::CValueFormControl(CValueForm *ownerFrame) : CValue(eValueTypes::TYPE_VALUE, true),
+CValueForm::CValueFormControl::CValueFormControl(CValueForm* ownerFrame) : CValue(eValueTypes::TYPE_VALUE, true),
 m_formOwner(ownerFrame), m_methods(new CMethods())
 {
 }
@@ -35,24 +35,21 @@ CValue CValueForm::CValueFormControl::GetItEmpty()
 
 CValue CValueForm::CValueFormControl::GetItAt(unsigned int idx)
 {
-	if (m_formOwner->m_aControls.size() < idx) {
+	if (m_formOwner->m_aControls.size() < idx)
 		return CValue();
-	}
 
 	auto structurePos = m_formOwner->m_aControls.begin();
 	std::advance(structurePos, idx);
 
-	wxString propertyName; 
-	if (!(*structurePos)->GetPropertyValue("name", propertyName)) {
-		return CValue();
-	}
-
-	return new CValueContainer::CValueReturnContainer(propertyName, CValue(*structurePos));
+	return new CValueContainer::CValueReturnContainer(
+		(*structurePos)->GetControlName(), 
+		CValue(*structurePos)
+	);
 }
 
 #include "appData.h"
 
-CValue CValueForm::CValueFormControl::GetAt(const CValue &cKey)
+CValue CValueForm::CValueFormControl::GetAt(const CValue& cKey)
 {
 	number_t number = cKey.GetNumber();
 
@@ -69,11 +66,21 @@ CValue CValueForm::CValueFormControl::GetAt(const CValue &cKey)
 	return CValue();
 }
 
-bool CValueForm::CValueFormControl::Property(const CValue &cKey, CValue &cValueFound)
+bool CValueForm::CValueFormControl::Property(const CValue& cKey, CValue& cValueFound)
 {
-	wxString key = cKey.GetString(); 
-	auto itFounded = std::find_if(m_formOwner->m_aControls.begin(), m_formOwner->m_aControls.end(), [key](IValueControl *control) { return StringUtils::CompareString(key, control->GetPropertyAsString("name")); });
-	if (itFounded != m_formOwner->m_aControls.end()) { cValueFound = *itFounded; return true; }
+	wxString key = cKey.GetString();
+
+	auto itFounded = std::find_if(m_formOwner->m_aControls.begin(), m_formOwner->m_aControls.end(),
+		[key](IValueControl* control) {
+			return StringUtils::CompareString(key, control->GetControlName());
+		}
+	);
+
+	if (itFounded != m_formOwner->m_aControls.end()) {
+		cValueFound = *itFounded;
+		return true;
+	}
+
 	return false;
 }
 
@@ -92,7 +99,7 @@ void CValueForm::CValueFormControl::PrepareNames() const
 	{"createControl", "createControl(typeControl, parentElement)"},
 	{"findControl", "findControl(controlName)"},
 	{"removeControl", "removeControl(controlElement)"},
-	{"property", "property(key, valueFound)"}, 
+	{"property", "property(key, valueFound)"},
 	{"count", "count()"}
 	};
 
@@ -100,13 +107,13 @@ void CValueForm::CValueFormControl::PrepareNames() const
 
 	std::vector<SEng> aAttributes;
 	for (auto control : m_formOwner->m_aControls) {
-		aAttributes.push_back({ control->GetPropertyAsString("name") });
+		aAttributes.emplace_back(control->GetControlName());
 	}
 
 	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
 }
 
-CValue CValueForm::CValueFormControl::GetAttribute(attributeArg_t &aParams)
+CValue CValueForm::CValueFormControl::GetAttribute(attributeArg_t& aParams)
 {
 	if (m_formOwner->m_aControls.size() < (unsigned int)aParams.GetIndex())
 		return CValue();
@@ -118,7 +125,7 @@ CValue CValueForm::CValueFormControl::GetAttribute(attributeArg_t &aParams)
 
 #include "compiler/valueType.h"
 
-CValue CValueForm::CValueFormControl::Method(methodArg_t &aParams)
+CValue CValueForm::CValueFormControl::Method(methodArg_t& aParams)
 {
 	switch (aParams.GetIndex())
 	{
@@ -127,7 +134,8 @@ CValue CValueForm::CValueFormControl::Method(methodArg_t &aParams)
 	case enControlFind:
 		return m_formOwner->FindControl(aParams[0].GetString());
 	case enControlRemove:
-		m_formOwner->RemoveControl(aParams[0].ConvertToType<IValueFrame>()); break;
+		m_formOwner->RemoveControl(aParams[0].ConvertToType<IValueFrame>());
+		break;
 	case enControlProperty:
 		return Property(aParams[0], aParams.GetParamCount() > 1 ? aParams[1] : CValue());
 	case enControlCount:

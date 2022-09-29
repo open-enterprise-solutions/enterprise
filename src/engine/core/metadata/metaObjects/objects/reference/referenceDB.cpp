@@ -5,7 +5,7 @@
 
 #include "reference.h"
 #include "appData.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 #include "metadata/metaObjects/objects/tabularSection/tabularSection.h"
 #include "databaseLayer/databaseLayer.h"
 #include "utils/stringUtils.h"

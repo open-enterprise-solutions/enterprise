@@ -13,7 +13,8 @@
 // */
 typedef enum
 {
-	PT_ERROR,
+	PT_NULL,
+
 	PT_BOOL,
 	PT_TEXT,
 	PT_INT,
@@ -35,31 +36,30 @@ typedef enum
 	PT_FILE,
 	PT_BITMAP,
 	PT_STRINGLIST,
-	PT_FLOAT,
+	PT_NUMBER,
 	PT_WXSTRING_I18N,
 	PT_PARENT,
 	PT_CLASS,
 	PT_EDIT_OPTION,
-	
-	PT_TYPE_SELECT,
-	PT_OWNER_SELECT,
-	PT_RECORD_SELECT,
-	PT_TOOL_ACTION,
-	PT_SOURCE_DATA
+
+	PT_TYPE_DATA,
+	PT_OWNER_DATA,
+	PT_RECORD_DATA,
+	PT_ACTION_DATA,
+	PT_SOURCE_DATA,
+	PT_GENERATION_DATA,
+
+	PT_MAX
 
 } PropertyType;
 
 /**
  * Lista de enteros.
  */
-class IntList
-{
-	bool m_abs;
-
-	std::vector<int> m_ints;
-	
+class IntList {
+	std::vector<int> m_ints; bool m_abs;
 public:
-	
+
 	IntList(bool absolute_value = false) : m_abs(absolute_value) {}
 	IntList(wxString value, bool absolute_value = false);
 
@@ -68,7 +68,7 @@ public:
 
 	void Add(int value);
 	void DeleteList();
-	void SetList(const wxString &str);
+	void SetList(const wxString& str);
 	wxString ToString();
 };
 

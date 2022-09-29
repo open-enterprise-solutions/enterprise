@@ -5,7 +5,7 @@
 
 #include "form.h"
 #include "appData.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 
 enum
 {
@@ -22,16 +22,16 @@ CValueForm::actionData_t CValueForm::GetActions(const form_identifier_t& formTyp
 {
 	actionData_t action(this);
 
-	action.AddAction("close", _("Close"), enClose);
-	action.AddAction("update", _("Update"), enUpdate);
-	action.AddAction("help", _("Help"), enHelp);
-
 	IActionSource* srcAction =
 		dynamic_cast<IActionSource*>(CValueForm::GetSourceObject());
 
 	if (srcAction != NULL) {
 		srcAction->AddActions(action, formType);
 	}
+
+	action.AddAction("close", _("Close"), enClose);
+	action.AddAction("update", _("Update"), enUpdate);
+	action.AddAction("help", _("Help"), enHelp);
 
 	return action;
 }

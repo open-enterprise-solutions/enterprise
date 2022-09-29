@@ -10,7 +10,14 @@
 
 namespace StringUtils
 {
-	wxString IntToStr(int num)
+	wxString IntToStr(signed int num)
+	{
+		wxString result;
+		result.Printf(wxT("%d"), num);
+		return result;
+	}
+	
+	wxString UIntToStr(unsigned int num)
 	{
 		wxString result;
 		result.Printf(wxT("%d"), num);

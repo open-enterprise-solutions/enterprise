@@ -65,12 +65,12 @@ wxDateTime DatabaseResultSet::GetResultDate(const wxString& strField)
 	return wxDefaultDateTime;
 }
 
-void* DatabaseResultSet::GetResultBlob(const wxString& strField, wxMemoryBuffer& Buffer)
+void* DatabaseResultSet::GetResultBlob(const wxString& strField, wxMemoryBuffer& buffer)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex != -1)
 	{
-		return GetResultBlob(nIndex, Buffer);
+		return GetResultBlob(nIndex, buffer);
 	}
 	return NULL;
 }

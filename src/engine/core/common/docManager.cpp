@@ -24,6 +24,9 @@
 #include "common/templates/formDesigner.h"
 #include "common/templates/template.h"
 
+#include "common/templates/interface.h"
+#include "common/templates/role.h"
+
 //files
 #include "common/templates/dataProcessorFile.h"
 #include "common/templates/dataReportFile.h"
@@ -67,7 +70,7 @@ wxEND_EVENT_TABLE()
 
 void CDocManager::Destroy()
 {
-	CDocManager *const documentManager =
+	CDocManager* const documentManager =
 		CDocManager::GetDocumentManager();
 
 	if (documentManager != NULL) {
@@ -86,45 +89,81 @@ void CDocManager::Destroy()
 wxIMPLEMENT_DYNAMIC_CLASS(CDocManager, wxDocManager);
 
 //****************************************************************
-//*                           CDocManager                     *
+//*                           CDocManager						 *
 //****************************************************************
 
 #include "metadata/metaObjects/metaObject.h"
 
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+bool CDocManager::CDocTemplate::InitDocument(wxDocument* doc, const wxString& path, long flags)
+{
+	wxTRY
+	{
+		doc->SetFilename(path);
+		doc->SetDocumentTemplate(this);
+		GetDocumentManager()->AddDocument(doc);
+		doc->SetCommandProcessor(doc->OnCreateCommandProcessor());
+
+		if (doc->OnCreate(path, flags))
+			return true;
+
+		// The document may be already destroyed, this happens if its view
+		// creation fails as then the view being created is destroyed
+		// triggering the destruction of the document as this first view is
+		// also the last one. However if OnCreate() fails for any reason other
+		// than view creation failure, the document is still alive and we need
+		// to clean it up ourselves to avoid having a zombie document.
+		if (GetDocumentManager()->GetDocuments().Member(doc))
+			doc->DeleteAllViews();
+
+		return false;
+	}
+		wxCATCH_ALL(
+			if (GetDocumentManager()->GetDocuments().Member(doc))
+				doc->DeleteAllViews();
+	throw;
+	)
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
 CDocManager::CDocManager()
 	: wxDocManager(), m_findDialog(NULL)
 {
-	AddDocTemplate("Text", "*.txt;*.text", "", "txt;text", "Text Doc", "Text View", CLASSINFO(CTextEditDocument), CLASSINFO(CTextEditView), wxTEMPLATE_VISIBLE, "Text", "Text", 317);
-	AddDocTemplate("Grid", "*.grd", "", "grd", "Grid Doc", "Grid View", CLASSINFO(CGridEditDocument), CLASSINFO(CGridEditView), wxTEMPLATE_VISIBLE, "Template", "Template", 318);
+	AddDocTemplate("Text document", "*.txt;*.text", "", "txt;text", "Text Doc", "Text View", CLASSINFO(CTextEditDocument), CLASSINFO(CTextEditView), wxTEMPLATE_VISIBLE);
+	AddDocTemplate("Spreadsheet document", "*.oxl", "", "oxl", "Spreadsheet Doc", "Spreadsheet View", CLASSINFO(CGridEditDocument), CLASSINFO(CGridEditView), wxTEMPLATE_VISIBLE);
 
-	if (appData->DesignerMode())
-	{
-		AddDocTemplate("Data processor", "*.dpr", "", "dpr", "Data processor Doc", "Data processor View", CLASSINFO(CDataProcessorEditDocument), CLASSINFO(CDataProcessorEditView), wxTEMPLATE_VISIBLE, "DataProcessor", "DataProcessor", 320);
-		AddDocTemplate("Report", "*.rpt", "", "rpt", "Report Doc", "Report View", CLASSINFO(CReportEditDocument), CLASSINFO(CReportEditView), wxTEMPLATE_VISIBLE, "Report", "Report", 319);
-		AddDocTemplate("Metadata", "*.mtd", "", "mtd", "Metadata Doc", "Metadata View", CLASSINFO(CMetataEditDocument), CLASSINFO(CMetadataView), wxTEMPLATE_ONLY_OPEN, "Metadata", "Metadata", 320);
+	if (appData->DesignerMode()) {
+
+		AddDocTemplate("External data processor", "*.edp", "", "edp", "Data processor Doc", "Data processor View", CLASSINFO(CDataProcessorEditDocument), CLASSINFO(CDataProcessorEditView), wxTEMPLATE_VISIBLE);
+		AddDocTemplate("External report", "*.erp", "", "erp", "Report Doc", "Report View", CLASSINFO(CReportEditDocument), CLASSINFO(CReportEditView), wxTEMPLATE_VISIBLE);
+		AddDocTemplate("Configuration", "*.conf", "", "conf", "Configuration Doc", "Configuration View", CLASSINFO(CMetataEditDocument), CLASSINFO(CMetadataView), wxTEMPLATE_ONLY_OPEN);
 
 		//common objects 
-		AddDocTemplate(g_metaCommonModuleCLSID, CLASSINFO(CModuleEditDocument), CLASSINFO(CModuleView), 601);
-		AddDocTemplate(g_metaCommonFormCLSID, CLASSINFO(CFormEditDocument), CLASSINFO(CFormEditView), 294);
-		AddDocTemplate(g_metaCommonTemplateCLSID, CLASSINFO(CGridEditDocument), CLASSINFO(CGridEditView), 318);
+		AddDocTemplate(g_metaCommonModuleCLSID, CLASSINFO(CModuleEditDocument), CLASSINFO(CModuleView));
+		AddDocTemplate(g_metaCommonFormCLSID, CLASSINFO(CFormEditDocument), CLASSINFO(CFormEditView));
+		AddDocTemplate(g_metaCommonTemplateCLSID, CLASSINFO(CGridEditDocument), CLASSINFO(CGridEditView));
+
+		AddDocTemplate(g_metaInterfaceCLSID, CLASSINFO(CInterfaceEditDocument), CLASSINFO(CInterfaceEditView));
+		AddDocTemplate(g_metaRoleCLSID, CLASSINFO(CRoleEditDocument), CLASSINFO(CRoleEditView));
 
 		//advanced object
-		AddDocTemplate(g_metaModuleCLSID, CLASSINFO(CModuleEditDocument), CLASSINFO(CModuleView), 601);
-		AddDocTemplate(g_metaManagerCLSID, CLASSINFO(CModuleEditDocument), CLASSINFO(CModuleView), 601);
-		AddDocTemplate(g_metaFormCLSID, CLASSINFO(CFormEditDocument), CLASSINFO(CFormEditView), 294);
-		AddDocTemplate(g_metaTemplateCLSID, CLASSINFO(CGridEditDocument), CLASSINFO(CGridEditView), 318);
+		AddDocTemplate(g_metaModuleCLSID, CLASSINFO(CModuleEditDocument), CLASSINFO(CModuleView));
+		AddDocTemplate(g_metaManagerCLSID, CLASSINFO(CModuleEditDocument), CLASSINFO(CModuleView));
+		AddDocTemplate(g_metaFormCLSID, CLASSINFO(CFormEditDocument), CLASSINFO(CFormEditView));
+		AddDocTemplate(g_metaTemplateCLSID, CLASSINFO(CGridEditDocument), CLASSINFO(CGridEditView));
 	}
-	else
-	{
-		AddDocTemplate("Data processor", "*.dpr", "", "dpr", "Data processor Doc", "Data processor View", CLASSINFO(CDataProcessorDocument), CLASSINFO(CDataProcessorView), wxTEMPLATE_ONLY_OPEN, "DataProcessor", "DataProcessor", 320);
-		AddDocTemplate("Report", "*.rpt", "", "rpt", "Report Doc", "Report View", CLASSINFO(CReportDocument), CLASSINFO(CReportView), wxTEMPLATE_ONLY_OPEN, "Report", "Report", 319);
+	else {
+		AddDocTemplate("External data processor", "*.edp", "", "edp", "Data processor Doc", "Data processor View", CLASSINFO(CDataProcessorDocument), CLASSINFO(CDataProcessorView), wxTEMPLATE_ONLY_OPEN);
+		AddDocTemplate("External report", "*.erp", "", "erp", "Report Doc", "Report View", CLASSINFO(CReportDocument), CLASSINFO(CReportView), wxTEMPLATE_ONLY_OPEN);
 	}
 
 #if wxUSE_PRINTING_ARCHITECTURE
 	// initialize print data and setup
 	wxPrintData m_printData;
 
-	wxPrintPaperType *paper = wxThePrintPaperDatabase->FindPaperType(wxPAPER_A4);
+	wxPrintPaperType* paper = wxThePrintPaperDatabase->FindPaperType(wxPAPER_A4);
 
 	m_printData.SetPaperId(paper->GetId());
 	m_printData.SetPaperSize(paper->GetSize());
@@ -136,14 +175,14 @@ CDocManager::CDocManager()
 #endif // wxUSE_PRINTING_ARCHITECTURE
 }
 
-CDocManager::~CDocManager() 
+CDocManager::~CDocManager()
 {
 	wxDELETE(m_findDialog);
 }
 
 void CDocManager::OnFileClose(wxCommandEvent& WXUNUSED(event))
 {
-	CDocument *doc = GetCurrentDocument();
+	CDocument* doc = GetCurrentDocument();
 	if (doc) {
 		CloseDocument(doc);
 	}
@@ -168,7 +207,7 @@ void CDocManager::OnFileOpen(wxCommandEvent& WXUNUSED(event))
 
 void CDocManager::OnFileRevert(wxCommandEvent& WXUNUSED(event))
 {
-	CDocument *doc = GetCurrentDocument();
+	CDocument* doc = GetCurrentDocument();
 	if (!doc)
 		return;
 	doc->Revert();
@@ -176,7 +215,7 @@ void CDocManager::OnFileRevert(wxCommandEvent& WXUNUSED(event))
 
 void CDocManager::OnFileSave(wxCommandEvent& WXUNUSED(event))
 {
-	CDocument *doc = GetCurrentDocument();
+	CDocument* doc = GetCurrentDocument();
 
 	if (!doc) {
 		if (metadata->IsModified()) {
@@ -190,7 +229,7 @@ void CDocManager::OnFileSave(wxCommandEvent& WXUNUSED(event))
 
 void CDocManager::OnFileSaveAs(wxCommandEvent& WXUNUSED(event))
 {
-	CDocument *doc = GetCurrentDocument();
+	CDocument* doc = GetCurrentDocument();
 	if (!doc)
 		return;
 	doc->SaveAs();
@@ -217,11 +256,11 @@ void CDocManager::OnMRUFile(wxCommandEvent& event)
 
 void CDocManager::OnPrint(wxCommandEvent& WXUNUSED(event))
 {
-	wxView *view = GetAnyUsableView();
+	wxView* view = GetAnyUsableView();
 	if (!view)
 		return;
 
-	wxPrintout *printout = view->OnCreatePrintout();
+	wxPrintout* printout = view->OnCreatePrintout();
 	if (printout) {
 		wxPrintDialogData printDialogData(m_pageSetupDialogData.GetPrintData());
 		wxPrinter printer(&printDialogData);
@@ -234,16 +273,16 @@ void CDocManager::OnPrint(wxCommandEvent& WXUNUSED(event))
 void CDocManager::OnPreview(wxCommandEvent& WXUNUSED(event))
 {
 	wxBusyCursor busy;
-	wxView *view = GetAnyUsableView();
+	wxView* view = GetAnyUsableView();
 	if (!view)
 		return;
 
-	wxPrintout *printout = view->OnCreatePrintout();
+	wxPrintout* printout = view->OnCreatePrintout();
 	if (printout) {
 		wxPrintDialogData printDialogData(m_pageSetupDialogData.GetPrintData());
 
 		// Pass two printout objects: for preview, and possible printing.
-		wxPrintPreviewBase *
+		wxPrintPreviewBase*
 			preview = new wxPrintPreview(printout,
 				view->OnCreatePrintout(),
 				&printDialogData);
@@ -268,7 +307,7 @@ void CDocManager::OnPreview(wxCommandEvent& WXUNUSED(event))
 
 void CDocManager::OnUndo(wxCommandEvent& event)
 {
-	CCommandProcessor * const cmdproc = GetCurrentCommandProcessor();
+	CCommandProcessor* const cmdproc = GetCurrentCommandProcessor();
 	if (!cmdproc) {
 		event.Skip();
 		return;
@@ -279,7 +318,7 @@ void CDocManager::OnUndo(wxCommandEvent& event)
 
 void CDocManager::OnRedo(wxCommandEvent& event)
 {
-	CCommandProcessor * const cmdproc = GetCurrentCommandProcessor();
+	CCommandProcessor* const cmdproc = GetCurrentCommandProcessor();
 	if (!cmdproc) {
 		event.Skip();
 		return;
@@ -317,17 +356,17 @@ void CDocManager::OnFindClose(wxFindDialogEvent& event)
 
 void CDocManager::OnFind(wxFindDialogEvent& event)
 {
-	CDocument *currDocument = GetCurrentDocument();
+	CDocument* currDocument = GetCurrentDocument();
 
 	if (currDocument) {
 
-		wxView *firstView = currDocument->GetFirstView(); 
+		wxView* firstView = currDocument->GetFirstView();
 		if (firstView) {
-	
+
 			event.StopPropagation();
 			event.SetClientData(m_findDialog);
 
-			firstView->ProcessEvent(event);		
+			firstView->ProcessEvent(event);
 		}
 	}
 }
@@ -361,7 +400,7 @@ void CDocManager::OnUpdateFileNew(wxUpdateUIEvent& event)
 
 void CDocManager::OnUpdateFileSave(wxUpdateUIEvent& event)
 {
-	CDocument *const doc = GetCurrentDocument();
+	CDocument* const doc = GetCurrentDocument();
 	event.Enable(
 		(doc && !doc->AlreadySaved()) ||
 		(doc == NULL && metadata->IsModified())
@@ -370,13 +409,13 @@ void CDocManager::OnUpdateFileSave(wxUpdateUIEvent& event)
 
 void CDocManager::OnUpdateFileSaveAs(wxUpdateUIEvent& event)
 {
-	CDocument * const doc = GetCurrentDocument();
+	CDocument* const doc = GetCurrentDocument();
 	event.Enable(doc && !doc->IsChildDocument());
 }
 
 void CDocManager::OnUpdateUndo(wxUpdateUIEvent& event)
 {
-	CCommandProcessor * const cmdproc = GetCurrentCommandProcessor();
+	CCommandProcessor* const cmdproc = GetCurrentCommandProcessor();
 	if (!cmdproc) {
 		// If we don't have any document at all, the menu item should really be
 		// disabled.
@@ -392,7 +431,7 @@ void CDocManager::OnUpdateUndo(wxUpdateUIEvent& event)
 
 void CDocManager::OnUpdateRedo(wxUpdateUIEvent& event)
 {
-	CCommandProcessor * const cmdproc = GetCurrentCommandProcessor();
+	CCommandProcessor* const cmdproc = GetCurrentCommandProcessor();
 	if (!cmdproc) {
 		// Use same logic as in OnUpdateUndo() above.
 		if (!GetCurrentDocument())
@@ -405,14 +444,14 @@ void CDocManager::OnUpdateRedo(wxUpdateUIEvent& event)
 	cmdproc->SetMenuStrings();
 }
 
-void CDocManager::OnUpdateSaveMetadata(wxUpdateUIEvent &event)
+void CDocManager::OnUpdateSaveMetadata(wxUpdateUIEvent& event)
 {
 	event.Enable(metadata->IsModified());
 }
 
-extern wxImageList *GetImageList();
+extern wxImageList* GetImageList();
 
-wxDocument *CDocManager::CreateDocument(const wxString & pathOrig, long flags)
+wxDocument* CDocManager::CreateDocument(const wxString& pathOrig, long flags)
 {
 	// this ought to be const but SelectDocumentType/Path() are not
 	// const-correct and can't be changed as, being virtual, this risks
@@ -438,7 +477,7 @@ wxDocument *CDocManager::CreateDocument(const wxString & pathOrig, long flags)
 	// normally user should select the template to use but wxDOC_SILENT flag we
 	// choose one ourselves
 	wxString path = pathOrig;   // may be modified below
-	wxDocTemplate *temp;
+	wxDocTemplate* temp;
 	if (flags & wxDOC_SILENT) {
 		wxASSERT_MSG(!path.empty(),
 			"using empty path with wxDOC_SILENT doesn't make sense");
@@ -463,7 +502,7 @@ wxDocument *CDocManager::CreateDocument(const wxString & pathOrig, long flags)
 
 	// check whether the document with this path is already opened
 	if (!path.empty()) {
-		wxDocument * const doc = FindDocumentByPath(path);
+		wxDocument* const doc = FindDocumentByPath(path);
 
 		if (doc) {
 			// file already open, just activate it and return
@@ -478,7 +517,7 @@ wxDocument *CDocManager::CreateDocument(const wxString & pathOrig, long flags)
 	// if we've reached the max number of docs, close the first one.
 	if ((int)GetDocuments().GetCount() >= m_maxDocsOpen)
 	{
-		if (!CloseDocument((wxDocument *)GetDocuments().GetFirst()->GetData()))
+		if (!CloseDocument((wxDocument*)GetDocuments().GetFirst()->GetData()))
 		{
 			// can't open the new document if closing the old one failed
 			return NULL;
@@ -486,7 +525,7 @@ wxDocument *CDocManager::CreateDocument(const wxString & pathOrig, long flags)
 	}
 
 	// do create and initialize the new document finally
-	wxDocument * const docNew = temp->CreateDocument(path, flags);
+	wxDocument* const docNew = temp->CreateDocument(path, flags);
 	if (!docNew)
 		return NULL;
 
@@ -519,7 +558,7 @@ wxDocument *CDocManager::CreateDocument(const wxString & pathOrig, long flags)
 	return docNew;
 }
 
-wxDocTemplate *CDocManager::SelectDocumentPath(wxDocTemplate **templates, int noTemplates, wxString &path, long flags, bool save)
+wxDocTemplate* CDocManager::SelectDocumentPath(wxDocTemplate** templates, int noTemplates, wxString& path, long flags, bool save)
 {
 #ifdef wxHAS_MULTIPLE_FILEDLG_FILTERS
 	wxString descrBuf;
@@ -574,7 +613,7 @@ wxDocTemplate *CDocManager::SelectDocumentPath(wxDocTemplate **templates, int no
 		descrBuf,
 		wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
-	wxDocTemplate *theTemplate = NULL;
+	wxDocTemplate* theTemplate = NULL;
 	if (!pathTmp.empty())
 	{
 		if (!wxFileExists(pathTmp))
@@ -634,10 +673,10 @@ wxDocTemplate *CDocManager::SelectDocumentPath(wxDocTemplate **templates, int no
 
 #include <wx/scopedarray.h>
 
-wxDocTemplate *CDocManager::SelectDocumentType(wxDocTemplate **templates, int noTemplates, bool sort)
+wxDocTemplate* CDocManager::SelectDocumentType(wxDocTemplate** templates, int noTemplates, bool sort)
 {
 	wxArrayString strings;
-	wxScopedArray<wxDocTemplate *> data(noTemplates);
+	wxScopedArray<wxDocTemplate*> data(noTemplates);
 	int i;
 	int n = 0;
 
@@ -684,7 +723,7 @@ wxDocTemplate *CDocManager::SelectDocumentType(wxDocTemplate **templates, int no
 		}
 	}
 
-	wxDocTemplate *theTemplate;
+	wxDocTemplate* theTemplate;
 
 	switch (n)
 	{
@@ -700,95 +739,95 @@ wxDocTemplate *CDocManager::SelectDocumentType(wxDocTemplate **templates, int no
 
 	default:
 		// propose the user to choose one of several
-		theTemplate = (wxDocTemplate *)wxGetSingleChoiceData
+		theTemplate = (wxDocTemplate*)wxGetSingleChoiceData
 		(
-			_("Select a document template"),
-			_("Templates"),
+			_("Templates:"),
+			_("Select document type"),
 			strings,
-			(void **)data.get()
+			(void**)data.get()
 		);
 	}
 
 	return theTemplate;
 }
 
-void CDocManager::AddDocTemplate(const wxString &descr, const wxString &filter, const wxString &dir, const wxString &ext, const wxString &docTypeName, const wxString &viewTypeName, wxClassInfo *docClassInfo, wxClassInfo *viewClassInfo, long flags, const wxString& sName, const wxString& sDescription, int nImage)
+void CDocManager::AddDocTemplate(
+	const wxString& descr, 
+	const wxString& filter, 
+	const wxString& dir,
+	const wxString& ext, 
+	const wxString& docTypeName, 
+	const wxString& viewTypeName, 
+	wxClassInfo* docClassInfo, wxClassInfo* viewClassInfo, 
+	long flags)
 {
 	CDocElement data;
-	data.m_className = sName;
-	data.m_classDescription = sDescription;
-	data.m_nImage = nImage;
-	data.m_docTemplate = new wxDocTemplate(this, descr, filter, dir, ext, docTypeName, viewTypeName, docClassInfo, viewClassInfo, flags);
-
+	data.m_className = docTypeName;
+	data.m_classDescription = descr;
+	data.m_docTemplate = new CDocTemplate(this, descr, filter, dir, ext, docTypeName, viewTypeName, docClassInfo, viewClassInfo, flags);
 	m_aTemplates.push_back(data);
 }
 
-void CDocManager::AddDocTemplate(const CLASS_ID &clsid, wxClassInfo *docClassInfo, wxClassInfo *viewClassInfo, int image)
+void CDocManager::AddDocTemplate(
+	const CLASS_ID& clsid, 
+	wxClassInfo* docClassInfo, 
+	wxClassInfo* viewClassInfo)
 {
 	CDocElement data;
 	data.m_clsid = clsid;
-	data.m_nImage = image;
-	data.m_docTemplate = new wxDocTemplate(this, wxEmptyString, wxEmptyString, wxEmptyString, wxEmptyString, wxEmptyString, wxEmptyString, docClassInfo, viewClassInfo, wxTEMPLATE_INVISIBLE);
-
+	data.m_docTemplate = new CDocTemplate(this, wxEmptyString, wxEmptyString, wxEmptyString, wxEmptyString, wxEmptyString, wxEmptyString, docClassInfo, viewClassInfo, wxTEMPLATE_INVISIBLE);
 	m_aTemplates.push_back(data);
 }
 
 CDocument* CDocManager::GetCurrentDocument() const
 {
-	return dynamic_cast<CDocument *>(wxDocManager::GetCurrentDocument());
+	return dynamic_cast<CDocument*>(wxDocManager::GetCurrentDocument());
 }
 
-CCommandProcessor * CDocManager::GetCurrentCommandProcessor() const
+CCommandProcessor* CDocManager::GetCurrentCommandProcessor() const
 {
-	return dynamic_cast<CCommandProcessor *>(wxDocManager::GetCurrentCommandProcessor());
+	return dynamic_cast<CCommandProcessor*>(wxDocManager::GetCurrentCommandProcessor());
 }
 
 #include "metadata/metaObjects/metaObject.h"
 
-CDocument* CDocManager::OpenFormMDI(IMetaObject *metaObject, long flags)
+CDocument* CDocManager::OpenFormMDI(IMetaObject* metaObject, long flags)
 {
 	return docManager->OpenForm(metaObject, NULL, flags);
 }
 
-CDocument* CDocManager::OpenFormMDI(IMetaObject *metaObject, CDocument *docParent, long flags)
+CDocument* CDocManager::OpenFormMDI(IMetaObject* metaObject, CDocument* docParent, long flags)
 {
 	return docManager->OpenForm(metaObject, docParent, flags);
 }
 
-CDocument* CDocManager::OpenForm(IMetaObject *metaObject, CDocument *docParent, long flags)
+CDocument* CDocManager::OpenForm(IMetaObject* metaObject, CDocument* docParent, long flags)
 {
-	for (auto currTemplate : m_aTemplates)
-	{
+	for (auto currTemplate : m_aTemplates) {
 		if (currTemplate.m_clsid == metaObject->GetClsid()) {
-
-			wxDocTemplate *docTemplate = currTemplate.m_docTemplate;
+			wxDocTemplate* docTemplate = currTemplate.m_docTemplate;
 			wxASSERT(docTemplate);
-			wxClassInfo *docClassInfo = docTemplate->GetDocClassInfo();
+			wxClassInfo* docClassInfo = docTemplate->GetDocClassInfo();
 			wxASSERT(docClassInfo);
-
-			CDocument *newDocument = wxStaticCast(
+			CDocument* newDocument = wxStaticCast(
 				docClassInfo->CreateObject(), CDocument
 			);
-
 			wxASSERT(newDocument);
-
-			if (docParent) {
+			if (docParent != NULL) {
 				newDocument->SetDocParent(docParent);
 			}
-
-			try
-			{
+			try {
 				newDocument->SetTitle(metaObject->GetModuleName());
 				newDocument->SetFilename(metaObject->GetDocPath());
 				newDocument->SetDocumentTemplate(docTemplate);
 				newDocument->SetMetaObject(metaObject);
 
 				//if doc has parent - special delete!
-				if (!docParent) {
+				if (docParent == NULL) {
 					wxDocManager::AddDocument(newDocument);
 				}
 
-				if (currTemplate.m_nImage > 0) newDocument->SetIcon(GetImageList()->GetIcon(currTemplate.m_nImage));
+				newDocument->SetIcon(metaObject->GetIcon());
 
 				if (newDocument->OnCreate(metaObject->GetModuleName(), flags | wxDOC_NEW)) {
 					newDocument->SetCommandProcessor(newDocument->CreateCommandProcessor());
@@ -804,7 +843,6 @@ CDocument* CDocManager::OpenForm(IMetaObject *metaObject, CDocument *docParent, 
 				// than view creation failure, the document is still alive and we need
 				// to clean it up ourselves to avoid having a zombie document.
 				newDocument->DeleteAllViews();
-
 				return NULL;
 			}
 			catch (...)
@@ -813,11 +851,9 @@ CDocument* CDocManager::OpenForm(IMetaObject *metaObject, CDocument *docParent, 
 					newDocument->DeleteAllViews();
 				}
 			}
-
 			return NULL;
 		}
 	}
-
 	return NULL;
 }
 
@@ -825,33 +861,26 @@ bool CDocManager::CloseDocument(wxDocument* doc, bool force)
 {
 	if (!doc->Close() && !force)
 		return false;
-
 	// To really force the document to close, we must ensure that it isn't
 	// modified, otherwise it would ask the user about whether it should be
 	// destroyed (again, it had been already done by Close() above) and might
 	// not destroy it at all, while we must do it here.
 	doc->Modify(false);
-
 	// Implicitly deletes the document when
 	// the last view is deleted
 	doc->DeleteAllViews();
-
 	wxASSERT(!m_docs.Member(doc));
-
 	return true;
 }
 
 bool CDocManager::CloseDocuments(bool force)
 {
 	wxList::compatibility_iterator node = m_docs.GetFirst();
-	while (node)
-	{
+	while (node) {
 		wxDocument* doc = (wxDocument*)node->GetData();
 		wxList::compatibility_iterator next = node->GetNext();
-
 		if (!CloseDocument(doc, force))
 			return false;
-
 		// This assumes that documents are not connected in
 		// any way, i.e. deleting one document does NOT
 		// delete another.
@@ -864,18 +893,13 @@ bool CDocManager::Clear(bool force)
 {
 	if (!CloseDocuments(force))
 		return false;
-
 	m_currentView = NULL;
-
 	wxList::compatibility_iterator node = m_templates.GetFirst();
-
-	while (node)
-	{
-		wxDocTemplate *templ = (wxDocTemplate*)node->GetData();
+	while (node) {
+		wxDocTemplate* templ = (wxDocTemplate*)node->GetData();
 		wxList::compatibility_iterator next = node->GetNext();
 		delete templ;
 		node = next;
 	}
-
 	return true;
 }

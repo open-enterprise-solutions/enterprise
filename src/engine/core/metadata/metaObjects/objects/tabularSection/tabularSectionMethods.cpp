@@ -5,7 +5,7 @@
 
 #include "tabularSection.h"
 #include "compiler/methods.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 #include "utils/stringUtils.h"
 
 CMethods ITabularSectionDataObject::m_methods;

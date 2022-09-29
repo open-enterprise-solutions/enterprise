@@ -18,7 +18,7 @@
 class CValueType;
 class CUniqueKey;
 
-class CVisualView; 
+class CVisualView;
 class IMetaFormObject;
 
 //********************************************************************************************
@@ -99,43 +99,44 @@ class CValueForm : public IValueFrame,
 	wxDECLARE_DYNAMIC_CLASS(CValueForm);
 protected:
 
-	OptionList* GetOrient(Property* property)
-	{
-		OptionList* optList = new OptionList();
-		optList->AddOption("Vertical", wxVERTICAL);
-		optList->AddOption("Horizontal", wxHORIZONTAL);
-		return optList;
-	}
-
-	bool m_formModified;
-
-public:
-
-	wxString m_caption = wxT("New frame");
-
-	wxColour m_fg = RGB(0, 120, 215);
-	wxColour m_bg = RGB(240, 240, 240);
-
-	wxString m_tooltip;
-	bool m_context_menu;
-	wxString m_context_help;
-	bool m_enabled = true;
-	bool m_visible = true;
-
-	long m_style = wxCAPTION;
-	long m_extra_style = 0;
-	long m_center = 0;
-
-	wxOrientation m_orient;
+	PropertyCategory* m_categoryFrame = IPropertyObject::CreatePropertyCategory({"frame", _("frame")});
+	Property* m_propertyCaption = IPropertyObject::CreateProperty(m_categoryFrame, "caption", PropertyType::PT_WXSTRING, _("New frame"));
+	Property* m_propertyFG = IPropertyObject::CreateProperty(m_categoryFrame, "fg", PropertyType::PT_WXCOLOUR, wxColour(0, 120, 215));
+	Property* m_propertyBG = IPropertyObject::CreateProperty(m_categoryFrame, "bg", PropertyType::PT_WXCOLOUR, wxColour(240, 240, 240));
+	PropertyCategory* m_categorySizer = IPropertyObject::CreatePropertyCategory({ "sizer", _("sizer")});
+	Property* m_propertyOrient = IPropertyObject::CreateProperty(m_categorySizer, "orient", &IValueFrame::GetOrient, wxVERTICAL);
 
 private:
+
+	bool m_formModified;
 
 	IMetaFormObject* m_metaFormObject; // ref to metadata
 	ISourceDataObject* m_sourceObject;
 
 public:
 
-	IValueControl* NewObject(const wxString& className, IValueFrame* parentControl = NULL, bool generateId = true);
+	void SetCaption(const wxString& caption) {
+		return m_propertyCaption->SetValue(caption);
+	}
+
+	wxString GetCaption() const {
+		return m_propertyCaption->GetValueAsString();
+	}
+
+	wxColour GetForegroundColour() const {
+		return m_propertyFG->GetValueAsColour();
+	}
+
+	wxColour GetBackgroundColour() const {
+		return m_propertyBG->GetValueAsColour();
+	}
+
+	wxOrientation GetOrient() const {
+		return (wxOrientation)m_propertyOrient->GetValueAsInteger();
+	}
+
+	IValueFrame* NewObject(const wxString& className, IValueFrame* parentControl = NULL, bool generateId = true);
+	
 	template <typename retType>
 	inline retType* NewObject(const wxString& className, IValueFrame* parentControl = NULL, bool generateId = true) {
 		return wxDynamicCast(
@@ -153,23 +154,27 @@ public:
 	* Fabrica de objetos.
 	* A partir del nombre de la clase se crea una nueva instancia de un objeto.
 	*/
-	IValueControl* CreateObject(const wxString& className, IValueFrame* parentControl = NULL);
+	IValueFrame* CreateObject(const wxString& className, IValueFrame* parentControl = NULL);
 
 	/**
 	* Crea un objeto como copia de otro.
 	*/
-	IValueControl* CopyObject(IValueFrame* srcControl);
+	IValueFrame* CopyObject(IValueFrame* srcControl);
 
 public:
 
 	CValueForm();
 	CValueForm(IValueFrame* ownerControl, IMetaFormObject* metaForm,
 		ISourceDataObject* ownerSrc, const CUniqueKey& formGuid, bool readOnly = false);
-
 	virtual ~CValueForm();
 
-	virtual wxString GetClassName() const override { return wxT("form"); }
-	virtual wxString GetObjectTypeName() const override { return wxT("form"); }
+	virtual wxString GetClassName() const override {
+		return wxT("form");
+	}
+
+	virtual wxString GetObjectTypeName() const override {
+		return wxT("form");
+	}
 
 	//****************************************************************************
 	//*                              Override attribute                          *
@@ -200,11 +205,10 @@ public:
 	//get metadata
 	virtual IMetadata* GetMetaData() const override;
 
-	//get typelist 
-	virtual OptionList* GetTypelist() const override;
-
 	//runtime 
-	virtual CProcUnit* GetFormProcUnit() const { return m_procUnit; }
+	virtual CProcUnit* GetFormProcUnit() const {
+		return m_procUnit;
+	}
 
 	ISourceDataObject* GetSourceObject() const;
 	IMetaFormObject* GetFormMetaObject() const;
@@ -213,15 +217,17 @@ public:
 	/**
 	* Support form
 	*/
+	virtual wxString GetControlName() const {
+		return GetObjectTypeName();
+	};
+
 	virtual CValueForm* GetOwnerForm() const {
 		return const_cast<CValueForm*>(this);
 	}
 
-	virtual void SetOwnerForm(CValueForm* ownerForm) {
-		wxASSERT(false);
+	IValueFrame* GetOwnerControl() const {
+		return m_formOwner;
 	}
-
-	IValueFrame* GetOwnerControl() const { return m_formOwner; }
 
 	/**
 	* Get type form
@@ -231,7 +237,9 @@ public:
 	/**
 	* Can delete object
 	*/
-	virtual bool CanDeleteControl() const { return false; }
+	virtual bool CanDeleteControl() const { 
+		return false; 
+	}
 
 public:
 
@@ -320,8 +328,8 @@ protected:
 
 public:
 
-	IValueControl* CreateControl(const wxString& classControl, IValueFrame* control = NULL);
-	void RemoveControl(IValueControl* control);
+	IValueFrame* CreateControl(const wxString& classControl, IValueFrame* control = NULL);
+	void RemoveControl(IValueFrame* control);
 
 private:
 
@@ -345,32 +353,35 @@ public:
 	bool CloseForm();
 	void HelpForm();
 
-	//set&get modify 
-	void Modify(bool modify) { m_formModified = modify; if (m_valueFormDocument) { m_valueFormDocument->Modify(m_formModified); } }
-	bool IsModified() { return m_formModified; }
+	//set & get modify 
+	void Modify(bool modify = true) {
+		if (m_valueFormDocument != NULL) {
+			m_valueFormDocument->Modify(modify);
+		}
+		m_formModified = modify;
+	}
+
+	bool IsModified() const {
+		return m_formModified;
+	}
+
 	//shown form 
-	bool IsShown() { return m_valueFormDocument != NULL; }
+	bool IsShown() const {
+		return m_valueFormDocument != NULL;
+	}
 
 	//timers 
 	void AttachIdleHandler(const wxString& procedureName, int interval, bool single);
 	void DetachIdleHandler(const wxString& procedureName);
 
 	//get visual document
-	CVisualDocument* GetVisualDocument() const { return m_valueFormDocument; }
+	CVisualDocument* GetVisualDocument() const { 
+		return m_valueFormDocument; 
+	}
 
 	//special proc
 	virtual void Update(wxObject* wxobject, IVisualHost* visualHost);
 	virtual void OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost);
-
-	/**
-	* Set property data
-	*/
-	virtual void SetPropertyData(Property* property, const CValue& srcValue);
-
-	/**
-	* Get property data
-	*/
-	virtual CValue GetPropertyData(Property* property);
 
 	//actions
 	virtual actionData_t GetActions(const form_identifier_t& formType);
@@ -380,12 +391,9 @@ public:
 	virtual bool LoadData(CMemoryReader& reader);
 	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
-	//property
-	virtual void ReadProperty() override;
-	virtual void SaveProperty() override;
-
-	virtual int GetComponentType() const override { return COMPONENT_TYPE_FRAME; }
-	virtual bool IsItem() override { return false; }
+	virtual int GetComponentType() const override {
+		return COMPONENT_TYPE_FRAME;
+	}
 
 private:
 

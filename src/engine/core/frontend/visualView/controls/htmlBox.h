@@ -25,10 +25,6 @@ public:
 	//load & save object in control 
 	virtual bool LoadData(CMemoryReader &reader);
 	virtual bool SaveData(CMemoryWriter &writer = CMemoryWriter());
-
-	//read&save propery 
-	virtual void ReadProperty() override;
-	virtual void SaveProperty() override;
 };
 
 #endif // ! _HTMLBOX_H__

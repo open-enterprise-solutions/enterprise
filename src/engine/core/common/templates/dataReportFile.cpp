@@ -116,10 +116,9 @@ wxIMPLEMENT_DYNAMIC_CLASS(CReportEditDocument, CDocument);
 
 bool CReportEditDocument::OnCreate(const wxString& path, long flags)
 {
+	m_metaData = new CMetadataReport();
 	if (!CDocument::OnCreate(path, flags))
 		return false;
-
-	m_metaData = new CMetadataReport();
 	return true;
 }
 

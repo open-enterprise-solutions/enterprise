@@ -9,14 +9,14 @@ class CReportManager : public CValue,
 	wxDECLARE_DYNAMIC_CLASS(CReportManager);
 public:
 
-	CReportManager(CMetaObjectReport *metaObject = NULL);
+	CReportManager(CMetaObjectReport* metaObject = NULL);
 	virtual ~CReportManager();
 
-	virtual CMetaCommonModuleObject *GetModuleManager() const;
+	virtual CMetaCommonModuleObject* GetModuleManager() const;
 
 	virtual CMethods* GetPMethods() const { PrepareNames(); return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
 	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t &aParams);//вызов метода
+	virtual CValue Method(methodArg_t& aParams);//вызов метода
 
 	//Get ref class 
 	virtual CLASS_ID GetClassType() const;
@@ -26,8 +26,8 @@ public:
 	virtual wxString GetString() const;
 
 protected:
-	CMethods *m_methods;
-	CMetaObjectReport *m_metaObject;
+	CMethods* m_methods;
+	CMetaObjectReport* m_metaObject;
 };
 
 class CManagerExternalReport : public CValue {
@@ -38,14 +38,14 @@ public:
 
 	virtual CMethods* GetPMethods() const { PrepareNames(); return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
 	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t &aParams);//вызов метода
+	virtual CValue Method(methodArg_t& aParams);//вызов метода
 
 	//types 
 	virtual wxString GetTypeString() const;
 	virtual wxString GetString() const;
 
 protected:
-	CMethods *m_methods;
+	CMethods* m_methods;
 };
 
 #endif 

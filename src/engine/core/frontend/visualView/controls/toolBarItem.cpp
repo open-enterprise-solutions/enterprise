@@ -11,34 +11,21 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueToolBarSeparator, IValueControl);
 //*                           CValueToolBarItem                               *
 //***********************************************************************************
 
-CValueToolBarItem::CValueToolBarItem() : IValueControl(),
-m_caption("newTool"),
-m_action(wxEmptyString),
-m_enabled(true),
-m_context_menu(false)
+CValueToolBarItem::CValueToolBarItem() : IValueControl()
 {
-	PropertyContainer *categoryToolbar = IObjectBase::CreatePropertyContainer("ToolBarItem");
-	categoryToolbar->AddProperty("name", PropertyType::PT_WXNAME);
-	categoryToolbar->AddProperty("caption", PropertyType::PT_WXSTRING);
-	categoryToolbar->AddProperty("bitmap", PropertyType::PT_BITMAP);
-	categoryToolbar->AddProperty("context_menu", PropertyType::PT_BOOL);
-	categoryToolbar->AddProperty("tooltip", PropertyType::PT_WXSTRING);
-	categoryToolbar->AddProperty("enabled", PropertyType::PT_BOOL);
-	categoryToolbar->AddProperty("action", PropertyType::PT_TOOL_ACTION, &CValueToolBarItem::GetActions);
-	m_category->AddCategory(categoryToolbar);
 }
 
 void CValueToolBarItem::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated)
 {
-	CAuiToolBar *m_auiToolWnd = dynamic_cast<CAuiToolBar *>(visualHost->GetWxObject(GetParent()));
-	wxASSERT(m_auiToolWnd);
+	CAuiToolBar *auiToolWnd = dynamic_cast<CAuiToolBar *>(visualHost->GetWxObject(GetParent()));
+	wxASSERT(auiToolWnd);
 
-	wxAuiToolBarItem* m_toolItem = m_auiToolWnd->AddTool(GetControlID(),
-		m_caption,
-		m_bitmap,
+	wxAuiToolBarItem* m_toolItem = auiToolWnd->AddTool(GetControlID(),
+		m_propertyCaption->GetValueAsString(),
+		m_propertyBitmap->GetValueAsBitmap(),
 		wxNullBitmap,
 		wxItemKind::wxITEM_NORMAL,
-		m_tooltip,
+		m_properyTooltip->GetValueAsString(),
 		wxEmptyString,
 		wxobject
 	);
@@ -49,71 +36,75 @@ void CValueToolBarItem::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisua
 	m_toolItem->SetUserData((long)wxobject);
 #endif 
 
-	m_auiToolWnd->EnableTool(m_toolItem->GetId(), m_enabled);
+	auiToolWnd->EnableTool(m_toolItem->GetId(), m_propertyEnabled->GetValueAsBoolean());
 
-	if (m_context_menu == 1 && !m_toolItem->HasDropDown())
-		m_auiToolWnd->SetToolDropDown(m_toolItem->GetId(), true);
-	else if (m_context_menu == 0 && m_toolItem->HasDropDown())
-		m_auiToolWnd->SetToolDropDown(m_toolItem->GetId(), false);
+	if (m_propertyContextMenu->GetValueAsBoolean() == true && !m_toolItem->HasDropDown())
+		auiToolWnd->SetToolDropDown(m_toolItem->GetId(), true);
+	else if (m_propertyContextMenu->GetValueAsBoolean() == false && m_toolItem->HasDropDown())
+		auiToolWnd->SetToolDropDown(m_toolItem->GetId(), false);
 
-	m_auiToolWnd->Realize();
-	m_auiToolWnd->Refresh();
-	m_auiToolWnd->Update();
+	auiToolWnd->Realize();
+	auiToolWnd->Refresh();
+	auiToolWnd->Update();
 }
 
 void CValueToolBarItem::OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost)
 {
-	CAuiToolBar *m_auiToolWnd = dynamic_cast<CAuiToolBar *>(visualHost->GetWxObject(GetParent()));
-	wxASSERT(m_auiToolWnd);
+	CAuiToolBar *auiToolWnd = dynamic_cast<CAuiToolBar *>(visualHost->GetWxObject(GetParent()));
+	wxASSERT(auiToolWnd);
 
-	wxAuiToolBarItem *m_toolItem = m_auiToolWnd->FindTool(GetControlID());
-	IValueFrame *m_parentControl = GetParent(); int idx = wxNOT_FOUND;
+	wxAuiToolBarItem *toolItem = auiToolWnd->FindTool(GetControlID());
+	IValueFrame *parentControl = GetParent(); int idx = wxNOT_FOUND;
 
-	for (unsigned int i = 0; i < m_parentControl->GetChildCount(); i++)
-	{
-		IValueFrame *child = m_parentControl->GetChild(i);
-		if (m_controlId == child->GetControlID()) { idx = i; break; }
+	for (unsigned int i = 0; i < parentControl->GetChildCount(); i++) {
+		IValueFrame *child = parentControl->GetChild(i);
+		if (m_controlId == child->GetControlID()) { 
+			idx = i;
+			break; 
+		}
 	}
 
-	if (m_toolItem) { m_auiToolWnd->DeleteTool(GetControlID()); }
+	if (toolItem != NULL) { 
+		auiToolWnd->DeleteTool(GetControlID()); 
+	}
 
-	m_toolItem = m_auiToolWnd->InsertTool(idx, GetControlID(),
-		m_caption,
-		m_bitmap,
+	toolItem = auiToolWnd->InsertTool(idx, GetControlID(),
+		m_propertyCaption->GetValueAsString(),
+		m_propertyBitmap->GetValueAsBitmap(),
 		wxNullBitmap,
 		wxItemKind::wxITEM_NORMAL,
-		m_tooltip,
+		m_properyTooltip->GetValueAsString(),
 		wxEmptyString,
 		wxobject
 	);
 
 #if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
-	m_toolItem->SetUserData((long long)wxobject);
+	toolItem->SetUserData((long long)wxobject);
 #else 
-	m_toolItem->SetUserData((long)wxobject);
+	toolItem->SetUserData((long)wxobject);
 #endif 
 
-	m_auiToolWnd->EnableTool(m_toolItem->GetId(), m_enabled);
+	auiToolWnd->EnableTool(toolItem->GetId(), m_propertyEnabled->GetValueAsBoolean());
 
-	if (m_context_menu == true && !m_toolItem->HasDropDown())
-		m_auiToolWnd->SetToolDropDown(m_toolItem->GetId(), true);
-	else if (m_context_menu == false && m_toolItem->HasDropDown())
-		m_auiToolWnd->SetToolDropDown(m_toolItem->GetId(), false);
+	if (m_propertyContextMenu->GetValueAsBoolean() == true && !toolItem->HasDropDown())
+		auiToolWnd->SetToolDropDown(toolItem->GetId(), true);
+	else if (m_propertyContextMenu->GetValueAsBoolean() == false && toolItem->HasDropDown())
+		auiToolWnd->SetToolDropDown(toolItem->GetId(), false);
 
-	m_auiToolWnd->Realize();
-	m_auiToolWnd->Refresh();
-	m_auiToolWnd->Update();
+	auiToolWnd->Realize();
+	auiToolWnd->Refresh();
+	auiToolWnd->Update();
 }
 
 void CValueToolBarItem::Cleanup(wxObject* obj, IVisualHost *visualHost)
 {
-	CAuiToolBar *m_auiToolWnd = dynamic_cast<CAuiToolBar *>(visualHost->GetWxObject(GetParent()));
+	CAuiToolBar *auiToolWnd = dynamic_cast<CAuiToolBar *>(visualHost->GetWxObject(GetParent()));
 
-	m_auiToolWnd->DeleteTool(GetControlID());
+	auiToolWnd->DeleteTool(GetControlID());
 
-	m_auiToolWnd->Realize();
-	m_auiToolWnd->Refresh();
-	m_auiToolWnd->Update();
+	auiToolWnd->Realize();
+	auiToolWnd->Refresh();
+	auiToolWnd->Update();
 }
 
 bool CValueToolBarItem::CanDeleteControl() const
@@ -135,29 +126,26 @@ bool CValueToolBarItem::CanDeleteControl() const
 
 CValueToolBarSeparator::CValueToolBarSeparator() : IValueControl()
 {
-	PropertyContainer *categoryToolbar = IObjectBase::CreatePropertyContainer("ToolBarItem");
-	categoryToolbar->AddProperty("name", PropertyType::PT_WXNAME);
-	m_category->AddCategory(categoryToolbar);
 }
 
 void CValueToolBarSeparator::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated)
 {
-	CAuiToolBar *m_auiToolWnd = dynamic_cast<CAuiToolBar *>(visualHost->GetWxObject(GetParent()));
-	wxASSERT(m_auiToolWnd);
-	wxAuiToolBarItem *m_toolItem = m_auiToolWnd->AddSeparator();
+	CAuiToolBar *auiToolWnd = dynamic_cast<CAuiToolBar *>(visualHost->GetWxObject(GetParent()));
+	wxASSERT(auiToolWnd);
+	wxAuiToolBarItem *m_toolItem = auiToolWnd->AddSeparator();
 	m_toolItem->SetId(GetControlID());
 
-	m_auiToolWnd->Realize();
-	m_auiToolWnd->Refresh();
-	m_auiToolWnd->Update();
+	auiToolWnd->Realize();
+	auiToolWnd->Refresh();
+	auiToolWnd->Update();
 }
 
 void CValueToolBarSeparator::OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost)
 {
-	CAuiToolBar *m_auiToolWnd = dynamic_cast<CAuiToolBar *>(visualHost->GetWxObject(GetParent()));
-	wxASSERT(m_auiToolWnd);
+	CAuiToolBar *auiToolWnd = dynamic_cast<CAuiToolBar *>(visualHost->GetWxObject(GetParent()));
+	wxASSERT(auiToolWnd);
 
-	wxAuiToolBarItem *m_toolItem = m_auiToolWnd->FindTool(GetControlID());
+	wxAuiToolBarItem *m_toolItem = auiToolWnd->FindTool(GetControlID());
 	IValueFrame *m_parentControl = GetParent(); int idx = wxNOT_FOUND;
 
 	for (unsigned int i = 0; i < m_parentControl->GetChildCount(); i++)
@@ -166,18 +154,18 @@ void CValueToolBarSeparator::OnUpdated(wxObject* wxobject, wxWindow* wxparent, I
 		if (m_controlId == child->GetControlID()) { idx = i; break; }
 	}
 
-	if (m_toolItem) { m_auiToolWnd->DeleteTool(GetControlID()); }
-	m_auiToolWnd->InsertSeparator(idx, GetControlID());
+	if (m_toolItem) { auiToolWnd->DeleteTool(GetControlID()); }
+	auiToolWnd->InsertSeparator(idx, GetControlID());
 
-	m_auiToolWnd->Realize();
-	m_auiToolWnd->Refresh();
-	m_auiToolWnd->Update();
+	auiToolWnd->Realize();
+	auiToolWnd->Refresh();
+	auiToolWnd->Update();
 }
 
 void CValueToolBarSeparator::Cleanup(wxObject* obj, IVisualHost *visualHost)
 {
-	CAuiToolBar *m_auiToolWnd = dynamic_cast<CAuiToolBar *>(visualHost->GetWxObject(GetParent()));
-	if (m_auiToolWnd) m_auiToolWnd->DeleteTool(GetControlID());
+	CAuiToolBar *auiToolWnd = dynamic_cast<CAuiToolBar *>(visualHost->GetWxObject(GetParent()));
+	if (auiToolWnd) auiToolWnd->DeleteTool(GetControlID());
 }
 
 bool CValueToolBarSeparator::CanDeleteControl() const
@@ -191,22 +179,25 @@ bool CValueToolBarSeparator::CanDeleteControl() const
 
 bool CValueToolBarItem::LoadData(CMemoryReader &reader)
 {
-	reader.r_stringZ(m_caption);
-	m_context_menu = reader.r_u8();
-	reader.r_stringZ(m_tooltip);
-	m_enabled = reader.r_u8();
-	reader.r_stringZ(m_action);
+	wxString caption; reader.r_stringZ(caption);
+	m_propertyCaption->SetValue(caption);
+	m_propertyContextMenu->SetValue(reader.r_u8());
+	wxString tooltip; reader.r_stringZ(tooltip);
+	m_properyTooltip->SetValue(tooltip);
+	m_propertyEnabled->SetValue(reader.r_u8());
+	wxString action; reader.r_stringZ(action);
+	m_propertyAction->SetValue(action);
 
 	return IValueControl::LoadData(reader);
 }
 
 bool CValueToolBarItem::SaveData(CMemoryWriter &writer)
 {
-	writer.w_stringZ(m_caption);
-	writer.w_u8(m_context_menu);
-	writer.w_stringZ(m_tooltip);
-	writer.w_u8(m_enabled);
-	writer.w_stringZ(m_action);
+	writer.w_stringZ(m_propertyCaption->GetValueAsString());
+	writer.w_u8(m_propertyContextMenu->GetValueAsBoolean());
+	writer.w_stringZ(m_properyTooltip->GetValueAsString());
+	writer.w_u8(m_propertyEnabled->GetValueAsBoolean());
+	writer.w_stringZ(m_propertyAction->GetValueAsString());
 
 	return IValueControl::SaveData(writer);
 }
@@ -219,42 +210,4 @@ bool CValueToolBarSeparator::LoadData(CMemoryReader &reader)
 bool CValueToolBarSeparator::SaveData(CMemoryWriter &writer)
 {
 	return IValueControl::SaveData(writer);
-}
-
-//**********************************************************************************
-//*                                  Property                                      *
-//**********************************************************************************
-
-void CValueToolBarItem::ReadProperty()
-{
-	IObjectBase::SetPropertyValue("name", m_controlName);
-	IObjectBase::SetPropertyValue("caption", m_caption);
-	IObjectBase::SetPropertyValue("bitmap", m_bitmap);
-	IObjectBase::SetPropertyValue("context_menu", m_context_menu);
-	IObjectBase::SetPropertyValue("tooltip", m_tooltip);
-	IObjectBase::SetPropertyValue("enabled", m_enabled);
-
-	IObjectBase::SetPropertyValue("action", m_action);
-}
-
-void CValueToolBarItem::SaveProperty()
-{
-	IObjectBase::GetPropertyValue("name", m_controlName);
-	IObjectBase::GetPropertyValue("caption", m_caption);
-	IObjectBase::GetPropertyValue("bitmap", m_bitmap);
-	IObjectBase::GetPropertyValue("context_menu", m_context_menu);
-	IObjectBase::GetPropertyValue("tooltip", m_tooltip);
-	IObjectBase::GetPropertyValue("enabled", m_enabled);
-
-	IObjectBase::GetPropertyValue("action", m_action);
-}
-
-void CValueToolBarSeparator::ReadProperty()
-{
-	IObjectBase::SetPropertyValue("name", m_controlName);
-}
-
-void CValueToolBarSeparator::SaveProperty()
-{
-	IObjectBase::GetPropertyValue("name", m_controlName);
 }

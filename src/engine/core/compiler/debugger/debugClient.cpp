@@ -538,7 +538,7 @@ void CDebuggerClient::OnDebugEvent(wxDebugEvent &event)
 	}
 	else if (event.GetEventId() == EventId::EventId_MessageFromEnterprise) {
 		if (fileName.IsEmpty()) {
-			IMetadataTree *metaTree = metadata->GetMetaTree();
+			IMetadataWrapperTree *metaTree = metadata->GetMetaTree();
 			wxASSERT(metaTree);
 			metaTree->EditModule(moduleName, event.GetLine(), false);
 		}
@@ -554,7 +554,7 @@ void CDebuggerClient::OnDebugEvent(wxDebugEvent &event)
 			if (foundedDoc) {
 				IMetadata *metaData = foundedDoc->GetMetadata();
 				wxASSERT(metaData);
-				IMetadataTree *metaTree = metaData->GetMetaTree();
+				IMetadataWrapperTree *metaTree = metaData->GetMetaTree();
 				wxASSERT(metaTree);
 				metaTree->EditModule(moduleName, event.GetLine(), false);
 			}

@@ -1,0 +1,28 @@
+/* XPM */
+static const char *s_syntaxControl_xpm[] = {
+/* columns rows colors chars-per-pixel */
+"16 16 6 1",
+"o c Black",
+"X c #FFFFFF",
+". c #808080",
+"+ c #000080",
+"O c #0000FF",
+"  c #C0C0C0",
+/* pixels */
+"  ...........   ",
+"  .XXXXXXXXXo   ",
+"  .XXXXXXXXXo   ",
+"  .XoooXXXXXo   ",
+"  .XXXXXXXXXo  O",
+"  .XX......Xo O ",
+"  .XXXXXXXXXoO. ",
+"  .XX.O....XO+  ",
+"  .XXXXOOXXO+   ",
+"  .XXX..OOO+o   ",
+"  .XXXXX.OO+o   ",
+"  .XXooo.O+ o   ",
+"  .XXXXXXO+Xo   ",
+"  .XXXXXXO Xo   ",
+"  .oooooooooo   ",
+"oooooooooooooooo"
+};

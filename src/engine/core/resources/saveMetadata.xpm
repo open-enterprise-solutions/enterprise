@@ -1,0 +1,29 @@
+/* XPM */
+static const char *s_saveMetadata_xpm[] = {
+/* columns rows colors chars-per-pixel */
+"16 16 7 1",
+"O c #333399",
+"+ c #FFFFFF",
+"o c #4D4D4D",
+". c #A0A0A4",
+"@ c #FF5050",
+"X c #D7D7D7",
+"  c None",
+/* pixels */
+"  ......        ",
+" .XXXXX.o  O    ",
+".+++++.oo OO    ",
+"......o.oOOOOO  ",
+".+++++..o OO  O ",
+".XXXXX.oo  O  O ",
+"......o.o     O ",
+".+++++..o ...o  ",
+".XXXXX..o .++o. ",
+".XXXXX..o .++ooo",
+".XXX@X..o .++++o",
+".XXXXX.o  .++++o",
+" oooooo   .++++o",
+"          .++++o",
+"          oooooo",
+"                "
+};

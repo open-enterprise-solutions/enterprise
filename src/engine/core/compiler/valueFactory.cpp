@@ -6,7 +6,7 @@
 #include "value.h"
 #include "functions.h"
 
-static std::vector<IObjectValueAbstract*>* m_aFactoryObjects = NULL;
+static std::vector<IObjectValueAbstract*>* s_factoryObjects = NULL;
 
 //*******************************************************************************
 //*                       Guard factory objects                                 *
@@ -14,12 +14,12 @@ static std::vector<IObjectValueAbstract*>* m_aFactoryObjects = NULL;
 
 inline void AllocateFactoryObjects()
 {
-	m_aFactoryObjects = new std::vector<IObjectValueAbstract*>;
+	s_factoryObjects = new std::vector<IObjectValueAbstract*>;
 }
 
 inline void DestroyFactoryObjects()
 {
-	wxDELETE(m_aFactoryObjects);
+	wxDELETE(s_factoryObjects);
 }
 
 //*******************************************************************************
@@ -27,52 +27,46 @@ inline void DestroyFactoryObjects()
 //*******************************************************************************
 
 #include "appData.h"
-#include "enumFactory.h"
 #include "utils/stringUtils.h"
 
 CValue* CValue::CreateObjectRef(const wxString& className, CValue** aParams)
 {
-	auto itFounded = std::find_if(m_aFactoryObjects->begin(), m_aFactoryObjects->end(), [className](IObjectValueAbstract* singleObject) {
+	auto itFounded = std::find_if(s_factoryObjects->begin(), s_factoryObjects->end(), [className](IObjectValueAbstract* singleObject) {
 		return StringUtils::CompareString(className, singleObject->GetClassName());
 		});
 
-	if (itFounded == m_aFactoryObjects->end())
+	if (itFounded == s_factoryObjects->end())
 		CTranslateError::Error(_("Error creating object '%s'"), className.wc_str());
 
 	IObjectValueAbstract* singleObject = *itFounded;
 	wxASSERT(singleObject);
 
-	if (singleObject->GetObjectType() != eObjectType::eObjectType_enum) {
-		CValue* newObject = singleObject->CreateObject();
-		wxASSERT(newObject);
+	CValue* newObject = singleObject->CreateObject();
+	wxASSERT(newObject);
 
-		if (singleObject->GetObjectType() == eObjectType::eObjectType_object) {
-			if (!appData->DesignerMode()) {
-				if (aParams) {
-					if (!newObject->Init(aParams)) {
-						wxDELETE(newObject);
-						CTranslateError::Error(_("Error initializing object '%s'"), className.wc_str());
-					}
+	if (singleObject->GetObjectType() == eObjectType::eObjectType_object) {
+		if (!appData->DesignerMode()) {
+			if (aParams) {
+				if (!newObject->Init(aParams)) {
+					wxDELETE(newObject);
+					CTranslateError::Error(_("Error initializing object '%s'"), className.wc_str());
 				}
-				else {
-					if (!newObject->Init()) {
-						wxDELETE(newObject);
-						CTranslateError::Error(_("Error initializing object '%s'"), className.wc_str());
-					}
+			}
+			else {
+				if (!newObject->Init()) {
+					wxDELETE(newObject);
+					CTranslateError::Error(_("Error initializing object '%s'"), className.wc_str());
 				}
 			}
 		}
+	}
 
-		return newObject;
-	}
-	else {
-		return enumFactory->GetEnumeration(className);
-	}
+	return newObject;
 }
 
 void CValue::RegisterObject(const wxString& className, IObjectValueAbstract* singleObject)
 {
-	if (!m_aFactoryObjects) {
+	if (!s_factoryObjects) {
 		AllocateFactoryObjects();
 	}
 
@@ -92,34 +86,27 @@ void CValue::RegisterObject(const wxString& className, IObjectValueAbstract* sin
 			newObject->PrepareNames();
 			delete newObject;
 		}
-		else if (singleObject->GetObjectType() == eObjectType::eObjectType_enum) {
-			enumFactory->AppendEnumeration(className, singleObject->CreateObject());
-		}
 
-		m_aFactoryObjects->push_back(singleObject);
+		s_factoryObjects->push_back(singleObject);
 	}
 }
 
 void CValue::UnRegisterObject(const wxString& className)
 {
-	auto itFounded = std::find_if(m_aFactoryObjects->begin(), m_aFactoryObjects->end(), [className](IObjectValueAbstract* singleObject) {
+	auto itFounded = std::find_if(s_factoryObjects->begin(), s_factoryObjects->end(), [className](IObjectValueAbstract* singleObject) {
 		return StringUtils::CompareString(className, singleObject->GetClassName());
 		});
 
-	if (itFounded == m_aFactoryObjects->end()) {
+	if (itFounded == s_factoryObjects->end()) {
 		CTranslateError::Error(_("Object '%s' is not exist"), className.wc_str());
 	}
 
 	IObjectValueAbstract* singleObject = *itFounded;
 	wxASSERT(singleObject);
 
-	if (singleObject->GetObjectType() == eObjectType::eObjectType_enum) {
-		enumFactory->RemoveEnumeration(className);
-	}
+	s_factoryObjects->erase(itFounded);
 
-	m_aFactoryObjects->erase(itFounded);
-
-	if (m_aFactoryObjects->size() == 0) {
+	if (s_factoryObjects->size() == 0) {
 		DestroyFactoryObjects();
 	}
 
@@ -128,39 +115,39 @@ void CValue::UnRegisterObject(const wxString& className)
 
 bool CValue::IsRegisterObject(const wxString& className)
 {
-	auto itFounded = std::find_if(m_aFactoryObjects->begin(), m_aFactoryObjects->end(), [className](IObjectValueAbstract* singleObject) {
+	auto itFounded = std::find_if(s_factoryObjects->begin(), s_factoryObjects->end(), [className](IObjectValueAbstract* singleObject) {
 		return StringUtils::CompareString(className, singleObject->GetClassName());
 		});
 
-	return itFounded != m_aFactoryObjects->end();
+	return itFounded != s_factoryObjects->end();
 }
 
 bool CValue::IsRegisterObject(const wxString& className, eObjectType objectType)
 {
-	auto itFounded = std::find_if(m_aFactoryObjects->begin(), m_aFactoryObjects->end(), [className, objectType](IObjectValueAbstract* singleObject) {
+	auto itFounded = std::find_if(s_factoryObjects->begin(), s_factoryObjects->end(), [className, objectType](IObjectValueAbstract* singleObject) {
 		return StringUtils::CompareString(className, singleObject->GetClassName())
 			&& (objectType == singleObject->GetObjectType());
 		});
 
-	return itFounded != m_aFactoryObjects->end();
+	return itFounded != s_factoryObjects->end();
 }
 
 bool CValue::IsRegisterObject(const CLASS_ID& clsid)
 {
-	auto itFounded = std::find_if(m_aFactoryObjects->begin(), m_aFactoryObjects->end(), [clsid](IObjectValueAbstract* singleObject) {
+	auto itFounded = std::find_if(s_factoryObjects->begin(), s_factoryObjects->end(), [clsid](IObjectValueAbstract* singleObject) {
 		return clsid == singleObject->GetClassType();
 		});
 
-	return itFounded != m_aFactoryObjects->end();
+	return itFounded != s_factoryObjects->end();
 }
 
 CLASS_ID CValue::GetTypeIDByRef(const wxClassInfo* classInfo)
 {
-	auto itFounded = std::find_if(m_aFactoryObjects->begin(), m_aFactoryObjects->end(), [classInfo](IObjectValueAbstract* singleObject) {
+	auto itFounded = std::find_if(s_factoryObjects->begin(), s_factoryObjects->end(), [classInfo](IObjectValueAbstract* singleObject) {
 		return classInfo == singleObject->GetClassInfo();
 		});
 
-	if (itFounded == m_aFactoryObjects->end())
+	if (itFounded == s_factoryObjects->end())
 		return 0;
 
 	IObjectValueAbstract* singleObject = *itFounded;
@@ -184,11 +171,11 @@ CLASS_ID CValue::GetTypeIDByRef(const ITypeValue* objectRef)
 
 CLASS_ID CValue::GetIDObjectFromString(const wxString& className)
 {
-	auto itFounded = std::find_if(m_aFactoryObjects->begin(), m_aFactoryObjects->end(), [className](IObjectValueAbstract* singleObject) {
+	auto itFounded = std::find_if(s_factoryObjects->begin(), s_factoryObjects->end(), [className](IObjectValueAbstract* singleObject) {
 		return StringUtils::CompareString(className, singleObject->GetClassName());
 		});
 
-	if (itFounded == m_aFactoryObjects->end())
+	if (itFounded == s_factoryObjects->end())
 		CTranslateError::Error(_("Object '%s' is not exist"), className.wc_str());
 
 	IObjectValueAbstract* singleObject = *itFounded;
@@ -203,12 +190,12 @@ bool CValue::CompareObjectName(const wxString& className, eValueTypes valueType)
 
 wxString CValue::GetNameObjectFromID(const CLASS_ID& clsid, bool upper)
 {
-	auto itFounded = std::find_if(m_aFactoryObjects->begin(), m_aFactoryObjects->end(), [clsid](IObjectValueAbstract* singleObject) {
+	auto itFounded = std::find_if(s_factoryObjects->begin(), s_factoryObjects->end(), [clsid](IObjectValueAbstract* singleObject) {
 		return clsid == singleObject->GetClassType();
 		});
 
-	if (itFounded == m_aFactoryObjects->end())
-		CTranslateError::Error(_("Object with id '%s' is not exist"), clsid);
+	if (itFounded == s_factoryObjects->end())
+		CTranslateError::Error(_("Object with id '%llu' is not exist"), clsid);
 
 	IObjectValueAbstract* singleObject = *itFounded;
 	wxASSERT(singleObject);
@@ -220,7 +207,7 @@ wxString CValue::GetNameObjectFromVT(eValueTypes valueType, bool upper)
 	if (valueType > eValueTypes::TYPE_REFFER)
 		return wxEmptyString;
 
-	auto itFounded = std::find_if(m_aFactoryObjects->begin(), m_aFactoryObjects->end(), [valueType](IObjectValueAbstract* singleObject) {
+	auto itFounded = std::find_if(s_factoryObjects->begin(), s_factoryObjects->end(), [valueType](IObjectValueAbstract* singleObject) {
 		ISimpleObjectValueSingle* simpleSingleObject = dynamic_cast<ISimpleObjectValueSingle*>(singleObject);
 		if (simpleSingleObject) {
 			return valueType == simpleSingleObject->GetValueType();
@@ -228,7 +215,7 @@ wxString CValue::GetNameObjectFromVT(eValueTypes valueType, bool upper)
 		return false;
 		});
 
-	if (itFounded == m_aFactoryObjects->end())
+	if (itFounded == s_factoryObjects->end())
 		return wxEmptyString;
 
 	IObjectValueAbstract* singleObject = *itFounded;
@@ -238,14 +225,14 @@ wxString CValue::GetNameObjectFromVT(eValueTypes valueType, bool upper)
 
 eValueTypes CValue::GetVTByID(const CLASS_ID& clsid)
 {
-	auto itFounded = std::find_if(m_aFactoryObjects->begin(), m_aFactoryObjects->end(), [clsid](IObjectValueAbstract* singleObject) {
+	auto itFounded = std::find_if(s_factoryObjects->begin(), s_factoryObjects->end(), [clsid](IObjectValueAbstract* singleObject) {
 		return clsid == singleObject->GetClassType();
 		});
 
-	if (itFounded == m_aFactoryObjects->end())
+	if (itFounded == s_factoryObjects->end())
 		return eValueTypes::TYPE_EMPTY;
 
-	ISimpleObjectValueSingle* singleObject = 
+	ISimpleObjectValueSingle* singleObject =
 		dynamic_cast<ISimpleObjectValueSingle*>(*itFounded);
 
 	if (singleObject == NULL)
@@ -256,7 +243,7 @@ eValueTypes CValue::GetVTByID(const CLASS_ID& clsid)
 
 CLASS_ID CValue::GetIDByVT(const eValueTypes& valueType)
 {
-	auto itFounded = std::find_if(m_aFactoryObjects->begin(), m_aFactoryObjects->end(), [valueType](IObjectValueAbstract* singleObject) {
+	auto itFounded = std::find_if(s_factoryObjects->begin(), s_factoryObjects->end(), [valueType](IObjectValueAbstract* singleObject) {
 		ISimpleObjectValueSingle* simpleSingleObject = dynamic_cast<ISimpleObjectValueSingle*>(singleObject);
 		if (simpleSingleObject) {
 			return valueType == simpleSingleObject->GetValueType();
@@ -265,7 +252,7 @@ CLASS_ID CValue::GetIDByVT(const eValueTypes& valueType)
 			simpleSingleObject->GetValueType() == eValueTypes::TYPE_EMPTY : false;
 		});
 
-	if (itFounded == m_aFactoryObjects->end())
+	if (itFounded == s_factoryObjects->end())
 		return 0;
 
 	IObjectValueAbstract* singleObject = *itFounded;
@@ -275,23 +262,23 @@ CLASS_ID CValue::GetIDByVT(const eValueTypes& valueType)
 
 IObjectValueAbstract* CValue::GetAvailableObject(const CLASS_ID& clsid)
 {
-	auto itFounded = std::find_if(m_aFactoryObjects->begin(), m_aFactoryObjects->end(), [clsid](IObjectValueAbstract* singleObject) {
+	auto itFounded = std::find_if(s_factoryObjects->begin(), s_factoryObjects->end(), [clsid](IObjectValueAbstract* singleObject) {
 		return clsid == singleObject->GetClassType();
 		});
 
-	if (itFounded == m_aFactoryObjects->end())
-		CTranslateError::Error(_("Object id '%i' is not exist"), clsid);
+	if (itFounded == s_factoryObjects->end())
+		CTranslateError::Error(_("Object id '%llu' is not exist"), clsid);
 
 	return *itFounded;
 }
 
 IObjectValueAbstract* CValue::GetAvailableObject(const wxString& className)
 {
-	auto itFounded = std::find_if(m_aFactoryObjects->begin(), m_aFactoryObjects->end(), [className](IObjectValueAbstract* singleObject) {
+	auto itFounded = std::find_if(s_factoryObjects->begin(), s_factoryObjects->end(), [className](IObjectValueAbstract* singleObject) {
 		return StringUtils::CompareString(className, singleObject->GetClassName());
 		});
 
-	if (itFounded == m_aFactoryObjects->end())
+	if (itFounded == s_factoryObjects->end())
 		CTranslateError::Error(_("Object '%s' is not exist"), className.wc_str());
 
 	return *itFounded;
@@ -300,7 +287,7 @@ IObjectValueAbstract* CValue::GetAvailableObject(const wxString& className)
 wxArrayString CValue::GetAvailableObjects(eObjectType objectType)
 {
 	wxArrayString classes;
-	for (auto singleObject : *m_aFactoryObjects) {
+	for (auto singleObject : *s_factoryObjects) {
 		if (objectType == singleObject->GetObjectType()) {
 			classes.push_back(singleObject->GetClassName());
 		}

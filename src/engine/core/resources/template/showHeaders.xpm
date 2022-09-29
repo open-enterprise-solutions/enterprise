@@ -1,0 +1,26 @@
+/* XPM */
+static const char *s_showHeaders_xpm[] = {
+/* columns rows colors chars-per-pixel */
+"16 16 4 1",
+". c Black",
+"o c #FFFFFF",
+"X c #808080",
+"  c #C0C0C0",
+/* pixels */
+"                ",
+".XXXXXXXXXXXXXX.",
+".    .     X    ",
+".    .     X   .",
+".    .     X    ",
+"................",
+".    .ooooo oooo",
+".    .ooooo oooo",
+".    .ooooo oooo",
+".XXXX.          ",
+".    .ooooo oooo",
+".    .ooooo oooo",
+".    .ooooo oooo",
+".XXXXX          ",
+"                ",
+"................"
+};

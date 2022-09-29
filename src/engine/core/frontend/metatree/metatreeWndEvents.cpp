@@ -163,6 +163,40 @@ void CMetadataTree::CMetadataTreeWnd::OnMouseMove(wxMouseEvent& event)
 	event.Skip();
 }
 
+void CMetadataTree::CMetadataTreeWnd::OnBeginDrag(wxTreeEvent& event) {
+
+	wxTreeItemId curItem = event.GetItem();
+	if (!curItem.IsOk())
+		return; 
+	// need to explicitly allow drag
+	if (curItem == GetRootItem())
+		return;
+	IMetaObject *metaObject = m_ownerTree->GetMetaObject(curItem);
+	if (metaObject == NULL)
+		return;
+	m_draggedItem = curItem;
+	event.Allow();
+}
+
+void CMetadataTree::CMetadataTreeWnd::OnEndDrag(wxTreeEvent& event) {
+	
+	bool copy = ::wxGetKeyState(WXK_CONTROL);
+	wxTreeItemId itemSrc = m_draggedItem, itemDst = event.GetItem();
+	m_draggedItem = (wxTreeItemId)0l;
+	// ensure that itemDst is not itemSrc or a child of itemSrc
+	wxTreeItemId item = itemDst;
+	while (item.IsOk()) {
+		if (item == itemSrc)
+			return;
+		item = GetItemParent(item);
+	}
+
+	IMetaObject *metaSrcObject = m_ownerTree->GetMetaObject(itemSrc);
+	IMetaObject* metaDstObject = m_ownerTree->GetMetaObject(itemDst);
+	
+	event.Skip();
+}
+
 void CMetadataTree::CMetadataTreeWnd::OnCreateItem(wxCommandEvent& event)
 {
 	m_ownerTree->CreateItem(); event.Skip();
@@ -181,6 +215,21 @@ void CMetadataTree::CMetadataTreeWnd::OnRemoveItem(wxCommandEvent& event)
 void CMetadataTree::CMetadataTreeWnd::OnPropertyItem(wxCommandEvent& event)
 {
 	m_ownerTree->PropertyItem(); event.Skip();
+}
+
+void CMetadataTree::CMetadataTreeWnd::OnUpItem(wxCommandEvent& event)
+{
+	m_ownerTree->UpItem(); event.Skip();
+}
+
+void CMetadataTree::CMetadataTreeWnd::OnDownItem(wxCommandEvent& event)
+{
+	m_ownerTree->DownItem(); event.Skip();
+}
+
+void CMetadataTree::CMetadataTreeWnd::OnSortItem(wxCommandEvent& event)
+{
+	m_ownerTree->SortItem(); event.Skip();
 }
 
 void CMetadataTree::CMetadataTreeWnd::OnInsertItem(wxCommandEvent& event)
@@ -208,56 +257,52 @@ void CMetadataTree::CMetadataTreeWnd::OnCommandItem(wxCommandEvent& event)
 void CMetadataTree::CMetadataTreeWnd::OnCopyItem(wxCommandEvent& event)
 {
 	wxTreeItemId item = GetSelection();
-
 	if (!item.IsOk())
 		return;
-
 	// Write some text to the clipboard
-	/*if (wxTheClipboard->Open()) {
+	if (wxTheClipboard->Open()) {
 		IMetaObject* metaObject = m_ownerTree->GetMetaObject(item);
 		if (metaObject != NULL) {		
-			CMemoryWriter dataWritter; metaObject->SaveProperty(); 
-			if (metaObject->SaveMeta(dataWritter)) {
+			CMemoryWriter dataWritter; 
+			if (metaObject->CopyObject(dataWritter)) {
 				// create an RTF data object
 				wxCustomDataObject* pdo = new wxCustomDataObject();
-				pdo->SetFormat(wxT("OES_Data"));
+				pdo->SetFormat(wxOES_Data);
 				pdo->SetData(dataWritter.size(), dataWritter.pointer()); // the +1 is used to force copy of the \0 character
 				// tell clipboard about our RTF
 				wxTheClipboard->SetData(pdo);
 			}
 			wxTheClipboard->Close();
 		}
-	}*/
+	}
 
 	event.Skip();
 }
 
 void CMetadataTree::CMetadataTreeWnd::OnPasteItem(wxCommandEvent& event)
 {
-	wxTreeItemId item = GetSelection();
-
-	if (!item.IsOk())
+	if (m_ownerTree->m_bReadOnly)
 		return;
 
-	// Read some text
-	/*if (wxTheClipboard->Open()
-		&& wxTheClipboard->IsSupported(wxT("OES_Data"))) {
-		wxCustomDataObject data("OES_Data");
+	wxTreeItemId item = GetSelection();
+	if (!item.IsOk())
+		return;
+	if (wxTheClipboard->Open()
+		&& wxTheClipboard->IsSupported(wxOES_Data)) {
+		wxCustomDataObject data(wxOES_Data);
 		if (wxTheClipboard->GetData(data)) {
-			m_ownerTree->CreateItem();
-			IMetaObject* metaObject =
-				m_ownerTree->GetMetaObject(GetSelection());
-			if (metaObject) {
+			IMetaObject* metaObject = m_ownerTree->CreateItem(false);
+			if (metaObject != NULL) {
 				CMemoryReader reader(data.GetData(), data.GetDataSize());
-				if (metaObject->LoadMeta(reader)) {
+				if (metaObject->PasteObject(reader)) {
 					objectInspector->RefreshProperty();
 				}
 
-				metaObject->SaveProperty();
+				m_ownerTree->Load(m_ownerTree->m_metaData);
 			}
 		}
 		wxTheClipboard->Close();
-	}*/
+	}
 
 	event.Skip();
 }
@@ -277,11 +322,10 @@ void CMetadataTree::CMetadataTreeWnd::OnPropertyModified(wxFramePropertyEvent& e
 {
 	Property* p = event.GetFrameProperty();
 	wxASSERT(p);
-	if (p->GetType() == PropertyType::PT_WXNAME)
-	{
+	if (p->GetType() == PropertyType::PT_WXNAME) {
 		IMetaObject* obj = dynamic_cast<IMetaObject*>(p->GetObject());
 		wxASSERT(obj);
-		if (!m_ownerTree->RenameMetaObject(obj, p->GetValue())) {
+		if (!m_ownerTree->RenameMetaObject(obj, event.GetValue())) {
 			event.Skip();
 		}
 	}

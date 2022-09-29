@@ -5,7 +5,7 @@
 
 #include "metaEnumerationObject.h"
 #include "appData.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 #include "metadata/metadata.h"
 #include "databaseLayer/databaseLayer.h"
 

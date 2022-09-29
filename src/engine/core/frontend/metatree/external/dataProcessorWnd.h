@@ -7,13 +7,10 @@
 #include <wx/statbox.h>
 #include <wx/statline.h>
 
-#include "common/docinfo.h"
 #include "metadata/external/metadataDataProcessor.h"
-#include "compiler/debugger/debugEvent.h"
-#include "frontend/objinspect/events.h"
-
-class CDataProcessorTree : public wxPanel,
-	public IMetadataTree {
+#include "frontend/metatree/metatreeWnd.h"
+ 
+class CDataProcessorTree : public IMetadataTree {
 	wxDECLARE_DYNAMIC_CLASS(CDataProcessorTree);
 
 private:
@@ -27,29 +24,7 @@ private:
 
 private:
 
-	bool m_initialize; 
-	bool m_bReadOnly;
-
-	enum
-	{
-		ID_METATREE_NEW = 15000,
-		ID_METATREE_EDIT,
-		ID_METATREE_REMOVE,
-		ID_METATREE_PROPERTY,
-	};
-
-	struct CObjectData
-	{
-		CLASS_ID m_clsid; //тип элемента
-		int  m_nChildImage;//картинка для подч. элементов группы
-	};
-
-	//сами объекты
-	std::map<wxTreeItemId, IMetaObject *> m_aMetaObj;
-	//типы объекта
-	std::map <wxTreeItemId, CObjectData> m_aMetaClassObj;
-	//список открытых элементов 
-	std::vector <CDocument *> m_aMetaOpenedForms;
+	bool m_initialize;
 
 protected:
 
@@ -72,23 +47,40 @@ protected:
 	wxTextCtrl* m_commentValue;
 	wxChoice* m_defaultFormValue;
 
-	wxAuiToolBar* m_metaTreeToolbar;
+	wxButton* m_buttonModule;
 
-	wxButton *m_buttonModule;
-
-	class CDataProcessorTreeWnd : public wxTreeCtrl
-	{
+	class CDataProcessorTreeWnd : public wxTreeCtrl {
 		wxDECLARE_DYNAMIC_CLASS(CMetadataTree);
-
 	private:
 
-		CDataProcessorTree *m_ownerTree;
+		CDataProcessorTree* m_ownerTree;
 
 	public:
 
 		CDataProcessorTreeWnd();
-		CDataProcessorTreeWnd(wxWindow *parentWnd, CDataProcessorTree *ownerWnd);
+		CDataProcessorTreeWnd(wxWindow* parentWnd, CDataProcessorTree* ownerWnd);
 		virtual ~CDataProcessorTreeWnd();
+
+		// this function is called to compare 2 items and should return -1, 0
+		// or +1 if the first item is less than, equal to or greater than the
+		// second one. The base class version performs alphabetic comparison
+		// of item labels (GetText)
+		virtual int OnCompareItems(const wxTreeItemId& item1,
+			const wxTreeItemId& item2) {
+			int ret = wxStrcmp(GetItemText(item1), GetItemText(item2));
+			ITreeMetaData* data1 = dynamic_cast<ITreeMetaData*>(GetItemData(item1));
+			ITreeMetaData* data2 = dynamic_cast<ITreeMetaData*>(GetItemData(item2));
+			if (data1 != NULL && data2 != NULL && ret > 0) {
+				IMetaObject* metaObject1 = data1->GetMetaObject();
+				IMetaObject* metaObject2 = data2->GetMetaObject();
+				IMetaObject* parent = metaObject1->GetParent();
+				wxASSERT(parent);
+				return parent->ChangeChildPosition(metaObject2,
+					parent->GetChildPosition(metaObject1)
+				) ? ret : wxNOT_FOUND;
+			}
+			return ret;
+		}
 
 		//events:
 		void OnLeftDClick(wxMouseEvent& event);
@@ -101,24 +93,29 @@ protected:
 		void OnKeyDown(wxKeyEvent& event);
 		void OnMouseMove(wxMouseEvent& event);
 
-		void OnCreateItem(wxCommandEvent &event);
-		void OnEditItem(wxCommandEvent &event);
-		void OnRemoveItem(wxCommandEvent &event);
-		void OnPropertyItem(wxCommandEvent &event);
+		void OnCreateItem(wxCommandEvent& event);
+		void OnEditItem(wxCommandEvent& event);
+		void OnRemoveItem(wxCommandEvent& event);
+		void OnPropertyItem(wxCommandEvent& event);
 
-		void OnCommandItem(wxCommandEvent &event);
+		void OnUpItem(wxCommandEvent& event);
+		void OnDownItem(wxCommandEvent& event);
 
-		void OnCopyItem(wxCommandEvent &event);
-		void OnPasteItem(wxCommandEvent &event);
+		void OnSortItem(wxCommandEvent& event);
 
-		void OnDebugEvent(wxDebugEvent &event);
-		void OnPropertyModified(wxFramePropertyEvent &event);
+		void OnCommandItem(wxCommandEvent& event);
 
-		void OnSelecting(wxTreeEvent &event);
-		void OnSelected(wxTreeEvent &event);
+		void OnCopyItem(wxCommandEvent& event);
+		void OnPasteItem(wxCommandEvent& event);
 
-		void OnCollapsing(wxTreeEvent &event);
-		void OnExpanding(wxTreeEvent &event);
+		void OnDebugEvent(wxDebugEvent& event);
+		void OnPropertyModified(wxFramePropertyEvent& event);
+
+		void OnSelecting(wxTreeEvent& event);
+		void OnSelected(wxTreeEvent& event);
+
+		void OnCollapsing(wxTreeEvent& event);
+		void OnExpanding(wxTreeEvent& event);
 
 	protected:
 
@@ -126,76 +123,114 @@ protected:
 	};
 
 	CDataProcessorTreeWnd* m_metaTreeWnd;
-
-	CMetadataDataProcessor *m_metaData;
-	CDocument *m_docParent;
+	CMetadataDataProcessor* m_metaData;
 
 private:
 
-	void ActivateItem(const wxTreeItemId &item);
+	wxTreeItemId AppendRootItem(const CLASS_ID& clsid, const wxString& name = wxEmptyString) const {
+		IObjectValueAbstract* singleObject = CValue::GetAvailableObject(clsid);
+		wxASSERT(singleObject);
+		wxImageList* imageList = m_metaTreeWnd->GetImageList();
+		wxASSERT(imageList);
+		int imageIndex = imageList->Add(singleObject->GetClassIcon());
+		return m_metaTreeWnd->AddRoot(name.IsEmpty() ? singleObject->GetClassName() : name,
+			imageIndex,
+			imageIndex,
+			NULL
+		);
+	}
 
-	void CreateItem();
+	wxTreeItemId AppendGroupItem(const wxTreeItemId& parent,
+		const CLASS_ID& clsid, const wxString& name = wxEmptyString) const {
+		IObjectValueAbstract* singleObject = CValue::GetAvailableObject(clsid);
+		wxASSERT(singleObject);
+		wxImageList* imageList = m_metaTreeWnd->GetImageList();
+		wxASSERT(imageList);
+		int imageIndex = imageList->Add(singleObject->GetClassIcon());
+		return m_metaTreeWnd->AppendItem(parent, name.IsEmpty() ? singleObject->GetClassName() : name,
+			imageIndex,
+			imageIndex,
+			new wxTreeItemClsidData(clsid)
+		);
+	}
+
+	wxTreeItemId AppendGroupItem(const wxTreeItemId& parent,
+		const CLASS_ID& clsid, IMetaObject* metaObject) const {
+		IObjectValueAbstract* singleObject = CValue::GetAvailableObject(metaObject->GetClsid());
+		wxASSERT(singleObject);
+		wxImageList* imageList = m_metaTreeWnd->GetImageList();
+		wxASSERT(imageList);
+		int imageIndex = imageList->Add(singleObject->GetClassIcon());
+		return m_metaTreeWnd->AppendItem(parent, metaObject->GetName(),
+			imageIndex,
+			imageIndex,
+			new wxTreeItemClsidMetaData(clsid, metaObject)
+		);
+	}
+
+	wxTreeItemId AppendItem(const wxTreeItemId& parent,
+		IMetaObject* metaObject) const {
+		wxImageList* imageList = m_metaTreeWnd->GetImageList();
+		wxASSERT(imageList);
+		int imageIndex = imageList->Add(metaObject->GetIcon());
+		return m_metaTreeWnd->AppendItem(parent, metaObject->GetName(),
+			imageIndex,
+			imageIndex,
+			new wxTreeItemMetaData(metaObject)
+		);
+	}
+
+	void ActivateItem(const wxTreeItemId& item);
+
+	IMetaObject* CreateItem(bool showValue = true);
 	void EditItem();
 	void RemoveItem();
-	void EraseItem(const wxTreeItemId &item);
+	void EraseItem(const wxTreeItemId& item);
 	void PropertyItem();
 
-	void CommandItem(unsigned int id);
-	void PrepareContextMenu(wxMenu *menu, const wxTreeItemId &item);
+	void UpItem();
+	void DownItem();
 
-	void EditModule(const wxString &fullName, int lineNumber, bool setRunLine = true);
+	void SortItem();
+
+	void CommandItem(unsigned int id);
+	void PrepareContextMenu(wxMenu* menu, const wxTreeItemId& item);
+
 	void FillData();
 
-	IMetaObject *GetMetaObject(const wxTreeItemId &item)
-	{
+	IMetaObject* GetMetaObject(const wxTreeItemId& item) {
 		if (!item.IsOk())
 			return NULL;
-
-		auto foundedIt = m_aMetaObj.find(item);
-		if (foundedIt == m_aMetaObj.end())
+		ITreeMetaData* data =
+			dynamic_cast<ITreeMetaData*>(m_metaTreeWnd->GetItemData(item));
+		if (data == NULL)
 			return NULL;
-
-		return foundedIt->second;
+		return data->GetMetaObject();
 	}
 
-	void UpdateToolbar(IMetaObject *obj, const wxTreeItemId &item);
-	void UpdateChoiceSelection();
+	void UpdateToolbar(IMetaObject* obj, const wxTreeItemId& item);
 
 public:
 
-	virtual void SetReadOnly(bool readOnly = true) { m_bReadOnly = readOnly; }
-
-	virtual void Modify(bool modify) { if (m_docParent) m_docParent->Modify(modify); }
-
-	virtual bool OpenFormMDI(IMetaObject *obj);
-	virtual bool OpenFormMDI(IMetaObject *obj, CDocument *&foundedDoc);
-
-	virtual bool CloseFormMDI(IMetaObject *obj);
-
-	virtual void OnPropertyChanged() { UpdateChoiceSelection(); }
-
-	virtual void OnCloseDocument(CDocument *doc);
-
-	virtual CDocument *GetDocument(IMetaObject *obj);
-
-	virtual void CloseMetaObject(IMetaObject *obj) {
-		CDocument *doc = GetDocument(obj);
-		if (doc) {
-			doc->DeleteAllViews();
-		}
-	}
-
-	bool RenameMetaObject(IMetaObject *obj, const wxString &sNewName);
+	virtual void UpdateChoiceSelection();
 
 public:
+
+	bool RenameMetaObject(IMetaObject* obj, const wxString& sNewName);
+
+public:
+
+	virtual IMetadata* GetMetadata() const {
+		return m_metaData;
+	}
 
 	CDataProcessorTree() { }
-	CDataProcessorTree(CDocument *docParent, wxWindow *parent, wxWindowID id = wxID_ANY);
+	CDataProcessorTree(CDocument* docParent, wxWindow* parent, wxWindowID id = wxID_ANY);
 	virtual ~CDataProcessorTree();
 
 	void InitTree();
 
-	bool Load(CMetadataDataProcessor *metaData);
+	bool Load(CMetadataDataProcessor* metaData);
 	bool Save();
 
 	void ClearTree();

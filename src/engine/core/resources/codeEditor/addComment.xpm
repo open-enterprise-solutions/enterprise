@@ -1,0 +1,25 @@
+/* XPM */
+static const char *s_addComment_xpm[] = {
+/* columns rows colors chars-per-pixel */
+"16 16 3 1",
+"X c Black",
+". c #008000",
+"  c #C0C0C0",
+/* pixels */
+"                ",
+"                ",
+"        .   .   ",
+"        .   .   ",
+"       .   .    ",
+"       .   .    ",
+"      .   .     ",
+"      .   .     ",
+"     .   .      ",
+"     .   .      ",
+"    .   .       ",
+"    .   .       ",
+"   .   .        ",
+"   .   .        ",
+"                ",
+"XXXXXXXXXXXXXXXX"
+};

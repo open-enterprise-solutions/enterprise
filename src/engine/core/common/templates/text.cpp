@@ -1,5 +1,5 @@
 #include "text.h"
-#include "module_cmd.h"
+#include "moduleCMD.h"
 #include "frontend/mainFrame.h"
 
 // ----------------------------------------------------------------------------
@@ -151,6 +151,51 @@ bool CTextEditView::OnClose(bool deleteWindow)
 	}
 
 	return CView::OnClose(deleteWindow);
+}
+
+#include "frontend/codeEditor/codeEditorCtrlPrintOut.h"
+
+wxPrintout* CTextEditView::OnCreatePrintout()
+{
+	return new CCodeEditorPrintout(m_text, this->GetViewName());
+}
+
+#include "metadata/metadata.h"
+#include "compiler/systemObjects.h"
+
+void CTextEditView::OnFind(wxFindDialogEvent& event)
+{
+	int wxflags = event.GetFlags();
+	int sciflags = 0;
+	if ((wxflags & wxFR_WHOLEWORD) != 0)
+	{
+		sciflags |= wxSTC_FIND_WHOLEWORD;
+	}
+	if ((wxflags & wxFR_MATCHCASE) != 0)
+	{
+		sciflags |= wxSTC_FIND_MATCHCASE;
+	}
+	int result;
+	if ((wxflags & wxFR_DOWN) != 0)
+	{
+		m_text->SetSelectionStart(m_text->GetSelectionEnd());
+		m_text->SearchAnchor();
+		result = m_text->SearchNext(sciflags, event.GetFindString());
+	}
+	else
+	{
+		m_text->SetSelectionEnd(m_text->GetSelectionStart());
+		m_text->SearchAnchor();
+		result = m_text->SearchPrev(sciflags, event.GetFindString());
+	}
+	if (wxSTC_INVALID_POSITION == result)
+	{
+		wxMessageBox(wxString::Format(_("\"%s\" not found!"), event.GetFindString().c_str()), _("Not Found!"), wxICON_ERROR, (wxWindow*)event.GetClientData());
+	}
+	else
+	{
+		m_text->EnsureCaretVisible();
+	}
 }
 
 // ----------------------------------------------------------------------------

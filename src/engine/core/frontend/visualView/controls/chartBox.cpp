@@ -13,9 +13,6 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueChartBox, IValueWindow);
 
 CValueChartBox::CValueChartBox() : IValueWindow(), m_name("chartbox")
 {
-	PropertyContainer *categoryNotebook = IObjectBase::CreatePropertyContainer("Chart");
-	categoryNotebook->AddProperty("name", PropertyType::PT_WXNAME);
-	m_category->AddCategory(categoryNotebook);
 }
 
 void CValueChartBox::PrepareNames() const //этот метод автоматически вызывается для инициализации имен атрибутов и методов
@@ -176,20 +173,4 @@ bool CValueChartBox::LoadData(CMemoryReader &reader)
 bool CValueChartBox::SaveData(CMemoryWriter &writer)
 {
 	return IValueWindow::SaveData(writer);
-}
-
-//**********************************************************************************
-//*                                   Property                                     *
-//**********************************************************************************
-
-void CValueChartBox::ReadProperty()
-{
-	IValueWindow::ReadProperty();
-	IObjectBase::SetPropertyValue("name", m_controlName);
-}
-
-void CValueChartBox::SaveProperty()
-{
-	IValueWindow::SaveProperty();
-	IObjectBase::GetPropertyValue("name", m_controlName);
 }

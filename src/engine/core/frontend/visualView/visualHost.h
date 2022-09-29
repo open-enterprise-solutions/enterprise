@@ -4,13 +4,10 @@
 #include "visualEditor.h"
 #include "common/docInfo.h"
 
-class CVisualHost : public IVisualHost
-{
+class CVisualHost : public IVisualHost {
+	bool m_formDemonstration;
 	CValueForm* m_valueForm;
 	CDocument* m_document;
-
-	bool m_formDemonstration;
-
 public:
 
 	// construction
@@ -18,7 +15,6 @@ public:
 		IVisualHost(parent, wxID_ANY, wxDefaultPosition, parent->GetSize()),
 		m_document(document), m_valueForm(valueForm), m_formDemonstration(demonstration)
 	{
-		m_formHandler = NULL;
 	}
 
 	virtual ~CVisualHost();

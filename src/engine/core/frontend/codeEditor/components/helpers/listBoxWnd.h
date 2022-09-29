@@ -14,10 +14,10 @@
 
 // The class is intended to look like a standard listbox (with an optional
 // icon). However, it needs to look like it has focus even when it doesn't.
-class wxSTCListBox : public wxSystemThemedControl<wxVListBox>
+class COESListBox : public wxSystemThemedControl<wxVListBox>
 {
 public:
-	wxSTCListBox(wxWindow*, ÑListBoxVisualData*, int);
+	COESListBox(wxWindow*, ÑListBoxVisualData*, int);
 
 	// wxWindow overrides
 	virtual bool AcceptsFocus() const override;

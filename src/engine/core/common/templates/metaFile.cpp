@@ -40,10 +40,11 @@ wxIMPLEMENT_CLASS(CMetadataDocument, CDocument);
 
 bool CMetadataDocument::OnCreate(const wxString& path, long flags)
 {
+	m_metaData = new CConfigFileMetadata(true);
+	
 	if (!CDocument::OnCreate(path, flags))
 		return false;
-
-	m_metaData = new CConfigFileMetadata(true);
+	
 	return m_metaData->RunMetadata(onlyLoadFlag);
 }
 

@@ -46,14 +46,14 @@ CValue* CMetaTypeListRegisterValueSingle::CreateObject() const
 //object class
 wxClassInfo* CMetaTypeObjectValueSingle::GetClassInfo() const
 {
-	IRecordDataObject* dataObject = m_metaValue->CreateObjectValue();
+	IRecordDataObject* dataObject = m_metaValue->CreateRecordDataObject();
 	wxASSERT(dataObject); wxClassInfo* classInfo = dataObject->GetClassInfo();
 	delete dataObject; return classInfo;
 }
 
 CValue* CMetaTypeObjectValueSingle::CreateObject() const
 {
-	return m_metaValue->CreateObjectValue();
+	return m_metaValue->CreateRecordDataObject();
 }
 
 //const-object class
@@ -81,25 +81,25 @@ CValue* CMetaTypeRecordKeyValueSingle::CreateObject() const
 //object record manager
 wxClassInfo* CMetaTypeRecordManagerValueSingle::GetClassInfo() const
 {
-	IRecordManagerObject* dataObject = m_metaValue->CreateRecordManagerValue();
+	IRecordManagerObject* dataObject = m_metaValue->CreateRecordManagerObjectValue();
 	wxASSERT(dataObject); wxClassInfo* classInfo = dataObject->GetClassInfo();
 	delete dataObject; return classInfo;
 }
 
 CValue* CMetaTypeRecordManagerValueSingle::CreateObject() const
 {
-	return m_metaValue->CreateRecordManagerValue();
+	return m_metaValue->CreateRecordManagerObjectValue();
 }
 
 //object record set
 wxClassInfo* CMetaTypeRecordSetValueSingle::GetClassInfo() const
 {
-	IRecordSetObject* dataObject = m_metaValue->CreateRecordSetValue();
+	IRecordSetObject* dataObject = m_metaValue->CreateRecordSetObjectValue();
 	wxASSERT(dataObject); wxClassInfo* classInfo = dataObject->GetClassInfo();
 	delete dataObject; return classInfo;
 }
 
 CValue* CMetaTypeRecordSetValueSingle::CreateObject() const
 {
-	return m_metaValue->CreateRecordSetValue();
+	return m_metaValue->CreateRecordSetObjectValue();
 }

@@ -1,0 +1,26 @@
+/* XPM */
+static const char *s_mergeCells_xpm[] = {
+/* columns rows colors chars-per-pixel */
+"16 16 4 1",
+"  c Black",
+". c #FFFFFF",
+"X c #808080",
+"o c #C0C0C0",
+/* pixels */
+"                ",
+" ......X....... ",
+" ......X....... ",
+" XXXXXXXXXXXXXX ",
+" .............. ",
+"X. ...   o... .X",
+"X  ...... ...  X",
+"     .o   .     ",
+"X  ... .. ...  X",
+"X. ...X   ... .X",
+" .............. ",
+" XXXXXXXXXXXXXX ",
+" ......X....... ",
+" ......X....... ",
+"                ",
+"                "
+};

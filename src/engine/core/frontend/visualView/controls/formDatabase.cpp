@@ -11,73 +11,70 @@
 #include "frontend/visualView/controls/htmlbox.h"
 #include "frontend/visualView/controls/chartBox.h"
 
-inline wxString GetClassType(const wxString &className)
+inline wxString GetClassType(const wxString& className)
 {
-	IControlValueAbstract *objectSingle =
-		dynamic_cast<IControlValueAbstract *>(CValue::GetAvailableObject(className));
+	IControlValueAbstract* objectSingle =
+		dynamic_cast<IControlValueAbstract*>(CValue::GetAvailableObject(className));
 	wxASSERT(objectSingle);
 	return objectSingle->GetControlType();
 }
 
-inline void SetDefaultLayoutProperties(CValueSizerItem *sizerItem)
+inline void SetDefaultLayoutProperties(CValueSizerItem* sizerItem)
 {
-	IValueFrame *child = sizerItem->GetChild(0);
+	IValueFrame* child = sizerItem->GetChild(0);
 	wxString obj_type = child->GetObjectTypeName();
 
 	if (obj_type == wxT("sizer"))
 	{
-		sizerItem->m_border = 0;
-		sizerItem->m_flag_border = wxALL;
-		sizerItem->m_flag_state = wxEXPAND;
+		sizerItem->SetBorder(0);
+		sizerItem->SetFlagBorder(wxALL);
+		sizerItem->SetFlagState(wxEXPAND);
 	}
 	else if (child->GetClassName() == wxT("splitter") ||
 		child->GetClassName() == wxT("spacer"))
 	{
-		sizerItem->m_proportion = 1;
-		sizerItem->m_flag_state = wxEXPAND;
+		sizerItem->SetProportion(1);
+		sizerItem->SetFlagState(wxEXPAND);
 	}
 	else if (child->GetClassName() == wxT("staticline"))
 	{
-		sizerItem->m_flag_border = wxALL;
-		sizerItem->m_flag_state = wxEXPAND;
+		sizerItem->SetFlagBorder(wxALL);
+		sizerItem->SetFlagState(wxEXPAND);
 	}
 	else if (child->GetClassName() == wxT("toolbar"))
 	{
-		sizerItem->m_border = 0;
-		sizerItem->m_flag_border = wxALL;
-		sizerItem->m_flag_state = wxEXPAND;
+		sizerItem->SetBorder(0);
+		sizerItem->SetFlagBorder(wxALL);
+		sizerItem->SetFlagState(wxEXPAND);
 	}
 	else if (child->GetClassName() == wxT("notebook"))
 	{
-		sizerItem->m_proportion = 1;
-		sizerItem->m_flag_border = wxALL;
-		sizerItem->m_flag_state = wxEXPAND;
+		sizerItem->SetProportion(1);
+		sizerItem->SetFlagBorder(wxALL);
+		sizerItem->SetFlagState(wxEXPAND);
 	}
 	else if (obj_type == wxT("widget") ||
 		obj_type == wxT("statusbar"))
 	{
-		sizerItem->m_proportion = 0;
-		sizerItem->m_flag_border = wxALL;
-		sizerItem->m_flag_state = wxSHRINK;
+		sizerItem->SetProportion(0);
+		sizerItem->SetFlagBorder(wxALL);
+		sizerItem->SetFlagState(wxSHRINK);
 	}
 	else if (obj_type == wxT("container"))
 	{
-		sizerItem->m_proportion = 1;
-		sizerItem->m_flag_border = wxALL;
-		sizerItem->m_flag_state = wxEXPAND;
+		sizerItem->SetProportion(1);
+		sizerItem->SetFlagBorder(wxALL);
+		sizerItem->SetFlagState(wxEXPAND);
 	}
-
-	sizerItem->ReadProperty();
 }
 
-IValueControl *CValueForm::NewObject(const wxString &classControl, IValueFrame *controlParent, bool generateId)
+IValueFrame* CValueForm::NewObject(const wxString& classControl, IValueFrame* controlParent, bool generateId)
 {
-	IValueControl *newControl =
-		CValue::CreateAndConvertObjectRef< IValueControl>(classControl);
+	IValueFrame* newControl =
+		CValue::CreateAndConvertObjectRef< IValueFrame>(classControl);
 	wxASSERT(newControl);
-	newControl->ReadProperty();
-
-	if (controlParent) {
+	;
+	if (controlParent != NULL) {
 		controlParent->AddChild(newControl);
 		newControl->SetParent(controlParent);
 	}
@@ -89,19 +86,25 @@ IValueControl *CValueForm::NewObject(const wxString &classControl, IValueFrame *
 		CValue::GetIDObjectFromString(classControl)
 	);
 
-	ResolveNameConflict(newControl);
+	CValueForm::ResolveNameConflict(newControl);
 
 	if (generateId) {
 		newControl->GenerateGuid();
 		newControl->GenerateNewID();
-		newControl->SaveProperty();
+	}
+
+	if (!newControl->Init()) {
+		controlParent->RemoveChild(newControl);
+		newControl->SetParent(NULL);
+		wxDELETE(newControl);
+		return NULL;
 	}
 
 	newControl->IncrRef();
 	return newControl;
 }
 
-void CValueForm::ResolveNameConflict(IValueFrame *control)
+void CValueForm::ResolveNameConflict(IValueFrame* control)
 {
 	// Save the original name for use later.
 	wxString originalName =
@@ -114,11 +117,11 @@ void CValueForm::ResolveNameConflict(IValueFrame *control)
 	// el nombre no puede estar repetido dentro del mismo form
 	IValueFrame* top = control->GetOwnerForm();
 	wxASSERT(top);
-	
+
 	// construimos el conjunto de nombres
 	std::set<wxString> name_set;
 
-	std::function<void(IValueFrame *, IValueFrame *, std::set< wxString >&)> buildNameSet = [&buildNameSet](IValueFrame *object, IValueFrame* top, std::set< wxString >& name_set) {
+	std::function<void(IValueFrame*, IValueFrame*, std::set< wxString >&)> buildNameSet = [&buildNameSet](IValueFrame* object, IValueFrame* top, std::set< wxString >& name_set) {
 		wxASSERT(object);
 		if (object != top) {
 			name_set.emplace(top->GetControlName());
@@ -127,7 +130,7 @@ void CValueForm::ResolveNameConflict(IValueFrame *control)
 			buildNameSet(object, top->GetChild(i), name_set);
 		}
 	};
-	
+
 	buildNameSet(control, top, name_set);
 
 	// comprobamos si hay conflicto
@@ -147,9 +150,9 @@ void CValueForm::ResolveNameConflict(IValueFrame *control)
 	control->SetControlName(name);
 }
 
-IValueControl *CValueForm::CreateObject(const wxString &className, IValueFrame *controlParent)
+IValueFrame* CValueForm::CreateObject(const wxString& className, IValueFrame* controlParent)
 {
-	IValueControl *object = NULL;
+	IValueFrame* object = NULL;
 	wxString classType = ::GetClassType(className);
 
 	if (controlParent) {
@@ -175,7 +178,7 @@ IValueControl *CValueForm::CreateObject(const wxString &className, IValueFrame *
 		// No menu dropdown for wxToolBar until wx 2.9 :(
 		if (controlParent->GetObjectTypeName() == wxT("tool"))
 		{
-			IValueFrame *gParent = controlParent->GetParent();
+			IValueFrame* gParent = controlParent->GetParent();
 
 			if (
 				(gParent->GetClassName() == wxT("toolbar")) &&
@@ -213,8 +216,8 @@ IValueControl *CValueForm::CreateObject(const wxString &className, IValueFrame *
 		}
 		else if (controlParent->GetObjectTypeName() == wxT("page"))
 		{
-			CValueSizerItem *sizerItem = NewObject<CValueSizerItem>("sizerItem", controlParent);
-			IValueControl *obj = NewObject(className, sizerItem);
+			CValueSizerItem* sizerItem = NewObject<CValueSizerItem>("sizerItem", controlParent);
+			IValueFrame* obj = NewObject(className, sizerItem);
 
 			if (controlParent) {
 				sizerItem->SetReadOnly(controlParent->IsEditable());
@@ -240,8 +243,8 @@ IValueControl *CValueForm::CreateObject(const wxString &className, IValueFrame *
 			controlParent->GetComponentType() == COMPONENT_TYPE_SIZER ||
 			controlParent->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
 		{
-			CValueSizerItem *sizerItem = NewObject< CValueSizerItem>("sizerItem", controlParent);
-			IValueControl *obj = NewObject(className, sizerItem);
+			CValueSizerItem* sizerItem = NewObject< CValueSizerItem>("sizerItem", controlParent);
+			IValueFrame* obj = NewObject(className, sizerItem);
 
 			if (controlParent) {
 				sizerItem->SetReadOnly(controlParent->IsEditable());
@@ -271,23 +274,26 @@ IValueControl *CValueForm::CreateObject(const wxString &className, IValueFrame *
 	return object;
 }
 
-IValueControl *CValueForm::CopyObject(IValueFrame *srcControl)
+IValueFrame* CValueForm::CopyObject(IValueFrame* srcControl)
 {
+	if (srcControl->GetComponentType() == COMPONENT_TYPE_FRAME)
+		return NULL; 
+
 	assert(srcControl);
-	IValueControl *copyObj = NewObject(srcControl->GetClassName(), NULL, false); // creamos la copia
+	IValueFrame* copyObj = NewObject(srcControl->GetClassName(), NULL, false); // creamos la copia
 	assert(copyObj);
 
 	// copiamos las propiedades
 	unsigned int i;
 	unsigned int count = srcControl->GetPropertyCount();
 	for (i = 0; i < count; i++) {
-		Property *objProp = srcControl->GetProperty(i);
+		Property* objProp = srcControl->GetProperty(i);
 		assert(objProp);
 
 		if (objProp->GetName() == wxT("name"))
 			continue;
 
-		Property *copyProp = copyObj->GetProperty(objProp->GetName());
+		Property* copyProp = copyObj->GetProperty(objProp->GetName());
 		assert(copyProp);
 
 		wxString propValue = objProp->GetValue();
@@ -297,8 +303,8 @@ IValueControl *CValueForm::CopyObject(IValueFrame *srcControl)
 	// ...and the event handlers
 	count = srcControl->GetEventCount();
 	for (i = 0; i < count; i++) {
-		Event *event = srcControl->GetEvent(i);
-		Event *copyEvent = copyObj->GetEvent(event->GetName());
+		Event* event = srcControl->GetEvent(i);
+		Event* copyEvent = copyObj->GetEvent(event->GetName());
 		copyEvent->SetValue(event->GetValue());
 	}
 
@@ -310,17 +316,15 @@ IValueControl *CValueForm::CopyObject(IValueFrame *srcControl)
 	// creamos recursivamente los hijos
 	count = srcControl->GetChildCount();
 	for (i = 0; i < count; i++) {
-		IValueFrame *childCopy =
+		IValueFrame* childCopy =
 			CopyObject(srcControl->GetChild(i));
 		wxASSERT(childCopy);
 		if (copyObj) {
 			copyObj->AddChild(childCopy);
 			childCopy->SetParent(copyObj);
 		}
-		childCopy->SaveProperty();
 	}
 
-	copyObj->SaveProperty();
 	return copyObj;
 }
 

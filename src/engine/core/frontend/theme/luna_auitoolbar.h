@@ -10,7 +10,10 @@ public:
 	CAuiGenericToolBarArt();
 	virtual ~CAuiGenericToolBarArt();
 
-	virtual wxAuiToolBarArt* Clone() wxOVERRIDE;
+	virtual wxAuiToolBarArt* Clone() wxOVERRIDE {
+		return new CAuiGenericToolBarArt(); 
+	}
+	
 	virtual void SetFlags(unsigned int flags) wxOVERRIDE;
 	virtual unsigned int GetFlags() wxOVERRIDE;
 	virtual void SetFont(const wxFont& font) wxOVERRIDE;

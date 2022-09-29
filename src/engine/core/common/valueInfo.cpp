@@ -1,6 +1,6 @@
 #include "valueInfo.h"
 #include "metadata/metaObjects/objects/reference/reference.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 #include "metadata/metaObjects/objects/tabularSection/tabularSection.h"
 #include "databaseLayer/databaseLayer.h"
 #include "appData.h" 

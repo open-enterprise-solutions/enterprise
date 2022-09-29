@@ -9,6 +9,21 @@
 #include "translateModule.h"
 
 #include "definition.h"
+#include "procUnit.h"
+
+inline void ThrowErrorTypeOperation(const wxString& fromType, wxClassInfo* clsInfo)
+{
+	if (!appData->DesignerMode()) {
+		wxString clsName = wxEmptyString;
+		if (clsInfo != NULL) {
+			CLASS_ID clsid = CValue::GetTypeIDByRef(clsInfo);
+			if (clsid > 0) {
+				clsName = CValue::GetNameObjectFromID(clsid);
+			}
+		}
+		CProcUnit::Raise(); CTranslateError::Error(ERROR_TYPE_OPERATION, fromType.wc_str(), clsName.wc_str());
+	}
+}
 
 //*************************************************************************************************************************************
 //*                                                           CValueNoRet                                                             *

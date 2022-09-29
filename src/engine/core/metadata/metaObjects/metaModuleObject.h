@@ -10,15 +10,15 @@ enum eContentHelper {
 	eUnknownHelper = 100
 };
 
-class CMetaModuleObject : public IMetaObject
-{
+class CMetaModuleObject : public IMetaObject {
 	wxDECLARE_DYNAMIC_CLASS(CMetaModuleObject);
-
 public:
 
 	CMetaModuleObject(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
 
-	virtual wxString GetClassName() const override { return wxT("module"); }
+	virtual wxString GetClassName() const override { 	
+		return wxT("module");
+	}
 
 	//support icons
 	virtual wxIcon GetIcon();
@@ -38,7 +38,7 @@ public:
 	virtual wxString GetModuleText() { return m_moduleData; }
 
 	//set default procedures 
-	void SetDefaultProcedure(const wxString& procname, eContentHelper contentHelper, std::vector<wxString> args = {});
+	void SetDefaultProcedure(const wxString& procName, const eContentHelper& contentHelper, std::vector<wxString> args = {});
 
 	size_t GetDefaultProcedureCount() const
 	{
@@ -97,22 +97,26 @@ private:
 	std::map<wxString, ContentData> m_contentHelper;
 };
 
-class CMetaCommonModuleObject : public CMetaModuleObject
-{
+class CMetaCommonModuleObject : public CMetaModuleObject {
 	wxDECLARE_DYNAMIC_CLASS(CMetaCommonModuleObject);
-
+private:
 	enum
 	{
 		ID_METATREE_OPEN_MODULE = 19000,
 	};
 
-	bool m_globalModule;
+protected:
+
+	PropertyCategory* m_moduleCategory = IPropertyObject::CreatePropertyCategory("Module");
+	Property* m_properyGlobalModule = IPropertyObject::CreateProperty(m_moduleCategory, "global_module", PropertyType::PT_BOOL, false);
 
 public:
 
 	CMetaCommonModuleObject(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
 
-	virtual wxString GetClassName() const override { return wxT("commonModule"); }
+	virtual wxString GetClassName() const override {
+		return wxT("commonModule");
+	}
 
 	//support icons
 	virtual wxIcon GetIcon();
@@ -130,21 +134,19 @@ public:
 	virtual bool OnBeforeRunMetaObject(int flags);
 	virtual bool OnAfterCloseMetaObject();
 
-	//read&save property
-	virtual void ReadProperty() override;
-	virtual void SaveProperty() override;
-
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defultMenu);
+	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
 	virtual void ProcessCommand(unsigned int id);
 
 	// check gm
-	virtual bool IsGlobalModule() const { return m_globalModule; }
+	virtual bool IsGlobalModule() const {
+		return m_properyGlobalModule->GetValueAsBoolean();
+	}
 
 	/**
 	* Property events
 	*/
-	virtual bool OnPropertyChanging(Property* property, const wxVariant& oldValue);
+	virtual bool OnPropertyChanging(Property* property, const wxVariant& newValue);
 	virtual void OnPropertyChanged(Property* property);
 
 protected:
@@ -161,7 +163,9 @@ public:
 	{
 	}
 
-	virtual wxString GetClassName() const override { return wxT("module"); }
+	virtual wxString GetClassName() const override {
+		return wxT("module");
+	}
 
 	//support icons
 	virtual wxIcon GetIcon();

@@ -35,8 +35,8 @@ void CCommandProcessor::Execute(CCommand *command)
 		m_redoStack.pop();
 	}
 
-	if (m_visualHostContext) {
-		m_visualHostContext->m_document->Modify(true);
+	if (g_visualHostContext) {
+		g_visualHostContext->m_document->Modify(true);
 	}
 }
 

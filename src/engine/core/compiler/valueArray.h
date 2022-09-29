@@ -25,11 +25,18 @@ public:
 
 	virtual bool Init(CValue **aParams);
 
-	virtual wxString GetTypeString() const { return wxT("array"); }
-	virtual wxString GetString() const { return wxT("array"); }
+	virtual wxString GetTypeString() const { 
+		return wxT("array"); 
+	}
+	
+	virtual wxString GetString() const { 
+		return wxT("array");
+	}
 
 	//check is empty
-	virtual inline bool IsEmpty() const override { return m_aValuesArray.empty(); }
+	virtual inline bool IsEmpty() const override { 
+		return m_aValuesArray.empty();
+	}
 
 public:
 
@@ -37,7 +44,9 @@ public:
 	//работа с массивом как с агрегатным объектом
 	static CMethods m_methods;
 
-	virtual CMethods* GetPMethods() const { return &m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethods* GetPMethods() const { //получить ссылку на класс помощник разбора имен атрибутов и методов
+		return &m_methods;
+	} 
 	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
 	virtual CValue Method(methodArg_t &aParams);       //вызов метода
 

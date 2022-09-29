@@ -5,8 +5,8 @@
 
 #include "reference.h"
 #include "compiler/methods.h"
-#include "metadata/metaObjects/objects/baseObject.h"
-#include "metadata/metaObjects/tables/metaTableObject.h"
+#include "metadata/metaObjects/objects/object.h"
+#include "metadata/metaObjects/table/metaTableObject.h"
 
 enum
 {

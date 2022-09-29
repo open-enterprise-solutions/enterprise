@@ -70,9 +70,7 @@ CValue CDocumentManager::Method(methodArg_t &aParams)
 	switch (aParams.GetIndex())
 	{
 	case eCreateElement:
-	{
-		return m_metaObject->CreateObjectRefValue();
-	}
+		return m_metaObject->CreateObjectValue();
 	case eSelect:
 	{
 		class CSelectorDocumentObject : public ISelectorDataObject {
@@ -110,9 +108,7 @@ CValue CDocumentManager::Method(methodArg_t &aParams)
 			guidVal ? ((Guid)*guidVal) : Guid());
 	}
 	case eEmptyRef:
-	{
 		return EmptyRef();
-	}
 	}
 
 	IMetadata *metaData = m_metaObject->GetMetadata();

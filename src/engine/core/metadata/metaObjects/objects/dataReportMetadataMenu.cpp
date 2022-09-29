@@ -6,20 +6,19 @@
 #include "dataReport.h"
 #include "frontend/metatree/metatreeWnd.h"
 
-bool CMetaObjectReport::PrepareContextMenu(wxMenu *defultMenu)
+bool CMetaObjectReport::PrepareContextMenu(wxMenu *defaultMenu)
 {
-	wxMenuItem *m_menuItem = NULL;
-	m_menuItem = defultMenu->Append(ID_METATREE_OPEN_MODULE, _("open module"));
-	m_menuItem->SetBitmap(wxGetImageBMPFromResource(IDB_EDIT_MODULE));
-	m_menuItem = defultMenu->Append(ID_METATREE_OPEN_MANAGER, _("open manager"));
-	m_menuItem->SetBitmap(wxGetImageBMPFromResource(IDB_EDIT_MODULE));
-	defultMenu->AppendSeparator();
+	wxMenuItem *menuItem = defaultMenu->Append(ID_METATREE_OPEN_MODULE, _("Open module"));
+	menuItem->SetBitmap(m_moduleObject->GetIcon());
+	menuItem = defaultMenu->Append(ID_METATREE_OPEN_MANAGER, _("Open manager"));
+	menuItem->SetBitmap(m_moduleManager->GetIcon());
+	defaultMenu->AppendSeparator();
 	return false;
 }
 
 void CMetaObjectReport::ProcessCommand(unsigned int id)
 {
-	IMetadataTree *metaTree = m_metaData->GetMetaTree();
+	IMetadataWrapperTree *metaTree = m_metaData->GetMetaTree();
 	wxASSERT(metaTree);
 
 	if (id == ID_METATREE_OPEN_MODULE)

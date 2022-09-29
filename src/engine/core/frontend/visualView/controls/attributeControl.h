@@ -7,7 +7,88 @@
 class IMetaObjectWrapperData;
 class ISourceDataObject;
 
+#include "guid/guid.h"
+
 class CValueForm;
+
+///////////////////////////////////////////////////////////////////////////
+
+class IAttributeControl :
+	public IAttributeInfo {
+protected:
+	virtual void DoSetFromMetaId(const meta_identifier_t& id);
+public:
+
+	virtual CLASS_ID GetFirstClsid() const;
+	virtual std::set<CLASS_ID> GetClsids() const;
+
+	IMetaObject* GetMetaSource() const;
+	IMetaObject* GetMetaObjectById(const CLASS_ID& clsid) const;
+
+	void SetSourceId(const meta_identifier_t& id);
+	meta_identifier_t GetSourceId() const;
+
+	void ResetSource();
+
+	//ctor
+	IAttributeControl(const eValueTypes& defType = eValueTypes::TYPE_STRING) :
+		IAttributeInfo(defType)
+	{
+	}
+
+	IAttributeControl(const CLASS_ID& clsid) :
+		IAttributeInfo(clsid)
+	{
+	}
+
+	IAttributeControl(const std::set<CLASS_ID>& clsids) :
+		IAttributeInfo(clsids)
+	{
+	}
+
+	IAttributeControl(const std::set<CLASS_ID>& clsids, const metaDescription_t& descr) :
+		IAttributeInfo(clsids, descr)
+	{
+	}
+
+	//////////////////////////////////////////////////
+
+	meta_identifier_t GetIdByGuid(const Guid &guid) const;
+	Guid GetGuidByID(const meta_identifier_t& id) const;
+
+	//////////////////////////////////////////////////
+
+	virtual bool LoadTypeData(CMemoryReader& dataReader);
+	virtual bool LoadFromVariant(const wxVariant& variant);
+	virtual bool SaveTypeData(CMemoryWriter& dataWritter);
+	virtual void SaveToVariant(wxVariant& variant, IMetadata* metaData) const;
+
+	//////////////////////////////////////////////////
+
+	virtual bool SelectSimpleValue(const CLASS_ID &clsid, wxWindow* parent) const;
+
+	//////////////////////////////////////////////////
+
+	//Get source object 
+	virtual ISourceDataObject* GetSourceObject() const = 0;
+
+	//Get source object 
+	virtual CValueForm* GetOwnerForm() const = 0;
+
+	//Get meta object
+	virtual IMetaObjectWrapperData* GetMetaObject() const;
+
+	//Create value by selected type
+	virtual CValue CreateValue() const;
+	virtual CValue* CreateValueRef() const;
+
+	//Get data type 
+	virtual CLASS_ID GetDataType() const;
+
+protected:
+
+	Guid m_dataSource;
+};
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -118,55 +199,6 @@ protected:
 	wxVariantSourceAttributeData* m_typeData;
 
 	meta_identifier_t m_srcId;
-};
-
-///////////////////////////////////////////////////////////////////////////
-
-class IAttributeControl : public IAttributeInfo {
-public:
-
-	IMetaObject* GetMetaSource() const;
-	IMetaObject* GetMetaObjectById(const CLASS_ID& clsid) const;
-
-	void ResetSource();
-
-	//ctor
-	IAttributeControl(const eValueTypes& defType = eValueTypes::TYPE_STRING) :
-		IAttributeInfo(defType), m_dataSource(wxNOT_FOUND)
-	{
-	}
-
-	IAttributeControl(const CLASS_ID& clsid) :
-		IAttributeInfo(clsid), m_dataSource(wxNOT_FOUND)
-	{
-	}
-
-	//////////////////////////////////////////////////
-
-	virtual bool LoadData(CMemoryReader& dataReader);
-
-	virtual bool LoadFromVariant(const wxVariant& variant);
-
-	virtual bool SaveData(CMemoryWriter& dataWritter);
-
-	virtual void SaveToVariant(wxVariant& variant, IMetadata* metaData) const;
-
-	//////////////////////////////////////////////////
-
-	//Get source object 
-	virtual ISourceDataObject* GetSourceObject() const = 0;
-	//Get source object 
-	virtual CValueForm* GetOwnerForm() const = 0;
-	//Get meta object
-	virtual IMetaObjectWrapperData* GetMetaObject() const;
-	//Create value by selected type
-	virtual CValue CreateValue() const;
-	virtual CValue* CreateValueRef() const;
-	//Get data type 
-	virtual CLASS_ID GetDataType() const;
-
-protected:
-	meta_identifier_t m_dataSource;
 };
 
 #endif

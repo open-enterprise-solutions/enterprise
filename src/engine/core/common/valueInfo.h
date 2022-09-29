@@ -8,9 +8,8 @@ class ITabularSectionDataObject;
 class IObjectValueInfo {
 public:
 
-	IObjectValueInfo(const Guid& guid = Guid(),
-		bool newObject = true) : m_objGuid(guid), m_newObject(newObject)
-	{
+	IObjectValueInfo(const Guid& objGuid = wxNullGuid,
+		bool newObject = true) : m_objGuid(objGuid), m_newObject(newObject) {
 	}
 
 	//support source set/get data 

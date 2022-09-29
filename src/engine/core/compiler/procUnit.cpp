@@ -877,23 +877,18 @@ start_label:
 		CSystemObjects::Message(err->what(),
 			eStatusMessage::eStatusMessage_Error
 		);
-
-		while (nCodeLine < nFinish)
-		{
+		while (nCodeLine < nFinish) {
 			if (CurCode.m_nOper != OPER_GOTO
 				&& CurCode.m_nOper != OPER_NEXT
-				&& CurCode.m_nOper != OPER_NEXT_ITER)
-			{
+				&& CurCode.m_nOper != OPER_NEXT_ITER) {
 				nCodeLine++;
 			}
-			else
-			{
+			else {
 				nCodeLine++;
 				goto start_label;
 				break;
 			}
 		}
-
 		return CValue();
 	}
 	catch (const CTranslateError *err)
@@ -901,15 +896,11 @@ start_label:
 		int n = aTryList.size() - 1;
 		if (n >= 0) {
 			s_errorPlace.Reset(); //Ошибка обрабатывается в этом модуле - стираем место ошибки
-
 			int nLine = aTryList[n].y;
-
 			aTryList.resize(n);
 			nCodeLine = nLine;
-
 			goto start_label;
 		}
-
 		//в этом модуле нет обработчика - сохраняем место ошибки для следующих модулей
 		//Но ошибку сразу не выдаем, т.к. не знаем есть ли дальше обработчики
 		if (!s_errorPlace.m_pByteCode) {
@@ -919,7 +910,6 @@ start_label:
 				s_errorPlace.nLine = nCodeLine;
 			}
 		}
-
 		CTranslateError::ProcessError(m_pByteCode->m_aCodeList[nCodeLine], err->what());
 	}
 
@@ -1043,11 +1033,9 @@ int CProcUnit::FindFunction(const wxString &sName, bool bError, int bExportOnly)
 	}
 
 	if (GetParent() &&
-		bExportOnly <= 1)
-	{
+		bExportOnly <= 1) {
 		unsigned int nCodeSize = m_pByteCode->m_aCodeList.size();
 		nCodeLine = GetParent()->FindFunction(sName, false, 1);
-
 		if (nCodeLine >= 0) {
 			return nCodeSize + nCodeLine;
 		}
@@ -1072,12 +1060,10 @@ CValue CProcUnit::CallFunction(unsigned int nCodeLine, CValue **ppParams, unsign
 
 	unsigned int nCodeSize = m_pByteCode->m_aCodeList.size();
 
-	if (nCodeLine >= nCodeSize)
-	{
+	if (nCodeLine >= nCodeSize) {
 		if (GetParent()) {
 			return GetParent()->CallFunction(nCodeLine - nCodeSize, ppParams, nReceiveParamCount);
 		}
-
 		CTranslateError::Error(_("Error calling module function!"));
 	}
 
@@ -1102,7 +1088,8 @@ CValue CProcUnit::CallFunction(methodArg_t &aParams)
 		CTranslateError::Error(_("Module not compiled!"));
 	}
 
-	int nCodeLine = m_pByteCode->m_aFuncList.find(aParams.GetName(true)) != m_pByteCode->m_aFuncList.end() ? m_pByteCode->m_aFuncList[aParams.GetName(true)] - 1 : wxNOT_FOUND;
+	int nCodeLine = m_pByteCode->m_aFuncList.find(aParams.GetName(true)) != m_pByteCode->m_aFuncList.end() ? 
+		m_pByteCode->m_aFuncList[aParams.GetName(true)] - 1 : wxNOT_FOUND;
 
 	wxASSERT(nCodeLine != wxNOT_FOUND);
 
@@ -1115,14 +1102,11 @@ CValue CProcUnit::CallFunction(methodArg_t &aParams)
 	cRunContext.m_compileContext = reinterpret_cast<CCompileContext *>(pCodeList[cRunContext.m_nStart].m_param1.m_nArray);
 
 	//загружаем параметры
-	for (unsigned int i = 0; i < cRunContext.m_nParamCount; i++)
-	{
+	for (unsigned int i = 0; i < cRunContext.m_nParamCount; i++) {
 		nCodeLine++;
 		if (CurCode.m_nOper == OPER_SETCONST) {
-
 			if (i < aParams.GetParamCount()) {
 				bool hasValue = aParams[i].GetType() != eValueTypes::TYPE_EMPTY;
-
 				if (aParams[i].m_bReadOnly || Index2 == 1) {//передача параметра по значению
 					CopyValue(cRunContext.m_pLocVars[i], hasValue ? aParams[i] : m_pByteCode->m_aConstList[Index1]);
 				}
@@ -1159,7 +1143,7 @@ CValue CProcUnit::CallFunction(methodArg_t &aParams)
 //Вызов осуществляется только в текущем модуле
 CValue CProcUnit::CallFunction(const wxString &sName, CValue **ppParams, unsigned int m_nParamCount)
 {
-	if (m_pByteCode) {
+	if (m_pByteCode != NULL) {
 		int nCodeLine = m_pByteCode->m_aFuncList.find(StringUtils::MakeUpper(sName)) != m_pByteCode->m_aFuncList.end() ?
 			m_pByteCode->m_aFuncList[StringUtils::MakeUpper(sName)] - 1 :
 			wxNOT_FOUND;
@@ -1257,13 +1241,15 @@ CValue CProcUnit::GetAttribute(attributeArg_t &aParams)//значение атрибута
 CValue CProcUnit::GetAttribute(const wxString &sName)//установка атрибута
 {
 	int iName = FindAttribute(sName);
-	if (iName != wxNOT_FOUND) return *m_cCurContext.m_pRefLocVars[iName];
+	if (iName != wxNOT_FOUND) 
+		return *m_cCurContext.m_pRefLocVars[iName];
 	return CValue();
 }
 
 int CProcUnit::FindAttribute(const wxString &sName) const
 {
-	if (m_pByteCode->m_aExportVarList.find(StringUtils::MakeUpper(sName)) != m_pByteCode->m_aExportVarList.end()) return m_pByteCode->m_aExportVarList[StringUtils::MakeUpper(sName)] - 1;
+	if (m_pByteCode->m_aExportVarList.find(StringUtils::MakeUpper(sName)) != m_pByteCode->m_aExportVarList.end()) 
+		return m_pByteCode->m_aExportVarList[StringUtils::MakeUpper(sName)] - 1;
 	else return wxNOT_FOUND;
 }
 

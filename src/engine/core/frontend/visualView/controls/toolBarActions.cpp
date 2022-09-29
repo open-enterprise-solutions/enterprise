@@ -4,7 +4,7 @@
 inline void ParseElements(IValueFrame* element, OptionList* optionlist)
 {
 	if (element->GetClassName() == wxT("tablebox")) {
-		optionlist->AddOption(element->GetPropertyAsString("name"), element->GetControlID());
+		optionlist->AddOption(element->GetControlName(), element->GetControlID());
 	}
 
 	for (unsigned int i = 0; i < element->GetChildCount(); i++) {
@@ -12,7 +12,7 @@ inline void ParseElements(IValueFrame* element, OptionList* optionlist)
 	}
 }
 
-OptionList* CValueToolbar::GetActionSource(Property*)
+OptionList* CValueToolbar::GetActionSource(PropertyOption*)
 {
 	OptionList* optionlist = new OptionList;
 

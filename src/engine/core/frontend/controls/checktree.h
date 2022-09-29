@@ -10,11 +10,57 @@
 #define wxCR_SINGLE_CHECK 0x2000
 #define wxCR_MULTIPLE_CHECK 0x4000
 
-class wxCheckTree : public wxTreeCtrl
-{
+class wxCheckTree : public wxTreeCtrl {
 	bool m_singleCheck;
 	bool m_allowEmpty;
 	std::map<wxTreeItemId, bool> m_checkedItems;
+protected:
+
+	// common part of Append/Prepend/InsertItem()
+	//
+	// pos is the position at which to insert the item or (size_t)-1 to append
+	// it to the end
+	virtual wxTreeItemId DoInsertItem(const wxTreeItemId& parent,
+		size_t pos,
+		const wxString& text,
+		int image, int selImage,
+		wxTreeItemData* data)
+	{
+		wxTreeItemId id = wxTreeCtrl::DoInsertItem(
+			parent,
+			pos,
+			text,
+			image, selImage,
+			data
+		);
+		//wxCheckTree::SetItemState(id, wxCheckTree::UNCHECKED);
+		//wxCheckTree::Check(id, false);
+		m_checkedItems.insert_or_assign(id, false);
+		return id;
+	}
+
+	// and this function implements overloaded InsertItem() taking wxTreeItemId
+	// (it can't be called InsertItem() as we'd have virtual function hiding
+	// problem in derived classes then)
+	virtual wxTreeItemId DoInsertAfter(const wxTreeItemId& parent,
+		const wxTreeItemId& idPrevious,
+		const wxString& text,
+		int image = -1, int selImage = -1,
+		wxTreeItemData* data = NULL)
+	{
+		wxTreeItemId id = wxTreeCtrl::DoInsertAfter(
+			parent,
+			idPrevious,
+			text,
+			image, selImage,
+			data
+		);
+		//wxCheckTree::SetItemState(id, wxCheckTree::UNCHECKED);
+		//wxCheckTree::Check(id, false);
+		m_checkedItems.insert_or_assign(id, false);
+		return id;
+	}
+
 public:
 
 	int GetItems(wxArrayTreeItemIds& array) const {
@@ -57,49 +103,6 @@ public:
 			}
 		}
 		wxTreeCtrl::SetWindowStyleFlag(style);
-	}
-
-	// common part of Append/Prepend/InsertItem()
-	//
-	// pos is the position at which to insert the item or (size_t)-1 to append
-	// it to the end
-	virtual wxTreeItemId DoInsertItem(const wxTreeItemId& parent,
-		size_t pos,
-		const wxString& text,
-		int image, int selImage,
-		wxTreeItemData* data)
-	{
-		wxTreeItemId id = wxTreeCtrl::DoInsertItem(
-			parent,
-			pos,
-			text,
-			image, selImage,
-			data
-		);
-
-		m_checkedItems.insert_or_assign(id, false);
-		return id;
-	}
-
-	// and this function implements overloaded InsertItem() taking wxTreeItemId
-	// (it can't be called InsertItem() as we'd have virtual function hiding
-	// problem in derived classes then)
-	virtual wxTreeItemId DoInsertAfter(const wxTreeItemId& parent,
-		const wxTreeItemId& idPrevious,
-		const wxString& text,
-		int image = -1, int selImage = -1,
-		wxTreeItemData* data = NULL)
-	{
-		wxTreeItemId id = wxTreeCtrl::DoInsertAfter(
-			parent,
-			idPrevious,
-			text,
-			image, selImage,
-			data
-		);
-
-		m_checkedItems.insert_or_assign(id, false);
-		return id;
 	}
 
 	//interaction with the check boxes:

@@ -12,8 +12,9 @@ DEFINE_EVENT_TYPE(wxEVT_INNER_FRAME_RESIZED)
 
 class CInnerFrame::TitleBar : public wxPanel
 {
+	wxDECLARE_EVENT_TABLE();
+
 private:
-	DECLARE_EVENT_TABLE()
 
 	void DrawTitleBar(wxDC &dc);
 
@@ -42,9 +43,8 @@ public:
 
 	void OnLeftClick(wxMouseEvent &event);
 	void SetTitle(const wxString &title) { m_titleText = title; }
-	wxString GetTitle() { return m_titleText; }
+	wxString GetTitle() const { return m_titleText; }
 	void SetStyle(long style) { m_style = style; }
-
 };
 
 

@@ -188,7 +188,7 @@ private:
 	} m_toolData;
 public:
 
-	IObjectBase* GetObject() const {
+	IPropertyObject* GetObject() const {
 		return m_curObject;
 	}
 
@@ -208,7 +208,7 @@ public:
 		const wxString& name = wxPG_LABEL,
 		wxPGChoices& choices = wxPGChoices(),
 		const wxString& value = wxEmptyString,
-		IObjectBase* currentObject = NULL);
+		IPropertyObject* currentObject = NULL);
 
 	virtual ~wxPGToolActionProperty();
 
@@ -228,7 +228,7 @@ public:
 
 protected:
 
-	IObjectBase* m_curObject;
+	IPropertyObject* m_curObject;
 };
 
 // -----------------------------------------------------------------------
@@ -242,7 +242,7 @@ private:
 	void FillByClsid(const CLASS_ID& clsid);
 public:
 
-	IObjectBase* GetObject() const {
+	IPropertyObject* GetObject() const {
 		return m_curObject;
 	}
 
@@ -253,7 +253,7 @@ public:
 	wxPGTypeSelectorProperty(const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant,
 		eSelectorDataType dataType = eSelectorDataType::eSelectorDataType_reference,
-		IObjectBase* currentObject = NULL);
+		IPropertyObject* currentObject = NULL);
 
 	virtual wxString ValueToString(wxVariant& value, int argFlags = 0) const override;
 	virtual bool StringToValue(wxVariant& variant,
@@ -289,7 +289,7 @@ protected:
 	wxEnumProperty* m_date_time;
 	wxUIntProperty* m_length;
 
-	IObjectBase* m_curObject;
+	IPropertyObject* m_curObject;
 };
 
 // -----------------------------------------------------------------------
@@ -302,13 +302,13 @@ private:
 	void FillByClsid(const CLASS_ID& clsid);
 public:
 
-	IObjectBase* GetObject() const {
+	IPropertyObject* GetObject() const {
 		return m_curObject;
 	}
 
 	wxPGRecordSelectorProperty(const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant,
-		IObjectBase* currentObject = NULL);
+		IPropertyObject* currentObject = NULL);
 
 	virtual wxString ValueToString(wxVariant& value, int argFlags = 0) const override;
 	virtual bool StringToValue(wxVariant& variant,
@@ -323,7 +323,7 @@ public:
 
 protected:
 
-	IObjectBase* m_curObject;
+	IPropertyObject* m_curObject;
 };
 
 // -----------------------------------------------------------------------
@@ -336,13 +336,13 @@ private:
 	void FillByClsid(const CLASS_ID& clsid);
 public:
 
-	IObjectBase* GetObject() const {
+	IPropertyObject* GetObject() const {
 		return m_curObject;
 	}
 
 	wxPGOwnerSelectorProperty(const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant,
-		IObjectBase* currentObject = NULL);
+		IPropertyObject* currentObject = NULL);
 
 	virtual wxString ValueToString(wxVariant& value, int argFlags = 0) const override;
 	virtual bool StringToValue(wxVariant& variant,
@@ -357,7 +357,41 @@ public:
 
 protected:
 
-	IObjectBase* m_curObject;
+	IPropertyObject* m_curObject;
+};
+
+// -----------------------------------------------------------------------
+// wxPGGenerationSelectorProperty
+// -----------------------------------------------------------------------
+
+class wxPGGenerationSelectorProperty : public wxStringProperty {
+	WX_PG_DECLARE_PROPERTY_CLASS(wxPGGenerationSelectorProperty);
+private:
+	void FillByClsid(const CLASS_ID& clsid);
+public:
+
+	IPropertyObject* GetObject() const {
+		return m_curObject;
+	}
+
+	wxPGGenerationSelectorProperty(const wxString& label = wxPG_LABEL,
+		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant,
+		IPropertyObject* currentObject = NULL);
+
+	virtual wxString ValueToString(wxVariant& value, int argFlags = 0) const override;
+	virtual bool StringToValue(wxVariant& variant,
+		const wxString& text,
+		int argFlags = 0) const override;
+
+	virtual bool IntToValue(wxVariant& value,
+		int number,
+		int argFlags = 0) const override;
+
+	virtual wxPGEditorDialogAdapter* GetEditorDialog() const override;
+
+protected:
+
+	IPropertyObject* m_curObject;
 };
 
 // -----------------------------------------------------------------------
@@ -372,14 +406,14 @@ public:
 		return m_srcDataType;
 	}
 
-	IObjectBase* GetObject() const {
+	IPropertyObject* GetObject() const {
 		return m_curObject;
 	}
 
 	wxPGSourceDataProperty(const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
 		const wxVariant& value = wxNullVariant,
-		IObjectBase* currentObject = NULL);
+		IPropertyObject* currentObject = NULL);
 
 	virtual ~wxPGSourceDataProperty();
 
@@ -401,8 +435,64 @@ protected:
 
 	eSourceDataType m_srcDataType;
 
-	IObjectBase* m_curObject;
+	IPropertyObject* m_curObject;
 	wxPGTypeSelectorProperty* m_typeSelector;
+};
+
+
+// -----------------------------------------------------------------------
+// wxNumberProperty
+// -----------------------------------------------------------------------
+
+class wxNumberProperty : public wxNumericProperty {
+	WX_PG_DECLARE_PROPERTY_CLASS(wxFloatProperty);
+protected:
+	// Common validation code to be called in ValidateValue() implementations.
+	// Note that 'value' is reference on purpose, so we can write
+	// back to it when mode is wxPG_PROPERTY_VALIDATION_SATURATE or wxPG_PROPERTY_VALIDATION_WRAP.
+	bool DoNumericValidation(number_t& value, wxPGValidationInfo* pValidationInfo, int mode) const
+	{
+		if (value.IsNan()) {
+			if (value < 0) {
+				if (mode == wxPG_PROPERTY_VALIDATION_ERROR_MESSAGE) {
+					wxString msg = wxString::Format(_("Value must be higher."));
+					pValidationInfo->SetFailureMessage(msg);
+				}
+				value = 0;
+				return false;
+			}
+			if (value > 0) {
+				if (mode == wxPG_PROPERTY_VALIDATION_ERROR_MESSAGE) {
+					wxString msg = wxString::Format(_("Value must be less."));
+					pValidationInfo->SetFailureMessage(msg);
+				}
+				value = 0;
+				return false;
+			}
+		}
+		return true;
+	}
+public:
+	wxNumberProperty(const wxString& label = wxPG_LABEL,
+		const wxString& name = wxPG_LABEL,
+		const number_t& value = 0.0);
+	virtual ~wxNumberProperty();
+
+	virtual wxString ValueToString(wxVariant& value, int argFlags = 0) const wxOVERRIDE;
+	virtual bool StringToValue(wxVariant& variant,
+		const wxString& text,
+		int argFlags = 0) const wxOVERRIDE;
+	virtual bool DoSetAttribute(const wxString& name, wxVariant& value) wxOVERRIDE;
+
+	virtual bool ValidateValue(wxVariant& value,
+		wxPGValidationInfo& validationInfo) const wxOVERRIDE;
+
+	static wxValidator* GetClassValidator();
+	virtual wxValidator* DoGetValidator() const wxOVERRIDE;
+	virtual wxVariant AddSpinStepValue(long stepScale) const wxOVERRIDE;
+
+protected:
+	int m_precision;
 };
 
 #endif

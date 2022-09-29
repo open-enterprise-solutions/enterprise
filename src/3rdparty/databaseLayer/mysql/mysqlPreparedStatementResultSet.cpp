@@ -247,7 +247,7 @@ wxDateTime MysqlPreparedStatementResultSet::GetResultDate(int nField)
 	return returnDate;
 }
 
-void* MysqlPreparedStatementResultSet::GetResultBlob(int nField, wxMemoryBuffer& Buffer)
+void* MysqlPreparedStatementResultSet::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 {
 	void* pReturn = NULL;
 	MYSQL_BIND* pResultBinding = GetResultBinding(nField);
@@ -267,16 +267,16 @@ void* MysqlPreparedStatementResultSet::GetResultBlob(int nField, wxMemoryBuffer&
 			tempBuffer.UngetWriteBuf(nBufferLength);
 			tempBuffer.SetDataLen(nBufferLength);
 			tempBuffer.SetBufSize(nBufferLength);
-			Buffer = tempBuffer;
+			buffer = tempBuffer;
 
-			pReturn = Buffer.GetData();
+			pReturn = buffer.GetData();
 		}
 		else
 		{
 			wxMemoryBuffer tempBuffer(0);
 			tempBuffer.SetDataLen(0);
 			tempBuffer.SetBufSize(0);
-			Buffer = tempBuffer;
+			buffer = tempBuffer;
 		}
 	}
 	else
@@ -284,7 +284,7 @@ void* MysqlPreparedStatementResultSet::GetResultBlob(int nField, wxMemoryBuffer&
 		wxMemoryBuffer tempBuffer(0);
 		tempBuffer.SetDataLen(0);
 		tempBuffer.SetBufSize(0);
-		Buffer = tempBuffer;
+		buffer = tempBuffer;
 	}
 
 	return pReturn;

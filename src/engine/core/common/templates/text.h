@@ -8,6 +8,8 @@
 #include "common/docInfo.h"
 #include "frontend/codeEditor/codeEditorCtrl.h"
 
+#include <wx/fdrepdlg.h>
+
 // The view using a standard wxTextCtrl to show its contents
 class CTextEditView : public CView
 {
@@ -23,6 +25,8 @@ public:
 	virtual void OnDraw(wxDC *dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
+	virtual wxPrintout* OnCreatePrintout() override;
+
 	wxStyledTextCtrl *GetText() const { return m_text; }
 
 private:
@@ -30,6 +34,8 @@ private:
 	void OnCopy(wxCommandEvent& WXUNUSED(event)) { m_text->Copy(); }
 	void OnPaste(wxCommandEvent& WXUNUSED(event)) { m_text->Paste(); }
 	void OnSelectAll(wxCommandEvent& WXUNUSED(event)) { m_text->SelectAll(); }
+
+	void OnFind(wxFindDialogEvent& event);
 
 	wxStyledTextCtrl *m_text;
 

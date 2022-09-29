@@ -1,14 +1,19 @@
 #ifndef _CONSTANTS_H__
 #define _CONSTANTS_H__
 
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 
 class CConstantObject;
 
 class CMetaConstantObject : public CMetaAttributeObject,
 	public IMetaCommandData {
 	wxDECLARE_DYNAMIC_CLASS(CMetaConstantObject);
-
+private:
+	Role* m_roleRead = IMetaObject::CreateRole({ "read", _("read") });
+	Role* m_roleInsert = IMetaObject::CreateRole({ "insert", _("insert") });
+	Role* m_roleUpdate = IMetaObject::CreateRole({ "update", _("update") });
+	Role* m_roleDelete = IMetaObject::CreateRole({ "delete", _("delete") });
+protected:
 	enum
 	{
 		ID_METATREE_OPEN_CONSTANT_MANAGER = 19000,
@@ -66,24 +71,20 @@ public:
 	//create and update table 
 	virtual bool CreateAndUpdateTableDB(IConfigMetadata* srcMetaData, IMetaObject* srcMetaObject, int flags);
 
-	//load & save metadata from DB 
-	virtual bool LoadData(CMemoryReader& reader);
-	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
-	virtual bool DeleteData();
-
 	//process default query
 	int ProcessAttribute(const wxString& tableName, IMetaAttributeObject* srcAttr, IMetaAttributeObject* dstAttr);
-
-	//read & save property
-	virtual void ReadProperty() override;
-	virtual void SaveProperty() override;
 
 	friend class CConstantObject;
 
 protected:
 
+	//load & save metadata from DB 
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
+	virtual bool DeleteData();
+
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defultMenu);
+	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
 	virtual void ProcessCommand(unsigned int id);
 };
 
@@ -92,13 +93,12 @@ protected:
 class CConstantObject : public CValue, public IActionSource,
 	public ISourceDataObject, public IModuleInfo {
 	virtual bool InitializeObject(const CConstantObject* source = NULL);
-public:
-
-	CValue GetConstValue() const;
-	bool SetConstValue(const CValue& cValue);
-
+protected:
 	CConstantObject(CMetaConstantObject* metaObject);
 	CConstantObject(const CConstantObject& source);
+public:
+	CValue GetConstValue() const;
+	bool SetConstValue(const CValue& cValue);
 
 	//standart override 
 	virtual CMethods* GetPMethods() const {
@@ -128,7 +128,7 @@ public:
 
 	//support source data 
 	virtual CSourceExplorer GetSourceExplorer() const;
-	virtual bool GetTable(IValueTable*& tableValue, const meta_identifier_t& id);
+	virtual bool GetModel(IValueModel*& tableValue, const meta_identifier_t& id);
 
 	//support source set/get data 
 	virtual void SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal);
@@ -179,9 +179,10 @@ public:
 	}
 
 protected:
-
 	CMetaConstantObject* m_metaObject;
 	CValue m_constVal;
+protected:
+	friend class CMetaConstantObject;
 };
 
 #endif

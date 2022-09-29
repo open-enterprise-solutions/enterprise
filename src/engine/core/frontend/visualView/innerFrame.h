@@ -4,10 +4,9 @@
 #include <wx/aui/aui.h>
 #include <wx/wx.h>
 
-class CInnerFrame : public wxPanel
-{
+class CInnerFrame : public wxPanel {
 	wxDECLARE_EVENT_TABLE();
-
+private:
 	enum {
 		NONE,
 		RIGHTBOTTOM,
@@ -27,7 +26,7 @@ class CInnerFrame : public wxPanel
 
 protected:
 
-	wxSize DoGetBestSize() const override;
+	virtual wxSize DoGetBestSize() const override;
 
 public:
 	CInnerFrame(wxWindow *parent, wxWindowID id,
@@ -35,7 +34,10 @@ public:
 		const wxSize &size = wxDefaultSize,
 		long style = 0);
 
-	wxPanel *GetFrameContentPanel() { return m_valueFrameContent; }
+	wxPanel *GetFrameContentPanel() const {
+		return m_valueFrameContent; 
+	}
+	
 	void OnMouseMotion(wxMouseEvent& e);
 	void OnLeftDown(wxMouseEvent& e);
 	void OnLeftUp(wxMouseEvent& e);

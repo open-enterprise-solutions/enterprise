@@ -1,61 +1,9 @@
 #ifndef _ACCUMULATION_REGISTER_H__
 #define _ACCUMULATION_REGISTER_H__
 
-#include "baseObject.h"
-#include "compiler/enumObject.h"
+#include "object.h"
 
-enum eRegisterType {
-	eBalances,
-	eTurnovers
-};
-
-enum eRecordType {
-	eExpense,
-	eReceipt
-};
-
-const CLASS_ID g_enumRecordTypeCLSID = TEXT2CLSID("EN_RETP");
-
-class CValueEnumAccumulationRegisterRecordType : public IEnumeration<eRecordType> {
-	wxDECLARE_DYNAMIC_CLASS(CValueEnumAccumulationRegisterRecordType);
-public:
-
-	static CValue CreateDefEnumValue();
-
-	CValueEnumAccumulationRegisterRecordType() : IEnumeration() {
-		InitializeEnumeration();
-	}
-
-	CValueEnumAccumulationRegisterRecordType(eRecordType recordType) : IEnumeration(recordType) {
-		InitializeEnumeration(recordType);
-	}
-
-	virtual wxString GetTypeString() const override {
-		return wxT("accumulationRecordType");
-	}
-
-protected:
-
-	void CreateEnumeration()
-	{
-		AddEnumeration(eExpense, wxT("expense"));
-		AddEnumeration(eReceipt, wxT("receipt"));
-	}
-
-	virtual void InitializeEnumeration() override
-	{
-		CreateEnumeration();
-		IEnumeration::InitializeEnumeration();
-	}
-
-	virtual void InitializeEnumeration(eRecordType value) override
-	{
-		CreateEnumeration();
-		IEnumeration::InitializeEnumeration(value);
-	}
-};
-
-////////////////////////////////////////////////////////////////////////////
+#include "accumulationRegisterEnum.h"
 
 class CMetaObjectAccumulationRegister : public IMetaObjectRegisterData {
 	wxDECLARE_DYNAMIC_CLASS(CMetaObjectAccumulationRegister);
@@ -68,8 +16,7 @@ class CMetaObjectAccumulationRegister : public IMetaObjectRegisterData {
 	virtual OptionList* GetFormType() override
 	{
 		OptionList* optionlist = new OptionList;
-		optionlist->AddOption(_("formList"), eFormList);
-
+		optionlist->AddOption(wxT("formList"), _("Form list"), eFormList);
 		return optionlist;
 	}
 
@@ -86,24 +33,24 @@ private:
 
 	CMetaDefaultAttributeObject* m_attributeRecordType;
 
-	//default form 
-	int m_defaultFormList;
+protected:
 
-	//data 
-	eRegisterType m_registerType;
+	PropertyCategory* m_categoryForm = IPropertyObject::CreatePropertyCategory({ "defaultForms", "default forms"});
+	Property* m_propertyDefFormList = IPropertyObject::CreateProperty(m_categoryForm, { "default_list",  "default list" }, &CMetaObjectAccumulationRegister::GetFormList, wxNOT_FOUND);
+
+	PropertyCategory* m_categoryData = IPropertyObject::CreatePropertyCategory("data");
+	Property* m_propertyRegisterType = IPropertyObject::CreateProperty(m_categoryData, { "register_type", "register type" }, &CMetaObjectAccumulationRegister::GetRegisterType, eRegisterType::eBalances);
 
 private:
 
-	OptionList* GetFormList(Property*);
-
-	OptionList* GetRegisterType(Property*)
-	{
+	OptionList* GetRegisterType(PropertyOption*) {
 		OptionList* optionlist = new OptionList;
 		optionlist->AddOption(_("balances"), eBalances);
 		optionlist->AddOption(_("turnovers"), eTurnovers);
-
 		return optionlist;
 	}
+
+	OptionList* GetFormList(PropertyOption*);
 
 public:
 
@@ -118,11 +65,10 @@ public:
 	///////////////////////////////////////////////////////////////////
 
 	eRegisterType GetRegisterType() const {
-		return m_registerType;
+		return (eRegisterType)m_propertyRegisterType->GetValueAsInteger();
 	}
 
-	wxString GetRegisterTableNameDB(eRegisterType rType) const
-	{
+	wxString GetRegisterTableNameDB(eRegisterType rType) const {
 		wxString className = GetClassName();
 		wxASSERT(m_metaId != 0);
 
@@ -135,9 +81,8 @@ public:
 			className, GetMetaID());
 	}
 
-	wxString GetRegisterTableNameDB() const
-	{
-		return GetRegisterTableNameDB(m_registerType);
+	wxString GetRegisterTableNameDB() const {
+		return GetRegisterTableNameDB(GetRegisterType());
 	}
 
 	///////////////////////////////////////////////////////////////////
@@ -194,12 +139,14 @@ public:
 		return true;
 	}
 
-	virtual IRecordSetObject* CreateRecordSet();
-	virtual IRecordSetObject* CreateRecordSet(const CUniquePairKey& uniqueKey);
-
 	//get module object in compose object 
-	virtual CMetaModuleObject* GetModuleObject() const { return m_moduleObject; }
-	virtual CMetaCommonModuleObject* GetModuleManager() const { return m_moduleManager; }
+	virtual CMetaModuleObject* GetModuleObject() const { 
+		return m_moduleObject; 
+	}
+	
+	virtual CMetaCommonModuleObject* GetModuleManager() const {
+		return m_moduleManager;
+	}
 
 	//create associate value 
 	virtual CMetaFormObject* GetDefaultFormByID(const form_identifier_t& id);
@@ -207,21 +154,18 @@ public:
 	//create object data with metaForm
 	virtual ISourceDataObject* CreateObjectData(IMetaFormObject* metaObject);
 
-	//create associate value 
-	virtual IRecordSetObject* CreateRecordSetValue() override;
-
 	//create form with data 
-	virtual CValueForm* CreateObjectValue(IMetaFormObject* metaForm) override {
+	virtual CValueForm* CreateObjectForm(IMetaFormObject* metaForm) override {
 		return metaForm->GenerateFormAndRun(
 			NULL, CreateObjectData(metaForm)
 		);
 	}
 
 	//support form 
-	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = Guid());
+	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullUniqueKey);
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defultMenu);
+	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
 	virtual void ProcessCommand(unsigned int id);
 
 	//create and update table 
@@ -232,11 +176,9 @@ public:
 	*/
 	virtual void OnPropertyChanged(Property* property);
 
-	//read and write property 
-	virtual void ReadProperty() override;
-	virtual	void SaveProperty() override;
-
 protected:
+
+	virtual IRecordSetObject* CreateRecordSetObjectRegValue(const CUniquePairKey& uniqueKey = wxNullUniquePairKey);
 
 	//load & save metadata from DB 
 	virtual bool LoadData(CMemoryReader& reader);
@@ -252,12 +194,7 @@ protected:
 class CRecordSetAccumulationRegister : public IRecordSetObject {
 public:
 
-	CRecordSetAccumulationRegister(CMetaObjectAccumulationRegister* metaObject) :
-		IRecordSetObject(metaObject)
-	{
-	}
-
-	CRecordSetAccumulationRegister(CMetaObjectAccumulationRegister* metaObject, const CUniquePairKey& uniqueKey) :
+	CRecordSetAccumulationRegister(CMetaObjectAccumulationRegister* metaObject, const CUniquePairKey& uniqueKey = wxNullUniquePairKey) :
 		IRecordSetObject(metaObject, uniqueKey)
 	{
 	}
@@ -265,11 +202,6 @@ public:
 	CRecordSetAccumulationRegister(const CRecordSetAccumulationRegister& source) :
 		IRecordSetObject(source)
 	{
-	}
-
-	//default methods
-	virtual IRecordSetObject* CopyRegisterValue() {
-		return new CRecordSetAccumulationRegister(*this);
 	}
 
 	virtual bool WriteRecordSet(bool replace = true, bool clearTable = true);

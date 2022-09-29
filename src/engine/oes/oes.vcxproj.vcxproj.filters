@@ -11,10 +11,18 @@
     <Filter Include="res">
       <UniqueIdentifier>{d3f4bf29-6f86-43b3-b079-064ad3a64eb7}</UniqueIdentifier>
     </Filter>
+    <Filter Include="res\xpm">
+      <UniqueIdentifier>{c2556e89-bf77-4e37-b5b5-1d1202759bad}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="oes.rc">
       <Filter>res</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\splashLogo.xpm">
+      <Filter>res\xpm</Filter>
+    </None>
   </ItemGroup>
 </Project>

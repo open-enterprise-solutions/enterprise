@@ -22,11 +22,20 @@ bool CValueTableBoxColumn::TextProcessing(CValue& newValue, const wxString& strD
 	}
 
 	SetControlValue(newValue);
+
+	CValue selfControl = this;
+	IValueControl::CallEvent(m_eventOnChange, selfControl);
 	return true;
 }
 
 void CValueTableBoxColumn::ChoiceProcessing(CValue& vSelected)
 {
+	CValue selfControl = this; CValue standartProcessing = true;
+	IValueControl::CallEvent(m_eventChoiceProcessing, selfControl, vSelected, standartProcessing);
+	if (!standartProcessing.GetBoolean()) {
+		return;
+	}
+	
 	CValueTableBox* tableBox = wxDynamicCast(
 		GetParent(),
 		CValueTableBox
@@ -35,8 +44,10 @@ void CValueTableBoxColumn::ChoiceProcessing(CValue& vSelected)
 	wxASSERT(tableBox);
 
 	if (tableBox->m_tableCurrentLine) {
-		if (m_dataSource != wxNOT_FOUND) {
-			tableBox->m_tableCurrentLine->SetValueByMetaID(m_dataSource, vSelected);
+		if (m_dataSource.isValid()) {
+			tableBox->m_tableCurrentLine->SetValueByMetaID(
+				GetIdByGuid(m_dataSource), vSelected
+			);
 		}
 	}
 
@@ -49,6 +60,8 @@ void CValueTableBoxColumn::ChoiceProcessing(CValue& vSelected)
 		wxVariant valVariant = vSelected.GetString();
 		renderer->FinishSelecting(valVariant);
 	}
+
+	IValueControl::CallEvent(m_eventOnChange, selfControl);
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -90,13 +103,11 @@ void CValueTableBoxColumn::OnKillFocus(wxFocusEvent& event)
 void CValueTableBoxColumn::OnSelectButtonPressed(wxCommandEvent& event)
 {
 	CValue selfControl = this; CValue standartProcessing = true;
-	IValueControl::CallEvent("startChoice", selfControl, standartProcessing);
+	IValueControl::CallEvent(m_eventStartChoice, selfControl, standartProcessing);
 	if (!standartProcessing.GetBoolean()) {
 		return;
 	}
-
 	CValue selValue = GetControlValue();
-
 	if (selValue.GetType() == eValueTypes::TYPE_EMPTY) {
 
 		CLASS_ID clsid = GetDataType();
@@ -104,26 +115,34 @@ void CValueTableBoxColumn::OnSelectButtonPressed(wxCommandEvent& event)
 			return;
 
 		IMetadata* metaData = GetMetaData();
-		CValue newValue = metaData->CreateObject(
-			metaData->GetNameObjectFromID(clsid)
-		);
-
-		SetControlValue(newValue);
+		wxASSERT(metaData);
+		if (metaData->IsRegisterObject(clsid)) {
+			CValue newValue = metaData->CreateObject(
+				metaData->GetNameObjectFromID(clsid)
+			);
+			SetControlValue(newValue);
+		}
 		return;
 	}
-
-	IMetaObject* metaObject =
-		IAttributeControl::GetMetaObjectById(selValue.GetClassType());
-
-	if (metaObject) {
-		metaObject->ProcessChoice(this, m_choiceForm);
+	CDataViewColumnObject* columnObject =
+		dynamic_cast<CDataViewColumnObject*>(GetWxObject());
+	wxASSERT(columnObject);
+	CValueViewRenderer *columnRenderer = columnObject->GetRenderer();
+	wxASSERT(columnRenderer);
+	const CLASS_ID& clsid = selValue.GetClassType();
+	if (!IAttributeControl::SelectSimpleValue(clsid, columnRenderer->GetEditorCtrl())) {
+		IMetaObject* metaObject =
+			IAttributeControl::GetMetaObjectById(clsid);
+		if (metaObject != NULL) {
+			metaObject->ProcessChoice(this, m_propertyChoiceForm->GetValueAsInteger());
+		}
 	}
 }
 
 void CValueTableBoxColumn::OnListButtonPressed(wxCommandEvent& event)
 {
 	CValue selfControl = this; CValue standartProcessing = true;
-	IValueControl::CallEvent("startListChoice", selfControl, standartProcessing);
+	IValueControl::CallEvent(m_eventStartListChoice, selfControl, standartProcessing);
 	if (!standartProcessing.GetBoolean()) {
 		return;
 	}
@@ -135,7 +154,7 @@ void CValueTableBoxColumn::OnListButtonPressed(wxCommandEvent& event)
 void CValueTableBoxColumn::OnClearButtonPressed(wxCommandEvent& event)
 {
 	CValue selfControl = this; CValue standartProcessing = true;
-	IValueControl::CallEvent("clearing", selfControl, standartProcessing);
+	IValueControl::CallEvent(m_eventClearing, selfControl, standartProcessing);
 	if (!standartProcessing.GetBoolean()) {
 		return;
 	}
@@ -148,8 +167,8 @@ void CValueTableBoxColumn::OnClearButtonPressed(wxCommandEvent& event)
 	wxASSERT(tableBox);
 
 	if (tableBox->m_tableCurrentLine) {
-		if (m_dataSource != wxNOT_FOUND) {
-			tableBox->m_tableCurrentLine->SetValueByMetaID(m_dataSource, CValue());
+		if (m_dataSource.isValid()) {
+			tableBox->m_tableCurrentLine->SetValueByMetaID(GetIdByGuid(m_dataSource), CValue());
 		}
 	}
 

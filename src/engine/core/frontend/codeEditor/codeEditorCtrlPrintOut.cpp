@@ -12,7 +12,7 @@
 // CCodeEditorPrintout
 //----------------------------------------------------------------------------
 
-CCodeEditorPrintout::CCodeEditorPrintout(CCodeEditorCtrl *edit, const wxString& title)
+CCodeEditorPrintout::CCodeEditorPrintout(wxStyledTextCtrl*edit, const wxString& title)
 	: wxPrintout(title)
 	, m_edit(edit)
 {
@@ -21,7 +21,8 @@ CCodeEditorPrintout::CCodeEditorPrintout(CCodeEditorCtrl *edit, const wxString& 
 bool CCodeEditorPrintout::OnPrintPage(int page) {
 
 	wxDC *dc = GetDC();
-	if (!dc) return false;
+	if (!dc) 
+		return false;
 
 	// scale DC
 	PrintScaling(dc);

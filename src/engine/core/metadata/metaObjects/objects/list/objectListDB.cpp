@@ -57,6 +57,59 @@ void CListDataObjectRef::RefreshModel()
 	databaseLayer->CloseStatement(statement);
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
+void CListDataObjectGroupRef::RefreshModel()
+{
+	wxString tableName = m_metaObject->GetTableNameDB();
+	wxString queryText = "SELECT * FROM " + tableName + " ORDER BY CAST(UUID AS VARCHAR(36));";
+
+	m_aObjectValues.clear();
+
+	PreparedStatement* statement = databaseLayer->PrepareStatement(queryText);
+	DatabaseResultSet* resultSet = statement->RunQueryWithResults();
+
+	CMetaDefaultAttributeObject* metaReference = m_metaObject->GetDataReference();
+
+	while (resultSet->Next()) {
+		std::map<meta_identifier_t, CValue> valueRow;
+		wxMemoryBuffer bufferData;
+		resultSet->GetResultBlob(guidRef, bufferData);
+		if (!bufferData.IsEmpty()) {
+			wxASSERT(metaReference);
+			valueRow.insert_or_assign(metaReference->GetMetaID(), CReferenceDataObject::CreateFromPtr(
+				m_metaObject->GetMetadata(), bufferData.GetData())
+			);
+		}
+		else {
+			wxASSERT(metaReference);
+			valueRow.insert_or_assign(metaReference->GetMetaID(),
+				CReferenceDataObject::Create(m_metaObject)
+			);
+		}
+		for (auto attribute : m_metaObject->GetGenericAttributes()) {
+			if (m_metaObject->IsDataReference(attribute->GetMetaID()))
+				continue;
+			valueRow.insert_or_assign(attribute->GetMetaID(),
+				IMetaAttributeObject::GetValueAttribute(attribute, resultSet)
+			);
+		}
+		m_aObjectValues.insert_or_assign(
+			resultSet->GetResultString(guidName), valueRow
+		);
+	};
+
+	resultSet->Close();
+
+	if (!CTranslateError::IsSimpleMode()) {
+		IValueTable::Reset(m_aObjectValues.size());
+	}
+
+	databaseLayer->CloseStatement(statement);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
 void CListRegisterObject::RefreshModel()
 {
 	wxString tableName = m_metaObject->GetTableNameDB();
@@ -91,7 +144,7 @@ void CListRegisterObject::RefreshModel()
 				IMetaAttributeObject::GetValueAttribute(attribute, resultSet)
 			);
 		}
-		m_aObjectValues.insert_or_assign(
+		m_aObjectValues.emplace_back(
 			keyRow, valueRow
 		);
 	};

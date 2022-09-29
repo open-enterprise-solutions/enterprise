@@ -12,18 +12,14 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueGridBox, IValueWindow);
 //***********************************************************************************
 
 CValueGridBox::CValueGridBox() : IValueWindow()
-{
-	PropertyContainer *categoryNotebook = IObjectBase::CreatePropertyContainer("Grid");
-	categoryNotebook->AddProperty("name", PropertyType::PT_WXNAME);
-	m_category->AddCategory(categoryNotebook);
-
+{	
 	//set default params
-	m_minimum_size = wxSize(300, 100);
+	*m_propertyMinSize = wxSize(300, 100);
 }
 
 wxObject* CValueGridBox::Create(wxObject* parent, IVisualHost *visualHost)
 {
-	return new CGrid((wxWindow*)parent, wxID_ANY, m_pos, m_size);
+	return new CGrid((wxWindow*)parent, wxID_ANY, wxDefaultPosition, wxDefaultSize);
 }
 
 void CValueGridBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated)
@@ -61,22 +57,4 @@ bool CValueGridBox::LoadData(CMemoryReader &reader)
 bool CValueGridBox::SaveData(CMemoryWriter &writer)
 {
 	return IValueWindow::SaveData(writer);
-}
-
-//**********************************************************************************
-//*                                   Property                                     *
-//**********************************************************************************
-
-void CValueGridBox::ReadProperty()
-{
-	IValueWindow::ReadProperty();
-
-	IObjectBase::SetPropertyValue("name", m_controlName);
-}
-
-void CValueGridBox::SaveProperty()
-{
-	IValueWindow::SaveProperty();
-
-	IObjectBase::GetPropertyValue("name", m_controlName);
 }

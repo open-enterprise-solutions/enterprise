@@ -22,8 +22,13 @@ public:
 	unsigned char m_scale;
 public:
 
-	virtual wxString GetTypeString() const { return wxT("qualifierNumber"); }
-	virtual wxString GetString() const { return wxT("qualifierNumber"); }
+	virtual wxString GetTypeString() const {
+		return wxT("qualifierNumber");
+	}
+
+	virtual wxString GetString() const {
+		return wxT("qualifierNumber");
+	}
 
 	CValueQualifierNumber() : CValue(eValueTypes::TYPE_VALUE, true) {}
 	CValueQualifierNumber(unsigned char precision, unsigned char scale) : CValue(eValueTypes::TYPE_VALUE, true),
@@ -38,8 +43,13 @@ public:
 	eDateFractions m_dateTime;
 public:
 
-	virtual wxString GetTypeString() const { return wxT("qualifierDate"); }
-	virtual wxString GetString() const { return wxT("qualifierDate"); }
+	virtual wxString GetTypeString() const {
+		return wxT("qualifierDate");
+	}
+
+	virtual wxString GetString() const {
+		return wxT("qualifierDate");
+	}
 
 	CValueQualifierDate() : CValue(eValueTypes::TYPE_VALUE, true) {}
 	CValueQualifierDate(eDateFractions dateTime) : CValue(eValueTypes::TYPE_VALUE, true),
@@ -54,8 +64,13 @@ public:
 	unsigned short m_length;
 public:
 
-	virtual wxString GetTypeString() const { return wxT("qualifierString"); }
-	virtual wxString GetString() const { return wxT("qualifierString"); }
+	virtual wxString GetTypeString() const {
+		return wxT("qualifierString");
+	}
+
+	virtual wxString GetString() const {
+		return wxT("qualifierString");
+	}
 
 	CValueQualifierString() : CValue(eValueTypes::TYPE_VALUE, true) {}
 	CValueQualifierString(unsigned short length) : CValue(eValueTypes::TYPE_VALUE, true),
@@ -72,8 +87,8 @@ class CMemoryWriter;
 ////////////////////////////////////////////////////////////////////////////////
 
 class IAttributeWrapper {
+	std::set<CLASS_ID> m_clsids, m_defClsids;
 protected:
-	std::set<CLASS_ID> m_clsids;
 	struct metaDescription_t {
 		eDateFractions m_dateTime;
 		struct typeNumber_t {
@@ -108,7 +123,9 @@ protected:
 		void SetDate(eDateFractions dateTime) { m_dateTime = dateTime; }
 		void SetString(unsigned short length, eAllowedLength allowedLength = eAllowedLength::eAllowedLength_Variable) { m_string.m_length = length; m_string.m_allowedLength = allowedLength; }
 
-	} m_metaDescription;
+	};
+private:
+	metaDescription_t m_metaDescription, m_metaDefDescription;
 public:
 
 	bool EqualsType(const CLASS_ID& clsid,
@@ -201,19 +218,19 @@ public:
 		return true;
 	}
 
-	CLASS_ID GetFirstClsid() const {
+	virtual CLASS_ID GetFirstClsid() const {
 		if (m_clsids.size() == 0)
-			return 0; 
-		auto itFounded = m_clsids.begin(); 
+			return 0;
+		auto itFounded = m_clsids.begin();
 		std::advance(itFounded, 0);
 		return *itFounded;
 	}
 
-	std::set<CLASS_ID> GetClsids() const {
+	virtual std::set<CLASS_ID> GetClsids() const {
 		return m_clsids;
 	}
 
-	bool ContainType(const eValueTypes& valType) const {
+	virtual bool ContainType(const eValueTypes& valType) const {
 		if (valType == eValueTypes::TYPE_ENUM) {
 			for (auto clsid : m_clsids) {
 				if (CValue::IsRegisterObject(clsid)) {
@@ -231,8 +248,16 @@ public:
 		return m_clsids.find(CValue::GetIDByVT(valType)) != m_clsids.end();
 	}
 
-	bool ContainType(const CLASS_ID& clsid) const {
+	virtual bool ContainType(const CLASS_ID& clsid) const {
 		return m_clsids.find(clsid) != m_clsids.end();
+	}
+
+	virtual CLASS_ID GetByIdx(unsigned int idx) const {
+		if (m_clsids.size() == 0)
+			return wxNOT_FOUND;
+		auto itStart = m_clsids.begin();
+		std::advance(itStart, idx);
+		return *itStart;
 	}
 
 	//get special data number 
@@ -266,30 +291,92 @@ public:
 	{
 		m_clsids.clear();
 		SetMetatype(valType);
+
+		m_defClsids.clear();
+		if (valType == eValueTypes::TYPE_NUMBER) {
+			m_metaDefDescription.SetNumber(10, 0);
+		}
+		if (valType == eValueTypes::TYPE_DATE) {
+			m_metaDefDescription.SetDate(eDateFractions::eDateFractions_DateTime);
+		}
+		if (valType == eValueTypes::TYPE_STRING) {
+			m_metaDefDescription.SetString(10);
+		}
+		m_defClsids.insert(
+			CValue::GetIDByVT(valType)
+		);
 	}
 
 	void SetDefaultMetatype(const CLASS_ID& clsid)
 	{
 		m_clsids.clear();
 		SetMetatype(clsid);
+		m_defClsids.clear();
+		if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_NUMBER)) {
+			m_metaDefDescription.SetNumber(10, 0);
+		}
+		if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_DATE)) {
+			m_metaDefDescription.SetDate(eDateFractions::eDateFractions_DateTime);
+		}
+		if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_STRING)) {
+			m_metaDefDescription.SetString(10);
+		}
+		m_defClsids.insert(clsid);
 	}
 
 	void SetDefaultMetatype(const CLASS_ID& clsid, const metaDescription_t& descr)
 	{
 		m_clsids.clear();
 		SetMetatype(clsid, descr);
+		m_defClsids.clear();
+		if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_NUMBER)) {
+			m_metaDefDescription.SetNumber(descr.GetPrecision(), descr.GetScale(), descr.IsNonNegative());
+		}
+		if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_DATE)) {
+			m_metaDefDescription.SetDate(descr.GetDateTime());
+		}
+		if (clsid == CValue::GetIDByVT(eValueTypes::TYPE_STRING)) {
+			m_metaDefDescription.SetString(descr.GetLength(), descr.GetAllowedLength());
+		}
+		m_defClsids.insert(clsid);
 	}
 
 	void SetDefaultMetatype(const std::set<CLASS_ID>& clsids)
 	{
 		m_clsids.clear();
 		SetMetatype(clsids);
+		m_defClsids.clear();
+		if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_NUMBER)) != clsids.end()) {
+			m_metaDefDescription.SetNumber(10, 0);
+		}
+		if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_DATE)) != clsids.end()) {
+			m_metaDefDescription.SetDate(eDateFractions::eDateFractions_DateTime);
+		}
+		if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_STRING)) != clsids.end()) {
+			m_metaDefDescription.SetString(10);
+		}
+		for (auto clsid : clsids) {
+			m_defClsids.insert(clsid);
+		}
 	}
 
 	void SetDefaultMetatype(const std::set<CLASS_ID>& clsids, const metaDescription_t& descr)
 	{
 		m_clsids.clear();
 		SetMetatype(clsids, descr);
+		m_defClsids.clear();
+		if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_NUMBER)) != clsids.end()) {
+			m_metaDefDescription.SetNumber(descr.GetPrecision(), descr.GetScale(), descr.IsNonNegative());
+		}
+		if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_DATE)) != clsids.end()) {
+			m_metaDefDescription.SetDate(descr.GetDateTime());
+		}
+		if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_STRING)) != clsids.end()) {
+			m_metaDefDescription.SetString(descr.GetLength(), descr.GetAllowedLength());
+		}
+		for (auto clsid : clsids) {
+			m_defClsids.insert(clsid);
+		}
 	}
 
 	void SetDefaultMetatype(const std::set<CLASS_ID>& clsids,
@@ -299,6 +386,19 @@ public:
 		SetMetatype(clsids,
 			qNumber, qDate, qString
 		);
+		m_defClsids.clear();
+		if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_NUMBER)) != clsids.end()) {
+			m_metaDefDescription.SetNumber(qNumber ? qNumber->m_precision : 10, qNumber ? qNumber->m_scale : 0);
+		}
+		else if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_DATE)) != clsids.end()) {
+			m_metaDefDescription.SetDate(qDate ? qDate->m_dateTime : eDateFractions::eDateFractions_DateTime);
+		}
+		else if (clsids.find(CValue::GetIDByVT(eValueTypes::TYPE_STRING)) != clsids.end()) {
+			m_metaDefDescription.SetString(qString ? qString->m_length : 10);
+		}
+		for (auto clsid : clsids) {
+			m_defClsids.insert(clsid);
+		}
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////
@@ -464,18 +564,19 @@ public:
 
 	//////////////////////////////////////////////////
 
-	virtual bool LoadData(CMemoryReader& dataReader);
-
+	virtual bool LoadTypeData(CMemoryReader& dataReader);
 	virtual bool LoadFromVariant(const wxVariant& variant);
-
-	virtual bool SaveData(CMemoryWriter& dataWritter);
-
+	virtual bool SaveTypeData(CMemoryWriter& dataWritter);
 	virtual void SaveToVariant(wxVariant& variant, IMetadata* metaData) const;
 
 	//////////////////////////////////////////////////
 
+	void SetDescription(const metaDescription_t& metaDescription) {
+		m_metaDescription = metaDescription;
+	}
+
 	//get meta decription 
-	metaDescription_t& GetDescription() {
+	const metaDescription_t& GetDescription() const {
 		return m_metaDescription;
 	}
 
@@ -516,14 +617,16 @@ public:
 
 	//////////////////////////////////////////////////
 
-	unsigned int GetTypeCount() const {
+	//get metadata
+	virtual IMetadata* GetMetadata() const = 0;
+
+	//////////////////////////////////////////////////
+
+	unsigned int GetClsidCount() const {
 		return m_clsids.size();
 	}
 
 	//////////////////////////////////////////////////
-
-	IAttributeWrapper() {
-	}
 
 	IAttributeWrapper(const eValueTypes& valType) {
 		SetDefaultMetatype(valType);
@@ -540,125 +643,15 @@ public:
 	IAttributeWrapper(const std::set<CLASS_ID>& clsids, const metaDescription_t& descr) {
 		SetDefaultMetatype(clsids, descr);
 	}
-};
-
-////////////////////////////////////////////////////////////////////////////////
-
-class wxVariantAttributeData :
-	public wxVariantData, public IAttributeWrapper {
-	wxString MakeString() const;
-protected:
-	virtual void DoSetFromMetaId(const meta_identifier_t& id);
-public:
-
-	void AppendRecord(const CLASS_ID& id) {
-		m_clsids.insert(id);
-	}
-
-	bool Contains(const CLASS_ID& id) const {
-		auto itFounded = m_clsids.find(id);
-		return itFounded != m_clsids.end();
-	}
-
-	CLASS_ID GetById(unsigned int idx) const {
-		if (m_clsids.size() == 0)
-			return wxNOT_FOUND;
-		auto itStart = m_clsids.begin();
-		std::advance(itStart, idx);
-		return *itStart;
-	}
-
-	//get special data number 
-	unsigned char GetPrecision() const {
-		return m_metaDescription.GetPrecision();
-	}
-
-	unsigned char GetScale() const {
-		return m_metaDescription.GetScale();
-	}
-
-	//get special data date  
-	eDateFractions GetDateTime() const {
-		return m_metaDescription.GetDateTime();
-	}
-
-	//get special data string  
-	unsigned short GetLength() const {
-		return m_metaDescription.GetLength();
-	}
-
-	void SetNumber(unsigned char precision, unsigned char scale) {
-		m_metaDescription.SetNumber(precision, scale);
-	}
-
-	void SetDate(eDateFractions dateTime) {
-		m_metaDescription.SetDate(dateTime);
-	}
-
-	void SetString(unsigned short length) {
-		m_metaDescription.SetString(length);
-	}
-
-	void LoadDescription(const metaDescription_t& descr) {
-		m_metaDescription = descr;
-	}
-
-	/////////////////////////////////////////////////////////////////////////////////////////
-
-	void RefreshData(const meta_identifier_t& id) {
-		DoSetFromMetaId(id);
-	}
-
-	/////////////////////////////////////////////////////////////////////////////////////////
-
-	wxVariantAttributeData(IMetadata* metaData) : wxVariantData(),
-		IAttributeWrapper(),
-		m_metaData(metaData)
-	{
-	}
-
-	wxVariantAttributeData(IMetadata* metaData, const meta_identifier_t& id) : wxVariantData(),
-		IAttributeWrapper(),
-		m_metaData(metaData)
-	{
-		DoSetFromMetaId(id);
-	}
-
-	wxVariantAttributeData(const wxVariantAttributeData& list) : wxVariantData(),
-		IAttributeWrapper(list.m_clsids, list.m_metaDescription),
-		m_metaData(list.m_metaData)
-	{
-	}
-
-	virtual bool Eq(wxVariantData& data) const {
-		wxVariantAttributeData* srcAttr = dynamic_cast<wxVariantAttributeData*>(&data);
-		if (srcAttr != NULL) {
-			return *srcAttr == *this;
-		}
-		return false;
-	}
-
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
-
-	virtual wxString GetType() const {
-		return wxT("wxVariantAttributeData");
-	}
-
-	IMetadata* GetMetadata() const {
-		return m_metaData;
-	}
 
 protected:
-	IMetadata* m_metaData;
+
+	IAttributeWrapper() {}
+
+	IAttributeWrapper(const IAttributeWrapper& src) :
+		m_clsids(src.m_clsids), m_metaDescription(src.m_metaDescription)
+	{
+	}
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -666,6 +659,11 @@ protected:
 class IAttributeInfo :
 	public IAttributeWrapper {
 public:
+
+	IAttributeInfo() :
+		IAttributeWrapper()
+	{
+	}
 
 	IAttributeInfo(const eValueTypes& defType) :
 		IAttributeWrapper(defType)
@@ -677,6 +675,16 @@ public:
 	{
 	}
 
+	IAttributeInfo(const std::set<CLASS_ID>& clsids) :
+		IAttributeWrapper(clsids)
+	{
+	}
+
+	IAttributeInfo(const std::set<CLASS_ID>& clsids, const metaDescription_t& descr) :
+		IAttributeWrapper(clsids, descr)
+	{
+	}
+
 	//Create value by selected type
 	virtual CValue CreateValue() const;
 	virtual CValue* CreateValueRef() const;
@@ -684,7 +692,10 @@ public:
 	//convert value
 	template<class retType = CValue>
 	retType* CreateAndConvertValueRef() {
-		return value_cast<retType>(CreateValueRef());
+		CValue* retVal = CreateValueRef();
+		if (retVal != NULL)
+			return value_cast<retType>(retVal);
+		return (retType*)NULL;
 	}
 
 	//Adjust value
@@ -720,9 +731,74 @@ public:
 		return *this;
 	}
 
+	CValueTypeDescription* GetValueTypeDescription() const;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+
+class wxVariantAttributeData :
+	public wxVariantData, public IAttributeWrapper {
+	wxString MakeString() const;
+protected:
+	virtual void DoSetFromMetaId(const meta_identifier_t& id);
 public:
 
-	CValueTypeDescription* GetValueTypeDescription() const;
+	/////////////////////////////////////////////////////////////////////////////////////////
+
+	void RefreshData(const meta_identifier_t& id) {
+		DoSetFromMetaId(id);
+	}
+
+	/////////////////////////////////////////////////////////////////////////////////////////
+
+	wxVariantAttributeData(IMetadata* metaData) : wxVariantData(),
+		IAttributeWrapper(),
+		m_metaData(metaData)
+	{
+	}
+
+	wxVariantAttributeData(IMetadata* metaData, const meta_identifier_t& id) : wxVariantData(),
+		IAttributeWrapper(),
+		m_metaData(metaData)
+	{
+		DoSetFromMetaId(id);
+	}
+
+	wxVariantAttributeData(const wxVariantAttributeData& list) : wxVariantData(),
+		IAttributeWrapper(list),
+		m_metaData(list.m_metaData)
+	{
+	}
+
+	virtual bool Eq(wxVariantData& data) const {
+		wxVariantAttributeData* srcAttr = dynamic_cast<wxVariantAttributeData*>(&data);
+		if (srcAttr != NULL) {
+			return *srcAttr == *this;
+		}
+		return false;
+	}
+
+#if wxUSE_STD_IOSTREAM
+	virtual bool Write(wxSTD ostream& str) const {
+		str << MakeString();
+		return true;
+	}
+#endif
+	virtual bool Write(wxString& str) const {
+		str = MakeString();
+		return true;
+	}
+
+	virtual wxString GetType() const {
+		return wxT("wxVariantAttributeData");
+	}
+
+	IMetadata* GetMetadata() const {
+		return m_metaData;
+	}
+
+protected:
+	IMetadata* m_metaData;
 };
 
 #endif

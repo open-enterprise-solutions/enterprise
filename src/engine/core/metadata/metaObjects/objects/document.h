@@ -1,160 +1,15 @@
 #ifndef _DOCUMENT_H__
 #define _DOCUMENT_H__
 
-#include "baseObject.h"
+#include "object.h"
 
-//********************************************************************************************
-//*                                     Defines                                              *
-//********************************************************************************************
-
-enum eDocumentWriteMode {
-	ePosting,
-	eUndoPosting,
-	eWrite
-};
-
-enum eDocumentPostingMode {
-	eRealTime,
-	eRegular
-};
-
-class CObjectDocument;
-
-#include "compiler/enumObject.h"
-
-class CValueEnumDocumentWriteMode : public IEnumeration<eDocumentWriteMode> {
-	wxDECLARE_DYNAMIC_CLASS(CValueEnumDocumentWriteMode);
-public:
-
-	CValueEnumDocumentWriteMode() : IEnumeration() { 
-		InitializeEnumeration(); 
-	}
-
-	CValueEnumDocumentWriteMode(eDocumentWriteMode writeMode) : IEnumeration(writeMode) {
-		InitializeEnumeration(writeMode);
-	}
-
-	virtual wxString GetTypeString() const override {
-		return wxT("documentWriteMode");
-	}
-
-protected:
-
-	void CreateEnumeration()
-	{
-		AddEnumeration(ePosting, wxT("posting"));
-		AddEnumeration(eUndoPosting, wxT("undoPosting"));
-		AddEnumeration(eWrite, wxT("write"));
-	}
-
-	virtual void InitializeEnumeration() override
-	{
-		CreateEnumeration();
-		IEnumeration::InitializeEnumeration();
-	}
-
-	virtual void InitializeEnumeration(eDocumentWriteMode value) override
-	{
-		CreateEnumeration();
-		IEnumeration::InitializeEnumeration(value);
-	}
-};
-
-class CValueEnumDocumentPostingMode : public IEnumeration<eDocumentPostingMode> {
-	wxDECLARE_DYNAMIC_CLASS(CValueEnumDocumentPostingMode);
-public:
-
-	CValueEnumDocumentPostingMode() : IEnumeration() { 
-		InitializeEnumeration(); 
-	}
-
-	CValueEnumDocumentPostingMode(eDocumentPostingMode postingMode) : IEnumeration(postingMode) {
-		InitializeEnumeration(postingMode);
-	}
-
-	virtual wxString GetTypeString() const override {
-		return wxT("documentPostingMode");
-	}
-
-protected:
-
-	void CreateEnumeration()
-	{
-		AddEnumeration(eRealTime, wxT("realTime"));
-		AddEnumeration(eRegular, wxT("regular"));
-	}
-
-	virtual void InitializeEnumeration() override
-	{
-		CreateEnumeration();
-		IEnumeration::InitializeEnumeration();
-	}
-
-	virtual void InitializeEnumeration(eDocumentPostingMode value) override
-	{
-		CreateEnumeration();
-		IEnumeration::InitializeEnumeration(value);
-	}
-};
+#include "documentVariant.h"
+#include "documentEnum.h"
+#include "documentData.h"
 
 //********************************************************************************************
 //*                                  Factory & metadata                                      *
 //********************************************************************************************
-
-class wxVariantRecordData : public wxVariantData {
-
-	wxString MakeString() const;
-
-public:
-
-	void AppendRecord(meta_identifier_t record_id) {
-		m_recordData.insert(record_id);
-	}
-
-	bool Contains(meta_identifier_t record_id) const {
-		auto itFounded = m_recordData.find(record_id);
-		return itFounded != m_recordData.end();
-	}
-
-	meta_identifier_t GetById(unsigned int idx) const {
-		if (m_recordData.size() == 0)
-			return wxNOT_FOUND;
-		auto itStart = m_recordData.begin();
-		std::advance(itStart, idx);
-		return *itStart;
-	}
-
-	unsigned int GetCount() const {
-		return m_recordData.size();
-	}
-
-	bool Eq(wxVariantData& data) const {
-		return true;
-	}
-
-	wxVariantRecordData(IMetadata* metaData) : wxVariantData(), m_metaData(metaData) {}
-
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
-
-	wxString GetType() const {
-		return wxT("wxVariantRecordData");
-	}
-
-protected:
-	IMetadata* m_metaData;
-	std::set<meta_identifier_t> m_recordData;
-};
-
-//////////////////////////////////////////////////////////////////////////////////////////////
 
 class CMetaObjectDocument : public IMetaObjectRecordDataMutableRef {
 	wxDECLARE_DYNAMIC_CLASS(CMetaObjectDocument);
@@ -178,44 +33,30 @@ class CMetaObjectDocument : public IMetaObjectRecordDataMutableRef {
 	virtual OptionList* GetFormType() override
 	{
 		OptionList* optionlist = new OptionList;
-
-		optionlist->AddOption("formObject", eFormObject);
-		optionlist->AddOption("formList", eFormList);
-		optionlist->AddOption("formSelect", eFormSelect);
-
+		optionlist->AddOption(wxT("formObject"), _("Form object"), eFormObject);
+		optionlist->AddOption(wxT("formList"), _("Form list"), eFormList);
+		optionlist->AddOption(wxT("formSelect"), _("Form select"), eFormSelect);
 		return optionlist;
 	}
 
-private:
+protected:
 
-	//default form 
-	int m_defaultFormObject;
-	int m_defaultFormList;
-	int m_defaultFormSelect;
+	PropertyCategory* m_categoryForm = IPropertyObject::CreatePropertyCategory({ "defaultForms", "default forms"});
+	
+	Property* m_propertyDefFormObject = IPropertyObject::CreateProperty(m_categoryForm, { "default_object", "default object" }, &CMetaObjectDocument::GetFormObject, wxNOT_FOUND);
+	Property* m_propertyDefFormList = IPropertyObject::CreateProperty(m_categoryForm, { "default_list", "default list" }, &CMetaObjectDocument::GetFormList, wxNOT_FOUND);
+	Property* m_propertyDefFormSelect = IPropertyObject::CreateProperty(m_categoryForm, { "default_select", "default Sselect" }, &CMetaObjectDocument::GetFormSelect, wxNOT_FOUND);
+
+	Property* m_propertyRecordData = IPropertyObject::CreateRecordProperty(m_categoryData, { "register_records", "register records" });
+
+private:
 
 	//default attributes 
 	CMetaDefaultAttributeObject* m_attributeNumber;
 	CMetaDefaultAttributeObject* m_attributeDate;
 	CMetaDefaultAttributeObject* m_attributePosted;
 
-	//variant 
-	class recordData_t {
-		std::set<meta_identifier_t> m_recordData;
-	public:
-		
-		bool LoadData(CMemoryReader& dataReader);
-		
-		bool LoadFromVariant(const wxVariant& variant);
-		
-		bool SaveData(CMemoryWriter& dataWritter);
-		
-		void SaveToVariant(wxVariant& variant, IMetadata* metaData) const;
-
-		std::set<meta_identifier_t>& GetData() {
-			return m_recordData;
-		}
-	};
-
+	//record data 
 	recordData_t m_recordData;
 
 private:
@@ -224,9 +65,9 @@ private:
 		return m_recordData;
 	}
 
-	OptionList* GetFormObject(Property*);
-	OptionList* GetFormList(Property*);
-	OptionList* GetFormSelect(Property*);
+	OptionList* GetFormObject(PropertyOption*);
+	OptionList* GetFormList(PropertyOption*);
+	OptionList* GetFormSelect(PropertyOption*);
 
 public:
 
@@ -247,7 +88,7 @@ public:
 	virtual ~CMetaObjectDocument();
 
 	virtual wxString GetClassName() const {
-		return wxT("document"); 
+		return wxT("document");
 	}
 
 	//support icons
@@ -257,6 +98,8 @@ public:
 	/**
 	* Property events
 	*/
+	virtual void OnPropertyCreated(Property* property);
+	virtual bool OnPropertyChanging(Property* property, const wxVariant& newValue);
 	virtual void OnPropertyChanged(Property* property);
 
 	//events: 
@@ -291,43 +134,43 @@ public:
 	virtual std::vector<IMetaAttributeObject*> GetSearchedAttributes() const override;
 
 	//create associate value 
-	virtual CMetaFormObject* GetDefaultFormByID(const form_identifier_t &id);
+	virtual CMetaFormObject* GetDefaultFormByID(const form_identifier_t& id);
 
 	//create object data with metaForm
 	virtual ISourceDataObject* CreateObjectData(IMetaFormObject* metaObject);
 
-	//create empty object
-	virtual IRecordDataObjectRef* CreateObjectRefValue();
-	virtual IRecordDataObjectRef* CreateObjectRefValue(const Guid& guid);
-
 	//create form with data 
-	virtual CValueForm* CreateObjectValue(IMetaFormObject* metaForm) override {
+	virtual CValueForm* CreateObjectForm(IMetaFormObject* metaForm) override {
 		return metaForm->GenerateFormAndRun(
 			NULL, CreateObjectData(metaForm)
 		);
 	}
 
 	//support form 
-	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = Guid());
-	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = Guid());
-	virtual CValueForm* GetSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = Guid());
+	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
 
 	//descriptions...
 	wxString GetDescription(const IObjectValueInfo* objValue) const;
 
 	//get module object in compose object 
-	virtual CMetaModuleObject* GetModuleObject() const { return m_moduleObject; }
-	virtual CMetaCommonModuleObject* GetModuleManager() const { return m_moduleManager; }
+	virtual CMetaModuleObject* GetModuleObject() const { 
+		return m_moduleObject; 
+	}
+	
+	virtual CMetaCommonModuleObject* GetModuleManager() const { 
+		return m_moduleManager; 
+	}
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defultMenu);
+	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
 	virtual void ProcessCommand(unsigned int id);
 
-	//read and write property 
-	virtual void ReadProperty() override;
-	virtual	void SaveProperty() override;
-
 protected:
+
+	//create empty object
+	virtual IRecordDataObjectRef* CreateObjectRefValue(const Guid& objGuid = wxNullGuid);
 
 	//load & save from variant
 	bool LoadFromVariant(const wxVariant& variant);
@@ -348,20 +191,29 @@ protected:
 
 #define registerRecords wxT("registerRecords")
 
-class CObjectDocument : public IRecordDataObjectRef
-{
+class CObjectDocument : public IRecordDataObjectRef {
+public:
 	class CRecordRegister : public CValue {
 		CObjectDocument* m_document;
 		std::map<meta_identifier_t, IRecordSetObject*> m_records;
 	public:
 
 		void CreateRecordSet();
-		bool WriteRecordSet(); 
+		bool WriteRecordSet();
 		bool DeleteRecordSet();
 		void ClearRecordSet();
 
-		CRecordRegister(CObjectDocument* currentDoc);
+		CRecordRegister(CObjectDocument* currentDoc = NULL);
 		virtual ~CRecordRegister();
+
+		virtual wxString GetTypeString() const {
+			return wxT("recordRegister");
+		}
+
+		virtual wxString GetString() const {
+			return wxT("recordRegister");
+		}
+
 		//standart override 
 		virtual CMethods* GetPMethods() const;
 
@@ -378,35 +230,35 @@ class CObjectDocument : public IRecordDataObjectRef
 	protected:
 		CMethods* m_methods;
 	};
+private:
 	CRecordRegister* m_registerRecords;
+protected:
+	CObjectDocument(CMetaObjectDocument* metaObject = NULL, const Guid& guid = wxNullGuid);
+	CObjectDocument(const CObjectDocument& source);
 public:
+	virtual ~CObjectDocument();
 
+	bool IsPosted() const;
 	void UpdateRecordSet() {
 		wxASSERT(m_registerRecords);
 		m_registerRecords->ClearRecordSet();
 		m_registerRecords->CreateRecordSet();
 	}
 
-	CObjectDocument(const CObjectDocument& source);
-	CObjectDocument(CMetaObjectDocument* metaObject);
-	CObjectDocument(CMetaObjectDocument* metaObject, const Guid& guid);
-	virtual ~CObjectDocument();
-
 	//****************************************************************************
 	//*                              Support id's                                *
 	//****************************************************************************
 
-	virtual IRecordDataObject* CopyObjectValue() {
-		return new CObjectDocument(*this);
-	}
-
 	//save modify 
 	virtual bool SaveModify() {
-		return WriteObject(eDocumentWriteMode::ePosting, eDocumentPostingMode::eRegular);
+		return WriteObject(
+			IsPosted() ? eDocumentWriteMode::ePosting : eDocumentWriteMode::eWrite, 
+			eDocumentPostingMode::eRegular
+		);
 	}
 
 	//default methods
-	virtual void FillObject(CValue& vFillObject);
+	virtual bool FillObject(CValue& vFillObject) const;
 	virtual CValue CopyObject();
 	virtual bool WriteObject(eDocumentWriteMode writeMode, eDocumentPostingMode postingMode);
 	virtual bool DeleteObject();
@@ -434,8 +286,13 @@ public:
 	virtual CValueForm* GetFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL);
 
 	//support actions
-	virtual actionData_t GetActions(const form_identifier_t &formType);
-	virtual void ExecuteAction(const action_identifier_t &action, CValueForm* srcForm);
+	virtual actionData_t GetActions(const form_identifier_t& formType);
+	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm);
+
+protected:
+	void SetDeletionMark(bool deletionMark = true);
+protected:
+	friend class CMetaObjectDocument; 
 };
 
 #endif

@@ -83,7 +83,7 @@ public:
 	virtual DatabaseResultSet* RunQueryWithResults(const wxString& strQuery) = 0;
 
 	/// Close a result set returned by the database or a prepared statement previously
-	virtual bool CloseResultSet(DatabaseResultSet* pResultSet);
+	virtual bool CloseResultSet(DatabaseResultSet*& pResultSet);
 
 	// PreparedStatement support
 
@@ -91,7 +91,7 @@ public:
 	virtual PreparedStatement* PrepareStatement(const wxString& strQuery) = 0;
 
 	/// Close a prepared statement previously prepared by the database
-	virtual bool CloseStatement(PreparedStatement* pStatement);
+	virtual bool CloseStatement(PreparedStatement*& pStatement);
 
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
 	/// Check for the existence of a table by name
@@ -143,8 +143,8 @@ public:
 	/// Retrieve a single Blob value from a query
 	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
 	///  is thrown unless bRequireUniqueResult is false
-	virtual void* GetSingleResultBlob(const wxString& strSQL, int nField, wxMemoryBuffer& Buffer, bool bRequireUniqueResult = true);
-	virtual void* GetSingleResultBlob(const wxString& strSQL, const wxString& strField, wxMemoryBuffer& Buffer, bool bRequireUniqueResult = true);
+	virtual void* GetSingleResultBlob(const wxString& strSQL, int nField, wxMemoryBuffer& buffer, bool bRequireUniqueResult = true);
+	virtual void* GetSingleResultBlob(const wxString& strSQL, const wxString& strField, wxMemoryBuffer& buffer, bool bRequireUniqueResult = true);
 
 	/// Retrieve a single double value from a query
 	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
@@ -191,7 +191,7 @@ private:
 	long GetSingleResultLong(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	bool GetSingleResultBool(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	wxDateTime GetSingleResultDate(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	void* GetSingleResultBlob(const wxString& strSQL, const wxVariant* field, wxMemoryBuffer& Buffer, bool bRequireUniqueResult = true);
+	void* GetSingleResultBlob(const wxString& strSQL, const wxVariant* field, wxMemoryBuffer& buffer, bool bRequireUniqueResult = true);
 	double GetSingleResultDouble(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	number_t GetSingleResultNumber(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	wxArrayInt GetResultsArrayInt(const wxString& strSQL, const wxVariant* field);

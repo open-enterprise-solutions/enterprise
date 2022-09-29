@@ -37,12 +37,10 @@ bool IModuleManager::CModuleValue::CreateCommonModule()
 	wxDELETE(m_procUnit);
 
 	if (appData->EnterpriseMode()) {
-		try
-		{
+		try {
 			m_compileModule->Compile();
 		}
-		catch (const CTranslateError *)
-		{
+		catch (const CTranslateError *){
 			return false;
 		};
 
@@ -73,12 +71,9 @@ void IModuleManager::CModuleValue::PrepareNames() const
 {
 	std::vector<SEng> aMethods, aAttributes;
 
-	if (m_procUnit != NULL)
-	{
+	if (m_procUnit != NULL) {
 		CByteCode *m_byteCode = m_procUnit->GetByteCode();
-
-		for (auto exportFunction : m_byteCode->m_aExportFuncList)
-		{
+		for (auto exportFunction : m_byteCode->m_aExportFuncList) {
 			SEng methods;
 			methods.sName = exportFunction.first;
 			methods.sSynonym = wxT("procUnit");

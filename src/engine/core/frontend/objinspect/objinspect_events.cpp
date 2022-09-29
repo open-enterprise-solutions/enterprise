@@ -1,7 +1,7 @@
 #include "objinspect.h"
 #include "frontend/mainFrame.h"
 
-void CObjectInspector::SelectObject(IObjectBase *selobj, bool force)
+void CObjectInspector::SelectObject(IPropertyObject* selobj, bool force)
 {
 	ShowProperty();
 
@@ -11,7 +11,7 @@ void CObjectInspector::SelectObject(IObjectBase *selobj, bool force)
 	Create(force);
 }
 
-void CObjectInspector::SelectObject(IObjectBase *selobj, wxEvtHandler *handler, bool force)
+void CObjectInspector::SelectObject(IPropertyObject* selobj, wxEvtHandler* handler, bool force)
 {
 	ShowProperty();
 
@@ -32,15 +32,9 @@ void CObjectInspector::RefreshProperty()
 
 	int pageNumber = m_pg->GetSelectedPage();
 	wxString pageName;
-	if (pageNumber != wxNOT_FOUND)
-	{
+	if (pageNumber != wxNOT_FOUND) {
 		pageName = m_pg->GetPageName(pageNumber);
 	}
-
-	m_currentSel->OnPropertyCreated();
-
-	wxPGProperty *lastProperty = m_pg->GetSelectedProperty();
-	wxString lastPropName = lastProperty->GetName();
 
 	// Clear Property Grid Manager
 	m_pg->Clear();
@@ -48,31 +42,25 @@ void CObjectInspector::RefreshProperty()
 	m_propMap.clear();
 	m_eventMap.clear();
 
-	std::map<wxString, Property *> propMap, dummyPropMap;
-	std::map<wxString, Event *> eventMap, dummyEventMap;
+	std::map<wxString, Property*> propMap, dummyPropMap;
+	std::map<wxString, Event*> eventMap, dummyEventMap;
 
 	// We create the categories with the properties of the object organized by "classes"
 	CreateCategory(m_currentSel->GetClassName(), m_currentSel, propMap, false);
 
-	IObjectBase* parent = m_currentSel->GetParent();
-	if (parent) {
-		if (parent->IsItem()) {
-			CreateCategory(m_currentSel->GetClassName(), parent, dummyPropMap, false);
-		}
+	IPropertyObject* parent = m_currentSel->GetParent();
+	if (parent != NULL && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
+		CreateCategory(m_currentSel->GetClassName(), parent, dummyPropMap, false);
 	}
 
 	CreateCategory(m_currentSel->GetClassName(), m_currentSel, eventMap, true);
 
-	if (parent)
-	{
-		if (parent->IsItem()) {
-			CreateCategory(m_currentSel->GetClassName(), parent, dummyEventMap, true);
-		}
+	if (parent != NULL && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
+		CreateCategory(m_currentSel->GetClassName(), parent, dummyEventMap, true);
 	}
 
 	// Select previously selected page, or first page
-	if (m_pg->GetPageCount() > 0)
-	{
+	if (m_pg->GetPageCount() > 0) {
 		int pageIndex = m_pg->GetPageByName(pageName);
 		if (wxNOT_FOUND != pageIndex) {
 			m_pg->SelectPage(pageIndex);
@@ -88,9 +76,4 @@ void CObjectInspector::RefreshProperty()
 	m_pg->Thaw();
 
 	RestoreLastSelectedPropItem();
-}
-
-IObjectBase* CObjectInspector::GetSelectedObject()
-{
-	return m_currentSel;
 }

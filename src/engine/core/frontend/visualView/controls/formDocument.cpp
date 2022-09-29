@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "form.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 #include "frontend/visualView/visualHost.h"
 #include "frontend/visualView/printout/formPrintOut.h"
 #include "frontend/mainFrame.h"
@@ -32,28 +32,23 @@ bool CVisualDocument::OnSaveModified()
 
 bool CVisualDocument::OnCloseDocument()
 {
-	CValueForm* valueForm = m_visualHost ? m_visualHost->GetValueForm() : NULL;
+	CValueForm* valueForm = m_visualHost ?
+		m_visualHost->GetValueForm() : NULL;
 
-	if (valueForm) {
-		valueForm->m_formModified = false;
+	if (valueForm != NULL) {
 		valueForm->m_valueFormDocument = NULL;
-
 		if (!m_visualHost->IsDemonstration()) {
-			valueForm->m_formModified = false;
-			valueForm->m_valueFormDocument = NULL;
-
 			wxTheApp->ScheduleForDestruction(m_visualHost);
-
 			if (valueForm->GetRefCount() > 1) {
 				valueForm->DecrRef();
 			}
 			else {
 				wxTheApp->ScheduleForDestruction(valueForm);
 			}
-
 			s_aOpenedForms.erase(m_guidForm);
 			m_guidForm.reset();
 		}
+		valueForm->m_formModified = false;
 	}
 
 	return CDocument::OnCloseDocument();
@@ -66,10 +61,10 @@ bool CVisualDocument::IsModified() const
 
 void CVisualDocument::Modify(bool modify)
 {
-	if (m_visualHost) {
+	if (m_visualHost != NULL) {
 		CValueForm* valueForm =
 			m_visualHost->GetValueForm();
-		if (valueForm) {
+		if (valueForm != NULL) {
 			valueForm->m_formModified = modify;
 		}
 	}
@@ -78,7 +73,7 @@ void CVisualDocument::Modify(bool modify)
 		m_documentModified = modify;
 		// Allow views to append asterix to the title
 		CVisualView* view = GetFirstView();
-		if (view) {
+		if (view != NULL) {
 			view->OnChangeFilename();
 		}
 	}
@@ -117,7 +112,7 @@ void CVisualDocument::SetVisualView(CVisualHost* visualHost)
 
 CVisualDocument::~CVisualDocument()
 {
-	if (m_visualHost) {
+	if (m_visualHost != NULL) {
 		if (!wxTheApp->IsScheduledForDestruction(m_visualHost)) {
 			wxTheApp->ScheduleForDestruction(m_visualHost);
 		}
@@ -135,7 +130,7 @@ wxPrintout* CVisualView::OnCreatePrintout()
 
 void CVisualView::OnUpdate(wxView* sender, wxObject* hint)
 {
-	if (m_valueForm) {
+	if (m_valueForm != NULL) {
 		m_valueForm->UpdateForm();
 	}
 }
@@ -196,20 +191,15 @@ bool CValueForm::UpdateFormKey(const CUniquePairKey& formKey)
 	);
 
 	if (foundedForm != s_aOpenedForms.end()) {
-
 		CVisualDocument* visualDocument = foundedForm->second;
 		wxASSERT(visualDocument);
-
 		s_aOpenedForms.erase(formKey);
 		s_aOpenedForms.insert_or_assign(formKey, visualDocument);
-
 		CVisualView* visualView = visualDocument->GetFirstView();
 		wxASSERT(visualView);
-
 		CValueForm* formValue = visualView->GetValueForm();
 		wxASSERT(formValue);
 		formValue->m_formKey = formKey;
-
 		return true;
 	}
 
@@ -285,10 +275,10 @@ bool CValueForm::CreateDocumentForm(CDocument* docParent, bool demoRun)
 		m_valueFormDocument->SetIcon(m_metaFormObject->GetIcon());
 	}
 
-	wxString valueFrameTitle = m_caption;
+	wxString valueFrameTitle = GetCaption();
 
 	if (demoRun) {
-		valueFrameTitle = st_demonstration + wxT(": ") + m_caption;
+		valueFrameTitle = st_demonstration + wxT(": ") + GetCaption();
 	}
 
 	if (valueFrameTitle.IsEmpty()) {
@@ -314,19 +304,15 @@ bool CValueForm::CreateDocumentForm(CDocument* docParent, bool demoRun)
 	}
 
 	if (appData->EnterpriseMode()) {
-
 		CValue bCancel = false;
-
 		if (m_procUnit != NULL) {
 			m_procUnit->CallFunction("beforeOpen", bCancel);
 		}
-
 		if (bCancel.GetBoolean()) {
 			s_aOpenedForms.erase(m_formKey);
 			m_valueFormDocument = NULL;
 			return false;
 		}
-
 		if (m_procUnit != NULL) {
 			m_procUnit->CallFunction("onOpen");
 		}
@@ -336,7 +322,7 @@ bool CValueForm::CreateDocumentForm(CDocument* docParent, bool demoRun)
 	CMainFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE);
 
 	if (demoRun) {
-		m_visualHostContext = NULL;
+		g_visualHostContext = NULL;
 	}
 
 	CVisualHost* visualView =
@@ -364,19 +350,14 @@ bool CValueForm::CloseDocumentForm()
 {
 	if (m_valueFormDocument == NULL)
 		return false;
-
 	CValue bCancel = false;
-
 	if (m_procUnit != NULL) {
 		m_procUnit->CallFunction("beforeClose", bCancel);
 	}
-
 	if (bCancel.GetBoolean())
 		return false;
-
 	if (m_procUnit != NULL) {
 		m_procUnit->CallFunction("onClose");
 	}
-
 	return true;
 }

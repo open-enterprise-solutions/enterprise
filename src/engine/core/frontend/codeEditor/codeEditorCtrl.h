@@ -111,6 +111,7 @@ public:
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize, long style = 0,
 		const wxString& name = wxSTCNameStr);
+	virtual ~CCodeEditorCtrl();
 
 	bool LoadModule();
 	bool SaveModule();
@@ -146,8 +147,6 @@ public:
 	}
 
 	void SetCurrentLine(int line, bool setLine = true);
-
-	~CCodeEditorCtrl();
 };
 
 #endif 

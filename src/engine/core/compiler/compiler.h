@@ -14,10 +14,9 @@
 #include <map>
 #include <vector>
 
-#include "ttmath/ttmath.h"
-
 class CValue;
-class CConfigMetadata;
+
+class IEnumerationWrapper;
 
 class IMetaObject;
 class IMetaObjectWrapperData;
@@ -28,23 +27,10 @@ class IRecordDataObject;
 class IRecordDataObjectRef;
 
 class IMetadata;
-class IConfigMetadata;
-
-struct CByteCode;
-
-class CMethods;
-class attributeArg_t;
-class methodArg_t;
 
 class CProcUnit;
 
-class PreparedStatement;
-class DatabaseResultSet;
-
 #include "resource.h"
-
-extern wxBitmap wxGetImageBMPFromResource(long id);
-extern inline void ThrowErrorTypeOperation(const wxString& fromType, wxClassInfo* clsInfo);
 
 //*******************************************************************************************
 //*                                 Special structures                                      *
@@ -64,15 +50,6 @@ struct guid_t  // UUID = GUID = CLSID = LIBID = IID
 	unsigned short  m_data2;
 	unsigned short  m_data3;
 	unsigned char   m_data4[8];
-};
-
-//reference data
-struct reference_t
-{
-	meta_identifier_t m_id; // id of metadata 
-	guid_t m_guid;
-
-	reference_t(const meta_identifier_t &id, const guid_t &guid) : m_id(id), m_guid(guid) {}
 };
 
 typedef unsigned wxLongLong_t CLASS_ID;
@@ -223,6 +200,8 @@ CAuto_##class_info()\
 //*******************************************************************************************
 //*                                 Declare number type                                     *
 //*******************************************************************************************
+
+#include "ttmath/ttmath.h"
 
 typedef ttmath::Big<TTMATH_BITS(128), TTMATH_BITS(128)> number_t;
 

@@ -12,7 +12,7 @@ class CCodeEditorPrintout : public wxPrintout {
 public:
 
 	//! constructor
-	CCodeEditorPrintout(CCodeEditorCtrl *edit, const wxString& title = "");
+	CCodeEditorPrintout(wxStyledTextCtrl *edit, const wxString& title = "");
 
 	//! event handlers
 	bool OnPrintPage(int page) wxOVERRIDE;
@@ -23,7 +23,7 @@ public:
 	void GetPageInfo(int *minPage, int *maxPage, int *selPageFrom, int *selPageTo) wxOVERRIDE;
 
 private:
-	CCodeEditorCtrl *m_edit;
+	wxStyledTextCtrl*m_edit;
 	wxArrayInt m_pageEnds;
 	wxRect m_pageRect;
 	wxRect m_printRect;

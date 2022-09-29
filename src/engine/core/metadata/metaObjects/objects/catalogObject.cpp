@@ -19,22 +19,14 @@
 //*                                  ObjectCatalogValue                                       *
 //*********************************************************************************************
 
+CObjectCatalog::CObjectCatalog(CMetaObjectCatalog* metaObject, const Guid& objGuid, int objMode) :
+	IRecordDataObjectGroupRef(metaObject, objGuid, objMode)
+{
+}
+
 CObjectCatalog::CObjectCatalog(const CObjectCatalog& source) :
-	IRecordDataObjectRef(source), m_objMode(source.m_objMode), m_catOwner(NULL), m_catParent(NULL)
+	IRecordDataObjectGroupRef(source)
 {
-	InitializeObject(&source);
-}
-
-CObjectCatalog::CObjectCatalog(CMetaObjectCatalog* metaObject, int objMode) :
-	IRecordDataObjectRef(metaObject), m_objMode(objMode), m_catOwner(NULL), m_catParent(NULL)
-{
-	InitializeObject();
-}
-
-CObjectCatalog::CObjectCatalog(CMetaObjectCatalog* metaObject, const Guid& guid, int objMode) :
-	IRecordDataObjectRef(metaObject, guid), m_objMode(objMode), m_catOwner(NULL), m_catParent(NULL)
-{
-	InitializeObject();
 }
 
 CSourceExplorer CObjectCatalog::GetSourceExplorer() const
@@ -50,17 +42,52 @@ CSourceExplorer CObjectCatalog::GetSourceExplorer() const
 		srcHelper.AppendSource(metaRef->GetCatalogCode(), false);
 		srcHelper.AppendSource(metaRef->GetCatalogDescription());
 		CMetaDefaultAttributeObject* defOwner = metaRef->GetCatalogOwner();
-		if (defOwner != NULL && defOwner->GetTypeCount() > 0) {
+		if (defOwner != NULL && defOwner->GetClsidCount() > 0) {
 			srcHelper.AppendSource(metaRef->GetCatalogOwner());
 		}
+		srcHelper.AppendSource(metaRef->GeCatalogParent());
 	}
 
 	for (auto attribute : m_metaObject->GetObjectAttributes()) {
-		srcHelper.AppendSource(attribute);
+		CMetaGroupAttributeObject* metaAttr = NULL; eUseItem attrUse = eUseItem::eUseItem_Folder_Item;
+		if (attribute->ConvertToValue(metaAttr)) {
+			attrUse = metaAttr->GetAttrUse();
+		}
+		if (m_objMode == OBJECT_NORMAL) {
+			if (attrUse == eUseItem::eUseItem_Item
+				|| attrUse == eUseItem::eUseItem_Folder_Item) {
+				if (!m_metaObject->IsDataReference(attribute->GetMetaID())) {
+					srcHelper.AppendSource(attribute);
+				}
+			}
+		}
+		else {
+			if (attrUse == eUseItem::eUseItem_Folder ||
+				attrUse == eUseItem::eUseItem_Folder_Item) {
+				if (!m_metaObject->IsDataReference(attribute->GetMetaID())) {
+					srcHelper.AppendSource(attribute);
+				}
+			}
+		}
 	}
 
 	for (auto table : m_metaObject->GetObjectTables()) {
-		srcHelper.AppendSource(table);
+		CMetaGroupTableObject* metaTable = NULL; eUseItem tableUse = eUseItem::eUseItem_Folder_Item;
+		if (table->ConvertToValue(metaTable)) {
+			tableUse = metaTable->GetTableUse();
+		}
+		if (m_objMode == OBJECT_NORMAL) {
+			if (tableUse == eUseItem::eUseItem_Item
+				|| tableUse == eUseItem::eUseItem_Folder_Item) {
+				srcHelper.AppendSource(table);
+			}
+		}
+		else {
+			if (tableUse == eUseItem::eUseItem_Folder ||
+				tableUse == eUseItem::eUseItem_Folder_Item) {
+				srcHelper.AppendSource(table);
+			}
+		}
 	}
 
 	return srcHelper;
@@ -102,7 +129,7 @@ CValueForm* CObjectCatalog::GetFormValue(const wxString& formName, IValueFrame* 
 		wxASSERT(defList);
 	}
 	else {
-		defList = m_metaObject->GetDefaultFormByID(CMetaObjectCatalog::eFormObject);
+		defList = m_metaObject->GetDefaultFormByID(m_objMode == OBJECT_NORMAL ? CMetaObjectCatalog::eFormObject : CMetaObjectCatalog::eFormGroup);
 	}
 
 	CValueForm* valueForm = NULL;
@@ -118,8 +145,7 @@ CValueForm* CObjectCatalog::GetFormValue(const wxString& formName, IValueFrame* 
 		valueForm->InitializeForm(ownerControl, NULL,
 			this, m_objGuid
 		);
-		valueForm->ReadProperty();
-		valueForm->BuildForm(CMetaObjectCatalog::eFormObject);
+		valueForm->BuildForm(m_objMode == OBJECT_NORMAL ? CMetaObjectCatalog::eFormObject : CMetaObjectCatalog::eFormGroup);
 		valueForm->Modify(m_objModified);
 	}
 
@@ -132,11 +158,9 @@ CValueForm* CObjectCatalog::GetFormValue(const wxString& formName, IValueFrame* 
 //*                                   Catalog events                                            *
 //***********************************************************************************************
 
-void CObjectCatalog::FillObject(CValue& vFillObject)
+bool CObjectCatalog::FillObject(CValue& vFillObject)
 {
-	if (appData->EnterpriseMode()) {
-		m_procUnit->CallFunction("Filling", vFillObject);
-	}
+	return Filling(vFillObject);
 }
 
 CValue CObjectCatalog::CopyObject()

@@ -1191,7 +1191,8 @@ void wxEditTextCtrl::OnChar(wxKeyEvent& event)
 		event.Skip();
 		return;
 	}
-	if (event.GetKeyCode() == WXK_RETURN)
+	if (event.GetKeyCode() == WXK_RETURN ||
+		event.GetKeyCode() == WXK_NUMPAD_ENTER)
 	{
 		EndEdit(false);  // not cancelled
 		return;
@@ -3921,6 +3922,7 @@ void wxTreeListMainWindow::OnChar(wxKeyEvent & event) {
 	}break;
 
 		// <RETURN>: activate current item
+	case WXK_NUMPAD_ENTER:
 	case WXK_RETURN: {
 		if (!SendEvent(wxEVT_COMMAND_TREE_ITEM_ACTIVATED, m_curItem)) {
 

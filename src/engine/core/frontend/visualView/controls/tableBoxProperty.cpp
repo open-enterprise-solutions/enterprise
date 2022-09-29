@@ -6,9 +6,23 @@
 #include "metadata/metadata.h"
 #include "metadata/singleMetaTypes.h"
 
+void CValueTableBox::OnPropertyCreated(Property* property)
+{
+	if (m_propertySource == property) {
+		CValueTableBox::SaveToVariant(m_propertySource->GetValue(), GetMetaData());
+	}
+}
+
+bool CValueTableBox::OnPropertyChanging(Property* property, const wxVariant& newValue)
+{
+	if (m_propertySource == property && !CValueTableBox::LoadFromVariant(newValue))
+		return false;
+	return IValueWindow::OnPropertyChanging(property, newValue);
+}
+
 void CValueTableBox::OnPropertyChanged(Property* property)
 {
-	if (property->GetName() == wxT("source")) {
+	if (m_propertySource == property) {
 		
 		int answer = wxMessageBox(		
 			_("The data source has been changed. Refill columns?"), 
@@ -20,7 +34,7 @@ void CValueTableBox::OnPropertyChanged(Property* property)
 			IMetadata* metaData = GetMetaData();
 
 			while (GetChildCount() != 0) {
-				m_visualHostContext->CutObject(GetChild(0), true);
+				g_visualHostContext->CutObject(GetChild(0), true);
 			}
 
 			auto clsids = CValueTableBox::GetClsids(); CLASS_ID clsid = 0;
@@ -50,16 +64,12 @@ void CValueTableBox::OnPropertyChanged(Property* property)
 
 						wxASSERT(tableBoxColumn);
 
-						tableBoxColumn->m_controlName = m_controlName + wxT("_") + attribute->GetName();
-						tableBoxColumn->m_caption = attribute->GetSynonym();
-						tableBoxColumn->m_dataSource = attribute->GetMetaID();
-						tableBoxColumn->m_enabled = true;
-						tableBoxColumn->m_visible = true;
+						tableBoxColumn->SetControlName(GetControlName() + wxT("_") + attribute->GetName());
+						tableBoxColumn->SetCaption(attribute->GetSynonym());
+						tableBoxColumn->SetSourceId(attribute->GetMetaID());
+						tableBoxColumn->SetVisibleColumn(true);
 
-						tableBoxColumn->ReadProperty();
-
-						m_visualHostContext->InsertObject(tableBoxColumn, this);
-						tableBoxColumn->SaveProperty();
+						g_visualHostContext->InsertObject(tableBoxColumn, this);
 					}
 				}
 			}
@@ -68,7 +78,7 @@ void CValueTableBox::OnPropertyChanged(Property* property)
 				CValueTableBox::AddColumn();
 			}
 
-			m_visualHostContext->RefreshEditor();
+			g_visualHostContext->RefreshEditor();
 		}
 	}
 }

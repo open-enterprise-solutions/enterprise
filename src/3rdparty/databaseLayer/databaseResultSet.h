@@ -54,7 +54,7 @@ public:
 	/// Retrieve a wxDateTime from the result set by the 1-based field index
 	virtual wxDateTime GetResultDate(int nField) = 0;
 	/// Retrieve a BLOB from the result set by the 1-based field index
-	virtual void* GetResultBlob(int nField, wxMemoryBuffer& Buffer) = 0;
+	virtual void* GetResultBlob(int nField, wxMemoryBuffer& buffer) = 0;
 	/// Retrieve a double from the result set by the 1-based field index
 	virtual double GetResultDouble(int nField) = 0;
 	/// Retrieve a number from the result set by the 1-based field index
@@ -73,7 +73,7 @@ public:
 	/// Retrieve a wxDateTime from the result set by the result set column name
 	virtual wxDateTime GetResultDate(const wxString& strField);
 	/// Retrieve a BLOB from the result set by the result set column name
-	virtual void* GetResultBlob(const wxString& strField, wxMemoryBuffer& Buffer);
+	virtual void* GetResultBlob(const wxString& strField, wxMemoryBuffer& buffer);
 	/// Retrieve a double from the result set by the result set column name
 	virtual double GetResultDouble(const wxString& strField);
 	/// Retrieve a number from the result set by the result set column name

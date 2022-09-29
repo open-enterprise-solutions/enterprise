@@ -14,7 +14,7 @@ CValueGuid::CValueGuid(const Guid &guid) : CValue(eValueTypes::TYPE_VALUE, true)
 
 bool CValueGuid::Init()
 {
-	m_guid = Guid::newGuid();
+	m_guid = wxNewGuid;
 	return true;
 }
 

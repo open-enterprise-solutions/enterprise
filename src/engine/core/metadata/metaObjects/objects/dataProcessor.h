@@ -1,10 +1,11 @@
 #ifndef _DATAPROCESSOR_H__
 #define _DATAPROCESSOR_H__
 
-#include "baseObject.h"
+#include "object.h"
 
-class CMetaObjectDataProcessor : public IMetaObjectRecordData {
+class CMetaObjectDataProcessor : public IMetaObjectRecordDataExt {
 	wxDECLARE_DYNAMIC_CLASS(CMetaObjectDataProcessor);
+protected:
 
 	enum
 	{
@@ -15,38 +16,42 @@ class CMetaObjectDataProcessor : public IMetaObjectRecordData {
 	CMetaModuleObject* m_moduleObject;
 	CMetaCommonModuleObject* m_moduleManager;
 
+public:
+
 	enum
 	{
 		eFormDataProcessor = 1,
 	};
 
-	virtual OptionList* GetFormType() override
-	{
+	virtual OptionList* GetFormType() override {
 		OptionList* optionlist = new OptionList;
-		optionlist->AddOption("formDataProcessor", eFormDataProcessor);
+		optionlist->AddOption(wxT("formDataProcessor"), _("Form data processor"), eFormDataProcessor);
 		return optionlist;
 	}
 
-	//default form 
-	int m_defaultFormObject;
-
-	//external or default dataProcessor
-	int m_objMode;
-
-private:
-
-	OptionList* GetFormObject(Property*);
-
 protected:
 
-	CMetaObjectDataProcessor(int objMode);
+	PropertyCategory* m_categoryForm = IPropertyObject::CreatePropertyCategory({ "defaultForms", "default forms"});
+	Property* m_propertyDefFormObject = IPropertyObject::CreateProperty(m_categoryForm, { "default_object", "default object" }, &CMetaObjectDataProcessor::GetFormObject, wxNOT_FOUND);
 
+private:
+	OptionList* GetFormObject(PropertyOption*);
 public:
 
-	CMetaObjectDataProcessor();
+	form_identifier_t GetDefFormObject() const {
+		return m_propertyDefFormObject->GetValueAsInteger();
+	}
+
+	void SetDefFormObject(const form_identifier_t &id) const {
+		m_propertyDefFormObject->SetValue(id);
+	}
+
+	CMetaObjectDataProcessor(int objMode = METAOBJECT_NORMAL);
 	virtual ~CMetaObjectDataProcessor();
 
-	virtual wxString GetClassName() const { return wxT("dataProcessor"); }
+	virtual wxString GetClassName() const { 
+		return wxT("dataProcessor");
+	}
 
 	//support icons
 	virtual wxIcon GetIcon();
@@ -73,38 +78,37 @@ public:
 	virtual void OnRemoveMetaForm(IMetaFormObject* metaForm);
 
 	//create associate value 
-	virtual CMetaFormObject* GetDefaultFormByID(const form_identifier_t &id);
+	virtual CMetaFormObject* GetDefaultFormByID(const form_identifier_t& id);
 
 	//create object data with metaForm
 	virtual ISourceDataObject* CreateObjectData(IMetaFormObject* metaObject);
 
-	//create empty object
-	virtual IRecordDataObject* CreateObjectValue();
-
 	//create form with data 
-	virtual CValueForm* CreateObjectValue(IMetaFormObject* metaForm) override {
+	virtual CValueForm* CreateObjectForm(IMetaFormObject* metaForm) override {
 		return metaForm->GenerateFormAndRun(
 			NULL, CreateObjectData(metaForm)
 		);
 	}
 
 	//suppot form
-	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = Guid());
+	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
 
 	//get module object in compose object 
-	virtual CMetaModuleObject* GetModuleObject() const { return m_moduleObject; }
-	virtual CMetaCommonModuleObject* GetModuleManager() const { return m_moduleManager; }
+	virtual CMetaModuleObject* GetModuleObject() const {
+		return m_moduleObject; 
+	}
+	
+	virtual CMetaCommonModuleObject* GetModuleManager() const { 
+		return m_moduleManager; 
+	}
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defultMenu);
+	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
 	virtual void ProcessCommand(unsigned int id);
 
-	//read & save property
-	virtual void ReadProperty() override;
-	virtual void SaveProperty() override;
-
 protected:
-
+	//create empty object
+	virtual IRecordDataObjectExt* CreateObjectExtValue();  //create object 
 	//load & save metadata from DB 
 	virtual bool LoadData(CMemoryReader& reader);
 	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
@@ -117,10 +121,12 @@ protected:
 class CMetaObjectDataProcessorExternal : public CMetaObjectDataProcessor {
 	wxDECLARE_DYNAMIC_CLASS(CMetaObjectDataProcessorExternal);
 public:
-	CMetaObjectDataProcessorExternal() : CMetaObjectDataProcessor(METAOBJECT_EXTERNAL) { m_metaId = default_meta_id; }
-	virtual ~CMetaObjectDataProcessorExternal() {}
-
-	virtual wxString GetClassName() const { return wxT("externalDataProcessor"); }
+	CMetaObjectDataProcessorExternal() : CMetaObjectDataProcessor(METAOBJECT_EXTERNAL) { 
+		m_metaId = default_meta_id; 
+	}
+	virtual wxString GetClassName() const { 
+		return wxT("externalDataProcessor"); 
+	}
 };
 
 //********************************************************************************************
@@ -129,19 +135,12 @@ public:
 
 #define thisObject wxT("thisObject")
 
-class CObjectDataProcessor : public IRecordDataObject {
-public:
-	virtual bool InitializeObject();
-
-	CObjectDataProcessor(const CObjectDataProcessor& source);
+class CObjectDataProcessor : public IRecordDataObjectExt {
+protected:
 	CObjectDataProcessor(CMetaObjectDataProcessor* metaObject);
-	virtual ~CObjectDataProcessor();
-
-	//copy new object
-	virtual IRecordDataObject* CopyObjectValue() {
-		return new CObjectDataProcessor(*this);
-	}
-
+	CObjectDataProcessor(const CObjectDataProcessor& source);
+public:
+	
 	//****************************************************************************
 	//*                              Support methods                             *
 	//****************************************************************************
@@ -160,23 +159,12 @@ public:
 	virtual void ShowFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL);
 	virtual CValueForm* GetFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL);
 
-	//get metadata from object 
-	virtual IMetaObjectRecordData* GetMetaObject() const { return m_metaObject; }
-
-	//get unique identifier 
-	virtual CUniqueKey GetGuid() const { return m_objGuid; }
-
-	//check is empty
-	virtual inline bool IsEmpty() const override { return false; }
-
 	//support actions
-	virtual actionData_t GetActions(const form_identifier_t &formType);
-	virtual void ExecuteAction(const action_identifier_t &action, CValueForm* srcForm);
+	virtual actionData_t GetActions(const form_identifier_t& formType);
+	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm);
 
 protected:
-
-	CMetaObjectDataProcessor* m_metaObject;
-
+	friend class CMetaObjectDataProcessor;
 	friend class CExternalDataProcessorModuleManager;
 };
 

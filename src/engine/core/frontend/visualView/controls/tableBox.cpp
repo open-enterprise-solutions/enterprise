@@ -1,5 +1,6 @@
 #include "tableBox.h"
 #include "frontend/visualView/visualEditor.h"
+#include "frontend/controls/dataView.h"
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
@@ -21,8 +22,8 @@ CValue CValueTableBox::GetControlValue() const
 
 void CValueTableBox::SetControlValue(CValue& vSelected)
 {
-	IValueTable* tableModel =
-		vSelected.ConvertToType<IValueTable>();
+	IValueModel* tableModel =
+		vSelected.ConvertToType<IValueModel>();
 
 	if (m_tableModel) {
 		m_tableModel->DecrRef();
@@ -39,73 +40,53 @@ void CValueTableBox::AddColumn()
 {
 	wxASSERT(m_formOwner);
 
-	IValueControl* newTableBoxColumn =
-		m_formOwner->NewObject(wxT("tableBoxColumn"), this);
-
-	newTableBoxColumn->ReadProperty();
-
-	m_visualHostContext->InsertObject(newTableBoxColumn, this);
-	newTableBoxColumn->SaveProperty();
-
-	m_visualHostContext->RefreshEditor();
+	IValueFrame* newTableBoxColumn = m_formOwner->NewObject(wxT("tableBoxColumn"), this);
+	g_visualHostContext->InsertObject(newTableBoxColumn, this);
+	g_visualHostContext->RefreshEditor();
 }
 
 #include "compiler/valueType.h"
 #include "compiler/valueTable.h"
 
 #include "metadata/metaObjectsDefines.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 
 #include "frontend/visualView/visualHost.h"
 
 #include "appData.h"
 
-void CValueTableBox::CreateColumns(wxDataViewCtrl* tableCtrl)
+void CValueTableBox::CreateColumns(CDataViewCtrl* tableCtrl)
 {
-	if (appData->DesignerMode()) {
+	if (appData->DesignerMode())
 		return;
-	}
-
-	wxDataViewCtrl* tc = tableCtrl ?
-		tableCtrl : dynamic_cast<wxDataViewCtrl*>(GetWxObject());
+	CDataViewCtrl* tc = tableCtrl ?
+		tableCtrl : dynamic_cast<CDataViewCtrl*>(GetWxObject());
 	wxASSERT(tc);
 	CVisualDocument* visualDocument = m_formOwner->GetVisualDocument();
-
 	//clear all controls 
-	for (unsigned int idx = 0; idx < GetChildCount(); idx++)
-	{
+	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
 		IValueFrame* childColumn = GetChild(idx);
-
 		wxASSERT(childColumn);
-
-		if (visualDocument) {
+		if (visualDocument != NULL) {
 			CVisualHost* m_visualView = visualDocument->GetVisualView();
 			wxASSERT(m_visualView);
 			m_visualView->RemoveControl(childColumn, this);
 		}
-
 		childColumn->SetParent(NULL);
 		childColumn->DecrRef();
 	}
-
 	//clear all children
 	RemoveAllChildren();
-
 	//clear all old columns
 	tc->ClearColumns();
-
 	//create new columns
-	IValueTable::IValueTableColumnCollection* tableColumns = m_tableModel->GetColumns();
+	IValueModel::IValueTableColumnCollection* tableColumns = m_tableModel->GetColumns();
 	wxASSERT(tableColumns);
-	for (unsigned int idx = 0; idx < tableColumns->GetColumnCount(); idx++)
-	{
-		IValueTable::IValueTableColumnCollection::IValueTableColumnInfo* columnInfo = tableColumns->GetColumnInfo(idx);
-
+	for (unsigned int idx = 0; idx < tableColumns->GetColumnCount(); idx++) {
+		IValueModel::IValueTableColumnCollection::IValueTableColumnInfo* columnInfo = tableColumns->GetColumnInfo(idx);
 		CValueTableBoxColumn* newTableBoxColumn =
 			m_formOwner->NewObject<CValueTableBoxColumn>("tableboxColumn", this);
-
 		CValueTypeDescription* typeDescription = columnInfo->GetColumnTypes();
-
 		if (typeDescription != NULL) {
 			newTableBoxColumn->SetDefaultMetatype(typeDescription->GetClsids(),
 				typeDescription->m_qNumber, typeDescription->m_qDate, typeDescription->m_qString
@@ -114,26 +95,22 @@ void CValueTableBox::CreateColumns(wxDataViewCtrl* tableCtrl)
 		else {
 			newTableBoxColumn->SetDefaultMetatype(eValueTypes::TYPE_STRING);
 		}
-
-		newTableBoxColumn->m_caption = columnInfo->GetColumnCaption();
-		newTableBoxColumn->m_dataSource = columnInfo->GetColumnID();
-		newTableBoxColumn->m_width = columnInfo->GetColumnWidth();
-
-		newTableBoxColumn->ReadProperty();
-
-		if (visualDocument) {
+		newTableBoxColumn->SetCaption(columnInfo->GetColumnCaption());
+		newTableBoxColumn->m_dataSource = GetGuidByID(columnInfo->GetColumnID());
+		newTableBoxColumn->SetWidthColumn(columnInfo->GetColumnWidth());
+		if (visualDocument != NULL) {
 			CVisualHost* m_visualView = visualDocument->GetVisualView();
 			wxASSERT(m_visualView);
 			m_visualView->CreateControl(newTableBoxColumn, this);
 		}
 	}
 
-	if (visualDocument) {
+	if (visualDocument != NULL) {
 		CVisualHost* visualView = visualDocument->GetVisualView();
 		wxASSERT(visualView);
 		//fix size in parent window 
 		wxWindow* wndParent = visualView->GetParent();
-		if (wndParent) {
+		if (wndParent != NULL) {
 			wndParent->Layout();
 		}
 	}
@@ -142,25 +119,24 @@ void CValueTableBox::CreateColumns(wxDataViewCtrl* tableCtrl)
 void CValueTableBox::CreateTable()
 {
 	if (m_tableModel == NULL) {
-		IValueTable* tableValue =
-			IAttributeControl::CreateAndConvertValueRef<IValueTable>();
+		IValueModel* tableValue =
+			IAttributeControl::CreateAndConvertValueRef<IValueModel>();
 		wxASSERT(tableValue);
 		for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
 			CValueTableBoxColumn* columnTable = wxDynamicCast(
 				GetChild(idx), CValueTableBoxColumn
 			);
 			if (columnTable != NULL) {
-				IValueTable::IValueTableColumnCollection* cols =
+				IValueModel::IValueTableColumnCollection* cols =
 					tableValue->GetColumns();
 				wxASSERT(cols);
-				cols->AddColumn(columnTable->m_controlName,
+				cols->AddColumn(columnTable->GetControlName(),
 					columnTable->GetValueTypeDescription(),
-					columnTable->m_caption,
-					columnTable->m_width
+					columnTable->GetCaption(),
+					columnTable->GetWidthColumn()
 				);
 			}
 		}
-
 		m_tableModel = tableValue;
 		m_tableModel->IncrRef();
 	}
@@ -172,10 +148,10 @@ void CValueTableBox::CreateTable()
 void CValueTableBox::CreateModel()
 {
 	ISourceDataObject* srcObject = m_formOwner->GetSourceObject();
-	if (m_dataSource != wxNOT_FOUND) {
+	if (m_dataSource.isValid()) {
 		if (srcObject != NULL) {
-			IValueTable* tableModel = NULL;
-			if (srcObject->GetTable(tableModel, m_dataSource)) {
+			IValueModel* tableModel = NULL;
+			if (srcObject->GetModel(tableModel, GetIdByGuid(m_dataSource))) {
 				if (tableModel != m_tableModel) {
 					if (m_tableModel != NULL) {
 						m_tableModel->DecrRef();
@@ -187,21 +163,21 @@ void CValueTableBox::CreateModel()
 			}
 		}
 	}
-
+	
 	CreateTable();
-
+	
 	if (!m_refreshModel && m_tableModel != NULL && !appData->DesignerMode()) {
 		m_tableModel->RefreshModel();
 	}
-
+	
 	IValueFrame* ownerControl = m_formOwner->GetOwnerControl();
 	if (ownerControl != NULL) {
 		CReferenceDataObject* refValue = NULL;
-		CValue& selValue = ownerControl->GetControlValue();
+		const CValue& selValue = ownerControl->GetControlValue();
 		if (selValue.ConvertToValue(refValue)) {
 			wxDataViewItem currLine = m_tableModel->GetLineByGuid(refValue->GetGuid());
 			if (currLine.IsOk()) {
-				if (m_tableCurrentLine) {
+				if (m_tableCurrentLine != NULL) {
 					m_tableCurrentLine->DecrRef();
 				}
 				m_tableCurrentLine = m_tableModel->GetRowAt(currLine);
@@ -214,28 +190,6 @@ void CValueTableBox::CreateModel()
 void CValueTableBox::RefreshModel()
 {
 	CValueTableBox::CreateModel();
-}
-
-bool CValueTableBox::LoadFromVariant(const wxVariant& variant)
-{
-	wxVariantSourceData* srcData =
-		dynamic_cast<wxVariantSourceData*>(variant.GetData());
-
-	if (srcData && *srcData->GetAttributeData() != IAttributeControl::GetTypeDescription()) {
-		for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
-			CValueTableBoxColumn* column = dynamic_cast<CValueTableBoxColumn*>(GetChild(idx));
-			if (column != NULL) {
-				column->ResetSource();
-			}
-		}
-	}
-
-	return IAttributeControl::LoadFromVariant(variant);
-}
-
-void CValueTableBox::SaveToVariant(wxVariant& variant, IMetadata* metaData) const
-{
-	IAttributeControl::SaveToVariant(variant, metaData);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -258,35 +212,18 @@ bool CValueTableBox::FilterSource(const CSourceExplorer& src, const meta_identif
 CValueTableBox::CValueTableBox() : IValueWindow(), IAttributeControl(g_valueTableCLSID),
 m_tableModel(NULL), m_tableCurrentLine(NULL), m_refreshModel(false)
 {
-	PropertyContainer* categoryTable = IObjectBase::CreatePropertyContainer("TableBox");
-	categoryTable->AddProperty("name", PropertyType::PT_WXNAME);
-	m_category->AddCategory(categoryTable);
-
-	PropertyContainer* categoryData = IObjectBase::CreatePropertyContainer("Data");
-	categoryData->AddProperty("source", PropertyType::PT_SOURCE_DATA);
-	m_category->AddCategory(categoryData);
-
-	//event
-	PropertyContainer* categoryEvent = IObjectBase::CreatePropertyContainer("Events");
-	categoryEvent->AddEvent("selection", { {"control"}, {"rowSelected"}, {"standardProcessing"} }, _("On double mouse click or pressing of Enter."));
-	categoryEvent->AddEvent("onActivateRow", { {"control"} }, _("When row is activated"));
-	categoryEvent->AddEvent("beforeAddRow", { {"control"}, {"cancel"}, {"clone"} }, _("When row addition mode is called"));
-	categoryEvent->AddEvent("beforeDeleteRow", { {"control"}, {"cancel"} }, _("When row deletion is called"));
-
-	m_category->AddCategory(categoryEvent);
-
 	//set default params
-	m_minimum_size = wxSize(300, 100);
-	m_bg = wxColour(255, 255, 255);
+	*m_propertyMinSize = wxSize(300, 100);
+	*m_propertyBG = wxColour(255, 255, 255);
 }
 
 CValueTableBox::~CValueTableBox()
 {
-	if (m_tableModel) {
+	if (m_tableModel != NULL) {
 		m_tableModel->DecrRef();
 	}
 
-	if (m_tableCurrentLine) {
+	if (m_tableCurrentLine != NULL) {
 		m_tableCurrentLine->DecrRef();
 	}
 }
@@ -296,8 +233,8 @@ CValueTableBox::~CValueTableBox()
 wxObject* CValueTableBox::Create(wxObject* parent, IVisualHost* visualHost)
 {
 	CDataViewCtrl* tableCtrl = new CDataViewCtrl((wxWindow*)parent, wxID_ANY,
-		m_pos,
-		m_size,
+		wxDefaultPosition,
+		wxDefaultSize,
 		wxDV_SINGLE | wxDV_HORIZ_RULES | wxDV_VERT_RULES | wxDV_ROW_LINES | wxDV_VARIABLE_LINE_HEIGHT | wxBORDER_SIMPLE);
 
 	if (!visualHost->IsDemonstration()) {
@@ -355,7 +292,7 @@ void CValueTableBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHo
 			}
 		}
 
-		if (m_tableModel != NULL && m_tableModel->GetCount() == 0) {
+		if (m_tableModel != NULL && m_tableModel->IsEmpty()) {
 			if (m_tableCurrentLine != NULL) {
 				m_tableCurrentLine->DecrRef();
 				m_tableCurrentLine = NULL;
@@ -397,7 +334,9 @@ void CValueTableBox::Update(wxObject* wxobject, IVisualHost* visualHost)
 
 		if (needRefresh) {
 			m_tableModel->RefreshModel();
-			if (m_tableModel->GetCount() == 0) {
+			if (!m_tableModel->IsEmpty() ||
+				(m_tableCurrentLine != NULL && 
+					m_tableCurrentLine->GetLineTable() > m_tableModel->GetCount())) {
 				if (m_tableCurrentLine != NULL) {
 					m_tableCurrentLine->DecrRef();
 					m_tableCurrentLine = NULL;
@@ -425,7 +364,7 @@ void CValueTableBox::Cleanup(wxObject* obj, IVisualHost* visualHost)
 {
 	CDataViewCtrl* tableCtrl = dynamic_cast<CDataViewCtrl*>(obj);
 
-	if (tableCtrl) {
+	if (tableCtrl != NULL) {
 		tableCtrl->AssociateModel(NULL);
 	}
 }
@@ -436,7 +375,7 @@ void CValueTableBox::Cleanup(wxObject* obj, IVisualHost* visualHost)
 
 bool CValueTableBox::LoadData(CMemoryReader& reader)
 {
-	if (!IAttributeControl::LoadData(reader))
+	if (!IAttributeControl::LoadTypeData(reader))
 		return false;
 
 	return IValueWindow::LoadData(reader);
@@ -444,30 +383,8 @@ bool CValueTableBox::LoadData(CMemoryReader& reader)
 
 bool CValueTableBox::SaveData(CMemoryWriter& writer)
 {
-	if (!IAttributeControl::SaveData(writer))
+	if (!IAttributeControl::SaveTypeData(writer))
 		return false;
 
 	return IValueWindow::SaveData(writer);
-}
-
-void CValueTableBox::ReadProperty()
-{
-	IValueWindow::ReadProperty();
-
-	IObjectBase::SetPropertyValue("name", m_controlName);
-
-	SaveToVariant(
-		GetPropertyAsVariant("source"), GetMetaData()
-	);
-}
-
-void CValueTableBox::SaveProperty()
-{
-	IValueWindow::SaveProperty();
-
-	IObjectBase::GetPropertyValue("name", m_controlName);
-
-	LoadFromVariant(
-		GetPropertyAsVariant("source")
-	);
 }

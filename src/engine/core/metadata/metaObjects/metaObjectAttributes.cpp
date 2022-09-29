@@ -9,24 +9,22 @@
 //*                          Attributes                            *
 //*******************************************************************
 
-void IMetaObject::SetAttribute(attributeArg_t &aParams, CValue &cVal)
+void IMetaObject::SetAttribute(attributeArg_t& aParams, CValue& cVal)
 {
-	Property *m_prop = GetPropertyByIndex(aParams.GetIndex());
-	if (m_prop) SetPropertyData(m_prop, cVal);
-
-	SaveProperty();
+	Property* property = GetPropertyByIndex(aParams.GetIndex());
+	if (property != NULL)
+		property->SetDataValue(cVal);
 }
 
-CValue IMetaObject::GetAttribute(attributeArg_t &aParams)
+CValue IMetaObject::GetAttribute(attributeArg_t& aParams)
 {
-	Property *m_prop = GetPropertyByIndex(aParams.GetIndex());
-	if (m_prop) return GetPropertyData(m_prop);
-
+	Property* property = GetPropertyByIndex(aParams.GetIndex());
+	if (property != NULL)
+		return property->GetDataValue();
 	return CValue();
 }
 
-int IMetaObject::FindAttribute(const wxString &sName) const
+int IMetaObject::FindAttribute(const wxString& nameAttribute) const
 {
-	//return GetPropertyIndex(sName) + 1;
-	return CValue::FindAttribute(sName);
+	return CValue::FindAttribute(nameAttribute);
 }

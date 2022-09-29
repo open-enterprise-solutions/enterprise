@@ -11,21 +11,18 @@
 
 wxIMPLEMENT_ABSTRACT_CLASS(IVisualHost, wxScrolledWindow)
 
-IValueFrame* IVisualHost::GetObjectBase(wxObject* wxobject)
+IValueFrame* IVisualHost::GetObjectBase(wxObject* wxobject) const
 {
-	if (NULL == wxobject)
-	{
+	if (NULL == wxobject) {
 		wxLogError(_("wxObject was NULL!"));
 		return NULL;
 	}
 
 	auto obj = m_wxObjects.find(wxobject);
-	if (obj != m_wxObjects.end())
-	{
+	if (obj != m_wxObjects.end()) {
 		return obj->second;
 	}
-	else
-	{
+	else {
 		wxLogError(_("No corresponding IValueFrame for wxObject. Name: %s"), wxobject->GetClassInfo()->GetClassName());
 		return NULL;
 	}
@@ -33,10 +30,9 @@ IValueFrame* IVisualHost::GetObjectBase(wxObject* wxobject)
 
 #include "controls/form.h"
 
-wxObject* IVisualHost::GetWxObject(IValueFrame* baseobject)
+wxObject* IVisualHost::GetWxObject(IValueFrame* baseobject) const
 {
-	if (!baseobject)
-	{
+	if (baseobject == NULL) {
 		wxLogError(_("baseobject was NULL!"));
 		return NULL;
 	}
@@ -45,12 +41,10 @@ wxObject* IVisualHost::GetWxObject(IValueFrame* baseobject)
 		return GetFrameSizer();
 
 	auto obj = m_baseObjects.find(baseobject);
-	if (obj != m_baseObjects.end())
-	{
+	if (obj != m_baseObjects.end()) {
 		return obj->second;
 	}
-	else
-	{
+	else {
 		wxLogError(_("No corresponding wxObject for IValueFrame. Name: %s"), baseobject->GetClassName().c_str());
 		return NULL;
 	}
@@ -513,9 +507,10 @@ void IVisualHost::UpdateVirtualSize()
 	GetVirtualSize(&w, &h);
 	GetBackgroundWindow()->GetSize(&panelW, &panelH);
 	panelW += 20; panelH += 20;
-	if (panelW != w || panelH != h) SetVirtualSize(panelW, panelH);
+	if (panelW != w || panelH != h) 
+		SetVirtualSize(panelW, panelH);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 
-CVisualEditorContextForm* m_visualHostContext = NULL;
+CVisualEditorContextForm* g_visualHostContext = NULL;

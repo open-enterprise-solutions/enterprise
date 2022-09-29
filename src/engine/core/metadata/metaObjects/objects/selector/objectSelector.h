@@ -1,7 +1,7 @@
 #ifndef _SELECTOR_H__
 #define _SELECTOR_H__
 
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 
 class ISelectorObject : public CValue {
 public:

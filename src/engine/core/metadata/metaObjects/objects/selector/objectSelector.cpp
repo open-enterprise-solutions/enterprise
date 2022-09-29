@@ -54,7 +54,8 @@ void ISelectorDataObject::Reset()
 				resultSet->GetResultString(guidName)
 			);
 		};
-		resultSet->Close();
+		databaseLayer->CloseResultSet(resultSet);
+		databaseLayer->CloseStatement(statement);
 	}
 	for (auto currAttribute : m_metaObject->GetObjectAttributes()) {
 		if (!appData->DesignerMode()) {
@@ -123,7 +124,8 @@ bool ISelectorDataObject::Read()
 			}
 		}
 	}
-	resultSet->Close();
+	databaseLayer->CloseResultSet(resultSet);
+	databaseLayer->CloseStatement(statement);
 	return isLoaded;
 }
 
@@ -166,14 +168,14 @@ bool ISelectorDataObject::Next()
 IRecordDataObjectRef* ISelectorDataObject::GetObject(const Guid& guid) const
 {
 	if (appData->DesignerMode()) {
-		return m_metaObject->CreateObjectRefValue();
+		return m_metaObject->CreateObjectValue();
 	}
 
 	if (!guid.isValid()) {
 		return NULL;
 	}
 
-	return m_metaObject->CreateObjectRefValue(guid);
+	return m_metaObject->CreateObjectValue(guid);
 }
 
 enum {
@@ -264,7 +266,8 @@ void ISelectorRegisterObject::Reset()
 			}
 			m_aCurrentValues.push_back(keyRow);
 		};
-		resultSet->Close();
+		databaseLayer->CloseResultSet(resultSet);
+		databaseLayer->CloseStatement(statement);
 	}
 }
 
@@ -323,7 +326,8 @@ bool ISelectorRegisterObject::Read()
 		}
 		m_aObjectValues.insert_or_assign(aKeyTable, aRowTable);
 	}
-	resultSet->Close();
+	databaseLayer->CloseResultSet(resultSet);
+	databaseLayer->CloseStatement(statement);
 	return isLoaded;
 }
 
@@ -365,14 +369,14 @@ bool ISelectorRegisterObject::Next()
 IRecordManagerObject* ISelectorRegisterObject::GetRecordManager(const std::map<meta_identifier_t, CValue>& keyValues) const
 {
 	if (appData->DesignerMode()) {
-		return m_metaObject->CreateRecordManager();
+		return m_metaObject->CreateRecordManagerObjectValue();
 	}
 
 	if (keyValues.empty()) {
 		return NULL;
 	}
 
-	return m_metaObject->CreateRecordManager(
+	return m_metaObject->CreateRecordManagerObjectValue(
 		CUniquePairKey(m_metaObject, keyValues)
 	);
 }

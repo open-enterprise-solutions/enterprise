@@ -33,9 +33,20 @@ class CMethods
 
 public:
 
-	void ResetConstructors() { m_aTreeConstructors.clear(); m_aConstructors.clear(); }
-	void ResetAttributes() { m_aTreeAttributes.clear();  m_aAttributes.clear(); }
-	void ResetMethods() { m_aTreeMethods.clear(); m_aMethods.clear(); }
+	void ResetConstructors() { 
+		m_aTreeConstructors.clear(); 
+		m_aConstructors.clear();
+	}
+	
+	void ResetAttributes() { 
+		m_aTreeAttributes.clear(); 
+		m_aAttributes.clear(); 
+	}
+	
+	void ResetMethods() { 
+		m_aTreeMethods.clear(); 
+		m_aMethods.clear(); 
+	}
 
 	void PrepareConstructors(SEng *Constructors, unsigned int nCount);
 
@@ -51,7 +62,9 @@ public:
 	wxString GetConstructorSynonym(unsigned int constructorID) const;
 
 	int GetConstructorPosition(unsigned int constructorID) const;
-	unsigned int GetNConstructors() const noexcept { return m_aConstructors.size(); }
+	unsigned int GetNConstructors() const noexcept { 
+		return m_aConstructors.size();
+	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -69,7 +82,9 @@ public:
 	wxString GetMethodSynonym(unsigned int methodID) const;
 
 	int GetMethodPosition(unsigned int methodID) const;
-	unsigned int GetNMethods() const noexcept { return m_aMethods.size(); }
+	unsigned int GetNMethods() const noexcept {
+		return m_aMethods.size();
+	}
 
 	void PrepareAttributes(SEng *Attributes, unsigned int nCount);
 
@@ -84,7 +99,9 @@ public:
 	wxString GetAttributeSynonym(unsigned int attributeID) const;
 
 	int GetAttributePosition(unsigned int attributeID) const;
-	unsigned int GetNAttributes() const noexcept { return m_aAttributes.size(); }
+	unsigned int GetNAttributes() const noexcept { 
+		return m_aAttributes.size(); 
+	}
 };
 
 #endif

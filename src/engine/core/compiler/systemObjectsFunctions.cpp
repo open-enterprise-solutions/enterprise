@@ -89,7 +89,7 @@ CValue CSystemObjects::Int(const CValue& cValue)
 number_t CSystemObjects::Log10(const CValue& cValue)
 {
 	number_t fNumber = cValue.GetNumber();
-	return std::log10(fNumber.ToDouble());
+	return 	fNumber.Log(fNumber, 10);
 }
 
 number_t CSystemObjects::Ln(const CValue& cValue)
@@ -102,7 +102,10 @@ CValue CSystemObjects::Max(CValue** aParams)
 {
 	int i = 1;
 	const CValue* pRes = aParams[0];
-	while (aParams[i]->GetType() != TYPE_EMPTY) { if (aParams[i]->GetNumber() > pRes->GetNumber()) pRes = aParams[i]; i++; }
+	while (aParams[i]->GetType() != TYPE_EMPTY) {
+		if (aParams[i]->GetNumber() > pRes->GetNumber()) 
+			pRes = aParams[i++];
+	}
 	return *pRes;
 }
 
@@ -110,7 +113,10 @@ CValue CSystemObjects::Min(CValue** aParams)
 {
 	int i = 1;
 	const CValue* pRes = aParams[0];
-	while (aParams[i]->GetType() != TYPE_EMPTY) { if (aParams[i]->GetNumber() < pRes->GetNumber()) pRes = aParams[i]; i++; }
+	while (aParams[i]->GetType() != TYPE_EMPTY) { 
+		if (aParams[i]->GetNumber() < pRes->GetNumber()) 
+			pRes = aParams[i++]; 
+	}
 	return *pRes;
 }
 
@@ -127,87 +133,87 @@ CValue CSystemObjects::Sqrt(const CValue& cValue)
 //---Строковые:
 int CSystemObjects::StrLen(const CValue& cValue)
 {
-	wxString csString = cValue.GetString();
-	return csString.Length();
+	wxString stringValue = cValue.GetString();
+	return stringValue.Length();
 }
 
 bool CSystemObjects::IsBlankString(const CValue& cValue)
 {
-	wxString csString = cValue.GetString();
-	csString.Trim(true);
-	csString.Trim(false);
-	return csString.IsEmpty();
+	wxString stringValue = cValue.GetString();
+	stringValue.Trim(true);
+	stringValue.Trim(false);
+	return stringValue.IsEmpty();
 }
 
 wxString CSystemObjects::TrimL(const CValue& cValue)
 {
-	wxString csString = cValue.GetString();
-	csString.Trim(false);
-	return csString;
+	wxString stringValue = cValue.GetString();
+	stringValue.Trim(false);
+	return stringValue;
 }
 
 wxString CSystemObjects::TrimR(const CValue& cValue)
 {
-	wxString csString = cValue.GetString();
-	csString.Trim(true);
-	return csString;
+	wxString stringValue = cValue.GetString();
+	stringValue.Trim(true);
+	return stringValue;
 }
 
 wxString CSystemObjects::TrimAll(const CValue& cValue)
 {
-	wxString csString = cValue.GetString();
-	csString.Trim(true);
-	csString.Trim(false);
-	return csString;
+	wxString stringValue = cValue.GetString();
+	stringValue.Trim(true);
+	stringValue.Trim(false);
+	return stringValue;
 }
 
 wxString CSystemObjects::Left(const CValue& cValue, unsigned int nCount)
 {
-	wxString csString = cValue.GetString();
-	return csString.Left(nCount);
+	wxString stringValue = cValue.GetString();
+	return stringValue.Left(nCount);
 }
 
 wxString CSystemObjects::Right(const CValue& cValue, unsigned int nCount)
 {
-	wxString csString = cValue.GetString();
-	return csString.Right(nCount);
+	wxString stringValue = cValue.GetString();
+	return stringValue.Right(nCount);
 }
 
 wxString CSystemObjects::Mid(const CValue& cValue, unsigned int nFirst, unsigned int nCount)
 {
-	wxString csString = cValue.GetString();
-	return csString.Mid(nFirst, nCount);
+	wxString stringValue = cValue.GetString();
+	return stringValue.Mid(nFirst, nCount);
 }
 
 unsigned int CSystemObjects::Find(const CValue& cValue, const CValue& cValue2, unsigned int nStart)
 {
 	if (nStart < 1) nStart = 1;
-	wxString csStr = cValue.GetString();
-	return csStr.find(cValue2.GetString(), nStart - 1) + 1;
+	wxString stringValue = cValue.GetString();
+	return stringValue.find(cValue2.GetString(), nStart - 1) + 1;
 }
 
 wxString CSystemObjects::StrReplace(const CValue& cSource, const CValue& cValue1, const CValue& cValue2)
 {
-	wxString csSource = cSource.GetString();
-	csSource.Replace(cValue1.GetString(), cValue2.GetString());
-	return csSource;
+	wxString stringValue = cSource.GetString();
+	stringValue.Replace(cValue1.GetString(), cValue2.GetString());
+	return stringValue;
 }
 
 int CSystemObjects::StrCountOccur(const CValue& cSource, const CValue& cValue1)
 {
-	wxString csSource = cSource.GetString();
-	return csSource.find(cValue1.GetString());
+	wxString stringValue = cSource.GetString();
+	return stringValue.find(cValue1.GetString());
 }
 
 int CSystemObjects::StrLineCount(const CValue& cSource)
 {
-	wxString csSource = cSource.GetString();
-	return csSource.find('\n') + 1;
+	wxString stringValue = cSource.GetString();
+	return stringValue.find('\n') + 1;
 }
 
 wxString CSystemObjects::StrGetLine(const CValue& cValue, unsigned int nLine)
 {
-	wxString csSource = cValue.GetString() + wxT("\r\n");
+	wxString stringValue = cValue.GetString() + wxT("\r\n");
 
 	unsigned int nLast = 0;
 	unsigned int nStartLine = 1;
@@ -218,7 +224,7 @@ wxString CSystemObjects::StrGetLine(const CValue& cValue, unsigned int nLine)
 	static unsigned int _nStaticLast = 0;
 	static unsigned int _nStaticLine = 0;
 
-	if (_csStaticSource == csSource)
+	if (_csStaticSource == stringValue)
 	{
 		if (_nStaticLine <= nLine)
 		{
@@ -230,17 +236,17 @@ wxString CSystemObjects::StrGetLine(const CValue& cValue, unsigned int nLine)
 	//перебираем строчки втупую
 	for (unsigned int i = nStartLine;; i++)
 	{
-		unsigned int nIndex = csSource.find(wxT("\r\n"), nLast);
+		unsigned int nIndex = stringValue.find(wxT("\r\n"), nLast);
 
 		if (nIndex < 0) return wxEmptyString;
 
 		if (i == nLine)
 		{
-			_csStaticSource = csSource;
+			_csStaticSource = stringValue;
 			_nStaticLast = nIndex + 2;
 			_nStaticLine = nLine + 1;
 
-			return csSource.Mid(nLast, nIndex - nLast);
+			return stringValue.Mid(nLast, nIndex - nLast);
 		}
 
 		nLast = nIndex + 2;
@@ -251,16 +257,16 @@ wxString CSystemObjects::StrGetLine(const CValue& cValue, unsigned int nLine)
 
 wxString CSystemObjects::Upper(const CValue& cSource)
 {
-	wxString csSource = cSource.GetString();
-	csSource.MakeUpper();
-	return csSource;
+	wxString stringValue = cSource.GetString();
+	stringValue.MakeUpper();
+	return stringValue;
 }
 
 wxString CSystemObjects::Lower(const CValue& cSource)
 {
-	wxString csSource = cSource.GetString();
-	csSource.MakeLower();
-	return csSource;
+	wxString stringValue = cSource.GetString();
+	stringValue.MakeLower();
+	return stringValue;
 }
 
 wxString CSystemObjects::Chr(short nCode)
@@ -270,9 +276,9 @@ wxString CSystemObjects::Chr(short nCode)
 
 short CSystemObjects::Asc(const CValue& cSource)
 {
-	wxString csSource = cSource.GetString();
-	if (!csSource.Length()) return 0;
-	return static_cast<wchar_t>(csSource[0]);
+	wxString stringValue = cSource.GetString();
+	if (!stringValue.Length()) return 0;
+	return static_cast<wchar_t>(stringValue[0]);
 }
 
 //---Работа с датой и временем

@@ -401,7 +401,7 @@ number_t OdbcResultSet::GetResultNumber(int nField)
 	return m_fieldValues[nField - 1].GetDouble();
 }
 
-void* OdbcResultSet::GetResultBlob(int nField, wxMemoryBuffer& Buffer)
+void* OdbcResultSet::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 {
 	if (m_BlobMap.find(nField) == m_BlobMap.end())
 	{
@@ -447,7 +447,7 @@ void* OdbcResultSet::GetResultBlob(int nField, wxMemoryBuffer& Buffer)
 			wxMemoryBuffer tempBuffer(0);
 			tempBuffer.SetDataLen(0);
 			tempBuffer.SetBufSize(0);
-			Buffer = tempBuffer;
+			buffer = tempBuffer;
 
 			// Add null blobs to the map as well
 			m_BlobMap[nField] = tempBuffer;
@@ -481,12 +481,12 @@ void* OdbcResultSet::GetResultBlob(int nField, wxMemoryBuffer& Buffer)
 		tempBufferExactSize.UngetWriteBuf(bufferSize);
 		tempBufferExactSize.SetDataLen(bufferSize);
 		tempBufferExactSize.SetBufSize(bufferSize);
-		Buffer = tempBufferExactSize;
+		buffer = tempBufferExactSize;
 
-		wxMemoryBuffer localCopy(Buffer);
+		wxMemoryBuffer localCopy(buffer);
 		m_BlobMap[nField] = localCopy;
 
-		return Buffer.GetData();
+		return buffer.GetData();
 	}
 	else
 	{
@@ -496,13 +496,13 @@ void* OdbcResultSet::GetResultBlob(int nField, wxMemoryBuffer& Buffer)
 			wxMemoryBuffer tempBuffer(0);
 			tempBuffer.SetDataLen(0);
 			tempBuffer.SetBufSize(0);
-			Buffer = tempBuffer;
+			buffer = tempBuffer;
 			return NULL;
 		}
 		else
 		{
-			Buffer = it->second;
-			return Buffer.GetData();
+			buffer = it->second;
+			return buffer.GetData();
 		}
 	}
 }

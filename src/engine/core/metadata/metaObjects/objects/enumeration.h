@@ -1,7 +1,7 @@
 #ifndef _ENUMERATION_H__
 #define _ENUMERATION_H__
 
-#include "baseObject.h"
+#include "object.h"
 
 class CMetaEnumerationObject;
 
@@ -21,37 +21,42 @@ class CMetaObjectEnumeration : public IMetaObjectRecordDataRef {
 		eFormSelect
 	};
 
-	virtual OptionList* GetFormType() override
-	{
+	virtual OptionList* GetFormType() override {
 		OptionList* optionlist = new OptionList;
-
-		optionlist->AddOption("formList", eFormList);
-		optionlist->AddOption("formSelect", eFormSelect);
-
+		optionlist->AddOption(wxT("formList"), _("Form list"), eFormList);
+		optionlist->AddOption(wxT("formSelect"), _("Form select"), eFormSelect);
 		return optionlist;
 	}
 
-private:
+protected:
 
-	//default form 
-	int m_defaultFormList;
-	int m_defaultFormSelect;
+	PropertyCategory* m_categoryForm = IPropertyObject::CreatePropertyCategory({ "defaultForms", "default forms" });
+	Property* m_propertyDefFormList = IPropertyObject::CreateProperty(m_categoryForm, { "default_list", "default list" }, &CMetaObjectEnumeration::GetFormList, wxNOT_FOUND);
+	Property* m_propertyDefFormSelect = IPropertyObject::CreateProperty(m_categoryForm, { "default_select" , "default select" }, &CMetaObjectEnumeration::GetFormSelect, wxNOT_FOUND);
+
+private:
 
 	//default attributes 
 	CMetaDefaultAttributeObject* m_attributeOrder;
 
 private:
 
-	OptionList* GetFormList(Property*);
-	OptionList* GetFormSelect(Property*);
+	OptionList* GetFormList(PropertyOption*);
+	OptionList* GetFormSelect(PropertyOption*);
 
 public:
+
+	virtual bool FilterChild(const CLASS_ID& clsid) const {
+		if (clsid == g_metaEnumCLSID)
+			return true;
+		return IMetaObjectWrapperData::FilterChild(clsid);
+	}
 
 	CMetaObjectEnumeration();
 	virtual ~CMetaObjectEnumeration();
 
 	virtual wxString GetClassName() const {
-		return wxT("enumeration"); 
+		return wxT("enumeration");
 	}
 
 	//support icons
@@ -82,7 +87,7 @@ public:
 	virtual std::vector<IMetaAttributeObject*> GetSearchedAttributes() const override;
 
 	//create associate value 
-	virtual CMetaFormObject* GetDefaultFormByID(const form_identifier_t &id);
+	virtual CMetaFormObject* GetDefaultFormByID(const form_identifier_t& id);
 
 	//create object data with metaForm
 	virtual ISourceDataObject* CreateObjectData(IMetaFormObject* metaObject);
@@ -92,31 +97,32 @@ public:
 	virtual IRecordDataObjectRef* CreateObjectRefValue(const Guid& guid) { return NULL; }
 
 	//create form with data 
-	virtual CValueForm* CreateObjectValue(IMetaFormObject* metaForm) override {
+	virtual CValueForm* CreateObjectForm(IMetaFormObject* metaForm) override {
 		return metaForm->GenerateFormAndRun(
 			NULL, CreateObjectData(metaForm)
 		);
 	}
 
 	//support form 
-	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = Guid());
-	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = Guid());
-	virtual CValueForm* GetSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = Guid());
+	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid) { return NULL; }
+	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
 
 	//get module object in compose object 
-	virtual CMetaModuleObject* GetModuleObject() const { return NULL; }
-	virtual CMetaCommonModuleObject* GetModuleManager() const { return m_moduleManager; }
+	virtual CMetaModuleObject* GetModuleObject() const {
+		return NULL;
+	}
+
+	virtual CMetaCommonModuleObject* GetModuleManager() const {
+		return m_moduleManager;
+	}
 
 	//descriptions...
 	wxString GetDescription(const IObjectValueInfo* objValue) const;
 
 	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defultMenu);
+	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
 	virtual void ProcessCommand(unsigned int id);
-
-	//read & save property
-	virtual void ReadProperty() override;
-	virtual void SaveProperty() override;
 
 protected:
 

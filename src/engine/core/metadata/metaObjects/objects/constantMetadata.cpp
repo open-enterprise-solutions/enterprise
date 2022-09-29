@@ -60,20 +60,6 @@ bool CMetaConstantObject::DeleteData()
 }
 
 //***********************************************************************
-//*                          Read&save property                         *
-//***********************************************************************
-
-void CMetaConstantObject::ReadProperty()
-{
-	CMetaAttributeObject::ReadProperty();
-}
-
-void CMetaConstantObject::SaveProperty()
-{
-	CMetaAttributeObject::SaveProperty();
-}
-
-//***********************************************************************
 //*                           read & save events                        *
 //***********************************************************************
 
@@ -180,7 +166,6 @@ CValueForm* CMetaConstantObject::GetObjectForm()
 	valueForm->InitializeForm(NULL, NULL,
 		CreateObjectValue(), m_metaGuid
 	);
-	valueForm->ReadProperty();
 	valueForm->BuildForm(defaultFormType);
 	valueForm->Modify(false);
 

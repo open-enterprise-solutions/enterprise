@@ -6,7 +6,7 @@
 #include "documentManager.h"
 #include "metadata/metadata.h"
 #include "compiler/methods.h"
-#include "baseObject.h"
+#include "object.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CDocumentManager, CValue);
 

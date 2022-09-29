@@ -9,7 +9,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueTextCtrl, IValueWindow)
 #include "metadata/metadata.h"
 #include "metadata/singleMetaTypes.h"
 
-OptionList* CValueTextCtrl::GetChoiceForm(Property* property)
+OptionList* CValueTextCtrl::GetChoiceForm(PropertyOption* property)
 {
 	OptionList* optList = new OptionList;
 	optList->AddOption(_("default"), wxNOT_FOUND);
@@ -17,7 +17,7 @@ OptionList* CValueTextCtrl::GetChoiceForm(Property* property)
 	IMetadata* metaData = GetMetaData();
 	if (metaData != NULL) {
 		IMetaObjectRecordDataRef* metaObject = NULL;
-		if (m_dataSource != wxNOT_FOUND) {
+		if (m_dataSource.isValid()) {
 			IMetaObjectWrapperData* metaObjectValue =
 				m_formOwner->GetMetaObject();
 			if (metaObjectValue) {
@@ -25,7 +25,7 @@ OptionList* CValueTextCtrl::GetChoiceForm(Property* property)
 					metaObjectValue->FindMetaObjectByID(m_dataSource), IMetaAttributeObject
 				);
 				wxASSERT(metaAttribute);
-				IMetaTypeObjectValueSingle *so = metaData->GetTypeObject(metaAttribute->GetFirstClsid()); 
+				IMetaTypeObjectValueSingle* so = metaData->GetTypeObject(metaAttribute->GetFirstClsid());
 				if (so != NULL) {
 					metaObject = wxDynamicCast(so->GetMetaObject(), IMetaObjectRecordDataRef);
 				}
@@ -61,52 +61,8 @@ ISourceDataObject* CValueTextCtrl::GetSourceObject() const
 //*                              TextCtrl                                    *
 //****************************************************************************
 
-CValueTextCtrl::CValueTextCtrl() : IValueWindow(), IAttributeControl(),
-m_selbutton(true), m_listbutton(false), m_clearbutton(true),
-m_passwordMode(false), m_multilineMode(false), m_textEditMode(true),
-m_choiceForm(wxNOT_FOUND)
+CValueTextCtrl::CValueTextCtrl() : IValueWindow(), IAttributeControl()
 {
-	PropertyContainer* categoryText = IObjectBase::CreatePropertyContainer("TextControl");
-
-	//property
-	categoryText->AddProperty("name", PropertyType::PT_WXNAME);
-	categoryText->AddProperty("caption", PropertyType::PT_WXSTRING);
-
-	categoryText->AddProperty("password_mode", PropertyType::PT_BOOL);
-	categoryText->AddProperty("multiline_mode", PropertyType::PT_BOOL);
-	categoryText->AddProperty("textedit_mode", PropertyType::PT_BOOL);
-
-	//category 
-	m_category->AddCategory(categoryText);
-
-	//source from object 
-	PropertyContainer* propertySource = IObjectBase::CreatePropertyContainer("Data");
-	propertySource->AddProperty("source", PropertyType::PT_SOURCE_DATA);
-	propertySource->AddProperty("choice_form", PropertyType::PT_OPTION, &CValueTextCtrl::GetChoiceForm);
-
-	m_category->AddCategory(propertySource);
-
-	PropertyContainer* categoryButton = IObjectBase::CreatePropertyContainer("Button");
-	categoryButton->AddProperty("button_select", PropertyType::PT_BOOL);
-	categoryButton->AddProperty("button_list", PropertyType::PT_BOOL);
-	categoryButton->AddProperty("button_clear", PropertyType::PT_BOOL);
-
-	//category 
-	m_category->AddCategory(categoryButton);
-
-	//category 
-	PropertyContainer* propertyEvents = IObjectBase::CreatePropertyContainer("Events");
-
-	//default events
-	propertyEvents->AddEvent("onChange", { "control" });
-	propertyEvents->AddEvent("startChoice", { "control", "standartProcessing" });
-	propertyEvents->AddEvent("startListChoice", { "control", "standartProcessing" });
-	propertyEvents->AddEvent("clearing", { "control", "standartProcessing" });
-	propertyEvents->AddEvent("opening", { "control", "standartProcessing" });
-	propertyEvents->AddEvent("clearing", { "control", "standartProcessing" });
-	propertyEvents->AddEvent("choiceProcessing", { "control", "valueSelected", "standartProcessing" });
-
-	m_category->AddCategory(propertyEvents);
 }
 
 #include "metadata/singleMetaTypes.h"
@@ -115,20 +71,19 @@ wxObject* CValueTextCtrl::Create(wxObject* parent, IVisualHost* visualHost)
 {
 	CTextCtrl* textCtrl = new CTextCtrl((wxWindow*)parent, wxID_ANY,
 		m_selValue.GetString(),
-		m_pos,
-		m_size,
-		m_style | m_window_style);
+		wxDefaultPosition,
+		wxDefaultSize,
+		0);
 
-	if (m_dataSource != wxNOT_FOUND) {
+	if (m_dataSource.isValid()) {
 		ISourceDataObject* srcObject = m_formOwner->GetSourceObject();
 		if (srcObject) {
 			IMetaObject* metaObject = GetMetaSource();
 			wxASSERT(metaObject);
-			m_selValue = srcObject->GetValueByMetaID(m_dataSource);
+			m_selValue = srcObject->GetValueByMetaID(GetIdByGuid(m_dataSource));
 		}
 	}
 	else {
-
 		m_selValue = IAttributeControl::CreateValue();
 	}
 
@@ -147,22 +102,22 @@ void CValueTextCtrl::Update(wxObject* wxobject, IVisualHost* visualHost)
 
 	if (textCtrl) {
 		wxString textCaption = wxEmptyString;
-		if (m_dataSource != wxNOT_FOUND) {
+		if (m_dataSource.isValid()) {
 			IMetaObject* metaObject = GetMetaSource();
-			if (metaObject) {
+			if (metaObject != NULL) {
 				textCaption = metaObject->GetSynonym() + wxT(":");
 			}
 		}
 
-		textCtrl->SetTextLabel(m_caption.IsEmpty() ?
-			textCaption : m_caption);
+		textCtrl->SetTextLabel(!m_propertyCaption->IsOk() ?
+			textCaption : m_propertyCaption->GetValueAsString());
 
-		if (m_dataSource != wxNOT_FOUND) {
+		if (m_dataSource.isValid()) {
 			ISourceDataObject* srcObject = m_formOwner->GetSourceObject();
-			if (srcObject) {
+			if (srcObject != NULL) {
 				IMetaObject* metaObject = GetMetaSource();
 				wxASSERT(metaObject);
-				m_selValue = srcObject->GetValueByMetaID(m_dataSource);
+				m_selValue = srcObject->GetValueByMetaID(GetIdByGuid(m_dataSource));
 			}
 		}
 
@@ -170,25 +125,25 @@ void CValueTextCtrl::Update(wxObject* wxobject, IVisualHost* visualHost)
 			textCtrl->SetTextValue(m_selValue.GetString());
 		}
 
-		textCtrl->SetPasswordMode(m_passwordMode);
-		textCtrl->SetMultilineMode(m_multilineMode);
-		textCtrl->SetTextEditMode(m_textEditMode);
+		textCtrl->SetPasswordMode(m_propertyPasswordMode->GetValueAsBoolean());
+		textCtrl->SetMultilineMode(m_propertyMultilineMode->GetValueAsBoolean());
+		textCtrl->SetTextEditMode(m_propertyTexteditMode->GetValueAsBoolean());
 
 		if (!appData->DesignerMode()) {
-			textCtrl->SetButtonSelect(m_selbutton);
+			textCtrl->SetButtonSelect(m_propertySelectButton->GetValueAsBoolean());
 			textCtrl->BindButtonSelect(&CValueTextCtrl::OnSelectButtonPressed, this);
-			textCtrl->SetButtonList(m_listbutton);
+			textCtrl->SetButtonList(m_propertyListButton->GetValueAsBoolean());
 			textCtrl->BindButtonList(&CValueTextCtrl::OnListButtonPressed, this);
-			textCtrl->SetButtonClear(m_clearbutton);
+			textCtrl->SetButtonClear(m_propertyClearButton->GetValueAsBoolean());
 			textCtrl->BindButtonClear(&CValueTextCtrl::OnClearButtonPressed, this);
 
 			textCtrl->BindTextCtrl(&CValueTextCtrl::OnTextEnter, this);
 			textCtrl->BindKillFocus(&CValueTextCtrl::OnKillFocus, this);
 		}
 		else {
-			textCtrl->SetButtonSelect(m_selbutton);
-			textCtrl->SetButtonList(m_listbutton);
-			textCtrl->SetButtonClear(m_clearbutton);
+			textCtrl->SetButtonSelect(m_propertySelectButton->GetValueAsBoolean());
+			textCtrl->SetButtonList(m_propertyListButton->GetValueAsBoolean());
+			textCtrl->SetButtonClear(m_propertyClearButton->GetValueAsBoolean());
 		}
 	}
 
@@ -200,7 +155,7 @@ void CValueTextCtrl::Cleanup(wxObject* wxobject, IVisualHost* visualHost)
 {
 	CTextCtrl* textCtrl = dynamic_cast<CTextCtrl*>(wxobject);
 
-	if (textCtrl) {
+	if (textCtrl != NULL) {
 		if (!appData->DesignerMode()) {
 			textCtrl->UnbindButtonSelect(&CValueTextCtrl::OnSelectButtonPressed, this);
 			textCtrl->UnbindButtonList(&CValueTextCtrl::OnListButtonPressed, this);
@@ -220,10 +175,10 @@ CValue CValueTextCtrl::GetControlValue() const
 {
 	CValueForm* ownerForm = GetOwnerForm();
 
-	if (m_dataSource != wxNOT_FOUND && m_formOwner->GetSourceObject()) {
+	if (m_dataSource.isValid() && m_formOwner->GetSourceObject()) {
 		ISourceDataObject* srcObject = ownerForm->GetSourceObject();
 		if (srcObject != NULL) {
-			return srcObject->GetValueByMetaID(m_dataSource);
+			return srcObject->GetValueByMetaID(GetIdByGuid(m_dataSource));
 		}
 	}
 
@@ -232,14 +187,14 @@ CValue CValueTextCtrl::GetControlValue() const
 
 void CValueTextCtrl::SetControlValue(CValue& vSelected)
 {
-	if (m_dataSource != wxNOT_FOUND && m_formOwner->GetSourceObject()) {
+	if (m_dataSource.isValid() && m_formOwner->GetSourceObject()) {
 		IMetaAttributeObject* metaObject = wxDynamicCast(
 			GetMetaSource(), IMetaAttributeObject
 		);
 		wxASSERT(metaObject);
 		ISourceDataObject* srcObject = m_formOwner->GetSourceObject();
 		if (srcObject != NULL) {
-			srcObject->SetValueByMetaID(m_dataSource, vSelected);
+			srcObject->SetValueByMetaID(GetIdByGuid(m_dataSource), vSelected);
 		}
 		m_selValue = metaObject->AdjustValue(vSelected);
 	}
@@ -259,19 +214,20 @@ void CValueTextCtrl::SetControlValue(CValue& vSelected)
 
 bool CValueTextCtrl::LoadData(CMemoryReader& reader)
 {
-	reader.r_stringZ(m_caption);
+	wxString caption; reader.r_stringZ(caption);
+	m_propertyCaption->SetValue(caption);
 
-	m_passwordMode = reader.r_u8();
-	m_multilineMode = reader.r_u8();
-	m_textEditMode = reader.r_u8();
+	m_propertyPasswordMode->SetValue(reader.r_u8());
+	m_propertyMultilineMode->SetValue(reader.r_u8());
+	m_propertyTexteditMode->SetValue(reader.r_u8());
 
-	m_selbutton = reader.r_u8();
-	m_listbutton = reader.r_u8();
-	m_clearbutton = reader.r_u8();
+	m_propertySelectButton->SetValue(reader.r_u8());
+	m_propertyListButton->SetValue(reader.r_u8());
+	m_propertyClearButton->SetValue(reader.r_u8());
 
-	m_choiceForm = reader.r_s32();
+	m_propertyChoiceForm->SetValue(reader.r_s32());
 
-	if (!IAttributeControl::LoadData(reader))
+	if (!IAttributeControl::LoadTypeData(reader))
 		return false;
 
 	return IValueWindow::LoadData(reader);
@@ -279,68 +235,20 @@ bool CValueTextCtrl::LoadData(CMemoryReader& reader)
 
 bool CValueTextCtrl::SaveData(CMemoryWriter& writer)
 {
-	writer.w_stringZ(m_caption);
+	writer.w_stringZ(m_propertyCaption->GetValueAsString());
 
-	writer.w_u8(m_passwordMode);
-	writer.w_u8(m_multilineMode);
-	writer.w_u8(m_textEditMode);
+	writer.w_u8(m_propertyPasswordMode->GetValueAsBoolean());
+	writer.w_u8(m_propertyMultilineMode->GetValueAsBoolean());
+	writer.w_u8(m_propertyTexteditMode->GetValueAsBoolean());
 
-	writer.w_u8(m_selbutton);
-	writer.w_u8(m_listbutton);
-	writer.w_u8(m_clearbutton);
+	writer.w_u8(m_propertySelectButton->GetValueAsBoolean());
+	writer.w_u8(m_propertyListButton->GetValueAsBoolean());
+	writer.w_u8(m_propertyClearButton->GetValueAsBoolean());
 
-	writer.w_s32(m_choiceForm);
+	writer.w_s32(m_propertyChoiceForm->GetValueAsInteger());
 
-	if (!IAttributeControl::SaveData(writer))
+	if (!IAttributeControl::SaveTypeData(writer))
 		return false;
 
 	return IValueWindow::SaveData(writer);
-}
-
-//*******************************************************************
-//*                            Property                             *
-//*******************************************************************
-
-void CValueTextCtrl::ReadProperty()
-{
-	IValueWindow::ReadProperty();
-
-	IObjectBase::SetPropertyValue("name", m_controlName);
-	IObjectBase::SetPropertyValue("caption", m_caption);
-
-	IObjectBase::SetPropertyValue("password_mode", m_passwordMode);
-	IObjectBase::SetPropertyValue("multiline_mode", m_multilineMode);
-	IObjectBase::SetPropertyValue("textedit_mode", m_textEditMode);
-
-	IObjectBase::SetPropertyValue("button_select", m_selbutton);
-	IObjectBase::SetPropertyValue("button_list", m_listbutton);
-	IObjectBase::SetPropertyValue("button_clear", m_clearbutton);
-
-	IObjectBase::SetPropertyValue("choice_form", m_choiceForm);
-
-	SaveToVariant(
-		GetPropertyAsVariant("source"), GetMetaData()
-	);
-}
-
-void CValueTextCtrl::SaveProperty()
-{
-	IValueWindow::SaveProperty();
-
-	IObjectBase::GetPropertyValue("name", m_controlName);
-	IObjectBase::GetPropertyValue("caption", m_caption);
-
-	IObjectBase::GetPropertyValue("password_mode", m_passwordMode);
-	IObjectBase::GetPropertyValue("multiline_mode", m_multilineMode);
-	IObjectBase::GetPropertyValue("textedit_mode", m_textEditMode);
-
-	IObjectBase::GetPropertyValue("button_select", m_selbutton);
-	IObjectBase::GetPropertyValue("button_list", m_listbutton);
-	IObjectBase::GetPropertyValue("button_clear", m_clearbutton);
-
-	IObjectBase::GetPropertyValue("choice_form", m_choiceForm);
-
-	LoadFromVariant(
-		GetPropertyAsVariant("source")
-	);
 }

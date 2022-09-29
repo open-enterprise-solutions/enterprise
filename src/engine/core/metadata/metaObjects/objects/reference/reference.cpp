@@ -5,7 +5,7 @@
 
 #include "reference.h"
 #include "metadata/metadata.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 #include "metadata/metaObjects/objects/tabularSection/tabularSection.h"
 #include "databaseLayer/databaseLayer.h"
 #include "compiler/methods.h"
@@ -169,12 +169,11 @@ IMetaObjectRecordData* CReferenceDataObject::GetMetaObject() const
 void CReferenceDataObject::ShowValue()
 {
 	IRecordDataObject* objValue = NULL;
-
 	if (m_metaObject != NULL && m_objGuid.isValid()) {
-		objValue = m_metaObject->CreateObjectRefValue(m_objGuid);
+		objValue = m_metaObject->CreateObjectValue(m_objGuid);
 	}
 	else {
-		objValue = m_metaObject->CreateObjectRefValue();
+		objValue = m_metaObject->CreateObjectValue();
 	}
 
 	if (objValue != NULL) {
@@ -185,10 +184,10 @@ void CReferenceDataObject::ShowValue()
 IRecordDataObjectRef* CReferenceDataObject::GetObject() const
 {
 	if (m_newObject) {
-		return m_metaObject->CreateObjectRefValue();
+		return m_metaObject->CreateObjectValue();
 	}
 
-	return m_metaObject->CreateObjectRefValue(m_objGuid);
+	return m_metaObject->CreateObjectValue(m_objGuid);
 }
 
 #include "metadata/singleMetaTypes.h"

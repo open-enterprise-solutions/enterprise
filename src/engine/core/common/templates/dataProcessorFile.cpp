@@ -116,10 +116,9 @@ wxIMPLEMENT_DYNAMIC_CLASS(CDataProcessorEditDocument, CDocument);
 
 bool CDataProcessorEditDocument::OnCreate(const wxString& path, long flags)
 {
+	m_metaData = new CMetadataDataProcessor();
 	if (!CDocument::OnCreate(path, flags))
 		return false;
-
-	m_metaData = new CMetadataDataProcessor();
 	return true;
 }
 

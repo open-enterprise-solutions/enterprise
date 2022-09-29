@@ -2,7 +2,7 @@
 
 #include "appData.h"
 #include "utils/typeconv.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 
 #include <wx/regex.h>
 #include <wx/spinctrl.h>
@@ -21,8 +21,8 @@ wxPGSizeProperty::wxPGSizeProperty(const wxString& label,
 	const wxSize& value) : wxPGProperty(label, name)
 {
 	DoSetValue(value);
-	AddPrivateChild(new wxIntProperty(wxT("Width"), wxPG_LABEL, value.x));
-	AddPrivateChild(new wxIntProperty(wxT("Height"), wxPG_LABEL, value.y));
+	AddPrivateChild(new wxIntProperty(_("width"), wxPG_LABEL, value.x));
+	AddPrivateChild(new wxIntProperty(_("height"), wxPG_LABEL, value.y));
 }
 
 void wxPGSizeProperty::RefreshChildren()
@@ -70,8 +70,8 @@ wxPGPointProperty::wxPGPointProperty(const wxString& label,
 	const wxPoint& value) : wxPGProperty(label, name)
 {
 	DoSetValue(value);
-	AddPrivateChild(new wxIntProperty(wxT("X"), wxPG_LABEL, value.x));
-	AddPrivateChild(new wxIntProperty(wxT("Y"), wxPG_LABEL, value.y));
+	AddPrivateChild(new wxIntProperty(wxT("x"), wxPG_LABEL, value.x));
+	AddPrivateChild(new wxIntProperty(wxT("y"), wxPG_LABEL, value.y));
 }
 
 wxPGPointProperty::~wxPGPointProperty() { }
@@ -518,10 +518,10 @@ WX_PG_IMPLEMENT_PROPERTY_CLASS(wxPGFontProperty, wxPGProperty,
 
 	//wxString emptyString(wxEmptyString);
 
-	AddPrivateChild(new wxIntProperty(_("Point Size"), wxT("Point Size"),
+	AddPrivateChild(new wxIntProperty(_("point Size"), wxT("point Size"),
 		value.m_pointSize));
 
-	AddPrivateChild(new wxEnumProperty(_("Family"), wxT("Family"),
+	AddPrivateChild(new wxEnumProperty(_("family"), wxT("family"),
 		gs_fp_es_family_labels, gs_fp_es_family_values,
 		value.m_family));
 
@@ -531,20 +531,20 @@ WX_PG_IMPLEMENT_PROPERTY_CLASS(wxPGFontProperty, wxPGProperty,
 		wxPGGlobalVars->m_fontFamilyChoices->Index(faceName) == wxNOT_FOUND)
 		wxPGGlobalVars->m_fontFamilyChoices->AddAsSorted(faceName);
 
-	wxPGProperty* p = new wxEnumProperty(_("Face Name"), wxT("Face Name"),
+	wxPGProperty* p = new wxEnumProperty(_("face Name"), wxT("face Name"),
 		*wxPGGlobalVars->m_fontFamilyChoices);
 
 	p->SetValueFromString(faceName, wxPG_FULL_VALUE);
 
 	AddPrivateChild(p);
 
-	AddPrivateChild(new wxEnumProperty(_("Style"), wxT("Style"),
+	AddPrivateChild(new wxEnumProperty(_("style"), wxT("style"),
 		gs_fp_es_style_labels, gs_fp_es_style_values, value.m_style));
 
-	AddPrivateChild(new wxEnumProperty(_("Weight"), wxT("Weight"),
+	AddPrivateChild(new wxEnumProperty(_("weight"), wxT("weight"),
 		gs_fp_es_weight_labels, gs_fp_es_weight_values, value.m_weight));
 
-	AddPrivateChild(new wxBoolProperty(_("Underlined"), wxT("Underlined"),
+	AddPrivateChild(new wxBoolProperty(_("underlined"), wxT("underlined"),
 		value.m_underlined));
 }
 
@@ -770,13 +770,6 @@ wxPGEditorDialogAdapter* wxEventControlProperty::GetEditorDialog() const
 {
 	class wxPGEventAdapter : public wxPGEditorDialogAdapter {
 	public:
-		wxPGEventAdapter() : wxPGEditorDialogAdapter()
-		{
-		}
-
-		virtual ~wxPGEventAdapter()
-		{
-		}
 
 		virtual bool DoShowDialog(wxPropertyGrid* pg, wxPGProperty* prop) wxOVERRIDE
 		{
@@ -814,7 +807,7 @@ wxPGEditorDialogAdapter* wxEventControlProperty::GetEditorDialog() const
 wxPG_IMPLEMENT_PROPERTY_CLASS(wxPGToolActionProperty, wxPGProperty, ComboBoxAndButton)
 
 wxPGToolActionProperty::wxPGToolActionProperty(const wxString& label, const wxString& name, wxPGChoices& choices,
-	const wxString& value, IObjectBase* curObject) : wxPGProperty(label, name),
+	const wxString& value, IPropertyObject* curObject) : wxPGProperty(label, name),
 	m_curObject(curObject)
 {
 	wxVariant selValue = value; long dataSource = wxNOT_FOUND;
@@ -889,13 +882,6 @@ wxPGEditorDialogAdapter* wxPGToolActionProperty::GetEditorDialog() const
 {
 	class wxPGEventAdapter : public wxPGEditorDialogAdapter {
 	public:
-		wxPGEventAdapter() : wxPGEditorDialogAdapter()
-		{
-		}
-
-		virtual ~wxPGEventAdapter()
-		{
-		}
 
 		virtual bool DoShowDialog(wxPropertyGrid* pg, wxPGProperty* prop) wxOVERRIDE
 		{
@@ -905,8 +891,11 @@ wxPGEditorDialogAdapter* wxPGToolActionProperty::GetEditorDialog() const
 			if (eventName.IsEmpty()) {
 				wxPGProperty* pgProp = pg->GetPropertyByLabel(wxT("name"));
 
+				IValueFrame* obj = dynamic_cast<IValueFrame*>(dlgProp->GetObject());
+				IValueFrame* parentObj = obj ? obj->GetParent() : NULL;
+
 				prop->SetValueFromString(
-					(pgProp ? pgProp->GetDisplayedString() : wxEmptyString) + wxT("_") + prop->GetLabel());
+					(pgProp ? pgProp->GetDisplayedString() : wxEmptyString) + wxT("_") + (parentObj ? parentObj->GetControlName() : pgProp->GetLabel()));
 
 				SetValue(prop->GetValue());
 			}
@@ -1007,7 +996,7 @@ void wxPGTypeSelectorProperty::FillByClsid(const CLASS_ID& clsid)
 
 wxPGTypeSelectorProperty::wxPGTypeSelectorProperty(const wxString& label, const wxString& name, const wxVariant& value,
 	eSelectorDataType dataType,
-	IObjectBase* curObject) :
+	IPropertyObject* curObject) :
 	wxStringProperty(label, name), m_selectorDataType(dataType),
 	m_curObject(curObject)
 {
@@ -1081,15 +1070,17 @@ bool wxPGTypeSelectorProperty::StringToValue(wxVariant& variant,
 
 bool wxPGTypeSelectorProperty::IntToValue(wxVariant& value, int number, int argFlags) const
 {
-	IMetadata* metaData = m_curObject->GetMetaData();
-	wxASSERT(metaData);
-	wxVariantAttributeData* list =
-		new wxVariantAttributeData(metaData);
-	list->AppendRecord(
-		m_valChoices.at(number)
-	);
-	value = list;
-	return true;
+	wxVariantAttributeData* currList =
+		dynamic_cast<wxVariantAttributeData*>(value.GetData());
+
+	if (currList != NULL) {
+		currList->SetDefaultMetatype(
+			m_valChoices.at(number)
+		);
+		return true;
+	}
+
+	return false;
 }
 
 wxVariant wxPGTypeSelectorProperty::ChildChanged(wxVariant& thisValue, int childIndex, wxVariant& childValue) const
@@ -1098,9 +1089,6 @@ wxVariant wxPGTypeSelectorProperty::ChildChanged(wxVariant& thisValue, int child
 		dynamic_cast<wxVariantAttributeData*>(thisValue.GetData());
 
 	if (currList != NULL) {
-
-		wxVariantAttributeData* list =
-			new wxVariantAttributeData(*currList);
 
 		if (childIndex == 0 || childIndex == 1) {
 			long precision = (childIndex == 0)
@@ -1117,21 +1105,21 @@ wxVariant wxPGTypeSelectorProperty::ChildChanged(wxVariant& thisValue, int child
 				scale = m_scale->GetValue();
 			}
 
-			list->SetNumber(precision, scale);
+			currList->SetNumber(precision, scale);
 		}
 		else if (childIndex == 2) {
 			long dateTime = childValue;
-			list->SetDate((eDateFractions)dateTime);
+			currList->SetDate((eDateFractions)dateTime);
 		}
 		else if (childIndex == 3) {
 			long length = childValue;
 			if (length > MAX_LENGTH_STRING) {
 				length = m_length->GetValue();
 			}
-			list->SetString(length);
+			currList->SetString(length);
 		}
 
-		return list;
+		return thisValue;
 	}
 
 	return wxVariant();
@@ -1142,8 +1130,8 @@ void wxPGTypeSelectorProperty::RefreshChildren()
 	wxVariantAttributeData* currList =
 		dynamic_cast<wxVariantAttributeData*>(m_value.GetData());
 
-	if (currList && currList->GetTypeCount() < 2) {
-		eValueTypes id = CValue::GetVTByID(currList->GetById(0));
+	if (currList && currList->GetClsidCount() < 2) {
+		eValueTypes id = CValue::GetVTByID(currList->GetFirstClsid());
 		if (id == eValueTypes::TYPE_NUMBER) {
 			m_precision->Hide(false);
 			m_scale->Hide(false);
@@ -1177,8 +1165,8 @@ void wxPGTypeSelectorProperty::RefreshChildren()
 	}
 
 	if (currList != NULL) {
-		for (unsigned int idx = 0; idx < currList->GetTypeCount(); idx++) {
-			eValueTypes id = CValue::GetVTByID(currList->GetById(idx));
+		for (unsigned int idx = 0; idx < currList->GetClsidCount(); idx++) {
+			eValueTypes id = CValue::GetVTByID(currList->GetByIdx(idx));
 			if (id == eValueTypes::TYPE_NUMBER) {
 				m_precision->SetValue(currList->GetPrecision());
 				m_scale->SetValue(currList->GetScale());
@@ -1226,8 +1214,8 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 				itemData);
 
 			if (oldList != NULL) {
-				tc->SetItemState(newItem, oldList->Contains(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
-				tc->Check(newItem, oldList->Contains(so->GetClassType()));
+				tc->SetItemState(newItem, oldList->ContainType(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
+				tc->Check(newItem, oldList->ContainType(so->GetClassType()));
 			}
 			else {
 				tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
@@ -1240,21 +1228,23 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 
 			wxImageList* imageList = tc->GetImageList();
 			wxASSERT(imageList);
-			IObjectValueAbstract* so = metaData ? metaData->GetAvailableObject(clsid) : CValue::GetAvailableObject(clsid);
-			int groupIcon = imageList->Add(so->GetClassIcon());
+			if (metaData != NULL && metaData->IsRegisterObject(clsid)) {
+				IObjectValueAbstract* so = metaData ? metaData->GetAvailableObject(clsid) : CValue::GetAvailableObject(clsid);
+				int groupIcon = imageList->Add(so->GetClassIcon());
 
-			optionTreeItemData* itemData = new optionTreeItemData(so);
-			wxTreeItemId newItem = tc->AppendItem(tc->GetRootItem(), so->GetClassName(),
-				groupIcon, groupIcon,
-				itemData);
+				optionTreeItemData* itemData = new optionTreeItemData(so);
+				wxTreeItemId newItem = tc->AppendItem(tc->GetRootItem(), so->GetClassName(),
+					groupIcon, groupIcon,
+					itemData);
 
-			if (oldList != NULL) {
-				tc->SetItemState(newItem, oldList->Contains(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
-				tc->Check(newItem, oldList->Contains(so->GetClassType()));
-			}
-			else {
-				tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
-				tc->Check(newItem, false);
+				if (oldList != NULL) {
+					tc->SetItemState(newItem, oldList->ContainType(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
+					tc->Check(newItem, oldList->ContainType(so->GetClassType()));
+				}
+				else {
+					tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
+					tc->Check(newItem, false);
+				}
 			}
 		}
 
@@ -1263,87 +1253,10 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 
 			wxImageList* imageList = tc->GetImageList();
 			wxASSERT(imageList);
-			IObjectValueAbstract* so = CValue::GetAvailableObject(clsid);
+			if (metaData != NULL && metaData->IsRegisterObject(clsid)) {
+				IObjectValueAbstract* so = CValue::GetAvailableObject(clsid);
+				if (selectorDataType == eSelectorDataType::eSelectorDataType_reference) {
 
-			if (selectorDataType == eSelectorDataType::eSelectorDataType_reference) {
-
-				int groupIcon = imageList->Add(so->GetClassIcon());
-				const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName() + wxT("Ref"),
-					groupIcon, groupIcon);
-
-				for (auto so : metaData->GetAvailableSingleObjects(clsid, eMetaObjectType::enReference)) {
-					IMetaObjectRecordDataRef* registerData = dynamic_cast<IMetaObjectRecordDataRef*>(so->GetMetaObject());
-					{
-						int icon = imageList->Add(registerData->GetIcon());
-						optionTreeItemData* itemData = new optionTreeItemData(so);
-						wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetSynonym(),
-							icon, icon,
-							itemData);
-
-						if (oldList != NULL) {
-							tc->SetItemState(newItem, oldList->Contains(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
-							tc->Check(newItem, oldList->Contains(so->GetClassType()));
-						}
-						else {
-							tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
-							tc->Check(newItem, false);
-						}
-					}
-				}
-			}
-			else if (selectorDataType == eSelectorDataType::eSelectorDataType_table) {
-
-				int groupIcon = imageList->Add(so->GetClassIcon());
-				const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName() + wxT("List"),
-					groupIcon, groupIcon);
-
-				for (auto so : metaData->GetAvailableSingleObjects(clsid, eMetaObjectType::enList)) {
-					IMetaObjectWrapperData* registerData = dynamic_cast<IMetaObjectWrapperData*>(so->GetMetaObject());
-					{
-						int icon = imageList->Add(registerData->GetIcon());
-						optionTreeItemData* itemData = new optionTreeItemData(so);
-						wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetSynonym(),
-							icon, icon,
-							itemData);
-
-						if (oldList != NULL) {
-							tc->SetItemState(newItem, oldList->Contains(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
-							tc->Check(newItem, oldList->Contains(so->GetClassType()));
-						}
-						else {
-							tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
-							tc->Check(newItem, false);
-						}
-					}
-				}
-			}
-			else if (selectorDataType == eSelectorDataType::eSelectorDataType_any) {
-				{
-					int groupIcon = imageList->Add(so->GetClassIcon());
-					const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName() + wxT("Object"),
-						groupIcon, groupIcon);
-
-					for (auto so : metaData->GetAvailableSingleObjects(clsid, eMetaObjectType::enObject)) {
-						IMetaObjectRecordData* registerData = dynamic_cast<IMetaObjectRecordData*>(so->GetMetaObject());
-						{
-							int icon = imageList->Add(registerData->GetIcon());
-							optionTreeItemData* itemData = new optionTreeItemData(so);
-							wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetSynonym(),
-								icon, icon,
-								itemData);
-
-							if (oldList != NULL) {
-								tc->SetItemState(newItem, oldList->Contains(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
-								tc->Check(newItem, oldList->Contains(so->GetClassType()));
-							}
-							else {
-								tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
-								tc->Check(newItem, false);
-							}
-						}
-					}
-				}
-				{
 					int groupIcon = imageList->Add(so->GetClassIcon());
 					const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName() + wxT("Ref"),
 						groupIcon, groupIcon);
@@ -1358,12 +1271,90 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 								itemData);
 
 							if (oldList != NULL) {
-								tc->SetItemState(newItem, oldList->Contains(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
-								tc->Check(newItem, oldList->Contains(so->GetClassType()));
+								tc->SetItemState(newItem, oldList->ContainType(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
+								tc->Check(newItem, oldList->ContainType(so->GetClassType()));
 							}
 							else {
 								tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
 								tc->Check(newItem, false);
+							}
+						}
+					}
+				}
+				else if (selectorDataType == eSelectorDataType::eSelectorDataType_table) {
+
+					int groupIcon = imageList->Add(so->GetClassIcon());
+					const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName() + wxT("List"),
+						groupIcon, groupIcon);
+
+					for (auto so : metaData->GetAvailableSingleObjects(clsid, eMetaObjectType::enList)) {
+						IMetaObjectWrapperData* registerData = dynamic_cast<IMetaObjectWrapperData*>(so->GetMetaObject());
+						{
+							int icon = imageList->Add(registerData->GetIcon());
+							optionTreeItemData* itemData = new optionTreeItemData(so);
+							wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetSynonym(),
+								icon, icon,
+								itemData);
+
+							if (oldList != NULL) {
+								tc->SetItemState(newItem, oldList->ContainType(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
+								tc->Check(newItem, oldList->ContainType(so->GetClassType()));
+							}
+							else {
+								tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
+								tc->Check(newItem, false);
+							}
+						}
+					}
+				}
+				else if (selectorDataType == eSelectorDataType::eSelectorDataType_any) {
+					{
+						int groupIcon = imageList->Add(so->GetClassIcon());
+						const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName() + wxT("Object"),
+							groupIcon, groupIcon);
+
+						for (auto so : metaData->GetAvailableSingleObjects(clsid, eMetaObjectType::enObject)) {
+							IMetaObjectRecordData* registerData = dynamic_cast<IMetaObjectRecordData*>(so->GetMetaObject());
+							{
+								int icon = imageList->Add(registerData->GetIcon());
+								optionTreeItemData* itemData = new optionTreeItemData(so);
+								wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetSynonym(),
+									icon, icon,
+									itemData);
+
+								if (oldList != NULL) {
+									tc->SetItemState(newItem, oldList->ContainType(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
+									tc->Check(newItem, oldList->ContainType(so->GetClassType()));
+								}
+								else {
+									tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
+									tc->Check(newItem, false);
+								}
+							}
+						}
+					}
+					{
+						int groupIcon = imageList->Add(so->GetClassIcon());
+						const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName() + wxT("Ref"),
+							groupIcon, groupIcon);
+
+						for (auto so : metaData->GetAvailableSingleObjects(clsid, eMetaObjectType::enReference)) {
+							IMetaObjectRecordDataRef* registerData = dynamic_cast<IMetaObjectRecordDataRef*>(so->GetMetaObject());
+							{
+								int icon = imageList->Add(registerData->GetIcon());
+								optionTreeItemData* itemData = new optionTreeItemData(so);
+								wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetSynonym(),
+									icon, icon,
+									itemData);
+
+								if (oldList != NULL) {
+									tc->SetItemState(newItem, oldList->ContainType(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
+									tc->Check(newItem, oldList->ContainType(so->GetClassType()));
+								}
+								else {
+									tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
+									tc->Check(newItem, false);
+								}
 							}
 						}
 					}
@@ -1373,15 +1364,12 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 
 	public:
 
-		wxPGEventAdapter() : wxPGEditorDialogAdapter() {}
-		virtual ~wxPGEventAdapter() {}
-
 		virtual bool DoShowDialog(wxPropertyGrid* pg, wxPGProperty* prop) wxOVERRIDE
 		{
 			wxPGTypeSelectorProperty* dlgProp = wxDynamicCast(prop, wxPGTypeSelectorProperty);
 			wxCHECK_MSG(dlgProp, false, "Function called for incompatible property");
 
-			IObjectBase* curObject = dlgProp->GetObject();
+			IPropertyObject* curObject = dlgProp->GetObject();
 
 			// launch editor dialog
 			wxDialog* dlg = new wxDialog(pg, wxID_ANY, _("Choice type"), wxDefaultPosition, wxDefaultSize,
@@ -1413,10 +1401,10 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 			}
 
 			if (oldList != NULL) {
-				style = oldList->GetTypeCount() > 1 ?
+				style = oldList->GetClsidCount() > 1 ?
 					wxCR_MULTIPLE_CHECK : wxCR_SINGLE_CHECK;
 				compositeDataType->SetValue(
-					oldList->GetTypeCount() > 1);
+					oldList->GetClsidCount() > 1);
 			}
 			else {
 				compositeDataType->SetValue(style != wxCR_SINGLE_CHECK);
@@ -1524,7 +1512,6 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 					event.Skip();
 				}
 			);
-
 
 			for (unsigned int i = 0; i < numberSizer->GetItemCount(); i++) {
 				numberSizer->Hide(i);
@@ -1640,33 +1627,27 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 						}
 					}
 				}
-
 				if (allowType) {
 					FillByClsid(metaData, clsid, tc, oldList);
 				}
 			}
-
 			tc->ExpandAll(); int res = dlg->ShowModal();
-			wxVariantAttributeData* list = new wxVariantAttributeData(metaData);
-			wxString result, description;
-			unsigned int selCount = tc->GetSelections(ids);
-			for (const wxTreeItemId& selItem : ids) {
-				if (selItem.IsOk()) {
-					wxTreeItemData* dataItem = tc->GetItemData(selItem);
-					if (dataItem
-						&& res == wxID_OK) {
-						IObjectValueAbstract* item = dynamic_cast<
-							optionTreeItemData*>(dataItem)->GetOption();
-						list->AppendRecord(item->GetClassType());
+			if (res == wxID_OK) {
+				wxVariantAttributeData* list = new wxVariantAttributeData(metaData);
+				unsigned int selCount = tc->GetSelections(ids);
+				for (const wxTreeItemId& selItem : ids) {
+					if (selItem.IsOk()) {
+						wxTreeItemData* dataItem = tc->GetItemData(selItem);
+						if (dataItem) {
+							IObjectValueAbstract* item = dynamic_cast<
+								optionTreeItemData*>(dataItem)->GetOption();
+							list->SetMetatype(item->GetClassType());
+						}
 					}
 				}
+				list->SetDescription(oldList->GetDescription());
+				SetValue(list);
 			}
-
-			if (oldList != NULL) {
-				list->LoadDescription(oldList->GetDescription());
-			}
-
-			SetValue(list);
 
 			dlg->Destroy();
 			return res == wxID_OK;
@@ -1696,7 +1677,7 @@ void wxPGRecordSelectorProperty::FillByClsid(const CLASS_ID& clsid)
 	}
 }
 
-wxPGRecordSelectorProperty::wxPGRecordSelectorProperty(const wxString& label, const wxString& name, const wxVariant& value, IObjectBase* curObject)
+wxPGRecordSelectorProperty::wxPGRecordSelectorProperty(const wxString& label, const wxString& name, const wxVariant& value, IPropertyObject* curObject)
 	: wxStringProperty(label, name), m_curObject(curObject)
 {
 	FillByClsid(g_metaInformationRegisterCLSID);
@@ -1726,7 +1707,7 @@ bool wxPGRecordSelectorProperty::IntToValue(wxVariant& value, int number, int ar
 	wxASSERT(metaData);
 	wxVariantRecordData* list =
 		new wxVariantRecordData(metaData);
-	list->AppendRecord(
+	list->SetMetatype(
 		m_choices.GetValue(number)
 	);
 	value = list;
@@ -1749,7 +1730,7 @@ wxPGEditorDialogAdapter* wxPGRecordSelectorProperty::GetEditorDialog() const
 		};
 
 		void FillByClsid(IMetadata* metaData, const CLASS_ID& clsid,
-			wxCheckTree* tc, wxVariantRecordData* oldList) {
+			wxCheckTree* tc, wxVariantRecordData* typeData) {
 
 			wxImageList* imageList = tc->GetImageList();
 			wxASSERT(imageList);
@@ -1767,9 +1748,9 @@ wxPGEditorDialogAdapter* wxPGRecordSelectorProperty::GetEditorDialog() const
 							icon, icon,
 							itemData);
 
-						if (oldList != NULL) {
-							tc->SetItemState(newItem, oldList->Contains(registerData->GetMetaID()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
-							tc->Check(newItem, oldList->Contains(registerData->GetMetaID()));
+						if (typeData != NULL) {
+							tc->SetItemState(newItem, typeData->Contains(registerData->GetMetaID()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
+							tc->Check(newItem, typeData->Contains(registerData->GetMetaID()));
 						}
 						else {
 							tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
@@ -1781,20 +1762,13 @@ wxPGEditorDialogAdapter* wxPGRecordSelectorProperty::GetEditorDialog() const
 		}
 
 	public:
-		wxPGEventAdapter() : wxPGEditorDialogAdapter()
-		{
-		}
-
-		virtual ~wxPGEventAdapter()
-		{
-		}
 
 		virtual bool DoShowDialog(wxPropertyGrid* pg, wxPGProperty* prop) wxOVERRIDE
 		{
 			wxPGRecordSelectorProperty* dlgProp = wxDynamicCast(prop, wxPGRecordSelectorProperty);
 			wxCHECK_MSG(dlgProp, false, "Function called for incompatible property");
 
-			IObjectBase* curObject = dlgProp->GetObject();
+			IPropertyObject* curObject = dlgProp->GetObject();
 
 			// launch editor dialog
 			wxDialog* dlg = new wxDialog(pg, wxID_ANY, _("Choice recorders"), wxDefaultPosition, wxDefaultSize,
@@ -1832,7 +1806,7 @@ wxPGEditorDialogAdapter* wxPGRecordSelectorProperty::GetEditorDialog() const
 			tc->SetFocus();
 
 			wxVariant value = dlgProp->GetValue();
-			wxVariantRecordData* oldList =
+			wxVariantRecordData* typeData =
 				dynamic_cast<wxVariantRecordData*>(value.GetData());
 
 			// Make an state image list containing small icons
@@ -1843,14 +1817,14 @@ wxPGEditorDialogAdapter* wxPGRecordSelectorProperty::GetEditorDialog() const
 			IMetadata* metaData = curObject->GetMetaData();
 			wxASSERT(metaData);
 			if (metaData) {
-				FillByClsid(metaData, g_metaInformationRegisterCLSID, tc, oldList);
-				FillByClsid(metaData, g_metaAccumulationRegisterCLSID, tc, oldList);
+				FillByClsid(metaData, g_metaInformationRegisterCLSID, tc, typeData);
+				FillByClsid(metaData, g_metaAccumulationRegisterCLSID, tc, typeData);
 			}
 
 			tc->ExpandAll(); int res = dlg->ShowModal();
 			wxVariantRecordData* list = new wxVariantRecordData(metaData);
 
-			wxArrayTreeItemIds ids; wxString result, description;
+			wxArrayTreeItemIds ids;
 			unsigned int selCount = tc->GetSelections(ids);
 			for (const wxTreeItemId& selItem : ids) {
 				if (selItem.IsOk()) {
@@ -1859,7 +1833,7 @@ wxPGEditorDialogAdapter* wxPGRecordSelectorProperty::GetEditorDialog() const
 						&& res == wxID_OK) {
 						IMetaObject* item = dynamic_cast<
 							optionTreeItemData*>(dataItem)->GetOption();
-						list->AppendRecord(item->GetMetaID());
+						list->SetMetatype(item->GetMetaID());
 					}
 				}
 			}
@@ -1893,7 +1867,7 @@ void wxPGOwnerSelectorProperty::FillByClsid(const CLASS_ID& clsid)
 	}
 }
 
-wxPGOwnerSelectorProperty::wxPGOwnerSelectorProperty(const wxString& label, const wxString& name, const wxVariant& value, IObjectBase* curObject)
+wxPGOwnerSelectorProperty::wxPGOwnerSelectorProperty(const wxString& label, const wxString& name, const wxVariant& value, IPropertyObject* curObject)
 	: wxStringProperty(label, name), m_curObject(curObject)
 {
 	FillByClsid(g_metaCatalogCLSID);
@@ -1922,7 +1896,7 @@ bool wxPGOwnerSelectorProperty::IntToValue(wxVariant& value, int number, int arg
 	wxASSERT(metaData);
 	wxVariantOwnerData* list =
 		new wxVariantOwnerData(metaData);
-	list->AppendRecord(
+	list->SetMetatype(
 		m_choices.GetValue(number)
 	);
 	value = list;
@@ -1945,7 +1919,7 @@ wxPGEditorDialogAdapter* wxPGOwnerSelectorProperty::GetEditorDialog() const
 		};
 
 		void FillByClsid(IMetadata* metaData, const CLASS_ID& clsid,
-			wxCheckTree* tc, wxVariantOwnerData* oldList) {
+			wxCheckTree* tc, wxVariantOwnerData* typeData) {
 
 			wxImageList* imageList = tc->GetImageList();
 			wxASSERT(imageList);
@@ -1963,9 +1937,9 @@ wxPGEditorDialogAdapter* wxPGOwnerSelectorProperty::GetEditorDialog() const
 							icon, icon,
 							itemData);
 
-						if (oldList != NULL) {
-							tc->SetItemState(newItem, oldList->Contains(registerData->GetMetaID()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
-							tc->Check(newItem, oldList->Contains(registerData->GetMetaID()));
+						if (typeData != NULL) {
+							tc->SetItemState(newItem, typeData->Contains(registerData->GetMetaID()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
+							tc->Check(newItem, typeData->Contains(registerData->GetMetaID()));
 						}
 						else {
 							tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
@@ -1977,20 +1951,13 @@ wxPGEditorDialogAdapter* wxPGOwnerSelectorProperty::GetEditorDialog() const
 		}
 
 	public:
-		wxPGEventAdapter() : wxPGEditorDialogAdapter()
-		{
-		}
-
-		virtual ~wxPGEventAdapter()
-		{
-		}
 
 		virtual bool DoShowDialog(wxPropertyGrid* pg, wxPGProperty* prop) wxOVERRIDE
 		{
 			wxPGOwnerSelectorProperty* dlgProp = wxDynamicCast(prop, wxPGOwnerSelectorProperty);
 			wxCHECK_MSG(dlgProp, false, "Function called for incompatible property");
 
-			IObjectBase* curObject = dlgProp->GetObject();
+			IPropertyObject* curObject = dlgProp->GetObject();
 
 			// launch editor dialog
 			wxDialog* dlg = new wxDialog(pg, wxID_ANY, _("Choice owners"), wxDefaultPosition, wxDefaultSize,
@@ -2028,7 +1995,7 @@ wxPGEditorDialogAdapter* wxPGOwnerSelectorProperty::GetEditorDialog() const
 			tc->SetFocus();
 
 			wxVariant value = dlgProp->GetValue();
-			wxVariantOwnerData* oldList =
+			wxVariantOwnerData* typeData =
 				dynamic_cast<wxVariantOwnerData*>(value.GetData());
 
 			// Make an state image list containing small icons
@@ -2039,13 +2006,13 @@ wxPGEditorDialogAdapter* wxPGOwnerSelectorProperty::GetEditorDialog() const
 			IMetadata* metaData = curObject->GetMetaData();
 			wxASSERT(metaData);
 			if (metaData != NULL) {
-				FillByClsid(metaData, g_metaCatalogCLSID, tc, oldList);
+				FillByClsid(metaData, g_metaCatalogCLSID, tc, typeData);
 			}
 
 			tc->ExpandAll(); int res = dlg->ShowModal();
 			wxVariantOwnerData* list = new wxVariantOwnerData(metaData);
 
-			wxArrayTreeItemIds ids; wxString result, description;
+			wxArrayTreeItemIds ids;
 			unsigned int selCount = tc->GetSelections(ids);
 			for (const wxTreeItemId& selItem : ids) {
 				if (selItem.IsOk()) {
@@ -2054,7 +2021,197 @@ wxPGEditorDialogAdapter* wxPGOwnerSelectorProperty::GetEditorDialog() const
 						&& res == wxID_OK) {
 						IMetaObject* item = dynamic_cast<
 							optionTreeItemData*>(dataItem)->GetOption();
-						list->AppendRecord(item->GetMetaID());
+						list->SetMetatype(item->GetMetaID());
+					}
+				}
+			}
+
+			SetValue(list);
+
+			dlg->Destroy();
+			return res == wxID_OK;
+		}
+	};
+
+	return new wxPGEventAdapter();
+}
+
+// -----------------------------------------------------------------------
+// wxPGGenerationSelectorProperty
+// -----------------------------------------------------------------------
+
+wxPG_IMPLEMENT_PROPERTY_CLASS(wxPGGenerationSelectorProperty, wxStringProperty, ComboBoxAndButton)
+
+void wxPGGenerationSelectorProperty::FillByClsid(const CLASS_ID& clsid)
+{
+	IMetadata* metaData = m_curObject->GetMetaData();
+	wxASSERT(metaData);
+	for (auto metaObject : metaData->GetMetaObjects(clsid)) {
+		IMetaObjectRecordDataRef* registerData =
+			dynamic_cast<IMetaObjectRecordDataRef*>(metaObject);
+		m_choices.Add(registerData->GetSynonym(), registerData->GetIcon(), registerData->GetMetaID());
+	}
+}
+
+wxPGGenerationSelectorProperty::wxPGGenerationSelectorProperty(const wxString& label, const wxString& name, const wxVariant& value, IPropertyObject* curObject)
+	: wxStringProperty(label, name), m_curObject(curObject)
+{
+	FillByClsid(g_metaCatalogCLSID);
+	FillByClsid(g_metaDocumentCLSID);
+
+	//m_flags |= wxPG_PROP_READONLY;
+	m_flags |= wxPG_PROP_ACTIVE_BTN; // Property button always enabled.
+
+	SetValue(value);
+}
+
+wxString wxPGGenerationSelectorProperty::ValueToString(wxVariant& value, int argFlags) const
+{
+	return value.GetString();
+}
+
+bool wxPGGenerationSelectorProperty::StringToValue(wxVariant& variant,
+	const wxString& text,
+	int argFlags) const
+{
+	return false;
+}
+
+bool wxPGGenerationSelectorProperty::IntToValue(wxVariant& value, int number, int argFlags) const
+{
+	IMetadata* metaData = m_curObject->GetMetaData();
+	wxASSERT(metaData);
+	wxVariantOwnerData* list =
+		new wxVariantOwnerData(metaData);
+	list->SetMetatype(
+		m_choices.GetValue(number)
+	);
+	value = list;
+	return true;
+}
+
+#include "metadata/metaObjects/objects/objectVariant.h"
+
+wxPGEditorDialogAdapter* wxPGGenerationSelectorProperty::GetEditorDialog() const
+{
+	class wxPGEventAdapter : public wxPGEditorDialogAdapter {
+		class optionTreeItemData : public wxTreeItemData {
+			IMetaObject* m_currOpt;
+		public:
+			optionTreeItemData(IMetaObject* opt)
+				: wxTreeItemData(), m_currOpt(opt)
+			{
+			};
+			IMetaObject* GetOption() const {
+				return m_currOpt;
+			}
+		};
+
+		void FillByClsid(IMetadata* metaData, const CLASS_ID& clsid,
+			wxCheckTree* tc, wxVariantGenerationData* typeData) {
+
+			wxImageList* imageList = tc->GetImageList();
+			wxASSERT(imageList);
+			IObjectValueAbstract* so = CValue::GetAvailableObject(clsid);
+			int groupIcon = imageList->Add(so->GetClassIcon());
+			const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName(),
+				groupIcon, groupIcon);
+			for (auto metaObject : metaData->GetMetaObjects(clsid)) {
+				IMetaObjectRecordDataMutableRef* registerData = dynamic_cast<IMetaObjectRecordDataMutableRef*>(metaObject);
+				if (registerData != NULL) {
+					{
+						int icon = imageList->Add(registerData->GetIcon());
+						optionTreeItemData* itemData = new optionTreeItemData(metaObject);
+						wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetSynonym(),
+							icon, icon,
+							itemData);
+
+						if (typeData != NULL) {
+							tc->SetItemState(newItem, typeData->Contains(registerData->GetMetaID()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
+							tc->Check(newItem, typeData->Contains(registerData->GetMetaID()));
+						}
+						else {
+							tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
+							tc->Check(newItem, false);
+						}
+					}
+				}
+			}
+		}
+
+	public:
+
+		virtual bool DoShowDialog(wxPropertyGrid* pg, wxPGProperty* prop) wxOVERRIDE
+		{
+			wxPGGenerationSelectorProperty* dlgProp = wxDynamicCast(prop, wxPGGenerationSelectorProperty);
+			wxCHECK_MSG(dlgProp, false, "Function called for incompatible property");
+
+			IPropertyObject* curObject = dlgProp->GetObject();
+
+			// launch editor dialog
+			wxDialog* dlg = new wxDialog(pg, wxID_ANY, _("Choice generation"), wxDefaultPosition, wxDefaultSize,
+				wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLIP_CHILDREN);
+
+			dlg->SetFont(pg->GetFont()); // To allow entering chars of the same set as the propGrid
+
+			// Multi-line text editor dialog.
+			const int spacing = wxPropertyGrid::IsSmallScreen() ? 4 : 8;
+			wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
+			wxBoxSizer* rowsizer = new wxBoxSizer(wxHORIZONTAL);
+
+			wxCheckTree* tc = new wxCheckTree(dlg, wxID_ANY,
+				wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_HIDE_ROOT | wxCR_MULTIPLE_CHECK | wxCR_EMPTY_CHECK | wxSUNKEN_BORDER);
+
+			wxTreeItemId rootItem = tc->AddRoot(wxEmptyString);
+
+			rowsizer->Add(tc, wxSizerFlags(1).Expand().Border(wxALL, spacing));
+			topsizer->Add(rowsizer, wxSizerFlags(1).Expand());
+
+			tc->SetDoubleBuffered(true);
+			tc->Enable(!dlgProp->HasFlag(wxPG_PROP_READONLY));
+
+			wxStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
+			topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));
+
+			dlg->SetSizer(topsizer);
+			topsizer->SetSizeHints(dlg);
+
+			if (!wxPropertyGrid::IsSmallScreen()) {
+				dlg->SetSize(400, 300);
+				dlg->Move(pg->GetGoodEditorDialogPosition(prop, dlg->GetSize()));
+			}
+
+			tc->SetFocus();
+
+			wxVariant value = dlgProp->GetValue();
+			wxVariantGenerationData* typeData =
+				dynamic_cast<wxVariantGenerationData*>(value.GetData());
+
+			// Make an state image list containing small icons
+			tc->SetImageList(
+				new wxImageList(ICON_SIZE, ICON_SIZE)
+			);
+
+			IMetadata* metaData = curObject->GetMetaData();
+			wxASSERT(metaData);
+			if (metaData != NULL) {
+				FillByClsid(metaData, g_metaCatalogCLSID, tc, typeData);
+				FillByClsid(metaData, g_metaDocumentCLSID, tc, typeData);
+			}
+
+			tc->ExpandAll(); int res = dlg->ShowModal();
+			wxVariantGenerationData* list = new wxVariantGenerationData(metaData);
+
+			wxArrayTreeItemIds ids;
+			unsigned int selCount = tc->GetSelections(ids);
+			for (const wxTreeItemId& selItem : ids) {
+				if (selItem.IsOk()) {
+					wxTreeItemData* dataItem = tc->GetItemData(selItem);
+					if (dataItem
+						&& res == wxID_OK) {
+						IMetaObject* item = dynamic_cast<
+							optionTreeItemData*>(dataItem)->GetOption();
+						list->SetMetatype(item->GetMetaID());
 					}
 				}
 			}
@@ -2078,7 +2235,7 @@ wxPGEditorDialogAdapter* wxPGOwnerSelectorProperty::GetEditorDialog() const
 wxPG_IMPLEMENT_PROPERTY_CLASS(wxPGSourceDataProperty, wxPGProperty, TextCtrlAndButton)
 
 wxPGSourceDataProperty::wxPGSourceDataProperty(const wxString& label, const wxString& name,
-	const wxVariant& value, IObjectBase* curObject) : wxPGProperty(label, name), m_curObject(curObject),
+	const wxVariant& value, IPropertyObject* curObject) : wxPGProperty(label, name), m_curObject(curObject),
 	m_srcDataType(
 		curObject->GetComponentType() == COMPONENT_TYPE_WINDOW_TABLE ?
 		eSourceDataType::eSourceDataVariant_table :
@@ -2140,27 +2297,11 @@ bool wxPGSourceDataProperty::StringToValue(wxVariant& variant, const wxString& t
 			dynamic_cast<wxVariantSourceData*>(variant.GetData());
 
 		if (currSrcData != NULL) {
-
-			IValueFrame* curControl = dynamic_cast<IValueFrame*>(m_curObject);
-			wxASSERT(curControl);
-			CValueForm* ownerForm = curControl ? curControl->GetOwnerForm() : NULL;
-			wxASSERT(ownerForm);
-			wxVariantSourceData* srcData = new wxVariantSourceData(
-				curControl->GetMetaData(), ownerForm, wxNOT_FOUND
-			);
-
-			wxVariant varData = new wxVariantSourceAttributeData(*currSrcData->GetAttributeData());
-
-			wxVariantSourceAttributeData* attrData = srcData->GetAttributeData();
-			wxASSERT(attrData);
-			attrData->LoadFromVariant(varData);
-
-			variant = srcData;
+			currSrcData->SetSourceId(wxNOT_FOUND);
 			return true;
 		}
 
 		return false;
-
 	}
 
 	return text.IsEmpty();
@@ -2214,18 +2355,12 @@ void wxPGSourceDataProperty::RefreshChildren()
 				new wxVariantSourceAttributeData(*attrData)
 			);
 		}
-	}
-
-	if (currSrcData != NULL) {
 		IMetadata* metaData = currSrcData->GetMetadata(); bool enabledProp = true;
 		if (metaData != NULL &&
-			wxNOT_FOUND != currSrcData->GetSourceId()) {
-			enabledProp = false;
+			currSrcData->GetSourceId() != wxNOT_FOUND) {
 			IMetaObject* metaObject = metaData->GetMetaObject(currSrcData->GetSourceId());
 			wxASSERT(metaObject);
-			if (!metaObject->IsAllowed()) {
-				enabledProp = true;
-			}
+			enabledProp = !metaObject->IsAllowed();
 		}
 		m_typeSelector->SetFlagRecursively(wxPG_PROP_READONLY, !enabledProp);
 	}
@@ -2264,10 +2399,10 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 		bool ProcessAttribute(wxPropertyGrid* pg,
 			wxPGSourceDataProperty* dlgProp, wxVariantSourceData* srcData) {
 
-			IValueFrame* currentControl = wxDynamicCast(
+			IValueFrame* currControl = wxDynamicCast(
 				dlgProp->GetObject(), IValueFrame);
 
-			if (currentControl == NULL)
+			if (currControl == NULL)
 				return false;
 
 			meta_identifier_t dataSource = wxNOT_FOUND;
@@ -2312,13 +2447,13 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 
 			tc->SetFocus();
 
-			CValueForm* ownerForm = currentControl->GetOwnerForm();
+			CValueForm* ownerForm = currControl->GetOwnerForm();
 			wxASSERT(ownerForm);
 			ISourceDataObject* srcObject = ownerForm->GetSourceObject();
 			if (srcObject != NULL) {
 				CSourceExplorer srcExplorer = srcObject->GetSourceExplorer();
 				metaTreeItemData* srcItemData = NULL;
-				if (currentControl->FilterSource(srcExplorer, srcExplorer.GetMetaIDSource())) {
+				if (currControl->FilterSource(srcExplorer, srcExplorer.GetMetaIDSource())) {
 					if (srcExplorer.IsSelect()) {
 						srcItemData = new metaTreeItemData(
 							srcExplorer.GetSourceName(),
@@ -2340,7 +2475,7 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 				for (unsigned int idx = 0; idx < srcExplorer.GetHelperCount(); idx++) {
 					CSourceExplorer srcNextExplorer = srcExplorer.GetHelper(idx);
 					metaTreeItemData* itemData = NULL;
-					if (currentControl->FilterSource(srcNextExplorer, srcExplorer.GetMetaIDSource())) {
+					if (currControl->FilterSource(srcNextExplorer, srcExplorer.GetMetaIDSource())) {
 						if (srcNextExplorer.IsSelect()) {
 							itemData = new metaTreeItemData(
 								srcNextExplorer.GetSourceName(),
@@ -2365,7 +2500,7 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 						for (unsigned int a = 0; a < srcNextExplorer.GetHelperCount(); a++) {
 							CSourceExplorer srcColExplorer = srcNextExplorer.GetHelper(a);
 							metaTreeItemData* itemTableData = NULL;
-							if (currentControl->FilterSource(srcColExplorer, srcNextExplorer.GetMetaIDSource())) {
+							if (currControl->FilterSource(srcColExplorer, srcNextExplorer.GetMetaIDSource())) {
 								itemTableData = new metaTreeItemData(
 									srcColExplorer.GetSourceName(),
 									srcColExplorer.GetMetaIDSource(),
@@ -2375,7 +2510,7 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 								if (srcColExplorer.GetMetaIDSource() == dataSource) {
 									tc->SelectItem(nextItem);
 								}
-								needDelete = !currentControl->FilterSource(srcNextExplorer, srcNextExplorer.GetMetaIDSource());
+								needDelete = !currControl->FilterSource(srcNextExplorer, srcNextExplorer.GetMetaIDSource());
 							}
 						}
 					}
@@ -2395,7 +2530,7 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 			tc->ExpandAll(); int res = dlg->ShowModal();
 
 			bool tableBox =
-				currentControl->GetComponentType() == COMPONENT_TYPE_WINDOW_TABLE;
+				currControl->GetComponentType() == COMPONENT_TYPE_WINDOW_TABLE;
 
 			wxTreeItemId selItem = tc->GetSelection();
 			if (selItem.IsOk()) {
@@ -2407,7 +2542,7 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 					wxASSERT(item);
 					if (tableBox == item->IsTableSection()) {
 						SetValue(
-							new wxVariantSourceData(currentControl->GetMetaData(), ownerForm, item->GetID())
+							new wxVariantSourceData(currControl->GetMetaData(), ownerForm, item->GetID())
 						);
 					}
 					else {
@@ -2429,10 +2564,9 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 		bool ProcessTableColumn(wxPropertyGrid* pg,
 			wxPGSourceDataProperty* dlgProp, wxVariantSourceData* srcData) {
 
-			IValueFrame* currentControl = wxDynamicCast(
+			IValueFrame* currControl = wxDynamicCast(
 				dlgProp->GetObject(), IValueFrame);
-
-			if (currentControl == NULL)
+			if (currControl == NULL)
 				return false;
 
 			meta_identifier_t dataSource = wxNOT_FOUND;
@@ -2440,36 +2574,25 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 				dataSource = srcData->GetSourceId();
 			}
 
-			IMetadata* metaData = currentControl->GetMetaData();
-			if (metaData == NULL) {
+			IMetadata* metaData = currControl->GetMetaData();
+			if (metaData == NULL)
 				return false;
-			}
 
 			CValueTableBox* tableBox = wxDynamicCast(
-				currentControl->GetParent(), CValueTableBox
+				currControl->GetParent(), CValueTableBox
 			);
 
-			CLASS_ID clsid = 0;
-			if (tableBox != NULL) {
-				auto clsids = tableBox->GetClsids();
-				if (clsids.size() > 0) {
-					auto itStart = clsids.begin();
-					std::advance(itStart, 0);
-					clsid = *itStart;
-				}
-			}
+			CLASS_ID clsid = tableBox->GetFirstClsid();
 			if (clsid == 0)
 				return false;
 
 			IMetaTypeObjectValueSingle* singleObject =
 				metaData->GetTypeObject(clsid);
-
 			if (singleObject == NULL)
 				return false;
 
 			ITableAttribute* metaObject =
 				dynamic_cast<ITableAttribute*>(singleObject->GetMetaObject());
-
 			if (metaObject == NULL)
 				return false;
 
@@ -2532,9 +2655,7 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 				}
 			}
 
-			tc->ExpandAll();
-
-			int res = dlg->ShowModal();
+			tc->ExpandAll(); int res = dlg->ShowModal();
 
 			wxTreeItemId selItem = tc->GetSelection();
 			if (selItem.IsOk()) {
@@ -2546,8 +2667,8 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 					wxASSERT(item);
 					SetValue(
 						new wxVariantSourceData(
-							currentControl->GetMetaData(),
-							currentControl->GetOwnerForm(),
+							currControl->GetMetaData(),
+							currControl->GetOwnerForm(),
 							item->GetID()
 						)
 					);
@@ -2564,13 +2685,6 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 		}
 
 	public:
-		wxPGEventAdapter() : wxPGEditorDialogAdapter()
-		{
-		}
-
-		virtual ~wxPGEventAdapter()
-		{
-		}
 
 		virtual bool DoShowDialog(wxPropertyGrid* pg, wxPGProperty* prop) wxOVERRIDE
 		{
@@ -2592,4 +2706,144 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 	};
 
 	return new wxPGEventAdapter();
+}
+
+// -----------------------------------------------------------------------
+// wxPGSourceDataProperty
+// -----------------------------------------------------------------------
+
+wxPG_IMPLEMENT_PROPERTY_CLASS(wxNumberProperty, wxNumericProperty, TextCtrl)
+
+class wxVariantNumberData : public wxVariantData {
+	number_t m_number;
+public:
+
+	void SetNumber(const number_t& number) {
+		m_number = number;
+	}
+
+	number_t GetNumber() const {
+		return m_number;
+	}
+
+	wxVariantNumberData(const number_t& number = 0.0f) : m_number(number) {}
+
+	virtual bool Eq(wxVariantData& data) const {
+		wxVariantNumberData* srcData = dynamic_cast<wxVariantNumberData*>(&data);
+		if (srcData != NULL) {
+			return m_number == srcData->GetNumber();
+		}
+		return false;
+	}
+
+	virtual wxString GetType() const {
+		return wxT("wxVariantNumberData");
+	}
+};
+
+wxNumberProperty::wxNumberProperty(const wxString& label,
+	const wxString& name,
+	const number_t& value)
+	: wxNumericProperty(label, name)
+{
+	m_precision = -1;
+	SetValue(
+		new wxVariantNumberData(value)
+	);
+}
+
+wxNumberProperty::~wxNumberProperty() { }
+
+wxString wxNumberProperty::ValueToString(wxVariant& variant,
+	int argFlags) const
+{
+	wxString text;
+	if (!variant.IsNull()) {
+		wxVariantNumberData* numberVariant =
+			dynamic_cast<wxVariantNumberData*>(variant.GetData());
+		number_t value = numberVariant->GetNumber();
+		text = value.ToString();
+	}
+	return text;
+}
+
+bool wxNumberProperty::StringToValue(wxVariant& variant, const wxString& text, int argFlags) const
+{
+	number_t value;
+	wxVariantNumberData* numberVariant =
+		dynamic_cast<wxVariantNumberData*>(variant.GetData());
+	wxASSERT(numberVariant);
+	if (text.empty()) {
+		numberVariant->SetNumber(0.0f);
+		return true;
+	}
+
+	bool res = value.FromString(text.ToStdWstring());
+	if (res) {
+		if (numberVariant->GetNumber() != value) {
+			numberVariant->SetNumber(value);
+			return true;
+		}
+	}
+	else if (argFlags & wxPG_REPORT_ERROR) {
+	}
+	return false;
+}
+
+bool
+wxNumberProperty::ValidateValue(wxVariant& variant,
+	wxPGValidationInfo& validationInfo) const
+{
+	number_t fpv = 0.0f;
+	wxVariantNumberData* numberVariant = dynamic_cast<wxVariantNumberData*>(variant.GetData());
+	if (numberVariant != NULL) {
+		fpv = numberVariant->GetNumber();
+	}
+	return DoNumericValidation(fpv, &validationInfo, wxPG_PROPERTY_VALIDATION_ERROR_MESSAGE);
+}
+
+bool wxNumberProperty::DoSetAttribute(const wxString& name, wxVariant& variant)
+{
+	if (name == wxPG_FLOAT_PRECISION) {
+		m_precision = variant.GetLong();
+		return true;
+	}
+	return wxNumericProperty::DoSetAttribute(name, variant);
+}
+
+wxValidator*
+wxNumberProperty::GetClassValidator()
+{
+#if wxUSE_VALIDATORS
+	WX_PG_DOGETVALIDATOR_ENTRY()
+
+		wxValidator* validator = new wxNumericPropertyValidator(
+			wxNumericPropertyValidator::Float);
+
+	WX_PG_DOGETVALIDATOR_EXIT(validator)
+#else
+	return NULL;
+#endif
+}
+
+wxValidator* wxNumberProperty::DoGetValidator() const
+{
+	return GetClassValidator();
+}
+
+wxVariant wxNumberProperty::AddSpinStepValue(long stepScale) const
+{
+	int mode = m_spinWrap ? wxPG_PROPERTY_VALIDATION_WRAP
+		: wxPG_PROPERTY_VALIDATION_SATURATE;
+	wxVariant value = GetValue();
+	number_t v = 0.0f;
+	wxVariantNumberData* numberVariant = dynamic_cast<wxVariantNumberData*>(value.GetData());
+	if (numberVariant != NULL) {
+		v = numberVariant->GetNumber();
+	}
+	double step = m_spinStep.GetDouble();
+	v += (step * stepScale);
+	DoNumericValidation(v, NULL, mode);
+	numberVariant->SetNumber(v);
+	return value;
 }

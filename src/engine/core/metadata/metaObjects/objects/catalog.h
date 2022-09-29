@@ -1,72 +1,16 @@
 ﻿#ifndef _CATALOG_H__
 #define _CATALOG_H__
 
-#include "baseObject.h"
+#include "object.h"
 
-//********************************************************************************************
-//*                                     Defines                                              *
-//********************************************************************************************
-
-class CObjectCatalog;
+#include "catalogVariant.h"
+#include "catalogData.h"
 
 //********************************************************************************************
 //*                                  Factory & metadata                                      *
 //********************************************************************************************
 
-class wxVariantOwnerData : public wxVariantData {
-
-	wxString MakeString() const;
-
-public:
-
-	void AppendRecord(meta_identifier_t record_id) {
-		m_ownerData.insert(record_id);
-	}
-
-	bool Contains(meta_identifier_t record_id) const {
-		auto itFounded = m_ownerData.find(record_id);
-		return itFounded != m_ownerData.end();
-	}
-
-	meta_identifier_t GetById(unsigned int idx) const {
-		if (m_ownerData.size() == 0)
-			return wxNOT_FOUND;
-		auto itStart = m_ownerData.begin();
-		std::advance(itStart, idx);
-		return *itStart;
-	}
-
-	unsigned int GetCount() const {
-		return m_ownerData.size();
-	}
-
-	bool Eq(wxVariantData& data) const {
-		return true;
-	}
-
-	wxVariantOwnerData(IMetadata* metaData) : wxVariantData(), m_metaData(metaData) {}
-
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
-
-	wxString GetType() const {
-		return wxT("wxVariantOwnerData");
-	}
-
-protected:
-	IMetadata* m_metaData;
-	std::set<meta_identifier_t> m_ownerData;
-};
-
-class CMetaObjectCatalog : public IMetaObjectRecordDataMutableRef {
+class CMetaObjectCatalog : public IMetaObjectRecordDataGroupMutableRef {
 	wxDECLARE_DYNAMIC_CLASS(CMetaObjectCatalog);
 
 	enum
@@ -81,25 +25,37 @@ class CMetaObjectCatalog : public IMetaObjectRecordDataMutableRef {
 	enum
 	{
 		eFormObject = 1,
+		eFormGroup,
 		eFormList,
-		eFormSelect
+		eFormSelect,
+		eFormGroupSelect
 	};
 
-	virtual OptionList* GetFormType() override
-	{
+	virtual OptionList* GetFormType() override {
 		OptionList* optionlist = new OptionList;
-		optionlist->AddOption("formObject", eFormObject);
-		optionlist->AddOption("formList", eFormList);
-		optionlist->AddOption("formSelect", eFormSelect);
+		optionlist->AddOption(wxT("formObject"),	  _("Form object"),	      eFormObject);
+		optionlist->AddOption(wxT("formGroup"),		  _("Form group"),        eFormGroup);
+		optionlist->AddOption(wxT("formList"),		  _("Form list"),         eFormList);
+		optionlist->AddOption(wxT("formSelect"),	  _("Form select"),       eFormSelect);
+		optionlist->AddOption(wxT("formGroupSelect"), _("Form group select"), eFormGroupSelect);
 		return optionlist;
 	}
 
-private:
+protected:
 
-	//default form 
-	int m_defaultFormObject;
-	int m_defaultFormList;
-	int m_defaultFormSelect;
+	PropertyCategory* m_categoryForm = IPropertyObject::CreatePropertyCategory({ "defaultForms", "default forms" });
+
+	Property* m_propertyDefFormObject		= IPropertyObject::CreateProperty(m_categoryForm, { "default_object",		_("default object") },	     &CMetaObjectCatalog::GetFormObject,      wxNOT_FOUND);
+	Property* m_propertyDefFormGroup		= IPropertyObject::CreateProperty(m_categoryForm, { "default_group",		_("default group") },		 &CMetaObjectCatalog::GetFormGroup,      wxNOT_FOUND);
+	Property* m_propertyDefFormList			= IPropertyObject::CreateProperty(m_categoryForm, { "default_list",			_("default list") },		 &CMetaObjectCatalog::GetFormList,	      wxNOT_FOUND);
+	Property* m_propertyDefFormSelect		= IPropertyObject::CreateProperty(m_categoryForm, { "default_select",		_("default select") },		 &CMetaObjectCatalog::GetFormSelect,      wxNOT_FOUND);
+	Property* m_propertyDefFormGroupSelect	= IPropertyObject::CreateProperty(m_categoryForm, { "default_group_select", _("default group select") }, &CMetaObjectCatalog::GetFormGroupSelect, wxNOT_FOUND);
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	Property* m_propertyOwners				= IPropertyObject::CreateOwnerProperty(m_categoryData, "owners");
+
+private:
 
 	//default attributes 
 	CMetaDefaultAttributeObject* m_attributeCode;
@@ -108,31 +64,16 @@ private:
 	CMetaDefaultAttributeObject* m_attributeParent;
 	CMetaDefaultAttributeObject* m_attributeIsFolder;
 
-	//variant 
-	class ownerData_t {
-		std::set<meta_identifier_t> m_ownerData;
-	public:
-
-		bool LoadData(CMemoryReader& dataReader);
-
-		bool LoadFromVariant(const wxVariant& variant);
-
-		bool SaveData(CMemoryWriter& dataWritter);
-
-		void SaveToVariant(wxVariant& variant, IMetadata* metaData) const;
-
-		std::set<meta_identifier_t>& GetData() {
-			return m_ownerData;
-		}
-	};
-
+	//variant data
 	ownerData_t m_ownerData;
 
 private:
 
-	OptionList* GetFormObject(Property*);
-	OptionList* GetFormList(Property*);
-	OptionList* GetFormSelect(Property*);
+	OptionList* GetFormObject(PropertyOption*);
+	OptionList* GetFormGroup(PropertyOption*);
+	OptionList* GetFormList(PropertyOption*);
+	OptionList* GetFormSelect(PropertyOption*);
+	OptionList* GetFormGroupSelect(PropertyOption*);
 
 public:
 
@@ -160,8 +101,8 @@ public:
 	CMetaObjectCatalog();
 	virtual ~CMetaObjectCatalog();
 
-	virtual wxString GetClassName() const { 
-		return wxT("catalog"); 
+	virtual wxString GetClassName() const {
+		return wxT("catalog");
 	}
 
 	//support icons
@@ -200,60 +141,63 @@ public:
 	virtual std::vector<IMetaAttributeObject*> GetSearchedAttributes() const override;
 
 	//create associate value 
-	virtual CMetaFormObject* GetDefaultFormByID(const form_identifier_t &id);
+	virtual CMetaFormObject* GetDefaultFormByID(const form_identifier_t& id);
 
 	//create object data with metaForm
 	virtual ISourceDataObject* CreateObjectData(IMetaFormObject* metaObject);
 
-	//create empty group
-	virtual IRecordDataObjectRef* CreateGroupObjectRefValue();
-	virtual IRecordDataObjectRef* CreateGroupObjectRefValue(const Guid& guid);
-
-	//create empty object
-	virtual IRecordDataObjectRef* CreateObjectRefValue();
-	virtual IRecordDataObjectRef* CreateObjectRefValue(const Guid& guid);
-
 	//create form with data 
-	virtual CValueForm* CreateObjectValue(IMetaFormObject* metaForm) override {
+	virtual CValueForm* CreateObjectForm(IMetaFormObject* metaForm) override {
 		return metaForm->GenerateFormAndRun(
 			NULL, CreateObjectData(metaForm)
 		);
 	}
 
 	//support form 
-	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = Guid());
-	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = Guid());
-	virtual CValueForm* GetSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = Guid());
+	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetGroupForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetGroupSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
 
 	//descriptions...
 	wxString GetDescription(const IObjectValueInfo* objValue) const;
 
 	//get module object in compose object 
-	virtual CMetaModuleObject* GetModuleObject() const { return m_moduleObject; }
-	virtual CMetaCommonModuleObject* GetModuleManager() const { return m_moduleManager; }
+	virtual CMetaModuleObject* GetModuleObject() const {
+		return m_moduleObject;
+	}
 
-	//prepare menu for item
-	virtual bool PrepareContextMenu(wxMenu* defultMenu);
-	virtual void ProcessCommand(unsigned int id);
+	virtual CMetaCommonModuleObject* GetModuleManager() const {
+		return m_moduleManager;
+	}
 
 	/**
 	* Property events
 	*/
+	virtual void OnPropertyCreated(Property* property);
+	virtual bool OnPropertyChanging(Property* property, const wxVariant& newValue);
 	virtual void OnPropertyChanged(Property* property);
-
-	//read and write property 
-	virtual void ReadProperty() override;
-	virtual	void SaveProperty() override;
 
 protected:
 
 	//load & save from variant
-	bool LoadFromVariant(const wxVariant& variant);
+	bool LoadFromVariant(const wxVariant& variant);	
 	void SaveToVariant(wxVariant& variant, IMetadata* metaData) const;
+
+	//create empty group
+	virtual IRecordDataObjectRef* CreateGroupObjectRefValue(const Guid& objGuid = wxNullGuid);
+	
+	//create empty object
+	virtual IRecordDataObjectRef* CreateObjectRefValue(const Guid& guid = wxNullGuid);
 
 	//load & save metadata from DB 
 	virtual bool LoadData(CMemoryReader& reader);
 	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
+
+	//prepare menu for item
+	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
+	virtual void ProcessCommand(unsigned int id);
 
 	friend class CObjectCatalog;
 };
@@ -264,30 +208,22 @@ protected:
 
 #define thisObject wxT("thisObject")
 
-class CObjectCatalog : public IRecordDataObjectRef {
-	CObjectCatalog* m_catOwner;
-	CObjectCatalog* m_catParent;
-public:
-
+class CObjectCatalog : public IRecordDataObjectGroupRef {
+	CObjectCatalog(CMetaObjectCatalog* metaObject, const Guid& objGuid = wxNullGuid, int objMode = OBJECT_NORMAL);
 	CObjectCatalog(const CObjectCatalog& source);
-	CObjectCatalog(CMetaObjectCatalog* metaObject, int objMode = OBJECT_NORMAL);
-	CObjectCatalog(CMetaObjectCatalog* metaObject, const Guid& guid, int objMode = OBJECT_NORMAL);
+public:
 
 	//****************************************************************************
 	//*                              Support id's                                *
 	//****************************************************************************
 
-	virtual IRecordDataObject* CopyObjectValue() {
-		return new CObjectCatalog(*this);
-	}
-
 	//save modify 
-	virtual bool SaveModify() { 
-		return WriteObject(); 
+	virtual bool SaveModify() {
+		return WriteObject();
 	}
 
 	//default methods
-	virtual void FillObject(CValue& vFillObject);
+	virtual bool FillObject(CValue& vFillObject);
 	virtual CValue CopyObject();
 	virtual bool WriteObject();
 	virtual bool DeleteObject();
@@ -315,24 +251,11 @@ public:
 	virtual CValueForm* GetFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL);
 
 	//support actions
-	virtual actionData_t GetActions(const form_identifier_t &formType);
-	virtual void ExecuteAction(const action_identifier_t &action, CValueForm* srcForm);
+	virtual actionData_t GetActions(const form_identifier_t& formType);
+	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm);
 
 protected:
-
-	//group or object catalog
-	int m_objMode;
-};
-
-//********************************************************************************************
-//*                                      Group	                                             *
-//********************************************************************************************
-
-class CObjectCatalogGroup : public CObjectCatalog {
-public:
-	CObjectCatalogGroup(const CObjectCatalogGroup& source) : CObjectCatalog(source) {}
-	CObjectCatalogGroup(CMetaObjectCatalog* metaObject) : CObjectCatalog(metaObject, OBJECT_GROUP) {}
-	CObjectCatalogGroup(CMetaObjectCatalog* metaObject, const Guid& guid) : CObjectCatalog(metaObject, guid, OBJECT_GROUP) { }
+	friend class CMetaObjectCatalog;
 };
 
 #endif

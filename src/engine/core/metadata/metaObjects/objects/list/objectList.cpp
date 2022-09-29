@@ -12,15 +12,15 @@
 wxIMPLEMENT_ABSTRACT_CLASS(IListDataObject, IValueTable);
 
 wxIMPLEMENT_DYNAMIC_CLASS(CListDataObjectRef, IListDataObject);
+wxIMPLEMENT_DYNAMIC_CLASS(CListDataObjectGroupRef, IListDataObject);
+
 wxIMPLEMENT_DYNAMIC_CLASS(CListRegisterObject, IListDataObject);
 
 IListDataObject::IListDataObject(IMetaObjectWrapperData* metaTable, const form_identifier_t& formType) :
-	ISourceDataObject(), m_objGuid(Guid::newGuid())
+	ISourceDataObject(), m_objGuid(Guid::newGuid()), m_methods(new CMethods())
 {
 	m_dataColumnCollection = new CDataObjectListColumnCollection(this, metaTable);
 	m_dataColumnCollection->IncrRef();
-
-	m_methods = new CMethods();
 }
 
 IListDataObject::~IListDataObject()
@@ -185,10 +185,6 @@ m_metaObject(metaObject), m_choiceMode(choiceMode)
 {
 }
 
-CListDataObjectRef::~CListDataObjectRef()
-{
-}
-
 CSourceExplorer CListDataObjectRef::GetSourceExplorer() const
 {
 	CSourceExplorer srcHelper(
@@ -210,7 +206,7 @@ CSourceExplorer CListDataObjectRef::GetSourceExplorer() const
 	return srcHelper;
 }
 
-bool CListDataObjectRef::GetTable(IValueTable*& tableValue, const meta_identifier_t& id)
+bool CListDataObjectRef::GetModel(IValueModel*& tableValue, const meta_identifier_t& id)
 {
 	if (id == m_metaObject->GetMetaID()) {
 		tableValue = this;
@@ -240,7 +236,7 @@ void CListDataObjectRef::CopyValue()
 	std::advance(itFounded, currentLine);
 
 	IRecordDataObject* dataValue =
-		m_metaObject->CreateObjectRefValue(itFounded->first);
+		m_metaObject->CreateObjectValue(itFounded->first);
 	if (dataValue != NULL) {
 		CValue reference = dataValue->CopyObjectValue();
 		reference.ShowValue();
@@ -257,7 +253,7 @@ void CListDataObjectRef::EditValue()
 	std::advance(itFounded, currentLine);
 
 	CValue reference =
-		m_metaObject->CreateObjectRefValue(itFounded->first);
+		m_metaObject->CreateObjectValue(itFounded->first);
 
 	reference.ShowValue();
 }
@@ -272,7 +268,7 @@ void CListDataObjectRef::DeleteValue()
 	std::advance(itFounded, currentLine);
 
 	IRecordDataObject* objData =
-		m_metaObject->CreateObjectRefValue(itFounded->first);
+		m_metaObject->CreateObjectValue(itFounded->first);
 
 	if (objData != NULL) {
 		//objData->DeleteObject();
@@ -324,6 +320,159 @@ wxString CListDataObjectRef::GetString() const
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
+wxDataViewItem CListDataObjectGroupRef::GetLineByGuid(const Guid& guid) const
+{
+	auto foundedIt = m_aObjectValues.find(guid);
+	if (foundedIt == m_aObjectValues.end()) {
+		return wxDataViewItem(NULL);
+	}
+
+	return GetItem(
+		std::distance(m_aObjectValues.begin(), foundedIt)
+	);
+}
+
+std::map<meta_identifier_t, CValue>& CListDataObjectGroupRef::GetRowData(unsigned int lineTable)
+{
+	auto itFoundedByLine = m_aObjectValues.begin();
+	std::advance(itFoundedByLine, lineTable);
+	return itFoundedByLine->second;
+}
+
+CListDataObjectGroupRef::CListDataObjectGroupRef(IMetaObjectRecordDataGroupMutableRef* metaObject, const form_identifier_t& formType,
+	int listMode, bool choiceMode) : IListDataObject(metaObject, formType),
+	m_metaObject(metaObject), m_choiceMode(choiceMode)
+{
+}
+
+CSourceExplorer CListDataObjectGroupRef::GetSourceExplorer() const
+{
+	CSourceExplorer srcHelper(
+		m_metaObject, GetClassType(),
+		true, true
+	);
+
+	for (auto attribute : m_metaObject->GetGenericAttributes()) {
+		srcHelper.AppendSource(attribute, true, true);
+	}
+
+	return srcHelper;
+}
+
+bool CListDataObjectGroupRef::GetModel(IValueModel*& tableValue, const meta_identifier_t& id)
+{
+	if (id == m_metaObject->GetMetaID()) {
+		tableValue = this;
+		return true;
+	}
+	return false;
+}
+
+//events 
+void CListDataObjectGroupRef::AddValue(unsigned int before)
+{
+	IRecordDataObject* dataValue =
+		m_metaObject->CreateObjectValue();
+
+	if (dataValue != NULL) {
+		dataValue->ShowValue();
+	}
+}
+
+void CListDataObjectGroupRef::CopyValue()
+{
+	int currentLine = GetSelectionLine();
+	if (currentLine == wxNOT_FOUND)
+		return;
+
+	auto itFounded = m_aObjectValues.begin();
+	std::advance(itFounded, currentLine);
+
+	IRecordDataObject* dataValue =
+		m_metaObject->CreateObjectValue(itFounded->first);
+	if (dataValue != NULL) {
+		CValue reference = dataValue->CopyObjectValue();
+		reference.ShowValue();
+	}
+}
+
+void CListDataObjectGroupRef::EditValue()
+{
+	int currentLine = GetSelectionLine();
+	if (currentLine == wxNOT_FOUND)
+		return;
+
+	auto itFounded = m_aObjectValues.begin();
+	std::advance(itFounded, currentLine);
+
+	CValue reference =
+		m_metaObject->CreateObjectValue(itFounded->first);
+
+	reference.ShowValue();
+}
+
+void CListDataObjectGroupRef::DeleteValue()
+{
+	int currentLine = GetSelectionLine();
+	if (currentLine == wxNOT_FOUND)
+		return;
+
+	auto itFounded = m_aObjectValues.begin();
+	std::advance(itFounded, currentLine);
+
+	IRecordDataObject* objData =
+		m_metaObject->CreateObjectValue(itFounded->first);
+
+	if (objData != NULL) {
+		//objData->DeleteObject();
+	}
+
+	CListDataObjectGroupRef::RefreshModel();
+}
+
+void CListDataObjectGroupRef::ChooseValue(CValueForm* srcForm)
+{
+	int currentLine = GetSelectionLine();
+	if (currentLine == wxNOT_FOUND)
+		return;
+	wxASSERT(srcForm);
+	auto itFounded = m_aObjectValues.begin();
+	std::advance(itFounded, currentLine);
+
+	CValue reference =
+		m_metaObject->FindObjectValue(itFounded->first);
+
+	srcForm->NotifyChoice(reference);
+}
+
+#include "metadata/singleMetaTypes.h"
+
+CLASS_ID CListDataObjectGroupRef::GetClassType() const
+{
+	IMetaTypeObjectValueSingle* clsFactory =
+		m_metaObject->GetTypeObject(eMetaObjectType::enList);
+	wxASSERT(clsFactory);
+	return clsFactory->GetClassType();
+}
+
+wxString CListDataObjectGroupRef::GetTypeString() const
+{
+	IMetaTypeObjectValueSingle* clsFactory =
+		m_metaObject->GetTypeObject(eMetaObjectType::enList);
+	wxASSERT(clsFactory);
+	return clsFactory->GetClassName();
+}
+
+wxString CListDataObjectGroupRef::GetString() const
+{
+	IMetaTypeObjectValueSingle* clsFactory =
+		m_metaObject->GetTypeObject(eMetaObjectType::enList);
+	wxASSERT(clsFactory);
+	return clsFactory->GetClassName();
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+
 std::map<meta_identifier_t, CValue>& CListRegisterObject::GetRowData(unsigned int lineTable)
 {
 	auto itFoundedByLine = m_aObjectValues.begin();
@@ -333,10 +482,6 @@ std::map<meta_identifier_t, CValue>& CListRegisterObject::GetRowData(unsigned in
 
 CListRegisterObject::CListRegisterObject(IMetaObjectRegisterData* metaObject, const form_identifier_t& formType) :
 	IListDataObject(metaObject, formType), m_metaObject(metaObject)
-{
-}
-
-CListRegisterObject::~CListRegisterObject()
 {
 }
 
@@ -354,7 +499,7 @@ CSourceExplorer CListRegisterObject::GetSourceExplorer() const
 	return srcHelper;
 }
 
-bool CListRegisterObject::GetTable(IValueTable*& tableValue, const meta_identifier_t& id)
+bool CListRegisterObject::GetModel(IValueModel*& tableValue, const meta_identifier_t& id)
 {
 	if (id == m_metaObject->GetMetaID()) {
 		tableValue = this;
@@ -369,7 +514,7 @@ void CListRegisterObject::AddValue(unsigned int before)
 	if (m_metaObject != NULL &&
 		m_metaObject->HasRecordManager()) {
 		IRecordManagerObject* recordManager =
-			m_metaObject->CreateRecordManager();
+			m_metaObject->CreateRecordManagerObjectValue();
 		wxASSERT(recordManager);
 		recordManager->ShowFormValue();
 	}
@@ -386,7 +531,7 @@ void CListRegisterObject::CopyValue()
 
 	if (m_metaObject != NULL &&
 		m_metaObject->HasRecordManager()) {
-		IRecordManagerObject* recordManager = m_metaObject->CreateRecordManager(
+		IRecordManagerObject* recordManager = m_metaObject->CreateRecordManagerObjectValue(
 			CUniquePairKey{ m_metaObject, itFounded->second }
 		);
 		wxASSERT(recordManager);
@@ -407,18 +552,18 @@ void CListRegisterObject::EditValue()
 
 	if (m_metaObject != NULL &&
 		m_metaObject->HasRecordManager()) {
-		IRecordManagerObject* recordManager = m_metaObject->CreateRecordManager(
+		IRecordManagerObject* recordManager = m_metaObject->CreateRecordManagerObjectValue(
 			CUniquePairKey{ m_metaObject, itFounded->second }
 		);
 		wxASSERT(recordManager);
 		recordManager->ShowFormValue();
 	}
 	else if (m_metaObject != NULL) {
-		CMetaDefaultAttributeObject *recorder = 
-			m_metaObject->GetRegisterRecorder(); 
-		if (recorder != NULL) {		
+		CMetaDefaultAttributeObject* recorder =
+			m_metaObject->GetRegisterRecorder();
+		if (recorder != NULL) {
 			auto itRef = itFounded->second;
-			CValue reference = 
+			CValue reference =
 				itRef.at(recorder->GetMetaID());
 			reference.ShowValue();
 		}
@@ -436,7 +581,7 @@ void CListRegisterObject::DeleteValue()
 
 	if (m_metaObject != NULL &&
 		m_metaObject->HasRecordManager()) {
-		IRecordManagerObject* recordManager = m_metaObject->CreateRecordManager(
+		IRecordManagerObject* recordManager = m_metaObject->CreateRecordManagerObjectValue(
 			CUniquePairKey{ m_metaObject, itFounded->second }
 		);
 		wxASSERT(recordManager);

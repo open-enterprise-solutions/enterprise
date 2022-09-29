@@ -2,19 +2,20 @@
 
 enum
 {
-	MENU_ADDCOLUMN = 1000
+	MENU_ADD_COLUMN = 1000
 };
 
-void CValueTableBox::PrepareDefaultMenu(wxMenu *m_menu)
+void CValueTableBox::PrepareDefaultMenu(wxMenu *menu)
 {
-	m_menu->Append(MENU_ADDCOLUMN, wxT("Add column\tInsert"));
-	m_menu->AppendSeparator();
+	menu->Append(MENU_ADD_COLUMN, _("Add column\tInsert"));
+	menu->AppendSeparator();
 }
 
 void CValueTableBox::ExecuteMenu(IVisualHost *visualHost, int id)
 {
 	switch (id)
 	{
-	case MENU_ADDCOLUMN:this->AddColumn(); break;
+	case MENU_ADD_COLUMN: AddColumn();
+		break;
 	}
 }

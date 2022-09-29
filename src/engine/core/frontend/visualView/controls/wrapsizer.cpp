@@ -9,16 +9,11 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueWrapSizer, IValueSizer)
 
 CValueWrapSizer::CValueWrapSizer() : IValueSizer()
 {
-	PropertyContainer *categoryWrapSizer = IObjectBase::CreatePropertyContainer("WrapSizer");
-	categoryWrapSizer->AddProperty("name", PropertyType::PT_WXNAME);
-	categoryWrapSizer->AddProperty("orient", PropertyType::PT_OPTION, &CValueWrapSizer::GetOrient);
-
-	m_category->AddCategory(categoryWrapSizer); 
 }
 
 wxObject* CValueWrapSizer::Create(wxObject* /*parent*/, IVisualHost* /*visualHost*/)
 {
-	return new wxWrapSizer(m_orient, wxWRAPSIZER_DEFAULT_FLAGS);
+	return new wxWrapSizer(m_propertyOrient->GetValueAsInteger(), wxWRAPSIZER_DEFAULT_FLAGS);
 }
 
 void CValueWrapSizer::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool firstÑreated)
@@ -31,8 +26,8 @@ void CValueWrapSizer::Update(wxObject* wxobject, IVisualHost *visualHost)
 
 	if (m_wrapsizer)
 	{
-		m_wrapsizer->SetOrientation(m_orient);
-		m_wrapsizer->SetMinSize(m_minimum_size);
+		m_wrapsizer->SetOrientation(m_propertyOrient->GetValueAsInteger());
+		m_wrapsizer->SetMinSize(m_propertyMinSize->GetValueAsSize());
 	}
 
 	UpdateSizer(m_wrapsizer);
@@ -48,32 +43,12 @@ void CValueWrapSizer::Cleanup(wxObject* obj, IVisualHost *visualHost)
 
 bool CValueWrapSizer::LoadData(CMemoryReader &reader)
 {
-	m_orient = (wxOrientation)reader.r_u16();
+	m_propertyOrient->SetValue(reader.r_u16());
 	return IValueSizer::LoadData(reader);
 }
 
 bool CValueWrapSizer::SaveData(CMemoryWriter &writer)
 {
-	writer.w_u16(m_orient);
+	writer.w_u16(m_propertyOrient->GetValueAsInteger());
 	return IValueSizer::SaveData(writer);
-}
-
-//**********************************************************************************
-//*                           Property                                             *
-//**********************************************************************************
-
-void CValueWrapSizer::ReadProperty()
-{
-	IValueSizer::ReadProperty();
-
-	IObjectBase::SetPropertyValue("name", m_controlName);
-	IObjectBase::SetPropertyValue("orient", m_orient, true);
-}
-
-void CValueWrapSizer::SaveProperty()
-{
-	IValueSizer::SaveProperty();
-
-	IObjectBase::GetPropertyValue("name", m_controlName);
-	IObjectBase::GetPropertyValue("orient", m_orient, true);
 }

@@ -10,39 +10,12 @@
 //*                         metadata                                    * 
 //***********************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(CValueEnumAccumulationRegisterRecordType, CValue);
 wxIMPLEMENT_DYNAMIC_CLASS(CMetaObjectAccumulationRegister, IMetaObjectRegisterData);
 
 /////////////////////////////////////////////////////////////////////////
 
-CValue CValueEnumAccumulationRegisterRecordType::CreateDefEnumValue()
+CMetaObjectAccumulationRegister::CMetaObjectAccumulationRegister() : IMetaObjectRegisterData()
 {
-	CValue retValue = new CValueEnumAccumulationRegisterRecordType(eRecordType::eExpense);
-
-	if (retValue.Init()) {
-		IEnumerationWrapper* enumVal = NULL;
-		if (retValue.ConvertToValue(enumVal)) {
-			return enumVal->GetEnumVariantValue();
-		}
-	}
-
-	return retValue;
-}
-
-/////////////////////////////////////////////////////////////////////////
-
-CMetaObjectAccumulationRegister::CMetaObjectAccumulationRegister() : IMetaObjectRegisterData(),
-m_defaultFormList(wxNOT_FOUND),
-m_registerType(eRegisterType::eBalances)
-{
-	PropertyContainer* categoryForm = IObjectBase::CreatePropertyContainer("DefaultForms");
-	categoryForm->AddProperty("default_list", PropertyType::PT_OPTION, &CMetaObjectAccumulationRegister::GetFormList);
-	m_category->AddCategory(categoryForm);
-
-	PropertyContainer* categoryData = IObjectBase::CreatePropertyContainer("Data");
-	categoryData->AddProperty("register_type", PropertyType::PT_OPTION, &CMetaObjectAccumulationRegister::GetRegisterType);
-	m_category->AddCategory(categoryData);
-
 	//create default attributes
 	m_attributeRecordType = CMetaDefaultAttributeObject::CreateSpecialType(wxT("recordType"), _("Record type"), wxEmptyString, g_enumRecordTypeCLSID, false, CValueEnumAccumulationRegisterRecordType::CreateDefEnumValue());
 	m_attributeRecordType->SetClsid(g_metaDefaultAttributeCLSID);
@@ -81,9 +54,9 @@ CMetaObjectAccumulationRegister::~CMetaObjectAccumulationRegister()
 
 CMetaFormObject* CMetaObjectAccumulationRegister::GetDefaultFormByID(const form_identifier_t& id)
 {
-	if (id == eFormList && m_defaultFormList != wxNOT_FOUND) {
+	if (id == eFormList && m_propertyDefFormList->GetValueAsInteger() != wxNOT_FOUND) {
 		for (auto obj : GetObjectForms()) {
-			if (m_defaultFormList == obj->GetMetaID()) {
+			if (m_propertyDefFormList->GetValueAsInteger() == obj->GetMetaID()) {
 				return obj;
 			}
 		}
@@ -117,7 +90,6 @@ CValueForm* CMetaObjectAccumulationRegister::GetListForm(const wxString& formNam
 		valueForm->InitializeForm(ownerControl, NULL,
 			new CListRegisterObject(this, CMetaObjectAccumulationRegister::eFormList), formGuid
 		);
-		valueForm->ReadProperty();
 		valueForm->BuildForm(CMetaObjectAccumulationRegister::eFormList);
 		return valueForm;
 	}
@@ -131,7 +103,7 @@ CValueForm* CMetaObjectAccumulationRegister::GetListForm(const wxString& formNam
 
 /////////////////////////////////////////////////////////////////////////////
 
-OptionList* CMetaObjectAccumulationRegister::GetFormList(Property*)
+OptionList* CMetaObjectAccumulationRegister::GetFormList(PropertyOption*)
 {
 	OptionList* optlist = new OptionList();
 	optlist->AddOption(_("<not selected>"), wxNOT_FOUND);
@@ -155,10 +127,10 @@ bool CMetaObjectAccumulationRegister::LoadData(CMemoryReader& dataReader)
 	m_attributeRecordType->LoadMeta(dataReader);
 
 	//load default form 
-	m_defaultFormList = dataReader.r_u32();
-
+	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	
 	//load data 
-	m_registerType = (eRegisterType)dataReader.r_u16();
+	m_propertyRegisterType->SetValue(dataReader.r_u16());
 
 	//load object module
 	m_moduleObject->LoadMeta(dataReader);
@@ -171,12 +143,12 @@ bool CMetaObjectAccumulationRegister::SaveData(CMemoryWriter& dataWritter)
 {
 	//save default attributes:
 	m_attributeRecordType->SaveMeta(dataWritter);
-
+	
 	//save default form 
-	dataWritter.w_u32(m_defaultFormList);
-
+	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
+	
 	//save data
-	dataWritter.w_u16(m_registerType);
+	dataWritter.w_u16(m_propertyRegisterType->GetValueAsInteger());
 
 	//Save object module
 	m_moduleObject->SaveMeta(dataWritter);
@@ -292,7 +264,7 @@ bool CMetaObjectAccumulationRegister::OnAfterRunMetaObject(int flags)
 
 		if (IMetaObjectRegisterData::OnAfterRunMetaObject(flags)) {
 
-			if (!moduleManager->AddCompileModule(m_moduleObject, CreateRecordSetValue()))
+			if (!moduleManager->AddCompileModule(m_moduleObject, CreateRecordSetObjectValue()))
 				return false;
 
 			return true;
@@ -344,18 +316,18 @@ bool CMetaObjectAccumulationRegister::OnAfterCloseMetaObject()
 void CMetaObjectAccumulationRegister::OnCreateMetaForm(IMetaFormObject* metaForm)
 {
 	if (metaForm->GetTypeForm() == CMetaObjectAccumulationRegister::eFormList
-		&& m_defaultFormList == wxNOT_FOUND)
+		&& m_propertyDefFormList->GetValueAsInteger() == wxNOT_FOUND)
 	{
-		m_defaultFormList = metaForm->GetMetaID();
+		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
 	}
 }
 
 void CMetaObjectAccumulationRegister::OnRemoveMetaForm(IMetaFormObject* metaForm)
 {
 	if (metaForm->GetTypeForm() == CMetaObjectAccumulationRegister::eFormList
-		&& m_defaultFormList == metaForm->GetMetaID())
+		&& m_propertyDefFormList->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_defaultFormList = wxNOT_FOUND;
+		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
 	}
 }
 
@@ -363,7 +335,7 @@ std::vector<IMetaAttributeObject*> CMetaObjectAccumulationRegister::GetDefaultAt
 {
 	std::vector<IMetaAttributeObject*> attributes;
 	attributes.push_back(m_attributeLineActive);
-	if (m_registerType == eRegisterType::eBalances) {
+	if (GetRegisterType() == eRegisterType::eBalances) {
 		attributes.push_back(m_attributeRecordType);
 	}
 	attributes.push_back(m_attributePeriod);
@@ -383,57 +355,25 @@ ISourceDataObject* CMetaObjectAccumulationRegister::CreateObjectData(IMetaFormOb
 {
 	switch (metaObject->GetTypeForm())
 	{
-	case eFormList: return new CListRegisterObject(this, metaObject->GetTypeForm());
+	case eFormList: 
+		return new CListRegisterObject(this, metaObject->GetTypeForm());
 	}
 
 	return NULL;
 }
 
-IRecordSetObject* CMetaObjectAccumulationRegister::CreateRecordSet()
-{
-	return new CRecordSetAccumulationRegister(this);
-}
-
-IRecordSetObject* CMetaObjectAccumulationRegister::CreateRecordSet(const CUniquePairKey& uniqueKey)
-{
-	return new CRecordSetAccumulationRegister(this, uniqueKey);
-}
-
-/////////////////////////////////////////////////////////////////////////
-
-IRecordSetObject* CMetaObjectAccumulationRegister::CreateRecordSetValue()
+IRecordSetObject* CMetaObjectAccumulationRegister::CreateRecordSetObjectRegValue(const CUniquePairKey& uniqueKey)
 {
 	IModuleManager* moduleManager = m_metaData->GetModuleManager();
 	wxASSERT(moduleManager);
-
 	if (appData->DesignerMode()) {
 		IRecordSetObject* pDataRef = NULL;
 		if (!moduleManager->FindCompileModule(m_moduleObject, pDataRef)) {
-			return CreateRecordSet();
+			return new CRecordSetAccumulationRegister(this, uniqueKey);
 		}
 		return pDataRef;
 	}
-	return CreateRecordSet();
-}
-
-//***********************************************************************
-//*                           read & save property                      *
-//***********************************************************************
-
-void CMetaObjectAccumulationRegister::ReadProperty()
-{
-	IMetaObjectRegisterData::ReadProperty();
-
-	IObjectBase::SetPropertyValue("default_list", m_defaultFormList);
-	IObjectBase::SetPropertyValue("register_type", m_registerType);
-}
-
-void CMetaObjectAccumulationRegister::SaveProperty()
-{
-	IMetaObjectRegisterData::SaveProperty();
-
-	IObjectBase::GetPropertyValue("default_list", m_defaultFormList);
-	IObjectBase::GetPropertyValue("register_type", m_registerType, true);
+	return new CRecordSetAccumulationRegister(this, uniqueKey);
 }
 
 //***********************************************************************
@@ -441,5 +381,3 @@ void CMetaObjectAccumulationRegister::SaveProperty()
 //***********************************************************************
 
 METADATA_REGISTER(CMetaObjectAccumulationRegister, "accumulationRegister", g_metaAccumulationRegisterCLSID);
-//add new enumeration
-ENUM_REGISTER(CValueEnumAccumulationRegisterRecordType, "accumulationRecordType", g_enumRecordTypeCLSID);

@@ -8,7 +8,7 @@
 #include "frontend/mainFrame.h"
 #include "frontend/objinspect/objinspect.h"
 
-#include "common/objectbase.h"
+#include "common/propertyObject.h"
 #include "utils/stringUtils.h"
 #include "utils/typeconv.h"
 
@@ -111,7 +111,7 @@ class ModifyPropertyCmd : public BaseVisualCmd
 
 public:
 
-	ModifyPropertyCmd(CVisualEditorContextForm* data, Property* prop, const wxVariant& value);
+	ModifyPropertyCmd(CVisualEditorContextForm* data, Property* prop, const wxVariant& newValue);
 
 protected:
 	virtual void DoExecute() override;
@@ -228,7 +228,6 @@ void InsertObjectCmd::GenerateId()
 			object->GenerateGuid();
 			object->GenerateNewID();
 		}
-		object->SaveProperty();
 	};
 	reset(m_object);
 }
@@ -244,7 +243,6 @@ void InsertObjectCmd::ResetId()
 			object->ResetGuid();
 			object->SetControlID(0);
 		}
-		object->SaveProperty();
 	};
 	reset(m_object);
 }
@@ -263,7 +261,7 @@ void InsertObjectCmd::DoExecute()
 	}
 
 	IValueFrame* obj = m_object;
-	while (obj && obj->IsItem()) {
+	while (obj && obj->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 		if (obj->GetChildCount() > 0) {
 			obj = obj->GetChild(0);
 		}
@@ -324,7 +322,6 @@ void RemoveObjectCmd::GenerateId()
 			object->GenerateGuid();
 			object->GenerateNewID();
 		}
-		object->SaveProperty();
 	};
 	reset(m_object);
 }
@@ -340,7 +337,6 @@ void RemoveObjectCmd::ResetId()
 			object->ResetGuid();
 			object->SetControlID(0);
 		}
-		object->SaveProperty();
 	};
 	reset(m_object);
 }
@@ -362,7 +358,7 @@ void RemoveObjectCmd::OnObjectRemoved(wxFrameObjectEvent& event)
 void RemoveObjectCmd::DoExecute()
 {
 	IValueFrame* obj = m_object;
-	while (obj && obj->IsItem()) {
+	while (obj && obj->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 		if (obj->GetChildCount() > 0) {
 			obj = obj->GetChild(0);
 		}
@@ -390,7 +386,7 @@ void RemoveObjectCmd::DoRestore()
 	}
 
 	IValueFrame* obj = m_object;
-	while (obj && obj->IsItem()) {
+	while (obj && obj->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 		if (obj->GetChildCount() > 0) {
 			obj = obj->GetChild(0);
 		}
@@ -411,8 +407,8 @@ void RemoveObjectCmd::DoRestore()
 
 //-----------------------------------------------------------------------------
 
-ModifyPropertyCmd::ModifyPropertyCmd(CVisualEditorContextForm* data, Property* prop, const wxVariant& oldValue) : BaseVisualCmd(data),
-m_property(prop), m_newValue(prop->GetValue()), m_oldValue(oldValue)
+ModifyPropertyCmd::ModifyPropertyCmd(CVisualEditorContextForm* data, Property* prop, const wxVariant& newValue) : BaseVisualCmd(data),
+m_property(prop), m_oldValue(prop->GetValue()), m_newValue(newValue)
 {
 }
 
@@ -422,7 +418,6 @@ void ModifyPropertyCmd::DoExecute()
 	// Get the IValueFrame from the event
 	IValueFrame* m_object = dynamic_cast<IValueFrame*>(m_property->GetObject());
 	m_property->SetValue(m_newValue);
-	m_object->SaveProperty();
 
 	if (m_object->GetClsid() == g_controlFormCLSID) {
 		visulEditor->UpdateVisualEditor();
@@ -441,7 +436,6 @@ void ModifyPropertyCmd::DoRestore()
 	IValueFrame* m_object = dynamic_cast<IValueFrame*>(m_property->GetObject());
 
 	m_property->SetValue(m_oldValue);
-	m_object->SaveProperty();
 
 	if (m_object->GetClsid() == g_controlFormCLSID) {
 		visulEditor->UpdateVisualEditor();
@@ -542,7 +536,6 @@ void CutObjectCmd::GenerateId()
 			object->GenerateGuid();
 			object->GenerateNewID();
 		}
-		object->SaveProperty();
 	};
 	reset(m_object);
 }
@@ -558,7 +551,6 @@ void CutObjectCmd::ResetId()
 			object->ResetGuid();
 			object->SetControlID(0);
 		}
-		object->SaveProperty();
 	};
 	reset(m_object);
 }
@@ -591,7 +583,7 @@ void CutObjectCmd::DoExecute()
 	}
 
 	IValueFrame* obj = m_object;
-	while (obj && obj->IsItem()) {
+	while (obj && obj->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 		if (obj->GetChildCount() > 0) {
 			obj = obj->GetChild(0);
 		}
@@ -621,7 +613,7 @@ void CutObjectCmd::DoRestore()
 	m_object->SetParent(m_parent);
 
 	IValueFrame* obj = m_object;
-	while (obj && obj->IsItem()) {
+	while (obj && obj->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 		if (obj->GetChildCount() > 0) {
 			obj = obj->GetChild(0);
 		}
@@ -683,7 +675,7 @@ IValueFrame* CVisualEditorContextForm::CreateObject(const wxString& name)
 					// no puede ser un item!
 					parent = parent->GetParent();
 
-					while (parent && parent->IsItem())
+					while (parent && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
 						parent = parent->GetParent();
 				}
 			}
@@ -691,7 +683,7 @@ IValueFrame* CVisualEditorContextForm::CreateObject(const wxString& name)
 
 		// Seleccionamos el objeto, si este es un item entonces se selecciona
 		// el objeto contenido. ?Tiene sentido tener un item debajo de un item?
-		while (obj && obj->IsItem())
+		while (obj && obj->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
 			obj = (obj->GetChildCount() > 0 ? obj->GetChild(0) : NULL);
 
 		NotifyObjectCreated(obj);
@@ -728,7 +720,7 @@ void CVisualEditorContextForm::CopyObject(IValueFrame* obj)
 	// be made on the clipboard.
 	IValueFrame* objParent = obj->GetParent();
 	wxASSERT(m_valueForm);
-	if (objParent && objParent->IsItem()) {
+	if (objParent && objParent->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 		m_clipboard = m_valueForm->CopyObject(objParent);
 	}
 	else {
@@ -740,8 +732,7 @@ bool CVisualEditorContextForm::PasteObject(IValueFrame* dstObject, IValueFrame* 
 {
 	wxASSERT(m_valueForm);
 
-	try
-	{
+	try {
 		IValueFrame* clipboard = NULL;
 		if (objToPaste) {
 			clipboard = objToPaste;
@@ -769,11 +760,11 @@ bool CVisualEditorContextForm::PasteObject(IValueFrame* dstObject, IValueFrame* 
 		// del padre de "parent" y ademas vamos a insertarlo en la posicion
 		// siguiente a "parent"
 		IValueFrame* parentObject = dstObject;
-		if (parentObject->IsItem()) {
+		if (parentObject->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 			parentObject = parentObject->GetParent();
 		}
 
-		if (clipboard->IsItem()) {
+		if (clipboard->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 			clipboard = clipboard->GetChild(0);
 		}
 
@@ -786,13 +777,13 @@ bool CVisualEditorContextForm::PasteObject(IValueFrame* dstObject, IValueFrame* 
 					parentObject->RemoveChild(obj);
 				}
 				IValueFrame* clipParent = clipboard->GetParent();
-				if (clipParent && clipParent->IsItem()) {
+				if (clipParent && clipParent->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 					clipboard = clipParent;
 				}
 			}
 			else {
 				parentObject = parentObject->GetParent();
-				if (parentObject->IsItem()) {
+				if (parentObject->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 					parentObject = parentObject->GetParent();
 				}
 			}
@@ -835,7 +826,7 @@ bool CVisualEditorContextForm::PasteObject(IValueFrame* dstObject, IValueFrame* 
 		// vamos a mantener seleccionado el nuevo objeto creado
 		// pero hay que tener en cuenta que es muy probable que el objeto creado
 		// sea un "item"
-		while (obj && obj->IsItem()) {
+		while (obj && obj->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 			assert(obj->GetChildCount() > 0);
 			obj = obj->GetChild(0);
 		}
@@ -856,8 +847,7 @@ IValueFrame* CVisualEditorContextForm::SearchSizerInto(IValueFrame* obj)
 	IValueFrame* theSizer = NULL;
 
 	if (obj->IsSubclassOf(wxT("boxsizer")) || obj->IsSubclassOf(wxT("wrapsizer")) ||
-		obj->IsSubclassOf(wxT("staticboxsizer")) || obj->IsSubclassOf(wxT("gridsizer")))
-	{
+		obj->IsSubclassOf(wxT("staticboxsizer")) || obj->IsSubclassOf(wxT("gridsizer"))) {
 		theSizer = obj;
 	}
 	else
@@ -896,7 +886,7 @@ bool CVisualEditorContextForm::SelectObject(IValueFrame* obj, bool force, bool n
 
 	m_visualEditor->SetObjectSelect(obj); m_selObj = obj;
 
-	if (notify) { 
+	if (notify) {
 		NotifyObjectSelected(obj, force);
 	}
 
@@ -918,13 +908,11 @@ void CVisualEditorContextForm::MovePosition(IValueFrame* obj, bool right, unsign
 	IValueFrame* noItemObj = obj;
 	IValueFrame* parent = obj->GetParent();
 
-	if (parent)
-	{
+	if (parent) {
 		// Si el objeto está incluido dentro de un item hay que desplazar
 		// el item
 
-		while (parent && parent->IsItem())
-		{
+		while (parent && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 			obj = parent;
 			parent = obj->GetParent();
 		}
@@ -935,10 +923,8 @@ void CVisualEditorContextForm::MovePosition(IValueFrame* obj, bool right, unsign
 		unsigned int children_count = parent->GetChildCount();
 
 		if ((right && num + pos < children_count) ||
-			(!right && (num <= pos)))
-		{
+			(!right && (num <= pos))) {
 			pos = (right ? pos + num : pos - num);
-
 			Execute(new ShiftChildCmd(this, obj, pos));
 			NotifyProjectRefresh();
 			SelectObject(noItemObj, true);
@@ -948,22 +934,19 @@ void CVisualEditorContextForm::MovePosition(IValueFrame* obj, bool right, unsign
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-void CVisualEditorContextForm::ModifyProperty(Property* prop, const wxVariant& oldValue)
+void CVisualEditorContextForm::ModifyProperty(Property* prop, const wxVariant& newValue)
 {
-	IObjectBase* object = prop->GetObject();
-
-	if (oldValue != prop->GetValue()) {
-		Execute(new ModifyPropertyCmd(this, prop, oldValue));
+	IPropertyObject* object = prop->GetObject();
+	if (newValue != prop->GetValue()) {
+		Execute(new ModifyPropertyCmd(this, prop, newValue));
 		NotifyPropertyModified(prop);
 	}
 }
 
 void CVisualEditorContextForm::ModifyEventHandler(Event* evt, const wxVariant& value)
 {
-	IObjectBase* object = evt->GetObject();
-
-	if (value != evt->GetValue())
-	{
+	IPropertyObject* object = evt->GetObject();
+	if (value != evt->GetValue()) {
 		Execute(new ModifyEventHandlerCmd(this, evt, value));
 		NotifyEventModified(evt);
 	}
@@ -973,16 +956,11 @@ void CVisualEditorContextForm::ModifyEventHandler(Event* evt, const wxVariant& v
 
 void CVisualEditorContextForm::PropagateExpansion(IValueFrame* obj, bool expand, bool up)
 {
-	if (obj)
-	{
-		if (up)
-		{
+	if (obj) {
+		if (up) {
 			IValueFrame* child = NULL;
-
-			for (unsigned int i = 0; i < obj->GetChildCount(); i++)
-			{
+			for (unsigned int i = 0; i < obj->GetChildCount(); i++) {
 				child = obj->GetChild(i);
-
 				Execute(new ExpandObjectCmd(this, child, expand));
 				PropagateExpansion(child, expand, up);
 			}
@@ -997,12 +975,11 @@ void CVisualEditorContextForm::PropagateExpansion(IValueFrame* obj, bool expand,
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-bool CVisualEditorContextForm::IsCorrectName(const wxString& controlName)
+bool CVisualEditorContextForm::IsCorrectName(const wxString& controlName) const
 {
 	wxASSERT(m_valueForm);
 	return m_valueForm->FindControlByName(controlName) == NULL;
 }
-
 
 /////////////////////////////////////////////////////////////////////////////////////
 
@@ -1016,7 +993,7 @@ void CVisualEditorContextForm::DoRemoveObject(IValueFrame* obj, bool cutObject, 
 
 	if (parent) {
 		// Get the top item
-		while (parent && parent->IsItem()) {
+		while (parent && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 			obj = parent;
 			parent = obj->GetParent();
 		}
@@ -1033,15 +1010,13 @@ void CVisualEditorContextForm::DoRemoveObject(IValueFrame* obj, bool cutObject, 
 			m_copyOnPaste = false;
 			Execute(new CutObjectCmd(this, obj, force));
 		}
-		else
-		{
+		else {
 			Execute(new RemoveObjectCmd(this, obj));
 		}
 
 		SelectObject(GetSelectedObject(), true, true);
 	}
-	else
-	{
+	else {
 		if (obj->GetObjectTypeName() != wxT("form")) {
 			assert(false);
 		}
@@ -1061,7 +1036,7 @@ void CVisualEditorContextForm::DetermineObjectToSelect(IValueFrame* parent, unsi
 		objToSelect = parent->GetChild(pos);
 	}
 
-	while (objToSelect && objToSelect->IsItem()) {
+	while (objToSelect && objToSelect->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 		objToSelect = objToSelect->GetChild(0);
 	}
 
@@ -1086,7 +1061,7 @@ void CVisualEditorContextForm::Redo()
 	NotifyObjectSelected(GetSelectedObject());
 }
 
-bool CVisualEditorContextForm::CanPasteObject()
+bool CVisualEditorContextForm::CanPasteObject() const
 {
 	IValueFrame* obj = GetSelectedObject();
 
@@ -1096,7 +1071,7 @@ bool CVisualEditorContextForm::CanPasteObject()
 	return false;
 }
 
-bool CVisualEditorContextForm::CanCopyObject()
+bool CVisualEditorContextForm::CanCopyObject() const
 {
 	IValueFrame* obj = GetSelectedObject();
 
@@ -1106,11 +1081,9 @@ bool CVisualEditorContextForm::CanCopyObject()
 	return false;
 }
 
-bool CVisualEditorContextForm::IsModified() { return m_document->IsModified(); }
-
-IValueFrame* CVisualEditorContextForm::GetSelectedObject() { return m_selObj; }
-
-CValueForm* CVisualEditorContextForm::GetSelectedForm() { return m_valueForm; }
+bool CVisualEditorContextForm::IsModified() const {
+	return m_document->IsModified();
+}
 
 int CVisualEditorContextForm::CalcPositionOfInsertion(IValueFrame* selected, IValueFrame* parent)
 {
@@ -1132,15 +1105,16 @@ int CVisualEditorContextForm::CalcPositionOfInsertion(IValueFrame* selected, IVa
 
 void CVisualEditorContextForm::ToggleBorderFlag(IValueFrame* obj, int border)
 {
-	if (!obj) return;
-
+	if (!obj)
+		return;
 	IValueFrame* parent = obj->GetParent();
-	if (!parent) return;
-
-	if (!parent->IsSubclassOf(wxT("sizerItem"))) return;
-
+	if (!parent)
+		return;
+	if (!parent->IsSubclassOf(wxT("sizerItem")))
+		return;
 	Property* propFlag = parent->GetProperty(wxT("flag"));
-	if (!propFlag) return;
+	if (!propFlag)
+		return;
 
 	wxString value = propFlag->GetValueAsString();
 
@@ -1153,12 +1127,10 @@ void CVisualEditorContextForm::ToggleBorderFlag(IValueFrame* obj, int border)
 	int intVal = propFlag->GetValueAsInteger();
 	intVal ^= border;
 
-	if ((intVal & wxALL) == wxALL)
-	{
+	if ((intVal & wxALL) == wxALL) {
 		value = TypeConv::SetFlag(wxT("wxALL"), value);
 	}
-	else
-	{
+	else {
 		if ((intVal & wxTOP) != 0) value = TypeConv::SetFlag(wxT("wxTOP"), value);
 		if ((intVal & wxBOTTOM) != 0) value = TypeConv::SetFlag(wxT("wxBOTTOM"), value);
 		if ((intVal & wxRIGHT) != 0) value = TypeConv::SetFlag(wxT("wxRIGHT"), value);
@@ -1171,11 +1143,11 @@ void CVisualEditorContextForm::ToggleBorderFlag(IValueFrame* obj, int border)
 void CVisualEditorContextForm::CreateBoxSizerWithObject(IValueFrame* obj)
 {
 	IValueFrame* parent = obj->GetParent();
-	if (!parent) return;
-
+	if (!parent)
+		return;
 	IValueFrame* grandParent = parent->GetParent();
-	if (!grandParent) return;
-
+	if (!grandParent)
+		return;
 	int childPos = -1;
 	if (parent->IsSubclassOf(wxT("sizerItem"))) {
 		childPos = (int)grandParent->GetChildPosition(parent);
@@ -1194,13 +1166,10 @@ void CVisualEditorContextForm::CreateBoxSizerWithObject(IValueFrame* obj)
 
 	if (newSizer) {
 		Execute(new InsertObjectCmd(this, newSizer, parent, childPos));
-
 		if (newSizer->GetObjectTypeName() == wxT("sizerItem"))
 			newSizer = newSizer->GetChild(0);
-
 		PasteObject(newSizer);
 		m_clipboard = clipboard;
-
 		NotifyProjectRefresh();
 	}
 	else {

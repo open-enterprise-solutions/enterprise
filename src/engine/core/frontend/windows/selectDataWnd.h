@@ -24,7 +24,7 @@ class CSelectDataTypeWnd : public wxDialog
 	wxButton* m_buttonOk;
 	wxButton* m_buttonCancel;
 
-	std::set<CLASS_ID> m_clsids;
+	std::map<long, CLASS_ID> m_clsids;
 
 public:
 

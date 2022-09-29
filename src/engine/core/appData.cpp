@@ -67,15 +67,15 @@ void ApplicationData::RefreshActiveUsers()
 	preparedStatement->SetParamString(2, m_sessionGuid.str());
 
 	preparedStatement->RunQuery();
-	preparedStatement->Close();
+	databaseLayer->CloseStatement(preparedStatement);
 
-	if (m_sesssionLocker.TryEnter()) {
+	if (m_sessionLocker.TryEnter()) {
 		PreparedStatement *preparedStatement =
 			databaseLayer->PrepareStatement("DELETE FROM %s WHERE lastActive < ?", IConfigMetadata::GetActiveUsersTableName());
 		preparedStatement->SetParamDate(1, currentTime.Subtract(wxTimeSpan(0, 0, timeInterval)));
 		preparedStatement->RunQuery();
-		preparedStatement->Close();
-		m_sesssionLocker.Leave();
+		databaseLayer->CloseStatement(preparedStatement);
+		m_sessionLocker.Leave();
 	}
 }
 
@@ -86,7 +86,7 @@ ApplicationData::ApplicationData(const wxString &projectDir) :
 	if (m_objDb->Open(projectDir + wxT("\\") + wxT("sys.database"))) {
 
 		//create new session 
-		m_sessionGuid = Guid::newGuid();
+		m_sessionGuid = wxNewGuid;
 
 		m_startedDate = wxDateTime::Now();
 		m_computerName = wxGetHostName();
@@ -299,7 +299,7 @@ bool ApplicationData::StartSession(const wxString &userName, const wxString &use
 	preparedStatement->SetParamString(6, m_computerName);
 
 	hasError = preparedStatement->RunQuery() == DATABASE_LAYER_QUERY_RESULT_ERROR;
-	preparedStatement->Close();
+	databaseLayer->CloseStatement(preparedStatement);
 
 	if (hasError) {
 		return false;
@@ -335,8 +335,7 @@ bool ApplicationData::StartSession(const wxString &userName, const wxString &use
 		preparedStatement->SetParamString(6, m_computerName);
 
 		hasError = preparedStatement->RunQuery() == DATABASE_LAYER_QUERY_RESULT_ERROR;
-		preparedStatement->Close();
-
+		databaseLayer->CloseStatement(preparedStatement);
 		return !hasError;
 	}
 

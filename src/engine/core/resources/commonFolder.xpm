@@ -1,0 +1,33 @@
+/* XPM */
+static const char *s_commonFolder_xpm[] = {
+/* columns rows colors chars-per-pixel */
+"16 16 11 1",
+"% c #CC3300",
+"@ c #0033CC",
+"O c #FFFFFF",
+"o c #FFFF00",
+"# c #3399FF",
+"+ c #040404",
+"X c #C0C0C0",
+"& c #009900",
+"  c None",
+". c #868686",
+"$ c #003399",
+/* pixels */
+"                ",
+"   .....        ",
+"  .XoXoX.       ",
+" .XoXoXoX...... ",
+" .OOOOOOOOOOOO.+",
+" .OoXoXo@#@@$o.+",
+" .OX%%oX@@@@$X.+",
+" .O% %%oXoXoXo.+",
+" .O%%%%Xo&&XoX.+",
+" .Oo%%Xo&&&&Xo.+",
+" .OXoXo&&&&&&X.+",
+" .OoXoXoXoXoXo.+",
+" ..............+",
+"  ++++++++++++++",
+"                ",
+"                "
+};

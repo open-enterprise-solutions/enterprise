@@ -7,7 +7,7 @@
 #include "databaseLayer/databaseLayer.h"
 #include "frontend/visualView/visualHost.h"
 #include "metadata/metadata.h"
-#include "metadata/metaObjects/objects/baseObject.h"
+#include "metadata/metaObjects/objects/object.h"
 #include "appData.h"
 
 //***********************************************************************
@@ -20,22 +20,20 @@ wxIMPLEMENT_ABSTRACT_CLASS(IMetaFormObject, CMetaModuleObject);
 //*                          common value object                        *
 //***********************************************************************
 
-CValueForm* IMetaFormObject::LoadControl(const wxString& formData)
+CValueForm* IMetaFormObject::LoadControl(const wxMemoryBuffer& formData) const
 {
-	wxMemoryBuffer tempBuffer =
-		wxBase64Decode(formData);
-	CMemoryReader readerData(tempBuffer.GetData(), tempBuffer.GetBufSize());
+	CMemoryReader readerData(formData);
 	u64 clsid = 0;
-	CMemoryReader* readerMemory = readerData.open_chunk_iterator(clsid);
+	std::shared_ptr<CMemoryReader>readerMemory(readerData.open_chunk_iterator(clsid));
 	if (!readerMemory)
 		return NULL;
 	u64 form_id = 0;
-	CMemoryReader* readerMetaMemory = readerMemory->open_chunk_iterator(form_id);
+	std::shared_ptr<CMemoryReader>readerMetaMemory(readerMemory->open_chunk_iterator(form_id));
 	if (!readerMetaMemory)
 		return NULL;
 	std::shared_ptr <CMemoryReader>readerDataMemory(readerMetaMemory->open_chunk(eDataBlock));
 	CValueForm* valueForm = new CValueForm;
-	valueForm->SetReadOnly(m_enabled);
+	valueForm->SetReadOnly(m_propEnabled);
 	if (!valueForm->LoadControl(this, *readerDataMemory)) {
 		wxDELETE(valueForm);
 		return NULL;
@@ -50,7 +48,7 @@ CValueForm* IMetaFormObject::LoadControl(const wxString& formData)
 	return valueForm;
 }
 
-bool IMetaFormObject::LoadChildControl(CValueForm* valueForm, CMemoryReader& readerData, IValueFrame* controlParent)
+bool IMetaFormObject::LoadChildControl(CValueForm* valueForm, CMemoryReader& readerData, IValueFrame* controlParent) const
 {
 	CLASS_ID clsid = 0;
 	CMemoryReader* prevReaderMemory = NULL;
@@ -68,7 +66,7 @@ bool IMetaFormObject::LoadChildControl(CValueForm* valueForm, CMemoryReader& rea
 			wxString classType = CValue::GetNameObjectFromID(clsid);
 			wxASSERT(classType.Length() > 0);
 			IValueFrame* newControl = valueForm->NewObject(classType, controlParent, false);
-			newControl->SetReadOnly(m_enabled);
+			newControl->SetReadOnly(m_propEnabled);
 			std::shared_ptr <CMemoryReader>readerDataMemory(readerMetaMemory->open_chunk(eDataBlock));
 			if (!newControl->LoadControl(this, *readerDataMemory))
 				return false;
@@ -84,7 +82,7 @@ bool IMetaFormObject::LoadChildControl(CValueForm* valueForm, CMemoryReader& rea
 	return true;
 }
 
-wxString IMetaFormObject::SaveControl(CValueForm* valueForm)
+wxMemoryBuffer IMetaFormObject::SaveControl(CValueForm* valueForm) const
 {
 	CMemoryWriter writterData;
 
@@ -93,22 +91,20 @@ wxString IMetaFormObject::SaveControl(CValueForm* valueForm)
 	CMemoryWriter writterMetaMemory;
 	CMemoryWriter writterDataMemory;
 	if (!valueForm->SaveControl(this, writterDataMemory)) {
-		return wxEmptyString;
+		return wxMemoryBuffer();
 	}
 	writterMetaMemory.w_chunk(eDataBlock, writterDataMemory.pointer(), writterDataMemory.size());
 	CMemoryWriter writterChildMemory;
 	if (!SaveChildControl(valueForm, writterChildMemory, valueForm))
-		return wxEmptyString;
+		return wxMemoryBuffer();
 	writterMetaMemory.w_chunk(eChildBlock, writterChildMemory.pointer(), writterChildMemory.size());
 	writterMemory.w_chunk(valueForm->GetControlID(), writterMetaMemory.pointer(), writterMetaMemory.size());
 	writterData.w_chunk(valueForm->GetClsid(), writterMemory.pointer(), writterMemory.size());
 
-	return wxBase64Encode(
-		writterData.pointer(), writterData.size()
-	);
+	return writterData.buffer();
 }
 
-bool IMetaFormObject::SaveChildControl(CValueForm* valueForm, CMemoryWriter& writterData, IValueFrame* controlParent)
+bool IMetaFormObject::SaveChildControl(CValueForm* valueForm, CMemoryWriter& writterData, IValueFrame* controlParent) const
 {
 	for (unsigned int idx = 0; idx < controlParent->GetChildCount(); idx++) {
 		CMemoryWriter writterMemory;
@@ -140,7 +136,7 @@ void IMetaFormObject::SaveFormData(CValueForm* valueForm)
 }
 
 IMetaFormObject::IMetaFormObject(const wxString& name, const wxString& synonym, const wxString& comment) :
-	CMetaModuleObject(name, synonym, comment), m_formData(wxEmptyString), m_firstInitialized(false), m_typeFrom(defaultFormType)
+	CMetaModuleObject(name, synonym, comment), m_formData(), m_firstInitialized(false)
 {
 	//set default proc
 	SetDefaultProcedure("beforeOpen", eContentHelper::eProcedureHelper, { "cancel" });
@@ -153,16 +149,18 @@ IMetaFormObject::IMetaFormObject(const wxString& name, const wxString& synonym, 
 	SetDefaultProcedure("refreshDisplay", eContentHelper::eProcedureHelper);
 }
 
+#define chunkForm 0x023456543
+
 bool IMetaFormObject::LoadData(CMemoryReader& reader)
 {
-	reader.r_stringZ(m_formData);
+	reader.r_chunk(m_metaId + chunkForm, m_formData);
 	reader.r_stringZ(m_moduleData);
 	return true;
 }
 
 bool IMetaFormObject::SaveData(CMemoryWriter& writer)
 {
-	writer.w_stringZ(m_formData);
+	writer.w_chunk(m_metaId + chunkForm, m_formData);
 	writer.w_stringZ(m_moduleData);
 	return true;
 }
@@ -170,27 +168,21 @@ bool IMetaFormObject::SaveData(CMemoryWriter& writer)
 CValueForm* IMetaFormObject::GenerateForm(IValueFrame* ownerControl,
 	ISourceDataObject* ownerSrc, const CUniqueKey& guidForm)
 {
-	CValueForm* valueForm = NULL;
-
 	if (m_formData.IsEmpty()) {
-		valueForm = new CValueForm();
-		valueForm->InitializeForm(ownerControl, this, ownerSrc, guidForm, m_enabled);
-		valueForm->ReadProperty();
-
+		CValueForm* valueForm = new CValueForm(ownerControl, this, ownerSrc, guidForm, m_propEnabled);
 		//build form
 		if (m_firstInitialized) {
-			valueForm->BuildForm(m_typeFrom);
+			valueForm->BuildForm(GetTypeForm());
 			SaveFormData(valueForm);
 			m_firstInitialized = false;
 		}
 		return valueForm;
 	}
 
-	valueForm = LoadControl(m_formData);
+	CValueForm *valueForm = LoadControl(m_formData);
 
-	if (valueForm) {
-		valueForm->InitializeForm(ownerControl, this, ownerSrc, guidForm, m_enabled);
-		valueForm->ReadProperty();
+	if (valueForm != NULL) {
+		valueForm->InitializeForm(ownerControl, this, ownerSrc, guidForm, m_propEnabled);
 	}
 
 	return valueForm;
@@ -222,24 +214,21 @@ wxIMPLEMENT_DYNAMIC_CLASS(CMetaFormObject, IMetaFormObject)
 
 CMetaFormObject::CMetaFormObject(const wxString& name, const wxString& synonym, const wxString& comment) : IMetaFormObject(name, synonym, comment)
 {
-	PropertyContainer* categoryForm = IObjectBase::CreatePropertyContainer("FormType");
-	categoryForm->AddProperty("form_type", PropertyType::PT_OPTION, &CMetaFormObject::GetFormType);
-	m_category->AddCategory(categoryForm);
 }
 
 bool CMetaFormObject::LoadData(CMemoryReader& reader)
 {
-	m_typeFrom = reader.r_u8();
+	m_properyFormType->SetValue(reader.r_s32());
 	return IMetaFormObject::LoadData(reader);
 }
 
 bool CMetaFormObject::SaveData(CMemoryWriter& writer)
 {
-	writer.w_u8(m_typeFrom);
+	writer.w_s32(m_properyFormType->GetValueAsInteger());
 	return IMetaFormObject::SaveData(writer);
 }
 
-OptionList* CMetaFormObject::GetFormType(Property*)
+OptionList* CMetaFormObject::GetFormType(PropertyOption*)
 {
 	IMetaObjectWrapperData* metaObject = wxStaticCast(
 		GetParent(), IMetaObjectWrapperData
@@ -251,22 +240,6 @@ OptionList* CMetaFormObject::GetFormType(Property*)
 	optionlist->AddOption(formDefaultName, defaultFormType);
 
 	return optionlist;
-}
-
-//***********************************************************************
-//*                           read & save property                      *
-//***********************************************************************
-
-void CMetaFormObject::ReadProperty()
-{
-	CMetaModuleObject::ReadProperty();
-	IObjectBase::SetPropertyValue("form_type", m_typeFrom);
-}
-
-void CMetaFormObject::SaveProperty()
-{
-	CMetaModuleObject::SaveProperty();
-	IObjectBase::GetPropertyValue("form_type", m_typeFrom);
 }
 
 //***********************************************************************
@@ -291,23 +264,29 @@ bool CMetaFormObject::OnCreateMetaObject(IMetadata* metaData)
 	OptionList* optList = metaObject->GetFormType();
 
 	CSelectTypeForm* selectTypeForm = new CSelectTypeForm(metaObject, this);
-
 	for (auto option : optList->GetOptions()) {
-		selectTypeForm->AppendTypeForm(option.m_option, option.m_intVal);
+		selectTypeForm->AppendTypeForm(option.m_name, option.m_label, option.m_intVal);
 	}
-
 	wxDELETE(optList);
 
 	selectTypeForm->CreateSelector();
-	int res = selectTypeForm->ShowModal();
+	form_identifier_t res = selectTypeForm->ShowModal();
 	if (res != wxID_CANCEL) {
-		m_typeFrom = res;
+		m_properyFormType->SetValue(res);
 	}
 	else {
 		return false;
 	}
 
 	metaObject->OnCreateMetaForm(this);
+
+	if (metaData != NULL) {
+		IMetadataWrapperTree* metaTree = metaData->GetMetaTree();
+		if (metaTree != NULL) {
+			metaTree->UpdateChoiceSelection();
+		}
+	}
+
 	return true;
 }
 
@@ -341,14 +320,14 @@ bool CMetaFormObject::OnBeforeRunMetaObject(int flags)
 bool CMetaFormObject::OnAfterRunMetaObject(int flags)
 {
 	if (appData->DesignerMode()) {
-		
+
 		IModuleManager* moduleManager = m_metaData->GetModuleManager();
 		wxASSERT(moduleManager);
-		
+
 		IMetaObjectWrapperData* metaObject = wxStaticCast(m_parent, IMetaObjectWrapperData);
 		wxASSERT(metaObject);
-		
-		return moduleManager->AddCompileModule(this, metaObject->CreateObjectValue(this));
+
+		return moduleManager->AddCompileModule(this, metaObject->CreateObjectForm(this));
 	}
 
 	return IMetaFormObject::OnAfterRunMetaObject(flags);
@@ -376,7 +355,7 @@ bool CMetaFormObject::OnAfterCloseMetaObject()
 
 wxIMPLEMENT_DYNAMIC_CLASS(CMetaCommonFormObject, IMetaFormObject)
 
-CMetaCommonFormObject::CMetaCommonFormObject(const wxString& name, const wxString& synonym, const wxString& comment) : IMetaFormObject(name, synonym, comment) { m_typeFrom = defaultFormType; }
+CMetaCommonFormObject::CMetaCommonFormObject(const wxString& name, const wxString& synonym, const wxString& comment) : IMetaFormObject(name, synonym, comment) {}
 
 //***********************************************************************
 //*                             event object                            *

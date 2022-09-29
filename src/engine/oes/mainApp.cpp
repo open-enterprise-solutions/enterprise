@@ -21,7 +21,7 @@
 #include <wx/stdpaths.h>
 #include <wx/sysopt.h>
 
-#include "core/resources/splashLogo.xpm"
+#include "resources/splashLogo.xpm"
 
 #if wxVERSION_NUMBER >= 2905 && wxVERSION_NUMBER <= 3100
 #include <wx/xrc/xh_auinotbk.h>
@@ -53,7 +53,7 @@ public:
 
 bool CMainApp::OnInit()
 {
-	wxDateTime::SetCountry(wxDateTime::Country::USA);
+	wxDateTime::SetCountry(wxDateTime::Country::Country_Default);
 
 	m_locale.AddCatalogLookupPathPrefix(_T("lang"));
 	m_locale.AddCatalog(m_locale.GetCanonicalName());
@@ -157,8 +157,7 @@ int CMainApp::OnRun()
 	//Needed to get the splashscreen to paint
 	splashWnd->Update();
 
-	if (modeRun == eRunMode::ENTERPRISE_MODE)
-	{
+	if (modeRun == eRunMode::ENTERPRISE_MODE) {
 		// Using a space so the initial 'w' will not be capitalized in wxLogGUI dialogs
 		wxApp::SetAppName(_("OES Enterprise"));
 
@@ -166,8 +165,7 @@ int CMainApp::OnRun()
 		// The old config (if any) is returned, delete it
 		delete wxConfigBase::Set(new wxConfig(wxT("Enterprise")));
 	}
-	else if (modeRun == eRunMode::DESIGNER_MODE)
-	{
+	else if (modeRun == eRunMode::DESIGNER_MODE) {
 		// Using a space so the initial 'w' will not be capitalized in wxLogGUI dialogs
 		wxApp::SetAppName(_("OES Designer"));
 
@@ -227,7 +225,7 @@ int CMainApp::OnRun()
 
 	// If connection is failed then exit from application 
 	if (!databaseLayer->IsOpen()) {
-		wxMessageBox(databaseLayer->GetErrorMessage(), wxT("Failed to connection!"), wxOK | wxCENTRE | wxICON_ERROR);
+		wxMessageBox(databaseLayer->GetErrorMessage(), _("Failed to connection!"), wxOK | wxCENTRE | wxICON_ERROR);
 		return 1;
 	}
 

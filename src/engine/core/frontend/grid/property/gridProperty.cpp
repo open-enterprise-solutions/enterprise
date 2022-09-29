@@ -4,78 +4,167 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "gridProperty.h"
+#include "frontend/grid/gridCommon.h"
+#include "frontend/objinspect/objinspect.h"
 
-CPropertyCell::CPropertyCell(wxGrid *grid) : IObjectBase(), m_ownerGrid(grid)
+void CGridPropertyObject::AddSelectedCell(const wxGridBlockCoords& coords, bool afterErase)
 {
-	PropertyContainer *commonGrid = IObjectBase::CreatePropertyContainer("Common");
-	commonGrid->AddProperty("name", PropertyType::PT_WXNAME);
-	commonGrid->AddProperty("font", PropertyType::PT_WXFONT);
-	commonGrid->AddProperty("background_colour", PropertyType::PT_WXCOLOUR);
+	if (this != objectInspector->GetSelectedObject())
+		return;
 
-	commonGrid->AddProperty("align_horz", PropertyType::PT_OPTION, &CPropertyCell::GetOptionsAlignment);
-	commonGrid->AddProperty("align_vert", PropertyType::PT_OPTION, &CPropertyCell::GetOptionsAlignment);
+	if (afterErase)
+		ClearSelectedCell();
 
-	commonGrid->AddProperty("text_colour", PropertyType::PT_WXCOLOUR);
-	commonGrid->AddProperty("value", PropertyType::PT_WXSTRING);
+	m_currentBlocks.push_back(coords);
 
-	m_category->AddCategory(commonGrid);
+	objectInspector->RefreshProperty();
+	m_ownerGrid->ForceRefresh();
 }
 
-void CPropertyCell::SetCellCoords(const wxGridCellCoords &coords)
+void CGridPropertyObject::ShowProperty()
 {
-	m_topLeftCoords = coords;
-	m_bottomRightCoords = coords;
+	CGridPropertyObject::ClearSelectedCell(); bool hasBlocks = false;
 
-	wxString sName = wxString::Format("R%iC%i", coords.GetRow() + 1, coords.GetCol() + 1);
-	IObjectBase::SetPropertyValue("name", sName);
-
-}
-
-void CPropertyCell::SetCellCoords(const wxGridCellCoords &topLeftCoords, const wxGridCellCoords &bottomRightCoords)
-{
-	m_topLeftCoords = topLeftCoords;
-	m_bottomRightCoords = bottomRightCoords;
-
-	wxString sName = wxString::Format("R%iC%i:R%iC%i", m_topLeftCoords.GetRow() + 1, m_topLeftCoords.GetCol() + 1, bottomRightCoords.GetRow() + 1, bottomRightCoords.GetCol() + 1);
-	IObjectBase::SetPropertyValue("name", sName);
-}
-
-void CPropertyCell::ReadProperty() 
-{
-	IObjectBase::SetPropertyValue("value", m_ownerGrid->GetCellValue(m_topLeftCoords));
-	IObjectBase::SetPropertyValue("font", m_ownerGrid->GetCellFont(m_topLeftCoords.GetRow(), m_topLeftCoords.GetCol()));
-	IObjectBase::SetPropertyValue("background_colour", m_ownerGrid->GetCellBackgroundColour(m_topLeftCoords.GetRow(), m_topLeftCoords.GetCol()));
-	IObjectBase::SetPropertyValue("text_colour", m_ownerGrid->GetCellTextColour(m_topLeftCoords.GetRow(), m_topLeftCoords.GetCol()));
-
-	int horz, vert; 
-	m_ownerGrid->GetCellAlignment(m_topLeftCoords.GetRow(), m_topLeftCoords.GetCol(), &horz, &vert);
-
-	IObjectBase::SetPropertyValue("align_horz", horz);
-	IObjectBase::SetPropertyValue("align_vert", vert);
-}
-
-void CPropertyCell::SaveProperty()
-{
-	if (m_topLeftCoords == m_bottomRightCoords)
-	{
-		m_ownerGrid->SetCellValue(m_topLeftCoords, IObjectBase::GetPropertyAsString("value"));
-		m_ownerGrid->SetCellFont(m_topLeftCoords.GetRow(), m_topLeftCoords.GetCol(), IObjectBase::GetPropertyAsFont("font"));
-		m_ownerGrid->SetCellBackgroundColour(m_topLeftCoords.GetRow(), m_topLeftCoords.GetCol(), IObjectBase::GetPropertyAsColour("background_colour"));
-		m_ownerGrid->SetCellTextColour(m_topLeftCoords.GetRow(), m_topLeftCoords.GetCol(), IObjectBase::GetPropertyAsColour("text_colour"));
-		m_ownerGrid->SetCellAlignment(m_topLeftCoords.GetRow(), m_topLeftCoords.GetCol(), IObjectBase::GetPropertyAsInteger("align_horz"), IObjectBase::GetPropertyAsInteger("align_vert"));
+	for (auto& coords : m_ownerGrid->GetSelectedBlocks()) {
+		m_currentBlocks.push_back(coords); hasBlocks = true;
 	}
-	else
-	{
-		for (int row = m_topLeftCoords.GetRow(); row <= m_bottomRightCoords.GetRow(); row++)
-		{
-			for (int col = m_topLeftCoords.GetCol(); col <= m_bottomRightCoords.GetCol(); col++)
-			{
-				m_ownerGrid->SetCellValue(row, col, IObjectBase::GetPropertyAsString("value"));
-				m_ownerGrid->SetCellFont(row, col, IObjectBase::GetPropertyAsFont("font"));
-				m_ownerGrid->SetCellBackgroundColour(row, col, IObjectBase::GetPropertyAsColour("background_colour"));
-				m_ownerGrid->SetCellTextColour(row, col, IObjectBase::GetPropertyAsColour("text_colour"));
-				m_ownerGrid->SetCellAlignment(row, col, IObjectBase::GetPropertyAsInteger("align_horz"), IObjectBase::GetPropertyAsInteger("align_vert"));
+	if (!hasBlocks) {
+		m_currentBlocks.push_back({
+			m_ownerGrid->GetGridCursorRow(), m_ownerGrid->GetGridCursorCol(),
+			m_ownerGrid->GetGridCursorRow(), m_ownerGrid->GetGridCursorCol()
+			}
+		);
+	}
+
+	objectInspector->SelectObject(this);
+}
+
+void CGridPropertyObject::OnPropertyCreated(Property* property, const wxGridBlockCoords& coords)
+{
+	if (m_propertyName == property) {
+		if (coords.GetTopLeft() != coords.GetBottomRight()) {
+			wxString nameField = wxString::Format("R%iC%i:R%iC%i",
+				coords.GetTopRow() + 1,
+				coords.GetLeftCol() + 1,
+				coords.GetBottomRow() + 1,
+				coords.GetRightCol() + 1
+			);
+			m_propertyName->SetValue(nameField);
+		}
+		else {
+			wxString nameField = wxString::Format("R%iC%i",
+				coords.GetTopRow() + 1,
+				coords.GetLeftCol() + 1
+			);
+			m_propertyName->SetValue(nameField);
+		}
+	}
+	else if (m_propertyText == property) {
+		m_propertyText->SetValue(
+			m_ownerGrid->GetCellValue(coords.GetTopRow(), coords.GetLeftCol())
+		);
+	}
+	else if (m_propertyAlignHorz == property) {
+		int horz, vert;
+		m_ownerGrid->GetCellAlignment(coords.GetTopRow(), coords.GetLeftCol(), &horz, &vert);
+		m_propertyAlignHorz->SetValue(horz);
+		m_propertyAlignVert->SetValue(vert);
+	}
+	else if (m_propertyOrient == property) {
+		m_propertyOrient->SetValue(
+			m_ownerGrid->GetCellTextOrientation(coords.GetTopRow(), coords.GetLeftCol())
+		);
+	}
+	else if (m_propertyFont == property) {
+		m_propertyFont->SetValue(m_ownerGrid->GetCellFont(coords.GetTopRow(), coords.GetLeftCol()));
+	}
+	else if (m_propertyBackgroundColour == property) {
+		m_propertyBackgroundColour->SetValue(m_ownerGrid->GetCellBackgroundColour(coords.GetTopRow(), coords.GetLeftCol()));
+	}
+	else if (m_propertyTextColour == property) {
+		m_propertyTextColour->SetValue(m_ownerGrid->GetCellTextColour(coords.GetTopRow(), coords.GetLeftCol()));
+	}
+	else if (m_propertyLeftBorder == property) {
+		wxColour borderColour;
+		wxPenStyle leftBorder, rightBorder,
+			topBorder, bottomBorder;
+		m_ownerGrid->GetCellBorder(coords.GetTopRow(), coords.GetLeftCol(),
+			&leftBorder, &rightBorder, &topBorder, &bottomBorder,
+			&borderColour
+		);
+		m_propertyLeftBorder->SetValue(leftBorder);
+		m_propertyRightBorder->SetValue(rightBorder);
+		m_propertyTopBorder->SetValue(topBorder);
+		m_propertyBottomBorder->SetValue(bottomBorder);
+		m_propertyColourBorder->SetValue(borderColour);
+	}
+}
+
+void CGridPropertyObject::OnPropertyChanged(Property* property, const wxGridBlockCoords& coords)
+{
+	for (int col = coords.GetLeftCol(); col <= coords.GetRightCol(); col++) {
+		for (int row = coords.GetTopRow(); row <= coords.GetBottomRow(); row++) {
+			if (m_propertyText == property) {
+				m_ownerGrid->SetCellValue(row, col, m_propertyText->GetValueAsString());
+			}
+			else if (m_propertyFont == property) {
+				m_ownerGrid->SetCellFont(row, col, m_propertyFont->GetValueAsFont());
+			}
+			else if (m_propertyBackgroundColour == property) {
+				m_ownerGrid->SetCellBackgroundColour(row, col, m_propertyBackgroundColour->GetValueAsColour());
+			}
+			else if (m_propertyTextColour == property) {
+				m_ownerGrid->SetCellTextColour(row, col, m_propertyTextColour->GetValueAsColour());
+			}
+			else if (m_propertyAlignHorz == property || m_propertyAlignVert == property) {
+				m_ownerGrid->SetCellAlignment(row, col, m_propertyAlignHorz->GetValueAsInteger(), m_propertyAlignVert->GetValueAsInteger());
+			}
+			else if (m_propertyOrient == property) {
+				m_ownerGrid->SetCellTextOrientation(row, col, (wxOrientation)m_propertyOrient->GetValueAsInteger());
+			}
+			else if (m_propertyLeftBorder == property || m_propertyRightBorder == property ||
+				m_propertyTopBorder == property || m_propertyBottomBorder == property ||
+				m_propertyColourBorder == property) {
+				m_ownerGrid->SetCellBorder(row, col,
+					(wxPenStyle)m_propertyLeftBorder->GetValueAsInteger(), (wxPenStyle)m_propertyRightBorder->GetValueAsInteger(),
+					(wxPenStyle)m_propertyTopBorder->GetValueAsInteger(), (wxPenStyle)m_propertyBottomBorder->GetValueAsInteger(),
+					m_propertyColourBorder->GetValueAsColour()
+				);
 			}
 		}
 	}
+}
+
+CGridPropertyObject::CGridPropertyObject(CGrid* ownerGrid) : IPropertyObject(),
+m_ownerGrid(ownerGrid)
+{
+}
+
+CGridPropertyObject::~CGridPropertyObject()
+{
+	if (objectInspector->GetSelectedObject() == this) {
+		objectInspector->ClearProperty();
+	}
+}
+
+void CGridPropertyObject::OnPropertyCreated(Property* property)
+{
+	for (auto& coords : m_currentBlocks) {
+		CGridPropertyObject::OnPropertyCreated(property, coords);
+	}
+}
+
+void CGridPropertyObject::OnPropertyChanged(Property* property)
+{
+	int maxRow = m_ownerGrid->GetGridCursorRow(), maxCol = m_ownerGrid->GetGridCursorCol();
+	for (auto& coords : m_currentBlocks) {
+		if (maxRow < coords.GetBottomRow())
+			maxRow = coords.GetBottomRow();
+		if (maxCol < coords.GetRightCol())
+			maxCol = coords.GetRightCol();
+		CGridPropertyObject::OnPropertyChanged(property, coords);
+	}
+
+	m_ownerGrid->SendPropertyModify({ maxRow, maxCol });
+	m_ownerGrid->ForceRefresh();
 }

@@ -4,7 +4,7 @@
 #include <wx/wx.h>
 #include <process.h> 
 
-static int start_day = 1;	    // 1
+static int start_day = 31;	    // 1
 static int start_month = 1;	    // January
 static int start_year = 2018;	// 2018
 
@@ -20,7 +20,7 @@ static int days_in_month[12] = {
 
 static unsigned int s_buildID = 0;
 
-void ComputeBuildID()
+void CalculateBuildId()
 {
 	int					days;
 	int					years;
@@ -31,7 +31,7 @@ void ComputeBuildID()
 	int					months = 0;
 
 	for (int i = 0; i < 12; i++) {
-		if (month_id[i] == month)
+		if (month_id[i] != month)
 			continue;
 
 		months = i;
@@ -61,7 +61,7 @@ BOOL APIENTRY DllMain(HANDLE hModule,
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
-		ComputeBuildID();
+		CalculateBuildId();
 	case DLL_THREAD_ATTACH:
 	case DLL_THREAD_DETACH:
 	case DLL_PROCESS_DETACH:

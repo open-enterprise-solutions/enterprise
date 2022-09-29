@@ -13,11 +13,13 @@ class CDocument;
 
 class IMetaTypeObjectValueSingle;
 
-class IMetadataTree {
+class IMetadataWrapperTree {
 public:
-	virtual void SetReadOnly(bool readOnly = true) = 0;
 
+	virtual void SetReadOnly(bool readOnly = true) = 0;
 	virtual void Modify(bool modify) = 0;
+
+	virtual void UpdateChoiceSelection() {}
 
 	virtual void EditModule(const wxString& fullName, int lineNumber, bool setRunLine = true) = 0;
 
@@ -26,26 +28,53 @@ public:
 
 	virtual bool CloseFormMDI(IMetaObject* obj) = 0;
 
-	virtual CDocument* GetDocument(IMetaObject* obj) = 0;
-
-	virtual void OnPropertyChanged() = 0;
+	virtual CDocument* GetDocument(IMetaObject* obj) const = 0;
 
 	virtual void CloseMetaObject(IMetaObject* obj) = 0;
 	virtual void OnCloseDocument(CDocument* doc) = 0;
+
+protected:
+
+	class ITreeClsidData {
+		CLASS_ID m_clsid; //тип элемента
+	public:
+		ITreeClsidData(const CLASS_ID& clsid) : m_clsid(clsid) {}
+
+		CLASS_ID GetClassID() const {
+			return m_clsid;
+		}
+	};
+
+	class ITreeMetaData {
+		IMetaObject* m_metaObject; //тип элемента
+	public:
+		ITreeMetaData(IMetaObject* metaObject) : m_metaObject(metaObject) {}
+
+		void SetMetaObject(IMetaObject* metaObject) {
+			m_metaObject = metaObject;
+		}
+
+		IMetaObject* GetMetaObject() const {
+			return m_metaObject;
+		}
+	};
 };
+
+#define wxOES_Data wxT("OES_Data")
 
 ///////////////////////////////////////////////////////////////////////////////
 
 class IMetadata {
-	IMetadataTree* m_metaTree;
+	IMetadataWrapperTree* m_metaTree;
 private:
-	void DoGenerateNewID(meta_identifier_t& id, IMetaObject* top);
+	void DoGenerateNewID(meta_identifier_t& id, IMetaObject* top) const;
 	//Get metaobjects 
-	void DoGetMetaObjects(const CLASS_ID& clsid, std::vector<IMetaObject*>& metaObjects, IMetaObject* top);
+	void DoGetMetaObjects(const CLASS_ID& clsid, std::vector<IMetaObject*>& metaObjects, IMetaObject* top) const;
 	//find object
-	IMetaObject* DoFindByName(const wxString& fullName, IMetaObject* top);
+	IMetaObject* DoFindByName(const wxString& fullName, IMetaObject* top) const;
 	//get metaObject 
-	IMetaObject* DoGetMetaObject(const meta_identifier_t &id, IMetaObject* top);
+	IMetaObject* DoGetMetaObject(const meta_identifier_t& id, IMetaObject* top) const;
+	IMetaObject* DoGetMetaObject(const Guid& guid, IMetaObject* top) const;
 public:
 	IMetadata(bool readOnly = false) : m_moduleManager(NULL), m_metaTree(NULL), m_metaReadOnly(readOnly), m_metaModify(false) {}
 	virtual ~IMetadata() {}
@@ -54,24 +83,32 @@ public:
 		return m_moduleManager;
 	}
 
-	virtual bool IsModified() const { return m_metaModify; }
-	virtual void Modify(bool modify) {
-		if (m_metaTree)
+	virtual bool IsModified() const {
+		return m_metaModify;
+	}
+
+	virtual void Modify(bool modify = true) {
+		if (m_metaTree != NULL)
 			m_metaTree->Modify(modify);
 		m_metaModify = modify;
 	}
 
-	virtual void SetVersion(const version_identifier_t &version) = 0;
+	virtual void SetVersion(const version_identifier_t& version) = 0;
 	virtual version_identifier_t GetVersion() const = 0;
 
-	virtual wxString GetFileName() const { return wxEmptyString; }
-	virtual IMetaObject* GetCommonMetaObject() const { return NULL; }
+	virtual wxString GetFileName() const {
+		return wxEmptyString;
+	}
+	
+	virtual IMetaObject* GetCommonMetaObject() const { 
+		return NULL; 
+	}
 
 	//runtime support:
 	CValue CreateObject(const wxString& className, CValue** aParams = NULL) {
 		return CreateObjectRef(className, aParams);
 	}
-	
+
 	virtual CValue* CreateObjectRef(const wxString& className, CValue** aParams = NULL);
 
 	template<class retType = CValue>
@@ -82,16 +119,17 @@ public:
 	void RegisterObject(const wxString& className, IMetaTypeObjectValueSingle* singleObject);
 	void UnRegisterObject(const wxString& className);
 
-	bool IsRegisterObject(const wxString& className) const;
-	bool IsRegisterObject(const wxString& className, eObjectType objectType) const;
-	bool IsRegisterObject(const wxString& className, eObjectType objectType, enum eMetaObjectType refType) const;
-	bool IsRegisterObject(const CLASS_ID& clsid) const;
+	virtual bool IsRegisterObject(const wxString& className) const;
+	virtual bool IsRegisterObject(const wxString& className, eObjectType objectType) const;
+	virtual bool IsRegisterObject(const wxString& className, eObjectType objectType, enum eMetaObjectType refType) const;
+
+	virtual bool IsRegisterObject(const CLASS_ID& clsid) const;
 
 	virtual CLASS_ID GetIDObjectFromString(const wxString& clsName) const;
 	virtual wxString GetNameObjectFromID(const CLASS_ID& clsid, bool upper = false) const;
 
-	meta_identifier_t GetVTByID(const CLASS_ID& clsid) const;
-	CLASS_ID GetIDByVT(const meta_identifier_t& valueType, enum eMetaObjectType refType) const;
+	virtual meta_identifier_t GetVTByID(const CLASS_ID& clsid) const;
+	virtual CLASS_ID GetIDByVT(const meta_identifier_t& valueType, enum eMetaObjectType refType) const;
 
 	virtual IMetaTypeObjectValueSingle* GetTypeObject(const CLASS_ID& clsid) const;
 	virtual IMetaTypeObjectValueSingle* GetTypeObject(const IMetaObject* metaValue, enum eMetaObjectType refType) const;
@@ -105,9 +143,6 @@ public:
 	virtual std::vector<IMetaTypeObjectValueSingle*> GetAvailableSingleObjects(const CLASS_ID& clsid, eMetaObjectType refType) const;
 	virtual std::vector<IMetaTypeObjectValueSingle*> GetAvailableSingleObjects(enum eMetaObjectType refType) const;
 
-	//Available types 
-	virtual OptionList* GetTypelist() const = 0;
-
 	//run/close 
 	virtual bool RunMetadata(int flags = defaultFlag) = 0;
 	virtual bool CloseMetadata(int flags = defaultFlag) = 0;
@@ -119,18 +154,39 @@ public:
 	void RemoveMetaObject(IMetaObject* obj, IMetaObject* objParent = NULL);
 
 	//Get metaobjects 
-	virtual std::vector<IMetaObject*> GetMetaObjects(const CLASS_ID& clsid);
+	virtual std::vector<IMetaObject*> GetMetaObjects(const CLASS_ID& clsid) const;
+	
 	//find object
-	virtual IMetaObject* FindByName(const wxString& fullName);
+	virtual IMetaObject* FindByName(const wxString& fullName) const;
+	
 	//get metaObject 
-	virtual IMetaObject* GetMetaObject(const meta_identifier_t &id);
+	template <typename retType>
+	inline bool GetMetaObject(retType*& foundedVal, const meta_identifier_t& id, IMetaObject* top = NULL) const {
+		foundedVal = dynamic_cast<retType *>(GetMetaObject(id, top));
+		return foundedVal != NULL; 
+	}
+
+	template <typename retType>
+	inline bool GetMetaObject(retType*& foundedVal, const Guid& guid, IMetaObject* top = NULL) const {
+		foundedVal = dynamic_cast<retType *>(GetMetaObject(guid, top));
+		return foundedVal != NULL;
+	}
+
+	//get metaObject 
+	virtual IMetaObject* GetMetaObject(const meta_identifier_t& id, IMetaObject* top = NULL) const;
+	virtual IMetaObject* GetMetaObject(const Guid& guid, IMetaObject* top = NULL) const;
 
 	//Associate this metadata with 
-	virtual IMetadataTree* GetMetaTree() const { return m_metaTree; }
-	virtual void SetMetaTree(IMetadataTree* metaTree) { m_metaTree = metaTree; }
+	virtual IMetadataWrapperTree* GetMetaTree() const {
+		return m_metaTree;
+	}
+
+	virtual void SetMetaTree(IMetadataWrapperTree* metaTree) {
+		m_metaTree = metaTree;
+	}
 
 	//ID's 
-	virtual meta_identifier_t GenerateNewID();
+	virtual meta_identifier_t GenerateNewID() const;
 
 	//Generate new name
 	virtual wxString GetNewName(const CLASS_ID& clsid, IMetaObject* metaParent, const wxString& sPrefix = wxEmptyString, bool forConstructor = false);
@@ -160,7 +216,9 @@ public:
 
 	IConfigMetadata(bool readOnly) : IMetadata(readOnly) {}
 
-	virtual bool IsConfigSave() const { return true; }
+	virtual bool IsConfigSave() const { 
+		return true; 
+	}
 
 	virtual Guid GetMetadataGuid() const = 0;
 	virtual wxString GetMetadataMD5() const = 0;
@@ -199,9 +257,6 @@ public:
 };
 
 class CConfigFileMetadata : public IConfigMetadata {
-	//Available types 
-	void DoGetTypelist(IMetaObject* top, OptionList* optionList) const;
-
 public:
 
 	bool ConfigOpened() const {
@@ -211,18 +266,33 @@ public:
 	CConfigFileMetadata(bool readOnly = false);
 	virtual ~CConfigFileMetadata();
 
-	virtual Guid GetMetadataGuid() const { return m_commonObject->GetDocPath(); }
-	virtual wxString GetMetadataMD5() const { return m_md5Hash; }
+	virtual Guid GetMetadataGuid() const { 
+		return m_commonObject->GetDocPath(); 
+	}
+	
+	virtual wxString GetMetadataMD5() const {
+		return m_md5Hash; 
+	}
 
-	virtual wxString GetMetadataName() const { return m_commonObject->GetName(); }
-	virtual wxString GetConfigPath() const { return wxEmptyString; }
-	virtual wxString GetDefaultSource() const { return wxEmptyString; }
+	virtual wxString GetMetadataName() const { 
+		return m_commonObject->GetName(); 
+	}
+	
+	virtual wxString GetConfigPath() const { 
+		return wxEmptyString;
+	}
+	
+	virtual wxString GetDefaultSource() const { 
+		return wxEmptyString;
+	}
 
-	virtual void SetVersion(const version_identifier_t &version) { m_version = version; }
-	version_identifier_t GetVersion() const { return m_version; }
+	virtual void SetVersion(const version_identifier_t& version) {
+		m_commonObject->SetVersion(version);
+	}
 
-	//Available types 
-	virtual OptionList* GetTypelist() const;
+	version_identifier_t GetVersion() const {
+		return m_commonObject->GetVersion();
+	}
 
 	//compare metadata
 	virtual bool CompareMetadata(CConfigFileMetadata* dst) const {
@@ -238,7 +308,9 @@ public:
 	//load/save form file
 	virtual bool LoadFromFile(const wxString& fileName);
 
-	virtual IMetaObject* GetCommonMetaObject() const { return m_commonObject; }
+	virtual IMetaObject* GetCommonMetaObject() const {
+		return m_commonObject;
+	}
 
 protected:
 
@@ -259,8 +331,6 @@ protected:
 protected:
 
 	bool m_configOpened;
-	version_identifier_t m_version;
-
 	wxString m_md5Hash;
 	//common meta object
 	CMetaObject* m_commonObject;
@@ -277,11 +347,21 @@ public:
 		return false;
 	}
 
-	virtual Guid GetMetadataGuid() const { return m_metaGuid; }
+	virtual Guid GetMetadataGuid() const {
+		return m_metaGuid; 
+	}
 
-	virtual wxString GetMetadataName() const { return m_commonObject->GetName(); }
-	virtual wxString GetConfigPath() const { return m_sConfigPath; }
-	virtual wxString GetDefaultSource() const { return m_sDefaultSource; }
+	virtual wxString GetMetadataName() const { 
+		return m_commonObject->GetName(); 
+	}
+	
+	virtual wxString GetConfigPath() const {
+		return m_sConfigPath; 
+	}
+	
+	virtual wxString GetDefaultSource() const { 
+		return m_sDefaultSource; 
+	}
 
 	//metadata 
 	virtual bool LoadMetadata(int flags = defaultFlag);
@@ -302,7 +382,9 @@ public:
 	virtual ~CConfigStorageMetadata();
 
 	//is config save
-	virtual bool IsConfigSave() const { return m_configSave; }
+	virtual bool IsConfigSave() const {
+		return m_configSave;
+	}
 
 	//metadata 
 	virtual bool CreateMetadata();
