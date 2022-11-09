@@ -5,11 +5,6 @@
 
 #include "tableInfo.h"
 
-static int my_sort(int* v1, int* v2)
-{
-	return *v2 - *v1;
-}
-
 wxIMPLEMENT_ABSTRACT_CLASS(IValueModel, CValue);
 wxIMPLEMENT_ABSTRACT_CLASS(IValueModel::IValueModelColumnCollection, CValue);
 wxIMPLEMENT_ABSTRACT_CLASS(IValueModel::IValueModelColumnCollection::IValueModelColumnInfo, CValue);
