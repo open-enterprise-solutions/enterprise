@@ -219,37 +219,44 @@ void CMetadataTree::CMetadataTreeWnd::OnPropertyItem(wxCommandEvent& event)
 
 void CMetadataTree::CMetadataTreeWnd::OnUpItem(wxCommandEvent& event)
 {
-	m_ownerTree->UpItem(); event.Skip();
+	m_ownerTree->UpItem(); 
+	event.Skip();
 }
 
 void CMetadataTree::CMetadataTreeWnd::OnDownItem(wxCommandEvent& event)
 {
-	m_ownerTree->DownItem(); event.Skip();
+	m_ownerTree->DownItem();
+	event.Skip();
 }
 
 void CMetadataTree::CMetadataTreeWnd::OnSortItem(wxCommandEvent& event)
 {
-	m_ownerTree->SortItem(); event.Skip();
+	m_ownerTree->SortItem(); 
+	event.Skip();
 }
 
 void CMetadataTree::CMetadataTreeWnd::OnInsertItem(wxCommandEvent& event)
 {
-	m_ownerTree->InsertItem(); event.Skip();
+	m_ownerTree->InsertItem(); 
+	event.Skip();
 }
 
 void CMetadataTree::CMetadataTreeWnd::OnReplaceItem(wxCommandEvent& event)
 {
-	m_ownerTree->ReplaceItem(); event.Skip();
+	m_ownerTree->ReplaceItem(); 
+	event.Skip();
 }
 
 void CMetadataTree::CMetadataTreeWnd::OnSaveItem(wxCommandEvent& event)
 {
-	m_ownerTree->SaveItem(); event.Skip();
+	m_ownerTree->SaveItem(); 
+	event.Skip();
 }
 
 void CMetadataTree::CMetadataTreeWnd::OnCommandItem(wxCommandEvent& event)
 {
-	m_ownerTree->CommandItem(event.GetId()); event.Skip();
+	m_ownerTree->CommandItem(event.GetId());
+	event.Skip();
 }
 
 #include <wx/clipbrd.h>
@@ -309,12 +316,14 @@ void CMetadataTree::CMetadataTreeWnd::OnPasteItem(wxCommandEvent& event)
 
 void CMetadataTree::CMetadataTreeWnd::OnDebugEvent(wxDebugEvent& event)
 {
-	if (m_ownerTree->m_docParent)
+	if (m_ownerTree->m_docParent != NULL)
 		return;
 
 	switch (event.GetEventId())
 	{
-	case EventId_EnterLoop: m_ownerTree->EditModule(event.GetModuleName(), event.GetLine(), true); break;
+	case EventId_EnterLoop: 
+		m_ownerTree->EditModule(event.GetModuleName(), event.GetLine(), true); 
+		break;
 	}
 }
 
@@ -343,13 +352,15 @@ void CMetadataTree::CMetadataTreeWnd::OnSelected(wxTreeEvent& event)
 
 void CMetadataTree::CMetadataTreeWnd::OnCollapsing(wxTreeEvent& event)
 {
-	if (GetRootItem() == event.GetItem())
+	if (GetRootItem() != event.GetItem()) {
+		m_ownerTree->Collapse(); event.Skip();
+	}
+	else {
 		event.Veto();
-	else
-		event.Skip();
+	}
 }
 
 void CMetadataTree::CMetadataTreeWnd::OnExpanding(wxTreeEvent& event)
 {
-	event.Skip();
+	m_ownerTree->Expand(); event.Skip();
 }

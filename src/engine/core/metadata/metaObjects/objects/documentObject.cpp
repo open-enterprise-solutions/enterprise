@@ -291,22 +291,30 @@ bool CObjectDocument::WriteObject(eDocumentWriteMode writeMode, eDocumentPosting
 						CMetaDefaultAttributeObject* metaPosted = dataRef->GetDocumentPosted();
 						wxASSERT(metaPosted);
 						if (writeMode == eDocumentWriteMode::ePosting)
-							m_aObjectValues.insert_or_assign(metaPosted->GetMetaID(), true);
+							m_objectValues.insert_or_assign(metaPosted->GetMetaID(), true);
 						else if (writeMode == eDocumentWriteMode::eUndoPosting)
-							m_aObjectValues.insert_or_assign(metaPosted->GetMetaID(), false);
+							m_objectValues.insert_or_assign(metaPosted->GetMetaID(), false);
 					}
 				}
 
-				bool needUpdateRecords = CObjectDocument::IsNewObject();
+				bool newObject = CObjectDocument::IsNewObject();
+
+				//set current date if empty 
+				CMetaObjectDocument* dataRef = NULL;
+				if (newObject && m_metaObject->ConvertToValue(dataRef)) {
+					const CValue &docDate = GetValueByMetaID(*dataRef->GetDocumentDate()); 
+					if (docDate.IsEmpty()) {
+						SetValueByMetaID(*dataRef->GetDocumentDate(), CSystemObjects::CurrentDate());
+					}
+				}
 
 				if (!CObjectDocument::SaveData()) {
 					databaseLayer->RollBack(); CSystemObjects::Raise(_("failed to write object in db!"));
 					return false;
 				}
 
-				if (needUpdateRecords) {
+				if (newObject) 
 					m_registerRecords->CreateRecordSet();
-				}
 
 				if (writeMode == eDocumentWriteMode::ePosting) {
 

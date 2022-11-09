@@ -1,4 +1,7 @@
 #include "dataView.h"
+#include "common/tableInfo.h"
+
+wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_START_DELETING, wxDataViewEvent);
 
 wxBEGIN_EVENT_TABLE(CDataViewCtrl::CDataViewFreezeRowsWindow, wxWindow)
 EVT_PAINT(CDataViewCtrl::CDataViewFreezeRowsWindow::OnPaint)
@@ -13,7 +16,7 @@ wxEND_EVENT_TABLE()
 bool CDataViewCtrl::AssociateModel(IValueModel* model)
 {
 	if (model != NULL) {
-		m_genNotitfier = new CTableModelNotifier(this);
+		m_genNotitfier = new wxTableModelNotifier(this);
 		model->AppendNotifier(m_genNotitfier);
 	}
 	else {

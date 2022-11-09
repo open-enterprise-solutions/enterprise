@@ -7,4 +7,9 @@ enum eUseItem {
 	eUseItem_Folder_Item
 };
 
+enum eObjectMode {
+	OBJECT_ITEM = 1,
+	OBJECT_FOLDER
+};
+
 #endif

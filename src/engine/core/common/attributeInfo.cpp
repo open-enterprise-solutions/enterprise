@@ -104,6 +104,8 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueQualifierString, CValue);
 
 ////////////////////////////////////////////////////////////////////////////
 
+#include "compiler/enum.h"
+
 CValue IAttributeInfo::CreateValue() const
 {
 	CValue* refData = CreateValueRef();
@@ -111,12 +113,10 @@ CValue IAttributeInfo::CreateValue() const
 		refData : CValue();
 }
 
-#include "compiler/enum.h"
-
 CValue* IAttributeInfo::CreateValueRef() const
 {
 	if (1 == GetClsidCount()) {
-		const CLASS_ID &clsid = GetFirstClsid();
+		const CLASS_ID& clsid = GetFirstClsid();
 		IMetadata* metaData = GetMetadata();
 		wxASSERT(metaData);
 		if (metaData->IsRegisterObject(clsid)) {

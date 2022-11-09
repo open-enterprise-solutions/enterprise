@@ -10,7 +10,7 @@
 //*                                  Factory & metadata                                      *
 //********************************************************************************************
 
-class CMetaObjectCatalog : public IMetaObjectRecordDataGroupMutableRef {
+class CMetaObjectCatalog : public IMetaObjectRecordDataFolderMutableRef {
 	wxDECLARE_DYNAMIC_CLASS(CMetaObjectCatalog);
 
 	enum
@@ -28,16 +28,16 @@ class CMetaObjectCatalog : public IMetaObjectRecordDataGroupMutableRef {
 		eFormGroup,
 		eFormList,
 		eFormSelect,
-		eFormGroupSelect
+		eFormFolderSelect
 	};
 
 	virtual OptionList* GetFormType() override {
 		OptionList* optionlist = new OptionList;
 		optionlist->AddOption(wxT("formObject"),	  _("Form object"),	      eFormObject);
-		optionlist->AddOption(wxT("formGroup"),		  _("Form group"),        eFormGroup);
+		optionlist->AddOption(wxT("formFolder"),	  _("Form group"),        eFormGroup);
 		optionlist->AddOption(wxT("formList"),		  _("Form list"),         eFormList);
 		optionlist->AddOption(wxT("formSelect"),	  _("Form select"),       eFormSelect);
-		optionlist->AddOption(wxT("formGroupSelect"), _("Form group select"), eFormGroupSelect);
+		optionlist->AddOption(wxT("formGroupSelect"), _("Form group select"), eFormFolderSelect);
 		return optionlist;
 	}
 
@@ -46,10 +46,10 @@ protected:
 	PropertyCategory* m_categoryForm = IPropertyObject::CreatePropertyCategory({ "defaultForms", "default forms" });
 
 	Property* m_propertyDefFormObject		= IPropertyObject::CreateProperty(m_categoryForm, { "default_object",		_("default object") },	     &CMetaObjectCatalog::GetFormObject,      wxNOT_FOUND);
-	Property* m_propertyDefFormGroup		= IPropertyObject::CreateProperty(m_categoryForm, { "default_group",		_("default group") },		 &CMetaObjectCatalog::GetFormGroup,      wxNOT_FOUND);
+	Property* m_propertyDefFormFolder		= IPropertyObject::CreateProperty(m_categoryForm, { "default_folder",		_("default folder") },		 &CMetaObjectCatalog::GetFormFolder,      wxNOT_FOUND);
 	Property* m_propertyDefFormList			= IPropertyObject::CreateProperty(m_categoryForm, { "default_list",			_("default list") },		 &CMetaObjectCatalog::GetFormList,	      wxNOT_FOUND);
 	Property* m_propertyDefFormSelect		= IPropertyObject::CreateProperty(m_categoryForm, { "default_select",		_("default select") },		 &CMetaObjectCatalog::GetFormSelect,      wxNOT_FOUND);
-	Property* m_propertyDefFormGroupSelect	= IPropertyObject::CreateProperty(m_categoryForm, { "default_group_select", _("default group select") }, &CMetaObjectCatalog::GetFormGroupSelect, wxNOT_FOUND);
+	Property* m_propertyDefFormFolderSelect	= IPropertyObject::CreateProperty(m_categoryForm, { "default_folder_select", _("default folder select") }, &CMetaObjectCatalog::GetFormFolderSelect, wxNOT_FOUND);
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -58,11 +58,7 @@ protected:
 private:
 
 	//default attributes 
-	CMetaDefaultAttributeObject* m_attributeCode;
-	CMetaDefaultAttributeObject* m_attributeDescription;
 	CMetaDefaultAttributeObject* m_attributeOwner;
-	CMetaDefaultAttributeObject* m_attributeParent;
-	CMetaDefaultAttributeObject* m_attributeIsFolder;
 
 	//variant data
 	ownerData_t m_ownerData;
@@ -70,31 +66,15 @@ private:
 private:
 
 	OptionList* GetFormObject(PropertyOption*);
-	OptionList* GetFormGroup(PropertyOption*);
+	OptionList* GetFormFolder(PropertyOption*);
 	OptionList* GetFormList(PropertyOption*);
 	OptionList* GetFormSelect(PropertyOption*);
-	OptionList* GetFormGroupSelect(PropertyOption*);
+	OptionList* GetFormFolderSelect(PropertyOption*);
 
 public:
 
-	CMetaDefaultAttributeObject* GetCatalogCode() const {
-		return m_attributeCode;
-	}
-
-	CMetaDefaultAttributeObject* GetCatalogDescription() const {
-		return m_attributeDescription;
-	}
-
 	CMetaDefaultAttributeObject* GetCatalogOwner() const {
 		return m_attributeOwner;
-	}
-
-	CMetaDefaultAttributeObject* GeCatalogParent() const {
-		return m_attributeParent;
-	}
-
-	CMetaDefaultAttributeObject* GeCatalogIsFolder() const {
-		return m_attributeIsFolder;
 	}
 
 	//default constructor 
@@ -155,10 +135,10 @@ public:
 
 	//support form 
 	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
-	virtual CValueForm* GetGroupForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetFolderForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
 	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
 	virtual CValueForm* GetSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
-	virtual CValueForm* GetGroupSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetFolderSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
 
 	//descriptions...
 	wxString GetDescription(const IObjectValueInfo* objValue) const;
@@ -184,12 +164,9 @@ protected:
 	//load & save from variant
 	bool LoadFromVariant(const wxVariant& variant);	
 	void SaveToVariant(wxVariant& variant, IMetadata* metaData) const;
-
-	//create empty group
-	virtual IRecordDataObjectRef* CreateGroupObjectRefValue(const Guid& objGuid = wxNullGuid);
 	
 	//create empty object
-	virtual IRecordDataObjectRef* CreateObjectRefValue(const Guid& guid = wxNullGuid);
+	virtual IRecordDataObjectFolderRef* CreateObjectRefValue(eObjectMode mode, const Guid& guid = wxNullGuid);
 
 	//load & save metadata from DB 
 	virtual bool LoadData(CMemoryReader& reader);
@@ -208,8 +185,8 @@ protected:
 
 #define thisObject wxT("thisObject")
 
-class CObjectCatalog : public IRecordDataObjectGroupRef {
-	CObjectCatalog(CMetaObjectCatalog* metaObject, const Guid& objGuid = wxNullGuid, int objMode = OBJECT_NORMAL);
+class CObjectCatalog : public IRecordDataObjectFolderRef {
+	CObjectCatalog(CMetaObjectCatalog* metaObject, const Guid& objGuid = wxNullGuid, eObjectMode objMode = eObjectMode::OBJECT_ITEM);
 	CObjectCatalog(const CObjectCatalog& source);
 public:
 

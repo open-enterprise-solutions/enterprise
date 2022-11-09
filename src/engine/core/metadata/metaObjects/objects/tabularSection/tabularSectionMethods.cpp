@@ -14,6 +14,8 @@ enum
 {
 	enAdd = 0,
 	enCount,
+	enFind,
+	enDelete,
 	enClear,
 	enLoad,
 	enUnload,
@@ -36,6 +38,8 @@ void ITabularSectionDataObject::PrepareNames() const
 	{
 		{"add","add()"},
 		{"count","count()"},
+		{"find","find(value, col)"},
+		{"delete","delete(row)"},
 		{"clear","clear()"},
 		{"load", "load(table)"},
 		{"unload", "unload()"},
@@ -54,23 +58,49 @@ CValue ITabularSectionDataObject::Method(methodArg_t& aParams)
 
 	switch (aParams.GetIndex())
 	{
-	case enAdd: return new CTabularSectionDataObjectReturnLine(this, AppenRow());
-	case enCount: return (unsigned int)m_aObjectValues.size();
-	case enClear: m_aObjectValues.clear(); break;
-
-	case enLoad: ITabularSectionDataObject::LoadDataFromTable(aParams[0].ConvertToType<IValueTable>()); break;
-	case enUnload: return SaveDataToTable();
-
-	case enGetMetadata: return m_metaTable;
+	case enAdd: 
+		return new CTabularSectionDataObjectReturnLine(this, GetItem(AppendRow()));
+	case enFind: {
+		const wxDataViewItem& item = FindRowValue(aParams[0], aParams[1].GetString());
+		if (item.IsOk())
+			return GetRowAt(item);
+		break;
+	}
+	case enCount:
+		return (unsigned int)GetRowCount();
+	case enDelete: {
+		CTabularSectionDataObjectReturnLine* retLine = NULL;
+		if (aParams[0].ConvertToValue(retLine)) {
+			wxValueTableRow* node = GetViewData(retLine->GetLineItem());
+			if (node != NULL)
+				IValueTable::Remove(node);
+		}
+		else {
+			number_t number = aParams[0].GetNumber();
+			wxValueTableRow* node = GetViewData(GetItem(number.ToInt()));
+			if (node != NULL)
+				IValueTable::Remove(node);
+		}
+		break;
+	}
+	case enClear: 
+		Clear(); 
+		break;
+	case enLoad: 
+		ITabularSectionDataObject::LoadDataFromTable(aParams[0].ConvertToType<IValueTable>()); 
+		break;
+	case enUnload: 
+		return SaveDataToTable();
+	case enGetMetadata: 
+		return m_metaTable;
 	}
 
 	return Ret;
 }
 
-unsigned int ITabularSectionDataObject::AppenRow(unsigned int before)
+long ITabularSectionDataObject::AppendRow(unsigned int before)
 {
-	std::map<meta_identifier_t, CValue> valueRow;
-
+	modelArray_t valueRow;
 	for (auto attribute : m_metaTable->GetObjectAttributes()) {
 		if (!m_metaTable->IsNumberLine(attribute->GetMetaID())) {
 			valueRow.insert_or_assign(attribute->GetMetaID(), attribute->CreateValue());
@@ -80,31 +110,18 @@ unsigned int ITabularSectionDataObject::AppenRow(unsigned int before)
 		}
 	}
 
-	if (before > 0) {
-		m_aObjectValues.insert(
-			m_aObjectValues.begin() + before + 1, valueRow
-		);
-	}
-	else {
-		m_aObjectValues.push_back(valueRow);
-	}
+	if (before > 0)
+		return IValueTable::Insert(
+			new wxValueTableRow(valueRow), before, !CTranslateError::IsSimpleMode());
 
-	if (!CTranslateError::IsSimpleMode()) {
-		if (before > 0) {
-			IValueTable::RowInserted(before);
-			return before + 1;
-		}
-		IValueTable::RowPrepended();
-		return m_aObjectValues.size() - 1;
-	}
-
-	return 0;
+	return IValueTable::Append(
+		new wxValueTableRow(valueRow), !CTranslateError::IsSimpleMode()
+	);
 }
 
-unsigned int CTabularSectionDataObjectRef::AppenRow(unsigned int before)
+long CTabularSectionDataObjectRef::AppendRow(unsigned int before)
 {
-	if (!CTranslateError::IsSimpleMode()) {
+	if (!CTranslateError::IsSimpleMode())
 		m_dataObject->Modify(true);
-	}
-	return ITabularSectionDataObject::AppenRow(before);
+	return ITabularSectionDataObject::AppendRow(before);
 }

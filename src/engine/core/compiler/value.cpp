@@ -189,26 +189,41 @@ void CValue::Copy(const CValue& cOld)
 
 	m_typeClass = cOld.m_typeClass;
 
-	switch (cOld.m_typeClass)
-	{
-	case eValueTypes::TYPE_NULL: break;
-	case eValueTypes::TYPE_BOOLEAN: m_bData = cOld.m_bData; break;
-	case eValueTypes::TYPE_NUMBER: m_fData = cOld.m_fData; break;
-	case eValueTypes::TYPE_STRING: m_sData = cOld.m_sData; break;
-	case eValueTypes::TYPE_DATE: m_dData = cOld.m_dData; break;
-
+	switch (m_typeClass) {
+	case eValueTypes::TYPE_NULL:
+		break;
+	case eValueTypes::TYPE_BOOLEAN:
+		m_bData = cOld.m_bData;
+		break;
+	case eValueTypes::TYPE_NUMBER:
+		m_fData = cOld.m_fData;
+		break;
+	case eValueTypes::TYPE_STRING:
+		m_sData = cOld.m_sData;
+		break;
+	case eValueTypes::TYPE_DATE:
+		m_dData = cOld.m_dData;
+		break;
 	case eValueTypes::TYPE_VALUE:
 	case eValueTypes::TYPE_ENUM:
 	case eValueTypes::TYPE_MODULE:
-		m_pRef = const_cast<CValue*>(&cOld); m_pRef->IncrRef();
 		m_typeClass = eValueTypes::TYPE_REFFER;
+		m_pRef = const_cast<CValue*>(&cOld);
+		m_pRef->IncrRef();
 		break;
-
 	case eValueTypes::TYPE_REFFER:
-		if (cOld.m_pRef) {
-			m_pRef = cOld.m_pRef; m_pRef->IncrRef();
-		} break;
-	default: m_typeClass = eValueTypes::TYPE_EMPTY;
+		if (cOld.GetType() < eValueTypes::TYPE_REFFER) {
+			m_pRef = new CValue(*cOld.m_pRef);
+			m_pRef->IncrRef();
+		}
+		else {
+			m_pRef = cOld.m_pRef;
+			m_pRef->IncrRef();
+		};
+		break;
+	default:
+		m_typeClass = eValueTypes::TYPE_EMPTY;
+		break;
 	}
 }
 
@@ -239,7 +254,8 @@ void CValue::operator = (const wxString& sValue)
 
 void CValue::operator = (const CValue& cVal)
 {
-	if (this != &cVal && !m_bReadOnly) Copy(cVal);
+	if (this != &cVal && !m_bReadOnly)
+		Copy(cVal);
 }
 
 void CValue::operator = (eValueTypes type)
@@ -250,11 +266,21 @@ void CValue::operator = (eValueTypes type)
 
 	switch (type)
 	{
-	case TYPE_BOOLEAN: m_bData = false; break;
-	case TYPE_NUMBER: m_fData.SetZero(); break;
-	case TYPE_DATE: m_dData = emptyDate; break;
-	case TYPE_STRING: m_sData.clear(); break;
-	default: m_pRef = NULL; break;
+	case TYPE_BOOLEAN:
+		m_bData = false;
+		break;
+	case TYPE_NUMBER:
+		m_fData.SetZero();
+		break;
+	case TYPE_DATE:
+		m_dData = emptyDate;
+		break;
+	case TYPE_STRING:
+		m_sData.clear();
+		break;
+	default:
+		m_pRef = NULL;
+		break;
 	}
 
 	m_typeClass = type;
@@ -267,14 +293,13 @@ void CValue::operator = (eValueTypes type)
 void CValue::operator = (CValue* pParam)
 {
 	if (this != pParam && !m_bReadOnly) {
-		if (pParam) {
+		if (pParam != NULL) {
+			m_typeClass = eValueTypes::TYPE_REFFER;
 			m_pRef = pParam;
 			m_pRef->IncrRef();
-			m_typeClass = eValueTypes::TYPE_REFFER;
 		}
-		else {
+		else
 			m_typeClass = eValueTypes::TYPE_EMPTY;
-		}
 	}
 }
 
@@ -290,19 +315,19 @@ void CValue::operator = (wxLongLong_t cParam)
 
 void CValue::SetValue(const CValue& cVal)
 {
-	if (this == &cVal) return;
+	if (this == &cVal)
+		return;
 
-	if (m_typeClass == eValueTypes::TYPE_REFFER) {
+	if (m_typeClass == eValueTypes::TYPE_REFFER)
 		m_pRef->SetValue(cVal);
-	}
-	else {
+	else
 		Copy(cVal);
-	}
 }
 
 void CValue::SetData(const CValue& cVal)
 {
-	if (this == &cVal) return;
+	if (this == &cVal)
+		return;
 
 	switch (m_typeClass)
 	{
@@ -319,7 +344,8 @@ void CValue::SetData(const CValue& cVal)
 		SetDate(cVal.GetString());
 		return;
 	case eValueTypes::TYPE_REFFER:
-		if (m_pRef) m_pRef->SetData(cVal);
+		if (m_pRef != NULL)
+			m_pRef->SetData(cVal);
 		return;
 	}
 
@@ -348,9 +374,8 @@ void CValue::SetNumber(const wxString& sNumber)
 	Reset();
 
 	unsigned int nSuccessful = m_fData.FromString(sNumber.ToStdWstring());
-	if (nSuccessful > 0) {
+	if (nSuccessful > 0)
 		CTranslateError::Error(_("Cannot convert string to number!"));
-	}
 	m_typeClass = eValueTypes::TYPE_NUMBER;
 }
 
@@ -398,16 +423,28 @@ void CValue::SetDate(const wxString& strDate)
 bool CValue::FindValue(const wxString& findData, std::vector<CValue>& foundedObjects)
 {
 	try {
+		CValue cFounded;
 		switch (m_typeClass)
 		{
-		case eValueTypes::TYPE_BOOLEAN: SetBoolean(findData); foundedObjects.push_back(this); return true;
-		case eValueTypes::TYPE_NUMBER: SetNumber(findData); foundedObjects.push_back(this); return true;
-		case eValueTypes::TYPE_STRING: SetString(findData); foundedObjects.push_back(this); return true;
-		case eValueTypes::TYPE_DATE: SetDate(findData); foundedObjects.push_back(this); return true;
-
-		case eValueTypes::TYPE_REFFER: if (m_pRef) {
-			return m_pRef->FindValue(findData, foundedObjects);
-		}
+		case eValueTypes::TYPE_BOOLEAN:
+			cFounded.SetBoolean(findData);
+			foundedObjects.push_back(cFounded);
+			return true;
+		case eValueTypes::TYPE_NUMBER:
+			cFounded.SetNumber(findData);
+			foundedObjects.push_back(cFounded);
+			return true;
+		case eValueTypes::TYPE_STRING:
+			cFounded.SetString(findData);
+			foundedObjects.push_back(cFounded);
+			return true;
+		case eValueTypes::TYPE_DATE:
+			cFounded.SetDate(findData);
+			foundedObjects.push_back(cFounded);
+			return true;
+		case eValueTypes::TYPE_REFFER:
+			return m_pRef ? 
+				m_pRef->FindValue(findData, foundedObjects) : false;
 		}
 	}
 	catch (...) {
@@ -461,7 +498,8 @@ number_t CValue::GetNumber() const
 
 		number_t number;
 		unsigned int nSuccessful = number.FromString(strVal.ToStdWstring());
-		if (nSuccessful > 0) CTranslateError::Error(_("Cannot convert string to number!"));
+		if (nSuccessful > 0)
+			CTranslateError::Error(_("Cannot convert string to number!"));
 		return number;
 	}
 	case eValueTypes::TYPE_DATE:
@@ -477,21 +515,21 @@ wxString CValue::GetString() const
 {
 	switch (m_typeClass)
 	{
-	case eValueTypes::TYPE_NULL: return wxT("null");
-	case eValueTypes::TYPE_BOOLEAN:	return m_bData ? wxT("true") : wxT("false");
-	case eValueTypes::TYPE_NUMBER: return m_fData.ToString();
-	case eValueTypes::TYPE_STRING: return m_sData;
-	case eValueTypes::TYPE_DATE:
-	{
+		//case eValueTypes::TYPE_NULL: return wxT("null");
+	case eValueTypes::TYPE_BOOLEAN:
+		return m_bData ? wxT("true") : wxT("false");
+	case eValueTypes::TYPE_NUMBER:
+		return m_fData.ToString();
+	case eValueTypes::TYPE_STRING:
+		return m_sData;
+	case eValueTypes::TYPE_DATE: {
 		wxLongLong dateTime = m_dData;
 		wxDateTime m_datetime(dateTime);
 		return m_datetime.Format("%d.%m.%Y %H:%M:%S");
 	}
-	case eValueTypes::TYPE_REFFER:
-	{
+	case eValueTypes::TYPE_REFFER: {
 		if (m_pRef != NULL)
 			return m_pRef->GetString();
-		wxEmptyString;
 	}
 	};
 
@@ -504,15 +542,13 @@ wxLongLong_t CValue::GetDate() const
 	{
 	case eValueTypes::TYPE_BOOLEAN:
 		return emptyDate;
-	case eValueTypes::TYPE_NUMBER:
-	{
+	case eValueTypes::TYPE_NUMBER: {
 		wxLongLong_t dTemp = 0;
 		if (!m_fData.ToInt(dTemp)) {
 			return dTemp * 1000;
 		} break;
 	}
-	case eValueTypes::TYPE_STRING:
-	{
+	case eValueTypes::TYPE_STRING: {
 		wxDateTime dateTime;
 		if (dateTime.ParseFormat(m_sData, "%d.%m.%Y %H:%M:%S")) {
 			wxLongLong m_llData = dateTime.GetValue();
@@ -541,7 +577,6 @@ CValue* CValue::GetRef() const
 {
 	if (m_typeClass == eValueTypes::TYPE_REFFER)
 		return m_pRef->GetRef();
-
 	return const_cast<CValue*>(this);
 }
 
@@ -1143,7 +1178,7 @@ unsigned int CValue::GetNAttributes() const
 //получить текущее значение (актуального для агрегатных объектов или объектов диалога)
 CValue CValue::GetValue(bool getThis)
 {
-	if (getThis) 
+	if (getThis)
 		return this;
 
 	if (m_typeClass == eValueTypes::TYPE_REFFER) {

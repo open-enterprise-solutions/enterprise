@@ -11,9 +11,9 @@ static int my_sort(int* v1, int* v2)
 }
 
 wxIMPLEMENT_ABSTRACT_CLASS(IValueModel, CValue);
-wxIMPLEMENT_ABSTRACT_CLASS(IValueModel::IValueTableColumnCollection, CValue);
-wxIMPLEMENT_ABSTRACT_CLASS(IValueModel::IValueTableColumnCollection::IValueTableColumnInfo, CValue);
-wxIMPLEMENT_ABSTRACT_CLASS(IValueModel::IValueTableReturnLine, CValue);
+wxIMPLEMENT_ABSTRACT_CLASS(IValueModel::IValueModelColumnCollection, CValue);
+wxIMPLEMENT_ABSTRACT_CLASS(IValueModel::IValueModelColumnCollection::IValueModelColumnInfo, CValue);
+wxIMPLEMENT_ABSTRACT_CLASS(IValueModel::IValueModelReturnLine, CValue);
 
 wxIMPLEMENT_ABSTRACT_CLASS(IValueTable, IValueModel);
 wxIMPLEMENT_ABSTRACT_CLASS(IValueTree, IValueModel);
@@ -25,29 +25,19 @@ IValueModel::IValueModel()
 
 wxDataViewItem IValueModel::GetSelection() const
 {
-	if (m_srcNotifier == NULL) {
+	if (m_srcNotifier == NULL)
 		return wxDataViewItem(NULL);
-	}
 	return m_srcNotifier->GetSelection();
 }
 
 void IValueModel::RowValueStartEdit(const wxDataViewItem& item, unsigned int col)
 {
-	if (m_srcNotifier == NULL) {
+	if (m_srcNotifier == NULL)
 		return;
-	}
 	m_srcNotifier->StartEditing(item, col);
 }
 
-enum
-{
-	eAddValue = 1,
-	eCopyValue,
-	eEditValue,
-	eDeleteValue
-};
-
-IValueModel::actionData_t IValueModel::GetActions(const form_identifier_t &formType)
+IValueModel::actionData_t IValueModel::GetActions(const form_identifier_t& formType)
 {
 	actionData_t action(this);
 	action.AddAction("add", _("Add"), eAddValue);
@@ -57,42 +47,35 @@ IValueModel::actionData_t IValueModel::GetActions(const form_identifier_t &formT
 	return action;
 }
 
-void IValueModel::ExecuteAction(const action_identifier_t &action, CValueForm* srcForm)
+void IValueModel::ExecuteAction(const action_identifier_t& action, CValueForm* srcForm)
 {
 	switch (action)
 	{
-	case eAddValue: 
-		AddValue(); 
+	case eAddValue:
+		AddValue();
 		break;
-	case eCopyValue: 
-		CopyValue(); 
+	case eCopyValue:
+		CopyValue();
 		break;
-	case eEditValue: 
-		EditValue(); 
+	case eEditValue:
+		EditValue();
 		break;
 	case eDeleteValue:
-		DeleteValue(); 
+		DeleteValue();
 		break;
 	}
-}
-
-///////////////////////////////////////////////////////////////////////////////////////s
-
-bool IValueModel::IValueTableColumnCollection::HasColumnID(unsigned int col_id)
-{
-	return GetColumnByID(col_id) != NULL;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
 
 #include "compiler/methods.h"
 
-IValueModel::IValueTableColumnCollection::IValueTableColumnInfo::IValueTableColumnInfo() : 
+IValueModel::IValueModelColumnCollection::IValueModelColumnInfo::IValueModelColumnInfo() :
 	CValue(eValueTypes::TYPE_VALUE, true), m_methods(new CMethods())
 {
 }
 
-IValueModel::IValueTableColumnCollection::IValueTableColumnInfo::~IValueTableColumnInfo()
+IValueModel::IValueModelColumnCollection::IValueModelColumnInfo::~IValueModelColumnInfo()
 {
 	wxDELETE(m_methods);
 }
@@ -105,7 +88,7 @@ enum
 	enColumnWidth
 };
 
-void IValueModel::IValueTableColumnCollection::IValueTableColumnInfo::PrepareNames() const
+void IValueModel::IValueModelColumnCollection::IValueModelColumnInfo::PrepareNames() const
 {
 	std::vector<SEng> aAttributes;
 
@@ -137,17 +120,17 @@ void IValueModel::IValueTableColumnCollection::IValueTableColumnInfo::PrepareNam
 	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
 }
 
-CValue IValueModel::IValueTableColumnCollection::IValueTableColumnInfo::GetAttribute(attributeArg_t& aParams)
+CValue IValueModel::IValueModelColumnCollection::IValueModelColumnInfo::GetAttribute(attributeArg_t& aParams)
 {
 	switch (aParams.GetIndex())
 	{
-	case enColumnName: 
+	case enColumnName:
 		return GetColumnName();
-	case enColumnTypes: 
+	case enColumnTypes:
 		return GetColumnTypes();
 	case enColumnCaption:
 		return GetColumnCaption();
-	case enColumnWidth: 
+	case enColumnWidth:
 		return GetColumnWidth();
 	}
 
@@ -155,14 +138,12 @@ CValue IValueModel::IValueTableColumnCollection::IValueTableColumnInfo::GetAttri
 }
 
 
-IValueModel::IValueTableColumnCollection::IValueTableColumnInfo* IValueModel::IValueTableColumnCollection::GetColumnByID(unsigned int col_id)
+IValueModel::IValueModelColumnCollection::IValueModelColumnInfo* IValueModel::IValueModelColumnCollection::GetColumnByID(unsigned int col) const
 {
-	for (unsigned int idx = 0; idx < GetColumnCount(); idx++)
-	{
-		IValueTableColumnInfo* columnInfo = GetColumnInfo(idx);
+	for (unsigned int idx = 0; idx < GetColumnCount(); idx++) {
+		IValueModelColumnInfo* columnInfo = GetColumnInfo(idx);
 		wxASSERT(columnInfo);
-
-		if (col_id == columnInfo->GetColumnID())
+		if (col == columnInfo->GetColumnID())
 			return columnInfo;
 	}
 
@@ -171,55 +152,14 @@ IValueModel::IValueTableColumnCollection::IValueTableColumnInfo* IValueModel::IV
 
 #include "utils/stringUtils.h"
 
-IValueModel::IValueTableColumnCollection::IValueTableColumnInfo* IValueModel::IValueTableColumnCollection::GetColumnByName(const wxString& colName)
+IValueModel::IValueModelColumnCollection::IValueModelColumnInfo* IValueModel::IValueModelColumnCollection::GetColumnByName(const wxString& colName) const
 {
-	for (unsigned int idx = 0; idx < GetColumnCount(); idx++)
-	{
-		IValueTableColumnInfo* columnInfo = GetColumnInfo(idx);
+	for (unsigned int idx = 0; idx < GetColumnCount(); idx++) {
+		IValueModelColumnInfo* columnInfo = GetColumnInfo(idx);
 		wxASSERT(columnInfo);
 		if (StringUtils::CompareString(colName, columnInfo->GetColumnName()))
 			return columnInfo;
 	}
 
 	return NULL;
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-IValueModel::IValueTableReturnLine::IValueTableReturnLine() : CValue(eValueTypes::TYPE_VALUE, true) {}
-
-IValueModel::IValueTableReturnLine::~IValueTableReturnLine() { }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#include "frontend/controls/dataView.h"
-
-void CTableModelNotifier::Select(const wxDataViewItem& sel) const
-{
-	m_mainWindow->Select(sel);
-}
-
-wxDataViewItem CTableModelNotifier::GetSelection() const
-{
-	return m_mainWindow->GetSelection();
-}
-
-int CTableModelNotifier::GetSelections(wxDataViewItemArray& sel) const
-{
-	return m_mainWindow->GetSelections(sel);
-}
-
-void CTableModelNotifier::StartEditing(const wxDataViewItem& item, unsigned int col) const
-{
-	int viewColumn = m_mainWindow->GetModelColumnIndex(col);
-	if (viewColumn != wxNOT_FOUND) {
-		m_mainWindow->EditItem(item,
-			m_mainWindow->GetColumn(viewColumn)
-		);
-	}
-	else if (col == 0 && m_mainWindow->GetColumnCount() > 0) {
-		m_mainWindow->EditItem(item,
-			m_mainWindow->GetColumnAt(0)
-		);
-	}
 }

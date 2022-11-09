@@ -23,7 +23,7 @@ public:
 	void reset();
 
 	Guid GetGuid() const {
-		return m_objGuid; 
+		return m_objGuid;
 	}
 
 	CUniqueKey();
@@ -65,7 +65,7 @@ protected:
 
 	Guid m_objGuid;
 	IMetaObjectRegisterData* m_metaObject;
-	std::map<meta_identifier_t, CValue> m_aKeyValues;
+	std::map<meta_identifier_t, CValue> m_keyValues;
 };
 
 class CUniquePairKey : public CUniqueKey {
@@ -74,12 +74,13 @@ public:
 	CUniquePairKey(IMetaObjectRegisterData* metaObject = NULL);
 	CUniquePairKey(IMetaObjectRegisterData* metaObject, const std::map<meta_identifier_t, CValue>& keyValues);
 
-	void SetKeyPair(std::map<meta_identifier_t, CValue> &keys) {
-		m_aKeyValues = keys; 
+	void SetKeyPair(IMetaObjectRegisterData* metaObject,
+		std::map<meta_identifier_t, CValue>& keys) {
+		m_metaObject = metaObject; m_keyValues = keys;
 	}
 
 	operator std::map<meta_identifier_t, CValue>() const {
-		return m_aKeyValues;
+		return m_keyValues;
 	}
 };
 

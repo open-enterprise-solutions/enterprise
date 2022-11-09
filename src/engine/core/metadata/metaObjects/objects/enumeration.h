@@ -92,10 +92,6 @@ public:
 	//create object data with metaForm
 	virtual ISourceDataObject* CreateObjectData(IMetaFormObject* metaObject);
 
-	//create empty object
-	virtual IRecordDataObjectRef* CreateObjectRefValue() { return NULL; }
-	virtual IRecordDataObjectRef* CreateObjectRefValue(const Guid& guid) { return NULL; }
-
 	//create form with data 
 	virtual CValueForm* CreateObjectForm(IMetaFormObject* metaForm) override {
 		return metaForm->GenerateFormAndRun(

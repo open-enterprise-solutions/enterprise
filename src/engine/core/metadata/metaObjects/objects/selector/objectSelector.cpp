@@ -59,18 +59,18 @@ void ISelectorDataObject::Reset()
 	}
 	for (auto currAttribute : m_metaObject->GetObjectAttributes()) {
 		if (!appData->DesignerMode()) {
-			m_aObjectValues[currAttribute->GetMetaID()] = CValue(eValueTypes::TYPE_NULL);
+			m_objectValues[currAttribute->GetMetaID()] = CValue(eValueTypes::TYPE_NULL);
 		}
 		else {
-			m_aObjectValues[currAttribute->GetMetaID()] = currAttribute->CreateValue();
+			m_objectValues[currAttribute->GetMetaID()] = currAttribute->CreateValue();
 		}
 	}
 	for (auto currTable : m_metaObject->GetObjectTables()) {
 		if (!appData->DesignerMode()) {
-			m_aObjectValues[currTable->GetMetaID()] = CValue(eValueTypes::TYPE_NULL);
+			m_objectValues[currTable->GetMetaID()] = CValue(eValueTypes::TYPE_NULL);
 		}
 		else {
-			m_aObjectValues[currTable->GetMetaID()] =
+			m_objectValues[currTable->GetMetaID()] =
 				new CTabularSectionDataObjectRef(this, currTable);
 		}
 	}
@@ -81,12 +81,12 @@ bool ISelectorDataObject::Read()
 	if (!m_objGuid.isValid())
 		return false;
 
-	m_aObjectValues.clear(); m_aObjectTables.clear();
+	m_objectValues.clear(); m_aObjectTables.clear();
 
 	for (auto currTable : m_metaObject->GetObjectTables()) {
 		CTabularSectionDataObjectRef* tabularSection =
 			new CTabularSectionDataObjectRef(this, currTable);
-		m_aObjectValues[currTable->GetMetaID()] = tabularSection;
+		m_objectValues[currTable->GetMetaID()] = tabularSection;
 		m_aObjectTables.push_back(tabularSection);
 	}
 
@@ -104,7 +104,7 @@ bool ISelectorDataObject::Read()
 		wxMemoryBuffer bufferData;
 		resultSet->GetResultBlob(guidRef, bufferData);
 		if (!bufferData.IsEmpty()) {
-			m_aObjectValues[m_metaObject->GetMetaID()] = CReferenceDataObject::CreateFromPtr(
+			m_objectValues[m_metaObject->GetMetaID()] = CReferenceDataObject::CreateFromPtr(
 				m_metaObject->GetMetadata(), bufferData.GetData()
 			);
 		}
@@ -112,7 +112,7 @@ bool ISelectorDataObject::Read()
 		for (auto attribute : m_metaObject->GetObjectAttributes()) {
 			if (m_metaObject->IsDataReference(attribute->GetMetaID()))
 				continue;
-			m_aObjectValues.insert_or_assign(
+			m_objectValues.insert_or_assign(
 				attribute->GetMetaID(),
 				IMetaAttributeObject::GetValueAttribute(
 					attribute, resultSet)
@@ -129,7 +129,7 @@ bool ISelectorDataObject::Read()
 	return isLoaded;
 }
 
-ISelectorDataObject::ISelectorDataObject(IMetaObjectRecordDataRef* metaObject) :
+ISelectorDataObject::ISelectorDataObject(IMetaObjectRecordDataMutableRef* metaObject) :
 	ISelectorObject(),
 	IObjectValueInfo(Guid(), false),
 	m_metaObject(metaObject)
@@ -232,7 +232,7 @@ CValue ISelectorDataObject::GetAttribute(attributeArg_t& aParams)
 	}
 
 	if (!m_metaObject->IsDataReference(id))
-		return m_aObjectValues[id];
+		return m_objectValues[id];
 
 	return CReferenceDataObject::Create(m_metaObject, m_objGuid);
 }
@@ -241,7 +241,7 @@ CValue ISelectorDataObject::GetAttribute(attributeArg_t& aParams)
 
 void ISelectorRegisterObject::Reset()
 {
-	m_aKeyValues.clear(); 
+	m_keyValues.clear(); 
 	if (!appData->DesignerMode()) {
 		m_aCurrentValues.clear();
 		PreparedStatement* statement = databaseLayer->PrepareStatement("SELECT * FROM %s; ", m_metaObject->GetTableNameDB());
@@ -273,10 +273,10 @@ void ISelectorRegisterObject::Reset()
 
 bool ISelectorRegisterObject::Read()
 {
-	if (m_aKeyValues.empty())
+	if (m_keyValues.empty())
 		return false;
 
-	m_aObjectValues.clear(); int position = 1;
+	m_objectValues.clear(); int position = 1;
 
 	bool isLoaded = false;
 	wxString queryText = "SELECT FIRST 1 * FROM " + m_metaObject->GetTableNameDB(); bool firstWhere = true;
@@ -300,7 +300,7 @@ bool ISelectorRegisterObject::Read()
 	for (auto attribute : m_metaObject->GetGenericDimensions()) {
 		IMetaAttributeObject::SetValueAttribute(
 			attribute,
-			m_aKeyValues.at(attribute->GetMetaID()),
+			m_keyValues.at(attribute->GetMetaID()),
 			statement,
 			position
 		);
@@ -324,7 +324,7 @@ bool ISelectorRegisterObject::Read()
 				IMetaAttributeObject::GetValueAttribute(attribute, resultSet)
 			);
 		}
-		m_aObjectValues.insert_or_assign(aKeyTable, aRowTable);
+		m_objectValues.insert_or_assign(aKeyTable, aRowTable);
 	}
 	databaseLayer->CloseResultSet(resultSet);
 	databaseLayer->CloseStatement(statement);
@@ -344,22 +344,22 @@ bool ISelectorRegisterObject::Next()
 		return false;
 	}
 
-	if (m_aKeyValues.empty()) {
+	if (m_keyValues.empty()) {
 		if (m_aCurrentValues.size() > 0) {
 			auto itStart = m_aCurrentValues.begin();
-			m_aKeyValues = *itStart;
+			m_keyValues = *itStart;
 			return Read();
 		}
 	}
 	else {
-		auto itFounded = std::find(m_aCurrentValues.begin(), m_aCurrentValues.end(), m_aKeyValues);
+		auto itFounded = std::find(m_aCurrentValues.begin(), m_aCurrentValues.end(), m_keyValues);
 		ptrdiff_t pos =
 			std::distance(m_aCurrentValues.begin(), itFounded);
 		if (pos == m_aCurrentValues.size() - 1) {
 			return false;
 		}
 		std::advance(itFounded, 1);
-		m_aKeyValues = *itFounded;
+		m_keyValues = *itFounded;
 		return Read();
 	}
 
@@ -405,7 +405,7 @@ CValue ISelectorRegisterObject::Method(methodArg_t& aParams)
 		Reset();
 		break;
 	case enGetObjectRecord: 
-		return GetRecordManager(m_aKeyValues);
+		return GetRecordManager(m_keyValues);
 	}
 
 	return CValue();
@@ -419,10 +419,10 @@ void ISelectorRegisterObject::SetAttribute(attributeArg_t& aParams, CValue& cVal
 CValue ISelectorRegisterObject::GetAttribute(attributeArg_t& aParams)
 {
 	const meta_identifier_t& id = m_methods->GetAttributePosition(aParams.GetIndex());
-	if (m_aKeyValues.empty()) {
+	if (m_keyValues.empty()) {
 		if (!appData->DesignerMode()) {
 			return CValue(eValueTypes::TYPE_NULL);
 		}
 	}
-	return m_aObjectValues[m_aKeyValues][id];
+	return m_objectValues[m_keyValues][id];
 }

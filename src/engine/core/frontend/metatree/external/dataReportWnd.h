@@ -65,11 +65,11 @@ protected:
 		virtual int OnCompareItems(const wxTreeItemId& item1,
 			const wxTreeItemId& item2) {
 			int ret = wxStrcmp(GetItemText(item1), GetItemText(item2));
-			ITreeMetaData* data1 = dynamic_cast<ITreeMetaData*>(GetItemData(item1));
-			ITreeMetaData* data2 = dynamic_cast<ITreeMetaData*>(GetItemData(item2));
+			treeMetaData_t* data1 = dynamic_cast<treeMetaData_t*>(GetItemData(item1));
+			treeMetaData_t* data2 = dynamic_cast<treeMetaData_t*>(GetItemData(item2));
 			if (data1 != NULL && data2 != NULL && ret > 0) {
-				IMetaObject* metaObject1 = data1->GetMetaObject();
-				IMetaObject* metaObject2 = data2->GetMetaObject();
+				IMetaObject* metaObject1 = data1->m_metaObject;
+				IMetaObject* metaObject2 = data2->m_metaObject;
 				IMetaObject* parent = metaObject1->GetParent();
 				wxASSERT(parent);
 				return parent->ChangeChildPosition(metaObject2,
@@ -185,6 +185,9 @@ private:
 	void EraseItem(const wxTreeItemId& item);
 	void PropertyItem();
 
+	void Collapse();
+	void Expand();
+
 	void UpItem();
 	void DownItem();
 
@@ -199,11 +202,11 @@ private:
 	{
 		if (!item.IsOk())
 			return NULL;
-		ITreeMetaData* data =
-			dynamic_cast<ITreeMetaData*>(m_metaTreeWnd->GetItemData(item));
+		treeMetaData_t* data =
+			dynamic_cast<treeMetaData_t*>(m_metaTreeWnd->GetItemData(item));
 		if (data == NULL)
 			return NULL;
-		return data->GetMetaObject();
+		return data->m_metaObject;
 	}
 
 	void UpdateToolbar(IMetaObject* obj, const wxTreeItemId& item);

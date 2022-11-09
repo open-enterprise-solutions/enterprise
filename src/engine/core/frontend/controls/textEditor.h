@@ -35,10 +35,10 @@ class CTextCtrl : public wxWindow,
 	wxDECLARE_DYNAMIC_CLASS(CTextCtrl);
 	wxDECLARE_NO_COPY_CLASS(CTextCtrl);
 
-	class CPanelButtons : public wxTextCtrl {
+	class СTextCtrlButton : public wxTextCtrl {
 
-		wxDECLARE_DYNAMIC_CLASS(CPanelButtons);
-		wxDECLARE_NO_COPY_CLASS(CPanelButtons);
+		wxDECLARE_DYNAMIC_CLASS(СTextCtrlButton);
+		wxDECLARE_NO_COPY_CLASS(СTextCtrlButton);
 
 		wxButton *m_buttonSelect = NULL;
 		wxButton *m_buttonClear = NULL;
@@ -79,43 +79,42 @@ class CTextCtrl : public wxWindow,
 			// Position of button.
 			wxPoint bt_pos(0, 1);
 
-			int delta = 0;
+			int deltaX = 0, deltaY = 0;
 
 			if (m_buttonSelect->IsShown()) {
 				m_buttonSelect->SetSize(bt_sz);
-				m_buttonSelect->SetPosition(wxPoint(bt_pos.x + delta, bt_pos.y));
-				delta += bt_sz.x;
+				m_buttonSelect->SetPosition(wxPoint(bt_pos.x + deltaX, bt_pos.y));
+				deltaX += bt_sz.x; deltaY += bt_sz.y;
 			}
 
 			if (m_buttonList->IsShown()) {
 				m_buttonList->SetSize(bt_sz);
-				m_buttonList->SetPosition(wxPoint(bt_pos.x + delta, bt_pos.y));
-				delta += bt_sz.x;
+				m_buttonList->SetPosition(wxPoint(bt_pos.x + deltaX, bt_pos.y));
+				deltaX += bt_sz.x; deltaY += bt_sz.y;
 			}
 
 			if (m_buttonClear->IsShown()) {
 				m_buttonClear->SetSize(bt_sz);
-				m_buttonClear->SetPosition(wxPoint(bt_pos.x + delta, bt_pos.y));
-				delta += bt_sz.x;
+				m_buttonClear->SetPosition(wxPoint(bt_pos.x + deltaX, bt_pos.y));
+				deltaX += bt_sz.x; deltaY += bt_sz.y;
 			}
 
 			wxSize controlSize = wxTextCtrl::GetSize();
-			wxTextCtrl::SetMaxSize(wxSize(delta > 0 ? delta + 1 : 0, controlSize.y));
-
-			return delta;
+			wxTextCtrl::SetMaxSize(wxSize(deltaX > 0 ? deltaX + 1 : 0, controlSize.y));
+			return deltaX;
 		}
 
 	public:
 
-		CPanelButtons() : wxTextCtrl() {}
+		СTextCtrlButton() : wxTextCtrl() {}
 
-		virtual ~CPanelButtons() {
+		virtual ~СTextCtrlButton() {
 
 			m_buttonSelect = NULL;
 			m_buttonList = NULL;
 			m_buttonClear = NULL;
 
-			wxTextCtrl::Unbind(wxEVT_SIZE, &CPanelButtons::OnSizeTextCtrl, this);
+			wxTextCtrl::Unbind(wxEVT_SIZE, &СTextCtrlButton::OnSizeTextCtrl, this);
 
 			if (m_parent->IsKindOf(CLASSINFO(CTextCtrl))) {
 				((CTextCtrl *)m_parent)->m_textCtrl = NULL;
@@ -148,7 +147,7 @@ class CTextCtrl : public wxWindow,
 
 			CalculateButtons();
 
-			wxTextCtrl::Bind(wxEVT_SIZE, &CPanelButtons::OnSizeTextCtrl, this);
+			wxTextCtrl::Bind(wxEVT_SIZE, &СTextCtrlButton::OnSizeTextCtrl, this);
 			return true;
 		}
 
@@ -342,7 +341,7 @@ private:
 	wxStaticText *m_staticText = NULL;
 	wxTextCtrl *m_textCtrl = NULL;
 
-	CPanelButtons *m_buttons = NULL;
+	СTextCtrlButton *m_winButton = NULL;
 	CTextCtrlPopupWindow *m_winPopup = NULL;
 
 	bool m_dvcMode;
@@ -417,13 +416,13 @@ private:
 		m_textCtrl = new wxTextCtrl(this, wxID_ANY, val, pos, wxSize(-1, m_dvcMode ? buttonSize + 3 : buttonSize), wxTE_PROCESS_ENTER | wxTE_PROCESS_TAB | wxBORDER_SIMPLE);
 
 		m_boxSizer->Add(m_textCtrl, 1, wxEXPAND);
-		m_buttons = new CPanelButtons();
-		m_buttons->SetButtonSelect(m_selbutton);
-		m_buttons->SetButtonList(m_listbutton);
-		m_buttons->SetButtonClear(m_clearbutton);
-		m_buttons->SetDVCMode(m_dvcMode);
-		m_buttons->Create(this, pos, wxSize(-1, m_dvcMode ? buttonSize + 3 : buttonSize));
-		m_boxSizer->Add(m_buttons, 0, wxALIGN_NOT);
+		m_winButton = new СTextCtrlButton;
+		m_winButton->SetButtonSelect(m_selbutton);
+		m_winButton->SetButtonList(m_listbutton);
+		m_winButton->SetButtonClear(m_clearbutton);
+		m_winButton->SetDVCMode(m_dvcMode);
+		m_winButton->Create(this, pos, wxSize(-1, m_dvcMode ? buttonSize + 3 : buttonSize));
+		m_boxSizer->Add(m_winButton, 0, wxALIGN_NOT);
 		UpdateStyleControls();
 	}
 
@@ -558,17 +557,16 @@ public:
 		wxWindow::Layout();
 		wxWindow::Centre(wxBOTH);
 
-		if (pos != wxDefaultPosition) {
+		if (pos != wxDefaultPosition)
 			wxWindow::Move(pos);
-		}
 
 		return true;
 	}
 
 	void SetDVCMode(bool dvc)
 	{
-		if (m_buttons) {
-			m_buttons->SetDVCMode(m_dvcMode);
+		if (m_winButton) {
+			m_winButton->SetDVCMode(m_dvcMode);
 		}
 		m_dvcMode = dvc;
 	}
@@ -676,11 +674,11 @@ public:
 
 	// Bind functors to an event:
 	template <typename Functor, typename EventHandler>
-	void BindButtonSelect(const Functor &functor, EventHandler handler) { m_buttons->BindButtonSelect(functor, handler); }
+	void BindButtonSelect(const Functor &functor, EventHandler handler) { m_winButton->BindButtonSelect(functor, handler); }
 	template <typename Functor, typename EventHandler>
-	void BindButtonList(const Functor &functor, EventHandler handler) { m_buttons->BindButtonList(functor, handler); }
+	void BindButtonList(const Functor &functor, EventHandler handler) { m_winButton->BindButtonList(functor, handler); }
 	template <typename Functor, typename EventHandler>
-	void BindButtonClear(const Functor &functor, EventHandler handler) { m_buttons->BindButtonClear(functor, handler); }
+	void BindButtonClear(const Functor &functor, EventHandler handler) { m_winButton->BindButtonClear(functor, handler); }
 	template <typename Functor, typename EventHandler>
 	void BindTextCtrl(const Functor &functor, EventHandler handler) { m_textCtrl->Bind(wxEVT_COMMAND_TEXT_ENTER, functor, handler); }
 	template <typename Functor, typename EventHandler>
@@ -688,11 +686,11 @@ public:
 
 	// Unbind functors to an event:
 	template <typename Functor, typename EventHandler>
-	void UnbindButtonSelect(const Functor &functor, EventHandler handler) { m_buttons->UnbindButtonSelect(functor, handler); }
+	void UnbindButtonSelect(const Functor &functor, EventHandler handler) { m_winButton->UnbindButtonSelect(functor, handler); }
 	template <typename Functor, typename EventHandler>
-	void UnbindButtonList(const Functor &functor, EventHandler handler) { m_buttons->UnbindButtonList(functor, handler); }
+	void UnbindButtonList(const Functor &functor, EventHandler handler) { m_winButton->UnbindButtonList(functor, handler); }
 	template <typename Functor, typename EventHandler>
-	void UnbindButtonClear(const Functor &functor, EventHandler handler) { m_buttons->UnbindButtonClear(functor, handler); }
+	void UnbindButtonClear(const Functor &functor, EventHandler handler) { m_winButton->UnbindButtonClear(functor, handler); }
 	template <typename Functor, typename EventHandler>
 	void UnbindTextCtrl(const Functor &functor, EventHandler handler) { m_textCtrl->Unbind(wxEVT_COMMAND_TEXT_ENTER, functor, handler); }
 	template <typename Functor, typename EventHandler>
@@ -743,10 +741,10 @@ public:
 
 	void CalculateButtons() {
 		m_textCtrl->SetMinSize(wxSize(-1, m_textCtrl->GetMinSize().y));
-		m_buttons->Hide();
-		int x = wxWindow::GetBestSize().x - 5;
-		m_buttons->Show();
-		int delta = m_buttons->CalculateButtons();
+		m_winButton->Hide();
+		int x = wxWindow::GetBestSize().x + 20;// -5;
+		m_winButton->Show();
+		int delta = m_winButton->CalculateButtons();
 		x -= delta;
 		if (!m_dvcMode) {
 			wxSize minSize = m_staticText->GetMinSize(); 
@@ -759,8 +757,8 @@ public:
 
 	//buttons:
 	void SetButtonSelect(bool select) {
-		if (m_buttons) {
-			m_buttons->SetButtonSelect(select);
+		if (m_winButton) {
+			m_winButton->SetButtonSelect(select);
 		}
 		m_selbutton = select;
 	}
@@ -770,8 +768,8 @@ public:
 	}
 
 	void SetButtonList(bool select = true) {
-		if (m_buttons) {
-			m_buttons->SetButtonList(select);
+		if (m_winButton) {
+			m_winButton->SetButtonList(select);
 		}
 		m_listbutton = select;
 	}
@@ -781,8 +779,8 @@ public:
 	}
 
 	void SetButtonClear(bool select = true) {
-		if (m_buttons) {
-			m_buttons->SetButtonClear(select);
+		if (m_winButton) {
+			m_winButton->SetButtonClear(select);
 		}
 		m_clearbutton = select;
 	}
@@ -799,7 +797,7 @@ public:
 			}
 		}
 		m_textCtrl->SetBackgroundColour(colour);
-		m_buttons->SetBackgroundColour(colour);
+		m_winButton->SetBackgroundColour(colour);
 		return wxWindow::SetBackgroundColour(colour);
 	}
 
@@ -810,7 +808,7 @@ public:
 			}
 		}
 		m_textCtrl->SetForegroundColour(colour);
-		m_buttons->SetForegroundColour(colour);
+		m_winButton->SetForegroundColour(colour);
 		return wxWindow::SetForegroundColour(colour);
 	}
 
@@ -823,15 +821,15 @@ public:
 		if (m_textCtrl) {
 			m_textCtrl->SetFont(font);
 		}
-		if (m_buttons) {
-			m_buttons->SetFont(font);
+		if (m_winButton) {
+			m_winButton->SetFont(font);
 		}
 		return wxWindow::SetFont(font);
 	}
 
 	virtual bool Enable(bool enable = true) {
 		return m_textCtrl->Enable(enable) &&
-			m_buttons->Enable(enable);
+			m_winButton->Enable(enable);
 	}
 
 #if wxUSE_TOOLTIPS
@@ -840,7 +838,7 @@ public:
 			m_staticText->SetToolTip(tip);
 		}
 		m_textCtrl->SetToolTip(tip);
-		m_buttons->SetToolTip(tip);
+		m_winButton->SetToolTip(tip);
 	}
 
 	virtual void DoSetToolTip(wxToolTip *tip) override {
@@ -848,11 +846,17 @@ public:
 			m_staticText->SetToolTip(tip);
 		}
 		m_textCtrl->SetToolTip(tip);
-		m_buttons->SetToolTip(tip);
+		m_winButton->SetToolTip(tip);
 	}
 #endif // wxUSE_TOOLTIPS
 
-	virtual void SetInsertionPointEnd() { m_textCtrl->SetInsertionPointEnd(); }
+	virtual void SetInsertionPointEnd() { 
+		m_textCtrl->SetInsertionPointEnd();
+	}
+
+	virtual void SetFocus() override {
+		m_textCtrl->SetFocus();
+	}
 
 	virtual wxStaticText *GetStaticText() const { return m_staticText; }
 	virtual void AfterCalc() { CalculateButtons(); }

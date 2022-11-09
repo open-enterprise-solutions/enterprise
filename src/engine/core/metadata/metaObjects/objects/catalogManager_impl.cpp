@@ -15,7 +15,7 @@ CReferenceDataObject* CCatalogManager::FindByCode(const CValue& vCode)
 		wxString tableName = m_metaObject->GetTableNameDB();
 		if (databaseLayer->TableExists(tableName)) {
 
-			CMetaDefaultAttributeObject* catCode = m_metaObject->GetCatalogCode();
+			CMetaDefaultAttributeObject* catCode = m_metaObject->GetDataCode();
 			wxASSERT(catCode);
 
 			wxString sqlQuery = "SELECT FIRST 1 UUID FROM %s WHERE " + IMetaAttributeObject::GetCompositeSQLFieldName(catCode, "LIKE");
@@ -54,7 +54,7 @@ CReferenceDataObject* CCatalogManager::FindByName(const CValue& vName)
 		if (databaseLayer->TableExists(tableName)) {
 			wxString UUID = wxEmptyString;
 
-			CMetaDefaultAttributeObject* catName = m_metaObject->GetCatalogCode();
+			CMetaDefaultAttributeObject* catName = m_metaObject->GetDataCode();
 			wxASSERT(catName);
 
 			wxString sqlQuery = "SELECT FIRST 1 UUID FROM %s WHERE " + IMetaAttributeObject::GetCompositeSQLFieldName(catName, "LIKE");

@@ -301,7 +301,7 @@ bool CRecordSetAccumulationRegister::SaveVirtualTable()
 
 	bool hasError = false;
 
-	for (auto objectValue : m_aObjectValues) {
+	for (auto objectValue : m_objectValues) {
 
 		if (hasError)
 			break;
@@ -316,8 +316,8 @@ bool CRecordSetAccumulationRegister::SaveVirtualTable()
 		);
 
 		for (auto attribute : metaObject->GetObjectDimensions()) {
-			auto foundedKey = m_aKeyValues.find(attribute->GetMetaID());
-			if (foundedKey != m_aKeyValues.end()) {
+			auto foundedKey = m_keyValues.find(attribute->GetMetaID());
+			if (foundedKey != m_keyValues.end()) {
 				IMetaAttributeObject::SetValueAttribute(
 					attribute,
 					foundedKey->second,
@@ -379,7 +379,7 @@ bool CRecordSetAccumulationRegister::DeleteVirtualTable()
 			continue;
 		IMetaAttributeObject::SetValueAttribute(
 			attribute,
-			m_aKeyValues.at(attribute->GetMetaID()),
+			m_keyValues.at(attribute->GetMetaID()),
 			statement,
 			position
 		);

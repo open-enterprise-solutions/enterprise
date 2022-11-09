@@ -240,13 +240,15 @@ void CDataProcessorTree::CDataProcessorTreeWnd::OnSelected(wxTreeEvent &event)
 
 void CDataProcessorTree::CDataProcessorTreeWnd::OnCollapsing(wxTreeEvent &event)
 {
-	if (GetRootItem() == event.GetItem())
+	if (GetRootItem() != event.GetItem()) {
+		m_ownerTree->Collapse(); event.Skip();
+	}
+	else {
 		event.Veto();
-	else
-		event.Skip();
+	}
 }
 
 void CDataProcessorTree::CDataProcessorTreeWnd::OnExpanding(wxTreeEvent &event)
 {
-	event.Skip();
+	m_ownerTree->Expand(); event.Skip();
 }

@@ -15,7 +15,7 @@
 
 #ifdef __WXMSW__
 
-static std::map<IDispatch *, CValueOLE *> s_aOLEValues;
+static std::map<IDispatch*, CValueOLE*> s_aOLEValues;
 
 //*********************************************************************************************************************
 //*                                             Wrapper around BSTR type (by Vadim Zeitlin)                           *
@@ -100,7 +100,7 @@ BSTR wxConvertStringToOle(const wxString& str)
 	return wxBasicString(str).Detach();
 }
 
-wxString wxConvertStringFromOle(const BSTR &bStr)
+wxString wxConvertStringFromOle(const BSTR& bStr)
 {
 	// NULL BSTR is equivalent to an empty string (this is the convention used
 	// by VB and hence we must follow it)
@@ -165,12 +165,12 @@ void CValueOLE::ReleaseCoObjects()
 {
 #ifdef __WXMSW__
 	for (auto dispOle : s_aOLEValues) {
-		CValueOLE *oleValue = dispOle.second;
+		CValueOLE* oleValue = dispOle.second;
 		if (!oleValue->m_dispatch)
 			continue;
 		unsigned int countRef = oleValue->m_dispatch->Release();
-		for (unsigned int i = 0; i < countRef; i++) { 
-			oleValue->m_dispatch->Release(); 
+		for (unsigned int i = 0; i < countRef; i++) {
+			oleValue->m_dispatch->Release();
 		}
 		oleValue->m_dispatch = NULL;
 	}
@@ -179,16 +179,16 @@ void CValueOLE::ReleaseCoObjects()
 
 #ifdef __WXMSW__
 
-void CValueOLE::AddFromArray(CValue &Ret, long *aPos, SAFEARRAY *pArray, SAFEARRAYBOUND *aDims, int nLastDim)
+void CValueOLE::AddFromArray(CValue& Ret, long* aPos, SAFEARRAY* pArray, SAFEARRAYBOUND* aDims, int nLastDim)
 {
 	VARIANT Val = { 0 }; HRESULT hr;
 
-	if (hr = ::SafeArrayGetElement(pArray, aPos, &Val)) throw hr;
+	if (hr = ::SafeArrayGetElement(pArray, aPos, &Val)) 
+		throw hr;
 
 	aPos[nLastDim]++;
 
-	if (aPos[nLastDim] > aDims[nLastDim].cElements)
-	{
+	if (aPos[nLastDim] > aDims[nLastDim].cElements) {
 		aPos[nLastDim] = aDims[nLastDim].lLbound;
 		//AddFromArray(CValue &Ret,long *aPos,SAFEARRAY *pArray,SAFEARRAYBOUND *aDims,int nLastDim)
 	}
@@ -205,7 +205,7 @@ void CValueOLE::AddFromArray(CValue &Ret, long *aPos, SAFEARRAY *pArray, SAFEARR
 
 }
 
-CValue CValueOLE::FromVariant(VARIANT &oleVariant)
+CValue CValueOLE::FromVariant(VARIANT& oleVariant)
 {
 	CValue vObject;
 
@@ -311,18 +311,13 @@ CValue CValueOLE::FromVariant(VARIANT &oleVariant)
 		break;
 	}
 	case VT_DISPATCH:
-	{
-		if (oleVariant.pdispVal) {
+		if (oleVariant.pdispVal != NULL)
 			vObject = new CValueOLE(m_clsId, oleVariant.pdispVal, m_sObjectName);
-		}
 		break;
-	}
 	case VT_SAFEARRAY:
-	{
-		if (oleVariant.parray)
+		if (oleVariant.parray != NULL)
 			vObject = FromVariantArray(oleVariant.parray);
 		break;
-	}
 	case VT_NULL: vObject.SetType(eValueTypes::TYPE_NULL); break;
 	case VT_EMPTY: vObject.Reset(); break;
 	}
@@ -330,16 +325,16 @@ CValue CValueOLE::FromVariant(VARIANT &oleVariant)
 	return vObject;
 }
 
-CValue CValueOLE::FromVariantArray(SAFEARRAY *pArray)
+CValue CValueOLE::FromVariantArray(SAFEARRAY* pArray)
 {
 	HRESULT hr;
 
 	CValue cRet = CValue::CreateObject("array");
 
 	long nDim = SafeArrayGetDim(pArray);
-	long *aPos = new long[nDim];
+	long* aPos = new long[nDim];
 
-	SAFEARRAYBOUND *aDims = new SAFEARRAYBOUND[nDim];
+	SAFEARRAYBOUND* aDims = new SAFEARRAYBOUND[nDim];
 
 	for (int i = 0; i < nDim; i++)
 	{
@@ -364,7 +359,7 @@ CValue CValueOLE::FromVariantArray(SAFEARRAY *pArray)
 	return cRet;
 }
 
-VARIANT CValueOLE::FromValue(CValue &cVal)
+VARIANT CValueOLE::FromValue(CValue& cVal)
 {
 	VARIANT oleVariant = { 0 };
 
@@ -381,13 +376,11 @@ VARIANT CValueOLE::FromValue(CValue &cVal)
 	case eValueTypes::TYPE_NUMBER:
 	{
 		number_t fData = cVal.GetNumber();
-		if (fData == fData.Round())
-		{
+		if (fData == fData.Round()) {
 			oleVariant.vt = VT_I4;
 			oleVariant.lVal = fData.ToInt();
 		}
-		else
-		{
+		else {
 			oleVariant.vt = VT_R8;
 			oleVariant.dblVal = fData.ToDouble();
 		}
@@ -412,15 +405,13 @@ VARIANT CValueOLE::FromValue(CValue &cVal)
 	}
 	case eValueTypes::TYPE_OLE:
 	{
-		CValueOLE *m_pValueOLE = dynamic_cast<CValueOLE *>(cVal.GetRef());
-		if (m_pValueOLE)
-		{
+		CValueOLE* valueOLE = dynamic_cast<CValueOLE*>(cVal.GetRef());
+		if (valueOLE != NULL) {
 			oleVariant.vt = VT_DISPATCH;
-			oleVariant.pdispVal = m_pValueOLE->GetDispatch();
+			oleVariant.pdispVal = valueOLE->GetDispatch();
 			oleVariant.pdispVal->AddRef();
 		}
-		else
-		{
+		else {
 			oleVariant.vt = VT_ERROR;
 		}
 		break;
@@ -430,15 +421,17 @@ VARIANT CValueOLE::FromValue(CValue &cVal)
 	return oleVariant;
 }
 
-void CValueOLE::FreeValue(VARIANT &cVal)
+void CValueOLE::FreeValue(VARIANT& cVal)
 {
 	switch (cVal.vt)
 	{
-	case VT_BSTR: SysFreeString(cVal.bstrVal); break;
+	case VT_BSTR: 
+		SysFreeString(cVal.bstrVal); 
+		break;
 	}
 }
 
-IDispatch *CValueOLE::DoCreateInstance()
+IDispatch* CValueOLE::DoCreateInstance()
 {
 	// get the server IDispatch interface
 	//
@@ -446,12 +439,11 @@ IDispatch *CValueOLE::DoCreateInstance()
 	//     Automation interface for Microsoft Office applications so don't use
 	//     CLSCTX_ALL which includes it
 
-	IDispatch *pDispatch = NULL;
+	IDispatch* pDispatch = NULL;
 	HRESULT hr = ::CoCreateInstance(m_clsId, NULL, CLSCTX_SERVER,
-		IID_IDispatch, (void **)&pDispatch);
+		IID_IDispatch, (void**)&pDispatch);
 
-	if (FAILED(hr))
-	{
+	if (FAILED(hr)) {
 		wxLogSysError(hr, _("Failed to create an instance of \"%s\""), m_sObjectName);
 		return NULL;
 	}
@@ -471,13 +463,13 @@ m_sObjectName(wxEmptyString)
 {
 }
 
-CValueOLE::CValueOLE(CLSID clsId, IDispatch *dispatch, const wxString &objectName) : CValue(eValueTypes::TYPE_OLE),
+CValueOLE::CValueOLE(CLSID clsId, IDispatch* dispatch, const wxString& objectName) : CValue(eValueTypes::TYPE_OLE),
 m_clsId(clsId),
 m_dispatch(dispatch),
 m_methods(new CMethods()),
 m_sObjectName(objectName)
 {
-	if (m_dispatch) {
+	if (m_dispatch != NULL) {
 		m_dispatch->AddRef();
 	}
 	PrepareNames();
@@ -500,7 +492,7 @@ CValueOLE::~CValueOLE()
 	wxDELETE(m_methods);
 }
 
-bool CValueOLE::Init(CValue **aParams)
+bool CValueOLE::Init(CValue** aParams)
 {
 	wxString sObject = aParams[0]->GetString();
 #ifdef __WXMSW__
@@ -512,7 +504,7 @@ bool CValueOLE::Init(CValue **aParams)
 #endif
 }
 
-bool CValueOLE::Create(const wxString &sName)
+bool CValueOLE::Create(const wxString& sName)
 {
 	if (appData->DesignerMode())
 		return true;
@@ -551,7 +543,7 @@ bool CValueOLE::Create(const wxString &sName)
 #endif
 }
 
-CMethods *CValueOLE::GetPMethods() const { return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
+CMethods* CValueOLE::GetPMethods() const { return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
 
 void CValueOLE::PrepareNames() const
 {
@@ -563,7 +555,7 @@ void CValueOLE::PrepareNames() const
 	std::vector<SEng> aMethods, aAttributes;
 	for (unsigned int i = 0; i < count; i++) {
 		HRESULT hr = S_OK;
-		ITypeInfo *typeInfo = NULL; TYPEATTR *typeAttr = NULL;
+		ITypeInfo* typeInfo = NULL; TYPEATTR* typeAttr = NULL;
 		hr = m_dispatch->GetTypeInfo(i, LOCALE_SYSTEM_DEFAULT, &typeInfo);
 		if (hr != S_OK) continue;
 		hr = typeInfo->GetTypeAttr(&typeAttr);
@@ -574,7 +566,7 @@ void CValueOLE::PrepareNames() const
 		{
 			for (unsigned int m = 0; m < (UINT)typeAttr->cFuncs; m++)
 			{
-				FUNCDESC *funcInfo = NULL;
+				FUNCDESC* funcInfo = NULL;
 				hr = typeInfo->GetFuncDesc(m, &funcInfo);
 
 				if (hr != S_OK) continue;
@@ -662,14 +654,14 @@ void CValueOLE::PrepareNames() const
 #endif 
 }
 
-int CValueOLE::FindAttribute(const wxString &sName) const
+int CValueOLE::FindAttribute(const wxString& sName) const
 {
 #ifdef __WXMSW__
 
 	if (!m_dispatch)
 		return wxNOT_FOUND;
 
-	LPOLESTR cbstrName = (WCHAR *)sName.wc_str();
+	LPOLESTR cbstrName = (WCHAR*)sName.wc_str();
 	DISPID dispid = -1;
 	OLECHAR FAR* szMember = cbstrName;
 
@@ -688,7 +680,7 @@ int CValueOLE::FindAttribute(const wxString &sName) const
 #endif 
 }
 
-CValue CValueOLE::GetAttribute(attributeArg_t &aParams)
+CValue CValueOLE::GetAttribute(attributeArg_t& aParams)
 {
 #ifdef __WXMSW__
 
@@ -728,9 +720,9 @@ CValue CValueOLE::GetAttribute(attributeArg_t &aParams)
 #ifdef __WXMSW__
 
 static HRESULT PutProperty(
-	IDispatch * pDisp,
+	IDispatch* pDisp,
 	DISPID dwDispID,
-	VARIANT *pVar
+	VARIANT* pVar
 )
 {
 	DISPPARAMS dispparams = { NULL, NULL, 1, 1 };
@@ -772,7 +764,7 @@ static HRESULT PutProperty(
 
 #endif 
 
-void CValueOLE::SetAttribute(attributeArg_t &aParams, CValue &cVal)
+void CValueOLE::SetAttribute(attributeArg_t& aParams, CValue& cVal)
 {
 #ifdef __WXMSW__
 	if (!m_dispatch) return;
@@ -782,12 +774,12 @@ void CValueOLE::SetAttribute(attributeArg_t &aParams, CValue &cVal)
 #endif 
 }
 
-int CValueOLE::FindMethod(const wxString &sName) const
+int CValueOLE::FindMethod(const wxString& sName) const
 {
 	return FindAttribute(sName);
 }
 
-CValue CValueOLE::Method(methodArg_t &aParams)
+CValue CValueOLE::Method(methodArg_t& aParams)
 {
 #ifdef __WXMSW__
 	if (!m_dispatch)
@@ -797,7 +789,7 @@ CValue CValueOLE::Method(methodArg_t &aParams)
 	unsigned int nParamCount = aParams.GetParamCount();
 
 	//переводим параметры в тип VARIANT
-	VARIANT *pvarArgs = new VARIANT[nParamCount];
+	VARIANT* pvarArgs = new VARIANT[nParamCount];
 	for (unsigned int i = 0; i < nParamCount; i++) {
 		pvarArgs[nParamCount - i - 1] = FromValue(aParams[i]);
 	}

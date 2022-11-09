@@ -35,7 +35,7 @@ void CValueTableBoxColumn::ChoiceProcessing(CValue& vSelected)
 	if (!standartProcessing.GetBoolean()) {
 		return;
 	}
-	
+
 	CValueTableBox* tableBox = wxDynamicCast(
 		GetParent(),
 		CValueTableBox
@@ -127,14 +127,19 @@ void CValueTableBoxColumn::OnSelectButtonPressed(wxCommandEvent& event)
 	CDataViewColumnObject* columnObject =
 		dynamic_cast<CDataViewColumnObject*>(GetWxObject());
 	wxASSERT(columnObject);
-	CValueViewRenderer *columnRenderer = columnObject->GetRenderer();
+	CValueViewRenderer* columnRenderer = columnObject->GetRenderer();
 	wxASSERT(columnRenderer);
 	const CLASS_ID& clsid = selValue.GetClassType();
 	if (!IAttributeControl::SelectSimpleValue(clsid, columnRenderer->GetEditorCtrl())) {
+		eSelectMode selMode = eSelectMode::eSelectMode_Items;
+		IMetaAttributeObject* srcValue =
+			dynamic_cast<IMetaAttributeObject*>(IAttributeControl::GetMetaSource());
+		if (srcValue != NULL)
+			selMode = srcValue->GetSelectMode();
 		IMetaObject* metaObject =
 			IAttributeControl::GetMetaObjectById(clsid);
 		if (metaObject != NULL) {
-			metaObject->ProcessChoice(this, m_propertyChoiceForm->GetValueAsInteger());
+			metaObject->ProcessChoice(this, m_propertyChoiceForm->GetValueAsInteger(), selMode);
 		}
 	}
 }

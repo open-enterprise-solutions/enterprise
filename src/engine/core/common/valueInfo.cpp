@@ -34,13 +34,13 @@ void IObjectValueInfo::PrepareValues()
 	
 	//attrbutes can refValue 
 	for (auto attribute : metaObject->GetObjectAttributes()) {
-		m_aObjectValues[attribute->GetMetaID()] = attribute->CreateValue(); 
+		m_objectValues[attribute->GetMetaID()] = attribute->CreateValue(); 
 	}
 
 	// table is collection values 
 	for (auto table : metaObject->GetObjectTables()) {
 		CTabularSectionDataObject *tableSection = new CTabularSectionDataObject(this, table);
-		m_aObjectValues[table->GetMetaID()] = tableSection;
+		m_objectValues[table->GetMetaID()] = tableSection;
 		m_aObjectTables.push_back(tableSection);
 	}
 }

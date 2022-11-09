@@ -50,7 +50,6 @@ wxWindow* CValueViewRenderer::CreateEditorCtrl(wxWindow* dv,
 	}
 
 	textCtrl->SetInsertionPointEnd();
-
 	return textCtrl;
 }
 

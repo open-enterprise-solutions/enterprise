@@ -39,7 +39,7 @@ bool CUniqueKey::operator==(const CUniqueKey& other) const
 	else if (m_uniqueData == enUniqueData::enUniqueKey) {
 		if (other.m_uniqueData == enUniqueData::enUniqueKey) {
 			return m_metaObject == other.m_metaObject
-				&& m_aKeyValues == other.m_aKeyValues;
+				&& m_keyValues == other.m_keyValues;
 		}
 		else if (m_uniqueData == enUniqueData::enUniqueGuid) {
 			return m_objGuid == other.m_objGuid;
@@ -57,7 +57,7 @@ bool CUniqueKey::operator!=(const CUniqueKey& other) const
 	else if (m_uniqueData == enUniqueData::enUniqueKey) {
 		if (other.m_uniqueData == enUniqueData::enUniqueKey) {
 			return m_metaObject != other.m_metaObject
-				|| m_aKeyValues != other.m_aKeyValues;
+				|| m_keyValues != other.m_keyValues;
 		}
 		else if (m_uniqueData == enUniqueData::enUniqueGuid) {
 			return m_objGuid != other.m_objGuid;
@@ -81,25 +81,25 @@ CUniqueKey::CUniqueKey() : CUniqueKey(enUniqueData::enUniqueGuid)
 {
 	m_objGuid = wxNullGuid;
 	m_metaObject = NULL;
-	m_aKeyValues = {};
+	m_keyValues = {};
 }
 
 CUniqueKey::CUniqueKey(const Guid& guid) : CUniqueKey(enUniqueData::enUniqueGuid)
 {
 	m_objGuid = guid;
 	m_metaObject = NULL;
-	m_aKeyValues = {};
+	m_keyValues = {};
 }
 
 CUniquePairKey::CUniquePairKey(IMetaObjectRegisterData* metaObject) : CUniqueKey(enUniqueData::enUniqueKey)
 {
 	m_objGuid = wxNewGuid;
 	m_metaObject = metaObject;
-	m_aKeyValues = {};
+	m_keyValues = {};
 
 	if (metaObject != NULL) {
 		for (auto attributes : metaObject->GetGenericDimensions()) {
-			m_aKeyValues.insert_or_assign(
+			m_keyValues.insert_or_assign(
 				attributes->GetMetaID(),
 				attributes->CreateValue()
 			);
@@ -111,13 +111,13 @@ CUniquePairKey::CUniquePairKey(IMetaObjectRegisterData* metaObject, const std::m
 {
 	m_objGuid = wxNewGuid;
 	m_metaObject = metaObject;
-	m_aKeyValues = {};
+	m_keyValues = {};
 
 	if (metaObject != NULL) {
 		for (auto attributes : metaObject->GetGenericDimensions()) {
 			auto foundedIt = keyValues.find(attributes->GetMetaID());
 			if (foundedIt != keyValues.end()) {
-				m_aKeyValues.insert_or_assign(
+				m_keyValues.insert_or_assign(
 					attributes->GetMetaID(),
 					keyValues.at(attributes->GetMetaID())
 				);

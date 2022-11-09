@@ -63,9 +63,10 @@ bool CMainFrame::Create(const wxString& title,
 	return true;
 }
 
-CDocChildFrame *CMainFrame::CreateChildFrame(CView *view, wxPoint pos, wxSize size, long style)
+CDocChildFrame *CMainFrame::CreateChildFrame(CView *view, const wxPoint &pos, const wxSize &size, long style)
 {
 	CDocument *document = view->GetDocument();
+	
 	// create a child valueForm of appropriate class for the current mode
 	CDocChildFrame *subvalueFrame = new CDocChildFrame(document, view, CMainFrame::Get(), wxID_ANY, document->GetTitle(), pos, size, style);
 
@@ -75,8 +76,6 @@ CDocChildFrame *CMainFrame::CreateChildFrame(CView *view, wxPoint pos, wxSize si
 	subvalueFrame->SetFocus();     // focus on my window
 	subvalueFrame->Raise();        // bring window to front
 	subvalueFrame->Maximize();
-
-	subvalueFrame->Hide();
 
 	subvalueFrame->SetExtraStyle(wxWS_EX_BLOCK_EVENTS);
 	return subvalueFrame;

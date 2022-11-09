@@ -6,78 +6,66 @@
 #include "valuetable.h"
 #include "functions.h"
 
-CValueTable::CValueTableReturnLine *CValueTable::AddRow(unsigned int before)
+long CValueTable::AppendRow(unsigned int before)
 {
-	std::map<unsigned int, CValue> valueRow;
-
-	for (auto &colData : m_dataColumnCollection->m_aColumnInfo) {
-		CValueTypeDescription *typeDescription = m_dataColumnCollection->GetColumnType(colData->GetColumnID());
+	modelArray_t valueRow;
+	for (auto& colData : m_dataColumnCollection->m_columnInfo) {
+		CValueTypeDescription* typeDescription = m_dataColumnCollection->GetColumnType(colData->GetColumnID());
 		valueRow.insert_or_assign(colData->GetColumnID(), typeDescription ? typeDescription->AdjustValue(CValue()) : CValue());
 	}
 
-	/*if (!CTranslateError::IsSimpleMode())*/ {
-		m_aObjectValues.push_back(valueRow);
-	}
-
-	if (!CTranslateError::IsSimpleMode()) {
-		IValueTable::RowAppended();
-	}
-
-	return new CValueTableReturnLine(this, m_aObjectValues.size() - 1);
+	return IValueTable::Append(
+		new wxValueTableRow(valueRow), !CTranslateError::IsSimpleMode()
+	);
 }
 
 void CValueTable::EditRow()
 {
-	int currentLine = GetSelectionLine();
-	if (currentLine == wxNOT_FOUND)
-		return;
-
 	IValueTable::RowValueStartEdit(GetSelection());
 }
 
 void CValueTable::CopyRow()
 {
-	int currentLine = GetSelectionLine();
-	if (currentLine == wxNOT_FOUND)
+	wxDataViewItem currentItem = GetSelection();
+	if (!currentItem.IsOk())
 		return;
-
-	auto foundedIt = m_aObjectValues.begin();
-	std::advance(foundedIt, currentLine);
-
-	std::map<unsigned int, CValue> valueRow;
-
-	for (auto &colData : m_dataColumnCollection->m_aColumnInfo) {
+	wxValueTableRow* node = GetViewData(currentItem);
+	if (node == NULL)
+		return;
+	modelArray_t valueRow;
+	for (auto& colData : m_dataColumnCollection->m_columnInfo) {
 		valueRow.insert_or_assign(
-			colData->GetColumnID(), 
-			foundedIt->at(colData->GetColumnID())
+			colData->GetColumnID(), node->GetValue((meta_identifier_t)colData->GetColumnID())
 		);
 	}
-	if (!CTranslateError::IsSimpleMode()) {
-		m_aObjectValues.insert(
-			m_aObjectValues.begin() + currentLine + 1, valueRow
+	long currentLine = GetRow(currentItem);
+	if (currentLine != wxNOT_FOUND) {
+		IValueTable::Insert(
+			new wxValueTableRow(valueRow), currentLine, !CTranslateError::IsSimpleMode()
 		);
-		IValueTable::RowInserted(currentLine);
+	}
+	else {
+		IValueTable::Append(
+			new wxValueTableRow(valueRow), !CTranslateError::IsSimpleMode()
+		);
 	}
 }
 
 void CValueTable::DeleteRow()
 {
-	unsigned int currentLine = GetSelectionLine();
-	if (currentLine == wxNOT_FOUND)
+	wxDataViewItem currentItem = GetSelection();
+	if (!currentItem.IsOk())
 		return;
-
-	if (!CTranslateError::IsSimpleMode()) {
-		auto itValuePos = m_aObjectValues.begin();
-		std::advance(itValuePos, currentLine);
-		m_aObjectValues.erase(itValuePos);
-		IValueTable::RowDeleted(currentLine);
-	}
+	wxValueTableRow* node = GetViewData(currentItem);
+	if (node == NULL)
+		return;
+	if (!CTranslateError::IsSimpleMode())
+		IValueTable::Remove(node);
 }
 
 void CValueTable::Clear()
 {
 	if (CTranslateError::IsSimpleMode())
 		return;
-	IValueTable::Reset(0);
-	m_aObjectValues.clear();
+	IValueTable::Clear();
 }

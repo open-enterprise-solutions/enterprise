@@ -14,10 +14,10 @@
 CValue CAccumulationRegisterManager::Balance(const CValue& cPeriod, const CValue& cFilter)
 {
 	CValueTable* retTable = new CValueTable();
-	CValueTable::IValueTableColumnCollection* colCollection = retTable->GetColumns();
+	CValueTable::IValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
 	for (auto dimention : m_metaObject->GetObjectDimensions()) {
-		CValueTable::IValueTableColumnCollection::IValueTableColumnInfo* colInfo =
+		CValueTable::IValueModelColumnCollection::IValueModelColumnInfo* colInfo =
 			colCollection->AddColumn(
 				dimention->GetName(),
 				dimention->GetValueTypeDescription(),
@@ -156,9 +156,8 @@ CValue CAccumulationRegisterManager::Balance(const CValue& cPeriod, const CValue
 
 		while (resultSet->Next()) {
 
-			CValueTable::CValueTableReturnLine* retLine = retTable->AddRow();
+			CValueTable::CValueTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
 			wxASSERT(retLine);
-
 			for (auto dimension : m_metaObject->GetObjectDimensions()) {
 				retLine->SetAt(dimension->GetName(),
 					IMetaAttributeObject::GetValueAttribute(dimension, resultSet)
@@ -173,6 +172,7 @@ CValue CAccumulationRegisterManager::Balance(const CValue& cPeriod, const CValue
 					)
 				);
 			}
+			delete retLine;
 		}
 
 		databaseLayer->CloseResultSet(resultSet);
@@ -185,10 +185,10 @@ CValue CAccumulationRegisterManager::Balance(const CValue& cPeriod, const CValue
 CValue CAccumulationRegisterManager::Turnovers(const CValue& cBeginOfPeriod, const CValue& cEndOfPeriod, const CValue& cFilter)
 {
 	CValueTable* retTable = new CValueTable();
-	CValueTable::IValueTableColumnCollection* colCollection = retTable->GetColumns();
+	CValueTable::IValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
 	for (auto dimention : m_metaObject->GetObjectDimensions()) {
-		CValueTable::IValueTableColumnCollection::IValueTableColumnInfo* colInfo =
+		CValueTable::IValueModelColumnCollection::IValueModelColumnInfo* colInfo =
 			colCollection->AddColumn(
 				dimention->GetName(),
 				dimention->GetValueTypeDescription(),
@@ -372,9 +372,8 @@ CValue CAccumulationRegisterManager::Turnovers(const CValue& cBeginOfPeriod, con
 
 	while (resultSet->Next()) {
 
-		CValueTable::CValueTableReturnLine* retLine = retTable->AddRow();
+		CValueTable::CValueTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
 		wxASSERT(retLine);
-
 		for (auto dimension : m_metaObject->GetObjectDimensions()) {
 			retLine->SetAt(dimension->GetName(),
 				IMetaAttributeObject::GetValueAttribute(dimension, resultSet)
@@ -404,6 +403,7 @@ CValue CAccumulationRegisterManager::Turnovers(const CValue& cBeginOfPeriod, con
 				);
 			}
 		}
+		delete retLine;
 	}
 
 	databaseLayer->CloseResultSet(resultSet);

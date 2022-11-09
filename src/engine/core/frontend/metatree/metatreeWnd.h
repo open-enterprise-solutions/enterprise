@@ -43,22 +43,22 @@ public:
 protected:
 
 	class wxTreeItemClsidData : public wxTreeItemData,
-		public ITreeClsidData {
+		public treeClsidData_t, public treeData_t {
 	public:
-		wxTreeItemClsidData(const CLASS_ID& clsid) : ITreeClsidData(clsid) {}
+		wxTreeItemClsidData(const CLASS_ID& clsid) : treeClsidData_t(clsid) {}
 	};
 
 	class wxTreeItemMetaData : public wxTreeItemData,
-		public ITreeMetaData {
+		public treeMetaData_t, public treeData_t {
 	public:
-		wxTreeItemMetaData(IMetaObject* metaObject) : ITreeMetaData(metaObject) {}
+		wxTreeItemMetaData(IMetaObject* metaObject) : treeMetaData_t(metaObject) {}
 	};
 
 	class wxTreeItemClsidMetaData : public wxTreeItemData,
-		public ITreeMetaData, public ITreeClsidData {
+		public treeMetaData_t, public treeClsidData_t, public treeData_t {
 	public:
 		wxTreeItemClsidMetaData(const CLASS_ID& clsid, IMetaObject* metaObject) :
-			ITreeClsidData(clsid), ITreeMetaData(metaObject)
+			treeClsidData_t(clsid), treeMetaData_t(metaObject)
 		{
 		}
 	};
@@ -149,8 +149,8 @@ private:
 			wxTreeItemMetaData* data1 = dynamic_cast<wxTreeItemMetaData*>(GetItemData(item1));
 			wxTreeItemMetaData* data2 = dynamic_cast<wxTreeItemMetaData*>(GetItemData(item2));
 			if (data1 != NULL && data2 != NULL && ret > 0) {
-				IMetaObject* metaObject1 = data1->GetMetaObject();
-				IMetaObject* metaObject2 = data2->GetMetaObject();
+				IMetaObject* metaObject1 = data1->m_metaObject;
+				IMetaObject* metaObject2 = data2->m_metaObject;
 				IMetaObject* parent = metaObject1->GetParent();
 				wxASSERT(parent);
 				return parent->ChangeChildPosition(metaObject2,
@@ -271,6 +271,9 @@ private:
 	void EraseItem(const wxTreeItemId& item);
 	void PropertyItem();
 
+	void Collapse();
+	void Expand();
+
 	void UpItem();
 	void DownItem();
 
@@ -298,11 +301,11 @@ private:
 
 		if (!item.IsOk())
 			return NULL;
-		ITreeMetaData* data =
-			dynamic_cast<ITreeMetaData*>(m_metaTreeWnd->GetItemData(item));
+		treeMetaData_t* data =
+			dynamic_cast<treeMetaData_t*>(m_metaTreeWnd->GetItemData(item));
 		if (data == NULL)
 			return NULL;
-		return data->GetMetaObject();
+		return data->m_metaObject;
 	}
 
 	void UpdateToolbar(IMetaObject* obj, const wxTreeItemId& item);

@@ -37,10 +37,10 @@ IMetaObject* CDataReportTree::CreateItem(bool showValue)
 	if (!selectedItem.IsOk())
 		return NULL;
 
-	ITreeClsidData* itemData = NULL;
+	treeClsidData_t* itemData = NULL;
 
 	while (parentItem != NULL) {
-		itemData = dynamic_cast<ITreeClsidData*>(m_metaTreeWnd->GetItemData(parentItem));
+		itemData = dynamic_cast<treeClsidData_t*>(m_metaTreeWnd->GetItemData(parentItem));
 		if (itemData != NULL) {
 			selectedItem = parentItem;
 			break;
@@ -63,13 +63,13 @@ IMetaObject* CDataReportTree::CreateItem(bool showValue)
 
 	wxASSERT(metaParent);
 
-	IMetaObject* newObject = m_metaData->CreateMetaObject(itemData->GetClassID(), metaParent);
+	IMetaObject* newObject = m_metaData->CreateMetaObject(itemData->m_clsid, metaParent);
 
 	if (newObject == NULL)
 		return NULL;
 
 	wxTreeItemId createdItem = NULL;
-	if (itemData->GetClassID() == g_metaTableCLSID) {
+	if (itemData->m_clsid == g_metaTableCLSID) {
 		createdItem = AppendGroupItem(selectedItem, g_metaAttributeCLSID, newObject);
 	}
 	else {
@@ -170,6 +170,24 @@ void CDataReportTree::PropertyItem()
 		return;
 
 	objectInspector->SelectObject(metaObject, m_metaTreeWnd->GetEventHandler());
+}
+
+void CDataReportTree::Collapse()
+{
+	const wxTreeItemId& selection = m_metaTreeWnd->GetSelection();
+	treeData_t* data =
+		dynamic_cast<treeData_t*>(m_metaTreeWnd->GetItemData(selection));
+	if (data != NULL)
+		data->m_expanded = false;
+}
+
+void CDataReportTree::Expand()
+{
+	const wxTreeItemId& selection = m_metaTreeWnd->GetSelection();
+	treeData_t* data =
+		dynamic_cast<treeData_t*>(m_metaTreeWnd->GetItemData(selection));
+	if (data != NULL)
+		data->m_expanded = true;
 }
 
 void CDataReportTree::UpItem()

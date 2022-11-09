@@ -33,7 +33,7 @@ bool IMetaAttributeObject::ContainMetaType(eMetaObjectType type) const
 
 /////////////////////////////////////////////////////////////////////////
 
-CMetaAttributeObject::CMetaAttributeObject(const eValueTypes& valType) : 
+CMetaAttributeObject::CMetaAttributeObject(const eValueTypes& valType) :
 	IMetaAttributeObject(valType)
 {
 }
@@ -43,15 +43,14 @@ CMetaAttributeObject::CMetaAttributeObject(const eValueTypes& valType) :
 CValue IMetaAttributeObject::CreateValue() const
 {
 	CValue* refData = CreateValueRef();
-	return refData ? 
+	return refData ?
 		refData : CValue();
 }
 
 CValue* IMetaAttributeObject::CreateValueRef() const
 {
-	if (m_defValue.IsEmpty()) {
+	if (m_defValue.IsEmpty())
 		return IAttributeInfo::CreateValueRef();
-	}
 
 	return new CValue(m_defValue);
 }

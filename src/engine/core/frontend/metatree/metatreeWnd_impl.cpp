@@ -179,10 +179,10 @@ IMetaObject* CMetadataTree::CreateItem(bool showValue)
 	if (!selectedItem.IsOk())
 		return NULL;
 
-	ITreeClsidData* itemData = NULL;
+	treeClsidData_t* itemData = NULL;
 
 	while (parentItem != NULL) {
-		itemData = dynamic_cast<ITreeClsidData*>(m_metaTreeWnd->GetItemData(parentItem));
+		itemData = dynamic_cast<treeClsidData_t*>(m_metaTreeWnd->GetItemData(parentItem));
 		if (itemData != NULL) {
 			selectedItem = parentItem;
 			break;
@@ -205,13 +205,13 @@ IMetaObject* CMetadataTree::CreateItem(bool showValue)
 
 	wxASSERT(metaParent);
 
-	IMetaObject* newObject = m_metaData->CreateMetaObject(itemData->GetClassID(), metaParent);
+	IMetaObject* newObject = m_metaData->CreateMetaObject(itemData->m_clsid, metaParent);
 
 	if (newObject == NULL)
 		return NULL;
 
 	wxTreeItemId createdItem = NULL;
-	if (itemData->GetClassID() == g_metaTableCLSID || itemData->GetClassID() == g_metaGroupTableCLSID) {
+	if (itemData->m_clsid == g_metaTableCLSID || itemData->m_clsid == g_metaFolderTableCLSID) {
 		createdItem = AppendGroupItem(selectedItem, g_metaAttributeCLSID, newObject);
 	}
 	else {
@@ -219,19 +219,19 @@ IMetaObject* CMetadataTree::CreateItem(bool showValue)
 	}
 
 	//Advanced mode
-	if (itemData->GetClassID() == g_metaCatalogCLSID)
+	if (itemData->m_clsid == g_metaCatalogCLSID)
 		AddCatalogItem(newObject, createdItem);
-	else if (itemData->GetClassID() == g_metaDocumentCLSID)
+	else if (itemData->m_clsid == g_metaDocumentCLSID)
 		AddDocumentItem(newObject, createdItem);
-	else if (itemData->GetClassID() == g_metaEnumerationCLSID)
+	else if (itemData->m_clsid == g_metaEnumerationCLSID)
 		AddEnumerationItem(newObject, createdItem);
-	else if (itemData->GetClassID() == g_metaDataProcessorCLSID)
+	else if (itemData->m_clsid == g_metaDataProcessorCLSID)
 		AddDataProcessorItem(newObject, createdItem);
-	else if (itemData->GetClassID() == g_metaReportCLSID)
+	else if (itemData->m_clsid == g_metaReportCLSID)
 		AddReportItem(newObject, createdItem);
-	else if (itemData->GetClassID() == g_metaInformationRegisterCLSID)
+	else if (itemData->m_clsid == g_metaInformationRegisterCLSID)
 		AddInformationRegisterItem(newObject, createdItem);
-	else if (itemData->GetClassID() == g_metaAccumulationRegisterCLSID)
+	else if (itemData->m_clsid == g_metaAccumulationRegisterCLSID)
 		AddAccumulationRegisterItem(newObject, createdItem);
 
 	if (showValue)
@@ -329,6 +329,26 @@ void CMetadataTree::PropertyItem()
 		return;
 
 	objectInspector->SelectObject(metaObject, m_metaTreeWnd->GetEventHandler());
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void CMetadataTree::Collapse()
+{
+	const wxTreeItemId& selection = m_metaTreeWnd->GetSelection();
+	treeData_t* data =
+		dynamic_cast<treeData_t*>(m_metaTreeWnd->GetItemData(selection));
+	if (data != NULL)
+		data->m_expanded = false;
+}
+
+void CMetadataTree::Expand()
+{
+	const wxTreeItemId& selection = m_metaTreeWnd->GetSelection();
+	treeData_t* data =
+		dynamic_cast<treeData_t*>(m_metaTreeWnd->GetItemData(selection));
+	if (data != NULL)
+		data->m_expanded = true;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -526,9 +546,9 @@ void CMetadataTree::ReplaceItem()
 			CMetaObjectDataProcessor* metaObject = metadataDataProcessor.GetDataProcessor();
 			wxTreeItemData* itemData = m_metaTreeWnd->GetItemData(hSelItem);
 			if (itemData != NULL) {
-				ITreeMetaData* metaItem = dynamic_cast<ITreeMetaData*>(itemData);
+				treeMetaData_t* metaItem = dynamic_cast<treeMetaData_t*>(itemData);
 				if (metaItem != NULL)
-					metaItem->SetMetaObject(metaObject);
+					metaItem->m_metaObject =metaObject;
 			}
 			m_metaData->RemoveMetaObject(currentMetaObject);
 			m_metaTreeWnd->SetItemText(hSelItem, metaObject->GetName());
@@ -555,9 +575,9 @@ void CMetadataTree::ReplaceItem()
 			CMetaObjectReport* metaObject = metadataDataProcessor.GetReport();
 			wxTreeItemData* itemData = m_metaTreeWnd->GetItemData(hSelItem);
 			if (itemData != NULL) {
-				ITreeMetaData* metaItem = dynamic_cast<ITreeMetaData*>(itemData);
+				treeMetaData_t* metaItem = dynamic_cast<treeMetaData_t*>(itemData);
 				if (metaItem != NULL)
-					metaItem->SetMetaObject(metaObject);
+					metaItem->m_metaObject = metaObject;
 			}
 			m_metaData->RemoveMetaObject(currentMetaObject);
 			m_metaTreeWnd->SetItemText(hSelItem, newReport->GetName());
@@ -716,7 +736,7 @@ void CMetadataTree::AddCatalogItem(IMetaObject* metaObject, const wxTreeItemId& 
 	wxASSERT(metaObject);
 
 	//Список аттрибутов 	
-	wxTreeItemId hAttributes = AppendGroupItem(hParentID, g_metaGroupAttributeCLSID, objectAttributesName);
+	wxTreeItemId hAttributes = AppendGroupItem(hParentID, g_metaFolderAttributeCLSID, objectAttributesName);
 	for (auto metaAttribute : metaObjectValue->GetObjectAttributes()) {
 		if (metaAttribute->IsDeleted())
 			continue;
@@ -726,7 +746,7 @@ void CMetadataTree::AddCatalogItem(IMetaObject* metaObject, const wxTreeItemId& 
 	}
 
 	//список табличных частей 
-	wxTreeItemId hTables = AppendGroupItem(hParentID, g_metaGroupTableCLSID, objectTablesName);
+	wxTreeItemId hTables = AppendGroupItem(hParentID, g_metaFolderTableCLSID, objectTablesName);
 	for (auto metaTable : metaObjectValue->GetObjectTables()) {
 		if (metaTable->IsDeleted())
 			continue;
@@ -1089,26 +1109,39 @@ void CMetadataTree::ClearTree()
 	//*                                      Common objects                                               *
 	//*****************************************************************************************************
 
-	if (m_treeMODULES.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeMODULES);
-	if (m_treeFORMS.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeFORMS);
-	if (m_treeTEMPLATES.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeTEMPLATES);
+	if (m_treeMODULES.IsOk())
+		m_metaTreeWnd->DeleteChildren(m_treeMODULES);
+	if (m_treeFORMS.IsOk()) 
+		m_metaTreeWnd->DeleteChildren(m_treeFORMS);
+	if (m_treeTEMPLATES.IsOk()) 
+		m_metaTreeWnd->DeleteChildren(m_treeTEMPLATES);
 
-	if (m_treeINTERFACES.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeINTERFACES);
-	if (m_treeROLES.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeROLES);
+	if (m_treeINTERFACES.IsOk()) 
+		m_metaTreeWnd->DeleteChildren(m_treeINTERFACES);
+	if (m_treeROLES.IsOk()) 
+		m_metaTreeWnd->DeleteChildren(m_treeROLES);
 
-	if (m_treeCONSTANTS.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeCONSTANTS);
+	if (m_treeCONSTANTS.IsOk()) 
+		m_metaTreeWnd->DeleteChildren(m_treeCONSTANTS);
 
 	//*****************************************************************************************************
 	//*                                      Custom objects                                               *
 	//*****************************************************************************************************
 
-	if (m_treeCATALOGS.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeCATALOGS);
-	if (m_treeDOCUMENTS.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeDOCUMENTS);
-	if (m_treeENUMERATIONS.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeENUMERATIONS);
-	if (m_treeDATAPROCESSORS.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeDATAPROCESSORS);
-	if (m_treeREPORTS.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeREPORTS);
-	if (m_treeINFORMATION_REGISTERS.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeINFORMATION_REGISTERS);
-	if (m_treeACCUMULATION_REGISTERS.IsOk()) m_metaTreeWnd->DeleteChildren(m_treeACCUMULATION_REGISTERS);
+	if (m_treeCATALOGS.IsOk()) 
+		m_metaTreeWnd->DeleteChildren(m_treeCATALOGS);
+	if (m_treeDOCUMENTS.IsOk()) 
+		m_metaTreeWnd->DeleteChildren(m_treeDOCUMENTS);
+	if (m_treeENUMERATIONS.IsOk()) 
+		m_metaTreeWnd->DeleteChildren(m_treeENUMERATIONS);
+	if (m_treeDATAPROCESSORS.IsOk()) 
+		m_metaTreeWnd->DeleteChildren(m_treeDATAPROCESSORS);
+	if (m_treeREPORTS.IsOk())
+		m_metaTreeWnd->DeleteChildren(m_treeREPORTS);
+	if (m_treeINFORMATION_REGISTERS.IsOk()) 
+		m_metaTreeWnd->DeleteChildren(m_treeINFORMATION_REGISTERS);
+	if (m_treeACCUMULATION_REGISTERS.IsOk()) 
+		m_metaTreeWnd->DeleteChildren(m_treeACCUMULATION_REGISTERS);
 
 	//delete all items
 	m_metaTreeWnd->DeleteAllItems();

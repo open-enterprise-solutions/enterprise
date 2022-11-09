@@ -148,10 +148,11 @@ bool IValueFrame::CallEvent(const Event* event)
 	if (event == NULL)
 		return false;
 
+	wxString eventValue = event->GetValue();
 	CProcUnit* formProcUnit = GetFormProcUnit();
 	CValue eventCancel = false;
 
-	if (formProcUnit != NULL) {
+	if (formProcUnit != NULL && !eventValue.IsEmpty()) {
 		try {
 			CValue controlElement = this;
 			formProcUnit->CallFunction(event->GetValue(), controlElement, eventCancel);
@@ -169,10 +170,11 @@ bool IValueFrame::CallEvent(const Event* event, CValue& value1)
 	if (event == NULL)
 		return false;
 
+	wxString eventValue = event->GetValue();
 	CProcUnit* formProcUnit = GetFormProcUnit();
 	CValue eventCancel = false;
 
-	if (formProcUnit != NULL) {
+	if (formProcUnit != NULL && !eventValue.IsEmpty()) {
 		try {
 			formProcUnit->CallFunction(event->GetValue(), value1, eventCancel);
 		}
@@ -191,10 +193,9 @@ bool IValueFrame::CallEvent(const Event* event, CValue& value1, CValue& value2)
 
 	wxString eventValue = event->GetValue();
 	CProcUnit* formProcUnit = GetFormProcUnit();
-
 	CValue eventCancel = false;
 
-	if (formProcUnit != NULL) {
+	if (formProcUnit != NULL && !eventValue.IsEmpty()) {
 		try {
 			formProcUnit->CallFunction(eventValue, value1, value2, eventCancel);
 		}
@@ -211,10 +212,11 @@ bool IValueFrame::CallEvent(const Event* event, CValue& value1, CValue& value2, 
 	if (event == NULL)
 		return false;
 
+	wxString eventValue = event->GetValue();
 	CProcUnit* formProcUnit = GetFormProcUnit();
 	CValue eventCancel = false;
 
-	if (formProcUnit != NULL) {
+	if (formProcUnit != NULL && !eventValue.IsEmpty()) {
 		try {
 			formProcUnit->CallFunction(event->GetValue(), value1, value2, value3, eventCancel);
 		}
@@ -230,7 +232,7 @@ void IValueFrame::CallFunction(const wxString& functionName)
 {
 	CProcUnit* formProcUnit = GetFormProcUnit();
 
-	if (formProcUnit) {
+	if (formProcUnit != NULL) {
 		try {
 			formProcUnit->CallFunction(functionName);
 		}
@@ -244,7 +246,7 @@ void IValueFrame::CallFunction(const wxString& functionName, CValue& value1)
 {
 	CProcUnit* formProcUnit = GetFormProcUnit();
 
-	if (formProcUnit) {
+	if (formProcUnit != NULL && !functionName.IsEmpty()) {
 		try {
 			formProcUnit->CallFunction(functionName, value1);
 		}
@@ -258,7 +260,7 @@ void IValueFrame::CallFunction(const wxString& functionName, CValue& value1, CVa
 {
 	CProcUnit* formProcUnit = GetFormProcUnit();
 
-	if (formProcUnit) {
+	if (formProcUnit != NULL && !functionName.IsEmpty()) {
 		try {
 			formProcUnit->CallFunction(functionName, value1, value2);
 		}
@@ -271,7 +273,7 @@ void IValueFrame::CallFunction(const wxString& functionName, CValue& value1, CVa
 void IValueFrame::CallFunction(const wxString& functionName, CValue& value1, CValue& value2, CValue& value3)
 {
 	CProcUnit* formProcUnit = GetFormProcUnit();
-	if (formProcUnit) {
+	if (formProcUnit != NULL && !functionName.IsEmpty()) {
 		try {
 			formProcUnit->CallFunction(functionName, value1, value2, value3);
 		}

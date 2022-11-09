@@ -24,7 +24,7 @@ bool CReferenceDataObject::ReadData(bool createData)
 		for (auto currTable : m_metaObject->GetObjectTables()) {
 			CTabularSectionDataObjectRef* tabularSection =
 				new CTabularSectionDataObjectRef(this, currTable);
-			m_aObjectValues[currTable->GetMetaID()] = tabularSection;
+			m_objectValues[currTable->GetMetaID()] = tabularSection;
 			m_aObjectTables.push_back(tabularSection);
 		}
 
@@ -32,12 +32,12 @@ bool CReferenceDataObject::ReadData(bool createData)
 			//load attributes 
 			for (auto attribute : m_metaObject->GetGenericAttributes()) {
 				if (!m_metaObject->IsDataReference(attribute->GetMetaID())) {
-					m_aObjectValues.insert_or_assign(attribute->GetMetaID(),
+					m_objectValues.insert_or_assign(attribute->GetMetaID(),
 						IMetaAttributeObject::GetValueAttribute(attribute, resultSet, createData)
 					);
 				}
 				else {
-					m_aObjectValues.insert_or_assign(attribute->GetMetaID(),
+					m_objectValues.insert_or_assign(attribute->GetMetaID(),
 						CValue()
 					);
 				}
@@ -74,7 +74,7 @@ bool CReferenceDataObject::FindValue(const wxString& findData, std::vector<CValu
 					for (auto attribute : m_metaObject->GetGenericAttributes()) {
 						if (m_metaObject->IsDataReference(attribute->GetMetaID()))
 							continue;
-						m_aObjectValues.insert_or_assign(
+						m_objectValues.insert_or_assign(
 							attribute->GetMetaID(),
 							IMetaAttributeObject::GetValueAttribute(
 								attribute, resultSet)
@@ -98,7 +98,7 @@ bool CReferenceDataObject::FindValue(const wxString& findData, std::vector<CValu
 			CObjectComparatorValue* comparator = new CObjectComparatorValue(metaObject, guid);
 			if (comparator->ReadValues()) {
 				for (auto attribute : metaObject->GetSearchedAttributes()) {
-					wxString fieldCompare = comparator->m_aObjectValues[attribute->GetMetaID()].GetString();
+					wxString fieldCompare = comparator->m_objectValues[attribute->GetMetaID()].GetString();
 					if (fieldCompare.Contains(findData)) {
 						allow = true; break;
 					}

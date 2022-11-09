@@ -46,8 +46,8 @@ const CLASS_ID g_metaEnumCLSID = TEXT2CLSID("MD_ENUM");
 const CLASS_ID g_metaDimensionCLSID = TEXT2CLSID("MD_DMNT");
 const CLASS_ID g_metaResourceCLSID = TEXT2CLSID("MD_RESS");
 
-const CLASS_ID g_metaGroupAttributeCLSID = TEXT2CLSID("MD_GATR");
-const CLASS_ID g_metaGroupTableCLSID = TEXT2CLSID("MD_GTBL");
+const CLASS_ID g_metaFolderAttributeCLSID = TEXT2CLSID("MD_GATR");
+const CLASS_ID g_metaFolderTableCLSID = TEXT2CLSID("MD_GTBL");
 
 //SPECIAL OBJECTS
 const CLASS_ID g_metaDefaultAttributeCLSID = TEXT2CLSID("MD_DATT");
@@ -369,11 +369,13 @@ public:
 	}
 
 	//process choice 
-	virtual bool ProcessChoice(IValueFrame* ownerValue, const meta_identifier_t& id = wxNOT_FOUND) {
+	virtual bool ProcessChoice(IValueFrame* ownerValue, 
+		const meta_identifier_t& id, enum eSelectMode selMode) {
 		return true;
 	}
 
-	virtual bool ProcessListChoice(IValueFrame* ownerValue, const meta_identifier_t& id = wxNOT_FOUND) {
+	virtual bool ProcessListChoice(IValueFrame* ownerValue,
+		const meta_identifier_t& id, enum eSelectMode selMode) {
 		return true;
 	}
 

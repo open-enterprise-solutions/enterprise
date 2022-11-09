@@ -72,8 +72,8 @@ CValue CCatalogManager::Method(methodArg_t& aParams)
 
 	switch (aParams.GetIndex())
 	{
-	case eCreateElement: return m_metaObject->CreateObjectValue();
-	case eCreateGroup: return m_metaObject->CreateGroupObjectValue();
+	case eCreateElement: return m_metaObject->CreateObjectValue(eObjectMode::OBJECT_ITEM);
+	case eCreateGroup: return m_metaObject->CreateObjectValue(eObjectMode::OBJECT_FOLDER);
 	case eSelect:
 	{
 		class CSelectorCatalogObject : public ISelectorDataObject {

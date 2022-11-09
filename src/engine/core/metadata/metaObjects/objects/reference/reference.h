@@ -12,17 +12,15 @@ class CReferenceDataObject : public CValue,
 private:
 
 	CReferenceDataObject() : CValue(eValueTypes::TYPE_VALUE, true), m_initializedRef(false)  {}
-	CReferenceDataObject(IMetadata* metaData, const meta_identifier_t& id, const Guid& objGuid = wxNullGuid);
 	CReferenceDataObject(IMetaObjectRecordDataRef* metaObject, const Guid& objGuid = wxNullGuid);
 
 public:
-
-	void PrepareRef(bool createData = true);
 
 	reference_t* GetReferenceData() const {
 		return m_reference_impl;
 	}
 
+	void PrepareRef(bool createData = true);
 	virtual ~CReferenceDataObject();
 
 	static CReferenceDataObject* Create(IMetadata* metaData, const meta_identifier_t& id, const Guid& objGuid = wxNullGuid);

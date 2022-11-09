@@ -19,13 +19,13 @@
 //*                                  ObjectCatalogValue                                       *
 //*********************************************************************************************
 
-CObjectCatalog::CObjectCatalog(CMetaObjectCatalog* metaObject, const Guid& objGuid, int objMode) :
-	IRecordDataObjectGroupRef(metaObject, objGuid, objMode)
+CObjectCatalog::CObjectCatalog(CMetaObjectCatalog* metaObject, const Guid& objGuid, eObjectMode objMode) :
+	IRecordDataObjectFolderRef(metaObject, objGuid, objMode)
 {
 }
 
 CObjectCatalog::CObjectCatalog(const CObjectCatalog& source) :
-	IRecordDataObjectGroupRef(source)
+	IRecordDataObjectFolderRef(source)
 {
 }
 
@@ -39,13 +39,13 @@ CSourceExplorer CObjectCatalog::GetSourceExplorer() const
 	CMetaObjectCatalog* metaRef = NULL;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		srcHelper.AppendSource(metaRef->GetCatalogCode(), false);
-		srcHelper.AppendSource(metaRef->GetCatalogDescription());
+		srcHelper.AppendSource(metaRef->GetDataCode(), false);
+		srcHelper.AppendSource(metaRef->GetDataDescription());
 		CMetaDefaultAttributeObject* defOwner = metaRef->GetCatalogOwner();
 		if (defOwner != NULL && defOwner->GetClsidCount() > 0) {
 			srcHelper.AppendSource(metaRef->GetCatalogOwner());
 		}
-		srcHelper.AppendSource(metaRef->GeCatalogParent());
+		srcHelper.AppendSource(metaRef->GetDataParent());
 	}
 
 	for (auto attribute : m_metaObject->GetObjectAttributes()) {
@@ -53,7 +53,7 @@ CSourceExplorer CObjectCatalog::GetSourceExplorer() const
 		if (attribute->ConvertToValue(metaAttr)) {
 			attrUse = metaAttr->GetAttrUse();
 		}
-		if (m_objMode == OBJECT_NORMAL) {
+		if (m_objMode == eObjectMode::OBJECT_ITEM) {
 			if (attrUse == eUseItem::eUseItem_Item
 				|| attrUse == eUseItem::eUseItem_Folder_Item) {
 				if (!m_metaObject->IsDataReference(attribute->GetMetaID())) {
@@ -76,7 +76,7 @@ CSourceExplorer CObjectCatalog::GetSourceExplorer() const
 		if (table->ConvertToValue(metaTable)) {
 			tableUse = metaTable->GetTableUse();
 		}
-		if (m_objMode == OBJECT_NORMAL) {
+		if (m_objMode == eObjectMode::OBJECT_ITEM) {
 			if (tableUse == eUseItem::eUseItem_Item
 				|| tableUse == eUseItem::eUseItem_Folder_Item) {
 				srcHelper.AppendSource(table);
@@ -129,7 +129,7 @@ CValueForm* CObjectCatalog::GetFormValue(const wxString& formName, IValueFrame* 
 		wxASSERT(defList);
 	}
 	else {
-		defList = m_metaObject->GetDefaultFormByID(m_objMode == OBJECT_NORMAL ? CMetaObjectCatalog::eFormObject : CMetaObjectCatalog::eFormGroup);
+		defList = m_metaObject->GetDefaultFormByID(m_objMode == eObjectMode::OBJECT_ITEM ? CMetaObjectCatalog::eFormObject : CMetaObjectCatalog::eFormGroup);
 	}
 
 	CValueForm* valueForm = NULL;
@@ -145,7 +145,7 @@ CValueForm* CObjectCatalog::GetFormValue(const wxString& formName, IValueFrame* 
 		valueForm->InitializeForm(ownerControl, NULL,
 			this, m_objGuid
 		);
-		valueForm->BuildForm(m_objMode == OBJECT_NORMAL ? CMetaObjectCatalog::eFormObject : CMetaObjectCatalog::eFormGroup);
+		valueForm->BuildForm(m_objMode == eObjectMode::OBJECT_ITEM ? CMetaObjectCatalog::eFormObject : CMetaObjectCatalog::eFormGroup);
 		valueForm->Modify(m_objModified);
 	}
 

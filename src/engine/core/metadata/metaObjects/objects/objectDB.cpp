@@ -466,13 +466,13 @@ bool IRecordDataObjectRef::ReadData()
 		for (auto currTable : m_metaObject->GetObjectTables()) {
 			CTabularSectionDataObjectRef* tabularSection =
 				new CTabularSectionDataObjectRef(this, currTable);
-			m_aObjectValues[currTable->GetMetaID()] = tabularSection;
+			m_objectValues[currTable->GetMetaID()] = tabularSection;
 			m_aObjectTables.push_back(tabularSection);
 		}
 		if (resultSet->Next()) {
 			//load other attributes 
 			for (auto attribute : m_metaObject->GetGenericAttributes()) {
-				m_aObjectValues.insert_or_assign(attribute->GetMetaID(),
+				m_objectValues.insert_or_assign(attribute->GetMetaID(),
 					IMetaAttributeObject::GetValueAttribute(attribute, resultSet)
 				);
 			}
@@ -486,13 +486,15 @@ bool IRecordDataObjectRef::ReadData()
 	return false;
 }
 
+#include "compiler/systemObjects.h"
+
 bool IRecordDataObjectRef::SaveData()
 {
 	wxASSERT(m_metaObject);
 
 	if (m_codeGenerator != NULL) {
-		if (m_aObjectValues[m_codeGenerator->GetMetaID()].IsEmpty()) {
-			m_aObjectValues[m_codeGenerator->GetMetaID()] = m_codeGenerator->GenerateCode();
+		if (m_objectValues[m_codeGenerator->GetMetaID()].IsEmpty()) {
+			m_objectValues[m_codeGenerator->GetMetaID()] = m_codeGenerator->GenerateCode();
 		}
 	}
 
@@ -501,7 +503,7 @@ bool IRecordDataObjectRef::SaveData()
 
 	for (auto attribute : m_metaObject->GetGenericAttributes()) {
 		if (attribute->FillCheck()) {
-			if (m_aObjectValues[attribute->GetMetaID()].IsEmpty()) {
+			if (m_objectValues[attribute->GetMetaID()].IsEmpty()) {
 				wxString fillError =
 					wxString::Format(_("""%s"" is a required field"), attribute->GetSynonym());
 				CSystemObjects::Message(fillError, eStatusMessage::eStatusMessage_Information);
@@ -548,7 +550,7 @@ bool IRecordDataObjectRef::SaveData()
 			continue;
 		IMetaAttributeObject::SetValueAttribute(
 			attribute,
-			m_aObjectValues.at(attribute->GetMetaID()),
+			m_objectValues.at(attribute->GetMetaID()),
 			statement,
 			position
 		);
@@ -591,6 +593,24 @@ bool IRecordDataObjectRef::DeleteData()
 	}
 
 	return !hasError;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+bool IRecordDataObjectFolderRef::ReadData()
+{
+	if (IRecordDataObjectRef::ReadData()) {
+		IMetaObjectRecordDataFolderMutableRef* metaFolder = GetMetaObject();
+		wxASSERT(metaFolder);
+		const CValue &isFolder = IRecordDataObjectFolderRef::GetValueByMetaID(*metaFolder->GetDataIsFolder());
+		if (isFolder.GetBoolean())
+			m_objMode = eObjectMode::OBJECT_FOLDER;
+		else 
+			m_objMode = eObjectMode::OBJECT_ITEM;
+		return true;
+	}
+
+	return false; 
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -662,11 +682,11 @@ bool IRecordManagerObject::ExistData()
 bool IRecordManagerObject::ReadData()
 {
 	if (m_recordSet->ReadData()) {
-
 		if (m_recordLine == NULL) {
-			m_recordLine = m_recordSet->GetRowAt(0);
+			m_recordLine = m_recordSet->GetRowAt(
+				m_recordSet->GetItem(0)
+			);
 		}
-
 		return true;
 	}
 
@@ -682,19 +702,19 @@ bool IRecordManagerObject::SaveData(bool replace)
 	if (ExistData())
 		return false;
 
-	m_recordSet->m_aKeyValues.clear();
+	m_recordSet->m_keyValues.clear();
 
 	wxASSERT(m_recordLine);
 
 	for (auto attribute : m_metaObject->GetGenericDimensions()) {
-		m_recordSet->m_aKeyValues.insert_or_assign(
+		m_recordSet->m_keyValues.insert_or_assign(
 			attribute->GetMetaID(),
 			m_recordLine->GetValueByMetaID(attribute->GetMetaID())
 		);
 	}
 
 	if (m_recordSet->WriteRecordSet(replace, false)) {
-		m_objGuid.SetKeyPair(m_recordSet->m_aKeyValues);
+		m_objGuid.SetKeyPair(m_metaObject, m_recordSet->m_keyValues);
 		return true;
 	}
 
@@ -736,7 +756,7 @@ bool IRecordSetObject::ExistData()
 			continue;
 		IMetaAttributeObject::SetValueAttribute(
 			attribute,
-			m_aKeyValues.at(attribute->GetMetaID()),
+			m_keyValues.at(attribute->GetMetaID()),
 			statement,
 			position
 		);
@@ -785,7 +805,7 @@ bool IRecordSetObject::ExistData(number_t& lastNum)
 			continue;
 		IMetaAttributeObject::SetValueAttribute(
 			attribute,
-			m_aKeyValues.at(attribute->GetMetaID()),
+			m_keyValues.at(attribute->GetMetaID()),
 			statement,
 			position
 		);
@@ -814,7 +834,7 @@ bool IRecordSetObject::ExistData(number_t& lastNum)
 
 bool IRecordSetObject::ReadData()
 {
-	m_aObjectValues.clear(); int position = 1;
+	IValueTable::Clear(); int position = 1;
 
 	wxString tableName = m_metaObject->GetTableNameDB();
 	wxString queryText = "SELECT * FROM " + tableName; bool firstWhere = true;
@@ -831,53 +851,44 @@ bool IRecordSetObject::ReadData()
 			firstWhere = false;
 		}
 	}
-
 	PreparedStatement* statement = databaseLayer->PrepareStatement(queryText);
-
 	if (statement == NULL)
 		return false;
-
 	for (auto attribute : m_metaObject->GetGenericDimensions()) {
 		if (!IRecordSetObject::FindKeyValue(attribute->GetMetaID()))
 			continue;
 		IMetaAttributeObject::SetValueAttribute(
 			attribute,
-			m_aKeyValues.at(attribute->GetMetaID()),
+			m_keyValues.at(attribute->GetMetaID()),
 			statement,
 			position
 		);
 	}
-
 	DatabaseResultSet* resultSet = statement->RunQueryWithResults();
-
 	if (resultSet == NULL)
 		return false;
-
 	while (resultSet->Next()) {
-		std::map<meta_identifier_t, CValue> aKeyTable, aRowTable;
+		std::map<meta_identifier_t, CValue> keyTable, rowTable;
 		for (auto attribute : m_metaObject->GetGenericDimensions()) {
-			aKeyTable.insert_or_assign(
+			keyTable.insert_or_assign(
 				attribute->GetMetaID(),
 				IMetaAttributeObject::GetValueAttribute(attribute, resultSet)
 			);
 		}
 		for (auto attribute : m_metaObject->GetGenericAttributes()) {
-			aRowTable.insert_or_assign(
+			rowTable.insert_or_assign(
 				attribute->GetMetaID(),
 				IMetaAttributeObject::GetValueAttribute(attribute, resultSet)
 			);
 		}
-		m_aObjectValues.push_back(aRowTable); m_selected = true;
+		IValueTable::Append(
+			new wxValueTableRow(rowTable), !CTranslateError::IsSimpleMode()
+		); m_selected = true;
 	}
 
 	resultSet->Close();
-
-	if (!CTranslateError::IsSimpleMode()) {
-		IValueTable::Reset(m_aObjectValues.size());
-	}
-
 	databaseLayer->CloseStatement(statement);
-	return m_aObjectValues.size() > 0;
+	return GetRowCount() > 0;
 }
 
 bool IRecordSetObject::SaveData(bool replace, bool clearTable)
@@ -886,10 +897,12 @@ bool IRecordSetObject::SaveData(bool replace, bool clearTable)
 
 	//check fill attributes 
 	bool fillCheck = true; long currLine = 1;
-	for (auto objectValue : m_aObjectValues) {
+	for (long row = 0; row < GetRowCount(); row++) {
 		for (auto attribute : m_metaObject->GetGenericAttributes()) {
 			if (attribute->FillCheck()) {
-				if (objectValue[attribute->GetMetaID()].IsEmpty()) {
+				wxValueTableRow* node = GetViewData(GetItem(row));
+				wxASSERT(node);
+				if (node->IsEmptyValue(attribute->GetMetaID())) {
 					wxString fillError =
 						wxString::Format(_("The %s is required on line %i of the %s"), attribute->GetSynonym(), currLine, m_metaObject->GetSynonym());
 					CSystemObjects::Message(fillError, eStatusMessage::eStatusMessage_Information);
@@ -968,16 +981,13 @@ bool IRecordSetObject::SaveData(bool replace, bool clearTable)
 	if (statement == NULL)
 		return false;
 
-	for (auto objectValue : m_aObjectValues) {
-
+	for (long row = 0; row < GetRowCount(); row++) {
 		if (hasError)
 			break;
-
 		int position = 1;
-
 		for (auto attribute : m_metaObject->GetGenericAttributes()) {
-			auto foundedKey = m_aKeyValues.find(attribute->GetMetaID());
-			if (foundedKey != m_aKeyValues.end()) {
+			auto foundedKey = m_keyValues.find(attribute->GetMetaID());
+			if (foundedKey != m_keyValues.end()) {
 				IMetaAttributeObject::SetValueAttribute(
 					attribute,
 					foundedKey->second,
@@ -994,9 +1004,11 @@ bool IRecordSetObject::SaveData(bool replace, bool clearTable)
 				);
 			}
 			else {
+				wxValueTableRow* node = GetViewData(GetItem(row));
+				wxASSERT(node);
 				IMetaAttributeObject::SetValueAttribute(
 					attribute,
-					objectValue.at(attribute->GetMetaID()),
+					node->GetValue(attribute->GetMetaID()),
 					statement,
 					position
 				);
@@ -1012,7 +1024,7 @@ bool IRecordSetObject::SaveData(bool replace, bool clearTable)
 		return false;
 
 	if (!hasError && clearTable)
-		m_aObjectValues.clear();
+		IValueTable::Clear();
 	else if (!clearTable)
 		m_selected = true;
 
@@ -1046,7 +1058,7 @@ bool IRecordSetObject::DeleteData()
 			continue;
 		IMetaAttributeObject::SetValueAttribute(
 			attribute,
-			m_aKeyValues.at(attribute->GetMetaID()),
+			m_keyValues.at(attribute->GetMetaID()),
 			statement,
 			position
 		);

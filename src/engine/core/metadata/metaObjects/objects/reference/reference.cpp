@@ -29,13 +29,13 @@ void CReferenceDataObject::PrepareRef(bool createData)
 		//attrbutes can refValue 
 		for (auto attribute : m_metaObject->GetGenericAttributes()) {
 			if (!m_metaObject->IsDataReference(attribute->GetMetaID())) {
-				m_aObjectValues.insert_or_assign(
+				m_objectValues.insert_or_assign(
 					attribute->GetMetaID(),
 					attribute->CreateValue()
 				);
 			}
 			else {
-				m_aObjectValues.insert_or_assign(
+				m_objectValues.insert_or_assign(
 					attribute->GetMetaID(), CValue()
 				);
 			}
@@ -43,7 +43,7 @@ void CReferenceDataObject::PrepareRef(bool createData)
 
 		// table is collection values 
 		for (auto table : m_metaObject->GetObjectTables()) {
-			m_aObjectValues[table->GetMetaID()] = new CTabularSectionDataObjectRef(this, table);
+			m_objectValues[table->GetMetaID()] = new CTabularSectionDataObjectRef(this, table);
 		}
 	}
 	else if (CReferenceDataObject::ReadData(createData)) {
@@ -55,21 +55,11 @@ void CReferenceDataObject::PrepareRef(bool createData)
 	}
 }
 
-CReferenceDataObject::CReferenceDataObject(IMetadata* metaData, const meta_identifier_t& id, const Guid& objGuid) : CValue(eValueTypes::TYPE_VALUE, true), IObjectValueInfo(objGuid, !objGuid.isValid()),
-m_metaObject(wxStaticCast(metaData->GetMetaObject(id), IMetaObjectRecordDataRef)), m_methods(new CMethods()), m_initializedRef(false), m_reference_impl(NULL), m_foundedRef(false)
-{
-	m_reference_impl = new reference_t(
-		m_metaObject->GetMetaID(),
-		m_objGuid
-	);
-}
-
 CReferenceDataObject::CReferenceDataObject(IMetaObjectRecordDataRef* metaObject, const Guid& objGuid) : CValue(eValueTypes::TYPE_VALUE, true), IObjectValueInfo(objGuid, !objGuid.isValid()),
 m_metaObject(metaObject), m_methods(new CMethods()), m_initializedRef(false), m_reference_impl(NULL), m_foundedRef(false)
 {
 	m_reference_impl = new reference_t(
-		m_metaObject->GetMetaID(),
-		m_objGuid
+		m_metaObject->GetMetaID(), m_objGuid
 	);
 }
 
@@ -81,23 +71,22 @@ CReferenceDataObject::~CReferenceDataObject()
 
 CReferenceDataObject* CReferenceDataObject::Create(IMetadata* metaData, const meta_identifier_t& id, const Guid& objGuid)
 {
-	CReferenceDataObject* refData = new CReferenceDataObject(
-		metaData,
-		id,
-		objGuid
-	);
-
-	refData->PrepareRef();
-	return refData;
+	IMetaObjectRecordDataRef* metaObject = NULL; 
+	if (metaData->GetMetaObject(metaObject, id)) {
+		CReferenceDataObject* refData = new CReferenceDataObject(
+			metaObject, objGuid
+		);
+		refData->PrepareRef();
+		return refData;
+	}
+	return NULL;
 }
 
 CReferenceDataObject* CReferenceDataObject::Create(IMetaObjectRecordDataRef* metaObject, const Guid& objGuid)
 {
 	CReferenceDataObject* refData = new CReferenceDataObject(
-		metaObject,
-		objGuid
+		metaObject, objGuid
 	);
-
 	refData->PrepareRef();
 	return refData;
 }
@@ -105,38 +94,32 @@ CReferenceDataObject* CReferenceDataObject::Create(IMetaObjectRecordDataRef* met
 CReferenceDataObject* CReferenceDataObject::Create(IMetadata* metaData, void* ptr)
 {
 	reference_t* reference = static_cast<reference_t*>(ptr);
-
 	if (reference != NULL) {
-
-		return new CReferenceDataObject(
-			metaData,
-			reference->m_id,
-			reference->m_guid
-		);
+		IMetaObjectRecordDataRef* metaObject = NULL;
+		if (metaData->GetMetaObject(metaObject, reference->m_id)) {
+			return new CReferenceDataObject(
+				metaObject, reference->m_guid
+			);
+		}
 	}
-
 	return NULL;
 }
 
 CReferenceDataObject* CReferenceDataObject::CreateFromPtr(IMetadata* metaData, void* ptr)
 {
 	reference_t* reference = static_cast<reference_t*>(ptr);
-
 	if (reference != NULL) {
-
-		CReferenceDataObject* refData = new CReferenceDataObject(
-			metaData,
-			reference->m_id,
-			reference->m_guid
-		);
-
-		if (refData != NULL) {
-			refData->PrepareRef(false);
+		IMetaObjectRecordDataRef* metaObject = NULL;
+		if (metaData->GetMetaObject(metaObject, reference->m_id)) {
+			CReferenceDataObject* refData = new CReferenceDataObject(
+				metaObject, reference->m_guid
+			);
+			if (refData != NULL) {
+				refData->PrepareRef(false);
+			}
+			return refData;
 		}
-
-		return refData;
 	}
-
 	return NULL;
 }
 
@@ -151,13 +134,10 @@ CValue CReferenceDataObject::GetValueByMetaID(const meta_identifier_t& id) const
 			return CReferenceDataObject::Create(m_metaObject, m_objGuid);
 		return CReferenceDataObject::Create(m_metaObject);
 	}
-
-	auto foundedIt = m_aObjectValues.find(id);
-	wxASSERT(foundedIt != m_aObjectValues.end());
-	if (foundedIt != m_aObjectValues.end()) {
+	auto foundedIt = m_objectValues.find(id);
+	wxASSERT(foundedIt != m_objectValues.end());
+	if (foundedIt != m_objectValues.end())
 		return foundedIt->second;
-	}
-
 	return CValue();
 }
 
@@ -168,26 +148,28 @@ IMetaObjectRecordData* CReferenceDataObject::GetMetaObject() const
 
 void CReferenceDataObject::ShowValue()
 {
-	IRecordDataObject* objValue = NULL;
-	if (m_metaObject != NULL && m_objGuid.isValid()) {
-		objValue = m_metaObject->CreateObjectValue(m_objGuid);
-	}
-	else {
-		objValue = m_metaObject->CreateObjectValue();
-	}
-
-	if (objValue != NULL) {
-		objValue->ShowFormValue();
+	IMetaObjectRecordDataMutableRef* metaObject = NULL;
+	if (m_metaObject->ConvertToValue(metaObject)) {
+		IRecordDataObject* objValue = NULL;
+		if (metaObject != NULL && m_objGuid.isValid())
+			objValue = metaObject->CreateObjectValue(m_objGuid);
+		else 
+			objValue = metaObject->CreateObjectValue();
+		if (objValue != NULL)
+			objValue->ShowFormValue();
 	}
 }
 
 IRecordDataObjectRef* CReferenceDataObject::GetObject() const
 {
-	if (m_newObject) {
-		return m_metaObject->CreateObjectValue();
+	IMetaObjectRecordDataMutableRef* metaObject = NULL;
+	if (m_metaObject->ConvertToValue(metaObject)) {
+		if (m_newObject) {
+			return metaObject->CreateObjectValue();
+		}
+		return metaObject->CreateObjectValue(m_objGuid);
 	}
-
-	return m_metaObject->CreateObjectValue(m_objGuid);
+	return NULL; 
 }
 
 #include "metadata/singleMetaTypes.h"
@@ -199,7 +181,6 @@ CLASS_ID CReferenceDataObject::GetClassType() const
 	wxASSERT(clsFactory);
 	return clsFactory->GetClassType();
 }
-
 
 wxString CReferenceDataObject::GetString() const
 {

@@ -169,9 +169,9 @@ CValue IRecordSetObject::CRecordSetRegisterKeyValue::CRecordSetRegisterKeyDescri
 
 //////////////////////////////////////////////////////////////
 
-unsigned int IRecordSetObject::AppenRow(unsigned int before)
+long IRecordSetObject::AppendRow(unsigned int before)
 {
-	std::map<meta_identifier_t, CValue> valueRow;
+	modelArray_t valueRow;
 
 	IMetaObjectRegisterData* metaObject = GetMetaObject();
 	wxASSERT(metaObject);
@@ -180,23 +180,11 @@ unsigned int IRecordSetObject::AppenRow(unsigned int before)
 		valueRow.insert_or_assign(attribute->GetMetaID(), attribute->CreateValue());
 	}
 
-	if (before > 0) {
-		m_aObjectValues.insert(
-			m_aObjectValues.begin() + before + 1, valueRow
-		);
-	}
-	else {
-		m_aObjectValues.push_back(valueRow);
-	}
-
-	if (!CTranslateError::IsSimpleMode()) {
-		if (before > 0) {
-			IValueTable::RowInserted(before);
-			return before + 1;
-		}
-		IValueTable::RowPrepended();
-		return m_aObjectValues.size() - 1;
-	}
-
-	return 0;
+	if (before > 0)
+		return IValueTable::Insert(
+			new wxValueTableRow(valueRow), before, !CTranslateError::IsSimpleMode());
+	
+	return IValueTable::Append(
+		new wxValueTableRow(valueRow), !CTranslateError::IsSimpleMode()
+	);
 }

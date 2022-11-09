@@ -74,11 +74,11 @@ public:
 
 public:
 
-	static CDocChildFrame *CreateChildFrame(CView *view, wxPoint pos_wnd, wxSize size_wnd, long style = wxDEFAULT_FRAME_STYLE);
+	static CDocChildFrame *CreateChildFrame(CView *view, const wxPoint &pos, const wxSize &size, long style = wxDEFAULT_FRAME_STYLE);
 
-	KeyBinder             GetKeyBinder() { return m_keyBinder; }
-	FontColorSettings     GetFontColorSettings() { return m_fontColorSettings; }
-	EditorSettings        GetEditorSettings() { return m_editorSettings; }
+	KeyBinder             GetKeyBinder() const { return m_keyBinder; }
+	FontColorSettings     GetFontColorSettings() const { return m_fontColorSettings; }
+	EditorSettings        GetEditorSettings() const { return m_editorSettings; }
 
 	virtual wxMenu *GetDefaultMenu(int nTypeMenu) = 0;
 	virtual CMetadataTree *GetMetadataTree() const { return NULL; }

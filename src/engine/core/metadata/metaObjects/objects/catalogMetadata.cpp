@@ -15,49 +15,20 @@
 //*										 metadata											 * 
 //********************************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(CMetaObjectCatalog, IMetaObjectRecordDataGroupMutableRef);
+wxIMPLEMENT_DYNAMIC_CLASS(CMetaObjectCatalog, IMetaObjectRecordDataFolderMutableRef);
 
 //********************************************************************************************
 //*                                      metadata                                            *
 //********************************************************************************************
 
-CMetaObjectCatalog::CMetaObjectCatalog() : IMetaObjectRecordDataGroupMutableRef()
+CMetaObjectCatalog::CMetaObjectCatalog() : IMetaObjectRecordDataFolderMutableRef()
 {
-	//create default attributes
-	m_attributeCode = CMetaDefaultAttributeObject::CreateString(wxT("code"), _("Code"), wxEmptyString, 8, true);
-	m_attributeCode->SetClsid(g_metaDefaultAttributeCLSID);
-
-	//set child/parent
-	m_attributeCode->SetParent(this);
-	AddChild(m_attributeCode);
-
-	m_attributeDescription = CMetaDefaultAttributeObject::CreateString(wxT("description"), _("Description"), wxEmptyString, 150, true);
-	m_attributeDescription->SetClsid(g_metaDefaultAttributeCLSID);
-
-	//set child/parent
-	m_attributeDescription->SetParent(this);
-	AddChild(m_attributeDescription);
-
 	m_attributeOwner = CMetaDefaultAttributeObject::CreateEmptyType(wxT("owner"), _("Owner"), wxEmptyString, true);
 	m_attributeOwner->SetClsid(g_metaDefaultAttributeCLSID);
 
 	//set child/parent
 	m_attributeOwner->SetParent(this);
 	AddChild(m_attributeOwner);
-
-	m_attributeParent = CMetaDefaultAttributeObject::CreateEmptyType(wxT("parent"), _("Parent"), wxEmptyString);
-	m_attributeParent->SetClsid(g_metaDefaultAttributeCLSID);
-
-	//set child/parent
-	m_attributeParent->SetParent(this);
-	AddChild(m_attributeParent);
-
-	m_attributeIsFolder = CMetaDefaultAttributeObject::CreateBoolean(wxT("isFolder"), _("Is folder"), wxEmptyString);
-	m_attributeIsFolder->SetClsid(g_metaDefaultAttributeCLSID);
-
-	//set child/parent
-	m_attributeIsFolder->SetParent(this);
-	AddChild(m_attributeIsFolder);
 
 	//create module
 	m_moduleObject = new CMetaModuleObject(objectModule);
@@ -86,11 +57,7 @@ CMetaObjectCatalog::CMetaObjectCatalog() : IMetaObjectRecordDataGroupMutableRef(
 
 CMetaObjectCatalog::~CMetaObjectCatalog()
 {
-	wxDELETE(m_attributeCode);
-	wxDELETE(m_attributeDescription);
 	wxDELETE(m_attributeOwner);
-	wxDELETE(m_attributeParent);
-	wxDELETE(m_attributeIsFolder);
 
 	wxDELETE(m_moduleObject);
 	wxDELETE(m_moduleManager);
@@ -131,39 +98,34 @@ ISourceDataObject* CMetaObjectCatalog::CreateObjectData(IMetaFormObject* metaObj
 	switch (metaObject->GetTypeForm())
 	{
 	case eFormObject:
-		return CreateObjectValue();
+		return CreateObjectValue(eObjectMode::OBJECT_ITEM);
 	case eFormGroup:
-		return CreateGroupObjectValue();
+		return CreateObjectValue(eObjectMode::OBJECT_FOLDER);
 	case eFormList:
-		return new CListDataObjectRef(this, metaObject->GetTypeForm());
+		return new CTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), CTreeDataObjectFolderRef::LIST_ITEM_FOLDER);
 	case eFormSelect:
-		return new CListDataObjectRef(this, metaObject->GetTypeForm(), true);
-	case eFormGroupSelect:
-		return new CListDataObjectRef(this, metaObject->GetTypeForm(), true);
+		return new CTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), CTreeDataObjectFolderRef::LIST_ITEM_FOLDER, true);
+	case eFormFolderSelect:
+		return new CTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), CTreeDataObjectFolderRef::LIST_FOLDER, true);
 	}
 
 	return NULL;
 }
 
-IRecordDataObjectRef* CMetaObjectCatalog::CreateGroupObjectRefValue(const Guid& guid)
-{
-	return new CObjectCatalog(this, guid, OBJECT_GROUP);
-}
-
 #include "appData.h"
 
-IRecordDataObjectRef* CMetaObjectCatalog::CreateObjectRefValue(const Guid& guid)
+IRecordDataObjectFolderRef* CMetaObjectCatalog::CreateObjectRefValue(eObjectMode mode, const Guid& guid)
 {
 	IModuleManager* moduleManager = m_metaData->GetModuleManager();
 	wxASSERT(moduleManager);
 	CObjectCatalog* pDataRef = NULL;
 	if (appData->DesignerMode()) {
 		if (!moduleManager->FindCompileModule(m_moduleObject, pDataRef)) {
-			return new CObjectCatalog(this, guid);
+			return new CObjectCatalog(this, guid, mode);
 		}
 	}
 	else {
-		pDataRef = new CObjectCatalog(this, guid);
+		pDataRef = new CObjectCatalog(this, guid, mode);
 	}
 
 	return pDataRef;
@@ -190,7 +152,7 @@ CValueForm* CMetaObjectCatalog::GetObjectForm(const wxString& formName, IValueFr
 	}
 
 	if (defList == NULL) {
-		IRecordDataObject* objectData = CreateObjectValue();
+		IRecordDataObject* objectData = CreateObjectValue(eObjectMode::OBJECT_ITEM);
 		CValueForm* valueForm = new CValueForm;
 		valueForm->InitializeForm(ownerControl, NULL,
 			objectData, formGuid
@@ -200,11 +162,11 @@ CValueForm* CMetaObjectCatalog::GetObjectForm(const wxString& formName, IValueFr
 	}
 
 	return defList->GenerateFormAndRun(
-		ownerControl, CreateObjectValue(), formGuid
+		ownerControl, CreateObjectValue(eObjectMode::OBJECT_ITEM), formGuid
 	);
 }
 
-CValueForm* CMetaObjectCatalog::GetGroupForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectCatalog::GetFolderForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -222,7 +184,7 @@ CValueForm* CMetaObjectCatalog::GetGroupForm(const wxString& formName, IValueFra
 	}
 
 	if (defList == NULL) {
-		IRecordDataObject* objectData = CreateObjectValue();
+		IRecordDataObject* objectData = CreateObjectValue(eObjectMode::OBJECT_FOLDER);
 		CValueForm* valueForm = new CValueForm;
 		valueForm->InitializeForm(ownerControl, NULL,
 			objectData, formGuid
@@ -232,7 +194,7 @@ CValueForm* CMetaObjectCatalog::GetGroupForm(const wxString& formName, IValueFra
 	}
 
 	return defList->GenerateFormAndRun(
-		ownerControl, CreateObjectValue(), formGuid
+		ownerControl, CreateObjectValue(eObjectMode::OBJECT_FOLDER), formGuid
 	);
 }
 
@@ -256,14 +218,14 @@ CValueForm* CMetaObjectCatalog::GetListForm(const wxString& formName, IValueFram
 	if (defList == NULL) {
 		CValueForm* valueForm = new CValueForm();
 		valueForm->InitializeForm(ownerControl, NULL,
-			new CListDataObjectRef(this, CMetaObjectCatalog::eFormList), formGuid
+			new CTreeDataObjectFolderRef(this, CMetaObjectCatalog::eFormList, CTreeDataObjectFolderRef::LIST_ITEM_FOLDER), formGuid
 		);
 		valueForm->BuildForm(CMetaObjectCatalog::eFormList);
 		return valueForm;
 	}
 
 	return defList->GenerateFormAndRun(ownerControl,
-		new CListDataObjectRef(this, defList->GetTypeForm())
+		new CTreeDataObjectFolderRef(this, defList->GetTypeForm(), CTreeDataObjectFolderRef::LIST_ITEM_FOLDER)
 	);
 }
 
@@ -287,24 +249,24 @@ CValueForm* CMetaObjectCatalog::GetSelectForm(const wxString& formName, IValueFr
 	if (defList == NULL) {
 		CValueForm* valueForm = new CValueForm();
 		valueForm->InitializeForm(ownerControl, NULL,
-			new CListDataObjectRef(this, CMetaObjectCatalog::eFormSelect, true), formGuid
+			new CTreeDataObjectFolderRef(this, CMetaObjectCatalog::eFormSelect, CTreeDataObjectFolderRef::LIST_ITEM, true), formGuid
 		);
 		valueForm->BuildForm(CMetaObjectCatalog::eFormSelect);
 		return valueForm;
 	}
 
 	return defList->GenerateFormAndRun(
-		ownerControl, new CListDataObjectRef(this, defList->GetTypeForm(), true), formGuid
+		ownerControl, new CTreeDataObjectFolderRef(this, defList->GetTypeForm(), CTreeDataObjectFolderRef::LIST_ITEM, true), formGuid
 	);
 }
 
-CValueForm* CMetaObjectCatalog::GetGroupSelectForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectCatalog::GetFolderSelectForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
 	if (!formName.IsEmpty()) {
 		for (auto metaForm : GetObjectForms()) {
-			if (CMetaObjectCatalog::eFormGroupSelect == metaForm->GetTypeForm()
+			if (CMetaObjectCatalog::eFormSelect == metaForm->GetTypeForm()
 				&& StringUtils::CompareString(formName, metaForm->GetName())) {
 				defList = metaForm; break;
 			}
@@ -312,21 +274,20 @@ CValueForm* CMetaObjectCatalog::GetGroupSelectForm(const wxString& formName, IVa
 		wxASSERT(defList);
 	}
 	else {
-		defList = GetDefaultFormByID(CMetaObjectCatalog::eFormGroupSelect);
+		defList = GetDefaultFormByID(CMetaObjectCatalog::eFormFolderSelect);
 	}
 
 	if (defList == NULL) {
-		IRecordDataObject* objectData = CreateObjectValue();
-		CValueForm* valueForm = new CValueForm;
+		CValueForm* valueForm = new CValueForm();
 		valueForm->InitializeForm(ownerControl, NULL,
-			objectData, formGuid
+			new CTreeDataObjectFolderRef(this, CMetaObjectCatalog::eFormFolderSelect, CTreeDataObjectFolderRef::LIST_FOLDER, true), formGuid
 		);
-		valueForm->BuildForm(CMetaObjectCatalog::eFormGroupSelect);
+		valueForm->BuildForm(CMetaObjectCatalog::eFormFolderSelect);
 		return valueForm;
 	}
 
 	return defList->GenerateFormAndRun(
-		ownerControl, CreateObjectValue(), formGuid
+		ownerControl, new CTreeDataObjectFolderRef(this, defList->GetTypeForm(), CTreeDataObjectFolderRef::LIST_FOLDER, true), formGuid
 	);
 }
 
@@ -344,7 +305,7 @@ OptionList* CMetaObjectCatalog::GetFormObject(PropertyOption*)
 	return optlist;
 }
 
-OptionList* CMetaObjectCatalog::GetFormGroup(PropertyOption*)
+OptionList* CMetaObjectCatalog::GetFormFolder(PropertyOption*)
 {
 	OptionList* optlist = new OptionList();
 	optlist->AddOption(_("<not selected>"), wxNOT_FOUND);
@@ -386,13 +347,13 @@ OptionList* CMetaObjectCatalog::GetFormSelect(PropertyOption*)
 	return optlist;
 }
 
-OptionList* CMetaObjectCatalog::GetFormGroupSelect(PropertyOption*)
+OptionList* CMetaObjectCatalog::GetFormFolderSelect(PropertyOption*)
 {
 	OptionList* optlist = new OptionList();
 	optlist->AddOption(_("<not selected>"), wxNOT_FOUND);
 
 	for (auto formObject : GetObjectForms()) {
-		if (eFormGroupSelect == formObject->GetTypeForm()) {
+		if (eFormFolderSelect == formObject->GetTypeForm()) {
 			optlist->AddOption(formObject->GetName(), formObject->GetMetaID());
 		}
 	}
@@ -493,11 +454,7 @@ void CMetaObjectCatalog::SaveToVariant(wxVariant& variant, IMetadata* metaData) 
 bool CMetaObjectCatalog::LoadData(CMemoryReader& dataReader)
 {
 	//load default attributes:
-	m_attributeCode->LoadMeta(dataReader);
-	m_attributeDescription->LoadMeta(dataReader);
 	m_attributeOwner->LoadMeta(dataReader);
-	m_attributeParent->LoadMeta(dataReader);
-	m_attributeIsFolder->LoadMeta(dataReader);
 
 	//load object module
 	m_moduleObject->LoadMeta(dataReader);
@@ -505,24 +462,20 @@ bool CMetaObjectCatalog::LoadData(CMemoryReader& dataReader)
 
 	//load default form 
 	m_propertyDefFormObject->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormGroup->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	m_propertyDefFormFolder->SetValue(GetIdByGuid(dataReader.r_stringZ()));
 	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
 	m_propertyDefFormSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
 
 	if (!m_ownerData.LoadData(dataReader))
 		return false;
 
-	return IMetaObjectRecordDataGroupMutableRef::LoadData(dataReader);
+	return IMetaObjectRecordDataFolderMutableRef::LoadData(dataReader);
 }
 
 bool CMetaObjectCatalog::SaveData(CMemoryWriter& dataWritter)
 {
 	//save default attributes:
-	m_attributeCode->SaveMeta(dataWritter);
-	m_attributeDescription->SaveMeta(dataWritter);
 	m_attributeOwner->SaveMeta(dataWritter);
-	m_attributeParent->SaveMeta(dataWritter);
-	m_attributeIsFolder->SaveMeta(dataWritter);
 
 	//save object module
 	m_moduleObject->SaveMeta(dataWritter);
@@ -530,7 +483,7 @@ bool CMetaObjectCatalog::SaveData(CMemoryWriter& dataWritter)
 
 	//save default form 
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormGroup->GetValueAsInteger()));
+	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormFolder->GetValueAsInteger()));
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()));
 	
@@ -538,7 +491,7 @@ bool CMetaObjectCatalog::SaveData(CMemoryWriter& dataWritter)
 		return false;
 
 	//create or update table:
-	return IMetaObjectRecordDataGroupMutableRef::SaveData(dataWritter);
+	return IMetaObjectRecordDataFolderMutableRef::SaveData(dataWritter);
 }
 
 //***********************************************************************
@@ -549,33 +502,17 @@ bool CMetaObjectCatalog::SaveData(CMemoryWriter& dataWritter)
 
 bool CMetaObjectCatalog::OnCreateMetaObject(IMetadata* metaData)
 {
-	if (!IMetaObjectRecordDataGroupMutableRef::OnCreateMetaObject(metaData))
+	if (!IMetaObjectRecordDataFolderMutableRef::OnCreateMetaObject(metaData))
 		return false;
 
-	return m_attributeCode->OnCreateMetaObject(metaData) &&
-		m_attributeDescription->OnCreateMetaObject(metaData) &&
-		m_attributeOwner->OnCreateMetaObject(metaData) &&
-		m_attributeParent->OnCreateMetaObject(metaData) &&
-		m_attributeIsFolder->OnCreateMetaObject(metaData) &&
+	return m_attributeOwner->OnCreateMetaObject(metaData) &&
 		m_moduleManager->OnCreateMetaObject(metaData) &&
 		m_moduleObject->OnCreateMetaObject(metaData);
 }
 
 bool CMetaObjectCatalog::OnLoadMetaObject(IMetadata* metaData)
 {
-	if (!m_attributeCode->OnLoadMetaObject(metaData))
-		return false;
-
-	if (!m_attributeDescription->OnLoadMetaObject(metaData))
-		return false;
-
 	if (!m_attributeOwner->OnLoadMetaObject(metaData))
-		return false;
-
-	if (!m_attributeParent->OnLoadMetaObject(metaData))
-		return false;
-
-	if (!m_attributeIsFolder->OnLoadMetaObject(metaData))
 		return false;
 
 	if (!m_moduleManager->OnLoadMetaObject(metaData))
@@ -584,24 +521,12 @@ bool CMetaObjectCatalog::OnLoadMetaObject(IMetadata* metaData)
 	if (!m_moduleObject->OnLoadMetaObject(metaData))
 		return false;
 
-	return IMetaObjectRecordDataGroupMutableRef::OnLoadMetaObject(metaData);
+	return IMetaObjectRecordDataFolderMutableRef::OnLoadMetaObject(metaData);
 }
 
 bool CMetaObjectCatalog::OnSaveMetaObject()
 {
-	if (!m_attributeCode->OnSaveMetaObject())
-		return false;
-
-	if (!m_attributeDescription->OnSaveMetaObject())
-		return false;
-
 	if (!m_attributeOwner->OnSaveMetaObject())
-		return false;
-
-	if (!m_attributeParent->OnSaveMetaObject())
-		return false;
-
-	if (!m_attributeIsFolder->OnSaveMetaObject())
 		return false;
 
 	if (!m_moduleManager->OnSaveMetaObject())
@@ -610,24 +535,12 @@ bool CMetaObjectCatalog::OnSaveMetaObject()
 	if (!m_moduleObject->OnSaveMetaObject())
 		return false;
 
-	return IMetaObjectRecordDataGroupMutableRef::OnSaveMetaObject();
+	return IMetaObjectRecordDataFolderMutableRef::OnSaveMetaObject();
 }
 
 bool CMetaObjectCatalog::OnDeleteMetaObject()
 {
-	if (!m_attributeCode->OnDeleteMetaObject())
-		return false;
-
-	if (!m_attributeDescription->OnDeleteMetaObject())
-		return false;
-
 	if (!m_attributeOwner->OnDeleteMetaObject())
-		return false;
-
-	if (!m_attributeParent->OnDeleteMetaObject())
-		return false;
-
-	if (!m_attributeIsFolder->OnDeleteMetaObject())
 		return false;
 
 	if (!m_moduleManager->OnDeleteMetaObject())
@@ -636,7 +549,7 @@ bool CMetaObjectCatalog::OnDeleteMetaObject()
 	if (!m_moduleObject->OnDeleteMetaObject())
 		return false;
 
-	return IMetaObjectRecordDataGroupMutableRef::OnDeleteMetaObject();
+	return IMetaObjectRecordDataFolderMutableRef::OnDeleteMetaObject();
 }
 
 bool CMetaObjectCatalog::OnReloadMetaObject()
@@ -659,19 +572,7 @@ bool CMetaObjectCatalog::OnReloadMetaObject()
 
 bool CMetaObjectCatalog::OnBeforeRunMetaObject(int flags)
 {
-	if (!m_attributeCode->OnBeforeRunMetaObject(flags))
-		return false;
-
-	if (!m_attributeDescription->OnBeforeRunMetaObject(flags))
-		return false;
-
 	if (!m_attributeOwner->OnBeforeRunMetaObject(flags))
-		return false;
-
-	if (!m_attributeParent->OnBeforeRunMetaObject(flags))
-		return false;
-
-	if (!m_attributeIsFolder->OnBeforeRunMetaObject(flags))
 		return false;
 
 	if (!m_moduleManager->OnBeforeRunMetaObject(flags))
@@ -682,7 +583,7 @@ bool CMetaObjectCatalog::OnBeforeRunMetaObject(int flags)
 
 	registerSelection();
 
-	if (!IMetaObjectRecordDataGroupMutableRef::OnBeforeRunMetaObject(flags))
+	if (!IMetaObjectRecordDataFolderMutableRef::OnBeforeRunMetaObject(flags))
 		return false;
 
 	IMetaTypeObjectValueSingle* singleObject =
@@ -702,13 +603,13 @@ bool CMetaObjectCatalog::OnAfterRunMetaObject(int flags)
 
 	if (appData->DesignerMode()) {
 
-		if (IMetaObjectRecordDataGroupMutableRef::OnAfterRunMetaObject(flags))
-			return moduleManager->AddCompileModule(m_moduleObject, CreateObjectValue());
+		if (IMetaObjectRecordDataFolderMutableRef::OnAfterRunMetaObject(flags))
+			return moduleManager->AddCompileModule(m_moduleObject, CreateObjectValue(eObjectMode::OBJECT_ITEM));
 
 		return false;
 	}
 
-	return IMetaObjectRecordDataGroupMutableRef::OnAfterRunMetaObject(flags);
+	return IMetaObjectRecordDataFolderMutableRef::OnAfterRunMetaObject(flags);
 }
 
 bool CMetaObjectCatalog::OnBeforeCloseMetaObject()
@@ -718,30 +619,18 @@ bool CMetaObjectCatalog::OnBeforeCloseMetaObject()
 
 	if (appData->DesignerMode()) {
 
-		if (IMetaObjectRecordDataGroupMutableRef::OnBeforeCloseMetaObject())
+		if (IMetaObjectRecordDataFolderMutableRef::OnBeforeCloseMetaObject())
 			return moduleManager->RemoveCompileModule(m_moduleObject);
 
 		return false;
 	}
 
-	return IMetaObjectRecordDataGroupMutableRef::OnBeforeCloseMetaObject();
+	return IMetaObjectRecordDataFolderMutableRef::OnBeforeCloseMetaObject();
 }
 
 bool CMetaObjectCatalog::OnAfterCloseMetaObject()
 {
-	if (!m_attributeCode->OnAfterCloseMetaObject())
-		return false;
-
-	if (!m_attributeDescription->OnAfterCloseMetaObject())
-		return false;
-
 	if (!m_attributeOwner->OnAfterCloseMetaObject())
-		return false;
-
-	if (!m_attributeParent->OnAfterCloseMetaObject())
-		return false;
-
-	if (!m_attributeIsFolder->OnAfterCloseMetaObject())
 		return false;
 
 	if (!m_moduleManager->OnAfterCloseMetaObject())
@@ -752,7 +641,7 @@ bool CMetaObjectCatalog::OnAfterCloseMetaObject()
 
 	unregisterSelection();
 
-	return IMetaObjectRecordDataGroupMutableRef::OnAfterCloseMetaObject();
+	return IMetaObjectRecordDataFolderMutableRef::OnAfterCloseMetaObject();
 }
 
 //***********************************************************************
@@ -767,9 +656,9 @@ void CMetaObjectCatalog::OnCreateMetaForm(IMetaFormObject* metaForm)
 		m_propertyDefFormObject->SetValue(metaForm->GetMetaID());
 	}
 	else if (metaForm->GetTypeForm() == CMetaObjectCatalog::eFormGroup
-		&& m_propertyDefFormGroup->GetValueAsInteger() == wxNOT_FOUND)
+		&& m_propertyDefFormFolder->GetValueAsInteger() == wxNOT_FOUND)
 	{
-		m_propertyDefFormGroup->SetValue(metaForm->GetMetaID());
+		m_propertyDefFormFolder->SetValue(metaForm->GetMetaID());
 	}
 	else if (metaForm->GetTypeForm() == CMetaObjectCatalog::eFormList
 		&& m_propertyDefFormList->GetValueAsInteger() == wxNOT_FOUND)
@@ -781,10 +670,10 @@ void CMetaObjectCatalog::OnCreateMetaForm(IMetaFormObject* metaForm)
 	{
 		m_propertyDefFormSelect->SetValue(metaForm->GetMetaID());
 	}
-	else if (metaForm->GetTypeForm() == CMetaObjectCatalog::eFormGroupSelect
-		&& m_propertyDefFormGroupSelect->GetValueAsInteger() == wxNOT_FOUND)
+	else if (metaForm->GetTypeForm() == CMetaObjectCatalog::eFormFolderSelect
+		&& m_propertyDefFormFolderSelect->GetValueAsInteger() == wxNOT_FOUND)
 	{
-		m_propertyDefFormGroupSelect->SetValue(metaForm->GetMetaID());
+		m_propertyDefFormFolderSelect->SetValue(metaForm->GetMetaID());
 	}
 }
 
@@ -796,9 +685,9 @@ void CMetaObjectCatalog::OnRemoveMetaForm(IMetaFormObject* metaForm)
 		m_propertyDefFormObject->SetValue(metaForm->GetMetaID());
 	}
 	else if (metaForm->GetTypeForm() == CMetaObjectCatalog::eFormGroup
-		&& m_propertyDefFormGroup->GetValueAsInteger() == metaForm->GetMetaID())
+		&& m_propertyDefFormFolder->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormGroup->SetValue(metaForm->GetMetaID());
+		m_propertyDefFormFolder->SetValue(metaForm->GetMetaID());
 	}
 	else if (metaForm->GetTypeForm() == CMetaObjectCatalog::eFormList
 		&& m_propertyDefFormList->GetValueAsInteger() == metaForm->GetMetaID())
@@ -810,10 +699,10 @@ void CMetaObjectCatalog::OnRemoveMetaForm(IMetaFormObject* metaForm)
 	{
 		m_propertyDefFormSelect->SetValue(metaForm->GetMetaID());
 	}
-	else if (metaForm->GetTypeForm() == CMetaObjectCatalog::eFormGroupSelect
-		&& m_propertyDefFormGroupSelect->GetValueAsInteger() == metaForm->GetMetaID())
+	else if (metaForm->GetTypeForm() == CMetaObjectCatalog::eFormFolderSelect
+		&& m_propertyDefFormFolderSelect->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormGroupSelect->SetValue(metaForm->GetMetaID());
+		m_propertyDefFormFolderSelect->SetValue(metaForm->GetMetaID());
 	}
 }
 

@@ -78,6 +78,13 @@ protected:
 			m_actions.emplace_back();
 		}
 
+		void RemoveAction(const action_identifier_t& action) {
+			auto foundedIt = std::find_if(m_actions.begin(), m_actions.end(), [action](const action_t& act) { return action == act.m_act_id; });
+			if (foundedIt != m_actions.end()) {
+				m_actions.erase(foundedIt);
+			}
+		}
+
 		wxString GetNameByID(const action_identifier_t& action) const {
 			auto foundedIt = std::find_if(m_actions.begin(), m_actions.end(), [action](const action_t& act) { return action == act.m_act_id; });
 			if (foundedIt != m_actions.end())

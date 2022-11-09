@@ -3,11 +3,13 @@
 
 #include <wx/dataview.h>
 #include <wx/headerctrl.h>
+#include <wx/sizer.h>
+#include <wx/pen.h>
 
-#include "common/tableInfo.h"
+#include "common/tableNotifier.h"
 
 class CDataViewCtrl : public wxDataViewCtrl {
-	CTableModelNotifier* m_genNotitfier;
+	wxTableModelNotifier* m_genNotitfier;
 protected:
 	class CDataViewFreezeRowsWindow : public wxWindow
 	{
@@ -92,7 +94,7 @@ public:
 	}
 
 	virtual wxSize GetSizeAvailableForScrollTarget(const wxSize& size) override;
-	virtual bool AssociateModel(IValueModel* model);
+	virtual bool AssociateModel(class IValueModel* model);
 
 protected:
 

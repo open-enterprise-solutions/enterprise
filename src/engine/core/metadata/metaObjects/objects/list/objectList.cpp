@@ -12,9 +12,10 @@
 wxIMPLEMENT_ABSTRACT_CLASS(IListDataObject, IValueTable);
 
 wxIMPLEMENT_DYNAMIC_CLASS(CListDataObjectRef, IListDataObject);
-wxIMPLEMENT_DYNAMIC_CLASS(CListDataObjectGroupRef, IListDataObject);
-
 wxIMPLEMENT_DYNAMIC_CLASS(CListRegisterObject, IListDataObject);
+
+wxIMPLEMENT_ABSTRACT_CLASS(ITreeDataObject, IValueTree);
+wxIMPLEMENT_DYNAMIC_CLASS(CTreeDataObjectFolderRef, ITreeDataObject);
 
 IListDataObject::IListDataObject(IMetaObjectWrapperData* metaTable, const form_identifier_t& formType) :
 	ISourceDataObject(), m_objGuid(Guid::newGuid()), m_methods(new CMethods())
@@ -32,34 +33,52 @@ IListDataObject::~IListDataObject()
 	wxDELETE(m_methods);
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
+ITreeDataObject::ITreeDataObject(IMetaObjectWrapperData* metaTable, const form_identifier_t& formType) :
+	ISourceDataObject(), m_objGuid(Guid::newGuid()), m_methods(new CMethods())
+{
+	m_dataColumnCollection = new CDataObjectTreeColumnCollection(this, metaTable);
+	m_dataColumnCollection->IncrRef();
+}
+
+ITreeDataObject::~ITreeDataObject()
+{
+	if (m_dataColumnCollection != NULL) {
+		m_dataColumnCollection->DecrRef();
+	}
+
+	wxDELETE(m_methods);
+}
+
 //////////////////////////////////////////////////////////////////////
 //					  CDataObjectListColumnCollection               //
 //////////////////////////////////////////////////////////////////////
 
 #include "compiler/methods.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(IListDataObject::CDataObjectListColumnCollection, IValueTable::IValueTableColumnCollection);
+wxIMPLEMENT_DYNAMIC_CLASS(IListDataObject::CDataObjectListColumnCollection, IValueTable::IValueModelColumnCollection);
 
 IListDataObject::CDataObjectListColumnCollection::CDataObjectListColumnCollection() :
-	IValueTableColumnCollection(), m_methods(NULL), m_ownerTable(NULL)
+	IValueModelColumnCollection(), m_methods(NULL), m_ownerTable(NULL)
 {
 }
 
 IListDataObject::CDataObjectListColumnCollection::CDataObjectListColumnCollection(IListDataObject* ownerTable, IMetaObjectWrapperData* metaTable) :
-	IValueTableColumnCollection(), m_methods(new CMethods()), m_ownerTable(ownerTable)
+	IValueModelColumnCollection(), m_methods(new CMethods()), m_ownerTable(ownerTable)
 {
 	wxASSERT(metaTable);
 
 	for (auto attributes : metaTable->GetGenericAttributes()) {
 		CDataObjectListColumnInfo* columnInfo = new CDataObjectListColumnInfo(attributes);
-		m_aColumnInfo.insert_or_assign(attributes->GetMetaID(), columnInfo);
+		m_columnInfo.insert_or_assign(attributes->GetMetaID(), columnInfo);
 		columnInfo->IncrRef();
 	}
 }
 
 IListDataObject::CDataObjectListColumnCollection::~CDataObjectListColumnCollection()
 {
-	for (auto& colInfo : m_aColumnInfo) {
+	for (auto& colInfo : m_columnInfo) {
 		CDataObjectListColumnInfo* columnInfo = colInfo.second;
 		wxASSERT(columnInfo);
 		columnInfo->DecrRef();
@@ -76,27 +95,74 @@ CValue IListDataObject::CDataObjectListColumnCollection::GetAt(const CValue& cKe
 {
 	unsigned int index = cKey.ToUInt();
 
-	if ((index < 0 || index >= m_aColumnInfo.size() && !appData->DesignerMode()))
+	if ((index < 0 || index >= m_columnInfo.size() && !appData->DesignerMode()))
 		CTranslateError::Error(_("Index goes beyond array"));
 
-	auto itFounded = m_aColumnInfo.begin();
+	auto itFounded = m_columnInfo.begin();
 	std::advance(itFounded, index);
 	return itFounded->second;
 }
 
+wxIMPLEMENT_DYNAMIC_CLASS(ITreeDataObject::CDataObjectTreeColumnCollection, IValueTree::IValueModelColumnCollection);
+
+ITreeDataObject::CDataObjectTreeColumnCollection::CDataObjectTreeColumnCollection() :
+	IValueModelColumnCollection(), m_methods(NULL), m_ownerTable(NULL)
+{
+}
+
+ITreeDataObject::CDataObjectTreeColumnCollection::CDataObjectTreeColumnCollection(ITreeDataObject* ownerTable, IMetaObjectWrapperData* metaTable) :
+	IValueModelColumnCollection(), m_methods(new CMethods()), m_ownerTable(ownerTable)
+{
+	wxASSERT(metaTable);
+
+	for (auto attributes : metaTable->GetGenericAttributes()) {
+		CDataObjectTreeColumnInfo* columnInfo = new CDataObjectTreeColumnInfo(attributes);
+		m_columnInfo.insert_or_assign(attributes->GetMetaID(), columnInfo);
+		columnInfo->IncrRef();
+	}
+}
+
+ITreeDataObject::CDataObjectTreeColumnCollection::~CDataObjectTreeColumnCollection()
+{
+	for (auto& colInfo : m_columnInfo) {
+		CDataObjectTreeColumnInfo* columnInfo = colInfo.second;
+		wxASSERT(columnInfo);
+		columnInfo->DecrRef();
+	}
+
+	wxDELETE(m_methods);
+}
+
+void ITreeDataObject::CDataObjectTreeColumnCollection::SetAt(const CValue& cKey, CValue& cVal)//индекс массива должен начинаться с 0
+{
+}
+
+CValue ITreeDataObject::CDataObjectTreeColumnCollection::GetAt(const CValue& cKey) //индекс массива должен начинаться с 0
+{
+	unsigned int index = cKey.ToUInt();
+
+	if ((index < 0 || index >= m_columnInfo.size() && !appData->DesignerMode()))
+		CTranslateError::Error(_("Index goes beyond array"));
+
+	auto itFounded = m_columnInfo.begin();
+	std::advance(itFounded, index);
+	return itFounded->second;
+}
+
+
 //////////////////////////////////////////////////////////////////////
-//							 CDataObjectListColumnInfo                    //
+//							 CDataObjectListColumnInfo              //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(IListDataObject::CDataObjectListColumnCollection::CDataObjectListColumnInfo, IValueTable::IValueTableColumnCollection::IValueTableColumnInfo);
+wxIMPLEMENT_DYNAMIC_CLASS(IListDataObject::CDataObjectListColumnCollection::CDataObjectListColumnInfo, IValueTable::IValueModelColumnCollection::IValueModelColumnInfo);
 
 IListDataObject::CDataObjectListColumnCollection::CDataObjectListColumnInfo::CDataObjectListColumnInfo() :
-	IValueTableColumnInfo(), m_metaAttribute(NULL)
+	IValueModelColumnInfo(), m_metaAttribute(NULL)
 {
 }
 
 IListDataObject::CDataObjectListColumnCollection::CDataObjectListColumnInfo::CDataObjectListColumnInfo(IMetaAttributeObject* metaAttribute) :
-	IValueTableColumnInfo(), m_metaAttribute(metaAttribute)
+	IValueModelColumnInfo(), m_metaAttribute(metaAttribute)
 {
 }
 
@@ -104,21 +170,112 @@ IListDataObject::CDataObjectListColumnCollection::CDataObjectListColumnInfo::~CD
 {
 }
 
+wxIMPLEMENT_DYNAMIC_CLASS(ITreeDataObject::CDataObjectTreeColumnCollection::CDataObjectTreeColumnInfo, IValueTree::IValueModelColumnCollection::IValueModelColumnInfo);
+
+ITreeDataObject::CDataObjectTreeColumnCollection::CDataObjectTreeColumnInfo::CDataObjectTreeColumnInfo() :
+	IValueModelColumnInfo(), m_metaAttribute(NULL)
+{
+}
+
+ITreeDataObject::CDataObjectTreeColumnCollection::CDataObjectTreeColumnInfo::CDataObjectTreeColumnInfo(IMetaAttributeObject* metaAttribute) :
+	IValueModelColumnInfo(), m_metaAttribute(metaAttribute)
+{
+}
+
+ITreeDataObject::CDataObjectTreeColumnCollection::CDataObjectTreeColumnInfo::~CDataObjectTreeColumnInfo()
+{
+}
+
 //////////////////////////////////////////////////////////////////////
 //					  CDataObjectListReturnLine                     //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_ABSTRACT_CLASS(IListDataObject::CDataObjectListReturnLine, IValueTable::IValueTableReturnLine);
+wxIMPLEMENT_DYNAMIC_CLASS(IListDataObject::CDataObjectListReturnLine, IValueTable::IValueModelReturnLine);
 
-IListDataObject::CDataObjectListReturnLine::CDataObjectListReturnLine(IListDataObject* ownerTable, int line) : IValueTableReturnLine(), m_methods(new CMethods()), m_ownerTable(ownerTable), m_lineTable(line) {}
-IListDataObject::CDataObjectListReturnLine::~CDataObjectListReturnLine() { if (m_methods) delete m_methods; }
+IListDataObject::CDataObjectListReturnLine::CDataObjectListReturnLine(IListDataObject* ownerTable, const wxDataViewItem& line) :
+	IValueModelReturnLine(line), m_methods(new CMethods()), m_ownerTable(ownerTable) {
+}
+
+IListDataObject::CDataObjectListReturnLine::~CDataObjectListReturnLine() {
+	if (m_methods)
+		delete m_methods;
+}
+
+void IListDataObject::CDataObjectListReturnLine::SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal)
+{
+}
+
+CValue IListDataObject::CDataObjectListReturnLine::GetValueByMetaID(const meta_identifier_t& id) const
+{
+	wxValueTableRow* node = m_ownerTable->GetViewData(m_lineItem);
+	if (node != NULL)
+		return node->GetValue(id);
+	return CValue();
+}
 
 void IListDataObject::CDataObjectListReturnLine::PrepareNames() const
 {
 	std::vector<SEng> aAttributes;
-
 	IMetaObjectWrapperData* metaObject = m_ownerTable->GetMetaObject();
+	for (auto attribute : metaObject->GetGenericAttributes()) {
+		SEng aAttribute;
+		aAttribute.sName = attribute->GetName();
+		aAttribute.sSynonym = wxT("default");
+		aAttribute.iName = attribute->GetMetaID();
+		aAttributes.push_back(aAttribute);
+	}
+	SEng aAttribute;
+	aAttribute.sName = wxT("reference");
+	aAttribute.sSynonym = wxT("reference");
+	aAttribute.iName = metaObject->GetMetaID();
+	aAttributes.push_back(aAttribute);
+	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
+}
 
+void IListDataObject::CDataObjectListReturnLine::SetAttribute(attributeArg_t& aParams, CValue& cVal)
+{
+	const meta_identifier_t& id = m_methods->GetAttributePosition(aParams.GetIndex());
+}
+
+CValue IListDataObject::CDataObjectListReturnLine::GetAttribute(attributeArg_t& aParams)
+{
+	if (appData->DesignerMode())
+		return CValue();
+	const meta_identifier_t& id = m_methods->GetAttributePosition(aParams.GetIndex());
+	wxValueTableRow* node = m_ownerTable->GetViewData(m_lineItem);
+	if (node == NULL)
+		return CValue();
+	return node->GetValue(id);
+}
+
+wxIMPLEMENT_DYNAMIC_CLASS(ITreeDataObject::CDataObjectTreeReturnLine, IValueTree::IValueModelReturnLine);
+
+ITreeDataObject::CDataObjectTreeReturnLine::CDataObjectTreeReturnLine(ITreeDataObject* ownerTable, const wxDataViewItem& line) :
+	IValueModelReturnLine(line),
+	m_methods(new CMethods()), m_ownerTable(ownerTable) {
+}
+
+ITreeDataObject::CDataObjectTreeReturnLine::~CDataObjectTreeReturnLine() {
+	if (m_methods)
+		delete m_methods;
+}
+
+void ITreeDataObject::CDataObjectTreeReturnLine::SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal)
+{
+}
+
+CValue ITreeDataObject::CDataObjectTreeReturnLine::GetValueByMetaID(const meta_identifier_t& id) const
+{
+	wxValueTreeNode* node = m_ownerTable->GetViewData(m_lineItem);
+	if (node != NULL)
+		return node->GetValue(id);
+	return CValue();
+}
+
+void ITreeDataObject::CDataObjectTreeReturnLine::PrepareNames() const
+{
+	std::vector<SEng> aAttributes;
+	IMetaObjectWrapperData* metaObject = m_ownerTable->GetMetaObject();
 	for (auto attribute : metaObject->GetGenericAttributes()) {
 		SEng aAttribute;
 		aAttribute.sName = attribute->GetName();
@@ -136,48 +293,47 @@ void IListDataObject::CDataObjectListReturnLine::PrepareNames() const
 	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
 }
 
-void IListDataObject::CDataObjectListReturnLine::SetAttribute(attributeArg_t& aParams, CValue& cVal)
+void ITreeDataObject::CDataObjectTreeReturnLine::SetAttribute(attributeArg_t& aParams, CValue& cVal)
 {
 	const meta_identifier_t& id = m_methods->GetAttributePosition(aParams.GetIndex());
-	auto& rowValues = m_ownerTable->GetRowData(m_lineTable);
 }
 
-CValue IListDataObject::CDataObjectListReturnLine::GetAttribute(attributeArg_t& aParams)
+CValue ITreeDataObject::CDataObjectTreeReturnLine::GetAttribute(attributeArg_t& aParams)
 {
-	if (appData->DesignerMode()) {
+	if (appData->DesignerMode())
 		return CValue();
-	}
-
 	const meta_identifier_t& id = m_methods->GetAttributePosition(aParams.GetIndex());
-
-	auto& rowValues = m_ownerTable->GetRowData(m_lineTable);
-	auto itFoundedByIndex = rowValues.find(id);
-	if (itFoundedByIndex != rowValues.end()) {
-		return itFoundedByIndex->second;
+	wxValueTreeNode* node = m_ownerTable->GetViewData(m_lineItem);
+	if (node != NULL) {
+		CValue cValue; node->GetValue(cValue, id);
+		return cValue;
 	}
-
 	return CValue();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-wxDataViewItem CListDataObjectRef::GetLineByGuid(const Guid& guid) const
+wxDataViewItem CListDataObjectRef::FindRowValue(const CValue& cVal, const wxString &colName) const
 {
-	auto foundedIt = m_aObjectValues.find(guid);
-	if (foundedIt == m_aObjectValues.end()) {
-		return wxDataViewItem(NULL);
+	CReferenceDataObject* pRefData = NULL;
+	if (cVal.ConvertToValue(pRefData)) {
+		for (long row = 0; row < GetRowCount(); row++) {
+			wxDataViewItem item = GetItem(row);
+			if (item.IsOk()) {
+				wxValueTableListRow* node = GetViewData<wxValueTableListRow>(item);
+				if (node != NULL && pRefData->GetGuid() == node->GetGuid())
+					return item;
+			}
+		}
 	}
-
-	return GetItem(
-		std::distance(m_aObjectValues.begin(), foundedIt)
-	);
+	return wxDataViewItem(NULL);
 }
 
-std::map<meta_identifier_t, CValue>& CListDataObjectRef::GetRowData(unsigned int lineTable)
+wxDataViewItem CListDataObjectRef::FindRowValue(IValueModelReturnLine* retLine) const
 {
-	auto itFoundedByLine = m_aObjectValues.begin();
-	std::advance(itFoundedByLine, lineTable);
-	return itFoundedByLine->second;
+	return FindRowValue(
+		retLine->GetValueByMetaID(*m_metaObject->GetDataReference())
+	);
 }
 
 CListDataObjectRef::CListDataObjectRef(IMetaObjectRecordDataRef* metaObject, const form_identifier_t& formType, bool choiceMode) : IListDataObject(metaObject, formType),
@@ -218,76 +374,81 @@ bool CListDataObjectRef::GetModel(IValueModel*& tableValue, const meta_identifie
 //events 
 void CListDataObjectRef::AddValue(unsigned int before)
 {
-	IRecordDataObject* dataValue =
-		m_metaObject->CreateObjectValue();
-
-	if (dataValue != NULL) {
-		dataValue->ShowValue();
+	IMetaObjectRecordDataMutableRef* metaObject = NULL;
+	if (m_metaObject->ConvertToValue(metaObject)) {
+		IRecordDataObject* dataValue =
+			metaObject->CreateObjectValue();
+		if (dataValue != NULL) {
+			dataValue->ShowValue();
+		}
 	}
 }
 
 void CListDataObjectRef::CopyValue()
 {
-	int currentLine = GetSelectionLine();
-	if (currentLine == wxNOT_FOUND)
-		return;
-
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, currentLine);
-
-	IRecordDataObject* dataValue =
-		m_metaObject->CreateObjectValue(itFounded->first);
-	if (dataValue != NULL) {
-		CValue reference = dataValue->CopyObjectValue();
-		reference.ShowValue();
+	IMetaObjectRecordDataMutableRef* metaObject = NULL;
+	if (m_metaObject->ConvertToValue(metaObject)) {
+		wxDataViewItem currentData = GetSelection();
+		if (!currentData.IsOk())
+			return;
+		wxValueTableListRow* node = GetViewData<wxValueTableListRow>(currentData);
+		if (node == NULL)
+			return;
+		IRecordDataObject* dataValue =
+			metaObject->CreateObjectValue(node->GetGuid());
+		if (dataValue != NULL) {
+			CValue reference = dataValue->CopyObjectValue();
+			reference.ShowValue();
+		}
 	}
 }
 
 void CListDataObjectRef::EditValue()
 {
-	int currentLine = GetSelectionLine();
-	if (currentLine == wxNOT_FOUND)
-		return;
-
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, currentLine);
-
-	CValue reference =
-		m_metaObject->CreateObjectValue(itFounded->first);
-
-	reference.ShowValue();
+	IMetaObjectRecordDataMutableRef* metaObject = NULL;
+	if (m_metaObject->ConvertToValue(metaObject)) {
+		wxDataViewItem currentData = GetSelection();
+		if (!currentData.IsOk())
+			return;
+		wxValueTableListRow* node = GetViewData<wxValueTableListRow>(currentData);
+		if (node == NULL)
+			return;
+		CValue reference =
+			metaObject->CreateObjectValue(node->GetGuid());
+		reference.ShowValue();
+	}
 }
 
 void CListDataObjectRef::DeleteValue()
 {
-	int currentLine = GetSelectionLine();
-	if (currentLine == wxNOT_FOUND)
-		return;
-
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, currentLine);
-
-	IRecordDataObject* objData =
-		m_metaObject->CreateObjectValue(itFounded->first);
-
-	if (objData != NULL) {
-		//objData->DeleteObject();
+	IMetaObjectRecordDataMutableRef* metaObject = NULL;
+	if (m_metaObject->ConvertToValue(metaObject)) {
+		wxDataViewItem currentData = GetSelection();
+		if (!currentData.IsOk())
+			return;
+		wxValueTableListRow* node = GetViewData<wxValueTableListRow>(currentData);
+		if (node == NULL)
+			return;
+		IRecordDataObject* objData =
+			metaObject->CreateObjectValue(node->GetGuid());
+		if (objData != NULL) {
+			//objData->DeleteObject();
+		}
+		CListDataObjectRef::RefreshModel();
 	}
-
-	CListDataObjectRef::RefreshModel();
 }
 
 void CListDataObjectRef::ChooseValue(CValueForm* srcForm)
 {
-	int currentLine = GetSelectionLine();
-	if (currentLine == wxNOT_FOUND)
+	wxDataViewItem currentData = GetSelection();
+	if (!currentData.IsOk())
 		return;
 	wxASSERT(srcForm);
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, currentLine);
-
+	wxValueTableListRow* node = GetViewData<wxValueTableListRow>(currentData);
+	if (node == NULL)
+		return;
 	CValue reference =
-		m_metaObject->FindObjectValue(itFounded->first);
+		m_metaObject->FindObjectValue(node->GetGuid());
 
 	srcForm->NotifyChoice(reference);
 }
@@ -320,32 +481,53 @@ wxString CListDataObjectRef::GetString() const
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-wxDataViewItem CListDataObjectGroupRef::GetLineByGuid(const Guid& guid) const
+wxDataViewItem CTreeDataObjectFolderRef::FindRowValue(const CValue& cVal, const wxString &colName) const
 {
-	auto foundedIt = m_aObjectValues.find(guid);
-	if (foundedIt == m_aObjectValues.end()) {
-		return wxDataViewItem(NULL);
+	CReferenceDataObject* pRefData = NULL;
+	if (cVal.ConvertToValue(pRefData)) {
+		std::function<void(wxValueTreeListNode*, wxValueTreeListNode*&, const Guid&)> findGuid = [&findGuid](wxValueTreeListNode* parent, wxValueTreeListNode*& foundedNode, const Guid& guid) {
+			if (guid == parent->GetGuid()) {
+				foundedNode = parent; return;
+			}
+			else if (foundedNode != NULL) {
+				return;
+			}
+			for (unsigned int n = 0; n < parent->GetChildCount(); n++) {
+				wxValueTreeListNode* node = dynamic_cast<wxValueTreeListNode*>(parent->GetChild(n));
+				if (node != NULL)
+					findGuid(node, foundedNode, guid);
+				if (foundedNode != NULL)
+					break;
+			}
+		};
+		wxValueTreeListNode* foundedNode = NULL;
+		for (unsigned int child = 0; child < GetRoot()->GetChildCount(); child++) {
+			wxValueTreeListNode* node = dynamic_cast<wxValueTreeListNode*>(GetRoot()->GetChild(child));
+			if (node != NULL)
+				findGuid(node, foundedNode, pRefData->GetGuid());
+			if (foundedNode != NULL)
+				break;
+		}
+		if (foundedNode != NULL)
+			return wxDataViewItem(foundedNode);
 	}
+	return wxDataViewItem(NULL);
+}
 
-	return GetItem(
-		std::distance(m_aObjectValues.begin(), foundedIt)
+wxDataViewItem CTreeDataObjectFolderRef::FindRowValue(IValueModelReturnLine* retLine) const
+{
+	return FindRowValue(
+		retLine->GetValueByMetaID(*m_metaObject->GetDataReference())
 	);
 }
 
-std::map<meta_identifier_t, CValue>& CListDataObjectGroupRef::GetRowData(unsigned int lineTable)
-{
-	auto itFoundedByLine = m_aObjectValues.begin();
-	std::advance(itFoundedByLine, lineTable);
-	return itFoundedByLine->second;
-}
-
-CListDataObjectGroupRef::CListDataObjectGroupRef(IMetaObjectRecordDataGroupMutableRef* metaObject, const form_identifier_t& formType,
-	int listMode, bool choiceMode) : IListDataObject(metaObject, formType),
-	m_metaObject(metaObject), m_choiceMode(choiceMode)
+CTreeDataObjectFolderRef::CTreeDataObjectFolderRef(IMetaObjectRecordDataFolderMutableRef* metaObject, const form_identifier_t& formType,
+	int listMode, bool choiceMode) : ITreeDataObject(metaObject, formType),
+	m_metaObject(metaObject), m_listMode(listMode), m_choiceMode(choiceMode)
 {
 }
 
-CSourceExplorer CListDataObjectGroupRef::GetSourceExplorer() const
+CSourceExplorer CTreeDataObjectFolderRef::GetSourceExplorer() const
 {
 	CSourceExplorer srcHelper(
 		m_metaObject, GetClassType(),
@@ -359,7 +541,7 @@ CSourceExplorer CListDataObjectGroupRef::GetSourceExplorer() const
 	return srcHelper;
 }
 
-bool CListDataObjectGroupRef::GetModel(IValueModel*& tableValue, const meta_identifier_t& id)
+bool CTreeDataObjectFolderRef::GetModel(IValueModel*& tableValue, const meta_identifier_t& id)
 {
 	if (id == m_metaObject->GetMetaID()) {
 		tableValue = this;
@@ -369,85 +551,121 @@ bool CListDataObjectGroupRef::GetModel(IValueModel*& tableValue, const meta_iden
 }
 
 //events 
-void CListDataObjectGroupRef::AddValue(unsigned int before)
+void CTreeDataObjectFolderRef::AddValue(unsigned int before)
 {
-	IRecordDataObject* dataValue =
-		m_metaObject->CreateObjectValue();
-
-	if (dataValue != NULL) {
-		dataValue->ShowValue();
+	CValue isFolder = true; CValue cParent;
+	wxValueTreeListNode* node = GetViewData<wxValueTreeListNode>(GetSelection());
+	if (node != NULL) {
+		node->GetValue(isFolder, *m_metaObject->GetDataIsFolder());
+		if (!isFolder.GetBoolean()) {
+			node->GetValue(cParent, *m_metaObject->GetDataParent());
+		}
+		else {
+			node->GetValue(cParent, *m_metaObject->GetDataReference());
+		}
 	}
+	IRecordDataObject* dataValue =
+		m_metaObject->CreateObjectValue(eObjectMode::OBJECT_ITEM);
+	if (dataValue == NULL)
+		return;
+	dataValue->SetValueByMetaID(*m_metaObject->GetDataParent(), cParent);
+	dataValue->ShowValue();
 }
 
-void CListDataObjectGroupRef::CopyValue()
+void CTreeDataObjectFolderRef::AddFolderValue(unsigned int before)
 {
-	int currentLine = GetSelectionLine();
-	if (currentLine == wxNOT_FOUND)
-		return;
-
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, currentLine);
+	CValue isFolder = true; CValue cParent;
+	wxValueTreeListNode* node = GetViewData<wxValueTreeListNode>(GetSelection());
+	if (node != NULL) {
+		node->GetValue(isFolder, *m_metaObject->GetDataIsFolder());
+		if (!isFolder.GetBoolean()) {
+			node->GetValue(cParent, *m_metaObject->GetDataParent());
+		}
+		else {
+			node->GetValue(cParent, *m_metaObject->GetDataReference());
+		}
+	}
 
 	IRecordDataObject* dataValue =
-		m_metaObject->CreateObjectValue(itFounded->first);
+		m_metaObject->CreateObjectValue(eObjectMode::OBJECT_FOLDER);
+	if (dataValue == NULL)
+		return;
+	dataValue->SetValueByMetaID(*m_metaObject->GetDataParent(), cParent);
+	dataValue->ShowValue();
+}
+
+void CTreeDataObjectFolderRef::CopyValue()
+{
+	const wxDataViewItem& item = GetSelection();
+	wxValueTreeListNode* node = static_cast<wxValueTreeListNode*>(item.GetID());
+	if (node == NULL)
+		return;
+	CValue isFolder = false;
+	node->GetValue(isFolder, *m_metaObject->GetDataIsFolder());
+	IRecordDataObject* dataValue =
+		m_metaObject->CreateObjectValue(isFolder.GetBoolean() ? eObjectMode::OBJECT_FOLDER : eObjectMode::OBJECT_ITEM, node->GetGuid());
 	if (dataValue != NULL) {
 		CValue reference = dataValue->CopyObjectValue();
 		reference.ShowValue();
 	}
 }
 
-void CListDataObjectGroupRef::EditValue()
+void CTreeDataObjectFolderRef::EditValue()
 {
-	int currentLine = GetSelectionLine();
-	if (currentLine == wxNOT_FOUND)
+	const wxDataViewItem& item = GetSelection();
+	wxValueTreeListNode* node = static_cast<wxValueTreeListNode*>(item.GetID());
+	if (node == NULL)
 		return;
-
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, currentLine);
-
+	CValue isFolder = false;
+	node->GetValue(isFolder, *m_metaObject->GetDataIsFolder());
 	CValue reference =
-		m_metaObject->CreateObjectValue(itFounded->first);
-
+		m_metaObject->CreateObjectValue(isFolder.GetBoolean() ? eObjectMode::OBJECT_FOLDER : eObjectMode::OBJECT_ITEM, node->GetGuid());
 	reference.ShowValue();
 }
 
-void CListDataObjectGroupRef::DeleteValue()
+void CTreeDataObjectFolderRef::DeleteValue()
 {
-	int currentLine = GetSelectionLine();
-	if (currentLine == wxNOT_FOUND)
+	const wxDataViewItem& item = GetSelection();
+	wxValueTreeListNode* node = static_cast<wxValueTreeListNode*>(item.GetID());
+	if (node == NULL)
 		return;
 
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, currentLine);
-
+	CValue isFolder = false;
+	node->GetValue(isFolder, *m_metaObject->GetDataIsFolder());
 	IRecordDataObject* objData =
-		m_metaObject->CreateObjectValue(itFounded->first);
+		m_metaObject->CreateObjectValue(isFolder.GetBoolean() ? eObjectMode::OBJECT_FOLDER : eObjectMode::OBJECT_ITEM, node->GetGuid());
 
 	if (objData != NULL) {
 		//objData->DeleteObject();
 	}
 
-	CListDataObjectGroupRef::RefreshModel();
+	CTreeDataObjectFolderRef::RefreshModel();
 }
 
-void CListDataObjectGroupRef::ChooseValue(CValueForm* srcForm)
+void CTreeDataObjectFolderRef::ChooseValue(CValueForm* srcForm)
 {
-	int currentLine = GetSelectionLine();
-	if (currentLine == wxNOT_FOUND)
+	const wxDataViewItem& item = GetSelection();
+	wxValueTreeListNode* node = static_cast<wxValueTreeListNode*>(item.GetID());
+	if (node == NULL)
 		return;
 	wxASSERT(srcForm);
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, currentLine);
+	CValue cIsFolder = false;
+	node->GetValue(cIsFolder, *m_metaObject->GetDataIsFolder());
 
 	CValue reference =
-		m_metaObject->FindObjectValue(itFounded->first);
+		m_metaObject->FindObjectValue(node->GetGuid());
 
-	srcForm->NotifyChoice(reference);
+	if (m_listMode == LIST_FOLDER && cIsFolder.GetBoolean())
+		srcForm->NotifyChoice(reference);
+	else if (m_listMode == LIST_ITEM && !cIsFolder.GetBoolean())
+		srcForm->NotifyChoice(reference);
+	else if (m_listMode == LIST_ITEM_FOLDER)
+		srcForm->NotifyChoice(reference);
 }
 
 #include "metadata/singleMetaTypes.h"
 
-CLASS_ID CListDataObjectGroupRef::GetClassType() const
+CLASS_ID CTreeDataObjectFolderRef::GetClassType() const
 {
 	IMetaTypeObjectValueSingle* clsFactory =
 		m_metaObject->GetTypeObject(eMetaObjectType::enList);
@@ -455,7 +673,7 @@ CLASS_ID CListDataObjectGroupRef::GetClassType() const
 	return clsFactory->GetClassType();
 }
 
-wxString CListDataObjectGroupRef::GetTypeString() const
+wxString CTreeDataObjectFolderRef::GetTypeString() const
 {
 	IMetaTypeObjectValueSingle* clsFactory =
 		m_metaObject->GetTypeObject(eMetaObjectType::enList);
@@ -463,7 +681,7 @@ wxString CListDataObjectGroupRef::GetTypeString() const
 	return clsFactory->GetClassName();
 }
 
-wxString CListDataObjectGroupRef::GetString() const
+wxString CTreeDataObjectFolderRef::GetString() const
 {
 	IMetaTypeObjectValueSingle* clsFactory =
 		m_metaObject->GetTypeObject(eMetaObjectType::enList);
@@ -473,11 +691,30 @@ wxString CListDataObjectGroupRef::GetString() const
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-std::map<meta_identifier_t, CValue>& CListRegisterObject::GetRowData(unsigned int lineTable)
+wxDataViewItem CListRegisterObject::FindRowValue(const CValue& cVal, const wxString &colName) const
 {
-	auto itFoundedByLine = m_aObjectValues.begin();
-	std::advance(itFoundedByLine, lineTable);
-	return itFoundedByLine->second;
+	return wxDataViewItem(NULL);
+}
+
+wxDataViewItem CListRegisterObject::FindRowValue(IValueModelReturnLine* retLine) const
+{
+	for (long row = 0; row < GetRowCount(); row++) {
+		wxDataViewItem item = GetItem(row);
+		if (item.IsOk()) {
+			wxValueTableKeyRow* node = GetViewData<wxValueTableKeyRow>(item);
+			if (node != NULL) {
+				bool founded = true; 
+				for (auto dimension : m_metaObject->GetGenericDimensions()) {
+					if (node->GetValue(dimension->GetMetaID()) != retLine->GetValueByMetaID(dimension->GetMetaID()))
+						founded = false; 
+				}
+				if (founded)
+					return item;
+			}
+		}
+	};
+
+	return wxDataViewItem(NULL);
 }
 
 CListRegisterObject::CListRegisterObject(IMetaObjectRegisterData* metaObject, const form_identifier_t& formType) :
@@ -522,17 +759,16 @@ void CListRegisterObject::AddValue(unsigned int before)
 
 void CListRegisterObject::CopyValue()
 {
-	int currentLine = GetSelectionLine();
-	if (currentLine == wxNOT_FOUND)
+	wxDataViewItem currentData = GetSelection();
+	if (!currentData.IsOk())
 		return;
-
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, currentLine);
-
+	wxValueTableKeyRow* node = GetViewData<wxValueTableKeyRow>(currentData);
+	if (node == NULL)
+		return;
 	if (m_metaObject != NULL &&
 		m_metaObject->HasRecordManager()) {
 		IRecordManagerObject* recordManager = m_metaObject->CreateRecordManagerObjectValue(
-			CUniquePairKey{ m_metaObject, itFounded->second }
+			node->GetUniquePairKey(m_metaObject)
 		);
 		wxASSERT(recordManager);
 		CValue recManager =
@@ -543,17 +779,16 @@ void CListRegisterObject::CopyValue()
 
 void CListRegisterObject::EditValue()
 {
-	int currentLine = GetSelectionLine();
-	if (currentLine == wxNOT_FOUND)
+	wxDataViewItem currentData = GetSelection();
+	if (!currentData.IsOk())
 		return;
-
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, currentLine);
-
+	wxValueTableKeyRow* node = GetViewData<wxValueTableKeyRow>(currentData);
+	if (node == NULL)
+		return;
 	if (m_metaObject != NULL &&
 		m_metaObject->HasRecordManager()) {
 		IRecordManagerObject* recordManager = m_metaObject->CreateRecordManagerObjectValue(
-			CUniquePairKey{ m_metaObject, itFounded->second }
+			node->GetUniquePairKey(m_metaObject)
 		);
 		wxASSERT(recordManager);
 		recordManager->ShowFormValue();
@@ -562,9 +797,7 @@ void CListRegisterObject::EditValue()
 		CMetaDefaultAttributeObject* recorder =
 			m_metaObject->GetRegisterRecorder();
 		if (recorder != NULL) {
-			auto itRef = itFounded->second;
-			CValue reference =
-				itRef.at(recorder->GetMetaID());
+			CValue reference = node->GetValue(recorder->GetMetaID());
 			reference.ShowValue();
 		}
 	}
@@ -572,17 +805,16 @@ void CListRegisterObject::EditValue()
 
 void CListRegisterObject::DeleteValue()
 {
-	int currentLine = GetSelectionLine();
-	if (currentLine == wxNOT_FOUND)
+	wxDataViewItem currentData = GetSelection();
+	if (!currentData.IsOk())
 		return;
-
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, currentLine);
-
+	wxValueTableKeyRow* node = GetViewData<wxValueTableKeyRow>(currentData);
+	if (node == NULL)
+		return;
 	if (m_metaObject != NULL &&
 		m_metaObject->HasRecordManager()) {
 		IRecordManagerObject* recordManager = m_metaObject->CreateRecordManagerObjectValue(
-			CUniquePairKey{ m_metaObject, itFounded->second }
+			node->GetUniquePairKey(m_metaObject)
 		);
 		wxASSERT(recordManager);
 		recordManager->DeleteRegister();

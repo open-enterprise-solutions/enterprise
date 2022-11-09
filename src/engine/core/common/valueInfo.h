@@ -43,7 +43,7 @@ protected:
 	
 	Guid m_objGuid;
 	
-	std::map<meta_identifier_t, CValue> m_aObjectValues;
+	std::map<meta_identifier_t, CValue> m_objectValues;
 	std::vector<ITabularSectionDataObject*> m_aObjectTables;
 	
 	bool m_newObject;

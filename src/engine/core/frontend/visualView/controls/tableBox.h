@@ -21,7 +21,7 @@ protected:
 
 private:
 	IValueModel* m_tableModel;
-	IValueModel::IValueTableReturnLine* m_tableCurrentLine;
+	IValueModel::IValueModelReturnLine* m_tableCurrentLine;
 public:
 
 	CValueTableBox();
@@ -103,7 +103,7 @@ public:
 
 	//other
 	void AddColumn();
-	void CreateColumns(CDataViewCtrl* tableCtrl = NULL);
+	void CreateColumns(wxDataViewCtrl* tableCtrl = NULL);
 
 	void CreateTable();
 
@@ -127,6 +127,7 @@ protected:
 	void OnItemEditingStarted(wxDataViewEvent& event);
 	void OnItemEditingDone(wxDataViewEvent& event);
 	void OnItemValueChanged(wxDataViewEvent& event);
+	void OnItemStartDeleting(wxDataViewEvent& event);
 
 #if wxUSE_DRAG_AND_DROP
 	void OnItemBeginDrag(wxDataViewEvent& event);

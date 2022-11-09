@@ -199,8 +199,8 @@ CValue CValueTableBoxColumn::GetControlValue() const
 		CValueTableBox
 	);
 	wxASSERT(tableBox);
-	IValueTable::IValueTableReturnLine* retLine = tableBox->m_tableCurrentLine;
-	if (retLine) {
+	IValueTable::IValueModelReturnLine* retLine = tableBox->m_tableCurrentLine;
+	if (retLine != NULL) {
 		return retLine->GetValueByMetaID(
 			!m_dataSource.isValid() ? m_controlId : GetIdByGuid(m_dataSource)
 		);
@@ -217,7 +217,7 @@ void CValueTableBoxColumn::SetControlValue(CValue& vSelected)
 		CValueTableBox
 	);
 	wxASSERT(tableBox);
-	IValueTable::IValueTableReturnLine* retLine = tableBox->m_tableCurrentLine;
+	IValueTable::IValueModelReturnLine* retLine = tableBox->m_tableCurrentLine;
 	if (retLine) {
 		retLine->SetValueByMetaID(
 			!m_dataSource.isValid() ? m_controlId : GetIdByGuid(m_dataSource), vSelected

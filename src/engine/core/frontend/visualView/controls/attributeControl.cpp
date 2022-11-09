@@ -379,7 +379,8 @@ CValue IAttributeControl::CreateValue() const
 	return IAttributeControl::CreateValueRef();
 }
 
-CValue* IAttributeControl::CreateValueRef() const
+
+CValue *IAttributeControl::CreateValueRef() const
 {
 	if (m_dataSource.isValid() && GetSourceObject()) {
 		IMetaObjectWrapperData* metaObjectValue =

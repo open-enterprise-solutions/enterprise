@@ -39,7 +39,7 @@ class ISelectorDataObject : public ISelectorObject,
 	public IObjectValueInfo {
 public:
 
-	ISelectorDataObject(IMetaObjectRecordDataRef* metaObject);
+	ISelectorDataObject(IMetaObjectRecordDataMutableRef* metaObject);
 
 	virtual bool Next();
 	virtual IRecordDataObjectRef* GetObject(const Guid& guid) const;
@@ -64,7 +64,7 @@ protected:
 
 protected:
 
-	IMetaObjectRecordDataRef* m_metaObject;
+	IMetaObjectRecordDataMutableRef* m_metaObject;
 	std::vector<Guid> m_aCurrentValues;
 };
 
@@ -100,12 +100,12 @@ protected:
 
 	IMetaObjectRegisterData* m_metaObject;
 
-	std::map<meta_identifier_t, CValue> m_aKeyValues;
+	std::map<meta_identifier_t, CValue> m_keyValues;
 	std::vector <std::map<meta_identifier_t, CValue>> m_aCurrentValues;
 	std::map<
 		std::map<meta_identifier_t, CValue>,
 		std::map<meta_identifier_t, CValue>
-	> m_aObjectValues;
+	> m_objectValues;
 };
 
 #endif

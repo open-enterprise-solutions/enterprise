@@ -11,8 +11,8 @@
 enum
 {
 	enIsEmpty = 0,
-	enGetObject,
 	enGetMetadata,
+	enGetObject,
 	enGetGuid
 };
 
@@ -28,51 +28,65 @@ CMethods* CReferenceDataObject::GetPMethods() const
 
 void CReferenceDataObject::PrepareNames() const
 {
-	if (m_metaObject->GetClsid() == g_metaEnumerationCLSID)
-		return;
+	IMetaObjectRecordDataMutableRef* metaObject = NULL;
+	if (m_metaObject->ConvertToValue(metaObject)) {
+		SEng aMethods[] =
+		{
+			{"isEmpty", "IsEmpty()"},
+			{"getMetadata", "getMetadata()"},
+			{"getObject", "getObject()"},
+			{"getGuid", "getGuid()"},
+		};
 
-	SEng aMethods[] =
-	{
-		{"isEmpty", "IsEmpty()"},
-		{"getObject", "getObject()"},
-		{"getMetadata", "getMetadata()"},
-		{"getGuid", "getGuid()"},
-	};
+		int nCountM = sizeof(aMethods) / sizeof(aMethods[0]);
+		m_methods->PrepareMethods(aMethods, nCountM);
 
-	int nCountM = sizeof(aMethods) / sizeof(aMethods[0]);
-	m_methods->PrepareMethods(aMethods, nCountM);
+		std::vector<SEng> aAttributes;
 
-	std::vector<SEng> aAttributes;
+		//fill custom attributes 
+		for (auto attributes : metaObject->GetGenericAttributes()) {
+			SEng attribute;
+			attribute.sName = attributes->GetName();
+			attribute.iName = attributes->GetMetaID();
+			attribute.sSynonym = wxT("attribute");
+			aAttributes.push_back(attribute);
+		}
 
-	//fill custom attributes 
-	for (auto attributes : m_metaObject->GetGenericAttributes()) {
-		SEng attribute;
-		attribute.sName = attributes->GetName();
-		attribute.iName = attributes->GetMetaID();
-		attribute.sSynonym = wxT("attribute");
-		aAttributes.push_back(attribute);
+		//fill part tables attributes 
+		for (auto table : metaObject->GetObjectTables()) {
+			SEng attribute;
+			attribute.sName = table->GetName();
+			attribute.iName = table->GetMetaID();
+			attribute.sSynonym = wxT("table");
+			aAttributes.push_back(attribute);
+		}
+
+		m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
 	}
+	else {
+		SEng aMethods[] =
+		{
+			{"isEmpty", "IsEmpty()"},
+			{"getMetadata", "getMetadata()"},
+		};
 
-	//fill part tables attributes 
-	for (auto table : m_metaObject->GetObjectTables()) {
-		SEng attribute;
-		attribute.sName = table->GetName();
-		attribute.iName = table->GetMetaID();
-		attribute.sSynonym = wxT("table");
-		aAttributes.push_back(attribute);
+		int nCountM = sizeof(aMethods) / sizeof(aMethods[0]);
+		m_methods->PrepareMethods(aMethods, nCountM);
 	}
-
-	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
 }
 
 CValue CReferenceDataObject::Method(methodArg_t& aParams)
 {
 	switch (aParams.GetIndex())
 	{
-	case enIsEmpty: return IsEmptyRef();
-	case enGetObject: return GetObject();
-	case enGetMetadata: return GetMetadata();
-	case enGetGuid: return new CValueGuid(m_objGuid);
+	case enIsEmpty: 
+		return IsEmptyRef();
+	case enGetMetadata:
+		return GetMetadata();
+	case enGetObject: 
+		return GetObject();
+	case enGetGuid: 
+		return new CValueGuid(m_objGuid);
 	}
 
 	return CValue();

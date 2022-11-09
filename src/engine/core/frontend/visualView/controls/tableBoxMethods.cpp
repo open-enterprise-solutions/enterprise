@@ -25,9 +25,9 @@ void CValueTableBox::SetAttribute(attributeArg_t &aParams, CValue &cVal)
 		if (m_tableCurrentLine != NULL)
 			m_tableCurrentLine->DecrRef();
 		m_tableCurrentLine = NULL;
-		IValueTable::IValueTableReturnLine *tableReturnLine = NULL;
+		IValueTable::IValueModelReturnLine *tableReturnLine = NULL;
 		if (cVal.ConvertToValue(tableReturnLine)) {
-			if (m_tableModel == tableReturnLine->GetOwnerTable()) {
+			if (m_tableModel == tableReturnLine->GetOwnerModel()) {
 				m_tableCurrentLine = tableReturnLine;
 				m_tableCurrentLine->IncrRef();
 			}

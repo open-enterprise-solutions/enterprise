@@ -10,95 +10,75 @@
 //***********************************************************************************
 
 void CListDataObjectRef::GetValueByRow(wxVariant& variant,
-	unsigned int row, unsigned int col) const
+	const wxDataViewItem& row, unsigned int col) const
 {
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, row);
-	auto& rowValues = itFounded->second;
-
-	auto foundedColumn = rowValues.find(col);
-	if (foundedColumn != rowValues.end()) {
-		const CValue& cValue = foundedColumn->second;
-		variant = cValue.GetString();
-	}
+	wxValueTableListRow* node = GetViewData<wxValueTableListRow>(row);
+	if (node == NULL)
+		return;
+	node->GetValue(variant, col);
 }
 
 bool CListDataObjectRef::SetValueByRow(const wxVariant& variant,
-	unsigned int row, unsigned int col)
+	const wxDataViewItem& row, unsigned int col)
 {
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, row);
-	auto& rowValues = itFounded->second;
-
-	auto foundedColumn = rowValues.find(col);
-	if (foundedColumn != rowValues.end()) {
-		CValue& cValue = foundedColumn->second;
-		cValue.SetValue(variant.GetString());
-	}
-
-	return false;
+	wxValueTableListRow* node = GetViewData<wxValueTableListRow>(row);
+	if (node == NULL)
+		return false;
+	return node->SetValue(variant, col);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void CListDataObjectGroupRef::GetValueByRow(wxVariant& variant,
-	unsigned int row, unsigned int col) const
+void CTreeDataObjectFolderRef::GetValueByRow(wxVariant& variant,
+	const wxDataViewItem& item, unsigned int col) const
 {
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, row);
-	auto& rowValues = itFounded->second;
-
-	auto foundedColumn = rowValues.find(col);
-	if (foundedColumn != rowValues.end()) {
-		const CValue& cValue = foundedColumn->second;
-		variant = cValue.GetString();
-	}
+	wxValueTreeListNode* node = GetViewData<wxValueTreeListNode>(item);
+	if (node == NULL)
+		return;
+	node->GetValue(variant, col);
 }
 
-bool CListDataObjectGroupRef::SetValueByRow(const wxVariant& variant,
-	unsigned int row, unsigned int col)
+bool CTreeDataObjectFolderRef::SetValueByRow(const wxVariant& variant,
+	const wxDataViewItem& item, unsigned int col)
 {
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, row);
-	auto& rowValues = itFounded->second;
+	wxValueTreeListNode* node = GetViewData<wxValueTreeListNode>(item);
+	if (node == NULL)
+		return false;
+	return node->SetValue(variant, col);
+}
 
-	auto foundedColumn = rowValues.find(col);
-	if (foundedColumn != rowValues.end()) {
-		CValue& cValue = foundedColumn->second;
-		cValue.SetValue(variant.GetString());
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+bool CTreeDataObjectFolderRef::GetAttrByRow(const wxDataViewItem& item, 
+	unsigned int col, wxDataViewItemAttr& attr) const
+{
+	wxValueTreeListNode* node = GetViewData<wxValueTreeListNode>(item);
+	if (node == NULL)
+		return false;
+	CValue isFolder = false; 
+	node->GetValue(isFolder, *m_metaObject->GetDataIsFolder());
+	if (isFolder.GetBoolean()) {
+		attr.SetBackgroundColour(wxColour(224, 212, 190));
 	}
-
-	return false;
+	return true;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void CListRegisterObject::GetValueByRow(wxVariant& variant,
-	unsigned int row, unsigned int col) const
+	const wxDataViewItem& row, unsigned int col) const
 {
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, row);
-	auto& rowValues = itFounded->second;
-
-	auto foundedColumn = rowValues.find(col);
-	if (foundedColumn != rowValues.end()) {
-		const CValue& cValue = foundedColumn->second;
-		variant = cValue.GetString();
-	}
+	wxValueTableRow* node = GetViewData(row);
+	if (node == NULL)
+		return;
+	node->GetValue(variant, col);
 }
 
 bool CListRegisterObject::SetValueByRow(const wxVariant& variant,
-	unsigned int row, unsigned int col)
+	const wxDataViewItem& row, unsigned int col)
 {
-	auto itFounded = m_aObjectValues.begin();
-	std::advance(itFounded, row);
-	auto& rowValues = itFounded->second;
-
-	auto foundedColumn = rowValues.find(col);
-	if (foundedColumn != rowValues.end()) {
-		CValue& cValue = foundedColumn->second;
-		cValue.SetValue(variant.GetString());
-	}
-
-	return false;
+	wxValueTableRow* node = GetViewData(row);
+	if (node == NULL)
+		return false;
+	return node->SetValue(variant, col);
 }

@@ -234,6 +234,7 @@
     <ClInclude Include="common\srcExplorer.h" />
     <ClInclude Include="common\tableAttributes.h" />
     <ClInclude Include="common\tableInfo.h" />
+    <ClInclude Include="common\tableNotifier.h" />
     <ClInclude Include="common\templates\dataProcessorFile.h" />
     <ClInclude Include="common\templates\dataReportFile.h" />
     <ClInclude Include="common\templates\formDesigner.h" />
@@ -745,6 +746,7 @@
     <ClCompile Include="common\propertyObject.cpp" />
     <ClCompile Include="common\docManager.cpp" />
     <ClCompile Include="common\tableInfo.cpp" />
+    <ClCompile Include="common\tableNotifier.cpp" />
     <ClCompile Include="common\templates\dataProcessorFile.cpp" />
     <ClCompile Include="common\templates\dataReportFile.cpp" />
     <ClCompile Include="common\templates\formDesigner.cpp" />

@@ -35,28 +35,23 @@ public:
 
 protected:
 
-	class ITreeClsidData {
-		CLASS_ID m_clsid; //тип элемента
-	public:
-		ITreeClsidData(const CLASS_ID& clsid) : m_clsid(clsid) {}
-
-		CLASS_ID GetClassID() const {
-			return m_clsid;
-		}
+	struct treeData_t {
+		bool m_expanded = false;
 	};
 
-	class ITreeMetaData {
+	struct treeClsidData_t {
+		CLASS_ID m_clsid; //тип элемента
+	public:
+		treeClsidData_t(const CLASS_ID& clsid) : 
+			m_clsid(clsid) {}
+	};
+
+	struct treeMetaData_t {
+		bool m_expanded;
 		IMetaObject* m_metaObject; //тип элемента
 	public:
-		ITreeMetaData(IMetaObject* metaObject) : m_metaObject(metaObject) {}
-
-		void SetMetaObject(IMetaObject* metaObject) {
-			m_metaObject = metaObject;
-		}
-
-		IMetaObject* GetMetaObject() const {
-			return m_metaObject;
-		}
+		treeMetaData_t(IMetaObject* metaObject) :
+			m_metaObject(metaObject) {}
 	};
 };
 

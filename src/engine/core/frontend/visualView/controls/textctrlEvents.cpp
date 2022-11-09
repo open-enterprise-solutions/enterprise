@@ -113,10 +113,15 @@ void CValueTextCtrl::OnSelectButtonPressed(wxCommandEvent& event)
 	}
 	const CLASS_ID &clsid = selValue.GetClassType();
 	if (!IAttributeControl::SelectSimpleValue(clsid, textCtrl)) {
-		IMetaObject* metaObject =
+		eSelectMode selMode = eSelectMode::eSelectMode_Items; 
+		IMetaAttributeObject *srcValue = 
+			dynamic_cast<IMetaAttributeObject *>(IAttributeControl::GetMetaSource());
+		if (srcValue != NULL)
+			selMode = srcValue->GetSelectMode();
+		IMetaObject* metaObject = 
 			IAttributeControl::GetMetaObjectById(clsid);
 		if (metaObject != NULL) {
-			metaObject->ProcessChoice(this, m_propertyChoiceForm->GetValueAsInteger());
+			metaObject->ProcessChoice(this, m_propertyChoiceForm->GetValueAsInteger(), selMode);
 		}
 	}
 }

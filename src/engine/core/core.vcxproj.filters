@@ -1803,6 +1803,9 @@
     <ClCompile Include="frontend\controls\dataView.cpp">
       <Filter>frontend\controls</Filter>
     </ClCompile>
+    <ClCompile Include="common\tableNotifier.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="compiler\Methods.h">
@@ -3433,6 +3436,9 @@
     </ClInclude>
     <ClInclude Include="metadata\metaObjects\objects\objectEnum.h">
       <Filter>metadata\metaObjects\objects</Filter>
+    </ClInclude>
+    <ClInclude Include="common\tableNotifier.h">
+      <Filter>common</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

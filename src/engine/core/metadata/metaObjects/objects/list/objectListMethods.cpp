@@ -42,12 +42,12 @@ CValue CListDataObjectRef::Method(methodArg_t& aParams)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-CMethods* CListDataObjectGroupRef::GetPMethods() const {
+CMethods* CTreeDataObjectFolderRef::GetPMethods() const {
 	PrepareNames();
 	return m_methods;
 };
 
-void CListDataObjectGroupRef::PrepareNames() const
+void CTreeDataObjectFolderRef::PrepareNames() const
 {
 	m_methods->ResetAttributes();
 	m_methods->AppendAttribute(wxT("choiceMode"));
@@ -55,7 +55,7 @@ void CListDataObjectGroupRef::PrepareNames() const
 	m_methods->AppendMethod(wxT("refresh"), "refresh()");
 }
 
-CValue CListDataObjectGroupRef::Method(methodArg_t& aParams)
+CValue CTreeDataObjectFolderRef::Method(methodArg_t& aParams)
 {
 	switch (aParams.GetIndex())
 	{

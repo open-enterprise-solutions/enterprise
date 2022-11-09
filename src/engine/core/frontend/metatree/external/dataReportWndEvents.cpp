@@ -260,13 +260,15 @@ void CDataReportTree::CDataReportTreeWnd::OnSelected(wxTreeEvent &event)
 
 void CDataReportTree::CDataReportTreeWnd::OnCollapsing(wxTreeEvent &event)
 {
-	if (GetRootItem() == event.GetItem())
+	if (GetRootItem() != event.GetItem()) {
+		m_ownerTree->Collapse(); event.Skip();
+	}
+	else {
 		event.Veto();
-	else
-		event.Skip();
+	}
 }
 
 void CDataReportTree::CDataReportTreeWnd::OnExpanding(wxTreeEvent &event)
 {
-	event.Skip();
+	m_ownerTree->Expand(); event.Skip();
 }

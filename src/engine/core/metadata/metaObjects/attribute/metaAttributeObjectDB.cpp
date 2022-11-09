@@ -528,6 +528,27 @@ void IMetaAttributeObject::SetValueAttribute(IMetaAttributeObject* metaAttr,
 			statement->SetParamNull(position++); //DATA REF
 		}
 	}
+	else if (cValue.GetType() == eValueTypes::TYPE_NULL) {
+
+		statement->SetParamInt(position++, eFieldTypes_Null); //TYPE
+
+		if (metaAttr->ContainType(eValueTypes::TYPE_BOOLEAN))
+			statement->SetParamBool(position++, false); //DATA binary 
+		if (metaAttr->ContainType(eValueTypes::TYPE_NUMBER))
+			statement->SetParamNumber(position++, 0); //DATA number 
+		if (metaAttr->ContainType(eValueTypes::TYPE_DATE))
+			statement->SetParamDate(position++, emptyDate); //DATA date 
+		if (metaAttr->ContainType(eValueTypes::TYPE_STRING))
+			statement->SetParamString(position++, wxEmptyString); //DATA string 
+
+		if (metaAttr->ContainType(eValueTypes::TYPE_ENUM))
+			statement->SetParamInt(position++, wxNOT_FOUND); //DATA enum 
+
+		if (metaAttr->ContainMetaType(eMetaObjectType::enReference)) {
+			statement->SetParamNumber(position++, 0); //TYPE REF
+			statement->SetParamNull(position++); //DATA REF
+		}
+	}
 	else if (cValue.GetType() == eValueTypes::TYPE_ENUM) {
 
 		statement->SetParamInt(position++, eFieldTypes_Enum); //TYPE
@@ -608,6 +629,8 @@ CValue IMetaAttributeObject::GetValueAttribute(const wxString& fieldName,
 		return resultSet->GetResultDate(fieldName);
 	case eFieldTypes_String:
 		return resultSet->GetResultString(fieldName);
+	case eFieldTypes_Null:
+		return eValueTypes::TYPE_NULL;
 	case eFieldTypes_Enum:
 	{
 		CValue defValue = metaAttr->CreateValue();
@@ -681,6 +704,8 @@ CValue IMetaAttributeObject::GetValueAttribute(const wxString& fieldName,
 		return IMetaAttributeObject::GetValueAttribute(fieldName + "_D", eFieldTypes_Date, metaAttr, resultSet, createData);
 	case eFieldTypes_String:
 		return IMetaAttributeObject::GetValueAttribute(fieldName + "_S", eFieldTypes_String, metaAttr, resultSet, createData);
+	case eFieldTypes_Null:
+		return eValueTypes::TYPE_NULL;
 	case eFieldTypes_Enum:
 		return IMetaAttributeObject::GetValueAttribute(fieldName + "_E", eFieldTypes_Enum, metaAttr, resultSet, createData);
 	case eFieldTypes_Reference:

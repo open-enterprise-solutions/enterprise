@@ -70,13 +70,10 @@ void CValueTableBox::OnSelectionChanged(wxDataViewEvent& event)
 	);
 
 	if (standardProcessing.GetBoolean()) {
-
 		if (m_tableCurrentLine != NULL)
 			m_tableCurrentLine->DecrRef();
-
 		m_tableCurrentLine = m_tableModel->GetRowAt(item);
 		m_tableCurrentLine->IncrRef();
-
 		event.Skip();
 	}
 	else {
@@ -129,14 +126,15 @@ void CValueTableBox::OnItemStartEditing(wxDataViewEvent& event)
 {
 	// event is a wxDataViewEvent
 	wxDataViewItem item = event.GetItem();
-
 	if (!item.IsOk())
 		return;
-
-	if (m_tableModel->EditableLine(item, event.GetColumn()))
-		event.Skip();
-	else
+	if (!m_tableModel->EditableLine(item, event.GetColumn())) {
+		if (m_tableModel != NULL)
+			m_tableModel->EditValue();
 		event.Veto(); /*!!!*/
+	}
+	else
+		event.Skip();
 }
 
 void CValueTableBox::OnItemEditingStarted(wxDataViewEvent& event)
@@ -152,6 +150,24 @@ void CValueTableBox::OnItemEditingDone(wxDataViewEvent& event)
 void CValueTableBox::OnItemValueChanged(wxDataViewEvent& event)
 {
 	event.Skip();
+}
+
+void CValueTableBox::OnItemStartDeleting(wxDataViewEvent& event)
+{
+	// event is a wxDataViewEvent
+	wxDataViewItem item = event.GetItem();
+	if (!item.IsOk())
+		return;
+	CValue cancel = false;
+	CallEvent(m_eventBeforeDeleteRow,
+		CValue(this), // control
+		cancel //cancel
+	);
+
+	if (cancel.GetBoolean())
+		event.Veto();
+	else
+		event.Skip();
 }
 
 #if wxUSE_DRAG_AND_DROP
@@ -187,14 +203,13 @@ void CValueTableBox::OnCommandMenu(wxCommandEvent& event)
 
 void CValueTableBox::OnContextMenu(wxDataViewEvent& event)
 {
-	wxMenu menu;
-
-	actionData_t& actions =
+	const actionData_t& actions =
 		CValueTableBox::GetActions(m_formOwner->GetTypeForm());
-
+	wxMenu menu;
 	for (unsigned int idx = 0; idx < actions.GetCount(); idx++) {
 		const action_identifier_t& id = actions.GetID(idx);
-		menu.Append(id, actions.GetCaptionByID(id));
+		if (id != wxNOT_FOUND)
+			menu.Append(id, actions.GetCaptionByID(id));
 	}
 
 	wxDataViewCtrl* wnd = wxDynamicCast(

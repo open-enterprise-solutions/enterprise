@@ -88,11 +88,11 @@ CValue CRecordSetAccumulationRegister::Method(methodArg_t& aParams)
 	switch (aParams.GetIndex())
 	{
 	case recordSet::enAdd:
-		return new CRecordSetRegisterReturnLine(this, AppenRow());
+		return new CRecordSetRegisterReturnLine(this, GetItem(AppendRow()));
 	case recordSet::enCount:
-		return (unsigned int)m_aObjectValues.size();
+		return (unsigned int)GetRowCount();
 	case recordSet::enClear:
-		m_aObjectValues.clear();
+		IValueTable::Clear();
 		break;
 	case recordSet::enLoad:
 		LoadDataFromTable(aParams[0].ConvertToType<IValueTable>());

@@ -18,22 +18,37 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueTable, IValueTable);
 
 CMethods CValueTable::m_methods;
 
+wxDataViewItem CValueTable::FindRowValue(const CValue& cVal, const wxString& colName) const
+{
+	IValueModelColumnCollection::IValueModelColumnInfo* colInfo = m_dataColumnCollection->GetColumnByName(colName);
+	if (colInfo != NULL) {
+		for (long row = 0; row < GetRowCount(); row++) {
+			const wxDataViewItem& item = GetItem(row);
+			wxValueTableRow* node = GetViewData<wxValueTableRow>(item);
+			if (node != NULL &&
+				cVal == node->GetValue((meta_identifier_t)colInfo->GetColumnID())) {
+				return item;
+			}
+		}
+	}
+	return wxDataViewItem(NULL);
+}
+
+wxDataViewItem CValueTable::FindRowValue(IValueModelReturnLine* retLine) const
+{
+	return wxDataViewItem(NULL);
+}
+
 CValueTable::CValueTable() : IValueTable()
 {
 	m_dataColumnCollection = new CValueTableColumnCollection(this);
 	m_dataColumnCollection->IncrRef();
-
-	//delete only in CValue
-	//wxRefCounter::IncrRef(); 
 }
 
-CValueTable::CValueTable(const CValueTable& valueTable) : IValueTable(), 
+CValueTable::CValueTable(const CValueTable& valueTable) : IValueTable(),
 m_dataColumnCollection(valueTable.m_dataColumnCollection)
 {
 	m_dataColumnCollection->IncrRef();
-
-	//delete only in CValue
-	//wxRefCounter::IncrRef();
 }
 
 CValueTable::~CValueTable()
@@ -48,6 +63,8 @@ enum
 	enAddRow = 0,
 	enClone,
 	enCount,
+	enFind,
+	enDelete,
 	enClear,
 };
 
@@ -62,9 +79,10 @@ void CValueTable::PrepareNames() const
 	SEng aMethods[] =
 	{
 		{"add","add()"},
-
 		{"clone","clone()"},
 		{"count","count()"},
+		{"find","find(value, column)"},
+		{"delete","delete(row)"},
 		{"clear","clear()"},
 	};
 
@@ -98,10 +116,33 @@ CValue CValueTable::Method(methodArg_t& aParams)
 
 	switch (aParams.GetIndex())
 	{
-	case enAddRow: return AddRow();
+	case enAddRow: return AppendRow();
 	case enClone: return Clone();
-	case enCount: return (int)Count();
-	case enClear: Clear(); break;
+	case enFind: {
+		const wxDataViewItem& item = FindRowValue(aParams[0], aParams[1].GetString());
+		if (item.IsOk())
+			return GetRowAt(item);
+		break;
+	}
+	case enCount: return (unsigned int)GetRowCount();
+	case enDelete: {
+		CValueTableReturnLine* retLine = NULL;
+		if (aParams[0].ConvertToValue(retLine)) {
+			wxValueTableRow* node = GetViewData(retLine->GetLineItem());
+			if (node != NULL)
+				IValueTable::Remove(node);
+		}
+		else {
+			number_t number = aParams[0].GetNumber();
+			wxValueTableRow* node = GetViewData(GetItem(number.ToInt()));
+			if (node != NULL)
+				IValueTable::Remove(node);
+		}
+		break;
+	}
+	case enClear: 
+		Clear();
+		break;
 	}
 
 	return ret;
@@ -111,29 +152,27 @@ CValue CValueTable::Method(methodArg_t& aParams)
 
 CValue CValueTable::GetAt(const CValue& cKey)
 {
-	unsigned int index = cKey.ToUInt();
-
-	if (index >= m_aObjectValues.size() && !appData->DesignerMode())
+	long index = cKey.ToUInt();
+	if (index >= GetRowCount() && !appData->DesignerMode())
 		CTranslateError::Error(_("Index outside array bounds"));
-
-	return new CValueTableReturnLine(this, index);
+	return new CValueTableReturnLine(this, GetItem(index));
 }
 
 //////////////////////////////////////////////////////////////////////
-//               CValueTableColumnCollection                                  //
+//               CValueTableColumnCollection                        //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(CValueTable::CValueTableColumnCollection, IValueTable::IValueTableColumnCollection);
+wxIMPLEMENT_DYNAMIC_CLASS(CValueTable::CValueTableColumnCollection, IValueTable::IValueModelColumnCollection);
 
-CValueTable::CValueTableColumnCollection::CValueTableColumnCollection() : IValueTableColumnCollection(), m_methods(NULL), m_ownerTable(NULL) {}
-CValueTable::CValueTableColumnCollection::CValueTableColumnCollection(CValueTable* ownerTable) : IValueTableColumnCollection(), m_methods(new CMethods()), m_ownerTable(ownerTable) {}
-CValueTable::CValueTableColumnCollection::~CValueTableColumnCollection()
-{
-	for (auto& colInfo : m_aColumnInfo) {
+CValueTable::CValueTableColumnCollection::CValueTableColumnCollection(CValueTable* ownerTable) : IValueModelColumnCollection(),
+m_methods(new CMethods()), m_ownerTable(ownerTable) {
+}
+
+CValueTable::CValueTableColumnCollection::~CValueTableColumnCollection() {
+	for (auto& colInfo : m_columnInfo) {
 		wxASSERT(colInfo);
 		colInfo->DecrRef();
 	}
-
 	wxDELETE(m_methods);
 }
 
@@ -162,19 +201,16 @@ CValue CValueTable::CValueTableColumnCollection::Method(methodArg_t& aParams)
 {
 	switch (aParams.GetIndex())
 	{
-	case enAddColumn:
-	{
-		CValueType* m_valueType = NULL;
-
+	case enAddColumn: {
+		CValueType* valueType = NULL;
 		if (aParams.GetParamCount() > 1)
-			aParams[1].ConvertToValue(m_valueType);
-
+			aParams[1].ConvertToValue(valueType);
 		if (aParams.GetParamCount() > 3)
-			return AddColumn(aParams[0].ToString(), m_valueType ? new CValueTypeDescription(m_valueType) : aParams[1].ConvertToType<CValueTypeDescription>(), aParams[2].ToString(), aParams[3].ToInt());
+			return AddColumn(aParams[0].ToString(), valueType ? new CValueTypeDescription(valueType) : aParams[1].ConvertToType<CValueTypeDescription>(), aParams[2].ToString(), aParams[3].ToInt());
 		else if (aParams.GetParamCount() > 2)
-			return AddColumn(aParams[0].ToString(), m_valueType ? new CValueTypeDescription(m_valueType) : aParams[1].ConvertToType<CValueTypeDescription>(), aParams[2].ToString(), wxDVC_DEFAULT_WIDTH);
+			return AddColumn(aParams[0].ToString(), valueType ? new CValueTypeDescription(valueType) : aParams[1].ConvertToType<CValueTypeDescription>(), aParams[2].ToString(), wxDVC_DEFAULT_WIDTH);
 		else if (aParams.GetParamCount() > 1)
-			return AddColumn(aParams[0].ToString(), m_valueType ? new CValueTypeDescription(m_valueType) : aParams[1].ConvertToType<CValueTypeDescription>(), aParams[0].ToString(), wxDVC_DEFAULT_WIDTH);
+			return AddColumn(aParams[0].ToString(), valueType ? new CValueTypeDescription(valueType) : aParams[1].ConvertToType<CValueTypeDescription>(), aParams[0].ToString(), wxDVC_DEFAULT_WIDTH);
 		else
 			return AddColumn(aParams[0].ToString(), NULL, aParams[0].ToString(), wxDVC_DEFAULT_WIDTH);
 		break;
@@ -182,12 +218,12 @@ CValue CValueTable::CValueTableColumnCollection::Method(methodArg_t& aParams)
 	case enRemoveColumn:
 	{
 		wxString columnName = aParams[0].ToString();
-		auto itFounded = std::find_if(m_aColumnInfo.begin(), m_aColumnInfo.end(),
+		auto itFounded = std::find_if(m_columnInfo.begin(), m_columnInfo.end(),
 			[columnName](CValueTableColumnInfo* colData)
 			{
 				return StringUtils::CompareString(columnName, colData->GetColumnName());
 			});
-		if (itFounded != m_aColumnInfo.end()) {
+		if (itFounded != m_columnInfo.end()) {
 			RemoveColumn((*itFounded)->GetColumnID());
 		}
 		break;
@@ -205,10 +241,10 @@ CValue CValueTable::CValueTableColumnCollection::GetAt(const CValue& cKey) //инд
 {
 	unsigned int index = cKey.ToUInt();
 
-	if ((index < 0 || index >= m_aColumnInfo.size() && !appData->DesignerMode()))
+	if ((index < 0 || index >= m_columnInfo.size() && !appData->DesignerMode()))
 		CTranslateError::Error(_("Index goes beyond array"));
 
-	auto itFounded = m_aColumnInfo.begin();
+	auto itFounded = m_columnInfo.begin();
 	std::advance(itFounded, index);
 	return *itFounded;
 }
@@ -217,63 +253,72 @@ CValue CValueTable::CValueTableColumnCollection::GetAt(const CValue& cKey) //инд
 //               CValueTableColumnInfo                              //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(CValueTable::CValueTableColumnCollection::CValueTableColumnInfo, IValueTable::IValueTableColumnCollection::IValueTableColumnInfo);
+wxIMPLEMENT_DYNAMIC_CLASS(CValueTable::CValueTableColumnCollection::CValueTableColumnInfo, IValueTable::IValueModelColumnCollection::IValueModelColumnInfo);
 
-CValueTable::CValueTableColumnCollection::CValueTableColumnInfo::CValueTableColumnInfo() : IValueTableColumnInfo() {}
-CValueTable::CValueTableColumnCollection::CValueTableColumnInfo::CValueTableColumnInfo(unsigned int colID, const wxString& colName, CValueTypeDescription* types, const wxString& caption, int width) : IValueTableColumnInfo(), m_columnID(colID), m_columnName(colName), m_columnTypes(types), m_columnCaption(caption), m_columnWidth(width) { if (m_columnTypes) m_columnTypes->IncrRef(); }
-CValueTable::CValueTableColumnCollection::CValueTableColumnInfo::~CValueTableColumnInfo() { if (m_columnTypes) m_columnTypes->DecrRef(); }
+CValueTable::CValueTableColumnCollection::CValueTableColumnInfo::CValueTableColumnInfo() : IValueModelColumnInfo() {
+}
+
+CValueTable::CValueTableColumnCollection::CValueTableColumnInfo::CValueTableColumnInfo(unsigned int colID, const wxString& colName, CValueTypeDescription* types, const wxString& caption, int width) :
+	IValueModelColumnInfo(), m_columnID(colID), m_columnName(colName), m_columnTypes(types), m_columnCaption(caption), m_columnWidth(width) {
+	if (m_columnTypes) m_columnTypes->IncrRef();
+}
+
+CValueTable::CValueTableColumnCollection::CValueTableColumnInfo::~CValueTableColumnInfo() {
+	if (m_columnTypes)
+		m_columnTypes->DecrRef();
+}
 
 //////////////////////////////////////////////////////////////////////
 //               CValueTableReturnLine                              //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(CValueTable::CValueTableReturnLine, IValueTable::IValueTableReturnLine);
+wxIMPLEMENT_DYNAMIC_CLASS(CValueTable::CValueTableReturnLine, IValueTable::IValueModelReturnLine);
 
-CValueTable::CValueTableReturnLine::CValueTableReturnLine() : IValueTableReturnLine(), m_methods(NULL), m_ownerTable(NULL), m_lineTable(wxNOT_FOUND) {}
-CValueTable::CValueTableReturnLine::CValueTableReturnLine(CValueTable* ownerTable, int line) : IValueTableReturnLine(), m_methods(new CMethods()), m_ownerTable(ownerTable), m_lineTable(line) {}
-CValueTable::CValueTableReturnLine::~CValueTableReturnLine() { if (m_methods) delete m_methods; }
-
-void CValueTable::CValueTableReturnLine::SetValueByMetaID(const meta_identifier_t &id, const CValue& cVal)
-{
-	auto itFoundedByLine = m_ownerTable->m_aObjectValues.begin();
-	std::advance(itFoundedByLine, m_lineTable);
-
-	CValueTypeDescription* typeDescription = 
-		m_ownerTable->m_dataColumnCollection->GetColumnType(id);
-
-	itFoundedByLine->insert_or_assign(id, typeDescription ? typeDescription->AdjustValue(cVal) : cVal);
+CValueTable::CValueTableReturnLine::CValueTableReturnLine(CValueTable* ownerTable, const wxDataViewItem& line) :
+	IValueModelReturnLine(line), m_methods(new CMethods()), m_ownerTable(ownerTable) {
 }
 
-CValue CValueTable::CValueTableReturnLine::GetValueByMetaID(const meta_identifier_t &id) const
+CValueTable::CValueTableReturnLine::~CValueTableReturnLine() {
+	if (m_methods)
+		delete m_methods;
+}
+
+void CValueTable::CValueTableReturnLine::SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal)
 {
-	auto itFoundedByLine = m_ownerTable->m_aObjectValues.begin();
-	std::advance(itFoundedByLine, m_lineTable);
+	if (m_ownerTable->ValidateReturnLine(this)) {
+		wxValueTableRow* node = m_ownerTable->GetViewData(m_lineItem);
+		if (node == NULL)
+			return;
+		CValueTypeDescription* typeDescription =
+			m_ownerTable->m_dataColumnCollection->GetColumnType(id);
+		node->SetValue(typeDescription ? typeDescription->AdjustValue(cVal) : cVal, id, true);
+	}
+}
 
-	auto itFoundedByIndex = itFoundedByLine->find(id);
-
-	if (itFoundedByIndex != itFoundedByLine->end())
-		return itFoundedByIndex->second;
-
-	return CValue();
+CValue CValueTable::CValueTableReturnLine::GetValueByMetaID(const meta_identifier_t& id) const
+{
+	CValueTableReturnLine* ret = const_cast<CValueTableReturnLine*>(this);
+	wxASSERT(ret);
+	if (m_ownerTable->ValidateReturnLine(ret)) {
+		wxValueTableRow* node = m_ownerTable->GetViewData(m_lineItem);
+		if (node == NULL)
+			return CValue();
+		return node->GetValue(id);
+	}
+	return _("Error while reading data");
 }
 
 void CValueTable::CValueTableReturnLine::PrepareNames() const
 {
 	std::vector<SEng> aAttributes;
-
-	for (auto& colInfo : m_ownerTable->m_dataColumnCollection->m_aColumnInfo)
-	{
+	for (auto& colInfo : m_ownerTable->m_dataColumnCollection->m_columnInfo) {
 		wxASSERT(colInfo);
-
 		SEng aAttribute;
-
 		aAttribute.sName = colInfo->GetColumnName();
 		aAttribute.sSynonym = wxT("default");
 		aAttribute.iName = colInfo->GetColumnID();
-
 		aAttributes.push_back(aAttribute);
 	}
-
 	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
 }
 
