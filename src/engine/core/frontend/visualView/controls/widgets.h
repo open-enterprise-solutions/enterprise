@@ -154,7 +154,7 @@ public:
 	CValueTextCtrl();
 
 	//Get source object 
-	virtual ISourceDataObject* GetSourceObject() const;
+	virtual ISourceObject* GetSourceObject() const;
 
 	//get form owner 
 	virtual CValueForm* GetOwnerForm() const {
@@ -339,7 +339,7 @@ public:
 	CValueCheckbox();
 
 	//Get source object 
-	virtual ISourceDataObject* GetSourceObject() const;
+	virtual ISourceObject* GetSourceObject() const;
 
 	//get form owner 
 	virtual CValueForm* GetOwnerForm() const {

@@ -37,38 +37,23 @@ void CValueTableBox::OnPropertyChanged(Property* property)
 				g_visualHostContext->CutObject(GetChild(0), true);
 			}
 
-			auto clsids = CValueTableBox::GetClsids(); CLASS_ID clsid = 0;
-
-			if (clsids.size() > 0) {
-				auto itStart = clsids.begin();
-				std::advance(itStart, 0);
-				clsid = *itStart;
-			}
-
+			const CLASS_ID& clsid = CValueTableBox::GetFirstClsid();
 			IMetaTypeObjectValueSingle* singleObject =
 				metaData->GetTypeObject(clsid);
-
 			if (singleObject != NULL) {
-
 				ITableAttribute* metaObject =
 					dynamic_cast<ITableAttribute*>(singleObject->GetMetaObject());
-
 				if (metaObject != NULL) {
-
 					for (auto attribute : metaObject->GetGenericAttributes()) {
-
 						CValueTableBoxColumn* tableBoxColumn =
 							wxDynamicCast(
 								m_formOwner->CreateControl(wxT("tableboxColumn"), this), CValueTableBoxColumn
-							);
-
+						);
 						wxASSERT(tableBoxColumn);
-
 						tableBoxColumn->SetControlName(GetControlName() + wxT("_") + attribute->GetName());
 						tableBoxColumn->SetCaption(attribute->GetSynonym());
 						tableBoxColumn->SetSourceId(attribute->GetMetaID());
 						tableBoxColumn->SetVisibleColumn(true);
-
 						g_visualHostContext->InsertObject(tableBoxColumn, this);
 					}
 				}

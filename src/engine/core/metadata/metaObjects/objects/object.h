@@ -796,8 +796,9 @@ protected:
 //********************************************************************************************
 
 #include "common/srcExplorer.h"
+#include "common/srcObject.h"
 
-class ISourceDataObject
+class ISourceDataObject : public ISourceObject
 {
 public:
 
@@ -809,21 +810,11 @@ public:
 		return true;
 	}
 
-	//get metadata from object 
-	virtual IMetaObjectWrapperData* GetMetaObject() const = 0;
+	//standart override 
+	virtual inline bool IsEmpty() const = 0;
 
 	//get unique identifier 
 	virtual CUniqueKey GetGuid() const = 0;
-
-	//standart override 
-	virtual CMethods* GetPMethods() const = 0;
-	virtual void PrepareNames() const = 0;
-	virtual CValue Method(methodArg_t& aParams) = 0;
-
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal) = 0;
-	virtual CValue GetAttribute(attributeArg_t& aParams) = 0;
-
-	virtual inline bool IsEmpty() const = 0;
 
 	//support source data 
 	virtual CSourceExplorer GetSourceExplorer() const = 0;
@@ -838,12 +829,6 @@ public:
 	//counter
 	virtual void IncrRef() = 0;
 	virtual void DecrRef() = 0;
-
-	//Get ref class 
-	virtual CLASS_ID GetClassType() const = 0;
-
-	virtual wxString GetTypeString() const = 0;
-	virtual wxString GetString() const = 0;
 
 	//operator 
 	virtual operator CValue() const = 0;

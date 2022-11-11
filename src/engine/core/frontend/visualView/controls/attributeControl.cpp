@@ -24,7 +24,7 @@ void wxVariantSourceAttributeData::UpdateSourceAttribute()
 void wxVariantSourceAttributeData::DoSetFromMetaId(const meta_identifier_t& id)
 {
 	if (m_metaData != NULL && id != wxNOT_FOUND) {
-		ISourceDataObject* srcData = m_formData->GetSourceObject();
+		ISourceObject* srcData = m_formData->GetSourceObject();
 		if (srcData != NULL) {
 			IMetaObjectWrapperData* metaObject = srcData->GetMetaObject();
 			if (metaObject != NULL && metaObject->IsAllowed() && id == metaObject->GetMetaID()) {
@@ -60,7 +60,7 @@ wxString wxVariantSourceData::MakeString() const
 meta_identifier_t IAttributeControl::GetIdByGuid(const Guid& guid) const
 {
 	if (guid.isValid() && GetSourceObject()) {
-		ISourceDataObject* srcObject = GetSourceObject();
+		ISourceObject* srcObject = GetSourceObject();
 		if (srcObject != NULL) {
 			IMetaObjectWrapperData* objMetaValue =
 				srcObject->GetMetaObject();
@@ -76,7 +76,7 @@ meta_identifier_t IAttributeControl::GetIdByGuid(const Guid& guid) const
 Guid IAttributeControl::GetGuidByID(const meta_identifier_t& id) const
 {
 	if (id != wxNOT_FOUND && GetSourceObject()) {
-		ISourceDataObject* srcObject = GetSourceObject();
+		ISourceObject* srcObject = GetSourceObject();
 		if (srcObject != NULL) {
 			IMetaObjectWrapperData* objMetaValue =
 				srcObject->GetMetaObject();
@@ -144,7 +144,7 @@ void IAttributeControl::DoSetFromMetaId(const meta_identifier_t& id)
 	IMetadata* metaData = GetMetadata();
 	if (metaData != NULL && id != wxNOT_FOUND) {
 
-		ISourceDataObject* srcData = GetSourceObject();
+		ISourceObject* srcData = GetSourceObject();
 		if (srcData != NULL) {
 			IMetaObjectWrapperData* metaObject = srcData->GetMetaObject();
 			if (metaObject != NULL && metaObject->IsAllowed() && id == metaObject->GetMetaID()) {
@@ -192,7 +192,7 @@ std::set<CLASS_ID> IAttributeControl::GetClsids() const
 IMetaObject* IAttributeControl::GetMetaSource() const
 {
 	if (m_dataSource.isValid() && GetSourceObject()) {
-		ISourceDataObject* srcObject = GetSourceObject();
+		ISourceObject* srcObject = GetSourceObject();
 		if (srcObject) {
 			IMetaObjectWrapperData* objMetaValue =
 				srcObject->GetMetaObject();
@@ -219,7 +219,7 @@ IMetaObject* IAttributeControl::GetMetaObjectById(const CLASS_ID& clsid) const
 void IAttributeControl::SetSourceId(const meta_identifier_t& id)
 {
 	if (id != wxNOT_FOUND && GetSourceObject()) {
-		ISourceDataObject* srcObject = GetSourceObject();
+		ISourceObject* srcObject = GetSourceObject();
 		if (srcObject != NULL) {
 			IMetaObjectWrapperData* objMetaValue =
 				srcObject->GetMetaObject();
@@ -369,7 +369,7 @@ bool IAttributeControl::SelectSimpleValue(const CLASS_ID& clsid, wxWindow* paren
 
 IMetaObjectWrapperData* IAttributeControl::GetMetaObject() const
 {
-	ISourceDataObject* sourceObject = GetSourceObject();
+	ISourceObject* sourceObject = GetSourceObject();
 	return sourceObject ?
 		sourceObject->GetMetaObject() : NULL;
 }

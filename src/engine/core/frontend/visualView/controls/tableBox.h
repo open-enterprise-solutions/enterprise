@@ -8,7 +8,7 @@
 #include "common/tableInfo.h"
 
 class CValueTableBox : public IValueWindow,
-	public IAttributeControl {
+	public IAttributeControl, public ISourceObject {
 	wxDECLARE_DYNAMIC_CLASS(CValueTableBox);
 protected:
 	PropertyCategory* m_categoryData = IPropertyObject::CreatePropertyCategory("data");
@@ -28,7 +28,13 @@ public:
 	virtual ~CValueTableBox();
 
 	//Get source object 
-	virtual ISourceDataObject* GetSourceObject() const;
+	virtual ISourceObject* GetSourceObject() const;
+
+	//get metadata from object 
+	virtual IMetaObjectWrapperData* GetMetaObject() const;
+
+	//Get ref class 
+	virtual CLASS_ID GetClassType() const;
 
 	//get form owner 
 	virtual CValueForm* GetOwnerForm() const {
@@ -94,7 +100,7 @@ public:
 	virtual bool FilterSource(const CSourceExplorer& src, const meta_identifier_t& id);
 
 	//contol value
-	virtual bool HasValueInControl() const { 
+	virtual bool HasValueInControl() const {
 		return true;
 	}
 
@@ -274,10 +280,17 @@ public:
 		return m_propertyWidth->GetValueAsInteger();
 	}
 
+	///////////////////////////////////////////////////////////////////////
+
+	CValueTableBox* GetOwner() const {
+		return dynamic_cast<CValueTableBox*>(m_parent);
+	}
+	///////////////////////////////////////////////////////////////////////
+
 	CValueTableBoxColumn();
 
 	//Get source object 
-	virtual ISourceDataObject* GetSourceObject() const;
+	virtual ISourceObject* GetSourceObject() const;
 
 	//get form owner 
 	virtual CValueForm* GetOwnerForm() const {

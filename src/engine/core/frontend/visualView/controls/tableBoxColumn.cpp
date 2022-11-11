@@ -66,10 +66,9 @@ OptionList* CValueTableBoxColumn::GetChoiceForm(PropertyOption* property)
 	return optList;
 }
 
-ISourceDataObject* CValueTableBoxColumn::GetSourceObject() const
+ISourceObject* CValueTableBoxColumn::GetSourceObject() const
 {
-	return m_formOwner ? m_formOwner->GetSourceObject()
-		: NULL;
+	return GetOwner();
 }
 
 //***********************************************************************************
@@ -184,22 +183,12 @@ bool CValueTableBoxColumn::CanDeleteControl() const
 
 bool CValueTableBoxColumn::FilterSource(const CSourceExplorer& src, const meta_identifier_t& id)
 {
-	CValueTableBox* tableBox = wxDynamicCast(
-		m_parent,
-		CValueTableBox
-	);
-	wxASSERT(tableBox);
-	return GetIdByGuid(tableBox->m_dataSource) == id;
+	return GetIdByGuid(GetOwner()->m_dataSource) == id;
 }
 
 CValue CValueTableBoxColumn::GetControlValue() const
 {
-	CValueTableBox* tableBox = wxDynamicCast(
-		m_parent,
-		CValueTableBox
-	);
-	wxASSERT(tableBox);
-	IValueTable::IValueModelReturnLine* retLine = tableBox->m_tableCurrentLine;
+	IValueTable::IValueModelReturnLine* retLine = GetOwner()->m_tableCurrentLine;
 	if (retLine != NULL) {
 		return retLine->GetValueByMetaID(
 			!m_dataSource.isValid() ? m_controlId : GetIdByGuid(m_dataSource)
@@ -212,13 +201,8 @@ CValue CValueTableBoxColumn::GetControlValue() const
 
 void CValueTableBoxColumn::SetControlValue(CValue& vSelected)
 {
-	CValueTableBox* tableBox = wxDynamicCast(
-		m_parent,
-		CValueTableBox
-	);
-	wxASSERT(tableBox);
-	IValueTable::IValueModelReturnLine* retLine = tableBox->m_tableCurrentLine;
-	if (retLine) {
+	IValueTable::IValueModelReturnLine* retLine = GetOwner()->m_tableCurrentLine;
+	if (retLine != NULL) {
 		retLine->SetValueByMetaID(
 			!m_dataSource.isValid() ? m_controlId : GetIdByGuid(m_dataSource), vSelected
 		);

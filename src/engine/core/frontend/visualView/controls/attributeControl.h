@@ -2,7 +2,9 @@
 #define _ATTRIBUTE_CONTROL_H__
 
 #include "compiler/value.h"
+
 #include "common/attributeInfo.h"
+#include "common/srcObject.h"
 
 class IMetaObjectWrapperData;
 class ISourceDataObject;
@@ -70,7 +72,7 @@ public:
 	//////////////////////////////////////////////////
 
 	//Get source object 
-	virtual ISourceDataObject* GetSourceObject() const = 0;
+	virtual ISourceObject* GetSourceObject() const = 0;
 
 	//Get source object 
 	virtual CValueForm* GetOwnerForm() const = 0;

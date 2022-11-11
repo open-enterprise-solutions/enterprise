@@ -192,10 +192,47 @@ void CValueTableBox::RefreshModel()
 
 ////////////////////////////////////////////////////////////////////////////////////
 
-ISourceDataObject* CValueTableBox::GetSourceObject() const
+ISourceObject* CValueTableBox::GetSourceObject() const
 {
 	return m_formOwner ? m_formOwner->GetSourceObject()
 		: NULL;
+}
+
+#include "metadata/metadata.h"
+#include "metadata/singleMetaTypes.h"
+
+IMetaObjectWrapperData* CValueTableBox::GetMetaObject() const
+{
+	if (!m_dataSource.isValid()) {
+		IMetadata *metaData = GetMetaData(); 
+		wxASSERT(metaData);
+		IMetaTypeObjectValueSingle* singleObject = metaData->GetTypeObject(GetFirstClsid());
+		wxASSERT(singleObject);
+		if (singleObject != NULL)
+			return dynamic_cast<IMetaObjectWrapperData*>(singleObject->GetMetaObject());
+		return NULL;
+	}
+	ISourceObject* srcObject = GetSourceObject();
+	wxASSERT(srcObject);
+	return srcObject ? srcObject->GetMetaObject()
+		: NULL;
+}
+
+CLASS_ID CValueTableBox::GetClassType() const
+{
+	if (!m_dataSource.isValid()) {
+		IMetadata* metaData = GetMetaData();
+		wxASSERT(metaData);
+		IMetaTypeObjectValueSingle* singleObject = metaData->GetTypeObject(GetFirstClsid());
+		wxASSERT(singleObject);
+		if (singleObject != NULL)
+			singleObject->GetClassType();
+		return 0;
+	}
+	ISourceObject* srcObject = GetSourceObject();
+	wxASSERT(srcObject);
+	return srcObject ? srcObject->GetClassType()
+		: 0;
 }
 
 bool CValueTableBox::FilterSource(const CSourceExplorer& src, const meta_identifier_t& id)

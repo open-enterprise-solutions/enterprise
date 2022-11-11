@@ -8,7 +8,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueCheckbox, IValueWindow)
 #include "form.h"
 #include "metadata/metadata.h"
 
-ISourceDataObject* CValueCheckbox::GetSourceObject() const
+ISourceObject* CValueCheckbox::GetSourceObject() const
 {
 	return m_formOwner ? m_formOwner->GetSourceObject()
 		: NULL;

@@ -3440,6 +3440,9 @@
     <ClInclude Include="common\tableNotifier.h">
       <Filter>common</Filter>
     </ClInclude>
+    <ClInclude Include="common\srcObject.h">
+      <Filter>common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="common">

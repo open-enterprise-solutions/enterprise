@@ -51,7 +51,7 @@ OptionList* CValueTextCtrl::GetChoiceForm(PropertyOption* property)
 	return optList;
 }
 
-ISourceDataObject* CValueTextCtrl::GetSourceObject() const
+ISourceObject* CValueTextCtrl::GetSourceObject() const
 {
 	return m_formOwner ? m_formOwner->GetSourceObject()
 		: NULL;
@@ -78,8 +78,6 @@ wxObject* CValueTextCtrl::Create(wxObject* parent, IVisualHost* visualHost)
 	if (m_dataSource.isValid()) {
 		ISourceDataObject* srcObject = m_formOwner->GetSourceObject();
 		if (srcObject) {
-			IMetaObject* metaObject = GetMetaSource();
-			wxASSERT(metaObject);
 			m_selValue = srcObject->GetValueByMetaID(GetIdByGuid(m_dataSource));
 		}
 	}
@@ -104,9 +102,8 @@ void CValueTextCtrl::Update(wxObject* wxobject, IVisualHost* visualHost)
 		wxString textCaption = wxEmptyString;
 		if (m_dataSource.isValid()) {
 			IMetaObject* metaObject = GetMetaSource();
-			if (metaObject != NULL) {
+			if (metaObject != NULL)
 				textCaption = metaObject->GetSynonym() + wxT(":");
-			}
 		}
 
 		textCtrl->SetTextLabel(!m_propertyCaption->IsOk() ?
@@ -115,8 +112,6 @@ void CValueTextCtrl::Update(wxObject* wxobject, IVisualHost* visualHost)
 		if (m_dataSource.isValid()) {
 			ISourceDataObject* srcObject = m_formOwner->GetSourceObject();
 			if (srcObject != NULL) {
-				IMetaObject* metaObject = GetMetaSource();
-				wxASSERT(metaObject);
 				m_selValue = srcObject->GetValueByMetaID(GetIdByGuid(m_dataSource));
 			}
 		}

@@ -232,6 +232,7 @@
     <ClInclude Include="common\propertyObject.h" />
     <ClInclude Include="Common\docManager.h" />
     <ClInclude Include="common\srcExplorer.h" />
+    <ClInclude Include="common\srcObject.h" />
     <ClInclude Include="common\tableAttributes.h" />
     <ClInclude Include="common\tableInfo.h" />
     <ClInclude Include="common\tableNotifier.h" />

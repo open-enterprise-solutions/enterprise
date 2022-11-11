@@ -79,19 +79,20 @@ void CValueSizerItem::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualH
 
 	// Get IObject for property access
 	CValueSizerItem* obj = wxDynamicCast(visualHost->GetObjectBase(wxobject), CValueSizerItem);
-	IValueFrame* childObj = visualHost->GetObjectBase(child);
 
 	// Add the child ( window or sizer ) to the sizer
 	wxWindow* windowChild = wxDynamicCast(child, wxWindow);
 	wxSizer* sizerChild = wxDynamicCast(child, wxSizer);
 
 	if (windowChild != NULL) {
+		sizer->Detach(windowChild);
 		sizer->Add(windowChild,
 			obj->GetProportion(),
 			obj->GetFlagBorder() | obj->GetFlagState(),
 			obj->GetBorder());
 	}
 	else if (sizerChild != NULL) {
+		sizer->Detach(sizerChild);
 		sizer->Add(sizerChild,
 			obj->GetProportion(),
 			obj->GetFlagBorder() | obj->GetFlagState(),
@@ -114,36 +115,31 @@ void CValueSizerItem::OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualH
 
 	// Get IObject for property access
 	CValueSizerItem* obj = wxDynamicCast(visualHost->GetObjectBase(wxobject), CValueSizerItem);
-	IValueFrame* childObj = visualHost->GetObjectBase(child);
 
 	// Add the child ( window or sizer ) to the sizer
 	wxWindow* windowChild = wxDynamicCast(child, wxWindow);
 	wxSizer* sizerChild = wxDynamicCast(child, wxSizer);
-
-	if (windowChild != NULL) {
-		sizer->Detach(windowChild);
-	}
-	else if (sizerChild != NULL) {
-		sizer->Detach(sizerChild);
-	}
 
 	IValueFrame* parentControl = GetParent(); int idx = wxNOT_FOUND;
 
 	for (unsigned int i = 0; i < parentControl->GetChildCount(); i++) {
 		IValueFrame* child = parentControl->GetChild(i);
 		if (m_controlId == child->GetControlID()) {
-			idx = i; break;
+			idx = i; 
+			break;
 		}
 	}
 
 	if (windowChild != NULL) {
 		if (idx == wxNOT_FOUND) {
+			sizer->Detach(windowChild);
 			sizer->Add(windowChild,
 				obj->GetProportion(),
 				obj->GetFlagBorder() | obj->GetFlagState(),
 				obj->GetBorder());
 		}
 		else {
+			sizer->Detach(windowChild);
 			sizer->Insert(idx, windowChild,
 				obj->GetProportion(),
 				obj->GetFlagBorder() | obj->GetFlagState(),
@@ -152,12 +148,14 @@ void CValueSizerItem::OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualH
 	}
 	else if (sizerChild != NULL) {
 		if (idx == wxNOT_FOUND) {
+			sizer->Detach(sizerChild);
 			sizer->Add(sizerChild,
 				obj->GetProportion(),
 				obj->GetFlagBorder() | obj->GetFlagState(),
 				obj->GetBorder());
 		}
 		else {
+			sizer->Detach(sizerChild);
 			sizer->Insert(idx, sizerChild,
 				obj->GetProportion(),
 				obj->GetFlagBorder() | obj->GetFlagState(),

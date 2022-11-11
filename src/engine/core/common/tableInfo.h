@@ -269,7 +269,7 @@ public:
 				wxASSERT(m_valueTable);
 				if (notify && cValue != variant)
 					m_valueTable->RowValueChanged(this, id);
-				cValue.SetValue(variant);
+				cValue = variant;
 				return true;
 			}
 			return false;
@@ -281,7 +281,7 @@ public:
 				CValue& cValue = foundedColumn->second;
 				std::vector<CValue> foundedObjects;
 				if (cValue.FindValue(variant.GetString(), foundedObjects))
-					cValue.SetValue(foundedObjects.at(0));
+					cValue = foundedObjects.at(0);
 				return true;
 			}
 			return false;
@@ -289,12 +289,18 @@ public:
 
 		bool IsEmptyValue(const meta_identifier_t& col) const {
 			auto foundedColumn = m_nodeValues.find(col);
-			return foundedColumn != m_nodeValues.end();
+			if (foundedColumn == m_nodeValues.end())
+				return true; 
+			const CValue& cValue = foundedColumn->second;
+			return cValue.IsEmpty();
 		}
 
 		bool IsEmptyValue(unsigned int col) const {
 			auto foundedColumn = m_nodeValues.find(col);
-			return foundedColumn != m_nodeValues.end();
+			if (foundedColumn == m_nodeValues.end())
+				return true;
+			const CValue& cValue = foundedColumn->second;
+			return cValue.IsEmpty();
 		}
 
 		void EraseValue(const meta_identifier_t& id) {
@@ -325,7 +331,7 @@ public:
 			auto foundedColumn = m_nodeValues.find(id);
 			if (foundedColumn != m_nodeValues.end()) {
 				const CValue& cValue = foundedColumn->second;
-				variant.SetValue(cValue);
+				variant = cValue;
 			}
 		}
 
@@ -374,7 +380,7 @@ public:
 	virtual bool ValidateReturnLine(IValueModelReturnLine* retLine) const {
 		wxValueTableRow* node = GetViewData(retLine->GetLineItem());
 		wxASSERT(node);
-		return node->m_valueTable != NULL;
+		return node ? node->m_valueTable != NULL : false;
 	}
 
 	/////////////////////////////////////////////////////////
@@ -751,7 +757,7 @@ public:
 	virtual bool ValidateReturnLine(IValueModelReturnLine* retLine) const {
 		wxValueTreeNode* node = GetViewData(retLine->GetLineItem());
 		wxASSERT(node);
-		return node->m_valueTree != NULL;
+		return node ? node->m_valueTree != NULL : false;
 	}
 
 
@@ -770,7 +776,7 @@ public:
 	}
 
 	// helper methods to change the model
-	void Delete(const wxDataViewItem& item) {
+	void Delete(const wxDataViewItem& item, bool notify = true) {
 		wxValueTreeNode* node = (wxValueTreeNode*)item.GetID();
 		if (!node)      // happens if item.IsOk()==false
 			return;
@@ -781,6 +787,13 @@ public:
 			wxLogError("Cannot remove the root item!");
 			return;
 		}
+
+		if (notify && m_srcNotifier != NULL) {
+			bool cancel = m_srcNotifier->SendEvent(wxEVT_DATAVIEW_ITEM_START_DELETING, item);
+			if (cancel)
+				return;
+		}
+
 		// first remove the node from the parent's array of children;
 		// NOTE: MyMusicTreeModelNodePtrArray is only an array of _pointers_
 		//       thus removing the node from it doesn't result in freeing it
@@ -789,7 +802,8 @@ public:
 		if (children_iterator != children.end())
 			children.erase(children_iterator);
 		// notify control
-		/* wxDataViewModel:: */ ItemDeleted(parent, item);
+		if (notify)
+			/* wxDataViewModel:: */ ItemDeleted(parent, item);
 		// free the node
 		node->m_valueTree = NULL;
 		node->DecRef();

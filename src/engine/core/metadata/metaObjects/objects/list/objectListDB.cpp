@@ -76,20 +76,20 @@ void CTreeDataObjectFolderRef::RefreshModel()
 			if (!isFolder)
 				continue;
 		};
-		wxMemoryBuffer bufferData; CReferenceDataObject* pRefData = NULL;
+		wxMemoryBuffer bufferData;
 		resultSet->GetResultBlob(guidRef, bufferData);
 		if (!bufferData.IsEmpty()) {
-			pRefData = CReferenceDataObject::CreateFromPtr(
-				m_metaObject->GetMetadata(), bufferData.GetData()
-			);
-			valueRow.insert_or_assign(metaReference->GetMetaID(), pRefData);
+			valueRow.insert_or_assign(metaReference->GetMetaID(), 
+				CReferenceDataObject::CreateFromPtr(
+					m_metaObject->GetMetadata(), bufferData.GetData()
+			));
 		}
 		else {
-			pRefData = CReferenceDataObject::Create(m_metaObject);
 			wxASSERT(metaReference);
-			valueRow.insert_or_assign(metaReference->GetMetaID(), pRefData);
+			valueRow.insert_or_assign(metaReference->GetMetaID(), 
+				CReferenceDataObject::Create(m_metaObject)
+			);
 		}
-		wxASSERT(pRefData);
 		for (auto attribute : m_metaObject->GetGenericAttributes()) {
 			if (m_metaObject->IsDataReference(attribute->GetMetaID()))
 				continue;
@@ -111,7 +111,11 @@ void CTreeDataObjectFolderRef::RefreshModel()
 		wxASSERT(node); CReferenceDataObject* pRefData = NULL; 
 		node->GetValue(cRefVal, *m_metaObject->GetDataParent());
 		if (cRefVal.ConvertToValue(pRefData)) {
-			auto foundedIt = std::find_if(treeData.begin(), treeData.end(), [pRefData](std::pair<Guid, wxValueTreeListNode*>& pair) { return pair.first == pRefData->GetGuid(); });
+			auto foundedIt = std::find_if(treeData.begin(), treeData.end(), 
+				[pRefData](std::pair<Guid, wxValueTreeListNode*>& pair) { 
+					return pair.first == pRefData->GetGuid(); 
+				}
+			);
 			if (foundedIt != treeData.end()) {
 				node->SetParent(foundedIt->second);
 			}

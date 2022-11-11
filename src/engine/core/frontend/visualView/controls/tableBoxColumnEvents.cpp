@@ -36,16 +36,9 @@ void CValueTableBoxColumn::ChoiceProcessing(CValue& vSelected)
 		return;
 	}
 
-	CValueTableBox* tableBox = wxDynamicCast(
-		GetParent(),
-		CValueTableBox
-	);
-
-	wxASSERT(tableBox);
-
-	if (tableBox->m_tableCurrentLine) {
+	if (GetOwner()->m_tableCurrentLine) {
 		if (m_dataSource.isValid()) {
-			tableBox->m_tableCurrentLine->SetValueByMetaID(
+			GetOwner()->m_tableCurrentLine->SetValueByMetaID(
 				GetIdByGuid(m_dataSource), vSelected
 			);
 		}
@@ -164,16 +157,9 @@ void CValueTableBoxColumn::OnClearButtonPressed(wxCommandEvent& event)
 		return;
 	}
 
-	CValueTableBox* tableBox = wxDynamicCast(
-		GetParent(),
-		CValueTableBox
-	);
-
-	wxASSERT(tableBox);
-
-	if (tableBox->m_tableCurrentLine) {
+	if (GetOwner()->m_tableCurrentLine != NULL) {
 		if (m_dataSource.isValid()) {
-			tableBox->m_tableCurrentLine->SetValueByMetaID(GetIdByGuid(m_dataSource), CValue());
+			GetOwner()->m_tableCurrentLine->SetValueByMetaID(GetIdByGuid(m_dataSource), CValue());
 		}
 	}
 

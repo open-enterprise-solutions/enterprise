@@ -121,7 +121,9 @@ public:
 		return m_aSrcData[idx];
 	}
 
-	unsigned int GetHelperCount() const { return m_aSrcData.size(); }
+	unsigned int GetHelperCount() const { 
+		return m_aSrcData.size();
+	}
 
 protected:
 

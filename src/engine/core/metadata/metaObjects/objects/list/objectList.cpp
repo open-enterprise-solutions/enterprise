@@ -224,11 +224,11 @@ void IListDataObject::CDataObjectListReturnLine::PrepareNames() const
 		aAttribute.iName = attribute->GetMetaID();
 		aAttributes.push_back(aAttribute);
 	}
-	SEng aAttribute;
+	/*SEng aAttribute;
 	aAttribute.sName = wxT("reference");
 	aAttribute.sSynonym = wxT("reference");
 	aAttribute.iName = metaObject->GetMetaID();
-	aAttributes.push_back(aAttribute);
+	aAttributes.push_back(aAttribute);*/
 	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
 }
 
@@ -284,11 +284,11 @@ void ITreeDataObject::CDataObjectTreeReturnLine::PrepareNames() const
 		aAttributes.push_back(aAttribute);
 	}
 
-	SEng aAttribute;
+	/*SEng aAttribute;
 	aAttribute.sName = wxT("reference");
 	aAttribute.sSynonym = wxT("reference");
 	aAttribute.iName = metaObject->GetMetaID();
-	aAttributes.push_back(aAttribute);
+	aAttributes.push_back(aAttribute);*/
 
 	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
 }
