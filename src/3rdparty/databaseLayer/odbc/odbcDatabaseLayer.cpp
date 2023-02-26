@@ -3,7 +3,7 @@
 #include "odbcPreparedStatement.h"
 #include "odbcResultSet.h"
 
-#include "databaseLayer/databaseErrorCodes.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
 
 // ctor()
 OdbcDatabaseLayer::OdbcDatabaseLayer()

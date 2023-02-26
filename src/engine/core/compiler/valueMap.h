@@ -4,17 +4,23 @@
 #include "value.h"
 #include <locale>
 
-class CValueContainer : public CValue
-{
+class CORE_API CValueContainer : public CValue {
 	wxDECLARE_DYNAMIC_CLASS(CValueContainer);
-
+private:
+	enum Func  {
+		enCount = 0,
+		enProperty,
+		enClear,
+		enDelete,
+		enInsert
+	};
 public:
 
 	//јтрибут -> —троковый ключ
 	//работа с массивом как с агрегатным объектом:
 
-	virtual CValue GetAt(const CValue& cKey);
-	virtual void SetAt(const CValue& cKey, CValue& cValue);
+	virtual bool GetAt(const CValue& varKeyValue, CValue& pvarValue);
+	virtual bool SetAt(const CValue& varKeyValue, const CValue& cValue);
 
 	virtual wxString GetTypeString() const { return wxT("container"); }
 	virtual wxString GetString() const { return wxT("container"); }
@@ -24,23 +30,28 @@ public:
 
 public:
 
-	class CValueReturnContainer : public CValue
-	{
+	class CValueReturnContainer : public CValue {
+		
+		enum Prop {
+			enKey,
+			enValue
+		};
+		
 		CValue m_key;
 		CValue m_value;
-
-		static CMethods m_methods;
+	
+		static CMethodHelper m_methodHelper;
 
 	public:
 
 		CValueReturnContainer() : CValue(eValueTypes::TYPE_VALUE, true) { PrepareNames(); }
 		CValueReturnContainer(const CValue& key, CValue& value) : CValue(eValueTypes::TYPE_VALUE, true), m_key(key), m_value(value) { PrepareNames(); }
 
-		virtual CMethods* GetPMethods() const { return &m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
+		virtual CMethodHelper* GetPMethods() const { return &m_methodHelper; } //получить ссылку на класс помощник разбора имен атрибутов и методов
 		virtual void PrepareNames() const;
 
-		virtual void SetAttribute(attributeArg_t& aParams, CValue& cValue);        //установка атрибута
-		virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
+		virtual bool SetPropVal(const long lPropNum, CValue& cValue);        //установка атрибута
+		virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
 
 		virtual wxString GetTypeString() const { return wxT("keyValue"); }
 		virtual wxString GetString() const { return wxT("keyValue"); }
@@ -54,19 +65,19 @@ public:
 
 	~CValueContainer();
 
-	static CMethods m_methods;
+	static CMethodHelper m_methodHelper;
 
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cValue);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
+	virtual bool SetPropVal(const long lPropNum, const CValue& cValue);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
 
-	virtual CMethods* GetPMethods() const { PrepareNames();  return &m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethodHelper* GetPMethods() const { PrepareNames();  return &m_methodHelper; } //получить ссылку на класс помощник разбора имен атрибутов и методов
 	virtual void PrepareNames() const;                         //этот метод автоматически вызываетс€ дл€ инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t& aParams);       //вызов метода
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);       //вызов метода
 
 	//–асширенные методы:
-	virtual void Insert(const CValue& cKey, CValue& cValue);
-	virtual void Delete(const CValue& cKey);
-	virtual bool Property(const CValue& cKey, CValue& cValueFound);
+	virtual void Insert(const CValue& varKeyValue, CValue& cValue);
+	virtual void Delete(const CValue& varKeyValue);
+	virtual bool Property(const CValue& varKeyValue, CValue& cValueFound);
 	unsigned int Count() const { return m_containerValues.size(); }
 	void Clear() { m_containerValues.clear(); }
 
@@ -78,8 +89,7 @@ public:
 
 protected:
 
-	struct ContainerComparator
-	{
+	struct ContainerComparator {
 		bool operator()(const CValue& lhs, const CValue& rhs) const;
 	};
 
@@ -87,10 +97,8 @@ protected:
 };
 
 // structure  
-class CValueStructure : public CValueContainer
-{
+class CValueStructure : public CValueContainer {
 	wxDECLARE_DYNAMIC_CLASS(CValueStructure);
-
 public:
 
 	CValueStructure() : CValueContainer(false) {}
@@ -98,12 +106,12 @@ public:
 
 	CValueStructure(bool readOnly) : CValueContainer(readOnly) {}
 
-	virtual void Delete(const CValue& cKey) override;
-	virtual void Insert(const CValue& cKey, CValue& cValue = CValue()) override;
-	virtual bool Property(const CValue& cKey, CValue& cValueFound) override;
+	virtual void Delete(const CValue& varKeyValue) override;
+	virtual void Insert(const CValue& varKeyValue, CValue& cValue = CValue()) override;
+	virtual bool Property(const CValue& varKeyValue, CValue& cValueFound) override;
 
-	virtual CValue GetAt(const CValue& cKey);
-	virtual void SetAt(const CValue& cKey, CValue& cValue);
+	virtual bool GetAt(const CValue& varKeyValue, CValue& pvarValue);
+	virtual bool SetAt(const CValue& varKeyValue, const CValue& cValue);
 
 	virtual wxString GetTypeString() const { return wxT("structure"); }
 	virtual wxString GetString() const { return wxT("structure"); }

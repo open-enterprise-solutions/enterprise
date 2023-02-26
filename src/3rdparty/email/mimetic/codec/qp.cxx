@@ -26,7 +26,7 @@
 #include <wx/wx.h>
 #endif
 
-#include <email/mimetic/codec/qp.h>
+#include <3rdparty/email/mimetic/codec/qp.h>
 
 using namespace mimetic;
 

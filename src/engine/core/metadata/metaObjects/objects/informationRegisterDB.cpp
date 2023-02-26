@@ -1,6 +1,6 @@
 #include "informationRegister.h"
-#include "databaseLayer/databaseLayer.h"
-#include "databaseLayer/databaseErrorCodes.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
 #include "appData.h"
 
 bool CMetaObjectInformationRegister::CreateAndUpdateSliceFirstTableDB(IConfigMetadata* srcMetaData, IMetaObject* srcMetaObject, int flags)

@@ -1,7 +1,7 @@
 #ifndef _ADVPROPS_H__
 #define _ADVPROPS_H__
 
-#include "common/fontcontainer.h"
+#include "core/common/fontcontainer.h"
 
 #include <wx/propgrid/propgrid.h>
 #include <wx/propgrid/advprops.h>
@@ -161,7 +161,7 @@ public:
 // wxPGToolActionProperty
 // -----------------------------------------------------------------------
 
-#include "frontend/visualView/controls/baseControl.h"
+#include "frontend/visualView/controls/controlInterface.h"
 
 class wxPGToolActionProperty : public wxPGProperty {
 	WX_PG_DECLARE_PROPERTY_CLASS(wxPGToolActionProperty)

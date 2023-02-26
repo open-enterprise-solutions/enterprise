@@ -1,5 +1,5 @@
 #include "debugItemsWnd.h"
-#include "compiler/debugger/debugClient.h"
+#include "core/compiler/debugger/debugClient.h"
 #include "utils/stringUtils.h"
 
 void CDebugItemsWnd::RefreshDebugList()

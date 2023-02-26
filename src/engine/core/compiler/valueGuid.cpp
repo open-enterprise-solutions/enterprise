@@ -4,29 +4,27 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueGuid.h"
-#include "compiler/methods.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CValueGuid, CValue);
 
 CValueGuid::CValueGuid() : CValue(eValueTypes::TYPE_VALUE, true), m_guid() {}
 
-CValueGuid::CValueGuid(const Guid &guid) : CValue(eValueTypes::TYPE_VALUE, true), m_guid(guid) {}
+CValueGuid::CValueGuid(const Guid& guid) : CValue(eValueTypes::TYPE_VALUE, true), m_guid(guid) {}
 
 bool CValueGuid::Init()
 {
-	m_guid = wxNewGuid;
+	m_guid = wxNewUniqueGuid;
 	return true;
 }
 
-bool CValueGuid::Init(CValue **aParams)
+bool CValueGuid::Init(CValue** paParams, const long lSizeArray)
 {
-	if (aParams[0]->GetType() == eValueTypes::TYPE_STRING)
-	{
-		Guid m_newGuid = aParams[0]->ToString();
-		if (m_newGuid.isValid()) m_guid = m_newGuid;	
-		return m_newGuid.isValid();
+	if (paParams[0]->GetType() == eValueTypes::TYPE_STRING) {
+		const Guid& newGuid = paParams[0]->GetString();
+		if (newGuid.isValid())
+			m_guid = newGuid;
+		return newGuid.isValid();
 	}
-
 	return false;
 }
 

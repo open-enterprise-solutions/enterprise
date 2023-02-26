@@ -2,7 +2,7 @@
 #include "postgresResultSet.h"
 #include "postgresDatabaseLayer.h"
 
-#include "databaseLayer/databaseErrorCodes.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
 
 PostgresPreparedStatementWrapper::PostgresPreparedStatementWrapper(PostgresInterface* pInterface, PGconn* pDatabase, const wxString& strSQL, const wxString& strStatementName)
 	: DatabaseErrorReporter(), m_strSQL(strSQL), m_strStatementName(strStatementName)
@@ -103,12 +103,12 @@ int PostgresPreparedStatementWrapper::RunQuery()
 		}
 		m_pInterface->GetPQclear()(pResult);
 	}
+	
 	delete[]paramValues;
 	delete[]paramLengths;
 	delete[]paramFormats;
 
-	if (GetErrorCode() != DATABASE_LAYER_OK)
-	{
+	if (GetErrorCode() != DATABASE_LAYER_OK) {
 		ThrowDatabaseException();
 		return DATABASE_LAYER_QUERY_RESULT_ERROR;
 	}

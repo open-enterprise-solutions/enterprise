@@ -1,5 +1,5 @@
 #include "selectDataWnd.h"
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 #include "frontend/mainFrame.h"
 
 bool CSelectDataTypeWnd::ShowModal(CLASS_ID& clsid)
@@ -32,7 +32,7 @@ bool CSelectDataTypeWnd::ShowModal(CLASS_ID& clsid)
 #define ICON_SIZE 16
 
 CSelectDataTypeWnd::CSelectDataTypeWnd(IMetadata* metaData, std::set<CLASS_ID>& clsids) :
-	wxDialog(CMainFrame::Get(), wxID_ANY, _("Select data type"), wxDefaultPosition, wxSize(315, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+	wxDialog(wxAuiDocMDIFrame::GetFrame(), wxID_ANY, _("Select data type"), wxDefaultPosition, wxSize(315, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
 	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);

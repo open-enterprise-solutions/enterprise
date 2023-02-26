@@ -10,7 +10,7 @@
 //*                                Hotkey support                                *
 //********************************************************************************
 
-void CMainFrameDesigner::SetDefaultHotKeys()
+void wxAuiDocDesignerMDIFrame::SetDefaultHotKeys()
 {
 	// Setup the hotkeys.
 	m_keyBinder.SetShortcut(wxID_NEW, wxT("Ctrl+N"));
@@ -46,7 +46,7 @@ enum MDI_MENU_ID
 	wxWINDOWPREV
 };
 
-void CMainFrameDesigner::InitializeDefaultMenu()
+void wxAuiDocDesignerMDIFrame::InitializeDefaultMenu()
 {
 	m_menuBar = new wxMenuBar;
 
@@ -131,19 +131,18 @@ void CMainFrameDesigner::InitializeDefaultMenu()
 	m_menuHelp->Append(wxID_DESIGNER_ABOUT, _("About"));
 	m_menuBar->Append(m_menuHelp, wxGetStockLabel(wxID_HELP, wxSTOCK_NOFLAGS));
 
-	Bind(wxEVT_MENU, &CMainFrameDesigner::OnRollbackConfiguration, this, wxID_DESIGNER_CONFIGURATION_RETURN_DATABASE);
+	Bind(wxEVT_MENU, &wxAuiDocDesignerMDIFrame::OnRollbackConfiguration, this, wxID_DESIGNER_CONFIGURATION_RETURN_DATABASE);
+	Bind(wxEVT_MENU, &wxAuiDocDesignerMDIFrame::OnConfiguration, this, wxID_DESIGNER_CONFIGURATION_LOAD, wxID_DESIGNER_CONFIGURATION_SAVE);
 
-	Bind(wxEVT_MENU, &CMainFrameDesigner::OnConfiguration, this, wxID_DESIGNER_CONFIGURATION_LOAD, wxID_DESIGNER_CONFIGURATION_SAVE);
-	
-	Bind(wxEVT_MENU, &CMainFrameDesigner::OnStartDebug, this, wxID_DESIGNER_DEBUG_START);
-	Bind(wxEVT_MENU, &CMainFrameDesigner::OnStartDebugWithoutDebug, this, wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING);
-	Bind(wxEVT_MENU, &CMainFrameDesigner::OnAttachForDebugging, this, wxID_DESIGNER_DEBUG_ATTACH_FOR_DEBUGGING);
+	Bind(wxEVT_MENU, &wxAuiDocDesignerMDIFrame::OnStartDebug, this, wxID_DESIGNER_DEBUG_START);
+	Bind(wxEVT_MENU, &wxAuiDocDesignerMDIFrame::OnStartDebugWithoutDebug, this, wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING);
+	Bind(wxEVT_MENU, &wxAuiDocDesignerMDIFrame::OnAttachForDebugging, this, wxID_DESIGNER_DEBUG_ATTACH_FOR_DEBUGGING);
 
-	Bind(wxEVT_MENU, &CMainFrameDesigner::OnRunDebugCommand, this, wxID_DESIGNER_DEBUG_EDIT_POINT, wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS);
-	Bind(wxEVT_MENU, &CMainFrameDesigner::OnToolsSettings, this, wxID_APPLICATION_SETTING);
-	Bind(wxEVT_MENU, &CMainFrameDesigner::OnUsers, this, wxID_APPLICATION_USERS);
-	Bind(wxEVT_MENU, &CMainFrameDesigner::OnActiveUsers, this, wxID_APPLICATION_ACTIVE_USERS);
-	Bind(wxEVT_MENU, &CMainFrameDesigner::OnAbout, this, wxID_DESIGNER_ABOUT);
+	Bind(wxEVT_MENU, &wxAuiDocDesignerMDIFrame::OnRunDebugCommand, this, wxID_DESIGNER_DEBUG_EDIT_POINT, wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS);
+	Bind(wxEVT_MENU, &wxAuiDocDesignerMDIFrame::OnToolsSettings, this, wxID_APPLICATION_SETTING);
+	Bind(wxEVT_MENU, &wxAuiDocDesignerMDIFrame::OnUsers, this, wxID_APPLICATION_USERS);
+	Bind(wxEVT_MENU, &wxAuiDocDesignerMDIFrame::OnActiveUsers, this, wxID_APPLICATION_ACTIVE_USERS);
+	Bind(wxEVT_MENU, &wxAuiDocDesignerMDIFrame::OnAbout, this, wxID_DESIGNER_ABOUT);
 
 	LoadOptions();
 }

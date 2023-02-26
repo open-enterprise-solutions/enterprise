@@ -5,10 +5,10 @@
 
 #include "metaObject.h"
 #include "appData.h"
-#include "compiler/methods.h"
-#include "metadata/metadata.h"
-#include "databaseLayer/databaseLayer.h"
-#include "databaseLayer/databaseErrorCodes.h"
+
+#include "core/metadata/metadata.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
 #include "utils/stringUtils.h"
 
 wxIMPLEMENT_ABSTRACT_CLASS(IMetaObject, CValue)
@@ -84,7 +84,7 @@ Role* IMetaObject::GetRole(unsigned int idx) const
 
 void IMetaObject::ResetGuid()
 {
-	m_metaGuid = wxNewGuid;
+	m_metaGuid = wxNewUniqueGuid;
 }
 
 void IMetaObject::ResetId()
@@ -126,7 +126,7 @@ bool IMetaObject::BuildNewName()
 /////////////////////////////////////////////////////////////////////////////////////////
 
 IMetaObject::IMetaObject(const wxString& name, const wxString& synonym, const wxString& comment) : CValue(eValueTypes::TYPE_VALUE, true), IPropertyObject(),
-m_methods(new CMethods()), m_metaData(NULL), m_metaFlags(metaDefaultFlag), m_metaId(0)
+m_methodHelper(new CMethodHelper()), m_metaData(NULL), m_metaFlags(metaDefaultFlag), m_metaId(0)
 {
 	m_propertyName->SetValue(name);
 	m_propertySynonym->SetValue(synonym);
@@ -137,7 +137,7 @@ IMetaObject::~IMetaObject()
 {
 	for (auto role : m_roles)
 		delete role.second;
-	wxDELETE(m_methods);
+	wxDELETE(m_methodHelper);
 }
 
 bool IMetaObject::LoadRole(CMemoryReader& dataReader)
@@ -377,11 +377,11 @@ bool IMetaObject::OnDeleteMetaObject()
 
 bool IMetaObject::OnAfterCloseMetaObject()
 {
-	IMetadataWrapperTree* metaTree =
+	IMetadataWrapperTree* metadataTree =
 		m_metaData->GetMetaTree();
 
-	if (metaTree) {
-		metaTree->CloseMetaObject(this);
+	if (metadataTree) {
+		metadataTree->CloseMetaObject(this);
 	}
 
 	return true;
@@ -467,20 +467,18 @@ wxString IMetaObject::GetModuleName() const
 
 wxString IMetaObject::GetFullName() const
 {
-	wxString m_metaFullName = GetModuleName();
+	wxString metaFullName = GetModuleName();
 	IMetaObject* metaParent = GetParent();
 
-	while (metaParent)
-	{
+	while (metaParent != NULL) {
 		if (g_metaCommonMetadataCLSID == metaParent->GetClsid())
 			break;
-
 		wxString m_sModuleName = metaParent->GetName();
-		m_metaFullName = m_sModuleName + '.' + m_metaFullName;
+		metaFullName = m_sModuleName + '.' + metaFullName;
 		metaParent = metaParent->GetParent();
 	}
 
-	return m_metaFullName;
+	return metaFullName;
 }
 
 wxString IMetaObject::GetFileName() const
@@ -491,4 +489,40 @@ wxString IMetaObject::GetFileName() const
 wxString IMetaObject::GetDocPath() const
 {
 	return m_metaGuid.str();
+}
+
+//****************************************************************************
+//*                              Support methods                             *
+//****************************************************************************
+
+void IMetaObject::PrepareNames() const
+{
+	m_methodHelper->ClearHelper();
+
+	for (unsigned idx = 0; idx < IPropertyObject::GetPropertyCount(); idx++) {
+		Property* property = IPropertyObject::GetProperty(idx);
+		if (property == NULL)
+			continue;
+		m_methodHelper->AppendProp(property->GetName(), idx);
+	}
+}
+
+bool IMetaObject::SetPropVal(const long lPropNum, const CValue& varPropVal)
+{
+	Property* property = GetPropertyByIndex(lPropNum);
+	if (property != NULL) {
+		property->SetDataValue(varPropVal);
+		return true;
+	}
+	return false;
+}
+
+bool IMetaObject::GetPropVal(const long lPropNum, CValue& pvarPropVal)
+{
+	Property* property = GetPropertyByIndex(lPropNum);
+	if (property != NULL) {
+		pvarPropVal = property->GetDataValue();
+		return true;
+	}
+	return false;
 }

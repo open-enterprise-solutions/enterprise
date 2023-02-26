@@ -5,62 +5,59 @@
 #include <wx/listctrl.h>
 #include <wx/sizer.h>
 
-#include "compiler/debugger/debugEvent.h"
+#include "core/compiler/debugger/debugEvent.h"
 
-class CStackWindow;
-class CMemoryReader;
+struct stackData_t {
 
-#define stackWindow           (CStackWindow::Get())
+	struct stackRow_t {
+		wxString m_moduleName;
+		unsigned int m_moduleLine;
+	public:
+		stackRow_t(const wxString& moduleName, unsigned int moduleLine) :
+			m_moduleName(moduleName), m_moduleLine(moduleLine) {
+		}
+	};
 
-class CStackWindow : public wxPanel
-{
-	wxListCtrl *m_treeCtrl;
-	static CStackWindow *s_instance;
-
-	CStackWindow(wxWindow *parent, int id = wxID_ANY);
+	std::vector<stackRow_t> m_stackData;
 
 public:
 
-	static CStackWindow* Get();
+	void AppendStack(const wxString& moduleName, unsigned int moduleLine) {
+		m_stackData.emplace_back(
+			moduleName, moduleLine
+		);
+	}
+
+	unsigned int GetStackCount() const {
+		return m_stackData.size();
+	}
+
+	wxString GetModuleName(unsigned int idx) const {
+		if (idx > m_stackData.size()) return wxEmptyString;
+		return m_stackData[idx].m_moduleName;
+	}
+
+	wxString GetModuleLine(unsigned int idx) const {
+		if (idx > m_stackData.size()) return wxEmptyString;
+		return std::to_string(m_stackData[idx].m_moduleLine);
+	}
+};
+
+#define stackWindow CStackWindow::GetStackWindow()
+
+class CStackWindow : public wxPanel {
+	wxListCtrl* m_treeCtrl;
+private:
+	CStackWindow(wxWindow* parent, int id = wxID_ANY);
+	friend class wxAuiDocDesignerMDIFrame;
+public:
 
 	virtual ~CStackWindow();
 
+	static CStackWindow* GetStackWindow();
+
 	void ClearAndCreate();
-	void SetStack(CMemoryReader &commandReader);
-
-public:
-
-	class wxStackEvent : public wxEvent {
-		struct stack_info {
-			wxString m_moduleName;
-			unsigned int m_moduleLine;
-		};
-
-		std::vector<stack_info> m_stackData;
-
-	public:
-
-		wxStackEvent();
-
-		void AppendStack(const wxString moduleName, unsigned int moduleLine) {
-			m_stackData.emplace_back(stack_info{ moduleName, moduleLine });
-		}
-
-		unsigned int GetStackCount() const { return m_stackData.size(); }
-
-		wxString GetModuleName(unsigned int idx) const {
-			if (idx > m_stackData.size()) return wxEmptyString;
-			return m_stackData[idx].m_moduleName;
-		}
-
-		wxString GetModuleLine(unsigned int idx) const {
-			if (idx > m_stackData.size()) return wxEmptyString;
-			return std::to_string(m_stackData[idx].m_moduleLine);
-		}
-
-		virtual wxEvent *Clone() const { return new wxStackEvent(*this); }
-	};
-
+	void SetStack(const stackData_t& stackData);
 
 protected:
 
@@ -78,9 +75,8 @@ protected:
 	void GetColumnSizes(int totalSize, int columnSize[s_numColumns]) const;
 
 	//events 
-	void OnDebugEvent(wxDebugEvent &event);
-	void OnStackEvent(wxStackEvent &event);
-	void OnItemSelected(wxListEvent &event);
+	void OnDebugEvent(wxDebugEvent& event);
+	void OnItemSelected(wxListEvent& event);
 
 	/**
 	* Called when the window changes size.
@@ -88,9 +84,7 @@ protected:
 	void OnSize(wxSizeEvent& event);
 
 private:
-
 	float m_columnSize[s_numColumns];
-
 	wxDECLARE_EVENT_TABLE();
 };
 

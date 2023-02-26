@@ -14,8 +14,8 @@
 
 #include "engine/ibase.h"
 
-#include "databaseLayer/DatabaseErrorReporter.h"
-#include "databaseLayer/databaseStringConverter.h"
+#include <3rdparty/databaseLayer/databaseErrorReporter.h>
+#include <3rdparty/databaseLayer/databaseStringConverter.h>
 
 #include "firebirdParameterCollection.h"
 #include "firebirdInterface.h"

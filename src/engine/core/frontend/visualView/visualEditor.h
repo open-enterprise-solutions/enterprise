@@ -3,13 +3,143 @@
 
 #include <set>
 
+#include <wx/artprov.h>
+#include <wx/config.h>
+#include <wx/cmdproc.h>
+#include <wx/docview.h>
+#include <wx/splitter.h>
+#include <wx/spinbutt.h>
+#include <wx/treectrl.h>
+
 #include "innerFrame.h"
 #include "pageWindow.h"
-#include "frontend/objinspect/events.h"
+
+#include "controls/form.h"
+#include "controls/sizers.h"
+#include "controls/widgets.h"
+
+class CCommand {
+	bool m_executed;
+protected:
+
+	/**
+	 * Ejecuta el comando.
+	 */
+	virtual void DoExecute() = 0;
+
+	/**
+	 * Restaura el estado previo a la ejecución del comando.
+	 */
+	virtual void DoRestore() = 0;
+
+public:
+
+	CCommand() : m_executed(false) {}
+
+	void Execute() {
+		if (!m_executed) {
+			DoExecute();
+			m_executed = true;
+		}
+	}
+
+	void Restore() {
+		if (m_executed) {
+			DoRestore();
+			m_executed = false;
+		}
+	}
+};
+
+class CCommandProcessor {
+	typedef std::stack<CCommand*> CommandStack;
+	CommandStack m_undoStack, m_redoStack;
+	unsigned int m_savePoint;
+public:
+
+	CCommandProcessor() : m_savePoint(0) {}
+
+	~CCommandProcessor() {
+		while (!m_redoStack.empty()) {
+			CCommand* redoCmd = m_redoStack.top();
+			delete redoCmd;
+			m_redoStack.pop();
+		}
+		while (!m_undoStack.empty()) {
+			CCommand* undoCmd = m_undoStack.top();
+			delete undoCmd;
+			m_undoStack.pop();
+		}
+	}
+
+	void CCommandProcessor::Execute(CCommand* command) {
+		command->Execute();
+		m_undoStack.push(command);
+		while (!m_redoStack.empty()) {
+			m_redoStack.pop();
+		}
+	}
+
+	bool CCommandProcessor::Undo() {
+		if (!m_undoStack.empty()) {
+			CCommand* command = m_undoStack.top();
+			m_undoStack.pop();
+			command->Restore();
+			m_redoStack.push(command);
+		}
+		return true;
+	}
+
+	bool CCommandProcessor::Redo() {
+		if (!m_redoStack.empty()) {
+			CCommand* command = m_redoStack.top();
+			m_redoStack.pop();
+			command->Execute();
+			m_undoStack.push(command);
+		}
+		return true;
+	}
+
+	void CCommandProcessor::Reset() {
+		while (!m_redoStack.empty())
+			m_redoStack.pop();
+		while (!m_undoStack.empty())
+			m_undoStack.pop();
+		m_savePoint = 0;
+	}
+
+	bool CCommandProcessor::CanUndo() const {
+		return (!m_undoStack.empty());
+	}
+
+	bool CCommandProcessor::CanRedo() const {
+		return (!m_redoStack.empty());
+	}
+
+	void CCommandProcessor::SetSavePoint() {
+		m_savePoint = m_undoStack.size();
+	}
+
+	bool CCommandProcessor::IsAtSavePoint() {
+		return m_savePoint == m_undoStack.size();
+	}
+};
+
+#include "visualInterface.h"
+#include "visualEvent.h"
+
+#include "frontend/codeEditor/codeEditorCtrl.h"
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+#include "core.h"
+
+#define wxNOTEBOOK_PAGE_DESIGNER 0
+#define wxNOTEBOOK_PAGE_CODE_EDITOR 1
 
 /**
  * Extends the CInnerFrame to show the object highlight
- */
+*/
 class CDesignerWindow : public CInnerFrame {
 	wxDECLARE_CLASS(CDesignerWindow);
 private:
@@ -71,48 +201,19 @@ protected:
 	wxDECLARE_EVENT_TABLE();
 };
 
-class wxFrameEvent;
-class wxFramePropertyEvent;
-class wxFrameObjectEvent;
+class CORE_API CVisualEditorNotebook : public wxAuiNotebook {
 
-class CVisualEditorContextForm;
-
-#include "controls/form.h"
-
-#include "controls/sizers.h"
-#include "controls/widgets.h"
-
-#include "visualEditorBase.h"
-#include "common/cmdProc.h"
-
-#include <wx/artprov.h>
-#include <wx/config.h>
-#include <wx/cmdproc.h>
-#include <wx/docview.h>
-#include <wx/splitter.h>
-#include <wx/spinbutt.h>
-#include <wx/treectrl.h>
-
-class CDocument;
-class CView;
-
-//////////////////////////////////////////////////////////////////////////////////////////
-
-#include "core.h"
-#include <wx/docview.h>
-
-class CORE_API CVisualEditorContextForm : public wxPanel {
-	wxDECLARE_DYNAMIC_CLASS(CVisualEditorContextForm);
+public: class CORE_API CVisualEditorCtrl : public wxPanel {
+	wxDECLARE_DYNAMIC_CLASS(CVisualEditorCtrl);
 public:
 
-	class CORE_API CVisualEditorHost : public IVisualHost {
-		friend class CVisualEditorContextForm;
+	class CVisualEditorHost : public IVisualHost {
+		friend class CVisualEditorCtrl;
 		friend class CVisualEditorObjectTree;
+		//designer 
 		CDesignerWindow* m_back;
-		// Active control
-		IValueFrame* m_activeControl;
 		//form handler
-		CVisualEditorContextForm* m_formHandler;
+		CVisualEditorCtrl* m_formHandler;
 		// Prevent OnSelected in components
 		bool m_stopSelectedEvent;
 		// Prevent OnModified in components
@@ -128,8 +229,49 @@ public:
 		friend class CutObjectCmd;
 		friend class ReparentObjectCmd;
 
-		CVisualEditorHost(CVisualEditorContextForm* handler, wxWindow* parent, wxWindowID id = wxID_ANY);
+		CVisualEditorHost(CVisualEditorCtrl* handler, wxWindow* parent, wxWindowID id = wxID_ANY);
 		virtual ~CVisualEditorHost() override;
+
+		//*********************************************************
+		//*                 Events for visual                     *
+		//*********************************************************
+
+		/**
+		* Create an instance of the wxObject and return a pointer
+		*/
+		virtual wxObject* Create(IValueFrame* control, wxWindow* wxparent);
+
+		/**
+		* Allows components to do something after they have been created.
+		* For example, Abstract components like NotebookPage and SizerItem can
+		* add the actual widget to the Notebook or sizer.
+		*
+		* @param wxobject The object which was just created.
+		* @param wxparent The wxWidgets parent - the wxObject that the created object was added to.
+		*/
+		virtual void OnCreated(IValueFrame* control, wxObject* obj, wxWindow* wxparent, bool firstСreated = false);
+
+		/**
+		* Allows components to do something after they have been updated.
+		*/
+		virtual void Update(IValueFrame* control, wxObject* obj);
+
+		/**
+		* Allows components to do something after they have been updated.
+		* For example, Abstract components like NotebookPage and SizerItem can
+		* add the actual widget to the Notebook or sizer.
+		*
+		* @param wxobject The object which was just updated.
+		* @param wxparent The wxWidgets parent - the wxObject that the updated object was added to.
+		*/
+		virtual void OnUpdated(IValueFrame* control, wxObject* obj, wxWindow* wndParent);
+
+		/**
+		 * Cleanup (do the reverse of Create)
+		 */
+		virtual void Cleanup(IValueFrame* control, wxObject* obj);
+
+		/////////////////////////////////////////////////////////////////////////////////////////
 
 		void OnResizeBackPanel(wxCommandEvent& event);
 		void OnClickBackPanel(wxMouseEvent& event);
@@ -159,10 +301,13 @@ public:
 
 		//set and create window
 		void SetObjectSelect(IValueFrame* obj);
+
 		//Setup window 
 		void CreateVisualEditor();
+
 		//Update window 
 		void UpdateVisualEditor();
+
 		//Clear visualeditor
 		void ClearVisualEditor();
 
@@ -173,7 +318,7 @@ public:
 	//////////////////////////////////////////////////////////////////////////////////////////
 
 	class CVisualEditorObjectTree : public wxPanel {
-		CVisualEditorContextForm* m_formHandler = NULL;
+		CVisualEditorCtrl* m_formHandler = NULL;
 	private:
 
 		wxImageList* m_iconList = NULL;
@@ -192,7 +337,7 @@ public:
 		void RebuildTree();
 		void AddChildren(IValueFrame* child, const wxTreeItemId& parent, bool is_root = false);
 		int GetImageIndex(const wxString& type);
-		void UpdateItem(const wxTreeItemId &id, IValueFrame* obj);
+		void UpdateItem(const wxTreeItemId& id, IValueFrame* obj);
 		void RestoreItemStatus(IValueFrame* obj);
 		void AddItem(IValueFrame* item, IValueFrame* parent);
 		void RemoveItem(IValueFrame* item);
@@ -204,7 +349,11 @@ public:
 
 	public:
 
-		CVisualEditorObjectTree(CVisualEditorContextForm* handler, wxWindow* parent, int id = wxID_ANY);
+		void RefreshTree() {
+			RebuildTree();
+		}
+
+		CVisualEditorObjectTree(CVisualEditorCtrl* owner, wxWindow* parent, int id = wxID_ANY);
 		virtual ~CVisualEditorObjectTree() override;
 
 		void Create();
@@ -248,14 +397,14 @@ public:
 	 */
 	class CVisualEditorItemPopupMenu : public wxMenu {
 		IValueFrame* m_object = NULL;
-		CVisualEditorContextForm* m_formHandler = NULL;
+		CVisualEditorCtrl* m_formHandler = NULL;
 		int m_selID;
 	public:
 
 		bool HasDeleteObject();
 		int GetSelectedID() const { return m_selID; }
 
-		CVisualEditorItemPopupMenu(CVisualEditorContextForm* handler, wxWindow* parent, IValueFrame* obj);
+		CVisualEditorItemPopupMenu(CVisualEditorCtrl* owner, wxWindow* parent, IValueFrame* obj);
 
 		void OnUpdateEvent(wxUpdateUIEvent& e);
 		void OnMenuEvent(wxCommandEvent& event);
@@ -283,7 +432,6 @@ public:
 
 	//Document & view 
 	CDocument* m_document;
-	CView* m_view;
 
 	//access to private object  
 	friend class CValueNotebook;
@@ -330,12 +478,12 @@ public:
 		m_valueForm = valueForm;
 	}
 
-	bool IsEditable() const { 
-		return !m_bReadOnly; 
+	bool IsEditable() const {
+		return !m_bReadOnly;
 	}
-	
-	void SetReadOnly(bool readOnly = true) { 
-		m_bReadOnly = readOnly; 
+
+	void SetReadOnly(bool readOnly = true) {
+		m_bReadOnly = readOnly;
 	}
 
 protected:
@@ -355,11 +503,6 @@ protected:
 	void NotifyProjectRefresh();
 	void NotifyCodeGeneration(bool panelOnly = false, bool force = false);
 
-	/*
-	* Check name conflict
-	*/
-	bool IsCorrectName(const wxString& controlName) const;
-
 	//Execute command 
 	void Execute(CCommand* cmd);
 
@@ -377,24 +520,21 @@ protected:
 
 public:
 
-	CVisualEditorContextForm();
-	CVisualEditorContextForm(CDocument* document, CView* view, wxWindow* parent, int id = wxID_ANY);
-	virtual ~CVisualEditorContextForm();
+	CVisualEditorCtrl();
+	CVisualEditorCtrl(CDocument* document, wxWindow* parent, int id = wxID_ANY);
+	virtual ~CVisualEditorCtrl();
 
 	// Procedures for register/unregister wxEvtHandlers to be notified of wxOESEvents
 	void AddHandler(wxEvtHandler* handler);
 	void RemoveHandler(wxEvtHandler* handler);
 
-	void ActivateObject();
-	void DeactivateObject();
-
 	// Servicios específicos, no definidos en DataObservable
 	void SetClipboardObject(IValueFrame* obj) {
 		m_clipboard = obj;
 	}
-	
+
 	IValueFrame* GetClipboardObject() const {
-		return m_clipboard; 
+		return m_clipboard;
 	}
 
 	//Objects 
@@ -406,8 +546,8 @@ public:
 	void InsertObject(IValueFrame* obj, IValueFrame* parent);
 	void ExpandObject(IValueFrame* obj, bool expand);
 
-	void ModifyProperty(Property* prop, const wxVariant& value);
-	void ModifyEventHandler(Event* evt, const wxVariant& value);
+	void ModifyProperty(Property* prop, const wxVariant& newValue);
+	void ModifyEvent(Event* evt, const wxString& newValue);
 
 	void CreateWideGui();
 
@@ -431,6 +571,11 @@ public:
 			m_visualEditor->UpdateVisualEditor();
 		}
 		NotifyProjectRefresh();
+	}
+
+	void RefreshTree() {
+		if (m_objectTree != NULL)
+			m_objectTree->RefreshTree();
 	}
 
 	void Undo();
@@ -473,22 +618,225 @@ public:
 	bool SaveForm();
 
 	void TestForm();
+};
 
-	void SetCommandProcessor(CCommandProcessor* cmdProc) {
-		m_cmdProc = cmdProc;
+private:
+
+	CVisualEditorCtrl* m_visualEditor;
+	CCodeEditorCtrl* m_codeEditor;
+
+public:
+
+	static CVisualEditorNotebook* FindEditorByForm(CValueForm* valueForm);
+
+	CVisualEditorNotebook(CDocument* document, wxWindow* parent, wxWindowID id, long flags) : wxAuiNotebook(parent, id, wxDefaultPosition, wxDefaultSize, wxAUI_NB_BOTTOM | wxAUI_NB_TAB_FIXED_WIDTH),
+		m_visualEditor(new CVisualEditorCtrl(document, this)), m_codeEditor(new CCodeEditorCtrl(document, this)) {
+		CreateVisualEditor(document, parent, id, flags);
 	}
 
-	// Events
-	void OnProjectLoaded(wxFrameEvent& event);
-	void OnProjectSaved(wxFrameEvent& event);
-	void OnObjectSelected(wxFrameObjectEvent& event);
-	void OnObjectCreated(wxFrameObjectEvent& event);
-	void OnObjectRemoved(wxFrameObjectEvent& event);
-	void OnPropertyModified(wxFramePropertyEvent& event);
-	void OnProjectRefresh(wxFrameEvent& event);
-	void OnCodeGeneration(wxFrameEventHandlerEvent& event);
+	virtual ~CVisualEditorNotebook() {
+		DestroyVisualEditor();
+	}
 
-	wxDECLARE_EVENT_TABLE();
+	void CreateVisualEditor(CDocument* document, wxWindow* parent, wxWindowID id, long flags);
+	void DestroyVisualEditor();
+
+	void Copy() {
+		if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER) {
+			m_visualEditor->CopyObject(m_visualEditor->GetSelectedObject());
+		}
+		else if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR) {
+			m_codeEditor->Copy();
+		}
+	}
+
+	void Paste() {
+		if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER) {
+			m_visualEditor->PasteObject(m_visualEditor->GetSelectedObject());
+		}
+		else if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR) {
+			m_codeEditor->Paste();
+		}
+	}
+
+	void SelectAll() {
+		if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER) {
+		}
+		else if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR) {
+			m_codeEditor->SelectAll();
+		}
+	}
+
+	bool Undo();
+	bool Redo();
+
+	bool CanUndo() const;
+	bool CanRedo() const;
+
+	void CreateControl(const wxString& controlName) {
+		m_visualEditor->CreateObject(controlName);
+		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_DESIGNER)
+			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
+	}
+
+	void RemoveControl(IValueFrame* obj) {
+		m_visualEditor->RemoveObject(obj);
+		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_DESIGNER)
+			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
+	}
+
+	void CutControl(IValueFrame* obj, bool force = false) {
+		m_visualEditor->CutObject(obj, force);
+		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_DESIGNER)
+			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
+	}
+
+	void CopyControl(IValueFrame* obj) {
+		m_visualEditor->CopyObject(obj);
+		wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
+	}
+
+	bool PasteControl(IValueFrame* parent, IValueFrame* objToPaste = NULL) {
+		bool result = m_visualEditor->PasteObject(parent, objToPaste);
+		wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
+		return result;
+	}
+
+	void InsertControl(IValueFrame* obj, IValueFrame* parent) {
+		m_visualEditor->InsertObject(obj, parent);
+		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_DESIGNER)
+			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
+	}
+
+	void ExpandControl(IValueFrame* obj, bool expand) {
+		m_visualEditor->ExpandObject(obj, expand);
+		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_DESIGNER)
+			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
+	}
+
+	void SelectControl(IValueFrame* obj) {
+		m_visualEditor->SelectObject(obj);
+		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_DESIGNER)
+			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
+	}
+
+	void ModifyEvent(Event* event, const wxString& newValue);
+	void ModifyProperty(Property* prop, const wxVariant& newValue) {
+		m_visualEditor->ModifyProperty(prop, newValue);
+		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_DESIGNER)
+			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
+	}
+
+	void FindText(const wxString& findString, int wxflags) {
+		m_codeEditor->FindText(findString, wxflags);
+		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
+			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
+	}
+
+	void ShowGotoLine() {
+		m_codeEditor->ShowGotoLine();
+		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
+			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
+	}
+
+	void ShowMethods() {
+		m_codeEditor->ShowMethods();
+		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
+			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
+	}
+
+	bool SyntaxControl(bool throwMessage = true) {
+		bool result = m_codeEditor->SyntaxControl(throwMessage);
+		if (!result && wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
+			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
+		return result;
+	}
+
+	void SetCurrentLine(int line, bool setLine = true) {
+		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
+			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
+	}
+
+	bool LoadForm() {
+		return m_visualEditor->LoadForm() &&
+			m_codeEditor->LoadModule();
+	}
+
+	bool SaveForm() {
+		return m_visualEditor->SaveForm() &&
+			m_codeEditor->SaveModule();
+	}
+
+	void TestForm() {
+		m_visualEditor->TestForm();
+	}
+
+	void RefreshEditor() {
+
+		if (m_visualEditor != NULL)
+			m_visualEditor->RefreshEditor();
+
+		if (m_codeEditor != NULL)
+			m_codeEditor->RefreshEditor();
+	}
+
+	void RefreshTree() {
+
+		if (m_visualEditor != NULL)
+			m_visualEditor->RefreshTree();
+
+	}
+
+	bool IsEditable() const {
+		return m_visualEditor->IsEditable() &&
+			m_codeEditor->IsEditable();
+	}
+
+	CValueForm* GetValueForm() const {
+		return m_visualEditor->GetValueForm();
+	}
+
+	IVisualHost* GetVisualHost() const {
+		return m_visualEditor->GetVisualEditor();
+	}
+
+	CVisualEditorCtrl* GetVisualEditor() const {
+		return m_visualEditor;
+	}
+
+	CCodeEditorCtrl* GetCodeEditor() const {
+		return m_codeEditor;
+	}
+
+protected:
+
+	void OnPageChanged(wxAuiNotebookEvent& event);
+};
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+class CVisualDesignerCommandProcessor : public wxCommandProcessor {
+	CVisualEditorNotebook* m_visualNotebook;
+public:
+
+	CVisualDesignerCommandProcessor(CVisualEditorNotebook* visualNotebook) : wxCommandProcessor(),
+		m_visualNotebook(visualNotebook) {}
+
+	virtual bool Undo() override {
+		return m_visualNotebook->Undo();
+	}
+
+	virtual bool Redo() override {
+		return m_visualNotebook->Redo();
+	}
+
+	virtual bool CanUndo() const override {
+		return m_visualNotebook->CanUndo();
+	}
+
+	virtual bool CanRedo() const override {
+		return m_visualNotebook->CanRedo();
+	}
 };
 
 #endif

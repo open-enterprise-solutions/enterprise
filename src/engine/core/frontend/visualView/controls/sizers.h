@@ -1,7 +1,7 @@
 #ifndef _SIZER_H_
 #define _SIZER_H_
 
-#include "baseControl.h"
+#include "controlInterface.h"
 
 class IValueSizer : public IValueControl {
 	wxDECLARE_ABSTRACT_CLASS(IValueSizer);
@@ -151,7 +151,7 @@ public:
 
 	CValueBoxSizer();
 
-	virtual wxObject* Create(wxObject* /*parent*/, IVisualHost* /*visualHost*/) override;
+	virtual wxObject* Create(wxWindow* /*parent*/, IVisualHost* /*visualHost*/) override;
 	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated) override;
 	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
@@ -163,6 +163,10 @@ public:
 	virtual wxString GetObjectTypeName() const override {
 		return wxT("sizer");
 	}
+
+	//support icons
+	virtual wxIcon GetIcon();
+	static wxIcon GetIconGroup();
 
 	//load & save object in control 
 	virtual bool LoadData(CMemoryReader& reader);
@@ -179,7 +183,7 @@ public:
 
 	CValueWrapSizer();
 
-	virtual wxObject* Create(wxObject* /*parent*/, IVisualHost* /*visualHost*/) override;
+	virtual wxObject* Create(wxWindow* /*parent*/, IVisualHost* /*visualHost*/) override;
 	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated) override;
 	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
@@ -214,7 +218,7 @@ public:
 
 	CValueStaticBoxSizer();
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual wxObject* Create(wxWindow* parent, IVisualHost* visualHost) override;
 	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated) override;
 	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
@@ -226,6 +230,10 @@ public:
 	virtual wxString GetObjectTypeName() const override {
 		return wxT("sizer");
 	}
+
+	//support icons
+	virtual wxIcon GetIcon();
+	static wxIcon GetIconGroup();
 
 	//load & save object in control 
 	virtual bool LoadData(CMemoryReader& reader);
@@ -241,7 +249,7 @@ public:
 
 	CValueGridSizer();
 
-	virtual wxObject* Create(wxObject* /*parent*/, IVisualHost* /*visualHost*/) override;
+	virtual wxObject* Create(wxWindow* /*parent*/, IVisualHost* /*visualHost*/) override;
 	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated) override;
 	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
@@ -253,6 +261,10 @@ public:
 	virtual wxString GetObjectTypeName() const override {
 		return wxT("sizer");
 	}
+
+	//support icons
+	virtual wxIcon GetIcon();
+	static wxIcon GetIconGroup();
 
 	//load & save object in control 
 	virtual bool LoadData(CMemoryReader& reader);

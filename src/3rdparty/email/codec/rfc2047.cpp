@@ -30,8 +30,8 @@
 #include <sstream>
 #include <string>
 
-#include <email/codec/rfc2047.h>
-#include <email/codec/charsetconv.h>
+#include <3rdparty/email/codec/rfc2047.h>
+#include <3rdparty/email/codec/charsetconv.h>
 
 wxString wxRfc2047::Decode(const wxString& encoded_str)
 {

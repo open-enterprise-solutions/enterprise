@@ -4,47 +4,71 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "mainFrameDesigner.h"
-#include "compiler/debugger/debugClient.h"
+#include "core/compiler/debugger/debugClient.h"
 
 #include <wx/config.h>
 #include <wx/fileconf.h>
 #include <wx/stdpaths.h>
 #include <wx/xml/xml.h>
 
-CMainFrameDesigner::CMainFrameDesigner(const wxString& title,
+wxAuiDocDesignerMDIFrame::wxAuiDocDesignerMDIFrame(const wxString& title,
 	const wxPoint& pos,
-	const wxSize& size) : CMainFrame(title, pos, size), m_menuBar(NULL)
+	const wxSize& size) : wxAuiDocMDIFrame(title, pos, size),
+	m_metadataTree(NULL),
+	m_outputWindow(NULL), m_stackWindow(NULL), m_watchWindow(NULL),
+	m_menuBar(NULL)
 {
-	Connect(wxEVT_DEBUG_EVENT, wxDebugEventHandler(CMainFrameDesigner::OnDebugEvent), NULL, this);
+	Connect(wxEVT_DEBUG_EVENT, wxDebugEventHandler(wxAuiDocDesignerMDIFrame::OnDebugEvent), NULL, this);
 	debugClient->AddHandler(this);
 }
 
-CMainFrameDesigner::~CMainFrameDesigner()
+wxAuiDocDesignerMDIFrame::~wxAuiDocDesignerMDIFrame()
 {
-	Disconnect(wxEVT_DEBUG_EVENT, wxDebugEventHandler(CMainFrameDesigner::OnDebugEvent), NULL, this);
+	Disconnect(wxEVT_DEBUG_EVENT, wxDebugEventHandler(wxAuiDocDesignerMDIFrame::OnDebugEvent), NULL, this);
 	debugClient->RemoveHandler(this);
 }
 
-void CMainFrameDesigner::CreateGUI()
+void wxAuiDocDesignerMDIFrame::CreateGUI()
 {
-	InitializeDefaultMenu();
 	CreateWideGui();
 }
 
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
+#include "core/frontend/metatree/metatreeWnd.h"
 
-static bool setModify = false; 
-
-void CMainFrameDesigner::Modify(bool modify)
+bool wxAuiDocDesignerMDIFrame::AllowClose() const
 {
-	wxAuiPaneInfo &paneInfo = m_mgr.GetPane("metadata");
+	bool allowClose = true;
+	if (IsModified()) {
+		int answer = wxMessageBox("Configuration '" + metadata->GetMetadataName() + "' has been changed. Save?", wxT("Save project"), wxYES | wxNO | wxCANCEL | wxCENTRE | wxICON_QUESTION, (wxWindow*)this);
+		if (answer == wxYES) {
+			allowClose = metadata->SaveMetadata();
+		}
+		else if (answer == wxCANCEL) {
+			allowClose = false;
+		}
+		else {
+			allowClose = true;
+		}
+	}
+	return allowClose;
+}
+
+static bool s_setModify = false, s_modified = false;
+
+void wxAuiDocDesignerMDIFrame::Modify(bool modify)
+{
+	wxAuiPaneInfo& paneInfo = m_mgr.GetPane(wxAUI_PANE_METADATA);
 
 	if (paneInfo.IsOk()) {
 
 		wxString caption = _("Configuration") + ' ';
 
-		if (setModify && modify) {
-			caption += '*';
+		if (s_setModify && modify) {
+			caption += '*'; s_modified = true; 
+		}
+		else {
+			s_modified = false; 
 		}
 
 		if (!metadata->IsConfigSave()) {
@@ -57,17 +81,20 @@ void CMainFrameDesigner::Modify(bool modify)
 		}
 	}
 
-	if (!setModify) {
-		setModify = true; 
+	if (!s_setModify) {
+		s_setModify = true;
 	}
 	else if (modify == false) {
-		setModify = metadata->IsConfigSave();
+		s_setModify = metadata->IsConfigSave();
 	}
 }
 
-#include "frontend/metatree/metatreeWnd.h"
+bool wxAuiDocDesignerMDIFrame::IsModified() const
+{
+	return s_modified;
+}
 
-void CMainFrameDesigner::LoadOptions()
+void wxAuiDocDesignerMDIFrame::LoadOptions()
 {
 	// Disable logging since it's ok if the options file is not there.
 	wxLogNull logNo;
@@ -81,31 +108,22 @@ void CMainFrameDesigner::LoadOptions()
 
 	wxXmlDocument document;
 
-	if (document.Load(fileName.GetFullPath()))
-	{
+	if (document.Load(fileName.GetFullPath())) {
 		wxXmlNode* root = document.GetRoot();
-
-		if (root->GetName() == "options")
-		{
+		if (root->GetName() == "options") {
 			wxXmlNode* node = root->GetChildren();
-			while (node != NULL)
-			{
+			while (node != NULL) {
 				wxString data;
-
-				if (node->GetName() == "editor")
-				{
+				if (node->GetName() == "editor") {
 					m_editorSettings.Load(node);
 				}
-				else if (node->GetName() == "fontcolor")
-				{
+				else if (node->GetName() == "fontcolor") {
 					m_fontColorSettings.Load(node);
 				}
-				else if (node->GetName() == "keybindings")
-				{
+				else if (node->GetName() == "keybindings") {
 					// Save the node and we'll load when we're done.
 					keyBindingNode = node;
 				}
-
 				node = node->GetNext();
 			}
 		}
@@ -113,12 +131,10 @@ void CMainFrameDesigner::LoadOptions()
 
 	m_keyBinder.AddCommandsFromMenuBar(m_menuBar);
 
-	if (keyBindingNode != NULL)
-	{
+	if (keyBindingNode != NULL) {
 		m_keyBinder.Load(keyBindingNode);
 	}
-	else
-	{
+	else {
 		SetDefaultHotKeys();
 	}
 
@@ -130,7 +146,7 @@ void CMainFrameDesigner::LoadOptions()
 	UpdateEditorOptions();
 }
 
-void CMainFrameDesigner::SaveOptions()
+void wxAuiDocDesignerMDIFrame::SaveOptions()
 {
 	// Disable logging since it's ok if the options file saving isn't successful.
 	wxLogNull logNo;
@@ -149,7 +165,7 @@ void CMainFrameDesigner::SaveOptions()
 	// Save the key bindings.
 	root->AddChild(m_keyBinder.Save("keybindings"));
 
-	wxString directory = 
+	wxString directory =
 		wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache) + wxT("\\OES");
 
 	// Make sure the directory exists.
@@ -159,11 +175,10 @@ void CMainFrameDesigner::SaveOptions()
 	document.Save(fileName.GetFullPath());
 }
 
-bool CMainFrameDesigner::Show(bool show)
+bool wxAuiDocDesignerMDIFrame::Show(bool show)
 {
-	if (!metatreeWnd->Load()) {
+	if (!m_metadataTree->Load())
 		return false;
-	}
 
-	return CMainFrame::Show(show);
+	return wxAuiDocMDIFrame::Show(show);
 }

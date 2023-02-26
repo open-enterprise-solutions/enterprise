@@ -1,6 +1,6 @@
 
 #include "widgets.h"
-#include "compiler/procUnit.h"
+#include "core/compiler/procUnit.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CValueComboBox, IValueWindow)
 
@@ -12,9 +12,9 @@ CValueComboBox::CValueComboBox() : IValueWindow()
 {
 }
 
-wxObject* CValueComboBox::Create(wxObject* parent, IVisualHost* visualHost)
+wxObject* CValueComboBox::Create(wxWindow* wxparent, IVisualHost* visualHost)
 {
-	wxComboBox* combobox = new wxComboBox((wxWindow*)parent, wxID_ANY,
+	wxComboBox* combobox = new wxComboBox(wxparent, wxID_ANY,
 		wxEmptyString, 
 		wxDefaultPosition,
 		wxDefaultSize);

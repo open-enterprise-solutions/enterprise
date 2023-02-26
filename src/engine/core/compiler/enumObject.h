@@ -66,7 +66,7 @@ protected:
 		}
 
 		//get type id
-		virtual CLASS_ID GetClassType() const override {
+		virtual CLASS_ID GetTypeClass() const override {
 			return m_clsid;
 		}
 
@@ -137,14 +137,13 @@ public:
 		return true;
 	}
 
-	virtual bool Init(CValue** aParams) {
-		valT defValue = static_cast<valT>(aParams[0]->ToInt());
+	virtual bool Init(CValue** paParams, const long lSizeArray) {
+		const valT& defValue = static_cast<valT>(paParams[0]->GetInteger());
 		IEnumeration::InitializeEnumeration(defValue);
 		return true;
 	}
 
-	virtual valT GetDefaultEnumValue() const
-	{
+	virtual valT GetDefaultEnumValue() const {
 		auto itEnums = m_aEnumValues.begin();
 		std::advance(itEnums, 1);
 		if (itEnums != m_aEnumValues.end()) {
@@ -179,7 +178,7 @@ public:
 	virtual void InitializeEnumeration(valT defValue) {
 		if (m_value != NULL)
 			m_value->DecrRef();
-		m_value = new CEnumerationVariant(defValue, ITypeValue::GetClassType());
+		m_value = new CEnumerationVariant(defValue, CValue::GetTypeClass());
 		m_value->IncrRef();
 		CreateEnumeration(defValue);
 	}
@@ -189,29 +188,27 @@ public:
 		return m_value;
 	}
 
-	virtual CValue GetAttribute(attributeArg_t& aParams) override //значение атрибута
-	{
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal) override { //значение атрибута
 		auto itEnums = m_aEnumValues.begin();
-		std::advance(itEnums, aParams.GetIndex());
-
+		std::advance(itEnums, lPropNum);
 		if (itEnums != m_aEnumValues.end()) {
 			CEnumerationVariant<valT>* enumValue =
-				new CEnumerationVariant<valT>(itEnums->first, ITypeValue::GetClassType());
+				new CEnumerationVariant<valT>(itEnums->first, CValue::GetTypeClass());
 			enumValue->CreateEnumeration(
 				GetTypeString(),
 				GetEnumName(itEnums->first),
 				GetEnumDescription(itEnums->first),
 				itEnums->first
 			);
-			return enumValue;
+			pvarPropVal = enumValue;
+			return true;
 		}
 
-		return CValue();
+		return false;
 	}
 
 	//operator '=='
-	virtual inline bool CompareValueEQ(const CValue& cParam) const override
-	{
+	virtual inline bool CompareValueEQ(const CValue& cParam) const override {
 		if (m_value != NULL) {
 			return m_value->CompareValueEQ(cParam);
 		}
@@ -219,8 +216,7 @@ public:
 	}
 
 	//operator '!='
-	virtual inline bool CompareValueNE(const CValue& cParam) const override
-	{
+	virtual inline bool CompareValueNE(const CValue& cParam) const override {
 		if (m_value != NULL) {
 			return m_value->CompareValueNE(cParam);
 		}

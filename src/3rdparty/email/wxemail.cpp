@@ -61,11 +61,11 @@
    // files which are not included by wxprec.h
 #endif
 
-#include <email/wxemail.h>
+#include <3rdparty/email/wxemail.h>
 
-#include <email/codec/rfc2231.h>
-#include <email/codec/rfc2047.h>
-#include <email/codec/charsetconv.h>
+#include <3rdparty/email/codec/rfc2231.h>
+#include <3rdparty/email/codec/rfc2047.h>
+#include <3rdparty/email/codec/charsetconv.h>
 
 #define CURRENT_FILE_ID 1
 

@@ -15,7 +15,7 @@
 
  ***************************************************************************/
 
-#include <email/mimetic/contentid.h>
+#include <3rdparty/email/mimetic/contentid.h>
 
 #include <wx/wxprec.h>
 

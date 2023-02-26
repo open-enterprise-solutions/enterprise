@@ -1,6 +1,6 @@
 #include "mysqlPreparedStatementParameter.h"
 #include "mysqlDatabaseLayer.h"
-#include "databaseLayer/databaseErrorCodes.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
 
 // ctor
 MysqlPreparedStatementParameter::MysqlPreparedStatementParameter(MYSQL_BIND* pBind)

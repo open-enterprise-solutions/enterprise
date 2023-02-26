@@ -4,56 +4,89 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "codeEditorCtrl.h"
-#include "compiler/definition.h"
-#include "compiler/debugger/debugClient.h"
-#include "common/docInfo.h"
-#include "common/managerInfo.h"
+#include "core/compiler/definition.h"
+#include "core/compiler/debugger/debugClient.h"
+#include "frontend/docView/docView.h"
+#include "core/common/managerInfo.h"
 #include "utils/stringUtils.h"
 
 #include "codeEditorParser.h"
-#include "metadata/metaObjects/metaModuleObject.h"
+#include "core/metadata/metaObjects/metaModuleObject.h"
 
-void CCodeEditorCtrl::AddKeywordFromObject(const CValue &vObject)
+void CCodeEditorCtrl::AddKeywordFromObject(const CValue& vObject)
 {
 	if (vObject.GetType() != eValueTypes::TYPE_EMPTY &&
 		vObject.GetType() != eValueTypes::TYPE_OLE) {
-		for (unsigned int i = 0; i < vObject.GetNMethods(); i++) ac.Append(eContentType::eFunction, vObject.GetMethodName(i), vObject.GetMethodDescription(i), 356);
-		for (unsigned int i = 0; i < vObject.GetNAttributes(); i++) ac.Append(eContentType::eVariable, vObject.GetAttributeName(i), wxEmptyString, 358);
-		IModuleInfo *moduleInfo = dynamic_cast<IModuleInfo *>(vObject.GetRef());
-		if (moduleInfo) {
-			CMetaModuleObject *computeModuleObject = moduleInfo->GetMetaObject();
-			if (computeModuleObject) {
+		for (long i = 0; i < vObject.GetNMethods(); i++) {
+			if (vObject.HasRetVal(i)) {
+				ac.Append(
+					eContentType::eFunction,
+					vObject.GetMethodName(i),
+					vObject.GetMethodHelper(i)
+				);
+			}
+			else {
+				ac.Append(
+					eContentType::eProcedure,
+					vObject.GetMethodName(i),
+					vObject.GetMethodHelper(i)
+				);
+			}
+		}
+		for (long i = 0; i < vObject.GetNProps(); i++) {
+			ac.Append(
+				eContentType::eVariable,
+				vObject.GetPropName(i),
+				wxEmptyString
+			);
+		}
+		IModuleInfo* moduleInfo = dynamic_cast<IModuleInfo*>(vObject.GetRef());
+		if (moduleInfo != NULL) {
+			CMetaModuleObject* computeModuleObject = moduleInfo->GetMetaObject();
+			if (computeModuleObject != NULL) {
 				CParserModule cParser;
 				if (cParser.ParseModule(computeModuleObject->GetModuleText())) {
 					for (auto code : cParser.GetAllContent()) {
 						if (code.eType == eExportVariable) {
-							ac.Append(eContentType::eExportVariable, code.sName, wxEmptyString, 358);
+							ac.Append(
+								eContentType::eExportVariable,
+								code.sName,
+								wxEmptyString
+							);
 						}
 						else if (code.eType == eExportProcedure) {
-							ac.Append(eContentType::eExportFunction, code.sName, code.sShortDescription, 352);
+							ac.Append(
+								eContentType::eExportFunction,
+								code.sName,
+								code.sShortDescription
+							);
 						}
 						else if (code.eType == eExportFunction) {
-							ac.Append(eContentType::eExportFunction, code.sName, code.sShortDescription, 353);
+							ac.Append(
+								eContentType::eExportFunction,
+								code.sName,
+								code.sShortDescription
+							);
 						}
 					}
 				}
 			}
 		}
-		IMetaManagerInfo *metaManager = dynamic_cast<IMetaManagerInfo *>(vObject.GetRef());
-		if (metaManager) {
-			CMetaCommonModuleObject *computeManagerModule = metaManager->GetModuleManager();
-			if (computeManagerModule) {
+		IMetaManagerInfo* metaManager = dynamic_cast<IMetaManagerInfo*>(vObject.GetRef());
+		if (metaManager != NULL) {
+			CMetaCommonModuleObject* computeManagerModule = metaManager->GetModuleManager();
+			if (computeManagerModule != NULL) {
 				CParserModule cParser;
 				if (cParser.ParseModule(computeManagerModule->GetModuleText())) {
 					for (auto code : cParser.GetAllContent()) {
 						if (code.eType == eExportVariable) {
-							ac.Append(eContentType::eExportVariable, code.sName, wxEmptyString, 358);
+							ac.Append(eContentType::eExportVariable, code.sName, wxEmptyString);
 						}
 						else if (code.eType == eExportProcedure) {
-							ac.Append(eContentType::eExportFunction, code.sName, code.sShortDescription, 352);
+							ac.Append(eContentType::eExportFunction, code.sName, code.sShortDescription);
 						}
 						else if (code.eType == eExportFunction) {
-							ac.Append(eContentType::eExportFunction, code.sName, code.sShortDescription, 353);
+							ac.Append(eContentType::eExportFunction, code.sName, code.sShortDescription);
 						}
 					}
 				}
@@ -61,15 +94,23 @@ void CCodeEditorCtrl::AddKeywordFromObject(const CValue &vObject)
 		}
 	}
 	else if (debugClient->IsEnterLoop()) {
-		CPrecompileContext *currContext = m_precompileModule->GetCurrentContext();
+		CPrecompileContext* currContext = m_precompileModule->GetCurrentContext();
 		if (currContext && currContext->FindVariable(m_precompileModule->sLastParentKeyword)) {
 			ac.Cancel();
-			debugClient->EvaluateAutocomplete(this, m_precompileModule->sLastExpression, m_precompileModule->sLastKeyword, GetCurrentPos());
+			IMetaObject *metaObject = m_document->GetMetaObject(); 
+			wxASSERT(metaObject);
+			debugClient->EvaluateAutocomplete(
+				metaObject->GetFileName(), 
+				metaObject->GetDocPath(), 
+				m_precompileModule->sLastExpression, 
+				m_precompileModule->sLastKeyword, 
+				GetCurrentPos()
+			);
 		}
 	}
 }
 
-bool CCodeEditorCtrl::PrepareExpression(unsigned int currPos, wxString &sExpression, wxString &sKeyWord, wxString &sCurrWord, bool &hPoint)
+bool CCodeEditorCtrl::PrepareExpression(unsigned int currPos, wxString& sExpression, wxString& sKeyWord, wxString& sCurrWord, bool& hPoint)
 {
 	bool hasPoint = false, hasKeyword = false;
 	for (unsigned int i = 0; i < m_precompileModule->m_aLexemList.size(); i++)
@@ -81,17 +122,17 @@ bool CCodeEditorCtrl::PrepareExpression(unsigned int currPos, wxString &sExpress
 
 			sCurrWord = m_precompileModule->m_aLexemList[i].m_vData.GetString();
 
-			if (i < m_precompileModule->m_aLexemList.size() - 1)
-			{
+			if (i < m_precompileModule->m_aLexemList.size() - 1) {
 				if (m_precompileModule->m_aLexemList[i + 1].m_nNumberString >= currPos)
 					break;
+				const lexem_t& lex = m_precompileModule->m_aLexemList[i + 1];
+				if (lex.m_nType == DELIMITER && lex.m_nData == '(')
+					sExpression = wxEmptyString;
+				if (lex.m_nType == DELIMITER && lex.m_nData == '(' && !hasPoint)
+					sKeyWord = sCurrWord;
 
-				const CLexem &lex = m_precompileModule->m_aLexemList[i + 1];
-
-				if (lex.m_nType == DELIMITER && lex.m_nData == '(') sExpression = wxEmptyString;
-				if (lex.m_nType == DELIMITER && lex.m_nData == '(' && !hasPoint) sKeyWord = sCurrWord;
-
-				if (lex.m_nType != ENDPROGRAM) hasPoint = lex.m_nType == DELIMITER && lex.m_nData == '.';
+				if (lex.m_nType != ENDPROGRAM)
+					hasPoint = lex.m_nType == DELIMITER && lex.m_nData == '.';
 			}
 
 			hasKeyword = hasKeyword ? i == m_precompileModule->m_aLexemList.size() - 1 : false;
@@ -130,7 +171,7 @@ bool CCodeEditorCtrl::PrepareExpression(unsigned int currPos, wxString &sExpress
 	hPoint = hasPoint; return hasKeyword;
 }
 
-void CCodeEditorCtrl::PrepareTooTipExpression(unsigned int currPos, wxString &sExpression, wxString &sCurrWord, bool &hPoint)
+void CCodeEditorCtrl::PrepareTooTipExpression(unsigned int currPos, wxString& sExpression, wxString& sCurrWord, bool& hPoint)
 {
 	bool hasPoint = false;
 
@@ -146,11 +187,10 @@ void CCodeEditorCtrl::PrepareTooTipExpression(unsigned int currPos, wxString &sE
 
 			sCurrWord = m_precompileModule->m_aLexemList[i].m_vData.GetString();
 
-			if (i < m_precompileModule->m_aLexemList.size() - 1)
-			{
-				const CLexem &lex = m_precompileModule->m_aLexemList[i + 1];
-
-				if (lex.m_nType == DELIMITER && lex.m_nData == '(') sExpression = wxEmptyString;
+			if (i < m_precompileModule->m_aLexemList.size() - 1) {
+				const lexem_t& lex = m_precompileModule->m_aLexemList[i + 1];
+				if (lex.m_nType == DELIMITER && lex.m_nData == '(')
+					sExpression = wxEmptyString;
 				hasPoint = lex.m_nType == DELIMITER && lex.m_nData == '.';
 			}
 			else hasPoint = false;
@@ -175,11 +215,8 @@ void CCodeEditorCtrl::PrepareTooTipExpression(unsigned int currPos, wxString &sE
 void CCodeEditorCtrl::PrepareTABs()
 {
 	unsigned int realPos = GetRealPosition(); int nFoldLevels = 0;
-
-	for (unsigned int i = 0; i < m_precompileModule->m_aLexemList.size() - 1; i++)
-	{
-		const CLexem &lex = m_precompileModule->m_aLexemList[i];
-
+	for (unsigned int i = 0; i < m_precompileModule->m_aLexemList.size() - 1; i++) {
+		const lexem_t& lex = m_precompileModule->m_aLexemList[i];
 		if (lex.m_nNumberString >= realPos) {
 
 			if (
@@ -335,23 +372,21 @@ void CCodeEditorCtrl::CalculateFoldLevels()
 
 		eFoldStates foldState = eFoldStates::eEmptyFold;
 
-		for (unsigned int i = nLastPos; i < m_precompileModule->m_aLexemList.size() - 1; i++)
-		{
-			const CLexem &lex = m_precompileModule->m_aLexemList[i];
+		for (unsigned int i = nLastPos; i < m_precompileModule->m_aLexemList.size() - 1; i++) {
+			const lexem_t& lex = m_precompileModule->m_aLexemList[i];
+			if (lex.m_nNumberLine < line)
+				continue;
+			if (lex.m_nNumberLine > line)
+				break;
 
-			if (lex.m_nNumberLine < line) continue;
-			if (lex.m_nNumberLine > line) break;
-
-			if (lex.m_nType == KEYWORD)
-			{
+			if (lex.m_nType == KEYWORD) {
 				if (lex.m_nData == KEY_PROCEDURE
 					|| lex.m_nData == KEY_FUNCTION
 					|| lex.m_nData == KEY_IF
 					|| lex.m_nData == KEY_FOR
 					|| lex.m_nData == KEY_FOREACH
 					|| lex.m_nData == KEY_WHILE
-					)
-				{
+					) {
 					unsigned int level = wxSTC_FOLDLEVELBASE + (nFoldLevels++);
 					SetFoldLevel(lex.m_nNumberLine, level | wxSTC_FOLDLEVELHEADERFLAG);
 					foldState = eFoldStates::eOpenFold;
@@ -361,14 +396,12 @@ void CCodeEditorCtrl::CalculateFoldLevels()
 					|| lex.m_nData == KEY_ENDFUNCTION
 					|| lex.m_nData == KEY_ENDIF
 					|| lex.m_nData == KEY_ENDDO
-					)
-				{
+					) {
 					SetFoldLevel(line, wxSTC_FOLDLEVELBASE + nFoldLevels);
 					if (nFoldLevels > 0) nFoldLevels--;
 					foldState = eFoldStates::eCloseFold;
 				}
 			}
-
 			nLastPos = i;
 		}
 
@@ -415,31 +448,40 @@ void CCodeEditorCtrl::LoadAutoComplete()
 	ac.Show(position);
 }
 
-void CCodeEditorCtrl::LoadToolTip(wxPoint pos)
+void CCodeEditorCtrl::LoadToolTip(const wxPoint& pos)
 {
-	if (debugClient->IsEnterLoop())
-	{
+	if (debugClient->IsEnterLoop()) {
+
 		int currentPos = GetRealPositionFromPoint(pos);
+		wxString expression, curWord; bool hasPoint = false;
+		PrepareTooTipExpression(currentPos, expression, curWord, hasPoint);
 
-		wxString sExpression, sCurWord; bool hasPoint = false;
+		expression.Trim(true).Trim(false);
 
-		PrepareTooTipExpression(currentPos, sExpression, sCurWord, hasPoint);
+		if (expression.IsEmpty()) {
+			SetToolTip(NULL); return; 
+		}
 
-		sExpression.Trim(true);
-		sExpression.Trim(false);
+		auto foundedIt = std::find_if(m_expressions.begin(), m_expressions.end(),
+			[expression](const std::pair<wxString, wxString>& p) {
+				return StringUtils::CompareString(expression, p.first);
+			}
+		);
 
-		if (sExpression.IsEmpty()) SetToolTip(NULL);
-
-		//Обновляем список точек останова
-		wxString sModuleName = m_document->GetFilename();
-
-		if (!sExpression.IsEmpty()
-			&& m_aExpressions.find(StringUtils::MakeUpper(sExpression)) != m_aExpressions.end()) SetToolTip(m_aExpressions[StringUtils::MakeUpper(sExpression)]);
-		else if (!sExpression.IsEmpty()) debugClient->EvaluateToolTip(sModuleName, sExpression);
+		if (foundedIt == m_expressions.end()) {
+			IMetaObject* metaObject = m_document->GetMetaObject();
+			wxASSERT(metaObject);
+			debugClient->EvaluateToolTip(
+				metaObject->GetFileName(),
+				metaObject->GetDocPath(),
+				expression
+			);
+		}
+		else {
+			SetToolTip(foundedIt->second);
+		}
 	}
 }
-
-#include "compiler/methods.h"
 
 void CCodeEditorCtrl::LoadCallTip()
 {
@@ -454,17 +496,17 @@ void CCodeEditorCtrl::LoadCallTip()
 			//Cобираем текст
 			if (m_precompileModule->Compile()) {
 				CValue vObject = m_precompileModule->GetComputeValue();
-				for (unsigned int i = 0; i < vObject.GetNMethods(); i++) {
+				for (long i = 0; i < vObject.GetNMethods(); i++) {
 					wxString sMethod = vObject.GetMethodName(i);
 					if (StringUtils::CompareString(sMethod, sCurWord)) {
-						sDescription = vObject.GetMethodDescription(i);
+						sDescription = vObject.GetMethodHelper(i);
 						break;
 					}
 				}
 
-				IModuleInfo *moduleInfo = dynamic_cast<IModuleInfo *>(vObject.GetRef());
+				IModuleInfo* moduleInfo = dynamic_cast<IModuleInfo*>(vObject.GetRef());
 				if (moduleInfo) {
-					CMetaModuleObject *computeModuleObject = moduleInfo->GetMetaObject();
+					CMetaModuleObject* computeModuleObject = moduleInfo->GetMetaObject();
 					if (computeModuleObject) {
 						CParserModule cParser;
 						if (cParser.ParseModule(computeModuleObject->GetModuleText())) {
@@ -480,9 +522,9 @@ void CCodeEditorCtrl::LoadCallTip()
 					}
 				}
 
-				IMetaManagerInfo *metaManager = dynamic_cast<IMetaManagerInfo *>(vObject.GetRef());
+				IMetaManagerInfo* metaManager = dynamic_cast<IMetaManagerInfo*>(vObject.GetRef());
 				if (metaManager) {
-					CMetaCommonModuleObject *computeManagerModule = metaManager->GetModuleManager();
+					CMetaCommonModuleObject* computeManagerModule = metaManager->GetModuleManager();
 					if (computeManagerModule) {
 						CParserModule cParser;
 						if (cParser.ParseModule(computeManagerModule->GetModuleText())) {
@@ -503,9 +545,9 @@ void CCodeEditorCtrl::LoadCallTip()
 			m_precompileModule->m_nCurrentPos = GetRealPosition();
 
 			if (m_precompileModule->Compile()) {
-				CPrecompileContext *m_pContext = m_precompileModule->GetContext();
+				CPrecompileContext* m_pContext = m_precompileModule->GetContext();
 				for (auto function : m_pContext->cFunctions) {
-					CPrecompileFunction *m_functionContext = function.second;
+					CPrecompileFunction* m_functionContext = function.second;
 					if (StringUtils::CompareString(function.first, sCurWord)) {
 						sDescription = m_functionContext->sShortDescription;
 						break;
@@ -516,20 +558,17 @@ void CCodeEditorCtrl::LoadCallTip()
 	}
 	else {
 
-		if (StringUtils::CompareString(sKeyWord, wxT("new"))) {	
+		if (StringUtils::CompareString(sKeyWord, wxT("new"))) {
 			if (CValue::IsRegisterObject(sExpression)) {
-
-				IObjectValueAbstract *objectValueAbstract =
+				IObjectValueAbstract* objectValueAbstract =
 					CValue::GetAvailableObject(sExpression);
-
-				CValue *newObject = objectValueAbstract->CreateObject();
-				CMethods *methods = newObject->GetPMethods();
-
-				int founded = methods->FindConstructor(sExpression);
-				if (founded != wxNOT_FOUND) {
-					sDescription = methods->GetConstructorDescription(founded);
+				CValue* newObject = objectValueAbstract->CreateObject();
+				CValue::CMethodHelper* methodHelper = newObject->GetPMethods();
+				if (methodHelper != NULL) {
+					for (long idx = 0; idx < methodHelper->GetNConstructors(); idx++) {
+						sDescription = methodHelper->GetConstructorHelper(idx);
+					}
 				}
-
 				wxDELETE(newObject);
 			}
 		}
@@ -546,50 +585,46 @@ void CCodeEditorCtrl::LoadSysKeyword()
 {
 	m_precompileModule->m_nCurrentPos = GetRealPosition();
 
-	for (int i = 0; i < LastKeyWord; i++)
-	{
-		wxString sKeyword = aKeyWords[i].Eng;
-		wxString sShortDescription = aKeyWords[i].sShortDescription;
-
-		ac.Append(eContentType::eVariable, sKeyword, sShortDescription, 355);
+	for (int i = 0; i < LastKeyWord; i++) {
+		ac.Append(eContentType::eVariable,
+			s_aKeyWords[i].Eng,
+			s_aKeyWords[i].sShortDescription
+		);
 	}
 
-	if (m_precompileModule->Compile())
-	{
-		CPrecompileContext *m_pContext = m_precompileModule->GetContext();
-
-		for (auto variable : m_pContext->cVariables)
-		{
+	if (m_precompileModule->Compile()) {
+		CPrecompileContext* m_pContext = m_precompileModule->GetContext();
+		for (auto variable : m_pContext->cVariables) {
 			CPrecompileVariable m_variable = variable.second;
-			if (m_variable.bTempVar) continue;
-
-			ac.Append(m_variable.bExport ? eContentType::eExportVariable : eContentType::eVariable, m_variable.sRealName, wxEmptyString, 354);
+			if (m_variable.bTempVar)
+				continue;
+			ac.Append(m_variable.bExport ?
+				eContentType::eExportVariable : eContentType::eVariable, m_variable.sRealName, wxEmptyString
+			);
 		}
 
-		for (auto function : m_pContext->cFunctions)
-		{
-			CPrecompileFunction *m_functionContext = function.second;
-
+		for (auto function : m_pContext->cFunctions) {
+			CPrecompileFunction* m_functionContext = function.second;
 			if (m_functionContext->m_pContext) {
 				if (m_functionContext->m_pContext->nReturn == RETURN_FUNCTION) {
-					ac.Append(m_functionContext->bExport ? eContentType::eExportFunction : eContentType::eFunction, m_functionContext->sRealName, m_functionContext->sShortDescription, 353);
+					ac.Append(m_functionContext->bExport ? eContentType::eExportFunction : eContentType::eFunction, m_functionContext->sRealName, m_functionContext->sShortDescription);
 				}
 				else {
-					ac.Append(m_functionContext->bExport ? eContentType::eExportProcedure : eContentType::eProcedure, m_functionContext->sRealName, m_functionContext->sShortDescription, 352);
+					ac.Append(m_functionContext->bExport ? eContentType::eExportProcedure : eContentType::eProcedure, m_functionContext->sRealName, m_functionContext->sShortDescription);
 				}
 			}
 			else {
-				ac.Append(m_functionContext->bExport ? eContentType::eExportFunction : eContentType::eFunction, m_functionContext->sRealName, m_functionContext->sShortDescription, 353);
+				ac.Append(m_functionContext->bExport ? eContentType::eExportFunction : eContentType::eFunction, m_functionContext->sRealName, m_functionContext->sShortDescription);
 			}
 
-			if (m_precompileModule->m_pCurrentContext && m_precompileModule->m_pCurrentContext == m_functionContext->m_pContext)
-			{
-				for (auto variable : m_precompileModule->m_pCurrentContext->cVariables)
-				{
+			if (m_precompileModule->m_pCurrentContext && m_precompileModule->m_pCurrentContext == m_functionContext->m_pContext) {
+				for (auto variable : m_precompileModule->m_pCurrentContext->cVariables) {
 					CPrecompileVariable m_variable = variable.second;
-					if (m_variable.bTempVar) continue;
-
-					ac.Append(m_variable.bExport ? eContentType::eExportVariable : eContentType::eVariable, m_variable.sRealName, wxEmptyString, 354);
+					if (m_variable.bTempVar)
+						continue;
+					ac.Append(m_variable.bExport ?
+						eContentType::eExportVariable : eContentType::eVariable, m_variable.sRealName, wxEmptyString
+					);
 				}
 			}
 		}
@@ -612,104 +647,88 @@ void CCodeEditorCtrl::LoadIntelliList()
 	m_precompileModule->Clear();
 }
 
-#include "metadata/metadata.h"
-#include "metadata/singleMetaTypes.h"
+#include "core/metadata/metadata.h"
+#include "core/metadata/singleClass.h"
 
-void CCodeEditorCtrl::LoadFromKeyWord(const wxString &keyWord)
+void CCodeEditorCtrl::LoadFromKeyWord(const wxString& keyWord)
 {
-	if (StringUtils::CompareString(keyWord, wxT("new")))
-	{
+	if (StringUtils::CompareString(keyWord, wxT("new"))) {
 		for (auto className : CValue::GetAvailableObjects(eObjectType::eObjectType_object))
-			ac.Append(eContentType::eVariable, className, wxEmptyString, 355);
+			ac.Append(eContentType::eVariable, className, wxEmptyString);
 	}
 	else if (StringUtils::CompareString(keyWord, wxT("type")))
 	{
 		for (auto className : CValue::GetAvailableObjects(eObjectType::eObjectType_simple))
-			ac.Append(eContentType::eVariable, className, wxEmptyString, 355);
+			ac.Append(eContentType::eVariable, className, wxEmptyString);
 
 		for (auto className : CValue::GetAvailableObjects(eObjectType::eObjectType_object))
-			ac.Append(eContentType::eVariable, className, wxEmptyString, 355);
+			ac.Append(eContentType::eVariable, className, wxEmptyString);
 
 		for (auto className : CValue::GetAvailableObjects(eObjectType::eObjectType_object_control))
-			ac.Append(eContentType::eVariable, className, wxEmptyString, 355);
+			ac.Append(eContentType::eVariable, className, wxEmptyString);
 
 		for (auto className : CValue::GetAvailableObjects(eObjectType::eObjectType_object_system))
-			ac.Append(eContentType::eVariable, className, wxEmptyString, 355);
+			ac.Append(eContentType::eVariable, className, wxEmptyString);
 
 		for (auto className : CValue::GetAvailableObjects(eObjectType::eObjectType_enum))
-			ac.Append(eContentType::eVariable, className, wxEmptyString, 355);
+			ac.Append(eContentType::eVariable, className, wxEmptyString);
 
 		if (m_document) {
-			IMetaObject *metaObject = m_document->GetMetaObject();
+			IMetaObject* metaObject = m_document->GetMetaObject();
 			if (metaObject) {
-				IMetadata *metaData = metaObject->GetMetadata();
+				IMetadata* metaData = metaObject->GetMetadata();
 				wxASSERT(metaData);
 
 				for (auto className : metaData->GetAvailableObjects(eMetaObjectType::enObject))
-					ac.Append(eContentType::eVariable, className, wxEmptyString, 355);
+					ac.Append(eContentType::eVariable, className, wxEmptyString);
 				for (auto className : metaData->GetAvailableObjects(eMetaObjectType::enReference))
-					ac.Append(eContentType::eVariable, className, wxEmptyString, 355);
+					ac.Append(eContentType::eVariable, className, wxEmptyString);
 				for (auto className : metaData->GetAvailableObjects(eMetaObjectType::enList))
-					ac.Append(eContentType::eVariable, className, wxEmptyString, 355);
+					ac.Append(eContentType::eVariable, className, wxEmptyString);
 				for (auto className : metaData->GetAvailableObjects(eMetaObjectType::enManager))
-					ac.Append(eContentType::eVariable, className, wxEmptyString, 355);
+					ac.Append(eContentType::eVariable, className, wxEmptyString);
 				for (auto className : metaData->GetAvailableObjects(eMetaObjectType::enSelection))
-					ac.Append(eContentType::eVariable, className, wxEmptyString, 355);
+					ac.Append(eContentType::eVariable, className, wxEmptyString);
 			}
 		}
 	}
 	else if (StringUtils::CompareString(keyWord, wxT("showCommonForm"))
 		|| StringUtils::CompareString(keyWord, wxT("getCommonForm")))
 	{
-		IMetaObject *metaObject = m_document->GetMetaObject();
+		IMetaObject* metaObject = m_document->GetMetaObject();
 		wxASSERT(metaObject);
-		IMetadata *metaData = metaObject->GetMetadata();
+		IMetadata* metaData = metaObject->GetMetadata();
 		wxASSERT(metaData);
 
 		for (auto obj : metaData->GetMetaObjects(g_metaCommonFormCLSID))
-			ac.Append(eContentType::eVariable, obj->GetName(), wxEmptyString, 355);
+			ac.Append(eContentType::eVariable, obj->GetName(), wxEmptyString);
 	}
 }
 
 #include "utils/fs/fs.h"
 
-void CCodeEditorCtrl::ShowAutoCompleteFromDebugger(CMemoryReader &commandReader)
+void CCodeEditorCtrl::ShowAutoComp(const debugAutoCompleteData_t& autoCompleteData)
 {
-	wxString sExpression, sKeyWord;
-	commandReader.r_stringZ(sExpression);
-	commandReader.r_stringZ(sKeyWord);
-	int currPos = commandReader.r_s32();
+	ac.Cancel();
 
-	ac.sCurrentWord = sKeyWord;
-
-	{
-		wxDebugAutocompleteEvent event(EventId::EventId_StartAutocomplete);
-		event.SetCurrentPos(currPos);
-		event.SetKeyWord(sKeyWord);
-		wxPostEvent(this, event);
+	for (unsigned int i = 0; i < autoCompleteData.m_arrVar.size(); i++) {
+		ac.Append(eContentType::eVariable, autoCompleteData.m_arrVar[i].m_variableName, wxEmptyString);
 	}
 
-	unsigned int nCountA = commandReader.r_u32();
-
-	for (unsigned int i = 0; i < nCountA; i++)
-	{
-		wxString sAttributeName; commandReader.r_stringZ(sAttributeName);
-		ac.Append(eContentType::eVariable, sAttributeName, wxEmptyString, 358);
+	for (unsigned int i = 0; i < autoCompleteData.m_arrMeth.size(); i++) {
+		ac.Append(autoCompleteData.m_arrMeth[i].m_methodRet ? eContentType::eFunction : eContentType::eProcedure,
+			autoCompleteData.m_arrMeth[i].m_methodName, 
+			autoCompleteData.m_arrMeth[i].m_methodHelper
+		);
 	}
+	
+	ac.Start(autoCompleteData.m_keyword,
+		autoCompleteData.m_currentPos,
+		autoCompleteData.m_keyword.Length(),
+		TextHeight(GetCurrentLine())
+	);
 
-	unsigned int nCountM = commandReader.r_u32();
-
-	for (unsigned int i = 0; i < nCountM; i++)
-	{
-		wxString sMethodName; commandReader.r_stringZ(sMethodName);
-		wxString sMethodDescription; commandReader.r_stringZ(sMethodDescription);
-		ac.Append(eContentType::eFunction, sMethodName, sMethodDescription, 353);
-	}
-
-	{
-		wxDebugAutocompleteEvent event(EventId::EventId_ShowAutocomplete);
-		event.SetCurrentPos(currPos);
-		event.SetKeyWord(sKeyWord);
-		wxPostEvent(this, event);
-	}
+	wxPoint position = PointFromPosition(autoCompleteData.m_currentPos);
+	position.y += TextHeight(GetCurrentLine());
+	ac.Show(position);
 }

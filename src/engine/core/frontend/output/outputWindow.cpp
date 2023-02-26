@@ -49,14 +49,25 @@ COutputWindow::COutputWindow(wxWindow* parent, wxWindowID winid)
 	MarkerDefine(eError, wxSTC_MARK_SHORTARROW, *wxWHITE, *wxRED);
 
 	wxAcceleratorEntry entries[2];
-	entries[0].Set(wxACCEL_CTRL, (int) 'A', idcmdSelectAll);
-	entries[1].Set(wxACCEL_CTRL, (int) 'C', idcmdCopy);
+	entries[0].Set(wxACCEL_CTRL, (int)'A', idcmdSelectAll);
+	entries[1].Set(wxACCEL_CTRL, (int)'C', idcmdCopy);
 
 	wxAcceleratorTable accel(2, entries);
 	SetAcceleratorTable(accel);
 
 	SetFontColorSettings(mainFrame->GetFontColorSettings());
 }
+
+///////////////////////////////////////////////////////////////////////////////
+
+COutputWindow* COutputWindow::GetOutputWindow()
+{
+	if (wxAuiDocMDIFrame::GetFrame())
+		return mainFrame->GetOutputWindow();
+	return NULL; 
+}
+
+///////////////////////////////////////////////////////////////////////////////
 
 void COutputWindow::SetFontColorSettings(const FontColorSettings& settings)
 {
@@ -89,16 +100,16 @@ void COutputWindow::SetFontColorSettings(const FontColorSettings& settings)
 	SetEditable(false);
 }
 
-void COutputWindow::OutputMessage(const wxString& message, 
-	const wxString &fileName, const wxString &docPath,
+void COutputWindow::OutputMessage(const wxString& message,
+	const wxString& fileName, const wxString& docPath,
 	int currLine)
 {
-	SharedOutput(message, eStatusMessage::eMessage, 
+	SharedOutput(message, eStatusMessage::eMessage,
 		fileName, docPath, currLine);
 }
 
-void COutputWindow::OutputWarning(const wxString& message, 
-	const wxString &fileName, const wxString &docPath,
+void COutputWindow::OutputWarning(const wxString& message,
+	const wxString& fileName, const wxString& docPath,
 	int currLine)
 {
 	SharedOutput(message, eStatusMessage::eWarning,
@@ -107,7 +118,7 @@ void COutputWindow::OutputWarning(const wxString& message,
 }
 
 void COutputWindow::OutputError(const wxString& message,
-	const wxString &fileName, const wxString &docPath,
+	const wxString& fileName, const wxString& docPath,
 	int currLine)
 {
 	SharedOutput(message, eStatusMessage::eError,
@@ -115,8 +126,8 @@ void COutputWindow::OutputError(const wxString& message,
 		currLine);
 }
 
-void COutputWindow::SharedOutput(const wxString &message, eStatusMessage status, 
-	const wxString &fileName, const wxString &docPath, 
+void COutputWindow::SharedOutput(const wxString& message, eStatusMessage status,
+	const wxString& fileName, const wxString& docPath,
 	int currLine)
 {
 	int beforeAppendPosition = GetInsertionPoint();
@@ -127,7 +138,7 @@ void COutputWindow::SharedOutput(const wxString &message, eStatusMessage status,
 	unsigned int lastLine = GetLineCount();
 
 	if (currLine != wxNOT_FOUND) {
-		m_aCodeInfo.insert_or_assign(lastLine, code_info { fileName, docPath,
+		m_aCodeInfo.insert_or_assign(lastLine, lineInfo_t{ fileName, docPath,
 			currLine });
 	}
 
@@ -145,12 +156,13 @@ void COutputWindow::SharedOutput(const wxString &message, eStatusMessage status,
 
 	SetInsertionPoint(beforeAppendPosition);
 
-	if (beforeAppendPosition == beforeAppendLastPosition)
-	{
+	if (beforeAppendPosition == beforeAppendLastPosition) {
 		SetInsertionPoint(GetLastPosition());
 		ShowPosition(GetLastPosition());
 		ScrollLines(-1);
 	}
+
+	wxStyledTextCtrl::SetFocus(); 
 
 	// update output window 
 	mainFrame->Update();
@@ -166,9 +178,8 @@ int COutputWindow::GetCurrentLine() const
 	return y;
 }
 
-#include "common/docManager.h"
-#include "metadata/metadata.h"
-#include "frontend/metatree/metatreeWnd.h"
+#include "core/frontend/docView/docManager.h"
+#include "core/frontend/metatree/metatreeWnd.h"
 
 void COutputWindow::OnDoubleClick(wxMouseEvent& event)
 {
@@ -179,29 +190,29 @@ void COutputWindow::OnDoubleClick(wxMouseEvent& event)
 
 		if (pair.first >= row) {
 
-			auto code = pair.second; 
+			auto code = pair.second;
 
 			if (code.m_fileName.IsEmpty()) {
-				IMetadataWrapperTree *metaTree = metadata->GetMetaTree();
+				IMetadataWrapperTree* metaTree = metadata->GetMetaTree();
 				wxASSERT(metaTree);
 				metaTree->EditModule(code.m_docPath, code.m_currLine, false);
 			}
 
 			if (!code.m_fileName.IsEmpty()) {
-				IMetaDocument *foundedDoc = dynamic_cast<IMetaDocument *>(
+				IMetaDataDocument* foundedDoc = dynamic_cast<IMetaDataDocument*>(
 					docManager->FindDocumentByPath(code.m_fileName)
 					);
 
-				if (!foundedDoc) {
-					foundedDoc = dynamic_cast<IMetaDocument *>(
+				if (foundedDoc == NULL) {
+					foundedDoc = dynamic_cast<IMetaDataDocument*>(
 						docManager->CreateDocument(code.m_fileName, wxDOC_SILENT)
 						);
 				}
 
-				if (foundedDoc) {
-					IMetadata *metaData = foundedDoc->GetMetadata();
+				if (foundedDoc != NULL) {
+					IMetadata* metaData = foundedDoc->GetMetadata();
 					wxASSERT(metaData);
-					IMetadataWrapperTree *metaTree = metaData->GetMetaTree();
+					IMetadataWrapperTree* metaTree = metaData->GetMetaTree();
 					wxASSERT(metaTree);
 					metaTree->EditModule(code.m_docPath, code.m_currLine, false);
 				}
@@ -213,7 +224,7 @@ void COutputWindow::OnDoubleClick(wxMouseEvent& event)
 	event.Skip();
 }
 
-void COutputWindow::OnContextMenu(wxContextMenuEvent &event)
+void COutputWindow::OnContextMenu(wxContextMenuEvent& event)
 {
 	wxPoint pt = event.GetPosition();
 	ScreenToClient(&pt.x, &pt.y);
@@ -227,19 +238,19 @@ void COutputWindow::OnContextMenu(wxContextMenuEvent &event)
 		pt = this->PointFromPosition(this->GetCurrentPos());
 	}
 
-	wxMenu *popupMenu = new wxMenu;
+	wxMenu* popupMenu = new wxMenu;
 
-	wxMenuItem *menuItemCopy = popupMenu->Append(idcmdCopy, wxT("Copy"));
+	wxMenuItem* menuItemCopy = popupMenu->Append(idcmdCopy, wxT("Copy"));
 	menuItemCopy->Enable(wxStyledTextCtrl::CanCopy());
-	wxMenuItem *menuItemClear = popupMenu->Append(idcmdClear, wxT("Clear"));
+	wxMenuItem* menuItemClear = popupMenu->Append(idcmdClear, wxT("Clear"));
 
 	wxStyledTextCtrl::PopupMenu(popupMenu, pt);
 	//event.Skip();
 }
 
-void COutputWindow::OnClearOutput(wxCommandEvent & event)
+void COutputWindow::OnClearOutput(wxCommandEvent& event)
 {
-	m_aCodeInfo.clear(); 
+	m_aCodeInfo.clear();
 
 	SetEditable(true);
 	wxStyledTextCtrl::ClearAll();
@@ -248,7 +259,7 @@ void COutputWindow::OnClearOutput(wxCommandEvent & event)
 	event.Skip();
 }
 
-void COutputWindow::OnKeyDown(wxKeyEvent &event)
+void COutputWindow::OnKeyDown(wxKeyEvent& event)
 {
 	event.Skip();
 }

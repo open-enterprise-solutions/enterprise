@@ -15,104 +15,79 @@ CValueNotebookPage::CValueNotebookPage() : IValueControl()
 {
 }
 
-wxObject* CValueNotebookPage::Create(wxObject* parent, IVisualHost *visualHost)
+wxObject* CValueNotebookPage::Create(wxWindow* wxparent, IVisualHost* visualHost)
 {
-	return new CPageWindow((wxWindow*)parent, wxID_ANY);
+	return new CPageWindow(wxparent, wxID_ANY);
 }
 
-void CValueNotebookPage::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated)
+void CValueNotebookPage::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool first—reated)
 {
-	CPageWindow *newPage = dynamic_cast<CPageWindow *>(wxobject);
-	wxASSERT(newPage);
-	wxAuiNotebook *auiNotebookWnd = dynamic_cast<wxAuiNotebook *>(wxparent);
-
-	if (auiNotebookWnd && m_propertyVisible->GetValueAsBoolean()) {
-		auiNotebookWnd->AddPage(newPage, m_propertyCaption->GetValueAsString(), false, m_propertyIcon->GetValueAsBitmap());
-		newPage->SetOrientation(m_propertyOrient->GetValueAsInteger());
+	CPageWindow* page = dynamic_cast<CPageWindow*>(wxobject);
+	wxASSERT(page);
+	wxAuiNotebook* notebook = dynamic_cast<wxAuiNotebook*>(wxparent);
+	if (notebook != NULL && m_propertyVisible->GetValueAsBoolean()) {
+		notebook->AddPage(page, m_propertyCaption->GetValueAsString(), false, m_propertyIcon->GetValueAsBitmap());
+		page->SetOrientation(m_propertyOrient->GetValueAsInteger());
 	}
-
 	if (visualHost->IsDesignerHost()) {
-		newPage->PushEventHandler(new CDesignerWindow::CHighlightPaintHandler(newPage));
+		page->PushEventHandler(
+			new CDesignerWindow::CHighlightPaintHandler(page)
+		);
 	}
 }
 
-void CValueNotebookPage::OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost)
+void CValueNotebookPage::OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost)
 {
-	IValueFrame *parentControl = GetParent(); int idx = wxNOT_FOUND;
-
-	for (unsigned int i = 0; i < parentControl->GetChildCount(); i++) {
-		CValueNotebookPage *child = dynamic_cast<CValueNotebookPage *>(parentControl->GetChild(i));
-		wxASSERT(child);
-		if (m_controlId == child->m_controlId) { 
-			idx = i;
-			break; 
+	IValueFrame* parentControl = GetParent(); int pos = wxNOT_FOUND;
+	if (m_propertyVisible->GetValueAsBoolean()) {
+		for (unsigned int i = 0; i < parentControl->GetChildCount(); i++) {
+			CValueNotebookPage* child = dynamic_cast<CValueNotebookPage*>(parentControl->GetChild(i));
+			wxASSERT(child);
+			if (m_controlId == child->m_controlId) {
+				pos = i; break;
+			}
 		}
 	}
-
-	CPageWindow *pageNotebook = dynamic_cast<CPageWindow *>(wxobject);
-	wxASSERT(pageNotebook);
-	wxAuiNotebook *auiNotebookWnd = dynamic_cast<wxAuiNotebook *>(wxparent);
-	wxASSERT(auiNotebookWnd);
-
-	int idxPage = wxNOT_FOUND;
-	for (unsigned int pageIndex = 0; pageIndex < auiNotebookWnd->GetPageCount(); pageIndex++) { 
-		if (auiNotebookWnd->GetPage(pageIndex) == pageNotebook) { 
-			idxPage = pageIndex; 
-			break; 
-		} 
-	}
-	
-	if (idxPage != wxNOT_FOUND) 
-		auiNotebookWnd->RemovePage(idxPage);
-
+	wxAuiNotebook* notebook = dynamic_cast<wxAuiNotebook*>(wxparent);
+	wxASSERT(notebook);
+	int pos_old = notebook->FindPage((wxWindow*)wxobject);
+	if (pos_old != wxNOT_FOUND && pos != pos_old)
+		notebook->RemovePage(pos_old);
 	if (m_propertyVisible->GetValueAsBoolean()) {
-		auiNotebookWnd->InsertPage(idx, pageNotebook, m_propertyCaption->GetValueAsString(), false, m_propertyIcon->GetValueAsBitmap());
-		auiNotebookWnd->SetPageText(idx, m_propertyCaption->GetValueAsString());
-		auiNotebookWnd->SetPageBitmap(idx, m_propertyIcon->GetValueAsBitmap());
-		pageNotebook->SetOrientation(m_propertyOrient->GetValueAsInteger());
+		if (pos != pos_old)
+			notebook->InsertPage(pos, (wxWindow*)wxobject, m_propertyCaption->GetValueAsString(), pos_old == wxNOT_FOUND, m_propertyIcon->GetValueAsBitmap());
+		notebook->SetPageText(pos, m_propertyCaption->GetValueAsString());
+		notebook->SetPageBitmap(pos, m_propertyIcon->GetValueAsBitmap());
+		CPageWindow* page = dynamic_cast<CPageWindow*>(wxobject);
+		wxASSERT(page);
+		page->SetOrientation(m_propertyOrient->GetValueAsInteger());
 	}
 }
 
 void CValueNotebookPage::OnSelected(wxObject* wxobject)
 {
-	IValueFrame *parentCtrl = GetParent();
-	wxASSERT(parentCtrl);
-	wxAuiNotebook *auiNotebookWnd = dynamic_cast<wxAuiNotebook *>(parentCtrl->GetWxObject());
-	wxASSERT(auiNotebookWnd);
-	int idxPage = wxNOT_FOUND;
-	for (unsigned int pageIndex = 0; pageIndex < auiNotebookWnd->GetPageCount(); pageIndex++) {
-		if (auiNotebookWnd->GetPage(pageIndex) == wxobject) {
-			idxPage = pageIndex;
-			break;
-		}
+	wxAuiNotebook* notebook = dynamic_cast<wxAuiNotebook*>(GetParent()->GetWxObject());
+	wxASSERT(notebook);
+	if (notebook != NULL) {
+		int pos = notebook->GetPageIndex((wxWindow*)wxobject);
+		if (pos != notebook->GetSelection())
+			notebook->SetSelection(pos);
 	}
-	if (idxPage != auiNotebookWnd->GetSelection()) 
-		auiNotebookWnd->SetSelection(idxPage);
 }
 
-void CValueNotebookPage::Cleanup(wxObject* wxobject, IVisualHost *visualHost)
+void CValueNotebookPage::Cleanup(wxObject* wxobject, IVisualHost* visualHost)
 {
-	CPageWindow *newPage = dynamic_cast<CPageWindow *>(wxobject);
-	wxASSERT(newPage);
-	wxAuiNotebook *auiNotebookWnd = dynamic_cast<wxAuiNotebook *>(visualHost->GetWxObject(GetParent()));
-	if (auiNotebookWnd) {
-		CValueNotebook *notebook = dynamic_cast<CValueNotebook *>(GetParent());
-		notebook->m_bInitialized = false; 
-		int page = wxNOT_FOUND;
-		for (unsigned int idx = 0; idx < auiNotebookWnd->GetPageCount(); idx++) { 
-			if (auiNotebookWnd->GetPage(idx) == wxobject) { 
-				page = idx; 
-				break; 
-			} 
-		}
-		if (page != wxNOT_FOUND) { 
-			auiNotebookWnd->RemovePage(page); 
-			newPage->Hide();
-		}
+	wxAuiNotebook* notebook = dynamic_cast<wxAuiNotebook*>(visualHost->GetWxObject(GetParent()));
+	wxASSERT(notebook);
+	if (notebook != NULL) {
+		int pos = notebook->GetPageIndex((wxWindow*)wxobject);
+		notebook->RemovePage(pos);
 	}
 
 	if (visualHost->IsDesignerHost()) {
-		newPage->PopEventHandler(true);
+		CPageWindow* page = dynamic_cast<CPageWindow*>(wxobject);
+		wxASSERT(page);
+		page->PopEventHandler(true);
 	}
 }
 
@@ -125,7 +100,7 @@ bool CValueNotebookPage::CanDeleteControl() const
 //*                              Read & save property                               *
 //***********************************************************************************
 
-bool CValueNotebookPage::LoadData(CMemoryReader &reader)
+bool CValueNotebookPage::LoadData(CMemoryReader& reader)
 {
 	wxString caption; reader.r_stringZ(caption);
 	m_propertyCaption->SetValue(caption);
@@ -134,10 +109,16 @@ bool CValueNotebookPage::LoadData(CMemoryReader &reader)
 	return IValueControl::LoadData(reader);
 }
 
-bool CValueNotebookPage::SaveData(CMemoryWriter &writer)
+bool CValueNotebookPage::SaveData(CMemoryWriter& writer)
 {
 	writer.w_stringZ(m_propertyCaption->GetValueAsString());
 	writer.w_u8(m_propertyVisible->GetValueAsBoolean());
 	writer.w_s32(m_propertyOrient->GetValueAsInteger());
 	return IValueControl::SaveData(writer);
 }
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+S_CONTROL_VALUE_REGISTER(CValueNotebookPage, "notebookPage", "notebookPage", g_controlNotebookPageCLSID);

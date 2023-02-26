@@ -1,6 +1,6 @@
 #include "activeUsersWnd.h"
-#include "databaseLayer/databaseLayer.h"
-#include "metadata/metadata.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
+#include "core/metadata/metadata.h"
 #include "appData.h"
 
 void CActiveUsersWnd::RefreshUsers()

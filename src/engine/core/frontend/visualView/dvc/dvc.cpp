@@ -11,7 +11,7 @@ wxWindow* CValueViewRenderer::CreateEditorCtrl(wxWindow* dv,
 	wxRect labelRect,
 	const wxVariant& value)
 {
-	CTextCtrl* textCtrl = new CTextCtrl;
+	wxTextContainerCtrl* textCtrl = new wxTextContainerCtrl;
 
 	textCtrl->SetDVCMode(true);
 
@@ -19,8 +19,8 @@ wxWindow* CValueViewRenderer::CreateEditorCtrl(wxWindow* dv,
 	textCtrl->SetMultilineMode(m_colControl->GetMultilineMode());
 	textCtrl->SetTextEditMode(m_colControl->GetTextEditMode());
 	textCtrl->SetButtonSelect(m_colControl->GetSelectButton());
-	textCtrl->SetButtonList(m_colControl->GetListButton());
 	textCtrl->SetButtonClear(m_colControl->GetClearButton());
+	textCtrl->SetButtonOpen(m_colControl->GetOpenButton());
 
 	bool result = textCtrl->Create(dv, wxID_ANY, value,
 		labelRect.GetPosition(),
@@ -43,9 +43,9 @@ wxWindow* CValueViewRenderer::CreateEditorCtrl(wxWindow* dv,
 
 	if (!appData->DesignerMode()) {
 		textCtrl->BindButtonSelect(&CValueTableBoxColumn::OnSelectButtonPressed, m_colControl);
-		textCtrl->BindButtonList(&CValueTableBoxColumn::OnListButtonPressed, m_colControl);
+		textCtrl->BindButtonOpen(&CValueTableBoxColumn::OnOpenButtonPressed, m_colControl);
 		textCtrl->BindButtonClear(&CValueTableBoxColumn::OnClearButtonPressed, m_colControl);
-		textCtrl->BindTextCtrl(&CValueTableBoxColumn::OnTextEnter, m_colControl);
+		textCtrl->BindTextEnter(&CValueTableBoxColumn::OnTextEnter, m_colControl);
 		textCtrl->BindKillFocus(&CValueTableBoxColumn::OnKillFocus, m_colControl);
 	}
 
@@ -55,16 +55,16 @@ wxWindow* CValueViewRenderer::CreateEditorCtrl(wxWindow* dv,
 
 bool CValueViewRenderer::GetValueFromEditorCtrl(wxWindow* ctrl, wxVariant& value)
 {
-	CTextCtrl* textCtrl = wxDynamicCast(ctrl, CTextCtrl);
+	wxTextContainerCtrl* textCtrl = wxDynamicCast(ctrl, wxTextContainerCtrl);
 
-	if (!textCtrl)
+	if (textCtrl == NULL)
 		return false;
 
 	if (!appData->DesignerMode()) {
 		textCtrl->UnbindButtonSelect(&CValueTableBoxColumn::OnSelectButtonPressed, m_colControl);
-		textCtrl->UnbindButtonList(&CValueTableBoxColumn::OnListButtonPressed, m_colControl);
+		textCtrl->UnbindButtonOpen(&CValueTableBoxColumn::OnOpenButtonPressed, m_colControl);
 		textCtrl->UnbindButtonClear(&CValueTableBoxColumn::OnClearButtonPressed, m_colControl);
-		textCtrl->UnbindTextCtrl(&CValueTableBoxColumn::OnTextEnter, m_colControl);
+		textCtrl->UnbindTextEnter(&CValueTableBoxColumn::OnTextEnter, m_colControl);
 		textCtrl->UnbindKillFocus(&CValueTableBoxColumn::OnKillFocus, m_colControl);
 	}
 

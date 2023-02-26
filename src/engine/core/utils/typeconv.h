@@ -1,9 +1,9 @@
 #ifndef _TYPECONV_H__
 #define _TYPECONV_H__
 
-#include "common/types.h"
-#include "common/fontcontainer.h"
-#include "compiler/compiler.h"
+#include "core/common/types.h"
+#include "core/common/fontcontainer.h"
+#include "core/compiler/compiler.h"
 
 // macros para la conversión entre wxString <-> wxString
 #define _WXSTR(x)  TypeConv::_StringToWxString(x)

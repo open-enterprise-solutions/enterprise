@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaGridObject.h"
-#include "frontend/metatree/metatreeWnd.h"
+#include "frontend/metatree/metaTreeWnd.h"
 
 bool CMetaGridObject::PrepareContextMenu(wxMenu *defaultMenu)
 {

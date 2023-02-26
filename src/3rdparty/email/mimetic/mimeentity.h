@@ -24,18 +24,18 @@
 #include <fstream>
 #include <iterator>
 #include <algorithm>
-#include <email/mimetic/strutils.h>
-#include <email/mimetic/utils.h>
-#include <email/mimetic/contenttype.h>
-#include <email/mimetic/contenttransferencoding.h>
-#include <email/mimetic/contentdisposition.h>
-#include <email/mimetic/mimeversion.h>
-#include <email/mimetic/mimeentitylist.h>
-#include <email/mimetic/codec/codec.h>
-#include <email/mimetic/header.h>
-#include <email/mimetic/body.h>
-#include <email/mimetic/parser/itparserdecl.h>
-#include <email/mimetic/streambufs.h>
+#include <3rdparty/email/mimetic/strutils.h>
+#include <3rdparty/email/mimetic/utils.h>
+#include <3rdparty/email/mimetic/contenttype.h>
+#include <3rdparty/email/mimetic/contenttransferencoding.h>
+#include <3rdparty/email/mimetic/contentdisposition.h>
+#include <3rdparty/email/mimetic/mimeversion.h>
+#include <3rdparty/email/mimetic/mimeentitylist.h>
+#include <3rdparty/email/mimetic/codec/codec.h>
+#include <3rdparty/email/mimetic/header.h>
+#include <3rdparty/email/mimetic/body.h>
+#include <3rdparty/email/mimetic/parser/itparserdecl.h>
+#include <3rdparty/email/mimetic/streambufs.h>
 
 namespace mimetic
 {

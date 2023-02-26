@@ -1,7 +1,7 @@
 #include "firebirdPreparedStatement.h"
 #include "firebirdDatabaseLayer.h"
-#include "databaseLayer/databaseErrorCodes.h"
-#include "databaseLayer/databaseLayerException.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
+#include <3rdparty/databaseLayer/databaseLayerException.h>
 
 // ctor()
 FirebirdPreparedStatement::FirebirdPreparedStatement(FirebirdInterface* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction)
@@ -99,9 +99,11 @@ FirebirdPreparedStatement* FirebirdPreparedStatement::CreateStatement(FirebirdIn
 	// Start a new transaction if appropriate
 	if (pTransaction == NULL)
 	{
-		pTransaction = 0L;
 		ISC_STATUS_ARRAY status;
-		int nReturn = pInterface->GetIscStartTransaction()(status, &pTransaction, 1, &pDatabase, 0 /*tpb_length*/, NULL/*tpb*/);
+
+		pTransaction = 0L;
+
+		int nReturn = pInterface->GetIscStartTransaction()(status, &pTransaction, 1, &pDatabase, 0, NULL);
 		pStatement = new FirebirdPreparedStatement(pInterface, pDatabase, pTransaction);
 		pStatement->SetEncoding(conv);
 		if (nReturn != 0)
@@ -287,10 +289,10 @@ int FirebirdPreparedStatement::RunQuery()
 	FirebirdStatementVector::iterator start = m_Statements.begin();
 	FirebirdStatementVector::iterator stop = m_Statements.end();
 
-	int nRows = -1;
+	long rows = -1;
 	while (start != stop)
 	{
-		nRows = ((FirebirdPreparedStatementWrapper*)(*start))->RunQuery();
+		rows = ((FirebirdPreparedStatementWrapper*)(*start))->RunQuery();
 		if (((FirebirdPreparedStatementWrapper*)(*start))->GetErrorCode() != DATABASE_LAYER_OK)
 		{
 			SetErrorCode(((FirebirdPreparedStatementWrapper*)(*start))->GetErrorCode());
@@ -307,14 +309,13 @@ int FirebirdPreparedStatement::RunQuery()
 		int nReturn = m_pInterface->GetIscCommitRetaining()(m_Status, &m_pTransaction);
 		//int nReturn = isc_commit_transaction(m_Status, &m_pTransaction);
 		// We're done with the transaction, so set it to NULL so that we know that a new transaction must be started if we run any queries
-		if (nReturn != 0)
-		{
+		if (nReturn != 0) {
 			InterpretErrorCodes();
 			ThrowDatabaseException();
 		}
 	}
 
-	return nRows;
+	return rows;
 }
 
 DatabaseResultSet* FirebirdPreparedStatement::RunQueryWithResults()
@@ -347,7 +348,7 @@ DatabaseResultSet* FirebirdPreparedStatement::RunQueryWithResults()
 			}
 
 			// Start a new transaction
-			nReturn = m_pInterface->GetIscStartTransaction()(m_Status, &m_pTransaction, 1, &m_pDatabase, 0 /*tpb_length*/, NULL/*tpb*/);
+			nReturn = m_pInterface->GetIscStartTransaction()(m_Status, &m_pTransaction, 1, &m_pDatabase, 0, NULL);
 			if (nReturn != 0)
 			{
 				InterpretErrorCodes();

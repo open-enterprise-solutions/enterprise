@@ -4,15 +4,15 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "moduleManager.h"
-#include "compiler/methods.h"
-#include "compiler/systemObjects.h"
+
+#include "core/compiler/systemObjects.h"
 #include "appData.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(IModuleManager::CModuleValue, CValue);
 
 IModuleManager::CModuleValue::CModuleValue(IModuleManager *moduleManager, CMetaModuleObject *moduleObject, bool managerModule) :
 	CValue(eValueTypes::TYPE_MODULE, true), IModuleInfo(new CCompileModule(moduleObject, true)),
-	m_methods(new CMethods()),
+	m_methodHelper(new CMethodHelper()),
 	m_moduleManager(moduleManager),
 	m_moduleObject(moduleObject)
 {
@@ -20,7 +20,7 @@ IModuleManager::CModuleValue::CModuleValue(IModuleManager *moduleManager, CMetaM
 
 IModuleManager::CModuleValue::~CModuleValue()
 {
-	wxDELETE(m_methods);
+	wxDELETE(m_methodHelper);
 }
 
 #define objectManager wxT("manager")
@@ -69,24 +69,32 @@ bool IModuleManager::CModuleValue::DestroyCommonModule()
 
 void IModuleManager::CModuleValue::PrepareNames() const
 {
-	std::vector<SEng> aMethods, aAttributes;
+	m_methodHelper->ClearHelper();
 
 	if (m_procUnit != NULL) {
-		CByteCode *m_byteCode = m_procUnit->GetByteCode();
-		for (auto exportFunction : m_byteCode->m_aExportFuncList) {
-			SEng methods;
-			methods.sName = exportFunction.first;
-			methods.sSynonym = wxT("procUnit");
-			methods.iName = (int)exportFunction.second;
-			aMethods.push_back(methods);
+		byteCode_t* byteCode = m_procUnit->GetByteCode();
+		for (auto exportFunction : byteCode->m_aExportFuncList) {
+			m_methodHelper->AppendMethod(
+				exportFunction.first,
+				byteCode->GetNParams(exportFunction.second),
+				byteCode->HasRetVal(exportFunction.second),
+				exportFunction.second,
+				eProcUnit
+			);
 		}
 	}
-
-	m_methods->PrepareMethods(aMethods.data(), aMethods.size());
-	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
 }
 
-CValue IModuleManager::CModuleValue::Method(methodArg_t &aParams)
+bool IModuleManager::CModuleValue::CallAsProc(const long lMethodNum, CValue** paParams, const long lSizeArray)
 {
-	return IModuleInfo::ExecuteMethod(aParams);
+	return IModuleInfo::ExecuteProc(
+		GetMethodName(lMethodNum), paParams, lSizeArray
+	);
+}
+
+bool IModuleManager::CModuleValue::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray)
+{
+	return IModuleInfo::ExecuteFunc(
+		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
+	);
 }

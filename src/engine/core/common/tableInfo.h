@@ -1,19 +1,193 @@
 #ifndef _TABLE_MODEL_H__
 #define _TABLE_MODEL_H__
 
-#include "common/actionInfo.h"
+#include <wx/dataview.h>
 
-#include "compiler/value.h"
-#include "compiler/valueTypeDescription.h"
+#include "core/compiler/value.h"
+#include "core/compiler/valueType.h"
 
-#include "common/tableNotifier.h"
+#include "core/common/actionInfo.h"
 
-class Guid;
+class wxTableNotifier {
+public:
+
+	virtual bool NotifyDelete(const wxDataViewItem& item) = 0;
+	virtual wxDataViewColumn* GetCurrentColumn() const = 0;
+	virtual void StartEditing(const wxDataViewItem& item, unsigned int col) const = 0;
+	virtual bool ShowFilter(struct filterRow_t& filter) = 0;
+
+	virtual void Select(const wxDataViewItem& item) const = 0;
+
+	virtual wxDataViewItem GetSelection() const = 0;
+	virtual int GetSelections(wxDataViewItemArray& sel) const = 0;
+};
+
+enum eComparisonType {
+	eComparisonType_Equal, // ==
+	eComparisonType_NotEqual, // !=
+};
+
+struct filterRow_t {
+
+	struct filterData_t {
+		unsigned int m_filterModel;
+		wxString m_filterName;
+		wxString m_filterPresentation;
+		eComparisonType m_filterComparison;
+		typeDescription_t m_filterTypeDescription;
+		CValue m_filterValue;
+		bool m_filterUse;
+	public:
+		filterData_t(unsigned int filterModel, const wxString& filterName, const wxString& filterPresentation,
+			eComparisonType comparisonType, const typeDescription_t& filterTypeDescription, const CValue& filterValue,
+			bool filterUse = false) :
+			m_filterModel(filterModel),
+			m_filterName(filterName),
+			m_filterPresentation(filterPresentation),
+			m_filterComparison(comparisonType),
+			m_filterTypeDescription(filterTypeDescription),
+			m_filterValue(filterValue),
+			m_filterUse(filterUse) {
+		}
+	};
+
+	std::vector< filterData_t> m_filters;
+
+public:
+
+	void AppendFilter(unsigned int filterModel, const wxString& filterName,
+		const typeDescription_t& filterTypeDescription, const CValue& filterValue) {
+		m_filters.emplace_back(filterModel, filterName, filterName,
+			eComparisonType::eComparisonType_Equal, filterTypeDescription, filterValue, false
+		);
+	}
+
+	void AppendFilter(unsigned int filterModel, const wxString& filterName, const wxString& filterPresentation,
+		const typeDescription_t& filterTypeDescription, const CValue& filterValue) {
+		m_filters.emplace_back(filterModel, filterName, filterPresentation,
+			eComparisonType::eComparisonType_Equal, filterTypeDescription, filterValue, false
+		);
+	}
+
+	void AppendFilter(unsigned int filterModel, const wxString& filterName, const wxString& filterPresentation,
+		eComparisonType comparisonType, const typeDescription_t& filterTypeDescription, const CValue& filterValue,
+		bool filterUse = false) {
+		m_filters.emplace_back(filterModel, filterName, filterPresentation,
+			comparisonType, filterTypeDescription, filterValue, filterUse
+		);
+	}
+
+	filterData_t* GetFilterByID(unsigned int filterModel) {
+		auto foundedIt = std::find_if(m_filters.begin(), m_filters.end(), [filterModel](const filterData_t& data) {
+			return filterModel == data.m_filterModel; }
+		);
+		if (foundedIt != m_filters.end())
+			return &*foundedIt;
+		return NULL;
+	}
+
+	filterData_t* GetFilterByName(const wxString& filterName) {
+		auto foundedIt = std::find_if(m_filters.begin(), m_filters.end(), [filterName](const filterData_t& data) {
+			return filterName == data.m_filterName; }
+		);
+		if (foundedIt != m_filters.end())
+			return &*foundedIt;
+		return NULL;
+	}
+
+	void SetFilterByID(unsigned int filterModel, const CValue& filterValue) {
+		filterData_t* data = GetFilterByID(filterModel);
+		if (data != NULL) {
+			data->m_filterValue = filterValue;
+			data->m_filterUse = true;
+		}
+	}
+
+	void SetFilterByName(const wxString& filterName, const CValue& filterValue) {
+		filterData_t* data = GetFilterByName(filterName);
+		if (data != NULL) {
+			data->m_filterValue = filterValue;
+			data->m_filterUse = true;
+		}
+	}
+
+	bool UseFilter() const {
+		return m_filters.size() > 0;
+	}
+
+	void ResetFilter() {
+		for (auto& filter : m_filters) {
+			filter.m_filterUse = false;
+		}
+	}
+};
+
+struct sortOrder_t {
+	struct sortData_t {
+		unsigned int m_sortModel;
+		wxString m_sortName;
+		wxString m_sortPresentation;
+		bool m_sortAscending;
+		bool m_sortEnable;
+		bool m_sortSystem;
+	public:
+		sortData_t(unsigned int sortModel, const wxString& sortName, const wxString& sortPresentation = wxEmptyString, bool sortAscending = true, bool sortEnable = true, bool sortSystem = false) :
+			m_sortModel(sortModel),
+			m_sortName(sortName),
+			m_sortPresentation(sortPresentation),
+			m_sortAscending(sortAscending),
+			m_sortEnable(sortEnable),
+			m_sortSystem(sortSystem)
+		{
+		}
+	};
+	std::vector< sortData_t> m_sorts;
+public:
+
+	void AppendSort(unsigned int col_id, const wxString& name, bool ascending = true, bool use = true, bool system = false) {
+		AppendSort(col_id, name, wxEmptyString, ascending, use, system);
+	}
+
+	void AppendSort(unsigned int col_id, const wxString& name, const wxString& presentation, bool ascending = true, bool use = true, bool system = false) {
+		if (GetSortByID(col_id) == NULL) m_sorts.emplace_back(col_id, name, presentation, ascending, use, system);
+	}
+
+	sortData_t* GetSortByID(unsigned int col_id) const {
+		auto foundedIt = std::find_if(m_sorts.begin(), m_sorts.end(),
+			[col_id](const sortData_t& data) {
+				return col_id == data.m_sortModel; }
+		);
+		if (foundedIt != m_sorts.end()) return const_cast<sortData_t*>(&*foundedIt);
+		return NULL;
+	}
+
+	unsigned int GetSortCount() const {
+		return m_sorts.size();
+	}
+};
+
+struct sortModel_t {
+	unsigned int m_sortModel;
+	bool m_sortAscending;
+};
 
 //Общая сущность для таблиц, списка, древа таблиц 
 class IValueModel : public CValue,
 	public IActionSource, public wxDataViewModel {
 	wxDECLARE_ABSTRACT_CLASS(IValueModel);
+protected:
+
+	//def actions
+	enum Func {
+		eAddValue = 1,
+		eCopyValue,
+		eEditValue,
+		eDeleteValue,
+		eFilter,
+		eFilterByColumn,
+		eFilterClear,
+	};
+
 public:
 
 	class IValueModelColumnCollection : public CValue {
@@ -25,32 +199,40 @@ public:
 
 			virtual unsigned int GetColumnID() const = 0;
 			virtual void SetColumnID(unsigned int col) {};
+
 			virtual wxString GetColumnName() const = 0;
 			virtual void SetColumnName(const wxString& name) {};
+
 			virtual wxString GetColumnCaption() const = 0;
 			virtual void SetColumnCaption(const wxString& caption) {};
-			virtual CValueTypeDescription* GetColumnTypes() const = 0;
-			virtual void SetColumnTypes(CValueTypeDescription* td) {};
-			virtual int GetColumnWidth() const = 0;
+
+			virtual typeDescription_t GetColumnType() const = 0;
+			virtual void SetColumnType(const typeDescription_t& typeData) {};
+
+			virtual int GetColumnWidth() const {
+				return wxDVC_DEFAULT_WIDTH;
+			};
+
 			virtual void SetColumnWidth(int width) {};
 
 			IValueModelColumnInfo();
 			virtual ~IValueModelColumnInfo();
 
-			virtual CMethods* GetPMethods() const { //получить ссылку на класс помощник разбора имен атрибутов и методов
-				PrepareNames(); return m_methods;
+			virtual CMethodHelper* GetPMethods() const {
+				PrepareNames();
+				return m_methodHelper;
 			}
-			virtual void PrepareNames() const; //этот метод автоматически вызывается для инициализации имен атрибутов и методов
 
-			virtual CValue GetAttribute(attributeArg_t& aParams); //значение атрибута
+			virtual void PrepareNames() const;
+			virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);
 
 		protected:
-			CMethods* m_methods;
+			CMethodHelper* m_methodHelper;
 		};
 	public:
 
 		virtual IValueModelColumnInfo* AddColumn(const wxString& colName,
-			CValueTypeDescription* types,
+			const typeDescription_t& typeData,
 			const wxString& caption,
 			int width = wxDVC_DEFAULT_WIDTH) {
 			return NULL;
@@ -105,19 +287,36 @@ public:
 				refCounter->DecRef();
 		}
 
+		virtual bool IsPropReadable(const long lPropNum) const {
+			return GetOwnerModel()->ValidateReturnLine(
+				const_cast<IValueModelReturnLine*>(this)
+			);
+		}
+
+		virtual bool IsPropWritable(const long lPropNum) const {
+			return GetOwnerModel()->ValidateReturnLine(
+				const_cast<IValueModelReturnLine*>(this)
+			);
+		}
+
 		virtual IValueModel* GetOwnerModel() const = 0;
 
 		//set meta/get meta
-		virtual void SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal) {}
-		virtual CValue GetValueByMetaID(const meta_identifier_t& id) const { return CValue(); }
+		virtual bool SetValueByMetaID(const meta_identifier_t& id, const CValue& varMetaVal) {
+			if (GetOwnerModel()->ValidateReturnLine(const_cast<IValueModelReturnLine*>(this)))
+				return GetOwnerModel()->SetValueByMetaID(m_lineItem, id, varMetaVal);
+			return false;
+		}
+
+		virtual bool GetValueByMetaID(const meta_identifier_t& id, CValue& pvarMetaVal) const {
+			return GetOwnerModel()->GetValueByMetaID(m_lineItem, id, pvarMetaVal);
+		}
 
 		//operator '=='
 		virtual inline bool CompareValueEQ(const CValue& cParam) const override {
 			IValueModelReturnLine* tableReturnLine = NULL;
 			if (cParam.ConvertToValue(tableReturnLine)) {
-				IValueModel* ownerTable = GetOwnerModel();
-				wxASSERT(ownerTable);
-				if (ownerTable == tableReturnLine->GetOwnerModel()
+				if (GetOwnerModel() == tableReturnLine->GetOwnerModel()
 					&& m_lineItem == tableReturnLine->GetLineItem()) {
 					return true;
 				}
@@ -129,14 +328,13 @@ public:
 		virtual inline bool CompareValueNE(const CValue& cParam) const override {
 			IValueModelReturnLine* tableReturnLine = NULL;
 			if (cParam.ConvertToValue(tableReturnLine)) {
-				IValueModel* ownerTable = GetOwnerModel();
-				wxASSERT(ownerTable);
-				if (ownerTable == tableReturnLine->GetOwnerModel()
-					&& m_lineItem == tableReturnLine->GetLineItem()) {
+				if (GetOwnerModel() != tableReturnLine->GetOwnerModel()
+					|| m_lineItem != tableReturnLine->GetLineItem()) {
 					return false;
 				}
+				return true;
 			}
-			return true;
+			return false;
 		}
 
 	protected:
@@ -145,18 +343,40 @@ public:
 
 public:
 
+	template <class retType>
+	inline retType* GetViewData(const wxDataViewItem& item) const {
+		if (!item.IsOk())
+			return NULL;
+		try {
+			return static_cast<retType*>(item.GetID());
+		}
+		catch (...) {
+			return NULL;
+		}
+	}
+
+	void ResetSort() {
+		for (auto& sort : m_sortOrder.m_sorts) {
+			if (!sort.m_sortSystem)
+				sort.m_sortEnable = false;
+		}
+	}
+
+	sortOrder_t::sortData_t* GetSortByID(unsigned int col) const {
+		return m_sortOrder.GetSortByID(col);
+	}
+
 	IValueModel();
 	virtual ~IValueModel() {}
 
-	void AppendNotifier(wxTableModelNotifier* notify) {
-		if (m_srcNotifier != NULL)
-			wxDELETE(m_srcNotifier);
-		m_srcNotifier = notify;
+	void AppendNotifier(wxTableNotifier* notify) {
+		m_srcNotifier.push_back(notify);
 	}
 
-	void RemoveNotifier(wxTableModelNotifier* notify) {
-		if (m_srcNotifier == notify)
-			wxDELETE(m_srcNotifier);
+	void RemoveNotifier(wxTableNotifier* notify) {
+		auto foundedIt = std::find(m_srcNotifier.begin(), m_srcNotifier.end(), notify);
+		if (foundedIt != m_srcNotifier.end())
+			m_srcNotifier.erase(foundedIt);
 	}
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////
@@ -184,7 +404,7 @@ public:
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////
 
-	virtual wxDataViewItem FindRowValue(const CValue& cVal, const wxString &colName = wxEmptyString) const {
+	virtual wxDataViewItem FindRowValue(const CValue& varValue, const wxString& colName = wxEmptyString) const {
 		return wxDataViewItem(NULL);
 	};
 
@@ -194,21 +414,62 @@ public:
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////
 
-	virtual bool AutoCreateColumns() const { return true; }
-	virtual bool EditableLine(const wxDataViewItem& item, unsigned int col) const { return true; }
+	virtual bool AutoCreateColumn() const {
+		return true;
+	}
+
+	virtual bool DynamicRefresh() const {
+		return false;
+	}
+
+	virtual bool UseFilter() const {
+		return m_filterRow.UseFilter();
+	}
+
+	virtual bool UseStandartCommand() const {
+		return true;
+	}
+
+	virtual bool EditableLine(const wxDataViewItem& item, unsigned int col) const {
+		return true;
+	}
+
+	virtual bool IsListModel() const { return false; }
+	virtual bool IsVirtualListModel() const { return false; }
 
 	virtual void ActivateItem(CValueForm* formOwner,
 		const wxDataViewItem& item, unsigned int col) {
 		IValueModel::RowValueStartEdit(item, col);
 	}
 
-	virtual void AddValue(unsigned int before = 0) = 0;
-	virtual void CopyValue() = 0;
-	virtual void EditValue() = 0;
-	virtual void DeleteValue() = 0;
+	virtual bool IsSortable(unsigned int col) const {
+		sortOrder_t::sortData_t* sortData = m_sortOrder.GetSortByID(col);
+		if (sortData == NULL)
+			return false;
+		return true;
+	}
+
+	virtual void AddValue(unsigned int before = 0) {};
+	virtual void CopyValue() {};
+	virtual void EditValue() {};
+	virtual void DeleteValue() {};
 
 	virtual IValueModelReturnLine* GetRowAt(const wxDataViewItem& line) = 0;
 	virtual IValueModelColumnCollection* GetColumnCollection() const = 0;
+
+	//set meta/get meta
+	virtual meta_identifier_t GetColumnIDByName(const wxString colName) const {
+		IValueModelColumnCollection* colCollection = GetColumnCollection();
+		if (colCollection == NULL)
+			return wxNOT_FOUND;
+		IValueModelColumnCollection::IValueModelColumnInfo* colInfo = colCollection->GetColumnByName(colName);
+		if (colInfo == NULL)
+			return wxNOT_FOUND;
+		return colInfo->GetColumnID();
+	};
+
+	virtual bool SetValueByMetaID(const wxDataViewItem& item, const meta_identifier_t& id, const CValue& varMetaVal) = 0;
+	virtual bool GetValueByMetaID(const wxDataViewItem& item, const meta_identifier_t& id, CValue& cVa) const = 0;
 
 	//ref counter 
 	virtual void DecrRef() override {
@@ -220,32 +481,26 @@ public:
 		}
 	}
 
+	//show filter 
+	virtual bool ShowFilter();
+
 	//Update model 
-	virtual void RefreshModel() {};
+	virtual void RefreshModel(const wxDataViewItem& topItem = wxDataViewItem(NULL), int countPerPage = DEF_START_ITEM_PER_COUNT) {};
 
 	/**
 	* Override actions
 	*/
 
 	virtual actionData_t GetActions(const form_identifier_t& formType);
-	virtual void ExecuteAction(const action_identifier_t& action, class CValueForm* srcForm);
+	virtual void ExecuteAction(const action_identifier_t& lNumAction, class CValueForm* srcForm);
 
 protected:
-	wxTableModelNotifier* m_srcNotifier;
-};
 
-//def actions
-enum
-{
-	eAddValue = 1,
-	eCopyValue,
-	eEditValue,
-	eDeleteValue
-};
+	std::vector<wxTableNotifier*> m_srcNotifier;
 
-typedef std::map<
-	meta_identifier_t, CValue
-> modelArray_t;
+	filterRow_t m_filterRow;
+	sortOrder_t m_sortOrder;
+};
 
 //Поддержка таблиц
 class IValueTable : public IValueModel {
@@ -254,7 +509,7 @@ public:
 
 	struct wxValueTableRow : public wxRefCounter {
 
-		wxValueTableRow(const modelArray_t& nodeValues) :
+		wxValueTableRow(const valueArray_t& nodeValues) :
 			m_valueTable(NULL), m_nodeValues(nodeValues) {
 		}
 
@@ -262,27 +517,36 @@ public:
 			m_valueTable(tableRow.m_valueTable), m_nodeValues(tableRow.m_nodeValues) {
 		}
 
-		bool SetValue(const CValue& variant, const meta_identifier_t& id, bool notify = false) {
-			auto foundedColumn = m_nodeValues.find(id);
-			if (foundedColumn != m_nodeValues.end()) {
-				CValue& cValue = foundedColumn->second;
-				wxASSERT(m_valueTable);
-				if (notify && cValue != variant)
-					m_valueTable->RowValueChanged(this, id);
-				cValue = variant;
-				return true;
+		bool SetValue(const meta_identifier_t& id, const CValue& variant, bool notify = false) {
+			try {
+				auto foundedColumn = m_nodeValues.find(id);
+				if (foundedColumn != m_nodeValues.end()) {
+					CValue& cValue = m_nodeValues.at(id);
+					wxASSERT(m_valueTable);
+					if (notify && cValue != variant)
+						m_valueTable->RowValueChanged(this, id);
+					cValue = variant;
+					return true;
+				}
+			}
+			catch (std::out_of_range&) {
 			}
 			return false;
 		}
 
-		bool SetValue(const wxVariant& variant, unsigned int col) {
-			auto foundedColumn = m_nodeValues.find(col);
-			if (foundedColumn != m_nodeValues.end()) {
-				CValue& cValue = foundedColumn->second;
+		bool SetValue(unsigned int col, const wxVariant& variant, bool notify = false) {
+			try {
+				CValue& cValue = m_nodeValues.at(col);
 				std::vector<CValue> foundedObjects;
-				if (cValue.FindValue(variant.GetString(), foundedObjects))
-					cValue = foundedObjects.at(0);
+				if (cValue.FindValue(variant.GetString(), foundedObjects)) {
+					const CValue& cFoundedValue = foundedObjects.at(0);
+					if (notify && cValue != cFoundedValue)
+						m_valueTable->RowValueChanged(this, col);
+					cValue.SetValue(cFoundedValue);
+				}
 				return true;
+			}
+			catch (std::out_of_range&) {
 			}
 			return false;
 		}
@@ -290,8 +554,8 @@ public:
 		bool IsEmptyValue(const meta_identifier_t& col) const {
 			auto foundedColumn = m_nodeValues.find(col);
 			if (foundedColumn == m_nodeValues.end())
-				return true; 
-			const CValue& cValue = foundedColumn->second;
+				return true;
+			const CValue& cValue = m_nodeValues.at(col);
 			return cValue.IsEmpty();
 		}
 
@@ -299,70 +563,86 @@ public:
 			auto foundedColumn = m_nodeValues.find(col);
 			if (foundedColumn == m_nodeValues.end())
 				return true;
-			const CValue& cValue = foundedColumn->second;
+			const CValue& cValue = m_nodeValues.at(col);
 			return cValue.IsEmpty();
 		}
 
 		void EraseValue(const meta_identifier_t& id) {
 			auto foundedColumn = m_nodeValues.find(id);
-			if (foundedColumn != m_nodeValues.end()) {
+			if (foundedColumn != m_nodeValues.end())
 				m_nodeValues.erase(id);
-			}
 		}
 
 		void EraseValue(unsigned int col) {
 			auto foundedColumn = m_nodeValues.find(col);
-			if (foundedColumn != m_nodeValues.end()) {
+			if (foundedColumn != m_nodeValues.end())
 				m_nodeValues.erase(col);
+		}
+
+		bool CompareRow(const wxValueTableRow* tableRow, std::vector<sortModel_t>& paSort) const {
+			try {
+				for (unsigned long p = 0; p < paSort.size(); p++) {
+					const CValue& lhs = tableRow->m_nodeValues.at(paSort[p].m_sortModel);
+					if (paSort[p].m_sortAscending) {
+						if (lhs > m_nodeValues.at(paSort[p].m_sortModel))
+							return true;
+						else if (lhs < m_nodeValues.at(paSort[p].m_sortModel))
+							return false;
+					}
+					else {
+						if (lhs < m_nodeValues.at(paSort[p].m_sortModel))
+							return true;
+						else if (lhs > m_nodeValues.at(paSort[p].m_sortModel))
+							return false;
+					}
+				}
 			}
+			catch (std::out_of_range&)
+			{
+			}
+			return false;
 		}
 
 		CValue GetValue(const meta_identifier_t& id) const {
-			CValue cValue; GetValue(cValue, id);
+			CValue cValue; GetValue(id, cValue);
 			return cValue;
 		}
 
 		wxVariant GetValue(unsigned int col) const {
-			wxVariant vValue; GetValue(vValue, col);
+			wxVariant vValue; GetValue(col, vValue);
 			return vValue;
 		}
 
-		void GetValue(CValue& variant, const meta_identifier_t& id) const {
-			auto foundedColumn = m_nodeValues.find(id);
-			if (foundedColumn != m_nodeValues.end()) {
-				const CValue& cValue = foundedColumn->second;
-				variant = cValue;
+		bool GetValue(const meta_identifier_t& id, CValue& variant) const {
+			try {
+				const CValue& cValue = m_nodeValues.at(id);
+				variant = cValue; return true;
 			}
+			catch (std::out_of_range&) {
+			}
+			return false;
 		}
 
-		void GetValue(wxVariant& variant, unsigned int col) const {
-			auto foundedColumn = m_nodeValues.find(col);
-			if (foundedColumn != m_nodeValues.end()) {
-				const CValue& cValue = foundedColumn->second;
-				variant = cValue.GetString();
+		bool GetValue(unsigned int col, wxVariant& variant) const {
+			try {
+				const CValue& cValue = m_nodeValues.at(col);
+				variant = cValue.GetString(); return true;
 			}
+			catch (std::out_of_range&) {
+				return false;
+			}
+
+			return false;
 		}
 
 	private:
 		friend class IValueTable;
 	protected:
-		modelArray_t m_nodeValues;
 		IValueTable* m_valueTable;
+		valueArray_t m_nodeValues;
 	};
 
 public:
-
-	template <class retType = wxValueTableRow>
-	inline retType* GetViewData(const wxDataViewItem& item) const {
-		if (!item.IsOk())
-			return NULL;
-		try {
-			return static_cast<retType*>(item.GetID());
-		}
-		catch (...) {
-			return NULL;
-		}
-	}
 
 	IValueTable() : IValueModel() {}
 	virtual ~IValueTable() {
@@ -378,7 +658,7 @@ public:
 	/////////////////////////////////////////////////////////
 
 	virtual bool ValidateReturnLine(IValueModelReturnLine* retLine) const {
-		wxValueTableRow* node = GetViewData(retLine->GetLineItem());
+		wxValueTableRow* node = GetViewData<wxValueTableRow>(retLine->GetLineItem());
 		wxASSERT(node);
 		return node ? node->m_valueTable != NULL : false;
 	}
@@ -436,12 +716,12 @@ public:
 			m_nodeValues.end(), child
 		);
 
-		if (notify && m_srcNotifier != NULL) {
-			bool cancel = m_srcNotifier->SendEvent(wxEVT_DATAVIEW_ITEM_START_DELETING,
-				wxDataViewItem(child)
-			);
-			if (cancel)
-				return false; 
+		if (notify) {
+			for (auto notifier : m_srcNotifier) {
+				bool cancel = notifier->NotifyDelete(wxDataViewItem(child));
+				if (cancel)
+					return false;
+			}
 		}
 
 		if (notify) /* wxDataViewModel:: */ ItemDeleted(
@@ -458,33 +738,78 @@ public:
 		return false;
 	}
 
+	void Sort(unsigned int col, bool ascending = true, bool notify = true) {
+		std::vector<sortModel_t> fixedSort = { { col, ascending } };
+		Sort(fixedSort, notify);
+	}
+
+	void Sort(std::vector<sortModel_t> paSort, bool notify = true) {
+		if (notify) wxDataViewModel::BeforeReset();
+		std::sort(m_nodeValues.begin(), m_nodeValues.end(),
+			[&paSort](const wxValueTableRow* a, const wxValueTableRow* b) {
+				return a->CompareRow(b, paSort);
+			}
+		);
+		if (notify) wxDataViewModel::AfterReset();
+	}
+
 	long GetRowCount() const {
 		return m_nodeValues.size();
 	}
 
 	/////////////////////////////////////////////////////////
 
+	virtual bool IsListModel() const { return true; }
+	virtual bool IsVirtualListModel() const { return false; }
+
 	// override sorting to always sort branches ascendingly
+	virtual bool HasDefaultCompare() const override {
+		return true;
+	}
+
 	virtual int Compare(const wxDataViewItem& item1, const wxDataViewItem& item2,
 		unsigned int col, bool ascending) const override {
+
 		wxASSERT(item1.IsOk() && item2.IsOk());
-		// should never happen
-		if (IsContainer(item1) && IsContainer(item2)) {
-			wxVariant value1, value2;
-			GetValue(value1, item1, 0);
-			GetValue(value2, item2, 0);
-			wxString str1 = value1.GetString();
-			wxString str2 = value2.GetString();
-			int res = str1.Cmp(str2);
-			if (res)
-				return res;
-			// items must be different
-			wxUIntPtr litem1 = (wxUIntPtr)item1.GetID();
-			wxUIntPtr litem2 = (wxUIntPtr)item2.GetID();
-			return litem1 - litem2;
+
+		sortOrder_t::sortData_t* foundedSort = m_sortOrder.GetSortByID(col);
+		if (foundedSort == NULL && col != unsigned int(wxNOT_FOUND))
+			return 0;
+
+		wxValueTableRow* node1 = GetViewData<wxValueTableRow>(item1);
+		if (node1 == NULL)
+			return 0;
+
+		wxValueTableRow* node2 = GetViewData<wxValueTableRow>(item2);
+		if (node2 == NULL)
+			return 0;
+
+		for (auto sort : m_sortOrder.m_sorts) {
+
+			CValue currValue1, currValue2;
+			node1->GetValue(sort.m_sortModel, currValue1);
+			node2->GetValue(sort.m_sortModel, currValue2);
+
+			if (sort.m_sortEnable) {
+				if (sort.m_sortAscending) {
+					if (currValue1 < currValue2)
+						return -1;
+					else if (currValue1 > currValue2)
+						return 1;
+				}
+				else {
+					if (currValue1 > currValue2)
+						return -1;
+					else if (currValue1 < currValue2)
+						return 1;
+				}
+			}
 		}
 
-		return wxDataViewModel::Compare(item1, item2, col, ascending);
+		// items must be different
+		wxUIntPtr id1 = wxPtrToUInt(item1.GetID()),
+			id2 = wxPtrToUInt(item2.GetID());
+		return ascending ? id1 - id2 : id2 - id1;
 	}
 
 	// derived classes should override these methods instead of
@@ -507,7 +832,7 @@ public:
 
 	// helper methods provided by list models only
 	virtual long GetRow(const wxDataViewItem& item) const {
-		wxValueTableRow* node = GetViewData(item);
+		wxValueTableRow* node = GetViewData<wxValueTableRow>(item);
 		if (node == NULL)
 			return wxNOT_FOUND;
 		auto foundedIt = std::find(m_nodeValues.begin(), m_nodeValues.end(), node);
@@ -530,7 +855,6 @@ public:
 	virtual unsigned int GetChildren(const wxDataViewItem& parent, wxDataViewItemArray& array) const override {
 		if (parent.IsOk())
 			return 0;
-		wxValueTableRow* node = (wxValueTableRow*)parent.GetID();
 		unsigned int count = m_nodeValues.size();
 		if (count == 0)
 			return 0;
@@ -584,10 +908,10 @@ public:
 	struct wxValueTreeNode : public wxRefCounter {
 
 		wxValueTreeNode(IValueTree* valueTree) :
-			m_valueTree(valueTree) {
+			m_valueTree(valueTree), m_parent(NULL) {
 		}
 
-		wxValueTreeNode(wxValueTreeNode* parent, const modelArray_t& nodeValues = modelArray_t()) :
+		wxValueTreeNode(wxValueTreeNode* parent, const valueArray_t& nodeValues = valueArray_t()) :
 			m_valueTree(NULL), m_parent(parent), m_nodeValues(nodeValues) {
 			if (m_parent != NULL)
 				m_parent->Append(this);
@@ -658,60 +982,105 @@ public:
 			child->DecRef();
 		}
 
+		void Sort(std::vector<sortModel_t>& paSort) {
+			std::sort(m_children.begin(), m_children.end(),
+				[&paSort](const wxValueTreeNode* a, const wxValueTreeNode* b) {
+					return a->CompareNode(b, paSort);
+				}
+			);
+			for (auto child : m_children) child->Sort(paSort);
+		}
+
 		unsigned int GetChildCount() const {
 			return m_children.size();
 		}
 
+	public:
+
+		bool CompareNode(const wxValueTreeNode* node, std::vector<sortModel_t>& paSort) const {
+			try {
+				for (unsigned long p = 0; p < paSort.size(); p++) {
+					const CValue& lhs = node->m_nodeValues.at(paSort[p].m_sortModel);
+					if (paSort[p].m_sortAscending) {
+						if (lhs > m_nodeValues.at(paSort[p].m_sortModel))
+							return true;
+						else if (lhs < m_nodeValues.at(paSort[p].m_sortModel))
+							return false;
+					}
+					else {
+						if (lhs < m_nodeValues.at(paSort[p].m_sortModel))
+							return true;
+						else if (lhs > m_nodeValues.at(paSort[p].m_sortModel))
+							return false;
+					}
+				}
+			}
+			catch (std::out_of_range&)
+			{
+			}
+			return false;
+		}
+
 	public:     // public to avoid getters/setters
 
-		bool SetValue(const CValue& variant, const meta_identifier_t& id, bool notify = false) {
-			auto foundedColumn = m_nodeValues.find(id);
-			if (foundedColumn != m_nodeValues.end()) {
-				CValue& cValue = foundedColumn->second;
+		bool SetValue(const meta_identifier_t& id, const CValue& variant, bool notify = false) {
+			try {
+				CValue& cValue = m_nodeValues.at(id);
 				if (notify && cValue != variant)
 					m_valueTree->RowValueChanged(this, id);
 				cValue.SetValue(variant);
 				return true;
 			}
+			catch (std::out_of_range&) {
+			}
 			return false;
 		}
 
-		bool SetValue(const wxVariant& variant, unsigned int col) {
-			auto foundedColumn = m_nodeValues.find(col);
-			if (foundedColumn != m_nodeValues.end()) {
-				CValue& cValue = foundedColumn->second;
+		bool SetValue(unsigned int col, const wxVariant& variant, bool notify = false) {
+			try {
+				CValue& cValue = m_nodeValues.at(col);
 				std::vector<CValue> foundedObjects;
-				if (cValue.FindValue(variant.GetString(), foundedObjects))
-					cValue.SetValue(foundedObjects.at(0));
+				if (cValue.FindValue(variant.GetString(), foundedObjects)) {
+					const CValue& cFoundedValue = foundedObjects.at(0);
+					if (notify && cValue != cFoundedValue)
+						m_valueTree->RowValueChanged(this, col);
+					cValue.SetValue(cFoundedValue);
+				}
 				return true;
+			}
+			catch (std::out_of_range&) {
 			}
 			return false;
 		}
 
 		CValue GetValue(const meta_identifier_t& id) const {
-			CValue cValue; GetValue(cValue, id);
+			CValue cValue; GetValue(id, cValue);
 			return cValue;
 		}
 
 		wxVariant GetValue(unsigned int col) const {
-			wxVariant vValue; GetValue(vValue, col);
+			wxVariant vValue; GetValue(col, vValue);
 			return vValue;
 		}
 
-		void GetValue(CValue& variant, unsigned int id) const {
-			auto foundedColumn = m_nodeValues.find(id);
-			if (foundedColumn != m_nodeValues.end()) {
-				const CValue& cValue = foundedColumn->second;
-				variant.SetValue(cValue);
+		bool GetValue(const meta_identifier_t& id, CValue& variant) const {
+			try {
+				const CValue& cValue = m_nodeValues.at(id);
+				variant = cValue; return true;
 			}
+			catch (std::out_of_range&) {
+			}
+			return false;
 		}
 
-		void GetValue(wxVariant& variant, unsigned int col) const {
-			auto foundedColumn = m_nodeValues.find(col);
-			if (foundedColumn != m_nodeValues.end()) {
-				const CValue& cValue = foundedColumn->second;
-				variant = cValue.GetString();
+		bool GetValue(unsigned int col, wxVariant& variant) const {
+			try {
+				const CValue& cValue = m_nodeValues.at(col);
+				variant = cValue.GetString(); return true;
 			}
+			catch (std::out_of_range&) {
+			}
+			return false;
 		}
 
 	private:
@@ -720,23 +1089,11 @@ public:
 		wxValueTreeNode* m_parent;
 		std::vector<wxValueTreeNode*> m_children;
 	protected:
-		modelArray_t m_nodeValues;
 		IValueTree* m_valueTree;
+		valueArray_t m_nodeValues;
 	};
 
 public:
-
-	template <class retType = wxValueTreeNode>
-	inline retType* GetViewData(const wxDataViewItem& item) const {
-		if (!item.IsOk())
-			return NULL;
-		try {
-			return static_cast<retType*>(item.GetID());
-		}
-		catch (...) {
-			return NULL;
-		}
-	}
 
 	IValueTree() : IValueModel() {
 		m_root = new wxValueTreeNode(this);
@@ -755,7 +1112,7 @@ public:
 	/////////////////////////////////////////////////////////
 
 	virtual bool ValidateReturnLine(IValueModelReturnLine* retLine) const {
-		wxValueTreeNode* node = GetViewData(retLine->GetLineItem());
+		wxValueTreeNode* node = GetViewData<wxValueTreeNode>(retLine->GetLineItem());
 		wxASSERT(node);
 		return node ? node->m_valueTree != NULL : false;
 	}
@@ -776,22 +1133,22 @@ public:
 	}
 
 	// helper methods to change the model
-	void Delete(const wxDataViewItem& item, bool notify = true) {
+	bool Delete(const wxDataViewItem& item, bool notify = true) {
 		wxValueTreeNode* node = (wxValueTreeNode*)item.GetID();
-		if (!node)      // happens if item.IsOk()==false
-			return;
+		if (node == NULL)
+			return false;
 		wxDataViewItem parent(node->GetParent());
 		if (!parent.IsOk()) {
 			wxASSERT(node == m_root);
 			// don't make the control completely empty:
 			wxLogError("Cannot remove the root item!");
-			return;
+			return false;
 		}
 
-		if (notify && m_srcNotifier != NULL) {
-			bool cancel = m_srcNotifier->SendEvent(wxEVT_DATAVIEW_ITEM_START_DELETING, item);
+		for (auto notifier : m_srcNotifier) {
+			bool cancel = notifier->NotifyDelete(item);
 			if (cancel)
-				return;
+				return false;
 		}
 
 		// first remove the node from the parent's array of children;
@@ -802,11 +1159,11 @@ public:
 		if (children_iterator != children.end())
 			children.erase(children_iterator);
 		// notify control
-		if (notify)
-			/* wxDataViewModel:: */ ItemDeleted(parent, item);
+		if (notify) /* wxDataViewModel:: */ ItemDeleted(parent, item);
 		// free the node
 		node->m_valueTree = NULL;
 		node->DecRef();
+		return true;
 	}
 
 	void Clear(bool notify = true) {
@@ -819,33 +1176,72 @@ public:
 			node->m_valueTree = NULL;
 			node->DecRef();
 		}
-		if (notify)
-			/* wxDataViewModel:: */ Cleared();
+		if (notify) /* wxDataViewModel:: */ Cleared();
+	}
+
+	void Sort(unsigned int col, bool ascending = true, bool notify = true) {
+		std::vector<sortModel_t> fixedSort = { { col, ascending } };
+		Sort(fixedSort, notify);
+	}
+
+	void Sort(std::vector<sortModel_t> paSort, bool notify = true) {
+		if (notify) /* wxDataViewModel:: */ BeforeReset();
+		m_root->Sort(paSort);
+		if (notify) /* wxDataViewModel:: */ AfterReset();
 	}
 
 	/////////////////////////////////////////////////////////
 
+	virtual bool IsListModel() const { return false; }
+	virtual bool IsVirtualListModel() const { return false; }
+
 	// override sorting to always sort branches ascendingly
+	virtual bool HasDefaultCompare() const override {
+		return true;
+	}
+
 	virtual int Compare(const wxDataViewItem& item1, const wxDataViewItem& item2,
 		unsigned int col, bool ascending) const override {
+
 		wxASSERT(item1.IsOk() && item2.IsOk());
-		// should never happen
-		if (IsContainer(item1) && IsContainer(item2)) {
-			wxVariant value1, value2;
-			GetValue(value1, item1, 0);
-			GetValue(value2, item2, 0);
-			wxString str1 = value1.GetString();
-			wxString str2 = value2.GetString();
-			int res = str1.Cmp(str2);
-			if (res)
-				return res;
-			// items must be different
-			wxUIntPtr litem1 = (wxUIntPtr)item1.GetID();
-			wxUIntPtr litem2 = (wxUIntPtr)item2.GetID();
-			return litem1 - litem2;
+
+		sortOrder_t::sortData_t* foundedSort = m_sortOrder.GetSortByID(col);
+		if (foundedSort == NULL && col != unsigned int(wxNOT_FOUND))
+			return 0;
+
+		wxValueTreeNode* node1 = GetViewData<wxValueTreeNode>(item1);
+		if (node1 == NULL)
+			return 0;
+		wxValueTreeNode* node2 = GetViewData<wxValueTreeNode>(item2);
+		if (node2 == NULL)
+			return 0;
+
+		for (auto sort : m_sortOrder.m_sorts) {
+
+			CValue currValue1, currValue2;
+			node1->GetValue(sort.m_sortModel, currValue1);
+			node2->GetValue(sort.m_sortModel, currValue2);
+
+			if (sort.m_sortEnable) {
+				if (sort.m_sortAscending) {
+					if (currValue1 < currValue2)
+						return -1;
+					else if (currValue1 > currValue2)
+						return 1;
+				}
+				else {
+					if (currValue1 > currValue2)
+						return -1;
+					else if (currValue1 < currValue2)
+						return 1;
+				}
+			}
 		}
 
-		return wxDataViewModel::Compare(item1, item2, col, ascending);
+		// items must be different
+		wxUIntPtr id1 = wxPtrToUInt(item1.GetID()),
+			id2 = wxPtrToUInt(item2.GetID());
+		return ascending ? id1 - id2 : id2 - id1;
 	}
 
 	// derived classes should override these methods instead of

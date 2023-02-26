@@ -4,17 +4,14 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataProcessorWnd.h"
-#include "compiler/debugger/debugClient.h"
+#include "core/compiler/debugger/debugClient.h"
 #include "frontend/theme/luna_auitoolbar.h"
 
-#include "common/templates/dataProcessorFile.h"
+#include "core/frontend/docView/templates/dataProcessorFile.h"
 
 #include <wx/artprov.h>
 
 wxIMPLEMENT_DYNAMIC_CLASS(CDataProcessorTree, wxPanel);
-
-wxBEGIN_EVENT_TABLE(CDataProcessorTree, wxPanel)
-wxEND_EVENT_TABLE()
 
 #define ICON_SIZE 16
 
@@ -231,8 +228,6 @@ wxIMPLEMENT_DYNAMIC_CLASS(CDataProcessorTree::CDataProcessorTreeWnd, wxTreeCtrl)
 //**********************************************************************************
 
 wxBEGIN_EVENT_TABLE(CDataProcessorTree::CDataProcessorTreeWnd, wxTreeCtrl)
-
-EVT_PROPERTY_MODIFIED(CDataProcessorTree::CDataProcessorTreeWnd::OnPropertyModified)
 
 EVT_LEFT_UP(CDataProcessorTree::CDataProcessorTreeWnd::OnLeftUp)
 EVT_LEFT_DOWN(CDataProcessorTree::CDataProcessorTreeWnd::OnLeftDown)

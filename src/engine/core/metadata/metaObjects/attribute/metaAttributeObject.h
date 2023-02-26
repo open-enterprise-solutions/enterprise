@@ -1,8 +1,8 @@
 #ifndef _ATTRIBUTES_H__
 #define _ATTRIBUTES_H__
 
-#include "metadata/metaObjects/metaObject.h"
-#include "common/attributeInfo.h"
+#include "core/metadata/metaObjects/metaObject.h"
+#include "core/common/typeInfo.h"
 
 enum eSelectMode {
 	eSelectMode_Items = 1,
@@ -10,8 +10,14 @@ enum eSelectMode {
 	eSelectMode_FoldersAndItems
 };
 
+enum eItemMode {
+	eItemMode_Item,
+	eItemMode_Folder,
+	eItemMode_Folder_Item
+};
+
 class IMetaAttributeObject : public IMetaObject,
-	public IAttributeInfo {
+	public ITypeAttribute {
 	wxDECLARE_ABSTRACT_CLASS(IMetaAttributeObject);
 public:
 
@@ -121,6 +127,7 @@ public:
 	static unsigned short GetSQLFieldCount(IMetaAttributeObject* metaAttr);
 	static wxString GetSQLFieldName(IMetaAttributeObject* metaAttr, const wxString& aggr = wxEmptyString);
 	static wxString GetCompositeSQLFieldName(IMetaAttributeObject* metaAttr, const wxString& oper = wxT("="));
+	static wxString GetExcluteSQLFieldName(IMetaAttributeObject* metaAttr);
 
 	//get data sql
 	static sqlField_t GetSQLFieldData(IMetaAttributeObject* metaAttr);
@@ -132,30 +139,21 @@ public:
 	static void SetValueAttribute(IMetaAttributeObject* metaAttribute, const CValue& cValue, class PreparedStatement* statement, int& position);
 
 	//get value from attribute
-	static CValue GetValueAttribute(const wxString& fieldName, const eFieldTypes& fldType, IMetaAttributeObject* metaAttr, class DatabaseResultSet* resultSet, bool createData = true);
-	static CValue GetValueAttribute(const wxString& fieldName, IMetaAttributeObject* metaAttribute, class DatabaseResultSet* resultSet, bool createData = true);
-	static CValue GetValueAttribute(IMetaAttributeObject* metaAttribute, class DatabaseResultSet* resultSet, bool createData = true);
-
-	template <class retType>
-	static retType GetValueAttributeAndConvert(IMetaAttributeObject* metaAttribute, class DatabaseResultSet* resultSet, bool createData = true) {
-		return GetValueAttribute(metaAttribute, resultSet, createData).ConvertToValue<retType>();
-	}
-
-	eSelectMode GetSelectMode() const {
-		return m_selMode;
-	}
+	static bool GetValueAttribute(const wxString& fieldName, const eFieldTypes& fldType, IMetaAttributeObject* metaAttr, CValue& retValue, class DatabaseResultSet* resultSet, bool createData = true);
+	static bool GetValueAttribute(const wxString& fieldName, IMetaAttributeObject* metaAttribute, CValue& retValue, class DatabaseResultSet* resultSet, bool createData = true);
+	static bool GetValueAttribute(IMetaAttributeObject* metaAttribute, CValue& retValue, class DatabaseResultSet* resultSet, bool createData = true);
 
 	//contain meta type
 	bool ContainMetaType(enum eMetaObjectType type) const;
 
 	//ctor 
 	IMetaAttributeObject(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString) :
-		IMetaObject(name, synonym, comment), IAttributeInfo(eValueTypes::TYPE_STRING), m_selMode(eSelectMode::eSelectMode_Items)
+		IMetaObject(name, synonym, comment), ITypeAttribute(eValueTypes::TYPE_STRING)
 	{
 	}
 
 	IMetaAttributeObject(const eValueTypes& valType) :
-		IMetaObject(), IAttributeInfo(valType), m_selMode(eSelectMode::eSelectMode_Items)
+		IMetaObject(), ITypeAttribute(valType)
 	{
 	}
 
@@ -186,23 +184,48 @@ public:
 	//check if attribute is fill 
 	virtual bool FillCheck() const = 0;
 
+	virtual eItemMode GetItemMode() const {
+		return eItemMode::eItemMode_Item;
+	}
+
+	virtual eSelectMode GetSelectMode() const {
+		return eSelectMode::eSelectMode_Items;
+	}
+
 	//events:
 	virtual bool OnCreateMetaObject(IMetadata* metaData);
 	virtual bool OnDeleteMetaObject();
 
 protected:
-
 	CValue m_defValue;
-	eSelectMode m_selMode;
 };
 
 class CMetaAttributeObject : public IMetaAttributeObject {
 	wxDECLARE_DYNAMIC_CLASS(CMetaAttributeObject);
+private:
+	OptionList* GetSelectMode(PropertyOption*) {
+		OptionList* opt_list = new OptionList;
+		opt_list->AddOption(_("items"), eSelectMode_Items);
+		opt_list->AddOption(_("folders and items"), eSelectMode_FoldersAndItems);
+		opt_list->AddOption(_("folders"), eSelectMode_Folders);
+		return opt_list;
+	}
+	OptionList* GetItemMode(PropertyOption*) {
+		OptionList* opt_list = new OptionList;
+		opt_list->AddOption(_("for item"), eItemMode_Item);
+		opt_list->AddOption(_("for folder"), eItemMode_Folder);
+		opt_list->AddOption(_("for folder and item"), eItemMode_Folder_Item);
+		return opt_list;
+	}
 protected:
 	PropertyCategory* m_categoryType = IPropertyObject::CreatePropertyCategory("data");
 	Property* m_propertyType = IPropertyObject::CreateTypeProperty(m_categoryType, "type");
 	PropertyCategory* m_categoryAttribute = IPropertyObject::CreatePropertyCategory("attribute");
 	Property* m_propertyFillCheck = IPropertyObject::CreateProperty(m_categoryAttribute, { "fill_check", "fill check" }, PropertyType::PT_BOOL);
+	PropertyCategory* m_categoryPresentation = IPropertyObject::CreatePropertyCategory({ "presentation", _("presentation") });
+	Property* m_propertySelectMode = IPropertyObject::CreateProperty(m_categoryPresentation, { "select",  "select group and items" }, &CMetaAttributeObject::GetSelectMode, eSelectMode::eSelectMode_Items);
+	PropertyCategory* m_categoryGroup = IPropertyObject::CreatePropertyCategory({ "group", _("group") });
+	Property* m_propertyItemMode = IPropertyObject::CreateProperty(m_categoryGroup, { "use",  "use" }, &CMetaAttributeObject::GetItemMode, eItemMode::eItemMode_Item);
 public:
 
 	CMetaAttributeObject(const eValueTypes& valType = eValueTypes::TYPE_STRING);
@@ -227,10 +250,14 @@ public:
 			GetClsidCount() > 0;
 	}
 
+	virtual eItemMode GetItemMode() const;
+	virtual eSelectMode GetSelectMode() const;
+
 	/**
 	* Property events
 	*/
 	virtual void OnPropertyCreated(Property* property);
+	virtual void OnPropertyRefresh(class wxPropertyGridManager* pg, class wxPGProperty* pgProperty, Property* property);
 	virtual bool OnPropertyChanging(Property* property, const wxVariant& newValue);
 	virtual void OnPropertyChanged(Property* property);
 
@@ -244,111 +271,165 @@ class CMetaDefaultAttributeObject : public IMetaAttributeObject {
 	wxDECLARE_DYNAMIC_CLASS(CMetaAttributeObject);
 private:
 
-	CMetaDefaultAttributeObject(const wxString& name, const wxString& synonym, const wxString& comment, bool fillCheck, const CValue& defValue)
-		: IMetaAttributeObject(name, synonym, comment)
+	CMetaDefaultAttributeObject(const wxString& name, const wxString& synonym, const wxString& comment, bool fillCheck, const CValue& defValue, eItemMode itemMode, eSelectMode selectMode)
+		: IMetaAttributeObject(name, synonym, comment), m_itemMode(itemMode), m_selectMode(selectMode)
 	{
-		IAttributeWrapper::SetDefaultMetatype(eValueTypes::TYPE_BOOLEAN);
+		SetClsid(g_metaDefaultAttributeCLSID);
+		ITypeWrapper::SetDefaultMetatype(eValueTypes::TYPE_BOOLEAN);
 		m_fillCheck = fillCheck; m_defValue = defValue;
 	}
-	CMetaDefaultAttributeObject(const wxString& name, const wxString& synonym, const wxString& comment, CValueQualifierNumber& qNumber, bool fillCheck, const CValue& defValue)
-		: IMetaAttributeObject(name, synonym, comment)
+	CMetaDefaultAttributeObject(const wxString& name, const wxString& synonym, const wxString& comment, const qualifierNumber_t& qNumber, bool fillCheck, const CValue& defValue, eItemMode itemMode, eSelectMode selectMode)
+		: IMetaAttributeObject(name, synonym, comment), m_itemMode(itemMode), m_selectMode(selectMode)
 	{
-		IAttributeWrapper::SetDefaultMetatype(eValueTypes::TYPE_NUMBER);
-		IAttributeWrapper::SetNumber(qNumber.m_precision, qNumber.m_scale);
+		SetClsid(g_metaDefaultAttributeCLSID);
+		ITypeWrapper::SetDefaultMetatype(eValueTypes::TYPE_NUMBER);
+		ITypeWrapper::SetNumber(qNumber.m_precision, qNumber.m_scale);
 		m_fillCheck = fillCheck; m_defValue = defValue;
 	}
-	CMetaDefaultAttributeObject(const wxString& name, const wxString& synonym, const wxString& comment, CValueQualifierDate& qDate, bool fillCheck, const CValue& defValue)
-		: IMetaAttributeObject(name, synonym, comment)
+	CMetaDefaultAttributeObject(const wxString& name, const wxString& synonym, const wxString& comment, const qualifierDate_t& qDate, bool fillCheck, const CValue& defValue, eItemMode itemMode, eSelectMode selectMode)
+		: IMetaAttributeObject(name, synonym, comment), m_itemMode(itemMode), m_selectMode(selectMode)
 	{
-		IAttributeWrapper::SetDefaultMetatype(eValueTypes::TYPE_DATE);
-		IAttributeWrapper::SetDate(qDate.m_dateTime);
-		m_fillCheck = fillCheck; m_defValue = defValue;
+		SetClsid(g_metaDefaultAttributeCLSID);
+		ITypeWrapper::SetDefaultMetatype(eValueTypes::TYPE_DATE);
+		ITypeWrapper::SetDate(qDate.m_dateTime);
+		m_fillCheck = fillCheck; m_defValue = defValue; 
 	}
-	CMetaDefaultAttributeObject(const wxString& name, const wxString& synonym, const wxString& comment, CValueQualifierString& qString, bool fillCheck, const CValue& defValue)
-		: IMetaAttributeObject(name, synonym, comment)
+	CMetaDefaultAttributeObject(const wxString& name, const wxString& synonym, const wxString& comment, const qualifierString_t& qString, bool fillCheck, const CValue& defValue, eItemMode itemMode, eSelectMode selectMode)
+		: IMetaAttributeObject(name, synonym, comment), m_itemMode(itemMode), m_selectMode(selectMode)
 	{
-		IAttributeWrapper::SetDefaultMetatype(eValueTypes::TYPE_STRING);
-		IAttributeWrapper::SetString(qString.m_length);
+		SetClsid(g_metaDefaultAttributeCLSID);
+		ITypeWrapper::SetDefaultMetatype(eValueTypes::TYPE_STRING);
+		ITypeWrapper::SetString(qString.m_length);
 		m_fillCheck = fillCheck; m_defValue = defValue;
 	}
 
 	CMetaDefaultAttributeObject(const wxString& name, const wxString& synonym, const wxString& comment,
-		const CLASS_ID& clsid, bool fillCheck, const CValue& defValue, eSelectMode selMode)
-		: IMetaAttributeObject(name, synonym, comment)
+		const CLASS_ID& clsid, bool fillCheck, const CValue& defValue, eItemMode itemMode, eSelectMode selectMode)
+		: IMetaAttributeObject(name, synonym, comment), m_itemMode(itemMode), m_selectMode(selectMode)
 	{
-		IAttributeWrapper::SetDefaultMetatype(clsid);
-		m_fillCheck = fillCheck; m_defValue = defValue; m_selMode = selMode;
+		SetClsid(g_metaDefaultAttributeCLSID);
+		ITypeWrapper::SetDefaultMetatype(clsid);
+		m_fillCheck = fillCheck; m_defValue = defValue;
 	}
 
 	CMetaDefaultAttributeObject(const wxString& name, const wxString& synonym, const wxString& comment,
-		const CLASS_ID& clsid, const metaDescription_t& descr, bool fillCheck, const CValue& defValue, eSelectMode selMode)
-		: IMetaAttributeObject(name, synonym, comment)
+		const CLASS_ID& clsid, const typeDescription_t::typeData_t& descr, bool fillCheck, const CValue& defValue, eItemMode itemMode, eSelectMode selectMode)
+		: IMetaAttributeObject(name, synonym, comment), m_itemMode(itemMode), m_selectMode(selectMode)
 	{
-		IAttributeWrapper::SetDefaultMetatype(clsid, descr);
-		m_fillCheck = fillCheck; m_defValue = defValue; m_selMode = selMode;
+		SetClsid(g_metaDefaultAttributeCLSID);
+		ITypeWrapper::SetDefaultMetatype(clsid, descr);
+		m_fillCheck = fillCheck; m_defValue = defValue;
 	}
 
-	CMetaDefaultAttributeObject(const wxString& name, const wxString& synonym, const wxString& comment, bool fillCheck)
-		: IMetaAttributeObject(name, synonym, comment)
+	CMetaDefaultAttributeObject(const wxString& name, const wxString& synonym, const wxString& comment, bool fillCheck, eItemMode itemMode, eSelectMode selectMode)
+		: IMetaAttributeObject(name, synonym, comment), m_itemMode(itemMode), m_selectMode(selectMode)
 	{
-		IAttributeWrapper::ClearAllMetatype();
-		m_fillCheck = fillCheck; 
-	}
-
-	CMetaDefaultAttributeObject(const wxString& name, const wxString& synonym, const wxString& comment, bool fillCheck, eSelectMode selMode)
-		: IMetaAttributeObject(name, synonym, comment)
-	{
-		IAttributeWrapper::ClearAllMetatype();
-		m_fillCheck = fillCheck; m_selMode = selMode;
+		SetClsid(g_metaDefaultAttributeCLSID);
+		ITypeWrapper::ClearAllMetatype();
+		m_fillCheck = fillCheck;
 	}
 
 public:
 
 	CMetaDefaultAttributeObject()
-		: IMetaAttributeObject()
-	{
-		IAttributeWrapper::SetDefaultMetatype(eValueTypes::TYPE_STRING);
+		: IMetaAttributeObject(), m_itemMode(eItemMode::eItemMode_Item), m_selectMode(eSelectMode::eSelectMode_Items) {
+		SetClsid(g_metaDefaultAttributeCLSID);
+		ITypeWrapper::SetDefaultMetatype(eValueTypes::TYPE_STRING);
 	}
 
 	static CMetaDefaultAttributeObject* CreateBoolean(const wxString& name, const wxString& synonym, const wxString& comment,
-		bool fillCheck = false, const bool& defValue = false) {
-		return new CMetaDefaultAttributeObject(name, synonym, comment, fillCheck, defValue);
+		eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, false, eValueTypes::TYPE_BOOLEAN, useItem, selectMode);
+	}
+
+	static CMetaDefaultAttributeObject* CreateBoolean(const wxString& name, const wxString& synonym, const wxString& comment,
+		bool fillCheck, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, fillCheck, eValueTypes::TYPE_BOOLEAN, useItem, selectMode);
+	}
+
+	static CMetaDefaultAttributeObject* CreateBoolean(const wxString& name, const wxString& synonym, const wxString& comment,
+		bool fillCheck, const bool& defValue, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, fillCheck, CValue(defValue), useItem, selectMode);
 	}
 
 	static CMetaDefaultAttributeObject* CreateNumber(const wxString& name, const wxString& synonym, const wxString& comment,
-		unsigned char precision, unsigned char scale, bool fillCheck = false, const number_t& defValue = 0) {
-		return new CMetaDefaultAttributeObject(name, synonym, comment, CValueQualifierNumber(precision, scale), fillCheck, defValue);
+		unsigned char precision, unsigned char scale, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, qualifierNumber_t(precision, scale), false, eValueTypes::TYPE_NUMBER, useItem, selectMode);
+	}
+
+	static CMetaDefaultAttributeObject* CreateNumber(const wxString& name, const wxString& synonym, const wxString& comment,
+		unsigned char precision, unsigned char scale, bool fillCheck, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, qualifierNumber_t(precision, scale), fillCheck, eValueTypes::TYPE_NUMBER, useItem, selectMode);
+	}
+
+	static CMetaDefaultAttributeObject* CreateNumber(const wxString& name, const wxString& synonym, const wxString& comment,
+		unsigned char precision, unsigned char scale, bool fillCheck, const number_t& defValue, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, qualifierNumber_t(precision, scale), fillCheck, CValue(defValue), useItem, selectMode);
 	}
 
 	static CMetaDefaultAttributeObject* CreateDate(const wxString& name, const wxString& synonym, const wxString& comment,
-		eDateFractions dateTime, bool fillCheck = false, const wxDateTime& defValue = wxLongLong(emptyDate)) {
-		return new CMetaDefaultAttributeObject(name, synonym, comment, CValueQualifierDate(dateTime), fillCheck, defValue);
+		eDateFractions dateTime, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, qualifierDate_t(dateTime), false, eValueTypes::TYPE_DATE, useItem, selectMode);
+	}
+
+	static CMetaDefaultAttributeObject* CreateDate(const wxString& name, const wxString& synonym, const wxString& comment,
+		eDateFractions dateTime, bool fillCheck, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, qualifierDate_t(dateTime), fillCheck, eValueTypes::TYPE_DATE, useItem, selectMode);
+	}
+
+	static CMetaDefaultAttributeObject* CreateDate(const wxString& name, const wxString& synonym, const wxString& comment,
+		eDateFractions dateTime, bool fillCheck, const wxDateTime& defValue, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, qualifierDate_t(dateTime), fillCheck, CValue(defValue), useItem, selectMode);
 	}
 
 	static CMetaDefaultAttributeObject* CreateString(const wxString& name, const wxString& synonym, const wxString& comment,
-		unsigned short length, bool fillCheck = false, const wxString& defValue = wxEmptyString) {
-		return new CMetaDefaultAttributeObject(name, synonym, comment, CValueQualifierString(length), fillCheck, defValue);
+		unsigned short length, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, qualifierString_t(length), false, eValueTypes::TYPE_STRING, useItem, selectMode);
+	}
+
+	static CMetaDefaultAttributeObject* CreateString(const wxString& name, const wxString& synonym, const wxString& comment,
+		unsigned short length, bool fillCheck, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, qualifierString_t(length), fillCheck, eValueTypes::TYPE_STRING, useItem, selectMode);
+	}
+
+	static CMetaDefaultAttributeObject* CreateString(const wxString& name, const wxString& synonym, const wxString& comment,
+		unsigned short length, bool fillCheck, const wxString& defValue, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, qualifierString_t(length), fillCheck, CValue(defValue), useItem, selectMode);
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static CMetaDefaultAttributeObject* CreateEmptyType(const wxString& name, const wxString& synonym, const wxString& comment,
-		bool fillCheck = false, eSelectMode selMode = eSelectMode::eSelectMode_Items) {
-		return new CMetaDefaultAttributeObject(name, synonym, comment, fillCheck, selMode);
+		eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, false, useItem, selectMode);
+	}
+
+	static CMetaDefaultAttributeObject* CreateEmptyType(const wxString& name, const wxString& synonym, const wxString& comment,
+		bool fillCheck, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, fillCheck, useItem, selectMode);
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static CMetaDefaultAttributeObject* CreateSpecialType(const wxString& name, const wxString& synonym, const wxString& comment,
-		const CLASS_ID& clsid,
-		bool fillCheck = false, const CValue& defValue = CValue(), eSelectMode selMode = eSelectMode::eSelectMode_Items) {
-		return new CMetaDefaultAttributeObject(name, synonym, comment, clsid, fillCheck, defValue, selMode);
+		const CLASS_ID& clsid, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, clsid, false, CValue(), useItem, selectMode);
 	}
 
 	static CMetaDefaultAttributeObject* CreateSpecialType(const wxString& name, const wxString& synonym, const wxString& comment,
-		const CLASS_ID& clsid, const metaDescription_t& descr,
-		bool fillCheck = false, const CValue& defValue = CValue(), eSelectMode selMode = eSelectMode::eSelectMode_Items) {
-		return new CMetaDefaultAttributeObject(name, synonym, comment, clsid, descr, fillCheck, defValue, selMode);
+		const CLASS_ID& clsid, const CValue& defValue, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, clsid, false, defValue, useItem, selectMode);
+	}
+
+	static CMetaDefaultAttributeObject* CreateSpecialType(const wxString& name, const wxString& synonym, const wxString& comment,
+		const CLASS_ID& clsid, bool fillCheck, const CValue& defValue, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, clsid, fillCheck, defValue, useItem, selectMode);
+	}
+
+	static CMetaDefaultAttributeObject* CreateSpecialType(const wxString& name, const wxString& synonym, const wxString& comment,
+		const CLASS_ID& clsid, const typeDescription_t::typeData_t& descr,
+		bool fillCheck, const CValue& defValue, eItemMode useItem = eItemMode::eItemMode_Item, eSelectMode selectMode = eSelectMode::eSelectMode_Items) {
+		return new CMetaDefaultAttributeObject(name, synonym, comment, clsid, descr, fillCheck, defValue, useItem, selectMode);
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -357,6 +438,7 @@ public:
 	virtual wxString GetClassName() const override {
 		return wxT("defaultAttribute");
 	}
+
 	//check if attribute is default 
 	virtual bool DefaultAttribute() const {
 		return true;
@@ -368,14 +450,23 @@ public:
 			GetClsidCount() > 0;
 	}
 
+	virtual eItemMode GetItemMode() const {
+		return m_itemMode;
+	}
+
+	virtual eSelectMode GetSelectMode() const {
+		return m_selectMode;
+	}
+
 protected:
 
 	virtual bool LoadData(CMemoryReader& reader);
 	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 private:
-
 	bool m_fillCheck;
+	eItemMode m_itemMode;
+	eSelectMode m_selectMode;
 };
 
 #endif

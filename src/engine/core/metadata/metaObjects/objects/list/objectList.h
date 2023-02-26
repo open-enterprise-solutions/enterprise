@@ -1,12 +1,16 @@
 #ifndef _OBJECT_LIST_H__
 #define _OBJECT_LIST_H__
 
-#include "metadata/metaObjects/objects/object.h"
+#include "core/metadata/metaObjects/objects/object.h"
 
 //base list class 
 class IListDataObject : public IValueTable,
 	public ISourceDataObject {
 	wxDECLARE_ABSTRACT_CLASS(IListDataObject);
+protected:
+	enum Func {
+		enRefresh
+	};
 private:
 
 	// implementation of base class virtuals to define model
@@ -42,12 +46,8 @@ public:
 				return m_metaAttribute->GetSynonym();
 			}
 
-			virtual CValueTypeDescription* GetColumnTypes() const {
-				return m_metaAttribute->GetValueTypeDescription();
-			}
-
-			virtual int GetColumnWidth() const {
-				return 0;
+			virtual typeDescription_t GetColumnType() const {
+				return m_metaAttribute->GetTypeDescription();
 			}
 
 			CDataObjectListColumnInfo();
@@ -71,18 +71,15 @@ public:
 		CDataObjectListColumnCollection(IListDataObject* ownerTable, IMetaObjectWrapperData* metaObject);
 		virtual ~CDataObjectListColumnCollection();
 
-		virtual CValueTypeDescription* GetColumnTypes(unsigned int col) const
-		{
+		virtual typeDescription_t GetColumnType(unsigned int col) const {
 			CDataObjectListColumnInfo* columnInfo = m_columnInfo.at(col);
 			wxASSERT(columnInfo);
-			return columnInfo->GetColumnTypes();
+			return columnInfo->GetColumnType();
 		}
 
-		virtual IValueModelColumnInfo* GetColumnInfo(unsigned int idx) const
-		{
+		virtual IValueModelColumnInfo* GetColumnInfo(unsigned int idx) const {
 			if (m_columnInfo.size() < idx)
 				return NULL;
-
 			auto foundedIt = m_columnInfo.begin();
 			std::advance(foundedIt, idx);
 			return foundedIt->second;
@@ -105,18 +102,17 @@ public:
 		}
 
 		//array support 
-		virtual CValue GetAt(const CValue& cKey);
-		virtual void SetAt(const CValue& cKey, CValue& cVal);
+		virtual bool SetAt(const CValue& varKeyValue, const CValue& varValue);
+		virtual bool GetAt(const CValue& varKeyValue, CValue& pvarValue);
 
 		friend class IListDataObject;
 
 	protected:
 
 		IListDataObject* m_ownerTable;
-		CMethods* m_methods;
+		CMethodHelper* m_methodHelper;
 
 		std::map<meta_identifier_t, CDataObjectListColumnInfo*> m_columnInfo;
-
 	};
 
 	class CDataObjectListReturnLine : public IValueModelReturnLine {
@@ -130,12 +126,12 @@ public:
 			return m_ownerTable;
 		}
 
-		//set meta/get meta
-		virtual void SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal);
-		virtual CValue GetValueByMetaID(const meta_identifier_t& id) const;
+		virtual CMethodHelper* GetPMethods() const {
+			PrepareNames();
+			return m_methodHelper;
+		};
 
-		virtual CMethods* GetPMethods() const { PrepareNames(); return m_methods; }; //получить ссылку на класс помощник разбора имен атрибутов и методов
-		virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
+		virtual void PrepareNames() const;
 
 		virtual wxString GetTypeString() const {
 			return wxT("listValueRow");
@@ -145,22 +141,50 @@ public:
 			return wxT("listValueRow");
 		}
 
-		virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal); //установка атрибута
-		virtual CValue GetAttribute(attributeArg_t& aParams); //значение атрибута
+		virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal); //установка атрибута
+		virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal); //значение атрибута
 
 	protected:
-		CMethods* m_methods;
+		CMethodHelper* m_methodHelper;
 		IListDataObject* m_ownerTable;
 	};
 
 public:
 
-	virtual bool AutoCreateColumns() const {
+	void AppendSort(IMetaObject* metaObject, bool ascending = true, bool use = true, bool system = false) {
+		if (metaObject == NULL)
+			return;
+		m_sortOrder.AppendSort(
+			metaObject->GetMetaID(),
+			metaObject->GetName(),
+			metaObject->GetSynonym(),
+			ascending, use, system
+		);
+	}
+
+	virtual bool AutoCreateColumn() const {
 		return false;
+	}
+
+	virtual bool DynamicRefresh() const {
+		return true;
 	}
 
 	virtual bool EditableLine(const wxDataViewItem& item, unsigned int col) const {
 		return false;
+	}
+
+	//set meta/get meta
+	virtual bool SetValueByMetaID(const wxDataViewItem& item, const meta_identifier_t& id, const CValue& varMetaVal) { return false; }
+	virtual bool GetValueByMetaID(const wxDataViewItem& item, const meta_identifier_t& id, CValue& pvarMetaVal) const {
+		wxValueTableRow* node = GetViewData<wxValueTableRow>(item);
+		if (node == NULL)
+			return false;
+		return node->GetValue(id, pvarMetaVal);
+	}
+
+	virtual bool GetValueAttribute(IMetaAttributeObject* metaAttr, CValue& retValue, class DatabaseResultSet* resultSet, bool createData = true) {
+		return IMetaAttributeObject::GetValueAttribute(metaAttr, retValue, resultSet, createData);
 	}
 
 	//ctor
@@ -170,8 +194,6 @@ public:
 	//****************************************************************************
 	//*                               Support model                              *
 	//****************************************************************************
-
-	virtual void RefreshModel() = 0;
 
 	//get metadata from object 
 	virtual IMetaObjectWrapperData* GetMetaObject() const = 0;
@@ -195,7 +217,7 @@ public:
 	}
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const = 0;
+	virtual CLASS_ID GetTypeClass() const = 0;
 
 	virtual wxString GetTypeString() const = 0;
 	virtual wxString GetString() const = 0;
@@ -206,11 +228,99 @@ public:
 	};
 
 protected:
-
 	Guid m_objGuid;
-
 	CDataObjectListColumnCollection* m_dataColumnCollection;
-	CMethods* m_methods;
+	CMethodHelper* m_methodHelper;
+};
+
+// list enumeration 
+class CListDataObjectEnumRef : public IListDataObject {
+	wxDECLARE_DYNAMIC_CLASS(CListDataObjectRef);
+public:
+	struct wxValueTableEnumRow : public wxValueTableRow {
+		Guid GetGuid() const {
+			return m_objGuid;
+		}
+		wxValueTableEnumRow(const valueArray_t& nodeValues, const Guid& guid) :
+			wxValueTableRow(nodeValues), m_objGuid(guid) {
+		}
+	private:
+		Guid m_objGuid;
+	};
+public:
+
+	virtual bool UseStandartCommand() const {
+		return false;
+	}
+
+	virtual wxDataViewItem FindRowValue(const CValue& varValue, const wxString& colName = wxEmptyString) const;
+	virtual wxDataViewItem FindRowValue(IValueModelReturnLine* retLine) const;
+
+	//Constructor
+	CListDataObjectEnumRef(IMetaObjectRecordDataEnumRef* metaObject = NULL, const form_identifier_t& formType = wxNOT_FOUND, bool choiceMode = false);
+
+	virtual void GetValueByRow(wxVariant& variant,
+		const wxDataViewItem& row, unsigned int col) const;
+	virtual bool SetValueByRow(const wxVariant& variant,
+		const wxDataViewItem& row, unsigned int col) override;
+
+	//****************************************************************************
+	//*                               Support model                              *
+	//****************************************************************************
+
+	virtual void RefreshModel(const wxDataViewItem& topItem = wxDataViewItem(NULL), int countPerPage = DEF_START_ITEM_PER_COUNT);
+
+	//support source data 
+	virtual CSourceExplorer GetSourceExplorer() const;
+	virtual bool GetModel(IValueModel*& tableValue, const meta_identifier_t& id);
+
+	//****************************************************************************
+	//*                              Support methods                             *
+	//****************************************************************************
+	virtual CMethodHelper* GetPMethods() const {
+		PrepareNames();
+		return m_methodHelper;
+	};
+
+	virtual void PrepareNames() const;
+
+	//****************************************************************************
+	//*                              Override attribute                          *
+	//****************************************************************************
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
+
+	virtual bool CallAsProc(const long lMethodNum, CValue** paParams, const long lSizeArray);       // вызов метода
+
+	//on activate item
+	virtual void ActivateItem(CValueForm* srcForm,
+		const wxDataViewItem& item, unsigned int col) {
+		if (m_choiceMode)
+			ChooseValue(srcForm);
+	}
+
+	//get metadata from object 
+	virtual IMetaObjectRecordDataEnumRef* GetMetaObject() const {
+		return m_metaObject;
+	};
+
+	//Get ref class 
+	virtual CLASS_ID GetTypeClass() const;
+
+	virtual wxString GetTypeString() const;
+	virtual wxString GetString() const;
+
+	//support actions
+	virtual actionData_t GetActions(const form_identifier_t& formType);
+	virtual void ExecuteAction(const action_identifier_t& lNumAction, CValueForm* srcForm);
+
+	//events:
+	virtual void ChooseValue(CValueForm* srcForm);
+
+private:
+
+	bool m_choiceMode;
+	IMetaObjectRecordDataEnumRef* m_metaObject;
 };
 
 // list without parent  
@@ -221,7 +331,7 @@ public:
 		Guid GetGuid() const {
 			return m_objGuid;
 		}
-		wxValueTableListRow(const modelArray_t& nodeValues, const Guid& guid) :
+		wxValueTableListRow(const valueArray_t& nodeValues, const Guid& guid) :
 			wxValueTableRow(nodeValues), m_objGuid(guid) {
 		}
 	private:
@@ -229,7 +339,7 @@ public:
 	};
 public:
 
-	virtual wxDataViewItem FindRowValue(const CValue& cVal, const wxString &colName = wxEmptyString) const;
+	virtual wxDataViewItem FindRowValue(const CValue& varValue, const wxString& colName = wxEmptyString) const;
 	virtual wxDataViewItem FindRowValue(IValueModelReturnLine* retLine) const;
 
 	//Constructor
@@ -244,7 +354,7 @@ public:
 	//*                               Support model                              *
 	//****************************************************************************
 
-	virtual void RefreshModel();
+	virtual void RefreshModel(const wxDataViewItem& topItem = wxDataViewItem(NULL), int countPerPage = DEF_START_ITEM_PER_COUNT);
 
 	//support source data 
 	virtual CSourceExplorer GetSourceExplorer() const;
@@ -253,15 +363,20 @@ public:
 	//****************************************************************************
 	//*                              Support methods                             *
 	//****************************************************************************
-	virtual CMethods* GetPMethods() const;                          // получить ссылку на класс помощник разбора имен атрибутов и методов
-	virtual void PrepareNames() const;                             // этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t& aParams);       // вызов метода
+	virtual CMethodHelper* GetPMethods() const {
+		PrepareNames();
+		return m_methodHelper;
+	};
+
+	virtual void PrepareNames() const;
 
 	//****************************************************************************
 	//*                              Override attribute                          *
 	//****************************************************************************
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
+
+	virtual bool CallAsProc(const long lMethodNum, CValue** paParams, const long lSizeArray);       // вызов метода
 
 	//on activate item
 	virtual void ActivateItem(CValueForm* srcForm,
@@ -275,19 +390,19 @@ public:
 	}
 
 	//get metadata from object 
-	virtual IMetaObjectWrapperData* GetMetaObject() const {
+	virtual IMetaObjectRecordDataRef* GetMetaObject() const {
 		return m_metaObject;
 	};
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const;
+	virtual CLASS_ID GetTypeClass() const;
 
 	virtual wxString GetTypeString() const;
 	virtual wxString GetString() const;
 
 	//support actions
 	virtual actionData_t GetActions(const form_identifier_t& formType);
-	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm);
+	virtual void ExecuteAction(const action_identifier_t& lNumAction, CValueForm* srcForm);
 
 	//events:
 	virtual void AddValue(unsigned int before = 0) override;
@@ -308,7 +423,7 @@ class CListRegisterObject : public IListDataObject {
 	wxDECLARE_DYNAMIC_CLASS(CListRegisterObject);
 public:
 	struct wxValueTableKeyRow : public wxValueTableRow {
-		wxValueTableKeyRow(const modelArray_t& nodeValues, const modelArray_t& nodeKeys) :
+		wxValueTableKeyRow(const valueArray_t& nodeValues, const valueArray_t& nodeKeys) :
 			wxValueTableRow(nodeValues), m_nodeKeys(nodeKeys) {
 		}
 
@@ -317,11 +432,11 @@ public:
 		}
 
 	private:
-		modelArray_t m_nodeKeys;
+		valueArray_t m_nodeKeys;
 	};
 public:
 
-	virtual wxDataViewItem FindRowValue(const CValue& cVal, const wxString &colName = wxEmptyString) const;
+	virtual wxDataViewItem FindRowValue(const CValue& varValue, const wxString& colName = wxEmptyString) const;
 	virtual wxDataViewItem FindRowValue(IValueModelReturnLine* retLine) const;
 
 	//Constructor
@@ -336,7 +451,7 @@ public:
 	//*                               Support model                              *
 	//****************************************************************************
 
-	virtual void RefreshModel();
+	virtual void RefreshModel(const wxDataViewItem& topItem = wxDataViewItem(NULL), int countPerPage = DEF_START_ITEM_PER_COUNT);
 
 	//support source data 
 	virtual CSourceExplorer GetSourceExplorer() const;
@@ -345,15 +460,19 @@ public:
 	//****************************************************************************
 	//*                              Support methods                             *
 	//****************************************************************************
-	virtual CMethods* GetPMethods() const;                          // получить ссылку на класс помощник разбора имен атрибутов и методов
-	virtual void PrepareNames() const;                             // этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t& aParams);       // вызов метода
+	virtual CMethodHelper* GetPMethods() const {
+		PrepareNames();
+		return m_methodHelper;
+	};
+
+	virtual void PrepareNames() const;
+	virtual bool CallAsProc(const long lMethodNum, CValue** paParams, const long lSizeArray);       // вызов метода
 
 	//****************************************************************************
 	//*                              Override attribute                          *
 	//****************************************************************************
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
 
 	//on activate item
 	virtual void ActivateItem(CValueForm* srcForm,
@@ -362,19 +481,19 @@ public:
 	}
 
 	//get metadata from object 
-	virtual IMetaObjectWrapperData* GetMetaObject() const {
+	virtual IMetaObjectRegisterData* GetMetaObject() const {
 		return m_metaObject;
 	};
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const;
+	virtual CLASS_ID GetTypeClass() const;
 
 	virtual wxString GetTypeString() const;
 	virtual wxString GetString() const;
 
 	//support actions
 	virtual actionData_t GetActions(const form_identifier_t& formType);
-	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm);
+	virtual void ExecuteAction(const action_identifier_t& lNumAction, CValueForm* srcForm);
 
 	//events:
 	virtual void AddValue(unsigned int before = 0) override;
@@ -383,7 +502,6 @@ public:
 	virtual void DeleteValue() override;
 
 private:
-
 	IMetaObjectRegisterData* m_metaObject;
 };
 
@@ -391,6 +509,10 @@ private:
 class ITreeDataObject : public IValueTree,
 	public ISourceDataObject {
 	wxDECLARE_ABSTRACT_CLASS(ITreeDataObject);
+protected:
+	enum Func {
+		enRefresh
+	};
 private:
 
 	// implementation of base class virtuals to define model
@@ -426,12 +548,8 @@ public:
 				return m_metaAttribute->GetSynonym();
 			}
 
-			virtual CValueTypeDescription* GetColumnTypes() const {
-				return m_metaAttribute->GetValueTypeDescription();
-			}
-
-			virtual int GetColumnWidth() const {
-				return 0;
+			virtual typeDescription_t GetColumnType() const {
+				return m_metaAttribute->GetTypeDescription();
 			}
 
 			CDataObjectTreeColumnInfo();
@@ -455,10 +573,10 @@ public:
 		CDataObjectTreeColumnCollection(ITreeDataObject* ownerTable, IMetaObjectWrapperData* metaObject);
 		virtual ~CDataObjectTreeColumnCollection();
 
-		virtual CValueTypeDescription* GetColumnTypes(unsigned int col) const {
+		virtual typeDescription_t GetColumnType(unsigned int col) const {
 			CDataObjectTreeColumnInfo* columnInfo = m_columnInfo.at(col);
 			wxASSERT(columnInfo);
-			return columnInfo->GetColumnTypes();
+			return columnInfo->GetColumnType();
 		}
 
 		virtual IValueModelColumnInfo* GetColumnInfo(unsigned int idx) const {
@@ -486,19 +604,19 @@ public:
 		}
 
 		//array support 
-		virtual CValue GetAt(const CValue& cKey);
-		virtual void SetAt(const CValue& cKey, CValue& cVal);
+		virtual bool SetAt(const CValue& varKeyValue, const CValue& varValue);
+		virtual bool GetAt(const CValue& varKeyValue, CValue& pvarValue);
 
 		friend class IListDataObject;
 
 	protected:
 
 		ITreeDataObject* m_ownerTable;
-		CMethods* m_methods;
+		CMethodHelper* m_methodHelper;
 
 		std::map<meta_identifier_t, CDataObjectTreeColumnInfo*> m_columnInfo;
 
-	} *m_dataColumnCollection;
+	};
 
 	class CDataObjectTreeReturnLine : public IValueModelReturnLine {
 		wxDECLARE_DYNAMIC_CLASS(CDataObjectTreeReturnLine);
@@ -511,11 +629,11 @@ public:
 			return m_ownerTable;
 		}
 
-		//set meta/get meta
-		virtual void SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal);
-		virtual CValue GetValueByMetaID(const meta_identifier_t& id) const;
+		virtual CMethodHelper* GetPMethods() const {
+			PrepareNames();
+			return m_methodHelper;
+		};
 
-		virtual CMethods* GetPMethods() const { PrepareNames(); return m_methods; }; //получить ссылку на класс помощник разбора имен атрибутов и методов
 		virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
 
 		virtual wxString GetTypeString() const {
@@ -526,22 +644,42 @@ public:
 			return wxT("treeValueRow");
 		}
 
-		virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal); //установка атрибута
-		virtual CValue GetAttribute(attributeArg_t& aParams); //значение атрибута
+		virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal); //установка атрибута
+		virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal); //значение атрибута
 
 	protected:
-		CMethods* m_methods;
-		ITreeDataObject* m_ownerTable; 
+		CMethodHelper* m_methodHelper;
+		ITreeDataObject* m_ownerTable;
 	};
 
 public:
 
-	virtual bool AutoCreateColumns() const {
+	void AppendSort(IMetaObject* metaObject, bool ascending = true, bool use = true, bool system = false) {
+		if (metaObject == NULL)
+			return;
+		m_sortOrder.AppendSort(
+			metaObject->GetMetaID(),
+			metaObject->GetName(),
+			metaObject->GetSynonym(),
+			ascending, use, system
+		);
+	}
+
+	virtual bool AutoCreateColumn() const {
 		return false;
 	}
 
 	virtual bool EditableLine(const wxDataViewItem& item, unsigned int col) const {
 		return false;
+	}
+
+	//set meta/get meta
+	virtual bool SetValueByMetaID(const wxDataViewItem& item, const meta_identifier_t& id, const CValue& varMetaVal) { return false; }
+	virtual bool GetValueByMetaID(const wxDataViewItem& item, const meta_identifier_t& id, CValue& pvarMetaVal) const {
+		wxValueTreeNode* node = GetViewData<wxValueTreeNode>(item);
+		if (node == NULL)
+			return false;
+		return node->GetValue(id, pvarMetaVal);
 	}
 
 	//ctor
@@ -551,8 +689,6 @@ public:
 	//****************************************************************************
 	//*                               Support model                              *
 	//****************************************************************************
-
-	virtual void RefreshModel() = 0;
 
 	//get metadata from object 
 	virtual IMetaObjectWrapperData* GetMetaObject() const = 0;
@@ -569,7 +705,7 @@ public:
 	virtual inline bool IsEmpty() const { return false; }
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const = 0;
+	virtual CLASS_ID GetTypeClass() const = 0;
 
 	virtual wxString GetTypeString() const = 0;
 	virtual wxString GetString() const = 0;
@@ -582,7 +718,8 @@ public:
 protected:
 
 	Guid m_objGuid;
-	CMethods* m_methods;
+	CDataObjectTreeColumnCollection* m_dataColumnCollection;
+	CMethodHelper* m_methodHelper;
 };
 
 // tree with parent or only parent 
@@ -597,22 +734,28 @@ public:
 	};
 
 	struct wxValueTreeListNode : public wxValueTreeNode {
-		wxValueTreeListNode(wxValueTreeNode* parent, const modelArray_t& nodeValues, const Guid& guid, ITreeDataObject* treeValue = NULL) :
-			wxValueTreeNode(parent, nodeValues), m_objGuid(guid) {
-			m_valueTree = treeValue;
-		}
 
 		Guid GetGuid() const {
 			return m_objGuid;
 		}
 
+		wxValueTreeListNode(wxValueTreeNode* parent, const valueArray_t& nodeValues, const Guid& guid, ITreeDataObject* treeValue = NULL, bool container = false) :
+			wxValueTreeNode(parent, nodeValues), m_objGuid(guid), m_container(container) {
+			m_valueTree = treeValue;
+		}
+
+		virtual bool IsContainer() const {
+			return m_container;
+		};
+
 	private:
+		bool m_container;
 		Guid m_objGuid;
 	};
 
 public:
 
-	virtual wxDataViewItem FindRowValue(const CValue& cVal, const wxString &colName = wxEmptyString) const;
+	virtual wxDataViewItem FindRowValue(const CValue& varValue, const wxString& colName = wxEmptyString) const;
 	virtual wxDataViewItem FindRowValue(IValueModelReturnLine* retLine) const;
 
 	//Constructor
@@ -630,7 +773,7 @@ public:
 	//*                               Support model                              *
 	//****************************************************************************
 
-	virtual void RefreshModel();
+	virtual void RefreshModel(const wxDataViewItem& topItem = wxDataViewItem(NULL), int countPerPage = DEF_START_ITEM_PER_COUNT);
 
 	//support source data 
 	virtual CSourceExplorer GetSourceExplorer() const;
@@ -639,15 +782,20 @@ public:
 	//****************************************************************************
 	//*                              Support methods                             *
 	//****************************************************************************
-	virtual CMethods* GetPMethods() const;                          // получить ссылку на класс помощник разбора имен атрибутов и методов
-	virtual void PrepareNames() const;                              // этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t& aParams);					// вызов метода
+	CMethodHelper* GetPMethods() const {
+		PrepareNames();
+		return m_methodHelper;
+	};
+
+	virtual void PrepareNames() const;
 
 	//****************************************************************************
 	//*                              Override attribute                          *
 	//****************************************************************************
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);
+
+	virtual bool CallAsProc(const long lMethodNum, CValue** paParams, const long lSizeArray);
 
 	//on activate item
 	virtual void ActivateItem(CValueForm* srcForm,
@@ -666,14 +814,14 @@ public:
 	};
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const;
+	virtual CLASS_ID GetTypeClass() const;
 
 	virtual wxString GetTypeString() const;
 	virtual wxString GetString() const;
 
 	//support actions
 	virtual actionData_t GetActions(const form_identifier_t& formType);
-	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm);
+	virtual void ExecuteAction(const action_identifier_t& lNumAction, CValueForm* srcForm);
 
 	//events:
 	virtual void AddValue(unsigned int before = 0) override;

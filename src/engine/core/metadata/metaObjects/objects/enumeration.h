@@ -3,9 +3,7 @@
 
 #include "object.h"
 
-class CMetaEnumerationObject;
-
-class CMetaObjectEnumeration : public IMetaObjectRecordDataRef {
+class CMetaObjectEnumeration : public IMetaObjectRecordDataEnumRef {
 	wxDECLARE_DYNAMIC_CLASS(CMetaObjectEnumeration);
 
 	enum
@@ -33,11 +31,6 @@ protected:
 	PropertyCategory* m_categoryForm = IPropertyObject::CreatePropertyCategory({ "defaultForms", "default forms" });
 	Property* m_propertyDefFormList = IPropertyObject::CreateProperty(m_categoryForm, { "default_list", "default list" }, &CMetaObjectEnumeration::GetFormList, wxNOT_FOUND);
 	Property* m_propertyDefFormSelect = IPropertyObject::CreateProperty(m_categoryForm, { "default_select" , "default select" }, &CMetaObjectEnumeration::GetFormSelect, wxNOT_FOUND);
-
-private:
-
-	//default attributes 
-	CMetaDefaultAttributeObject* m_attributeOrder;
 
 private:
 
@@ -100,9 +93,9 @@ public:
 	}
 
 	//support form 
-	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid) { return NULL; }
-	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
-	virtual CValueForm* GetSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid) { return NULL; }
+	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetSelectForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
 
 	//get module object in compose object 
 	virtual CMetaModuleObject* GetModuleObject() const {

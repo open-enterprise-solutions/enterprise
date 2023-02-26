@@ -1,11 +1,11 @@
 #include "interfaceEditor.h"
 #include <wx/artprov.h>
 
-#define ICON_SIZE 15
+#define ICON_SIZE 16
 
 CInterfaceEditor::CInterfaceEditor(wxWindow* parent,
 	wxWindowID winid, CDocument* document, IMetaObject* metaObject) :
-	wxPanel(parent, winid), m_document(document), m_metaObject(metaObject), m_interfaceProperty(new CInterfaceEditorProperty)
+	wxPanel(parent, winid), m_document(document), m_metaObject(metaObject)
 {
 	m_metaTreeToolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_TEXT);
 	m_metaTreeToolbar->SetArtProvider(new CAuiGenericToolBarArt());
@@ -40,8 +40,6 @@ CInterfaceEditor::CInterfaceEditor(wxWindow* parent,
 }
 
 CInterfaceEditor::~CInterfaceEditor() {
-
-	wxDELETE(m_interfaceProperty);
 
 	m_metaTreeToolbar->Unbind(wxEVT_MENU, &CInterfaceEditor::OnCreateItem, this, ID_MENUEDIT_NEW);
 	m_metaTreeToolbar->Unbind(wxEVT_MENU, &CInterfaceEditor::OnEditItem, this, ID_MENUEDIT_EDIT);
@@ -96,9 +94,11 @@ void CInterfaceEditor::OnEndDrag(wxTreeEvent& event) {
 			return;
 		item = m_menuCtrl->GetItemParent(item);
 	}
+
+	event.Skip();
 }
 
-#include "frontend/objinspect/objinspect.h"
+#include "frontend/mainFrame.h"
 
 void CInterfaceEditor::OnRightClickItem(wxTreeEvent& event)
 {
@@ -123,14 +123,12 @@ void CInterfaceEditor::OnSelectedItem(wxTreeEvent& event)
 	// need to explicitly allow drag
 	if (event.GetItem() == m_menuCtrl->GetRootItem())
 		return;
-
-	m_interfaceProperty->SetCaption(m_menuCtrl->GetItemText(event.GetItem()));
-
-	objectInspector->SelectObject(m_interfaceProperty);
+	wxInterfaceItemData* itemData = dynamic_cast<wxInterfaceItemData*>(m_menuCtrl->GetItemData(event.GetItem()));
+	objectInspector->SelectObject(itemData->GetProperty());
 	event.Skip();
 }
 
-#include "metadata/metaObjects/metaObject.h"
+#include "core/metadata/metaObjects/metaObject.h"
 
 wxTreeItemId CInterfaceEditor::AppendMenu(const wxTreeItemId& parent, wxStandardID id) const
 {
@@ -140,7 +138,7 @@ wxTreeItemId CInterfaceEditor::AppendMenu(const wxTreeItemId& parent, wxStandard
 	wxTreeItemId newItem = m_menuCtrl->AppendItem(parent, wxGetStockLabel(id, wxSTOCK_NOFLAGS),
 		imageIndex,
 		imageIndex,
-		new wxInterfaceItemData(eMenuType::eMenu)
+		new wxInterfaceItemData(eMenuType::eMenu, wxGetStockLabel(id, wxSTOCK_NOFLAGS))
 	);
 	m_menuCtrl->SelectItem(newItem);
 	return newItem;
@@ -154,7 +152,7 @@ wxTreeItemId CInterfaceEditor::AppendMenu(const wxTreeItemId& parent, const wxSt
 	wxTreeItemId newItem = m_menuCtrl->AppendItem(parent, name,
 		imageIndex,
 		imageIndex,
-		new wxInterfaceItemData(eMenuType::eMenu)
+		new wxInterfaceItemData(eMenuType::eMenu, name)
 	);
 	m_menuCtrl->SelectItem(newItem);
 	return newItem;
@@ -168,7 +166,7 @@ wxTreeItemId CInterfaceEditor::AppendSubMenu(const wxTreeItemId& parent, wxStand
 	wxTreeItemId newItem = m_menuCtrl->AppendItem(parent, wxGetStockLabel(id, wxSTOCK_NOFLAGS),
 		imageIndex,
 		imageIndex,
-		new wxInterfaceItemData(eMenuType::eSubMenu)
+		new wxInterfaceItemData(eMenuType::eSubMenu, wxGetStockLabel(id, wxSTOCK_NOFLAGS))
 	);
 	m_menuCtrl->SelectItem(newItem);
 	return newItem;
@@ -182,7 +180,7 @@ wxTreeItemId CInterfaceEditor::AppendSubMenu(const wxTreeItemId& parent, const w
 	wxTreeItemId newItem = m_menuCtrl->AppendItem(parent, name,
 		imageIndex,
 		imageIndex,
-		new wxInterfaceItemData(eMenuType::eSubMenu)
+		new wxInterfaceItemData(eMenuType::eSubMenu, name)
 	);
 	m_menuCtrl->SelectItem(newItem);
 	return newItem;
@@ -215,7 +213,7 @@ void CInterfaceEditor::CreateDefaultMenu()
 	wxASSERT(imageList);
 	int imageIndex = imageList->Add(m_metaObject->GetIcon());
 
-	wxTreeItemId root = m_menuCtrl->AddRoot(m_metaObject->GetClassName(),
+	const wxTreeItemId& root = m_menuCtrl->AddRoot(m_metaObject->GetClassName(),
 		imageIndex, imageIndex);
 
 	CInterfaceEditor::AppendSubMenu(root, wxID_FILE);
@@ -235,18 +233,18 @@ void CInterfaceEditor::FillMenu(const wxTreeItemId& parent, wxMenu* menu)
 
 	while (nextItem.IsOk()) {
 		if (m_menuCtrl->HasChildren(nextItem)) {
-			wxMenu* child = new wxMenu; 
+			wxMenu* child = new wxMenu;
 			FillMenu(nextItem, child);
 			menu->AppendSubMenu(child, m_menuCtrl->GetItemText(nextItem));
 		}
 		else {
 			menu->Append(wxID_ANY, m_menuCtrl->GetItemText(nextItem));
-		}	
+		}
 		nextItem = m_menuCtrl->GetNextChild(nextItem, cookie);
 	}
 }
 
-#include "common/docManager.h"
+#include "core/frontend/docView/docManager.h"
 
 #include "frontend/mainFrame.h"
 #include "frontend/mainFrameChild.h"
@@ -279,7 +277,7 @@ bool CInterfaceEditor::TestInterface()
 	);
 
 	// create a child valueForm of appropriate class for the current mode
-	CMainFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE);
+	wxAuiDocMDIFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE);
 
 	wxTreeItemIdValue cookie;
 	wxTreeItemId nextItem = m_menuCtrl->GetFirstChild(

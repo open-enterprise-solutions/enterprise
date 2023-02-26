@@ -8,6 +8,18 @@ void IMetaObjectRecordDataMutableRef::OnPropertyCreated(Property* property)
 	IMetaObjectRecordDataRef::OnPropertyCreated(property);
 }
 
+#include <wx/propgrid/manager.h>
+
+#include "metadata/metadata.h"
+#include "metadata/singleClass.h"
+
+void IMetaObjectRecordDataMutableRef::OnPropertyRefresh(wxPropertyGridManager* pg, wxPGProperty* pgProperty, Property* property)
+{
+	if (m_propertyQuickChoice == property) {
+		pg->HideProperty(pgProperty, true);
+	}
+}
+
 bool IMetaObjectRecordDataMutableRef::OnPropertyChanging(Property* property, const wxVariant& newValue)
 {
 	if (m_propertyGeneration == property && !m_genData.LoadFromVariant(newValue))
@@ -18,4 +30,10 @@ bool IMetaObjectRecordDataMutableRef::OnPropertyChanging(Property* property, con
 void IMetaObjectRecordDataMutableRef::OnPropertyChanged(Property* property)
 {
 	IMetaObjectRecordDataRef::OnPropertyChanged(property);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+void IMetaObjectRecordDataFolderMutableRef::OnPropertyRefresh(wxPropertyGridManager* pg, wxPGProperty* pgProperty, Property* property)
+{
 }

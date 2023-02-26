@@ -1,21 +1,24 @@
 #ifndef _MANAGER_BASE_H__
 #define _MANAGER_BASE_H__
 
-#include "compiler/value.h"
+#include "core/compiler/value.h"
 
 class CSystemManager : public CValue {
 	wxDECLARE_DYNAMIC_CLASS(CSystemManager);
 public:
 
 	CSystemManager(IMetadata *metaData = NULL);
-
 	virtual ~CSystemManager();
 
-	virtual CMethods* GetPMethods() const { PrepareNames();  return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
-	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
+	virtual CMethodHelper* GetPMethods() const { 
+		PrepareNames();  
+		return m_methodHelper;
+	} 
 
+	virtual void PrepareNames() const;                       
+	
 	//attributes
-	virtual CValue GetAttribute(attributeArg_t &aParams);                   //значение атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                  
 
 	//types 
 	virtual wxString GetTypeString() const {
@@ -28,7 +31,7 @@ public:
 
 protected:
 	//methods 
-	CMethods *m_methods;
+	CMethodHelper *m_methodHelper;
 	//metadata 
 	IMetadata *m_metaData;
 };

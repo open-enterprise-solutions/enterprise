@@ -9,35 +9,32 @@
 #include <vector>
 
 #include "value.h"
-#include "functions.h"
+#include "translateError.h"
 
 //Список ключевых слов
 struct aKeyWordsDef {
 	//char *Rus;
-	char *Eng;
-	char *sShortDescription;
+	char* Eng;
+	char* sShortDescription;
 };
 
-extern struct aKeyWordsDef aKeyWords[];
+extern struct aKeyWordsDef s_aKeyWords[];
 
-enum
-{
+enum {
 	LEXEM_ADD = 0,
 	LEXEM_ADDDEF,
 	LEXEM_IGNORE,
 };
 
 //Свойства функций:
-enum
-{
+enum {
 	RETURN_NONE = 0,//нет возврата (код модуля)
 	RETURN_PROCEDURE,//возврат из процедуры
 	RETURN_FUNCTION,//возврат из функции
 };
 
 //признаки переменных (задаются с отриц. значением в атрибут nArray байт-кода)
-enum
-{
+enum {
 	DEF_VAR_SKIP = -1,//пропущенный параметр
 	DEF_VAR_DEFAULT = -2,//параметр по умолчанию
 	DEF_VAR_TEMP = -3,//признак временной локальной переменной
@@ -49,8 +46,8 @@ enum
 //определения
 
 //хранение одного примитива из исходного кода
-struct CLexem
-{
+struct lexem_t {
+
 	//тип лексемы:
 	short       m_nType;
 
@@ -67,29 +64,37 @@ struct CLexem
 	unsigned int m_nNumberLine;	  //номер строки исходного текста (для точек останова)
 	unsigned int m_nNumberString;	  //номер исходного текста (для вывода ошибок)
 
-	//Конструктор: 
-	CLexem() : m_nType(0), m_nData(0), m_nNumberString(0), m_nNumberLine(0) {}
-};
-
-typedef std::vector<CLexem> CLexemList;
-
-//класс для хранения определений пользователя
-class CDefList
-{
 public:
 
-	CDefList() : pParent(NULL) {};
+	//Конструктор: 
+	lexem_t() :
+		m_nType(0),
+		m_nData(0),
+		m_nNumberString(0),
+		m_nNumberLine(0) {
+	}
+};
+
+typedef std::vector<lexem_t> CLexemList;
+
+//класс для хранения определений пользователя
+class CDefList {
+	CDefList* m_pParent;
+	std::map<wxString, CLexemList*> m_aDefList;//содержит массивы лексем
+public:
+
+	CDefList() : m_pParent(NULL) {};
 	~CDefList();
 
-	std::map<wxString, CLexemList *> DefList;//содержит массивы лексем
-	CDefList *pParent;
+	void SetParent(CDefList* p) {
+		m_pParent = p;
+	}
 
-	void SetParent(CDefList *p);
-	void RemoveDef(const wxString &sName);
-	bool HasDef(const wxString &sName);
-	CLexemList *GetDef(const wxString &sName);
-	void SetDef(const wxString &sName, CLexemList*);
-	void SetDef(const wxString &sName, wxString sValue);
+	void RemoveDef(const wxString& sName);
+	bool HasDef(const wxString& sName) const;
+	CLexemList* GetDef(const wxString& sName);
+	void SetDef(const wxString& sName, CLexemList*);
+	void SetDef(const wxString& sName, const wxString &sValue);
 };
 
 /************************************************
@@ -108,85 +113,92 @@ class CTranslateModule
 public:
 
 	CTranslateModule();
-	CTranslateModule(const wxString &moduleName, const wxString &docPath);
-	CTranslateModule(const wxString &fileName);
+	CTranslateModule(const wxString& moduleName, const wxString& docPath);
+	CTranslateModule(const wxString& fileName);
 
 	virtual ~CTranslateModule();
 
-	bool HasDef(const wxString &sName)
-	{
-		if (m_aDefList) {
+	bool HasDef(const wxString& sName) const {
+		if (m_aDefList != NULL)
 			return m_aDefList->HasDef(sName);
-		}
 		return false;
 	};
 
 	//методы:
-	void Load(const wxString &code);
+	void Load(const wxString& code);
 
-	void AppendModule(CTranslateModule *module);
-	void RemoveModule(CTranslateModule *module);
+	void AppendModule(CTranslateModule* module);
+	void RemoveModule(CTranslateModule* module);
 
-	void OnSetParent(CTranslateModule *setParent);
+	void OnSetParent(CTranslateModule* setParent);
 
 	void Clear();
 	bool PrepareLexem();
 
-	void SetError(int codeError, int currPos, const wxString &errorDesc = wxEmptyString);
+	void SetError(int codeError, int currPos, const wxString& errorDesc = wxEmptyString) const;
+	void SetError(int codeError,
+		const wxString& fileName, const wxString& moduleName, const wxString& docPath,
+		int currPos, int currLine,
+		const wxString& errorDesc = wxEmptyString) const;
 
-	void SetError(int codeError, 
-		const wxString &fileName, const wxString &moduleName, const wxString &docPath,
-		int currPos, int currLine, 
-		const wxString &errorDesc = wxEmptyString);
-
-	const std::vector<CLexem> &GetLexems() const { return m_aLexemList; }
+	const std::vector<lexem_t>& GetLexems() const {
+		return m_aLexemList;
+	}
 
 public:
 
-	inline void SkipSpaces();
+	inline void SkipSpaces() const;
 
-	bool IsByte(char c);
-	char GetByte();
+	bool IsByte(char c) const;
+	char GetByte() const;
 
-	bool IsWord();
-	wxString GetWord(bool bOrigin = false, bool bGetPoint = false, wxString *psOrig = NULL);
+	bool IsWord() const;
+	wxString GetWord(bool bOrigin = false, bool bGetPoint = false, wxString* psOrig = NULL);
 
-	bool IsNumber();
-	wxString GetNumber();
+	bool IsNumber() const;
+	wxString GetNumber() const;
 
-	bool IsString();
-	wxString GetString();
+	bool IsString() const;
+	wxString GetString() const;
 
-	bool IsDate();
-	wxString GetDate();
+	bool IsDate() const;
+	wxString GetDate() const;
 
-	bool IsEnd();
+	bool IsEnd() const;
 
 #if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
-	static long long IsKeyWord(const wxString &sKeyWord);
+	static long long IsKeyWord(const wxString& sKeyWord);
 #else
-	static int IsKeyWord(const wxString &sKeyWord);
+	static int IsKeyWord(const wxString& sKeyWord);
 #endif
 
-	wxString GetStrToEndLine();
-	void PrepareFromCurrent(int nMode, const wxString &sName = wxEmptyString);
-	wxString GetModuleName() { return m_sModuleName; }
+	wxString GetStrToEndLine() const;
+	void PrepareFromCurrent(int nMode, const wxString& sName = wxEmptyString);
+	
+	wxString GetModuleName() const {
+		return m_sModuleName;
+	}
 
-	unsigned int GetCurrentPos() { return m_nCurPos; }
-	unsigned int GetCurrentLine() { return m_nCurLine; }
+	unsigned int GetCurrentPos() const {
+		return m_nCurPos;
+	}
+
+	unsigned int GetCurrentLine() const {
+		return m_nCurLine;
+	}
 
 public:
 
-	static std::map<wxString, void *> m_aHashKeyWords;
+	static std::map<wxString, void*> m_aHashKeyWords;
 	static void LoadKeyWords();
 
 protected:
 
-	std::vector<CTranslateModule *> m_aTranslateModules; 
+	std::vector<CTranslateModule*> m_aTranslateModules;
 
 	//методы и переменные для парсинга текста
 	//Поддержка "дефайнов":
-	CDefList *m_aDefList;
+	CDefList* m_aDefList;
 	bool m_bAutoDeleteDefList;
 	int m_nModePreparing;
 
@@ -201,11 +213,11 @@ protected:
 	wxString m_sBuffer;
 	wxString m_sBUFFER;//буфер - исходный код в верхнем регистре
 
-	unsigned int m_nCurPos;//текущая позиция обрабатываемого текста
-	unsigned int m_nCurLine;
+	mutable unsigned int m_nCurPos;//текущая позиция обрабатываемого текста
+	mutable unsigned int m_nCurLine;
 
 	//промежуточный массив с лексемами:
-	std::vector<CLexem> m_aLexemList;
+	std::vector<lexem_t> m_aLexemList;
 };
 
 #endif

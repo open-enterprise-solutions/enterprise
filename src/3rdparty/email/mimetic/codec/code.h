@@ -18,10 +18,10 @@
 #ifndef _MIMETIC_CODEC_CODE_H_
 #define _MIMETIC_CODEC_CODE_H_
 
-#include <email/mimetic/codec/codec_base.h>
-#include <email/mimetic/codec/codec_chain.h>
-#include <email/mimetic/codec/other_codecs.h>
-#include <email/mimetic/utils.h>
+#include <3rdparty/email/mimetic/codec/codec_base.h>
+#include <3rdparty/email/mimetic/codec/codec_chain.h>
+#include <3rdparty/email/mimetic/codec/other_codecs.h>
+#include <3rdparty/email/mimetic/utils.h>
 
 namespace mimetic
 {

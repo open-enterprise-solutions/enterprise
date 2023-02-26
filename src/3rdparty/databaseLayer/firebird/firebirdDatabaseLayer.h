@@ -1,8 +1,8 @@
 #ifndef __FIREBIRD_DATABASE_LAYER_H__
 #define __FIREBIRD_DATABASE_LAYER_H__
 
-#include "databaseLayer/databaseLayerDef.h"
-#include "databaseLayer/databaseLayer.h"
+#include <3rdparty/databaseLayer/databaseLayerDef.h>
+#include <3rdparty/databaseLayer/databaseLayer.h>
 
 #ifndef DONT_USE_DYNAMIC_DATABASE_LAYER_LINKING
 class FirebirdInterface;
@@ -79,6 +79,10 @@ public:
 	virtual wxArrayString GetTables();
 	virtual wxArrayString GetViews();
 	virtual wxArrayString GetColumns(const wxString& table);
+
+	virtual int GetDatabaseLayerType() const {
+		return DATABASELAYER_FIREBIRD;
+	}
 
 private:
 

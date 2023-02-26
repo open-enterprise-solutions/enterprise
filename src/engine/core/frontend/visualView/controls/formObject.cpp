@@ -5,12 +5,12 @@
 
 #include "form.h"
 #include "appData.h"
-#include "metadata/metadata.h"
-#include "common/docManager.h"
-#include "common/srcExplorer.h"
-#include "metadata/moduleManager/moduleManager.h"
-#include "compiler/systemObjects.h"
-#include "frontend/visualView/visualHost.h"
+#include "core/metadata/metadata.h"
+#include "core/frontend/docView/docManager.h"
+#include "core/common/srcExplorer.h"
+#include "core/metadata/moduleManager/moduleManager.h"
+#include "core/compiler/systemObjects.h"
+#include "core/frontend/visualView/visualHost.h"
 
 //*************************************************************************************************
 //*                                    System attribute                                           *
@@ -42,7 +42,7 @@ void CValueForm::BuildForm(const form_identifier_t& formType)
 
 		actionData_t actions = CValueForm::GetActions(formType);
 		for (unsigned int idx = 0; idx < actions.GetCount(); idx++) {
-			const action_identifier_t &id = actions.GetID(idx);
+			const action_identifier_t& id = actions.GetID(idx);
 			if (id != wxNOT_FOUND) {
 				CValue* currSrcData = actions.GetSourceDataByID(id);
 				if (currSrcData != prevSrcData
@@ -52,7 +52,7 @@ void CValueForm::BuildForm(const form_identifier_t& formType)
 				CValueToolBarItem* toolBarItem =
 					wxDynamicCast(
 						CValueForm::CreateControl(wxT("tool"), mainToolBar), CValueToolBarItem
-				);
+					);
 				toolBarItem->SetControlName(mainToolBar->GetControlName() + wxT("_") + actions.GetNameByID(id));
 				toolBarItem->SetCaption(actions.GetCaptionByID(id));
 				toolBarItem->SetAction(wxString::Format("%i", id));
@@ -85,11 +85,9 @@ void CValueForm::BuildForm(const form_identifier_t& formType)
 						CValueForm::CreateControl(wxT("tableboxColumn"), mainTableBox), CValueTableBoxColumn
 					);
 				tableBoxColumn->SetControlName(mainTableBox->GetControlName() + wxT("_") + nextSourceExplorer.GetSourceName());
-				//tableBoxColumn->SetCaption(nextSourceExplorer.GetSourceSynonym());
 				tableBoxColumn->SetVisibleColumn(nextSourceExplorer.IsVisible()
 					|| sourceExplorer.GetHelperCount() == 1);
 				tableBoxColumn->SetSourceId(nextSourceExplorer.GetMetaIDSource());
-				tableBoxColumn->SetSortableColumn();
 			}
 			else
 			{
@@ -116,7 +114,7 @@ void CValueForm::BuildForm(const form_identifier_t& formType)
 
 					actionData_t actions = tableBox->GetActions(formType);
 					for (unsigned int idx = 0; idx < actions.GetCount(); idx++) {
-						const action_identifier_t &id = actions.GetID(idx);
+						const action_identifier_t& id = actions.GetID(idx);
 						if (id != wxNOT_FOUND) {
 							CValue* currSrcData = actions.GetSourceDataByID(id);
 							if (currSrcData != prevSrcData
@@ -126,7 +124,7 @@ void CValueForm::BuildForm(const form_identifier_t& formType)
 							CValueToolBarItem* toolBarItem =
 								wxDynamicCast(
 									CValueForm::CreateControl(wxT("tool"), toolBar), CValueToolBarItem
-							);
+								);
 							toolBarItem->SetControlName(toolBar->GetControlName() + wxT("_") + actions.GetNameByID(id));
 							toolBarItem->SetCaption(actions.GetCaptionByID(id));
 							toolBarItem->SetAction(wxString::Format("%i", id));
@@ -185,7 +183,7 @@ void CValueForm::BuildForm(const form_identifier_t& formType)
 						textCtrl->SetSourceId(nextSourceExplorer.GetMetaIDSource());
 
 						textCtrl->SetSelectButton(selButton);
-						textCtrl->SetListButton(false);
+						textCtrl->SetOpenButton(false);
 						textCtrl->SetClearButton(nextSourceExplorer.IsEnabled());
 					}
 				}
@@ -224,7 +222,7 @@ void CValueForm::BuildForm(const form_identifier_t& formType)
 	}
 }
 
-void CValueForm::InitializeForm(IValueFrame* ownerControl,
+void CValueForm::InitializeForm(IControlFrame* ownerControl,
 	IMetaFormObject* metaForm, ISourceDataObject* ownerSrc, const CUniqueKey& formGuid, bool readOnly)
 {
 	if (ownerSrc != NULL) {
@@ -241,7 +239,7 @@ void CValueForm::InitializeForm(IValueFrame* ownerControl,
 		m_valueFormDocument = NULL;
 	}
 
-	m_formOwner = ownerControl;
+	m_controlOwner = ownerControl;
 	m_sourceObject = ownerSrc;
 	m_metaFormObject = metaForm;
 
@@ -255,10 +253,10 @@ void CValueForm::InitializeForm(IValueFrame* ownerControl,
 		m_formKey = m_sourceObject->GetGuid();
 	}
 	else { //4. just generate 
-		m_formKey = wxNewGuid;
+		m_formKey = wxNewUniqueGuid;
 	}
 
-	if (m_metaFormObject != NULL) {
+	if (metaForm != NULL) {
 		m_defaultFormType = metaForm->GetTypeForm();
 	}
 
@@ -280,8 +278,7 @@ bool CValueForm::InitializeFormModule()
 	if (m_compileModule == NULL) {
 		m_compileModule = new CCompileModule(m_metaFormObject);
 		m_compileModule->SetParent(
-			sourceObjectValue ?
-			sourceObjectValue->GetCompileModule() :
+			sourceObjectValue != NULL ? sourceObjectValue->GetCompileModule() :
 			moduleManager->GetCompileModule()
 		);
 		m_compileModule->AddContextVariable(thisForm, this);
@@ -292,10 +289,10 @@ bool CValueForm::InitializeFormModule()
 		try {
 			m_compileModule->Compile();
 		}
-		catch (const CTranslateError* err) {
-			if (appData->EnterpriseMode()) {
-				CSystemObjects::Raise(err->what());
-			}
+		catch (const CTranslateError*) {
+
+			if (!appData->DesignerMode())
+				throw(std::exception());
 
 			return false;
 		};
@@ -303,8 +300,7 @@ bool CValueForm::InitializeFormModule()
 		if (m_procUnit == NULL) {
 			m_procUnit = new CProcUnit();
 			m_procUnit->SetParent(
-				sourceObjectValue ?
-				sourceObjectValue->GetProcUnit() :
+				sourceObjectValue != NULL ? sourceObjectValue->GetProcUnit() :
 				moduleManager->GetProcUnit()
 			);
 		}
@@ -315,38 +311,26 @@ bool CValueForm::InitializeFormModule()
 	return true;
 }
 
-#include "compiler/valueType.h"
+#include "core/compiler/valueType.h"
 
 void CValueForm::NotifyChoice(CValue& vSelected)
 {
-	CValue vSelfForm = this; /*!!!*/
-#pragma message("nouverbe to nouverbe: счётчие ссылок здесь равен 1, а должен быть больше одного!")
-
-	if (m_formOwner != NULL) {
-		m_formOwner->CallFunction("choiceProcessing", vSelected, vSelfForm);
-	}
-
-	if (m_formOwner != NULL) {
-		m_formOwner->ChoiceProcessing(vSelected);
-	}
-
-	CValueForm* ownerForm =
-		m_formOwner->GetOwnerForm();
-
-	if (ownerForm != NULL) {
-		ownerForm->UpdateForm();
+	if (m_controlOwner != NULL) {
+		CValueForm* ownerForm = m_controlOwner->GetOwnerForm();
+		if (ownerForm != NULL)
+			ownerForm->CallFunction("choiceProcessing", vSelected, GetValue());
+		m_controlOwner->ChoiceProcessing(vSelected);
+		if (ownerForm != NULL)
+			ownerForm->UpdateForm();
 	}
 
 	CValueForm::CloseForm();
-
-	IncrRef(); /*!!!*/
 }
 
 CValue CValueForm::CreateControl(const CValueType* clsControl, const CValue& vControl)
 {
-	if (appData->DesignerMode()) {
+	if (appData->DesignerMode())
 		return CValue();
-	}
 
 	if (!CValue::IsRegisterObject(clsControl->GetString(), eObjectType::eObjectType_object_control)) {
 		CSystemObjects::Raise(_("Сlass does not belong to control!"));
@@ -369,10 +353,8 @@ CValue CValueForm::CreateControl(const CValueType* clsControl, const CValue& vCo
 CValue CValueForm::FindControl(const CValue& vControl)
 {
 	IValueFrame* foundedControl = FindControlByName(vControl.GetString());
-
 	if (foundedControl != NULL)
 		return foundedControl;
-
 	return CValue();
 }
 
@@ -384,6 +366,7 @@ void CValueForm::RemoveControl(const CValue& vControl)
 	//get parent obj
 	IValueControl* currentControl =
 		value_cast<IValueControl>(vControl);
+
 	wxASSERT(currentControl);
 	RemoveControl(currentControl);
 }
@@ -407,15 +390,13 @@ void CValueForm::ShowForm(CDocument* doc, bool demoRun)
 		CValue::IncrRef();
 	}
 
-	if (m_formOwner != NULL &&
+	if (m_controlOwner != NULL &&
 		doc == NULL) {
-		CValueForm* ownerForm = m_formOwner->GetOwnerForm();
-		wxASSERT(ownerForm);
-		docParent = ownerForm->GetVisualDocument();
+		docParent = m_controlOwner->GetVisualDocument();
 	}
 
 	if (demoRun || appData->EnterpriseMode()) {
-		CreateDocumentForm(docParent, demoRun);
+		CreateDocForm(docParent, demoRun);
 	}
 }
 
@@ -441,7 +422,9 @@ void CValueForm::UpdateForm()
 			m_valueFormDocument->GetVisualView();
 
 		if (visualView != NULL) {
+			visualView->Freeze();
 			visualView->UpdateFrame();
+			visualView->Thaw();
 		}
 
 		if (appData->EnterpriseMode()) {
@@ -458,7 +441,7 @@ bool CValueForm::CloseForm()
 		return false;
 
 	if (appData->EnterpriseMode()) {
-		if (!CloseDocumentForm()) {
+		if (!CloseDocForm()) {
 			return false;
 		}
 	}
@@ -507,14 +490,13 @@ IValueFrame* CValueForm::CreateControl(const wxString& clsControl, IValueFrame* 
 			visualView->CreateControl(newControl);
 			//fix size in parent window 
 			wxWindow* wndParent = visualView->GetParent();
-			if (wndParent) {
+			if (wndParent != NULL)
 				wndParent->Layout();
-			}
 		}
 	}
 
 	//return value 
-	if (newControl->GetClassName() == wxT("sizerItem"))
+	if (newControl->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
 		return newControl->GetChild(0);
 
 	return newControl;
@@ -529,19 +511,19 @@ void CValueForm::RemoveControl(IValueFrame* control)
 		if (m_valueFormDocument != NULL) {
 			CVisualHost* visualView = m_valueFormDocument->GetVisualView();
 			visualView->RemoveControl(currentControl);
-
 			//fix size in parent window 
 			wxWindow* wndParent = visualView->GetParent();
-			if (wndParent) wndParent->Layout();
+			if (wndParent != NULL)
+				wndParent->Layout();
 		}
 	}
 
 	IValueFrame* parentControl =
 		currentControl->GetParent();
 
-	if (parentControl->GetClassName() == wxT("sizerItem")) {
+	if (parentControl->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 		IValueFrame* parentOwner = parentControl->GetParent();
-		if (parentOwner) {
+		if (parentOwner != NULL) {
 			parentOwner->RemoveChild(parentControl);
 		}
 		parentControl->SetParent(NULL);
@@ -553,7 +535,7 @@ void CValueForm::RemoveControl(IValueFrame* control)
 	}
 	else {
 		IValueFrame* parentOwner = currentControl->GetParent();
-		if (parentOwner) {
+		if (parentOwner != NULL) {
 			parentOwner->RemoveChild(currentControl);
 		}
 		currentControl->SetParent(NULL);
@@ -566,10 +548,11 @@ void CValueForm::OnIdleHandler(wxTimerEvent& event)
 	if (m_procUnit != NULL) {
 		auto foundedIt = std::find_if(m_aIdleHandlers.begin(), m_aIdleHandlers.end(), [event](std::pair<wxString, wxTimer*> pair) {
 			return pair.second == event.GetEventObject();
-		});
+			}
+		);
 
 		if (foundedIt != m_aIdleHandlers.end()) {
-			CallFunction(foundedIt->first);
+			IValueFrame::CallFunction(foundedIt->first);
 		}
 	}
 
@@ -592,7 +575,7 @@ void CValueForm::AttachIdleHandler(const wxString& procedureName, int interval, 
 		}
 	}
 
-	if (m_procUnit && m_procUnit->FindFunction(procedureName, true)) {
+	if (m_procUnit != NULL && m_procUnit->FindMethod(procedureName, true)) {
 		auto foundedIt = m_aIdleHandlers.find(procedureName);
 		if (foundedIt == m_aIdleHandlers.end()) {
 			wxTimer* timer = new wxTimer();
@@ -618,12 +601,12 @@ void CValueForm::DetachIdleHandler(const wxString& procedureName)
 		}
 	}
 
-	if (m_procUnit && m_procUnit->FindFunction(procedureName, true)) {
+	if (m_procUnit && m_procUnit->FindMethod(procedureName, true)) {
 		auto foundedIt = m_aIdleHandlers.find(procedureName);
 		if (foundedIt != m_aIdleHandlers.end()) {
 			wxTimer* timer = foundedIt->second;
 			m_aIdleHandlers.erase(foundedIt);
-			if (timer->IsRunning()) {
+			if (timer != NULL && timer->IsRunning()) {
 				timer->Stop();
 			}
 			timer->Unbind(wxEVT_TIMER, &CValueForm::OnIdleHandler, this);
@@ -638,7 +621,7 @@ void CValueForm::ClearRecursive(IValueFrame* control)
 		IValueFrame* controlChild =
 			dynamic_cast<IValueFrame*>(control->GetChild(idx - 1));
 		ClearRecursive(controlChild);
-		if (controlChild) {
+		if (controlChild != NULL) {
 			controlChild->DecrRef();
 		}
 	}

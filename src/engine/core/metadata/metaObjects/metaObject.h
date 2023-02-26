@@ -1,21 +1,20 @@
 ﻿#ifndef _METAOBJECT_H__
 #define _METAOBJECT_H__
 
-#include "compiler/value.h"
-#include "common/propertyObject.h"
-#include "utils/fs/fs.h"
-#include "guid/guid.h"
+#include "core/compiler/value.h"
+#include "core/common/propertyInfo.h"
+#include "core/utils/fs/fs.h"
 
 class CMetaModuleObject;
 class IMetaFormObject;
 
 //reference data
-struct reference_t
-{
+struct reference_t {
 	meta_identifier_t m_id; // id of metadata 
 	guid_t m_guid;
-
-	reference_t(const meta_identifier_t& id, const guid_t& guid) : m_id(id), m_guid(guid) {}
+public:
+	reference_t(const meta_identifier_t& id, const guid_t& guid) :
+		m_id(id), m_guid(guid) {}
 };
 
 class IConfigMetadata;
@@ -45,9 +44,6 @@ const CLASS_ID g_metaTableCLSID = TEXT2CLSID("MD_TBL");
 const CLASS_ID g_metaEnumCLSID = TEXT2CLSID("MD_ENUM");
 const CLASS_ID g_metaDimensionCLSID = TEXT2CLSID("MD_DMNT");
 const CLASS_ID g_metaResourceCLSID = TEXT2CLSID("MD_RESS");
-
-const CLASS_ID g_metaFolderAttributeCLSID = TEXT2CLSID("MD_GATR");
-const CLASS_ID g_metaFolderTableCLSID = TEXT2CLSID("MD_GTBL");
 
 //SPECIAL OBJECTS
 const CLASS_ID g_metaDefaultAttributeCLSID = TEXT2CLSID("MD_DATT");
@@ -151,7 +147,7 @@ protected:
 protected:
 
 	PropertyCategory* m_categoryCommon = IPropertyObject::CreatePropertyCategory({ "common", _("common") });
-	
+
 	Property* m_propertyName = IPropertyObject::CreateProperty(m_categoryCommon, { "name" , _("name") }, PropertyType::PT_WXNAME);
 	Property* m_propertySynonym = IPropertyObject::CreateProperty(m_categoryCommon, { "synonym", _("synonym") }, PropertyType::PT_WXSTRING);
 	Property* m_propertyComment = IPropertyObject::CreateProperty(m_categoryCommon, { "comment", _("comment") }, PropertyType::PT_WXSTRING);
@@ -333,7 +329,7 @@ public:
 
 	//system override 
 	virtual int GetComponentType() const override {
-		return COMPONENT_TYPE_METADATA;
+		return COMPONENT_TYPE_ABSTRACT;
 	}
 
 	virtual wxString GetObjectTypeName() const override {
@@ -360,7 +356,7 @@ public:
 
 	void RemoveChild(IMetaObject* child) {
 		auto itFounded = std::find(m_metaObjects.begin(), m_metaObjects.end(), child);
-		if (itFounded != m_metaObjects.end()) 
+		if (itFounded != m_metaObjects.end())
 			m_metaObjects.erase(itFounded);
 	}
 
@@ -369,12 +365,7 @@ public:
 	}
 
 	//process choice 
-	virtual bool ProcessChoice(IValueFrame* ownerValue, 
-		const meta_identifier_t& id, enum eSelectMode selMode) {
-		return true;
-	}
-
-	virtual bool ProcessListChoice(IValueFrame* ownerValue,
+	virtual bool ProcessChoice(IControlFrame* ownerValue,
 		const meta_identifier_t& id, enum eSelectMode selMode) {
 		return true;
 	}
@@ -410,18 +401,16 @@ public:
 	}
 
 	//methods 
-	virtual CMethods* GetPMethods() const { //получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethodHelper* GetPMethods() const { //получить ссылку на класс помощник разбора имен атрибутов и методов
 		PrepareNames();
-		return m_methods;
+		return m_methodHelper;
 	}
 
-	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t& aParams);       //вызов метода
+	virtual void PrepareNames() const; //этот метод автоматически вызывается для инициализации имен атрибутов и методов
 
 	//attributes 
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
-	virtual int  FindAttribute(const wxString& sName) const;
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
 
 	virtual wxString GetTypeString() const {
 		return GetObjectTypeName() << wxT(".") << GetClassName();
@@ -519,6 +508,7 @@ public:
 	*/
 	virtual void OnPropertyCreated(Property* property);
 	virtual void OnPropertySelected(Property* property);
+	virtual bool OnPropertyChanging(Property* property, const wxVariant& newValue);
 	virtual void OnPropertyChanged(Property* property);
 
 	/**
@@ -565,7 +555,7 @@ protected:
 
 	std::vector<IMetaObject*> m_metaObjects;
 
-	CMethods* m_methods;
+	CMethodHelper* m_methodHelper;
 };
 
 #endif

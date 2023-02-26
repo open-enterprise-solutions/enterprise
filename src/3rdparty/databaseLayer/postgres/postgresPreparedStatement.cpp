@@ -1,6 +1,6 @@
 #include "postgresPreparedStatement.h"
 #include "postgresDatabaseLayer.h"
-#include "databaseLayer/databaseErrorCodes.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
 
 #include <wx/tokenzr.h>
 #include <wx/arrimpl.cpp>
@@ -170,28 +170,24 @@ int PostgresPreparedStatement::GetParameterCount()
 int PostgresPreparedStatement::RunQuery()
 {
 	// Iterate through the statements and have them run their queries
-	int nRows = DATABASE_LAYER_QUERY_RESULT_ERROR;
-	for (unsigned int i = 0; i < (m_Statements.size()); i++)
-	{
-		nRows = m_Statements[i].RunQuery();
-		if (m_Statements[i].GetErrorCode() != DATABASE_LAYER_OK)
-		{
+	long rows = -1;
+	for (unsigned int i = 0; i < (m_Statements.size()); i++) {
+		rows = m_Statements[i].RunQuery();
+		if (m_Statements[i].GetErrorCode() != DATABASE_LAYER_OK) {
 			SetErrorCode(m_Statements[i].GetErrorCode());
 			SetErrorMessage(m_Statements[i].GetErrorMessage());
 			ThrowDatabaseException();
 			return DATABASE_LAYER_QUERY_RESULT_ERROR;
 		}
 	}
-	return nRows;
+	return rows;
 }
 
 DatabaseResultSet* PostgresPreparedStatement::RunQueryWithResults()
 {
-	for (unsigned int i = 0; i < (m_Statements.size() - 1); i++)
-	{
+	for (unsigned int i = 0; i < (m_Statements.size() - 1); i++) {
 		m_Statements[i].RunQuery();
-		if (m_Statements[i].GetErrorCode() != DATABASE_LAYER_OK)
-		{
+		if (m_Statements[i].GetErrorCode() != DATABASE_LAYER_OK) {
 			SetErrorCode(m_Statements[i].GetErrorCode());
 			SetErrorMessage(m_Statements[i].GetErrorMessage());
 			ThrowDatabaseException();
@@ -200,8 +196,7 @@ DatabaseResultSet* PostgresPreparedStatement::RunQueryWithResults()
 	}
 	PostgresPreparedStatementWrapper* pLastStatement = &(m_Statements[m_Statements.size() - 1]);
 	DatabaseResultSet* pResultSet = pLastStatement->RunQueryWithResults();
-	if (pLastStatement->GetErrorCode() != DATABASE_LAYER_OK)
-	{
+	if (pLastStatement->GetErrorCode() != DATABASE_LAYER_OK) {
 		SetErrorCode(pLastStatement->GetErrorCode());
 		SetErrorMessage(pLastStatement->GetErrorMessage());
 		ThrowDatabaseException();

@@ -6,7 +6,7 @@
 #include "compileModule.h"
 #include "definition.h"
 #include "systemObjects.h"
-#include "metadata/metaObjects/metaModuleObject.h"
+#include "core/metadata/metaObjects/metaModuleObject.h"
 #include "utils/stringUtils.h"
 
 #pragma warning(push)
@@ -22,38 +22,92 @@ std::map<wxString, void*> aHashKeywordList;
 //Массив приоритетов математических операций
 static std::array<int, 256> s_aPriority = { 0 };
 
-//////////////////////////////////////////////////////////////////////
-// CCompileContext CCompileContext CCompileContext CCompileContext  //
-//////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+// byteCode_t byteCode_t byteCode_t byteCode_t						  //
+////////////////////////////////////////////////////////////////////////
+
+long byteCode_t::FindMethod(const wxString& methodName) const
+{
+	auto foundedFunction = std::find_if(m_aFuncList.begin(), m_aFuncList.end(),
+		[methodName](const std::pair<const wxString, byteMethod_t>& pair) {
+			return StringUtils::CompareString(methodName, pair.first);
+		}
+	);
+	if (foundedFunction != m_aFuncList.end())
+		return (long)foundedFunction->second - 1;
+	return wxNOT_FOUND;
+}
+
+long byteCode_t::FindExportMethod(const wxString& methodName) const
+{
+	auto foundedFunction = std::find_if(m_aExportFuncList.begin(), m_aExportFuncList.end(),
+		[methodName](const std::pair<const wxString, byteMethod_t>& pair) {
+			return StringUtils::CompareString(methodName, pair.first);
+		}
+	);
+	if (foundedFunction != m_aExportFuncList.end())
+		return (long)foundedFunction->second - 1;
+	return wxNOT_FOUND;
+}
+
+long byteCode_t::FindVariable(const wxString& varName) const
+{
+	auto foundedFunction = std::find_if(m_aVarList.begin(), m_aVarList.end(),
+		[varName](const std::pair<const wxString, long>& pair) {
+			return StringUtils::CompareString(varName, pair.first);
+		}
+	);
+	if (foundedFunction != m_aVarList.end())
+		return (long)foundedFunction->second - 1;
+	return wxNOT_FOUND;
+}
+
+long byteCode_t::FindExportVariable(const wxString& varName) const
+{
+	auto foundedFunction = std::find_if(m_aExportVarList.begin(), m_aExportVarList.end(),
+		[varName](const std::pair<const wxString, long>& pair) {
+			return StringUtils::CompareString(varName, pair.first);
+		}
+	);
+	if (foundedFunction != m_aExportVarList.end())
+		return (long)foundedFunction->second - 1;
+	return wxNOT_FOUND;
+}
+
+////////////////////////////////////////////////////////////////////////
+// compileContext_t compileContext_t compileContext_t compileContext_t//
+////////////////////////////////////////////////////////////////////////
 
 /**
  * Добавляет новую переменную в список
- * Возвращает добавленную переменную в виде SParam
+ * Возвращает добавленную переменную в виде param_t
  */
-SParam CCompileContext::AddVariable(const wxString& name, const wxString& typeVar, bool exportVar, bool contextVar, bool tempVar)
+param_t compileContext_t::AddVariable(const wxString& varName,
+	const wxString& typeVar, bool exportVar, bool contextVar, bool tempVar)
 {
-	if (FindVariable(name))//было объявление + повторное объявление = ошибка
-		m_compileModule->SetError(ERROR_IDENTIFIER_DUPLICATE, name);
+	variable_t* foundedVariable = NULL;
+	if (FindVariable(varName, foundedVariable))//было объявление + повторное объявление = ошибка
+		m_compileModule->SetError(ERROR_IDENTIFIER_DUPLICATE, varName);
 
 	unsigned int nCountVar = m_cVariables.size();
 
-	CVariable cCurrentVariable;
-	cCurrentVariable.m_sName = StringUtils::MakeUpper(name);
-	cCurrentVariable.m_sRealName = name;
+	variable_t cCurrentVariable;
+	cCurrentVariable.m_sName = StringUtils::MakeUpper(varName);
+	cCurrentVariable.m_sRealName = varName;
 	cCurrentVariable.m_bExport = exportVar;
 	cCurrentVariable.m_bContext = contextVar;
 	cCurrentVariable.m_bTempVar = tempVar;
-
 	cCurrentVariable.m_sType = typeVar;
 	cCurrentVariable.m_nNumber = nCountVar;
 
-	m_cVariables[StringUtils::MakeUpper(name)] = cCurrentVariable;
+	m_cVariables.insert_or_assign(
+		StringUtils::MakeUpper(varName), cCurrentVariable
+	);
 
-	SParam cRet;
-	cRet.m_sType = typeVar;
+	param_t cRet;
 	cRet.m_nArray = 0;
+	cRet.m_sType = typeVar;
 	cRet.m_nIndex = nCountVar;
-
 	return cRet;
 }
 
@@ -62,68 +116,54 @@ SParam CCompileContext::AddVariable(const wxString& name, const wxString& typeVa
  * Поиск определения переменной, начиная с текущего контекста до всех родительских
  * Если требуемой переменной нет, то создается новое определение переменной
  */
-SParam CCompileContext::GetVariable(const wxString& name, bool bFindInParent, bool bCheckError, bool contextVar, bool tempVar)
+param_t compileContext_t::GetVariable(const wxString& varName, bool bFindInParent, bool bCheckError, bool contextVar, bool tempVar)
 {
 	int nCanUseLocalInParent = m_nFindLocalInParent;
-	SParam variable;
-
-	if (!FindVariable(name))
-	{
-		if (bFindInParent)//ищем в родительских контекстах(модулях)
-		{
+	variable_t* currentVariable = NULL;
+	if (!FindVariable(varName, currentVariable)) {
+		//ищем в родительских контекстах(модулях)
+		if (bFindInParent) {
 			int nParentNumber = 0;
-
-			CCompileContext* pCurContext = m_parentContext;
-
+			compileContext_t* pCurContext = m_parentContext;
 			while (pCurContext) {
 				nParentNumber++;
-
 				if (nParentNumber > MAX_OBJECTS_LEVEL) {
 					CSystemObjects::Message(pCurContext->m_compileModule->GetModuleName());
-
 					if (nParentNumber > 2 * MAX_OBJECTS_LEVEL) {
-						CTranslateError::Error(_("Recursive call of modules!"));
+						CTranslateError::Error("Recursive call of modules!");
 					}
 				}
-
-				if (pCurContext->FindVariable(name)) { //нашли
-
-					CVariable cCurrentVariable = pCurContext->m_cVariables[StringUtils::MakeUpper(name)];
-
+				if (pCurContext->FindVariable(varName, currentVariable)) { //нашли
 					//смотрим это экспортная переменная или нет (если m_nFindLocalInParent=true, то можно взять локальные переменные родителя)	
 					if (nCanUseLocalInParent > 0 ||
-						cCurrentVariable.m_bExport) {
-
+						currentVariable->m_bExport) {
+						param_t variable;
 						//определяем номер переменной
 						variable.m_nArray = nParentNumber;
-
-						variable.m_nIndex = cCurrentVariable.m_nNumber;
-						variable.m_sType = cCurrentVariable.m_sType;
-
+						variable.m_nIndex = currentVariable->m_nNumber;
+						variable.m_sType = currentVariable->m_sType;
 						return variable;
 					}
 				}
-
 				nCanUseLocalInParent--;
 				pCurContext = pCurContext->m_parentContext;
 			}
 		}
 
-		if (bCheckError) {
-			m_compileModule->SetError(ERROR_VAR_NOT_FOUND, name); //выводим сообщение об ошибке
-		}
+		if (bCheckError)
+			m_compileModule->SetError(ERROR_VAR_NOT_FOUND, varName); //выводим сообщение об ошибке
 
 		//не было еще объявления переменной - добавляем
-		AddVariable(name, wxEmptyString, contextVar, contextVar, tempVar);
+		return AddVariable(varName, wxEmptyString, contextVar, contextVar, tempVar);
 	}
 
+	wxASSERT(currentVariable);
+
+	param_t variable;
 	//определяем номер и тип переменной
-	CVariable cCurrentVariable = m_cVariables[StringUtils::MakeUpper(name)];
-
 	variable.m_nArray = 0;
-	variable.m_nIndex = cCurrentVariable.m_nNumber;
-	variable.m_sType = cCurrentVariable.m_sType;
-
+	variable.m_nIndex = currentVariable->m_nNumber;
+	variable.m_sType = currentVariable->m_sType;
 	return variable;
 }
 
@@ -131,128 +171,82 @@ SParam CCompileContext::GetVariable(const wxString& name, bool bFindInParent, bo
  * Поиск переменной в хэш массиве
  * Возвращает 1 - если переменная найдена
  */
-bool CCompileContext::FindVariable(const wxString& name, wxString& sContextVariable, bool contextVar)
+bool compileContext_t::FindVariable(const wxString& varName, variable_t*& foundedVar, bool contextVar)
 {
-	if (contextVar)
-	{
-		auto itFounded = m_cVariables.find(StringUtils::MakeUpper(name));
-		if (itFounded != m_cVariables.end())
-		{
-			sContextVariable = StringUtils::MakeUpper(itFounded->second.m_sContextVar);
+	auto itFounded = std::find_if(m_cVariables.begin(), m_cVariables.end(),
+		[varName](std::pair < const wxString, variable_t>& pair) {
+			return StringUtils::CompareString(varName, pair.first); }
+	);
+
+	if (contextVar) {
+		if (itFounded != m_cVariables.end()) {
+			foundedVar = &itFounded->second;
 			return itFounded->second.m_bContext;
 		}
-
-		if (m_parentContext && m_parentContext->FindVariable(name, sContextVariable, contextVar))
+		if (m_parentContext && m_parentContext->FindVariable(varName, foundedVar, contextVar))
 			return true;
-
-		sContextVariable = wxEmptyString;
+		foundedVar = NULL;
 		return false;
 	}
-	else
-	{
-		return m_cVariables.find(StringUtils::MakeUpper(name)) != m_cVariables.end();
+	else if (itFounded != m_cVariables.end()) {
+		foundedVar = &itFounded->second;
+		return true;
 	}
+	foundedVar = NULL;
+	return false;
 }
 
 /**
  * Поиск переменной в хэш массиве
  * Возвращает 1 - если переменная найдена
  */
-bool CCompileContext::FindFunction(const wxString& name, wxString& sContextVariable, bool contextVar)
-{
-	if (contextVar)
-	{
-		auto itFounded = m_cFunctions.find(StringUtils::MakeUpper(name));
-		if (itFounded != m_cFunctions.end() && itFounded->second)
-		{
-			sContextVariable = StringUtils::MakeUpper(itFounded->second->m_sContextVar);
+bool compileContext_t::FindFunction(const wxString& funcName, function_t*& foundedFunc, bool contextVar) {
+	auto itFounded = std::find_if(m_cFunctions.begin(), m_cFunctions.end(),
+		[funcName](std::pair < const wxString, function_t*>& pair) {
+			return StringUtils::CompareString(funcName, pair.first); }
+	);
+	if (contextVar) {
+		if (itFounded != m_cFunctions.end() && itFounded->second) {
+			foundedFunc = itFounded->second;
 			return itFounded->second->m_bContext;
 		}
-
-		if (m_parentContext && m_parentContext->FindFunction(name, sContextVariable, contextVar))
+		if (m_parentContext && m_parentContext->FindFunction(funcName, foundedFunc, contextVar))
 			return true;
-
-		sContextVariable = wxEmptyString;
+		foundedFunc = NULL;
 		return false;
 	}
-	else
-	{
-		return m_cFunctions.find(StringUtils::MakeUpper(name)) != m_cFunctions.end();
+	else if (itFounded != m_cFunctions.end() && itFounded->second) {
+		foundedFunc = itFounded->second;
+		return true;
 	}
+	foundedFunc = NULL;
+	return false;
 }
 
 /**
  * Связываение операторов GOTO с метками
  */
-void CCompileContext::DoLabels()
+void compileContext_t::DoLabels()
 {
 	wxASSERT(m_compileModule != NULL);
-
-	for (unsigned int i = 0; i < m_cLabels.size(); i++)
-	{
+	for (unsigned int i = 0; i < m_cLabels.size(); i++) {
 		wxString name = m_cLabels[i].m_sName;
 		int m_nLine = m_cLabels[i].m_nLine;
-
 		//ищем такую метку в списке объявленных меток
 		unsigned int hLine = m_cLabelsDef[name];
-
 		if (!hLine) {
 			m_compileModule->m_nCurrentCompile = m_cLabels[i].m_nError;
 			m_compileModule->SetError(ERROR_LABEL_DEFINE, name);//произошло дублированное определения меток
 		}
-
 		//записываем адрес перехода:
 		m_compileModule->m_cByteCode.m_aCodeList[m_nLine].m_param1.m_nIndex = hLine + 1;
 	}
 };
 
-/**
- * Создание списка для записи строк байт-кода, в которых встретились команды Continue и Break
- */
-void CCompileContext::StartDoList()
-{
-	//создаем списки для команд Continue и Break (в них будут хранится адреса байт кодов, где встретились соответствующие команды)
-	m_nDoNumber++;
-	aContinueList[m_nDoNumber] = new CDefIntList();
-	aBreakList[m_nDoNumber] = new CDefIntList();
-};
-
-/**
- * Установка адресов перехода для команд Continue и Break
- */
-void CCompileContext::FinishDoList(CByteCode& m_cByteCode, int nGotoContinue, int nGotoBreak)
-{
-	CDefIntList* pListC = (CDefIntList*)aContinueList[m_nDoNumber];
-	CDefIntList* pListB = (CDefIntList*)aBreakList[m_nDoNumber];
-
-	if (pListC == 0 || pListB == 0) {
-#ifdef _DEBUG 
-		wxLogDebug("Error (FinishDoList) nGotoContinue=%d, nGotoBreak=%d\n", nGotoContinue, nGotoBreak);
-		wxLogDebug("m_nDoNumber=%d\n", m_nDoNumber);
-#endif 
-		m_nDoNumber--;
-		return;
-	}
-
-	for (unsigned int i = 0; i < pListC->size(); i++)
-		m_cByteCode.m_aCodeList[*pListC[i].data()].m_param1.m_nIndex = nGotoContinue;
-
-	for (unsigned int i = 0; i < pListB->size(); i++)
-		m_cByteCode.m_aCodeList[*pListB[i].data()].m_param1.m_nIndex = nGotoBreak;
-
-	aContinueList.erase(m_nDoNumber);
-	aContinueList.erase(m_nDoNumber);
-
-	delete pListC;
-	delete pListB;
-
-	m_nDoNumber--;
-};
-
-CCompileContext::~CCompileContext()
+compileContext_t::~compileContext_t()
 {
 	for (auto it = m_cFunctions.begin(); it != m_cFunctions.end(); it++) {
-		CFunction* pFunction = static_cast<CFunction*>(it->second);
+		function_t* pFunction = static_cast<function_t*>(it->second);
 		if (pFunction)
 			delete pFunction;
 	}
@@ -267,7 +261,7 @@ CCompileContext::~CCompileContext()
 CCompileModule::CCompileModule() :
 	CTranslateModule(),
 	m_pContext(GetContext()),
-	m_moduleObject(NULL), m_pParent(NULL),
+	m_moduleObject(NULL), m_parent(NULL),
 	m_bExpressionOnly(false), m_bNeedRecompile(false),
 	m_bCommonModule(false)
 {
@@ -280,7 +274,7 @@ CCompileModule::CCompileModule() :
 CCompileModule::CCompileModule(CMetaModuleObject* moduleObject, bool commonModule) :
 	CTranslateModule(moduleObject->GetFullName(), moduleObject->GetDocPath()),
 	m_pContext(GetContext()),
-	m_moduleObject(moduleObject), m_pParent(NULL),
+	m_moduleObject(moduleObject), m_parent(NULL),
 	m_bExpressionOnly(false), m_bNeedRecompile(false),
 	m_bCommonModule(commonModule)
 {
@@ -345,7 +339,7 @@ void CCompileModule::Reset()
 
 	//clear functions & variables 
 	for (auto function : m_cContext.m_cFunctions) {
-		CFunction* pFunction = static_cast<CFunction*>(function.second);
+		function_t* pFunction = static_cast<function_t*>(function.second);
 		if (pFunction) delete pFunction;
 	}
 
@@ -365,44 +359,65 @@ void CCompileModule::PrepareModuleData()
 		m_cContext.AddVariable(externValue.first, wxEmptyString, true);
 		m_cByteCode.m_aExternValues.push_back(externValue.second);
 	}
-
 	for (auto contextValue : m_aContextValues) {
 		m_cContext.AddVariable(contextValue.first, wxEmptyString, true);
 		m_cByteCode.m_aExternValues.push_back(contextValue.second);
 	}
+	for (auto pair : m_aContextValues) {
 
-	for (auto contextValue : m_aContextValues) {
+		CValue* contextValue = pair.second;
+
 		//добавляем переменные из контекста
-		for (unsigned int i = 0; i < contextValue.second->GetNAttributes(); i++)
-		{
-			wxString sAttributeName = contextValue.second->GetAttributeName(i);
+		for (unsigned int i = 0; i < contextValue->GetNProps(); i++) {
+
+			const wxString& propName = contextValue->GetPropName(i);
 
 			//определяем номер и тип переменной
-			CVariable m_cVariables(sAttributeName);
-			m_cVariables.m_sContextVar = contextValue.first;
+			variable_t cVariables(propName);
+			cVariables.m_sContextVar = pair.first;
+			cVariables.m_bContext = true;
+			cVariables.m_bExport = true;
+			cVariables.m_nNumber = i;
 
-			m_cVariables.m_bContext = true;
-			m_cVariables.m_bExport = true;
-			m_cVariables.m_nNumber = i;
-
-			GetContext()->m_cVariables[StringUtils::MakeUpper(sAttributeName)] = m_cVariables;
+			GetContext()->m_cVariables.insert_or_assign(
+				StringUtils::MakeUpper(propName), cVariables
+			);
 		}
 
 		//добавляем методы из контекста
-		for (unsigned int i = 0; i < contextValue.second->GetNMethods(); i++)
-		{
-			wxString sMethodName = contextValue.second->GetMethodName(i);
+		for (long i = 0; i < contextValue->GetNMethods(); i++) {
+
+			const wxString& methodName = contextValue->GetMethodName(i);
+
+			compileContext_t* compileContext = new compileContext_t(GetContext());
+			compileContext->SetModule(this);
+
+			if (contextValue->HasRetVal(i))
+				compileContext->m_nReturn = RETURN_FUNCTION;
+			else
+				compileContext->m_nReturn = RETURN_PROCEDURE;
 
 			//определяем номер и тип функции
-			CFunction* pFunction = new CFunction(sMethodName);
+			function_t* pFunction = new function_t(methodName, compileContext);
 			pFunction->m_nStart = i;
 			pFunction->m_bContext = true;
 			pFunction->m_bExport = true;
+			pFunction->m_sContextVar = pair.first;
 
-			pFunction->m_sContextVar = contextValue.first;
+			paramVariable_t contextVariable;
+			contextVariable.m_vData.m_nArray = DEF_VAR_DEFAULT;
+			contextVariable.m_vData.m_nIndex = DEF_VAR_DEFAULT;
+			for (int n = 0; n < contextValue->GetNParams(i); n++) {
+				pFunction->m_aParamList.push_back(contextVariable);
+			}
+
+			pFunction->m_sRealName = methodName;
+			pFunction->m_sShortDescription = contextValue->GetMethodHelper(i);
 
 			//проверка на типизированность
-			GetContext()->m_cFunctions[StringUtils::MakeUpper(sMethodName)] = pFunction;
+			GetContext()->m_cFunctions.insert_or_assign(
+				StringUtils::MakeUpper(methodName), pFunction
+			);
 		}
 	}
 }
@@ -461,7 +476,7 @@ void CCompileModule::SetError(int nErr, char c)
 /**
  *добавление в байт код информации о текущей строке
  */
-void CCompileModule::AddLineInfo(CByte& code)
+void CCompileModule::AddLineInfo(byteRaw_t& code)
 {
 	code.m_sModuleName = m_sModuleName;
 	code.m_sDocPath = m_sDocPath;
@@ -487,20 +502,19 @@ void CCompileModule::AddLineInfo(CByte& code)
  * Возвращаемое значение:
  * 0 или указатель на лексему
  */
-CLexem CCompileModule::GetLexem()
+lexem_t CCompileModule::GetLexem()
 {
-	CLexem lex;
-	if (m_nCurrentCompile + 1 < m_aLexemList.size())
-	{
+	lexem_t lex;
+	if (m_nCurrentCompile + 1 < m_aLexemList.size()) {
 		lex = m_aLexemList[++m_nCurrentCompile];
 	}
 	return lex;
 }
 
 //Получить следующую лексему из списка байт кода без увеличения счетчика текущей позиции
-CLexem CCompileModule::PreviewGetLexem()
+lexem_t CCompileModule::PreviewGetLexem()
 {
-	CLexem lex;
+	lexem_t lex;
 	while (true)
 	{
 		lex = GetLexem();
@@ -517,9 +531,9 @@ CLexem CCompileModule::PreviewGetLexem()
  * Возвращаемое значение:
  * нет (в случае неудачи генерится исключение)
  */
-CLexem CCompileModule::GETLexem()
+lexem_t CCompileModule::GETLexem()
 {
-	CLexem lex = GetLexem();
+	lexem_t lex = GetLexem();
 	if (lex.m_nType == ERRORTYPE) {
 		SetError(ERROR_CODE_DEFINE);
 	}
@@ -534,9 +548,8 @@ CLexem CCompileModule::GETLexem()
  */
 void CCompileModule::GETDelimeter(char c)
 {
-	CLexem lex = GETLexem();
-	if (!(lex.m_nType == DELIMITER && lex.m_nData == c))
-	{
+	lexem_t lex = GETLexem();
+	if (!(lex.m_nType == DELIMITER && lex.m_nData == c)) {
 		SetError(ERROR_DELIMETER, c);
 	}
 }
@@ -550,10 +563,10 @@ void CCompileModule::GETDelimeter(char c)
  */
 bool CCompileModule::IsKeyWord(int nKey)
 {
-	if (m_nCurrentCompile + 1 < m_aLexemList.size())
-	{
-		CLexem lex = m_aLexemList[m_nCurrentCompile];
-		if (lex.m_nType == KEYWORD && lex.m_nData == nKey) return true;
+	if (m_nCurrentCompile + 1 < m_aLexemList.size()) {
+		const lexem_t& lex = m_aLexemList[m_nCurrentCompile];
+		if (lex.m_nType == KEYWORD && lex.m_nData == nKey)
+			return true;
 	}
 	return false;
 }
@@ -567,10 +580,10 @@ bool CCompileModule::IsKeyWord(int nKey)
  */
 bool CCompileModule::IsNextKeyWord(int nKey)
 {
-	if (m_nCurrentCompile + 1 < m_aLexemList.size())
-	{
-		CLexem lex = m_aLexemList[m_nCurrentCompile + 1];
-		if (lex.m_nType == KEYWORD && lex.m_nData == nKey) return true;
+	if (m_nCurrentCompile + 1 < m_aLexemList.size()) {
+		const lexem_t& lex = m_aLexemList[m_nCurrentCompile + 1];
+		if (lex.m_nType == KEYWORD && lex.m_nData == nKey)
+			return true;
 	}
 	return false;
 }
@@ -584,10 +597,10 @@ bool CCompileModule::IsNextKeyWord(int nKey)
  */
 bool CCompileModule::IsDelimeter(char c)
 {
-	if (m_nCurrentCompile + 1 < m_aLexemList.size())
-	{
-		CLexem lex = m_aLexemList[m_nCurrentCompile];
-		if (lex.m_nType == DELIMITER && lex.m_nData == c) return true;
+	if (m_nCurrentCompile + 1 < m_aLexemList.size()) {
+		const lexem_t& lex = m_aLexemList[m_nCurrentCompile];
+		if (lex.m_nType == DELIMITER && lex.m_nData == c)
+			return true;
 	}
 	return false;
 }
@@ -601,10 +614,10 @@ bool CCompileModule::IsDelimeter(char c)
  */
 bool CCompileModule::IsNextDelimeter(char c)
 {
-	if (m_nCurrentCompile + 1 < m_aLexemList.size())
-	{
-		CLexem lex = m_aLexemList[m_nCurrentCompile + 1];
-		if (lex.m_nType == DELIMITER && lex.m_nData == c) return true;
+	if (m_nCurrentCompile + 1 < m_aLexemList.size()) {
+		const lexem_t& lex = m_aLexemList[m_nCurrentCompile + 1];
+		if (lex.m_nType == DELIMITER && lex.m_nData == c)
+			return true;
 	}
 	return false;
 }
@@ -617,11 +630,10 @@ bool CCompileModule::IsNextDelimeter(char c)
  */
 void CCompileModule::GETKeyWord(int nKey)
 {
-	CLexem lex = GETLexem();
-
+	const lexem_t& lex = GETLexem();
 	if (!(lex.m_nType == KEYWORD && lex.m_nData == nKey)) {
 		SetError(ERROR_KEYWORD,
-			wxString::Format(wxT("%s"), aKeyWords[nKey].Eng)
+			wxString::Format(wxT("%s"), s_aKeyWords[nKey].Eng)
 		);
 	}
 }
@@ -634,14 +646,11 @@ void CCompileModule::GETKeyWord(int nKey)
  */
 wxString CCompileModule::GETIdentifier(bool realName)
 {
-	CLexem lex = GETLexem();
-
-	if (lex.m_nType != IDENTIFIER)
-	{
+	const lexem_t& lex = GETLexem();
+	if (lex.m_nType != IDENTIFIER) {
 		if (realName && lex.m_nType == KEYWORD) {
 			return lex.m_sData;
 		}
-
 		SetError(ERROR_IDENTIFIER_DEFINE);
 	}
 
@@ -660,7 +669,7 @@ wxString CCompileModule::GETIdentifier(bool realName)
  */
 CValue CCompileModule::GETConstant()
 {
-	CLexem lex;
+	lexem_t lex;
 	int iNumRequire = 0;
 	if (IsNextDelimeter('-') || IsNextDelimeter('+')) {
 		iNumRequire = 1;
@@ -671,28 +680,36 @@ CValue CCompileModule::GETConstant()
 
 	lex = GETLexem();
 
-	if (lex.m_nType != CONSTANT) SetError(ERROR_CONST_DEFINE);
+	if (lex.m_nType != CONSTANT)
+		SetError(ERROR_CONST_DEFINE);
 
 	if (iNumRequire) {
 		//проверка на то чтобы константа имела числовой тип
 		if (lex.m_vData.GetType() != eValueTypes::TYPE_NUMBER)
 			SetError(ERROR_CONST_DEFINE);
-
 		//меняем знак при минусе
-		if (iNumRequire == -1) lex.m_vData.m_fData = -lex.m_vData.m_fData;
+		if (iNumRequire == -1)
+			lex.m_vData.m_fData = -lex.m_vData.m_fData;
 	}
 	return lex.m_vData;
 }
 
 //получение номера константой строки (для определения номера метода)
-int CCompileModule::GetConstString(const wxString& sMethod)
+int CCompileModule::GetConstString(const wxString& methodName)
 {
-	if (!m_aHashConstList[sMethod]) {
-		m_cByteCode.m_aConstList.push_back(sMethod);
-		m_aHashConstList[sMethod] = m_cByteCode.m_aConstList.size();
-	}
+	auto foundedIt = std::find_if(m_aHashConstList.begin(), m_aHashConstList.end(),
+		[methodName](std::pair <const wxString, unsigned int>& pair) {
+			return StringUtils::CompareString(methodName, pair.first);
+		}
+	);
 
-	return m_aHashConstList[sMethod] - 1;
+	if (foundedIt != m_aHashConstList.end())
+		return foundedIt->second - 1;
+
+	m_cByteCode.m_aConstList.push_back(methodName);
+	m_aHashConstList.insert_or_assign(methodName, m_cByteCode.m_aConstList.size());
+
+	return m_cByteCode.m_aConstList.size() - 1;
 }
 
 /**
@@ -700,13 +717,13 @@ int CCompileModule::GetConstString(const wxString& sMethod)
  * Назначение:
  * Добавить имя и адрес внешней переменной в специальный массив для дальнейшего использования
  */
-void CCompileModule::AddVariable(const wxString& nameVariable, const CValue& vObject)
+void CCompileModule::AddVariable(const wxString& varName, const CValue& vObject)
 {
-	if (nameVariable.IsEmpty())
+	if (varName.IsEmpty())
 		return;
 
 	//учитываем внешние переменные при компиляции
-	m_aExternValues[nameVariable.Upper()] = vObject.m_typeClass == eValueTypes::TYPE_REFFER
+	m_aExternValues[varName.Upper()] = vObject.m_typeClass == eValueTypes::TYPE_REFFER
 		? vObject.GetRef() : const_cast<CValue*>(&vObject);
 
 	//ставим флаг для перекомпиляции
@@ -718,13 +735,13 @@ void CCompileModule::AddVariable(const wxString& nameVariable, const CValue& vOb
  * Назначение:
  * Добавить имя и адрес внешней перменной в специальный массив для дальнейшего использования
  */
-void CCompileModule::AddVariable(const wxString& nameVariable, CValue* pValue)
+void CCompileModule::AddVariable(const wxString& varName, CValue* pValue)
 {
-	if (nameVariable.IsEmpty())
+	if (varName.IsEmpty())
 		return;
 
 	//учитываем внешние переменные при компиляции
-	m_aExternValues[nameVariable.Upper()] = pValue;
+	m_aExternValues[varName.Upper()] = pValue;
 
 	//ставим флаг для перекомпиляции
 	m_bNeedRecompile = true;
@@ -735,13 +752,13 @@ void CCompileModule::AddVariable(const wxString& nameVariable, CValue* pValue)
  * Назначение:
  * Добавить имя и адрес внешней перменной в специальный массив для дальнейшего использования
  */
-void CCompileModule::AddContextVariable(const wxString& nameVariable, const CValue& vObject)
+void CCompileModule::AddContextVariable(const wxString& varName, const CValue& vObject)
 {
-	if (nameVariable.IsEmpty())
+	if (varName.IsEmpty())
 		return;
 
 	//добавляем переменные из контекста
-	m_aContextValues[nameVariable.Upper()] = vObject.m_typeClass == eValueTypes::TYPE_REFFER ? vObject.GetRef() : const_cast<CValue*>(&vObject);
+	m_aContextValues[varName.Upper()] = vObject.m_typeClass == eValueTypes::TYPE_REFFER ? vObject.GetRef() : const_cast<CValue*>(&vObject);
 
 	//ставим флаг для перекомпиляции
 	m_bNeedRecompile = true;
@@ -752,13 +769,13 @@ void CCompileModule::AddContextVariable(const wxString& nameVariable, const CVal
  * Назначение:
  * Добавить имя и адрес внешней перменной в специальный массив для дальнейшего использования
  */
-void CCompileModule::AddContextVariable(const wxString& nameVariable, CValue* pValue)
+void CCompileModule::AddContextVariable(const wxString& varName, CValue* pValue)
 {
-	if (nameVariable.IsEmpty())
+	if (varName.IsEmpty())
 		return;
 
 	//добавляем переменные из контекста
-	m_aContextValues[nameVariable.Upper()] = pValue;
+	m_aContextValues[varName.Upper()] = pValue;
 
 	//ставим флаг для перекомпиляции
 	m_bNeedRecompile = true;
@@ -769,13 +786,13 @@ void CCompileModule::AddContextVariable(const wxString& nameVariable, CValue* pV
  * Назначение:
  * Удалить имя и адрес внешней перменной
  */
-void CCompileModule::RemoveVariable(const wxString& nameVariable)
+void CCompileModule::RemoveVariable(const wxString& varName)
 {
-	if (nameVariable.IsEmpty())
+	if (varName.IsEmpty())
 		return;
 
-	m_aExternValues.erase(nameVariable.Upper());
-	m_aContextValues.erase(nameVariable.Upper());
+	m_aExternValues.erase(varName.Upper());
+	m_aContextValues.erase(varName.Upper());
 
 	//ставим флаг для перекомпиляции
 	m_bNeedRecompile = true;
@@ -793,7 +810,7 @@ bool CCompileModule::Recompile()
 	//clear functions & variables 
 	Reset();
 
-	if (m_pParent) {
+	if (m_parent != NULL) {
 		if (m_moduleObject &&
 			m_moduleObject->IsGlobalModule()) {
 
@@ -805,8 +822,8 @@ bool CCompileModule::Recompile()
 
 			Load(m_moduleObject->GetModuleText());
 
-			return m_pParent ?
-				m_pParent->Compile() : true;
+			return m_parent ?
+				m_parent->Compile() : true;
 		}
 	}
 
@@ -816,9 +833,9 @@ bool CCompileModule::Recompile()
 	if (m_moduleObject) {
 		m_cByteCode.m_sModuleName = m_moduleObject->GetFullName();
 
-		if (m_pParent) {
-			m_cByteCode.m_pParent = &m_pParent->m_cByteCode;
-			m_cContext.m_parentContext = &m_pParent->m_cContext;
+		if (m_parent) {
+			m_cByteCode.m_parent = &m_parent->m_cByteCode;
+			m_cContext.m_parentContext = &m_parent->m_cContext;
 		}
 
 		m_sModuleName = m_moduleObject->GetFullName();
@@ -858,7 +875,7 @@ bool CCompileModule::Compile()
 	//clear functions & variables 
 	Reset();
 
-	if (m_pParent) {
+	if (m_parent) {
 		if (m_moduleObject &&
 			m_moduleObject->IsGlobalModule()) {
 
@@ -870,8 +887,8 @@ bool CCompileModule::Compile()
 
 			Load(m_moduleObject->GetModuleText());
 
-			return m_pParent ?
-				m_pParent->Compile() : true;
+			return m_parent ?
+				m_parent->Compile() : true;
 		}
 	}
 
@@ -879,11 +896,11 @@ bool CCompileModule::Compile()
 	m_pContext = GetContext();
 
 	//рекурсивно компилируем модули на случай каких-либо изменений 
-	if (m_pParent) {
+	if (m_parent) {
 
 		std::stack<CCompileModule*> aCompileModules;
 
-		CCompileModule* parentModule = m_pParent; bool needRecompile = false;
+		CCompileModule* parentModule = m_parent; bool needRecompile = false;
 
 		while (parentModule)
 		{
@@ -914,9 +931,9 @@ bool CCompileModule::Compile()
 
 		m_cByteCode.m_sModuleName = m_moduleObject->GetFullName();
 
-		if (m_pParent) {
-			m_cByteCode.m_pParent = &m_pParent->m_cByteCode;
-			m_cContext.m_parentContext = &m_pParent->m_cContext;
+		if (m_parent) {
+			m_cByteCode.m_parent = &m_parent->m_cByteCode;
+			m_cContext.m_parentContext = &m_parent->m_cContext;
 		}
 
 		m_sModuleName = m_moduleObject->GetFullName();
@@ -951,8 +968,7 @@ bool CCompileModule::IsTypeVar(const wxString& typeVar)
 			return true;
 	}
 	else {
-		CLexem lex = PreviewGetLexem();
-
+		const lexem_t& lex = PreviewGetLexem();
 		if (CValue::IsRegisterObject(lex.m_sData, eObjectType::eObjectType_simple))
 			return true;
 	}
@@ -968,7 +984,7 @@ wxString CCompileModule::GetTypeVar(const wxString& sType)
 		return sType.Upper();
 	}
 	else {
-		CLexem lex = GETLexem();
+		const lexem_t& lex = GETLexem();
 		if (!CValue::IsRegisterObject(lex.m_sData, eObjectType::eObjectType_simple))
 			SetError(ERROR_TYPE_DEF);
 		return lex.m_sData.Upper();
@@ -984,9 +1000,7 @@ wxString CCompileModule::GetTypeVar(const wxString& sType)
  */
 bool CCompileModule::CompileDeclaration()
 {
-	wxString sType;
-	CLexem lex = PreviewGetLexem();
-
+	const lexem_t& lex = PreviewGetLexem(); wxString sType;
 	if (IDENTIFIER == lex.m_nType) {
 		sType = GetTypeVar(); //типизированное задание переменных
 	}
@@ -995,30 +1009,25 @@ bool CCompileModule::CompileDeclaration()
 	}
 
 	while (true) {
-
-		wxString sName0 = GETIdentifier(true);
-		wxString sName = StringUtils::MakeUpper(sName0);
-
+		wxString sRealName = GETIdentifier(true);
+		wxString sName = StringUtils::MakeUpper(sRealName);
 		int nParentNumber = 0;
-		CCompileContext* pCurContext = GetContext();
-
+		compileContext_t* pCurContext = GetContext();
 		while (pCurContext) {
 			nParentNumber++;
 			if (nParentNumber > MAX_OBJECTS_LEVEL) {
 				CSystemObjects::Message(pCurContext->m_compileModule->GetModuleName());
 				if (nParentNumber > 2 * MAX_OBJECTS_LEVEL) {
-					CTranslateError::Error(_("Recursive call of modules!"));
+					CTranslateError::Error("Recursive call of modules!");
 				}
 			}
-
-			if (pCurContext->FindVariable(sName)) { //нашли
-				CVariable cCurrentVariable = pCurContext->m_cVariables[sName];
-				if (cCurrentVariable.m_bExport ||
+			variable_t* currentVariable = NULL;
+			if (pCurContext->FindVariable(sName, currentVariable)) { //нашли
+				if (currentVariable->m_bExport ||
 					pCurContext->m_compileModule == this) {
-					SetError(ERROR_DEF_VARIABLE, sName0);
+					SetError(ERROR_DEF_VARIABLE, sRealName);
 				}
 			}
-
 			pCurContext = pCurContext->m_parentContext;
 		}
 
@@ -1033,7 +1042,7 @@ bool CCompileModule::CompileDeclaration()
 					vConst.GetNumber() < 0) {
 					SetError(ERROR_ARRAY_SIZE_CONST);
 				}
-				nArrayCount = vConst.ToInt();
+				nArrayCount = vConst.GetInteger();
 			}
 			GETDelimeter(']');
 		}
@@ -1048,11 +1057,11 @@ bool CCompileModule::CompileDeclaration()
 		}
 
 		//не было еще объявления переменной - добавляем
-		SParam variable =
-			m_pContext->AddVariable(sName0, sType, bExport);
+		param_t variable =
+			m_pContext->AddVariable(sRealName, sType, bExport);
 
 		if (nArrayCount >= 0) {//записываем информацию о массивах
-			CByte code;
+			byteRaw_t code;
 			AddLineInfo(code);
 			code.m_nOper = OPER_SET_ARRAY_SIZE;
 			code.m_param1 = variable;
@@ -1069,7 +1078,7 @@ bool CCompileModule::CompileDeclaration()
 
 			GETDelimeter('=');
 
-			CByte code;
+			byteRaw_t code;
 			AddLineInfo(code);
 			code.m_nOper = OPER_LET;
 			code.m_param1 = variable;
@@ -1095,15 +1104,11 @@ bool CCompileModule::CompileDeclaration()
 */
 bool CCompileModule::CompileModule()
 {
+	lexem_t lex;
 	//устанавливаем курсор на начало массива лексем
 	m_nCurrentCompile = -1;
-
 	m_pContext = GetContext();//контекст самого модуля
-
-	CLexem lex;
-
-	while ((lex = PreviewGetLexem()).m_nType != ERRORTYPE)
-	{
+	while ((lex = PreviewGetLexem()).m_nType != ERRORTYPE) {
 		if ((KEYWORD == lex.m_nType && KEY_VAR == lex.m_nData) || (IDENTIFIER == lex.m_nType && IsTypeVar(lex.m_sData))) {
 			if (!m_bCommonModule) {
 				m_pContext = GetContext();
@@ -1124,37 +1129,32 @@ bool CCompileModule::CompileModule()
 
 	//загружаем исполняемое тело модуля
 	m_pContext = GetContext();//контекст самого модуля
-	m_cByteCode.m_nStartModule = 0;//m_cByteCode.m_aCodeList.size() - 1;
+	m_cByteCode.m_lStartModule = 0;//m_cByteCode.m_aCodeList.size() - 1;
 	CompileBlock();
 	m_pContext->DoLabels();
 
 	//ставим признак конца программы
-	CByte code;
+	byteRaw_t code;
 	AddLineInfo(code);
 	code.m_nOper = OPER_END;
 	m_cByteCode.m_aCodeList.push_back(code);
-	m_cByteCode.m_nVarCount = m_pContext->m_cVariables.size();
+	m_cByteCode.m_lVarCount = m_pContext->m_cVariables.size();
 
 	m_pContext = GetContext();
 
 	//дообрабатываем процедуры и функции, вызовы которых были до их объявления
 	//для это в конце массива байт-кодов добавляем новый код по вызову таких функций,
 	//а для корректной работы в места раннего вызова вставляем операторы GOTO
-	for (unsigned int i = 0; i < m_apCallFunctions.size(); i++)
-	{
+	for (unsigned int i = 0; i < m_apCallFunctions.size(); i++) {
 		m_cByteCode.m_aCodeList[m_apCallFunctions[i]->m_nAddLine].m_param1.m_nIndex =
 			m_cByteCode.m_aCodeList.size(); //переход на вызов функции
-
 		if (AddCallFunction(m_apCallFunctions[i])) {
-
 			//корректрируем переходы
-			CByte code;
+			byteRaw_t code;
 			AddLineInfo(code);
 			code.m_nOper = OPER_GOTO;
-
 			code.m_nNumberLine = m_apCallFunctions[i]->m_nNumberLine;
 			code.m_nNumberString = m_apCallFunctions[i]->m_nNumberString;
-
 			code.m_param1.m_nIndex = m_apCallFunctions[i]->m_nAddLine + 1; //после вызова функции возвращаемся назад
 			m_cByteCode.m_aCodeList.push_back(code);
 		}
@@ -1163,14 +1163,11 @@ bool CCompileModule::CompileModule()
 	m_pContext = GetContext();
 
 	//Получаем список переменных
-	for (auto it : m_pContext->m_cVariables)
-	{
+	for (auto it : m_pContext->m_cVariables) {
 		if (it.second.m_bTempVar ||
 			it.second.m_bContext)
 			continue;
-
 		m_cByteCode.m_aVarList[it.first] = it.second.m_nNumber;
-
 		if (it.second.m_bExport) {
 			m_cByteCode.m_aExportVarList[it.first] = it.second.m_nNumber;
 		}
@@ -1181,7 +1178,6 @@ bool CCompileModule::CompileModule()
 	}
 
 	m_cByteCode.SetModule(this);
-
 	//компиляция завершена успешно
 	m_cByteCode.m_bCompile = true;
 
@@ -1189,58 +1185,40 @@ bool CCompileModule::CompileModule()
 }
 
 //поиск определения функции в текущем модуле и во всех родительских
-CFunction* CCompileModule::GetFunction(const wxString& name, int* pNumber)
+function_t* CCompileModule::GetFunction(const wxString& name, int* pNumber)
 {
 	int nCanUseLocalInParent = m_cContext.m_nFindLocalInParent - 1;
 	int nNumber = 0;
-
 	//ищем в текущем модуле
-	CFunction* pDefFunction = NULL;
-
-	if (GetContext()->FindFunction(name)) {
-		pDefFunction = GetContext()->m_cFunctions[name];//ищем в текущем модуле
-	}
-
-	if (!pDefFunction)
-	{
-		CCompileModule* pCurModule = m_pParent;
-
-		while (pCurModule)
-		{
+	function_t* foundedFunction = NULL;
+	if (!GetContext()->FindFunction(name, foundedFunction)) {
+		CCompileModule* pCurModule = m_parent;
+		while (pCurModule != NULL) {
 			nNumber++;
-
-			pDefFunction = pCurModule->m_pContext->m_cFunctions[name];
-
-			if (pDefFunction)//нашли
-			{
+			foundedFunction = pCurModule->m_pContext->m_cFunctions[name];
+			if (foundedFunction != NULL) { //нашли
 				//смотрим это экспортная функция или нет
 				if (nCanUseLocalInParent > 0 ||
-					pDefFunction->m_bExport)
+					foundedFunction->m_bExport)
 					break;//ок
-
-				pDefFunction = NULL;
+				foundedFunction = NULL;
 			}
-
 			nCanUseLocalInParent--;
-			pCurModule = pCurModule->m_pParent;
+			pCurModule = pCurModule->m_parent;
 		}
 	}
-
-	if (pNumber) {
+	if (pNumber)
 		*pNumber = nNumber;
-	}
-
-	return pDefFunction;
+	return foundedFunction;
 }
 
 //Добавление в массив байт-кода вызова функции
-bool CCompileModule::AddCallFunction(CCallFunction* pRealCall)
+bool CCompileModule::AddCallFunction(сallFunction_t* pRealCall)
 {
 	int nModuleNumber = 0;
-
 	//находим определение функции
-	CFunction* pDefFunction = GetFunction(pRealCall->m_sName, &nModuleNumber);
-	if (!pDefFunction) {
+	function_t* foundedFunction = GetFunction(pRealCall->m_sName, &nModuleNumber);
+	if (foundedFunction == NULL) {
 		m_nCurrentCompile = pRealCall->m_nError;
 		SetError(ERROR_CALL_FUNCTION, pRealCall->m_sRealName);//нет такой функции в модуле
 		return false;
@@ -1248,7 +1226,7 @@ bool CCompileModule::AddCallFunction(CCallFunction* pRealCall)
 
 	//проверяем соответствие количество переданных и объявленных параметров
 	unsigned int nRealCount = pRealCall->m_aParamList.size();
-	unsigned int nDefCount = pDefFunction->m_aParamList.size();
+	unsigned int nDefCount = foundedFunction->m_aParamList.size();
 
 	if (nRealCount > nDefCount) {
 		m_nCurrentCompile = pRealCall->m_nError;
@@ -1256,14 +1234,14 @@ bool CCompileModule::AddCallFunction(CCallFunction* pRealCall)
 		return false;
 	}
 
-	CByte code;
+	byteRaw_t code;
 	AddLineInfo(code);
 
 	code.m_nNumberString = pRealCall->m_nNumberString;
 	code.m_nNumberLine = pRealCall->m_nNumberLine;
 	code.m_sModuleName = pRealCall->m_sModuleName;
 
-	if (pDefFunction->m_bContext) {//виртуальная функция - вызов заменям на конструкцию Контекст.ИмяФункции(...)
+	if (foundedFunction->m_bContext) {//виртуальная функция - вызов заменям на конструкцию Контекст.ИмяФункции(...)
 		code.m_nOper = OPER_CALL_M;
 		code.m_param1 = pRealCall->m_sRetValue;//переменная, в которую возвращается значение
 		code.m_param2 = pRealCall->m_sContextVal;//переменная у которой вызывается метод
@@ -1274,46 +1252,39 @@ bool CCompileModule::AddCallFunction(CCallFunction* pRealCall)
 		code.m_nOper = OPER_CALL;
 		code.m_param1 = pRealCall->m_sRetValue;//переменная, в которую возвращается значение
 		code.m_param2.m_nArray = nModuleNumber;//номер модуля
-		code.m_param2.m_nIndex = pDefFunction->m_nStart;//стартовая позиция
+		code.m_param2.m_nIndex = foundedFunction->m_nStart;//стартовая позиция
 		code.m_param3.m_nArray = nDefCount;//число параметров
-		code.m_param3.m_nIndex = pDefFunction->m_nVarCount;//число локальных переменных
+		code.m_param3.m_nIndex = foundedFunction->m_lVarCount;//число локальных переменных
 		code.m_param4 = pRealCall->m_sContextVal;//контекстная переменная
 	}
 
 	m_cByteCode.m_aCodeList.push_back(code);
 
-	for (unsigned int i = 0; i < nDefCount; i++)
-	{
-		CByte code;
+	for (unsigned int i = 0; i < nDefCount; i++) {
+		byteRaw_t code;
 		AddLineInfo(code);
 		code.m_nOper = OPER_SET;//идет передача параметров
-
 		bool defaultValue = false;
-
 		if (i < nRealCount) {
 			code.m_param1 = pRealCall->m_aParamList[i];
-
 			if (code.m_param1.m_nArray == DEF_VAR_SKIP) { //нужно подставить значение по умолчанию
 				defaultValue = true;
 			}
 			else {  //тип передачи значений
-				code.m_param2.m_nIndex = pDefFunction->m_aParamList[i].m_bByRef;
+				code.m_param2.m_nIndex = foundedFunction->m_aParamList[i].m_bByRef;
 			}
 		}
 		else {
 			defaultValue = true;
 		}
-
 		if (defaultValue) {
-			if (pDefFunction->m_aParamList[i].m_vData.m_nArray == DEF_VAR_SKIP) {
+			if (foundedFunction->m_aParamList[i].m_vData.m_nArray == DEF_VAR_SKIP) {
 				m_nCurrentCompile = pRealCall->m_nError;
 				SetError(ERROR_FEW_PARAMS);//Недостаточно фактических параметров
 			}
-
 			code.m_nOper = OPER_SETCONST;//значения по умолчанию
-			code.m_param1 = pDefFunction->m_aParamList[i].m_vData;
+			code.m_param1 = foundedFunction->m_aParamList[i].m_vData;
 		}
-
 		m_cByteCode.m_aCodeList.push_back(code);
 	}
 
@@ -1337,17 +1308,17 @@ bool CCompileModule::AddCallFunction(CCallFunction* pRealCall)
 bool CCompileModule::CompileFunction()
 {
 	//сейчас мы на уровне лексемы, где задано ключевое слово FUNCTION или PROCEDURE
-	CLexem lex;
+	lexem_t lex;
 
 	if (IsNextKeyWord(KEY_FUNCTION)) {
 		GETKeyWord(KEY_FUNCTION);
-		m_pContext = new CCompileContext(GetContext());//создаем новый контекст, в котором будем компилировать тело функции
+		m_pContext = new compileContext_t(GetContext());//создаем новый контекст, в котором будем компилировать тело функции
 		m_pContext->SetModule(this);
 		m_pContext->m_nReturn = RETURN_FUNCTION;
 	}
 	else if (IsNextKeyWord(KEY_PROCEDURE)) {
 		GETKeyWord(KEY_PROCEDURE);
-		m_pContext = new CCompileContext(GetContext());//создаем новый контекст, в котором будем компилировать тело процедуры
+		m_pContext = new compileContext_t(GetContext());//создаем новый контекст, в котором будем компилировать тело процедуры
 		m_pContext->SetModule(this);
 		m_pContext->m_nReturn = RETURN_PROCEDURE;
 	}
@@ -1365,58 +1336,49 @@ bool CCompileModule::CompileFunction()
 	{
 		sShortDescription = m_sBuffer.Mid(lex.m_nNumberString, nRes - lex.m_nNumberString - 1);
 		nRes = sShortDescription.find_first_of('/');
-		if (nRes > 0)
-		{
-			if (sShortDescription[nRes - 1] == '/')//итак - это комментарий
-			{
+		if (nRes > 0) {
+			if (sShortDescription[nRes - 1] == '/') { //итак - это комментарий
 				sShortDescription = sShortDescription.Mid(nRes + 1);
 			}
 		}
-		else
-		{
+		else {
 			nRes = sShortDescription.find_first_of(')');
 			sShortDescription = sShortDescription.Left(nRes + 1);
 		}
 	}
 
 	//получаем имя функции
-	wxString sFuncName0 = GETIdentifier(true);
-	wxString sFuncName = StringUtils::MakeUpper(sFuncName0);
+	wxString sFuncRealName = GETIdentifier(true);
+	wxString sFuncName = StringUtils::MakeUpper(sFuncRealName);
 
 	int errorPlace = m_nCurrentCompile;
 
-	CFunction* pFunction = new CFunction(sFuncName, m_pContext);
-	pFunction->m_sRealName = sFuncName0;
+	function_t* pFunction = new function_t(sFuncName, m_pContext);
+	pFunction->m_sRealName = sFuncRealName;
 	pFunction->m_sShortDescription = sShortDescription;
 	pFunction->m_nNumberLine = m_nNumberLine;
 
 	//компилируем список формальных параметров + регистрируем их как локальные
 	GETDelimeter('(');
-
-	if (!IsNextDelimeter(')'))
-	{
-		while (true)
-		{
+	if (!IsNextDelimeter(')')) {
+		while (true) {
 			wxString typeVar = wxEmptyString;
 			//проверка на типизированность
-			if (IsTypeVar()) typeVar = GetTypeVar();
-
-			CParamVariable cVariable;
+			if (IsTypeVar())
+				typeVar = GetTypeVar();
+			paramVariable_t cVariable;
 			if (IsNextKeyWord(KEY_VAL)) {
 				GETKeyWord(KEY_VAL);
 				cVariable.m_bByRef = true;
 			}
-
-			wxString realName = GETIdentifier(true);
-
+			const wxString& realName = GETIdentifier(true);
 			cVariable.m_sName = realName;
 			cVariable.m_sType = typeVar;
-
+			variable_t* foundedVar = NULL;
 			//регистрируем эту переменную как локальную
-			if (m_pContext->FindVariable(realName)) { //было объявление + повторное объявление = ошибка
+			if (m_pContext->FindVariable(realName, foundedVar)) { //было объявление + повторное объявление = ошибка
 				SetError(ERROR_IDENTIFIER_DUPLICATE, realName);
 			}
-
 			if (IsNextDelimeter('[')) {//это массив
 				GETDelimeter('[');
 				GETDelimeter(']');
@@ -1425,47 +1387,36 @@ bool CCompileModule::CompileFunction()
 				GETDelimeter('=');
 				cVariable.m_vData = FindConst(GETConstant());
 			}
-
 			m_pContext->AddVariable(realName, typeVar);
 			pFunction->m_aParamList.push_back(cVariable);
-
-			if (IsNextDelimeter(')')) break;
+			if (IsNextDelimeter(')'))
+				break;
 			GETDelimeter(',');
 		}
 	}
-
 	GETDelimeter(')');
-
 	if (IsNextKeyWord(KEY_EXPORT)) {
 		GETKeyWord(KEY_EXPORT);
 		pFunction->m_bExport = true;
 	}
 
 	int nParentNumber = 0;
-	CCompileContext* pCurContext = GetContext();
-
-	while (pCurContext)
-	{
+	compileContext_t* pCurContext = GetContext();
+	while (pCurContext) {
 		nParentNumber++;
-
-		if (nParentNumber > MAX_OBJECTS_LEVEL)
-		{
+		if (nParentNumber > MAX_OBJECTS_LEVEL) {
 			CSystemObjects::Message(pCurContext->m_compileModule->GetModuleName());
 			if (nParentNumber > 2 * MAX_OBJECTS_LEVEL)
-				CTranslateError::Error(_("Recursive call of modules!"));
+				CTranslateError::Error("Recursive call of modules!");
 		}
-
-		if (pCurContext->FindFunction(sFuncName))//нашли
-		{
-			CFunction* m_pCurrentFunc = pCurContext->m_cFunctions[sFuncName];
-			if (m_pCurrentFunc->m_bExport ||
-				pCurContext->m_compileModule == this)
-			{
+		function_t* foundedFunc = NULL;
+		if (pCurContext->FindFunction(sFuncName, foundedFunc)) { //нашли
+			if (foundedFunc->m_bExport ||
+				pCurContext->m_compileModule == this) {
 				m_nCurrentCompile = errorPlace;
-				SetError(ERROR_DEF_FUNCTION, sFuncName0);
+				SetError(ERROR_DEF_FUNCTION, sFuncRealName);
 			}
 		}
-
 		pCurContext = pCurContext->m_parentContext;
 	}
 
@@ -1473,50 +1424,51 @@ bool CCompileModule::CompileFunction()
 	GetContext()->m_cFunctions[sFuncName] = pFunction;
 
 	//вставляем информацию о функции в массив байт-кодов:
-	CByte code0;
+	byteRaw_t code0;
 	AddLineInfo(code0);
 	code0.m_nOper = OPER_FUNC;
-
 #if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
 	code0.m_param1.m_nArray = reinterpret_cast<wxLongLong_t>(m_pContext);
 #else
 	code0.m_param1.m_nArray = reinterpret_cast<int>(m_pContext);
 #endif
-
 	m_cByteCode.m_aCodeList.push_back(code0);
 
-	int nAddres = pFunction->m_nStart = m_cByteCode.m_aCodeList.size() - 1;
-	m_cByteCode.m_aFuncList[sFuncName] = nAddres + 1;
+	const long lAddres = pFunction->m_nStart = m_cByteCode.m_aCodeList.size() - 1;
+
+	m_cByteCode.m_aFuncList[sFuncName] = {
+		(long)pFunction->m_aParamList.size(),
+		lAddres + 1,
+		m_pContext->m_nReturn == RETURN_FUNCTION
+	};
 
 	if (pFunction->m_bExport) {
-		m_cByteCode.m_aExportFuncList[sFuncName] = nAddres + 1;
+		m_cByteCode.m_aExportFuncList[sFuncName] = {
+			(long)pFunction->m_aParamList.size(),
+			lAddres + 1,
+			m_pContext->m_nReturn == RETURN_FUNCTION
+		};
 	}
 
-	for (unsigned int i = 0; i < pFunction->m_aParamList.size(); i++)
-	{
+	for (unsigned int i = 0; i < pFunction->m_aParamList.size(); i++) {
 		//add set oper
-		CByte code;
+		byteRaw_t code;
 		AddLineInfo(code);
-
 		if (pFunction->m_aParamList[i].m_vData.m_nArray == DEF_VAR_CONST) {
 			code.m_nOper = OPER_SETCONST;//идет передача параметров
 		}
 		else {
 			code.m_nOper = OPER_SET;//идет передача параметров
 		}
-
 		code.m_param1 = pFunction->m_aParamList[i].m_vData;
 		code.m_param2.m_nIndex = pFunction->m_aParamList[i].m_bByRef;
-
 		m_cByteCode.m_aCodeList.push_back(code);
 
 		//Set type variable
-		SParam variable;
-
+		param_t variable;
 		variable.m_sType = pFunction->m_aParamList[i].m_sType;
 		variable.m_nArray = 0;
 		variable.m_nIndex = i;//индекс совпадает с номером
-
 		AddTypeSet(variable);
 	}
 
@@ -1532,16 +1484,16 @@ bool CCompileModule::CompileFunction()
 		GETKeyWord(KEY_ENDPROCEDURE);
 	}
 
-	CByte code;
+	byteRaw_t code;
 	AddLineInfo(code);
 	code.m_nOper = OPER_ENDFUNC;
 	m_cByteCode.m_aCodeList.push_back(code);
 
 	pFunction->m_nFinish = m_cByteCode.m_aCodeList.size() - 1;
-	pFunction->m_nVarCount = m_pContext->m_cVariables.size();
+	pFunction->m_lVarCount = m_pContext->m_cVariables.size();
 
-	m_cByteCode.m_aCodeList[nAddres].m_param3.m_nIndex = pFunction->m_nVarCount;//число локальных переменных
-	m_cByteCode.m_aCodeList[nAddres].m_param3.m_nArray = pFunction->m_aParamList.size();//число формальных параметров
+	m_cByteCode.m_aCodeList[lAddres].m_param3.m_nIndex = pFunction->m_lVarCount;//число локальных переменных
+	m_cByteCode.m_aCodeList[lAddres].m_param3.m_nArray = pFunction->m_aParamList.size();//число формальных параметров
 
 	m_pContext->SetFunction(pFunction);
 	return true;
@@ -1550,18 +1502,15 @@ bool CCompileModule::CompileFunction()
 /**
  * записываем информацию о типе переменной
  */
-void CCompileModule::AddTypeSet(const SParam& sVariable)
+void CCompileModule::AddTypeSet(const param_t& sVariable)
 {
-	wxString typeName = sVariable.m_sType;
-
+	const wxString &typeName = sVariable.m_sType;
 	if (!typeName.IsEmpty()) {
-		CByte code;
+		byteRaw_t code;
 		AddLineInfo(code);
 		code.m_nOper = OPER_SET_TYPE;
-
 		code.m_param1 = sVariable;
 		code.m_param2.m_nArray = CValue::GetIDObjectFromString(typeName);
-
 		m_cByteCode.m_aCodeList.push_back(code);
 	}
 }
@@ -1607,7 +1556,7 @@ if(!sKey.m_sType.IsEmpty())\
  */
 bool CCompileModule::CompileBlock()
 {
-	CLexem lex;
+	lexem_t lex;
 	while ((lex = PreviewGetLexem()).m_nType != ERRORTYPE)
 	{
 		/*if (IDENTIFIER == lex.m_nType && IsTypeVar(lex.m_sData))
@@ -1648,7 +1597,7 @@ bool CCompileModule::CompileBlock()
 					SetError(ERROR_USE_RETURN); //Оператор Return (Возврат) не может употребляться вне процедуры или функции
 				}
 
-				CByte code;
+				byteRaw_t code;
 				AddLineInfo(code);
 				code.m_nOper = OPER_RET;
 
@@ -1671,7 +1620,7 @@ bool CCompileModule::CompileBlock()
 			case KEY_TRY:
 			{
 				GETKeyWord(KEY_TRY);
-				CByte code;
+				byteRaw_t code;
 				AddLineInfo(code);
 				code.m_nOper = OPER_TRY;
 				m_cByteCode.m_aCodeList.push_back(code);
@@ -1694,7 +1643,7 @@ bool CCompileModule::CompileBlock()
 			case KEY_RAISE:
 			{
 				GETKeyWord(KEY_RAISE);
-				CByte code;
+				byteRaw_t code;
 				AddLineInfo(code);
 				if (IsNextDelimeter('(')) {
 					code.m_nOper = OPER_RAISE_T;
@@ -1712,7 +1661,7 @@ bool CCompileModule::CompileBlock()
 			{
 				GETKeyWord(KEY_CONTINUE);
 				if (m_pContext->aContinueList[m_pContext->m_nDoNumber]) {
-					CByte code;
+					byteRaw_t code;
 					AddLineInfo(code);
 					code.m_nOper = OPER_GOTO;
 					m_cByteCode.m_aCodeList.push_back(code);
@@ -1730,7 +1679,7 @@ bool CCompileModule::CompileBlock()
 				GETKeyWord(KEY_BREAK);
 				if (m_pContext->aBreakList[m_pContext->m_nDoNumber])
 				{
-					CByte code;
+					byteRaw_t code;
 					AddLineInfo(code);
 					code.m_nOper = OPER_GOTO;
 					m_cByteCode.m_aCodeList.push_back(code);
@@ -1755,30 +1704,25 @@ bool CCompileModule::CompileBlock()
 		{
 			lex = GetLexem();
 
-			if (IDENTIFIER == lex.m_nType)
-			{
+			if (IDENTIFIER == lex.m_nType) {
 				m_pContext->m_nTempVar = 0;
-
-				if (IsNextDelimeter(':'))//это встретилось задание метки
-				{
+				if (IsNextDelimeter(':')) {//это встретилось задание метки
 					unsigned int pLabel = m_pContext->m_cLabelsDef[lex.m_sData];
-					if (pLabel > 0) SetError(ERROR_IDENTIFIER_DUPLICATE, lex.m_sData);//произошло дублированное определения меток
-
+					if (pLabel > 0)
+						SetError(ERROR_IDENTIFIER_DUPLICATE, lex.m_sData);//произошло дублированное определения меток
 					//записываем адрес перехода:
 					m_pContext->m_cLabelsDef[lex.m_sData] = m_cByteCode.m_aCodeList.size() - 1;
 					GETDelimeter(':');
 				}
-				else//здесь обрабатываются вызовы функций, методов, присваиваение выражений
-				{
+				else { //здесь обрабатываются вызовы функций, методов, присваиваение выражений
 					m_nCurrentCompile--;//шаг назад
 					int nSet = 1;
 					if (m_bCommonModule && m_pContext == GetContext()) SetError(ERROR_ONLY_FUNCTION);
-					SParam variable = GetCurrentIdentifier(nSet);//получаем левую часть выражения (до знака '=')
+					param_t variable = GetCurrentIdentifier(nSet);//получаем левую часть выражения (до знака '=')
 					if (nSet) { //если есть правая часть, т.е. знак '='
-
 						GETDelimeter('=');//это присваивание переменной какого-то выражения
-						SParam sExpression = GetExpression();
-						CByte code;
+						param_t sExpression = GetExpression();
+						byteRaw_t code;
 						code.m_nOper = OPER_LET;
 						AddLineInfo(code);
 
@@ -1788,7 +1732,6 @@ bool CCompileModule::CompileBlock()
 						bool bShortLet = false; int n = 0;
 
 						if (DEF_VAR_TEMP == sExpression.m_nArray) { //сокращаем только временные переменные
-
 							n = m_cByteCode.m_aCodeList.size() - 1;
 							if (n >= 0) {
 								int nOperation = m_cByteCode.m_aCodeList[n].m_nOper;
@@ -1846,7 +1789,7 @@ bool CCompileModule::CompileNewObject()
 	wxString sObjectName = GETIdentifier(true);
 	int nNumber = GetConstString(sObjectName);
 
-	std::vector <SParam> aParamList;
+	std::vector <param_t> aParamList;
 
 	if (IsNextDelimeter('('))//это вызов метода
 	{
@@ -1856,7 +1799,7 @@ bool CCompileModule::CompileNewObject()
 		{
 			if (IsNextDelimeter(','))
 			{
-				SParam data;
+				param_t data;
 				data.m_nArray = DEF_VAR_SKIP;//пропущенный параметр
 				data.m_nIndex = DEF_VAR_SKIP;
 				aParamList.push_back(data);
@@ -1875,20 +1818,20 @@ bool CCompileModule::CompileNewObject()
 	if (!CValue::IsRegisterObject(sObjectName, eObjectType::eObjectType_object))
 		SetError(ERROR_CALL_CONSTRUCTOR, sObjectName);
 
-	CByte code;
+	byteRaw_t code;
 	AddLineInfo(code);
+	
 	code.m_nOper = OPER_NEW;
-
 	code.m_param2.m_nIndex = nNumber;//номер вызываемого метода из списка встретившихся методов
 	code.m_param2.m_nArray = aParamList.size();//число параметров
 
-	SParam variable = GetVariable();
+	param_t variable = GetVariable();
 	code.m_param1 = variable;//переменная, в которую возвращается значение
 	m_cByteCode.m_aCodeList.push_back(code);
 
 	for (unsigned int i = 0; i < aParamList.size(); i++)
 	{
-		CByte code;
+		byteRaw_t code;
 		AddLineInfo(code);
 		code.m_nOper = OPER_SET;
 		code.m_param1 = aParamList[i];
@@ -1910,13 +1853,13 @@ bool CCompileModule::CompileGoto()
 {
 	GETKeyWord(KEY_GOTO);
 
-	SLabel data;
+	label_t data;
 	data.m_sName = GETIdentifier();
 	data.m_nLine = m_cByteCode.m_aCodeList.size();//запоминаем те переходы, которые потом надо будет обработать
 	data.m_nError = m_nCurrentCompile;
 	m_pContext->m_cLabels.push_back(data);
 
-	CByte code;
+	byteRaw_t code;
 	AddLineInfo(code);
 	code.m_nOper = OPER_GOTO;
 	m_cByteCode.m_aCodeList.push_back(code);
@@ -1933,139 +1876,112 @@ bool CCompileModule::CompileGoto()
  * nIsSet - на выходе: 1 - признак того что точно ожидается присваивание выражения (т.е. должен встретиться знак '=')
  * номер идекса переменной, где лежит значение идентификатора
 */
-SParam CCompileModule::GetCurrentIdentifier(int& nIsSet)
+param_t CCompileModule::GetCurrentIdentifier(int& nIsSet)
 {
-	SParam variable; int nPrevSet = nIsSet;
+	param_t variable; int nPrevSet = nIsSet;
 
 	wxString realName = GETIdentifier(true);
 	wxString name = StringUtils::MakeUpper(realName);
 
-	if (IsNextDelimeter('('))//это вызов функции
-	{
-		wxString contextName;
-
-		if (m_cContext.FindFunction(name, contextName, true))
-		{
+	if (IsNextDelimeter('(')) { //это вызов функции
+		function_t* foundedFunction = NULL;
+		if (m_cContext.FindFunction(name, foundedFunction, true)) {
 			int nNumber = GetConstString(realName);
-
-			std::vector <SParam> aParamList;
+			std::vector <param_t> aParamList;
 			GETDelimeter('(');
-			while (!IsNextDelimeter(')'))
-			{
-				if (IsNextDelimeter(','))
-				{
-					SParam data;
+			while (!IsNextDelimeter(')')) {
+				if (IsNextDelimeter(',')) {
+					param_t data;
 					data.m_nArray = DEF_VAR_SKIP;//пропущенный параметр
 					data.m_nIndex = DEF_VAR_SKIP;
 					aParamList.push_back(data);
 				}
-				else
-				{
+				else {
 					aParamList.emplace_back(GetExpression());
-					if (IsNextDelimeter(')')) break;
+					if (IsNextDelimeter(')'))
+						break;
 				}
 				GETDelimeter(',');
 			}
-
 			GETDelimeter(')');
-
-			CByte code;
+			if (!nIsSet && foundedFunction != NULL &&
+				foundedFunction->m_pContext && foundedFunction->m_pContext->m_nReturn == RETURN_PROCEDURE) {
+				SetError(ERROR_USE_PROCEDURE_AS_FUNCTION, foundedFunction->m_sRealName);
+			}
+			if (aParamList.size() > foundedFunction->m_aParamList.size()) {
+				SetError(ERROR_MANY_PARAMS); //Слишком много фактических параметров
+			}
+			byteRaw_t code;
 			AddLineInfo(code);
 			code.m_nOper = OPER_CALL_M;
-
 			// переменная у которой вызывается метод
-			code.m_param2 = GetVariable(contextName, false, true);
-
+			code.m_param2 = GetVariable(foundedFunction->m_sContextVar, false, true);
 			code.m_param3.m_nIndex = nNumber;//номер вызываемого метода из списка встретившихся методов
 			code.m_param3.m_nArray = aParamList.size();//число параметров
 			variable = GetVariable();
 			code.m_param1 = variable;//переменная, в которую возвращается значение
 			m_cByteCode.m_aCodeList.push_back(code);
-
-			for (unsigned int i = 0; i < aParamList.size(); i++)
-			{
-				CByte code;
+			for (unsigned int i = 0; i < aParamList.size(); i++) {
+				byteRaw_t code;
 				AddLineInfo(code);
 				code.m_nOper = OPER_SET;
 				code.m_param1 = aParamList[i];
 				m_cByteCode.m_aCodeList.push_back(code);
 			}
 		}
-		else
-		{
-			CFunction* pDefFunction = NULL;
-
-			if (m_bExpressionOnly) {
-				pDefFunction = GetFunction(name);
+		else {
+			function_t* foundedFunc = NULL;
+			if (m_bExpressionOnly)
+				foundedFunc = GetFunction(name);
+			else if (!GetContext()->FindFunction(name, foundedFunc))
+				SetError(ERROR_CALL_FUNCTION, realName);
+			if (!nIsSet && foundedFunc && foundedFunc->m_pContext && foundedFunc->m_pContext->m_nReturn == RETURN_PROCEDURE) {
+				SetError(ERROR_USE_PROCEDURE_AS_FUNCTION, foundedFunc->m_sRealName);
 			}
-			else if (GetContext()->FindFunction(name)) {
-				pDefFunction = GetContext()->m_cFunctions[name];//ищем в текущем модуле
-			}
-
-			if (!nIsSet && pDefFunction && pDefFunction->m_pContext && pDefFunction->m_pContext->m_nReturn == RETURN_PROCEDURE) {
-				SetError(ERROR_USE_PROCEDURE_AS_FUNCTION, pDefFunction->m_sRealName);
-			}
-
 			variable = GetCallFunction(realName);
 		}
-
 		if (IsTypeVar(realName)) {
 			variable.m_sType = GetTypeVar(realName);//это приведение типов
 		}
-
 		nIsSet = 0;
 	}
-	else//это вызов переменной
-	{
-		wxString contextName; nIsSet = 1;
-
-		if (m_cContext.FindVariable(realName, contextName, true))
-		{
-			CByte code;
+	else { //это вызов переменной
+		variable_t* foundedVar = NULL; nIsSet = 1;
+		if (m_cContext.FindVariable(realName, foundedVar, true)) {
+			byteRaw_t code;
 			AddLineInfo(code);
-
 			int nNumber = GetConstString(realName);
-
-			if (IsNextDelimeter('=') && nPrevSet == 1)
-			{
+			if (IsNextDelimeter('=') && nPrevSet == 1) {
 				GETDelimeter('='); nIsSet = 0;
-
 				code.m_nOper = OPER_SET_A;
-				code.m_param1 = GetVariable(contextName, false, true);//переменная у которой вызывается атрибут
+				code.m_param1 = GetVariable(foundedVar->m_sContextVar, false, true);//переменная у которой вызывается атрибут
 				code.m_param2.m_nIndex = nNumber;//номер вызываемого метода из списка встретившихся атрибутов и методов
 				code.m_param3 = GetExpression();
-
 				m_cByteCode.m_aCodeList.push_back(code);
-
 				return variable;
 			}
-			else
-			{
+			else {
 				code.m_nOper = OPER_GET_A;
-				code.m_param2 = GetVariable(contextName, false, true);//переменная у которой вызывается атрибут
+				code.m_param2 = GetVariable(foundedVar->m_sContextVar, false, true);//переменная у которой вызывается атрибут
 				code.m_param3.m_nIndex = nNumber;//номер вызываемого атрибута из списка встретившихся атрибутов и методов
 				variable = GetVariable();
 				code.m_param1 = variable;//переменная, в которую возвращается значение
 				m_cByteCode.m_aCodeList.push_back(code);
 			}
 		}
-		else
-		{
+		else {
 			bool bCheckError = !nPrevSet;
-
 			if (IsNextDelimeter('.'))//эта переменная содержит вызов метода
 				bCheckError = true;
-
 			variable = GetVariable(realName, bCheckError);
 		}
 	}
 
 MLabel:
 
-	if (IsNextDelimeter('['))//это массив
-	{
+	if (IsNextDelimeter('[')) { //это массив
 		GETDelimeter('[');
-		SParam sKey = GetExpression();
+		param_t sKey = GetExpression();
 		GETDelimeter(']');
 		//определяем тип вызова (т.е. это установка значения массива или получение)
 		//Пример:
@@ -2073,21 +1989,17 @@ MLabel:
 		//А=Мас[10]; - Get
 		//Мас[10][2]=12; - Get,Set
 		nIsSet = 0;
-
-		if (IsNextDelimeter('['))//проверки типа переменной массива (поддержка многомерных массивов)
-		{
-			CByte code;
+		if (IsNextDelimeter('[')) { //проверки типа переменной массива (поддержка многомерных массивов)
+			byteRaw_t code;
 			AddLineInfo(code);
 			code.m_nOper = OPER_CHECK_ARRAY;
 			code.m_param1 = variable;//переменная - массив
 			code.m_param2 = sKey;//индекс массива
 			m_cByteCode.m_aCodeList.push_back(code);
 		}
-
-		if (IsNextDelimeter('=') && nPrevSet == 1)
-		{
+		if (IsNextDelimeter('=') && nPrevSet == 1) {
 			GETDelimeter('=');
-			CByte code;
+			byteRaw_t code;
 			AddLineInfo(code);
 			code.m_nOper = OPER_SET_ARRAY;
 			code.m_param1 = variable;//переменная - массив
@@ -2099,71 +2011,54 @@ MLabel:
 			m_cByteCode.m_aCodeList.push_back(code);
 			return variable;
 		}
-		else
-		{
-			CByte code;
+		else {
+			byteRaw_t code;
 			AddLineInfo(code);
 			code.m_nOper = OPER_GET_ARRAY;
-
 			code.m_param2 = variable;//переменная - массив
 			code.m_param3 = sKey;//индекс массива (точнее ключ т.к. используется ассоциативный массив)
 			variable = GetVariable();
 			code.m_param1 = variable;//переменная, в которую возвращается значение
-
 			CorrectTypeDef(sKey);//проверка типа значения индексной переменной
-
 			m_cByteCode.m_aCodeList.push_back(code);
 		}
-
 		goto MLabel;
 	}
 
-	if (IsNextDelimeter('.'))//это вызов метода или атрибута агрегатного объекта
-	{
+	if (IsNextDelimeter('.')) { //это вызов метода или атрибута агрегатного объекта
 		GETDelimeter('.');
-
 		wxString sRealMethod = GETIdentifier(true);
 		//wxString sMethod = StringUtils::MakeUpper(sRealMethod);
-
 		int nNumber = GetConstString(sRealMethod);
-
-		if (IsNextDelimeter('('))//это вызов метода
-		{
-			std::vector <SParam> aParamList;
+		if (IsNextDelimeter('(')) { //это вызов метода
+			std::vector <param_t> aParamList;
 			GETDelimeter('(');
-			while (!IsNextDelimeter(')'))
-			{
-				if (IsNextDelimeter(','))
-				{
-					SParam data;
+			while (!IsNextDelimeter(')')) {
+				if (IsNextDelimeter(',')) {
+					param_t data;
 					data.m_nArray = DEF_VAR_SKIP;//пропущенный параметр
 					data.m_nIndex = DEF_VAR_SKIP;
 					aParamList.push_back(data);
 				}
-				else
-				{
+				else {
 					aParamList.emplace_back(GetExpression());
 					if (IsNextDelimeter(')')) break;
 				}
 				GETDelimeter(',');
 			}
-
 			GETDelimeter(')');
 
-			CByte code;
+			byteRaw_t code;
 			AddLineInfo(code);
 			code.m_nOper = OPER_CALL_M;
-
 			code.m_param2 = variable; // переменная у которой вызывается метод
 			code.m_param3.m_nIndex = nNumber;//номер вызываемого метода из списка встретившихся методов
 			code.m_param3.m_nArray = aParamList.size();//число параметров
 			variable = GetVariable();
 			code.m_param1 = variable;//переменная, в которую возвращается значение
 			m_cByteCode.m_aCodeList.push_back(code);
-
-			for (unsigned int i = 0; i < aParamList.size(); i++)
-			{
-				CByte code;
+			for (unsigned int i = 0; i < aParamList.size(); i++) {
+				byteRaw_t code;
 				AddLineInfo(code);
 				code.m_nOper = OPER_SET;
 				code.m_param1 = aParamList[i];
@@ -2172,18 +2067,15 @@ MLabel:
 
 			nIsSet = 0;
 		}
-		else//иначе - вызов атрибута
-		{
+		else { //иначе - вызов атрибута
 			//определяем тип вызова (т.е. это установка атрибута или получение)
 			//Пример:
 			//А=Спр.Товар; - Get
 			//Спр.Товар=0; - Set
 			//Спр.Товар.Код=0;  - Get,Set
-			CByte code;
+			byteRaw_t code;
 			AddLineInfo(code);
-
-			if (IsNextDelimeter('=') && nPrevSet == 1)
-			{
+			if (IsNextDelimeter('=') && nPrevSet == 1) {
 				GETDelimeter('='); 	nIsSet = 0;
 				code.m_nOper = OPER_SET_A;
 				code.m_param1 = variable;//переменная у которой вызывается атрибут
@@ -2192,8 +2084,7 @@ MLabel:
 				m_cByteCode.m_aCodeList.push_back(code);
 				return variable;
 			}
-			else
-			{
+			else {
 				code.m_nOper = OPER_GET_A;
 				code.m_param2 = variable;//переменная у которой вызывается атрибут
 				code.m_param3.m_nIndex = nNumber;//номер вызываемого атрибута из списка встретившихся атрибутов и методов
@@ -2202,10 +2093,8 @@ MLabel:
 				m_cByteCode.m_aCodeList.push_back(code);
 			}
 		}
-
 		goto MLabel;
 	}
-
 	return variable;
 }
 
@@ -2215,8 +2104,8 @@ bool CCompileModule::CompileIf()
 
 	GETKeyWord(KEY_IF);
 
-	SParam sParam;
-	CByte code;
+	param_t sParam;
+	byteRaw_t code;
 	AddLineInfo(code);
 	code.m_nOper = OPER_IF;
 
@@ -2231,8 +2120,7 @@ bool CCompileModule::CompileIf()
 	GETKeyWord(KEY_THEN);
 	CompileBlock();
 
-	while (IsNextKeyWord(KEY_ELSEIF))
-	{
+	while (IsNextKeyWord(KEY_ELSEIF)) {
 		//Записываем выход из всех проверок для предыдущего блока
 		code.m_nOper = OPER_GOTO;
 		m_cByteCode.m_aCodeList.push_back(code);
@@ -2256,8 +2144,7 @@ bool CCompileModule::CompileIf()
 		CompileBlock();
 	}
 
-	if (IsNextKeyWord(KEY_ELSE))
-	{
+	if (IsNextKeyWord(KEY_ELSE)) {
 		//Записываем выход из всех проверок для предыдущего блока
 		AddLineInfo(code);
 		code.m_nOper = OPER_GOTO;
@@ -2294,11 +2181,11 @@ bool CCompileModule::CompileWhile()
 	int nStartWhile = m_cByteCode.m_aCodeList.size();
 
 	GETKeyWord(KEY_WHILE);
-	CByte code;
+	byteRaw_t code;
 	AddLineInfo(code);
 	code.m_nOper = OPER_IF;
 
-	SParam sParam = GetExpression();
+	param_t sParam = GetExpression();
 	code.m_param1 = sParam;
 	CorrectTypeDef(sParam);//проверка типа значения
 
@@ -2310,7 +2197,7 @@ bool CCompileModule::CompileWhile()
 	CompileBlock();
 	GETKeyWord(KEY_ENDDO);
 
-	CByte code2;
+	byteRaw_t code2;
 	AddLineInfo(code2);
 	code2.m_nOper = OPER_GOTO;
 	code2.m_param1.m_nIndex = nStartWhile;
@@ -2333,7 +2220,7 @@ bool CCompileModule::CompileFor()
 	wxString realName = GETIdentifier(true);
 	wxString name = StringUtils::MakeUpper(realName);
 
-	SParam variable = GetVariable(realName);
+	param_t variable = GetVariable(realName);
 
 	//проверка типа переменной
 	if (!variable.m_sType.IsEmpty()) {
@@ -2343,9 +2230,9 @@ bool CCompileModule::CompileFor()
 	}
 
 	GETDelimeter('=');
-	SParam Variable2 = GetExpression();
+	param_t Variable2 = GetExpression();
 
-	CByte code0;
+	byteRaw_t code0;
 	AddLineInfo(code0);
 	code0.m_nOper = OPER_LET;
 	code0.m_param1 = variable;
@@ -2361,17 +2248,17 @@ bool CCompileModule::CompileFor()
 	}
 
 	GETKeyWord(KEY_TO);
-	SParam VariableTo =
+	param_t VariableTo =
 		m_pContext->GetVariable(name + wxT("@to"), true, false, false, true); //loop variable
 
-	CByte code1;
+	byteRaw_t code1;
 	AddLineInfo(code1);
 	code1.m_nOper = OPER_LET;
 	code1.m_param1 = VariableTo;
 	code1.m_param2 = GetExpression();
 	m_cByteCode.m_aCodeList.push_back(code1);
 
-	CByte code;
+	byteRaw_t code;
 	AddLineInfo(code);
 	code.m_nOper = OPER_FOR;
 	code.m_param1 = variable;
@@ -2384,7 +2271,7 @@ bool CCompileModule::CompileFor()
 	CompileBlock();
 	GETKeyWord(KEY_ENDDO);
 
-	CByte code2;
+	byteRaw_t code2;
 	AddLineInfo(code2);
 	code2.m_nOper = OPER_NEXT;
 	code2.m_param1 = variable;
@@ -2408,24 +2295,24 @@ bool CCompileModule::CompileForeach()
 	wxString realName = GETIdentifier(true);
 	wxString name = StringUtils::MakeUpper(realName);
 
-	SParam variable = GetVariable(realName);
+	param_t variable = GetVariable(realName);
 
 	GETKeyWord(KEY_IN);
 
-	SParam VariableIn =
+	param_t VariableIn =
 		m_pContext->GetVariable(name + wxT("@in"), true, false, false, true); //loop variable
 
-	CByte code1;
+	byteRaw_t code1;
 	AddLineInfo(code1);
 	code1.m_nOper = OPER_LET;
 	code1.m_param1 = VariableIn;
 	code1.m_param2 = GetExpression();
 	m_cByteCode.m_aCodeList.push_back(code1);
 
-	SParam VariableIt =
+	param_t VariableIt =
 		m_pContext->GetVariable(name + wxT("@it"), true, false, false, true);  //storage iterpos;
 
-	CByte code;
+	byteRaw_t code;
 	AddLineInfo(code);
 	code.m_nOper = OPER_FOREACH;
 	code.m_param1 = variable;
@@ -2439,7 +2326,7 @@ bool CCompileModule::CompileForeach()
 	CompileBlock();
 	GETKeyWord(KEY_ENDDO);
 
-	CByte code2;
+	byteRaw_t code2;
 	AddLineInfo(code2);
 	code2.m_nOper = OPER_NEXT_ITER;
 	code2.m_param1 = VariableIt; // for storage iterpos;
@@ -2457,34 +2344,30 @@ bool CCompileModule::CompileForeach()
 /**
  * обработка вызова функции или процедуры
  */
-SParam CCompileModule::GetCallFunction(const wxString& realName)
+param_t CCompileModule::GetCallFunction(const wxString& realName)
 {
-	CCallFunction* pRealCall = new CCallFunction();
 	wxString name = StringUtils::MakeUpper(realName);
+	сallFunction_t* callFunc = new сallFunction_t;
 
-	CFunction* pDefFunction = NULL;
-
+	function_t* foundedFunction = NULL;
 	if (m_bExpressionOnly)
-		pDefFunction = GetFunction(name);
-	else if (GetContext()->FindFunction(name))
-		pDefFunction = GetContext()->m_cFunctions[name];//ищем в текущем модуле
+		foundedFunction = GetFunction(name);
+	else if (!GetContext()->FindFunction(name, foundedFunction))
+		SetError(ERROR_CALL_FUNCTION, realName);
 
-	pRealCall->m_nError = m_nCurrentCompile;//для выдачи сообщений при ошибках
-
-	pRealCall->m_sName = name;
-	pRealCall->m_sRealName = realName;
-
+	callFunc->m_sName = name;
+	callFunc->m_sRealName = realName;
+	callFunc->m_nError = m_nCurrentCompile;//для выдачи сообщений при ошибках
 	GETDelimeter('(');
-
 	while (!IsNextDelimeter(')')) {
 		if (IsNextDelimeter(',')) {
-			SParam data;
+			param_t data;
 			data.m_nArray = DEF_VAR_SKIP;//пропущенный параметр
 			data.m_nIndex = DEF_VAR_SKIP;
-			pRealCall->m_aParamList.push_back(data);
+			callFunc->m_aParamList.push_back(data);
 		}
 		else {
-			pRealCall->m_aParamList.emplace_back(GetExpression());
+			callFunc->m_aParamList.emplace_back(GetExpression());
 			if (IsNextDelimeter(')'))
 				break;
 		}
@@ -2492,33 +2375,27 @@ SParam CCompileModule::GetCallFunction(const wxString& realName)
 	}
 
 	GETDelimeter(')');
+	param_t variable = GetVariable();
 
-	SParam variable = GetVariable();
-
-	CByte code;
+	byteRaw_t code;
 	AddLineInfo(code);
 
-	pRealCall->m_nNumberString = code.m_nNumberString;
-	pRealCall->m_nNumberLine = code.m_nNumberLine;
-	pRealCall->m_sModuleName = code.m_sModuleName;
-	pRealCall->m_sRetValue = variable;
+	callFunc->m_nNumberString = code.m_nNumberString;
+	callFunc->m_nNumberLine = code.m_nNumberLine;
+	callFunc->m_sModuleName = code.m_sModuleName;
+	callFunc->m_sRetValue = variable;
 
-	if (pDefFunction && GetContext()->m_sCurFuncName != name)
-	{
-		AddCallFunction(pRealCall);
-		delete pRealCall;
+	if (foundedFunction && GetContext()->m_sCurFuncName != name) {
+		AddCallFunction(callFunc);
+		wxDELETE(callFunc);
 	}
-	else
-	{
-		if (m_bExpressionOnly) {
+	else {
+		if (m_bExpressionOnly)
 			SetError(ERROR_CALL_FUNCTION, realName);
-		}
-
 		code.m_nOper = OPER_GOTO;//переход в конец байт-кода, где будет производиться развернутый вызов
 		m_cByteCode.m_aCodeList.push_back(code);
-
-		pRealCall->m_nAddLine = m_cByteCode.m_aCodeList.size() - 1;
-		m_apCallFunctions.push_back(pRealCall);
+		callFunc->m_nAddLine = m_cByteCode.m_aCodeList.size() - 1;
+		m_apCallFunctions.push_back(callFunc);
 	}
 
 	return variable;
@@ -2528,9 +2405,9 @@ SParam CCompileModule::GetCallFunction(const wxString& realName)
  * Получает номер константы из уникального списка значений
  * (если такого значения в списке нет, то оно создается)
  */
-SParam CCompileModule::FindConst(CValue& m_vData)
+param_t CCompileModule::FindConst(CValue& m_vData)
 {
-	SParam Const; Const.m_nArray = DEF_VAR_CONST;
+	param_t Const; Const.m_nArray = DEF_VAR_CONST;
 
 	wxString sConst = wxString::Format(wxT("%d:%s"), m_vData.GetType(), m_vData.GetString());
 
@@ -2552,25 +2429,24 @@ SParam CCompileModule::FindConst(CValue& m_vData)
 /**
  * Компиляция произвольного выражения (служебные вызовы из самой функции)
  */
-SParam CCompileModule::GetExpression(int nPriority)
+param_t CCompileModule::GetExpression(int nPriority)
 {
-	SParam variable;
-	CLexem lex = GETLexem();
+	param_t variable;
+	lexem_t lex = GETLexem();
 
 	//Сначала обрабатываем Левые операторы
 	if ((lex.m_nType == KEYWORD && lex.m_nData == KEY_NOT) || (lex.m_nType == DELIMITER && lex.m_nData == '!'))
 	{
 		variable = GetVariable();
-		SParam Variable2 = GetExpression(s_aPriority['!']);
-		CByte code;
+		param_t Variable2 = GetExpression(s_aPriority['!']);
+		byteRaw_t code;
 		code.m_nOper = OPER_NOT;
 		AddLineInfo(code);
 
-		if (!Variable2.m_sType.IsEmpty())
-		{
+		if (!Variable2.m_sType.IsEmpty()) {
 			CheckTypeDef(Variable2, CValue::GetNameObjectFromVT(eValueTypes::TYPE_BOOLEAN));
 		}
-
+		
 		variable.m_sType = CValue::GetNameObjectFromVT(eValueTypes::TYPE_BOOLEAN, true);
 
 		code.m_param1 = variable;
@@ -2582,7 +2458,7 @@ SParam CCompileModule::GetExpression(int nPriority)
 		wxString sObjectName = GETIdentifier(true);
 		int nNumber = GetConstString(sObjectName);
 
-		std::vector <SParam> aParamList;
+		std::vector <param_t> aParamList;
 
 		if (IsNextDelimeter('('))//это вызов метода
 		{
@@ -2592,7 +2468,7 @@ SParam CCompileModule::GetExpression(int nPriority)
 			{
 				if (IsNextDelimeter(','))
 				{
-					SParam data;
+					param_t data;
 					data.m_nArray = DEF_VAR_SKIP;//пропущенный параметр
 					data.m_nIndex = DEF_VAR_SKIP;
 					aParamList.push_back(data);
@@ -2611,7 +2487,7 @@ SParam CCompileModule::GetExpression(int nPriority)
 		if (lex.m_nData == KEY_NEW && !CValue::IsRegisterObject(sObjectName, eObjectType::eObjectType_object))
 			SetError(ERROR_CALL_CONSTRUCTOR, sObjectName);
 
-		CByte code;
+		byteRaw_t code;
 		AddLineInfo(code);
 		code.m_nOper = OPER_NEW;
 
@@ -2624,7 +2500,7 @@ SParam CCompileModule::GetExpression(int nPriority)
 
 		for (unsigned int i = 0; i < aParamList.size(); i++)
 		{
-			CByte code;
+			byteRaw_t code;
 			AddLineInfo(code);
 			code.m_nOper = OPER_SET;
 			code.m_param1 = aParamList[i];
@@ -2639,7 +2515,7 @@ SParam CCompileModule::GetExpression(int nPriority)
 	else if (lex.m_nType == DELIMITER && lex.m_nData == '?')
 	{
 		variable = GetVariable();
-		CByte code;
+		byteRaw_t code;
 		AddLineInfo(code);
 		code.m_nOper = OPER_ITER;
 		code.m_param1 = variable;
@@ -2672,20 +2548,23 @@ SParam CCompileModule::GetExpression(int nPriority)
 		//Это задание пользователем знака выражения
 		if (lex.m_nData == '+')//ничего не делаем (игнорируем)
 		{
-			CByte code;
+			byteRaw_t code;
 			variable = GetExpression(nPriority);
-			if (!variable.m_sType.IsEmpty()) { CheckTypeDef(variable, CValue::GetNameObjectFromVT(eValueTypes::TYPE_NUMBER)); }
+			if (!variable.m_sType.IsEmpty()) { 
+				CheckTypeDef(variable, CValue::GetNameObjectFromVT(eValueTypes::TYPE_NUMBER)); 
+			}
 			variable.m_sType = CValue::GetNameObjectFromVT(eValueTypes::TYPE_NUMBER, true);
 			return variable;
 		}
 		else
 		{
 			variable = GetExpression(100);//сверх высокий приоритет!
-			CByte code;
+			byteRaw_t code;
 			AddLineInfo(code);
 			code.m_nOper = OPER_INVERT;
 
-			if (!variable.m_sType.IsEmpty()) CheckTypeDef(variable, CValue::GetNameObjectFromVT(eValueTypes::TYPE_NUMBER));
+			if (!variable.m_sType.IsEmpty()) 
+				CheckTypeDef(variable, CValue::GetNameObjectFromVT(eValueTypes::TYPE_NUMBER));
 
 			code.m_param2 = variable;
 			variable = GetVariable();
@@ -2706,7 +2585,8 @@ MOperation:
 
 	lex = PreviewGetLexem();
 
-	if (lex.m_nType == DELIMITER && lex.m_nData == ')') return variable;
+	if (lex.m_nType == DELIMITER && lex.m_nData == ')')
+		return variable;
 
 	//смотрим есть ли далее операторы выполнения действий над данной переменной
 	if ((lex.m_nType == DELIMITER && lex.m_nData != ';') || (lex.m_nType == KEYWORD && lex.m_nData == KEY_AND) || (lex.m_nType == KEYWORD && lex.m_nData == KEY_OR))
@@ -2716,7 +2596,7 @@ MOperation:
 			int nCurPriority = s_aPriority[lex.m_nData];
 			if (nPriority < nCurPriority)//сравниваем приоритеты левой (предыдущей операции) и текущей выполняемой операции
 			{
-				CByte code;
+				byteRaw_t code;
 				AddLineInfo(code);
 				lex = GetLexem();
 
@@ -2768,9 +2648,9 @@ MOperation:
 					SetError(ERROR_EXPRESSION);
 				}
 
-				SParam Variable1 = GetVariable();
-				SParam Variable2 = variable;
-				SParam Variable3 = GetExpression(nCurPriority);
+				param_t Variable1 = GetVariable();
+				param_t Variable2 = variable;
+				param_t Variable3 = GetExpression(nCurPriority);
 
 				if (DEF_VAR_TEMP != Variable3.m_nArray && DEF_VAR_CONST != Variable3.m_nArray) { //доп. проверка на запрещенные операции
 					if (CValue::CompareObjectName(Variable2.m_sType, eValueTypes::TYPE_STRING)) {
@@ -2811,20 +2691,20 @@ MOperation:
 
 void CCompileModule::SetParent(CCompileModule* setParent)
 {
-	m_cByteCode.m_pParent = NULL;
+	m_cByteCode.m_parent = NULL;
 
-	m_pParent = setParent;
+	m_parent = setParent;
 	m_cContext.m_parentContext = NULL;
 
-	if (m_pParent) {
-		m_cByteCode.m_pParent = &m_pParent->m_cByteCode;
-		m_cContext.m_parentContext = &m_pParent->m_cContext;
+	if (m_parent != NULL) {
+		m_cByteCode.m_parent = &m_parent->m_cByteCode;
+		m_cContext.m_parentContext = &m_parent->m_cContext;
 	}
 
 	OnSetParent(setParent);
 }
 
-SParam CCompileModule::AddVariable(const wxString& name, const wxString& typeVar, bool exportVar, bool contextVar, bool tempVar)
+param_t CCompileModule::AddVariable(const wxString& name, const wxString& typeVar, bool exportVar, bool contextVar, bool tempVar)
 {
 	return m_pContext->AddVariable(name, typeVar, exportVar, contextVar, tempVar);
 }
@@ -2832,7 +2712,7 @@ SParam CCompileModule::AddVariable(const wxString& name, const wxString& typeVar
 /**
  * Функция возвращает номер переменной по строковому имени
  */
-SParam CCompileModule::GetVariable(const wxString& name, bool bCheckError, bool bLoadFromContext)
+param_t CCompileModule::GetVariable(const wxString& name, bool bCheckError, bool bLoadFromContext)
 {
 	return m_pContext->GetVariable(name, true, bCheckError, bLoadFromContext);
 }
@@ -2840,10 +2720,10 @@ SParam CCompileModule::GetVariable(const wxString& name, bool bCheckError, bool 
 /**
  * Cоздаем новый идентификатор переменной
  */
-SParam CCompileModule::GetVariable()
+param_t CCompileModule::GetVariable()
 {
 	wxString name = wxString::Format(wxT("@%d"), m_pContext->m_nTempVar);//@ - для гарантии уникальности имени
-	SParam variable = m_pContext->GetVariable(name, false, false, false, true);//временную переменную ищем только в локальном контексте
+	param_t variable = m_pContext->GetVariable(name, false, false, false, true);//временную переменную ищем только в локальном контексте
 	variable.m_nArray = DEF_VAR_TEMP;//признак временной локальной переменной
 	m_pContext->m_nTempVar++;
 	return variable;

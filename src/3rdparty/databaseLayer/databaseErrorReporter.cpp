@@ -37,7 +37,7 @@ void DatabaseErrorReporter::ResetErrorCodes()
 	m_nErrorCode = DATABASE_LAYER_OK;
 }
 
-#include "compiler/systemObjects.h"
+#include "core/compiler/systemObjects.h"
 #include "frontend/mainFrame.h"
 
 void DatabaseErrorReporter::ThrowDatabaseException()
@@ -46,9 +46,8 @@ void DatabaseErrorReporter::ThrowDatabaseException()
 	wxLogDebug(GetErrorMessage());
 #endif 
 
-	if (CMainFrame::Get()) {
+	if (wxAuiDocMDIFrame::GetFrame())
 		CSystemObjects::Message(GetErrorMessage());
-	}
 
 #ifndef DONT_USE_DATABASE_LAYER_EXCEPTIONS 
 	DatabaseLayerException error(GetErrorCode(), GetErrorMessage());

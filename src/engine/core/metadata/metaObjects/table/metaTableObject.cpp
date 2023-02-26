@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaTableObject.h"
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CMetaTableObject, IMetaObject)
 
@@ -12,19 +12,17 @@ wxIMPLEMENT_DYNAMIC_CLASS(CMetaTableObject, IMetaObject)
 //*                         Attributes                                  * 
 //***********************************************************************
 
-#include "metadata/singleMetaTypes.h"
-#include "metadata/metaObjects/objects/object.h"
+#include "core/metadata/singleClass.h"
+#include "core/metadata/metaObjects/objects/object.h"
 
-CLASS_ID CMetaTableObject::GetClsidTable() const
+typeDescription_t CMetaTableObject::GetTypeDescription() const
 {
 	IMetaTypeObjectValueSingle* singleObject =
 		m_metaData->GetTypeObject(this, eMetaObjectType::enTabularSection);
-	
-	if (singleObject != NULL) {
-		return singleObject->GetClassType();
-	}
-
-	return 0;
+	wxASSERT(singleObject);
+	if (singleObject != NULL)
+		return typeDescription_t(singleObject->GetTypeClass());
+	return typeDescription_t();
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -32,8 +30,6 @@ CLASS_ID CMetaTableObject::GetClsidTable() const
 CMetaTableObject::CMetaTableObject() : IMetaObject()
 {
 	m_numberLine = CMetaDefaultAttributeObject::CreateNumber("numberLine", _("N"), wxEmptyString, 6, 0);
-	m_numberLine->SetClsid(g_metaDefaultAttributeCLSID);
-
 	//set child/parent
 	m_numberLine->SetParent(this);
 	AddChild(m_numberLine);
@@ -46,6 +42,8 @@ CMetaTableObject::~CMetaTableObject()
 
 bool CMetaTableObject::LoadData(CMemoryReader& dataReader)
 {
+	m_propertyUse->SetValue(dataReader.r_u16());
+
 	//load default attributes:
 	m_numberLine->LoadMeta(dataReader);
 	return true;
@@ -53,6 +51,8 @@ bool CMetaTableObject::LoadData(CMemoryReader& dataReader)
 
 bool CMetaTableObject::SaveData(CMemoryWriter& dataWritter)
 {
+	dataWritter.w_u16(m_propertyUse->GetValueAsInteger());
+	
 	//save default attributes:
 	m_numberLine->SaveMeta(dataWritter);
 	return true;
@@ -164,7 +164,7 @@ std::vector<IMetaAttributeObject*> CMetaTableObject::GetObjectAttributes() const
 	return tableAttributes;
 }
 
-IMetaAttributeObject* CMetaTableObject::FindAttribute(const meta_identifier_t &id) const
+IMetaAttributeObject* CMetaTableObject::FindProp(const meta_identifier_t& id) const
 {
 	for (auto metaObject : m_metaObjects) {
 		if (metaObject->GetClsid() == g_metaAttributeCLSID && metaObject->GetMetaID() == id) {

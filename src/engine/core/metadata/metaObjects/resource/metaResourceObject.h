@@ -1,7 +1,7 @@
 #ifndef _RESOURCE_H__
 #define _RESOURCE_H__
 
-#include "metadata/metaObjects/attribute/metaAttributeObject.h"
+#include "core/metadata/metaObjects/attribute/metaAttributeObject.h"
 
 class CMetaResourceObject : public CMetaAttributeObject {
 	wxDECLARE_DYNAMIC_CLASS(CMetaResourceObject);

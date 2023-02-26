@@ -40,13 +40,11 @@ public:
 	//set default procedures 
 	void SetDefaultProcedure(const wxString& procName, const eContentHelper& contentHelper, std::vector<wxString> args = {});
 
-	size_t GetDefaultProcedureCount() const
-	{
+	size_t GetDefaultProcedureCount() const {
 		return m_contentHelper.size();
 	}
 
-	wxString GetDefaultProcedureName(size_t idx) const
-	{
+	wxString GetDefaultProcedureName(size_t idx) const {
 		if (idx > m_contentHelper.size())
 			return wxEmptyString;
 
@@ -55,27 +53,25 @@ public:
 		return it->first;
 	}
 
-	eContentHelper GetDefaultProcedureType(size_t idx) const
-	{
+	eContentHelper GetDefaultProcedureType(size_t idx) const {
 		if (idx > m_contentHelper.size())
 			return eContentHelper::eUnknownHelper;
-
 		auto it = m_contentHelper.begin();
 		std::advance(it, idx);
 		return it->second.m_contentType;
 	}
 
-	std::vector<wxString> GetDefaultProcedureArgs(size_t idx) const
-	{
+	std::vector<wxString> GetDefaultProcedureArgs(size_t idx) const {
 		if (idx > m_contentHelper.size())
 			return std::vector<wxString>();
-
 		auto it = m_contentHelper.begin();
 		std::advance(it, idx);
 		return it->second.m_args;
 	}
 
-	virtual bool IsGlobalModule() const { return false; }
+	virtual bool IsGlobalModule() const {
+		return false; 
+	}
 
 protected:
 

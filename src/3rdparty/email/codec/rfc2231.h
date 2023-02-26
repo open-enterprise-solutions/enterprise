@@ -13,7 +13,7 @@
 #ifndef _WX_RFC2231_H_
 #define _WX_RFC2231_H_
 
-#include <email/mimetic/mimeentity.h>
+#include <3rdparty/email/mimetic/mimeentity.h>
 
 class wxRfc2231
 {

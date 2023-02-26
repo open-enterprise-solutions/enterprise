@@ -67,7 +67,7 @@ extern int NEAR my_errno;		/* Last error in mysys */
 #define MY_SYNC_DIR     1024    /* my_create/delete/rename: sync directory */
 #define MY_RAID         64      /* Support for RAID */
 #define MY_FULL_IO     512      /* For my_read - loop intil I/O is complete */
-#define MY_DONT_CHECK_FILESIZE 128 /* Option to init_io_cache() */
+#define MY_DONT_CHECK_FILESIZE 128 /* option_t to init_io_cache() */
 #define MY_LINK_WARNING 32	/* my_redel() gives warning if links */
 #define MY_COPYTIME	64	/* my_redel() copys time */
 #define MY_DELETE_OLD	256	/* my_create_with_symlink() */

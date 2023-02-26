@@ -4,29 +4,27 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "enum.h"
-#include "methods.h"
 
 IEnumerationWrapper::IEnumerationWrapper(bool createInstance) :
-	CValue(eValueTypes::TYPE_VALUE, true), m_methods(NULL)
+	CValue(eValueTypes::TYPE_VALUE, true), m_methodHelper(NULL)
 {
 	if (createInstance) {
-		m_methods = new CMethods();
+		m_methodHelper = new CMethodHelper();
 	}
 }
 
 IEnumerationWrapper::~IEnumerationWrapper()
 {
-	wxDELETE(m_methods);
+	wxDELETE(m_methodHelper);
 }
 
 void IEnumerationWrapper::PrepareNames() const
 {
-	if (m_methods == NULL)
+	if (m_methodHelper == NULL)
 		return;
 
-	std::vector<SEng> aAttributes;
+	m_methodHelper->ClearHelper();
 	for (auto enumVal : m_aEnumsString) {
-		aAttributes.push_back(enumVal);
+		m_methodHelper->AppendProp(enumVal);
 	}
-	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
 }

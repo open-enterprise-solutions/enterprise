@@ -56,8 +56,8 @@
 
 #include <wx/sckstrm.h>
 
-#include <email/smtp/wxsmtp.h>
-#include <email/utils/wxmd5.hpp>
+#include <3rdparty/email/smtp/wxsmtp.h>
+#include <3rdparty/email/utils/wxmd5.hpp>
 
 /*!
  * The default timeout used for communication with SMTP server, in seconds

@@ -4,26 +4,25 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "enumeration.h"
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 #include "list/objectList.h"
 
 #define managerModule wxT("managerModule")
 
-wxIMPLEMENT_DYNAMIC_CLASS(CMetaObjectEnumeration, IMetaObjectRecordDataRef)
+wxIMPLEMENT_DYNAMIC_CLASS(CMetaObjectEnumeration, IMetaObjectRecordDataEnumRef)
+
+//********************************************************************************************
+
+#include "3rdparty/databaseLayer/databaseLayer.h"
+#include "appData.h"
 
 //********************************************************************************************
 //*                                      metadata                                            *
 //********************************************************************************************
 
-CMetaObjectEnumeration::CMetaObjectEnumeration() : IMetaObjectRecordDataRef()
+CMetaObjectEnumeration::CMetaObjectEnumeration() : IMetaObjectRecordDataEnumRef()
 {
-	//create default attributes
-	m_attributeOrder = CMetaDefaultAttributeObject::CreateNumber(wxT("order"), _("Order"), wxEmptyString, 6, true);
-	m_attributeOrder->SetClsid(g_metaDefaultAttributeCLSID);
-
-	//set child/parent
-	m_attributeOrder->SetParent(this);
-	AddChild(m_attributeOrder);
+	m_propertyQuickChoice->SetValue(true);
 
 	m_moduleManager = new CMetaManagerModuleObject(managerModule);
 	m_moduleManager->SetClsid(g_metaManagerCLSID);
@@ -35,11 +34,10 @@ CMetaObjectEnumeration::CMetaObjectEnumeration() : IMetaObjectRecordDataRef()
 
 CMetaObjectEnumeration::~CMetaObjectEnumeration()
 {
-	wxDELETE(m_attributeOrder);
 	wxDELETE(m_moduleManager);
 }
 
-CMetaFormObject* CMetaObjectEnumeration::GetDefaultFormByID(const form_identifier_t &id)
+CMetaFormObject* CMetaObjectEnumeration::GetDefaultFormByID(const form_identifier_t& id)
 {
 	if (id == eFormList
 		&& m_propertyDefFormList->GetValueAsInteger() != wxNOT_FOUND) {
@@ -65,8 +63,11 @@ ISourceDataObject* CMetaObjectEnumeration::CreateObjectData(IMetaFormObject* met
 {
 	switch (metaObject->GetTypeForm())
 	{
-	case eFormList: return new CListDataObjectRef(this, metaObject->GetTypeForm()); break;
-	case eFormSelect: return new CListDataObjectRef(this, metaObject->GetTypeForm(), true); break;
+	case eFormList: return
+		new CListDataObjectEnumRef(this, metaObject->GetTypeForm()); break;
+	case eFormSelect: return
+		new CListDataObjectEnumRef(this, metaObject->GetTypeForm(), true); 
+		break;
 	}
 
 	return NULL;
@@ -75,7 +76,7 @@ ISourceDataObject* CMetaObjectEnumeration::CreateObjectData(IMetaFormObject* met
 #include "frontend/visualView/controls/form.h"
 #include "utils/stringUtils.h"
 
-CValueForm* CMetaObjectEnumeration::GetListForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectEnumeration::GetListForm(const wxString& formName, IControlFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -93,20 +94,19 @@ CValueForm* CMetaObjectEnumeration::GetListForm(const wxString& formName, IValue
 	}
 
 	if (defList == NULL) {
-		CValueForm* valueForm = new CValueForm();
-		valueForm->InitializeForm(ownerControl, NULL,
-			new CListDataObjectRef(this, CMetaObjectEnumeration::eFormList), formGuid
+		CValueForm* valueForm = new CValueForm(ownerControl, NULL,
+			new CListDataObjectEnumRef(this, CMetaObjectEnumeration::eFormList), formGuid
 		);
 		valueForm->BuildForm(CMetaObjectEnumeration::eFormList);
 		return valueForm;
 	}
 
 	return defList->GenerateFormAndRun(ownerControl,
-		new CListDataObjectRef(this, defList->GetTypeForm()), formGuid
+		new CListDataObjectEnumRef(this, defList->GetTypeForm()), formGuid
 	);
 }
 
-CValueForm* CMetaObjectEnumeration::GetSelectForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectEnumeration::GetSelectForm(const wxString& formName, IControlFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -124,16 +124,15 @@ CValueForm* CMetaObjectEnumeration::GetSelectForm(const wxString& formName, IVal
 	}
 
 	if (defList == NULL) {
-		CValueForm* valueForm = new CValueForm();
-		valueForm->InitializeForm(ownerControl, NULL,
-			new CListDataObjectRef(this, CMetaObjectEnumeration::eFormSelect, true), formGuid
+		CValueForm* valueForm = new CValueForm(ownerControl, NULL,
+			new CListDataObjectEnumRef(this, CMetaObjectEnumeration::eFormSelect, true), formGuid
 		);
 		valueForm->BuildForm(CMetaObjectEnumeration::eFormSelect);
 		return valueForm;
 	}
 
 	return defList->GenerateFormAndRun(ownerControl,
-		new CListDataObjectRef(this, defList->GetTypeForm(), true), formGuid
+		new CListDataObjectEnumRef(this, defList->GetTypeForm(), true), formGuid
 	);
 }
 
@@ -182,9 +181,6 @@ wxString CMetaObjectEnumeration::GetDescription(const IObjectValueInfo* objValue
 
 bool CMetaObjectEnumeration::LoadData(CMemoryReader& dataReader)
 {
-	//load default attributes:
-	m_attributeOrder->LoadMeta(dataReader);
-
 	//Load object module
 	m_moduleManager->LoadMeta(dataReader);
 
@@ -197,9 +193,6 @@ bool CMetaObjectEnumeration::LoadData(CMemoryReader& dataReader)
 
 bool CMetaObjectEnumeration::SaveData(CMemoryWriter& dataWritter)
 {
-	//save default attributes:
-	m_attributeOrder->SaveMeta(dataWritter);
-
 	//Save object module
 	m_moduleManager->SaveMeta(dataWritter);
 
@@ -220,15 +213,11 @@ bool CMetaObjectEnumeration::OnCreateMetaObject(IMetadata* metaData)
 	if (!IMetaObjectRecordDataRef::OnCreateMetaObject(metaData))
 		return false;
 
-	return m_attributeOrder->OnCreateMetaObject(metaData) &&
-		m_moduleManager->OnCreateMetaObject(metaData);
+	return m_moduleManager->OnCreateMetaObject(metaData);
 }
 
 bool CMetaObjectEnumeration::OnLoadMetaObject(IMetadata* metaData)
 {
-	if (!m_attributeOrder->OnLoadMetaObject(metaData))
-		return false;
-
 	if (!m_moduleManager->OnLoadMetaObject(metaData))
 		return false;
 
@@ -237,9 +226,6 @@ bool CMetaObjectEnumeration::OnLoadMetaObject(IMetadata* metaData)
 
 bool CMetaObjectEnumeration::OnSaveMetaObject()
 {
-	if (!m_attributeOrder->OnSaveMetaObject())
-		return false;
-
 	if (!m_moduleManager->OnSaveMetaObject())
 		return false;
 
@@ -248,9 +234,6 @@ bool CMetaObjectEnumeration::OnSaveMetaObject()
 
 bool CMetaObjectEnumeration::OnDeleteMetaObject()
 {
-	if (!m_attributeOrder->OnDeleteMetaObject())
-		return false;
-
 	if (!m_moduleManager->OnDeleteMetaObject())
 		return false;
 
@@ -264,9 +247,6 @@ bool CMetaObjectEnumeration::OnReloadMetaObject()
 
 bool CMetaObjectEnumeration::OnBeforeRunMetaObject(int flags)
 {
-	if (!m_attributeOrder->OnBeforeRunMetaObject(flags))
-		return false;
-
 	if (!m_moduleManager->OnBeforeRunMetaObject(flags))
 		return false;
 
@@ -275,9 +255,6 @@ bool CMetaObjectEnumeration::OnBeforeRunMetaObject(int flags)
 
 bool CMetaObjectEnumeration::OnAfterCloseMetaObject()
 {
-	if (!m_attributeOrder->OnAfterCloseMetaObject())
-		return false;
-
 	if (!m_moduleManager->OnAfterCloseMetaObject())
 		return false;
 
@@ -320,7 +297,6 @@ std::vector<IMetaAttributeObject*> CMetaObjectEnumeration::GetDefaultAttributes(
 {
 	std::vector<IMetaAttributeObject*> attributes;
 	attributes.push_back(m_attributeReference);
-	attributes.push_back(m_attributeOrder);
 	return attributes;
 }
 

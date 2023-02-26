@@ -2,7 +2,7 @@
 #include "odbcResultSet.h"
 #include "odbcDatabaseLayer.h"
 
-#include "databaseLayer/databaseErrorCodes.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
 
 // ctor
 OdbcPreparedStatement::OdbcPreparedStatement(OdbcInterface* pInterface, SQLHENV sqlEnvHandle, SQLHDBC sqlHDBC)

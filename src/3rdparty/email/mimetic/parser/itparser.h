@@ -15,9 +15,9 @@
 #include <algorithm>
 #include <stack>
 #include <iostream>
-#include <email/mimetic/tree.h>
-#include <email/mimetic/utils.h>
-#include <email/mimetic/mimeentity.h>
+#include <3rdparty/email/mimetic/tree.h>
+#include <3rdparty/email/mimetic/utils.h>
+#include <3rdparty/email/mimetic/mimeentity.h>
 
 
 // FIXME: handle HigherLevelClosingBoundary

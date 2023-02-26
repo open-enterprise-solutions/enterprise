@@ -10,7 +10,7 @@ public:
 
 	CValueGridBox();
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost *visualHost) override;
+	virtual wxObject* Create(wxWindow* wxparent, IVisualHost *visualHost) override;
 	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated) override;
 	virtual void OnSelected(wxObject* wxobject) override;
 	virtual void Update(wxObject* wxobject, IVisualHost *visualHost) override;
@@ -23,6 +23,10 @@ public:
 	virtual wxString GetObjectTypeName() const override {
 		return wxT("container"); 
 	}
+
+	//support icons
+	virtual wxIcon GetIcon();
+	static wxIcon GetIconGroup();
 
 	//load & save object in control 
 	virtual bool LoadData(CMemoryReader &reader);

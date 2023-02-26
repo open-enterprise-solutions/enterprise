@@ -5,8 +5,8 @@
 #include <wx/treectrl.h>
 #include <wx/splitter.h>
 
-#include "compiler/compiler.h"
-#include "metadata/metadata.h"
+#include "core/compiler/compiler.h"
+#include "core/metadata/metadata.h"
 #include "frontend/theme/luna_auitoolbar.h"
 
 #include "frontend/controls/checktree.h"

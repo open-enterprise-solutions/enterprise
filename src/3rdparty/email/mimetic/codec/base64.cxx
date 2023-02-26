@@ -26,7 +26,7 @@
 #include <wx/wx.h>
 #endif
 
-#include <email/mimetic/codec/base64.h>
+#include <3rdparty/email/mimetic/codec/base64.h>
 
 using namespace mimetic;
 

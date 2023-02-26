@@ -4,10 +4,10 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valuePoint.h"
-#include "compiler/methods.h"
+
 
 #include "frontend/mainFrame.h"
-#include "databaseLayer/databaseLayer.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 
 #include "utils/stringUtils.h"
 #include "utils/typeconv.h"
@@ -15,20 +15,26 @@
 //////////////////////////////////////////////////////////////////////
 wxIMPLEMENT_DYNAMIC_CLASS(CValuePoint, CValue);
 
-CMethods CValuePoint::m_methods;
+CValue::CMethodHelper CValuePoint::m_methodHelper;
 
 CValuePoint::CValuePoint() : CValue(eValueTypes::TYPE_VALUE), m_point(wxDefaultPosition)
 {
 }
 
-CValuePoint::CValuePoint(const wxPoint &point) : CValue(eValueTypes::TYPE_VALUE), m_point(point)
+CValuePoint::CValuePoint(const wxPoint& point) : CValue(eValueTypes::TYPE_VALUE), m_point(point)
 {
 }
 
-bool CValuePoint::Init(CValue **aParams)
+bool CValuePoint::Init(CValue** paParams, const long lSizeArray)
 {
-	if (aParams[0]->GetType() == eValueTypes::TYPE_STRING) { m_point = TypeConv::StringToPoint(aParams[0]->ToString()); return true; }
-	else { m_point = wxPoint(aParams[0]->ToInt(), aParams[1]->ToInt()); return true; }
+	if (paParams[0]->GetType() == eValueTypes::TYPE_STRING) {
+		m_point = TypeConv::StringToPoint(paParams[0]->GetString());
+		return true;
+	}
+	else {
+		m_point = wxPoint(paParams[0]->GetInteger(), paParams[1]->GetInteger());
+		return true;
+	}
 	return false;
 }
 
@@ -44,36 +50,40 @@ enum
 
 void CValuePoint::PrepareNames() const
 {
-	std::vector <SEng>aAttributes;
+	m_methodHelper.ClearHelper();
 
-	SEng attribute;
-
-	attribute.sName = "x";
-	aAttributes.push_back(attribute);
-	attribute.sName = "y";
-	aAttributes.push_back(attribute);
-
-	m_methods.PrepareAttributes(aAttributes.data(), aAttributes.size());
+	m_methodHelper.AppendProp(wxT("x"));
+	m_methodHelper.AppendProp(wxT("y"));
 }
 
-void CValuePoint::SetAttribute(attributeArg_t &aParams, CValue &cVal)
+bool CValuePoint::SetPropVal(const long lPropNum, const CValue& varPropVal)
 {
-	switch (aParams.GetIndex())
+	switch (lPropNum)
 	{
-	case eX: m_point.x = cVal.ToInt(); break;
-	case eY: m_point.y = cVal.ToInt(); break;
+	case eX:
+		m_point.x = varPropVal.GetInteger();
+		return true;
+	case eY:
+		m_point.y = varPropVal.GetInteger();
+		return true;
 	}
+
+	return false;
 }
 
-CValue CValuePoint::GetAttribute(attributeArg_t &aParams)
+bool CValuePoint::GetPropVal(const long lPropNum, CValue& pvarPropVal)
 {
-	switch (aParams.GetIndex())
+	switch (lPropNum)
 	{
-	case eX: return m_point.x;
-	case eY: return m_point.y;
+	case eX:
+		pvarPropVal = m_point.x;
+		return true;
+	case eY:
+		pvarPropVal = m_point.y;
+		return true;
 	}
 
-	return CValue();
+	return false;
 }
 
 wxString CValuePoint::GetTypeString()const

@@ -9,11 +9,11 @@
 void CVisualHost::CreateFrame()
 {
 #if !defined(__WXGTK__ )
-	wxScrolledCanvas::Freeze();   // Prevent flickering on wx 2.8,
+	wxScrolledWindow::Freeze();   // Prevent flickering on wx 2.8,
 				// Causes problems on wx 2.9 in wxGTK (e.g. wxNoteBook objects)
 #endif
 
-	wxScrolledCanvas::Enable(true);
+	wxScrolledWindow::Enable(true);
 
 	if (m_valueForm != NULL &&
 		m_valueForm->IsShown())
@@ -30,7 +30,7 @@ void CVisualHost::CreateFrame()
 
 		// --- [3] Default sizer Setup 
 		m_mainBoxSizer = new wxBoxSizer(m_valueForm->GetOrient());
-		wxScrolledCanvas::SetSizer(m_mainBoxSizer);
+		wxScrolledWindow::SetSizer(m_mainBoxSizer);
 
 		// --- [4] Create the components of the form -------------------------
 		// Used to save valueForm objects for later display
@@ -48,17 +48,17 @@ void CVisualHost::CreateFrame()
 			}
 		}
 
-		wxScrolledCanvas::Layout();
-		wxScrolledCanvas::Refresh();
+		wxScrolledWindow::Layout();
+		wxScrolledWindow::Refresh();
 	}
 	else {
 		// There is no form to display
-		wxScrolledCanvas::Show(false);
-		wxScrolledCanvas::Refresh();
+		wxScrolledWindow::Show(false);
+		wxScrolledWindow::Refresh();
 	}
 
 #if !defined(__WXGTK__)
-	wxScrolledCanvas::Thaw();
+	wxScrolledWindow::Thaw();
 #endif
 
 	UpdateVirtualSize();
@@ -67,11 +67,11 @@ void CVisualHost::CreateFrame()
 void CVisualHost::UpdateFrame()
 {
 #if !defined(__WXGTK__ )
-	wxScrolledCanvas::Freeze();   // Prevent flickering on wx 2.8,
+	wxScrolledWindow::Freeze();   // Prevent flickering on wx 2.8,
 				// Causes problems on wx 2.9 in wxGTK (e.g. wxNoteBook objects)
 #endif
 
-	wxScrolledCanvas::Enable(true);
+	wxScrolledWindow::Enable(true);
 
 	if (m_valueForm != NULL &&
 		m_valueForm->IsShown()) {
@@ -106,23 +106,23 @@ void CVisualHost::UpdateFrame()
 			}
 		}
 
-		wxScrolledCanvas::Layout();
-		wxScrolledCanvas::Refresh();
+		wxScrolledWindow::Layout();
+		wxScrolledWindow::Refresh();
 	}
 	else {
 		// There is no form to display
-		wxScrolledCanvas::Show(false);
-		wxScrolledCanvas::Refresh();
+		wxScrolledWindow::Show(false);
+		wxScrolledWindow::Refresh();
 	}
 
 #if !defined(__WXGTK__)
-	wxScrolledCanvas::Thaw();
+	wxScrolledWindow::Thaw();
 #endif
 
 	UpdateVirtualSize();
 }
 
-#include "common/docManager.h"
+#include "core/frontend/docView/docManager.h"
 
 CVisualHost::~CVisualHost()
 {

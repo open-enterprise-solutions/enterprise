@@ -4,17 +4,17 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "moduleInfo.h"
-#include "compiler/definition.h"
+#include "core/compiler/definition.h"
 #include "appData.h"
 
-IModuleInfo::IModuleInfo() : 
-	m_compileModule(NULL), 
-	m_procUnit(NULL) 
+IModuleInfo::IModuleInfo() :
+	m_compileModule(NULL),
+	m_procUnit(NULL)
 {
 }
 
-IModuleInfo::IModuleInfo(CCompileModule *compileModule) : 
-	m_compileModule(compileModule), m_procUnit(NULL) 
+IModuleInfo::IModuleInfo(CCompileModule* compileModule) :
+	m_compileModule(compileModule), m_procUnit(NULL)
 {
 }
 
@@ -24,16 +24,20 @@ IModuleInfo::~IModuleInfo()
 	wxDELETE(m_procUnit);
 }
 
-CValue IModuleInfo::ExecuteMethod(methodArg_t &aParams)
-{
-	if (m_procUnit != NULL)
-	{
-		if (m_procUnit->FindFunction(aParams.GetName()) != wxNOT_FOUND) {
-			return m_procUnit->CallFunction(aParams);
-		}
-
-		return new CValueNoRet(aParams.GetName());
+bool IModuleInfo::ExecuteProc(const wxString& methodName,
+	CValue** paParams, const long lSizeArray) {
+	if (m_procUnit != NULL && m_procUnit->FindMethod(methodName) != wxNOT_FOUND) {
+		m_procUnit->CallFunction(methodName, paParams, lSizeArray);
+		return true;
 	}
+	return false; 
+}
 
-	return CValue();
+bool IModuleInfo::ExecuteFunc(const wxString& methodName,
+	CValue& pvarRetValue, CValue** paParams, const long lSizeArray) {
+	if (m_procUnit != NULL && m_procUnit->FindMethod(methodName) != wxNOT_FOUND) {
+		pvarRetValue = m_procUnit->CallFunction(methodName, paParams, lSizeArray);
+		return true;
+	}
+	return false;
 }

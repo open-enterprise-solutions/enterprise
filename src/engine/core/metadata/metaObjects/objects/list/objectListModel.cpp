@@ -9,22 +9,42 @@
 //*                                  Model                                          *
 //***********************************************************************************
 
+void CListDataObjectEnumRef::GetValueByRow(wxVariant& variant,
+	const wxDataViewItem& row, unsigned int col) const
+{
+	wxValueTableRow* node = GetViewData<wxValueTableRow>(row);
+	if (node == NULL)
+		return;
+	node->GetValue(col, variant);
+}
+
+bool CListDataObjectEnumRef::SetValueByRow(const wxVariant& variant,
+	const wxDataViewItem& row, unsigned int col)
+{
+	wxValueTableRow* node = GetViewData<wxValueTableRow>(row);
+	if (node == NULL)
+		return false;
+	return node->SetValue(col, variant);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 void CListDataObjectRef::GetValueByRow(wxVariant& variant,
 	const wxDataViewItem& row, unsigned int col) const
 {
-	wxValueTableListRow* node = GetViewData<wxValueTableListRow>(row);
+	wxValueTableRow* node = GetViewData<wxValueTableRow>(row);
 	if (node == NULL)
 		return;
-	node->GetValue(variant, col);
+	node->GetValue(col, variant);
 }
 
 bool CListDataObjectRef::SetValueByRow(const wxVariant& variant,
 	const wxDataViewItem& row, unsigned int col)
 {
-	wxValueTableListRow* node = GetViewData<wxValueTableListRow>(row);
+	wxValueTableRow* node = GetViewData<wxValueTableRow>(row);
 	if (node == NULL)
 		return false;
-	return node->SetValue(variant, col);
+	return node->SetValue(col, variant);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,34 +52,33 @@ bool CListDataObjectRef::SetValueByRow(const wxVariant& variant,
 void CTreeDataObjectFolderRef::GetValueByRow(wxVariant& variant,
 	const wxDataViewItem& item, unsigned int col) const
 {
-	wxValueTreeListNode* node = GetViewData<wxValueTreeListNode>(item);
+	wxValueTreeNode* node = GetViewData<wxValueTreeNode>(item);
 	if (node == NULL)
 		return;
-	node->GetValue(variant, col);
+	node->GetValue(col, variant);
 }
 
 bool CTreeDataObjectFolderRef::SetValueByRow(const wxVariant& variant,
 	const wxDataViewItem& item, unsigned int col)
 {
-	wxValueTreeListNode* node = GetViewData<wxValueTreeListNode>(item);
+	wxValueTreeNode* node = GetViewData<wxValueTreeNode>(item);
 	if (node == NULL)
 		return false;
-	return node->SetValue(variant, col);
+	return node->SetValue(col, variant);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool CTreeDataObjectFolderRef::GetAttrByRow(const wxDataViewItem& item, 
+bool CTreeDataObjectFolderRef::GetAttrByRow(const wxDataViewItem& item,
 	unsigned int col, wxDataViewItemAttr& attr) const
 {
-	wxValueTreeListNode* node = GetViewData<wxValueTreeListNode>(item);
+	wxValueTreeNode* node = GetViewData<wxValueTreeNode>(item);
 	if (node == NULL)
 		return false;
-	CValue isFolder = false; 
-	node->GetValue(isFolder, *m_metaObject->GetDataIsFolder());
-	if (isFolder.GetBoolean()) {
+	CValue isFolder = false;
+	node->GetValue(*m_metaObject->GetDataIsFolder(), isFolder);
+	if (isFolder.GetBoolean())
 		attr.SetBackgroundColour(wxColour(224, 212, 190));
-	}
 	return true;
 }
 
@@ -68,17 +87,17 @@ bool CTreeDataObjectFolderRef::GetAttrByRow(const wxDataViewItem& item,
 void CListRegisterObject::GetValueByRow(wxVariant& variant,
 	const wxDataViewItem& row, unsigned int col) const
 {
-	wxValueTableRow* node = GetViewData(row);
+	wxValueTableRow* node = GetViewData<wxValueTableRow>(row);
 	if (node == NULL)
 		return;
-	node->GetValue(variant, col);
+	node->GetValue(col, variant);
 }
 
 bool CListRegisterObject::SetValueByRow(const wxVariant& variant,
 	const wxDataViewItem& row, unsigned int col)
 {
-	wxValueTableRow* node = GetViewData(row);
+	wxValueTableRow* node = GetViewData<wxValueTableRow>(row);
 	if (node == NULL)
 		return false;
-	return node->SetValue(variant, col);
+	return node->SetValue(col, variant);
 }

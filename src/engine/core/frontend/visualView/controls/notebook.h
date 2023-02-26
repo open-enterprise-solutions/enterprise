@@ -6,6 +6,18 @@
 
 class CValueNotebookPage;
 
+//********************************************************************************************
+//*                                 define commom clsid									     *
+//********************************************************************************************
+
+//COMMON FORM
+const CLASS_ID g_controlNotebookCLSID = TEXT2CLSID("CT_NTBK");
+const CLASS_ID g_controlNotebookPageCLSID = TEXT2CLSID("CT_NTPG");
+
+//********************************************************************************************
+//*                                 Value Notebook                                           *
+//********************************************************************************************
+
 #include "frontend/visualView/special/enums/valueOrient.h"
 
 class CValueNotebook : public IValueWindow {
@@ -14,8 +26,7 @@ protected:
 
 	friend class CValueNotebookPage;
 
-	OptionList* GetOrientPage(PropertyOption* property)
-	{
+	OptionList* GetOrientPage(PropertyOption* property) {
 		OptionList* optList = new OptionList();
 		optList->AddOption(_("top"), wxAUI_NB_TOP);
 		//optList->AddOption(_("Left", wxAUI_NB_LEFT);
@@ -32,12 +43,11 @@ protected:
 private:
 	CValueNotebookPage* m_activePage;
 	std::vector< CValueNotebookPage*> m_aPages;
-	bool m_bInitialized;
 public:
 
 	CValueNotebook();
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual wxObject* Create(wxWindow* wxparent, IVisualHost* visualHost) override;
 	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool firstСreated) override;
 	virtual void OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost) override;
 	virtual void OnSelected(wxObject* wxobject) override;
@@ -53,8 +63,8 @@ public:
 	}
 
 	//methods 
-	virtual void PrepareNames() const override;                          //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t& aParams) override;       //вызов метода
+	virtual void PrepareNames() const;                          //этот метод автоматически вызывается для инициализации имен атрибутов и методов
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray) override;       //вызов метода
 
 	/**
 	* Support default menu
@@ -64,6 +74,10 @@ public:
 
 	void AddNotebookPage();
 
+	//support icons
+	virtual wxIcon GetIcon();
+	static wxIcon GetIconGroup();
+
 	//load & save object in control 
 	virtual bool LoadData(CMemoryReader& reader);
 	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
@@ -71,8 +85,9 @@ public:
 protected:
 
 	//Events
-	void OnEnablePage(wxCommandEvent& event);
-	void OnChangedPage(wxAuiNotebookEvent& event);
+	void OnPageChanged(wxAuiNotebookEvent& event);
+	void OnBGDClick(wxAuiNotebookEvent& event);
+	void OnEndDrag(wxAuiNotebookEvent& event);
 };
 
 class CValueNotebookPage : public IValueControl {
@@ -89,18 +104,18 @@ public:
 
 	CValueNotebookPage();
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual wxObject* Create(wxWindow* wxparent, IVisualHost* visualHost) override;
 	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool firstСreated) override;
 	virtual void OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost) override;
 	virtual void OnSelected(wxObject* wxobject) override;
 	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
 
 	virtual wxString GetClassName() const override {
-		return wxT("page");
+		return wxT("notebookPage");
 	}
 
 	virtual wxString GetObjectTypeName() const override {
-		return wxT("page");
+		return wxT("notebookPage");
 	}
 
 	virtual bool CanDeleteControl() const;
@@ -108,6 +123,10 @@ public:
 	virtual int GetComponentType() const override {
 		return COMPONENT_TYPE_WINDOW;
 	}
+
+	//support icons
+	virtual wxIcon GetIcon();
+	static wxIcon GetIconGroup();
 
 	//load & save object in control 
 	virtual bool LoadData(CMemoryReader& reader);

@@ -4,24 +4,20 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueMap.h"
-#include "methods.h"
-#include "functions.h"
+#include "translateError.h"
 #include "utils/stringUtils.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CValueContainer, CValue);
 wxIMPLEMENT_DYNAMIC_CLASS(CValueStructure, CValue);
 
-CMethods CValueContainer::CValueReturnContainer::m_methods;
+CValue::CMethodHelper CValueContainer::CValueReturnContainer::m_methodHelper;
 
-bool CValueContainer::ContainerComparator::operator() (const CValue& lhs, const CValue& rhs) const
-{
+bool CValueContainer::ContainerComparator::operator() (const CValue& lhs, const CValue& rhs) const {
 	if (lhs.GetType() == eValueTypes::TYPE_STRING
-		&& rhs.GetType() == eValueTypes::TYPE_STRING)
-	{
+		&& rhs.GetType() == eValueTypes::TYPE_STRING) {
 		return StringUtils::MakeUpper(lhs.GetString()) < StringUtils::MakeUpper(rhs.GetString());
 	}
-	else
-	{
+	else {
 		return lhs < rhs;
 	}
 }
@@ -30,39 +26,34 @@ bool CValueContainer::ContainerComparator::operator() (const CValue& lhs, const 
 //*                          CValueReturnMap                           *
 //**********************************************************************
 
-enum
-{
-	enKey,
-	enValue
-};
-
 void CValueContainer::CValueReturnContainer::PrepareNames() const
 {
-	std::vector<SEng> aAttributes =
-	{
-		{"key"},
-		{"value"}
-	};
-
-	m_methods.PrepareAttributes(aAttributes.data(), aAttributes.size());
+	m_methodHelper.ClearHelper();
+	m_methodHelper.AppendProp(wxT("key"));
+	m_methodHelper.AppendProp(wxT("value"));
 }
 
-void CValueContainer::CValueReturnContainer::SetAttribute(attributeArg_t& aParams, CValue& cValue)
+bool CValueContainer::CValueReturnContainer::SetPropVal(const long lPropNum, CValue& cValue)
 {
+	return false;
 }
 
-CValue CValueContainer::CValueReturnContainer::GetAttribute(attributeArg_t& aParams)
+bool CValueContainer::CValueReturnContainer::GetPropVal(const long lPropNum, CValue& pvarPropVal)
 {
-	switch (aParams.GetIndex())
+	switch (lPropNum)
 	{
-	case enKey: return m_key;
-	case enValue: return m_value;
+	case enKey:
+		pvarPropVal = m_key;
+		return true;
+	case enValue:
+		pvarPropVal = m_value;
+		return true;
 	}
 
-	return CValue();
+	return false;
 }
 
-CMethods CValueContainer::m_methods;
+CValue::CMethodHelper CValueContainer::m_methodHelper;
 
 //**********************************************************************
 //*                            CValueContainer                         *
@@ -70,101 +61,100 @@ CMethods CValueContainer::m_methods;
 
 CValueContainer::CValueContainer() : CValue(eValueTypes::TYPE_VALUE) {}
 
-CValueContainer::CValueContainer(const std::map<CValue, CValue>& containerValues) : CValue(eValueTypes::TYPE_VALUE, true) { for (auto& cntVal : containerValues) m_containerValues.insert_or_assign(cntVal.first, cntVal.second); }
+CValueContainer::CValueContainer(const std::map<CValue, CValue>& containerValues) : CValue(eValueTypes::TYPE_VALUE, true) {
+	for (auto& cntVal : containerValues)
+		m_containerValues.insert_or_assign(cntVal.first, cntVal.second);
+}
 
 CValueContainer::CValueContainer(bool readOnly) : CValue(eValueTypes::TYPE_VALUE, readOnly) {}
 
-CValueContainer::~CValueContainer() { m_containerValues.clear(); }
+CValueContainer::~CValueContainer() {
+	m_containerValues.clear();
+}
 
 //работа с массивом как с агрегатным объектом
 //перечисление строковых ключей
-enum
-{
-	enCount = 0,
-	enProperty,
-
-	enClear,
-	enDelete,
-	enInsert
-};
-
 void CValueContainer::PrepareNames() const
 {
-	std::vector<SEng> aMethods =
-	{
-		{"count", "count()"},
-		{"property", "property(key, valueFound)"}
-	};
-
-	if (!m_bReadOnly)
-	{
-		aMethods.push_back({ "clear", "clear()" });
-		aMethods.push_back({ "delete", "delete(key)" });
-		aMethods.push_back({ "insert", "insert(key, value)" });
+	m_methodHelper.ClearHelper();
+	m_methodHelper.AppendFunc(wxT("count"), "count()");
+	m_methodHelper.AppendFunc(wxT("property"), 2, "property(key, valueFound)");
+	if (!m_bReadOnly) {
+		m_methodHelper.AppendFunc(wxT("clear"), "clear()");
+		m_methodHelper.AppendFunc(wxT("delete"), 1, "delete(key)");
+		m_methodHelper.AppendFunc(wxT("insert"), 2, "insert(key, value)");
 	}
-
-	m_methods.PrepareMethods(aMethods.data(), aMethods.size());
-
-	std::vector<SEng> aAttributes;
-
-	for (auto keyValue : m_containerValues)
-	{
-		CValue cValKey = keyValue.first;
-
-		if (!cValKey.IsEmpty())
-		{
-			SEng attributes;
-			attributes.sName = cValKey.GetString();
-			aAttributes.push_back(attributes);
+	for (auto keyValue : m_containerValues) {
+		const CValue& cValKey = keyValue.first;
+		if (!cValKey.IsEmpty()) {
+			m_methodHelper.AppendProp(cValKey.GetString());
 		}
 	}
-
-	m_methods.PrepareAttributes(aAttributes.data(), aAttributes.size());
 }
 
-void CValueContainer::SetAttribute(attributeArg_t& aParams, CValue& cVal)
+bool CValueContainer::SetPropVal(const long lPropNum, const CValue& varPropVal)
 {
-	SetAt(aParams.GetName(), cVal);
+	return SetAt(
+		GetPropName(lPropNum), varPropVal
+	);
 }
 
-CValue CValueContainer::GetAttribute(attributeArg_t& aParams)
+bool CValueContainer::GetPropVal(const long lPropNum, CValue& pvarPropVal)
 {
-	return GetAt(aParams.GetName());
+	return GetAt(
+		GetPropName(lPropNum), pvarPropVal
+	);
 }
 
-CValue CValueContainer::Method(methodArg_t& aParams)
+bool CValueContainer::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray)
 {
-	switch (aParams.GetIndex())
+	switch (lMethodNum)
 	{
-	case enClear: Clear(); break;
-	case enCount: return Count();
-	case enDelete: Delete(aParams[0]); break;
-	case enInsert: Insert(aParams[0], aParams[1]);  break;
-	case enProperty: return Property(aParams[0], aParams.GetParamCount() > 1 ? aParams[1] : CValue());
+	case enClear:
+		Clear();
+		return true;
+	case enCount:
+		pvarRetValue = Count();
+		return true;
+	case enDelete:
+		Delete(*paParams[0]);
+		return true;
+	case enInsert:
+		Insert(*paParams[0], *paParams[1]); 		
+		return true;
+	case enProperty:
+		pvarRetValue = Property(*paParams[0], lSizeArray > 1 ? *paParams[1] : CValue());
+		return true;
 	}
 
-	return CValue();
+	return false;
 }
 
-void CValueContainer::Delete(const CValue& cKey)
+void CValueContainer::Delete(const CValue& varKeyValue)
 {
-	m_containerValues.erase(cKey);
+	m_containerValues.erase(varKeyValue);
 }
 
 #include "appData.h"
 
-void CValueContainer::Insert(const CValue& cKey, CValue& cValue)
+void CValueContainer::Insert(const CValue& varKeyValue, CValue& cValue)
 {
-	std::map<const CValue, CValue>::iterator itFound = m_containerValues.find(cKey);
-	if (itFound != m_containerValues.end()) { if (!appData->DesignerMode()) { CTranslateError::Error(_("Key '" + cKey.GetString() + "' is already using!")); } return; }
-	SetAt(cKey, cValue);
+	std::map<const CValue, CValue>::iterator itFounded = m_containerValues.find(varKeyValue);
+	if (itFounded != m_containerValues.end()) {
+		if (!appData->DesignerMode())
+			CTranslateError::Error("Key '%s' is already using!", varKeyValue.GetString());
+		return;
+	}
+	SetAt(varKeyValue, cValue);
 }
 
-bool CValueContainer::Property(const CValue& cKey, CValue& cValueFound)
+bool CValueContainer::Property(const CValue& varKeyValue, CValue& cValueFound)
 {
-	std::map<const CValue, CValue>::iterator itFound = m_containerValues.find(cKey);
-	if (itFound != m_containerValues.end()) { cValueFound = itFound->second; return true; }
-
+	std::map<const CValue, CValue>::iterator itFound = m_containerValues.find(varKeyValue);
+	if (itFound != m_containerValues.end()) {
+		cValueFound = itFound->second;
+		return true;
+	}
 	return false;
 }
 
@@ -175,90 +165,89 @@ CValue CValueContainer::GetItEmpty()
 
 CValue CValueContainer::GetItAt(unsigned int idx)
 {
-	if (m_containerValues.size() < idx) return CValue();
-
+	if (m_containerValues.size() < idx)
+		return CValue();
 	auto structurePos = m_containerValues.begin();
 	std::advance(structurePos, idx);
-
 	return new CValueReturnContainer(structurePos->first, structurePos->second);
 }
 
-void CValueContainer::SetAt(const CValue& cKey, CValue& cVal)
+bool CValueContainer::SetAt(const CValue& varKeyValue, const CValue& varValue)
 {
-	m_containerValues.insert_or_assign(cKey, cVal);
+	m_containerValues.insert_or_assign(varKeyValue, varValue);
+	return true;
 }
 
-CValue CValueContainer::GetAt(const CValue& cKey)
+bool CValueContainer::GetAt(const CValue& varKeyValue, CValue& pvarValue)
 {
-	std::map<const CValue, CValue>::iterator itFound = m_containerValues.find(cKey);
-	if (itFound != m_containerValues.end()) return itFound->second;
-
-	if (!appData->DesignerMode()) { CTranslateError::Error(_("Key '" + cKey.GetString() + "' not found!")); }
-	return CValue();
+	std::map<const CValue, CValue>::const_iterator itFound = m_containerValues.find(varKeyValue);
+	if (itFound != m_containerValues.end()) {
+		pvarValue = itFound->second; return true;
+	}
+	if (!appData->DesignerMode())
+		CTranslateError::Error("Key '%s' not found!", varKeyValue.GetString());
+	return false;
 }
 
 //**********************************************************************
 //*                            CValueStructure                         *
 //**********************************************************************
 
-#define st_error_conversion _("Error conversion value. Must be string!")
+#define st_error_conversion "Error conversion value. Must be string!"
 
-CValue CValueStructure::GetAt(const CValue& cKey)
+bool CValueStructure::GetAt(const CValue& varKeyValue, CValue& pvarValue)
 {
-	if (cKey.GetType() != eValueTypes::TYPE_STRING) {
-		if (!appData->DesignerMode()) { 
-			CTranslateError::Error(st_error_conversion); 
-		} return CValue();
+	if (varKeyValue.GetType() != eValueTypes::TYPE_STRING) {
+		if (!appData->DesignerMode()) 
+			CTranslateError::Error(st_error_conversion);
+		return false;
 	}
-
-	return CValueContainer::GetAt(cKey);
+	return CValueContainer::GetAt(varKeyValue, pvarValue);
 }
 
-void CValueStructure::SetAt(const CValue& cKey, CValue& cValue)
+bool CValueStructure::SetAt(const CValue& varKeyValue, const CValue& cValue)
 {
-	if (cKey.GetType() != eValueTypes::TYPE_STRING) {
-		if (!appData->DesignerMode()) { 
-			CTranslateError::Error(st_error_conversion); 
-		} return;
+	if (varKeyValue.GetType() != eValueTypes::TYPE_STRING) {
+		if (!appData->DesignerMode()) {
+			CTranslateError::Error(st_error_conversion);
+		} return false;
 	}
 
-	CValueContainer::SetAt(cKey, cValue);
+	return CValueContainer::SetAt(varKeyValue, cValue);
 }
 
-void CValueStructure::Delete(const CValue& cKey)
+void CValueStructure::Delete(const CValue& varKeyValue)
 {
-	if (cKey.GetType() != eValueTypes::TYPE_STRING)
-	{
+	if (varKeyValue.GetType() != eValueTypes::TYPE_STRING) {
 		if (!appData->DesignerMode()) {
 			CTranslateError::Error(st_error_conversion);
 		} return;
 	}
 
-	CValueContainer::Delete(cKey);
+	CValueContainer::Delete(varKeyValue);
 }
 
-void CValueStructure::Insert(const CValue& cKey, CValue& cValue)
+void CValueStructure::Insert(const CValue& varKeyValue, CValue& cValue)
 {
-	if (cKey.GetType() != eValueTypes::TYPE_STRING)
-	{
+	if (varKeyValue.GetType() != eValueTypes::TYPE_STRING) {
 		if (!appData->DesignerMode()) {
 			CTranslateError::Error(st_error_conversion);
 		} return;
 	}
 
-	CValueContainer::Insert(cKey, cValue);
+	CValueContainer::Insert(varKeyValue, cValue);
 }
 
-bool CValueStructure::Property(const CValue& cKey, CValue& cValueFound)
+bool CValueStructure::Property(const CValue& varKeyValue, CValue& cValueFound)
 {
-	if (cKey.GetType() != eValueTypes::TYPE_STRING) {
+	if (varKeyValue.GetType() != eValueTypes::TYPE_STRING) {
 		if (!appData->DesignerMode()) {
 			CTranslateError::Error(st_error_conversion);
 		}
 		return false;
 	}
 
-	return CValueContainer::Property(cKey, cValueFound);
+	return CValueContainer::Property(varKeyValue, cValueFound);
 }
 
 //**********************************************************************
@@ -268,4 +257,4 @@ bool CValueStructure::Property(const CValue& cKey, CValue& cValueFound)
 VALUE_REGISTER(CValueContainer, "container", TEXT2CLSID("VL_CONT"));
 VALUE_REGISTER(CValueStructure, "structure", TEXT2CLSID("VL_STRU"));
 
-SO_VALUE_REGISTER(CValueContainer::CValueReturnContainer, "keyValue", CValueReturnContainer, TEXT2CLSID("VL_KEVA"));
+SO_VALUE_REGISTER(CValueContainer::CValueReturnContainer, "keyValue", TEXT2CLSID("VL_KEVA"));

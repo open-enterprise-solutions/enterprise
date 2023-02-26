@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "constant.h"
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 #define objectModule wxT("objectModule")
 
@@ -100,7 +100,7 @@ bool CMetaConstantObject::OnDeleteMetaObject()
 	return CMetaAttributeObject::OnDeleteMetaObject();
 }
 
-#include "metadata/singleMetaTypes.h"
+#include "core/metadata/singleClass.h"
 
 bool CMetaConstantObject::OnBeforeRunMetaObject(int flags)
 {
@@ -162,8 +162,7 @@ bool CMetaConstantObject::OnAfterCloseMetaObject()
 
 CValueForm* CMetaConstantObject::GetObjectForm()
 {
-	CValueForm* valueForm = new CValueForm();
-	valueForm->InitializeForm(NULL, NULL,
+	CValueForm* valueForm = new CValueForm(NULL, NULL,
 		CreateObjectValue(), m_metaGuid
 	);
 	valueForm->BuildForm(defaultFormType);

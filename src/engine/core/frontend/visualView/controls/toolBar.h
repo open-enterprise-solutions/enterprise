@@ -7,12 +7,25 @@
 class CValueToolBarItem;
 class CValueToolBarSeparator;
 
+//********************************************************************************************
+//*                                 define commom clsid									     *
+//********************************************************************************************
+
+//COMMON FORM
+const CLASS_ID g_controlToolBarCLSID = TEXT2CLSID("CT_TLBR");
+const CLASS_ID g_controlToolBarItemCLSID = TEXT2CLSID("CT_TLIT");
+const CLASS_ID g_controlToolBarSeparatorCLSID = TEXT2CLSID("CT_TLIS");
+
+//********************************************************************************************
+//*                                 Value Toolbar                                            *
+//********************************************************************************************
+
 class CValueToolbar : public IValueWindow {
 	wxDECLARE_DYNAMIC_CLASS(CValueToolbar);
 protected:
 
 	OptionList* GetActionSource(PropertyOption*);
-	PropertyCategory* m_categoryAction = IPropertyObject::CreatePropertyCategory({ "action", _("action")});
+	PropertyCategory* m_categoryAction = IPropertyObject::CreatePropertyCategory({ "action", _("action") });
 	Property* m_actSource = IPropertyObject::CreateProperty(m_categoryAction, { "action_source", "action source" }, &CValueToolbar::GetActionSource, wxNOT_FOUND);
 public:
 
@@ -26,7 +39,7 @@ public:
 
 	CValueToolbar();
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual wxObject* Create(wxWindow* wxparent, IVisualHost* visualHost) override;
 	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool firstÑreated) override;
 	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
 	virtual void OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost) override;
@@ -39,6 +52,10 @@ public:
 	virtual wxString GetObjectTypeName() const override {
 		return wxT("toolbar");
 	}
+
+	//support icons
+	virtual wxIcon GetIcon();
+	static wxIcon GetIconGroup();
 
 	/**
 	* Property events
@@ -64,6 +81,7 @@ public:
 protected:
 
 	//events 
+	void OnToolBarLeftDown(wxMouseEvent& event);
 	void OnTool(wxCommandEvent& event);
 	void OnToolDropDown(wxAuiToolBarEvent& event);
 	void OnRightDown(wxMouseEvent& event);
@@ -75,15 +93,19 @@ class CValueToolBarItem : public IValueControl {
 	wxDECLARE_DYNAMIC_CLASS(CValueToolBarItem);
 private:
 
-	OptionList* GetActions(PropertyAction*);
+	OptionList* GetToolAction(EventAction* act);
+
+private:
 
 	PropertyCategory* m_categoryToolbar = IPropertyObject::CreatePropertyCategory({ "toolBarItem", _("toolBar item") });
+
 	Property* m_propertyCaption = IPropertyObject::CreateProperty(m_categoryToolbar, "caption", PropertyType::PT_WXSTRING, _("New tool"));
 	Property* m_propertyBitmap = IPropertyObject::CreateProperty(m_categoryToolbar, "bitmap", PropertyType::PT_BITMAP);
 	Property* m_propertyContextMenu = IPropertyObject::CreateProperty(m_categoryToolbar, "context_menu", PropertyType::PT_BOOL, false);
 	Property* m_properyTooltip = IPropertyObject::CreateProperty(m_categoryToolbar, "tooltip", PropertyType::PT_WXSTRING);
 	Property* m_propertyEnabled = IPropertyObject::CreateProperty(m_categoryToolbar, "enabled", PropertyType::PT_BOOL, true);
-	Property* m_propertyAction = IPropertyObject::CreateProperty(m_categoryToolbar, "action", &CValueToolBarItem::GetActions);
+
+	Event* m_eventAction = IPropertyObject::CreateEvent(m_categoryToolbar, "action", { "control" }, &CValueToolBarItem::GetToolAction);
 
 public:
 
@@ -96,11 +118,11 @@ public:
 	}
 
 	void SetAction(const wxString& action) {
-		return m_propertyAction->SetValue(action);
+		return m_eventAction->SetValue(action);
 	}
 
 	wxString GetAction() const {
-		return m_propertyAction->GetValueAsString();
+		return m_eventAction->GetValue();
 	}
 
 	CValueToolBarItem();
@@ -122,6 +144,10 @@ public:
 	virtual int GetComponentType() const override {
 		return COMPONENT_TYPE_ABSTRACT;
 	}
+
+	//support icons
+	virtual wxIcon GetIcon();
+	static wxIcon GetIconGroup();
 
 	//load & save object in control 
 	virtual bool LoadData(CMemoryReader& reader);
@@ -153,6 +179,10 @@ public:
 	virtual int GetComponentType() const override {
 		return COMPONENT_TYPE_ABSTRACT;
 	}
+
+	//support icons
+	virtual wxIcon GetIcon();
+	static wxIcon GetIconGroup();
 
 	//load & save object in control 
 	virtual bool LoadData(CMemoryReader& reader);

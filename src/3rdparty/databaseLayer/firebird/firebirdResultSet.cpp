@@ -1,8 +1,8 @@
 #include "firebirdResultSet.h"
 #include "firebirdResultSetMetaData.h"
 #include "firebirdDatabaseLayer.h"
-#include "databaseLayer/databaseErrorCodes.h"
-#include "databaseLayer/databaseLayerException.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
+#include <3rdparty/databaseLayer/databaseLayerException.h>
 
 FirebirdResultSet::FirebirdResultSet(FirebirdInterface* pInterface)
 	: DatabaseResultSet()
@@ -51,7 +51,7 @@ bool FirebirdResultSet::Next()
 		return false;
 	}
 	else  // Errors!!!
-	{
+	{		
 		wxLogError(_("Error retrieving Next record\n"));
 		InterpretErrorCodes();
 		ThrowDatabaseException();

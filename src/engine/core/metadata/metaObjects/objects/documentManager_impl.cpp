@@ -5,8 +5,7 @@
 
 #include "documentManager.h"
 #include "appData.h"
-#include "databaseLayer/databaseLayer.h"
-#include "compiler/valueTypeDescription.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 
 CReferenceDataObject * CDocumentManager::FindByNumber(const CValue &vNumber, const CValue &vPeriod)
 {
@@ -15,16 +14,24 @@ CReferenceDataObject * CDocumentManager::FindByNumber(const CValue &vNumber, con
 		if (databaseLayer->TableExists(tableName)) {
 			wxString UUID = wxEmptyString;
 
-			CMetaDefaultAttributeObject *docNumber = m_metaObject->GetDocumentNumber();
-			CMetaDefaultAttributeObject *docDate = m_metaObject->GetDocumentDate();
+			CMetaDefaultAttributeObject* docNumber = m_metaObject->GetDocumentNumber();
+			CMetaDefaultAttributeObject* docDate = m_metaObject->GetDocumentDate();
 			wxASSERT(docNumber && docDate);
 
-			wxString sqlQuery = "SELECT FIRST 1 UUID FROM %s WHERE " + IMetaAttributeObject::GetCompositeSQLFieldName(docNumber, "LIKE");
-
-			if (!vPeriod.IsEmpty()) {
-				sqlQuery += IMetaAttributeObject::GetCompositeSQLFieldName(docNumber, "<=");
+			wxString sqlQuery = "";
+			if (databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
+				sqlQuery = "SELECT UUID FROM %s WHERE " + IMetaAttributeObject::GetCompositeSQLFieldName(docNumber, "LIKE") + " LIMIT 1;";
+				if (!vPeriod.IsEmpty()) {
+					sqlQuery += IMetaAttributeObject::GetCompositeSQLFieldName(docNumber, "<=");
+				}
 			}
-
+			else {
+				sqlQuery = "SELECT FIRST 1 UUID FROM %s WHERE " + IMetaAttributeObject::GetCompositeSQLFieldName(docNumber, "LIKE") + ";";
+				if (!vPeriod.IsEmpty()) {
+					sqlQuery += IMetaAttributeObject::GetCompositeSQLFieldName(docNumber, "<=");
+				}
+			}
+		
 			PreparedStatement *statement = NULL;
 			if (!vPeriod.IsEmpty()) {
 				statement = databaseLayer->PrepareStatement(sqlQuery, tableName);

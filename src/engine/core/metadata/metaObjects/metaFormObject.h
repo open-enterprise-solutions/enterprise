@@ -2,7 +2,7 @@
 #define _METAFORMOBJECT_H__
 
 #include "metaModuleObject.h"
-#include "common/uniqueKey.h"
+#include "core/common/uniqueKey.h"
 
 class CValueForm;
 
@@ -43,10 +43,10 @@ public:
 	*/
 	virtual form_identifier_t GetTypeForm() const = 0;
 
-	CValueForm* GenerateForm(IValueFrame* ownerControl = NULL,
+	CValueForm* GenerateForm(IControlFrame* ownerControl = NULL,
 		ISourceDataObject* ownerSrc = NULL, const CUniqueKey& guidForm = wxNullGuid);
 
-	CValueForm* GenerateFormAndRun(IValueFrame* ownerControl = NULL,
+	CValueForm* GenerateFormAndRun(IControlFrame* ownerControl = NULL,
 		ISourceDataObject* ownerSrc = NULL, const CUniqueKey& guidForm = wxNullGuid);
 
 	//prepare menu for item
@@ -68,7 +68,7 @@ class CMetaFormObject : public IMetaFormObject {
 	wxDECLARE_DYNAMIC_CLASS(CMetaFormObject);
 private:
 
-	friend class CVisualEditorContextForm;
+	friend class CVisualEditorCtrl;
 
 	friend class IMetaObjectRecordData;
 	friend class IListDataObject;

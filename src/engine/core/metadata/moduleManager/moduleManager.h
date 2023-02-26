@@ -1,20 +1,28 @@
 #ifndef _MODULE_MANAGER_H__
 #define _MODULE_MANAGER_H__
 
-#include "common/moduleInfo.h"
-#include "metadata/metaObjects/metaObjectMetadata.h"
-#include "metadata/metaObjects/metaModuleObject.h"
-#include "metadata/metaObjects/objects/dataProcessor.h"
-#include "metadata/metaObjects/objects/dataReport.h"
+#include "core/common/moduleInfo.h"
+#include "core/metadata/metaObjects/metaObjectMetadata.h"
+#include "core/metadata/metaObjects/metaModuleObject.h"
+#include "core/metadata/metaObjects/objects/dataProcessor.h"
+#include "core/metadata/metaObjects/objects/dataReport.h"
 
 class IModuleManager : public CValue,
 	public IModuleInfo {
+protected:
+	enum helperAlias {
+		eProcUnit
+	};
 public:
 	class CModuleValue : public CValue,
 		public IModuleInfo {
 		wxDECLARE_DYNAMIC_CLASS(CModuleValue);
+	protected:
+		enum helperAlias {
+			eProcUnit
+		};
 	private:
-		CMethods* m_methods;
+		CMethodHelper* m_methodHelper;
 	public:
 
 		CModuleValue() {}
@@ -31,37 +39,51 @@ public:
 		}
 
 		//Is global module?
-		wxString GetModuleFullName() const { return m_moduleObject ? m_moduleObject->GetFullName() : wxEmptyString; }
-		wxString GetModuleDocPath() const { return m_moduleObject ? m_moduleObject->GetDocPath() : wxEmptyString; }
-		wxString GetModuleName() const { return m_moduleObject ? m_moduleObject->GetName() : wxEmptyString; }
-		wxString GetModuleText() const { return m_moduleObject ? m_moduleObject->GetModuleText() : wxEmptyString; }
+		wxString GetModuleFullName() const {
+			return m_moduleObject ? m_moduleObject->GetFullName() : wxEmptyString;
+		}
 
-		bool IsGlobalModule() const { return m_moduleObject ? m_moduleObject->IsGlobalModule() : false; }
+		wxString GetModuleDocPath() const {
+			return m_moduleObject ? m_moduleObject->GetDocPath() : wxEmptyString;
+		}
+
+		wxString GetModuleName() const {
+			return m_moduleObject ? m_moduleObject->GetName() : wxEmptyString;
+		}
+
+		wxString GetModuleText() const {
+			return m_moduleObject ? m_moduleObject->GetModuleText() : wxEmptyString;
+		}
+
+		bool IsGlobalModule() const {
+			return m_moduleObject ? m_moduleObject->IsGlobalModule() : false;
+		}
 
 		//РАБОТА КАК АГРЕГАТНОГО ОБЪЕКТА
 
 		//эти методы нужно переопределить в ваших агрегатных объектах:
-		virtual CMethods* GetPMethods() const { //получить ссылку на класс помощник разбора имен атрибутов и методов
+		virtual CMethodHelper* GetPMethods() const { //получить ссылку на класс помощник разбора имен атрибутов и методов
 			PrepareNames();
-			return m_methods;
+			return m_methodHelper;
 		}
 
 		//этот метод автоматически вызывается для инициализации имен атрибутов и методов
 		virtual void PrepareNames() const;
 
 		//вызов метода
-		virtual CValue Method(methodArg_t& aParams) override;
+		virtual bool CallAsProc(const long lMethodNum, CValue** paParams, const long lSizeArray) override;
+		virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray) override;
 
-		virtual wxString GetString() const override { 
+		virtual wxString GetString() const override {
 			return m_moduleObject->GetName();
 		}
-		
-		virtual wxString GetTypeString() const override { 
-			return wxT("module"); 
+
+		virtual wxString GetTypeString() const override {
+			return wxT("module");
 		}
 
 		//check is empty
-		virtual inline bool IsEmpty() const override { 
+		virtual inline bool IsEmpty() const override {
 			return false;
 		}
 
@@ -95,7 +117,7 @@ public:
 	class CMetadataValue : public CValue {
 		wxDECLARE_DYNAMIC_CLASS(CMetadataValue);
 	private:
-		CMethods* m_methods;
+		CMethodHelper* m_methodHelper;
 	public:
 
 		CMetadataValue() {}
@@ -103,19 +125,21 @@ public:
 		virtual ~CMetadataValue();
 
 		//get common module 
-		IMetadata* GetMetadata() const { return m_metaData; }
+		IMetadata* GetMetadata() const { 
+			return m_metaData;
+		}
 
-		virtual wxString GetTypeString() const override { 
+		virtual wxString GetTypeString() const override {
 			return wxT("metadata");
 		}
-		
-		virtual wxString GetString() const override { 
+
+		virtual wxString GetString() const override {
 			return wxT("metadata");
 		}
 
 		//check is empty
-		virtual inline bool IsEmpty() const override { 
-			return false; 
+		virtual inline bool IsEmpty() const override {
+			return false;
 		}
 
 		//operator '=='
@@ -130,8 +154,7 @@ public:
 		}
 
 		//operator '!='
-		virtual inline bool CompareValueNE(const CValue& cParam) const override
-		{
+		virtual inline bool CompareValueNE(const CValue& cParam) const override {
 			CMetadataValue* compareMetadata = dynamic_cast<CMetadataValue*>(cParam.GetRef());
 			if (compareMetadata) {
 				return m_metaData != compareMetadata->GetMetadata();
@@ -141,19 +164,20 @@ public:
 		}
 
 		//эти методы нужно переопределить в ваших агрегатных объектах:
-		virtual CMethods* GetPMethods() const override { PrepareNames();  return m_methods; }//получить ссылку на класс помощник разбора имен атрибутов и методов
-		virtual void PrepareNames() const override;//этот метод автоматически вызывается для инициализации имен атрибутов и методов
-		virtual CValue Method(methodArg_t& aParams) override;//вызов метода
+		virtual CMethodHelper* GetPMethods() const override { 
+			PrepareNames();  
+			return m_methodHelper; }
+		
+		virtual void PrepareNames() const; //этот метод автоматически вызывается для инициализации имен атрибутов и методов
 
 		//****************************************************************************
 		//*                              Override attribute                          *
 		//****************************************************************************
 
-		virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal) override;        //установка атрибута
-		virtual CValue GetAttribute(attributeArg_t& aParams) override;                   //значение атрибута
+		virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal) override;        //установка атрибута
+		virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal) override;                   //значение атрибута
 
 	protected:
-
 		IMetadata* m_metaData;
 	};
 
@@ -183,22 +207,22 @@ public:
 	virtual bool ExitMainModule(bool force = false) = 0;
 
 	//эти методы нужно переопределить в ваших агрегатных объектах:
-	virtual CMethods* GetPMethods() const { PrepareNames();  return m_methods; }//получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethodHelper* GetPMethods() const { PrepareNames();  return m_methodHelper; }//получить ссылку на класс помощник разбора имен атрибутов и методов
 	//этот метод автоматически вызывается для инициализации имен атрибутов и методов
 	virtual void PrepareNames() const;
 	//вызов метода
-	virtual CValue Method(methodArg_t& aParams);
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
-	virtual int FindAttribute(const wxString& sName) const;
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
+	virtual long FindProp(const wxString& sName) const;
 
-	virtual wxString GetString() const { 
-		return wxT("moduleManager"); 
+	virtual wxString GetString() const {
+		return wxT("moduleManager");
 	}
-	
-	virtual wxString GetTypeString() const { 
-		return wxT("moduleManager"); 
+
+	virtual wxString GetTypeString() const {
+		return wxT("moduleManager");
 	}
 
 	//check is empty
@@ -289,7 +313,7 @@ protected:
 
 	friend class CModuleValue;
 
-	CMethods* m_methods;
+	CMethodHelper* m_methodHelper;
 };
 
 class CModuleManager : public IModuleManager {
@@ -349,11 +373,12 @@ public:
 	//этот метод автоматически вызывается для инициализации имен атрибутов и методов
 	virtual void PrepareNames() const;
 	//вызов метода
-	virtual CValue Method(methodArg_t& aParams);
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
-	virtual int FindAttribute(const wxString& sName) const;
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
+
+	virtual long FindProp(const wxString& sName) const;
 };
 
 class CExternalReportModuleManager : public IModuleManager {
@@ -389,11 +414,11 @@ public:
 	//этот метод автоматически вызывается для инициализации имен атрибутов и методов
 	virtual void PrepareNames() const;
 	//вызов метода
-	virtual CValue Method(methodArg_t& aParams);
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
-	virtual int FindAttribute(const wxString& sName) const;
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
+	virtual long FindProp(const wxString& sName) const;
 };
 
 #endif

@@ -18,7 +18,7 @@
 #ifndef _MIMETIC_CODEC_OTHER_CODECS_H_
 #define _MIMETIC_CODEC_OTHER_CODECS_H_
 
-#include <email/mimetic/codec/codec_base.h>
+#include <3rdparty/email/mimetic/codec/codec_base.h>
 
 namespace mimetic
 {

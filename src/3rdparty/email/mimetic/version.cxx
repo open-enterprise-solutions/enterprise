@@ -16,9 +16,9 @@
  ***************************************************************************/
 
 #include <iostream>
-#include <email/mimetic/version.h>
-#include <email/mimetic/utils.h>
-#include <email/mimetic/tokenizer.h>
+#include <3rdparty/email/mimetic/version.h>
+#include <3rdparty/email/mimetic/utils.h>
+#include <3rdparty/email/mimetic/tokenizer.h>
 
 namespace mimetic
 {

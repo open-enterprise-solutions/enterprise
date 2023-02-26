@@ -4,8 +4,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaModuleObject.h"
-#include "databaseLayer/databaseLayer.h"
-#include "metadata/metaObjects/objects/object.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
+#include "core/metadata/metaObjects/objects/object.h"
 #include "appData.h"
 
 //***********************************************************************
@@ -41,9 +41,9 @@ bool CMetaModuleObject::SaveData(CMemoryWriter& writer)
 //*                           System metadata                           *
 //***********************************************************************
 
-#include "compiler/debugger/debugServer.h"
-#include "compiler/debugger/debugClient.h"
-#include "metadata/metadata.h"
+#include "core/compiler/debugger/debugServer.h"
+#include "core/compiler/debugger/debugClient.h"
+#include "core/metadata/metadata.h"
 
 bool CMetaModuleObject::OnCreateMetaObject(IMetadata* metaData)
 {

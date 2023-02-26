@@ -40,4 +40,9 @@ enum {
 	wxID_APPLICATION_ACTIVE_USERS,
 };
 
+//pane 
+#define wxAUI_PANE_METADATA wxT("metadataWindow")
+#define wxAUI_PANE_PROPERTY wxT("propertyWindow")
+#define wxAUI_PANE_BOTTOM wxT("bottomWindow")
+
 #endif 

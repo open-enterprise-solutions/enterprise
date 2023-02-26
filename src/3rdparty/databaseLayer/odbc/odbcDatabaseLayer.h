@@ -14,14 +14,13 @@
 
 #include <wx/arrstr.h>
 
-#include "databaseLayer/databaseLayerDef.h"
-#include "databaseLayer/databaseLayer.h"
+#include <3rdparty/databaseLayer/databaseLayerDef.h>
+#include <3rdparty/databaseLayer/databaseLayer.h>
 
 class OdbcInterface;
 
 #define ERR_BUFFER_LEN 1024
 #define ERR_STATE_LEN 10
-
 
 class CORE_API OdbcDatabaseLayer : public DatabaseLayer
 {
@@ -64,6 +63,10 @@ public:
 	virtual wxArrayString GetTables();
 	virtual wxArrayString GetViews();
 	virtual wxArrayString GetColumns(const wxString& table);
+
+	virtual int GetDatabaseLayerType() const {
+		return DATABASELAYER_ODBC;
+	}
 
 	static bool IsAvailable();
 

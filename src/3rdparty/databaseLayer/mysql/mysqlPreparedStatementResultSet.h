@@ -14,7 +14,7 @@
 
 #include <wx/hashmap.h>
 
-#include "databaseLayer/databaseResultSet.h"
+#include <3rdparty/databaseLayer/databaseResultSet.h>
 #include "mysqlPreparedStatementParameter.h"
 #include "mysqlInterface.h"
 

@@ -14,8 +14,8 @@
 
 #include "engine/mysql.h"
 
-#include "databaseLayer/databaseErrorReporter.h"
-#include "databaseLayer/databaseStringConverter.h"
+#include <3rdparty/databaseLayer/databaseErrorReporter.h>
+#include <3rdparty/databaseLayer/databaseStringConverter.h>
 
 #include "mysqlPreparedStatementParameterCollection.h"
 #include "mysqlInterface.h"

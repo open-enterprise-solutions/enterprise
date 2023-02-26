@@ -14,7 +14,7 @@
 
 #include "engine/ibase.h"
 
-#include "databaseLayer/databaseResultSet.h"
+#include <3rdparty/databaseLayer/databaseResultSet.h>
 #include "firebirdInterface.h"
 
 class FirebirdResultSet : public DatabaseResultSet

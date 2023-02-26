@@ -503,8 +503,7 @@ void CLunaDockArt::DrawBorder(wxDC& dc, wxWindow* window, const wxRect& _rect,
 	wxRect rect = _rect;
 	int i, border_width = GetMetric(wxAUI_DOCKART_PANE_BORDER_SIZE);
 
-	if (pane.IsToolbar())
-	{
+	if (pane.IsToolbar()) {
 		for (i = 0; i < border_width; ++i)
 		{
 			dc.SetPen(wxPen(THEME_COLOUR_BACKGROUND));
@@ -519,8 +518,7 @@ void CLunaDockArt::DrawBorder(wxDC& dc, wxWindow* window, const wxRect& _rect,
 			rect.Deflate(1);
 		}
 	}
-	else
-	{
+	else {
 		// notebooks draw the border themselves, so they can use native rendering (e.g. tabartgtk)
 		wxAuiTabArt* art = 0;
 		wxAuiNotebook* nb = wxDynamicCast(window, wxAuiNotebook);
@@ -531,8 +529,7 @@ void CLunaDockArt::DrawBorder(wxDC& dc, wxWindow* window, const wxRect& _rect,
 			art->DrawBorder(dc, window, rect);
 		else
 		{
-			for (i = 0; i < border_width; ++i)
-			{
+			for (i = 0; i < border_width; ++i) {
 				//dc.DrawRectangle(rect.x + 2, rect.y, rect.width, rect.height);
 				dc.DrawRoundedRectangle(rect.x, rect.y, rect.width, rect.height, 3);
 

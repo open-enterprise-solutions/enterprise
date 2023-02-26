@@ -2,7 +2,7 @@
 #define _gridProperty_H__
 
 #include <wx/grid.h>
-#include "common/propertyObject.h"
+#include "core/common/propertyInfo.h"
 
 class CGrid;
 
@@ -92,7 +92,7 @@ public:
 	}
 
 	virtual wxString GetClassName() const override {
-		return wxT("cells";)
+		return wxT("cells");
 	}
 
 	/**

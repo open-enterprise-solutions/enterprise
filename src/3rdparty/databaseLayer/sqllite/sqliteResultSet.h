@@ -1,7 +1,7 @@
 #ifndef __SQLITE_RESULT_SET_H__
 #define __SQLITE_RESULT_SET_H__
 
-#include "databaseLayer/databaseResultSet.h"
+#include <3rdparty/databaseLayer/databaseResultSet.h>
 #include "engine/sqlite3.h"
 
 class SqlitePreparedStatement;

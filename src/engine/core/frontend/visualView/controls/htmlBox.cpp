@@ -1,5 +1,4 @@
 #include "htmlbox.h"
-#include "compiler/methods.h"
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
@@ -16,38 +15,9 @@ CValueHTMLBox::CValueHTMLBox() : IValueWindow()
 	*m_propertyMinSize = wxSize(250, 150);
 }
 
-enum
+wxObject* CValueHTMLBox::Create(wxWindow* wxparent, IVisualHost* visualHost)
 {
-	enSetPage = 0,
-};
-
-void CValueHTMLBox::PrepareNames() const //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-{
-	IValueFrame::PrepareNames();
-
-	std::vector<SEng> aMethods =
-	{
-		{"setPage", "setPage(string)"}
-	};
-
-	m_methods->PrepareMethods(aMethods.data(), aMethods.size());
-}
-
-CValue CValueHTMLBox::Method(methodArg_t &aParams)       //вызов метода
-{
-	wxHtmlWindow *htmlBox = dynamic_cast<wxHtmlWindow *>(GetWxObject());
-
-	switch (aParams.GetIndex())
-	{
-	case enSetPage: return htmlBox ? htmlBox->SetPage(aParams[0].ToString()) : !aParams[0].ToString().IsEmpty();
-	}
-
-	return IValueFrame::Method(aParams);
-}
-
-wxObject* CValueHTMLBox::Create(wxObject* parent, IVisualHost *visualHost)
-{
-	wxHtmlWindow *htmlBox = new wxHtmlWindow((wxWindow*)parent, wxID_ANY,
+	wxHtmlWindow* htmlBox = new wxHtmlWindow(wxparent, wxID_ANY,
 		wxDefaultPosition,
 		wxDefaultSize);
 
@@ -60,18 +30,18 @@ wxObject* CValueHTMLBox::Create(wxObject* parent, IVisualHost *visualHost)
 	return htmlBox;
 }
 
-void CValueHTMLBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool firstСreated)
+void CValueHTMLBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool firstСreated)
 {
-	wxHtmlWindow *htmlBox = dynamic_cast<wxHtmlWindow *>(wxobject);
+	wxHtmlWindow* htmlBox = dynamic_cast<wxHtmlWindow*>(wxobject);
 }
 
 void CValueHTMLBox::OnSelected(wxObject* wxobject)
 {
 }
 
-void CValueHTMLBox::Update(wxObject* wxobject, IVisualHost *visualHost)
+void CValueHTMLBox::Update(wxObject* wxobject, IVisualHost* visualHost)
 {
-	wxHtmlWindow *htmlBox = dynamic_cast<wxHtmlWindow *>(wxobject);
+	wxHtmlWindow* htmlBox = dynamic_cast<wxHtmlWindow*>(wxobject);
 
 	if (htmlBox)
 	{
@@ -80,7 +50,7 @@ void CValueHTMLBox::Update(wxObject* wxobject, IVisualHost *visualHost)
 	UpdateWindow(htmlBox);
 }
 
-void CValueHTMLBox::Cleanup(wxObject* obj, IVisualHost *visualHost)
+void CValueHTMLBox::Cleanup(wxObject* obj, IVisualHost* visualHost)
 {
 }
 
@@ -88,12 +58,45 @@ void CValueHTMLBox::Cleanup(wxObject* obj, IVisualHost *visualHost)
 //*                                   Data										   *
 //**********************************************************************************
 
-bool CValueHTMLBox::LoadData(CMemoryReader &reader)
+bool CValueHTMLBox::LoadData(CMemoryReader& reader)
 {
 	return IValueWindow::LoadData(reader);
 }
 
-bool CValueHTMLBox::SaveData(CMemoryWriter &writer)
+bool CValueHTMLBox::SaveData(CMemoryWriter& writer)
 {
 	return IValueWindow::SaveData(writer);
 }
+
+//**********************************************************************************
+
+enum Func {
+	enSetPage = 0,
+};
+
+void CValueHTMLBox::PrepareNames() const //этот метод автоматически вызывается для инициализации имен атрибутов и методов
+{
+	IValueFrame::PrepareNames();
+
+	m_methodHelper->AppendFunc("setPage", 1, "setPage(string)", enSetPage, s_def_alias);
+}
+
+bool CValueHTMLBox::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray)       //вызов метода
+{
+	wxHtmlWindow* htmlBox = dynamic_cast<wxHtmlWindow*>(GetWxObject());
+	switch (m_methodHelper->GetMethodData(lMethodNum))
+	{
+	case enSetPage:
+		pvarRetValue = htmlBox ?
+			htmlBox->SetPage(paParams[0]->GetString()) : !paParams[0]->IsEmpty();
+		return true;
+	}
+
+	return IValueFrame::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
+}
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+CONTROL_VALUE_REGISTER(CValueHTMLBox, "htmlbox", "htmlbox", TEXT2CLSID("CT_HTML"));

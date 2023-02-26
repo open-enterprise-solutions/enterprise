@@ -887,7 +887,7 @@ CGrid::CGrid(wxWindow* parent,
 
 CGrid::~CGrid()
 {
-	m_gridWin->Unbind(wxEVT_PAINT, &CGrid::OnPaint, this);
+	//m_gridWin->Unbind(wxEVT_PAINT, &CGrid::OnPaint, this);
 
 	if (m_frozenRowGridWin != NULL) {
 		m_frozenRowGridWin->Unbind(wxEVT_PAINT, &CGrid::OnPaint, this);

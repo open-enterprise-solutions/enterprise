@@ -9,7 +9,7 @@ public:
 	virtual IMetaObjectWrapperData* GetMetaObject() const = 0;
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const = 0;
+	virtual CLASS_ID GetTypeClass() const = 0;
 };
 
 #endif 

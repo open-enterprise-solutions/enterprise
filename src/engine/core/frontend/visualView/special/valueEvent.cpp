@@ -4,10 +4,10 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueEvent.h"
-#include "compiler/methods.h"
+
 
 #include "frontend/mainFrame.h"
-#include "databaseLayer/databaseLayer.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 
 #include "utils/stringUtils.h"
 #include "utils/typeconv.h"
@@ -15,17 +15,19 @@
 //////////////////////////////////////////////////////////////////////
 wxIMPLEMENT_DYNAMIC_CLASS(CValueEvent, CValue);
 
-CValueEvent::CValueEvent() : CValue(eValueTypes::TYPE_VALUE), m_eventName(wxEmptyString)
+CValueEvent::CValueEvent() :
+	CValue(eValueTypes::TYPE_VALUE), m_eventName(wxEmptyString)
 {
 }
 
-CValueEvent::CValueEvent(const wxString &eventName) : CValue(eValueTypes::TYPE_VALUE), m_eventName(eventName)
+CValueEvent::CValueEvent(const wxString& eventName) :
+	CValue(eValueTypes::TYPE_VALUE), m_eventName(eventName)
 {
 }
 
-bool CValueEvent::Init(CValue **aParams)
+bool CValueEvent::Init(CValue** paParams, const long lSizeArray)
 {
-	m_eventName = aParams[0]->ToString(); 
+	m_eventName = paParams[0]->GetString();
 	return true;
 }
 
@@ -40,7 +42,7 @@ wxString CValueEvent::GetTypeString()const
 
 wxString CValueEvent::GetString() const
 {
-	return m_eventName; 
+	return m_eventName;
 }
 
 //**********************************************************************

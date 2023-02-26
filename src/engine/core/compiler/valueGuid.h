@@ -1,19 +1,17 @@
-#ifndef _VALUEGUID_H__
+#ifndef _VALUE_GUID_H__
+#define _VALUE_GUID_H__
 
-#include "compiler/value.h"
-#include "guid/guid.h"
+#include "core/compiler/value.h"
 
-class CValueGuid : public CValue
-{
+class CORE_API CValueGuid : public CValue {
 	wxDECLARE_DYNAMIC_CLASS(CValueGuid);
-
 public:
 
 	CValueGuid();
 	CValueGuid(const Guid &guid);
 
 	virtual bool Init();
-	virtual bool Init(CValue **aParams);
+	virtual bool Init(CValue **paParams, const long lSizeArray);
 
 	virtual wxString GetTypeString() const { return wxT("guid"); }
 	virtual wxString GetString() const { return m_guid; }
@@ -21,7 +19,10 @@ public:
 	operator Guid() { return m_guid; }
 
 	//check is empty
-	virtual inline bool IsEmpty() const override { return !m_guid.isValid(); }
+	virtual inline bool IsEmpty() const override { 
+		return !m_guid.isValid(); 
+	}
+
 	//operator '=='
 	virtual inline bool CompareValueEQ(const CValue &cParam) const { return m_guid == cParam.GetString(); }
 	//operator '!='

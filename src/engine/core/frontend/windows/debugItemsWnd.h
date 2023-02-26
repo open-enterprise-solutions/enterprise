@@ -17,7 +17,7 @@
 
 #include <map>
 
-#include "compiler/debugger/debugEvent.h"
+#include "core/compiler/debugger/debugEvent.h"
 
 class CDebugItemsWnd : public wxDialog
 {

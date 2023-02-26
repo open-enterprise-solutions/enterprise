@@ -3,12 +3,6 @@
 
 #include "frontend/controls/treelistctrl.h"
 
-//
-// Forward declarations.
-//
-
-class wxXmlNode;
-
 /**
  * Watch control. This is the base class for the tree controls used to display
  * the results of evaluating expressions.

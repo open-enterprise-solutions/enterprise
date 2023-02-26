@@ -1,7 +1,7 @@
 #include "informationRegister.h"
 #include "list/objectList.h"
-#include "metadata/metadata.h"
-#include "metadata/moduleManager/moduleManager.h"
+#include "core/metadata/metadata.h"
+#include "core/metadata/moduleManager/moduleManager.h"
 
 #define objectModule wxT("objectModule")
 #define managerModule wxT("managerModule")
@@ -69,7 +69,7 @@ CMetaFormObject* CMetaObjectInformationRegister::GetDefaultFormByID(const form_i
 #include "frontend/visualView/controls/form.h"
 #include "utils/stringUtils.h"
 
-CValueForm* CMetaObjectInformationRegister::GetRecordForm(const wxString& formName, IValueFrame* ownerControl, const CUniquePairKey& formGuid)
+CValueForm* CMetaObjectInformationRegister::GetRecordForm(const wxString& formName, IControlFrame* ownerControl, const CUniquePairKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -87,8 +87,7 @@ CValueForm* CMetaObjectInformationRegister::GetRecordForm(const wxString& formNa
 	}
 
 	if (defList == NULL) {
-		CValueForm* valueForm = new CValueForm();
-		valueForm->InitializeForm(ownerControl, NULL,
+		CValueForm* valueForm = new CValueForm(ownerControl, NULL,
 			CreateRecordManagerObjectValue(), formGuid
 		);
 		valueForm->BuildForm(CMetaObjectInformationRegister::eFormRecord);
@@ -102,7 +101,7 @@ CValueForm* CMetaObjectInformationRegister::GetRecordForm(const wxString& formNa
 	return NULL;
 }
 
-CValueForm* CMetaObjectInformationRegister::GetListForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectInformationRegister::GetListForm(const wxString& formName, IControlFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -120,8 +119,7 @@ CValueForm* CMetaObjectInformationRegister::GetListForm(const wxString& formName
 	}
 
 	if (defList == NULL) {
-		CValueForm* valueForm = new CValueForm();
-		valueForm->InitializeForm(ownerControl, NULL,
+		CValueForm* valueForm = new CValueForm(ownerControl, NULL,
 			new CListRegisterObject(this, CMetaObjectInformationRegister::eFormList), formGuid
 		);
 		valueForm->BuildForm(CMetaObjectInformationRegister::eFormList);
@@ -169,7 +167,7 @@ OptionList* CMetaObjectInformationRegister::GetFormList(PropertyOption*)
 //*								form record								    *
 //***************************************************************************
 
-CValueForm* CMetaObjectInformationRegister::GetRecordForm(const meta_identifier_t& id, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectInformationRegister::GetRecordForm(const meta_identifier_t& id, IControlFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -301,7 +299,7 @@ bool CMetaObjectInformationRegister::OnReloadMetaObject()
 	return true;
 }
 
-#include "metadata/singleMetaTypes.h"
+#include "core/metadata/singleClass.h"
 
 bool CMetaObjectInformationRegister::OnBeforeRunMetaObject(int flags)
 {

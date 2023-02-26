@@ -56,7 +56,7 @@
 
 #include <wx/sckstrm.h>
 
-#include <email/smtp/wxsmtp.h>
+#include <3rdparty/email/smtp/wxsmtp.h>
 
 void wxSMTP::ConnectState::onEnterState(wxCmdlineProtocol& context) const
 {

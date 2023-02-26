@@ -35,7 +35,7 @@ private:
 
 protected:
 
-	PropertyCategory* m_categoryForm = IPropertyObject::CreatePropertyCategory({ "defaultForms", "default forms"});
+	PropertyCategory* m_categoryForm = IPropertyObject::CreatePropertyCategory({ "defaultForms", "default forms" });
 	Property* m_propertyDefFormList = IPropertyObject::CreateProperty(m_categoryForm, { "default_list",  "default list" }, &CMetaObjectAccumulationRegister::GetFormList, wxNOT_FOUND);
 
 	PropertyCategory* m_categoryData = IPropertyObject::CreatePropertyCategory("data");
@@ -134,16 +134,20 @@ public:
 		return false;
 	}
 
-	//has recorder 
+	//has recorder and period 
+	virtual bool HasPeriod() const {
+		return true;
+	}
+
 	virtual bool HasRecorder() const {
 		return true;
 	}
 
 	//get module object in compose object 
-	virtual CMetaModuleObject* GetModuleObject() const { 
-		return m_moduleObject; 
+	virtual CMetaModuleObject* GetModuleObject() const {
+		return m_moduleObject;
 	}
-	
+
 	virtual CMetaCommonModuleObject* GetModuleManager() const {
 		return m_moduleManager;
 	}
@@ -162,7 +166,7 @@ public:
 	}
 
 	//support form 
-	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullUniqueKey);
+	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullUniqueKey);
 
 	//prepare menu for item
 	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
@@ -189,8 +193,6 @@ protected:
 //*                                      Object                                              *
 //********************************************************************************************
 
-#define thisObject wxT("thisObject")
-
 class CRecordSetAccumulationRegister : public IRecordSetObject {
 public:
 
@@ -216,15 +218,15 @@ public:
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual CMethods* GetPMethods() const;
 	virtual void PrepareNames() const;
-	virtual CValue Method(methodArg_t& aParams);
 
 	//****************************************************************************
 	//*                              Override attribute                          *
 	//****************************************************************************
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);
-	virtual CValue GetAttribute(attributeArg_t& aParams);
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);
+
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 };
 
 #endif 

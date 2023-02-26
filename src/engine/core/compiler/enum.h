@@ -8,14 +8,14 @@
 //***************************************************************************************************
 
 class IEnumerationWrapper : public CValue {
-	CMethods* m_methods;
+	CMethodHelper* m_methodHelper;
 public:
 
 	IEnumerationWrapper(bool createInstance = false);
 	virtual ~IEnumerationWrapper();
 
-	virtual CMethods* GetPMethods() const {
-		return m_methods;
+	virtual CMethodHelper* GetPMethods() const {
+		return m_methodHelper;
 	}
 
 	virtual void PrepareNames() const;
@@ -43,9 +43,9 @@ public:
 		return true;
 	}
 
-	virtual bool Init(CValue** aParams) {
+	virtual bool Init(CValue** paParams, const long lSizeArray) {
 		SetEnumValue(
-			static_cast<valT>(aParams[0]->ToInt())
+			static_cast<valT>(paParams[0]->GetInteger())
 		);
 		return true;
 	}

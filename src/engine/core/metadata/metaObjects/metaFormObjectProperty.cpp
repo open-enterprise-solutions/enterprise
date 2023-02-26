@@ -5,8 +5,8 @@
 
 #include "metaFormObject.h"
 #include "frontend/visualView/visualHost.h"
-#include "metadata/metadata.h"
-#include "metadata/metaObjects/objects/object.h"
+#include "core/metadata/metadata.h"
+#include "core/metadata/metaObjects/objects/object.h"
 #include "appData.h"
 
 void CMetaFormObject::OnPropertyCreated(Property *property)

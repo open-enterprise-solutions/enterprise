@@ -12,9 +12,9 @@
 #include <wx/wx.h>
 #endif
 
-#include "databaseLayer/databaseLayerDef.h"
-#include "databaseLayer/databaseLayer.h"
-#include "databaseLayer/preparedStatement.h"
+#include <3rdparty/databaseLayer/databaseLayerDef.h>
+#include <3rdparty/databaseLayer/databaseLayer.h>
+#include <3rdparty/databaseLayer/preparedStatement.h>
 
 #ifndef DONT_USE_DYNAMIC_DATABASE_LAYER_LINKING
 class PostgresInterface;
@@ -68,11 +68,17 @@ public:
 	virtual PreparedStatement* PrepareStatement(const wxString& strQuery);
 
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
+	virtual bool DatabaseExists(const wxString& table);
 	virtual bool TableExists(const wxString& table);
 	virtual bool ViewExists(const wxString& view);
+
 	virtual wxArrayString GetTables();
 	virtual wxArrayString GetViews();
 	virtual wxArrayString GetColumns(const wxString& table);
+
+	virtual int GetDatabaseLayerType() const {
+		return DATABASELAYER_POSTGRESQL;
+	}
 
 	void SetPort(int nPort);
 

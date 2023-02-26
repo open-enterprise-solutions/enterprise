@@ -17,9 +17,9 @@ CValueGridBox::CValueGridBox() : IValueWindow()
 	*m_propertyMinSize = wxSize(300, 100);
 }
 
-wxObject* CValueGridBox::Create(wxObject* parent, IVisualHost *visualHost)
+wxObject* CValueGridBox::Create(wxWindow* wxparent, IVisualHost *visualHost)
 {
-	return new CGrid((wxWindow*)parent, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+	return new CGrid(wxparent, wxID_ANY, wxDefaultPosition, wxDefaultSize);
 }
 
 void CValueGridBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated)
@@ -58,3 +58,9 @@ bool CValueGridBox::SaveData(CMemoryWriter &writer)
 {
 	return IValueWindow::SaveData(writer);
 }
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+CONTROL_VALUE_REGISTER(CValueGridBox, "gridbox", "gridbox", TEXT2CLSID("CT_GRID"));

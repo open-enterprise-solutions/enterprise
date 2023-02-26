@@ -20,13 +20,13 @@
 
 #include <string>
 #include <algorithm>
-#include <email/mimetic/rfc822/header.h>
-#include <email/mimetic/mimeversion.h>
-#include <email/mimetic/contenttype.h>
-#include <email/mimetic/contentid.h>
-#include <email/mimetic/contenttransferencoding.h>
-#include <email/mimetic/contentdisposition.h>
-#include <email/mimetic/contentdescription.h>
+#include <3rdparty/email/mimetic/rfc822/header.h>
+#include <3rdparty/email/mimetic/mimeversion.h>
+#include <3rdparty/email/mimetic/contenttype.h>
+#include <3rdparty/email/mimetic/contentid.h>
+#include <3rdparty/email/mimetic/contenttransferencoding.h>
+#include <3rdparty/email/mimetic/contentdisposition.h>
+#include <3rdparty/email/mimetic/contentdescription.h>
 
 namespace mimetic
 {

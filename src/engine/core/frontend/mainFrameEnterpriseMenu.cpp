@@ -10,7 +10,7 @@
 //*                                Hotkey support                                *
 //********************************************************************************
 
-void CMainFrameEnterprise::SetDefaultHotKeys()
+void wxAuiDocEnterpriseMDIFrame::SetDefaultHotKeys()
 {
 	// Setup the hotkeys.
 	m_keyBinder.SetShortcut(wxID_NEW, wxT("Ctrl+N"));
@@ -31,7 +31,7 @@ void CMainFrameEnterprise::SetDefaultHotKeys()
 //*                                Default menu                                  *
 //********************************************************************************
 
-void CMainFrameEnterprise::InitializeDefaultMenu()
+void wxAuiDocEnterpriseMDIFrame::InitializeDefaultMenu()
 {
 	wxMenuBar *m_menuBar = new wxMenuBar;
 	// and its menu bar
@@ -97,10 +97,10 @@ void CMainFrameEnterprise::InitializeDefaultMenu()
 	SetDefaultHotKeys();
 	SetMenuBar(m_menuBar);
 
-	Bind(wxEVT_MENU, &CMainFrameEnterprise::OnClickAllOperation, this, wxID_ENTERPRISE_ALL_OPERATIONS);
-	Bind(wxEVT_MENU, &CMainFrameEnterprise::OnToolsSettings, this, wxID_APPLICATION_SETTING);
-	Bind(wxEVT_MENU, &CMainFrameEnterprise::OnActiveUsers, this, wxID_APPLICATION_ACTIVE_USERS);
-	Bind(wxEVT_MENU, &CMainFrameEnterprise::OnAbout, this, wxID_ENTERPRISE_ABOUT);
+	Bind(wxEVT_MENU, &wxAuiDocEnterpriseMDIFrame::OnClickAllOperation, this, wxID_ENTERPRISE_ALL_OPERATIONS);
+	Bind(wxEVT_MENU, &wxAuiDocEnterpriseMDIFrame::OnToolsSettings, this, wxID_APPLICATION_SETTING);
+	Bind(wxEVT_MENU, &wxAuiDocEnterpriseMDIFrame::OnActiveUsers, this, wxID_APPLICATION_ACTIVE_USERS);
+	Bind(wxEVT_MENU, &wxAuiDocEnterpriseMDIFrame::OnAbout, this, wxID_ENTERPRISE_ABOUT);
 
 	m_keyBinder.UpdateWindow(this);
 	m_keyBinder.UpdateMenuBar(GetMenuBar());

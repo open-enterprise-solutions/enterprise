@@ -1,7 +1,7 @@
 #include "mysqlPreparedStatementWrapper.h"
 #include "mysqlPreparedStatementResultSet.h"
 #include "mysqlDatabaseLayer.h"
-#include "databaseLayer/databaseErrorCodes.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
 
 #include "engine/errmsg.h"
 

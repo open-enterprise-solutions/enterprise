@@ -10,18 +10,13 @@
 // Forward declarations.
 //
 
-class CMainFrame;
-class COutputWindow;
-class FontColorSettings;
-
-#define outputWindow           (COutputWindow::Get())
+#define outputWindow COutputWindow::GetOutputWindow()
 
 /**
  *
  */
 class COutputWindow : public wxStyledTextCtrl
 {
-	static COutputWindow *s_instance;
 
 	/**
 	* Constructor.
@@ -30,36 +25,36 @@ class COutputWindow : public wxStyledTextCtrl
 
 private:
 
-	enum eStatusMessage
-	{
+	enum eStatusMessage {
+		
 		eMessage = 1,
 		eWarning,
 		eError
 	};
 
-	struct code_info {
+	struct lineInfo_t {
 
 		wxString m_fileName;
 		wxString m_docPath;
 		int m_currLine;
 
-		code_info(const wxString &fileName = wxEmptyString, const wxString &docPath = wxEmptyString,
+		lineInfo_t(const wxString &fileName = wxEmptyString, const wxString &docPath = wxEmptyString,
 			int currLine = wxNOT_FOUND) : m_fileName(fileName), m_docPath(docPath),
 			m_currLine(currLine)
 		{
 		}
 	};
 
-	std::map<long, code_info> m_aCodeInfo;
+	std::map<long, lineInfo_t> m_aCodeInfo;
 
 public:
 
-	static COutputWindow* Get();
+	static COutputWindow* GetOutputWindow();
 
 	/**
 	 * Sets the font and color settings used in the output window.
 	 */
-	void SetFontColorSettings(const FontColorSettings& settings);
+	void SetFontColorSettings(const class FontColorSettings& settings);
 
 	/**
 	 * Adds a message to the end of the log.
@@ -108,6 +103,9 @@ public:
 	void OnKeyDown(wxKeyEvent& evt);
 
 private:
+
+	friend class wxAuiDocDesignerMDIFrame;
+	friend class wxAuiDocEnterpriseMDIFrame;
 
 	/**
 	 * Outputs text using the passed in text attribute. This method will only

@@ -1,7 +1,7 @@
 #ifndef _VALUESIZE_H__
 #define _VALUESIZE_H__
 
-#include "compiler/value.h"
+#include "core/compiler/value.h"
 
 //Поддержка массивов
 class CValueSize : public CValue
@@ -15,24 +15,32 @@ public:
 public:
 
 	CValueSize();
-	CValueSize(const wxSize &size);
+	CValueSize(const wxSize& size);
 
-	virtual bool Init(CValue **aParams);
+	virtual bool Init(CValue** paParams, const long lSizeArray);
 
 	virtual wxString GetTypeString() const;
 	virtual wxString GetString() const;
 
-	virtual inline bool IsEmpty() const override { return m_size == wxDefaultSize; }
+	virtual inline bool IsEmpty() const override {
+		return m_size == wxDefaultSize;
+	}
 
-	static CMethods m_methods;
+	static CMethodHelper m_methodHelper;
 
-	virtual void SetAttribute(attributeArg_t &aParams, CValue &cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t &aParams);                   //значение атрибута
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
 
-	virtual CMethods* GetPMethods() const { return &m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
-	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
+	virtual CMethodHelper* GetPMethods() const { //получить ссылку на класс помощник разбора имен атрибутов и методов
+		PrepareNames();
+		return &m_methodHelper;
+	}
 
-	operator wxSize() { return m_size; }
+	virtual void PrepareNames() const; //этот метод автоматически вызывается для инициализации имен атрибутов и методов
+
+	operator wxSize() const {
+		return m_size;
+	}
 
 	virtual ~CValueSize();
 

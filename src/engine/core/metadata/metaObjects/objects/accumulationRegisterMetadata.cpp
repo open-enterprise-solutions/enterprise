@@ -1,7 +1,7 @@
 #include "accumulationRegister.h"
 #include "list/objectList.h"
-#include "metadata/metadata.h"
-#include "metadata/moduleManager/moduleManager.h"
+#include "core/metadata/metadata.h"
+#include "core/metadata/moduleManager/moduleManager.h"
 
 #define objectModule wxT("objectModule")
 #define managerModule wxT("managerModule")
@@ -18,8 +18,6 @@ CMetaObjectAccumulationRegister::CMetaObjectAccumulationRegister() : IMetaObject
 {
 	//create default attributes
 	m_attributeRecordType = CMetaDefaultAttributeObject::CreateSpecialType(wxT("recordType"), _("Record type"), wxEmptyString, g_enumRecordTypeCLSID, false, CValueEnumAccumulationRegisterRecordType::CreateDefEnumValue());
-	m_attributeRecordType->SetClsid(g_metaDefaultAttributeCLSID);
-
 	//set child/parent
 	m_attributeRecordType->SetParent(this);
 	AddChild(m_attributeRecordType);
@@ -68,7 +66,7 @@ CMetaFormObject* CMetaObjectAccumulationRegister::GetDefaultFormByID(const form_
 #include "frontend/visualView/controls/form.h"
 #include "utils/stringUtils.h"
 
-CValueForm* CMetaObjectAccumulationRegister::GetListForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectAccumulationRegister::GetListForm(const wxString& formName, IControlFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -86,8 +84,7 @@ CValueForm* CMetaObjectAccumulationRegister::GetListForm(const wxString& formNam
 	}
 
 	if (defList == NULL) {
-		CValueForm* valueForm = new CValueForm();
-		valueForm->InitializeForm(ownerControl, NULL,
+		CValueForm* valueForm = new CValueForm(ownerControl, NULL,
 			new CListRegisterObject(this, CMetaObjectAccumulationRegister::eFormList), formGuid
 		);
 		valueForm->BuildForm(CMetaObjectAccumulationRegister::eFormList);
@@ -128,7 +125,7 @@ bool CMetaObjectAccumulationRegister::LoadData(CMemoryReader& dataReader)
 
 	//load default form 
 	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	
+
 	//load data 
 	m_propertyRegisterType->SetValue(dataReader.r_u16());
 
@@ -143,10 +140,10 @@ bool CMetaObjectAccumulationRegister::SaveData(CMemoryWriter& dataWritter)
 {
 	//save default attributes:
 	m_attributeRecordType->SaveMeta(dataWritter);
-	
+
 	//save default form 
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
-	
+
 	//save data
 	dataWritter.w_u16(m_propertyRegisterType->GetValueAsInteger());
 
@@ -237,7 +234,7 @@ bool CMetaObjectAccumulationRegister::OnReloadMetaObject()
 	return true;
 }
 
-#include "metadata/singleMetaTypes.h"
+#include "core/metadata/singleClass.h"
 
 bool CMetaObjectAccumulationRegister::OnBeforeRunMetaObject(int flags)
 {
@@ -355,7 +352,7 @@ ISourceDataObject* CMetaObjectAccumulationRegister::CreateObjectData(IMetaFormOb
 {
 	switch (metaObject->GetTypeForm())
 	{
-	case eFormList: 
+	case eFormList:
 		return new CListRegisterObject(this, metaObject->GetTypeForm());
 	}
 

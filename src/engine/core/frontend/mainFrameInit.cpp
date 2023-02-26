@@ -4,43 +4,33 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "mainFrame.h" 
-#include "common/docManager.h"
+#include "core/frontend/docView/docManager.h"
 
 //***********************************************************************************
 //*                                 mainFrame                                       *
 //***********************************************************************************
 
-CMainFrame* CMainFrame::s_instance = NULL;
-
-CMainFrame* CMainFrame::Get() {
-	return s_instance;
-}
+wxAuiDocMDIFrame* wxAuiDocMDIFrame::s_instance = NULL;
 
 #include "frontend/mainFrameDesigner.h"
 #include "frontend/mainFrameEnterprise.h"
 
-void CMainFrame::Initialize(eRunMode mode)
+void wxAuiDocMDIFrame::InitializeFrame(eRunMode mode)
 {
-	if (!s_instance) {
-		switch (mode)
-		{
-		case eRunMode::DESIGNER_MODE:
-			s_instance = new CMainFrameDesigner;
-			s_instance->CreateGUI();
-			break;
-		case eRunMode::ENTERPRISE_MODE:
-			s_instance = new CMainFrameEnterprise;
-			s_instance->CreateGUI();
-			break;
-		}
+	if (s_instance == NULL && mode == eRunMode::eDESIGNER_MODE) {
+		s_instance = new wxAuiDocDesignerMDIFrame;
+		s_instance->CreateGUI();
+		wxTheApp->SetTopWindow(s_instance);
 	}
-
-	if (s_instance != NULL) {
+	else if (s_instance == NULL && mode == eRunMode::eENTERPRISE_MODE) {
+		s_instance = new wxAuiDocEnterpriseMDIFrame;
+		s_instance->CreateGUI();
 		wxTheApp->SetTopWindow(s_instance);
 	}
 }
 
-void CMainFrame::Destroy()
+void wxAuiDocMDIFrame::DestroyFrame()
 {
-	wxDELETE(s_instance);
+	if (s_instance != NULL)
+		s_instance->Destroy();
 }

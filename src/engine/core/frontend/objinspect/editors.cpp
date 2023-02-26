@@ -6,11 +6,15 @@
 #include <wx/slider.h>
 #include <wx/odcombo.h>
 
+// -----------------------------------------------------------------------
+// wxComboBox-based property editor
+// -----------------------------------------------------------------------
+
 WX_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(ComboBoxAndButton,
 	wxPGComboBoxAndButtonEditor,
 	wxPGComboBoxEditor)
 
-	wxPGWindowList wxPGComboBoxAndButtonEditor::CreateControls(wxPropertyGrid* propGrid,
+wxPGWindowList wxPGComboBoxAndButtonEditor::CreateControls(wxPropertyGrid* propGrid,
 		wxPGProperty* property,
 		const wxPoint& pos,
 		const wxSize& sz) const
@@ -126,9 +130,11 @@ wxPGComboBoxAndButtonEditor::~wxPGComboBoxAndButtonEditor()
 // -----------------------------------------------------------------------
 #ifdef wxUSE_SLIDER
 
-wxIMPLEMENT_DYNAMIC_CLASS(wxPGSliderEditor, wxPGEditor)
+WX_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(Slider,
+	wxPGSliderEditor,
+	wxPGEditor)
 
-wxPGSliderEditor::~wxPGSliderEditor()
+	wxPGSliderEditor::~wxPGSliderEditor()
 {
 }
 
@@ -225,3 +231,22 @@ void wxPGSliderEditor::SetValueToUnspecified(wxPGProperty* WXUNUSED(property), w
 }
 
 #endif //wxUSE_SLIDER
+
+#include <wx/module.h>
+
+class wxOESEditorModule : public wxModule
+{
+public:
+	wxOESEditorModule() : wxModule() { }
+	virtual bool OnInit() {
+		//register new editor 
+		wxPGRegisterEditorClass(ComboBoxAndButton);
+		wxPGRegisterEditorClass(Slider);
+		return true;
+	}
+	virtual void OnExit() {}
+private:
+	wxDECLARE_DYNAMIC_CLASS(wxOESEditorModule);
+};
+
+wxIMPLEMENT_DYNAMIC_CLASS(wxOESEditorModule, wxModule)

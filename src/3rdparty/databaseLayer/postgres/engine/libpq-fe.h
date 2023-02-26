@@ -38,7 +38,7 @@ extern "C"
 #define LIBPQ_HAS_TRACE_FLAGS 1
 
 /*
- * Option flags for PQcopyResult
+ * option_t flags for PQcopyResult
  */
 #define PG_COPYRES_ATTRS		  0x01
 #define PG_COPYRES_TUPLES		  0x02	/* Implies PG_COPYRES_ATTRS */
@@ -227,7 +227,7 @@ typedef struct _PQconninfoOption
 	char	   *keyword;		/* The keyword of the option			*/
 	char	   *envvar;			/* Fallback environment variable name	*/
 	char	   *compiled;		/* Fallback compiled in default value	*/
-	char	   *val;			/* Option's current value, or NULL		 */
+	char	   *val;			/* option_t's current value, or NULL		 */
 	char	   *label;			/* Label for field in connect dialog	*/
 	char	   *dispchar;		/* Indicates how to display this field in a
 								 * connect dialog. Values are: "" Display

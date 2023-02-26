@@ -12,7 +12,7 @@
 #include "wx/wx.h"
 #endif
 
-#include "databaseLayer/resultSetMetaData.h"
+#include <3rdparty/databaseLayer/resultSetMetaData.h>
 #include "mysqlInterface.h"
 
 #include "engine/mysql.h"

@@ -4,12 +4,12 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "accumulationRegister.h"
-#include "frontend/metatree/metatreeWnd.h"
+#include "frontend/metatree/metaTreeWnd.h"
 
 bool CMetaObjectAccumulationRegister::PrepareContextMenu(wxMenu* defaultMenu)
 {
 	wxMenuItem* menuItem = NULL;
-	menuItem = defaultMenu->Append(ID_METATREE_OPEN_MODULE, _("Open module"));
+	menuItem = defaultMenu->Append(ID_METATREE_OPEN_MODULE, _("Open record set"));
 	menuItem->SetBitmap(m_moduleObject->GetIcon());
 	menuItem = defaultMenu->Append(ID_METATREE_OPEN_MANAGER, _("Open manager"));
 	menuItem->SetBitmap(m_moduleManager->GetIcon());

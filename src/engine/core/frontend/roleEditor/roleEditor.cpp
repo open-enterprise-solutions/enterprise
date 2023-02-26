@@ -76,7 +76,7 @@ void CRoleEditor::OnSelectedItem(wxTreeEvent& event) {
 	event.Skip();
 }
 
-#include "resources/commonFolder.xpm"
+#include "core/art/artProvider.h"
 
 #define metadataName _("metadata")
 
@@ -107,7 +107,7 @@ void CRoleEditor::InitRole()
 	//*                                      Common objects                                               *
 	//*****************************************************************************************************
 
-	int imageCommonIndex = imageList->Add(wxIcon(s_commonFolder_xpm));
+	int imageCommonIndex = imageList->Add(wxArtProvider::GetIcon(wxART_COMMON_FOLDER, wxART_METATREE));
 	m_treeCOMMON = m_roleCtrl->AppendItem(m_treeMETADATA, commonName, imageCommonIndex, imageCommonIndex);
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////

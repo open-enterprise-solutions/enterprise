@@ -41,11 +41,6 @@ public:
 	void OnButtonCancel(wxCommandEvent &event);
 	void OnCheckBoxSort(wxCommandEvent &event);
 	void OnItemSelected(wxListEvent &event);
-
-protected:
-
-	// Events 
-	wxDECLARE_EVENT_TABLE();
 };
 
 #endif // !defined(_FUNCTIONLIST_H__)

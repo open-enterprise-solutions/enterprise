@@ -11,10 +11,9 @@
 // **
 // * Tipos de propiedades.
 // */
-typedef enum
-{
+typedef enum {
+	
 	PT_NULL,
-
 	PT_BOOL,
 	PT_TEXT,
 	PT_INT,
@@ -30,28 +29,32 @@ typedef enum
 	PT_WXSIZE,
 	PT_WXFONT,
 	PT_WXCOLOUR,
-	PT_WXPARENT,
-	PT_WXPARENT_SB,
 	PT_PATH,
 	PT_FILE,
 	PT_BITMAP,
 	PT_STRINGLIST,
 	PT_NUMBER,
-	PT_WXSTRING_I18N,
-	PT_PARENT,
-	PT_CLASS,
+
 	PT_EDIT_OPTION,
 
-	PT_TYPE_DATA,
-	PT_OWNER_DATA,
-	PT_RECORD_DATA,
-	PT_ACTION_DATA,
-	PT_SOURCE_DATA,
-	PT_GENERATION_DATA,
+	PT_TYPE,
+	PT_OWNER,
+	PT_RECORD,
+	PT_SOURCE,
+	PT_GENERATION,
 
 	PT_MAX
 
 } PropertyType;
+
+typedef enum {
+	
+	ET_EVENT,
+	ET_ACTION,
+
+	ET_MAX
+
+} EventType;
 
 /**
  * Lista de enteros.

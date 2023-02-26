@@ -5,9 +5,9 @@
 
 #include "metaEnumerationObject.h"
 #include "appData.h"
-#include "metadata/metaObjects/objects/object.h"
-#include "metadata/metadata.h"
-#include "databaseLayer/databaseLayer.h"
+#include "core/metadata/metaObjects/objects/object.h"
+#include "core/metadata/metadata.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 
 wxIMPLEMENT_DYNAMIC_CLASS(CMetaEnumerationObject, IMetaObject)
 

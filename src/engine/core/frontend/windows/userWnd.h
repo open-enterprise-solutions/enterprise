@@ -21,7 +21,7 @@
 #include <wx/statline.h>
 #include <wx/stattext.h>
 
-#include "guid/guid.h"
+#include <3rdparty/guid/guid.h>
 
 #include "frontend/theme/luna_auitabart.h"
 #include "frontend/theme/luna_dockart.h"

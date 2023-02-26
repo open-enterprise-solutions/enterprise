@@ -12,9 +12,9 @@
 #include <wx/wx.h>
 #endif
 
-#include "databaseLayer/resultSetMetaData.h"
-#include "postgresInterface.h"
+#include <3rdparty/databaseLayer/resultSetMetaData.h>
 
+#include "postgresInterface.h"
 #include "engine/libpq-fe.h"
 
 class PostgresResultSetMetaData : public ResultSetMetaData

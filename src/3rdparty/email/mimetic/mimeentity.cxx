@@ -30,12 +30,12 @@
 #include <fstream>
 #include <streambuf>
 #include <algorithm>
-#include <email/mimetic/mimeentity.h>
-#include <email/mimetic/tokenizer.h>
-#include <email/mimetic/strutils.h>
-#include <email/mimetic/codec/codec.h>
-#include <email/mimetic/parser/itparser.h>
-#include <email/mimetic/streambufs.h>
+#include <3rdparty/email/mimetic/mimeentity.h>
+#include <3rdparty/email/mimetic/tokenizer.h>
+#include <3rdparty/email/mimetic/strutils.h>
+#include <3rdparty/email/mimetic/codec/codec.h>
+#include <3rdparty/email/mimetic/parser/itparser.h>
+#include <3rdparty/email/mimetic/streambufs.h>
 
 namespace mimetic
 {

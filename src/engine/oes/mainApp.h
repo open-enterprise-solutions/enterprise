@@ -1,5 +1,5 @@
-#ifndef _MAINAPP_H__
-#define _MAINAPP_H__
+#ifndef _MAIN_APP_H__
+#define _MAIN_APP_H__
 
 #include <wx/app.h>
 #include <wx/aui/framemanager.h>
@@ -31,7 +31,6 @@ protected:
 	void OnKeyEvent(wxKeyEvent &event);
 	void OnMouseEvent(wxMouseEvent &event);
 	void OnSetFocus(wxFocusEvent &event);
-
 };
 
 wxDECLARE_APP(CMainApp);

@@ -1,7 +1,7 @@
 #ifndef _CATALOG_DATA_H_
 #define _CATALOG_DATA_H_
 
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 struct ownerData_t {
 	std::set<meta_identifier_t> m_data;

@@ -19,14 +19,15 @@ public:
 	static void Destroy();
 
 	//эти методы нужно переопределить в ваших агрегатных объектах:
-	virtual CMethods* GetPMethods() const { //получить ссылку на класс помощник разбора имен атрибутов и методов
-		return m_methods; 
+	virtual CMethodHelper* GetPMethods() const { //получить ссылку на класс помощник разбора имен атрибутов и методов	
+		PrepareNames(); 
+		return m_methodHelper; 
 	}
 
 	virtual void PrepareNames() const; //этот метод автоматически вызывается для инициализации имен атрибутов и методов
 
 	//этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue GetAttribute(attributeArg_t &aParams);                   //значение атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
 
 	virtual wxString GetString() const { 
 		return wxT("enumFactory"); 
@@ -37,7 +38,7 @@ public:
 	}
 
 protected:
-	CMethods *m_methods;
+	CMethodHelper *m_methodHelper;
 };
 
 #endif 

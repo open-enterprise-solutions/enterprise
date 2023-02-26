@@ -1,5 +1,5 @@
 #include "widgets.h"
-#include "compiler/procUnit.h"
+#include "core/compiler/procUnit.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CValueButton, IValueWindow)
 
@@ -11,17 +11,12 @@ CValueButton::CValueButton() : IValueWindow()
 {
 }
 
-wxObject* CValueButton::Create(wxObject* parent, IVisualHost* visualHost)
+wxObject* CValueButton::Create(wxWindow* wxparent, IVisualHost* visualHost)
 {
-	wxButton* m_button = new wxButton((wxWindow*)parent, wxID_ANY,
-		m_propertyCaption->GetValueAsString(),
-		wxDefaultPosition,
-		wxDefaultSize);
-
+	wxButton* wxbutton = new wxButton(wxparent, wxID_ANY, m_propertyCaption->GetValueAsString());
 	//setup event 
-	m_button->Bind(wxEVT_BUTTON, &CValueButton::OnButtonPressed, this);
-
-	return m_button;
+	wxbutton->Bind(wxEVT_BUTTON, &CValueButton::OnButtonPressed, this);
+	return wxbutton;
 }
 
 void CValueButton::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool firstÑreated)
@@ -59,3 +54,9 @@ bool CValueButton::SaveData(CMemoryWriter& writer)
 	writer.w_stringZ(m_propertyCaption->GetValueAsString());
 	return IValueWindow::SaveData(writer);
 }
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+CONTROL_VALUE_REGISTER(CValueButton, "button", "widget", TEXT2CLSID("CT_BUTN"));

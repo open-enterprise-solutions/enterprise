@@ -26,9 +26,9 @@
 #include <wx/wx.h>
 #endif
 
-#include <email/mimetic/mimeentity.h>
-#include <email/mimetic/body.h>
-#include <email/mimetic/wxFileIterator.h>
+#include <3rdparty/email/mimetic/mimeentity.h>
+#include <3rdparty/email/mimetic/body.h>
+#include <3rdparty/email/mimetic/wxFileIterator.h>
 
 namespace mimetic
 {

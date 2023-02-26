@@ -1,11 +1,12 @@
 #include "userWnd.h"
-#include "databaseLayer/databaseLayer.h"
-#include "metadata/metadata.h"
-#include "utils/fs/fs.h"
-#include "appData.h"
 
 #include <wx/base64.h>
-#include "email/utils/wxmd5.hpp"
+#include <3rdparty/databaseLayer/databaseLayer.h>
+#include <3rdparty/email/utils/wxmd5.hpp>
+
+#include "core/metadata/metadata.h"
+#include "utils/fs/fs.h"
+#include "appData.h"
 
 void CUserWnd::OnPasswordText(wxCommandEvent& event)
 {
@@ -32,7 +33,7 @@ void CUserWnd::OnOKButtonClick(wxCommandEvent& event)
 
 	if (prepStatement) {
 		if (!m_userGuid.isValid()) {
-			m_userGuid = wxNewGuid;
+			m_userGuid = wxNewUniqueGuid;
 		}
 		prepStatement->SetParamString(1, m_userGuid.str());
 		prepStatement->SetParamString(2, m_textName->GetValue());
@@ -85,7 +86,7 @@ bool CUserWnd::ReadUserData(const Guid& guid, bool copy)
 	return true;
 }
 
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 CUserWnd::CUserWnd(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) :
 	wxDialog(parent, id, title, pos, size, style), m_bInitialized(false)

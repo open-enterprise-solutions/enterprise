@@ -15,7 +15,7 @@
 
  ***************************************************************************/
 
-#include <email/mimetic/contentdescription.h>
+#include <3rdparty/email/mimetic/contentdescription.h>
 
 namespace mimetic
 {

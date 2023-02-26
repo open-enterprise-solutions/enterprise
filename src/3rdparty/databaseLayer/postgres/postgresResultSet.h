@@ -12,9 +12,9 @@
 #include <wx/wx.h>
 #endif
 
-#include "compiler/compiler.h"
+#include "core/compiler/compiler.h"
 
-#include "databaseLayer/databaseResultSet.h"
+#include <3rdparty/databaseLayer/databaseResultSet.h>
 #include "postgresInterface.h"
 
 #include "engine/libpq-fe.h"

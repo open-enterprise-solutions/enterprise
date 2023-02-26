@@ -14,9 +14,9 @@
 
 #include <wx/dynarray.h>
 
-#include "compiler/compiler.h"
+#include "core/compiler/compiler.h"
 
-#include "databaseLayer/databaseStringConverter.h"
+#include <3rdparty/databaseLayer/databaseStringConverter.h>
 #include "mysqlParameter.h"
 
 WX_DEFINE_ARRAY_PTR(MysqlParameter*, MysqlParameterArray);

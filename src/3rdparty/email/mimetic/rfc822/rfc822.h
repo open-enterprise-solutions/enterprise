@@ -18,15 +18,15 @@
 #ifndef _MIMETIC_RFC822_RFC822_H_
 #define _MIMETIC_RFC822_RFC822_H_
 
-#include <email/mimetic/rfc822/address.h>
-#include <email/mimetic/rfc822/addresslist.h>
-#include <email/mimetic/rfc822/body.h>
-#include <email/mimetic/rfc822/datetime.h>
-#include <email/mimetic/rfc822/messageid.h>
-#include <email/mimetic/rfc822/field.h>
-#include <email/mimetic/rfc822/group.h>
-#include <email/mimetic/rfc822/header.h>
-#include <email/mimetic/rfc822/mailbox.h>
-#include <email/mimetic/rfc822/message.h>
+#include <3rdparty/email/mimetic/rfc822/address.h>
+#include <3rdparty/email/mimetic/rfc822/addresslist.h>
+#include <3rdparty/email/mimetic/rfc822/body.h>
+#include <3rdparty/email/mimetic/rfc822/datetime.h>
+#include <3rdparty/email/mimetic/rfc822/messageid.h>
+#include <3rdparty/email/mimetic/rfc822/field.h>
+#include <3rdparty/email/mimetic/rfc822/group.h>
+#include <3rdparty/email/mimetic/rfc822/header.h>
+#include <3rdparty/email/mimetic/rfc822/mailbox.h>
+#include <3rdparty/email/mimetic/rfc822/message.h>
 
 #endif

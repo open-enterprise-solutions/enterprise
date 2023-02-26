@@ -1,55 +1,103 @@
 #ifndef _MAINFRAMECHILD_H__
 #define _MAINFRAMECHILD_H__
 
-#include <wx/wx.h>
 #include <wx/aui/aui.h>
 #include <wx/docview.h>
+#include <wx/cmdproc.h>
 
-class CDocChildFrame : public wxAuiMDIChildFrame,
-	public wxDocChildFrameAnyBase
-{
-
+class wxAuiMDIDocChildFrame : 
+	public wxDocChildFrameAny<wxAuiMDIChildFrame, wxAuiMDIParentFrame> {
 public:
-	
+
 	// default ctor, use Create after it
-	CDocChildFrame();
+	wxAuiMDIDocChildFrame() {
+	}
 
 	// ctor for a valueForm showing the given view of the specified document
-	CDocChildFrame(wxDocument *doc,
-		wxView *view,
-		wxAuiMDIParentFrame *parent,
+	wxAuiMDIDocChildFrame(wxDocument* doc,
+		wxView* view,
+		wxAuiMDIParentFrame* parent,
 		wxWindowID id,
 		const wxString& title,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_FRAME_STYLE,
-		const wxString& name = wxASCII_STR(wxFrameNameStr));
+		const wxString& name = wxASCII_STR(wxFrameNameStr)) 
+		: wxDocChildFrameAny(doc, view,
+			parent, id, title, pos, size, style, name)
+	{
+	}
 
-	virtual ~CDocChildFrame();
+	virtual ~wxAuiMDIDocChildFrame();
 
-	bool Create(wxDocument *doc,
-		wxView *view,
-		wxAuiMDIParentFrame *parent,
+	bool Create(wxDocument* doc,
+		wxView* view,
+		wxAuiMDIParentFrame* parent,
 		wxWindowID id,
 		const wxString& title,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_FRAME_STYLE,
-		const wxString& name = wxASCII_STR(wxFrameNameStr));
+		const wxString& name = wxASCII_STR(wxFrameNameStr)) 
+	{
+		return wxDocChildFrameAny::Create
+		(
+			doc, view,
+			parent, id, title, pos, size, style, name
+		);
+	}
 
 	virtual void SetLabel(const wxString& label) override;
 
-protected:
+private:
 
-	// hook the child view into event handlers chain here
-	virtual bool TryBefore(wxEvent& event) override;
+	wxDECLARE_CLASS(wxAuiMDIDocChildFrame);
+	wxDECLARE_NO_COPY_CLASS(wxAuiMDIDocChildFrame);
+};
+
+class wxDialogDocChildFrame :
+	public wxDocChildFrameAny<wxDialog, wxWindow> {
+public:
+	
+	wxDialogDocChildFrame()
+	{
+	}
+
+	wxDialogDocChildFrame(wxDocument* doc,
+		wxView* view,
+		wxWindow* parent,
+		wxWindowID id,
+		const wxString& title,
+		const wxPoint& pos = wxDefaultPosition,
+		const wxSize& size = wxDefaultSize,
+		long style = wxDEFAULT_DIALOG_STYLE,
+		const wxString& name = wxASCII_STR(wxDialogNameStr))
+		: wxDocChildFrameAny(doc, view,
+			parent, id, title, pos, size, style, name)
+	{
+	}
+
+	bool Create(wxDocument* doc,
+		wxView* view,
+		wxWindow* parent,
+		wxWindowID id,
+		const wxString& title,
+		const wxPoint& pos = wxDefaultPosition,
+		const wxSize& size = wxDefaultSize,
+		long style = wxDEFAULT_DIALOG_STYLE,
+		const wxString& name = wxASCII_STR(wxDialogNameStr))
+	{
+		return wxDocChildFrameAny::Create
+		(
+			doc, view,
+			parent, id, title, pos, size, style, name
+		);
+	}
 
 private:
 
-	void OnActivate(wxActivateEvent& event);
-	void OnCloseWindow(wxCloseEvent& event);
-
-	wxDECLARE_NO_COPY_CLASS(CDocChildFrame);
+	wxDECLARE_CLASS(wxDialogDocChildFrame);
+	wxDECLARE_NO_COPY_CLASS(wxDialogDocChildFrame);
 };
 
 #endif 

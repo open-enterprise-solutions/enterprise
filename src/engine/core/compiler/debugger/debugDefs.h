@@ -78,6 +78,43 @@ enum ConnectionType {
 	ConnectionType_Unknown = 100
 };
 
+struct debugData_t {
+	wxString m_fileName;
+	wxString m_moduleName;
+	unsigned int m_line;
+};
+
+struct debugTipData_t {
+	wxString m_fileName;
+	wxString m_moduleName;
+	wxString m_expression;
+};
+
+struct debugAutoCompleteData_t {
+
+	struct debugVariableData_t {
+		wxString m_variableName;
+	};
+
+	std::vector<debugVariableData_t> m_arrVar;
+
+	struct debugMethodData_t {
+		wxString m_methodName;
+		wxString m_methodHelper;
+		bool m_methodRet;
+	};
+
+	std::vector<debugMethodData_t> m_arrMeth;
+
+public:
+
+	wxString m_fileName;
+	wxString m_moduleName;
+	wxString m_expression;
+	wxString m_keyword;
+	int      m_currentPos;
+};
+
 #define defaultDebuggerPort 1650
 #define diapasonDebuggerPort 10
 

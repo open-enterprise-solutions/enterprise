@@ -4,12 +4,12 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "formSelector.h"
-#include "metadata/metaObjects/metaFormObject.h"
-#include "metadata/metaObjects/objects/object.h"
+#include "core/metadata/metaObjects/metaFormObject.h"
+#include "core/metadata/metaObjects/objects/object.h"
 #include "frontend/mainFrame.h"
 
 CSelectTypeForm::CSelectTypeForm(IMetaObject*metaValue, IMetaFormObject *metaObject)
-	: wxDialog(CMainFrame::Get(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(480, 320), wxDEFAULT_DIALOG_STYLE | wxDIALOG_ADAPTATION_ANY_SIZER), m_metaObject(metaObject)
+	: wxDialog(wxAuiDocMDIFrame::GetFrame(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(480, 320), wxDEFAULT_DIALOG_STYLE | wxDIALOG_ADAPTATION_ANY_SIZER), m_metaObject(metaObject)
 {
 	SetTitle(metaValue->GetSynonym() + _(" form wizard"));
 }
@@ -121,7 +121,7 @@ void CSelectTypeForm::OnButtonCancel(wxCommandEvent & event)
 	event.Skip();
 }
 
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 void CSelectTypeForm::OnFormTypeChanged(wxCommandEvent &event)
 {

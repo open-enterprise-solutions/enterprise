@@ -16,16 +16,16 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueToolbar, IValueWindow);
 void CValueToolbar::AddToolItem()
 {
 	wxASSERT(m_formOwner);
-	IValueFrame* toolItem = m_formOwner->NewObject("tool", this);
-	g_visualHostContext->InsertObject(toolItem, this);
+	IValueFrame* toolItem = m_formOwner->NewObject(g_controlToolBarItemCLSID, this);
+	g_visualHostContext->InsertControl(toolItem, this);
 	g_visualHostContext->RefreshEditor();
 }
 
 void CValueToolbar::AddToolSeparator()
 {
 	wxASSERT(m_formOwner);
-	IValueFrame* toolSeparator = m_formOwner->NewObject("toolSeparator", this);
-	g_visualHostContext->InsertObject(toolSeparator, this);
+	IValueFrame* toolSeparator = m_formOwner->NewObject(g_controlToolBarSeparatorCLSID, this);
+	g_visualHostContext->InsertControl(toolSeparator, this);
 	g_visualHostContext->RefreshEditor();
 }
 
@@ -37,12 +37,13 @@ CValueToolbar::CValueToolbar() : IValueWindow()
 {
 }
 
-wxObject* CValueToolbar::Create(wxObject* parent, IVisualHost* visualHost)
+wxObject* CValueToolbar::Create(wxWindow* wxparent, IVisualHost* visualHost)
 {
-	CAuiToolBar* toolbar = new CAuiToolBar((wxWindow*)parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_TEXT);
+	CAuiToolBar* toolbar = new CAuiToolBar(wxparent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_TEXT | wxAUI_TB_OVERFLOW);
 	toolbar->SetArtProvider(new CAuiGenericToolBarArt());
 	toolbar->Bind(wxEVT_TOOL, &CValueToolbar::OnTool, this);
 	toolbar->Bind(wxEVT_AUITOOLBAR_TOOL_DROPDOWN, &CValueToolbar::OnToolDropDown, this);
+	toolbar->Bind(wxEVT_LEFT_DOWN, &CValueToolbar::OnToolBarLeftDown, this);
 	return toolbar;
 }
 
@@ -89,3 +90,9 @@ bool CValueToolbar::SaveData(CMemoryWriter& writer)
 	writer.w_s32(m_actSource->GetValueAsInteger());
 	return IValueWindow::SaveData(writer);
 }
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+CONTROL_VALUE_REGISTER(CValueToolbar, "toolbar", "toolbar", g_controlToolBarCLSID);

@@ -1,6 +1,6 @@
 
 #include "widgets.h"
-#include "compiler/procUnit.h"
+#include "core/compiler/procUnit.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CValueChoice, IValueWindow)
 
@@ -12,9 +12,9 @@ CValueChoice::CValueChoice() : IValueWindow()
 {
 }
 
-wxObject* CValueChoice::Create(wxObject* parent, IVisualHost* visualHost)
+wxObject* CValueChoice::Create(wxWindow* wxparent, IVisualHost* visualHost)
 {
-	wxChoice* choice = new wxChoice((wxWindow*)parent, wxID_ANY,
+	wxChoice* choice = new wxChoice(wxparent, wxID_ANY,
 		wxDefaultPosition,
 		wxDefaultSize);
 

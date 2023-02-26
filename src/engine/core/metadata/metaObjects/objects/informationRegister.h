@@ -44,7 +44,7 @@ class CMetaObjectInformationRegister : public IMetaObjectRegisterData {
 
 protected:
 
-	PropertyCategory* m_categoryForm = IPropertyObject::CreatePropertyCategory({ "defaultForms", "default forms"});
+	PropertyCategory* m_categoryForm = IPropertyObject::CreatePropertyCategory({ "defaultForms", "default forms" });
 	Property* m_propertyDefFormRecord = IPropertyObject::CreateProperty(m_categoryForm, { "default_record", "default record" }, &CMetaObjectInformationRegister::GetFormRecord, wxNOT_FOUND);
 	Property* m_propertyDefFormList = IPropertyObject::CreateProperty(m_categoryForm, { "default_list", "default list" }, &CMetaObjectInformationRegister::GetFormList, wxNOT_FOUND);
 
@@ -75,7 +75,7 @@ private:
 	OptionList* GetFormList(PropertyOption*);
 
 public:
-	
+
 	CMetaObjectInformationRegister();
 	virtual ~CMetaObjectInformationRegister();
 
@@ -131,17 +131,21 @@ public:
 		return GetWriteRegisterMode() == eWriteRegisterMode::eIndependent;
 	}
 
-	//has recorder 
+	//has recorder and period 
+	virtual bool HasPeriod() const {
+		return GetPeriodicity() != ePeriodicity::eNonPeriodic;
+	}
+
 	virtual bool HasRecorder() const {
 		return GetWriteRegisterMode() == eWriteRegisterMode::eSubordinateRecorder;
 	}
 
 	//get module object in compose object 
-	virtual CMetaModuleObject* GetModuleObject() const { 
-		return m_moduleObject; 
+	virtual CMetaModuleObject* GetModuleObject() const {
+		return m_moduleObject;
 	}
 
-	virtual CMetaCommonModuleObject* GetModuleManager() const { 
+	virtual CMetaCommonModuleObject* GetModuleManager() const {
 		return m_moduleManager;
 	}
 
@@ -159,8 +163,8 @@ public:
 	}
 
 	//support form 
-	virtual CValueForm* GetRecordForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniquePairKey& formGuid = wxNullUniquePairKey);
-	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullUniqueKey);
+	virtual CValueForm* GetRecordForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniquePairKey& formGuid = wxNullUniquePairKey);
+	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullUniqueKey);
 
 	//prepare menu for item
 	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
@@ -186,7 +190,7 @@ protected:
 protected:
 
 	//support form 
-	virtual CValueForm* GetRecordForm(const meta_identifier_t& id, IValueFrame* ownerControl, const CUniqueKey& formGuid);
+	virtual CValueForm* GetRecordForm(const meta_identifier_t& id, IControlFrame* ownerControl, const CUniqueKey& formGuid);
 
 protected:
 	friend class CRecordSetInformationRegister;
@@ -197,19 +201,15 @@ protected:
 //*                                      Object                                              *
 //********************************************************************************************
 
-#define thisObject wxT("thisObject")
-
 class CRecordSetInformationRegister : public IRecordSetObject {
 protected:
 
 	CRecordSetInformationRegister(CMetaObjectInformationRegister* metaObject, const CUniquePairKey& uniqueKey = wxNullUniquePairKey) :
-		IRecordSetObject(metaObject, uniqueKey)
-	{
+		IRecordSetObject(metaObject, uniqueKey) {
 	}
 
 	CRecordSetInformationRegister(const CRecordSetInformationRegister& source) :
-		IRecordSetObject(source)
-	{
+		IRecordSetObject(source) {
 	}
 
 public:
@@ -226,15 +226,16 @@ public:
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual CMethods* GetPMethods() const;
 	virtual void PrepareNames() const;
-	virtual CValue Method(methodArg_t& aParams);
 
 	//****************************************************************************
 	//*                              Override attribute                          *
 	//****************************************************************************
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);
-	virtual CValue GetAttribute(attributeArg_t& aParams);
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);
+
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
+
 protected:
 	friend class CMetaObjectInformationRegister;
 };
@@ -252,7 +253,12 @@ public:
 	{
 	}
 
-	virtual CValue CopyRegister();
+	virtual IRecordManagerObject* CopyRegister(bool showValue = false) {
+		IRecordManagerObject* objectRef = CopyRegisterValue();
+		if (objectRef != NULL && showValue)
+			objectRef->ShowFormValue();
+		return objectRef;
+	}
 	virtual bool WriteRegister(bool replace = true);
 	virtual bool DeleteRegister();
 
@@ -260,26 +266,26 @@ public:
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual CMethods* GetPMethods() const;
 	virtual void PrepareNames() const;
-	virtual CValue Method(methodArg_t& aParams);
 
 	//****************************************************************************
 	//*                              Override attribute                          *
 	//****************************************************************************
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);
-	virtual CValue GetAttribute(attributeArg_t& aParams);
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);
+
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 
 	//support source data 
 	virtual CSourceExplorer GetSourceExplorer() const;
 
 	//support show 
-	virtual void ShowFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL);
-	virtual CValueForm* GetFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL);
+	virtual void ShowFormValue(const wxString& formName = wxEmptyString, IControlFrame* owner = NULL);
+	virtual CValueForm* GetFormValue(const wxString& formName = wxEmptyString, IControlFrame* owner = NULL);
 
 	//support actions
 	virtual actionData_t GetActions(const form_identifier_t& formType);
-	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm);
+	virtual void ExecuteAction(const action_identifier_t& lNumAction, CValueForm* srcForm);
 
 protected:
 	friend class CMetaObjectInformationRegister;

@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueOrient.h"
-#include "compiler/enumFactory.h"
+#include "core/compiler/enumFactory.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CValueEnumOrient, CValue);
 

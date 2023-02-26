@@ -6,9 +6,9 @@
 #include "accumulationRegister.h"
 #include "accumulationRegisterManager.h"
 
-#include "compiler/valueMap.h"
-#include "compiler/valueTable.h"
-#include "databaseLayer/databaseLayer.h"
+#include "core/compiler/valueMap.h"
+#include "core/compiler/valueTable.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 #include "appData.h"
 
 CValue CAccumulationRegisterManager::Balance(const CValue& cPeriod, const CValue& cFilter)
@@ -20,7 +20,7 @@ CValue CAccumulationRegisterManager::Balance(const CValue& cPeriod, const CValue
 		CValueTable::IValueModelColumnCollection::IValueModelColumnInfo* colInfo =
 			colCollection->AddColumn(
 				dimention->GetName(),
-				dimention->GetValueTypeDescription(),
+				dimention->GetTypeDescription(),
 				dimention->GetSynonym()
 			);
 	}
@@ -28,7 +28,7 @@ CValue CAccumulationRegisterManager::Balance(const CValue& cPeriod, const CValue
 	for (auto resource : m_metaObject->GetObjectResources()) {
 		colCollection->AddColumn(
 			resource->GetName() + "_Balance",
-			resource->GetValueTypeDescription(),
+			resource->GetTypeDescription(),
 			resource->GetSynonym() + " " + _("Balance")
 		);
 	}
@@ -155,22 +155,17 @@ CValue CAccumulationRegisterManager::Balance(const CValue& cPeriod, const CValue
 			return retTable;
 
 		while (resultSet->Next()) {
-
 			CValueTable::CValueTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
 			wxASSERT(retLine);
 			for (auto dimension : m_metaObject->GetObjectDimensions()) {
-				retLine->SetAt(dimension->GetName(),
-					IMetaAttributeObject::GetValueAttribute(dimension, resultSet)
-				);
+				CValue retVal;
+				if (IMetaAttributeObject::GetValueAttribute(dimension, retVal, resultSet))
+					retLine->SetAt(dimension->GetName(), retVal);
 			}
-
 			for (auto resource : m_metaObject->GetObjectResources()) {
-				retLine->SetAt(resource->GetName() + "_Balance",
-					IMetaAttributeObject::GetValueAttribute(resource->GetFieldNameDB() + "_N_Balance_",
-						IMetaAttributeObject::eFieldTypes_Number,
-						resource, resultSet
-					)
-				);
+				CValue retVal;
+				if (IMetaAttributeObject::GetValueAttribute(resource->GetFieldNameDB() + "_N_Balance_", IMetaAttributeObject::eFieldTypes_Number, resource, retVal, resultSet))
+					retLine->SetAt(resource->GetName() + "_Balance", retVal);
 			}
 			delete retLine;
 		}
@@ -191,25 +186,25 @@ CValue CAccumulationRegisterManager::Turnovers(const CValue& cBeginOfPeriod, con
 		CValueTable::IValueModelColumnCollection::IValueModelColumnInfo* colInfo =
 			colCollection->AddColumn(
 				dimention->GetName(),
-				dimention->GetValueTypeDescription(),
+				dimention->GetTypeDescription(),
 				dimention->GetSynonym()
-			);;
+			);
 	}
 	for (auto resource : m_metaObject->GetObjectResources()) {
 		colCollection->AddColumn(
-			resource->GetName() + "_Turnover",
-			resource->GetValueTypeDescription(),
+			resource->GetName() + wxT("_Turnover"),
+			resource->GetTypeDescription(),
 			resource->GetSynonym() + " " + _("Turnover")
 		);
 		if (m_metaObject->GetRegisterType() == eRegisterType::eBalances) {
 			colCollection->AddColumn(
-				resource->GetName() + "_Receipt",
-				resource->GetValueTypeDescription(),
+				resource->GetName() + wxT("_Receipt"),
+				resource->GetTypeDescription(),
 				resource->GetSynonym() + " " + _("Receipt")
 			);
 			colCollection->AddColumn(
-				resource->GetName() + "_Expense",
-				resource->GetValueTypeDescription(),
+				resource->GetName() + wxT("_Expense"),
+				resource->GetTypeDescription(),
 				resource->GetSynonym() + " " + _("Expense")
 			);
 		}
@@ -375,32 +370,22 @@ CValue CAccumulationRegisterManager::Turnovers(const CValue& cBeginOfPeriod, con
 		CValueTable::CValueTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
 		wxASSERT(retLine);
 		for (auto dimension : m_metaObject->GetObjectDimensions()) {
-			retLine->SetAt(dimension->GetName(),
-				IMetaAttributeObject::GetValueAttribute(dimension, resultSet)
-			);
+			CValue retValue;
+			if (IMetaAttributeObject::GetValueAttribute(dimension, retValue, resultSet))
+				retLine->SetAt(dimension->GetName(), retValue);
 		}
 
 		for (auto resource : m_metaObject->GetObjectResources()) {
-			retLine->SetAt(resource->GetName() + "_Turnover",
-				IMetaAttributeObject::GetValueAttribute(resource->GetFieldNameDB() + "_N_Turnover_",
-					IMetaAttributeObject::eFieldTypes_Number,
-					resource, resultSet
-				)
-			);
-
+			CValue retValue;
+			if (IMetaAttributeObject::GetValueAttribute(resource->GetFieldNameDB() + "_N_Turnover_", IMetaAttributeObject::eFieldTypes_Number, resource, retValue, resultSet))
+				retLine->SetAt(resource->GetName() + "_Turnover", retValue);
 			if (m_metaObject->GetRegisterType() == eRegisterType::eBalances) {
-				retLine->SetAt(resource->GetName() + "_Receipt",
-					IMetaAttributeObject::GetValueAttribute(resource->GetFieldNameDB() + "_N_Receipt_",
-						IMetaAttributeObject::eFieldTypes_Number,
-						resource, resultSet
-					)
-				);
-				retLine->SetAt(resource->GetName() + "_Expense",
-					IMetaAttributeObject::GetValueAttribute(resource->GetFieldNameDB() + "_N_Expense_",
-						IMetaAttributeObject::eFieldTypes_Number,
-						resource, resultSet
-					)
-				);
+				CValue retValue1;
+				if (IMetaAttributeObject::GetValueAttribute(resource->GetFieldNameDB() + "_N_Receipt_", IMetaAttributeObject::eFieldTypes_Number, resource, retValue1, resultSet))
+					retLine->SetAt(resource->GetName() + "_Receipt", retValue1);
+				CValue retValue2;
+				if (IMetaAttributeObject::GetValueAttribute(resource->GetFieldNameDB() + "_N_Expense_", IMetaAttributeObject::eFieldTypes_Number, resource, retValue2, resultSet))
+					retLine->SetAt(resource->GetName() + "_Expense", retValue2);
 			}
 		}
 		delete retLine;

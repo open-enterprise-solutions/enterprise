@@ -17,8 +17,8 @@
 
 #include "engine/mysql.h"
 
-#include "databaseLayer/DatabaseErrorReporter.h"
-#include "databaseLayer/databaseStringConverter.h"
+#include <3rdparty/databaseLayer/databaseErrorReporter.h>
+#include <3rdparty/databaseLayer/databaseStringConverter.h>
 
 typedef struct bind_data {
 	wxString strValue;

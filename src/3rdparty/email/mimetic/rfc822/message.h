@@ -20,8 +20,8 @@
 
 #include <string>
 #include <iostream>
-#include <email/mimetic/rfc822/header.h>
-#include <email/mimetic/rfc822/body.h>
+#include <3rdparty/email/mimetic/rfc822/header.h>
+#include <3rdparty/email/mimetic/rfc822/body.h>
 
 namespace mimetic
 {

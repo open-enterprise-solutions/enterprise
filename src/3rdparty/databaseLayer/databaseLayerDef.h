@@ -1,6 +1,12 @@
 #ifndef __DATABASELAYER_DEF_H__
 #define __DATABASELAYER_DEF_H__
 
-#include "core.h"
+#include "core/core.h"
+
+#define DATABASELAYER_FIREBIRD 1
+#define DATABASELAYER_POSTGRESQL 2
+#define DATABASELAYER_ODBC 3
+#define DATABASELAYER_MYSQL 4
+#define DATABASELAYER_SQLLITE 5
 
 #endif // __DATABASELAYER_DEF_H__

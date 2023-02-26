@@ -1,9 +1,9 @@
 #include "postgresResultSet.h"
 #include "postgresResultSetMetaData.h"
 
-#include "databaseLayer/databaseErrorCodes.h"
-#include "databaseLayer/databaseLayer.h"
-#include "databaseLayer/databaseLayerException.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
+#include <3rdparty/databaseLayer/databaseLayer.h>
+#include <3rdparty/databaseLayer/databaseLayerException.h>
 
 #include "engine/libpq/libpq-fs.h"
 

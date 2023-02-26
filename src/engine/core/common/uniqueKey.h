@@ -1,7 +1,7 @@
 #ifndef __UNIQUE_KEY_H__
 #define __UNIQUE_KEY_H__
 
-#include "guid/guid.h"
+#include "core/compiler/value.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,21 +65,37 @@ protected:
 
 	Guid m_objGuid;
 	IMetaObjectRegisterData* m_metaObject;
-	std::map<meta_identifier_t, CValue> m_keyValues;
+	valueArray_t m_keyValues;
 };
 
 class CUniquePairKey : public CUniqueKey {
 public:
 
 	CUniquePairKey(IMetaObjectRegisterData* metaObject = NULL);
-	CUniquePairKey(IMetaObjectRegisterData* metaObject, const std::map<meta_identifier_t, CValue>& keyValues);
+	CUniquePairKey(IMetaObjectRegisterData* metaObject, const valueArray_t& keyValues);
+
+	bool IsOk() const {
+		return m_metaObject != NULL && m_keyValues.size() > 0;
+	}
 
 	void SetKeyPair(IMetaObjectRegisterData* metaObject,
-		std::map<meta_identifier_t, CValue>& keys) {
+		valueArray_t& keys) {
 		m_metaObject = metaObject; m_keyValues = keys;
 	}
 
-	operator std::map<meta_identifier_t, CValue>() const {
+	bool FindKey(const meta_identifier_t& id) const {
+		auto foundedIt = m_keyValues.find(id);
+		return foundedIt != m_keyValues.end();
+	}
+
+	CValue GetKey(const meta_identifier_t& id) const {
+		auto foundedIt = m_keyValues.find(id);
+		if (foundedIt != m_keyValues.end())
+			return foundedIt->second;
+		return CValue();
+	}
+
+	operator valueArray_t() const {
 		return m_keyValues;
 	}
 };

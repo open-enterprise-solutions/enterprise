@@ -1,8 +1,8 @@
 #include "mysqlPreparedStatementResultSet.h"
 #include "mysqlResultSetMetaData.h"
 #include "mysqlDatabaseLayer.h"
-#include "databaseLayer/databaseErrorCodes.h"
-#include "databaseLayer/databaseLayerException.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
+#include <3rdparty/databaseLayer/databaseLayerException.h>
 
 MysqlPreparedStatementResultSet::MysqlPreparedStatementResultSet(MysqlInterface* pInterface)
 	: DatabaseResultSet()

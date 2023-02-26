@@ -21,7 +21,7 @@
 #include <string>
 #include <iostream>
 #include <list>
-#include <email/mimetic/strutils.h>
+#include <3rdparty/email/mimetic/strutils.h>
 
 namespace mimetic
 {

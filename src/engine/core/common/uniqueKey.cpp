@@ -1,5 +1,5 @@
 #include "uniqueKey.h"
-#include "metadata/metaObjects/objects/object.h"
+#include "core/metadata/metaObjects/objects/object.h"
 
 bool CUniqueKey::isValid() const
 {
@@ -93,7 +93,7 @@ CUniqueKey::CUniqueKey(const Guid& guid) : CUniqueKey(enUniqueData::enUniqueGuid
 
 CUniquePairKey::CUniquePairKey(IMetaObjectRegisterData* metaObject) : CUniqueKey(enUniqueData::enUniqueKey)
 {
-	m_objGuid = wxNewGuid;
+	m_objGuid = wxNewUniqueGuid;
 	m_metaObject = metaObject;
 	m_keyValues = {};
 
@@ -107,9 +107,9 @@ CUniquePairKey::CUniquePairKey(IMetaObjectRegisterData* metaObject) : CUniqueKey
 	}
 }
 
-CUniquePairKey::CUniquePairKey(IMetaObjectRegisterData* metaObject, const std::map<meta_identifier_t, CValue>& keyValues) : CUniqueKey(enUniqueData::enUniqueKey)
+CUniquePairKey::CUniquePairKey(IMetaObjectRegisterData* metaObject, const valueArray_t& keyValues) : CUniqueKey(enUniqueData::enUniqueKey)
 {
-	m_objGuid = wxNewGuid;
+	m_objGuid = wxNewUniqueGuid;
 	m_metaObject = metaObject;
 	m_keyValues = {};
 

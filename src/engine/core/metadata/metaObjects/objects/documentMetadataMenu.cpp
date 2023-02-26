@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "document.h"
-#include "frontend/metatree/metatreeWnd.h"
+#include "frontend/metatree/metaTreeWnd.h"
 
 bool CMetaObjectDocument::PrepareContextMenu(wxMenu *defaultMenu)
 {

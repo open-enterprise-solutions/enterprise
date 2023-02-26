@@ -7,7 +7,7 @@ class CSourceExplorer {
 		wxString m_srcSynonym;
 		IMetaObject* m_metaObject = NULL;
 		meta_identifier_t m_meta_id = wxNOT_FOUND;
-		std::set<CLASS_ID> m_clsids;
+		typeDescription_t m_typeDescription;
 		bool m_enabled = true;
 		bool m_visible = true;
 		bool m_tableSection = false;
@@ -26,11 +26,11 @@ private:
 	}
 
 	CSourceExplorer(IMetaAttributeObject* attribute, bool enabled = true, bool visible = true) {
-		m_srcData = { attribute->GetName(), attribute->GetSynonym(), attribute, attribute->GetMetaID(), attribute->GetClsids(), enabled, visible, false };
+		m_srcData = { attribute->GetName(), attribute->GetSynonym(), attribute, attribute->GetMetaID(), attribute->GetTypeDescription(), enabled, visible, false };
 	}
 
 	CSourceExplorer(CMetaTableObject* tableSection) {
-		m_srcData = { tableSection->GetName(), tableSection->GetSynonym(), tableSection, tableSection->GetMetaID(), { tableSection->GetClsidTable() }, true, true, true };
+		m_srcData = { tableSection->GetName(), tableSection->GetSynonym(), tableSection, tableSection->GetMetaID(), tableSection->GetTypeDescription(), true, true, true };
 		for (auto attribute : tableSection->GetObjectAttributes()) {
 			CSourceExplorer::AppendSource(attribute);
 		}
@@ -39,14 +39,14 @@ private:
 public:
 
 	CSourceExplorer(IMetaObject* refData, const CLASS_ID& clsid, bool tableSection, bool select = false) {
-		m_srcData = { wxT("ref"), _("ref"), refData, refData->GetMetaID(), { clsid }, true, true, tableSection, select };
+		m_srcData = { wxT("ref"), _("ref"), refData, refData->GetMetaID(), clsid, true, true, tableSection, select };
 	}
 
 	// this object 
 	CSourceExplorer(IMetaObjectWrapperData* refData, const CLASS_ID& clsid, bool tableSection, bool select = false) {
 		if (refData->IsDeleted())
 			return;
-		m_srcData = { refData->GetName(), refData->GetSynonym(), refData, refData->GetMetaID(), { clsid },  true, true, tableSection, select };
+		m_srcData = { refData->GetName(), refData->GetSynonym(), refData, refData->GetMetaID(), clsid,  true, true, tableSection, select };
 	}
 
 	wxString GetSourceName() const { return m_srcData.m_srcName; }
@@ -62,13 +62,13 @@ public:
 	}
 
 	std::set<CLASS_ID> GetTypeIDSource() const {
-		return m_srcData.m_clsids;
+		return m_srcData.m_typeDescription.m_clsids;
 	}
 
 	bool ContainType(const eValueTypes& valType) const {
-		
+
 		if (valType == eValueTypes::TYPE_ENUM) {
-			for (auto clsid : m_srcData.m_clsids) {
+			for (auto clsid : m_srcData.m_typeDescription.m_clsids) {
 				if (CValue::IsRegisterObject(clsid)) {
 					ISimpleObjectValueSingle* singleObject =
 						dynamic_cast<ISimpleObjectValueSingle*>(CValue::GetAvailableObject(clsid));
@@ -81,13 +81,13 @@ public:
 			}
 			return false;
 		}
-		
-		return m_srcData.m_clsids.find(
-			CValue::GetIDByVT(valType)) != m_srcData.m_clsids.end();
+
+		return m_srcData.m_typeDescription.m_clsids.find(
+			CValue::GetIDByVT(valType)) != m_srcData.m_typeDescription.m_clsids.end();
 	}
 
 	bool ContainType(const CLASS_ID& clsid) const {
-		return m_srcData.m_clsids.find(clsid) != m_srcData.m_clsids.end();
+		return m_srcData.m_typeDescription.m_clsids.find(clsid) != m_srcData.m_typeDescription.m_clsids.end();
 	}
 
 	void AppendSource(IMetaObjectWrapperData* refData, const CLASS_ID& clsid) {
@@ -121,7 +121,7 @@ public:
 		return m_aSrcData[idx];
 	}
 
-	unsigned int GetHelperCount() const { 
+	unsigned int GetHelperCount() const {
 		return m_aSrcData.size();
 	}
 

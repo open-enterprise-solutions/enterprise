@@ -2,7 +2,7 @@
 
 #include "appData.h"
 #include "utils/typeconv.h"
-#include "metadata/metaObjects/objects/object.h"
+#include "core/metadata/metaObjects/objects/object.h"
 
 #include <wx/regex.h>
 #include <wx/spinctrl.h>
@@ -655,6 +655,8 @@ wxVariant wxPGFontProperty::ChildChanged(wxVariant& thisValue, int ind, wxVarian
 	return thisValue;
 }
 
+#include "editors.h"
+
 // -----------------------------------------------------------------------
 // wxStringControlProperty
 // -----------------------------------------------------------------------
@@ -799,10 +801,8 @@ wxPGEditorDialogAdapter* wxEventControlProperty::GetEditorDialog() const
 // wxPGToolActionProperty
 // -----------------------------------------------------------------------
 
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 #include "frontend/visualView/controls/form.h"
-
-#include "editors.h"
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(wxPGToolActionProperty, wxPGProperty, ComboBoxAndButton)
 
@@ -916,7 +916,7 @@ wxPGEditorDialogAdapter* wxPGToolActionProperty::GetEditorDialog() const
 // wxPGTypeSelectorProperty
 // -----------------------------------------------------------------------
 
-#include "metadata/singleMetaTypes.h"
+#include "core/metadata/singleClass.h"
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(wxPGTypeSelectorProperty, wxStringProperty, ComboBoxAndButton)
 
@@ -943,7 +943,7 @@ void wxPGTypeSelectorProperty::FillByClsid(const CLASS_ID& clsid)
 				auto metaObject = so->GetMetaObject();
 				auto choice = m_choices.Add(so->GetClassName(), metaObject->GetIcon());
 				m_valChoices.insert_or_assign(
-					choice.GetValue(), so->GetClassType()
+					choice.GetValue(), so->GetTypeClass()
 				);
 			}
 		}
@@ -953,7 +953,7 @@ void wxPGTypeSelectorProperty::FillByClsid(const CLASS_ID& clsid)
 				auto metaObject = so->GetMetaObject();
 				auto choice = m_choices.Add(so->GetClassName(), metaObject->GetIcon());
 				m_valChoices.insert_or_assign(
-					choice.GetValue(), so->GetClassType()
+					choice.GetValue(), so->GetTypeClass()
 				);
 			}
 		}
@@ -963,7 +963,7 @@ void wxPGTypeSelectorProperty::FillByClsid(const CLASS_ID& clsid)
 				auto metaObject = so->GetMetaObject();
 				auto choice = m_choices.Add(so->GetClassName(), metaObject->GetIcon());
 				m_valChoices.insert_or_assign(
-					choice.GetValue(), so->GetClassType()
+					choice.GetValue(), so->GetTypeClass()
 				);
 			}
 
@@ -971,7 +971,7 @@ void wxPGTypeSelectorProperty::FillByClsid(const CLASS_ID& clsid)
 				auto metaObject = so->GetMetaObject();
 				auto choice = m_choices.Add(so->GetClassName(), metaObject->GetIcon());
 				m_valChoices.insert_or_assign(
-					choice.GetValue(), so->GetClassType()
+					choice.GetValue(), so->GetTypeClass()
 				);
 			}
 
@@ -979,7 +979,7 @@ void wxPGTypeSelectorProperty::FillByClsid(const CLASS_ID& clsid)
 				auto metaObject = so->GetMetaObject();
 				auto choice = m_choices.Add(so->GetClassName(), metaObject->GetIcon());
 				m_valChoices.insert_or_assign(
-					choice.GetValue(), so->GetClassType()
+					choice.GetValue(), so->GetTypeClass()
 				);
 			}
 		}
@@ -987,12 +987,12 @@ void wxPGTypeSelectorProperty::FillByClsid(const CLASS_ID& clsid)
 	else {
 		auto choice = m_choices.Add(so->GetClassName(), so->GetClassIcon());
 		m_valChoices.insert_or_assign(
-			choice.GetValue(), so->GetClassType()
+			choice.GetValue(), so->GetTypeClass()
 		);
 	}
 }
 
-#include "compiler/valueTable.h"
+#include "core/compiler/valueTable.h"
 
 wxPGTypeSelectorProperty::wxPGTypeSelectorProperty(const wxString& label, const wxString& name, const wxVariant& value,
 	eSelectorDataType dataType,
@@ -1172,7 +1172,7 @@ void wxPGTypeSelectorProperty::RefreshChildren()
 				m_scale->SetValue(currList->GetScale());
 			}
 			else if (id == eValueTypes::TYPE_DATE) {
-				m_date_time->SetValue(currList->GetDateTime());
+				m_date_time->SetValue(currList->GetDateFraction());
 			}
 			else if (id == eValueTypes::TYPE_STRING) {
 				m_length->SetValue(currList->GetLength());
@@ -1214,8 +1214,8 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 				itemData);
 
 			if (oldList != NULL) {
-				tc->SetItemState(newItem, oldList->ContainType(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
-				tc->Check(newItem, oldList->ContainType(so->GetClassType()));
+				tc->SetItemState(newItem, oldList->ContainType(so->GetTypeClass()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
+				tc->Check(newItem, oldList->ContainType(so->GetTypeClass()));
 			}
 			else {
 				tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
@@ -1238,8 +1238,8 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 					itemData);
 
 				if (oldList != NULL) {
-					tc->SetItemState(newItem, oldList->ContainType(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
-					tc->Check(newItem, oldList->ContainType(so->GetClassType()));
+					tc->SetItemState(newItem, oldList->ContainType(so->GetTypeClass()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
+					tc->Check(newItem, oldList->ContainType(so->GetTypeClass()));
 				}
 				else {
 					tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
@@ -1271,8 +1271,8 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 								itemData);
 
 							if (oldList != NULL) {
-								tc->SetItemState(newItem, oldList->ContainType(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
-								tc->Check(newItem, oldList->ContainType(so->GetClassType()));
+								tc->SetItemState(newItem, oldList->ContainType(so->GetTypeClass()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
+								tc->Check(newItem, oldList->ContainType(so->GetTypeClass()));
 							}
 							else {
 								tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
@@ -1297,8 +1297,8 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 								itemData);
 
 							if (oldList != NULL) {
-								tc->SetItemState(newItem, oldList->ContainType(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
-								tc->Check(newItem, oldList->ContainType(so->GetClassType()));
+								tc->SetItemState(newItem, oldList->ContainType(so->GetTypeClass()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
+								tc->Check(newItem, oldList->ContainType(so->GetTypeClass()));
 							}
 							else {
 								tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
@@ -1323,8 +1323,8 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 									itemData);
 
 								if (oldList != NULL) {
-									tc->SetItemState(newItem, oldList->ContainType(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
-									tc->Check(newItem, oldList->ContainType(so->GetClassType()));
+									tc->SetItemState(newItem, oldList->ContainType(so->GetTypeClass()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
+									tc->Check(newItem, oldList->ContainType(so->GetTypeClass()));
 								}
 								else {
 									tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
@@ -1348,8 +1348,8 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 									itemData);
 
 								if (oldList != NULL) {
-									tc->SetItemState(newItem, oldList->ContainType(so->GetClassType()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
-									tc->Check(newItem, oldList->ContainType(so->GetClassType()));
+									tc->SetItemState(newItem, oldList->ContainType(so->GetTypeClass()) ? wxCheckTree::CHECKED : wxCheckTree::UNCHECKED);
+									tc->Check(newItem, oldList->ContainType(so->GetTypeClass()));
 								}
 								else {
 									tc->SetItemState(newItem, wxCheckTree::UNCHECKED);
@@ -1447,7 +1447,7 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 				cDDateFormatChoices.Add(ch.GetLabel(idx));
 			}
 			wxChoice* cDDateFormat = new wxChoice(dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize, cDDateFormatChoices);
-			cDDateFormat->SetSelection(oldList->GetDateTime());
+			cDDateFormat->SetSelection(oldList->GetDateFraction());
 			dateSizer->Add(cDDateFormat, 0, wxALL, 0);
 
 			cDDateFormat->Bind(wxEVT_COMMAND_CHOICE_SELECTED,
@@ -1531,7 +1531,7 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 					if (dataItem != NULL) {
 						IObjectValueAbstract* so = dataItem->GetOption();
 						wxASSERT(so);
-						CLASS_ID clsid = so->GetClassType();
+						CLASS_ID clsid = so->GetTypeClass();
 
 						for (unsigned int i = 0; i < numberSizer->GetItemCount(); i++) {
 							numberSizer->Show(i, CValue::GetVTByID(clsid) == eValueTypes::TYPE_NUMBER);
@@ -1621,7 +1621,7 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 						IObjectValueAbstract* item = dataItem ?
 							dynamic_cast<optionTreeItemData*>(dataItem)->GetOption() : NULL;
 						if (dataItem != NULL) {
-							if (clsid == item->GetClassType()) {
+							if (clsid == item->GetTypeClass()) {
 								allowType = false; break;
 							}
 						}
@@ -1641,11 +1641,11 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 						if (dataItem) {
 							IObjectValueAbstract* item = dynamic_cast<
 								optionTreeItemData*>(dataItem)->GetOption();
-							list->SetMetatype(item->GetClassType());
+							list->SetMetatype(item->GetTypeClass());
 						}
 					}
 				}
-				list->SetDescription(oldList->GetDescription());
+				list->SetTypeData(oldList->GetTypeData());
 				SetValue(list);
 			}
 
@@ -1663,7 +1663,7 @@ wxPGEditorDialogAdapter* wxPGTypeSelectorProperty::GetEditorDialog() const
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(wxPGRecordSelectorProperty, wxStringProperty, ComboBoxAndButton)
 
-#include "metadata/metaObjects/objects/document.h"
+#include "core/metadata/metaObjects/objects/document.h"
 
 void wxPGRecordSelectorProperty::FillByClsid(const CLASS_ID& clsid)
 {
@@ -1854,7 +1854,7 @@ wxPGEditorDialogAdapter* wxPGRecordSelectorProperty::GetEditorDialog() const
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(wxPGOwnerSelectorProperty, wxStringProperty, ComboBoxAndButton)
 
-#include "metadata/metaObjects/objects/catalog.h"
+#include "core/metadata/metaObjects/objects/catalog.h"
 
 void wxPGOwnerSelectorProperty::FillByClsid(const CLASS_ID& clsid)
 {
@@ -2090,7 +2090,7 @@ bool wxPGGenerationSelectorProperty::IntToValue(wxVariant& value, int number, in
 	return true;
 }
 
-#include "metadata/metaObjects/objects/objectVariant.h"
+#include "core/metadata/metaObjects/objects/objectVariant.h"
 
 wxPGEditorDialogAdapter* wxPGGenerationSelectorProperty::GetEditorDialog() const
 {
@@ -2230,20 +2230,25 @@ wxPGEditorDialogAdapter* wxPGGenerationSelectorProperty::GetEditorDialog() const
 // wxPGSourceDataProperty
 // -----------------------------------------------------------------------
 
-#include "frontend/visualView/controls/attributeControl.h"
+#include "frontend/visualView/controls/tableBox.h"
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(wxPGSourceDataProperty, wxPGProperty, TextCtrlAndButton)
 
 wxPGSourceDataProperty::wxPGSourceDataProperty(const wxString& label, const wxString& name,
 	const wxVariant& value, IPropertyObject* curObject) : wxPGProperty(label, name), m_curObject(curObject),
-	m_srcDataType(
-		curObject->GetComponentType() == COMPONENT_TYPE_WINDOW_TABLE ?
-		eSourceDataType::eSourceDataVariant_table :
-		curObject->GetComponentType() == COMPONENT_TYPE_TABLE_COLUMN ?
-		eSourceDataType::eSourceDataVariant_tableColumn :
-		eSourceDataVariant_attribute
-	)
+	m_srcDataType(eSourceDataType::eSourceDataVariant_attribute)
 {
+	IValueFrame* curControl = dynamic_cast<IValueFrame*>(m_curObject);
+	wxASSERT(curControl);
+
+	const CLASS_ID& clsid = curControl->GetClsid();
+	if (clsid == g_controlTableBoxCLSID)
+		m_srcDataType = eSourceDataType::eSourceDataVariant_table;
+	else if (clsid == g_controlTableBoxColumnCLSID)
+		m_srcDataType = eSourceDataType::eSourceDataVariant_tableColumn;
+	else
+		m_srcDataType = eSourceDataType::eSourceDataVariant_attribute;
+
 	wxVariantSourceData* currSrcData =
 		dynamic_cast<wxVariantSourceData*>(value.GetData());
 
@@ -2254,12 +2259,8 @@ wxPGSourceDataProperty::wxPGSourceDataProperty(const wxString& label, const wxSt
 		);
 	}
 	else {
-
-		IValueFrame* curControl = dynamic_cast<IValueFrame*>(m_curObject);
-		wxASSERT(curControl);
 		CValueForm* ownerForm = curControl ? curControl->GetOwnerForm() : NULL;
 		wxASSERT(ownerForm);
-
 		m_typeSelector = new wxPGTypeSelectorProperty(wxT("type"), wxPG_LABEL,
 			new wxVariantSourceAttributeData(curObject->GetMetaData(), ownerForm, wxNOT_FOUND),
 			m_srcDataType == eSourceDataType::eSourceDataVariant_table ? eSelectorDataType::eSelectorDataType_table : eSelectorDataType::eSelectorDataType_reference, curObject
@@ -2369,10 +2370,8 @@ void wxPGSourceDataProperty::RefreshChildren()
 	}
 }
 
-extern wxImageList* GetImageList();
-
-#define icon_attribute 219 
-#define icon_table 217
+#define icon_attribute 0 
+#define icon_table 1
 
 #include "frontend/visualView/controls/tableBox.h"
 
@@ -2395,6 +2394,13 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 			const meta_identifier_t& GetID() const { return m_id; }
 			const bool IsTableSection() const { return m_tableSection; }
 		};
+
+		wxImageList* GetSourceImageList() const {
+			wxImageList *list = new wxImageList(ICON_SIZE, ICON_SIZE);
+			list->Add(CValue::GetIconGroup());
+			list->Add(CValueTable::GetIconGroup());
+			return list; 
+		}
 
 		bool ProcessAttribute(wxPropertyGrid* pg,
 			wxPGSourceDataProperty* dlgProp, wxVariantSourceData* srcData) {
@@ -2426,7 +2432,10 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 			wxTreeCtrl* tc = new wxTreeCtrl(dlg, wxID_ANY,
 				wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxSUNKEN_BORDER);
 
-			tc->SetImageList(::GetImageList());
+			// Make an state image list containing small icons
+			tc->SetImageList(
+				GetSourceImageList()
+			);
 
 			rowsizer->Add(tc, wxSizerFlags(1).Expand().Border(wxALL, spacing));
 			topsizer->Add(rowsizer, wxSizerFlags(1).Expand());
@@ -2530,7 +2539,7 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 			tc->ExpandAll(); int res = dlg->ShowModal();
 
 			bool tableBox =
-				currControl->GetComponentType() == COMPONENT_TYPE_WINDOW_TABLE;
+				currControl->GetClsid() == g_controlTableBoxCLSID;
 
 			wxTreeItemId selItem = tc->GetSelection();
 			if (selItem.IsOk()) {
@@ -2591,9 +2600,8 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 			if (singleObject == NULL)
 				return false;
 
-			ITableAttribute* metaObject =
-				dynamic_cast<ITableAttribute*>(singleObject->GetMetaObject());
-			if (metaObject == NULL)
+			IMetaTableData* metaObject = NULL; 
+			if (!singleObject->ConvertToMetaValue(metaObject))
 				return false;
 
 			// launch editor dialog
@@ -2611,7 +2619,7 @@ wxPGEditorDialogAdapter* wxPGSourceDataProperty::GetEditorDialog() const
 			wxTreeCtrl* tc = new wxTreeCtrl(dlg, wxID_ANY,
 				wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxSUNKEN_BORDER);
 
-			tc->SetImageList(::GetImageList());
+			tc->SetImageList(GetSourceImageList());
 
 			rowsizer->Add(tc, wxSizerFlags(1).Expand().Border(wxALL, spacing));
 			topsizer->Add(rowsizer, wxSizerFlags(1).Expand());

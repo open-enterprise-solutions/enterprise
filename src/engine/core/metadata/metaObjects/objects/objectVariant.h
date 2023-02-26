@@ -1,7 +1,7 @@
 #ifndef _BASE_VARIANT_H_
 #define _BASE_VARIANT_H_
 
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 class wxVariantGenerationData : public wxVariantData {
 	wxString MakeString() const;

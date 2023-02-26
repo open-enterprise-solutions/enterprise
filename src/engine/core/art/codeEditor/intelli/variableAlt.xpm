@@ -1,0 +1,26 @@
+/* XPM */
+static const char *s_variable_alt_xpm[] = {
+/* columns rows colors chars-per-pixel */
+"16 16 4 1",
+"X c #FF00FF",
+"o c #040404",
+"  c None",
+". c #868686",
+/* pixels */
+"                ",
+"                ",
+"     .          ",
+"    .X.         ",
+"   .XXX.        ",
+"  .XXXXXo       ",
+" .XXXXXoo       ",
+" ..XXXo.o       ",
+" .X.Xo..o       ",
+" .XXo..o        ",
+"  .Xo.o         ",
+"   .oo          ",
+"    o           ",
+"                ",
+"                ",
+"                "
+};

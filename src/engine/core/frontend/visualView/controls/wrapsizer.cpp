@@ -11,7 +11,7 @@ CValueWrapSizer::CValueWrapSizer() : IValueSizer()
 {
 }
 
-wxObject* CValueWrapSizer::Create(wxObject* /*parent*/, IVisualHost* /*visualHost*/)
+wxObject* CValueWrapSizer::Create(wxWindow* /*parent*/, IVisualHost* /*visualHost*/)
 {
 	return new wxWrapSizer(m_propertyOrient->GetValueAsInteger(), wxWRAPSIZER_DEFAULT_FLAGS);
 }
@@ -22,15 +22,14 @@ void CValueWrapSizer::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualH
 
 void CValueWrapSizer::Update(wxObject* wxobject, IVisualHost *visualHost)
 {
-	wxWrapSizer *m_wrapsizer = dynamic_cast<wxWrapSizer *>(wxobject);
+	wxWrapSizer *wrapsizer = dynamic_cast<wxWrapSizer *>(wxobject);
 
-	if (m_wrapsizer)
-	{
-		m_wrapsizer->SetOrientation(m_propertyOrient->GetValueAsInteger());
-		m_wrapsizer->SetMinSize(m_propertyMinSize->GetValueAsSize());
+	if (wrapsizer) {
+		wrapsizer->SetOrientation(m_propertyOrient->GetValueAsInteger());
+		wrapsizer->SetMinSize(m_propertyMinSize->GetValueAsSize());
 	}
 
-	UpdateSizer(m_wrapsizer);
+	UpdateSizer(wrapsizer);
 }
 
 void CValueWrapSizer::Cleanup(wxObject* obj, IVisualHost *visualHost)

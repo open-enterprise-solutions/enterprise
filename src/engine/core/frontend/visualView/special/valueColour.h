@@ -1,7 +1,7 @@
 #ifndef _VALUECOLOUR_H__
 #define _VALUECOLOUR_H__
 
-#include "compiler/value.h"
+#include "core/compiler/value.h"
 
 //Поддержка массивов
 class CValueColour : public CValue
@@ -15,27 +15,33 @@ public:
 public:
 
 	CValueColour();
-	CValueColour(wxColour colour);
-	
-	virtual bool Init(CValue **aParams);
+	CValueColour(const wxColour& colour);
+	virtual ~CValueColour();
+
+	virtual bool Init(CValue** paParams, const long lSizeArray);
 
 	virtual wxString GetTypeString() const;
 	virtual wxString GetString() const;
 
 	//check is empty
-	virtual inline bool IsEmpty() const override { return !m_colour.IsOk(); }
+	virtual inline bool IsEmpty() const override {
+		return !m_colour.IsOk();
+	}
 
-	static CMethods m_methods;
+	static CMethodHelper m_methodHelper;
 
-	virtual void SetAttribute(attributeArg_t &aParams, CValue &cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t &aParams);                   //значение атрибута
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
 
-	virtual CMethods* GetPMethods() const { return &m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethodHelper* GetPMethods() const {
+		PrepareNames();
+		return &m_methodHelper;
+	}
 	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
 
-	operator wxColour() { return m_colour; }
-
-	virtual ~CValueColour();
+	operator wxColour() const {
+		return m_colour;
+	}
 };
 
 #endif

@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataReport.h"
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 #define objectModule wxT("objectModule")
 #define managerModule wxT("managerModule")
@@ -106,7 +106,7 @@ IRecordDataObjectExt* CMetaObjectReport::CreateObjectExtValue()
 #include "frontend/visualView/controls/form.h"
 #include "utils/stringUtils.h"
 
-CValueForm* CMetaObjectReport::GetObjectForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectReport::GetObjectForm(const wxString& formName, IControlFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -241,9 +241,6 @@ bool CMetaObjectReport::OnSaveMetaObject()
 
 bool CMetaObjectReport::OnDeleteMetaObject()
 {
-	IModuleManager* moduleManager = m_metaData->GetModuleManager();
-	wxASSERT(moduleManager);
-
 	if (m_objMode == METAOBJECT_NORMAL) {
 		if (!m_moduleManager->OnDeleteMetaObject())
 			return false;

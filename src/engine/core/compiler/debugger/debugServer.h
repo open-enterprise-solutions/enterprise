@@ -12,14 +12,14 @@ class CRunContext;
 #define debugServerInit()     (CDebuggerServer::Initialize())
 #define debugServerDestroy()  (CDebuggerServer::Destroy())
 
-#include "core.h"
+#include "core/core.h"
 #include "debugDefs.h"
-#include "compiler/compiler.h"
+#include "core/compiler/compiler.h"
 
 class CORE_API CDebuggerServer :
 	public wxEvtHandler
 {
-	static CDebuggerServer *s_instance;
+	static CDebuggerServer* s_instance;
 
 	bool m_bUseDebug;
 	bool m_bDoLoop;
@@ -30,19 +30,19 @@ class CORE_API CDebuggerServer :
 
 	bool m_waitConnection;
 
-	std::map <wxString, std::map<unsigned int, int>> m_aBreakpoints; //список точек 
-	std::map <wxString, std::map<unsigned int, int>> m_aOffsetPoints; //список измененных переходов
+	std::map <wxString, std::map<unsigned int, int>> m_breakpoints; //список точек 
+	std::map <wxString, std::map<unsigned int, int>> m_offsetPoints; //список измененных переходов
 
 #if defined(_USE_64_BIT_POINT_IN_DEBUGGER)
-	std::map <unsigned long long, wxString> m_aExpressions;
+	std::map <unsigned long long, wxString> m_expressions;
 #else 
-	std::map <unsigned int, wxString> m_aExpressions;
+	std::map <unsigned int, wxString> m_expressions;
 #endif 
 
 	wxCriticalSection m_clearBreakpointsCS;
 
-	CRunContext *m_pRunContext;
-	wxSocketServer *m_socketServer;
+	CRunContext* m_runContext;
+	wxSocketServer* m_socketServer;
 
 	CDebuggerServer();
 
@@ -65,14 +65,14 @@ public:
 		return !m_waitConnection;
 	}
 
-	bool CreateServer(const wxString &hostName = wxT("localhost"), unsigned short startPort = defaultDebuggerPort, bool wait = false);
+	bool CreateServer(const wxString& hostName = wxT("localhost"), unsigned short startPort = defaultDebuggerPort, bool wait = false);
 	void ShutdownServer();
 
-	void EnterDebugger(CRunContext *pContext, struct CByte &CurCode, int &nPrevLine);
+	void EnterDebugger(CRunContext* pContext, struct byteRaw_t& CurCode, long& nPrevLine);
 	bool IsDebugLooped() const { return m_bDebugLoop; }
 
-	void InitializeBreakpoints(const wxString &docPath, unsigned int from, unsigned int to);
-	void SendErrorToDesigner(const wxString &fileName, const wxString &docPath, unsigned int line, const wxString &errorMessage);
+	void InitializeBreakpoints(const wxString& docPath, unsigned int from, unsigned int to);
+	void SendErrorToDesigner(const wxString& fileName, const wxString& docPath, unsigned int line, const wxString& errorMessage);
 
 	class CORE_API CServerSocketThread : public wxThread {
 		friend class CDebuggerServer;
@@ -97,7 +97,7 @@ public:
 			return m_connectionType;
 		}
 
-		CServerSocketThread(wxSocketBase *client);
+		CServerSocketThread(wxSocketBase* client);
 		virtual ~CServerSocketThread();
 
 		// entry point for the thread - called by Run() and executes in the context
@@ -105,17 +105,16 @@ public:
 		virtual ExitCode Entry() override;
 
 	protected:
-		void RecvCommand(void *pointer, unsigned int length);
-		void SendCommand(void *pointer, unsigned int length);
+		void RecvCommand(void* pointer, unsigned int length);
+		void SendCommand(void* pointer, unsigned int length);
 	public:
 		virtual void EntryClient();
 	private:
-
+		wxSocketBase* m_socketClient;
 		ConnectionType m_connectionType;
-		wxSocketBase *m_socketClient;
 	};
 
-	CServerSocketThread *m_socketThread;
+	CServerSocketThread* m_socketThread;
 
 protected:
 
@@ -126,20 +125,20 @@ protected:
 			}
 			m_waitConnection = false;
 		}
-		ResetDebugger(); 
+		ResetDebugger();
 	}
 
 	void ResetDebugger() {
-		m_pRunContext	= NULL;
-		m_bUseDebug		= false;
-		m_bDebugLoop	= false;
-		ClearBreakpoints(); 
+		m_runContext = NULL;
+		m_bUseDebug = false;
+		m_bDebugLoop = false;
+		ClearBreakpoints();
 	}
 
 	void ClearBreakpoints();
 
 	//main loop
-	inline void DoDebugLoop(const wxString &filePath, const wxString &module, int nLine, CRunContext *pSetRunContext);
+	inline void DoDebugLoop(const wxString& filePath, const wxString& module, int nLine, CRunContext* pSetRunContext);
 
 	//special functions:
 	inline void SendExpressions();
@@ -147,11 +146,11 @@ protected:
 	inline void SendStack();
 
 	//commands:
-	void RecvCommand(void *pointer, unsigned int length);
-	void SendCommand(void *pointer, unsigned int length);
+	void RecvCommand(void* pointer, unsigned int length);
+	void SendCommand(void* pointer, unsigned int length);
 
 	//events:
-	void OnSocketServerEvent(wxSocketEvent &evt);
+	void OnSocketServerEvent(wxSocketEvent& evt);
 
 	friend class CTranslateError;
 

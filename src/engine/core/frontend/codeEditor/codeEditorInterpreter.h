@@ -1,18 +1,16 @@
 #ifndef _AUTOCOMPLETE_COMPILE_H__
 #define _AUTOCOMPLETE_COMPILE_H__
 
-#include "common/moduleInfo.h"
-#include "compiler/compilemodule.h"
+#include "core/common/moduleInfo.h"
+#include "core/compiler/compilemodule.h"
 
 class CPrecompileModule;
 struct CPrecompileFunction;
 
-struct SParamValue
-{
-	wxString sName;//имя переменной 
-	wxString sType;//тип переменной в англ. нотации (в случае явной типизации)
-
-	CValue vObject;
+struct SParamValue {
+	wxString m_paramName;//имя переменной 
+	wxString m_paramType;//тип переменной в англ. нотации (в случае явной типизации)
+	CValue m_paramObject;
 };
 
 struct CPrecompileVariable
@@ -27,8 +25,8 @@ struct CPrecompileVariable
 	wxString sType;//тип значения
 	wxString sRealName;
 
-	CValue vContext;
-	CValue vObject;
+	CValue m_valContext;
+	CValue m_valObject;
 
 	CPrecompileVariable() : bExport(false), bContext(false), bTempVar(false), nNumber(0) {};
 	CPrecompileVariable(wxString csVarName) : sName(csVarName), bExport(false), bContext(false), bTempVar(false), nNumber(0) {};
@@ -36,35 +34,35 @@ struct CPrecompileVariable
 
 struct CPrecompileContext
 {
-	CPrecompileModule *pModule;
-	void SetModule(CPrecompileModule *pSetModule) { pModule = pSetModule; }
+	CPrecompileModule* pModule;
+	void SetModule(CPrecompileModule* pSetModule) { pModule = pSetModule; }
 
-	CPrecompileContext *pParent;//родительский контекст
-	CPrecompileContext *pStopParent;//начало запрещенной области прародителя
-	CPrecompileContext *pContinueParent;//начало разрешенной области прародителя
+	CPrecompileContext* pParent;//родительский контекст
+	CPrecompileContext* pStopParent;//начало запрещенной области прародителя
+	CPrecompileContext* pContinueParent;//начало разрешенной области прародителя
 	bool bStaticVariable;		//все переменные статичные
 
 	//ПЕРЕМЕННЫЕ
 	std::map <wxString, CPrecompileVariable> cVariables;
 
-	SParamValue GetVariable(const wxString &sName, bool bFindInParent = true, bool bCheckError = false, CValue Value = CValue());
-	SParamValue AddVariable(const wxString &sName, const wxString &sType = wxEmptyString, bool bExport = false, bool bTempVar = false, CValue Value = CValue());
+	SParamValue GetVariable(const wxString& varName, bool bFindInParent = true, bool bCheckError = false, const CValue& valVar = CValue());
+	SParamValue AddVariable(const wxString& varName, const wxString& varType = wxEmptyString, bool bExport = false, bool bTempVar = false, const CValue& valVar = CValue());
+	void SetVariable(const wxString& varName, const CValue& valVar);
 
-	bool FindVariable(const wxString &sName, CValue &vContext = CValue(), bool bContext = false);
-	bool FindFunction(const wxString &sName, CValue &vContext = CValue(), bool bContext = false);
+	bool FindVariable(const wxString& sName, CValue& valContext = CValue(), bool bContext = false);
+	bool FindFunction(const wxString& sName, CValue& valContext = CValue(), bool bContext = false);
 
-	void RemoveVariable(const wxString &sName);
+	void RemoveVariable(const wxString& sName);
 
 	int nTempVar;//номер текущей временной переменной
 	int nFindLocalInParent;//признак поиска переменных в родителе (на один уровень), в остальных случаях в родителях ищутся только экспортные переменные)
 
 	//ФУНКЦИИ И ПРОЦЕДУРЫ
-	std::map<wxString, CPrecompileFunction *> cFunctions;//список встретившихся определений функций
+	std::map<wxString, CPrecompileFunction*> cFunctions;//список встретившихся определений функций
 	int nReturn;//режим обработки оператора RETURN : RETURN_NONE,RETURN_PROCEDURE,RETURN_FUNCTION
 	wxString sCurFuncName;//имя текущей компилируемой функции (для обработки варианта вызова рекурсивной функции)
 
-	CPrecompileContext(CPrecompileContext *hSetParent = NULL)
-	{
+	CPrecompileContext(CPrecompileContext* hSetParent = NULL) {
 		pParent = hSetParent;
 
 		nReturn = 0;
@@ -74,8 +72,7 @@ struct CPrecompileContext
 		pStopParent = NULL;
 		pContinueParent = NULL;
 
-		if (hSetParent)
-		{
+		if (hSetParent) {
 			pStopParent = hSetParent->pStopParent;
 			pContinueParent = hSetParent->pContinueParent;
 		}
@@ -96,12 +93,12 @@ struct CPrecompileFunction
 	std::vector<SParamValue> aParamList;
 	bool bExport;
 	bool bContext;
-	CPrecompileContext *m_pContext;//конекст компиляции
+	CPrecompileContext* m_pContext;//конекст компиляции
 	int nVarCount;//число локальных переменных
 	int nStart;//стартовая позиция в массиве байт-кодов
 	int nFinish;//конечная позиция в массиве байт-кодов
 
-	CValue vContext;
+	CValue m_valContext;
 
 	SParamValue RealRetValue;//для хранения переменной при реальном вызове
 	bool bSysFunction;
@@ -112,7 +109,7 @@ struct CPrecompileFunction
 	wxString sShortDescription;//включает в себя всю строку после ключевого слова Функция(Процедура)
 	wxString sLongDescription;//включает в себя весь слитный (т.е.е буз пустых строк) блок комментарий до определения функции (процедуры)
 
-	CPrecompileFunction(const wxString &sFuncName, CPrecompileContext *pSetContext = NULL)
+	CPrecompileFunction(const wxString& sFuncName, CPrecompileContext* pSetContext = NULL)
 	{
 		sName = sFuncName;
 		m_pContext = pSetContext;
@@ -139,15 +136,15 @@ class CPrecompileModule : public CTranslateModule
 {
 	int m_nCurrentCompile;		//текущее положение в массиве лексем
 
-	CMetaModuleObject *m_moduleObject;
+	CMetaModuleObject* m_moduleObject;
 
 	std::map<wxString, unsigned int> m_aHashConstList;
 
 	CPrecompileContext	cContext;
-	CPrecompileContext	*m_pContext;
-	CPrecompileContext  *m_pCurrentContext;
+	CPrecompileContext* m_pContext;
+	CPrecompileContext* m_pCurrentContext;
 
-	CValue vObject;
+	CValue m_valObject;
 
 	unsigned int nLastPosition;
 
@@ -167,22 +164,25 @@ public:
 	void Clear();//Сброс данных для повторного использования объекта
 	void PrepareModuleData();
 
-	CPrecompileModule(CMetaModuleObject *moduleObject);
+	CPrecompileModule(CMetaModuleObject* moduleObject);
 	virtual ~CPrecompileModule();
 
-	CValue GetComputeValue() { return vObject; }
-	
-	CPrecompileContext *GetContext()
-	{
+	CValue GetComputeValue() const {
+		return m_valObject;
+	}
+
+	CPrecompileContext* GetContext() {
 		cContext.SetModule(this);
 		return &cContext;
 	};
 
-	CPrecompileContext *GetCurrentContext() const { return m_pCurrentContext; }
+	CPrecompileContext* GetCurrentContext() const {
+		return m_pCurrentContext;
+	}
 
 	bool Compile();
 
-	bool PrepareLexem(); 
+	bool PrepareLexem();
 	void PatchLexem(unsigned int line, int offsetLine, unsigned int offsetString, unsigned int modFlags);
 
 protected:
@@ -203,9 +203,9 @@ protected:
 
 	bool CompileModule();
 
-	CLexem PreviewGetLexem();
-	CLexem GetLexem();
-	CLexem GETLexem();
+	lexem_t PreviewGetLexem();
+	lexem_t GetLexem();
+	lexem_t GETLexem();
 	void GETDelimeter(char c);
 
 	bool IsNextDelimeter(char c);
@@ -213,22 +213,24 @@ protected:
 	void GETKeyWord(int nKey);
 	wxString GETIdentifier(bool realName = false);
 	CValue GETConstant();
-	int GetConstString(const wxString &sMethod);
+	int GetConstString(const wxString& sMethod);
 
-	int IsTypeVar(const wxString &sType = wxEmptyString);
-	wxString GetTypeVar(const wxString &sType = wxEmptyString);
+	int IsTypeVar(const wxString& sType = wxEmptyString);
+	wxString GetTypeVar(const wxString& sType = wxEmptyString);
 
 	SParamValue GetExpression(int nPriority = 0);
 
-	SParamValue GetCurrentIdentifier(int &nIsSet);
-	SParamValue GetCallFunction(const wxString &sName);
+	SParamValue GetCurrentIdentifier(int& nIsSet);
+	SParamValue GetCallFunction(const wxString& sName);
 
-	void AddVariable(const wxString &sName, CValue Value);
+	void AddVariable(const wxString& varName, const CValue& varVal);
 
-	SParamValue GetVariable(const wxString &sName, bool bCheckError = false);
+	SParamValue GetVariable(const wxString& varName, bool bCheckError = false);
 	SParamValue GetVariable();
 
-	SParamValue FindConst(CValue &vData);
+	void SetVariable(const wxString& varName, const CValue& varVal);
+
+	SParamValue FindConst(CValue& vData);
 };
 
 #endif 

@@ -14,7 +14,7 @@
 
 #include <wx/dynarray.h>
 
-#include "databaseLayer/preparedStatement.h"
+#include <3rdparty/databaseLayer/preparedStatement.h>
 #include "mysqlPreparedStatementParameter.h"
 #include "mysqlPreparedStatementWrapper.h"
 #include "mysqlInterface.h"

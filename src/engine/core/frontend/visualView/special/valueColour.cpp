@@ -4,10 +4,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueColour.h"
-#include "compiler/methods.h"
-
 #include "frontend/mainFrame.h"
-#include "databaseLayer/databaseLayer.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 
 #include "utils/stringUtils.h"
 #include "utils/typeconv.h"
@@ -15,26 +13,31 @@
 //////////////////////////////////////////////////////////////////////
 wxIMPLEMENT_DYNAMIC_CLASS(CValueColour, CValue);
 
-CMethods CValueColour::m_methods;
+CValue::CMethodHelper CValueColour::m_methodHelper;
 
-CValueColour::CValueColour() : CValue(eValueTypes::TYPE_VALUE), m_colour()
+CValueColour::CValueColour() :
+	CValue(eValueTypes::TYPE_VALUE), m_colour()
 {
 }
 
-CValueColour::CValueColour(wxColour colour) : CValue(eValueTypes::TYPE_VALUE),
-m_colour(colour)
+CValueColour::CValueColour(const wxColour& colour) :
+	CValue(eValueTypes::TYPE_VALUE), m_colour(colour)
 {
 }
 
-bool CValueColour::Init(CValue **aParams)
+bool CValueColour::Init(CValue** paParams, const long lSizeArray)
 {
-	if (aParams[0]->GetType() == eValueTypes::TYPE_STRING) { 
-		m_colour = TypeConv::StringToColour(aParams[0]->ToString()); 
-		return true; 
+	if (paParams[0]->GetType() == eValueTypes::TYPE_STRING) {
+		m_colour = TypeConv::StringToColour(paParams[0]->GetString());
+		return true;
 	}
-	else { 
-		m_colour = wxColour(aParams[0]->ToInt(), aParams[1]->ToInt(), aParams[2]->ToInt()); 
-		return true; 
+	else {
+		m_colour = wxColour(
+			paParams[0]->GetInteger(),
+			paParams[1]->GetInteger(),
+			paParams[2]->GetInteger()
+		);
+		return true;
 	}
 	return false;
 }
@@ -48,40 +51,45 @@ enum
 
 void CValueColour::PrepareNames() const
 {
-	std::vector <SEng>aAttributes;
+	m_methodHelper.ClearHelper();
 
-	SEng attribute;
-
-	attribute.sName = wxT("r");
-	aAttributes.push_back(attribute);
-	attribute.sName = wxT("g");
-	aAttributes.push_back(attribute);
-	attribute.sName = wxT("b");
-	aAttributes.push_back(attribute);
-
-	m_methods.PrepareAttributes(aAttributes.data(), aAttributes.size());
+	m_methodHelper.AppendProp(wxT("r"));
+	m_methodHelper.AppendProp(wxT("g"));
+	m_methodHelper.AppendProp(wxT("b"));
 }
 
-void CValueColour::SetAttribute(attributeArg_t &aParams, CValue &cVal)
+bool CValueColour::SetPropVal(const long lPropNum, const CValue& varPropVal)
 {
-	switch (aParams.GetIndex())
+	switch (lPropNum)
 	{
-	case enColorR: m_colour.Set(cVal.ToDouble(), m_colour.Green(), m_colour.Blue()); break;
-	case enColorG: m_colour.Set(m_colour.Red(), cVal.ToDouble(), m_colour.Blue()); break;
-	case enColorB: m_colour.Set(m_colour.Red(), m_colour.Green(), cVal.ToDouble()); break;
+	case enColorR:
+		m_colour.Set(varPropVal.GetDouble(), m_colour.Green(), m_colour.Blue());
+		return true;
+	case enColorG:
+		m_colour.Set(m_colour.Red(), varPropVal.GetDouble(), m_colour.Blue());
+		return true;
+	case enColorB:
+		m_colour.Set(m_colour.Red(), m_colour.Green(), varPropVal.GetDouble());
+		return true;
 	}
+	return false;
 }
 
-CValue CValueColour::GetAttribute(attributeArg_t &aParams)
+bool CValueColour::GetPropVal(const long lPropNum, CValue& pvarPropVal)
 {
-	switch (aParams.GetIndex())
+	switch (lPropNum)
 	{
-	case enColorR: return m_colour.Red();
-	case enColorG: return m_colour.Green();
-	case enColorB: return m_colour.Blue();
+	case enColorR:
+		pvarPropVal = m_colour.Red();
+		return true;
+	case enColorG:
+		pvarPropVal = m_colour.Green();
+		return true;
+	case enColorB:
+		pvarPropVal = m_colour.Blue();
+		return true;
 	}
-
-	return CValue();
+	return false;
 }
 
 wxString CValueColour::GetTypeString()const

@@ -2,17 +2,17 @@
 #define _DOCUMENT_ENUM_H_
 
 enum eDocumentWriteMode {
-	ePosting,
-	eUndoPosting,
-	eWrite
+	eDocumentWriteMode_Posting,
+	eDocumentWriteMode_UndoPosting,
+	eDocumentWriteMode_Write
 };
 
 enum eDocumentPostingMode {
-	eRealTime,
-	eRegular
+	eDocumentPostingMode_RealTime,
+	eDocumentPostingMode_Regular
 };
 
-#include "compiler/enumObject.h"
+#include "core/compiler/enumObject.h"
 
 class CValueEnumDocumentWriteMode : public IEnumeration<eDocumentWriteMode> {
 	wxDECLARE_DYNAMIC_CLASS(CValueEnumDocumentWriteMode);
@@ -32,11 +32,10 @@ public:
 
 protected:
 
-	void CreateEnumeration()
-	{
-		AddEnumeration(ePosting, wxT("posting"));
-		AddEnumeration(eUndoPosting, wxT("undoPosting"));
-		AddEnumeration(eWrite, wxT("write"));
+	void CreateEnumeration() {
+		AddEnumeration(eDocumentWriteMode_Posting, wxT("posting"));
+		AddEnumeration(eDocumentWriteMode_UndoPosting, wxT("undoPosting"));
+		AddEnumeration(eDocumentWriteMode_Write, wxT("write"));
 	}
 
 	virtual void InitializeEnumeration() override
@@ -70,10 +69,9 @@ public:
 
 protected:
 
-	void CreateEnumeration()
-	{
-		AddEnumeration(eRealTime, wxT("realTime"));
-		AddEnumeration(eRegular, wxT("regular"));
+	void CreateEnumeration() {
+		AddEnumeration(eDocumentPostingMode_RealTime, wxT("realTime"));
+		AddEnumeration(eDocumentPostingMode_Regular, wxT("regular"));
 	}
 
 	virtual void InitializeEnumeration() override

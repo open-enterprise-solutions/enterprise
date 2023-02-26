@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metatreeWnd.h"
-#include "compiler/debugger/debugClient.h"
+#include "core/compiler/debugger/debugClient.h"
 #include "frontend/theme/luna_auitoolbar.h"
 
 wxIMPLEMENT_ABSTRACT_CLASS(IMetadataTree, wxPanel);
@@ -13,9 +13,6 @@ wxIMPLEMENT_DYNAMIC_CLASS(CMetadataTree, IMetadataTree);
 //**********************************************************************************
 //*                                  metatree									   *
 //**********************************************************************************
-
-wxBEGIN_EVENT_TABLE(CMetadataTree, wxPanel)
-wxEND_EVENT_TABLE()
 
 #define ICON_SIZE 16
 
@@ -149,6 +146,19 @@ CMetadataTree::~CMetadataTree()
 
 }
 
+//**********************************************************************************
+
+#include "frontend/mainFrame.h"
+
+CMetadataTree* CMetadataTree::GetMetadataTree()
+{
+	if (wxAuiDocMDIFrame::GetFrame())
+		return mainFrame->GetMetadataTree();
+	return NULL;
+}
+
+//**********************************************************************************
+
 wxIMPLEMENT_DYNAMIC_CLASS(CMetadataTree::CMetadataTreeWnd, wxTreeCtrl);
 
 //**********************************************************************************
@@ -156,8 +166,6 @@ wxIMPLEMENT_DYNAMIC_CLASS(CMetadataTree::CMetadataTreeWnd, wxTreeCtrl);
 //**********************************************************************************
 
 wxBEGIN_EVENT_TABLE(CMetadataTree::CMetadataTreeWnd, wxTreeCtrl)
-
-EVT_PROPERTY_MODIFIED(CMetadataTree::CMetadataTreeWnd::OnPropertyModified)
 
 EVT_LEFT_UP(CMetadataTree::CMetadataTreeWnd::OnLeftUp)
 EVT_LEFT_DOWN(CMetadataTree::CMetadataTreeWnd::OnLeftDown)

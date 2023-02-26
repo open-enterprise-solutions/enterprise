@@ -7,17 +7,17 @@
 #include "definition.h"
 #include "utils/stringUtils.h"
 
-extern std::map<wxString, void *>	aHelpDescription;//описание ключевых слов и системных функций
-extern std::map<wxString, void *>	aHashKeywordList;
+extern std::map<wxString, void*>	aHelpDescription;//описание ключевых слов и системных функций
+extern std::map<wxString, void*>	aHashKeywordList;
 
 CDefList CTranslateModule::glDefList; //глобальный массив определений
 
-std::map<wxString, void *>	CTranslateModule::m_aHashKeyWords;//список ключевых слов
+std::map<wxString, void*>	CTranslateModule::m_aHashKeyWords;//список ключевых слов
 
 //////////////////////////////////////////////////////////////////////
 // Global array
 //////////////////////////////////////////////////////////////////////
-struct aKeyWordsDef aKeyWords[] =
+struct aKeyWordsDef s_aKeyWords[] =
 {
 	{"if"},
 	{"then"},
@@ -90,7 +90,7 @@ m_nModePreparing(LEXEM_ADD)
 	Clear();
 }
 
-CTranslateModule::CTranslateModule(const wxString &moduleName, const wxString &docPath) : m_aDefList(NULL),
+CTranslateModule::CTranslateModule(const wxString& moduleName, const wxString& docPath) : m_aDefList(NULL),
 m_sModuleName(moduleName), m_sDocPath(docPath),
 m_bAutoDeleteDefList(false),
 m_nModePreparing(LEXEM_ADD)
@@ -103,7 +103,7 @@ m_nModePreparing(LEXEM_ADD)
 	Clear();
 }
 
-CTranslateModule::CTranslateModule(const wxString &fileName) : m_aDefList(NULL),
+CTranslateModule::CTranslateModule(const wxString& fileName) : m_aDefList(NULL),
 m_sFileName(fileName),
 m_bAutoDeleteDefList(false),
 m_nModePreparing(LEXEM_ADD)
@@ -131,18 +131,18 @@ void CTranslateModule::LoadKeyWords()
 	m_aHashKeyWords.clear();
 
 #if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
-	for (unsigned long long i = 0; i < sizeof(aKeyWords) / sizeof(aKeyWords[0]); i++)
+	for (unsigned long long i = 0; i < sizeof(s_aKeyWords) / sizeof(s_aKeyWords[0]); i++)
 #else 
-	for (unsigned int i = 0; i < sizeof(aKeyWords) / sizeof(aKeyWords[0]); i++)
+	for (unsigned int i = 0; i < sizeof(s_aKeyWords) / sizeof(s_aKeyWords[0]); i++)
 #endif 
 	{
-		wxString csEng = StringUtils::MakeUpper(aKeyWords[i].Eng);
+		wxString csEng = StringUtils::MakeUpper(s_aKeyWords[i].Eng);
 
 		m_aHashKeyWords[csEng] = (void*)(i + 1);
 
 		//добавляем в массив для синтаксического анализатора
 		aHashKeywordList[csEng] = (void*)1;
-		aHelpDescription[csEng] = &aKeyWords[i].sShortDescription;
+		aHelpDescription[csEng] = &s_aKeyWords[i].sShortDescription;
 	}
 }
 
@@ -172,7 +172,7 @@ void CTranslateModule::Clear()
  * Возвращаемое значение:
  * нет
  */
-void CTranslateModule::Load(const wxString &sCode)
+void CTranslateModule::Load(const wxString& sCode)
 {
 	Clear();
 
@@ -196,12 +196,11 @@ void CTranslateModule::Load(const wxString &sCode)
  * Метод не возвращает управление!s
  */
 
-void CTranslateModule::SetError(int codeError, int currPos, const wxString &errorDesc)
+void CTranslateModule::SetError(int codeError, int currPos, const wxString& errorDesc) const
 {
 	int start_pos = 0;
 
-	for (int i = currPos; i > 0; i--)//ищем начало строки в которой выдается сообщение об ошибке трансляции
-	{
+	for (int i = currPos; i > 0; i--) { //ищем начало строки в которой выдается сообщение об ошибке трансляции
 		if (m_sBuffer[i] == '\n') {
 			start_pos = i + 1; break;
 		};
@@ -224,12 +223,11 @@ void CTranslateModule::SetError(int codeError, int currPos, const wxString &erro
  */
 
 void CTranslateModule::SetError(int codeError,
-	const wxString &fileName, const wxString &moduleName, const wxString &docPath,
+	const wxString& fileName, const wxString& moduleName, const wxString& docPath,
 	int currPos, int currLine,
-	const wxString &descError)
+	const wxString& descError) const
 {
-	CTranslateModule *translateModule = NULL;
-
+	CTranslateModule* translateModule = NULL;
 	if (m_sDocPath != docPath) {
 		for (auto tModule : m_aTranslateModules) {
 			if (docPath == tModule->m_sDocPath) {
@@ -238,11 +236,10 @@ void CTranslateModule::SetError(int codeError,
 		}
 	}
 
-	wxString buffer = translateModule ?
+	const wxString& buffer = translateModule ?
 		translateModule->m_sBuffer :
 		m_sBuffer;
-
-	wxString codeLineError =
+	const wxString& codeLineError =
 		CTranslateError::FindErrorCodeLine(buffer, currPos);
 
 	CTranslateError::ProcessError(
@@ -261,27 +258,18 @@ void CTranslateModule::SetError(int codeError,
  * Возвращаемое значение:
  * НЕТ
  */
-void CTranslateModule::SkipSpaces()
+void CTranslateModule::SkipSpaces() const
 {
 	unsigned int i = m_nCurPos;
-
-	for (; i < m_nSizeText; i++)
-	{
+	for (; i < m_nSizeText; i++) {
 		char c = m_sBUFFER[i];
-
-		if (c != ' ' && c != '\t' && c != '\n' && c != '\r')
-		{
-			if (c == '/')//может это комментарий
-			{
-				if (i + 1 < m_nSizeText)
-				{
-					if (m_sBUFFER[i + 1] == '/')//пропускаем комментарии
-					{
-						for (unsigned int j = i; j < m_nSizeText; j++)
-						{
+		if (c != ' ' && c != '\t' && c != '\n' && c != '\r') {
+			if (c == '/') { //может это комментарий
+				if (i + 1 < m_nSizeText) {
+					if (m_sBUFFER[i + 1] == '/') { //пропускаем комментарии
+						for (unsigned int j = i; j < m_nSizeText; j++) {
 							m_nCurPos = j;
-							if (m_sBUFFER[j] == '\n' || m_sBUFFER[j] == 13)
-							{
+							if (m_sBUFFER[j] == '\n' || m_sBUFFER[j] == 13) {
 								//обрабатываем следующую строку
 								SkipSpaces();
 								return;
@@ -313,12 +301,13 @@ void CTranslateModule::SkipSpaces()
  * Возвращаемое значение:
  * true,false
  */
-bool CTranslateModule::IsByte(char c)
+bool CTranslateModule::IsByte(char c) const
 {
 	SkipSpaces();
 
 	if (m_nCurPos >= m_nSizeText)
 		return false;
+
 	if (m_sBUFFER[m_nCurPos] == c)
 		return true;
 
@@ -333,13 +322,12 @@ bool CTranslateModule::IsByte(char c)
  * Возвращаемое значение:
  * Байт из буфера
  */
-char CTranslateModule::GetByte()
+char CTranslateModule::GetByte() const
 {
 	SkipSpaces();
 
-	if (m_nCurPos < m_nSizeText) {
+	if (m_nCurPos < m_nSizeText)
 		return m_sBuffer[m_nCurPos++];
-	}
 
 	SetError(ERROR_TRANSLATE_BYTE, m_nCurPos);
 	return '\0';
@@ -353,7 +341,7 @@ char CTranslateModule::GetByte()
  * Возвращаемое значение:
  * true,false
  */
-bool CTranslateModule::IsWord()
+bool CTranslateModule::IsWord() const
 {
 	SkipSpaces();
 
@@ -378,13 +366,12 @@ bool CTranslateModule::IsWord()
  * Возвращаемое значение:
  * Слово из буфера
  */
-wxString CTranslateModule::GetWord(bool bOrigin, bool bGetPoint, wxString *psOrig)
+wxString CTranslateModule::GetWord(bool bOrigin, bool bGetPoint, wxString* psOrig)
 {
 	SkipSpaces();
 
-	if (m_nCurPos >= m_nSizeText) {
+	if (m_nCurPos >= m_nSizeText)
 		SetError(ERROR_TRANSLATE_WORD, m_nCurPos);
-	}
 
 	int nNext = m_nCurPos;
 
@@ -396,11 +383,11 @@ wxString CTranslateModule::GetWord(bool bOrigin, bool bGetPoint, wxString *psOri
 		if (c == '[' || c == ']') break;
 
 		if ((c == '_') ||
-			(c >= 'A'&&c <= 'Z') || (c >= 'a'&&c <= 'z') ||
-			(c >= 'А'&&c <= 'Я') || (c >= 'а'&&c <= 'я') ||
-			(c >= '0'&&c <= '9') ||
-			(c == '#'&&i == m_nCurPos) || //если первый символ # - это служебное слово
-			(c == '.'&&bGetPoint))
+			(c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+			(c >= 'А' && c <= 'Я') || (c >= 'а' && c <= 'я') ||
+			(c >= '0' && c <= '9') ||
+			(c == '#' && i == m_nCurPos) || //если первый символ # - это служебное слово
+			(c == '.' && bGetPoint))
 		{
 			if (c == '.' && bGetPoint)
 				bGetPoint = false; //точка должна встречаться только один раз
@@ -413,9 +400,9 @@ wxString CTranslateModule::GetWord(bool bOrigin, bool bGetPoint, wxString *psOri
 	m_nCurPos = nNext;
 	if (nFirst == nNext) SetError(ERROR_TRANSLATE_WORD, nFirst);
 
-	if (bOrigin) return m_sBuffer.Mid(nFirst, nNext - nFirst);
-	else
-	{
+	if (bOrigin)
+		return m_sBuffer.Mid(nFirst, nNext - nFirst);
+	else {
 		if (psOrig)
 			*psOrig = m_sBuffer.Mid(nFirst, nNext - nFirst);
 		return m_sBUFFER.Mid(nFirst, nNext - nFirst);
@@ -428,17 +415,17 @@ wxString CTranslateModule::GetWord(bool bOrigin, bool bGetPoint, wxString *psOri
  * Получить всю строку до конца (символа 13 или конца кода программы)
  * Строка
  */
-wxString CTranslateModule::GetStrToEndLine()
+wxString CTranslateModule::GetStrToEndLine() const
 {
 	unsigned int nStart = m_nCurPos;
 	unsigned int i = m_nCurPos;
-
 	for (; i < m_nSizeText; i++) {
-		if (m_sBuffer[i] == '\r' || m_sBuffer[i] == '\n') { i++; break; }
+		if (m_sBuffer[i] == '\r' || m_sBuffer[i] == '\n') { 
+			i++; 
+			break; 
+		}
 	}
-
 	m_nCurPos = i;
-
 	return m_sBuffer.Mid(nStart, m_nCurPos - nStart);
 }
 
@@ -450,14 +437,11 @@ wxString CTranslateModule::GetStrToEndLine()
  * Возвращаемое значение:
  * true,false
 */
-bool CTranslateModule::IsNumber()
+bool CTranslateModule::IsNumber() const
 {
 	SkipSpaces();
-
-	if (m_nCurPos < m_nSizeText) {
+	if (m_nCurPos < m_nSizeText)
 		return m_sBUFFER[m_nCurPos] >= '0' && m_sBUFFER[m_nCurPos] <= '9';
-	}
-
 	return false;
 }
 
@@ -469,26 +453,20 @@ bool CTranslateModule::IsNumber()
  * Возвращаемое значение:
  * Число из буфера
  */
-wxString CTranslateModule::GetNumber()
+wxString CTranslateModule::GetNumber() const
 {
-	if (!IsNumber()) {
+	if (!IsNumber())
 		SetError(ERROR_TRANSLATE_NUMBER, m_nCurPos);
-	}
 
 	SkipSpaces();
 
-	if (m_nCurPos >= m_nSizeText) {
+	if (m_nCurPos >= m_nSizeText)
 		SetError(ERROR_TRANSLATE_NUMBER, m_nCurPos);
-	}
 
 	int nNext = m_nCurPos; bool bGetPoint = true;
-
-	for (unsigned int i = m_nCurPos; i < m_nSizeText; i++)
-	{
+	for (unsigned int i = m_nCurPos; i < m_nSizeText; i++) {
 		char c = m_sBUFFER[i];
-
-		if ((c >= '0' && c <= '9') || (c == '.' && bGetPoint))
-		{
+		if ((c >= '0' && c <= '9') || (c == '.' && bGetPoint)) {
 			if (c == '.' && bGetPoint)
 				bGetPoint = false; //точка должна встречаться только один раз
 			nNext = i + 1;
@@ -499,9 +477,8 @@ wxString CTranslateModule::GetNumber()
 	int nFirst = m_nCurPos;
 	m_nCurPos = nNext;
 
-	if (nFirst == nNext) {
+	if (nFirst == nNext)
 		SetError(ERROR_TRANSLATE_NUMBER, nFirst);
-	}
 
 	return m_sBUFFER.Mid(nFirst, nNext - nFirst);
 }
@@ -513,7 +490,7 @@ wxString CTranslateModule::GetNumber()
  * Возвращаемое значение:
  * true,false
  */
-bool CTranslateModule::IsString()
+bool CTranslateModule::IsString() const
 {
 	return IsByte('\"') ||
 		IsByte('|');
@@ -527,7 +504,7 @@ bool CTranslateModule::IsString()
  * Возвращаемое значение:
  * Строка из буфера
  */
-wxString CTranslateModule::GetString()
+wxString CTranslateModule::GetString() const
 {
 	wxString sString;
 
@@ -551,10 +528,10 @@ wxString CTranslateModule::GetString()
 			}
 		}
 		else {
-			if (c == '\n') {			
+			if (c == '\n') {
 				if (nStart > 0)
 					break;
-				unsigned int pos = i + 1; bool hasNewLine = false; 
+				unsigned int pos = i + 1; bool hasNewLine = false;
 				for (; pos < m_nSizeText; pos++) {
 					if (m_sBuffer[pos] == '\n') {
 						hasNewLine = false;
@@ -565,7 +542,7 @@ wxString CTranslateModule::GetString()
 						break;
 					}
 				}
-				i = pos - 1; 
+				i = pos - 1;
 				if (!hasNewLine) {
 					break;
 				}
@@ -603,7 +580,7 @@ wxString CTranslateModule::GetString()
 * Возвращаемое значение:
 * true,false
 */
-bool CTranslateModule::IsDate()
+bool CTranslateModule::IsDate() const
 {
 	return IsByte('\'');
 }
@@ -616,7 +593,7 @@ bool CTranslateModule::IsDate()
 * Возвращаемое значение:
 * Дата из буфера, заключенная в кавычки
 */
-wxString CTranslateModule::GetDate()
+wxString CTranslateModule::GetDate() const
 {
 	if (!IsDate()) {
 		SetError(ERROR_TRANSLATE_DATE, m_nCurPos);
@@ -632,13 +609,11 @@ wxString CTranslateModule::GetDate()
 
 	int nNext = m_nCurPos;
 
-	for (unsigned int i = m_nCurPos; i < m_nSizeText; i++)
-	{
+	for (unsigned int i = m_nCurPos; i < m_nSizeText; i++) {
 		if (m_sBUFFER[i] == '\n') {
 			nNext = m_nCurPos + 1;
 			break;
 		}
-
 		if (nCount < 2) {
 			if (m_sBUFFER[i] == '\'')
 				nCount++;
@@ -665,13 +640,12 @@ wxString CTranslateModule::GetDate()
  * Возвращаемое значение:
  * true,false
  */
-bool CTranslateModule::IsEnd()
+bool CTranslateModule::IsEnd() const
 {
 	SkipSpaces();
 
-	if (m_nCurPos < m_nSizeText) {
+	if (m_nCurPos < m_nSizeText)
 		return false;
-	}
 
 	return true;
 }
@@ -685,16 +659,18 @@ bool CTranslateModule::IsEnd()
  * бельше или равно 0: номер в списке служебных слов
 */
 #if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
-long long CTranslateModule::IsKeyWord(const wxString &sKeyWord)
+long long CTranslateModule::IsKeyWord(const wxString& sKeyWord)
 #else 
-int CTranslateModule::IsKeyWord(const wxString &sKeyWord)
+int CTranslateModule::IsKeyWord(const wxString& sKeyWord)
 #endif
 {
 	auto itHashKeyWords = m_aHashKeyWords.find(StringUtils::MakeUpper(sKeyWord));
 #if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
-	if (itHashKeyWords != m_aHashKeyWords.end()) return ((long long)itHashKeyWords->second) - 1;
+	if (itHashKeyWords != m_aHashKeyWords.end())
+		return ((long long)itHashKeyWords->second) - 1;
 #else 
-	if (itHashKeyWords != m_aHashKeyWords.end()) return ((int)itHashKeyWords->second) - 1;
+	if (itHashKeyWords != m_aHashKeyWords.end())
+		return ((int)itHashKeyWords->second) - 1;
 #endif 
 	return wxNOT_FOUND;
 }
@@ -716,98 +692,82 @@ bool CTranslateModule::PrepareLexem()
 
 	m_aLexemList.clear();
 
-	while (!IsEnd())
-	{
-		CLexem bytecode;
-		bytecode.m_nNumberLine = m_nCurLine;
-		bytecode.m_nNumberString = m_nCurPos;//если в дальнейшем произойдет ошибка, то именно эту строку нужно выдать пользователю
+	while (!IsEnd()) {
+
+		lexem_t bytecode;
 
 		bytecode.m_sModuleName = m_sModuleName;
 		bytecode.m_sDocPath = m_sDocPath;
 		bytecode.m_sFileName = m_sFileName;
 
-		if (IsWord())
-		{
+		bytecode.m_nNumberLine = m_nCurLine;
+		bytecode.m_nNumberString = m_nCurPos;//если в дальнейшем произойдет ошибка, то именно эту строку нужно выдать пользователю
+
+		if (IsWord()) {
 			wxString sOrig;
 			s = GetWord(false, false, &sOrig);
-
 			//обработка определений пользователя (#define)
-			if (m_aDefList->HasDef(s))
-			{
-				CLexemList *pDef = m_aDefList->GetDef(s);
-
-				for (unsigned int i = 0; i < pDef->size(); i++)
-				{
-					CLexem *lex = pDef[i].data();
-
+			if (m_aDefList->HasDef(s)) {
+				CLexemList* pDef = m_aDefList->GetDef(s);
+				for (unsigned int i = 0; i < pDef->size(); i++) {
+					lexem_t* lex = pDef[i].data();
 					lex->m_nNumberString = m_nCurPos;
 					lex->m_nNumberLine = m_nCurLine;//для точек останова
-
 					lex->m_sModuleName = m_sModuleName;
 					lex->m_sDocPath = m_sDocPath;
 					lex->m_sFileName = m_sFileName;
-
 					m_aLexemList.push_back(*lex);
 				}
-
 				continue;
 			}
 
 			//undefined
-			if (s.Lower() == wxT("undefined"))
-			{
+			if (s.Lower() == wxT("undefined")) {
 				bytecode.m_nType = CONSTANT;
 				bytecode.m_vData.SetType(eValueTypes::TYPE_EMPTY);
 			}
 			//boolean
-			else if (s.Lower() == wxT("true") || s.Lower() == wxT("false"))
-			{
+			else if (s.Lower() == wxT("true") || s.Lower() == wxT("false")) {
 				bytecode.m_nType = CONSTANT;
 				bytecode.m_vData.SetBoolean(s);
 			}
 			//null
-			else if (s.Lower() == wxT("null"))
-			{
+			else if (s.Lower() == wxT("null")) {
 				bytecode.m_nType = CONSTANT;
 				bytecode.m_vData.SetType(eValueTypes::TYPE_NULL);
 			}
 
-			if (bytecode.m_nType != CONSTANT)
-			{
+			if (bytecode.m_nType != CONSTANT) {
 				int n = IsKeyWord(s);
-
 				bytecode.m_vData = sOrig;
-
-				if (n >= 0)
-				{
+				if (n >= 0) {
 					bytecode.m_nType = KEYWORD;
 					bytecode.m_nData = n;
 				}
-				else
-				{
+				else {
 					bytecode.m_nType = IDENTIFIER;
 				}
 			}
 		}
-		else if (IsNumber() || IsString() || IsDate())
-		{
+		else if (IsNumber() || IsString() || IsDate()) {
 			bytecode.m_nType = CONSTANT;
-
-			if (IsNumber())
-			{
-				bytecode.m_vData.SetNumber(GetNumber());
-
+			if (IsNumber()) {
+				bool isSetNumber = bytecode.m_vData.SetNumber(GetNumber());
+				if (!isSetNumber)
+					SetError(ERROR_TRANSLATE_NUMBER, m_nCurPos);
 				int n = m_aLexemList.size() - 1;
-
-				if (n >= 0)
-				{
-					if (m_aLexemList[n].m_nType == DELIMITER && (m_aLexemList[n].m_nData == '-' || m_aLexemList[n].m_nData == '+'))
-					{
+				if (n >= 0) {
+					if (m_aLexemList[n].m_nType == DELIMITER && (m_aLexemList[n].m_nData == '-' || m_aLexemList[n].m_nData == '+')) {
 						n--;
-						if (n >= 0)
-						{
-							if (m_aLexemList[n].m_nType == DELIMITER && (m_aLexemList[n].m_nData == '[' || m_aLexemList[n].m_nData == '(' || m_aLexemList[n].m_nData == ',' || m_aLexemList[n].m_nData == '<' || m_aLexemList[n].m_nData == '>' || m_aLexemList[n].m_nData == '='))
-							{
+						if (n >= 0) {
+							if (m_aLexemList[n].m_nType == DELIMITER &&
+								(
+									m_aLexemList[n].m_nData == '[' ||
+									m_aLexemList[n].m_nData == '(' ||
+									m_aLexemList[n].m_nData == ',' ||
+									m_aLexemList[n].m_nData == '<' ||
+									m_aLexemList[n].m_nData == '>' ||
+									m_aLexemList[n].m_nData == '=')) {
 								n++;
 								if (m_aLexemList[n].m_nData == '-')
 									bytecode.m_vData.m_fData = -bytecode.m_vData.m_fData;
@@ -820,10 +780,14 @@ bool CTranslateModule::PrepareLexem()
 			}
 			else {
 				if (IsString()) {
-					bytecode.m_vData.SetString(GetString());
+					bool isSetString = bytecode.m_vData.SetString(GetString());
+					if (!isSetString)
+						SetError(ERROR_TRANSLATE_STRING, m_nCurPos);
 				}
 				else if (IsDate()) {
-					bytecode.m_vData.SetDate(GetDate());
+					bool isSetDate = bytecode.m_vData.SetDate(GetDate());
+					if (!isSetDate)
+						SetError(ERROR_TRANSLATE_DATE, m_nCurPos);
 				}
 			}
 
@@ -837,19 +801,17 @@ bool CTranslateModule::PrepareLexem()
 			continue;
 		}
 		else {
+
 			s.clear();
 
 			bytecode.m_nType = DELIMITER;
 			bytecode.m_nData = GetByte();
 
-			if (bytecode.m_nData <= 13)
-			{
+			if (bytecode.m_nData <= 13) {
 				continue;
 			}
 		}
-
 		bytecode.m_sData = s;
-
 		if (bytecode.m_nType == KEYWORD) {
 			if (bytecode.m_nData == KEY_DEFINE && m_nModePreparing != LEXEM_ADDDEF)//задание произвольного идентификатора
 			{
@@ -981,7 +943,7 @@ bool CTranslateModule::PrepareLexem()
 		translateModule->m_nCurLine = 0;
 	}
 
-	CLexem bytecode;
+	lexem_t bytecode;
 
 	bytecode.m_nType = ENDPROGRAM;
 	bytecode.m_nData = 0;
@@ -998,94 +960,84 @@ bool CTranslateModule::PrepareLexem()
 
 CDefList::~CDefList()
 {
-	DefList.clear();
+	m_aDefList.clear();
 }
 
-void CDefList::RemoveDef(const wxString &sName)
+void CDefList::RemoveDef(const wxString& sName)
 {
-	DefList.erase(StringUtils::MakeUpper(sName));
+	m_aDefList.erase(StringUtils::MakeUpper(sName));
 }
 
-bool CDefList::HasDef(const wxString &sName)
+bool CDefList::HasDef(const wxString& sName) const
 {
 	wxString m_csName = StringUtils::MakeUpper(sName);
-	auto m_find_val = DefList.find(m_csName);
-	if (m_find_val != DefList.end()) return true;
+	auto m_find_val = m_aDefList.find(m_csName);
+	if (m_find_val != m_aDefList.end()) return true;
 
 	static int nLevel = 0;
 
 	nLevel++;
 
-	if (nLevel > MAX_OBJECTS_LEVEL)
-	{
+	if (nLevel > MAX_OBJECTS_LEVEL) {
 		CTranslateError::Error("Рекурсивный вызов модулей (#3)");
 	}
 
 	//ищем в родителях
 	bool bRes = false;
-	if (pParent) bRes = pParent->HasDef(sName);
+	if (m_pParent)
+		bRes = m_pParent->HasDef(sName);
 	nLevel--;
 	return bRes;
 }
 
-CLexemList *CDefList::GetDef(const wxString &sName)
+CLexemList* CDefList::GetDef(const wxString& sName)
 {
-	auto itDefList = DefList.find(StringUtils::MakeUpper(sName));
-	if (itDefList != DefList.end()) return itDefList->second;
+	auto itDefList = m_aDefList.find(StringUtils::MakeUpper(sName));
+	if (itDefList != m_aDefList.end())
+		return itDefList->second;
 
 	//ищем в родителях
-	if (pParent && pParent->HasDef(sName))
-		return pParent->GetDef(sName);
+	if (m_pParent && m_pParent->HasDef(sName))
+		return m_pParent->GetDef(sName);
 
-	CLexemList *m_lexList = new CLexemList();
-	DefList[StringUtils::MakeUpper(sName)] = m_lexList;
+	CLexemList* m_lexList = new CLexemList();
+	m_aDefList[StringUtils::MakeUpper(sName)] = m_lexList;
 	return m_lexList;
 }
 
-void CDefList::SetDef(const wxString &sName, CLexemList *pDef)
+void CDefList::SetDef(const wxString& sName, CLexemList* pDef)
 {
-	CLexemList *pList = GetDef(sName);
-
+	CLexemList* pList = GetDef(sName);
 	pList->clear();
-
-	if (pDef)
-	{
-		for (unsigned int i = 0; i < pDef->size(); i++)
-		{
+	if (pDef != NULL) {
+		for (unsigned int i = 0; i < pDef->size(); i++) {
 			pList->push_back(*pDef[i].data());
 		}
 	}
 }
 
-void CDefList::SetDef(const wxString &sName, wxString sValue)
+void CDefList::SetDef(const wxString& sName, const wxString &sValue) 
 {
 	CLexemList List;
-	if (sValue.length() > 0)
-	{
-		CLexem Lex;
+	if (sValue.length() > 0) {
+		lexem_t Lex;
 		Lex.m_nType = CONSTANT;
-		if (sValue[0] == '-' || sValue[0] == '+' || (sValue[0] >= '0'&&sValue[0] <= '9'))//число
+		if (sValue[0] == '-' || sValue[0] == '+' || (sValue[0] >= '0' && sValue[0] <= '9'))//число
 			Lex.m_vData.SetNumber(sValue);
 		else
 			Lex.m_vData.SetString(sValue);
 		List.push_back(Lex);
 		SetDef(StringUtils::MakeUpper(sName), &List);
 	}
-	else
-	{
+	else {
 		SetDef(StringUtils::MakeUpper(sName), NULL);
 	}
-}
-
-void CDefList::SetParent(CDefList *p)
-{
-	pParent = p;
 }
 
 /**
  * создание лексем начиная с текущей позиции
  */
-void CTranslateModule::PrepareFromCurrent(int nMode, const wxString &sName)
+void CTranslateModule::PrepareFromCurrent(int nMode, const wxString& sName)
 {
 	CTranslateModule translate;
 	translate.m_aDefList = m_aDefList;
@@ -1123,23 +1075,23 @@ void CTranslateModule::PrepareFromCurrent(int nMode, const wxString &sName)
 	}
 }
 
-void CTranslateModule::AppendModule(CTranslateModule *module)
+void CTranslateModule::AppendModule(CTranslateModule* module)
 {
-	auto foundedIT = std::find(m_aTranslateModules.begin(), m_aTranslateModules.end(), module);
-	if (foundedIT == m_aTranslateModules.end()) {
+	auto foundedIt = std::find(m_aTranslateModules.begin(), m_aTranslateModules.end(), module);
+	if (foundedIt == m_aTranslateModules.end()) {
 		m_aTranslateModules.push_back(module);
 	}
 }
 
-void CTranslateModule::RemoveModule(CTranslateModule *module)
+void CTranslateModule::RemoveModule(CTranslateModule* module)
 {
-	auto foundedIT = std::find(m_aTranslateModules.begin(), m_aTranslateModules.end(), module);
-	if (foundedIT != m_aTranslateModules.end()) {
-		m_aTranslateModules.erase(foundedIT);
+	auto foundedIt = std::find(m_aTranslateModules.begin(), m_aTranslateModules.end(), module);
+	if (foundedIt != m_aTranslateModules.end()) {
+		m_aTranslateModules.erase(foundedIt);
 	}
 }
 
-void CTranslateModule::OnSetParent(CTranslateModule *setParent)
+void CTranslateModule::OnSetParent(CTranslateModule* setParent)
 {
 	if (!m_aDefList) {
 		m_aDefList = new CDefList;
@@ -1148,18 +1100,21 @@ void CTranslateModule::OnSetParent(CTranslateModule *setParent)
 	}
 
 	if (setParent) {
-		m_aDefList->pParent = setParent->m_aDefList;
+		m_aDefList->SetParent(setParent->m_aDefList);
 	}
 	else {
-		m_aDefList->pParent = &glDefList;
+		m_aDefList->SetParent(&glDefList);
 	}
 }
 
 class CAutoLoader
 {
 public:
+
 	//старт программы
-	CAutoLoader() { CTranslateModule::LoadKeyWords(); }
+	CAutoLoader() {
+		CTranslateModule::LoadKeyWords();
+	}
 
 	//завершение программы
 	~CAutoLoader() {}

@@ -15,11 +15,11 @@
 
   ***************************************************************************/
 
-#include <email/mimetic/rfc822/field.h>
-#include <email/mimetic/strutils.h>
-#include <email/mimetic/utils.h>
-#include <email/mimetic/contenttype.h>
-#include <email/mimetic/rfc822/mailboxlist.h>
+#include <3rdparty/email/mimetic/rfc822/field.h>
+#include <3rdparty/email/mimetic/strutils.h>
+#include <3rdparty/email/mimetic/utils.h>
+#include <3rdparty/email/mimetic/contenttype.h>
+#include <3rdparty/email/mimetic/rfc822/mailboxlist.h>
 
 namespace mimetic
 {

@@ -1,7 +1,7 @@
 #ifndef _DIMENSION_H__
 #define _DIMENSION_H__
 
-#include "metadata/metaObjects/attribute/metaAttributeObject.h"
+#include "core/metadata/metaObjects/attribute/metaAttributeObject.h"
 
 class CMetaDimensionObject : public CMetaAttributeObject {
 	wxDECLARE_DYNAMIC_CLASS(CMetaDimensionObject);

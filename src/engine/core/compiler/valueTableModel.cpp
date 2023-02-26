@@ -12,38 +12,37 @@
 void CValueTable::GetValueByRow(wxVariant& variant,
 	const wxDataViewItem& row, unsigned int col) const
 {
-	wxValueTableRow* node = GetViewData(row);
+	wxValueTableRow* node = GetViewData<wxValueTableRow>(row);
 	if (node == NULL)
 		return;
-	node->GetValue(variant, col);
+	node->GetValue(col, variant);
 }
 
 bool CValueTable::SetValueByRow(const wxVariant& variant,
 	const wxDataViewItem& row, unsigned int col)
 {
-	wxString strData = variant.GetString();
-	wxValueTableRow* node = GetViewData(row);
+	const wxString& strData = variant.GetString();
+	wxValueTableRow* node = GetViewData<wxValueTableRow>(row);
 	if (node == NULL)
 		return false;
-	CValue cValue; node->GetValue(cValue, col);
+	const typeDescription_t& typeDescription =
+		m_dataColumnCollection->GetColumnType(col);
+	CValue cValue; node->GetValue(col, cValue);
 	if (strData.Length() > 0) {
 		std::vector<CValue> foundedObjects;
 		if (cValue.FindValue(strData, foundedObjects)) {
-			cValue = foundedObjects.at(0);
+			node->SetValue(
+				col, CValueTypeDescription::AdjustValue(typeDescription, foundedObjects.at(0))
+			);
 		}
 		else {
 			return false;
 		}
 	}
 	else {
-		CValueTypeDescription* typeDescription =
-			m_dataColumnCollection->GetColumnType(col);
-		if (typeDescription != NULL) {
-			cValue = typeDescription->AdjustValue();
-		}
-		else {
-			cValue.Reset();
-		}
+		node->SetValue(
+			col, CValueTypeDescription::AdjustValue(typeDescription)
+		);
 	}
 
 	return true;

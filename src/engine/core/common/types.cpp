@@ -3,7 +3,7 @@
 //	Description : property types 
 ////////////////////////////////////////////////////////////////////////////
 
-#include "common/types.h"
+#include "core/common/types.h"
 #include "utils/stringUtils.h"
 
 #include <wx/tokenzr.h>

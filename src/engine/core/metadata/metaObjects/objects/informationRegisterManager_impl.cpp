@@ -6,9 +6,9 @@
 #include "informationRegister.h"
 #include "informationRegisterManager.h"
 
-#include "compiler/valueMap.h"
-#include "compiler/valueTable.h"
-#include "databaseLayer/databaseLayer.h"
+#include "core/compiler/valueMap.h"
+#include "core/compiler/valueTable.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 #include "appData.h"
 
 CValue CInformationRegisterManager::Get(const CValue& cFilter)
@@ -17,7 +17,7 @@ CValue CInformationRegisterManager::Get(const CValue& cFilter)
 	CValueTable::IValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
 	for (auto attribute : m_metaObject->GetGenericAttributes()) {
-		CValueTable::IValueModelColumnCollection::IValueModelColumnInfo* colInfo = colCollection->AddColumn(attribute->GetName(), attribute->GetValueTypeDescription(), attribute->GetSynonym());
+		CValueTable::IValueModelColumnCollection::IValueModelColumnInfo* colInfo = colCollection->AddColumn(attribute->GetName(), attribute->GetTypeDescription(), attribute->GetSynonym());
 		colInfo->SetColumnID(attribute->GetMetaID());
 	}
 
@@ -47,17 +47,17 @@ CValue CInformationRegisterManager::Get(const CValue& cFilter)
 	}
 
 	PreparedStatement* statement = databaseLayer->PrepareStatement(queryText, m_metaObject->GetTableNameDB());
-	
+
 	if (statement == NULL)
 		return retTable;
-	
+
 	int position = 1;
 	for (auto filter : selFilter) {
 		IMetaAttributeObject::SetValueAttribute(filter.first, filter.second, statement, position);
 	}
 
 	DatabaseResultSet* resultSet = statement->RunQueryWithResults();
-	
+
 	if (resultSet == NULL)
 		return retTable;
 
@@ -65,10 +65,9 @@ CValue CInformationRegisterManager::Get(const CValue& cFilter)
 		CValueTable::CValueTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
 		wxASSERT(retLine);
 		for (auto attribute : m_metaObject->GetGenericAttributes()) {
-			retLine->SetValueByMetaID(
-				attribute->GetMetaID(),
-				IMetaAttributeObject::GetValueAttribute(attribute, resultSet)
-			);
+			CValue retValue;
+			if (IMetaAttributeObject::GetValueAttribute(attribute, retValue, resultSet))
+				retLine->SetValueByMetaID(attribute->GetMetaID(), retValue);
 		}
 		delete retLine;
 	}
@@ -88,7 +87,7 @@ CValue CInformationRegisterManager::Get(const CValue& cPeriod, const CValue& cFi
 		CValueTable::IValueModelColumnCollection::IValueModelColumnInfo* colInfo =
 			colCollection->AddColumn(
 				attribute->GetName(),
-				attribute->GetValueTypeDescription(),
+				attribute->GetTypeDescription(),
 				attribute->GetSynonym()
 			);
 		colInfo->SetColumnID(attribute->GetMetaID());
@@ -129,7 +128,7 @@ CValue CInformationRegisterManager::Get(const CValue& cPeriod, const CValue& cFi
 		}
 
 		DatabaseResultSet* resultSet = statement->RunQueryWithResults();
-		
+
 		if (resultSet == NULL)
 			return retTable;
 
@@ -137,10 +136,9 @@ CValue CInformationRegisterManager::Get(const CValue& cPeriod, const CValue& cFi
 			CValueTable::CValueTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
 			wxASSERT(retLine);
 			for (auto attribute : m_metaObject->GetGenericAttributes()) {
-				retLine->SetValueByMetaID(
-					attribute->GetMetaID(),
-					IMetaAttributeObject::GetValueAttribute(attribute, resultSet)
-				);
+				CValue retValue;
+				if (IMetaAttributeObject::GetValueAttribute(attribute, retValue, resultSet))
+					retLine->SetValueByMetaID(attribute->GetMetaID(), retValue);
 			}
 			delete retLine;
 		}
@@ -148,7 +146,7 @@ CValue CInformationRegisterManager::Get(const CValue& cPeriod, const CValue& cFi
 		resultSet->Close();
 		statement->Close();
 	}
-	
+
 	return retTable;
 }
 
@@ -307,15 +305,15 @@ CValue CInformationRegisterManager::GetFirst(const CValue& cPeriod, const CValue
 		}
 
 		DatabaseResultSet* resultSet = statement->RunQueryWithResults();
-		
+
 		if (resultSet == NULL)
 			return retTable;
 
 		if (resultSet->Next()) {
 			for (auto attribute : m_metaObject->GetGenericAttributes()) {
-				retTable->SetAt(attribute->GetName(),
-					IMetaAttributeObject::GetValueAttribute(attribute, resultSet)
-				);
+				CValue retValue; 
+				if(IMetaAttributeObject::GetValueAttribute(attribute, retValue, resultSet))
+					retTable->SetAt(attribute->GetName(), retValue);
 			}
 		}
 
@@ -481,15 +479,15 @@ CValue CInformationRegisterManager::GetLast(const CValue& cPeriod, const CValue&
 		}
 
 		DatabaseResultSet* resultSet = statement->RunQueryWithResults();
-		
+
 		if (resultSet == NULL)
 			return retTable;
 
 		if (resultSet->Next()) {
 			for (auto attribute : m_metaObject->GetGenericAttributes()) {
-				retTable->SetAt(attribute->GetName(),
-					IMetaAttributeObject::GetValueAttribute(attribute, resultSet)
-				);
+				CValue retValue;
+				if (IMetaAttributeObject::GetValueAttribute(attribute, retValue, resultSet))
+					retTable->SetAt(attribute->GetName(), retValue);
 			}
 		}
 
@@ -509,7 +507,7 @@ CValue CInformationRegisterManager::SliceFirst(const CValue& cPeriod, const CVal
 		CValueTable::IValueModelColumnCollection::IValueModelColumnInfo* colInfo =
 			colCollection->AddColumn(
 				attribute->GetName(),
-				attribute->GetValueTypeDescription(),
+				attribute->GetTypeDescription(),
 				attribute->GetSynonym()
 			);
 		colInfo->SetColumnID(attribute->GetMetaID());
@@ -663,7 +661,7 @@ CValue CInformationRegisterManager::SliceFirst(const CValue& cPeriod, const CVal
 		}
 
 		DatabaseResultSet* resultSet = statement->RunQueryWithResults();
-		
+
 		if (resultSet == NULL)
 			return retTable;
 
@@ -671,10 +669,9 @@ CValue CInformationRegisterManager::SliceFirst(const CValue& cPeriod, const CVal
 			CValueTable::CValueTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
 			wxASSERT(retLine);
 			for (auto attribute : m_metaObject->GetGenericAttributes()) {
-				retLine->SetValueByMetaID(
-					attribute->GetMetaID(),
-					IMetaAttributeObject::GetValueAttribute(attribute, resultSet)
-				);
+				CValue retValue;
+				if (IMetaAttributeObject::GetValueAttribute(attribute, retValue, resultSet))
+					retLine->SetValueByMetaID(attribute->GetMetaID(), retValue);
 			}
 			delete retLine;
 		}
@@ -695,7 +692,7 @@ CValue CInformationRegisterManager::SliceLast(const CValue& cPeriod, const CValu
 		CValueTable::IValueModelColumnCollection::IValueModelColumnInfo* colInfo =
 			colCollection->AddColumn(
 				attribute->GetName(),
-				attribute->GetValueTypeDescription(),
+				attribute->GetTypeDescription(),
 				attribute->GetSynonym()
 			);
 		colInfo->SetColumnID(attribute->GetMetaID());
@@ -849,7 +846,7 @@ CValue CInformationRegisterManager::SliceLast(const CValue& cPeriod, const CValu
 		}
 
 		DatabaseResultSet* resultSet = statement->RunQueryWithResults();
-		
+
 		if (resultSet == NULL)
 			return retTable;
 
@@ -857,10 +854,9 @@ CValue CInformationRegisterManager::SliceLast(const CValue& cPeriod, const CValu
 			CValueTable::CValueTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
 			wxASSERT(retLine);
 			for (auto attribute : m_metaObject->GetGenericAttributes()) {
-				retLine->SetValueByMetaID(
-					attribute->GetMetaID(),
-					IMetaAttributeObject::GetValueAttribute(attribute, resultSet)
-				);
+				CValue retValue;
+				if (IMetaAttributeObject::GetValueAttribute(attribute, retValue, resultSet))
+					retTable->SetAt(attribute->GetName(), retValue);
 			}
 			delete retLine;
 		}

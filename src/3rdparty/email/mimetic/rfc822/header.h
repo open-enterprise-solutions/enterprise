@@ -23,13 +23,13 @@
 #include <cassert>
 #include <functional>
 #include <iostream>
-#include <email/mimetic/strutils.h>
-#include <email/mimetic/utils.h>
-#include <email/mimetic/rfc822/field.h>
-#include <email/mimetic/rfc822/mailbox.h>
-#include <email/mimetic/rfc822/messageid.h>
-#include <email/mimetic/rfc822/mailboxlist.h>
-#include <email/mimetic/rfc822/addresslist.h>
+#include <3rdparty/email/mimetic/strutils.h>
+#include <3rdparty/email/mimetic/utils.h>
+#include <3rdparty/email/mimetic/rfc822/field.h>
+#include <3rdparty/email/mimetic/rfc822/mailbox.h>
+#include <3rdparty/email/mimetic/rfc822/messageid.h>
+#include <3rdparty/email/mimetic/rfc822/mailboxlist.h>
+#include <3rdparty/email/mimetic/rfc822/addresslist.h>
 
 namespace mimetic
 {

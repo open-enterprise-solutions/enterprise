@@ -24,8 +24,7 @@ namespace StringUtils
 	int CheckCorrectName(const wxString &systemName);
 	wxString GenerateSynonym(const wxString &systemName);
 
-	inline bool CompareString(const wxString &lhs, const wxString &rhs)
-	{
+	inline bool CompareString(const wxString &lhs, const wxString &rhs) {
 		return lhs.CompareTo(rhs, wxString::ignoreCase) == 0;
 	}
 

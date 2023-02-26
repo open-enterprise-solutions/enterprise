@@ -17,6 +17,9 @@
     <ClInclude Include="selectIBWnd.h">
       <Filter>windows</Filter>
     </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>res</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="res">
@@ -30,5 +33,10 @@
     <ResourceCompile Include="launcher.rc">
       <Filter>res</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="launcher.ico">
+      <Filter>res</Filter>
+    </Image>
   </ItemGroup>
 </Project>

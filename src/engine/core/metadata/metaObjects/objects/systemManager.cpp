@@ -4,21 +4,20 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "systemManager.h"
-#include "compiler/methods.h"
-#include "compiler/valueMap.h"
+#include "core/compiler/valueMap.h"
 
-#include "metadata/metadata.h"
-#include "metadata/metaObjects/metaObject.h"
+#include "core/metadata/metadata.h"
+#include "core/metadata/metaObjects/metaObject.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CSystemManager, CValue);
 
 CSystemManager::CSystemManager(IMetadata* metaData) : CValue(eValueTypes::TYPE_VALUE, true),
-m_methods(new CMethods()), m_metaData(metaData)
+m_methodHelper(new CMethodHelper()), m_metaData(metaData)
 {
 }
 
 CSystemManager::~CSystemManager() {
-	wxDELETE(m_methods);
+	wxDELETE(m_methodHelper);
 }
 
 enum
@@ -37,22 +36,18 @@ enum
 
 void CSystemManager::PrepareNames() const
 {
-	SEng aAttributes[] =
-	{
-		{"constants","constants"},
-		{"catalogs","catalogs"},
-		{"documents","documents"},
-		{"enumerations","enumerations"},
-		{"dataProcessors","dataProcessors"},
-		{"externalDataProcessors","extenalDataProcessors"},
-		{"reports","reports"},
-		{"externalReports","externalReports"},
-		{"informationRegisters","informationRegisters"},
-		{"accumulationRegisters","accumulationRegisters"},
-	};
+	m_methodHelper->ClearHelper();
 
-	int nCountA = sizeof(aAttributes) / sizeof(aAttributes[0]);
-	m_methods->PrepareAttributes(aAttributes, nCountA);
+	m_methodHelper->AppendProp("constants");
+	m_methodHelper->AppendProp("catalogs");
+	m_methodHelper->AppendProp("documents");
+	m_methodHelper->AppendProp("enumerations");
+	m_methodHelper->AppendProp("dataProcessors");
+	m_methodHelper->AppendProp("externalDataProcessors");
+	m_methodHelper->AppendProp("reports");
+	m_methodHelper->AppendProp("externalReports");
+	m_methodHelper->AppendProp("informationRegisters");
+	m_methodHelper->AppendProp("accumulationRegisters");
 }
 
 #include "catalogManager.h"
@@ -63,11 +58,11 @@ void CSystemManager::PrepareNames() const
 #include "informationRegisterManager.h"
 #include "accumulationRegisterManager.h"
 
-#include "metadata/metaObjects/objects/constantManager.h"
+#include "core/metadata/metaObjects/objects/constantManager.h"
 
-CValue CSystemManager::GetAttribute(attributeArg_t& aParams)
+bool CSystemManager::GetPropVal(const long lPropNum, CValue& pvarPropVal)
 {
-	switch (aParams.GetIndex())
+	switch (lPropNum)
 	{
 	case enConstants:
 	{
@@ -78,8 +73,8 @@ CValue CSystemManager::GetAttribute(attributeArg_t& aParams)
 				constMananager.insert_or_assign(obj->GetName(), new CConstantManager(dataRef));
 			}
 		}
-
-		return new CValueStructure(constMananager);
+		pvarPropVal = new CValueStructure(constMananager);
+		return true; 
 	}
 	case enCatalogs:
 	{
@@ -90,8 +85,8 @@ CValue CSystemManager::GetAttribute(attributeArg_t& aParams)
 				catMananager.insert_or_assign(obj->GetName(), new CCatalogManager(dataRef));
 			}
 		}
-
-		return new CValueStructure(catMananager);
+		pvarPropVal = new CValueStructure(catMananager);
+		return true;
 	}
 	case enDocuments:
 	{
@@ -102,9 +97,8 @@ CValue CSystemManager::GetAttribute(attributeArg_t& aParams)
 				docMananager.insert_or_assign(obj->GetName(), new CDocumentManager(dataRef));
 			}
 		}
-
-		return new CValueStructure(docMananager);
-
+		pvarPropVal = new CValueStructure(docMananager);
+		return true;
 	}
 	case enEnumerations:
 	{
@@ -116,8 +110,8 @@ CValue CSystemManager::GetAttribute(attributeArg_t& aParams)
 
 			}
 		}
-
-		return new CValueStructure(enumMananager);
+		pvarPropVal = new CValueStructure(enumMananager);
+		return true;
 	}
 	case enDataProcessors:
 	{
@@ -128,11 +122,12 @@ CValue CSystemManager::GetAttribute(attributeArg_t& aParams)
 				dataProcessoMananager.insert_or_assign(obj->GetName(), new CDataProcessorManager(dataRef));
 			}
 		}
-
-		return new CValueStructure(dataProcessoMananager);
+		pvarPropVal = new CValueStructure(dataProcessoMananager);
+		return true;
 	}
 	case enExternalDataProcessors:
-		return new CManagerExternalDataProcessorValue();
+		pvarPropVal = new CManagerExternalDataProcessorValue();
+		return true;
 	case enReports:
 	{
 		std::map<wxString, CValue> reportMananager;
@@ -142,11 +137,12 @@ CValue CSystemManager::GetAttribute(attributeArg_t& aParams)
 				reportMananager.insert_or_assign(obj->GetName(), new CReportManager(dataRef));
 			}
 		}
-
-		return new CValueStructure(reportMananager);
+		pvarPropVal = new CValueStructure(reportMananager);
+		return true;
 	}
 	case enExternalReports:
-		return new CManagerExternalReport();
+		pvarPropVal = new CManagerExternalReport();
+		return true;
 	case enInformationRegisters:
 	{
 		std::map<wxString, CValue> informationRegister;
@@ -156,8 +152,8 @@ CValue CSystemManager::GetAttribute(attributeArg_t& aParams)
 				informationRegister.insert_or_assign(obj->GetName(), new CInformationRegisterManager(dataRef));
 			}
 		}
-
-		return new CValueStructure(informationRegister);
+		pvarPropVal = new CValueStructure(informationRegister);
+		return true;
 	}
 	case enAccumulationRegisters:
 	{
@@ -168,16 +164,16 @@ CValue CSystemManager::GetAttribute(attributeArg_t& aParams)
 				accumulationRegister.insert_or_assign(obj->GetName(), new CAccumulationRegisterManager(dataRef));
 			}
 		}
-
-		return new CValueStructure(accumulationRegister);
+		pvarPropVal = new CValueStructure(accumulationRegister);
+		return true;
 	}
 	}
 
-	return CValue();
+	return false;
 }
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
-SO_VALUE_REGISTER(CSystemManager, "systemManager", CSystemManager, TEXT2CLSID("MG_SYSM"));
+SO_VALUE_REGISTER(CSystemManager, "systemManager", TEXT2CLSID("MG_SYSM"));

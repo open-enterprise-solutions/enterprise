@@ -1,7 +1,7 @@
 #ifndef _CATALOG_VARIANT_H_
 #define _CATALOG_VARIANT_H_
 
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 class wxVariantOwnerData : public wxVariantData {
 	wxString MakeString() const;

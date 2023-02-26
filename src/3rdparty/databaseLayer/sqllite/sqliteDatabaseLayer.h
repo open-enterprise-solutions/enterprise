@@ -14,8 +14,8 @@
 
 #include <wx/arrstr.h>
 
-#include "databaseLayer/databaseLayerDef.h"
-#include "databaseLayer/databaseLayer.h"
+#include <3rdparty/databaseLayer/databaseLayerDef.h>
+#include <3rdparty/databaseLayer/databaseLayer.h>
 
 class PreparedStatement;
 
@@ -59,6 +59,10 @@ public:
 	virtual wxArrayString GetTables();
 	virtual wxArrayString GetViews();
 	virtual wxArrayString GetColumns(const wxString& table);
+
+	virtual int GetDatabaseLayerType() const {
+		return DATABASELAYER_SQLLITE;
+	}
 
 	static int TranslateErrorCode(int nCode);
 

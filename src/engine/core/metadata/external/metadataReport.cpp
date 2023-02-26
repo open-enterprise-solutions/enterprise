@@ -65,16 +65,14 @@ CMetadataReport::~CMetadataReport()
 		if (!m_moduleManager->DestroyMainModule()) {
 			wxASSERT_MSG(false, "m_moduleManager->DestroyMainModule() == false");
 		}
-
+		//delete module manager
+		if (m_moduleManager != NULL) {
+			m_moduleManager->DecrRef();
+		}
 		//clear data 
 		if (!ClearMetadata()) {
 			wxASSERT_MSG(false, "ClearMetadata() == false");
 		}
-	}
-
-	//delete module manager
-	if (m_moduleManager) {
-		m_moduleManager->DecrRef();
 	}
 
 	if (m_commonObject->GetObjectMode() == METAOBJECT_EXTERNAL) {
@@ -83,42 +81,41 @@ CMetadataReport::~CMetadataReport()
 	}
 }
 
-#include "metadata/singleMetaTypes.h"
+#include "core/metadata/singleClass.h"
 #include "utils/stringUtils.h"
 
-CValue* CMetadataReport::CreateObjectRef(const wxString& className, CValue** aParams)
+CValue* CMetadataReport::CreateObjectRef(const CLASS_ID& clsid, CValue** paParams, const long lSizeArray)
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [className](IObjectValueAbstract* singleObject) {
-		return StringUtils::CompareString(className, singleObject->GetClassName());
-		});
+	auto itFounded = std::find_if(s_factoryMetaObjects.begin(), s_factoryMetaObjects.end(), [clsid](IObjectValueAbstract* singleObject) {
+		return clsid == singleObject->GetTypeClass();
+		}
+	);
 
-	if (itFounded != m_aFactoryMetaObjects.end()) {
+	if (itFounded != s_factoryMetaObjects.end()) {
 		IObjectValueAbstract* singleObject = *itFounded;
 		wxASSERT(singleObject);
 		CValue* newObject = singleObject->CreateObject();
 		wxASSERT(newObject);
-		if (singleObject->GetObjectType() == eObjectType::eObjectType_object) {
-			if (aParams) {
-				if (!newObject->Init(aParams)) {
-					if (!appData->DesignerMode()) {
-						wxDELETE(newObject);
-						CTranslateError::Error(_("Error initializing object '%s'"), className.wc_str());
-					}
+		//newObject->PrepareNames();
+		if (lSizeArray > 0) {
+			if (!newObject->Init(paParams, lSizeArray)) {
+				if (!appData->DesignerMode()) {
+					wxDELETE(newObject);
+					CTranslateError::Error("Error initializing object '%ul'", clsid);
 				}
 			}
-			else {
-				if (!newObject->Init()) {
-					if (!appData->DesignerMode()) {
-						wxDELETE(newObject);
-						CTranslateError::Error(_("Error initializing object '%s'"), className.wc_str());
-					}
+		}
+		else {
+			if (!newObject->Init()) {
+				if (!appData->DesignerMode()) {
+					wxDELETE(newObject);
+					CTranslateError::Error("Error initializing object '%ul'", clsid);
 				}
 			}
 		}
 		return newObject;
 	}
-
-	return metadata->CreateObjectRef(className, aParams);
+	return metadata->CreateObjectRef(clsid, paParams, lSizeArray);
 }
 
 bool CMetadataReport::IsRegisterObject(const wxString& className) const
@@ -151,14 +148,14 @@ bool CMetadataReport::IsRegisterObject(const CLASS_ID& clsid) const
 
 CLASS_ID CMetadataReport::GetIDObjectFromString(const wxString& clsName) const
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsName](IObjectValueAbstract* singleObject) {
+	auto itFounded = std::find_if(s_factoryMetaObjects.begin(), s_factoryMetaObjects.end(), [clsName](IObjectValueAbstract* singleObject) {
 		return StringUtils::CompareString(clsName, singleObject->GetClassName());
 		});
 
-	if (itFounded == m_aFactoryMetaObjects.end()) {
+	if (itFounded != s_factoryMetaObjects.end()) {
 		IObjectValueAbstract* singleObject = *itFounded;
 		wxASSERT(singleObject);
-		return singleObject->GetClassType();
+		return singleObject->GetTypeClass();
 	}
 
 	return metadata->GetIDObjectFromString(clsName);
@@ -166,11 +163,11 @@ CLASS_ID CMetadataReport::GetIDObjectFromString(const wxString& clsName) const
 
 wxString CMetadataReport::GetNameObjectFromID(const CLASS_ID& clsid, bool upper) const
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsid](IObjectValueAbstract* singleObject) {
-		return clsid == singleObject->GetClassType();
+	auto itFounded = std::find_if(s_factoryMetaObjects.begin(), s_factoryMetaObjects.end(), [clsid](IObjectValueAbstract* singleObject) {
+		return clsid == singleObject->GetTypeClass();
 		});
 
-	if (itFounded != m_aFactoryMetaObjects.end()) {
+	if (itFounded != s_factoryMetaObjects.end()) {
 		IObjectValueAbstract* singleObject = *itFounded;
 		wxASSERT(singleObject);
 		return upper ? singleObject->GetClassName().Upper() : singleObject->GetClassName();
@@ -181,11 +178,11 @@ wxString CMetadataReport::GetNameObjectFromID(const CLASS_ID& clsid, bool upper)
 
 IMetaTypeObjectValueSingle* CMetadataReport::GetTypeObject(const CLASS_ID& clsid) const
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [clsid](IMetaTypeObjectValueSingle* singleObject) {
-		return clsid == singleObject->GetClassType(); }
+	auto itFounded = std::find_if(s_factoryMetaObjects.begin(), s_factoryMetaObjects.end(), [clsid](IMetaTypeObjectValueSingle* singleObject) {
+		return clsid == singleObject->GetTypeClass(); }
 	);
 
-	if (itFounded != m_aFactoryMetaObjects.end()) {
+	if (itFounded != s_factoryMetaObjects.end()) {
 		return *itFounded;
 	}
 
@@ -194,12 +191,12 @@ IMetaTypeObjectValueSingle* CMetadataReport::GetTypeObject(const CLASS_ID& clsid
 
 IMetaTypeObjectValueSingle* CMetadataReport::GetTypeObject(const IMetaObject* metaValue, eMetaObjectType refType) const
 {
-	auto itFounded = std::find_if(m_aFactoryMetaObjects.begin(), m_aFactoryMetaObjects.end(), [metaValue, refType](IMetaTypeObjectValueSingle* singleObject) {
+	auto itFounded = std::find_if(s_factoryMetaObjects.begin(), s_factoryMetaObjects.end(), [metaValue, refType](IMetaTypeObjectValueSingle* singleObject) {
 		return refType == singleObject->GetMetaType() &&
-			metaValue == singleObject->GetMetaObject();
+		metaValue == singleObject->GetMetaObject();
 		});
 
-	if (itFounded != m_aFactoryMetaObjects.end()) {
+	if (itFounded != s_factoryMetaObjects.end()) {
 		return *itFounded;
 	}
 
@@ -236,7 +233,7 @@ std::vector<IMetaTypeObjectValueSingle*> CMetadataReport::GetAvailableSingleObje
 	return metadata->GetAvailableSingleObjects(refType);
 }
 
-IMetaObject* CMetadataReport::GetMetaObject(const meta_identifier_t &id)
+IMetaObject* CMetadataReport::GetMetaObject(const meta_identifier_t& id)
 {
 	IMetaObject* metaObject = IMetadata::GetMetaObject(id);
 
@@ -376,7 +373,7 @@ bool CMetadataReport::CloseMetadata(int flags)
 		m_moduleManager->ExitMainModule((flags & forceCloseFlag) != 0)) {
 		return CloseChildMetadata(m_commonObject, (flags & forceCloseFlag) != 0, false);
 	}
-	
+
 	return false;
 }
 
@@ -569,9 +566,7 @@ bool CMetadataReport::LoadChildMetadata(const CLASS_ID&, CMemoryReader& readerDa
 				break;
 
 			wxASSERT(clsid != 0);
-			wxString classType = CValue::GetNameObjectFromID(clsid);
-			wxASSERT(classType.Length() > 0);
-			IMetaObject* newMetaObject = CValue::CreateAndConvertObjectRef<IMetaObject>(classType);
+			IMetaObject* newMetaObject = CValue::CreateAndConvertObjectRef<IMetaObject>(clsid);
 			wxASSERT(newMetaObject);
 
 			newMetaObject->SetClsid(clsid);

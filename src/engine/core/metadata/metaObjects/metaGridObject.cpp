@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaGridObject.h"
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CMetaGridObject, IMetaObject)
 wxIMPLEMENT_DYNAMIC_CLASS(CMetaCommonGridObject, CMetaGridObject)

@@ -18,9 +18,9 @@
 #ifndef _MIMETIC_MESSAGE_H_
 #define _MIMETIC_MESSAGE_H_
 
-#include <email/mimetic/mimeentity.h>
-#include <email/mimetic/utils.h>
-#include <email/mimetic/codec/codec.h>
+#include <3rdparty/email/mimetic/mimeentity.h>
+#include <3rdparty/email/mimetic/utils.h>
+#include <3rdparty/email/mimetic/codec/codec.h>
 
 namespace mimetic
 {

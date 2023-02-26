@@ -1,5 +1,5 @@
 #include "generationWnd.h"
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 #include "frontend/mainFrame.h"
 
 bool CGenerationWnd::ShowModal(meta_identifier_t& clsid)
@@ -20,7 +20,7 @@ bool CGenerationWnd::ShowModal(meta_identifier_t& clsid)
 #define ICON_SIZE 16
 
 CGenerationWnd::CGenerationWnd(IMetadata* metaData, std::set<meta_identifier_t>& clsids) :
-	wxDialog(CMainFrame::Get(), wxID_ANY, _("Select data type"), wxDefaultPosition, wxSize(315, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), m_clsids(clsids)
+	wxDialog(wxAuiDocMDIFrame::GetFrame(), wxID_ANY, _("Select data type"), wxDefaultPosition, wxSize(315, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), m_clsids(clsids)
 {
 	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 

@@ -7,7 +7,7 @@
 #include "mainFrameChild.h"
 
 //common 
-#include "common/docManager.h"
+#include "core/frontend/docView/docManager.h"
 #include "theme/luna_auitabart.h"
 #include "theme/luna_dockart.h"
 #include "frontend/objinspect/objinspect.h"
@@ -27,19 +27,19 @@
 //*                                 Constructor                                     *
 //***********************************************************************************
 
-CMainFrame::CMainFrame(const wxString& title,
+wxAuiDocMDIFrame::wxAuiDocMDIFrame(const wxString& title,
 	const wxPoint& pos,
 	const wxSize& size,
 	long style,
 	const wxString& name)
-	: wxDocParentFrameAnyBase(this)
+	: wxDocParentFrameAnyBase(this), m_objectInspector(NULL)
 {
-	Create(title, pos, size, style);
+	Create(title, pos, size, style | wxNO_FULL_REPAINT_ON_RESIZE);
 }
 
-#include "compiler/value.h"
+#include "core/compiler/value.h"
 
-bool CMainFrame::Create(const wxString& title,
+bool wxAuiDocMDIFrame::Create(const wxString& title,
 	const wxPoint& pos,
 	const wxSize& size,
 	long style,
@@ -48,10 +48,10 @@ bool CMainFrame::Create(const wxString& title,
 	if (!wxAuiMDIParentFrame::Create(NULL, wxID_ANY, title, pos, size, style, name))
 		return false;
 
-	m_docManager = new CDocManager();
+	m_docManager = new CDocManager;
 
-	this->Bind(wxEVT_MENU, &CMainFrame::OnExit, this, wxID_EXIT);
-	this->Bind(wxEVT_CLOSE_WINDOW, &CMainFrame::OnCloseWindow, this);
+	this->Bind(wxEVT_MENU, &wxAuiDocMDIFrame::OnExit, this, wxID_EXIT);
+	this->Bind(wxEVT_CLOSE_WINDOW, &wxAuiDocMDIFrame::OnCloseWindow, this);
 
 	this->SetArtProvider(new CLunaTabArt());
 
@@ -63,38 +63,64 @@ bool CMainFrame::Create(const wxString& title,
 	return true;
 }
 
-CDocChildFrame *CMainFrame::CreateChildFrame(CView *view, const wxPoint &pos, const wxSize &size, long style)
+wxWindow* wxAuiDocMDIFrame::CreateChildFrame(CView* view, const wxPoint& pos, const wxSize& size, long style)
 {
-	CDocument *document = view->GetDocument();
-	
 	// create a child valueForm of appropriate class for the current mode
-	CDocChildFrame *subvalueFrame = new CDocChildFrame(document, view, CMainFrame::Get(), wxID_ANY, document->GetTitle(), pos, size, style);
+	CDocument* document = view->GetDocument();
 
-	subvalueFrame->SetIcon(document->GetIcon());
+	if ((style & wxCREATE_SDI_FRAME) != 0) {
 
-	subvalueFrame->Iconize(false); // restore the window if minimized
-	subvalueFrame->SetFocus();     // focus on my window
-	subvalueFrame->Raise();        // bring window to front
-	subvalueFrame->Maximize();
+		wxWindow* parent = wxTheApp->GetTopWindow();
 
-	subvalueFrame->SetExtraStyle(wxWS_EX_BLOCK_EVENTS);
-	return subvalueFrame;
+		for (wxWindow* window : wxTopLevelWindows) {
+			if (window->IsKindOf(CLASSINFO(wxDialog))) {
+				if (((wxDialog*)window)->IsModal()) {
+					parent = window; break;
+				}
+			}
+		}
+
+		wxDialogDocChildFrame* subframe = new wxDialogDocChildFrame(document, view, parent, wxID_ANY, document->GetTitle(), pos, size, style & ~wxCREATE_SDI_FRAME);
+		subframe->SetIcon(document->GetIcon());
+
+		subframe->Iconize(false); // restore the window if minimized
+		subframe->SetFocus();     // focus on my window
+		subframe->Raise();        // bring window to front
+		subframe->Center();
+
+		subframe->SetExtraStyle(wxWS_EX_BLOCK_EVENTS);
+		return subframe;
+	}
+
+	wxAuiMDIDocChildFrame* subframe = new wxAuiMDIDocChildFrame(document, view, mainFrame, wxID_ANY, document->GetTitle(), pos, size, style);
+	subframe->SetIcon(document->GetIcon());
+
+	subframe->Iconize(false); // restore the window if minimized
+	subframe->SetFocus();     // focus on my window
+	subframe->Raise();        // bring window to front
+	subframe->Maximize();
+
+	subframe->SetExtraStyle(wxWS_EX_BLOCK_EVENTS);
+	return subframe;
 }
 
 // bring window to front
-void CMainFrame::Raise()
+void wxAuiDocMDIFrame::Raise()
 {
 #if __WXMSW__
-	keybd_event(0, 0, 0, 0); // Simulate a key press
+	::keybd_event(0, 0, 0, 0); // Simulate a key press
 #endif
 	wxAuiMDIParentFrame::Raise();
 }
 
-CMainFrame::~CMainFrame()
+wxAuiDocMDIFrame::~wxAuiDocMDIFrame()
 {
-	objectInspectorDestroy();
-	docManagerDestroy();
+	if (s_instance == this)
+		s_instance = NULL;
 	
+	//destroy manager
+	docManagerDestroy();
+
 	// deinitialize the valueForm manager
 	m_mgr.UnInit();
 }

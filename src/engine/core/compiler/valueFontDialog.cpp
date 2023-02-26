@@ -1,63 +1,58 @@
 #include "valueFontDialog.h"
-#include "methods.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CValueFontDialog, CValue);
 
-enum {
-	enFont,
-};
-
-CMethods CValueFontDialog::m_methods;
-
-enum {
-	enChoose
-};
+CValue::CMethodHelper CValueFontDialog::m_methodHelper;
 
 void CValueFontDialog::PrepareNames() const
 {
-	m_methods.AppendAttribute("font");
-	m_methods.AppendMethod("choose", "choose()");
+	m_methodHelper.ClearHelper();
+	m_methodHelper.AppendProp("font");
+	m_methodHelper.AppendFunc("choose", "choose()");
 }
 
 #include "appData.h"
 
-CValue CValueFontDialog::Method(methodArg_t &aParams)
+bool CValueFontDialog::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray)
 {
 	if (appData->DesignerMode())
-		return CValue();
+		return false;
 
-	switch (aParams.GetIndex())
+	switch (lMethodNum)
 	{
 	case enChoose:
-		return m_fontDialog->ShowModal() != wxID_CANCEL;
+		pvarRetValue = m_fontDialog->ShowModal() != wxID_CANCEL;
+		return true;
 	}
 
-	return CValue();
+	return false;
 }
 
 #include "frontend/visualView/special/valueFont.h"
 
-void CValueFontDialog::SetAttribute(attributeArg_t &aParams, CValue &cVal)
+bool CValueFontDialog::SetPropVal(const long lPropNum, CValue &varPropVal)
 {
+	return false;
 }
 
-CValue CValueFontDialog::GetAttribute(attributeArg_t &aParams)
+bool CValueFontDialog::GetPropVal(const long lPropNum, CValue& pvarPropVal)
 {
-	switch (aParams.GetIndex())
+	switch (lPropNum)
 	{
 	case enFont: 
-		return new CValueFont(
+		pvarPropVal = new CValueFont(
 			m_fontDialog->GetFontData().GetChosenFont()
 		);
+		return true;
 	}
 
-	return CValue();
+	return false;
 }
 
 #include "frontend/mainFrame.h"
 
 CValueFontDialog::CValueFontDialog() : CValue(eValueTypes::TYPE_VALUE),
-m_fontDialog(new wxFontDialog(CMainFrame::Get()))
+m_fontDialog(new wxFontDialog(wxAuiDocMDIFrame::GetFrame()))
 {
 }
 

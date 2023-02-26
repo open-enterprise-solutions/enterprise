@@ -1,6 +1,6 @@
 #include "mysqlPreparedStatement.h"
 #include "mysqlDatabaseLayer.h"
-#include "databaseLayer/databaseErrorCodes.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
 
 MysqlPreparedStatement::MysqlPreparedStatement(MysqlInterface* pInterface)
 	: PreparedStatement()

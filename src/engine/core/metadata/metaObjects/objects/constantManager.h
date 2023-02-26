@@ -12,12 +12,15 @@ public:
 	CConstantManager(CMetaConstantObject *metaConst = NULL);
 	virtual ~CConstantManager();
 
-	virtual CMethods* GetPMethods() const { PrepareNames();  return &m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
-	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t &aParams);//вызов метода
+	virtual CMethodHelper* GetPMethods() const {
+		PrepareNames();  
+		return &m_methodHelper; 
+	} 
+	virtual void PrepareNames() const;                        
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const;
+	virtual CLASS_ID GetTypeClass() const;
 
 	//types 
 	virtual wxString GetTypeString() const;
@@ -26,7 +29,7 @@ public:
 protected:
 
 	//methods 
-	static CMethods m_methods;
+	static CMethodHelper m_methodHelper;
 };
 
 

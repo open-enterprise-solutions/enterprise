@@ -3,8 +3,8 @@
 #include "frontend/visualView/visualEditor.h"
 #include "frontend/visualView/visualHost.h"
 
-#include "metadata/metadata.h"
-#include "metadata/singleMetaTypes.h"
+#include "core/metadata/metadata.h"
+#include "core/metadata/singleClass.h"
 
 void CValueTableBox::OnPropertyCreated(Property* property)
 {
@@ -34,15 +34,15 @@ void CValueTableBox::OnPropertyChanged(Property* property)
 			IMetadata* metaData = GetMetaData();
 
 			while (GetChildCount() != 0) {
-				g_visualHostContext->CutObject(GetChild(0), true);
+				g_visualHostContext->CutControl(GetChild(0), true);
 			}
 
 			const CLASS_ID& clsid = CValueTableBox::GetFirstClsid();
 			IMetaTypeObjectValueSingle* singleObject =
 				metaData->GetTypeObject(clsid);
 			if (singleObject != NULL) {
-				ITableAttribute* metaObject =
-					dynamic_cast<ITableAttribute*>(singleObject->GetMetaObject());
+				IMetaTableData* metaObject =
+					dynamic_cast<IMetaTableData*>(singleObject->GetMetaObject());
 				if (metaObject != NULL) {
 					for (auto attribute : metaObject->GetGenericAttributes()) {
 						CValueTableBoxColumn* tableBoxColumn =
@@ -54,7 +54,7 @@ void CValueTableBox::OnPropertyChanged(Property* property)
 						tableBoxColumn->SetCaption(attribute->GetSynonym());
 						tableBoxColumn->SetSourceId(attribute->GetMetaID());
 						tableBoxColumn->SetVisibleColumn(true);
-						g_visualHostContext->InsertObject(tableBoxColumn, this);
+						g_visualHostContext->InsertControl(tableBoxColumn, this);
 					}
 				}
 			}

@@ -1,7 +1,7 @@
 #ifndef _DOCUMENT_VARIANT_
 #define _DOCUMENT_VARIANT_
 
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 class wxVariantRecordData : public wxVariantData {
 	wxString MakeString() const;

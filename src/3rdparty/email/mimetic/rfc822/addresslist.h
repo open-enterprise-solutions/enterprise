@@ -20,8 +20,8 @@
 
 #include <string>
 #include <vector>
-#include <email/mimetic/rfc822/address.h>
-#include <email/mimetic/rfc822/fieldvalue.h>
+#include <3rdparty/email/mimetic/rfc822/address.h>
+#include <3rdparty/email/mimetic/rfc822/fieldvalue.h>
 namespace mimetic
 {
 

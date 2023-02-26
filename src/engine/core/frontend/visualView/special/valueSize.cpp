@@ -4,10 +4,9 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueSize.h"
-#include "compiler/methods.h"
 
 #include "frontend/mainFrame.h"
-#include "databaseLayer/databaseLayer.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 
 #include "utils/stringUtils.h"
 #include "utils/typeconv.h"
@@ -15,20 +14,26 @@
 //////////////////////////////////////////////////////////////////////
 wxIMPLEMENT_DYNAMIC_CLASS(CValueSize, CValue);
 
-CMethods CValueSize::m_methods;
+CValue::CMethodHelper CValueSize::m_methodHelper;
 
 CValueSize::CValueSize() : CValue(eValueTypes::TYPE_VALUE), m_size(wxDefaultSize)
 {
 }
 
-CValueSize::CValueSize(const wxSize &size) : CValue(eValueTypes::TYPE_VALUE), m_size(size)
+CValueSize::CValueSize(const wxSize& size) : CValue(eValueTypes::TYPE_VALUE), m_size(size)
 {
 }
 
-bool CValueSize::Init(CValue **aParams)
+bool CValueSize::Init(CValue** paParams, const long lSizeArray)
 {
-	if (aParams[0]->GetType() == eValueTypes::TYPE_STRING) { m_size = TypeConv::StringToSize(aParams[0]->ToString()); return true; }
-	else { m_size = wxSize(aParams[0]->ToInt(), aParams[1]->ToInt()); return true; }
+	if (paParams[0]->GetType() == eValueTypes::TYPE_STRING) {
+		m_size = TypeConv::StringToSize(paParams[0]->GetString());
+		return true;
+	}
+	else {
+		m_size = wxSize(paParams[0]->GetInteger(), paParams[1]->GetInteger());
+		return true;
+	}
 	return false;
 }
 
@@ -44,36 +49,38 @@ enum
 
 void CValueSize::PrepareNames() const
 {
-	std::vector <SEng>aAttributes;
+	m_methodHelper.ClearHelper();
 
-	SEng attribute;
-
-	attribute.sName = "x";
-	aAttributes.push_back(attribute);
-	attribute.sName = "y";
-	aAttributes.push_back(attribute);
-
-	m_methods.PrepareAttributes(aAttributes.data(), aAttributes.size());
+	m_methodHelper.AppendProp(wxT("x"));
+	m_methodHelper.AppendProp(wxT("y"));
 }
 
-void CValueSize::SetAttribute(attributeArg_t &aParams, CValue &cVal)
+bool CValueSize::SetPropVal(const long lPropNum, const CValue& varPropVal)
 {
-	switch (aParams.GetIndex())
+	switch (lPropNum)
 	{
-	case eX: m_size.x = cVal.ToInt(); break;
-	case eY: m_size.y = cVal.ToInt(); break;
+	case eX:
+		m_size.x = varPropVal.GetInteger();
+		return true;
+	case eY:
+		m_size.y = varPropVal.GetInteger();
+		return true;
 	}
+	return false;
 }
 
-CValue CValueSize::GetAttribute(attributeArg_t &aParams)
+bool CValueSize::GetPropVal(const long lPropNum, CValue& pvarPropVal)
 {
-	switch (aParams.GetIndex())
+	switch (lPropNum)
 	{
-	case eX: return m_size.x;
-	case eY: return m_size.y;
+	case eX:
+		pvarPropVal = m_size.x;
+		return true;
+	case eY:
+		pvarPropVal = m_size.y;
+		return true;
 	}
-
-	return CValue();
+	return false;
 }
 
 

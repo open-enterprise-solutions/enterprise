@@ -4,10 +4,10 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "constant.h"
-#include "databaseLayer/databaseLayer.h"
-#include "databaseLayer/databaseErrorCodes.h"
-#include "metadata/metadata.h"
-#include "metadata/singleMetaTypes.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
+#include "core/metadata/metadata.h"
+#include "core/metadata/singleClass.h"
 #include "utils/stringUtils.h"
 #include "appData.h"
 
@@ -18,8 +18,8 @@ int CMetaConstantObject::ProcessAttribute(const wxString& tableName, IMetaAttrib
 
 bool CMetaConstantObject::CreateAndUpdateTableDB(IConfigMetadata* srcMetaData, IMetaObject* srcMetaObject, int flags)
 {
-	wxString tableName = GetTableNameDB();
-	wxString fieldName = GetFieldNameDB();
+	const wxString &tableName = GetTableNameDB();
+	const wxString &fieldName = GetFieldNameDB();
 
 	int retCode = 1;
 

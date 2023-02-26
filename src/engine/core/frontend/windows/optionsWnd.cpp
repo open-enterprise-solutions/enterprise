@@ -1,6 +1,6 @@
 #include "optionsWnd.h"
 #include "frontend/theme/luna_auitabart.h"
-#include "compiler/debugger/debugServer.h"
+#include "core/compiler/debugger/debugServer.h"
 
 void COptionsWnd::FillOptions()
 {

@@ -20,7 +20,7 @@
 
 #include <wx/filename.h>
 
-#include <email/mimetic/utils.h>
+#include <3rdparty/email/mimetic/utils.h>
 #include <sstream>
 #include <stdlib.h>
 

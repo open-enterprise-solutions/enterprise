@@ -1,7 +1,7 @@
 #ifndef _CONSTANTS_H__
 #define _CONSTANTS_H__
 
-#include "metadata/metaObjects/objects/object.h"
+#include "core/metadata/metaObjects/objects/object.h"
 
 class CConstantObject;
 
@@ -88,7 +88,7 @@ protected:
 	virtual void ProcessCommand(unsigned int id);
 };
 
-#include "common/moduleInfo.h"
+#include "core/common/moduleInfo.h"
 
 class CConstantObject : public CValue, public IActionSource,
 	public ISourceDataObject, public IModuleInfo {
@@ -97,33 +97,12 @@ protected:
 	CConstantObject(CMetaConstantObject* metaObject);
 	CConstantObject(const CConstantObject& source);
 public:
+	
 	CValue GetConstValue() const;
 	bool SetConstValue(const CValue& cValue);
 
-	//standart override 
-	virtual CMethods* GetPMethods() const {
-		return CValue::GetPMethods();
-	}
-
-	virtual void PrepareNames() const {
-		CValue::PrepareNames();
-	}
-
-	virtual CValue Method(methodArg_t& aParams) {
-		return CValue::Method(aParams);
-	}
-
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal) {
-		CValue::SetAttribute(aParams, cVal);
-	}
-
-	virtual CValue GetAttribute(attributeArg_t& aParams) {
-		return CValue::GetAttribute(aParams);
-	}
-
-	//check is empty
-	virtual inline bool IsEmpty() const override {
-		return CValue::IsEmpty();
+	inline virtual bool IsEmpty() const {
+		return false;
 	}
 
 	//support source data 
@@ -131,8 +110,8 @@ public:
 	virtual bool GetModel(IValueModel*& tableValue, const meta_identifier_t& id);
 
 	//support source set/get data 
-	virtual void SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal);
-	virtual CValue GetValueByMetaID(const meta_identifier_t& id) const;
+	virtual bool SetValueByMetaID(const meta_identifier_t& id, const CValue& varMetaVal);
+	virtual bool GetValueByMetaID(const meta_identifier_t& id, CValue& pvarMetaVal) const;
 
 	//counter
 	virtual void IncrRef() { CValue::IncrRef(); }
@@ -161,7 +140,7 @@ public:
 
 	//support actions
 	virtual actionData_t GetActions(const form_identifier_t& formType);
-	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm);
+	virtual void ExecuteAction(const action_identifier_t& lNumAction, CValueForm* srcForm);
 
 	//default showing
 	virtual void ShowValue() override {
@@ -169,7 +148,7 @@ public:
 	}
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const;
+	virtual CLASS_ID GetTypeClass() const;
 	virtual wxString GetTypeString() const;
 	virtual wxString GetString() const;
 

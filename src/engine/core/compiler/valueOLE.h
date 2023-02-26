@@ -3,36 +3,28 @@
 
 #include "value.h"
 
-class CORE_API CValueOLE : public CValue
-{
-	wxString m_sObjectName;
-
+class CORE_API CValueOLE : 
+	public CValue {
+	wxString m_objectName;
 #ifdef __WXMSW__
-	IDispatch *m_dispatch;
+	IDispatch* m_dispatch;
 #endif 
-
-	CMethods *m_methods;
-
+	CMethodHelper* m_methodHelper;
 #ifdef __WXMSW__
 	CLSID m_clsId;
 #endif
-
 private:
-
 #ifdef __WXMSW__
-	IDispatch *DoCreateInstance();
+	IDispatch* DoCreateInstance();
 #endif
-
 #ifdef __WXMSW__
-	void AddFromArray(CValue &Ret, long *aPos, SAFEARRAY *pArray, SAFEARRAYBOUND *aDims, int nLastDim);
-	CValue FromVariant(VARIANT &data);
-	CValue FromVariantArray(SAFEARRAY *pArray);
-	VARIANT FromValue(CValue &Val);
-	void FreeValue(VARIANT &Val);
+	void AddFromArray(CValue& pvarRetValue, long* aPos, SAFEARRAY* psa, SAFEARRAYBOUND* aDims, int nLastDim) const;
+	bool FromVariant(const VARIANT& oleVariant, CValue& pvarRetValue) const;
+	CValue FromVariantArray(SAFEARRAY* psa) const;
+	VARIANT FromValue(const CValue& varRetValue) const;
+	void FreeValue(VARIANT& oleVariant);
 #endif
-
 	friend class CDebuggerServer;
-
 public:
 
 	//STA
@@ -45,55 +37,72 @@ public:
 public:
 
 #ifdef __WXMSW__
-	IDispatch *GetDispatch() { return m_dispatch; }
+	IDispatch* GetDispatch() const {
+		return m_dispatch;
+	}
 #endif
 
-	virtual CMethods* GetPMethods() const;
-	virtual void PrepareNames() const;//этот метод автоматически вызывается для инициализации имен атрибутов и методов
+	virtual CMethodHelper* GetPMethods() const {
+		return m_methodHelper;
+	}
 
+	virtual void PrepareNames() const;
+
+	virtual long FindMethod(const wxString& methodName) const override {
+		return FindProp(methodName);
+	}
+	
+	virtual long FindProp(const wxString& propName) const override;
+
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);//установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);//значение атрибута
+	
 	//РАБОТА КАК АГРЕГАТНОГО ОБЪЕКТА
-	virtual CValue Method(methodArg_t &aParams);
-
-	virtual void SetAttribute(attributeArg_t &aParams, CValue &cValue);//установка атрибута
-	virtual CValue GetAttribute(attributeArg_t &aParams);//значение атрибута
-
-	virtual int FindMethod(const wxString &sName) const override;
-	virtual int FindAttribute(const wxString &sName) const override;
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 
 #ifdef __WXMSW__
 	CValueOLE();
-	CValueOLE(CLSID clsId, IDispatch *dispatch, const wxString &objectName);
+	CValueOLE(const CLSID& clsId, IDispatch* dispatch, const wxString& objectName);
 #else
 	CValueOLE();
 #endif
 
-	bool Create(const wxString &sName);
+	virtual ~CValueOLE();
 
-	virtual bool Init() { return false; }
-	virtual bool Init(CValue **aParams);
+	bool Create(const wxString& oleName);
 
-	virtual wxString GetString() const { return m_sObjectName; }
-	virtual wxString GetTypeString() const { return wxT("comObject"); }
+	virtual bool Init() { 
+		return false;
+	}
+	
+	virtual bool Init(CValue** paParams, const long lSizeArray);
+
+	virtual wxString GetString() const { 
+		return m_objectName;
+	}
+	
+	virtual wxString GetTypeString() const { 
+		return wxT("comObject"); 
+	}
 
 	//operator '=='
-	virtual inline bool CompareValueEQ(const CValue &cParam) const
-	{
-		CValueOLE *m_pValueOLE = dynamic_cast<CValueOLE *>(cParam.GetRef());
+	virtual inline bool CompareValueEQ(const CValue& cParam) const {
+		CValueOLE* m_pValueOLE = dynamic_cast<CValueOLE*>(cParam.GetRef());
 		if (m_pValueOLE) return m_dispatch == m_pValueOLE->m_dispatch;
 		else return false;
 	}
+	
 	//operator '!='
-	virtual inline bool CompareValueNE(const CValue &cParam) const
-	{
-		CValueOLE *m_pValueOLE = dynamic_cast<CValueOLE *>(cParam.GetRef());
+	virtual inline bool CompareValueNE(const CValue& cParam) const {
+		CValueOLE* m_pValueOLE = dynamic_cast<CValueOLE*>(cParam.GetRef());
 		if (m_pValueOLE) return m_dispatch != m_pValueOLE->m_dispatch;
 		else return false;
 	}
 
 	//check is empty
-	virtual inline bool IsEmpty() const override { return false; }
-
-	virtual ~CValueOLE();
+	virtual inline bool IsEmpty() const override {
+		return false; 
+	}
 
 protected:
 

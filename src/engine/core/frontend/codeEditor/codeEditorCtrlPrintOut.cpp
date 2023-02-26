@@ -42,7 +42,7 @@ bool CCodeEditorPrintout::OnBeginDocument(int startPage, int endPage) {
 	return true;
 }
 
-#include "common/docManager.h"
+#include "core/frontend/docView/docManager.h"
 
 void CCodeEditorPrintout::GetPageInfo(int *minPage, int *maxPage, int *selPageFrom, int *selPageTo) {
 

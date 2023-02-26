@@ -4,10 +4,10 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "constant.h"
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 #include "frontend/visualView/controls/form.h"
-#include "compiler/systemObjects.h"
-#include "metadata/singleMetaTypes.h"
+#include "core/compiler/systemObjects.h"
+#include "core/metadata/singleClass.h"
 #include "utils/stringUtils.h"
 #include "appData.h"
 
@@ -93,14 +93,14 @@ CValueForm* CConstantObject::GetForm() const
 	);
 }
 
-CLASS_ID CConstantObject::GetClassType() const
+CLASS_ID CConstantObject::GetTypeClass() const
 {
 	IMetadata* metaData = m_metaObject->GetMetadata();
 	wxASSERT(metaData);
 	IMetaTypeObjectValueSingle* clsFactory =
 		metaData->GetTypeObject(m_metaObject, eMetaObjectType::enObject);
 	wxASSERT(clsFactory);
-	return clsFactory->GetClassType();
+	return clsFactory->GetTypeClass();
 }
 
 wxString CConstantObject::GetTypeString() const
@@ -126,7 +126,7 @@ wxString CConstantObject::GetString() const
 CSourceExplorer CConstantObject::GetSourceExplorer() const
 {
 	CSourceExplorer srcHelper(
-		m_metaObject, GetClassType(),
+		m_metaObject, GetTypeClass(),
 		false, true
 	);
 
@@ -141,7 +141,7 @@ bool CConstantObject::GetModel(IValueModel*& tableValue, const meta_identifier_t
 
 void CConstantObject::ShowFormValue()
 {
-	CValueForm* foundedForm = GetForm();
+	CValueForm* const foundedForm = GetForm();
 
 	if (foundedForm && foundedForm->IsShown()) {
 		foundedForm->ActivateForm();
@@ -157,13 +157,12 @@ void CConstantObject::ShowFormValue()
 
 CValueForm* CConstantObject::GetFormValue()
 {
-	CValueForm* foundedForm = GetForm();
+	CValueForm* const foundedForm = GetForm();
 
 	if (foundedForm != NULL)
 		return foundedForm;
 
-	CValueForm* valueForm = new CValueForm();
-	valueForm->InitializeForm(NULL, NULL,
+	CValueForm* valueForm = new CValueForm(NULL, NULL,
 		this, m_metaObject->GetGuid()
 	);;
 	valueForm->BuildForm(defaultFormType);
@@ -172,55 +171,55 @@ CValueForm* CConstantObject::GetFormValue()
 	return valueForm;
 }
 
-void CConstantObject::SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal)
+bool CConstantObject::SetValueByMetaID(const meta_identifier_t& id, const CValue& varMetaVal)
 {
 	if (id == m_metaObject->GetMetaID()) {
-		CValueForm* foundedForm = CValueForm::FindFormByGuid(m_metaObject->GetGuid());
-		m_constVal = m_metaObject->AdjustValue(cVal);
+		CValueForm* const foundedForm = CValueForm::FindFormByGuid(m_metaObject->GetGuid());
+		m_constVal = m_metaObject->AdjustValue(varMetaVal);
 		if (foundedForm != NULL) {
 			foundedForm->Modify(true);
 		}
+		return true;
 	}
+	return false;
 }
 
-CValue CConstantObject::GetValueByMetaID(const meta_identifier_t& id) const
+bool CConstantObject::GetValueByMetaID(const meta_identifier_t& id, CValue& pvarMetaVal) const
 {
 	if (id == m_metaObject->GetMetaID()) {
-		return m_constVal;
+		pvarMetaVal = m_constVal;
+		return true;
 	}
 
-	return CValue();
+	return false;
 }
 
-#include "databaseLayer/databaseLayer.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 
 CValue CConstantObject::GetConstValue() const
 {
 	CValue ret;
 
-	if (appData->EnterpriseMode()) {
-
-		wxString tableName = m_metaObject->GetTableNameDB();
-		wxString fieldName = m_metaObject->GetFieldNameDB();
-
+	if (!appData->DesignerMode()) {
+		const wxString& tableName = m_metaObject->GetTableNameDB();
+		const wxString& fieldName = m_metaObject->GetFieldNameDB();
 		if (databaseLayer->TableExists(tableName)) {
-
-			DatabaseResultSet* resultSet =
-				databaseLayer->RunQueryWithResults("SELECT FIRST 1 %s FROM %s", IMetaAttributeObject::GetSQLFieldName(m_metaObject), tableName);
-
-			if (resultSet == NULL) {
+			DatabaseResultSet* resultSet = NULL;
+			if (databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+				resultSet = databaseLayer->RunQueryWithResults("SELECT %s FROM %s LIMIT 1", IMetaAttributeObject::GetSQLFieldName(m_metaObject), tableName);
+			else
+				resultSet = databaseLayer->RunQueryWithResults("SELECT FIRST 1 %s FROM %s", IMetaAttributeObject::GetSQLFieldName(m_metaObject), tableName);
+			if (resultSet == NULL)
 				return ret;
-			}
-
 			if (resultSet->Next()) {
-				ret = IMetaAttributeObject::GetValueAttribute(
-					m_metaObject, resultSet);
-				ret = m_metaObject->AdjustValue(ret);
+				if (IMetaAttributeObject::GetValueAttribute(m_metaObject, ret, resultSet))
+					ret = m_metaObject->AdjustValue(ret);
+				else
+					ret = m_metaObject->CreateValue();
 			}
 			else {
 				ret = m_metaObject->CreateValue();
 			}
-
 			resultSet->Close();
 		}
 	}
@@ -228,21 +227,18 @@ CValue CConstantObject::GetConstValue() const
 	return ret;
 }
 
-#include "databaseLayer/databaseErrorCodes.h" 
+#include <3rdparty/databaseLayer/databaseErrorCodes.h> 
 
 bool CConstantObject::SetConstValue(const CValue& cValue)
 {
-	if (appData->EnterpriseMode()) {
-
-		wxString tableName = m_metaObject->GetTableNameDB();
-		wxString fieldName = m_metaObject->GetFieldNameDB();
-
+	if (!appData->DesignerMode()) {
+		const wxString& tableName = m_metaObject->GetTableNameDB();
+		const wxString& fieldName = m_metaObject->GetFieldNameDB();
 		if (databaseLayer->TableExists(tableName)) {
-
-			CValueForm* foundedForm = GetForm();
+			
+			CValueForm* const foundedForm = GetForm();
 
 			databaseLayer->BeginTransaction();
-
 			{
 				CValue cancel = false;
 				m_procUnit->CallFunction("BeforeWrite", cancel);
@@ -252,7 +248,7 @@ bool CConstantObject::SetConstValue(const CValue& cValue)
 				}
 			}
 
-			CValue adjustVal = m_metaObject->AdjustValue(cValue);
+			const CValue& adjustVal = m_metaObject->AdjustValue(cValue);
 
 			//check fill attributes 
 			bool fillCheck = true;
@@ -270,11 +266,25 @@ bool CConstantObject::SetConstValue(const CValue& cValue)
 				return false;
 			}
 
-			wxString sqlText = "UPDATE OR INSERT INTO %s (%s, RECORD_KEY) VALUES(";
-			for (unsigned int idx = 0; idx < IMetaAttributeObject::GetSQLFieldCount(m_metaObject); idx++) {
-				sqlText += "?,";
+			wxString sqlText = "";
+
+			if (databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
+				sqlText = "INSERT INTO %s (%s, RECORD_KEY) VALUES(";
+				for (unsigned int idx = 0; idx < IMetaAttributeObject::GetSQLFieldCount(m_metaObject); idx++) {
+					sqlText += "?,";
+				}
+				sqlText += "'6')";
+				sqlText += " ON CONFLICT (RECORD_KEY) ";
+				sqlText += " DO UPDATE SET " + IMetaAttributeObject::GetExcluteSQLFieldName(m_metaObject) + ";";
 			}
-			sqlText += "'6') MATCHING(RECORD_KEY);";
+			else {
+				sqlText = "UPDATE OR INSERT INTO %s (%s, RECORD_KEY) VALUES(";
+				for (unsigned int idx = 0; idx < IMetaAttributeObject::GetSQLFieldCount(m_metaObject); idx++) {
+					sqlText += "?,";
+				}
+				sqlText += "'6') MATCHING(RECORD_KEY);";
+			}
+
 			PreparedStatement* statement =
 				databaseLayer->PrepareStatement(sqlText, tableName, IMetaAttributeObject::GetSQLFieldName(m_metaObject));
 
@@ -293,6 +303,10 @@ bool CConstantObject::SetConstValue(const CValue& cValue)
 
 			bool hasError = statement->RunQuery() == DATABASE_LAYER_QUERY_RESULT_ERROR;
 			databaseLayer->CloseStatement(statement);
+
+			if (hasError) {
+				databaseLayer->RollBack(); CSystemObjects::Raise("failed to write object in db!"); return false;
+			}
 
 			{
 				CValue cancel = false;

@@ -5,7 +5,7 @@
 
 #include "watchwindow.h"
 #include "watchdroptarget.h"
-#include "compiler/debugger/debugClient.h"
+#include "core/compiler/debugger/debugClient.h"
 #include "utils/stringUtils.h"
 #include "utils/fs/fs.h"
 
@@ -16,10 +16,6 @@ EVT_TREE_ITEM_ACTIVATED(wxID_ANY, CWatchWindow::OnItemSelected)
 EVT_TREE_DELETE_ITEM(wxID_ANY, CWatchWindow::OnItemDeleted)
 EVT_TREE_KEY_DOWN(wxID_ANY, CWatchWindow::OnKeyDown)
 EVT_TREE_ITEM_EXPANDING(wxID_ANY, CWatchWindow::OnItemExpanding)
-
-EVT_WATCHWINDOW_VARIABLE_EVENT(CWatchWindow::OnDataSetVariable)
-EVT_WATCHWINDOW_EXPAND_EVENT(CWatchWindow::OnDataExpanding)
-
 END_EVENT_TABLE()
 
 //
@@ -40,66 +36,78 @@ CWatchWindow::CWatchWindow(wxWindow* parent, wxWindowID winid)
 	m_updating = false;
 }
 
-void CWatchWindow::SetVariable(CMemoryReader &commandReader)
+#include "frontend/mainFrame.h"
+
+CWatchWindow* CWatchWindow::GetWatchWindow()
 {
-	unsigned int nCountExpression = commandReader.r_u32(); wxWatchWindowDataEvent event(wxEVT_WATCHWINDOW_VARIABLE_EVENT);
-
-	for (unsigned int i = 0; i < nCountExpression; i++)
-	{
-#if defined(_USE_64_BIT_POINT_IN_DEBUGGER)
-		wxTreeItemId item = reinterpret_cast<void *>(commandReader.r_u64());
-#else 
-		wxTreeItemId item = reinterpret_cast<void *>(commandReader.r_u32());
-#endif 
-
-		wxString sExpression, sValue, sType;
-		//expressions
-		commandReader.r_stringZ(sExpression);
-		commandReader.r_stringZ(sValue);
-		commandReader.r_stringZ(sType);
-
-		//refresh child elements 
-		unsigned int m_attributeCount = commandReader.r_u32();
-		event.AddWatch(sExpression, sValue, sType, m_attributeCount > 0, item);
-	}
-
-	wxPostEvent(this, event);
+	if (wxAuiDocMDIFrame::GetFrame())
+		return mainFrame->GetWatchWindow();
+	return NULL; 
 }
 
-void CWatchWindow::SetExpanded(CMemoryReader &commandReader)
+void CWatchWindow::SetVariable(const watchWindowData_t& watchData)
 {
-#if defined(_USE_64_BIT_POINT_IN_DEBUGGER)
-	wxTreeItemId item = reinterpret_cast<void *>(commandReader.r_u64());
-#else 
-	wxTreeItemId item = reinterpret_cast<void *>(commandReader.r_u32());
-#endif 
+	m_updating = true;
 
-	wxWatchWindowDataEvent event(wxEVT_WATCHWINDOW_EXPAND_EVENT, item);
-	//generate event 
-	unsigned int m_attributeCount = commandReader.r_u32();
+	for (unsigned int i = 0; i < watchData.GetWatchCount(); i++) {
 
-	for (unsigned int i = 0; i < m_attributeCount; i++) {
-		wxString name, value, type;
+		const wxTreeItemId& item = watchData.GetItem(i);
 
-		commandReader.r_stringZ(name);
-		commandReader.r_stringZ(value);
-		commandReader.r_stringZ(type);
+		SetItemText(item, 1, watchData.GetValue(i));
+		SetItemText(item, 2, watchData.GetType(i));
 
-		unsigned int m_attributeChildCount = commandReader.r_u32();
-		event.AddWatch(name, value, type, m_attributeChildCount > 0);
+		//collapse childern items 
+		Collapse(item);
+
+		//delete children elements 
+		DeleteChildren(item);
+
+		if (watchData.HasAttributes(i)) {
+			AppendItem(item, wxT("..."));
+		}
 	}
 
-	wxPostEvent(this, event);
+	m_updating = false;
+
+	// update watch window 
+	mainFrame->Update();
 }
 
-void CWatchWindow::UpdateItem(wxTreeItemId item)
+void CWatchWindow::SetExpanded(const watchWindowData_t& watchData)
 {
-	wxString m_expression = GetItemText(item);
+	const wxTreeItemId& item = watchData.GetItem();
+
+	//delete children elements 
+	DeleteChildren(item);
+
+	m_updating = true;
+
+	for (unsigned int i = 0; i < watchData.GetWatchCount(); i++) {
+
+		const wxTreeItemId& child = AppendItem(item, watchData.GetName(i));
+
+		SetItemText(child, 1, watchData.GetValue(i));
+		SetItemText(child, 2, watchData.GetType(i));
+
+		if (watchData.HasAttributes(i)) {
+			AppendItem(child, wxT("..."));
+		}
+	}
+
+	Expand(item);
+	m_updating = false;
+}
+
+void CWatchWindow::UpdateItem(const wxTreeItemId& item)
+{
+	const wxString& expression = GetItemText(item);
 
 #if defined(_USE_64_BIT_POINT_IN_DEBUGGER)
-	if (!m_expression.IsEmpty()) debugClient->AddExpression(m_expression, reinterpret_cast<u64>(item.GetID()));
+	if (!expression.IsEmpty())
+		debugClient->AddExpression(expression, reinterpret_cast<u64>(item.GetID()));
 #else 
-	if (!m_expression.IsEmpty()) debugClient->AddExpression(m_expression, reinterpret_cast<u32>(item.GetID()));
+	if (!expression.IsEmpty())
+		debugClient->AddExpression(expression, reinterpret_cast<u32>(item.GetID()));
 #endif 
 
 	DeleteChildren(item);
@@ -115,8 +123,7 @@ void CWatchWindow::UpdateItems()
 	wxTreeItemIdValue cookie;
 	wxTreeItemId item = GetFirstChild(m_root, cookie);
 
-	while (item.IsOk())
-	{
+	while (item.IsOk()) {
 		UpdateItem(item);
 		item = GetNextSibling(item);
 	}
@@ -138,12 +145,10 @@ void CWatchWindow::AddWatch(const wxString& expression)
 
 		wxTreeItemId item;
 
-		if (lastItem.IsOk())
-		{
+		if (lastItem.IsOk()) {
 			item = InsertItem(m_root, lastItem, temp);
 		}
-		else
-		{
+		else {
 			item = PrependItem(m_root, temp);
 		}
 
@@ -266,8 +271,8 @@ void CWatchWindow::OnItemDeleted(wxTreeEvent& event)
 {
 	wxTreeItemId item = event.GetItem();
 #if defined(_USE_64_BIT_POINT_IN_DEBUGGER)
-	if (!m_updating) { 
-		debugClient->RemoveExpression(reinterpret_cast<u64>(item.GetID())); 
+	if (!m_updating) {
+		debugClient->RemoveExpression(reinterpret_cast<u64>(item.GetID()));
 	}
 #else 
 	if (!m_updating) {
@@ -277,7 +282,7 @@ void CWatchWindow::OnItemDeleted(wxTreeEvent& event)
 	event.Skip();
 }
 
-void CWatchWindow::OnItemExpanding(wxTreeEvent &event)
+void CWatchWindow::OnItemExpanding(wxTreeEvent& event)
 {
 	wxTreeItemId item = event.GetItem();
 	wxString sExpression = GetItemText(item);
@@ -301,72 +306,16 @@ void CWatchWindow::OnItemExpanding(wxTreeEvent &event)
 	}
 #endif 
 
-	if (!m_updating) event.Veto();
+	if (!m_updating)
+		event.Veto();
 	else event.Skip();
-}
-
-void CWatchWindow::OnDataExpanding(wxWatchWindowDataEvent& event)
-{
-	wxTreeItemId item = event.GetItem(); m_updating = true;
-
-	//delete children elements 
-	DeleteChildren(item);
-
-	for (unsigned int i = 0; i < event.GetWatchCount(); i++)
-	{
-		wxTreeItemId child = AppendItem(item, event.GetName(i));
-
-		SetItemText(child, 1, event.GetValue(i));
-		SetItemText(child, 2, event.GetType(i));
-
-		if (event.HasAttributes(i)) { 
-			AppendItem(child, wxT("...")); 
-		}
-	}
-
-	Expand(item);
-
-	event.Skip(); m_updating = false;
-}
-
-#include "frontend/mainFrame.h"
-
-void CWatchWindow::OnDataSetVariable(wxWatchWindowDataEvent& event)
-{
-	m_updating = true;
-
-	for (unsigned int i = 0; i < event.GetWatchCount(); i++)
-	{
-		wxTreeItemId item = event.GetItem(i);
-
-		SetItemText(item, 1, event.GetValue(i));
-		SetItemText(item, 2, event.GetType(i));
-
-		//collapse childern items 
-		Collapse(item);
-	
-		//delete children elements 
-		DeleteChildren(item);
-
-		if (event.HasAttributes(i)) {
-			AppendItem(item, wxT("..."));
-		}
-	}
-
-	// update watch window 
-	mainFrame->Update();
-
-	event.Skip(); m_updating = false;
 }
 
 void CWatchWindow::CreateEmptySlotIfNeeded()
 {
-	bool needsEmptySlot = true;
-
-	unsigned int numItems = GetChildrenCount(m_root, false);
-
-	if (numItems > 0)
-	{
+	unsigned int numItems = GetChildrenCount(m_root, false); bool needsEmptySlot = true;
+	
+	if (numItems > 0) {
 		wxTreeItemIdValue cookie;
 		wxTreeItemId lastItem = GetLastChild(m_root, cookie);
 		needsEmptySlot = !GetItemText(lastItem).IsEmpty();

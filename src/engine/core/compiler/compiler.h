@@ -3,16 +3,14 @@
 
 #include <wx/wx.h>
 
-#include <functional>
-#include <iostream>
-#include <array>
-#include <sstream>
-#include <string_view>
-#include <utility>
-#include <iomanip>
+#include <3rdparty/ttmath/ttmath.h>
+#include <3rdparty/guid/guid.h>
 
-#include <map>
+#include <functional>
 #include <vector>
+#include <map>
+
+#include <utility>
 
 class CValue;
 
@@ -30,8 +28,6 @@ class IMetadata;
 
 class CProcUnit;
 
-#include "resource.h"
-
 //*******************************************************************************************
 //*                                 Special structures                                      *
 //*******************************************************************************************
@@ -44,15 +40,48 @@ typedef int action_identifier_t;
 
 typedef unsigned int version_identifier_t;
 
-struct guid_t  // UUID = GUID = CLSID = LIBID = IID
-{
-	unsigned long   m_data1;
-	unsigned short  m_data2;
-	unsigned short  m_data3;
-	unsigned char   m_data4[8];
-};
+typedef std::map<
+	meta_identifier_t, CValue
+> valueArray_t;
 
 typedef unsigned wxLongLong_t CLASS_ID;
+
+//*******************************************************************************************
+//*                                 Clsid support											*
+//*******************************************************************************************
+
+#define MK_CLSID(a,b,c,d,e,f,g,h) \
+    	CLASS_ID((CLASS_ID(a)<<CLASS_ID(56))|(CLASS_ID(b)<<CLASS_ID(48))|(CLASS_ID(c)<<CLASS_ID(40))|(CLASS_ID(d)<<CLASS_ID(32))|(CLASS_ID(e)<<CLASS_ID(24))|(CLASS_ID(f)<<CLASS_ID(16))|(CLASS_ID(g)<<CLASS_ID(8))|(CLASS_ID(h)))
+
+#define MK_CLSID_INV(a,b,c,d,e,f,g,h) MK_CLSID(h,g,f,e,d,c,b,a)
+
+inline void CLSID2TEXT(CLASS_ID& clsid, const wxString& clsidStr) {
+	clsidStr[8] = '\0';
+	for (int i = 7; i >= 0; i--)
+		clsidStr[i] = char(clsid & 0xff); clsid >>= 8;
+}
+
+#define CLSID_OFFSET 4800000000000000000ul
+
+inline CLASS_ID TEXT2CLSID(const wxString& clsidStr) {
+
+	wxASSERT(clsidStr.length() <= 8);
+	char buf[9] = { 0 };
+	strncpy_s(buf, sizeof(buf),
+		clsidStr.GetData(), clsidStr.length()
+	);
+	size_t need = 8 - strlen(buf);
+	while (need) {
+		buf[8 - need] = ' ';
+		need--;
+	}
+	const CLASS_ID& clsid = MK_CLSID(
+		buf[0], buf[1], buf[2], buf[3],
+		buf[4], buf[5], buf[6], buf[7]
+	);
+	wxASSERT(clsid > CLSID_OFFSET);
+	return clsid;
+}
 
 //*******************************************************************************************
 //*                                 Versions support									    *
@@ -70,146 +99,31 @@ typedef unsigned wxLongLong_t CLASS_ID;
 //*                                 Special enumeration                                     *
 //*******************************************************************************************
 
-enum eValueTypes
-{
+enum eValueTypes {
 	TYPE_EMPTY = 0,
-
 	TYPE_BOOLEAN = 1,
 	TYPE_NUMBER = 2,
 	TYPE_DATE = 3,
 	TYPE_STRING = 4,
-
 	TYPE_NULL = 5,
-
 	TYPE_REFFER = 100,  // cсылка на объект 
-
 	TYPE_ENUM = 101,    // перечисление
 	TYPE_OLE = 102,     // оле объект 
 	TYPE_MODULE = 103,  // модуль
-
 	TYPE_VALUE = 200,   // значение
 
 	TYPE_LAST,
 };
 
 //*******************************************************************************************
-//*                                 Register new objects                                    *
-//*******************************************************************************************
-
-extern void CLSID2TEXT(CLASS_ID id, const wxString& clsidText);
-extern CLASS_ID TEXT2CLSID(const wxString& clsidText);
-
-#define S_VALUE_REGISTER(class_info, class_name, class_type, class_id, clsid)\
-class CAuto_##class_info##class_id \
-{\
-public:\
-CAuto_##class_info##class_id()\
-{\
-	CValue::RegisterObject(class_name, new CSimpleObjectValueSingle<class_info>(class_name, class_type, clsid));\
-}\
-~CAuto_##class_info##class_id()\
-{\
-	CValue::UnRegisterObject(class_name);\
-}\
-}m_auto_##class_info##class_id; \
-
-#define SO_VALUE_REGISTER(class_info, class_name, class_type, clsid)\
-class CAuto_##class_type \
-{\
-public:\
-CAuto_##class_type()\
-{\
-	CValue::RegisterObject(class_name, new CSystemObjectValueSingle<class_info>(class_name, clsid));\
-}\
-~CAuto_##class_type()\
-{\
-	CValue::UnRegisterObject(class_name);\
-}\
-}m_auto_##class_type; \
-
-#define VALUE_REGISTER(class_info, class_name, clsid)\
-class CAuto_##class_info \
-{\
-public:\
-CAuto_##class_info()\
-{\
-	CValue::RegisterObject(wxT(class_name), new CObjectValueSingle<class_info>(class_name, clsid));\
-}\
-~CAuto_##class_info()\
-{\
-	CValue::UnRegisterObject(wxT(class_name));\
-}\
-}m_auto_##class_info;\
-
-#define CONTROL_VALUE_REGISTER(class_info, class_name, class_type, class_image, clsid)\
-class CAuto_##class_info \
-{\
-public:\
-CAuto_##class_info()\
-{\
-	CValue::RegisterObject(wxT(class_name), new CControlObjectValueSingle<class_info>(class_name, class_type, class_image, clsid));\
-}\
-~CAuto_##class_info()\
-{\
-	CValue::UnRegisterObject(wxT(class_name));\
-}\
-}m_auto_##class_info;\
-
-#define S_CONTROL_VALUE_REGISTER(class_info, class_name, class_type, class_image, clsid)\
-class CAuto_##class_info \
-{\
-public:\
-CAuto_##class_info()\
-{\
-	CValue::RegisterObject(wxT(class_name), new CControlObjectValueSingle<class_info>(class_name, class_type, class_image, true, clsid));\
-}\
-~CAuto_##class_info()\
-{\
-	CValue::UnRegisterObject(wxT(class_name));\
-}\
-}m_auto_##class_info;\
-
-#define ENUM_REGISTER(class_info, class_name, clsid)\
-class CAuto_##class_info \
-{\
-public:\
-CAuto_##class_info()\
-{\
-	CValue::RegisterObject(wxT(class_name), new CEnumObjectValueSingle<class_info>(class_name, clsid));\
-}\
-~CAuto_##class_info()\
-{\
-	CValue::UnRegisterObject(wxT(class_name));\
-}\
-}m_auto_##class_info; \
-
-#define METADATA_REGISTER(class_info, class_name, clsid)\
-class CAuto_##class_info \
-{\
-public:\
-CAuto_##class_info()\
-{\
-	CValue::RegisterObject(wxT(class_name), new CMetaObjectValueSingle<class_info>(class_name, clsid));\
-}\
-~CAuto_##class_info()\
-{\
-	CValue::UnRegisterObject(wxT(class_name));\
-}\
-}m_auto_##class_info; \
-
-//*******************************************************************************************
 //*                                 Declare number type                                     *
 //*******************************************************************************************
-
-#include "ttmath/ttmath.h"
 
 typedef ttmath::Big<TTMATH_BITS(128), TTMATH_BITS(128)> number_t;
 
 //*******************************************************************************************
 //*                                 Declare special var                                     *
 //*******************************************************************************************
-
-#define NOT_DEFINED wxT("undefined")
 
 #if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
 #define MAX_STATIC_VAR 25ll
@@ -223,11 +137,7 @@ typedef ttmath::Big<TTMATH_BITS(128), TTMATH_BITS(128)> number_t;
 // full parser is very slowly ...
 //#define _USE_OLD_TEXT_PARSER_IN_CODE_EDITOR
 
-#if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
-#define _USE_64_BIT_POINT_IN_DEBUGGER
-#else 
 #define _USE_64_BIT_POINT_IN_DEBUGGER 
-#endif 
 
 //have bugs....
 //#define _USE_NET_COMPRESSOR 

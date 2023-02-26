@@ -1,5 +1,4 @@
 #include "valueColourDialog.h"
-#include "methods.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CValueColourDialog, CValue);
 
@@ -7,7 +6,7 @@ enum {
 	enColour,
 };
 
-CMethods CValueColourDialog::m_methods;
+CValue::CMethodHelper CValueColourDialog::m_methodHelper;
 
 enum {
 	enChoose
@@ -15,49 +14,54 @@ enum {
 
 void CValueColourDialog::PrepareNames() const
 {
-	m_methods.AppendAttribute("colour");
-	m_methods.AppendMethod("choose", "choose()");
+	m_methodHelper.ClearHelper();
+
+	m_methodHelper.AppendProp("colour");
+	m_methodHelper.AppendFunc("choose", "choose()");
 }
 
 #include "appData.h"
 
-CValue CValueColourDialog::Method(methodArg_t &aParams)
+bool CValueColourDialog::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray)
 {
 	if (appData->DesignerMode())
-		return CValue();
+		return false;
 
-	switch (aParams.GetIndex())
+	switch (lMethodNum)
 	{
 	case enChoose:
-		return m_colourDialog->ShowModal() != wxID_CANCEL;
+		pvarRetValue = m_colourDialog->ShowModal() != wxID_CANCEL;
+		return true;
 	}
 
-	return CValue();
+	return false;
 }
 
 #include "frontend/visualView/special/valueColour.h"
 
-void CValueColourDialog::SetAttribute(attributeArg_t &aParams, CValue &cVal)
+bool CValueColourDialog::SetPropVal(const long lPropNum, CValue &varPropVal)
 {
+	return false;
 }
 
-CValue CValueColourDialog::GetAttribute(attributeArg_t &aParams)
+bool CValueColourDialog::GetPropVal(const long lPropNum, CValue& pvarPropVal)
 {
-	switch (aParams.GetIndex())
+	switch (lPropNum)
 	{
 	case enColour: 
-		return new CValueColour(
+		pvarPropVal = new CValueColour(
 			m_colourDialog->GetColourData().GetColour()
 		);
+		return true;
 	}
 
-	return CValue();
+	return false;
 }
 
 #include "frontend/mainFrame.h"
 
 CValueColourDialog::CValueColourDialog() : CValue(eValueTypes::TYPE_VALUE),
-m_colourDialog(new wxColourDialog(CMainFrame::Get()))
+m_colourDialog(new wxColourDialog(wxAuiDocMDIFrame::GetFrame()))
 {
 }
 

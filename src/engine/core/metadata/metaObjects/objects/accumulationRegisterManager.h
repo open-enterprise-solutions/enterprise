@@ -2,7 +2,7 @@
 #define _ACC_REGISTER_MANAGER_H__
 
 #include "accumulationRegister.h"
-#include "common/managerInfo.h"
+#include "core/common/managerInfo.h"
 
 class CAccumulationRegisterManager : public CValue,
 	public IMetaManagerInfo {
@@ -17,15 +17,12 @@ public:
 
 	virtual CMetaCommonModuleObject* GetModuleManager() const;
 
-	virtual CMethods* GetPMethods() const { PrepareNames(); return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethodHelper* GetPMethods() const { PrepareNames(); return m_methodHelper; } //получить ссылку на класс помощник разбора имен атрибутов и методов
 	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t& aParams);//вызов метода
-
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);//вызов метода
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const;
+	virtual CLASS_ID GetTypeClass() const;
 
 	//types 
 	virtual wxString GetTypeString() const;
@@ -33,7 +30,7 @@ public:
 
 protected:
 	//methods 
-	CMethods* m_methods;
+	CMethodHelper* m_methodHelper;
 	CMetaObjectAccumulationRegister* m_metaObject;
 };
 

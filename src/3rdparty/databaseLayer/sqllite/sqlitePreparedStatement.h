@@ -13,8 +13,8 @@
 #endif
 
 #include <wx/dynarray.h>
+#include <3rdparty/databaseLayer/preparedStatement.h>
 
-#include "databaseLayer/preparedStatement.h"
 #include "engine/sqlite3.h"
 
 WX_DEFINE_ARRAY_PTR(sqlite3_stmt*, StatementVector);

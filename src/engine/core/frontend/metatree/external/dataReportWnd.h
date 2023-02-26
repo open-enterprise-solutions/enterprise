@@ -7,7 +7,7 @@
 #include <wx/statbox.h>
 #include <wx/statline.h>
 
-#include "metadata/external/metadataReport.h"
+#include "core/metadata/external/metadataReport.h"
 #include "frontend/metatree/metatreeWnd.h"
 
 class CDataReportTree : public IMetadataTree {
@@ -106,7 +106,6 @@ protected:
 		void OnPasteItem(wxCommandEvent& event);
 
 		void OnDebugEvent(wxDebugEvent& event);
-		void OnPropertyModified(wxFramePropertyEvent& event);
 
 		void OnSelecting(wxTreeEvent& event);
 		void OnSelected(wxTreeEvent& event);
@@ -235,8 +234,6 @@ public:
 	bool Save();
 
 	void ClearTree();
-
-	wxDECLARE_EVENT_TABLE();
 };
 
 #endif 

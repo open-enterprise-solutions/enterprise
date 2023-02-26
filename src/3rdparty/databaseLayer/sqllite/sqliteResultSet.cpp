@@ -3,8 +3,8 @@
 #include "sqliteDatabaseLayer.h"
 #include "sqliteResultSetMetaData.h"
 
-#include "databaseLayer/databaseLayerException.h"
-#include "databaseLayer/databaseErrorCodes.h"
+#include <3rdparty/databaseLayer/databaseLayerException.h>
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
 
 // ctor
 SqliteResultSet::SqliteResultSet()

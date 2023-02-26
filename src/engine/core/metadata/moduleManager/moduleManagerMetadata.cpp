@@ -4,21 +4,21 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "moduleManager.h"
-#include "metadata/metadata.h"
-#include "compiler/methods.h"
-#include "compiler/valueMap.h"
+#include "core/metadata/metadata.h"
+
+#include "core/compiler/valueMap.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(IModuleManager::CMetadataValue, CValue);
 
-IModuleManager::CMetadataValue::CMetadataValue(IMetadata *metaData) :
+IModuleManager::CMetadataValue::CMetadataValue(IMetadata* metaData) :
 	CValue(eValueTypes::TYPE_VALUE, true),
-	m_methods(new CMethods()), m_metaData(metaData)
+	m_methodHelper(new CMethodHelper()), m_metaData(metaData)
 {
 }
 
 IModuleManager::CMetadataValue::~CMetadataValue()
 {
-	wxDELETE(m_methods);
+	wxDELETE(m_methodHelper);
 }
 
 enum
@@ -32,53 +32,44 @@ enum
 	enEnumerations,
 	enDataProcessors,
 	enReports,
-	enInformationRegisters, 
+	enInformationRegisters,
 	enAccumulationRegisters,
 };
 
 void IModuleManager::CMetadataValue::PrepareNames() const
 {
-	SEng aAttributes[] = {
-			{"commonModules","commonModules"},
-			{"commonForms","commonForms"},
-			{"commonTemplates","commonTemplates"},
-			{"constants","constants"},
-			{"catalogs","catalogs"},
-			{"documents","documents"},
-			{"enumerations","enumerations"},
-			{"dataProcessors","dataProcessors"},
-			{"reports","reports"},
-			{"informationRegisters","informationRegisters"},
-			{"accumulationRegisters","accumulationRegisters"},
-	};
-
-	int nCountA = sizeof(aAttributes) / sizeof(aAttributes[0]);
-	m_methods->PrepareAttributes(aAttributes, nCountA);
-}
-
-CValue IModuleManager::CMetadataValue::Method(methodArg_t &aParams)
-{
-	return CValue();
+	m_methodHelper->ClearHelper();
+	m_methodHelper->AppendProp("commonModules", true, false, g_metaCommonModuleCLSID);
+	m_methodHelper->AppendProp("commonForms", true, false, g_metaCommonFormCLSID);
+	m_methodHelper->AppendProp("commonTemplates", true, false, g_metaTemplateCLSID);
+	m_methodHelper->AppendProp("constants", true, false, g_metaConstantCLSID);
+	m_methodHelper->AppendProp("catalogs", true, false, g_metaCatalogCLSID);
+	m_methodHelper->AppendProp("documents", true, false, g_metaDocumentCLSID);
+	m_methodHelper->AppendProp("enumerations", true, false, g_metaEnumerationCLSID);
+	m_methodHelper->AppendProp("dataProcessors", true, false, g_metaDataProcessorCLSID);
+	m_methodHelper->AppendProp("reports", true, false, g_metaReportCLSID);
+	m_methodHelper->AppendProp("informationRegisters", true, false, g_metaInformationRegisterCLSID);
+	m_methodHelper->AppendProp("accumulationRegisters", true, false, g_metaAccumulationRegisterCLSID);
 }
 
 //****************************************************************************
 //*                              Override attribute                          *
 //****************************************************************************
 
-void IModuleManager::CMetadataValue::SetAttribute(attributeArg_t &aParams, CValue &cVal)
+bool IModuleManager::CMetadataValue::SetPropVal(const long lPropNum, const CValue& varPropVal)
 {
+	return false; 
 }
 
-CValue IModuleManager::CMetadataValue::GetAttribute(attributeArg_t &aParams)//значение атрибута
+bool IModuleManager::CMetadataValue::GetPropVal(const long lPropNum, CValue& pvarPropVal)//значение атрибута
 {
 	std::map<wxString, CValue> m_aMetaObjects;
 
-	switch (aParams.GetIndex())
+	switch (lPropNum)
 	{
 	case enCommonModules:
 	{
-		for (auto obj : m_metaData->GetMetaObjects(g_metaCommonModuleCLSID))
-		{
+		for (auto obj : m_metaData->GetMetaObjects(g_metaCommonModuleCLSID)) {
 			m_aMetaObjects.insert_or_assign(obj->GetName(), obj);
 		}
 	} break;
@@ -154,5 +145,6 @@ CValue IModuleManager::CMetadataValue::GetAttribute(attributeArg_t &aParams)//зн
 	} break;
 	}
 
-	return new CValueStructure(m_aMetaObjects);
+	pvarPropVal = new CValueStructure(m_aMetaObjects);
+	return true; 
 }

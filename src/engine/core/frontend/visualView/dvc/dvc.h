@@ -14,9 +14,9 @@ class CValueViewRenderer : public wxDataViewCustomRenderer {
 	CValueTableBoxColumn* m_colControl;
 public:
 
-	void FinishSelecting(wxVariant& valVariant) {
+	void FinishSelecting() {
 
-		if (m_editorCtrl) {
+		if (m_editorCtrl != NULL) {
 			// Remove our event handler first to prevent it from (recursively) calling
 			// us again as it would do via a call to FinishEditing() when the editor
 			// loses focus when we hide it below.
@@ -33,7 +33,6 @@ public:
 			m_editorCtrl.Release();
 		}
 
-		//DoHandleEditingDone(&valVariant);
 		DoHandleEditingDone(NULL);
 	}
 
@@ -95,7 +94,9 @@ public:
 	}
 #endif // wxUSE_ACCESSIBILITY
 
-	virtual bool HasEditorCtrl() const override { return true; }
+	virtual bool HasEditorCtrl() const override {
+		return true; 
+	}
 
 	virtual wxWindow* CreateEditorCtrl(wxWindow* parent,
 		wxRect labelRect,
@@ -109,16 +110,16 @@ private:
 };
 
 // ----------------------------------------------------------------------------
-// CDataViewColumnObject
+// wxDataViewColumnObject
 // ----------------------------------------------------------------------------
 
-class CDataViewColumnObject : public wxObject,
+class wxDataViewColumnObject : public wxObject,
 	public wxDataViewColumn {
 	unsigned int m_controlId; 
 	CValueTableBoxColumn* m_valColumn;
 public:
 
-	CDataViewColumnObject(CValueTableBoxColumn* col,
+	wxDataViewColumnObject(CValueTableBoxColumn* col,
 		const wxString& title,
 		unsigned int model_column,
 		int width = wxDVC_DEFAULT_WIDTH,
@@ -128,7 +129,7 @@ public:
 	{
 	}
 
-	CDataViewColumnObject(CValueTableBoxColumn* col,
+	wxDataViewColumnObject(CValueTableBoxColumn* col,
 		const wxBitmap& bitmap,
 		unsigned int model_column,
 		int width = wxDVC_DEFAULT_WIDTH,

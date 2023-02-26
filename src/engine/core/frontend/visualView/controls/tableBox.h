@@ -2,18 +2,32 @@
 #define _TABLE_H__
 
 #include "window.h"
-#include "attributeControl.h"
+#include "controlAttribute.h"
 
 #include "frontend/visualView/dvc/dvc.h"
-#include "common/tableInfo.h"
+#include "frontend/controls/dataView.h"
+
+//********************************************************************************************
+//*                                 define commom clsid									     *
+//********************************************************************************************
+
+//COMMON TABLE & COLUMN
+const CLASS_ID g_controlTableBoxCLSID = TEXT2CLSID("CT_TABL");
+const CLASS_ID g_controlTableBoxColumnCLSID = TEXT2CLSID("CT_TBLC");
+
+//********************************************************************************************
+//*                                 Value TableBox                                           *
+//********************************************************************************************
+
+#include <wx/headerctrl.h>
 
 class CValueTableBox : public IValueWindow,
-	public IAttributeControl, public ISourceObject {
+	public ITypeControl, public ISourceObject {
 	wxDECLARE_DYNAMIC_CLASS(CValueTableBox);
 protected:
 	PropertyCategory* m_categoryData = IPropertyObject::CreatePropertyCategory("data");
 	Property* m_propertySource = IPropertyObject::CreateSourceProperty(m_categoryData, "source");
-	PropertyCategory* m_categoryEvent = IPropertyObject::CreatePropertyCategory("Event");
+	PropertyCategory* m_categoryEvent = IPropertyObject::CreatePropertyCategory("event");
 	Event* m_eventSelection = IPropertyObject::CreateEvent(m_categoryEvent, { "selection", "selection", _("On double mouse click or pressing of Enter.") }, { {"control"}, {"rowSelected"}, {"standardProcessing"} });
 	Event* m_eventOnActivateRow = IPropertyObject::CreateEvent(m_categoryEvent, { "onActivateRow", "onActivateRow", _("When row is activated") }, { {"control"} });
 	Event* m_eventBeforeAddRow = IPropertyObject::CreateEvent(m_categoryEvent, { "beforeAddRow", "beforeAddRow", _("When row addition mode is called") }, { {"control"}, {"cancel"}, {"clone"} });
@@ -33,12 +47,17 @@ public:
 	//get metadata from object 
 	virtual IMetaObjectWrapperData* GetMetaObject() const;
 
-	//Get ref class 
-	virtual CLASS_ID GetClassType() const;
+	//get ref class 
+	virtual CLASS_ID GetTypeClass() const;
 
 	//get form owner 
 	virtual CValueForm* GetOwnerForm() const {
 		return m_formOwner;
+	}
+
+	//get model 
+	IValueModel* GetModel() const {
+		return m_tableModel;
 	}
 
 	//get metadata
@@ -49,11 +68,11 @@ public:
 	//methods & attributes
 	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
 
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
 
 	//control factory 
-	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual wxObject* Create(wxWindow* wxparent, IVisualHost* visualHost) override;
 	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool firstСreated) override;
 	virtual void Update(wxObject* wxobject, IVisualHost* visualHost) override;
 	virtual void OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost) override;
@@ -69,8 +88,12 @@ public:
 
 	//get component type 
 	virtual int GetComponentType() const override {
-		return COMPONENT_TYPE_WINDOW_TABLE;
+		return COMPONENT_TYPE_WINDOW;
 	}
+
+	//support icons
+	virtual wxIcon GetIcon();
+	static wxIcon GetIconGroup();
 
 	/**
 	* Property events
@@ -78,6 +101,7 @@ public:
 	virtual void OnPropertyCreated(Property* property);
 	virtual bool OnPropertyChanging(Property* property, const wxVariant& newValue);
 	virtual void OnPropertyChanged(Property* property);
+
 
 	//load & save object in control 
 	virtual bool LoadData(CMemoryReader& reader);
@@ -88,7 +112,7 @@ public:
 	*/
 
 	virtual actionData_t GetActions(const form_identifier_t& formType);
-	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm);
+	virtual void ExecuteAction(const action_identifier_t& lNumAction, CValueForm* srcForm);
 
 	/**
 	* Support default menu
@@ -104,12 +128,12 @@ public:
 		return true;
 	}
 
-	virtual CValue GetControlValue() const;
-	virtual void SetControlValue(CValue& vSelected = CValue());
+	virtual bool GetControlValue(CValue& pvarControlVal) const;
+	virtual bool SetControlValue(const CValue& varControlVal = CValue());
 
 	//other
 	void AddColumn();
-	void CreateColumns(wxDataViewCtrl* tableCtrl = NULL);
+	void CreateColumnCollection(wxDataViewCtrl* tableCtrl = NULL);
 
 	void CreateTable();
 
@@ -135,6 +159,9 @@ protected:
 	void OnItemValueChanged(wxDataViewEvent& event);
 	void OnItemStartDeleting(wxDataViewEvent& event);
 
+	void OnHeaderResizing(wxHeaderCtrlEvent& event);
+	void OnMainWindowClick(wxMouseEvent& event);
+
 #if wxUSE_DRAG_AND_DROP
 	void OnItemBeginDrag(wxDataViewEvent& event);
 	void OnItemDropPossible(wxDataViewEvent& event);
@@ -143,6 +170,9 @@ protected:
 
 	void OnCommandMenu(wxCommandEvent& event);
 	void OnContextMenu(wxDataViewEvent& event);
+
+	// the methods to be called from the window event handlers
+	void HandleOnScroll(wxScrollWinEvent& event);
 
 	friend class CValueForm;
 	friend class CValueTableBoxColumn;
@@ -153,7 +183,7 @@ protected:
 };
 
 class CValueTableBoxColumn : public IValueControl,
-	public IAttributeControl {
+	public ITypeControl {
 	wxDECLARE_DYNAMIC_CLASS(CValueTableBoxColumn);
 protected:
 
@@ -166,7 +196,7 @@ protected:
 		return optList;
 	}
 
-	PropertyCategory* m_categoryInfo = IPropertyObject::CreatePropertyCategory("Info");
+	PropertyCategory* m_categoryInfo = IPropertyObject::CreatePropertyCategory("info");
 	Property* m_propertyCaption = IPropertyObject::CreateProperty(m_categoryInfo, "caption", PropertyType::PT_WXSTRING);
 	Property* m_propertyPasswordMode = IPropertyObject::CreateProperty(m_categoryInfo, "password_mode", PropertyType::PT_BOOL, false);
 	Property* m_propertyMultilineMode = IPropertyObject::CreateProperty(m_categoryInfo, "multiline_mode", PropertyType::PT_BOOL, false);
@@ -174,23 +204,23 @@ protected:
 
 	PropertyCategory* m_categoryData = IPropertyObject::CreatePropertyCategory("data");
 	Property* m_propertySource = IPropertyObject::CreateSourceProperty(m_categoryData, "source");
-	Property* m_propertyChoiceForm = IPropertyObject::CreateProperty(m_categoryData, "choice_form", &CValueTableBoxColumn::GetChoiceForm, wxNOT_FOUND);
+	Property* m_propertyChoiceForm = IPropertyObject::CreateProperty(m_categoryData, { "choice_form", "choice form" }, &CValueTableBoxColumn::GetChoiceForm, wxNOT_FOUND);
 
-	PropertyCategory* m_categoryButton = IPropertyObject::CreatePropertyCategory("Button");
+	PropertyCategory* m_categoryButton = IPropertyObject::CreatePropertyCategory("button");
 	Property* m_propertySelectButton = IPropertyObject::CreateProperty(m_categoryButton, "button_select", PropertyType::PT_BOOL, true);
-	Property* m_propertyListButton = IPropertyObject::CreateProperty(m_categoryButton, "button_list", PropertyType::PT_BOOL, false);
 	Property* m_propertyClearButton = IPropertyObject::CreateProperty(m_categoryButton, "button_clear", PropertyType::PT_BOOL, true);
+	Property* m_propertyOpenButton = IPropertyObject::CreateProperty(m_categoryButton, "button_open", PropertyType::PT_BOOL, false);
 
-	PropertyCategory* m_categoryStyle = IPropertyObject::CreatePropertyCategory("Style");
+	PropertyCategory* m_categoryStyle = IPropertyObject::CreatePropertyCategory("style");
 	Property* m_propertyWidth = IPropertyObject::CreateProperty(m_categoryStyle, "width", PropertyType::PT_UINT, wxDVC_DEFAULT_WIDTH);
 	Property* m_propertyAlign = IPropertyObject::CreateProperty(m_categoryStyle, "align", &CValueTableBoxColumn::GetAlign, wxALIGN_LEFT);
 	Property* m_propertyIcon = IPropertyObject::CreateProperty(m_categoryStyle, "icon", PropertyType::PT_BITMAP);
 	Property* m_propertyVisible = IPropertyObject::CreateProperty(m_categoryStyle, "visible", PropertyType::PT_BOOL, true);
 	Property* m_propertyResizable = IPropertyObject::CreateProperty(m_categoryStyle, "resizable", PropertyType::PT_BOOL, true);
-	Property* m_propertySortable = IPropertyObject::CreateProperty(m_categoryStyle, "sortable", PropertyType::PT_BOOL, false);
+	//Property* m_propertySortable = IPropertyObject::CreateProperty(m_categoryStyle, "sortable", PropertyType::PT_BOOL, false);
 	Property* m_propertyReorderable = IPropertyObject::CreateProperty(m_categoryStyle, "reorderable", PropertyType::PT_BOOL, true);
 
-	PropertyCategory* m_propertyEvent = IPropertyObject::CreatePropertyCategory("Event");
+	PropertyCategory* m_propertyEvent = IPropertyObject::CreatePropertyCategory("event");
 	Event* m_eventOnChange = IPropertyObject::CreateEvent(m_propertyEvent, "onChange", { "control" });
 	Event* m_eventStartChoice = IPropertyObject::CreateEvent(m_propertyEvent, "startChoice", { "control", "standartProcessing" });
 	Event* m_eventStartListChoice = IPropertyObject::CreateEvent(m_propertyEvent, "startListChoice", { "control", "standartProcessing" });
@@ -240,12 +270,12 @@ public:
 		return m_propertySelectButton->GetValueAsBoolean();
 	}
 
-	void SetListButton(bool caption) {
-		return m_propertyListButton->SetValue(caption);
+	void SetOpenButton(bool caption) {
+		return m_propertyOpenButton->SetValue(caption);
 	}
 
-	bool GetListButton() const {
-		return m_propertyListButton->GetValueAsBoolean();
+	bool GetOpenButton() const {
+		return m_propertyOpenButton->GetValueAsBoolean();
 	}
 
 	void SetClearButton(bool caption) {
@@ -264,13 +294,13 @@ public:
 		return m_propertyVisible->GetValueAsBoolean();
 	}
 
-	void SetSortableColumn(bool sortable = true) const {
-		m_propertySortable->SetValue(sortable);
-	}
+	//void SetSortableColumn(bool sortable = true) const {
+	//	m_propertySortable->SetValue(sortable);
+	//}
 
-	bool GetSortableColumn() const {
-		return m_propertySortable->GetValueAsBoolean();
-	}
+	//bool GetSortableColumn() const {
+	//	return m_propertySortable->GetValueAsBoolean();
+	//}
 
 	void SetWidthColumn(int width) const {
 		m_propertyWidth->SetValue(width);
@@ -285,6 +315,13 @@ public:
 	CValueTableBox* GetOwner() const {
 		return dynamic_cast<CValueTableBox*>(m_parent);
 	}
+
+	IValueTable::IValueModelReturnLine* GetReturnLine() const {
+		CValueTableBox* tableBox = GetOwner();
+		wxASSERT(tableBox);
+		return tableBox->m_tableCurrentLine;
+	}
+
 	///////////////////////////////////////////////////////////////////////
 
 	CValueTableBoxColumn();
@@ -302,7 +339,7 @@ public:
 		return GetMetaData();
 	}
 
-	virtual wxObject* Create(wxObject* parent, IVisualHost* visualHost) override;
+	virtual wxObject* Create(wxWindow* wxparent, IVisualHost* visualHost) override;
 	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost, bool firstCreated) override;
 	virtual void OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, IVisualHost* visualHost) override;
@@ -319,13 +356,18 @@ public:
 
 	//get component type 
 	virtual int GetComponentType() const override {
-		return COMPONENT_TYPE_TABLE_COLUMN;
+		return COMPONENT_TYPE_ABSTRACT;
 	}
+
+	//support icons
+	virtual wxIcon GetIcon();
+	static wxIcon GetIconGroup();
 
 	/**
 	* Property events
 	*/
 	virtual void OnPropertyCreated(Property* property);
+	virtual void OnPropertyRefresh(class wxPropertyGridManager* pg, class wxPGProperty* pgProperty, Property* property);
 	virtual bool OnPropertyChanging(Property* property, const wxVariant& newValue);
 
 	//load & save object in control 
@@ -338,8 +380,8 @@ public:
 	virtual bool FilterSource(const CSourceExplorer& src, const meta_identifier_t& id);
 
 	//get control value
-	virtual CValue GetControlValue() const;
-	virtual void SetControlValue(CValue& vSelected = CValue());
+	virtual bool SetControlValue(const CValue& varControlVal = CValue());
+	virtual bool GetControlValue(CValue& pvarControlVal) const;
 
 	//choice processing
 	virtual void ChoiceProcessing(CValue& vSelected);
@@ -347,11 +389,11 @@ public:
 protected:
 
 	// text processing
-	bool TextProcessing(CValue& selValue, const wxString& strData);
+	bool TextProcessing(wxTextCtrl* textCtrl, const wxString& strData);
 
 	//events
 	void OnSelectButtonPressed(wxCommandEvent& event);
-	void OnListButtonPressed(wxCommandEvent& event);
+	void OnOpenButtonPressed(wxCommandEvent& event);
 	void OnClearButtonPressed(wxCommandEvent& event);
 
 	void OnTextEnter(wxCommandEvent& event);

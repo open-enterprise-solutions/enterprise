@@ -4,15 +4,13 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "functionlistWnd.h"
-#include "common/docInfo.h"
+#include "core/art/artProvider.h"
+#include "frontend/docView/docView.h"
 
 #include "frontend/codeEditor/codeEditorParser.h"
-#include "metadata/metaObjectsDefines.h"
+#include "core/metadata/metaObjectsDefines.h"
 
-wxBEGIN_EVENT_TABLE(CFunctionList, wxDialog)
-wxEND_EVENT_TABLE()
-
-wxImageList* GetImageList();
+#define ICON_SIZE 16
 
 CFunctionList::CFunctionList(CDocument* moduleDoc, CCodeEditorCtrl* parent)
 	: wxDialog(parent, wxID_ANY, _("Procedures and functions")), m_docModule(moduleDoc), m_codeEditor(parent)
@@ -32,7 +30,10 @@ CFunctionList::CFunctionList(CDocument* moduleDoc, CCodeEditorCtrl* parent)
 
 	m_listProcedures->Connect(wxEVT_LIST_ITEM_SELECTED, wxListEventHandler(CFunctionList::OnItemSelected), NULL, this);
 
-	m_listProcedures->SetImageList(::GetImageList(), wxIMAGE_LIST_SMALL);
+	wxImageList* imageList = new wxImageList(ICON_SIZE, ICON_SIZE);
+	int procRed = imageList->Add(wxArtProvider::GetIcon(wxART_PROCEDURE_RED, wxART_AUTOCOMPLETE));
+	int funcRed = imageList->Add(wxArtProvider::GetIcon(wxART_FUNCTION_RED, wxART_AUTOCOMPLETE));
+	m_listProcedures->SetImageList(imageList, wxIMAGE_LIST_SMALL);
 
 	CMetaModuleObject* metaModule = dynamic_cast<CMetaModuleObject*>(moduleDoc->GetMetaObject());
 	wxASSERT(metaModule);
@@ -45,21 +46,28 @@ CFunctionList::CFunctionList(CDocument* moduleDoc, CCodeEditorCtrl* parent)
 			if (content.eType == eContentType::eExportFunction ||
 				content.eType == eContentType::eFunction ||
 				content.eType == eContentType::eExportProcedure ||
-				content.eType == eContentType::eProcedure)
-			{
-				int item_id = m_listProcedures->GetItemCount();
-
+				content.eType == eContentType::eProcedure) {
 				wxListItem info;
-				info.m_image = content.nImage;
 				info.m_text = content.sName;
 				info.m_mask = wxLIST_MASK_TEXT | wxLIST_MASK_IMAGE | wxLIST_MASK_DATA;
-				info.m_itemId = item_id;
+				info.m_itemId = m_listProcedures->GetItemCount();
 				info.m_col = 0;
+
+				if (content.eType == eContentType::eExportFunction ||
+					content.eType == eContentType::eFunction)
+					info.m_image = funcRed;
+				else
+					info.m_image = procRed;
 
 				long item = m_listProcedures->InsertItem(info);
 				m_listProcedures->SetItemData(item, content.nLineStart + 1);
 
-				m_aOffsets.insert_or_assign(item, offset_proc_t{ content.nLineStart + 1,  content.nLineEnd - content.nLineStart });
+				m_aOffsets.insert_or_assign(item,
+					offset_proc_t{
+						content.nLineStart + 1,
+						content.nLineEnd - content.nLineStart
+					}
+				);
 
 				maxLine = content.nLineEnd;
 				arrayProcedures.push_back(content.sName);
@@ -68,8 +76,7 @@ CFunctionList::CFunctionList(CDocument* moduleDoc, CCodeEditorCtrl* parent)
 	}
 
 	//Get default proc 
-	for (unsigned int idx = 0; idx < metaModule->GetDefaultProcedureCount(); idx++)
-	{
+	for (unsigned int idx = 0; idx < metaModule->GetDefaultProcedureCount(); idx++) {
 		wxString procedureName = metaModule->GetDefaultProcedureName(idx);
 		auto itFounded = std::find_if(arrayProcedures.begin(), arrayProcedures.end(),
 			[&procedureName](const wxString& proc) { return proc.CompareTo(procedureName, wxString::caseCompare::ignoreCase) == 0; });
@@ -77,19 +84,19 @@ CFunctionList::CFunctionList(CDocument* moduleDoc, CCodeEditorCtrl* parent)
 		if (itFounded != arrayProcedures.end())
 			continue;
 
-		int item_id = m_listProcedures->GetItemCount();
-
 		wxListItem info;
 		info.m_image = wxNOT_FOUND;//content.nImage;
 		info.m_text = procedureName;
 		info.m_mask = wxLIST_MASK_TEXT | wxLIST_MASK_IMAGE | wxLIST_MASK_DATA;
-		info.m_itemId = item_id;
+		info.m_itemId = m_listProcedures->GetItemCount();
 		info.m_col = 0;
 
 		long item = m_listProcedures->InsertItem(info);
 		m_listProcedures->SetItemData(item, 0);
 
-		m_aOffsets.insert_or_assign(item, offset_proc_t{ maxLine,  wxNOT_FOUND });
+		m_aOffsets.insert_or_assign(item,
+			offset_proc_t { maxLine,  wxNOT_FOUND }
+		);
 	}
 
 	wxBoxSizer* boxsizerButton = new wxBoxSizer(wxVERTICAL);
@@ -104,7 +111,7 @@ CFunctionList::CFunctionList(CDocument* moduleDoc, CCodeEditorCtrl* parent)
 	SetSizer(boxsizerList);
 }
 
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 void CFunctionList::OnButtonOk(wxCommandEvent& event)
 {
@@ -115,24 +122,17 @@ void CFunctionList::OnButtonOk(wxCommandEvent& event)
 
 	m_codeEditor->SetSTCFocus(true);
 
-	CMetaModuleObject* metaModule = wxDynamicCast(
-		m_docModule->GetMetaObject(), CMetaModuleObject
-	);
-
-	wxASSERT(metaModule);
-
 	if (lSelectedItem != wxNOT_FOUND) {
-
-		wxUIntPtr lineId =
-			m_listProcedures->GetItemData(lSelectedItem);
-
 		auto foundedIt = m_aOffsets.find(lSelectedItem);
 		offset_proc_t line = foundedIt->second;
-
 		if (line.m_offset != wxNOT_FOUND) {
 			m_codeEditor->GotoLine(line.m_line - 1);
 		}
 		else {
+			CMetaModuleObject* metaModule = wxDynamicCast(
+				m_docModule->GetMetaObject(), CMetaModuleObject
+			);
+			wxASSERT(metaModule);
 			wxString procName = m_listProcedures->GetItemText(lSelectedItem);
 			std::vector<wxString> procArgs;
 			for (unsigned int idx = 0; idx < metaModule->GetDefaultProcedureCount(); idx++)

@@ -147,9 +147,9 @@ public:
 	}
 
 	//support form 
-	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
-	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
-	virtual CValueForm* GetSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetSelectForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
 
 	//descriptions...
 	wxString GetDescription(const IObjectValueInfo* objValue) const;
@@ -187,10 +187,6 @@ protected:
 //*                                      Object                                              *
 //********************************************************************************************
 
-#define thisObject wxT("thisObject")
-
-#define registerRecords wxT("registerRecords")
-
 class CObjectDocument : public IRecordDataObjectRef {
 public:
 	class CRecordRegister : public CValue {
@@ -215,20 +211,23 @@ public:
 		}
 
 		//standart override 
-		virtual CMethods* GetPMethods() const;
+		virtual CMethodHelper* GetPMethods() const {
+			PrepareNames();
+			return m_methodHelper; 
+		}
 
 		virtual void PrepareNames() const;
-		virtual CValue Method(methodArg_t& aParams);
+		virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 
-		virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);
-		virtual CValue GetAttribute(attributeArg_t& aParams);
+		virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);
+		virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);
 
 		//check is empty
 		virtual inline bool IsEmpty() const override {
 			return false;
 		}
 	protected:
-		CMethods* m_methods;
+		CMethodHelper* m_methodHelper;
 	};
 private:
 	CRecordRegister* m_registerRecords;
@@ -252,14 +251,21 @@ public:
 	//save modify 
 	virtual bool SaveModify() {
 		return WriteObject(
-			IsPosted() ? eDocumentWriteMode::ePosting : eDocumentWriteMode::eWrite, 
-			eDocumentPostingMode::eRegular
+			IsPosted() ? eDocumentWriteMode::eDocumentWriteMode_Posting : eDocumentWriteMode::eDocumentWriteMode_Write, 
+			eDocumentPostingMode::eDocumentPostingMode_Regular
 		);
 	}
 
 	//default methods
-	virtual bool FillObject(CValue& vFillObject) const;
-	virtual CValue CopyObject();
+	virtual bool FillObject(CValue& vFillObject) const {
+		return Filling(vFillObject);
+	}
+	virtual IRecordDataObjectRef* CopyObject(bool showValue = false) {
+		IRecordDataObjectRef* objectRef = CopyObjectValue();
+		if (objectRef != NULL && showValue)
+			objectRef->ShowFormValue();
+		return objectRef;
+	}
 	virtual bool WriteObject(eDocumentWriteMode writeMode, eDocumentPostingMode postingMode);
 	virtual bool DeleteObject();
 
@@ -267,27 +273,27 @@ public:
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual CMethods* GetPMethods() const;
 	virtual void PrepareNames() const;
-	virtual CValue Method(methodArg_t& aParams);
 
 	//****************************************************************************
 	//*                              Override attribute                          *
 	//****************************************************************************
 
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);
-	virtual CValue GetAttribute(attributeArg_t& aParams);
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);
+
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 
 	//support source data 
 	virtual CSourceExplorer GetSourceExplorer() const;
 
 	//support show 
-	virtual void ShowFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL);
-	virtual CValueForm* GetFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL);
+	virtual void ShowFormValue(const wxString& formName = wxEmptyString, IControlFrame* owner = NULL);
+	virtual CValueForm* GetFormValue(const wxString& formName = wxEmptyString, IControlFrame* owner = NULL);
 
 	//support actions
 	virtual actionData_t GetActions(const form_identifier_t& formType);
-	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm);
+	virtual void ExecuteAction(const action_identifier_t& lNumAction, CValueForm* srcForm);
 
 protected:
 	void SetDeletionMark(bool deletionMark = true);

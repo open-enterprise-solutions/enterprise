@@ -6,7 +6,7 @@
 #include "gridSections.h"
 #include "gridCommon.h"
 #include "gridUtils.h"
-#include "compiler/functions.h"
+#include "core/compiler/translateError.h"
 #include "utils/stringUtils.h"
 
 CSectionCtrl::CSectionCtrl(CGrid* grid, eSectionMode setMode) :
@@ -23,7 +23,7 @@ wxPoint CSectionCtrl::GetRange(const wxString& sectionName) const
 		}
 	}
 
-	CTranslateError::Error(_("Wrong section named \"") + sectionName + "\"");
+	CTranslateError::Error("Wrong section named \"%s\"", sectionName);
 	return wxPoint();
 }
 

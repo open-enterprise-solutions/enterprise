@@ -26,7 +26,7 @@
 #include "wx/encconv.h"
 #include "wx/fontmap.h"
 
-#include <email/codec/charsetconv.h>
+#include <3rdparty/email/codec/charsetconv.h>
 
 /*!
  * This function computes the beginning of an UTF-8 stream by pointing after the BOM, if any

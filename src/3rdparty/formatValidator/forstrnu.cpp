@@ -950,7 +950,7 @@ int wxFormatStringAsNumber::StrFor(int usesty,
 	}
 
 
-	//Method: get from style the next char
+	//CallAsFunc: get from style the next char
 	//to match (if digit) or insert (rest of chars)
 
 	//1. All given digits before decimal separator, exponential or

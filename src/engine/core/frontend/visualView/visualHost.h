@@ -1,8 +1,7 @@
-#ifndef _VISUAL_EDITOR_VIEW_H_
-#define _VISUAL_EDITOR_VIEW_H_
+#ifndef __VISUAL_EDITOR_VIEW_H__
+#define __VISUAL_EDITOR_VIEW_H__
 
 #include "visualEditor.h"
-#include "common/docInfo.h"
 
 class CVisualHost : public IVisualHost {
 	bool m_formDemonstration;
@@ -10,11 +9,10 @@ class CVisualHost : public IVisualHost {
 	CDocument* m_document;
 public:
 
-	// construction
+	// ctor
 	CVisualHost(CDocument* document, CValueForm* valueForm, wxWindow* parent, bool demonstration = false) :
 		IVisualHost(parent, wxID_ANY, wxDefaultPosition, parent->GetSize()),
-		m_document(document), m_valueForm(valueForm), m_formDemonstration(demonstration)
-	{
+		m_document(document), m_valueForm(valueForm), m_formDemonstration(demonstration) {
 	}
 
 	virtual ~CVisualHost();

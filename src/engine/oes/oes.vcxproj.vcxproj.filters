@@ -2,10 +2,13 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="mainApp.cpp" />
-    <ClCompile Include="mainAppEvents.cpp" />
+    <ClCompile Include="mainAppEvent.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
+    <ClInclude Include="resource.h">
+      <Filter>res</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="res">
@@ -24,5 +27,10 @@
     <None Include="resources\splashLogo.xpm">
       <Filter>res\xpm</Filter>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="oes.ico">
+      <Filter>res</Filter>
+    </Image>
   </ItemGroup>
 </Project>

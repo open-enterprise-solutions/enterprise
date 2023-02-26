@@ -19,8 +19,8 @@
 #define _MIMETIC_CONTENT_TRANSFER_ENCODING_H_
 
 #include <string>
-#include <email/mimetic/strutils.h>
-#include <email/mimetic/rfc822/fieldvalue.h>
+#include <3rdparty/email/mimetic/strutils.h>
+#include <3rdparty/email/mimetic/rfc822/fieldvalue.h>
 
 namespace mimetic
 {

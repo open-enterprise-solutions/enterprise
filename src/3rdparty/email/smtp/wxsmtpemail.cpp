@@ -22,9 +22,9 @@
    // files which are not included by wxprec.h
 #endif
 
-#include <email/mimetic/mimetic.h>
-#include <email/smtp/wxsmtp.h>
-#include <email/mimetic/rfc822/message.h>
+#include <3rdparty/email/mimetic/mimetic.h>
+#include <3rdparty/email/smtp/wxsmtp.h>
+#include <3rdparty/email/mimetic/rfc822/message.h>
 
 wxSMTP::wxSmtpEmailMessage::wxSmtpEmailMessage()
 {

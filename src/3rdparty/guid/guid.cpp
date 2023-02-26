@@ -32,8 +32,12 @@ THE SOFTWARE.
 #include <objbase.h>
 #endif
 
+#include <array>
+#include <iomanip>
+#include <string_view>
+
 // overload << so that it's easy to convert to a string
-std::ostream &operator<<(std::ostream &s, const Guid &guid)
+std::ostream& operator<<(std::ostream& s, const Guid& guid)
 {
 	std::ios_base::fmtflags f(s.flags()); // politely don't leave the ostream in hex mode
 	s << std::hex << std::setfill('0')
@@ -61,7 +65,7 @@ std::ostream &operator<<(std::ostream &s, const Guid &guid)
 	return s;
 }
 
-bool operator<(const Guid &lhs, const Guid &rhs)
+bool operator<(const Guid& lhs, const Guid& rhs)
 {
 	return lhs.bytes() < rhs.bytes();
 }
@@ -129,11 +133,11 @@ const std::array<unsigned char, 16>& Guid::bytes() const
 }
 
 // create a guid from vector of bytes
-Guid::Guid(const std::array<unsigned char, 16> &bytes) : _bytes(bytes)
+Guid::Guid(const std::array<unsigned char, 16>& bytes) : _bytes(bytes)
 { }
 
 // create a guid from vector of bytes
-Guid::Guid(const std::array<unsigned char, 16> &&bytes) : _bytes(std::move(bytes))
+Guid::Guid(const std::array<unsigned char, 16>&& bytes) : _bytes(std::move(bytes))
 { }
 
 // converts a single hex char to a number (0 - 15)
@@ -178,14 +182,14 @@ inline unsigned char hexPairToChar(char a, char b)
 }
 
 // create a guid from string
-Guid::Guid(const std::string_view &fromString)
+Guid::Guid(const std::string_view& fromString)
 {
 	char charOne = '\0';
 	char charTwo = '\0';
 	bool lookingForFirstChar = true;
 	unsigned nextByte = 0;
 
-	for (const char &ch : fromString)
+	for (const char& ch : fromString)
 	{
 		if (ch == '-')
 			continue;
@@ -220,14 +224,14 @@ Guid::Guid(const std::string_view &fromString)
 }
 
 // create a guid from string
-Guid::Guid(const wxString &fromString)
+Guid::Guid(const wxString& fromString)
 {
 	char charOne = '\0';
 	char charTwo = '\0';
 	bool lookingForFirstChar = true;
 	unsigned nextByte = 0;
 
-	for (const char &ch : fromString)
+	for (const char& ch : fromString)
 	{
 		if (ch == '-')
 			continue;
@@ -261,7 +265,7 @@ Guid::Guid(const wxString &fromString)
 	}
 }
 
-Guid::Guid(const guid_t &guid)
+Guid::Guid(const guid_t& guid)
 {
 	_bytes = {
 		(unsigned char)((guid.m_data1 >> 24) & 0xFF),
@@ -296,40 +300,40 @@ void Guid::zeroify()
 	std::fill(_bytes.begin(), _bytes.end(), static_cast<unsigned char>(0));
 }
 
-bool Guid::operator > (const Guid &other) const
+bool Guid::operator > (const Guid& other) const
 {
 	return _bytes > other._bytes;
 }
 
-bool Guid::operator >= (const Guid &other) const
+bool Guid::operator >= (const Guid& other) const
 {
 	return _bytes >= other._bytes;
 }
 
-bool Guid::operator < (const Guid &other) const
+bool Guid::operator < (const Guid& other) const
 {
 	return _bytes < other._bytes;
 }
 
-bool Guid::operator <= (const Guid &other) const
+bool Guid::operator <= (const Guid& other) const
 {
 	return _bytes <= other._bytes;
 }
 
 // overload equality operator
-bool Guid::operator==(const Guid &other) const
+bool Guid::operator==(const Guid& other) const
 {
 	return _bytes == other._bytes;
 }
 
 // overload inequality operator
-bool Guid::operator!=(const Guid &other) const
+bool Guid::operator!=(const Guid& other) const
 {
 	return !((*this) == other);
 }
 
 // member swap function
-void Guid::swap(Guid &other)
+void Guid::swap(Guid& other)
 {
 	_bytes.swap(other._bytes);
 }
@@ -337,7 +341,7 @@ void Guid::swap(Guid &other)
 // This is the linux friendly implementation, but it could work on other
 // systems that have libuuid available
 #ifdef GUID_LIBUUID
-Guid Guid::newGuid()
+Guid Guid::newGuid(int version)
 {
 	std::array<unsigned char, 16> data;
 	static_assert(std::is_same<unsigned char[16], uuid_t>::value, "Wrong type!");
@@ -348,7 +352,7 @@ Guid Guid::newGuid()
 
 // this is the mac and ios version
 #ifdef GUID_CFUUID
-Guid Guid::newGuid()
+Guid Guid::newGuid(int version)
 {
 	auto newId = CFUUIDCreate(NULL);
 	auto bytes = CFUUIDGetUUIDBytes(newId);
@@ -379,10 +383,16 @@ Guid Guid::newGuid()
 
 // obviously this is the windows version
 #ifdef GUID_WINDOWS
-Guid Guid::newGuid()
+
+#pragma comment( lib, "rpcrt4.lib" )
+
+Guid Guid::newGuid(int version)
 {
-	GUID newId;
-	::CoCreateGuid(&newId);
+	GUID newId = { 0 };
+	if (version == GUID_TIME_BASED)
+		::UuidCreateSequential(&newId);
+	else if (version == GUID_RANDOM)
+		::UuidCreate(&newId);
 
 	std::array<unsigned char, 16> bytes =
 	{

@@ -3,7 +3,7 @@
 
 #include "mainFrame.h"
 
-class CMainFrameEnterprise : public CMainFrame
+class wxAuiDocEnterpriseMDIFrame : public wxAuiDocMDIFrame
 {
 	wxMenu *m_menuFile;
 	wxMenu *m_menuEdit;
@@ -13,16 +13,28 @@ class CMainFrameEnterprise : public CMainFrame
 	wxMenu *m_menuAdministration;
 	wxMenu *m_menuHelp;
 
-	CMetadataTree *m_metadataTree;
+protected:
+
+	COutputWindow* m_outputWindow;
 
 protected:
 
+	virtual COutputWindow* GetOutputWindow() const {
+		return m_outputWindow;
+	}
+
+	virtual CStackWindow* GetStackWindow() const {
+		return NULL; 
+	}
+	
+	virtual CWatchWindow* GetWatchWindow() const {
+		return NULL;
+	}
+
 	void InitializeDefaultMenu();
 
-	void CreatePropertyManager();
-	void CreateMessageAndDebugBar();
-
-	void CreateWideGui();
+	virtual void CreateBottomPane();
+	virtual void CreateWideGui();
 
 	/**
 	* Adds the default profile to the hot keys.
@@ -31,16 +43,11 @@ protected:
 
 public:
 
-	CMainFrameEnterprise(const wxString& title = wxT("Enterprise"),
+	wxAuiDocEnterpriseMDIFrame(const wxString& title = _("Enterprise"),
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize);
 
 	virtual void CreateGUI();
-
-	virtual wxMenu *GetDefaultMenu(int nTypeMenu)
-	{
-		return NULL;
-	}
 
 	//events:
 	void OnClickAllOperation(wxCommandEvent &event);

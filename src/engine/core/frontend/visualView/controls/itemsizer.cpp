@@ -17,7 +17,7 @@ inline wxObject* GetParentFormVisualEditor(IVisualHost* visualEdit, wxObject* wx
 
 	wxObject* objItem = visualEdit->GetWxObject(objParent);
 
-	if (objParent->GetClassName() == wxT("page")) {
+	if (objParent->GetClassName() == wxT("notebookPage")) {
 		CPageWindow* objPage = dynamic_cast<CPageWindow*>(objItem);
 		wxASSERT(objPage);
 		return objPage->GetSizer();
@@ -25,12 +25,12 @@ inline wxObject* GetParentFormVisualEditor(IVisualHost* visualEdit, wxObject* wx
 	return objItem;
 }
 
-inline wxObject* GetChildFormVisualEditor(IVisualHost* m_visualEdit, wxObject* wxobject, unsigned int childIndex)
+inline wxObject* GetChildFormVisualEditor(IVisualHost* visualEdit, wxObject* wxobject, unsigned int childIndex)
 {
-	IValueFrame* obj = m_visualEdit->GetObjectBase(wxobject);
+	IValueFrame* obj = visualEdit->GetObjectBase(wxobject);
 	if (childIndex >= obj->GetChildCount())
 		return NULL;
-	return m_visualEdit->GetWxObject(obj->GetChild(childIndex));
+	return visualEdit->GetWxObject(obj->GetChild(childIndex));
 }
 
 OptionList* CValueSizerItem::GetDefaultOptionBorder(PropertyBitlist* property)
@@ -164,7 +164,7 @@ void CValueSizerItem::OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualH
 	}
 }
 
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 IMetadata* CValueSizerItem::GetMetaData() const
 {
@@ -189,7 +189,7 @@ IMetadata* CValueSizerItem::GetMetaData() const
 		NULL;
 }
 
-#include "metadata/metaObjects/metaFormObject.h"
+#include "core/metadata/metaObjects/metaFormObject.h"
 
 form_identifier_t CValueSizerItem::GetTypeForm() const
 {
@@ -237,3 +237,9 @@ bool CValueSizerItem::SaveData(CMemoryWriter& writer)
 
 	return IValueFrame::SaveData(writer);
 }
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+S_CONTROL_VALUE_REGISTER(CValueSizerItem, "sizerItem", "sizer", TEXT2CLSID("CT_SIZR"));

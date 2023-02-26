@@ -5,8 +5,6 @@
 
 #include "mainApp.h"
 
-#include "databaseLayer/databaseLayer.h"
-
 #include <wx/apptrait.h>
 #include <wx/clipbrd.h>
 #include <wx/cmdline.h>
@@ -50,6 +48,9 @@ public:
 };
 
 //////////////////////////////////////////////////////////////////////////////////
+
+//mainFrame
+#include "core/frontend/mainFrame.h"
 
 bool CMainApp::OnInit()
 {
@@ -123,10 +124,10 @@ int CMainApp::OnRun()
 		wxSystemOptions::SetOption("debug.enable", "false");
 	}
 
-	eRunMode modeRun = eRunMode::ENTERPRISE_MODE;
+	eRunMode runMode = eRunMode::eENTERPRISE_MODE;
 
 	if (mode == wxT("designer")) {
-		modeRun = eRunMode::DESIGNER_MODE;
+		runMode = eRunMode::eDESIGNER_MODE;
 	}
 
 	// Get the data directory
@@ -157,7 +158,7 @@ int CMainApp::OnRun()
 	//Needed to get the splashscreen to paint
 	splashWnd->Update();
 
-	if (modeRun == eRunMode::ENTERPRISE_MODE) {
+	if (runMode == eRunMode::eENTERPRISE_MODE) {
 		// Using a space so the initial 'w' will not be capitalized in wxLogGUI dialogs
 		wxApp::SetAppName(_("OES Enterprise"));
 
@@ -165,7 +166,7 @@ int CMainApp::OnRun()
 		// The old config (if any) is returned, delete it
 		delete wxConfigBase::Set(new wxConfig(wxT("Enterprise")));
 	}
-	else if (modeRun == eRunMode::DESIGNER_MODE) {
+	else if (runMode == eRunMode::eDESIGNER_MODE) {
 		// Using a space so the initial 'w' will not be capitalized in wxLogGUI dialogs
 		wxApp::SetAppName(_("OES Designer"));
 
@@ -210,6 +211,10 @@ int CMainApp::OnRun()
 	wxImage::AddHandler(new wxPNGHandler);
 #endif
 
+#ifdef __WXMSW__
+	::SetPriorityClass(::GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
+#endif 
+
 	// Support loading files from memory
 	// Used to load the XRC preview, but could be useful elsewhere
 	wxFileSystem::AddHandler(new wxMemoryFSHandler);
@@ -221,11 +226,12 @@ int CMainApp::OnRun()
 	wxSocketBase::Initialize();
 
 	// Init appData
-	appDataCreate(dataDir);
+	//bool connected = ApplicationData::CreateAppData(eDBMode::ePostgres, runMode, "localhost", "test_db_new", "postgres", "postgres");
+	bool connected = ApplicationData::CreateAppData(eDBMode::eFirebird, runMode, dataDir);
 
 	// If connection is failed then exit from application 
-	if (!databaseLayer->IsOpen()) {
-		wxMessageBox(databaseLayer->GetErrorMessage(), _("Failed to connection!"), wxOK | wxCENTRE | wxICON_ERROR);
+	if (!connected) {
+		wxMessageBox(_("Failed to connection!"), _("Connection error"), wxOK | wxCENTRE | wxICON_ERROR);
 		return 1;
 	}
 
@@ -237,18 +243,28 @@ int CMainApp::OnRun()
 	::wxSetWorkingDirectory(dataDir);
 #endif
 
-	if (!appData->Initialize(modeRun, userIB, passwordIB)) {
+	mainFrameCreate(runMode);
+
+	if (!appData->Initialize(userIB, passwordIB)) {
+		mainFrameDestroy();
+		splashWnd->Destroy();
 		return 1;
 	}
 
-	if (splashWnd->Destroy()) {
-		return wxApp::OnRun();
+	splashWnd->Destroy();
+
+	if (wxAuiDocMDIFrame::GetFrame()) {
+		mainFrame->SetFocus();     // focus on my window
+		mainFrame->Raise();
+		mainFrame->Maximize();
+		mainFrame->Show();    // show the window	
 	}
 
-	return 0;
+	return wxApp::OnRun();
 }
 
 #include "core/compiler/valueOLE.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 
 void CMainApp::OnUnhandledException()
 {
@@ -282,9 +298,8 @@ void CMainApp::OnFatalException()
 	databaseLayer->Close();
 
 	//decr socket
-	if (wxSocketBase::IsInitialized()) {
+	if (wxSocketBase::IsInitialized())
 		wxSocketBase::Shutdown();
-	}
 
 	// Allow clipboard data to persist after close
 	if (wxTheClipboard->IsOpened()) {
@@ -301,11 +316,14 @@ void CMainApp::OnFatalException()
 
 int CMainApp::OnExit()
 {
-	if (wxSocketBase::IsInitialized()) {
+	if (wxSocketBase::IsInitialized())
 		wxSocketBase::Shutdown();
-	}
 
 	appDataDestroy();
+
+#ifdef _DEBUG
+	CValue::ShowCreatedObject();
+#endif
 
 	if (!wxTheClipboard->IsOpened()) {
 		if (!wxTheClipboard->Open()) {

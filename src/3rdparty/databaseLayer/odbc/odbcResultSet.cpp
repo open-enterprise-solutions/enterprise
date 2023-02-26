@@ -5,8 +5,8 @@
 #include "odbcDatabaseLayer.h"
 #include "odbcResultSetMetaData.h"
 
-#include "databaseLayer/databaseLayerException.h"
-#include "databaseLayer/databaseErrorCodes.h"
+#include <3rdparty/databaseLayer/databaseLayerException.h>
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
 
 #include <wx/arrimpl.cpp> // this is a magic incantation which must be done!
 

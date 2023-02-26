@@ -18,33 +18,47 @@ IValueModel::IValueModel()
 {
 }
 
+#include "frontend/controls/dataView.h"
+
 wxDataViewItem IValueModel::GetSelection() const
 {
-	if (m_srcNotifier == NULL)
+	if (m_srcNotifier.empty())
 		return wxDataViewItem(NULL);
-	return m_srcNotifier->GetSelection();
+	return m_srcNotifier[0]->GetSelection();
 }
 
 void IValueModel::RowValueStartEdit(const wxDataViewItem& item, unsigned int col)
 {
-	if (m_srcNotifier == NULL)
+	if (m_srcNotifier.empty())
 		return;
-	m_srcNotifier->StartEditing(item, col);
+	m_srcNotifier[0]->StartEditing(item, col);
 }
 
 IValueModel::actionData_t IValueModel::GetActions(const form_identifier_t& formType)
 {
 	actionData_t action(this);
-	action.AddAction("add", _("Add"), eAddValue);
-	action.AddAction("copy", _("Copy"), eCopyValue);
-	action.AddAction("edit", _("Edit"), eEditValue);
-	action.AddAction("delete", _("Delete"), eDeleteValue);
+
+	if (UseStandartCommand()) {
+		action.AddAction("add", _("Add"), eAddValue);
+		action.AddAction("copy", _("Copy"), eCopyValue);
+		action.AddAction("edit", _("Edit"), eEditValue);
+		action.AddAction("delete", _("Delete"), eDeleteValue);
+	}
+
+	if (UseFilter()) {
+		action.AddSeparator();
+		action.AddAction("filter", _("Filter"), eFilter);
+		action.AddAction("filterByColumn", _("Filter by column"), eFilterByColumn);
+		action.AddSeparator();
+		action.AddAction("filterClear", _("Filter clear"), eFilterClear);
+	}
+
 	return action;
 }
 
-void IValueModel::ExecuteAction(const action_identifier_t& action, CValueForm* srcForm)
+void IValueModel::ExecuteAction(const action_identifier_t& lNumAction, CValueForm* srcForm)
 {
-	switch (action)
+	switch (lNumAction)
 	{
 	case eAddValue:
 		AddValue();
@@ -58,25 +72,51 @@ void IValueModel::ExecuteAction(const action_identifier_t& action, CValueForm* s
 	case eDeleteValue:
 		DeleteValue();
 		break;
+	case eFilter:
+		if (ShowFilter())
+			RefreshModel();
+		break;
+	case eFilterByColumn: {
+		const wxDataViewItem& item = GetSelection();
+		if (!item.IsOk())
+			break;
+		wxDataViewColumn* dataView = !m_srcNotifier.empty() ? m_srcNotifier[0]->GetCurrentColumn() : NULL;
+		if (dataView != NULL) {
+			CValue retValue; GetValueByMetaID(item, dataView->GetModelColumn(), retValue);
+			m_filterRow.SetFilterByID(dataView->GetModelColumn(), retValue);
+		}
+		RefreshModel();
+		break;
+	}
+	case eFilterClear:
+		m_filterRow.ResetFilter();
+		RefreshModel();
+		break;
 	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
 
-#include "compiler/methods.h"
+bool IValueModel::ShowFilter()
+{
+	if (m_srcNotifier.empty())
+		return false;
+	return m_srcNotifier[0]->ShowFilter(m_filterRow);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////
 
 IValueModel::IValueModelColumnCollection::IValueModelColumnInfo::IValueModelColumnInfo() :
-	CValue(eValueTypes::TYPE_VALUE, true), m_methods(new CMethods())
+	CValue(eValueTypes::TYPE_VALUE, true), m_methodHelper(new CMethodHelper())
 {
 }
 
 IValueModel::IValueModelColumnCollection::IValueModelColumnInfo::~IValueModelColumnInfo()
 {
-	wxDELETE(m_methods);
+	wxDELETE(m_methodHelper);
 }
 
-enum
-{
+enum Prop {
 	enColumnName,
 	enColumnTypes,
 	enColumnCaption,
@@ -85,53 +125,34 @@ enum
 
 void IValueModel::IValueModelColumnCollection::IValueModelColumnInfo::PrepareNames() const
 {
-	std::vector<SEng> aAttributes;
+	m_methodHelper->ClearHelper();
 
-	{
-		SEng aAttribute;
-		aAttribute.sName = wxT("name");
-		aAttribute.sSynonym = wxT("default");
-		aAttributes.push_back(aAttribute);
-	}
-	{
-		SEng aAttribute;
-		aAttribute.sName = wxT("types");
-		aAttribute.sSynonym = wxT("default");
-		aAttributes.push_back(aAttribute);
-	}
-	{
-		SEng aAttribute;
-		aAttribute.sName = wxT("caption");
-		aAttribute.sSynonym = wxT("default");
-		aAttributes.push_back(aAttribute);
-	}
-	{
-		SEng aAttribute;
-		aAttribute.sName = wxT("width");
-		aAttribute.sSynonym = wxT("default");
-		aAttributes.push_back(aAttribute);
-	}
-
-	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
+	m_methodHelper->AppendProp(wxT("name"));
+	m_methodHelper->AppendProp(wxT("types"));
+	m_methodHelper->AppendProp(wxT("caption"));
+	m_methodHelper->AppendProp(wxT("width"));
 }
 
-CValue IValueModel::IValueModelColumnCollection::IValueModelColumnInfo::GetAttribute(attributeArg_t& aParams)
+bool IValueModel::IValueModelColumnCollection::IValueModelColumnInfo::GetPropVal(const long lPropNum, CValue& pvarPropVal)
 {
-	switch (aParams.GetIndex())
+	switch (lPropNum)
 	{
 	case enColumnName:
-		return GetColumnName();
+		pvarPropVal = GetColumnName();
+		return true;
 	case enColumnTypes:
-		return GetColumnTypes();
+		pvarPropVal = new CValueTypeDescription(GetColumnType());
+		return true;
 	case enColumnCaption:
-		return GetColumnCaption();
+		pvarPropVal = GetColumnCaption();
+		return true;
 	case enColumnWidth:
-		return GetColumnWidth();
+		pvarPropVal = GetColumnWidth();
+		return true;
 	}
 
-	return CValue();
+	return false;
 }
-
 
 IValueModel::IValueModelColumnCollection::IValueModelColumnInfo* IValueModel::IValueModelColumnCollection::GetColumnByID(unsigned int col) const
 {

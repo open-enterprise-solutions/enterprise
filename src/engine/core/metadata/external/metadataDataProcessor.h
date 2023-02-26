@@ -1,5 +1,5 @@
-#include "metadata/metadata.h"
-#include "metadata/metaObjects/objects/dataProcessor.h"
+#include "core/metadata/metadata.h"
+#include "core/metadata/metaObjects/objects/dataProcessor.h"
 
 #define sign_dataProcessor 0x1345F6621261E
 
@@ -29,7 +29,12 @@ public:
 	}
 
 	//runtime support:
-	virtual CValue* CreateObjectRef(const wxString& className, CValue** aParams = NULL);
+	virtual CValue* CreateObjectRef(const CLASS_ID& clsid, CValue** paParams = NULL, const long lSizeArray = 0);
+	virtual CValue* CreateObjectRef(const wxString& className, CValue** paParams = NULL, const long lSizeArray = 0) {
+		return CreateObjectRef(
+			GetIDObjectFromString(className), paParams, lSizeArray
+		);
+	}
 
 	virtual bool IsRegisterObject(const wxString& className) const;
 	virtual bool IsRegisterObject(const wxString& className, eObjectType objectType) const;

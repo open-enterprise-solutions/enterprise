@@ -18,11 +18,11 @@
 #ifndef _MIMETIC_CODEC_CODEC_H_
 #define _MIMETIC_CODEC_CODEC_H_
 
-#include <email/mimetic/codec/codec_base.h>
-#include <email/mimetic/codec/codec_chain.h>
-#include <email/mimetic/codec/base64.h>
-#include <email/mimetic/codec/qp.h>
-#include <email/mimetic/codec/code.h>
-#include <email/mimetic/codec/other_codecs.h>
+#include <3rdparty/email/mimetic/codec/codec_base.h>
+#include <3rdparty/email/mimetic/codec/codec_chain.h>
+#include <3rdparty/email/mimetic/codec/base64.h>
+#include <3rdparty/email/mimetic/codec/qp.h>
+#include <3rdparty/email/mimetic/codec/code.h>
+#include <3rdparty/email/mimetic/codec/other_codecs.h>
 
 #endif

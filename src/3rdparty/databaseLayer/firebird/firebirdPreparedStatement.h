@@ -14,7 +14,7 @@
 
 #include "engine/ibase.h"
 
-#include "databaseLayer/preparedStatement.h"
+#include <3rdparty/databaseLayer/preparedStatement.h>
 #include "firebirdPreparedStatementWrapper.h"
 #include "firebirdInterface.h"
 

@@ -4,13 +4,13 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "catalog.h"
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 #include "appData.h"
 #include "reference/reference.h"
 #include "frontend/visualView/controls/form.h"
-#include "databaseLayer/databaseLayer.h"
-#include "compiler/systemObjects.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
+#include "core/compiler/systemObjects.h"
 
 #include "utils/fs/fs.h"
 #include "utils/stringUtils.h"
@@ -32,7 +32,7 @@ CObjectCatalog::CObjectCatalog(const CObjectCatalog& source) :
 CSourceExplorer CObjectCatalog::GetSourceExplorer() const
 {
 	CSourceExplorer srcHelper(
-		m_metaObject, GetClassType(),
+		m_metaObject, GetTypeClass(),
 		false
 	);
 
@@ -49,21 +49,18 @@ CSourceExplorer CObjectCatalog::GetSourceExplorer() const
 	}
 
 	for (auto attribute : m_metaObject->GetObjectAttributes()) {
-		CMetaGroupAttributeObject* metaAttr = NULL; eUseItem attrUse = eUseItem::eUseItem_Folder_Item;
-		if (attribute->ConvertToValue(metaAttr)) {
-			attrUse = metaAttr->GetAttrUse();
-		}
+		eItemMode attrUse = attribute->GetItemMode();
 		if (m_objMode == eObjectMode::OBJECT_ITEM) {
-			if (attrUse == eUseItem::eUseItem_Item
-				|| attrUse == eUseItem::eUseItem_Folder_Item) {
+			if (attrUse == eItemMode::eItemMode_Item
+				|| attrUse == eItemMode::eItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(attribute->GetMetaID())) {
 					srcHelper.AppendSource(attribute);
 				}
 			}
 		}
 		else {
-			if (attrUse == eUseItem::eUseItem_Folder ||
-				attrUse == eUseItem::eUseItem_Folder_Item) {
+			if (attrUse == eItemMode::eItemMode_Folder ||
+				attrUse == eItemMode::eItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(attribute->GetMetaID())) {
 					srcHelper.AppendSource(attribute);
 				}
@@ -72,19 +69,16 @@ CSourceExplorer CObjectCatalog::GetSourceExplorer() const
 	}
 
 	for (auto table : m_metaObject->GetObjectTables()) {
-		CMetaGroupTableObject* metaTable = NULL; eUseItem tableUse = eUseItem::eUseItem_Folder_Item;
-		if (table->ConvertToValue(metaTable)) {
-			tableUse = metaTable->GetTableUse();
-		}
+		eItemMode tableUse = table->GetTableUse();
 		if (m_objMode == eObjectMode::OBJECT_ITEM) {
-			if (tableUse == eUseItem::eUseItem_Item
-				|| tableUse == eUseItem::eUseItem_Folder_Item) {
+			if (tableUse == eItemMode::eItemMode_Item
+				|| tableUse == eItemMode::eItemMode_Folder_Item) {
 				srcHelper.AppendSource(table);
 			}
 		}
 		else {
-			if (tableUse == eUseItem::eUseItem_Folder ||
-				tableUse == eUseItem::eUseItem_Folder_Item) {
+			if (tableUse == eItemMode::eItemMode_Folder ||
+				tableUse == eItemMode::eItemMode_Folder_Item) {
 				srcHelper.AppendSource(table);
 			}
 		}
@@ -93,9 +87,9 @@ CSourceExplorer CObjectCatalog::GetSourceExplorer() const
 	return srcHelper;
 }
 
-void CObjectCatalog::ShowFormValue(const wxString& formName, IValueFrame* ownerControl)
+void CObjectCatalog::ShowFormValue(const wxString& formName, IControlFrame* ownerControl)
 {
-	CValueForm* foundedForm = GetForm();
+	CValueForm* const foundedForm = GetForm();
 
 	if (foundedForm && foundedForm->IsShown()) {
 		foundedForm->ActivateForm();
@@ -110,9 +104,9 @@ void CObjectCatalog::ShowFormValue(const wxString& formName, IValueFrame* ownerC
 	valueForm->ShowForm();
 }
 
-CValueForm* CObjectCatalog::GetFormValue(const wxString& formName, IValueFrame* ownerControl)
+CValueForm* CObjectCatalog::GetFormValue(const wxString& formName, IControlFrame* ownerControl)
 {
-	CValueForm* foundedForm = GetForm();
+	CValueForm* const foundedForm = GetForm();
 
 	if (foundedForm) {
 		return foundedForm;
@@ -141,8 +135,7 @@ CValueForm* CObjectCatalog::GetFormValue(const wxString& formName, IValueFrame* 
 		valueForm->Modify(m_objModified);
 	}
 	else {
-		valueForm = new CValueForm();
-		valueForm->InitializeForm(ownerControl, NULL,
+		valueForm = new CValueForm(ownerControl, NULL,
 			this, m_objGuid
 		);
 		valueForm->BuildForm(m_objMode == eObjectMode::OBJECT_ITEM ? CMetaObjectCatalog::eFormObject : CMetaObjectCatalog::eFormGroup);
@@ -152,27 +145,13 @@ CValueForm* CObjectCatalog::GetFormValue(const wxString& formName, IValueFrame* 
 	return valueForm;
 }
 
-#include "compiler/systemObjects.h"
+#include "core/compiler/systemObjects.h"
 
 //***********************************************************************************************
 //*                                   Catalog events                                            *
 //***********************************************************************************************
 
-bool CObjectCatalog::FillObject(CValue& vFillObject)
-{
-	return Filling(vFillObject);
-}
-
-CValue CObjectCatalog::CopyObject()
-{
-	if (appData->EnterpriseMode()) {
-		return CopyObjectValue();
-	}
-
-	return CValue();
-}
-
-#include "common/docManager.h"
+#include "core/frontend/docView/docManager.h"
 
 bool CObjectCatalog::WriteObject()
 {
@@ -180,7 +159,7 @@ bool CObjectCatalog::WriteObject()
 	{
 		if (!CTranslateError::IsSimpleMode())
 		{
-			CValueForm* valueForm = GetForm();
+			CValueForm* const valueForm = GetForm();
 
 			{
 				databaseLayer->BeginTransaction();
@@ -234,7 +213,7 @@ bool CObjectCatalog::DeleteObject()
 	{
 		if (!CTranslateError::IsSimpleMode())
 		{
-			CValueForm* valueForm = GetForm();
+			CValueForm* const valueForm = GetForm();
 
 			{
 				databaseLayer->BeginTransaction();
@@ -273,4 +252,167 @@ bool CObjectCatalog::DeleteObject()
 	}
 
 	return true;
+}
+
+enum Func {
+	enIsNew = 0,
+	enCopy,
+	enFill,
+	enWrite,
+	enDelete,
+	enModified,
+	enGetForm,
+	enGetMetadata
+};
+
+//****************************************************************************
+//*                              Support methods                             *
+//****************************************************************************
+
+void CObjectCatalog::PrepareNames() const
+{
+	m_methodHelper->ClearHelper();
+
+	m_methodHelper->AppendFunc("isNew", "isNew()");
+	m_methodHelper->AppendFunc("copy", "copy()");
+	m_methodHelper->AppendFunc("fill", 1, "fill(object)");
+	m_methodHelper->AppendFunc("write", "write()");
+	m_methodHelper->AppendFunc("delete", "delete()");
+	m_methodHelper->AppendFunc("modified", "modified()");
+	m_methodHelper->AppendFunc("getFormObject", 3, "getFormObject(string, owner, guid)");
+	m_methodHelper->AppendFunc("getMetadata", "getMetadata()");
+
+	m_methodHelper->AppendProp(wxT("thisObject"), true, false, eThisObject, eSystem);
+
+	//fill custom attributes 
+	for (auto attribute : m_metaObject->GetGenericAttributes()) {
+		if (attribute->IsDeleted())
+			continue;
+		m_methodHelper->AppendProp(
+			attribute->GetName(),
+			true,
+			!m_metaObject->IsDataReference(attribute->GetMetaID()),
+			attribute->GetMetaID(),
+			eProperty
+		);
+	}
+
+	//fill custom tables 
+	for (auto table : m_metaObject->GetObjectTables()) {
+		if (table->IsDeleted())
+			continue;
+		m_methodHelper->AppendProp(
+			table->GetName(),
+			true,
+			false,
+			table->GetMetaID(),
+			eTable
+		);
+	}
+	if (m_procUnit != NULL) {
+		byteCode_t* byteCode = m_procUnit->GetByteCode();
+		for (auto exportFunction : byteCode->m_aExportFuncList) {
+			m_methodHelper->AppendMethod(
+				exportFunction.first,
+				byteCode->GetNParams(exportFunction.second),
+				byteCode->HasRetVal(exportFunction.second),
+				exportFunction.second,
+				eProcUnit
+			);
+		}
+		for (auto exportVariable : byteCode->m_aExportVarList) {
+			m_methodHelper->AppendProp(
+				exportVariable.first,
+				exportVariable.second,
+				eProcUnit
+			);
+		}
+	}
+}
+
+bool CObjectCatalog::SetPropVal(const long lPropNum, const CValue& varPropVal)
+{
+	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	if (lPropAlias == eProcUnit) {
+		if (m_procUnit != NULL) {
+			return m_procUnit->SetPropVal(
+				GetPropName(lPropNum), varPropVal
+			);
+		}
+	}
+	else if (lPropAlias == eProperty) {
+		return SetValueByMetaID(
+			m_methodHelper->GetPropData(lPropNum),
+			varPropVal
+		);
+	}
+
+	return false;
+}
+
+bool CObjectCatalog::GetPropVal(const long lPropNum, CValue& pvarPropVal)
+{
+	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	if (lPropAlias == eProcUnit) {
+		if (m_procUnit != NULL) {
+			return m_procUnit->GetPropVal(
+				GetPropName(lPropNum), pvarPropVal
+			);
+		}
+	}
+	else if (lPropAlias == eProperty || lPropAlias == eTable) {
+		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		if (m_metaObject->IsDataReference(lPropData)) {
+			pvarPropVal = GetReference();
+			return true;
+		}
+		return GetValueByMetaID(lPropData, pvarPropVal);
+	}
+	else if (lPropAlias == eSystem) {
+		switch (m_methodHelper->GetPropData(lPropNum))
+		{
+		case eThisObject:
+			pvarPropVal = GetValue();
+			return true;
+		}
+	}
+	return false;
+}
+
+bool CObjectCatalog::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray)
+{
+	switch (lMethodNum)
+	{
+	case enIsNew:
+		pvarRetValue = m_newObject;
+		return true;
+	case enCopy:
+		pvarRetValue = CopyObject();
+		return true;
+	case enFill:
+		FillObject(*paParams[0]);
+		return true;
+	case enWrite:
+		WriteObject();
+		return true;
+	case enDelete:
+		DeleteObject();
+		return true;
+	case enModified:
+		pvarRetValue = m_objModified;
+		return true;
+	case enGetForm:
+		pvarRetValue = GetFormValue(
+			lSizeArray > 0 ? paParams[0]->GetString() : wxEmptyString,
+			lSizeArray > 1 ? paParams[1]->ConvertToType<IValueFrame>() : NULL
+		);
+		return true;
+	case enGetMetadata:
+		pvarRetValue = m_metaObject;
+		return true;
+	}
+
+	return IModuleInfo::ExecuteFunc(
+		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
+	);
 }

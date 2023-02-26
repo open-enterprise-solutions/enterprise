@@ -20,9 +20,9 @@
 #include <sstream>
 #include <iomanip>
 #include <cassert>
-#include <email/mimetic/contenttype.h>
-#include <email/mimetic/tokenizer.h>
-#include <email/mimetic/utils.h>
+#include <3rdparty/email/mimetic/contenttype.h>
+#include <3rdparty/email/mimetic/tokenizer.h>
+#include <3rdparty/email/mimetic/utils.h>
 
 namespace mimetic
 {

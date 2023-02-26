@@ -4,15 +4,15 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataProcessor.h"
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 #include "appData.h"
 #include "reference/reference.h"
 #include "frontend/visualView/controls/form.h"
-#include "databaseLayer/databaseLayer.h"
-#include "compiler/systemObjects.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
+#include "core/compiler/systemObjects.h"
 
-#include "metadata/metaObjects/objects/tabularSection/tabularSection.h"
+#include "core/metadata/metaObjects/objects/tabularSection/tabularSection.h"
 
 #include "utils/fs/fs.h"
 #include "utils/stringUtils.h"
@@ -31,7 +31,7 @@ CObjectDataProcessor::CObjectDataProcessor(const CObjectDataProcessor& source) :
 {
 }
 
-void CObjectDataProcessor::ShowFormValue(const wxString &formName, IValueFrame *owner)
+void CObjectDataProcessor::ShowFormValue(const wxString &formName, IControlFrame*owner)
 {
 	CValueForm *foundedForm = GetForm();
 
@@ -47,7 +47,7 @@ void CObjectDataProcessor::ShowFormValue(const wxString &formName, IValueFrame *
 	valueForm->ShowForm();
 }
 
-CValueForm *CObjectDataProcessor::GetFormValue(const wxString &formName, IValueFrame *ownerControl)
+CValueForm *CObjectDataProcessor::GetFormValue(const wxString &formName, IControlFrame*ownerControl)
 {
 	CValueForm *foundedForm = GetForm();
 
@@ -76,8 +76,7 @@ CValueForm *CObjectDataProcessor::GetFormValue(const wxString &formName, IValueF
 		);
 	}
 	else {
-		valueForm = new CValueForm();
-		valueForm->InitializeForm(ownerControl, NULL,
+		valueForm = new CValueForm(ownerControl, NULL,
 			this, m_objGuid
 		);
 		valueForm->BuildForm(CMetaObjectDataProcessor::eFormDataProcessor);

@@ -14,9 +14,9 @@
 
 #include <wx/datetime.h>
 
-#include "compiler/compiler.h"
+#include "core/compiler/compiler.h"
 
-#include "databaseLayer/databaseStringConverter.h"
+#include <3rdparty/databaseLayer/databaseStringConverter.h>
 #include "engine/mysql.h"
 
 class MysqlParameter : public DatabaseStringConverter

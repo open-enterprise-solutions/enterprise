@@ -20,8 +20,8 @@
 
 #include <string>
 #include <iostream>
-#include <email/mimetic/rfc822/fieldvalue.h>
-#include <email/mimetic/version.h>
+#include <3rdparty/email/mimetic/rfc822/fieldvalue.h>
+#include <3rdparty/email/mimetic/version.h>
 namespace mimetic
 {
 

@@ -5,8 +5,8 @@
 #include "sqliteResultSet.h"
 #include "sqlitePreparedStatement.h"
 
-#include "databaseLayer/databaseErrorCodes.h"
-#include "databaseLayer/databaseLayerException.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
+#include <3rdparty/databaseLayer/databaseLayerException.h>
 
 #include <wx/tokenzr.h>
 #include <wx/filename.h>

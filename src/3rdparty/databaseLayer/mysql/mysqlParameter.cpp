@@ -1,5 +1,5 @@
 #include "mysqlParameter.h"
-#include "databaseLayer/databaseLayer.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 
 // ctor
 MysqlParameter::MysqlParameter()

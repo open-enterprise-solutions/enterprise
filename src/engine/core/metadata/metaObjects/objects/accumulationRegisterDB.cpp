@@ -1,6 +1,6 @@
 #include "accumulationRegister.h"
-#include "databaseLayer/databaseLayer.h"
-#include "databaseLayer/databaseErrorCodes.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
 #include "appData.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -13,7 +13,10 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateBalancesTableDB(IConfigMeta
 
 	if ((flags & createMetaTable) != 0) {
 
-		retCode = databaseLayer->RunQuery("CREATE TABLE %s (rowData BLOB);", tableName);
+		if (databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+			retCode = databaseLayer->RunQuery("CREATE TABLE %s (rowData BYTEA);", tableName);
+		else 
+			retCode = databaseLayer->RunQuery("CREATE TABLE %s (rowData BLOB);", tableName);
 
 		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 			return false;
@@ -48,7 +51,7 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateBalancesTableDB(IConfigMeta
 			//dimensions from dst 
 			for (auto dimension : dstValue->GetObjectDimensions()) {
 				IMetaObject* foundedMeta =
-					IMetaObjectRegisterData::FindDimensionByName(dimension->GetDocPath());
+					IMetaObjectRegisterData::FindDimensionByGuid(dimension->GetDocPath());
 				if (foundedMeta == NULL) {
 					retCode = ProcessDimension(tableName, NULL, dimension);
 					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
@@ -59,7 +62,7 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateBalancesTableDB(IConfigMeta
 			//dimensions current
 			for (auto dimension : GetObjectDimensions()) {
 				retCode = ProcessDimension(tableName,
-					dimension, dstValue->FindDimensionByName(dimension->GetDocPath())
+					dimension, dstValue->FindDimensionByGuid(dimension->GetDocPath())
 				);
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return false;
@@ -68,7 +71,7 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateBalancesTableDB(IConfigMeta
 			//resources from dst 
 			for (auto resource : dstValue->GetObjectResources()) {
 				IMetaObject* foundedMeta =
-					IMetaObjectRegisterData::FindResourceByName(resource->GetDocPath());
+					IMetaObjectRegisterData::FindResourceByGuid(resource->GetDocPath());
 				if (foundedMeta == NULL) {
 					retCode = ProcessResource(tableName, NULL, resource);
 					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
@@ -79,7 +82,7 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateBalancesTableDB(IConfigMeta
 			//resources current
 			for (auto resource : GetObjectResources()) {
 				retCode = ProcessResource(tableName,
-					resource, dstValue->FindResourceByName(resource->GetDocPath())
+					resource, dstValue->FindResourceByGuid(resource->GetDocPath())
 				);
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return false;
@@ -104,7 +107,10 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateTurnoverTableDB(IConfigMeta
 
 	if ((flags & createMetaTable) != 0) {
 
-		retCode = databaseLayer->RunQuery("CREATE TABLE %s (rowData BLOB);", tableName);
+		if (databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+			retCode = databaseLayer->RunQuery("CREATE TABLE %s (rowData BYTEA);", tableName);
+		else
+			retCode = databaseLayer->RunQuery("CREATE TABLE %s (rowData BLOB);", tableName);
 
 		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 			return false;
@@ -139,7 +145,7 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateTurnoverTableDB(IConfigMeta
 			//dimensions from dst 
 			for (auto dimension : dstValue->GetObjectDimensions()) {
 				IMetaObject* foundedMeta =
-					IMetaObjectRegisterData::FindDimensionByName(dimension->GetDocPath());
+					IMetaObjectRegisterData::FindDimensionByGuid(dimension->GetDocPath());
 				if (foundedMeta == NULL) {
 					retCode = ProcessDimension(tableName, NULL, dimension);
 					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
@@ -150,7 +156,7 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateTurnoverTableDB(IConfigMeta
 			//dimensions current
 			for (auto dimension : GetObjectDimensions()) {
 				retCode = ProcessDimension(tableName,
-					dimension, dstValue->FindDimensionByName(dimension->GetDocPath())
+					dimension, dstValue->FindDimensionByGuid(dimension->GetDocPath())
 				);
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return false;
@@ -159,7 +165,7 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateTurnoverTableDB(IConfigMeta
 			//resources from dst 
 			for (auto resource : dstValue->GetObjectResources()) {
 				IMetaObject* foundedMeta =
-					IMetaObjectRegisterData::FindResourceByName(resource->GetDocPath());
+					IMetaObjectRegisterData::FindResourceByGuid(resource->GetDocPath());
 				if (foundedMeta == NULL) {
 					retCode = ProcessResource(tableName, NULL, resource);
 					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
@@ -170,7 +176,7 @@ bool CMetaObjectAccumulationRegister::CreateAndUpdateTurnoverTableDB(IConfigMeta
 			//resources current
 			for (auto resource : GetObjectResources()) {
 				retCode = ProcessResource(tableName,
-					resource, dstValue->FindResourceByName(resource->GetDocPath())
+					resource, dstValue->FindResourceByGuid(resource->GetDocPath())
 				);
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return false;

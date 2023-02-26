@@ -14,7 +14,7 @@
 
 #include <wx/dynarray.h>
 
-#include "databaseLayer/preparedStatement.h"
+#include <3rdparty/databaseLayer/preparedStatement.h>
 
 #include "odbcParameter.h"
 #include "odbcInterface.h"

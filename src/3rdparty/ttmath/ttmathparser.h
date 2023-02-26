@@ -1540,7 +1540,7 @@ namespace ttmath
 		/*!
 			this method returns the value from a user-defined function
 
-			(look at the description in 'CallFunction(...)')
+			(look at the description in 'CallAsFunc(...)')
 		*/
 		bool GetValueOfUserDefinedFunction(const std::string & function_name, int amount_of_args, unsigned int index)
 		{
@@ -1597,7 +1597,7 @@ namespace ttmath
 			result will be stored in 'stack[index-1].value'
 			(we don't have to set the correct type of this element, it'll be set later)
 		*/
-		virtual void CallFunction(const std::string & function_name, int amount_of_args, unsigned int index)
+		virtual void CallAsFunc(const std::string & function_name, int amount_of_args, unsigned int index)
 		{
 			if (GetValueOfUserDefinedFunction(function_name, amount_of_args, index))
 				return;
@@ -2405,7 +2405,7 @@ namespace ttmath
 			{
 				// the result of a function will be on 'stack[index-1]'
 				// and then at the end we'll set the correct type (numerical value) of this element
-				CallFunction(stack[index - 1].function_name, amount_of_parameters, index);
+				CallAsFunc(stack[index - 1].function_name, amount_of_parameters, index);
 			}
 			else
 			{

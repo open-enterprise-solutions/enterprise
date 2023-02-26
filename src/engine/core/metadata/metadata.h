@@ -1,9 +1,9 @@
 #ifndef _METADATA_H__
 #define _METADATA_H__
 
-#include "compiler/compiler.h"
-#include "metadata/moduleManager/moduleManager.h"
-#include "metadata/metaObjects/metaObjectMetadata.h"
+#include "core/compiler/compiler.h"
+#include "core/metadata/moduleManager/moduleManager.h"
+#include "core/metadata/metaObjects/metaObjectMetadata.h"
 
 class CDocument;
 
@@ -30,7 +30,9 @@ public:
 
 	virtual CDocument* GetDocument(IMetaObject* obj) const = 0;
 
+	virtual bool RenameMetaObject(IMetaObject* obj, const wxString& sNewName) = 0;
 	virtual void CloseMetaObject(IMetaObject* obj) = 0;
+	
 	virtual void OnCloseDocument(CDocument* doc) = 0;
 
 protected:
@@ -42,7 +44,7 @@ protected:
 	struct treeClsidData_t {
 		CLASS_ID m_clsid; //тип элемента
 	public:
-		treeClsidData_t(const CLASS_ID& clsid) : 
+		treeClsidData_t(const CLASS_ID& clsid) :
 			m_clsid(clsid) {}
 	};
 
@@ -94,21 +96,35 @@ public:
 	virtual wxString GetFileName() const {
 		return wxEmptyString;
 	}
-	
-	virtual IMetaObject* GetCommonMetaObject() const { 
-		return NULL; 
+
+	virtual IMetaObject* GetCommonMetaObject() const {
+		return NULL;
 	}
 
 	//runtime support:
-	CValue CreateObject(const wxString& className, CValue** aParams = NULL) {
-		return CreateObjectRef(className, aParams);
+	CValue CreateObject(const CLASS_ID& clsid, CValue** paParams = NULL, const long lSizeArray = 0) {
+		return CreateObjectRef(clsid, paParams, lSizeArray);
 	}
 
-	virtual CValue* CreateObjectRef(const wxString& className, CValue** aParams = NULL);
+	CValue CreateObject(const wxString& className, CValue** paParams = NULL, const long lSizeArray = 0) {
+		return CreateObjectRef(className, paParams, lSizeArray);
+	}
+
+	virtual CValue* CreateObjectRef(const CLASS_ID& clsid, CValue** paParams = NULL, const long lSizeArray = 0);
+	virtual CValue* CreateObjectRef(const wxString& className, CValue** paParams = NULL, const long lSizeArray = 0) {
+		return CreateObjectRef(
+			GetIDObjectFromString(className), paParams, lSizeArray
+		);
+	}
 
 	template<class retType = CValue>
-	retType* CreateAndConvertObjectRef(const wxString& className, CValue** aParams = NULL) {
-		return value_cast<retType>(CreateObjectRef(className, aParams));
+	retType* CreateAndConvertObjectRef(const CLASS_ID& clsid, CValue** paParams = NULL, const long lSizeArray = 0) {
+		return value_cast<retType>(CreateObjectRef(clsid, paParams, lSizeArray));
+	}
+
+	template<class retType = CValue>
+	retType* CreateAndConvertObjectRef(const wxString& className, CValue** paParams = NULL, const long lSizeArray = 0) {
+		return value_cast<retType>(CreateObjectRef(className, paParams, lSizeArray));
 	}
 
 	void RegisterObject(const wxString& className, IMetaTypeObjectValueSingle* singleObject);
@@ -150,20 +166,20 @@ public:
 
 	//Get metaobjects 
 	virtual std::vector<IMetaObject*> GetMetaObjects(const CLASS_ID& clsid) const;
-	
+
 	//find object
 	virtual IMetaObject* FindByName(const wxString& fullName) const;
-	
+
 	//get metaObject 
 	template <typename retType>
 	inline bool GetMetaObject(retType*& foundedVal, const meta_identifier_t& id, IMetaObject* top = NULL) const {
-		foundedVal = dynamic_cast<retType *>(GetMetaObject(id, top));
-		return foundedVal != NULL; 
+		foundedVal = dynamic_cast<retType*>(GetMetaObject(id, top));
+		return foundedVal != NULL;
 	}
 
 	template <typename retType>
 	inline bool GetMetaObject(retType*& foundedVal, const Guid& guid, IMetaObject* top = NULL) const {
-		foundedVal = dynamic_cast<retType *>(GetMetaObject(guid, top));
+		foundedVal = dynamic_cast<retType*>(GetMetaObject(guid, top));
 		return foundedVal != NULL;
 	}
 
@@ -199,7 +215,7 @@ protected:
 	};
 
 	//custom types
-	std::vector<IMetaTypeObjectValueSingle*> m_aFactoryMetaObjects;
+	std::vector<IMetaTypeObjectValueSingle*> s_factoryMetaObjects;
 
 	//common module manager
 	IModuleManager* m_moduleManager;
@@ -211,8 +227,8 @@ public:
 
 	IConfigMetadata(bool readOnly) : IMetadata(readOnly) {}
 
-	virtual bool IsConfigSave() const { 
-		return true; 
+	virtual bool IsConfigSave() const {
+		return true;
 	}
 
 	virtual Guid GetMetadataGuid() const = 0;
@@ -223,26 +239,54 @@ public:
 	virtual wxString GetDefaultSource() const = 0;
 
 	virtual bool CreateMetadata();
-	virtual bool LoadMetadata(int flags = defaultFlag) { return true; }
-	virtual bool SaveMetadata(int flags = defaultFlag) { return true; }
+	virtual bool LoadMetadata(int flags = defaultFlag) {
+		return true;
+	}
+
+	virtual bool SaveMetadata(int flags = defaultFlag) {
+		return true;
+	}
 
 	//get tablename 
-	static wxString GetConfigSaveTableName();
-	static wxString GetConfigTableName();
-	static wxString GetCompileDataTableName();
-	static wxString GetUsersTableName();
-	static wxString GetActiveUsersTableName();
-	static wxString GetConfigParamsTableName();
+	static wxString GetConfigSaveTableName() {
+		return wxT("CONFIG_SAVE");
+	}
+
+	static wxString GetConfigTableName() {
+		return wxT("CONFIG");
+	}
+
+	static wxString GetCompileDataTableName() {
+		return wxT("COMPILE_DATA");
+	}
+
+	static wxString GetUsersTableName() {
+		return wxT("USERS");
+	}
+
+	static wxString GetActiveUsersTableName() {
+		return wxT("ACTIVE_USERS");
+	}
+
+	static wxString GetConfigParamsTableName() {
+		return wxT("CONFIG_PARAMS");
+	}
 
 	//rollback to config db
 	virtual bool RoolbackToConfigDatabase() { return true; }
 
 	//load/save form file
-	virtual bool LoadFromFile(const wxString& fileName) { return true; }
-	virtual bool SaveToFile(const wxString& fileName) { return true; }
+	virtual bool LoadFromFile(const wxString& fileName) {
+		return true;
+	}
+	virtual bool SaveToFile(const wxString& fileName) {
+		return true;
+	}
 
 	// get config metadata 
-	virtual IConfigMetadata* GetConfigMetadata() const { return NULL; }
+	virtual IConfigMetadata* GetConfigMetadata() const {
+		return NULL;
+	}
 
 public:
 	static IConfigMetadata* Get();
@@ -261,23 +305,23 @@ public:
 	CConfigFileMetadata(bool readOnly = false);
 	virtual ~CConfigFileMetadata();
 
-	virtual Guid GetMetadataGuid() const { 
-		return m_commonObject->GetDocPath(); 
-	}
-	
-	virtual wxString GetMetadataMD5() const {
-		return m_md5Hash; 
+	virtual Guid GetMetadataGuid() const {
+		return m_commonObject->GetDocPath();
 	}
 
-	virtual wxString GetMetadataName() const { 
-		return m_commonObject->GetName(); 
+	virtual wxString GetMetadataMD5() const {
+		return m_md5Hash;
 	}
-	
-	virtual wxString GetConfigPath() const { 
+
+	virtual wxString GetMetadataName() const {
+		return m_commonObject->GetName();
+	}
+
+	virtual wxString GetConfigPath() const {
 		return wxEmptyString;
 	}
-	
-	virtual wxString GetDefaultSource() const { 
+
+	virtual wxString GetDefaultSource() const {
 		return wxEmptyString;
 	}
 
@@ -343,19 +387,19 @@ public:
 	}
 
 	virtual Guid GetMetadataGuid() const {
-		return m_metaGuid; 
+		return m_metaGuid;
 	}
 
-	virtual wxString GetMetadataName() const { 
-		return m_commonObject->GetName(); 
+	virtual wxString GetMetadataName() const {
+		return m_commonObject->GetName();
 	}
-	
+
 	virtual wxString GetConfigPath() const {
-		return m_sConfigPath; 
+		return m_sConfigPath;
 	}
-	
-	virtual wxString GetDefaultSource() const { 
-		return m_sDefaultSource; 
+
+	virtual wxString GetDefaultSource() const {
+		return m_sDefaultSource;
 	}
 
 	//metadata 

@@ -4,15 +4,15 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataReport.h"
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 #include "appData.h"
 #include "reference/reference.h"
 #include "frontend/visualView/controls/form.h"
-#include "databaseLayer/databaseLayer.h"
-#include "compiler/systemObjects.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
+#include "core/compiler/systemObjects.h"
 
-#include "metadata/metaObjects/objects/tabularSection/tabularSection.h"
+#include "core/metadata/metaObjects/objects/tabularSection/tabularSection.h"
 
 #include "utils/fs/fs.h"
 #include "utils/stringUtils.h"
@@ -25,13 +25,13 @@ CObjectReport::CObjectReport(CMetaObjectReport* metaObject) : IRecordDataObjectE
 {
 }
 
-CObjectReport::CObjectReport(const CObjectReport &source) : IRecordDataObjectExt(source)
+CObjectReport::CObjectReport(const CObjectReport& source) : IRecordDataObjectExt(source)
 {
 }
 
-void CObjectReport::ShowFormValue(const wxString &formName, IValueFrame *owner)
+void CObjectReport::ShowFormValue(const wxString& formName, IControlFrame* owner)
 {
-	CValueForm *foundedForm = GetForm();
+	CValueForm* const foundedForm = GetForm();
 
 	if (foundedForm && foundedForm->IsShown()) {
 		foundedForm->ActivateForm();
@@ -39,16 +39,16 @@ void CObjectReport::ShowFormValue(const wxString &formName, IValueFrame *owner)
 	}
 
 	//if form is not initialised then generate  
-	CValueForm *valueForm =
+	CValueForm* valueForm =
 		GetFormValue(formName, owner);
 
 	valueForm->Modify(false);
 	valueForm->ShowForm();
 }
 
-CValueForm *CObjectReport::GetFormValue(const wxString &formName, IValueFrame *ownerControl)
+CValueForm* CObjectReport::GetFormValue(const wxString& formName, IControlFrame* ownerControl)
 {
-	CValueForm *foundedForm = GetForm();
+	CValueForm* const foundedForm = GetForm();
 
 	if (foundedForm)
 		return foundedForm;
@@ -67,7 +67,7 @@ CValueForm *CObjectReport::GetFormValue(const wxString &formName, IValueFrame *o
 		defList = m_metaObject->GetDefaultFormByID(CMetaObjectReport::eFormReport);
 	}
 
-	CValueForm *valueForm = NULL;
+	CValueForm* valueForm = NULL;
 
 	if (defList) {
 		valueForm = defList->GenerateFormAndRun(
@@ -75,8 +75,7 @@ CValueForm *CObjectReport::GetFormValue(const wxString &formName, IValueFrame *o
 		);
 	}
 	else {
-		valueForm = new CValueForm();
-		valueForm->InitializeForm(ownerControl, NULL,
+		valueForm = new CValueForm(ownerControl, NULL,
 			this, m_objGuid
 		);
 		valueForm->BuildForm(CMetaObjectReport::eFormReport);

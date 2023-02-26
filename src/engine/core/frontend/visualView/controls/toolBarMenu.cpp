@@ -18,7 +18,11 @@ void CValueToolbar::ExecuteMenu(IVisualHost *visualHost, int id)
 {
 	switch (id)
 	{
-	case MENU_ADDITEM: this->AddToolItem();	break;
-	case MENU_ADDITEM_SEPARATOR: this->AddToolSeparator(); break;
+	case MENU_ADDITEM: 
+		this->AddToolItem();	
+		break;
+	case MENU_ADDITEM_SEPARATOR: 
+		this->AddToolSeparator(); 
+		break;
 	}
 }

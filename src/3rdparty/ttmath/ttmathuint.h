@@ -3099,7 +3099,7 @@ namespace ttmath
 			we must be sure when we using this method whether the value
 			will hold in an uint type or not (the rest value from the table must be zero)
 		*/
-		uint ToUInt() const
+		uint GetUInteger() const
 		{
 			return table[0];
 		}
@@ -3109,7 +3109,7 @@ namespace ttmath
 			this method converts the value to uint type
 			can return a carry if the value is too long to store it in uint type
 		*/
-		uint ToUInt(uint & result) const
+		uint GetUInteger(uint & result) const
 		{
 			result = table[0];
 
@@ -3127,7 +3127,7 @@ namespace ttmath
 		*/
 		uint ToInt(uint & result) const
 		{
-			return ToUInt(result);
+			return GetUInteger(result);
 		}
 
 
@@ -3157,7 +3157,7 @@ namespace ttmath
 			can return a carry if the value is too long to store it in ulint type
 			*** this method is created only on a 32 bit platform ***
 		*/
-		uint ToUInt(ulint & result) const
+		uint GetUInteger(ulint & result) const
 		{
 			if (value_size == 1)
 			{
@@ -3187,7 +3187,7 @@ namespace ttmath
 		*/
 		uint ToInt(ulint & result) const
 		{
-			return ToUInt(result);
+			return GetUInteger(result);
 		}
 
 
@@ -3200,7 +3200,7 @@ namespace ttmath
 		{
 			ulint temp;
 
-			uint c = ToUInt(temp);
+			uint c = GetUInteger(temp);
 			result = slint(temp);
 
 			if (c || result < 0)
@@ -3220,7 +3220,7 @@ namespace ttmath
 			can return a carry if the value is too long to store it in this type
 			*** this method is created only on a 64 bit platform ***
 		*/
-		uint ToUInt(unsigned int & result) const
+		uint GetUInteger(unsigned int & result) const
 		{
 			result = (unsigned int)table[0];
 
@@ -3242,7 +3242,7 @@ namespace ttmath
 		*/
 		uint ToInt(unsigned int & result) const
 		{
-			return ToUInt(result);
+			return GetUInteger(result);
 		}
 
 
@@ -3255,7 +3255,7 @@ namespace ttmath
 		{
 			unsigned int temp;
 
-			uint c = ToUInt(temp);
+			uint c = GetUInteger(temp);
 			result = int(temp);
 
 			if (c || result < 0)

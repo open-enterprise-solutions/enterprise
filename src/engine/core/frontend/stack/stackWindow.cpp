@@ -4,26 +4,19 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "stackWindow.h"
-#include "compiler/debugger/debugClient.h"
-#include "utils/fs/fs.h"
+#include "core/compiler/debugger/debugClient.h"
 
 wxBEGIN_EVENT_TABLE(CStackWindow, wxPanel)
 EVT_DEBUG(CStackWindow::OnDebugEvent)
 EVT_SIZE(CStackWindow::OnSize)
 wxEND_EVENT_TABLE()
 
-wxDEFINE_EVENT(wxEVT_STACK_EVENT, CStackWindow::wxStackEvent);
-
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-CStackWindow::wxStackEvent::wxStackEvent()
-	: wxEvent(0, wxEVT_STACK_EVENT)
-{
-}
-
-CStackWindow::CStackWindow(wxWindow *parent, int id) : wxPanel(parent, id), m_treeCtrl(new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT))
+CStackWindow::CStackWindow(wxWindow* parent, int id) :
+	wxPanel(parent, id), m_treeCtrl(new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT))
 {
 	debugClient->AddHandler(this);
 
@@ -34,25 +27,27 @@ CStackWindow::CStackWindow(wxWindow *parent, int id) : wxPanel(parent, id), m_tr
 	ClearAndCreate();
 	GetSizer()->Add(m_treeCtrl, 1, wxEXPAND);
 
-	m_treeCtrl->Bind(wxEVT_STACK_EVENT, &CStackWindow::OnStackEvent, this);
 	m_treeCtrl->Bind(wxEVT_LIST_ITEM_ACTIVATED, &CStackWindow::OnItemSelected, this);
 }
 
-void CStackWindow::SetStack(CMemoryReader &commandReader)
+static bool s_initialize = false;
+
+void CStackWindow::SetStack(const stackData_t& stackData)
 {
-	wxStackEvent stackEvent;
-	stackEvent.SetEventObject(m_treeCtrl);
+	ClearAndCreate();
 
-	unsigned int count = commandReader.r_u32();
-
-	for (unsigned int i = 0; i < count; i++)
-	{
-		wxString moduleName;
-		commandReader.r_stringZ(moduleName);
-		stackEvent.AppendStack(moduleName, commandReader.r_u32());
+	for (unsigned int idx = 0; idx < stackData.GetStackCount(); idx++) {
+		long index = m_treeCtrl->InsertItem(m_treeCtrl->GetItemCount(), stackData.GetModuleName(idx));
+		m_treeCtrl->SetItem(index, 0, stackData.GetModuleLine(idx));
+		m_treeCtrl->SetItem(index, 1, stackData.GetModuleName(idx));
+		if (idx == 0) {
+			s_initialize = true;
+			m_treeCtrl->SetItemState(index,
+				wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED,
+				wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
+			s_initialize = false;
+		}
 	}
-
-	wxPostEvent(m_treeCtrl, stackEvent);
 }
 
 void CStackWindow::UpdateColumnSizes()
@@ -63,8 +58,7 @@ void CStackWindow::UpdateColumnSizes()
 	int columnSize[2];
 	GetColumnSizes(totalSize, columnSize);
 
-	for (unsigned int i = 0; i < s_numColumns; ++i)
-	{
+	for (unsigned int i = 0; i < s_numColumns; ++i) {
 		m_treeCtrl->SetColumnWidth(i, columnSize[i]);
 	}
 }
@@ -73,27 +67,22 @@ void CStackWindow::GetColumnSizes(int totalSize, int columnSize[s_numColumns]) c
 {
 	int fixedSize = 0;
 
-	for (unsigned int i = 0; i < s_numColumns; ++i)
-	{
-		if (m_columnSize[i] < 0.0f)
-		{
+	for (unsigned int i = 0; i < s_numColumns; ++i) {
+		if (m_columnSize[i] < 0.0f) {
 			columnSize[i] = static_cast<int>(-m_columnSize[i]);
 			fixedSize += columnSize[i];
 		}
 	}
 
 	// Set the size of the proportional columns.
-	for (unsigned int i = 0; i < s_numColumns; ++i)
-	{
-		if (m_columnSize[i] >= 0.0f)
-		{
+	for (unsigned int i = 0; i < s_numColumns; ++i) {
+		if (m_columnSize[i] >= 0.0f) {
 			columnSize[i] = static_cast<int>(m_columnSize[i] * (totalSize - fixedSize) + 0.5f);
 		}
 	}
 
 	// Make sure the total size is exactly correct by resizing the final column.
-	for (unsigned int i = 0; i < s_numColumns - 1; ++i)
-	{
+	for (unsigned int i = 0; i < s_numColumns - 1; ++i) {
 		totalSize -= columnSize[i];
 	}
 
@@ -105,47 +94,25 @@ void CStackWindow::OnDebugEvent(wxDebugEvent& event)
 	switch (event.GetEventId())
 	{
 	case EventId_LeaveLoop:
-	case EventId_SessionEnd: ClearAndCreate(); break;
+	case EventId_SessionEnd:
+		ClearAndCreate();
+		break;
 	}
 }
 
-bool m_initialize = false;
-
-void CStackWindow::OnStackEvent(wxStackEvent &event)
+void CStackWindow::OnItemSelected(wxListEvent& event)
 {
-	ClearAndCreate();
-
-	for (unsigned int idx = 0; idx < event.GetStackCount(); idx++) {
-
-		long index = m_treeCtrl->InsertItem(m_treeCtrl->GetItemCount(), event.GetModuleName(idx));
-
-		m_treeCtrl->SetItem(index, 0, event.GetModuleLine(idx));
-		m_treeCtrl->SetItem(index, 1, event.GetModuleName(idx));
-
-		if (idx == 0) {
-			m_initialize = true;
-			m_treeCtrl->SetItemState(index,
-				wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED,
-				wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
-			m_initialize = false;
-		}
-	}
-
-	event.Skip();
-}
-
-void CStackWindow::OnItemSelected(wxListEvent &event)
-{
-	if (m_initialize)
+	if (s_initialize)
 		return;
 
-	debugClient->SetLevelStack(m_treeCtrl->GetItemCount()
-		- event.GetIndex() - 1
+	debugClient->SetLevelStack(
+		m_treeCtrl->GetItemCount() - event.GetIndex() - 1
 	);
+	
 	event.Skip();
 }
 
-void CStackWindow::OnSize(wxSizeEvent & event)
+void CStackWindow::OnSize(wxSizeEvent& event)
 {
 	UpdateColumnSizes();
 	event.Skip();
@@ -160,8 +127,16 @@ void CStackWindow::ClearAndCreate()
 	UpdateColumnSizes();
 }
 
+#include "frontend/mainFrame.h"
+
+CStackWindow* CStackWindow::GetStackWindow()
+{
+	if (wxAuiDocMDIFrame::GetFrame())
+		return mainFrame->GetStackWindow();
+	return NULL; 
+}
+
 CStackWindow::~CStackWindow()
 {
-	m_treeCtrl->Unbind(wxEVT_STACK_EVENT, &CStackWindow::OnStackEvent, this);
 	m_treeCtrl->Unbind(wxEVT_LIST_ITEM_ACTIVATED, &CStackWindow::OnItemSelected, this);
 }

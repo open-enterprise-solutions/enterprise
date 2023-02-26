@@ -21,7 +21,7 @@
 #include "databaseStringConverter.h"
 #include "resultSetMetaData.h"
 
-#include "compiler/compiler.h"
+#include "core/compiler/compiler.h"
 
 WX_DECLARE_STRING_HASH_MAP(int, StringToIntMap);
 WX_DECLARE_HASH_SET(ResultSetMetaData*, wxPointerHash, wxPointerEqual, MetaDataHashSet);

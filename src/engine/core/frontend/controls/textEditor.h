@@ -1,5 +1,5 @@
-﻿#ifndef _TEXTCTRL_H__
-#define _TEXTCTRL_H__
+﻿#ifndef __TEXT_CTRL_H__
+#define __TEXT_CTRL_H__
 
 #include <wx/app.h>
 #include <wx/button.h>
@@ -18,39 +18,56 @@
 
 enum {
 	textCtrl_buttonSelect = wxID_LOWEST + 1,
-	textCtrl_buttonList,
+	textCtrl_buttonOpen,
 	textCtrl_buttonClear
 };
 
-#include "formatValidator/fvalnum.h"
-#include "formatValidator/forstrnu.h"
-
 #define buttonSize 20
-
 #define dvcMode 0x0004096
 
-class CTextCtrl : public wxWindow,
+class wxTextContainerCtrl : public wxWindow,
 	public IDynamicBorder {
 
-	wxDECLARE_DYNAMIC_CLASS(CTextCtrl);
-	wxDECLARE_NO_COPY_CLASS(CTextCtrl);
+	wxDECLARE_DYNAMIC_CLASS(wxTextContainerCtrl);
+	wxDECLARE_NO_COPY_CLASS(wxTextContainerCtrl);
 
-	class СTextCtrlButton : public wxTextCtrl {
+	class wxTextRawCtrl : public wxTextCtrl {
+	public:
 
-		wxDECLARE_DYNAMIC_CLASS(СTextCtrlButton);
-		wxDECLARE_NO_COPY_CLASS(СTextCtrlButton);
+		wxTextRawCtrl() {}
+		wxTextRawCtrl(wxWindow* parent, wxWindowID id,
+			const wxString& value = wxEmptyString,
+			const wxPoint& pos = wxDefaultPosition,
+			const wxSize& size = wxDefaultSize,
+			long style = 0,
+			const wxValidator& validator = wxDefaultValidator, 
+			const wxString& name = wxASCII_STR(wxTextCtrlNameStr)) 
+			: 
+			wxTextCtrl(parent, id, value, pos, size, style, validator, name)
+		{
+		}
+
+		virtual void SetValue(const wxString& value) override {
+			DoSetValue(value, SetValue_NoEvent);
+		}
+	};
+
+	class wxTextButtonCtrl : public wxTextCtrl {
+
+		wxDECLARE_DYNAMIC_CLASS(wxTextButtonCtrl);
+		wxDECLARE_NO_COPY_CLASS(wxTextButtonCtrl);
 
 		wxButton *m_buttonSelect = NULL;
 		wxButton *m_buttonClear = NULL;
-		wxButton *m_buttonList = NULL;
+		wxButton *m_buttonOpen = NULL;
 
 		bool m_dvcMode = false;
 
 		bool m_selbutton = false;
-		bool m_listbutton = false;
 		bool m_clearbutton = false;
+		bool m_openbutton = false;
 
-		friend class CTextCtrl;
+		friend class wxTextContainerCtrl;
 
 	private:
 
@@ -66,11 +83,11 @@ class CTextCtrl : public wxWindow,
 
 		void OnSizeTextCtrl(wxSizeEvent& event)
 		{
-			CalculateButtons();
+			CalculateButton();
 			event.Skip();
 		}
 
-		int CalculateButtons()
+		int CalculateButton()
 		{
 			// Use one two units smaller to match size of the combo's dropbutton.
 			// (normally a bigger button is used because it looks better)
@@ -87,15 +104,15 @@ class CTextCtrl : public wxWindow,
 				deltaX += bt_sz.x; deltaY += bt_sz.y;
 			}
 
-			if (m_buttonList->IsShown()) {
-				m_buttonList->SetSize(bt_sz);
-				m_buttonList->SetPosition(wxPoint(bt_pos.x + deltaX, bt_pos.y));
-				deltaX += bt_sz.x; deltaY += bt_sz.y;
-			}
-
 			if (m_buttonClear->IsShown()) {
 				m_buttonClear->SetSize(bt_sz);
 				m_buttonClear->SetPosition(wxPoint(bt_pos.x + deltaX, bt_pos.y));
+				deltaX += bt_sz.x; deltaY += bt_sz.y;
+			}
+
+			if (m_buttonOpen->IsShown()) {
+				m_buttonOpen->SetSize(bt_sz);
+				m_buttonOpen->SetPosition(wxPoint(bt_pos.x + deltaX, bt_pos.y));
 				deltaX += bt_sz.x; deltaY += bt_sz.y;
 			}
 
@@ -106,18 +123,18 @@ class CTextCtrl : public wxWindow,
 
 	public:
 
-		СTextCtrlButton() : wxTextCtrl() {}
+		wxTextButtonCtrl() : wxTextCtrl() {}
 
-		virtual ~СTextCtrlButton() {
+		virtual ~wxTextButtonCtrl() {
 
 			m_buttonSelect = NULL;
-			m_buttonList = NULL;
+			m_buttonOpen = NULL;
 			m_buttonClear = NULL;
 
-			wxTextCtrl::Unbind(wxEVT_SIZE, &СTextCtrlButton::OnSizeTextCtrl, this);
+			wxTextCtrl::Unbind(wxEVT_SIZE, &wxTextButtonCtrl::OnSizeTextCtrl, this);
 
-			if (m_parent->IsKindOf(CLASSINFO(CTextCtrl))) {
-				((CTextCtrl *)m_parent)->m_textCtrl = NULL;
+			if (m_parent->IsKindOf(CLASSINFO(wxTextContainerCtrl))) {
+				((wxTextContainerCtrl *)m_parent)->m_textCtrl = NULL;
 			}
 		}
 
@@ -128,26 +145,26 @@ class CTextCtrl : public wxWindow,
 				return false;
 
 			m_buttonSelect = new wxButton(this, textCtrl_buttonSelect, wxT("..."), wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxTRANSPARENT_WINDOW);
-			m_buttonList = new wxButton(this, textCtrl_buttonList, wxT("↓"), wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxTRANSPARENT_WINDOW);
 			m_buttonClear = new wxButton(this, textCtrl_buttonClear, wxT("×"), wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxTRANSPARENT_WINDOW);
+			m_buttonOpen = new wxButton(this, textCtrl_buttonOpen, wxT("🔍"), wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxTRANSPARENT_WINDOW);
 
 			wxColour bgCol = GetBackgroundColour();
 
 			m_buttonSelect->SetBackgroundColour(bgCol.ChangeLightness(80));
-			m_buttonList->SetBackgroundColour(bgCol.ChangeLightness(85));
-			m_buttonClear->SetBackgroundColour(bgCol.ChangeLightness(80));
+			m_buttonClear->SetBackgroundColour(bgCol.ChangeLightness(85));
+			m_buttonOpen->SetBackgroundColour(bgCol.ChangeLightness(80));
 
 			m_buttonSelect->SetLabelMarkup("<b>" + m_buttonSelect->GetLabelText() + "</b>");
-			m_buttonList->SetLabelMarkup("<b>" + m_buttonList->GetLabelText() + "</b>");
 			m_buttonClear->SetLabelMarkup("<b>" + m_buttonClear->GetLabelText() + "</b>");
+			m_buttonOpen->SetLabelMarkup("<b>" + m_buttonOpen->GetLabelText() + "</b>");
 
 			m_buttonSelect->Show(m_selbutton);
-			m_buttonList->Show(m_listbutton);
 			m_buttonClear->Show(m_clearbutton);
+			m_buttonOpen->Show(m_openbutton);
 
-			CalculateButtons();
+			CalculateButton();
 
-			wxTextCtrl::Bind(wxEVT_SIZE, &СTextCtrlButton::OnSizeTextCtrl, this);
+			wxTextCtrl::Bind(wxEVT_SIZE, &wxTextButtonCtrl::OnSizeTextCtrl, this);
 			return true;
 		}
 
@@ -160,17 +177,17 @@ class CTextCtrl : public wxWindow,
 		template <typename Functor, typename EventHandler>
 		void BindButtonSelect(const Functor &functor, EventHandler handler) { m_buttonSelect->Bind(wxEVT_BUTTON, functor, handler, textCtrl_buttonSelect); }
 		template <typename Functor, typename EventHandler>
-		void BindButtonList(const Functor &functor, EventHandler handler) { m_buttonList->Bind(wxEVT_BUTTON, functor, handler, textCtrl_buttonList); }
-		template <typename Functor, typename EventHandler>
 		void BindButtonClear(const Functor &functor, EventHandler handler) { m_buttonClear->Bind(wxEVT_BUTTON, functor, handler, textCtrl_buttonClear); }
+		template <typename Functor, typename EventHandler>
+		void BindButtonOpen(const Functor& functor, EventHandler handler) { m_buttonOpen->Bind(wxEVT_BUTTON, functor, handler, textCtrl_buttonOpen); }
 
 		// Unbind functors to an event:
 		template <typename Functor, typename EventHandler>
 		void UnbindButtonSelect(const Functor &functor, EventHandler handler) { m_buttonSelect->Unbind(wxEVT_BUTTON, functor, handler, textCtrl_buttonSelect); }
 		template <typename Functor, typename EventHandler>
-		void UnbindButtonList(const Functor &functor, EventHandler handler) { m_buttonList->Unbind(wxEVT_BUTTON, functor, handler, textCtrl_buttonList); }
+		void UnbindButtonClear(const Functor& functor, EventHandler handler) { m_buttonClear->Unbind(wxEVT_BUTTON, functor, handler, textCtrl_buttonClear); }
 		template <typename Functor, typename EventHandler>
-		void UnbindButtonClear(const Functor &functor, EventHandler handler) { m_buttonClear->Unbind(wxEVT_BUTTON, functor, handler, textCtrl_buttonClear); }
+		void UnbindButtonOpen(const Functor &functor, EventHandler handler) { m_buttonOpen->Unbind(wxEVT_BUTTON, functor, handler, textCtrl_buttonOpen); }
 
 		//buttons:
 		void SetButtonSelect(bool select = true) {
@@ -184,15 +201,15 @@ class CTextCtrl : public wxWindow,
 			return m_selbutton;
 		}
 
-		void SetButtonList(bool select = true) {
-			m_listbutton = select;
-			if (m_buttonList) {
-				m_buttonList->Show(select);
+		void SetButtonOpen(bool select = true) {
+			m_openbutton = select;
+			if (m_buttonOpen) {
+				m_buttonOpen->Show(select);
 			}
 		}
 
-		bool HasButtonList() const {
-			return m_listbutton;
+		bool HasButtonOpen() const {
+			return m_openbutton;
 		}
 
 		void SetButtonClear(bool select = true) {
@@ -218,8 +235,8 @@ class CTextCtrl : public wxWindow,
 					colLight = 80;
 				}
 			}
-			if (m_buttonList->IsShown()) {
-				m_buttonList->SetBackgroundColour(colour.ChangeLightness(colLight));
+			if (m_buttonClear->IsShown()) {
+				m_buttonClear->SetBackgroundColour(colour.ChangeLightness(colLight));
 				if (colLight == 80) {
 					colLight = 85;
 				}
@@ -227,8 +244,8 @@ class CTextCtrl : public wxWindow,
 					colLight = 80;
 				}
 			}
-			if (m_buttonClear->IsShown()) {
-				m_buttonClear->SetBackgroundColour(colour.ChangeLightness(colLight));
+			if (m_buttonOpen->IsShown()) {
+				m_buttonOpen->SetBackgroundColour(colour.ChangeLightness(colLight));
 				if (colLight == 80) {
 					colLight = 85;
 				}
@@ -241,7 +258,7 @@ class CTextCtrl : public wxWindow,
 
 		virtual bool SetForegroundColour(const wxColour& colour) override {
 			m_buttonSelect->SetForegroundColour(colour);
-			m_buttonList->SetForegroundColour(colour);
+			m_buttonOpen->SetForegroundColour(colour);
 			m_buttonClear->SetForegroundColour(colour);
 			return wxTextCtrl::SetForegroundColour(colour);
 		}
@@ -250,8 +267,8 @@ class CTextCtrl : public wxWindow,
 			if (m_buttonSelect) {
 				m_buttonSelect->SetFont(font);
 			}
-			if (m_buttonList) {
-				m_buttonList->SetFont(font);
+			if (m_buttonOpen) {
+				m_buttonOpen->SetFont(font);
 			}
 			if (m_buttonClear) {
 				m_buttonClear->SetFont(font);
@@ -261,7 +278,7 @@ class CTextCtrl : public wxWindow,
 
 		virtual bool Enable(bool enable = true) {
 			m_buttonSelect->Enable(enable);
-			m_buttonList->Enable(enable);
+			m_buttonOpen->Enable(enable);
 			m_buttonClear->Enable(enable);
 			return wxTextCtrl::Enable(enable);
 		}
@@ -269,70 +286,16 @@ class CTextCtrl : public wxWindow,
 #if wxUSE_TOOLTIPS
 		virtual void DoSetToolTipText(const wxString &tip) override {
 			m_buttonSelect->SetToolTip(tip);
-			m_buttonList->SetToolTip(tip);
+			m_buttonOpen->SetToolTip(tip);
 			m_buttonClear->SetToolTip(tip);
 		}
 
 		virtual void DoSetToolTip(wxToolTip *tip) override {
 			m_buttonSelect->SetToolTip(tip);
-			m_buttonList->SetToolTip(tip);
+			m_buttonOpen->SetToolTip(tip);
 			m_buttonClear->SetToolTip(tip);
 		}
 #endif // wxUSE_TOOLTIPS
-	};
-
-	class CTextCtrlPopupWindow : public wxPopupTransientWindow {
-
-		wxDECLARE_DYNAMIC_CLASS(CTextCtrlPopupWindow);
-		wxDECLARE_NO_COPY_CLASS(CTextCtrlPopupWindow);
-
-		wxListBox *m_listBox;
-	public:
-
-		CTextCtrlPopupWindow(wxWindow *textCtrl = NULL) : wxPopupTransientWindow(textCtrl, wxBORDER_SIMPLE)
-		{
-			wxPopupTransientWindow::SetSizeHints(wxDefaultSize, wxDefaultSize);
-
-			wxBoxSizer* sizerListBox = new wxBoxSizer(wxVERTICAL);
-
-			m_listBox = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, NULL, wxBORDER_SIMPLE | wxLB_SINGLE);
-			m_listBox->SetForegroundColour(textCtrl->GetForegroundColour());
-			m_listBox->SetBackgroundColour(textCtrl->GetBackgroundColour());
-
-			sizerListBox->Add(m_listBox, 1, wxALL | wxEXPAND, 5);
-
-			m_listBox->SetFont(textCtrl->GetFont());
-
-			// Bind Events
-			m_listBox->Bind(wxEVT_COMMAND_LISTBOX_SELECTED, &CTextCtrlPopupWindow::OnListBox, this);
-
-			wxPopupTransientWindow::SetSizer(sizerListBox);
-			wxPopupTransientWindow::Layout();
-			wxPopupTransientWindow::Centre(wxBOTH);
-		}
-
-		virtual ~CTextCtrlPopupWindow() {}
-
-		void AddString(const wxString &item) {
-			m_listBox->AppendString(item);
-			m_listBox->Select(0);
-		}
-		void ClearAll() { m_listBox->Clear(); }
-
-	protected:
-
-		// Virtual event handlers, overide them in your derived class
-		virtual void OnListBox(wxCommandEvent& event)
-		{
-			/*wxCommandEvent redirectedEvent(event);
-			redirectedEvent.SetEventObject(m_textOwner);
-
-			if (!m_textOwner->GetEventHandler()->ProcessEvent(redirectedEvent)) {
-				event.Skip();
-			}*/
-
-			event.Skip();
-		}
 	};
 
 private:
@@ -341,13 +304,12 @@ private:
 	wxStaticText *m_staticText = NULL;
 	wxTextCtrl *m_textCtrl = NULL;
 
-	СTextCtrlButton *m_winButton = NULL;
-	CTextCtrlPopupWindow *m_winPopup = NULL;
+	wxTextButtonCtrl *m_winButton = NULL;
 
 	bool m_dvcMode;
 
 	bool m_selbutton;
-	bool m_listbutton;
+	bool m_openbutton;
 	bool m_clearbutton;
 
 	bool m_passwordMode;
@@ -356,7 +318,7 @@ private:
 
 private:
 
-	void UpdateStyleControls() {
+	void UpdateControlStyle() {
 
 		if (m_textCtrl) {
 
@@ -402,7 +364,7 @@ private:
 		}
 	}
 
-	void CreateControls(const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize,
+	void CreateControl(const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize,
 		const wxString &val = wxEmptyString)
 	{
 		m_boxSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -413,26 +375,17 @@ private:
 			m_boxSizer->Add(m_staticText, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
 		}
 
-		m_textCtrl = new wxTextCtrl(this, wxID_ANY, val, pos, wxSize(-1, m_dvcMode ? buttonSize + 3 : buttonSize), wxTE_PROCESS_ENTER | wxTE_PROCESS_TAB | wxBORDER_SIMPLE);
+		m_textCtrl = new wxTextRawCtrl(this, wxID_ANY, val, pos, wxSize(-1, m_dvcMode ? buttonSize + 3 : buttonSize), wxTE_PROCESS_ENTER | wxTE_PROCESS_TAB | wxBORDER_SIMPLE);
 
 		m_boxSizer->Add(m_textCtrl, 1, wxEXPAND);
-		m_winButton = new СTextCtrlButton;
+		m_winButton = new wxTextButtonCtrl;
 		m_winButton->SetButtonSelect(m_selbutton);
-		m_winButton->SetButtonList(m_listbutton);
+		m_winButton->SetButtonOpen(m_openbutton);
 		m_winButton->SetButtonClear(m_clearbutton);
 		m_winButton->SetDVCMode(m_dvcMode);
 		m_winButton->Create(this, pos, wxSize(-1, m_dvcMode ? buttonSize + 3 : buttonSize));
 		m_boxSizer->Add(m_winButton, 0, wxALIGN_NOT);
-		UpdateStyleControls();
-	}
-
-	bool IsPopupShown() const {
-		return m_winPopup->IsShown();
-	}
-
-	void HidePopup() {
-		if (m_winPopup->Hide()) {
-		}
+		UpdateControlStyle();
 	}
 
 	//events:
@@ -469,65 +422,47 @@ private:
 
 	void OnKeyEvent(wxKeyEvent& event)
 	{
-		if (IsPopupShown()) {
-			// pass it to the popped up control
-			m_winPopup->GetEventHandler()->ProcessEvent(event);
-		}
-		else {
-			event.Skip();
-		}
 		event.Skip();
 	}
 	void OnCharEvent(wxKeyEvent& event)
 	{
-		if (IsPopupShown()) {
-			// pass it to the popped up control
-			m_winPopup->GetEventHandler()->ProcessEvent(event);
-		}
-		else {
-			event.Skip();
-		}
 		event.Skip();
 	}
 	void OnFocusEvent(wxFocusEvent& event)
 	{
-		if (event.GetEventType() == wxEVT_KILL_FOCUS) {
-			HidePopup();
-		}
-
 		Refresh();
 	}
 
 public:
 
-	CTextCtrl() :
-		m_selbutton(true), m_listbutton(false), m_clearbutton(false),
+	wxTextContainerCtrl() :
+		m_selbutton(true), m_openbutton(false), m_clearbutton(false),
 		m_passwordMode(false), m_multilineMode(false), m_textEditMode(true),
 		m_dvcMode(false)
 	{
 	}
 
-	CTextCtrl(wxWindow *parent,
+	wxTextContainerCtrl(wxWindow *parent,
 		wxWindowID id = wxID_ANY,
 		const wxString &val = wxEmptyString,
 		const wxPoint& pos = wxDefaultPosition,
-		const wxSize& size = wxDefaultSize, long style = wxBORDER_SIMPLE | wxTAB_TRAVERSAL) :
-		m_selbutton(true), m_listbutton(false), m_clearbutton(false),
+		const wxSize& size = wxDefaultSize, long style = wxBORDER_NONE) :
+		m_selbutton(true), m_openbutton(false), m_clearbutton(false),
 		m_passwordMode(false), m_multilineMode(false), m_textEditMode(true),
 		m_dvcMode(false)
 	{
 		Create(parent, id, val, pos, size, style);
 	}
 
-	virtual ~CTextCtrl() {
+	virtual ~wxTextContainerCtrl() {
 
-		wxWindow::Unbind(wxEVT_KEY_DOWN, &CTextCtrl::OnKeyEvent, this);
-		wxWindow::Unbind(wxEVT_CHAR, &CTextCtrl::OnCharEvent, this);
-		wxWindow::Unbind(wxEVT_SET_FOCUS, &CTextCtrl::OnFocusEvent, this);
-		wxWindow::Unbind(wxEVT_KILL_FOCUS, &CTextCtrl::OnFocusEvent, this);
+		wxWindow::Unbind(wxEVT_KEY_DOWN, &wxTextContainerCtrl::OnKeyEvent, this);
+		wxWindow::Unbind(wxEVT_CHAR, &wxTextContainerCtrl::OnCharEvent, this);
+		wxWindow::Unbind(wxEVT_SET_FOCUS, &wxTextContainerCtrl::OnFocusEvent, this);
+		wxWindow::Unbind(wxEVT_KILL_FOCUS, &wxTextContainerCtrl::OnFocusEvent, this);
 
 		if (m_textCtrl) {
-			m_textCtrl->Unbind(wxEVT_KILL_FOCUS, &CTextCtrl::OnKillFocus, this);
+			m_textCtrl->Unbind(wxEVT_KILL_FOCUS, &wxTextContainerCtrl::OnKillFocus, this);
 		}
 	}
 
@@ -540,18 +475,16 @@ public:
 		if (!wxWindow::Create(parent, id, pos, size, style))
 			return false;
 
-		m_winPopup = new CTextCtrlPopupWindow(this);
-
-		wxWindow::Bind(wxEVT_KEY_DOWN, &CTextCtrl::OnKeyEvent, this);
-		wxWindow::Bind(wxEVT_CHAR, &CTextCtrl::OnCharEvent, this);
-		wxWindow::Bind(wxEVT_SET_FOCUS, &CTextCtrl::OnFocusEvent, this);
-		wxWindow::Bind(wxEVT_KILL_FOCUS, &CTextCtrl::OnFocusEvent, this);
+		wxWindow::Bind(wxEVT_KEY_DOWN, &wxTextContainerCtrl::OnKeyEvent, this);
+		wxWindow::Bind(wxEVT_CHAR, &wxTextContainerCtrl::OnCharEvent, this);
+		wxWindow::Bind(wxEVT_SET_FOCUS, &wxTextContainerCtrl::OnFocusEvent, this);
+		wxWindow::Bind(wxEVT_KILL_FOCUS, &wxTextContainerCtrl::OnFocusEvent, this);
 
 		wxWindow::SetSizeHints(wxDefaultSize, wxDefaultSize);
 
-		CreateControls(pos, size, val);
+		CreateControl(pos, size, val);
 
-		m_textCtrl->Bind(wxEVT_KILL_FOCUS, &CTextCtrl::OnKillFocus, this);
+		m_textCtrl->Bind(wxEVT_KILL_FOCUS, &wxTextContainerCtrl::OnKillFocus, this);
 
 		wxWindow::SetSizer(m_boxSizer);
 		wxWindow::Layout();
@@ -571,116 +504,17 @@ public:
 		m_dvcMode = dvc;
 	}
 
-	void ShowPopup()
-	{
-		if (IsPopupShown()) {
-			HidePopup();
-		}
-
-		m_winPopup->ClearAll();
-		m_winPopup->AddString("test1");
-		m_winPopup->AddString("test2");
-		m_winPopup->AddString("test3");
-		m_winPopup->AddString("test4");
-		m_winPopup->AddString("test5");
-		m_winPopup->AddString("test6");
-
-		wxSize ctrlSz = GetSize();
-
-		int screenHeight = wxSystemSettings::GetMetric(wxSYS_SCREEN_Y);
-		wxPoint scrPos = GetScreenPosition();
-
-		// Space above and below
-		int spaceAbove = scrPos.y;
-		int spaceBelow = screenHeight - spaceAbove - ctrlSz.y;
-
-		int maxHeightPopup = spaceBelow;
-
-		if (spaceAbove > spaceBelow) maxHeightPopup = spaceAbove;
-
-		// Width
-		int widthPopup = ctrlSz.x;
-
-		if (widthPopup < -1) widthPopup = -1;
-
-		wxSize adjustedSize = wxSize(widthPopup, 250);
-
-		m_winPopup->SetSize(adjustedSize);
-		m_winPopup->Move(0, 0);
-
-		//
-		// Reposition and resize popup window
-		//
-
-		wxSize szp = m_winPopup->GetSize();
-
-		int popupX;
-		int popupY = scrPos.y + ctrlSz.y;
-
-		// Default anchor is wxLEFT
-		int anchorSide = wxLEFT;
-
-		int rightX = scrPos.x + ctrlSz.x - szp.x;
-		int leftX = scrPos.x;
-
-		if (wxTheApp->GetLayoutDirection() == wxLayout_RightToLeft)
-			leftX -= ctrlSz.x;
-
-		int screenWidth = wxSystemSettings::GetMetric(wxSYS_SCREEN_X);
-
-		// If there is not enough horizontal space, anchor on the other side.
-		// If there is no space even then, place the popup at x 0.
-		if (anchorSide == wxRIGHT)
-		{
-			if (rightX < 0)
-			{
-				if ((leftX + szp.x) < screenWidth)
-					anchorSide = wxLEFT;
-				else
-					anchorSide = 0;
-			}
-		}
-		else
-		{
-			if ((leftX + szp.x) >= screenWidth)
-			{
-				if (rightX >= 0)
-					anchorSide = wxRIGHT;
-				else
-					anchorSide = 0;
-			}
-		}
-
-		// Select x coordinate according to the anchor side
-		if (anchorSide == wxRIGHT)
-			popupX = rightX;
-		else if (anchorSide == wxLEFT)
-			popupX = leftX;
-		else
-			popupX = 0;
-
-		if (spaceBelow < szp.y)
-		{
-			popupY = scrPos.y - szp.y;
-		}
-
-		m_winPopup->SetBackgroundColour(GetBackgroundColour());
-
-		wxRect popupWinRect(popupX - 2, popupY, szp.x, szp.y);
-		m_winPopup->SetSize(popupWinRect);
-		m_winPopup->Popup();
-		m_winPopup->Refresh();
-	}
-
 	// Bind functors to an event:
 	template <typename Functor, typename EventHandler>
 	void BindButtonSelect(const Functor &functor, EventHandler handler) { m_winButton->BindButtonSelect(functor, handler); }
 	template <typename Functor, typename EventHandler>
-	void BindButtonList(const Functor &functor, EventHandler handler) { m_winButton->BindButtonList(functor, handler); }
+	void BindButtonOpen(const Functor &functor, EventHandler handler) { m_winButton->BindButtonOpen(functor, handler); }
 	template <typename Functor, typename EventHandler>
 	void BindButtonClear(const Functor &functor, EventHandler handler) { m_winButton->BindButtonClear(functor, handler); }
 	template <typename Functor, typename EventHandler>
-	void BindTextCtrl(const Functor &functor, EventHandler handler) { m_textCtrl->Bind(wxEVT_COMMAND_TEXT_ENTER, functor, handler); }
+	void BindTextEnter(const Functor &functor, EventHandler handler) { m_textCtrl->Bind(wxEVT_COMMAND_TEXT_ENTER, functor, handler); }
+	template <typename Functor, typename EventHandler>
+	void BindTextUpdated(const Functor& functor, EventHandler handler) { m_textCtrl->Bind(wxEVT_COMMAND_TEXT_UPDATED, functor, handler); }
 	template <typename Functor, typename EventHandler>
 	void BindKillFocus(const Functor &functor, EventHandler handler) { m_textCtrl->Bind(wxEVT_KILL_FOCUS, functor, handler); }
 
@@ -688,17 +522,19 @@ public:
 	template <typename Functor, typename EventHandler>
 	void UnbindButtonSelect(const Functor &functor, EventHandler handler) { m_winButton->UnbindButtonSelect(functor, handler); }
 	template <typename Functor, typename EventHandler>
-	void UnbindButtonList(const Functor &functor, EventHandler handler) { m_winButton->UnbindButtonList(functor, handler); }
+	void UnbindButtonOpen(const Functor &functor, EventHandler handler) { m_winButton->UnbindButtonOpen(functor, handler); }
 	template <typename Functor, typename EventHandler>
 	void UnbindButtonClear(const Functor &functor, EventHandler handler) { m_winButton->UnbindButtonClear(functor, handler); }
 	template <typename Functor, typename EventHandler>
-	void UnbindTextCtrl(const Functor &functor, EventHandler handler) { m_textCtrl->Unbind(wxEVT_COMMAND_TEXT_ENTER, functor, handler); }
+	void UnbindTextEnter(const Functor &functor, EventHandler handler) { m_textCtrl->Unbind(wxEVT_COMMAND_TEXT_ENTER, functor, handler); }
+	template <typename Functor, typename EventHandler>
+	void UnbindTextUpdated(const Functor& functor, EventHandler handler) { m_textCtrl->Unbind(wxEVT_COMMAND_TEXT_UPDATED, functor, handler); }
 	template <typename Functor, typename EventHandler>
 	void UnbindKillFocus(const Functor &functor, EventHandler handler) { m_textCtrl->Unbind(wxEVT_KILL_FOCUS, functor, handler); }
 
 	void SetMultilineMode(bool mode) {
 		m_multilineMode = mode;
-		UpdateStyleControls();
+		UpdateControlStyle();
 	}
 
 	bool GetMultilineMode() const {
@@ -707,7 +543,7 @@ public:
 
 	void SetPasswordMode(bool mode) {
 		m_passwordMode = mode;
-		UpdateStyleControls();
+		UpdateControlStyle();
 	}
 
 	bool GetPasswordMode() const {
@@ -716,7 +552,7 @@ public:
 
 	void SetTextEditMode(bool mode) {
 		m_textEditMode = mode;
-		UpdateStyleControls();
+		UpdateControlStyle();
 	}
 
 	bool GetTextEditMode() const {
@@ -739,12 +575,12 @@ public:
 		return m_textCtrl->GetValue();
 	}
 
-	void CalculateButtons() {
+	void CalculateButton() {
 		m_textCtrl->SetMinSize(wxSize(-1, m_textCtrl->GetMinSize().y));
 		m_winButton->Hide();
 		int x = wxWindow::GetBestSize().x + 20;// -5;
 		m_winButton->Show();
-		int delta = m_winButton->CalculateButtons();
+		int delta = m_winButton->CalculateButton();
 		x -= delta;
 		if (!m_dvcMode) {
 			wxSize minSize = m_staticText->GetMinSize(); 
@@ -767,15 +603,15 @@ public:
 		return m_selbutton;
 	}
 
-	void SetButtonList(bool select = true) {
+	void SetButtonOpen(bool select = true) {
 		if (m_winButton) {
-			m_winButton->SetButtonList(select);
+			m_winButton->SetButtonOpen(select);
 		}
-		m_listbutton = select;
+		m_openbutton = select;
 	}
 
-	bool HasButtonList() const {
-		return m_listbutton;
+	bool HasButtonOpen() const {
+		return m_openbutton;
 	}
 
 	void SetButtonClear(bool select = true) {
@@ -827,9 +663,10 @@ public:
 		return wxWindow::SetFont(font);
 	}
 
-	virtual bool Enable(bool enable = true) {
-		return m_textCtrl->Enable(enable) &&
-			m_winButton->Enable(enable);
+	virtual bool Enable(bool enable = true) {	
+		bool result = m_textCtrl->Enable(enable);
+		m_winButton->Enable(enable);
+		return result;
 	}
 
 #if wxUSE_TOOLTIPS
@@ -858,8 +695,22 @@ public:
 		m_textCtrl->SetFocus();
 	}
 
-	virtual wxStaticText *GetStaticText() const { return m_staticText; }
-	virtual void AfterCalc() { CalculateButtons(); }
+	virtual wxSize GetControlSize() const {
+		 return m_textCtrl->GetSize() + 
+			 m_winButton->GetSize();
+	}
+
+	virtual wxStaticText *GetStaticText() const { 
+		return m_staticText;
+	}
+
+	virtual wxWindow* GetControl() const {
+		return m_textCtrl;
+	}
+
+	virtual void AfterCalc() {
+		CalculateButton(); 
+	}
 
 	/*#if wxUSE_VALIDATORS
 		virtual void SetValidator(const wxValidator& validator) override {

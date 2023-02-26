@@ -22,8 +22,8 @@
    // files which are not included by wxprec.h
 #endif
 
-#include <email/pop3/wxpop3.h>
-#include <email/utils/wxmd5.hpp>
+#include <3rdparty/email/pop3/wxpop3.h>
+#include <3rdparty/email/utils/wxmd5.hpp>
 
 void wxPOP3::InitialState::onEnterState(wxCmdlineProtocol& context) const
 {

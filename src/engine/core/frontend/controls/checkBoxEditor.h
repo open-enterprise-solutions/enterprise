@@ -15,8 +15,7 @@ class CCheckBox : public wxPanel,
 	wxStaticText *m_staticText;
 	wxCheckBox *m_checkBox;
 
-	void CreateControls()
-	{
+	void CreateControls() {
 		m_boxSizer = new wxBoxSizer(wxHORIZONTAL);
 
 		m_staticText = new wxStaticText(this, wxID_ANY, wxT("<labelText>"), wxDefaultPosition, wxDefaultSize);
@@ -49,11 +48,15 @@ public:
 
 	// Bind functors to an event:
 	template <typename Functor, typename EventHandler>
-	void BindCheckBoxCtrl(const Functor &functor, EventHandler handler) { m_checkBox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, functor, handler); }
+	void BindCheckBoxCtrl(const Functor &functor, EventHandler handler) {
+		m_checkBox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, functor, handler);
+	}
 
 	// Unbind functors to an event:
 	template <typename Functor, typename EventHandler>
-	void UnbindCheckBoxCtrl(const Functor &functor, EventHandler handler) { m_checkBox->Unbind(wxEVT_COMMAND_CHECKBOX_CLICKED, functor, handler); }
+	void UnbindCheckBoxCtrl(const Functor &functor, EventHandler handler) { 
+		m_checkBox->Unbind(wxEVT_COMMAND_CHECKBOX_CLICKED, functor, handler);
+	}
 
 	void SetCheckBoxLabel(const wxString& label) {
 		m_staticText->SetLabel(label);
@@ -133,8 +136,16 @@ public:
 		return true; 
 	};
 
+	virtual wxSize GetControlSize() const {
+		return m_checkBox->GetSize();
+	}
+
 	virtual wxStaticText *GetStaticText() const {
 		return m_staticText;
+	}
+
+	virtual wxWindow* GetControl() const {
+		return m_checkBox;
 	}
 };
 

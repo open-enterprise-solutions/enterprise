@@ -4,8 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueole.h"
-#include "functions.h"
-#include "methods.h"
+#include "translateError.h"
 #include "appData.h"
 
 #include <wx/clipbrd.h>
@@ -15,7 +14,7 @@
 
 #ifdef __WXMSW__
 
-static std::map<IDispatch*, CValueOLE*> s_aOLEValues;
+static std::map<IDispatch*, CValueOLE*> s_valueOLE;
 
 //*********************************************************************************************************************
 //*                                             Wrapper around BSTR type (by Vadim Zeitlin)                           *
@@ -136,7 +135,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueOLE, CValue);
 void CValueOLE::GetInterfaceAndReleaseStream()
 {
 #ifdef __WXMSW__
-	//for (auto dispOle : s_aOLEValues) {
+	//for (auto dispOle : s_valueOLE) {
 	//	CValueOLE *oleValue = dispOle.second;
 	//	if (!oleValue->m_streamThreading)
 	//		continue;
@@ -151,7 +150,7 @@ void CValueOLE::GetInterfaceAndReleaseStream()
 void CValueOLE::CreateStreamForDispatch()
 {
 #ifdef __WXMSW__
-	//for (auto dispOle : s_aOLEValues)
+	//for (auto dispOle : s_valueOLE)
 	//{
 	//	CValueOLE *oleValue = dispOle.second;
 	//	if (oleValue->m_streamThreading) continue;
@@ -164,7 +163,7 @@ void CValueOLE::CreateStreamForDispatch()
 void CValueOLE::ReleaseCoObjects()
 {
 #ifdef __WXMSW__
-	for (auto dispOle : s_aOLEValues) {
+	for (auto dispOle : s_valueOLE) {
 		CValueOLE* oleValue = dispOle.second;
 		if (!oleValue->m_dispatch)
 			continue;
@@ -179,20 +178,16 @@ void CValueOLE::ReleaseCoObjects()
 
 #ifdef __WXMSW__
 
-void CValueOLE::AddFromArray(CValue& Ret, long* aPos, SAFEARRAY* pArray, SAFEARRAYBOUND* aDims, int nLastDim)
+void CValueOLE::AddFromArray(CValue& pvarRetValue, long* aPos, SAFEARRAY* psa, SAFEARRAYBOUND* safeArrayBound, int nLastDim) const
 {
-	VARIANT Val = { 0 }; HRESULT hr;
-
-	if (hr = ::SafeArrayGetElement(pArray, aPos, &Val)) 
+	VARIANT var = { 0 }; HRESULT hr;
+	if (hr = ::SafeArrayGetElement(psa, aPos, &var))
 		throw hr;
-
 	aPos[nLastDim]++;
-
-	if (aPos[nLastDim] > aDims[nLastDim].cElements) {
-		aPos[nLastDim] = aDims[nLastDim].lLbound;
+	if (aPos[nLastDim] > safeArrayBound[nLastDim].cElements) {
+		aPos[nLastDim] = safeArrayBound[nLastDim].lLbound;
 		//AddFromArray(CValue &Ret,long *aPos,SAFEARRAY *pArray,SAFEARRAYBOUND *aDims,int nLastDim)
 	}
-
 	/*
 			AddFromArray(pArray,nMin
 			if(i+1<nDim)
@@ -202,156 +197,151 @@ void CValueOLE::AddFromArray(CValue& Ret, long* aPos, SAFEARRAY* pArray, SAFEARR
 				Ret
 			}
 	*/
-
 }
 
-CValue CValueOLE::FromVariant(VARIANT& oleVariant)
+bool CValueOLE::FromVariant(const VARIANT& oleVariant, CValue& pvarRetValue) const
 {
-	CValue vObject;
-
 	switch (oleVariant.vt)
 	{
 	case VT_BOOL:
 	{
-		vObject.SetType(eValueTypes::TYPE_BOOLEAN);
-		vObject.m_bData = oleVariant.boolVal != 0;
-		break;
+		pvarRetValue.SetType(eValueTypes::TYPE_BOOLEAN);
+		pvarRetValue.m_bData = oleVariant.boolVal != 0;
+		return true;
 	}
 	case VT_UI1:
 	{
-		vObject.SetType(eValueTypes::TYPE_NUMBER);
-		vObject.m_fData = oleVariant.bVal;
-		break;
+		pvarRetValue.SetType(eValueTypes::TYPE_NUMBER);
+		pvarRetValue.m_fData = oleVariant.bVal;
+		return true;
 	}
 	case VT_I2:
 	{
-		vObject.SetType(eValueTypes::TYPE_NUMBER);
-		vObject.m_fData = oleVariant.iVal;
-		break;
+		pvarRetValue.SetType(eValueTypes::TYPE_NUMBER);
+		pvarRetValue.m_fData = oleVariant.iVal;
+		return true;
 	}
 	case VT_I4:
 	{
-		vObject.SetType(eValueTypes::TYPE_NUMBER);
-		vObject.m_fData = oleVariant.lVal;
-		break;
+		pvarRetValue.SetType(eValueTypes::TYPE_NUMBER);
+		pvarRetValue.m_fData = oleVariant.lVal;
+		return true;
 	}
 #if wxUSE_LONGLONG
 	case VT_I8:
-		vObject.SetType(eValueTypes::TYPE_NUMBER);
-		vObject.m_fData = oleVariant.llVal;
-		break;
+		pvarRetValue.SetType(eValueTypes::TYPE_NUMBER);
+		pvarRetValue.m_fData = oleVariant.llVal;
+		return true;
 #endif // wxUSE_LONGLONG
 	case VT_R4:
 	{
-		vObject.SetType(eValueTypes::TYPE_NUMBER);
-		vObject.m_fData = oleVariant.fltVal;
-		break;
+		pvarRetValue.SetType(eValueTypes::TYPE_NUMBER);
+		pvarRetValue.m_fData = oleVariant.fltVal;
+		return true;
 	}
 	case VT_R8:
 	{
-		vObject.SetType(eValueTypes::TYPE_NUMBER);
-		vObject.m_fData = oleVariant.dblVal;
-		break;
+		pvarRetValue.SetType(eValueTypes::TYPE_NUMBER);
+		pvarRetValue.m_fData = oleVariant.dblVal;
+		return true;
 	}
 	case VT_I1:
 	{
-		vObject.SetType(eValueTypes::TYPE_NUMBER);
-		vObject.m_fData = oleVariant.cVal;
+		pvarRetValue.SetType(eValueTypes::TYPE_NUMBER);
+		pvarRetValue.m_fData = oleVariant.cVal;
 		break;
 	}
 	case VT_UI2:
 	{
-		vObject.SetType(eValueTypes::TYPE_NUMBER);
-		vObject.m_fData = oleVariant.uiVal;
-		break;
+		pvarRetValue.SetType(eValueTypes::TYPE_NUMBER);
+		pvarRetValue.m_fData = oleVariant.uiVal;
+		return true;
 	}
 	case VT_UI4:
 	{
-		vObject.SetType(eValueTypes::TYPE_NUMBER);
+		pvarRetValue.SetType(eValueTypes::TYPE_NUMBER);
 #if !defined _M_X64 && !defined __x86_64__
-		vObject.m_fData = ttmath::ulint(oleVariant.ulVal);
+		pvarRetValue.m_fData = ttmath::ulint(oleVariant.ulVal);
 #else 
-		vObject.m_fData = uint64_t(oleVariant.ulVal);
+		pvarRetValue.m_fData = uint64_t(oleVariant.ulVal);
 #endif
-		break;
+		return true;
 	}
 	case VT_INT:
 	{
-		vObject.SetType(eValueTypes::TYPE_NUMBER);
-		vObject.m_fData = oleVariant.intVal;
-		break;
+		pvarRetValue.SetType(eValueTypes::TYPE_NUMBER);
+		pvarRetValue.m_fData = oleVariant.intVal;
+		return true;
 	}
 	case VT_UINT:
 	{
-		vObject.SetType(eValueTypes::TYPE_NUMBER);
-		vObject.m_fData = oleVariant.uintVal;
-		break;
+		pvarRetValue.SetType(eValueTypes::TYPE_NUMBER);
+		pvarRetValue.m_fData = oleVariant.uintVal;
+		return true;
 	}
 	case VT_BSTR:
 	{
-		vObject.SetType(eValueTypes::TYPE_STRING);
-		vObject.m_sData = wxConvertStringFromOle(oleVariant.bstrVal);
-		break;
+		pvarRetValue.SetType(eValueTypes::TYPE_STRING);
+		pvarRetValue.m_sData = wxConvertStringFromOle(oleVariant.bstrVal);
+		return true;
 	}
 	case VT_DATE:
 	{
-		vObject.SetType(eValueTypes::TYPE_DATE);
+		pvarRetValue.SetType(eValueTypes::TYPE_DATE);
 #if wxUSE_DATETIME
 		{
 			SYSTEMTIME st;
 			VariantTimeToSystemTime(oleVariant.date, &st);
-
 			wxDateTime date;
 			date.SetFromMSWSysTime(st);
-
-			wxLongLong m_llValue = date.GetValue();
-			vObject.m_dData = m_llValue.GetValue();
+			wxLongLong llValue = date.GetValue();
+			pvarRetValue.m_dData = llValue.GetValue();
 		}
 #endif // wxUSE_DATETIME
-		break;
+		return true;
 	}
 	case VT_DISPATCH:
 		if (oleVariant.pdispVal != NULL)
-			vObject = new CValueOLE(m_clsId, oleVariant.pdispVal, m_sObjectName);
-		break;
+			pvarRetValue = new CValueOLE(m_clsId, oleVariant.pdispVal, m_objectName);
+		return true;
 	case VT_SAFEARRAY:
 		if (oleVariant.parray != NULL)
-			vObject = FromVariantArray(oleVariant.parray);
-		break;
-	case VT_NULL: vObject.SetType(eValueTypes::TYPE_NULL); break;
-	case VT_EMPTY: vObject.Reset(); break;
+			pvarRetValue = FromVariantArray(oleVariant.parray);
+		return true;
+	case VT_NULL:
+		pvarRetValue.SetType(eValueTypes::TYPE_NULL);
+		return true;
+	case VT_EMPTY:
+		pvarRetValue.Reset();
+		return true;
 	}
 
-	return vObject;
+	return false;
 }
 
-CValue CValueOLE::FromVariantArray(SAFEARRAY* pArray)
+#include "valueArray.h"
+
+CValue CValueOLE::FromVariantArray(SAFEARRAY* psa) const
 {
 	HRESULT hr;
 
-	CValue cRet = CValue::CreateObject("array");
-
-	long nDim = SafeArrayGetDim(pArray);
+	long nDim = SafeArrayGetDim(psa);
 	long* aPos = new long[nDim];
 
 	SAFEARRAYBOUND* aDims = new SAFEARRAYBOUND[nDim];
-
-	for (int i = 0; i < nDim; i++)
-	{
+	for (int i = 0; i < nDim; i++) {
 		long nMin, nMax;
-
-		if (hr = SafeArrayGetLBound(pArray, i + 1, &nMin))
+		if (hr = SafeArrayGetLBound(psa, i + 1, &nMin))
 			throw hr;
-
-		if (hr = SafeArrayGetUBound(pArray, i + 1, &nMax))
+		if (hr = SafeArrayGetUBound(psa, i + 1, &nMax))
 			throw hr;
-
 		aPos[i] = nMin;//начальное положение
 		aDims[i].lLbound = nMin;
 		aDims[i].cElements = nMax;//-nMin+1;
 	}
 
-	AddFromArray(cRet, aPos, pArray, aDims, nDim - 1);
+	CValue cRet = new CValueArray;
+	AddFromArray(cRet, aPos, psa, aDims, nDim - 1);
 
 	delete[]aPos;
 	delete[]aDims;
@@ -359,23 +349,27 @@ CValue CValueOLE::FromVariantArray(SAFEARRAY* pArray)
 	return cRet;
 }
 
-VARIANT CValueOLE::FromValue(CValue& cVal)
+VARIANT CValueOLE::FromValue(const CValue& varRetValue) const
 {
 	VARIANT oleVariant = { 0 };
 
-	switch (cVal.GetType())
+	switch (varRetValue.GetType())
 	{
-	case eValueTypes::TYPE_EMPTY: oleVariant.vt = VT_EMPTY; break;
-	case eValueTypes::TYPE_NULL: oleVariant.vt = VT_NULL; break;
+	case eValueTypes::TYPE_EMPTY:
+		oleVariant.vt = VT_EMPTY;
+		break;
+	case eValueTypes::TYPE_NULL:
+		oleVariant.vt = VT_NULL;
+		break;
 	case eValueTypes::TYPE_BOOLEAN:
 	{
 		oleVariant.vt = VT_BOOL;
-		oleVariant.boolVal = cVal.GetBoolean();
+		oleVariant.boolVal = varRetValue.GetBoolean();
 		break;
 	}
 	case eValueTypes::TYPE_NUMBER:
 	{
-		number_t fData = cVal.GetNumber();
+		number_t fData = varRetValue.GetNumber();
 		if (fData == fData.Round()) {
 			oleVariant.vt = VT_I4;
 			oleVariant.lVal = fData.ToInt();
@@ -389,13 +383,13 @@ VARIANT CValueOLE::FromValue(CValue& cVal)
 	case eValueTypes::TYPE_STRING:
 	{
 		oleVariant.vt = VT_BSTR;
-		oleVariant.bstrVal = wxConvertStringToOle(cVal.GetString());
+		oleVariant.bstrVal = wxConvertStringToOle(varRetValue.GetString());
 		break;
 	}
 	case eValueTypes::TYPE_DATE:
 	{
 #if wxUSE_DATETIME
-		wxDateTime date(wxLongLong(cVal.GetDate()));
+		wxDateTime date(wxLongLong(varRetValue.GetDate()));
 		oleVariant.vt = VT_DATE;
 		SYSTEMTIME st;
 		date.GetAsMSWSysTime(&st);
@@ -403,10 +397,9 @@ VARIANT CValueOLE::FromValue(CValue& cVal)
 #endif
 		break;
 	}
-	case eValueTypes::TYPE_OLE:
-	{
-		CValueOLE* valueOLE = dynamic_cast<CValueOLE*>(cVal.GetRef());
-		if (valueOLE != NULL) {
+	case eValueTypes::TYPE_OLE: {
+		CValueOLE* valueOLE = NULL;
+		if (varRetValue.ConvertToValue(valueOLE)) {
 			oleVariant.vt = VT_DISPATCH;
 			oleVariant.pdispVal = valueOLE->GetDispatch();
 			oleVariant.pdispVal->AddRef();
@@ -421,12 +414,12 @@ VARIANT CValueOLE::FromValue(CValue& cVal)
 	return oleVariant;
 }
 
-void CValueOLE::FreeValue(VARIANT& cVal)
+void CValueOLE::FreeValue(VARIANT& varValue)
 {
-	switch (cVal.vt)
+	switch (varValue.vt)
 	{
-	case VT_BSTR: 
-		SysFreeString(cVal.bstrVal); 
+	case VT_BSTR:
+		SysFreeString(varValue.bstrVal);
 		break;
 	}
 }
@@ -444,7 +437,7 @@ IDispatch* CValueOLE::DoCreateInstance()
 		IID_IDispatch, (void**)&pDispatch);
 
 	if (FAILED(hr)) {
-		wxLogSysError(hr, _("Failed to create an instance of \"%s\""), m_sObjectName);
+		wxLogSysError(hr, _("Failed to create an instance of \"%s\""), m_objectName);
 		return NULL;
 	}
 
@@ -456,18 +449,14 @@ IDispatch* CValueOLE::DoCreateInstance()
 #ifdef __WXMSW__
 
 CValueOLE::CValueOLE() : CValue(eValueTypes::TYPE_OLE),
-m_clsId({ 0 }),
-m_dispatch(NULL),
-m_methods(new CMethods()),
-m_sObjectName(wxEmptyString)
+m_clsId({ 0 }), m_dispatch(NULL),
+m_methodHelper(new CMethodHelper()), m_objectName(wxEmptyString)
 {
 }
 
-CValueOLE::CValueOLE(CLSID clsId, IDispatch* dispatch, const wxString& objectName) : CValue(eValueTypes::TYPE_OLE),
-m_clsId(clsId),
-m_dispatch(dispatch),
-m_methods(new CMethods()),
-m_sObjectName(objectName)
+CValueOLE::CValueOLE(const CLSID& clsId, IDispatch* dispatch, const wxString& objectName) : CValue(eValueTypes::TYPE_OLE),
+m_clsId(clsId), m_dispatch(dispatch),
+m_methodHelper(new CMethodHelper()), m_objectName(objectName)
 {
 	if (m_dispatch != NULL) {
 		m_dispatch->AddRef();
@@ -476,125 +465,128 @@ m_sObjectName(objectName)
 }
 
 #else 
-CValueOLE::CValueOLE() : CValue(eValueTypes::TYPE_OLE), m_methods(new CMethods()), m_sObjectName(wxEmptyString) {}
+CValueOLE::CValueOLE() : CValue(eValueTypes::TYPE_OLE), m_methodHelper(new CMethodHelper()), m_objectName(wxEmptyString) {}
 #endif 
 
 CValueOLE::~CValueOLE()
 {
 #ifdef __WXMSW__
-	if (m_dispatch) {
-		s_aOLEValues.erase(m_dispatch);
-
-		m_dispatch->Release();
-		m_dispatch = NULL;
+	if (m_dispatch != NULL) {
+		s_valueOLE.erase(m_dispatch);
+		m_dispatch->Release(); m_dispatch = NULL;
 	}
 #endif 
-	wxDELETE(m_methods);
+
+	wxDELETE(m_methodHelper);
 }
 
-bool CValueOLE::Init(CValue** aParams)
+bool CValueOLE::Init(CValue** paParams, const long lSizeArray)
 {
-	wxString sObject = aParams[0]->GetString();
+	const wxString& oleName = paParams[0]->GetString();
 #ifdef __WXMSW__
-	if (!Create(sObject))
-		CTranslateError::Error(_("Failed to create an instance of '%s'"), sObject.wc_str());
+	if (!Create(oleName))
+		CTranslateError::Error("Failed to create an instance of '%s'", oleName);
 	return true;
 #else
 	return false;
 #endif
 }
 
-bool CValueOLE::Create(const wxString& sName)
+bool CValueOLE::Create(const wxString& oleName)
 {
 	if (appData->DesignerMode())
 		return true;
 
 #ifdef __WXMSW__
-	if (m_dispatch)
+	if (m_dispatch != NULL)
 		return false;
 #endif
 
 #ifdef __WXMSW__
 
-	HRESULT hr = CLSIDFromProgID(sName, &m_clsId);
-	if (FAILED(hr)) return false;
+	HRESULT hr = ::CLSIDFromProgID(oleName, &m_clsId);
+	if (FAILED(hr))
+		return false;
 
 	BSTR strClassName = NULL;
-	if (SUCCEEDED(ProgIDFromCLSID(m_clsId, &strClassName))) {
-		m_sObjectName = strClassName;
+	if (SUCCEEDED(::ProgIDFromCLSID(m_clsId, &strClassName))) {
+		m_objectName = strClassName;
 		// free memory allocated by ProgIDFromCLSID 
 		CoTaskMemFree(strClassName);
 	}
 	else {
 		return false;
 	}
-
 	m_dispatch = DoCreateInstance();
-
 	PrepareNames();
-
-	if (wxThread::IsMain()) {
-		s_aOLEValues.insert_or_assign(m_dispatch, this);
-	}
-
+	s_valueOLE.insert_or_assign(m_dispatch, this);
 	return m_dispatch != NULL;
 #else 
 	return false;
 #endif
 }
 
-CMethods* CValueOLE::GetPMethods() const { return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
-
 void CValueOLE::PrepareNames() const
 {
 #ifdef __WXMSW__
-	if (!m_dispatch)
-		return; unsigned int count = 0;
+	
+	m_methodHelper->ClearHelper();
+	
+	if (m_dispatch == NULL)
+		return;
+	
+	unsigned int count = 0;
+	
 	if (m_dispatch->GetTypeInfoCount(&count) != S_OK)
 		return;
-	std::vector<SEng> aMethods, aAttributes;
+	
 	for (unsigned int i = 0; i < count; i++) {
+
 		HRESULT hr = S_OK;
 		ITypeInfo* typeInfo = NULL; TYPEATTR* typeAttr = NULL;
+
 		hr = m_dispatch->GetTypeInfo(i, LOCALE_SYSTEM_DEFAULT, &typeInfo);
-		if (hr != S_OK) continue;
+		if (hr != S_OK)
+			continue;
+
 		hr = typeInfo->GetTypeAttr(&typeAttr);
-		if (hr != S_OK) continue;
+		if (hr != S_OK)
+			continue;
 
 		if (typeAttr->typekind == TKIND_INTERFACE ||
-			typeAttr->typekind == TKIND_DISPATCH)
-		{
+			typeAttr->typekind == TKIND_DISPATCH) {
 			for (unsigned int m = 0; m < (UINT)typeAttr->cFuncs; m++)
 			{
 				FUNCDESC* funcInfo = NULL;
 				hr = typeInfo->GetFuncDesc(m, &funcInfo);
 
 				if (hr != S_OK) continue;
-				if (funcInfo->invkind != INVOKE_FUNC && funcInfo->invkind != INVOKE_PROPERTYGET) continue;
+				if (funcInfo->invkind != INVOKE_FUNC && funcInfo->invkind != INVOKE_PROPERTYGET)
+					continue;
 
 				BSTR strName = NULL;
-
 				// Получаем название метода
 				typeInfo->GetDocumentation(funcInfo->memid, &strName,
 					NULL, NULL, NULL);
 
-				wxString sMethod = wxConvertStringFromOle(strName); wxString sMethodDescription = sMethod;
+				wxString methodName = wxConvertStringFromOle(strName);
 				SysFreeString(strName);
+				wxString methodHelper = methodName;
 
-				if (sMethod.Length() > 2) {
-					wxString sMethodL = sMethod.Left(2);
+				if (methodName.Length() > 2) {
+					wxString sMethodL = methodName.Left(2);
 					sMethodL.MakeLower();
-					if (sMethodL[1] == sMethod[1]) {
-						sMethod[0] = sMethodL[0];
-						sMethodDescription[0] = sMethodL[0];
+					if (sMethodL[1] == methodName[1]) {
+						methodName[0] = sMethodL[0];
+						methodHelper[0] = sMethodL[0];
 					}
 				}
 				else {
-					sMethod.MakeLower();
-					sMethodDescription.MakeLower();
+					methodName.MakeLower();
+					methodHelper.MakeLower();
 				}
 
-				sMethodDescription += wxT("(");
+				methodHelper += wxT("(");
 
 				for (unsigned int k = 0; k < (UINT)funcInfo->cParams; k++) {
 					VARTYPE vt = funcInfo->lprgelemdescParam[k].tdesc.vt & ~0xF000;
@@ -602,7 +594,9 @@ void CValueOLE::PrepareNames() const
 					{
 						switch (vt)
 						{
-						case VT_BOOL: sMethodDescription += wxT("bool"); break;
+						case VT_BOOL:
+							methodHelper += wxT("bool");
+							break;
 						case VT_UI1:
 						case VT_I2:
 						case VT_I4:
@@ -615,46 +609,62 @@ void CValueOLE::PrepareNames() const
 						case VT_UI2:
 						case VT_UI4:
 						case VT_INT:
-						case VT_UINT: sMethodDescription += wxT("number"); break;
-						case VT_BSTR: sMethodDescription += wxT("string"); break;
-						case VT_DATE: sMethodDescription += wxT("date"); break;
-						case VT_DISPATCH: sMethodDescription += wxT("oleRef"); break;
-						case VT_PTR: sMethodDescription += wxT("olePtr"); break;
-						case VT_SAFEARRAY: sMethodDescription += wxT("oleArray"); break;
-						case VT_NULL: sMethodDescription += wxT("null"); break;
-						case VT_EMPTY: sMethodDescription += wxT("empty"); break;
-						default: sMethodDescription += wxT("other"); break;
+						case VT_UINT:
+							methodHelper += wxT("number");
+							break;
+						case VT_BSTR:
+							methodHelper += wxT("string");
+							break;
+						case VT_DATE:
+							methodHelper += wxT("date");
+							break;
+						case VT_DISPATCH:
+							methodHelper += wxT("oleRef");
+							break;
+						case VT_PTR:
+							methodHelper += wxT("olePtr");
+							break;
+						case VT_SAFEARRAY:
+							methodHelper += wxT("oleArray");
+							break;
+						case VT_NULL:
+							methodHelper += wxT("null");
+							break;
+						case VT_EMPTY:
+							methodHelper += wxT("empty");
+							break;
+						default: methodHelper += wxT("other"); break;
 						}
 					}
-					else sMethodDescription += wxT("badType");
-
+					else methodHelper += wxT("badType");
 					if (k < (UINT)funcInfo->cParams - 1) {
-						sMethodDescription += wxT(", ");
+						methodHelper += wxT(", ");
 					}
 				}
-
-				sMethodDescription += wxT(")");
-
+				methodHelper += wxT(")");
 				if (funcInfo->invkind == INVOKE_FUNC) {
-					aMethods.push_back({ sMethod, sMethodDescription, wxT("ole"), funcInfo->memid });
+					m_methodHelper->AppendFunc(
+						methodName,
+						funcInfo->cParams,
+						methodHelper,
+						funcInfo->memid
+					);
 				}
 				else if (funcInfo->invkind == INVOKE_PROPERTYGET) {
-					aAttributes.push_back({ sMethod, wxEmptyString, wxT("ole"), funcInfo->memid });
+					m_methodHelper->AppendProp(
+						methodName,
+						funcInfo->memid
+					);
 				}
 			}
 		}
-
 		typeInfo->ReleaseTypeAttr(typeAttr);
 		typeInfo->Release();
 	}
-
-	m_methods->PrepareAttributes(aAttributes.data(), aAttributes.size());
-	m_methods->PrepareMethods(aMethods.data(), aMethods.size());
-
 #endif 
 }
 
-int CValueOLE::FindAttribute(const wxString& sName) const
+long CValueOLE::FindProp(const wxString& sName) const
 {
 #ifdef __WXMSW__
 
@@ -673,47 +683,11 @@ int CValueOLE::FindAttribute(const wxString& sName) const
 
 	if (hr != S_OK || dispid == 1000)
 		return wxNOT_FOUND;
+
 	return dispid;
 
 #else 
 	return wxNOT_FOUND;
-#endif 
-}
-
-CValue CValueOLE::GetAttribute(attributeArg_t& aParams)
-{
-#ifdef __WXMSW__
-
-	VARIANT vRes = { 0 };
-	DISPPARAMS dp = { NULL, NULL, 0, 0 };
-
-	if (!m_dispatch)
-		return CValue();
-
-	unsigned int uiArgErr = 0;
-
-	EXCEPINFO FAR ExcepInfo;
-	ZeroMemory(&ExcepInfo, sizeof(EXCEPINFO));
-
-	HRESULT hr = m_dispatch->Invoke(
-		aParams.GetIndex(),
-		IID_NULL,
-		LOCALE_SYSTEM_DEFAULT,
-		DISPATCH_PROPERTYGET,
-		&dp,
-		&vRes,
-		&ExcepInfo,
-		&uiArgErr
-	);
-
-	if (hr != S_OK) {
-		CTranslateError::Error(_("%s:\n%s"), ExcepInfo.bstrSource, ExcepInfo.bstrDescription);
-	}
-
-	return FromVariant(vRes);
-
-#else 
-	return CValue();
 #endif 
 }
 
@@ -722,8 +696,7 @@ CValue CValueOLE::GetAttribute(attributeArg_t& aParams)
 static HRESULT PutProperty(
 	IDispatch* pDisp,
 	DISPID dwDispID,
-	VARIANT* pVar
-)
+	VARIANT* pVar)
 {
 	DISPPARAMS dispparams = { NULL, NULL, 1, 1 };
 	dispparams.rgvarg = pVar;
@@ -733,8 +706,7 @@ static HRESULT PutProperty(
 	if (pVar->vt == VT_UNKNOWN
 		|| pVar->vt == VT_DISPATCH
 		|| (pVar->vt & VT_ARRAY)
-		|| (pVar->vt & VT_BYREF))
-	{
+		|| (pVar->vt & VT_BYREF)) {
 		HRESULT hr = pDisp->Invoke(
 			dwDispID,
 			IID_NULL,
@@ -745,7 +717,6 @@ static HRESULT PutProperty(
 			NULL,
 			NULL
 		);
-
 		if (SUCCEEDED(hr))
 			return hr;
 	}
@@ -764,78 +735,135 @@ static HRESULT PutProperty(
 
 #endif 
 
-void CValueOLE::SetAttribute(attributeArg_t& aParams, CValue& cVal)
-{
-#ifdef __WXMSW__
-	if (!m_dispatch) return;
-	VARIANT var = FromValue(cVal);
-	PutProperty(m_dispatch, aParams.GetIndex(), &var);
-	FreeValue(var);
-#endif 
-}
-
-int CValueOLE::FindMethod(const wxString& sName) const
-{
-	return FindAttribute(sName);
-}
-
-CValue CValueOLE::Method(methodArg_t& aParams)
+bool CValueOLE::SetPropVal(const long lPropNum, const CValue& varPropVal)
 {
 #ifdef __WXMSW__
 	if (!m_dispatch)
-		return CValue();
+		return false;
+	VARIANT oleVariant = FromValue(varPropVal);
+	HRESULT hr = PutProperty(m_dispatch, lPropNum, &oleVariant);
+	FreeValue(oleVariant);
+	return hr == S_OK;
+#else 
+	return false;
+#endif 
+}
 
-	VARIANT varRet = { 0 };
-	unsigned int nParamCount = aParams.GetParamCount();
+bool CValueOLE::GetPropVal(const long lPropNum, CValue& pvarPropVal)
+{
+#ifdef __WXMSW__
 
-	//переводим параметры в тип VARIANT
-	VARIANT* pvarArgs = new VARIANT[nParamCount];
-	for (unsigned int i = 0; i < nParamCount; i++) {
-		pvarArgs[nParamCount - i - 1] = FromValue(aParams[i]);
-	}
+	if (m_dispatch == NULL)
+		return false;
+
+	VARIANT oleVariant = { 0 };
+	DISPPARAMS dp = { NULL, NULL, 0, 0 };
 
 	unsigned int uiArgErr = 0;
 
 	EXCEPINFO FAR ExcepInfo;
-	ZeroMemory(&ExcepInfo, sizeof(EXCEPINFO));
+	wxSecureZeroMemory(&ExcepInfo, sizeof(EXCEPINFO));
 
-	DISPPARAMS dispparams = { pvarArgs, NULL, nParamCount,  0 };
+	HRESULT hr = m_dispatch->Invoke(
+		lPropNum,
+		IID_NULL,
+		LOCALE_SYSTEM_DEFAULT,
+		DISPATCH_PROPERTYGET,
+		&dp,
+		&oleVariant,
+		&ExcepInfo,
+		&uiArgErr
+	);
 
-	HRESULT hr = m_dispatch->Invoke(aParams.GetIndex(),
+	if (hr != S_OK) {
+		CTranslateError::Error("%s:\n%s", ExcepInfo.bstrSource, ExcepInfo.bstrDescription);
+		return false;
+	}
+
+	return FromVariant(oleVariant, pvarPropVal);
+
+#else 
+	return false;
+#endif 
+}
+
+bool CValueOLE::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray)
+{
+#ifdef __WXMSW__
+
+	if (m_dispatch == NULL)
+		return false;
+
+	VARIANT oleVariant = { 0 };
+
+	//переводим параметры в тип VARIANT
+	VARIANT* pvarArgs = new VARIANT[lSizeArray];
+	for (long arg = 0; arg < lSizeArray; arg++)
+		pvarArgs[lSizeArray - arg - 1] = FromValue(paParams[arg]);
+
+	unsigned int uiArgErr = 0;
+	EXCEPINFO FAR ExcepInfo;
+	wxSecureZeroMemory(&ExcepInfo, sizeof(EXCEPINFO));
+
+	DISPPARAMS dispparams = { pvarArgs, NULL, (UINT)lSizeArray,  0 };
+
+	HRESULT hr = m_dispatch->Invoke(lMethodNum,
 		IID_NULL,
 		LOCALE_SYSTEM_DEFAULT,
 		DISPATCH_METHOD | DISPATCH_PROPERTYGET,
-		&dispparams, &varRet, &ExcepInfo, &uiArgErr);
+		&dispparams, &oleVariant, &ExcepInfo, &uiArgErr);
 
-	for (unsigned int i = 0; i < nParamCount; i++) {
-		FreeValue(pvarArgs[i]);
-	}
+	for (long arg = 0; arg < lSizeArray; arg++)
+		FreeValue(pvarArgs[arg]);
 
 	delete[]pvarArgs;
 
-	if (hr != S_OK)
-	{
+	if (hr != S_OK) {
 		switch (hr)
 		{
-		case DISP_E_EXCEPTION: CTranslateError::Error(_("%s:\n%s"), ExcepInfo.bstrSource, ExcepInfo.bstrDescription); break;
-		case DISP_E_BADPARAMCOUNT: CTranslateError::Error(_("The number of elements provided to DISPPARAMS is different from the number of arguments accepted by the method or property.")); break;
-		case DISP_E_BADVARTYPE: CTranslateError::Error(_("One of the arguments in rgvarg is not a valid variant type. ")); break;
-		case DISP_E_MEMBERNOTFOUND: CTranslateError::Error(_("The requested member does not exist, or the call to Invoke tried to set the value of a read-only property.")); break;
-		case DISP_E_NONAMEDARGS: CTranslateError::Error(_("This implementation of IDispatch does not support named arguments.")); break;
-		case DISP_E_OVERFLOW: CTranslateError::Error(_("One of the arguments in rgvarg could not be coerced to the specified type.")); break;
-		case DISP_E_PARAMNOTFOUND: CTranslateError::Error(_("One of the parameter DISPIDs does not correspond to a parameter on the method. In this case, puArgErr should be set to the first argument that contains the error.")); break;
-		case DISP_E_TYPEMISMATCH: CTranslateError::Error(_("One or more of the arguments could not be coerced. The index within rgvarg of the first parameter with the incorrect type is returned in the puArgErr parameter.")); break;
-		case DISP_E_UNKNOWNINTERFACE: CTranslateError::Error(_("The interface identifier passed in riid is not IID_NULL.)")); break;
-		case DISP_E_UNKNOWNLCID: CTranslateError::Error(_("The member being invoked interprets string arguments according to the LCID, and the LCID is not recognized. If the LCID is not needed to interpret arguments, this error should not be returned.")); break;
-		case DISP_E_PARAMNOTOPTIONAL: CTranslateError::Error(_("A required parameter was omitted.")); break;
-		default: CTranslateError::Error(_("Error: get method return unknown code")); break;
+		case DISP_E_EXCEPTION:
+			CTranslateError::Error("%s:\n%s", ExcepInfo.bstrSource, ExcepInfo.bstrDescription);
+			return false;
+		case DISP_E_BADPARAMCOUNT:
+			CTranslateError::Error("The number of elements provided to DISPPARAMS is different from the number of arguments accepted by the method or property.");
+			return false;
+		case DISP_E_BADVARTYPE:
+			CTranslateError::Error("One of the arguments in rgvarg is not a valid variant type. ");
+			return false;
+		case DISP_E_MEMBERNOTFOUND:
+			CTranslateError::Error("The requested member does not exist, or the call to Invoke tried to set the value of a read-only property.");
+			return false;
+		case DISP_E_NONAMEDARGS:
+			CTranslateError::Error("This implementation of IDispatch does not support named arguments.");
+			return false;
+		case DISP_E_OVERFLOW:
+			CTranslateError::Error("One of the arguments in rgvarg could not be coerced to the specified type.");
+			return false;
+		case DISP_E_PARAMNOTFOUND:
+			CTranslateError::Error("One of the parameter DISPIDs does not correspond to a parameter on the method. In this case, puArgErr should be set to the first argument that contains the error.");
+			return false;
+		case DISP_E_TYPEMISMATCH:
+			CTranslateError::Error("One or more of the arguments could not be coerced. The index within rgvarg of the first parameter with the incorrect type is returned in the puArgErr parameter.");
+			return false;
+		case DISP_E_UNKNOWNINTERFACE:
+			CTranslateError::Error("The interface identifier passed in riid is not IID_NULL.)");
+			return false;
+		case DISP_E_UNKNOWNLCID:
+			CTranslateError::Error("The member being invoked interprets string arguments according to the LCID, and the LCID is not recognized. If the LCID is not needed to interpret arguments, this error should not be returned.");
+			return false;
+		case DISP_E_PARAMNOTOPTIONAL:
+			CTranslateError::Error("A required parameter was omitted.");
+			return false;
+		default:
+			CTranslateError::Error("Error: get method return unknown code");
+			return false;
 		}
 	}
 
-	return FromVariant(varRet);
+	return FromVariant(oleVariant, pvarRetValue);
 
 #else 
-	return CValue();
+	return false;
 #endif
 }
 

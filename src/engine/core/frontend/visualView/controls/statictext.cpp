@@ -1,6 +1,6 @@
 
 #include "widgets.h"
-#include "compiler/procUnit.h"
+#include "core/compiler/procUnit.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CValueStaticText, IValueWindow)
 
@@ -12,9 +12,9 @@ CValueStaticText::CValueStaticText() : IValueWindow()
 {
 }
 
-wxObject* CValueStaticText::Create(wxObject* parent, IVisualHost* visualHost)
+wxObject* CValueStaticText::Create(wxWindow* wxparent, IVisualHost* visualHost)
 {
-	wxStaticText* staticText = new wxStaticText((wxWindow*)parent, wxID_ANY,
+	wxStaticText* staticText = new wxStaticText(wxparent, wxID_ANY,
 		m_propertyLabel->GetValueAsString(),
 		wxDefaultPosition,
 		wxDefaultSize);
@@ -66,3 +66,9 @@ bool CValueStaticText::SaveData(CMemoryWriter& writer)
 
 	return IValueWindow::SaveData(writer);
 }
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+CONTROL_VALUE_REGISTER(CValueStaticText, "statictext", "widget", TEXT2CLSID("CT_STTX"));

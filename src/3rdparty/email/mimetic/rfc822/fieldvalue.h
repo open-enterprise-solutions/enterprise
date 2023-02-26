@@ -19,7 +19,7 @@
 #define _MIMETIC_RFC822_FIELDVALUE_H_
 
 #include <string>
-#include <email/mimetic/strutils.h>
+#include <3rdparty/email/mimetic/strutils.h>
 
 namespace mimetic
 {

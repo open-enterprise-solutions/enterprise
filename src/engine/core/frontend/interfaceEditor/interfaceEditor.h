@@ -4,9 +4,9 @@
 #include <wx/panel.h>
 #include <wx/treectrl.h>
 
-#include "common/docInfo.h"
+#include "frontend/docView/docView.h"
 
-#include "compiler/compiler.h"
+#include "core/compiler/compiler.h"
 #include "property/interfaceEditorProperty.h"
 
 #include "frontend/theme/luna_auitoolbar.h"
@@ -25,16 +25,25 @@ class CInterfaceEditor : public wxPanel {
 	IMetaObject* m_metaObject;
 
 	class wxInterfaceItemData : public wxTreeItemData {
-		wxString m_caption; 
-		eMenuType m_menuType;
+		CInterfaceEditorProperty* m_interfaceProperty;
 	public:
+
+		CInterfaceEditorProperty* GetProperty() const {
+			return m_interfaceProperty;
+		}
+
 		wxInterfaceItemData(eMenuType menuType) :
-			m_menuType(menuType)
-		{
+			m_interfaceProperty(new CInterfaceEditorProperty(menuType)) {
+		}
+
+		wxInterfaceItemData(eMenuType menuType, const wxString &caption) :
+			m_interfaceProperty(new CInterfaceEditorProperty(menuType)) {
+		}
+
+		virtual ~wxInterfaceItemData() {
+			delete m_interfaceProperty;
 		}
 	};
-
-	CInterfaceEditorProperty* m_interfaceProperty;
 
 	wxAuiToolBar* m_metaTreeToolbar;
 	wxTreeCtrl* m_menuCtrl;

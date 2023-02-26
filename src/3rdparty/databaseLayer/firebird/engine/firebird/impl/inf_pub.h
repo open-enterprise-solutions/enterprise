@@ -1,5 +1,5 @@
 /*
- *	PROGRAM:	JRD Access Method
+ *	PROGRAM:	JRD Access CallAsFunc
  *	MODULE:		inf.h
  *	DESCRIPTION:	Information call declarations.
  *

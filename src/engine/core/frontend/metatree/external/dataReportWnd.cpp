@@ -4,19 +4,14 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataReportWnd.h"
-#include "compiler/debugger/debugClient.h"
+#include "core/compiler/debugger/debugClient.h"
 #include "frontend/theme/luna_auitoolbar.h"
 
-#include "common/templates/dataReportFile.h"
+#include "core/frontend/docView/templates/dataReportFile.h"
 
 #include <wx/artprov.h>
 
 wxIMPLEMENT_DYNAMIC_CLASS(CDataReportTree, wxPanel);
-
-extern wxImageList* GetImageList();
-
-wxBEGIN_EVENT_TABLE(CDataReportTree, wxPanel)
-wxEND_EVENT_TABLE()
 
 #define ICON_SIZE 16
 
@@ -233,8 +228,6 @@ wxIMPLEMENT_DYNAMIC_CLASS(CDataReportTree::CDataReportTreeWnd, wxTreeCtrl);
 //**********************************************************************************
 
 wxBEGIN_EVENT_TABLE(CDataReportTree::CDataReportTreeWnd, wxTreeCtrl)
-
-EVT_PROPERTY_MODIFIED(CDataReportTree::CDataReportTreeWnd::OnPropertyModified)
 
 EVT_LEFT_UP(CDataReportTree::CDataReportTreeWnd::OnLeftUp)
 EVT_LEFT_DOWN(CDataReportTree::CDataReportTreeWnd::OnLeftDown)

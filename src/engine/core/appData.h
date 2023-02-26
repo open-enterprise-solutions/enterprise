@@ -3,52 +3,43 @@
 
 #include <set>
 
-#include "core.h"
+#include "core/core.h"
+#include "core/common/formdefs.h"
+#include "core/common/types.h"
 
-#include "common/formdefs.h"
-#include "common/types.h"
-#include "guid/guid.h"
+#include <3rdparty/guid/guid.h>
 
 #include <wx/stc/stc.h>
 #include <wx/thread.h>
 
-class CValue;
-class CConfigMetadata;
-class IMetaObject;
-class CMethods;
-class IModuleManager;
-class CProcUnit;
-class CMetadataTree;
+#define appData				(ApplicationData::Get())
+#define appDataDestroy()	(ApplicationData::Destroy())
 
-struct CByteCode;
+#define databaseLayer		(ApplicationData::GetObjectDatabase())
+
+enum eRunMode {
+	eDESIGNER_MODE = 1,
+	eENTERPRISE_MODE = 2,
+	eSERVICE_MODE = 3
+};
+
+enum eDBMode {
+	eFirebird,
+	ePostgres
+};
 
 class DatabaseLayer;
-
-#define appData         	(ApplicationData::Get())
-#define appDataCreate(path) (ApplicationData::Get(path))
-#define appDataDestroy()  	(ApplicationData::Destroy())
-
-#define databaseLayer      appData->GetObjectDatabase()
-
-enum eRunMode
-{
-	START_MODE = 0,
-
-	DESIGNER_MODE = 1,
-	ENTERPRISE_MODE = 2,
-	SERVICE_MODE = 3
-};
 
 // This class is a singleton class.
 class CORE_API ApplicationData {
 
 	eRunMode m_runMode;
 
-	Guid m_sessionGuid;
-
 	wxString m_projectPath;
 	wxString m_projectDir;
 	wxString m_userPath; //каталог пользователя для записи настроек
+
+	Guid m_sessionGuid;
 
 	wxString m_userName;
 	wxString m_userPassword;
@@ -58,59 +49,73 @@ class CORE_API ApplicationData {
 	wxDateTime m_lastActivity;
 
 	DatabaseLayer* m_objDb;  // Base de datos de objetos
-	wxTimer *m_sessionTimer;
+	wxTimer* m_sessionTimer;
 
 	wxCriticalSection m_sessionLocker;
 
 private:
 
 	bool m_bSingleMode; //Монопольный режим
-	static ApplicationData *s_instance;
+	static ApplicationData* s_instance;
 
 	// hiden constructor
-	ApplicationData(const wxString &rootdir = wxT(".")); //for file db 
-
-	void RefreshActiveUsers(); 
+	ApplicationData(DatabaseLayer* db, eRunMode runMode);
+	void RefreshActiveUsers();
 
 public:
 
 	~ApplicationData();
-	static ApplicationData* Get(const wxString &rootdir = wxT("."));
+
+	static bool CreateAppData(eDBMode dbMode, eRunMode runMode, const wxString& strDatabase); //for file db 
+	static bool CreateAppData(eDBMode dbMode, eRunMode runMode, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword);
+	static bool CreateAppData(eDBMode dbMode, eRunMode runMode, const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword);
+	static bool CreateAppData(eDBMode dbMode, eRunMode runMode, const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword, const wxString& strRole);
+
+	static ApplicationData* Get() {
+		return s_instance;
+	}
 
 	// Force the static appData instance to Init()
-	static bool Initialize(eRunMode eMode, const wxString &user, const wxString &password);
+	static bool Initialize(const wxString& user, const wxString& password);
 	static void Destroy();
 
 	// Initialize application
-	bool Connect(eRunMode eMode, const wxString &user, const wxString &password);
+	bool Connect(const wxString& user, const wxString& password);
 	bool Disconnect();
 
 	bool SaveConfiguration();
 
-	DatabaseLayer *GetObjectDatabase() const { return m_objDb; }
+	static DatabaseLayer* GetObjectDatabase() {
+		if (s_instance != NULL)
+			return s_instance->m_objDb;
+		return NULL;
+	}
 
 	eRunMode GetAppMode() const {
 		return m_runMode;
 	}
 
 	bool DesignerMode() const {
-		return m_runMode == eRunMode::DESIGNER_MODE;
+		return m_runMode == eRunMode::eDESIGNER_MODE;
 	}
 
 	bool EnterpriseMode() const {
-		return m_runMode == eRunMode::ENTERPRISE_MODE;
+		return m_runMode == eRunMode::eENTERPRISE_MODE;
 	}
 
 	bool ServiceMode() const {
-		return m_runMode == eRunMode::SERVICE_MODE;
+		return m_runMode == eRunMode::eSERVICE_MODE;
 	}
 
-	wxString GetModeDescr(eRunMode mode) const {
+	wxString GetModeDescr(const eRunMode& mode) const {
 		switch (mode)
 		{
-		case DESIGNER_MODE: return _("Designer");
-		case ENTERPRISE_MODE: return _("Thick client");
-		case SERVICE_MODE: return _("Deamon");
+		case eDESIGNER_MODE:
+			return _("Designer");
+		case eENTERPRISE_MODE:
+			return _("Thick client");
+		case eSERVICE_MODE:
+			return _("Deamon");
 		}
 		return wxEmptyString;
 	}
@@ -124,11 +129,11 @@ public:
 		return m_bSingleMode;
 	}
 
-	const wxString &GetUserName() const {
+	const wxString& GetUserName() const {
 		return m_userName;
 	};
 
-	const wxString &GetUserPassword() const {
+	const wxString& GetUserPassword() const {
 		return m_userPassword;
 	};
 
@@ -136,24 +141,24 @@ public:
 		return m_computerName;
 	}
 
-	const wxString &GetProjectPath() const {  /** Path to the mtd file that is opened. */
+	const wxString& GetProjectPath() const {  /** Path to the mtd file that is opened. */
 		return m_projectPath;
 	}
 
-	const wxString &GetApplicationPath() const {
+	const wxString& GetApplicationPath() const {
 		return m_projectDir;
 	};
 
 	wxArrayString GetAllowedUsers() const;
 
 	wxString ComputeMd5() const;
-	wxString ComputeMd5(const wxString &userPassword) const;
+	wxString ComputeMd5(const wxString& userPassword) const;
 
 	bool HasAllowedUsers() const;
-	bool CheckLoginAndPassword(const wxString &userName, const wxString &md5Password) const;
+	bool CheckLoginAndPassword(const wxString& userName, const wxString& md5Password) const;
 	bool ShowAuthorizationWnd();
 
-	bool StartSession(const wxString &userName, const wxString &md5Password);
+	bool StartSession(const wxString& userName, const wxString& md5Password);
 	bool CloseSession();
 
 protected:

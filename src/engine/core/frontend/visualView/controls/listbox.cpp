@@ -1,6 +1,6 @@
 
 #include "widgets.h"
-#include "compiler/procUnit.h"
+#include "core/compiler/procUnit.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CValueListBox, IValueWindow)
 
@@ -12,9 +12,9 @@ CValueListBox::CValueListBox() : IValueWindow()
 {
 }
 
-wxObject* CValueListBox::Create(wxObject* parent, IVisualHost* visualHost)
+wxObject* CValueListBox::Create(wxWindow* wxparent, IVisualHost* visualHost)
 {
-	wxListBox* m_listbox = new wxListBox((wxWindow*)parent, wxID_ANY,
+	wxListBox* m_listbox = new wxListBox(wxparent, wxID_ANY,
 		wxDefaultPosition,
 		wxDefaultSize,
 		0,

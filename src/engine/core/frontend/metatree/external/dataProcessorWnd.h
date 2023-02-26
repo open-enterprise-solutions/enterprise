@@ -7,7 +7,7 @@
 #include <wx/statbox.h>
 #include <wx/statline.h>
 
-#include "metadata/external/metadataDataProcessor.h"
+#include "core/metadata/external/metadataDataProcessor.h"
 #include "frontend/metatree/metatreeWnd.h"
  
 class CDataProcessorTree : public IMetadataTree {
@@ -109,7 +109,6 @@ protected:
 		void OnPasteItem(wxCommandEvent& event);
 
 		void OnDebugEvent(wxDebugEvent& event);
-		void OnPropertyModified(wxFramePropertyEvent& event);
 
 		void OnSelecting(wxTreeEvent& event);
 		void OnSelected(wxTreeEvent& event);
@@ -237,8 +236,6 @@ public:
 	bool Save();
 
 	void ClearTree();
-
-	wxDECLARE_EVENT_TABLE();
 };
 
 #endif 

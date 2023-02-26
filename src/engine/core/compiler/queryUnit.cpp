@@ -5,7 +5,7 @@
 
 #include "queryunit.h"
 #include "utils/stringUtils.h"
-#include "databaseLayer/databaseLayer.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 #include "appData.h"
 
 CQueryUnit::CQueryUnit() : queryText(wxEmptyString) {}
@@ -24,12 +24,12 @@ wxString CQueryUnit::GetQueryText()
 
 void CQueryUnit::SetQueryParam(const wxString &sParamName, CValue cParam)
 {
-	aParams[StringUtils::MakeUpper(sParamName)] = cParam;
+	paParams[StringUtils::MakeUpper(sParamName)] = cParam;
 }
 
 CValue CQueryUnit::GetQueryParam(const wxString &sParamName)
 {
-	return aParams[StringUtils::MakeUpper(sParamName)];
+	return paParams[StringUtils::MakeUpper(sParamName)];
 }
 
 void CQueryUnit::Execute()
@@ -39,5 +39,5 @@ void CQueryUnit::Execute()
 void CQueryUnit::Reset()
 {
 	queryText = wxEmptyString;
-	aParams.clear();
+	paParams.clear();
 }

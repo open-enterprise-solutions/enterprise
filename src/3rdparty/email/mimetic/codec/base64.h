@@ -18,9 +18,9 @@
 #ifndef _MIMETIC_CODEC_BASE64_H_
 #define _MIMETIC_CODEC_BASE64_H_
 
-#include <email/mimetic/circular_buffer.h>
-#include <email/mimetic/codec/codec_base.h>
-#include <email/mimetic/codec/codec_chain.h>
+#include <3rdparty/email/mimetic/circular_buffer.h>
+#include <3rdparty/email/mimetic/codec/codec_base.h>
+#include <3rdparty/email/mimetic/codec/codec_chain.h>
 
 namespace mimetic
 {

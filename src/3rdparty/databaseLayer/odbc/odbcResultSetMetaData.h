@@ -12,7 +12,7 @@
     #include <wx/wx.h>
 #endif
 
-#include "databaseLayer/resultSetMetaData.h"
+#include <3rdparty/databaseLayer/resultSetMetaData.h>
 
 #include "odbcInterface.h"
 

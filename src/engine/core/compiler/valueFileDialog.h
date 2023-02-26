@@ -1,8 +1,8 @@
 #ifndef _VALUE_FILEDIALOG_H_
 #define _VALUE_FILEDIALOG_H_
 
-#include "compiler/value.h"
-#include "compiler/enumObject.h"
+#include "core/compiler/value.h"
+#include "core/compiler/enumObject.h"
 
 enum eFileDialogMode {
 	eChooseDirectory = 1,
@@ -10,7 +10,7 @@ enum eFileDialogMode {
 	eSave
 };
 
-class CValueEnumFileDialogMode : public IEnumeration<eFileDialogMode>{
+class CValueEnumFileDialogMode : public IEnumeration<eFileDialogMode> {
 	wxDECLARE_DYNAMIC_CLASS(CValueEnumFileDialogMode);
 public:
 
@@ -48,12 +48,16 @@ class CValueFileDialog : public CValue {
 public:
 
 	//эти методы нужно переопределить в ваших агрегатных объектах:
-	virtual CMethods* GetPMethods() const { return &m_methods; }//получить ссылку на класс помощник разбора имен атрибутов и методов
-	virtual void PrepareNames() const;//этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t &aParams);//вызов метода
+	virtual CMethodHelper* GetPMethods() const {
+		PrepareNames();
+		return &m_methodHelper;
+	}
 
-	virtual void SetAttribute(attributeArg_t &aParams, CValue &cVal);//установка атрибута
-	virtual CValue GetAttribute(attributeArg_t &aParams);//значение атрибута
+	virtual void PrepareNames() const;//этот метод автоматически вызывается для инициализации имен атрибутов и методов
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);//вызов метода
+
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);//установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);//значение атрибута
 
 	CValueFileDialog();
 	virtual ~CValueFileDialog();
@@ -61,17 +65,17 @@ public:
 	virtual inline bool IsEmpty() const override { return false; }
 
 	virtual bool Init() { return false; }
-	virtual bool Init(CValue **aParams);
+	virtual bool Init(CValue** paParams, const long lSizeArray);
 
 	virtual wxString GetTypeString() const { return wxT("fileDialog"); }
 	virtual wxString GetString() const { return wxT("fileDialog"); }
 
 private:
-	static CMethods m_methods;
+	static CMethodHelper m_methodHelper;
 	eFileDialogMode m_dialogMode;
 
-	wxDirDialog *m_dirDialog;
-	wxFileDialog *m_fileDialog;
+	wxDirDialog* m_dirDialog;
+	wxFileDialog* m_fileDialog;
 };
 
 #endif 

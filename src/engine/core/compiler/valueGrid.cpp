@@ -4,63 +4,56 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valuegrid.h"
-#include "methods.h"
 #include "utils/stringUtils.h"
 
 #include "frontend/grid/gridCommon.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CValueGrid, CValue);
 
-CMethods CValueGrid::m_methods;
+CValue::CMethodHelper CValueGrid::m_methodHelper;
 
-CValueGrid::CValueGrid() : CValue(eValueTypes::TYPE_VALUE) {}
+CValueGrid::CValueGrid() : 
+	CValue(eValueTypes::TYPE_VALUE) {
+}
 
-CValueGrid::~CValueGrid() {}
-
-enum
-{
-	enShowGrid = 0,
-};
+CValueGrid::~CValueGrid() {
+}
 
 void CValueGrid::PrepareNames() const
 {
-	SEng aMethods[] =
+	m_methodHelper.ClearHelper();
+	m_methodHelper.AppendFunc(wxT("showGrid"), "showGrid()");
+}
+
+bool CValueGrid::SetPropVal(const long lPropNum, CValue &varPropVal)
+{
+	return false;
+}
+
+bool CValueGrid::GetPropVal(const long lPropNum, CValue& pvarPropVal)
+{
+	return false;
+}
+
+#include "core/frontend/docView/docManager.h"
+
+bool CValueGrid::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray)
+{
+	switch (lMethodNum)
 	{
-		{"showGrid","showGrid()"},
-	};
-
-	int nCountM = sizeof(aMethods) / sizeof(aMethods[0]);
-	m_methods.PrepareMethods(aMethods, nCountM);
-}
-
-void CValueGrid::SetAttribute(attributeArg_t &aParams, CValue &cVal)
-{
-}
-
-CValue CValueGrid::GetAttribute(attributeArg_t &aParams)
-{
-	return CValue();
-}
-
-#include "common/docManager.h"
-
-CValue CValueGrid::Method(methodArg_t &aParams)
-{
-	CValue ret;
-
-	switch (aParams.GetIndex())
-	{
-	case enShowGrid: ShowGrid(aParams[0].GetType() == eValueTypes::TYPE_EMPTY ? docManager->MakeNewDocumentName() : aParams[0].ToString()); break;
+	case enShowGrid: 
+		ShowGrid(
+			paParams[0]->GetType() == eValueTypes::TYPE_EMPTY ? docManager->MakeNewDocumentName() : paParams[0]->GetString()
+		); 
+		return true;
 	}
-
-	return ret;
+	return false;
 }
 
-#include "common/cmdProc.h"
 #include "frontend/mainFrame.h"
 #include "frontend/mainFrameChild.h"
-#include "common/templates/template.h"
-#include "common/docManager.h"
+#include "core/frontend/docView/templates/template.h"
+#include "core/frontend/docView/docManager.h"
 
 bool CValueGrid::ShowGrid(const wxString &sTitle)
 {
@@ -79,7 +72,7 @@ bool CValueGrid::ShowGrid(const wxString &sTitle)
 	view->SetDocument(m_document);
 
 	// create a child valueForm of appropriate class for the current mode
-	CDocChildFrame *subvalueFrame = new CDocChildFrame(m_document, view.get(), CMainFrame::Get(), wxID_ANY, sTitle, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE);
+	wxAuiMDIDocChildFrame *subvalueFrame = new wxAuiMDIDocChildFrame(m_document, view.get(), wxAuiDocMDIFrame::GetFrame(), wxID_ANY, sTitle, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE);
 	subvalueFrame->SetExtraStyle(wxWS_EX_BLOCK_EVENTS);
 
 	if (view->OnCreate(m_document, wxDOC_NEW)) { view->ShowFrame(); }

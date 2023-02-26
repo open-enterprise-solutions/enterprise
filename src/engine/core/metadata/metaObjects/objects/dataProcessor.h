@@ -91,7 +91,7 @@ public:
 	}
 
 	//suppot form
-	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
 
 	//get module object in compose object 
 	virtual CMetaModuleObject* GetModuleObject() const {
@@ -133,35 +133,19 @@ public:
 //*                                      Object                                              *
 //********************************************************************************************
 
-#define thisObject wxT("thisObject")
-
 class CObjectDataProcessor : public IRecordDataObjectExt {
 protected:
 	CObjectDataProcessor(CMetaObjectDataProcessor* metaObject);
 	CObjectDataProcessor(const CObjectDataProcessor& source);
 public:
 	
-	//****************************************************************************
-	//*                              Support methods                             *
-	//****************************************************************************
-
-	virtual CMethods* GetPMethods() const;
-	virtual void PrepareNames() const;
-	virtual CValue Method(methodArg_t& aParams);
-
-	//****************************************************************************
-	//*                              Override attribute                          *
-	//****************************************************************************
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);
-	virtual CValue GetAttribute(attributeArg_t& aParams);
-
 	//support show 
-	virtual void ShowFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL);
-	virtual CValueForm* GetFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL);
+	virtual void ShowFormValue(const wxString& formName = wxEmptyString, IControlFrame* owner = NULL);
+	virtual CValueForm* GetFormValue(const wxString& formName = wxEmptyString, IControlFrame* owner = NULL);
 
 	//support actions
 	virtual actionData_t GetActions(const form_identifier_t& formType);
-	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm);
+	virtual void ExecuteAction(const action_identifier_t& lNumAction, CValueForm* srcForm);
 
 protected:
 	friend class CMetaObjectDataProcessor;

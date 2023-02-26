@@ -4,8 +4,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataProcessorWnd.h"
-#include "frontend/objinspect/objinspect.h"
-#include "common/docManager.h"
+#include "frontend/mainFrame.h"
+#include "core/frontend/docView/docManager.h"
 #include "appData.h"
 
 #define	objectFormsName _("forms")
@@ -68,6 +68,8 @@ IMetaObject* CDataProcessorTree::CreateItem(bool showValue)
 	if (newObject == NULL)
 		return NULL;
 
+	m_metaTreeWnd->Freeze();
+
 	wxTreeItemId createdItem = NULL;
 	if (itemData->m_clsid == g_metaTableCLSID) {
 		createdItem = AppendGroupItem(selectedItem, g_metaAttributeCLSID, newObject);
@@ -84,6 +86,8 @@ IMetaObject* CDataProcessorTree::CreateItem(bool showValue)
 	m_metaTreeWnd->InvalidateBestSize();
 	m_metaTreeWnd->SelectItem(createdItem);
 	m_metaTreeWnd->Expand(createdItem);
+
+	m_metaTreeWnd->Thaw();
 
 	objectInspector->SelectObject(newObject, m_metaTreeWnd->GetEventHandler());
 	return newObject;
@@ -155,21 +159,22 @@ void CDataProcessorTree::EraseItem(const wxTreeItemId& item)
 	}
 }
 
+#include "frontend/mainFrame.h"
+
 void CDataProcessorTree::PropertyItem()
 {
-	if (appData->GetAppMode() != eRunMode::DESIGNER_MODE)
+	if (appData->GetAppMode() != eRunMode::eDESIGNER_MODE)
 		return;
-	wxTreeItemId sel = m_metaTreeWnd->GetSelection();
+	const wxTreeItemId &sel = m_metaTreeWnd->GetSelection();
 	objectInspector->ClearProperty();
 
 	IMetaObject* metaObject = GetMetaObject(sel);
-
 	UpdateToolbar(metaObject, sel);
 
 	if (!metaObject)
 		return;
 
-	objectInspector->SelectObject(metaObject, m_metaTreeWnd->GetEventHandler());
+	objectInspector->CallAfter(&CObjectInspector::SelectObject, metaObject, m_metaTreeWnd->GetEventHandler());
 }
 
 void CDataProcessorTree::Collapse()
@@ -192,9 +197,10 @@ void CDataProcessorTree::Expand()
 
 void CDataProcessorTree::UpItem()
 {
-	if (appData->GetAppMode() != eRunMode::DESIGNER_MODE)
+	if (appData->GetAppMode() != eRunMode::eDESIGNER_MODE)
 		return;
 
+	m_metaTreeWnd->Freeze();
 	const wxTreeItemId& selection = m_metaTreeWnd->GetSelection();
 	const wxTreeItemId& nextItem = m_metaTreeWnd->GetPrevSibling(selection);
 	IMetaObject* metaObject = GetMetaObject(selection);
@@ -241,16 +247,18 @@ void CDataProcessorTree::UpItem()
 			m_metaTreeWnd->SetItemData(nextItem, NULL);
 			m_metaTreeWnd->Delete(nextItem);
 
-			m_metaTreeWnd->Expand(newId);
+			//m_metaTreeWnd->Expand(newId);
 		}
 	}
+	m_metaTreeWnd->Thaw();
 }
 
 void CDataProcessorTree::DownItem()
 {
-	if (appData->GetAppMode() != eRunMode::DESIGNER_MODE)
+	if (appData->GetAppMode() != eRunMode::eDESIGNER_MODE)
 		return;
 
+	m_metaTreeWnd->Freeze();
 	const wxTreeItemId& selection = m_metaTreeWnd->GetSelection();
 	const wxTreeItemId& prevItem = m_metaTreeWnd->GetNextSibling(selection);
 	IMetaObject* metaObject = GetMetaObject(selection);
@@ -297,15 +305,17 @@ void CDataProcessorTree::DownItem()
 			m_metaTreeWnd->SetItemData(prevItem, NULL);
 			m_metaTreeWnd->Delete(prevItem);
 
-			m_metaTreeWnd->Expand(newId);
+			//m_metaTreeWnd->Expand(newId);
 		}
 	}
+	m_metaTreeWnd->Thaw();
 }
 
 void CDataProcessorTree::SortItem()
 {
-	if (appData->GetAppMode() != eRunMode::DESIGNER_MODE)
+	if (appData->GetAppMode() != eRunMode::eDESIGNER_MODE)
 		return;
+	m_metaTreeWnd->Freeze();
 	const wxTreeItemId& selection = m_metaTreeWnd->GetSelection();
 	IMetaObject* prevObject = GetMetaObject(selection);
 	if (prevObject != NULL && selection.IsOk()) {
@@ -315,11 +325,12 @@ void CDataProcessorTree::SortItem()
 			m_metaTreeWnd->SortChildren(parentItem);
 		}
 	}
+	m_metaTreeWnd->Thaw();
 }
 
 void CDataProcessorTree::CommandItem(unsigned int id)
 {
-	if (appData->GetAppMode() != eRunMode::DESIGNER_MODE)
+	if (appData->GetAppMode() != eRunMode::eDESIGNER_MODE)
 		return;
 	wxTreeItemId sel = m_metaTreeWnd->GetSelection();
 	IMetaObject* metaObject = GetMetaObject(sel);

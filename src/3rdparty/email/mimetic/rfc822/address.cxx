@@ -15,8 +15,8 @@
 
  ***************************************************************************/
 
-#include <email/mimetic/rfc822/address.h>
-#include <email/mimetic/strutils.h>
+#include <3rdparty/email/mimetic/rfc822/address.h>
+#include <3rdparty/email/mimetic/strutils.h>
 
 namespace mimetic
 {

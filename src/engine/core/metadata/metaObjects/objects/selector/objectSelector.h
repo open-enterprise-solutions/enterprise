@@ -1,7 +1,7 @@
 #ifndef _SELECTOR_H__
 #define _SELECTOR_H__
 
-#include "metadata/metaObjects/objects/object.h"
+#include "core/metadata/metaObjects/objects/object.h"
 
 class ISelectorObject : public CValue {
 public:
@@ -20,7 +20,7 @@ public:
 	virtual IMetaObjectWrapperData* GetMetaObject() const = 0;
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const;
+	virtual CLASS_ID GetTypeClass() const;
 
 	//types 
 	virtual wxString GetTypeString() const;
@@ -32,14 +32,14 @@ protected:
 	virtual bool Read() = 0;
 
 protected:
-	CMethods* m_methods;
+	CMethodHelper* m_methodHelper;
 };
 
-class ISelectorDataObject : public ISelectorObject,
+class CSelectorDataObject : public ISelectorObject,
 	public IObjectValueInfo {
 public:
 
-	ISelectorDataObject(IMetaObjectRecordDataMutableRef* metaObject);
+	CSelectorDataObject(IMetaObjectRecordDataMutableRef* metaObject);
 
 	virtual bool Next();
 	virtual IRecordDataObjectRef* GetObject(const Guid& guid) const;
@@ -49,13 +49,17 @@ public:
 		return m_metaObject;
 	}
 
-	virtual CMethods* GetPMethods() const { PrepareNames();  return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethodHelper* GetPMethods() const { //получить ссылку на класс помощник разбора имен атрибутов и методов
+		PrepareNames();
+		return m_methodHelper;
+	}
+
 	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t& aParams);//вызов метода
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);//вызов метода
 
 	//attribute
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
 
 protected:
 
@@ -65,31 +69,35 @@ protected:
 protected:
 
 	IMetaObjectRecordDataMutableRef* m_metaObject;
-	std::vector<Guid> m_aCurrentValues;
+	std::vector<Guid> m_currentValues;
 };
 
 /////////////////////////////////////////////////////////////////////////////
 
-class ISelectorRegisterObject :
+class CSelectorRegisterObject :
 	public ISelectorObject {
 public:
-	ISelectorRegisterObject(IMetaObjectRegisterData* metaObject);
+	CSelectorRegisterObject(IMetaObjectRegisterData* metaObject);
 
 	virtual bool Next();
-	virtual IRecordManagerObject* GetRecordManager(const std::map<meta_identifier_t, CValue>& keyValues) const;
+	virtual IRecordManagerObject* GetRecordManager(const valueArray_t& keyValues) const;
 
 	//get metadata from object 
 	virtual IMetaObjectRegisterData* GetMetaObject() const {
 		return m_metaObject;
 	}
 
-	virtual CMethods* GetPMethods() const { PrepareNames();  return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethodHelper* GetPMethods() const { //получить ссылку на класс помощник разбора имен атрибутов и методов
+		PrepareNames();
+		return m_methodHelper;
+	}
+
 	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t& aParams);//вызов метода
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);//вызов метода
 
 	//attribute
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
 
 protected:
 
@@ -100,11 +108,11 @@ protected:
 
 	IMetaObjectRegisterData* m_metaObject;
 
-	std::map<meta_identifier_t, CValue> m_keyValues;
-	std::vector <std::map<meta_identifier_t, CValue>> m_aCurrentValues;
+	valueArray_t m_keyValues;
+	std::vector <valueArray_t> m_currentValues;
 	std::map<
-		std::map<meta_identifier_t, CValue>,
-		std::map<meta_identifier_t, CValue>
+		valueArray_t,
+		valueArray_t
 	> m_objectValues;
 };
 

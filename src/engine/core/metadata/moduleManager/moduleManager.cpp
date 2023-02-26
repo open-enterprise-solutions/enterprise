@@ -4,10 +4,9 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "moduleManager.h"
-#include "metadata/metaObjects/objects/systemManager.h"
-#include "compiler/enumFactory.h"
-#include "compiler/methods.h"
-#include "compiler/systemObjects.h"
+#include "core/metadata/metaObjects/objects/systemManager.h"
+#include "core/compiler/enumFactory.h"
+#include "core/compiler/systemObjects.h"
 #include "utils/stringUtils.h"
 #include "appData.h"
 
@@ -23,11 +22,11 @@
 //*                                   Singleton class "moduleManager"                                     *
 //*********************************************************************************************************
 
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 IModuleManager::IModuleManager(IMetadata* metaData, CMetaModuleObject* obj) :
 	CValue(eValueTypes::TYPE_MODULE), IModuleInfo(new CGlobalCompileModule(obj)),
-	m_methods(new CMethods()),
+	m_methodHelper(new CMethodHelper()),
 	m_initialized(false)
 {
 	//increment reference
@@ -65,7 +64,7 @@ IModuleManager::~IModuleManager()
 {
 	Clear();
 
-	wxDELETE(m_methods);
+	wxDELETE(m_methodHelper);
 
 	wxDELETE(m_objectManager);
 	wxDELETE(m_objectSysManager);
@@ -242,8 +241,7 @@ bool CModuleManager::CreateMainModule()
 		try {
 			m_compileModule->Compile();
 		}
-		catch (const CTranslateError*)
-		{
+		catch (const CTranslateError*) {
 			return false;
 		};
 
@@ -284,10 +282,8 @@ bool CModuleManager::DestroyMainModule()
 	wxDELETE(m_procUnit);
 
 	//Setup common modules
-	for (auto moduleValue : m_aCommonModules)
-	{
-		if (!moduleValue->DestroyCommonModule())
-		{
+	for (auto moduleValue : m_aCommonModules) {
+		if (!moduleValue->DestroyCommonModule()) {
 			if (appData->EnterpriseMode() ||
 				appData->ServiceMode())
 				return false;
@@ -387,17 +383,14 @@ bool CExternalDataProcessorModuleManager::CreateMainModule()
 	m_objectValue->InitializeObject();
 
 	if (appData->EnterpriseMode() ||
-		appData->ServiceMode())
-	{
+		appData->ServiceMode()) {
 		m_procUnit = new CProcUnit();
 		m_procUnit->SetParent(moduleManager->GetProcUnit());
 
-		try
-		{
+		try {
 			m_compileModule->Compile();
 		}
-		catch (const CTranslateError*)
-		{
+		catch (const CTranslateError*) {
 			return false;
 		};
 
@@ -485,23 +478,22 @@ bool CExternalDataProcessorModuleManager::StartMainModule()
 			}
 		}
 	}
-	else {
-		CValueForm* valueForm = new CValueForm;
-		valueForm->InitializeForm(NULL, NULL, m_objectValue, Guid::newGuid());
-		valueForm->BuildForm(CMetaObjectDataProcessor::eFormDataProcessor);
-		try {
-			valueForm->ShowForm();
-		}
-		catch (...) {
-			wxDELETE(valueForm);
-			if (appData->EnterpriseMode() ||
-				appData->ServiceMode()) {
-				//decrRef - for control delete 
-				m_objectValue->DecrRef();
-				return false;
-			}
-		}
-	}
+	//else {
+	//	CValueForm* valueForm = new CValueForm(NULL, NULL, m_objectValue, Guid::newGuid());
+	//	valueForm->BuildForm(CMetaObjectDataProcessor::eFormDataProcessor);
+	//	try {
+	//		valueForm->ShowForm();
+	//	}
+	//	catch (...) {
+	//		wxDELETE(valueForm);
+	//		if (appData->EnterpriseMode() ||
+	//			appData->ServiceMode()) {
+	//			//decrRef - for control delete 
+	//			m_objectValue->DecrRef();
+	//			return false;
+	//		}
+	//	}
+	//}
 
 	//decrRef - for control delete 
 	m_objectValue->DecrRef();
@@ -681,23 +673,22 @@ bool CExternalReportModuleManager::StartMainModule()
 			}
 		}
 	}
-	else {
-		CValueForm* valueForm = new CValueForm;
-		valueForm->InitializeForm(NULL, NULL, m_objectValue, Guid::newGuid());
-		valueForm->BuildForm(CMetaObjectReport::eFormReport);
-		try {
-			valueForm->ShowForm();
-		}
-		catch (...) {
-			wxDELETE(valueForm);
-			if (appData->EnterpriseMode() ||
-				appData->ServiceMode()) {
-				//decrRef - for control delete 
-				m_objectValue->DecrRef();
-				return false;
-			}
-		}
-	}
+	//else {
+	//	CValueForm* valueForm = new CValueForm(NULL, NULL, m_objectValue, Guid::newGuid());
+	//	valueForm->BuildForm(CMetaObjectReport::eFormReport);
+	//	try {
+	//		valueForm->ShowForm();
+	//	}
+	//	catch (...) {
+	//		wxDELETE(valueForm);
+	//		if (appData->EnterpriseMode() ||
+	//			appData->ServiceMode()) {
+	//			//decrRef - for control delete 
+	//			m_objectValue->DecrRef();
+	//			return false;
+	//		}
+	//	}
+	//}
 
 	//decrRef - for control delete 
 	m_objectValue->DecrRef();
@@ -718,8 +709,249 @@ bool CExternalReportModuleManager::ExitMainModule(bool force)
 }
 
 //**********************************************************************
+
+void IModuleManager::PrepareNames() const
+{
+	m_methodHelper->ClearHelper();
+	if (m_procUnit != NULL) {
+		byteCode_t* byteCode = m_procUnit->GetByteCode();
+		for (auto exportFunction : byteCode->m_aExportFuncList) {
+			m_methodHelper->AppendMethod(
+				exportFunction.first,
+				byteCode->GetNParams(exportFunction.second),
+				byteCode->HasRetVal(exportFunction.second),
+				exportFunction.second,
+				eProcUnit
+			);
+		}
+		for (auto exportVariable : byteCode->m_aExportVarList) {
+			m_methodHelper->AppendProp(
+				exportVariable.first,
+				exportVariable.second,
+				eProcUnit
+			);
+		}
+	}
+}
+
+bool IModuleManager::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray)
+{
+	return IModuleInfo::ExecuteFunc(
+		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
+	);
+}
+
+bool IModuleManager::SetPropVal(const long lPropNum, const CValue& varPropVal)        //установка атрибута
+{
+	if (m_procUnit != NULL)
+		return m_procUnit->SetPropVal(lPropNum, varPropVal);
+	return false;
+}
+
+bool IModuleManager::GetPropVal(const long lPropNum, CValue& pvarPropVal)                   //значение атрибута
+{
+	if (m_procUnit != NULL)
+		return m_procUnit->GetPropVal(lPropNum, pvarPropVal);
+	return false;
+}
+
+long IModuleManager::FindProp(const wxString& sName) const
+{
+	if (m_procUnit != NULL) {
+		return m_procUnit->FindProp(sName);
+	}
+
+	return CValue::FindProp(sName);
+}
+
+//****************************************************************************
+//*                      CExternalDataProcessorModuleManager                 *
+//****************************************************************************
+
+void CExternalDataProcessorModuleManager::PrepareNames() const
+{
+	m_methodHelper->ClearHelper();
+	if (m_objectValue != NULL) {
+		CMethodHelper* methodHelper = m_objectValue->GetPMethods();
+		wxASSERT(methodHelper);
+		for (long idx = 0; idx < methodHelper->GetNMethods(); idx++) {
+			m_methodHelper->CopyMethod(methodHelper, idx);
+		}
+		for (long idx = 0; idx < methodHelper->GetNProps(); idx++) {
+			m_methodHelper->CopyProp(methodHelper, idx);
+		}
+	}
+
+	if (m_procUnit != NULL) {
+		byteCode_t* byteCode = m_procUnit->GetByteCode();
+		for (auto exportFunction : byteCode->m_aExportFuncList) {
+			m_methodHelper->AppendMethod(
+				exportFunction.first,
+				byteCode->GetNParams(exportFunction.second),
+				byteCode->HasRetVal(exportFunction.second),
+				exportFunction.second,
+				eProcUnit
+			);
+		}
+		for (auto exportVariable : byteCode->m_aExportVarList) {
+			m_methodHelper->AppendProp(
+				exportVariable.first,
+				exportVariable.second,
+				eProcUnit
+			);
+		}
+	}
+}
+
+bool CExternalDataProcessorModuleManager::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray)
+{
+	if (m_objectValue &&
+		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
+		return m_objectValue->CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
+	}
+
+	return IModuleInfo::ExecuteFunc(
+		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
+	);
+}
+
+bool CExternalDataProcessorModuleManager::SetPropVal(const long lPropNum, const CValue& varPropVal)
+{
+	if (m_objectValue &&
+		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
+		return m_objectValue->SetPropVal(lPropNum, varPropVal);
+	}
+
+	if (m_procUnit != NULL) {
+		return m_procUnit->SetPropVal(lPropNum, varPropVal);
+	}
+
+	return false;
+}
+
+bool CExternalDataProcessorModuleManager::GetPropVal(const long lPropNum, CValue& pvarPropVal)
+{
+	if (m_objectValue &&
+		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
+		return m_objectValue->GetPropVal(lPropNum, pvarPropVal);
+	}
+
+	if (m_procUnit != NULL) {
+		return m_procUnit->GetPropVal(lPropNum, pvarPropVal);
+	}
+
+	return false;
+}
+
+long CExternalDataProcessorModuleManager::FindProp(const wxString& sName) const
+{
+	if (m_objectValue &&
+		m_objectValue->FindProp(sName) != wxNOT_FOUND) {
+		return m_objectValue->FindProp(sName);
+	}
+
+	if (m_procUnit != NULL) {
+		return m_procUnit->FindProp(sName);
+	}
+
+	return CValue::FindProp(sName);
+}
+
+//****************************************************************************
+//*                      CExternalReportModuleManager		                 *
+//****************************************************************************
+
+void CExternalReportModuleManager::PrepareNames() const
+{
+	m_methodHelper->ClearHelper();
+	if (m_objectValue != NULL) {
+		CMethodHelper* methodHelper = m_objectValue->GetPMethods();
+		wxASSERT(methodHelper);
+		for (long idx = 0; idx < methodHelper->GetNMethods(); idx++) {
+			m_methodHelper->CopyMethod(methodHelper, idx);
+		}
+		for (long idx = 0; idx < methodHelper->GetNProps(); idx++) {
+			m_methodHelper->CopyProp(methodHelper, idx);
+		}
+	}
+	if (m_procUnit != NULL) {
+		byteCode_t* byteCode = m_procUnit->GetByteCode();
+		for (auto exportFunction : byteCode->m_aExportFuncList) {
+			m_methodHelper->AppendMethod(
+				exportFunction.first,
+				byteCode->GetNParams(exportFunction.second),
+				byteCode->HasRetVal(exportFunction.second),
+				exportFunction.second,
+				eProcUnit
+			);
+		}
+		for (auto exportVariable : byteCode->m_aExportVarList) {
+			m_methodHelper->AppendProp(
+				exportVariable.first,
+				exportVariable.second,
+				eProcUnit
+			);
+		}
+	}
+}
+
+bool CExternalReportModuleManager::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray)
+{
+	if (m_objectValue &&
+		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
+		return m_objectValue->CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
+	}
+
+	return IModuleInfo::ExecuteFunc(
+		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
+	);
+}
+
+bool CExternalReportModuleManager::SetPropVal(const long lPropNum, const CValue& varPropVal)        //установка атрибута
+{
+	if (m_objectValue &&
+		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
+		return m_objectValue->SetPropVal(lPropNum, varPropVal);
+	}
+
+	if (m_procUnit != NULL) {
+		return m_procUnit->SetPropVal(lPropNum, varPropVal);
+	}
+
+	return false;
+}
+
+bool CExternalReportModuleManager::GetPropVal(const long lPropNum, CValue& pvarPropVal)                   //значение атрибута
+{
+	if (m_objectValue &&
+		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
+		return m_objectValue->GetPropVal(lPropNum, pvarPropVal);
+	}
+
+	if (m_procUnit != NULL) {
+		return m_procUnit->GetPropVal(lPropNum, pvarPropVal);
+	}
+
+	return false;
+}
+
+long CExternalReportModuleManager::FindProp(const wxString& sName) const
+{
+	if (m_objectValue &&
+		m_objectValue->FindProp(sName) != wxNOT_FOUND) {
+		return m_objectValue->FindProp(sName);
+	}
+
+	if (m_procUnit != NULL) {
+		return m_procUnit->FindProp(sName);
+	}
+
+	return CValue::FindProp(sName);
+}
+
+//**********************************************************************
 //*                       Runtime register                             *
 //**********************************************************************
 
-SO_VALUE_REGISTER(IModuleManager::CModuleValue, "module", CModuleValue, TEXT2CLSID("SO_MODL"));
-SO_VALUE_REGISTER(IModuleManager::CMetadataValue, "metadata", CMetadataValue, TEXT2CLSID("SO_METD"));
+SO_VALUE_REGISTER(IModuleManager::CModuleValue, "module", TEXT2CLSID("SO_MODL"));
+SO_VALUE_REGISTER(IModuleManager::CMetadataValue, "metadata", TEXT2CLSID("SO_METD"));

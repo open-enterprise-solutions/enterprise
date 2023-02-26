@@ -26,9 +26,9 @@
 
 #include <fstream>
 #include <cstdlib>
-#include <email/mimetic/message.h>
-#include <email/mimetic/contenttype.h>
-#include <email/mimetic/utils.h>
+#include <3rdparty/email/mimetic/message.h>
+#include <3rdparty/email/mimetic/contenttype.h>
+#include <3rdparty/email/mimetic/utils.h>
 
 namespace mimetic
 {

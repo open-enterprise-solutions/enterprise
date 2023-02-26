@@ -20,8 +20,8 @@
 
 #include <string>
 #include <vector>
-#include <email/mimetic/utils.h>
-#include <email/mimetic/rfc822/mailbox.h>
+#include <3rdparty/email/mimetic/utils.h>
+#include <3rdparty/email/mimetic/rfc822/mailbox.h>
 
 
 namespace mimetic

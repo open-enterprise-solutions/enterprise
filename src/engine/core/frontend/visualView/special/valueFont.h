@@ -1,41 +1,44 @@
 #ifndef _VALUEFONT_H__
 #define _VALUEFONT_H__
 
-#include "compiler/value.h"
+#include "core/compiler/value.h"
 
 //Поддержка массивов
 class CValueFont : public CValue
 {
 	wxDECLARE_DYNAMIC_CLASS(CValueFont);
-
-public:
-
+private:
 	wxFont m_font;
-
 public:
 
 	CValueFont();
-	CValueFont(const wxFont &font);
+	CValueFont(const wxFont& font);
+	virtual ~CValueFont();
 
-	virtual bool Init(CValue **aParams);
+	virtual bool Init(CValue** paParams, const long lSizeArray);
 
 	virtual wxString GetTypeString() const;
 	virtual wxString GetString() const;
 
 	//check is empty
-	virtual inline bool IsEmpty() const override { return !m_font.IsOk(); }
+	virtual inline bool IsEmpty() const override {
+		return !m_font.IsOk();
+	}
 
-	static CMethods m_methods;
+	static CMethodHelper m_methodHelper;
 
-	virtual void SetAttribute(attributeArg_t &aParams, CValue &cValue);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t &aParams);                   //значение атрибута
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
 
-	virtual CMethods* GetPMethods() const { return &m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethodHelper* GetPMethods() const {
+		PrepareNames();
+		return &m_methodHelper;
+	}
 	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
 
-	operator wxFont() { return m_font; }
-
-	virtual ~CValueFont();
+	operator wxFont() {
+		return m_font;
+	}
 };
 
 #endif

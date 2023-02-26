@@ -21,10 +21,10 @@
 
 #include <string>
 #include <math.h>
-#include <email/mimetic/rfc822/body.h>
-#include <email/mimetic/codec/code.h>
-#include <email/mimetic/mimeentitylist.h>
-#include <email/mimetic/wxFileIterator.h>
+#include <3rdparty/email/mimetic/rfc822/body.h>
+#include <3rdparty/email/mimetic/codec/code.h>
+#include <3rdparty/email/mimetic/mimeentitylist.h>
+#include <3rdparty/email/mimetic/wxFileIterator.h>
 
 namespace mimetic
 {

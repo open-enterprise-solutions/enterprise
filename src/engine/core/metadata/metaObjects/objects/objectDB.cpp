@@ -5,9 +5,9 @@
 
 #include "object.h"
 #include "appData.h"
-#include "databaseLayer/databaseLayer.h"
-#include "databaseLayer/databaseErrorCodes.h"
-#include "metadata/metaObjects/objects/tabularSection/tabularSection.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
+#include "core/metadata/metaObjects/objects/tabularSection/tabularSection.h"
 #include "utils/stringUtils.h"
 
 //**********************************************************************************************************
@@ -16,7 +16,7 @@
 
 wxString IMetaObjectRecordDataRef::GetTableNameDB() const
 {
-	wxString className = GetClassName();
+	const wxString& className = GetClassName();
 	wxASSERT(m_metaId != 0);
 	return wxString::Format("%s%i",
 		className, GetMetaID());
@@ -32,8 +32,11 @@ int IMetaObjectRecordDataRef::ProcessEnumeration(const wxString& tableName, cons
 	int retCode = 1;
 	//is null - create
 	if (dstEnum == NULL) {
-		PreparedStatement* prepareStatement =
-			databaseLayer->PrepareStatement("UPDATE OR INSERT INTO %s (UUID, UUIDREF) VALUES (?, ?) MATCHING(UUID);", tableName);
+		PreparedStatement* prepareStatement = NULL;
+		if (databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+			prepareStatement = databaseLayer->PrepareStatement("INSERT INTO %s (UUID, UUIDREF) VALUES (?, ?) ON CONFLICT(UUID) DO UPDATE SET UUID = excluded.UUID, UUIDREF = excluded.UUIDREF;", tableName);
+		else
+			prepareStatement = databaseLayer->PrepareStatement("UPDATE OR INSERT INTO %s (UUID, UUIDREF) VALUES (?, ?) MATCHING(UUID);", tableName);
 		if (prepareStatement == NULL)
 			return 0;
 		reference_t* reference_impl = new reference_t{ id, srcEnum->GetGuid() };
@@ -45,8 +48,11 @@ int IMetaObjectRecordDataRef::ProcessEnumeration(const wxString& tableName, cons
 	}
 	// update 
 	else if (srcEnum != NULL) {
-		PreparedStatement* prepareStatement =
-			databaseLayer->PrepareStatement("UPDATE OR INSERT INTO %s (UUID, UUIDREF) VALUES (?, ?) MATCHING(UUID);", tableName);
+		PreparedStatement* prepareStatement = NULL;
+		if (databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+			prepareStatement = databaseLayer->PrepareStatement("INSERT INTO %s (UUID, UUIDREF) VALUES (?, ?) ON CONFLICT(UUID) DO UPDATE SET UUID = excluded.UUID, UUIDREF = excluded.UUIDREF;", tableName);
+		else
+			prepareStatement = databaseLayer->PrepareStatement("UPDATE OR INSERT INTO %s (UUID, UUIDREF) VALUES (?, ?) MATCHING(UUID);", tableName);
 		if (prepareStatement == NULL)
 			return 0;
 		reference_t* reference_impl = new reference_t{ id, srcEnum->GetGuid() };
@@ -69,10 +75,12 @@ int IMetaObjectRecordDataRef::ProcessTable(const wxString& tabularName, CMetaTab
 	int retCode = 1;
 	//is null - create
 	if (dstTable == NULL) {
-		retCode = databaseLayer->RunQuery("CREATE TABLE %s (UUID VARCHAR(36) NOT NULL, UUIDREF BLOB);", tabularName);
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR) return retCode;
-		CMetaDefaultAttributeObject* attrNumberLine = srcTable->GetNumberLine();
-		wxASSERT(attrNumberLine);
+		if (databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+			retCode = databaseLayer->RunQuery("CREATE TABLE %s (UUID VARCHAR(36) NOT NULL, UUIDREF BYTEA);", tabularName);
+		else
+			retCode = databaseLayer->RunQuery("CREATE TABLE %s (UUID VARCHAR(36) NOT NULL, UUIDREF BLOB);", tabularName);
+		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
+			return retCode;
 		//default attributes
 		for (auto attribute : srcTable->GetGenericAttributes()) {
 			retCode = ProcessAttribute(tabularName,
@@ -83,7 +91,7 @@ int IMetaObjectRecordDataRef::ProcessTable(const wxString& tabularName, CMetaTab
 	else if (srcTable != NULL) {
 		for (auto attribute : srcTable->GetGenericAttributes()) {
 			retCode = ProcessAttribute(tabularName,
-				attribute, dstTable->FindAttributeByName(attribute->GetDocPath())
+				attribute, dstTable->FindAttributeByGuid(attribute->GetDocPath())
 			);
 			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 				return retCode;
@@ -99,10 +107,22 @@ int IMetaObjectRecordDataRef::ProcessTable(const wxString& tabularName, CMetaTab
 
 bool IMetaObjectRecordDataRef::CreateAndUpdateTableDB(IConfigMetadata* srcMetaData, IMetaObject* srcMetaObject, int flags)
 {
-	wxString tableName = GetTableNameDB(); int retCode = DATABASE_LAYER_QUERY_RESULT_ERROR;
+	const wxString& tableName = GetTableNameDB(); int retCode = DATABASE_LAYER_QUERY_RESULT_ERROR;
 
 	if ((flags & createMetaTable) != 0) {
-		retCode = databaseLayer->RunQuery("CREATE TABLE %s (UUID VARCHAR(36) NOT NULL PRIMARY KEY, UUIDREF BLOB);", tableName);
+
+		if (databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+			retCode = databaseLayer->RunQuery("CREATE TABLE %s (UUID VARCHAR(36) NOT NULL PRIMARY KEY, UUIDREF BYTEA);", tableName);
+		else
+			retCode = databaseLayer->RunQuery("CREATE TABLE %s (UUID VARCHAR(36) NOT NULL PRIMARY KEY, UUIDREF BLOB);", tableName);
+
+		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
+			return false;
+
+		retCode = databaseLayer->RunQuery("CREATE INDEX %s_INDEX ON %s (UUID);", tableName, tableName);
+
+		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
+			return false;
 
 		for (auto attribute : GetDefaultAttributes()) {
 			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
@@ -151,7 +171,7 @@ bool IMetaObjectRecordDataRef::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDa
 			//attributes from dst 
 			for (auto attribute : dstValue->GetDefaultAttributes()) {
 				IMetaObject* foundedMeta =
-					IMetaObjectRecordDataRef::FindDefAttributeByName(attribute->GetDocPath());
+					IMetaObjectRecordDataRef::FindDefAttributeByGuid(attribute->GetDocPath());
 				if (dstValue->IsDataReference(attribute->GetMetaID()))
 					continue;
 				if (foundedMeta == NULL) {
@@ -165,7 +185,7 @@ bool IMetaObjectRecordDataRef::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDa
 				if (IMetaObjectRecordDataRef::IsDataReference(attribute->GetMetaID()))
 					continue;
 				retCode = ProcessAttribute(tableName,
-					attribute, dstValue->FindDefAttributeByName(attribute->GetDocPath())
+					attribute, dstValue->FindDefAttributeByGuid(attribute->GetDocPath())
 				);
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return false;
@@ -174,7 +194,7 @@ bool IMetaObjectRecordDataRef::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDa
 			//attributes from dst 
 			for (auto attribute : dstValue->GetObjectAttributes()) {
 				IMetaObject* foundedMeta =
-					IMetaObjectRecordDataRef::FindAttributeByName(attribute->GetDocPath());
+					IMetaObjectRecordDataRef::FindAttributeByGuid(attribute->GetDocPath());
 				if (foundedMeta == NULL) {
 					retCode = ProcessAttribute(tableName, NULL, attribute);
 					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
@@ -184,7 +204,7 @@ bool IMetaObjectRecordDataRef::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDa
 			//attributes current
 			for (auto attribute : GetObjectAttributes()) {
 				retCode = ProcessAttribute(tableName,
-					attribute, dstValue->FindAttributeByName(attribute->GetDocPath())
+					attribute, dstValue->FindAttributeByGuid(attribute->GetDocPath())
 				);
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return false;
@@ -193,7 +213,7 @@ bool IMetaObjectRecordDataRef::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDa
 			//enums from dst 
 			for (auto enumeration : dstValue->GetObjectEnums()) {
 				IMetaObject* foundedMeta =
-					IMetaObjectRecordDataRef::FindEnumByName(enumeration->GetDocPath());
+					IMetaObjectRecordDataRef::FindEnumByGuid(enumeration->GetDocPath());
 				if (foundedMeta == NULL) {
 					retCode = ProcessEnumeration(tableName, m_metaId, NULL, enumeration);
 					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
@@ -203,7 +223,7 @@ bool IMetaObjectRecordDataRef::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDa
 			//enums current
 			for (auto enumeration : GetObjectEnums()) {
 				retCode = ProcessEnumeration(tableName, m_metaId,
-					enumeration, dstValue->FindEnumByName(enumeration->GetDocPath())
+					enumeration, dstValue->FindEnumByGuid(enumeration->GetDocPath())
 				);
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return false;
@@ -212,7 +232,7 @@ bool IMetaObjectRecordDataRef::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDa
 			//tables from dst 
 			for (auto table : dstValue->GetObjectTables()) {
 				IMetaObject* foundedMeta =
-					IMetaObjectRecordDataRef::FindTableByName(table->GetDocPath());
+					IMetaObjectRecordDataRef::FindTableByGuid(table->GetDocPath());
 				if (foundedMeta == NULL) {
 					retCode = ProcessTable(table->GetTableNameDB(), NULL, table);
 					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
@@ -222,7 +242,7 @@ bool IMetaObjectRecordDataRef::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDa
 			//tables current 
 			for (auto table : GetObjectTables()) {
 				retCode = ProcessTable(table->GetTableNameDB(),
-					table, dstValue->FindTableByName(table->GetDocPath())
+					table, dstValue->FindTableByGuid(table->GetDocPath())
 				);
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return false;
@@ -253,7 +273,7 @@ bool IMetaObjectRecordDataRef::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDa
 
 wxString IMetaObjectRegisterData::GetTableNameDB() const
 {
-	wxString className = GetClassName();
+	const wxString& className = GetClassName();
 	wxASSERT(m_metaId != 0);
 	return wxString::Format("%s%i",
 		className, GetMetaID());
@@ -299,13 +319,16 @@ bool IMetaObjectRegisterData::UpdateCurrentRecords(const wxString& tableName, IM
 
 bool IMetaObjectRegisterData::CreateAndUpdateTableDB(IConfigMetadata* srcMetaData, IMetaObject* srcMetaObject, int flags)
 {
-	wxString tableName = GetTableNameDB();
+	const wxString& tableName = GetTableNameDB();
 
 	int retCode = DATABASE_LAYER_QUERY_RESULT_ERROR;
 
 	if ((flags & createMetaTable) != 0) {
 
-		retCode = databaseLayer->RunQuery("CREATE TABLE %s (rowData BLOB);", tableName);
+		if (databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+			retCode = databaseLayer->RunQuery("CREATE TABLE %s (rowData BYTEA);", tableName);
+		else
+			retCode = databaseLayer->RunQuery("CREATE TABLE %s (rowData BLOB);", tableName);
 
 		for (auto attribute : GetDefaultAttributes()) {
 			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
@@ -356,7 +379,7 @@ bool IMetaObjectRegisterData::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDat
 			//attributes from dst 
 			for (auto attribute : dstValue->GetDefaultAttributes()) {
 				IMetaObject* foundedMeta =
-					IMetaObjectRegisterData::FindDefAttributeByName(attribute->GetDocPath());
+					IMetaObjectRegisterData::FindDefAttributeByGuid(attribute->GetDocPath());
 				if (foundedMeta == NULL) {
 					retCode = ProcessAttribute(tableName, NULL, attribute);
 					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
@@ -367,7 +390,7 @@ bool IMetaObjectRegisterData::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDat
 			//attributes current
 			for (auto attribute : GetDefaultAttributes()) {
 				retCode = ProcessAttribute(tableName,
-					attribute, dstValue->FindDefAttributeByName(attribute->GetDocPath())
+					attribute, dstValue->FindDefAttributeByGuid(attribute->GetDocPath())
 				);
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return false;
@@ -376,7 +399,7 @@ bool IMetaObjectRegisterData::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDat
 			//dimensions from dst 
 			for (auto dimension : dstValue->GetObjectDimensions()) {
 				IMetaObject* foundedMeta =
-					IMetaObjectRegisterData::FindDimensionByName(dimension->GetDocPath());
+					IMetaObjectRegisterData::FindDimensionByGuid(dimension->GetDocPath());
 				if (foundedMeta == NULL) {
 					retCode = ProcessDimension(tableName, NULL, dimension);
 					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
@@ -387,7 +410,7 @@ bool IMetaObjectRegisterData::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDat
 			//dimensions current
 			for (auto dimension : GetObjectDimensions()) {
 				retCode = ProcessDimension(tableName,
-					dimension, dstValue->FindDimensionByName(dimension->GetDocPath())
+					dimension, dstValue->FindDimensionByGuid(dimension->GetDocPath())
 				);
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return false;
@@ -396,7 +419,7 @@ bool IMetaObjectRegisterData::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDat
 			//resources from dst 
 			for (auto resource : dstValue->GetObjectResources()) {
 				IMetaObject* foundedMeta =
-					IMetaObjectRegisterData::FindResourceByName(resource->GetDocPath());
+					IMetaObjectRegisterData::FindResourceByGuid(resource->GetDocPath());
 				if (foundedMeta == NULL) {
 					retCode = ProcessResource(tableName, NULL, resource);
 					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
@@ -407,7 +430,7 @@ bool IMetaObjectRegisterData::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDat
 			//resources current
 			for (auto resource : GetObjectResources()) {
 				retCode = ProcessResource(tableName,
-					resource, dstValue->FindResourceByName(resource->GetDocPath())
+					resource, dstValue->FindResourceByGuid(resource->GetDocPath())
 				);
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return false;
@@ -416,7 +439,7 @@ bool IMetaObjectRegisterData::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDat
 			//attributes from dst 
 			for (auto attribute : dstValue->GetObjectAttributes()) {
 				IMetaObject* foundedMeta =
-					IMetaObjectRegisterData::FindAttributeByName(attribute->GetDocPath());
+					IMetaObjectRegisterData::FindAttributeByGuid(attribute->GetDocPath());
 				if (foundedMeta == NULL) {
 					retCode = ProcessAttribute(tableName, NULL, attribute);
 					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
@@ -427,7 +450,7 @@ bool IMetaObjectRegisterData::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDat
 			//attributes current
 			for (auto attribute : GetObjectAttributes()) {
 				retCode = ProcessAttribute(tableName,
-					attribute, dstValue->FindAttributeByName(attribute->GetDocPath())
+					attribute, dstValue->FindAttributeByGuid(attribute->GetDocPath())
 				);
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return false;
@@ -448,45 +471,49 @@ bool IMetaObjectRegisterData::CreateAndUpdateTableDB(IConfigMetadata* srcMetaDat
 //*                                          Query functions                                               *
 //**********************************************************************************************************
 
-#include "compiler/systemObjects.h"
+#include "core/compiler/systemObjects.h"
 
 bool IRecordDataObjectRef::ReadData()
 {
-	if (m_metaObject == NULL ||
-		m_newObject)
+	return ReadData(m_objGuid);
+}
+
+bool IRecordDataObjectRef::ReadData(const Guid& srcGuid)
+{
+	if (m_newObject && !srcGuid.isValid())
 		return false;
-
+	wxASSERT(m_metaObject);
 	wxString tableName = m_metaObject->GetTableNameDB();
-
 	if (databaseLayer->TableExists(tableName)) {
-		wxString queryText = "SELECT FIRST 1 * FROM " + tableName + " WHERE UUID = '" + m_objGuid.str() + "';";
-		DatabaseResultSet* resultSet = databaseLayer->RunQueryWithResults(queryText);
+
+		DatabaseResultSet* resultSet = NULL;
+		if (databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+			resultSet = databaseLayer->RunQueryWithResults("SELECT * FROM " + tableName + " WHERE UUID = '" + srcGuid.str() + "' LIMIT 1;");
+		else
+			resultSet = databaseLayer->RunQueryWithResults("SELECT FIRST 1 * FROM " + tableName + " WHERE UUID = '" + srcGuid.str() + "';");
+
 		if (resultSet == NULL)
 			return false;
-		for (auto currTable : m_metaObject->GetObjectTables()) {
-			CTabularSectionDataObjectRef* tabularSection =
-				new CTabularSectionDataObjectRef(this, currTable);
-			m_objectValues[currTable->GetMetaID()] = tabularSection;
-			m_aObjectTables.push_back(tabularSection);
-		}
+		bool succes = true;
 		if (resultSet->Next()) {
 			//load other attributes 
 			for (auto attribute : m_metaObject->GetGenericAttributes()) {
-				m_objectValues.insert_or_assign(attribute->GetMetaID(),
-					IMetaAttributeObject::GetValueAttribute(attribute, resultSet)
-				);
+				IMetaAttributeObject::GetValueAttribute(attribute, m_objectValues[attribute->GetMetaID()], resultSet);
 			}
-			for (auto tabularSection : m_aObjectTables) {
-				tabularSection->LoadData();
+			for (auto table : m_metaObject->GetObjectTables()) {
+				CTabularSectionDataObjectRef* tabularSection = new CTabularSectionDataObjectRef(this, table);
+				if (!tabularSection->LoadData(srcGuid))
+					succes = false;
+				m_objectValues.insert_or_assign(table->GetMetaID(), tabularSection);
 			}
 		}
 		resultSet->Close();
-		return true;
+		return succes;
 	}
 	return false;
 }
 
-#include "compiler/systemObjects.h"
+#include "core/compiler/systemObjects.h"
 
 bool IRecordDataObjectRef::SaveData()
 {
@@ -515,8 +542,11 @@ bool IRecordDataObjectRef::SaveData()
 	if (!fillCheck)
 		return false;
 
-	wxString tableName = m_metaObject->GetTableNameDB();
-	wxString queryText = "UPDATE OR INSERT INTO " + tableName + " (";
+	if (!IRecordDataObjectRef::DeleteData())
+		return false;
+
+	const wxString& tableName = m_metaObject->GetTableNameDB();
+	wxString queryText = "INSERT INTO " + tableName + " (";
 	queryText += "UUID, UUIDREF";
 	for (auto attribute : m_metaObject->GetGenericAttributes()) {
 		if (m_metaObject->IsDataReference(attribute->GetMetaID()))
@@ -532,7 +562,7 @@ bool IRecordDataObjectRef::SaveData()
 			queryText += ", ?";
 		}
 	}
-	queryText += ") MATCHING (UUID);";
+	queryText += ");";
 
 	PreparedStatement* statement = databaseLayer->PrepareStatement(queryText);
 	if (statement == NULL)
@@ -563,9 +593,17 @@ bool IRecordDataObjectRef::SaveData()
 
 	//table parts
 	if (!hasError) {
-		for (auto table : m_aObjectTables) {
-			if (!table->SaveData()) {
-				hasError = true; break;
+		for (auto table : m_metaObject->GetObjectTables()) {
+			ITabularSectionDataObject* tabularSection = NULL;
+			if (m_objectValues[table->GetMetaID()].ConvertToValue(tabularSection)) {
+				if (!tabularSection->SaveData()) {
+					hasError = true;
+					break;
+				}
+			}
+			else if (m_objectValues[table->GetMetaID()].GetType() != TYPE_NULL) {
+				hasError = true;
+				break;
 			}
 		}
 	}
@@ -580,19 +618,21 @@ bool IRecordDataObjectRef::SaveData()
 bool IRecordDataObjectRef::DeleteData()
 {
 	if (m_newObject)
-		return false;
-
-	wxString tableName = m_metaObject->GetTableNameDB();
-	bool hasError = databaseLayer->RunQuery("DELETE FROM " + tableName + " WHERE UUID = '" + m_objGuid.str() + "';") == DATABASE_LAYER_QUERY_RESULT_ERROR;
-
+		return true;
+	const wxString& tableName = m_metaObject->GetTableNameDB();
 	//table parts
-	for (auto table : m_aObjectTables) {
-		if (!table->DeleteData()) {
-			hasError = true; break;
+	for (auto table : m_metaObject->GetObjectTables()) {
+		ITabularSectionDataObject* tabularSection = NULL;
+		if (m_objectValues[table->GetMetaID()].ConvertToValue(tabularSection)) {
+			if (!tabularSection->DeleteData())
+				return false;
 		}
-	}
+		else if (m_objectValues[table->GetMetaID()].GetType() != TYPE_NULL)
+			return false;
 
-	return !hasError;
+	}
+	databaseLayer->RunQuery("DELETE FROM " + tableName + " WHERE UUID = '" + m_objGuid.str() + "';");
+	return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -602,15 +642,29 @@ bool IRecordDataObjectFolderRef::ReadData()
 	if (IRecordDataObjectRef::ReadData()) {
 		IMetaObjectRecordDataFolderMutableRef* metaFolder = GetMetaObject();
 		wxASSERT(metaFolder);
-		const CValue &isFolder = IRecordDataObjectFolderRef::GetValueByMetaID(*metaFolder->GetDataIsFolder());
+		CValue isFolder; IRecordDataObjectFolderRef::GetValueByMetaID(*metaFolder->GetDataIsFolder(), isFolder);
 		if (isFolder.GetBoolean())
 			m_objMode = eObjectMode::OBJECT_FOLDER;
-		else 
+		else
 			m_objMode = eObjectMode::OBJECT_ITEM;
 		return true;
 	}
+	return false;
+}
 
-	return false; 
+bool IRecordDataObjectFolderRef::ReadData(const Guid& srcGuid)
+{
+	if (IRecordDataObjectRef::ReadData(srcGuid)) {
+		IMetaObjectRecordDataFolderMutableRef* metaFolder = GetMetaObject();
+		wxASSERT(metaFolder);
+		CValue isFolder; IRecordDataObjectFolderRef::GetValueByMetaID(*metaFolder->GetDataIsFolder(), isFolder);
+		if (isFolder.GetBoolean())
+			m_objMode = eObjectMode::OBJECT_FOLDER;
+		else
+			m_objMode = eObjectMode::OBJECT_ITEM;
+		return true;
+	}
+	return false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -625,7 +679,7 @@ void IRecordDataObjectRef::SetDeletionMark(bool deletionMark)
 		wxASSERT(attributeDeletionMark);
 		IRecordDataObjectRef::SetValueByMetaID(*attributeDeletionMark, deletionMark);
 	}
-	
+
 	SaveModify();
 }
 
@@ -651,30 +705,24 @@ bool IRecordManagerObject::ExistData()
 	}
 
 	PreparedStatement* statement = databaseLayer->PrepareStatement(queryText);
-
 	if (statement == NULL)
 		return false;
-
 	for (auto attribute : m_metaObject->GetGenericDimensions()) {
+		CValue retValue; m_recordLine->GetValueByMetaID(attribute->GetMetaID(), retValue);
 		IMetaAttributeObject::SetValueAttribute(
 			attribute,
-			m_recordLine->GetValueByMetaID(attribute->GetMetaID()),
+			retValue,
 			statement,
 			position
 		);
 	}
-
 	DatabaseResultSet* resultSet = statement->RunQueryWithResults();
-
 	if (resultSet == NULL)
 		return false;
-
 	bool founded = false;
-
-	if (resultSet->Next()) {
+	if (resultSet->Next())
 		founded = true;
-	}
-
+	databaseLayer->CloseResultSet(resultSet);
 	databaseLayer->CloseStatement(statement);
 	return founded;
 }
@@ -703,21 +751,17 @@ bool IRecordManagerObject::SaveData(bool replace)
 		return false;
 
 	m_recordSet->m_keyValues.clear();
-
 	wxASSERT(m_recordLine);
-
 	for (auto attribute : m_metaObject->GetGenericDimensions()) {
+		CValue retValue; m_recordLine->GetValueByMetaID(attribute->GetMetaID(), retValue);
 		m_recordSet->m_keyValues.insert_or_assign(
-			attribute->GetMetaID(),
-			m_recordLine->GetValueByMetaID(attribute->GetMetaID())
+			attribute->GetMetaID(), retValue
 		);
 	}
-
 	if (m_recordSet->WriteRecordSet(replace, false)) {
 		m_objGuid.SetKeyPair(m_metaObject, m_recordSet->m_keyValues);
 		return true;
 	}
-
 	return false;
 }
 
@@ -747,7 +791,6 @@ bool IRecordSetObject::ExistData()
 	}
 
 	PreparedStatement* statement = databaseLayer->PrepareStatement(queryText);
-
 	if (statement == NULL)
 		return false;
 
@@ -763,16 +806,12 @@ bool IRecordSetObject::ExistData()
 	}
 
 	DatabaseResultSet* resultSet = statement->RunQueryWithResults();
-
 	if (resultSet == NULL)
 		return false;
-
 	bool founded = false;
-
-	if (resultSet->Next()) {
+	if (resultSet->Next())
 		founded = true;
-	}
-
+	databaseLayer->CloseResultSet(resultSet);
 	databaseLayer->CloseStatement(statement);
 	return founded;
 }
@@ -796,7 +835,6 @@ bool IRecordSetObject::ExistData(number_t& lastNum)
 	}
 
 	PreparedStatement* statement = databaseLayer->PrepareStatement(queryText);
-
 	if (statement == NULL)
 		return false;
 
@@ -812,22 +850,17 @@ bool IRecordSetObject::ExistData(number_t& lastNum)
 	}
 
 	DatabaseResultSet* resultSet = statement->RunQueryWithResults();
-
 	if (resultSet == NULL)
 		return false;
-
 	bool founded = false; lastNum = 1;
-
 	while (resultSet->Next()) {
-		CValue numLine = IMetaAttributeObject::GetValueAttribute(
-			m_metaObject->GetRegisterLineNumber(), resultSet
-		);
+		CValue numLine; IMetaAttributeObject::GetValueAttribute(m_metaObject->GetRegisterLineNumber(), numLine, resultSet);
 		if (numLine > lastNum) {
 			lastNum = numLine.GetNumber();
 		}
 		founded = true;
 	}
-
+	databaseLayer->CloseResultSet(resultSet);
 	databaseLayer->CloseStatement(statement);
 	return founded;
 }
@@ -868,18 +901,12 @@ bool IRecordSetObject::ReadData()
 	if (resultSet == NULL)
 		return false;
 	while (resultSet->Next()) {
-		std::map<meta_identifier_t, CValue> keyTable, rowTable;
+		valueArray_t keyTable, rowTable;
 		for (auto attribute : m_metaObject->GetGenericDimensions()) {
-			keyTable.insert_or_assign(
-				attribute->GetMetaID(),
-				IMetaAttributeObject::GetValueAttribute(attribute, resultSet)
-			);
+			IMetaAttributeObject::GetValueAttribute(attribute, keyTable[attribute->GetMetaID()], resultSet);
 		}
 		for (auto attribute : m_metaObject->GetGenericAttributes()) {
-			rowTable.insert_or_assign(
-				attribute->GetMetaID(),
-				IMetaAttributeObject::GetValueAttribute(attribute, resultSet)
-			);
+			IMetaAttributeObject::GetValueAttribute(attribute, rowTable[attribute->GetMetaID()], resultSet);
 		}
 		IValueTable::Append(
 			new wxValueTableRow(rowTable), !CTranslateError::IsSimpleMode()
@@ -887,6 +914,7 @@ bool IRecordSetObject::ReadData()
 	}
 
 	resultSet->Close();
+	databaseLayer->CloseResultSet(resultSet);
 	databaseLayer->CloseStatement(statement);
 	return GetRowCount() > 0;
 }
@@ -900,7 +928,7 @@ bool IRecordSetObject::SaveData(bool replace, bool clearTable)
 	for (long row = 0; row < GetRowCount(); row++) {
 		for (auto attribute : m_metaObject->GetGenericAttributes()) {
 			if (attribute->FillCheck()) {
-				wxValueTableRow* node = GetViewData(GetItem(row));
+				wxValueTableRow* node = GetViewData<wxValueTableRow>(GetItem(row));
 				wxASSERT(node);
 				if (node->IsEmptyValue(attribute->GetMetaID())) {
 					wxString fillError =
@@ -1004,7 +1032,7 @@ bool IRecordSetObject::SaveData(bool replace, bool clearTable)
 				);
 			}
 			else {
-				wxValueTableRow* node = GetViewData(GetItem(row));
+				wxValueTableRow* node = GetViewData< wxValueTableRow>(GetItem(row));
 				wxASSERT(node);
 				IMetaAttributeObject::SetValueAttribute(
 					attribute,
@@ -1073,34 +1101,32 @@ bool IRecordSetObject::DeleteData()
 //*                                          Code generator												   *
 //**********************************************************************************************************
 
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 CValue IRecordDataObjectRef::CCodeGenerator::GenerateCode() const
 {
 	wxASSERT(m_metaAttribute);
 
-	wxString tableName = m_metaObject->GetTableNameDB();
-	wxString fieldName = m_metaAttribute->GetFieldNameDB();
+	const wxString& tableName = m_metaObject->GetTableNameDB();
+	const wxString& fieldName = m_metaAttribute->GetFieldNameDB();
 
 	IMetadata* metaData = m_metaObject->GetMetadata();
 	wxASSERT(metaData);
 
-	DatabaseResultSet* resultSet = databaseLayer->RunQueryWithResults("SELECT %s FROM %s ORDER BY %s;",
+	DatabaseResultSet* resultSet = databaseLayer->RunQueryWithResults("SELECT %s FROM %s ORDER BY %s FOR UPDATE;",
 		IMetaAttributeObject::GetSQLFieldName(m_metaAttribute),
 		tableName,
 		IMetaAttributeObject::GetSQLFieldName(m_metaAttribute)
 	);
 
-	if (resultSet == NULL) {
+	if (resultSet == NULL)
 		return m_metaAttribute->CreateValue();
-	}
 
 	number_t code = 1;
 
 	if (m_metaAttribute->ContainType(eValueTypes::TYPE_NUMBER)) {
 		while (resultSet->Next()) {
-			CValue fieldCode =
-				IMetaAttributeObject::GetValueAttribute(m_metaAttribute, resultSet);
+			CValue fieldCode; IMetaAttributeObject::GetValueAttribute(m_metaAttribute, fieldCode, resultSet);
 			if (fieldCode == code) {
 				code++;
 			}
@@ -1112,10 +1138,10 @@ CValue IRecordDataObjectRef::CCodeGenerator::GenerateCode() const
 		ttmath::Conv conv;
 		conv.precision = m_metaAttribute->GetLength();
 		conv.leading_zero = true;
+		
 		wxString strCode = code.ToString(conv);
-
 		while (resultSet->Next()) {
-			CValue fieldCode = IMetaAttributeObject::GetValueAttribute(m_metaAttribute, resultSet);
+			CValue fieldCode; IMetaAttributeObject::GetValueAttribute(m_metaAttribute, fieldCode, resultSet);
 			if (fieldCode == strCode) {
 				code++;
 				strCode = code.ToString(conv);
@@ -1128,5 +1154,5 @@ CValue IRecordDataObjectRef::CCodeGenerator::GenerateCode() const
 	wxASSERT_MSG(false, "m_metaAttribute->GetClsids() != eValueTypes::TYPE_NUMBER"
 		"|| m_metaAttribute->GetClsids() != eValueTypes::TYPE_STRING");
 
-	return CValue();
+	return code;
 }

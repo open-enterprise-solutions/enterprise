@@ -3,176 +3,267 @@
 
 #include "compileModule.h"
 
-class CRunContext
-{
+class CRunContext {
 public:
-
-	CProcUnit *m_procUnit;
-	CCompileContext *m_compileContext;
-
-	unsigned int m_nStart;
-	unsigned int m_nCurLine; //текущая исполняемая строка байт-кода
-
-	unsigned int m_nVarCount;
-	unsigned int m_nParamCount;
-
+	CProcUnit* m_procUnit;
+	compileContext_t* m_compileContext;
+	long m_lStart, m_lCurLine; //текущая исполняемая строка байт-кода
+	long m_lVarCount, m_lParamCount;
 	CValue m_cLocVars[MAX_STATIC_VAR];
-	CValue *m_pLocVars;
-	CValue *m_cRefLocVars[MAX_STATIC_VAR];
-	CValue **m_pRefLocVars;
-
-	std::map<wxString, CProcUnit *> m_aEvalString;
-
+	CValue* m_pLocVars;
+	CValue* m_cRefLocVars[MAX_STATIC_VAR];
+	CValue** m_pRefLocVars;
+	std::map<wxString, CProcUnit*> m_stringEvals;
 public:
 
-	CRunContext(int nLocal = wxNOT_FOUND);
-
-	CByteCode *GetByteCode();
-
-	void SetLocalCount(int nLocal);
-	unsigned int GetLocalCount();
-
-	void SetProcUnit(CProcUnit *procUnit) { m_procUnit = procUnit; }
-	CProcUnit *GetProcUnit() { return m_procUnit; }
+	CRunContext(int iLocal = wxNOT_FOUND) :
+		m_lVarCount(0), m_lParamCount(0), m_lCurLine(0),
+		m_procUnit(NULL), m_compileContext(NULL) {
+		if (iLocal >= 0) {
+			SetLocalCount(iLocal);
+		}
+	};
 
 	~CRunContext();
+	byteCode_t* CRunContext::GetByteCode() const;
+
+	void SetLocalCount(long varCount) {
+		m_lVarCount = varCount;
+		if (m_lVarCount > MAX_STATIC_VAR) {
+			m_pLocVars = new CValue[m_lVarCount];
+			m_pRefLocVars = new CValue * [m_lVarCount];
+		}
+		else {
+			m_pLocVars = m_cLocVars;
+			m_pRefLocVars = m_cRefLocVars;
+		}
+		for (long i = 0; i < m_lVarCount; i++)
+			m_pRefLocVars[i] = &m_pLocVars[i];
+	}
+
+	long GetLocalCount() const {
+		return m_lVarCount;
+	}
+
+	void SetProcUnit(CProcUnit* procUnit) {
+		m_procUnit = procUnit;
+	}
+
+	CProcUnit* GetProcUnit() const {
+		return m_procUnit;
+	}
 };
 
-class CRunContextSmall
-{
+class CRunContextSmall {
 public:
 
-	CRunContextSmall(int nLocal = wxNOT_FOUND) {
-		m_nVarCount = 0;
-		m_nParamCount = 0;
-
+	CRunContextSmall(int nLocal = wxNOT_FOUND) :
+		m_lVarCount(0), m_lParamCount(0) {
 		if (nLocal >= 0) {
 			SetLocalCount(nLocal);
 		}
 	};
 
 	~CRunContextSmall() {
-		if (m_nVarCount > MAX_STATIC_VAR)
-		{
+		if (m_lVarCount > MAX_STATIC_VAR) {
 			delete[]m_pLocVars;
 			delete[]m_pRefLocVars;
 		}
 	}
 
-	unsigned int m_nStart;
-	unsigned int m_nParamCount;
+	long m_lStart, m_lParamCount;
 
 	CValue m_cLocVars[MAX_STATIC_VAR];
-	CValue *m_pLocVars;
-	CValue *m_cRefLocVars[MAX_STATIC_VAR];
-	CValue **m_pRefLocVars;
+	CValue* m_pLocVars;
+
+	CValue* m_cRefLocVars[MAX_STATIC_VAR];
+	CValue** m_pRefLocVars;
 
 private:
-
-	unsigned int m_nVarCount;
-
+	long m_lVarCount;
 public:
 
-	void SetLocalCount(int nLocal)
-	{
-		m_nVarCount = nLocal;
-
-		if (m_nVarCount > MAX_STATIC_VAR)
-		{
-			m_pLocVars = new CValue[m_nVarCount];
-			m_pRefLocVars = new CValue*[m_nVarCount];
+	void SetLocalCount(long varCount) {
+		m_lVarCount = varCount;
+		if (m_lVarCount > MAX_STATIC_VAR) {
+			m_pLocVars = new CValue[m_lVarCount];
+			m_pRefLocVars = new CValue*[m_lVarCount];
 		}
-		else
-		{
+		else {
 			m_pLocVars = m_cLocVars;
 			m_pRefLocVars = m_cRefLocVars;
 		}
-
-		for (unsigned int i = 0; i < m_nVarCount; i++)
-		{
+		for (long i = 0; i < m_lVarCount; i++) {
 			m_pRefLocVars[i] = &m_pLocVars[i];
 		}
 	};
 
-	unsigned int GetLocalCount() { return m_nVarCount; }
+	long GetLocalCount() const {
+		return m_lVarCount;
+	}
 };
 
-class CProcUnit
-{
-	//Атрибуты:
+class CProcUnit {
+	//attributes:
 	int m_nAutoDeleteParent;	//признак удаления родительского модуля
-
-	CByteCode *m_pByteCode;
+	byteCode_t* m_pByteCode;
+	CValue*** m_pppArrayList;//указатели на массивы указателей переменных (0 - локальные переменные,1-переменные текущего модуля,2 и выше - переменные родительских модулей)
+	CProcUnit** m_ppArrayCode;//указатели на массивы выполняемых модулей (0-текущий модуль,1 и выше - родительские модули)
+	std::vector <CProcUnit*> m_aParent;
+	//static attributes
+	static CProcUnit* m_currentRunModule;
+private:
 	CRunContext m_cCurContext;
-	CValue	***m_pppArrayList;//указатели на массивы указателей переменных (0 - локальные переменные,1-переменные текущего модуля,2 и выше - переменные родительских модулей)
-	CProcUnit **m_ppArrayCode;//указатели на массивы выполняемых модулей (0-текущий модуль,1 и выше - родительские модули)
-
-	std::vector <CProcUnit *> m_aParent;
-
-	friend class CRunContext;
-	friend class CRunContextSmall;
-
+	//static attributes
+	static std::vector <CRunContext*> s_aRunContext; //список исполняемых кодов модулей
 public:
 
 	//Конструкторы/деструкторы
-	CProcUnit();
-	virtual ~CProcUnit();
+	CProcUnit() : m_pppArrayList(NULL),
+		m_ppArrayCode(NULL),
+		m_pByteCode(NULL),
+		m_nAutoDeleteParent(0) {
+	}
+
+	virtual ~CProcUnit() {
+		Clear();
+	}
 
 	//Методы
-	void Clear();
-	void SetParent(CProcUnit *pSetParent);
-	CProcUnit *GetParent(unsigned int nLevel = 0);
-	unsigned int GetParentCount();
+	void Clear() {
 
-	CByteCode *GetByteCode() { return m_pByteCode; }
+		if (m_pppArrayList != NULL)
+			delete[] m_pppArrayList;
 
-	CValue Execute(CByteCode &ByteCode, bool bRunModule = true);
-	CValue Execute(CRunContext *pContext, int nDelta); //nDelta=true - признак выполнения операторов модуля, которые идут в конце функций и процедур
+		if (m_ppArrayCode != NULL)
+			delete m_ppArrayCode;
 
-	static CValue Evaluate(const wxString &sCode, CRunContext *pRunContext = NULL, bool bCompileBlock = false, bool *bError = NULL);
-	bool CompileExpression(const wxString &sCode, CRunContext *pRunContext, CCompileModule &cModule, bool bCompileBlock);
+		if (m_currentRunModule == this)
+			m_currentRunModule = NULL;
+
+		m_nAutoDeleteParent = 0;
+
+		m_pppArrayList = NULL;
+		m_ppArrayCode = NULL;
+		m_pByteCode = NULL;
+
+		m_aParent.clear();
+	}
+
+	void SetParent(CProcUnit* procParent) {
+		m_aParent.clear();
+		if (procParent != NULL) {
+			unsigned int count = procParent->m_aParent.size();
+			m_aParent.push_back(procParent);
+			for (unsigned int i = 1; i <= count; i++) {
+				m_aParent.push_back(procParent->m_aParent[i - 1]);
+			}
+		}
+
+	}
+
+	CProcUnit* GetParent(unsigned int iLevel = 0) const {
+		if (iLevel >= m_aParent.size()) {
+			wxASSERT(iLevel == 0);
+			return NULL;
+		}
+		else {
+			wxASSERT(iLevel == m_aParent.size() - 1 || m_aParent[iLevel]);
+			return m_aParent[iLevel];
+		}
+	}
+
+	unsigned int GetParentCount() const {
+		return m_aParent.size();
+	}
+
+	byteCode_t* GetByteCode() const {
+		return m_pByteCode;
+	}
+
+	CValue Execute(byteCode_t& ByteCode, bool bRunModule = true);
+	CValue Execute(CRunContext* pContext, bool bDelta); // bDelta=true - признак выполнения операторов модуля, которые идут в конце функций и процедур
+
+	static CValue Evaluate(const wxString& strCode, CRunContext* pRunContext = NULL, bool bCompileBlock = false, bool* bError = NULL);
+	bool CompileExpression(const wxString& strCode, CRunContext* pRunContext, CCompileModule& cModule, bool bCompileBlock);
 
 	//вызов произвольной функции исполняемого модуля
-	int FindExportFunction(const wxString &sName);
-	int FindFunction(const wxString &sName0, bool bError = false, int bExportOnly = 0);
+	long FindExportMethod(const wxString& methodName) const {
+		return FindMethod(methodName, false, 2);
+	}
 
-	CValue CallFunction(const wxString &sName);
-	CValue CallFunction(const wxString &sName, CValue &vParam1);
-	CValue CallFunction(const wxString &sName, CValue &vParam1, CValue &vParam2);
-	CValue CallFunction(const wxString &sName, CValue &vParam1, CValue &vParam2, CValue &vParam3);
-	CValue CallFunction(const wxString &sName, CValue &vParam1, CValue &vParam2, CValue &vParam3, CValue &vParam4);
+	//Поиск экспортной функций
+	long FindMethod(const wxString& methodName, bool bError = false, int bExportOnly = 0) const;
 
-	CValue CallFunction(const wxString &sName, CValue **ppParams, unsigned int nParamCount);
+	template <typename ...Types>
+	CValue CallFunction(const wxString& funcName, Types&... args) {
+		CValue *ppParams[] = {&args..., NULL};
+		return CallFunction(funcName, ppParams, (const long)sizeof ...(args));
+	}
 
-	CValue CallFunction(unsigned int lptr, CValue &vParam1);
-	CValue CallFunction(unsigned int lptr, CValue &vParam1, CValue &vParam2);
-	CValue CallFunction(unsigned int nAddr, CValue **ppParams, unsigned int nReceiveParamCount = MAX_STATIC_VAR);
+	CValue CallFunction(const wxString& funcName, CValue** ppParams, const long lSizeArray);
+	CValue CallFunction(const long lCodeLine, CValue** ppParams, const long lSizeArray);
 
-	CValue CallFunction(methodArg_t &aParams);
+	long FindProp(const wxString& propName) const;
 
-	void SetAttribute(const wxString &sName, CValue &cVal);
-	void SetAttribute(attributeArg_t &aParams, CValue &cVal);//установка атрибута
+	bool SetPropVal(const wxString& propName, const CValue& varPropVal);
+	bool SetPropVal(const long lPropNum, const CValue& varPropVal); //установка атрибута
 
-	CValue GetAttribute(const wxString &sName);
-	CValue GetAttribute(attributeArg_t &aParams);//значение атрибута
-
-	int FindAttribute(const wxString &sName) const;
+	bool GetPropVal(const wxString& propName, CValue& pvarPropVal);
+	bool GetPropVal(const long lPropNum, CValue& pvarPropVal);//значение атрибута
 
 	//run module 
-	static CProcUnit *GetCurrentRunModule();
-	static void ClearCurrentRunModule();
+	static CProcUnit* GetCurrentRunModule() {
+		return m_currentRunModule;
+	}
+
+	static void ClearCurrentRunModule() {
+		m_currentRunModule = NULL;
+	}
 
 	//run context
-	static void AddRunContext(CRunContext *runContext);
-	static unsigned int GetCountRunContext();
-	static CRunContext *GetPrevRunContext();
-	static CRunContext *GetCurrentRunContext();
-	static CRunContext *GetRunContext(unsigned int idx);
-	static void BackRunContext();
+	static void CProcUnit::AddRunContext(CRunContext* runContext) {
+		s_aRunContext.push_back(runContext);
+	}
 
-	static CByteCode *GetCurrentByteCode();
+	static unsigned int CProcUnit::GetCountRunContext() {
+		return s_aRunContext.size();
+	}
+
+	static CRunContext* CProcUnit::GetPrevRunContext() {
+		if (s_aRunContext.size() < 2)
+			return NULL;
+		return s_aRunContext[s_aRunContext.size() - 2];
+	}
+
+	static CRunContext* CProcUnit::GetCurrentRunContext() {
+		if (!s_aRunContext.size())
+			return NULL;
+		return s_aRunContext.back();
+	}
+
+	static CRunContext* CProcUnit::GetRunContext(unsigned int idx) {
+		if (s_aRunContext.size() < idx)
+			return NULL;
+		return s_aRunContext[idx];
+	}
+
+	static void CProcUnit::BackRunContext() {
+		s_aRunContext.pop_back();
+	}
+
+	static byteCode_t* GetCurrentByteCode() {
+		CRunContext* runContext = GetCurrentRunContext();
+		if (runContext != NULL)
+			return runContext->GetByteCode();
+		return NULL;
+	}
 
 	static void Raise();
+
+private:
+	friend class CRunContext;
+	friend class CRunContextSmall;
 };
 
 #endif 

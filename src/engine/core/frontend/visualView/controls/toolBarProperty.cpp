@@ -22,13 +22,13 @@ void CValueToolbar::OnPropertyChanged(Property* property)
 		if (answer == wxYES) {
 
 			while (GetChildCount() != 0) {
-				g_visualHostContext->CutObject(GetChild(0), true);
+				g_visualHostContext->CutControl(GetChild(0), true);
 			}
 
 			IValueFrame* sourceElement = property->GetValueAsInteger() != wxNOT_FOUND ?
 				FindControlByID(property->GetValueAsInteger()) : NULL;
 
-			if (sourceElement) {
+			if (sourceElement != NULL) {
 				actionData_t actions =
 					sourceElement->GetActions(sourceElement->GetTypeForm());
 				for (unsigned int i = 0; i < actions.GetCount(); i++) {
@@ -41,13 +41,13 @@ void CValueToolbar::OnPropertyChanged(Property* property)
 						toolItem->SetControlName(GetControlName() + wxT("_") + actions.GetNameByID(id));
 						toolItem->SetCaption(actions.GetCaptionByID(id));
 						toolItem->SetAction(wxString::Format("%i", id));
-						g_visualHostContext->InsertObject(toolItem, this);
+						g_visualHostContext->InsertControl(toolItem, this);
 					}
 					else {
 						CValueToolBarSeparator* toolItemSeparator = dynamic_cast<CValueToolBarSeparator*>(
 							m_formOwner->CreateControl("toolSeparator", this)
 						);
-						g_visualHostContext->InsertObject(toolItemSeparator, this);
+						g_visualHostContext->InsertControl(toolItemSeparator, this);
 					}
 				}
 			}

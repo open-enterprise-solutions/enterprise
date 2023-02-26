@@ -4,10 +4,10 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaFormObject.h"
-#include "databaseLayer/databaseLayer.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 #include "frontend/visualView/visualHost.h"
-#include "metadata/metadata.h"
-#include "metadata/metaObjects/objects/object.h"
+#include "core/metadata/metadata.h"
+#include "core/metadata/metaObjects/objects/object.h"
 #include "appData.h"
 
 //***********************************************************************
@@ -165,7 +165,7 @@ bool IMetaFormObject::SaveData(CMemoryWriter& writer)
 	return true;
 }
 
-CValueForm* IMetaFormObject::GenerateForm(IValueFrame* ownerControl,
+CValueForm* IMetaFormObject::GenerateForm(IControlFrame* ownerControl,
 	ISourceDataObject* ownerSrc, const CUniqueKey& guidForm)
 {
 	if (m_formData.IsEmpty()) {
@@ -188,7 +188,7 @@ CValueForm* IMetaFormObject::GenerateForm(IValueFrame* ownerControl,
 	return valueForm;
 }
 
-CValueForm* IMetaFormObject::GenerateFormAndRun(IValueFrame* ownerControl,
+CValueForm* IMetaFormObject::GenerateFormAndRun(IControlFrame* ownerControl,
 	ISourceDataObject* ownerSrc, const CUniqueKey& guidForm)
 {
 	CValueForm* valueForm = NULL;
@@ -302,9 +302,6 @@ bool CMetaFormObject::OnSaveMetaObject()
 
 bool CMetaFormObject::OnDeleteMetaObject()
 {
-	IModuleManager* moduleManager = m_metaData->GetModuleManager();
-	wxASSERT(moduleManager);
-
 	IMetaObjectWrapperData* metaObject = wxStaticCast(m_parent, IMetaObjectWrapperData);
 	wxASSERT(metaObject);
 	metaObject->OnRemoveMetaForm(this);

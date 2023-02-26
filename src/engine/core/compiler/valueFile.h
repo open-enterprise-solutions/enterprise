@@ -1,19 +1,46 @@
 #ifndef _VALUE_FILE_H__
 #define _VALUE_FILE_H__
 
-#include "compiler/value.h"
+#include "core/compiler/value.h"
 
-class CValueFile : public CValue {
+class CORE_API CValueFile : public CValue {
 	wxDECLARE_DYNAMIC_CLASS(CValueFile);
+private:
+
+	enum Prop {
+		enBaseName,
+		enExtension,
+		enFullName,
+		enName,
+		enPath,
+	};
+
+	enum Func {
+		enExist,
+		//enGetHidden,
+		enGetModificationTime,
+		enGetReadOnly,
+		enIsDirectory,
+		enIsFile,
+		//enSetHidden,
+		//enSetModificationTime,
+		//enSetReadOnly,
+		enSize,
+	};
+
 public:
 
 	//эти методы нужно переопределить в ваших агрегатных объектах:
-	virtual CMethods* GetPMethods() const { return &m_methods; }//получить ссылку на класс помощник разбора имен атрибутов и методов
-	virtual void PrepareNames() const;//этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t &aParams);//вызов метода
+	virtual CMethodHelper* GetPMethods() const { 
+		PrepareNames();
+		return &m_methodHelper; 
+	}
 
-	virtual void SetAttribute(attributeArg_t &aParams, CValue &cVal);//установка атрибута
-	virtual CValue GetAttribute(attributeArg_t &aParams);//значение атрибута
+	virtual void PrepareNames() const;//этот метод автоматически вызывается для инициализации имен атрибутов и методов
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);//вызов метода
+
+	virtual bool SetPropVal(const long lPropNum, const CValue &varValue);//установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);//значение атрибута
 
 	CValueFile();
 	virtual ~CValueFile();
@@ -21,14 +48,14 @@ public:
 	virtual inline bool IsEmpty() const override { return false; }
 
 	virtual bool Init() { return false; }
-	virtual bool Init(CValue **aParams);
+	virtual bool Init(CValue **paParams, const long lSizeArray);
 
 	virtual wxString GetTypeString() const { return wxT("file"); }
 	virtual wxString GetString() const { return wxT("file"); }
 
 private:
 	wxString m_fileName; 
-	static CMethods m_methods;
+	static CMethodHelper m_methodHelper;
 };
 
 #endif 

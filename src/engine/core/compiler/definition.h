@@ -1,8 +1,5 @@
-//Список сообщений об ошибках
-extern wxString aErrors[];
 
-enum//Номера сообщений об ошибках
-{
+enum { //Номера сообщений об ошибках
 	ERROR_USAGE = 0,
 	ERROR_FILE_READ,
 	ERROR_FILE_OPEN,
@@ -52,27 +49,21 @@ enum//Номера сообщений об ошибках
 	ERROR_USE_IMPORT,
 	ERROR_USE_ENDDEF,
 	ERROR_USE_ENDREGION,
-
 	ERROR_CALL_CONSTRUCTOR,
-
 	ERROR_TYPE_DEF,
 	ERROR_BAD_TYPE,
 	ERROR_BAD_TYPE_EXPRESSION,
 	ERROR_NUMBER_TYPE,
-
 	ERROR_BAD_TYPE_EXPRESSION_B,
 	ERROR_BAD_TYPE_EXPRESSION_N,
 	ERROR_BAD_TYPE_EXPRESSION_S,
 	ERROR_BAD_TYPE_EXPRESSION_D,
-
 	ERROR_TYPE_OPERATION,
 
 	LastError
 };
 
-
-enum//типы инструкций
-{
+enum { //типы инструкций
 	OPER_NOP = 0,
 	OPER_ADD,
 	OPER_DIV,
@@ -131,9 +122,7 @@ enum//типы инструкций
 	OPER_SET_ARRAY_SIZE,
 	OPER_ENDTRY,
 	OPER_SET_TYPE,
-
 	OPER_NEW,
-
 	OPER_END,
 };
 
@@ -142,21 +131,16 @@ enum//типы инструкций
 #define TYPE_DELTA3	3 * TYPE_DELTA1//для операций с датами
 #define TYPE_DELTA4	4 * TYPE_DELTA1//для операций с булевыми
 
-enum//типы лексем
-{
+enum { //типы лексем
 	ERRORTYPE = 0,
-
 	DELIMITER,//односимвольные разделители и операторы
-
 	IDENTIFIER,//нераспознанный идентификатор (этап трансляции)
 	CONSTANT,//константа
 	KEYWORD,//содержит номер ключевого слова
-
 	ENDPROGRAM,//конец программного модуля
 };
 
-enum//Номера ключевых слов (в строгой последовательности как заданы сами значения)
-{
+enum { //Номера ключевых слов (в строгой последовательности как заданы сами значения)
 	KEY_IF = 0,
 	KEY_THEN,
 	KEY_ELSE,
@@ -187,24 +171,18 @@ enum//Номера ключевых слов (в строгой последовательности как заданы сами значени
 	KEY_BREAK,
 	KEY_RAISE,
 	KEY_VAR,
-
 	KEY_NEW,
 	KEY_UNDEFINED,
-
 	KEY_NULL,
-
 	KEY_TRUE,
 	KEY_FALSE,
-
 	KEY_DEFINE,
 	KEY_UNDEF,
 	KEY_IFDEF,
 	KEY_IFNDEF,
 	KEY_ELSEDEF,
 	KEY_ENDIFDEF,
-
 	KEY_REGION,
 	KEY_ENDREGION,
-
 	LastKeyWord
 };

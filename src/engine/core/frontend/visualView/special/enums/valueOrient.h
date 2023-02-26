@@ -1,7 +1,7 @@
 #ifndef _VALUEORIENT_H__
 #define _VALUEORIENT_H__
 
-#include "compiler/enumObject.h"
+#include "core/compiler/enumObject.h"
 
 class CValueEnumOrient : public IEnumeration<wxOrientation> {
 	wxDECLARE_DYNAMIC_CLASS(CValueEnumOrient);

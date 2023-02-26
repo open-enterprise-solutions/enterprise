@@ -27,7 +27,7 @@
    // files which are not included by wxprec.h
 #endif
 
-#include <email/ssl/wxSSLSocketClient.h>
+#include <3rdparty/email/ssl/wxSSLSocketClient.h>
 
 wxSSLSocketClient::OpenSslInitialisator::OpenSslInitialisator()
 {

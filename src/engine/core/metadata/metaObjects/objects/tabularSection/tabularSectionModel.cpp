@@ -12,48 +12,44 @@
 void ITabularSectionDataObject::GetValueByRow(wxVariant& variant,
 	const wxDataViewItem& row, unsigned int col) const
 {
-	wxValueTableRow* node = GetViewData(row);
+	wxValueTableRow* node = GetViewData<wxValueTableRow>(row);
 	if (node == NULL)
 		return;
 	if (m_metaTable->IsNumberLine(col))
 		variant = wxString::Format("%i", GetRow(row) + 1);
 	else
-		node->GetValue(variant, col);
+		node->GetValue(col, variant);
 }
 
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 bool ITabularSectionDataObject::SetValueByRow(const wxVariant& variant,
 	const wxDataViewItem& row, unsigned int col)
 {
-	wxString strData = variant.GetString();
-	wxValueTableRow* node = GetViewData(row);
+	const wxString& strData = variant.GetString();
+	wxValueTableRow* node = GetViewData<wxValueTableRow>(row);
 	if (node == NULL)
 		return false;
 	if (!m_metaTable->IsNumberLine(col)) {
 		IMetadata* metaData = m_metaTable->GetMetadata();
-		CValue selValue; node->GetValue(selValue, col);
-		wxString className = metaData->GetNameObjectFromID(
-			selValue.GetClassType()
-		);
-		CValue newValue = metaData->CreateObject(className);
+		wxASSERT(metaData);
+		const CValue& selValue = node->GetValue((meta_identifier_t)col);
+		const CValue& newValue = metaData->CreateObject(selValue.GetTypeClass());
 		if (strData.Length() > 0) {
 			std::vector<CValue> foundedObjects;
 			if (newValue.FindValue(strData, foundedObjects)) {
-				SetValueByMetaID(
-					GetRow(row), col, foundedObjects.at(0));
+				SetValueByMetaID(row, col, foundedObjects.at(0));
 			}
 			else {
 				return false;
 			}
 		}
 		else {
-			SetValueByMetaID(
-				GetRow(row), col, newValue);
+			SetValueByMetaID(row, col, newValue);
 		}
 	};
 
-	return false;
+	return true;
 }
 
 #include "frontend/visualView/controls/form.h"
@@ -71,10 +67,10 @@ void ITabularSectionDataObject::CopyValue()
 	wxDataViewItem currentItem = GetSelection();
 	if (!currentItem.IsOk())
 		return;
-	wxValueTableRow* node = GetViewData(currentItem);
+	wxValueTableRow* node = GetViewData<wxValueTableRow>(currentItem);
 	if (node == NULL)
 		return;
-	modelArray_t valueRow;
+	valueArray_t valueRow;
 	for (auto attribute : m_metaTable->GetObjectAttributes()) {
 		if (!m_metaTable->IsNumberLine(attribute->GetMetaID())) {
 			valueRow.insert_or_assign(attribute->GetMetaID(), node->GetValue(attribute->GetMetaID()));
@@ -94,14 +90,6 @@ void ITabularSectionDataObject::CopyValue()
 			new wxValueTableRow(valueRow), !CTranslateError::IsSimpleMode()
 		);
 	}
-	if (!CTranslateError::IsSimpleMode()) {
-		CValueForm* foundedForm = CValueForm::FindFormByGuid(
-			m_dataObject->GetGuid()
-		);
-		if (foundedForm != NULL) {
-			foundedForm->Modify(true);
-		}
-	}
 }
 
 void ITabularSectionDataObject::EditValue()
@@ -114,14 +102,36 @@ void ITabularSectionDataObject::DeleteValue()
 	wxDataViewItem currentItem = GetSelection();
 	if (!currentItem.IsOk())
 		return;
-	wxValueTableRow* node = GetViewData(currentItem);
+	wxValueTableRow* node = GetViewData<wxValueTableRow>(currentItem);
 	if (node == NULL)
 		return;
 	if (!CTranslateError::IsSimpleMode()) {
-		CValueForm* foundedForm = CValueForm::FindFormByGuid(
-			m_dataObject->GetGuid()
-		);
 		IValueTable::Remove(node);
+	}
+}
+
+void CTabularSectionDataObjectRef::CopyValue()
+{
+	ITabularSectionDataObject::CopyValue();
+
+	if (!CTranslateError::IsSimpleMode()) {
+		CValueForm* const foundedForm = CValueForm::FindFormByGuid(
+			m_objectValue->GetGuid()
+		);
+		if (foundedForm != NULL) {
+			foundedForm->Modify(true);
+		}
+	}
+}
+
+void CTabularSectionDataObjectRef::DeleteValue()
+{
+	ITabularSectionDataObject::DeleteValue();
+
+	if (!CTranslateError::IsSimpleMode()) {
+		CValueForm* const foundedForm = CValueForm::FindFormByGuid(
+			m_objectValue->GetGuid()
+		);
 		if (foundedForm != NULL) {
 			foundedForm->Modify(true);
 		}

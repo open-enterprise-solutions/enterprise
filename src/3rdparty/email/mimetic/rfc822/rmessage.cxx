@@ -15,9 +15,9 @@
 
  ***************************************************************************/
 
-#include <email/mimetic/rfc822/message.h>
-#include <email/mimetic/strutils.h>
-#include <email/mimetic/utils.h>
+#include <3rdparty/email/mimetic/rfc822/message.h>
+#include <3rdparty/email/mimetic/strutils.h>
+#include <3rdparty/email/mimetic/utils.h>
 
 
 namespace mimetic

@@ -4,7 +4,6 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "form.h"
-#include "compiler/methods.h"
 #include "utils/stringUtils.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -12,20 +11,20 @@
 wxIMPLEMENT_DYNAMIC_CLASS(CValueForm::CValueFormData, CValue);
 
 CValueForm::CValueFormData::CValueFormData() : CValue(eValueTypes::TYPE_VALUE, true),
-m_formOwner(NULL), m_methods(NULL)
+m_formOwner(NULL), m_methodHelper(NULL)
 {
 }
 
-CValueForm::CValueFormData::CValueFormData(CValueForm *ownerFrame) : CValue(eValueTypes::TYPE_VALUE, true),
-m_formOwner(ownerFrame), m_methods(new CMethods())
+CValueForm::CValueFormData::CValueFormData(CValueForm* ownerFrame) : CValue(eValueTypes::TYPE_VALUE, true),
+m_formOwner(ownerFrame), m_methodHelper(new CMethodHelper())
 {
 }
 
-#include "compiler/valueMap.h"
+#include "core/compiler/valueMap.h"
 
 CValueForm::CValueFormData::~CValueFormData()
 {
-	wxDELETE(m_methods);
+	wxDELETE(m_methodHelper);
 }
 
 CValue CValueForm::CValueFormData::GetItEmpty()
@@ -35,14 +34,12 @@ CValue CValueForm::CValueFormData::GetItEmpty()
 
 CValue CValueForm::CValueFormData::GetItAt(unsigned int idx)
 {
-	IValueControl *valueControl = NULL; 
-
+	IValueControl* valueControl = NULL;
 	if (m_formOwner->m_aControls.size() < idx) {
 		return CValue();
 	}
 
 	unsigned int count = 0;
-
 	for (auto control : m_formOwner->m_aControls) {
 		if (control->HasValueInControl()) {
 			count++;
@@ -52,74 +49,61 @@ CValue CValueForm::CValueFormData::GetItAt(unsigned int idx)
 			break;
 		}
 	}
-
 	wxASSERT(valueControl);
-
-	return new CValueContainer::CValueReturnContainer(valueControl->GetControlName(),
-		CValue(valueControl)
+	return new CValueContainer::CValueReturnContainer(
+		valueControl->GetControlName(),
+		valueControl->GetValue()
 	);
 }
 
 #include "appData.h"
 
-void CValueForm::CValueFormData::SetAt(const CValue &cKey, CValue &cVal)
+bool CValueForm::CValueFormData::SetAt(const CValue& varKeyValue, const CValue& varValue)
 {
-	number_t number = cKey.GetNumber();
-	if (number.ToUInt() > Count())
-		return;
-
+	const number_t& number = varKeyValue.GetNumber();
+	if (number.GetUInteger() > Count())
+		return false;
 	unsigned int count = 0;
-
 	for (auto control : m_formOwner->m_aControls) {
 		if (control->HasValueInControl()) {
 			count++;
 		}
 		if (number == count) {
-			control->SetControlValue(cVal);
+			control->SetControlValue(varValue);
 			break;
 		}
 	}
+	return true;
 }
 
-CValue CValueForm::CValueFormData::GetAt(const CValue &cKey)
+bool CValueForm::CValueFormData::GetAt(const CValue& varKeyValue, CValue& pvarValue)
 {
-	number_t number = cKey.GetNumber();
-
-	if (Count() < number.ToUInt())
-		return CValue();
-
+	const number_t& number = varKeyValue.GetNumber();
+	if (Count() < number.GetUInteger())
+		return false;
 	unsigned int count = 0;
-
 	for (auto control : m_formOwner->m_aControls) {
 		if (control->HasValueInControl()) {
 			count++;
 		}
 		if (number == count) {
-			return control->GetControlValue();
+			return control->GetControlValue(pvarValue);
 		}
 	}
-
-	if (!appData->DesignerMode()) {
-		CTranslateError::Error(_("Index goes beyond array"));
-	}
-
-	return CValue();
+	if (!appData->DesignerMode()) 
+		CTranslateError::Error("Index goes beyond array");
+	return false;
 }
 
-bool CValueForm::CValueFormData::Property(const CValue &cKey, CValue &cValueFound)
+bool CValueForm::CValueFormData::Property(const CValue& varKeyValue, CValue& cValueFound)
 {
-	wxString key = cKey.GetString();
-	auto itFounded = std::find_if(m_formOwner->m_aControls.begin(), m_formOwner->m_aControls.end(), [key](IValueControl *control) { 
-		if (control->HasValueInControl()) {
-			return StringUtils::CompareString(key, control->GetControlName());
+	wxString key = varKeyValue.GetString();
+	auto itFounded = std::find_if(m_formOwner->m_aControls.begin(), m_formOwner->m_aControls.end(), [key](IValueControl* control) {
+		if (control->HasValueInControl()) return StringUtils::CompareString(key, control->GetControlName()); return false;
 		}
-		return false; 
-	});
-	
-	if (itFounded != m_formOwner->m_aControls.end()) {
-		cValueFound = (*itFounded)->GetControlValue(); 
-		return true; 
-	}
+	);
+	if (itFounded != m_formOwner->m_aControls.end())
+		return (*itFounded)->GetControlValue(cValueFound);
 	return false;
 }
 
@@ -134,64 +118,55 @@ unsigned int CValueForm::CValueFormData::Count() const
 	return count;
 }
 
-enum
-{
+enum Func {
 	enAttributeProperty,
 	enAttributeCount
 };
 
 void CValueForm::CValueFormData::PrepareNames() const
 {
-	std::vector<SEng> aMethods = {
-	{"property", "property(key, valueFound)"},
-	{"count", "count()"}
-	};
-
-	m_methods->PrepareMethods(aMethods.data(), aMethods.size());
-
-	std::vector<SEng> attributes;
-
+	m_methodHelper->ClearHelper();
 	for (auto control : m_formOwner->m_aControls) {
 		if (!control->HasValueInControl())
 			continue;
-		
-		SEng attr;
-		attr.sName = control->GetControlName();
-		attr.iName = control->GetControlID();
-		attributes.push_back(attr);
+		m_methodHelper->AppendProp(
+			control->GetControlName(),
+			control->GetControlID()
+		);
 	}
-
-	m_methods->PrepareAttributes(attributes.data(), attributes.size());
 }
 
 #include "frontend/visualView/visualHost.h"
 
-void CValueForm::CValueFormData::SetAttribute(attributeArg_t &aParams, CValue &cVal)
+bool CValueForm::CValueFormData::SetPropVal(const long lPropNum, const CValue& varPropVal)
 {
-	unsigned int id = m_methods->GetAttributePosition(aParams.GetIndex());
-
+	unsigned int id = m_methodHelper->GetPropData(lPropNum);
 	auto foundedIt = std::find_if(m_formOwner->m_aControls.begin(), m_formOwner->m_aControls.end(),
-		[id](IValueFrame *control) { return id == control->GetControlID(); });
+		[id](IValueFrame* control) {
+			return id == control->GetControlID();
+		}
+	);
 
 	if (foundedIt != m_formOwner->m_aControls.end()) {
-		IValueControl *currentControl = *foundedIt; 
+		IValueControl* currentControl = *foundedIt;
 		wxASSERT(currentControl);
-		currentControl->SetControlValue(cVal);
-		CVisualDocument *visualDoc = m_formOwner->GetVisualDocument();
+		bool result = currentControl->SetControlValue(varPropVal);
+		if (!result)
+			return false;
+		CVisualDocument* visualDoc = m_formOwner->GetVisualDocument();
 		if (!visualDoc)
-			return;
-		CVisualHost *visualView = visualDoc->GetVisualView();
+			return false;
+		CVisualHost* visualView = visualDoc->GetVisualView();
 		if (!visualView)
-			return;
-		wxObject *object = visualView->GetWxObject(currentControl);
+			return false;
+		wxObject* object = visualView->GetWxObject(currentControl);
 		if (object) {
-			wxWindow *parentWnd = NULL;
+			wxWindow* parentWnd = NULL;
 			currentControl->Update(object, visualView);
 			IValueFrame* nextParent = currentControl->GetParent();
 			while (!parentWnd && nextParent) {
-				if (nextParent->GetComponentType() == COMPONENT_TYPE_WINDOW
-					|| nextParent->GetComponentType() == COMPONENT_TYPE_WINDOW_TABLE) {
-					parentWnd = dynamic_cast<wxWindow *>(visualView->GetWxObject(nextParent));
+				if (nextParent->GetComponentType() == COMPONENT_TYPE_WINDOW) {
+					parentWnd = dynamic_cast<wxWindow*>(visualView->GetWxObject(nextParent));
 					break;
 				}
 				nextParent = nextParent->GetParent();
@@ -202,38 +177,42 @@ void CValueForm::CValueFormData::SetAttribute(attributeArg_t &aParams, CValue &c
 			currentControl->OnUpdated(object, parentWnd, visualView);
 		}
 	}
+	return true;
 }
 
-CValue CValueForm::CValueFormData::GetAttribute(attributeArg_t &aParams)
+bool CValueForm::CValueFormData::GetPropVal(const long lPropNum, CValue& pvarPropVal)
 {
-	unsigned int id = m_methods->GetAttributePosition(aParams.GetIndex());
-
+	unsigned int id = m_methodHelper->GetPropData(lPropNum);
 	auto foundedIt = std::find_if(m_formOwner->m_aControls.begin(), m_formOwner->m_aControls.end(),
-		[id](IValueFrame *control) { return id == control->GetControlID(); });
-
+		[id](IValueFrame* control) {
+			return id == control->GetControlID();
+		}
+	);
 	if (foundedIt != m_formOwner->m_aControls.end()) {
-		IValueControl *currentControl = *foundedIt;
+		IValueControl* currentControl = *foundedIt;
 		wxASSERT(currentControl);
-		return currentControl->GetControlValue();
+		return currentControl->GetControlValue(pvarPropVal);
 	}
-	return CValue();
+	return false;
 }
 
-CValue CValueForm::CValueFormData::Method(methodArg_t &aParams)
+bool CValueForm::CValueFormData::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray)
 {
-	switch (aParams.GetIndex())
+	switch (lMethodNum)
 	{
 	case enAttributeProperty:
-		return Property(aParams[0], aParams.GetParamCount() > 1 ? aParams[1] : CValue());
+		pvarRetValue = Property(*paParams[0], lSizeArray > 1 ? *paParams[1] : CValue());
+		return true;
 	case enAttributeCount:
-		return Count();
+		pvarRetValue = Count();
+		return true;
 	}
 
-	return CValue();
+	return false;
 }
 
 //**********************************************************************
 //*                       Runtime register                             *
 //**********************************************************************
 
-SO_VALUE_REGISTER(CValueForm::CValueFormData, "formData", CValueFormData, TEXT2CLSID("VL_FDTA"));
+SO_VALUE_REGISTER(CValueForm::CValueFormData, "formData", TEXT2CLSID("VL_FDTA"));

@@ -1,6 +1,6 @@
 #include "firebirdDatabaseLayer.h"
-#include "databaseLayer/databaseErrorCodes.h"
-#include "databaseLayer/databaseLayerException.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
+#include <3rdparty/databaseLayer/databaseLayerException.h>
 
 #include "engine/ibase.h"
 
@@ -375,7 +375,7 @@ void FirebirdDatabaseLayer::BeginTransaction()
 		isc_db_handle pDatabase = (isc_db_handle)m_pDatabase;
 		isc_tr_handle pTransaction = (isc_tr_handle)fbNextNode->m_pTransaction;
 
-		int nReturn = m_pInterface->GetIscStartTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pTransaction, 1, &pDatabase, 0 /*tpb_length*/, NULL/*tpb*/);
+		int nReturn = m_pInterface->GetIscStartTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pTransaction, 1, &pDatabase, 0, NULL);
 
 		m_pDatabase = pDatabase;
 		fbNextNode->m_pTransaction = pTransaction;
@@ -463,7 +463,7 @@ int FirebirdDatabaseLayer::RunQuery(const wxString& strQuery, bool bParseQuery)
 		wxArrayString::iterator start = QueryArray.begin();
 		wxArrayString::iterator stop = QueryArray.end();
 
-		int nRows = 1;
+		long rows = 1;
 		if (QueryArray.size() > 0)
 		{
 			bool bQuickieTransaction = false;
@@ -520,7 +520,7 @@ int FirebirdDatabaseLayer::RunQuery(const wxString& strQuery, bool bParseQuery)
 			}
 		}
 
-		return nRows;
+		return rows;
 	}
 	else
 	{
@@ -591,8 +591,9 @@ DatabaseResultSet* FirebirdDatabaseLayer::RunQueryWithResults(const wxString& st
 			if (bQuickieTransaction)
 			{
 				bManageTransaction = true;
+
 				isc_db_handle pDatabase = (isc_db_handle)m_pDatabase;
-				int nReturn = m_pInterface->GetIscStartTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction, 1, &pDatabase, 0 /*tpb_length*/, NULL/*tpb*/);
+				int nReturn = m_pInterface->GetIscStartTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction, 1, &pDatabase, 0, NULL);
 				m_pDatabase = pDatabase;
 				if (nReturn != 0)
 				{

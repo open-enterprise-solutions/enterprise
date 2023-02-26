@@ -1,13 +1,57 @@
 #include "interfaceEditorProperty.h"
-#include "frontend/objinspect/objinspect.h"
+#include "frontend/mainFrame.h"
 
-CInterfaceEditorProperty::CInterfaceEditorProperty()
-{
-}
-
-CInterfaceEditorProperty::~CInterfaceEditorProperty()
-{
+CInterfaceEditorProperty::~CInterfaceEditorProperty() {
 	if (objectInspector->GetSelectedObject() == this) {
 		objectInspector->ClearProperty();
+	}
+}
+
+void CInterfaceEditorProperty::OnPropertyRefresh(wxPropertyGridManager* pg,
+	wxPGProperty* pgProperty, Property* property)
+{
+	const eMenuType menuType = (eMenuType)m_propertyMenuType->GetValueAsInteger();
+	if (menuType == eMenuType::eMenu) {
+		if (m_propertySubMenu == property)
+			pg->HideProperty(pgProperty, true);
+		if (m_propertyAction == property)
+			pg->HideProperty(pgProperty, false);
+		if (m_propertyCaption == property)
+			pg->HideProperty(pgProperty, false);
+		if (m_propertyToolTip == property)
+			pg->HideProperty(pgProperty, false);
+		if (m_propertyDescription == property)
+			pg->HideProperty(pgProperty, false);
+		if (m_propertyPicture == property)
+			pg->HideProperty(pgProperty, false);
+
+	}
+	else if (menuType == eMenuType::eSubMenu) {
+		if (m_propertySubMenu == property)
+			pg->HideProperty(pgProperty, false);
+		if (m_propertyAction == property)
+			pg->HideProperty(pgProperty, true);
+		if (m_propertyCaption == property)
+			pg->HideProperty(pgProperty, false);
+		if (m_propertyToolTip == property)
+			pg->HideProperty(pgProperty, false);
+		if (m_propertyDescription == property)
+			pg->HideProperty(pgProperty, false);
+		if (m_propertyPicture == property)
+			pg->HideProperty(pgProperty, false);
+	}
+	else if (menuType == eMenuType::eSeparator) {
+		if (m_propertySubMenu == property)
+			pg->HideProperty(pgProperty, true);
+		if (m_propertyAction == property)
+			pg->HideProperty(pgProperty, true);
+		if (m_propertyCaption == property)
+			pg->HideProperty(pgProperty, true);
+		if (m_propertyToolTip == property)
+			pg->HideProperty(pgProperty, true);
+		if (m_propertyDescription == property)
+			pg->HideProperty(pgProperty, true);
+		if (m_propertyPicture == property)
+			pg->HideProperty(pgProperty, true);
 	}
 }

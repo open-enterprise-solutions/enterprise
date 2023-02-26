@@ -4,8 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "enumFactory.h"
-#include "common/propertyObject.h"
-#include "methods.h"
+#include "core/common/propertyInfo.h"
 
 //*********************************************************************************************************
 //*                                   Singleton initializer "enumFactory"                                 *
@@ -33,30 +32,29 @@ void CEnumFactory::Destroy()
 //*********************************************************************************************************
 
 CEnumFactory::CEnumFactory() :
-	CValue(eValueTypes::TYPE_VALUE, true), m_methods(new CMethods())
+	CValue(eValueTypes::TYPE_VALUE, true), m_methodHelper(new CMethodHelper())
 {
 	for (auto enumeration : CValue::GetAvailableObjects(eObjectType_enum)) {
-		m_methods->AppendAttribute(enumeration);
+		m_methodHelper->AppendProp(enumeration);
 	}
 }
 
 CEnumFactory::~CEnumFactory() {
-	wxDELETE(m_methods);
+	wxDELETE(m_methodHelper);
 }
 
 void CEnumFactory::PrepareNames() const
 {
 	for (auto enumeration : CValue::GetAvailableObjects(eObjectType_enum)) {
-		m_methods->AppendAttribute(enumeration);
+		m_methodHelper->AppendProp(enumeration);
 	}
 }
 
-CValue CEnumFactory::GetAttribute(attributeArg_t& aParams)
+bool CEnumFactory::GetPropVal(const long lPropNum, CValue& pvarPropVal)
 {
-	wxString enumeration = aParams.GetName();
-
+	const wxString &enumeration = GetPropName(lPropNum);
 	if (!CValue::IsRegisterObject(enumeration))
-		return CValue();
-
-	return CValue::CreateObject(enumeration);;
+		return false;
+	pvarPropVal = CValue::CreateObject(enumeration);
+	return true;
 }

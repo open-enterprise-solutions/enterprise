@@ -11,7 +11,7 @@ CValueGridSizer::CValueGridSizer() : IValueSizer()
 {
 }
 
-wxObject* CValueGridSizer::Create(wxObject* /*parent*/, IVisualHost* /*visualHost*/)
+wxObject* CValueGridSizer::Create(wxWindow* /*parent*/, IVisualHost* /*visualHost*/)
 {
 	return new wxGridSizer(m_propertyRows->GetValueAsInteger(), m_propertyCols->GetValueAsInteger(), 0, 0);
 }
@@ -57,3 +57,9 @@ bool CValueGridSizer::SaveData(CMemoryWriter &writer)
 
 	return IValueSizer::SaveData(writer);
 }
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+CONTROL_VALUE_REGISTER(CValueGridSizer, "gridsizer", "sizer", TEXT2CLSID("CT_GSZR"));

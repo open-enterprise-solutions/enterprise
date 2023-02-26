@@ -23,7 +23,7 @@
 
 #include <wx/utils.h>
 
-#include <email/mimetic/rfc822/messageid.h>
+#include <3rdparty/email/mimetic/rfc822/messageid.h>
 
 namespace mimetic
 {

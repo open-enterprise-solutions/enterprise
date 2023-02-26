@@ -1,7 +1,7 @@
 #include "userListWnd.h"
-#include "databaseLayer/databaseLayer.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 #include "frontend/theme/luna_auitoolbar.h"
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 #include "appData.h"
 
 #define colUserName 1

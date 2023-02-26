@@ -21,8 +21,8 @@
 #include <wx/wx.h> 
 #endif
 
-#include <email/codec/rfc2231.h>
-#include <email/codec/charsetconv.h>
+#include <3rdparty/email/codec/rfc2231.h>
+#include <3rdparty/email/codec/charsetconv.h>
 
 bool wxRfc2231::ExtractParameter(const std::list<mimetic::FieldParam>& parameters_list, const wxString& name, wxString& value)
 {

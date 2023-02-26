@@ -15,9 +15,8 @@
 #include "postgresPreparedStatementParameterCollection.h"
 #include "postgresInterface.h"
 
-
-#include "databaseLayer/databaseErrorReporter.h"
-#include "databaseLayer/databaseStringConverter.h"
+#include <3rdparty/databaseLayer/databaseErrorReporter.h>
+#include <3rdparty/databaseLayer/databaseStringConverter.h>
 
 #include "engine/libpq-fe.h"
 

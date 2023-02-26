@@ -1,7 +1,7 @@
 #ifndef __OBJ_INSPECT__
 #define __OBJ_INSPECT__
 
-#include "common/propertyObject.h"
+#include "core/common/propertyInfo.h"
 
 #include <wx/aui/auibook.h>
 #include <wx/propgrid/manager.h>
@@ -10,10 +10,9 @@
 #error "wxUSE_PROPGRID must be set to 1 in your wxWidgets library."
 #endif
 
-class wxFrameEventHandlerEvent;
-class wxFramePropertyEvent;
-class wxFrameObjectEvent;
-class wxFrameEvent;
+#include "frontend/objinspect/advprops.h"
+
+static int wxEVT_OES_PROP_BITMAP_CHANGED = wxNewEventType();
 
 enum {
 	wxOES_OI_DEFAULT_STYLE,
@@ -21,69 +20,73 @@ enum {
 	wxOES_OI_SINGLE_PAGE_STYLE
 };
 
-class CObjectInspector;
-
-#define objectInspector           (CObjectInspector::Get())
-#define objectInspectorDestroy()  (CObjectInspector::Destroy())
+#define objectInspector  CObjectInspector::GetObjectInspector()
 
 class CObjectInspector : public wxPanel {
-	static CObjectInspector* s_instance;
-private:
+
+	wxPropertyGridManager* m_pg;
+
+	std::map< wxString, bool > m_isExpanded;
 
 	std::map< wxPGProperty*, Property*> m_propMap;
 	std::map< wxPGProperty*, Event*> m_eventMap;
 
 	IPropertyObject* m_currentSel;
-	wxEvtHandler* m_evthandler;
+
+	int m_style;
 
 	//save the current selected property
 	wxString m_strSelPropItem;
 
-	wxPropertyGridManager* m_pg;
+private:
 
-	int m_style;
-
-	int StringToBits(const wxString& strVal, wxPGChoices& constants);
-
-	std::map< wxString, bool > m_isExpanded;
+	int StringToBits(const wxString& strVal, wxPGChoices& constants) {
+		wxStringTokenizer strTok(strVal, wxT(" |"));
+		int val = 0;
+		while (strTok.HasMoreTokens())
+		{
+			wxString token = strTok.GetNextToken();
+			unsigned int i = 0;
+			bool done = false;
+			while (i < constants.GetCount() && !done)
+			{
+				if (constants.GetLabel(i) == token)
+				{
+					val |= constants.GetValue(i);
+					done = true;
+				}
+				i++;
+			}
+		}
+		return val;
+	}
 
 	template < class ValueT >
-	void CreateCategory(const wxString& name, IPropertyObject* obj, std::map< wxString, ValueT >& itemMap, bool addingEvents)
-	{
+	void CreateCategory(const wxString& name, IPropertyObject* obj, std::map< wxString, ValueT >& itemMap, bool addingEvents) {
 		// Get Category
 		PropertyCategory* category = obj->GetCategory();
-
-		if (!category)
+		if (category == NULL)
 			return;
-
 		// Prevent page creation if there are no properties
 		if (category->GetCategoryCount() == 0 &&
 			(addingEvents ? category->GetEventCount() : category->GetPropertyCount()) == 0)
 			return;
-
 		wxString pageName;
-
 		if (m_style == wxOES_OI_MULTIPAGE_STYLE) {
 			pageName = name;
 		}
 		else {
 			pageName = wxT("default");
 		}
-
 		wxPropertyGridManager* pg = m_pg; //(addingEvents ? m_eg : m_pg);
 		int pageIndex = pg->GetPageByName(pageName);
-
-		if (pageIndex == wxNOT_FOUND)
-		{
+		if (pageIndex == wxNOT_FOUND) {
 			//pg->AddPage( pageName, obj_info->GetSmallIconFile() );
 			pg->AddPage(pageName);
 		}
-
 		const wxString& catName = category->GetName();
 		wxPGProperty* id = pg->Append(new wxPropertyCategory(category->GetLabel(), catName));
-
 		AddItems(name, obj, category, itemMap);
-
 		std::map< wxString, bool >::iterator it = m_isExpanded.find(catName);
 		if (it != m_isExpanded.end()) {
 			if (it->second) {
@@ -93,29 +96,187 @@ private:
 				pg->Collapse(id);
 			}
 		}
-
 		pg->SetPropertyAttributeAll(wxPG_BOOL_USE_CHECKBOX, (long)1);
 	}
 
 	void GenerateSynonym(const wxString& name);
 
-	void AddItems(const wxString& name, IPropertyObject* obj, PropertyCategory* category, std::map<wxString, Property*>& map);
-	void AddItems(const wxString& name, IPropertyObject* obj, PropertyCategory* category, std::map<wxString, Event*>& map);
+	void AddItems(const wxString& name, IPropertyObject* obj, PropertyCategory* category, std::map<wxString, Property*>& properties) {
+		unsigned int propCount = category->GetPropertyCount();
+		for (unsigned int i = 0; i < propCount; i++) {
+
+			wxString propName = category->GetPropertyName(i);
+			Property* prop = obj->GetProperty(propName);
+
+			if (!prop)
+				continue;
+
+			// we do not want to duplicate inherited properties
+			if (properties.find(propName) == properties.end()) {
+
+				if (m_currentSel != NULL) {
+					m_currentSel->OnPropertyCreated(prop);
+				}
+
+				wxPGProperty* id = m_pg->Append(GetProperty(prop));
+				int           propType = prop->GetType();
+				if (propType != PropertyType::PT_OPTION &&
+					propType != PropertyType::PT_TYPE &&
+					propType != PropertyType::PT_RECORD &&
+					propType != PropertyType::PT_GENERATION &&
+					propType != PropertyType::PT_OWNER) {
+					m_pg->SetPropertyHelpString(id, prop->GetHelp());
+					if (propType == PropertyType::PT_BITMAP) {
+						wxPGBitmapProperty* bp = wxDynamicCast(id, wxPGBitmapProperty);
+						if (bp != NULL) {
+							bp->CreateChildren();
+							// perform delayed child properties update
+							wxCommandEvent e(wxEVT_OES_PROP_BITMAP_CHANGED);
+							e.SetString(bp->GetName() + wxT(":") + prop->GetValueAsString());
+							GetEventHandler()->AddPendingEvent(e);
+						}
+					}
+				}
+
+				if (m_style != wxOES_OI_MULTIPAGE_STYLE) {
+					// Most common classes will be showed with a slightly different colour.
+					if (name == wxT("Window"))
+						m_pg->SetPropertyBackgroundColour(id, wxColour(255, 255, 205)); // yellow
+					else if (name == wxT("Common"))
+						m_pg->SetPropertyBackgroundColour(id, wxColour(240, 240, 255)); // light blue
+					else if (name == wxT("SizerItem"))
+						m_pg->SetPropertyBackgroundColour(id, wxColour(220, 255, 255)); // cyan
+				}
+
+				std::map< wxString, bool >::iterator it = m_isExpanded.find(propName);
+				if (it != m_isExpanded.end()) {
+					if (it->second) {
+						m_pg->Expand(id);
+					}
+					else {
+						m_pg->Collapse(id);
+					}
+				}
+
+				if (prop->GetType() == PropertyType::PT_TYPE
+					|| prop->GetType() == PropertyType::PT_SOURCE) {
+					m_pg->Expand(id);
+				}
+
+				if (m_currentSel != NULL) {
+					m_currentSel->OnPropertyCreated(prop);
+				}
+
+				properties.insert(std::map<wxString, Property*>::value_type(propName, prop));
+				m_propMap.insert(std::map< wxPGProperty*, Property*>::value_type(id, prop));
+			}
+		}
+
+		unsigned int catCount = category->GetCategoryCount();
+		for (unsigned int i = 0; i < catCount; i++) {
+
+			PropertyCategory* nextCat = category->GetCategory(i);
+			if (0 == nextCat->GetCategoryCount() && 0 == nextCat->GetPropertyCount()) {
+				continue;
+			}
+
+			wxPGProperty* catId = m_pg->AppendIn(category->GetName(), new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));
+			AddItems(nextCat->GetName(), obj, nextCat, properties);
+
+			std::map< wxString, bool >::iterator it = m_isExpanded.find(nextCat->GetName());
+			if (it != m_isExpanded.end())
+			{
+				if (it->second) {
+					m_pg->Expand(catId);
+				}
+				else {
+					m_pg->Collapse(catId);
+				}
+			}
+		}
+	}
+
+	void AddItems(const wxString& name, IPropertyObject* obj, PropertyCategory* category, std::map<wxString, Event*>& events) {
+		unsigned int eventCount = category->GetEventCount();
+		for (unsigned int i = 0; i < eventCount; i++) {
+
+			wxString eventName = category->GetEventName(i);
+			Event* event = obj->GetEvent(eventName);
+
+			if (!event)
+				continue;
+
+			// We do not want to duplicate inherited events
+			if (events.find(eventName) == events.end()) {
+
+				wxPGProperty* id = m_pg->Append(GetEvent(event));
+
+				m_pg->SetPropertyHelpString(id, wxGetTranslation(event->GetHelp()));
+
+				if (m_style != wxOES_OI_MULTIPAGE_STYLE) {
+					// Most common classes will be showed with a slightly different colour.
+					if (name == wxT("Window"))
+						m_pg->SetPropertyBackgroundColour(id, wxColour(255, 255, 205)); // Yellow
+					else if (name == wxT("Common"))
+						m_pg->SetPropertyBackgroundColour(id, wxColour(240, 240, 255)); // light blue
+					else if (name == wxT("SizerItem"))
+						m_pg->SetPropertyBackgroundColour(id, wxColour(220, 255, 255)); // Cyan
+				}
+
+				std::map< wxString, bool >::iterator it = m_isExpanded.find(eventName);
+				if (it != m_isExpanded.end()) {
+					if (it->second) {
+						m_pg->Expand(id);
+					}
+					else {
+						m_pg->Collapse(id);
+					}
+				}
+
+				events.insert(std::map<wxString, Event*>::value_type(eventName, event));
+				m_eventMap.insert(std::map< wxPGProperty*, Event*>::value_type(id, event));
+			}
+		}
+
+		unsigned int catCount = category->GetCategoryCount();
+		for (unsigned int i = 0; i < catCount; i++)
+		{
+			PropertyCategory* nextCat = category->GetCategory(i);
+			if (0 == nextCat->GetCategoryCount() && 0 == nextCat->GetEventCount()) {
+				continue;
+			}
+
+			wxPGProperty* catId = m_pg->AppendIn(category->GetName(), new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));
+
+			AddItems(nextCat->GetName(), obj, nextCat, events);
+
+			std::map< wxString, bool >::iterator it = m_isExpanded.find(nextCat->GetName());
+			if (it != m_isExpanded.end()) {
+				if (it->second) {
+					m_pg->Expand(catId);
+				}
+				else {
+					m_pg->Collapse(catId);
+				}
+			}
+		}
+	}
+
+	friend class wxAuiDocMDIFrame; 
 
 	wxPGProperty* GetProperty(Property* prop);
+	wxPGProperty* GetEvent(Event* event);
 
 	void Create(bool force = false);
 
-	void OnPropertyGridChanging(wxPropertyGridEvent& event);
-	void OnPropertyGridExpand(wxPropertyGridEvent& event);
-	void OnPropertyGridItemSelected(wxPropertyGridEvent& event);
-
-	void OnBitmapPropertyChanged(wxCommandEvent& event);
-
 	bool ModifyProperty(Property* prop, const wxVariant& newValue);
-	void RestoreLastSelectedPropItem();
+	bool ModifyEvent(Event* event, const wxString& newValue);
 
-	void OnChildFocus(wxChildFocusEvent& event);
+	void RestoreLastSelectedPropItem() {
+		wxPGProperty* p = m_pg->GetPropertyByName(wxT("name"));
+		if (p != NULL)
+			m_pg->SelectProperty(p, true);
+	}
 
 	CObjectInspector(wxWindow* parent, int id, int style = wxOES_OI_DEFAULT_STYLE);
 
@@ -123,28 +284,34 @@ public:
 
 	virtual ~CObjectInspector();
 
-	static CObjectInspector* Get(bool createIfNeed = true);
-	static void Destroy();
-
-	void OnObjectSelected(wxFrameObjectEvent& event);
-	void OnProjectRefresh(wxFrameEvent& event);
-	void OnPropertyModified(wxFramePropertyEvent& event);
+	wxPropertyGridManager* CreatePropertyGridManager(wxWindow* parent, wxWindowID id);
 
 	// Servicios para los observadores
-	void SelectObject(IPropertyObject* selobj, bool force = true);
-	void SelectObject(IPropertyObject* selobj, wxEvtHandler* m_handler, bool force = true);
+	void SelectObject(IPropertyObject* selobj, bool force = true) {
+		ShowProperty();
+		m_currentSel = selobj;
+		Create(force);
+	}
 
 	IPropertyObject* GetSelectedObject() const {
 		return m_currentSel;
 	}
 
 	void ShowProperty();
-	void RefreshProperty();
-
-	wxPropertyGridManager* CreatePropertyGridManager(wxWindow* parent, wxWindowID id);
 	void SavePosition();
-
 	void ClearProperty();
+
+	static CObjectInspector* GetObjectInspector();
+
+protected:
+
+	void OnPropertyGridChanging(wxPropertyGridEvent& event);
+	void OnPropertyGridChanged(wxPropertyGridEvent& event);
+	void OnPropertyGridExpand(wxPropertyGridEvent& event);
+	void OnPropertyGridItemSelected(wxPropertyGridEvent& event);
+
+	void OnBitmapPropertyChanged(wxCommandEvent& event);
+	void OnChildFocus(wxChildFocusEvent& event);
 
 	wxDECLARE_EVENT_TABLE();
 };

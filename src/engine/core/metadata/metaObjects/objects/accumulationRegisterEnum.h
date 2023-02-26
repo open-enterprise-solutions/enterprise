@@ -11,7 +11,7 @@ enum eRecordType {
 	eReceipt
 };
 
-#include "compiler/enumObject.h"
+#include "core/compiler/enumObject.h"
 
 class CValueEnumAccumulationRegisterRecordType : public IEnumeration<eRecordType> {
 	wxDECLARE_DYNAMIC_CLASS(CValueEnumAccumulationRegisterRecordType);

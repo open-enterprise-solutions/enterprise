@@ -10,22 +10,22 @@
 #define debugClientInit()     (CDebuggerClient::Initialize())
 #define debugClientDestroy()  (CDebuggerClient::Destroy())
 
-#include "core.h"
+#include "core/core.h"
 #include "debugEvent.h"
-#include "compiler/compiler.h"
+#include "core/compiler/compiler.h"
 
 class CORE_API CDebuggerClient :
 	public wxEvtHandler {
 
-	static CDebuggerClient *s_instance;
+	static CDebuggerClient* s_instance;
 
-	std::map <wxString, std::map<unsigned int, int>> m_aBreakpoints; //список точек 
-	std::map <wxString, std::map<unsigned int, int>> m_aOffsetPoints; //список измененных переходов
+	std::map <wxString, std::map<unsigned int, int>> m_breakpoints; //список точек 
+	std::map <wxString, std::map<unsigned int, int>> m_offsetPoints; //список измененных переходов
 
 #if defined(_USE_64_BIT_POINT_IN_DEBUGGER)
-	std::map <unsigned long long, wxString> m_aExpressions;
+	std::map <unsigned long long, wxString> m_expressions;
 #else 
-	std::map <unsigned int, wxString> m_aExpressions;
+	std::map <unsigned int, wxString> m_expressions;
 #endif  
 
 	bool m_bEnterLoop;
@@ -40,7 +40,7 @@ protected:
 		wxString m_hostName;
 		unsigned short m_port;
 
-		wxSocketClient *m_socketClient;
+		wxSocketClient* m_socketClient;
 
 		wxString m_confGuid;
 		wxString m_md5Hash;
@@ -64,15 +64,26 @@ protected:
 				error == wxSOCKET_WOULDBLOCK;
 		}
 
-		wxString GetHostName() const { return m_hostName; }
-		unsigned short GetPort() const { return m_port; }
-		wxString GetComputerName() const { return m_compName; }
-		wxString GetUserName() const { return m_userName; }
+		wxString GetHostName() const {
+			return m_hostName;
+		}
+
+		unsigned short GetPort() const {
+			return m_port;
+		}
+
+		wxString GetComputerName() const {
+			return m_compName;
+		}
+
+		wxString GetUserName() const {
+			return m_userName;
+		}
 
 		bool AttachConnection();
 		bool DetachConnection(bool kill = false);
 
-		CClientSocketThread(const wxString &hostName, unsigned short port);
+		CClientSocketThread(const wxString& hostName, unsigned short port);
 		virtual ~CClientSocketThread();
 
 		// This one is called by Kill() before killing the thread and is executed
@@ -92,13 +103,13 @@ protected:
 		void VerifyConnection();
 		void EntryClient();
 
-		void RecvCommand(void *pointer, unsigned int length);
-		void SendCommand(void *pointer, unsigned int length);
+		void RecvCommand(void* pointer, unsigned int length);
+		void SendCommand(void* pointer, unsigned int length);
 	};
 
-	CClientSocketThread *m_socketActive;
+	CClientSocketThread* m_socketActive;
 
-	std::vector<CClientSocketThread *> m_aConnections;
+	std::vector<CClientSocketThread*> m_aConnections;
 	std::vector< wxEvtHandler* > m_aHandlers;
 
 	CDebuggerClient();
@@ -118,33 +129,33 @@ public:
 
 public:
 
-	void ConnectToDebugger(const wxString &hostName, unsigned short port);
-	CClientSocketThread *FindConnection(const wxString &hostName, unsigned short port);
-	CClientSocketThread *FindDebugger(const wxString &hostName, unsigned short port);
-	void FindDebuggers(const wxString &hostName = wxT("localhost"), unsigned short startPort = defaultDebuggerPort);
-	std::vector<CClientSocketThread *> &GetConnections() { return m_aConnections; }
+	void ConnectToDebugger(const wxString& hostName, unsigned short port);
+	CClientSocketThread* FindConnection(const wxString& hostName, unsigned short port);
+	CClientSocketThread* FindDebugger(const wxString& hostName, unsigned short port);
+	void FindDebuggers(const wxString& hostName = wxT("localhost"), unsigned short startPort = defaultDebuggerPort);
+	std::vector<CClientSocketThread*>& GetConnections() { return m_aConnections; }
 
 	//special public function:
 #if defined(_USE_64_BIT_POINT_IN_DEBUGGER)
-	void AddExpression(const wxString &sExpression, unsigned long long id);
-	void ExpandExpression(const wxString &sExpression, unsigned long long id);
+	void AddExpression(const wxString& expression, unsigned long long id);
+	void ExpandExpression(const wxString& expression, unsigned long long id);
 	void RemoveExpression(unsigned long long id);
 #else 
-	void AddExpression(wxString sExpression, unsigned int id);
-	void ExpandExpression(wxString sExpression, unsigned int id);
+	void AddExpression(wxString expression, unsigned int id);
+	void ExpandExpression(wxString expression, unsigned int id);
 	void RemoveExpression(unsigned int id);
 #endif 
 
 	void SetLevelStack(unsigned int level);
 
 	//evaluate for tooltip
-	void EvaluateToolTip(const wxString &sModuleName, const wxString &sExpression);
+	void EvaluateToolTip(const wxString& fileName, const wxString& moduleName, const wxString& expression);
 
 	//support calc expression in debugloop
-	void EvaluateAutocomplete(void *pointer, const wxString &sExpression, const wxString &sKeyWord, int currline);
+	void EvaluateAutocomplete(const wxString& fileName, const wxString& moduleName, const wxString& expression, const wxString& keyWord, int currline);
 
 	//get debug list
-	std::vector<unsigned int> GetDebugList(const wxString &sModuleName);
+	std::vector<unsigned int> GetDebugList(const wxString& moduleName);
 
 	//special functions:
 	void Continue();
@@ -154,53 +165,63 @@ public:
 	void Stop(bool kill);
 
 	//for breakpoints and offsets 
-	void InitializeBreakpoints(const wxString &sModuleName, unsigned int from, unsigned int to);
-	void PatchBreakpoints(const wxString &sModuleName, unsigned int line, int offsetLine);
+	void InitializeBreakpoints(const wxString& moduleName, unsigned int from, unsigned int to);
+	void PatchBreakpoints(const wxString& moduleName, unsigned int line, int offsetLine);
 
-	bool SaveBreakpoints(const wxString &sModuleName);
+	bool SaveBreakpoints(const wxString& moduleName);
 	bool SaveAllBreakpoints();
 
-	bool ToggleBreakpoint(const wxString &sModuleName, unsigned int line);
-	bool RemoveBreakpoint(const wxString &sModuleName, unsigned int line);
+	bool ToggleBreakpoint(const wxString& moduleName, unsigned int line);
+	bool RemoveBreakpoint(const wxString& moduleName, unsigned int line);
 	void RemoveAllBreakPoints();
 
-	bool HasConnections() const { 
+	bool HasConnections() const {
 		for (auto connection : m_aConnections) {
 			if (connection->GetConnectionType() == ConnectionType::ConnectionType_Debugger) {
 				return connection->IsConnected();
 			}
 		}
-		return false; 
+		return false;
 	}
 
-	bool IsEnterLoop() const { return m_bEnterLoop; }
+	bool IsEnterLoop() const {
+		return m_bEnterLoop;
+	}
 
 protected:
 
-	static wxString GetDebugPointTableName();
+	static wxString GetDebugPointTableName() {
+		return wxT("DEBUG_POINTS");
+	}
 
 	//db support 
 	void LoadBreakpoints();
 
-	bool ToggleBreakpointInDB(const wxString &sModuleName, unsigned int line);
-	bool RemoveBreakpointInDB(const wxString &sModuleName, unsigned int line);
-	bool OffsetBreakpointInDB(const wxString &sModuleName, unsigned int line, int offset);
+	bool ToggleBreakpointInDB(const wxString& moduleName, unsigned int line);
+	bool RemoveBreakpointInDB(const wxString& moduleName, unsigned int line);
+	bool OffsetBreakpointInDB(const wxString& moduleName, unsigned int line, int offset);
 	bool RemoveAllBreakPointsInDB();
 
 	//notify event: 
 	void NotifyEvent(wxEvent& event);
 
 	//commands:
-	void AppendConnection(CClientSocketThread *client);
-	void DeleteConnection(CClientSocketThread *client);
+	void AppendConnection(CClientSocketThread* client);
+	void DeleteConnection(CClientSocketThread* client);
 
-	void RecvCommand(void *pointer, unsigned int length);
-	void SendCommand(void *pointer, unsigned int length);
+	void RecvCommand(void* pointer, unsigned int length);
+	void SendCommand(void* pointer, unsigned int length);
 
 	//events:
-	void OnDebugEvent(wxDebugEvent &event);
-	void OnDebugToolTipEvent(wxDebugToolTipEvent &event);
-	void OnDebugAutoCompleteEvent(wxDebugAutocompleteEvent &event);
+	void OnDebugEvent(wxDebugEvent& event);
+
+	//commands 
+	void OnEnterLoop(const debugData_t& debugData);
+	void OnLeaveLoop(const debugData_t& debugData);
+
+	void OnFillAutoComplete(const debugAutoCompleteData_t &debugData);
+	void OnMessageFromEnterprise(const debugData_t& debugData, const wxString& message);
+	void OnSetToolTip(const debugTipData_t &debugData, const wxString &resultStr);
 
 	wxDECLARE_EVENT_TABLE();
 };

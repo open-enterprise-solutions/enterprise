@@ -63,7 +63,7 @@
 
 #include <wx/sckstrm.h>
 
-#include <email/utils/wxcmdprot.h>
+#include <3rdparty/email/utils/wxcmdprot.h>
 
 static long SOCKET_ID = wxNewId();
 static long TIMER_ID = wxNewId();

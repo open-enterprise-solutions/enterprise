@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataProcessor.h"
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 #define objectModule wxT("objectModule")
 #define managerModule wxT("managerModule")
@@ -96,7 +96,7 @@ IRecordDataObjectExt* CMetaObjectDataProcessor::CreateObjectExtValue()
 #include "frontend/visualView/controls/form.h"
 #include "utils/stringUtils.h"
 
-CValueForm* CMetaObjectDataProcessor::GetObjectForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectDataProcessor::GetObjectForm(const wxString& formName, IControlFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -122,8 +122,7 @@ CValueForm* CMetaObjectDataProcessor::GetObjectForm(const wxString& formName, IV
 
 	if (defList == NULL) {
 		IRecordDataObject* objectData = CreateObjectValue();
-		CValueForm* valueForm = new CValueForm;
-		valueForm->InitializeForm(ownerControl, NULL,
+		CValueForm* valueForm = new CValueForm(ownerControl, NULL,
 			objectData, formGuid
 		);
 		valueForm->BuildForm(CMetaObjectDataProcessor::eFormDataProcessor);
@@ -227,9 +226,6 @@ bool CMetaObjectDataProcessor::OnSaveMetaObject()
 
 bool CMetaObjectDataProcessor::OnDeleteMetaObject()
 {
-	IModuleManager* moduleManager = m_metaData->GetModuleManager();
-	wxASSERT(moduleManager);
-
 	if (m_objMode == METAOBJECT_NORMAL) {
 		if (!m_moduleManager->OnDeleteMetaObject())
 			return false;

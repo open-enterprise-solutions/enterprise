@@ -11,9 +11,9 @@ CValueStaticBoxSizer::CValueStaticBoxSizer() : IValueSizer()
 {
 }
 
-wxObject* CValueStaticBoxSizer::Create(wxObject* parent, IVisualHost* visualHost)
+wxObject* CValueStaticBoxSizer::Create(wxWindow* wxparent, IVisualHost* visualHost)
 {
-	wxStaticBox* m_staticBox = new wxStaticBox((wxWindow*)parent, wxID_ANY, m_propertyLabel->GetValueAsString());
+	wxStaticBox* m_staticBox = new wxStaticBox(wxparent, wxID_ANY, m_propertyLabel->GetValueAsString());
 	return new wxStaticBoxSizer(m_staticBox, m_propertyOrient->GetValueAsInteger());
 }
 
@@ -112,3 +112,9 @@ bool CValueStaticBoxSizer::SaveData(CMemoryWriter& writer)
 
 	return IValueSizer::SaveData(writer);
 }
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+CONTROL_VALUE_REGISTER(CValueStaticBoxSizer, "staticboxsizer", "sizer", TEXT2CLSID("CT_SSZER"));

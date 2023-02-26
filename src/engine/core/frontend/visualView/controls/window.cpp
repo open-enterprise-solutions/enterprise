@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "window.h"
-#include "frontend/visualView/visualEditorBase.h"
+#include "form.h"
 
 wxIMPLEMENT_ABSTRACT_CLASS(IValueWindow, IValueControl)
 
@@ -46,8 +46,11 @@ void IValueWindow::UpdateWindow(wxWindow* window)
 	if (m_propertyBG->IsOk())
 		window->SetBackgroundColour(m_propertyBG->GetValueAsColour());
 
+	CValueForm* ownerForm = GetOwnerForm();
+	wxASSERT(ownerForm);
+
 	// Enabled
-	window->Enable(m_propertyEnabled->GetValueAsBoolean());
+	window->Enable(m_propertyEnabled->GetValueAsBoolean() && ownerForm->IsFormEnabled());
 
 	// Hidden
 	window->Show(m_propertyVisible->GetValueAsBoolean());
@@ -72,7 +75,7 @@ void IValueWindow::UpdateLabelSize(IDynamicBorder* control)
 
 	IValueFrame* parentFrame = m_formOwner;
 	wxASSERT(parentFrame);
-	if (parentFrame->GetClassName() == wxT("sizerItem")) {
+	if (parentFrame->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 		parentFrame = parentFrame->GetParent();
 	}
 
@@ -86,13 +89,13 @@ void IValueWindow::UpdateLabelSize(IDynamicBorder* control)
 	std::function<void(IDynamicBorder*, IValueFrame*, wxBoxSizer*, int&)> updateSizer =
 		[&updateSizer](IDynamicBorder* control, IValueFrame* child, wxBoxSizer* parentSizer, int& maxX) {
 		IValueFrame* childParent = child->GetParent();
-		if (child->GetClassName() == wxT("sizerItem")) {
+		if (child->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 			child = child->GetChild(0);
 		}
 		wxASSERT(child);
 		std::function<void(IDynamicBorder*, IValueFrame*, wxBoxSizer*, int&)> calcSizer =
 			[&calcSizer](IDynamicBorder* control, IValueFrame* child, wxBoxSizer* parentSizer, int& maxX) {
-			if (child->GetClassName() == wxT("sizerItem")) {
+			if (child->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 				child = child->GetChild(0);
 			}
 			wxASSERT(child);

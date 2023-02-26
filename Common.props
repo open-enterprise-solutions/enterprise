@@ -44,6 +44,7 @@
     <oesBinDir>$(SolutionDir)\bin\$(oesPlatform)\$(Configuration)\</oesBinDir>
     <oesLibDir>$(SolutionDir)\lib\$(oesPlatform)\$(Configuration)\</oesLibDir>
     <oesIntDir>$(SolutionDir)\intermediate\$(oesPlatform)\$(Configuration)\</oesIntDir>
+	<oesSrcDir>$(SolutionDir)src\</oesSrcDir>
     <oes3rdParty>$(SolutionDir)src\3rdparty\</oes3rdParty>
 	<oesEngine>$(SolutionDir)src\engine\</oesEngine>
   </PropertyGroup>
@@ -68,7 +69,7 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>
-        .;$(SolutionDir);$(oes3rdParty);$(oesEngine);$(ProjectDir);%(AdditionalIncludeDirectories)
+        .;$(SolutionDir);$(oesSrcDir);$(oesEngine);$(ProjectDir);%(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
       <!-- MultiProcessorCompilation don't compatible with LinkIncremental and UseDebugLibraries -->
       <MultiProcessorCompilation Condition="$(Configuration.StartsWith('Debug'  ))">false</MultiProcessorCompilation>

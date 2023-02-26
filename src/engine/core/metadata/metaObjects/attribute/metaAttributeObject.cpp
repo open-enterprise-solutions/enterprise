@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaAttributeObject.h"
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 ////////////////////////////////////////////////////////////////////////////
 
@@ -17,7 +17,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(CMetaDefaultAttributeObject, IMetaAttributeObject);
 //*                         Attributes                                  * 
 //***********************************************************************
 
-#include "metadata/singleMetaTypes.h"
+#include "core/metadata/singleClass.h"
 
 bool IMetaAttributeObject::ContainMetaType(eMetaObjectType type) const
 {
@@ -38,19 +38,42 @@ CMetaAttributeObject::CMetaAttributeObject(const eValueTypes& valType) :
 {
 }
 
+eItemMode CMetaAttributeObject::GetItemMode() const {
+	IMetaObjectRecordDataFolderMutableRef* metaObject =
+		dynamic_cast<IMetaObjectRecordDataFolderMutableRef*>(m_parent);
+	if (metaObject != NULL)
+		return (eItemMode)m_propertyItemMode->GetValueAsInteger();
+	return eItemMode::eItemMode_Item;
+}
+
+eSelectMode CMetaAttributeObject::GetSelectMode() const
+{
+	if (GetClsidCount() > 1)
+		return eSelectMode::eSelectMode_Items;
+	IMetaTypeObjectValueSingle* so = GetMetadata()->GetTypeObject(GetFirstClsid());
+	if (so != NULL) {
+		IMetaObjectRecordDataFolderMutableRef* metaObject = dynamic_cast<IMetaObjectRecordDataFolderMutableRef*>(so->GetMetaObject());
+		if (so->GetMetaType() == eMetaObjectType::enReference && metaObject != NULL)
+			return (eSelectMode)m_propertySelectMode->GetValueAsInteger();
+		return eSelectMode::eSelectMode_Items;
+	}	
+	return eSelectMode::eSelectMode_Items;
+}
+
 /////////////////////////////////////////////////////////////////////////
 
 CValue IMetaAttributeObject::CreateValue() const
 {
 	CValue* refData = CreateValueRef();
-	return refData ?
-		refData : CValue();
+	if (refData == NULL)
+		return CValue();
+	return refData;
 }
 
 CValue* IMetaAttributeObject::CreateValueRef() const
 {
 	if (m_defValue.IsEmpty())
-		return IAttributeInfo::CreateValueRef();
+		return ITypeAttribute::CreateValueRef();
 
 	return new CValue(m_defValue);
 }
@@ -76,6 +99,9 @@ bool IMetaAttributeObject::OnDeleteMetaObject()
 	return IMetaObject::OnDeleteMetaObject();
 }
 
+#include "appData.h"
+#include "3rdparty/databaseLayer/databaseLayer.h"
+
 wxString IMetaAttributeObject::GetSQLTypeObject(const CLASS_ID& clsid) const
 {
 	switch (CValue::GetVTByID(clsid))
@@ -88,9 +114,9 @@ wxString IMetaAttributeObject::GetSQLTypeObject(const CLASS_ID& clsid) const
 		else
 			return wxString::Format("NUMERIC(%i)", GetPrecision());
 	case eValueTypes::TYPE_DATE:
-		if (GetDateTime() == eDateFractions::eDateFractions_Date)
+		if (GetDateFraction() == eDateFractions::eDateFractions_Date)
 			return wxString::Format("DATE");
-		else if (GetDateTime() == eDateFractions::eDateFractions_DateTime)
+		else if (GetDateFraction() == eDateFractions::eDateFractions_DateTime)
 			return wxString::Format("TIMESTAMP");
 		else
 			return wxString::Format("TIME");
@@ -102,6 +128,8 @@ wxString IMetaAttributeObject::GetSQLTypeObject(const CLASS_ID& clsid) const
 	case eValueTypes::TYPE_ENUM:
 		return wxString::Format("INTEGER");
 	default:
+		if (databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+			return wxString::Format("BYTEA"); 
 		return wxString::Format("BLOB");
 	}
 
@@ -114,25 +142,29 @@ wxString IMetaAttributeObject::GetSQLTypeObject(const CLASS_ID& clsid) const
 
 bool CMetaAttributeObject::LoadData(CMemoryReader& reader)
 {
-	if (!IAttributeWrapper::LoadTypeData(reader))
+	if (!ITypeWrapper::LoadTypeData(reader))
 		return false;
 
 	m_propertyFillCheck->SetValue(reader.r_u8());
+	m_propertyItemMode->SetValue(reader.r_u16());
+	m_propertySelectMode->SetValue(reader.r_u16());
 	return true;
 }
 
 bool CMetaAttributeObject::SaveData(CMemoryWriter& writer)
 {
-	if (!IAttributeWrapper::SaveTypeData(writer))
+	if (!ITypeWrapper::SaveTypeData(writer))
 		return false;
 
 	writer.w_u8(m_propertyFillCheck->GetValueAsBoolean());
+	writer.w_u16(m_propertyItemMode->GetValueAsInteger());
+	writer.w_u16(m_propertySelectMode->GetValueAsInteger());
 	return true;
 }
 
 bool CMetaDefaultAttributeObject::LoadData(CMemoryReader& reader)
 {
-	if (!IAttributeWrapper::LoadTypeData(reader))
+	if (!ITypeWrapper::LoadTypeData(reader))
 		return false;
 
 	m_fillCheck = reader.r_u8();
@@ -141,7 +173,7 @@ bool CMetaDefaultAttributeObject::LoadData(CMemoryReader& reader)
 
 bool CMetaDefaultAttributeObject::SaveData(CMemoryWriter& writer)
 {
-	if (!IAttributeWrapper::SaveTypeData(writer))
+	if (!ITypeWrapper::SaveTypeData(writer))
 		return false;
 
 	writer.w_u8(m_fillCheck);

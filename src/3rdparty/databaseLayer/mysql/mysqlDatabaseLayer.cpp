@@ -5,8 +5,8 @@
 #include "mysqlInterface.h"
 #include "mysqlPreparedStatement.h"
 #include "mysqlPreparedStatementResultSet.h"
-#include "databaseLayer/databaseErrorCodes.h"
-#include "databaseLayer/databaseLayerException.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
+#include <3rdparty/databaseLayer/databaseLayerException.h>
 
 #include <wx/tokenzr.h>
 

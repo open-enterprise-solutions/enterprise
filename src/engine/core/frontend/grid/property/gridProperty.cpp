@@ -5,7 +5,7 @@
 
 #include "gridProperty.h"
 #include "frontend/grid/gridCommon.h"
-#include "frontend/objinspect/objinspect.h"
+#include "frontend/mainFrame.h"
 
 void CGridPropertyObject::AddSelectedCell(const wxGridBlockCoords& coords, bool afterErase)
 {
@@ -17,7 +17,7 @@ void CGridPropertyObject::AddSelectedCell(const wxGridBlockCoords& coords, bool 
 
 	m_currentBlocks.push_back(coords);
 
-	objectInspector->RefreshProperty();
+	objectInspector->SelectObject(this);
 	m_ownerGrid->ForceRefresh();
 }
 

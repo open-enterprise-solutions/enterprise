@@ -9,12 +9,10 @@ class CAutoComplete
 {
 	bool active;
 
-	struct keywordElement_t
-	{
-		short type;
-		wxString name;
-		wxString shortDescription;
-		int image;
+	struct keywordElement_t {
+		short m_type;
+		wxString m_name;
+		wxString m_shortDescription;
 	};
 
 	enum 
@@ -27,7 +25,7 @@ class CAutoComplete
 		eExportFunction,
 	};
 
-	std::vector< keywordElement_t> aKeywords;
+	std::vector< keywordElement_t> m_aKeywords;
 
 public:
 
@@ -55,7 +53,7 @@ public:
 	int autoSort;
 
 	CAutoComplete(wxStyledTextCtrl *textCtrl);
-	~CAutoComplete();
+	virtual ~CAutoComplete();
 
 	/// Is the auto completion list displayed?
 	bool Active() const;
@@ -65,7 +63,7 @@ public:
 		int startLen_, int lineHeight);
 
 	/// The append string contains a sequence of words separated by the separator character
-	void Append(short type, const wxString &sName, const wxString &sDescription, int image = -1);
+	void Append(short type, const wxString &sName, const wxString &sDescription);
 
 	/// Return the position of the currently selected list item
 	int GetSelection() const;
@@ -87,6 +85,8 @@ public:
 	bool CallEvent(wxEvent& event);
 
 protected:
+
+	wxBitmap GetImageByType(short type) const;
 
 	// Event handlers
 	void OnSelection(wxCommandEvent& event);

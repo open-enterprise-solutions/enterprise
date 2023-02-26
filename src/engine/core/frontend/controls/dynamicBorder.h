@@ -5,8 +5,13 @@
 
 class IDynamicBorder {
 public:
-	virtual bool AllowCalc() const { return true; }
+	virtual bool AllowCalc() const { 
+		return true; 
+	}
+	
+	virtual wxSize GetControlSize() const = 0;
 	virtual wxStaticText *GetStaticText() const = 0;
+	virtual wxWindow* GetControl() const = 0;
 
 	virtual void BeforeCalc() {}
 	virtual void AfterCalc() {}

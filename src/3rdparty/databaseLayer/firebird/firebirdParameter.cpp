@@ -1,6 +1,6 @@
 #include "firebirdParameter.h"
 #include "firebirdDatabaseLayer.h"
-#include "databaseLayer/databaseLayerException.h"
+#include <3rdparty/databaseLayer/databaseLayerException.h>
 
 // ctor
 FirebirdParameter::FirebirdParameter(FirebirdInterface* pInterface, XSQLVAR* pVar) : m_nParameterType(FirebirdParameter::PARAM_NULL)

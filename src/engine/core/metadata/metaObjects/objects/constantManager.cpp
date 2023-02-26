@@ -16,17 +16,17 @@ CConstantManager::~CConstantManager()
 {
 }
 
-#include "metadata/metadata.h"
-#include "metadata/singleMetaTypes.h"
+#include "core/metadata/metadata.h"
+#include "core/metadata/singleClass.h"
 
-CLASS_ID CConstantManager::GetClassType() const
+CLASS_ID CConstantManager::GetTypeClass() const
 {
 	IMetadata *metaData = m_metaConst->GetMetadata();
 	wxASSERT(metaData);
 	IMetaTypeObjectValueSingle *clsFactory =
 		metaData->GetTypeObject(m_metaConst, eMetaObjectType::enManager);
 	wxASSERT(clsFactory);
-	return clsFactory->GetClassType();
+	return clsFactory->GetTypeClass();
 }
 
 wxString CConstantManager::GetTypeString() const
@@ -47,4 +47,36 @@ wxString CConstantManager::GetString() const
 		metaData->GetTypeObject(m_metaConst, eMetaObjectType::enManager);
 	wxASSERT(clsFactory);
 	return clsFactory->GetClassName();
+}
+
+CValue::CMethodHelper CConstantManager::m_methodHelper;
+
+enum Func {
+	enSet = 0,
+	enGet
+};
+
+void CConstantManager::PrepareNames() const
+{
+	m_methodHelper.ClearHelper();
+	m_methodHelper.AppendFunc("set", 1, "set(value)");
+	m_methodHelper.AppendFunc("get", "get()");
+}
+
+bool CConstantManager::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray)
+{
+	CConstantObject* constantValue =
+		m_metaConst->CreateObjectValue();
+	wxASSERT(constantValue);
+	switch (lMethodNum)
+	{
+	case enSet:
+		constantValue->SetConstValue(*paParams[0]);
+		break;
+	case enGet:
+		pvarRetValue = constantValue->GetConstValue();
+		break;
+	}
+	wxDELETE(constantValue);
+	return true;
 }

@@ -15,7 +15,7 @@
 
  ***************************************************************************/
 
-#include <email/mimetic/contenttransferencoding.h>
+#include <3rdparty/email/mimetic/contenttransferencoding.h>
 
 namespace mimetic
 {

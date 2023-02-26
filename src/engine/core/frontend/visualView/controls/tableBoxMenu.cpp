@@ -15,7 +15,8 @@ void CValueTableBox::ExecuteMenu(IVisualHost *visualHost, int id)
 {
 	switch (id)
 	{
-	case MENU_ADD_COLUMN: AddColumn();
+	case MENU_ADD_COLUMN: 
+		AddColumn();
 		break;
 	}
 }

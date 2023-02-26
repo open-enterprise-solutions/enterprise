@@ -6,9 +6,7 @@
 #include <wx/docview.h>
 #include <wx/stc/stc.h>
 
-class IMetaObject;
-class CDocManager;
-class CDocChildFrame;
+class CMetadataTree;
 
 #include "appData.h"
 
@@ -18,22 +16,28 @@ class CView;
 #include "settings/fontcolorsettings.h"
 #include "settings/editorsettings.h"
 
-#define mainFrame            	(CMainFrame::Get())
-#define mainFrameCreate(mode)   (CMainFrame::Initialize(mode))
-#define mainFrameDestroy()  	(CMainFrame::Destroy())
+#define mainFrame            	(wxAuiDocMDIFrame::GetFrame())
+#define mainFrameCreate(mode)   (wxAuiDocMDIFrame::InitializeFrame(mode))
+#define mainFrameDestroy()  	(wxAuiDocMDIFrame::DestroyFrame())
+
+#include "objinspect/objinspect.h"
+
+#include "watch/watchWindow.h"
+#include "output/outputWindow.h"
+#include "stack/stackWindow.h"
 
 #include "mainFrameDefs.h"
-
-#define metatreeWnd             mainFrame->GetMetadataTree()
 
 //********************************************************************************
 //*                                 ID's                                         *
 //********************************************************************************
 
-class CORE_API CMainFrame : public wxAuiMDIParentFrame,
+#define wxCREATE_SDI_FRAME 0x16000
+
+class CORE_API wxAuiDocMDIFrame : public wxAuiMDIParentFrame,
 	public wxDocParentFrameAnyBase
 {
-	static CMainFrame *s_instance;
+	static wxAuiDocMDIFrame* s_instance;
 
 protected:
 
@@ -54,8 +58,16 @@ protected:
 	FontColorSettings     m_fontColorSettings;
 	EditorSettings        m_editorSettings;
 
-	wxAuiToolBar *m_toolbarDefault;
-	wxAuiToolBar *m_toolbarAdditional;
+	wxAuiToolBar* m_mainFrameToolbar;
+	wxAuiToolBar* m_docToolbar;
+
+protected:
+
+	CObjectInspector* m_objectInspector;
+
+protected:
+
+	virtual void CreatePropertyPane();
 
 public:
 
@@ -66,30 +78,64 @@ public:
 
 public:
 
-	static CMainFrame* Get();
+	static CObjectInspector* GetObjectInspector() {
+		if (s_instance != NULL)
+			return s_instance->m_objectInspector;
+		return NULL;
+	}
+
+	static wxAuiDocMDIFrame* GetFrame() {
+		return s_instance;
+	}
 
 	// Force the static appData instance to Init()
-	static void Initialize(enum eRunMode mode);
-	static void Destroy();
+	static void InitializeFrame(enum eRunMode mode);
+	static void DestroyFrame();
 
 public:
 
-	static CDocChildFrame *CreateChildFrame(CView *view, const wxPoint &pos, const wxSize &size, long style = wxDEFAULT_FRAME_STYLE);
+	static wxWindow* CreateChildFrame(CView* view, const wxPoint& pos, const wxSize& size, long style = wxDEFAULT_FRAME_STYLE);
 
-	KeyBinder             GetKeyBinder() const { return m_keyBinder; }
-	FontColorSettings     GetFontColorSettings() const { return m_fontColorSettings; }
-	EditorSettings        GetEditorSettings() const { return m_editorSettings; }
+	KeyBinder             GetKeyBinder() const {
+		return m_keyBinder;
+	}
 
-	virtual wxMenu *GetDefaultMenu(int nTypeMenu) = 0;
-	virtual CMetadataTree *GetMetadataTree() const { return NULL; }
+	FontColorSettings     GetFontColorSettings() const {
+		return m_fontColorSettings;
+	}
+
+	EditorSettings        GetEditorSettings() const {
+		return m_editorSettings;
+	}
+
+	virtual wxMenu* GetDefaultMenu(int idMenu) const {
+		return NULL;
+	}
+
+	virtual COutputWindow* GetOutputWindow() const = 0;
+	virtual CStackWindow* GetStackWindow() const = 0;
+	virtual CWatchWindow* GetWatchWindow() const = 0;
+
+	virtual CMetadataTree* GetMetadataTree() const {
+		return NULL;
+	}
+
 	virtual void CreateGUI() = 0;
 
 	virtual void Modify(bool modify) {}
+	virtual bool IsModified() const {
+		return false;
+	}
 
-	virtual wxAuiToolBar *GetDefaultToolbar() { return m_toolbarDefault; }
-	virtual wxAuiToolBar *GetAdditionalToolbar() { return m_toolbarAdditional; }
+	virtual wxAuiToolBar* GetMainFrameToolbar() const {
+		return m_mainFrameToolbar;
+	}
 
-	void OnActivateView(bool activate, wxView *activeView, wxView *deactiveView);
+	virtual wxAuiToolBar* GetDocToolbar() const {
+		return m_docToolbar;
+	}
+
+	void OnActivateView(bool activate, wxView* activeView, wxView* deactiveView);
 
 	// bring window to front
 	virtual void Raise() override;
@@ -97,8 +143,7 @@ public:
 protected:
 
 	// hook the document manager into event handling chain here
-	virtual bool TryBefore(wxEvent& event) override
-	{
+	virtual bool TryBefore(wxEvent& event) override {
 		// It is important to send the event to the base class first as
 		// wxMDIParentFrame overrides its TryBefore() to send the menu events
 		// to the currently active child valueForm and the child must get them
@@ -106,11 +151,15 @@ protected:
 		return wxAuiMDIParentFrame::TryBefore(event) || TryProcessEvent(event);
 	}
 
-	virtual bool ProcessEvent(wxEvent& event) override;
+protected:
+
+	virtual bool AllowClose() const {
+		return true;
+	}
 
 protected:
 
-	CMainFrame(const wxString& title,
+	wxAuiDocMDIFrame(const wxString& title,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_FRAME_STYLE,
@@ -124,7 +173,7 @@ protected:
 
 public:
 
-	virtual ~CMainFrame();
+	virtual ~wxAuiDocMDIFrame();
 
 	//Events 
 	void OnExit(wxCommandEvent& WXUNUSED(event));

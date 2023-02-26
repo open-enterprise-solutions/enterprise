@@ -22,7 +22,7 @@
 
 #include <iterator>
 #include <string>
-#include <email/mimetic/codec/codec_base.h>
+#include <3rdparty/email/mimetic/codec/codec_base.h>
 
 
 namespace mimetic

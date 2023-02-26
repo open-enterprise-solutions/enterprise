@@ -19,8 +19,8 @@
 #define _MIMETIC_MESSAGEID_H_
 
 #include <string>
-#include <email/mimetic/utils.h>
-#include <email/mimetic/rfc822/fieldvalue.h>
+#include <3rdparty/email/mimetic/utils.h>
+#include <3rdparty/email/mimetic/rfc822/fieldvalue.h>
 
 namespace mimetic
 {

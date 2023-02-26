@@ -96,12 +96,16 @@ public:
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
 	/// Check for the existence of a table by name
 	virtual bool TableExists(const wxString& table) = 0;
+	
 	/// Check for the existence of a view by name
 	virtual bool ViewExists(const wxString& view) = 0;
+	
 	/// Retrieve all table names
 	virtual wxArrayString GetTables() = 0;
+	
 	/// Retrieve all view names
 	virtual wxArrayString GetViews() = 0;
+
 	/// Retrieve all column names for a table
 	virtual wxArrayString GetColumns(const wxString& table) = 0;
 
@@ -172,6 +176,8 @@ public:
 	virtual wxArrayDouble GetResultsArrayDouble(const wxString& strSQL, int nField);
 	virtual wxArrayDouble GetResultsArrayDouble(const wxString& strSQL, const wxString& Field);
 #endif
+
+	virtual int GetDatabaseLayerType() const = 0;
 
 	/// Close all result set objects that have been generated but not yet closed
 	void CloseResultSets();

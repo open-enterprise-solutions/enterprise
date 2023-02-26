@@ -6,7 +6,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueCheckbox, IValueWindow)
 //****************************************************************************
 
 #include "form.h"
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 ISourceObject* CValueCheckbox::GetSourceObject() const
 {
@@ -18,13 +18,13 @@ ISourceObject* CValueCheckbox::GetSourceObject() const
 //*                              Checkbox                                    *
 //****************************************************************************
 
-CValueCheckbox::CValueCheckbox() : IValueWindow(), IAttributeControl(eValueTypes::TYPE_BOOLEAN)
+CValueCheckbox::CValueCheckbox() : IValueWindow(), ITypeControl(eValueTypes::TYPE_BOOLEAN)
 {
 }
 
-wxObject* CValueCheckbox::Create(wxObject* parent, IVisualHost* visualHost)
+wxObject* CValueCheckbox::Create(wxWindow* wxparent, IVisualHost* visualHost)
 {
-	CCheckBox* checkbox = new CCheckBox((wxWindow*)parent, wxID_ANY,
+	CCheckBox* checkbox = new CCheckBox(wxparent, wxID_ANY,
 		m_propertyCaption->GetValueAsString(),
 		wxDefaultPosition,
 		wxDefaultSize);
@@ -49,10 +49,10 @@ void CValueCheckbox::Update(wxObject* wxobject, IVisualHost* visualHost)
 			if (srcObject != NULL) {
 				IMetaObjectWrapperData* objMetaValue = srcObject->GetMetaObject();
 				IMetaObject* metaObject = objMetaValue->FindMetaObjectByID(m_dataSource);
-				if (metaObject) {
+				if (metaObject != NULL) {
 					textCaption = metaObject->GetSynonym() + wxT(":");
 				}
-				m_selValue = srcObject->GetValueByMetaID(GetIdByGuid(m_dataSource));
+				srcObject->GetValueByMetaID(GetIdByGuid(m_dataSource), m_selValue);
 			}
 		}
 
@@ -83,38 +83,39 @@ void CValueCheckbox::Cleanup(wxObject* obj, IVisualHost* visualHost)
 //*							 Control value	                        *
 //*******************************************************************
 
-CValue CValueCheckbox::GetControlValue() const
+bool CValueCheckbox::GetControlValue(CValue& pvarControlVal) const
 {
 	CValueForm* ownerForm = GetOwnerForm();
-
 	if (m_dataSource.isValid() && m_formOwner->GetSourceObject()) {
 		ISourceDataObject* srcObject = ownerForm->GetSourceObject();
 		if (srcObject != NULL) {
-			return srcObject->GetValueByMetaID(GetIdByGuid(m_dataSource));
+			return srcObject->GetValueByMetaID(GetIdByGuid(m_dataSource), pvarControlVal);
 		}
 	}
-
-	return m_selValue;
+	pvarControlVal = m_selValue;
+	return true; 
 }
 
-#include "compiler/valueTypeDescription.h"
+#include "core/compiler/valueType.h"
 #include "frontend/controls/checkBoxEditor.h"
 
-void CValueCheckbox::SetControlValue(CValue& vSelected)
+bool CValueCheckbox::SetControlValue(const CValue& varControlVal)
 {
 	if (m_dataSource.isValid() && m_formOwner->GetSourceObject()) {
 		ISourceDataObject* srcObject = m_formOwner->GetSourceObject();
 		if (srcObject != NULL) {
-			srcObject->SetValueByMetaID(GetIdByGuid(m_dataSource), vSelected);
+			srcObject->SetValueByMetaID(GetIdByGuid(m_dataSource), varControlVal);
 		}
 	}
 
-	m_selValue = vSelected.GetBoolean();
+	m_selValue = varControlVal.GetBoolean();
 
 	CCheckBox* checkboxCtrl = dynamic_cast<CCheckBox*>(GetWxObject());
 	if (checkboxCtrl != NULL) {
-		checkboxCtrl->SetCheckBoxValue(vSelected.GetBoolean());
+		checkboxCtrl->SetCheckBoxValue(varControlVal.GetBoolean());
 	}
+
+	return true;
 }
 
 //*******************************************************************
@@ -127,7 +128,7 @@ bool CValueCheckbox::LoadData(CMemoryReader& reader)
 	m_propertyCaption->SetValue(caption);
 	m_propertyTitle->SetValue(reader.r_s32());
 
-	if (!IAttributeControl::LoadTypeData(reader))
+	if (!ITypeControl::LoadTypeData(reader))
 		return false;
 
 	return IValueWindow::LoadData(reader);
@@ -138,8 +139,14 @@ bool CValueCheckbox::SaveData(CMemoryWriter& writer)
 	writer.w_stringZ(m_propertyCaption->GetValueAsString());
 	writer.w_s32(m_propertyTitle->GetValueAsInteger());
 
-	if (!IAttributeControl::SaveTypeData(writer))
+	if (!ITypeControl::SaveTypeData(writer))
 		return false;
 
 	return IValueWindow::SaveData(writer);
 }
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+CONTROL_VALUE_REGISTER(CValueCheckbox, "checkbox", "widget", TEXT2CLSID("CT_CHKB"));

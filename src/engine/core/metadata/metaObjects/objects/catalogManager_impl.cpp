@@ -5,9 +5,9 @@
 
 #include "catalogManager.h"
 #include "appData.h"
-#include "databaseLayer/databaseLayer.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 
-#include "metadata/metaObjects/attribute/metaAttributeObject.h"
+#include "core/metadata/metaObjects/attribute/metaAttributeObject.h"
 
 CReferenceDataObject* CCatalogManager::FindByCode(const CValue& vCode)
 {
@@ -18,12 +18,17 @@ CReferenceDataObject* CCatalogManager::FindByCode(const CValue& vCode)
 			CMetaDefaultAttributeObject* catCode = m_metaObject->GetDataCode();
 			wxASSERT(catCode);
 
-			wxString sqlQuery = "SELECT FIRST 1 UUID FROM %s WHERE " + IMetaAttributeObject::GetCompositeSQLFieldName(catCode, "LIKE");
+			wxString sqlQuery = "";
+			if (databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+				sqlQuery = "SELECT UUID FROM %s WHERE " + IMetaAttributeObject::GetCompositeSQLFieldName(catCode, "LIKE") + " LIMIT 1";
+			else
+				sqlQuery = "SELECT FIRST 1 UUID FROM %s WHERE " + IMetaAttributeObject::GetCompositeSQLFieldName(catCode, "LIKE");
+
 			PreparedStatement* statement = databaseLayer->PrepareStatement(sqlQuery, tableName);
 			if (statement == NULL)
 				return CReferenceDataObject::Create(m_metaObject);
 
-			CValue code = catCode->AdjustValue(vCode);
+			const CValue &code = catCode->AdjustValue(vCode);
 		
 			int position = 1;
 			IMetaAttributeObject::SetValueAttribute(catCode, code, statement, position);
@@ -52,18 +57,22 @@ CReferenceDataObject* CCatalogManager::FindByName(const CValue& vName)
 	if (appData->EnterpriseMode()) {
 		wxString tableName = m_metaObject->GetTableNameDB();
 		if (databaseLayer->TableExists(tableName)) {
-			wxString UUID = wxEmptyString;
-
+		
 			CMetaDefaultAttributeObject* catName = m_metaObject->GetDataCode();
 			wxASSERT(catName);
 
-			wxString sqlQuery = "SELECT FIRST 1 UUID FROM %s WHERE " + IMetaAttributeObject::GetCompositeSQLFieldName(catName, "LIKE");
+			wxString sqlQuery = "";	
+			if (databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+				sqlQuery = "SELECT UUID FROM %s WHERE " + IMetaAttributeObject::GetCompositeSQLFieldName(catName, "LIKE") + " LIMIT 1";
+			else 
+				sqlQuery = "SELECT FIRST 1 UUID FROM %s WHERE " + IMetaAttributeObject::GetCompositeSQLFieldName(catName, "LIKE");
+
 			PreparedStatement* statement = databaseLayer->PrepareStatement(sqlQuery, tableName);
 
 			if (statement == NULL)
 				return CReferenceDataObject::Create(m_metaObject);
 
-			CValue name = catName->AdjustValue(vName);
+			const CValue &name = catName->AdjustValue(vName);
 
 			int position = 1;
 			IMetaAttributeObject::SetValueAttribute(catName, name, statement, position);

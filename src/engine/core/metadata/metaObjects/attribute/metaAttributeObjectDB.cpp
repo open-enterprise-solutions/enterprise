@@ -1,15 +1,15 @@
 #include "metaAttributeObject.h"
 
 #include "appData.h"
-#include "databaseLayer/databaseLayer.h"
-#include "databaseLayer/databaseErrorCodes.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
 
-#include "metadata/metadata.h"
-#include "metadata/singleMetaTypes.h"
+#include "core/metadata/metadata.h"
+#include "core/metadata/singleClass.h"
 
 unsigned short IMetaAttributeObject::GetSQLFieldCount(IMetaAttributeObject* metaAttr)
 {
-	wxString fieldName = metaAttr->GetFieldNameDB(); unsigned short sqlField = 1;
+	const wxString& fieldName = metaAttr->GetFieldNameDB(); unsigned short sqlField = 1;
 
 	if (metaAttr->ContainType(eValueTypes::TYPE_BOOLEAN)) {
 		sqlField += 1;
@@ -35,7 +35,7 @@ unsigned short IMetaAttributeObject::GetSQLFieldCount(IMetaAttributeObject* meta
 
 wxString IMetaAttributeObject::GetSQLFieldName(IMetaAttributeObject* metaAttr, const wxString& aggr)
 {
-	wxString fieldName = metaAttr->GetFieldNameDB(); wxString sqlField = wxEmptyString;
+	const wxString& fieldName = metaAttr->GetFieldNameDB(); wxString sqlField = wxEmptyString;
 
 	if (metaAttr->ContainType(eValueTypes::TYPE_BOOLEAN)) {
 		if (!sqlField.IsEmpty())
@@ -81,7 +81,7 @@ wxString IMetaAttributeObject::GetSQLFieldName(IMetaAttributeObject* metaAttr, c
 
 wxString IMetaAttributeObject::GetCompositeSQLFieldName(IMetaAttributeObject* metaAttr, const wxString& oper)
 {
-	wxString fieldName = metaAttr->GetFieldNameDB(); wxString sqlField = wxEmptyString;
+	const wxString& fieldName = metaAttr->GetFieldNameDB(); wxString sqlField = wxEmptyString;
 
 	if (metaAttr->ContainType(eValueTypes::TYPE_BOOLEAN)) {
 		if (!sqlField.IsEmpty())
@@ -119,9 +119,49 @@ wxString IMetaAttributeObject::GetCompositeSQLFieldName(IMetaAttributeObject* me
 		+ sqlField;
 }
 
+wxString IMetaAttributeObject::GetExcluteSQLFieldName(IMetaAttributeObject* metaAttr)
+{
+	const wxString& fieldName = metaAttr->GetFieldNameDB(); wxString sqlField = wxEmptyString;
+
+	if (metaAttr->ContainType(eValueTypes::TYPE_BOOLEAN)) {
+		if (!sqlField.IsEmpty())
+			sqlField += ", ";
+		sqlField += fieldName + "_B = excluded." + fieldName + "_B";
+	}
+	if (metaAttr->ContainType(eValueTypes::TYPE_NUMBER)) {
+		if (!sqlField.IsEmpty())
+			sqlField += ", ";
+		sqlField += fieldName + "_N = excluded." + fieldName + "_N";
+	}
+	if (metaAttr->ContainType(eValueTypes::TYPE_DATE)) {
+		if (!sqlField.IsEmpty())
+			sqlField += ", ";
+		sqlField += fieldName + "_D = excluded." + fieldName + "_D";
+	}
+	if (metaAttr->ContainType(eValueTypes::TYPE_STRING)) {
+		if (!sqlField.IsEmpty())
+			sqlField += ", ";
+		sqlField += fieldName + "_S = excluded." + fieldName + "_S";
+	}
+	if (metaAttr->ContainType(eValueTypes::TYPE_ENUM)) {
+		if (!sqlField.IsEmpty())
+			sqlField += ", ";
+		sqlField += fieldName + "_E = excluded." + fieldName + "_E";
+	}
+	if (metaAttr->ContainMetaType(eMetaObjectType::enReference)) {
+		if (!sqlField.IsEmpty())
+			sqlField += ", ";
+		sqlField += fieldName + "_RTRef = excluded." + fieldName + "_RTRef, " + fieldName + "_RRRef = excluded." + fieldName + "_RRRef";
+	}
+
+	return fieldName + "_TYPE = excluded." + fieldName + "_TYPE"
+		+ (sqlField.Length() > 0 ? ", " : "")
+		+ sqlField;
+}
+
 IMetaAttributeObject::sqlField_t IMetaAttributeObject::GetSQLFieldData(IMetaAttributeObject* metaAttr)
 {
-	wxString fieldName = metaAttr->GetFieldNameDB(); sqlField_t sqlData(fieldName + "_TYPE");
+	const wxString& fieldName = metaAttr->GetFieldNameDB(); sqlField_t sqlData(fieldName + "_TYPE");
 
 	if (metaAttr->ContainType(eValueTypes::TYPE_BOOLEAN)) {
 		sqlData.AppendType(
@@ -169,13 +209,13 @@ IMetaAttributeObject::sqlField_t IMetaAttributeObject::GetSQLFieldData(IMetaAttr
 	return sqlData;
 }
 
-int IMetaAttributeObject::ProcessAttribute(const wxString& tableName, 
+int IMetaAttributeObject::ProcessAttribute(const wxString& tableName,
 	IMetaAttributeObject* srcAttr, IMetaAttributeObject* dstAttr)
 {
 	int retCode = 1;
 	//is null - create
 	if (dstAttr == NULL) {
-		wxString fieldName = srcAttr->GetFieldNameDB(); bool createReference = false; IMetadata* metaData = srcAttr->GetMetadata();
+		const wxString& fieldName = srcAttr->GetFieldNameDB(); bool createReference = false; IMetadata* metaData = srcAttr->GetMetadata();
 		retCode = databaseLayer->RunQuery("ALTER TABLE %s ADD %s_TYPE %s DEFAULT 0 NOT NULL;", tableName, fieldName, "INTEGER");
 		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 			return retCode;
@@ -200,7 +240,7 @@ int IMetaAttributeObject::ProcessAttribute(const wxString& tableName,
 			default:
 				IMetaTypeObjectValueSingle* singleObject = metaData->GetTypeObject(clsid);
 				wxASSERT(singleObject);
-				if (eMetaObjectType::enReference == singleObject->GetMetaType()) {
+				if (singleObject != NULL && eMetaObjectType::enReference == singleObject->GetMetaType()) {
 					createReference = true;
 				}
 			}
@@ -209,7 +249,7 @@ int IMetaAttributeObject::ProcessAttribute(const wxString& tableName,
 			retCode = databaseLayer->RunQuery("ALTER TABLE %s ADD %s_RTRef %s;", tableName, fieldName, "BIGINT");
 			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 				return retCode;
-			retCode = databaseLayer->RunQuery("ALTER TABLE %s ADD %s_RRRef %s;", tableName, fieldName, "BLOB");
+			retCode = databaseLayer->RunQuery("ALTER TABLE %s ADD %s_RRRef %s;", tableName, fieldName, databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL ? "BYTEA" : "BLOB");
 			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 				return retCode;
 		}
@@ -217,7 +257,7 @@ int IMetaAttributeObject::ProcessAttribute(const wxString& tableName,
 	// update 
 	else if (srcAttr != NULL) {
 		if (srcAttr->GetTypeDescription() != dstAttr->GetTypeDescription()) {
-			wxString fieldName = srcAttr->GetFieldNameDB(); std::set<CLASS_ID> createdRef, currentRef, removedRef; IMetadata* metaData = srcAttr->GetMetadata();
+			const wxString& fieldName = srcAttr->GetFieldNameDB(); std::set<CLASS_ID> createdRef, currentRef, removedRef; IMetadata* metaData = srcAttr->GetMetadata();
 			for (auto clsid : srcAttr->GetClsids()) {
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return retCode;
@@ -242,7 +282,7 @@ int IMetaAttributeObject::ProcessAttribute(const wxString& tableName,
 					default:
 						IMetaTypeObjectValueSingle* singleObject = metaData->GetTypeObject(clsid);
 						wxASSERT(singleObject);
-						if (eMetaObjectType::enReference == singleObject->GetMetaType()) {
+						if (singleObject != NULL && eMetaObjectType::enReference == singleObject->GetMetaType()) {
 							createdRef.insert(clsid);
 						}
 					}
@@ -255,16 +295,16 @@ int IMetaAttributeObject::ProcessAttribute(const wxString& tableName,
 				if (srcAttr->ContainType(clsid)) {
 					switch (valType) {
 					case eValueTypes::TYPE_BOOLEAN:
-						if (!srcAttr->EqualsType(clsid, dstAttr->GetDescription()))
+						if (!srcAttr->EqualsType(clsid, dstAttr->GetTypeDescription()))
 							retCode = databaseLayer->RunQuery("ALTER TABLE %s ALTER COLUMN %s_B TYPE %s;", tableName, fieldName, srcAttr->GetSQLTypeObject(clsid));
 						break;
 					case eValueTypes::TYPE_NUMBER:
-						if (!srcAttr->EqualsType(clsid, dstAttr->GetDescription()))
+						if (!srcAttr->EqualsType(clsid, dstAttr->GetTypeDescription()))
 							retCode = databaseLayer->RunQuery("ALTER TABLE %s ALTER COLUMN %s_N TYPE %s;", tableName, fieldName, srcAttr->GetSQLTypeObject(clsid));
 						break;
 					case eValueTypes::TYPE_DATE:
-						if (!srcAttr->EqualsType(clsid, dstAttr->GetDescription())) {
-							if (srcAttr->GetDateTime() != eDateFractions::eDateFractions_Time && dstAttr->GetDateTime() == eDateFractions::eDateFractions_Time) {
+						if (!srcAttr->EqualsType(clsid, dstAttr->GetTypeDescription())) {
+							if (srcAttr->GetDateFraction() != eDateFractions::eDateFractions_Time && dstAttr->GetDateFraction() == eDateFractions::eDateFractions_Time) {
 								retCode = databaseLayer->RunQuery("ALTER TABLE %s DROP %s_D;", tableName, fieldName);
 								if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 									return retCode;
@@ -276,17 +316,17 @@ int IMetaAttributeObject::ProcessAttribute(const wxString& tableName,
 						}
 						break;
 					case eValueTypes::TYPE_STRING:
-						if (!srcAttr->EqualsType(clsid, dstAttr->GetDescription()))
+						if (!srcAttr->EqualsType(clsid, dstAttr->GetTypeDescription()))
 							retCode = databaseLayer->RunQuery("ALTER TABLE %s ALTER COLUMN %s_S TYPE %s;", tableName, fieldName, srcAttr->GetSQLTypeObject(clsid));
 						break;
 					case eValueTypes::TYPE_ENUM:
-						if (!srcAttr->EqualsType(clsid, dstAttr->GetDescription()))
+						if (!srcAttr->EqualsType(clsid, dstAttr->GetTypeDescription()))
 							retCode = databaseLayer->RunQuery("ALTER TABLE %s ALTER COLUMN %s_E TYPE %s;", tableName, fieldName, srcAttr->GetSQLTypeObject(clsid));
 						break;
 					default:
 						IMetaTypeObjectValueSingle* singleObject = metaData->GetTypeObject(clsid);
 						wxASSERT(singleObject);
-						if (eMetaObjectType::enReference == singleObject->GetMetaType()) {
+						if (singleObject != NULL && eMetaObjectType::enReference == singleObject->GetMetaType()) {
 							currentRef.insert(clsid);
 						}
 					}
@@ -326,7 +366,7 @@ int IMetaAttributeObject::ProcessAttribute(const wxString& tableName,
 					default:
 						IMetaTypeObjectValueSingle* singleObject = metaData->GetTypeObject(clsid);
 						wxASSERT(singleObject);
-						if (singleObject && eMetaObjectType::enReference == singleObject->GetMetaType()) {
+						if (singleObject != NULL && eMetaObjectType::enReference == singleObject->GetMetaType()) {
 							removedRef.insert(clsid);
 						}
 					}
@@ -336,7 +376,7 @@ int IMetaAttributeObject::ProcessAttribute(const wxString& tableName,
 				retCode = databaseLayer->RunQuery("ALTER TABLE %s ADD %s_RTRef %s;", tableName, fieldName, "BIGINT");
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return retCode;
-				retCode = databaseLayer->RunQuery("ALTER TABLE %s ADD %s_RRRef %s;", tableName, fieldName, "BLOB");
+				retCode = databaseLayer->RunQuery("ALTER TABLE %s ADD %s_RRRef %s;", tableName, fieldName, databaseLayer->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL ? "BYTEA" : "BLOB");
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return retCode;
 			}
@@ -363,7 +403,7 @@ int IMetaAttributeObject::ProcessAttribute(const wxString& tableName,
 	}
 	//delete 
 	else if (srcAttr == NULL) {
-		wxString fieldName = dstAttr->GetFieldNameDB(); bool removeReference = false; IMetadata* metaData = dstAttr->GetMetadata();
+		const wxString& fieldName = dstAttr->GetFieldNameDB(); bool removeReference = false; IMetadata* metaData = dstAttr->GetMetadata();
 		retCode = databaseLayer->RunQuery("ALTER TABLE %s DROP %s_TYPE;", tableName, fieldName);
 		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 			return retCode;
@@ -398,7 +438,7 @@ int IMetaAttributeObject::ProcessAttribute(const wxString& tableName,
 			default:
 				IMetaTypeObjectValueSingle* singleObject = metaData->GetTypeObject(clsid);
 				wxASSERT(singleObject);
-				if (singleObject && eMetaObjectType::enReference == singleObject->GetMetaType()) {
+				if (singleObject != NULL && eMetaObjectType::enReference == singleObject->GetMetaType()) {
 					removeReference = true;
 				}
 				break;
@@ -417,7 +457,7 @@ int IMetaAttributeObject::ProcessAttribute(const wxString& tableName,
 	return retCode;
 }
 
-#include "metadata/singleMetaTypes.h"
+#include "core/metadata/singleClass.h"
 
 void IMetaAttributeObject::SetValueAttribute(IMetaAttributeObject* metaAttr,
 	const CValue& cValue, PreparedStatement* statement, int& position)
@@ -563,7 +603,7 @@ void IMetaAttributeObject::SetValueAttribute(IMetaAttributeObject* metaAttr,
 			statement->SetParamString(position++, wxEmptyString); //DATA string 
 
 		if (metaAttr->ContainType(eValueTypes::TYPE_ENUM))
-			statement->SetParamInt(position++, cValue.ToInt()); //DATA enum 
+			statement->SetParamInt(position++, cValue.GetInteger()); //DATA enum 
 
 		if (metaAttr->ContainMetaType(eMetaObjectType::enReference)) {
 			statement->SetParamNumber(position++, 0); //TYPE REF
@@ -586,11 +626,11 @@ void IMetaAttributeObject::SetValueAttribute(IMetaAttributeObject* metaAttr,
 		if (metaAttr->ContainType(eValueTypes::TYPE_ENUM))
 			statement->SetParamInt(position++, wxNOT_FOUND); //DATA enum 
 
+		const CLASS_ID& clsid = cValue.GetTypeClass();
+		wxASSERT(clsid > 0);
+
 		IMetadata* metaData = metaAttr->GetMetadata();
 		wxASSERT(metaData);
-
-		CLASS_ID clsid = cValue.GetClassType();
-		wxASSERT(clsid > 0);
 
 		IMetaTypeObjectValueSingle* singleObject = metaData->GetTypeObject(clsid);
 		wxASSERT(singleObject);
@@ -613,32 +653,35 @@ void IMetaAttributeObject::SetValueAttribute(IMetaAttributeObject* metaAttr,
 	}
 }
 
-#include "compiler/enum.h"
+#include "core/compiler/enum.h"
 
-CValue IMetaAttributeObject::GetValueAttribute(const wxString& fieldName, 
-	const eFieldTypes& fieldType, IMetaAttributeObject* metaAttr, DatabaseResultSet* resultSet, 
-	bool createData)
+bool IMetaAttributeObject::GetValueAttribute(const wxString& fieldName,
+	const eFieldTypes& fieldType, IMetaAttributeObject* metaAttr, CValue& retValue, DatabaseResultSet* resultSet, bool createData)
 {
 	switch (fieldType)
 	{
 	case eFieldTypes_Boolean:
-		return resultSet->GetResultBool(fieldName);
+		retValue = resultSet->GetResultBool(fieldName);
+		return true;
 	case eFieldTypes_Number:
-		return resultSet->GetResultNumber(fieldName);
+		retValue = resultSet->GetResultNumber(fieldName);
+		return true;
 	case eFieldTypes_Date:
-		return resultSet->GetResultDate(fieldName);
+		retValue = resultSet->GetResultDate(fieldName);
+		return true;
 	case eFieldTypes_String:
-		return resultSet->GetResultString(fieldName);
+		retValue = resultSet->GetResultString(fieldName);
+		return true;
 	case eFieldTypes_Null:
-		return eValueTypes::TYPE_NULL;
+		retValue = eValueTypes::TYPE_NULL;
+		return true;
 	case eFieldTypes_Enum:
 	{
-		CValue defValue = metaAttr->CreateValue();
-
+		const CValue& defValue = metaAttr->CreateValue();
 		IMetadata* metaData = metaAttr->GetMetadata();
 		wxASSERT(metaData);
 		IObjectValueAbstract* so =
-			metaData->GetAvailableObject(defValue.GetClassType());
+			metaData->GetAvailableObject(defValue.GetTypeClass());
 		wxASSERT(so);
 		IEnumerationWrapper* enumVal =
 			metaData->CreateAndConvertObjectRef<IEnumerationWrapper>(so->GetClassName());
@@ -646,50 +689,54 @@ CValue IMetaAttributeObject::GetValueAttribute(const wxString& fieldName,
 		CValue* ppParams[] = { &enumVariant };
 
 		if (enumVal != NULL &&
-			enumVal->Init(ppParams)) {
-			CValue retValue = enumVal->GetEnumVariantValue();
+			enumVal->Init(ppParams, 1)) {
+			const CValue& objValue = enumVal->GetEnumVariantValue();
 			wxDELETE(enumVal);
-			return retValue;
+			retValue = objValue;
+			return true;
 		}
 		wxDELETE(enumVal);
-		return defValue;
+		retValue = defValue;
+		return true;
 	}
 	case eFieldTypes_Reference:
 	{
 		IMetadata* metaData = metaAttr->GetMetadata();
 		wxASSERT(metaData);
-		const CLASS_ID &refType = resultSet->GetResultLong(fieldName + "_RTRef");
+		const CLASS_ID& refType = resultSet->GetResultLong(fieldName + "_RTRef");
 		wxMemoryBuffer bufferData;
 		resultSet->GetResultBlob(fieldName + "_RRRef", bufferData);
 		if (!bufferData.IsEmpty()) {
 			if (createData) {
-				return CReferenceDataObject::CreateFromPtr(
+				retValue = CReferenceDataObject::CreateFromPtr(
 					metaData, bufferData.GetData()
 				);
+				return true;
 			}
-			return CReferenceDataObject::Create(
+			retValue = CReferenceDataObject::Create(
 				metaData, bufferData.GetData()
 			);
+			return true;
 		}
 		else if (refType > 0) {
 			IMetaTypeObjectValueSingle* singleObject = metaData->GetTypeObject(refType);
 			wxASSERT(singleObject);
 			IMetaObject* metaObject = singleObject->GetMetaObject();
 			wxASSERT(metaObject);
-			return CReferenceDataObject::Create(
+			retValue = CReferenceDataObject::Create(
 				metaData, metaObject->GetMetaID()
 			);
+			return true;
 		}
 		break;
 	}
 	}
 
-	return CValue();
+	return false;
 }
 
-CValue IMetaAttributeObject::GetValueAttribute(const wxString& fieldName, 
-	IMetaAttributeObject* metaAttr, DatabaseResultSet* resultSet, 
-	bool createData)
+bool IMetaAttributeObject::GetValueAttribute(const wxString& fieldName,
+	IMetaAttributeObject* metaAttr, CValue& retValue, DatabaseResultSet* resultSet, bool createData)
 {
 	eFieldTypes fieldType =
 		static_cast<eFieldTypes>(resultSet->GetResultInt(fieldName + "_TYPE"));
@@ -697,31 +744,32 @@ CValue IMetaAttributeObject::GetValueAttribute(const wxString& fieldName,
 	switch (fieldType)
 	{
 	case eFieldTypes_Boolean:
-		return IMetaAttributeObject::GetValueAttribute(fieldName + "_B", eFieldTypes_Boolean, metaAttr, resultSet, createData);
+		return IMetaAttributeObject::GetValueAttribute(fieldName + "_B", eFieldTypes_Boolean, metaAttr, retValue, resultSet, createData);
 	case eFieldTypes_Number:
-		return IMetaAttributeObject::GetValueAttribute(fieldName + "_N", eFieldTypes_Number, metaAttr, resultSet, createData);
+		return IMetaAttributeObject::GetValueAttribute(fieldName + "_N", eFieldTypes_Number, metaAttr, retValue, resultSet, createData);
 	case eFieldTypes_Date:
-		return IMetaAttributeObject::GetValueAttribute(fieldName + "_D", eFieldTypes_Date, metaAttr, resultSet, createData);
+		return IMetaAttributeObject::GetValueAttribute(fieldName + "_D", eFieldTypes_Date, metaAttr, retValue, resultSet, createData);
 	case eFieldTypes_String:
-		return IMetaAttributeObject::GetValueAttribute(fieldName + "_S", eFieldTypes_String, metaAttr, resultSet, createData);
+		return IMetaAttributeObject::GetValueAttribute(fieldName + "_S", eFieldTypes_String, metaAttr, retValue, resultSet, createData);
 	case eFieldTypes_Null:
-		return eValueTypes::TYPE_NULL;
+		retValue = eValueTypes::TYPE_NULL;
+		return true;
 	case eFieldTypes_Enum:
-		return IMetaAttributeObject::GetValueAttribute(fieldName + "_E", eFieldTypes_Enum, metaAttr, resultSet, createData);
+		return IMetaAttributeObject::GetValueAttribute(fieldName + "_E", eFieldTypes_Enum, metaAttr, retValue, resultSet, createData);
 	case eFieldTypes_Reference:
-		return IMetaAttributeObject::GetValueAttribute(fieldName, eFieldTypes_Reference, metaAttr, resultSet, createData);
+		return IMetaAttributeObject::GetValueAttribute(fieldName, eFieldTypes_Reference, metaAttr, retValue, resultSet, createData);
 	default:
-		return metaAttr->CreateValue(); // if attribute was updated after 
+		retValue = metaAttr->CreateValue(); // if attribute was updated after 
+		return true;
 	}
 
-	return CValue();
+	return false;
 }
 
-CValue IMetaAttributeObject::GetValueAttribute(IMetaAttributeObject* metaAttr, DatabaseResultSet* resultSet, 
-	bool createData)
+bool IMetaAttributeObject::GetValueAttribute(IMetaAttributeObject* metaAttr, CValue& retValue, DatabaseResultSet* resultSet, bool createData)
 {
 	return IMetaAttributeObject::GetValueAttribute(
 		metaAttr->GetFieldNameDB(),
-		metaAttr, resultSet, createData
+		metaAttr, retValue, resultSet, createData
 	);
 }

@@ -24,7 +24,7 @@
 #ifdef OPEN_SSL_STATIC_LINK
 
 #else
-#include <email/ssl/wxOpenSSL.h>
+#include <3rdparty/email/ssl/wxOpenSSL.h>
 #endif
 
 

@@ -1,16 +1,35 @@
 #ifndef _TABLES_H__
 #define _TABLES_H__
 
-#include "metadata/metaObjects/metaObject.h"
-#include "metadata/metaObjects/attribute/metaAttributeObject.h"
-#include "common/tableAttributes.h"
+#include "core/metadata/metaObjects/metaObject.h"
+#include "core/metadata/metaObjects/attribute/metaAttributeObject.h"
+
+class IMetaTableData {
+public:
+	//override base objects 
+	virtual std::vector<IMetaAttributeObject*> GetGenericAttributes() const = 0;
+};
 
 class CMetaTableObject : public IMetaObject,
-	public ITableAttribute {
+	public IMetaTableData {
 	wxDECLARE_DYNAMIC_CLASS(CMetaTableObject);
 private:
+	OptionList* GetUseItem(PropertyOption*) {
+		OptionList* opt_list = new OptionList;
+		opt_list->AddOption(_("for item"), eItemMode_Item);
+		opt_list->AddOption(_("for folder"), eItemMode_Folder);
+		opt_list->AddOption(_("for folder and item"), eItemMode_Folder_Item);
+		return opt_list;
+	}
 	CMetaDefaultAttributeObject* m_numberLine;
+protected:
+	PropertyCategory* m_categoryGroup = IPropertyObject::CreatePropertyCategory({ "group", _("group") });
+	Property* m_propertyUse = IPropertyObject::CreateProperty(m_categoryGroup, { "use",  _("use") }, &CMetaTableObject::GetUseItem, eItemMode::eItemMode_Item);
 public:
+
+	eItemMode GetTableUse() const {
+		return (eItemMode)m_propertyUse->GetValueAsInteger();
+	}
 
 	CMetaDefaultAttributeObject* GetNumberLine() const {
 		return m_numberLine;
@@ -21,7 +40,7 @@ public:
 	}
 
 	//get table class
-	CLASS_ID GetClsidTable() const;
+	typeDescription_t GetTypeDescription() const;
 
 	virtual bool FilterChild(const CLASS_ID& clsid) const {
 		if (clsid == g_metaAttributeCLSID)
@@ -64,7 +83,7 @@ public:
 	virtual std::vector<IMetaAttributeObject*> GetObjectAttributes() const;
 
 	//find attributes, tables etc 
-	virtual IMetaAttributeObject* FindAttributeByName(const wxString& docPath) const {
+	virtual IMetaAttributeObject* FindAttributeByGuid(const wxString& docPath) const {
 		for (auto obj : GetObjectAttributes()) {
 			if (docPath == obj->GetDocPath())
 				return obj;
@@ -73,7 +92,7 @@ public:
 	}
 
 	//find in current metaObject
-	virtual IMetaAttributeObject* FindAttribute(const meta_identifier_t& id) const;
+	virtual IMetaAttributeObject* FindProp(const meta_identifier_t& id) const;
 
 	//special functions for DB 
 	virtual wxString GetTableNameDB() const {
@@ -88,6 +107,12 @@ public:
 
 	virtual bool HasAttributes() { return true; }
 	virtual wxArrayString GetAttributes();
+
+
+	/**
+	* Property events
+	*/
+	virtual void OnPropertyRefresh(class wxPropertyGridManager* pg, class wxPGProperty* pgProperty, Property* property);
 
 protected:
 

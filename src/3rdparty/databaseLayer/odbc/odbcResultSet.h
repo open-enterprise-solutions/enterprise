@@ -17,7 +17,7 @@
 #include <wx/hashmap.h>
 #include <wx/dynarray.h>
 
-#include "databaseLayer/databaseResultSet.h"
+#include <3rdparty/databaseLayer/databaseResultSet.h>
 #include "odbcInterface.h"
 
 #include <sql.h>

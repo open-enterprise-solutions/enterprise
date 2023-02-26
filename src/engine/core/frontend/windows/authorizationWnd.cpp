@@ -1,5 +1,5 @@
 #include "authorizationWnd.h"
-#include "databaseLayer/databaseLayer.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 #include "appData.h"
 
 ///////////////////////////////////////////////////////////////////////////

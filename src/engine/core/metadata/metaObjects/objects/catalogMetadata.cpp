@@ -5,8 +5,8 @@
 
 #include "catalog.h"
 #include "list/objectList.h"
-#include "metadata/metadata.h"
-#include "metadata/moduleManager/moduleManager.h"
+#include "core/metadata/metadata.h"
+#include "core/metadata/moduleManager/moduleManager.h"
 
 #define objectModule wxT("objectModule")
 #define managerModule wxT("managerModule")
@@ -23,9 +23,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(CMetaObjectCatalog, IMetaObjectRecordDataFolderMutable
 
 CMetaObjectCatalog::CMetaObjectCatalog() : IMetaObjectRecordDataFolderMutableRef()
 {
-	m_attributeOwner = CMetaDefaultAttributeObject::CreateEmptyType(wxT("owner"), _("Owner"), wxEmptyString, true);
-	m_attributeOwner->SetClsid(g_metaDefaultAttributeCLSID);
-
+	m_attributeOwner = CMetaDefaultAttributeObject::CreateEmptyType(wxT("owner"), _("Owner"), wxEmptyString, true, eItemMode::eItemMode_Folder_Item);
 	//set child/parent
 	m_attributeOwner->SetParent(this);
 	AddChild(m_attributeOwner);
@@ -44,7 +42,7 @@ CMetaObjectCatalog::CMetaObjectCatalog() : IMetaObjectRecordDataFolderMutableRef
 	m_moduleObject->SetDefaultProcedure("beforeDelete", eContentHelper::eProcedureHelper, { "cancel" });
 	m_moduleObject->SetDefaultProcedure("onDelete", eContentHelper::eProcedureHelper, { "cancel" });
 
-	m_moduleObject->SetDefaultProcedure("filling", eContentHelper::eProcedureHelper, { "source", "standartProcessing"});
+	m_moduleObject->SetDefaultProcedure("filling", eContentHelper::eProcedureHelper, { "source", "standartProcessing" });
 	m_moduleObject->SetDefaultProcedure("onCopy", eContentHelper::eProcedureHelper, { "source" });
 
 	m_moduleManager = new CMetaManagerModuleObject(managerModule);
@@ -134,7 +132,7 @@ IRecordDataObjectFolderRef* CMetaObjectCatalog::CreateObjectRefValue(eObjectMode
 #include "frontend/visualView/controls/form.h"
 #include "utils/stringUtils.h"
 
-CValueForm* CMetaObjectCatalog::GetObjectForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectCatalog::GetObjectForm(const wxString& formName, IControlFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -153,8 +151,7 @@ CValueForm* CMetaObjectCatalog::GetObjectForm(const wxString& formName, IValueFr
 
 	if (defList == NULL) {
 		IRecordDataObject* objectData = CreateObjectValue(eObjectMode::OBJECT_ITEM);
-		CValueForm* valueForm = new CValueForm;
-		valueForm->InitializeForm(ownerControl, NULL,
+		CValueForm* valueForm = new CValueForm(ownerControl, NULL,
 			objectData, formGuid
 		);
 		valueForm->BuildForm(CMetaObjectCatalog::eFormObject);
@@ -166,7 +163,7 @@ CValueForm* CMetaObjectCatalog::GetObjectForm(const wxString& formName, IValueFr
 	);
 }
 
-CValueForm* CMetaObjectCatalog::GetFolderForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectCatalog::GetFolderForm(const wxString& formName, IControlFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -185,8 +182,7 @@ CValueForm* CMetaObjectCatalog::GetFolderForm(const wxString& formName, IValueFr
 
 	if (defList == NULL) {
 		IRecordDataObject* objectData = CreateObjectValue(eObjectMode::OBJECT_FOLDER);
-		CValueForm* valueForm = new CValueForm;
-		valueForm->InitializeForm(ownerControl, NULL,
+		CValueForm* valueForm = new CValueForm(ownerControl, NULL,
 			objectData, formGuid
 		);
 		valueForm->BuildForm(CMetaObjectCatalog::eFormGroup);
@@ -198,7 +194,7 @@ CValueForm* CMetaObjectCatalog::GetFolderForm(const wxString& formName, IValueFr
 	);
 }
 
-CValueForm* CMetaObjectCatalog::GetListForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectCatalog::GetListForm(const wxString& formName, IControlFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -216,8 +212,7 @@ CValueForm* CMetaObjectCatalog::GetListForm(const wxString& formName, IValueFram
 	}
 
 	if (defList == NULL) {
-		CValueForm* valueForm = new CValueForm();
-		valueForm->InitializeForm(ownerControl, NULL,
+		CValueForm* valueForm = new CValueForm(ownerControl, NULL,
 			new CTreeDataObjectFolderRef(this, CMetaObjectCatalog::eFormList, CTreeDataObjectFolderRef::LIST_ITEM_FOLDER), formGuid
 		);
 		valueForm->BuildForm(CMetaObjectCatalog::eFormList);
@@ -229,7 +224,7 @@ CValueForm* CMetaObjectCatalog::GetListForm(const wxString& formName, IValueFram
 	);
 }
 
-CValueForm* CMetaObjectCatalog::GetSelectForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectCatalog::GetSelectForm(const wxString& formName, IControlFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -247,8 +242,7 @@ CValueForm* CMetaObjectCatalog::GetSelectForm(const wxString& formName, IValueFr
 	}
 
 	if (defList == NULL) {
-		CValueForm* valueForm = new CValueForm();
-		valueForm->InitializeForm(ownerControl, NULL,
+		CValueForm* valueForm = new CValueForm(ownerControl, NULL,
 			new CTreeDataObjectFolderRef(this, CMetaObjectCatalog::eFormSelect, CTreeDataObjectFolderRef::LIST_ITEM, true), formGuid
 		);
 		valueForm->BuildForm(CMetaObjectCatalog::eFormSelect);
@@ -260,7 +254,7 @@ CValueForm* CMetaObjectCatalog::GetSelectForm(const wxString& formName, IValueFr
 	);
 }
 
-CValueForm* CMetaObjectCatalog::GetFolderSelectForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectCatalog::GetFolderSelectForm(const wxString& formName, IControlFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -278,8 +272,7 @@ CValueForm* CMetaObjectCatalog::GetFolderSelectForm(const wxString& formName, IV
 	}
 
 	if (defList == NULL) {
-		CValueForm* valueForm = new CValueForm();
-		valueForm->InitializeForm(ownerControl, NULL,
+		CValueForm* valueForm = new CValueForm(ownerControl, NULL,
 			new CTreeDataObjectFolderRef(this, CMetaObjectCatalog::eFormFolderSelect, CTreeDataObjectFolderRef::LIST_FOLDER, true), formGuid
 		);
 		valueForm->BuildForm(CMetaObjectCatalog::eFormFolderSelect);
@@ -363,11 +356,10 @@ OptionList* CMetaObjectCatalog::GetFormFolderSelect(PropertyOption*)
 
 wxString CMetaObjectCatalog::GetDescription(const IObjectValueInfo* objValue) const
 {
-	CValue vName = objValue->GetValueByMetaID(m_attributeDescription->GetMetaID());
-
-	wxString decr;
-	decr << vName.GetString();
-	return decr;
+	CValue vDescription;
+	if (objValue->GetValueByMetaID(m_attributeDescription->GetMetaID(), vDescription))
+		return vDescription.GetString();
+	return wxEmptyString;
 }
 
 std::vector<IMetaAttributeObject*> CMetaObjectCatalog::GetDefaultAttributes() const
@@ -396,7 +388,7 @@ std::vector<IMetaAttributeObject*> CMetaObjectCatalog::GetSearchedAttributes() c
 
 //////////////////////////////////////////////////////////////////////////////
 
-#include "metadata/singleMetaTypes.h"
+#include "core/metadata/singleClass.h"
 
 bool CMetaObjectCatalog::LoadFromVariant(const wxVariant& variant)
 {
@@ -415,7 +407,7 @@ bool CMetaObjectCatalog::LoadFromVariant(const wxVariant& variant)
 					m_metaData->GetTypeObject(catalog, eMetaObjectType::enReference);
 				wxASSERT(so);
 				m_attributeOwner->ClearMetatype(
-					so->GetClassType()
+					so->GetTypeClass()
 				);
 			}
 		}
@@ -431,7 +423,7 @@ bool CMetaObjectCatalog::LoadFromVariant(const wxVariant& variant)
 					m_metaData->GetTypeObject(catalog, eMetaObjectType::enReference);
 				wxASSERT(so);
 				m_attributeOwner->SetMetatype(
-					so->GetClassType()
+					so->GetTypeClass()
 				);
 			}
 		}
@@ -486,7 +478,7 @@ bool CMetaObjectCatalog::SaveData(CMemoryWriter& dataWritter)
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormFolder->GetValueAsInteger()));
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()));
-	
+
 	if (!m_ownerData.SaveData(dataWritter))
 		return false;
 
@@ -568,7 +560,7 @@ bool CMetaObjectCatalog::OnReloadMetaObject()
 	return true;
 }
 
-#include "metadata/singleMetaTypes.h"
+#include "core/metadata/singleClass.h"
 
 bool CMetaObjectCatalog::OnBeforeRunMetaObject(int flags)
 {
@@ -589,8 +581,8 @@ bool CMetaObjectCatalog::OnBeforeRunMetaObject(int flags)
 	IMetaTypeObjectValueSingle* singleObject =
 		m_metaData->GetTypeObject(this, eMetaObjectType::enReference);
 
-	if (singleObject != NULL && !m_attributeParent->ContainType(singleObject->GetClassType())) {
-		m_attributeParent->SetDefaultMetatype(singleObject->GetClassType());
+	if (singleObject != NULL && !m_attributeParent->ContainType(singleObject->GetTypeClass())) {
+		m_attributeParent->SetDefaultMetatype(singleObject->GetTypeClass());
 	}
 
 	return true;

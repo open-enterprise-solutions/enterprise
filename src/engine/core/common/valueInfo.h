@@ -1,8 +1,6 @@
 #ifndef _VALUE_INFO_H__
 #define _VALUE_INFO_H__
 
-class ITabularSectionDataObject;
-
 #include "uniqueKey.h"
 
 class IObjectValueInfo {
@@ -13,11 +11,10 @@ public:
 	}
 
 	//support source set/get data 
-	virtual void SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal);
-	virtual CValue GetValueByMetaID(const meta_identifier_t& id) const;
-
-	//support tabular section 
-	virtual ITabularSectionDataObject* GetTableByMetaID(const meta_identifier_t& id) const;
+	virtual bool SetValueByMetaID(const meta_identifier_t& id, const CValue& varMetaVal) { return false; }
+	virtual bool GetValueByMetaID(const meta_identifier_t& id, CValue& pvarMetaVal) const {
+		return false;
+	}
 
 	//get unique identifier 
 	virtual CUniqueKey GetGuid() const {
@@ -36,17 +33,9 @@ public:
 	virtual void Modify(bool mod) {}
 
 protected:
-
-	void PrepareValues();
-
-protected:
-	
-	Guid m_objGuid;
-	
-	std::map<meta_identifier_t, CValue> m_objectValues;
-	std::vector<ITabularSectionDataObject*> m_aObjectTables;
-	
 	bool m_newObject;
+	valueArray_t m_objectValues;
+	Guid m_objGuid;
 };
 
 #endif

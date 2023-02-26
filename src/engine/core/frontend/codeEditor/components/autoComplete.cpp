@@ -84,23 +84,24 @@ void CAutoComplete::Start(const wxString& sCurWord,
 	m_evtHandler->Bind(wxEVT_MIDDLE_UP, &CAutoComplete::OnProcessMouse, this);
 }
 
-void CAutoComplete::Append(short type, const wxString& sName, const wxString& sDescription, int image)
+void CAutoComplete::Append(short type, const wxString& name, const wxString& desc)
 {
-	if (sName.IsEmpty())
+	if (name.IsEmpty())
 		return;
 
 	if (!sCurrentWord.IsEmpty()) {
-		wxString sNameUpper = sName.Upper().Trim(true).Trim(false);
-		if (sNameUpper.Find(sCurrentWord.Upper().Trim(true).Trim(false)) < 0)
+		wxString nameUpper = name.Upper().Trim(true).Trim(false);
+		if (nameUpper.Find(sCurrentWord.Upper().Trim(true).Trim(false)) < 0)
 			return;
 	}
 
-	if (image != wxNOT_FOUND) {
-		const wxBitmap* m_bmp = m_visualData->GetImage(image);
-		if (!m_bmp) m_visualData->RegisterImage(image, GetImageList()->GetBitmap(image));
-	}
+	const wxBitmap* bitmap = m_visualData->GetImage(type);
+	if (bitmap == NULL)
+		m_visualData->RegisterImage(type, GetImageByType(type));
 
-	aKeywords.push_back({ type, sName, sDescription, image });
+	m_aKeywords.push_back(
+		{ type, name, desc }
+	);
 }
 
 int CAutoComplete::GetSelection() const
@@ -116,21 +117,24 @@ wxString CAutoComplete::GetValue(int item) const
 void CAutoComplete::Show(const wxPoint& position)
 {
 	if (!active) return;
-	if (!aKeywords.size()) { Cancel(); return; }
+	if (!m_aKeywords.size()) {
+		Cancel(); return;
+	}
 
 	COESListBox* m_listBox = lb->GetListBox();
 
-	std::sort(aKeywords.begin(), aKeywords.end(),
-		[](keywordElement_t a, keywordElement_t b)
-		{
-			return a.name.CompareTo(b.name, wxString::caseCompare::ignoreCase) < 0;
-		});
+	std::sort(m_aKeywords.begin(), m_aKeywords.end(),
+		[](keywordElement_t a, keywordElement_t b) {
+			return a.m_name.CompareTo(b.m_name, wxString::caseCompare::ignoreCase) < 0;
+		}
+	);
 
 	lb->SetPosition(position);
 
-	for (auto keyword : aKeywords) m_listBox->Append(keyword.name, keyword.image);
+	for (auto keyword : m_aKeywords)
+		m_listBox->Append(keyword.m_name, keyword.m_type);
 
-	if (aKeywords.size() == 1) Select(0);
+	if (m_aKeywords.size() == 1) Select(0);
 	else if (lb->Show()) m_listBox->Select(0);
 }
 
@@ -138,16 +142,13 @@ void CAutoComplete::Cancel()
 {
 	active = false;
 	sCurrentWord = wxEmptyString;
-	aKeywords.clear();
+	m_aKeywords.clear();
 
 	if (lb) {
-
 		lb->GetListBox()->Clear();
 		lb->GetListBox()->Destroy();
-
 		wxDELETE(lb);
 	}
-
 	wxDELETE(m_evtHandler);
 }
 
@@ -187,21 +188,19 @@ void CAutoComplete::Select(int index)
 {
 	wxString sDescription; bool m_bNeedCallTip = false;
 
-	std::vector< keywordElement_t>::iterator m_selectedKeyword = aKeywords.begin() + index;
+	std::vector< keywordElement_t>::iterator m_selectedKeyword = m_aKeywords.begin() + index;
 
-	if (m_selectedKeyword != aKeywords.end())
+	if (m_selectedKeyword != m_aKeywords.end())
 	{
-		wxString sTextComplete = m_selectedKeyword->name;
-		wxString sShortDescription = m_selectedKeyword->shortDescription;
+		wxString sTextComplete = m_selectedKeyword->m_name;
+		wxString sShortDescription = m_selectedKeyword->m_shortDescription;
 
-		if (m_selectedKeyword->type != eVariable && m_selectedKeyword->type != eExportVariable)
+		if (m_selectedKeyword->m_type != eVariable && m_selectedKeyword->m_type != eExportVariable)
 		{
-			if (sShortDescription.IsEmpty())
-			{
+			if (sShortDescription.IsEmpty()) {
 				sTextComplete += "()";
 			}
-			else
-			{
+			else {
 				sTextComplete += "(";
 				if (sShortDescription.Find("()") > 0) sTextComplete += ")";
 				else m_bNeedCallTip = true;
@@ -238,6 +237,19 @@ bool CAutoComplete::CallEvent(wxEvent& event)
 	return false;
 }
 
+#include "core/art/artProvider.h"
+
+wxBitmap CAutoComplete::GetImageByType(short type) const
+{
+	if (type == eProcedure || type == eExportProcedure)
+		return wxArtProvider::GetBitmap(wxART_PROCEDURE_RED, wxART_AUTOCOMPLETE);
+	else if (type == eFunction || type == eExportFunction)
+		return wxArtProvider::GetBitmap(wxART_FUNCTION_RED, wxART_AUTOCOMPLETE);
+	else if (type == eVariable || type == eExportVariable)
+		return wxArtProvider::GetBitmap(wxART_VARIABLE_ALTERNATIVE, wxART_AUTOCOMPLETE);
+	return wxNullBitmap;
+}
+
 void CAutoComplete::OnSelection(wxCommandEvent& event)
 {
 	Select(event.GetSelection());
@@ -261,14 +273,15 @@ void CAutoComplete::OnKeyDown(wxKeyEvent& event)
 
 void CAutoComplete::OnMouseMotion(wxMouseEvent& event)
 {
-	COESListBox* m_listBox = lb->GetListBox();
-	int m_currentRow = m_listBox->VirtualHitTest(event.GetY());
-	if (m_currentRow != wxNOT_FOUND)
-	{
-		std::vector< keywordElement_t>::iterator m_selectedKeyword = aKeywords.begin() + m_currentRow;
+	COESListBox* listBox = lb->GetListBox();
+	int currentRow = listBox->VirtualHitTest(event.GetY());
+	if (currentRow != wxNOT_FOUND) {
+		std::vector< keywordElement_t>::iterator selectedKeyword = m_aKeywords.begin() + currentRow;
 
-		if (m_selectedKeyword->shortDescription.IsEmpty()) m_listBox->SetToolTip(NULL);
-		else m_listBox->SetToolTip(m_selectedKeyword->shortDescription);
+		if (selectedKeyword->m_shortDescription.IsEmpty())
+			listBox->SetToolTip(NULL);
+		else
+			listBox->SetToolTip(selectedKeyword->m_shortDescription);
 	}
 
 	event.Skip();

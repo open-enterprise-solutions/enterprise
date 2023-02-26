@@ -1,13 +1,12 @@
 ﻿#ifndef _FORM_H_
 #define _FORM_H_
 
-#include "baseControl.h"
+#include "controlInterface.h"
 
 #define defaultFormId 1
 
-#include "common/attributeInfo.h"
-#include "common/docInfo.h"
-#include "common/moduleInfo.h"
+#include "core/common/typeInfo.h"
+#include "frontend/docView/docView.h"
 
 #define thisForm wxT("thisForm")
 
@@ -22,7 +21,7 @@ class CVisualView;
 class IMetaFormObject;
 
 //********************************************************************************************
-//*                          define commom clsid											 *
+//*                                 define commom clsid									     *
 //********************************************************************************************
 
 //COMMON FORM
@@ -32,7 +31,7 @@ const CLASS_ID g_controlFormCLSID = TEXT2CLSID("CT_FRME");
 //*                                  Visual Document & View                                  *
 //********************************************************************************************
 
-#include "common/valueInfo.h"
+#include "core/common/valueInfo.h"
 
 class CVisualDocument : public CDocument {
 	CVisualHost* m_visualHost;
@@ -94,18 +93,21 @@ public:
 //*                                      Value Frame                                         *
 //********************************************************************************************
 
-class CValueForm : public IValueFrame,
-	public IModuleInfo {
+class CValueForm : public IValueFrame, public IModuleInfo {
 	wxDECLARE_DYNAMIC_CLASS(CValueForm);
+private:
+	enum {
+		eSystem = eSizerItem + 1,
+		eProcUnit
+	};
 protected:
-
-	PropertyCategory* m_categoryFrame = IPropertyObject::CreatePropertyCategory({"frame", _("frame")});
+	PropertyCategory* m_categoryFrame = IPropertyObject::CreatePropertyCategory({ "frame", _("frame") });
 	Property* m_propertyCaption = IPropertyObject::CreateProperty(m_categoryFrame, "caption", PropertyType::PT_WXSTRING, _("New frame"));
 	Property* m_propertyFG = IPropertyObject::CreateProperty(m_categoryFrame, "fg", PropertyType::PT_WXCOLOUR, wxColour(0, 120, 215));
 	Property* m_propertyBG = IPropertyObject::CreateProperty(m_categoryFrame, "bg", PropertyType::PT_WXCOLOUR, wxColour(240, 240, 240));
-	PropertyCategory* m_categorySizer = IPropertyObject::CreatePropertyCategory({ "sizer", _("sizer")});
+	Property* m_propertyEnabled = IPropertyObject::CreateProperty(m_categoryFrame, "enabled", PropertyType::PT_BOOL, true);
+	PropertyCategory* m_categorySizer = IPropertyObject::CreatePropertyCategory({ "sizer", _("sizer") });
 	Property* m_propertyOrient = IPropertyObject::CreateProperty(m_categorySizer, "orient", &IValueFrame::GetOrient, wxVERTICAL);
-
 private:
 
 	bool m_formModified;
@@ -131,12 +133,23 @@ public:
 		return m_propertyBG->GetValueAsColour();
 	}
 
+	bool IsFormEnabled() const {
+		return m_propertyEnabled->GetValueAsBoolean();
+	}
+
 	wxOrientation GetOrient() const {
 		return (wxOrientation)m_propertyOrient->GetValueAsInteger();
 	}
 
+	IValueFrame* NewObject(const CLASS_ID& clsid, IValueFrame* parentControl = NULL, bool generateId = true);
 	IValueFrame* NewObject(const wxString& className, IValueFrame* parentControl = NULL, bool generateId = true);
-	
+
+	template <typename retType>
+	inline retType* NewObject(const CLASS_ID& clsid, IValueFrame* parentControl = NULL, bool generateId = true) {
+		return wxDynamicCast(
+			NewObject(clsid, parentControl, generateId), retType);
+	}
+
 	template <typename retType>
 	inline retType* NewObject(const wxString& className, IValueFrame* parentControl = NULL, bool generateId = true) {
 		return wxDynamicCast(
@@ -163,9 +176,8 @@ public:
 
 public:
 
-	CValueForm();
-	CValueForm(IValueFrame* ownerControl, IMetaFormObject* metaForm,
-		ISourceDataObject* ownerSrc, const CUniqueKey& formGuid, bool readOnly = false);
+	CValueForm(IControlFrame* ownerControl = NULL, IMetaFormObject* metaForm = NULL,
+		ISourceDataObject* ownerSrc = NULL, const CUniqueKey& formGuid = wxNullUniqueKey, bool readOnly = false);
 	virtual ~CValueForm();
 
 	virtual wxString GetClassName() const override {
@@ -180,16 +192,17 @@ public:
 	//*                              Override attribute                          *
 	//****************************************************************************
 
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
-	virtual int FindAttribute(const wxString& sName) const;
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
 
 	//****************************************************************************
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual void PrepareNames() const;                             // этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t& aParams);       // вызов метода
+	virtual void PrepareNames() const;
+
+	virtual bool CallAsProc(const long lMethodNum, CValue** paParams, const long lSizeArray);
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 
 	//****************************************************************************
 	//*                              Support form context                        *
@@ -197,7 +210,7 @@ public:
 
 	void BuildForm(const form_identifier_t& formType);
 
-	void InitializeForm(IValueFrame* ownerControl, IMetaFormObject* metaForm,
+	void InitializeForm(IControlFrame* ownerControl, IMetaFormObject* metaForm,
 		ISourceDataObject* ownerSrc, const CUniqueKey& formGuid, bool readOnly = false);
 
 	bool InitializeFormModule();
@@ -226,7 +239,7 @@ public:
 	}
 
 	IValueFrame* GetOwnerControl() const {
-		return m_formOwner;
+		return (IValueFrame*)m_controlOwner;
 	}
 
 	/**
@@ -237,8 +250,8 @@ public:
 	/**
 	* Can delete object
 	*/
-	virtual bool CanDeleteControl() const { 
-		return false; 
+	virtual bool CanDeleteControl() const {
+		return false;
 	}
 
 public:
@@ -252,18 +265,24 @@ public:
 		CValueFormControl(CValueForm* ownerFrame);
 		virtual ~CValueFormControl();
 
-		virtual CMethods* GetPMethods() const { PrepareNames(); return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
-		virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-		virtual CValue Method(methodArg_t& aParams);
+		virtual CMethodHelper* GetPMethods() const {
+			PrepareNames();
+			return m_methodHelper;
+		}
 
-		virtual CValue GetAttribute(attributeArg_t& aParams); //значение атрибута
-		virtual CValue GetAt(const CValue& cKey);
+		virtual void PrepareNames() const;
+
+		virtual bool CallAsProc(const long lMethodNum, CValue** paParams, const long lSizeArray);
+		virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
+
+		virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal); //значение атрибута
+		virtual bool GetAt(const CValue& varKeyValue, CValue& pvarValue);
 
 		virtual wxString GetTypeString() const { return wxT("formControls"); }
 		virtual wxString GetString() const { return wxT("formControls"); }
 
 		//Расширенные методы:
-		bool Property(const CValue& cKey, CValue& cValueFound);
+		bool Property(const CValue& varKeyValue, CValue& cValueFound);
 		unsigned int Count() const { return m_formOwner->m_aControls.size(); }
 
 		//Работа с итераторами:
@@ -273,7 +292,7 @@ public:
 		virtual unsigned int GetItSize() const { return Count(); }
 	private:
 		CValueForm* m_formOwner;
-		CMethods* m_methods;
+		CMethodHelper* m_methodHelper;
 	};
 
 	class CValueFormData : public CValue {
@@ -283,20 +302,20 @@ public:
 		CValueFormData(CValueForm* ownerFrame);
 		virtual ~CValueFormData();
 
-		virtual CMethods* GetPMethods() const { PrepareNames(); return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
+		virtual CMethodHelper* GetPMethods() const { PrepareNames(); return m_methodHelper; } //получить ссылку на класс помощник разбора имен атрибутов и методов
 		virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-		virtual CValue Method(methodArg_t& aParams);
+		virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 
-		virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);        //установка атрибута
-		virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
-		virtual void SetAt(const CValue& cKey, CValue& cVal);
-		virtual CValue GetAt(const CValue& cKey);
+		virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+		virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
+		virtual bool SetAt(const CValue& varKeyValue, const CValue& varValue);
+		virtual bool GetAt(const CValue& varKeyValue, CValue& pvarValue);
 
 		virtual wxString GetTypeString() const { return wxT("formData"); }
 		virtual wxString GetString() const { return wxT("formData"); }
 
 		//Расширенные методы:
-		bool Property(const CValue& cKey, CValue& cValueFound);
+		bool Property(const CValue& varKeyValue, CValue& cValueFound);
 		unsigned int Count() const;
 
 		//Работа с итераторами:
@@ -306,7 +325,7 @@ public:
 		virtual unsigned int GetItSize() const { return Count(); }
 	private:
 		CValueForm* m_formOwner;
-		CMethods* m_methods;
+		CMethodHelper* m_methodHelper;
 	};
 
 	CValueFormControl* m_formControls;
@@ -323,8 +342,8 @@ protected:
 
 	friend class CValueFormControl;
 
-	bool CreateDocumentForm(CDocument* docParent, bool demo = false);
-	bool CloseDocumentForm();
+	bool CreateDocForm(CDocument* docParent, bool demo = false);
+	bool CloseDocForm();
 
 public:
 
@@ -348,10 +367,11 @@ public:
 public:
 
 	void ShowForm(CDocument* docParent = NULL, bool demo = false);
-	void ActivateForm();
-	void UpdateForm();
-	bool CloseForm();
-	void HelpForm();
+	
+	virtual void ActivateForm();
+	virtual void UpdateForm();
+	virtual bool CloseForm();
+	virtual void HelpForm();
 
 	//set & get modify 
 	void Modify(bool modify = true) {
@@ -375,8 +395,8 @@ public:
 	void DetachIdleHandler(const wxString& procedureName);
 
 	//get visual document
-	CVisualDocument* GetVisualDocument() const { 
-		return m_valueFormDocument; 
+	virtual CVisualDocument* GetVisualDocument() const {
+		return m_valueFormDocument;
 	}
 
 	//special proc
@@ -385,7 +405,11 @@ public:
 
 	//actions
 	virtual actionData_t GetActions(const form_identifier_t& formType);
-	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm);
+	virtual void ExecuteAction(const action_identifier_t& lNumAction, CValueForm* srcForm);
+
+	//support icons
+	virtual wxIcon GetIcon();
+	static wxIcon GetIconGroup();
 
 	//load & save object in control 
 	virtual bool LoadData(CMemoryReader& reader);
@@ -403,7 +427,7 @@ protected:
 
 	CUniqueKey m_formKey;
 	form_identifier_t m_defaultFormType;
-	IValueFrame* m_formOwner;
+	IControlFrame* m_controlOwner;
 
 	std::map<wxString, wxTimer*> m_aIdleHandlers;
 };

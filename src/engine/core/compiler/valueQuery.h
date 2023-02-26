@@ -24,11 +24,11 @@ public:
 	virtual wxString GetTypeString() const { return wxT("query"); }
 	virtual wxString GetString() const { return wxT("query"); }
 
-	static CMethods m_methods;
+	static CMethodHelper m_methodHelper;
 
-	virtual CMethods* GetPMethods() const { return &m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethodHelper* GetPMethods() const { return &m_methodHelper; } //получить ссылку на класс помощник разбора имен атрибутов и методов
 	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t &aParams);       //вызов метода
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);       //вызов метода
 };
 
 #endif

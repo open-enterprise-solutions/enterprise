@@ -12,19 +12,19 @@
 void IRecordSetObject::GetValueByRow(wxVariant& variant,
 	const wxDataViewItem& row, unsigned int col) const
 {
-	wxValueTableRow* node = GetViewData(row);
+	wxValueTableRow* node = GetViewData<wxValueTableRow>(row);
 	if (node == NULL)
 		return;
-	node->GetValue(variant, col);
+	node->GetValue(col, variant);
 }
 
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 bool IRecordSetObject::SetValueByRow(const wxVariant& variant,
 	const wxDataViewItem& row, unsigned int col)
 {
-	wxString strData = variant.GetString();
-	wxValueTableRow* node = GetViewData(row);
+	const wxString &strData = variant.GetString();
+	wxValueTableRow* node = GetViewData<wxValueTableRow>(row);
 	if (node == NULL)
 		return false;
 
@@ -36,14 +36,14 @@ bool IRecordSetObject::SetValueByRow(const wxVariant& variant,
 	if (strData.Length() > 0) {
 		std::vector<CValue> foundedObjects;
 		if (newValue.FindValue(strData, foundedObjects)) {
-			return node->SetValue(foundedObjects.at(0), col);
+			return node->SetValue(col, foundedObjects.at(0));
 		}
 		else {
 			return false;
 		}
 	}
 	else {
-		return node->SetValue(newValue, col);
+		return node->SetValue(col, newValue);
 	}
 
 

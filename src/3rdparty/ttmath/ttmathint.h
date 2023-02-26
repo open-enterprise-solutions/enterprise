@@ -1139,9 +1139,9 @@ namespace ttmath
 			this method converts the value to uint type
 			can return a carry if the value is too long to store it in uint type
 		*/
-		uint ToUInt(uint & result) const
+		uint GetUInteger(uint & result) const
 		{
-			uint c = UInt<value_size>::ToUInt(result);
+			uint c = UInt<value_size>::GetUInteger(result);
 
 			if (value_size == 1)
 				return (result & TTMATH_UINT_HIGHEST_BIT) == 0 ? 0 : 1;
@@ -1156,7 +1156,7 @@ namespace ttmath
 		*/
 		uint ToInt(uint & result) const
 		{
-			return ToUInt(result);
+			return GetUInteger(result);
 		}
 
 
@@ -1187,9 +1187,9 @@ namespace ttmath
 			can return a carry if the value is too long to store it in ulint type
 			*** this method is created only on a 32 bit platform ***
 		*/
-		uint ToUInt(ulint & result) const
+		uint GetUInteger(ulint & result) const
 		{
-			uint c = UInt<value_size>::ToUInt(result);
+			uint c = UInt<value_size>::GetUInteger(result);
 
 			if (value_size == 1)
 				return (UInt<value_size>::table[0] & TTMATH_UINT_HIGHEST_BIT) == 0 ? 0 : 1;
@@ -1208,7 +1208,7 @@ namespace ttmath
 		*/
 		uint ToInt(ulint & result) const
 		{
-			return ToUInt(result);
+			return GetUInteger(result);
 		}
 
 
@@ -1255,9 +1255,9 @@ namespace ttmath
 			can return a carry if the value is too long to store it in this type
 			*** this method is created only on a 64 bit platform ***
 		*/
-		uint ToUInt(unsigned int & result) const
+		uint GetUInteger(unsigned int & result) const
 		{
-			uint c = UInt<value_size>::ToUInt(result);
+			uint c = UInt<value_size>::GetUInteger(result);
 
 			if (c || IsSign())
 				return 1;
@@ -1273,7 +1273,7 @@ namespace ttmath
 		*/
 		uint ToInt(unsigned int & result) const
 		{
-			return ToUInt(result);
+			return GetUInteger(result);
 		}
 
 

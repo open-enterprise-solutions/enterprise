@@ -1,7 +1,7 @@
 #include "firebirdPreparedStatementWrapper.h"
 #include "firebirdDatabaseLayer.h"
-#include "databaseLayer/databaseErrorCodes.h"
-#include "databaseLayer/databaseLayerException.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
+#include <3rdparty/databaseLayer/databaseLayerException.h>
 #include "firebirdResultSet.h"
 
 FirebirdPreparedStatementWrapper::FirebirdPreparedStatementWrapper(FirebirdInterface* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const wxString& strSQL)
@@ -177,16 +177,14 @@ int FirebirdPreparedStatementWrapper::RunQuery()
 		return DATABASE_LAYER_QUERY_RESULT_ERROR;
 	}
 
-	int nRows = 0;
+	long nRows = 0;
 	static char requestedInfoTypes[] = { isc_info_sql_records, isc_info_end };
 	char resultBuffer[1024];
 	memset(resultBuffer, 0, sizeof(resultBuffer));
 	nReturn = m_pInterface->GetIscDsqlSqlInfo()(m_Status, &m_pStatement, sizeof(requestedInfoTypes), requestedInfoTypes, sizeof(resultBuffer), resultBuffer);
-	if (nReturn == 0)
-	{
+	if (nReturn == 0) {
 		char* pBufferPosition = resultBuffer + 3;
-		while (*pBufferPosition != isc_info_end)
-		{
+		while (*pBufferPosition != isc_info_end) {
 			char infoType = *pBufferPosition;
 			pBufferPosition++;
 			short nLength = m_pInterface->GetIscVaxInteger()(pBufferPosition, 2);
@@ -202,7 +200,7 @@ int FirebirdPreparedStatementWrapper::RunQuery()
 			}
 		}
 	}
-	return nRows;
+	return (int)nRows;
 }
 
 DatabaseResultSet* FirebirdPreparedStatementWrapper::RunQueryWithResults()

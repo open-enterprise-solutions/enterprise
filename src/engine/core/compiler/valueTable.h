@@ -4,17 +4,37 @@
 #include "value.h"
 #include "valueArray.h"
 #include "valueMap.h"
-#include "common/tableInfo.h"
-#include "utils/stringUtils.h"
+#include "core/common/tableInfo.h"
+#include "core/utils/stringUtils.h"
 
 const CLASS_ID g_valueTableCLSID = TEXT2CLSID("VL_TABL");
 
 //Поддержка таблиц
-class CValueTable : public IValueTable {
+class CORE_API CValueTable : public IValueTable {
 	wxDECLARE_DYNAMIC_CLASS(CValueTable);
+private:
+	// methods:
+	enum Func {
+		enAddRow = 0,
+		enClone,
+		enCount,
+		enFind,
+		enDelete,
+		enClear,
+		enSort,
+	};
+	//attributes:
+	enum Prop {
+		enColumns = 0,
+	};
 public:
 	class CValueTableColumnCollection : public IValueTable::IValueModelColumnCollection {
 		wxDECLARE_DYNAMIC_CLASS(CValueTableColumnCollection);
+	private:
+		enum Func {
+			enAddColumn = 0,
+			enRemoveColumn
+		};
 	public:
 
 		class CValueTableColumnInfo : public IValueTable::IValueModelColumnCollection::IValueModelColumnInfo {
@@ -23,26 +43,55 @@ public:
 
 			unsigned int m_columnID;
 			wxString m_columnName;
-			CValueTypeDescription* m_columnTypes;
+			typeDescription_t m_columnType;
 			wxString m_columnCaption;
 			int m_columnWidth;
 
 		public:
 
 			CValueTableColumnInfo();
-			CValueTableColumnInfo(unsigned int colId, const wxString& colName, CValueTypeDescription* types, const wxString& caption, int width);
+			CValueTableColumnInfo(unsigned int colId, const wxString& colName, const typeDescription_t& typeDescription, const wxString& caption, int width);
 			virtual ~CValueTableColumnInfo();
 
-			virtual unsigned int GetColumnID() const { return m_columnID; }
-			virtual void SetColumnID(unsigned int col) { m_columnID = col; }
-			virtual wxString GetColumnName() const { return m_columnName; }
-			virtual void SetColumnName(const wxString& name) { m_columnName = name; }
-			virtual wxString GetColumnCaption() const { return m_columnCaption; }
-			virtual void SetColumnCaption(const wxString& caption) { m_columnCaption = caption; }
-			virtual CValueTypeDescription* GetColumnTypes() const { return m_columnTypes; }
-			virtual void SetColumnTypes(CValueTypeDescription* td) { m_columnTypes = td; }
-			virtual int GetColumnWidth() const { return m_columnWidth; }
-			virtual void SetColumnWidth(int width) { m_columnWidth = width; }
+			virtual unsigned int GetColumnID() const {
+				return m_columnID;
+			}
+
+			virtual void SetColumnID(unsigned int col) {
+				m_columnID = col;
+			}
+
+			virtual wxString GetColumnName() const {
+				return m_columnName;
+			}
+
+			virtual void SetColumnName(const wxString& name) {
+				m_columnName = name;
+			}
+
+			virtual wxString GetColumnCaption() const {
+				return m_columnCaption;
+			}
+
+			virtual void SetColumnCaption(const wxString& caption) {
+				m_columnCaption = caption;
+			}
+
+			virtual typeDescription_t GetColumnType() const {
+				return m_columnType;
+			}
+
+			virtual void SetColumnType(const typeDescription_t& typeDescription) {
+				m_columnType = typeDescription;
+			}
+
+			virtual int GetColumnWidth() const {
+				return m_columnWidth;
+			}
+
+			virtual void SetColumnWidth(int width) {
+				m_columnWidth = width;
+			}
 
 			virtual wxString GetTypeString() const {
 				return wxT("tableValueColumnInfo");
@@ -60,36 +109,39 @@ public:
 		CValueTableColumnCollection(CValueTable* ownerTable = NULL);
 		virtual ~CValueTableColumnCollection();
 
-		IValueModelColumnInfo* AddColumn(const wxString& colName, CValueTypeDescription* types, const wxString& caption, int width = wxDVC_DEFAULT_WIDTH) {
+		IValueModelColumnInfo* AddColumn(const wxString& colName,
+			const typeDescription_t& typeData,
+			const wxString& caption,
+			int width = wxDVC_DEFAULT_WIDTH) override {
 			unsigned int max_id = 0;
 			for (auto& col : m_columnInfo) {
 				if (max_id < col->GetColumnID()) {
 					max_id = col->GetColumnID();
 				}
 			}
-			CValueTableColumnInfo* columnInfo = new CValueTableColumnInfo(max_id + 1, colName, types, caption, width);
+			CValueTableColumnInfo* columnInfo = new CValueTableColumnInfo(max_id + 1, colName, typeData, caption, width);
 			for (long row = 0; row < m_ownerTable->GetRowCount(); row++) {
-				wxValueTableRow *node = m_ownerTable->GetViewData(m_ownerTable->GetItem(row));
+				wxValueTableRow* node = m_ownerTable->GetViewData<wxValueTableRow>(m_ownerTable->GetItem(row));
 				wxASSERT(node);
-				node->SetValue(types ? types->AdjustValue() : CValue(), max_id + 1);
+				node->SetValue(max_id + 1, CValueTypeDescription::AdjustValue(typeData));
 			}
 			columnInfo->IncrRef();
 			m_columnInfo.push_back(columnInfo);
 			return columnInfo;
 		}
 
-		CValueTypeDescription* GetColumnType(unsigned int col) const {
+		typeDescription_t GetColumnType(unsigned int col) const {
 			for (auto& colInfo : m_columnInfo) {
 				if (col == colInfo->GetColumnID()) {
-					return colInfo->GetColumnTypes();
+					return colInfo->GetColumnType();
 				}
 			}
-			return NULL;
+			return typeDescription_t();
 		}
 
 		virtual void RemoveColumn(unsigned int col) {
 			for (long row = 0; row < m_ownerTable->GetRowCount(); row++) {
-				wxValueTableRow* node = m_ownerTable->GetViewData(m_ownerTable->GetItem(row));
+				wxValueTableRow* node = m_ownerTable->GetViewData<wxValueTableRow>(m_ownerTable->GetItem(row));
 				wxASSERT(node);
 				node->EraseValue(col);
 			}
@@ -111,11 +163,15 @@ public:
 			return *foundedIt;
 		}
 
-		virtual unsigned int GetColumnCount() const { 
-			return m_columnInfo.size(); 
+		virtual unsigned int GetColumnCount() const {
+			return m_columnInfo.size();
 		}
 
-		virtual CMethods* GetPMethods() const { PrepareNames(); return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
+		virtual CMethodHelper* GetPMethods() const {
+			PrepareNames();
+			return m_methodHelper;
+		}
+
 		virtual void PrepareNames() const;
 
 		virtual wxString GetTypeString() const {
@@ -127,11 +183,12 @@ public:
 		}
 
 		//РАБОТА КАК АГРЕГАТНОГО ОБЪЕКТА
-		virtual CValue Method(methodArg_t& aParams);
+		virtual bool CallAsProc(const long lMethodNum, CValue** paParams, const long lSizeArray);
+		virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 
 		//array support 
-		virtual CValue GetAt(const CValue& cKey);
-		virtual void SetAt(const CValue& cKey, CValue& cVal);
+		virtual bool SetAt(const CValue& varKeyValue, const CValue& varValue);
+		virtual bool GetAt(const CValue& varKeyValue, CValue& pvarValue);
 
 		friend class CValueTable;
 
@@ -139,14 +196,14 @@ public:
 
 		CValueTable* m_ownerTable;
 		std::vector<CValueTableColumnInfo*> m_columnInfo;
-		CMethods* m_methods;
+		CMethodHelper* m_methodHelper;
 
 	} *m_dataColumnCollection;
 
 	class CValueTableReturnLine : public IValueModelReturnLine {
 		wxDECLARE_DYNAMIC_CLASS(CValueTableReturnLine);
 	public:
-		CValueTable* m_ownerTable; 
+		CValueTable* m_ownerTable;
 	public:
 
 		CValueTableReturnLine(CValueTable* ownerTable = NULL, const wxDataViewItem& line = wxDataViewItem(NULL));
@@ -156,11 +213,11 @@ public:
 			return m_ownerTable;
 		}
 
-		//set meta/get meta
-		virtual void SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal);
-		virtual CValue GetValueByMetaID(const meta_identifier_t& id) const;
+		virtual CMethodHelper* GetPMethods() const {
+			PrepareNames();
+			return m_methodHelper;
+		}
 
-		virtual CMethods* GetPMethods() const { PrepareNames(); return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
 		virtual void PrepareNames() const; //этот метод автоматически вызывается для инициализации имен атрибутов и методов
 
 		virtual wxString GetTypeString() const {
@@ -171,24 +228,26 @@ public:
 			return wxT("tableValueRow");
 		}
 
-		virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal); //установка атрибута
-		virtual CValue GetAttribute(attributeArg_t& aParams); //значение атрибута
+		virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal); //установка атрибута
+		virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal); //значение атрибута
 
 	private:
-
-		CMethods* m_methods;
+		CMethodHelper* m_methodHelper;
 	};
 
-	static CMethods m_methods;
+	static CMethodHelper m_methodHelper;
 
 public:
+
+	virtual wxDataViewItem FindRowValue(const CValue& varValue, const wxString& colName = wxEmptyString) const;
+	virtual wxDataViewItem FindRowValue(IValueModelReturnLine* retLine) const;
 
 	virtual IValueModelColumnCollection* GetColumnCollection() const {
 		return m_dataColumnCollection;
 	}
 
 	virtual CValueTableReturnLine* GetRowAt(const long& line) {
-		if (line < GetRowCount())
+		if (line > GetRowCount())
 			return NULL;
 		return new CValueTableReturnLine(this, GetItem(line));
 	}
@@ -199,8 +258,20 @@ public:
 		return GetRowAt(GetRow(line));
 	}
 
-	virtual wxDataViewItem FindRowValue(const CValue& cVal, const wxString& colName = wxEmptyString) const;
-	virtual wxDataViewItem FindRowValue(IValueModelReturnLine* retLine) const;
+	//set meta/get meta
+	virtual bool SetValueByMetaID(const wxDataViewItem& item, const meta_identifier_t& id, const CValue& varMetaVal) {
+		wxValueTableRow* node = GetViewData<wxValueTableRow>(item);
+		if (node == NULL)
+			return false;
+		return node->SetValue(id, CValueTypeDescription::AdjustValue(m_dataColumnCollection->GetColumnType(id), varMetaVal), true);
+	}
+
+	virtual bool GetValueByMetaID(const wxDataViewItem& item, const meta_identifier_t& id, CValue& pvarMetaVal) const {
+		wxValueTableRow* node = GetViewData<wxValueTableRow>(item);
+		if (node == NULL)
+			return false;
+		return node->GetValue(id, pvarMetaVal);
+	}
 
 	CValueTable();
 	CValueTable(const CValueTable& val);
@@ -226,7 +297,7 @@ public:
 	}
 
 	//array
-	virtual CValue GetAt(const CValue& cKey);
+	virtual bool GetAt(const CValue& varKeyValue, CValue& pvarValue);
 
 	wxString GetTypeString() const {
 		return wxT("tableValue");
@@ -241,11 +312,14 @@ public:
 		return GetRowCount() == 0;
 	}
 
-	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal); //значение атрибута
 
-	virtual CMethods* GetPMethods() const { return &m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethodHelper* GetPMethods() const {  //получить ссылку на класс помощник разбора имен атрибутов и методов
+		PrepareNames();
+		return &m_methodHelper;
+	}
 	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t& aParams);       //вызов метода
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);       //вызов метода
 
 	// implementation of base class virtuals to define model
 	virtual void GetValueByRow(wxVariant& variant,

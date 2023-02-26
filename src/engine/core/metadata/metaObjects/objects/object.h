@@ -2,15 +2,13 @@
 #define _BASE_OBJECT_H__
 
 #include "reference/reference.h"
-#include "metadata/metaObjectsDefines.h"
-#include "compiler/valueGuid.h"
+#include "core/metadata/metaObjectsDefines.h"
+#include "core/compiler/valueGuid.h"
 
-#include "common/tableAttributes.h"
-
-#include "common/actionInfo.h"
-#include "common/moduleInfo.h"
-#include "common/valueInfo.h"
-#include "common/tableInfo.h"
+#include "core/common/actionInfo.h"
+#include "core/common/moduleInfo.h"
+#include "core/common/valueInfo.h"
+#include "core/common/tableInfo.h"
 
 //********************************************************************************************
 //*                                     Defines                                              *
@@ -53,7 +51,7 @@ public:
 };
 
 class IMetaObjectWrapperData
-	: public IMetaObject, public IMetaCommandData, public ITableAttribute {
+	: public IMetaObject, public IMetaCommandData, public IMetaTableData {
 	wxDECLARE_ABSTRACT_CLASS(IMetaObjectWrapperData);
 public:
 
@@ -84,10 +82,12 @@ public:
 
 	//override base objects 
 	virtual std::vector<IMetaAttributeObject*> GetGenericAttributes() const = 0;
+
 	virtual std::vector<CMetaFormObject*> GetGenericForms() const = 0;
+	virtual std::vector<CMetaGridObject*> GetObjectTemplates() const = 0;
 
 	//find attributes, tables etc 
-	virtual IMetaAttributeObject* FindGenericAttributeByName(const wxString& docPath) const {
+	virtual IMetaAttributeObject* FindGenericAttributeByGuid(const wxString& docPath) const {
 		for (auto obj : GetGenericAttributes()) {
 			if (docPath == obj->GetDocPath())
 				return obj;
@@ -109,12 +109,12 @@ public:
 	virtual CValueForm* CreateObjectForm(IMetaFormObject* metaForm) = 0; //create with form
 
 	//support form 
-	virtual CValueForm* GetGenericForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetGenericForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
 
 protected:
 
 	//support form 
-	virtual CValueForm* GetGenericForm(const meta_identifier_t& id, IValueFrame* ownerControl, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetGenericForm(const meta_identifier_t& id, IControlFrame* ownerControl, const CUniqueKey& formGuid = wxNullGuid);
 };
 
 class IMetaObjectRecordData
@@ -170,7 +170,15 @@ public:
 	virtual std::vector<CMetaGridObject*> GetObjectTemplates() const;
 
 	//find attributes, tables etc 
-	virtual IMetaAttributeObject* FindDefAttributeByName(const wxString& docPath) const {
+	virtual IMetaAttributeObject* FindDefAttributeById(const meta_identifier_t& id) const {
+		for (auto obj : GetDefaultAttributes()) {
+			if (id == obj->GetMetaID())
+				return obj;
+		}
+		return NULL;
+	}
+
+	virtual IMetaAttributeObject* FindDefAttributeByGuid(const wxString& docPath) const {
 		for (auto obj : GetDefaultAttributes()) {
 			if (docPath == obj->GetDocPath())
 				return obj;
@@ -178,7 +186,15 @@ public:
 		return NULL;
 	}
 
-	virtual IMetaAttributeObject* FindAttributeByName(const wxString& docPath) const {
+	virtual IMetaAttributeObject* FindAttributeById(const meta_identifier_t& id) const {
+		for (auto obj : GetObjectAttributes()) {
+			if (id == obj->GetMetaID())
+				return obj;
+		}
+		return NULL;
+	}
+
+	virtual IMetaAttributeObject* FindAttributeByGuid(const wxString& docPath) const {
 		for (auto obj : GetObjectAttributes()) {
 			if (docPath == obj->GetDocPath())
 				return obj;
@@ -186,7 +202,15 @@ public:
 		return NULL;
 	}
 
-	virtual CMetaTableObject* FindTableByName(const wxString& docPath) const {
+	virtual CMetaTableObject* FindTableById(const meta_identifier_t& id) const {
+		for (auto obj : GetObjectTables()) {
+			if (id == obj->GetMetaID())
+				return obj;
+		}
+		return NULL;
+	}
+
+	virtual CMetaTableObject* FindTableByGuid(const wxString& docPath) const {
 		for (auto obj : GetObjectTables()) {
 			if (docPath == obj->GetDocPath())
 				return obj;
@@ -206,12 +230,12 @@ public:
 	};
 
 	//support form 
-	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid) = 0;
+	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid) = 0;
 
 protected:
 
 	//support form 
-	virtual CValueForm* GetObjectForm(const meta_identifier_t& id, IValueFrame* ownerControl, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetObjectForm(const meta_identifier_t& id, IControlFrame* ownerControl, const CUniqueKey& formGuid = wxNullGuid);
 
 protected:
 	friend class CMetaFormObject;
@@ -222,6 +246,11 @@ enum
 {
 	METAOBJECT_NORMAL = 1,
 	METAOBJECT_EXTERNAL,
+};
+
+enum eObjectMode {
+	OBJECT_ITEM = 1,
+	OBJECT_FOLDER
 };
 
 //metaObject with file 
@@ -252,16 +281,22 @@ protected:
 	virtual IRecordDataObjectExt* CreateObjectExtValue() = 0;  //create object 
 };
 
-//metaObject with reference - for enumeration 
+//metaObject with reference 
 class IMetaObjectRecordDataRef : public IMetaObjectRecordData {
 	wxDECLARE_ABSTRACT_CLASS(IMetaObjectRecordDataRef);
 protected:
 	PropertyCategory* m_categoryData = CreatePropertyCategory({ "data", _("data") });
+	PropertyCategory* m_categoryPresentation = CreatePropertyCategory({ "presentation", _("presentation") });
+	Property* m_propertyQuickChoice = CreateProperty(m_categoryPresentation, { "quickChoice",  _("quick choice") }, PropertyType::PT_BOOL, false);
 protected:
 	//ctor
 	IMetaObjectRecordDataRef();
 	virtual ~IMetaObjectRecordDataRef();
 public:
+
+	virtual bool HasQuickChoice() const {
+		return m_propertyQuickChoice->GetValueAsBoolean();
+	}
 
 	virtual CMetaDefaultAttributeObject* GetDataReference() const {
 		return m_attributeReference;
@@ -297,13 +332,11 @@ public:
 	}
 
 	//process choice 
-	virtual bool ProcessChoice(IValueFrame* ownerValue, 
-		const meta_identifier_t& id = wxNOT_FOUND, eSelectMode selMode = eSelectMode::eSelectMode_Items);
-	virtual bool ProcessListChoice(IValueFrame* ownerValue, 
+	virtual bool ProcessChoice(IControlFrame* ownerValue,
 		const meta_identifier_t& id = wxNOT_FOUND, eSelectMode selMode = eSelectMode::eSelectMode_Items);
 
 	//find attributes, tables etc 
-	virtual CMetaEnumerationObject* FindEnumByName(const wxString& docPath) const {
+	virtual CMetaEnumerationObject* FindEnumByGuid(const wxString& docPath) const {
 		for (auto obj : GetObjectEnums()) {
 			if (docPath == obj->GetDocPath())
 				return obj;
@@ -335,8 +368,8 @@ public:
 	virtual CReferenceDataObject* FindObjectValue(const Guid& guid); //find by guid and ret reference 
 
 	//support form 
-	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid) = 0;
-	virtual CValueForm* GetSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid) = 0;
+	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid) = 0;
+	virtual CValueForm* GetSelectForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid) = 0;
 
 	//descriptions...
 	virtual wxString GetDescription(const IObjectValueInfo* objValue) const = 0;
@@ -360,12 +393,54 @@ public:
 protected:
 
 	//support form 
-	virtual CValueForm* GetListForm(const meta_identifier_t& id, IValueFrame* ownerControl, const CUniqueKey& formGuid = wxNullGuid);
-	virtual CValueForm* GetSelectForm(const meta_identifier_t& id, IValueFrame* ownerControl, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetListForm(const meta_identifier_t& id, IControlFrame* ownerControl, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetSelectForm(const meta_identifier_t& id, IControlFrame* ownerControl, const CUniqueKey& formGuid = wxNullGuid);
 
 protected:
 
 	CMetaDefaultAttributeObject* m_attributeReference;
+};
+
+//metaObject with reference - for enumeration
+class IMetaObjectRecordDataEnumRef : public IMetaObjectRecordDataRef {
+	wxDECLARE_ABSTRACT_CLASS(IMetaObjectRecordDataEnumRef);
+private:
+	//default attributes 
+	CMetaDefaultAttributeObject* m_attributeOrder;
+protected:
+
+	//ctor
+	IMetaObjectRecordDataEnumRef();
+	virtual ~IMetaObjectRecordDataEnumRef();
+
+public:
+
+	CMetaDefaultAttributeObject* GetDataOrder() const {
+		return m_attributeOrder;
+	}
+
+	bool IsDataOrder(const meta_identifier_t& id) const {
+		return id == m_attributeOrder->GetMetaID();
+	}
+
+	//events: 
+	virtual bool OnCreateMetaObject(IMetadata* metaData);
+	virtual bool OnLoadMetaObject(IMetadata* metaData);
+	virtual bool OnSaveMetaObject();
+	virtual bool OnDeleteMetaObject();
+
+	//module manager is started or exit 
+	virtual bool OnBeforeRunMetaObject(int flags);
+	virtual bool OnAfterRunMetaObject(int flags);
+
+	virtual bool OnBeforeCloseMetaObject();
+	virtual bool OnAfterCloseMetaObject();
+
+protected:
+
+	//load & save metadata from DB 
+	virtual bool LoadData(CMemoryReader& reader);
+	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 };
 
 //metaObject with reference and deletion mark 
@@ -388,7 +463,7 @@ private:
 	Role* m_roleUpdate = IMetaObject::CreateRole({ "update", _("update") });
 	Role* m_roleDelete = IMetaObject::CreateRole({ "delete", _("delete") });
 protected:
-	Property* m_propertyGeneration = IPropertyObject::CreateGenerationProperty(m_categoryData, { "baseOn", _("base on") });
+	Property* m_propertyGeneration = IPropertyObject::CreateGenerationProperty(m_categoryData, { "generation", _("generation") });
 private:
 	CMetaDefaultAttributeObject* m_attributeDeletionMark;
 protected:
@@ -409,6 +484,10 @@ public:
 		return m_genData.m_data;
 	}
 
+	virtual bool HasQuickChoice() const {
+		return false;
+	}
+
 	//events: 
 	virtual bool OnCreateMetaObject(IMetadata* metaData);
 	virtual bool OnLoadMetaObject(IMetadata* metaData);
@@ -427,6 +506,9 @@ public:
 	IRecordDataObjectRef* CreateObjectValue(const Guid& guid);
 	IRecordDataObjectRef* CreateObjectValue(IRecordDataObjectRef* objSrc, bool generate = false);
 
+	//copy associate value 	
+	IRecordDataObjectRef* CopyObjectValue(const Guid& guid);
+
 	//create single object
 	virtual IRecordDataObject* CreateRecordDataObject();
 
@@ -436,6 +518,7 @@ protected:
 	* Property events
 	*/
 	virtual void OnPropertyCreated(Property* property);
+	virtual void OnPropertyRefresh(class wxPropertyGridManager* pg, class wxPGProperty* pgProperty, Property* property);
 	virtual bool OnPropertyChanging(Property* property, const wxVariant& newValue);
 	virtual void OnPropertyChanged(Property* property);
 
@@ -446,8 +529,6 @@ protected:
 	//create empty object
 	virtual IRecordDataObjectRef* CreateObjectRefValue(const Guid& objGuid = wxNullGuid) = 0; //create object and read by guid 
 };
-
-#include "objectEnum.h"
 
 //metaObject with reference and deletion mark and group/object type
 class IMetaObjectRecordDataFolderMutableRef : public IMetaObjectRecordDataMutableRef {
@@ -486,64 +567,20 @@ public:
 		return id == m_attributeIsFolder->GetMetaID();
 	}
 
+	virtual bool HasQuickChoice() const {
+		return m_propertyQuickChoice->GetValueAsBoolean();
+	}
+
 	IMetaObjectRecordDataFolderMutableRef();
 	virtual ~IMetaObjectRecordDataFolderMutableRef();
 
 	//process choice 
-	virtual bool ProcessChoice(IValueFrame* ownerValue,
+	virtual bool ProcessChoice(IControlFrame* ownerValue,
 		const meta_identifier_t& id = wxNOT_FOUND, eSelectMode selMode = eSelectMode::eSelectMode_Items);
-	virtual bool ProcessListChoice(IValueFrame* ownerValue,
-		const meta_identifier_t& id = wxNOT_FOUND, eSelectMode selMode = eSelectMode::eSelectMode_Items);
-
-	class CMetaGroupAttributeObject : public CMetaAttributeObject {
-		wxDECLARE_DYNAMIC_CLASS(CMetaGroupAttributeObject);
-	private:
-		OptionList* GetUseItem(PropertyOption*) {
-			OptionList* opt_list = new OptionList;
-			opt_list->AddOption(_("for item"), eUseItem_Item);
-			opt_list->AddOption(_("for folder"), eUseItem_Folder);
-			opt_list->AddOption(_("for folder and item"), eUseItem_Folder_Item);
-			return opt_list;
-		}
-	protected:
-		PropertyCategory* m_categoryGroup = IPropertyObject::CreatePropertyCategory({ "group", _("group") });
-		Property* m_propertyUse = IPropertyObject::CreateProperty(m_categoryGroup, { "use",  "use" }, &CMetaGroupAttributeObject::GetUseItem, eUseItem::eUseItem_Item);
-	public:
-		eUseItem GetAttrUse() const {
-			return (eUseItem)m_propertyUse->GetValueAsInteger();
-		}
-	protected:
-		virtual bool LoadData(CMemoryReader& reader);
-		virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
-	};
-
-	class CMetaGroupTableObject : public CMetaTableObject {
-		wxDECLARE_DYNAMIC_CLASS(CMetaGroupTableObject);
-	private:
-		OptionList* GetUseItem(PropertyOption*) {
-			OptionList* opt_list = new OptionList;
-			opt_list->AddOption(_("for item"), eUseItem_Item);
-			opt_list->AddOption(_("for folder"), eUseItem_Folder);
-			opt_list->AddOption(_("for folder and item"), eUseItem_Folder_Item);
-			return opt_list;
-		}
-	protected:
-		PropertyCategory* m_categoryGroup = IPropertyObject::CreatePropertyCategory({ "group", _("group") });
-		Property* m_propertyUse = IPropertyObject::CreateProperty(m_categoryGroup, { "use",  "use" }, &CMetaGroupTableObject::GetUseItem, eUseItem::eUseItem_Item);
-	public:
-		eUseItem GetTableUse() const {
-			return (eUseItem)m_propertyUse->GetValueAsInteger();
-		}
-	protected:
-		virtual bool LoadData(CMemoryReader& reader);
-		virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
-	};
 
 	virtual bool FilterChild(const CLASS_ID& clsid) const {
-		if (
-			clsid == g_metaFolderAttributeCLSID ||
-			clsid == g_metaFolderTableCLSID
-			)
+		if (clsid == g_metaAttributeCLSID ||
+			clsid == g_metaTableCLSID)
 			return true;
 		return IMetaObjectWrapperData::FilterChild(clsid);
 	}
@@ -566,19 +603,27 @@ public:
 	IRecordDataObjectFolderRef* CreateObjectValue(eObjectMode mode, const Guid& guid);
 	IRecordDataObjectFolderRef* CreateObjectValue(eObjectMode mode, IRecordDataObjectRef* objSrc, bool generate = false);
 
+	//copy associate value 	
+	IRecordDataObjectFolderRef* CopyObjectValue(eObjectMode mode, const Guid& guid);
+
 	//support form 
-	virtual CValueForm* GetFolderForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid) = 0;
-	virtual CValueForm* GetFolderSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid) = 0;
+	virtual CValueForm* GetFolderForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid) = 0;
+	virtual CValueForm* GetFolderSelectForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid) = 0;
 
 protected:
+
+	/**
+	* Property events
+	*/
+	virtual void OnPropertyRefresh(class wxPropertyGridManager* pg, class wxPGProperty* pgProperty, Property* property);
 
 	//load & save metadata from DB 
 	virtual bool LoadData(CMemoryReader& reader);
 	virtual bool SaveData(CMemoryWriter& writer = CMemoryWriter());
 
 	//support form 
-	virtual CValueForm* GetFolderForm(const meta_identifier_t& id, IValueFrame* ownerControl, const CUniqueKey& formGuid = wxNullGuid);
-	virtual CValueForm* GetFolderSelectForm(const meta_identifier_t& id, IValueFrame* ownerControl, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetFolderForm(const meta_identifier_t& id, IControlFrame* ownerControl, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetFolderSelectForm(const meta_identifier_t& id, IControlFrame* ownerControl, const CUniqueKey& formGuid = wxNullGuid);
 
 	//create empty object
 	virtual IRecordDataObjectFolderRef* CreateObjectRefValue(eObjectMode mode, const Guid& objGuid = wxNullGuid) = 0; //create object and read by guid 
@@ -658,7 +703,7 @@ public:
 	virtual std::vector<CMetaGridObject*> GetObjectTemplates() const;
 
 	//find attributes, tables etc 
-	virtual IMetaAttributeObject* FindDefAttributeByName(const wxString& docPath) const {
+	virtual IMetaAttributeObject* FindDefAttributeByGuid(const wxString& docPath) const {
 		for (auto obj : GetDefaultAttributes()) {
 			if (docPath == obj->GetDocPath())
 				return obj;
@@ -666,7 +711,7 @@ public:
 		return NULL;
 	}
 
-	virtual IMetaAttributeObject* FindDimensionByName(const wxString& docPath) const {
+	virtual IMetaAttributeObject* FindDimensionByGuid(const wxString& docPath) const {
 		for (auto obj : GetObjectDimensions()) {
 			if (docPath == obj->GetDocPath())
 				return obj;
@@ -674,7 +719,7 @@ public:
 		return NULL;
 	}
 
-	virtual IMetaAttributeObject* FindResourceByName(const wxString& docPath) const {
+	virtual IMetaAttributeObject* FindResourceByGuid(const wxString& docPath) const {
 		for (auto obj : GetObjectResources()) {
 			if (docPath == obj->GetDocPath())
 				return obj;
@@ -683,7 +728,7 @@ public:
 		return NULL;
 	}
 
-	virtual IMetaAttributeObject* FindAttributeByName(const wxString& docPath) const {
+	virtual IMetaAttributeObject* FindAttributeByGuid(const wxString& docPath) const {
 		for (auto obj : GetObjectAttributes()) {
 			if (docPath == obj->GetDocPath())
 				return obj;
@@ -692,14 +737,18 @@ public:
 	}
 
 	//find in current metaObject
-	virtual IMetaAttributeObject* FindAttribute(const meta_identifier_t& id) const;
+	virtual IMetaAttributeObject* FindProp(const meta_identifier_t& id) const;
 
 	//has record manager 
 	virtual bool HasRecordManager() const {
 		return false;
 	}
 
-	//has recorder 
+	//has recorder and period 
+	virtual bool HasPeriod() const {
+		return false;
+	}
+
 	virtual bool HasRecorder() const {
 		return true;
 	}
@@ -711,6 +760,8 @@ public:
 	IRecordManagerObject* CreateRecordManagerObjectValue();
 	IRecordManagerObject* CreateRecordManagerObjectValue(const CUniquePairKey& uniqueKey);
 	IRecordManagerObject* CreateRecordManagerObjectValue(IRecordManagerObject* source);
+
+	IRecordManagerObject* CopyRecordManagerObjectValue(const CUniquePairKey& uniqueKey);
 
 	//get module object in compose object 
 	virtual CMetaModuleObject* GetModuleObject() const { return NULL; }
@@ -750,7 +801,7 @@ public:
 	};
 
 	//support form 
-	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid) = 0;
+	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid) = 0;
 
 	//special functions for DB 
 	virtual wxString GetTableNameDB() const;
@@ -780,7 +831,7 @@ protected:
 protected:
 
 	//support form 
-	virtual CValueForm* GetListForm(const meta_identifier_t& id, IValueFrame* ownerControl, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetListForm(const meta_identifier_t& id, IControlFrame* ownerControl, const CUniqueKey& formGuid = wxNullGuid);
 
 protected:
 
@@ -795,10 +846,11 @@ protected:
 //*                                      Base data                                           *
 //********************************************************************************************
 
-#include "common/srcExplorer.h"
-#include "common/srcObject.h"
+#include "core/common/srcExplorer.h"
+#include "core/common/srcObject.h"
 
-class ISourceDataObject : public ISourceObject
+class ISourceDataObject :
+	public ISourceObject
 {
 public:
 
@@ -808,6 +860,10 @@ public:
 	//override default type object 
 	virtual bool SaveModify() {
 		return true;
+	}
+
+	virtual bool IsNewObject() const {
+		return true; 
 	}
 
 	//standart override 
@@ -821,9 +877,9 @@ public:
 	virtual bool GetModel(IValueModel*& tableValue, const meta_identifier_t& id) = 0;
 
 	//support source set/get data 
-	virtual void SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal) {}
-	virtual CValue GetValueByMetaID(const meta_identifier_t& id) const {
-		return CValue();
+	virtual bool SetValueByMetaID(const meta_identifier_t& id, const CValue& varMetaVal) { return false; }
+	virtual bool GetValueByMetaID(const meta_identifier_t& id, CValue& pvarMetaVal) const {
+		return false;
 	}
 
 	//counter
@@ -844,38 +900,46 @@ class IRecordDataObject : public CValue, public IActionSource,
 	public ISourceDataObject, public IObjectValueInfo, public IModuleInfo {
 	wxDECLARE_ABSTRACT_CLASS(IRecordDataObject);
 protected:
+	enum helperAlias {
+		eSystem,
+		eProperty,
+		eTable,
+		eProcUnit
+	};
+	enum helperProp {
+		eThisObject
+	};
+	enum helperFunc {
+		eGetFormObject,
+		eGetMetadata
+	};
+protected:
 	//override copy constructor
 	IRecordDataObject(const Guid& objGuid, bool newObject);
 	IRecordDataObject(const IRecordDataObject& source);
+
+	//standart override 
+	virtual CMethodHelper* GetPMethods() const final {
+		PrepareNames();
+		return m_methodHelper;
+	}
 public:
 	virtual ~IRecordDataObject();
 
 	//support actions 
 	virtual actionData_t GetActions(const form_identifier_t& formType) { return actionData_t(); }
-	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm) {}
+	virtual void ExecuteAction(const action_identifier_t& lNumAction, CValueForm* srcForm) {}
 
 	virtual IRecordDataObject* CopyObjectValue() = 0;
 
 	//standart override 
-	virtual CMethods* GetPMethods() const {
-		return CValue::GetPMethods();
-	}
+	virtual void PrepareNames() const;
 
-	virtual void PrepareNames() const {
-		CValue::PrepareNames();
-	}
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);
 
-	virtual CValue Method(methodArg_t& aParams) {
-		return CValue::Method(aParams);
-	}
-
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal) {
-		CValue::SetAttribute(aParams, cVal);
-	}
-
-	virtual CValue GetAttribute(attributeArg_t& aParams) {
-		return CValue::GetAttribute(aParams);
-	}
+	virtual bool CallAsProc(const long lMethodNum, CValue** paParams, const long lSizeArray);
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 
 	//check is empty
 	virtual inline bool IsEmpty() const override {
@@ -887,12 +951,27 @@ public:
 	virtual bool GetModel(IValueModel*& tableValue, const meta_identifier_t& id);
 
 	//support source set/get data 
-	virtual void SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal);
-	virtual CValue GetValueByMetaID(const meta_identifier_t& id) const;
+	virtual bool SetValueByMetaID(const meta_identifier_t& id, const CValue& varMetaVal);
+	virtual bool GetValueByMetaID(const meta_identifier_t& id, CValue& pvarMetaVal) const;
+
+	CValue GetValueByMetaID(const meta_identifier_t& id) const {
+		CValue retValue;
+		if (GetValueByMetaID(id, retValue))
+			return retValue;
+		return CValue();
+	}
+
+	//support tabular section 
+	virtual IValueTable* GetTableByMetaID(const meta_identifier_t& id) const;
 
 	//counter
-	virtual void IncrRef() { CValue::IncrRef(); }
-	virtual void DecrRef() { CValue::DecrRef(); }
+	virtual void IncrRef() {
+		CValue::IncrRef();
+	}
+
+	virtual void DecrRef() {
+		CValue::DecrRef();
+	}
 
 	//get metadata from object 
 	virtual IMetaObjectRecordData* GetMetaObject() const = 0;
@@ -904,8 +983,8 @@ public:
 	virtual CValueForm* GetForm() const;
 
 	//support show 
-	virtual void ShowFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL) = 0;
-	virtual CValueForm* GetFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL) = 0;
+	virtual void ShowFormValue(const wxString& formName = wxEmptyString, IControlFrame* owner = NULL) = 0;
+	virtual CValueForm* GetFormValue(const wxString& formName = wxEmptyString, IControlFrame* owner = NULL) = 0;
 
 	//default showing
 	virtual void ShowValue() override {
@@ -918,7 +997,7 @@ public:
 	}
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const;
+	virtual CLASS_ID GetTypeClass() const;
 
 	virtual wxString GetTypeString() const;
 	virtual wxString GetString() const;
@@ -933,7 +1012,7 @@ protected:
 protected:
 	friend class IMetaObjectRecordData;
 protected:
-	CMethods* m_methods;
+	CMethodHelper* m_methodHelper;
 };
 
 //Object with file
@@ -945,6 +1024,7 @@ protected:
 	IRecordDataObjectExt(const IRecordDataObjectExt& source);
 public:
 	virtual ~IRecordDataObjectExt();
+
 	virtual bool InitializeObject();
 	virtual bool InitializeObject(IRecordDataObjectExt* source);
 
@@ -994,11 +1074,11 @@ protected:
 public:
 	virtual ~IRecordDataObjectRef();
 
-	virtual bool InitializeObject();
+	virtual bool InitializeObject(const Guid& copyGuid = wxNullGuid);
 	virtual bool InitializeObject(IRecordDataObjectRef* source, bool generate = false);
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const;
+	virtual CLASS_ID GetTypeClass() const;
 
 	virtual wxString GetTypeString() const;
 	virtual wxString GetString() const;
@@ -1027,8 +1107,15 @@ public:
 	virtual bool Filling(CValue& cValue = CValue()) const;
 
 	//support source set/get data 
-	virtual void SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal);
-	virtual CValue GetValueByMetaID(const meta_identifier_t& id) const;
+	virtual bool SetValueByMetaID(const meta_identifier_t& id, const CValue& varMetaVal);
+	virtual bool GetValueByMetaID(const meta_identifier_t& id, CValue& pvarMetaVal) const;
+
+	CValue GetValueByMetaID(const meta_identifier_t& id) const {
+		CValue retValue;
+		if (GetValueByMetaID(id, retValue))
+			return retValue;
+		return CValue();
+	}
 
 	//get unique identifier 
 	virtual CUniqueKey GetGuid() const {
@@ -1050,6 +1137,7 @@ protected:
 	void SetDeletionMark(bool deletionMark = true);
 protected:
 	virtual bool ReadData();
+	virtual bool ReadData(const Guid& srcGuid);
 	virtual bool SaveData();
 	virtual bool DeleteData();
 protected:
@@ -1086,11 +1174,19 @@ public:
 	virtual IRecordDataObjectRef* CopyObjectValue();
 
 	//support source set/get data 
-	virtual void SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal);
-	virtual CValue GetValueByMetaID(const meta_identifier_t& id) const;
+	virtual bool SetValueByMetaID(const meta_identifier_t& id, const CValue& varMetaVal);
+	virtual bool GetValueByMetaID(const meta_identifier_t& id, CValue& pvarMetaVal) const;
+
+	CValue GetValueByMetaID(const meta_identifier_t& id) const {
+		CValue retValue;
+		if (GetValueByMetaID(id, retValue))
+			return retValue;
+		return CValue();
+	}
 
 protected:
 	virtual bool ReadData();
+	virtual bool ReadData(const Guid& srcGuid);
 protected:
 	virtual void PrepareEmptyObject();
 	virtual void PrepareEmptyObject(const IRecordDataObjectRef* source);
@@ -1109,13 +1205,16 @@ public:
 	virtual ~CRecordKeyObject();
 
 	//standart override 
-	virtual CMethods* GetPMethods() const;
+	virtual CMethodHelper* GetPMethods() const {
+		PrepareNames();
+		return m_methodHelper;
+	}
 
 	virtual void PrepareNames() const;
-	virtual CValue Method(methodArg_t& aParams);
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);
-	virtual CValue GetAttribute(attributeArg_t& aParams);
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);
 
 	//check is empty
 	virtual inline bool IsEmpty() const override;
@@ -1131,16 +1230,15 @@ public:
 	};
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const;
+	virtual CLASS_ID GetTypeClass() const;
 
 	virtual wxString GetTypeString() const;
 	virtual wxString GetString() const;
 
 protected:
 	IMetaObjectRegisterData* m_metaObject;
-	CMethods* m_methods;
-
-	std::map<meta_identifier_t, CValue> m_keyValues;
+	CMethodHelper* m_methodHelper;
+	valueArray_t m_keyValues;
 };
 
 class IRecordSetObject : public IValueTable, public IModuleInfo {
@@ -1163,14 +1261,25 @@ public:
 
 		class CValueRecordSetRegisterColumnInfo : public IValueTable::IValueModelColumnCollection::IValueModelColumnInfo {
 			wxDECLARE_DYNAMIC_CLASS(CValueRecordSetRegisterColumnInfo);
+		private:
 			IMetaAttributeObject* m_metaAttribute;
 		public:
 
-			virtual unsigned int GetColumnID() const { return m_metaAttribute->GetMetaID(); }
-			virtual wxString GetColumnName() const { return m_metaAttribute->GetName(); }
-			virtual wxString GetColumnCaption() const { return m_metaAttribute->GetSynonym(); }
-			virtual CValueTypeDescription* GetColumnTypes() const { return m_metaAttribute->GetValueTypeDescription(); }
-			virtual int GetColumnWidth() const { return 0; }
+			virtual unsigned int GetColumnID() const {
+				return m_metaAttribute->GetMetaID();
+			}
+
+			virtual wxString GetColumnName() const {
+				return m_metaAttribute->GetName();
+			}
+
+			virtual wxString GetColumnCaption() const {
+				return m_metaAttribute->GetSynonym();
+			}
+
+			virtual typeDescription_t GetColumnType() const {
+				return m_metaAttribute->GetTypeDescription();
+			}
 
 			CValueRecordSetRegisterColumnInfo();
 			CValueRecordSetRegisterColumnInfo(IMetaAttributeObject* metaAttribute);
@@ -1193,18 +1302,15 @@ public:
 		CRecordSetRegisterColumnCollection(IRecordSetObject* ownerTable);
 		virtual ~CRecordSetRegisterColumnCollection();
 
-		virtual CValueTypeDescription* GetColumnTypes(unsigned int col) const
-		{
+		virtual typeDescription_t GetColumnType(unsigned int col) const {
 			CValueRecordSetRegisterColumnInfo* columnInfo = m_columnInfo.at(col);
 			wxASSERT(columnInfo);
-			return columnInfo->GetColumnTypes();
+			return columnInfo->GetColumnType();
 		}
 
-		virtual IValueModelColumnInfo* GetColumnInfo(unsigned int idx) const
-		{
+		virtual IValueModelColumnInfo* GetColumnInfo(unsigned int idx) const {
 			if (m_columnInfo.size() < idx)
 				return NULL;
-
 			auto foundedIt = m_columnInfo.begin();
 			std::advance(foundedIt, idx);
 			return foundedIt->second;
@@ -1227,15 +1333,15 @@ public:
 		}
 
 		//array support 
-		virtual CValue GetAt(const CValue& cKey);
-		virtual void SetAt(const CValue& cKey, CValue& cVal);
+		virtual bool SetAt(const CValue& varKeyValue, const CValue& varValue);
+		virtual bool GetAt(const CValue& varKeyValue, CValue& pvarValue);
 
 		friend class IRecordSetObject;
 
 	protected:
 
 		IRecordSetObject* m_ownerTable;
-		CMethods* m_methods;
+		CMethodHelper* m_methodHelper;
 
 		std::map<meta_identifier_t, CValueRecordSetRegisterColumnInfo*> m_columnInfo;
 	};
@@ -1243,25 +1349,26 @@ public:
 	class CRecordSetRegisterReturnLine : public IValueModelReturnLine {
 		wxDECLARE_DYNAMIC_CLASS(CRecordSetRegisterReturnLine);
 	public:
-		IRecordSetObject* m_ownerTable; 
+		IRecordSetObject* m_ownerTable;
 	public:
 
-		CRecordSetRegisterReturnLine(IRecordSetObject* ownerTable = NULL, const wxDataViewItem&line = wxDataViewItem(NULL));
+		CRecordSetRegisterReturnLine(IRecordSetObject* ownerTable = NULL,
+			const wxDataViewItem& line = wxDataViewItem(NULL));
 		virtual ~CRecordSetRegisterReturnLine();
 
 		virtual IValueTable* GetOwnerModel() const {
 			return m_ownerTable;
 		}
 
-		//set meta/get meta
-		virtual void SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal);
-		virtual CValue GetValueByMetaID(const meta_identifier_t& id) const;
+		virtual CMethodHelper* GetPMethods() const {
+			PrepareNames();
+			return m_methodHelper;
+		}
 
-		virtual CMethods* GetPMethods() const { PrepareNames(); return m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
-		virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
+		virtual void PrepareNames() const;
 
-		virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal); //установка атрибута
-		virtual CValue GetAttribute(attributeArg_t& aParams); //значение атрибута
+		virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal); //установка атрибута
+		virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal); //значение атрибута
 
 		virtual wxString GetTypeString() const {
 			return wxT("recordSetRegisterRow");
@@ -1273,7 +1380,7 @@ public:
 
 		friend class IRecordSetObject;
 	private:
-		CMethods* m_methods;
+		CMethodHelper* m_methodHelper;
 	};
 
 	class CRecordSetRegisterKeyValue : public CValue {
@@ -1294,12 +1401,16 @@ public:
 			//*                              Support methods                             *
 			//****************************************************************************
 
-			virtual CMethods* GetPMethods() const;                          // получить ссылку на класс помощник разбора имен атрибутов и методов
-			virtual void PrepareNames() const;                             // этот метод автоматически вызывается для инициализации имен атрибутов и методов
-			virtual CValue Method(methodArg_t& aParams);       // вызов метода
+			virtual CMethodHelper* GetPMethods() const {
+				PrepareNames();
+				return m_methodHelper;
+			}
 
-			virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);//установка атрибута
-			virtual CValue GetAttribute(attributeArg_t& aParams);//значение атрибута
+			virtual void PrepareNames() const;                             // этот метод автоматически вызывается для инициализации имен атрибутов и методов
+			virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);       // вызов метода
+
+			virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);//установка атрибута
+			virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);//значение атрибута
 
 			virtual wxString GetTypeString() const {
 				return wxT("recordSetRegisterKeyDescription");
@@ -1310,10 +1421,10 @@ public:
 			}
 
 		protected:
-			IRecordSetObject* m_recordSet;
-			CMethods* m_methods;
-
 			meta_identifier_t m_metaId;
+
+			CMethodHelper* m_methodHelper;
+			IRecordSetObject* m_recordSet;
 		};
 	public:
 
@@ -1328,12 +1439,16 @@ public:
 		//*                              Support methods                             *
 		//****************************************************************************
 
-		virtual CMethods* GetPMethods() const;                          // получить ссылку на класс помощник разбора имен атрибутов и методов
-		virtual void PrepareNames() const;                             // этот метод автоматически вызывается для инициализации имен атрибутов и методов
-		virtual CValue Method(methodArg_t& aParams);       // вызов метода
+		virtual CMethodHelper* GetPMethods() const {
+			PrepareNames();
+			return m_methodHelper;
+		}
 
-		virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);//установка атрибута
-		virtual CValue GetAttribute(attributeArg_t& aParams);//значение атрибута
+		virtual void PrepareNames() const;                             // этот метод автоматически вызывается для инициализации имен атрибутов и методов
+		virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);       // вызов метода
+
+		virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);//установка атрибута
+		virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);//значение атрибута
 
 		virtual wxString GetTypeString() const {
 			return wxT("recordSetRegisterKey");
@@ -1345,7 +1460,7 @@ public:
 
 	protected:
 		IRecordSetObject* m_recordSet;
-		CMethods* m_methods;
+		CMethodHelper* m_methodHelper;
 	};
 
 	CRecordSetRegisterColumnCollection* m_dataColumnCollection;
@@ -1375,6 +1490,12 @@ public:
 		ReadData();
 	}
 
+	//standart override 
+	virtual CMethodHelper* GetPMethods() const {
+		PrepareNames();
+		return m_methodHelper;
+	}
+
 	//counter
 	virtual void IncrRef() {
 		CValue::IncrRef();
@@ -1397,7 +1518,7 @@ public:
 		return m_metaObject;
 	};
 
-	virtual bool AutoCreateColumns() const { return false; }
+	virtual bool AutoCreateColumn() const { return false; }
 	virtual bool EditableLine(const wxDataViewItem& item, unsigned int col) const {
 		return false;
 	}
@@ -1429,22 +1550,22 @@ public:
 	virtual bool DeleteRecordSet() = 0;
 
 	//array
-	virtual CValue GetAt(const CValue& cKey);
+	virtual bool GetAt(const CValue& varKeyValue, CValue& pvarValue);
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const;
+	virtual CLASS_ID GetTypeClass() const;
 
 	virtual wxString GetTypeString() const;
 	virtual wxString GetString() const;
-	
+
 	//operator 
 	virtual operator CValue() const {
 		return this;
 	}
 
 	//Работа с итераторами 
-	virtual bool HasIterator() const override { 
-		return true; 
+	virtual bool HasIterator() const override {
+		return true;
 	}
 
 	virtual CValue GetItEmpty() override {
@@ -1482,8 +1603,8 @@ protected:
 protected:
 
 	//set meta/get meta
-	virtual void SetValueByMetaID(long line, const meta_identifier_t& id, const CValue& cVal);
-	virtual CValue GetValueByMetaID(long line, const meta_identifier_t& id) const;
+	virtual bool SetValueByMetaID(const wxDataViewItem& item, const meta_identifier_t& id, const CValue& varMetaVal);
+	virtual bool GetValueByMetaID(const wxDataViewItem& item, const meta_identifier_t& id, CValue& pvarMetaVal) const;
 
 protected:
 
@@ -1492,10 +1613,9 @@ protected:
 	bool m_objModified;
 	bool m_selected;
 
-	std::map<meta_identifier_t, CValue> m_keyValues;
-
+	valueArray_t m_keyValues;
 	IMetaObjectRegisterData* m_metaObject;
-	CMethods* m_methods;
+	CMethodHelper* m_methodHelper;
 };
 
 class IRecordManagerObject : public CValue,
@@ -1513,7 +1633,7 @@ public:
 	virtual ~IRecordManagerObject();
 
 	virtual void CreateEmptyKey();
-	virtual bool InitializeObject(const IRecordManagerObject* source = NULL, bool newRecord = false);
+	virtual bool InitializeObject(const IRecordManagerObject* source = NULL, bool newRecord = false, bool copyObject = false);
 
 	//copy new object
 	virtual IRecordManagerObject* CopyRegisterValue();
@@ -1537,8 +1657,11 @@ public:
 		return WriteRegister();
 	}
 
+	virtual bool IsNewObject() const {
+		return !m_recordSet->m_selected;
+	}
+
 	//default methods
-	virtual CValue CopyRegister() = 0;
 	virtual bool WriteRegister(bool replace = true) = 0;
 	virtual bool DeleteRegister() = 0;
 
@@ -1552,8 +1675,15 @@ public:
 	virtual bool IsModified() const;
 
 	//support source set/get data 
-	virtual void SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal);
-	virtual CValue GetValueByMetaID(const meta_identifier_t& id) const;
+	virtual bool SetValueByMetaID(const meta_identifier_t& id, const CValue& varMetaVal);
+	virtual bool GetValueByMetaID(const meta_identifier_t& id, CValue& pvarMetaVal) const;
+
+	CValue GetValueByMetaID(const meta_identifier_t& id) const {
+		CValue retValue;
+		if (GetValueByMetaID(id, retValue))
+			return retValue;
+		return CValue();
+	}
 
 	//support source data 
 	virtual CSourceExplorer GetSourceExplorer() const;
@@ -1568,8 +1698,8 @@ public:
 	virtual CValueForm* GetForm() const;
 
 	//support show 
-	virtual void ShowFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL) = 0;
-	virtual CValueForm* GetFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL) = 0;
+	virtual void ShowFormValue(const wxString& formName = wxEmptyString, IControlFrame* owner = NULL) = 0;
+	virtual CValueForm* GetFormValue(const wxString& formName = wxEmptyString, IControlFrame* owner = NULL) = 0;
 
 	//default showing
 	virtual void ShowValue() override {
@@ -1577,7 +1707,7 @@ public:
 	}
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const;
+	virtual CLASS_ID GetTypeClass() const;
 
 	virtual wxString GetTypeString() const;
 	virtual wxString GetString() const;
@@ -1607,11 +1737,8 @@ protected:
 
 	IValueTable::IValueModelReturnLine* m_recordLine;
 
-	CMethods* m_methods;
+	CMethodHelper* m_methodHelper;
 };
 #pragma endregion
-
-typedef IMetaObjectRecordDataFolderMutableRef::CMetaGroupAttributeObject CMetaGroupAttributeObject;
-typedef IMetaObjectRecordDataFolderMutableRef::CMetaGroupTableObject CMetaGroupTableObject;
 
 #endif 

@@ -3,8 +3,8 @@
 #include "postgresResultSet.h"
 #include "postgresPreparedStatement.h"
 
-#include "databaseLayer/databaseErrorCodes.h"
-#include "databaseLayer/databaseLayerException.h"
+#include <3rdparty/databaseLayer/databaseErrorCodes.h>
+#include <3rdparty/databaseLayer/databaseLayerException.h>
 
 // ctor
 PostgresDatabaseLayer::PostgresDatabaseLayer()
@@ -146,8 +146,8 @@ bool PostgresDatabaseLayer::Open()
 
 	wxCharBuffer serverCharBuffer;
 	const char* pHost = NULL;
-	wxCharBuffer pDatabaseBuffer = ConvertToUnicodeStream(m_strDatabase);
-	const char* pDatabase = pDatabaseBuffer;
+	wxCharBuffer databaseBuffer;
+	const char* pDatabase = NULL;
 	wxCharBuffer userCharBuffer;
 	const char* pUser = NULL;
 	wxCharBuffer passwordCharBuffer;
@@ -181,7 +181,7 @@ bool PostgresDatabaseLayer::Open()
 		pPort = portCharBuffer;
 	}
 
-	m_pDatabase = m_pInterface->GetPQsetdbLogin()(pHost, pPort, pOptions, pTty, pDatabase, pUser, pPassword);
+	m_pDatabase = m_pInterface->GetPQsetdbLogin()(pHost, pPort, pOptions, pTty, NULL, pUser, pPassword);
 	if (m_pInterface->GetPQstatus()((PGconn*)m_pDatabase) == CONNECTION_BAD)
 	{
 		SetErrorCode(PostgresDatabaseLayer::TranslateErrorCode(m_pInterface->GetPQstatus()((PGconn*)m_pDatabase)));
@@ -189,10 +189,45 @@ bool PostgresDatabaseLayer::Open()
 		ThrowDatabaseException();
 		return false;
 	}
+	else
+	{
+		m_pInterface->GetPQsetClientEncoding()((PGconn*)m_pDatabase, "UTF-8");
+		wxCSConv conv((const wxChar*)(m_pInterface->GetPQencodingToChar()(m_pInterface->GetPQclientEncoding()((PGconn*)m_pDatabase))));
+		SetEncoding(&conv);
+	}
 
-	m_pInterface->GetPQsetClientEncoding()((PGconn*)m_pDatabase, "UTF-8");
-	wxCSConv conv((const wxChar*)(m_pInterface->GetPQencodingToChar()(m_pInterface->GetPQclientEncoding()((PGconn*)m_pDatabase))));
-	SetEncoding(&conv);
+	if (!DatabaseExists(m_strDatabase)) {
+		bool result = RunQuery("CREATE DATABASE " + m_strDatabase, false) != DATABASE_LAYER_QUERY_RESULT_ERROR;
+		if (!result)
+			return false;
+		RunQuery("GRANT ALL PRIVILEGES ON DATABASE " + m_strDatabase + " to " + m_strUser, false);
+	}
+
+	if (m_strDatabase != _(""))
+	{
+		databaseBuffer = ConvertToUnicodeStream(m_strDatabase);
+		pDatabase = databaseBuffer;
+	}
+
+	if (m_pDatabase != NULL) {
+		m_pInterface->GetPQfinish()((PGconn*)m_pDatabase);
+		m_pDatabase = NULL;
+	}
+
+	m_pDatabase = m_pInterface->GetPQsetdbLogin()(pHost, pPort, pOptions, pTty, databaseBuffer, pUser, pPassword);
+	if (m_pInterface->GetPQstatus()((PGconn*)m_pDatabase) == CONNECTION_BAD)
+	{
+		SetErrorCode(PostgresDatabaseLayer::TranslateErrorCode(m_pInterface->GetPQstatus()((PGconn*)m_pDatabase)));
+		SetErrorMessage(ConvertFromUnicodeStream(m_pInterface->GetPQerrorMessage()((PGconn*)m_pDatabase)));
+		ThrowDatabaseException();
+		return false;
+	}
+	else 
+	{
+		m_pInterface->GetPQsetClientEncoding()((PGconn*)m_pDatabase, "UTF-8");
+		wxCSConv conv((const wxChar*)(m_pInterface->GetPQencodingToChar()(m_pInterface->GetPQclientEncoding()((PGconn*)m_pDatabase))));
+		SetEncoding(&conv);
+	}
 
 	return true;
 }
@@ -307,9 +342,9 @@ int PostgresDatabaseLayer::RunQuery(const wxString& strQuery, bool WXUNUSED(bPar
 	}
 	else
 	{
-		wxString rowsAffected = ConvertFromUnicodeStream(m_pInterface->GetPQcmdTuples()(pResultCode));
-		long rows = -1;
-		rowsAffected.ToLong(&rows);
+		const wxString& rowsAffected = ConvertFromUnicodeStream(m_pInterface->GetPQcmdTuples()(pResultCode));
+		long rows = 1;
+		//rowsAffected.ToLong(&rows);
 		m_pInterface->GetPQclear()(pResultCode);
 		return (int)rows;
 	}
@@ -348,6 +383,67 @@ PreparedStatement* PostgresDatabaseLayer::PrepareStatement(const wxString& strQu
 	return pStatement;
 }
 
+bool PostgresDatabaseLayer::DatabaseExists(const wxString& database)
+{
+	// Initialize variables
+	bool bReturn = false;
+	// Keep these variables outside of scope so that we can clean them up
+	//  in case of an error
+	PreparedStatement* pStatement = NULL;
+	DatabaseResultSet* pResult = NULL;
+
+#ifndef DONT_USE_DATABASE_LAYER_EXCEPTIONS
+	try
+	{
+#endif
+		wxString query = _("SELECT COUNT(*) FROM pg_catalog.pg_database WHERE datname=?;");
+		pStatement = PrepareStatement(query);
+		if (pStatement != NULL) {
+			pStatement->SetParamString(1, database.Lower());
+			pResult = pStatement->ExecuteQuery();
+			if (pResult) {
+				if (pResult->Next()) {
+					if (pResult->GetResultInt(1) != 0) {
+						bReturn = true;
+					}
+				}
+			}
+		}
+#ifndef DONT_USE_DATABASE_LAYER_EXCEPTIONS
+	}
+	catch (DatabaseLayerException& e)
+	{
+		if (pResult != NULL)
+		{
+			CloseResultSet(pResult);
+			pResult = NULL;
+		}
+
+		if (pStatement != NULL)
+		{
+			CloseStatement(pStatement);
+			pStatement = NULL;
+		}
+
+		throw e;
+	}
+#endif
+
+	if (pResult != NULL)
+	{
+		CloseResultSet(pResult);
+		pResult = NULL;
+	}
+
+	if (pStatement != NULL)
+	{
+		CloseStatement(pStatement);
+		pStatement = NULL;
+	}
+
+	return bReturn;
+}
+
 bool PostgresDatabaseLayer::TableExists(const wxString& table)
 {
 	// Initialize variables
@@ -363,16 +459,12 @@ bool PostgresDatabaseLayer::TableExists(const wxString& table)
 #endif
 		wxString query = _("SELECT COUNT(*) FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_name=?;");
 		pStatement = PrepareStatement(query);
-		if (pStatement)
-		{
-			pStatement->SetParamString(1, table);
+		if (pStatement != NULL) {
+			pStatement->SetParamString(1, table.Lower());
 			pResult = pStatement->ExecuteQuery();
-			if (pResult)
-			{
-				if (pResult->Next())
-				{
-					if (pResult->GetResultInt(1) != 0)
-					{
+			if (pResult) {
+				if (pResult->Next()) {
+					if (pResult->GetResultInt(1) != 0) {
 						bReturn = true;
 					}
 				}
@@ -428,16 +520,12 @@ bool PostgresDatabaseLayer::ViewExists(const wxString& view)
 #endif
 		wxString query = _("SELECT COUNT(*) FROM information_schema.tables WHERE table_type='VIEW' AND table_name=?;");
 		pStatement = PrepareStatement(query);
-		if (pStatement)
-		{
-			pStatement->SetParamString(1, view);
+		if (pStatement) {
+			pStatement->SetParamString(1, view.Lower());
 			pResult = pStatement->ExecuteQuery();
-			if (pResult)
-			{
-				if (pResult->Next())
-				{
-					if (pResult->GetResultInt(1) != 0)
-					{
+			if (pResult) {
+				if (pResult->Next()) {
+					if (pResult->GetResultInt(1) != 0) {
 						bReturn = true;
 					}
 				}
@@ -473,7 +561,7 @@ bool PostgresDatabaseLayer::ViewExists(const wxString& view)
 	{
 		CloseStatement(pStatement);
 		pStatement = NULL;
-	}
+}
 
 	return bReturn;
 }
@@ -493,9 +581,9 @@ wxArrayString PostgresDatabaseLayer::GetTables()
 		while (pResult->Next())
 		{
 			returnArray.Add(pResult->GetResultString(1));
-		}
+}
 #ifndef DONT_USE_DATABASE_LAYER_EXCEPTIONS
-	}
+}
 	catch (DatabaseLayerException& e)
 	{
 		if (pResult != NULL)
@@ -512,10 +600,10 @@ wxArrayString PostgresDatabaseLayer::GetTables()
 	{
 		CloseResultSet(pResult);
 		pResult = NULL;
-	}
+}
 
 	return returnArray;
-}
+	}
 
 wxArrayString PostgresDatabaseLayer::GetViews()
 {
@@ -532,7 +620,7 @@ wxArrayString PostgresDatabaseLayer::GetViews()
 		while (pResult->Next())
 		{
 			returnArray.Add(pResult->GetResultString(1));
-		}
+}
 #ifndef DONT_USE_DATABASE_LAYER_EXCEPTIONS
 	}
 	catch (DatabaseLayerException& e)

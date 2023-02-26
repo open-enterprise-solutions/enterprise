@@ -1,8 +1,8 @@
 #ifndef _REFERENCE_H__
 #define _REFERENCE_H__
 
-#include "compiler/value.h"
-#include "common/valueInfo.h"
+#include "core/compiler/value.h"
+#include "core/common/valueInfo.h"
 
 struct reference_t;
 
@@ -10,10 +10,13 @@ class CReferenceDataObject : public CValue,
 	public IObjectValueInfo {
 	wxDECLARE_DYNAMIC_CLASS(CReferenceDataObject);
 private:
-
-	CReferenceDataObject() : CValue(eValueTypes::TYPE_VALUE, true), m_initializedRef(false)  {}
+	enum helperAlias {
+		eProperty,
+		eTable
+	};
+private:
+	CReferenceDataObject() : CValue(eValueTypes::TYPE_VALUE, true), m_initializedRef(false) {}
 	CReferenceDataObject(IMetaObjectRecordDataRef* metaObject, const Guid& objGuid = wxNullGuid);
-
 public:
 
 	reference_t* GetReferenceData() const {
@@ -21,40 +24,76 @@ public:
 	}
 
 	void PrepareRef(bool createData = true);
+
 	virtual ~CReferenceDataObject();
 
 	static CReferenceDataObject* Create(IMetadata* metaData, const meta_identifier_t& id, const Guid& objGuid = wxNullGuid);
 	static CReferenceDataObject* Create(IMetaObjectRecordDataRef* metaObject, const Guid& objGuid = wxNullGuid);
-	
+
 	static CReferenceDataObject* Create(IMetadata* metaData, void* ptr);
 	static CReferenceDataObject* CreateFromPtr(IMetadata* metaData, void* ptr);
 
+	//operator '>'
+	virtual inline bool CompareValueGT(const CValue& cParam) const {
+		CReferenceDataObject* rhs = dynamic_cast<CReferenceDataObject*>(cParam.GetRef());
+		if (rhs != NULL)
+			return m_metaObject == rhs->m_metaObject && m_objGuid > rhs->m_objGuid;
+		return false;
+	}
+	
+	//operator '>='
+	virtual inline bool CompareValueGE(const CValue& cParam) const {
+		CReferenceDataObject* rhs = dynamic_cast<CReferenceDataObject*>(cParam.GetRef());
+		if (rhs != NULL)
+			return m_metaObject == rhs->m_metaObject && m_objGuid >= rhs->m_objGuid;
+		return false;
+	}
+
+	//operator '<'
+	virtual inline bool CompareValueLS(const CValue& cParam) const {
+		CReferenceDataObject* rhs = dynamic_cast<CReferenceDataObject*>(cParam.GetRef());
+		if (rhs != NULL)
+			return m_metaObject == rhs->m_metaObject && m_objGuid < rhs->m_objGuid;
+		return false;
+	}
+
+	//operator '<='
+	virtual inline bool CompareValueLE(const CValue& cParam) const {
+		CReferenceDataObject* rhs = dynamic_cast<CReferenceDataObject*>(cParam.GetRef());
+		if (rhs != NULL)
+			return m_metaObject == rhs->m_metaObject && m_objGuid <= rhs->m_objGuid;
+		return false;
+	}
+
 	//operator '=='
-	virtual inline bool CompareValueEQ(const CValue& cParam) const
-	{
-		CReferenceDataObject* reference = dynamic_cast<CReferenceDataObject*>(cParam.GetRef());
-		if (reference != NULL)
-			return m_objGuid == reference->m_objGuid && m_metaObject == reference->m_metaObject;
+	virtual inline bool CompareValueEQ(const CValue& cParam) const {
+		CReferenceDataObject* rhs = dynamic_cast<CReferenceDataObject*>(cParam.GetRef());
+		if (rhs != NULL)
+			return m_metaObject == rhs->m_metaObject && m_objGuid == rhs->m_objGuid;
 		return false;
 	}
 
 	//operator '!='
-	virtual inline bool CompareValueNE(const CValue& cParam) const
-	{
-		CReferenceDataObject* reference = dynamic_cast<CReferenceDataObject*>(cParam.GetRef());
-		if (reference != NULL)
-			return m_objGuid != reference->m_objGuid || m_metaObject != reference->m_metaObject;
+	virtual inline bool CompareValueNE(const CValue& cParam) const {
+		CReferenceDataObject* rhs = dynamic_cast<CReferenceDataObject*>(cParam.GetRef());
+		if (rhs != NULL)
+			return m_metaObject != rhs->m_metaObject || m_objGuid != rhs->m_objGuid;
 		return false;
 	}
 
-	virtual bool FindValue(const wxString& findData, std::vector<CValue>& foundedObjects);
+	virtual bool FindValue(const wxString& findData, std::vector<CValue>& foundedObjects) const;
 
 	//support source set/get data 
-	virtual void SetValueByMetaID(const meta_identifier_t& id, const CValue& cVal);
-	virtual CValue GetValueByMetaID(const meta_identifier_t& id) const;
+	virtual bool SetValueByMetaID(const meta_identifier_t& id, const CValue& varMetaVal);
+	virtual bool GetValueByMetaID(const meta_identifier_t& id, CValue& pvarMetaVal) const;
+
+	//fill values from array 
+	virtual void FillFromModel(const valueArray_t& arr);
 
 	//get metadata from object 
-	virtual IMetaObjectRecordData* GetMetaObject() const;
+	virtual IMetaObjectRecordData* GetMetaObject() const {
+		return (IMetaObjectRecordData *)m_metaObject;
+	}
 
 	//support show 
 	virtual void ShowValue();
@@ -82,27 +121,32 @@ public:
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual CMethods* GetPMethods() const;                          // получить ссылку на класс помощник разбора имен атрибутов и методов
-	virtual void PrepareNames() const;                             // этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual CValue Method(methodArg_t& aParams);       // вызов метода
+	virtual CMethodHelper* GetPMethods() const {
+		CReferenceDataObject::PrepareNames();
+		return m_methodHelper;
+	};
+
+	virtual void PrepareNames() const;
 
 	//****************************************************************************
 	//*                              Override attribute                          *
 	//****************************************************************************
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t& aParams);                   //значение атрибута
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);       
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   
+
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 
 	//****************************************************************************
 	//*                              Override type                               *
 	//****************************************************************************
 
 	//Get ref class 
-	virtual CLASS_ID GetClassType() const;
+	virtual CLASS_ID GetTypeClass() const;
 
 	virtual wxString GetString() const;
 	virtual wxString GetTypeString() const;
 
-	friend class CMetaTypeRefObjectValueSingle; 
+	friend class CMetaTypeRefObjectValueSingle;
 	friend class IRecordDataObjectRef;
 
 private:
@@ -111,9 +155,9 @@ private:
 
 protected:
 
-	bool m_initializedRef; 
+	bool m_initializedRef;
 
-	CMethods* m_methods;
+	CMethodHelper* m_methodHelper;
 	IMetaObjectRecordDataRef* m_metaObject;
 	reference_t* m_reference_impl;
 

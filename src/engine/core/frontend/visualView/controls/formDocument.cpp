@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "form.h"
-#include "metadata/metaObjects/objects/object.h"
+#include "core/metadata/metaObjects/objects/object.h"
 #include "frontend/visualView/visualHost.h"
 #include "frontend/visualView/printout/formPrintOut.h"
 #include "frontend/mainFrame.h"
@@ -130,28 +130,28 @@ wxPrintout* CVisualView::OnCreatePrintout()
 
 void CVisualView::OnUpdate(wxView* sender, wxObject* hint)
 {
-	if (m_valueForm != NULL) {
+	if (m_valueForm != NULL)
 		m_valueForm->UpdateForm();
-	}
 }
 
 bool CVisualView::OnClose(bool deleteWindow)
 {
 	if (!deleteWindow) {
 		if (m_valueForm->m_valueFormDocument
-			&& !m_valueForm->CloseDocumentForm())
+			&& !m_valueForm->CloseDocForm())
 			return false;
 	}
 
-	if (CMainFrame::Get())
-		Activate(false);
+	//if (wxAuiDocMDIFrame::Get())
+	//	Activate(false);
 
 	if (deleteWindow) {
 		m_viewFrame->Destroy();
 		m_viewFrame = NULL;
 	}
 
-	return m_viewDocument ? m_viewDocument->Close() : true;
+	return m_viewDocument ?
+		m_viewDocument->Close() : true;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -164,8 +164,7 @@ CValueForm* CValueForm::FindFormByGuid(const CUniqueKey& guid)
 	std::map<const CUniqueKey, CVisualDocument*>::iterator foundedForm =
 		std::find_if(s_aOpenedForms.begin(), s_aOpenedForms.end(),
 			[guid](std::pair<const CUniqueKey, CVisualDocument* >& pair) {
-				const CUniqueKey& uniqueKey = pair.first;
-				return uniqueKey == guid;
+				const CUniqueKey& uniqueKey = pair.first; return uniqueKey == guid;
 			}
 	);
 
@@ -185,15 +184,14 @@ bool CValueForm::UpdateFormKey(const CUniquePairKey& formKey)
 	std::map<const CUniqueKey, CVisualDocument*>::iterator foundedForm =
 		std::find_if(s_aOpenedForms.begin(), s_aOpenedForms.end(),
 			[formKey](std::pair<const CUniqueKey, CVisualDocument* >& pair) {
-				const CUniqueKey& uniqueKey = pair.first;
-				return uniqueKey.GetGuid() == formKey.GetGuid();
+				const CUniqueKey& uniqueKey = pair.first; return uniqueKey.GetGuid() == formKey.GetGuid();
 			}
 	);
 
 	if (foundedForm != s_aOpenedForms.end()) {
 		CVisualDocument* visualDocument = foundedForm->second;
 		wxASSERT(visualDocument);
-		s_aOpenedForms.erase(formKey);
+		s_aOpenedForms.erase(foundedForm);
 		s_aOpenedForms.insert_or_assign(formKey, visualDocument);
 		CVisualView* visualView = visualDocument->GetFirstView();
 		wxASSERT(visualView);
@@ -222,9 +220,10 @@ IMetaObjectWrapperData* CValueForm::GetMetaObject() const
 		m_sourceObject->GetMetaObject() : NULL;
 }
 
-#include "common/docManager.h"
+#include <wx/toplevel.h>
+#include "core/frontend/docView/docManager.h"
 
-bool CValueForm::CreateDocumentForm(CDocument* docParent, bool demoRun)
+bool CValueForm::CreateDocForm(CDocument* docParent, bool demoRun)
 {
 	if (m_valueFormDocument != NULL) {
 		ActivateForm();
@@ -239,16 +238,26 @@ bool CValueForm::CreateDocumentForm(CDocument* docParent, bool demoRun)
 		std::map<const CUniqueKey, CVisualDocument*>::iterator foundedForm =
 			std::find_if(s_aOpenedForms.begin(), s_aOpenedForms.end(),
 				[formKey](std::pair<const CUniqueKey, CVisualDocument* >& pair) {
-					const CUniqueKey& uniqueKey = pair.first;
-					return uniqueKey == formKey;
+					const CUniqueKey& uniqueKey = pair.first; return uniqueKey == formKey;
 				}
 		);
 
-		if (foundedForm != s_aOpenedForms.end()) {
-			CVisualDocument* foundedVisualDocument = foundedForm->second;
-			wxASSERT(foundedVisualDocument);
-			foundedVisualDocument->Activate();
-			return true;
+		ISourceDataObject* srcData = GetSourceObject();
+		if (srcData != NULL && !srcData->IsNewObject()) {
+			if (foundedForm != s_aOpenedForms.end()) {
+				CVisualDocument* foundedVisualDocument = foundedForm->second;
+				wxASSERT(foundedVisualDocument);
+				foundedVisualDocument->Activate();
+				return true;
+			}
+		}
+		else if (srcData == NULL) {
+			if (foundedForm != s_aOpenedForms.end()) {
+				CVisualDocument* foundedVisualDocument = foundedForm->second;
+				wxASSERT(foundedVisualDocument);
+				foundedVisualDocument->Activate();
+				return true;
+			}
 		}
 
 		m_valueFormDocument = new CVisualDocument(m_formKey);
@@ -271,7 +280,7 @@ bool CValueForm::CreateDocumentForm(CDocument* docParent, bool demoRun)
 			m_sourceObject->GetMetaObject();
 		m_valueFormDocument->SetIcon(metaValue->GetIcon());
 	}
-	else {
+	else if (m_metaFormObject != NULL) {
 		m_valueFormDocument->SetIcon(m_metaFormObject->GetIcon());
 	}
 
@@ -299,11 +308,11 @@ bool CValueForm::CreateDocumentForm(CDocument* docParent, bool demoRun)
 	view->SetDocument(m_valueFormDocument);
 
 	//set window if is not demonstation
-	if (!demoRun) {
+	if (!demoRun)
 		s_aOpenedForms.insert_or_assign(m_formKey, m_valueFormDocument);
-	}
 
 	if (appData->EnterpriseMode()) {
+
 		CValue bCancel = false;
 		if (m_procUnit != NULL) {
 			m_procUnit->CallFunction("beforeOpen", bCancel);
@@ -318,27 +327,35 @@ bool CValueForm::CreateDocumentForm(CDocument* docParent, bool demoRun)
 		}
 	}
 
-	// create a child valueForm of appropriate class for the current mode
-	CMainFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE);
-
-	if (demoRun) {
-		g_visualHostContext = NULL;
+	bool isModal = false;
+	for (wxWindow* window : wxTopLevelWindows) {
+		if (window->IsKindOf(CLASSINFO(wxDialog))) {
+			if (((wxDialog*)window)->IsModal()) {
+				isModal = true; break;
+			}
+		}
 	}
 
-	CVisualHost* visualView =
-		new CVisualHost(m_valueFormDocument, this, view->GetFrame(), demoRun);
+	long style = wxDEFAULT_FRAME_STYLE;
 
+	if (isModal)
+		style = style | wxCREATE_SDI_FRAME;
+
+	// create a child valueForm of appropriate class for the current mode
+	wxAuiDocMDIFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, style);
+
+	CVisualHost* visualView = new CVisualHost(m_valueFormDocument, this, view->GetFrame(), demoRun);
 	//set visual view
 	m_valueFormDocument->SetVisualView(visualView);
 
-	if (!visualView->IsDemonstration()) {
+	if (!visualView->IsDemonstration())
 		m_valueFormDocument->Modify(m_formModified);
-	}
 
-	//create frame 
+	//create and update show frame
+	visualView->Freeze();
 	visualView->CreateFrame();
-	//update and show frame
 	visualView->UpdateFrame();
+	visualView->Thaw();
 
 	if (!view->ShowFrame())
 		return false;
@@ -346,18 +363,25 @@ bool CValueForm::CreateDocumentForm(CDocument* docParent, bool demoRun)
 	return view.release() != NULL;
 }
 
-bool CValueForm::CloseDocumentForm()
+bool CValueForm::CloseDocForm()
 {
 	if (m_valueFormDocument == NULL)
 		return false;
+
 	CValue bCancel = false;
-	if (m_procUnit != NULL) {
+	if (m_procUnit != NULL)
 		m_procUnit->CallFunction("beforeClose", bCancel);
-	}
 	if (bCancel.GetBoolean())
 		return false;
-	if (m_procUnit != NULL) {
+
+	if (m_procUnit != NULL)
 		m_procUnit->CallFunction("onClose");
+
+	if (m_controlOwner != NULL) {
+		CValueForm* ownerForm = m_controlOwner->GetOwnerForm();
+		if (ownerForm != NULL)
+			ownerForm->ActivateForm();
 	}
+
 	return true;
 }

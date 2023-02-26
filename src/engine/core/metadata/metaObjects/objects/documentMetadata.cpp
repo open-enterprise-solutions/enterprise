@@ -5,13 +5,26 @@
 
 #include "document.h"
 #include "list/objectList.h"
-#include "metadata/metadata.h"
-#include "metadata/moduleManager/moduleManager.h"
+#include "core/metadata/metadata.h"
+#include "core/metadata/moduleManager/moduleManager.h"
 
 #define objectModule wxT("objectModule")
 #define managerModule wxT("managerModule")
 
 wxIMPLEMENT_DYNAMIC_CLASS(CMetaObjectDocument, IMetaObjectRecordDataMutableRef);
+
+//********************************************************************************************
+
+class CListDocumentDataObjectRef : public CListDataObjectRef {
+public:
+	CListDocumentDataObjectRef(CMetaObjectDocument* metaObject = NULL, const form_identifier_t& formType = wxNOT_FOUND, bool choiceMode = false) :
+		CListDataObjectRef(metaObject, formType, choiceMode)
+	{
+		IListDataObject::AppendSort(metaObject->GetDocumentNumber(), true, false);
+		IListDataObject::AppendSort(metaObject->GetDocumentDate(), true, true);
+		IListDataObject::AppendSort(metaObject->GetDataReference(), true, true, true);
+	}
+};
 
 //********************************************************************************************
 //*                                      metadata                                            *
@@ -21,22 +34,16 @@ CMetaObjectDocument::CMetaObjectDocument() : IMetaObjectRecordDataMutableRef()
 {
 	//create default attributes
 	m_attributeNumber = CMetaDefaultAttributeObject::CreateString(wxT("number"), _("Number"), wxEmptyString, 11, true);
-	m_attributeNumber->SetClsid(g_metaDefaultAttributeCLSID);
-
 	//set child/parent
 	m_attributeNumber->SetParent(this);
 	AddChild(m_attributeNumber);
 
 	m_attributeDate = CMetaDefaultAttributeObject::CreateDate(wxT("date"), _("Date"), wxEmptyString, eDateFractions::eDateFractions_DateTime, true);
-	m_attributeDate->SetClsid(g_metaDefaultAttributeCLSID);
-
 	//set child/parent
 	m_attributeDate->SetParent(this);
 	AddChild(m_attributeDate);
 
 	m_attributePosted = CMetaDefaultAttributeObject::CreateBoolean(wxT("posted"), _("Posted"), wxEmptyString);
-	m_attributePosted->SetClsid(g_metaDefaultAttributeCLSID);
-
 	//set child/parent
 	m_attributePosted->SetParent(this);
 	AddChild(m_attributePosted);
@@ -114,8 +121,12 @@ ISourceDataObject* CMetaObjectDocument::CreateObjectData(IMetaFormObject* metaOb
 	switch (metaObject->GetTypeForm())
 	{
 	case eFormObject: return CreateObjectValue(); break;
-	case eFormList: return new CListDataObjectRef(this, metaObject->GetTypeForm()); break;
-	case eFormSelect: return new CListDataObjectRef(this, metaObject->GetTypeForm(), true); break;
+	case eFormList:
+		return new CListDocumentDataObjectRef(this, metaObject->GetTypeForm());
+		break;
+	case eFormSelect:
+		return new CListDocumentDataObjectRef(this, metaObject->GetTypeForm(), true);
+		break;
 	}
 
 	return NULL;
@@ -142,7 +153,7 @@ IRecordDataObjectRef* CMetaObjectDocument::CreateObjectRefValue(const Guid& objG
 #include "frontend/visualView/controls/form.h"
 #include "utils/stringUtils.h"
 
-CValueForm* CMetaObjectDocument::GetObjectForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectDocument::GetObjectForm(const wxString& formName, IControlFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -161,8 +172,7 @@ CValueForm* CMetaObjectDocument::GetObjectForm(const wxString& formName, IValueF
 
 	if (defList == NULL) {
 		IRecordDataObject* objectData = CreateObjectValue();
-		CValueForm* valueForm = new CValueForm;
-		valueForm->InitializeForm(ownerControl, NULL,
+		CValueForm* valueForm = new CValueForm(ownerControl, NULL,
 			objectData, formGuid
 		);
 		valueForm->BuildForm(CMetaObjectDocument::eFormObject);
@@ -174,7 +184,7 @@ CValueForm* CMetaObjectDocument::GetObjectForm(const wxString& formName, IValueF
 	);
 }
 
-CValueForm* CMetaObjectDocument::GetListForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectDocument::GetListForm(const wxString& formName, IControlFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -192,20 +202,19 @@ CValueForm* CMetaObjectDocument::GetListForm(const wxString& formName, IValueFra
 	}
 
 	if (defList == NULL) {
-		CValueForm* valueForm = new CValueForm();
-		valueForm->InitializeForm(ownerControl, NULL,
-			new CListDataObjectRef(this, CMetaObjectDocument::eFormList), formGuid
+		CValueForm* valueForm = new CValueForm(ownerControl, NULL,
+			new CListDocumentDataObjectRef(this, CMetaObjectDocument::eFormList), formGuid
 		);
 		valueForm->BuildForm(CMetaObjectDocument::eFormList);
 		return valueForm;
 	}
 
 	return defList->GenerateFormAndRun(
-		ownerControl, new CListDataObjectRef(this, defList->GetTypeForm()), formGuid
+		ownerControl, new CListDocumentDataObjectRef(this, defList->GetTypeForm()), formGuid
 	);
 }
 
-CValueForm* CMetaObjectDocument::GetSelectForm(const wxString& formName, IValueFrame* ownerControl, const CUniqueKey& formGuid)
+CValueForm* CMetaObjectDocument::GetSelectForm(const wxString& formName, IControlFrame* ownerControl, const CUniqueKey& formGuid)
 {
 	CMetaFormObject* defList = NULL;
 
@@ -223,16 +232,15 @@ CValueForm* CMetaObjectDocument::GetSelectForm(const wxString& formName, IValueF
 	}
 
 	if (defList == NULL) {
-		CValueForm* valueForm = new CValueForm();
-		valueForm->InitializeForm(ownerControl, NULL,
-			new CListDataObjectRef(this, CMetaObjectDocument::eFormSelect, true), formGuid
+		CValueForm* valueForm = new CValueForm(ownerControl, NULL,
+			new CListDocumentDataObjectRef(this, CMetaObjectDocument::eFormSelect, true), formGuid
 		);
 		valueForm->BuildForm(CMetaObjectDocument::eFormSelect);
 		return valueForm;
 	}
 
 	return defList->GenerateFormAndRun(
-		ownerControl, new CListDataObjectRef(this, defList->GetTypeForm()), formGuid
+		ownerControl, new CListDocumentDataObjectRef(this, defList->GetTypeForm()), formGuid
 	);
 }
 
@@ -280,12 +288,12 @@ OptionList* CMetaObjectDocument::GetFormSelect(PropertyOption*)
 
 wxString CMetaObjectDocument::GetDescription(const IObjectValueInfo* objValue) const
 {
-	CValue vDate = objValue->GetValueByMetaID(m_attributeDate->GetMetaID());
-	CValue vNumber = objValue->GetValueByMetaID(m_attributeNumber->GetMetaID());
-
-	wxString decr;
-	decr << GetSynonym() << wxT(" ") << vNumber.GetString() << wxT(" ") << vDate.GetString();
-	return decr;
+	CValue vDate, vNumber;
+	if (!objValue->GetValueByMetaID(m_attributeDate->GetMetaID(), vDate))
+		return wxEmptyString;
+	if (!objValue->GetValueByMetaID(m_attributeNumber->GetMetaID(), vNumber))
+		return wxEmptyString;
+	return GetSynonym() << wxT(" ") << vNumber.GetString() << wxT(" ") << vDate.GetString();
 }
 
 std::vector<IMetaAttributeObject*> CMetaObjectDocument::GetDefaultAttributes() const
@@ -464,9 +472,6 @@ bool CMetaObjectDocument::OnSaveMetaObject()
 
 bool CMetaObjectDocument::OnDeleteMetaObject()
 {
-	IModuleManager* moduleManager = m_metaData->GetModuleManager();
-	wxASSERT(moduleManager);
-
 	if (!m_attributeNumber->OnDeleteMetaObject())
 		return false;
 
@@ -507,7 +512,7 @@ bool CMetaObjectDocument::OnReloadMetaObject()
 	return true;
 }
 
-#include "metadata/singleMetaTypes.h"
+#include "core/metadata/singleClass.h"
 
 bool CMetaObjectDocument::OnBeforeRunMetaObject(int flags)
 {
@@ -635,4 +640,4 @@ void CMetaObjectDocument::OnRemoveMetaForm(IMetaFormObject* metaForm)
 //***********************************************************************
 
 METADATA_REGISTER(CMetaObjectDocument, "document", g_metaDocumentCLSID);
-SO_VALUE_REGISTER(CObjectDocument::CRecordRegister, "recordRegister", CRecordRegister, TEXT2CLSID("VL_RECR"));
+SO_VALUE_REGISTER(CObjectDocument::CRecordRegister, "recordRegister", TEXT2CLSID("VL_RECR"));

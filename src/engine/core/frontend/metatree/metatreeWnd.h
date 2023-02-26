@@ -1,10 +1,9 @@
 #ifndef _METATREE_H__
 #define _METATREE_H__
 
-#include "common/docinfo.h"
-#include "metadata/metadata.h"
-#include "compiler/debugger/debugEvent.h"
-#include "frontend/objinspect/events.h"
+#include "core/frontend/docView/docView.h"
+#include "core/metadata/metadata.h"
+#include "core/compiler/debugger/debugEvent.h"
 
 #include <wx/aui/aui.h>
 #include <wx/treectrl.h>
@@ -25,6 +24,8 @@ public:
 	IMetadataTree(CDocument* docParent, wxWindow* parent, int id = wxID_ANY) : wxPanel(parent, id), m_docParent(docParent), m_bReadOnly(false) {}
 
 	virtual void Modify(bool modify);
+
+	virtual void SetMetaName(const wxString& confName) {};
 
 	virtual bool OpenFormMDI(IMetaObject* metaObject);
 	virtual bool OpenFormMDI(IMetaObject* metaObject, CDocument*& foundedDoc);
@@ -89,6 +90,8 @@ protected:
 	//список открытых элементов 
 	std::vector <CDocument*> m_metaOpenedForms;
 };
+
+#define metadataTree CMetadataTree::GetMetadataTree()
 
 class CMetadataTree : public IMetadataTree {
 	wxDECLARE_DYNAMIC_CLASS(CMetadataTree);
@@ -194,7 +197,6 @@ private:
 		void OnPasteItem(wxCommandEvent& event);
 
 		void OnDebugEvent(wxDebugEvent& event);
-		void OnPropertyModified(wxFramePropertyEvent& event);
 
 		void OnSelecting(wxTreeEvent& event);
 		void OnSelected(wxTreeEvent& event);
@@ -321,8 +323,9 @@ public:
 	CMetadataTree();
 	CMetadataTree(wxWindow* parent, int id = wxID_ANY);
 	CMetadataTree(CDocument* docParent, wxWindow* parent, int id = wxID_ANY);
-
 	virtual ~CMetadataTree();
+
+	static CMetadataTree* GetMetadataTree();
 
 	void InitTree();
 
@@ -330,8 +333,6 @@ public:
 	bool Save();
 
 	void ClearTree();
-
-	wxDECLARE_EVENT_TABLE();
 };
 
 #endif 

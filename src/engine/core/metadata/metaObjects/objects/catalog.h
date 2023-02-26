@@ -33,10 +33,10 @@ class CMetaObjectCatalog : public IMetaObjectRecordDataFolderMutableRef {
 
 	virtual OptionList* GetFormType() override {
 		OptionList* optionlist = new OptionList;
-		optionlist->AddOption(wxT("formObject"),	  _("Form object"),	      eFormObject);
-		optionlist->AddOption(wxT("formFolder"),	  _("Form group"),        eFormGroup);
-		optionlist->AddOption(wxT("formList"),		  _("Form list"),         eFormList);
-		optionlist->AddOption(wxT("formSelect"),	  _("Form select"),       eFormSelect);
+		optionlist->AddOption(wxT("formObject"), _("Form object"), eFormObject);
+		optionlist->AddOption(wxT("formFolder"), _("Form group"), eFormGroup);
+		optionlist->AddOption(wxT("formList"), _("Form list"), eFormList);
+		optionlist->AddOption(wxT("formSelect"), _("Form select"), eFormSelect);
 		optionlist->AddOption(wxT("formGroupSelect"), _("Form group select"), eFormFolderSelect);
 		return optionlist;
 	}
@@ -45,15 +45,15 @@ protected:
 
 	PropertyCategory* m_categoryForm = IPropertyObject::CreatePropertyCategory({ "defaultForms", "default forms" });
 
-	Property* m_propertyDefFormObject		= IPropertyObject::CreateProperty(m_categoryForm, { "default_object",		_("default object") },	     &CMetaObjectCatalog::GetFormObject,      wxNOT_FOUND);
-	Property* m_propertyDefFormFolder		= IPropertyObject::CreateProperty(m_categoryForm, { "default_folder",		_("default folder") },		 &CMetaObjectCatalog::GetFormFolder,      wxNOT_FOUND);
-	Property* m_propertyDefFormList			= IPropertyObject::CreateProperty(m_categoryForm, { "default_list",			_("default list") },		 &CMetaObjectCatalog::GetFormList,	      wxNOT_FOUND);
-	Property* m_propertyDefFormSelect		= IPropertyObject::CreateProperty(m_categoryForm, { "default_select",		_("default select") },		 &CMetaObjectCatalog::GetFormSelect,      wxNOT_FOUND);
-	Property* m_propertyDefFormFolderSelect	= IPropertyObject::CreateProperty(m_categoryForm, { "default_folder_select", _("default folder select") }, &CMetaObjectCatalog::GetFormFolderSelect, wxNOT_FOUND);
+	Property* m_propertyDefFormObject = IPropertyObject::CreateProperty(m_categoryForm, { "default_object",		_("default object") }, &CMetaObjectCatalog::GetFormObject, wxNOT_FOUND);
+	Property* m_propertyDefFormFolder = IPropertyObject::CreateProperty(m_categoryForm, { "default_folder",		_("default folder") }, &CMetaObjectCatalog::GetFormFolder, wxNOT_FOUND);
+	Property* m_propertyDefFormList = IPropertyObject::CreateProperty(m_categoryForm, { "default_list",			_("default list") }, &CMetaObjectCatalog::GetFormList, wxNOT_FOUND);
+	Property* m_propertyDefFormSelect = IPropertyObject::CreateProperty(m_categoryForm, { "default_select",		_("default select") }, &CMetaObjectCatalog::GetFormSelect, wxNOT_FOUND);
+	Property* m_propertyDefFormFolderSelect = IPropertyObject::CreateProperty(m_categoryForm, { "default_folder_select", _("default folder select") }, &CMetaObjectCatalog::GetFormFolderSelect, wxNOT_FOUND);
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	Property* m_propertyOwners				= IPropertyObject::CreateOwnerProperty(m_categoryData, "owners");
+	Property* m_propertyOwners = IPropertyObject::CreateOwnerProperty(m_categoryData, "owners");
 
 private:
 
@@ -134,11 +134,11 @@ public:
 	}
 
 	//support form 
-	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
-	virtual CValueForm* GetFolderForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
-	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
-	virtual CValueForm* GetSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
-	virtual CValueForm* GetFolderSelectForm(const wxString& formName = wxEmptyString, IValueFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetObjectForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetFolderForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetListForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetSelectForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
+	virtual CValueForm* GetFolderSelectForm(const wxString& formName = wxEmptyString, IControlFrame* ownerControl = NULL, const CUniqueKey& formGuid = wxNullGuid);
 
 	//descriptions...
 	wxString GetDescription(const IObjectValueInfo* objValue) const;
@@ -162,9 +162,9 @@ public:
 protected:
 
 	//load & save from variant
-	bool LoadFromVariant(const wxVariant& variant);	
+	bool LoadFromVariant(const wxVariant& variant);
 	void SaveToVariant(wxVariant& variant, IMetadata* metaData) const;
-	
+
 	//create empty object
 	virtual IRecordDataObjectFolderRef* CreateObjectRefValue(eObjectMode mode, const Guid& guid = wxNullGuid);
 
@@ -183,8 +183,6 @@ protected:
 //*                                      Object                                              *
 //********************************************************************************************
 
-#define thisObject wxT("thisObject")
-
 class CObjectCatalog : public IRecordDataObjectFolderRef {
 	CObjectCatalog(CMetaObjectCatalog* metaObject, const Guid& objGuid = wxNullGuid, eObjectMode objMode = eObjectMode::OBJECT_ITEM);
 	CObjectCatalog(const CObjectCatalog& source);
@@ -200,8 +198,15 @@ public:
 	}
 
 	//default methods
-	virtual bool FillObject(CValue& vFillObject);
-	virtual CValue CopyObject();
+	virtual bool FillObject(CValue& vFillObject) const {
+		return Filling(vFillObject);
+	}
+	virtual IRecordDataObjectRef* CopyObject(bool showValue = false) {
+		IRecordDataObjectRef* objectRef = CopyObjectValue();
+		if (objectRef != NULL && showValue)
+			objectRef->ShowFormValue();
+		return objectRef;
+	}
 	virtual bool WriteObject();
 	virtual bool DeleteObject();
 
@@ -209,27 +214,27 @@ public:
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual CMethods* GetPMethods() const;
 	virtual void PrepareNames() const;
-	virtual CValue Method(methodArg_t& aParams);
 
 	//****************************************************************************
 	//*                              Override attribute                          *
 	//****************************************************************************
 
-	virtual void SetAttribute(attributeArg_t& aParams, CValue& cVal);
-	virtual CValue GetAttribute(attributeArg_t& aParams);
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);
+
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);
 
 	//support source data 
 	virtual CSourceExplorer GetSourceExplorer() const;
 
 	//support show 
-	virtual void ShowFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL);
-	virtual CValueForm* GetFormValue(const wxString& formName = wxEmptyString, IValueFrame* owner = NULL);
+	virtual void ShowFormValue(const wxString& formName = wxEmptyString, IControlFrame* owner = NULL);
+	virtual CValueForm* GetFormValue(const wxString& formName = wxEmptyString, IControlFrame* owner = NULL);
 
 	//support actions
 	virtual actionData_t GetActions(const form_identifier_t& formType);
-	virtual void ExecuteAction(const action_identifier_t& action, CValueForm* srcForm);
+	virtual void ExecuteAction(const action_identifier_t& lNumAction, CValueForm* srcForm);
 
 protected:
 	friend class CMetaObjectCatalog;

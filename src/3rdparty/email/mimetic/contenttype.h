@@ -19,9 +19,9 @@
 #define _MIMETIC_CONTENT_TYPE_H_
 
 #include <string>
-#include <email/mimetic/strutils.h>
-#include <email/mimetic/rfc822/fieldvalue.h>
-#include <email/mimetic/fieldparam.h>
+#include <3rdparty/email/mimetic/strutils.h>
+#include <3rdparty/email/mimetic/rfc822/fieldvalue.h>
+#include <3rdparty/email/mimetic/fieldparam.h>
 
 namespace mimetic
 {

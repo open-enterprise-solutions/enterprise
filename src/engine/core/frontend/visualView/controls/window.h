@@ -1,7 +1,7 @@
 #ifndef _WINDOW_BASE_H_
 #define _WINDOW_BASE_H_
 
-#include "baseControl.h"
+#include "controlInterface.h"
 
 #define FORM_ACTION 1
 

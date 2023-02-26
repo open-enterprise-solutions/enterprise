@@ -48,7 +48,7 @@
    // files which are not included by wxprec.h
 #endif
 
-#include <email/utils/wxmd5.hpp>
+#include <3rdparty/email/utils/wxmd5.hpp>
 
 #define HIGHFIRST
 

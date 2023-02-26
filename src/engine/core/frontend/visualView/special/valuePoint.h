@@ -1,7 +1,7 @@
 #ifndef _VALUEPOINT_H__
 #define _VALUEPOINT_H__
 
-#include "compiler/value.h"
+#include "core/compiler/value.h"
 
 //Поддержка массивов
 class CValuePoint : public CValue
@@ -15,25 +15,31 @@ public:
 public:
 
 	CValuePoint();
-	CValuePoint(const wxPoint &point);
+	CValuePoint(const wxPoint& point);
 
-	virtual bool Init(CValue **aParams);
+	virtual bool Init(CValue** paParams, const long lSizeArray);
 
 	virtual wxString GetTypeString() const;
 	virtual wxString GetString() const;
 
 	//check is empty
-	virtual inline bool IsEmpty() const override { return m_point == wxDefaultPosition; }
+	virtual inline bool IsEmpty() const override {
+		return m_point == wxDefaultPosition;
+	}
 
-	static CMethods m_methods;
+	static CMethodHelper m_methodHelper;
 
-	virtual void SetAttribute(attributeArg_t &aParams, CValue &cVal);        //установка атрибута
-	virtual CValue GetAttribute(attributeArg_t &aParams);                   //значение атрибута
+	virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal);        //установка атрибута
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
 
-	virtual CMethods* GetPMethods() const { return &m_methods; } //получить ссылку на класс помощник разбора имен атрибутов и методов
+	virtual CMethodHelper* GetPMethods() const { //получить ссылку на класс помощник разбора имен атрибутов и методов
+		PrepareNames();
+		return &m_methodHelper;
+	}
+
 	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
 
-	operator wxPoint() { return m_point; }
+	operator wxPoint() const { return m_point; }
 	virtual ~CValuePoint();
 };
 

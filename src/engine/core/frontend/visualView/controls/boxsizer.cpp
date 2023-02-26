@@ -10,7 +10,7 @@ CValueBoxSizer::CValueBoxSizer() : IValueSizer()
 {
 }
 
-wxObject* CValueBoxSizer::Create(wxObject* /*parent*/, IVisualHost* /*visualHost*/)
+wxObject* CValueBoxSizer::Create(wxWindow* /*parent*/, IVisualHost* /*visualHost*/)
 {
 	return new wxBoxSizer(m_propertyOrient->GetValueAsInteger());
 }
@@ -21,14 +21,14 @@ void CValueBoxSizer::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHo
 
 void CValueBoxSizer::Update(wxObject* wxobject, IVisualHost *visualHost)
 {
-	wxBoxSizer *m_boxsizer = dynamic_cast<wxBoxSizer *>(wxobject);
+	wxBoxSizer *boxSizer = dynamic_cast<wxBoxSizer *>(wxobject);
 
-	if (m_boxsizer) {
-		m_boxsizer->SetOrientation(m_propertyOrient->GetValueAsInteger());
-		m_boxsizer->SetMinSize(m_propertyMinSize->GetValueAsSize());
+	if (boxSizer != NULL) {
+		boxSizer->SetOrientation(m_propertyOrient->GetValueAsInteger());
+		boxSizer->SetMinSize(m_propertyMinSize->GetValueAsSize());
 	}
 
-	UpdateSizer(m_boxsizer);
+	UpdateSizer(boxSizer);
 }
 
 void CValueBoxSizer::Cleanup(wxObject* obj, IVisualHost *visualHost)
@@ -50,3 +50,9 @@ bool CValueBoxSizer::SaveData(CMemoryWriter &writer)
 	writer.w_u16(m_propertyOrient->GetValueAsInteger());
 	return IValueSizer::SaveData(writer);
 }
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+CONTROL_VALUE_REGISTER(CValueBoxSizer, "boxsizer", "sizer", TEXT2CLSID("CT_BSZR"));

@@ -13,9 +13,9 @@
 #endif
 
 #include <wx/datetime.h>
+#include <3rdparty/databaseLayer/databaseStringConverter.h>
 
-#include "compiler/compiler.h"
-#include "databaseLayer/databaseStringConverter.h"
+#include "core/compiler/compiler.h"
 
 class PostgresParameter : public DatabaseStringConverter
 {

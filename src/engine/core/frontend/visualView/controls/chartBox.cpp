@@ -1,5 +1,5 @@
 #include "chartBox.h"
-#include <charts/wxcharts.h>
+#include <3rdparty/charts/wxcharts.h>
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
@@ -11,21 +11,11 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValueChartBox, IValueWindow);
 //*                                 Value Notebook                                  *
 //***********************************************************************************
 
-CValueChartBox::CValueChartBox() : IValueWindow(), m_name("chartbox")
+CValueChartBox::CValueChartBox() : IValueWindow()
 {
 }
 
-void CValueChartBox::PrepareNames() const //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-{
-	IValueFrame::PrepareNames();
-}
-
-CValue CValueChartBox::Method(methodArg_t &aParams)       //вызов метода
-{
-	return IValueFrame::Method(aParams);
-}
-
-wxObject* CValueChartBox::Create(wxObject* parent, IVisualHost *visualHost)
+wxObject* CValueChartBox::Create(wxWindow* wxparent, IVisualHost *visualHost)
 {
 	/*wxMath2DPlotData chartData;
 	wxSharedPtr<wxMath2DPlotOptions> options(new wxMath2DPlotOptions());
@@ -49,7 +39,7 @@ wxObject* CValueChartBox::Create(wxObject* parent, IVisualHost *visualHost)
 	);
 	chartData.AddDataset(dataset);
 
-	wxChartCtrl *m_chartBox = new wxMath2DPlotCtrl((wxWindow*)parent, wxID_ANY, chartData, options);*/
+	wxChartCtrl *m_chartBox = new wxMath2DPlotCtrl(wxparent, wxID_ANY, chartData, options);*/
 
 	/*
 	// Create the data for the area chart widget
@@ -67,7 +57,7 @@ wxObject* CValueChartBox::Create(wxObject* parent, IVisualHost *visualHost)
 	chartData.AddDataset(dataset1);
 
 	// Create the area chart widget
-	wxAreaChartCtrl* m_chartBox = new wxAreaChartCtrl((wxWindow*)parent, wxID_ANY, chartData);
+	wxAreaChartCtrl* m_chartBox = new wxAreaChartCtrl(wxparent, wxID_ANY, chartData);
 	*/
 	/*
 	// Create the data for the bar chart widget
@@ -106,10 +96,10 @@ wxObject* CValueChartBox::Create(wxObject* parent, IVisualHost *visualHost)
 	chartData->AddDataset(dataset2);
 
 	// Create the bar chart widget
-	wxBarChartCtrl* m_chartBox = new wxBarChartCtrl((wxWindow*)parent, wxID_ANY, chartData, m_pos, m_size);*/
+	wxBarChartCtrl* m_chartBox = new wxBarChartCtrl(wxparent, wxID_ANY, chartData, m_pos, m_size);*/
 
 	// Create a top-level panel to hold all the contents of the valueForm
-	wxPanel* m_chartBox = new wxPanel((wxWindow*)parent, wxID_ANY);
+	wxPanel* m_chartBox = new wxPanel(wxparent, wxID_ANY);
 
 	// Create the data for the pie chart widget
 	wxPieChartData::ptr chartData = wxPieChartData::make_shared();
@@ -174,3 +164,9 @@ bool CValueChartBox::SaveData(CMemoryWriter &writer)
 {
 	return IValueWindow::SaveData(writer);
 }
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+CONTROL_VALUE_REGISTER(CValueChartBox, "chartbox", "chartbox", TEXT2CLSID("CT_CHRB"));

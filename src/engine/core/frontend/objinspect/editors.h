@@ -6,8 +6,7 @@
 #include <wx/propgrid/propgriddefs.h>
 #include <wx/propgrid/editors.h>
 
-class wxPGComboBoxAndButtonEditor : public wxPGComboBoxEditor
-{
+class wxPGComboBoxAndButtonEditor : public wxPGComboBoxEditor {
 	wxDECLARE_DYNAMIC_CLASS(wxPGComboBoxAndButtonEditor);
 public:
 	wxPGComboBoxAndButtonEditor() {}
@@ -41,24 +40,25 @@ public:
 // property that is likely to require the editor in question.
 //
 
-class wxPGSliderEditor : public wxPGEditor
-{
+class wxPGSliderEditor : public wxPGEditor {
 	wxDECLARE_DYNAMIC_CLASS(wxPGSliderEditor);
 public:
-	wxPGSliderEditor()
-		:
-		m_max(10000)
+	wxPGSliderEditor() : m_max(10000)
 	{
 	}
 
 	virtual ~wxPGSliderEditor();
+
+	virtual wxString GetName() const wxOVERRIDE;
 	virtual wxPGWindowList CreateControls(wxPropertyGrid* propgrid,
 		wxPGProperty* property,
 		const wxPoint& pos,
 		const wxSize& size) const;
+	
 	virtual void UpdateControl(wxPGProperty* property, wxWindow* wnd) const;
 	virtual bool OnEvent(wxPropertyGrid* propgrid, wxPGProperty* property,
 		wxWindow* wnd, wxEvent& event) const;
+	
 	virtual bool GetValueFromControl(wxVariant& variant, wxPGProperty* property, wxWindow* ctrl) const;
 	virtual void SetValueToUnspecified(wxPGProperty* property, wxWindow* ctrl) const;
 
@@ -68,5 +68,6 @@ private:
 #endif // wxUSE_SLIDER
 
 WX_PG_DECLARE_EDITOR(ComboBoxAndButton);
+WX_PG_DECLARE_EDITOR(Slider);
 
 #endif

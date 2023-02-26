@@ -43,7 +43,7 @@
 #include <list>
 #include <vector>
 
-#include <email/mimetic/mimeentity.h>
+#include <3rdparty/email/mimetic/mimeentity.h>
 
  /**
   * An email without transport mechanism specific declarations

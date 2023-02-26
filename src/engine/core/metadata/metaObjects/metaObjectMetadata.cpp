@@ -57,7 +57,7 @@ bool CMetaObject::SaveData(CMemoryWriter& dataWritter)
 //*                          common value object                        *
 //***********************************************************************
 
-#include "metadata/metadata.h"
+#include "core/metadata/metadata.h"
 
 bool CMetaObject::OnCreateMetaObject(IMetadata* metaData)
 {

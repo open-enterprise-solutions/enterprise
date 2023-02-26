@@ -17,9 +17,8 @@ CValueToolBarItem::CValueToolBarItem() : IValueControl()
 
 void CValueToolBarItem::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost, bool first—reated)
 {
-	CAuiToolBar *auiToolWnd = dynamic_cast<CAuiToolBar *>(visualHost->GetWxObject(GetParent()));
+	CAuiToolBar *auiToolWnd = dynamic_cast<CAuiToolBar *>(wxparent);
 	wxASSERT(auiToolWnd);
-
 	wxAuiToolBarItem* m_toolItem = auiToolWnd->AddTool(GetControlID(),
 		m_propertyCaption->GetValueAsString(),
 		m_propertyBitmap->GetValueAsBitmap(),
@@ -50,7 +49,7 @@ void CValueToolBarItem::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisua
 
 void CValueToolBarItem::OnUpdated(wxObject* wxobject, wxWindow* wxparent, IVisualHost *visualHost)
 {
-	CAuiToolBar *auiToolWnd = dynamic_cast<CAuiToolBar *>(visualHost->GetWxObject(GetParent()));
+	CAuiToolBar* auiToolWnd = dynamic_cast<CAuiToolBar*>(wxparent);
 	wxASSERT(auiToolWnd);
 
 	wxAuiToolBarItem *toolItem = auiToolWnd->FindTool(GetControlID());
@@ -185,8 +184,9 @@ bool CValueToolBarItem::LoadData(CMemoryReader &reader)
 	wxString tooltip; reader.r_stringZ(tooltip);
 	m_properyTooltip->SetValue(tooltip);
 	m_propertyEnabled->SetValue(reader.r_u8());
+	
 	wxString action; reader.r_stringZ(action);
-	m_propertyAction->SetValue(action);
+	m_eventAction->SetValue(action);
 
 	return IValueControl::LoadData(reader);
 }
@@ -197,7 +197,8 @@ bool CValueToolBarItem::SaveData(CMemoryWriter &writer)
 	writer.w_u8(m_propertyContextMenu->GetValueAsBoolean());
 	writer.w_stringZ(m_properyTooltip->GetValueAsString());
 	writer.w_u8(m_propertyEnabled->GetValueAsBoolean());
-	writer.w_stringZ(m_propertyAction->GetValueAsString());
+
+	writer.w_stringZ(m_eventAction->GetValue());
 
 	return IValueControl::SaveData(writer);
 }
@@ -211,3 +212,10 @@ bool CValueToolBarSeparator::SaveData(CMemoryWriter &writer)
 {
 	return IValueControl::SaveData(writer);
 }
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+S_CONTROL_VALUE_REGISTER(CValueToolBarItem, "tool", "tool", g_controlToolBarItemCLSID);
+S_CONTROL_VALUE_REGISTER(CValueToolBarSeparator, "toolSeparator", "tool", g_controlToolBarSeparatorCLSID);

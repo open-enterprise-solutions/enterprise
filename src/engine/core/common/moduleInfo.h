@@ -1,7 +1,7 @@
 #ifndef _MODULEINFO_H__
 #define _MODULEINFO_H__
 
-#include "compiler/procUnit.h"
+#include "core/compiler/procUnit.h"
 
 class IModuleInfo
 {
@@ -12,7 +12,13 @@ public:
 	}
 
 	//גûחמג לועמהא
-	CValue ExecuteMethod(methodArg_t& aParams);
+	bool ExecuteProc(const wxString &methodName,
+		CValue** paParams,
+		const long lSizeArray);
+	bool ExecuteFunc(const wxString& methodName,
+		CValue& pvarRetValue,
+		CValue** paParams,
+		const long lSizeArray);
 
 	IModuleInfo();
 	IModuleInfo(CCompileModule* compileModule);

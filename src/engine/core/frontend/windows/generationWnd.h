@@ -16,7 +16,7 @@
 #include <wx/sizer.h>
 #include <wx/dialog.h>
 
-#include "compiler/compiler.h"
+#include "core/compiler/compiler.h"
 
 class CGenerationWnd : public wxDialog
 {

@@ -1,6 +1,6 @@
 
 #include "widgets.h"
-#include "compiler/procUnit.h"
+#include "core/compiler/procUnit.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(CValueRadioButton, IValueWindow)
 
@@ -12,9 +12,9 @@ CValueRadioButton::CValueRadioButton() : IValueWindow()
 {
 }
 
-wxObject* CValueRadioButton::Create(wxObject* parent, IVisualHost *visualHost) 
+wxObject* CValueRadioButton::Create(wxWindow* wxparent, IVisualHost *visualHost) 
 {
-	wxRadioButton *radioButton = new wxRadioButton((wxWindow *)parent, wxID_ANY,
+	wxRadioButton *radioButton = new wxRadioButton(wxparent, wxID_ANY,
 		m_propertyCaption->GetValueAsString(),
 		wxDefaultPosition,
 		wxDefaultSize);
@@ -55,3 +55,9 @@ bool CValueRadioButton::SaveData(CMemoryWriter &writer)
 {
 	return IValueWindow::SaveData(writer);
 }
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+CONTROL_VALUE_REGISTER(CValueRadioButton, "radiobutton", "widget", TEXT2CLSID("CT_RDBT"));

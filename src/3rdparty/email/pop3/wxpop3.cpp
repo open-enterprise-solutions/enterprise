@@ -21,7 +21,7 @@
 #include <wx/wx.h>
 #endif
 
-#include <email/pop3/wxpop3.h>
+#include <3rdparty/email/pop3/wxpop3.h>
 
 #define DEFAULT_TIMEOUT_VALUE 60
 

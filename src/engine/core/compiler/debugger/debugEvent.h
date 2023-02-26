@@ -13,8 +13,6 @@
 
 BEGIN_DECLARE_EVENT_TYPES()
 DECLARE_LOCAL_EVENT_TYPE(wxEVT_DEBUG_EVENT, -1)
-DECLARE_LOCAL_EVENT_TYPE(wxEVT_DEBUG_TOOLTIP_EVENT, -1)
-DECLARE_LOCAL_EVENT_TYPE(wxEVT_DEBUG_AUTOCOMPLETE_EVENT, -1)
 DECLARE_LOCAL_EVENT_TYPE(wxEVT_DEBUGGER_FOUND, -1)
 END_DECLARE_EVENT_TYPES()
 
@@ -136,102 +134,6 @@ private:
 	wxString        m_fileName;
 };
 
-/**
- * Event for special tooltip func
- */
-
-class wxDebugToolTipEvent : public wxDebugEvent
-{
-
-public:
-
-	/**
-	* Constructor.
-	*/
-	wxDebugToolTipEvent(EventId eventId, wxSocketBase *connection);
-
-	/**
-	* Returns the message associated with the event. Not all events will have
-	* messages.
-	*/
-	const wxString& GetExpression() const;
-
-	/**
-	 * Sets the message associated with the event.
-	 */
-	void SetExpression(const wxString& expression);
-
-	/**
-	* Returns the message associated with the event. Not all events will have
-	* messages.
-	*/
-	const wxString& GetResult() const;
-
-	/**
-	 * Sets the message associated with the event.
-	 */
-	void SetResult(const wxString& result);
-
-	/**
-	* From wxEvent.
-	*/
-	virtual wxEvent* Clone() const;
-
-private:
-
-	wxString m_expression;
-	wxString m_result;
-};
-
-/**
- * Event for special autocomplete func
- */
-class wxDebugAutocompleteEvent : public wxEvent
-{
-public:
-
-	wxDebugAutocompleteEvent(EventId eventId);
-
-	/**
-	* Returns the event id of the event.
-	*/
-	EventId GetEventId() const;
-
-	/**
-	* Returns the position associated with the event. Not all events will have
-	* position.
-	*/
-	int GetCurrentPos();
-
-	/**
-	 * Sets the position associated with the event.
-	 */
-	void SetCurrentPos(int currPosition);
-
-	/**
-	* Returns the position associated with the event. Not all events will have
-	* position.
-	*/
-	wxString GetKeyWord();
-
-	/**
-	 * Sets the position associated with the event.
-	 */
-	void SetKeyWord(const wxString &keyWord);
-
-	/**
-	* From wxEvent.
-	*/
-	virtual wxEvent* Clone() const;
-
-private:
-
-	EventId         m_eventId;
-	wxString        m_expression;
-	wxString        m_keyword;
-	int             m_currentPos;
-};
-
 class wxDebuggerEvent : public wxEvent 
 {
 public:
@@ -266,18 +168,10 @@ private:
 };
 
 typedef void (wxEvtHandler::*wxDebugEventFunction)(wxDebugEvent&);
-typedef void (wxEvtHandler::*wxDebugToolTipEventFunction)(wxDebugToolTipEvent&);
-typedef void (wxEvtHandler::*wxDebugAutocompleteEventFunction)(wxDebugAutocompleteEvent&);
 typedef void (wxEvtHandler::*wxDebuggerEventFunction)(wxDebuggerEvent&);
 
 #define wxDebugEventHandler(func) \
   wxEVENT_HANDLER_CAST(wxDebugEventFunction, func)
-
-#define wxDebugToolTipEventHandler(func) \
-  wxEVENT_HANDLER_CAST(wxDebugToolTipEventFunction, func)
-
-#define wxDebugAutocompleteEventHandler(func) \
-  wxEVENT_HANDLER_CAST(wxDebugAutocompleteEventFunction, func)
 
 #define wxDebuggerEventHandler(func) \
   wxEVENT_HANDLER_CAST(wxDebuggerEventFunction, func)
@@ -285,14 +179,6 @@ typedef void (wxEvtHandler::*wxDebuggerEventFunction)(wxDebuggerEvent&);
 #define EVT_DEBUG(fn) \
     DECLARE_EVENT_TABLE_ENTRY( wxEVT_DEBUG_EVENT, 0, -1, \
     (wxObjectEventFunction) (wxEventFunction) wxStaticCastEvent( wxDebugEventFunction, &fn ), (wxObject *) NULL ),
-
-#define EVT_DEBUG_TOOLTIP_EVENT(fn) \
-    DECLARE_EVENT_TABLE_ENTRY( wxEVT_DEBUG_TOOLTIP_EVENT, 0, -1, \
-    (wxObjectEventFunction) (wxEventFunction) wxStaticCastEvent( wxDebugToolTipEventFunction, &fn ), (wxObject *) NULL ),
-
-#define EVT_DEBUG_AUTOCOMPLETE_EVENT(fn) \
-    DECLARE_EVENT_TABLE_ENTRY( wxEVT_DEBUG_AUTOCOMPLETE_EVENT, 0, -1, \
-    (wxObjectEventFunction) (wxEventFunction) wxStaticCastEvent( wxDebugAutocompleteEventFunction, &fn ), (wxObject *) NULL ),
 
 #define EVT_DEBUGGER_FOUND(fn) \
     DECLARE_EVENT_TABLE_ENTRY( wxEVT_DEBUGGER_FOUND, 0, -1, \

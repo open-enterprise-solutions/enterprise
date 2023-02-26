@@ -10,7 +10,6 @@
 #include <windows.h>
 
 #include "core/appData.h"
-#include "databaseLayer/databaseLayer.h"
 
 static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 
@@ -83,10 +82,11 @@ int main(int argc, char **argv)
 	wxSocketBase::Initialize();
 
 	// Init appData
-	appDataCreate(dataDir);
+	bool connected = ApplicationData::CreateAppData(eDBMode::eFirebird, eSERVICE_MODE, dataDir);
 
 	// If connection is failed then exit from application 
-	if (!databaseLayer->IsOpen()) {
+	if (!connected) {
+		wxMessageBox(_("Failed to connection!"), _("Connection error"), wxOK | wxCENTRE | wxICON_ERROR);
 		return 1;
 	}
 
@@ -98,7 +98,7 @@ int main(int argc, char **argv)
 	::wxSetWorkingDirectory(dataDir);
 #endif
 
-	if (!appData->Initialize(eRunMode::SERVICE_MODE, userIB, passwordIB)) {
+	if (!appData->Initialize(userIB, passwordIB)) {
 		return 1;
 	}
 

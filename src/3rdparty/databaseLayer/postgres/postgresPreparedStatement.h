@@ -15,7 +15,7 @@
 #include <wx/arrstr.h>
 #include <wx/dynarray.h>
 
-#include "databaseLayer/preparedStatement.h"
+#include <3rdparty/databaseLayer/preparedStatement.h>
 
 #include "postgresResultSet.h"
 #include "postgresPreparedStatementWrapper.h"

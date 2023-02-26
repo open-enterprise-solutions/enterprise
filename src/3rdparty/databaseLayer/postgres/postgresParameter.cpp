@@ -1,5 +1,5 @@
 #include "postgresParameter.h"
-#include "databaseLayer/databaseLayer.h"
+#include <3rdparty/databaseLayer/databaseLayer.h>
 
 // ctor
 PostgresParameter::PostgresParameter() : m_nParameterType(PostgresParameter::PARAM_NULL)
@@ -25,8 +25,9 @@ PostgresParameter::PostgresParameter(const number_t &dblValue) : m_nParameterTyp
 	m_strValue = dblValue.ToWString();
 }
 
-PostgresParameter::PostgresParameter(bool bValue) : m_nParameterType(PostgresParameter::PARAM_BOOL), m_bValue(bValue)
+PostgresParameter::PostgresParameter(bool bValue) : m_nParameterType(PostgresParameter::PARAM_BOOL)
 {
+	m_strValue = wxString::Format(_("%d"), bValue);
 }
 
 PostgresParameter::PostgresParameter(const wxDateTime& dateValue) : m_nParameterType(PostgresParameter::PARAM_DATETIME)
@@ -82,7 +83,9 @@ const void* PostgresParameter::GetDataPtr()
 		pReturn = m_CharBufferValue;
 		break;
 	case PostgresParameter::PARAM_BOOL:
-		pReturn = &m_bValue;
+		//pReturn = &m_bValue;
+		m_CharBufferValue = ConvertToUnicodeStream(m_strValue);
+		pReturn = m_CharBufferValue;
 		break;
 	case PostgresParameter::PARAM_BLOB:
 		pReturn = m_BufferValue.GetData();

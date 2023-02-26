@@ -1,15 +1,10 @@
 #ifndef __DATA_VIEW_H__
 #define __DATA_VIEW_H__
 
-#include <wx/dataview.h>
-#include <wx/headerctrl.h>
-#include <wx/sizer.h>
-#include <wx/pen.h>
+#include "common/tableInfo.h"
 
-#include "common/tableNotifier.h"
-
-class CDataViewCtrl : public wxDataViewCtrl {
-	wxTableModelNotifier* m_genNotitfier;
+class wxDataModelViewCtrl : public wxDataViewCtrl {
+	class wxTableModelNotifier* m_genNotitfier;
 protected:
 	class CDataViewFreezeRowsWindow : public wxWindow
 	{
@@ -38,7 +33,7 @@ protected:
 
 	public:
 
-		CDataViewFreezeRowsWindow(CDataViewCtrl* parent) :
+		CDataViewFreezeRowsWindow(wxDataModelViewCtrl* parent) :
 			wxWindow(parent, wxID_ANY, wxDefaultPosition, wxSize(-1, 22)) {
 			SetBackgroundColour(*wxWHITE);
 			SetBackgroundStyle(wxBG_STYLE_PAINT);
@@ -46,8 +41,8 @@ protected:
 			wxWindow::Hide();
 		}
 
-		CDataViewCtrl* GetOwner() const {
-			return dynamic_cast<CDataViewCtrl*>(GetParent());
+		wxDataModelViewCtrl* GetOwner() const {
+			return dynamic_cast<wxDataModelViewCtrl*>(GetParent());
 		}
 
 #if wxUSE_ACCESSIBILITY
@@ -71,12 +66,13 @@ protected:
 	};
 	CDataViewFreezeRowsWindow* m_freezeRows;
 public:
-	CDataViewCtrl() : wxDataViewCtrl(),
+	
+	wxDataModelViewCtrl() : wxDataViewCtrl(),
 		m_genNotitfier(NULL), m_freezeRows(NULL)
 	{
 	}
 
-	CDataViewCtrl(wxWindow* parent, wxWindowID id,
+	wxDataModelViewCtrl(wxWindow* parent, wxWindowID id,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize, long style = 0,
 		const wxValidator& validator = wxDefaultValidator,
@@ -89,22 +85,51 @@ public:
 		wxSystemThemedControl<wxControl>::DoEnableSystemTheme(true, m_freezeRows);
 	}
 
-	virtual ~CDataViewCtrl() {
+	virtual ~wxDataModelViewCtrl() {
 		wxDELETE(m_genNotitfier);
 	}
 
+	bool ShowFilter(struct filterRow_t& filter);
+
 	virtual wxSize GetSizeAvailableForScrollTarget(const wxSize& size) override;
-	virtual bool AssociateModel(class IValueModel* model);
+	virtual bool AssociateModel(wxDataViewModel* model) override;
 
 protected:
 
+	void OnChar(wxKeyEvent& event);
+	void OnRightUp(wxMouseEvent &event); 
 	void OnSize(wxSizeEvent& event);
 
 private:
 
-	wxDECLARE_DYNAMIC_CLASS(CDataViewCtrl);
-	wxDECLARE_NO_COPY_CLASS(CDataViewCtrl);
+	wxDECLARE_DYNAMIC_CLASS(wxDataModelViewCtrl);
+	wxDECLARE_NO_COPY_CLASS(wxDataModelViewCtrl);
 	wxDECLARE_EVENT_TABLE();
 };
+
+class wxTableModelNotifier : public wxTableNotifier {
+	wxDataModelViewCtrl* m_mainWindow;
+public:
+	wxTableModelNotifier(class wxDataModelViewCtrl* mainWindow) :
+		m_mainWindow(mainWindow) {
+	}
+
+	virtual bool NotifyDelete(const wxDataViewItem& item);
+
+	virtual wxDataViewColumn* GetCurrentColumn() const;
+	virtual void StartEditing(const wxDataViewItem& item, unsigned int col) const;
+	virtual bool ShowFilter(struct filterRow_t& filter);
+
+	virtual void Select(const wxDataViewItem& item) const;
+	virtual wxDataViewItem GetSelection() const;
+	virtual int GetSelections(wxDataViewItemArray& sel) const;
+
+private:
+
+	bool SendEvent(const wxEventType& eventType, const wxDataViewItem& item);
+	bool SendEvent(const wxEventType& eventType, const wxDataViewItem& item, wxDataViewColumn* column);
+};
+
+wxDECLARE_EVENT(wxEVT_DATAVIEW_ITEM_START_DELETING, wxDataViewEvent);
 
 #endif 
