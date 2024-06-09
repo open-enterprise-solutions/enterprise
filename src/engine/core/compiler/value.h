@@ -484,14 +484,19 @@ public:
 	void operator = (const CValue& cParam);
 
 	void operator = (bool cParam);
+	void operator = (short cParam);
+	void operator = (unsigned short cParam);
 	void operator = (int cParam);
 	void operator = (unsigned int cParam);
+	void operator = (float cParam);
 	void operator = (double cParam);
-	void operator = (const wxString& cParam);
-	void operator = (eValueTypes cParam);
-	void operator = (CValue* pParam);
+	void operator = (const number_t &cParam);
 	void operator = (const wxDateTime& cParam);
 	void operator = (wxLongLong_t cParam);
+	void operator = (const wxString& cParam);
+
+	void operator = (eValueTypes cParam);
+	void operator = (CValue* pParam);
 
 	//Реализация операторов сравнения:
 	bool operator > (const CValue& cParam) const {

@@ -21,15 +21,17 @@ wxIMPLEMENT_DYNAMIC_CLASS(CValue, wxObject);
 //**********************************************************************
 
 #ifdef _DEBUG
-static std::vector<CValue*> s_createdValues;
+//static std::vector<CValue*> s_createdValues;
 void CValue::ShowCreatedObject() {
-	if (s_createdValues.size() > 0)
-		wxTrap();
+	//if (s_createdValues.size() > 0)
+	//	wxTrap();
 }
 
 static unsigned int s_nCreateCount = 0;
+//#define _DEBUG_VALUE_CREATE() \
+//	s_createdValues.push_back(this); \
+//	wxLogDebug("Create %d", s_nCreateCount++);
 #define _DEBUG_VALUE_CREATE() \
-	s_createdValues.push_back(this); \
 	wxLogDebug("Create %d", s_nCreateCount++);
 #else 
 #define _DEBUG_VALUE_CREATE() 
@@ -62,8 +64,8 @@ CValue::CValue(CValue* pValue)
 CValue::CValue(const wxDateTime& cParam)
 	: m_typeClass(eValueTypes::TYPE_DATE), m_refCount(0), m_pRef(NULL), m_bReadOnly(false)
 {
-	wxLongLong m_llData = cParam.GetValue();
-	m_dData = m_llData.GetValue();
+	const wxLongLong& llData = cParam.GetValue();
+	m_dData = llData.GetValue();
 	_DEBUG_VALUE_CREATE();
 }
 
@@ -139,9 +141,9 @@ CValue::~CValue()
 	if (m_typeClass == eValueTypes::TYPE_REFFER && m_pRef && m_pRef != this)
 		m_pRef->DecrRef();
 #ifdef _DEBUG
-	auto foundedIt = std::find(s_createdValues.begin(), s_createdValues.end(), GetThis());
-	if (foundedIt != s_createdValues.end())
-		s_createdValues.erase(foundedIt);
+	//auto foundedIt = std::find(s_createdValues.begin(), s_createdValues.end(), GetThis());
+	//if (foundedIt != s_createdValues.end())
+	//	s_createdValues.erase(foundedIt);
 	wxLogDebug("Delete %d", --s_nCreateCount);
 #endif
 }
@@ -207,35 +209,100 @@ void CValue::Copy(const CValue& cOld)
 	}
 }
 
-void CValue::operator = (bool bValue)
+void CValue::operator = (bool cParam)
 {
-	SetValue(bValue);
+	Reset();
+
+	m_typeClass = eValueTypes::TYPE_BOOLEAN;
+	m_bData = cParam;
 }
 
-void CValue::operator = (signed int iValue)
+void CValue::operator = (short cParam)
 {
-	SetValue(iValue);
+	Reset();
+
+	m_typeClass = eValueTypes::TYPE_NUMBER;
+	m_fData = cParam;
 }
 
-void CValue::operator = (unsigned int iValue)
+void CValue::operator = (unsigned short cParam)
 {
-	SetValue(iValue);
+	Reset();
+
+	m_typeClass = eValueTypes::TYPE_NUMBER;
+	m_fData = cParam;
 }
 
-void CValue::operator = (double dValue)
+void CValue::operator = (int cParam)
 {
-	SetValue(dValue);
+	Reset();
+
+	m_typeClass = eValueTypes::TYPE_NUMBER;
+	m_fData = cParam;
 }
 
-void CValue::operator = (const wxString& sValue)
+void CValue::operator = (unsigned int cParam)
 {
-	SetValue(sValue);
+	Reset();
+
+	m_typeClass = eValueTypes::TYPE_NUMBER;
+	m_fData = cParam;
 }
 
-void CValue::operator = (const CValue& varValue)
+void CValue::operator = (float cParam)
 {
-	if (this != &varValue && !m_bReadOnly)
-		Copy(varValue);
+	Reset();
+
+	m_typeClass = eValueTypes::TYPE_NUMBER;
+	m_fData = cParam;
+}
+
+void CValue::operator = (double cParam)
+{
+	Reset();
+
+	m_typeClass = eValueTypes::TYPE_NUMBER;
+	m_fData = cParam;
+}
+
+void CValue::operator = (const number_t& cParam)
+{
+	Reset();
+
+	m_typeClass = eValueTypes::TYPE_NUMBER;
+	m_fData = cParam;
+}
+
+void CValue::operator = (const wxDateTime& cParam)
+{
+	Reset();
+
+	m_typeClass = eValueTypes::TYPE_DATE;
+	const wxLongLong& llData = cParam.GetValue();
+	m_dData = llData.GetValue();
+}
+
+void CValue::operator = (wxLongLong_t cParam)
+{
+	Reset();
+
+	m_typeClass = eValueTypes::TYPE_DATE;
+	m_dData = cParam;
+}
+
+
+void CValue::operator = (const wxString& cParam)
+{
+	Reset();
+
+	m_typeClass = eValueTypes::TYPE_STRING;
+	m_sData = cParam;
+}
+
+void CValue::operator = (const CValue& cParam)
+{
+	if (this != &cParam && !m_bReadOnly)
+		Copy(cParam);
 }
 
 void CValue::operator = (eValueTypes type)
@@ -276,16 +343,6 @@ void CValue::operator = (CValue* pParam)
 			m_pRef->IncrRef();
 		}
 	}
-}
-
-void CValue::operator = (const wxDateTime& cParam)
-{
-	SetValue(cParam);
-}
-
-void CValue::operator = (wxLongLong_t cParam)
-{
-	SetValue(cParam);
 }
 
 void CValue::SetValue(const CValue& varValue)
@@ -888,16 +945,16 @@ bool CValue::CompareValueEQ(const CValue& cParam) const
 	case eValueTypes::TYPE_NULL:
 		return eValueTypes::TYPE_NULL == cParam.GetType();
 	case eValueTypes::TYPE_BOOLEAN:
-		return GetBoolean() == cParam.GetBoolean() && 
+		return GetBoolean() == cParam.GetBoolean() &&
 			eValueTypes::TYPE_BOOLEAN == cParam.GetType();
 	case eValueTypes::TYPE_NUMBER:
-		return GetNumber() == cParam.GetNumber() && 
+		return GetNumber() == cParam.GetNumber() &&
 			eValueTypes::TYPE_NUMBER == cParam.GetType();
 	case eValueTypes::TYPE_DATE:
-		return GetDate() == cParam.GetDate() && 
+		return GetDate() == cParam.GetDate() &&
 			eValueTypes::TYPE_DATE == cParam.GetType();
 	case eValueTypes::TYPE_STRING:
-		return GetString() == cParam.GetString() && 
+		return GetString() == cParam.GetString() &&
 			eValueTypes::TYPE_STRING == cParam.GetType();
 	case eValueTypes::TYPE_ENUM:
 	case eValueTypes::TYPE_MODULE:
@@ -922,16 +979,16 @@ bool CValue::CompareValueNE(const CValue& cParam) const
 	case eValueTypes::TYPE_NULL:
 		return eValueTypes::TYPE_NULL != cParam.GetType();
 	case eValueTypes::TYPE_BOOLEAN:
-		return eValueTypes::TYPE_BOOLEAN != cParam.GetType() || 
+		return eValueTypes::TYPE_BOOLEAN != cParam.GetType() ||
 			GetBoolean() != cParam.GetBoolean();
 	case eValueTypes::TYPE_NUMBER:
 		return eValueTypes::TYPE_NUMBER != cParam.GetType() ||
 			GetNumber() != cParam.GetNumber();
 	case eValueTypes::TYPE_DATE:
-		return eValueTypes::TYPE_DATE != cParam.GetType() || 
+		return eValueTypes::TYPE_DATE != cParam.GetType() ||
 			GetDate() != cParam.GetDate();
 	case eValueTypes::TYPE_STRING:
-		return eValueTypes::TYPE_STRING != cParam.GetType() || 
+		return eValueTypes::TYPE_STRING != cParam.GetType() ||
 			GetString() != cParam.GetString();
 	case eValueTypes::TYPE_ENUM:
 	case eValueTypes::TYPE_MODULE:
