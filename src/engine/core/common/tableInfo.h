@@ -509,13 +509,35 @@ public:
 
 	struct wxValueTableRow : public wxRefCounter {
 
-		wxValueTableRow(const valueArray_t& nodeValues) :
-			m_valueTable(NULL), m_nodeValues(nodeValues) {
+		wxValueTableRow() :
+			m_valueTable(NULL), m_nodeValues() {
 		}
 
 		wxValueTableRow(const wxValueTableRow& tableRow) :
 			m_valueTable(tableRow.m_valueTable), m_nodeValues(tableRow.m_nodeValues) {
 		}
+		
+		/////////////////////////////////////////////////////////////////////////////
+
+		template <class vatT> 
+		inline void AppendTableValue(const meta_identifier_t& id, vatT variant)
+		{
+			m_nodeValues.insert_or_assign(id, variant);
+		}
+
+		inline CValue& AppendTableValue(const meta_identifier_t& id)
+		{
+			return m_nodeValues[id];
+		}
+
+		/////////////////////////////////////////////////////////////////////////////
+
+		const valueArray_t& GetTableValues() const 
+		{
+			return m_nodeValues;
+		}
+
+		/////////////////////////////////////////////////////////////////////////////
 
 		bool SetValue(const meta_identifier_t& id, const CValue& variant, bool notify = false) {
 			try {
@@ -603,30 +625,29 @@ public:
 			return false;
 		}
 
-		CValue GetValue(const meta_identifier_t& id) const {
-			CValue cValue; GetValue(id, cValue);
-			return cValue;
+		////////////////////////////////////////////////////////////////////////
+
+		const CValue &GetTableValue(const meta_identifier_t& id) const {
+			return m_nodeValues.at(id);
 		}
 
-		wxVariant GetValue(unsigned int col) const {
-			wxVariant vValue; GetValue(col, vValue);
-			return vValue;
-		}
+		////////////////////////////////////////////////////////////////////////
 
 		bool GetValue(const meta_identifier_t& id, CValue& variant) const {
 			try {
-				const CValue& cValue = m_nodeValues.at(id);
-				variant = cValue; return true;
+				variant = GetTableValue(id); 
+				return true;
 			}
 			catch (std::out_of_range&) {
+				return false;
 			}
 			return false;
 		}
 
 		bool GetValue(unsigned int col, wxVariant& variant) const {
 			try {
-				const CValue& cValue = m_nodeValues.at(col);
-				variant = cValue.GetString(); return true;
+				variant = GetTableValue(col).GetString();
+				return true;
 			}
 			catch (std::out_of_range&) {
 				return false;
@@ -909,8 +930,8 @@ public:
 			m_valueTree(valueTree), m_parent(NULL) {
 		}
 
-		wxValueTreeNode(wxValueTreeNode* parent, const valueArray_t& nodeValues = valueArray_t()) :
-			m_valueTree(NULL), m_parent(parent), m_nodeValues(nodeValues) {
+		wxValueTreeNode(wxValueTreeNode* parent) :
+			m_valueTree(NULL), m_parent(parent), m_nodeValues() {
 			if (m_parent != NULL)
 				m_parent->Append(this);
 		}
@@ -925,6 +946,28 @@ public:
 				child->DecRef();
 			}
 		}
+
+		/////////////////////////////////////////////////////////////////////////////
+
+		template <class vatT>
+		inline void AppendTableValue(const meta_identifier_t& id, vatT variant)
+		{
+			m_nodeValues.insert_or_assign(id, variant);
+		}
+
+		inline CValue& AppendTableValue(const meta_identifier_t& id)
+		{
+			return m_nodeValues[id];
+		}
+
+		/////////////////////////////////////////////////////////////////////////////
+
+		const valueArray_t& GetTableValues() const
+		{
+			return m_nodeValues;
+		}
+
+		/////////////////////////////////////////////////////////////////////////////
 
 		bool IsContainer() const {
 			return m_children.size() > 0;

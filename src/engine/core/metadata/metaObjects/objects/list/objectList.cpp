@@ -765,10 +765,10 @@ wxDataViewItem CListRegisterObject::FindRowValue(IValueModelReturnLine* retLine)
 		if (item.IsOk()) {
 			wxValueTableKeyRow* node = GetViewData<wxValueTableKeyRow>(item);
 			if (node != NULL) {
-				bool founded = true;
+				bool founded = true; CValue retValue;
 				for (auto dimension : m_metaObject->GetGenericDimensions()) {
-					CValue retValue; retLine->GetValueByMetaID(dimension->GetMetaID(), retValue);
-					if (node->GetValue(dimension->GetMetaID()) != retValue)
+					retLine->GetValueByMetaID(dimension->GetMetaID(), retValue);
+					if (node->GetTableValue(dimension->GetMetaID()) != retValue)
 						founded = false;
 				}
 				if (founded)
@@ -861,7 +861,7 @@ void CListRegisterObject::EditValue()
 		CMetaDefaultAttributeObject* recorder =
 			m_metaObject->GetRegisterRecorder();
 		if (recorder != NULL) {
-			CValue reference = node->GetValue(recorder->GetMetaID());
+			CValue reference = node->GetTableValue(recorder->GetMetaID());
 			reference.ShowValue();
 		}
 	}

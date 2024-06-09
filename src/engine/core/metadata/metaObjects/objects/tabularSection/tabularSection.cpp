@@ -30,7 +30,7 @@ wxDataViewItem ITabularSectionDataObject::FindRowValue(const CValue& varValue, c
 			const wxDataViewItem& item = GetItem(row);
 			wxValueTableRow* node = GetViewData<wxValueTableRow>(item);
 			if (node != NULL &&
-				varValue == node->GetValue((meta_identifier_t)colInfo->GetColumnID())) {
+				varValue == node->GetTableValue(colInfo->GetColumnID())) {
 				return item;
 			}
 		}
@@ -175,15 +175,13 @@ bool CTabularSectionDataObjectRef::LoadData(const Guid& srcGuid, bool createData
 	if (resultSet == NULL)
 		return false;
 	while (resultSet->Next()) {
-		valueArray_t modelValues;
+		wxValueTableRow *rowData = new wxValueTableRow();
 		for (auto attribute : m_metaTable->GetObjectAttributes()) {
 			if (m_metaTable->IsNumberLine(attribute->GetMetaID()))
 				continue;
-			IMetaAttributeObject::GetValueAttribute(attribute, modelValues[attribute->GetMetaID()], resultSet, createData);
+			IMetaAttributeObject::GetValueAttribute(attribute, rowData->AppendTableValue(attribute->GetMetaID()), resultSet, createData);
 		}
-		IValueTable::Append(new wxValueTableRow(modelValues),
-			!CTranslateError::IsSimpleMode()
-		);
+		IValueTable::Append(rowData, !CTranslateError::IsSimpleMode());
 
 	}
 	resultSet->Close();
@@ -261,7 +259,7 @@ bool CTabularSectionDataObjectRef::SaveData()
 				wxASSERT(node);
 				IMetaAttributeObject::SetValueAttribute(
 					attribute,
-					node->GetValue(attribute->GetMetaID()),
+					node->GetTableValue(attribute->GetMetaID()),
 					statement,
 					position
 				);
@@ -489,19 +487,16 @@ void ITabularSectionDataObject::CTabularSectionDataObjectReturnLine::PrepareName
 
 long ITabularSectionDataObject::AppendRow(unsigned int before)
 {
-	valueArray_t valueRow;
+	wxValueTableRow* rowData = new wxValueTableRow();
 	for (auto attribute : m_metaTable->GetObjectAttributes()) {
 		if (!m_metaTable->IsNumberLine(attribute->GetMetaID()))
-			valueRow.insert_or_assign(attribute->GetMetaID(), attribute->CreateValue());
+			rowData->AppendTableValue(attribute->GetMetaID(), attribute->CreateValue());
 	}
 
 	if (before > 0)
-		return IValueTable::Insert(
-			new wxValueTableRow(valueRow), before, !CTranslateError::IsSimpleMode());
+		return IValueTable::Insert(rowData, before, !CTranslateError::IsSimpleMode());
 
-	return IValueTable::Append(
-		new wxValueTableRow(valueRow), !CTranslateError::IsSimpleMode()
-	);
+	return IValueTable::Append(rowData, !CTranslateError::IsSimpleMode());
 }
 
 long CTabularSectionDataObjectRef::AppendRow(unsigned int before)

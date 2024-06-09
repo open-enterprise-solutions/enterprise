@@ -33,7 +33,7 @@ bool ITabularSectionDataObject::SetValueByRow(const wxVariant& variant,
 	if (!m_metaTable->IsNumberLine(col)) {
 		IMetadata* metaData = m_metaTable->GetMetadata();
 		wxASSERT(metaData);
-		const CValue& selValue = node->GetValue((meta_identifier_t)col);
+		const CValue& selValue = node->GetTableValue(col);
 		const CValue& newValue = metaData->CreateObject(selValue.GetTypeClass());
 		if (strData.Length() > 0) {
 			std::vector<CValue> foundedObjects;
@@ -70,25 +70,21 @@ void ITabularSectionDataObject::CopyValue()
 	wxValueTableRow* node = GetViewData<wxValueTableRow>(currentItem);
 	if (node == NULL)
 		return;
-	valueArray_t valueRow;
+	wxValueTableRow* rowData = new wxValueTableRow();
 	for (auto attribute : m_metaTable->GetObjectAttributes()) {
 		if (!m_metaTable->IsNumberLine(attribute->GetMetaID())) {
-			valueRow.insert_or_assign(attribute->GetMetaID(), node->GetValue(attribute->GetMetaID()));
+			rowData->AppendTableValue(attribute->GetMetaID(), node->GetTableValue(attribute->GetMetaID()));
 		}
 		else {
-			valueRow.insert_or_assign(attribute->GetMetaID(), CValue());
+			rowData->AppendTableValue(attribute->GetMetaID(), CValue());
 		}
 	}
 	long currentLine = GetRow(currentItem);
 	if (currentLine != wxNOT_FOUND) {
-		IValueTable::Insert(
-			new wxValueTableRow(valueRow), currentLine, !CTranslateError::IsSimpleMode()
-		);
+		IValueTable::Insert(rowData, currentLine, !CTranslateError::IsSimpleMode());
 	}
 	else {
-		IValueTable::Append(
-			new wxValueTableRow(valueRow), !CTranslateError::IsSimpleMode()
-		);
+		IValueTable::Append(rowData, !CTranslateError::IsSimpleMode());
 	}
 }
 

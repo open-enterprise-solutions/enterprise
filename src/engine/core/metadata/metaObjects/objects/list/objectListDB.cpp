@@ -56,28 +56,22 @@ void CListDataObjectEnumRef::RefreshModel(const wxDataViewItem& topItem, int cou
 	}
 	DatabaseResultSet* resultSet = statement->RunQueryWithResults();
 	while (resultSet->Next()) {
-		wxMemoryBuffer bufferData; valueArray_t valueRow;
+		const Guid& enumRow = resultSet->GetResultString(guidName);
+		wxMemoryBuffer bufferData; wxValueTableEnumRow* rowData = new wxValueTableEnumRow(enumRow);
+		rowData->AppendTableValue(metaOrder->GetMetaID(), GetMetaObject()->FindEnumByGuid(enumRow.str())->GetParentPosition());
 		resultSet->GetResultBlob(guidRef, bufferData);
 		if (!bufferData.IsEmpty()) {
 			wxASSERT(metaReference);
 			CReferenceDataObject* createdReference = CReferenceDataObject::Create(metaReference->GetMetadata(), bufferData.GetData());
 			if (createdReference != NULL)
-				createdReference->FillFromModel(valueRow);
-			valueRow.insert_or_assign(metaReference->GetMetaID(), createdReference);
+				createdReference->FillFromModel(rowData->GetTableValues());
+			rowData->AppendTableValue(metaReference->GetMetaID(), createdReference);
 		}
 		else {
 			wxASSERT(metaReference);
-			valueRow.insert_or_assign(metaReference->GetMetaID(),
-				CReferenceDataObject::Create(GetMetaObject())
-			);
+			rowData->AppendTableValue(metaReference->GetMetaID(), CReferenceDataObject::Create(GetMetaObject()));
 		}
-		const Guid& enumRow = resultSet->GetResultString(guidName);
-		valueRow.insert_or_assign(metaOrder->GetMetaID(),
-			GetMetaObject()->FindEnumByGuid(enumRow.str())->GetParentPosition()
-		);
-		IValueTable::Append(
-			new wxValueTableEnumRow(valueRow, enumRow)
-		);
+		IValueTable::Append(rowData, !CTranslateError::IsSimpleMode());
 	};
 
 	databaseLayer->CloseResultSet(resultSet);
@@ -134,31 +128,27 @@ void CListDataObjectRef::RefreshModel(const wxDataViewItem& topItem, int countPe
 	}
 	DatabaseResultSet* resultSet = statement->RunQueryWithResults();
 	while (resultSet->Next()) {
-		wxMemoryBuffer bufferData; valueArray_t valueRow;
-		const Guid& rowGuid = resultSet->GetResultString(guidName);
+		wxMemoryBuffer bufferData; const Guid& rowGuid = resultSet->GetResultString(guidName);
+		wxValueTableListRow *rowData = new wxValueTableListRow(rowGuid);
 		for (auto attribute : m_metaObject->GetGenericAttributes()) {
 			if (m_metaObject->IsDataReference(attribute->GetMetaID()))
 				continue;
-			IMetaAttributeObject::GetValueAttribute(attribute, valueRow[attribute->GetMetaID()], resultSet);
+			IMetaAttributeObject::GetValueAttribute(attribute, rowData->AppendTableValue(attribute->GetMetaID()), resultSet);
 		}
 		resultSet->GetResultBlob(guidRef, bufferData);
 		if (!bufferData.IsEmpty()) {
 			wxASSERT(metaReference);
 			CReferenceDataObject* createdReference = CReferenceDataObject::Create(metaReference->GetMetadata(), bufferData.GetData());
 			if (createdReference != NULL)
-				createdReference->FillFromModel(valueRow);
-			valueRow.insert_or_assign(metaReference->GetMetaID(), createdReference);
+				createdReference->FillFromModel(rowData->GetTableValues());
+			rowData->AppendTableValue(metaReference->GetMetaID(), createdReference);
 		}
 		else {
 			wxASSERT(metaReference);
-			valueRow.insert_or_assign(metaReference->GetMetaID(),
-				CReferenceDataObject::Create(m_metaObject)
-			);
+			rowData->AppendTableValue(metaReference->GetMetaID(), CReferenceDataObject::Create(m_metaObject));
 		}
 
-		IValueTable::Append(
-			new wxValueTableListRow(valueRow, resultSet->GetResultString(guidName))
-		);
+		IValueTable::Append(rowData, !CTranslateError::IsSimpleMode());
 	};
 
 	databaseLayer->CloseResultSet(resultSet);
@@ -215,6 +205,9 @@ void CTreeDataObjectFolderRef::RefreshModel(const wxDataViewItem& topItem, int c
 			}
 		}
 	}
+	
+	CValue cRefVal;
+	
 	DatabaseResultSet* resultSet = statement->RunQueryWithResults();
 	wxASSERT(metaReference);
 	while (resultSet->Next()) {
@@ -226,38 +219,32 @@ void CTreeDataObjectFolderRef::RefreshModel(const wxDataViewItem& topItem, int c
 		if (m_listMode == CTreeDataObjectFolderRef::LIST_FOLDER && !isFolder.GetBoolean())
 			continue;
 
-		valueArray_t valueRow;
+		wxValueTreeListNode* rowData = new wxValueTreeListNode(NULL, resultSet->GetResultString(guidName), this, isFolder.GetBoolean());
 		for (auto attribute : m_metaObject->GetGenericAttributes()) {
 			if (m_metaObject->IsDataReference(attribute->GetMetaID()))
 				continue;
-			IMetaAttributeObject::GetValueAttribute(attribute, valueRow[attribute->GetMetaID()], resultSet);
+			IMetaAttributeObject::GetValueAttribute(attribute, rowData->AppendTableValue(attribute->GetMetaID()), resultSet);
 		}
 		wxMemoryBuffer bufferData; resultSet->GetResultBlob(guidRef, bufferData);
 		if (!bufferData.IsEmpty()) {
 			CReferenceDataObject* createdReference = CReferenceDataObject::Create(m_metaObject->GetMetadata(), bufferData.GetData());
 			if (createdReference != NULL) {
-				createdReference->FillFromModel(valueRow);
+				createdReference->FillFromModel(rowData->GetTableValues());
 			}
-			valueRow.insert_or_assign(metaReference->GetMetaID(), createdReference);
+			rowData->AppendTableValue(metaReference->GetMetaID(), createdReference);
 		}
 		else {
 			wxASSERT(metaReference);
-			valueRow.insert_or_assign(metaReference->GetMetaID(),
-				CReferenceDataObject::Create(m_metaObject)
-			);
+			rowData->AppendTableValue(metaReference->GetMetaID(), CReferenceDataObject::Create(m_metaObject));
 		}
 
-		treeData.emplace_back(resultSet->GetResultString(guidName),
-			new wxValueTreeListNode(
-				NULL, valueRow, resultSet->GetResultString(guidName), this, isFolder.GetBoolean()
-			)
-		);
+		treeData.emplace_back(rowData->GetGuid(), rowData);
 	};
 
 	/* wxDataViewModel:: */ BeforeReset();
 
 	for (auto data : treeData) {
-		wxValueTreeListNode* node = data.second; CValue cRefVal;
+		wxValueTreeListNode* node = data.second;
 		wxASSERT(node); CReferenceDataObject* pRefData = NULL;
 		node->GetValue(*m_metaObject->GetDataParent(), cRefVal);
 		if (cRefVal.ConvertToValue(pRefData)) {
@@ -311,25 +298,25 @@ void CListRegisterObject::RefreshModel(const wxDataViewItem& topItem, int countP
 	}
 	DatabaseResultSet* resultSet = statement->RunQueryWithResults();
 	while (resultSet->Next()) {
-		valueArray_t keyRow, valueRow;
+		wxValueTableKeyRow* rowData = new wxValueTableKeyRow();
 		if (m_metaObject->HasRecorder()) {
 			CMetaDefaultAttributeObject* attributeRecorder = m_metaObject->GetRegisterRecorder();
 			wxASSERT(attributeRecorder);
-			IMetaAttributeObject::GetValueAttribute(attributeRecorder, keyRow[attributeRecorder->GetMetaID()], resultSet);
+			IMetaAttributeObject::GetValueAttribute(attributeRecorder, rowData->AppendNodeValue(attributeRecorder->GetMetaID()), resultSet);
 			CMetaDefaultAttributeObject* attributeNumberLine = m_metaObject->GetRegisterLineNumber();
 			wxASSERT(attributeNumberLine);
-			IMetaAttributeObject::GetValueAttribute(attributeNumberLine, keyRow[attributeNumberLine->GetMetaID()], resultSet);
+			IMetaAttributeObject::GetValueAttribute(attributeNumberLine, rowData->AppendNodeValue(attributeNumberLine->GetMetaID()), resultSet);
 		}
 		else {
 			for (auto dimension : m_metaObject->GetGenericDimensions()) {
-				IMetaAttributeObject::GetValueAttribute(dimension, keyRow[dimension->GetMetaID()], resultSet);
+				IMetaAttributeObject::GetValueAttribute(dimension, rowData->AppendNodeValue(dimension->GetMetaID()), resultSet);
 			}
 		}
 		for (auto attribute : m_metaObject->GetGenericAttributes()) {
-			IMetaAttributeObject::GetValueAttribute(attribute, valueRow[attribute->GetMetaID()], resultSet);
+			IMetaAttributeObject::GetValueAttribute(attribute, rowData->AppendTableValue(attribute->GetMetaID()), resultSet);
 		}
 		IValueTable::Append(
-			new wxValueTableKeyRow(valueRow, keyRow), !CTranslateError::IsSimpleMode()
+			rowData, !CTranslateError::IsSimpleMode()
 		);
 	};
 

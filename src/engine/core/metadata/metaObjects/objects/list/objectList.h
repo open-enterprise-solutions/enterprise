@@ -241,8 +241,8 @@ public:
 		Guid GetGuid() const {
 			return m_objGuid;
 		}
-		wxValueTableEnumRow(const valueArray_t& nodeValues, const Guid& guid) :
-			wxValueTableRow(nodeValues), m_objGuid(guid) {
+		wxValueTableEnumRow(const Guid& guid) :
+			wxValueTableRow(), m_objGuid(guid) {
 		}
 	private:
 		Guid m_objGuid;
@@ -331,8 +331,8 @@ public:
 		Guid GetGuid() const {
 			return m_objGuid;
 		}
-		wxValueTableListRow(const valueArray_t& nodeValues, const Guid& guid) :
-			wxValueTableRow(nodeValues), m_objGuid(guid) {
+		wxValueTableListRow(const Guid& guid) :
+			wxValueTableRow(), m_objGuid(guid) {
 		}
 	private:
 		Guid m_objGuid;
@@ -423,8 +423,18 @@ class CListRegisterObject : public IListDataObject {
 	wxDECLARE_DYNAMIC_CLASS(CListRegisterObject);
 public:
 	struct wxValueTableKeyRow : public wxValueTableRow {
-		wxValueTableKeyRow(const valueArray_t& nodeValues, const valueArray_t& nodeKeys) :
-			wxValueTableRow(nodeValues), m_nodeKeys(nodeKeys) {
+		wxValueTableKeyRow() :
+			wxValueTableRow(), m_nodeKeys() {
+		}
+
+		void AppendNodeValue(const meta_identifier_t& id, const CValue& variant)
+		{
+			m_nodeKeys.insert_or_assign(id, variant);
+		}
+
+		CValue& AppendNodeValue(const meta_identifier_t& id)
+		{
+			return m_nodeKeys[id];
 		}
 
 		CUniquePairKey GetUniquePairKey(IMetaObjectRegisterData* metaObject) const {
@@ -739,8 +749,8 @@ public:
 			return m_objGuid;
 		}
 
-		wxValueTreeListNode(wxValueTreeNode* parent, const valueArray_t& nodeValues, const Guid& guid, ITreeDataObject* treeValue = NULL, bool container = false) :
-			wxValueTreeNode(parent, nodeValues), m_objGuid(guid), m_container(container) {
+		wxValueTreeListNode(wxValueTreeNode* parent, const Guid& guid, ITreeDataObject* treeValue = NULL, bool container = false) :
+			wxValueTreeNode(parent), m_objGuid(guid), m_container(container) {
 			m_valueTree = treeValue;
 		}
 

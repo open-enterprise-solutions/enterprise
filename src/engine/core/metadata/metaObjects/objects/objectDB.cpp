@@ -901,16 +901,15 @@ bool IRecordSetObject::ReadData()
 	if (resultSet == NULL)
 		return false;
 	while (resultSet->Next()) {
-		valueArray_t keyTable, rowTable;
+		wxValueTableRow* rowData = new wxValueTableRow();
 		for (auto attribute : m_metaObject->GetGenericDimensions()) {
-			IMetaAttributeObject::GetValueAttribute(attribute, keyTable[attribute->GetMetaID()], resultSet);
+			IMetaAttributeObject::GetValueAttribute(attribute, rowData->AppendTableValue(attribute->GetMetaID()), resultSet);
 		}
 		for (auto attribute : m_metaObject->GetGenericAttributes()) {
-			IMetaAttributeObject::GetValueAttribute(attribute, rowTable[attribute->GetMetaID()], resultSet);
+			IMetaAttributeObject::GetValueAttribute(attribute, rowData->AppendTableValue(attribute->GetMetaID()), resultSet);
 		}
-		IValueTable::Append(
-			new wxValueTableRow(rowTable), !CTranslateError::IsSimpleMode()
-		); m_selected = true;
+		IValueTable::Append(rowData, !CTranslateError::IsSimpleMode());
+		m_selected = true;
 	}
 
 	resultSet->Close();
@@ -1036,7 +1035,7 @@ bool IRecordSetObject::SaveData(bool replace, bool clearTable)
 				wxASSERT(node);
 				IMetaAttributeObject::SetValueAttribute(
 					attribute,
-					node->GetValue(attribute->GetMetaID()),
+					node->GetTableValue(attribute->GetMetaID()),
 					statement,
 					position
 				);

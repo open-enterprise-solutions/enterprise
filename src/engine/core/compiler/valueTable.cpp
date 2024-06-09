@@ -25,7 +25,7 @@ wxDataViewItem CValueTable::FindRowValue(const CValue& varValue, const wxString&
 			const wxDataViewItem& item = GetItem(row);
 			wxValueTableRow* node = GetViewData<wxValueTableRow>(item);
 			if (node != NULL &&
-				varValue == node->GetValue((meta_identifier_t)colInfo->GetColumnID())) {
+				varValue == node->GetTableValue((meta_identifier_t)colInfo->GetColumnID())) {
 				return item;
 			}
 		}
@@ -304,16 +304,14 @@ bool CValueTable::CValueTableReturnLine::GetPropVal(const long lPropNum, CValue&
 
 long CValueTable::AppendRow(unsigned int before)
 {
-	valueArray_t valueRow;
+	wxValueTableRow* rowData = new wxValueTableRow();
 	for (auto& colData : m_dataColumnCollection->m_columnInfo) {
-		valueRow.insert_or_assign(colData->GetColumnID(),
+		rowData->AppendTableValue(colData->GetColumnID(),
 			CValueTypeDescription::AdjustValue(m_dataColumnCollection->GetColumnType(colData->GetColumnID()))
 		);
 	}
 
-	return IValueTable::Append(
-		new wxValueTableRow(valueRow), !CTranslateError::IsSimpleMode()
-	);
+	return IValueTable::Append(rowData, !CTranslateError::IsSimpleMode());
 }
 
 void CValueTable::EditRow()
@@ -329,22 +327,18 @@ void CValueTable::CopyRow()
 	wxValueTableRow* node = GetViewData<wxValueTableRow>(currentItem);
 	if (node == NULL)
 		return;
-	valueArray_t valueRow;
+	wxValueTableRow* rowData = new wxValueTableRow();
 	for (auto& colData : m_dataColumnCollection->m_columnInfo) {
-		valueRow.insert_or_assign(
-			colData->GetColumnID(), node->GetValue((meta_identifier_t)colData->GetColumnID())
+		rowData->AppendTableValue(
+			colData->GetColumnID(), node->GetTableValue(colData->GetColumnID())
 		);
 	}
 	const long& currentLine = GetRow(currentItem);
 	if (currentLine != wxNOT_FOUND) {
-		IValueTable::Insert(
-			new wxValueTableRow(valueRow), currentLine, !CTranslateError::IsSimpleMode()
-		);
+		IValueTable::Insert(rowData, currentLine, !CTranslateError::IsSimpleMode());
 	}
 	else {
-		IValueTable::Append(
-			new wxValueTableRow(valueRow), !CTranslateError::IsSimpleMode()
-		);
+		IValueTable::Append(rowData, !CTranslateError::IsSimpleMode());
 	}
 }
 

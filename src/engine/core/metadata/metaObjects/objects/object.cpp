@@ -3026,22 +3026,19 @@ IRecordSetObject::CRecordSetRegisterKeyValue::CRecordSetRegisterKeyDescriptionVa
 
 long IRecordSetObject::AppendRow(unsigned int before)
 {
-	valueArray_t valueRow;
+	wxValueTableRow* rowData = new wxValueTableRow();
 
 	IMetaObjectRegisterData* metaObject = GetMetaObject();
 	wxASSERT(metaObject);
 	IMetadata* metaData = metaObject->GetMetadata();
 	for (auto attribute : metaObject->GetGenericAttributes()) {
-		valueRow.insert_or_assign(attribute->GetMetaID(), attribute->CreateValue());
+		rowData->AppendTableValue(attribute->GetMetaID(), attribute->CreateValue());
 	}
 
 	if (before > 0)
-		return IValueTable::Insert(
-			new wxValueTableRow(valueRow), before, !CTranslateError::IsSimpleMode());
+		return IValueTable::Insert(rowData, before, !CTranslateError::IsSimpleMode());
 
-	return IValueTable::Append(
-		new wxValueTableRow(valueRow), !CTranslateError::IsSimpleMode()
-	);
+	return IValueTable::Append(rowData, !CTranslateError::IsSimpleMode());
 }
 
 enum Func {
