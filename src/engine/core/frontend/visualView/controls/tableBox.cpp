@@ -340,15 +340,15 @@ void CValueTableBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, IVisualHo
 
 		CValueTableBox::CreateModel();
 
-		if (m_tableModel != tableCtrl->GetModel()) {
-			tableCtrl->AssociateModel(m_tableModel);
-		}
+		//if (m_tableModel != tableCtrl->GetModel()) {
+		//	tableCtrl->AssociateModel(m_tableModel);
+		//}
 
-		if (m_tableCurrentLine != NULL) {
-			tableCtrl->Select(
-				m_tableCurrentLine->GetLineItem()
-			);
-		}
+		//if (m_tableCurrentLine != NULL) {
+		//	tableCtrl->Select(
+		//		m_tableCurrentLine->GetLineItem()
+		//	);
+		//}
 	}
 }
 
