@@ -743,7 +743,7 @@ public:
 		Sort(fixedSort, notify);
 	}
 
-	void Sort(std::vector<sortModel_t> paSort, bool notify = true) {
+	void Sort(std::vector<sortModel_t> &paSort, bool notify = true) {
 		if (notify) wxDataViewModel::BeforeReset();
 		std::sort(m_nodeValues.begin(), m_nodeValues.end(),
 			[&paSort](const wxValueTableRow* a, const wxValueTableRow* b) {
@@ -784,13 +784,11 @@ public:
 		if (node2 == NULL)
 			return 0;
 
+		CValue currValue1, currValue2;
 		for (auto sort : m_sortOrder.m_sorts) {
-
-			CValue currValue1, currValue2;
-			node1->GetValue(sort.m_sortModel, currValue1);
-			node2->GetValue(sort.m_sortModel, currValue2);
-
-			if (sort.m_sortEnable) {
+			if (sort.m_sortEnable) {			
+				node1->GetValue(sort.m_sortModel, currValue1);
+				node2->GetValue(sort.m_sortModel, currValue2);
 				if (sort.m_sortAscending) {
 					if (currValue1 < currValue2)
 						return -1;
@@ -1184,7 +1182,7 @@ public:
 		Sort(fixedSort, notify);
 	}
 
-	void Sort(std::vector<sortModel_t> paSort, bool notify = true) {
+	void Sort(std::vector<sortModel_t> &paSort, bool notify = true) {
 		if (notify) /* wxDataViewModel:: */ BeforeReset();
 		m_root->Sort(paSort);
 		if (notify) /* wxDataViewModel:: */ AfterReset();
@@ -1216,13 +1214,11 @@ public:
 		if (node2 == NULL)
 			return 0;
 
+		CValue currValue1, currValue2;
 		for (auto sort : m_sortOrder.m_sorts) {
-
-			CValue currValue1, currValue2;
-			node1->GetValue(sort.m_sortModel, currValue1);
-			node2->GetValue(sort.m_sortModel, currValue2);
-
 			if (sort.m_sortEnable) {
+				node1->GetValue(sort.m_sortModel, currValue1);
+				node2->GetValue(sort.m_sortModel, currValue2);
 				if (sort.m_sortAscending) {
 					if (currValue1 < currValue2)
 						return -1;
