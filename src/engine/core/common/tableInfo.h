@@ -525,6 +525,16 @@ public:
 			m_nodeValues.insert_or_assign(id, variant);
 		}
 
+		inline void AppendTableValue(const meta_identifier_t& id, CValue& variant)
+		{
+			m_nodeValues.insert_or_assign(id, variant);
+		}
+
+		inline void AppendTableValue(const meta_identifier_t& id, const CValue& variant)
+		{
+			m_nodeValues.insert_or_assign(id, variant);
+		}
+
 		inline CValue& AppendTableValue(const meta_identifier_t& id)
 		{
 			return m_nodeValues[id];
