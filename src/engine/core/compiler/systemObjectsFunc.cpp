@@ -915,7 +915,7 @@ CValue CSystemObjects::GetCommonForm(const wxString& formName, IValueFrame* owne
 				}
 			}
 		}
-		Raise(_("Сommon form not found '") + formName + "'");
+		Raise(_("Common form not found '") + formName + "'");
 	}
 	return NULL;
 }

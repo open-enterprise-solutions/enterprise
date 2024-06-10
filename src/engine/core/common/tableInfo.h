@@ -815,11 +815,10 @@ public:
 		if (node2 == NULL)
 			return 0;
 
-		CValue currValue1, currValue2;
 		for (auto sort : m_sortOrder.m_sorts) {
 			if (sort.m_sortEnable) {			
-				node1->GetValue(sort.m_sortModel, currValue1);
-				node2->GetValue(sort.m_sortModel, currValue2);
+				const CValue &currValue1 = node1->GetTableValue(sort.m_sortModel);
+				const CValue &currValue2 = node2->GetTableValue(sort.m_sortModel);
 				if (sort.m_sortAscending) {
 					if (currValue1 < currValue2)
 						return -1;
@@ -1104,20 +1103,19 @@ public:
 			return false;
 		}
 
-		CValue GetValue(const meta_identifier_t& id) const {
-			CValue cValue; GetValue(id, cValue);
-			return cValue;
+		////////////////////////////////////////////////////////////////////////
+
+		const CValue& GetTableValue(const meta_identifier_t& id) const {
+			return m_nodeValues.at(id);
 		}
 
-		wxVariant GetValue(unsigned int col) const {
-			wxVariant vValue; GetValue(col, vValue);
-			return vValue;
-		}
+		////////////////////////////////////////////////////////////////////////
+
 
 		bool GetValue(const meta_identifier_t& id, CValue& variant) const {
 			try {
-				const CValue& cValue = m_nodeValues.at(id);
-				variant = cValue; return true;
+				variant = GetTableValue(id); 
+				return true;
 			}
 			catch (std::out_of_range&) {
 			}
@@ -1126,8 +1124,8 @@ public:
 
 		bool GetValue(unsigned int col, wxVariant& variant) const {
 			try {
-				const CValue& cValue = m_nodeValues.at(col);
-				variant = cValue.GetString(); return true;
+				variant = GetTableValue(col).GetString();
+				return true;
 			}
 			catch (std::out_of_range&) {
 			}
@@ -1267,11 +1265,10 @@ public:
 		if (node2 == NULL)
 			return 0;
 
-		CValue currValue1, currValue2;
 		for (auto sort : m_sortOrder.m_sorts) {
 			if (sort.m_sortEnable) {
-				node1->GetValue(sort.m_sortModel, currValue1);
-				node2->GetValue(sort.m_sortModel, currValue2);
+				const CValue& currValue1 = node1->GetTableValue(sort.m_sortModel);
+				const CValue& currValue2 = node2->GetTableValue(sort.m_sortModel);
 				if (sort.m_sortAscending) {
 					if (currValue1 < currValue2)
 						return -1;

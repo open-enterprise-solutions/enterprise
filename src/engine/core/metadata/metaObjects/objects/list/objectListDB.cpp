@@ -106,6 +106,7 @@ void CListDataObjectRef::RefreshModel(const wxDataViewItem& topItem, int countPe
 			}
 		}
 	}
+	const std::vector<IMetaAttributeObject*>& vec_attr = m_metaObject->GetGenericAttributes();
 	queryText = queryText + whereText;
 	CMetaDefaultAttributeObject* metaReference = m_metaObject->GetDataReference();
 	IValueTable::Clear();
@@ -130,7 +131,7 @@ void CListDataObjectRef::RefreshModel(const wxDataViewItem& topItem, int countPe
 	while (resultSet->Next()) {
 		wxMemoryBuffer bufferData; const Guid& rowGuid = resultSet->GetResultString(guidName);
 		wxValueTableListRow *rowData = new wxValueTableListRow(rowGuid);
-		for (auto attribute : m_metaObject->GetGenericAttributes()) {
+		for (auto &attribute : vec_attr) {
 			if (m_metaObject->IsDataReference(attribute->GetMetaID()))
 				continue;
 			IMetaAttributeObject::GetValueAttribute(attribute, rowData->AppendTableValue(attribute->GetMetaID()), resultSet);
@@ -159,8 +160,6 @@ void CListDataObjectRef::RefreshModel(const wxDataViewItem& topItem, int countPe
 
 void CTreeDataObjectFolderRef::RefreshModel(const wxDataViewItem& topItem, int countPerPage)
 {
-	std::vector<std::pair<Guid, wxValueTreeListNode*>> treeData;
-
 	const wxString& tableName = m_metaObject->GetTableNameDB();
 	wxString queryText = "SELECT * FROM " + tableName;
 	wxString whereText; bool firstWhere = true;
@@ -185,6 +184,7 @@ void CTreeDataObjectFolderRef::RefreshModel(const wxDataViewItem& topItem, int c
 			}
 		}
 	}
+	const std::vector<IMetaAttributeObject*>& vec_attr = m_metaObject->GetGenericAttributes();
 	queryText = queryText + whereText;
 	CMetaDefaultAttributeObject* metaReference = m_metaObject->GetDataReference();
 	IValueTree::Clear();
@@ -206,7 +206,7 @@ void CTreeDataObjectFolderRef::RefreshModel(const wxDataViewItem& topItem, int c
 		}
 	}
 	
-	CValue cRefVal;
+	std::vector<std::pair<Guid, wxValueTreeListNode*>> treeData; CValue cRefVal;
 	
 	DatabaseResultSet* resultSet = statement->RunQueryWithResults();
 	wxASSERT(metaReference);
@@ -220,7 +220,7 @@ void CTreeDataObjectFolderRef::RefreshModel(const wxDataViewItem& topItem, int c
 			continue;
 
 		wxValueTreeListNode* rowData = new wxValueTreeListNode(NULL, resultSet->GetResultString(guidName), this, isFolder.GetBoolean());
-		for (auto attribute : m_metaObject->GetGenericAttributes()) {
+		for (auto &attribute : vec_attr) {
 			if (m_metaObject->IsDataReference(attribute->GetMetaID()))
 				continue;
 			IMetaAttributeObject::GetValueAttribute(attribute, rowData->AppendTableValue(attribute->GetMetaID()), resultSet);
@@ -286,6 +286,7 @@ void CListRegisterObject::RefreshModel(const wxDataViewItem& topItem, int countP
 				firstWhere = false;
 		}
 	}
+	const std::vector<IMetaAttributeObject*>& vec_attr = m_metaObject->GetGenericAttributes(), &vec_dim = m_metaObject->GetGenericDimensions();
 	queryText = queryText + whereText;
 	IValueTable::Clear();
 	PreparedStatement* statement = databaseLayer->PrepareStatement(queryText); int position = 1;
@@ -308,11 +309,11 @@ void CListRegisterObject::RefreshModel(const wxDataViewItem& topItem, int countP
 			IMetaAttributeObject::GetValueAttribute(attributeNumberLine, rowData->AppendNodeValue(attributeNumberLine->GetMetaID()), resultSet);
 		}
 		else {
-			for (auto dimension : m_metaObject->GetGenericDimensions()) {
+			for (auto &dimension : vec_dim) {
 				IMetaAttributeObject::GetValueAttribute(dimension, rowData->AppendNodeValue(dimension->GetMetaID()), resultSet);
 			}
 		}
-		for (auto attribute : m_metaObject->GetGenericAttributes()) {
+		for (auto &attribute : vec_attr) {
 			IMetaAttributeObject::GetValueAttribute(attribute, rowData->AppendTableValue(attribute->GetMetaID()), resultSet);
 		}
 		IValueTable::Append(
