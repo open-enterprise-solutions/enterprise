@@ -1121,12 +1121,12 @@ CValue IRecordDataObjectRef::CCodeGenerator::GenerateCode() const
 	if (resultSet == NULL)
 		return m_metaAttribute->CreateValue();
 
-	number_t code = 1;
+	number_t code = 1; CValue fieldCode;
 
 	if (m_metaAttribute->ContainType(eValueTypes::TYPE_NUMBER)) {
 		while (resultSet->Next()) {
-			CValue fieldCode; IMetaAttributeObject::GetValueAttribute(m_metaAttribute, fieldCode, resultSet);
-			if (fieldCode == code) {
+			IMetaAttributeObject::GetValueAttribute(m_metaAttribute, fieldCode, resultSet);
+			if (fieldCode.GetNumber() == code) {
 				code++;
 			}
 		}
@@ -1136,12 +1136,11 @@ CValue IRecordDataObjectRef::CCodeGenerator::GenerateCode() const
 	else if (m_metaAttribute->ContainType(eValueTypes::TYPE_STRING)) {
 		ttmath::Conv conv;
 		conv.precision = m_metaAttribute->GetLength();
-		conv.leading_zero = true;
-		
+		conv.leading_zero = true;	
 		wxString strCode = code.ToString(conv);
 		while (resultSet->Next()) {
-			CValue fieldCode; IMetaAttributeObject::GetValueAttribute(m_metaAttribute, fieldCode, resultSet);
-			if (fieldCode == strCode) {
+			IMetaAttributeObject::GetValueAttribute(m_metaAttribute, fieldCode, resultSet);
+			if (fieldCode.GetString() == strCode) {
 				code++;
 				strCode = code.ToString(conv);
 			}
