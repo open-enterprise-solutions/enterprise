@@ -1217,6 +1217,9 @@
     <Filter Include="metaCollection\partial\tabularSection">
       <UniqueIdentifier>{71c8219e-d586-457e-9dda-a3df1944473b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="databaseLayer\postgres\engine\dll">
+      <UniqueIdentifier>{f3d5ad68-1601-4e62-b0a9-fc2b00b345a2}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="compiler\ttmath\ttmathuint_x86_64_msvc.asm">
@@ -1224,8 +1227,23 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="databaseLayer\postgres\engine\libpq_x86.dll">
-      <Filter>databaseLayer\postgres\engine</Filter>
+    <CopyFileToFolders Include="databaseLayer\postgres\engine\dll\libcrypto-3-x64.dll">
+      <Filter>databaseLayer\postgres\engine\dll</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\postgres\engine\dll\libcrypto-3-x86.dll">
+      <Filter>databaseLayer\postgres\engine\dll</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\postgres\engine\dll\libpq_x64.dll">
+      <Filter>databaseLayer\postgres\engine\dll</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\postgres\engine\dll\libpq_x86.dll">
+      <Filter>databaseLayer\postgres\engine\dll</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\postgres\engine\dll\libssl-3-x64.dll">
+      <Filter>databaseLayer\postgres\engine\dll</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\postgres\engine\dll\libssl-3-x86.dll">
+      <Filter>databaseLayer\postgres\engine\dll</Filter>
     </CopyFileToFolders>
   </ItemGroup>
 </Project>
