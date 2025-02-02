@@ -1,0 +1,650 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="artProvider\artProvider.cpp" />
+    <ClCompile Include="docView\docManager.cpp" />
+    <ClCompile Include="docView\docView.cpp" />
+    <ClCompile Include="docView\docViewCmd.cpp" />
+    <ClCompile Include="docView\templates\template.cpp" />
+    <ClCompile Include="docView\templates\text.cpp" />
+    <ClCompile Include="frontend.cpp" />
+    <ClCompile Include="mainFrame\grid\gridCommon.cpp" />
+    <ClCompile Include="mainFrame\grid\gridSections.cpp" />
+    <ClCompile Include="mainFrame\grid\gridUtils.cpp" />
+    <ClCompile Include="mainFrame\grid\printout\gridPrintout.cpp" />
+    <ClCompile Include="mainFrame\grid\property\gridProperty.cpp" />
+    <ClCompile Include="mainFrame\mainFrame.cpp" />
+    <ClCompile Include="mainFrame\mainFrameChild.cpp" />
+    <ClCompile Include="mainFrame\mainFrameComponent.cpp" />
+    <ClCompile Include="mainFrame\objinspect\advprops.cpp" />
+    <ClCompile Include="mainFrame\objinspect\editors.cpp" />
+    <ClCompile Include="mainFrame\objinspect\objinspect.cpp" />
+    <ClCompile Include="mainFrame\settings\editorsettings.cpp" />
+    <ClCompile Include="mainFrame\settings\editorsettingspanel.cpp" />
+    <ClCompile Include="mainFrame\settings\fontcolorsettings.cpp" />
+    <ClCompile Include="mainFrame\settings\fontcolorsettingspanel.cpp" />
+    <ClCompile Include="mainFrame\settings\keybinder.cpp" />
+    <ClCompile Include="mainFrame\settings\keybinderdialog.cpp" />
+    <ClCompile Include="mainFrame\settings\keymonitortextctrl.cpp" />
+    <ClCompile Include="mainFrame\settings\settingsdialog.cpp" />
+    <ClCompile Include="mainFrame\settings\showhelpevent.cpp" />
+    <ClCompile Include="mainFrame\settings\statictextex.cpp" />
+    <ClCompile Include="mainFrame\settings\stlutility.cpp" />
+    <ClCompile Include="mainFrame\settings\xmlutility.cpp" />
+    <ClCompile Include="visualView\ctrl\boxsizer.cpp" />
+    <ClCompile Include="visualView\ctrl\boxsizer_res.cpp" />
+    <ClCompile Include="visualView\ctrl\button.cpp" />
+    <ClCompile Include="visualView\ctrl\buttonEvent.cpp" />
+    <ClCompile Include="visualView\ctrl\button_res.cpp" />
+    <ClCompile Include="visualView\ctrl\chartBox.cpp" />
+    <ClCompile Include="visualView\ctrl\chartBox_res.cpp" />
+    <ClCompile Include="visualView\ctrl\checkbox.cpp" />
+    <ClCompile Include="visualView\ctrl\checkboxEvent.cpp" />
+    <ClCompile Include="visualView\ctrl\checkboxProperty.cpp" />
+    <ClCompile Include="visualView\ctrl\checkbox_res.cpp" />
+    <ClCompile Include="visualView\ctrl\choice.cpp" />
+    <ClCompile Include="visualView\ctrl\combobox.cpp" />
+    <ClCompile Include="visualView\ctrl\control.cpp" />
+    <ClCompile Include="visualView\ctrl\controlProperty.cpp" />
+    <ClCompile Include="visualView\ctrl\form.cpp" />
+    <ClCompile Include="visualView\ctrl\formAction.cpp" />
+    <ClCompile Include="visualView\ctrl\formControl.cpp" />
+    <ClCompile Include="visualView\ctrl\formData.cpp" />
+    <ClCompile Include="visualView\ctrl\formDocument.cpp" />
+    <ClCompile Include="visualView\ctrl\formFactory.cpp" />
+    <ClCompile Include="visualView\ctrl\formMem.cpp" />
+    <ClCompile Include="visualView\ctrl\formObject.cpp" />
+    <ClCompile Include="visualView\ctrl\form_res.cpp" />
+    <ClCompile Include="visualView\ctrl\frame.cpp" />
+    <ClCompile Include="visualView\ctrl\frameEvent.cpp" />
+    <ClCompile Include="visualView\ctrl\frameID.cpp" />
+    <ClCompile Include="visualView\ctrl\frameProperty.cpp" />
+    <ClCompile Include="visualView\ctrl\gauge.cpp" />
+    <ClCompile Include="visualView\ctrl\gauge_res.cpp" />
+    <ClCompile Include="visualView\ctrl\gridBox.cpp" />
+    <ClCompile Include="visualView\ctrl\gridBox_res.cpp" />
+    <ClCompile Include="visualView\ctrl\gridsizer.cpp" />
+    <ClCompile Include="visualView\ctrl\gridsizer_res.cpp" />
+    <ClCompile Include="visualView\ctrl\htmlBox.cpp" />
+    <ClCompile Include="visualView\ctrl\htmlBox_res.cpp" />
+    <ClCompile Include="visualView\ctrl\itemsizer.cpp" />
+    <ClCompile Include="visualView\ctrl\listbox.cpp" />
+    <ClCompile Include="visualView\ctrl\notebook.cpp" />
+    <ClCompile Include="visualView\ctrl\notebookEvent.cpp" />
+    <ClCompile Include="visualView\ctrl\notebookMenu.cpp" />
+    <ClCompile Include="visualView\ctrl\notebookPage.cpp" />
+    <ClCompile Include="visualView\ctrl\notebookPage_res.cpp" />
+    <ClCompile Include="visualView\ctrl\notebook_res.cpp" />
+    <ClCompile Include="visualView\ctrl\radiobutton.cpp" />
+    <ClCompile Include="visualView\ctrl\radiobutton_res.cpp" />
+    <ClCompile Include="visualView\ctrl\sizers.cpp" />
+    <ClCompile Include="visualView\ctrl\slider.cpp" />
+    <ClCompile Include="visualView\ctrl\slider_res.cpp" />
+    <ClCompile Include="visualView\ctrl\staticboxsizer.cpp" />
+    <ClCompile Include="visualView\ctrl\staticboxsizer_res.cpp" />
+    <ClCompile Include="visualView\ctrl\staticline.cpp" />
+    <ClCompile Include="visualView\ctrl\staticline_res.cpp" />
+    <ClCompile Include="visualView\ctrl\statictext.cpp" />
+    <ClCompile Include="visualView\ctrl\statictext_res.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBox.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxAction.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxColumn.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxColumnEvent.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxColumnProperty.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxColumn_res.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxEvent.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxMenu.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxProperty.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBox_res.cpp" />
+    <ClCompile Include="visualView\ctrl\textctrl.cpp" />
+    <ClCompile Include="visualView\ctrl\textctrlEvent.cpp" />
+    <ClCompile Include="visualView\ctrl\textctrlProperty.cpp" />
+    <ClCompile Include="visualView\ctrl\textctrl_res.cpp" />
+    <ClCompile Include="visualView\ctrl\toolBar.cpp" />
+    <ClCompile Include="visualView\ctrl\toolBarAction.cpp" />
+    <ClCompile Include="visualView\ctrl\toolBarEvent.cpp" />
+    <ClCompile Include="visualView\ctrl\toolBarItem.cpp" />
+    <ClCompile Include="visualView\ctrl\toolBarItemAction.cpp" />
+    <ClCompile Include="visualView\ctrl\toolBarItem_res.cpp" />
+    <ClCompile Include="visualView\ctrl\toolBarMenu.cpp" />
+    <ClCompile Include="visualView\ctrl\toolBarProperty.cpp" />
+    <ClCompile Include="visualView\ctrl\toolBar_res.cpp" />
+    <ClCompile Include="visualView\ctrl\typeControl.cpp" />
+    <ClCompile Include="visualView\ctrl\window.cpp" />
+    <ClCompile Include="visualView\ctrl\wrapsizer.cpp" />
+    <ClCompile Include="visualView\dvc\dvc.cpp" />
+    <ClCompile Include="visualView\pageWindow.cpp" />
+    <ClCompile Include="visualView\special\enums\valueOrient.cpp" />
+    <ClCompile Include="visualView\special\valueEvent.cpp" />
+    <ClCompile Include="visualView\visualHost.cpp" />
+    <ClCompile Include="visualView\visualHost_impl.cpp" />
+    <ClCompile Include="visualView\visual.cpp" />
+    <ClCompile Include="visualView\visualEvent.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxareachart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxareachartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxareachartdatasetoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxareachartoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxbarchart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxbarchartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxbarchartdatasetoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxbarchartoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxboxplot.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxboxplotctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxboxplotdatasetoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxboxplotoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxbubblechart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxbubblechartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxbubblechartoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxcandlestickchart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxcandlestickchartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxcandlestickchartoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartbackground.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartbackgroundoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartcommonoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartfontoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartmultitooltip.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartmultitooltipoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartpadding.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsarc.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsarcoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsaxis.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsaxisoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsbrushoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartscategoricalaxis.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartscategoricaldata.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartscategoricaldataobserver.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartscircle.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartscircleoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsdataset.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsdatasetid.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsdatasettheme.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsdoubledataset.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartselement.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsgrid.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsgridmapping.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsgridoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartslabel.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartslabelgroup.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartslabeloptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartslegendctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartslegenditem.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartslegendline.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartslegendlineoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartslegendoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartslicedata.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsnumericalaxis.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsohlcdata.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartspenoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartspoint.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartspointoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsprecisiontheme.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartspresentationtheme.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsradialgrid.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsradialgridoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsrectangle.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsrectangleoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartstheme.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsthemefactory.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsthemeid.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartstimeaxis.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxchartsutilities.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxcharttooltip.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxcharttooltipoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxcharttooltipprovider.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxcolumnchart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxcolumnchartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxcolumnchartdatasetoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxcolumnchartoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxcombinationchart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxcombinationchartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxcombinationchartoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxdoughnutandpiechartbase.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxdoughnutandpiechartoptionsbase.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxdoughnutchart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxdoughnutchartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxdoughnutchartoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxhistogram.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxhistogramctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxhistogramoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxlinechart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxlinechartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxlinechartdatasetoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxlinechartoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxmath2dplot.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxmath2dplotctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxmath2dplotoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxohlcchart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxohlcchartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxohlcchartoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxpiechart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxpiechartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxpiechartoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxpolarareachart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxpolarareachartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxpolarareachartoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxradarchart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxradarchartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxradarchartoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxscatterplot.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxscatterplotctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxscatterplotoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxstackedbarchart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxstackedbarchartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxstackedbarchartdatasetoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxstackedbarchartoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxstackedcolumnchart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxstackedcolumnchartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxstackedcolumnchartdatasetoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxstackedcolumnchartoptions.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxtimeserieschart.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxtimeserieschartctrl.cpp" />
+    <ClCompile Include="win\ctrls\charts\wxtimeserieschartoptions.cpp" />
+    <ClCompile Include="win\ctrls\checktree.cpp" />
+    <ClCompile Include="win\ctrls\dataView.cpp" />
+    <ClCompile Include="win\ctrls\textEditor.cpp" />
+    <ClCompile Include="win\ctrls\treelistctrl.cpp" />
+    <ClCompile Include="win\dlgs\about.cpp" />
+    <ClCompile Include="win\dlgs\activeUser.cpp" />
+    <ClCompile Include="win\dlgs\authorization.cpp" />
+    <ClCompile Include="win\dlgs\colHeight.cpp" />
+    <ClCompile Include="win\dlgs\connectionDB.cpp" />
+    <ClCompile Include="win\dlgs\errorDialog.cpp" />
+    <ClCompile Include="win\dlgs\formSelector\formSelector.cpp" />
+    <ClCompile Include="win\dlgs\generation.cpp" />
+    <ClCompile Include="win\dlgs\rowHeight.cpp" />
+    <ClCompile Include="win\dlgs\selectData.cpp" />
+    <ClCompile Include="win\dlgs\userList.cpp" />
+    <ClCompile Include="win\dlgs\userItem.cpp" />
+    <ClCompile Include="win\theme\luna_dockart.cpp" />
+    <ClCompile Include="win\theme\luna_tabart.cpp" />
+    <ClCompile Include="win\theme\luna_toolbarart.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="artProvider\artProvider.h" />
+    <ClInclude Include="docView\docManager.h" />
+    <ClInclude Include="docView\docView.h" />
+    <ClInclude Include="docView\templates\template.h" />
+    <ClInclude Include="docView\templates\text.h" />
+    <ClInclude Include="frontend.h" />
+    <ClInclude Include="mainFrame\grid\gridCommon.h" />
+    <ClInclude Include="mainFrame\grid\gridSections.h" />
+    <ClInclude Include="mainFrame\grid\gridUtils.h" />
+    <ClInclude Include="mainFrame\grid\printout\gridPrintout.h" />
+    <ClInclude Include="mainFrame\grid\property\gridProperty.h" />
+    <ClInclude Include="mainFrame\mainFrame.h" />
+    <ClInclude Include="mainFrame\mainFrameChild.h" />
+    <ClInclude Include="mainFrame\objinspect\advprops.h" />
+    <ClInclude Include="mainFrame\objinspect\editors.h" />
+    <ClInclude Include="mainFrame\objinspect\objinspect.h" />
+    <ClInclude Include="mainFrame\settings\editorsettings.h" />
+    <ClInclude Include="mainFrame\settings\editorsettingspanel.h" />
+    <ClInclude Include="mainFrame\settings\fontcolorsettings.h" />
+    <ClInclude Include="mainFrame\settings\fontcolorsettingspanel.h" />
+    <ClInclude Include="mainFrame\settings\keybinder.h" />
+    <ClInclude Include="mainFrame\settings\keybinderdialog.h" />
+    <ClInclude Include="mainFrame\settings\keymonitortextctrl.h" />
+    <ClInclude Include="mainFrame\settings\settingsdialog.h" />
+    <ClInclude Include="mainFrame\settings\showhelpevent.h" />
+    <ClInclude Include="mainFrame\settings\statictextex.h" />
+    <ClInclude Include="mainFrame\settings\stlutility.h" />
+    <ClInclude Include="mainFrame\settings\xmlutility.h" />
+    <ClInclude Include="visualView\controlCtor.h" />
+    <ClInclude Include="visualView\ctrl\chartBox.h" />
+    <ClInclude Include="visualView\ctrl\control.h" />
+    <ClInclude Include="visualView\ctrl\form.h" />
+    <ClInclude Include="visualView\ctrl\frame.h" />
+    <ClInclude Include="visualView\ctrl\gridBox.h" />
+    <ClInclude Include="visualView\ctrl\htmlBox.h" />
+    <ClInclude Include="visualView\ctrl\notebook.h" />
+    <ClInclude Include="visualView\ctrl\sizers.h" />
+    <ClInclude Include="visualView\ctrl\tableBox.h" />
+    <ClInclude Include="visualView\ctrl\toolBar.h" />
+    <ClInclude Include="visualView\ctrl\typeControl.h" />
+    <ClInclude Include="visualView\ctrl\widgets.h" />
+    <ClInclude Include="visualView\ctrl\window.h" />
+    <ClInclude Include="visualView\dvc\dvc.h" />
+    <ClInclude Include="visualView\formdefs.h" />
+    <ClInclude Include="visualView\pageWindow.h" />
+    <ClInclude Include="visualView\special\enums\valueOrient.h" />
+    <ClInclude Include="visualView\special\valueEvent.h" />
+    <ClInclude Include="visualView\special\valueFilter.h" />
+    <ClInclude Include="visualView\visualHost.h" />
+    <ClInclude Include="visualView\visual.h" />
+    <ClInclude Include="win\ctrls\charts\wxareachart.h" />
+    <ClInclude Include="win\ctrls\charts\wxareachartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxareachartdatasetoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxareachartoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxbarchart.h" />
+    <ClInclude Include="win\ctrls\charts\wxbarchartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxbarchartdatasetoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxbarchartoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxboxplot.h" />
+    <ClInclude Include="win\ctrls\charts\wxboxplotctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxboxplotdatasetoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxboxplotoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxbubblechart.h" />
+    <ClInclude Include="win\ctrls\charts\wxbubblechartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxbubblechartoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxcandlestickchart.h" />
+    <ClInclude Include="win\ctrls\charts\wxcandlestickchartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxcandlestickchartoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchart.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartbackground.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartbackgroundoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartcommonoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartfontoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartmultitooltip.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartmultitooltipoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartobservers.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartpadding.h" />
+    <ClInclude Include="win\ctrls\charts\wxcharts.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsarc.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsarcoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsaxis.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsaxisoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsbrushoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartscategoricalaxis.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartscategoricaldata.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartscategoricaldataobserver.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartscircle.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartscircleoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsdataset.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsdatasetid.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsdatasettheme.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsdoubledataset.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartselement.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsgrid.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsgridmapping.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsgridoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartslabel.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartslabelgroup.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartslabeloptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartslegendctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartslegenditem.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartslegendline.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartslegendlineoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartslegendoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartslicedata.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsnumericalaxis.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsohlcdata.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartspenoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartspoint.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartspointoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsprecisiontheme.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartspresentationtheme.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsradialgrid.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsradialgridoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsrectangle.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsrectangleoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartstheme.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsthemefactory.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsthemeid.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartstimeaxis.h" />
+    <ClInclude Include="win\ctrls\charts\wxchartsutilities.h" />
+    <ClInclude Include="win\ctrls\charts\wxcharttooltip.h" />
+    <ClInclude Include="win\ctrls\charts\wxcharttooltipoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxcharttooltipprovider.h" />
+    <ClInclude Include="win\ctrls\charts\wxcolumnchart.h" />
+    <ClInclude Include="win\ctrls\charts\wxcolumnchartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxcolumnchartdatasetoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxcolumnchartoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxcombinationchart.h" />
+    <ClInclude Include="win\ctrls\charts\wxcombinationchartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxcombinationchartoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxdoughnutandpiechartbase.h" />
+    <ClInclude Include="win\ctrls\charts\wxdoughnutandpiechartoptionsbase.h" />
+    <ClInclude Include="win\ctrls\charts\wxdoughnutchart.h" />
+    <ClInclude Include="win\ctrls\charts\wxdoughnutchartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxdoughnutchartoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxhistogram.h" />
+    <ClInclude Include="win\ctrls\charts\wxhistogramctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxhistogramoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxlinechart.h" />
+    <ClInclude Include="win\ctrls\charts\wxlinechartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxlinechartdatasetoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxlinechartoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxmath2dplot.h" />
+    <ClInclude Include="win\ctrls\charts\wxmath2dplotctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxmath2dplotoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxohlcchart.h" />
+    <ClInclude Include="win\ctrls\charts\wxohlcchartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxohlcchartoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxpiechart.h" />
+    <ClInclude Include="win\ctrls\charts\wxpiechartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxpiechartoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxpolarareachart.h" />
+    <ClInclude Include="win\ctrls\charts\wxpolarareachartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxpolarareachartoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxradarchart.h" />
+    <ClInclude Include="win\ctrls\charts\wxradarchartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxradarchartoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxscatterplot.h" />
+    <ClInclude Include="win\ctrls\charts\wxscatterplotctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxscatterplotoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxstackedbarchart.h" />
+    <ClInclude Include="win\ctrls\charts\wxstackedbarchartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxstackedbarchartdatasetoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxstackedbarchartoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxstackedcolumnchart.h" />
+    <ClInclude Include="win\ctrls\charts\wxstackedcolumnchartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxstackedcolumnchartdatasetoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxstackedcolumnchartoptions.h" />
+    <ClInclude Include="win\ctrls\charts\wxtimeserieschart.h" />
+    <ClInclude Include="win\ctrls\charts\wxtimeserieschartctrl.h" />
+    <ClInclude Include="win\ctrls\charts\wxtimeserieschartoptions.h" />
+    <ClInclude Include="win\ctrls\checkBoxEditor.h" />
+    <ClInclude Include="win\ctrls\checktree.h" />
+    <ClInclude Include="win\ctrls\dataView.h" />
+    <ClInclude Include="win\ctrls\dynamicBorder.h" />
+    <ClInclude Include="win\ctrls\floatingNotebook.h" />
+    <ClInclude Include="win\ctrls\textEditor.h" />
+    <ClInclude Include="win\ctrls\toolBar.h" />
+    <ClInclude Include="win\ctrls\treelistctrl.h" />
+    <ClInclude Include="win\dlgs\about.h" />
+    <ClInclude Include="win\dlgs\activeUser.h" />
+    <ClInclude Include="win\dlgs\authorization.h" />
+    <ClInclude Include="win\dlgs\colHeight.h" />
+    <ClInclude Include="win\dlgs\connectionDB.h" />
+    <ClInclude Include="win\dlgs\errorDialog.h" />
+    <ClInclude Include="win\dlgs\formSelector\formSelector.h" />
+    <ClInclude Include="win\dlgs\generation.h" />
+    <ClInclude Include="win\dlgs\rowHeight.h" />
+    <ClInclude Include="win\dlgs\selectData.h" />
+    <ClInclude Include="win\dlgs\userList.h" />
+    <ClInclude Include="win\dlgs\userItem.h" />
+    <ClInclude Include="win\theme\luna_dockart.h" />
+    <ClInclude Include="win\theme\luna_tabart.h" />
+    <ClInclude Include="win\theme\luna_toolbarart.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="win\ctrls\res\checked2.xpm" />
+    <None Include="win\ctrls\res\checked_d.xpm" />
+    <None Include="win\ctrls\res\checked_ld.xpm" />
+    <None Include="win\ctrls\res\checked_mo.xpm" />
+    <None Include="win\ctrls\res\unchecked2.xpm" />
+    <None Include="win\ctrls\res\unchecked_d.xpm" />
+    <None Include="win\ctrls\res\unchecked_ld.xpm" />
+    <None Include="win\ctrls\res\unchecked_mo.xpm" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>15.0</VCProjectVersion>
+    <ProjectGuid>{0AE93EF4-6124-4C25-9D11-C5421385E80B}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>deamon</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>frontend</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ExecutablePath>$(VC_ExecutablePath_x64_x86);$(CommonExecutablePath);$(ExecutablePath)</ExecutablePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ExecutablePath>$(VC_ExecutablePath_x64_x86);$(CommonExecutablePath);$(ExecutablePath)</ExecutablePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);FRONTEND_EXPORTS</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);$(oesSrcDir)include;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw32ud_aui.lib;wxmsw32ud_qa.lib;wxmsw32ud_html.lib;wxmsw32ud_propgrid.lib;wxmsw32ud_adv.lib;wxmsw32ud_core.lib;wxbase32ud_xml.lib;wxbase32ud_net.lib;wxmsw32ud_stc.lib;wxmsw32ud_xrc.lib;wxbase32ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;backend.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);CORE_EXPORTS</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw31ud_aui.lib;wxmsw31ud_qa.lib;wxmsw31ud_html.lib;wxmsw31ud_propgrid.lib;wxmsw31ud_adv.lib;wxmsw31ud_core.lib;wxbase31ud_xml.lib;wxbase31ud_net.lib;wxmsw31ud_stc.lib;wxmsw31ud_xrc.lib;wxbase31ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;core.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;FRONTEND_EXPORTS</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)\core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>true</OmitFramePointers>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw32u_aui.lib;wxmsw32u_qa.lib;wxmsw32u_html.lib;wxmsw32u_propgrid.lib;wxmsw32u_adv.lib;wxmsw32u_core.lib;wxbase32u_xml.lib;wxbase32u_net.lib;wxmsw32u_stc.lib;wxmsw32u_xrc.lib;wxbase32u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;backend.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;CORE_EXPORTS</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>true</OmitFramePointers>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw31u_aui.lib;wxmsw31u_qa.lib;wxmsw31u_html.lib;wxmsw31u_propgrid.lib;wxmsw31u_adv.lib;wxmsw31u_core.lib;wxbase31u_xml.lib;wxbase31u_net.lib;wxmsw31u_stc.lib;wxmsw31u_xrc.lib;wxbase31u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;core.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

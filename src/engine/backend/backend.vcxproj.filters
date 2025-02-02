@@ -1,0 +1,1231 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="backend.h" />
+    <ClInclude Include="backend_form.h" />
+    <ClInclude Include="metaCtor.h" />
+    <ClInclude Include="metadata.h" />
+    <ClInclude Include="backend_metatree.h" />
+    <ClInclude Include="objCtor.h" />
+    <ClInclude Include="debugger\debugClient.h">
+      <Filter>debugger</Filter>
+    </ClInclude>
+    <ClInclude Include="debugger\debugClientBridge.h">
+      <Filter>debugger</Filter>
+    </ClInclude>
+    <ClInclude Include="debugger\debugDefs.h">
+      <Filter>debugger</Filter>
+    </ClInclude>
+    <ClInclude Include="debugger\debugServer.h">
+      <Filter>debugger</Filter>
+    </ClInclude>
+    <ClInclude Include="external\metadataDataProcessor.h">
+      <Filter>external</Filter>
+    </ClInclude>
+    <ClInclude Include="external\metadataReport.h">
+      <Filter>external</Filter>
+    </ClInclude>
+    <ClInclude Include="moduleManager\moduleManager.h">
+      <Filter>moduleManager</Filter>
+    </ClInclude>
+    <ClInclude Include="metaDefines.h" />
+    <ClInclude Include="systemManager\systemManager.h">
+      <Filter>systemManager</Filter>
+    </ClInclude>
+    <ClInclude Include="systemManager\systemManagerEnum.h">
+      <Filter>systemManager</Filter>
+    </ClInclude>
+    <ClInclude Include="systemManager\systemEnum.h">
+      <Filter>systemManager</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\compileModule.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="wrapper\moduleInfo.h">
+      <Filter>wrapper</Filter>
+    </ClInclude>
+    <ClInclude Include="wrapper\managerInfo.h">
+      <Filter>wrapper</Filter>
+    </ClInclude>
+    <ClInclude Include="appData.h" />
+    <ClInclude Include="wrapper\typeInfo.h">
+      <Filter>wrapper</Filter>
+    </ClInclude>
+    <ClInclude Include="wrapper\actionInfo.h">
+      <Filter>wrapper</Filter>
+    </ClInclude>
+    <ClInclude Include="wrapper\valueInfo.h">
+      <Filter>wrapper</Filter>
+    </ClInclude>
+    <ClInclude Include="uniqueKey.h" />
+    <ClInclude Include="wrapper\tableInfo.h">
+      <Filter>wrapper</Filter>
+    </ClInclude>
+    <ClInclude Include="wrapper\propertyInfo.h">
+      <Filter>wrapper</Filter>
+    </ClInclude>
+    <ClInclude Include="srcExplorer.h" />
+    <ClInclude Include="srcObject.h" />
+    <ClInclude Include="compiler\value\valueArray.h">
+      <Filter>compiler\value</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\value\valueColour.h">
+      <Filter>compiler\value</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\value\valueFile.h">
+      <Filter>compiler\value</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\value\valueFont.h">
+      <Filter>compiler\value</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\value\valueMap.h">
+      <Filter>compiler\value</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\value\valueOLE.h">
+      <Filter>compiler\value</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\value\valuePoint.h">
+      <Filter>compiler\value</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\value\valueSize.h">
+      <Filter>compiler\value</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\value\valueTable.h">
+      <Filter>compiler\value</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\value\valueType.h">
+      <Filter>compiler\value</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\databaseErrorCodes.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\databaseErrorReporter.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\databaseLayer.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\databaseLayerDef.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\databaseLayerException.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\databaseQueryParser.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\databaseResultSet.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\databaseStringConverter.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\preparedStatement.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\resultSetMetaData.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\value\valueGuid.h">
+      <Filter>compiler\value</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\value\value.h">
+      <Filter>compiler\value</Filter>
+    </ClInclude>
+    <ClInclude Include="guid.h" />
+    <ClInclude Include="databaseLayer\sqllite\sqliteDatabaseLayer.h">
+      <Filter>databaseLayer\sqllite</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\sqllite\sqlitePreparedStatement.h">
+      <Filter>databaseLayer\sqllite</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\sqllite\sqliteResultSet.h">
+      <Filter>databaseLayer\sqllite</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\sqllite\sqliteResultSetMetaData.h">
+      <Filter>databaseLayer\sqllite</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\sqllite\engine\sqlite_cfg.h">
+      <Filter>databaseLayer\sqllite\engine</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\sqllite\engine\sqlite3.h">
+      <Filter>databaseLayer\sqllite\engine</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\sqllite\engine\sqlite3ext.h">
+      <Filter>databaseLayer\sqllite\engine</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\wxmd5.hpp">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\compileContext.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\enum.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\enumFactory.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\enumObject.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\procContext.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\procUnit.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\translateCode.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\typeCtor.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\byteCode.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\codeDef.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\compileCode.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="backend_core.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdDatabaseLayer.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdInterface.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdParameter.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdParameterCollection.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdPreparedStatement.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdPreparedStatementWrapper.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdResultSet.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdResultSetMetaData.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\mysql\mysqlDatabaseLayer.h">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\mysql\mysqlInterface.h">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\mysql\mysqlParameter.h">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatement.h">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementParameter.h">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementParameterCollection.h">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementResultSet.h">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementWrapper.h">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\mysql\mysqlResultSetMetaData.h">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\odbc\odbcDatabaseLayer.h">
+      <Filter>databaseLayer\odbc</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\odbc\odbcInterface.h">
+      <Filter>databaseLayer\odbc</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\odbc\odbcParameter.h">
+      <Filter>databaseLayer\odbc</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\odbc\odbcPreparedStatement.h">
+      <Filter>databaseLayer\odbc</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\odbc\odbcResultSet.h">
+      <Filter>databaseLayer\odbc</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\odbc\odbcResultSetMetaData.h">
+      <Filter>databaseLayer\odbc</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\postgres\postgresDatabaseLayer.h">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\postgres\postgresInterface.h">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\postgres\postgresParameter.h">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\postgres\postgresPreparedStatement.h">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\postgres\postgresPreparedStatementParameterCollection.h">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\postgres\postgresPreparedStatementWrapper.h">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\postgres\postgresResultSet.h">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\postgres\postgresResultSetMetaData.h">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClInclude>
+    <ClInclude Include="backend_mainFrame.h" />
+    <ClInclude Include="backend_exception.h" />
+    <ClInclude Include="stringUtils.h" />
+    <ClInclude Include="typeconv.h" />
+    <ClInclude Include="types.h" />
+    <ClInclude Include="clsid.h" />
+    <ClInclude Include="compiler\ttmath\ttmath.h">
+      <Filter>compiler\ttmath</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ttmath\ttmathbig.h">
+      <Filter>compiler\ttmath</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ttmath\ttmathdec.h">
+      <Filter>compiler\ttmath</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ttmath\ttmathint.h">
+      <Filter>compiler\ttmath</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ttmath\ttmathmisc.h">
+      <Filter>compiler\ttmath</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ttmath\ttmathobjects.h">
+      <Filter>compiler\ttmath</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ttmath\ttmathparser.h">
+      <Filter>compiler\ttmath</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ttmath\ttmaththreads.h">
+      <Filter>compiler\ttmath</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ttmath\ttmathtypes.h">
+      <Filter>compiler\ttmath</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ttmath\ttmathuint.h">
+      <Filter>compiler\ttmath</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ttmath\ttmathuint_noasm.h">
+      <Filter>compiler\ttmath</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ttmath\ttmathuint_x86.h">
+      <Filter>compiler\ttmath</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\ttmath\ttmathuint_x86_64.h">
+      <Filter>compiler\ttmath</Filter>
+    </ClInclude>
+    <ClInclude Include="number.h" />
+    <ClInclude Include="fileSystem\fs.h">
+      <Filter>fileSystem</Filter>
+    </ClInclude>
+    <ClInclude Include="fileSystem\types.h">
+      <Filter>fileSystem</Filter>
+    </ClInclude>
+    <ClInclude Include="fileSystem\lz\lzhuf.h">
+      <Filter>fileSystem\lz</Filter>
+    </ClInclude>
+    <ClInclude Include="fileSystem\quicklz\quicklz.h">
+      <Filter>fileSystem\quicklz</Filter>
+    </ClInclude>
+    <ClInclude Include="value_cast.h" />
+    <ClInclude Include="metadataConfiguration.h" />
+    <ClInclude Include="role.h" />
+    <ClInclude Include="databaseLayer\postgres\engine\libpq-fe.h">
+      <Filter>databaseLayer\postgres\engine</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\postgres\engine\pg_config_ext.h">
+      <Filter>databaseLayer\postgres\engine</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\postgres\engine\postgres_ext.h">
+      <Filter>databaseLayer\postgres\engine</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\postgres\engine\libpq\libpq-fs.h">
+      <Filter>databaseLayer\postgres\engine\libpq</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaRoleObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaFormObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaGridObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaInterfaceObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaModuleObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaObjectMetadata.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\attribute\metaAttributeObject.h">
+      <Filter>metaCollection\attribute</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\dimension\metaDimensionObject.h">
+      <Filter>metaCollection\dimension</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\enumeration\metaEnumObject.h">
+      <Filter>metaCollection\enumeration</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\object.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\objectVariant.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\accumulationRegister.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\accumulationRegisterEnum.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\accumulationRegisterManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\catalog.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\catalogData.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\catalogManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\catalogVariant.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\constant.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\constantManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\contextManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\dataProcessor.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\dataProcessorManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\dataReport.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\dataReportManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\document.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\documentData.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\documentEnum.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\documentManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\documentVariant.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\enumeration.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\enumerationManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\informationRegister.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\informationRegisterEnum.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\informationRegisterManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\resource\metaResourceObject.h">
+      <Filter>metaCollection\resource</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\table\metaTableObject.h">
+      <Filter>metaCollection\table</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\list\objectList.h">
+      <Filter>metaCollection\partial\list</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\reference\reference.h">
+      <Filter>metaCollection\partial\reference</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\selector\objectSelector.h">
+      <Filter>metaCollection\partial\selector</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\tabularSection\tabularSection.h">
+      <Filter>metaCollection\partial\tabularSection</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="backend.cpp" />
+    <ClCompile Include="backend_form.cpp" />
+    <ClCompile Include="metadata.cpp" />
+    <ClCompile Include="metadataFactory.cpp" />
+    <ClCompile Include="objCtor.cpp" />
+    <ClCompile Include="debugger\debugClient.cpp">
+      <Filter>debugger</Filter>
+    </ClCompile>
+    <ClCompile Include="debugger\debugClientAsync.cpp">
+      <Filter>debugger</Filter>
+    </ClCompile>
+    <ClCompile Include="debugger\debugClientBridge.cpp">
+      <Filter>debugger</Filter>
+    </ClCompile>
+    <ClCompile Include="debugger\debugClientQuery.cpp">
+      <Filter>debugger</Filter>
+    </ClCompile>
+    <ClCompile Include="debugger\debugServer.cpp">
+      <Filter>debugger</Filter>
+    </ClCompile>
+    <ClCompile Include="external\metadataDataProcessor.cpp">
+      <Filter>external</Filter>
+    </ClCompile>
+    <ClCompile Include="external\metadataDataProcessorFactory.cpp">
+      <Filter>external</Filter>
+    </ClCompile>
+    <ClCompile Include="external\metadataReport.cpp">
+      <Filter>external</Filter>
+    </ClCompile>
+    <ClCompile Include="external\metadataReportFactory.cpp">
+      <Filter>external</Filter>
+    </ClCompile>
+    <ClCompile Include="moduleManager\moduleManager.cpp">
+      <Filter>moduleManager</Filter>
+    </ClCompile>
+    <ClCompile Include="moduleManager\moduleManagerEvent.cpp">
+      <Filter>moduleManager</Filter>
+    </ClCompile>
+    <ClCompile Include="moduleManager\moduleManagerMetadataUnit.cpp">
+      <Filter>moduleManager</Filter>
+    </ClCompile>
+    <ClCompile Include="moduleManager\moduleManagerUnit.cpp">
+      <Filter>moduleManager</Filter>
+    </ClCompile>
+    <ClCompile Include="systemManager\systemManagerEnum.cpp">
+      <Filter>systemManager</Filter>
+    </ClCompile>
+    <ClCompile Include="systemManager\systemManagerFunc.cpp">
+      <Filter>systemManager</Filter>
+    </ClCompile>
+    <ClCompile Include="systemManager\systemManager.cpp">
+      <Filter>systemManager</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\compileModule.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="wrapper\moduleInfo.cpp">
+      <Filter>wrapper</Filter>
+    </ClCompile>
+    <ClCompile Include="appData.cpp" />
+    <ClCompile Include="wrapper\typeInfo.cpp">
+      <Filter>wrapper</Filter>
+    </ClCompile>
+    <ClCompile Include="uniqueKey.cpp" />
+    <ClCompile Include="wrapper\propertyInfo.cpp">
+      <Filter>wrapper</Filter>
+    </ClCompile>
+    <ClCompile Include="wrapper\tableInfo.cpp">
+      <Filter>wrapper</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\valueArray.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\valueColour.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\valueFile.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\valueFont.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\valueMap.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\valueOLE.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\valuePoint.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\valueSize.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\valueTable.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\valueTable_res.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\valueTableModel.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\valueType.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\databaseErrorReporter.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\databaseLayer.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\databaseQueryParser.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\databaseResultSet.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\databaseStringConverter.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\resultSetMetaData.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\valueGuid.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\value.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\value_res.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\value\valueFactory.cpp">
+      <Filter>compiler\value</Filter>
+    </ClCompile>
+    <ClCompile Include="guid.cpp" />
+    <ClCompile Include="databaseLayer\sqllite\sqliteDatabaseLayer.cpp">
+      <Filter>databaseLayer\sqllite</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\sqllite\sqlitePreparedStatement.cpp">
+      <Filter>databaseLayer\sqllite</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\sqllite\sqliteResultSet.cpp">
+      <Filter>databaseLayer\sqllite</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\sqllite\sqliteResultSetMetaData.cpp">
+      <Filter>databaseLayer\sqllite</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\sqllite\engine\sqlite3.c">
+      <Filter>databaseLayer\sqllite\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\wxmd5.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\enum.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\enumFactory.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\procContext.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\procUnit.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\translateCode.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\byteCode.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\compileCode.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="compiler\compileContext.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="backend_core.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdDatabaseLayer.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdInterface.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdParameter.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdParameterCollection.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdPreparedStatement.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdPreparedStatementWrapper.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdResultSet.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdResultSetMetaData.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\mysql\mysqlDatabaseLayer.cpp">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\mysql\mysqlInterface.cpp">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\mysql\mysqlParameter.cpp">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatement.cpp">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementParameter.cpp">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementParameterCollection.cpp">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementResultSet.cpp">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementWrapper.cpp">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\mysql\mysqlResultSetMetaData.cpp">
+      <Filter>databaseLayer\mysql</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\odbc\odbcDatabaseLayer.cpp">
+      <Filter>databaseLayer\odbc</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\odbc\odbcInterface.cpp">
+      <Filter>databaseLayer\odbc</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\odbc\odbcParameter.cpp">
+      <Filter>databaseLayer\odbc</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\odbc\odbcPreparedStatement.cpp">
+      <Filter>databaseLayer\odbc</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\odbc\odbcResultSet.cpp">
+      <Filter>databaseLayer\odbc</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\odbc\odbcResultSetMetaData.cpp">
+      <Filter>databaseLayer\odbc</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\postgres\postgresDatabaseLayer.cpp">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\postgres\postgresInterface.cpp">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\postgres\postgresParameter.cpp">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\postgres\postgresPreparedStatement.cpp">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\postgres\postgresPreparedStatementParameterCollection.cpp">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\postgres\postgresPreparedStatementWrapper.cpp">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\postgres\postgresResultSet.cpp">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\postgres\postgresResultSetMetaData.cpp">
+      <Filter>databaseLayer\postgres</Filter>
+    </ClCompile>
+    <ClCompile Include="backend_mainFrame.cpp" />
+    <ClCompile Include="backend_exception.cpp" />
+    <ClCompile Include="fileSystem\lz\lzhuf.cpp">
+      <Filter>fileSystem\lz</Filter>
+    </ClCompile>
+    <ClCompile Include="fileSystem\quicklz\quicklz.c">
+      <Filter>fileSystem\quicklz</Filter>
+    </ClCompile>
+    <ClCompile Include="fileSystem\fs.cpp">
+      <Filter>fileSystem</Filter>
+    </ClCompile>
+    <ClCompile Include="value_cast.cpp" />
+    <ClCompile Include="metadataConfiguration.cpp" />
+    <ClCompile Include="role.cpp" />
+    <ClCompile Include="appDataQuery.cpp" />
+    <ClCompile Include="metadataConfigurationQuery.cpp" />
+    <ClCompile Include="metaCollection\metaObjectMetadataQuery.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaObjectProperty.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaRoleObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaRoleObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaRoleObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaFormObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaFormObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaFormObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaFormObjectProperty.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaGridObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaGridObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaGridObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaInterfaceObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaInterfaceObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaInterfaceObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaModuleObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaModuleObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaModuleObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaObjectMetadata.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaObjectMetadata_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaObjectMetadataMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\attribute\metaAttributeObjectQuery.cpp">
+      <Filter>metaCollection\attribute</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\attribute\metaAttributeObject.cpp">
+      <Filter>metaCollection\attribute</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\attribute\metaAttributeObject_res.cpp">
+      <Filter>metaCollection\attribute</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\attribute\metaAttributeObjectProperty.cpp">
+      <Filter>metaCollection\attribute</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\dimension\metaDimensionObject_res.cpp">
+      <Filter>metaCollection\dimension</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\dimension\metaDimensionObject.cpp">
+      <Filter>metaCollection\dimension</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\enumeration\metaEnumObject.cpp">
+      <Filter>metaCollection\enumeration</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\enumeration\metaEnumObject_res.cpp">
+      <Filter>metaCollection\enumeration</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\informationRegisterQuery.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\object.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\objectModel.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\objectProperty.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\objectQuery.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\objectVariant.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accumulationRegisterEnum.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accumulationRegisterManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accumulationRegisterManager_impl.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accumulationRegisterMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accumulationRegisterMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataProperty.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accumulationRegisterObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accumulationRegisterQuery.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\catalogAction.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\catalogData.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\catalogManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\catalogManager_impl.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\catalogMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\catalogMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\catalogMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\catalogMetadataProperty.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\catalogObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\catalogVariant.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\constantAction.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\constantManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\constantMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\constantMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\constantMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\constantMetadataQuery.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\constantObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\contextManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\dataProcessor_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\dataProcessorAction.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\dataProcessorManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\dataProcessorMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\dataProcessorMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\dataProcessorObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\dataReportAction.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\dataReportManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\dataReportMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\dataReportMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\dataReportMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\dataReportObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentAction.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentData.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentEnum.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentManager_impl.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentMetadataProperty.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentVariant.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\enumerationAction.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\enumerationManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\enumerationMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\enumerationMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\enumerationMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\informationRegisterAction.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\informationRegisterManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\informationRegisterManager_impl.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\informationRegisterMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\informationRegisterMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\informationRegisterMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\informationRegisterMetadataProperty.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\informationRegisterObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\resource\metaResourceObject_res.cpp">
+      <Filter>metaCollection\resource</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\resource\metaResourceObject.cpp">
+      <Filter>metaCollection\resource</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\table\metaTableObject_res.cpp">
+      <Filter>metaCollection\table</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\table\metaTableObjectProperty.cpp">
+      <Filter>metaCollection\table</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\table\metaTableObject.cpp">
+      <Filter>metaCollection\table</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\list\objectList.cpp">
+      <Filter>metaCollection\partial\list</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\list\objectListAction.cpp">
+      <Filter>metaCollection\partial\list</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\list\objectListModel.cpp">
+      <Filter>metaCollection\partial\list</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\list\objectListQuery.cpp">
+      <Filter>metaCollection\partial\list</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\reference\referenceQuery.cpp">
+      <Filter>metaCollection\partial\reference</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\reference\reference.cpp">
+      <Filter>metaCollection\partial\reference</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\selector\objectSelectorQuery.cpp">
+      <Filter>metaCollection\partial\selector</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\selector\objectSelector.cpp">
+      <Filter>metaCollection\partial\selector</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\tabularSection\tabularSectionModel.cpp">
+      <Filter>metaCollection\partial\tabularSection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\tabularSection\tabularSectionQuery.cpp">
+      <Filter>metaCollection\partial\tabularSection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\tabularSection\tabularSection.cpp">
+      <Filter>metaCollection\partial\tabularSection</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="debugger">
+      <UniqueIdentifier>{e7188396-0035-47b0-b863-be1ec229b525}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="external">
+      <UniqueIdentifier>{3379560f-6e0b-4972-b8d0-20e417961d4b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="moduleManager">
+      <UniqueIdentifier>{ac49a1b3-bb42-4b4f-9b17-a6ec169f254f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="systemManager">
+      <UniqueIdentifier>{18dba576-1530-4589-9207-1de10f999be6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="compiler">
+      <UniqueIdentifier>{154d9ec9-4ee0-4bf9-9618-e99db35efcbb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="wrapper">
+      <UniqueIdentifier>{92fe7c94-2fca-478a-8432-63b7ba88e1cc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="compiler\value">
+      <UniqueIdentifier>{40347ae0-b398-4570-bdf5-11f78ee03abc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="databaseLayer">
+      <UniqueIdentifier>{a817edbf-c64d-499d-8148-46d695095097}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="databaseLayer\sqllite">
+      <UniqueIdentifier>{388a21ca-c38d-448b-8ef2-e9a8eb228db2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="databaseLayer\sqllite\engine">
+      <UniqueIdentifier>{e0ed0b45-722f-4f6f-92b7-89455e0082e6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils">
+      <UniqueIdentifier>{bc892a4b-bcaa-4561-8a79-069a784639b3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="databaseLayer\firebird">
+      <UniqueIdentifier>{30f3747a-6465-49ff-8cf7-9d11d34be44e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="databaseLayer\mysql">
+      <UniqueIdentifier>{204db032-98ae-4033-89f0-20216a95904f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="databaseLayer\odbc">
+      <UniqueIdentifier>{b49afbd4-405d-43a6-9819-a18723fab8ec}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="databaseLayer\postgres">
+      <UniqueIdentifier>{d30249ca-7a5a-4c3a-a1ec-b642a76dc60b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="compiler\ttmath">
+      <UniqueIdentifier>{11f6fbf3-fc95-4f2a-9d6d-c9ef57c273a3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="fileSystem">
+      <UniqueIdentifier>{abe9471e-5391-4bba-a9f7-6f050759d4b2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="fileSystem\lz">
+      <UniqueIdentifier>{b90ba678-9672-4d50-aebb-fac2355d5f67}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="fileSystem\quicklz">
+      <UniqueIdentifier>{2bee2522-1df5-49c5-afa8-21aea5b6ebfd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="databaseLayer\postgres\engine">
+      <UniqueIdentifier>{16d7e749-7aed-4b1c-a574-65151ff8df41}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="databaseLayer\postgres\engine\libpq">
+      <UniqueIdentifier>{a6a8cca3-a622-464a-8489-76ddf1ad4066}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metaCollection">
+      <UniqueIdentifier>{9bb88d5f-8ec9-4280-a591-9d5ce4472e70}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metaCollection\attribute">
+      <UniqueIdentifier>{1658db8e-2fb5-4db1-8bac-a0bc5589a6c2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metaCollection\dimension">
+      <UniqueIdentifier>{33239027-ee04-4fe5-9c06-558dc0996576}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metaCollection\enumeration">
+      <UniqueIdentifier>{15736fc2-c93f-4a0e-9cad-ae0db704ef37}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metaCollection\partial">
+      <UniqueIdentifier>{4b1e37a0-cee8-440e-b9e7-cf9c8f46329a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metaCollection\resource">
+      <UniqueIdentifier>{06ebf933-8b13-4f02-a21b-db4431ca510a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metaCollection\table">
+      <UniqueIdentifier>{f2dc3d03-c9ee-455c-a66b-fc299a460c86}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metaCollection\partial\list">
+      <UniqueIdentifier>{1b0d2cd0-1dd7-4d9b-a6ad-a7a7151b7ddd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metaCollection\partial\reference">
+      <UniqueIdentifier>{3019c9d7-3be0-4fd4-adca-aede6f885a79}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metaCollection\partial\selector">
+      <UniqueIdentifier>{640ef6ad-bd06-4b47-915b-b3812f00980e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metaCollection\partial\tabularSection">
+      <UniqueIdentifier>{71c8219e-d586-457e-9dda-a3df1944473b}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="compiler\ttmath\ttmathuint_x86_64_msvc.asm">
+      <Filter>compiler\ttmath</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="databaseLayer\postgres\engine\libpq_x86.dll">
+      <Filter>databaseLayer\postgres\engine</Filter>
+    </CopyFileToFolders>
+  </ItemGroup>
+</Project>

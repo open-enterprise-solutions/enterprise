@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>15.0</VCProjectVersion>
+    <ProjectGuid>{C2437114-6380-4C58-8950-F2337719AC1C}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>launcher</RootNamespace>
+    <ProjectName>designer</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+    <ExecutablePath>$(VC_ExecutablePath_x64_x86);$(CommonExecutablePath);$(ExecutablePath)</ExecutablePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <ExecutablePath>$(VC_ExecutablePath_x64_x86);$(CommonExecutablePath);$(ExecutablePath)</ExecutablePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_WINDOWS;NOPCH;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)\core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw32ud_aui.lib;wxmsw32ud_qa.lib;wxmsw32ud_html.lib;wxmsw32ud_propgrid.lib;wxmsw32ud_adv.lib;wxmsw32ud_core.lib;wxbase32ud_xml.lib;wxbase32ud_net.lib;wxmsw32ud_stc.lib;wxmsw32ud_xrc.lib;wxbase32ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxregexud.lib;wxexpatd.lib;backend.lib;frontend.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\include</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;_WINDOWS;WXUSINGDLL;NOPCH;SMALL_TRANSLATE;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;TIXML_USE_TICPP;DONT_USE_DATABASE_LAYER_EXCEPTIONS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine)\core;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw31ud_aui.lib;wxmsw31ud_qa.lib;wxmsw31ud_html.lib;wxmsw31ud_propgrid.lib;wxmsw31ud_adv.lib;wxmsw31ud_core.lib;wxbase31ud_xml.lib;wxbase31ud_net.lib;wxmsw31ud_stc.lib;wxmsw31ud_xrc.lib;wxbase31ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxregexud.lib;wxexpatd.lib;core.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\include</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_WINDOWS;NOPCH;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine)\core;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>true</OmitFramePointers>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw32u_aui.lib;wxmsw32u_qa.lib;wxmsw32u_html.lib;wxmsw32u_propgrid.lib;wxmsw32u_adv.lib;wxmsw32u_core.lib;wxbase32u_xml.lib;wxbase32u_net.lib;wxmsw32u_stc.lib;wxmsw32u_xrc.lib;wxbase32u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;backend.lib;frontend.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\include</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;_WINDOWS;WXUSINGDLL;NOPCH;SMALL_TRANSLATE;BUILD_WINDOWS;wxDEBUG_LEVEL=0;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;TIXML_USE_TICPP;DONT_USE_DATABASE_LAYER_EXCEPTIONS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine)\core;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>true</OmitFramePointers>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
+      <AdditionalDependencies>wxmsw31u_aui.lib;wxmsw31u_qa.lib;wxmsw31u_html.lib;wxmsw31u_propgrid.lib;wxmsw31u_adv.lib;wxmsw31u_core.lib;wxbase31u_xml.lib;wxbase31u_net.lib;wxmsw31u_stc.lib;wxmsw31u_xrc.lib;wxbase31u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;core.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\include</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="docManager\docManager.cpp" />
+    <ClCompile Include="docManager\templates\dataProcessorFile.cpp" />
+    <ClCompile Include="docManager\templates\dataReportFile.cpp" />
+    <ClCompile Include="docManager\templates\formEditor.cpp" />
+    <ClCompile Include="docManager\templates\interface.cpp" />
+    <ClCompile Include="docManager\templates\metaFile.cpp" />
+    <ClCompile Include="docManager\templates\moduleEditor.cpp" />
+    <ClCompile Include="docManager\templates\role.cpp" />
+    <ClCompile Include="mainApp.cpp" />
+    <ClCompile Include="mainAppEvent.cpp" />
+    <ClCompile Include="mainFrame\debugger\debugClientImpl.cpp" />
+    <ClCompile Include="mainFrame\local\localWindow.cpp" />
+    <ClCompile Include="mainFrame\mainFrameDesigner.cpp" />
+    <ClCompile Include="mainFrame\mainFrameDesignerComponent.cpp" />
+    <ClCompile Include="mainFrame\mainFrameDesignerEvent.cpp" />
+    <ClCompile Include="mainFrame\mainFrameDesignerMenu.cpp" />
+    <ClCompile Include="mainFrame\metatree\external\dataProcessorWnd.cpp" />
+    <ClCompile Include="mainFrame\metatree\external\dataProcessorWndEvent.cpp" />
+    <ClCompile Include="mainFrame\metatree\external\dataProcessorWnd_impl.cpp" />
+    <ClCompile Include="mainFrame\metatree\external\dataReportWnd.cpp" />
+    <ClCompile Include="mainFrame\metatree\external\dataReportWndEvent.cpp" />
+    <ClCompile Include="mainFrame\metatree\external\dataReportWnd_impl.cpp" />
+    <ClCompile Include="mainFrame\metatree\metatreeWnd.cpp" />
+    <ClCompile Include="mainFrame\metatree\metatreeWndEvent.cpp" />
+    <ClCompile Include="mainFrame\metatree\metatreeWnd_impl.cpp" />
+    <ClCompile Include="mainFrame\output\outputWindow.cpp" />
+    <ClCompile Include="mainFrame\stack\stackWindow.cpp" />
+    <ClCompile Include="mainFrame\watch\watchctrl.cpp" />
+    <ClCompile Include="mainFrame\watch\watchdroptarget.cpp" />
+    <ClCompile Include="mainFrame\watch\watchWindow.cpp" />
+    <ClCompile Include="win\ctrl\menuBar.cpp" />
+    <ClCompile Include="win\dlg\debugItem\debugItem.cpp" />
+    <ClCompile Include="win\dlg\functionSearcher\functionSearcher.cpp" />
+    <ClCompile Include="win\dlg\lineInput\lineInput.cpp" />
+    <ClCompile Include="win\editor\codeEditor\codeEditor.cpp" />
+    <ClCompile Include="win\editor\codeEditor\codeEditorInterpreter.cpp" />
+    <ClCompile Include="win\editor\codeEditor\codeEditorInterpreterContext.cpp" />
+    <ClCompile Include="win\editor\codeEditor\codeEditorLoader.cpp" />
+    <ClCompile Include="win\editor\codeEditor\codeEditorParser.cpp" />
+    <ClCompile Include="win\editor\codeEditor\codeEditorPrintOut.cpp" />
+    <ClCompile Include="win\editor\codeEditor\components\autoComplete.cpp" />
+    <ClCompile Include="win\editor\codeEditor\components\callTip.cpp" />
+    <ClCompile Include="win\editor\codeEditor\components\helpers\listBoxVisualData.cpp" />
+    <ClCompile Include="win\editor\codeEditor\components\helpers\listBoxWnd.cpp" />
+    <ClCompile Include="win\editor\codeEditor\components\helpers\popupWnd.cpp" />
+    <ClCompile Include="win\editor\interfaceEditor\interfaceEditor.cpp" />
+    <ClCompile Include="win\editor\interfaceEditor\property\interfaceEditorProperty.cpp" />
+    <ClCompile Include="win\editor\roleEditor\roleEditor.cpp" />
+    <ClCompile Include="win\editor\visualEditor\innerFrame.cpp" />
+    <ClCompile Include="win\editor\visualEditor\titleFrame.cpp" />
+    <ClCompile Include="win\editor\visualEditor\visualEditor.cpp" />
+    <ClCompile Include="win\editor\visualEditor\visualEditorEvent.cpp" />
+    <ClCompile Include="win\editor\visualEditor\visualEditorNotebook.cpp" />
+    <ClCompile Include="win\editor\visualEditor\visualEditorObject.cpp" />
+    <ClCompile Include="win\editor\visualEditor\visualEditorObjectTree.cpp" />
+    <ClCompile Include="win\editor\visualEditor\visualEditorPanel.cpp" />
+    <ClCompile Include="win\editor\visualEditor\visualEvent.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="docManager\docManager.h" />
+    <ClInclude Include="docManager\templates\dataProcessorFile.h" />
+    <ClInclude Include="docManager\templates\dataReportFile.h" />
+    <ClInclude Include="docManager\templates\formEditor.h" />
+    <ClInclude Include="docManager\templates\interface.h" />
+    <ClInclude Include="docManager\templates\metaFile.h" />
+    <ClInclude Include="docManager\templates\moduleEditor.h" />
+    <ClInclude Include="docManager\templates\role.h" />
+    <ClInclude Include="mainApp.h" />
+    <ClInclude Include="mainFrame\debugger\debugClientImpl.h" />
+    <ClInclude Include="mainFrame\local\localWindow.h" />
+    <ClInclude Include="mainFrame\mainFrameDesigner.h" />
+    <ClInclude Include="mainFrame\metatree\external\dataProcessorWnd.h" />
+    <ClInclude Include="mainFrame\metatree\external\dataReportWnd.h" />
+    <ClInclude Include="mainFrame\metatree\metatreeWnd.h" />
+    <ClInclude Include="mainFrame\output\outputWindow.h" />
+    <ClInclude Include="mainFrame\stack\stackWindow.h" />
+    <ClInclude Include="mainFrame\watch\watchctrl.h" />
+    <ClInclude Include="mainFrame\watch\watchdroptarget.h" />
+    <ClInclude Include="mainFrame\watch\watchWindow.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="win\ctrl\menuBar.h" />
+    <ClInclude Include="win\dlg\debugItem\debugItem.h" />
+    <ClInclude Include="win\dlg\functionSearcher\functionSearcher.h" />
+    <ClInclude Include="win\dlg\lineInput\lineInput.h" />
+    <ClInclude Include="win\editor\codeEditor\codeEditor.h" />
+    <ClInclude Include="win\editor\codeEditor\codeEditorInterpreter.h" />
+    <ClInclude Include="win\editor\codeEditor\codeEditorParser.h" />
+    <ClInclude Include="win\editor\codeEditor\codeEditorPrintOut.h" />
+    <ClInclude Include="win\editor\codeEditor\components\autoComplete.h" />
+    <ClInclude Include="win\editor\codeEditor\components\callTip.h" />
+    <ClInclude Include="win\editor\codeEditor\components\helpers\fontAscent.h" />
+    <ClInclude Include="win\editor\codeEditor\components\helpers\listBoxVisualData.h" />
+    <ClInclude Include="win\editor\codeEditor\components\helpers\listBoxWnd.h" />
+    <ClInclude Include="win\editor\codeEditor\components\helpers\popupWnd.h" />
+    <ClInclude Include="win\editor\interfaceEditor\interfaceEditor.h" />
+    <ClInclude Include="win\editor\interfaceEditor\property\interfaceEditorProperty.h" />
+    <ClInclude Include="win\editor\roleEditor\roleEditor.h" />
+    <ClInclude Include="win\editor\visualEditor\innerFrame.h" />
+    <ClInclude Include="win\editor\visualEditor\printout\formPrintOut.h" />
+    <ClInclude Include="win\editor\visualEditor\res\visualResource.h" />
+    <ClInclude Include="win\editor\visualEditor\titleFrame.h" />
+    <ClInclude Include="win\editor\visualEditor\visualEditor.h" />
+    <ClInclude Include="win\editor\visualEditor\visualEvent.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\splashLogo.xpm" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="designer.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="designer.rc" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

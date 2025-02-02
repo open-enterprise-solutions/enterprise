@@ -9,31 +9,29 @@
 
 #include <windows.h>
 
-#include "core/appData.h"
+#include "backend/appData.h"
 
 static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 
-	//embedded mode 
-	{ wxCMD_LINE_OPTION, "ib", "ib", "Start enterprise from current path", wxCMD_LINE_VAL_STRING, NULL },
-
 	//server mode 
-	{ wxCMD_LINE_OPTION, "srv", "srv", "Start enterprise using server address", wxCMD_LINE_VAL_STRING, NULL },
-	{ wxCMD_LINE_OPTION, "port", "port", "Start enterprise using port", wxCMD_LINE_VAL_STRING, NULL },
+	{ wxCMD_LINE_OPTION, "srv", "srv", "Start using server address", wxCMD_LINE_VAL_STRING, NULL },
+	{ wxCMD_LINE_OPTION, "p", "p", "Start using port", wxCMD_LINE_VAL_STRING, NULL },
 
-	{ wxCMD_LINE_OPTION, "l", "l", "Start enterprise from current login", wxCMD_LINE_VAL_STRING, NULL },
-	{ wxCMD_LINE_OPTION, "p", "p", "Start enterprise from current password", wxCMD_LINE_VAL_STRING, NULL },
+	{ wxCMD_LINE_OPTION, "db", "db", "Start from current db", wxCMD_LINE_VAL_STRING, NULL },
+
+	{ wxCMD_LINE_OPTION, "usr", "usr", "Start from current login", wxCMD_LINE_VAL_STRING, NULL },
+	{ wxCMD_LINE_OPTION, "p", "p", "Start from current password", wxCMD_LINE_VAL_STRING, NULL },
 
 	{ wxCMD_LINE_SWITCH, "h", "help", "Show this help message.", wxCMD_LINE_VAL_STRING, wxCMD_LINE_OPTION_HELP },
 	{ wxCMD_LINE_PARAM, NULL, NULL, "File to open.", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL },
 	{ wxCMD_LINE_NONE, NULL, NULL, NULL, wxCMD_LINE_VAL_NONE, 0 }
 };
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
 	wxApp::CheckBuildOptions(WX_BUILD_OPTIONS_SIGNATURE, "deamon");
 
-	wxInitializer initializer;
-
+	wxInitializer initializer(argc, argv);
 	if (!initializer.IsOk()) {
 		fprintf(stderr, "Failed to initialize the wxWidgets library, aborting.");
 		return -1;
@@ -45,29 +43,28 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	wxSystemOptions::SetOption("debug.enable", "true");
+	wxString strServer, strPort, strDatabase, strUser, strPassword;
+	wxString strIBUser, strIBPassword;
 
-	// Get the data directory
-	wxStandardPaths& stdPaths = wxStandardPaths::Get();
-	wxString dataDir = stdPaths.GetDataDir();
+	// SERVER ENTRY
+	parser.Found(wxT("srv"), &strServer);
+	parser.Found(wxT("p"), &strPort);
+	parser.Found(wxT("db"), &strDatabase);
+	parser.Found(wxT("usr"), &strUser);
+	parser.Found(wxT("pwd"), &strPassword);
 
-	wxString pathIB, serverIB, portIB, userIB, passwordIB;
+	//user db 
+	parser.Found(wxT("ib_usr"), &strIBUser);
+	parser.Found(wxT("ib_pwd"), &strIBPassword);
 
-	if (parser.Found("ib", &pathIB)) {
-		dataDir = pathIB;
-	}
-
-	parser.Found("srv", &serverIB);
-	parser.Found("port", &portIB);
-
-	parser.Found("l", &userIB);
-	parser.Found("p", &passwordIB);
+	//debug 
+	bool debugEnable = parser.FoundSwitch("debug") == wxCMD_SWITCH_ON;
 
 #ifdef __WXMSW__
 	::DisableProcessWindowsGhosting();
 #endif 
 
-#if _DEBUG 
+#if DEBUG 
 	wxLog::AddTraceMask(wxTRACE_MemAlloc);
 	wxLog::AddTraceMask(wxTRACE_ResAlloc);
 #if wxUSE_LOG
@@ -82,7 +79,9 @@ int main(int argc, char **argv)
 	wxSocketBase::Initialize();
 
 	// Init appData
-	bool connected = ApplicationData::CreateAppData(eDBMode::eFirebird, eSERVICE_MODE, dataDir);
+	bool connected = appDataCreate(eRunMode::eENTERPRISE_MODE,
+		strServer, strPort, strUser, strPassword, strDatabase
+	);
 
 	// If connection is failed then exit from application 
 	if (!connected) {
@@ -90,15 +89,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	// This is not necessary for Enterprise to work. However, Windows sets the Current Working Directory
-	// to the directory from which a .md file was opened, if opened from Windows Explorer.
-	// This puts an unneccessary lock on the directory.
-	// This changes the CWD to the already locked app directory as a workaround
-#ifdef __WXMSW__
-	::wxSetWorkingDirectory(dataDir);
-#endif
-
-	if (!appData->Initialize(userIB, passwordIB)) {
+	if (!appData->Connect(strIBUser, strIBPassword)) {
 		return 1;
 	}
 

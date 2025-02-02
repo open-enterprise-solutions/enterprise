@@ -1,0 +1,405 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="mainApp.cpp" />
+    <ClCompile Include="mainAppEvent.cpp" />
+    <ClCompile Include="mainFrame\mainFrameDesignerMenu.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameDesignerEvent.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameDesigner.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameDesignerComponent.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\docManager.cpp">
+      <Filter>docManager</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\dataProcessorFile.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\dataReportFile.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\formEditor.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\interface.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\metaFile.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\moduleEditor.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\role.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\debugger\debugClientImpl.cpp">
+      <Filter>mainFrame\debugger</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrl\menuBar.cpp">
+      <Filter>win\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlg\lineInput\lineInput.cpp">
+      <Filter>win\dlg\lineInput</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlg\functionSearcher\functionSearcher.cpp">
+      <Filter>win\dlg\functionSearcher</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlg\debugItem\debugItem.cpp">
+      <Filter>win\dlg\debugItem</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metatree\metatreeWnd.cpp">
+      <Filter>mainFrame\metatree</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metatree\metatreeWnd_impl.cpp">
+      <Filter>mainFrame\metatree</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metatree\metatreeWndEvent.cpp">
+      <Filter>mainFrame\metatree</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metatree\external\dataProcessorWnd.cpp">
+      <Filter>mainFrame\metatree\external</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metatree\external\dataProcessorWnd_impl.cpp">
+      <Filter>mainFrame\metatree\external</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metatree\external\dataProcessorWndEvent.cpp">
+      <Filter>mainFrame\metatree\external</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metatree\external\dataReportWnd.cpp">
+      <Filter>mainFrame\metatree\external</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metatree\external\dataReportWnd_impl.cpp">
+      <Filter>mainFrame\metatree\external</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\metatree\external\dataReportWndEvent.cpp">
+      <Filter>mainFrame\metatree\external</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\codeEditor.cpp">
+      <Filter>win\editor\codeEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\codeEditorInterpreter.cpp">
+      <Filter>win\editor\codeEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\codeEditorInterpreterContext.cpp">
+      <Filter>win\editor\codeEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\codeEditorLoader.cpp">
+      <Filter>win\editor\codeEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\codeEditorParser.cpp">
+      <Filter>win\editor\codeEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\codeEditorPrintOut.cpp">
+      <Filter>win\editor\codeEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\interfaceEditor\interfaceEditor.cpp">
+      <Filter>win\editor\interfaceEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\interfaceEditor\property\interfaceEditorProperty.cpp">
+      <Filter>win\editor\interfaceEditor\property</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\roleEditor\roleEditor.cpp">
+      <Filter>win\editor\roleEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\innerFrame.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\titleFrame.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditor.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditorEvent.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditorNotebook.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditorObject.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditorObjectTree.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditorPanel.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEvent.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\components\autoComplete.cpp">
+      <Filter>win\editor\codeEditor\components</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\components\callTip.cpp">
+      <Filter>win\editor\codeEditor\components</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\components\helpers\listBoxVisualData.cpp">
+      <Filter>win\editor\codeEditor\components\helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\components\helpers\listBoxWnd.cpp">
+      <Filter>win\editor\codeEditor\components\helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="win\editor\codeEditor\components\helpers\popupWnd.cpp">
+      <Filter>win\editor\codeEditor\components\helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\output\outputWindow.cpp">
+      <Filter>mainFrame\output</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\local\localWindow.cpp">
+      <Filter>mainFrame\local</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\stack\stackWindow.cpp">
+      <Filter>mainFrame\stack</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\watch\watchdroptarget.cpp">
+      <Filter>mainFrame\watch</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\watch\watchWindow.cpp">
+      <Filter>mainFrame\watch</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\watch\watchctrl.cpp">
+      <Filter>mainFrame\watch</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="mainApp.h" />
+    <ClInclude Include="resource.h">
+      <Filter>res</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\mainFrameDesigner.h">
+      <Filter>mainFrame</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\docManager.h">
+      <Filter>docManager</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\role.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\dataProcessorFile.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\dataReportFile.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\formEditor.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\interface.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\metaFile.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\moduleEditor.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\debugger\debugClientImpl.h">
+      <Filter>mainFrame\debugger</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrl\menuBar.h">
+      <Filter>win\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlg\lineInput\lineInput.h">
+      <Filter>win\dlg\lineInput</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlg\functionSearcher\functionSearcher.h">
+      <Filter>win\dlg\functionSearcher</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlg\debugItem\debugItem.h">
+      <Filter>win\dlg\debugItem</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\metatree\metatreeWnd.h">
+      <Filter>mainFrame\metatree</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\metatree\external\dataProcessorWnd.h">
+      <Filter>mainFrame\metatree\external</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\metatree\external\dataReportWnd.h">
+      <Filter>mainFrame\metatree\external</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\codeEditor.h">
+      <Filter>win\editor\codeEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\codeEditorInterpreter.h">
+      <Filter>win\editor\codeEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\codeEditorParser.h">
+      <Filter>win\editor\codeEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\codeEditorPrintOut.h">
+      <Filter>win\editor\codeEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\interfaceEditor\interfaceEditor.h">
+      <Filter>win\editor\interfaceEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\interfaceEditor\property\interfaceEditorProperty.h">
+      <Filter>win\editor\interfaceEditor\property</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\roleEditor\roleEditor.h">
+      <Filter>win\editor\roleEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\visualEditor\innerFrame.h">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\visualEditor\titleFrame.h">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\visualEditor\visualEditor.h">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\visualEditor\visualEvent.h">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\visualEditor\printout\formPrintOut.h">
+      <Filter>win\editor\visualEditor\printout</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\visualEditor\res\visualResource.h">
+      <Filter>win\editor\visualEditor\res</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\components\autoComplete.h">
+      <Filter>win\editor\codeEditor\components</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\components\callTip.h">
+      <Filter>win\editor\codeEditor\components</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\components\helpers\fontAscent.h">
+      <Filter>win\editor\codeEditor\components\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\components\helpers\listBoxVisualData.h">
+      <Filter>win\editor\codeEditor\components\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\components\helpers\listBoxWnd.h">
+      <Filter>win\editor\codeEditor\components\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="win\editor\codeEditor\components\helpers\popupWnd.h">
+      <Filter>win\editor\codeEditor\components\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\output\outputWindow.h">
+      <Filter>mainFrame\output</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\local\localWindow.h">
+      <Filter>mainFrame\local</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\stack\stackWindow.h">
+      <Filter>mainFrame\stack</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\watch\watchctrl.h">
+      <Filter>mainFrame\watch</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\watch\watchdroptarget.h">
+      <Filter>mainFrame\watch</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\watch\watchWindow.h">
+      <Filter>mainFrame\watch</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="res">
+      <UniqueIdentifier>{d3f4bf29-6f86-43b3-b079-064ad3a64eb7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="res\xpm">
+      <UniqueIdentifier>{c2556e89-bf77-4e37-b5b5-1d1202759bad}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame">
+      <UniqueIdentifier>{c4ad9574-1344-4c87-b10d-e8d80991c467}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docManager">
+      <UniqueIdentifier>{32fb44c8-bba7-4954-b1e0-cffa97fe0452}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docManager\templates">
+      <UniqueIdentifier>{2a50478b-abbe-4171-9b53-d9518f506c19}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\debugger">
+      <UniqueIdentifier>{fe3f1769-61f3-4769-a64d-92911c0f4120}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\metatree">
+      <UniqueIdentifier>{826f5b9e-e0db-4825-ba90-b3d0442b3ff5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\metatree\external">
+      <UniqueIdentifier>{8f8fb7b4-9b8b-4847-aaa6-90581b7006bb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win">
+      <UniqueIdentifier>{eeb061da-1a61-46bf-8977-9cb8aaf2337b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlg">
+      <UniqueIdentifier>{5ddaa2ef-2ff7-4097-9b80-5c9c0216286a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlg\lineInput">
+      <UniqueIdentifier>{d29e56d6-c979-4241-96e7-03617fd6a0ac}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlg\functionSearcher">
+      <UniqueIdentifier>{6193570b-cda3-4822-af4e-45f8adf62eb8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlg\debugItem">
+      <UniqueIdentifier>{5e0faed8-dfa4-403c-94e2-55fe546f844f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\ctrl">
+      <UniqueIdentifier>{d32bbaf3-c1e8-4128-9185-2307edf5f3ca}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor">
+      <UniqueIdentifier>{391edced-75f0-4d25-8aaa-69e8d7e8337b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\codeEditor">
+      <UniqueIdentifier>{ee0ef581-54bf-473e-9254-b5f8065ac66c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\interfaceEditor">
+      <UniqueIdentifier>{7c154e02-e0fe-4b7c-a23a-0a9a58117ed6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\interfaceEditor\property">
+      <UniqueIdentifier>{c948c112-8f06-4b66-8ad6-b2e70ad48cad}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\roleEditor">
+      <UniqueIdentifier>{1ad7d1dd-d4f4-4d64-b86d-649c849b6089}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\visualEditor">
+      <UniqueIdentifier>{caba25a8-fec3-4dac-a546-ced381f572cd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\visualEditor\printout">
+      <UniqueIdentifier>{21229b4b-9547-4d1d-afc5-c12d0ba7d15a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\visualEditor\res">
+      <UniqueIdentifier>{5192482e-2b7d-4a91-81d6-72579d67caef}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\codeEditor\components">
+      <UniqueIdentifier>{a1eb94f4-2aa0-4296-874f-6a11da1b0a97}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\codeEditor\components\helpers">
+      <UniqueIdentifier>{084b864c-316e-404b-9027-03e72c37fec4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\output">
+      <UniqueIdentifier>{67b44ba1-54f0-4913-b0f8-09a1f1185b79}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\local">
+      <UniqueIdentifier>{63e7cb2a-c403-4e3c-8808-60eba28029a1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\stack">
+      <UniqueIdentifier>{a93087ef-1dcf-4f86-bc7b-4453be5e5513}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\watch">
+      <UniqueIdentifier>{5e54e3dc-905a-425b-90ed-ba143ea5bef3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\splashLogo.xpm">
+      <Filter>res\xpm</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="designer.ico">
+      <Filter>res</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="designer.rc">
+      <Filter>res</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+</Project>

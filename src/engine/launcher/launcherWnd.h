@@ -17,9 +17,9 @@
 #include <wx/button.h>
 #include <wx/frame.h>
 
-class CLauncherWnd : public wxFrame
-{
-	wxListBox* m_listIB;
+class CFrameLauncher : public wxFrame {
+
+	wxListBox* m_listIBwnd;
 	wxStaticText* m_staticPath;
 	wxButton* m_buttonEnterprise;
 	wxButton* m_buttonDesigner;
@@ -28,30 +28,38 @@ class CLauncherWnd : public wxFrame
 	wxButton* m_buttonDelete;
 	wxButton* m_buttonExit;
 
-	std::vector<std::pair<wxString, wxString>> m_aList; 
+	struct listInfo_t {
+		wxString m_strServer;
+		wxString m_strDatabase;
+		wxString m_strUser;
+		wxString m_strPassword;
+		wxString m_strPort;
+	};
+
+	std::vector<std::pair<wxString, listInfo_t>> m_listInfoBase;
 
 public:
 
-	void LoadIBList(); 
+	void LoadIBList();
 	void SaveIBList();
 
-	CLauncherWnd(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Launch OES"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(450, 375), long style = wxDEFAULT_FRAME_STYLE | wxRESIZE_BORDER);
-	virtual ~CLauncherWnd();
+	CFrameLauncher(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Launch OES"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(450, 375), long style = wxDEFAULT_FRAME_STYLE | wxRESIZE_BORDER);
+	virtual ~CFrameLauncher();
 
 	//events:
 protected:
 
-	void OnSelectedList(wxCommandEvent &event);
-	void OnSelectedDClickList(wxCommandEvent &event);
+	void OnSelectedList(wxCommandEvent& event);
+	void OnSelectedDClickList(wxCommandEvent& event);
 
-	void OnButtonEnterprise(wxCommandEvent &event);
-	void OnButtonDesigner(wxCommandEvent &event);
+	void OnButtonEnterprise(wxCommandEvent& event);
+	void OnButtonDesigner(wxCommandEvent& event);
 
-	void OnButtonAdd(wxCommandEvent &event);
-	void OnButtonEdit(wxCommandEvent &event);
-	void OnButtonDelete(wxCommandEvent &event);
+	void OnButtonAdd(wxCommandEvent& event);
+	void OnButtonEdit(wxCommandEvent& event);
+	void OnButtonDelete(wxCommandEvent& event);
 
-	void OnButtonClose(wxCommandEvent &event);
+	void OnButtonClose(wxCommandEvent& event);
 };
 
 #endif

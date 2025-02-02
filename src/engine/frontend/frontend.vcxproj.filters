@@ -1,0 +1,1465 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="mainFrame\mainFrame.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameChild.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameComponent.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\objinspect\advprops.cpp">
+      <Filter>mainFrame\objinspect</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\objinspect\editors.cpp">
+      <Filter>mainFrame\objinspect</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\objinspect\objinspect.cpp">
+      <Filter>mainFrame\objinspect</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\userItem.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\userList.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\selectData.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\rowHeight.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\generation.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\errorDialog.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\colHeight.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\authorization.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\activeUser.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\about.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\grid\gridCommon.cpp">
+      <Filter>mainFrame\grid</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\grid\gridSections.cpp">
+      <Filter>mainFrame\grid</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\grid\gridUtils.cpp">
+      <Filter>mainFrame\grid</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\grid\printout\gridPrintout.cpp">
+      <Filter>mainFrame\grid\printout</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\grid\property\gridProperty.cpp">
+      <Filter>mainFrame\grid\property</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\docViewCmd.cpp">
+      <Filter>docView</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\docView.cpp">
+      <Filter>docView</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\docManager.cpp">
+      <Filter>docView</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\text.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\template.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\checktree.cpp">
+      <Filter>win\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\dataView.cpp">
+      <Filter>win\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\textEditor.cpp">
+      <Filter>win\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\treelistctrl.cpp">
+      <Filter>win\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\formSelector\formSelector.cpp">
+      <Filter>win\dlg\formSelector</Filter>
+    </ClCompile>
+    <ClCompile Include="frontend.cpp" />
+    <ClCompile Include="visualView\pageWindow.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\visualHost.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\visualHost_impl.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\visual.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\visualEvent.cpp">
+      <Filter>visualView</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\dvc\dvc.cpp">
+      <Filter>visualView\dvc</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\special\valueEvent.cpp">
+      <Filter>visualView\special</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\special\enums\valueOrient.cpp">
+      <Filter>visualView\special\enums</Filter>
+    </ClCompile>
+    <ClCompile Include="win\theme\luna_dockart.cpp">
+      <Filter>win\theme</Filter>
+    </ClCompile>
+    <ClCompile Include="win\theme\luna_tabart.cpp">
+      <Filter>win\theme</Filter>
+    </ClCompile>
+    <ClCompile Include="win\theme\luna_toolbarart.cpp">
+      <Filter>win\theme</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\editorsettings.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\editorsettingspanel.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\fontcolorsettings.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\fontcolorsettingspanel.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\keybinder.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\keybinderdialog.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\keymonitortextctrl.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\settingsdialog.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\showhelpevent.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\statictextex.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\stlutility.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\settings\xmlutility.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxareachartdatasetoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxareachartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxbarchart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxbarchartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxbarchartdatasetoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxbarchartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxboxplot.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxboxplotctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxboxplotdatasetoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxboxplotoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxbubblechart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxbubblechartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxbubblechartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxcandlestickchart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxcandlestickchartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxcandlestickchartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartbackground.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartbackgroundoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartcommonoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartfontoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartmultitooltip.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartmultitooltipoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartpadding.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsarc.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsarcoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsaxis.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsaxisoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsbrushoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartscategoricalaxis.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartscategoricaldata.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartscategoricaldataobserver.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartscircle.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartscircleoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsdataset.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsdatasetid.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsdatasettheme.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsdoubledataset.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartselement.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsgrid.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsgridmapping.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsgridoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartslabel.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartslabelgroup.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartslabeloptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartslegendctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartslegenditem.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartslegendline.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartslegendlineoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartslegendoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartslicedata.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsnumericalaxis.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsohlcdata.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartspenoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartspoint.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartspointoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsprecisiontheme.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartspresentationtheme.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsradialgrid.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsradialgridoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsrectangle.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsrectangleoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartstheme.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsthemefactory.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsthemeid.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartstimeaxis.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxchartsutilities.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxcharttooltip.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxcharttooltipoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxcharttooltipprovider.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxcolumnchart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxcolumnchartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxcolumnchartdatasetoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxcolumnchartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxcombinationchart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxcombinationchartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxcombinationchartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxdoughnutandpiechartbase.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxdoughnutandpiechartoptionsbase.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxdoughnutchart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxdoughnutchartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxdoughnutchartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxhistogram.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxhistogramctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxhistogramoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxlinechart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxlinechartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxlinechartdatasetoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxlinechartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxmath2dplot.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxmath2dplotctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxmath2dplotoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxohlcchart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxohlcchartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxohlcchartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxpiechart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxpiechartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxpiechartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxpolarareachart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxpolarareachartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxpolarareachartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxradarchart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxradarchartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxradarchartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxscatterplot.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxscatterplotctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxscatterplotoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxstackedbarchart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxstackedbarchartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxstackedbarchartdatasetoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxstackedbarchartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxstackedcolumnchart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxstackedcolumnchartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxstackedcolumnchartdatasetoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxstackedcolumnchartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxtimeserieschart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxtimeserieschartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxtimeserieschartoptions.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxareachart.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="win\ctrls\charts\wxareachartctrl.cpp">
+      <Filter>win\ctrl\charts</Filter>
+    </ClCompile>
+    <ClCompile Include="artProvider\artProvider.cpp">
+      <Filter>artProvider</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\wrapsizer.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\boxsizer.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\boxsizer_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\button.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\button_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\buttonEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\chartBox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\chartBox_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\checkbox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\checkbox_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\checkboxEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\checkboxProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\choice.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\combobox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\control.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\controlProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\form.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\form_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formAction.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formControl.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formData.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formDocument.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formFactory.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formMem.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\formObject.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\frame.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\frameEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\frameID.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\frameProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gauge.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gauge_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridBox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridBox_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridsizer.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\gridsizer_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\htmlBox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\htmlBox_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\itemsizer.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\listbox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\notebook.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\notebook_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\notebookEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\notebookMenu.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\notebookPage.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\notebookPage_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\radiobutton.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\radiobutton_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\sizers.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\slider.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\slider_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\staticboxsizer.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\staticboxsizer_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\staticline.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\staticline_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\statictext.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\statictext_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBox_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxAction.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumn.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumn_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumnEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumnProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxMenu.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\textctrl.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\textctrl_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\textctrlEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\textctrlProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\toolBar.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\toolBar_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\toolBarAction.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\toolBarEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\toolBarItem.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\toolBarItem_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\toolBarItemAction.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\toolBarMenu.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\toolBarProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\typeControl.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\window.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\connectionDB.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="mainFrame\mainFrame.h">
+      <Filter>mainFrame</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\mainFrameChild.h">
+      <Filter>mainFrame</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\objinspect\advprops.h">
+      <Filter>mainFrame\objinspect</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\objinspect\editors.h">
+      <Filter>mainFrame\objinspect</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\objinspect\objinspect.h">
+      <Filter>mainFrame\objinspect</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\userItem.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\userList.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\selectData.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\rowHeight.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\generation.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\errorDialog.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\colHeight.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\authorization.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\activeUser.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\about.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\grid\gridCommon.h">
+      <Filter>mainFrame\grid</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\grid\gridSections.h">
+      <Filter>mainFrame\grid</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\grid\gridUtils.h">
+      <Filter>mainFrame\grid</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\grid\printout\gridPrintout.h">
+      <Filter>mainFrame\grid\printout</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\grid\property\gridProperty.h">
+      <Filter>mainFrame\grid\property</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\docManager.h">
+      <Filter>docView</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\docView.h">
+      <Filter>docView</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\template.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\text.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\checkBoxEditor.h">
+      <Filter>win\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\checktree.h">
+      <Filter>win\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\dataView.h">
+      <Filter>win\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\dynamicBorder.h">
+      <Filter>win\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\floatingNotebook.h">
+      <Filter>win\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\textEditor.h">
+      <Filter>win\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\toolBar.h">
+      <Filter>win\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\treelistctrl.h">
+      <Filter>win\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\formSelector\formSelector.h">
+      <Filter>win\dlg\formSelector</Filter>
+    </ClInclude>
+    <ClInclude Include="frontend.h" />
+    <ClInclude Include="visualView\controlCtor.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\pageWindow.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\visualHost.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\visual.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\dvc\dvc.h">
+      <Filter>visualView\dvc</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\special\valueEvent.h">
+      <Filter>visualView\special</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\special\valueFilter.h">
+      <Filter>visualView\special</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\special\enums\valueOrient.h">
+      <Filter>visualView\special\enums</Filter>
+    </ClInclude>
+    <ClInclude Include="win\theme\luna_dockart.h">
+      <Filter>win\theme</Filter>
+    </ClInclude>
+    <ClInclude Include="win\theme\luna_tabart.h">
+      <Filter>win\theme</Filter>
+    </ClInclude>
+    <ClInclude Include="win\theme\luna_toolbarart.h">
+      <Filter>win\theme</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\editorsettings.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\editorsettingspanel.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\fontcolorsettings.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\fontcolorsettingspanel.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\keybinder.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\keybinderdialog.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\keymonitortextctrl.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\settingsdialog.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\showhelpevent.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\statictextex.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\stlutility.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\xmlutility.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxareachartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxareachartdatasetoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxareachartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxbarchart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxbarchartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxbarchartdatasetoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxbarchartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxboxplot.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxboxplotctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxboxplotdatasetoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxboxplotoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxbubblechart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxbubblechartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxbubblechartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxcandlestickchart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxcandlestickchartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxcandlestickchartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartbackground.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartbackgroundoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartcommonoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartfontoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartmultitooltip.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartmultitooltipoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartobservers.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartpadding.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxcharts.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsarc.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsarcoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsaxis.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsaxisoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsbrushoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartscategoricalaxis.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartscategoricaldata.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartscategoricaldataobserver.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartscircle.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartscircleoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsdataset.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsdatasetid.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsdatasettheme.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsdoubledataset.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartselement.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsgrid.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsgridmapping.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsgridoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartslabel.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartslabelgroup.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartslabeloptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartslegendctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartslegenditem.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartslegendline.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartslegendlineoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartslegendoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartslicedata.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsnumericalaxis.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsohlcdata.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartspenoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartspoint.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartspointoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsprecisiontheme.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartspresentationtheme.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsradialgrid.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsradialgridoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsrectangle.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsrectangleoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartstheme.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsthemefactory.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsthemeid.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartstimeaxis.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxchartsutilities.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxcharttooltip.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxcharttooltipoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxcharttooltipprovider.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxcolumnchart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxcolumnchartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxcolumnchartdatasetoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxcolumnchartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxcombinationchart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxcombinationchartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxcombinationchartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxdoughnutandpiechartbase.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxdoughnutandpiechartoptionsbase.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxdoughnutchart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxdoughnutchartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxdoughnutchartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxhistogram.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxhistogramctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxhistogramoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxlinechart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxlinechartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxlinechartdatasetoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxlinechartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxmath2dplot.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxmath2dplotctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxmath2dplotoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxohlcchart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxohlcchartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxohlcchartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxpiechart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxpiechartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxpiechartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxpolarareachart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxpolarareachartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxpolarareachartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxradarchart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxradarchartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxradarchartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxscatterplot.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxscatterplotctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxscatterplotoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxstackedbarchart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxstackedbarchartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxstackedbarchartdatasetoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxstackedbarchartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxstackedcolumnchart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxstackedcolumnchartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxstackedcolumnchartdatasetoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxstackedcolumnchartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxtimeserieschart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxtimeserieschartctrl.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxtimeserieschartoptions.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\charts\wxareachart.h">
+      <Filter>win\ctrl\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="artProvider\artProvider.h">
+      <Filter>artProvider</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\formdefs.h">
+      <Filter>visualView</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\window.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\chartBox.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\control.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\form.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\frame.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\gridBox.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\htmlBox.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\notebook.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\sizers.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\tableBox.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\toolBar.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\typeControl.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\widgets.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\connectionDB.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="win">
+      <UniqueIdentifier>{e09820de-4672-403b-bb92-2fa562dbb2c7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame">
+      <UniqueIdentifier>{4d75f131-22b3-42a7-90cd-b47e61bcc564}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\objinspect">
+      <UniqueIdentifier>{5b008341-e88f-4993-8e8d-7caa98ba8c3e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\grid">
+      <UniqueIdentifier>{e1c211f2-aceb-4018-893d-1ed8d653bd3d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\grid\printout">
+      <UniqueIdentifier>{5d6896ad-7709-4658-b400-b47cdaed64a7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\grid\property">
+      <UniqueIdentifier>{6c51148e-13b0-4583-8408-bc97036e74aa}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docView">
+      <UniqueIdentifier>{442f0471-db57-440c-aa5f-f6a20e933269}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docView\templates">
+      <UniqueIdentifier>{de8c1ef4-820a-4c8f-ab29-c012e37d6b0a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="visualView">
+      <UniqueIdentifier>{15ab1d55-40d6-4e89-96f1-2b9b0bfdc779}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="visualView\dvc">
+      <UniqueIdentifier>{5388c62b-4a7a-427f-9607-53405723f906}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="visualView\special">
+      <UniqueIdentifier>{eb4f12fd-11f1-4731-8809-a46442706ba5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="visualView\special\enums">
+      <UniqueIdentifier>{fd65e2ab-52ca-4f1d-892c-641b7b7e68a2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\theme">
+      <UniqueIdentifier>{25dd471b-6260-4d4d-85b7-1d3978db9616}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\settings">
+      <UniqueIdentifier>{5ef95328-021c-422d-8e39-9055b40cc95c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="artProvider">
+      <UniqueIdentifier>{d4a27d48-5c40-457b-a665-214b6054de8c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="visualView\ctrl">
+      <UniqueIdentifier>{afa18155-1b9d-4ce9-9fa1-fa7484971d73}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlg">
+      <UniqueIdentifier>{a4d904fc-8846-4565-a46d-3569ca3d4b5c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlg\formSelector">
+      <UniqueIdentifier>{93ad2a93-8110-49c6-81f2-68d2bfb11c71}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\ctrl">
+      <UniqueIdentifier>{6f2ec00a-68a5-4c8a-ad29-16c10a471ce0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\ctrl\res">
+      <UniqueIdentifier>{5a202ab1-a0e6-4b63-a9f4-290502367277}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\ctrl\charts">
+      <UniqueIdentifier>{fefa8620-51e2-434d-8ef3-1f8ed381f960}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="win\ctrls\res\checked_d.xpm">
+      <Filter>win\ctrl\res</Filter>
+    </None>
+    <None Include="win\ctrls\res\checked_ld.xpm">
+      <Filter>win\ctrl\res</Filter>
+    </None>
+    <None Include="win\ctrls\res\checked_mo.xpm">
+      <Filter>win\ctrl\res</Filter>
+    </None>
+    <None Include="win\ctrls\res\checked2.xpm">
+      <Filter>win\ctrl\res</Filter>
+    </None>
+    <None Include="win\ctrls\res\unchecked_d.xpm">
+      <Filter>win\ctrl\res</Filter>
+    </None>
+    <None Include="win\ctrls\res\unchecked_ld.xpm">
+      <Filter>win\ctrl\res</Filter>
+    </None>
+    <None Include="win\ctrls\res\unchecked_mo.xpm">
+      <Filter>win\ctrl\res</Filter>
+    </None>
+    <None Include="win\ctrls\res\unchecked2.xpm">
+      <Filter>win\ctrl\res</Filter>
+    </None>
+  </ItemGroup>
+</Project>

@@ -13,8 +13,8 @@ bool CMainApp::OnInit()
 	m_locale.AddCatalogLookupPathPrefix(_T("lang"));
 	m_locale.AddCatalog(m_locale.GetCanonicalName());
 
-	CLauncherWnd *launcherWnd = 
-		new CLauncherWnd(NULL, wxID_ANY);
+	CFrameLauncher *launcherWnd = 
+		new CFrameLauncher(nullptr, wxID_ANY);
 	launcherWnd->Show();
 
 	return m_locale.Init(wxLANGUAGE_ENGLISH);

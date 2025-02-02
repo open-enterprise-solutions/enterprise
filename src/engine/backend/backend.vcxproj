@@ -1,0 +1,590 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="appData.h" />
+    <ClInclude Include="backend.h" />
+    <ClInclude Include="backend_exception.h" />
+    <ClInclude Include="backend_core.h" />
+    <ClInclude Include="backend_mainFrame.h" />
+    <ClInclude Include="clsid.h" />
+    <ClInclude Include="compiler\byteCode.h" />
+    <ClInclude Include="compiler\codeDef.h" />
+    <ClInclude Include="compiler\compileCode.h" />
+    <ClInclude Include="compiler\compileContext.h" />
+    <ClInclude Include="compiler\compileModule.h" />
+    <ClInclude Include="compiler\enum.h" />
+    <ClInclude Include="compiler\enumFactory.h" />
+    <ClInclude Include="compiler\enumObject.h" />
+    <ClInclude Include="compiler\procContext.h" />
+    <ClInclude Include="compiler\procUnit.h" />
+    <ClInclude Include="compiler\translateCode.h" />
+    <ClInclude Include="compiler\ttmath\ttmath.h" />
+    <ClInclude Include="compiler\ttmath\ttmathbig.h" />
+    <ClInclude Include="compiler\ttmath\ttmathdec.h" />
+    <ClInclude Include="compiler\ttmath\ttmathint.h" />
+    <ClInclude Include="compiler\ttmath\ttmathmisc.h" />
+    <ClInclude Include="compiler\ttmath\ttmathobjects.h" />
+    <ClInclude Include="compiler\ttmath\ttmathparser.h" />
+    <ClInclude Include="compiler\ttmath\ttmaththreads.h" />
+    <ClInclude Include="compiler\ttmath\ttmathtypes.h" />
+    <ClInclude Include="compiler\ttmath\ttmathuint.h" />
+    <ClInclude Include="compiler\ttmath\ttmathuint_noasm.h" />
+    <ClInclude Include="compiler\ttmath\ttmathuint_x86.h" />
+    <ClInclude Include="compiler\ttmath\ttmathuint_x86_64.h" />
+    <ClInclude Include="compiler\typeCtor.h" />
+    <ClInclude Include="compiler\value\value.h" />
+    <ClInclude Include="compiler\value\valueArray.h" />
+    <ClInclude Include="compiler\value\valueColour.h" />
+    <ClInclude Include="compiler\value\valueFile.h" />
+    <ClInclude Include="compiler\value\valueFont.h" />
+    <ClInclude Include="compiler\value\valueGuid.h" />
+    <ClInclude Include="compiler\value\valueMap.h" />
+    <ClInclude Include="compiler\value\valueOLE.h" />
+    <ClInclude Include="compiler\value\valuePoint.h" />
+    <ClInclude Include="compiler\value\valueSize.h" />
+    <ClInclude Include="compiler\value\valueTable.h" />
+    <ClInclude Include="compiler\value\valueType.h" />
+    <ClInclude Include="databaseLayer\databaseErrorCodes.h" />
+    <ClInclude Include="databaseLayer\databaseErrorReporter.h" />
+    <ClInclude Include="databaseLayer\databaseLayer.h" />
+    <ClInclude Include="databaseLayer\databaseLayerDef.h" />
+    <ClInclude Include="databaseLayer\databaseLayerException.h" />
+    <ClInclude Include="databaseLayer\databaseQueryParser.h" />
+    <ClInclude Include="databaseLayer\databaseResultSet.h" />
+    <ClInclude Include="databaseLayer\databaseStringConverter.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdDatabaseLayer.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdInterface.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdParameter.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdParameterCollection.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdPreparedStatement.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdPreparedStatementWrapper.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdResultSet.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdResultSetMetaData.h" />
+    <ClInclude Include="databaseLayer\mysql\mysqlDatabaseLayer.h" />
+    <ClInclude Include="databaseLayer\mysql\mysqlInterface.h" />
+    <ClInclude Include="databaseLayer\mysql\mysqlParameter.h" />
+    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatement.h" />
+    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementParameter.h" />
+    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementParameterCollection.h" />
+    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementResultSet.h" />
+    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementWrapper.h" />
+    <ClInclude Include="databaseLayer\mysql\mysqlResultSetMetaData.h" />
+    <ClInclude Include="databaseLayer\odbc\odbcDatabaseLayer.h" />
+    <ClInclude Include="databaseLayer\odbc\odbcInterface.h" />
+    <ClInclude Include="databaseLayer\odbc\odbcParameter.h" />
+    <ClInclude Include="databaseLayer\odbc\odbcPreparedStatement.h" />
+    <ClInclude Include="databaseLayer\odbc\odbcResultSet.h" />
+    <ClInclude Include="databaseLayer\odbc\odbcResultSetMetaData.h" />
+    <ClInclude Include="databaseLayer\postgres\engine\libpq-fe.h" />
+    <ClInclude Include="databaseLayer\postgres\engine\libpq\libpq-fs.h" />
+    <ClInclude Include="databaseLayer\postgres\engine\pg_config_ext.h" />
+    <ClInclude Include="databaseLayer\postgres\engine\postgres_ext.h" />
+    <ClInclude Include="databaseLayer\postgres\postgresDatabaseLayer.h" />
+    <ClInclude Include="databaseLayer\postgres\postgresInterface.h" />
+    <ClInclude Include="databaseLayer\postgres\postgresParameter.h" />
+    <ClInclude Include="databaseLayer\postgres\postgresPreparedStatement.h" />
+    <ClInclude Include="databaseLayer\postgres\postgresPreparedStatementParameterCollection.h" />
+    <ClInclude Include="databaseLayer\postgres\postgresPreparedStatementWrapper.h" />
+    <ClInclude Include="databaseLayer\postgres\postgresResultSet.h" />
+    <ClInclude Include="databaseLayer\postgres\postgresResultSetMetaData.h" />
+    <ClInclude Include="databaseLayer\preparedStatement.h" />
+    <ClInclude Include="databaseLayer\resultSetMetaData.h" />
+    <ClInclude Include="databaseLayer\sqllite\engine\sqlite3.h" />
+    <ClInclude Include="databaseLayer\sqllite\engine\sqlite3ext.h" />
+    <ClInclude Include="databaseLayer\sqllite\engine\sqlite_cfg.h" />
+    <ClInclude Include="databaseLayer\sqllite\sqliteDatabaseLayer.h" />
+    <ClInclude Include="databaseLayer\sqllite\sqlitePreparedStatement.h" />
+    <ClInclude Include="databaseLayer\sqllite\sqliteResultSet.h" />
+    <ClInclude Include="databaseLayer\sqllite\sqliteResultSetMetaData.h" />
+    <ClInclude Include="debugger\debugClient.h" />
+    <ClInclude Include="debugger\debugClientBridge.h" />
+    <ClInclude Include="debugger\debugDefs.h" />
+    <ClInclude Include="debugger\debugServer.h" />
+    <ClInclude Include="external\metadataDataProcessor.h" />
+    <ClInclude Include="external\metadataReport.h" />
+    <ClInclude Include="backend_form.h" />
+    <ClInclude Include="fileSystem\fs.h" />
+    <ClInclude Include="fileSystem\lz\lzhuf.h" />
+    <ClInclude Include="fileSystem\quicklz\quicklz.h" />
+    <ClInclude Include="fileSystem\types.h" />
+    <ClInclude Include="guid.h" />
+    <ClInclude Include="metaCollection\attribute\metaAttributeObject.h" />
+    <ClInclude Include="metaCollection\dimension\metaDimensionObject.h" />
+    <ClInclude Include="metaCollection\enumeration\metaEnumObject.h" />
+    <ClInclude Include="metaCollection\metaFormObject.h" />
+    <ClInclude Include="metaCollection\metaGridObject.h" />
+    <ClInclude Include="metaCollection\metaInterfaceObject.h" />
+    <ClInclude Include="metaCollection\metaModuleObject.h" />
+    <ClInclude Include="metaCollection\metaObject.h" />
+    <ClInclude Include="metaCollection\metaObjectMetadata.h" />
+    <ClInclude Include="metaCollection\metaRoleObject.h" />
+    <ClInclude Include="metaCollection\partial\accumulationRegister.h" />
+    <ClInclude Include="metaCollection\partial\accumulationRegisterEnum.h" />
+    <ClInclude Include="metaCollection\partial\accumulationRegisterManager.h" />
+    <ClInclude Include="metaCollection\partial\catalog.h" />
+    <ClInclude Include="metaCollection\partial\catalogData.h" />
+    <ClInclude Include="metaCollection\partial\catalogManager.h" />
+    <ClInclude Include="metaCollection\partial\catalogVariant.h" />
+    <ClInclude Include="metaCollection\partial\constant.h" />
+    <ClInclude Include="metaCollection\partial\constantManager.h" />
+    <ClInclude Include="metaCollection\partial\contextManager.h" />
+    <ClInclude Include="metaCollection\partial\dataProcessor.h" />
+    <ClInclude Include="metaCollection\partial\dataProcessorManager.h" />
+    <ClInclude Include="metaCollection\partial\dataReport.h" />
+    <ClInclude Include="metaCollection\partial\dataReportManager.h" />
+    <ClInclude Include="metaCollection\partial\document.h" />
+    <ClInclude Include="metaCollection\partial\documentData.h" />
+    <ClInclude Include="metaCollection\partial\documentEnum.h" />
+    <ClInclude Include="metaCollection\partial\documentManager.h" />
+    <ClInclude Include="metaCollection\partial\documentVariant.h" />
+    <ClInclude Include="metaCollection\partial\enumeration.h" />
+    <ClInclude Include="metaCollection\partial\enumerationManager.h" />
+    <ClInclude Include="metaCollection\partial\informationRegister.h" />
+    <ClInclude Include="metaCollection\partial\informationRegisterEnum.h" />
+    <ClInclude Include="metaCollection\partial\informationRegisterManager.h" />
+    <ClInclude Include="metaCollection\partial\list\objectList.h" />
+    <ClInclude Include="metaCollection\partial\object.h" />
+    <ClInclude Include="metaCollection\partial\objectVariant.h" />
+    <ClInclude Include="metaCollection\partial\reference\reference.h" />
+    <ClInclude Include="metaCollection\partial\selector\objectSelector.h" />
+    <ClInclude Include="metaCollection\partial\tabularSection\tabularSection.h" />
+    <ClInclude Include="metaCollection\resource\metaResourceObject.h" />
+    <ClInclude Include="metaCollection\table\metaTableObject.h" />
+    <ClInclude Include="metaCtor.h" />
+    <ClInclude Include="metadata.h" />
+    <ClInclude Include="metadataConfiguration.h" />
+    <ClInclude Include="metaDefines.h" />
+    <ClInclude Include="backend_metatree.h" />
+    <ClInclude Include="moduleManager\moduleManager.h" />
+    <ClInclude Include="number.h" />
+    <ClInclude Include="objCtor.h" />
+    <ClInclude Include="role.h" />
+    <ClInclude Include="srcExplorer.h" />
+    <ClInclude Include="srcObject.h" />
+    <ClInclude Include="stringUtils.h" />
+    <ClInclude Include="systemManager\systemEnum.h" />
+    <ClInclude Include="systemManager\systemManager.h" />
+    <ClInclude Include="systemManager\systemManagerEnum.h" />
+    <ClInclude Include="typeconv.h" />
+    <ClInclude Include="types.h" />
+    <ClInclude Include="uniqueKey.h" />
+    <ClInclude Include="utils\wxmd5.hpp" />
+    <ClInclude Include="value_cast.h" />
+    <ClInclude Include="wrapper\actionInfo.h" />
+    <ClInclude Include="wrapper\managerInfo.h" />
+    <ClInclude Include="wrapper\moduleInfo.h" />
+    <ClInclude Include="wrapper\propertyInfo.h" />
+    <ClInclude Include="wrapper\tableInfo.h" />
+    <ClInclude Include="wrapper\typeInfo.h" />
+    <ClInclude Include="wrapper\valueInfo.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="appData.cpp" />
+    <ClCompile Include="appDataQuery.cpp" />
+    <ClCompile Include="backend.cpp" />
+    <ClCompile Include="backend_exception.cpp" />
+    <ClCompile Include="backend_core.cpp" />
+    <ClCompile Include="backend_mainFrame.cpp" />
+    <ClCompile Include="compiler\byteCode.cpp" />
+    <ClCompile Include="compiler\compileCode.cpp" />
+    <ClCompile Include="compiler\compileContext.cpp" />
+    <ClCompile Include="compiler\compileModule.cpp" />
+    <ClCompile Include="compiler\enum.cpp" />
+    <ClCompile Include="compiler\enumFactory.cpp" />
+    <ClCompile Include="compiler\procContext.cpp" />
+    <ClCompile Include="compiler\procUnit.cpp" />
+    <ClCompile Include="compiler\translateCode.cpp" />
+    <ClCompile Include="compiler\value\value.cpp" />
+    <ClCompile Include="compiler\value\valueArray.cpp" />
+    <ClCompile Include="compiler\value\valueColour.cpp" />
+    <ClCompile Include="compiler\value\valueFactory.cpp" />
+    <ClCompile Include="compiler\value\valueFile.cpp" />
+    <ClCompile Include="compiler\value\valueFont.cpp" />
+    <ClCompile Include="compiler\value\valueGuid.cpp" />
+    <ClCompile Include="compiler\value\valueMap.cpp" />
+    <ClCompile Include="compiler\value\valueOLE.cpp" />
+    <ClCompile Include="compiler\value\valuePoint.cpp" />
+    <ClCompile Include="compiler\value\valueSize.cpp" />
+    <ClCompile Include="compiler\value\valueTable.cpp" />
+    <ClCompile Include="compiler\value\valueTableModel.cpp" />
+    <ClCompile Include="compiler\value\valueTable_res.cpp" />
+    <ClCompile Include="compiler\value\valueType.cpp" />
+    <ClCompile Include="compiler\value\value_res.cpp" />
+    <ClCompile Include="databaseLayer\databaseErrorReporter.cpp" />
+    <ClCompile Include="databaseLayer\databaseLayer.cpp" />
+    <ClCompile Include="databaseLayer\databaseQueryParser.cpp" />
+    <ClCompile Include="databaseLayer\databaseResultSet.cpp" />
+    <ClCompile Include="databaseLayer\databaseStringConverter.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdDatabaseLayer.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdInterface.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdParameter.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdParameterCollection.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdPreparedStatement.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdPreparedStatementWrapper.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdResultSet.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdResultSetMetaData.cpp" />
+    <ClCompile Include="databaseLayer\mysql\mysqlDatabaseLayer.cpp" />
+    <ClCompile Include="databaseLayer\mysql\mysqlInterface.cpp" />
+    <ClCompile Include="databaseLayer\mysql\mysqlParameter.cpp" />
+    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatement.cpp" />
+    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementParameter.cpp" />
+    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementParameterCollection.cpp" />
+    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementResultSet.cpp" />
+    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementWrapper.cpp" />
+    <ClCompile Include="databaseLayer\mysql\mysqlResultSetMetaData.cpp" />
+    <ClCompile Include="databaseLayer\odbc\odbcDatabaseLayer.cpp" />
+    <ClCompile Include="databaseLayer\odbc\odbcInterface.cpp" />
+    <ClCompile Include="databaseLayer\odbc\odbcParameter.cpp" />
+    <ClCompile Include="databaseLayer\odbc\odbcPreparedStatement.cpp" />
+    <ClCompile Include="databaseLayer\odbc\odbcResultSet.cpp" />
+    <ClCompile Include="databaseLayer\odbc\odbcResultSetMetaData.cpp" />
+    <ClCompile Include="databaseLayer\postgres\postgresDatabaseLayer.cpp" />
+    <ClCompile Include="databaseLayer\postgres\postgresInterface.cpp" />
+    <ClCompile Include="databaseLayer\postgres\postgresParameter.cpp" />
+    <ClCompile Include="databaseLayer\postgres\postgresPreparedStatement.cpp" />
+    <ClCompile Include="databaseLayer\postgres\postgresPreparedStatementParameterCollection.cpp" />
+    <ClCompile Include="databaseLayer\postgres\postgresPreparedStatementWrapper.cpp" />
+    <ClCompile Include="databaseLayer\postgres\postgresResultSet.cpp" />
+    <ClCompile Include="databaseLayer\postgres\postgresResultSetMetaData.cpp" />
+    <ClCompile Include="databaseLayer\resultSetMetaData.cpp" />
+    <ClCompile Include="databaseLayer\sqllite\engine\sqlite3.c" />
+    <ClCompile Include="databaseLayer\sqllite\sqliteDatabaseLayer.cpp" />
+    <ClCompile Include="databaseLayer\sqllite\sqlitePreparedStatement.cpp" />
+    <ClCompile Include="databaseLayer\sqllite\sqliteResultSet.cpp" />
+    <ClCompile Include="databaseLayer\sqllite\sqliteResultSetMetaData.cpp" />
+    <ClCompile Include="debugger\debugClient.cpp" />
+    <ClCompile Include="debugger\debugClientAsync.cpp" />
+    <ClCompile Include="debugger\debugClientBridge.cpp" />
+    <ClCompile Include="debugger\debugClientQuery.cpp" />
+    <ClCompile Include="debugger\debugServer.cpp" />
+    <ClCompile Include="external\metadataDataProcessor.cpp" />
+    <ClCompile Include="external\metadataDataProcessorFactory.cpp" />
+    <ClCompile Include="external\metadataReport.cpp" />
+    <ClCompile Include="external\metadataReportFactory.cpp" />
+    <ClCompile Include="backend_form.cpp" />
+    <ClCompile Include="fileSystem\fs.cpp" />
+    <ClCompile Include="fileSystem\lz\lzhuf.cpp" />
+    <ClCompile Include="fileSystem\quicklz\quicklz.c" />
+    <ClCompile Include="guid.cpp" />
+    <ClCompile Include="metaCollection\attribute\metaAttributeObject.cpp" />
+    <ClCompile Include="metaCollection\attribute\metaAttributeObjectProperty.cpp" />
+    <ClCompile Include="metaCollection\attribute\metaAttributeObjectQuery.cpp" />
+    <ClCompile Include="metaCollection\attribute\metaAttributeObject_res.cpp" />
+    <ClCompile Include="metaCollection\dimension\metaDimensionObject.cpp" />
+    <ClCompile Include="metaCollection\dimension\metaDimensionObject_res.cpp" />
+    <ClCompile Include="metaCollection\enumeration\metaEnumObject.cpp" />
+    <ClCompile Include="metaCollection\enumeration\metaEnumObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaFormObject.cpp" />
+    <ClCompile Include="metaCollection\metaFormObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaFormObjectProperty.cpp" />
+    <ClCompile Include="metaCollection\metaFormObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaGridObject.cpp" />
+    <ClCompile Include="metaCollection\metaGridObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaGridObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaInterfaceObject.cpp" />
+    <ClCompile Include="metaCollection\metaInterfaceObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaInterfaceObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaModuleObject.cpp" />
+    <ClCompile Include="metaCollection\metaModuleObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaModuleObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaObject.cpp" />
+    <ClCompile Include="metaCollection\metaObjectMetadata.cpp" />
+    <ClCompile Include="metaCollection\metaObjectMetadataMenu.cpp" />
+    <ClCompile Include="metaCollection\metaObjectMetadataQuery.cpp" />
+    <ClCompile Include="metaCollection\metaObjectMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\metaObjectProperty.cpp" />
+    <ClCompile Include="metaCollection\metaRoleObject.cpp" />
+    <ClCompile Include="metaCollection\metaRoleObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaRoleObject_res.cpp" />
+    <ClCompile Include="metaCollection\partial\accumulationRegisterEnum.cpp" />
+    <ClCompile Include="metaCollection\partial\accumulationRegisterManager.cpp" />
+    <ClCompile Include="metaCollection\partial\accumulationRegisterManager_impl.cpp" />
+    <ClCompile Include="metaCollection\partial\accumulationRegisterMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataMenu.cpp" />
+    <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataProperty.cpp" />
+    <ClCompile Include="metaCollection\partial\accumulationRegisterMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\accumulationRegisterObject.cpp" />
+    <ClCompile Include="metaCollection\partial\accumulationRegisterQuery.cpp" />
+    <ClCompile Include="metaCollection\partial\catalogAction.cpp" />
+    <ClCompile Include="metaCollection\partial\catalogData.cpp" />
+    <ClCompile Include="metaCollection\partial\catalogManager.cpp" />
+    <ClCompile Include="metaCollection\partial\catalogManager_impl.cpp" />
+    <ClCompile Include="metaCollection\partial\catalogMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\catalogMetadataMenu.cpp" />
+    <ClCompile Include="metaCollection\partial\catalogMetadataProperty.cpp" />
+    <ClCompile Include="metaCollection\partial\catalogMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\catalogObject.cpp" />
+    <ClCompile Include="metaCollection\partial\catalogVariant.cpp" />
+    <ClCompile Include="metaCollection\partial\constantAction.cpp" />
+    <ClCompile Include="metaCollection\partial\constantManager.cpp" />
+    <ClCompile Include="metaCollection\partial\constantMenu.cpp" />
+    <ClCompile Include="metaCollection\partial\constantMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\constantMetadataQuery.cpp" />
+    <ClCompile Include="metaCollection\partial\constantMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\constantObject.cpp" />
+    <ClCompile Include="metaCollection\partial\contextManager.cpp" />
+    <ClCompile Include="metaCollection\partial\dataProcessorAction.cpp" />
+    <ClCompile Include="metaCollection\partial\dataProcessorManager.cpp" />
+    <ClCompile Include="metaCollection\partial\dataProcessorMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\dataProcessorMetadataMenu.cpp" />
+    <ClCompile Include="metaCollection\partial\dataProcessorObject.cpp" />
+    <ClCompile Include="metaCollection\partial\dataProcessor_res.cpp" />
+    <ClCompile Include="metaCollection\partial\dataReportAction.cpp" />
+    <ClCompile Include="metaCollection\partial\dataReportManager.cpp" />
+    <ClCompile Include="metaCollection\partial\dataReportMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\dataReportMetadataMenu.cpp" />
+    <ClCompile Include="metaCollection\partial\dataReportMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\dataReportObject.cpp" />
+    <ClCompile Include="metaCollection\partial\documentAction.cpp" />
+    <ClCompile Include="metaCollection\partial\documentData.cpp" />
+    <ClCompile Include="metaCollection\partial\documentEnum.cpp" />
+    <ClCompile Include="metaCollection\partial\documentManager.cpp" />
+    <ClCompile Include="metaCollection\partial\documentManager_impl.cpp" />
+    <ClCompile Include="metaCollection\partial\documentMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\documentMetadataMenu.cpp" />
+    <ClCompile Include="metaCollection\partial\documentMetadataProperty.cpp" />
+    <ClCompile Include="metaCollection\partial\documentMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\documentObject.cpp" />
+    <ClCompile Include="metaCollection\partial\documentVariant.cpp" />
+    <ClCompile Include="metaCollection\partial\enumerationAction.cpp" />
+    <ClCompile Include="metaCollection\partial\enumerationManager.cpp" />
+    <ClCompile Include="metaCollection\partial\enumerationMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\enumerationMetadataMenu.cpp" />
+    <ClCompile Include="metaCollection\partial\enumerationMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\informationRegisterAction.cpp" />
+    <ClCompile Include="metaCollection\partial\informationRegisterManager.cpp" />
+    <ClCompile Include="metaCollection\partial\informationRegisterManager_impl.cpp" />
+    <ClCompile Include="metaCollection\partial\informationRegisterMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\informationRegisterMetadataMenu.cpp" />
+    <ClCompile Include="metaCollection\partial\informationRegisterMetadataProperty.cpp" />
+    <ClCompile Include="metaCollection\partial\informationRegisterMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\informationRegisterObject.cpp" />
+    <ClCompile Include="metaCollection\partial\informationRegisterQuery.cpp" />
+    <ClCompile Include="metaCollection\partial\list\objectList.cpp" />
+    <ClCompile Include="metaCollection\partial\list\objectListAction.cpp" />
+    <ClCompile Include="metaCollection\partial\list\objectListModel.cpp" />
+    <ClCompile Include="metaCollection\partial\list\objectListQuery.cpp" />
+    <ClCompile Include="metaCollection\partial\object.cpp" />
+    <ClCompile Include="metaCollection\partial\objectModel.cpp" />
+    <ClCompile Include="metaCollection\partial\objectProperty.cpp" />
+    <ClCompile Include="metaCollection\partial\objectQuery.cpp" />
+    <ClCompile Include="metaCollection\partial\objectVariant.cpp" />
+    <ClCompile Include="metaCollection\partial\reference\reference.cpp" />
+    <ClCompile Include="metaCollection\partial\reference\referenceQuery.cpp" />
+    <ClCompile Include="metaCollection\partial\selector\objectSelector.cpp" />
+    <ClCompile Include="metaCollection\partial\selector\objectSelectorQuery.cpp" />
+    <ClCompile Include="metaCollection\partial\tabularSection\tabularSection.cpp" />
+    <ClCompile Include="metaCollection\partial\tabularSection\tabularSectionModel.cpp" />
+    <ClCompile Include="metaCollection\partial\tabularSection\tabularSectionQuery.cpp" />
+    <ClCompile Include="metaCollection\resource\metaResourceObject.cpp" />
+    <ClCompile Include="metaCollection\resource\metaResourceObject_res.cpp" />
+    <ClCompile Include="metaCollection\table\metaTableObject.cpp" />
+    <ClCompile Include="metaCollection\table\metaTableObjectProperty.cpp" />
+    <ClCompile Include="metaCollection\table\metaTableObject_res.cpp" />
+    <ClCompile Include="metadata.cpp" />
+    <ClCompile Include="metadataConfiguration.cpp" />
+    <ClCompile Include="metadataConfigurationQuery.cpp" />
+    <ClCompile Include="metadataFactory.cpp" />
+    <ClCompile Include="moduleManager\moduleManager.cpp" />
+    <ClCompile Include="moduleManager\moduleManagerEvent.cpp" />
+    <ClCompile Include="moduleManager\moduleManagerMetadataUnit.cpp" />
+    <ClCompile Include="moduleManager\moduleManagerUnit.cpp" />
+    <ClCompile Include="objCtor.cpp" />
+    <ClCompile Include="role.cpp" />
+    <ClCompile Include="systemManager\systemManager.cpp" />
+    <ClCompile Include="systemManager\systemManagerEnum.cpp" />
+    <ClCompile Include="systemManager\systemManagerFunc.cpp" />
+    <ClCompile Include="uniqueKey.cpp" />
+    <ClCompile Include="utils\wxmd5.cpp" />
+    <ClCompile Include="value_cast.cpp" />
+    <ClCompile Include="wrapper\moduleInfo.cpp" />
+    <ClCompile Include="wrapper\propertyInfo.cpp" />
+    <ClCompile Include="wrapper\tableInfo.cpp" />
+    <ClCompile Include="wrapper\typeInfo.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="compiler\ttmath\ttmathuint_x86_64_msvc.asm" />
+    <CopyFileToFolders Include="databaseLayer\postgres\engine\libpq_x86.dll">
+      <FileType>Document</FileType>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">libpq%(Extension)</DestinationFileName>
+      <DestinationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">libpq%(Extension)</DestinationFileName>
+    </CopyFileToFolders>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>15.0</VCProjectVersion>
+    <ProjectGuid>{35245A06-A72D-40B9-92FE-8EF2CCCC9D00}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>deamon</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>backend</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ExecutablePath>$(VC_ExecutablePath_x64_x86);$(CommonExecutablePath);$(ExecutablePath)</ExecutablePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ExecutablePath>$(VC_ExecutablePath_x64_x86);$(CommonExecutablePath);$(ExecutablePath)</ExecutablePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);$(oesSrcDir)include;.;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw32ud_aui.lib;wxmsw32ud_qa.lib;wxmsw32ud_html.lib;wxmsw32ud_propgrid.lib;wxmsw32ud_adv.lib;wxmsw32ud_core.lib;wxbase32ud_xml.lib;wxbase32ud_net.lib;wxmsw32ud_stc.lib;wxmsw32ud_xrc.lib;wxbase32ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_CONSOLE;%(PreprocessorDefinitions);CORE_EXPORTS</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw31ud_aui.lib;wxmsw31ud_qa.lib;wxmsw31ud_html.lib;wxmsw31ud_propgrid.lib;wxmsw31ud_adv.lib;wxmsw31ud_core.lib;wxbase31ud_xml.lib;wxbase31ud_net.lib;wxmsw31ud_stc.lib;wxmsw31ud_xrc.lib;wxbase31ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;core.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <Profile>true</Profile>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;BACKEND_EXPORTS</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>true</OmitFramePointers>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw32u_aui.lib;wxmsw32u_qa.lib;wxmsw32u_html.lib;wxmsw32u_propgrid.lib;wxmsw32u_adv.lib;wxmsw32u_core.lib;wxbase32u_xml.lib;wxbase32u_net.lib;wxmsw32u_stc.lib;wxmsw32u_xrc.lib;wxbase32u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;_CONSOLE;CORE_EXPORTS</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>true</OmitFramePointers>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw31u_aui.lib;wxmsw31u_qa.lib;wxmsw31u_html.lib;wxmsw31u_propgrid.lib;wxmsw31u_adv.lib;wxmsw31u_core.lib;wxbase31u_xml.lib;wxbase31u_net.lib;wxmsw31u_stc.lib;wxmsw31u_xrc.lib;wxbase31u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;core.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

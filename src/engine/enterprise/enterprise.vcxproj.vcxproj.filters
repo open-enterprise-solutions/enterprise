@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="mainApp.cpp" />
+    <ClCompile Include="mainAppEvent.cpp" />
+    <ClCompile Include="mainFrame\mainFrameEnterprise.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameEnterpriseComponent.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameEnterpriseEvent.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\mainFrameEnterpriseMenu.cpp">
+      <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\docManager.cpp">
+      <Filter>docManager</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\dataProcessorFile.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\dataReportFile.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlg\functionAll.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlg\enterpriseOption.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\output\outputWindow.cpp">
+      <Filter>mainFrame\output</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="mainApp.h" />
+    <ClInclude Include="resource.h">
+      <Filter>res</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\mainFrameEnterprise.h">
+      <Filter>mainFrame</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\docManager.h">
+      <Filter>docManager</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\dataProcessorFile.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\dataReportFile.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlg\enterpriseOption.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlg\functionAll.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\output\outputWindow.h">
+      <Filter>mainFrame\output</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="res">
+      <UniqueIdentifier>{d3f4bf29-6f86-43b3-b079-064ad3a64eb7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="res\xpm">
+      <UniqueIdentifier>{c2556e89-bf77-4e37-b5b5-1d1202759bad}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame">
+      <UniqueIdentifier>{bd02bd41-d4ef-4e04-ab63-bc8c625942ca}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docManager">
+      <UniqueIdentifier>{0c575678-69b1-4c6c-a45e-2669d90bd1f4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docManager\templates">
+      <UniqueIdentifier>{2296585d-fe0f-4c36-837a-c7340bca5cb2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win">
+      <UniqueIdentifier>{230a09f4-b820-4904-9dae-25e6f513c1e0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlg">
+      <UniqueIdentifier>{8b207972-925e-41a9-bcbc-699fbc905016}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\output">
+      <UniqueIdentifier>{7ba15e51-0685-4bb8-b79b-17014cf4826c}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\splashLogo.xpm">
+      <Filter>res\xpm</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="enterprise.ico">
+      <Filter>res</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="enterprise.rc">
+      <Filter>res</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+</Project>
