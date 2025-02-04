@@ -189,7 +189,11 @@ void* CPostgresResultSet::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 {
 	//int nLength = m_pInterface->GetPQgetlength()(m_pResult, m_nCurrentRow, nIndex);
 	unsigned char* pBlob = (unsigned char*)m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1);
+#if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
+	unsigned long long nUnescapedLength = 0;
+#else 
 	unsigned int nUnescapedLength = 0;
+#endif
 	unsigned char* pUnescapedBlob = m_pInterface->GetPQunescapeBytea()(pBlob, &nUnescapedLength);
 
 	wxMemoryBuffer tempBuffer(nUnescapedLength);
@@ -200,7 +204,7 @@ void* CPostgresResultSet::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 
 	tempBuffer.SetBufSize(nUnescapedLength);
 	tempBuffer.SetDataLen(nUnescapedLength);
-	
+
 	buffer = tempBuffer;
 	buffer.UngetWriteBuf(nUnescapedLength);
 

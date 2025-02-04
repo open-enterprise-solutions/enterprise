@@ -49,10 +49,10 @@ CValue CValueForm::CValueFormControl::GetIteratorAt(unsigned int idx)
 bool CValueForm::CValueFormControl::GetAt(const CValue& varKeyValue, CValue& pvarValue)
 {
 	const number_t& number = varKeyValue.GetNumber();
-	if (m_formOwner->m_aControls.size() < number.GetUInteger())
+	if (m_formOwner->m_aControls.size() < number.ToUInt())
 		return false;
 	auto structurePos = m_formOwner->m_aControls.begin();
-	pvarValue = structurePos[number.GetUInteger()];
+	pvarValue = structurePos[number.ToUInt()];
 	return true;
 }
 

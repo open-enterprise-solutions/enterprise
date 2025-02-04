@@ -10,13 +10,13 @@
 #include <wx/sstream.h>
 #include <wx/xml/xml.h>
 
-wxBEGIN_EVENT_TABLE(CWatchCtrl, wxTreeListCtrl)
+wxBEGIN_EVENT_TABLE(CWatchCtrl, wxTreeMultiListCtrl)
 EVT_SIZE(CWatchCtrl::OnSize)
 EVT_LIST_COL_END_DRAG(wxID_ANY, CWatchCtrl::OnColumnEndDrag)
 wxEND_EVENT_TABLE()
 
 CWatchCtrl::CWatchCtrl(wxWindow *parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style, const wxValidator &validator, const wxString& name)
-	: wxTreeListCtrl(parent, id, pos, size, style, validator, name)
+	: wxTreeMultiListCtrl(parent, id, pos, size, style, validator, name)
 {
 	AddColumn(_("Name"), 0, wxALIGN_LEFT);
 	SetColumnEditable(0, true);

@@ -9,7 +9,7 @@ CFirebirdParameter::CFirebirdParameter(CFirebirdInterface* pInterface, XSQLVAR* 
 	m_pParameter = pVar;
 
 	m_nNullFlag = -1;
-	m_pParameter->sqlind = &m_nNullFlag; // nullptr indicator
+	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
 CFirebirdParameter::CFirebirdParameter(CFirebirdInterface* pInterface, XSQLVAR* pVar, const wxString& strValue, const wxCSConv* conv) : m_nParameterType(CFirebirdParameter::PARAM_STRING), m_strValue(strValue)
@@ -29,7 +29,7 @@ CFirebirdParameter::CFirebirdParameter(CFirebirdInterface* pInterface, XSQLVAR* 
 	m_pParameter->sqllen = length;
 
 	m_nNullFlag = 0;
-	m_pParameter->sqlind = &m_nNullFlag; // nullptr indicator
+	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
 CFirebirdParameter::CFirebirdParameter(CFirebirdInterface* pInterface, XSQLVAR* pVar, const number_t& dblValue) : m_nParameterType(CFirebirdParameter::PARAM_NUMBER)
@@ -88,7 +88,7 @@ CFirebirdParameter::CFirebirdParameter(CFirebirdInterface* pInterface, XSQLVAR* 
 	}
 
 	m_nNullFlag = 0;
-	m_pParameter->sqlind = &m_nNullFlag; // nullptr indicator
+	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
 CFirebirdParameter::CFirebirdParameter(CFirebirdInterface* pInterface, XSQLVAR* pVar, int nValue) : m_nParameterType(CFirebirdParameter::PARAM_INT)
@@ -100,7 +100,7 @@ CFirebirdParameter::CFirebirdParameter(CFirebirdInterface* pInterface, XSQLVAR* 
 	m_pParameter->sqldata = (char*)&m_nValue;
 
 	m_nNullFlag = 0;
-	m_pParameter->sqlind = &m_nNullFlag; // nullptr indicator
+	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
 CFirebirdParameter::CFirebirdParameter(CFirebirdInterface* pInterface, XSQLVAR* pVar, double dblValue) : m_nParameterType(CFirebirdParameter::PARAM_DOUBLE)
@@ -127,7 +127,7 @@ CFirebirdParameter::CFirebirdParameter(CFirebirdInterface* pInterface, XSQLVAR* 
 	}
 
 	m_nNullFlag = 0;
-	m_pParameter->sqlind = &m_nNullFlag; // nullptr indicator
+	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
 CFirebirdParameter::CFirebirdParameter(CFirebirdInterface* pInterface, XSQLVAR* pVar, bool bValue) : m_nParameterType(CFirebirdParameter::PARAM_BOOL)
@@ -141,7 +141,7 @@ CFirebirdParameter::CFirebirdParameter(CFirebirdInterface* pInterface, XSQLVAR* 
 	m_pParameter->sqldata = (char*)&m_nValue;
 
 	m_nNullFlag = 0;
-	m_pParameter->sqlind = &m_nNullFlag; // nullptr indicator
+	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
 const long TIME_T_FACTOR = 1000l;
@@ -166,7 +166,7 @@ CFirebirdParameter::CFirebirdParameter(CFirebirdInterface* pInterface, XSQLVAR* 
 	m_pParameter->sqldata = (char*)&m_Date;
 
 	m_nNullFlag = 0;
-	m_pParameter->sqlind = &m_nNullFlag; // nullptr indicator
+	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
 CFirebirdParameter::CFirebirdParameter(CFirebirdInterface* pInterface, XSQLVAR* pVar, const void* pData, long nDataLength) : m_nParameterType(CFirebirdParameter::PARAM_BLOB)
@@ -183,17 +183,17 @@ CFirebirdParameter::CFirebirdParameter(CFirebirdInterface* pInterface, XSQLVAR* 
 bool CFirebirdParameter::ResetBlob(isc_db_handle database, isc_tr_handle transaction)
 {
 	// If the databaes and transaction handles aren't valid then don't try to do anything
-	if ((database == nullptr) || (transaction == nullptr))
+	if ((database == NULL) || (transaction == NULL))
 		return false;
 
-	//m_BlobId = nullptr;
-	m_pBlob = nullptr;
+	//m_BlobId = NULL;
+	m_pBlob = NULL;
 	ISC_STATUS_ARRAY    status;              /* status vector */
 	void* pData = m_BufferValue.GetData();
 	int nDataLength = m_nBufferLength;//m_BufferValue.GetDataLen();
 
 	memset(&m_BlobId, 0, sizeof(m_BlobId));
-	int nReturn = m_pInterface->GetIscCreateBlob2()(status, &database, &transaction, &m_pBlob, &m_BlobId, 0, nullptr);
+	int nReturn = m_pInterface->GetIscCreateBlob2()(status, &database, &transaction, &m_pBlob, &m_BlobId, 0, NULL);
 	if (nReturn != 0)
 	{
 #if _USE_DATABASE_LAYER_EXCEPTIONS == 1
@@ -250,7 +250,7 @@ bool CFirebirdParameter::ResetBlob(isc_db_handle database, isc_tr_handle transac
 	m_pParameter->sqldata = (char*)&m_BlobId;
 
 	m_nNullFlag = 0;
-	m_pParameter->sqlind = &m_nNullFlag; // nullptr indicator
+	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 
 	return true;
 }

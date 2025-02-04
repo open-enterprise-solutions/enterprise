@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////////////
 // Name:        treelistctrl.h
-// Purpose:     wxTreeListCtrl class
+// Purpose:     wxTreeMultiListCtrl class
 // Created:     01/02/97
 // Author:      Robert Roebling
 // Maintainer:  Ronan Chartois (pgriddev)
@@ -25,9 +25,11 @@
 #include <wx/xrc/xmlres.h>
 #endif
 
-class wxTreeListItem;
-class wxTreeListHeaderWindow;
-class wxTreeListMainWindow;
+#include "frontend/frontend.h"
+
+class FRONTEND_API wxTreeListItem;
+class FRONTEND_API wxTreeListHeaderWindow;
+class FRONTEND_API wxTreeListMainWindow;
 
 #define wxTR_COLUMN_LINES 0x1000 // put border around items
 #define wxTR_VIRTUAL      0x4000 // The application provides items text on demand.
@@ -38,8 +40,6 @@ class wxTreeListMainWindow;
 typedef long wxTreeItemIdValue;
 #endif
 #endif
-
-#include "frontend/frontend.h"
 
 //-----------------------------------------------------------------------------
 // wxTreeListColumnAttrs
@@ -115,7 +115,7 @@ private:
 };
 
 //----------------------------------------------------------------------------
-// wxTreeListCtrl - the multicolumn tree control
+// wxTreeMultiListCtrl - the multicolumn tree control
 //----------------------------------------------------------------------------
 
 // modes for navigation
@@ -131,9 +131,9 @@ const int wxTL_MODE_FIND_NOCASE = 0x0020;
 
 // additional flag for HitTest
 const int wxTREE_HITTEST_ONITEMCOLUMN = 0x2000;
-extern const wxChar* wxTreeListCtrlNameStr;
+extern const wxChar* wxTreeMuiltiListCtrlNameStr;
 
-class FRONTEND_API wxTreeListCtrl : public wxControl
+class FRONTEND_API wxTreeMultiListCtrl : public wxControl
 {
 	friend class wxTreeListHeaderWindow;
 	friend class wxTreeListMainWindow;
@@ -142,29 +142,29 @@ public:
 
 	// ---------- creation ----------
 
-	wxTreeListCtrl()
+	wxTreeMultiListCtrl()
 		: m_header_win(0), m_main_win(0), m_headerHeight(0)
 	{}
 
-	wxTreeListCtrl(wxWindow *parent, wxWindowID id = -1,
+	wxTreeMultiListCtrl(wxWindow *parent, wxWindowID id = -1,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxTR_DEFAULT_STYLE,
 		const wxValidator &validator = wxDefaultValidator,
-		const wxString& name = wxTreeListCtrlNameStr)
+		const wxString& name = wxTreeMuiltiListCtrlNameStr)
 		: m_header_win(0), m_main_win(0), m_headerHeight(0)
 	{
 		Create(parent, id, pos, size, style, validator, name);
 	}
 
-	virtual ~wxTreeListCtrl() {}
+	virtual ~wxTreeMultiListCtrl() {}
 
 	bool Create(wxWindow *parent, wxWindowID id = -1,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxTR_DEFAULT_STYLE,
 		const wxValidator &validator = wxDefaultValidator,
-		const wxString& name = wxTreeListCtrlNameStr);
+		const wxString& name = wxTreeMuiltiListCtrlNameStr);
 
 	void Refresh(bool erase = TRUE, const wxRect* rect = nullptr);
 	void SetFocus();
@@ -577,7 +577,7 @@ private:
 	int m_headerHeight;
 
 	DECLARE_EVENT_TABLE()
-	DECLARE_DYNAMIC_CLASS(wxTreeListCtrl)
+	DECLARE_DYNAMIC_CLASS(wxTreeMultiListCtrl)
 };
 
 /////////////////////////////////////////////////////////////////////////////

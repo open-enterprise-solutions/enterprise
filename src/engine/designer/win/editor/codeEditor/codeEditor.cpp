@@ -264,6 +264,10 @@ void CCodeEditor::SetFontColorSettings(const FontColorSettings& settings)
 	StyleSetForeground(wxSTC_C_CHARACTER, settings.GetColors(FontColorSettings::DisplayItem_String).foreColor);
 	StyleSetBackground(wxSTC_C_CHARACTER, settings.GetColors(FontColorSettings::DisplayItem_String).backColor);
 
+	StyleSetFont(wxSTC_C_CHARACTER, font);
+	StyleSetForeground(wxSTC_C_CHARACTER, settings.GetColors(FontColorSettings::DisplayItem_Selection).foreColor);
+	StyleSetBackground(wxSTC_C_CHARACTER, settings.GetColors(FontColorSettings::DisplayItem_Selection).backColor);
+
 	font = settings.GetFont(FontColorSettings::DisplayItem_Number);
 
 	StyleSetFont(wxSTC_C_NUMBER, font);

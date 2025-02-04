@@ -548,6 +548,9 @@ void CDebuggerClient::CDebuggerThreadClient::VerifyConnection()
 		commandChannel.w_u16(CommandId_StartSession);
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 	}
+	else if (m_connectionType == ConnectionType::ConnectionType_Unknown) {
+
+	}
 }
 
 #define defWait 50 //msec
@@ -605,8 +608,9 @@ void CDebuggerClient::CDebuggerThreadClient::EntryClient()
 			}
 		}
 
-		m_connectionType = ConnectionType::ConnectionType_Scanner;
+		if (m_connectionType != ConnectionType::ConnectionType_Unknown) m_connectionType = ConnectionType::ConnectionType_Scanner;
 		if (m_socketClient != nullptr) m_socketClient->Close();
+
 		m_verifiedConnection = false;
 	}
 }

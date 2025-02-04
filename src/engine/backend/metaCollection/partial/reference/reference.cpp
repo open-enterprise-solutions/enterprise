@@ -27,12 +27,16 @@ void CReferenceDataObject::PrepareRef(bool createData)
 	if (CReferenceDataObject::IsEmpty()) {
 		//attrbutes can refValue 
 		for (auto& obj : m_metaObject->GetGenericAttributes()) {
+			if (obj->IsDeleted()) 
+				continue;
 			if (!m_metaObject->IsDataReference(obj->GetMetaID())) {
 				m_objectValues.insert_or_assign(obj->GetMetaID(), obj->CreateValue());
 			}
 		}
 		// table is collection values 
 		for (auto& obj : m_metaObject->GetObjectTables()) {
+			if (obj->IsDeleted())
+				continue;
 			m_objectValues.insert_or_assign(obj->GetMetaID(),
 				m_metaObject->GetMetaData()->CreateObjectValue<CTabularSectionDataObjectRef>(this, obj));
 		}
@@ -143,11 +147,11 @@ CReferenceDataObject* CReferenceDataObject::CreateFromResultSet(IDatabaseResultS
 	CReferenceDataObject* refData = new CReferenceDataObject(metaObject, refGuid);
 
 	//load attributes 
-	for (auto& obj : metaObject->GetGenericAttributes()) {
-
+	for (auto& obj : metaObject->GetGenericAttributes()) {		
+		if (obj->IsDeleted())
+			continue;	
 		if (metaObject->IsDataReference(obj->GetMetaID()))
 			continue;
-
 		IMetaObjectAttribute::GetValueAttribute(
 			obj,
 			refData->m_objectValues[obj->GetMetaID()],
@@ -158,6 +162,8 @@ CReferenceDataObject* CReferenceDataObject::CreateFromResultSet(IDatabaseResultS
 
 	// table is collection values 
 	for (auto& obj : metaObject->GetObjectTables()) {
+		if (obj->IsDeleted())
+			continue;
 		refData->m_objectValues.insert_or_assign(obj->GetMetaID(),
 			metaObject->GetMetaData()->CreateObjectValue<CTabularSectionDataObjectRef>(refData, obj, true));
 	}

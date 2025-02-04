@@ -29,7 +29,7 @@ void CFirebirdPreparedStatement::Close()
 	{
 		CFirebirdPreparedStatementWrapper* pWrapper = (CFirebirdPreparedStatementWrapper*)(*start);
 		wxDELETE(pWrapper);
-		(*start) = nullptr;
+		(*start) = NULL;
 		start++;
 	}
 
@@ -37,7 +37,7 @@ void CFirebirdPreparedStatement::Close()
 	if (m_bManageTransaction && m_pTransaction)
 	{
 		int nReturn = m_pInterface->GetIscCommitTransaction()(m_Status, &m_pTransaction);
-		m_pTransaction = nullptr;
+		m_pTransaction = NULL;
 		if (nReturn != 0)
 		{
 			InterpretErrorCodes();
@@ -68,7 +68,7 @@ CFirebirdPreparedStatement* CFirebirdPreparedStatement::CreateStatement(CFirebir
 	wxArrayString::iterator start = Queries.begin();
 	wxArrayString::iterator stop = Queries.end();
 
-	CFirebirdPreparedStatement *pStatement = nullptr;
+	CFirebirdPreparedStatement *pStatement = NULL;
 
 	if (Queries.size() < 1)
 	{
@@ -93,17 +93,17 @@ CFirebirdPreparedStatement* CFirebirdPreparedStatement::CreateStatement(CFirebir
 
 		throw error;
 #endif
-		return nullptr;
+		return NULL;
 	}
 
 	// Start a new transaction if appropriate
-	if (pTransaction == nullptr)
+	if (pTransaction == NULL)
 	{
 		ISC_STATUS_ARRAY status;
 
 		pTransaction = 0L;
 
-		int nReturn = pInterface->GetIscStartTransaction()(status, &pTransaction, 1, &pDatabase, 0, nullptr);
+		int nReturn = pInterface->GetIscStartTransaction()(status, &pTransaction, 1, &pDatabase, 0, NULL);
 		pStatement = new CFirebirdPreparedStatement(pInterface, pDatabase, pTransaction);
 		pStatement->SetEncoding(conv);
 		if (nReturn != 0)
@@ -308,7 +308,7 @@ int CFirebirdPreparedStatement::RunQuery()
 	{
 		int nReturn = m_pInterface->GetIscCommitRetaining()(m_Status, &m_pTransaction);
 		//int nReturn = isc_commit_transaction(m_Status, &m_pTransaction);
-		// We're done with the transaction, so set it to nullptr so that we know that a new transaction must be started if we run any queries
+		// We're done with the transaction, so set it to NULL so that we know that a new transaction must be started if we run any queries
 		if (nReturn != 0) {
 			InterpretErrorCodes();
 			ThrowDatabaseException();
@@ -330,7 +330,7 @@ IDatabaseResultSet* CFirebirdPreparedStatement::RunQueryWithResults()
 			{
 				SetErrorCode(m_Statements[i]->GetErrorCode());
 				SetErrorMessage(m_Statements[i]->GetErrorMessage());
-				return nullptr;
+				return NULL;
 			}
 		}
 
@@ -340,7 +340,7 @@ IDatabaseResultSet* CFirebirdPreparedStatement::RunQueryWithResults()
 		{
 			//int nReturn = isc_commit_retaining(m_Status, &m_pTransaction);
 			int nReturn = m_pInterface->GetIscCommitTransaction()(m_Status, &m_pTransaction);
-			// We're done with the transaction, so set it to nullptr so that we know that a new transaction must be started if we run any queries
+			// We're done with the transaction, so set it to NULL so that we know that a new transaction must be started if we run any queries
 			if (nReturn != 0)
 			{
 				InterpretErrorCodes();
@@ -348,12 +348,12 @@ IDatabaseResultSet* CFirebirdPreparedStatement::RunQueryWithResults()
 			}
 
 			// Start a new transaction
-			nReturn = m_pInterface->GetIscStartTransaction()(m_Status, &m_pTransaction, 1, &m_pDatabase, 0, nullptr);
+			nReturn = m_pInterface->GetIscStartTransaction()(m_Status, &m_pTransaction, 1, &m_pDatabase, 0, NULL);
 			if (nReturn != 0)
 			{
 				InterpretErrorCodes();
 				ThrowDatabaseException();
-				return nullptr;
+				return NULL;
 			}
 
 			// Make sure to update the last statements pointer to the transaction
@@ -386,14 +386,14 @@ IDatabaseResultSet* CFirebirdPreparedStatement::RunQueryWithResults()
 			}
 #endif
 
-			return nullptr;
+			return NULL;
 	}
 
 		LogResultSetForCleanup(pResultSet);
 		return pResultSet;
 }
 	else
-		return nullptr;
+		return NULL;
 }
 
 int CFirebirdPreparedStatement::FindStatementAndAdjustPositionIndex(int* pPosition)

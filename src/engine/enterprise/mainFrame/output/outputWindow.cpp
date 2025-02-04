@@ -136,14 +136,14 @@ void COutputWindow::SharedOutput(const wxString& message, eStatusMessage status,
 
 	Freeze();
 
+	unsigned int lastLine = GetLineCount();
+
 	SetEditable(true);
 	AppendText(message + '\n');
 	SetEditable(false);
 
-	const unsigned int newLine = GetLineCount();
-
 	MarkerAdd(
-		newLine - 1,
+		lastLine - 1,
 		status);
 
 	Thaw();

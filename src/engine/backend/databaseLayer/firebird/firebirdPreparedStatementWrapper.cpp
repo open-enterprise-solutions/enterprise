@@ -11,9 +11,9 @@ CFirebirdPreparedStatementWrapper::CFirebirdPreparedStatementWrapper(CFirebirdIn
 	m_pDatabase = pDatabase;
 	m_pTransaction = pTransaction;
 
-	m_pStatement = nullptr;
-	m_pParameters = nullptr;
-	m_pParameterCollection = nullptr;
+	m_pStatement = NULL;
+	m_pParameters = NULL;
+	m_pParameterCollection = NULL;
 	m_bManageStatement = true;
 	m_bManageTransaction = false;
 
@@ -58,7 +58,7 @@ bool CFirebirdPreparedStatementWrapper::Prepare()
 
 	m_pParameters = (XSQLDA*)malloc(XSQLDA_LENGTH(1));
 
-	if (m_pParameters == nullptr)
+	if (m_pParameters == NULL)
 	{
 		InterpretErrorCodes();
 		ThrowDatabaseException();
@@ -151,7 +151,7 @@ void CFirebirdPreparedStatementWrapper::SetParam(int nPosition, bool bValue)
 
 int CFirebirdPreparedStatementWrapper::GetParameterCount()
 {
-	if (m_pParameters == nullptr)
+	if (m_pParameters == NULL)
 		return 0;
 	else
 		return m_pParameters->sqld;
@@ -218,7 +218,7 @@ IDatabaseResultSet* CFirebirdPreparedStatementWrapper::DoRunQueryWithResults()
 		free(pOutputSqlda);
 		InterpretErrorCodes();
 		ThrowDatabaseException();
-		return nullptr;
+		return NULL;
 	}
 	if (pOutputSqlda->sqld > pOutputSqlda->sqln)
 	{
@@ -233,7 +233,7 @@ IDatabaseResultSet* CFirebirdPreparedStatementWrapper::DoRunQueryWithResults()
 			free(pOutputSqlda);
 			InterpretErrorCodes();
 			ThrowDatabaseException();
-			return nullptr;
+			return NULL;
 		}
 	}
 
@@ -268,7 +268,7 @@ IDatabaseResultSet* CFirebirdPreparedStatementWrapper::DoRunQueryWithResults()
 		
 		ThrowDatabaseException();
 		
-		return nullptr;
+		return NULL;
 	}
 
 	// Now execute the SQL
@@ -292,7 +292,7 @@ IDatabaseResultSet* CFirebirdPreparedStatementWrapper::DoRunQueryWithResults()
 		}
 #endif
 		ThrowDatabaseException();
-		return nullptr;
+		return NULL;
 	}
 
 	m_bManageStatement = true;

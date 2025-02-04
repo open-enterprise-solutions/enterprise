@@ -161,7 +161,7 @@ class CPrecompileModule : public CTranslateCode
 public:
 
 	//Основные методы:
-	void Clear();//Сброс данных для повторного использования объекта
+	virtual void Clear();//Сброс данных для повторного использования объекта
 	void PrepareModuleData();
 
 	CPrecompileModule(CMetaObjectModule* moduleObject);

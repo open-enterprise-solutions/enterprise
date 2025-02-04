@@ -79,11 +79,6 @@ struct aKeyWordsDef s_aKeyWords[] =
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-CTranslateCode::CDefineList::~CDefineList()
-{
-	m_defineList.clear();
-}
-
 void CTranslateCode::CDefineList::RemoveDef(const wxString& strName)
 {
 	m_defineList.erase(stringUtils::MakeUpper(strName));
@@ -91,8 +86,8 @@ void CTranslateCode::CDefineList::RemoveDef(const wxString& strName)
 
 bool CTranslateCode::CDefineList::HasDefine(const wxString& strName) const
 {
-	auto itDefList = m_defineList.find(stringUtils::MakeUpper(strName));
-	if (itDefList != m_defineList.end())
+	auto it = m_defineList.find(stringUtils::MakeUpper(strName));
+	if (it != m_defineList.end())
 		return true;
 
 	static int nLevel = 0;
@@ -111,12 +106,12 @@ bool CTranslateCode::CDefineList::HasDefine(const wxString& strName) const
 
 CLexemList* CTranslateCode::CDefineList::GetDefine(const wxString& strName)
 {
-	auto itDefList = m_defineList.find(stringUtils::MakeUpper(strName));
-	if (itDefList != m_defineList.end())
-		return itDefList->second;
+	auto it = m_defineList.find(stringUtils::MakeUpper(strName));
+	if (it != m_defineList.end())
+		return it->second;
 
 	//ищем в родителях
-	if (m_parentDefine && m_parentDefine->HasDefine(strName))
+	if (m_parentDefine != nullptr && m_parentDefine->HasDefine(strName))
 		return m_parentDefine->GetDefine(strName);
 
 	CLexemList* lexList = new CLexemList();
@@ -129,9 +124,7 @@ void CTranslateCode::CDefineList::SetDefine(const wxString& strName, CLexemList*
 	CLexemList* pList = GetDefine(strName);
 	pList->clear();
 	if (pDef != nullptr) {
-		for (unsigned int i = 0; i < pDef->size(); i++) {
-			pList->push_back(*pDef[i].data());
-		}
+		for (unsigned int i = 0; i < pDef->size(); i++) pList->push_back(*pDef[i].data());	
 	}
 }
 
@@ -197,9 +190,8 @@ m_nModePreparing(LEXEM_ADD)
 
 CTranslateCode::~CTranslateCode()
 {
-	if (m_bAutoDeleteDefList && m_defineList) {
-		delete m_defineList;
-	}
+	if (m_bAutoDeleteDefList)
+		wxDELETE(m_defineList);
 }
 
 /**
@@ -239,9 +231,10 @@ void CTranslateCode::Clear()
 {
 	m_strBuffer.clear();
 
-	//m_listLexem.clear();
-	//m_listTranslateCode.clear();
+	m_listLexem.clear();
+	m_listTranslateCode.clear();
 
+	if (m_defineList != nullptr) m_defineList->Clear();
 	m_bufferSize = m_nCurPos = m_nCurLine = 0;
 }
 
@@ -997,7 +990,7 @@ bool CTranslateCode::PrepareLexem()
 	lex.m_strModuleName = m_strModuleName;
 	lex.m_strDocPath = m_strDocPath;
 	lex.m_strFileName = m_strFileName;
-	
+
 	lex.m_nNumberLine = m_nCurLine;
 	lex.m_nNumberString = m_nCurPos;
 
@@ -1011,11 +1004,11 @@ bool CTranslateCode::PrepareLexem()
 void CTranslateCode::PrepareFromCurrent(int nMode, const wxString& strName)
 {
 	CTranslateCode translate;
-	
+
 	translate.m_defineList = m_defineList;
 	translate.m_nModePreparing = nMode;
 	translate.m_strModuleName = m_strModuleName;
-	
+
 	translate.Load(m_strBuffer);
 
 	//начальный номер строки

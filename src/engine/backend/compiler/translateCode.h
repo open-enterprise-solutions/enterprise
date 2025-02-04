@@ -97,7 +97,9 @@ class BACKEND_API CTranslateCode {
 	public:
 
 		CDefineList() : m_parentDefine(nullptr) {};
-		~CDefineList();
+		~CDefineList() { Clear(); }
+
+		void Clear() { m_defineList.clear(); }
 
 		void SetParent(CDefineList* parent) {
 			m_parentDefine = parent;
@@ -134,7 +136,7 @@ public:
 
 	virtual void OnSetParent(CTranslateCode* setParent);
 
-	void Clear();
+	virtual void Clear();
 	bool PrepareLexem();
 
 protected:

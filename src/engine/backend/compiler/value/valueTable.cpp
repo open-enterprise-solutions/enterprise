@@ -88,7 +88,7 @@ bool CValueTable::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue
 	switch (lMethodNum)
 	{
 	case enAddRow:
-		pvarRetValue = AppendRow();
+		pvarRetValue = GetRowAt(AppendRow());
 		return true;
 	case enClone:
 		pvarRetValue = Clone();
@@ -110,11 +110,8 @@ bool CValueTable::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue
 				IValueTable::Remove(node);
 		}
 		else {
-			wxValueTableRow* node = GetViewData<wxValueTableRow>(
-				GetItem(paParams[0]->GetInteger())
-				);
-			if (node != nullptr)
-				IValueTable::Remove(node);
+			wxValueTableRow* node = GetViewData<wxValueTableRow>(GetItem(paParams[0]->GetInteger()));
+			if (node != nullptr) IValueTable::Remove(node);
 		}
 		return true;
 	}
@@ -124,7 +121,7 @@ bool CValueTable::CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue
 	case enSort:
 		IValueModelColumnCollection::IValueModelColumnInfo* colInfo = m_dataColumnCollection->GetColumnByName(paParams[0]->GetString());
 		if (colInfo != nullptr) {
-			IValueTable::Sort( colInfo->GetColumnID(), lSizeArray > 0 ? paParams[1]->GetBoolean() : true );
+			IValueTable::Sort(colInfo->GetColumnID(), lSizeArray > 0 ? paParams[1]->GetBoolean() : true);
 			return true;
 		}
 		return false;
@@ -250,6 +247,7 @@ CValueTable::CValueTableColumnCollection::CValueTableColumnInfo::CValueTableColu
 }
 
 CValueTable::CValueTableColumnCollection::CValueTableColumnInfo::~CValueTableColumnInfo() {
+	wxDELETE(m_methodHelper);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -263,8 +261,7 @@ CValueTable::CValueTableReturnLine::CValueTableReturnLine(CValueTable* ownerTabl
 }
 
 CValueTable::CValueTableReturnLine::~CValueTableReturnLine() {
-	if (m_methodHelper)
-		delete m_methodHelper;
+	wxDELETE(m_methodHelper);
 }
 
 void CValueTable::CValueTableReturnLine::PrepareNames() const

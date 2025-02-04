@@ -41,6 +41,7 @@ CDocDesignerMDIFrame::CDocDesignerMDIFrame(const wxString& title,
 
 CDocDesignerMDIFrame::~CDocDesignerMDIFrame()
 {
+	wxDELETE(m_docManager);
 }
 
 void CDocDesignerMDIFrame::CreateGUI()

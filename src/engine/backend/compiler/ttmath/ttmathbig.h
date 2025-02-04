@@ -2333,11 +2333,11 @@ namespace ttmath
 		/*!
 			this method converts 'this' into uint
 		*/
-		uint GetUInteger() const
+		uint ToUInt() const
 		{
 			uint result;
 
-			GetUInteger(result);
+			ToUInt(result);
 
 			return result;
 		}
@@ -2348,7 +2348,7 @@ namespace ttmath
 
 			if the value is too big this method returns a carry (1)
 		*/
-		uint GetUInteger(uint & result) const
+		uint ToUInt(uint & result) const
 		{
 			if (ToUIntOrInt(result))
 				return 1;
@@ -2380,7 +2380,7 @@ namespace ttmath
 		*/
 		uint ToInt(uint & result) const
 		{
-			return GetUInteger(result);
+			return ToUInt(result);
 		}
 
 
@@ -2481,7 +2481,7 @@ namespace ttmath
 			if the value is too big this method returns a carry (1)
 		*/
 		template<uint int_size>
-		uint GetUInteger(UInt<int_size> & result) const
+		uint ToUInt(UInt<int_size> & result) const
 		{
 			uint c = ToUIntOrInt(result);
 
@@ -2503,7 +2503,7 @@ namespace ttmath
 		template<uint int_size>
 		uint ToInt(UInt<int_size> & result) const
 		{
-			return GetUInteger(result);
+			return ToUInt(result);
 		}
 
 
@@ -3198,12 +3198,12 @@ namespace ttmath
 			this method converts 'this' into 'result' (64 bit unsigned integer)
 			if the value is too big this method returns a carry (1)
 		*/
-		uint GetUInteger(ulint & result) const
+		uint ToUInt(ulint & result) const
 		{
 			UInt<2> temp; // 64 bits container
 
-			uint c = GetUInteger(temp);
-			temp.GetUInteger(result);
+			uint c = ToUInt(temp);
+			temp.ToUInt(result);
 
 			return c;
 		}
@@ -3215,7 +3215,7 @@ namespace ttmath
 		*/
 		uint ToInt(ulint & result) const
 		{
-			return GetUInteger(result);
+			return ToUInt(result);
 		}
 
 
@@ -3377,11 +3377,11 @@ namespace ttmath
 			***this method is created only on a 64bit platform***
 			if the value is too big this method returns a carry (1)
 		*/
-		uint GetUInteger(unsigned int & result) const
+		uint ToUInt(unsigned int & result) const
 		{
 			uint result_uint;
 
-			uint c = GetUInteger(result_uint);
+			uint c = ToUInt(result_uint);
 			result = (unsigned int)result_uint;
 
 			if (c || result_uint != uint(result))
@@ -3398,7 +3398,7 @@ namespace ttmath
 		*/
 		uint ToInt(unsigned int & result) const
 		{
-			return GetUInteger(result);
+			return ToUInt(result);
 		}
 
 

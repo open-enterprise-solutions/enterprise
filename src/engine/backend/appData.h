@@ -1,6 +1,5 @@
 #ifndef __APP_DATA_H__
 #define __APP_DATA_H__
-
 #include "backend/backend_core.h"
 
 #define appData				(CApplicationData::Get())

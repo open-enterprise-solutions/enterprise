@@ -1054,7 +1054,7 @@ namespace ttmath
 
 #ifdef _MSC_VER
 #pragma warning (disable : 4731)
-	//warning C4731: valueForm pointer register 'ebp' modified by inline assembly code
+	//warning C4731: frame pointer register 'ebp' modified by inline assembly code
 #endif
 
 

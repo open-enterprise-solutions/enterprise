@@ -283,7 +283,7 @@ class CValueCheckbox : public IValueWindow,
 	CValue m_selValue = false;
 
 	PropertyCategory* m_categoryCheckBox = IPropertyObject::CreatePropertyCategory({ "checkbox", _("checkbox") });
-	Property* m_propertyCaption = IPropertyObject::CreateProperty(m_categoryCheckBox, "caption", PropertyType::PT_WXSTRING, _("Check Me!"));
+	Property* m_propertyCaption = IPropertyObject::CreateProperty(m_categoryCheckBox, "caption", PropertyType::PT_WXSTRING, _(""));
 	Property* m_propertyTitle = IPropertyObject::CreateProperty(m_categoryCheckBox, "title_location", &CValueCheckbox::GetTitleLocation, enTitleLocation::eRight);
 
 	PropertyCategory* m_categorySource = IPropertyObject::CreatePropertyCategory("data");

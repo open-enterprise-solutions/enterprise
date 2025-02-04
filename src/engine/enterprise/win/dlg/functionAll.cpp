@@ -102,12 +102,13 @@ void CDialogFunctionAll::OnTreeCtrlElementsOnLeftDClick(wxMouseEvent& event)
 	if (itemData != nullptr) {
 		IMetaCommandData* metaObject = dynamic_cast<IMetaCommandData*>(itemData->GetMetaObject());
 		if (metaObject != nullptr) {
-			IBackendValueForm* valueForm = metaObject->GetDefaultCommandForm();
-			wxASSERT(valueForm);
+			IBackendValueForm* valueForm = nullptr;
 			try {
+				valueForm = metaObject->GetDefaultCommandForm();
+				wxASSERT(valueForm);
 				valueForm->ShowForm(); Close(true);
 			}
-			catch (const CBackendException *err) {
+			catch (const CBackendException* err) {
 				wxMessageBox(err->what());
 				wxDELETE(valueForm);
 			}

@@ -29,6 +29,11 @@ CDocEnterpriseMDIFrame::CDocEnterpriseMDIFrame(const wxString& title,
 	m_docManager = new CEnterpriseDocManager;
 }
 
+CDocEnterpriseMDIFrame::~CDocEnterpriseMDIFrame()
+{
+	wxDELETE(m_docManager);
+}
+
 #include "backend/debugger/debugServer.h"
 #include "frontend/win/dlgs/errorDialog.h"
 

@@ -6,7 +6,7 @@ CRoleEditor::CRoleEditor(wxWindow* parent,
 	wxWindowID winid, IMetaObject* metaObject) :
 	wxSplitterWindow(parent, winid, wxDefaultPosition, wxDefaultSize, wxSP_3D | wxSP_LIVE_UPDATE), m_metaRole(metaObject)
 {
-	m_roleCtrl = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_ROW_LINES | wxTR_SINGLE);
+	m_roleCtrl = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_ROW_LINES | wxTR_SINGLE | wxTR_TWIST_BUTTONS);
 	m_roleCtrl->SetDoubleBuffered(true);
 	m_roleCtrl->Bind(wxEVT_TREE_SEL_CHANGED, &CRoleEditor::OnSelectedItem, this);
 

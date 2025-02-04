@@ -50,15 +50,10 @@ CPrecompileModule::~CPrecompileModule() {}
 void CPrecompileModule::Clear() //—брос данных дл€ повторного использовани€ объекта
 {
 	m_pCurrentContext = nullptr;
-
-	for (auto function : cContext.cFunctions)
-	{
-		CPrecompileFunction* pFunction = static_cast<CPrecompileFunction*>(function.second);
-		if (pFunction) delete pFunction;
-	}
-
+	if (m_defineList != nullptr) m_defineList->Clear();
+	m_bufferSize = m_nCurPos = m_nCurLine = 0;
+	for (auto& function : cContext.cFunctions) wxDELETE(function.second);
 	m_nCurrentCompile = wxNOT_FOUND;
-
 	cContext.cVariables.clear();
 	cContext.cFunctions.clear();
 

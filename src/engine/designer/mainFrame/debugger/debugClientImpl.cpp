@@ -3,19 +3,21 @@
 
 void CDebuggerClientBridge::OnSessionStart(wxSocketClient* sock)
 {
-	for (auto& doc : docManager->GetDocumentsVector()) {
-		CMetaDocument* metaDoc = dynamic_cast<CMetaDocument*>(doc);
-		if (metaDoc != nullptr) {
-			IModuleDocument* foundedDoc = dynamic_cast<IModuleDocument*>(metaDoc);
-			if (foundedDoc != nullptr) {
-				foundedDoc->SetCurrentLine(wxNOT_FOUND, false);
-				foundedDoc->SetToolTip(wxEmptyString);
-			}
-			for (auto& child_doc : metaDoc->GetChild()) {
-				IModuleDocument* foundedDoc = dynamic_cast<IModuleDocument*>(child_doc);
+	if (docManager != nullptr) {
+		for (auto& doc : docManager->GetDocumentsVector()) {
+			CMetaDocument* metaDoc = dynamic_cast<CMetaDocument*>(doc);
+			if (metaDoc != nullptr) {
+				IModuleDocument* foundedDoc = dynamic_cast<IModuleDocument*>(metaDoc);
 				if (foundedDoc != nullptr) {
 					foundedDoc->SetCurrentLine(wxNOT_FOUND, false);
 					foundedDoc->SetToolTip(wxEmptyString);
+				}
+				for (auto& child_doc : metaDoc->GetChild()) {
+					IModuleDocument* foundedDoc = dynamic_cast<IModuleDocument*>(child_doc);
+					if (foundedDoc != nullptr) {
+						foundedDoc->SetCurrentLine(wxNOT_FOUND, false);
+						foundedDoc->SetToolTip(wxEmptyString);
+					}
 				}
 			}
 		}
@@ -27,19 +29,21 @@ void CDebuggerClientBridge::OnSessionStart(wxSocketClient* sock)
 
 void CDebuggerClientBridge::OnSessionEnd(wxSocketClient* sock)
 {
-	for (auto& doc : docManager->GetDocumentsVector()) {
-		CMetaDocument* metaDoc = dynamic_cast<CMetaDocument*>(doc);
-		if (metaDoc != nullptr) {
-			IModuleDocument* foundedDoc = dynamic_cast<IModuleDocument*>(metaDoc);
-			if (foundedDoc != nullptr) {
-				foundedDoc->SetCurrentLine(wxNOT_FOUND, false);
-				foundedDoc->SetToolTip(wxEmptyString);
-			}
-			for (auto& child_doc : metaDoc->GetChild()) {
-				IModuleDocument* foundedDoc = dynamic_cast<IModuleDocument*>(child_doc);
+	if (docManager != nullptr) {
+		for (auto& doc : docManager->GetDocumentsVector()) {
+			CMetaDocument* metaDoc = dynamic_cast<CMetaDocument*>(doc);
+			if (metaDoc != nullptr) {
+				IModuleDocument* foundedDoc = dynamic_cast<IModuleDocument*>(metaDoc);
 				if (foundedDoc != nullptr) {
 					foundedDoc->SetCurrentLine(wxNOT_FOUND, false);
 					foundedDoc->SetToolTip(wxEmptyString);
+				}
+				for (auto& child_doc : metaDoc->GetChild()) {
+					IModuleDocument* foundedDoc = dynamic_cast<IModuleDocument*>(child_doc);
+					if (foundedDoc != nullptr) {
+						foundedDoc->SetCurrentLine(wxNOT_FOUND, false);
+						foundedDoc->SetToolTip(wxEmptyString);
+					}
 				}
 			}
 		}
@@ -56,26 +60,28 @@ void CDebuggerClientBridge::OnEnterLoop(wxSocketClient* sock, const debugLineDat
 {
 	mainFrame->RaiseFrame();
 
-	if (data.m_fileName.IsEmpty()) {
-		IBackendMetadataTree* metaTree = commonMetaData->GetMetaTree();
-		wxASSERT(metaTree);
-		metaTree->EditModule(data.m_moduleName, data.m_line, true);
-	}
-	else if (!data.m_fileName.IsEmpty()) {
-		IMetaDataDocument* foundedDoc = dynamic_cast<IMetaDataDocument*>(
-			docManager->FindDocumentByPath(data.m_fileName)
-			);
-		if (foundedDoc == nullptr) {
-			foundedDoc = dynamic_cast<IMetaDataDocument*>(
-				docManager->CreateDocument(data.m_fileName, wxDOC_SILENT)
-				);
-		}
-		if (foundedDoc != nullptr) {
-			IMetaData* metaData = foundedDoc->GetMetaData();
-			wxASSERT(metaData);
-			IBackendMetadataTree* metaTree = metaData->GetMetaTree();
+	if (docManager != nullptr) {
+		if (data.m_fileName.IsEmpty()) {
+			IBackendMetadataTree* metaTree = commonMetaData->GetMetaTree();
 			wxASSERT(metaTree);
 			metaTree->EditModule(data.m_moduleName, data.m_line, true);
+		}
+		else if (!data.m_fileName.IsEmpty()) {
+			IMetaDataDocument* foundedDoc = dynamic_cast<IMetaDataDocument*>(
+				docManager->FindDocumentByPath(data.m_fileName)
+				);
+			if (foundedDoc == nullptr) {
+				foundedDoc = dynamic_cast<IMetaDataDocument*>(
+					docManager->CreateDocument(data.m_fileName, wxDOC_SILENT)
+					);
+			}
+			if (foundedDoc != nullptr) {
+				IMetaData* metaData = foundedDoc->GetMetaData();
+				wxASSERT(metaData);
+				IBackendMetadataTree* metaTree = metaData->GetMetaTree();
+				wxASSERT(metaTree);
+				metaTree->EditModule(data.m_moduleName, data.m_line, true);
+			}
 		}
 	}
 
@@ -85,32 +91,34 @@ void CDebuggerClientBridge::OnEnterLoop(wxSocketClient* sock, const debugLineDat
 
 void CDebuggerClientBridge::OnLeaveLoop(wxSocketClient* sock, const debugLineData_t& data)
 {
-	if (data.m_fileName.IsEmpty()) {
-		IBackendMetadataTree* metaTree = commonMetaData->GetMetaTree();
-		if (metaTree != nullptr) {
-			IMetaObject* foundedMeta = commonMetaData->FindByName(data.m_moduleName);
-			if (foundedMeta != nullptr) {
-				IModuleDocument* foundedDoc = dynamic_cast<IModuleDocument*>(metaTree->GetDocument(foundedMeta));
-				if (foundedDoc != nullptr) {
-					foundedDoc->SetCurrentLine(data.m_line, false);
-					foundedDoc->SetToolTip(wxEmptyString);
-				}
-			}
-		}
-	}
-	else if (!data.m_fileName.IsEmpty()) {
-		IMetaDataDocument* foundedDoc = dynamic_cast<IMetaDataDocument*>(docManager->FindDocumentByPath(data.m_fileName));
-		if (foundedDoc != nullptr) {
-			IMetaData* foundedMetadata = foundedDoc->GetMetaData();
-			wxASSERT(foundedMetadata);
-			IBackendMetadataTree* metaTree = foundedMetadata->GetMetaTree();
+	if (docManager != nullptr) {
+		if (data.m_fileName.IsEmpty()) {
+			IBackendMetadataTree* metaTree = commonMetaData->GetMetaTree();
 			if (metaTree != nullptr) {
-				IMetaObject* foundedMeta = foundedMetadata->FindByName(data.m_moduleName);
+				IMetaObject* foundedMeta = commonMetaData->FindByName(data.m_moduleName);
 				if (foundedMeta != nullptr) {
 					IModuleDocument* foundedDoc = dynamic_cast<IModuleDocument*>(metaTree->GetDocument(foundedMeta));
 					if (foundedDoc != nullptr) {
 						foundedDoc->SetCurrentLine(data.m_line, false);
 						foundedDoc->SetToolTip(wxEmptyString);
+					}
+				}
+			}
+		}
+		else if (!data.m_fileName.IsEmpty()) {
+			IMetaDataDocument* foundedDoc = dynamic_cast<IMetaDataDocument*>(docManager->FindDocumentByPath(data.m_fileName));
+			if (foundedDoc != nullptr) {
+				IMetaData* foundedMetadata = foundedDoc->GetMetaData();
+				wxASSERT(foundedMetadata);
+				IBackendMetadataTree* metaTree = foundedMetadata->GetMetaTree();
+				if (metaTree != nullptr) {
+					IMetaObject* foundedMeta = foundedMetadata->FindByName(data.m_moduleName);
+					if (foundedMeta != nullptr) {
+						IModuleDocument* foundedDoc = dynamic_cast<IModuleDocument*>(metaTree->GetDocument(foundedMeta));
+						if (foundedDoc != nullptr) {
+							foundedDoc->SetCurrentLine(data.m_line, false);
+							foundedDoc->SetToolTip(wxEmptyString);
+						}
 					}
 				}
 			}
@@ -126,30 +134,32 @@ void CDebuggerClientBridge::OnLeaveLoop(wxSocketClient* sock, const debugLineDat
 
 void CDebuggerClientBridge::OnAutoComplete(const debugAutoCompleteData_t& data)
 {
-	if (data.m_fileName.IsEmpty()) {
-		IBackendMetadataTree* metaTree = commonMetaData->GetMetaTree();
-		if (metaTree != nullptr) {
-			IMetaObject* foundedMeta = commonMetaData->FindByName(data.m_moduleName);
-			if (foundedMeta != nullptr) {
-				IModuleDocument* foundedDoc = static_cast<IModuleDocument*>(metaTree->GetDocument(foundedMeta));
-				if (foundedDoc != nullptr) {
-					foundedDoc->ShowAutoComplete(data);
-				}
-			}
-		}
-	}
-	else if (!data.m_fileName.IsEmpty()) {
-		IMetaDataDocument* foundedDoc = dynamic_cast<IMetaDataDocument*>(docManager->FindDocumentByPath(data.m_fileName));
-		if (foundedDoc != nullptr) {
-			IMetaData* metaData = foundedDoc->GetMetaData();
-			wxASSERT(metaData);
-			IBackendMetadataTree* metaTree = metaData->GetMetaTree();
+	if (docManager != nullptr) {
+		if (data.m_fileName.IsEmpty()) {
+			IBackendMetadataTree* metaTree = commonMetaData->GetMetaTree();
 			if (metaTree != nullptr) {
-				IMetaObject* foundedMeta = metaData->FindByName(data.m_moduleName);
+				IMetaObject* foundedMeta = commonMetaData->FindByName(data.m_moduleName);
 				if (foundedMeta != nullptr) {
 					IModuleDocument* foundedDoc = static_cast<IModuleDocument*>(metaTree->GetDocument(foundedMeta));
 					if (foundedDoc != nullptr) {
 						foundedDoc->ShowAutoComplete(data);
+					}
+				}
+			}
+		}
+		else if (!data.m_fileName.IsEmpty()) {
+			IMetaDataDocument* foundedDoc = dynamic_cast<IMetaDataDocument*>(docManager->FindDocumentByPath(data.m_fileName));
+			if (foundedDoc != nullptr) {
+				IMetaData* metaData = foundedDoc->GetMetaData();
+				wxASSERT(metaData);
+				IBackendMetadataTree* metaTree = metaData->GetMetaTree();
+				if (metaTree != nullptr) {
+					IMetaObject* foundedMeta = metaData->FindByName(data.m_moduleName);
+					if (foundedMeta != nullptr) {
+						IModuleDocument* foundedDoc = static_cast<IModuleDocument*>(metaTree->GetDocument(foundedMeta));
+						if (foundedDoc != nullptr) {
+							foundedDoc->ShowAutoComplete(data);
+						}
 					}
 				}
 			}
@@ -161,26 +171,28 @@ void CDebuggerClientBridge::OnMessageFromServer(const debugLineData_t& data, con
 {
 	mainFrame->RaiseFrame();
 
-	if (data.m_fileName.IsEmpty()) {
-		IBackendMetadataTree* metaTree = commonMetaData->GetMetaTree();
-		wxASSERT(metaTree);
-		metaTree->EditModule(data.m_moduleName, data.m_line, false);
-	}
-	if (!data.m_fileName.IsEmpty()) {
-		IMetaDataDocument* foundedDoc = dynamic_cast<IMetaDataDocument*>(
-			docManager->FindDocumentByPath(data.m_fileName)
-			);
-		if (foundedDoc == nullptr) {
-			foundedDoc = dynamic_cast<IMetaDataDocument*>(
-				docManager->CreateDocument(data.m_fileName, wxDOC_SILENT)
-				);
-		}
-		if (foundedDoc != nullptr) {
-			IMetaData* metaData = foundedDoc->GetMetaData();
-			wxASSERT(metaData);
-			IBackendMetadataTree* metaTree = metaData->GetMetaTree();
+	if (docManager != nullptr) {
+		if (data.m_fileName.IsEmpty()) {
+			IBackendMetadataTree* metaTree = commonMetaData->GetMetaTree();
 			wxASSERT(metaTree);
 			metaTree->EditModule(data.m_moduleName, data.m_line, false);
+		}
+		if (!data.m_fileName.IsEmpty()) {
+			IMetaDataDocument* foundedDoc = dynamic_cast<IMetaDataDocument*>(
+				docManager->FindDocumentByPath(data.m_fileName)
+				);
+			if (foundedDoc == nullptr) {
+				foundedDoc = dynamic_cast<IMetaDataDocument*>(
+					docManager->CreateDocument(data.m_fileName, wxDOC_SILENT)
+					);
+			}
+			if (foundedDoc != nullptr) {
+				IMetaData* metaData = foundedDoc->GetMetaData();
+				wxASSERT(metaData);
+				IBackendMetadataTree* metaTree = metaData->GetMetaTree();
+				wxASSERT(metaTree);
+				metaTree->EditModule(data.m_moduleName, data.m_line, false);
+			}
 		}
 	}
 
@@ -190,34 +202,36 @@ void CDebuggerClientBridge::OnMessageFromServer(const debugLineData_t& data, con
 
 void CDebuggerClientBridge::OnSetToolTip(const debugExpressionData_t& data, const wxString& resultStr)
 {
-	if (data.m_fileName.IsEmpty()) {
-		IBackendMetadataTree* metaTree = commonMetaData->GetMetaTree();
-		if (metaTree != nullptr) {
-			IMetaObject* foundedMeta = commonMetaData->FindByName(data.m_moduleName);
-			if (foundedMeta != nullptr) {
-				IModuleDocument* foundedDoc =
-					static_cast<IModuleDocument*>(metaTree->GetDocument(foundedMeta));
-				if (foundedDoc != nullptr) {
-					foundedDoc->SetToolTip(resultStr);
-				}
-			}
-		}
-	}
-	if (!data.m_fileName.IsEmpty()) {
-		IMetaDataDocument* foundedDoc = dynamic_cast<IMetaDataDocument*>(
-			docManager->FindDocumentByPath(data.m_fileName)
-			);
-		if (foundedDoc != nullptr) {
-			IMetaData* metaData = foundedDoc->GetMetaData();
-			wxASSERT(metaData);
-			IBackendMetadataTree* metaTree = metaData->GetMetaTree();
+	if (docManager != nullptr) {
+		if (data.m_fileName.IsEmpty()) {
+			IBackendMetadataTree* metaTree = commonMetaData->GetMetaTree();
 			if (metaTree != nullptr) {
-				IMetaObject* foundedMeta = metaData->FindByName(data.m_moduleName);
+				IMetaObject* foundedMeta = commonMetaData->FindByName(data.m_moduleName);
 				if (foundedMeta != nullptr) {
 					IModuleDocument* foundedDoc =
 						static_cast<IModuleDocument*>(metaTree->GetDocument(foundedMeta));
 					if (foundedDoc != nullptr) {
 						foundedDoc->SetToolTip(resultStr);
+					}
+				}
+			}
+		}
+		if (!data.m_fileName.IsEmpty()) {
+			IMetaDataDocument* foundedDoc = dynamic_cast<IMetaDataDocument*>(
+				docManager->FindDocumentByPath(data.m_fileName)
+				);
+			if (foundedDoc != nullptr) {
+				IMetaData* metaData = foundedDoc->GetMetaData();
+				wxASSERT(metaData);
+				IBackendMetadataTree* metaTree = metaData->GetMetaTree();
+				if (metaTree != nullptr) {
+					IMetaObject* foundedMeta = metaData->FindByName(data.m_moduleName);
+					if (foundedMeta != nullptr) {
+						IModuleDocument* foundedDoc =
+							static_cast<IModuleDocument*>(metaTree->GetDocument(foundedMeta));
+						if (foundedDoc != nullptr) {
+							foundedDoc->SetToolTip(resultStr);
+						}
 					}
 				}
 			}

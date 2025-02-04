@@ -1499,11 +1499,15 @@ void IRecordDataObject::PrepareEmptyObject()
 
 	//attrbutes can refValue 
 	for (auto& obj : metaObject->GetGenericAttributes()) {
+		if (obj->IsDeleted())
+			continue;
 		m_objectValues.insert_or_assign(obj->GetMetaID(), obj->CreateValue());
 	}
 
 	// table is collection values 
 	for (auto& obj : metaObject->GetObjectTables()) {
+		if (obj->IsDeleted())
+			continue;
 		m_objectValues.insert_or_assign(obj->GetMetaID(), metaObject->GetMetaData()->CreateObjectValueRef<CTabularSectionDataObject>(this, obj));
 	}
 }
@@ -2045,10 +2049,14 @@ void IRecordDataObjectRef::PrepareEmptyObject()
 	m_objectValues.clear();
 	//attrbutes can refValue 
 	for (auto& obj : m_metaObject->GetGenericAttributes()) {
+		if (obj->IsDeleted())
+			continue;
 		m_objectValues.insert_or_assign(obj->GetMetaID(), obj->CreateValue());
 	}
 	// table is collection values 
 	for (auto& obj : m_metaObject->GetObjectTables()) {
+		if (obj->IsDeleted())
+			continue;
 		m_objectValues.insert_or_assign(obj->GetMetaID(), m_metaObject->GetMetaData()->CreateAndConvertObjectValueRef<CTabularSectionDataObjectRef>(this, obj));
 	}
 	m_objModified = true;
@@ -2062,12 +2070,16 @@ void IRecordDataObjectRef::PrepareEmptyObject(const IRecordDataObjectRef* source
 	m_objectValues[codeAttribute->GetMetaID()] = codeAttribute->CreateValue();
 	//attributes can refValue 
 	for (auto& obj : m_metaObject->GetGenericAttributes()) {
+		if (obj->IsDeleted())
+			continue;
 		if (obj != codeAttribute) {
 			source->GetValueByMetaID(obj->GetMetaID(), m_objectValues[obj->GetMetaID()]);
 		}
 	}
 	// table is collection values 
 	for (auto& obj : m_metaObject->GetObjectTables()) {
+		if (obj->IsDeleted())
+			continue;
 		CTabularSectionDataObjectRef* tableSection = m_metaObject->GetMetaData()->CreateAndConvertObjectValueRef<CTabularSectionDataObjectRef>(this, obj);
 		if (tableSection->LoadDataFromTable(source->GetTableByMetaID(obj->GetMetaID())))
 			m_objectValues.insert_or_assign(obj->GetMetaID(), tableSection);
@@ -2192,6 +2204,8 @@ void IRecordDataObjectFolderRef::PrepareEmptyObject()
 	m_objectValues.clear();
 	//attrbutes can refValue 
 	for (auto& obj : m_metaObject->GetGenericAttributes()) {
+		if (obj->IsDeleted())
+			continue;
 		eItemMode attrUse = obj->GetItemMode();
 		if (m_objMode == eObjectMode::OBJECT_ITEM) {
 			if (attrUse == eItemMode::eItemMode_Item ||
@@ -2222,6 +2236,8 @@ void IRecordDataObjectFolderRef::PrepareEmptyObject()
 	}
 	// table is collection values 
 	for (auto& obj : m_metaObject->GetObjectTables()) {
+		if (obj->IsDeleted())
+			continue;
 		eItemMode tableUse = obj->GetTableUse();
 		if (m_objMode == eObjectMode::OBJECT_ITEM) {
 			if (tableUse == eItemMode::eItemMode_Item ||
@@ -2253,6 +2269,8 @@ void IRecordDataObjectFolderRef::PrepareEmptyObject(const IRecordDataObjectRef* 
 	m_objectValues[codeAttribute->GetMetaID()] = codeAttribute->CreateValue();
 	//attributes can refValue 
 	for (auto& obj : m_metaObject->GetGenericAttributes()) {
+		if (obj->IsDeleted())
+			continue;
 		CMetaObjectAttribute* metaAttr = nullptr; eItemMode attrUse = eItemMode::eItemMode_Folder_Item;
 		if (obj->ConvertToValue(metaAttr)) {
 			attrUse = metaAttr->GetItemMode();
@@ -2271,6 +2289,8 @@ void IRecordDataObjectFolderRef::PrepareEmptyObject(const IRecordDataObjectRef* 
 	}
 	// table is collection values 
 	for (auto& obj : m_metaObject->GetObjectTables()) {
+		if (obj->IsDeleted())
+			continue;
 		CMetaObjectTable* metaTable = nullptr; eItemMode tableUse = eItemMode::eItemMode_Folder_Item;
 		if (obj->ConvertToValue(metaTable))
 			tableUse = metaTable->GetTableUse();
@@ -2522,6 +2542,8 @@ void IRecordSetObject::CreateEmptyKey()
 {
 	m_keyValues.clear();
 	for (auto& obj : m_metaObject->GetGenericDimensions()) {
+		if (obj->IsDeleted())
+			continue;
 		m_keyValues.insert_or_assign(
 			obj->GetMetaID(), obj->CreateValue()
 		);
@@ -2884,6 +2906,8 @@ void IRecordSetObject::CRecordSetObjectRegisterReturnLine::PrepareNames() const
 
 	IMetaObjectGenericData* metaObject = m_ownerTable->GetMetaObject();
 	for (auto& obj : metaObject->GetGenericAttributes()) {
+		if (obj->IsDeleted())
+			continue;
 		m_methodHelper->AppendProp(
 			obj->GetName(),
 			obj->GetMetaID()

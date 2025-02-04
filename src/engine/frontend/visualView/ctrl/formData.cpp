@@ -61,7 +61,7 @@ CValue CValueForm::CValueFormData::GetIteratorAt(unsigned int idx)
 bool CValueForm::CValueFormData::SetAt(const CValue& varKeyValue, const CValue& varValue)
 {
 	const number_t& number = varKeyValue.GetNumber();
-	if (number.GetUInteger() > Count())
+	if (number.ToUInt() > Count())
 		return false;
 	unsigned int count = 0;
 	for (auto control : m_formOwner->m_aControls) {
@@ -79,7 +79,7 @@ bool CValueForm::CValueFormData::SetAt(const CValue& varKeyValue, const CValue& 
 bool CValueForm::CValueFormData::GetAt(const CValue& varKeyValue, CValue& pvarValue)
 {
 	const number_t& number = varKeyValue.GetNumber();
-	if (Count() < number.GetUInteger())
+	if (Count() < number.ToUInt())
 		return false;
 	unsigned int count = 0;
 	for (auto control : m_formOwner->m_aControls) {

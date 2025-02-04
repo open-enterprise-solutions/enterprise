@@ -58,6 +58,7 @@ public:
 	CDocEnterpriseMDIFrame(const wxString& title = _("Enterprise"),
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize);
+	virtual ~CDocEnterpriseMDIFrame();
 
 	virtual void Message(const wxString& strMessage, eStatusMessage status) { m_outputWindow->SharedOutput(strMessage, status); }
 	virtual void ClearMessage() { m_outputWindow->ClearAll(); }

@@ -1222,11 +1222,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="compiler\ttmath\ttmathuint_x86_64_msvc.asm">
-      <Filter>compiler\ttmath</Filter>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
     <CopyFileToFolders Include="databaseLayer\postgres\engine\dll\libcrypto-3-x64.dll">
       <Filter>databaseLayer\postgres\engine\dll</Filter>
     </CopyFileToFolders>
@@ -1245,5 +1240,10 @@
     <CopyFileToFolders Include="databaseLayer\postgres\engine\dll\libssl-3-x86.dll">
       <Filter>databaseLayer\postgres\engine\dll</Filter>
     </CopyFileToFolders>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="compiler\ttmath\ttmathuint_x86_64_msvc.asm">
+      <Filter>compiler\ttmath</Filter>
+    </MASM>
   </ItemGroup>
 </Project>

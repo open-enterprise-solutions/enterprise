@@ -41,7 +41,7 @@ void IModuleManager::CMetadataUnit::PrepareNames() const
 	m_methodHelper->ClearHelper();
 	m_methodHelper->AppendProp("commonModules", true, false, g_metaCommonModuleCLSID);
 	m_methodHelper->AppendProp("commonForms", true, false, g_metaCommonFormCLSID);
-	m_methodHelper->AppendProp("commonTemplates", true, false, g_metaTemplateCLSID);
+	m_methodHelper->AppendProp("commonTemplates", true, false, g_metaCommonTemplateCLSID);
 	m_methodHelper->AppendProp("constants", true, false, g_metaConstantCLSID);
 	m_methodHelper->AppendProp("catalogs", true, false, g_metaCatalogCLSID);
 	m_methodHelper->AppendProp("documents", true, false, g_metaDocumentCLSID);
@@ -77,7 +77,7 @@ bool IModuleManager::CMetadataUnit::GetPropVal(const long lPropNum, CValue& pvar
 		}
 	} break;
 	case enCommonTemplates: {
-		for (auto& obj : m_metaData->GetMetaObject(g_metaTemplateCLSID)) {
+		for (auto& obj : m_metaData->GetMetaObject(g_metaCommonTemplateCLSID)) {
 			valStruct->Insert(obj->GetName(), obj);
 		}
 	} break;

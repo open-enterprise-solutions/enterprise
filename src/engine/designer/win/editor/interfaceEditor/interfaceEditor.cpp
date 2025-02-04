@@ -17,7 +17,7 @@ CInterfaceEditor::CInterfaceEditor(wxWindow* parent,
 	m_metaTreeToolbar->Bind(wxEVT_MENU, &CInterfaceEditor::OnEditItem, this, ID_MENUEDIT_EDIT);
 	m_metaTreeToolbar->Bind(wxEVT_MENU, &CInterfaceEditor::OnRemoveItem, this, ID_MENUEDIT_REMOVE);
 
-	m_menuCtrl = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_SINGLE | wxSIMPLE_BORDER);
+	m_menuCtrl = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_SINGLE | wxTR_TWIST_BUTTONS | wxSIMPLE_BORDER);
 	m_menuCtrl->SetDoubleBuffered(true);
 
 	m_menuCtrl->Bind(wxEVT_TREE_SEL_CHANGED, &CInterfaceEditor::OnSelectedItem, this);

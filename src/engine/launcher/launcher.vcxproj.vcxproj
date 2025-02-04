@@ -124,7 +124,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw31ud_aui.lib;wxmsw31ud_qa.lib;wxmsw31ud_html.lib;wxmsw31ud_propgrid.lib;wxmsw31ud_adv.lib;wxmsw31ud_core.lib;wxbase31ud_xml.lib;wxbase31ud_net.lib;wxmsw31ud_stc.lib;wxmsw31ud_xrc.lib;wxbase31ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxregexud.lib;wxexpatd.lib;core.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxmsw32ud_aui.lib;wxmsw32ud_qa.lib;wxmsw32ud_html.lib;wxmsw32ud_propgrid.lib;wxmsw32ud_adv.lib;wxmsw32ud_core.lib;wxbase32ud_xml.lib;wxbase32ud_net.lib;wxmsw32ud_stc.lib;wxmsw32ud_xrc.lib;wxbase32ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxregexud.lib;wxexpatd.lib;backend.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <ResourceCompile>
       <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\include</AdditionalIncludeDirectories>
@@ -179,7 +179,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
-      <AdditionalDependencies>wxmsw31u_aui.lib;wxmsw31u_qa.lib;wxmsw31u_html.lib;wxmsw31u_propgrid.lib;wxmsw31u_adv.lib;wxmsw31u_core.lib;wxbase31u_xml.lib;wxbase31u_net.lib;wxmsw31u_stc.lib;wxmsw31u_xrc.lib;wxbase31u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;core.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxmsw32u_aui.lib;wxmsw32u_qa.lib;wxmsw32u_html.lib;wxmsw32u_propgrid.lib;wxmsw32u_adv.lib;wxmsw32u_core.lib;wxbase32u_xml.lib;wxbase32u_net.lib;wxmsw32u_stc.lib;wxmsw32u_xrc.lib;wxbase32u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;frontend.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <ResourceCompile>

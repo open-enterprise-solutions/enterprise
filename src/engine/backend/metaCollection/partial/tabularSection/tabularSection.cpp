@@ -134,7 +134,7 @@ bool ITabularSectionDataObject::CallAsFunc(const long lMethodNum, CValue& pvarRe
 	switch (lMethodData)
 	{
 	case enAddValue:
-		pvarRetValue = new CTabularSectionDataObjectReturnLine(this, GetItem(AppendRow()));
+		pvarRetValue = m_metaTable->GetMetaData()->CreateAndConvertObjectValueRef<CTabularSectionDataObjectReturnLine>(this, GetItem(AppendRow()));
 		return true;
 	case enFind: {
 		const wxDataViewItem& item = FindRowValue(*paParams[0], paParams[1]->GetString());

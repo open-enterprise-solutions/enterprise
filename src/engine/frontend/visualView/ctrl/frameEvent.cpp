@@ -56,9 +56,9 @@ CValue IValueFrame::CValueEventContainer::GetIteratorAt(unsigned int idx)
 bool IValueFrame::CValueEventContainer::SetAt(const CValue& varKeyValue, const CValue& varValue)
 {
 	number_t number = varKeyValue.GetNumber();
-	if (m_controlEvent->GetEventCount() < number.GetUInteger())
+	if (m_controlEvent->GetEventCount() < number.ToUInt())
 		return false;
-	Event* event = m_controlEvent->GetEvent(number.GetUInteger());
+	Event* event = m_controlEvent->GetEvent(number.ToUInt());
 	CValueEvent* eventValue = nullptr;
 	if (varValue.ConvertToValue(eventValue)) {
 		event->SetValue(eventValue->GetString());
@@ -72,9 +72,9 @@ bool IValueFrame::CValueEventContainer::SetAt(const CValue& varKeyValue, const C
 bool IValueFrame::CValueEventContainer::GetAt(const CValue& varKeyValue, CValue& pvarValue)
 {
 	number_t number = varKeyValue.GetNumber();
-	if (m_controlEvent->GetEventCount() < number.GetUInteger())
+	if (m_controlEvent->GetEventCount() < number.ToUInt())
 		return false;
-	Event* event = m_controlEvent->GetEvent(number.GetUInteger());
+	Event* event = m_controlEvent->GetEvent(number.ToUInt());
 	if (!event)
 		return false;
 	wxString eventValue = event->GetValue();

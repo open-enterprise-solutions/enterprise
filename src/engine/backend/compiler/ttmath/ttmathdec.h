@@ -387,15 +387,17 @@ public:
     }
 
 private:
+#ifndef TTMATH_MULTITHREADS
+
 	/*!
 	*/
-	void SetMultipler(UInt<value_size> & result)
+	void SetMultipler(UInt<value_size>& result)
 	{
 		// this guardian is initialized before the program runs (static POD type)
 		static int guardian = 0;
 		static UInt<value_size> multipler;
-	
-		if( guardian == 0 )
+
+		if (guardian == 0)
 		{
 			multipler = 10;
 			multipler.Pow(dec_digits);
@@ -404,6 +406,51 @@ private:
 
 		result = multipler;
 	}
+
+#else
+
+	/*!
+	*/
+	void SetMultipler(UInt<value_size>& result)
+	{
+		// this guardian is initialized before the program runs (static POD type)
+		volatile static sig_atomic_t guardian = 0;
+		static UInt<value_size>* pmultipler;
+
+		// double-checked locking
+		if (guardian == 0)
+		{
+			ThreadLock thread_lock;
+
+			// locking
+			if (thread_lock.Lock())
+			{
+				static UInt<value_size> multipler;
+
+				if (guardian == 0)
+				{
+					pmultipler = &multipler;
+					multipler = 10;
+					multipler.Pow(dec_digits);
+					guardian = 1;
+				}
+			}
+			else
+			{
+				// there was a problem with locking, we store the result directly in 'result' object
+				result = 10;
+				result.Pow(dec_digits);
+
+				return;
+			}
+
+			// automatically unlocking
+		}
+
+		result = *pmultipler;
+	}
+
+#endif
 
 	/*!
 		an auxiliary method for converting from a string

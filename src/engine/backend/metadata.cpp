@@ -263,12 +263,9 @@ void IMetaData::RemoveMetaObject(IMetaObject* metaObject, IMetaObject* parent)
 
 	if (metaObject->OnAfterCloseMetaObject()) {
 		if (metaObject->OnDeleteMetaObject()) {
-			for (auto child : metaObject->GetObjects()) {
-				RemoveMetaObject(child, metaObject);
-			}
 			metaObject->MarkAsDeleted();
+			for (auto& obj : metaObject->GetObjects()) RemoveMetaObject(obj, metaObject);		
 		}
-
 		metaObject->OnReloadMetaObject();
 		Modify(true);
 	}

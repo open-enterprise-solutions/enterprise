@@ -23,7 +23,7 @@ bool CValueArray::Init(CValue** paParams, const long lSizeArray)
 	if (paParams[0]->GetType() == eValueTypes::TYPE_NUMBER) {
 		const number_t& number = paParams[0]->GetNumber();
 		if (number > 0) {
-			m_arrValues.resize(number.GetUInteger());
+			m_arrValues.resize(number.ToUInt());
 			return true;
 		}
 	}

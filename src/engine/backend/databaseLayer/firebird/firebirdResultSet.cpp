@@ -8,10 +8,10 @@ CFirebirdResultSet::CFirebirdResultSet(CFirebirdInterface* pInterface)
 	: IDatabaseResultSet()
 {
 	m_pInterface = pInterface;
-	m_pDatabase = nullptr;
-	m_pTransaction = nullptr;
-	m_pStatement = nullptr;
-	m_pFields = nullptr;
+	m_pDatabase = NULL;
+	m_pTransaction = NULL;
+	m_pStatement = NULL;
+	m_pFields = NULL;
 	m_bManageStatement = false;
 	m_bManageTransaction = false;
 }
@@ -66,8 +66,8 @@ void CFirebirdResultSet::Close()
 	if (m_bManageTransaction && m_pTransaction)
 	{
 		int nReturn = m_pInterface->GetIscCommitTransaction()(m_Status, &m_pTransaction);
-		// We're done with the transaction, so set it to nullptr so that we know that a new transaction must be started if we run any queries
-		m_pTransaction = nullptr;
+		// We're done with the transaction, so set it to NULL so that we know that a new transaction must be started if we run any queries
+		m_pTransaction = NULL;
 		if (nReturn != 0)
 		{
 			InterpretErrorCodes();
@@ -79,7 +79,7 @@ void CFirebirdResultSet::Close()
 	if (m_bManageStatement && m_pStatement)
 	{
 		int nReturn = m_pInterface->GetIscDsqlFreeStatement()(m_Status, &m_pStatement, DSQL_drop);
-		m_pStatement = nullptr;
+		m_pStatement = NULL;
 		if (nReturn != 0)
 		{
 			InterpretErrorCodes();
@@ -92,7 +92,7 @@ void CFirebirdResultSet::Close()
 	{
 		FreeFieldSpace();
 		free(m_pFields);
-		m_pFields = nullptr;
+		m_pFields = NULL;
 	}
 }
 
@@ -114,7 +114,7 @@ wxString CFirebirdResultSet::GetResultString(int nField)
 	XSQLVAR* pVar = &(m_pFields->sqlvar[nField - 1]);
 	if (IsNull(pVar))
 	{
-		// The column is nullptr
+		// The column is NULL
 		strReturn = wxEmptyString;
 	}
 	else
@@ -155,7 +155,7 @@ long long CFirebirdResultSet::GetResultLong(int nField)
 	XSQLVAR* pVar = &(m_pFields->sqlvar[nField - 1]);
 	if (IsNull(pVar))
 	{
-		// The column is nullptr
+		// The column is NULL
 		nReturn = 0;
 	}
 	else
@@ -230,7 +230,7 @@ wxDateTime CFirebirdResultSet::GetResultDate(int nField)
 	XSQLVAR* pVar = &(m_pFields->sqlvar[nField - 1]);
 	if (IsNull(pVar))
 	{
-		// The column is nullptr
+		// The column is NULL
 		dateReturn = wxDefaultDateTime;
 	}
 	else
@@ -282,7 +282,7 @@ double CFirebirdResultSet::GetResultDouble(int nField)
 	XSQLVAR* pVar = &(m_pFields->sqlvar[nField - 1]);
 	if (IsNull(pVar))
 	{
-		// The column is nullptr
+		// The column is NULL
 		dblReturn = 0.00;
 	}
 	else
@@ -334,7 +334,7 @@ number_t CFirebirdResultSet::GetResultNumber(int nField)
 	XSQLVAR* pVar = &(m_pFields->sqlvar[nField - 1]);
 	if (IsNull(pVar))
 	{
-		// The column is nullptr
+		// The column is NULL
 		dblReturn = 0.00;
 	}
 	else
@@ -397,12 +397,12 @@ void* CFirebirdResultSet::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 	XSQLVAR* pVar = &(m_pFields->sqlvar[nField - 1]);
 	if (IsNull(pVar))
 	{
-		// The column is nullptr
+		// The column is NULL
 		wxMemoryBuffer tempBuffer(0);
 		tempBuffer.SetBufSize(0);
 		tempBuffer.SetDataLen(0);
 		buffer = tempBuffer;
-		return nullptr;
+		return NULL;
 	}
 	else
 	{
@@ -410,10 +410,10 @@ void* CFirebirdResultSet::GetResultBlob(int nField, wxMemoryBuffer& buffer)
 		if (nType == SQL_BLOB)
 		{
 			ISC_QUAD blobId = *(ISC_QUAD *)pVar->sqldata;
-			isc_blob_handle pBlob = nullptr;
+			isc_blob_handle pBlob = NULL;
 			char szSegment[128];
 			unsigned short nSegmentLength;
-			m_pInterface->GetIscOpenBlob2()(m_Status, &m_pDatabase, &m_pTransaction, &pBlob, &blobId, 0, nullptr);
+			m_pInterface->GetIscOpenBlob2()(m_Status, &m_pDatabase, &m_pTransaction, &pBlob, &blobId, 0, NULL);
 
 			ISC_STATUS blobStatus = m_pInterface->GetIscGetSegment()(m_Status, &pBlob, &nSegmentLength, sizeof(szSegment), szSegment);
 			wxMemoryBuffer tempBuffer(nSegmentLength);
@@ -469,7 +469,7 @@ bool CFirebirdResultSet::IsNull(XSQLVAR* pVar)
 
 void CFirebirdResultSet::AllocateFieldSpace()
 {
-	if (m_pFields == nullptr)
+	if (m_pFields == NULL)
 		return;
 
 	for (int i = 0; i < m_pFields->sqld; i++)
@@ -534,7 +534,7 @@ void CFirebirdResultSet::AllocateFieldSpace()
 
 void CFirebirdResultSet::FreeFieldSpace()
 {
-	if (m_pFields == nullptr)
+	if (m_pFields == NULL)
 		return;
 
 	for (int i = 0; i < m_pFields->sqln; i++)
@@ -588,7 +588,7 @@ void CFirebirdResultSet::FreeFieldSpace()
 	}
 
 	//delete [] (char*)m_pFields;
-	//m_pFields = nullptr;
+	//m_pFields = NULL;
 	wxDELETEA(m_pFields);
 }
 

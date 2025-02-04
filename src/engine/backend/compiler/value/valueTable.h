@@ -162,7 +162,7 @@ public:
 			//PrepareNames();
 			return m_methodHelper;
 		}
-		
+
 		virtual void PrepareNames() const;
 
 
@@ -201,7 +201,7 @@ public:
 			//PrepareNames();
 			return m_methodHelper;
 		}
-	
+
 		virtual void PrepareNames() const; //этот метод автоматически вызывается для инициализации имен атрибутов и методов
 
 		virtual bool SetPropVal(const long lPropNum, const CValue& varPropVal); //установка атрибута
@@ -225,7 +225,7 @@ public:
 	virtual CValueTableReturnLine* GetRowAt(const long& line) {
 		if (line > GetRowCount())
 			return nullptr;
-		return new CValueTableReturnLine(this, GetItem(line));
+		return CValue::CreateAndConvertObjectValueRef<CValueTableReturnLine>(this, GetItem(line));
 	}
 
 	virtual IValueModelReturnLine* GetRowAt(const wxDataViewItem& line) {
@@ -302,7 +302,7 @@ public:
 	void DeleteRow();
 
 	CValueTable* Clone() {
-		return new CValueTable(*this);
+		return CValue::CreateAndConvertObjectValueRef<CValueTable>(*this);
 	}
 
 	unsigned int Count() {
@@ -321,13 +321,13 @@ public:
 	}
 
 	virtual CValue GetIteratorEmpty() override {
-		return new CValueTableReturnLine(this, wxDataViewItem(nullptr));
+		return CValue::CreateAndConvertObjectValueRef <CValueTableReturnLine>(this, wxDataViewItem(nullptr));
 	}
 
 	virtual CValue GetIteratorAt(unsigned int idx) override {
 		if (idx > (unsigned int)GetRowCount())
 			return CValue();
-		return new CValueTableReturnLine(this, GetItem(idx));
+		return CValue::CreateAndConvertObjectValueRef <CValueTableReturnLine>(this, GetItem(idx));
 	}
 
 	virtual unsigned int GetIteratorCount() const override {

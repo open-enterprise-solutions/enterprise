@@ -721,7 +721,7 @@ public:
 	}
 
 	virtual unsigned int GetUInteger() const {
-		return GetNumber().GetUInteger();
+		return GetNumber().ToUInt();
 	}
 
 	virtual double GetDouble() const {

@@ -91,6 +91,7 @@ namespace ttmath
 		uint __fastcall ttmath_rcl2_x64(uint* p1, uint nSize, uint nBits, uint c);
 		uint __fastcall ttmath_rcr2_x64(uint* p1, uint nSize, uint nBits, uint c);
 	};
+
 #endif
 
 

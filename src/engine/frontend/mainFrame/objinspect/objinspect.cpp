@@ -210,7 +210,7 @@ void CObjectInspector::Create(bool force)
 
 void CObjectInspector::ShowProperty()
 {
-	mainFrame->ShowProperty();
+	if (mainFrame != nullptr) mainFrame->ShowProperty();
 }
 
 void CObjectInspector::ClearProperty()

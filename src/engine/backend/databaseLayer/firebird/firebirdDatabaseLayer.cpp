@@ -21,10 +21,10 @@
 CFirebirdDatabaseLayer::CFirebirdDatabaseLayer()
 	: IDatabaseLayer()
 {
-	m_pDatabase = nullptr;
+	m_pDatabase = NULL;
 
 	m_fbNode = new fb_tr_list_t;
-	m_fbNode->prev = nullptr;
+	m_fbNode->prev = NULL;
 
 	m_fbNode->m_pTransaction = 0L;
 
@@ -52,10 +52,10 @@ CFirebirdDatabaseLayer::CFirebirdDatabaseLayer()
 CFirebirdDatabaseLayer::CFirebirdDatabaseLayer(const wxString& strDatabase)
 	: IDatabaseLayer()
 {
-	m_pDatabase = nullptr;
+	m_pDatabase = NULL;
 
 	m_fbNode = new fb_tr_list_t;
-	m_fbNode->prev = nullptr;
+	m_fbNode->prev = NULL;
 
 	m_fbNode->m_pTransaction = 0L;
 
@@ -84,10 +84,10 @@ CFirebirdDatabaseLayer::CFirebirdDatabaseLayer(const wxString& strDatabase)
 CFirebirdDatabaseLayer::CFirebirdDatabaseLayer(const wxString& strDatabase, const wxString& strUser, const wxString& strPassword)
 	: IDatabaseLayer()
 {
-	m_pDatabase = nullptr;
+	m_pDatabase = NULL;
 
 	m_fbNode = new fb_tr_list_t;
-	m_fbNode->prev = nullptr;
+	m_fbNode->prev = NULL;
 
 	m_fbNode->m_pTransaction = 0L;
 
@@ -114,10 +114,10 @@ CFirebirdDatabaseLayer::CFirebirdDatabaseLayer(const wxString& strDatabase, cons
 CFirebirdDatabaseLayer::CFirebirdDatabaseLayer(const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword)
 	: IDatabaseLayer()
 {
-	m_pDatabase = nullptr;
+	m_pDatabase = NULL;
 
 	m_fbNode = new fb_tr_list_t;
-	m_fbNode->prev = nullptr;
+	m_fbNode->prev = NULL;
 
 	m_fbNode->m_pTransaction = 0L;
 
@@ -144,10 +144,10 @@ CFirebirdDatabaseLayer::CFirebirdDatabaseLayer(const wxString& strServer, const 
 CFirebirdDatabaseLayer::CFirebirdDatabaseLayer(const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword, const wxString& strRole)
 	: IDatabaseLayer()
 {
-	m_pDatabase = nullptr;
+	m_pDatabase = NULL;
 
 	m_fbNode = new fb_tr_list_t;
-	m_fbNode->prev = nullptr;
+	m_fbNode->prev = NULL;
 
 	m_fbNode->m_pTransaction = 0L;
 
@@ -177,11 +177,11 @@ CFirebirdDatabaseLayer::~CFirebirdDatabaseLayer()
 	Close();
 	ISC_STATUS_ARRAY* pStatus = (ISC_STATUS_ARRAY*)m_pStatus;
 	wxDELETEA(pStatus);
-	m_pStatus = nullptr;
+	m_pStatus = NULL;
 	wxDELETE(m_pInterface);
-	m_pInterface = nullptr;
+	m_pInterface = NULL;
 	wxDELETE(m_fbNode);
-	m_fbNode = nullptr;
+	m_fbNode = NULL;
 }
 
 // open database
@@ -212,7 +212,7 @@ bool CFirebirdDatabaseLayer::Open()
 {
 	ResetErrorCodes();
 
-	if (m_pInterface == nullptr)
+	if (m_pInterface == NULL)
 		return false;
 
 	wxCSConv conv(_("UTF-8"));
@@ -277,7 +277,7 @@ bool CFirebirdDatabaseLayer::Open()
 		}
 	}
 
-	m_pDatabase = nullptr;
+	m_pDatabase = NULL;
 
 	isc_db_handle pDatabase = (isc_db_handle)m_pDatabase;
 
@@ -333,7 +333,7 @@ bool CFirebirdDatabaseLayer::Close()
 			{
 				isc_tr_handle pTransaction = (isc_tr_handle)m_fbNode->m_pTransaction;
 				m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pTransaction);
-				m_fbNode->m_pTransaction = nullptr;
+				m_fbNode->m_pTransaction = NULL;
 			}
 
 			fb_tr_list *tr_link = m_fbNode->prev;
@@ -347,7 +347,7 @@ bool CFirebirdDatabaseLayer::Close()
 
 		isc_db_handle pDatabase = (isc_db_handle)m_pDatabase;
 		int nReturn = m_pInterface->GetIscDetachDatabase()(*(ISC_STATUS_ARRAY*)m_pStatus, &pDatabase);
-		m_pDatabase = nullptr;
+		m_pDatabase = NULL;
 		if (nReturn != 0)
 		{
 			InterpretErrorCodes();
@@ -361,7 +361,7 @@ bool CFirebirdDatabaseLayer::Close()
 
 bool CFirebirdDatabaseLayer::IsOpen()
 {
-	return (m_pDatabase != nullptr);
+	return (m_pDatabase != NULL);
 }
 
 // transaction support
@@ -379,7 +379,7 @@ void CFirebirdDatabaseLayer::BeginTransaction()
 		isc_db_handle pDatabase = (isc_db_handle)m_pDatabase;
 		isc_tr_handle pTransaction = (isc_tr_handle)fbNextNode->m_pTransaction;
 
-		int nReturn = m_pInterface->GetIscStartTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pTransaction, 1, &pDatabase, 0, nullptr);
+		int nReturn = m_pInterface->GetIscStartTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pTransaction, 1, &pDatabase, 0, NULL);
 
 		m_pDatabase = pDatabase;
 		fbNextNode->m_pTransaction = pTransaction;
@@ -411,7 +411,7 @@ void CFirebirdDatabaseLayer::Commit()
 		}
 		else
 		{
-			// We're done with the transaction, so set it to nullptr so that we know that a new transaction must be started if we run any queries
+			// We're done with the transaction, so set it to NULL so that we know that a new transaction must be started if we run any queries
 			m_fbNode->m_pTransaction = 0L;
 
 			fb_tr_list *tr_link = m_fbNode->prev;
@@ -438,8 +438,8 @@ void CFirebirdDatabaseLayer::RollBack()
 		}
 		else
 		{
-			// We're done with the transaction, so set it to nullptr so that we know that a new transaction must be started if we run any queries
-			m_fbNode->m_pTransaction = nullptr;
+			// We're done with the transaction, so set it to NULL so that we know that a new transaction must be started if we run any queries
+			m_fbNode->m_pTransaction = NULL;
 
 			fb_tr_list *tr_link = m_fbNode->prev;
 			wxDELETE(m_fbNode);
@@ -452,7 +452,7 @@ void CFirebirdDatabaseLayer::RollBack()
 int CFirebirdDatabaseLayer::DoRunQuery(const wxString& strQuery, bool bParseQuery)
 {
 	ResetErrorCodes();
-	if (m_pDatabase != nullptr)
+	if (m_pDatabase != NULL)
 	{
 		wxCharBuffer sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
 #ifdef DEBUG
@@ -472,7 +472,7 @@ int CFirebirdDatabaseLayer::DoRunQuery(const wxString& strQuery, bool bParseQuer
 		{
 			bool bQuickieTransaction = false;
 
-			if (m_fbNode->m_pTransaction == nullptr)
+			if (m_fbNode->m_pTransaction == NULL)
 			{
 				// If there's no transaction is progress, run this as a quick one-timer transaction
 				bQuickieTransaction = true;
@@ -494,8 +494,8 @@ int CFirebirdDatabaseLayer::DoRunQuery(const wxString& strQuery, bool bParseQuer
 				wxCharBuffer sqlBuffer = ConvertToUnicodeStream(*start);
 				isc_db_handle pDatabase = (isc_db_handle)m_pDatabase;
 				isc_tr_handle pTransaction = (isc_tr_handle)m_fbNode->m_pTransaction;
-				//int nReturn = m_pInterface->GetIscDsqlExecuteImmediate()(*(ISC_STATUS_ARRAY*)m_pStatus, &pDatabase, &pTransaction, 0, (char*)(const char*)sqlBuffer, SQL_DIALECT_CURRENT, nullptr);
-				int nReturn = m_pInterface->GetIscDsqlExecuteImmediate()(*(ISC_STATUS_ARRAY*)m_pStatus, &pDatabase, &pTransaction, GetEncodedStreamLength(*start), (char*)(const char*)sqlBuffer, SQL_DIALECT_CURRENT, nullptr);
+				//int nReturn = m_pInterface->GetIscDsqlExecuteImmediate()(*(ISC_STATUS_ARRAY*)m_pStatus, &pDatabase, &pTransaction, 0, (char*)(const char*)sqlBuffer, SQL_DIALECT_CURRENT, NULL);
+				int nReturn = m_pInterface->GetIscDsqlExecuteImmediate()(*(ISC_STATUS_ARRAY*)m_pStatus, &pDatabase, &pTransaction, GetEncodedStreamLength(*start), (char*)(const char*)sqlBuffer, SQL_DIALECT_CURRENT, NULL);
 				m_pDatabase = pDatabase;
 				m_fbNode->m_pTransaction = pTransaction;
 				if (nReturn != 0)
@@ -505,7 +505,7 @@ int CFirebirdDatabaseLayer::DoRunQuery(const wxString& strQuery, bool bParseQuer
 					//  so that we can ignore the error messages
 					isc_tr_handle pTransaction = (isc_tr_handle)m_fbNode->m_pTransaction;
 					m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pTransaction);
-					m_fbNode->m_pTransaction = nullptr;
+					m_fbNode->m_pTransaction = NULL;
 
 					ThrowDatabaseException();
 					return DATABASE_LAYER_QUERY_RESULT_ERROR;
@@ -528,7 +528,7 @@ int CFirebirdDatabaseLayer::DoRunQuery(const wxString& strQuery, bool bParseQuer
 	}
 	else
 	{
-		wxLogError(_("Database handle is nullptr"));
+		wxLogError(_("Database handle is NULL"));
 		return DATABASE_LAYER_QUERY_RESULT_ERROR;
 	}
 }
@@ -536,7 +536,7 @@ int CFirebirdDatabaseLayer::DoRunQuery(const wxString& strQuery, bool bParseQuer
 IDatabaseResultSet* CFirebirdDatabaseLayer::DoRunQueryWithResults(const wxString& strQuery)
 {
 	ResetErrorCodes();
-	if (m_pDatabase != nullptr)
+	if (m_pDatabase != NULL)
 	{
 		wxCharBuffer sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
 #if DEBUG 
@@ -548,7 +548,7 @@ IDatabaseResultSet* CFirebirdDatabaseLayer::DoRunQueryWithResults(const wxString
 		{
 			bool bQuickieTransaction = false;
 
-			if (m_fbNode->m_pTransaction == nullptr)
+			if (m_fbNode->m_pTransaction == NULL)
 			{
 				// If there's no transaction is progress, run this as a quick one-timer transaction
 				bQuickieTransaction = true;
@@ -563,7 +563,7 @@ IDatabaseResultSet* CFirebirdDatabaseLayer::DoRunQueryWithResults(const wxString
 					{
 						wxLogError(_("Unable to start transaction"));
 						ThrowDatabaseException();
-						return nullptr;
+						return NULL;
 					}
 				}
 
@@ -574,7 +574,7 @@ IDatabaseResultSet* CFirebirdDatabaseLayer::DoRunQueryWithResults(const wxString
 					if (GetErrorCode() != DATABASE_LAYER_OK)
 					{
 						ThrowDatabaseException();
-						return nullptr;
+						return NULL;
 					}
 				}
 
@@ -585,19 +585,19 @@ IDatabaseResultSet* CFirebirdDatabaseLayer::DoRunQueryWithResults(const wxString
 					if (GetErrorCode() != DATABASE_LAYER_OK)
 					{
 						ThrowDatabaseException();
-						return nullptr;
+						return NULL;
 					}
 				}
 			} // End check if there are more than one query in the array
 
-			isc_tr_handle pQueryTransaction = nullptr;
+			isc_tr_handle pQueryTransaction = NULL;
 			bool bManageTransaction = false;
 			if (bQuickieTransaction)
 			{
 				bManageTransaction = true;
 
 				isc_db_handle pDatabase = (isc_db_handle)m_pDatabase;
-				int nReturn = m_pInterface->GetIscStartTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction, 1, &pDatabase, 0, nullptr);
+				int nReturn = m_pInterface->GetIscStartTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction, 1, &pDatabase, 0, NULL);
 				m_pDatabase = pDatabase;
 				if (nReturn != 0)
 				{
@@ -610,7 +610,7 @@ IDatabaseResultSet* CFirebirdDatabaseLayer::DoRunQueryWithResults(const wxString
 				pQueryTransaction = m_fbNode->m_pTransaction;
 			}
 
-			isc_stmt_handle pStatement = nullptr;
+			isc_stmt_handle pStatement = NULL;
 			isc_db_handle pDatabase = (isc_db_handle)m_pDatabase;
 			int nReturn = m_pInterface->GetIscDsqlAllocateStatement()(*(ISC_STATUS_ARRAY*)m_pStatus, &pDatabase, &pStatement);
 			m_pDatabase = pDatabase;
@@ -623,11 +623,11 @@ IDatabaseResultSet* CFirebirdDatabaseLayer::DoRunQueryWithResults(const wxString
 				m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
 
 				ThrowDatabaseException();
-				return nullptr;
+				return NULL;
 			}
 
 			wxCharBuffer sqlBuffer = ConvertToUnicodeStream(QueryArray[QueryArray.size() - 1]);
-			nReturn = m_pInterface->GetIscDsqlPrepare()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction, &pStatement, 0, (char*)(const char*)sqlBuffer, SQL_DIALECT_CURRENT, nullptr);
+			nReturn = m_pInterface->GetIscDsqlPrepare()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction, &pStatement, 0, (char*)(const char*)sqlBuffer, SQL_DIALECT_CURRENT, NULL);
 			if (nReturn != 0)
 			{
 				InterpretErrorCodes();
@@ -637,7 +637,7 @@ IDatabaseResultSet* CFirebirdDatabaseLayer::DoRunQueryWithResults(const wxString
 				m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
 
 				ThrowDatabaseException();
-				return nullptr;
+				return NULL;
 			}
 
 			//--------------------------------------------------------------
@@ -658,7 +658,7 @@ IDatabaseResultSet* CFirebirdDatabaseLayer::DoRunQueryWithResults(const wxString
 				m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
 
 				ThrowDatabaseException();
-				return nullptr;
+				return NULL;
 			}
 
 			if (pOutputSqlda->sqld > pOutputSqlda->sqln)
@@ -679,7 +679,7 @@ IDatabaseResultSet* CFirebirdDatabaseLayer::DoRunQueryWithResults(const wxString
 					m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
 
 					ThrowDatabaseException();
-					return nullptr;
+					return NULL;
 				}
 			}
 
@@ -713,7 +713,7 @@ IDatabaseResultSet* CFirebirdDatabaseLayer::DoRunQueryWithResults(const wxString
 			}
 
 			// Now execute the SQL
-			nReturn = m_pInterface->GetIscDsqlExecute()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction, &pStatement, SQL_DIALECT_CURRENT, nullptr);
+			nReturn = m_pInterface->GetIscDsqlExecute()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction, &pStatement, SQL_DIALECT_CURRENT, NULL);
 			if (nReturn != 0)
 			{
 				InterpretErrorCodes();
@@ -737,7 +737,7 @@ IDatabaseResultSet* CFirebirdDatabaseLayer::DoRunQueryWithResults(const wxString
 #endif
 
 				ThrowDatabaseException();
-				return nullptr;
+				return NULL;
 			}
 
 			//--------------------------------------------------------------
@@ -746,12 +746,12 @@ IDatabaseResultSet* CFirebirdDatabaseLayer::DoRunQueryWithResults(const wxString
 			return pResultSet;
 		}
 		else
-			return nullptr;
+			return NULL;
 	}
 	else
 	{
-		wxLogError(_("Database handle is nullptr"));
-		return nullptr;
+		wxLogError(_("Database handle is NULL"));
+		return NULL;
 	}
 }
 
@@ -764,10 +764,10 @@ IPreparedStatement* CFirebirdDatabaseLayer::DoPrepareStatement(const wxString& s
 	{
 		SetErrorCode(pStatement->GetErrorCode());
 		SetErrorMessage(pStatement->GetErrorMessage());
-		wxDELETE(pStatement); // This sets the pointer to nullptr after deleting it
+		wxDELETE(pStatement); // This sets the pointer to NULL after deleting it
 
 		ThrowDatabaseException();
-		return nullptr;
+		return NULL;
 	}
 
 	LogStatementForCleanup(pStatement);
@@ -780,15 +780,15 @@ bool CFirebirdDatabaseLayer::TableExists(const wxString& table)
 	bool bReturn = false;
 	// Keep these variables outside of scope so that we can clean them up
 	//  in case of an error
-	IPreparedStatement* pStatement = nullptr;
-	IDatabaseResultSet* pResult = nullptr;
+	IPreparedStatement* pStatement = NULL;
+	IDatabaseResultSet* pResult = NULL;
 
 #if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	try
 	{
 #endif
 		wxString tableUpperCase = table.Upper();
-		wxString query = _("SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS nullptr AND RDB$RELATION_NAME=?;");
+		wxString query = _("SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NULL AND RDB$RELATION_NAME=?;");
 		pStatement = DoPrepareStatement(query);
 		if (pStatement)
 		{
@@ -809,32 +809,32 @@ bool CFirebirdDatabaseLayer::TableExists(const wxString& table)
 	}
 	catch (DatabaseLayerException& e)
 	{
-		if (pResult != nullptr)
+		if (pResult != NULL)
 		{
 			CloseResultSet(pResult);
-			pResult = nullptr;
+			pResult = NULL;
 		}
 
-		if (pStatement != nullptr)
+		if (pStatement != NULL)
 		{
 			CloseStatement(pStatement);
-			pStatement = nullptr;
+			pStatement = NULL;
 		}
 
 		throw e;
 		}
 #endif
 
-	if (pResult != nullptr)
+	if (pResult != NULL)
 	{
 		CloseResultSet(pResult);
-		pResult = nullptr;
+		pResult = NULL;
 	}
 
-	if (pStatement != nullptr)
+	if (pStatement != NULL)
 	{
 		CloseStatement(pStatement);
-		pStatement = nullptr;
+		pStatement = NULL;
 	}
 
 	return bReturn;
@@ -846,8 +846,8 @@ bool CFirebirdDatabaseLayer::ViewExists(const wxString& view)
 	bool bReturn = false;
 	// Keep these variables outside of scope so that we can clean them up
 	//  in case of an error
-	IPreparedStatement* pStatement = nullptr;
-	IDatabaseResultSet* pResult = nullptr;
+	IPreparedStatement* pStatement = NULL;
+	IDatabaseResultSet* pResult = NULL;
 
 #if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	try
@@ -875,32 +875,32 @@ bool CFirebirdDatabaseLayer::ViewExists(const wxString& view)
 	}
 	catch (DatabaseLayerException& e)
 	{
-		if (pResult != nullptr)
+		if (pResult != NULL)
 		{
 			CloseResultSet(pResult);
-			pResult = nullptr;
+			pResult = NULL;
 		}
 
-		if (pStatement != nullptr)
+		if (pStatement != NULL)
 		{
 			CloseStatement(pStatement);
-			pStatement = nullptr;
+			pStatement = NULL;
 		}
 
 		throw e;
 		}
 #endif
 
-	if (pResult != nullptr)
+	if (pResult != NULL)
 	{
 		CloseResultSet(pResult);
-		pResult = nullptr;
+		pResult = NULL;
 	}
 
-	if (pStatement != nullptr)
+	if (pStatement != NULL)
 	{
 		CloseStatement(pStatement);
-		pStatement = nullptr;
+		pStatement = NULL;
 	}
 
 	return bReturn;
@@ -910,12 +910,12 @@ wxArrayString CFirebirdDatabaseLayer::GetTables()
 {
 	wxArrayString returnArray;
 
-	IDatabaseResultSet* pResult = nullptr;
+	IDatabaseResultSet* pResult = NULL;
 #if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	try
 	{
 #endif
-		wxString query = _("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS nullptr");
+		wxString query = _("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NULL");
 		pResult = ExecuteQuery(query);
 
 		while (pResult->Next())
@@ -926,20 +926,20 @@ wxArrayString CFirebirdDatabaseLayer::GetTables()
 	}
 	catch (DatabaseLayerException& e)
 	{
-		if (pResult != nullptr)
+		if (pResult != NULL)
 		{
 			CloseResultSet(pResult);
-			pResult = nullptr;
+			pResult = NULL;
 		}
 
 		throw e;
 		}
 #endif
 
-	if (pResult != nullptr)
+	if (pResult != NULL)
 	{
 		CloseResultSet(pResult);
-		pResult = nullptr;
+		pResult = NULL;
 	}
 
 	return returnArray;
@@ -949,7 +949,7 @@ wxArrayString CFirebirdDatabaseLayer::GetViews()
 {
 	wxArrayString returnArray;
 
-	IDatabaseResultSet* pResult = nullptr;
+	IDatabaseResultSet* pResult = NULL;
 #if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	try
 	{
@@ -965,20 +965,20 @@ wxArrayString CFirebirdDatabaseLayer::GetViews()
 	}
 	catch (DatabaseLayerException& e)
 	{
-		if (pResult != nullptr)
+		if (pResult != NULL)
 		{
 			CloseResultSet(pResult);
-			pResult = nullptr;
+			pResult = NULL;
 		}
 
 		throw e;
 		}
 #endif
 
-	if (pResult != nullptr)
+	if (pResult != NULL)
 	{
 		CloseResultSet(pResult);
-		pResult = nullptr;
+		pResult = NULL;
 	}
 
 	return returnArray;
@@ -990,8 +990,8 @@ wxArrayString CFirebirdDatabaseLayer::GetColumns(const wxString& table)
 	wxArrayString returnArray;
 	// Keep these variables outside of scope so that we can clean them up
 	//  in case of an error
-	IPreparedStatement* pStatement = nullptr;
-	IDatabaseResultSet* pResult = nullptr;
+	IPreparedStatement* pStatement = NULL;
+	IDatabaseResultSet* pResult = NULL;
 
 #if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	try
@@ -1016,32 +1016,32 @@ wxArrayString CFirebirdDatabaseLayer::GetColumns(const wxString& table)
 	}
 	catch (DatabaseLayerException& e)
 	{
-		if (pResult != nullptr)
+		if (pResult != NULL)
 		{
 			CloseResultSet(pResult);
-			pResult = nullptr;
+			pResult = NULL;
 		}
 
-		if (pStatement != nullptr)
+		if (pStatement != NULL)
 		{
 			CloseStatement(pStatement);
-			pStatement = nullptr;
+			pStatement = NULL;
 		}
 
 		throw e;
 		}
 #endif
 
-	if (pResult != nullptr)
+	if (pResult != NULL)
 	{
 		CloseResultSet(pResult);
-		pResult = nullptr;
+		pResult = NULL;
 	}
 
-	if (pStatement != nullptr)
+	if (pStatement != NULL)
 	{
 		CloseStatement(pStatement);
-		pStatement = nullptr;
+		pStatement = NULL;
 	}
 
 	return returnArray;

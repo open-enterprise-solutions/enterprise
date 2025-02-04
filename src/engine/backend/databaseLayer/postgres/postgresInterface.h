@@ -29,7 +29,7 @@ typedef ExecStatusType(*PQresultStatusType)(const PGresult*);
 typedef void(*PQclearType)(PGresult*);
 typedef char* (*PQcmdTuplesType)(const PGresult*);
 typedef PGresult* (*PQprepareType)(PGconn*, const char*, const char*, int, const Oid*);
-typedef PGresult* (*PQexecPreparedType)(PGconn*, const char*, int, const char *const*,
+typedef PGresult* (*PQexecPreparedType)(PGconn*, const char*, int, const char* const*,
 	const int*, const int*, int resultFormat);
 typedef char* (*PQresultErrorMessageType)(const PGresult*);
 typedef int(*PQntuplesType)(const PGresult*);
@@ -38,7 +38,11 @@ typedef char* (*PQfnameType)(const PGresult*, int);
 typedef int(*PQgetisnullType)(const PGresult*, int, int);
 typedef char* (*PQgetvalueType)(const PGresult*, int, int);
 typedef int(*PQgetlengthType)(const PGconn*);
+#if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
+typedef unsigned char* (*PQunescapeByteaType)(const unsigned char*, unsigned long long*);
+#else 
 typedef unsigned char* (*PQunescapeByteaType)(const unsigned char*, unsigned int*);
+#endif
 typedef void(*PQfreememType)(void*);
 typedef Oid(*PQftypeType)(const PGresult*, int);
 typedef int(*PQfsizeType)(const PGresult*, int);
@@ -47,7 +51,7 @@ typedef int(*PQnfieldsType)(const PGresult*);
 class CPostgresInterface
 {
 public:
-	CPostgresInterface() { }
+	CPostgresInterface() {}
 	bool Init();
 
 	PQstatusType GetPQstatus() { return m_pPQstatus; }

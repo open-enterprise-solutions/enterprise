@@ -522,8 +522,10 @@ void CFrameCodeRunner::SetFontColorSettings()
 
 	m_codeEditor->StyleSetForeground(wxSTC_C_COMMENT, wxColor(0x00, 0x80, 0x00));
 	m_codeEditor->StyleSetBackground(wxSTC_C_COMMENT, wxColor(0xFF, 0xFF, 0xFF));
+	
 	m_codeEditor->StyleSetForeground(wxSTC_C_COMMENTLINE, wxColor(0x00, 0x80, 0x00));
 	m_codeEditor->StyleSetBackground(wxSTC_C_COMMENTLINE, wxColor(0xFF, 0xFF, 0xFF));
+	
 	m_codeEditor->StyleSetForeground(wxSTC_C_COMMENTDOC, wxColor(0x00, 0x80, 0x00));
 	m_codeEditor->StyleSetBackground(wxSTC_C_COMMENTDOC, wxColor(0xFF, 0xFF, 0xFF));
 
@@ -543,9 +545,9 @@ void CFrameCodeRunner::SetFontColorSettings()
 	m_codeEditor->StyleSetForeground(wxSTC_C_STRINGEOL, wxColor(0xFF, 0x80, 0x80));
 	m_codeEditor->StyleSetBackground(wxSTC_C_STRINGEOL, wxColor(0xFF, 0xFF, 0xFF));
 
-	m_codeEditor->StyleSetFont(wxSTC_C_CHARACTER, font);
-	m_codeEditor->StyleSetForeground(wxSTC_C_CHARACTER, wxColor(0xFF, 0x80, 0x80));
-	m_codeEditor->StyleSetBackground(wxSTC_C_CHARACTER, wxColor(0xFF, 0xFF, 0xFF));
+	m_codeEditor->StyleSetFont(wxSTC_C_PREPROCESSOR, font);
+	m_codeEditor->StyleSetForeground(wxSTC_C_PREPROCESSOR, wxColor(0x00, 0x00, 0x00));
+	m_codeEditor->StyleSetBackground(wxSTC_C_PREPROCESSOR, wxColor(0xFF, 0xFF, 0xFF));
 
 	m_codeEditor->StyleSetFont(wxSTC_C_NUMBER, font);
 	m_codeEditor->StyleSetForeground(wxSTC_C_NUMBER, wxColor(0xFF, 0x00, 0x00));

@@ -250,7 +250,7 @@ bool CMetaDataConfigurationStorage::SaveConfiguration(int flags)
 #endif
 		}
 
-		if (!m_configMetadata->RunConfiguration()) {
+		if (!m_configNew && !m_configMetadata->RunConfiguration()) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 			db_query->RollBack();
 #else 

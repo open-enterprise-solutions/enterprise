@@ -1,8 +1,14 @@
 #ifndef __NUMBER_T_H__
 #define __NUMBER_T_H__
 
+#include <wx/wx.h>
+
 //*******************************************************************************************
+#ifdef wxUSE_THREADS
 #define TTMATH_MULTITHREADS
+#endif
+
+#define TTMATH_NOASM
 //*******************************************************************************************
 
 #include "backend/compiler/ttmath/ttmath.h"

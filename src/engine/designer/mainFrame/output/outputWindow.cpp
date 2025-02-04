@@ -152,8 +152,6 @@ void COutputWindow::SharedOutput(const wxString& message, eStatusMessage status,
 	AppendText(message + '\n');
 	SetEditable(false);
 
-	const unsigned int newLine = GetLineCount();
-
 	MarkerAdd(
 		lastLine - 1,
 		status);

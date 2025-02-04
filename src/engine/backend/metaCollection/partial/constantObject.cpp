@@ -47,7 +47,13 @@ bool CRecordDataObjectConstant::InitializeObject(const CRecordDataObjectConstant
 		m_compileModule->SetParent(moduleManager->GetCompileModule());
 	}
 
-	m_constVal = GetConstValue();
+	try {
+		m_constVal = GetConstValue();
+	}
+	catch (const CBackendException* err) {
+		CSystemFunction::Raise(err->what());
+		return false;
+	}
 
 	if (!appData->DesignerMode()) {
 		m_procUnit = new CProcUnit();
@@ -196,6 +202,12 @@ CValue CRecordDataObjectConstant::GetConstValue() const
 	CValue ret;
 
 	if (!appData->DesignerMode()) {
+
+		if (db_query != nullptr && !db_query->IsOpen())
+			CBackendException::Error(_("database is not open!"));
+		else if (db_query == nullptr)
+			CBackendException::Error(_("database is not open!"));
+
 		const wxString& tableName = m_metaObject->GetTableNameDB();
 		const wxString& fieldName = m_metaObject->GetFieldNameDB();
 		if (db_query->TableExists(tableName)) {
@@ -227,10 +239,16 @@ CValue CRecordDataObjectConstant::GetConstValue() const
 bool CRecordDataObjectConstant::SetConstValue(const CValue& cValue)
 {
 	if (!appData->DesignerMode()) {
+
+		if (db_query != nullptr && !db_query->IsOpen())
+			CBackendException::Error(_("database is not open!"));
+		else if (db_query == nullptr)
+			CBackendException::Error(_("database is not open!"));
+
 		const wxString& tableName = m_metaObject->GetTableNameDB();
 		const wxString& fieldName = m_metaObject->GetFieldNameDB();
 		if (db_query->TableExists(tableName)) {
-			
+
 			IBackendValueForm* const foundedForm = GetForm();
 
 			db_query->BeginTransaction();
