@@ -7,7 +7,7 @@
  * Watch control. This is the base class for the tree controls used to display
  * the results of evaluating expressions.
  */
-class CWatchCtrl : public wxTreeMultiListCtrl
+class CWatchCtrl : public wxTreeListExtCtrl
 {
 
 public:

@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////////////
 // Name:        treelistctrl.h
-// Purpose:     wxTreeMultiListCtrl class
+// Purpose:     wxTreeListExtCtrl class
 // Created:     01/02/97
 // Author:      Robert Roebling
 // Maintainer:  Ronan Chartois (pgriddev)
@@ -115,7 +115,7 @@ private:
 };
 
 //----------------------------------------------------------------------------
-// wxTreeMultiListCtrl - the multicolumn tree control
+// wxTreeListExtCtrl - the multicolumn tree control
 //----------------------------------------------------------------------------
 
 // modes for navigation
@@ -131,9 +131,9 @@ const int wxTL_MODE_FIND_NOCASE = 0x0020;
 
 // additional flag for HitTest
 const int wxTREE_HITTEST_ONITEMCOLUMN = 0x2000;
-extern const wxChar* wxTreeMuiltiListCtrlNameStr;
+extern const wxChar* wxTreeListExtCtrlNameStr;
 
-class FRONTEND_API wxTreeMultiListCtrl : public wxControl
+class FRONTEND_API wxTreeListExtCtrl : public wxControl
 {
 	friend class wxTreeListHeaderWindow;
 	friend class wxTreeListMainWindow;
@@ -142,29 +142,29 @@ public:
 
 	// ---------- creation ----------
 
-	wxTreeMultiListCtrl()
+	wxTreeListExtCtrl()
 		: m_header_win(0), m_main_win(0), m_headerHeight(0)
 	{}
 
-	wxTreeMultiListCtrl(wxWindow *parent, wxWindowID id = -1,
+	wxTreeListExtCtrl(wxWindow *parent, wxWindowID id = -1,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxTR_DEFAULT_STYLE,
 		const wxValidator &validator = wxDefaultValidator,
-		const wxString& name = wxTreeMuiltiListCtrlNameStr)
+		const wxString& name = wxTreeListExtCtrlNameStr)
 		: m_header_win(0), m_main_win(0), m_headerHeight(0)
 	{
 		Create(parent, id, pos, size, style, validator, name);
 	}
 
-	virtual ~wxTreeMultiListCtrl() {}
+	virtual ~wxTreeListExtCtrl() {}
 
 	bool Create(wxWindow *parent, wxWindowID id = -1,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxTR_DEFAULT_STYLE,
 		const wxValidator &validator = wxDefaultValidator,
-		const wxString& name = wxTreeMuiltiListCtrlNameStr);
+		const wxString& name = wxTreeListExtCtrlNameStr);
 
 	void Refresh(bool erase = TRUE, const wxRect* rect = nullptr);
 	void SetFocus();
@@ -577,7 +577,7 @@ private:
 	int m_headerHeight;
 
 	DECLARE_EVENT_TABLE()
-	DECLARE_DYNAMIC_CLASS(wxTreeMultiListCtrl)
+	DECLARE_DYNAMIC_CLASS(wxTreeListExtCtrl)
 };
 
 /////////////////////////////////////////////////////////////////////////////
