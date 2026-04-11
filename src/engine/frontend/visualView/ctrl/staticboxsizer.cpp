@@ -17,7 +17,7 @@ wxObject* ibValueStaticBoxSizer::Create(wxWindow* wxparent, ibVisualHost* visual
 	return new wxStaticBoxSizer(staticBox, m_propertyOrient->GetValueAsInteger());
 }
 
-void ibValueStaticBoxSizer::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first—reated)
+void ibValueStaticBoxSizer::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first–°reated)
 {
 	wxStaticBoxSizer* staticboxsizer = dynamic_cast<wxStaticBoxSizer*>(wxobject);
 	wxStaticBox* staticBox = staticboxsizer->GetStaticBox();
@@ -97,7 +97,7 @@ bool ibValueStaticBoxSizer::LoadData(ibReaderMemory& reader)
 	return ibValueSizer::LoadData(reader);
 }
 
-bool ibValueStaticBoxSizer::SaveData(ibWriterMemory& writer)
+bool ibValueStaticBoxSizer::SaveData(ibWriterMemory writer)
 {
 	writer.w_u16(m_propertyOrient->GetValueAsInteger());
 	writer.w_stringZ(m_propertyTitle->GetValueAsString());

@@ -51,7 +51,7 @@
 #include <wx/arrimpl.cpp>
 
 #ifdef __WXMAC__
-#include "wx/mac/private.h"
+#include "wx/osx/private.h"
 #endif
 
 #include "treelistctrl.h"
@@ -2048,7 +2048,7 @@ bool ibTreeListMainWindow::Create(ibTreeListCtrl* parent,
 	const wxString& name) {
 
 #ifdef __WXMAC__
-	if (style & wxTR_HAS_BUTTONS) style |= wxTR_MAC_BUTTONS;
+	if (style & wxTR_HAS_BUTTONS) style |= 0 /* wxTR_MAC_BUTTONS removed in wx3.3 */;
 	if (style & wxTR_HAS_BUTTONS) style &= ~wxTR_HAS_BUTTONS;
 	style &= ~wxTR_LINES_AT_ROOT;
 	style |= wxTR_NO_LINES;

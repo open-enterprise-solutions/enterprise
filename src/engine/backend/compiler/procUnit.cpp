@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, 2Ñ-team
+//	Author		: Maxim Kornienko, 2ï¿½-team
 //	Description : Processor unit 
 ////////////////////////////////////////////////////////////////////////////
 
@@ -327,6 +327,13 @@ inline void CopyValue(ibValue& cValue1, ibValue& cValue2)
 	}
 }
 
+inline void CopyValue(ibValue& cValue1, ibValue&& cValue2)
+{
+	// For temporaries: store into local lvalue, then delegate to lvalue version
+	ibValue tmp = std::move(cValue2);
+	CopyValue(cValue1, tmp);
+}
+
 inline void MoveValue(ibValue&& cValue1, ibValue&& cValue2)
 {
 	if (&cValue1 == &cValue2)
@@ -412,6 +419,12 @@ inline bool SetArrayValue(ibValue& cValue1, const ibValue& cValue2, ibValue& cVa
 	return cValue1.SetAt(cValue2, cValue3);
 }
 
+inline bool SetArrayValue(ibValue& cValue1, const ibValue& cValue2, ibValue&& cValue3)
+{
+	ibValue tmp = std::move(cValue3);
+	return cValue1.SetAt(cValue2, tmp);
+}
+
 inline bool GetArrayValue(ibValue& cValue1, ibValue& cValue2, const ibValue& cValue3)
 {
 	ibValue retValue;
@@ -436,8 +449,12 @@ inline ibValue GetValue(ibValue& cValue1)
 #pragma region iterator_support
 class ibValueIterator : public ibValue {
 	wxDECLARE_DYNAMIC_CLASS(ibValueIterator);
+	static ibValue s_defaultOwner;
 public:
-	ibValueIterator(ibValue& ownerValue = ibValue()) : ibValue(ibValueTypes::TYPE_VALUE),
+	ibValueIterator() : ibValue(ibValueTypes::TYPE_VALUE),
+		m_ownerValue(s_defaultOwner), m_currentPos(0) {
+	}
+	ibValueIterator(ibValue& ownerValue) : ibValue(ibValueTypes::TYPE_VALUE),
 		m_ownerValue(ownerValue), m_currentPos(0) {
 		ResetIterator();
 	}
@@ -462,6 +479,7 @@ private:
 };
 
 //**************************************************************************************************************
+ibValue ibValueIterator::s_defaultOwner;
 wxIMPLEMENT_DYNAMIC_CLASS(ibValueIterator, ibValue);
 //**************************************************************************************************************
 
@@ -1196,7 +1214,7 @@ bool ibProcUnit::GetPropVal(const wxString& strPropName, ibValue& pvarPropVal) /
 	return false;
 }
 
-bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunContext, ibValue& pvarRetValue, bool ñompileBlock)
+bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunContext, ibValue& pvarRetValue, bool compileBlock)
 {
 	if (pRunContext == nullptr)
 		pRunContext = ibProcUnit::GetCurrentRunContext();
@@ -1217,7 +1235,7 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 		compileExpression->Load(strExpression);
 
 		ibProcUnitEvaluate* evalUnit = new ibProcUnitEvaluate;
-		if (!evalUnit->CompileExpression(pRunContext, pvarRetValue, *compileExpression, ñompileBlock)) {
+		if (!evalUnit->CompileExpression(pRunContext, pvarRetValue, *compileExpression, compileBlock)) {
 			//delete from memory
 			wxDELETE(evalUnit);
 			wxDELETE(compileExpression);

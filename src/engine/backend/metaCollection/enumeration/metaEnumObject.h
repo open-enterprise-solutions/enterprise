@@ -17,7 +17,7 @@ public:
 
 	//load & save metaData from DB 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 };
 
 #endif

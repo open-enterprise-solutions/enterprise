@@ -157,7 +157,7 @@ public:
 protected:
 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 
 private:
 	ibPropertyModule* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyModule>(m_categoryContext, wxT("Module"), _("Module"));
@@ -219,7 +219,7 @@ public:
 protected:
 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 
 private:
 	ibPropertyModule* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyModule>(m_categoryContext, wxT("Module"), _("Module"));

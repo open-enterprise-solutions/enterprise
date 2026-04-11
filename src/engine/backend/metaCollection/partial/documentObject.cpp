@@ -623,7 +623,7 @@ bool ibValueRecordDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue&
 		return true;
 	case Func::eGetFormObject:
 		pvarRetValue = GetFormValue(
-			lSizeArray > 0 ? paParams[0]->GetString() : wxEmptyString,
+			lSizeArray > 0 ? paParams[0]->GetString() : wxString(wxEmptyString),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr
 		);
 		return true;
@@ -667,7 +667,7 @@ bool ibValueRecordDataObjectDocument::ibRecorderRegisterDocument::SetPropVal(con
 
 bool ibValueRecordDataObjectDocument::ibRecorderRegisterDocument::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	auto& it = m_records.find(m_methodHelper->GetPropData(lPropNum));
+	auto it = m_records.find(m_methodHelper->GetPropData(lPropNum));
 	if (it != m_records.end()) {
 		pvarPropVal = it->second;
 		return true;

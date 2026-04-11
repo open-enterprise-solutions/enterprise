@@ -75,12 +75,12 @@ public:
 	}
 
 	bool FindKey(const ibMetaID& id) const {
-		auto& it = m_keyValues.find(id);
+		const auto it = m_keyValues.find(id);
 		return it != m_keyValues.end();
 	}
 
 	ibValue GetKey(const ibMetaID& id) const {
-		auto& it = m_keyValues.find(id);
+		const auto it = m_keyValues.find(id);
 		if (it != m_keyValues.end())
 			return it->second;
 		return ibValue();

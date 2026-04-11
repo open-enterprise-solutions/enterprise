@@ -94,31 +94,31 @@ bool ibValueSpreadsheetDocumentArea::SetPropVal(const long lPropNum, const ibVal
 	}
 	case eBorderLeft:
 	{
-		ibValuePtr<ibValueSpreadsheetDocumentBorder> valueBorder = varPropVal.ConvertToType<ibValueSpreadsheetDocumentBorder>();
+		ibValuePtr<ibValueSpreadsheetDocumentBorder> valueBorder(varPropVal.ConvertToType<ibValueSpreadsheetDocumentBorder>());
 		m_spreadsheetDoc->SetCellBorderLeft(m_row, m_col, { valueBorder->GetStyle(), valueBorder->GetColour(), valueBorder->GetWidth() });
 		return true;
 	}
 	case eBorderRight:
 	{
-		ibValuePtr<ibValueSpreadsheetDocumentBorder> valueBorder = varPropVal.ConvertToType<ibValueSpreadsheetDocumentBorder>();
+		ibValuePtr<ibValueSpreadsheetDocumentBorder> valueBorder(varPropVal.ConvertToType<ibValueSpreadsheetDocumentBorder>());
 		m_spreadsheetDoc->SetCellBorderRight(m_row, m_col, { valueBorder->GetStyle(), valueBorder->GetColour(), valueBorder->GetWidth() });
 		return true;
 	}
 	case eBorderTop:
 	{
-		ibValuePtr<ibValueSpreadsheetDocumentBorder> valueBorder = varPropVal.ConvertToType<ibValueSpreadsheetDocumentBorder>();
+		ibValuePtr<ibValueSpreadsheetDocumentBorder> valueBorder(varPropVal.ConvertToType<ibValueSpreadsheetDocumentBorder>());
 		m_spreadsheetDoc->SetCellBorderTop(m_row, m_col, { valueBorder->GetStyle(), valueBorder->GetColour(), valueBorder->GetWidth() });
 		return true;
 	}
 	case eBorderBottom:
 	{
-		ibValuePtr<ibValueSpreadsheetDocumentBorder> valueBorder = varPropVal.ConvertToType<ibValueSpreadsheetDocumentBorder>();
+		ibValuePtr<ibValueSpreadsheetDocumentBorder> valueBorder(varPropVal.ConvertToType<ibValueSpreadsheetDocumentBorder>());
 		m_spreadsheetDoc->SetCellBorderBottom(m_row, m_col, { valueBorder->GetStyle(), valueBorder->GetColour(), valueBorder->GetWidth() });
 		return true;
 	}
 	case eSize:
 	{
-		ibValuePtr<ibValueSize> valueSize = varPropVal.ConvertToType<ibValueSize>();
+		ibValuePtr<ibValueSize> valueSize(varPropVal.ConvertToType<ibValueSize>());
 		m_spreadsheetDoc->SetCellSize(m_row, m_col, valueSize->m_size.x, valueSize->m_size.y);
 		return true;
 	}

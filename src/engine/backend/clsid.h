@@ -14,7 +14,7 @@ typedef unsigned wxLongLong_t ibClassID;
 
 inline wxString clsid_to_string(const ibClassID& clsid) {
 	if (clsid != 0) {
-		return std::initializer_list{
+		const char buf[] = {
 			char((clsid >> 56) & 0xff),
 			char((clsid >> 48) & 0xff),
 			char((clsid >> 40) & 0xff),
@@ -22,8 +22,10 @@ inline wxString clsid_to_string(const ibClassID& clsid) {
 			char((clsid >> 24) & 0xff),
 			char((clsid >> 16) & 0xff),
 			char((clsid >> 8) & 0xff),
-			char((clsid >> 0) & 0xff)
+			char((clsid >> 0) & 0xff),
+			'\0'
 		};
+		return wxString::FromAscii(buf);
 	}
 	return wxEmptyString;
 }

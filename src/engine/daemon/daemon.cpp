@@ -7,7 +7,9 @@
 #include <wx/sysopt.h>
 #include <wx/utils.h> 
 
+#ifdef __WXMSW__
 #include <windows.h>
+#endif
 
 #include "backend/appData.h"
 

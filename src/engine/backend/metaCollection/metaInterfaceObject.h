@@ -47,8 +47,13 @@ public:
 #pragma region __array_h__
 
 	//interface
+	std::vector<ibValueMetaObjectInterface*> GetInterfaceArrayObject() const {
+		std::vector<ibValueMetaObjectInterface*> array;
+		FillArrayObjectByFilter<ibValueMetaObjectInterface>(array, { g_metaInterfaceCLSID });
+		return array;
+	}
 	std::vector<ibValueMetaObjectInterface*> GetInterfaceArrayObject(
-		std::vector<ibValueMetaObjectInterface*>& array = std::vector<ibValueMetaObjectInterface*>()) const {
+		std::vector<ibValueMetaObjectInterface*>& array) const {
 		FillArrayObjectByFilter<ibValueMetaObjectInterface>(array, { g_metaInterfaceCLSID });
 		return array;
 	}
@@ -71,7 +76,7 @@ public:
 protected:
 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 
 private:
 	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryContext, wxT("Picture"), _("Picture"));

@@ -95,14 +95,14 @@ public:
 	virtual ~ibValueMetaObjectCompositeData() {}
 
 	//guid to id 
-	ibMetaID ibValueMetaObjectCompositeData::GetIdByGuid(const ibGuid& guid) const {
+	ibMetaID GetIdByGuid(const ibGuid& guid) const {
 		ibValueMetaObject* metaObject = FindAnyObjectByFilter(guid);
 		if (metaObject != nullptr)
 			return metaObject->GetMetaID();
 		return wxNOT_FOUND;
 	}
 
-	ibGuid ibValueMetaObjectCompositeData::GetGuidByID(const ibMetaID& id) const {
+	ibGuid GetGuidByID(const ibMetaID& id) const {
 		ibValueMetaObject* metaObject = FindAnyObjectByFilter(id);
 		if (metaObject != nullptr)
 			return metaObject->GetGuid();
@@ -115,15 +115,24 @@ public:
 #pragma region __generic_h__
 
 	//any attribute 
+	std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject() const {
+		std::vector<ibValueMetaObjectAttributeBase*> array;
+		return GetGenericAttributeArrayObject(array);
+	}
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const = 0;
+		std::vector<ibValueMetaObjectAttributeBase*>& array) const = 0;
 
 #pragma endregion
 #pragma region __array_h__
 
 	//predefined 
+	std::vector<ibValueMetaObjectAttributeBase*> GetPredefinedAttributeArrayObject() const {
+		std::vector<ibValueMetaObjectAttributeBase*> array;
+		FillArrayObjectByPredefined(array);
+		return array;
+	}
 	std::vector<ibValueMetaObjectAttributeBase*> GetPredefinedAttributeArrayObject(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		FillArrayObjectByPredefined(array);
 		return array;
 	}

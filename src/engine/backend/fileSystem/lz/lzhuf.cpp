@@ -14,12 +14,22 @@ All rights reserved. Permission granted for non-commercial use.
 
 #pragma hdrstop
 
+#ifdef __WXMSW__
 #include <io.h>
 #include <fcntl.h>
 #include <sys\stat.h>
+#else
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#endif
 
 #include <stdio.h>
+#ifdef __WXMSW__
 #include <malloc.h>
+#else
+#include <stdlib.h>
+#endif
 #include <cstring>
 
 unsigned	textsize = 0, codesize = 0;
@@ -659,7 +669,11 @@ unsigned _writeLZ(int hf, void* d, unsigned size)
 	Encode();
 	// Flush cache
 	int size_out = fs.OutSize();
+#ifdef __WXMSW__
 	if (size_out) _write(hf, fs.OutPointer(), size_out);
+#else
+	if (size_out) write(hf, fs.OutPointer(), size_out);
+#endif
 	fs.OutRelease();
 	return size_out;
 }
@@ -686,7 +700,11 @@ unsigned _readLZ(int hf, void* &d, unsigned size)
 {
 	// Read file in memory
 	u8*	data = (u8*)malloc(size);
+#ifdef __WXMSW__
 	_read(hf, data, size);
+#else
+	read(hf, data, size);
+#endif
 
 	fs.Init_Input(data, data + size);
 

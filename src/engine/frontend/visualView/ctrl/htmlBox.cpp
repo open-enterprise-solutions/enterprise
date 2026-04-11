@@ -30,7 +30,7 @@ wxObject* ibValueHTMLBox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return htmlBox;
 }
 
-void ibValueHTMLBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first—reated)
+void ibValueHTMLBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first–°reated)
 {
 	wxHtmlWindow* htmlBox = dynamic_cast<wxHtmlWindow*>(wxobject);
 }
@@ -63,7 +63,7 @@ bool ibValueHTMLBox::LoadData(ibReaderMemory& reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueHTMLBox::SaveData(ibWriterMemory& writer)
+bool ibValueHTMLBox::SaveData(ibWriterMemory writer)
 {
 	return ibValueWindow::SaveData(writer);
 }

@@ -19,7 +19,7 @@ wxObject* ibValueButton::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return wxbutton;
 }
 
-void ibValueButton::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstÑreated)
+void ibValueButton::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstĞ¡reated)
 {
 }
 
@@ -70,7 +70,7 @@ bool ibValueButton::LoadData(ibReaderMemory& reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueButton::SaveData(ibWriterMemory& writer)
+bool ibValueButton::SaveData(ibWriterMemory writer)
 {
 	m_propertyTitle->SaveData(writer);
 	m_propertyRepresentation->SaveData(writer);

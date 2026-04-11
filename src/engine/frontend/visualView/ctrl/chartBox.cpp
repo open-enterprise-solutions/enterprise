@@ -127,7 +127,7 @@ wxObject* ibValueChartBox::Create(wxWindow* wxparent, ibVisualHost *visualHost)
 	return m_chartBox;
 }
 
-void ibValueChartBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool first—reated)
+void ibValueChartBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool first–°reated)
 {
 	wxWindow *m_chartBox = dynamic_cast<wxWindow *>(wxobject);
 }
@@ -160,7 +160,7 @@ bool ibValueChartBox::LoadData(ibReaderMemory &reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueChartBox::SaveData(ibWriterMemory &writer)
+bool ibValueChartBox::SaveData(ibWriterMemory writer)
 {
 	return ibValueWindow::SaveData(writer);
 }

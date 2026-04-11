@@ -90,12 +90,12 @@ ibValueListDataObject::ibValueDataObjectListColumnCollection::~ibValueDataObject
 	wxDELETE(m_methodHelper);
 }
 
-bool ibValueListDataObject::ibValueDataObjectListColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//индекс массива должен начинаться с 0
+bool ibValueListDataObject::ibValueDataObjectListColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0
 {
 	return false;
 }
 
-bool ibValueListDataObject::ibValueDataObjectListColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //индекс массива должен начинаться с 0
+bool ibValueListDataObject::ibValueDataObjectListColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0
 {
 	unsigned int index = varKeyValue.GetUInteger();
 
@@ -134,12 +134,12 @@ ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::~ibValueDataO
 	wxDELETE(m_methodHelper);
 }
 
-bool ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//индекс массива должен начинаться с 0
+bool ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0
 {
 	return false;
 }
 
-bool ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //индекс массива должен начинаться с 0
+bool ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0
 {
 	unsigned int index = varKeyValue.GetUInteger();
 	if ((index < 0 || index >= m_listColumnInfo.size() && !appData->DesignerMode())) {
@@ -342,7 +342,8 @@ void ibValueListDataObjectEnumRef::ChooseValue(ibBackendValueForm* srcForm)
 	wxASSERT(srcForm);
 	ibValueReferenceDataObject* dataValueRef = m_metaObject->FindObjectValue(node->GetGuid());
 	if (dataValueRef != nullptr) {
-		srcForm->NotifyChoice(dataValueRef->GetValue());
+		ibValue selectedValue = dataValueRef->GetValue();
+		srcForm->NotifyChoice(selectedValue);
 	}
 }
 
@@ -531,7 +532,7 @@ void ibValueListDataObjectRef::MarkAsDeleteValue()
 			return;
 
 		try {
-			ibValuePtr<ibValueRecordDataObjectRef> dataValueObject = metaObject->CreateObjectValue(node->GetGuid());
+			ibValuePtr<ibValueRecordDataObjectRef> dataValueObject(metaObject->CreateObjectValue(node->GetGuid()));
 			if (dataValueObject != nullptr)
 				dataValueObject->SetDeletionMark(true);
 			ibBackendValueForm* valueListForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);
@@ -555,9 +556,11 @@ void ibValueListDataObjectRef::ChooseValue(ibBackendValueForm* srcForm)
 	wxASSERT(srcForm);
 
 	try {
-		ibValuePtr<ibValueReferenceDataObject> dataValueRef = m_metaObject->FindObjectValue(node->GetGuid());
-		if (dataValueRef != nullptr)
-			srcForm->NotifyChoice(dataValueRef->GetValue());
+		ibValuePtr<ibValueReferenceDataObject> dataValueRef(m_metaObject->FindObjectValue(node->GetGuid()));
+		if (dataValueRef != nullptr) {
+			ibValue selectedValue = dataValueRef->GetValue();
+			srcForm->NotifyChoice(selectedValue);
+		}
 	}
 	catch (const ibBackendCoreException* err) {
 		ibValueSystemFunction::Alert(err->GetErrorDescription());
@@ -765,7 +768,7 @@ void ibValueModelTreeDataObjectFolderRef::CopyValue()
 	node->GetValue(*m_metaObject->GetDataIsFolder(), isFolder);
 
 	try {
-		ibValuePtr<ibValueRecordDataObjectHierarchyRef> dataValueFolderObject = m_metaObject->CopyObjectValue(isFolder.GetBoolean() ? ibObjectMode::OBJECT_FOLDER : ibObjectMode::OBJECT_ITEM, node->GetGuid());
+		ibValuePtr<ibValueRecordDataObjectHierarchyRef> dataValueFolderObject(m_metaObject->CopyObjectValue(isFolder.GetBoolean() ? ibObjectMode::OBJECT_FOLDER : ibObjectMode::OBJECT_ITEM, node->GetGuid()));
 		if (dataValueFolderObject != nullptr)
 			dataValueFolderObject->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)));
 	}
@@ -859,12 +862,13 @@ void ibValueModelTreeDataObjectFolderRef::ChooseValue(ibBackendValueForm* srcFor
 
 	try {
 		ibValuePtr<ibValueReferenceDataObject> dataValueFolderRef(m_metaObject->FindObjectValue(node->GetGuid()));
+		ibValue selectedValue = dataValueFolderRef != nullptr ? dataValueFolderRef->GetValue() : ibValue();
 		if (m_listMode == LIST_FOLDER && cIsFolder.GetBoolean())
-			srcForm->NotifyChoice(dataValueFolderRef->GetValue());
+			srcForm->NotifyChoice(selectedValue);
 		else if (m_listMode == LIST_ITEM && !cIsFolder.GetBoolean())
-			srcForm->NotifyChoice(dataValueFolderRef->GetValue());
+			srcForm->NotifyChoice(selectedValue);
 		else if (m_listMode == LIST_ITEM_FOLDER)
-			srcForm->NotifyChoice(dataValueFolderRef->GetValue());
+			srcForm->NotifyChoice(selectedValue);
 	}
 	catch (const ibBackendCoreException* err) {
 		ibValueSystemFunction::Alert(err->GetErrorDescription());
@@ -1052,7 +1056,7 @@ void ibValueListRegisterObject::DeleteValue()
 		if (node == nullptr) return;
 		if (m_metaObject->HasRecordManager()) {
 			try {
-				ibValuePtr<ibValueRecordManagerObject> dataValueObject = m_metaObject->CreateRecordManagerObjectValue(node->GetUniquePairKey(m_metaObject));
+				ibValuePtr<ibValueRecordManagerObject> dataValueObject(m_metaObject->CreateRecordManagerObjectValue(node->GetUniquePairKey(m_metaObject)));
 				if (dataValueObject != nullptr)
 					dataValueObject->DeleteRegister();
 				ibBackendValueForm* valueListForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);

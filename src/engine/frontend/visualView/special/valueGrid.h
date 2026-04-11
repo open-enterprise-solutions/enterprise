@@ -1,9 +1,9 @@
 #ifndef _VALUEQUERY_H__
 #define _VALUEQUERY_H__
 
-#include "value.h"
+#include "backend/compiler/value.h"
 
-//Поддержка массивов
+//РџРѕРґРґРµСЂР¶РєР° РјР°СЃСЃРёРІРѕРІ
 class CORE_API CValueGrid : public CValue {
 	wxDECLARE_DYNAMIC_CLASS(CValueGrid);
 private:
@@ -25,14 +25,14 @@ public:
 
 	static CMethodHelper m_methodHelper;
 
-	virtual bool SetPropVal(const long lPropNum, CValue &varPropVal);        //установка атрибута
-	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
+	virtual bool SetPropVal(const long lPropNum, CValue &varPropVal);        //СѓСЃС‚Р°РЅРѕРІРєР° Р°С‚СЂРёР±СѓС‚Р°
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //Р·РЅР°С‡РµРЅРёРµ Р°С‚СЂРёР±СѓС‚Р°
 
 	virtual CMethodHelper* GetPMethods() const { 
 		PrepareNames(); return &m_methodHelper; 
 	} 
-	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);       //вызов метода
+	virtual void PrepareNames() const;                         //СЌС‚РѕС‚ РјРµС‚РѕРґ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РІС‹Р·С‹РІР°РµС‚СЃСЏ РґР»СЏ РёРЅРёС†РёР°Р»РёР·Р°С†РёРё РёРјРµРЅ Р°С‚СЂРёР±СѓС‚РѕРІ Рё РјРµС‚РѕРґРѕРІ
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);       //РІС‹Р·РѕРІ РјРµС‚РѕРґР°
 
 protected:
 

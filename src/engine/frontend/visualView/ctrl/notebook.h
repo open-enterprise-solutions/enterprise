@@ -32,7 +32,7 @@ public:
 
 	//control factory 
 	virtual wxObject* Create(wxWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first—reated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first–°reated) override;
 	virtual void OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost) override;
 	virtual void OnSelected(wxObject* wxobject) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
@@ -56,7 +56,7 @@ public:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 private:
 
@@ -98,7 +98,7 @@ public:
 
 	//control factory 
 	virtual wxObject* Create(wxWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first—reated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first–°reated) override;
 	virtual void OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost) override;
 	virtual void OnSelected(wxObject* wxobject) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
@@ -113,7 +113,7 @@ public:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 private:
 

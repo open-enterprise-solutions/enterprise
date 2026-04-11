@@ -93,7 +93,7 @@ wxPGEditorDialogAdapter* ibPGEventProperty::GetEditorDialog() const
 
 				wxPGProperty* pgProp = pg->GetPropertyByName(wxT("Name"));
 				prop->SetValueFromString(
-					(pgProp ? pgProp->GetDisplayedString() : wxEmptyString) + prop->GetName());
+					(pgProp ? pgProp->GetDisplayedString() : wxString()) + prop->GetName());
 
 				SetValue(prop->GetValue());
 			}

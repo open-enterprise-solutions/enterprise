@@ -179,7 +179,7 @@ class FRONTEND_API ibControlTextEditor :
 		// at all.
 		virtual wxSize DoGetBestSize() const override {
 
-			wxSize size = DoGetSizeFromTextSize(FromDIP(m_defaultItemWidth));
+			wxSize size = DoGetSizeFromTextSize(FromDIP(m_defaultItemWidth), -1);
 
 			// The calculation for no external borders in wxTextCtrl::DoGetSizeFromTextSize also
 			// removes any padding around the value, which is wrong for this situation. So we
@@ -610,7 +610,7 @@ public:
 		if (m_label != nullptr) m_label->SetLabel(label);
 	}
 
-	virtual wxString GetLabel() const { return m_label != nullptr ? m_label->GetLabel() : wxEmptyString; }
+	virtual wxString GetLabel() const { if (m_label != nullptr) return m_label->GetLabel(); return wxString(); }
 
 	virtual void SetValue(const wxString& label) { m_text->SetValue(label); }
 	virtual wxString GetValue() const { return m_text->GetValue(); }

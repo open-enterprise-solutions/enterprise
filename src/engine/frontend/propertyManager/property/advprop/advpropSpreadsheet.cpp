@@ -12,4 +12,4 @@ public:
 	{
 		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGHyperLinkProperty, ibPropertySpreadsheet::ms_propertySpreadsheet);
 	}
-}g_dateLoader;
+}s_dateLoaderSpreadsheet;

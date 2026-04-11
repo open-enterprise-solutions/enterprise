@@ -16,7 +16,7 @@ wxObject* ibValueWrapSizer::Create(wxWindow* /*parent*/, ibVisualHost* /*visualH
 	return new wxWrapSizer(m_propertyOrient->GetValueAsInteger(), wxWRAPSIZER_DEFAULT_FLAGS);
 }
 
-void ibValueWrapSizer::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool firstÑreated)
+void ibValueWrapSizer::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool firstÐ¡reated)
 {
 }
 
@@ -46,7 +46,7 @@ bool ibValueWrapSizer::LoadData(ibReaderMemory &reader)
 	return ibValueSizer::LoadData(reader);
 }
 
-bool ibValueWrapSizer::SaveData(ibWriterMemory &writer)
+bool ibValueWrapSizer::SaveData(ibWriterMemory writer)
 {
 	writer.w_u16(m_propertyOrient->GetValueAsInteger());
 	return ibValueSizer::SaveData(writer);

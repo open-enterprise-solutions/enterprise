@@ -32,7 +32,7 @@ wxObject* ibValueGridBox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return gridWindow;
 }
 
-void ibValueGridBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first—reated)
+void ibValueGridBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first–°reated)
 {
 	ibGridEditor* gridWindow = dynamic_cast<ibGridEditor*>(wxobject);
 }
@@ -65,7 +65,7 @@ wxPrintout* ibValueGridBox::CreatePrintout() const
 	if (gridWindow != nullptr)
 		return gridWindow->CreatePrintout();
 
-	return false;
+	return nullptr;
 }
 
 //**********************************************************************************
@@ -78,7 +78,7 @@ bool ibValueGridBox::LoadData(ibReaderMemory& reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueGridBox::SaveData(ibWriterMemory& writer)
+bool ibValueGridBox::SaveData(ibWriterMemory writer)
 {
 	ibSpreadsheetDescriptionMemory::SaveData(writer, m_valueSpreadsheet->GetSpreadsheetDesc());
 	return ibValueWindow::SaveData(writer);

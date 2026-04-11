@@ -514,7 +514,7 @@ public:
 			owner, wxID_ANY, wxDefaultPosition, wxDefaultSize, additionalStyle | wxBORDER_NONE, name
 		);
 #else
-		Create(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxWANTS_CHARS | wxBORDER_NONE, name);
+		Create(owner, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxWANTS_CHARS | wxBORDER_NONE, name);
 #endif
 
 		SetOwner(owner);
@@ -3747,7 +3747,7 @@ bool ibDataViewCtrl::Create(wxWindow* parent,
 
 	SetInitialSize(size);
 
-#ifdef __WXMAC__
+#if defined(__WXMAC__) && !wxCHECK_VERSION(3, 3, 0)
 	MacSetClipChildren(true);
 #endif
 

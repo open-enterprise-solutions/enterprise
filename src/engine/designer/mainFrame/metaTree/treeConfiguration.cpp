@@ -61,7 +61,7 @@ ibMetadataTree::ibMetadataTree(wxWindow* parent, int id)
 
 	//Create main tree
 	m_metaTreeCtrl = new ibMetaTreeCtrl(this);
-	m_metaTreeCtrl->SetBackgroundColour(RGB(250, 250, 250));
+	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 250, 250));
 
 	//set image list
 	m_metaTreeCtrl->AssignImageList(
@@ -112,7 +112,7 @@ ibMetadataTree::ibMetadataTree(ibMetaDocument* docParent, wxWindow* parent, int 
 
 	//Create main tree
 	m_metaTreeCtrl = new ibMetaTreeCtrl(this);
-	m_metaTreeCtrl->SetBackgroundColour(RGB(250, 250, 250));
+	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 250, 250));
 
 	//set image list
 	m_metaTreeCtrl->AssignImageList(

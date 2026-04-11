@@ -330,7 +330,7 @@ bool ibGuid::operator <= (const ibGuid& other) const
 // overload equality operator
 bool ibGuid::operator==(const ibGuid& other) const
 {
-	return std::memcmp(_bytes._Elems, other._bytes._Elems, 16) == 0;
+	return std::memcmp(_bytes.data(), other._bytes.data(), 16) == 0;
 }
 
 // overload inequality operator

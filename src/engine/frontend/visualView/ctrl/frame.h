@@ -426,7 +426,7 @@ public:
 
 	//load & save object in metaObject 
 	bool LoadControl(const ibValueMetaObjectFormBase* metaForm, ibReaderMemory& dataReader);
-	bool SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWriterMemory& dataWritter = ibWriterMemory(), bool copy_form = false);
+	bool SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWriterMemory dataWritter = ibWriterMemory(), bool copy_form = false);
 
 protected:
 
@@ -435,7 +435,7 @@ protected:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader) { return true; }
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory()) { return true; }
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory()) { return true; }
 
 protected:
 

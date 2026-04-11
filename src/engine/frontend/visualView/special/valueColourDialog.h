@@ -1,7 +1,7 @@
 #ifndef  _VALUE_COLOUR_DIALOG_H__
 #define _VALUE_COLOUR_DIALOG_H__
 
-#include "core/compiler/value.h"
+#include "backend/compiler/value.h"
 
 #include <wx/colordlg.h>
 
@@ -9,17 +9,17 @@ class CValueColourDialog : public CValue {
 	wxDECLARE_DYNAMIC_CLASS(CValueFileDialog);
 public:
 
-	//эти методы нужно переопределить в ваших агрегатных объектах:
+	//СЌС‚Рё РјРµС‚РѕРґС‹ РЅСѓР¶РЅРѕ РїРµСЂРµРѕРїСЂРµРґРµР»РёС‚СЊ РІ РІР°С€РёС… Р°РіСЂРµРіР°С‚РЅС‹С… РѕР±СЉРµРєС‚Р°С…:
 	virtual CMethodHelper* GetPMethods() const { 
 		PrepareNames();
 		return &m_methodHelper; 
 	}
-	//получить ссылку на класс помощник разбора имен атрибутов и методов
-	virtual void PrepareNames() const;//этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);//вызов метода
+	//РїРѕР»СѓС‡РёС‚СЊ СЃСЃС‹Р»РєСѓ РЅР° РєР»Р°СЃСЃ РїРѕРјРѕС‰РЅРёРє СЂР°Р·Р±РѕСЂР° РёРјРµРЅ Р°С‚СЂРёР±СѓС‚РѕРІ Рё РјРµС‚РѕРґРѕРІ
+	virtual void PrepareNames() const;//СЌС‚РѕС‚ РјРµС‚РѕРґ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РІС‹Р·С‹РІР°РµС‚СЃСЏ РґР»СЏ РёРЅРёС†РёР°Р»РёР·Р°С†РёРё РёРјРµРЅ Р°С‚СЂРёР±СѓС‚РѕРІ Рё РјРµС‚РѕРґРѕРІ
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);//РІС‹Р·РѕРІ РјРµС‚РѕРґР°
 
-	virtual bool SetPropVal(const long lPropNum, CValue &varPropVal);//установка атрибута
-	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);//значение атрибута
+	virtual bool SetPropVal(const long lPropNum, CValue &varPropVal);//СѓСЃС‚Р°РЅРѕРІРєР° Р°С‚СЂРёР±СѓС‚Р°
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);//Р·РЅР°С‡РµРЅРёРµ Р°С‚СЂРёР±СѓС‚Р°
 
 	CValueColourDialog();
 	virtual ~CValueColourDialog();

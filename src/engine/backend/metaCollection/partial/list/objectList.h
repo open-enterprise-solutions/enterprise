@@ -71,7 +71,7 @@ public:
 		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const {
 			if (m_listColumnInfo.size() < idx)
 				return nullptr;
-			auto& it = m_listColumnInfo.begin();
+			auto it = m_listColumnInfo.begin();
 			std::advance(it, idx);
 			return it->second;
 		}
@@ -548,7 +548,7 @@ public:
 		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const {
 			if (m_listColumnInfo.size() < idx)
 				return nullptr;
-			auto& it = m_listColumnInfo.begin();
+			auto it = m_listColumnInfo.begin();
 			std::advance(it, idx);
 			return it->second;
 		}

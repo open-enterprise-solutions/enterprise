@@ -111,6 +111,11 @@ bool ibApplicationData::CreateAppDataEnv(ibRunMode runMode)
 
 bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& strDirDatabase, const wxString& strLocale)
 {
+#ifndef OES_USE_FIREBIRD
+	wxUnusedVar(runMode); wxUnusedVar(strDirDatabase); wxUnusedVar(strLocale);
+	return false;
+}
+#else
 	if (s_instance != nullptr) s_instance->DestroyAppDataEnv();
 #if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	try {
@@ -153,10 +158,17 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 #endif
 	return false;
 }
+#endif // OES_USE_FIREBIRD
 
 bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString& strServer, const wxString& strPort,
 	const wxString& strUser, const wxString& strPassword, const wxString& strDatabase, const wxString& strLocale)
 {
+#ifndef OES_USE_POSTGRESQL
+	wxUnusedVar(runMode); wxUnusedVar(strServer); wxUnusedVar(strPort);
+	wxUnusedVar(strUser); wxUnusedVar(strPassword); wxUnusedVar(strDatabase); wxUnusedVar(strLocale);
+	return false;
+}
+#else
 	if (s_instance != nullptr) s_instance->DestroyAppDataEnv();
 #if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	try {
@@ -203,6 +215,7 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 #endif
 	return false;
 }
+#endif // OES_USE_POSTGRESQL
 
 bool ibApplicationData::SetLocaleAppDataEnv(const wxString& strLocale)
 {

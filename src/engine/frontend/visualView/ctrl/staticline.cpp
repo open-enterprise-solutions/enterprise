@@ -23,7 +23,7 @@ wxObject* ibValueStaticLine::Create(wxWindow* wxparent, ibVisualHost* visualHost
 	return staticline;
 }
 
-void ibValueStaticLine::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstÑreated)
+void ibValueStaticLine::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstÐ¡reated)
 {
 }
 
@@ -66,7 +66,7 @@ bool ibValueStaticLine::LoadData(ibReaderMemory& reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueStaticLine::SaveData(ibWriterMemory& writer)
+bool ibValueStaticLine::SaveData(ibWriterMemory writer)
 {
 	writer.w_s32(m_propertyOrient->GetValueAsInteger());
 	return ibValueWindow::SaveData(writer);

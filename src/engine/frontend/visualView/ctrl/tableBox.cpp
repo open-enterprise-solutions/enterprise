@@ -375,14 +375,14 @@ wxObject* ibValueModelTableBox::Create(wxWindow* wxparent, ibVisualHost* visualH
 	return dataViewCtrl;
 }
 
-void ibValueModelTableBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first—reated)
+void ibValueModelTableBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first–°reated)
 {
 	ibTableViewCtrl* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(wxobject);
 
 	if (dataViewCtrl != nullptr) ibValueModelTableBox::CreateModel();
 
 	if (visualHost->IsDesignerHost() && GetChildCount() == 0
-		&& first—reated) {
+		&& first–°reated) {
 		ibValueModelTableBox::AddColumn();
 	}
 }
@@ -489,7 +489,7 @@ bool ibValueModelTableBox::LoadData(ibReaderMemory& reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueModelTableBox::SaveData(ibWriterMemory& writer)
+bool ibValueModelTableBox::SaveData(ibWriterMemory writer)
 {
 	if (!m_propertySource->SaveData(writer))
 		return false;

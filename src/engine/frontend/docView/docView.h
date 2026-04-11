@@ -15,6 +15,7 @@
 
 class BACKEND_API ibValue;
 
+#include "backend/metaCollection/metaObject.h"
 class BACKEND_API ibValueMetaObject;
 class BACKEND_API ibValueMetaObjectRecordData;
 

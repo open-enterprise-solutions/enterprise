@@ -292,7 +292,7 @@ bool ibValueTextCtrl::LoadData(ibReaderMemory& reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueTextCtrl::SaveData(ibWriterMemory& writer)
+bool ibValueTextCtrl::SaveData(ibWriterMemory writer)
 {
 	writer.w_stringZ(m_propertyTitle->GetValueAsString());
 

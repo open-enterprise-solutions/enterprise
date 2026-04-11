@@ -157,8 +157,8 @@ ibValueModelTable::ibValueModelTableColumnCollection::~ibValueModelTableColumnCo
 	wxDELETE(m_methodHelper);
 }
 
-//работа с массивом как с агрегатным объектом
-//перечисление строковых ключей
+//пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+//пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 void ibValueModelTable::ibValueModelTableColumnCollection::PrepareNames() const
 {
 	m_methodHelper->ClearHelper();
@@ -200,11 +200,11 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::CallAsFunc(const long
 		if (lSizeArray > 1)
 			paParams[1]->ConvertToValue(valueType);
 		if (lSizeArray > 3)
-			pvarRetValue = AddColumn(paParams[0]->GetString(), valueType ? valueType->GetOwnerTypeDescription() : *paParams[1]->ConvertToType<ibValueTypeDescription>(), paParams[2]->GetString(), paParams[3]->GetInteger());
+			pvarRetValue = AddColumn(paParams[0]->GetString(), valueType ? ibTypeDescription(valueType->GetOwnerTypeDescription()) : ibTypeDescription(*paParams[1]->ConvertToType<ibValueTypeDescription>()), paParams[2]->GetString(), paParams[3]->GetInteger());
 		else if (lSizeArray > 2)
-			pvarRetValue = AddColumn(paParams[0]->GetString(), valueType ? valueType->GetOwnerTypeDescription() : *paParams[1]->ConvertToType<ibValueTypeDescription>(), paParams[2]->GetString(), wxDVC_DEFAULT_WIDTH);
+			pvarRetValue = AddColumn(paParams[0]->GetString(), valueType ? ibTypeDescription(valueType->GetOwnerTypeDescription()) : ibTypeDescription(*paParams[1]->ConvertToType<ibValueTypeDescription>()), paParams[2]->GetString(), wxDVC_DEFAULT_WIDTH);
 		else if (lSizeArray > 1)
-			pvarRetValue = AddColumn(paParams[0]->GetString(), valueType ? valueType->GetOwnerTypeDescription() : *paParams[1]->ConvertToType<ibValueTypeDescription>(), paParams[0]->GetString(), wxDVC_DEFAULT_WIDTH);
+			pvarRetValue = AddColumn(paParams[0]->GetString(), valueType ? ibTypeDescription(valueType->GetOwnerTypeDescription()) : ibTypeDescription(*paParams[1]->ConvertToType<ibValueTypeDescription>()), paParams[0]->GetString(), wxDVC_DEFAULT_WIDTH);
 		else
 			pvarRetValue = AddColumn(paParams[0]->GetString(), ibTypeDescription(g_valueStringCLSID), paParams[0]->GetString(), wxDVC_DEFAULT_WIDTH);
 		return true;
@@ -214,12 +214,12 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::CallAsFunc(const long
 	return false;
 }
 
-bool ibValueModelTable::ibValueModelTableColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//индекс массива должен начинаться с 0
+bool ibValueModelTable::ibValueModelTableColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0
 {
 	return false;
 }
 
-bool ibValueModelTable::ibValueModelTableColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //индекс массива должен начинаться с 0
+bool ibValueModelTable::ibValueModelTableColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0
 {
 	unsigned int index = varKeyValue.GetUInteger();
 	if ((index < 0 || index >= m_listColumnInfo.size() && !appData->DesignerMode())) {

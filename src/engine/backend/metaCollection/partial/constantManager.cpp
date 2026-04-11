@@ -56,7 +56,7 @@ void ibValueManagerDataObjectConstant::PrepareNames() const
 
 bool ibValueManagerDataObjectConstant::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	ibValuePtr<ibValueRecordDataObjectConstant> recordDataObjectValue = m_metaObject->CreateRecordDataObjectValue();
+	ibValuePtr<ibValueRecordDataObjectConstant> recordDataObjectValue(m_metaObject->CreateRecordDataObjectValue());
 
 	switch (lMethodNum)
 	{

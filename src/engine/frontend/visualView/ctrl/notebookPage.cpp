@@ -20,7 +20,7 @@ wxObject* ibValueNotebookPage::Create(wxWindow* wxparent, ibVisualHost* visualHo
     return new ibPanelPage(wxparent, wxID_ANY);
 }
 
-void ibValueNotebookPage::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first—reated)
+void ibValueNotebookPage::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first–°reated)
 {
     ibPanelPage* page = dynamic_cast<ibPanelPage*>(wxobject);
     wxASSERT(page);
@@ -130,7 +130,7 @@ bool ibValueNotebookPage::LoadData(ibReaderMemory& reader)
     return ibValueControl::LoadData(reader);
 }
 
-bool ibValueNotebookPage::SaveData(ibWriterMemory& writer)
+bool ibValueNotebookPage::SaveData(ibWriterMemory writer)
 {
     m_propertyTitle->SaveData(writer);
     m_propertyRepresentation->SaveData(writer);

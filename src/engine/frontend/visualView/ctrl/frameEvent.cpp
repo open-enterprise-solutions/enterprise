@@ -160,7 +160,8 @@ bool ibValueFrame::ibValueEventContainer::CallAsFunc(const long lMethodNum, ibVa
 	switch (lMethodNum)
 	{
 	case enControlProperty:
-		pvarRetValue = Property(*paParams[0], lSizeArray > 1 ? *paParams[1] : ibValue());
+	{	ibValue defaultVal;
+		pvarRetValue = Property(*paParams[0], lSizeArray > 1 ? *paParams[1] : defaultVal); }
 		return true;
 	case enControlCount:
 		pvarRetValue = Count();

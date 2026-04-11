@@ -271,7 +271,7 @@ bool ibMetaDataReport::LoadFromFile(const wxString& strFileName)
 		}
 	}
 
-	std::ifstream in(strFileName.ToStdWstring(), std::ios::in | std::ios::binary);
+	std::ifstream in(strFileName.ToStdString(), std::ios::in | std::ios::binary);
 
 	if (!in.is_open())
 		return false;
@@ -337,7 +337,7 @@ bool ibMetaDataReport::SaveToFile(const wxString& strFileName)
 		return false;
 
 	std::ofstream datafile;
-	datafile.open(strFileName.ToStdWstring(), std::ios::binary);
+	datafile.open(strFileName.ToStdString(), std::ios::binary);
 	datafile.write(reinterpret_cast <char*> (writerData.pointer()), writerData.size());
 	datafile.close();
 

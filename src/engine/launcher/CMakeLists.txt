@@ -1,0 +1,35 @@
+cmake_minimum_required(VERSION 3.16)
+
+set(LAUNCHER_SOURCES
+    connectionDB.cpp
+    launcher.cpp
+    mainApp.cpp
+)
+
+add_executable(launcher ${LAUNCHER_SOURCES})
+
+set_target_properties(launcher PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+)
+
+if(WIN32)
+    set_target_properties(launcher PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
+
+if(APPLE)
+    set_target_properties(launcher PROPERTIES MACOSX_BUNDLE TRUE)
+endif()
+
+target_compile_definitions(launcher PRIVATE NOPCH)
+
+target_include_directories(launcher PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+    ${CMAKE_SOURCE_DIR}/src/engine/backend
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(launcher PRIVATE
+    backend
+    wx::core wx::aui wx::html wx::propgrid wx::adv wx::stc wx::xrc wx::qa wx::base wx::net wx::xml
+)

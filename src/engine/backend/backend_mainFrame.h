@@ -44,7 +44,7 @@ public:
 	virtual class ibBackendValueForm* FindFormByControlUniqueKey(const ibUniqueKey& guid) { return nullptr; }
 	virtual class ibBackendValueForm* FindFormBySourceUniqueKey(const ibUniqueKey& guid) { return nullptr; }
 
-	virtual bool UpdateFormUniqueKey(const ibUniqueKeyPair& guid) { return nullptr; }
+	virtual bool UpdateFormUniqueKey(const ibUniqueKeyPair& guid) { return false; }
 
 	// Grid support
 	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDataPtr<ibBackendSpreadsheetObject>& doc) { return false; }
@@ -69,8 +69,8 @@ public:
 	virtual bool AuthenticationUser(const wxString& userName, const wxString& userPassword) const { return false; }
 
 public:
-	virtual void OnInitializeConfiguration(enum ibConfigType cfg) {}
-	virtual void OnDestroyConfiguration(enum ibConfigType cfg) {}
+	virtual void OnInitializeConfiguration(int cfg) {}
+	virtual void OnDestroyConfiguration(int cfg) {}
 private:
 	static ibBackendDocMDIFrame* ms_mainFrame;
 };

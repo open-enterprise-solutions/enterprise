@@ -17,8 +17,8 @@ public:
 	virtual bool Init();
 	virtual bool Init(ibValue **paParams, const long lSizeArray);
 
-	virtual wxString GetString() const { 
-		return m_guid; 
+	virtual wxString GetString() const {
+		return wxString(m_guid.str());
 	}
 
 	//check is empty

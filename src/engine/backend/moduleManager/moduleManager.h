@@ -39,19 +39,19 @@ public:
 
 		//Is global module?
 		wxString GetModuleFullName() const {
-			return m_moduleObject ? m_moduleObject->GetFullName() : wxEmptyString;
+			return m_moduleObject ? m_moduleObject->GetFullName() : wxString(wxEmptyString);
 		}
 
 		wxString GetModuleDocPath() const {
-			return m_moduleObject ? m_moduleObject->GetDocPath() : wxEmptyString;
+			return m_moduleObject ? m_moduleObject->GetDocPath() : wxString(wxEmptyString);
 		}
 
 		wxString GetModuleName() const {
-			return m_moduleObject ? m_moduleObject->GetName() : wxEmptyString;
+			return m_moduleObject ? m_moduleObject->GetName() : wxString(wxEmptyString);
 		}
 
 		wxString GetModuleText() const {
-			return m_moduleObject ? m_moduleObject->GetModuleText() : wxEmptyString;
+			return m_moduleObject ? m_moduleObject->GetModuleText() : wxString(wxEmptyString);
 		}
 
 		bool IsGlobalModule() const {
@@ -218,7 +218,7 @@ public:
 
 	//templates:
 	template <class T> inline bool FindCompileModule(const ibValueMetaObject* moduleObject, T*& objValue) const {
-		auto& it = m_listCommonModuleValue.find(moduleObject);
+		auto it = m_listCommonModuleValue.find(moduleObject);
 		if (it != m_listCommonModuleValue.end()) {
 			objValue = dynamic_cast<T*>(&(*it->second));
 			return objValue != nullptr;

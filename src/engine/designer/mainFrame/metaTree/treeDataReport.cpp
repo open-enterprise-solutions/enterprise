@@ -87,7 +87,7 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 	sbSizerTree->Add(m_metaTreeToolbar, 0, wxALL | wxEXPAND, 0);
 
 	m_metaTreeCtrl = new ibDataReportTreeCtrl(sbSizerTree->GetStaticBox(), this);
-	m_metaTreeCtrl->SetBackgroundColour(RGB(250, 250, 250));
+	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 250, 250));
 
 	//set image list
 	m_metaTreeCtrl->AssignImageList(
@@ -199,7 +199,7 @@ void ibDataReportTree::OnChoiceDefForm(wxCommandEvent& event)
 	ibValueMetaObjectReport* report = m_metaData->GetReport();
 	wxASSERT(report);
 
-	const ibMetaID id = reinterpret_cast<ibMetaID>(event.GetClientData());
+	const ibMetaID id = static_cast<ibMetaID>(reinterpret_cast<intptr_t>(event.GetClientData()));
 	if (id > 0) {
 		report->SetDefFormObject(id);
 	}

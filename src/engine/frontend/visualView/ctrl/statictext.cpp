@@ -22,7 +22,7 @@ wxObject* ibValueStaticText::Create(wxWindow* wxparent, ibVisualHost* visualHost
 	return staticText;
 }
 
-void ibValueStaticText::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstÑreated)
+void ibValueStaticText::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstÐ¡reated)
 {
 }
 
@@ -60,7 +60,7 @@ bool ibValueStaticText::LoadData(ibReaderMemory& reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueStaticText::SaveData(ibWriterMemory& writer)
+bool ibValueStaticText::SaveData(ibWriterMemory writer)
 {
 	writer.w_u8(m_propertyMarkup->GetValueAsBoolean());
 	writer.w_u32(m_propertyWrap->GetValueAsUInteger());

@@ -56,8 +56,8 @@ ibValue* ibCtorMetaValueTypeRegisterList::CreateObject() const
 //object class
 wxClassInfo* ibCtorMetaValueTypeObject::GetClassInfo() const
 {
-	ibValuePtr<ibValueRecordDataObject> recordDataObjectValue = 
-		m_metaObject->CreateRecordDataObjectValue();
+	ibValuePtr<ibValueRecordDataObject> recordDataObjectValue(
+		m_metaObject->CreateRecordDataObjectValue());
 	return recordDataObjectValue->GetClassInfo();
 }
 
@@ -69,8 +69,8 @@ ibValue* ibCtorMetaValueTypeObject::CreateObject() const
 //manager class
 wxClassInfo* ibCtorMetaValueTypeManager::GetClassInfo() const
 {
-	ibValuePtr<ibValueManagerDataObject> managerDataObject = 
-		m_metaObject->CreateManagerDataObjectValue();
+	ibValuePtr<ibValueManagerDataObject> managerDataObject(
+		m_metaObject->CreateManagerDataObjectValue());
 	return managerDataObject->GetClassInfo();
 }
 
@@ -93,8 +93,8 @@ ibValue* ibCtorMetaValueTypeRecord::CreateObject() const
 //object record manager
 wxClassInfo* ibCtorMetaValueTypeRecordManager::GetClassInfo() const
 {
-	ibValuePtr<ibValueRecordManagerObject> recordManagerObject = 
-		m_metaObject->CreateRecordManagerObjectValue();
+	ibValuePtr<ibValueRecordManagerObject> recordManagerObject(
+		m_metaObject->CreateRecordManagerObjectValue());
 	return recordManagerObject->GetClassInfo();
 }
 
@@ -106,8 +106,8 @@ ibValue* ibCtorMetaValueTypeRecordManager::CreateObject() const
 //object record set
 wxClassInfo* ibCtorMetaValueTypeRecordSet::GetClassInfo() const
 {
-	ibValuePtr<ibValueRecordSetObject> recordSetObject = 
-		m_metaObject->CreateRecordSetObjectValue();
+	ibValuePtr<ibValueRecordSetObject> recordSetObject(
+		m_metaObject->CreateRecordSetObjectValue());
 	return recordSetObject->GetClassInfo();
 }
 

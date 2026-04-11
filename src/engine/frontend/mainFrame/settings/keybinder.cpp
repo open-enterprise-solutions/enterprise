@@ -52,7 +52,7 @@ void ibKeyBinder::AddCommand(const wxString& group, wxMenuItem* menuItem)
 {
     if (menuItem->GetKind() != wxITEM_SEPARATOR)
     {
-        AddCommand(menuItem->GetId(), group, menuItem->GetName(), menuItem->GetHelp());
+        AddCommand(menuItem->GetId(), group, menuItem->GetItemLabelText(), menuItem->GetHelp());
     }
 }
 

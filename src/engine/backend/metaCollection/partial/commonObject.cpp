@@ -1481,7 +1481,7 @@ ibSourceExplorer ibValueRecordDataObject::GetSourceExplorer() const
 
 bool ibValueRecordDataObject::GetModel(ibValueModel*& tableValue, const ibMetaID& id)
 {
-	auto& it = m_listObjectValue.find(id);
+	auto it = m_listObjectValue.find(id);
 	if (it != m_listObjectValue.end()) {
 		const ibValue& cTabularSection = it->second;
 		return cTabularSection.ConvertToValue(tableValue);
@@ -1493,7 +1493,7 @@ bool ibValueRecordDataObject::GetModel(ibValueModel*& tableValue, const ibMetaID
 
 bool ibValueRecordDataObject::SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal)
 {
-	auto& it = m_listObjectValue.find(id);
+	auto it = m_listObjectValue.find(id);
 	wxASSERT(it != m_listObjectValue.end());
 	if (it != m_listObjectValue.end()) {
 
@@ -1510,7 +1510,7 @@ bool ibValueRecordDataObject::SetValueByMetaID(const ibMetaID& id, const ibValue
 
 bool ibValueRecordDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const
 {
-	auto& it = m_listObjectValue.find(id);
+	auto it = m_listObjectValue.find(id);
 	wxASSERT(it != m_listObjectValue.end());
 	if (it != m_listObjectValue.end()) {
 		pvarMetaVal = it->second;
@@ -1698,7 +1698,7 @@ bool ibValueRecordDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRet
 	{
 	case eGetFormObject:
 		pvarRetValue = GetFormValue(
-			lSizeArray > 0 ? paParams[0]->GetString() : wxEmptyString,
+			lSizeArray > 0 ? paParams[0]->GetString() : wxString(wxEmptyString),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr
 		);
 		return true;
@@ -2030,7 +2030,7 @@ ibSourceExplorer ibValueRecordDataObjectRef::GetSourceExplorer() const
 
 bool ibValueRecordDataObjectRef::GetModel(ibValueModel*& tableValue, const ibMetaID& id)
 {
-	auto& it = m_listObjectValue.find(id);
+	auto it = m_listObjectValue.find(id);
 	if (it != m_listObjectValue.end()) {
 		const ibValue& cTabularSection = it->second;
 		return cTabularSection.ConvertToValue(tableValue);
@@ -2061,7 +2061,7 @@ bool ibValueRecordDataObjectRef::Generate()
 	return false;
 }
 
-bool ibValueRecordDataObjectRef::Filling(ibValue& cValue) const
+bool ibValueRecordDataObjectRef::Filling(ibValue cValue) const
 {
 	ibValue standartProcessing = true;
 	if (m_procUnit != nullptr) {
@@ -2220,7 +2220,7 @@ ibSourceExplorer ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 
 bool ibValueRecordDataObjectHierarchyRef::GetModel(ibValueModel*& tableValue, const ibMetaID& id)
 {
-	auto& it = m_listObjectValue.find(id);
+	auto it = m_listObjectValue.find(id);
 	if (it != m_listObjectValue.end()) {
 		const ibValue& cTabularSection = it->second;
 		return cTabularSection.ConvertToValue(tableValue);
@@ -2888,12 +2888,12 @@ ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::~ibValue
 	wxDELETE(m_methodHelper);
 }
 
-bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//индекс массива должен начинаться с 0
+bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0
 {
 	return false;
 }
 
-bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //индекс массива должен начинаться с 0
+bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0
 {
 	unsigned int index = varKeyValue.GetUInteger();
 	if ((index < 0 || index >= m_listColumnInfo.size() && !appData->DesignerMode())) {

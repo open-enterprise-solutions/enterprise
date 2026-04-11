@@ -261,7 +261,7 @@ void ibTranslateCode::Load(const wxString& strCode)
 		m_strBuffer.assign(strCode);
 		m_strBUFFER.assign(strCode);
 
-		std::transform(std::execution::par,
+		std::transform(
 			m_strBUFFER.begin(), m_strBUFFER.end(),
 			m_strBUFFER.begin(),
 #ifdef wxUSE_UNICODE
@@ -934,7 +934,7 @@ int ibTranslateCode::IsKeyWord(const wxString& strKeyWord)
 
 	for (auto& pair : ms_listHashKeyWord) {
 		if (stringUtils::CompareString(pair.first, strKeyWord))
-			return reinterpret_cast<int>(pair.second) - 1;
+			return static_cast<int>(reinterpret_cast<intptr_t>(pair.second)) - 1;
 	}
 
 	return wxNOT_FOUND;
@@ -942,9 +942,9 @@ int ibTranslateCode::IsKeyWord(const wxString& strKeyWord)
 
 wxString ibTranslateCode::GetKeyWord(int k)
 {
-	auto it = std::find_if(std::execution::par, ms_listHashKeyWord.begin(), ms_listHashKeyWord.end(),
+	auto it = std::find_if(ms_listHashKeyWord.begin(), ms_listHashKeyWord.end(),
 		[k](const std::pair<const wxString, void*>& pair) -> bool {
-			return k == ((int)pair.second) - 1;
+			return k == static_cast<int>(reinterpret_cast<intptr_t>(pair.second)) - 1;
 		}
 	);
 

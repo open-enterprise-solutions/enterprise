@@ -73,7 +73,7 @@ protected:
 	class ibValueEnumerationVariant : public ibValueEnumerationVariantBase<valType> {
 	public:
 
-		ibValueEnumerationVariant(const valType& v, const ibClassID& clsid) : ibValueEnumerationVariantBase(), m_value(v), m_clsid(clsid) {}
+		ibValueEnumerationVariant(const valType& v, const ibClassID& clsid) : ibValueEnumerationVariantBase<valType>(), m_value(v), m_clsid(clsid) {}
 
 		void CreateEnumeration(
 			const wxString& name, const wxString& descr,
@@ -161,17 +161,17 @@ private:
 
 public:
 
-	using valEnumType = typename valT;
+	using valEnumType = valT;
 
 	inline void AddEnumeration(const valT& v, const wxString& name, const wxString& descr = wxEmptyString) {
 		wxASSERT(m_listEnumData.find(v) == m_listEnumData.end());
 		m_listEnumData.insert_or_assign(v, name);
 		m_listEnumDesc.insert_or_assign(v, descr.IsEmpty() ? name : descr);
 
-		m_listEnumStr.push_back(name);
+		this->m_listEnumStr.push_back(name);
 	}
 
-	ibValueEnumeration() : ibValueEnumerationBase(true), m_value(nullptr) { InitializeEnumeration(); }
+	ibValueEnumeration() : ibValueEnumerationBase<valT>(true), m_value(nullptr) { InitializeEnumeration(); }
 	virtual ~ibValueEnumeration() {}
 
 	virtual bool Init() { return true; }
@@ -228,7 +228,7 @@ public:
 
 	//initialize enumeration 
 	void InitializeEnumeration() {
-		PrepareNames();
+		this->PrepareNames();
 	}
 
 	void InitializeEnumeration(const valT& v) {
@@ -330,7 +330,7 @@ public:
 	//type conversion
 	virtual wxString GetString() const final {
 		return m_value ? m_value->GetString() :
-			wxEmptyString;
+			wxString(wxEmptyString);
 	}
 
 	virtual ibNumber GetNumber() const final {

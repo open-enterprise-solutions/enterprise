@@ -101,10 +101,13 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	m_buttonSaveConnection->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogConnection::SaveConnectionOnButtonClick), NULL, this);
 }
 
+#ifdef OES_USE_POSTGRESQL
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
+#endif
 
 void ibDialogConnection::TestConnectionOnButtonClick(wxCommandEvent& event)
 {
+#ifdef OES_USE_POSTGRESQL
 	std::shared_ptr<ibDatabaseLayerPostgres>postgresDatabaseLayer(new ibDatabaseLayerPostgres);
 	bool sucess = postgresDatabaseLayer->Open(
 		m_textCtrlServer->GetValue(),
@@ -118,7 +121,9 @@ void ibDialogConnection::TestConnectionOnButtonClick(wxCommandEvent& event)
 
 	if (sucess) wxMessageBox("Connected to DB!");
 	else wxMessageBox("Failed connect to DB!");
-
+#else
+	wxMessageBox("PostgreSQL driver not available");
+#endif
 	event.Skip();
 }
 

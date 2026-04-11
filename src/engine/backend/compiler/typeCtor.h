@@ -1,6 +1,9 @@
 #ifndef _TYPE_CTOR_H__
 #define _TYPE_CTOR_H__
 
+class ibValue;
+class ibCtorAbstractType;
+
 enum ibCtorObjectType {
 	ibCtorObjectType_object_primitive = 1,
 	ibCtorObjectType_object_value,
@@ -24,32 +27,8 @@ template<typename typeCtor>
 class value_register {
 	class ibCtorAbstractType* m_so;
 public:
-	value_register(typeCtor* so) : m_so(so) {
-		try {
-			if (m_so != nullptr) {
-				ibValue::RegisterCtor(m_so);
-			}
-		}
-		catch (...) {
-#ifdef DEBUG
-			wxLogDebug(wxT("! failed to register class: %s"), m_so->GetClassName());
-#endif
-			wxDELETE(m_so);
-		}
-	}
-	~value_register() {
-		try {
-			if (m_so != nullptr) {
-				ibValue::UnRegisterCtor(m_so);
-			}
-		}
-		catch (...) {
-#ifdef DEBUG
-			wxLogDebug(wxT("! failed to unregister class: %s"), m_so->GetClassName());
-#endif
-			wxDELETE(m_so);
-		}
-	}
+	value_register(typeCtor* so);
+	~value_register();
 };
 
 /////////////////////////////////////////////////////////////////////////

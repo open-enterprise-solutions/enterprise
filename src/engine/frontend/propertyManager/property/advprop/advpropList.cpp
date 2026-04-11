@@ -22,7 +22,7 @@ public:
 }g_listLoader;
 
 ibPGListProperty::ibPGListProperty(const wxString& label, const wxString& strName,
-	wxPGChoices& choices, int value)
+	wxPGChoices choices, int value)
 	: wxPGProperty(label, strName)
 {
 	m_choices.Assign(choices);
@@ -166,7 +166,7 @@ wxPGEditorDialogAdapter* ibPGListProperty::GetEditorDialog() const
 			const wxDataViewItem& item = lc->GetSelection();
 			if (res == wxID_OK && item.IsOk()) SetValue(
 				choices.GetValue(
-					reinterpret_cast<unsigned int>(item.GetID()) - 1));
+					static_cast<unsigned int>(reinterpret_cast<uintptr_t>(item.GetID())) - 1));
 			else if (res == wxID_OK)
 				SetValue(wxNOT_FOUND);
 

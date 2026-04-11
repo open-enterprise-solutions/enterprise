@@ -6,6 +6,7 @@
 ///////////////////////////////////////////////////////////////////////////
 #include "backend/backend_type.h"
 #include "backend/compiler/value.h"
+#include "backend/metaCollection/attribute/metaAttributeObjectEnum.h"
 ///////////////////////////////////////////////////////////////////////////
 
 class BACKEND_API ibMetaData;
@@ -39,7 +40,7 @@ public:
 
 	//////////////////////////////////////////////////
 
-	enum ibSelectMode GetSelectMode() const;
+	ibSelectMode GetSelectMode() const;
 	
 	//Create value by selected type
 	virtual ibValue CreateValue() const;

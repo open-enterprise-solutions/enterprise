@@ -87,7 +87,7 @@ ibDataProcessorTree::ibDataProcessorTree(ibMetaDocument* docParent, wxWindow* pa
 	sbSizerTree->Add(m_metaTreeToolbar, 0, wxALL | wxEXPAND, 0);
 
 	m_metaTreeCtrl = new ibDataProcessorTreeCtrl(sbSizerTree->GetStaticBox(), this);
-	m_metaTreeCtrl->SetBackgroundColour(RGB(250, 250, 250));
+	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 250, 250));
 
 	//set image list
 	m_metaTreeCtrl->AssignImageList(
@@ -199,7 +199,7 @@ void ibDataProcessorTree::OnChoiceDefForm(wxCommandEvent& event)
 	ibValueMetaObjectDataProcessor* dataProcessor = m_metaData->GetDataProcessor();
 	wxASSERT(dataProcessor);
 
-	const ibMetaID id = reinterpret_cast<ibMetaID>(event.GetClientData());
+	const ibMetaID id = static_cast<ibMetaID>(reinterpret_cast<intptr_t>(event.GetClientData()));
 	if (id > 0) {
 		dataProcessor->SetDefFormObject(id);
 	}

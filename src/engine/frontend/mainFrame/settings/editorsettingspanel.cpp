@@ -3,14 +3,14 @@
 
 BEGIN_EVENT_TABLE(ibPanelEditorSettings, wxPanel)
 
-    EVT_RADIOBUTTON(    ID_InsertSpaces,                    OnInsertSpaces )
-    EVT_RADIOBUTTON(    ID_KeepTabs,                        OnKeepTabs )
-    EVT_CHECKBOX(       ID_RemoveTabsOnLoad,                OnRemoveTabsOnLoad )
-    EVT_CHECKBOX(       ID_ShowLineNumbers,                 OnShowLineNumbersChanged )
-    EVT_TEXT(           ID_IndentSize,                      OnIndentSizeChanged )
-    EVT_CHECKBOX(       ID_MostRecentlyUsedTabSwitching,    OnMostRecentlyUsedTabSwitching )
-    EVT_CHECKBOX(       ID_EnableAutoComplete,              OnEnableAutoComplete )
-    EVT_CHECKBOX(       ID_ShowWhiteSpace,                  OnShowWhiteSpace )
+    EVT_RADIOBUTTON(    ID_InsertSpaces,                    ibPanelEditorSettings::OnInsertSpaces )
+    EVT_RADIOBUTTON(    ID_KeepTabs,                        ibPanelEditorSettings::OnKeepTabs )
+    EVT_CHECKBOX(       ID_RemoveTabsOnLoad,                ibPanelEditorSettings::OnRemoveTabsOnLoad )
+    EVT_CHECKBOX(       ID_ShowLineNumbers,                 ibPanelEditorSettings::OnShowLineNumbersChanged )
+    EVT_TEXT(           ID_IndentSize,                      ibPanelEditorSettings::OnIndentSizeChanged )
+    EVT_CHECKBOX(       ID_MostRecentlyUsedTabSwitching,    ibPanelEditorSettings::OnMostRecentlyUsedTabSwitching )
+    EVT_CHECKBOX(       ID_EnableAutoComplete,              ibPanelEditorSettings::OnEnableAutoComplete )
+    EVT_CHECKBOX(       ID_ShowWhiteSpace,                  ibPanelEditorSettings::OnShowWhiteSpace )
 
 END_EVENT_TABLE()
 

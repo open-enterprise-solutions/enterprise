@@ -16,7 +16,7 @@ ibValueToolBarItem::ibValueToolBarItem() : ibValueControl()
 {
 }
 
-void ibValueToolBarItem::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first—reated)
+void ibValueToolBarItem::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first–°reated)
 {
 	ibAuiToolBar* toolbar = dynamic_cast<ibAuiToolBar*>(wxparent);
 	wxASSERT(toolbar);
@@ -198,7 +198,7 @@ ibValueToolBarSeparator::ibValueToolBarSeparator() : ibValueControl()
 {
 }
 
-void ibValueToolBarSeparator::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first—reated)
+void ibValueToolBarSeparator::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first–°reated)
 {
 	ibAuiToolBar* toolbar = dynamic_cast<ibAuiToolBar*>(visualHost->GetWxObject(GetParent()));
 	wxASSERT(toolbar);
@@ -266,7 +266,7 @@ bool ibValueToolBarItem::LoadData(ibReaderMemory& reader)
 	return ibValueControl::LoadData(reader);
 }
 
-bool ibValueToolBarItem::SaveData(ibWriterMemory& writer)
+bool ibValueToolBarItem::SaveData(ibWriterMemory writer)
 {
 	m_propertyTitle->SaveData(writer);
 	m_propertyPicture->SaveData(writer);
@@ -286,7 +286,7 @@ bool ibValueToolBarSeparator::LoadData(ibReaderMemory& reader)
 	return ibValueControl::LoadData(reader);
 }
 
-bool ibValueToolBarSeparator::SaveData(ibWriterMemory& writer)
+bool ibValueToolBarSeparator::SaveData(ibWriterMemory writer)
 {
 	return ibValueControl::SaveData(writer);
 }

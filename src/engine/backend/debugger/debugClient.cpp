@@ -865,10 +865,10 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 	}
 	else if (commandFromServer == CommandId_ExpandExpression) {
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-		ibWatchWindowData watchData = reinterpret_cast<void*>(commandReader.r_u64());
-#else 
-		ibWatchWindowData watchData = reinterpret_cast<void*>(commandReader.r_u32());
-#endif 
+		ibWatchWindowData watchData(wxTreeItemId(reinterpret_cast<void*>(commandReader.r_u64())));
+#else
+		ibWatchWindowData watchData(wxTreeItemId(reinterpret_cast<void*>(commandReader.r_u32())));
+#endif
 		//generate event 
 		unsigned int attributeCount = commandReader.r_u32();
 		for (unsigned int i = 0; i < attributeCount; i++) {

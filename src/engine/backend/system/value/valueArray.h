@@ -57,7 +57,7 @@ public:
 	virtual void PrepareNames() const;                         // this method is automatically called to initialize attribute and method names.
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       //method call
 
-	//Расширенные методы
+	//пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 	void Add(const ibValue& varValue) {
 		m_listValue.push_back(varValue);
 	}
@@ -72,15 +72,15 @@ public:
 	}
 
 	ibValue Find(const ibValue& varValue) {
-		auto& it = std::find(m_listValue.begin(), m_listValue.end(), varValue);
+		auto it = std::find(m_listValue.begin(), m_listValue.end(), varValue);
 		if (it != m_listValue.end())
-			return std::distance(m_listValue.begin(), it);
+			return ibValue(static_cast<signed int>(std::distance(m_listValue.begin(), it)));
 		return ibValue();
 	}
 
 	void Remove(unsigned int index) {
 		CheckIndex(index);
-		auto& it = std::find(m_listValue.begin(), m_listValue.end(), index);
+		auto it = std::find(m_listValue.begin(), m_listValue.end(), index);
 		if (it != m_listValue.end())
 			m_listValue.erase(it);
 	}

@@ -1,0 +1,2 @@
+/usr/bin/ar qc ../../../lib/Debug/libwxsharpyuv-3.3.a CMakeFiles/sharpyuv.dir/sharpyuv/sharpyuv_sse2.c.o CMakeFiles/sharpyuv.dir/sharpyuv/sharpyuv_neon.c.o CMakeFiles/sharpyuv.dir/sharpyuv/sharpyuv_cpu.c.o CMakeFiles/sharpyuv.dir/sharpyuv/sharpyuv_csp.c.o CMakeFiles/sharpyuv.dir/sharpyuv/sharpyuv_dsp.c.o CMakeFiles/sharpyuv.dir/sharpyuv/sharpyuv_gamma.c.o CMakeFiles/sharpyuv.dir/sharpyuv/sharpyuv.c.o
+/usr/bin/ranlib ../../../lib/Debug/libwxsharpyuv-3.3.a

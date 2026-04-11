@@ -3,6 +3,7 @@
 
 #include "backend/metaCollection/metaObject.h"
 #include "backend/backend_type.h"
+#include "backend/objCtorDefs.h"
 
 #include "metaAttributeObjectEnum.h"
 
@@ -150,7 +151,7 @@ public:
 	bool ContainType(const ibClassID& clsid) const;
 
 	//contain meta type
-	bool ContainMetaType(enum ibCtorObjectMetaType type) const;
+	bool ContainMetaType(ibCtorObjectMetaType type) const;
 
 	//equal type 
 	bool EqualType(const ibClassID& clsid, const ibTypeDescription& rhs) const;
@@ -206,7 +207,7 @@ class BACKEND_API ibValueMetaObjectAttribute : public ibValueMetaObjectAttribute
 	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectAttribute);
 public:
 
-	ibValueMetaObjectAttribute::ibValueMetaObjectAttribute(const ibValueTypes& valType = ibValueTypes::TYPE_STRING) :
+	ibValueMetaObjectAttribute(const ibValueTypes& valType = ibValueTypes::TYPE_STRING) :
 		ibValueMetaObjectAttributeBase()
 	{
 		m_propertyType->SetValue(ibValue::GetIDByVT(valType));
@@ -236,7 +237,7 @@ public:
 protected:
 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 
 private:
 
@@ -334,7 +335,7 @@ public:
 protected:
 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 
 private:
 

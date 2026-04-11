@@ -135,7 +135,7 @@ public: class ibVisualEditor :
 			}
 		}
 
-		void ibCommandProcessor::Execute(ibVisualEditorCmd* command) {
+		void Execute(ibVisualEditorCmd* command) {
 			command->Execute();
 			m_undoStack.push(command);
 			while (!m_redoStack.empty()) {
@@ -143,7 +143,7 @@ public: class ibVisualEditor :
 			}
 		}
 
-		bool ibCommandProcessor::Undo() {
+		bool Undo() {
 			if (!m_undoStack.empty()) {
 				ibVisualEditorCmd* command = m_undoStack.top();
 				m_undoStack.pop();
@@ -153,7 +153,7 @@ public: class ibVisualEditor :
 			return true;
 		}
 
-		bool ibCommandProcessor::Redo() {
+		bool Redo() {
 			if (!m_redoStack.empty()) {
 				ibVisualEditorCmd* command = m_redoStack.top();
 				m_redoStack.pop();
@@ -163,7 +163,7 @@ public: class ibVisualEditor :
 			return true;
 		}
 
-		void ibCommandProcessor::Reset() {
+		void Reset() {
 			while (!m_redoStack.empty())
 				m_redoStack.pop();
 			while (!m_undoStack.empty())
@@ -171,19 +171,19 @@ public: class ibVisualEditor :
 			m_savePoint = 0;
 		}
 
-		bool ibCommandProcessor::CanUndo() const {
+		bool CanUndo() const {
 			return (!m_undoStack.empty());
 		}
 
-		bool ibCommandProcessor::CanRedo() const {
+		bool CanRedo() const {
 			return (!m_redoStack.empty());
 		}
 
-		void ibCommandProcessor::SetSavePoint() {
+		void SetSavePoint() {
 			m_savePoint = m_undoStack.size();
 		}
 
-		bool ibCommandProcessor::IsAtSavePoint() {
+		bool IsAtSavePoint() {
 			return m_savePoint == m_undoStack.size();
 		}
 

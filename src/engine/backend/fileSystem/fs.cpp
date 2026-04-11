@@ -65,7 +65,11 @@ void	ibWriter::w_printf(const char* format, ...)
 	char buf[1024];
 
 	va_start(mark, format);
+#ifdef __WXMSW__
 	vsprintf_s(buf, format, mark);
+#else
+	vsnprintf(buf, sizeof(buf), format, mark);
+#endif
 	va_end(mark);
 
 	w(buf, strlen(buf));
@@ -260,9 +264,12 @@ void	ibReader::r_string(char* dest, u32 tgt_sz) const
 	char* src = (char*)m_data + m_pos;
 	u32 sz = advance_term_string();
 	wxASSERT(sz < (tgt_sz - 1));
+#ifdef __WXMSW__
 	wxASSERT(!IsBadReadPtr((void*)src, sz));
-
 	strncpy_s(dest, tgt_sz, src, sz);
+#else
+	strncpy(dest, src, tgt_sz - 1);
+#endif
 
 	dest[sz] = 0;
 }

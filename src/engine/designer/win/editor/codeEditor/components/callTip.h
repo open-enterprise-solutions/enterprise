@@ -2,6 +2,7 @@
 #define CALLTIP_H
 
 #include <wx/wx.h>
+#include <wx/dcbuffer.h>
 #include <wx/stc/stc.h>
 
 #include "helpers/fontAscent.h"

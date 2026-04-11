@@ -252,3 +252,39 @@ The 8 business object types and their C++ classes:
 - Do not commit changes to `enterprise.sln` project GUIDs or global section entries unless you are adding/removing a project
 - Do not define `NDEBUG` in Debug configurations
 - Do not catch `const ibBackendException*` and swallow it silently
+
+---
+
+## AI Agents
+
+Specialized agents for OES development tasks. Defined in `~/.claude/agents/oes-*.md`.
+
+### Security Scanner (`oes-security-scanner`)
+Checks code for vulnerabilities: SQL injection (string concatenation in queries instead of `ibPreparedStatement`), buffer overflows (strcpy/sprintf), hardcoded credentials, unsafe file access, memory leaks (missing RAII). Flags MD5 password hashing as critical.
+
+### Code Reviewer (`oes-code-reviewer`)
+Reviews code against C++17 standards and OES architecture rules: RAII, const-correctness, explicit constructors, cross-platform compatibility (MSVC/Clang/GCC), naming conventions (`ib` prefix, `m_` members), no GUI headers in backend.
+
+### Test Writer (`oes-test-writer`)
+Generates Google Test tests. Naming: `TEST(ClassName, Method_Condition_Expected)`. Uses MockDatabaseLayer for unit tests, real SQLite for integration tests. Handles throw-by-pointer exceptions.
+
+### CMake Writer (`oes-cmake-writer`)
+Generates and fixes CMakeLists.txt. Target-based approach, C++17, compatible with MSVC 2019+/Clang/GCC 9+. Handles wxWidgets submodule, optional DB drivers (OES_USE_FIREBIRD, etc.).
+
+### System Architect (`oes-system-architect`)
+Evaluates architecture, identifies coupling issues, circular dependencies, two-DLL separation violations. Proposes incremental refactoring plans.
+
+### Performance Engineer (`oes-performance-engineer`)
+Optimizes DB queries, bytecode interpreter (ibProcUnit), form rendering, memory usage. Profile before optimizing.
+
+### Debugger (`oes-debugger`)
+Diagnoses build errors (MSVC vs Clang), runtime crashes, logic bugs. Knows common OES pitfalls: circular includes, ibGuid conversion, empty catch blocks.
+
+### Database Expert (`oes-database-expert`)
+Schema design, query optimization, cross-DB compatibility (Firebird/PostgreSQL/SQLite/MySQL). All queries through ibPreparedStatement.
+
+### Deployment Wizard (`oes-deployment-wizard`)
+CI/CD, cross-platform builds (MSBuild + CMake), release management. PRs → develop, releases → master with tag.
+
+### Code Refactorer (`oes-code-refactorer`)
+Fixes MSVC-specific code for Clang/GCC, breaks circular includes, modernizes to C++17 where appropriate. One refactoring per PR.

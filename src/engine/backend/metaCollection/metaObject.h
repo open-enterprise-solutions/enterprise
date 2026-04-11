@@ -252,7 +252,7 @@ public:
 
 	//process choice 
 	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue,
-		const wxString& strFormName, enum ibSelectMode selMode) {
+		const wxString& strFormName, int selMode) {
 		return true;
 	}
 
@@ -274,7 +274,7 @@ public:
 
 	//load & save object in metaObject 
 	bool LoadMeta(ibReaderMemory& dataReader);
-	bool SaveMeta(ibWriterMemory& dataWritter = ibWriterMemory());
+	bool SaveMeta(ibWriterMemory& dataWritter);
 
 	//load & save object
 	bool LoadMetaObject(ibMetaData* metaData, ibReaderMemory& dataReader);
@@ -346,7 +346,7 @@ public:
 	//any
 	template <typename _T1 = ibValueMetaObject>
 	std::vector<_T1*> GetAnyArrayObject(
-		std::vector<_T1*>& array = std::vector<_T1*>()) const {
+		std::vector<_T1*> array = std::vector<_T1*>()) const {
 		FillArrayObjectByFilter<_T1>(array, {});
 		return array;
 	}
@@ -379,7 +379,7 @@ protected:
 
 	//load & save metaData from DB 
 	virtual bool LoadData(ibReaderMemory& reader) { return true; }
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory()) { return true; }
+	virtual bool SaveData(ibWriterMemory& writer) { return true; }
 	virtual bool DeleteData() { return true; }
 
 protected:

@@ -2,7 +2,9 @@
 #include "backend/fileSystem/types.h"
 
 #include <wx/wx.h>
-#include <process.h> 
+#ifdef _MSC_VER
+#include <process.h>
+#endif
 
 static int start_day   = 01;   // 1
 static int start_month = 01;   // January

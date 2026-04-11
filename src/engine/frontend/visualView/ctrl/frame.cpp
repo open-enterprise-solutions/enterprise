@@ -87,7 +87,7 @@ bool ibValueFrame::LoadControl(const ibValueMetaObjectFormBase* metaForm, ibRead
 	return true;
 }
 
-bool ibValueFrame::SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWriterMemory& dataWritter, bool copy_form)
+bool ibValueFrame::SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWriterMemory dataWritter, bool copy_form)
 {
 	//save meta version 
 	dataWritter.w_u32(version_oes_last); //reserved 

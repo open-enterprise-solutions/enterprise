@@ -50,7 +50,9 @@ void CAuiDocChildFrame::SetMenuBar(wxMenuBar* menuBar)
 				menuItem->Enable(it->IsEnabled());
 
 				menuItem->SetBitmap(it->GetBitmap());
+#ifdef __WXMSW__
 				menuItem->SetMarginWidth(it->GetMarginWidth());
+#endif
 				menuItem->SetHelp(it->GetHelp());
 
 				if (it->IsSubMenu()) {

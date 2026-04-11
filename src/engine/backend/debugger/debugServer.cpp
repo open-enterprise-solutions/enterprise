@@ -136,7 +136,9 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 	m_bDebugStopLine = false;
 
 	//create stream for this loop
+#ifdef __WXMSW__
 	ibValueOLE::CreateStreamForDispatch();
+#endif
 
 	//start debug loop
 	while (m_bDebugLoop) {
@@ -151,7 +153,9 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 		wxMilliSleep(5);
 	}
 
+#ifdef __WXMSW__
 	ibValueOLE::ReleaseStreamForDispatch();
+#endif
 
 	if (m_socketConnectionThread != nullptr && ConnectionType::ConnectionType_Debugger == m_socketConnectionThread->GetConnectionType()) {
 
@@ -317,7 +321,7 @@ void ibDebuggerServer::SendStack()
 	commandChannel.w_u16(CommandId_SetStack);
 	commandChannel.w_u32(ibProcUnit::GetCountRunContext());
 
-	for (unsigned int i = ibProcUnit::GetCountRunContext(); i > 0; i--) { //передаем снизу вверх
+	for (unsigned int i = ibProcUnit::GetCountRunContext(); i > 0; i--) { //пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 
 		ibRunContext* runContext = ibProcUnit::GetRunContext(i - 1);
 		ibByteCode* byteCode = runContext->GetByteCode();
@@ -517,7 +521,9 @@ void ibDebuggerServer::ibDebuggerServerConnection::EntryClient()
 					wxMemoryBuffer bufferData(length);
 					m_socket->ReadMsg(bufferData.GetData(), length);
 					if (length > 0) {
+#ifdef __WXMSW__
 						ibValueOLE::GetInterfaceAndReleaseStream();
+#endif
 #if _USE_NET_COMPRESSOR == 1
 						BYTE* dest = nullptr; unsigned int dest_sz = 0;
 						_decompressLZ(&dest, &dest_sz, bufferData.GetData(), bufferData.GetBufSize());

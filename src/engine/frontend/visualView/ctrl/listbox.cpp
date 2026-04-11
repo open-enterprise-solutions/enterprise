@@ -23,7 +23,7 @@ wxObject* ibValueListBox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return m_listbox;
 }
 
-void ibValueListBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first—reated)
+void ibValueListBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first–°reated)
 {
 }
 
@@ -50,7 +50,7 @@ bool ibValueListBox::LoadData(ibReaderMemory& reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueListBox::SaveData(ibWriterMemory& writer)
+bool ibValueListBox::SaveData(ibWriterMemory writer)
 {
 	return ibValueWindow::SaveData(writer);
 }

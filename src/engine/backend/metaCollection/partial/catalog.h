@@ -155,7 +155,7 @@ protected:
 
 	//load & save metaData from DB 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 
 	//prepare menu for item
 	virtual bool PrepareContextMenu(wxMenu* defaultMenu);

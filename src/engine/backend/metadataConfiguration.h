@@ -2,6 +2,7 @@
 #define _CONFIG_METADATA_H__
 
 #include "backend/metadata.h"
+#include "backend/appData.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 #define activeMetaData		(ibMetaDataConfiguration::Get())

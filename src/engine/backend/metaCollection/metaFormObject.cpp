@@ -325,7 +325,7 @@ ibBackendValueForm* ibValueMetaObjectCommonForm::GetObjectForm(ibBackendControlF
 {
 	if (!AccessRight_Use()) {
 		ibBackendAccessException::Error();
-		return false;
+		return nullptr;
 	}
 
 	return ibValueMetaObjectFormBase::CreateAndBuildForm(

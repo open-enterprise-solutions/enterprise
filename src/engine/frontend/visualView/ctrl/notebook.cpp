@@ -46,10 +46,10 @@ wxObject* ibValueNotebook::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return notebook;
 }
 
-void ibValueNotebook::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstÑreated)
+void ibValueNotebook::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstĞ¡reated)
 {
 	if (visualHost->IsDesignerHost() && GetChildCount() == 0
-		&& firstÑreated) {
+		&& firstĞ¡reated) {
 		ibValueNotebook::AddNotebookPage();
 	}
 
@@ -110,7 +110,7 @@ bool ibValueNotebook::LoadData(ibReaderMemory& reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueNotebook::SaveData(ibWriterMemory& writer)
+bool ibValueNotebook::SaveData(ibWriterMemory writer)
 {
 	writer.w_s32(m_propertyOrient->GetValueAsInteger());
 
@@ -149,7 +149,7 @@ bool ibValueNotebook::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, i
 				structurePage->Insert(notebookPage->GetControlName(), ibValue(notebookPage));
 			}
 		}
-#pragma message("nouverbe to nouverbe: íåîáõîäèìî äîğàáîòàòü!")
+#pragma message("nouverbe to nouverbe: Ğ½ĞµĞ¾Ğ±Ñ…Ğ¾Ğ´Ğ¸Ğ¼Ğ¾ Ğ´Ğ¾Ñ€Ğ°Ğ±Ğ¾Ñ‚Ğ°Ñ‚ÑŒ!")
 		pvarRetValue = structurePage;
 		return true; 
 	}

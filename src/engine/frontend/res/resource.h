@@ -1,6 +1,6 @@
 //{{NO_DEPENDENCIES}}
-// Включаемый файл, созданный в Microsoft Visual C++.
-// Используется frontend.rc
+// Р’РєР»СЋС‡Р°РµРјС‹Р№ С„Р°Р№Р», СЃРѕР·РґР°РЅРЅС‹Р№ РІ Microsoft Visual C++.
+// РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ frontend.rc
 //
 
 // Next default values for new objects

@@ -96,7 +96,9 @@ bool ibFrontendDocMDIFrame::Create(const wxString& title,
 	m_mgr.SetManagedWindow(this);
 	m_mgr.SetArtProvider(new wxAuiLunaDockArt());
 
+#ifdef __WXMSW__
 	SetIcon(wxICON(oes));
+#endif
 	return true;
 }
 

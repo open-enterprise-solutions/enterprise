@@ -402,7 +402,7 @@ private:
 template <typename T>
 class ibPropertyObjectHelper : public ibPropertyObject {
 	void RemovePropertyObject(const ibPropertyObject* obj) {
-		std::vector< propertyType* >::iterator it = m_children.begin();
+		typename std::vector< propertyType* >::iterator it = m_children.begin();
 		while (it != m_children.end() && *it != obj) it++;
 		if (it != m_children.end()) m_children.erase(it);
 	}
@@ -410,8 +410,8 @@ protected:
 	ibPropertyObjectHelper() : m_parent(nullptr) {}
 public:
 
-	using propertyType = typename T;
-	using vectorType = typename std::vector<propertyType*>;
+	using propertyType = T;
+	using vectorType = std::vector<propertyType*>;
 
 	virtual ~ibPropertyObjectHelper() {
 		// remove the reference in the parent

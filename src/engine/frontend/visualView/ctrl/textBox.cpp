@@ -24,7 +24,7 @@ wxObject* ibValueTextBox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return textWindow;
 }
 
-void ibValueTextBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first—reated)
+void ibValueTextBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first–°reated)
 {
 	ibTextEditor* textWindow = dynamic_cast<ibTextEditor*>(wxobject);
 }
@@ -57,7 +57,7 @@ wxPrintout* ibValueTextBox::CreatePrintout() const
 	if (gridWindow != nullptr)
 		return new ibTextEditorPrintout(gridWindow);
 
-	return false;
+	return nullptr;
 }
 
 //**********************************************************************************
@@ -69,7 +69,7 @@ bool ibValueTextBox::LoadData(ibReaderMemory& reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueTextBox::SaveData(ibWriterMemory& writer)
+bool ibValueTextBox::SaveData(ibWriterMemory writer)
 {
 	return ibValueWindow::SaveData(writer);
 }

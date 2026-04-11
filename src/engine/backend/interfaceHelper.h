@@ -47,7 +47,7 @@ protected:
 
 	//load & save subsystem in metaobject 
 	bool LoadInterface(ibReaderMemory& reader);
-	bool SaveInterface(ibWriterMemory& writer = ibWriterMemory()) const;
+	bool SaveInterface(ibWriterMemory& writer) const;
 
 	std::set<ibMetaID> m_interfaces;
 };

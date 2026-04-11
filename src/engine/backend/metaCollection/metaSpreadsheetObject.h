@@ -38,7 +38,7 @@ public:
 	virtual ibSpreadsheetDescription& GetSpreadsheetDesc() const { return m_propertyTemplate->GetValueAsSpreadsheetDesc(); }
 protected:
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 private:
 	ibPropertyCategory* m_categoryTemplate = ibPropertyObject::CreatePropertyCategory(wxT("Template"), _("Template"));
 	ibPropertySpreadsheet* m_propertyTemplate = ibPropertyObject::CreateProperty<ibPropertySpreadsheet>(m_categoryTemplate, wxT("TemplateData"), _("Template data"));
@@ -52,7 +52,7 @@ public:
 	virtual ibSpreadsheetDescription& GetSpreadsheetDesc() const { return m_propertyTemplate->GetValueAsSpreadsheetDesc(); }
 protected:
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 private:
 	ibPropertyCategory* m_categoryTemplate = ibPropertyObject::CreatePropertyCategory(wxT("CommonTemplate"), _("Common template"));
 	ibPropertySpreadsheet* m_propertyTemplate = ibPropertyObject::CreateProperty<ibPropertySpreadsheet>(m_categoryTemplate, wxT("TemplateData"), _("Template data"));

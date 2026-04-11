@@ -85,7 +85,7 @@ public:
 protected:
 
 	virtual bool LoadData(ibReaderMemory& reader) = 0;
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory()) = 0;
+	virtual bool SaveData(ibWriterMemory& writer) = 0;
 };
 
 // -----------------------------------------------------------------------
@@ -144,7 +144,7 @@ public:
 protected:
 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 
 private:
 
@@ -216,7 +216,7 @@ public:
 protected:
 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 
 	//get default form 
 	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) {

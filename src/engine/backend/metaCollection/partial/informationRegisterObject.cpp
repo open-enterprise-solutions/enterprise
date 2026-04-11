@@ -467,7 +467,7 @@ bool ibValueRecordManagerObjectInformationRegister::CallAsFunc(const long lMetho
 		return true;
 	case recordManager::enGetFormRecord:
 		pvarRetValue = GetFormValue(
-			lSizeArray > 0 ? paParams[0]->GetString() : wxEmptyString,
+			lSizeArray > 0 ? paParams[0]->GetString() : wxString(wxEmptyString),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr
 		);
 		return true;

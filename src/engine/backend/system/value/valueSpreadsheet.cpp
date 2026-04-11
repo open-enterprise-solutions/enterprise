@@ -205,7 +205,7 @@ public:
 		switch (lMethodNum)
 		{
 		case enCount:
-			pvarRetValue = m_methodHelper ? m_methodHelper->GetNProps() : 0;
+			pvarRetValue = ibValue(ibNumber(m_methodHelper ? static_cast<int>(m_methodHelper->GetNProps()) : 0));
 			return true;
 		case enGet:
 			m_spreadsheetDoc->GetParameter(paParams[0]->GetString(), pvarRetValue);
@@ -512,15 +512,15 @@ bool ibValueSpreadsheetDocument::CallAsProc(const long lMethodNum, ibValue** paP
 		return false;
 	}
 	else if (lMethodNum == ePut) {
-		ibValuePtr<ibValueSpreadsheetDocument> valueSpreadsheet =
-			paParams[0]->ConvertToType<ibValueSpreadsheetDocument>();
+		ibValuePtr<ibValueSpreadsheetDocument> valueSpreadsheet(
+			paParams[0]->ConvertToType<ibValueSpreadsheetDocument>());
 		if (valueSpreadsheet)
 			m_spreadsheetDoc->PutArea(valueSpreadsheet->GetSpreadsheetDocument());
 		return true;
 	}
 	else if (lMethodNum == eJoin) {
-		ibValuePtr<ibValueSpreadsheetDocument> valueSpreadsheet =
-			paParams[0]->ConvertToType<ibValueSpreadsheetDocument>();
+		ibValuePtr<ibValueSpreadsheetDocument> valueSpreadsheet(
+			paParams[0]->ConvertToType<ibValueSpreadsheetDocument>());
 		if (valueSpreadsheet)
 			m_spreadsheetDoc->JoinArea(valueSpreadsheet->GetSpreadsheetDocument());
 		return true;

@@ -32,7 +32,7 @@ public:
 protected:
 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 
 	bool IsValidCode(const wxString& strLangCode);
 

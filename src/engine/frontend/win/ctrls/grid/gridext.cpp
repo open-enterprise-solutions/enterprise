@@ -6983,7 +6983,7 @@ bool ibGrid::SetCurrentCell(const ibGridCellCoords& coords)
 // exposed cells (usually set from the update region by
 // CalcExposedCells)
 //
-void ibGrid::DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells, ibGridCellCacheArray& storage)
+void ibGrid::DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells, ibGridCellCacheArray storage)
 {
 	if (!m_numRows || !m_numCols)
 		return;
@@ -7144,7 +7144,7 @@ void ibGrid::DrawGridSpace(wxDC& dc, ibGridWindow* gridWindow)
 	}
 }
 
-void ibGrid::DrawCell(wxDC& dc, const ibGridCellCoords& coords, ibGridCellCache& cache)
+void ibGrid::DrawCell(wxDC& dc, const ibGridCellCoords& coords, ibGridCellCache cache)
 {
 	int row = coords.GetRow();
 	int col = coords.GetCol();

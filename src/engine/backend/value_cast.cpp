@@ -4,7 +4,7 @@
 #include "backend/appData.h"
 
 #if defined(_USE_CONTROL_VALUECAST)
-inline void ThrowErrorTypeOperation(const wxString& fromType, wxClassInfo* clsInfo)
+void ThrowErrorTypeOperation(const wxString& fromType, wxClassInfo* clsInfo)
 {
 	if (!appData->DesignerMode()) {
 		wxString className = wxEmptyString;

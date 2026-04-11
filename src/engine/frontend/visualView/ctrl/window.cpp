@@ -92,7 +92,7 @@ bool ibValueWindow::LoadData(ibReaderMemory& reader)
 	return ibValueControl::LoadData(reader);
 }
 
-bool ibValueWindow::SaveData(ibWriterMemory& writer)
+bool ibValueWindow::SaveData(ibWriterMemory writer)
 {
 	writer.w_stringZ(
 		m_propertyMinSize->GetValueAsString()

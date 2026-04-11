@@ -30,7 +30,7 @@ public:
 	//get property for grid 
 	virtual wxObject* GetPGProperty() const {
 		if (ms_propertyDate != nullptr)
-			return ms_propertyDate(m_propLabel, m_propName, GetValueAsDateTime());
+			return ms_propertyDate(m_propLabel, m_propName, wxDateTime(static_cast<time_t>(GetValueAsDateTime())));
 		return nullptr;
 	}
 

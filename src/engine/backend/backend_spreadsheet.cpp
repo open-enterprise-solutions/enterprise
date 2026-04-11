@@ -506,7 +506,7 @@ bool ibBackendSpreadsheetObject::OpenCellDetailsParameter(int row, int col) cons
 
 bool ibBackendSpreadsheetObject::LoadFromFile(const wxString& strFileName)
 {
-	std::ifstream in(strFileName.ToStdWstring(), std::ios::in | std::ios::binary);
+	std::ifstream in(strFileName.ToStdString(), std::ios::in | std::ios::binary);
 
 	if (!in.is_open())
 		return false;

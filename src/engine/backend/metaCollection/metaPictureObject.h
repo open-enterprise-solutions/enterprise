@@ -18,7 +18,7 @@ public:
 protected:
 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 
 private:
 	ibPropertyExternalPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyExternalPicture>(m_categoryContext, wxT("Picture"), _("Picture"));

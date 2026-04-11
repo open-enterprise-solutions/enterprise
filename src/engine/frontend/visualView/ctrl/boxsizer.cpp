@@ -15,7 +15,7 @@ wxObject* ibValueBoxSizer::Create(wxWindow* /*parent*/, ibVisualHost* /*visualHo
 	return new wxBoxSizer(m_propertyOrient->GetValueAsInteger());
 }
 
-void ibValueBoxSizer::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool firstÑreated)
+void ibValueBoxSizer::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool firstÐ¡reated)
 {
 }
 
@@ -45,7 +45,7 @@ bool ibValueBoxSizer::LoadData(ibReaderMemory &reader)
 	return ibValueSizer::LoadData(reader);
 }
 
-bool ibValueBoxSizer::SaveData(ibWriterMemory &writer)
+bool ibValueBoxSizer::SaveData(ibWriterMemory writer)
 {
 	writer.w_u16(m_propertyOrient->GetValueAsInteger());
 	return ibValueSizer::SaveData(writer);

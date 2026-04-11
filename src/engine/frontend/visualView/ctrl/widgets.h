@@ -23,7 +23,7 @@ public:
 
 	//control factory
 	virtual wxObject* Create(wxWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first裷eated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first小reated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
@@ -33,7 +33,7 @@ public:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 protected:
 
@@ -64,7 +64,7 @@ public:
 
 	//control factory
 	virtual wxObject* Create(wxWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first裷eated)override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first小reated)override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
@@ -74,7 +74,7 @@ public:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 protected:
 	ibPropertyCategory* m_categoryStaticText = ibPropertyObject::CreatePropertyCategory(wxT("StaticText"), _("Static text"));
@@ -137,7 +137,7 @@ public:
 
 	//control factory
 	virtual wxObject* Create(wxWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first裷eated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first小reated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
@@ -155,7 +155,7 @@ public:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 public:
 
@@ -228,13 +228,13 @@ public:
 
 	//control factory
 	virtual wxObject* Create(wxWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first裷eated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first小reated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 };
 
 #include <wx/choice.h>
@@ -247,13 +247,13 @@ public:
 
 	//control factory
 	virtual wxObject* Create(wxWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first裷eated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first小reated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 };
 
 #include <wx/listbox.h>
@@ -267,13 +267,13 @@ public:
 
 	//control factory
 	virtual wxObject* Create(wxWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first裷eated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first小reated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 };
 
 #include <wx/checkbox.h>
@@ -325,7 +325,7 @@ public:
 
 	//control factory
 	virtual wxObject* Create(wxWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first裷eated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first小reated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
@@ -342,7 +342,7 @@ public:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 public:
 
@@ -391,7 +391,7 @@ public:
 
 	//control factory
 	virtual wxObject* Create(wxWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first裷eated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first小reated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
@@ -401,7 +401,7 @@ public:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 private:
 	ibPropertyCategory* m_categoryRadioButton = ibPropertyObject::CreatePropertyCategory(wxT("RadioButton"), _("Radio button"));
@@ -419,7 +419,7 @@ public:
 
 	//control factory
 	virtual wxObject* Create(wxWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first裷eated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first小reated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
@@ -430,7 +430,7 @@ public:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 private:
 	ibPropertyCategory* m_categoryStaticLine = ibPropertyObject::CreatePropertyCategory(wxT("StaticLine"), _("Static line"));
@@ -447,7 +447,7 @@ public:
 
 	//control factory
 	virtual wxObject* Create(wxWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first裷eated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first小reated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
@@ -458,7 +458,7 @@ public:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 private:
 	ibPropertyCategory* m_categorySlider = ibPropertyObject::CreatePropertyCategory(wxT("Slider"), _("Slider"));
@@ -478,7 +478,7 @@ public:
 
 	//control factory
 	virtual wxObject* Create(wxWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first裷eated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first小reated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
@@ -489,7 +489,7 @@ public:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 private:
 	ibPropertyCategory* m_categoryGauge = ibPropertyObject::CreatePropertyCategory(wxT("Gauge"), _("Gauge"));

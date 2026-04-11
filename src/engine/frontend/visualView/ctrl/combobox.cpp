@@ -22,7 +22,7 @@ wxObject* ibValueComboBox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return combobox;
 }
 
-void ibValueComboBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first—reated)
+void ibValueComboBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first–°reated)
 {
 }
 
@@ -49,7 +49,7 @@ bool ibValueComboBox::LoadData(ibReaderMemory& reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueComboBox::SaveData(ibWriterMemory& writer)
+bool ibValueComboBox::SaveData(ibWriterMemory writer)
 {
 	return ibValueWindow::SaveData(writer);
 }

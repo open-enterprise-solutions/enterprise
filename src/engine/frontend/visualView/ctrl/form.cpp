@@ -78,7 +78,7 @@ bool ibValueForm::LoadData(ibReaderMemory& reader)
 	return ibValueFrame::LoadData(reader);
 }
 
-bool ibValueForm::SaveData(ibWriterMemory& writer)
+bool ibValueForm::SaveData(ibWriterMemory writer)
 {
 	writer.w_stringZ(m_propertyTitle->GetValueAsString());
 	writer.w_s32(m_propertyOrient->GetValueAsInteger());
@@ -250,7 +250,7 @@ bool ibValueForm::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 	}
 	else if (lPropAlias == eAttribute) {
 		unsigned int id = m_methodHelper->GetPropData(lPropNum);
-		auto& it = std::find_if(m_listControl.begin(), m_listControl.end(),
+		auto it = std::find_if(m_listControl.begin(), m_listControl.end(),
 			[id](const ibValueFrame* control) {
 				return id == control->GetControlID();
 			}
@@ -305,7 +305,7 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	}
 	else if (lPropAlias == eAttribute) {
 		unsigned int id = m_methodHelper->GetPropData(lPropNum);
-		auto& it = std::find_if(m_listControl.begin(), m_listControl.end(),
+		auto it = std::find_if(m_listControl.begin(), m_listControl.end(),
 			[id](const ibValueFrame* control) {
 				return id == control->GetControlID();
 			}

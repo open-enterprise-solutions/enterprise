@@ -49,9 +49,10 @@ public:
 
 #pragma region __generic_h__
 
-	//attribute  
+	using ibValueMetaObjectCompositeData::GetGenericAttributeArrayObject;
+	//attribute
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		FillArrayObjectByPredefined(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
 		return array;
@@ -62,7 +63,7 @@ public:
 
 	//any
 	std::vector<ibValueMetaObjectAttributeBase*> GetAnyAttributeArrayObject(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
 		FillArrayObjectByPredefined(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
 		return array;
@@ -70,7 +71,7 @@ public:
 
 	//attribute 
 	std::vector<ibValueMetaObjectAttributeBase*> GetAttributeArrayObject(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
 		return array;
 	}
@@ -117,7 +118,7 @@ protected:
 	}
 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 
 private:
 

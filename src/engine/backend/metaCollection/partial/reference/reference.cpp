@@ -189,7 +189,7 @@ bool ibValueReferenceDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& p
 		pvarMetaVal = ibValueReferenceDataObject::Create(m_metaObject);
 		return true;
 	}
-	auto& it = m_listObjectValue.find(id);
+	auto it = m_listObjectValue.find(id);
 	//wxASSERT(it != m_listObjectValue.end());
 	if (it != m_listObjectValue.end()) {
 		pvarMetaVal = it->second;

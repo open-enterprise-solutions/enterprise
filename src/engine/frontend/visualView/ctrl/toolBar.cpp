@@ -47,10 +47,10 @@ wxObject* ibValueToolbar::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return toolbar;
 }
 
-void ibValueToolbar::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstÑreated)
+void ibValueToolbar::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstÐ¡reated)
 {
 	if (visualHost->IsDesignerHost() && GetChildCount() == 0
-		&& firstÑreated) {
+		&& firstÐ¡reated) {
 		ibValueToolbar::AddToolItem();
 	}
 }
@@ -95,7 +95,7 @@ bool ibValueToolbar::LoadData(ibReaderMemory& reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueToolbar::SaveData(ibWriterMemory& writer)
+bool ibValueToolbar::SaveData(ibWriterMemory writer)
 {
 	m_actSource->SaveData(writer);
 	return ibValueWindow::SaveData(writer);

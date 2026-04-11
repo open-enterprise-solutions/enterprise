@@ -13,12 +13,12 @@ public:
 			stringUtils::IntToStr(m_metaObject->GetMetaID()));
 	}
 
-	wxString ibCtorMetaValueTypeConstantObject::GetClassName() const {
+	wxString GetClassName() const {
 		return m_metaObject->GetClassName() + prefixObject +
 			m_metaObject->GetName();
 	}
 
-	virtual ibClassID ibCtorMetaValueTypeConstantObject::GetClassType() const { return m_classType; }
+	virtual ibClassID GetClassType() const { return m_classType; }
 	virtual wxClassInfo* GetClassInfo() const;
 	virtual ibValue* CreateObject() const;
 	virtual ibValueMetaObject* GetMetaObject() const { return m_metaObject; }

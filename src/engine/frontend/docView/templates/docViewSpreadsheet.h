@@ -15,7 +15,7 @@ public:
 	ibSpreadsheetEditView() : ibMetaView(), m_gridEditor(nullptr) {}
 
 #if wxUSE_MENUS	
-	wxMenuBar* ibSpreadsheetEditView::CreateMenuBar() const;
+	wxMenuBar* CreateMenuBar() const;
 #endif 
 
 	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;

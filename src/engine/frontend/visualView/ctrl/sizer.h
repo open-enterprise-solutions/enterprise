@@ -13,7 +13,7 @@ public:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 protected:
 	void UpdateSizer(wxSizer* sizer);
@@ -71,7 +71,7 @@ public:
 
 	ibValueSizerItem();
 
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first�reated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstРЎreated) override;
 	virtual void OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost) override;
 
 	virtual int GetComponentType() const {
@@ -102,7 +102,7 @@ public:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 private:
 
@@ -130,7 +130,7 @@ public:
 
 	//control factory
 	virtual wxObject* Create(wxWindow* /*parent*/, ibVisualHost* /*visualHost*/) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first�reated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstРЎreated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
@@ -140,7 +140,7 @@ public:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 private:
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, wxT("Orient"), _("Orient"), wxVERTICAL);
@@ -156,13 +156,13 @@ public:
 
 	//control factory
 	virtual wxObject* Create(wxWindow* /*parent*/, ibVisualHost* /*visualHost*/) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first�reated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstРЎreated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 private:
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, wxT("Orient"), _("Orient"), wxHORIZONTAL);
@@ -179,7 +179,7 @@ public:
 
 	//control factory
 	virtual wxObject* Create(wxWindow* parent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first�reated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstРЎreated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
@@ -189,7 +189,7 @@ public:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 private:
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, wxT("Orient"), _("Orient"), wxHORIZONTAL);
@@ -212,7 +212,7 @@ public:
 
 	//control factory
 	virtual wxObject* Create(wxWindow* /*parent*/, ibVisualHost* /*visualHost*/) override;
-	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first�reated) override;
+	virtual void OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstРЎreated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
@@ -222,7 +222,7 @@ public:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory writer = ibWriterMemory());
 
 private:
 	ibPropertyUInteger* m_propertyRows = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categorySizer, wxT("Rows"), _("Rows"), 0);

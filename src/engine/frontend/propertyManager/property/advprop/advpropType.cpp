@@ -104,7 +104,8 @@ ibPGTypeProperty::ibPGTypeProperty(const ibPropertyObject* property, const ibSel
 	AddPrivateChild(m_precision);
 	m_scale = new wxUIntProperty(_("Scale"), wxT("scale"), 0);
 	AddPrivateChild(m_scale);
-	m_date_time = new wxEnumProperty(_("Date time"), wxT("date_time"), GetDateTime(), ibDateFractions::ibDateFractions_Date);
+	{ wxPGChoices dtChoices = GetDateTime();
+	m_date_time = new wxEnumProperty(_("Date time"), wxT("date_time"), dtChoices, ibDateFractions::ibDateFractions_Date); }
 	AddPrivateChild(m_date_time);
 	m_length = new wxUIntProperty(_("Length"), wxT("length"), 0);
 	AddPrivateChild(m_length);

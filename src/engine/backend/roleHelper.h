@@ -119,7 +119,7 @@ protected:
 
 	//load & save role in metaobject 
 	bool LoadRole(ibReaderMemory& reader);
-	bool SaveRole(ibWriterMemory& writer = ibWriterMemory()) const;
+	bool SaveRole(ibWriterMemory& writer) const;
 
 	/**
 	* Añade una propiedad al objeto.

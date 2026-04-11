@@ -40,9 +40,10 @@ ibValue ibValueForm::ibValueFormCollectionControl::GetIteratorAt(unsigned int id
 	auto structurePos = m_formOwner->m_listControl.begin();
 	std::advance(structurePos, idx);
 
+	ibValue controlValue(*structurePos);
 	return ibValue::CreateAndPrepareValueRef<ibValueContainer::ibValueReturnContainer>(
 		(*structurePos)->GetControlName(),
-		ibValue(*structurePos)
+		controlValue
 	);
 }
 
@@ -144,7 +145,8 @@ bool ibValueForm::ibValueFormCollectionControl::CallAsFunc(const long lMethodNum
 		pvarRetValue = m_formOwner->FindControl(paParams[0]->GetString());
 		return true;
 	case enControlProperty:
-		pvarRetValue = Property(*paParams[0], lSizeArray > 1 ? *paParams[1] : ibValue());
+	{	ibValue defaultVal;
+		pvarRetValue = Property(*paParams[0], lSizeArray > 1 ? *paParams[1] : defaultVal); }
 		return true;
 	case enControlCount:
 		pvarRetValue = Count();

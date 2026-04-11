@@ -31,8 +31,9 @@ ibMetaView* ibMetaDocument::DoCreateView()
 
 wxString ibMetaDocument::GetModuleName() const
 {
-	return m_metaObject ?
-		m_metaObject->GetFullName() : wxEmptyString;
+	if (m_metaObject)
+		return m_metaObject->GetFullName();
+	return wxString();
 }
 
 ibMetaDocument::ibMetaDocument(ibMetaDocument* docParent) :

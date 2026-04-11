@@ -673,8 +673,8 @@ int ibValueMetaObjectRecordDataHierarchyMutableRef::ProcessPredefinedValue(const
 		dbStatement->SetParamString(1, srcPredefined->GetPredefinedGuid().str());
 
 		const wxObjectDataPtr<ibPredefinedValueObject>& predefinedParentValue = srcPredefined->GetPredefinedParent();
-		ibValuePtr<ibValueReferenceDataObject> referenceValue =
-			ibValueReferenceDataObject::Create(this, predefinedParentValue != nullptr ? predefinedParentValue->GetPredefinedGuid() : wxNullGuid);
+		ibValuePtr<ibValueReferenceDataObject> referenceValue(
+			ibValueReferenceDataObject::Create(this, predefinedParentValue != nullptr ? predefinedParentValue->GetPredefinedGuid() : wxNullGuid));
 
 		int position = 2;
 
@@ -722,8 +722,8 @@ int ibValueMetaObjectRecordDataHierarchyMutableRef::ProcessPredefinedValue(const
 		dbStatement->SetParamString(1, srcPredefined->GetPredefinedGuid().str());
 
 		const wxObjectDataPtr<ibPredefinedValueObject>& predefinedParentValue = srcPredefined->GetPredefinedParent();
-		ibValuePtr<ibValueReferenceDataObject> referenceValue =
-			ibValueReferenceDataObject::Create(this, predefinedParentValue != nullptr ? predefinedParentValue->GetPredefinedGuid() : wxNullGuid);
+		ibValuePtr<ibValueReferenceDataObject> referenceValue(
+			ibValueReferenceDataObject::Create(this, predefinedParentValue != nullptr ? predefinedParentValue->GetPredefinedGuid() : wxNullGuid));
 
 		int position = 2;
 
@@ -933,7 +933,7 @@ bool ibValueMetaObjectRegisterData::UpdateCurrentRecords(const wxString& tableNa
 		const ibTypeDescription& typeDesc = metaRec->GetTypeDesc();
 		for (auto& clsid : typeDesc.GetClsidList()) {
 			if (!(*m_propertyAttributeRecorder)->ContainType(clsid)) {
-				int retCode = DATABASE_LAYER_QUERY_RESULT_ERROR; wxString clsStr; clsStr << wxLongLong_t(clsid);
+				int retCode = DATABASE_LAYER_QUERY_RESULT_ERROR; wxString clsStr; clsStr << static_cast<wxLongLong_t>(clsid);
 				retCode = db_query->RunQuery(wxT("DELETE FROM %s WHERE %s_RTRef = ") + clsStr, tableName, metaRec->GetFieldNameDB());
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return false;

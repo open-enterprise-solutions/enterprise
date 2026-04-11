@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, 2Ñ-team
+//	Author		: Maxim Kornienko, 2ï¿½-team
 //	Description : base value  
 ////////////////////////////////////////////////////////////////////////////
 
@@ -623,7 +623,7 @@ wxString ibValue::GetString() const
 		return dateTime.Format("%d.%m.%Y %H:%M:%S");
 	}
 	case ibValueTypes::TYPE_REFFER:
-		return m_pRef ? m_pRef->GetString() : wxEmptyString;
+		return m_pRef ? m_pRef->GetString() : wxString(wxEmptyString);
 	};
 
 	return GetClassName();

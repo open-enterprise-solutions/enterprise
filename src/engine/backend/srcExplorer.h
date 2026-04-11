@@ -30,7 +30,8 @@ private:
 			wxT("ref"), _("Ref"), object->GetMetaID(), true, false, false, true, { cid }, object
 		};
 
-		for (const auto child : object->GetGenericAttributeArrayObject()) ibSourceExplorer::AppendSource(child);
+		std::vector<ibValueMetaObjectAttributeBase*> genArray1;
+		for (const auto child : object->GetGenericAttributeArrayObject(genArray1)) ibSourceExplorer::AppendSource(child);
 	}
 
 	ibSourceExplorer(const ibValueMetaObjectAttributeBase* object, bool enabled = true, bool visible = true) {
@@ -46,7 +47,8 @@ private:
 			object->GetName(), object->GetSynonym(), object->GetMetaID(), true, true, true, true,  object->GetTypeDesc(), object
 		};
 
-		for (const auto child : object->GetGenericAttributeArrayObject()) ibSourceExplorer::AppendSource(child);
+		std::vector<ibValueMetaObjectAttributeBase*> genArray2;
+		for (const auto child : object->GetGenericAttributeArrayObject(genArray2)) ibSourceExplorer::AppendSource(child);
 	}
 
 public:

@@ -1852,11 +1852,11 @@ public:
 
 	bool IsFrozen() const;
 
-	void DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells, ibGridCellCacheArray& storage = ibGridCellCacheArray());
+	void DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells, ibGridCellCacheArray storage = ibGridCellCacheArray());
 	void DrawGridSpace(wxDC& dc, ibGridWindow* gridWindow);
 	void DrawAllGridLines();
 	void DrawAllGridWindowLines(wxDC& dc, const wxRegion& reg, ibGridWindow* gridWindow);
-	void DrawCell(wxDC& dc, const ibGridCellCoords&, ibGridCellCache& param = ibGridCellCache());
+	void DrawCell(wxDC& dc, const ibGridCellCoords&, ibGridCellCache param = ibGridCellCache());
 	void DrawBorder(wxDC& dc, const ibGridCellCacheArray& storage);
 	void DrawHighlight(wxDC& dc, const ibGridCellCoordsArray& cells);
 	void DrawFrozenBorder(wxDC& dc, ibGridWindow* gridWindow);

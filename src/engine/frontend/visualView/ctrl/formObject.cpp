@@ -616,7 +616,7 @@ void ibValueForm::AttachIdleHandler(const wxString& procedureName, int interval,
 
 	for (unsigned int i = 0; i < procedureName.length(); i++) {
 		if (!((procedureName[i] >= 'A' && procedureName[i] <= 'Z') || (procedureName[i] >= 'a' && procedureName[i] <= 'z') ||
-			(procedureName[i] >= 'À' && procedureName[i] <= 'ß') || (procedureName[i] >= 'à' && procedureName[i] <= 'ÿ') ||
+			(procedureName[i] >= L'\u0410' && procedureName[i] <= L'\u042F') || (procedureName[i] >= L'\u0430' && procedureName[i] <= L'\u044F') ||
 			(procedureName[i] >= '0' && procedureName[i] <= '9')))
 		{
 			ibBackendCoreException::Error(_("Procedure can enter only numbers, letters and the symbol \"_\""));
@@ -625,7 +625,7 @@ void ibValueForm::AttachIdleHandler(const wxString& procedureName, int interval,
 	}
 
 	if (m_procUnit != nullptr && m_procUnit->FindMethod(procedureName, true)) {
-		auto& it = m_idleHandlerArray.find(procedureName);
+		auto it = m_idleHandlerArray.find(procedureName);
 		if (it == m_idleHandlerArray.end()) {
 			wxTimer* timer = new wxTimer();
 			timer->Bind(wxEVT_TIMER, &ibValueForm::OnIdleHandler, this);
@@ -643,7 +643,7 @@ void ibValueForm::DetachIdleHandler(const wxString& procedureName)
 
 	for (unsigned int i = 0; i < procedureName.length(); i++) {
 		if (!((procedureName[i] >= 'A' && procedureName[i] <= 'Z') || (procedureName[i] >= 'a' && procedureName[i] <= 'z') ||
-			(procedureName[i] >= 'À' && procedureName[i] <= 'ß') || (procedureName[i] >= 'à' && procedureName[i] <= 'ÿ') ||
+			(procedureName[i] >= L'\u0410' && procedureName[i] <= L'\u042F') || (procedureName[i] >= L'\u0430' && procedureName[i] <= L'\u044F') ||
 			(procedureName[i] >= '0' && procedureName[i] <= '9')))
 		{
 			ibBackendCoreException::Error(_("Procedure can enter only numbers, letters and the symbol \"_\""));
@@ -652,7 +652,7 @@ void ibValueForm::DetachIdleHandler(const wxString& procedureName)
 	}
 
 	if (m_procUnit != nullptr && m_procUnit->FindMethod(procedureName, true)) {
-		auto& it = m_idleHandlerArray.find(procedureName);
+		auto it = m_idleHandlerArray.find(procedureName);
 		if (it != m_idleHandlerArray.end()) {
 			wxTimer* timer = it->second;
 			m_idleHandlerArray.erase(it);

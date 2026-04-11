@@ -196,7 +196,7 @@ bool wxTStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 						return stringUtils::CompareString(entry.m_code, language->GetLangCode()); });
 
 				const wxString& strTranslate =
-					iterator != array.end() ? iterator->m_data : wxEmptyString;
+					iterator != array.end() ? wxString(iterator->m_data) : wxString();
 
 				if (arrayLanguage.size() > 1) {
 

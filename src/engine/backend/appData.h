@@ -60,7 +60,7 @@ public:
 		m_listSession.emplace_back(runMode, startedTime, strUserName, strComputerName, strSession);
 	}
 
-	wxString GetSessionArrayHash() const { return m_sessionArrayHash; }
+	wxString GetSessionArrayHash() const { return wxString(m_sessionArrayHash.str()); }
 
 	wxString GetUserName(unsigned int idx) const;
 	wxString GetComputerName(unsigned int idx) const;

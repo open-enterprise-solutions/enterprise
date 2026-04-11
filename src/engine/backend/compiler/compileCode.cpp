@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, 2С-team
+//	Author		: Maxim Kornienko, 2пїЅ-team
 //	Description : compile module 
 ////////////////////////////////////////////////////////////////////////////
 
@@ -33,7 +33,7 @@ ibCompileCode::ibCompileCode() :
 {
 	InitializeCompileModule();
 
-	// we don’t look for local variables in parent contexts!
+	// we donпїЅt look for local variables in parent contexts!
 	m_rootContext->m_numFindLocalInParent = 0;
 }
 
@@ -45,7 +45,7 @@ ibCompileCode::ibCompileCode(const wxString& strModuleName, const wxString& strD
 {
 	InitializeCompileModule();
 
-	// we don’t look for local variables in parent contexts!
+	// we donпїЅt look for local variables in parent contexts!
 	m_rootContext->m_numFindLocalInParent = 0;
 }
 
@@ -57,7 +57,7 @@ ibCompileCode::ibCompileCode(const wxString& strFileName) :
 {
 	InitializeCompileModule();
 
-	// we don’t look for local variables in parent contexts!
+	// we donпїЅt look for local variables in parent contexts!
 	m_rootContext->m_numFindLocalInParent = 0;
 }
 
@@ -764,7 +764,7 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 			AddLineInfo(code);
 			code.m_numOper = OPER_SET_ARRAY_SIZE;
 			code.m_param1 = variable;
-			code.m_param2.m_numArray = nArrayCount;//число элементов в массиве
+			code.m_param2.m_numArray = nArrayCount;//пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 			m_cByteCode.m_listCode.emplace_back(std::move(code));
 		}
 
@@ -897,7 +897,7 @@ bool ibCompileCode::GetFunction(const wxString& strName, std::shared_ptr<ibCompi
 			if (pCurModule->GetContext()->FindFunction(strName, function)) { // found
 				// see if this is an export function or not
 				if (numCanUseLocalInParent > 0 || function->m_bExport)
-					break;//ок
+					break;//пїЅпїЅ
 				function = nullptr;
 			}
 			numCanUseLocalInParent--;
@@ -977,7 +977,7 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 			if (code.m_param1.m_numArray == DEF_VAR_SKIP) { // need to substitute the default value
 				defaultValue = true;
 			}
-			else {  //тип передачи значений
+			else {  //пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 				code.m_param2.m_numIndex = foundedFunc->m_listParam[i].m_bByRef;
 			}
 		}
@@ -1073,7 +1073,7 @@ bool ibCompileCode::CompileFunction(ibCompileContext* context)
 
 		// check for typing
 		const wxString typeVar = IsTypeVar() ?
-			GetTypeVar() : wxEmptyString;
+			GetTypeVar() : wxString(wxEmptyString);
 
 		ibCompileContext::ibFunction::ibParamVariable cVariable;
 		if (IsNextKeyWord(KEY_VAL)) {
@@ -1744,7 +1744,7 @@ loopLabel:
 		//determine the call type (i.e. is it setting or getting an array value)
 		//Example:
 		//Arr[10]=12; - Set
-		//А=Arr[10]; - Get
+		//пїЅ=Arr[10]; - Get
 		//Arr[10][2]=12; - Get,Set
 		numIsSet = 0;
 		if (IsNextDelimeter('[')) { //check the array variable type (multidimensional array support)
@@ -1777,13 +1777,13 @@ loopLabel:
 			code.m_param3 = variableKey;//array index (more precisely key since associative array is used)
 			variable = context->CreateVariable();
 			code.m_param1 = variable;// variable into which the value is returned
-			CorrectTypeDef(variableKey);// check value type индексной переменной
+			CorrectTypeDef(variableKey);// check value type пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 			m_cByteCode.m_listCode.emplace_back(std::move(code));
 		}
 		goto loopLabel;
 	}
 
-	if (IsNextDelimeter('.')) { // this is a method call или атрибута агрегатного объекта
+	if (IsNextDelimeter('.')) { // this is a method call пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 		GETDelimeter('.');
 		wxString strIdentifier = GETIdentifier(true);
 		const int numConst = GetConstString(strIdentifier);
@@ -2427,7 +2427,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		const int numCurPriority = gs_operPriority[lex.m_numData];
 
 		if (nPriority >= numCurPriority) {
-			SetError(ERROR_EXPRESSION);// сompare the priorities of the left (previous operation) and the currently running operation
+			SetError(ERROR_EXPRESSION);// пїЅompare the priorities of the left (previous operation) and the currently running operation
 			return ibParamUnit();
 		}
 
@@ -2478,7 +2478,7 @@ delimOperation:
 	if ((prevLexem.m_lexType == DELIMITER && prevLexem.m_numData != ';') || (prevLexem.m_lexType == KEYWORD && prevLexem.m_numData == KEY_AND) || (prevLexem.m_lexType == KEYWORD && prevLexem.m_numData == KEY_OR)) {
 		if (prevLexem.m_numData >= 0 && prevLexem.m_numData <= 255) {
 			const int numCurPriority = gs_operPriority[prevLexem.m_numData];
-			if (nPriority < numCurPriority) { // сompare the priorities of the left (previous operation) and the currently running operation
+			if (nPriority < numCurPriority) { // пїЅompare the priorities of the left (previous operation) and the currently running operation
 
 				ibByteUnit code;
 				AddLineInfo(code);

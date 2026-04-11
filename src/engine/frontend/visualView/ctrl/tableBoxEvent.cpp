@@ -276,7 +276,7 @@ void ibValueModelTableBox::OnContextMenu(ibDataViewEvent& event)
 		const ibActionID& id = actionData.GetID(idx);
 		if (id != wxNOT_FOUND) {
 			wxMenuItem* menuItem = menu.Append(id, actionData.GetCaptionByID(id));
-			ibPictureDescription& pictureDesc = actionData.GetPictureByID(id);
+			ibPictureDescription pictureDesc = actionData.GetPictureByID(id);
 			if (!pictureDesc.IsEmptyPicture())
 				menuItem->SetBitmap(ibBackendPicture::CreatePicture(pictureDesc));
 		}

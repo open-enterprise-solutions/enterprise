@@ -88,8 +88,8 @@ ibValue ibValueSystemFunction::Int(const ibValue& cValue)
 {
 	ttmath::Int<TTMATH_BITS(128)> int128;
 	ibNumber fNumber = cValue.GetNumber();
-	if (!fNumber.ToInt(int128)) return int128;
-	else return 0;
+	if (!fNumber.ToInt(int128)) return ibValue(ibNumber(int128));
+	else return ibValue(ibNumber(0));
 }
 
 ibNumber ibValueSystemFunction::Log10(const ibValue& cValue)
@@ -864,14 +864,25 @@ int ibValueSystemFunction::Rand()
 
 int ibValueSystemFunction::ArgCount()//ArgCount
 {
+#ifdef __WXMSW__
 	return __argc;
+#else
+	return wxTheApp ? wxTheApp->argc : 0;
+#endif
 }
 
 wxString ibValueSystemFunction::ArgValue(int n)//ArgValue
 {
-	if (n<0 || n> __argc)
+	int count = ArgCount();
+	if (n < 0 || n > count)
 		ibBackendCoreException::Error(_("Invalid argument index"));
+#ifdef __WXMSW__
 	return __wargv[n];
+#else
+	if (wxTheApp)
+		return wxString(wxTheApp->argv[n]);
+	return wxString();
+#endif
 }
 
 wxString ibValueSystemFunction::ComputerName()//ComputerName

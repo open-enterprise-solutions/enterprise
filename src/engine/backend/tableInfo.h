@@ -1133,7 +1133,7 @@ public:
 		wxASSERT(item1.IsOk() && item2.IsOk());
 
 		ibSortOrder::ibSortData* foundedSort = m_sortOrder.GetSortByID(col);
-		if (foundedSort == nullptr && col != unsigned int(wxNOT_FOUND))
+		if (foundedSort == nullptr && col != static_cast<unsigned int>(wxNOT_FOUND))
 			return 0;
 
 		ibValueTableRow* node1 = GetViewData<ibValueTableRow>(item1);
@@ -1574,7 +1574,7 @@ public:
 		wxASSERT(item1.IsOk() && item2.IsOk());
 
 		ibSortOrder::ibSortData* foundedSort = m_sortOrder.GetSortByID(col);
-		if (foundedSort == nullptr && col != unsigned int(wxNOT_FOUND))
+		if (foundedSort == nullptr && col != static_cast<unsigned int>(wxNOT_FOUND))
 			return 0;
 
 		ibValueTreeNode* node1 = GetViewData<ibValueTreeNode>(item1);

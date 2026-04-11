@@ -119,28 +119,28 @@ public:
 	static void ClearCurrentRunModule() { m_currentRunModule = nullptr; }
 
 	//run context
-	static void ibProcUnit::AddRunContext(ibRunContext* runContext) { ms_runContext.push_back(runContext); }
-	static unsigned int ibProcUnit::GetCountRunContext() { return ms_runContext.size(); }
+	static void AddRunContext(ibRunContext* runContext) { ms_runContext.push_back(runContext); }
+	static unsigned int GetCountRunContext() { return ms_runContext.size(); }
 
-	static ibRunContext* ibProcUnit::GetPrevRunContext() {
+	static ibRunContext* GetPrevRunContext() {
 		if (ms_runContext.size() < 2)
 			return nullptr;
 		return ms_runContext[ms_runContext.size() - 2];
 	}
 
-	static ibRunContext* ibProcUnit::GetCurrentRunContext() {
+	static ibRunContext* GetCurrentRunContext() {
 		if (!ms_runContext.size())
 			return nullptr;
 		return ms_runContext.back();
 	}
 
-	static ibRunContext* ibProcUnit::GetRunContext(unsigned int idx) {
+	static ibRunContext* GetRunContext(unsigned int idx) {
 		if (ms_runContext.size() < idx)
 			return nullptr;
 		return ms_runContext[idx];
 	}
 
-	static void ibProcUnit::BackRunContext() { ms_runContext.pop_back(); }
+	static void BackRunContext() { ms_runContext.pop_back(); }
 
 	static ibByteCode* GetCurrentByteCode() {
 		const ibRunContext* runContext = GetCurrentRunContext();

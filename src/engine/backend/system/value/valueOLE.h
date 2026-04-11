@@ -93,16 +93,20 @@ public:
 
 	//operator '=='
 	virtual bool CompareValueEQ(const ibValue& cParam) const {
+#ifdef __WXMSW__
 		ibValueOLE* m_pValueOLE = dynamic_cast<ibValueOLE*>(cParam.GetRef());
 		if (m_pValueOLE) return m_dispatch == m_pValueOLE->m_dispatch;
-		else return false;
+#endif
+		return false;
 	}
 
 	//operator '!='
 	virtual bool CompareValueNE(const ibValue& cParam) const {
+#ifdef __WXMSW__
 		ibValueOLE* m_pValueOLE = dynamic_cast<ibValueOLE*>(cParam.GetRef());
 		if (m_pValueOLE) return m_dispatch != m_pValueOLE->m_dispatch;
-		else return false;
+#endif
+		return false;
 	}
 
 	//check is empty

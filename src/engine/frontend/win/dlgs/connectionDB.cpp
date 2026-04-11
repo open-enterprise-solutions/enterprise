@@ -146,10 +146,13 @@ void ibDialogConnection::SaveConnectionData()
 	//document.Save(strFileName);
 }
 
+#ifdef OES_USE_POSTGRESQL
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
+#endif
 
 void ibDialogConnection::TestConnectionOnButtonClick(wxCommandEvent& event)
 {
+#ifdef OES_USE_POSTGRESQL
 	ibDatabaseLayerPostgres* postgresDatabaseLayer = new ibDatabaseLayerPostgres;
 	bool sucess = postgresDatabaseLayer->Open(
 		m_textCtrlServer->GetValue(),
@@ -160,6 +163,9 @@ void ibDialogConnection::TestConnectionOnButtonClick(wxCommandEvent& event)
 	);
 
 	postgresDatabaseLayer->Close();
+#else
+	wxMessageBox(_("PostgreSQL driver not available"));
+#endif
 	event.Skip();
 }
 

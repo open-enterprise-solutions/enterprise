@@ -13,4 +13,4 @@ public:
 	{
 		ibPG_IMPLEMENT_PROPERTY_CALLBACK(wxColourProperty, ibPropertyColour::ms_propertyColour);
 	}
-}g_enumLoader;
+}s_enumLoader;

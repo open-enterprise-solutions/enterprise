@@ -12,7 +12,7 @@ class ibPGListProperty : public wxPGProperty {
 
 public:
 	ibPGListProperty(const wxString& label = wxPG_LABEL,
-		const wxString& name = wxPG_LABEL, wxPGChoices& choices = wxPGChoices(), int value = 0);
+		const wxString& name = wxPG_LABEL, wxPGChoices choices = wxPGChoices(), int value = 0);
 
 	virtual wxString ValueToString(wxVariant& value,
 		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;

@@ -766,15 +766,15 @@ bool ibValueMetaObjectAttributeBase::GetValueAttribute(const wxString& fieldName
 
 			if (createData) {
 
-				ibValuePtr<ibValueReferenceDataObject> created_reference =
-					ibValueReferenceDataObject::CreateFromPtr(metaData, bufferData.GetData());
+				ibValuePtr<ibValueReferenceDataObject> created_reference(
+					ibValueReferenceDataObject::CreateFromPtr(metaData, bufferData.GetData()));
 
 				retValue = created_reference;
 				return created_reference != nullptr;
 			}
 
-			ibValuePtr<ibValueReferenceDataObject> created_reference =
-				ibValueReferenceDataObject::Create(metaData, bufferData.GetData());
+			ibValuePtr<ibValueReferenceDataObject> created_reference(
+				ibValueReferenceDataObject::Create(metaData, bufferData.GetData()));
 
 			retValue = created_reference;
 			return created_reference != nullptr;
@@ -787,8 +787,8 @@ bool ibValueMetaObjectAttributeBase::GetValueAttribute(const wxString& fieldName
 				const ibValueMetaObject* metaObject = typeCtor->GetMetaObject();
 				wxASSERT(metaObject);
 
-				ibValuePtr<ibValueReferenceDataObject> created_reference =
-					ibValueReferenceDataObject::Create(metaData, metaObject->GetMetaID());
+				ibValuePtr<ibValueReferenceDataObject> created_reference(
+					ibValueReferenceDataObject::Create(metaData, metaObject->GetMetaID()));
 
 				retValue = created_reference;
 				return created_reference != nullptr;

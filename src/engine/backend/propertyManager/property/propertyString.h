@@ -146,7 +146,7 @@ public:
 		return std::move(result);
 	}
 
-	bool ibPropertyTString::GetValueAsTranslateString(wxString& result) const {
+	bool GetValueAsTranslateString(wxString& result) const {
 		if (GetValueAsString(result))
 			return ibBackendLocalization::GetTranslateGetRawLocText(result, result);
 		return false;

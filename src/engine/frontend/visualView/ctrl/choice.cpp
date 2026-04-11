@@ -21,7 +21,7 @@ wxObject* ibValueChoice::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return choice;
 }
 
-void ibValueChoice::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first—reated)
+void ibValueChoice::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first–°reated)
 {
 }
 
@@ -48,7 +48,7 @@ bool ibValueChoice::LoadData(ibReaderMemory& reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueChoice::SaveData(ibWriterMemory& writer)
+bool ibValueChoice::SaveData(ibWriterMemory writer)
 {
 	return ibValueWindow::SaveData(writer);
 }

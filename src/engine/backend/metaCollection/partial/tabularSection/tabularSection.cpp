@@ -117,7 +117,7 @@ bool ibValueTabularSectionDataObjectBase::SetValueByMetaID(const ibDataViewItem&
 bool ibValueTabularSectionDataObjectBase::GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const
 {
 	if (m_metaTable->IsNumberLine(id)) {
-		pvarMetaVal = GetRow(item) + 1;
+		pvarMetaVal = ibValue(ibNumber(static_cast<int>(GetRow(item) + 1)));
 		return true;
 	}
 
@@ -446,12 +446,12 @@ ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollec
 	wxDELETE(m_methodHelper);
 }
 
-bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//индекс массива должен начинаться с 0
+bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0
 {
 	return false;
 }
 
-bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //индекс массива должен начинаться с 0
+bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0
 {
 	unsigned int index = varKeyValue.GetUInteger();
 	if ((index < 0 || index >= m_listColumnInfo.size() && !appData->DesignerMode())) {

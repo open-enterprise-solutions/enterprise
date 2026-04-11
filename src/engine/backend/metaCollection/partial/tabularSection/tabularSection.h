@@ -28,7 +28,7 @@ private:
 		public ibVariantDataValueImpl<ibValue> {
 	public:
 		ibVariantDataValueNumberLine(const long& cValue)
-			: ibVariantDataValueImpl(cValue)
+			: ibVariantDataValueImpl(static_cast<signed int>(cValue))
 		{
 		}
 	};
@@ -92,7 +92,7 @@ public:
 		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const {
 			if (m_listColumnInfo.size() < idx)
 				return nullptr;
-			auto& it = m_listColumnInfo.begin();
+			auto it = m_listColumnInfo.begin();
 			std::advance(it, idx);
 			return it->second;
 		}

@@ -230,9 +230,9 @@ wxString ibBackendPicture::CreateBase64Image(const wxImage& image) {
 }
 
 wxImage ibBackendPicture::GetImageFromBase64(const wxString& src, const wxSize& size) {
-	const wxMemoryBuffer& buffer = wxBase64Decode(src);
-	const wxImage& image(wxMemoryInputStream(
-		buffer.GetData(), buffer.GetDataLen()));
+	const wxMemoryBuffer buffer = wxBase64Decode(src);
+	wxMemoryInputStream stream(buffer.GetData(), buffer.GetDataLen());
+	wxImage image(stream);
 	return size != wxDefaultSize ? image.Scale(
 		size.x, size.y, wxIMAGE_QUALITY_HIGH) : image;
 }

@@ -122,7 +122,7 @@ void ibValueTextCtrl::OnSelectButtonPressed(wxCommandEvent& event)
 							const ibMetaData* metaData = GetMetaData();
 							const ibValueMetaObject* foundedObject = metaData != nullptr
 								? metaData->FindAnyObjectByFilter(id) : nullptr;
-							metaObject->ProcessChoice(this, foundedObject != nullptr ? foundedObject->GetName() : wxEmptyString, GetSelectMode());
+							metaObject->ProcessChoice(this, foundedObject != nullptr ? foundedObject->GetName() : wxString(), GetSelectMode());
 						}
 						else {
 							metaObject->ProcessChoice(this, wxEmptyString, GetSelectMode());

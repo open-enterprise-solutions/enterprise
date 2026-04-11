@@ -9,7 +9,7 @@
     
 BEGIN_EVENT_TABLE(ibDialogSettings, wxPropertySheetDialog)
     EVT_INIT_DIALOG(        ibDialogSettings::OnInitDialog)
-    EVT_HELP(wxID_ANY,                      OnHelp) 
+    EVT_HELP(wxID_ANY,                      ibDialogSettings::OnHelp)
 END_EVENT_TABLE()
 
 ibDialogSettings::ibDialogSettings(wxWindow* parent)

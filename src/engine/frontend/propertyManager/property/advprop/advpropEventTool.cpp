@@ -138,7 +138,7 @@ wxPGEditorDialogAdapter* ibPGEventToolProperty::GetEditorDialog() const
 			if (strActionEvent.IsEmpty()) {
 				wxPGProperty* pgProp = pg->GetPropertyByName(wxT("Name"));
 				const wxString& strActionEvent =
-					(pgProp ? pgProp->GetDisplayedString() : wxEmptyString) + prop->GetName();
+					(pgProp ? pgProp->GetDisplayedString() : wxString()) + prop->GetName();
 				SetValue(new ibVariantDataAction(strActionEvent));
 				return true;
 			}

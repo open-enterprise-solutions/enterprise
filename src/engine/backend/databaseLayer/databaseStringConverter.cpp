@@ -1,7 +1,7 @@
 #include "databaseStringConverter.h"
 
 static wxCriticalSection s_dbStringConverterCS;
-static wxCSConv g_def_encoding = wxT("UTF-8");
+static wxCSConv g_def_encoding("UTF-8");
 
 // Default the encoding converter
 ibDatabaseStringConverter::ibDatabaseStringConverter()

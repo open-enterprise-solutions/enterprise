@@ -11,9 +11,9 @@ wxObject* ibVisualHost::Create(ibValueFrame *control, wxWindow* wndParent)
 	return control->Create(wndParent, this);
 }
 
-void ibVisualHost::OnCreated(ibValueFrame *control, wxObject* obj, wxWindow* wndParent, bool first—reated)
+void ibVisualHost::OnCreated(ibValueFrame *control, wxObject* obj, wxWindow* wndParent, bool first–°reated)
 {
-	control->OnCreated(obj, wndParent, this, first—reated);
+	control->OnCreated(obj, wndParent, this, first–°reated);
 }
 
 void ibVisualHost::OnSelected(ibValueFrame *control, wxObject* obj) 

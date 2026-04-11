@@ -54,7 +54,7 @@ template <class T>
 class ibCtorSystemControlType : public ibCtorControlType<T> {
 public:
 	ibCtorSystemControlType(const wxString& className, const wxString& classType, const ibClassID& clsid)
-		: ibCtorControlType(className, classType, clsid) {
+		: ibCtorControlType<T>(className, classType, clsid) {
 	}
 	virtual bool IsControlSystem() const {
 		return true;

@@ -21,7 +21,7 @@ public:
 			ibCtorMetaValueType* so = m_metaData->GetTypeCtor(object, ibCtorObjectMetaType::ibCtorObjectMetaType_Manager);
 			if (so == nullptr)
 				continue;
-			ibValuePtr<ibValue> createdValue = so->CreateObject();
+			ibValuePtr<ibValue> createdValue(so->CreateObject());
 			if (createdValue != nullptr)
 				createdValue->PrepareNames();
 			ibValueStructure::Insert(object->GetName(), createdValue);

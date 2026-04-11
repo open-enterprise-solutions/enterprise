@@ -102,7 +102,7 @@ wxObject* ibValueModelTableBoxColumn::Create(wxWindow* wxparent, ibVisualHost* v
 	return dataViewColumn;
 }
 
-void ibValueModelTableBoxColumn::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first—reated)
+void ibValueModelTableBoxColumn::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool first–°reated)
 {
 	ibDataViewCtrl* dataViewCtrl = dynamic_cast<ibDataViewCtrl*>(wxparent);
 	wxASSERT(dataViewCtrl);
@@ -283,7 +283,7 @@ bool ibValueModelTableBoxColumn::LoadData(ibReaderMemory& reader)
 	return ibValueControl::LoadData(reader);
 }
 
-bool ibValueModelTableBoxColumn::SaveData(ibWriterMemory& writer)
+bool ibValueModelTableBoxColumn::SaveData(ibWriterMemory writer)
 {
 	m_propertyTitle->SaveData(writer);
 	m_propertyRepresentation->SaveData(writer);

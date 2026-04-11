@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, 2Ñ-team
+//	Author		: Maxim Kornienko, 2ï¿½-team
 //	Description : translate error and exception handler 
 ////////////////////////////////////////////////////////////////////////////
 
@@ -134,7 +134,7 @@ void ibBackendException::ProcessError(const ibBackendException* err, const ibByt
 				strModuleData = foundedDoc->GetModuleText();
 			}
 
-			const wxString& strCodeError = isEvalMode ? wxEmptyString :
+			const wxString strCodeError = isEvalMode ? wxString(wxEmptyString) :
 				ibBackendException::FindErrorCodeLine(strModuleData, error.m_numString);
 
 			ibBackendException::ProcessExceptionError(strFileName,
@@ -178,9 +178,9 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 {
 	wxString strErrorMessage;
 
-	strErrorMessage += wxT("{") + strModuleName + wxT("(") + (gs_evalMode ? wxT(" ") : wxString::Format(wxT("%i"), currLine)) + wxT(")}: ");
+	strErrorMessage += wxT("{") + strModuleName + wxT("(") + (gs_evalMode ? wxString(wxT(" ")) : wxString::Format(wxT("%i"), currLine)) + wxT(")}: ");
 	strErrorMessage += (codeError > 0 ? ibBackendException::Format(codeError, strErrorDesc) : strErrorDesc) + wxT("\n");
-	strErrorMessage += (gs_evalMode ? wxEmptyString : strCodeError);
+	strErrorMessage += (gs_evalMode ? wxString(wxEmptyString) : strCodeError);
 
 	if (gs_evalMode) strErrorMessage.Replace(wxT('\n'), wxT(' '));
 

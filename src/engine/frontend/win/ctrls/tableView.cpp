@@ -383,7 +383,7 @@ bool ibTableViewCtrl::ShowFilter(struct ibFilterRow& filter)
 			return ibFilterRow();
 		}
 
-		wxFilterDialog::wxFilterDialog(wxWindow* parent, wxWindowID id,
+		wxFilterDialog(wxWindow* parent, wxWindowID id,
 			const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(600, 250), long style = wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER) :
 			wxDialog(parent, id, _("Filter"), pos, size, style)
 		{

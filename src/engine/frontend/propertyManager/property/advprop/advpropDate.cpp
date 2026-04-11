@@ -13,4 +13,4 @@ public:
 	{
 		ibPG_IMPLEMENT_PROPERTY_CALLBACK(wxDateProperty, ibPropertyDate::ms_propertyDate);
 	}
-}g_dateLoader;
+}s_dateLoaderDate;

@@ -63,7 +63,7 @@ bool ibValueMetaObject::BuildNewName()
 		const wxString& metaName = m_metaData->GetNewName(GetClassType(), GetParent(), metaPrevName.Left(length + 1));
 		SetName(metaName);
 		const wxString& metaPrevSynonym = m_propertySynonym->GetValueAsString();
-		const wxString& metaSynonym = metaPrevSynonym.Length() > 0 ? stringUtils::GenerateSynonym(metaName) : wxEmptyString;
+		const wxString& metaSynonym = metaPrevSynonym.Length() > 0 ? stringUtils::GenerateSynonym(metaName) : wxString(wxEmptyString);
 		SetSynonym(metaSynonym);
 	}
 

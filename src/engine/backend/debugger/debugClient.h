@@ -73,7 +73,7 @@ class BACKEND_API ibDebuggerClient {
 		void AttachConnection();
 		void DetachConnection(bool kill = false);
 
-		ibDebuggerClient::ibDebuggerClientConnection::ibDebuggerClientConnection(ibDebuggerClient* client, const wxString& hostName, unsigned short port) :
+		ibDebuggerClientConnection(ibDebuggerClient* client, const wxString& hostName, unsigned short port) :
 			wxThread(wxTHREAD_DETACHED),
 			m_hostName(hostName),
 			m_port(port),
@@ -88,7 +88,7 @@ class BACKEND_API ibDebuggerClient {
 			wxThread::SetPriority(wxPRIORITY_MIN);
 		}
 
-		ibDebuggerClient::ibDebuggerClientConnection::~ibDebuggerClientConnection() {
+		~ibDebuggerClientConnection() {
 
 			if (debugClient != nullptr)
 				debugClient->DeleteConnection(this);

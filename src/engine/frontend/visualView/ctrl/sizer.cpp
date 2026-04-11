@@ -32,7 +32,7 @@ bool ibValueSizer::LoadData(ibReaderMemory& reader)
 	return ibValueFrame::LoadData(reader);
 }
 
-bool ibValueSizer::SaveData(ibWriterMemory& writer)
+bool ibValueSizer::SaveData(ibWriterMemory writer)
 {
 	writer.w_stringZ(
 		m_propertyMinSize->GetValueAsString()

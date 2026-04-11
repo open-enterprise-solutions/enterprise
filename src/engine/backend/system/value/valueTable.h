@@ -111,7 +111,7 @@ public:
 				node->EraseValue(col);
 			}
 
-			auto& it = std::find_if(m_listColumnInfo.begin(), m_listColumnInfo.end(),
+			auto it = std::find_if(m_listColumnInfo.begin(), m_listColumnInfo.end(),
 				[col](ibValueModelTableColumnInfo* colInfo) {
 					return col == colInfo->GetColumnID();
 				}
@@ -123,7 +123,7 @@ public:
 		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const {
 			if (m_listColumnInfo.size() < idx)
 				return nullptr;
-			auto& it = m_listColumnInfo.begin();
+			auto it = m_listColumnInfo.begin();
 			std::advance(it, idx);
 			return *it;
 		}

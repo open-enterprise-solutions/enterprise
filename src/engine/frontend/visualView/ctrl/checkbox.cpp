@@ -84,7 +84,7 @@ wxObject* ibValueCheckbox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return checkbox;
 }
 
-void ibValueCheckbox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstÑreated)
+void ibValueCheckbox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstÐ¡reated)
 {
 }
 
@@ -177,7 +177,7 @@ bool ibValueCheckbox::LoadData(ibReaderMemory& reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueCheckbox::SaveData(ibWriterMemory& writer)
+bool ibValueCheckbox::SaveData(ibWriterMemory writer)
 {
 	writer.w_stringZ(m_propertyTitle->GetValueAsString());
 	writer.w_s32(m_propertyTitleLocation->GetValueAsInteger());

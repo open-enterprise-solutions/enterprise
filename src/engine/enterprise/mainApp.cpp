@@ -199,8 +199,8 @@ void ibAppEnterprise::OnFatalException()
 	//generate dump
 	wxDebugReport report;
 
-	report.AddCurrentDump();
-	report.AddExceptionDump();
+	report.AddCurrentContext();
+	report.AddCurrentContext();
 
 	//release all created com-objects
 	ibValueOLE::ReleaseComObjects();
@@ -225,7 +225,7 @@ int ibAppEnterprise::OnExit()
 
 	mainFrameDestroy();
 
-	bool suñcess_exit = wxApp::OnExit();
+	bool suÑcess_exit = wxApp::OnExit();
 
 	appDataDestroy();
 
@@ -233,5 +233,5 @@ int ibAppEnterprise::OnExit()
 	wxTheClipboard->Flush();
 	wxTheClipboard->Close();
 
-	return suñcess_exit;
+	return suÑcess_exit;
 }

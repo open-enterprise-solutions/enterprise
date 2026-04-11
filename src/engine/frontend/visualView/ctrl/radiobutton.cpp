@@ -22,7 +22,7 @@ wxObject* ibValueRadioButton::Create(wxWindow* wxparent, ibVisualHost *visualHos
 	return radioButton;
 }
 
-void ibValueRadioButton::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool first—reated)
+void ibValueRadioButton::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool first–°reated)
 {
 }
 
@@ -51,7 +51,7 @@ bool ibValueRadioButton::LoadData(ibReaderMemory &reader)
 	return ibValueWindow::LoadData(reader);
 }
 
-bool ibValueRadioButton::SaveData(ibWriterMemory &writer)
+bool ibValueRadioButton::SaveData(ibWriterMemory writer)
 {
 	return ibValueWindow::SaveData(writer);
 }

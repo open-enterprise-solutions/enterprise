@@ -16,7 +16,7 @@ wxObject* ibValueGridSizer::Create(wxWindow* /*parent*/, ibVisualHost* /*visualH
 	return new wxGridSizer(m_propertyRows->GetValueAsUInteger(), m_propertyCols->GetValueAsUInteger(), 0, 0);
 }
 
-void ibValueGridSizer::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool firstÑreated)
+void ibValueGridSizer::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool firstÐ¡reated)
 {
 }
 
@@ -50,7 +50,7 @@ bool ibValueGridSizer::LoadData(ibReaderMemory &reader)
 	return ibValueSizer::LoadData(reader);
 }
 
-bool ibValueGridSizer::SaveData(ibWriterMemory &writer)
+bool ibValueGridSizer::SaveData(ibWriterMemory writer)
 {
 	writer.w_s32(m_propertyRows->GetValueAsUInteger());
 	writer.w_s32(m_propertyCols->GetValueAsUInteger());

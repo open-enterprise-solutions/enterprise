@@ -9,6 +9,9 @@ class ibPropertyEnumLoader
 public:
 	ibPropertyEnumLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(wxEnumProperty, ibPropertyEnumBase::ms_propertyEnum);
+		ibPropertyEnumBase::ms_propertyEnum = [](const wxString& label, const wxString& name, const wxPGChoices& choices, const int& value) -> wxObject* {
+			wxPGChoices ch(choices);
+			return new wxEnumProperty(label, name, ch, value);
+		};
 	}
 }g_enumLoader;

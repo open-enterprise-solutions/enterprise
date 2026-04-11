@@ -39,7 +39,7 @@ ibValueSizerItem::ibValueSizerItem() : ibValueFrame()
 {
 }
 
-void ibValueSizerItem::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstÑreated)
+void ibValueSizerItem::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstÐ¡reated)
 {
 	ibValueFrame* object = visualHost->GetObjectBase(wxobject);
 
@@ -232,7 +232,7 @@ bool ibValueSizerItem::LoadData(ibReaderMemory& reader)
 	return ibValueFrame::LoadData(reader);
 }
 
-bool ibValueSizerItem::SaveData(ibWriterMemory& writer)
+bool ibValueSizerItem::SaveData(ibWriterMemory writer)
 {
 	//writer.w_s32(m_propertyProportion->GetValueAsInteger());
 	//writer.w_s64(m_propertyFlagBorder->GetValueAsInteger());

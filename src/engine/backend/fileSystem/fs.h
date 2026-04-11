@@ -47,7 +47,11 @@ public:
 	inline void			w_stringZ(const std::string& p) { w(p.c_str() ? p.c_str() : "", (u32)p.size()); w_u8(0); }
 	inline void			w_stringZ(const wxString& p) { const wxScopedCharBuffer s = p.utf8_str(); w(s.data() ? s.data() : "", (u32)s.length()); w_u8(0); }
 
+#ifdef _MSC_VER
 	void	__cdecl  	w_printf(const char* format, ...);
+#else
+	void	w_printf(const char* format, ...);
+#endif
 
 	// generalized chunking
 	u32				align();
@@ -96,10 +100,14 @@ public:
 	inline u8* pointer() const { return m_data; }
 	inline u32			size() const { return m_file_size; }
 	inline void			clear() { m_file_size = 0; m_pos = 0; }
+#ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable:4995)
+#endif
 	inline void			free() { m_file_size = 0; m_pos = 0; m_mem_size = 0; wxDELETE(m_data); }
+#ifdef _MSC_VER
 #pragma warning(pop)
+#endif
 	void* save_to();
 	virtual	void	flush() { };
 };
@@ -170,7 +178,7 @@ public:
 	inline	void		rewind() const { seek(0); }
 	u64 			    find_chunk(u64 ID, bool* bCompressed = nullptr) const;
 
-	inline	bool		r_chunk(u64 ID, void* dest) const {	// чтение Chunk'ов (4b-ID,4b-size,??b-m_data)
+	inline	bool		r_chunk(u64 ID, void* dest) const {	// пїЅпїЅпїЅпїЅпїЅпїЅ Chunk'пїЅпїЅ (4b-ID,4b-size,??b-m_data)
 		m_last_pos = tell();
 		u32	dwSize = find_chunk(ID);
 		if (dwSize != 0) {
@@ -180,7 +188,7 @@ public:
 		return false;
 	}
 
-	inline	bool		r_chunk(u64 ID, wxMemoryBuffer& dest) const {	// чтение Chunk'ов (4b-ID,4b-size,??b-m_data)
+	inline	bool		r_chunk(u64 ID, wxMemoryBuffer& dest) const {	// пїЅпїЅпїЅпїЅпїЅпїЅ Chunk'пїЅпїЅ (4b-ID,4b-size,??b-m_data)
 		m_last_pos = tell();
 		u32	dwSize = find_chunk(ID);
 		if (dwSize != 0) {
@@ -191,7 +199,7 @@ public:
 		return false;
 	}
 
-	inline	bool		r_chunk_safe(u64 ID, void* dest, u32 dest_size) const { // чтение Chunk'ов (4b-ID,4b-size,??b-m_data)
+	inline	bool		r_chunk_safe(u64 ID, void* dest, u32 dest_size) const { // пїЅпїЅпїЅпїЅпїЅпїЅ Chunk'пїЅпїЅ (4b-ID,4b-size,??b-m_data)
 		m_last_pos = tell();
 		u64	dwSize = find_chunk(ID);
 		if (dwSize != 0) {
@@ -202,7 +210,7 @@ public:
 		return false;
 	}
 
-	inline	bool		r_chunk_safe(u64 ID, wxMemoryBuffer& dest, u32 dest_size) const { // чтение Chunk'ов (4b-ID,4b-size,??b-m_data)
+	inline	bool		r_chunk_safe(u64 ID, wxMemoryBuffer& dest, u32 dest_size) const { // пїЅпїЅпїЅпїЅпїЅпїЅ Chunk'пїЅпїЅ (4b-ID,4b-size,??b-m_data)
 		m_last_pos = tell();
 		u64	dwSize = find_chunk(ID);
 		if (dwSize != 0) {
@@ -232,7 +240,7 @@ public:
 
 public:
 
-	// поиск Chunk'ов - возврат - размер или 0
+	// пїЅпїЅпїЅпїЅпїЅ Chunk'пїЅпїЅ - пїЅпїЅпїЅпїЅпїЅпїЅпїЅ - пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ 0
 	ibReader* open_chunk(u64 ID) const;
 	// iterators
 	ibReader* open_chunk_iterator(u64& ID, ibReader* previous = nullptr) const;	// nullptr=first
@@ -254,7 +262,7 @@ public:
 	{
 	}
 
-	// поиск Chunk'ов - возврат - размер или 0
+	// пїЅпїЅпїЅпїЅпїЅ Chunk'пїЅпїЅ - пїЅпїЅпїЅпїЅпїЅпїЅпїЅ - пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ 0
 	ibReaderMemory* open_chunk(u64 ID) const;
 	
 	// iterators

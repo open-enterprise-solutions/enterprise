@@ -26,6 +26,7 @@
 #include "backend/system/value/valueSpreadsheet.h"
 #include "backend/system/value/valueGuid.h"
 
+#include "backend/appData.h"
 #include "backend/actionInfo.h"
 #include "backend/moduleInfo.h"
 #include "backend/valueInfo.h"
@@ -179,7 +180,7 @@ public:
 
 	//form
 	std::vector<ibValueMetaObjectFormBase*> GetFormArrayObject(
-		std::vector<ibValueMetaObjectFormBase*>& array = std::vector<ibValueMetaObjectFormBase*>()) const {
+		std::vector<ibValueMetaObjectFormBase*> array = std::vector<ibValueMetaObjectFormBase*>()) const {
 		FillArrayObjectByFilter<ibValueMetaObjectFormBase>(array, { g_metaFormCLSID });
 		return array;
 	}
@@ -224,7 +225,7 @@ public:
 	//create form with data 
 	virtual ibBackendValueForm* CreateObjectForm(ibValueMetaObjectFormBase* metaForm) {
 		return ibValueMetaObjectGenericData::CreateAndBuildForm(
-			metaForm != nullptr ? metaForm->GetName() : wxEmptyString,
+			metaForm != nullptr ? metaForm->GetName() : wxString(wxEmptyString),
 			metaForm != nullptr ? metaForm->GetTypeForm() : defaultFormType,
 			nullptr,
 			CreateSourceObject(metaForm),
@@ -296,9 +297,10 @@ public:
 
 #pragma region __generic_h__
 
+	using ibValueMetaObjectCompositeData::GetGenericAttributeArrayObject;
 	//attribute
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		FillArrayObjectByPredefined(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
 		return array;
@@ -308,9 +310,9 @@ public:
 
 #pragma region __array_h__
 
-	//any attribute 
+	//any attribute
 	std::vector<ibValueMetaObjectAttributeBase*> GetAnyAttributeArrayObject(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
 		FillArrayObjectByPredefined(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
 		return array;
@@ -318,14 +320,14 @@ public:
 
 	//attribute
 	std::vector<ibValueMetaObjectAttributeBase*> GetAttributeArrayObject(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
 		return array;
 	}
 
 	//table
 	std::vector<ibValueMetaObjectTableData*> GetTableArrayObject(
-		std::vector<ibValueMetaObjectTableData*>& array = std::vector<ibValueMetaObjectTableData*>()) const {
+		std::vector<ibValueMetaObjectTableData*> array = std::vector<ibValueMetaObjectTableData*>()) const {
 		FillArrayObjectByFilter<ibValueMetaObjectTableData>(array, { g_metaTableCLSID });
 		return array;
 	}
@@ -394,7 +396,7 @@ public:
 	//ctor
 	ibValueMetaObjectRecordDataExt();
 
-	//ñreate from file?
+	//ï¿½reate from file?
 	virtual bool IsExternalCreate() const { return false; }
 
 	//module manager is started or exit 
@@ -470,7 +472,7 @@ public:
 
 	//searched 
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetSearchedAttributeObjectArray(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
 		FillArrayObjectBySearched(array);
 		return array;
 	}
@@ -515,7 +517,7 @@ protected:
 
 	//load & save metaData from DB 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 	virtual bool DeleteData() { return true; }
 
 protected:
@@ -557,7 +559,7 @@ public:
 
 	//enum
 	std::vector<ibValueMetaObjectEnum*> GetEnumObjectArray(
-		std::vector<ibValueMetaObjectEnum*>& array = std::vector<ibValueMetaObjectEnum*>()) const {
+		std::vector<ibValueMetaObjectEnum*> array = std::vector<ibValueMetaObjectEnum*>()) const {
 		FillArrayObjectByFilter<ibValueMetaObjectEnum>(array, { g_metaEnumCLSID });
 		return array;
 	}
@@ -589,7 +591,7 @@ protected:
 
 	//load & save metaData from DB 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 
 	//process default query
 	int ProcessEnumeration(const wxString& tableName, const ibValueMetaObjectEnum* srcEnum, const ibValueMetaObjectEnum* dstEnum);
@@ -689,7 +691,7 @@ protected:
 
 	//load & save metaData from DB 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 
 	//process default query
 	int ProcessAttribute(const wxString& tableName, const ibValueMetaObjectAttributeBase* srcAttr, const ibValueMetaObjectAttributeBase* dstAttr);
@@ -888,7 +890,7 @@ protected:
 
 	//load & save metaData from DB 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 
 	//create empty object
 	virtual ibValueRecordDataObjectHierarchyRef* CreateObjectRefValue(ibObjectMode mode, const ibGuid& objGuid = wxNullGuid) = 0; //create object and read by guid 
@@ -969,17 +971,18 @@ public:
 
 #pragma region __generic_h__
 
-	//attribute 
+	using ibValueMetaObjectCompositeData::GetGenericAttributeArrayObject;
+	//attribute
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		FillArrayObjectByPredefined(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaDimensionCLSID, g_metaResourceCLSID, g_metaAttributeCLSID });
 		return array;
 	}
 
-	//dimention  
+	//dimention
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericDimentionArrayObject(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
 		FillArrayObjectByDimention(array);
 		return array;
 	}
@@ -987,9 +990,9 @@ public:
 #pragma endregion
 #pragma region __array_h__
 
-	//any attribute 
+	//any attribute
 	std::vector<ibValueMetaObjectAttributeBase*> GetAnyAttributeArrayObject(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
 		FillArrayObjectByPredefined(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaDimensionCLSID, g_metaResourceCLSID, g_metaAttributeCLSID });
 		return array;
@@ -997,21 +1000,21 @@ public:
 
 	//dimension
 	std::vector<ibValueMetaObjectDimension*> GetDimentionArrayObject(
-		std::vector<ibValueMetaObjectDimension*>& array = std::vector<ibValueMetaObjectDimension*>()) const {
+		std::vector<ibValueMetaObjectDimension*> array = std::vector<ibValueMetaObjectDimension*>()) const {
 		FillArrayObjectByFilter<ibValueMetaObjectDimension>(array, { g_metaDimensionCLSID });
 		return array;
 	}
 
 	//resource
 	std::vector<ibValueMetaObjectResource*> GetResourceArrayObject(
-		std::vector<ibValueMetaObjectResource*>& array = std::vector<ibValueMetaObjectResource*>()) const {
+		std::vector<ibValueMetaObjectResource*> array = std::vector<ibValueMetaObjectResource*>()) const {
 		FillArrayObjectByFilter<ibValueMetaObjectResource>(array, { g_metaResourceCLSID });
 		return array;
 	}
 
-	//attribute 
+	//attribute
 	std::vector<ibValueMetaObjectAttributeBase*> GetAttributeArrayObject(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
 		return array;
 	}
@@ -1147,7 +1150,7 @@ protected:
 
 	//load & save metaData from DB 
 	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool SaveData(ibWriterMemory& writer);
 	virtual bool DeleteData() { return true; }
 
 protected:
@@ -1223,7 +1226,7 @@ template <typename db_type = class BACKEND_API ibDatabaseLayer>
 struct ibTransactionGuard
 {
 	ibTransactionGuard() : m_db(ibApplicationData::GetDatabaseLayer()), m_active_transaction(false) {}
-	ibTransactionGuard(std::shared_ptr<db_type>& db) : m_db(db), m_active_transaction(false) {}
+	ibTransactionGuard(const std::shared_ptr<db_type>& db) : m_db(db), m_active_transaction(false) {}
 	~ibTransactionGuard() { RollBackTransaction(); }
 
 	/// Begin a transaction
@@ -1526,7 +1529,7 @@ public:
 	virtual bool Generate();
 
 	//filling object 
-	virtual bool Filling(ibValue& cValue = ibValue()) const;
+	virtual bool Filling(ibValue cValue = ibValue()) const;
 
 	//support source set/get data 
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal);
@@ -1719,7 +1722,7 @@ public:
 		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const {
 			if (m_listColumnInfo.size() < idx)
 				return nullptr;
-			auto& it = m_listColumnInfo.begin();
+			auto it = m_listColumnInfo.begin();
 			std::advance(it, idx);
 			return it->second;
 		}
@@ -1727,7 +1730,8 @@ public:
 		virtual unsigned int GetColumnCount() const {
 			ibValueMetaObjectGenericData* metaTable = m_ownerTable->GetMetaObject();
 			wxASSERT(metaTable);
-			const auto& obj = metaTable->GetGenericAttributeArrayObject();
+			std::vector<ibValueMetaObjectAttributeBase*> genArr;
+			const auto obj = metaTable->GetGenericAttributeArrayObject(genArr);
 			return obj.size();
 		}
 
