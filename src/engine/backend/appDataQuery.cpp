@@ -187,10 +187,10 @@ void ibApplicationData::ibApplicationDataSessionUpdater::ClearLostSessionUpdater
 
 ibApplicationData::ibApplicationDataSessionUpdater::ibApplicationDataSessionUpdater(ibApplicationData* application, const ibGuid& session) :
 	wxThread(wxTHREAD_JOINABLE),
-	m_session_db(application->m_db != nullptr ? application->m_db->Clone() : nullptr),
-	m_session(session),
 	m_sessionCreated(false), m_sessionStarted(false),
-	m_sessionUpdaterLoop(false)
+	m_sessionUpdaterLoop(false),
+	m_session_db(application->m_db != nullptr ? application->m_db->Clone() : nullptr),
+	m_session(session)
 {
 	wxThread::SetPriority(wxPRIORITY_MIN);
 }
@@ -260,7 +260,7 @@ ibApplicationData::ibApplicationDataSessionUpdater::~ibApplicationDataSessionUpd
 
 wxThread::ExitCode ibApplicationData::ibApplicationDataSessionUpdater::Entry()
 {
-	//ñlear lost session 
+	//ï¿½lear lost session 
 	ClearLostSessionUpdater();
 
 	Job_UpdateActiveSession();
@@ -301,7 +301,7 @@ wxThread::ExitCode ibApplicationData::ibApplicationDataSessionUpdater::Entry()
 	bool lastSessionStarted = m_sessionStarted;
 	while (!TestDestroy()) {
 
-		m_currentDateTime = std::move(wxDateTime::UNow());
+		m_currentDateTime = wxDateTime::UNow();
 
 		Job_ClearLostSession();
 		Job_CalcActiveSession();

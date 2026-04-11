@@ -144,9 +144,9 @@ class BACKEND_API ibValueSpreadsheetDocumentArea :
 	public ibValue {
 public:
 
-	ibValueSpreadsheetDocumentArea() : ibValue(ibValueTypes::TYPE_VALUE), m_spreadsheetDoc(), m_row(-1), m_col(-1) {}
+	ibValueSpreadsheetDocumentArea() : ibValue(ibValueTypes::TYPE_VALUE), m_row(-1), m_col(-1), m_spreadsheetDoc() {}
 	ibValueSpreadsheetDocumentArea(wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadsheetDoc, int row, int col) :
-		ibValue(ibValueTypes::TYPE_VALUE), m_spreadsheetDoc(spreadsheetDoc), m_row(row), m_col(col) {
+		ibValue(ibValueTypes::TYPE_VALUE), m_row(row), m_col(col), m_spreadsheetDoc(spreadsheetDoc) {
 	}
 
 	virtual bool IsEmpty() const { return m_spreadsheetDoc->IsEmptyCell(m_row, m_col); }

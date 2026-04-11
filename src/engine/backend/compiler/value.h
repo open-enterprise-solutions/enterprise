@@ -14,6 +14,12 @@ template <typename valT> class ibValueEnumerationBase;
 template <typename valT> class ibValueEnumerationVariantBase;
 template <typename valT> class ibValueEnumeration;
 
+// Forward declarations for CastValue (defined in value_cast.h, included at end of file)
+template <typename T, typename U> static inline T* CastValue(U* ptr);
+template <typename T, typename U> static inline T* CastValue(const U* ptr);
+template <typename T, typename U> static inline T* CastValue(U& ptr);
+template <typename T, typename U> static inline T* CastValue(const U& ptr);
+
 class BACKEND_API ibBackendValue {
 public:
 	virtual ibValue* GetImplValueRef() const = 0;
@@ -336,7 +342,7 @@ public:
 	virtual ~ibValue();
 
 	//clear values
-	inline void Reset();
+	void Reset();
 
 	//ref counter
 	void IncrRef() { wxAtomicInc(m_refCount); }

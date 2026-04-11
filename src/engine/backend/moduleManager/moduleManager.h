@@ -61,13 +61,13 @@ public:
 		//WORK AS AN AGGREGATE OBJECT
 
 		// these methods need to be overridden in your aggregate objects:
-		virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
+		virtual ibValueMethodHelper* GetPMethods() const override { // get a reference to the class helper for parsing attribute and method names
 			//PrepareNames();
 			return m_methodHelper;
 		}
 
 		// this method is automatically called to initialize attribute and method names.
-		virtual void PrepareNames() const;
+		virtual void PrepareNames() const override;
 
 		//method call
 		virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
@@ -78,7 +78,7 @@ public:
 		}
 
 		//check is empty
-		virtual bool IsEmpty() const {
+		virtual bool IsEmpty() const override {
 			return false;
 		}
 
@@ -124,7 +124,7 @@ public:
 		ibMetaData* GetMetaData() const { return m_metaData; }
 
 		//check is empty
-		virtual bool IsEmpty() const { return false; }
+		virtual bool IsEmpty() const override { return false; }
 
 		//operator '=='
 		virtual bool CompareValueEQ(const ibValue& cParam) const override
@@ -148,12 +148,12 @@ public:
 		}
 
 		// these methods need to be overridden in your aggregate objects:
-		virtual ibValueMethodHelper* GetPMethods() const {
-			//PrepareNames();  
+		virtual ibValueMethodHelper* GetPMethods() const override {
+			//PrepareNames();
 			return m_methodHelper;
 		}
 
-		virtual void PrepareNames() const; // this method is automatically called to initialize attribute and method names.
+		virtual void PrepareNames() const override; // this method is automatically called to initialize attribute and method names.
 
 		//****************************************************************************
 		//*                              Override attribute                          *

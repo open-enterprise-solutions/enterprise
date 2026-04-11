@@ -14,8 +14,8 @@ class BACKEND_API ibMetaData {
 public:
 
 	ibMetaData() :
-		m_metaTree(nullptr),
-		m_metaModify(false) {
+		m_metaModify(false),
+		m_metaTree(nullptr) {
 	}
 
 	virtual ~ibMetaData() {}

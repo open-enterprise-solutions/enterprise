@@ -75,12 +75,12 @@ class BACKEND_API ibDebuggerClient {
 
 		ibDebuggerClientConnection(ibDebuggerClient* client, const wxString& hostName, unsigned short port) :
 			wxThread(wxTHREAD_DETACHED),
+			m_verifiedConnection(false),
 			m_hostName(hostName),
 			m_port(port),
-			m_verifiedConnection(false), 
-			m_connectionType(ConnectionType::ConnectionType_Scanner),
+			m_socketClient(nullptr),
 			m_number_connection_attempts(-1),
-			m_socketClient(nullptr) {
+			m_connectionType(ConnectionType::ConnectionType_Scanner) {
 
 			if (debugClient != nullptr)
 				debugClient->AppendConnection(this);
@@ -99,7 +99,7 @@ class BACKEND_API ibDebuggerClient {
 
 		// entry point for the thread - called by Run() and executes in the context
 		// of this thread.
-		virtual ExitCode Entry();
+		virtual ExitCode Entry() override;
 
 		// This one is called by Kill() before killing the thread and is executed
 		// in the context of the thread that called Kill().

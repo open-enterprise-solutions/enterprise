@@ -6,8 +6,8 @@ struct ibActionDescription {
 	ibActionID m_lAction;
 	wxString m_strAction;
 
-	ibActionDescription(const ibActionID& lAction) : m_strAction(), m_lAction(lAction) {}
-	ibActionDescription(const wxString& strAction) : m_strAction(strAction), m_lAction(wxNOT_FOUND) {}
+	ibActionDescription(const ibActionID& lAction) : m_lAction(lAction), m_strAction() {}
+	ibActionDescription(const wxString& strAction) : m_lAction(wxNOT_FOUND), m_strAction(strAction) {}
 
 	wxString GetCustomAction() const { return m_strAction; }
 	ibActionID GetSystemAction() const { return m_lAction; }
@@ -52,7 +52,7 @@ protected:
 			bool m_createDef;
 			ibValue* m_srcData;
 
-			ibActionItem() : m_name(wxEmptyString), m_caption(wxEmptyString), m_pictureDescription(), m_act_id(wxNOT_FOUND), m_pictureAndText(false), m_createDef(false) {}
+			ibActionItem() : m_act_id(wxNOT_FOUND), m_name(wxEmptyString), m_caption(wxEmptyString), m_pictureDescription(), m_pictureAndText(false), m_createDef(false) {}
 			ibActionItem(const ibActionID& act_id, const wxString& name, const wxString& description, bool createDef, ibValue* srcData) : m_act_id(act_id), m_name(name), m_caption(description), m_pictureDescription(), m_pictureAndText(false), m_createDef(createDef), m_srcData(srcData) {}
 			ibActionItem(const ibActionID& act_id, const wxString& name, const wxString& description, const ibPictureDescription& pictureDescription, bool pictureAndText, bool createDef, ibValue* srcData) : m_act_id(act_id), m_name(name), m_caption(description), m_pictureDescription(pictureDescription), m_pictureAndText(pictureAndText), m_createDef(createDef), m_srcData(srcData) {}
 		};

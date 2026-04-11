@@ -86,43 +86,43 @@ public:
 		m_numUtf8String(0)
 #else
 		m_numString(0)
-#endif // UTF8_LEXEM_TRANSLATE
+#endif
 	{
 	}
 
 	ibLexem(const ibLexem& src) :
 		m_lexType(src.m_lexType),
 		m_numData(src.m_numData),
-		m_numLine(src.m_numLine),
-		m_numString(src.m_numString),
-#ifdef UTF8_LEXEM_TRANSLATE
-		m_numUtf8String(src.m_numUtf8String),
-#endif // UTF8_LEXEM_TRANSLATE
-
-		m_valData(src.m_valData),
 		m_strData(src.m_strData),
-
+		m_valData(src.m_valData),
 		m_strModuleName(src.m_strModuleName),
 		m_strDocPath(src.m_strDocPath),
-		m_strFileName(src.m_strFileName)
+		m_strFileName(src.m_strFileName),
+		m_numLine(src.m_numLine),
+#ifdef UTF8_LEXEM_TRANSLATE
+		m_numString(src.m_numString),
+		m_numUtf8String(src.m_numUtf8String)
+#else
+		m_numString(src.m_numString)
+#endif // UTF8_LEXEM_TRANSLATE
 	{
 	}
 
 	ibLexem(ibLexem&& src) :
 		m_lexType(src.m_lexType),
 		m_numData(src.m_numData),
-		m_numLine(src.m_numLine),
-		m_numString(src.m_numString),
-#ifdef UTF8_LEXEM_TRANSLATE
-		m_numUtf8String(src.m_numUtf8String),
-#endif // UTF8_LEXEM_TRANSLATE
-
-		m_valData(std::move(src.m_valData)),
 		m_strData(std::move(src.m_strData)),
-
+		m_valData(std::move(src.m_valData)),
 		m_strModuleName(std::move(src.m_strModuleName)),
 		m_strDocPath(std::move(src.m_strDocPath)),
-		m_strFileName(std::move(src.m_strFileName))
+		m_strFileName(std::move(src.m_strFileName)),
+		m_numLine(src.m_numLine),
+#ifdef UTF8_LEXEM_TRANSLATE
+		m_numString(src.m_numString),
+		m_numUtf8String(src.m_numUtf8String)
+#else
+		m_numString(src.m_numString)
+#endif // UTF8_LEXEM_TRANSLATE
 	{
 		src.m_lexType = 0;
 		src.m_numData = 0;

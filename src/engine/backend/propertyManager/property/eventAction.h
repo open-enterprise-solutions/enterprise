@@ -26,27 +26,27 @@ class BACKEND_API ibEventAction : public ibEvent {
 		struct ibEventOptionItem {
 
 			ibEventOptionItem() :
-				m_strName(), m_strLabel(), m_id(wxNOT_FOUND), m_value(), m_isOk(true)
+				m_isOk(true), m_strName(), m_strLabel(), m_id(wxNOT_FOUND), m_value()
 			{
 			}
 
 			ibEventOptionItem(const wxString& name, const ibActionID& l, const wxBitmap& b, const ibValue& v) :
-				m_strName(name), m_strLabel(name), m_bmp(b), m_id(l), m_value(v), m_isOk(true)
+				m_isOk(true), m_strName(name), m_strLabel(name), m_bmp(b), m_id(l), m_value(v)
 			{
 			}
 
 			ibEventOptionItem(const wxString& name, const wxString& label, const ibActionID& l, const wxBitmap& b, const ibValue& v) :
-				m_strName(name), m_strLabel(label), m_bmp(b), m_id(l), m_value(v), m_isOk(true)
+				m_isOk(true), m_strName(name), m_strLabel(label), m_bmp(b), m_id(l), m_value(v)
 			{
 			}
 
 			ibEventOptionItem(const wxString& name, const wxString& label, const wxString& help, const ibActionID& l, const wxBitmap& b, const ibValue& v) :
-				m_strName(name), m_strLabel(label), m_bmp(b), m_strHelp(help), m_id(l), m_value(v), m_isOk(true)
+				m_isOk(true), m_strName(name), m_strLabel(label), m_strHelp(help), m_bmp(b), m_id(l), m_value(v)
 			{
 			}
 
 			ibEventOptionItem(const ibEventOptionItem& item) :
-				m_strName(item.m_strName), m_strLabel(item.m_strLabel), m_strHelp(item.m_strHelp), m_bmp(item.m_bmp), m_id(item.m_id), m_value(item.m_value), m_isOk(true)
+				m_isOk(true), m_strName(item.m_strName), m_strLabel(item.m_strLabel), m_strHelp(item.m_strHelp), m_bmp(item.m_bmp), m_id(item.m_id), m_value(item.m_value)
 			{
 			}
 

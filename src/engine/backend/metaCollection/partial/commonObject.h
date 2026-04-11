@@ -76,27 +76,27 @@ class BACKEND_API ibFormTypeList {
 	public:
 
 		ibFormTypeItem() :
-			m_strName(), m_strLabel(), m_id(-1), m_isOk(true)
+			m_isOk(true), m_strName(), m_strLabel(), m_id(-1)
 		{
 		}
 
 		ibFormTypeItem(const wxString& name, const long& l) :
-			m_strName(name), m_strLabel(name), m_id(l), m_isOk(true)
+			m_isOk(true), m_strName(name), m_strLabel(name), m_id(l)
 		{
 		}
 
 		ibFormTypeItem(const wxString& name, const wxString& label, const long& l) :
-			m_strName(name), m_strLabel(label), m_id(l), m_isOk(true)
+			m_isOk(true), m_strName(name), m_strLabel(label), m_id(l)
 		{
 		}
 
 		ibFormTypeItem(const wxString& name, const wxString& label, const wxString& help, const long& l) :
-			m_strName(name), m_strLabel(label), m_strHelp(help), m_id(l), m_isOk(true)
+			m_isOk(true), m_strName(name), m_strLabel(label), m_strHelp(help), m_id(l)
 		{
 		}
 
 		ibFormTypeItem(const ibFormTypeItem& item) :
-			m_strName(item.m_strName), m_strLabel(item.m_strLabel), m_strHelp(item.m_strHelp), m_id(item.m_id), m_isOk(true)
+			m_isOk(true), m_strName(item.m_strName), m_strLabel(item.m_strLabel), m_strHelp(item.m_strHelp), m_id(item.m_id)
 		{
 		}
 
@@ -199,7 +199,7 @@ public:
 	template <typename _T1>
 	ibValueMetaObjectFormBase* FindFormObjectByFilter(const _T1& id, const ibFormID& form_id = wxNOT_FOUND) const {
 		ibValueMetaObjectFormBase* founded = FindObjectByFilter<ibValueMetaObjectFormBase>(id, { g_metaCommonFormCLSID, g_metaFormCLSID });
-		if (founded != nullptr && form_id == founded->GetTypeForm() || form_id == wxNOT_FOUND)
+		if ((founded != nullptr && form_id == founded->GetTypeForm()) || form_id == wxNOT_FOUND)
 			return founded;
 		return nullptr;
 	}
@@ -1346,23 +1346,23 @@ protected:
 public:
 	virtual ~ibValueRecordDataObject();
 
-	//support actionData 
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType) { return ibActionCollection(); }
-	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm) {}
+	//support actionData
+	virtual ibActionCollection GetActionCollection(const ibFormID& formType) override { return ibActionCollection(); }
+	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm) override {}
 
 	virtual ibValueRecordDataObject* CopyObjectValue() = 0;
 
-	//standart override 
-	virtual void PrepareNames() const;
+	//standart override
+	virtual void PrepareNames() const override;
 
-	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
-	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
+	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 
-	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);
-	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
+	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
+	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 
 	//check is empty
-	virtual bool IsEmpty() const { return ibValue::IsEmpty(); }
+	virtual bool IsEmpty() const override { return ibValue::IsEmpty(); }
 
 	//get metaData from object 
 	virtual ibValueMetaObjectGenericData* GetSourceMetaObject() const final { return GetMetaObject(); }
@@ -1371,17 +1371,17 @@ public:
 	virtual ibClassID GetSourceClassType() const final { return GetClassType(); }
 
 	//Get presentation 
-	virtual wxString GetSourceCaption() const {
+	virtual wxString GetSourceCaption() const override {
 		return GetMetaObject() ? stringUtils::GenerateSynonym(GetMetaObject()->GetClassName()) + wxT(": ") + GetMetaObject()->GetSynonym() : GetString();
 	}
 
-	//support source data 
-	virtual ibSourceExplorer GetSourceExplorer() const;
-	virtual bool GetModel(ibValueModel*& tableValue, const ibMetaID& id);
+	//support source data
+	virtual ibSourceExplorer GetSourceExplorer() const override;
+	virtual bool GetModel(ibValueModel*& tableValue, const ibMetaID& id) override;
 
-	//support source set/get data 
-	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal);
-	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const;
+	//support source set/get data
+	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) override;
+	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const override;
 
 	ibValue GetValueByMetaID(const ibMetaID& id) const {
 		ibValue retValue;
@@ -1390,18 +1390,18 @@ public:
 		return ibValue();
 	}
 
-	//support tabular section 
+	//support tabular section
 	virtual ibValueModelTableBase* GetTableByMetaID(const ibMetaID& id) const;
 
 	//counter
-	virtual void SourceIncrRef() { ibValue::IncrRef(); }
-	virtual void SourceDecrRef() { ibValue::DecrRef(); }
+	virtual void SourceIncrRef() override { ibValue::IncrRef(); }
+	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
 
-	//get metaData from object 
-	virtual ibValueMetaObjectRecordData* GetMetaObject() const = 0;
+	//get metaData from object
+	virtual ibValueMetaObjectRecordData* GetMetaObject() const override = 0;
 
-	//get unique identifier 
-	virtual ibUniqueKey GetGuid() const = 0;
+	//get unique identifier
+	virtual ibUniqueKey GetGuid() const override = 0;
 
 	//get frame
 	virtual ibBackendValueForm* GetForm() const;
@@ -1418,16 +1418,16 @@ public:
 	//save modify 
 	virtual bool SaveModify() override { return true; }
 
-	//Get ref class 
-	virtual ibClassID GetClassType() const;
+	//Get ref class
+	virtual ibClassID GetClassType() const override;
 
-	virtual wxString GetClassName() const;
-	virtual wxString GetString() const;
+	virtual wxString GetClassName() const override;
+	virtual wxString GetString() const override;
 
 	//Working with iterators
-	virtual bool HasIterator() const { return true; }
-	virtual ibValue GetIteratorAt(unsigned int lPropNum) { ibValue retValue; GetPropVal(lPropNum, retValue); return retValue; }
-	virtual unsigned int GetIteratorCount() const { return m_methodHelper != nullptr ? m_methodHelper->GetNProps() : 0; }
+	virtual bool HasIterator() const override { return true; }
+	virtual ibValue GetIteratorAt(unsigned int lPropNum) override { ibValue retValue; GetPropVal(lPropNum, retValue); return retValue; }
+	virtual unsigned int GetIteratorCount() const override { return m_methodHelper != nullptr ? m_methodHelper->GetNProps() : 0; }
 
 protected:
 	virtual void PrepareEmptyObject();
@@ -1635,37 +1635,37 @@ public:
 	ibValueRecordKeyObject(ibValueMetaObjectRegisterData* metaObject);
 	virtual ~ibValueRecordKeyObject();
 
-	//standart override 
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
+	//standart override
+	virtual ibValueMethodHelper* GetPMethods() const override { // get a reference to the class helper for parsing attribute and method names
+		//PrepareNames();
 		return m_methodHelper;
 	}
 
-	virtual void PrepareNames() const;
-	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
+	virtual void PrepareNames() const override;
+	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 
-	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
-	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
+	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 
 	//check is empty
-	virtual bool IsEmpty() const;
+	virtual bool IsEmpty() const override;
 
-	//Get unique key 
+	//Get unique key
 	ibUniqueKeyPair GetUniqueKey() { return ibUniqueKeyPair(m_metaObject, m_keyValues); }
 
-	//get metaData from object 
+	//get metaData from object
 	virtual ibValueMetaObjectRegisterData* GetMetaObject() const { return m_metaObject; };
 
-	//Get ref class 
-	virtual ibClassID GetClassType() const;
+	//Get ref class
+	virtual ibClassID GetClassType() const override;
 
-	virtual wxString GetClassName() const;
-	virtual wxString GetString() const;
+	virtual wxString GetClassName() const override;
+	virtual wxString GetString() const override;
 
 	//Working with iterators
-	virtual bool HasIterator() const { return true; }
-	virtual ibValue GetIteratorAt(unsigned int lPropNum) { ibValue retValue; GetPropVal(lPropNum, retValue); return retValue; }
-	virtual unsigned int GetIteratorCount() const { return m_methodHelper != nullptr ? m_methodHelper->GetNProps() : 0; }
+	virtual bool HasIterator() const override { return true; }
+	virtual ibValue GetIteratorAt(unsigned int lPropNum) override { ibValue retValue; GetPropVal(lPropNum, retValue); return retValue; }
+	virtual unsigned int GetIteratorCount() const override { return m_methodHelper != nullptr ? m_methodHelper->GetNProps() : 0; }
 
 protected:
 	ibValueMetaObjectRegisterData* m_metaObject;
@@ -1677,8 +1677,8 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelTableBase, public 
 	wxDECLARE_ABSTRACT_CLASS(ibValueRecordSetObject);
 public:
 
-	virtual ibValueModelColumnCollection* GetColumnCollection() const { return m_recordColumnCollection; }
-	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) {
+	virtual ibValueModelColumnCollection* GetColumnCollection() const override { return m_recordColumnCollection; }
+	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) override {
 		if (!line.IsOk())
 			return nullptr;
 		return ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterReturnLine>(this, line);
@@ -1719,7 +1719,7 @@ public:
 			return columnInfo->GetColumnType();
 		}
 
-		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const {
+		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const override {
 			if (m_listColumnInfo.size() < idx)
 				return nullptr;
 			auto it = m_listColumnInfo.begin();
@@ -1727,7 +1727,7 @@ public:
 			return it->second;
 		}
 
-		virtual unsigned int GetColumnCount() const {
+		virtual unsigned int GetColumnCount() const override {
 			ibValueMetaObjectGenericData* metaTable = m_ownerTable->GetMetaObject();
 			wxASSERT(metaTable);
 			std::vector<ibValueMetaObjectAttributeBase*> genArr;
@@ -1735,9 +1735,9 @@ public:
 			return obj.size();
 		}
 
-		//array support 
-		virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue);
-		virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
+		//array support
+		virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue) override;
+		virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue) override;
 
 		friend class ibValueRecordSetObject;
 
@@ -1866,9 +1866,9 @@ public:
 	bool Selected() const { return m_selected; }
 	void Read() { ReadData(); }
 
-	//standart override 
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
+	//standart override
+	virtual ibValueMethodHelper* GetPMethods() const override { // get a reference to the class helper for parsing attribute and method names
+		//PrepareNames();
 		return m_methodHelper;
 	}
 
@@ -1876,28 +1876,28 @@ public:
 	virtual void SourceIncrRef() { ibValue::IncrRef(); }
 	virtual void SourceDecrRef() { ibValue::DecrRef(); }
 
-	//check is empty object? 
-	virtual bool IsEmpty() const { return !m_selected; }
+	//check is empty object?
+	virtual bool IsEmpty() const override { return !m_selected; }
 
-	//set modify 
+	//set modify
 	virtual void Modify(bool mod) { m_objModified = mod; }
 
-	//is modified 
+	//is modified
 	virtual bool IsModified() const { return m_objModified; }
 
 	//check is changes data in db
 	virtual bool ModifiesData() { return true; }
 
-	//get metaData from object 
+	//get metaData from object
 	virtual ibValueMetaObjectRegisterData* GetMetaObject() const { return m_metaObject; }
 
 #pragma region _tabular_data_
-	//get metaData from object 
+	//get metaData from object
 	virtual ibValueMetaObjectCompositeData* GetSourceMetaObject() const { return GetMetaObject(); }
 
-	//Get ref class 
+	//Get ref class
 	virtual ibClassID GetSourceClassType() const { return GetClassType(); }
-#pragma endregion 
+#pragma endregion
 
 	virtual bool AutoCreateColumn() const { return false; }
 	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const {
@@ -1931,13 +1931,13 @@ public:
 	virtual bool DeleteRecordSet() = 0;
 
 	//array
-	virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
+	virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue) override;
 
-	//Get ref class 
-	virtual ibClassID GetClassType() const;
+	//Get ref class
+	virtual ibClassID GetClassType() const override;
 
-	virtual wxString GetClassName() const;
-	virtual wxString GetString() const;
+	virtual wxString GetClassName() const override;
+	virtual wxString GetString() const override;
 
 	//Working with iterators
 	virtual bool HasIterator() const override { return true; }
@@ -1971,8 +1971,8 @@ protected:
 protected:
 
 	//set meta/get meta
-	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal);
-	virtual bool GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const;
+	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal) override;
+	virtual bool GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const override;
 
 protected:
 
@@ -2008,57 +2008,57 @@ public:
 	bool InitializeObject(const ibValueRecordManagerObject* source = nullptr, bool newRecord = false);
 	bool InitializeObject(const ibUniqueKeyPair& key);
 
-	virtual bool IsNewObject() const { return !m_recordSet->m_selected; }
+	virtual bool IsNewObject() const override { return !m_recordSet->m_selected; }
 
-	//get metaData from object 
+	//get metaData from object
 	virtual ibValueMetaObjectGenericData* GetSourceMetaObject() const final { return GetMetaObject(); }
 
-	//Get ref class 
+	//Get ref class
 	virtual ibClassID GetSourceClassType() const final { return GetClassType(); }
 
-	//Get presentation 
-	virtual wxString GetSourceCaption() const {
+	//Get presentation
+	virtual wxString GetSourceCaption() const override {
 		return m_metaObject->GetSynonym() + wxT(": ") + (IsNewObject() ? _("Creating") : m_metaObject->GetSynonym());
 	}
 
 	//copy new object
 	virtual ibValueRecordManagerObject* CopyRegisterValue();
 
-	//standart override 
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
+	//standart override
+	virtual ibValueMethodHelper* GetPMethods() const override { // get a reference to the class helper for parsing attribute and method names
+		//PrepareNames();
 		return m_methodHelper;
 	}
 
 	//counter
-	virtual void SourceIncrRef() { ibValue::IncrRef(); }
-	virtual void SourceDecrRef() { ibValue::DecrRef(); }
+	virtual void SourceIncrRef() override { ibValue::IncrRef(); }
+	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
 
-	//get unique identifier 
-	virtual ibUniqueKey GetGuid() const { return m_objGuid; }
+	//get unique identifier
+	virtual ibUniqueKey GetGuid() const override { return m_objGuid; }
 
-	//save modify 
+	//save modify
 	virtual bool SaveModify() override { return WriteRegister(); }
 
 	//check is changes data in db
-	virtual bool ModifiesData() { return true; }
+	virtual bool ModifiesData() override { return true; }
 
 	//default methods
 	virtual bool WriteRegister(bool replace = true) = 0;
 	virtual bool DeleteRegister() = 0;
 
 	//check is empty
-	virtual bool IsEmpty() const;
+	virtual bool IsEmpty() const override;
 
-	//set modify 
-	virtual void Modify(bool mod);
+	//set modify
+	virtual void Modify(bool mod) override;
 
-	//is modified 
-	virtual bool IsModified() const;
+	//is modified
+	virtual bool IsModified() const override;
 
-	//support source set/get data 
-	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal);
-	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const;
+	//support source set/get data
+	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) override;
+	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const override;
 
 	ibValue GetValueByMetaID(const ibMetaID& id) const {
 		ibValue retValue;
@@ -2067,11 +2067,11 @@ public:
 		return ibValue();
 	}
 
-	//support source data 
-	virtual ibSourceExplorer GetSourceExplorer() const;
-	virtual bool GetModel(ibValueModel*& tableValue, const ibMetaID& id);
+	//support source data
+	virtual ibSourceExplorer GetSourceExplorer() const override;
+	virtual bool GetModel(ibValueModel*& tableValue, const ibMetaID& id) override;
 
-	//get metaData from object 
+	//get metaData from object
 	virtual ibValueMetaObjectRegisterData* GetMetaObject() const {
 		return m_metaObject;
 	};
@@ -2088,16 +2088,16 @@ public:
 	//default showing
 	virtual void ShowValue() override { ShowFormValue(); }
 
-	//Get ref class 
-	virtual ibClassID GetClassType() const;
+	//Get ref class
+	virtual ibClassID GetClassType() const override;
 
-	virtual wxString GetClassName() const;
-	virtual wxString GetString() const;
+	virtual wxString GetClassName() const override;
+	virtual wxString GetString() const override;
 
 	//Working with iterators
-	virtual bool HasIterator() const { return true; }
-	virtual ibValue GetIteratorAt(unsigned int lPropNum) { ibValue retValue; GetPropVal(lPropNum, retValue); return retValue; }
-	virtual unsigned int GetIteratorCount() const { return m_methodHelper != nullptr ? m_methodHelper->GetNProps() : 0; }
+	virtual bool HasIterator() const override { return true; }
+	virtual ibValue GetIteratorAt(unsigned int lPropNum) override { ibValue retValue; GetPropVal(lPropNum, retValue); return retValue; }
+	virtual unsigned int GetIteratorCount() const override { return m_methodHelper != nullptr ? m_methodHelper->GetNProps() : 0; }
 
 protected:
 

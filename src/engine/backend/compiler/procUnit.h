@@ -7,10 +7,10 @@ class BACKEND_API ibProcUnit {
 public:
 
 	//Constructors/destructors
-	ibProcUnit() : m_pppArrayList(nullptr),
-		m_ppArrayCode(nullptr),
+	ibProcUnit() : m_numAutoDeleteParent(0),
 		m_pByteCode(nullptr),
-		m_numAutoDeleteParent(0) {
+		m_pppArrayList(nullptr),
+		m_ppArrayCode(nullptr) {
 	}
 
 	virtual ~ibProcUnit() { Clear(); }

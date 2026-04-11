@@ -17,7 +17,7 @@ struct ibQualifierNumber {
 	unsigned char m_precision;
 	unsigned char m_scale;
 	ibQualifierNumber(unsigned char precision = 10, char scale = 0, bool nonNegative = false) :
-		m_precision(precision), m_scale(scale), m_nonNegative(nonNegative) {
+		m_nonNegative(nonNegative), m_precision(precision), m_scale(scale) {
 	}
 };
 

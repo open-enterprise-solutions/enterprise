@@ -1,2 +1,0 @@
-/usr/bin/ar qc ../../../lib/Debug/libwxlibwebpmux-3.3.a CMakeFiles/libwebpmux.dir/src/mux/anim_encode.c.o CMakeFiles/libwebpmux.dir/src/mux/muxedit.c.o CMakeFiles/libwebpmux.dir/src/mux/muxinternal.c.o CMakeFiles/libwebpmux.dir/src/mux/muxread.c.o
-/usr/bin/ranlib ../../../lib/Debug/libwxlibwebpmux-3.3.a

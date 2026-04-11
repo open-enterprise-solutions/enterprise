@@ -229,8 +229,10 @@ int ibAppDesigner::OnExit()
 	appDataDestroy();
 
 	// Allow clipboard data to persist after close
-	wxTheClipboard->Flush();
-	wxTheClipboard->Close();
+	if (wxTheClipboard->Open()) {
+		wxTheClipboard->Flush();
+		wxTheClipboard->Close();
+	}
 
 	return suсcess_exit;
 }

@@ -43,13 +43,13 @@ class BACKEND_API ibPropertyList : public ibProperty {
 			return *this;
 		}
 
-		ibPropertyOptionValue(ibValue* p = nullptr) : m_valType(eValType::eValType_pointer), m_pValue(p) {}
-		ibPropertyOptionValue(const ibValue& v) : m_valType(eValType::eValType_value), m_cValue(v), m_pValue(nullptr) {}
+		ibPropertyOptionValue(ibValue* p = nullptr) : m_valType(eValType::eValType_pointer), m_pValue(p), m_cValue() {}
+		ibPropertyOptionValue(const ibValue& v) : m_valType(eValType::eValType_value), m_pValue(nullptr), m_cValue(v) {}
 
-		template <typename T1> ibPropertyOptionValue(T1* v) : m_valType(eValType::eValType_pointer), m_pValue(v) {}
-		template <typename T1> ibPropertyOptionValue(const T1& v) : m_valType(eValType::eValType_value), m_cValue(v), m_pValue(nullptr) {}
+		template <typename T1> ibPropertyOptionValue(T1* v) : m_valType(eValType::eValType_pointer), m_pValue(v), m_cValue() {}
+		template <typename T1> ibPropertyOptionValue(const T1& v) : m_valType(eValType::eValType_value), m_pValue(nullptr), m_cValue(v) {}
 
-		ibPropertyOptionValue(const ibPropertyOptionValue& val) : m_valType(val.m_valType), m_cValue(val.m_cValue), m_pValue(val.m_pValue) {}
+		ibPropertyOptionValue(const ibPropertyOptionValue& val) : m_valType(val.m_valType), m_pValue(val.m_pValue), m_cValue(val.m_cValue) {}
 		~ibPropertyOptionValue() {}
 
 		ibValue* GetOptionValue() {
@@ -62,27 +62,27 @@ class BACKEND_API ibPropertyList : public ibProperty {
 		struct ibPropertyOptionItem {
 
 			ibPropertyOptionItem() :
-				m_strName(), m_strLabel(), m_id(-1), m_value(), m_isOk(true)
+				m_isOk(true), m_strName(), m_strLabel(), m_id(-1), m_value()
 			{
 			}
 
 			ibPropertyOptionItem(const wxString& name, const long& l, const wxBitmap& b, const ibPropertyOptionValue& v) :
-				m_strName(name), m_strLabel(name), m_bmp(b), m_id(l), m_value(v), m_isOk(true)
+				m_isOk(true), m_strName(name), m_strLabel(name), m_bmp(b), m_id(l), m_value(v)
 			{
 			}
 
 			ibPropertyOptionItem(const wxString& name, const wxString& label, const long& l, const wxBitmap& b, const ibPropertyOptionValue& v) :
-				m_strName(name), m_strLabel(label), m_bmp(b), m_id(l), m_value(v), m_isOk(true)
+				m_isOk(true), m_strName(name), m_strLabel(label), m_bmp(b), m_id(l), m_value(v)
 			{
 			}
 
 			ibPropertyOptionItem(const wxString& name, const wxString& label, const wxString& help, const long& l, const wxBitmap& b, const ibPropertyOptionValue& v) :
-				m_strName(name), m_strLabel(label), m_strHelp(help), m_bmp(b), m_id(l), m_value(v), m_isOk(true)
+				m_isOk(true), m_strName(name), m_strLabel(label), m_strHelp(help), m_bmp(b), m_id(l), m_value(v)
 			{
 			}
 
 			ibPropertyOptionItem(const ibPropertyOptionItem& item) :
-				m_strName(item.m_strName), m_strLabel(item.m_strLabel), m_strHelp(item.m_strHelp), m_bmp(item.m_bmp), m_id(item.m_id), m_value(item.m_value), m_isOk(true)
+				m_isOk(true), m_strName(item.m_strName), m_strLabel(item.m_strLabel), m_strHelp(item.m_strHelp), m_bmp(item.m_bmp), m_id(item.m_id), m_value(item.m_value)
 			{
 			}
 

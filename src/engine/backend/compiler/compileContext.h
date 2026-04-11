@@ -33,7 +33,7 @@ struct ibCompileContext {
 	struct ibVariable
 	{
 		ibVariable() : m_bExport(false), m_bContext(false), m_bTempVar(false), m_numVariable(0) {}
-		ibVariable(const wxString& strVariableName) : m_strName(strVariableName), m_bExport(false), m_bContext(false), m_bTempVar(false), m_numVariable(0) {}
+		ibVariable(const wxString& strVariableName) : m_bExport(false), m_bContext(false), m_bTempVar(false), m_numVariable(0), m_strName(strVariableName) {}
 
 		bool m_bExport;
 		bool m_bContext;
@@ -62,10 +62,10 @@ struct ibCompileContext {
 		};
 
 		ibFunction(const wxString& strFuncName, ibCompileContext* compileContext = nullptr) :
-			m_strName(strFuncName),
-			m_compileContext(compileContext),
 			m_bExport(false),
 			m_bContext(false),
+			m_strName(strFuncName),
+			m_compileContext(compileContext),
 			m_lVarCount(0), m_nStart(0), m_nFinish(0), m_numLine(0)
 		{
 			//Set current context 
@@ -113,13 +113,13 @@ struct ibCompileContext {
 #pragma endregion
 
 	ibCompileContext(ibCompileCode* compileCode) :
-		m_parentContext(nullptr), m_functionContext(nullptr), m_compileModule(compileCode),
-		m_numDoNumber(0), m_numReturn(0), m_numTempVar(0), m_numFindLocalInParent(1) {
+		m_compileModule(compileCode), m_parentContext(nullptr), m_functionContext(nullptr),
+		m_numTempVar(0), m_numFindLocalInParent(1), m_numReturn(0), m_numDoNumber(0) {
 	}
 
 	ibCompileContext(ibCompileContext* compileContext) :
-		m_parentContext(compileContext), m_functionContext(nullptr), m_compileModule(nullptr),
-		m_numDoNumber(0), m_numReturn(0), m_numTempVar(0), m_numFindLocalInParent(1) {
+		m_compileModule(nullptr), m_parentContext(compileContext), m_functionContext(nullptr),
+		m_numTempVar(0), m_numFindLocalInParent(1), m_numReturn(0), m_numDoNumber(0) {
 	}
 
 	~ibCompileContext() {}

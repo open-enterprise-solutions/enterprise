@@ -249,6 +249,9 @@ paket-files/
 # FAKE - F# Make
 .fake/
 
+# CMake build directory
+build/
+
 # JetBrains Rider
 .idea/
 *.sln.iml

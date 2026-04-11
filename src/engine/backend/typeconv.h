@@ -25,12 +25,12 @@
 
 namespace typeConv
 {
-	inline wxString _StringToWxString(const std::string& str) {
-		return _StringToWxString(str.c_str());
-	}
-
 	inline wxString _StringToWxString(const char* str) {
 		return wxString(str, wxConvUTF8);
+	}
+
+	inline wxString _StringToWxString(const std::string& str) {
+		return _StringToWxString(str.c_str());
 	}
 
 	inline std::string _WxStringToString(const wxString& str) {

@@ -162,7 +162,7 @@ public:
 public:
 
 	inline bool			eof()	const { return elapsed() <= 0; }
-	inline void			r(void* p, int cnt) const;
+	void			r(void* p, int cnt) const;
 
 	inline u64			r_u64() const { u64   tmp;	r(&tmp, sizeof(tmp)); return tmp; }
 	inline u32			r_u32() const { u32   tmp;	r(&tmp, sizeof(tmp)); return tmp; }

@@ -228,6 +228,8 @@ public:
 	inline wxString GetRunModeDescr(const ibRunMode& mode) const {
 		switch (mode)
 		{
+		case eLAUNCHER_MODE:
+			return wxEmptyString;
 		case eDESIGNER_MODE:
 			return _("Designer");
 		case eENTERPRISE_MODE:
@@ -245,6 +247,8 @@ public:
 	inline wxString GetDatabaseModeDescr(const ibDatabaseMode& mode) const {
 		switch (mode)
 		{
+		case eNONE:
+			return wxEmptyString;
 		case eFILE:
 			return _("File");
 		case eSERVER:

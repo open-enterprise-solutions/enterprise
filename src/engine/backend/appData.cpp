@@ -71,11 +71,13 @@ wxCriticalSection ibApplicationData::m_cs_force_exit;
 ///////////////////////////////////////////////////////////////////////////////
 
 ibApplicationData::ibApplicationData(ibRunMode runMode) :
-	m_db(nullptr), m_runMode(runMode), m_dbMode(ibDatabaseMode::eNONE),
-	m_sessionGuid(wxNewUniqueGuid),
-	m_startedDate(wxDateTime::Now()),
+	m_runMode(runMode),
 	m_strComputer(wxGetHostName()),
+	m_startedDate(wxDateTime::Now()),
+	m_sessionGuid(wxNewUniqueGuid),
+	m_db(nullptr),
 	m_sessionUpdater(nullptr),
+	m_dbMode(ibDatabaseMode::eNONE),
 	m_locale_lang(wxLanguage::wxLANGUAGE_UNKNOWN)
 {
 }
@@ -667,7 +669,7 @@ wxMemoryBuffer ibApplicationData::SaveUserData_Role(const ibApplicationDataUserI
 {
 	ibWriterMemory writer;
 	writer.w_u32(userInfo.m_roleArray.size());
-	for (const auto role : userInfo.m_roleArray) {
+	for (const auto& role : userInfo.m_roleArray) {
 		writer.w_stringZ(role.m_strRoleGuid);
 		writer.w_s32(role.m_miRoleId);
 	}

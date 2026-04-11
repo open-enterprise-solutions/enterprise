@@ -298,7 +298,7 @@ double ibDatabaseResultSetFirebird::GetResultDouble(int nField)
 		}
 		else if (nType == SQL_LONG)
 		{
-			dblReturn = *(long*)(pVar->sqldata);
+			dblReturn = static_cast<int>(*(long*)(pVar->sqldata));
 			for (int i = 0; i < -pVar->sqlscale; dblReturn /= 10, i++);
 		}
 		else if (nType == SQL_INT64)
@@ -350,7 +350,7 @@ ibNumber ibDatabaseResultSetFirebird::GetResultNumber(int nField)
 		}
 		else if (nType == SQL_LONG)
 		{
-			dblReturn = *(long*)(pVar->sqldata);
+			dblReturn = static_cast<int>(*(long*)(pVar->sqldata));
 			for (int i = 0; i < -pVar->sqlscale; i++) dblReturn /= 10;
 		}
 		else if (nType == SQL_INT64)

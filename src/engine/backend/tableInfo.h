@@ -454,13 +454,13 @@ public:
 				refCounter->DecRef();
 		}
 
-		virtual bool IsPropReadable(const long lPropNum) const {
+		virtual bool IsPropReadable(const long lPropNum) const override {
 			return GetOwnerModel()->ValidateReturnLine(
 				const_cast<ibValueModelReturnLine*>(this)
 			);
 		}
 
-		virtual bool IsPropWritable(const long lPropNum) const {
+		virtual bool IsPropWritable(const long lPropNum) const override {
 			return GetOwnerModel()->ValidateReturnLine(
 				const_cast<ibValueModelReturnLine*>(this)
 			);
@@ -893,11 +893,11 @@ public:
 
 	/////////////////////////////////////////////////////////
 
-	virtual bool IsEmpty() const { return GetRowCount() == 0; }
+	virtual bool IsEmpty() const override { return GetRowCount() == 0; }
 
 	/////////////////////////////////////////////////////////
 
-	virtual bool ValidateReturnLine(ibValueModelReturnLine* retLine) const {
+	virtual bool ValidateReturnLine(ibValueModelReturnLine* retLine) const override {
 		ibValueTableRow* node = GetViewData<ibValueTableRow>(retLine->GetLineItem());
 		wxASSERT(node);
 		return node ? node->m_valueTable != nullptr : false;
@@ -1177,16 +1177,16 @@ public:
 	virtual bool HasDefaultCompare() const override { return true; }
 
 	// internal
-	virtual bool IsListModel() const { return true; }
-	virtual bool IsVirtualListModel() const { return false; }
+	virtual bool IsListModel() const override { return true; }
+	virtual bool IsVirtualListModel() const override { return false; }
 
-#pragma endregion 
+#pragma endregion
 
 protected:
 	std::vector< ibValueTableRow*> m_nodeValues;
 };
 
-//Tree support 
+//Tree support
 class BACKEND_API ibValueModelTreeBase : public ibValueModel {
 	wxDECLARE_ABSTRACT_CLASS(ibValueModelTableBase);
 public:
@@ -1194,11 +1194,11 @@ public:
 	struct ibValueTreeNode : public wxRefCounter {
 
 		ibValueTreeNode(ibValueModelTreeBase* valueTree) :
-			m_valueTree(valueTree), m_parent(nullptr) {
+			m_parent(nullptr), m_valueTree(valueTree) {
 		}
 
 		ibValueTreeNode(ibValueTreeNode* parent) :
-			m_valueTree(nullptr), m_parent(parent), m_nodeValues() {
+			m_parent(parent), m_valueTree(nullptr) {
 			if (m_parent != nullptr) m_parent->Append(this);
 		}
 
@@ -1241,7 +1241,7 @@ public:
 
 		bool Append(ibValueTreeNode* child, bool notify = true) {
 			child->m_valueTree = m_valueTree;
-			auto iterator = m_children.emplace_back(child);
+			m_children.emplace_back(child);
 			if (notify && !m_valueTree->m_modelProvider->ItemAdded(ibDataViewItem(this), ibDataViewItem(child))) {
 				child->m_valueTree = nullptr;
 				m_children.pop_back();
@@ -1395,13 +1395,13 @@ public:
 
 	/////////////////////////////////////////////////////////
 
-	virtual bool IsEmpty() const {
+	virtual bool IsEmpty() const override {
 		return m_root->GetChildCount() == 0;
 	}
 
 	/////////////////////////////////////////////////////////
 
-	virtual bool ValidateReturnLine(ibValueModelReturnLine* retLine) const {
+	virtual bool ValidateReturnLine(ibValueModelReturnLine* retLine) const override {
 		ibValueTreeNode* node = GetViewData<ibValueTreeNode>(retLine->GetLineItem());
 		wxASSERT(node);
 		return node ? node->m_valueTree != nullptr : false;
@@ -1614,10 +1614,10 @@ public:
 		return ascending ? id1 - id2 : id2 - id1;
 	}
 
-	virtual bool IsListModel() const { return false; }
-	virtual bool IsVirtualListModel() const { return false; }
+	virtual bool IsListModel() const override { return false; }
+	virtual bool IsVirtualListModel() const override { return false; }
 
-#pragma endregion 
+#pragma endregion
 
 protected:
 	ibValueTreeNode* m_root;

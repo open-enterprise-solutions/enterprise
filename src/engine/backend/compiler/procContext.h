@@ -14,7 +14,7 @@ class BACKEND_API ibProcUnitEvaluate;
 struct ibRunContextSmall {
 
 	ibRunContextSmall(int varCount = wxNOT_FOUND) :
-		m_lVarCount(0), m_lParamCount(0) {
+		m_lParamCount(0), m_lVarCount(0) {
 		if (varCount >= 0) SetLocalCount(varCount);
 	}
 
@@ -51,7 +51,7 @@ struct ibRunContextSmall {
 struct ibRunContext {
 
 	ibRunContext(int varCount = wxNOT_FOUND) :
-		m_lVarCount(0), m_lParamCount(0), m_lStart(0), m_lCurLine(0) {
+		m_lStart(0), m_lCurLine(0), m_lVarCount(0), m_lParamCount(0) {
 		if (varCount >= 0) SetLocalCount(varCount);
 	}
 

@@ -59,6 +59,8 @@ endforeach()
 # Options — optional database drivers
 # ---------------------------------------------------------------------------
 
+option(BUILD_TESTING       "Build unit tests (Google Test)"     OFF)
+
 option(OES_USE_FIREBIRD    "Enable Firebird database driver"    OFF)
 option(OES_USE_POSTGRESQL  "Enable PostgreSQL database driver"  OFF)
 option(OES_USE_MYSQL       "Enable MySQL database driver"       OFF)
@@ -173,6 +175,8 @@ if(OES_USE_FIREBIRD)
     find_library(FIREBIRD_LIBRARY NAMES fbclient fbclient_ms
         HINTS
             "$ENV{FIREBIRD_HOME}/lib"
+            "/Library/Frameworks/Firebird.framework/Versions/A/Libraries"
+            "/Library/Frameworks/Firebird.framework/Versions/A/Resources/lib"
             "/usr/lib"
             "/usr/local/lib"
             "/opt/firebird/lib"
@@ -180,6 +184,7 @@ if(OES_USE_FIREBIRD)
     find_path(FIREBIRD_INCLUDE_DIR NAMES ibase.h
         HINTS
             "$ENV{FIREBIRD_HOME}/include"
+            "/Library/Frameworks/Firebird.framework/Versions/A/Headers"
             "/usr/include"
             "/usr/local/include"
             "/opt/firebird/include"
@@ -291,6 +296,15 @@ add_subdirectory("${OES_ENGINE_DIR}/classChecker")
 add_subdirectory("${OES_ENGINE_DIR}/simplePlugin")
 
 # ---------------------------------------------------------------------------
+# Unit tests (Google Test)
+# ---------------------------------------------------------------------------
+
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 
@@ -308,5 +322,6 @@ message(STATUS "  PostgreSQL ........ ${OES_USE_POSTGRESQL}")
 message(STATUS "  MySQL ............. ${OES_USE_MYSQL}")
 message(STATUS "  ODBC .............. ${OES_USE_ODBC}")
 message(STATUS "  SQLite ............ ON (embedded)")
+message(STATUS "  Tests ............. ${BUILD_TESTING}")
 message(STATUS "=============================================")
 message(STATUS "")

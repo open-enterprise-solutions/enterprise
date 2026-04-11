@@ -217,7 +217,7 @@ struct ibWatchWindowData {
 		bool		 m_hasAttributes;
 
 		ibWatchWindowItem(const wxString& n, const wxString& v, const wxString& t, bool a, const wxTreeItemId& i) :
-			m_name(n), m_value(v), m_type(t), m_hasAttributes(a), m_item(i) {
+			m_item(i), m_name(n), m_value(v), m_type(t), m_hasAttributes(a) {
 		}
 	};
 

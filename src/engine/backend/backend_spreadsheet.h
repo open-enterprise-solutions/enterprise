@@ -63,7 +63,7 @@ class BACKEND_API ibBackendSpreadsheetObject : public wxRefCounter {
 public:
 
 	ibBackendSpreadsheetObject() : m_docGuid(wxNewUniqueGuid), m_editable(true) {}
-	ibBackendSpreadsheetObject(const ibSpreadsheetDescription& spreadsheetDesc) : m_docGuid(wxNewUniqueGuid), m_spreadsheetDesc(spreadsheetDesc), m_editable(true) {}
+	ibBackendSpreadsheetObject(const ibSpreadsheetDescription& spreadsheetDesc) : m_docGuid(wxNewUniqueGuid), m_editable(true), m_spreadsheetDesc(spreadsheetDesc) {}
 
 	ibSpreadsheetDescription& GetSpreadsheetDesc() { return m_spreadsheetDesc; }
 	const ibSpreadsheetDescription& GetSpreadsheetDesc() const { return m_spreadsheetDesc; }

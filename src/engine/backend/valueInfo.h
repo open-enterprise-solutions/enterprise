@@ -6,7 +6,7 @@
 //reference data
 struct ibReference {
 
-	ibReference(const ibMetaID& id, const ibGuidImpl& guid) : m_id(id), m_guid(guid) {}
+	ibReference(const ibMetaID& id, const ibGuidImpl& guid) : m_guid(guid), m_id(id) {}
 
 	ibGuidImpl m_guid;
 	ibMetaID m_id; // id of metadata 
@@ -17,7 +17,7 @@ struct ibReference {
 class ibValueDataObject {
 public:
 
-	ibValueDataObject(const ibGuid& objGuid = wxNullGuid, bool newObject = true) : m_objGuid(objGuid), m_newObject(newObject) {}
+	ibValueDataObject(const ibGuid& objGuid = wxNullGuid, bool newObject = true) : m_newObject(newObject), m_objGuid(objGuid) {}
 
 	//support source set/get data 
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) { return false; }
