@@ -109,22 +109,25 @@ bool ibApplicationData::CreateAppDataEnv(ibRunMode runMode)
 	return false;
 }
 
+#ifdef OES_USE_FIREBIRD
 #define sys_db wxT("sys.fdb")
+#else
+#define sys_db wxT("sys.sqlite")
+#endif
 
 bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& strDirDatabase, const wxString& strLocale)
 {
-#ifndef OES_USE_FIREBIRD
-	wxUnusedVar(runMode); wxUnusedVar(strDirDatabase); wxUnusedVar(strLocale);
-	return false;
-}
-#else
 	if (s_instance != nullptr) s_instance->DestroyAppDataEnv();
 #if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	try {
 #endif
+#ifdef OES_USE_FIREBIRD
 		std::shared_ptr<ibDatabaseLayerFirebird> db(new ibDatabaseLayerFirebird());
-
-		if (db->Open(strDirDatabase + wxT("\\") + sys_db)) {
+#else
+		std::shared_ptr<ibDatabaseLayerSQLite> db(new ibDatabaseLayerSQLite());
+#endif
+		wxString pathSep = wxFileName::GetPathSeparator();
+		if (db->Open(strDirDatabase + pathSep + sys_db)) {
 
 			s_instance = new ibApplicationData(runMode);
 			s_instance->m_strFile = strDirDatabase;
@@ -160,7 +163,6 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 #endif
 	return false;
 }
-#endif // OES_USE_FIREBIRD
 
 bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString& strServer, const wxString& strPort,
 	const wxString& strUser, const wxString& strPassword, const wxString& strDatabase, const wxString& strLocale)
