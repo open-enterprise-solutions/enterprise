@@ -497,7 +497,7 @@ void ibCodeEditor::LoadToolTip(const wxPoint& pos)
 			SetToolTip(nullptr); return;
 		}
 
-		auto& it = std::find_if(m_expressions.begin(), m_expressions.end(),
+		auto it = std::find_if(m_expressions.begin(), m_expressions.end(),
 			[strExpression](const std::pair<wxString, wxString>& p) {
 				return stringUtils::CompareString(strExpression, p.first);
 			}

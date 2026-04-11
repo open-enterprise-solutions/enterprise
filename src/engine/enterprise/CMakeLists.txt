@@ -36,6 +36,7 @@ target_compile_definitions(enterprise PRIVATE NOPCH)
 target_include_directories(enterprise PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine
     ${CMAKE_SOURCE_DIR}/src/engine/backend
+    ${CMAKE_SOURCE_DIR}/src/engine/frontend
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 

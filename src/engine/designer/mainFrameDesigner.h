@@ -2,7 +2,7 @@
 #define _MAINFRAME_DESIGNER_H__
 
 #include "mainFrame/mainFrame.h"
-#include "backend/compiler/debugger/debugEvent.h"
+#include "backend/debugger/debugEvent.h"
 
 class wxAuiDocDesignerMDIFrame : public wxAuiDocMDIFrame
 {

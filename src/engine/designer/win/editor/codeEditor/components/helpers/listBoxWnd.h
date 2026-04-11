@@ -27,7 +27,7 @@ public:
 	void SetContainerBorderSize(int);
 
 	// ListBoxImpl implementation
-	void SetListBoxFont(wxFont &font);
+	void SetListBoxFont(const wxFont &font);
 	void SetAverageCharWidth(int width);
 	wxRect GetDesiredRect() const;
 	int CaretFromEdge() const;

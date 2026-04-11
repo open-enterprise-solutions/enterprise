@@ -895,78 +895,6 @@ mainFrame/watch/watchdroptarget.cpp.s:
 	cd /Volumes/T9/Web/oes-enterprise/build && $(MAKE) $(MAKESILENT) -f src/engine/designer/CMakeFiles/designer.dir/build.make src/engine/designer/CMakeFiles/designer.dir/mainFrame/watch/watchdroptarget.cpp.s
 .PHONY : mainFrame/watch/watchdroptarget.cpp.s
 
-mainFrameDesignerCmd.o: mainFrameDesignerCmd.cpp.o
-.PHONY : mainFrameDesignerCmd.o
-
-# target to build an object file
-mainFrameDesignerCmd.cpp.o:
-	cd /Volumes/T9/Web/oes-enterprise/build && $(MAKE) $(MAKESILENT) -f src/engine/designer/CMakeFiles/designer.dir/build.make src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.o
-.PHONY : mainFrameDesignerCmd.cpp.o
-
-mainFrameDesignerCmd.i: mainFrameDesignerCmd.cpp.i
-.PHONY : mainFrameDesignerCmd.i
-
-# target to preprocess a source file
-mainFrameDesignerCmd.cpp.i:
-	cd /Volumes/T9/Web/oes-enterprise/build && $(MAKE) $(MAKESILENT) -f src/engine/designer/CMakeFiles/designer.dir/build.make src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.i
-.PHONY : mainFrameDesignerCmd.cpp.i
-
-mainFrameDesignerCmd.s: mainFrameDesignerCmd.cpp.s
-.PHONY : mainFrameDesignerCmd.s
-
-# target to generate assembly for a file
-mainFrameDesignerCmd.cpp.s:
-	cd /Volumes/T9/Web/oes-enterprise/build && $(MAKE) $(MAKESILENT) -f src/engine/designer/CMakeFiles/designer.dir/build.make src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.s
-.PHONY : mainFrameDesignerCmd.cpp.s
-
-mainFrameDesignerEvent.o: mainFrameDesignerEvent.cpp.o
-.PHONY : mainFrameDesignerEvent.o
-
-# target to build an object file
-mainFrameDesignerEvent.cpp.o:
-	cd /Volumes/T9/Web/oes-enterprise/build && $(MAKE) $(MAKESILENT) -f src/engine/designer/CMakeFiles/designer.dir/build.make src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.o
-.PHONY : mainFrameDesignerEvent.cpp.o
-
-mainFrameDesignerEvent.i: mainFrameDesignerEvent.cpp.i
-.PHONY : mainFrameDesignerEvent.i
-
-# target to preprocess a source file
-mainFrameDesignerEvent.cpp.i:
-	cd /Volumes/T9/Web/oes-enterprise/build && $(MAKE) $(MAKESILENT) -f src/engine/designer/CMakeFiles/designer.dir/build.make src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.i
-.PHONY : mainFrameDesignerEvent.cpp.i
-
-mainFrameDesignerEvent.s: mainFrameDesignerEvent.cpp.s
-.PHONY : mainFrameDesignerEvent.s
-
-# target to generate assembly for a file
-mainFrameDesignerEvent.cpp.s:
-	cd /Volumes/T9/Web/oes-enterprise/build && $(MAKE) $(MAKESILENT) -f src/engine/designer/CMakeFiles/designer.dir/build.make src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.s
-.PHONY : mainFrameDesignerEvent.cpp.s
-
-mainFrameDesignerMenu.o: mainFrameDesignerMenu.cpp.o
-.PHONY : mainFrameDesignerMenu.o
-
-# target to build an object file
-mainFrameDesignerMenu.cpp.o:
-	cd /Volumes/T9/Web/oes-enterprise/build && $(MAKE) $(MAKESILENT) -f src/engine/designer/CMakeFiles/designer.dir/build.make src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.o
-.PHONY : mainFrameDesignerMenu.cpp.o
-
-mainFrameDesignerMenu.i: mainFrameDesignerMenu.cpp.i
-.PHONY : mainFrameDesignerMenu.i
-
-# target to preprocess a source file
-mainFrameDesignerMenu.cpp.i:
-	cd /Volumes/T9/Web/oes-enterprise/build && $(MAKE) $(MAKESILENT) -f src/engine/designer/CMakeFiles/designer.dir/build.make src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.i
-.PHONY : mainFrameDesignerMenu.cpp.i
-
-mainFrameDesignerMenu.s: mainFrameDesignerMenu.cpp.s
-.PHONY : mainFrameDesignerMenu.s
-
-# target to generate assembly for a file
-mainFrameDesignerMenu.cpp.s:
-	cd /Volumes/T9/Web/oes-enterprise/build && $(MAKE) $(MAKESILENT) -f src/engine/designer/CMakeFiles/designer.dir/build.make src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.s
-.PHONY : mainFrameDesignerMenu.cpp.s
-
 win/ctrl/menuBar.o: win/ctrl/menuBar.cpp.o
 .PHONY : win/ctrl/menuBar.o
 
@@ -1694,15 +1622,6 @@ help:
 	@echo "... mainFrame/watch/watchdroptarget.o"
 	@echo "... mainFrame/watch/watchdroptarget.i"
 	@echo "... mainFrame/watch/watchdroptarget.s"
-	@echo "... mainFrameDesignerCmd.o"
-	@echo "... mainFrameDesignerCmd.i"
-	@echo "... mainFrameDesignerCmd.s"
-	@echo "... mainFrameDesignerEvent.o"
-	@echo "... mainFrameDesignerEvent.i"
-	@echo "... mainFrameDesignerEvent.s"
-	@echo "... mainFrameDesignerMenu.o"
-	@echo "... mainFrameDesignerMenu.i"
-	@echo "... mainFrameDesignerMenu.s"
 	@echo "... win/ctrl/menuBar.o"
 	@echo "... win/ctrl/menuBar.i"
 	@echo "... win/ctrl/menuBar.s"

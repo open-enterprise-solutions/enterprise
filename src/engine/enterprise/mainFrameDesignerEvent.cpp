@@ -5,7 +5,7 @@
 
 #include "mainFrameDesigner.h"
 #include "appData.h"
-#include "core/compiler/debugger/debugClient.h"
+#include "debugger/debugClient.h"
 #include "settings/settingsdialog.h"
 #include "settings/keybinderdialog.h" 
 #include "settings/fontcolorsettingspanel.h"
@@ -15,7 +15,7 @@
 //*                                 Debug commands                               *
 //********************************************************************************
 
-#include "core/metadata/metadataConfig.h"
+#include "metadataConfiguration.h"
 
 void wxAuiDocDesignerMDIFrame::OnStartDebug(wxCommandEvent& WXUNUSED(event))
 {
@@ -230,7 +230,7 @@ void wxAuiDocDesignerMDIFrame::OnAbout(wxCommandEvent& event)
 //*                                    Toolbar                                   *
 //********************************************************************************
 
-#include "core/compiler/debugger/debugClient.h"
+#include "debugger/debugClient.h"
 
 void wxAuiDocDesignerMDIFrame::OnDebugEvent(wxDebugEvent& event)
 {
@@ -262,7 +262,7 @@ void wxAuiDocDesignerMDIFrame::OnDebugEvent(wxDebugEvent& event)
 	}
 }
 
-#include "core/metadata/metadata.h"
+#include "metadata.h"
 
 void wxAuiDocDesignerMDIFrame::OnToolbarClicked(wxEvent& event)
 {

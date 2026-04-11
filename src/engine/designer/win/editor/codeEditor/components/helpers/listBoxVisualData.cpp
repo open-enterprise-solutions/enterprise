@@ -180,14 +180,9 @@ void ibListBoxVisualData::ComputeColours()
 	}
 	else
 	{
-#ifdef __WXOSX_COCOA__
-		if (m_useDefaultHighlightBgColour)
-			m_highlightBgColour = GetListHighlightColour();
-#else
 		if (m_useDefaultHighlightBgColour)
 			m_highlightBgColour =
 			wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
-#endif
 
 		if (m_useDefaultHighlightTextColour)
 			m_highlightTextColour =

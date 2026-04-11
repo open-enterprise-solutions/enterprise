@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko, wxFormBuilder
-//	Description : visual editor 
+//	Description : visual editor
 ////////////////////////////////////////////////////////////////////////////
 
 #include "visualEditor.h"
@@ -18,8 +18,8 @@ void ibVisualEditorNotebook::ibVisualEditor::NotifyEditorSaved()
 {
 	ibValueMetaObjectFormBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectFormBase>();
 	wxASSERT(creator);
-	// Create a std::string and copy your document data in to the string    
-	if (creator != nullptr) creator->SaveFormData(m_valueForm);	
+	// Create a std::string and copy your document data in to the string
+	if (creator != nullptr) creator->SaveFormData(m_valueForm);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::NotifyEditorRefresh()
@@ -63,9 +63,9 @@ wxObject* ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::Create(ibV
 	return control->Create(wxparent, this);
 }
 
-void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnCreated(ibValueFrame* control, wxObject* obj, wxWindow* wndParent, bool firstÑreated)
+void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnCreated(ibValueFrame* control, wxObject* obj, wxWindow* wndParent, bool firstCreated)
 {
-	control->OnCreated(obj, wndParent, this, firstÑreated);
+	control->OnCreated(obj, wndParent, this, firstCreated);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::Update(ibValueFrame* control, wxObject* obj)

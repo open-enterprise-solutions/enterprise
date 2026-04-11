@@ -1259,6 +1259,8 @@ src/engine/designer/CMakeFiles/designer.dir/docManager/docManager.cpp.o: \
   /Volumes/T9/Web/oes-enterprise/src/3rdparty/wxWidgets/include/wx/renderer.h \
   /Volumes/T9/Web/oes-enterprise/src/3rdparty/wxWidgets/include/wx/wupdlock.h \
   /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/components/helpers/listBoxVisualData.h \
+  /Volumes/T9/Web/oes-enterprise/src/3rdparty/wxWidgets/include/wx/popupwin.h \
+  /Volumes/T9/Web/oes-enterprise/src/3rdparty/wxWidgets/include/wx/osx/popupwin.h \
   /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/components/callTip.h \
   /Volumes/T9/Web/oes-enterprise/src/3rdparty/wxWidgets/include/wx/dcbuffer.h \
   /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/components/helpers/fontAscent.h \

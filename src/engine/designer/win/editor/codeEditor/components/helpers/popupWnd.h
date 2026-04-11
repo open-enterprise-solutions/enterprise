@@ -17,34 +17,7 @@
 #endif
 
 // Define the base class used for ibOESPopupWindow.
-#ifdef __WXOSX_COCOA__
-
-#include <wx/nonownedwnd.h>
-#define wxOES_POPUP_IS_FRAME 0
-
-class ibOESPopupBase :public wxNonOwnedWindow
-{
-public:
-	ibOESPopupBase(wxWindow*);
-	virtual ~ibOESPopupBase();
-	virtual bool Show(bool show = true) override;
-
-protected:
-	virtual void DoSetSize(int, int, int, int, int) override;
-	void SetSTCCursor(int);
-	void RestoreSTCCursor();
-	void OnMouseEnter(wxMouseEvent&);
-	void OnMouseLeave(wxMouseEvent&);
-	void OnParentDestroy(wxWindowDestroyEvent& event);
-
-private:
-	WX_NSWindow       m_nativeWin;
-	wxStyledTextCtrl* m_stc;
-	bool              m_cursorSetByPopup;
-	int               m_prevCursor;
-};
-
-#elif wxUSE_POPUPWIN
+#if wxUSE_POPUPWIN
 
 #include <wx/popupwin.h>
 #define wxOES_POPUP_IS_FRAME 0

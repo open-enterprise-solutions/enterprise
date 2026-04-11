@@ -7,7 +7,7 @@
 #include "theme/statusbar.h"
 #include "frontend/metatree/metatreeWnd.h"
 
-#include "core/art/artProvider.h"
+#include "frontend/artProvider/artProvider.h"
 
 void wxAuiDocDesignerMDIFrame::CreateWideGui()
 {

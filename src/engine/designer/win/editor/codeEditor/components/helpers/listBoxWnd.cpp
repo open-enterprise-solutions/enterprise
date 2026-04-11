@@ -49,7 +49,7 @@ void ibListBox::SetContainerBorderSize(int s)
 	m_borderSize = s;
 }
 
-void ibListBox::SetListBoxFont(wxFont &font)
+void ibListBox::SetListBoxFont(const wxFont &font)
 {
 	SetFont(font);
 	int w;

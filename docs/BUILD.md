@@ -152,7 +152,7 @@ The `ConfigurationDefs.props` file defines preprocessor macros per configuration
 
 ## macOS — CMake
 
-> CMake support is not yet in the repository. The following describes the intended workflow for when `CMakeLists.txt` is added.
+CMake cross-platform build is available. wxWidgets 3.3.2 is built from the in-tree submodule.
 
 ```bash
 cd /path/to/enterprise
@@ -160,29 +160,62 @@ cd /path/to/enterprise
 # Ensure submodules are initialised
 git submodule update --init --recursive
 
+# Configure (Debug)
+cmake -B build -DCMAKE_BUILD_TYPE=Debug
+
 # Configure (Release)
-cmake -B build \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_OSX_ARCHITECTURES=arm64   # or x86_64, or "arm64;x86_64" for universal
+cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-# Build
-cmake --build build -j$(sysctl -n hw.logicalcpu)
+# Build — IMPORTANT: limit parallel jobs on 16GB RAM machines
+cmake --build build --parallel 3
 
-# Optionally install to a staging prefix
-cmake --install build --prefix /usr/local/oes
+# For 32GB+ RAM, you can use more parallelism:
+cmake --build build --parallel 6
 ```
+
+> **Warning:** Using `--parallel` without a limit (all CPU cores) on machines with 16GB RAM will cause an OOM crash during wxWidgets compilation. Always limit to 3 jobs on 16GB.
+
+### CMake Options
+
+| Option | Default | Description |
+|---|---|---|
+| `OES_USE_FIREBIRD` | OFF | Enable Firebird database driver |
+| `OES_USE_POSTGRESQL` | OFF | Enable PostgreSQL database driver |
+| `OES_USE_MYSQL` | OFF | Enable MySQL database driver |
+| `OES_USE_ODBC` | OFF | Enable ODBC database driver |
+| `OES_USE_TBB` | OFF | Enable Intel TBB parallelism |
+
+SQLite is always enabled (embedded).
+
+Example with PostgreSQL:
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DOES_USE_POSTGRESQL=ON
+```
+
+### Build Targets
+
+| Target | Type | Status |
+|---|---|---|
+| backend | shared lib | Builds |
+| frontend | shared lib | Builds |
+| enterprise | executable | In progress |
+| designer | executable | In progress |
+| launcher | executable | Builds |
+| daemon | executable | Builds |
+| codeRunner | executable | Builds |
+| classChecker | executable | Builds |
+| simplePlugin | shared lib | Builds |
 
 ### macOS-specific Notes
 
-- wxWidgets will be located via `find_package(wxWidgets)`. If the Homebrew wxWidgets is not found, add `-DwxWidgets_ROOT_DIR=src/3rdparty/wxWidgets` to the cmake command to use the in-tree submodule.
-- Firebird embedded is not available as a standard Homebrew formula; you may need to build it from source or use the Firebird server package and connect over TCP.
-- The app bundle structure (`designer.app`, `enterprise.app`) will need `Info.plist` files — these do not exist yet.
+- wxWidgets is built from the submodule via `add_subdirectory()` — no system wxWidgets needed
+- Backend links against `wx::base`, `wx::core`, `wx::net`, `wx::xml`, `wx::propgrid`, `wx::aui`, `wx::stc`
+- Firebird embedded is not available via Homebrew; use SQLite for local development
+- App bundles (`designer.app`, `enterprise.app`) are created automatically by CMake
 
 ---
 
 ## Linux — CMake
-
-> CMake support is not yet in the repository.
 
 ```bash
 cd /path/to/enterprise
@@ -190,25 +223,16 @@ cd /path/to/enterprise
 git submodule update --init --recursive
 
 # Configure
-cmake -B build \
-      -DCMAKE_BUILD_TYPE=Release
+cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-# Build
-cmake --build build -j$(nproc)
+# Build (limit parallelism based on available RAM)
+cmake --build build --parallel 3    # 16GB RAM
+cmake --build build --parallel 6    # 32GB+ RAM
 ```
 
-### Using the Bundled wxWidgets Submodule
+wxWidgets 3.3.2 is built from the in-tree submodule automatically. No system wxWidgets required.
 
-If the system wxWidgets is too old (< 3.2):
-
-```bash
-cmake -B build \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DwxWidgets_ROOT_DIR=$(pwd)/src/3rdparty/wxWidgets \
-      -DBUILD_SHARED_LIBS=ON
-```
-
-This will build wxWidgets as part of the project. Expect compilation to take several minutes.
+The same CMake options and build targets apply as described in the [macOS section](#macos--cmake).
 
 ---
 
@@ -298,7 +322,23 @@ These drivers are compiled in but are intended for secondary/plugin use. No addi
 
 **Symptom:** `Could not find wxWidgets`
 
-**Fix:** Add `-DCMAKE_PREFIX_PATH=/path/to/wxWidgets/install` or set the `wxWidgets_ROOT_DIR` variable.
+**Fix:** Run `git submodule update --init --recursive`. The CMake build uses the in-tree submodule automatically.
+
+### Out of memory during build (macOS/Linux)
+
+**Symptom:** System freezes, "Your system has run out of application memory" dialog, or OOM killer terminates compiler.
+
+**Fix:** Limit parallel build jobs. On 16GB RAM use `--parallel 3`, on 8GB use `--parallel 2`. Close heavy applications (browsers, IDEs) before building.
+
+### wxWidgets submodule corrupted after OOM
+
+**Symptom:** `fatal: Unable to find current revision in submodule path 'src/3rdparty/wxWidgets'`
+
+**Fix:**
+```bash
+rm -rf src/3rdparty/wxWidgets
+git submodule update --init --recursive
+```
 
 ### Debug build has assertions disabled (Win32 only)
 

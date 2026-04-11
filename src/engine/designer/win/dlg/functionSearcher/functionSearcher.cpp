@@ -125,7 +125,7 @@ void CFunctionList::OnButtonOk(wxCommandEvent& event)
 	m_codeEditor->SetSTCFocus(true);
 
 	if (lSelectedItem != wxNOT_FOUND) {
-		auto& it = m_aOffsets.find(lSelectedItem);
+		auto it = m_aOffsets.find(lSelectedItem);
 		offset_proc_t line = it->second;
 		if (line.m_offset != wxNOT_FOUND) {
 			m_codeEditor->GotoLine(line.m_line - 1);

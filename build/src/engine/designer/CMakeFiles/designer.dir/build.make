@@ -492,52 +492,10 @@ src/engine/designer/CMakeFiles/designer.dir/mainFrame/watch/watchdroptarget.cpp.
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/designer.dir/mainFrame/watch/watchdroptarget.cpp.s"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Volumes/T9/Web/oes-enterprise/src/engine/designer/mainFrame/watch/watchdroptarget.cpp -o CMakeFiles/designer.dir/mainFrame/watch/watchdroptarget.cpp.s
 
-src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
-src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/mainFrameDesignerCmd.cpp
-src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_31) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.o"
-	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.o -MF CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.o.d -o CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/mainFrameDesignerCmd.cpp
-
-src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.i"
-	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Volumes/T9/Web/oes-enterprise/src/engine/designer/mainFrameDesignerCmd.cpp > CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.i
-
-src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.s"
-	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Volumes/T9/Web/oes-enterprise/src/engine/designer/mainFrameDesignerCmd.cpp -o CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.s
-
-src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
-src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/mainFrameDesignerEvent.cpp
-src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_32) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.o"
-	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.o -MF CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.o.d -o CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/mainFrameDesignerEvent.cpp
-
-src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.i"
-	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Volumes/T9/Web/oes-enterprise/src/engine/designer/mainFrameDesignerEvent.cpp > CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.i
-
-src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.s"
-	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Volumes/T9/Web/oes-enterprise/src/engine/designer/mainFrameDesignerEvent.cpp -o CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.s
-
-src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
-src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/mainFrameDesignerMenu.cpp
-src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_33) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.o"
-	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.o -MF CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.o.d -o CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/mainFrameDesignerMenu.cpp
-
-src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.i"
-	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Volumes/T9/Web/oes-enterprise/src/engine/designer/mainFrameDesignerMenu.cpp > CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.i
-
-src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.s"
-	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Volumes/T9/Web/oes-enterprise/src/engine/designer/mainFrameDesignerMenu.cpp -o CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.s
-
 src/engine/designer/CMakeFiles/designer.dir/win/ctrl/menuBar.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/ctrl/menuBar.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/ctrl/menuBar.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/ctrl/menuBar.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_34) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/ctrl/menuBar.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_31) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/ctrl/menuBar.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/ctrl/menuBar.cpp.o -MF CMakeFiles/designer.dir/win/ctrl/menuBar.cpp.o.d -o CMakeFiles/designer.dir/win/ctrl/menuBar.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/ctrl/menuBar.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/ctrl/menuBar.cpp.i: cmake_force
@@ -551,7 +509,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/ctrl/menuBar.cpp.s: cmake_force
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/debugItem/debugItem.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/debugItem/debugItem.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/dlg/debugItem/debugItem.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/debugItem/debugItem.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_35) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/dlg/debugItem/debugItem.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_32) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/dlg/debugItem/debugItem.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/dlg/debugItem/debugItem.cpp.o -MF CMakeFiles/designer.dir/win/dlg/debugItem/debugItem.cpp.o.d -o CMakeFiles/designer.dir/win/dlg/debugItem/debugItem.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/dlg/debugItem/debugItem.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/debugItem/debugItem.cpp.i: cmake_force
@@ -565,7 +523,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/dlg/debugItem/debugItem.cpp.s: c
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/functionSearcher/functionSearcher.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/functionSearcher/functionSearcher.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/dlg/functionSearcher/functionSearcher.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/functionSearcher/functionSearcher.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_36) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/dlg/functionSearcher/functionSearcher.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_33) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/dlg/functionSearcher/functionSearcher.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/dlg/functionSearcher/functionSearcher.cpp.o -MF CMakeFiles/designer.dir/win/dlg/functionSearcher/functionSearcher.cpp.o.d -o CMakeFiles/designer.dir/win/dlg/functionSearcher/functionSearcher.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/dlg/functionSearcher/functionSearcher.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/functionSearcher/functionSearcher.cpp.i: cmake_force
@@ -579,7 +537,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/dlg/functionSearcher/functionSea
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/lineInput/lineInput.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/lineInput/lineInput.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/dlg/lineInput/lineInput.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/lineInput/lineInput.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_37) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/dlg/lineInput/lineInput.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_34) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/dlg/lineInput/lineInput.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/dlg/lineInput/lineInput.cpp.o -MF CMakeFiles/designer.dir/win/dlg/lineInput/lineInput.cpp.o.d -o CMakeFiles/designer.dir/win/dlg/lineInput/lineInput.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/dlg/lineInput/lineInput.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/lineInput/lineInput.cpp.i: cmake_force
@@ -593,7 +551,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/dlg/lineInput/lineInput.cpp.s: c
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/predefinedEditor.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/predefinedEditor.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/dlg/predefinedEditor.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/predefinedEditor.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_38) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/dlg/predefinedEditor.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_35) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/dlg/predefinedEditor.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/dlg/predefinedEditor.cpp.o -MF CMakeFiles/designer.dir/win/dlg/predefinedEditor.cpp.o.d -o CMakeFiles/designer.dir/win/dlg/predefinedEditor.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/dlg/predefinedEditor.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/dlg/predefinedEditor.cpp.i: cmake_force
@@ -607,7 +565,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/dlg/predefinedEditor.cpp.s: cmak
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditor.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditor.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/codeEditor.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditor.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_39) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditor.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_36) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditor.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditor.cpp.o -MF CMakeFiles/designer.dir/win/editor/codeEditor/codeEditor.cpp.o.d -o CMakeFiles/designer.dir/win/editor/codeEditor/codeEditor.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/codeEditor.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditor.cpp.i: cmake_force
@@ -621,7 +579,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditor.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreter.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreter.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/codeEditorInterpreter.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreter.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_40) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreter.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_37) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreter.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreter.cpp.o -MF CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreter.cpp.o.d -o CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreter.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/codeEditorInterpreter.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreter.cpp.i: cmake_force
@@ -635,7 +593,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInte
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreterContext.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreterContext.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/codeEditorInterpreterContext.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreterContext.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_41) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreterContext.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_38) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreterContext.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreterContext.cpp.o -MF CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreterContext.cpp.o.d -o CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreterContext.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/codeEditorInterpreterContext.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInterpreterContext.cpp.i: cmake_force
@@ -649,7 +607,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorInte
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorLoader.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorLoader.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/codeEditorLoader.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorLoader.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_42) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorLoader.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_39) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorLoader.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorLoader.cpp.o -MF CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorLoader.cpp.o.d -o CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorLoader.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/codeEditorLoader.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorLoader.cpp.i: cmake_force
@@ -663,7 +621,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorLoad
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorParser.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorParser.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/codeEditorParser.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorParser.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_43) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorParser.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_40) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorParser.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorParser.cpp.o -MF CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorParser.cpp.o.d -o CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorParser.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/codeEditorParser.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorParser.cpp.i: cmake_force
@@ -677,7 +635,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorPars
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorPrintOut.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorPrintOut.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/codeEditorPrintOut.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorPrintOut.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_44) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorPrintOut.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_41) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorPrintOut.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorPrintOut.cpp.o -MF CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorPrintOut.cpp.o.d -o CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorPrintOut.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/codeEditorPrintOut.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorPrintOut.cpp.i: cmake_force
@@ -691,7 +649,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/codeEditorPrin
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/autoComplete.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/autoComplete.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/components/autoComplete.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/autoComplete.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_45) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/autoComplete.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_42) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/autoComplete.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/autoComplete.cpp.o -MF CMakeFiles/designer.dir/win/editor/codeEditor/components/autoComplete.cpp.o.d -o CMakeFiles/designer.dir/win/editor/codeEditor/components/autoComplete.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/components/autoComplete.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/autoComplete.cpp.i: cmake_force
@@ -705,7 +663,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/aut
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/callTip.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/callTip.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/components/callTip.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/callTip.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_46) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/callTip.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_43) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/callTip.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/callTip.cpp.o -MF CMakeFiles/designer.dir/win/editor/codeEditor/components/callTip.cpp.o.d -o CMakeFiles/designer.dir/win/editor/codeEditor/components/callTip.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/components/callTip.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/callTip.cpp.i: cmake_force
@@ -719,7 +677,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/cal
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxVisualData.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxVisualData.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/components/helpers/listBoxVisualData.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxVisualData.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_47) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxVisualData.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_44) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxVisualData.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxVisualData.cpp.o -MF CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxVisualData.cpp.o.d -o CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxVisualData.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/components/helpers/listBoxVisualData.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxVisualData.cpp.i: cmake_force
@@ -733,7 +691,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/hel
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxWnd.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxWnd.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/components/helpers/listBoxWnd.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxWnd.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_48) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxWnd.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_45) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxWnd.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxWnd.cpp.o -MF CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxWnd.cpp.o.d -o CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxWnd.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/components/helpers/listBoxWnd.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/listBoxWnd.cpp.i: cmake_force
@@ -747,7 +705,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/hel
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/popupWnd.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/popupWnd.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/components/helpers/popupWnd.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/popupWnd.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_49) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/popupWnd.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_46) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/popupWnd.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/popupWnd.cpp.o -MF CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/popupWnd.cpp.o.d -o CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/popupWnd.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/codeEditor/components/helpers/popupWnd.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/helpers/popupWnd.cpp.i: cmake_force
@@ -761,7 +719,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/codeEditor/components/hel
 src/engine/designer/CMakeFiles/designer.dir/win/editor/interfaceEditor/interfaceEditor.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/interfaceEditor/interfaceEditor.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/interfaceEditor/interfaceEditor.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/interfaceEditor/interfaceEditor.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_50) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/interfaceEditor/interfaceEditor.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_47) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/interfaceEditor/interfaceEditor.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/interfaceEditor/interfaceEditor.cpp.o -MF CMakeFiles/designer.dir/win/editor/interfaceEditor/interfaceEditor.cpp.o.d -o CMakeFiles/designer.dir/win/editor/interfaceEditor/interfaceEditor.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/interfaceEditor/interfaceEditor.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/interfaceEditor/interfaceEditor.cpp.i: cmake_force
@@ -775,7 +733,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/interfaceEditor/interface
 src/engine/designer/CMakeFiles/designer.dir/win/editor/roleEditor/roleEditor.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/roleEditor/roleEditor.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/roleEditor/roleEditor.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/roleEditor/roleEditor.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_51) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/roleEditor/roleEditor.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_48) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/roleEditor/roleEditor.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/roleEditor/roleEditor.cpp.o -MF CMakeFiles/designer.dir/win/editor/roleEditor/roleEditor.cpp.o.d -o CMakeFiles/designer.dir/win/editor/roleEditor/roleEditor.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/roleEditor/roleEditor.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/roleEditor/roleEditor.cpp.i: cmake_force
@@ -789,7 +747,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/roleEditor/roleEditor.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/innerFrame.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/innerFrame.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/innerFrame.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/innerFrame.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_52) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/innerFrame.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_49) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/innerFrame.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/innerFrame.cpp.o -MF CMakeFiles/designer.dir/win/editor/visualEditor/innerFrame.cpp.o.d -o CMakeFiles/designer.dir/win/editor/visualEditor/innerFrame.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/innerFrame.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/innerFrame.cpp.i: cmake_force
@@ -803,7 +761,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/innerFrame.c
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/titleFrame.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/titleFrame.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/titleFrame.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/titleFrame.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_53) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/titleFrame.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_50) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/titleFrame.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/titleFrame.cpp.o -MF CMakeFiles/designer.dir/win/editor/visualEditor/titleFrame.cpp.o.d -o CMakeFiles/designer.dir/win/editor/visualEditor/titleFrame.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/titleFrame.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/titleFrame.cpp.i: cmake_force
@@ -817,7 +775,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/titleFrame.c
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditor.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditor.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/visualEditor.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditor.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_54) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditor.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_51) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditor.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditor.cpp.o -MF CMakeFiles/designer.dir/win/editor/visualEditor/visualEditor.cpp.o.d -o CMakeFiles/designer.dir/win/editor/visualEditor/visualEditor.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/visualEditor.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditor.cpp.i: cmake_force
@@ -831,7 +789,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditor
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorCmdProc.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorCmdProc.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/visualEditorCmdProc.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorCmdProc.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_55) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorCmdProc.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_52) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorCmdProc.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorCmdProc.cpp.o -MF CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorCmdProc.cpp.o.d -o CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorCmdProc.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/visualEditorCmdProc.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorCmdProc.cpp.i: cmake_force
@@ -845,7 +803,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditor
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorEvent.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorEvent.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/visualEditorEvent.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorEvent.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_56) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorEvent.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_53) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorEvent.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorEvent.cpp.o -MF CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorEvent.cpp.o.d -o CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorEvent.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/visualEditorEvent.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorEvent.cpp.i: cmake_force
@@ -859,7 +817,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditor
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorNotebook.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorNotebook.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/visualEditorNotebook.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorNotebook.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_57) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorNotebook.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_54) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorNotebook.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorNotebook.cpp.o -MF CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorNotebook.cpp.o.d -o CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorNotebook.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/visualEditorNotebook.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorNotebook.cpp.i: cmake_force
@@ -873,7 +831,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditor
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorObjectTree.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorObjectTree.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/visualEditorObjectTree.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorObjectTree.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_58) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorObjectTree.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_55) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorObjectTree.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorObjectTree.cpp.o -MF CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorObjectTree.cpp.o.d -o CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorObjectTree.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/visualEditorObjectTree.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorObjectTree.cpp.i: cmake_force
@@ -887,7 +845,7 @@ src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditor
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorPanel.cpp.o: src/engine/designer/CMakeFiles/designer.dir/flags.make
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorPanel.cpp.o: /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/visualEditorPanel.cpp
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorPanel.cpp.o: src/engine/designer/CMakeFiles/designer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_59) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorPanel.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_56) "Building CXX object src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorPanel.cpp.o"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorPanel.cpp.o -MF CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorPanel.cpp.o.d -o CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorPanel.cpp.o -c /Volumes/T9/Web/oes-enterprise/src/engine/designer/win/editor/visualEditor/visualEditorPanel.cpp
 
 src/engine/designer/CMakeFiles/designer.dir/win/editor/visualEditor/visualEditorPanel.cpp.i: cmake_force
@@ -930,9 +888,6 @@ designer_OBJECTS = \
 "CMakeFiles/designer.dir/mainFrame/watch/watchWindow.cpp.o" \
 "CMakeFiles/designer.dir/mainFrame/watch/watchctrl.cpp.o" \
 "CMakeFiles/designer.dir/mainFrame/watch/watchdroptarget.cpp.o" \
-"CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.o" \
-"CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.o" \
-"CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.o" \
 "CMakeFiles/designer.dir/win/ctrl/menuBar.cpp.o" \
 "CMakeFiles/designer.dir/win/dlg/debugItem/debugItem.cpp.o" \
 "CMakeFiles/designer.dir/win/dlg/functionSearcher/functionSearcher.cpp.o" \
@@ -993,9 +948,6 @@ bin/Debug/designer.app/Contents/MacOS/designer: src/engine/designer/CMakeFiles/d
 bin/Debug/designer.app/Contents/MacOS/designer: src/engine/designer/CMakeFiles/designer.dir/mainFrame/watch/watchWindow.cpp.o
 bin/Debug/designer.app/Contents/MacOS/designer: src/engine/designer/CMakeFiles/designer.dir/mainFrame/watch/watchctrl.cpp.o
 bin/Debug/designer.app/Contents/MacOS/designer: src/engine/designer/CMakeFiles/designer.dir/mainFrame/watch/watchdroptarget.cpp.o
-bin/Debug/designer.app/Contents/MacOS/designer: src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerCmd.cpp.o
-bin/Debug/designer.app/Contents/MacOS/designer: src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerEvent.cpp.o
-bin/Debug/designer.app/Contents/MacOS/designer: src/engine/designer/CMakeFiles/designer.dir/mainFrameDesignerMenu.cpp.o
 bin/Debug/designer.app/Contents/MacOS/designer: src/engine/designer/CMakeFiles/designer.dir/win/ctrl/menuBar.cpp.o
 bin/Debug/designer.app/Contents/MacOS/designer: src/engine/designer/CMakeFiles/designer.dir/win/dlg/debugItem/debugItem.cpp.o
 bin/Debug/designer.app/Contents/MacOS/designer: src/engine/designer/CMakeFiles/designer.dir/win/dlg/functionSearcher/functionSearcher.cpp.o
@@ -1037,7 +989,7 @@ bin/Debug/designer.app/Contents/MacOS/designer: bin/Debug/libwx_baseu_net-3.3.2.
 bin/Debug/designer.app/Contents/MacOS/designer: bin/Debug/libwx_baseu_xml-3.3.2.0.0.dylib
 bin/Debug/designer.app/Contents/MacOS/designer: bin/Debug/libwx_baseu-3.3.2.0.0.dylib
 bin/Debug/designer.app/Contents/MacOS/designer: src/engine/designer/CMakeFiles/designer.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_60) "Linking CXX executable ../../../bin/Debug/designer.app/Contents/MacOS/designer"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Volumes/T9/Web/oes-enterprise/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_57) "Linking CXX executable ../../../bin/Debug/designer.app/Contents/MacOS/designer"
 	cd /Volumes/T9/Web/oes-enterprise/build/src/engine/designer && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/designer.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

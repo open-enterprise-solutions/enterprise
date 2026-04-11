@@ -192,7 +192,9 @@ void ibAppEnterprise::OnUnhandledException()
 {
 }
 
+#ifdef __WXMSW__
 #include "backend/system/value/valueOLE.h"
+#endif
 
 void ibAppEnterprise::OnFatalException()
 {
@@ -203,7 +205,9 @@ void ibAppEnterprise::OnFatalException()
 	report.AddCurrentContext();
 
 	//release all created com-objects
+#ifdef __WXMSW__
 	ibValueOLE::ReleaseComObjects();
+#endif
 
 	if (wxSocketBase::IsInitialized())
 		wxSocketBase::Shutdown();
@@ -218,7 +222,9 @@ void ibAppEnterprise::OnFatalException()
 int ibAppEnterprise::OnExit()
 {
 	//release all created com-objects
+#ifdef __WXMSW__
 	ibValueOLE::ReleaseComObjects();
+#endif
 
 	if (wxSocketBase::IsInitialized())
 		wxSocketBase::Shutdown();
