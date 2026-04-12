@@ -39,7 +39,7 @@ bool ibValueModuleManager::ibValueModuleUnit::CreateCommonModule()
 	if (!appData->DesignerMode()) {
 		try {
 			m_compileModule->Compile();
-			// у глобального модуля код исполняется в главном модуле! 
+			// Сѓ РіР»РѕР±Р°Р»СЊРЅРѕРіРѕ РјРѕРґСѓР»СЏ РєРѕРґ РёСЃРїРѕР»РЅСЏРµС‚СЃСЏ РІ РіР»Р°РІРЅРѕРј РјРѕРґСѓР»Рµ! 
 			if (!ibValueModuleUnit::IsGlobalModule()) {
 				m_procUnit = new ibProcUnit();
 				m_procUnit->SetParent(m_moduleManager->GetProcUnit());

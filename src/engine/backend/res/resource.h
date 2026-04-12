@@ -2,7 +2,7 @@
 // Microsoft Visual C++ generated include file.
 // Used by backend.rc
 
-// Следующие стандартные значения для новых объектов
+// РЎР»РµРґСѓСЋС‰РёРµ СЃС‚Р°РЅРґР°СЂС‚РЅС‹Рµ Р·РЅР°С‡РµРЅРёСЏ РґР»СЏ РЅРѕРІС‹С… РѕР±СЉРµРєС‚РѕРІ
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS

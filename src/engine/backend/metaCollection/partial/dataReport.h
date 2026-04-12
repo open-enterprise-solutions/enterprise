@@ -132,7 +132,7 @@ public:
 		m_metaId = default_meta_id;
 	}
 
-	//Òreate from file?
+	//—Åreate from file?
 	virtual bool IsExternalCreate() const { return true; }
 };
 

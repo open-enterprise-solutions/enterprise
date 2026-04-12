@@ -358,7 +358,7 @@ ibValue ibValueOLE::FromVariantArray(SAFEARRAY* psa) const
 			throw hr;
 		if (hr = SafeArrayGetUBound(psa, i + 1, &nMax))
 			throw hr;
-		aPos[i] = nMin;//начальное положение
+		aPos[i] = nMin;//РЅР°С‡Р°Р»СЊРЅРѕРµ РїРѕР»РѕР¶РµРЅРёРµ
 		aDims[i].lLbound = nMin;
 		aDims[i].cElements = nMax;//-nMin+1;
 	}
@@ -623,7 +623,7 @@ void ibValueOLE::PrepareNames() const
 					continue;
 
 				BSTR strName = nullptr;
-				// Получаем название метода
+				// РџРѕР»СѓС‡Р°РµРј РЅР°Р·РІР°РЅРёРµ РјРµС‚РѕРґР°
 				typeInfo->GetDocumentation(funcInfo->memid, &strName,
 					nullptr, nullptr, nullptr);
 
@@ -861,7 +861,7 @@ bool ibValueOLE::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValu
 
 	VARIANT oleVariant = { 0 };
 
-	//переводим параметры в тип VARIANT
+	//РїРµСЂРµРІРѕРґРёРј РїР°СЂР°РјРµС‚СЂС‹ РІ С‚РёРї VARIANT
 	VARIANT* pvarArgs = new VARIANT[lSizeArray];
 	for (long arg = 0; arg < lSizeArray; arg++)
 		pvarArgs[lSizeArray - arg - 1] = FromValue(paParams[arg]);

@@ -183,8 +183,8 @@ namespace stringUtils
 			if (strSynonym.IsEmpty()) {
 				strSynonym += wxToupper(c);
 			}
-			else if (c >= 'A' && c <= 'Z' ||
-				(c >= 'À' && c <= 'ß')) {
+			else if ((c >= 'A' && c <= 'Z') ||
+				(c >= L'\u0410' && c <= L'\u042F')) {
 				strSynonym += wxT(' ');
 				strSynonym += wxTolower(c);
 			}
@@ -201,7 +201,7 @@ namespace stringUtils
 		for (unsigned int i = 0; i < systemName.length(); i++) {
 			if (!((systemName[i] == '_') ||
 				(systemName[i] >= 'A' && systemName[i] <= 'Z') || (systemName[i] >= 'a' && systemName[i] <= 'z') ||
-				(systemName[i] >= 'À' && systemName[i] <= 'ß') || (systemName[i] >= 'à' && systemName[i] <= 'ÿ') ||
+				(systemName[i] >= L'\u0410' && systemName[i] <= L'\u042F') || (systemName[i] >= L'\u0430' && systemName[i] <= L'\u044F') ||
 				(systemName[i] >= '0' && systemName[i] <= '9'))) {
 				//wxMessageBox(wxT("You can enter only numbers, letters and the symbol \"_\""), wxT("Error entering value"));
 				return i;

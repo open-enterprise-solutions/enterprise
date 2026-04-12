@@ -8,12 +8,12 @@
 
 enum
 {
-	//--- Áàçîâûå:
+	//--- Ð‘Ð°Ð·Ð¾Ð²Ñ‹Ðµ:
 	enBoolean = 0,
 	enNumber,
 	enDate,
 	enString,
-	//--- Ìàòåìàòè÷åñêèå:
+	//--- ÐœÐ°Ñ‚ÐµÐ¼Ð°Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¸Ðµ:
 	enRound,
 	enInt,
 	enLog10,
@@ -21,7 +21,7 @@ enum
 	enMax,
 	enMin,
 	enSqrt,
-	//--- Ñòðîêîâûå:
+	//--- Ð¡Ñ‚Ñ€Ð¾ÐºÐ¾Ð²Ñ‹Ðµ:
 	enStrLen,
 	enIsBlankString,
 	enTrimL,
@@ -40,7 +40,7 @@ enum
 	enChr,
 	enAsc,
 	enTStr,
-	//--- Ðàáîòà ñ äàòîé è âðåìåíåì:
+	//--- Ð Ð°Ð±Ð¾Ñ‚Ð° Ñ Ð´Ð°Ñ‚Ð¾Ð¹ Ð¸ Ð²Ñ€ÐµÐ¼ÐµÐ½ÐµÐ¼:
 	enCurrentDate,
 	enWorkingDate,
 	enAddMonth,
@@ -64,14 +64,14 @@ enum
 	enGetDayOfYear,
 	enGetDayOfWeek,
 	enGetQuartOfYear,
-	//--- Ðàáîòà ñ ôàéëàìè: 
+	//--- Ð Ð°Ð±Ð¾Ñ‚Ð° Ñ Ñ„Ð°Ð¹Ð»Ð°Ð¼Ð¸: 
 	enFileCopy,
 	enFileDelete,
 	enGetTempDir,
 	enGetTempFileName,
-	//--- Ðàáîòà ñ îêíàìè: 
+	//--- Ð Ð°Ð±Ð¾Ñ‚Ð° Ñ Ð¾ÐºÐ½Ð°Ð¼Ð¸: 
 	enActiveWindow,
-	//--- Ñïåöèàëüíûå:
+	//--- Ð¡Ð¿ÐµÑ†Ð¸Ð°Ð»ÑŒÐ½Ñ‹Ðµ:
 	enMessage,
 	enAlert,
 	enQuestion,
@@ -113,12 +113,12 @@ void ibValueSystemFunction::PrepareNames() const
 {
 	m_methodHelper->ClearHelper();
 
-	//--- Áàçîâûå:
+	//--- Ð‘Ð°Ð·Ð¾Ð²Ñ‹Ðµ:
 	m_methodHelper->AppendFunc(wxT("Boolean"), 1, wxT("Boolean(value : any)"));
 	m_methodHelper->AppendFunc(wxT("Number"), 1, wxT("Number(value: any)"));
 	m_methodHelper->AppendFunc(wxT("Date"), 1, wxT("Date(value: any)"));
 	m_methodHelper->AppendFunc(wxT("String"), 1, wxT("String(value: any)"));
-	//--- Ìàòåìàòè÷åñêèå:
+	//--- ÐœÐ°Ñ‚ÐµÐ¼Ð°Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¸Ðµ:
 	m_methodHelper->AppendFunc(wxT("Round"), 3, wxT("Round(num : number, number, roundMode)"));
 	m_methodHelper->AppendFunc(wxT("Lnt"), 1, wxT("Lnt(num : number)"));
 	m_methodHelper->AppendFunc(wxT("Log10"), 1, wxT("Log10(num : number)"));
@@ -126,7 +126,7 @@ void ibValueSystemFunction::PrepareNames() const
 	m_methodHelper->AppendFunc(wxT("Max"), -1, wxT("Max(num : number, ...)"));
 	m_methodHelper->AppendFunc(wxT("Min"), -1, wxT("Min(num : number, ...)"));
 	m_methodHelper->AppendFunc(wxT("Sqrt"), 1, wxT("Sqrt(num : number)"));
-	//--- Ñòðîêîâûå:
+	//--- Ð¡Ñ‚Ñ€Ð¾ÐºÐ¾Ð²Ñ‹Ðµ:
 	m_methodHelper->AppendFunc(wxT("StrLen"), 1, wxT("StrLen(str : string)"));
 	m_methodHelper->AppendFunc(wxT("IsBlankString"), 1, wxT("IsBlankString(str : string)"));
 	m_methodHelper->AppendFunc(wxT("TrimL"), 1, wxT("TrimL(str : string)"));
@@ -145,7 +145,7 @@ void ibValueSystemFunction::PrepareNames() const
 	m_methodHelper->AppendFunc(wxT("Chr"), 1, wxT("Chr(num : number)"));
 	m_methodHelper->AppendFunc(wxT("Asc"), 1, wxT("Asc(str : string)"));
 	m_methodHelper->AppendFunc(wxT("Tstr"), 2, wxT("Tstr(text : string, langCode : string)"));
-	//--- Ðàáîòà ñ äàòîé è âðåìåíåì:
+	//--- Ð Ð°Ð±Ð¾Ñ‚Ð° Ñ Ð´Ð°Ñ‚Ð¾Ð¹ Ð¸ Ð²Ñ€ÐµÐ¼ÐµÐ½ÐµÐ¼:
 	m_methodHelper->AppendFunc(wxT("CurrentDate"), wxT("CurrentDate()"));
 	m_methodHelper->AppendFunc(wxT("WorkingDate"), 1, wxT("WorkingDate(d : date)"));
 	m_methodHelper->AppendFunc(wxT("AddMonth"), 2, wxT("AddMonth(d : date, num : number)"));
@@ -169,14 +169,14 @@ void ibValueSystemFunction::PrepareNames() const
 	m_methodHelper->AppendFunc(wxT("GetDayOfYear"), 1, wxT("GetDayOfYear(d : date)"));
 	m_methodHelper->AppendFunc(wxT("GetDayOfWeek"), 1, wxT("GetDayOfWeek(d : date)"));
 	m_methodHelper->AppendFunc(wxT("GetQuartOfYear"), 1, wxT("GetQuartOfYear(d : date)"));
-	//--- Ðàáîòà ñ ôàéëàìè: 
+	//--- Ð Ð°Ð±Ð¾Ñ‚Ð° Ñ Ñ„Ð°Ð¹Ð»Ð°Ð¼Ð¸: 
 	m_methodHelper->AppendFunc(wxT("FileDelete"), 1, wxT("FileDelete(fileName : string)"));
 	m_methodHelper->AppendFunc(wxT("FileCopy"), 2, wxT("FileCopy(fileDstName : string, fileSrcName : string)"));
 	m_methodHelper->AppendFunc(wxT("GetTempDir"), wxT("GetTempDir()"));
 	m_methodHelper->AppendFunc(wxT("GetTempFileName"), wxT("GetTempFileName()"));
-	//--- Ðàáîòà ñ îêíàìè: 
+	//--- Ð Ð°Ð±Ð¾Ñ‚Ð° Ñ Ð¾ÐºÐ½Ð°Ð¼Ð¸: 
 	m_methodHelper->AppendFunc(wxT("ActiveWindow"), wxT("ActiveWindow()"));
-	//--- Ñïåöèàëüíûå:
+	//--- Ð¡Ð¿ÐµÑ†Ð¸Ð°Ð»ÑŒÐ½Ñ‹Ðµ:
 	m_methodHelper->AppendProc(wxT("Message"), 2, wxT("Message(message : string, statusMessage : statusMessage)"));
 	m_methodHelper->AppendFunc(wxT("Alert"), 1, wxT("Alert(message : string)"));
 	m_methodHelper->AppendFunc(wxT("Question"), 2, wxT("Question(message : string, questionMode)"));
@@ -224,12 +224,12 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 	if (!appData->DesignerMode()) {
 		switch (lMethodNum)
 		{
-			//--- Áàçîâûå:
+			//--- Ð‘Ð°Ð·Ð¾Ð²Ñ‹Ðµ:
 		case enBoolean: pvarRetValue = Boolean(*paParams[0]); return true;
 		case enNumber: pvarRetValue = Number(*paParams[0]); return true;
 		case enDate: pvarRetValue = Date(*paParams[0]); return true;
 		case enString: pvarRetValue = String(*paParams[0]); return true;
-			//--- Ìàòåìàòè÷åñêèå:
+			//--- ÐœÐ°Ñ‚ÐµÐ¼Ð°Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¸Ðµ:
 		case enRound: pvarRetValue = Round(*paParams[0],
 			lSizeArray > 1 ? paParams[1]->GetInteger() : 0,
 			lSizeArray > 2 ?
@@ -241,7 +241,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enMax: pvarRetValue = Max(paParams, lSizeArray); return true;
 		case enMin: pvarRetValue = Min(paParams, lSizeArray); return true;
 		case enSqrt: pvarRetValue = Sqrt(*paParams[0]); return true;
-			//--- Ñòðîêîâûå:  
+			//--- Ð¡Ñ‚Ñ€Ð¾ÐºÐ¾Ð²Ñ‹Ðµ:  
 		case enStrLen: pvarRetValue = StrLen(*paParams[0]); return true;
 		case enIsBlankString: pvarRetValue = IsBlankString(*paParams[0]); return true;
 		case enTrimL: pvarRetValue = TrimL(*paParams[0]); return true;
@@ -260,7 +260,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enChr: pvarRetValue = Chr(paParams[0]->GetInteger()); return true;
 		case enAsc: pvarRetValue = Asc(*paParams[0]); return true;
 		case enTStr: pvarRetValue = TStr(*paParams[0], lSizeArray > 0 ? paParams[1]->GetString() : wxT("")); return true;
-			//--- Ðàáîòà ñ äàòîé è âðåìåíåì:
+			//--- Ð Ð°Ð±Ð¾Ñ‚Ð° Ñ Ð´Ð°Ñ‚Ð¾Ð¹ Ð¸ Ð²Ñ€ÐµÐ¼ÐµÐ½ÐµÐ¼:
 		case enCurrentDate: pvarRetValue = CurrentDate(); return true;
 		case enWorkingDate: pvarRetValue = WorkingDate(); return true;
 		case enAddMonth: pvarRetValue = AddMonth(*paParams[0], paParams[1]->GetInteger()); return true;
@@ -284,14 +284,14 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enGetDayOfYear: pvarRetValue = GetDayOfYear(*paParams[0]); return true;
 		case enGetDayOfWeek: pvarRetValue = GetDayOfWeek(*paParams[0]); return true;
 		case enGetQuartOfYear: pvarRetValue = GetQuartOfYear(*paParams[0]); return true;
-			//--- Ðàáîòà ñ ôàéëàìè:
+			//--- Ð Ð°Ð±Ð¾Ñ‚Ð° Ñ Ñ„Ð°Ð¹Ð»Ð°Ð¼Ð¸:
 		case enFileCopy: pvarRetValue = CopyFile(paParams[0]->GetString(), paParams[1]->GetString()); return true;
 		case enFileDelete: pvarRetValue = DeleteFile(paParams[0]->GetString()); return true;
 		case enGetTempDir: pvarRetValue = GetTempDir(); return true;
 		case enGetTempFileName: pvarRetValue = GetTempFileName(); return true;
-			//--- Ðàáîòà ñ îêíàìè: 
+			//--- Ð Ð°Ð±Ð¾Ñ‚Ð° Ñ Ð¾ÐºÐ½Ð°Ð¼Ð¸: 
 		case enActiveWindow: pvarRetValue = ActiveWindow(); return true;
-			//--- Ñïåöèàëüíûå:
+			//--- Ð¡Ð¿ÐµÑ†Ð¸Ð°Ð»ÑŒÐ½Ñ‹Ðµ:
 		case enMessage:
 			Message(paParams[0]->GetString(),
 				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information);
@@ -343,7 +343,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enGetCommonTemplate:
 			pvarRetValue = GetCommonTemplate(paParams[0]->GetString());
 			return true;
-			//--- Òðàçàêöèè:
+			//--- Ð¢Ñ€Ð°Ð·Ð°ÐºÑ†Ð¸Ð¸:
 		case enBeginTransaction: BeginTransaction(); return true;
 		case enCommitTransaction: CommitTransaction(); return true;
 		case enRollBackTransaction: RollBackTransaction(); return true;
@@ -353,7 +353,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 	{
 		switch (lMethodNum)
 		{
-			//--- Ñïåöèàëüíûå:
+			//--- Ð¡Ð¿ÐµÑ†Ð¸Ð°Ð»ÑŒÐ½Ñ‹Ðµ:
 		case enType:
 			pvarRetValue = Type(*paParams[0]);
 			return true;
@@ -381,7 +381,7 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 	if (!appData->DesignerMode()) {
 		switch (lMethodNum)
 		{
-			//--- Ñïåöèàëüíûå:
+			//--- Ð¡Ð¿ÐµÑ†Ð¸Ð°Ð»ÑŒÐ½Ñ‹Ðµ:
 		case enMessage:
 			Message(paParams[0]->GetString(),
 				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information);
@@ -401,7 +401,7 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 			lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
-			//--- Òðàçàêöèè:
+			//--- Ð¢Ñ€Ð°Ð·Ð°ÐºÑ†Ð¸Ð¸:
 		case enBeginTransaction: BeginTransaction(); return true;
 		case enCommitTransaction: CommitTransaction(); return true;
 		case enRollBackTransaction: RollBackTransaction(); return true;
@@ -411,7 +411,7 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 	{
 		switch (lMethodNum)
 		{
-			//--- Ñïåöèàëüíûå:
+			//--- Ð¡Ð¿ÐµÑ†Ð¸Ð°Ð»ÑŒÐ½Ñ‹Ðµ:
 		case enShowCommonForm:
 			ShowCommonForm(paParams[0]->GetString(),
 				lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,

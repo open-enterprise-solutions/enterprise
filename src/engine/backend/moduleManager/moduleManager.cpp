@@ -247,7 +247,7 @@ bool ibValueModuleManagerConfiguration::CreateMainModule()
 	if (m_initialized)
 		return true;
 
-	//Добавление глобальных констант
+	//Р”РѕР±Р°РІР»РµРЅРёРµ РіР»РѕР±Р°Р»СЊРЅС‹С… РєРѕРЅСЃС‚Р°РЅС‚
 	for (auto variable : m_listGlConstValue) {
 		m_compileModule->AddVariable(variable.first, variable.second);
 	}
@@ -290,7 +290,7 @@ bool ibValueModuleManagerConfiguration::DestroyMainModule()
 	if (!m_initialized)
 		return true;
 
-	//Добавление глобальных констант
+	//Р”РѕР±Р°РІР»РµРЅРёРµ РіР»РѕР±Р°Р»СЊРЅС‹С… РєРѕРЅСЃС‚Р°РЅС‚
 	for (auto& variable : m_listGlConstValue) {
 		m_compileModule->RemoveVariable(variable.first);
 	}

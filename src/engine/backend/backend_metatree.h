@@ -43,7 +43,7 @@ protected:
 	};
 
 	struct ibTreeDataClassIdentifier : ibTreeData {
-		ibClassID m_clsid; //тип элемента
+		ibClassID m_clsid; //С‚РёРї СЌР»РµРјРµРЅС‚Р°
 	public:
 		ibTreeDataClassIdentifier(const ibClassID& clsid) :
 			m_clsid(clsid) {
@@ -51,7 +51,7 @@ protected:
 	};
 
 	struct ibTreeDataMetaItem : ibTreeData {
-		ibValueMetaObject* m_metaObject; //тип элемента
+		ibValueMetaObject* m_metaObject; //С‚РёРї СЌР»РµРјРµРЅС‚Р°
 	public:
 		ibTreeDataMetaItem(ibValueMetaObject* metaObject) :
 			m_metaObject(metaObject) {

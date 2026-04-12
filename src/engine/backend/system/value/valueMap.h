@@ -78,14 +78,14 @@ public:
 	virtual void PrepareNames() const;                         // this method is automatically called to initialize attribute and method names.
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       //method call
 
-	//Расширенные методы:
+	//Р Р°СЃС€РёСЂРµРЅРЅС‹Рµ РјРµС‚РѕРґС‹:
 	virtual void Insert(const ibValue& varKeyValue, const ibValue& cValue);
 	virtual void Delete(const ibValue& varKeyValue);
 	virtual bool Property(const ibValue& varKeyValue, ibValue& cValueFound);
 	unsigned int Count() const { return m_containerValues.size(); }
 	void Clear() { m_containerValues.clear(); }
 
-	//Работа с итераторами:
+	//Р Р°Р±РѕС‚Р° СЃ РёС‚РµСЂР°С‚РѕСЂР°РјРё:
 	virtual bool HasIterator() const { return true; }
 	virtual ibValue GetIteratorEmpty();
 	virtual ibValue GetIteratorAt(unsigned int idx);
