@@ -269,6 +269,7 @@ private:
 		void OnStartSearch(wxCommandEvent& event);
 		void OnCancelSearch(wxCommandEvent& event);
 
+		void OnItemActivated(wxTreeEvent& event);
 		void OnCreateItem(wxCommandEvent& event);
 		void OnEditItem(wxCommandEvent& event);
 		void OnRemoveItem(wxCommandEvent& event);

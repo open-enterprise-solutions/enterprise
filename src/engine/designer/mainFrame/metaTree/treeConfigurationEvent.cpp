@@ -239,6 +239,11 @@ void ibMetadataTree::ibMetaTreeCtrl::OnCreateItem(wxCommandEvent& event)
 	m_ownerTree->CreateItem(); event.Skip();
 }
 
+void ibMetadataTree::ibMetaTreeCtrl::OnItemActivated(wxTreeEvent& event)
+{
+	m_ownerTree->EditItem(); event.Skip();
+}
+
 void ibMetadataTree::ibMetaTreeCtrl::OnEditItem(wxCommandEvent& event)
 {
 	m_ownerTree->EditItem(); event.Skip();

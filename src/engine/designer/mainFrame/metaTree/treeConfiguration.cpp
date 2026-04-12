@@ -192,6 +192,8 @@ EVT_TREE_ITEM_EXPANDING(wxID_ANY, ibMetadataTree::ibMetaTreeCtrl::OnExpanding)
 EVT_TREE_BEGIN_DRAG(wxID_ANY, ibMetadataTree::ibMetaTreeCtrl::OnBeginDrag)
 EVT_TREE_END_DRAG(wxID_ANY, ibMetadataTree::ibMetaTreeCtrl::OnEndDrag)
 
+EVT_TREE_ITEM_ACTIVATED(wxID_ANY, ibMetadataTree::ibMetaTreeCtrl::OnItemActivated)
+
 EVT_MENU(ID_METATREE_NEW, ibMetadataTree::ibMetaTreeCtrl::OnCreateItem)
 EVT_MENU(ID_METATREE_EDIT, ibMetadataTree::ibMetaTreeCtrl::OnEditItem)
 EVT_MENU(ID_METATREE_DELETE, ibMetadataTree::ibMetaTreeCtrl::OnRemoveItem)

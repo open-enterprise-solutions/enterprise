@@ -9,7 +9,11 @@ const wxString ibFontColorSettings::s_displayItemName[] = { _("Default"), _("Com
 ibFontColorSettings::ibFontColorSettings()
 {
 
+#if defined(__WXOSX__) || defined(__APPLE__)
+	m_font = wxFont(13, wxFONTFAMILY_MODERN, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, wxT("Menlo"));
+#else
 	m_font = wxFont(10, wxFONTFAMILY_MODERN, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
+#endif
 
 	m_colors[DisplayItem_Default].foreColor = wxColor(0x00, 0x00, 0x00);
 	m_colors[DisplayItem_Default].backColor = wxColor(0xFF, 0xFF, 0xFF);
