@@ -161,26 +161,48 @@ void ibDialogConnection::OnModeChanged(wxCommandEvent& event)
 #ifdef OES_USE_POSTGRESQL
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
 #endif
+#ifdef OES_USE_FIREBIRD
+#include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
+#endif
 
 void ibDialogConnection::TestConnectionOnButtonClick(wxCommandEvent& event)
 {
-#ifdef OES_USE_POSTGRESQL
-	std::shared_ptr<ibDatabaseLayerPostgres>postgresDatabaseLayer(new ibDatabaseLayerPostgres);
-	bool sucess = postgresDatabaseLayer->Open(
-		m_textCtrlServer->GetValue(),
-		m_textCtrlPort->GetValue(),
-		wxT(""),
-		m_textCtrlUser->GetValue(),
-		m_textCtrlPassword->GetValue()
-	);
+	bool success = false;
 
-	postgresDatabaseLayer->Close();
-
-	if (sucess) wxMessageBox("Connected to DB!");
-	else wxMessageBox("Failed connect to DB!");
+#ifdef OES_USE_FIREBIRD
+	{
+		std::shared_ptr<ibDatabaseLayerFirebird> db(new ibDatabaseLayerFirebird(
+			m_textCtrlServer->GetValue(),
+			m_textCtrlDataBase->GetValue(),
+			m_textCtrlUser->GetValue(),
+			m_textCtrlPassword->GetValue()
+		));
+		success = db->Open();
+		db->Close();
+	}
+#elif defined(OES_USE_POSTGRESQL)
+	{
+		std::shared_ptr<ibDatabaseLayerPostgres> db(new ibDatabaseLayerPostgres);
+		success = db->Open(
+			m_textCtrlServer->GetValue(),
+			m_textCtrlPort->GetValue(),
+			m_textCtrlDataBase->GetValue(),
+			m_textCtrlUser->GetValue(),
+			m_textCtrlPassword->GetValue()
+		);
+		db->Close();
+	}
 #else
-	wxMessageBox("PostgreSQL driver not available");
+	wxMessageBox(_("No database driver available"));
+	event.Skip();
+	return;
 #endif
+
+	if (success)
+		wxMessageBox(_("Connected to DB!"));
+	else
+		wxMessageBox(_("Failed to connect to DB!"));
+
 	event.Skip();
 }
 
