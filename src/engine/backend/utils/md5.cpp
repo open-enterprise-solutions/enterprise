@@ -211,7 +211,7 @@ void MD5Final(unsigned char digest[16], struct MD5Context *ctx)
 	MD5Transform(ctx->buf, (uint32 *)ctx->in);
 	byteReverse((unsigned char *)ctx->buf, 4);
 	memcpy(digest, ctx->buf, 16);
-	memset(ctx, 0, sizeof(ctx));        /* In case it's sensitive */
+	memset(ctx, 0, sizeof(*ctx));       /* In case it's sensitive */
 }
 
 
@@ -401,7 +401,8 @@ wxString ibMD5::ComputeMd5(const wxString& content)
 
 	MD5Init(&md5c);
 
-	MD5Update(&md5c, (const unsigned char*)content.c_str(), content.length());
+	const wxScopedCharBuffer utf8 = content.utf8_str();
+	MD5Update(&md5c, (const unsigned char*)utf8.data(), utf8.length());
 
 	MD5Final(signature, &md5c);
 
@@ -416,10 +417,12 @@ wxString ibMD5::ComputeMd5(const wxString& content)
 wxString ibMD5::ComputeKeyedMd5(const wxString& content, const wxString& key)
 {
 	unsigned char  digest[16];
-	hmac_md5((const unsigned char*)content.c_str(),                /* pointer to data stream */
-		content.Len(),            /* length of data stream */
-		(const unsigned char*)key.c_str(),                 /* pointer to authentication key */
-		key.Len(),             /* length of authentication key */
+	const wxScopedCharBuffer contentUtf8 = content.utf8_str();
+	const wxScopedCharBuffer keyUtf8 = key.utf8_str();
+	hmac_md5((const unsigned char*)contentUtf8.data(),
+		contentUtf8.length(),
+		(const unsigned char*)keyUtf8.data(),
+		keyUtf8.length(),
 		digest);
 	wxString result;
 	for (int j = 0; j < (int)sizeof digest; j++) {
