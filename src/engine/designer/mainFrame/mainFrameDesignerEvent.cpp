@@ -301,7 +301,7 @@ void ibFrontendDocMDIFrameDesigner::OnConfiguration(wxCommandEvent& event)
 	if (wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILE == event.GetId())
 	{
 		wxFileDialog openFileDialog(this, _("Open configuration file"), "", "",
-			wxT("Configuration files (*.mcf)|*.mcf"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+			wxT("Configuration files (*.mcf;*.obk)|*.mcf;*.obk|All files (*.*)|*.*"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
