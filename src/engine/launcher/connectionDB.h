@@ -17,12 +17,23 @@
 #include <wx/image.h>
 #include <wx/icon.h>
 #include <wx/frame.h>
+#include <wx/radiobut.h>
+#include <wx/filepicker.h>
 
 #include "frontend/frontend.h"
 
 class ibDialogConnection : public wxDialog {
 	wxStaticText* m_staticTextName;
 	wxTextCtrl* m_textCtrlName;
+
+	wxRadioButton* m_radioFile;
+	wxRadioButton* m_radioServer;
+
+	// File mode controls
+	wxStaticText* m_staticTextFilePath;
+	wxDirPickerCtrl* m_dirPickerFile;
+
+	// Server mode controls
 	wxStaticText* m_staticTextServer;
 	wxTextCtrl* m_textCtrlServer;
 	wxStaticText* m_staticTextPort;
@@ -33,20 +44,31 @@ class ibDialogConnection : public wxDialog {
 	wxTextCtrl* m_textCtrlPassword;
 	wxStaticText* m_staticTextDataBase;
 	wxTextCtrl* m_textCtrlDataBase;
+
+	wxBoxSizer* m_sizerFileMode;
+	wxBoxSizer* m_sizerServerMode;
+
 	wxButton* m_buttonTestConnection;
 	wxButton* m_buttonSaveConnection;
+
+	void UpdateModeVisibility();
+
 public:
-	
+
 	void InitConnection(
-		const wxString &strName, 
+		const wxString &strName,
+		bool bFileMode,
+		const wxString& strFilePath,
 		const wxString &strServer, const wxString& strPort,
 		const wxString& strDatabase,
 		const wxString& strUser, const wxString& strPassword
 	);
 
-	ibDialogConnection(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Configure connect"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(500, 270), long style = wxSYSTEM_MENU | wxCLOSE_BOX | wxCAPTION | wxCLIP_CHILDREN | wxTAB_TRAVERSAL);
+	ibDialogConnection(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Configure connect"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(500, 320), long style = wxSYSTEM_MENU | wxCLOSE_BOX | wxCAPTION | wxCLIP_CHILDREN | wxTAB_TRAVERSAL);
 
+	bool IsFileMode() const { return m_radioFile->GetValue(); }
 	wxString GetNameIB() const { return m_textCtrlName->GetValue(); }
+	wxString GetFilePath() const { return m_dirPickerFile->GetPath(); }
 	wxString GetServer() const { return m_textCtrlServer->GetValue(); }
 	wxString GetPort() const { return m_textCtrlPort->GetValue(); }
 	wxString GetDBName() const { return m_textCtrlDataBase->GetValue(); }
@@ -54,6 +76,7 @@ public:
 	wxString GetPassword() const { return m_textCtrlPassword->GetValue(); }
 
 protected:
+	void OnModeChanged(wxCommandEvent& event);
 	void TestConnectionOnButtonClick(wxCommandEvent& event);
 	void SaveConnectionOnButtonClick(wxCommandEvent& event);
 };

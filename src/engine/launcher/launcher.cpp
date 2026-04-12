@@ -2,9 +2,77 @@
 
 #include <wx/config.h>
 #include <wx/fileconf.h>
+#include <wx/filename.h>
 #include <wx/log.h>
 #include <wx/stdpaths.h>
 #include <wx/xml/xml.h>
+
+namespace {
+
+wxString FindSiblingExecutable(const wxString& exeName) {
+	wxFileName selfPath(wxStandardPaths::Get().GetExecutablePath());
+	wxString dir = selfPath.GetPath();
+
+#ifdef __WXMAC__
+	// If running inside a .app bundle, the executable is at:
+	//   Foo.app/Contents/MacOS/foo
+	// The sibling app would be at:
+	//   <parent>/Bar.app/Contents/MacOS/bar
+	// First, try the same directory (flat layout in build/bin/Debug)
+	wxString flatPath = dir + wxFileName::GetPathSeparator() + exeName;
+	if (wxFileExists(flatPath))
+		return flatPath;
+
+	// Try sibling .app bundle: go up 3 levels from Contents/MacOS/launcher
+	// to reach the directory containing launcher.app, then look for exeName.app
+	wxFileName bundlePath(dir);
+	bundlePath.RemoveLastDir(); // MacOS -> Contents
+	bundlePath.RemoveLastDir(); // Contents -> launcher.app
+	bundlePath.RemoveLastDir(); // launcher.app -> parent dir
+	wxString siblingApp = bundlePath.GetFullPath() + exeName + ".app"
+		+ wxFileName::GetPathSeparator() + "Contents"
+		+ wxFileName::GetPathSeparator() + "MacOS"
+		+ wxFileName::GetPathSeparator() + exeName;
+	if (wxFileExists(siblingApp))
+		return siblingApp;
+
+	// Fallback: same directory
+	return flatPath;
+#else
+	// Windows / Linux: sibling executable in the same directory
+	wxString path = dir + wxFileName::GetPathSeparator() + exeName;
+#ifdef __WXMSW__
+	path += ".exe";
+#endif
+	return path;
+#endif
+}
+
+wxString BuildLaunchCommand(const wxString& exeName, const CListInfo& info) {
+	wxString exePath = FindSiblingExecutable(exeName);
+	wxString cmd = wxT("\"") + exePath + wxT("\"");
+
+	if (info.m_bFileMode) {
+		if (!info.m_strFilePath.IsEmpty())
+			cmd += wxT(" -file \"") + info.m_strFilePath + wxT("\"");
+	}
+	else {
+		if (!info.m_strServer.IsEmpty())
+			cmd += wxT(" /srv ") + info.m_strServer;
+		if (!info.m_strPort.IsEmpty())
+			cmd += wxT(" /p ") + info.m_strPort;
+		if (!info.m_strDatabase.IsEmpty())
+			cmd += wxT(" /db ") + info.m_strDatabase;
+		if (!info.m_strUser.IsEmpty())
+			cmd += wxT(" /usr ") + info.m_strUser;
+		if (!info.m_strPassword.IsEmpty())
+			cmd += wxT(" /pwd ") + info.m_strPassword;
+	}
+
+	return cmd;
+}
+
+} // anonymous namespace
 
 void ibFrameLauncher::LoadListIB() {
 
@@ -28,19 +96,25 @@ void ibFrameLauncher::LoadListIB() {
 					if (nodeItem->GetName() == "name" && nodeItem->GetChildren()) {
 						strNameIB = nodeItem->GetChildren()->GetContent();
 					}
-					if (nodeItem->GetName() == "server" && nodeItem->GetChildren()) {
+					else if (nodeItem->GetName() == "filemode" && nodeItem->GetChildren()) {
+						listInfo.m_bFileMode = (nodeItem->GetChildren()->GetContent() == "1");
+					}
+					else if (nodeItem->GetName() == "filepath" && nodeItem->GetChildren()) {
+						listInfo.m_strFilePath = nodeItem->GetChildren()->GetContent();
+					}
+					else if (nodeItem->GetName() == "server" && nodeItem->GetChildren()) {
 						listInfo.m_strServer = nodeItem->GetChildren()->GetContent();
 					}
-					else if (nodeItem->GetName() == "port" && node->GetChildren()) {
+					else if (nodeItem->GetName() == "port" && nodeItem->GetChildren()) {
 						listInfo.m_strPort = nodeItem->GetChildren()->GetContent();
 					}
-					else if (nodeItem->GetName() == "database" && node->GetChildren()) {
+					else if (nodeItem->GetName() == "database" && nodeItem->GetChildren()) {
 						listInfo.m_strDatabase = nodeItem->GetChildren()->GetContent();
 					}
-					else if (nodeItem->GetName() == "user" && node->GetChildren()) {
+					else if (nodeItem->GetName() == "user" && nodeItem->GetChildren()) {
 						listInfo.m_strUser = nodeItem->GetChildren()->GetContent();
 					}
-					else if (nodeItem->GetName() == "password" && node->GetChildren()) {
+					else if (nodeItem->GetName() == "password" && nodeItem->GetChildren()) {
 						listInfo.m_strPassword = nodeItem->GetChildren()->GetContent();
 					}
 					nodeItem = nodeItem->GetNext();
@@ -60,12 +134,22 @@ void ibFrameLauncher::SaveListIB() {
 	wxXmlDocument document;
 	wxXmlNode* root = new wxXmlNode(wxXML_ELEMENT_NODE, "ib");
 	document.SetRoot(root);
-	
+
 	for (auto& list : m_listInfoBase) {
 		wxXmlNode* xmlItem = new wxXmlNode(wxXML_ELEMENT_NODE, "item");
+
 		wxXmlNode* xmlNode_name = new wxXmlNode(wxXML_ELEMENT_NODE, "name");
 		xmlNode_name->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.first));
 		xmlItem->AddChild(xmlNode_name);
+
+		wxXmlNode* xmlNode_filemode = new wxXmlNode(wxXML_ELEMENT_NODE, "filemode");
+		xmlNode_filemode->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_bFileMode ? "1" : "0"));
+		xmlItem->AddChild(xmlNode_filemode);
+
+		wxXmlNode* xmlNode_filepath = new wxXmlNode(wxXML_ELEMENT_NODE, "filepath");
+		xmlNode_filepath->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_strFilePath));
+		xmlItem->AddChild(xmlNode_filepath);
+
 		wxXmlNode* xmlNode_server = new wxXmlNode(wxXML_ELEMENT_NODE, "server");
 		xmlNode_server->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_strServer));
 		xmlItem->AddChild(xmlNode_server);
@@ -81,6 +165,7 @@ void ibFrameLauncher::SaveListIB() {
 		wxXmlNode* xmlNode_password = new wxXmlNode(wxXML_ELEMENT_NODE, "password");
 		xmlNode_password->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_strPassword));
 		xmlItem->AddChild(xmlNode_password);
+
 		root->AddChild(xmlItem);
 	}
 
@@ -175,28 +260,25 @@ ibFrameLauncher::~ibFrameLauncher()
 	SaveListIB();
 }
 
+static wxString FormatInfoLabel(const CListInfo& info) {
+	if (info.m_bFileMode) {
+		return wxT("file: ") + info.m_strFilePath;
+	}
+	return wxT("srv: ") + info.m_strServer + wxT("; db: ") + info.m_strDatabase;
+}
+
 void ibFrameLauncher::OnSelectedList(wxCommandEvent& event) {
 	int selection = m_listIBwnd->GetSelection();
 	if (selection == wxNOT_FOUND) return;
 	auto itSelection = m_listInfoBase.begin() + selection;
-	m_staticDBName->SetLabel("srv: " + itSelection->second.m_strServer + "; db: " + itSelection->second.m_strDatabase);
+	m_staticDBName->SetLabel(FormatInfoLabel(itSelection->second));
 }
 
 void ibFrameLauncher::OnSelectedDClickList(wxCommandEvent& event) {
 	int selection = m_listIBwnd->GetSelection();
 	if (selection == wxNOT_FOUND) return;
 	auto itSelection = m_listInfoBase.begin() + selection;
-	wxString executeCmd = "enterprise ";
-	if (!itSelection->second.m_strServer.IsEmpty())
-		executeCmd += " /srv " + itSelection->second.m_strServer;
-	if (!itSelection->second.m_strPort.IsEmpty())
-		executeCmd += " /p " + itSelection->second.m_strPort;
-	if (!itSelection->second.m_strDatabase.IsEmpty())
-		executeCmd += " /db " + itSelection->second.m_strDatabase;
-	if (!itSelection->second.m_strUser.IsEmpty())
-		executeCmd += " /usr " + itSelection->second.m_strUser;
-	if (!itSelection->second.m_strPassword.IsEmpty())
-		executeCmd += " /pwd " + itSelection->second.m_strPassword;
+	wxString executeCmd = BuildLaunchCommand("enterprise", itSelection->second);
 	wxExecute(executeCmd);
 	Close(true);
 }
@@ -205,17 +287,7 @@ void ibFrameLauncher::OnButtonEnterprise(wxCommandEvent& event) {
 	int selection = m_listIBwnd->GetSelection();
 	if (selection == wxNOT_FOUND) return;
 	auto itSelection = m_listInfoBase.begin() + selection;
-	wxString executeCmd = "enterprise ";
-	if (!itSelection->second.m_strServer.IsEmpty())
-		executeCmd += " /srv " + itSelection->second.m_strServer;
-	if (!itSelection->second.m_strPort.IsEmpty())
-		executeCmd += " /p " + itSelection->second.m_strPort;
-	if (!itSelection->second.m_strDatabase.IsEmpty())
-		executeCmd += " /db " + itSelection->second.m_strDatabase;
-	if (!itSelection->second.m_strUser.IsEmpty())
-		executeCmd += " /usr " + itSelection->second.m_strUser;
-	if (!itSelection->second.m_strPassword.IsEmpty())
-		executeCmd += " /pwd " + itSelection->second.m_strPassword;
+	wxString executeCmd = BuildLaunchCommand("enterprise", itSelection->second);
 	wxExecute(executeCmd);
 	Close(true);
 }
@@ -224,17 +296,7 @@ void ibFrameLauncher::OnButtonDesigner(wxCommandEvent& event) {
 	int selection = m_listIBwnd->GetSelection();
 	if (selection == wxNOT_FOUND) return;
 	auto itSelection = m_listInfoBase.begin() + selection;
-	wxString executeCmd = "designer ";
-	if (!itSelection->second.m_strServer.IsEmpty())
-		executeCmd += " /srv " + itSelection->second.m_strServer;
-	if (!itSelection->second.m_strPort.IsEmpty())
-		executeCmd += " /p " + itSelection->second.m_strPort;
-	if (!itSelection->second.m_strDatabase.IsEmpty())
-		executeCmd += " /db " + itSelection->second.m_strDatabase;
-	if (!itSelection->second.m_strUser.IsEmpty())
-		executeCmd += " /usr " + itSelection->second.m_strUser;
-	if (!itSelection->second.m_strPassword.IsEmpty())
-		executeCmd += " /pwd " + itSelection->second.m_strPassword;
+	wxString executeCmd = BuildLaunchCommand("designer", itSelection->second);
 	wxExecute(executeCmd);
 	Close(true);
 }
@@ -246,20 +308,22 @@ void ibFrameLauncher::OnButtonAdd(wxCommandEvent& event) {
 	const int res = connection_db->ShowModal();
 	if (res == wxID_OK) {
 
-		CListInfo listInfo; 
+		CListInfo listInfo;
 
+		listInfo.m_bFileMode = connection_db->IsFileMode();
+		listInfo.m_strFilePath = connection_db->GetFilePath();
 		listInfo.m_strServer = connection_db->GetServer();
 		listInfo.m_strPort = connection_db->GetPort();
 		listInfo.m_strDatabase = connection_db->GetDBName();
 		listInfo.m_strUser = connection_db->GetUser();
-		listInfo.m_strPassword = connection_db->GetUser();
+		listInfo.m_strPassword = connection_db->GetPassword();
 
 		m_listInfoBase.emplace_back(connection_db->GetNameIB(), listInfo);
-	
+
 		m_listIBwnd->AppendString(connection_db->GetNameIB());
 		m_listIBwnd->Select(m_listIBwnd->GetCount() - 1);
 
-		m_staticDBName->SetLabel("srv: " + listInfo.m_strServer + "; db: " + listInfo.m_strDatabase);
+		m_staticDBName->SetLabel(FormatInfoLabel(listInfo));
 	}
 
 	connection_db->Destroy();
@@ -273,7 +337,9 @@ void ibFrameLauncher::OnButtonEdit(wxCommandEvent& event) {
 	auto itSelection = m_listInfoBase.begin() + selection;
 
 	ibDialogConnection* connection_db = new ibDialogConnection(this, wxID_ANY);
-	connection_db->InitConnection(itSelection->first, 
+	connection_db->InitConnection(itSelection->first,
+		itSelection->second.m_bFileMode,
+		itSelection->second.m_strFilePath,
 		itSelection->second.m_strServer, itSelection->second.m_strPort,
 		itSelection->second.m_strDatabase,
 		itSelection->second.m_strUser, itSelection->second.m_strPassword
@@ -283,18 +349,20 @@ void ibFrameLauncher::OnButtonEdit(wxCommandEvent& event) {
 
 		CListInfo listInfo;
 
+		listInfo.m_bFileMode = connection_db->IsFileMode();
+		listInfo.m_strFilePath = connection_db->GetFilePath();
 		listInfo.m_strServer = connection_db->GetServer();
 		listInfo.m_strPort = connection_db->GetPort();
 		listInfo.m_strDatabase = connection_db->GetDBName();
 		listInfo.m_strUser = connection_db->GetUser();
-		listInfo.m_strPassword = connection_db->GetUser();
+		listInfo.m_strPassword = connection_db->GetPassword();
 
 		m_listIBwnd->Insert(connection_db->GetNameIB(), selection);
-		m_listIBwnd->Delete(selection);
+		m_listIBwnd->Delete(selection + 1);
 		itSelection->first = connection_db->GetNameIB();
 		itSelection->second = listInfo;
 
-		m_staticDBName->SetLabel("srv: " + listInfo.m_strServer + "; db: " + listInfo.m_strDatabase);
+		m_staticDBName->SetLabel(FormatInfoLabel(listInfo));
 	}
 	connection_db->Destroy();
 	event.Skip();

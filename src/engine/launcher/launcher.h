@@ -18,6 +18,8 @@
 #include <wx/frame.h>
 
 struct CListInfo {
+	bool m_bFileMode = false;
+	wxString m_strFilePath;
 	wxString m_strServer;
 	wxString m_strDatabase;
 	wxString m_strUser;
