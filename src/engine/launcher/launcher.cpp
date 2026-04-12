@@ -1,4 +1,5 @@
 #include "launcher.h"
+#include "backend/appData.h"
 
 #include <wx/config.h>
 #include <wx/fileconf.h>
@@ -69,13 +70,9 @@ wxString BuildLaunchCommand(const wxString& exeName, const CListInfo& info) {
 			cmd += wxT(" -pwd ") + info.m_strPassword;
 	}
 
-	// Always pass locale from backend.conf
-	wxFileName selfPath(wxStandardPaths::Get().GetExecutablePath());
-	wxString confPath = selfPath.GetPath() + wxFileName::GetPathSeparator() + wxT("backend.conf");
-	if (wxFileExists(confPath)) {
-		wxFileConfig fc(wxT(""), wxT(""), wxT(""), confPath);
-		wxString locale;
-		fc.Read(wxT("Locale"), &locale);
+	// Pass locale from appData singleton (already read from backend.conf)
+	if (appData != nullptr) {
+		wxString locale = appData->GetLocale();
 		if (!locale.IsEmpty())
 			cmd += wxT(" -lc ") + locale;
 	}
