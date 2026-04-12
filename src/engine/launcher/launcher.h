@@ -45,7 +45,7 @@ public:
 	void LoadListIB();
 	void SaveListIB();
 
-	ibFrameLauncher(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Launch OES"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(450, 375), long style = wxDEFAULT_FRAME_STYLE | wxRESIZE_BORDER);
+	ibFrameLauncher(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Launch OES"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(520, 420), long style = wxDEFAULT_FRAME_STYLE | wxRESIZE_BORDER);
 	virtual ~ibFrameLauncher();
 
 	//events:
