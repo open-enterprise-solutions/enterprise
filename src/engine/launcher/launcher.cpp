@@ -188,7 +188,7 @@ ibFrameLauncher::ibFrameLauncher(wxWindow* parent, wxWindowID id, const wxString
 	wxBoxSizer* sizerLeft = new wxBoxSizer(wxVERTICAL);
 
 	m_listIBwnd = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE);
-	m_listIBwnd->SetFont(wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, wxT("Arial")));
+	m_listIBwnd->SetFont(wxFont(13, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
 
 	m_listIBwnd->Bind(wxEVT_LISTBOX, &ibFrameLauncher::OnSelectedList, this);
 	m_listIBwnd->Bind(wxEVT_LISTBOX_DCLICK, &ibFrameLauncher::OnSelectedDClickList, this);
@@ -196,6 +196,7 @@ ibFrameLauncher::ibFrameLauncher(wxWindow* parent, wxWindowID id, const wxString
 	sizerLeft->Add(m_listIBwnd, 1, wxALL | wxEXPAND, 5);
 
 	m_staticDBName = new wxStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
+	m_staticDBName->SetFont(wxFont(12, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
 	m_staticDBName->Wrap(-1);
 	sizerLeft->Add(m_staticDBName, 0, wxALL | wxEXPAND, 5);
 
