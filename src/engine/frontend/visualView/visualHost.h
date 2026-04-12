@@ -31,6 +31,10 @@ public:
 	{
 		wxScrolledCanvas::SetDoubleBuffered(true);
 		wxScrolledCanvas::SetScrollRate(5, 5);
+#ifdef __WXOSX__
+		wxScrolledCanvas::SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
+		wxScrolledCanvas::SetBackgroundStyle(wxBG_STYLE_SYSTEM);
+#endif
 	}
 
 	virtual ~ibVisualHost() {/* ClearVisualHost(); */ }

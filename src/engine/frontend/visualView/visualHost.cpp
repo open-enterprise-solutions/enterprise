@@ -72,6 +72,11 @@ bool ibVisualHost::CreateVisualHost()
 	GetParentBackgroundWindow()->Thaw();
 #endif
 
+#ifdef __WXOSX__
+	GetParentBackgroundWindow()->Refresh();
+	GetParentBackgroundWindow()->Update();
+#endif
+
 	return true;
 }
 
@@ -132,6 +137,11 @@ bool ibVisualHost::UpdateVisualHost()
 
 #if defined(__FREEZE_CONTROL__)
 	GetParentBackgroundWindow()->Thaw();
+#endif
+
+#ifdef __WXOSX__
+	GetParentBackgroundWindow()->Refresh();
+	GetParentBackgroundWindow()->Update();
 #endif
 
 	return true;

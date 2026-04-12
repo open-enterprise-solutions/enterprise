@@ -301,7 +301,7 @@ void ibFrameCodeRunner::HighlightSyntaxAndCalculateFoldLevel(
 	ibTranslateCode translate;
 	translate.Load(strCode);
 
-	//вдруг строка начинается с комментария:
+	//РІРґСЂСѓРі СЃС‚СЂРѕРєР° РЅР°С‡РёРЅР°РµС‚СЃСЏ СЃ РєРѕРјРјРµРЅС‚Р°СЂРёСЏ:
 	int wasLeftPoint = wxNOT_FOUND;
 
 	//remove old styling
@@ -688,7 +688,7 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 
 	bSizerMain->Add(m_output, 1, wxEXPAND | wxALL, 5);
 
-	m_output->SetCodePage(wxSTC_CP_UTF8); //Устанавливаем кодировку Юникод (UTF-8)
+	m_output->SetCodePage(wxSTC_CP_UTF8); //РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РєРѕРґРёСЂРѕРІРєСѓ Р®РЅРёРєРѕРґ (UTF-8)
 
 	SetFontColorSettings();
 

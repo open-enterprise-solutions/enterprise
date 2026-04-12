@@ -19,7 +19,7 @@
 #include "wx/image.h"
 #endif
 
-#ifdef __WXMAC__
+#ifdef __WXOSX__
 #include "wx/osx/private.h"
 #include "wx/graphics.h"
 #include "wx/dcgraph.h"
@@ -160,7 +160,7 @@ wxAuiLunaDockArt::wxAuiLunaDockArt() : wxAuiDockArt()
 	m_captionFont = wxFont(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
 
 	// default metric values
-#if defined( __WXMAC__ ) && wxOSX_USE_COCOA_OR_CARBON
+#if defined( __WXOSX__ ) && wxOSX_USE_COCOA_OR_CARBON
 	SInt32 height;
 	GetThemeMetric(kThemeMetricSmallPaneSplitterHeight, &height);
 	m_sashSize = height;
@@ -182,7 +182,7 @@ void wxAuiLunaDockArt::InitBitmaps()
 {
 	// some built in bitmaps
 	// TODO: Provide x1.5 and x2.0 versions or migrate to SVG.
-#if defined( __WXMAC__ )
+#if defined( __WXOSX__ )
 	static const unsigned char close_bits[] = {
 		0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0xFE, 0x03, 0xF8, 0x01, 0xF0, 0x19, 0xF3,
 		0xB8, 0xE3, 0xF0, 0xE1, 0xE0, 0xE0, 0xF0, 0xE1, 0xB8, 0xE3, 0x19, 0xF3,
@@ -221,7 +221,7 @@ void wxAuiLunaDockArt::InitBitmaps()
 		0xdf,0xfc,0xdf,0xfc,0xdf,0xfc,0x0f,0xf8,0x7f,0xff,0x7f,0xff,
 		0x7f,0xff,0xff,0xff,0xff,0xff,0xff,0xff };
 
-#ifdef __WXMAC__
+#ifdef __WXOSX__
 	m_inactiveCloseBitmap = wxAuiBitmapFromBits(close_bits, 16, 16, *wxWHITE);
 	m_activeCloseBitmap = wxAuiBitmapFromBits(close_bits, 16, 16, *wxWHITE);
 #else
@@ -229,7 +229,7 @@ void wxAuiLunaDockArt::InitBitmaps()
 	m_activeCloseBitmap = wxAuiBitmapFromBits(close_bits, 16, 16, m_activeCaptionTextColour);
 #endif
 
-#ifdef __WXMAC__
+#ifdef __WXOSX__
 	m_inactiveMaximizeBitmap = wxAuiBitmapFromBits(maximize_bits, 16, 16, *wxWHITE);
 	m_activeMaximizeBitmap = wxAuiBitmapFromBits(maximize_bits, 16, 16, *wxWHITE);
 #else
@@ -237,7 +237,7 @@ void wxAuiLunaDockArt::InitBitmaps()
 	m_activeMaximizeBitmap = wxAuiBitmapFromBits(maximize_bits, 16, 16, m_activeCaptionTextColour);
 #endif
 
-#ifdef __WXMAC__
+#ifdef __WXOSX__
 	m_inactiveRestoreBitmap = wxAuiBitmapFromBits(restore_bits, 16, 16, *wxWHITE);
 	m_activeRestoreBitmap = wxAuiBitmapFromBits(restore_bits, 16, 16, *wxWHITE);
 #else
@@ -251,7 +251,7 @@ void wxAuiLunaDockArt::InitBitmaps()
 
 void wxAuiLunaDockArt::UpdateColoursFromSystem()
 {
-#if defined( __WXMAC__ ) && wxOSX_USE_COCOA_OR_CARBON
+#if defined( __WXOSX__ ) && wxOSX_USE_COCOA_OR_CARBON
 	wxColor baseColour = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
 #else
 	wxColor baseColour = wxSystemSettings::GetColour(wxSYS_COLOUR_3DFACE);
@@ -394,7 +394,7 @@ wxFont wxAuiLunaDockArt::GetFont(int id)
 
 void wxAuiLunaDockArt::DrawSash(wxDC& dc, wxWindow *window, int orientation, const wxRect& rect)
 {
-#if defined( __WXMAC__ ) && wxOSX_USE_COCOA_OR_CARBON
+#if defined( __WXOSX__ ) && wxOSX_USE_COCOA_OR_CARBON
 	wxUnusedVar(window);
 	wxUnusedVar(orientation);
 
@@ -556,7 +556,7 @@ void wxAuiLunaDockArt::DrawCaptionBackground(wxDC& dc, const wxRect& rect, bool 
 		if (active)
 		{
 			// on mac the gradients are expected to become darker from the top
-#ifdef __WXMAC__
+#ifdef __WXOSX__
 			DrawGradientRectangle(dc, rect,
 				m_activeCaptionColour,
 				m_activeCaptionGradientColour,
@@ -571,7 +571,7 @@ void wxAuiLunaDockArt::DrawCaptionBackground(wxDC& dc, const wxRect& rect, bool 
 		}
 		else
 		{
-#ifdef __WXMAC__
+#ifdef __WXOSX__
 			// on mac the gradients are expected to become darker from the top
 			DrawGradientRectangle(dc, rect,
 				m_inactiveCaptionGradientColour,

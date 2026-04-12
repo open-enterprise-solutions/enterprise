@@ -18,7 +18,7 @@
 #include <wx/aui/framemanager.h>
 #include <wx/aui/dockart.h>
 
-#ifdef __WXMAC__
+#ifdef __WXOSX__
 #include <wx/osx/private.h>
 #endif
 
@@ -150,7 +150,7 @@ static void IndentPressedBitmap(const wxSize& offset, wxRect* rect, int button_s
 // -- bitmaps --
 // TODO: Provide x1.5 and x2.0 versions or migrate to SVG.
 
-#if defined( __WXMAC__ )
+#if defined( __WXOSX__ )
 static const unsigned char close_bits[] = {
 	0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0xFE, 0x03, 0xF8, 0x01, 0xF0, 0x19, 0xF3,
 	0xB8, 0xE3, 0xF0, 0xE1, 0xE0, 0xE0, 0xF0, 0xE1, 0xB8, 0xE3, 0x19, 0xF3,
@@ -217,7 +217,7 @@ wxAuiLunaTabArt::~wxAuiLunaTabArt()
 
 void wxAuiLunaTabArt::UpdateColoursFromSystem()
 {
-//#if defined( __WXMAC__ ) && wxOSX_USE_COCOA_OR_CARBON
+//#if defined( __WXOSX__ ) && wxOSX_USE_COCOA_OR_CARBON
 //	wxColor baseColour = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
 //#else
 //	wxColor baseColour = wxSystemSettings::GetColour(wxSYS_COLOUR_3DFACE);

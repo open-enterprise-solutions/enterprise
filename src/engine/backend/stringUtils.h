@@ -179,19 +179,33 @@ namespace stringUtils
 
 	inline wxString GenerateSynonym(const wxString& strSystemName) {
 		wxString strSynonym;
-		for (auto& c : strSystemName) {
+		for (size_t i = 0; i < strSystemName.length(); i++) {
+			const wxUniChar c = strSystemName[i];
+			const wxUniChar::value_type wc = c.GetValue();
 			if (strSynonym.IsEmpty()) {
-				strSynonym += wxToupper(c);
+				if (c.IsAscii()) {
+					strSynonym += wxToupper(c);
+				}
+				else {
+					strSynonym += c;
+				}
 			}
-			else if ((c >= 'A' && c <= 'Z') ||
-				(c >= L'\u0410' && c <= L'\u042F')) {
+			else if ((wc >= wxT('A') && wc <= wxT('Z')) ||
+				(wc >= 0x0410 && wc <= 0x042F)) {
 				strSynonym += wxT(' ');
-				strSynonym += wxTolower(c);
+				if (c.IsAscii()) {
+					strSynonym += wxTolower(c);
+				}
+				else if (wc >= 0x0410 && wc <= 0x042F) {
+					// Cyrillic uppercase to lowercase: add 0x20
+					strSynonym += wxUniChar(wc + 0x20);
+				}
+				else {
+					strSynonym += c;
+				}
 			}
 			else {
-				strSynonym += (strSynonym.Length() > 0 ?
-					c : wxToupper(c)
-					);
+				strSynonym += c;
 			}
 		}
 		return strSynonym;

@@ -424,7 +424,7 @@ void ibGridSelection::ClearSelection()
 		{
 			m_grid->RefreshBlock(coords1, coords2);
 
-#ifdef __WXMAC__
+#ifdef __WXOSX__
 			m_grid->UpdateGridWindows();
 #endif
 		}

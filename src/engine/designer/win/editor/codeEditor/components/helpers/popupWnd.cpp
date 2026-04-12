@@ -128,7 +128,7 @@ bool ibOESPopupBase::Show(bool show)
 	if (rv && show)
 		ActivateParent();
 
-#ifdef __WXMAC__
+#ifdef __WXOSX__
 	GetParent()->Refresh(false);
 #endif
 }
@@ -167,7 +167,7 @@ ibOESPopupWindow::~ibOESPopupWindow()
 
 bool ibOESPopupWindow::Destroy()
 {
-#if defined(__WXMAC__) && wxOES_POPUP_IS_FRAME && !wxOES_POPUP_IS_CUSTOM
+#if defined(__WXOSX__) && wxOES_POPUP_IS_FRAME && !wxOES_POPUP_IS_CUSTOM
 	// The bottom edge of this window is not getting properly
 	// refreshed upon deletion, so help it out...
 	wxWindow* p = GetParent();

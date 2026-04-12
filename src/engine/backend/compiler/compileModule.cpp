@@ -19,7 +19,7 @@ ibCompileModule::ibCompileModule(const ibValueMetaObjectModuleBase* moduleObject
 
 	Load(m_moduleObject->GetModuleText());
 
-	//We don’t look for local variables in parent contexts!
+	//We donâ€™t look for local variables in parent contexts!
 	m_rootContext->m_numFindLocalInParent = 0;
 }
 

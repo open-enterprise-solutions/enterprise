@@ -220,7 +220,7 @@ unsigned int ibDataViewIndexListModel::GetChildren(const ibDataViewItem& item, i
 // ibDataViewVirtualListModel
 // ---------------------------------------------------------
 
-#ifndef __WXMAC__
+#ifndef __WXOSX__
 
 ibDataViewVirtualListModel::ibDataViewVirtualListModel(unsigned int initial_size)
 {
@@ -325,7 +325,7 @@ unsigned int ibDataViewVirtualListModel::GetChildren(const ibDataViewItem& WXUNU
 	return 0;  // should we report an error ?
 }
 
-#endif  // __WXMAC__
+#endif  // __WXOSX__
 
 //-----------------------------------------------------------------------------
 // ibDataViewIconText
@@ -1499,7 +1499,7 @@ wxWindow* ibDataViewSpinRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labe
 	str.Printf(wxT("%d"), (int)l);
 	wxSpinCtrl* sc = new wxSpinCtrl(parent, wxID_ANY, str,
 		labelRect.GetTopLeft(), labelRect.GetSize(), wxSP_ARROW_KEYS | wxTE_PROCESS_ENTER, m_min, m_max, l);
-#ifdef __WXMAC__
+#ifdef __WXOSX__
 	const wxSize size = sc->GetSize();
 	wxPoint pt = sc->GetPosition();
 	sc->SetSize(pt.x - 4, pt.y - 4, size.x, size.y);

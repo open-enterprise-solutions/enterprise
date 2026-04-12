@@ -8681,7 +8681,7 @@ void ibGrid::DoHideCellEditControl()
 	CalcGridWindowScrolledPosition(rect.x, rect.y, &rect.x, &rect.y, gridWindow);
 	rect.width = gridWindow->GetClientSize().GetWidth() - rect.x;
 
-#ifdef __WXMAC__
+#ifdef __WXOSX__
 	// ensure that the pixels under the focus ring get refreshed as well
 	rect.Inflate(10, 10);
 #endif

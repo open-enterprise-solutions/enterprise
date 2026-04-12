@@ -391,7 +391,7 @@ class ibSubSystemWindow : public wxWindow {
 
 		class ibScrolledSubWindow : public wxScrolledWindow {
 
-			class ibScrolledSubWindowSectionRefData : public wxRefCounter {
+			class ibScrolledSubWindowSectionRefData : public wxClientData {
 			public:
 				ibInterfaceCommandSection GetArea() const { return m_section; }
 				ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection s) : m_section(s) {}
@@ -428,7 +428,7 @@ class ibSubSystemWindow : public wxWindow {
 							df->SetForegroundColour(wxDefaultStypeFGColour);
 
 							df->SetCursor(wxCURSOR_HAND);
-							df->SetRefData(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Default));
+							df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Default));
 							df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
 
 							sizerSubCommonItem->Add(df, 0, wxEXPAND, 5);
@@ -491,7 +491,7 @@ class ibSubSystemWindow : public wxWindow {
 											df->SetBackgroundColour(*wxWHITE);
 											df->SetForegroundColour(wxDefaultStypeFGColour);
 											df->SetCursor(wxCURSOR_HAND);
-											df->SetRefData(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Default));
+											df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Default));
 											df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, wnd);
 
 											sizerSubSystemItem->Add(df, 0, wxEXPAND, 5);
@@ -514,7 +514,7 @@ class ibSubSystemWindow : public wxWindow {
 							df->SetBackgroundColour(*wxWHITE);
 							df->SetForegroundColour(wxDefaultStypeFGColour);
 							df->SetCursor(wxCURSOR_HAND);
-							df->SetRefData(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Default));
+							df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Default));
 							df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
 
 							sizerSubSystemItem->Add(df, 0, wxEXPAND, 5);
@@ -565,7 +565,7 @@ class ibSubSystemWindow : public wxWindow {
 							df->SetBackgroundColour(*wxWHITE);
 							df->SetForegroundColour(wxDefaultStypeFGColour);
 							df->SetCursor(wxCURSOR_HAND);
-							df->SetRefData(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Create));
+							df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Create));
 
 							df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
 
@@ -609,7 +609,7 @@ class ibSubSystemWindow : public wxWindow {
 							df->SetBackgroundColour(*wxWHITE);
 							df->SetForegroundColour(wxDefaultStypeFGColour);
 							df->SetCursor(wxCURSOR_HAND);
-							df->SetRefData(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Report));
+							df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Report));
 
 							df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
 
@@ -652,7 +652,7 @@ class ibSubSystemWindow : public wxWindow {
 							df->SetBackgroundColour(*wxWHITE);
 							df->SetForegroundColour(wxDefaultStypeFGColour);
 							df->SetCursor(wxCURSOR_HAND);
-							df->SetRefData(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Service));
+							df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Service));
 
 							df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
 
@@ -681,17 +681,18 @@ class ibSubSystemWindow : public wxWindow {
 				if (section == ibInterfaceCommandSection::ibInterfaceCommandSection_Create)
 					return ibInterfaceCommandType::ibInterfaceCommandType_Create;
 				else if (section == ibInterfaceCommandSection::ibInterfaceCommandSection_Service)
-					return ibInterfaceCommandType::ibInterfaceCommandType_Create;
+					return ibInterfaceCommandType::ibInterfaceCommandType_Default;
 				else if (section == ibInterfaceCommandSection::ibInterfaceCommandSection_Report)
-					return ibInterfaceCommandType::ibInterfaceCommandType_Create;
+					return ibInterfaceCommandType::ibInterfaceCommandType_Default;
 
 				return ibInterfaceCommandType::ibInterfaceCommandType_Default;
 			}
 
 			void OnMenuItemClicked(wxCommandEvent& event) {
 
-				ibScrolledSubWindowSectionRefData* refData =
-					dynamic_cast<ibScrolledSubWindowSectionRefData*>(event.GetEventObject()->GetRefData());
+				wxWindow* btn = dynamic_cast<wxWindow*>(event.GetEventObject());
+				ibScrolledSubWindowSectionRefData* refData = btn != nullptr ?
+					dynamic_cast<ibScrolledSubWindowSectionRefData*>(btn->GetClientObject()) : nullptr;
 
 				const ibInterfaceCommandSection section = refData != nullptr ?
 					refData->GetArea() : ibInterfaceCommandSection::ibInterfaceCommandSection_Default;

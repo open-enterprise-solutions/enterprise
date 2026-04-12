@@ -445,13 +445,13 @@ bool ibDataReportTree::RenameMetaObject(ibValueMetaObject* obj, const wxString& 
 void ibDataReportTree::InitTree()
 {
 	m_treeREPORTS = AppendRootItem(g_metaReportCLSID, _("Reports"));
-	//Ñïèñîê àòòðèáóòîâ 
+	//Ð¡Ð¿Ð¸ÑÐ¾Ðº Ð°Ñ‚Ñ‚Ñ€Ð¸Ð±ÑƒÑ‚Ð¾Ð² 
 	m_treeATTRIBUTES = AppendGroupItem(m_treeREPORTS, g_metaAttributeCLSID, objectAttributesName);
-	//ñïèñîê òàáëè÷íûõ ÷àñòåé 
+	//ÑÐ¿Ð¸ÑÐ¾Ðº Ñ‚Ð°Ð±Ð»Ð¸Ñ‡Ð½Ñ‹Ñ… Ñ‡Ð°ÑÑ‚ÐµÐ¹ 
 	m_treeTABLES = AppendGroupItem(m_treeREPORTS, g_metaTableCLSID, objectTablesName);
-	//Ôîðìû
+	//Ð¤Ð¾Ñ€Ð¼Ñ‹
 	m_treeFORM = AppendGroupItem(m_treeREPORTS, g_metaFormCLSID, objectFormsName);
-	//Òàáëèöû
+	//Ð¢Ð°Ð±Ð»Ð¸Ñ†Ñ‹
 	m_treeTEMPLATES = AppendGroupItem(m_treeREPORTS, g_metaTemplateCLSID, objectTablesName);
 }
 
@@ -508,7 +508,7 @@ void ibDataReportTree::FillData()
 	//append default value 
 	m_defaultFormValue->AppendString(_("<not selected>"));
 
-	//Ñïèñîê àòòðèáóòîâ 
+	//Ð¡Ð¿Ð¸ÑÐ¾Ðº Ð°Ñ‚Ñ‚Ñ€Ð¸Ð±ÑƒÑ‚Ð¾Ð² 
 	for (auto attribute : commonMetadata->GetAttributeArrayObject()) {
 		if (attribute->IsDeleted())
 			continue;
@@ -517,7 +517,7 @@ void ibDataReportTree::FillData()
 		AppendItem(m_treeATTRIBUTES, attribute);
 	}
 
-	//Ñïèñîê òàáëè÷íûõ ÷àñòåé 
+	//Ð¡Ð¿Ð¸ÑÐ¾Ðº Ñ‚Ð°Ð±Ð»Ð¸Ñ‡Ð½Ñ‹Ñ… Ñ‡Ð°ÑÑ‚ÐµÐ¹ 
 	for (auto metaTable : commonMetadata->GetTableArrayObject()) {
 		if (metaTable->IsDeleted())
 			continue;
@@ -531,14 +531,14 @@ void ibDataReportTree::FillData()
 		}
 	}
 
-	//Ôîðìû
+	//Ð¤Ð¾Ñ€Ð¼Ñ‹
 	for (auto metaForm : commonMetadata->GetFormArrayObject()) {
 		if (metaForm->IsDeleted())
 			continue;
 		AppendItem(m_treeFORM, metaForm);
 	}
 
-	//Òàáëèöû
+	//Ð¢Ð°Ð±Ð»Ð¸Ñ†Ñ‹
 	for (auto metaTemplates : commonMetadata->GetTemplateArrayObject()) {
 		if (metaTemplates->IsDeleted())
 			continue;

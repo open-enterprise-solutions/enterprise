@@ -398,13 +398,13 @@ bool ibGridCellEditor::IsAcceptedKey(wxKeyEvent& event)
 	bool ctrl = event.ControlDown();
 	bool alt;
 
-#ifdef __WXMAC__
+#ifdef __WXOSX__
 	// On the Mac the Alt key is more like shift and is used for entry of
 	// valid characters, so check for Ctrl and Meta instead.
 	alt = event.MetaDown();
-#else // !__WXMAC__
+#else // !__WXOSX__
 	alt = event.AltDown();
-#endif // __WXMAC__/!__WXMAC__
+#endif // __WXOSX__/!__WXOSX__
 
 	// Assume it's not a valid char if ctrl or alt is down, but if both are
 	// down then it may be because of an AltGr key combination, so let them

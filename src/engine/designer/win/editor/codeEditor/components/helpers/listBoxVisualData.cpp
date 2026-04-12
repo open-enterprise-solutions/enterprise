@@ -5,7 +5,7 @@
 #include <wx/rawbmp.h>
 #include <wx/xpmdecod.h>
 
-#if defined(__WXMSW__) || defined(__WXMAC__)
+#if defined(__WXMSW__) || defined(__WXOSX__)
 #define wxPy_premultiply(p, a)   ((p) * (a) / 0xff)
 #else
 #define wxPy_premultiply(p, a)   (p)

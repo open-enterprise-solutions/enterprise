@@ -20,20 +20,20 @@ struct ibModuleElement
 	ibModuleElement() : 
 		eType(eEmpty), nImage(0), nLineStart(-1), nLineEnd(-1) {};
 
-	wxString strName;//имя элемента
-	wxString strShortDescription;//тип объекта
+	wxString strName;//РёРјСЏ СЌР»РµРјРµРЅС‚Р°
+	wxString strShortDescription;//С‚РёРї РѕР±СЉРµРєС‚Р°
 
-	int nImage;//номер картинки
-	int nLineStart;//номер строки кода, где находится элемент
-	int nLineEnd;//номер строки кода, где находится элемент
+	int nImage;//РЅРѕРјРµСЂ РєР°СЂС‚РёРЅРєРё
+	int nLineStart;//РЅРѕРјРµСЂ СЃС‚СЂРѕРєРё РєРѕРґР°, РіРґРµ РЅР°С…РѕРґРёС‚СЃСЏ СЌР»РµРјРµРЅС‚
+	int nLineEnd;//РЅРѕРјРµСЂ СЃС‚СЂРѕРєРё РєРѕРґР°, РіРґРµ РЅР°С…РѕРґРёС‚СЃСЏ СЌР»РµРјРµРЅС‚
 
-	wxString sModuleName;//Имя модуля
+	wxString sModuleName;//РРјСЏ РјРѕРґСѓР»СЏ
 	ibContentType eType;
 };
 
 class ibParserModule : public ibTranslateCode
 {
-	int m_numCurrentCompile;//текущее положение в массиве лексем
+	int m_numCurrentCompile;//С‚РµРєСѓС‰РµРµ РїРѕР»РѕР¶РµРЅРёРµ РІ РјР°СЃСЃРёРІРµ Р»РµРєСЃРµРј
 	std::vector<ibModuleElement> m_aContentModule;
 
 protected:

@@ -28,7 +28,7 @@ class ibInterfaceEditor : public wxWindow {
 	ibValueMetaObject* m_metaInterface;
 
 	class wxTreeItemMetaData : public wxTreeItemData {
-		ibInterfaceObject* m_metaObject; //тип элемента
+		ibInterfaceObject* m_metaObject; //С‚РёРї СЌР»РµРјРµРЅС‚Р°
 	public:
 		wxTreeItemMetaData(ibInterfaceObject* metaObject) : m_metaObject(metaObject) {}
 		ibInterfaceObject* GetMetaObject() const { return m_metaObject; }

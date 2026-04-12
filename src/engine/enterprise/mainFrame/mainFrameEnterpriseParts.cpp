@@ -63,10 +63,24 @@ void ibFrontendDocMDIFrameEnterprise::CreateWideGui()
 	SetStatusText(_("Ready"));
 	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(wxAUI_DOCKART_BACKGROUND_COLOUR, wxAUI_DEFAULT_COLOUR);
 
+#ifdef __WXOSX__
+	// On macOS, ensure the client window has proper background
+	wxAuiMDIClientWindow* clientWnd = GetClientWindow();
+	if (clientWnd != nullptr) {
+		clientWnd->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_APPWORKSPACE));
+	}
+#endif
+
 	SetMinSize(wxSize(400, 380));
 
 	// tell the manager to "commit" all the changes just made
 	m_mgr.Update();
+
+#ifdef __WXOSX__
+	// Force a full refresh on macOS to avoid black background artifacts
+	Refresh();
+	Update();
+#endif
 }
 
 #include "frontend/win/ctrls/floatingNotebook.h"

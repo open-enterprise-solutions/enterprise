@@ -3747,7 +3747,7 @@ bool ibDataViewCtrl::Create(wxWindow* parent,
 
 	SetInitialSize(size);
 
-#if defined(__WXMAC__) && !wxCHECK_VERSION(3, 3, 0)
+#if defined(__WXOSX__) && !wxCHECK_VERSION(3, 3, 0)
 	MacSetClipChildren(true);
 #endif
 

@@ -170,7 +170,7 @@ private:
 // ibDataViewVirtualListModel
 // ---------------------------------------------------------
 
-#ifdef __WXMAC__
+#ifdef __WXOSX__
 // better than nothing
 typedef ibDataViewIndexListModel ibDataViewVirtualListModel;
 #else

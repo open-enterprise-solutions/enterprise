@@ -50,7 +50,7 @@
 #include <wx/dynarray.h>
 #include <wx/arrimpl.cpp>
 
-#ifdef __WXMAC__
+#ifdef __WXOSX__
 #include "wx/osx/private.h"
 #endif
 
@@ -1310,7 +1310,7 @@ void ibTreeListHeaderWindow::DoDrawRect(wxDC* dc, int x, int y, int w, int h)
 	const int m_corner = 1;
 
 	dc->SetBrush(*wxTRANSPARENT_BRUSH);
-#if defined( __WXMAC__  )
+#if defined( __WXOSX__  )
 	dc->SetPen(pen);
 #else // !GTK, !Mac
 	dc->SetPen(*wxBLACK_PEN);
@@ -1318,7 +1318,7 @@ void ibTreeListHeaderWindow::DoDrawRect(wxDC* dc, int x, int y, int w, int h)
 	dc->DrawLine(x + w - m_corner + 1, y, x + w, y + h);  // right (outer)
 	dc->DrawRectangle(x, y + h, w + 1, 1);          // bottom (outer)
 
-#if defined( __WXMAC__  )
+#if defined( __WXOSX__  )
 	pen = wxPen(wxColour(0x88, 0x88, 0x88), 1, wxPENSTYLE_SOLID);
 #endif
 	dc->SetPen(pen);
@@ -2021,11 +2021,7 @@ void ibTreeListMainWindow::Init() {
 
 	m_findTimer = new wxTimer(this, -1);
 
-#if defined( __WXMAC__ ) && defined(__WXMAC_CARBON__)
-	m_normalFont.MacCreateThemeFont(kThemeViewsFont);
-#else
 	m_normalFont = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
-#endif
 	m_boldFont = wxFont(m_normalFont.GetPointSize(),
 		m_normalFont.GetFamily(),
 		m_normalFont.GetStyle(),
@@ -2047,7 +2043,7 @@ bool ibTreeListMainWindow::Create(ibTreeListCtrl* parent,
 	const wxValidator& validator,
 	const wxString& name) {
 
-#ifdef __WXMAC__
+#ifdef __WXOSX__
 	if (style & wxTR_HAS_BUTTONS) style |= 0 /* wxTR_MAC_BUTTONS removed in wx3.3 */;
 	if (style & wxTR_HAS_BUTTONS) style &= ~wxTR_HAS_BUTTONS;
 	style &= ~wxTR_LINES_AT_ROOT;
@@ -3450,15 +3446,15 @@ void ibTreeListMainWindow::PaintItem(ibTreeListItem * item, wxDC & dc) {
 			if (!m_isDragging && m_hasFocus) {
 				dc.SetTextForeground(colTextHilight);
 				dc.SetBrush(*m_hilightBrush);
-#ifndef __WXMAC__ // don't draw rect outline if we already have the background color
+#ifndef __WXOSX__ // don't draw rect outline if we already have the background color
 				dc.SetPen(*wxTRANSPARENT_PEN);
-#endif // !__WXMAC__
+#endif // !__WXOSX__
 			}
 			else {
 				dc.SetTextForeground(colText);
-#ifndef __WXMAC__ // don't draw rect outline if we already have the background color
+#ifndef __WXOSX__ // don't draw rect outline if we already have the background color
 				dc.SetPen(*wxTRANSPARENT_PEN);
-#endif // !__WXMAC__
+#endif // !__WXOSX__
 			}
 		}
 		else {
@@ -3531,9 +3527,9 @@ void ibTreeListMainWindow::PaintItem(ibTreeListItem * item, wxDC & dc) {
 		if (!HasFlag(wxTR_FULL_ROW_HIGHLIGHT)) {
 			// cursor: indicate current cell
 			bool drawCursor = false;
-#ifndef __WXMAC__ // don't draw rect outline if we already have the background color
+#ifndef __WXOSX__ // don't draw rect outline if we already have the background color
 			drawCursor = (item == m_curItem && i == m_curColumn && !m_isDragging && m_hasFocus);
-#endif // !__WXMAC__
+#endif // !__WXOSX__
 			// selection: main col only, overrides colors + separate draw
 			if (item->IsSelected() && i == GetMainColumn()) {
 				// draw normal background
