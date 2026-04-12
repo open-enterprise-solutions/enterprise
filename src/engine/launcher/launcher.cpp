@@ -10,8 +10,8 @@ void ibFrameLauncher::LoadListIB() {
 
 	wxLogNull logNo;
 
-	wxString directory = 
-		wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache) + wxT("\\") + wxT("OES");
+	wxString directory =
+		wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache) + wxFileName::GetPathSeparator() + wxT("OES");
 
 	// Make sure the directory exists.
 	wxFileName strFileName(directory, "ib_list.xml");
@@ -85,7 +85,7 @@ void ibFrameLauncher::SaveListIB() {
 	}
 
 	wxString directory =
-		wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache) + wxT("\\") + wxT("OES");
+		wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache) + wxFileName::GetPathSeparator() + wxT("OES");
 
 	// Make sure the directory exists.
 	wxFileName strFileName(directory, "ib_list.xml");

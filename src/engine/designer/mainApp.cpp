@@ -96,6 +96,18 @@ int ibAppDesigner::OnRun()
 	// Get the data directory
 	bool ret = false;
 
+	if (m_strFile.IsEmpty() && m_strServer.IsEmpty()) {
+		// No command-line args — show folder picker
+		wxDirDialog dlg(nullptr, _("Select configuration database folder"),
+			wxStandardPaths::Get().GetDocumentsDir(),
+			wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST | wxDD_NEW_DIR_BUTTON);
+		if (dlg.ShowModal() == wxID_OK) {
+			m_strFile = dlg.GetPath();
+		} else {
+			return 0; // user cancelled
+		}
+	}
+
 	if (m_strFile.IsEmpty()) {
 		ret = appDataCreateServer(ibRunMode::eDESIGNER_MODE,
 			m_strServer, m_strPort, m_strUser, m_strPassword, m_strDatabase, m_strLocale
