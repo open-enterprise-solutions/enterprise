@@ -28,7 +28,13 @@ if(WIN32)
 endif()
 
 if(APPLE)
-    set_target_properties(enterprise PROPERTIES MACOSX_BUNDLE TRUE)
+    set_target_properties(enterprise PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist"
+    )
+    set(OES_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/oes.icns")
+    set_source_files_properties(${OES_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+    target_sources(enterprise PRIVATE ${OES_ICON})
 endif()
 
 target_compile_definitions(enterprise PRIVATE NOPCH)
