@@ -62,6 +62,7 @@ bool ibMetaDataConfigurationBase::LoadConfigFromFile(const wxString& strFileName
 	wxMemoryBuffer buffer(fsize);
 
 	in.read((char*)buffer.GetWriteBuf(fsize), fsize);
+	buffer.UngetWriteBuf(fsize);
 	in.close();
 
 	return LoadConfigFromBuffer(buffer);
