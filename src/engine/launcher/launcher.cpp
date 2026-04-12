@@ -69,6 +69,17 @@ wxString BuildLaunchCommand(const wxString& exeName, const CListInfo& info) {
 			cmd += wxT(" -pwd ") + info.m_strPassword;
 	}
 
+	// Always pass locale from backend.conf
+	wxFileName selfPath(wxStandardPaths::Get().GetExecutablePath());
+	wxString confPath = selfPath.GetPath() + wxFileName::GetPathSeparator() + wxT("backend.conf");
+	if (wxFileExists(confPath)) {
+		wxFileConfig fc(wxT(""), wxT(""), wxT(""), confPath);
+		wxString locale;
+		fc.Read(wxT("Locale"), &locale);
+		if (!locale.IsEmpty())
+			cmd += wxT(" -lc ") + locale;
+	}
+
 	return cmd;
 }
 
