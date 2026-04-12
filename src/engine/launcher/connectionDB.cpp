@@ -78,7 +78,7 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	m_staticTextFilePath = new wxStaticText(this, wxID_ANY, _("Database folder:"), wxDefaultPosition, wxDefaultSize, 0);
 	m_staticTextFilePath->Wrap(-1);
 	sizerFilePath->Add(m_staticTextFilePath, 1, wxALIGN_CENTER_VERTICAL, 0);
-	m_dirPickerFile = new wxDirPickerCtrl(this, wxID_ANY, wxEmptyString, _("Select database folder"), wxDefaultPosition, wxDefaultSize, wxDIRP_DEFAULT_STYLE | wxDIRP_DIR_MUST_EXIST);
+	m_dirPickerFile = new wxDirPickerCtrl(this, wxID_ANY, wxEmptyString, _("Select database folder"), wxDefaultPosition, wxDefaultSize, wxDIRP_USE_TEXTCTRL | wxDIRP_DIR_MUST_EXIST);
 	sizerFilePath->Add(m_dirPickerFile, 3, wxALL | wxEXPAND, 5);
 	m_sizerFileMode->Add(sizerFilePath, 0, wxEXPAND, 5);
 	mainSizer->Add(m_sizerFileMode, 0, wxEXPAND, 5);

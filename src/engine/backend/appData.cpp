@@ -267,6 +267,8 @@ bool ibApplicationData::InitLocale(const wxString& locale)
 #endif // WXDEBUG
 
 		m_locale_lang = wxLocale::GetSystemLanguage();
+		if (m_locale_lang == wxLanguage::wxLANGUAGE_UNKNOWN)
+			m_locale_lang = wxLanguage::wxLANGUAGE_DEFAULT;
 
 		if (!locale.IsEmpty()) {
 			const wxLanguageInfo* foundedLocale = wxLocale::FindLanguageInfo(locale);
