@@ -3,6 +3,7 @@
 
 #include "backend/databaseLayer/databaseLayerDef.h"
 #include "backend/databaseLayer/databaseLayer.h"
+#include "backend/databaseLayer/firebird/engine/ibase.h"
 
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 class ibInterfaceFirebird;
@@ -29,11 +30,7 @@ public:
 	ibDatabaseLayerFirebird(const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword);
 	ibDatabaseLayerFirebird(const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword, const wxString& strRole);
 
-#if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
-	ibDatabaseLayerFirebird(unsigned int pDatabase) { m_pDatabase = pDatabase; }
-#else 
-	ibDatabaseLayerFirebird(void* pDatabase) { m_pDatabase = pDatabase; }
-#endif
+	ibDatabaseLayerFirebird(isc_db_handle pDatabase) { m_pDatabase = pDatabase; }
 
 	ibDatabaseLayerFirebird(const ibDatabaseLayerFirebird& src);
 
@@ -109,12 +106,7 @@ private:
 
 	fb_tr_list_t *m_fbNode;
 
-#if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
-	unsigned int m_pDatabase;
-#else
-	void* m_pDatabase;
-#endif
-
+	isc_db_handle m_pDatabase;
 	void *m_pStatus;
 };
 

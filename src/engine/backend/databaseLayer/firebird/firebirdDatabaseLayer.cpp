@@ -21,7 +21,7 @@
 ibDatabaseLayerFirebird::ibDatabaseLayerFirebird()
 	: ibDatabaseLayer()
 {
-	m_pDatabase = NULL;
+	m_pDatabase = 0;
 
 	m_fbNode = new fb_tr_list_t;
 	m_fbNode->prev = NULL;
@@ -52,7 +52,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird()
 ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase)
 	: ibDatabaseLayer()
 {
-	m_pDatabase = NULL;
+	m_pDatabase = 0;
 
 	m_fbNode = new fb_tr_list_t;
 	m_fbNode->prev = NULL;
@@ -84,7 +84,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase)
 ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase, const wxString& strUser, const wxString& strPassword)
 	: ibDatabaseLayer()
 {
-	m_pDatabase = NULL;
+	m_pDatabase = 0;
 
 	m_fbNode = new fb_tr_list_t;
 	m_fbNode->prev = NULL;
@@ -114,7 +114,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase, co
 ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword)
 	: ibDatabaseLayer()
 {
-	m_pDatabase = NULL;
+	m_pDatabase = 0;
 
 	m_fbNode = new fb_tr_list_t;
 	m_fbNode->prev = NULL;
@@ -144,7 +144,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, cons
 ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, const wxString& strDatabase, const wxString& strUser, const wxString& strPassword, const wxString& strRole)
 	: ibDatabaseLayer()
 {
-	m_pDatabase = NULL;
+	m_pDatabase = 0;
 
 	m_fbNode = new fb_tr_list_t;
 	m_fbNode->prev = NULL;
@@ -173,7 +173,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, cons
 
 ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const ibDatabaseLayerFirebird& src) 
 {
-	m_pDatabase = NULL;
+	m_pDatabase = 0;
 
 	m_fbNode = new fb_tr_list_t;
 	m_fbNode->prev = NULL;
@@ -308,9 +308,9 @@ bool ibDatabaseLayerFirebird::Open()
 		}
 	}
 
-	m_pDatabase = NULL;
+	m_pDatabase = 0;
 
-	isc_db_handle pDatabase = (isc_db_handle)m_pDatabase;
+	isc_db_handle pDatabase = m_pDatabase;
 
 	int nReturn = 0;
 
@@ -321,16 +321,18 @@ bool ibDatabaseLayerFirebird::Open()
 			wxFileName fileDatabase(m_strDatabase);
 			wxMkDir(fileDatabase.GetPath(), 0777);
 			
-			nReturn = m_pInterface->GetIscCreateDatabase()(*(ISC_STATUS_ARRAY*)m_pStatus, urlLength, (char*)(const char*)urlBuffer,
+			nReturn = m_pInterface->GetIscCreateDatabase()(*(ISC_STATUS_ARRAY*)m_pStatus,
+				(unsigned short)urlLength, (const char*)urlBuffer,
 				&pDatabase,
-				dpbBuffer.length(), dpbBuffer.c_str(),
-				NULL);
+				(unsigned short)dpbBuffer.length(), dpbBuffer.c_str(),
+				(unsigned short)0);
 		}
 		else
 		{
-			nReturn = m_pInterface->GetIscAttachDatabase()(*(ISC_STATUS_ARRAY*)m_pStatus, urlLength, (char*)(const char*)urlBuffer,
+			nReturn = m_pInterface->GetIscAttachDatabase()(*(ISC_STATUS_ARRAY*)m_pStatus,
+				(unsigned short)urlLength, (const char*)urlBuffer,
 				&pDatabase,
-				dpbBuffer.length(), dpbBuffer.c_str());
+				(unsigned short)dpbBuffer.length(), dpbBuffer.c_str());
 		}
 	}
 	else
@@ -379,9 +381,9 @@ bool ibDatabaseLayerFirebird::Close()
 			m_fbNode = tr_link;
 		}
 
-		isc_db_handle pDatabase = (isc_db_handle)m_pDatabase;
+		isc_db_handle pDatabase = m_pDatabase;
 		int nReturn = m_pInterface->GetIscDetachDatabase()(*(ISC_STATUS_ARRAY*)m_pStatus, &pDatabase);
-		m_pDatabase = NULL;
+		m_pDatabase = 0;
 		if (nReturn != 0)
 		{
 			InterpretErrorCodes();
@@ -395,7 +397,7 @@ bool ibDatabaseLayerFirebird::Close()
 
 bool ibDatabaseLayerFirebird::IsOpen()
 {
-	return (m_pDatabase != NULL);
+	return (m_pDatabase != 0);
 }
 
 // transaction support
@@ -418,7 +420,7 @@ void ibDatabaseLayerFirebird::BeginTransaction()
 
 		static std::string isc_tpb = { isc_tpb_version3, isc_tpb_write, isc_tpb_wait, isc_tpb_read_committed, isc_tpb_no_rec_version };
 
-		isc_db_handle pDatabase = (isc_db_handle)m_pDatabase;
+		isc_db_handle pDatabase = m_pDatabase;
 		isc_tr_handle pTransaction = (isc_tr_handle)fbNextNode->m_pTransaction;
 
 		int nReturn = m_pInterface->GetIscStartTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pTransaction, 1, &pDatabase, isc_tpb.size(), isc_tpb.c_str());
@@ -499,7 +501,7 @@ bool ibDatabaseLayerFirebird::IsActiveTransaction()
 int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQuery)
 {
 	ResetErrorCodes();
-	if (m_pDatabase != NULL)
+	if (m_pDatabase != 0)
 	{
 		wxCharBuffer sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
 #ifdef DEBUG
@@ -539,7 +541,7 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 			while (start != stop)
 			{
 				wxCharBuffer sqlBuffer = ConvertToUnicodeStream(*start);
-				isc_db_handle pDatabase = (isc_db_handle)m_pDatabase;
+				isc_db_handle pDatabase = m_pDatabase;
 				isc_tr_handle pTransaction = (isc_tr_handle)m_fbNode->m_pTransaction;
 				//int nReturn = m_pInterface->GetIscDsqlExecuteImmediate()(*(ISC_STATUS_ARRAY*)m_pStatus, &pDatabase, &pTransaction, 0, (char*)(const char*)sqlBuffer, SQL_DIALECT_CURRENT, NULL);
 				int nReturn = m_pInterface->GetIscDsqlExecuteImmediate()(*(ISC_STATUS_ARRAY*)m_pStatus, &pDatabase, &pTransaction, GetEncodedStreamLength(*start), (char*)(const char*)sqlBuffer, SQL_DIALECT_CURRENT, NULL);
@@ -583,7 +585,7 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxString& strQuery)
 {
 	ResetErrorCodes();
-	if (m_pDatabase != NULL)
+	if (m_pDatabase != 0)
 	{
 		wxCharBuffer sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
 #if DEBUG 
@@ -649,7 +651,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 					//tpbBuffer.push_back(60);
 				}
 
-				isc_db_handle pDatabase = (isc_db_handle)m_pDatabase;
+				isc_db_handle pDatabase = m_pDatabase;
 				int nReturn = m_pInterface->GetIscStartTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction, 1, &pDatabase, tpbBuffer.size(), tpbBuffer.data());
 				m_pDatabase = pDatabase;
 				if (nReturn != 0)
@@ -664,7 +666,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 			}
 
 			isc_stmt_handle pStatement = NULL;
-			isc_db_handle pDatabase = (isc_db_handle)m_pDatabase;
+			isc_db_handle pDatabase = m_pDatabase;
 			int nReturn = m_pInterface->GetIscDsqlAllocateStatement()(*(ISC_STATUS_ARRAY*)m_pStatus, &pDatabase, &pStatement);
 			m_pDatabase = pDatabase;
 			if (nReturn != 0)

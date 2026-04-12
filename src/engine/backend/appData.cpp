@@ -167,18 +167,25 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString& strServer, const wxString& strPort,
 	const wxString& strUser, const wxString& strPassword, const wxString& strDatabase, const wxString& strLocale)
 {
-#ifndef OES_USE_POSTGRESQL
-	wxUnusedVar(runMode); wxUnusedVar(strServer); wxUnusedVar(strPort);
-	wxUnusedVar(strUser); wxUnusedVar(strPassword); wxUnusedVar(strDatabase); wxUnusedVar(strLocale);
-	return false;
-}
-#else
 	if (s_instance != nullptr) s_instance->DestroyAppDataEnv();
 #if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	try {
 #endif
+
+#ifdef OES_USE_FIREBIRD
+		// Try Firebird server first
+		std::shared_ptr<ibDatabaseLayerFirebird> db(new ibDatabaseLayerFirebird(strServer, strDatabase, strUser, strPassword));
+		if (db->Open()) {
+#elif defined(OES_USE_POSTGRESQL)
 		std::shared_ptr<ibDatabaseLayerPostgres> db(new ibDatabaseLayerPostgres());
 		if (db->Open(strServer, strPort, strDatabase, strUser, strPassword)) {
+#else
+		wxUnusedVar(runMode); wxUnusedVar(strServer); wxUnusedVar(strPort);
+		wxUnusedVar(strUser); wxUnusedVar(strPassword); wxUnusedVar(strDatabase); wxUnusedVar(strLocale);
+		return false;
+	}
+	if (false) {
+#endif
 
 			s_instance = new ibApplicationData(runMode);
 
@@ -219,7 +226,6 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 #endif
 	return false;
 }
-#endif // OES_USE_POSTGRESQL
 
 bool ibApplicationData::SetLocaleAppDataEnv(const wxString& strLocale)
 {

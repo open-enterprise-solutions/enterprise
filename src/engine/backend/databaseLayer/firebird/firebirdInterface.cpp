@@ -3,6 +3,11 @@
 bool ibInterfaceFirebird::Init()
 {
 	bool bLoaded = m_FirebirdDLL.Load(wxDynamicLibrary::CanonicalizeName(wxT("fbclient")));
+#if defined(__WXOSX__) || defined(__WXMAC__) || defined(__APPLE__)
+	if (!bLoaded) {
+		bLoaded = m_FirebirdDLL.Load(wxT("/Library/Frameworks/Firebird.framework/Versions/A/Libraries/libfbclient.dylib"));
+	}
+#endif
 	if (!bLoaded)
 	{
 		return false;

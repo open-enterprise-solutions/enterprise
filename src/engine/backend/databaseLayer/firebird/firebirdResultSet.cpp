@@ -8,7 +8,7 @@ ibDatabaseResultSetFirebird::ibDatabaseResultSetFirebird(ibInterfaceFirebird* pI
 	: ibDatabaseResultSet()
 {
 	m_pInterface = pInterface;
-	m_pDatabase = NULL;
+	m_pDatabase = 0;
 	m_pTransaction = NULL;
 	m_pStatement = NULL;
 	m_pFields = NULL;
