@@ -301,6 +301,12 @@ bool ibApplicationData::InitLocale(const wxString& locale)
 
 		wxLocale::AddCatalogLookupPathPrefix(workingDir + wxFILE_SEP_PATH + wxT("lang"));
 		wxLocale::AddCatalogLookupPathPrefix(fn.GetPath() + wxFILE_SEP_PATH + wxT("lang"));
+#if defined(__WXOSX__) || defined(__APPLE__)
+		// On macOS, also check outside .app bundle
+		wxFileName bundleLang(fn.GetPath());
+		bundleLang.RemoveLastDir(); bundleLang.RemoveLastDir(); bundleLang.RemoveLastDir();
+		wxLocale::AddCatalogLookupPathPrefix(bundleLang.GetPath() + wxFILE_SEP_PATH + wxT("lang"));
+#endif
 
 		if (!m_locale.Init(m_locale_lang)) {
 			if (!m_locale.Init(wxLanguage::wxLANGUAGE_ENGLISH))
@@ -370,8 +376,23 @@ void ibApplicationData::ReadEngineConfig()
 	}
 	else {
 		wxFileName fn(wxStandardPaths::Get().GetExecutablePath());
-		strConfigFile = fn.GetPath() +
-			wxFILE_SEP_PATH + BACKEND_CONF;
+		wxString exeDir = fn.GetPath();
+		if (wxFileName::FileExists(exeDir + wxFILE_SEP_PATH + BACKEND_CONF)) {
+			strConfigFile = exeDir + wxFILE_SEP_PATH + BACKEND_CONF;
+		}
+#if defined(__WXOSX__) || defined(__APPLE__)
+		// On macOS, exe is inside .app/Contents/MacOS/ — check 3 levels up
+		else {
+			wxFileName bundlePath(exeDir);
+			bundlePath.RemoveLastDir(); // MacOS
+			bundlePath.RemoveLastDir(); // Contents
+			bundlePath.RemoveLastDir(); // .app
+			wxString bundleDir = bundlePath.GetPath();
+			if (wxFileName::FileExists(bundleDir + wxFILE_SEP_PATH + BACKEND_CONF)) {
+				strConfigFile = bundleDir + wxFILE_SEP_PATH + BACKEND_CONF;
+			}
+		}
+#endif
 	}
 
 	wxFileConfig fc(wxT(""), wxT(""), wxT(""), strConfigFile);
