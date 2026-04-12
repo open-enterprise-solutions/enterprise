@@ -59,11 +59,8 @@
 /*  On machines where "long" is 64 bits, we need to declare
 	uint32 as something guaranteed to be 32 bits.  */
 
-#ifdef __alpha
-typedef unsigned int uint32;
-#else
-typedef unsigned long uint32;
-#endif
+#include <cstdint>
+typedef uint32_t uint32;
 
 struct MD5Context {
 	uint32 buf[4];
