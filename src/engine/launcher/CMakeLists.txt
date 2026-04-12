@@ -33,3 +33,13 @@ target_link_libraries(launcher PRIVATE
     backend
     wx::core wx::aui wx::html wx::propgrid wx::adv wx::stc wx::xrc wx::qa wx::base wx::net wx::xml
 )
+
+# Copy Firebird client library next to binaries on macOS
+if(APPLE AND OES_USE_FIREBIRD AND FIREBIRD_LIBRARY)
+    add_custom_command(TARGET launcher POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${FIREBIRD_LIBRARY}"
+            "$<TARGET_FILE_DIR:launcher>/libfbclient.dylib"
+        COMMENT "Copying libfbclient.dylib to output directory"
+    )
+endif()

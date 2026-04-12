@@ -13,7 +13,7 @@ wxString FindSiblingExecutable(const wxString& exeName) {
 	wxFileName selfPath(wxStandardPaths::Get().GetExecutablePath());
 	wxString dir = selfPath.GetPath();
 
-#ifdef __WXMAC__
+#if defined(__WXOSX__) || defined(__APPLE__)
 	// If running inside a .app bundle, the executable is at:
 	//   Foo.app/Contents/MacOS/foo
 	// The sibling app would be at:
