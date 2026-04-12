@@ -757,6 +757,52 @@ void ibMetadataTree::PrepareContextMenu(wxMenu* defaultMenu, const wxTreeItemId&
 	}
 }
 
+void ibMetadataTree::ShowContextMenu(wxWindow* eventSrc, const wxTreeItemId& item, const wxPoint& pos)
+{
+	wxMenu* innerMenu = new wxMenu;
+	PrepareContextMenu(innerMenu, item);
+
+	// Collect IDs of custom (non-standard) menu items
+	std::vector<int> boundIds;
+	for (auto def_menu : innerMenu->GetMenuItems())
+	{
+		const int id = def_menu->GetId();
+		if (id == ID_METATREE_NEW
+			|| id == ID_METATREE_EDIT
+			|| id == ID_METATREE_DELETE
+			|| id == ID_METATREE_PROPERTY
+			|| id == ID_METATREE_INSERT
+			|| id == ID_METATREE_REPLACE
+			|| id == ID_METATREE_SAVE
+			|| id == wxID_SEPARATOR)
+		{
+			continue;
+		}
+		eventSrc->GetEventHandler()->Bind(wxEVT_MENU, &ibMetadataTree::ibMetaTreeCtrl::OnCommandItem, m_metaTreeCtrl, id);
+		boundIds.push_back(id);
+	}
+
+	eventSrc->PopupMenu(innerMenu, pos);
+
+	// On macOS, menu events may be dispatched asynchronously after PopupMenu returns.
+	// Use CallAfter to defer unbinding so the event handler is still valid when the event arrives.
+#ifdef __WXOSX__
+	auto* handler = eventSrc->GetEventHandler();
+	auto* treeCtrl = m_metaTreeCtrl;
+	eventSrc->CallAfter([handler, treeCtrl, boundIds]() {
+		for (int id : boundIds) {
+			handler->Unbind(wxEVT_MENU, &ibMetadataTree::ibMetaTreeCtrl::OnCommandItem, treeCtrl, id);
+		}
+	});
+#else
+	for (int id : boundIds) {
+		eventSrc->GetEventHandler()->Unbind(wxEVT_MENU, &ibMetadataTree::ibMetaTreeCtrl::OnCommandItem, m_metaTreeCtrl, id);
+	}
+#endif
+
+	delete innerMenu;
+}
+
 void ibMetadataTree::UpdateToolbar(ibValueMetaObject* obj, const wxTreeItemId& item)
 {
 	m_metaTreeToolbar->EnableTool(ID_METATREE_NEW, item != m_metaTreeCtrl->GetRootItem() && !m_bReadOnly && item != m_treeCOMMON);

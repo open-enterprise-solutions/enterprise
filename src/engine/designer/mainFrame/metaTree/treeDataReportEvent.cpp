@@ -30,46 +30,20 @@ void ibDataReportTree::ibDataReportTreeCtrl::OnLeftDown(wxMouseEvent &event)
 
 void ibDataReportTree::ibDataReportTreeCtrl::OnRightUp(wxMouseEvent &event)
 {
+#ifdef __WXOSX__
+	// On macOS, context menu is shown from OnRightDown
+	event.Skip();
+#else
 	wxTreeItemId curItem = HitTest(event.GetPosition());
 
 	if (curItem.IsOk())
 	{
 		SelectItem(curItem); SetFocus();
-		wxMenu *innerMenu = new wxMenu;
-		m_ownerTree->PrepareContextMenu(innerMenu, curItem);
-
-		for (auto def_menu : innerMenu->GetMenuItems())
-		{
-			if (def_menu->GetId() == ID_METATREE_NEW
-				|| def_menu->GetId() == ID_METATREE_EDIT
-				|| def_menu->GetId() == ID_METATREE_DELETE
-				|| def_menu->GetId() == ID_METATREE_PROPERTY)
-			{
-				continue;
-			}
-
-			GetEventHandler()->Bind(wxEVT_MENU, &ibDataReportTree::ibDataReportTreeCtrl::OnCommandItem, this, def_menu->GetId());
-		}
-
-		PopupMenu(innerMenu, event.GetPosition());
-
-		for (auto def_menu : innerMenu->GetMenuItems())
-		{
-			if (def_menu->GetId() == ID_METATREE_NEW
-				|| def_menu->GetId() == ID_METATREE_EDIT
-				|| def_menu->GetId() == ID_METATREE_DELETE
-				|| def_menu->GetId() == ID_METATREE_PROPERTY)
-			{
-				continue;
-			}
-
-			GetEventHandler()->Unbind(wxEVT_MENU, &ibDataReportTree::ibDataReportTreeCtrl::OnCommandItem, this, def_menu->GetId());
-		}
-
-		delete innerMenu;
+		m_ownerTree->ShowContextMenu(this, curItem, event.GetPosition());
 	}
 
 	m_ownerTree->SelectItem(); event.Skip();
+#endif
 }
 
 void ibDataReportTree::ibDataReportTreeCtrl::OnRightDown(wxMouseEvent &event)
@@ -79,42 +53,14 @@ void ibDataReportTree::ibDataReportTreeCtrl::OnRightDown(wxMouseEvent &event)
 	if (curItem.IsOk())
 	{
 		SelectItem(curItem); SetFocus();
-		wxMenu *defaultMenu = new wxMenu;
-		m_ownerTree->PrepareContextMenu(defaultMenu, curItem);
-
-		for (auto def_menu : defaultMenu->GetMenuItems())
-		{
-			if (def_menu->GetId() == ID_METATREE_NEW
-				|| def_menu->GetId() == ID_METATREE_EDIT
-				|| def_menu->GetId() == ID_METATREE_DELETE
-				|| def_menu->GetId() == ID_METATREE_PROPERTY)
-			{
-				continue;
-			}
-
-			GetEventHandler()->Bind(wxEVT_MENU, &ibDataReportTree::ibDataReportTreeCtrl::OnCommandItem, this, def_menu->GetId());
-		}
-
-		PopupMenu(defaultMenu, event.GetPosition());
-
-		for (auto def_menu : defaultMenu->GetMenuItems())
-		{
-			if (def_menu->GetId() == ID_METATREE_NEW
-				|| def_menu->GetId() == ID_METATREE_EDIT
-				|| def_menu->GetId() == ID_METATREE_DELETE
-				|| def_menu->GetId() == ID_METATREE_PROPERTY)
-			{
-				continue;
-			}
-
-			GetEventHandler()->Unbind(wxEVT_MENU, &ibDataReportTree::ibDataReportTreeCtrl::OnCommandItem, this, def_menu->GetId());
-		}
-
-		delete defaultMenu;
+#ifdef __WXOSX__
+		m_ownerTree->ShowContextMenu(this, curItem, event.GetPosition());
+#endif
 	}
 
-	//m_ownerTree->SelectItem(); event.Skip();
+#ifndef __WXOSX__
 	event.Skip();
+#endif
 }
 
 void ibDataReportTree::ibDataReportTreeCtrl::OnRightDClick(wxMouseEvent &event)

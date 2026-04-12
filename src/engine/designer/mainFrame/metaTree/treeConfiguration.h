@@ -386,6 +386,8 @@ private:
 	void PrepareReplaceMenu(wxMenu* menu);
 	void PrepareContextMenu(wxMenu* menu, const wxTreeItemId& item);
 
+	void ShowContextMenu(wxWindow* eventSrc, const wxTreeItemId& item, const wxPoint& pos);
+
 	void AddInterfaceItem(ibValueMetaObject* obj, const wxTreeItemId& item);
 
 	void AddCatalogItem(ibValueMetaObject* obj, const wxTreeItemId& item);

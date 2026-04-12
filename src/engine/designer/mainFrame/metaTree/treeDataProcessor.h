@@ -255,6 +255,7 @@ private:
 
 	void CommandItem(unsigned int id);
 	void PrepareContextMenu(wxMenu* menu, const wxTreeItemId& item);
+	void ShowContextMenu(wxWindow* eventSrc, const wxTreeItemId& item, const wxPoint& pos);
 
 	void FillData();
 

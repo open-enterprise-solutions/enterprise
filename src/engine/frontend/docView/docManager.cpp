@@ -839,6 +839,7 @@ ibMetaDocument* ibMetaDocManager::OpenForm(ibValueMetaObject* metaObject, ibMeta
 				return nullptr;
 			}
 			catch (...) {
+				wxLogError(wxT("OpenForm: failed to create document view"));
 				if (ibMetaDocManager::GetDocuments().Member(newDocument)) {
 					newDocument->DeleteAllViews();
 				}

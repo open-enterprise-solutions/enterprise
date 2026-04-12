@@ -31,59 +31,20 @@ void ibMetadataTree::ibMetaTreeCtrl::OnLeftDown(wxMouseEvent& event)
 
 void ibMetadataTree::ibMetaTreeCtrl::OnRightUp(wxMouseEvent& event)
 {
+#ifdef __WXOSX__
+	// On macOS, context menu is shown from OnRightDown, skip here
+	event.Skip();
+#else
 	wxTreeItemId curItem = HitTest(event.GetPosition());
 
 	if (curItem.IsOk())
 	{
 		SelectItem(curItem); SetFocus();
-		wxMenu* innerMenu = new wxMenu;
-		m_ownerTree->PrepareContextMenu(innerMenu, curItem);
-
-		for (auto def_menu : innerMenu->GetMenuItems())
-		{
-			if (
-				def_menu->GetId() == ID_METATREE_NEW
-				|| def_menu->GetId() == ID_METATREE_EDIT
-				|| def_menu->GetId() == ID_METATREE_DELETE
-				|| def_menu->GetId() == ID_METATREE_PROPERTY
-
-				|| def_menu->GetId() == ID_METATREE_INSERT
-				|| def_menu->GetId() == ID_METATREE_REPLACE
-				|| def_menu->GetId() == ID_METATREE_SAVE
-				)
-			{
-				continue;
-			}
-
-			GetEventHandler()->Bind(wxEVT_MENU, &ibMetadataTree::ibMetaTreeCtrl::OnCommandItem, this, def_menu->GetId());
-		}
-
-		PopupMenu(innerMenu, event.GetPosition());
-
-		for (auto def_menu : innerMenu->GetMenuItems())
-		{
-			if (
-				def_menu->GetId() == ID_METATREE_NEW
-				|| def_menu->GetId() == ID_METATREE_EDIT
-				|| def_menu->GetId() == ID_METATREE_DELETE
-				|| def_menu->GetId() == ID_METATREE_PROPERTY
-
-				|| def_menu->GetId() == ID_METATREE_INSERT
-				|| def_menu->GetId() == ID_METATREE_REPLACE
-				|| def_menu->GetId() == ID_METATREE_SAVE
-				)
-			{
-				continue;
-			}
-
-			GetEventHandler()->Unbind(wxEVT_MENU, &ibMetadataTree::ibMetaTreeCtrl::OnCommandItem, this, def_menu->GetId());
-		}
-
-		delete innerMenu;
+		m_ownerTree->ShowContextMenu(this, curItem, event.GetPosition());
 	}
 
-	//m_ownerTree->SelectItem(); event.Skip();
 	event.Skip();
+#endif
 }
 
 void ibMetadataTree::ibMetaTreeCtrl::OnRightDown(wxMouseEvent& event)
@@ -93,54 +54,15 @@ void ibMetadataTree::ibMetaTreeCtrl::OnRightDown(wxMouseEvent& event)
 	if (curItem.IsOk())
 	{
 		SelectItem(curItem); SetFocus();
-		wxMenu* innerMenu = new wxMenu;
-		m_ownerTree->PrepareContextMenu(innerMenu, curItem);
-
-		for (auto def_menu : innerMenu->GetMenuItems())
-		{
-			if (
-				def_menu->GetId() == ID_METATREE_NEW
-				|| def_menu->GetId() == ID_METATREE_EDIT
-				|| def_menu->GetId() == ID_METATREE_DELETE
-				|| def_menu->GetId() == ID_METATREE_PROPERTY
-
-				|| def_menu->GetId() == ID_METATREE_INSERT
-				|| def_menu->GetId() == ID_METATREE_REPLACE
-				|| def_menu->GetId() == ID_METATREE_SAVE
-				)
-			{
-				continue;
-			}
-
-			GetEventHandler()->Bind(wxEVT_MENU, &ibMetadataTree::ibMetaTreeCtrl::OnCommandItem, this, def_menu->GetId());
-		}
-
-		PopupMenu(innerMenu, event.GetPosition());
-
-		for (auto def_menu : innerMenu->GetMenuItems())
-		{
-			if (
-				def_menu->GetId() == ID_METATREE_NEW
-				|| def_menu->GetId() == ID_METATREE_EDIT
-				|| def_menu->GetId() == ID_METATREE_DELETE
-				|| def_menu->GetId() == ID_METATREE_PROPERTY
-
-				|| def_menu->GetId() == ID_METATREE_INSERT
-				|| def_menu->GetId() == ID_METATREE_REPLACE
-				|| def_menu->GetId() == ID_METATREE_SAVE
-				)
-			{
-				continue;
-			}
-
-			GetEventHandler()->Unbind(wxEVT_MENU, &ibMetadataTree::ibMetaTreeCtrl::OnCommandItem, this, def_menu->GetId());
-		}
-
-		delete innerMenu;
+#ifdef __WXOSX__
+		// On macOS, show context menu on mouse-down
+		m_ownerTree->ShowContextMenu(this, curItem, event.GetPosition());
+#endif
 	}
 
-	//m_ownerTree->SelectItem(); event.Skip();
+#ifndef __WXOSX__
 	event.Skip();
+#endif
 }
 
 void ibMetadataTree::ibMetaTreeCtrl::OnRightDClick(wxMouseEvent& event)
