@@ -58,15 +58,15 @@ wxString BuildLaunchCommand(const wxString& exeName, const CListInfo& info) {
 	}
 	else {
 		if (!info.m_strServer.IsEmpty())
-			cmd += wxT(" /srv ") + info.m_strServer;
+			cmd += wxT(" -srv ") + info.m_strServer;
 		if (!info.m_strPort.IsEmpty())
-			cmd += wxT(" /p ") + info.m_strPort;
+			cmd += wxT(" -p ") + info.m_strPort;
 		if (!info.m_strDatabase.IsEmpty())
-			cmd += wxT(" /db ") + info.m_strDatabase;
+			cmd += wxT(" -db ") + info.m_strDatabase;
 		if (!info.m_strUser.IsEmpty())
-			cmd += wxT(" /usr ") + info.m_strUser;
+			cmd += wxT(" -usr ") + info.m_strUser;
 		if (!info.m_strPassword.IsEmpty())
-			cmd += wxT(" /pwd ") + info.m_strPassword;
+			cmd += wxT(" -pwd ") + info.m_strPassword;
 	}
 
 	return cmd;
