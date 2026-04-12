@@ -55,7 +55,7 @@ bool ibDebuggerClient::ToggleBreakpointInDB(const wxString& strModuleName, unsig
 {
 	bool successful = true;
 	ibPreparedStatement* preparedStatement = nullptr;	
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 		preparedStatement = db_query->PrepareStatement("INSERT INTO %s(moduleName, moduleLine) VALUES('" + strModuleName + "', " + stringUtils::IntToStr(line) + ") ON CONFLICT (moduleName, moduleLine) DO UPDATE SET moduleName = excluded.moduleName, moduleLine = excluded.moduleLine; ", dbg_table);
 	else
 		preparedStatement = db_query->PrepareStatement("UPDATE OR INSERT INTO %s(moduleName, moduleLine) VALUES('" + strModuleName + "', " + stringUtils::IntToStr(line) + ") MATCHING (moduleName, moduleLine); ", dbg_table);
@@ -86,7 +86,7 @@ bool ibDebuggerClient::OffsetBreakpointInDB(const wxString& strModuleName, unsig
 {
 	bool successful = true;
 	ibPreparedStatement* preparedStatement = nullptr;
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 		preparedStatement = db_query->PrepareStatement("DELETE FROM %s WHERE moduleName = '" + strModuleName + "' AND moduleLine = " + stringUtils::IntToStr(lineFrom) + ";"
 			"INSERT INTO %s(moduleName, moduleLine) VALUES('" + strModuleName + "', " + stringUtils::IntToStr(lineFrom + offset) + ") ON CONFLICT (moduleName, moduleLine) DO UPDATE SET moduleName = excluded.moduleName, moduleLine = excluded.moduleLine; ", dbg_table, dbg_table);
 	else

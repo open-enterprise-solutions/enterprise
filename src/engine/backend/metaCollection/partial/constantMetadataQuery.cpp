@@ -127,7 +127,7 @@ bool ibValueMetaObjectConstant::LoadTableData(const ibReaderMemory& reader)
 {
 	wxString sqlText = "";
 
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
 		sqlText = "INSERT INTO %s (%s, RECORD_KEY) VALUES(";
 		for (unsigned int idx = 0; idx < ibValueMetaObjectAttributeBase::GetSQLFieldCount(this); idx++) {
 			sqlText += "?,";

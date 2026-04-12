@@ -32,10 +32,13 @@ ibDatabaseLayerSQLite::ibDatabaseLayerSQLite(const wxString& strDatabase, bool m
 ibDatabaseLayerSQLite::ibDatabaseLayerSQLite(const ibDatabaseLayerSQLite& src)
 	: ibDatabaseLayer()
 {
-	m_pDatabase = nullptr; //new sqlite3;
+	m_pDatabase = nullptr;
 	wxCSConv conv(wxT("UTF-8"));
 	SetEncoding(&conv);
-	Open(wxEmptyString, false);
+	if (!src.m_strDatabasePath.IsEmpty())
+		Open(src.m_strDatabasePath);
+	else
+		Open(wxEmptyString, false);
 }
 
 // dtor()
@@ -64,8 +67,7 @@ bool ibDatabaseLayerSQLite::Open(const wxString& strDatabase)
 {
 	ResetErrorCodes();
 
-	//if (m_pDatabase == nullptr)
-	//  m_pDatabase = new sqlite3;
+	m_strDatabasePath = strDatabase;
 
 	wxCharBuffer databaseNameBuffer = ConvertToUnicodeStream(strDatabase);
 	sqlite3* pDbPtr = (sqlite3*)m_pDatabase;
@@ -79,6 +81,10 @@ bool ibDatabaseLayerSQLite::Open(const wxString& strDatabase)
 		ThrowDatabaseException();
 		return false;
 	}
+
+	// Enable WAL mode for concurrent read/write access from multiple threads
+	sqlite3_exec((sqlite3*)m_pDatabase, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
+	sqlite3_exec((sqlite3*)m_pDatabase, "PRAGMA busy_timeout=5000;", nullptr, nullptr, nullptr);
 
 	return true;
 }

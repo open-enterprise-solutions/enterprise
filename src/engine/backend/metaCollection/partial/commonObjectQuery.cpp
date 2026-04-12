@@ -258,7 +258,7 @@ bool ibValueMetaObjectRecordDataMutableRef::LoadTableData(const ibReaderMemory& 
 		
 		wxString queryText;
 
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText = wxT("INSERT INTO ") + tableName + wxT(" (uuid");
 		else
 			queryText = wxT("UPDATE OR INSERT INTO ") + tableName + wxT(" (uuid");
@@ -285,7 +285,7 @@ bool ibValueMetaObjectRecordDataMutableRef::LoadTableData(const ibReaderMemory& 
 
 		queryText += ") ";
 
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText += wxT("ON CONFLICT(uuid) DO UPDATE SET uuid = excluded.uuid;");
 		else
 			queryText += wxT("MATCHING(uuid);");
@@ -511,18 +511,18 @@ int ibValueMetaObjectRecordDataEnumRef::ProcessEnumeration(const wxString& table
 
 		s_restructureInfo.AppendInfo(_("Create enumeration ") + srcEnum->GetFullName());
 
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			retCode = db_query->RunQuery("INSERT INTO %s (uuid) VALUES ('%s') ON CONFLICT(uuid) DO UPDATE SET uuid = excluded.uuid;", tableName, srcEnum->GetGuid().str());
 		else
 			retCode = db_query->RunQuery("UPDATE OR INSERT INTO %s (uuid) VALUES ('%s') MATCHING(uuid);", tableName, srcEnum->GetGuid().str());
 	}
-	// update 
+	// update
 	else if (srcEnum != nullptr) {
 
 		if (!srcEnum->CompareObject(dstEnum))
 			s_restructureInfo.AppendInfo(_("Changing enumeration ") + srcEnum->GetFullName());
 
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			retCode = db_query->RunQuery("INSERT INTO %s (uuid) VALUES ('%s') ON CONFLICT(uuid) DO UPDATE SET uuid = excluded.uuid;", tableName, srcEnum->GetGuid().str());
 		else
 			retCode = db_query->RunQuery("UPDATE OR INSERT INTO %s (uuid) VALUES ('%s') MATCHING(uuid);", tableName, srcEnum->GetGuid().str());
@@ -694,7 +694,7 @@ int ibValueMetaObjectRecordDataHierarchyMutableRef::ProcessPredefinedValue(const
 
 		wxString queryText;
 
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText = wxT("INSERT INTO ") + tableName + wxT(" (uuid");
 		else
 			queryText = wxT("UPDATE OR INSERT INTO ") + tableName + wxT(" (uuid");
@@ -709,7 +709,7 @@ int ibValueMetaObjectRecordDataHierarchyMutableRef::ProcessPredefinedValue(const
 
 		queryText += wxT(") ");
 
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText += wxT("ON CONFLICT(uuid) DO UPDATE SET uuid = excluded.uuid;");
 		else
 			queryText += wxT("MATCHING(uuid);");
@@ -735,12 +735,12 @@ int ibValueMetaObjectRecordDataHierarchyMutableRef::ProcessPredefinedValue(const
 
 		db_query->CloseStatement(dbStatement);
 	}
-	//delete 
+	//delete
 	else if (srcPredefined == nullptr) {
 
 		wxString queryText;
 
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText = wxT("INSERT INTO ") + tableName + wxT(" (uuid");
 		else
 			queryText = wxT("UPDATE OR INSERT INTO ") + tableName + wxT(" (uuid");
@@ -755,7 +755,7 @@ int ibValueMetaObjectRecordDataHierarchyMutableRef::ProcessPredefinedValue(const
 
 		queryText += wxT(") ");
 
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText += wxT("ON CONFLICT(uuid) DO UPDATE SET uuid = excluded.uuid;");
 		else
 			queryText += wxT("MATCHING(uuid);");
@@ -1262,7 +1262,7 @@ bool ibValueRecordDataObjectRef::ReadData(const ibGuid& srcGuid)
 	if (db_query->TableExists(tableName)) {
 
 		ibDatabaseResultSet* resultSet = nullptr;
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			resultSet = db_query->RunQueryWithResults("SELECT * FROM " + tableName + " WHERE uuid = '" + srcGuid.str() + "' LIMIT 1;");
 		else
 			resultSet = db_query->RunQueryWithResults("SELECT FIRST 1 * FROM " + tableName + " WHERE uuid = '" + srcGuid.str() + "';");
@@ -1874,7 +1874,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 	}
 
 	wxString tableName = m_metaObject->GetTableNameDB(); wxString queryText; bool firstUpdate = true;
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
 		queryText = "INSERT INTO " + tableName + " (";
 	}
 	else {
@@ -1897,7 +1897,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 		}
 	}
 
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
 		queryText += ")";
 	}
 	else {
@@ -2040,10 +2040,10 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	ibNumber resultCode = 1;
 	const ibTypeDescription& typeDesc = attribute->GetTypeDesc();
 
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
 
 		ibDatabaseResultSet* resultSet = db_query->RunQueryWithResults(
-			wxT("SELECT interval, meta_guid, prefix, number FROM %s WHERE interval = %s AND meta_guid = '%s' AND prefix = '%s' FOR UPDATE;"),
+			wxT("SELECT interval, meta_guid, prefix, number FROM %s WHERE interval = %s AND meta_guid = '%s' AND prefix = '%s';"),
 			sequence_table,
 			stringUtils::IntToStr(interval),
 			m_metaObject->GetDocPath(),

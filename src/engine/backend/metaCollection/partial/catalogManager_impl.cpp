@@ -23,7 +23,7 @@ ibValueReferenceDataObject* ibValueManagerDataObjectCatalog::FindByCode(const ib
 				ibValueMetaObjectAttributePredefined* attributeCode = m_metaObject->GetDataCode();
 				wxASSERT(attributeCode);
 				wxString sqlQuery = "";
-				if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+				if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 					sqlQuery = "SELECT uuid FROM %s WHERE " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attributeCode, "LIKE") + " LIMIT 1";
 				else
 					sqlQuery = "SELECT FIRST 1 uuid FROM %s WHERE " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attributeCode, "LIKE");
@@ -63,7 +63,7 @@ ibValueReferenceDataObject* ibValueManagerDataObjectCatalog::FindByDescription(c
 				ibValueMetaObjectAttributePredefined* attributeDescription = m_metaObject->GetDataDescription();
 				wxASSERT(attributeDescription);
 				wxString sqlQuery = "";
-				if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+				if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 					sqlQuery = "SELECT uuid FROM %s WHERE " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attributeDescription, "LIKE") + " LIMIT 1";
 				else
 					sqlQuery = "SELECT FIRST 1 uuid FROM %s WHERE " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attributeDescription, "LIKE");

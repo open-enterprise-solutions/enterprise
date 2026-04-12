@@ -18,7 +18,7 @@ void ibValueListDataObjectEnumRef::RefreshModel(const ibDataViewItem& topItem, c
 
 	wxString queryText = wxT("");
 
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 		queryText = wxString::Format("SELECT * FROM %s", tableName);
 	else
 		queryText = wxString::Format("SELECT FIRST " + stringUtils::IntToStr(countPerPage + 1) + " * FROM %s", tableName);
@@ -62,7 +62,7 @@ void ibValueListDataObjectEnumRef::RefreshModel(const ibDataViewItem& topItem, c
 		}
 	};
 
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 		queryText = queryText + whereText + orderText + " LIMIT " + stringUtils::IntToStr(countPerPage + 1);
 	else
 		queryText = queryText + whereText + orderText;
@@ -115,7 +115,7 @@ void ibValueListDataObjectEnumRef::RefreshItemModel(const ibDataViewItem& topIte
 		const wxString& tableName = m_metaObject->GetTableNameDB();
 
 		wxString queryText;
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText = wxString::Format("SELECT * FROM %s ", tableName);
 		else
 			queryText = wxString::Format("SELECT FIRST 1 * FROM %s ", tableName);
@@ -168,7 +168,7 @@ void ibValueListDataObjectEnumRef::RefreshItemModel(const ibDataViewItem& topIte
 			}
 		};
 
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText = queryText + whereText + orderText + " LIMIT " + stringUtils::IntToStr(1);
 		else
 			queryText = queryText + whereText + orderText;
@@ -227,7 +227,7 @@ void ibValueListDataObjectEnumRef::RefreshItemModel(const ibDataViewItem& topIte
 		const wxString& tableName = m_metaObject->GetTableNameDB();
 
 		wxString queryText;
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText = wxString::Format("SELECT * FROM %s ", tableName);
 		else
 			queryText = wxString::Format("SELECT FIRST 1 * FROM %s ", tableName);
@@ -280,7 +280,7 @@ void ibValueListDataObjectEnumRef::RefreshItemModel(const ibDataViewItem& topIte
 			}
 		};
 
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText = queryText + whereText + orderText + " LIMIT " + stringUtils::IntToStr(1);
 		else
 			queryText = queryText + whereText + orderText;
@@ -347,7 +347,7 @@ void ibValueListDataObjectRef::RefreshModel(const ibDataViewItem& topItem, const
 	const wxString& tableName = m_metaObject->GetTableNameDB();
 
 	wxString queryText;
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 		queryText = wxString::Format("SELECT * FROM %s ", tableName);
 	else
 		queryText = wxString::Format("SELECT FIRST " + stringUtils::IntToStr(countPerPage + 1) + " * FROM % s ", tableName);
@@ -416,7 +416,7 @@ void ibValueListDataObjectRef::RefreshModel(const ibDataViewItem& topItem, const
 
 	const std::vector<ibValueMetaObjectAttributeBase*>& vec_attr = m_metaObject->GetGenericAttributeArrayObject();
 
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 		queryText = queryText + whereText + orderText + " LIMIT " + stringUtils::IntToStr(countPerPage + 1);
 	else
 		queryText = queryText + whereText + orderText;
@@ -472,7 +472,7 @@ void ibValueListDataObjectRef::RefreshItemModel(const ibDataViewItem& topItem, c
 		const wxString& tableName = m_metaObject->GetTableNameDB();
 
 		wxString queryText;
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText = wxString::Format("SELECT * FROM %s ", tableName);
 		else
 			queryText = wxString::Format("SELECT FIRST 1 * FROM %s ", tableName);
@@ -557,7 +557,7 @@ void ibValueListDataObjectRef::RefreshItemModel(const ibDataViewItem& topItem, c
 		};
 		const std::vector<ibValueMetaObjectAttributeBase*>& vec_attr = m_metaObject->GetGenericAttributeArrayObject();
 
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText = queryText + whereText + orderText + " LIMIT " + stringUtils::IntToStr(1);
 		else
 			queryText = queryText + whereText + orderText;
@@ -627,7 +627,7 @@ void ibValueListDataObjectRef::RefreshItemModel(const ibDataViewItem& topItem, c
 		const wxString& tableName = m_metaObject->GetTableNameDB();
 
 		wxString queryText;
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText = wxString::Format("SELECT * FROM %s ", tableName);
 		else
 			queryText = wxString::Format("SELECT FIRST 1 * FROM %s ", tableName);
@@ -706,7 +706,7 @@ void ibValueListDataObjectRef::RefreshItemModel(const ibDataViewItem& topItem, c
 		};
 		const std::vector<ibValueMetaObjectAttributeBase*>& vec_attr = m_metaObject->GetGenericAttributeArrayObject();
 
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText = queryText + whereText + orderText + " LIMIT " + stringUtils::IntToStr(1);
 		else
 			queryText = queryText + whereText + orderText;
@@ -784,7 +784,7 @@ void ibValueListRegisterObject::RefreshModel(const ibDataViewItem& topItem, cons
 	const wxString& tableName = m_metaObject->GetTableNameDB();
 
 	wxString queryText;
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 		queryText = "SELECT * FROM " + tableName;
 	else
 		queryText = "SELECT FIRST " + stringUtils::IntToStr(countPerPage + 1) + " * FROM " + tableName;
@@ -830,7 +830,7 @@ void ibValueListRegisterObject::RefreshModel(const ibDataViewItem& topItem, cons
 		}
 	};
 	/////////////////////////////////////////////////////////
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 		queryText = queryText + whereText + orderText + " LIMIT " + stringUtils::IntToStr(countPerPage + 1);
 	else
 		queryText = queryText + whereText + orderText;
@@ -886,7 +886,7 @@ void ibValueListRegisterObject::RefreshItemModel(const ibDataViewItem& topItem, 
 		const wxString& tableName = m_metaObject->GetTableNameDB();
 
 		wxString queryText;
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText = wxString::Format("SELECT * FROM %s ", tableName);
 		else
 			queryText = wxString::Format("SELECT FIRST 1 * FROM %s ", tableName);
@@ -953,7 +953,7 @@ void ibValueListRegisterObject::RefreshItemModel(const ibDataViewItem& topItem, 
 			vec_dim = m_metaObject->GetGenericDimentionArrayObject();
 
 		/////////////////////////////////////////////////////////
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText = queryText + whereText + " AND (" + dimText + ") " + orderText + " LIMIT " + stringUtils::IntToStr(1);
 		else
 			queryText = queryText + whereText + " AND (" + dimText + ") " + orderText;
@@ -1022,7 +1022,7 @@ void ibValueListRegisterObject::RefreshItemModel(const ibDataViewItem& topItem, 
 		const wxString& tableName = m_metaObject->GetTableNameDB();
 
 		wxString queryText;
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText = wxString::Format("SELECT * FROM %s ", tableName);
 		else
 			queryText = wxString::Format("SELECT FIRST 1 * FROM %s ", tableName);
@@ -1089,7 +1089,7 @@ void ibValueListRegisterObject::RefreshItemModel(const ibDataViewItem& topItem, 
 			vec_dim = m_metaObject->GetGenericDimentionArrayObject();
 
 		/////////////////////////////////////////////////////////
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			queryText = queryText + whereText + " AND (" + dimText + ") " + orderText + " LIMIT " + stringUtils::IntToStr(1);
 		else
 			queryText = queryText + whereText + " AND (" + dimText + ") " + orderText;

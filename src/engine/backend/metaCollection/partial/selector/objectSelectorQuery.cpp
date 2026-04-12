@@ -48,7 +48,7 @@ bool ibValueSelectorRecordDataObject::Read()
 	m_listObjectValue.clear();
 
 	ibPreparedStatement* statement = nullptr;
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 		statement = db_query->PrepareStatement("SELECT * FROM %s WHERE uuid = '%s' LIMIT 1; ", m_metaObject->GetTableNameDB(), m_objGuid.str());
 	else
 		statement = db_query->PrepareStatement("SELECT FIRST 1 * FROM %s WHERE uuid = '%s'; ", m_metaObject->GetTableNameDB(), m_objGuid.str());
@@ -124,7 +124,7 @@ bool ibValueSelectorRegisterDataObject::Read()
 	
 	wxString queryText = ""; bool isLoaded = false;
 
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
 		queryText = "SELECT * FROM " + m_metaObject->GetTableNameDB() + " LIMIT 1"; bool firstWhere = true;
 		for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
 			if (firstWhere) {

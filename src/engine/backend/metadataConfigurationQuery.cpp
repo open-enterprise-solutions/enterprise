@@ -222,7 +222,7 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 	}
 
 	ibPreparedStatement* prepStatement = nullptr;
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 		prepStatement = db_query->PrepareStatement("INSERT INTO %s (file_name, binary_data, file_guid) VALUES(?, ?, ?)"
 			"ON CONFLICT (file_name) DO UPDATE SET file_name = EXCLUDED.file_name, binary_data = EXCLUDED.binary_data, file_guid = EXCLUDED.file_guid; ", config_save_table);
 	else
@@ -530,7 +530,7 @@ void ibMetaDataConfigurationStorage::CreateConfigSequence()
 
 			sequence_table);
 
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
 			db_query->RunQuery(
 				wxT("create index if not exists sequence_index on %s (interval, meta_guid, prefix);"),
 				sequence_table
@@ -573,7 +573,7 @@ bool ibMetaDataConfigurationStorage::LoadSequenceFromBuffer(const ibReaderMemory
 		const wxString& strPrefix = seqReader->r_stringZ();
 		const int number = seqReader->r_u32();
 
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
 
 			db_query->RunQuery(
 				wxT("INSERT INTO %s (interval, meta_guid, prefix, number) VALUES (%s, '%s', '%s', %s) ON CONFLICT(interval, meta_guid, prefix) DO UPDATE SET interval = excluded.interval, meta_guid = excluded.meta_guid, prefix = excluded.prefix, number = excluded.number;"),

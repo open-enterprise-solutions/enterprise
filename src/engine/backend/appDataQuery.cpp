@@ -24,13 +24,12 @@ void ibApplicationData::ibApplicationDataSessionUpdater::Job_ClearLostSession()
 
 	const wxString& strLastActive = prevDateTime.FormatISOCombined(' ');
 	ibDatabaseResultSet* dbResultSetRecord = m_session_db->RunQueryWithResults(
-		//wxT("SELECT lastActive FROM %s WHERE lastActive < '%s' FOR UPDATE WITH LOCK SKIP LOCKED;"),
-		wxT("SELECT lastActive FROM %s WHERE lastActive < '%s' FOR UPDATE;"),
+		wxT("SELECT lastActive FROM %s WHERE lastActive < '%s';"),
 		session_table,
 		strLastActive
 	);
 
-	//clear 
+	//clear
 	m_session_db->RunQuery(
 		wxT("DELETE FROM %s WHERE lastActive < '%s';"),
 		session_table,
@@ -50,8 +49,7 @@ void ibApplicationData::ibApplicationDataSessionUpdater::Job_CalcActiveSession()
 	m_session_db->BeginTransaction();
 
 	auto dbSessionCountResult = m_session_db->RunQueryWithResults(
-		//wxT("SELECT session, userName, lastActive FROM %s WHERE session = '%s' FOR UPDATE WITH LOCK SKIP LOCKED;"),
-		wxT("SELECT session, userName, lastActive FROM %s WHERE session = '%s' FOR UPDATE;"),
+		wxT("SELECT session, userName, lastActive FROM %s WHERE session = '%s';"),
 		session_table,
 		m_session.str()
 	);
@@ -137,8 +135,7 @@ void ibApplicationData::ibApplicationDataSessionUpdater::ClearLostSessionUpdater
 
 	const wxDateTime& currentTime = wxDateTime::Now();
 	ibDatabaseResultSet* dbResultSetRecord = m_session_db->RunQueryWithResults(
-		//wxT("SELECT lastActive FROM %s WHERE lastActive < '%s' FOR UPDATE WITH LOCK SKIP LOCKED;"),
-		wxT("SELECT lastActive FROM %s WHERE lastActive < '%s' FOR UPDATE;"),
+		wxT("SELECT lastActive FROM %s WHERE lastActive < '%s';"),
 		session_table,
 		currentTime.Subtract(wxTimeSpan(0, 0, timeInterval)).FormatISOCombined(' ')
 	);
@@ -392,7 +389,7 @@ void ibApplicationData::CreateTableSession()
 			session_table
 		);
 
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
 
 			db_query->RunQuery(
 				wxT("create index if not exists session_index_1 on %s (session, userName);"),
@@ -545,7 +542,7 @@ ibApplicationDataUserInfo ibApplicationData::ReadUserData(const wxString& strUse
 bool ibApplicationData::SaveUserData(const ibApplicationDataUserInfo& userInfo) const
 {
 	ibPreparedStatement* dbUserPrepareData = nullptr;
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 		dbUserPrepareData = db_query->PrepareStatement(
 			wxT("INSERT INTO %s (guid, name, fullName, changed, dataSize, binaryData) VALUES(?, ?, ?, ?, ?, ?) ON CONFLICT (guid) DO UPDATE SET guid = excluded.guid, name = excluded.name, fullName = excluded.fullName, changed = excluded.changed, dataSize = excluded.dataSize, binaryData = excluded.binaryData; "), user_table);
 	else

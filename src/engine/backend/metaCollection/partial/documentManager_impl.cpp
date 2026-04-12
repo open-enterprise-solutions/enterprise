@@ -22,7 +22,7 @@ ibValueReferenceDataObject* ibValueManagerDataObjectDocument::FindByNumber(const
 			ibValueMetaObjectAttributePredefined* attributeDate = m_metaObject->GetDocumentDate();
 			wxASSERT(attributeNumber && attributeDate);
 			wxString sqlQuery = "";
-			if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
+			if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
 				sqlQuery = "SELECT uuid FROM %s WHERE " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attributeNumber, "LIKE") + " LIMIT 1;";
 				if (!vPeriod.IsEmpty()) {
 					sqlQuery += ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attributeNumber, "<=");

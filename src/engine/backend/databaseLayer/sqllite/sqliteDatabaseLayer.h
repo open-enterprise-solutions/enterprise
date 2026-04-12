@@ -78,6 +78,7 @@ private:
 
 	//sqlite3* m_pDatabase;
 	void* m_pDatabase;
+	wxString m_strDatabasePath;
 };
 
 #endif // __SQLITE_DATABASE_LAYER_H__

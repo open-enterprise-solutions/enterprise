@@ -19,7 +19,7 @@ bool ibValueReferenceDataObject::ReadData(bool createData)
 
 	if (db_query->TableExists(tableName)) {
 		ibDatabaseResultSet* resultSet = nullptr;	
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 			resultSet = db_query->RunQueryWithResults("SELECT * FROM %s WHERE uuid = '%s' LIMIT 1;", tableName, m_objGuid.str());
 		else
 			resultSet = db_query->RunQueryWithResults("SELECT FIRST 1 * FROM %s WHERE uuid = '%s';", tableName, m_objGuid.str());
@@ -62,7 +62,7 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 			if (db_query->TableExists(tableName)) {
 
 				ibDatabaseResultSet* resultSet = nullptr;
-				if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+				if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 					resultSet = db_query->RunQueryWithResults("SELECT * FROM " + tableName + " WHERE uuid = '" + m_objGuid.str() + "' LIMIT 1;");
 				else
 					resultSet = db_query->RunQueryWithResults("SELECT FIRST 1 * FROM " + tableName + " WHERE uuid = '" + m_objGuid.str() + "';");

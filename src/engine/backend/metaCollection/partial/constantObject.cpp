@@ -304,7 +304,7 @@ ibValue ibValueRecordDataObjectConstant::GetConstValue() const
 		const wxString& fieldName = m_metaObject->GetFieldNameDB();
 		if (db_query->TableExists(tableName)) {
 			ibDatabaseResultSet* resultSet = nullptr;
-			if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL)
+			if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
 				resultSet = db_query->RunQueryWithResults("SELECT %s FROM %s LIMIT 1", ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject), tableName);
 			else
 				resultSet = db_query->RunQueryWithResults("SELECT FIRST 1 %s FROM %s", ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject), tableName);
@@ -391,7 +391,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 
 				wxString sqlText = "";
 
-				if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
+				if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
 					sqlText = "INSERT INTO %s (%s, RECORD_KEY) VALUES(";
 					for (unsigned int idx = 0; idx < ibValueMetaObjectAttributeBase::GetSQLFieldCount(m_metaObject); idx++) {
 						sqlText += "?,";
