@@ -63,13 +63,11 @@ void ibFrontendDocMDIFrameEnterprise::CreateWideGui()
 	SetStatusText(_("Ready"));
 	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(wxAUI_DOCKART_BACKGROUND_COLOUR, wxAUI_DEFAULT_COLOUR);
 
-#ifdef __WXOSX__
-	// On macOS, ensure the client window has proper background
+	// Ensure the client window has proper background (dark blue theme)
 	wxAuiMDIClientWindow* clientWnd = GetClientWindow();
 	if (clientWnd != nullptr) {
-		clientWnd->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_APPWORKSPACE));
+		clientWnd->SetBackgroundColour(wxColour(68, 88, 123));
 	}
-#endif
 
 	SetMinSize(wxSize(400, 380));
 

@@ -178,7 +178,7 @@ wxAuiMDIClientWindow* ibFrontendDocMDIFrame::OnCreateClient()
 		wxAuiMDIClientWindowImpl() : wxAuiMDIClientWindow() {}
 		wxAuiMDIClientWindowImpl(wxAuiMDIParentFrame* parent, long style = 0) : wxAuiMDIClientWindow(parent, style) {
 #ifdef __WXOSX__
-			SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_APPWORKSPACE));
+			SetBackgroundColour(wxColour(68, 88, 123)); // THEME_COLOUR_MAIN
 			SetBackgroundStyle(wxBG_STYLE_SYSTEM);
 			Bind(wxEVT_PAINT, &wxAuiMDIClientWindowImpl::OnPaint, this);
 			Bind(wxEVT_ERASE_BACKGROUND, &wxAuiMDIClientWindowImpl::OnEraseBackground, this);
