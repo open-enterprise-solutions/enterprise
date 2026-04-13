@@ -210,7 +210,7 @@ Key attributes:
 - `wxString GetName()` / `GetSynonym()` — developer name and user-visible synonym
 - `ibMetaData* m_metaData` — back-pointer to the owning metadata container
 
-### Eight Business Object Types
+### Eleven Business Object Types
 
 | Type | Class | File |
 |---|---|---|
@@ -222,6 +222,9 @@ Key attributes:
 | AccumulationRegister | `ibValueMetaObjectAccumulationRegister` | `metaCollection/partial/accumulationRegister.h` |
 | DataProcessor | `ibValueMetaObjectDataProcessor` | `metaCollection/partial/dataProcessor.h` |
 | Report | `ibValueMetaObjectReport` | `metaCollection/partial/dataReport.h` |
+| ChartOfCharacteristicTypes | `ibValueMetaObjectChartOfCharacteristicTypes` | `metaCollection/partial/chartOfCharacteristicTypes.h` |
+| ChartOfAccounts | `ibValueMetaObjectChartOfAccounts` | `metaCollection/partial/chartOfAccounts.h` |
+| AccountingRegister | `ibValueMetaObjectAccountingRegister` | `metaCollection/partial/accountingRegister.h` |
 
 ### Inheritance Chain (simplified)
 
@@ -234,13 +237,16 @@ ibValue
        │    ├─ ibValueMetaObjectRecordDataMutableRef
        │    │    └─ ibValueMetaObjectDocument
        │    ├─ ibValueMetaObjectRecordDataHierarchyMutableRef
-       │    │    └─ ibValueMetaObjectCatalog
+       │    │    ├─ ibValueMetaObjectCatalog
+       │    │    ├─ ibValueMetaObjectChartOfCharacteristicTypes
+       │    │    └─ ibValueMetaObjectChartOfAccounts
        │    └─ ibValueMetaObjectRecordDataExt
        │         ├─ ibValueMetaObjectDataProcessor
        │         └─ ibValueMetaObjectReport
        ├─ ibValueMetaObjectRegisterData
        │    ├─ ibValueMetaObjectInformationRegister
-       │    └─ ibValueMetaObjectAccumulationRegister
+       │    ├─ ibValueMetaObjectAccumulationRegister
+       │    └─ ibValueMetaObjectAccountingRegister
        └─ ibValueMetaObjectRecordDataEnumRef
             └─ ibValueMetaObjectEnumeration
 ```

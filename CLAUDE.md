@@ -220,7 +220,7 @@ All feature work happens on branches cut from `develop`. Pull requests target `d
 
 ## Metadata Object Types
 
-The 8 business object types and their C++ classes:
+The 11 business object types and their C++ classes:
 
 | Type | Class | Header |
 |---|---|---|
@@ -232,6 +232,9 @@ The 8 business object types and their C++ classes:
 | AccumulationRegister | `ibValueMetaObjectAccumulationRegister` | `metaCollection/partial/accumulationRegister.h` |
 | DataProcessor | `ibValueMetaObjectDataProcessor` | `metaCollection/partial/dataProcessor.h` |
 | Report | `ibValueMetaObjectReport` | `metaCollection/partial/dataReport.h` |
+| ChartOfCharacteristicTypes | `ibValueMetaObjectChartOfCharacteristicTypes` | `metaCollection/partial/chartOfCharacteristicTypes.h` |
+| ChartOfAccounts | `ibValueMetaObjectChartOfAccounts` | `metaCollection/partial/chartOfAccounts.h` |
+| AccountingRegister | `ibValueMetaObjectAccountingRegister` | `metaCollection/partial/accountingRegister.h` |
 
 ---
 
