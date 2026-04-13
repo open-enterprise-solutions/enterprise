@@ -32,12 +32,19 @@ f f   # OES Architecture
 │  22 Controls       │  │  ibCompileCode / ibProcUnit        │
 │  ibMainFrame       │  │  ibDatabaseLayer (+ 5 drivers)     │
 │  Property editor   │  │  ibDebuggerServer                  │
+│                    │  │  ibWebServer (HTTP/REST)            │
 └────────────────────┘  └────────────────┬───────────────────┘
                                          │
                         ┌────────────────▼────────────────────┐
                         │         Database tier                │
                         │  Firebird  PostgreSQL  SQLite        │
                         │  MySQL     ODBC                      │
+                        └─────────────────────────────────────┘
+
+                        ┌─────────────────────────────────────┐
+                        │         Web Client (browser)         │
+                        │  React SPA  ─── HTTP/WS ──► daemon   │
+                        │  Refine · shadcn · Formily           │
                         └─────────────────────────────────────┘
 ```
 
@@ -413,6 +420,101 @@ Designer                           Enterprise
 ```
 
 The server runs each connection as a `wxThread` (`ibDebuggerServer::ibDebuggerServerConnection`). Raw binary packets are sent via `SendCommand` / `RecvCommand`.
+
+---
+
+## Web Server Architecture
+
+### Overview
+
+OES includes an embedded HTTP server that enables browser-based access to the platform. The web server is an **add-on layer** — it calls existing backend C++ methods without modifying the core engine.
+
+```
+Browser (React SPA)
+    │ HTTP / WebSocket
+    ▼
+daemon.exe
+    └─ ibWebServer (cpp-httplib)
+         ├─ /api/health        → system status
+         ├─ /api/auth/*        → JWT authentication
+         ├─ /api/data/*        → CRUD for business objects
+         ├─ /api/metadata/*    → metadata tree access
+         ├─ /api/designer/*    → web configurator
+         ├─ /api/ws/debug      → debugger bridge (WebSocket → TCP:1650)
+         └─ /*                 → static files (web/dist/)
+              │
+              ▼
+         backend.dll (unchanged)
+              │
+              ▼
+         Database tier
+```
+
+### ibWebServer
+
+`ibWebServer` (`src/engine/backend/webServer/ibWebServer.h`) wraps the cpp-httplib library and follows the same singleton pattern as `ibDebuggerServer`:
+
+- **Singleton access**: `webServer` macro (like `appData`, `debugServer`)
+- **Lifecycle**: `ibWebServer::Initialize(port, staticDir)` / `ibWebServer::Destroy()`
+- **Threading**: cpp-httplib runs its own thread pool (8 base, 64 max threads via `std::thread`). Each HTTP request handler gets an independent context.
+- **Database access**: Request handlers call `db_query->Clone()` to obtain a thread-safe database connection, following the same pattern used by `ibApplicationDataSessionUpdater`.
+
+### Daemon Mode
+
+When `daemon.exe` starts with `--web-port` (default 8765), it:
+
+1. Initializes backend via `appDataCreateServer(eSERVICE_MODE, ...)`
+2. Authenticates via `appData->Connect(user, password)`
+3. Creates `ibWebServer` singleton and registers routes
+4. Blocks on `webServer->WaitForShutdown()` until process termination
+
+Command-line arguments:
+
+| Flag | Description |
+|------|-------------|
+| `--srv` | Database server address |
+| `--p` | Database server port |
+| `--db` | Database name |
+| `--usr` / `--pwd` | Database credentials |
+| `--ib_usr` / `--ib_pwd` | Application user credentials |
+| `--web-port` (`-wp`) | HTTP server port (default: 8765) |
+| `--web-dir` (`-wd`) | Static files directory (default: `web/` next to executable) |
+
+### Web Client Frontend
+
+The browser-based client is a React SPA located in `web/` at the project root. It is built with Vite and served as static files by the daemon.
+
+| Technology | Purpose |
+|---|---|
+| Refine v5 | CRUD framework with routing, auth, data hooks |
+| shadcn/ui | UI component library (custom @oes/theme preset) |
+| Formily v2 | JSON Schema-driven form rendering |
+| AG Grid | Heavy data tables (registers, ledgers) |
+| TanStack Table | Light lists (catalogs) |
+| Phosphor Icons | 9000+ icons in 6 weights |
+| Monaco Editor | Code editor for web designer/debugger |
+| Zustand | State management |
+| Recharts | Dashboard charts |
+
+### Third-Party Libraries
+
+| Library | Location | License |
+|---|---|---|
+| cpp-httplib | `src/3rdparty/cpp-httplib/httplib.h` | MIT |
+| nlohmann/json | `src/3rdparty/nlohmann/json.hpp` | MIT |
+
+### Production Deployment
+
+```
+Clients ──► Nginx (TLS, rate limiting, load balancing)
+                │
+                ├──► oes-daemon #1 (:8765)
+                ├──► oes-daemon #2 (:8766)  ──► PostgreSQL (primary + replicas)
+                └──► oes-daemon #N
+                                               Redis (sessions, pub/sub, cache)
+```
+
+For production, Nginx handles TLS termination and load balancing across multiple daemon instances. See `docs/devops-playbook/03-nginx.md` for configuration templates.
 
 ---
 

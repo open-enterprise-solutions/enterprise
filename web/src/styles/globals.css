@@ -1,0 +1,171 @@
+@import "tailwindcss";
+
+/*
+ * OES Enterprise Sharp Theme
+ * Gray-white palette, sharp corners, compact density
+ */
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/ibmplexsans/v19/zYXgKVElMYYaJe8bpLHnCwDKhdzeFaxOedc.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/ibmplexsans/v19/zYX9KVElMYYaJe8bpLHnCwDKjSL9AIFsdP3pBms.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/ibmplexsans/v19/zYX9KVElMYYaJe8bpLHnCwDKjQ76AIFsdP3pBms.woff2') format('woff2');
+}
+
+:root {
+  /* Enterprise Sharp — Light Theme */
+  --radius: 2px;
+
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+
+  /* Deep blue primary */
+  --primary: 221 83% 48%;
+  --primary-foreground: 210 40% 98%;
+
+  /* Teal accent */
+  --accent: 173 58% 39%;
+  --accent-foreground: 210 40% 98%;
+
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 221 83% 48%;
+
+  /* Status colors */
+  --status-posted: 142 71% 45%;
+  --status-draft: 215 14% 64%;
+  --status-deleted: 0 84% 60%;
+  --status-progress: 221 83% 48%;
+
+  /* Sidebar — slightly darker */
+  --sidebar: 210 20% 98%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-border: 214 32% 91%;
+  --sidebar-accent: 221 83% 48%;
+
+  /* Chart colors */
+  --chart-1: 221 83% 48%;
+  --chart-2: 173 58% 39%;
+  --chart-3: 24 95% 53%;
+  --chart-4: 280 67% 49%;
+  --chart-5: 142 71% 45%;
+}
+
+.dark {
+  --background: 222 47% 8%;
+  --foreground: 210 40% 98%;
+  --card: 222 47% 11%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222 47% 11%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 217 91% 60%;
+  --primary-foreground: 222 47% 8%;
+  --accent: 173 58% 39%;
+  --accent-foreground: 210 40% 98%;
+  --secondary: 217 33% 17%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 65%;
+  --destructive: 0 63% 31%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217 33% 17%;
+  --input: 217 33% 17%;
+  --ring: 217 91% 60%;
+
+  --sidebar: 222 47% 6%;
+  --sidebar-foreground: 210 40% 98%;
+  --sidebar-border: 217 33% 17%;
+  --sidebar-accent: 217 91% 60%;
+}
+
+/* Base styles */
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  font-family: 'IBM Plex Sans', 'Golos Text', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Compact density for ERP */
+.density-compact {
+  --row-height: 32px;
+  --cell-padding: 4px 8px;
+  --gap: 8px;
+}
+
+.density-standard {
+  --row-height: 40px;
+  --cell-padding: 8px 12px;
+  --gap: 12px;
+}
+
+/* Status strip on documents */
+.status-strip {
+  border-left: 3px solid transparent;
+}
+.status-strip--posted { border-left-color: hsl(var(--status-posted)); }
+.status-strip--draft { border-left-color: hsl(var(--status-draft)); }
+.status-strip--deleted { border-left-color: hsl(var(--status-deleted)); }
+.status-strip--progress { border-left-color: hsl(var(--status-progress)); }
+
+/* Skeleton loading animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--muted) / 0.5) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
