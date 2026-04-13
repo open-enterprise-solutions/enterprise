@@ -29,6 +29,9 @@
 #define reportsName _("Reports")
 #define informationRegisterName _("Information Registers")
 #define accumulationRegisterName _("Accumulation Registers")
+#define chartsOfCharacteristicTypesName _("Charts of characteristic types")
+#define chartsOfAccountsName _("Charts of accounts")
+#define accountingRegistersName _("Accounting registers")
 
 #define	objectFormsName _("Forms")
 #define	objectModulesName _("Modules")
@@ -250,6 +253,9 @@ wxTreeItemId ibMetadataTree::FillItem(ibValueMetaObject* metaItem, const wxTreeI
 	else if (metaItem->GetClassType() == g_metaReportCLSID) AddReportItem(metaItem, createdItem);
 	else if (metaItem->GetClassType() == g_metaInformationRegisterCLSID) AddInformationRegisterItem(metaItem, createdItem);
 	else if (metaItem->GetClassType() == g_metaAccumulationRegisterCLSID) AddAccumulationRegisterItem(metaItem, createdItem);
+	else if (metaItem->GetClassType() == g_metaChartOfCharacteristicTypesCLSID) AddCatalogItem(metaItem, createdItem);
+	else if (metaItem->GetClassType() == g_metaChartOfAccountsCLSID) AddCatalogItem(metaItem, createdItem);
+	else if (metaItem->GetClassType() == g_metaAccountingRegisterCLSID) AddAccumulationRegisterItem(metaItem, createdItem);
 
 	else if (metaItem->GetClassType() == g_metaTableCLSID) {
 
@@ -1491,6 +1497,9 @@ void ibMetadataTree::InitTree()
 
 	m_treeINFORMATION_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaInformationRegisterCLSID, informationRegisterName);
 	m_treeACCUMULATION_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaAccumulationRegisterCLSID, accumulationRegisterName);
+	m_treeCHARTS_OF_CHARACTERISTIC_TYPES = AppendGroupItem(m_treeMETADATA, g_metaChartOfCharacteristicTypesCLSID, chartsOfCharacteristicTypesName);
+	m_treeCHARTS_OF_ACCOUNTS = AppendGroupItem(m_treeMETADATA, g_metaChartOfAccountsCLSID, chartsOfAccountsName);
+	m_treeACCOUNTING_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaAccountingRegisterCLSID, accountingRegistersName);
 
 	//Set item bold and name
 	m_metaTreeCtrl->SetItemText(m_treeMETADATA, _("Configuration"));
@@ -1555,6 +1564,12 @@ void ibMetadataTree::ClearTree()
 		m_metaTreeCtrl->DeleteChildren(m_treeINFORMATION_REGISTERS);
 	if (m_treeACCUMULATION_REGISTERS.IsOk())
 		m_metaTreeCtrl->DeleteChildren(m_treeACCUMULATION_REGISTERS);
+	if (m_treeCHARTS_OF_CHARACTERISTIC_TYPES.IsOk())
+		m_metaTreeCtrl->DeleteChildren(m_treeCHARTS_OF_CHARACTERISTIC_TYPES);
+	if (m_treeCHARTS_OF_ACCOUNTS.IsOk())
+		m_metaTreeCtrl->DeleteChildren(m_treeCHARTS_OF_ACCOUNTS);
+	if (m_treeACCOUNTING_REGISTERS.IsOk())
+		m_metaTreeCtrl->DeleteChildren(m_treeACCOUNTING_REGISTERS);
 
 	//delete all items
 	m_metaTreeCtrl->DeleteAllItems();
@@ -1883,7 +1898,70 @@ void ibMetadataTree::FillData()
 	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeACCUMULATION_REGISTERS))
 		m_metaTreeCtrl->Delete(m_treeACCUMULATION_REGISTERS);
 
-	//set modify 
+	//****************************************************************
+	//*                          Charts of characteristic types      *
+	//****************************************************************
+	for (auto chartOfCharacteristicTypes : m_metaData->GetAnyArrayObject(g_metaChartOfCharacteristicTypesCLSID)) {
+
+		if (chartOfCharacteristicTypes->IsDeleted())
+			continue;
+
+		const wxString& strName = chartOfCharacteristicTypes->GetName();
+
+		if (!m_strSearch.IsEmpty()
+			&& strName.Find(m_strSearch) < 0)
+			continue;
+
+		AddCatalogItem(chartOfCharacteristicTypes,
+			AppendItem(m_treeCHARTS_OF_CHARACTERISTIC_TYPES, chartOfCharacteristicTypes));
+	}
+
+	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeCHARTS_OF_CHARACTERISTIC_TYPES))
+		m_metaTreeCtrl->Delete(m_treeCHARTS_OF_CHARACTERISTIC_TYPES);
+
+	//****************************************************************
+	//*                          Charts of accounts                  *
+	//****************************************************************
+	for (auto chartOfAccounts : m_metaData->GetAnyArrayObject(g_metaChartOfAccountsCLSID)) {
+
+		if (chartOfAccounts->IsDeleted())
+			continue;
+
+		const wxString& strName = chartOfAccounts->GetName();
+
+		if (!m_strSearch.IsEmpty()
+			&& strName.Find(m_strSearch) < 0)
+			continue;
+
+		AddCatalogItem(chartOfAccounts,
+			AppendItem(m_treeCHARTS_OF_ACCOUNTS, chartOfAccounts));
+	}
+
+	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeCHARTS_OF_ACCOUNTS))
+		m_metaTreeCtrl->Delete(m_treeCHARTS_OF_ACCOUNTS);
+
+	//****************************************************************
+	//*                          Accounting register                 *
+	//****************************************************************
+	for (auto accountingRegister : m_metaData->GetAnyArrayObject(g_metaAccountingRegisterCLSID)) {
+
+		if (accountingRegister->IsDeleted())
+			continue;
+
+		const wxString& strName = accountingRegister->GetName();
+
+		if (!m_strSearch.IsEmpty()
+			&& strName.Find(m_strSearch) < 0)
+			continue;
+
+		AddAccumulationRegisterItem(accountingRegister,
+			AppendItem(m_treeACCOUNTING_REGISTERS, accountingRegister));
+	}
+
+	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeACCOUNTING_REGISTERS))
+		m_metaTreeCtrl->Delete(m_treeACCOUNTING_REGISTERS);
+
+	//set modify
 	Modify(m_metaData->IsModified());
 
 	//update toolbar 

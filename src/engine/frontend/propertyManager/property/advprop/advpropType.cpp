@@ -145,6 +145,8 @@ ibPGTypeProperty::ibPGTypeProperty(const ibPropertyObject* property, const ibSel
 	FillByClsid(selectorDataType, g_metaCatalogCLSID);
 	FillByClsid(selectorDataType, g_metaDocumentCLSID);
 	FillByClsid(selectorDataType, g_metaEnumerationCLSID);
+	FillByClsid(selectorDataType, g_metaChartOfCharacteristicTypesCLSID);
+	FillByClsid(selectorDataType, g_metaChartOfAccountsCLSID);
 
 	if (selectorDataType == ibSelectorDataType::ibSelectorDataType_any) {
 		FillByClsid(selectorDataType, g_metaDataProcessorCLSID);
@@ -154,6 +156,7 @@ ibPGTypeProperty::ibPGTypeProperty(const ibPropertyObject* property, const ibSel
 	if (selectorDataType == ibSelectorDataType::ibSelectorDataType_table) {
 		FillByClsid(selectorDataType, g_metaInformationRegisterCLSID);
 		FillByClsid(selectorDataType, g_metaAccumulationRegisterCLSID);
+		FillByClsid(selectorDataType, g_metaAccountingRegisterCLSID);
 	}
 
 	SetValue(value);
@@ -733,6 +736,8 @@ wxPGEditorDialogAdapter* ibPGTypeProperty::GetEditorDialog() const
 				FillByClsid(selectorDataType, metaData, g_metaCatalogCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
 				FillByClsid(selectorDataType, metaData, g_metaDocumentCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
 				FillByClsid(selectorDataType, metaData, g_metaEnumerationCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
+				FillByClsid(selectorDataType, metaData, g_metaChartOfCharacteristicTypesCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
+				FillByClsid(selectorDataType, metaData, g_metaChartOfAccountsCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
 				if (selectorDataType == ibSelectorDataType::ibSelectorDataType_any) {
 					FillByClsid(selectorDataType, metaData, g_metaDataProcessorCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
 					FillByClsid(selectorDataType, metaData, g_metaReportCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
@@ -740,6 +745,7 @@ wxPGEditorDialogAdapter* ibPGTypeProperty::GetEditorDialog() const
 				if (selectorDataType == ibSelectorDataType::ibSelectorDataType_table) {
 					FillByClsid(selectorDataType, metaData, g_metaInformationRegisterCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
 					FillByClsid(selectorDataType, metaData, g_metaAccumulationRegisterCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
+					FillByClsid(selectorDataType, metaData, g_metaAccountingRegisterCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
 				}
 			}
 

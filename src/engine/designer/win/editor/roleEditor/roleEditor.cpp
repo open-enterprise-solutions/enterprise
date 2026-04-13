@@ -11,6 +11,9 @@
 #define reportsName _("Reports")
 #define informationRegisterName _("Information Registers")
 #define accumulationRegisterName _("Accumulation Registers")
+#define chartsOfCharacteristicTypesName _("Charts of characteristic types")
+#define chartsOfAccountsName _("Charts of accounts")
+#define accountingRegistersName _("Accounting registers")
 
 #define ICON_SIZE 16
 
@@ -143,6 +146,9 @@ void ibRoleEditor::InitRole()
 
 	m_treeINFORMATION_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaInformationRegisterCLSID, informationRegisterName);
 	m_treeACCUMULATION_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaAccumulationRegisterCLSID, accumulationRegisterName);
+	m_treeCHARTS_OF_CHARACTERISTIC_TYPES = AppendGroupItem(m_treeMETADATA, g_metaChartOfCharacteristicTypesCLSID, chartsOfCharacteristicTypesName);
+	m_treeCHARTS_OF_ACCOUNTS = AppendGroupItem(m_treeMETADATA, g_metaChartOfAccountsCLSID, chartsOfAccountsName);
+	m_treeACCOUNTING_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaAccountingRegisterCLSID, accountingRegistersName);
 
 	//Set item bold and name
 	m_roleCtrl->SetItemText(m_treeMETADATA, _("Configuration"));
@@ -183,6 +189,12 @@ void ibRoleEditor::ClearRole() {
 		m_roleCtrl->DeleteChildren(m_treeINFORMATION_REGISTERS);
 	if (m_treeACCUMULATION_REGISTERS.IsOk())
 		m_roleCtrl->DeleteChildren(m_treeACCUMULATION_REGISTERS);
+	if (m_treeCHARTS_OF_CHARACTERISTIC_TYPES.IsOk())
+		m_roleCtrl->DeleteChildren(m_treeCHARTS_OF_CHARACTERISTIC_TYPES);
+	if (m_treeCHARTS_OF_ACCOUNTS.IsOk())
+		m_roleCtrl->DeleteChildren(m_treeCHARTS_OF_ACCOUNTS);
+	if (m_treeACCOUNTING_REGISTERS.IsOk())
+		m_roleCtrl->DeleteChildren(m_treeACCOUNTING_REGISTERS);
 
 	//delete all items
 	m_roleCtrl->DeleteAllItems();
@@ -280,6 +292,33 @@ void ibRoleEditor::FillData()
 		if (accumulationRegister->IsDeleted())
 			continue;
 		AppendItem(m_treeACCUMULATION_REGISTERS, accumulationRegister);
+	}
+
+	//****************************************************************
+	//*                          Charts of characteristic types      *
+	//****************************************************************
+	for (auto chartOfCharacteristicTypes : metaData->GetAnyArrayObject(g_metaChartOfCharacteristicTypesCLSID)) {
+		if (chartOfCharacteristicTypes->IsDeleted())
+			continue;
+		AppendItem(m_treeCHARTS_OF_CHARACTERISTIC_TYPES, chartOfCharacteristicTypes);
+	}
+
+	//****************************************************************
+	//*                          Charts of accounts                  *
+	//****************************************************************
+	for (auto chartOfAccounts : metaData->GetAnyArrayObject(g_metaChartOfAccountsCLSID)) {
+		if (chartOfAccounts->IsDeleted())
+			continue;
+		AppendItem(m_treeCHARTS_OF_ACCOUNTS, chartOfAccounts);
+	}
+
+	//****************************************************************
+	//*                          Accounting register                 *
+	//****************************************************************
+	for (auto accountingRegister : metaData->GetAnyArrayObject(g_metaAccountingRegisterCLSID)) {
+		if (accountingRegister->IsDeleted())
+			continue;
+		AppendItem(m_treeACCOUNTING_REGISTERS, accountingRegister);
 	}
 
 	m_checkCtrl->Enable(m_metaRole->IsEnabled());

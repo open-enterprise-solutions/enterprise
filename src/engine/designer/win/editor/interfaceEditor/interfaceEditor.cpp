@@ -88,6 +88,10 @@ void ibInterfaceEditor::InitInterface()
 	m_treeINFORMATION_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaInformationRegisterCLSID, informationRegisterName);
 	m_treeACCUMULATION_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaAccumulationRegisterCLSID, accumulationRegisterName);
 
+	m_treeCHARTS_OF_CHARACTERISTIC_TYPES = AppendGroupItem(m_treeMETADATA, g_metaChartOfCharacteristicTypesCLSID, _("Charts of characteristic types"));
+	m_treeCHARTS_OF_ACCOUNTS = AppendGroupItem(m_treeMETADATA, g_metaChartOfAccountsCLSID, _("Charts of accounts"));
+	m_treeACCOUNTING_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaAccountingRegisterCLSID, _("Accounting registers"));
+
 	//Set item bold and name
 	m_interfaceCtrl->SetItemText(m_treeMETADATA, _("Configuration"));
 	m_interfaceCtrl->SetItemBold(m_treeMETADATA);
@@ -116,6 +120,9 @@ void ibInterfaceEditor::ClearInterface() {
 	if (m_treeREPORTS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeREPORTS);
 	if (m_treeINFORMATION_REGISTERS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeINFORMATION_REGISTERS);
 	if (m_treeACCUMULATION_REGISTERS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeACCUMULATION_REGISTERS);
+	if (m_treeCHARTS_OF_CHARACTERISTIC_TYPES.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeCHARTS_OF_CHARACTERISTIC_TYPES);
+	if (m_treeCHARTS_OF_ACCOUNTS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeCHARTS_OF_ACCOUNTS);
+	if (m_treeACCOUNTING_REGISTERS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeACCOUNTING_REGISTERS);
 
 	//delete all items
 	m_interfaceCtrl->DeleteAllItems();
@@ -203,6 +210,33 @@ void ibInterfaceEditor::FillData()
 		if (accumulationRegister->IsDeleted())
 			continue;
 		AppendItem(m_treeACCUMULATION_REGISTERS, accumulationRegister);
+	}
+
+	//****************************************************************
+	//*                 Charts of characteristic types               *
+	//****************************************************************
+	for (auto chartOfCharTypes : metaData->GetAnyArrayObject(g_metaChartOfCharacteristicTypesCLSID)) {
+		if (chartOfCharTypes->IsDeleted())
+			continue;
+		AppendItem(m_treeCHARTS_OF_CHARACTERISTIC_TYPES, chartOfCharTypes);
+	}
+
+	//****************************************************************
+	//*                      Charts of accounts                      *
+	//****************************************************************
+	for (auto chartOfAccounts : metaData->GetAnyArrayObject(g_metaChartOfAccountsCLSID)) {
+		if (chartOfAccounts->IsDeleted())
+			continue;
+		AppendItem(m_treeCHARTS_OF_ACCOUNTS, chartOfAccounts);
+	}
+
+	//****************************************************************
+	//*                      Accounting registers                    *
+	//****************************************************************
+	for (auto accountingRegister : metaData->GetAnyArrayObject(g_metaAccountingRegisterCLSID)) {
+		if (accountingRegister->IsDeleted())
+			continue;
+		AppendItem(m_treeACCOUNTING_REGISTERS, accountingRegister);
 	}
 
 	m_interfaceCtrl->Enable(m_metaInterface->IsEnabled());

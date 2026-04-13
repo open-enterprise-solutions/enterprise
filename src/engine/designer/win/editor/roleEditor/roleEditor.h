@@ -27,6 +27,9 @@ class ibRoleEditor : public wxSplitterWindow {
 	wxTreeItemId m_treeREPORTS;
 	wxTreeItemId m_treeINFORMATION_REGISTERS;
 	wxTreeItemId m_treeACCUMULATION_REGISTERS;
+	wxTreeItemId m_treeCHARTS_OF_CHARACTERISTIC_TYPES;
+	wxTreeItemId m_treeCHARTS_OF_ACCOUNTS;
+	wxTreeItemId m_treeACCOUNTING_REGISTERS;
 
 	ibValueMetaObject* m_metaRole;
 

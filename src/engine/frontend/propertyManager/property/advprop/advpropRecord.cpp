@@ -42,6 +42,7 @@ ibPGRecordProperty::ibPGRecordProperty(const ibPropertyObject* property, const w
 {
     FillByClsid(g_metaInformationRegisterCLSID);
     FillByClsid(g_metaAccumulationRegisterCLSID);
+    FillByClsid(g_metaAccountingRegisterCLSID);
 
     //m_flags |= wxPGFlags::ReadOnly;
     m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
@@ -174,6 +175,7 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
             if (metaData != nullptr) {
                 FillByClsid(metaData, g_metaInformationRegisterCLSID, tc, data);
                 FillByClsid(metaData, g_metaAccumulationRegisterCLSID, tc, data);
+                FillByClsid(metaData, g_metaAccountingRegisterCLSID, tc, data);
             }
             tc->ExpandAll(); int res = dlg->ShowModal();
             ibVariantDataRecord* clone = data->Clone();
