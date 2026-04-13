@@ -157,6 +157,11 @@ void ibValueMetaObjectChartOfAccounts::CreateSubcontoKindsTable(ibMetaData* meta
 	m_subcontoKindsTable = CreateMetaObjectAndSetParent<ibValueMetaObjectTableData>();
 	m_subcontoKindsTable->SetName(wxT("SubcontoKinds"));
 	m_subcontoKindsTable->SetSynonym(_("Subconto kinds"));
+
+	// IMPORTANT: Set metaData on table BEFORE creating child attributes,
+	// otherwise ibBackendTypeConfigFactory::CreateValueRef() will assert
+	// because metaData is null when registering attribute types
+	m_subcontoKindsTable->SetMetaData(metaData);
 	m_subcontoKindsTable->OnCreateMetaObject(metaData, flags);
 
 	// Add column: SubcontoKind (empty type - polymorphic reference, type set from ПВХ at runtime)
@@ -164,6 +169,7 @@ void ibValueMetaObjectChartOfAccounts::CreateSubcontoKindsTable(ibMetaData* meta
 		m_subcontoKindsTable->CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(
 			wxT("SubcontoKind"), _("Subconto kind"), wxEmptyString,
 			false, ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items);
+	attrKind->SetMetaData(metaData);
 	attrKind->OnCreateMetaObject(metaData, flags);
 
 	// Add column: Order (number, 3 digits)
@@ -172,6 +178,7 @@ void ibValueMetaObjectChartOfAccounts::CreateSubcontoKindsTable(ibMetaData* meta
 			wxT("Order"), _("Order"), wxEmptyString,
 			ibQualifierNumber(3, 0), false, ibValue(ibNumber(0.0)),
 			ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items);
+	attrOrder->SetMetaData(metaData);
 	attrOrder->OnCreateMetaObject(metaData, flags);
 
 	// Add column: SummaryOnly (boolean - only turnovers, no balances for this subconto)
@@ -180,6 +187,7 @@ void ibValueMetaObjectChartOfAccounts::CreateSubcontoKindsTable(ibMetaData* meta
 			wxT("SummaryOnly"), _("Summary only"), wxEmptyString,
 			false, ibValue(false),
 			ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items);
+	attrSummary->SetMetaData(metaData);
 	attrSummary->OnCreateMetaObject(metaData, flags);
 }
 
