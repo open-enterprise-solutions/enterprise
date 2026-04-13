@@ -54,6 +54,11 @@ const ibClassID g_metaReportCLSID = string_to_clsid("MD_RPT");
 const ibClassID g_metaInformationRegisterCLSID = string_to_clsid("MD_INFR");
 const ibClassID g_metaAccumulationRegisterCLSID = string_to_clsid("MD_ACCR");
 
+//ACCOUNTING OBJECTS
+const ibClassID g_metaChartOfCharacteristicTypesCLSID = string_to_clsid("MD_CHRC");
+const ibClassID g_metaChartOfAccountsCLSID = string_to_clsid("MD_CHOA");
+const ibClassID g_metaAccountingRegisterCLSID = string_to_clsid("MD_AREG");
+
 // EXTERNAL
 const ibClassID g_metaExternalDataProcessorCLSID = string_to_clsid("MD_EDPR");
 const ibClassID g_metaExternalReportCLSID = string_to_clsid("MD_ERPT");
