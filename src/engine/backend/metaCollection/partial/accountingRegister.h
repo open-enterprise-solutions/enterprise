@@ -3,6 +3,7 @@
 
 #include "commonObject.h"
 #include "accountingRegisterEnum.h"
+#include "backend/propertyManager/property/propertyOwner.h"
 
 class ibValueMetaObjectAccountingRegister : public ibValueMetaObjectRegisterData {
 	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectAccountingRegister);
@@ -182,6 +183,11 @@ private:
 
 	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
 	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), &ibValueMetaObjectAccountingRegister::FillFormList);
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Chart of Accounts binding — determines the type of Account field
+	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
+	ibPropertyOwner* m_propertyChartOfAccounts = ibPropertyObject::CreateProperty<ibPropertyOwner>(m_categoryData, wxT("ChartOfAccounts"), _("Chart of accounts"));
 
 	// Predefined attributes: RecordType (Debit/Credit)
 	ibPropertyInnerAttribute<>* m_propertyAttributeRecordType = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categoryCommon,

@@ -43,6 +43,10 @@ bool ibValueMetaObjectAccountingRegister::LoadData(ibReaderMemory& dataReader)
 	(*m_propertyAttributeSubconto2)->LoadMeta(dataReader);
 	(*m_propertyAttributeSubconto3)->LoadMeta(dataReader);
 	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+
+	if (!m_propertyChartOfAccounts->LoadData(dataReader))
+		return false;
+
 	(*m_propertyModuleObject)->LoadMeta(dataReader);
 	(*m_propertyModuleManager)->LoadMeta(dataReader);
 	return ibValueMetaObjectRegisterData::LoadData(dataReader);
@@ -56,6 +60,10 @@ bool ibValueMetaObjectAccountingRegister::SaveData(ibWriterMemory& dataWritter)
 	(*m_propertyAttributeSubconto2)->SaveMeta(dataWritter);
 	(*m_propertyAttributeSubconto3)->SaveMeta(dataWritter);
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
+
+	if (!m_propertyChartOfAccounts->SaveData(dataWritter))
+		return false;
+
 	(*m_propertyModuleObject)->SaveMeta(dataWritter);
 	(*m_propertyModuleManager)->SaveMeta(dataWritter);
 	return ibValueMetaObjectRegisterData::SaveData(dataWritter);
@@ -148,8 +156,28 @@ bool ibValueMetaObjectAccountingRegister::OnAfterRunMetaObject(int flags)
 	if (!(*m_propertyAttributeSubconto3)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertyModuleManager)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertyModuleObject)->OnAfterRunMetaObject(flags)) return false;
+
 	ibValueModuleManager* moduleManager = m_metaData->GetModuleManager();
 	wxASSERT(moduleManager);
+
+	// Set Account field type from Chart of Accounts binding
+	const ibMetaDescription& metaDesc = m_propertyChartOfAccounts->GetValueAsMetaDesc();
+	ibTypeDescription typeDesc;
+	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
+		const ibValueMetaObject* chartOfAccounts = m_metaData->FindAnyObjectByFilter(metaDesc.GetByIdx(idx));
+		if (chartOfAccounts != nullptr) {
+			const ibCtorMetaValueType* so = m_metaData->GetTypeCtor(chartOfAccounts, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
+			wxASSERT(so);
+			typeDesc.AppendMetaType(so->GetClassType());
+		}
+	}
+	(*m_propertyAttributeAccount)->SetDefaultMetaType(typeDesc);
+
+	if ((*m_propertyAttributeAccount)->GetClsidCount() > 0)
+		(*m_propertyAttributeAccount)->ClearFlag(metaDisableFlag);
+	else
+		(*m_propertyAttributeAccount)->SetFlag(metaDisableFlag);
+
 	if (appData->DesignerMode()) {
 		if (ibValueMetaObjectRegisterData::OnAfterRunMetaObject(flags)) {
 			if (!moduleManager->AddCompileModule(m_propertyModuleObject->GetMetaObject(), CreateRecordSetObjectValue())) return false;
