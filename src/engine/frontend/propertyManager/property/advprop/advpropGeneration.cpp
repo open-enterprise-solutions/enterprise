@@ -40,6 +40,8 @@ ibPGGenerationProperty::ibPGGenerationProperty(const ibPropertyObject* property,
 {
     FillByClsid(g_metaCatalogCLSID);
     FillByClsid(g_metaDocumentCLSID);
+    FillByClsid(g_metaChartOfCharacteristicTypesCLSID);
+    FillByClsid(g_metaChartOfAccountsCLSID);
 
     //m_flags |= wxPGFlags::ReadOnly;
     m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
@@ -175,6 +177,8 @@ wxPGEditorDialogAdapter* ibPGGenerationProperty::GetEditorDialog() const
             if (metaData != nullptr) {
                 FillByClsid(metaData, g_metaCatalogCLSID, tc, data);
                 FillByClsid(metaData, g_metaDocumentCLSID, tc, data);
+                FillByClsid(metaData, g_metaChartOfCharacteristicTypesCLSID, tc, data);
+                FillByClsid(metaData, g_metaChartOfAccountsCLSID, tc, data);
             }
 
             tc->ExpandAll(); int res = dlg->ShowModal();
