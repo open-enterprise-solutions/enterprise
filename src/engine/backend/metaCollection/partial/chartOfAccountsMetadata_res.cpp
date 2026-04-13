@@ -1,7 +1,7 @@
 #include "chartOfAccounts.h"
 
-/* PNG - chart of accounts icon 16x16 */
-static const wxString s_chartOfAccounts_16_png = wxT("iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAA3NCSVQICAjb4U/gAAAAMFBMVEUAAAGha02lbk2hakqkbU3ennLbmWz/1bj/xJylcFCibUyibU3x6eX///+nclahbEvzIaCgAAAAAXRSTlMAQObYZgAAAC9JREFUGJVjYGBkYkYCDAwMLKxs7BwwABJgZhsqApxcaH7h5uFFAJAAHz+aCjQAAPm1BXSM41l5AAAAAElFTkSuQmCC");
+/* PNG - chart of accounts icon 16x16 (uses document icon) */
+static const wxString s_chartOfAccounts_16_png = wxT("iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAA3NCSVQICAjb4U/gAAAAIVBMVEUAAAF4i5x9j5////+Mnat9kJ/29/iOnaz09veLm6l9j6C1uLjiAAAAAXRSTlMAQObYZgAAADhJREFUGJVjYGCEAyYGMGBkhgJGFlY0ATZ2JlQBZg5OLiQBiDnIKsCiuAQgygmpoNQMVAEUwIABAB6/AfGpRQdOAAAAAElFTkSuQmCC");
 
 wxIcon ibValueMetaObjectChartOfAccounts::GetIcon() const
 {

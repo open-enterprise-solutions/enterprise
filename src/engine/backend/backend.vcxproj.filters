@@ -317,10 +317,34 @@
     <ClInclude Include="metaCollection\partial\accumulationRegisterManager.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\partial\accountingRegister.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\accountingRegisterEnum.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\accountingRegisterManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\partial\catalog.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\partial\catalogManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\chartOfAccounts.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\chartOfAccountsEnum.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\chartOfAccountsManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\chartOfCharacteristicTypes.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\chartOfCharacteristicTypesManager.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\partial\constant.h">
@@ -952,6 +976,30 @@
     <ClCompile Include="metaCollection\partial\accumulationRegisterQuery.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\partial\accountingRegisterEnum.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accountingRegisterManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accountingRegisterManager_impl.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accountingRegisterMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accountingRegisterMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accountingRegisterMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accountingRegisterMetadataProperty.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accountingRegisterObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\partial\catalogAction.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
@@ -974,6 +1022,57 @@
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\catalogObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfAccountsAction.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfAccountsEnum.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfAccountsManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfAccountsManager_impl.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfAccountsMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfAccountsMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataProperty.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfAccountsObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesAction.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesManager_impl.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadataProperty.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesObject.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\constantAction.cpp">
