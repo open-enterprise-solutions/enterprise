@@ -140,9 +140,56 @@ bool ibValueMetaObjectChartOfAccounts::SaveData(ibWriterMemory& dataWritter)
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::SaveData(dataWritter);
 }
 
+ibValueMetaObjectTableData* ibValueMetaObjectChartOfAccounts::FindSubcontoKindsTable() const
+{
+	for (auto table : GetTableArrayObject()) {
+		if (table->GetName() == wxT("SubcontoKinds"))
+			return table;
+	}
+	return nullptr;
+}
+
+#include "backend/metaCollection/table/metaTableObject.h"
+
+void ibValueMetaObjectChartOfAccounts::CreateSubcontoKindsTable(ibMetaData* metaData, int flags)
+{
+	// Create predefined tabular section "SubcontoKinds"
+	m_subcontoKindsTable = CreateMetaObjectAndSetParent<ibValueMetaObjectTableData>();
+	m_subcontoKindsTable->SetName(wxT("SubcontoKinds"));
+	m_subcontoKindsTable->SetSynonym(_("Subconto kinds"));
+	m_subcontoKindsTable->OnCreateMetaObject(metaData, flags);
+
+	// Add column: SubcontoKind (empty type - polymorphic reference, type set from ПВХ at runtime)
+	ibValueMetaObjectAttributePredefined* attrKind =
+		m_subcontoKindsTable->CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(
+			wxT("SubcontoKind"), _("Subconto kind"), wxEmptyString,
+			false, ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items);
+	attrKind->OnCreateMetaObject(metaData, flags);
+
+	// Add column: Order (number, 3 digits)
+	ibValueMetaObjectAttributePredefined* attrOrder =
+		m_subcontoKindsTable->CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(
+			wxT("Order"), _("Order"), wxEmptyString,
+			ibQualifierNumber(3, 0), false, ibValue(ibNumber(0.0)),
+			ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items);
+	attrOrder->OnCreateMetaObject(metaData, flags);
+
+	// Add column: SummaryOnly (boolean - only turnovers, no balances for this subconto)
+	ibValueMetaObjectAttributePredefined* attrSummary =
+		m_subcontoKindsTable->CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(
+			wxT("SummaryOnly"), _("Summary only"), wxEmptyString,
+			false, ibValue(false),
+			ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items);
+	attrSummary->OnCreateMetaObject(metaData, flags);
+}
+
 bool ibValueMetaObjectChartOfAccounts::OnCreateMetaObject(ibMetaData* metaData, int flags)
 {
 	if (!ibValueMetaObjectRecordDataHierarchyMutableRef::OnCreateMetaObject(metaData, flags)) return false;
+
+	// Create predefined SubcontoKinds tabular section
+	CreateSubcontoKindsTable(metaData, flags);
+
 	return (*m_propertyModuleObject)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyModuleManager)->OnCreateMetaObject(metaData, flags);
 }
@@ -151,6 +198,10 @@ bool ibValueMetaObjectChartOfAccounts::OnLoadMetaObject(ibMetaData* metaData)
 {
 	if (!(*m_propertyModuleObject)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyModuleManager)->OnLoadMetaObject(metaData)) return false;
+
+	// Find existing SubcontoKinds table (loaded from saved config)
+	m_subcontoKindsTable = FindSubcontoKindsTable();
+
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnLoadMetaObject(metaData);
 }
 

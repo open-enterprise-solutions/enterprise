@@ -245,6 +245,15 @@ private:
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
 	ibPropertyOwner* m_propertyChartOfCharacteristicTypes = ibPropertyObject::CreateProperty<ibPropertyOwner>(m_categoryData, wxT("ChartOfCharacteristicTypes"), _("Chart of characteristic types"));
 
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Predefined tabular section "SubcontoKinds" — created in OnCreateMetaObject
+	// Columns: SubcontoKind (ref to ПВХ), Order (number), SummaryOnly (boolean)
+	ibValueMetaObjectTableData* m_subcontoKindsTable = nullptr;
+
+	// Helper to find or create the predefined SubcontoKinds table
+	ibValueMetaObjectTableData* FindSubcontoKindsTable() const;
+	void CreateSubcontoKindsTable(ibMetaData* metaData, int flags);
+
 	friend class ibValueRecordDataObjectChartOfAccounts;
 	friend class ibMetaData;
 };
