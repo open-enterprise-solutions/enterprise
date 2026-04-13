@@ -79,3 +79,11 @@ bool ibValueMetaObjectSubcontoKindsTable::OnAfterCloseMetaObject()
 	if (!(*m_propertySummaryOnly)->OnAfterCloseMetaObject()) return false;
 	return ibValueMetaObjectTableData::OnAfterCloseMetaObject();
 }
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+const ibClassID g_metaSubcontoKindsTableCLSID = string_to_clsid("MD_SKTB");
+
+METADATA_TYPE_REGISTER(ibValueMetaObjectSubcontoKindsTable, "SubcontoKindsTable", g_metaSubcontoKindsTableCLSID);
