@@ -380,3 +380,105 @@ public:
 - [ ] Все параметры задокументированы (`@param[in]`, `@param[out]`)
 - [ ] Mock-реализация существует для юнит-тестов
 - [ ] Интерфейс версионирован при ломающих изменениях
+
+---
+
+## Web Client REST API
+
+Веб-клиент OES взаимодействует с daemon через HTTP REST API, реализованный на базе cpp-httplib (`src/3rdparty/cpp-httplib/`). Код сервера находится в `src/engine/backend/webServer/`.
+
+### Карта эндпоинтов
+
+| Метод | Путь | Назначение |
+|-------|------|-----------|
+| `POST` | `/api/auth/login` | Аутентификация, возвращает JWT |
+| `POST` | `/api/auth/logout` | Завершение сессии |
+| `GET` | `/api/auth/me` | Текущий пользователь |
+| `GET` | `/api/metadata` | Дерево метаданных конфигурации |
+| `GET` | `/api/metadata/:type` | Метаданные объекта (catalogs, documents и т.д.) |
+| `GET` | `/api/data/:type` | Список записей (с пагинацией) |
+| `GET` | `/api/data/:type/:id` | Одна запись по ID |
+| `POST` | `/api/data/:type` | Создание записи |
+| `PUT` | `/api/data/:type/:id` | Обновление записи |
+| `DELETE` | `/api/data/:type/:id` | Удаление (пометка на удаление) записи |
+
+### Формат JSON-ответа
+
+Все успешные ответы возвращают данные в единообразной обёртке:
+
+```json
+{
+  "data": { ... },
+  "meta": {
+    "total": 142
+  }
+}
+```
+
+Для списков `data` содержит массив объектов, для одиночных записей -- объект. Поле `meta.total` присутствует только в ответах со списками и содержит общее количество записей (до пагинации).
+
+### Формат ошибок
+
+```json
+{
+  "error": {
+    "code": "AUTH_INVALID_CREDENTIALS",
+    "message": "Invalid username or password"
+  }
+}
+```
+
+Стандартные коды ошибок:
+
+| Код | HTTP-статус | Описание |
+|-----|-------------|----------|
+| `AUTH_INVALID_CREDENTIALS` | 401 | Неверный логин/пароль |
+| `AUTH_TOKEN_EXPIRED` | 401 | JWT истёк |
+| `NOT_FOUND` | 404 | Объект не найден |
+| `VALIDATION_ERROR` | 400 | Ошибка валидации входных данных |
+| `INTERNAL_ERROR` | 500 | Внутренняя ошибка сервера |
+
+### Пагинация
+
+Списочные эндпоинты поддерживают пагинацию через query-параметры:
+
+```
+GET /api/data/catalogs.Contractors?page=1&pageSize=25
+```
+
+| Параметр | По умолчанию | Описание |
+|----------|-------------|----------|
+| `page` | 1 | Номер страницы (начиная с 1) |
+| `pageSize` | 25 | Количество записей на странице (макс. 1000) |
+
+### Аутентификация
+
+Все эндпоинты кроме `/api/auth/login` требуют JWT Bearer-токен в заголовке:
+
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+```
+
+Токен выдаётся при успешном `POST /api/auth/login` и содержит `userId`, `userName`, срок действия. Daemon проверяет подпись и срок при каждом запросе.
+
+### Потокобезопасность
+
+cpp-httplib обрабатывает запросы в пуле потоков. Глобальный `db_query` не является потокобезопасным. Каждый обработчик запроса обязан получить собственное соединение через `db_query->Clone()`:
+
+```cpp
+server.Get("/api/data/:type", [](const httplib::Request& req, httplib::Response& res) {
+    // Клонируем соединение для этого потока
+    auto dbConn = db_query->Clone();
+
+    // Все запросы к БД через dbConn, не через db_query
+    ibPreparedStatement* stmt = dbConn->PrepareStatement(
+        wxT("SELECT * FROM %s LIMIT ? OFFSET ?"), tableName);
+    stmt->SetParamInt(1, pageSize);
+    stmt->SetParamInt(2, (page - 1) * pageSize);
+    ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
+
+    // ... формируем JSON-ответ ...
+});
+```
+
+Нарушение этого правила приведёт к гонкам данных и порче соединения.

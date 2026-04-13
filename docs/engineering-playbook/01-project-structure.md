@@ -66,6 +66,9 @@ OES Enterprise — монолитный десктопный продукт. В�
 ```
 enterprise/
 ├── src/                          — Исходный код
+│   ├── 3rdparty/
+│   │   ├── wxWidgets/            — GUI-фреймворк (git submodule)
+│   │   └── cpp-httplib/          — HTTP-сервер/клиент (header-only)
 │   └── engine/                   — Движок платформы
 │       ├── backend/              — Ядро платформы (бизнес-логика, компилятор, БД)
 │       │   ├── appData.cpp       — ibApplicationData: авторизация, сессия (AuthenticationAndSetUser())
@@ -85,16 +88,19 @@ enterprise/
 │       │   ├── metaCollection/   — Метаданные объектов
 │       │   │   └── partial/
 │       │   │       └── commonObjectQuery.cpp — CRUD запросы, CreateAndUpdateTableDB()
-│       │   └── debugger/
-│       │       └── debugServer.cpp  — ibDebuggerServer
+│       │   ├── debugger/
+│       │   │   └── debugServer.cpp  — ibDebuggerServer
+│       │   └── webServer/       — HTTP REST API для веб-клиента (cpp-httplib)
 │       ├── frontend/             — UI компоненты (wxWidgets)
 │       │   └── visualView/
 │       │       └── ctrl/         — ibValueForm, ibValueFrame, ibValueTextCtrl,
 │       │                           ibValueButton, ibValueModelTableBox
 │       ├── designer/             — Low-code дизайнер форм и отчётов
 │       │   └── mainApp.cpp       — Точка входа дизайнера
-│       └── enterprise/           — Среда исполнения (runtime)
-│           └── mainApp.cpp       — Точка входа приложения
+│       ├── enterprise/           — Среда исполнения (runtime)
+│       │   └── mainApp.cpp       — Точка входа приложения
+│       └── daemon/               — Фоновый сервис + веб-сервер
+│           └── mainApp.cpp       — Точка входа daemon (REST API, --web-port)
 ├── tests/                        — Google Test тесты
 │   ├── unit/                     — Юнит-тесты (зеркалируют структуру src/)
 │   │   ├── backend/
@@ -124,6 +130,12 @@ enterprise/
 │   │   ├── build.yml
 │   │   └── test.yml
 │   └── PULL_REQUEST_TEMPLATE.md
+├── web/                          — Веб-клиент (React SPA)
+│   ├── src/                      — Исходный код React-приложения
+│   ├── public/                   — Статические ресурсы
+│   ├── vite.config.ts            — Конфигурация Vite (dev-server, proxy)
+│   ├── package.json
+│   └── dist/                     — Результат сборки (не в git)
 ├── CMakeLists.txt                — Корневой CMake (macOS/Linux; Windows использует MSBuild)
 ├── enterprise.sln                — Visual Studio Solution (основная система сборки, Windows)
 ├── .gitignore
