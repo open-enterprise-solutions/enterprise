@@ -6,6 +6,7 @@
 #include <thread>
 #include <atomic>
 #include <chrono>
+#include <memory>
 
 namespace httplib { class Server; }
 
@@ -30,7 +31,7 @@ private:
 
 	void RegisterRoutes();
 
-	httplib::Server* m_server;
+	std::unique_ptr<httplib::Server> m_server;
 	std::thread m_serverThread;
 	std::atomic<bool> m_running;
 	int m_port;

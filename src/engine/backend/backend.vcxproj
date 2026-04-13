@@ -21,6 +21,8 @@
   <ItemGroup>
     <ClInclude Include="actionInfo.h" />
     <ClInclude Include="webServer\ibWebServer.h" />
+    <ClInclude Include="webServer\ibWebAuth.h" />
+    <ClInclude Include="webServer\ibWebMetadataProvider.h" />
     <ClInclude Include="appData.h" />
     <ClInclude Include="backend.h" />
     <ClInclude Include="backend_spreadsheet.h" />
@@ -268,6 +270,8 @@
   <ItemGroup>
     <ClCompile Include="appData.cpp" />
     <ClCompile Include="webServer\ibWebServer.cpp" />
+    <ClCompile Include="webServer\ibWebAuth.cpp" />
+    <ClCompile Include="webServer\ibWebMetadataProvider.cpp" />
     <ClCompile Include="appDataQuery.cpp" />
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="backend_spreadsheet.cpp" />
