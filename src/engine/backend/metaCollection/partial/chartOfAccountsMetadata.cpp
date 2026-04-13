@@ -140,81 +140,41 @@ bool ibValueMetaObjectChartOfAccounts::SaveData(ibWriterMemory& dataWritter)
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::SaveData(dataWritter);
 }
 
-ibValueMetaObjectTableData* ibValueMetaObjectChartOfAccounts::FindSubcontoKindsTable() const
-{
-	for (auto table : GetTableArrayObject()) {
-		if (table->GetName() == wxT("SubcontoKinds"))
-			return table;
-	}
-	return nullptr;
-}
-
-#include "backend/metaCollection/table/metaTableObject.h"
-
-void ibValueMetaObjectChartOfAccounts::CreateSubcontoKindsTable(ibMetaData* metaData, int flags)
-{
-	// Create predefined tabular section "SubcontoKinds"
-	m_subcontoKindsTable = CreateMetaObjectAndSetParent<ibValueMetaObjectTableData>();
-	m_subcontoKindsTable->SetName(wxT("SubcontoKinds"));
-	m_subcontoKindsTable->SetSynonym(_("Subconto kinds"));
-
-	// IMPORTANT: Set metaData on table BEFORE creating child attributes,
-	// otherwise ibBackendTypeConfigFactory::CreateValueRef() will assert
-	// because metaData is null when registering attribute types
-	m_subcontoKindsTable->SetMetaData(metaData);
-	m_subcontoKindsTable->OnCreateMetaObject(metaData, flags);
-
-	// Add column: SubcontoKind (empty type - polymorphic reference, type set from ПВХ at runtime)
-	ibValueMetaObjectAttributePredefined* attrKind =
-		m_subcontoKindsTable->CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(
-			wxT("SubcontoKind"), _("Subconto kind"), wxEmptyString,
-			false, ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items);
-	attrKind->SetMetaData(metaData);
-	attrKind->OnCreateMetaObject(metaData, flags);
-
-	// Add column: Order (number, 3 digits)
-	ibValueMetaObjectAttributePredefined* attrOrder =
-		m_subcontoKindsTable->CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(
-			wxT("Order"), _("Order"), wxEmptyString,
-			ibQualifierNumber(3, 0), false, ibValue(ibNumber(0.0)),
-			ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items);
-	attrOrder->SetMetaData(metaData);
-	attrOrder->OnCreateMetaObject(metaData, flags);
-
-	// Add column: SummaryOnly (boolean - only turnovers, no balances for this subconto)
-	ibValueMetaObjectAttributePredefined* attrSummary =
-		m_subcontoKindsTable->CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(
-			wxT("SummaryOnly"), _("Summary only"), wxEmptyString,
-			false, ibValue(false),
-			ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items);
-	attrSummary->SetMetaData(metaData);
-	attrSummary->OnCreateMetaObject(metaData, flags);
-}
-
 bool ibValueMetaObjectChartOfAccounts::OnCreateMetaObject(ibMetaData* metaData, int flags)
 {
 	if (!ibValueMetaObjectRecordDataHierarchyMutableRef::OnCreateMetaObject(metaData, flags)) return false;
 
-	// Create predefined SubcontoKinds tabular section
-	CreateSubcontoKindsTable(metaData, flags);
-
-	return (*m_propertyModuleObject)->OnCreateMetaObject(metaData, flags) &&
+	return (*m_propertyAttributeAccountType)->OnCreateMetaObject(metaData, flags) &&
+		(*m_propertyAttributeOffBalance)->OnCreateMetaObject(metaData, flags) &&
+		(*m_propertyAttributeQuantitative)->OnCreateMetaObject(metaData, flags) &&
+		(*m_propertyAttributeCurrency)->OnCreateMetaObject(metaData, flags) &&
+		(*m_propertyAttributeMaxSubcontoCount)->OnCreateMetaObject(metaData, flags) &&
+		(*m_propertySubcontoKindsTable)->OnCreateMetaObject(metaData, flags) &&
+		(*m_propertyModuleObject)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyModuleManager)->OnCreateMetaObject(metaData, flags);
 }
 
 bool ibValueMetaObjectChartOfAccounts::OnLoadMetaObject(ibMetaData* metaData)
 {
+	if (!(*m_propertyAttributeAccountType)->OnLoadMetaObject(metaData)) return false;
+	if (!(*m_propertyAttributeOffBalance)->OnLoadMetaObject(metaData)) return false;
+	if (!(*m_propertyAttributeQuantitative)->OnLoadMetaObject(metaData)) return false;
+	if (!(*m_propertyAttributeCurrency)->OnLoadMetaObject(metaData)) return false;
+	if (!(*m_propertyAttributeMaxSubcontoCount)->OnLoadMetaObject(metaData)) return false;
+	if (!(*m_propertySubcontoKindsTable)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyModuleObject)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyModuleManager)->OnLoadMetaObject(metaData)) return false;
-
-	// Find existing SubcontoKinds table (loaded from saved config)
-	m_subcontoKindsTable = FindSubcontoKindsTable();
-
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnLoadMetaObject(metaData);
 }
 
 bool ibValueMetaObjectChartOfAccounts::OnSaveMetaObject(int flags)
 {
+	if (!(*m_propertyAttributeAccountType)->OnSaveMetaObject(flags)) return false;
+	if (!(*m_propertyAttributeOffBalance)->OnSaveMetaObject(flags)) return false;
+	if (!(*m_propertyAttributeQuantitative)->OnSaveMetaObject(flags)) return false;
+	if (!(*m_propertyAttributeCurrency)->OnSaveMetaObject(flags)) return false;
+	if (!(*m_propertyAttributeMaxSubcontoCount)->OnSaveMetaObject(flags)) return false;
+	if (!(*m_propertySubcontoKindsTable)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyModuleObject)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyModuleManager)->OnSaveMetaObject(flags)) return false;
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnSaveMetaObject(flags);
@@ -222,6 +182,12 @@ bool ibValueMetaObjectChartOfAccounts::OnSaveMetaObject(int flags)
 
 bool ibValueMetaObjectChartOfAccounts::OnDeleteMetaObject()
 {
+	if (!(*m_propertyAttributeAccountType)->OnDeleteMetaObject()) return false;
+	if (!(*m_propertyAttributeOffBalance)->OnDeleteMetaObject()) return false;
+	if (!(*m_propertyAttributeQuantitative)->OnDeleteMetaObject()) return false;
+	if (!(*m_propertyAttributeCurrency)->OnDeleteMetaObject()) return false;
+	if (!(*m_propertyAttributeMaxSubcontoCount)->OnDeleteMetaObject()) return false;
+	if (!(*m_propertySubcontoKindsTable)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyModuleObject)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyModuleManager)->OnDeleteMetaObject()) return false;
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnDeleteMetaObject();
@@ -243,6 +209,12 @@ bool ibValueMetaObjectChartOfAccounts::OnReloadMetaObject()
 
 bool ibValueMetaObjectChartOfAccounts::OnBeforeRunMetaObject(int flags)
 {
+	if (!(*m_propertyAttributeAccountType)->OnBeforeRunMetaObject(flags)) return false;
+	if (!(*m_propertyAttributeOffBalance)->OnBeforeRunMetaObject(flags)) return false;
+	if (!(*m_propertyAttributeQuantitative)->OnBeforeRunMetaObject(flags)) return false;
+	if (!(*m_propertyAttributeCurrency)->OnBeforeRunMetaObject(flags)) return false;
+	if (!(*m_propertyAttributeMaxSubcontoCount)->OnBeforeRunMetaObject(flags)) return false;
+	if (!(*m_propertySubcontoKindsTable)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertyModuleObject)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertyModuleManager)->OnBeforeRunMetaObject(flags)) return false;
 	registerSelection();
@@ -255,6 +227,12 @@ bool ibValueMetaObjectChartOfAccounts::OnBeforeRunMetaObject(int flags)
 
 bool ibValueMetaObjectChartOfAccounts::OnAfterRunMetaObject(int flags)
 {
+	if (!(*m_propertyAttributeAccountType)->OnAfterRunMetaObject(flags)) return false;
+	if (!(*m_propertyAttributeOffBalance)->OnAfterRunMetaObject(flags)) return false;
+	if (!(*m_propertyAttributeQuantitative)->OnAfterRunMetaObject(flags)) return false;
+	if (!(*m_propertyAttributeCurrency)->OnAfterRunMetaObject(flags)) return false;
+	if (!(*m_propertyAttributeMaxSubcontoCount)->OnAfterRunMetaObject(flags)) return false;
+	if (!(*m_propertySubcontoKindsTable)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertyModuleObject)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertyModuleManager)->OnAfterRunMetaObject(flags)) return false;
 
@@ -263,7 +241,8 @@ bool ibValueMetaObjectChartOfAccounts::OnAfterRunMetaObject(int flags)
 
 	// Set SubcontoKind column type from ПВХ binding
 	const ibMetaDescription& metaDesc = m_propertyChartOfCharacteristicTypes->GetValueAsMetaDesc();
-	if (m_subcontoKindsTable != nullptr && metaDesc.GetTypeCount() > 0) {
+	ibValueMetaObjectSubcontoKindsTable* subcontoKindsTable = m_propertySubcontoKindsTable->GetMetaObject();
+	if (subcontoKindsTable != nullptr && metaDesc.GetTypeCount() > 0) {
 		ibTypeDescription typeDesc;
 		for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
 			const ibValueMetaObject* chartOfCharTypes = m_metaData->FindAnyObjectByFilter(metaDesc.GetByIdx(idx));
@@ -274,12 +253,12 @@ bool ibValueMetaObjectChartOfAccounts::OnAfterRunMetaObject(int flags)
 			}
 		}
 		// Update SubcontoKind column type in predefined table
-		ibValueMetaObjectAttributeBase* kindAttr = m_subcontoKindsTable->FindAnyAttributeObjectByFilter(wxT("SubcontoKind"));
+		ibValueMetaObjectAttributeBase* kindAttr = subcontoKindsTable->GetSubcontoKind();
 		if (kindAttr != nullptr) {
 			kindAttr->GetTypeDesc().SetDefaultMetaType(typeDesc);
 		}
 		// Prevent deletion of predefined tabular section
-		m_subcontoKindsTable->SetFlag(metaDisableFlag);
+		subcontoKindsTable->SetFlag(metaDisableFlag);
 	}
 
 	if (appData->DesignerMode()) {
@@ -292,6 +271,12 @@ bool ibValueMetaObjectChartOfAccounts::OnAfterRunMetaObject(int flags)
 
 bool ibValueMetaObjectChartOfAccounts::OnBeforeCloseMetaObject()
 {
+	if (!(*m_propertyAttributeAccountType)->OnBeforeCloseMetaObject()) return false;
+	if (!(*m_propertyAttributeOffBalance)->OnBeforeCloseMetaObject()) return false;
+	if (!(*m_propertyAttributeQuantitative)->OnBeforeCloseMetaObject()) return false;
+	if (!(*m_propertyAttributeCurrency)->OnBeforeCloseMetaObject()) return false;
+	if (!(*m_propertyAttributeMaxSubcontoCount)->OnBeforeCloseMetaObject()) return false;
+	if (!(*m_propertySubcontoKindsTable)->OnBeforeCloseMetaObject()) return false;
 	if (!(*m_propertyModuleObject)->OnBeforeCloseMetaObject()) return false;
 	if (!(*m_propertyModuleManager)->OnBeforeCloseMetaObject()) return false;
 	ibValueModuleManager* moduleManager = m_metaData->GetModuleManager();
@@ -306,6 +291,12 @@ bool ibValueMetaObjectChartOfAccounts::OnBeforeCloseMetaObject()
 
 bool ibValueMetaObjectChartOfAccounts::OnAfterCloseMetaObject()
 {
+	if (!(*m_propertyAttributeAccountType)->OnAfterCloseMetaObject()) return false;
+	if (!(*m_propertyAttributeOffBalance)->OnAfterCloseMetaObject()) return false;
+	if (!(*m_propertyAttributeQuantitative)->OnAfterCloseMetaObject()) return false;
+	if (!(*m_propertyAttributeCurrency)->OnAfterCloseMetaObject()) return false;
+	if (!(*m_propertyAttributeMaxSubcontoCount)->OnAfterCloseMetaObject()) return false;
+	if (!(*m_propertySubcontoKindsTable)->OnAfterCloseMetaObject()) return false;
 	if (!(*m_propertyModuleObject)->OnAfterCloseMetaObject()) return false;
 	if (!(*m_propertyModuleManager)->OnAfterCloseMetaObject()) return false;
 	unregisterSelection();

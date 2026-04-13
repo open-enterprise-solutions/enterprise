@@ -4,6 +4,7 @@
 #include "commonObject.h"
 #include "reference/reference.h"
 #include "chartOfAccountsEnum.h"
+#include "chartOfAccountsSubcontoTable.h"
 #include "backend/propertyManager/property/propertyOwner.h"
 
 //********************************************************************************************
@@ -246,13 +247,9 @@ private:
 	ibPropertyOwner* m_propertyChartOfCharacteristicTypes = ibPropertyObject::CreateProperty<ibPropertyOwner>(m_categoryData, wxT("ChartOfCharacteristicTypes"), _("Chart of characteristic types"));
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Predefined tabular section "SubcontoKinds" — created in OnCreateMetaObject
-	// Columns: SubcontoKind (ref to ПВХ), Order (number), SummaryOnly (boolean)
-	ibValueMetaObjectTableData* m_subcontoKindsTable = nullptr;
-
-	// Helper to find or create the predefined SubcontoKinds table
-	ibValueMetaObjectTableData* FindSubcontoKindsTable() const;
-	void CreateSubcontoKindsTable(ibMetaData* metaData, int flags);
+	// Predefined tabular section "SubcontoKinds" — own meta class with predefined columns
+	ibPropertyInnerAttribute<ibValueMetaObjectSubcontoKindsTable>* m_propertySubcontoKindsTable =
+		ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<ibValueMetaObjectSubcontoKindsTable>>(m_categoryAccounting, wxT("SubcontoKinds"), _("Subconto kinds"));
 
 	friend class ibValueRecordDataObjectChartOfAccounts;
 	friend class ibMetaData;
