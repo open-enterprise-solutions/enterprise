@@ -34,6 +34,9 @@ enum
 	enReports,
 	enInformationRegisters,
 	enAccumulationRegisters,
+	enChartsOfCharacteristicTypes,
+	enChartsOfAccounts,
+	enAccountingRegisters,
 };
 
 void ibValueModuleManager::ibValueMetadataUnit::PrepareNames() const
@@ -50,6 +53,9 @@ void ibValueModuleManager::ibValueMetadataUnit::PrepareNames() const
 	m_methodHelper->AppendProp("Reports", true, false, g_metaReportCLSID);
 	m_methodHelper->AppendProp("InformationRegisters", true, false, g_metaInformationRegisterCLSID);
 	m_methodHelper->AppendProp("AccumulationRegisters", true, false, g_metaAccumulationRegisterCLSID);
+	m_methodHelper->AppendProp("ChartsOfCharacteristicTypes", true, false, g_metaChartOfCharacteristicTypesCLSID);
+	m_methodHelper->AppendProp("ChartsOfAccounts", true, false, g_metaChartOfAccountsCLSID);
+	m_methodHelper->AppendProp("AccountingRegisters", true, false, g_metaAccountingRegisterCLSID);
 }
 
 //****************************************************************************
@@ -118,6 +124,24 @@ bool ibValueModuleManager::ibValueMetadataUnit::GetPropVal(const long lPropNum, 
 	} break;
 	case enAccumulationRegisters: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaAccumulationRegisterCLSID)) {
+			valStruct->Insert(object->GetName(), object);
+		}
+		break;
+	}
+	case enChartsOfCharacteristicTypes: {
+		for (const auto object : m_metaData->GetAnyArrayObject(g_metaChartOfCharacteristicTypesCLSID)) {
+			valStruct->Insert(object->GetName(), object);
+		}
+		break;
+	}
+	case enChartsOfAccounts: {
+		for (const auto object : m_metaData->GetAnyArrayObject(g_metaChartOfAccountsCLSID)) {
+			valStruct->Insert(object->GetName(), object);
+		}
+		break;
+	}
+	case enAccountingRegisters: {
+		for (const auto object : m_metaData->GetAnyArrayObject(g_metaAccountingRegisterCLSID)) {
 			valStruct->Insert(object->GetName(), object);
 		}
 		break;

@@ -64,7 +64,10 @@ enum
 	enReports,
 	enExternalReports,
 	enInformationRegisters,
-	enAccumulationRegisters
+	enAccumulationRegisters,
+	enChartsOfCharacteristicTypes,
+	enChartsOfAccounts,
+	enAccountingRegisters
 };
 
 void ibValueGlobalContextManager::PrepareNames() const
@@ -81,6 +84,9 @@ void ibValueGlobalContextManager::PrepareNames() const
 	m_methodHelper->AppendProp(wxT("ExternalReports"));
 	m_methodHelper->AppendProp(wxT("InformationRegisters"));
 	m_methodHelper->AppendProp(wxT("AccumulationRegisters"));
+	m_methodHelper->AppendProp(wxT("ChartsOfCharacteristicTypes"));
+	m_methodHelper->AppendProp(wxT("ChartsOfAccounts"));
+	m_methodHelper->AppendProp(wxT("AccountingRegisters"));
 }
 
 #include "backend/metaCollection/partial/dataProcessorManager.h"
@@ -119,6 +125,15 @@ bool ibValueGlobalContextManager::GetPropVal(const long lPropNum, ibValue& pvarP
 		return true;
 	case enAccumulationRegisters:
 		pvarPropVal = ibValue::CreateAndPrepareValueRef<ibValueGlobalContextStructureManager>(g_metaAccumulationRegisterCLSID, m_metaData);
+		return true;
+	case enChartsOfCharacteristicTypes:
+		pvarPropVal = ibValue::CreateAndPrepareValueRef<ibValueGlobalContextStructureManager>(g_metaChartOfCharacteristicTypesCLSID, m_metaData);
+		return true;
+	case enChartsOfAccounts:
+		pvarPropVal = ibValue::CreateAndPrepareValueRef<ibValueGlobalContextStructureManager>(g_metaChartOfAccountsCLSID, m_metaData);
+		return true;
+	case enAccountingRegisters:
+		pvarPropVal = ibValue::CreateAndPrepareValueRef<ibValueGlobalContextStructureManager>(g_metaAccountingRegisterCLSID, m_metaData);
 		return true;
 	}
 
