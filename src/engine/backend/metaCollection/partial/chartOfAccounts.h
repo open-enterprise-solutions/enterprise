@@ -4,6 +4,7 @@
 #include "commonObject.h"
 #include "reference/reference.h"
 #include "chartOfAccountsEnum.h"
+#include "backend/propertyManager/property/propertyOwner.h"
 
 //********************************************************************************************
 //*                                  Factory & metaData                                      *
@@ -45,6 +46,10 @@ public:
 	ibValueMetaObjectAttributePredefined* GetOffBalance() const { return m_propertyAttributeOffBalance->GetMetaObject(); }
 	ibValueMetaObjectAttributePredefined* GetQuantitative() const { return m_propertyAttributeQuantitative->GetMetaObject(); }
 	ibValueMetaObjectAttributePredefined* GetCurrency() const { return m_propertyAttributeCurrency->GetMetaObject(); }
+	ibValueMetaObjectAttributePredefined* GetMaxSubcontoCount() const { return m_propertyAttributeMaxSubcontoCount->GetMetaObject(); }
+
+	// Chart of Characteristic Types binding (determines available subconto types)
+	ibPropertyOwner* GetChartOfCharacteristicTypes() const { return m_propertyChartOfCharacteristicTypes; }
 
 	//default constructor
 	ibValueMetaObjectChartOfAccounts();
@@ -119,6 +124,7 @@ protected:
 			m_propertyAttributeOffBalance->GetMetaObject(),
 			m_propertyAttributeQuantitative->GetMetaObject(),
 			m_propertyAttributeCurrency->GetMetaObject(),
+			m_propertyAttributeMaxSubcontoCount->GetMetaObject(),
 			m_propertyAttributeReference->GetMetaObject(),
 			m_propertyAttributeDeletionMark->GetMetaObject(),
 		};
@@ -230,6 +236,14 @@ private:
 
 	ibPropertyInnerAttribute<>* m_propertyAttributeCurrency = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categoryAccounting,
 		ibValueMetaObjectCompositeData::CreateBoolean(wxT("Currency"), _("Currency accounting"), wxEmptyString, ibItemMode::ibItemMode_Folder_Item));
+
+	ibPropertyInnerAttribute<>* m_propertyAttributeMaxSubcontoCount = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categoryAccounting,
+		ibValueMetaObjectCompositeData::CreateNumber(wxT("MaxSubcontoCount"), _("Max subconto count"), wxEmptyString, 1, 0, ibItemMode::ibItemMode_Folder_Item));
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Chart of Characteristic Types binding (determines subconto types available for this chart of accounts)
+	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
+	ibPropertyOwner* m_propertyChartOfCharacteristicTypes = ibPropertyObject::CreateProperty<ibPropertyOwner>(m_categoryData, wxT("ChartOfCharacteristicTypes"), _("Chart of characteristic types"));
 
 	friend class ibValueRecordDataObjectChartOfAccounts;
 	friend class ibMetaData;

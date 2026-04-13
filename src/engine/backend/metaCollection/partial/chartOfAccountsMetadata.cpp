@@ -118,6 +118,10 @@ bool ibValueMetaObjectChartOfAccounts::LoadData(ibReaderMemory& dataReader)
 	m_propertyDefFormFolder->SetValue(GetIdByGuid(dataReader.r_stringZ()));
 	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
 	m_propertyDefFormSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+
+	if (!m_propertyChartOfCharacteristicTypes->LoadData(dataReader))
+		return false;
+
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::LoadData(dataReader);
 }
 
@@ -129,6 +133,10 @@ bool ibValueMetaObjectChartOfAccounts::SaveData(ibWriterMemory& dataWritter)
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormFolder->GetValueAsInteger()));
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()));
+
+	if (!m_propertyChartOfCharacteristicTypes->SaveData(dataWritter))
+		return false;
+
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::SaveData(dataWritter);
 }
 
