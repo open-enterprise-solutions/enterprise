@@ -14,7 +14,12 @@
 
 #include "backend/appData.h"
 #include "backend/webServer/ibWebServer.h"
+#include "ibWebSessionManager.h"
 #include "ibWebMainFrame.h"
+
+// Defined in ibWebSessionRoutes.cpp
+namespace httplib { class Server; }
+void RegisterSessionRoutes(httplib::Server* svr);
 
 static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 
@@ -119,6 +124,7 @@ int main(int argc, char** argv)
 
 	// Initialize web main frame (enables CreateNewForm() in service mode)
 	ibWebMainFrame::Initialize();
+	ibWebSessionManager::Initialize();
 
 	if (!appData->Connect(strIBUser, strIBPassword)) {
 		fprintf(stderr, "Failed to authenticate.\n");
@@ -131,6 +137,9 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
+	// Register session endpoints (need frontend.dll which daemon links)
+	RegisterSessionRoutes(webServer->GetHttpServer());
+
 	fprintf(stdout, "OES Web Server started on http://0.0.0.0:%ld\n", webPort);
 	fprintf(stdout, "Static files: %s\n", strWebDir.ToStdString().c_str());
 
@@ -139,6 +148,7 @@ int main(int argc, char** argv)
 
 	// Cleanup
 	ibWebServer::Destroy();
+	ibWebSessionManager::Destroy();
 	ibWebMainFrame::Destroy();
 
 	return 0;

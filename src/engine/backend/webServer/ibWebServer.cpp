@@ -10,6 +10,8 @@
 #include "ibWebEventBus.h"
 #include "ibWebMetadataProvider.h"
 #include "ibWebFormSerializer.h"
+// ibWebSessionManager is in daemon (links frontend.dll)
+// Session endpoints are registered separately by daemon
 
 #include "appData.h"
 #include "metadataConfiguration.h"
@@ -1403,6 +1405,10 @@ void ibWebServer::RegisterRoutes()
 	//===================================================================
 	// END Phase 7 — Web Designer
 	//===================================================================
+
+	// Session endpoints (open-form, event, layout, close) are registered
+	// by daemon.cpp after ibWebServer::Initialize() — they need frontend.dll
+	// which is only available in daemon, not in backend.dll.
 
 	//-------------------------------------------------------------------
 	// Static file serving + SPA fallback

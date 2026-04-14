@@ -21,6 +21,9 @@ public:
 	void Stop();
 	void WaitForShutdown();
 
+	// Access internal server for external route registration (daemon adds session routes)
+	httplib::Server* GetHttpServer() { return m_server.get(); }
+
 	bool IsRunning() const { return m_running.load(); }
 	int GetPort() const { return m_port; }
 
