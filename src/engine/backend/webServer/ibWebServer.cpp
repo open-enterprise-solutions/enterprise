@@ -30,6 +30,7 @@
 #include "databaseLayer/databaseResultSet.h"
 
 #include <json.hpp>
+#include <fstream>
 
 #define CPPHTTPLIB_THREAD_POOL_COUNT 8
 #include <httplib.h>
@@ -1300,11 +1301,28 @@ void ibWebServer::RegisterRoutes()
 	//===================================================================
 
 	//-------------------------------------------------------------------
-	// Static file serving (SPA fallback)
+	// Static file serving + SPA fallback
 	//-------------------------------------------------------------------
 	if (!m_staticDir.IsEmpty()) {
 		std::string dir = m_staticDir.ToStdString();
 		m_server->set_mount_point("/", dir);
+
+		// SPA fallback: any non-API GET that doesn't match a static file → index.html
+		std::string indexPath = dir + "/index.html";
+		m_server->Get(".*", [indexPath](const httplib::Request& req, httplib::Response& res) {
+			// Skip API paths and asset files
+			if (req.path.compare(0, 4, "/api") == 0)
+				return;
+			if (req.path.find('.') != std::string::npos)
+				return;
+
+			std::ifstream ifs(indexPath);
+			if (ifs.good()) {
+				std::string body((std::istreambuf_iterator<char>(ifs)),
+					std::istreambuf_iterator<char>());
+				res.set_content(body, "text/html");
+			}
+		});
 	}
 
 	//-------------------------------------------------------------------
