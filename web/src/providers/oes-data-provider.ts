@@ -73,9 +73,19 @@ export const oesDataProvider: DataProvider = {
     const response = await api.get(`/data/${resource}`, { params })
     const body = response.data
 
+    // Strip internal _type suffix keys added by the backend
+    const rawData: Record<string, unknown>[] = body.data ?? []
+    const cleanedData = rawData.map((row) => {
+      const clean: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(row)) {
+        if (!k.endsWith("_type")) clean[k] = v
+      }
+      return clean
+    })
+
     // Backend returns: { data: [...], meta: { total, page, pageSize } }
     return {
-      data: body.data ?? [],
+      data: cleanedData as any[],
       total: body.meta?.total ?? body.total ?? 0,
     }
   },

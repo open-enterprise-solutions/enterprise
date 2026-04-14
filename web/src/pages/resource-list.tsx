@@ -28,17 +28,52 @@ interface ColumnDef {
   label: string
 }
 
-// Derive columns from metadata attributes or fall back to generic ones
-function deriveColumns(item: MetaObjectRef | undefined): ColumnDef[] {
-  const base: ColumnDef[] = [
-    { key: "name", label: "Name" },
-    { key: "description", label: "Description" },
-  ]
-  if (!item) return base
+interface MetaAttribute {
+  name: string
+  synonym?: string
+  type?: { types?: string[] }
+}
 
-  // If MetaObjectRef has attributes in a future schema extension, use them.
-  // For now, always return the base set plus a status column for documents.
-  return base
+interface MetaSystemAttributes {
+  code?: unknown
+  description?: unknown
+  number?: unknown
+  date?: unknown
+  [key: string]: unknown
+}
+
+// Derive columns from metadata attributes
+function deriveColumns(item: MetaObjectRef | undefined, isDocument: boolean): ColumnDef[] {
+  if (!item) {
+    return isDocument
+      ? [{ key: "number", label: "Number" }, { key: "date", label: "Date" }]
+      : [{ key: "code", label: "Code" }, { key: "description", label: "Description" }]
+  }
+
+  const cols: ColumnDef[] = []
+  const sys = item.systemAttributes as MetaSystemAttributes | undefined
+
+  if (isDocument) {
+    if (sys?.number !== undefined) cols.push({ key: "number", label: "Number" })
+    if (sys?.date !== undefined) cols.push({ key: "date", label: "Date" })
+  } else {
+    if (sys?.code !== undefined) cols.push({ key: "code", label: "Code" })
+    if (sys?.description !== undefined) cols.push({ key: "description", label: "Description" })
+  }
+
+  // User-defined attributes
+  const attrs = (item.attributes ?? []) as MetaAttribute[]
+  for (const attr of attrs) {
+    if (!attr.name) continue
+    cols.push({ key: attr.name.toLowerCase(), label: attr.synonym ?? attr.name })
+  }
+
+  // Fallback: ensure at least one visible column
+  if (cols.length === 0) {
+    cols.push({ key: "description", label: "Description" })
+  }
+
+  return cols
 }
 
 // ---------------------------------------------------------------------------
@@ -220,7 +255,7 @@ export function ResourceList() {
   // Reset page when search changes
   useEffect(() => { setPage(1) }, [debouncedSearch])
 
-  const columns = deriveColumns(metaItem)
+  const columns = deriveColumns(metaItem, isDocument)
 
   // Build Refine filters
   const filters = debouncedSearch

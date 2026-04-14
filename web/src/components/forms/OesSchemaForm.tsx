@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { createForm } from "@formily/core"
 import { FormProvider, createSchemaField } from "@formily/react"
-import { useFormSchema } from "@/hooks/useFormSchema"
+import { useMetadata, type MetaObjectRef } from "@/hooks/useMetadata"
 import { oesFormilyComponents } from "./oes-formily-components"
 import { CommandBar } from "./CommandBar"
 import { FormSkeleton } from "./FormSkeleton"
@@ -14,6 +14,86 @@ import type { OesCommand } from "@/hooks/useFormSchema"
 const OesSchemaField = createSchemaField({
   components: oesFormilyComponents,
 })
+
+// ---------------------------------------------------------------------------
+// Schema builder — constructs Formily schema from metadata, no API call needed
+// ---------------------------------------------------------------------------
+
+interface MetaAttribute {
+  name: string
+  synonym?: string
+  type?: { types?: string[] }
+}
+
+interface MetaSystemAttributes {
+  code?: unknown
+  description?: unknown
+  number?: unknown
+  date?: unknown
+  [key: string]: unknown
+}
+
+function buildSchemaFromMetadata(
+  metaItem: MetaObjectRef,
+  metaType: string,
+): Record<string, unknown> {
+  const properties: Record<string, unknown> = {}
+  const sys = metaItem.systemAttributes as MetaSystemAttributes | undefined
+  const isDocument = metaType === "document"
+
+  if (isDocument) {
+    if (sys?.number !== undefined) {
+      properties.number = {
+        type: "string",
+        title: "Number",
+        "x-component": "Input",
+        "x-decorator": "FormItem",
+        "x-read-only": true,
+      }
+    }
+    if (sys?.date !== undefined) {
+      properties.date = {
+        type: "string",
+        title: "Date",
+        "x-component": "DatePicker",
+        "x-decorator": "FormItem",
+      }
+    }
+  } else {
+    if (sys?.code !== undefined) {
+      properties.code = {
+        type: "string",
+        title: "Code",
+        "x-component": "Input",
+        "x-decorator": "FormItem",
+      }
+    }
+    if (sys?.description !== undefined) {
+      properties.description = {
+        type: "string",
+        title: "Description",
+        "x-component": "Input",
+        "x-decorator": "FormItem",
+      }
+    }
+  }
+
+  const attrs = (metaItem.attributes ?? []) as MetaAttribute[]
+  for (const attr of attrs) {
+    if (!attr.name) continue
+    const rawType = attr.type?.types?.[0] ?? "string"
+    const fieldKey = attr.name.toLowerCase()
+    properties[fieldKey] = {
+      type: rawType === "number" ? "number" : "string",
+      title: attr.synonym ?? attr.name,
+      "x-component":
+        rawType === "boolean" ? "Checkbox" : rawType === "date" ? "DatePicker" : "Input",
+      "x-decorator": "FormItem",
+    }
+  }
+
+  return { type: "object", properties }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,7 +130,28 @@ function ErrorBanner({ message }: { message: string }) {
 export function OesSchemaForm({ resource, id, onSave, onCancel }: OesSchemaFormProps) {
   const isEditMode = Boolean(id)
 
-  const { schema, isLoading: schemaLoading, error: schemaError } = useFormSchema(resource)
+  // Resolve metaType and object name from resource string (e.g. "catalog.products")
+  const [metaType, metaName] = resource.split(".")
+
+  const { tree, load } = useMetadata()
+  useEffect(() => { load() }, [load])
+
+  // Find the matching metadata item
+  const metaItem = useMemo(() => {
+    if (!tree || !metaName) return undefined
+    const sectionKey = `${metaType}s` as keyof typeof tree
+    const section = tree[sectionKey] as MetaObjectRef[] | undefined
+    return section?.find((m) => m.name === metaName)
+  }, [tree, metaType, metaName])
+
+  // Build Formily schema from metadata — no API call needed
+  const schema = useMemo(() => {
+    if (!metaItem) return null
+    return buildSchemaFromMetadata(metaItem, metaType)
+  }, [metaItem, metaType])
+
+  const schemaLoading = !tree
+  const schemaError: string | null = null
 
   const [dataLoading, setDataLoading] = useState(isEditMode)
   const [dataError, setDataError] = useState<string | null>(null)
@@ -90,10 +191,10 @@ export function OesSchemaForm({ resource, id, onSave, onCancel }: OesSchemaFormP
       })
   }, [resource, id, isEditMode])
 
-  // Derive metadata from schema extension fields
-  const meta = schema?.["x-oes-meta"]
-  const commands: OesCommand[] = schema?.["x-oes-commands"] ?? ["save", "close"]
-  const isDocument = meta?.metaType === "document"
+  const isDocument = metaType === "document"
+  const commands: OesCommand[] = isDocument
+    ? ["save", "post", "unpost", "delete", "copy", "close"]
+    : ["save", "delete", "copy", "close"]
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -205,10 +306,10 @@ export function OesSchemaForm({ resource, id, onSave, onCancel }: OesSchemaFormP
     )
   }
 
-  if (!schema) {
+  if (!schema && tree) {
     return (
       <div className="p-4">
-        <ErrorBanner message="No schema returned for this resource." />
+        <ErrorBanner message={`Metadata not found for resource: ${resource}`} />
       </div>
     )
   }
@@ -244,8 +345,8 @@ export function OesSchemaForm({ resource, id, onSave, onCancel }: OesSchemaFormP
 
         {/* Object header */}
         <FormHeader
-          title={meta?.name}
-          synonym={meta?.synonym}
+          title={metaItem?.name}
+          synonym={metaItem?.synonym}
           status={isDocument ? docStatus : undefined}
         />
 

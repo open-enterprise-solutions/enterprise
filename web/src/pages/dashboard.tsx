@@ -11,7 +11,6 @@ import {
 } from "@phosphor-icons/react"
 import { useTabStore } from "@/stores/tab-store"
 import { useMetadata } from "@/hooks/useMetadata"
-import { DashboardWidget } from "@/components/charts/DashboardWidget"
 
 interface Identity {
   id: string
@@ -185,48 +184,6 @@ export function DashboardPage() {
               />
             </button>
           ))}
-        </div>
-      </div>
-
-      {/* Analytics widgets */}
-      <div>
-        <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
-          Analytics Overview
-        </h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <DashboardWidget
-            title="Monthly Revenue"
-            type="area"
-            color="hsl(221, 83%, 48%)"
-            data={[
-              { name: "Jan", value: 42000 },
-              { name: "Feb", value: 38500 },
-              { name: "Mar", value: 51200 },
-              { name: "Apr", value: 47800 },
-              { name: "May", value: 55100 },
-              { name: "Jun", value: 62400 },
-            ]}
-          />
-          <DashboardWidget
-            title="Documents by Status"
-            type="bar"
-            color="hsl(173, 58%, 39%)"
-            data={[
-              { name: "Posted",    value: 84 },
-              { name: "Draft",     value: 31 },
-              { name: "Cancelled", value: 7  },
-            ]}
-          />
-          <DashboardWidget
-            title="Catalog Distribution"
-            type="pie"
-            data={[
-              { name: "Products",        value: 412 },
-              { name: "Counterparties",  value: 187 },
-              { name: "Warehouses",      value: 24  },
-              { name: "Employees",       value: 63  },
-            ]}
-          />
         </div>
       </div>
 

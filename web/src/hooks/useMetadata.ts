@@ -9,6 +9,7 @@ export interface MetaObjectRef {
   guid?: string
   metaType?: string
   attributes?: unknown[]
+  systemAttributes?: unknown
   tabularSections?: unknown[]
 }
 
