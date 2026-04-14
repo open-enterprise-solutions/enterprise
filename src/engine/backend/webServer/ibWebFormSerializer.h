@@ -10,9 +10,9 @@
 #define _IB_WEB_FORM_SERIALIZER_H__
 
 #include "backend/backend.h"
+#include "backend/clsid.h"
 
-// Forward declarations — callers that use the returned json must include <json.hpp>
-namespace nlohmann { class json; }
+#include <json.hpp>
 
 class ibValueMetaObjectRecordData;
 class ibValueMetaObjectAttributeBase;

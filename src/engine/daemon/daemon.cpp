@@ -82,7 +82,8 @@ int main(int argc, char** argv)
 	wxString strWebDir;
 	if (!parser.Found(wxT("wd"), &strWebDir)) {
 		// Default: look for web/ next to executable
-		wxFileName exePath(wxString(argv[0]));
+		wxString exeStr(argv[0]);
+		wxFileName exePath(exeStr);
 		strWebDir = exePath.GetPath() + wxFileName::GetPathSeparator() + wxT("web");
 	}
 

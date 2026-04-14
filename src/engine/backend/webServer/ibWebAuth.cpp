@@ -232,7 +232,7 @@ std::string ibWebAuth::Base64UrlEncode(const std::string& s)
 std::vector<uint8_t> ibWebAuth::Base64UrlDecode(const std::string& s)
 {
 	// Build decode table
-	static const int8_t kTable[256] = [] {
+	static const std::array<int8_t, 256> kTable = [] {
 		std::array<int8_t, 256> t;
 		t.fill(-1);
 		const char* alpha =

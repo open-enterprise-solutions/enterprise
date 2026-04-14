@@ -23,6 +23,7 @@
 
 #include "compiler/compileCode.h"
 #include "backend_exception.h"
+#include "utils/md5.hpp"
 
 #include "databaseLayer/databaseLayer.h"
 #include "databaseLayer/preparedStatement.h"
@@ -121,7 +122,9 @@ inline std::string WxStr(const wxString& s)
 
 // ---- Map a :resource path segment to a metadata type -------------------
 // Returns nullptr if no matching object is found.
-ibValueMetaObjectRecordData* FindResourceObject(const std::string& resource)
+// The returned pointer is either ibValueMetaObjectRecordData* or
+// ibValueMetaObjectRegisterData* — use GetMetaTableName() to get the DB table.
+ibValueMetaObjectGenericData* FindResourceObject(const std::string& resource)
 {
 	if (activeMetaData == nullptr)
 		return nullptr;
@@ -144,11 +147,11 @@ ibValueMetaObjectRecordData* FindResourceObject(const std::string& resource)
 
 	const wxString wxName = wxString::FromUTF8(namePart.c_str());
 
-	auto searchIn = [&](auto& arr) -> ibValueMetaObjectRecordData* {
+	auto searchIn = [&](auto& arr) -> ibValueMetaObjectGenericData* {
 		for (auto* obj : arr) {
 			if (obj->IsDeleted()) continue;
 			if (obj->GetName().CmpNoCase(wxName) == 0)
-				return static_cast<ibValueMetaObjectRecordData*>(obj);
+				return obj;
 		}
 		return nullptr;
 	};
@@ -171,6 +174,19 @@ ibValueMetaObjectRecordData* FindResourceObject(const std::string& resource)
 	}
 
 	return nullptr;
+}
+
+// ---- Get the DB table name for a generic metadata object ----------------
+// Both ibValueMetaObjectRecordData and ibValueMetaObjectRegisterData have
+// GetTableNameDB(), but they share only ibValueMetaObjectGenericData as a
+// common base which does not declare that method.
+wxString GetMetaTableName(ibValueMetaObjectGenericData* obj)
+{
+	if (auto* rec = dynamic_cast<ibValueMetaObjectRecordDataRef*>(obj))
+		return rec->GetTableNameDB();
+	if (auto* reg = dynamic_cast<ibValueMetaObjectRegisterData*>(obj))
+		return reg->GetTableNameDB();
+	return wxEmptyString;
 }
 
 // ---- Build a cross-DB paged SELECT ------------------------------------
@@ -298,11 +314,11 @@ void ibWebServer::RegisterRoutes()
 		if (req.method == "OPTIONS")
 			return httplib::Server::HandlerResponse::Unhandled;
 
-		if (!req.path.starts_with("/api/"))
+		if (req.path.compare(0, 5, "/api/") != 0)
 			return httplib::Server::HandlerResponse::Unhandled;
 
-		if (req.path.starts_with("/api/health") ||
-			req.path.starts_with("/api/auth/"))
+		if (req.path.compare(0, 11, "/api/health") == 0 ||
+			req.path.compare(0, 10, "/api/auth/") == 0)
 			return httplib::Server::HandlerResponse::Unhandled;
 
 		// All other /api/* require a valid JWT
@@ -389,7 +405,7 @@ void ibWebServer::RegisterRoutes()
 		}
 
 		// Compare MD5 hashes (existing auth convention in OES)
-		const wxString inputMd5 = appData->ComputeMd5(wxPass);
+		const wxString inputMd5 = ibMD5::ComputeMd5(wxPass);
 		if (userInfo.m_strUserPassword != inputMd5) {
 			SendError(res, 401, "INVALID_CREDENTIALS", "Invalid username or password");
 			return;
@@ -502,7 +518,7 @@ void ibWebServer::RegisterRoutes()
 		}
 
 		std::string resource = req.matches[1].str();
-		ibValueMetaObjectRecordData* metaObj = FindResourceObject(resource);
+		ibValueMetaObjectGenericData* metaObj = FindResourceObject(resource);
 		if (metaObj == nullptr) {
 			SendError(res, 404, "NOT_FOUND",
 				"Metadata object '" + resource + "' not found");
@@ -519,21 +535,26 @@ void ibWebServer::RegisterRoutes()
 		if (!syn.IsEmpty())
 			j["synonym"] = WxStr(syn);
 
+		// Attribute and table access is available on ibValueMetaObjectRecordData
+		auto* recObj = dynamic_cast<ibValueMetaObjectRecordData*>(metaObj);
+
 		json jAttrs = json::array();
-		for (auto* attr : metaObj->GetAttributeArrayObject()) {
-			if (attr->IsDeleted()) continue;
-			json a;
-			a["guid"] = WxStr(attr->GetGuid().str());
-			a["id"]   = attr->GetMetaID();
-			a["name"] = WxStr(attr->GetName());
-			const wxString attrSyn = attr->GetSynonym();
-			if (!attrSyn.IsEmpty()) a["synonym"] = WxStr(attrSyn);
-			jAttrs.push_back(a);
+		if (recObj != nullptr) {
+			for (auto* attr : recObj->GetAttributeArrayObject()) {
+				if (attr->IsDeleted()) continue;
+				json a;
+				a["guid"] = WxStr(attr->GetGuid().str());
+				a["id"]   = attr->GetMetaID();
+				a["name"] = WxStr(attr->GetName());
+				const wxString attrSyn = attr->GetSynonym();
+				if (!attrSyn.IsEmpty()) a["synonym"] = WxStr(attrSyn);
+				jAttrs.push_back(a);
+			}
 		}
 		j["attributes"] = jAttrs;
 
 		json jTables = json::array();
-		for (auto* tbl : metaObj->GetTableArrayObject()) {
+		if (recObj != nullptr) for (auto* tbl : recObj->GetTableArrayObject()) {
 			if (tbl->IsDeleted()) continue;
 			json t;
 			t["guid"] = WxStr(tbl->GetGuid().str());
@@ -575,10 +596,18 @@ void ibWebServer::RegisterRoutes()
 		}
 
 		const std::string resource = req.matches[1].str();
-		ibValueMetaObjectRecordData* metaObj = FindResourceObject(resource);
-		if (metaObj == nullptr) {
+		ibValueMetaObjectGenericData* metaGenObj = FindResourceObject(resource);
+		if (metaGenObj == nullptr) {
 			SendError(res, 404, "NOT_FOUND",
 				"Metadata object '" + resource + "' not found");
+			return;
+		}
+
+		// SerializeFormSchema only handles record-data objects (catalogs, documents, etc.)
+		auto* metaObj = dynamic_cast<ibValueMetaObjectRecordData*>(metaGenObj);
+		if (metaObj == nullptr) {
+			SendError(res, 422, "UNSUPPORTED_TYPE",
+				"Form schema is not available for register objects");
 			return;
 		}
 
@@ -602,7 +631,7 @@ void ibWebServer::RegisterRoutes()
 		}
 
 		std::string resource = req.matches[1].str();
-		ibValueMetaObjectRecordData* metaObj = FindResourceObject(resource);
+		ibValueMetaObjectGenericData* metaObj = FindResourceObject(resource);
 		if (metaObj == nullptr) {
 			SendError(res, 404, "NOT_FOUND", "Resource '" + resource + "' not found");
 			return;
@@ -611,7 +640,7 @@ void ibWebServer::RegisterRoutes()
 		auto pag = ParsePagination(req);
 		const int offset = (pag.page - 1) * pag.pageSize;
 
-		const wxString tableName = metaObj->GetTableNameDB();
+		const wxString tableName = GetMetaTableName(metaObj);
 		if (tableName.IsEmpty()) {
 			SendError(res, 503, "SERVICE_UNAVAILABLE", "Object has no database table");
 			return;
@@ -679,13 +708,13 @@ void ibWebServer::RegisterRoutes()
 		std::string resource = req.matches[1].str();
 		std::string id       = req.matches[2].str();
 
-		ibValueMetaObjectRecordData* metaObj = FindResourceObject(resource);
+		ibValueMetaObjectGenericData* metaObj = FindResourceObject(resource);
 		if (metaObj == nullptr) {
 			SendError(res, 404, "NOT_FOUND", "Resource '" + resource + "' not found");
 			return;
 		}
 
-		const wxString tableName = metaObj->GetTableNameDB();
+		const wxString tableName = GetMetaTableName(metaObj);
 		if (tableName.IsEmpty()) {
 			SendError(res, 503, "SERVICE_UNAVAILABLE", "Object has no database table");
 			return;

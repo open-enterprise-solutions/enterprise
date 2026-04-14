@@ -6,8 +6,12 @@
 #include "backend/appData.h"
 
 //databases
+#ifdef OES_USE_FIREBIRD
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
+#endif
+#ifdef OES_USE_POSTGRESQL
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
+#endif
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 
 //sandbox
@@ -164,8 +168,14 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 #if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	try {
 #endif
+#ifdef OES_USE_POSTGRESQL
 		std::shared_ptr<ibDatabaseLayerPostgres> db(new ibDatabaseLayerPostgres());
 		if (db->Open(strServer, strPort, strDatabase, strUser, strPassword)) {
+#else
+		// Fallback to SQLite when PostgreSQL not available
+		std::shared_ptr<ibDatabaseLayerSQLite> db(new ibDatabaseLayerSQLite());
+		if (db->Open(strDatabase)) {
+#endif
 
 			s_instance = new ibApplicationData(runMode);
 

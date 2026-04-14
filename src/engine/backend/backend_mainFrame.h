@@ -5,6 +5,9 @@
 #include "backend/backend_spreadsheet.h"
 #include "backend/system/systemEnum.h"
 
+// Forward declaration for cross-platform compatibility (Clang requires enum definition)
+enum ibConfigType : int;
+
 #define backend_mainFrame \
 	ibBackendDocMDIFrame::GetDocMDIFrame() \
 
@@ -69,8 +72,8 @@ public:
 	virtual bool AuthenticationUser(const wxString& userName, const wxString& userPassword) const { return false; }
 
 public:
-	virtual void OnInitializeConfiguration(enum ibConfigType cfg) {}
-	virtual void OnDestroyConfiguration(enum ibConfigType cfg) {}
+	virtual void OnInitializeConfiguration(ibConfigType cfg) {}
+	virtual void OnDestroyConfiguration(ibConfigType cfg) {}
 private:
 	static ibBackendDocMDIFrame* ms_mainFrame;
 };

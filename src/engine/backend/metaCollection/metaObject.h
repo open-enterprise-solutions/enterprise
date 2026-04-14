@@ -11,6 +11,9 @@
 #include "backend/interfaceHelper.h"
 #include "backend/roleHelper.h"
 
+// Forward declaration for cross-platform compatibility (Clang requires enum definition)
+enum ibSelectMode : int;
+
 //*******************************************************************************
 class BACKEND_API ibMetaData;
 //*******************************************************************************
@@ -258,7 +261,7 @@ public:
 
 	//process choice 
 	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue,
-		const wxString& strFormName, enum ibSelectMode selMode) {
+		const wxString& strFormName, ibSelectMode selMode) {
 		return true;
 	}
 

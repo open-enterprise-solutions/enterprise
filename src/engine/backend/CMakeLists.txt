@@ -74,6 +74,9 @@ target_include_directories(backend
         "${CMAKE_SOURCE_DIR}/src/engine"
         # Embedded database engine headers
         "${CMAKE_CURRENT_SOURCE_DIR}/databaseLayer/sqllite/engine"
+        # Web server dependencies (header-only)
+        "${CMAKE_SOURCE_DIR}/src/3rdparty/cpp-httplib"
+        "${CMAKE_SOURCE_DIR}/src/3rdparty/nlohmann"
 )
 
 # Firebird headers (bundled in-tree)

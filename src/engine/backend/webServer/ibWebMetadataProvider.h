@@ -8,8 +8,7 @@
 
 #include "backend/backend.h"
 
-// Forward-declare nlohmann::json so callers do not need the full header
-namespace nlohmann { class json; }
+#include <json.hpp>
 
 class BACKEND_API ibWebMetadataProvider {
 public:

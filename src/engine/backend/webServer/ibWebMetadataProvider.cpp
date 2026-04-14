@@ -74,7 +74,7 @@ json SerializeTypeDesc(const ibTypeDescription& td)
 	}
 
 	// Date qualifiers
-	if (td.GetDateFraction() != ibDateFraction::DATE_FRACTION_DATE_TIME)
+	if (td.GetDateFraction() != ibDateFractions::ibDateFractions_DateTime)
 		j["dateFraction"] = static_cast<int>(td.GetDateFraction());
 
 	return j;
