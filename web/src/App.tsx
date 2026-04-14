@@ -20,10 +20,14 @@ import { ResourceList } from "./pages/resource-list"
 import { ReportPage } from "./pages/report-page"
 import { RegisterPage } from "./pages/register-page"
 import { DesignerPage } from "./pages/designer"
+import { DebuggerPage } from "./pages/debugger"
 import { OesSchemaForm } from "./components/forms/OesSchemaForm"
 import { useTabStore } from "./stores/tab-store"
 import { useEventSource } from "./hooks/useEventSource"
 import { useCallback } from "react"
+import { AiConfigGeneratorPage } from "./pages/ai-config-generator"
+import { PluginManager } from "./components/plugins/PluginManager"
+import { AiAssistant } from "./components/ai/AiAssistant"
 
 // Sections rendered with RegisterView instead of ResourceList
 const REGISTER_SECTIONS = new Set([
@@ -53,6 +57,7 @@ function ProtectedLayout() {
       <AppShell>
         <Outlet />
       </AppShell>
+      <AiAssistant />
     </Authenticated>
   )
 }
@@ -250,6 +255,16 @@ export default function App() {
             }
           />
 
+          {/* Debugger — standalone layout, authenticated */}
+          <Route
+            path="/debugger"
+            element={
+              <Authenticated key="debugger-layout" redirectOnFail="/login">
+                <DebuggerPage />
+              </Authenticated>
+            }
+          />
+
           {/* Embed routes — EmbedLayout, authenticated */}
           <Route element={<EmbedProtectedLayout />}>
             <Route path="/embed/:section/:resource"     element={<EmbedListRoute />} />
@@ -260,6 +275,12 @@ export default function App() {
           <Route element={<ProtectedLayout />}>
             {/* Dashboard */}
             <Route index element={<DashboardPage />} />
+
+            {/* AI Config Generator */}
+            <Route path="/ai" element={<AiConfigGeneratorPage />} />
+
+            {/* Plugin Manager */}
+            <Route path="/plugins" element={<PluginManager />} />
 
             {/* Generic list view: /:section/:resource */}
             <Route

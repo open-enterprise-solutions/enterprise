@@ -169,3 +169,55 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.5);
 }
+
+/* ---------------------------------------------------------------------------
+ * AI Chat — markdown prose styles
+ * --------------------------------------------------------------------------- */
+
+.prose-oes .md-p {
+  margin: 0;
+  color: hsl(var(--foreground));
+}
+
+.prose-oes .md-h1,
+.prose-oes .md-h2,
+.prose-oes .md-h3 {
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin: 0.5em 0 0.25em;
+}
+
+.prose-oes .md-h1 { font-size: 14px; }
+.prose-oes .md-h2 { font-size: 13px; }
+.prose-oes .md-h3 { font-size: 12px; }
+
+.prose-oes .md-li,
+.prose-oes .md-li-num {
+  display: list-item;
+  margin-left: 1.25em;
+  padding-left: 0.25em;
+  color: hsl(var(--foreground));
+}
+
+.prose-oes .md-li { list-style-type: disc; }
+.prose-oes .md-li-num { list-style-type: decimal; }
+
+.prose-oes .md-code {
+  font-family: "IBM Plex Mono", "Fira Code", monospace;
+  font-size: 11px;
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius);
+  background: hsl(var(--muted));
+  color: hsl(var(--accent));
+}
+
+.prose-oes strong { font-weight: 600; }
+.prose-oes em { font-style: italic; }
+
+/* AI floating panel shadow */
+.ai-panel-shadow {
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.1),
+    0 10px 15px -3px rgb(0 0 0 / 0.1),
+    0 0 0 1px hsl(var(--border));
+}

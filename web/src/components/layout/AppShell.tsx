@@ -23,6 +23,8 @@ import {
   Clipboard,
   ChartLineUp,
   Code,
+  Robot,
+  PuzzlePiece,
 } from "@phosphor-icons/react"
 import { useMetadata, type MetaObjectRef, type MetadataTree } from "@/hooks/useMetadata"
 import { useUiStore } from "@/stores/ui-store"
@@ -336,6 +338,20 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* Bottom actions */}
         <div className="border-t border-[hsl(var(--sidebar-border))] py-1">
+          <SidebarItem
+            label="AI Generator"
+            icon={<Robot size={16} weight="duotone" />}
+            active={activePath.startsWith("/ai")}
+            collapsed={sidebarCollapsed}
+            onClick={() => navigate("/ai")}
+          />
+          <SidebarItem
+            label="Plugins"
+            icon={<PuzzlePiece size={16} weight="duotone" />}
+            active={activePath.startsWith("/plugins")}
+            collapsed={sidebarCollapsed}
+            onClick={() => navigate("/plugins")}
+          />
           <SidebarItem
             label="Designer"
             icon={<Code size={16} weight="duotone" />}
