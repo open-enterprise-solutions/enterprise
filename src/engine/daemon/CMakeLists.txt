@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 set(DAEMON_SOURCES
     daemon.cpp
+    ibWebMainFrame.cpp
 )
 
 add_executable(daemon ${DAEMON_SOURCES})

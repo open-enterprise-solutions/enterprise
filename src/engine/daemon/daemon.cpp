@@ -14,6 +14,7 @@
 
 #include "backend/appData.h"
 #include "backend/webServer/ibWebServer.h"
+#include "ibWebMainFrame.h"
 
 static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 
@@ -116,6 +117,9 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
+	// Initialize web main frame (enables CreateNewForm() in service mode)
+	ibWebMainFrame::Initialize();
+
 	if (!appData->Connect(strIBUser, strIBPassword)) {
 		fprintf(stderr, "Failed to authenticate.\n");
 		return 1;
@@ -135,6 +139,7 @@ int main(int argc, char** argv)
 
 	// Cleanup
 	ibWebServer::Destroy();
+	ibWebMainFrame::Destroy();
 
 	return 0;
 }
