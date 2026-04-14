@@ -173,12 +173,12 @@ function SidebarSection({
       {expanded && !sidebarCollapsed && (
         <div>
           {filtered.map((item) => {
-            const path = `/${config.routePrefix}/${item.id}`
+            const path = `/${config.routePrefix}/${item.name}`
             const isActive = activePath === path || activePath.startsWith(path + "/")
             return (
               <SidebarItem
                 key={item.id}
-                label={item.name}
+                label={item.synonym ?? item.name}
                 active={isActive}
                 depth={1}
                 onClick={() => onItemClick(item, config.routePrefix)}
@@ -245,10 +245,10 @@ export function AppShell({ children }: AppShellProps) {
 
   const handleItemClick = useCallback(
     (item: MetaObjectRef, prefix: string) => {
-      const path = `/${prefix}/${item.id}`
+      const path = `/${prefix}/${item.name}`
       addTab({
-        id: `${prefix}/${item.id}`,
-        title: item.name,
+        id: `${prefix}/${item.name}`,
+        title: item.synonym ?? item.name,
         path,
         icon: "list",
         closable: true,

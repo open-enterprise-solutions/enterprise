@@ -172,15 +172,28 @@ export function ResourceList() {
 
   useEffect(() => { load() }, [load])
 
-  // Resolve metadata object info
+  // section → singular API type mapping
+  const SECTION_TO_TYPE: Record<string, string> = {
+    catalogs: "catalog",
+    documents: "document",
+    enumerations: "enumeration",
+    informationRegisters: "informationRegister",
+    accumulationRegisters: "accumulationRegister",
+    accountingRegisters: "accountingRegister",
+    reports: "report",
+    dataProcessors: "dataProcessor",
+    constants: "constant",
+  }
+
+  // Resolve metadata object info — resource param is now item.name
   const metaItems = tree
     ? (tree[section as keyof typeof tree] as MetaObjectRef[] | undefined) ?? []
     : []
-  const metaItem = metaItems.find((m) => m.id === resource)
+  const metaItem = metaItems.find((m) => m.name === resource)
 
   // Register tab
   useEffect(() => {
-    const title = metaItem?.name ?? resource
+    const title = metaItem?.synonym ?? metaItem?.name ?? resource
     const tabId = `${section}/${resource}`
     addTab({ id: tabId, title, path: `/${section}/${resource}`, icon: "list", closable: true })
     updateTab(tabId, { title })
@@ -219,7 +232,8 @@ export function ResourceList() {
       ? [{ field: sortField, order: sortOrder }]
       : []
 
-  const fullResource = `${section}/${resource}`
+  const apiType = SECTION_TO_TYPE[section] ?? section
+  const fullResource = `${apiType}.${resource}`
 
   const listResult = useList({
     resource: fullResource,

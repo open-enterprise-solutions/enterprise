@@ -218,9 +218,66 @@ wxString BuildPagedSelect(const wxString& tableName,
 	}
 }
 
-// ---- Serialise one result-set row as a generic key->value JSON object -
-// We read column names from the result-set metadata.
-json RowToJson(ibDatabaseResultSet* rs)
+// ---- Build a map: lowercase raw DB column name → human attribute name -----
+// Covers both system (predefined) and user-defined attributes.
+// Column naming convention used by OES/Firebird:
+//   fld{metaID}_s      — string value
+//   fld{metaID}_n      — number value
+//   fld{metaID}_d      — date value
+//   fld{metaID}_b      — boolean value
+//   fld{metaID}_rrref  — reference GUID (the meaningful half of a ref pair)
+//   fld{metaID}_rtref  — reference type discriminator (internal — skip)
+//
+// For _rrref columns the key stored in the map is "fld{id}_rrref"; we map it
+// to the plain attribute name so the JSON key becomes e.g. "counterparty".
+// For all other suffixes we store "fld{id}_<suffix>" → attribute name.
+//
+// Additionally any column whose name does not match the fld{N}_* pattern is
+// passed through unchanged (e.g. "uuid", "lineNo").
+using ColumnMap = std::unordered_map<std::string, std::string>;
+
+ColumnMap BuildColumnMap(ibValueMetaObjectGenericData* metaObj)
+{
+	ColumnMap m;
+	if (metaObj == nullptr)
+		return m;
+
+	// GetAnyAttributeArrayObject() returns system + user attributes.
+	// It is defined on ibValueMetaObjectRecordData; fall back to user-only
+	// via ibValueMetaObjectRegisterData which exposes a similar interface.
+	std::vector<ibValueMetaObjectAttributeBase*> attrs;
+
+	if (auto* rec = dynamic_cast<ibValueMetaObjectRecordData*>(metaObj))
+		attrs = rec->GetAnyAttributeArrayObject();
+	else if (auto* reg = dynamic_cast<ibValueMetaObjectRegisterData*>(metaObj))
+		attrs = reg->GetAnyAttributeArrayObject();
+
+	for (auto* attr : attrs) {
+		if (attr == nullptr || attr->IsDeleted())
+			continue;
+
+		const ibMetaID id   = attr->GetMetaID();
+		const std::string attrName = WxStr(attr->GetName().Lower());
+		const std::string prefix   = "fld" + std::to_string(id) + "_";
+
+		// Register all suffix variants that OES generates for this attribute.
+		// The frontend only needs one key per logical attribute; for reference
+		// fields we use the _rrref column (GUID) and discard _rtref.
+		for (const char* suffix : {"s", "n", "d", "b", "rrref"})
+			m[prefix + suffix] = attrName;
+
+		// _rtref is the type discriminator of a polymorphic reference.
+		// Map it to empty string — RowToJson will skip empty-mapped columns.
+		m[prefix + "rtref"] = "";
+	}
+
+	return m;
+}
+
+// ---- Serialise one result-set row, mapping raw DB column names to
+// human attribute names via the supplied ColumnMap. -------------------------
+// Pass an empty ColumnMap to get raw column names (legacy behaviour).
+json RowToJson(ibDatabaseResultSet* rs, const ColumnMap& colMap)
 {
 	json row = json::object();
 	auto* meta = rs->GetMetaData();
@@ -229,10 +286,28 @@ json RowToJson(ibDatabaseResultSet* rs)
 
 	const int count = meta->GetColumnCount();
 	for (int col = 1; col <= count; ++col) {
-		wxString colName = meta->GetColumnName(col);
-		std::string key  = WxStr(colName.Lower());
+		std::string rawKey = WxStr(meta->GetColumnName(col).Lower());
 
-		// Read as string; the frontend knows the type from metadata
+		std::string key;
+		if (colMap.empty()) {
+			key = rawKey;
+		}
+		else {
+			auto it = colMap.find(rawKey);
+			if (it == colMap.end()) {
+				// Column not in metadata map — pass through as-is (e.g. "uuid")
+				key = rawKey;
+			}
+			else if (it->second.empty()) {
+				// Explicitly suppressed column (e.g. _rtref discriminator) — skip
+				continue;
+			}
+			else {
+				key = it->second;
+			}
+		}
+
+		// Read as string; the frontend resolves the type from metadata schema
 		wxString val = rs->GetResultString(col);
 		row[key] = WxStr(val);
 	}
@@ -687,11 +762,13 @@ void ibWebServer::RegisterRoutes()
 			return;
 		}
 
+		const ColumnMap colMap = BuildColumnMap(metaObj);
+
 		json jRows = json::array();
 		ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
 		if (rs != nullptr) {
 			while (rs->Next())
-				jRows.push_back(RowToJson(rs));
+				jRows.push_back(RowToJson(rs, colMap));
 			localDb->CloseResultSet(rs);
 		}
 		localDb->CloseStatement(stmt);
@@ -751,12 +828,14 @@ void ibWebServer::RegisterRoutes()
 
 		stmt->SetParamString(1, wxString::FromUTF8(id.c_str()));
 
+		const ColumnMap colMap = BuildColumnMap(metaObj);
+
 		ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
 		json jRow;
 		bool found = false;
 		if (rs != nullptr) {
 			if (rs->Next()) {
-				jRow  = RowToJson(rs);
+				jRow  = RowToJson(rs, colMap);
 				found = true;
 			}
 			localDb->CloseResultSet(rs);
