@@ -15,6 +15,7 @@ import {
 } from "@phosphor-icons/react"
 import { useTabStore } from "@/stores/tab-store"
 import { useMetadata, type MetaObjectRef } from "@/hooks/useMetadata"
+import { toApiResource } from "@/lib/resource-utils"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -207,19 +208,6 @@ export function ResourceList() {
 
   useEffect(() => { load() }, [load])
 
-  // section → singular API type mapping
-  const SECTION_TO_TYPE: Record<string, string> = {
-    catalogs: "catalog",
-    documents: "document",
-    enumerations: "enumeration",
-    informationRegisters: "informationRegister",
-    accumulationRegisters: "accumulationRegister",
-    accountingRegisters: "accountingRegister",
-    reports: "report",
-    dataProcessors: "dataProcessor",
-    constants: "constant",
-  }
-
   // Resolve metadata object info — resource param is now item.name
   const metaItems = tree
     ? (tree[section as keyof typeof tree] as MetaObjectRef[] | undefined) ?? []
@@ -267,8 +255,7 @@ export function ResourceList() {
       ? [{ field: sortField, order: sortOrder }]
       : []
 
-  const apiType = SECTION_TO_TYPE[section] ?? section
-  const fullResource = `${apiType}.${resource}`
+  const fullResource = toApiResource(section, resource)
 
   const listResult = useList({
     resource: fullResource,
@@ -285,10 +272,10 @@ export function ResourceList() {
 
   const handleRowClick = useCallback(
     (record: Record<string, unknown>) => {
-      const id = String(record.id ?? record.guid ?? "")
+      const id = String(record.uuid ?? record.id ?? record.guid ?? "")
       if (!id) return
       const path = `/${section}/${resource}/${id}`
-      const title = String(record.name ?? record.description ?? id)
+      const title = String(record.description ?? record.name ?? record.number ?? id)
       addTab({ id: `${section}/${resource}/${id}`, title, path, icon: "file-text", closable: true })
       navigate(path)
     },

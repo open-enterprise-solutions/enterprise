@@ -12,6 +12,7 @@ import { useOne } from "@refinedev/core"
 import { ChartBar, Warning } from "@phosphor-icons/react"
 import { useTabStore } from "@/stores/tab-store"
 import { api } from "@/lib/axios"
+import { toApiResource } from "@/lib/resource-utils"
 import { ReportViewer, type ReportParameter, type ReportColumn } from "@/components/reports/ReportViewer"
 import { PrintTemplate } from "@/components/reports/PrintTemplate"
 
@@ -97,7 +98,7 @@ export function ReportPage() {
         }
       }
       const response = await api.get<{ data: Record<string, unknown>[] }>(
-        `/data/${section}/${resource}?${qs.toString()}`,
+        `/data/${toApiResource(section, resource)}?${qs.toString()}`,
       )
       return response.data.data ?? []
     },

@@ -12,6 +12,7 @@ import {
 } from "react-router-dom"
 import { oesDataProvider } from "./providers/oes-data-provider"
 import { oesAuthProvider } from "./providers/oes-auth-provider"
+import { toApiResource } from "@/lib/resource-utils"
 import { AppShell } from "./components/layout/AppShell"
 import { LoginPage } from "./pages/login"
 import { useTabStore } from "./stores/tab-store"
@@ -107,7 +108,7 @@ function FormCreateRoute() {
   const navigate = useNavigate()
   const { addTab, removeTab } = useTabStore()
 
-  const fullResource = section && resource ? `${section}/${resource}` : ""
+  const fullResource = section && resource ? toApiResource(section, resource) : ""
 
   const handleSave = useCallback(
     (values: Record<string, unknown>) => {
@@ -158,7 +159,7 @@ function FormEditRoute() {
 
   if (!section || !resource || !id) return null
 
-  const fullResource = `${section}/${resource}`
+  const fullResource = toApiResource(section, resource)
 
   return (
     <OesSchemaForm
@@ -191,7 +192,7 @@ function EmbedEditRoute() {
 
   return (
     <OesSchemaForm
-      resource={`${section}/${resource}`}
+      resource={toApiResource(section, resource)}
       id={id}
       onSave={() => { /* stay in place */ }}
       onCancel={() => navigate(-1)}

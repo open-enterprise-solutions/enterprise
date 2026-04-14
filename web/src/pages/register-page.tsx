@@ -11,6 +11,7 @@ import { useParams } from "react-router-dom"
 import { useOne } from "@refinedev/core"
 import { Database, Warning } from "@phosphor-icons/react"
 import { useTabStore } from "@/stores/tab-store"
+import { toApiResource } from "@/lib/resource-utils"
 import {
   RegisterView,
   type RegisterType,
@@ -154,7 +155,7 @@ export function RegisterPage() {
       </div>
 
       <RegisterView
-        resource={`${section}/${resource}`}
+        resource={toApiResource(section, resource)}
         registerType={meta.registerType ?? registerType}
         dimensions={dimensions}
         resources={resources}

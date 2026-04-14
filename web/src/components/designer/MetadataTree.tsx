@@ -103,8 +103,30 @@ export function MetadataTree({ onOpenModule, onSelectNode }: MetadataTreeProps) 
     setLoading(true)
     setError(null)
     try {
-      const { data } = await api.get<Record<string, DesignerMetaNode[]>>("/designer/metadata")
-      setTree(data)
+      const resp = await api.get("/metadata/tree")
+      const raw = resp.data.data ?? resp.data
+      // Transform metadata tree into designer tree format
+      const designerTree: Record<string, DesignerMetaNode[]> = {}
+      for (const [section, items] of Object.entries(raw)) {
+        if (!Array.isArray(items)) continue
+        designerTree[section] = (items as any[]).map((item: any) => ({
+          id: String(item.id ?? item.guid ?? item.name),
+          name: item.synonym ?? item.name,
+          type: "object",
+          metaType: section,
+          children: [
+            ...(item.attributes ?? []).map((a: any) => ({
+              id: `${item.id}_attr_${a.id}`, name: a.synonym ?? a.name, type: "attribute",
+            })),
+            ...(item.tabularSections ?? []).map((t: any) => ({
+              id: `${item.id}_table_${t.id}`, name: t.synonym ?? t.name, type: "table",
+            })),
+            { id: `${item.id}_obj`, name: "Object module", type: "module", moduleId: `${item.guid}_obj` },
+            { id: `${item.id}_mgr`, name: "Manager module", type: "module", moduleId: `${item.guid}_mgr` },
+          ],
+        }))
+      }
+      setTree(designerTree)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load metadata")
     } finally {
