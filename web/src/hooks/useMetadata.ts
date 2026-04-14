@@ -3,10 +3,13 @@ import { api } from "@/lib/axios"
 
 // Types matching the backend /api/metadata/tree response
 export interface MetaObjectRef {
-  id: string
+  id: number | string
   name: string
-  fullName: string
+  synonym?: string
   guid?: string
+  metaType?: string
+  attributes?: unknown[]
+  tabularSections?: unknown[]
 }
 
 export interface MetadataTree {
@@ -49,9 +52,11 @@ export const useMetadataStore = create<MetadataState>((set, get) => ({
     set({ loading: true, error: null })
 
     try {
-      const response = await api.get<MetadataTree>("/metadata/tree")
+      const response = await api.get("/metadata/tree")
+      // Backend wraps in {data: {...}}
+      const tree = (response.data.data ?? response.data) as MetadataTree
       set({
-        tree: response.data,
+        tree,
         loading: false,
         lastFetchedAt: Date.now(),
       })
