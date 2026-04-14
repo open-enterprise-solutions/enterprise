@@ -21,6 +21,7 @@ target_include_directories(frontend
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/src/engine
         ${CMAKE_SOURCE_DIR}/src/engine/backend
+        ${CMAKE_SOURCE_DIR}/src/3rdparty/nlohmann
 )
 
 target_compile_definitions(frontend
