@@ -1,11 +1,23 @@
 import { Refine, Authenticated } from "@refinedev/core"
 import routerBindings from "@refinedev/react-router"
-import { BrowserRouter, Routes, Route, Outlet, Navigate, useParams, useNavigate } from "react-router-dom"
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Outlet,
+  Navigate,
+  useParams,
+  useNavigate,
+} from "react-router-dom"
 import { oesDataProvider } from "./providers/oes-data-provider"
 import { oesAuthProvider } from "./providers/oes-auth-provider"
 import { AppShell } from "./components/layout/AppShell"
 import { LoginPage } from "./pages/login"
+import { DashboardPage } from "./pages/dashboard"
+import { ResourceList } from "./pages/resource-list"
 import { OesSchemaForm } from "./components/forms/OesSchemaForm"
+import { useTabStore } from "./stores/tab-store"
+import { useCallback } from "react"
 
 // ---------------------------------------------------------------------------
 // Layout wrappers
@@ -31,51 +43,73 @@ function GuestLayout() {
 
 // ---------------------------------------------------------------------------
 // Form route adapters
-// Paths:  /:section/:resource/create   → create mode
-//         /:section/:resource/:id       → edit mode
-// The `resource` param is joined with `section` to form a dot-notation key,
-// e.g. section="catalogs", resource="products" → "catalogs.products"
 // ---------------------------------------------------------------------------
 
 function FormCreateRoute() {
   const { section, resource } = useParams<{ section: string; resource: string }>()
   const navigate = useNavigate()
+  const { addTab, removeTab } = useTabStore()
+
+  const fullResource = section && resource ? `${section}/${resource}` : ""
+
+  const handleSave = useCallback(
+    (values: Record<string, unknown>) => {
+      const newId = values?.id as string | undefined
+      if (newId && section && resource) {
+        const path = `/${section}/${resource}/${newId}`
+        // Replace create tab with the new edit tab
+        removeTab(`${section}/${resource}/create`)
+        addTab({
+          id: `${section}/${resource}/${newId}`,
+          title: String(values.name ?? values.description ?? newId),
+          path,
+          icon: "file-text",
+          closable: true,
+        })
+        navigate(path, { replace: true })
+      } else if (section && resource) {
+        navigate(`/${section}/${resource}`, { replace: true })
+      }
+    },
+    [section, resource, navigate, addTab, removeTab],
+  )
+
+  const handleCancel = useCallback(() => {
+    if (section && resource) {
+      removeTab(`${section}/${resource}/create`)
+    }
+    navigate(-1)
+  }, [section, resource, navigate, removeTab])
 
   if (!section || !resource) return null
-
-  const fullResource = `${section}.${resource}`
 
   return (
     <OesSchemaForm
       resource={fullResource}
-      onSave={(values) => {
-        // After create, redirect to edit page with the new id
-        const newId = values?.id as string | undefined
-        if (newId) {
-          navigate(`/${section}/${resource}/${newId}`, { replace: true })
-        } else {
-          navigate(`/${section}/${resource}`, { replace: true })
-        }
-      }}
-      onCancel={() => navigate(-1)}
+      onSave={handleSave}
+      onCancel={handleCancel}
     />
   )
 }
 
 function FormEditRoute() {
-  const { section, resource, id } = useParams<{ section: string; resource: string; id: string }>()
+  const { section, resource, id } = useParams<{
+    section: string
+    resource: string
+    id: string
+  }>()
   const navigate = useNavigate()
 
   if (!section || !resource || !id) return null
 
-  const fullResource = `${section}.${resource}`
+  const fullResource = `${section}/${resource}`
 
   return (
     <OesSchemaForm
       resource={fullResource}
       id={id}
       onSave={() => {
-        // Stay on the same page after save — the form will reflect updated values
+        // Stay on the same page after save
       }}
       onCancel={() => navigate(-1)}
     />
@@ -86,6 +120,19 @@ function FormEditRoute() {
 // App
 // ---------------------------------------------------------------------------
 
+// All known metadata section keys — used to register Refine resources
+const OES_SECTIONS = [
+  "catalogs",
+  "documents",
+  "enumerations",
+  "informationRegisters",
+  "accumulationRegisters",
+  "accountingRegisters",
+  "reports",
+  "dataProcessors",
+  "constants",
+]
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -93,11 +140,10 @@ export default function App() {
         dataProvider={oesDataProvider}
         authProvider={oesAuthProvider}
         routerProvider={routerBindings}
-        resources={[
-          { name: "catalogs", list: "/catalogs" },
-          { name: "documents", list: "/documents" },
-          { name: "reports", list: "/reports" },
-        ]}
+        resources={OES_SECTIONS.map((name) => ({
+          name,
+          list: `/${name}`,
+        }))}
         options={{
           syncWithLocation: true,
           warnWhenUnsavedChanges: true,
@@ -111,21 +157,38 @@ export default function App() {
 
           {/* Protected routes — rendered inside AppShell */}
           <Route element={<ProtectedLayout />}>
-            <Route index element={null} />
+            {/* Dashboard */}
+            <Route index element={<DashboardPage />} />
 
-            {/* Section list pages (Phase 4 will add list components here) */}
-            <Route path="/catalogs" element={null} />
-            <Route path="/documents" element={null} />
-            <Route path="/reports" element={null} />
+            {/* Generic list view: /:section/:resource */}
+            <Route
+              path="/:section/:resource"
+              element={<ResourceListRoute />}
+            />
 
-            {/* Form routes — generic: /:section/:resource/create and /:section/:resource/:id */}
-            <Route path="/:section/:resource/create" element={<FormCreateRoute />} />
-            <Route path="/:section/:resource/:id" element={<FormEditRoute />} />
+            {/* Create form */}
+            <Route
+              path="/:section/:resource/create"
+              element={<FormCreateRoute />}
+            />
 
-            <Route path="*" element={null} />
+            {/* Edit form */}
+            <Route
+              path="/:section/:resource/:id"
+              element={<FormEditRoute />}
+            />
+
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
       </Refine>
     </BrowserRouter>
   )
+}
+
+// Guard: skip list route if `:resource` is literally "create"
+function ResourceListRoute() {
+  const { resource } = useParams<{ resource: string }>()
+  if (resource === "create") return <Navigate to="/" replace />
+  return <ResourceList />
 }
