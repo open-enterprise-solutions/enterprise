@@ -16,7 +16,8 @@ import { toApiResource } from "@/lib/resource-utils"
 import { AppShell } from "./components/layout/AppShell"
 import { LoginPage } from "./pages/login"
 import { useTabStore } from "./stores/tab-store"
-import { useCallback, lazy, Suspense } from "react"
+import { useCallback, useEffect, lazy, Suspense } from "react"
+import { useMetadata, type MetaObjectRef } from "@/hooks/useMetadata"
 
 // Lazy load heavy pages (Monaco Editor = 2MB, Recharts, Formily)
 const DashboardPage = lazy(() => import("./pages/dashboard").then(m => ({ default: m.DashboardPage })))
@@ -276,6 +277,9 @@ export default function App() {
             {/* Plugin Manager */}
             <Route path="/plugins" element={<PluginManager />} />
 
+            {/* Section overview: /:section (no resource selected) */}
+            <Route path="/:section" element={<SectionOverviewRoute />} />
+
             {/* Generic list view: /:section/:resource */}
             <Route
               path="/:section/:resource"
@@ -317,10 +321,80 @@ export default function App() {
 }
 
 // Guard: skip list route if `:resource` is literally "create".
-// For register sections, render RegisterPage; for reports, ResourceList still shows the list.
+// For register sections, render RegisterPage; for reports, render ReportPage.
 function ResourceListRoute() {
   const { section = "", resource } = useParams<{ section: string; resource: string }>()
   if (resource === "create") return <Navigate to="/" replace />
   if (REGISTER_SECTIONS.has(section)) return <RegisterPage />
+  if (section === "reports") return <ReportPage />
   return <ResourceList />
+}
+
+// Section overview — shows all items in a section so the user can pick one.
+// Rendered when navigating to /:section (e.g. /catalogs, /documents).
+function SectionOverviewRoute() {
+  const { section = "" } = useParams<{ section: string }>()
+  const navigate = useNavigate()
+  const { addTab } = useTabStore()
+  const { tree, load } = useMetadata()
+
+  useEffect(() => { load() }, [load])
+
+  const items = tree
+    ? ((tree[section as keyof typeof tree] as MetaObjectRef[] | undefined) ?? [])
+    : []
+
+  if (!tree) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="skeleton h-8 w-48" />
+      </div>
+    )
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-2 text-[hsl(var(--muted-foreground))] text-[13px]">
+        <p>No items in <strong>{section}</strong>.</p>
+        <p className="text-[11px]">Define objects in the OES Designer to see them here.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-6 max-w-2xl">
+      <h1 className="text-[16px] font-semibold text-[hsl(var(--foreground))] mb-4 capitalize">
+        {section}
+      </h1>
+      <div className="space-y-1">
+        {items.map((item) => (
+          <button
+            key={item.id ?? item.name}
+            type="button"
+            onClick={() => {
+              const path = `/${section}/${item.name}`
+              addTab({
+                id: `${section}/${item.name}`,
+                title: item.synonym ?? item.name,
+                path,
+                icon: "list",
+                closable: true,
+              })
+              navigate(path)
+            }}
+            className="flex w-full items-center gap-3 rounded-[var(--radius)] border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 text-left text-[13px] transition-colors hover:border-[hsl(var(--ring))] hover:bg-[hsl(var(--secondary)/0.3)]"
+          >
+            <span className="font-medium text-[hsl(var(--foreground))]">
+              {item.synonym ?? item.name}
+            </span>
+            {item.synonym && (
+              <span className="text-[11px] text-[hsl(var(--muted-foreground))]">
+                {item.name}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
 }

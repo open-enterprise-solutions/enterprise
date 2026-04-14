@@ -262,6 +262,7 @@ export function ResourceList() {
     pagination: { currentPage: page, pageSize },
     sorters,
     filters,
+    queryOptions: { retry: 1 },
   })
 
   const isLoading = listResult.query?.isLoading ?? false

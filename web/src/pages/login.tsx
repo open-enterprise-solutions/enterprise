@@ -1,22 +1,39 @@
 import { useState, type FormEvent } from "react"
-import { useLogin } from "@refinedev/core"
 import { SignIn, Eye, EyeSlash, CircleNotch } from "@phosphor-icons/react"
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api"
 
 export function LoginPage() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const { mutate: login, isPending: isLoading, error } = useLogin<{ username: string; password: string }>()
-
-  const errorMessage =
-    error && typeof error === "object" && "message" in error
-      ? (error as { message: string }).message
-      : null
-
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    login({ username: username.trim(), password })
+    setIsLoading(true)
+    setErrorMessage(null)
+    try {
+      const resp = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: username.trim(), password }),
+      })
+      const body = await resp.json() as Record<string, unknown>
+      const payload = (body.data ?? body) as { token?: string; user?: unknown }
+      if (payload.token) {
+        localStorage.setItem("oes_token", payload.token as string)
+        localStorage.setItem("oes_user", JSON.stringify(payload.user))
+        window.location.href = "/"
+      } else {
+        setErrorMessage("Invalid username or password")
+      }
+    } catch {
+      setErrorMessage("Connection error — check that the OES backend is running")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
