@@ -67,12 +67,15 @@ function clearStorage(): void {
 export const oesAuthProvider: AuthProvider = {
   login: async ({ username, password }: { username: string; password: string }) => {
     try {
-      const response = await authApi.post<{ token: string; user: OesUser }>("/auth/login", {
+      const response = await authApi.post("/auth/login", {
         username,
         password,
       })
 
-      const { token, user } = response.data
+      // Backend wraps in {"data": {...}}
+      const body = response.data as Record<string, unknown>
+      const payload = (body.data ?? body) as { token?: string; user?: OesUser }
+      const { token, user } = payload
 
       if (!token) {
         return {
