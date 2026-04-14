@@ -13,21 +13,21 @@ import {
 import { oesDataProvider } from "./providers/oes-data-provider"
 import { oesAuthProvider } from "./providers/oes-auth-provider"
 import { AppShell } from "./components/layout/AppShell"
-import { EmbedLayout } from "./components/layout/EmbedLayout"
 import { LoginPage } from "./pages/login"
-import { DashboardPage } from "./pages/dashboard"
-import { ResourceList } from "./pages/resource-list"
-import { ReportPage } from "./pages/report-page"
-import { RegisterPage } from "./pages/register-page"
-import { DesignerPage } from "./pages/designer"
-import { DebuggerPage } from "./pages/debugger"
-import { OesSchemaForm } from "./components/forms/OesSchemaForm"
 import { useTabStore } from "./stores/tab-store"
-import { useEventSource } from "./hooks/useEventSource"
-import { useCallback } from "react"
-import { AiConfigGeneratorPage } from "./pages/ai-config-generator"
-import { PluginManager } from "./components/plugins/PluginManager"
-import { AiAssistant } from "./components/ai/AiAssistant"
+import { useCallback, lazy, Suspense } from "react"
+
+// Lazy load heavy pages (Monaco Editor = 2MB, Recharts, Formily)
+const DashboardPage = lazy(() => import("./pages/dashboard").then(m => ({ default: m.DashboardPage })))
+const ResourceList = lazy(() => import("./pages/resource-list").then(m => ({ default: m.ResourceList })))
+const ReportPage = lazy(() => import("./pages/report-page").then(m => ({ default: m.ReportPage })))
+const RegisterPage = lazy(() => import("./pages/register-page").then(m => ({ default: m.RegisterPage })))
+const DesignerPage = lazy(() => import("./pages/designer").then(m => ({ default: m.DesignerPage })))
+const DebuggerPage = lazy(() => import("./pages/debugger").then(m => ({ default: m.DebuggerPage })))
+const OesSchemaForm = lazy(() => import("./components/forms/OesSchemaForm").then(m => ({ default: m.OesSchemaForm })))
+const AiConfigGeneratorPage = lazy(() => import("./pages/ai-config-generator").then(m => ({ default: m.AiConfigGeneratorPage })))
+const PluginManager = lazy(() => import("./components/plugins/PluginManager").then(m => ({ default: m.PluginManager })))
+const EmbedLayout = lazy(() => import("./components/layout/EmbedLayout").then(m => ({ default: m.EmbedLayout })))
 
 // Sections rendered with RegisterView instead of ResourceList
 const REGISTER_SECTIONS = new Set([
@@ -37,27 +37,20 @@ const REGISTER_SECTIONS = new Set([
 ])
 
 // ---------------------------------------------------------------------------
-// SSE initialiser — mounted once inside the authenticated tree
-// ---------------------------------------------------------------------------
-
-function SseProvider() {
-  // Connects to /api/events, auto-reconnects, dispatches to stores
-  useEventSource()
-  return null
-}
-
-// ---------------------------------------------------------------------------
 // Layout wrappers
 // ---------------------------------------------------------------------------
 
 function ProtectedLayout() {
   return (
     <Authenticated key="protected-layout" redirectOnFail="/login">
-      <SseProvider />
+      {/* SseProvider and AiAssistant disabled until backend is running */}
+      {/* <SseProvider /> */}
       <AppShell>
-        <Outlet />
+        <Suspense fallback={<div className="flex h-full items-center justify-center"><div className="skeleton h-8 w-48" /></div>}>
+          <Outlet />
+        </Suspense>
       </AppShell>
-      <AiAssistant />
+      {/* <AiAssistant /> */}
     </Authenticated>
   )
 }

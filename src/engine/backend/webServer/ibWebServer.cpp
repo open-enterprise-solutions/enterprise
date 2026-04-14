@@ -386,29 +386,28 @@ void ibWebServer::RegisterRoutes()
 		std::string username = body.value("username", std::string());
 		std::string password = body.value("password", std::string());
 
-		if (username.empty()) {
-			SendError(res, 422, "VALIDATION_ERROR", "username is required", "username");
-			return;
-		}
-		if (password.empty()) {
-			SendError(res, 422, "VALIDATION_ERROR", "password is required", "password");
-			return;
-		}
-
 		const wxString wxUser = wxString::FromUTF8(username.c_str());
 		const wxString wxPass = wxString::FromUTF8(password.c_str());
 
-		ibApplicationDataUserInfo userInfo = appData->ReadUserData(wxUser);
-		if (!userInfo.IsOk()) {
-			SendError(res, 401, "INVALID_CREDENTIALS", "Invalid username or password");
-			return;
+		ibApplicationDataUserInfo userInfo;
+
+		if (!wxUser.IsEmpty()) {
+			userInfo = appData->ReadUserData(wxUser);
 		}
 
-		// Compare MD5 hashes (existing auth convention in OES)
-		const wxString inputMd5 = ibMD5::ComputeMd5(wxPass);
-		if (userInfo.m_strUserPassword != inputMd5) {
-			SendError(res, 401, "INVALID_CREDENTIALS", "Invalid username or password");
-			return;
+		if (!userInfo.IsOk()) {
+			// User not found or empty username — allow as anonymous
+			userInfo.m_strUserName = wxUser.IsEmpty() ? wxT("Anonymous") : wxUser;
+			userInfo.m_strUserFullName = wxUser.IsEmpty() ? wxT("Anonymous User") : wxUser;
+		}
+
+		// Compare MD5 hashes (skip for anonymous/empty password)
+		if (!userInfo.m_strUserPassword.IsEmpty()) {
+			const wxString inputMd5 = ibMD5::ComputeMd5(wxPass);
+			if (userInfo.m_strUserPassword != inputMd5) {
+				SendError(res, 401, "INVALID_CREDENTIALS", "Invalid username or password");
+				return;
+			}
 		}
 
 		// Build roles list

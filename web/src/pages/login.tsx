@@ -1,6 +1,5 @@
-import { useState, type FormEvent, useEffect } from "react"
-import { useLogin, useIsAuthenticated } from "@refinedev/core"
-import { useNavigate } from "react-router-dom"
+import { useState, type FormEvent } from "react"
+import { useLogin } from "@refinedev/core"
 import { SignIn, Eye, EyeSlash, CircleNotch } from "@phosphor-icons/react"
 
 export function LoginPage() {
@@ -9,15 +8,6 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
 
   const { mutate: login, isPending: isLoading, error } = useLogin<{ username: string; password: string }>()
-  const { data: authData } = useIsAuthenticated()
-  const navigate = useNavigate()
-
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (authData?.authenticated) {
-      navigate("/", { replace: true })
-    }
-  }, [authData, navigate])
 
   const errorMessage =
     error && typeof error === "object" && "message" in error
@@ -26,7 +16,6 @@ export function LoginPage() {
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (!username.trim()) return
     login({ username: username.trim(), password })
   }
 
@@ -72,7 +61,6 @@ export function LoginPage() {
               placeholder="admin"
               autoComplete="username"
               autoFocus
-              required
               disabled={isLoading}
               className="w-full border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] outline-none placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--ring))] focus:ring-1 focus:ring-[hsl(var(--ring))] disabled:opacity-50"
               style={{ borderRadius: "var(--radius)" }}
@@ -117,7 +105,7 @@ export function LoginPage() {
           {/* Submit */}
           <button
             type="submit"
-            disabled={isLoading || !username.trim()}
+            disabled={isLoading}
             className="flex w-full items-center justify-center gap-2 bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             style={{ borderRadius: "var(--radius)" }}
           >
