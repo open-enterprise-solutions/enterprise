@@ -1,7 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Tetracode Dev
-//	Description : OES embedded HTTP server — Phase 2
+//	Description : OES embedded HTTP server — Phase 2 + Phase 7 (Web Designer)
 //	              JWT auth + metadata endpoints + data read endpoints
+//	              + designer module editor + compile + config export/import
 ////////////////////////////////////////////////////////////////////////////
 
 #include "ibWebServer.h"
@@ -14,10 +15,14 @@
 #include "metadataConfiguration.h"
 
 #include "metaCollection/metaObject.h"
+#include "metaCollection/metaModuleObject.h"
 #include "metaCollection/partial/catalog.h"
 #include "metaCollection/partial/document.h"
 #include "metaCollection/partial/informationRegister.h"
 #include "metaCollection/partial/accumulationRegister.h"
+
+#include "compiler/compileCode.h"
+#include "backend_exception.h"
 
 #include "databaseLayer/databaseLayer.h"
 #include "databaseLayer/preparedStatement.h"
@@ -31,6 +36,7 @@
 #include <fstream>
 
 #include <wx/base64.h>
+#include <wx/filename.h>
 
 using json = nlohmann::json;
 
@@ -882,6 +888,382 @@ void ibWebServer::RegisterRoutes()
 		res.status = 200;
 		res.set_content(content, "text/html; charset=utf-8");
 	});
+
+	//===================================================================
+	// PHASE 7 — Web Designer endpoints
+	//   All routes under /api/designer/* require a valid JWT (already
+	//   enforced by the pre_routing_handler above).
+	//===================================================================
+
+	//-------------------------------------------------------------------
+	// GET /api/designer/modules/:guid
+	// Returns the source code of an object module or manager module
+	// identified by its GUID.
+	//
+	// Response:
+	//   200  { "data": { "guid": "...", "name": "...", "code": "..." } }
+	//   404  module not found
+	//   503  metadata not loaded
+	//-------------------------------------------------------------------
+	m_server->Get(R"(/api/designer/modules/([^/]+))",
+		[](const httplib::Request& req, httplib::Response& res)
+	{
+		if (activeMetaData == nullptr) {
+			SendError(res, 503, "SERVICE_UNAVAILABLE", "Metadata not loaded");
+			return;
+		}
+
+		const std::string guidStr = req.matches[1].str();
+		const ibGuid guid = ibGuid(wxString::FromUTF8(guidStr.c_str()));
+
+		ibValueMetaObjectModuleBase* moduleObj =
+			activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectModuleBase>(guid);
+
+		if (moduleObj == nullptr) {
+			SendError(res, 404, "NOT_FOUND",
+				"Module with guid '" + guidStr + "' not found");
+			return;
+		}
+
+		json resp;
+		resp["data"]["guid"] = guidStr;
+		resp["data"]["name"] = WxStr(moduleObj->GetName());
+		resp["data"]["code"] = WxStr(moduleObj->GetModuleText());
+
+		res.status = 200;
+		res.set_content(resp.dump(), "application/json");
+	});
+
+	//-------------------------------------------------------------------
+	// PUT /api/designer/modules/:guid
+	// Saves new source code to an object module or manager module.
+	//
+	// Request body:  { "code": "..." }
+	// Response:
+	//   200  { "data": { "success": true } }
+	//   400  malformed JSON or missing "code" field
+	//   404  module not found
+	//   503  metadata not loaded
+	//-------------------------------------------------------------------
+	m_server->Put(R"(/api/designer/modules/([^/]+))",
+		[](const httplib::Request& req, httplib::Response& res)
+	{
+		if (activeMetaData == nullptr) {
+			SendError(res, 503, "SERVICE_UNAVAILABLE", "Metadata not loaded");
+			return;
+		}
+
+		json body;
+		try {
+			body = json::parse(req.body);
+		}
+		catch (...) {
+			SendError(res, 400, "BAD_REQUEST", "Invalid JSON body");
+			return;
+		}
+
+		if (!body.contains("code") || !body["code"].is_string()) {
+			SendError(res, 400, "VALIDATION_ERROR", "'code' field is required", "code");
+			return;
+		}
+
+		const std::string guidStr = req.matches[1].str();
+		const ibGuid guid = ibGuid(wxString::FromUTF8(guidStr.c_str()));
+
+		ibValueMetaObjectModuleBase* moduleObj =
+			activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectModuleBase>(guid);
+
+		if (moduleObj == nullptr) {
+			SendError(res, 404, "NOT_FOUND",
+				"Module with guid '" + guidStr + "' not found");
+			return;
+		}
+
+		const std::string newCode = body["code"].get<std::string>();
+		moduleObj->SetModuleText(wxString::FromUTF8(newCode.c_str()));
+
+		// Mark configuration as modified so the next SaveDatabase picks it up
+		activeMetaData->Modify(true);
+
+		json resp;
+		resp["data"]["success"] = true;
+
+		res.status = 200;
+		res.set_content(resp.dump(), "application/json");
+	});
+
+	//-------------------------------------------------------------------
+	// POST /api/designer/compile
+	// Compiles a snippet of OES script code and returns diagnostics.
+	//
+	// Request body:
+	//   { "code": "...", "moduleName": "optional name for error messages" }
+	//
+	// Response:
+	//   200  { "data": { "success": true, "errors": [] } }
+	//   200  { "data": { "success": false,
+	//                    "errors": [{ "line": N, "message": "..." }] } }
+	//   400  missing "code" field
+	//-------------------------------------------------------------------
+	m_server->Post("/api/designer/compile",
+		[](const httplib::Request& req, httplib::Response& res)
+	{
+		json body;
+		try {
+			body = json::parse(req.body);
+		}
+		catch (...) {
+			SendError(res, 400, "BAD_REQUEST", "Invalid JSON body");
+			return;
+		}
+
+		if (!body.contains("code") || !body["code"].is_string()) {
+			SendError(res, 400, "VALIDATION_ERROR", "'code' field is required", "code");
+			return;
+		}
+
+		const std::string codeStd   = body["code"].get<std::string>();
+		const std::string moduleNameStd =
+			body.value("moduleName", std::string("__web_compile__"));
+
+		const wxString wxCode       = wxString::FromUTF8(codeStd.c_str());
+		const wxString wxModuleName = wxString::FromUTF8(moduleNameStd.c_str());
+
+		// Suppress all GUI error dialogs during compilation
+		ibBackendException::SetEvalMode(true);
+
+		bool compiled = false;
+		json jErrors  = json::array();
+
+		try {
+			ibCompileCode compiler(wxModuleName, wxEmptyString);
+			compiled = compiler.Compile(wxCode);
+
+			if (!compiled) {
+				// Retrieve the formatted error text accumulated by the compiler.
+				// ibBackendException::GetLastError() returns and clears the
+				// thread-local last-error string set by DoSetError.
+				const wxString errText = ibBackendException::GetLastError();
+
+				json errEntry;
+				errEntry["line"]    = 0;   // full message already contains line info
+				errEntry["message"] = WxStr(errText);
+				jErrors.push_back(errEntry);
+			}
+		}
+		catch (const ibBackendException* ex) {
+			// The compiler may throw for fatal errors; extract description
+			json errEntry;
+			errEntry["line"]    = 0;
+			errEntry["message"] = WxStr(ex->GetErrorDescription());
+			jErrors.push_back(errEntry);
+			compiled = false;
+			// Exceptions are throw-by-pointer — we must not rethrow here;
+			// the exception object is owned by the exception system.
+		}
+		catch (...) {
+			json errEntry;
+			errEntry["line"]    = 0;
+			errEntry["message"] = "Unknown compile error";
+			jErrors.push_back(errEntry);
+			compiled = false;
+		}
+
+		ibBackendException::SetEvalMode(false);
+
+		json resp;
+		resp["data"]["success"] = compiled;
+		resp["data"]["errors"]  = jErrors;
+
+		res.status = 200;
+		res.set_content(resp.dump(), "application/json");
+	});
+
+	//-------------------------------------------------------------------
+	// POST /api/designer/export/json
+	// Exports the full configuration to OES-JSON-1.0 format.
+	//
+	// Response:
+	//   200  { "data": { "configuration": <full JSON object> } }
+	//   500  export failed
+	//   503  metadata not loaded
+	//-------------------------------------------------------------------
+	m_server->Post("/api/designer/export/json",
+		[](const httplib::Request&, httplib::Response& res)
+	{
+		if (activeMetaData == nullptr) {
+			SendError(res, 503, "SERVICE_UNAVAILABLE", "Metadata not loaded");
+			return;
+		}
+
+		// Create a temporary file for the export
+		wxString tempFile = wxFileName::CreateTempFileName(wxT("oes_export_"));
+		if (tempFile.IsEmpty()) {
+			SendError(res, 500, "INTERNAL_ERROR",
+				"Failed to create temporary file for export");
+			return;
+		}
+
+		const bool ok = activeMetaData->SaveConfigToJSON(tempFile);
+		if (!ok) {
+			wxRemoveFile(tempFile);
+			SendError(res, 500, "EXPORT_FAILED",
+				"SaveConfigToJSON failed; check server logs");
+			return;
+		}
+
+		// Read the exported JSON back from disk
+		std::ifstream in(tempFile.ToStdString(), std::ios::binary);
+		wxRemoveFile(tempFile);
+
+		if (!in.is_open()) {
+			SendError(res, 500, "INTERNAL_ERROR",
+				"Failed to read exported configuration file");
+			return;
+		}
+
+		json configJson;
+		try {
+			in >> configJson;
+		}
+		catch (...) {
+			SendError(res, 500, "INTERNAL_ERROR",
+				"Exported file is not valid JSON");
+			return;
+		}
+
+		json resp;
+		resp["data"]["configuration"] = configJson;
+
+		res.status = 200;
+		res.set_content(resp.dump(), "application/json");
+	});
+
+	//-------------------------------------------------------------------
+	// POST /api/designer/import/json
+	// Imports a configuration from an OES-JSON-1.0 payload.
+	//
+	// Request body: { "configuration": <full config JSON object> }
+	// Response:
+	//   200  { "data": { "success": true } }
+	//   400  malformed body or missing "configuration" field
+	//   500  import failed
+	//   503  metadata not loaded
+	//-------------------------------------------------------------------
+	m_server->Post("/api/designer/import/json",
+		[](const httplib::Request& req, httplib::Response& res)
+	{
+		if (activeMetaData == nullptr) {
+			SendError(res, 503, "SERVICE_UNAVAILABLE", "Metadata not loaded");
+			return;
+		}
+
+		json body;
+		try {
+			body = json::parse(req.body);
+		}
+		catch (...) {
+			SendError(res, 400, "BAD_REQUEST", "Invalid JSON body");
+			return;
+		}
+
+		if (!body.contains("configuration") || !body["configuration"].is_object()) {
+			SendError(res, 400, "VALIDATION_ERROR",
+				"'configuration' object field is required", "configuration");
+			return;
+		}
+
+		// Write configuration to a temporary file so LoadConfigFromJSON can read it
+		wxString tempFile = wxFileName::CreateTempFileName(wxT("oes_import_"));
+		if (tempFile.IsEmpty()) {
+			SendError(res, 500, "INTERNAL_ERROR",
+				"Failed to create temporary file for import");
+			return;
+		}
+
+		{
+			std::ofstream out(tempFile.ToStdString(), std::ios::binary);
+			if (!out.is_open()) {
+				wxRemoveFile(tempFile);
+				SendError(res, 500, "INTERNAL_ERROR",
+					"Failed to open temporary file for writing");
+				return;
+			}
+			out << body["configuration"].dump();
+		}
+
+		const bool ok = activeMetaData->LoadConfigFromJSON(tempFile);
+		wxRemoveFile(tempFile);
+
+		if (!ok) {
+			SendError(res, 500, "IMPORT_FAILED",
+				"LoadConfigFromJSON failed; check server logs");
+			return;
+		}
+
+		json resp;
+		resp["data"]["success"] = true;
+
+		res.status = 200;
+		res.set_content(resp.dump(), "application/json");
+	});
+
+	//-------------------------------------------------------------------
+	// POST /api/designer/update-db
+	// Persists the current in-memory metadata to the database and
+	// synchronises the relational schema (creates/alters tables for new
+	// or modified object types).
+	//
+	// Response:
+	//   200  { "data": { "success": true, "message": "..." } }
+	//   500  update failed
+	//   503  metadata not loaded or DB not connected
+	//-------------------------------------------------------------------
+	m_server->Post("/api/designer/update-db",
+		[](const httplib::Request&, httplib::Response& res)
+	{
+		if (activeMetaData == nullptr) {
+			SendError(res, 503, "SERVICE_UNAVAILABLE", "Metadata not loaded");
+			return;
+		}
+
+		if (db_query == nullptr || !db_query->IsOpen()) {
+			SendError(res, 503, "SERVICE_UNAVAILABLE", "Database not connected");
+			return;
+		}
+
+		bool ok = false;
+		try {
+			ok = activeMetaData->SaveDatabase();
+		}
+		catch (const ibBackendException* ex) {
+			const std::string msg = WxStr(ex->GetErrorDescription());
+			SendError(res, 500, "UPDATE_FAILED", msg);
+			return;
+		}
+		catch (...) {
+			SendError(res, 500, "UPDATE_FAILED",
+				"Unknown error during database structure update");
+			return;
+		}
+
+		if (!ok) {
+			SendError(res, 500, "UPDATE_FAILED",
+				"SaveDatabase returned false; check server logs");
+			return;
+		}
+
+		json resp;
+		resp["data"]["success"] = true;
+		resp["data"]["message"] = "Database structure updated successfully";
+
+		res.status = 200;
+		res.set_content(resp.dump(), "application/json");
+	});
+
+	//===================================================================
+	// END Phase 7 — Web Designer
+	//===================================================================
 
 	//-------------------------------------------------------------------
 	// Static file serving (SPA fallback)

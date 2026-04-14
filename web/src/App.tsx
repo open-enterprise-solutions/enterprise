@@ -19,6 +19,7 @@ import { DashboardPage } from "./pages/dashboard"
 import { ResourceList } from "./pages/resource-list"
 import { ReportPage } from "./pages/report-page"
 import { RegisterPage } from "./pages/register-page"
+import { DesignerPage } from "./pages/designer"
 import { OesSchemaForm } from "./components/forms/OesSchemaForm"
 import { useTabStore } from "./stores/tab-store"
 import { useEventSource } from "./hooks/useEventSource"
@@ -238,6 +239,16 @@ export default function App() {
           <Route element={<GuestLayout />}>
             <Route path="/login" element={<LoginPage />} />
           </Route>
+
+          {/* Designer — standalone layout, authenticated */}
+          <Route
+            path="/designer"
+            element={
+              <Authenticated key="designer-layout" redirectOnFail="/login">
+                <DesignerPage />
+              </Authenticated>
+            }
+          />
 
           {/* Embed routes — EmbedLayout, authenticated */}
           <Route element={<EmbedProtectedLayout />}>

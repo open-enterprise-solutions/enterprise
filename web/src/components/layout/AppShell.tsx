@@ -22,6 +22,7 @@ import {
   Calculator,
   Clipboard,
   ChartLineUp,
+  Code,
 } from "@phosphor-icons/react"
 import { useMetadata, type MetaObjectRef, type MetadataTree } from "@/hooks/useMetadata"
 import { useUiStore } from "@/stores/ui-store"
@@ -333,8 +334,15 @@ export function AppShell({ children }: AppShellProps) {
             })}
         </nav>
 
-        {/* Settings link at bottom */}
+        {/* Bottom actions */}
         <div className="border-t border-[hsl(var(--sidebar-border))] py-1">
+          <SidebarItem
+            label="Designer"
+            icon={<Code size={16} weight="duotone" />}
+            active={activePath.startsWith("/designer")}
+            collapsed={sidebarCollapsed}
+            onClick={() => navigate("/designer")}
+          />
           <SidebarItem
             label="Settings"
             icon={<Gear size={16} weight="duotone" />}
