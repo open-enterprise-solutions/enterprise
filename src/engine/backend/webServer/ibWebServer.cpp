@@ -7,6 +7,7 @@
 #include "ibWebServer.h"
 #include "ibWebAuth.h"
 #include "ibWebMetadataProvider.h"
+#include "ibWebFormSerializer.h"
 
 #include "appData.h"
 #include "metadataConfiguration.h"
@@ -547,6 +548,34 @@ void ibWebServer::RegisterRoutes()
 
 		json resp;
 		resp["data"] = j;
+		res.status = 200;
+		res.set_content(resp.dump(), "application/json");
+	});
+
+	//-------------------------------------------------------------------
+	// GET /api/form/:resource/schema
+	// Returns a Formily-compatible JSON Schema for the named resource.
+	// :resource format: "<type>.<name>"  e.g. "catalog.products"
+	//-------------------------------------------------------------------
+	m_server->Get(R"(/api/form/([^/]+)/schema)", [](const httplib::Request& req, httplib::Response& res) {
+
+		if (activeMetaData == nullptr) {
+			SendError(res, 503, "SERVICE_UNAVAILABLE", "Metadata not loaded");
+			return;
+		}
+
+		const std::string resource = req.matches[1].str();
+		ibValueMetaObjectRecordData* metaObj = FindResourceObject(resource);
+		if (metaObj == nullptr) {
+			SendError(res, 404, "NOT_FOUND",
+				"Metadata object '" + resource + "' not found");
+			return;
+		}
+
+		json schema = ibWebFormSerializer::SerializeFormSchema(metaObj);
+
+		json resp;
+		resp["data"] = schema;
 		res.status = 200;
 		res.set_content(resp.dump(), "application/json");
 	});
