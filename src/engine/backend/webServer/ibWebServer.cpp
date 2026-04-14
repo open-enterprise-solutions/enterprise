@@ -6,6 +6,7 @@
 
 #include "ibWebServer.h"
 #include "ibWebAuth.h"
+#include "ibWebEventBus.h"
 #include "ibWebMetadataProvider.h"
 #include "ibWebFormSerializer.h"
 
@@ -26,6 +27,8 @@
 
 #define CPPHTTPLIB_THREAD_POOL_COUNT 8
 #include <httplib.h>
+
+#include <fstream>
 
 #include <wx/base64.h>
 
@@ -256,6 +259,7 @@ void ibWebServer::Destroy()
 		delete ms_instance;
 		ms_instance = nullptr;
 	}
+	ibWebEventBus::Reset();
 }
 
 //***********************************************************************
@@ -728,6 +732,155 @@ void ibWebServer::RegisterRoutes()
 		resp["data"] = jRow;
 		res.status = 200;
 		res.set_content(resp.dump(), "application/json");
+	});
+
+	//-------------------------------------------------------------------
+	// GET /api/events — Server-Sent Events stream
+	//
+	// Auth: Bearer token in ?token=<jwt> query param because the
+	// EventSource browser API does not support custom request headers.
+	//
+	// SSE wire format per message:
+	//   event: <type>\n
+	//   data: <json>\n
+	//   \n
+	//
+	// The handler sends a heartbeat every 30 seconds to keep the TCP
+	// connection alive through proxies and load-balancers.
+	//-------------------------------------------------------------------
+	m_server->Get("/api/events", [](const httplib::Request& req, httplib::Response& res) {
+
+		// Validate token from query param
+		std::string token = req.has_param("token") ? req.get_param_value("token") : std::string();
+		if (token.empty()) {
+			SendError(res, 401, "UNAUTHORIZED", "Missing token query parameter");
+			return;
+		}
+
+		ibWebAuthClaims claims;
+		if (!ibWebAuth::ValidateToken(token, claims)) {
+			SendError(res, 401, "TOKEN_EXPIRED", "Token is invalid or expired");
+			return;
+		}
+
+		// SSE requires these specific headers
+		res.set_header("Content-Type",  "text/event-stream");
+		res.set_header("Cache-Control", "no-cache");
+		res.set_header("X-Accel-Buffering", "no"); // disable nginx proxy buffering
+
+		// Shared state between the content provider and the subscriber
+		struct SseState {
+			std::mutex              mutex;
+			std::condition_variable cv;
+			std::vector<std::string> pending; // ready-to-send SSE frames
+			bool                    closed = false;
+		};
+		auto state = std::make_shared<SseState>();
+
+		// Subscribe to the event bus
+		const int subId = ibWebEventBus::Get()->Subscribe(
+			[state](const std::string& eventType, const json& data) {
+				// Build one SSE frame: "event: <type>\ndata: <json>\n\n"
+				std::string frame;
+				frame.reserve(128);
+				frame += "event: ";
+				frame += eventType;
+				frame += "\ndata: ";
+				frame += data.dump();
+				frame += "\n\n";
+
+				{
+					std::lock_guard<std::mutex> lock(state->mutex);
+					if (!state->closed)
+						state->pending.push_back(std::move(frame));
+				}
+				state->cv.notify_one();
+			}
+		);
+
+		static constexpr int kHeartbeatIntervalSec = 30;
+
+		res.set_chunked_content_provider(
+			"text/event-stream",
+			[state, subId](size_t /*offset*/, httplib::DataSink& sink) -> bool {
+
+				// Wait up to 30 s for new events or a heartbeat deadline
+				std::unique_lock<std::mutex> lock(state->mutex);
+				bool timedOut = !state->cv.wait_for(
+					lock,
+					std::chrono::seconds(kHeartbeatIntervalSec),
+					[&state] { return !state->pending.empty() || state->closed; }
+				);
+
+				if (state->closed)
+					return false;
+
+				if (timedOut) {
+					// Send keep-alive heartbeat
+					const std::string heartbeat = "event: heartbeat\ndata: {}\n\n";
+					lock.unlock();
+					return sink.write(heartbeat.data(), heartbeat.size());
+				}
+
+				// Drain all queued frames
+				std::vector<std::string> frames;
+				frames.swap(state->pending);
+				lock.unlock();
+
+				for (const auto& frame : frames) {
+					if (!sink.write(frame.data(), frame.size()))
+						return false;
+				}
+				return true;
+			},
+			[state, subId](bool /*success*/) {
+				// Cleanup: mark closed, wake provider, unsubscribe from bus
+				{
+					std::lock_guard<std::mutex> lock(state->mutex);
+					state->closed = true;
+				}
+				state->cv.notify_all();
+				ibWebEventBus::Get()->Unsubscribe(subId);
+			}
+		);
+	});
+
+	//-------------------------------------------------------------------
+	// GET /embed/:resource        → SPA in embed mode (no sidebar)
+	// GET /embed/:resource/:id    → single object in embed mode
+	//
+	// Both routes serve the same index.html SPA. The frontend detects
+	// the /embed/ path prefix (or ?embed=true) and switches to
+	// EmbedLayout automatically.
+	//
+	// When the static dir is not configured we cannot serve HTML, so
+	// we redirect to the API base — embed consumers are responsible for
+	// hosting the SPA themselves in that scenario.
+	//-------------------------------------------------------------------
+	m_server->Get(R"(/embed(/.*)?)", [this](const httplib::Request& req, httplib::Response& res) {
+
+		if (m_staticDir.IsEmpty()) {
+			// No SPA available — tell the caller to configure staticDir
+			res.status = 307;
+			res.set_header("Location", "/api/health");
+			return;
+		}
+
+		// Serve index.html; the SPA handles the rest client-side
+		std::string indexPath = m_staticDir.ToStdString() + "/index.html";
+		std::ifstream file(indexPath, std::ios::binary);
+		if (!file.is_open()) {
+			SendError(res, 404, "NOT_FOUND", "SPA index not found");
+			return;
+		}
+
+		std::string content(
+			(std::istreambuf_iterator<char>(file)),
+			std::istreambuf_iterator<char>()
+		);
+
+		res.status = 200;
+		res.set_content(content, "text/html; charset=utf-8");
 	});
 
 	//-------------------------------------------------------------------

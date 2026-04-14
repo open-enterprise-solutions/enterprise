@@ -24,6 +24,7 @@
     <ClInclude Include="webServer\ibWebAuth.h" />
     <ClInclude Include="webServer\ibWebMetadataProvider.h" />
     <ClInclude Include="webServer\ibWebFormSerializer.h" />
+    <ClInclude Include="webServer\ibWebEventBus.h" />
     <ClInclude Include="appData.h" />
     <ClInclude Include="backend.h" />
     <ClInclude Include="backend_spreadsheet.h" />
@@ -274,6 +275,7 @@
     <ClCompile Include="webServer\ibWebAuth.cpp" />
     <ClCompile Include="webServer\ibWebMetadataProvider.cpp" />
     <ClCompile Include="webServer\ibWebFormSerializer.cpp" />
+    <ClCompile Include="webServer\ibWebEventBus.cpp" />
     <ClCompile Include="appDataQuery.cpp" />
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="backend_spreadsheet.cpp" />

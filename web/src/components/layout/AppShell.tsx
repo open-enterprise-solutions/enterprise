@@ -26,6 +26,7 @@ import {
 import { useMetadata, type MetaObjectRef, type MetadataTree } from "@/hooks/useMetadata"
 import { useUiStore } from "@/stores/ui-store"
 import { useTabStore } from "@/stores/tab-store"
+import { useNotificationStore } from "@/stores/notification-store"
 import { TabBar } from "./TabBar"
 import { UserMenu } from "./UserMenu"
 
@@ -200,11 +201,12 @@ export function AppShell({ children }: AppShellProps) {
   const location = useLocation()
   const searchRef = useRef<HTMLInputElement>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [notifCount] = useState(0)
 
   const { sidebarCollapsed, toggleSidebar } = useUiStore()
   const { addTab } = useTabStore()
   const { tree, loading: metaLoading, load } = useMetadata()
+  const notifCount = useNotificationStore((s) => s.unreadCount())
+  const markAllRead = useNotificationStore((s) => s.markAllRead)
 
   // Load metadata on mount
   useEffect(() => {
@@ -371,7 +373,8 @@ export function AppShell({ children }: AppShellProps) {
           {/* Notifications */}
           <button
             type="button"
-            title="Notifications"
+            title={notifCount > 0 ? `${notifCount} unread notifications` : "Notifications"}
+            onClick={markAllRead}
             className="relative flex h-8 w-8 items-center justify-center rounded-[var(--radius)] hover:bg-[hsl(var(--secondary))] transition-colors"
           >
             <Bell size={17} weight="duotone" />

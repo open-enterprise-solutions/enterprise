@@ -8,16 +8,38 @@ import {
   Navigate,
   useParams,
   useNavigate,
+  useSearchParams,
 } from "react-router-dom"
 import { oesDataProvider } from "./providers/oes-data-provider"
 import { oesAuthProvider } from "./providers/oes-auth-provider"
 import { AppShell } from "./components/layout/AppShell"
+import { EmbedLayout } from "./components/layout/EmbedLayout"
 import { LoginPage } from "./pages/login"
 import { DashboardPage } from "./pages/dashboard"
 import { ResourceList } from "./pages/resource-list"
+import { ReportPage } from "./pages/report-page"
+import { RegisterPage } from "./pages/register-page"
 import { OesSchemaForm } from "./components/forms/OesSchemaForm"
 import { useTabStore } from "./stores/tab-store"
+import { useEventSource } from "./hooks/useEventSource"
 import { useCallback } from "react"
+
+// Sections rendered with RegisterView instead of ResourceList
+const REGISTER_SECTIONS = new Set([
+  "informationRegisters",
+  "accumulationRegisters",
+  "accountingRegisters",
+])
+
+// ---------------------------------------------------------------------------
+// SSE initialiser — mounted once inside the authenticated tree
+// ---------------------------------------------------------------------------
+
+function SseProvider() {
+  // Connects to /api/events, auto-reconnects, dispatches to stores
+  useEventSource()
+  return null
+}
 
 // ---------------------------------------------------------------------------
 // Layout wrappers
@@ -26,6 +48,7 @@ import { useCallback } from "react"
 function ProtectedLayout() {
   return (
     <Authenticated key="protected-layout" redirectOnFail="/login">
+      <SseProvider />
       <AppShell>
         <Outlet />
       </AppShell>
@@ -39,6 +62,41 @@ function GuestLayout() {
       <Navigate to="/" replace />
     </Authenticated>
   )
+}
+
+// Embed layout wrapper — no auth check needed (token passed in query param)
+function EmbedProtectedLayout() {
+  return (
+    <Authenticated key="embed-layout" redirectOnFail="/login">
+      <EmbedLayout>
+        <Outlet />
+      </EmbedLayout>
+    </Authenticated>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Embed detection helper
+// Reads ?embed=true from any URL and redirects to the /embed/ path
+// so the EmbedLayout is applied. Only active in ProtectedLayout routes.
+// ---------------------------------------------------------------------------
+
+function EmbedRedirectGuard({ children }: { children: React.ReactNode }) {
+  const [searchParams] = useSearchParams()
+  const { section, resource, id } = useParams<{
+    section?: string
+    resource?: string
+    id?: string
+  }>()
+
+  if (searchParams.get("embed") === "true" && section && resource) {
+    const embedPath = id
+      ? `/embed/${section}/${resource}/${id}`
+      : `/embed/${section}/${resource}`
+    return <Navigate to={embedPath} replace />
+  }
+
+  return <>{children}</>
 }
 
 // ---------------------------------------------------------------------------
@@ -57,7 +115,6 @@ function FormCreateRoute() {
       const newId = values?.id as string | undefined
       if (newId && section && resource) {
         const path = `/${section}/${resource}/${newId}`
-        // Replace create tab with the new edit tab
         removeTab(`${section}/${resource}/create`)
         addTab({
           id: `${section}/${resource}/${newId}`,
@@ -116,6 +173,33 @@ function FormEditRoute() {
   )
 }
 
+// Embed variants — same forms, no tab management, no AppShell navigation
+function EmbedListRoute() {
+  const { section, resource } = useParams<{ section: string; resource: string }>()
+  if (!section || !resource) return null
+  return <ResourceList />
+}
+
+function EmbedEditRoute() {
+  const { section, resource, id } = useParams<{
+    section: string
+    resource: string
+    id: string
+  }>()
+  const navigate = useNavigate()
+
+  if (!section || !resource || !id) return null
+
+  return (
+    <OesSchemaForm
+      resource={`${section}/${resource}`}
+      id={id}
+      onSave={() => { /* stay in place */ }}
+      onCancel={() => navigate(-1)}
+    />
+  )
+}
+
 // ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
@@ -155,6 +239,12 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
           </Route>
 
+          {/* Embed routes — EmbedLayout, authenticated */}
+          <Route element={<EmbedProtectedLayout />}>
+            <Route path="/embed/:section/:resource"     element={<EmbedListRoute />} />
+            <Route path="/embed/:section/:resource/:id" element={<EmbedEditRoute />} />
+          </Route>
+
           {/* Protected routes — rendered inside AppShell */}
           <Route element={<ProtectedLayout />}>
             {/* Dashboard */}
@@ -163,7 +253,17 @@ export default function App() {
             {/* Generic list view: /:section/:resource */}
             <Route
               path="/:section/:resource"
-              element={<ResourceListRoute />}
+              element={
+                <EmbedRedirectGuard>
+                  <ResourceListRoute />
+                </EmbedRedirectGuard>
+              }
+            />
+
+            {/* Report viewer: /:section/:resource/report */}
+            <Route
+              path="/:section/:resource/report"
+              element={<ReportPage />}
             />
 
             {/* Create form */}
@@ -175,7 +275,11 @@ export default function App() {
             {/* Edit form */}
             <Route
               path="/:section/:resource/:id"
-              element={<FormEditRoute />}
+              element={
+                <EmbedRedirectGuard>
+                  <FormEditRoute />
+                </EmbedRedirectGuard>
+              }
             />
 
             <Route path="*" element={<Navigate to="/" replace />} />
@@ -186,9 +290,11 @@ export default function App() {
   )
 }
 
-// Guard: skip list route if `:resource` is literally "create"
+// Guard: skip list route if `:resource` is literally "create".
+// For register sections, render RegisterPage; for reports, ResourceList still shows the list.
 function ResourceListRoute() {
-  const { resource } = useParams<{ resource: string }>()
+  const { section = "", resource } = useParams<{ section: string; resource: string }>()
   if (resource === "create") return <Navigate to="/" replace />
+  if (REGISTER_SECTIONS.has(section)) return <RegisterPage />
   return <ResourceList />
 }
