@@ -261,14 +261,12 @@ ColumnMap BuildColumnMap(ibValueMetaObjectGenericData* metaObj)
 		const std::string prefix   = "fld" + std::to_string(id) + "_";
 
 		// Register all suffix variants that OES generates for this attribute.
-		// The frontend only needs one key per logical attribute; for reference
-		// fields we use the _rrref column (GUID) and discard _rtref.
 		for (const char* suffix : {"s", "n", "d", "b", "rrref"})
 			m[prefix + suffix] = attrName;
 
-		// _rtref is the type discriminator of a polymorphic reference.
-		// Map it to empty string — RowToJson will skip empty-mapped columns.
+		// Skip internal columns: type discriminator and rtref
 		m[prefix + "rtref"] = "";
+		m[prefix + "type"] = "";
 	}
 
 	return m;
@@ -307,9 +305,36 @@ json RowToJson(ibDatabaseResultSet* rs, const ColumnMap& colMap)
 			}
 		}
 
-		// Read as string; the frontend resolves the type from metadata schema
-		wxString val = rs->GetResultString(col);
-		row[key] = WxStr(val);
+		// Determine value based on DB column suffix
+		std::string sval;
+
+		if (rawKey.size() > 2 && rawKey.substr(rawKey.size() - 2) == "_d") {
+			// Date column
+			wxDateTime dt = rs->GetResultDate(col);
+			if (dt.IsValid())
+				sval = WxStr(dt.FormatISOCombined(' '));
+		}
+		else if (rawKey.size() > 2 && rawKey.substr(rawKey.size() - 2) == "_n") {
+			// Number column
+			ibNumber num = rs->GetResultNumber(col);
+			sval = WxStr(num.ToString());
+		}
+		else if (rawKey.size() > 2 && rawKey.substr(rawKey.size() - 2) == "_b") {
+			// Boolean column
+			bool bval = rs->GetResultBool(col);
+			sval = bval ? "true" : "false";
+		}
+		else {
+			// String, reference GUID, or other
+			sval = WxStr(rs->GetResultString(col));
+		}
+
+		// Don't overwrite a non-empty value with an empty one
+		// (multiple DB columns can map to the same attribute name)
+		if (row.contains(key) && sval.empty())
+			continue;
+
+		row[key] = sval;
 	}
 	return row;
 }
