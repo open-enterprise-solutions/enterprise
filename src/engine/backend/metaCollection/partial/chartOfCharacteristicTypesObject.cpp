@@ -39,6 +39,7 @@ ibSourceExplorer ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExp
 		srcHelper.AppendSource(metaRef->GetDataCode(), false);
 		srcHelper.AppendSource(metaRef->GetDataDescription());
 		srcHelper.AppendSource(metaRef->GetDataParent());
+		srcHelper.AppendSource(metaRef->GetDataType(), false);
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
@@ -326,7 +327,7 @@ void ibValueRecordDataObjectChartOfCharacteristicTypes::PrepareNames() const
 		);
 	}
 
-	for (const auto object : m_metaObject->GetTableArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
 		if (!object->GetObjectNameAsString(objectName))

@@ -168,9 +168,14 @@ wxString ibValueMetaObjectChartOfCharacteristicTypes::GetDataPresentation(const 
 
 bool ibValueMetaObjectChartOfCharacteristicTypes::LoadData(ibReaderMemory& dataReader)
 {
+	//load default attributes:
+	(*m_propertyAttributeType)->LoadMeta(dataReader);
+
 	//Load object module
 	(*m_propertyModuleObject)->LoadMeta(dataReader);
 	(*m_propertyModuleManager)->LoadMeta(dataReader);
+
+	m_propertyTypesOfCharacteristics->LoadData(dataReader);
 
 	//load default form
 	m_propertyDefFormObject->SetValue(GetIdByGuid(dataReader.r_stringZ()));
@@ -184,9 +189,14 @@ bool ibValueMetaObjectChartOfCharacteristicTypes::LoadData(ibReaderMemory& dataR
 
 bool ibValueMetaObjectChartOfCharacteristicTypes::SaveData(ibWriterMemory& dataWritter)
 {
+	//save default attributes:
+	(*m_propertyAttributeType)->SaveMeta(dataWritter);
+
 	//Save object module
 	(*m_propertyModuleObject)->SaveMeta(dataWritter);
 	(*m_propertyModuleManager)->SaveMeta(dataWritter);
+
+	m_propertyTypesOfCharacteristics->SaveData(dataWritter);
 
 	//save default form
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()));
@@ -208,12 +218,16 @@ bool ibValueMetaObjectChartOfCharacteristicTypes::OnCreateMetaObject(ibMetaData*
 	if (!ibValueMetaObjectRecordDataHierarchyMutableRef::OnCreateMetaObject(metaData, flags))
 		return false;
 
-	return (*m_propertyModuleObject)->OnCreateMetaObject(metaData, flags) &&
+	return (*m_propertyAttributeType)->OnCreateMetaObject(metaData, flags) && 
+		(*m_propertyModuleObject)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyModuleManager)->OnCreateMetaObject(metaData, flags);
 }
 
 bool ibValueMetaObjectChartOfCharacteristicTypes::OnLoadMetaObject(ibMetaData* metaData)
 {
+	if (!(*m_propertyAttributeType)->OnLoadMetaObject(metaData))
+		return false;
+
 	if (!(*m_propertyModuleObject)->OnLoadMetaObject(metaData))
 		return false;
 
@@ -225,6 +239,9 @@ bool ibValueMetaObjectChartOfCharacteristicTypes::OnLoadMetaObject(ibMetaData* m
 
 bool ibValueMetaObjectChartOfCharacteristicTypes::OnSaveMetaObject(int flags)
 {
+	if (!(*m_propertyAttributeType)->OnSaveMetaObject(flags))
+		return false;
+
 	if (!(*m_propertyModuleObject)->OnSaveMetaObject(flags))
 		return false;
 
@@ -236,6 +253,9 @@ bool ibValueMetaObjectChartOfCharacteristicTypes::OnSaveMetaObject(int flags)
 
 bool ibValueMetaObjectChartOfCharacteristicTypes::OnDeleteMetaObject()
 {
+	if (!(*m_propertyAttributeType)->OnDeleteMetaObject())
+		return false;
+
 	if (!(*m_propertyModuleObject)->OnDeleteMetaObject())
 		return false;
 
@@ -265,6 +285,9 @@ bool ibValueMetaObjectChartOfCharacteristicTypes::OnReloadMetaObject()
 
 bool ibValueMetaObjectChartOfCharacteristicTypes::OnBeforeRunMetaObject(int flags)
 {
+	if (!(*m_propertyAttributeType)->OnBeforeRunMetaObject(flags))
+		return false;
+
 	if (!(*m_propertyModuleObject)->OnBeforeRunMetaObject(flags))
 		return false;
 
@@ -288,6 +311,9 @@ bool ibValueMetaObjectChartOfCharacteristicTypes::OnBeforeRunMetaObject(int flag
 
 bool ibValueMetaObjectChartOfCharacteristicTypes::OnAfterRunMetaObject(int flags)
 {
+	if (!(*m_propertyAttributeType)->OnAfterRunMetaObject(flags))
+		return false;
+
 	if (!(*m_propertyModuleObject)->OnAfterRunMetaObject(flags))
 		return false;
 
@@ -310,6 +336,9 @@ bool ibValueMetaObjectChartOfCharacteristicTypes::OnAfterRunMetaObject(int flags
 
 bool ibValueMetaObjectChartOfCharacteristicTypes::OnBeforeCloseMetaObject()
 {
+	if (!(*m_propertyAttributeType)->OnBeforeCloseMetaObject())
+		return false;
+
 	if (!(*m_propertyModuleObject)->OnBeforeCloseMetaObject())
 		return false;
 
@@ -332,6 +361,9 @@ bool ibValueMetaObjectChartOfCharacteristicTypes::OnBeforeCloseMetaObject()
 
 bool ibValueMetaObjectChartOfCharacteristicTypes::OnAfterCloseMetaObject()
 {
+	if (!(*m_propertyAttributeType)->OnAfterCloseMetaObject())
+		return false;
+
 	if (!(*m_propertyModuleObject)->OnAfterCloseMetaObject())
 		return false;
 

@@ -286,6 +286,7 @@
     <ClCompile Include="backend_localization.cpp" />
     <ClCompile Include="compiler\valueSerialization.cpp" />
     <ClCompile Include="constantCtor.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataQuery.cpp" />
     <ClCompile Include="metadataSerialization.cpp" />
     <ClCompile Include="moduleManager\globalContextManager.cpp" />
     <ClCompile Include="spreadsheetDescription.cpp" />

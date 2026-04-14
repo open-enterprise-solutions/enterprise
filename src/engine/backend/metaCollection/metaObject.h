@@ -37,6 +37,7 @@ const ibClassID g_metaTemplateCLSID = string_to_clsid("MD_TMPL");
 const ibClassID g_metaModuleCLSID = string_to_clsid("MD_MOD");
 const ibClassID g_metaManagerCLSID = string_to_clsid("MD_MNGR");
 const ibClassID g_metaTableCLSID = string_to_clsid("MD_TBL");
+const ibClassID g_metaSubcontoKindsTableCLSID = string_to_clsid("MD_SKTB");
 const ibClassID g_metaEnumCLSID = string_to_clsid("MD_ENUM");
 const ibClassID g_metaDimensionCLSID = string_to_clsid("MD_DMNT");
 const ibClassID g_metaResourceCLSID = string_to_clsid("MD_RESS");
@@ -257,7 +258,7 @@ public:
 
 	//process choice 
 	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue,
-		const wxString& strFormName, int selMode) {
+		const wxString& strFormName, enum ibSelectMode selMode) {
 		return true;
 	}
 

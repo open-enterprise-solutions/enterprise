@@ -120,6 +120,15 @@ bool ibValueMetaObjectChartOfAccounts::LoadData(ibReaderMemory& dataReader)
 	m_propertyDefFormSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
 	m_propertyDefFormFolderSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
 
+	//load default attributes:
+	(*m_propertyAttributeAccountType)->LoadMeta(dataReader);
+	(*m_propertyAttributeOffBalance)->LoadMeta(dataReader);
+	(*m_propertyAttributeQuantitative)->LoadMeta(dataReader);
+	(*m_propertyAttributeCurrency)->LoadMeta(dataReader);
+	(*m_propertyAttributeMaxSubcontoCount)->LoadMeta(dataReader);
+
+	(*m_propertySubcontoKindsTable)->LoadMeta(dataReader);
+
 	if (!m_propertyChartOfCharacteristicTypes->LoadData(dataReader))
 		return false;
 
@@ -135,6 +144,15 @@ bool ibValueMetaObjectChartOfAccounts::SaveData(ibWriterMemory& dataWritter)
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()));
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormFolderSelect->GetValueAsInteger()));
+
+	//save default attributes:
+	(*m_propertyAttributeAccountType)->SaveMeta(dataWritter);
+	(*m_propertyAttributeOffBalance)->SaveMeta(dataWritter);
+	(*m_propertyAttributeQuantitative)->SaveMeta(dataWritter);
+	(*m_propertyAttributeCurrency)->SaveMeta(dataWritter);
+	(*m_propertyAttributeMaxSubcontoCount)->SaveMeta(dataWritter);
+
+	(*m_propertySubcontoKindsTable)->SaveMeta(dataWritter);
 
 	if (!m_propertyChartOfCharacteristicTypes->SaveData(dataWritter))
 		return false;

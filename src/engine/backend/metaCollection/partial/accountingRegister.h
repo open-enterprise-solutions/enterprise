@@ -131,7 +131,7 @@ public:
 protected:
 
 	//get default attributes
-	virtual bool FillArrayObjectByPredefined(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
+	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		array = {
 			m_propertyAttributeLineActive->GetMetaObject(),
 			m_propertyAttributePeriod->GetMetaObject(),
@@ -190,21 +190,21 @@ private:
 	ibPropertyChartOfAccounts* m_propertyChartOfAccounts = ibPropertyObject::CreateProperty<ibPropertyChartOfAccounts>(m_categoryData, wxT("ChartOfAccounts"), _("Chart of accounts"));
 
 	// Predefined attributes: RecordType (Debit/Credit)
-	ibPropertyInnerAttribute<>* m_propertyAttributeRecordType = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categoryCommon,
+	ibPropertyContainer<>* m_propertyAttributeRecordType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
 		ibValueMetaObjectCompositeData::CreateSpecialType(wxT("RecordType"), _("Record type"), wxEmptyString, g_enumAccountingRecordTypeCLSID, false, ibValueEnumAccountingRegisterRecordType::CreateDefEnumValue()));
 
 	// Predefined attribute: Account (reference to Chart of Accounts - polymorphic)
-	ibPropertyInnerAttribute<>* m_propertyAttributeAccount = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categoryCommon,
+	ibPropertyContainer<>* m_propertyAttributeAccount = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
 		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Account"), _("Account"), wxEmptyString, false, ibItemMode::ibItemMode_Item));
 
 	// Predefined attributes: Subconto 1-3 (polymorphic references, type determined by ПВХ linked to account)
-	ibPropertyInnerAttribute<>* m_propertyAttributeSubconto1 = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categoryCommon,
+	ibPropertyContainer<>* m_propertyAttributeSubconto1 = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
 		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Subconto1"), _("Subconto 1"), wxEmptyString, false, ibItemMode::ibItemMode_Item));
 
-	ibPropertyInnerAttribute<>* m_propertyAttributeSubconto2 = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categoryCommon,
+	ibPropertyContainer<>* m_propertyAttributeSubconto2 = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
 		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Subconto2"), _("Subconto 2"), wxEmptyString, false, ibItemMode::ibItemMode_Item));
 
-	ibPropertyInnerAttribute<>* m_propertyAttributeSubconto3 = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categoryCommon,
+	ibPropertyContainer<>* m_propertyAttributeSubconto3 = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
 		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Subconto3"), _("Subconto 3"), wxEmptyString, false, ibItemMode::ibItemMode_Item));
 
 	friend class ibValueRecordSetObjectAccountingRegister;

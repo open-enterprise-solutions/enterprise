@@ -21,11 +21,14 @@ ibSourceExplorer ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer() con
 {
 	ibSourceExplorer srcHelper(m_metaObject, GetClassType(), false);
 	ibValueMetaObjectChartOfAccounts* metaRef = nullptr;
+	
 	if (m_metaObject->ConvertToValue(metaRef)) {
 		srcHelper.AppendSource(metaRef->GetDataCode(), false);
 		srcHelper.AppendSource(metaRef->GetDataDescription());
 		srcHelper.AppendSource(metaRef->GetDataParent());
+		srcHelper.AppendSource(metaRef->GetSubcontoKindsTable());
 	}
+	
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
 		ibItemMode attrUse = object->GetItemMode();
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
@@ -38,6 +41,7 @@ ibSourceExplorer ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer() con
 			}
 		}
 	}
+
 	for (const auto object : m_metaObject->GetTableArrayObject()) {
 		ibItemMode tableUse = object->GetTableUse();
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
@@ -46,6 +50,7 @@ ibSourceExplorer ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer() con
 			if (tableUse == ibItemMode::ibItemMode_Folder || tableUse == ibItemMode::ibItemMode_Folder_Item) srcHelper.AppendSource(object);
 		}
 	}
+	
 	return srcHelper;
 }
 
@@ -165,7 +170,7 @@ void ibValueRecordDataObjectChartOfAccounts::PrepareNames() const
 		if (!object->GetObjectNameAsString(objectName)) continue;
 		m_methodHelper->AppendProp(objectName, true, !m_metaObject->IsDataReference(object->GetMetaID()), object->GetMetaID(), eProperty);
 	}
-	for (const auto object : m_metaObject->GetTableArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted()) continue;
 		if (!object->GetObjectNameAsString(objectName)) continue;
 		m_methodHelper->AppendProp(objectName, true, false, object->GetMetaID(), eTable);

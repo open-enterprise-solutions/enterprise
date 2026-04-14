@@ -334,7 +334,7 @@ void ibValueRecordDataObjectCatalog::PrepareNames() const
 	}
 
 	//fill custom tables 
-	for (const auto object : m_metaObject->GetTableArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
 		if (!object->GetObjectNameAsString(objectName))

@@ -893,6 +893,12 @@
     <ClCompile Include="propertyManager\property\advprop\advpropBoolean.cpp">
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\advprop\advpropChartOfCharacteristicTypes.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\advprop\advpropChartOfAccounts.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainFrame\mainFrame.h">
@@ -1591,6 +1597,12 @@
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\advprop\advpropBoolean.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\advprop\advpropChartOfCharacteristicTypes.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\advprop\advpropChartOfAccounts.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
   </ItemGroup>

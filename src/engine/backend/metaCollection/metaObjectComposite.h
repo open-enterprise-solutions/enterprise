@@ -7,11 +7,11 @@
 
 //base property for "inner attribute"
 template <typename T = class ibValueMetaObjectAttributePredefined>
-class ibPropertyInnerAttribute : public ibProperty {
+class ibPropertyContainer : public ibProperty {
 public:
 
 	template <typename... Args>
-	ibPropertyInnerAttribute(ibPropertyCategory* cat, Args&&... args)
+	ibPropertyContainer(ibPropertyCategory* cat, Args&&... args)
 		: ibProperty(cat,
 			std::get<0>(std::forward_as_tuple(args...)),
 			std::get<1>(std::forward_as_tuple(args...)),
@@ -23,12 +23,12 @@ public:
 		m_metaObject = parent->CreateMetaObjectAndSetParent<T>(args...);
 	}
 
-	ibPropertyInnerAttribute(ibPropertyCategory* cat, T* metaObject)
+	ibPropertyContainer(ibPropertyCategory* cat, T* metaObject)
 		: ibProperty(cat, metaObject->GetName(), metaObject->GetSynonym(), wxNullVariant), m_metaObject(metaObject)
 	{
 	}
 
-	virtual ~ibPropertyInnerAttribute() {}
+	virtual ~ibPropertyContainer() {}
 
 	// get meta object 
 	T* GetMetaObject() const { return m_metaObject; }
@@ -119,6 +119,7 @@ public:
 		std::vector<ibValueMetaObjectAttributeBase*> array;
 		return GetGenericAttributeArrayObject(array);
 	}
+	
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const = 0;
 
@@ -128,12 +129,12 @@ public:
 	//predefined 
 	std::vector<ibValueMetaObjectAttributeBase*> GetPredefinedAttributeArrayObject() const {
 		std::vector<ibValueMetaObjectAttributeBase*> array;
-		FillArrayObjectByPredefined(array);
+		FillArrayObjectByPredefinedAttribute(array);
 		return array;
 	}
 	std::vector<ibValueMetaObjectAttributeBase*> GetPredefinedAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-		FillArrayObjectByPredefined(array);
+		FillArrayObjectByPredefinedAttribute(array);
 		return array;
 	}
 
@@ -245,7 +246,7 @@ protected:
 		return ibValueMetaObject::CreateMetaObjectAndSetParent<ibValueMetaObjectAttributePredefined>(name, synonym, comment, clsid, descr, fillCheck, defValue, useItem, selectMode);
 	}
 
-	virtual bool FillArrayObjectByPredefined(
+	virtual bool FillArrayObjectByPredefinedAttribute(
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		return false;
 	}

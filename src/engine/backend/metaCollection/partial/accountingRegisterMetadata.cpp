@@ -301,7 +301,7 @@ bool ibValueMetaObjectAccountingRegister::CreateAndUpdateRegisterTableDB(ibMetaD
 {
 	// Delegates to the base class which handles all predefined attributes
 	// (LineActive, Period, RecordType, Account, Subconto1-3, Recorder, LineNumber)
-	// via FillArrayObjectByPredefined, plus user-defined dimensions and resources.
+	// via FillArrayObjectByPredefinedAttribute, plus user-defined dimensions and resources.
 	return ibValueMetaObjectRegisterData::CreateAndUpdateTableDB(srcMetaData, srcMetaObject, flags);
 }
 

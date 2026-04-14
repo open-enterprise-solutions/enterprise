@@ -647,6 +647,12 @@
     <ClInclude Include="value_ptr.h" />
     <ClInclude Include="restructureInfo.h" />
     <ClInclude Include="tableView.h" />
+    <ClInclude Include="propertyManager\property\propertyChartOfCharacteristicTypes.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyChartOfAccounts.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="backend.cpp" />
@@ -1505,6 +1511,17 @@
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="tableView.cpp" />
+    <ClCompile Include="metadataConfigurationXML.cpp" />
+    <ClCompile Include="metadataConfigurationJSON.cpp" />
+    <ClCompile Include="propertyManager\property\propertyChartOfAccounts.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyChartOfCharacteristicTypes.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataQuery.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="debugger">

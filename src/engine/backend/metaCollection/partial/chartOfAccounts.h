@@ -49,6 +49,8 @@ public:
 	ibValueMetaObjectAttributePredefined* GetCurrency() const { return m_propertyAttributeCurrency->GetMetaObject(); }
 	ibValueMetaObjectAttributePredefined* GetMaxSubcontoCount() const { return m_propertyAttributeMaxSubcontoCount->GetMetaObject(); }
 
+	ibValueMetaObjectSubcontoKindsTable* GetSubcontoKindsTable() const { return m_propertySubcontoKindsTable->GetMetaObject(); }
+
 	// Chart of Characteristic Types binding (determines available subconto types)
 	ibPropertyChartOfCharacteristicTypes* GetChartOfCharacteristicTypes() const { return m_propertyChartOfCharacteristicTypes; }
 
@@ -114,7 +116,7 @@ public:
 protected:
 
 	//predefined array
-	virtual bool FillArrayObjectByPredefined(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
+	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		array = {
 			m_propertyAttributePredefined->GetMetaObject(),
 			m_propertyAttributeCode->GetMetaObject(),
@@ -129,6 +131,12 @@ protected:
 			m_propertyAttributeReference->GetMetaObject(),
 			m_propertyAttributeDeletionMark->GetMetaObject(),
 		};
+		return true;
+	}
+
+	virtual bool FillArrayObjectByPredefinedTable(
+		std::vector<ibValueMetaObjectTableData*>& array) const {
+		array = { m_propertySubcontoKindsTable->GetMetaObject() };
 		return true;
 	}
 
@@ -149,6 +157,9 @@ protected:
 
 	//create object data with meta form
 	virtual ibSourceDataObject* CreateSourceObject(ibValueMetaObjectFormBase* metaObject);
+
+	//create and update table 
+	virtual bool CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags);
 
 	//load & save metaData from DB
 	virtual bool LoadData(ibReaderMemory& reader);
@@ -226,19 +237,19 @@ private:
 
 	ibPropertyCategory* m_categoryAccounting = ibPropertyObject::CreatePropertyCategory(wxT("Accounting"), _("Accounting"));
 
-	ibPropertyInnerAttribute<>* m_propertyAttributeAccountType = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categoryAccounting,
+	ibPropertyContainer<>* m_propertyAttributeAccountType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
 		ibValueMetaObjectCompositeData::CreateSpecialType(wxT("AccountType"), _("Account type"), wxEmptyString, g_enumAccountTypeCLSID, false, ibValueEnumAccountType::CreateDefEnumValue()));
 
-	ibPropertyInnerAttribute<>* m_propertyAttributeOffBalance = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categoryAccounting,
+	ibPropertyContainer<>* m_propertyAttributeOffBalance = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
 		ibValueMetaObjectCompositeData::CreateBoolean(wxT("OffBalance"), _("Off-balance"), wxEmptyString, ibItemMode::ibItemMode_Folder_Item));
 
-	ibPropertyInnerAttribute<>* m_propertyAttributeQuantitative = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categoryAccounting,
+	ibPropertyContainer<>* m_propertyAttributeQuantitative = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
 		ibValueMetaObjectCompositeData::CreateBoolean(wxT("Quantitative"), _("Quantitative"), wxEmptyString, ibItemMode::ibItemMode_Folder_Item));
 
-	ibPropertyInnerAttribute<>* m_propertyAttributeCurrency = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categoryAccounting,
+	ibPropertyContainer<>* m_propertyAttributeCurrency = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
 		ibValueMetaObjectCompositeData::CreateBoolean(wxT("Currency"), _("Currency accounting"), wxEmptyString, ibItemMode::ibItemMode_Folder_Item));
 
-	ibPropertyInnerAttribute<>* m_propertyAttributeMaxSubcontoCount = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categoryAccounting,
+	ibPropertyContainer<>* m_propertyAttributeMaxSubcontoCount = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
 		ibValueMetaObjectCompositeData::CreateNumber(wxT("MaxSubcontoCount"), _("Max subconto count"), wxEmptyString, 1, 0, ibItemMode::ibItemMode_Folder_Item));
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -248,9 +259,9 @@ private:
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Predefined tabular section "SubcontoKinds" — own meta class with predefined columns
-	// Created manually because ibPropertyInnerAttribute template can't pass args to non-default constructor via wxClassInfo
-	ibPropertyInnerAttribute<ibValueMetaObjectSubcontoKindsTable>* m_propertySubcontoKindsTable =
-		ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<ibValueMetaObjectSubcontoKindsTable>>(m_categoryAccounting, wxT("SubcontoKinds"), _("Subconto kinds"));
+	// Created manually because ibPropertyContainer template can't pass args to non-default constructor via wxClassInfo
+	ibPropertyContainer<ibValueMetaObjectSubcontoKindsTable>* m_propertySubcontoKindsTable =
+		ibPropertyObject::CreateProperty<ibPropertyContainer<ibValueMetaObjectSubcontoKindsTable>>(m_categoryAccounting, wxT("SubcontoKinds"), _("Subconto kinds"));
 
 	friend class ibValueRecordDataObjectChartOfAccounts;
 	friend class ibMetaData;

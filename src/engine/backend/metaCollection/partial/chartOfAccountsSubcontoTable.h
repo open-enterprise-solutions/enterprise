@@ -34,9 +34,9 @@ public:
 
 protected:
 
-	virtual bool FillArrayObjectByPredefined(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
+	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
 		// Call base to get NumberLine
-		ibValueMetaObjectTableData::FillArrayObjectByPredefined(array);
+		ibValueMetaObjectTableData::FillArrayObjectByPredefinedAttribute(array);
 		// Add our predefined columns
 		array.push_back(m_propertySubcontoKind->GetMetaObject());
 		array.push_back(m_propertyOrder->GetMetaObject());
@@ -44,18 +44,22 @@ protected:
 		return true;
 	}
 
+	//load & save metaData from DB
+	virtual bool LoadData(ibReaderMemory& reader);
+	virtual bool SaveData(ibWriterMemory& writer);
+
 private:
 
 	ibPropertyCategory* m_categorySubconto = ibPropertyObject::CreatePropertyCategory(wxT("Subconto"), _("Subconto"));
 
 	// Predefined columns
-	ibPropertyInnerAttribute<>* m_propertySubcontoKind = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categorySubconto,
+	ibPropertyContainer<>* m_propertySubcontoKind = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categorySubconto,
 		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("SubcontoKind"), _("Subconto kind"), wxEmptyString, false, ibItemMode::ibItemMode_Item));
 
-	ibPropertyInnerAttribute<>* m_propertyOrder = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categorySubconto,
+	ibPropertyContainer<>* m_propertyOrder = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categorySubconto,
 		ibValueMetaObjectCompositeData::CreateNumber(wxT("Order"), _("Order"), wxEmptyString, 3, 0, ibItemMode::ibItemMode_Item));
 
-	ibPropertyInnerAttribute<>* m_propertySummaryOnly = ibPropertyObject::CreateProperty<ibPropertyInnerAttribute<>>(m_categorySubconto,
+	ibPropertyContainer<>* m_propertySummaryOnly = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categorySubconto,
 		ibValueMetaObjectCompositeData::CreateBoolean(wxT("SummaryOnly"), _("Summary only"), wxEmptyString, ibItemMode::ibItemMode_Item));
 };
 

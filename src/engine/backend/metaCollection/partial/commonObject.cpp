@@ -1470,7 +1470,7 @@ ibSourceExplorer ibValueRecordDataObject::GetSourceExplorer() const
 		srcHelper.AppendSource(object);
 	}
 
-	for (const auto object : metaObject->GetTableArrayObject()) {
+	for (const auto object : metaObject->GetGenericTableArrayObject()) {
 		srcHelper.AppendSource(object);
 	}
 
@@ -1548,7 +1548,7 @@ void ibValueRecordDataObject::PrepareEmptyObject()
 	}
 
 	// table is collection values 
-	for (const auto object : metaObject->GetTableArrayObject()) {
+	for (const auto object : metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
 		m_listObjectValue.insert_or_assign(object->GetMetaID(), ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObject>(this, object));
@@ -1590,7 +1590,7 @@ void ibValueRecordDataObject::PrepareNames() const
 		}
 
 		//fill custom tables 
-		for (const auto object : metaObject->GetTableArrayObject()) {
+		for (const auto object : metaObject->GetGenericTableArrayObject()) {
 			if (object->IsDeleted())
 				continue;
 			if (!object->GetObjectNameAsString(objectName))
@@ -2021,7 +2021,7 @@ ibSourceExplorer ibValueRecordDataObjectRef::GetSourceExplorer() const
 		}
 	}
 
-	for (const auto object : m_metaObject->GetTableArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		srcHelper.AppendSource(object);
 	}
 
@@ -2104,7 +2104,7 @@ void ibValueRecordDataObjectRef::PrepareEmptyObject()
 		}
 	}
 	// table is collection values 
-	for (const auto object : m_metaObject->GetTableArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
 		m_listObjectValue.insert_or_assign(object->GetMetaID(), ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectRef>(this, object));
@@ -2131,7 +2131,7 @@ void ibValueRecordDataObjectRef::PrepareEmptyObject(const ibValueRecordDataObjec
 	m_listObjectValue[codeAttribute->GetMetaID()] = codeAttribute->CreateValue();
 
 	// table is collection values 
-	for (const auto object : m_metaObject->GetTableArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
 		ibValueTabularSectionDataObjectRef* tableSection = ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectRef>(this, object);
@@ -2199,7 +2199,7 @@ ibSourceExplorer ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 		}
 	}
 
-	for (const auto object : m_metaObject->GetTableArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		ibItemMode tableUse = object->GetTableUse();
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
 			if (tableUse == ibItemMode::ibItemMode_Item
@@ -2298,7 +2298,7 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject()
 		m_listObjectValue.insert_or_assign(*metaFolder->GetDataIsFolder(), true);
 	}
 	// table is collection values 
-	for (const auto object : m_metaObject->GetTableArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
 		ibItemMode tableUse = object->GetTableUse();
@@ -2351,7 +2351,7 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject(const ibValueRecord
 		m_listObjectValue.insert_or_assign(*metaFolder->GetDataIsFolder(), true);
 	}
 	// table is collection values 
-	for (const auto object : m_metaObject->GetTableArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
 		ibValueMetaObjectTableData* metaTable = nullptr; ibItemMode tableUse = ibItemMode::ibItemMode_Folder_Item;
