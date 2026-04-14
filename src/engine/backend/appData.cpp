@@ -171,8 +171,10 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 #ifdef OES_USE_POSTGRESQL
 		std::shared_ptr<ibDatabaseLayerPostgres> db(new ibDatabaseLayerPostgres());
 		if (db->Open(strServer, strPort, strDatabase, strUser, strPassword)) {
+#elif defined(OES_USE_FIREBIRD)
+		std::shared_ptr<ibDatabaseLayerFirebird> db(new ibDatabaseLayerFirebird());
+		if (db->Open(strServer, strDatabase, strUser, strPassword)) {
 #else
-		// Fallback to SQLite when PostgreSQL not available
 		std::shared_ptr<ibDatabaseLayerSQLite> db(new ibDatabaseLayerSQLite());
 		if (db->Open(strDatabase)) {
 #endif
