@@ -178,7 +178,8 @@ export function OesSchemaForm({ resource, id, onSave, onCancel }: OesSchemaFormP
     api
       .get<Record<string, unknown>>(`/data/${resource}/${id}`)
       .then((res) => {
-        const data = res.data
+        const raw = res.data as Record<string, unknown>
+        const data = (raw.data ?? raw) as Record<string, unknown>
         formRef.current.setValues(data)
         if (typeof data["status"] === "string") {
           setDocStatus(data["status"] as DocStatus)
