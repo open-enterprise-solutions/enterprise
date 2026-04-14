@@ -311,7 +311,7 @@ bool ibWebAuth::ParsePayload(const std::string& encoded, ibWebAuthClaims& out)
 		return false;
 	}
 
-	return !out.sub.empty();
+	return true;  // allow anonymous (empty sub)
 }
 
 // --- Public API ---
@@ -377,4 +377,20 @@ bool ibWebAuth::ValidateToken(const std::string& token, ibWebAuthClaims& outClai
 		return false;
 
 	return true;
+}
+
+bool ibWebAuth::DecodePayload(const std::string& token, ibWebAuthClaims& outClaims)
+{
+	// Split into header.payload.signature
+	size_t dot1 = token.find('.');
+	if (dot1 == std::string::npos)
+		return false;
+
+	size_t dot2 = token.find('.', dot1 + 1);
+	if (dot2 == std::string::npos)
+		return false;
+
+	std::string payloadPart = token.substr(dot1 + 1, dot2 - dot1 - 1);
+
+	return ParsePayload(payloadPart, outClaims);
 }

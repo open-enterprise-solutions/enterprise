@@ -47,6 +47,10 @@ public:
 	static bool ValidateToken(const std::string& token,
 		ibWebAuthClaims& outClaims);
 
+	// Decode payload without signature verification (for debugging/fallback)
+	static bool DecodePayload(const std::string& token,
+		ibWebAuthClaims& outClaims);
+
 	// Token lifetime in seconds (default: 15 minutes)
 	static constexpr int64_t ms_tokenLifetimeSec = 15 * 60;
 
