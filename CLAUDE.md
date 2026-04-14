@@ -185,25 +185,32 @@ These are located primarily in the compiler and metadata loading paths. They mas
 
 ### Architecture
 
-The web server is an **add-on layer** over backend.dll — it does not modify the core engine. `ibWebServer` wraps cpp-httplib and runs inside `daemon.exe`.
+The web server uses **server-side form rendering** — forms live in memory on the server, browser receives JSON layouts and sends events back. daemon.exe links both backend.dll and frontend.dll.
 
 ```
 Browser (React SPA)
-    │ HTTP / WebSocket
+    │ HTTP (JSON layouts + events)
     ▼
-daemon.exe ──► ibWebServer (cpp-httplib) ──► backend.dll (unchanged)
-                   │                              │
-                   └── /api/*                     └── Database
-                   └── /* (static files from web/dist/)
+daemon.exe (backend.dll + frontend.dll)
+    ├─ ibWebServer (cpp-httplib) ──► /api/* endpoints
+    ├─ ibWebSessionManager ──► per-user sessions with forms in memory
+    ├─ ibWebMainFrame ──► enables CreateNewForm() in service mode
+    └─ ibWebVisualHost ──► builds JSON proxy tree from ibValueForm
+         │
+         ▼
+    backend.dll ──► Database
 ```
 
 ### Key Files
 
 | File | Purpose |
 |---|---|
-| `src/engine/backend/webServer/ibWebServer.h` | Server class — singleton, `BACKEND_API` |
-| `src/engine/backend/webServer/ibWebServer.cpp` | Routes, health endpoint, static files, CORS |
-| `src/3rdparty/cpp-httplib/httplib.h` | HTTP server library (header-only, MIT) |
+| `src/engine/backend/webServer/ibWebServer.h` | HTTP server (cpp-httplib wrapper) |
+| `src/engine/frontend/visualView/webHost/ibWebVisualHost.h` | Server-side form rendering → JSON |
+| `src/engine/frontend/visualView/webHost/ibWebControlProxy.h` | wxObject replacement for web |
+| `src/engine/daemon/ibWebMainFrame.h` | CreateNewForm() in service mode |
+| `src/engine/daemon/ibWebSessionManager.h` | Per-user sessions with forms |
+| `src/engine/daemon/ibWebSessionRoutes.cpp` | Session API endpoints |
 | `web/` | React SPA frontend (Vite + TypeScript) |
 
 ### Running the Web Server

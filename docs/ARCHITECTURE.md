@@ -427,46 +427,114 @@ The server runs each connection as a `wxThread` (`ibDebuggerServer::ibDebuggerSe
 
 ### Overview
 
-OES includes an embedded HTTP server that enables browser-based access to the platform. The web server is an **add-on layer** — it calls existing backend C++ methods without modifying the core engine.
+OES includes an embedded HTTP server with **server-side form rendering** — similar to how 1C:Enterprise and the Wt C++ Web Toolkit work. Forms live in memory on the server; the browser receives JSON layouts and sends events back.
 
 ```
 Browser (React SPA)
-    │ HTTP / WebSocket
+    │ HTTP (JSON layouts + events)
     ▼
-daemon.exe
-    └─ ibWebServer (cpp-httplib)
-         ├─ /api/health        → system status
-         ├─ /api/auth/*        → JWT authentication
-         ├─ /api/data/*        → CRUD for business objects
-         ├─ /api/metadata/*    → metadata tree access
-         ├─ /api/designer/*    → web configurator
-         ├─ /api/ws/debug      → debugger bridge (WebSocket → TCP:1650)
-         └─ /*                 → static files (web/dist/)
-              │
-              ▼
-         backend.dll (unchanged)
-              │
-              ▼
-         Database tier
+daemon.exe (links backend.dll + frontend.dll)
+    ├─ ibWebServer (cpp-httplib)
+    │    ├─ /api/health           → system status
+    │    ├─ /api/auth/*           → JWT authentication
+    │    ├─ /api/data/*           → CRUD for business objects
+    │    ├─ /api/metadata/*       → metadata tree
+    │    └─ /*                    → static files (web/dist/)
+    │
+    ├─ ibWebSessionManager        → per-user sessions with forms in memory
+    │    ├─ /api/session/open-form  → create form → JSON layout
+    │    ├─ /api/session/event      → process event → JSON updates
+    │    └─ /api/session/close      → cleanup
+    │
+    ├─ ibWebMainFrame             → enables CreateNewForm() in service mode
+    └─ ibWebVisualHost            → builds JSON proxy tree from ibValueForm
+         │
+         ▼
+    backend.dll (ibApplicationData, ibMetaDataConfiguration, ibProcUnit)
+         │
+         ▼
+    Database tier (Firebird / PostgreSQL / SQLite)
 ```
 
-### ibWebServer
+### Server-Side Form Rendering
 
-`ibWebServer` (`src/engine/backend/webServer/ibWebServer.h`) wraps the cpp-httplib library and follows the same singleton pattern as `ibDebuggerServer`:
+The web client uses **server-side form rendering** — the same approach as 1C:Enterprise and Wt C++ Web Toolkit:
 
-- **Singleton access**: `webServer` macro (like `appData`, `debugServer`)
-- **Lifecycle**: `ibWebServer::Initialize(port, staticDir)` / `ibWebServer::Destroy()`
-- **Threading**: cpp-httplib runs its own thread pool (8 base, 64 max threads via `std::thread`). Each HTTP request handler gets an independent context.
-- **Database access**: Request handlers call `db_query->Clone()` to obtain a thread-safe database connection, following the same pattern used by `ibApplicationDataSessionUpdater`.
+1. User opens a form → server creates `ibValueForm` in memory
+2. Server loads form blob from metadata → `LoadForm()` deserializes control tree
+3. `ibWebVisualHost` walks the tree recursively, creating `ibWebControlProxy` for each control
+4. Server sends JSON layout to browser
+5. User clicks a button → browser sends event to server
+6. Server calls `ibProcUnit::CallAsFunc()` to execute the event handler (bytecode)
+7. Server collects changed control properties → sends diff back to browser
 
-### Daemon Mode
+```
+Session lifecycle:
 
-When `daemon.exe` starts with `--web-port` (default 8765), it:
+  POST /api/session/open-form {metaName: "Products"}
+    → Server: ibWebMainFrame::CreateNewForm(formMeta)
+    → Server: ibValueForm::LoadForm(blob)
+    → Server: ibValueForm::BuildForm()
+    → Server: ibValueForm::InitializeFormModule()  (compile + execute)
+    → Server: ibWebVisualHost::CreateWebHost()     (recursive proxy tree)
+    → Client: {layout: {id:1, type:"form", children:[...]}}
 
-1. Initializes backend via `appDataCreateServer(eSERVICE_MODE, ...)`
-2. Authenticates via `appData->Connect(user, password)`
-3. Creates `ibWebServer` singleton and registers routes
-4. Blocks on `webServer->WaitForShutdown()` until process termination
+  POST /api/session/event {controlId:3, event:"OnClick"}
+    → Server: ibProcUnit::CallAsFunc("OnClick")
+    → Server: re-read all proxy properties (diff detection)
+    → Client: {updates: [{id:5, props:{value:"new text"}}]}
+```
+
+### Key Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `ibWebServer` | `backend/webServer/ibWebServer.h` | HTTP server (cpp-httplib wrapper) |
+| `ibWebMainFrame` | `daemon/ibWebMainFrame.h` | Enables `CreateNewForm()` in service mode |
+| `ibWebVisualHost` | `frontend/visualView/webHost/ibWebVisualHost.h` | Builds JSON proxy tree from form |
+| `ibWebControlProxy` | `frontend/visualView/webHost/ibWebControlProxy.h` | wxObject replacement — stores control state |
+| `ibWebSessionManager` | `daemon/ibWebSessionManager.h` | Per-user sessions with forms in memory |
+| Session routes | `daemon/ibWebSessionRoutes.cpp` | HTTP endpoints for form lifecycle |
+
+### ibWebVisualHost
+
+Standalone class (not inheriting `ibVisualHost` which requires wxScrolledWindow). Same recursive control traversal pattern, but outputs JSON instead of wxWidgets.
+
+- `CreateWebHost()` — walks `ibValueForm` children recursively, creates `ibWebControlProxy` for each
+- `CreateProxy()` — maps CLSID to type name (22 control types), reads properties via `GetPropVal()`
+- `GetFormLayout()` — serializes entire proxy tree to JSON
+- `HandleEvent()` — calls `ibProcUnit` handler, collects property diffs
+
+### ibWebControlProxy
+
+Inherits `wxObject` (to fit existing API). Stores:
+- `m_controlId` — unique control ID
+- `m_type` — "button", "textbox", "tablebox", "sizer", etc. (22 types)
+- `m_props` — all control properties (value, color, font, visible, enabled, source...)
+- `m_children` — child proxies (recursive tree)
+- `m_frame` — back-pointer to `ibValueFrame` for event handling
+
+### ibWebSessionManager
+
+Each user session holds:
+- Cloned DB connection (`db_query->Clone()`)
+- `ibValueForm*` — the form object in memory
+- `ibWebVisualHost*` — the JSON proxy tree
+- Last activity timestamp (for timeout cleanup)
+
+### Daemon Initialization
+
+When `daemon.exe` starts:
+
+1. `ibWebMainFrame::Initialize()` — enables `CreateNewForm()` (sets `backend_mainFrame`)
+2. `ibWebSessionManager::Initialize()` — creates session manager
+3. `appDataCreateServer(eSERVICE_MODE, ...)` — connect to database
+4. `appData->Connect(user, password)` — authenticate, load metadata
+5. `ibWebServer::Initialize(port, staticDir)` — start HTTP server
+6. `RegisterSessionRoutes(webServer->GetHttpServer())` — add session endpoints
+7. `webServer->WaitForShutdown()` — block until termination
+
+**Daemon links both `backend.dll` and `frontend.dll`** — this gives access to `ibValueForm`, all 22 control types (registered via `S_CONTROL_TYPE_REGISTER`), and `ibWebVisualHost`.
 
 Command-line arguments:
 
