@@ -25,5 +25,6 @@ target_include_directories(daemon PRIVATE
 
 target_link_libraries(daemon PRIVATE
     backend
+    frontend
     wx::core wx::aui wx::html wx::propgrid wx::adv wx::stc wx::xrc wx::qa wx::base wx::net wx::xml
 )
