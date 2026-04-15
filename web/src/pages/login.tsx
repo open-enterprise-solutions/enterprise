@@ -21,10 +21,16 @@ export function LoginPage() {
         body: JSON.stringify({ username: username.trim(), password }),
       })
       const body = await resp.json() as Record<string, unknown>
-      const payload = (body.data ?? body) as { token?: string; user?: unknown }
-      if (payload.token) {
-        localStorage.setItem("oes_token", payload.token as string)
-        localStorage.setItem("oes_user", JSON.stringify(payload.user))
+      const payload = (body.data ?? body) as { token?: string; user?: Record<string, unknown> }
+      const token = payload.token
+      if (typeof token === "string" && token.trim() !== "") {
+        const user = payload.user
+        const safeUser =
+          user && typeof user.name === "string" && user.name
+            ? user
+            : { guid: "", name: username.trim(), fullName: username.trim(), roles: [] }
+        localStorage.setItem("oes_token", token)
+        localStorage.setItem("oes_user", JSON.stringify(safeUser))
         window.location.href = "/"
       } else {
         setErrorMessage("Invalid username or password")

@@ -8,9 +8,9 @@
 
 import { useEffect, useCallback } from "react"
 import { useParams } from "react-router-dom"
-import { useOne } from "@refinedev/core"
 import { ChartBar, Warning } from "@phosphor-icons/react"
 import { useTabStore } from "@/stores/tab-store"
+import { useMetadata } from "@/hooks/useMetadata"
 import { api } from "@/lib/axios"
 import { toApiResource } from "@/lib/resource-utils"
 import { ReportViewer, type ReportParameter, type ReportColumn } from "@/components/reports/ReportViewer"
@@ -65,15 +65,26 @@ export function ReportPage() {
 
   const { addTab } = useTabStore()
 
-  // Fetch report metadata
-  const metaResult = useOne<ReportMeta>({
-    resource: `metadata/${section}`,
-    id: resource,
-  })
+  // Resolve report metadata from the already-loaded metadata tree
+  const { tree, loading: metaLoading, error: metaError, load } = useMetadata()
+  useEffect(() => { load() }, [load])
 
-  const isLoading = metaResult.query?.isLoading ?? false
-  const isError = metaResult.query?.isError ?? false
-  const meta = metaResult.result
+  const isLoading = metaLoading
+  const isError = !!metaError
+
+  const metaItem = tree?.reports?.find(
+    (r) => r.name === resource || r.id === resource,
+  )
+
+  // Shape it into the ReportMeta interface
+  const meta: ReportMeta | undefined = metaItem
+    ? {
+        id: String(metaItem.id),
+        name: metaItem.synonym ?? metaItem.name,
+        parameters: (metaItem as unknown as { parameters?: ReportParameter[] }).parameters,
+        columns: (metaItem as unknown as { columns?: ReportColumn[] }).columns,
+      }
+    : undefined
 
   // Register tab
   useEffect(() => {

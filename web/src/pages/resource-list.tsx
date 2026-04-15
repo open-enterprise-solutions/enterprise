@@ -460,7 +460,7 @@ export function ResourceList() {
                     >
                       {columns.map((col) => (
                         <td key={col.key} className="px-3 py-2 text-[hsl(var(--foreground))]">
-                          {String(record[col.key] ?? "")}
+                          {String(Object.entries(record).find(([k]) => k.toLowerCase() === col.key.toLowerCase())?.[1] ?? "")}
                         </td>
                       ))}
                       {isDocument && (

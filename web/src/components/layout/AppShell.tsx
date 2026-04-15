@@ -25,6 +25,7 @@ import {
   Code,
   Robot,
   PuzzlePiece,
+  ShieldCheck,
 } from "@phosphor-icons/react"
 import { useMetadata, type MetaObjectRef, type MetadataTree } from "@/hooks/useMetadata"
 import { useUiStore } from "@/stores/ui-store"
@@ -32,6 +33,8 @@ import { useTabStore } from "@/stores/tab-store"
 import { useNotificationStore } from "@/stores/notification-store"
 import { TabBar } from "./TabBar"
 import { UserMenu } from "./UserMenu"
+import { Breadcrumb } from "./Breadcrumb"
+import { ToastContainer } from "./Toast"
 
 // ---------------------------------------------------------------------------
 // Section config — maps metadata tree keys to display data
@@ -85,16 +88,19 @@ function SidebarItem({
       onClick={onClick}
       title={collapsed ? label : undefined}
       className={[
-        "group flex w-full items-center gap-2 text-[12px] transition-colors outline-none",
+        "group relative flex w-full items-center gap-2 text-[12px] transition-colors duration-[150ms] outline-none",
         depth === 0
           ? "h-8 px-3 font-medium"
           : "h-7 font-normal",
         depth === 1 && !collapsed ? "pl-8 pr-3" : depth === 1 ? "px-3" : "",
         active
-          ? "bg-[hsl(var(--sidebar-accent)/0.12)] text-[hsl(var(--sidebar-accent))]"
+          ? "bg-[hsl(var(--sidebar-accent)/0.10)] text-[hsl(var(--sidebar-accent))]"
           : "text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--secondary))] hover:text-[hsl(var(--foreground))]",
       ].join(" ")}
     >
+      {active && depth === 0 && (
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-[hsl(var(--sidebar-accent))] rounded-r-sm" />
+      )}
       {icon && <span className="shrink-0">{icon}</span>}
       {!collapsed && (
         <span className="flex-1 truncate text-left">{label}</span>
@@ -275,9 +281,14 @@ export function AppShell({ children }: AppShellProps) {
         {/* Logo / collapse toggle */}
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-[hsl(var(--sidebar-border))] px-3">
           {!sidebarCollapsed && (
-            <span className="text-[12px] font-semibold text-[hsl(var(--foreground))] tracking-wide truncate pr-1">
-              OES
-            </span>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
+                <ShieldCheck size={14} weight="duotone" />
+              </div>
+              <span className="text-[12px] font-semibold text-[hsl(var(--foreground))] tracking-wide truncate">
+                OES Enterprise
+              </span>
+            </div>
           )}
           <button
             type="button"
@@ -288,6 +299,24 @@ export function AppShell({ children }: AppShellProps) {
             <List size={16} weight="duotone" />
           </button>
         </div>
+
+        {/* Search */}
+        {!sidebarCollapsed && (
+          <div className="px-2 py-2 border-b border-[hsl(var(--sidebar-border))]">
+            <div className="flex items-center gap-1.5 rounded-[var(--radius)] border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--background))] px-2 py-1.5">
+              <MagnifyingGlass size={12} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
+              <input
+                ref={searchRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search objects..."
+                aria-label="Search"
+                className="flex-1 bg-transparent outline-none text-[11px] placeholder:text-[hsl(var(--muted-foreground))]"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Dashboard link */}
         <div className="pt-1">
@@ -374,26 +403,7 @@ export function AppShell({ children }: AppShellProps) {
       {/* ------------------------------------------------------------------ */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         {/* Top toolbar */}
-        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[hsl(var(--border))] px-4">
-          {/* Global search */}
-          <div className="flex flex-1 items-center gap-2 rounded-[var(--radius)] border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-1.5 text-[12px] max-w-[380px]">
-            <MagnifyingGlass size={14} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
-            <input
-              ref={searchRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search..."
-              aria-label="Search"
-              className="flex-1 bg-transparent outline-none placeholder:text-[hsl(var(--muted-foreground))]"
-            />
-            <kbd className="hidden text-[10px] text-[hsl(var(--muted-foreground))] sm:inline opacity-60">
-              Ctrl+F
-            </kbd>
-          </div>
-
-          <div className="flex-1" />
-
+        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4">
           {/* Notifications */}
           <button
             type="button"
@@ -403,11 +413,13 @@ export function AppShell({ children }: AppShellProps) {
           >
             <Bell size={17} weight="duotone" />
             {notifCount > 0 && (
-              <span className="absolute right-1 top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[hsl(var(--destructive))] text-[9px] font-bold text-white">
+              <span className="absolute right-1 top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[hsl(var(--destructive))] text-[9px] font-bold text-white leading-none">
                 {notifCount > 9 ? "9+" : notifCount}
               </span>
             )}
           </button>
+
+          <div className="flex-1" />
 
           {/* User menu */}
           <UserMenu />
@@ -416,11 +428,32 @@ export function AppShell({ children }: AppShellProps) {
         {/* Tab bar */}
         <TabBar />
 
+        {/* Breadcrumb */}
+        <Breadcrumb />
+
         {/* Content */}
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto bg-[hsl(var(--background))]">
           {children}
         </main>
+
+        {/* Status bar */}
+        <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.4)] px-4">
+          <span className="conn-dot conn-dot--online" />
+          <span className="text-[10px] text-[hsl(var(--muted-foreground))]">
+            Connected
+          </span>
+          {tree && (
+            <span className="text-[10px] text-[hsl(var(--muted-foreground))]">
+              · {(tree.catalogs?.length ?? 0) + (tree.documents?.length ?? 0)} objects loaded
+            </span>
+          )}
+          <div className="flex-1" />
+          <span className="text-[10px] text-[hsl(var(--muted-foreground))]">OES Enterprise</span>
+        </footer>
       </div>
+
+      {/* Toast notifications */}
+      <ToastContainer />
     </div>
   )
 }

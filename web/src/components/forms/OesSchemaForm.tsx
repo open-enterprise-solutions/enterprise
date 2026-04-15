@@ -124,6 +124,37 @@ function ErrorBanner({ message }: { message: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// PropRow — used in the right-side properties panel
+// ---------------------------------------------------------------------------
+
+function PropRow({
+  label,
+  value,
+  mono = false,
+  valueClass,
+}: {
+  label: string
+  value: string
+  mono?: boolean
+  valueClass?: string
+}) {
+  return (
+    <div>
+      <p className="text-[10px] text-[hsl(var(--muted-foreground))] mb-0.5">{label}</p>
+      <p
+        className={[
+          "text-[11px] text-[hsl(var(--foreground))] break-all",
+          mono ? "font-mono" : "",
+          valueClass ?? "",
+        ].join(" ")}
+      >
+        {value}
+      </p>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -319,6 +350,13 @@ export function OesSchemaForm({ resource, id, onSave, onCancel }: OesSchemaFormP
   // Main form render
   // ---------------------------------------------------------------------------
 
+  const statusStripColor =
+    docStatus === "posted"
+      ? "hsl(var(--status-posted))"
+      : docStatus === "cancelled"
+      ? "hsl(var(--status-deleted))"
+      : "hsl(var(--status-draft))"
+
   return (
     <div className="flex flex-col h-full bg-[hsl(var(--background))]">
       {/* Toolbar */}
@@ -335,41 +373,70 @@ export function OesSchemaForm({ resource, id, onSave, onCancel }: OesSchemaFormP
         docStatus={docStatus}
       />
 
-      {/* Form body */}
-      <div className="flex-1 overflow-auto p-4">
-        {/* Form-level error */}
-        {formError && (
-          <div className="mb-3">
-            <ErrorBanner message={formError} />
-          </div>
+      {/* Form body — two-column layout */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Document status left strip */}
+        {isDocument && (
+          <div
+            className="w-[3px] shrink-0 self-stretch"
+            style={{ background: statusStripColor }}
+          />
         )}
 
-        {/* Object header */}
-        <FormHeader
-          title={metaItem?.name}
-          synonym={metaItem?.synonym}
-          status={isDocument ? docStatus : undefined}
-        />
+        {/* Main scrollable area */}
+        <div className="flex flex-1 overflow-auto">
+          {/* Form-level error */}
+          {formError && (
+            <div className="absolute z-10 top-2 left-1/2 -translate-x-1/2 w-[480px] max-w-[90vw]">
+              <ErrorBanner message={formError} />
+            </div>
+          )}
 
-        {/* Formily form */}
-        <FormProvider form={formRef.current}>
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          <OesSchemaField schema={schema as any} />
-        </FormProvider>
+          {/* Left: main form fields (70%) */}
+          <div className="flex-1 min-w-0 p-4 pr-3">
+            <FormHeader
+              title={metaItem?.name}
+              synonym={metaItem?.synonym}
+              status={isDocument ? docStatus : undefined}
+            />
+            <div className="mt-3 border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 shadow-card">
+              <FormProvider form={formRef.current}>
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                <OesSchemaField schema={schema as any} />
+              </FormProvider>
+            </div>
+          </div>
+
+          {/* Right: system properties panel (30%) */}
+          <aside className="w-[240px] shrink-0 border-l border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.2)] p-3 overflow-y-auto">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))] mb-3">
+              Properties
+            </p>
+            <div className="space-y-3">
+              {metaItem && (
+                <>
+                  <PropRow label="Object" value={metaItem.synonym ?? metaItem.name} />
+                  <PropRow label="Type" value={metaType} />
+                  {id && <PropRow label="ID" value={id} mono />}
+                  {isDocument && (
+                    <PropRow
+                      label="Status"
+                      value={docStatus}
+                      valueClass={
+                        docStatus === "posted"
+                          ? "text-[hsl(142_60%_30%)]"
+                          : docStatus === "cancelled"
+                          ? "text-[hsl(0_72%_45%)]"
+                          : "text-[hsl(215_14%_40%)]"
+                      }
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          </aside>
+        </div>
       </div>
-
-      {/* Status strip on the left edge (documents only) */}
-      {isDocument && (
-        <div
-          className={`fixed left-0 top-0 h-full w-[3px] pointer-events-none ${
-            docStatus === "posted"
-              ? "bg-[hsl(var(--status-posted))]"
-              : docStatus === "cancelled"
-              ? "bg-[hsl(var(--status-deleted))]"
-              : "bg-[hsl(var(--status-draft))]"
-          }`}
-        />
-      )}
     </div>
   )
 }

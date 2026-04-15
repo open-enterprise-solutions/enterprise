@@ -432,6 +432,10 @@ void ibValueForm::ShowForm(ibBackendMetaDocument* doc, bool createContext)
 	if (ibBackendException::IsEvalMode())
 		return;
 
+	// In daemon/service mode there is no wxApp event loop — skip all GUI
+	if (appData->ServiceMode())
+		return;
+
 	ibFormVisualDocument* const ownerDocForm = GetVisualDocument();
 
 	if (ownerDocForm != nullptr) {
@@ -491,6 +495,8 @@ bool ibValueForm::CloseForm(bool force)
 
 void ibValueForm::HelpForm()
 {
+	if (appData->ServiceMode())
+		return;
 	wxMessageBox(
 		_("Help will appear here sometime, but not today.")
 	);
@@ -500,6 +506,8 @@ void ibValueForm::HelpForm()
 
 void ibValueForm::ChangeForm()
 {
+	if (appData->ServiceMode())
+		return;
 	ibDialogFormEditor dlg(this);
 	dlg.ShowModal();
 }
@@ -611,7 +619,7 @@ void ibValueForm::RemoveControl(ibValueFrame* control)
 
 void ibValueForm::AttachIdleHandler(const wxString& procedureName, int interval, bool single)
 {
-	if (appData->DesignerMode())
+	if (appData->DesignerMode() || appData->ServiceMode())
 		return;
 
 	for (unsigned int i = 0; i < procedureName.length(); i++) {
@@ -638,7 +646,7 @@ void ibValueForm::AttachIdleHandler(const wxString& procedureName, int interval,
 
 void ibValueForm::DetachIdleHandler(const wxString& procedureName)
 {
-	if (appData->DesignerMode())
+	if (appData->DesignerMode() || appData->ServiceMode())
 		return;
 
 	for (unsigned int i = 0; i < procedureName.length(); i++) {

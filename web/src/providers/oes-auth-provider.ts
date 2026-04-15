@@ -77,15 +77,21 @@ export const oesAuthProvider: AuthProvider = {
       const payload = (body.data ?? body) as { token?: string; user?: OesUser }
       const { token, user } = payload
 
-      if (!token) {
+      if (typeof token !== "string" || token.trim() === "") {
         return {
           success: false,
           error: { name: "Login Error", message: "Server returned no token" },
         }
       }
 
+      // Build a safe user object — fall back to username if user is missing/incomplete
+      const safeUser: OesUser =
+        user && typeof user === "object" && typeof user.name === "string" && user.name
+          ? user
+          : { guid: "", name: username, fullName: username, roles: [] }
+
       localStorage.setItem("oes_token", token)
-      localStorage.setItem("oes_user", JSON.stringify(user))
+      localStorage.setItem("oes_user", JSON.stringify(safeUser))
 
       return { success: true, redirectTo: "/" }
     } catch (err) {

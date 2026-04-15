@@ -221,3 +221,63 @@ body {
     0 10px 15px -3px rgb(0 0 0 / 0.1),
     0 0 0 1px hsl(var(--border));
 }
+
+/* Card shadow tokens */
+.shadow-card {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.shadow-card-hover {
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.10), 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="tab"]:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+
+/* Status colors — explicit so they're clearly visible */
+.status-badge-posted    { background: hsl(var(--status-posted)  / 0.12); color: hsl(142 60% 30%); }
+.status-badge-draft     { background: hsl(var(--status-draft)   / 0.14); color: hsl(215 14% 40%); }
+.status-badge-cancelled { background: hsl(var(--status-deleted) / 0.12); color: hsl(0   72% 45%); }
+
+.dark .status-badge-posted    { background: hsl(var(--status-posted)  / 0.18); color: hsl(142 60% 55%); }
+.dark .status-badge-draft     { background: hsl(var(--status-draft)   / 0.16); color: hsl(215 20% 68%); }
+.dark .status-badge-cancelled { background: hsl(var(--status-deleted) / 0.18); color: hsl(0   72% 65%); }
+
+/* Toast slide-in animation */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Status strip — left edge indicator on document rows */
+.doc-row-posted    { border-left: 3px solid hsl(var(--status-posted)); }
+.doc-row-draft     { border-left: 3px solid hsl(var(--status-draft)); }
+.doc-row-cancelled { border-left: 3px solid hsl(var(--status-deleted)); }
+
+/* Connection status dot */
+.conn-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.conn-dot--online  { background: hsl(var(--status-posted)); }
+.conn-dot--offline { background: hsl(var(--status-deleted)); }
+.conn-dot--connecting {
+  background: hsl(var(--status-draft));
+  animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}

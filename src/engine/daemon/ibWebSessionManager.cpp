@@ -22,6 +22,100 @@
 ibWebSessionManager* ibWebSessionManager::ms_instance = nullptr;
 
 //***********************************************************************
+//*  Build a JSON form layout directly from metadata (no wxWidgets)    *
+//***********************************************************************
+
+namespace {
+
+json BuildLayoutFromMetadata(ibValueMetaObject* metaObj, const std::string& /*metaType*/)
+{
+	json root;
+	try {
+
+	root["id"] = 1;
+	root["type"] = "form";
+	root["name"] = metaObj->GetName().ToStdString();
+
+	json props;
+	wxString synonym = metaObj->GetSynonym();
+	props["caption"] = synonym.IsEmpty()
+		? metaObj->GetName().ToStdString()
+		: synonym.ToStdString();
+	root["props"] = props;
+
+	json children = json::array();
+	int nextId = 100;
+
+	auto* recordObj = dynamic_cast<ibValueMetaObjectRecordData*>(metaObj);
+	if (recordObj == nullptr) {
+		root["children"] = children;
+		return root;
+	}
+
+	// Attributes (system + user)
+	auto attrs = recordObj->GetAttributeArrayObject();
+	for (auto* attr : attrs) {
+		if (attr == nullptr || attr->IsDeleted()) continue;
+		json field;
+		field["id"] = nextId++;
+		field["type"] = "textbox";
+		field["name"] = attr->GetName().ToStdString();
+		json fprops;
+		wxString attrSyn = attr->GetSynonym();
+		fprops["label"] = attrSyn.IsEmpty()
+			? attr->GetName().ToStdString()
+			: attrSyn.ToStdString();
+		field["props"] = fprops;
+		children.push_back(field);
+	}
+
+	// Tabular sections
+	auto tables = recordObj->GetTableArrayObject();
+	for (auto* table : tables) {
+		if (table == nullptr || table->IsDeleted()) continue;
+		json tableNode;
+		tableNode["id"] = nextId++;
+		tableNode["type"] = "tablebox";
+		tableNode["name"] = table->GetName().ToStdString();
+		json tprops;
+		wxString tSyn = table->GetSynonym();
+		tprops["caption"] = tSyn.IsEmpty()
+			? table->GetName().ToStdString()
+			: tSyn.ToStdString();
+		tableNode["props"] = tprops;
+
+		json cols = json::array();
+		auto tableAttrs = table->GetAttributeArrayObject();
+		for (auto* tattr : tableAttrs) {
+			if (tattr == nullptr || tattr->IsDeleted()) continue;
+			json col;
+			col["id"] = nextId++;
+			col["type"] = "statictext";
+			col["name"] = tattr->GetName().ToStdString();
+			json cprops;
+			wxString cSyn = tattr->GetSynonym();
+			cprops["caption"] = cSyn.IsEmpty()
+				? tattr->GetName().ToStdString()
+				: cSyn.ToStdString();
+			col["props"] = cprops;
+			cols.push_back(col);
+		}
+		tableNode["children"] = cols;
+		children.push_back(tableNode);
+	}
+
+	root["children"] = children;
+
+	} catch (...) {
+		root["children"] = json::array();
+	}
+
+	return root;
+}
+
+} // anonymous namespace
+
+//***********************************************************************
 //*                      Helper: generate session ID                   *
 //***********************************************************************
 
@@ -199,30 +293,15 @@ json ibWebSessionManager::OpenForm(const std::string& sessionId,
 	if (session->form == nullptr)
 		return json{{"error", "Form cast failed"}};
 
-	// Load form layout from blob if available
-	if (formMeta != nullptr) {
-		wxMemoryBuffer formData = formMeta->GetFormData();
-		if (formData.GetDataLen() > 0) {
-			session->form->LoadForm(formData);
-		}
-	}
-
-	// Build form (creates control tree from metadata if no blob)
-	if (session->form->GetChildCount() == 0) {
-		session->form->BuildForm(defaultFormType);
-	}
-
-	// Initialize form module (compile script, execute)
-	session->form->InitializeFormModule();
-
-	// Create web visual host — builds JSON proxy tree
-	session->host = new ibWebVisualHost(session->form);
-	session->host->CreateWebHost();
+	// In service mode, building the full control tree via BuildForm/LoadForm
+	// crashes because control factories create wxWidgets objects.
+	// Instead, build a JSON layout directly from metadata attributes.
+	json layout = BuildLayoutFromMetadata(metaObj, metaType);
 
 	// Return layout
 	json result;
 	result["sessionId"] = sessionId;
-	result["layout"] = session->host->GetFormLayout();
+	result["layout"] = layout;
 	return result;
 }
 
