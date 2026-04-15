@@ -27,6 +27,7 @@ const RegisterPage = lazy(() => import("./pages/register-page").then(m => ({ def
 const DesignerPage = lazy(() => import("./pages/designer").then(m => ({ default: m.DesignerPage })))
 const DebuggerPage = lazy(() => import("./pages/debugger").then(m => ({ default: m.DebuggerPage })))
 const OesSchemaForm = lazy(() => import("./components/forms/OesSchemaForm").then(m => ({ default: m.OesSchemaForm })))
+const FormSessionPage = lazy(() => import("./pages/form-session").then(m => ({ default: m.FormSessionPage })))
 const AiConfigGeneratorPage = lazy(() => import("./pages/ai-config-generator").then(m => ({ default: m.AiConfigGeneratorPage })))
 const PluginManager = lazy(() => import("./components/plugins/PluginManager").then(m => ({ default: m.PluginManager })))
 const EmbedLayout = lazy(() => import("./components/layout/EmbedLayout").then(m => ({ default: m.EmbedLayout })))
@@ -294,6 +295,16 @@ export default function App() {
             <Route
               path="/:section/:resource/report"
               element={<ReportPage />}
+            />
+
+            {/* Server-side form (real designer layout) */}
+            <Route
+              path="/:section/:resource/form"
+              element={<FormSessionPage />}
+            />
+            <Route
+              path="/:section/:resource/:id/form"
+              element={<FormSessionPage />}
             />
 
             {/* Create form */}

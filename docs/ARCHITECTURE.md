@@ -564,6 +564,55 @@ The browser-based client is a React SPA located in `web/` at the project root. I
 | Zustand | State management |
 | Recharts | Dashboard charts |
 
+### Server-Side Form Rendering (FormRenderer)
+
+The web client uses **server-side form rendering** — the daemon holds the form in memory (C++ objects), the browser receives a JSON control tree and renders it as React components. All business logic runs on the server.
+
+```
+Browser (FormRenderer)                    daemon.exe
+  │                                         │
+  ├─ POST /api/session/open-form ──────────►├─ CreateSession()
+  │   { metaType, metaName, objectId }      ├─ OpenForm() → ibValueForm + ibWebVisualHost
+  │                                         ├─ CreateWebHost() → recursive proxy tree
+  │◄── { sessionId, layout }────────────────┤
+  │                                         │
+  ├─ User clicks button ──────────────────► │
+  │   POST /api/session/event               ├─ ibProcUnit::CallAsFunc(eventName)
+  │   { sessionId, controlId, event }       ├─ Re-read all proxy properties
+  │◄── { handled, updates[] }───────────────┤  (diff only changed props)
+  │                                         │
+  ├─ POST /api/session/close ──────────────►├─ Cleanup session, form, DB clone
+  │                                         │
+```
+
+**Frontend files:**
+
+| File | Purpose |
+|---|---|
+| `web/src/hooks/useFormSession.ts` | Session lifecycle hook (open/event/close) |
+| `web/src/components/forms/FormRenderer.tsx` | Recursive control renderer (21 control types) |
+| `web/src/pages/form-session.tsx` | Page component with route integration |
+
+**Control type mapping** (server → React):
+
+| Server type | React component | HTML element |
+|---|---|---|
+| `form` | FormControl | Container with caption + overflow body |
+| `boxsizer` | BoxSizerControl | Flex row/column |
+| `gridsizer` | GridSizerControl | CSS Grid |
+| `notebook` | NotebookControl | Tabbed container |
+| `textbox` | TextBoxControl | `<input type="text">` |
+| `button` | ButtonControl | `<button>` |
+| `checkbox` | CheckboxControl | `<input type="checkbox">` |
+| `tablebox` | TableBoxControl | `<table>` with column headers |
+| `toolbar` | ToolbarControl | Flex row with tool buttons |
+| ... | ... | (21 types total) |
+
+**Routes:**
+
+- `/:section/:resource/form` — open default form for metadata object
+- `/:section/:resource/:id/form` — open form for existing record
+
 ### Third-Party Libraries
 
 | Library | Location | License |
