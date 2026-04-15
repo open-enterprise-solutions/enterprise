@@ -12,14 +12,17 @@
  * by cross-referencing the metadata tree attribute type information.
  */
 
-import { useEffect, useCallback, useMemo } from "react"
+import { useEffect, useCallback, useMemo, useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { useFormSession } from "@/hooks/useFormSession"
 import { useMetadata, type MetaObjectRef } from "@/hooks/useMetadata"
 import { FormRenderer } from "@/components/forms/FormRenderer"
 import { FormSkeleton } from "@/components/forms/FormSkeleton"
+import { CommandBar } from "@/components/forms/CommandBar"
 import { Warning, X } from "@phosphor-icons/react"
+import { api } from "@/lib/axios"
 import type { ControlNode } from "@/hooks/useFormSession"
+import type { OesCommand } from "@/hooks/useFormSchema"
 
 // Map URL section names to metadata type names
 const SECTION_TO_META: Record<string, string> = {
@@ -212,6 +215,83 @@ export function FormSessionPage() {
     return enrichLayout(layout, attrMap)
   }, [layout, attrMap])
 
+  // Document detection
+  const isDocument = metaType === "document"
+  const commands: OesCommand[] = isDocument
+    ? ["save", "post", "unpost", "delete", "copy", "close"]
+    : ["save", "delete", "copy", "close"]
+
+  // Form actions
+  const [isSaving, setIsSaving] = useState(false)
+  const [isPosting, setIsPosting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [docStatus, setDocStatus] = useState<string>("draft")
+
+  const apiResource = `${metaType}.${metaName}`
+
+  const handleSave = useCallback(async () => {
+    if (!id || isSaving) return
+    setIsSaving(true)
+    setFormError(null)
+    try {
+      await api.put(`/data/${apiResource}/${id}`, {})
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Save failed")
+    } finally {
+      setIsSaving(false)
+    }
+  }, [id, isSaving, apiResource])
+
+  const handlePost = useCallback(async () => {
+    if (!id || isPosting) return
+    setIsPosting(true)
+    try {
+      await api.post(`/data/${apiResource}/${id}/post`)
+      setDocStatus("posted")
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Post failed")
+    } finally {
+      setIsPosting(false)
+    }
+  }, [id, isPosting, apiResource])
+
+  const handleUnpost = useCallback(async () => {
+    if (!id || isPosting) return
+    setIsPosting(true)
+    try {
+      await api.post(`/data/${apiResource}/${id}/unpost`)
+      setDocStatus("draft")
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Unpost failed")
+    } finally {
+      setIsPosting(false)
+    }
+  }, [id, isPosting, apiResource])
+
+  const handleDelete = useCallback(async () => {
+    if (!id) return
+    setFormError(null)
+    try {
+      await api.delete(`/data/${apiResource}/${id}`)
+      handleClose()
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Delete failed")
+    }
+  }, [id, apiResource, handleClose])
+
+  const handleCopy = useCallback(async () => {
+    if (!id) return
+    try {
+      await api.post(`/data/${apiResource}/${id}/copy`)
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Copy failed")
+    }
+  }, [id, apiResource])
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+
   if (loading) return <FormSkeleton />
 
   if (error) {
@@ -220,11 +300,7 @@ export function FormSessionPage() {
         <div className="flex items-start gap-2 rounded-[var(--radius)] border border-[hsl(var(--destructive)/0.4)] bg-[hsl(var(--destructive)/0.06)] px-3 py-2 text-[13px] text-[hsl(var(--destructive))]">
           <Warning size={16} weight="duotone" className="mt-0.5 shrink-0" />
           <span>Form error: {error}</span>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="ml-auto text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-          >
+          <button type="button" onClick={handleClose} className="ml-auto text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
             <X size={14} />
           </button>
         </div>
@@ -240,5 +316,85 @@ export function FormSessionPage() {
     )
   }
 
-  return <FormRenderer layout={enrichedLayout} onEvent={sendEvent} />
+  const formTitle = enrichedLayout.props?.caption ?? resource
+
+  return (
+    <div className="flex flex-col h-full bg-[hsl(var(--background))]">
+      {/* Command Bar */}
+      <CommandBar
+        commands={commands}
+        onSave={handleSave}
+        onPost={isDocument ? handlePost : undefined}
+        onUnpost={isDocument ? handleUnpost : undefined}
+        onDelete={id ? handleDelete : undefined}
+        onCopy={id ? handleCopy : undefined}
+        onClose={handleClose}
+        isSaving={isSaving}
+        isPosting={isPosting}
+        docStatus={docStatus}
+      />
+
+      {/* Form body */}
+      <div className="flex-1 overflow-auto p-4">
+        {formError && (
+          <div className="mb-3 flex items-start gap-2 rounded-[var(--radius)] border border-[hsl(var(--destructive)/0.4)] bg-[hsl(var(--destructive)/0.06)] px-3 py-2 text-[13px] text-[hsl(var(--destructive))]">
+            <Warning size={16} weight="duotone" className="mt-0.5 shrink-0" />
+            <span>{formError}</span>
+          </div>
+        )}
+
+        <div className="flex gap-4">
+          {/* Main form area */}
+          <div className="flex-1 min-w-0">
+            <div className="rounded-[var(--radius)] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 shadow-card">
+              <h2 className="text-[15px] font-semibold text-[hsl(var(--foreground))] mb-4">{formTitle}</h2>
+              <FormRenderer layout={enrichedLayout} onEvent={sendEvent} />
+            </div>
+          </div>
+
+          {/* Properties panel */}
+          <div className="w-[240px] shrink-0">
+            <div className="rounded-[var(--radius)] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 shadow-card">
+              <h3 className="text-[11px] font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider mb-3">Properties</h3>
+              <div className="space-y-2 text-[12px]">
+                <div>
+                  <span className="text-[hsl(var(--muted-foreground))]">Object</span>
+                  <p className="font-medium text-[hsl(var(--foreground))]">{formTitle}</p>
+                </div>
+                <div>
+                  <span className="text-[hsl(var(--muted-foreground))]">Type</span>
+                  <p className="font-medium text-[hsl(var(--foreground))] capitalize">{metaType}</p>
+                </div>
+                {id && (
+                  <div>
+                    <span className="text-[hsl(var(--muted-foreground))]">ID</span>
+                    <p className="font-mono text-[11px] text-[hsl(var(--foreground))] break-all">{id}</p>
+                  </div>
+                )}
+                {isDocument && (
+                  <div>
+                    <span className="text-[hsl(var(--muted-foreground))]">Status</span>
+                    <p className={`font-medium ${docStatus === "posted" ? "text-[hsl(var(--status-posted))]" : "text-[hsl(var(--foreground))]"}`}>
+                      {docStatus}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Status strip */}
+      {isDocument && (
+        <div
+          className={`fixed left-0 top-0 h-full w-[3px] pointer-events-none ${
+            docStatus === "posted" ? "bg-[hsl(var(--status-posted))]"
+              : docStatus === "cancelled" ? "bg-[hsl(var(--status-deleted))]"
+              : "bg-[hsl(var(--status-draft))]"
+          }`}
+        />
+      )}
+    </div>
+  )
 }
