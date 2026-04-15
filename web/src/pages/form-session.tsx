@@ -170,7 +170,7 @@ export function FormSessionPage() {
   const { layout, loading, error, openForm, sendEvent, closeForm } = useFormSession()
   const { tree, load: loadMetadata } = useMetadata()
 
-  const metaType = SECTION_TO_META[section] ?? section
+  const metaType = SECTION_TO_META[section] ?? SECTION_TO_META[section.toLowerCase()] ?? section
   const metaName = resource
 
   // Ensure metadata is loaded so we can enrich the layout
@@ -195,7 +195,7 @@ export function FormSessionPage() {
   // Build attribute map from the matching metadata object
   const attrMap = useMemo<Map<string, MetaAttribute>>(() => {
     if (!tree) return new Map()
-    const treeKey = SECTION_TO_TREE_KEY[section]
+    const treeKey = SECTION_TO_TREE_KEY[section] ?? SECTION_TO_TREE_KEY[section.toLowerCase()]
     if (!treeKey) return new Map()
     const collection = (tree[treeKey] ?? []) as MetaObjectRef[]
     const metaItem = collection.find(
