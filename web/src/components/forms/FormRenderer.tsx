@@ -12,6 +12,7 @@
  */
 
 import { memo, useCallback, type CSSProperties, type ReactNode } from "react"
+import { DotsThree } from "@phosphor-icons/react"
 import type { ControlNode } from "@/hooks/useFormSession"
 
 // ---------------------------------------------------------------------------
@@ -491,6 +492,106 @@ function ChartControl({ node }: ControlProps) {
   )
 }
 
+function DatePickerControl({ node, onEvent }: ControlProps) {
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onEvent(node.id, "OnChange", { value: e.target.value })
+    },
+    [node.id, onEvent],
+  )
+
+  return (
+    <div className="flex flex-col gap-1" data-oes-datepicker={node.name}>
+      {node.props?.label && (
+        <label className="text-[11px] font-medium text-[hsl(var(--muted-foreground))]">
+          {node.props.label}
+        </label>
+      )}
+      <input
+        type="date"
+        className="h-8 rounded-[var(--radius)] border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-[13px] text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))] transition-colors"
+        defaultValue={node.props?.value ?? ""}
+        readOnly={bool(node.props?.read_only)}
+        onChange={handleChange}
+      />
+    </div>
+  )
+}
+
+function NumberInputControl({ node, onEvent }: ControlProps) {
+  const scale = Number(node.props?.scale ?? 0)
+  const step = scale > 0 ? (1 / Math.pow(10, scale)).toFixed(scale) : "1"
+
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onEvent(node.id, "OnChange", { value: e.target.value })
+    },
+    [node.id, onEvent],
+  )
+
+  return (
+    <div className="flex flex-col gap-1" data-oes-numberinput={node.name}>
+      {node.props?.label && (
+        <label className="text-[11px] font-medium text-[hsl(var(--muted-foreground))]">
+          {node.props.label}
+        </label>
+      )}
+      <input
+        type="number"
+        step={step}
+        min={node.props?.min}
+        max={node.props?.max}
+        className="h-8 rounded-[var(--radius)] border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-[13px] text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))] transition-colors"
+        defaultValue={node.props?.value ?? ""}
+        readOnly={bool(node.props?.read_only)}
+        onChange={handleChange}
+      />
+    </div>
+  )
+}
+
+function RefFieldControl({ node, onEvent }: ControlProps) {
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onEvent(node.id, "OnChange", { value: e.target.value })
+    },
+    [node.id, onEvent],
+  )
+
+  const handleBrowse = useCallback(() => {
+    onEvent(node.id, "OnChoose", { refType: node.props?.refType ?? "" })
+  }, [node.id, onEvent, node.props?.refType])
+
+  return (
+    <div className="flex flex-col gap-1" data-oes-reffield={node.name}>
+      {node.props?.label && (
+        <label className="text-[11px] font-medium text-[hsl(var(--muted-foreground))]">
+          {node.props.label}
+        </label>
+      )}
+      <div className="flex gap-1">
+        <input
+          type="text"
+          className="h-8 flex-1 rounded-[var(--radius)] border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-[13px] text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))] transition-colors"
+          defaultValue={node.props?.value ?? ""}
+          readOnly={bool(node.props?.read_only)}
+          onChange={handleChange}
+          title={node.props?.refType ? `Reference: ${node.props.refType}` : undefined}
+        />
+        <button
+          type="button"
+          className="h-8 w-8 flex items-center justify-center rounded-[var(--radius)] border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.5)] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--secondary))] hover:text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))] transition-colors shrink-0"
+          onClick={handleBrowse}
+          disabled={bool(node.props?.read_only)}
+          title="Select..."
+        >
+          <DotsThree size={14} weight="bold" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function UnknownControl({ node, onEvent }: ControlProps) {
   return (
     <div
@@ -529,6 +630,9 @@ const CONTROL_MAP: Record<string, React.ComponentType<ControlProps>> = {
   tool: ToolControl,
   htmlbox: HtmlBoxControl,
   chart: ChartControl,
+  datepicker: DatePickerControl,
+  numberinput: NumberInputControl,
+  reffield: RefFieldControl,
 }
 
 // ---------------------------------------------------------------------------
