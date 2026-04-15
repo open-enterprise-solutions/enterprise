@@ -13,7 +13,7 @@ namespace httplib { class Server; }
 class BACKEND_API ibWebServer {
 public:
 
-	static bool Initialize(int port = 8765, const wxString& staticDir = wxEmptyString);
+	static bool Initialize(int port = 8765, const wxString& staticDir = wxEmptyString, bool autoStart = true);
 	static void Destroy();
 	static ibWebServer* Get() { return ms_instance; }
 

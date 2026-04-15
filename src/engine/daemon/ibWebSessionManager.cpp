@@ -89,8 +89,9 @@ std::string ibWebSessionManager::CreateSession(const std::string& userGuid)
 	if (db_query != nullptr)
 		session.db = std::shared_ptr<ibDatabaseLayer>(db_query->Clone());
 
-	m_sessions[session.id] = std::move(session);
-	return session.id;
+	std::string id = session.id;
+	m_sessions[id] = std::move(session);
+	return id;
 }
 
 void ibWebSessionManager::DestroySession(const std::string& sessionId)

@@ -131,14 +131,22 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	// Start web server
-	if (!ibWebServer::Initialize(static_cast<int>(webPort), strWebDir)) {
-		fprintf(stderr, "Failed to start web server on port %ld.\n", webPort);
+	// Initialize web server (don't start yet — register session routes first)
+	if (!ibWebServer::Initialize(static_cast<int>(webPort), strWebDir, false)) {
+		fprintf(stderr, "Failed to initialize web server.\n");
 		return 1;
 	}
 
 	// Register session endpoints (need frontend.dll which daemon links)
+	// Must happen before Start() — cpp-httplib doesn't support adding routes after listen()
 	RegisterSessionRoutes(webServer->GetHttpServer());
+
+	// Now start listening
+	webServer->Start();
+	if (!webServer->IsRunning()) {
+		fprintf(stderr, "Failed to start web server on port %ld.\n", webPort);
+		return 1;
+	}
 
 	fprintf(stdout, "OES Web Server started on http://0.0.0.0:%ld\n", webPort);
 	fprintf(stdout, "Static files: %s\n", strWebDir.ToStdString().c_str());

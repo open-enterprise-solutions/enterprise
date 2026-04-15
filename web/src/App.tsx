@@ -16,7 +16,7 @@ import { toApiResource } from "@/lib/resource-utils"
 import { AppShell } from "./components/layout/AppShell"
 import { LoginPage } from "./pages/login"
 import { useTabStore } from "./stores/tab-store"
-import { useCallback, useEffect, lazy, Suspense } from "react"
+import { useEffect, lazy, Suspense } from "react"
 import { useMetadata, type MetaObjectRef } from "@/hooks/useMetadata"
 
 // Lazy load heavy pages (Monaco Editor = 2MB, Recharts, Formily)
@@ -102,78 +102,8 @@ function EmbedRedirectGuard({ children }: { children: React.ReactNode }) {
 }
 
 // ---------------------------------------------------------------------------
-// Form route adapters
+// Form route adapters (kept for embed routes that still use schema forms)
 // ---------------------------------------------------------------------------
-
-function FormCreateRoute() {
-  const { section, resource } = useParams<{ section: string; resource: string }>()
-  const navigate = useNavigate()
-  const { addTab, removeTab } = useTabStore()
-
-  const fullResource = section && resource ? toApiResource(section, resource) : ""
-
-  const handleSave = useCallback(
-    (values: Record<string, unknown>) => {
-      const newId = values?.id as string | undefined
-      if (newId && section && resource) {
-        const path = `/${section}/${resource}/${newId}`
-        removeTab(`${section}/${resource}/create`)
-        addTab({
-          id: `${section}/${resource}/${newId}`,
-          title: String(values.name ?? values.description ?? newId),
-          path,
-          icon: "file-text",
-          closable: true,
-        })
-        navigate(path, { replace: true })
-      } else if (section && resource) {
-        navigate(`/${section}/${resource}`, { replace: true })
-      }
-    },
-    [section, resource, navigate, addTab, removeTab],
-  )
-
-  const handleCancel = useCallback(() => {
-    if (section && resource) {
-      removeTab(`${section}/${resource}/create`)
-    }
-    navigate(-1)
-  }, [section, resource, navigate, removeTab])
-
-  if (!section || !resource) return null
-
-  return (
-    <OesSchemaForm
-      resource={fullResource}
-      onSave={handleSave}
-      onCancel={handleCancel}
-    />
-  )
-}
-
-function FormEditRoute() {
-  const { section, resource, id } = useParams<{
-    section: string
-    resource: string
-    id: string
-  }>()
-  const navigate = useNavigate()
-
-  if (!section || !resource || !id) return null
-
-  const fullResource = toApiResource(section, resource)
-
-  return (
-    <OesSchemaForm
-      resource={fullResource}
-      id={id}
-      onSave={() => {
-        // Stay on the same page after save
-      }}
-      onCancel={() => navigate(-1)}
-    />
-  )
-}
 
 // Embed variants — same forms, no tab management, no AppShell navigation
 function EmbedListRoute() {
@@ -307,18 +237,18 @@ export default function App() {
               element={<FormSessionPage />}
             />
 
-            {/* Create form */}
+            {/* Create form — server-side rendering */}
             <Route
               path="/:section/:resource/create"
-              element={<FormCreateRoute />}
+              element={<FormSessionPage />}
             />
 
-            {/* Edit form */}
+            {/* Edit form — server-side rendering */}
             <Route
               path="/:section/:resource/:id"
               element={
                 <EmbedRedirectGuard>
-                  <FormEditRoute />
+                  <FormSessionPage />
                 </EmbedRedirectGuard>
               }
             />

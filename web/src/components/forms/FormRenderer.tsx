@@ -395,16 +395,9 @@ function GaugeControl({ node }: ControlProps) {
   )
 }
 
-function TableBoxControl({ node, onEvent }: ControlProps) {
+function TableBoxControl({ node }: ControlProps) {
   // Columns are children with type info in their props
   const columns = node.children ?? []
-
-  const handleCellClick = useCallback(
-    (rowIdx: number, colId: number) => {
-      onEvent(node.id, "OnCellClick", { row: rowIdx, column: colId })
-    },
-    [node.id, onEvent],
-  )
 
   return (
     <div className="border border-[hsl(var(--border))] rounded-[var(--radius)] overflow-hidden" data-oes-table={node.name}>

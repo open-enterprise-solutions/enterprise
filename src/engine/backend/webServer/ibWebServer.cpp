@@ -365,16 +365,20 @@ ibWebServer::~ibWebServer()
 	Stop();
 }
 
-bool ibWebServer::Initialize(int port, const wxString& staticDir)
+bool ibWebServer::Initialize(int port, const wxString& staticDir, bool autoStart)
 {
 	if (ms_instance != nullptr)
 		return false;
 
 	ms_instance = new ibWebServer(port, staticDir);
 	ms_instance->RegisterRoutes();
-	ms_instance->Start();
 
-	return ms_instance->IsRunning();
+	if (autoStart) {
+		ms_instance->Start();
+		return ms_instance->IsRunning();
+	}
+
+	return true;
 }
 
 void ibWebServer::Destroy()
