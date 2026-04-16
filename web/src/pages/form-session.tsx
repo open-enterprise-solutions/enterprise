@@ -158,6 +158,29 @@ function enrichLayout(node: ControlNode, attrMap: Map<string, MetaAttribute>): C
   return { ...node, children: enrichedChildren }
 }
 
+/**
+ * Fill control values from loaded record data.
+ * Matches control name (case-insensitive) to record keys.
+ */
+function fillLayoutValues(node: ControlNode, data: Record<string, unknown>): ControlNode {
+  const filledChildren = node.children?.map((child) => fillLayoutValues(child, data))
+
+  // Match node name to data key (case-insensitive)
+  if (node.name && (node.type === "textbox" || node.type === "reffield" || node.type === "datepicker" || node.type === "numberinput" || node.type === "checkbox")) {
+    const val = Object.entries(data).find(([k]) => k.toLowerCase() === node.name!.toLowerCase())?.[1]
+    if (val !== undefined && val !== null) {
+      return {
+        ...node,
+        props: { ...node.props, value: String(val) },
+        children: filledChildren,
+      }
+    }
+  }
+
+  if (filledChildren === node.children) return node
+  return { ...node, children: filledChildren }
+}
+
 // ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
@@ -208,12 +231,29 @@ export function FormSessionPage() {
     return buildAttrMap(metaItem)
   }, [tree, section, resource])
 
-  // Enrich layout with proper control types from metadata
+  // Load record data when editing existing record
+  const [recordData, setRecordData] = useState<Record<string, unknown> | null>(null)
+
+  useEffect(() => {
+    if (!id || !metaType || !metaName) return
+    const apiResource = `${metaType}.${metaName}`
+    api.get(`/data/${apiResource}/${id}`)
+      .then((res) => {
+        const raw = res.data as Record<string, unknown>
+        setRecordData((raw.data ?? raw) as Record<string, unknown>)
+      })
+      .catch(() => {
+        // Data load failure is non-fatal — form still renders empty
+      })
+  }, [id, metaType, metaName])
+
+  // Enrich layout with proper control types + fill values from record data
   const enrichedLayout = useMemo<ControlNode | null>(() => {
     if (!layout) return null
-    if (attrMap.size === 0) return layout
-    return enrichLayout(layout, attrMap)
-  }, [layout, attrMap])
+    let enriched = attrMap.size > 0 ? enrichLayout(layout, attrMap) : layout
+    if (recordData) enriched = fillLayoutValues(enriched, recordData)
+    return enriched
+  }, [layout, attrMap, recordData])
 
   // Document detection
   const isDocument = metaType === "document"

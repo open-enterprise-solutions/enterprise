@@ -11,7 +11,7 @@
  * 21 control types from ibWebVisualHost::MapControlType().
  */
 
-import { memo, useCallback, type CSSProperties, type ReactNode } from "react"
+import { memo, useCallback, type ReactNode } from "react"
 import { DotsThree } from "@phosphor-icons/react"
 import type { ControlNode } from "@/hooks/useFormSession"
 
@@ -54,20 +54,10 @@ function renderChildren(node: ControlNode, onEvent: FormRendererProps["onEvent"]
 // ---------------------------------------------------------------------------
 
 function FormControl({ node, onEvent }: ControlProps) {
-  const style: CSSProperties = {
-    width: px(node.props?.width) ?? "100%",
-    height: px(node.props?.height),
-  }
+  // Form root renders as transparent container — page provides the title
   return (
-    <div className="flex flex-col h-full" style={style} data-oes-form={node.name}>
-      {node.props?.caption && (
-        <div className="px-4 py-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.4)] text-[13px] font-semibold text-[hsl(var(--foreground))]">
-          {node.props.caption}
-        </div>
-      )}
-      <div className="flex-1 overflow-auto p-3">
-        {renderChildren(node, onEvent)}
-      </div>
+    <div className="flex flex-col gap-3" data-oes-form={node.name}>
+      {renderChildren(node, onEvent)}
     </div>
   )
 }
