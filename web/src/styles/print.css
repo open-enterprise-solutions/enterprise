@@ -1,0 +1,85 @@
+@media print {
+  /* Hide non-printable chrome */
+  nav,
+  .sidebar,
+  .toolbar,
+  .tab-bar,
+  .command-bar,
+  [data-no-print],
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  /* Full-width content */
+  main,
+  [data-print-content] {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Ensure white background */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt !important;
+    font-family: "IBM Plex Sans", Arial, sans-serif !important;
+  }
+
+  /* Table print styles */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  th,
+  td {
+    border: 1px solid #ccc !important;
+    padding: 4pt 6pt !important;
+    font-size: 10pt !important;
+    color: black !important;
+  }
+
+  thead {
+    background: #f0f0f0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Page breaks */
+  .page-break {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  .no-page-break {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Print header block */
+  .print-header {
+    display: block !important;
+    margin-bottom: 16pt;
+    border-bottom: 2px solid #333;
+    padding-bottom: 8pt;
+  }
+
+  /* Hide scrollbars */
+  ::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  /* Force show print-only elements */
+  [data-print-only] {
+    display: block !important;
+  }
+}
+
+/* Screen: hide print-only elements */
+@media screen {
+  [data-print-only] {
+    display: none !important;
+  }
+}

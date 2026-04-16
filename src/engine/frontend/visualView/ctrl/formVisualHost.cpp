@@ -55,6 +55,10 @@ wxString ibValueForm::GetControlTitle() const
 
 bool ibValueForm::CreateDocForm(ibMetaDocument* docParent, bool createContext)
 {
+	// Guard: no wxApp/wxFrame in daemon/service mode — CreateDocForm must not run
+	if (appData->ServiceMode())
+		return false;
+
 	ibFormVisualDocument* const visualFoundedDoc = GetVisualDocument();
 	if (visualFoundedDoc != nullptr) {
 		ActivateForm();

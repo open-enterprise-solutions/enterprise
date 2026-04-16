@@ -11,7 +11,7 @@
 #define metaDataDestroy()		(ibMetaDataConfiguration::Destroy())
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
-enum ibConfigType {
+enum ibConfigType : int {
 	ibConfigType_File,
 	ibConfigType_Load,
 	ibConfigType_Load_And_Save,

@@ -7,7 +7,7 @@ enum ibItemMode {
 	ibItemMode_Folder_Item
 };
 
-enum ibSelectMode {
+enum ibSelectMode : int {
 	ibSelectMode_Items = 1,
 	ibSelectMode_Folders,
 	ibSelectMode_FoldersAndItems

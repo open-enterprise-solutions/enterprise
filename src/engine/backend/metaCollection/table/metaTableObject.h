@@ -50,8 +50,12 @@ public:
 #pragma region __generic_h__
 
 	//attribute
+	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject() const {
+		std::vector<ibValueMetaObjectAttributeBase*> array;
+		return GetGenericAttributeArrayObject(array);
+	}
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		FillArrayObjectByPredefinedAttribute(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
 		return array;

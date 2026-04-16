@@ -433,9 +433,10 @@ protected:
 	virtual void OnChangeChildPosition(ibValueFrame* obj, unsigned int pos) {}
 	virtual void OnChoiceProcessing(ibValue& vSelected) {}
 
-	//load & save object in control 
+	//load & save object in control
 	virtual bool LoadData(ibReaderMemory& reader) { return true; }
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory()) { return true; }
+	bool SaveData() { ibWriterMemory w; return SaveData(w); }
+	virtual bool SaveData(ibWriterMemory& writer) { return true; }
 
 protected:
 

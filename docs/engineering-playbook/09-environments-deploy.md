@@ -533,6 +533,107 @@ OES использует **Semantic Versioning**: `MAJOR.MINOR.PATCH`
 #define OES_VERSION_BUILD  __DATE__ " " __TIME__
 ```
 
+---
+
+## Web Client
+
+### Сборка
+
+Веб-клиент -- React SPA, расположен в каталоге `web/`. Сборка производит статические файлы в `web/dist/`:
+
+```bash
+cd web
+npm install
+npm run build     # production-сборка → web/dist/
+```
+
+### Режим разработки
+
+Для локальной разработки используется Vite dev-server с проксированием API-запросов на daemon:
+
+```bash
+cd web
+npm run dev       # запуск Vite dev-server на http://localhost:5173
+```
+
+Vite проксирует все запросы `/api/*` на `http://localhost:8765` (daemon с web-сервером). Настройка прокси в `web/vite.config.ts`.
+
+### Запуск daemon с веб-сервером
+
+Daemon запускается с параметрами веб-сервера:
+
+```bash
+# daemon обслуживает REST API и раздаёт статику из web/dist/
+./daemon --web-port 8765 --web-dir web/dist
+```
+
+| Параметр | Описание |
+|----------|----------|
+| `--web-port` | Порт HTTP-сервера (по умолчанию: 8765) |
+| `--web-dir` | Путь к каталогу со статическими файлами SPA |
+
+При обращении к любому маршруту, не начинающемуся с `/api/`, сервер отдаёт `index.html` (SPA fallback).
+
+### Production-архитектура
+
+В production веб-клиент обслуживается через Nginx, который проксирует API-запросы на один или несколько экземпляров daemon:
+
+```
+                  ┌──────────┐
+  Browser ──────► │  Nginx   │
+                  │  :443    │
+                  └────┬─────┘
+                       │
+          ┌────────────┼────────────┐
+          │            │            │
+   ┌──────▼──┐  ┌──────▼──┐  ┌──────▼──┐
+   │ daemon  │  │ daemon  │  │ daemon  │
+   │ :8765   │  │ :8766   │  │ :8767   │
+   └─────────┘  └─────────┘  └─────────┘
+         │            │            │
+         └────────────┼────────────┘
+                      │
+               ┌──────▼──────┐
+               │  Firebird   │
+               │  Database   │
+               └─────────────┘
+```
+
+Пример конфигурации Nginx:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name oes.example.com;
+
+    # Статика SPA
+    root /opt/oes/web/dist;
+    index index.html;
+
+    # SPA fallback
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # API → daemon (upstream с балансировкой)
+    location /api/ {
+        proxy_pass http://oes_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+upstream oes_backend {
+    server 127.0.0.1:8765;
+    server 127.0.0.1:8766;
+    server 127.0.0.1:8767;
+}
+```
+
+---
+
 ### Changelog
 
 Перед каждым релизом обновлять `CHANGELOG.md`:

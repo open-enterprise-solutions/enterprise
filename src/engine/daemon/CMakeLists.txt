@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.16)
 
 set(DAEMON_SOURCES
     daemon.cpp
+    ibWebMainFrame.cpp
+    ibWebSessionManager.cpp
+    ibWebSessionRoutes.cpp
 )
 
 add_executable(daemon ${DAEMON_SOURCES})
@@ -20,10 +23,13 @@ target_compile_definitions(daemon PRIVATE NOPCH)
 target_include_directories(daemon PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine
     ${CMAKE_SOURCE_DIR}/src/engine/backend
+    ${CMAKE_SOURCE_DIR}/src/3rdparty/nlohmann
+    ${CMAKE_SOURCE_DIR}/src/3rdparty/cpp-httplib
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 target_link_libraries(daemon PRIVATE
     backend
+    frontend
     wx::core wx::aui wx::html wx::propgrid wx::adv wx::stc wx::xrc wx::qa wx::base wx::net wx::xml
 )

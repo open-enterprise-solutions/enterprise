@@ -32,12 +32,19 @@ f f   # OES Architecture
 │  22 Controls       │  │  ibCompileCode / ibProcUnit        │
 │  ibMainFrame       │  │  ibDatabaseLayer (+ 5 drivers)     │
 │  Property editor   │  │  ibDebuggerServer                  │
+│                    │  │  ibWebServer (HTTP/REST)            │
 └────────────────────┘  └────────────────┬───────────────────┘
                                          │
                         ┌────────────────▼────────────────────┐
                         │         Database tier                │
                         │  Firebird  PostgreSQL  SQLite        │
                         │  MySQL     ODBC                      │
+                        └─────────────────────────────────────┘
+
+                        ┌─────────────────────────────────────┐
+                        │         Web Client (browser)         │
+                        │  React SPA  ─── HTTP/WS ──► daemon   │
+                        │  Refine · shadcn · Formily           │
                         └─────────────────────────────────────┘
 ```
 
@@ -413,6 +420,218 @@ Designer                           Enterprise
 ```
 
 The server runs each connection as a `wxThread` (`ibDebuggerServer::ibDebuggerServerConnection`). Raw binary packets are sent via `SendCommand` / `RecvCommand`.
+
+---
+
+## Web Server Architecture
+
+### Overview
+
+OES includes an embedded HTTP server with **server-side form rendering** — similar to how 1C:Enterprise and the Wt C++ Web Toolkit work. Forms live in memory on the server; the browser receives JSON layouts and sends events back.
+
+```
+Browser (React SPA)
+    │ HTTP (JSON layouts + events)
+    ▼
+daemon.exe (links backend.dll + frontend.dll)
+    ├─ ibWebServer (cpp-httplib)
+    │    ├─ /api/health           → system status
+    │    ├─ /api/auth/*           → JWT authentication
+    │    ├─ /api/data/*           → CRUD for business objects
+    │    ├─ /api/metadata/*       → metadata tree
+    │    └─ /*                    → static files (web/dist/)
+    │
+    ├─ ibWebSessionManager        → per-user sessions with forms in memory
+    │    ├─ /api/session/open-form  → create form → JSON layout
+    │    ├─ /api/session/event      → process event → JSON updates
+    │    └─ /api/session/close      → cleanup
+    │
+    ├─ ibWebMainFrame             → enables CreateNewForm() in service mode
+    └─ ibWebVisualHost            → builds JSON proxy tree from ibValueForm
+         │
+         ▼
+    backend.dll (ibApplicationData, ibMetaDataConfiguration, ibProcUnit)
+         │
+         ▼
+    Database tier (Firebird / PostgreSQL / SQLite)
+```
+
+### Server-Side Form Rendering
+
+The web client uses **server-side form rendering** — the same approach as 1C:Enterprise and Wt C++ Web Toolkit:
+
+1. User opens a form → server creates `ibValueForm` in memory
+2. Server loads form blob from metadata → `LoadForm()` deserializes control tree
+3. `ibWebVisualHost` walks the tree recursively, creating `ibWebControlProxy` for each control
+4. Server sends JSON layout to browser
+5. User clicks a button → browser sends event to server
+6. Server calls `ibProcUnit::CallAsFunc()` to execute the event handler (bytecode)
+7. Server collects changed control properties → sends diff back to browser
+
+```
+Session lifecycle:
+
+  POST /api/session/open-form {metaName: "Products"}
+    → Server: ibWebMainFrame::CreateNewForm(formMeta)
+    → Server: ibValueForm::LoadForm(blob)
+    → Server: ibValueForm::BuildForm()
+    → Server: ibValueForm::InitializeFormModule()  (compile + execute)
+    → Server: ibWebVisualHost::CreateWebHost()     (recursive proxy tree)
+    → Client: {layout: {id:1, type:"form", children:[...]}}
+
+  POST /api/session/event {controlId:3, event:"OnClick"}
+    → Server: ibProcUnit::CallAsFunc("OnClick")
+    → Server: re-read all proxy properties (diff detection)
+    → Client: {updates: [{id:5, props:{value:"new text"}}]}
+```
+
+### Key Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `ibWebServer` | `backend/webServer/ibWebServer.h` | HTTP server (cpp-httplib wrapper) |
+| `ibWebMainFrame` | `daemon/ibWebMainFrame.h` | Enables `CreateNewForm()` in service mode |
+| `ibWebVisualHost` | `frontend/visualView/webHost/ibWebVisualHost.h` | Builds JSON proxy tree from form |
+| `ibWebControlProxy` | `frontend/visualView/webHost/ibWebControlProxy.h` | wxObject replacement — stores control state |
+| `ibWebSessionManager` | `daemon/ibWebSessionManager.h` | Per-user sessions with forms in memory |
+| Session routes | `daemon/ibWebSessionRoutes.cpp` | HTTP endpoints for form lifecycle |
+
+### ibWebVisualHost
+
+Standalone class (not inheriting `ibVisualHost` which requires wxScrolledWindow). Same recursive control traversal pattern, but outputs JSON instead of wxWidgets.
+
+- `CreateWebHost()` — walks `ibValueForm` children recursively, creates `ibWebControlProxy` for each
+- `CreateProxy()` — maps CLSID to type name (22 control types), reads properties via `GetPropVal()`
+- `GetFormLayout()` — serializes entire proxy tree to JSON
+- `HandleEvent()` — calls `ibProcUnit` handler, collects property diffs
+
+### ibWebControlProxy
+
+Inherits `wxObject` (to fit existing API). Stores:
+- `m_controlId` — unique control ID
+- `m_type` — "button", "textbox", "tablebox", "sizer", etc. (22 types)
+- `m_props` — all control properties (value, color, font, visible, enabled, source...)
+- `m_children` — child proxies (recursive tree)
+- `m_frame` — back-pointer to `ibValueFrame` for event handling
+
+### ibWebSessionManager
+
+Each user session holds:
+- Cloned DB connection (`db_query->Clone()`)
+- `ibValueForm*` — the form object in memory
+- `ibWebVisualHost*` — the JSON proxy tree
+- Last activity timestamp (for timeout cleanup)
+
+### Daemon Initialization
+
+When `daemon.exe` starts:
+
+1. `ibWebMainFrame::Initialize()` — enables `CreateNewForm()` (sets `backend_mainFrame`)
+2. `ibWebSessionManager::Initialize()` — creates session manager
+3. `appDataCreateServer(eSERVICE_MODE, ...)` — connect to database
+4. `appData->Connect(user, password)` — authenticate, load metadata
+5. `ibWebServer::Initialize(port, staticDir)` — start HTTP server
+6. `RegisterSessionRoutes(webServer->GetHttpServer())` — add session endpoints
+7. `webServer->WaitForShutdown()` — block until termination
+
+**Daemon links both `backend.dll` and `frontend.dll`** — this gives access to `ibValueForm`, all 22 control types (registered via `S_CONTROL_TYPE_REGISTER`), and `ibWebVisualHost`.
+
+Command-line arguments:
+
+| Flag | Description |
+|------|-------------|
+| `--srv` | Database server address |
+| `--p` | Database server port |
+| `--db` | Database name |
+| `--usr` / `--pwd` | Database credentials |
+| `--ib_usr` / `--ib_pwd` | Application user credentials |
+| `--web-port` (`-wp`) | HTTP server port (default: 8765) |
+| `--web-dir` (`-wd`) | Static files directory (default: `web/` next to executable) |
+
+### Web Client Frontend
+
+The browser-based client is a React SPA located in `web/` at the project root. It is built with Vite and served as static files by the daemon.
+
+| Technology | Purpose |
+|---|---|
+| Refine v5 | CRUD framework with routing, auth, data hooks |
+| shadcn/ui | UI component library (custom @oes/theme preset) |
+| Formily v2 | JSON Schema-driven form rendering |
+| AG Grid | Heavy data tables (registers, ledgers) |
+| TanStack Table | Light lists (catalogs) |
+| Phosphor Icons | 9000+ icons in 6 weights |
+| Monaco Editor | Code editor for web designer/debugger |
+| Zustand | State management |
+| Recharts | Dashboard charts |
+
+### Server-Side Form Rendering (FormRenderer)
+
+The web client uses **server-side form rendering** — the daemon holds the form in memory (C++ objects), the browser receives a JSON control tree and renders it as React components. All business logic runs on the server.
+
+```
+Browser (FormRenderer)                    daemon.exe
+  │                                         │
+  ├─ POST /api/session/open-form ──────────►├─ CreateSession()
+  │   { metaType, metaName, objectId }      ├─ OpenForm() → ibValueForm + ibWebVisualHost
+  │                                         ├─ CreateWebHost() → recursive proxy tree
+  │◄── { sessionId, layout }────────────────┤
+  │                                         │
+  ├─ User clicks button ──────────────────► │
+  │   POST /api/session/event               ├─ ibProcUnit::CallAsFunc(eventName)
+  │   { sessionId, controlId, event }       ├─ Re-read all proxy properties
+  │◄── { handled, updates[] }───────────────┤  (diff only changed props)
+  │                                         │
+  ├─ POST /api/session/close ──────────────►├─ Cleanup session, form, DB clone
+  │                                         │
+```
+
+**Frontend files:**
+
+| File | Purpose |
+|---|---|
+| `web/src/hooks/useFormSession.ts` | Session lifecycle hook (open/event/close) |
+| `web/src/components/forms/FormRenderer.tsx` | Recursive control renderer (21 control types) |
+| `web/src/pages/form-session.tsx` | Page component with route integration |
+
+**Control type mapping** (server → React):
+
+| Server type | React component | HTML element |
+|---|---|---|
+| `form` | FormControl | Container with caption + overflow body |
+| `boxsizer` | BoxSizerControl | Flex row/column |
+| `gridsizer` | GridSizerControl | CSS Grid |
+| `notebook` | NotebookControl | Tabbed container |
+| `textbox` | TextBoxControl | `<input type="text">` |
+| `button` | ButtonControl | `<button>` |
+| `checkbox` | CheckboxControl | `<input type="checkbox">` |
+| `tablebox` | TableBoxControl | `<table>` with column headers |
+| `toolbar` | ToolbarControl | Flex row with tool buttons |
+| ... | ... | (21 types total) |
+
+**Routes:**
+
+- `/:section/:resource/form` — open default form for metadata object
+- `/:section/:resource/:id/form` — open form for existing record
+
+### Third-Party Libraries
+
+| Library | Location | License |
+|---|---|---|
+| cpp-httplib | `src/3rdparty/cpp-httplib/httplib.h` | MIT |
+| nlohmann/json | `src/3rdparty/nlohmann/json.hpp` | MIT |
+
+### Production Deployment
+
+```
+Clients ──► Nginx (TLS, rate limiting, load balancing)
+                │
+                ├──► oes-daemon #1 (:8765)
+                ├──► oes-daemon #2 (:8766)  ──► PostgreSQL (primary + replicas)
+                └──► oes-daemon #N
+                                               Redis (sessions, pub/sub, cache)
+```
+
+For production, Nginx handles TLS termination and load balancing across multiple daemon instances. See `docs/devops-playbook/03-nginx.md` for configuration templates.
 
 ---
 

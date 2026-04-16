@@ -49,8 +49,10 @@ struct CPrecompileContext
 	ibParamValue AddVariable(const wxString& strVarName, const wxString& varType = wxEmptyString, bool bExport = false, bool bTempVar = false, const ibValue& valVar = ibValue());
 	void SetVariable(const wxString& strVarName, const ibValue& valVar);
 
-	bool FindVariable(const wxString& strName, ibValue& valContext = ibValue(), bool bContext = false);
-	bool FindFunction(const wxString& strName, ibValue& valContext = ibValue(), bool bContext = false);
+	bool FindVariable(const wxString& strName, bool bContext = false) { ibValue v; return FindVariable(strName, v, bContext); }
+	bool FindVariable(const wxString& strName, ibValue& valContext, bool bContext = false);
+	bool FindFunction(const wxString& strName, bool bContext = false) { ibValue v; return FindFunction(strName, v, bContext); }
+	bool FindFunction(const wxString& strName, ibValue& valContext, bool bContext = false);
 
 	void RemoveVariable(const wxString& strName);
 

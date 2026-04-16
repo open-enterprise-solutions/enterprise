@@ -125,6 +125,9 @@ else()
     add_compile_options(-Wall -Wno-unused-parameter -Wno-sign-compare)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         add_compile_options(-Wno-deprecated-declarations)
+        # Allow MSVC extension: binding temporary to non-const lvalue reference
+        # Used extensively in OES codebase (e.g. SaveData(ibWriterMemory& = ibWriterMemory()))
+        add_compile_options(-fms-extensions)
     endif()
 endif()
 

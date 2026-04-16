@@ -1,0 +1,283 @@
+@import "tailwindcss";
+
+/*
+ * OES Enterprise Sharp Theme
+ * Gray-white palette, sharp corners, compact density
+ */
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/ibmplexsans/v19/zYXgKVElMYYaJe8bpLHnCwDKhdzeFaxOedc.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/ibmplexsans/v19/zYX9KVElMYYaJe8bpLHnCwDKjSL9AIFsdP3pBms.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/ibmplexsans/v19/zYX9KVElMYYaJe8bpLHnCwDKjQ76AIFsdP3pBms.woff2') format('woff2');
+}
+
+:root {
+  /* Enterprise Sharp — Light Theme */
+  --radius: 2px;
+
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+
+  /* Deep blue primary */
+  --primary: 221 83% 48%;
+  --primary-foreground: 210 40% 98%;
+
+  /* Teal accent */
+  --accent: 173 58% 39%;
+  --accent-foreground: 210 40% 98%;
+
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 221 83% 48%;
+
+  /* Status colors */
+  --status-posted: 142 71% 45%;
+  --status-draft: 215 14% 64%;
+  --status-deleted: 0 84% 60%;
+  --status-progress: 221 83% 48%;
+
+  /* Sidebar — slightly darker */
+  --sidebar: 210 20% 98%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-border: 214 32% 91%;
+  --sidebar-accent: 221 83% 48%;
+
+  /* Chart colors */
+  --chart-1: 221 83% 48%;
+  --chart-2: 173 58% 39%;
+  --chart-3: 24 95% 53%;
+  --chart-4: 280 67% 49%;
+  --chart-5: 142 71% 45%;
+}
+
+.dark {
+  --background: 222 47% 8%;
+  --foreground: 210 40% 98%;
+  --card: 222 47% 11%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222 47% 11%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 217 91% 60%;
+  --primary-foreground: 222 47% 8%;
+  --accent: 173 58% 39%;
+  --accent-foreground: 210 40% 98%;
+  --secondary: 217 33% 17%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 65%;
+  --destructive: 0 63% 31%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217 33% 17%;
+  --input: 217 33% 17%;
+  --ring: 217 91% 60%;
+
+  --sidebar: 222 47% 6%;
+  --sidebar-foreground: 210 40% 98%;
+  --sidebar-border: 217 33% 17%;
+  --sidebar-accent: 217 91% 60%;
+}
+
+/* Base styles */
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  font-family: 'IBM Plex Sans', 'Golos Text', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Compact density for ERP */
+.density-compact {
+  --row-height: 32px;
+  --cell-padding: 4px 8px;
+  --gap: 8px;
+}
+
+.density-standard {
+  --row-height: 40px;
+  --cell-padding: 8px 12px;
+  --gap: 12px;
+}
+
+/* Status strip on documents */
+.status-strip {
+  border-left: 3px solid transparent;
+}
+.status-strip--posted { border-left-color: hsl(var(--status-posted)); }
+.status-strip--draft { border-left-color: hsl(var(--status-draft)); }
+.status-strip--deleted { border-left-color: hsl(var(--status-deleted)); }
+.status-strip--progress { border-left-color: hsl(var(--status-progress)); }
+
+/* Skeleton loading animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--muted) / 0.5) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* ---------------------------------------------------------------------------
+ * AI Chat — markdown prose styles
+ * --------------------------------------------------------------------------- */
+
+.prose-oes .md-p {
+  margin: 0;
+  color: hsl(var(--foreground));
+}
+
+.prose-oes .md-h1,
+.prose-oes .md-h2,
+.prose-oes .md-h3 {
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin: 0.5em 0 0.25em;
+}
+
+.prose-oes .md-h1 { font-size: 14px; }
+.prose-oes .md-h2 { font-size: 13px; }
+.prose-oes .md-h3 { font-size: 12px; }
+
+.prose-oes .md-li,
+.prose-oes .md-li-num {
+  display: list-item;
+  margin-left: 1.25em;
+  padding-left: 0.25em;
+  color: hsl(var(--foreground));
+}
+
+.prose-oes .md-li { list-style-type: disc; }
+.prose-oes .md-li-num { list-style-type: decimal; }
+
+.prose-oes .md-code {
+  font-family: "IBM Plex Mono", "Fira Code", monospace;
+  font-size: 11px;
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius);
+  background: hsl(var(--muted));
+  color: hsl(var(--accent));
+}
+
+.prose-oes strong { font-weight: 600; }
+.prose-oes em { font-style: italic; }
+
+/* AI floating panel shadow */
+.ai-panel-shadow {
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.1),
+    0 10px 15px -3px rgb(0 0 0 / 0.1),
+    0 0 0 1px hsl(var(--border));
+}
+
+/* Card shadow tokens */
+.shadow-card {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.shadow-card-hover {
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.10), 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="tab"]:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+
+/* Status colors — explicit so they're clearly visible */
+.status-badge-posted    { background: hsl(var(--status-posted)  / 0.12); color: hsl(142 60% 30%); }
+.status-badge-draft     { background: hsl(var(--status-draft)   / 0.14); color: hsl(215 14% 40%); }
+.status-badge-cancelled { background: hsl(var(--status-deleted) / 0.12); color: hsl(0   72% 45%); }
+
+.dark .status-badge-posted    { background: hsl(var(--status-posted)  / 0.18); color: hsl(142 60% 55%); }
+.dark .status-badge-draft     { background: hsl(var(--status-draft)   / 0.16); color: hsl(215 20% 68%); }
+.dark .status-badge-cancelled { background: hsl(var(--status-deleted) / 0.18); color: hsl(0   72% 65%); }
+
+/* Toast slide-in animation */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Status strip — left edge indicator on document rows */
+.doc-row-posted    { border-left: 3px solid hsl(var(--status-posted)); }
+.doc-row-draft     { border-left: 3px solid hsl(var(--status-draft)); }
+.doc-row-cancelled { border-left: 3px solid hsl(var(--status-deleted)); }
+
+/* Connection status dot */
+.conn-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.conn-dot--online  { background: hsl(var(--status-posted)); }
+.conn-dot--offline { background: hsl(var(--status-deleted)); }
+.conn-dot--connecting {
+  background: hsl(var(--status-draft));
+  animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
