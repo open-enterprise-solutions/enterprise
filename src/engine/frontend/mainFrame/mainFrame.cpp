@@ -183,7 +183,8 @@ wxAuiMDIClientWindow* ibFrontendDocMDIFrame::OnCreateClient()
 			// Use the system background instead of the old hard-coded blue —
 			// respects dark/light mode.
 			SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_APPWORKSPACE));
-			SetBackgroundStyle(wxBG_STYLE_SYSTEM);
+			if (GetBackgroundStyle() != wxBG_STYLE_TRANSPARENT)
+				SetBackgroundStyle(wxBG_STYLE_SYSTEM);
 			Bind(wxEVT_PAINT, &wxAuiMDIClientWindowImpl::OnPaint, this);
 			Bind(wxEVT_ERASE_BACKGROUND, &wxAuiMDIClientWindowImpl::OnEraseBackground, this);
 #endif

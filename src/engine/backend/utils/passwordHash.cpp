@@ -42,6 +42,9 @@ void FillRandom(uint8_t* buf, size_t len)
 #ifdef __WXMSW__
 	if (BCryptGenRandom(nullptr, buf, (ULONG)len, BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0)
 		return;
+#elif defined(__APPLE__)
+	arc4random_buf(buf, len);
+	return;
 #else
 	if (getrandom(buf, len, 0) == (ssize_t)len)
 		return;

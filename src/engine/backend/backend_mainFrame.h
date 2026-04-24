@@ -4,6 +4,7 @@
 #include "backend/uniqueKey.h"
 #include "backend/backend_spreadsheet.h"
 #include "backend/system/systemEnum.h"
+#include "backend/metadataConfiguration.h"
 
 class ibSession;
 

@@ -5,6 +5,11 @@
 
 #include "debugServer.h"
 
+#ifndef _WIN32
+#include <sys/socket.h>
+#include <netinet/tcp.h>
+#endif
+
 #include "backend/compiler/procUnit.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/metadataConfiguration.h"

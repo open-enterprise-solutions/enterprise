@@ -46,14 +46,12 @@ wxDECLARE_EVENT(wxEVT_CONTROL_BUTTON_SELECT, wxCommandEvent);
 wxDECLARE_EVENT(wxEVT_CONTROL_BUTTON_OPEN,   wxCommandEvent);
 wxDECLARE_EVENT(wxEVT_CONTROL_BUTTON_CLEAR,  wxCommandEvent);
 // Text edit lifecycle events — mirror desktop ibControlTextEditor.
-// ibValueTextCtrl binds all three in the unified Update body;
-// web fires only ENTER/INPUT/CLEAR that make sense remotely (per-
-// keystroke INPUT still goes through /change commit — server side
-// doesn't see it directly, but the binds are emitted so the shared
-// code path links identically on both builds).
 wxDECLARE_EVENT(wxEVT_CONTROL_TEXT_ENTER,    wxCommandEvent);
 wxDECLARE_EVENT(wxEVT_CONTROL_TEXT_INPUT,    wxCommandEvent);
 wxDECLARE_EVENT(wxEVT_CONTROL_TEXT_CLEAR,    wxCommandEvent);
+#else
+// Desktop build: pull the declarations from the desktop control header
+#include "frontend/win/ctrls/controlTextEditor.h"
 #endif
 
 class ibWebSizer;

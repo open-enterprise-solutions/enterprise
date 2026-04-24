@@ -195,15 +195,23 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnPasteItem(wxCommandEvent& e
 
 void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnSetFocus(wxFocusEvent& event)
 {
+	static bool s_inActivate = false;
+	if (s_inActivate) { event.Skip(); return; }
+
 	if (event.GetEventType() == wxEVT_SET_FOCUS) {
+		s_inActivate = true;
 		docManager->ActivateView(m_metaView);
+		s_inActivate = false;
 	}
 	else if (event.GetEventType() == wxEVT_KILL_FOCUS) {
 		const CAuiDocChildFrame* child =
 			static_cast<CAuiDocChildFrame*>(mainFrame->GetActiveChild());
 		wxView* view = child ? child->GetView() : docManager->GetAnyUsableView();
-		if (view != nullptr && view != docManager->GetCurrentView())
+		if (view != nullptr && view != docManager->GetCurrentView()) {
+			s_inActivate = true;
 			view->Activate(true);
+			s_inActivate = false;
+		}
 		docManager->ActivateView(view);
 	}
 

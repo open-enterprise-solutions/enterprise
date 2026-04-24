@@ -25,6 +25,12 @@ void ibMetaView::OnActivateView(bool activate, wxView* activeView, wxView* deact
 void ibMetaView::Activate(bool activate)
 {
 #ifndef OES_USE_WEB
+	// Guard against infinite recursion on macOS: Activate → SetFocus →
+	// resignFirstResponder → OnSetFocus → Activate → ...
+	static bool s_inActivate = false;
+	if (s_inActivate) return;
+	s_inActivate = true;
+
 	wxDocManager* docManager = m_viewDocument != nullptr ?
 		m_viewDocument->GetDocumentManager() : wxDocManager::GetDocumentManager();
 
@@ -34,8 +40,7 @@ void ibMetaView::Activate(bool activate)
 		docManager->ActivateView(this, activate);
 	}
 
-	if (activate) wxLogDebug("! <debug> activate view %s", ibMetaView::GetViewName());
-	else wxLogDebug("! <debug> deactivate view %s", ibMetaView::GetViewName());
+	s_inActivate = false;
 #else
 	// Web: activation is driven from ibWebFrame::SetActiveTab directly
 	// on the session's tab list — no docManager round-trip needed.

@@ -11,6 +11,8 @@
 #include "backend/interfaceHelper.h"
 #include "backend/roleHelper.h"
 
+#include "backend/metaCollection/attribute/metaAttributeObjectEnum.h"
+
 //*******************************************************************************
 class BACKEND_API ibMetaData;
 //*******************************************************************************

@@ -49,9 +49,11 @@ public:
 
 #pragma region __generic_h__
 
+	using ibValueMetaObjectCompositeData::GetGenericAttributeArrayObject;
+
 	//attribute
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
 		FillArrayObjectByPredefinedAttribute(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
 		return array;

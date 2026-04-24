@@ -459,7 +459,7 @@ protected:
 
 	//load & save object in control 
 	virtual bool LoadData(ibReaderMemory& reader) { return true; }
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory()) { return true; }
+	virtual bool SaveData(ibWriterMemory& writer) { return true; }
 
 protected:
 

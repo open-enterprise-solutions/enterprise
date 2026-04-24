@@ -4,6 +4,7 @@
 #include <wx/checkbox.h>
 #include <wx/compositewin.h>
 #include <wx/containr.h>
+#include <wx/tooltip.h>
 
 #include "dynamicBorder.h"
 

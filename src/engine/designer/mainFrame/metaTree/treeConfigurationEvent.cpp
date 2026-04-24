@@ -302,15 +302,19 @@ void ibMetadataTree::ibMetaTreeCtrl::OnPasteItem(wxCommandEvent& event)
 
 void ibMetadataTree::ibMetaTreeCtrl::OnSetFocus(wxFocusEvent& event)
 {
+	static bool s_inActivate = false;
 	if (docManager != nullptr && event.GetEventType() == wxEVT_SET_FOCUS) {
 
 		const wxTreeItemId& item = GetSelection();
 
 		wxView* view = docManager->GetCurrentView();
-		if (m_ownerTree->m_docParent == nullptr &&
+		if (!s_inActivate &&
+			m_ownerTree->m_docParent == nullptr &&
 			m_metaView != view) {
+			s_inActivate = true;
 			if (view != nullptr) view->Activate(false);
 			m_metaView->Activate(true);
+			s_inActivate = false;
 		}
 	}
 	else if (docManager != nullptr && event.GetEventType() == wxEVT_KILL_FOCUS) {

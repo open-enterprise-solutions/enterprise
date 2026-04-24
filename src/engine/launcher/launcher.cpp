@@ -24,13 +24,14 @@ wxString FindSiblingExecutable(const wxString& exeName) {
 	if (wxFileExists(flatPath))
 		return flatPath;
 
-	// Try sibling .app bundle: go up 3 levels from Contents/MacOS/launcher
+	// Try sibling .app bundle: go up 3 levels from Contents/MacOS/
 	// to reach the directory containing launcher.app, then look for exeName.app
-	wxFileName bundlePath(dir);
+	wxFileName bundlePath = wxFileName::DirName(dir);
 	bundlePath.RemoveLastDir(); // MacOS -> Contents
 	bundlePath.RemoveLastDir(); // Contents -> launcher.app
 	bundlePath.RemoveLastDir(); // launcher.app -> parent dir
-	wxString siblingApp = bundlePath.GetFullPath() + exeName + ".app"
+	wxString siblingApp = bundlePath.GetPath() + wxFileName::GetPathSeparator()
+		+ exeName + ".app"
 		+ wxFileName::GetPathSeparator() + "Contents"
 		+ wxFileName::GetPathSeparator() + "MacOS"
 		+ wxFileName::GetPathSeparator() + exeName;
@@ -312,7 +313,13 @@ void ibFrameLauncher::OnButtonDesigner(wxCommandEvent& event) {
 	if (selection == wxNOT_FOUND) return;
 	auto itSelection = m_listInfoBase.begin() + selection;
 	wxString executeCmd = BuildLaunchCommand("designer", itSelection->second);
-	wxExecute(executeCmd);
+	wxLogDebug("Launcher exec: %s", executeCmd);
+	long pid = wxExecute(executeCmd);
+	wxLogDebug("Launcher wxExecute returned pid: %ld", pid);
+	if (pid == 0) {
+		wxMessageBox(wxT("Failed to launch designer:\n") + executeCmd, wxT("Launch Error"));
+		return;
+	}
 	Close(true);
 }
 

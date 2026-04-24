@@ -7,6 +7,11 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
 
+#ifndef _WIN32
+#include <sys/socket.h>
+#include <netinet/tcp.h>
+#endif
+
 #include "backend/fileSystem/fs.h"
 #if _USE_NET_COMPRESSOR == 1
 #include "utils/fs/lz/lzhuf.h"

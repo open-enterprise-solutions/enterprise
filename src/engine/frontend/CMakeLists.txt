@@ -8,6 +8,10 @@ file(GLOB_RECURSE FRONTEND_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
 
+# Exclude web-only sources (built by wfrontend target with OES_USE_WEB)
+list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "/web/")
+list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "wfrontend\\.cpp$")
+
 # Exclude legacy/broken special dialog files (use old CValue naming)
 list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "special/valueColourDialog\\.cpp$")
 list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "special/valueFileDialog\\.cpp$")
