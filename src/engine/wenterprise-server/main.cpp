@@ -32,6 +32,8 @@
 #	include <windows.h>
 #else
 #	include <csignal>
+#	include <sys/stat.h>
+#	include <unistd.h>
 #endif
 
 namespace {
@@ -185,14 +187,17 @@ CmdArgs ParseArgs(int argc, char** argv)
 		}
 	}
 
-	// Default URL prefix from --db or --file basename.
+	// Default URL prefix from --db or --file basename (strip path + extension).
 	if (a.urlPrefix.empty()) {
-		if (!a.database.empty()) {
-			a.urlPrefix = a.database;
-		}
-		else if (!a.file.empty()) {
-			const auto slash = a.file.find_last_of("/\\");
-			const std::string base = slash == std::string::npos ? a.file : a.file.substr(slash + 1);
+		std::string raw;
+		if (!a.database.empty())
+			raw = a.database;
+		else if (!a.file.empty())
+			raw = a.file;
+
+		if (!raw.empty()) {
+			const auto slash = raw.find_last_of("/\\");
+			const std::string base = slash == std::string::npos ? raw : raw.substr(slash + 1);
 			const auto dot = base.find_last_of('.');
 			a.urlPrefix = dot == std::string::npos ? base : base.substr(0, dot);
 		}
@@ -296,8 +301,35 @@ bool PortAlreadyListening(const std::string& host, int port)
 
 bool InitBackend(const CmdArgs& args)
 {
+#if defined(__APPLE__)
+	// Firebird embedded on macOS stores lock files in /tmp/firebird/.
+	// If the directory exists but is owned by the 'firebird' user with
+	// restricted permissions, the current user can't write there and
+	// Firebird fails with a cryptic "system error" message.
+	{
+		struct stat st;
+		if (stat("/tmp/firebird", &st) == 0 && access("/tmp/firebird", W_OK) != 0) {
+			std::cerr << "WARNING: /tmp/firebird/ exists but is not writable.\n"
+				"Firebird embedded needs write access for lock files.\n"
+				"Fix with:  sudo chmod 777 /tmp/firebird\n" << std::endl;
+		}
+	}
+#endif
+
 	if (!args.file.empty()) {
-		return wfrontendInitFile(args.file, args.ibUser, args.ibPassword, args.locale, args.debugEnable);
+		// CreateFileAppDataEnv expects a *directory* containing sys.fdb,
+		// not the full path to the .fdb file. If the caller passed a
+		// path ending in .fdb, strip the filename to get the directory.
+		std::string dbPath = args.file;
+		{
+			const auto dot = dbPath.rfind(".fdb");
+			if (dot != std::string::npos && dot + 4 == dbPath.size()) {
+				const auto slash = dbPath.find_last_of("/\\");
+				if (slash != std::string::npos)
+					dbPath = dbPath.substr(0, slash);
+			}
+		}
+		return wfrontendInitFile(dbPath, args.ibUser, args.ibPassword, args.locale, args.debugEnable);
 	}
 	if (!args.server.empty()) {
 		return wfrontendInitServer(args.server, args.dbPort,

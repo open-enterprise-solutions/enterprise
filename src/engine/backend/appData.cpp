@@ -683,7 +683,9 @@ long ibApplicationData::SpawnWebServerWithManifest(wxString cmd, bool searchDebu
 	cmd += wxString::Format(wxT(" --port=0 --manifest=\"%s\""), manifestPath);
 
 	// Spawn detached so the caller can exit without killing the server.
-	const long pid = wxExecute(cmd, wxEXEC_ASYNC);
+	// wxEXEC_MAKE_GROUP_LEADER puts the child into its own process group
+	// so it survives when the launcher (parent) exits after Close(true).
+	const long pid = wxExecute(cmd, wxEXEC_ASYNC | wxEXEC_MAKE_GROUP_LEADER);
 	if (pid == 0) {
 		wxRemoveFile(manifestPath);
 		return 0;
@@ -699,7 +701,7 @@ long ibApplicationData::SpawnWebServerWithManifest(wxString cmd, bool searchDebu
 	// Synchronous poll keeps the caller alive long enough for
 	// wxLaunchDefaultBrowser to fully ShellExecute before return.
 	wxString url;
-	for (int waited = 0; waited < 5000; waited += 100) {
+	for (int waited = 0; waited < 15000; waited += 100) {
 		wxMilliSleep(100);
 		wxYieldIfNeeded();
 		wxFile f;

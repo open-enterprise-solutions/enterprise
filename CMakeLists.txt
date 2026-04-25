@@ -283,10 +283,13 @@ endif()
 #   codeRunner    — executable      (GUI subsystem)
 #   classChecker  — executable      (GUI subsystem)
 #   simplePlugin  — SHARED library  (plugin example)
+#   wfrontend     — SHARED library  (web variant of frontend, OES_USE_WEB)
+#   wenterprise-server — executable (HTTP server for web client)
 # ---------------------------------------------------------------------------
 
 add_subdirectory("${OES_ENGINE_DIR}/backend")
 add_subdirectory("${OES_ENGINE_DIR}/frontend")
+add_subdirectory("${OES_ENGINE_DIR}/wenterprise-server")
 add_subdirectory("${OES_ENGINE_DIR}/daemon")
 add_subdirectory("${OES_ENGINE_DIR}/enterprise")
 add_subdirectory("${OES_ENGINE_DIR}/designer")

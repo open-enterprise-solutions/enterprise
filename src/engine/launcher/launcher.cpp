@@ -304,7 +304,11 @@ void ibFrameLauncher::OnButtonEnterprise(wxCommandEvent& event) {
 	if (selection == wxNOT_FOUND) return;
 	auto itSelection = m_listInfoBase.begin() + selection;
 	wxString executeCmd = BuildLaunchCommand("enterprise", itSelection->second);
-	wxExecute(executeCmd);
+	long pid = wxExecute(executeCmd);
+	if (pid == 0) {
+		wxMessageBox(wxT("Failed to launch enterprise:\n") + executeCmd, wxT("Launch Error"));
+		return;
+	}
 	Close(true);
 }
 
@@ -335,11 +339,32 @@ void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
 	// Port defaults to 0 (OS-picked); the actual bound port is read back
 	// from a manifest file the server writes after bind+init.
 	wxString exePath = FindSiblingExecutable(wxT("wenterprise-server"));
+	if (!wxFileExists(exePath)) {
+		wxMessageBox(wxT("Web server executable not found:\n") + exePath,
+			wxT("Launch Error"), wxOK | wxICON_ERROR);
+		return;
+	}
 	wxString cmd = wxT("\"") + exePath + wxT("\"");
 
-	if (info.m_bFileMode) {
-		if (!info.m_strFilePath.IsEmpty())
-			cmd += wxT(" --file=\"") + info.m_strFilePath + wxT("\"");
+	// Detect whether the database path is a local file: when the launcher
+	// entry is "server mode" but the database field is an absolute path to
+	// an .fdb file on this machine (common with Firebird embedded), pass it
+	// as --file instead — wenterprise-server's InitBackend then uses
+	// CreateFileAppDataEnv which opens the file directly instead of trying
+	// a remote Firebird TCP connection that would need a running fbserver.
+	bool useFileMode = info.m_bFileMode;
+	wxString filePath = info.m_strFilePath;
+	if (!useFileMode && !info.m_strDatabase.IsEmpty() &&
+		wxFileName(info.m_strDatabase).IsAbsolute() &&
+		wxFileExists(info.m_strDatabase))
+	{
+		useFileMode = true;
+		filePath = info.m_strDatabase;
+	}
+
+	if (useFileMode) {
+		if (!filePath.IsEmpty())
+			cmd += wxT(" --file=\"") + filePath + wxT("\"");
 	}
 	else {
 		if (!info.m_strServer.IsEmpty())
@@ -371,7 +396,8 @@ void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
 	// Any change to the spawn/handshake protocol lives in one place.
 	const long pid = ibApplicationData::SpawnWebServerWithManifest(cmd);
 	if (pid == 0) {
-		wxLogError(_("Failed to start wenterprise-server: %s"), cmd);
+		wxMessageBox(wxT("Failed to start wenterprise-server:\n") + cmd,
+			wxT("Launch Error"), wxOK | wxICON_ERROR);
 		return;
 	}
 	Close(true);
