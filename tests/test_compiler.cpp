@@ -46,7 +46,7 @@ TEST(LexerTest, EmptySourceProducesEndProgramOnly) {
 	ASSERT_TRUE(cc.PrepareLexem());
 	// At least the ENDPROGRAM sentinel — exact number depends on lexer
 	// implementation, but it must be non-empty.
-	EXPECT_GE(cc.m_listLexem.size(), 1u);
+	EXPECT_GE(cc.GetLexemList().size(), 1u);
 }
 
 TEST(LexerTest, SimpleAssignmentTokenizes) {
@@ -54,14 +54,14 @@ TEST(LexerTest, SimpleAssignmentTokenizes) {
 	cc.Load(wxT("a = 1;"));
 	ASSERT_TRUE(cc.PrepareLexem());
 	// Identifier 'a', '=', number '1', ';', ENDPROGRAM — at least 5.
-	EXPECT_GE(cc.m_listLexem.size(), 4u);
+	EXPECT_GE(cc.GetLexemList().size(), 4u);
 }
 
 TEST(LexerTest, StringLiteralLexes) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(wxT("s = \"hello\";"));
 	ASSERT_TRUE(cc.PrepareLexem());
-	EXPECT_GE(cc.m_listLexem.size(), 4u);
+	EXPECT_GE(cc.GetLexemList().size(), 4u);
 }
 
 // ===========================================================================

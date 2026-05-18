@@ -11,14 +11,14 @@
  *   reports whether the variable is bound to a context value via
  *   the out-parameter vContext.
  */
-bool ibPrecompileContext::FindVariable(const wxString& name, ibValue& vContext, bool isContext)
+bool ibPrecompileContext::FindVariable(const wxString& name, ibValue* vContext, bool isContext)
 {
 	if (isContext)
 	{
 		auto it = m_variables.find(stringUtils::MakeUpper(name));
 		if (it != m_variables.end())
 		{
-			vContext = it->second.m_valContext;
+			if (vContext) *vContext = it->second.m_valContext;
 			return it->second.m_isContext;
 		}
 		return false;
@@ -35,14 +35,14 @@ bool ibPrecompileContext::FindVariable(const wxString& name, ibValue& vContext, 
  *   the function is bound to a context value via the out-parameter
  *   vContext.
  */
-bool ibPrecompileContext::FindFunction(const wxString& name, ibValue& vContext, bool isContext)
+bool ibPrecompileContext::FindFunction(const wxString& name, ibValue* vContext, bool isContext)
 {
 	if (isContext)
 	{
 		auto it = m_functions.find(stringUtils::MakeUpper(name));
 		if (it != m_functions.end() && it->second)
 		{
-			vContext = it->second->m_valContext;
+			if (vContext) *vContext = it->second->m_valContext;
 			return it->second->m_isContext;
 		}
 		return false;

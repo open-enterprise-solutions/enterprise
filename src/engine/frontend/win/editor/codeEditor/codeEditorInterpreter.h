@@ -56,8 +56,12 @@ struct ibPrecompileContext
 	ibParamValue AddVariable(const wxString& varName, const wxString& varType = wxEmptyString, bool isExport = false, bool isTempVar = false, const ibValue& value = ibValue(), int declPos = 0);
 	void         SetVariable(const wxString& varName, const ibValue& value);
 
-	bool FindVariable(const wxString& name, ibValue& valContext = ibValue(), bool isContext = false);
-	bool FindFunction(const wxString& name, ibValue& valContext = ibValue(), bool isContext = false);
+	// valContext is an optional out-param. Pass nullptr (default) when the
+	// caller does not need the resolved value back — pointer chosen over
+	// reference because Clang rejects binding a non-const reference to a
+	// default-constructed temporary, even though MSVC accepts it.
+	bool FindVariable(const wxString& name, ibValue* valContext = nullptr, bool isContext = false);
+	bool FindFunction(const wxString& name, ibValue* valContext = nullptr, bool isContext = false);
 
 	void RemoveVariable(const wxString& name);
 

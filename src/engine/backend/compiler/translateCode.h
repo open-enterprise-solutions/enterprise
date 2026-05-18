@@ -268,6 +268,11 @@ public:
 	virtual void Clear();
 	void ClearLexem() { m_listLexem.resize(0); } // resetting and free data to reuse an object
 
+	// Read-only view of the lexem buffer. Tests and IntelliSense inspect
+	// the post-tokenization stream; mutation is reserved for translate
+	// internals (PrepareLexem, ClearLexem).
+	const std::vector<ibLexem>& GetLexemList() const { return m_listLexem; }
+
 	bool PrepareLexem();
 
 protected:

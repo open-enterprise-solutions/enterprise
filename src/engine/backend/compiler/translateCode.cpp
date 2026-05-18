@@ -182,14 +182,23 @@ void ibTranslateCode::ibDefineCollection::SetDefine(const wxString& strName, con
 // ibLexem — out-of-line accessors (need ibTranslateCode definition)
 //////////////////////////////////////////////////////////////////////
 
+// Clang rejects the ternary `wxString : wxEmptyString` form as ambiguous
+// because wxString and wxChar* are mutually convertible. Use a static
+// empty wxString sentinel so both branches are the same type.
 const wxString& ibLexem::GetModuleName() const {
-	return m_translateCode ? m_translateCode->m_strModuleName : wxEmptyString;
+	if (m_translateCode) return m_translateCode->m_strModuleName;
+	static const wxString s_empty;
+	return s_empty;
 }
 const wxString& ibLexem::GetDocPath() const {
-	return m_translateCode ? m_translateCode->m_strDocPath : wxEmptyString;
+	if (m_translateCode) return m_translateCode->m_strDocPath;
+	static const wxString s_empty;
+	return s_empty;
 }
 const wxString& ibLexem::GetFileName() const {
-	return m_translateCode ? m_translateCode->m_strFileName : wxEmptyString;
+	if (m_translateCode) return m_translateCode->m_strFileName;
+	static const wxString s_empty;
+	return s_empty;
 }
 
 //////////////////////////////////////////////////////////////////////

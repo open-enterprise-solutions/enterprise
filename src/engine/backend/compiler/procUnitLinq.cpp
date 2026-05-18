@@ -707,7 +707,7 @@ public:
 private:
 	std::shared_ptr<ibValueIteratorState> m_upstream;
 	ibValueFunction m_pred;
-	long m_idx = 0;
+	int64_t m_idx = 0;
 };
 
 class ibValueSelectIndexedState : public ibValueIteratorState {
@@ -729,7 +729,7 @@ public:
 private:
 	std::shared_ptr<ibValueIteratorState> m_upstream;
 	ibValueFunction m_proj;
-	long m_idx = 0;
+	int64_t m_idx = 0;
 };
 
 // Query value — wraps the tail of a LINQ pipeline. Iterable
@@ -832,7 +832,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		// === Terminal operators (no args, materialise / aggregate) ===
 		case M::Count: // number of elements
 		{
-			long count = 0;
+			int64_t count = 0;
 			ibValue current;
 			while (upstream->MoveNext(current)) ++count;
 			SetTypeNumber(ret, count);

@@ -204,7 +204,7 @@ void ibValueArray::DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
 	switch (method) {
 		case M::Count: // O(1) via m_listValue.size()
 		{
-			SetTypeNumber(ret, (long)m_listValue.size());
+			SetTypeNumber(ret, (int64_t)m_listValue.size());
 			return;
 		}
 		case M::ToArray: // array already materialised; return fresh shallow copy

@@ -89,7 +89,10 @@ set(WFRONTEND_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/docView/docView.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/docView/docViewCmd.cpp
 
-    # Controls — shared between desktop and web
+    # Controls — only files with ibFrontendWindow* signatures. The
+    # excluded ctrl/*.cpp files still declare Create/OnCreated with
+    # bare wxWindow* and would not match the header on web builds
+    # where ibFrontendWindow = ibWebWindow.
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/control.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/controlProperty.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/typeControl.cpp
@@ -137,6 +140,18 @@ set(WFRONTEND_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/toolBarMenu.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/toolBarAction.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/toolBarItemAction.cpp
+
+    # tableBox subset — formObject references ms_classInfo / RefreshModel /
+    # GetIcon / GetIconGroup on ibValueModelTableBox and ibValueModelTableBoxColumn.
+    # tableBox*.cpp themselves are #ifndef-guarded against wxDataView so they
+    # compile cleanly with OES_USE_WEB. Files that include
+    # tableBoxColumnRenderer.h directly (tableBoxColumnRenderer.cpp itself)
+    # must stay out — its header pulls dataview.h whose enums conflict with
+    # the web-stub enums in tableBox.h.
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/tableBox.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/tableBox_res.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/tableBoxColumn.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/tableBoxColumn_res.cpp
 )
 
 add_library(wfrontend SHARED ${WFRONTEND_SOURCES})

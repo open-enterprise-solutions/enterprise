@@ -2222,7 +2222,7 @@ ibParamValue ibPrecompileCode::GetCurrentIdentifier(int& isSet)
 	if (IsNextDelimeter('('))// this is a function call
 	{
 		ibValue valContext;
-		if (m_rootContext.FindFunction(realName, valContext, true))
+		if (m_rootContext.FindFunction(realName, &valContext, true))
 		{
 			std::vector <ibParamValue> listParam;
 			ExpectDelimeter('(');
@@ -2294,7 +2294,7 @@ ibParamValue ibPrecompileCode::GetCurrentIdentifier(int& isSet)
 			checkError = true;
 
 		ibValue valContext;
-		if (m_rootContext.FindVariable(realName, valContext, true)) {
+		if (m_rootContext.FindVariable(realName, &valContext, true)) {
 			isSet = 0;
 			if (IsNextDelimeter('=') && nPrevSet == 1) {
 				ExpectDelimeter('=');

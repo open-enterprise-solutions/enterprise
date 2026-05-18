@@ -340,7 +340,7 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 						if (maxCode.length() > strPrefix.length()) {
 							long parsed = 0;
 							maxCode.Mid(strPrefix.length()).ToLong(&parsed);
-							if (parsed > 0) maxFound = parsed;
+							if (parsed > 0) maxFound = static_cast<int64_t>(parsed);
 						}
 					}
 					db->CloseResultSet(rs);
