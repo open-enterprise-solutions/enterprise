@@ -120,7 +120,7 @@ public:
 	// databaseLayer.h). Multiple scopes on the same thread all call
 	// Safe* on the same shared conn; the counter collapses them onto
 	// one real driver-level TX.
-	void SafeBeginTransaction(const ibDatabaseLayer::ibTxOptions& opts = {});
+	void SafeBeginTransaction(const ibTxOptions& opts = {});
 	void SafeCommitTransaction();
 	void SafeRollBackTransaction();
 

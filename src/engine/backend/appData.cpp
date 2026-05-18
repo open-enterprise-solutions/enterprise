@@ -20,7 +20,9 @@
 
 //databases
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
+#ifdef OES_USE_POSTGRESQL
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
+#endif
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/databaseLayer/connectionPool.h"
 
@@ -384,8 +386,15 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 #if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	try {
 #endif
+#ifdef OES_USE_POSTGRESQL
 		std::shared_ptr<ibDatabaseLayerPostgres> db(new ibDatabaseLayerPostgres());
 		if (db->Open(strServer, strPort, strDatabase, strUser, strPassword)) {
+#else
+		std::shared_ptr<ibDatabaseLayerFirebird> db(new ibDatabaseLayerFirebird());
+		if (db->Open(strServer, strDatabase,
+			strUser.IsEmpty() ? wxT("SYSDBA") : strUser,
+			strPassword.IsEmpty() ? wxT("masterkey") : strPassword)) {
+#endif
 
 			s_instance = new ibApplicationData(runMode);
 

@@ -125,7 +125,7 @@ ibConnectionScope& ibConnectionScope::operator=(ibConnectionScope&& other) noexc
 	return *this;
 }
 
-void ibConnectionScope::SafeBeginTransaction(const ibDatabaseLayer::ibTxOptions& opts)
+void ibConnectionScope::SafeBeginTransaction(const ibTxOptions& opts)
 {
 	if (!m_activeTx && m_conn) {
 		m_conn->BeginTransaction(opts);

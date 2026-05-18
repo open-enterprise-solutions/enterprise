@@ -31,6 +31,30 @@ WX_DECLARE_HASH_SET(ibPreparedStatement*, wxPointerHash, wxPointerEqual, Databas
 class ibDatabaseConnectionHolder;
 class ibConnectionPool;
 
+// Optional transaction attributes. Struct so future knobs (lock timeout,
+// isolation level override) can land without changing the BeginTransaction
+// signature again. Default-constructed value preserves historical
+// behaviour — every existing caller works unchanged.
+//
+// `noWait` — when true, row-lock contention raises a lock conflict
+// immediately instead of blocking. Used by row-lock probes
+// (TryProbeRowLock). On FB maps to `isc_tpb_nowait`; other drivers
+// approximate via session-level lock_timeout settings or ignore.
+//
+// `readOnly` — caller promises this TX won't issue DML. The driver can
+// then pick an isolation that doesn't acquire write-intent locks (FB 4+:
+// read_committed + read_consistency for snapshot-style reads without
+// long-running snapshot TX; PostgreSQL: SET TRANSACTION READ ONLY).
+// Drivers that don't have a cheap read-only mode silently ignore the flag.
+//
+// Defined at namespace scope (not nested) so Clang accepts default
+// member initializers — nested structs with default-init can't be used
+// in default function arguments of the enclosing class definition.
+struct ibTxOptions {
+	bool noWait = false;
+	bool readOnly = false;
+};
+
 class BACKEND_API ibDatabaseLayer
 	: public ibDatabaseErrorReporter
 	, public ibDatabaseStringConverter
@@ -56,29 +80,7 @@ public:
 	virtual ibDatabaseLayer *Clone() = 0;
 
 	// transaction support
-
-	// Optional transaction attributes. Struct so future knobs (lock
-	// timeout, isolation level override) can land without changing the
-	// BeginTransaction signature again. Default-constructed value
-	// preserves historical behaviour — every existing caller works
-	// unchanged.
 	//
-	// `noWait` — when true, row-lock contention raises a lock conflict
-	// immediately instead of blocking. Used by row-lock probes
-	// (TryProbeRowLock). On FB maps to `isc_tpb_nowait`; other drivers
-	// approximate via session-level lock_timeout settings or ignore.
-	//
-	// `readOnly` — caller promises this TX won't issue DML. The driver
-	// can then pick an isolation that doesn't acquire write-intent locks
-	// (FB 4+: read_committed + read_consistency for snapshot-style
-	// reads without long-running snapshot TX; PostgreSQL: SET TRANSACTION
-	// READ ONLY). Drivers that don't have a cheap read-only mode silently
-	// ignore the flag.
-	struct ibTxOptions {
-		bool noWait = false;
-		bool readOnly = false;
-	};
-
 	// Transaction support — nested-safe counter layer.
 	//
 	// Public BeginTransaction / Commit / RollBack are non-virtual
