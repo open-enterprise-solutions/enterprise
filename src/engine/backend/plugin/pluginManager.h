@@ -16,6 +16,7 @@
 
 #include <wx/dynlib.h>
 #include <wx/string.h>
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -88,6 +89,31 @@ public:
 	int  HostRegisterMenuItem(const char* label, ibPluginMenuFn handler);
 	int  HostSubscribe(const char* event, ibPluginEventFn cb);
 
+	// Frontend hookup for ABI v4 WebView pane entries. Designer
+	// registers concrete callbacks on init; backend trampolines
+	// (Host_RegisterWebPane / Host_WebPaneSend / Host_WebPaneShow)
+	// forward through these so the layering stays clean (backend
+	// cannot depend on wxWebView, but plugins drive WebView from
+	// inside the host ABI). Returns -1 when no callbacks have been
+	// installed yet — common in headless run modes.
+	using WebPaneRegisterFn = std::function<int(
+	    const wxString& paneId, const wxString& title,
+	    const wxString& htmlBundlePath,
+	    ibPluginWebMsgFn onMessage, void* userData)>;
+	using WebPaneSendFn = std::function<int(
+	    const wxString& paneId, const wxString& jsonInline)>;
+	using WebPaneShowFn = std::function<int(const wxString& paneId)>;
+
+	void SetWebPaneCallbacks(WebPaneRegisterFn reg,
+	                          WebPaneSendFn    send,
+	                          WebPaneShowFn    show);
+
+	int CallWebPaneRegister(const wxString& paneId, const wxString& title,
+	                         const wxString& htmlBundlePath,
+	                         ibPluginWebMsgFn cb, void* userData) const;
+	int CallWebPaneSend(const wxString& paneId, const wxString& jsonInline) const;
+	int CallWebPaneShow(const wxString& paneId) const;
+
 	// Dispatch a registered plugin function from the script call site.
 	// Sets up the arena scope so Make* / GetString calls inside the
 	// plugin callback see a live ibPluginCallScope; marshals args by
@@ -109,6 +135,10 @@ private:
 	std::vector<RegisteredMenuItem>  m_menuItems;
 	std::unordered_map<std::string,
 	    std::vector<ibPluginEventFn>> m_subscribers;
+
+	WebPaneRegisterFn m_webPaneRegister;
+	WebPaneSendFn     m_webPaneSend;
+	WebPaneShowFn     m_webPaneShow;
 };
 
 #endif // _IB_PLUGIN_MANAGER_H_

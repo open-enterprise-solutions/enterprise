@@ -40,6 +40,10 @@ void ibFrontendDocMDIFrameDesigner::SetDefaultHotKeys()
 	// ibKeyBinder strips the accelerator labels during LoadOptions.
 	m_keyBinder.SetShortcut(wxID_FRONTEND_SYNTAX_HELPER,        wxT("RawCtrl+Alt+F1"));
 	m_keyBinder.SetShortcut(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP, wxT("RawCtrl+F1"));
+
+	// Sigma AI chat pane toggle. RawCtrl for the same macOS-vs-Cmd
+	// reason as the Syntax Helper entries above.
+	m_keyBinder.SetShortcut(wxID_FRONTEND_SIGMA_PANE,           wxT("RawCtrl+Alt+I"));
 }
 
 //********************************************************************************
@@ -187,6 +191,8 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	                       _("Syntax Helper\tRawCtrl+Alt+F1"));
 	m_menuSetting->Append(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP,
 	                       _("Look up in Syntax Helper\tRawCtrl+F1"));
+	m_menuSetting->Append(wxID_FRONTEND_SIGMA_PANE,
+	                       _("Sigma AI Chat\tRawCtrl+Alt+I"));
 
 	// Plugin-supplied menu items live under Tools → Plugins. Built from
 	// the plugin manager's RegisteredMenuItem table. Each click routes
@@ -223,6 +229,13 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	Bind(wxEVT_MENU,
 	     [this](wxCommandEvent&) { OpenHelpForCursor(); },
 	     wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) {
+	         WireSigmaCallbacks();
+	         auto* pm = appData->GetPluginManager();
+	         if (pm) { pm->CallWebPaneShow(wxT("pugi.sigma.chat")); }
+	     },
+	     wxID_FRONTEND_SIGMA_PANE);
 
 	// Editor context-menu items use frontend-shared command ids
 	// (frontend.dll cannot depend on the downstream designer header).
@@ -267,4 +280,13 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnAbout, this, wxID_DESIGNER_ABOUT);
 
 	LoadOptions();
+
+	// Wire Sigma pane callbacks now that the plugin manager is alive
+	// and the designer frame exists. Any plugins loaded BEFORE the
+	// frame existed (early oes_plugin_initialize) need their
+	// RegisterWebPane / WebPaneSend / WebPaneShow trampolines bound
+	// to concrete wxAuiPane construction here. The method early-returns
+	// on duplicate calls so the on-menu lazy WireSigmaCallbacks() in
+	// the wxID_FRONTEND_SIGMA_PANE handler stays a no-op afterwards.
+	WireSigmaCallbacks();
 }

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sigma Smoke Test</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #1e1e1e; color: #e0e0e0; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 14px; display: flex; flex-direction: column; height: 100vh; }
+  #bar { padding: 8px 12px; font-size: 16px; font-weight: bold; border-bottom: 1px solid #333; background: #252525; }
+  #log { flex: 1; overflow-y: auto; padding: 8px 12px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+  #log .row { margin: 2px 0; }
+  #log .err { color: #ff7777; }
+  #log .raw { color: #ffaa55; }
+  #row { display: flex; gap: 6px; padding: 8px 12px; border-top: 1px solid #333; background: #252525; }
+  #input { flex: 1; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; padding: 6px 8px; font-family: inherit; font-size: 14px; outline: none; }
+  #input:focus { border-color: #6aa9ff; }
+  #send { background: #3a6ea5; color: #fff; border: 0; padding: 6px 14px; cursor: pointer; font-size: 14px; }
+  #send:hover { background: #4a80c0; }
+</style>
+</head>
+<body>
+<div id="bar">Sigma — Smoke Test</div>
+<div id="log"></div>
+<div id="row">
+  <input type="text" id="input" autocomplete="off" placeholder="type and press Enter">
+  <button id="send">Send</button>
+</div>
+<script>
+(function () {
+  function ts() {
+    var d = new Date();
+    var p = function (n) { return (n < 10 ? "0" : "") + n; };
+    return "[" + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds()) + "]";
+  }
+  var logEl = document.getElementById("log");
+  function append(text, cls) {
+    var div = document.createElement("div");
+    div.className = "row" + (cls ? " " + cls : "");
+    div.textContent = text;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function onHost(jsonString) {
+    try {
+      var obj = JSON.parse(jsonString);
+      var body = (obj && typeof obj.text === "string") ? obj.text : JSON.stringify(obj);
+      append(ts() + " host: " + body);
+    } catch (e) {
+      append(ts() + " [raw] " + String(jsonString), "raw");
+    }
+  }
+  function send() {
+    var input = document.getElementById("input");
+    var text = input.value;
+    if (!text) return;
+    input.value = "";
+    append(ts() + " you: " + text);
+    if (window.sigma && typeof window.sigma.postMessage === "function") {
+      try {
+        window.sigma.postMessage(JSON.stringify({ type: "smoke.echo", text: text, ts: Date.now() }));
+      } catch (e) {
+        append(ts() + " [ERR] postMessage threw: " + e, "err");
+      }
+    } else {
+      append(ts() + " [ERR] sigma channel not wired", "err");
+    }
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    document.getElementById("send").addEventListener("click", send);
+    document.getElementById("input").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); send(); }
+    });
+    if (window.sigma) {
+      window.sigma._recv = onHost;
+      var inbox = window.sigma.__inbox;
+      if (inbox && inbox.length) {
+        for (var i = 0; i < inbox.length; i++) { onHost(inbox[i]); }
+        window.sigma.__inbox = [];
+      }
+    }
+    append(ts() + " sigma sample ready — channel=" + (window.sigma ? "wired" : "missing"));
+  });
+})();
+</script>
+</body>
+</html>

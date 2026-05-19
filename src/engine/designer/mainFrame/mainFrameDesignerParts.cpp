@@ -5,8 +5,11 @@
 
 #include "mainFrameDesigner.h"
 #include "backend/metaData.h"
+#include "backend/appData.h"
+#include "backend/plugin/pluginManager.h"
 
 #include "frontend/artProvider/artProvider.h"
+#include "frontend/sigma/sigmaPane.h"
 
 #include <wx/xml/xml.h>
 
@@ -246,4 +249,73 @@ void ibFrontendDocMDIFrameDesigner::OpenHelpForCursor()
 	}
 	if (!dlg.GetSelectedId().IsEmpty() && m_helpPane)
 		m_helpPane->ShowEntry(dlg.GetSelectedId());
+}
+
+// ---------------------------------------------------------------------------
+// Sigma AI pane — Phase 1 wiring. Designer registers callbacks with the
+// plugin manager so RegisterWebPane / WebPaneSend / WebPaneShow trampolines
+// in pluginManager.cpp can construct + drive concrete wxAuiPane instances.
+//
+// Provider plugins (pugi-oes-bridge / future Anthropic / OpenAI / Ollama
+// bridges) call host->RegisterWebPane("<id>", "<title>", "<html>", cb, ud)
+// from oes_plugin_initialize; the lambdas below run on the UI thread and
+// add the resulting ibSigmaPane to wxAuiManager.
+// ---------------------------------------------------------------------------
+
+void ibFrontendDocMDIFrameDesigner::WireSigmaCallbacks()
+{
+	if (m_sigmaCallbacksRegistered) return;
+	auto* pm = appData->GetPluginManager();
+	if (pm == nullptr) return;
+
+	pm->SetWebPaneCallbacks(
+	    // RegisterWebPane — wraps an ibSigmaPane inside a wxAuiPane and
+	    // shows it on the right dock by default.
+	    [this](const wxString& paneId, const wxString& title,
+	            const wxString& htmlBundlePath,
+	            ibPluginWebMsgFn onMessage, void* userData) -> int {
+	        if (m_sigmaPanes.count(paneId)) return -1;
+	        auto* pane = new ibSigmaPane(this, paneId, title,
+	                                      htmlBundlePath, onMessage, userData);
+	        wxAuiPaneInfo info;
+	        info.Name(paneId);
+	        info.Caption(title);
+	        info.Right();
+	        info.MinSize(360, 480);
+	        info.BestSize(420, 600);
+	        info.CloseButton(true);
+	        info.MaximizeButton(false);
+	        // Replay persisted visibility from options.xml. Default
+	        // hidden so a brand-new plugin install doesn't pop the pane
+	        // on first launch — the user opens it via Tools menu or
+	        // Ctrl+Alt+I, and that choice persists for next session.
+	        auto pit = m_pendingSigmaVisible.find(paneId);
+	        const bool wantVisible = (pit != m_pendingSigmaVisible.end()) && pit->second;
+	        info.Show(wantVisible);
+	        m_mgr.AddPane(pane, info);
+	        m_mgr.Update();
+	        m_sigmaPanes[paneId] = pane;
+	        return 0;
+	    },
+	    // WebPaneSend — thread-safe push to the WebView; ibSigmaPane
+	    // handles the wxThreadEvent marshal for off-UI callers.
+	    [this](const wxString& paneId, const wxString& jsonInline) -> int {
+	        auto it = m_sigmaPanes.find(paneId);
+	        if (it == m_sigmaPanes.end()) return -1;
+	        it->second->PushMessage(jsonInline);
+	        return 0;
+	    },
+	    // WebPaneShow — force-visible flip; creates the AUI pane on
+	    // first call if the registration step skipped Show(true).
+	    [this](const wxString& paneId) -> int {
+	        auto it = m_sigmaPanes.find(paneId);
+	        if (it == m_sigmaPanes.end()) return -1;
+	        wxAuiPaneInfo& info = m_mgr.GetPane(paneId);
+	        if (!info.IsOk()) return -1;
+	        if (!info.IsShown()) info.Show(true);
+	        m_mgr.Update();
+	        return 0;
+	    });
+
+	m_sigmaCallbacksRegistered = true;
 }

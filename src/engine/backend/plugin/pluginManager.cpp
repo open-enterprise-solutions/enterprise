@@ -25,7 +25,10 @@ constexpr int kAbiMin = 1;
 constexpr int kAbiMax = IB_PLUGIN_ABI_VERSION;  // bumped to 4
 
 // The plugin manager currently being loaded — the host-API trampolines
-// dispatch back into it. Set for the duration of LoadAll().
+// dispatch back into it. Set for the duration of LoadAll() AND kept
+// pointing at the most recently constructed manager so callbacks fired
+// long after init (WebPaneSend during chat, FireEvent during save)
+// still resolve. ibApplicationData owns the single instance.
 ibPluginManager* g_currentManager = nullptr;
 
 // Arena that backs Make* / Get* calls for the in-flight initialize /
@@ -83,22 +86,31 @@ int            Host_IsNull    (const ibPluginValue* v) { return ibPluginCallScop
 //     returns a recognisable failure so plugins can detect "v4 host
 //     present, capability still bootstrapping" cleanly.
 
-int  Host_RegisterWebPane(const char* /*paneId*/, const char* /*title*/,
-                            const char* /*htmlBundlePath*/,
-                            ibPluginWebMsgFn /*onMessage*/,
-                            void* /*userData*/)
+int  Host_RegisterWebPane(const char* paneId, const char* title,
+                            const char* htmlBundlePath,
+                            ibPluginWebMsgFn onMessage,
+                            void* userData)
 {
-	return -1; // not yet implemented (Phase 1)
+	if (g_currentManager == nullptr || paneId == nullptr) return -1;
+	return g_currentManager->CallWebPaneRegister(
+	    wxString::FromUTF8(paneId),
+	    title          ? wxString::FromUTF8(title)          : wxString(),
+	    htmlBundlePath ? wxString::FromUTF8(htmlBundlePath) : wxString(),
+	    onMessage, userData);
 }
 
-int  Host_WebPaneSend(const char* /*paneId*/, const char* /*jsonInline*/)
+int  Host_WebPaneSend(const char* paneId, const char* jsonInline)
 {
-	return -1;
+	if (g_currentManager == nullptr || paneId == nullptr) return -1;
+	return g_currentManager->CallWebPaneSend(
+	    wxString::FromUTF8(paneId),
+	    jsonInline ? wxString::FromUTF8(jsonInline) : wxString());
 }
 
-int  Host_WebPaneShow(const char* /*paneId*/)
+int  Host_WebPaneShow(const char* paneId)
 {
-	return -1;
+	if (g_currentManager == nullptr || paneId == nullptr) return -1;
+	return g_currentManager->CallWebPaneShow(wxString::FromUTF8(paneId));
 }
 
 int  Host_RegisterAIProvider(const ibPluginAIProvider* /*provider*/)
@@ -221,6 +233,11 @@ wxString ibPluginManager::GetPluginsDir()
 
 size_t ibPluginManager::LoadAll()
 {
+	// Make the host-trampolines see this instance for the entire app
+	// lifetime, not just the duration of LoadAll. WebPaneSend etc. fire
+	// long after init returns.
+	g_currentManager = this;
+
 	UnloadAll();
 
 	// Sandbox / kill-switch. OES_PLUGIN_SANDBOX=1 in the environment
@@ -418,6 +435,38 @@ bool ibPluginManager::CallFunction(const RegisteredFunction& fn,
 
 	tl_scope = prev;
 	return rc == 0;
+}
+
+void ibPluginManager::SetWebPaneCallbacks(WebPaneRegisterFn reg,
+                                            WebPaneSendFn    send,
+                                            WebPaneShowFn    show)
+{
+	m_webPaneRegister = std::move(reg);
+	m_webPaneSend     = std::move(send);
+	m_webPaneShow     = std::move(show);
+}
+
+int ibPluginManager::CallWebPaneRegister(const wxString& paneId,
+                                           const wxString& title,
+                                           const wxString& htmlBundlePath,
+                                           ibPluginWebMsgFn cb,
+                                           void* userData) const
+{
+	if (!m_webPaneRegister) return -1;
+	return m_webPaneRegister(paneId, title, htmlBundlePath, cb, userData);
+}
+
+int ibPluginManager::CallWebPaneSend(const wxString& paneId,
+                                       const wxString& jsonInline) const
+{
+	if (!m_webPaneSend) return -1;
+	return m_webPaneSend(paneId, jsonInline);
+}
+
+int ibPluginManager::CallWebPaneShow(const wxString& paneId) const
+{
+	if (!m_webPaneShow) return -1;
+	return m_webPaneShow(paneId);
 }
 
 void ibPluginManager::CallMenuHandler(const RegisteredMenuItem& item)

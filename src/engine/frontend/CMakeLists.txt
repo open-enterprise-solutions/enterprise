@@ -46,6 +46,7 @@ target_link_libraries(frontend
         wx::base
         wx::net
         wx::xml
+        wx::webview
 )
 
 set_target_properties(frontend PROPERTIES

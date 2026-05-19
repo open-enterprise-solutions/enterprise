@@ -137,6 +137,21 @@ void ibFrontendDocMDIFrameDesigner::LoadOptions()
 				h->GetAttribute(wxT("fontBoost"), wxEmptyString).ToLong(&m_pendingHelpState.fontBoost);
 				break;
 			}
+			// Sigma pane visibility — multi-paneId map. Applied later
+			// inside WireSigmaCallbacks at RegisterWebPane time, because
+			// the plugin that owns each pane hasn't loaded yet at this
+			// point. visible="1" → AUI Show(true) on registration.
+			for (wxXmlNode* s = root->GetChildren(); s; s = s->GetNext()) {
+				if (s->GetName() != wxT("sigmaPanes")) continue;
+				for (wxXmlNode* p = s->GetChildren(); p; p = p->GetNext()) {
+					if (p->GetName() != wxT("pane")) continue;
+					const wxString id = p->GetAttribute(wxT("id"), wxEmptyString);
+					if (id.IsEmpty()) continue;
+					m_pendingSigmaVisible[id] =
+						p->GetAttribute(wxT("visible"), wxT("0")) == wxT("1");
+				}
+				break;
+			}
 		}
 	}
 
@@ -187,6 +202,30 @@ void ibFrontendDocMDIFrameDesigner::SaveOptions()
 	// the pane was never opened in this session.
 	if (m_helpPane)
 		m_helpPane->SaveStateToXml(root);
+
+	// Save Sigma pane visibility per paneId. Walks live AUI panes
+	// rather than m_sigmaPanes alone so closed-but-registered panes
+	// still get visible="0" written (user closed → must not resurrect
+	// on next launch). Pre-loaded entries that were never re-registered
+	// in this session are preserved verbatim so a plugin uninstalled
+	// temporarily doesn't lose its remembered visibility.
+	{
+		std::unordered_map<wxString, bool> final = m_pendingSigmaVisible;
+		for (const auto& kv : m_sigmaPanes) {
+			wxAuiPaneInfo& info = m_mgr.GetPane(kv.first);
+			final[kv.first] = info.IsOk() && info.IsShown();
+		}
+		if (!final.empty()) {
+			wxXmlNode* sp = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("sigmaPanes"));
+			for (const auto& kv : final) {
+				wxXmlNode* p = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("pane"));
+				p->AddAttribute(wxT("id"),      kv.first);
+				p->AddAttribute(wxT("visible"), kv.second ? wxT("1") : wxT("0"));
+				sp->AddChild(p);
+			}
+			root->AddChild(sp);
+		}
+	}
 
 	wxString directory =
 		wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache) + wxT("\\OES");

@@ -37,11 +37,16 @@ add_executable(oes_tests
     test_session.cpp
     test_pagingRamTable.cpp
     test_pluginApi.cpp
+    test_sigmaPane.cpp
 )
 
 target_link_libraries(oes_tests
     PRIVATE
         backend
+        frontend
+        wx::core
+        wx::base
+        wx::webview
         GTest::gtest
         GTest::gtest_main
 )
@@ -50,6 +55,7 @@ target_include_directories(oes_tests PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
     "${CMAKE_SOURCE_DIR}/src/engine"
     "${CMAKE_SOURCE_DIR}/src/engine/backend"
+    "${CMAKE_SOURCE_DIR}/src/engine/frontend"
 )
 
 # On non-Windows the backend is a .dylib/.so; ensure the test can find it
