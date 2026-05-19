@@ -37,7 +37,12 @@ extern "C" {
 //       host's script-side dispatch can bind a builtin with a known
 //       arity. Calling-convention change at the same struct slot;
 //       v2 plugins must be rebuilt against the v3 header.
-#define IB_PLUGIN_ABI_VERSION 3
+//   4 — Additive: appended WebView pane host, AI-provider registry,
+//       and metadata mutation entries to ibHostAPI. v3 plugins keep
+//       loading; they just don't see the new slots. Existing fields
+//       are NOT reordered — additions live strictly at the struct
+//       tail per ABI rule.
+#define IB_PLUGIN_ABI_VERSION 4
 
 typedef struct ibPluginInfo_s {
 	int         abi_version;   // must equal a value the host recognises
@@ -70,6 +75,50 @@ typedef void (*ibPluginEventFn)(const char* event, ibPluginValue* payload);
 // ibPluginMenuFn — no parameters; plugin reads its own static state.
 // Called from the Designer UI thread.
 typedef void (*ibPluginMenuFn)(void);
+
+// ibPluginWebMsgFn — invoked by the host when a WebView posts a
+// message to the plugin via `window.sigma.postMessage(json)`. The
+// callback is called from the Designer UI thread; the plugin must
+// spawn its own worker for blocking I/O.
+//   `paneId`     — id registered via RegisterWebPane.
+//   `jsonInline` — UTF-8 string payload (no terminator length, NUL-terminated).
+typedef void (*ibPluginWebMsgFn)(const char* paneId, const char* jsonInline, void* userData);
+
+// ibPluginAIProvider — fed to RegisterAIProvider once per plugin.
+// `supportedModes` is a NULL-terminated array of strings drawn from
+// {"chat", "agent", "helper"}.
+typedef struct ibPluginAIProvider_s {
+	const char*  providerId;        // unique stable id, e.g. "pugi.sigma"
+	const char*  displayName;       // e.g. "Sigma (Pugi × OES)"
+	const char*  iconPath;          // optional absolute path
+	const char** supportedModes;    // NULL-terminated
+	int  (*Query)(const char* requestJson,
+	              const char* requestId,
+	              void*       userData);
+	int  (*Cancel)(const char* requestId, void* userData);
+	int  (*ListModels)(char** jsonOut); // host frees via free()
+	void* userData;
+} ibPluginAIProvider;
+
+// Metadata-mutation entry points — Mode 2 (Agent) only. All four run
+// inside the active Designer document's wxCommandProcessor so a
+// single Ctrl+Z reverts the whole agent turn.
+//   `objectKind`     — "Catalog", "Document", "Form", …
+//   `fullName`       — e.g. "Catalog.Контрагенти"
+//   `propertiesJson` — serialised property bag
+//   `jsonPatch`      — RFC 6902 JSON Patch document
+//   `errorMsg` / `jsonOut` — out-parameters; host allocates, caller frees via free().
+typedef int (*ibPluginMetaCreateFn)(const char* objectKind, const char* fullName,
+                                     const char* propertiesJson, char** errorMsg);
+typedef int (*ibPluginMetaEditFn)(const char* fullName, const char* jsonPatch,
+                                    char** errorMsg);
+typedef int (*ibPluginMetaDeleteFn)(const char* fullName, char** errorMsg);
+typedef int (*ibPluginMetaQueryFn)(const char* fullName, const char* fieldsFilter,
+                                     char** jsonOut, char** errorMsg);
+
+// Plugin lock-denied error code returned by Meta* fns when the
+// target object is exclusive-locked by another user.
+#define IB_PLUGIN_LOCK_DENIED 0x0001
 
 // Host-side API table. Function pointers are valid for the lifetime of
 // the plugin (from initialize until just before shutdown). The struct
@@ -123,6 +172,50 @@ typedef struct ibHostAPI_s {
 	double         (*GetNumber)(const ibPluginValue*);
 	int            (*GetBool)(const ibPluginValue*);
 	int            (*IsNull)(const ibPluginValue*);
+
+	// --- ABI v4 additions — appended; existing v3 layout preserved -----------
+
+	// WebView host. Plugins implementing the Sigma chat UI register
+	// a pane id + initial HTML; the kernel creates a wxAuiPane around
+	// a wxWebView, loads the HTML, and routes script messages back to
+	// `onMessage`. Returns 0 on success, non-zero when the pane id is
+	// already registered or the host couldn't allocate.
+	int  (*RegisterWebPane)(const char* paneId,
+	                         const char* title,
+	                         const char* htmlBundlePath,
+	                         ibPluginWebMsgFn onMessage,
+	                         void* userData);
+
+	// Plugin → WebView push channel. `jsonInline` is serialised once
+	// and forwarded to the JS side via `wxWebView::RunScript`. Safe
+	// from any thread; the host posts a wxThreadEvent if not on UI.
+	int  (*WebPaneSend)(const char* paneId, const char* jsonInline);
+
+	// Force the pane visible (creates the wxAuiPane on first call if
+	// it isn't shown yet). Returns 0 on success.
+	int  (*WebPaneShow)(const char* paneId);
+
+	// AI provider registry. The plugin announces itself as a query
+	// provider; the kernel routes user prompts to whichever provider
+	// the customer has enabled in Settings.
+	int  (*RegisterAIProvider)(const ibPluginAIProvider* provider);
+
+	// Streaming response channel — provider drives these on its
+	// worker thread; the host marshals to UI via wxQueueEvent.
+	//   AIChunkEmit  — assistant produced `deltaJson` payload.
+	//   AIChunkEnd   — end of stream; `metaJson` carries model + tokens.
+	//   AIChunkError — fatal error; `errorJson` is rendered inline.
+	int  (*AIChunkEmit)(const char* requestId, const char* deltaJson);
+	int  (*AIChunkEnd)(const char* requestId, const char* metaJson);
+	int  (*AIChunkError)(const char* requestId, const char* errorJson);
+
+	// Metadata mutation surface — Mode 2 (Agent). Each mutation runs
+	// inside the active wxDocument's wxCommandProcessor so Ctrl+Z
+	// reverts the whole agent turn atomically.
+	ibPluginMetaCreateFn  MetaCreate;
+	ibPluginMetaEditFn    MetaEdit;
+	ibPluginMetaDeleteFn  MetaDelete;
+	ibPluginMetaQueryFn   MetaQuery;
 } ibHostAPI;
 
 // Required export. The DLL announces itself via this fn — abi_version

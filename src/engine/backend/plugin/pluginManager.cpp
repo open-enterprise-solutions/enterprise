@@ -19,9 +19,10 @@
 namespace {
 
 // Lowest + highest ABI version this build accepts. Plugins built against
-// a number outside [kAbiMin, kAbiMax] are skipped.
+// a number outside [kAbiMin, kAbiMax] are skipped. v1..v3 plugins remain
+// loadable; ABI v4 added new ibHostAPI slots at the struct tail.
 constexpr int kAbiMin = 1;
-constexpr int kAbiMax = IB_PLUGIN_ABI_VERSION;
+constexpr int kAbiMax = IB_PLUGIN_ABI_VERSION;  // bumped to 4
 
 // The plugin manager currently being loaded — the host-API trampolines
 // dispatch back into it. Set for the duration of LoadAll().
@@ -75,8 +76,79 @@ double         Host_GetNumber (const ibPluginValue* v) { return ibPluginCallScop
 int            Host_GetBool   (const ibPluginValue* v) { return ibPluginCallScope::GetBool(v);   }
 int            Host_IsNull    (const ibPluginValue* v) { return ibPluginCallScope::IsNull(v);    }
 
-// The single ibHostAPI instance handed to every v2 plugin. Const after
-// initialization; plugins never mutate it.
+// --- ABI v4 stubs. Phase 1+ replaces each with a real impl wired to
+//     wxWebView (RegisterWebPane / WebPaneSend / WebPaneShow), the
+//     Sigma provider registry (Register/Chunk*), and the agent
+//     metadata mutation surface (Meta*). Until then every entry
+//     returns a recognisable failure so plugins can detect "v4 host
+//     present, capability still bootstrapping" cleanly.
+
+int  Host_RegisterWebPane(const char* /*paneId*/, const char* /*title*/,
+                            const char* /*htmlBundlePath*/,
+                            ibPluginWebMsgFn /*onMessage*/,
+                            void* /*userData*/)
+{
+	return -1; // not yet implemented (Phase 1)
+}
+
+int  Host_WebPaneSend(const char* /*paneId*/, const char* /*jsonInline*/)
+{
+	return -1;
+}
+
+int  Host_WebPaneShow(const char* /*paneId*/)
+{
+	return -1;
+}
+
+int  Host_RegisterAIProvider(const ibPluginAIProvider* /*provider*/)
+{
+	return -1; // Phase 2
+}
+
+int  Host_AIChunkEmit(const char* /*requestId*/, const char* /*deltaJson*/)
+{
+	return -1;
+}
+
+int  Host_AIChunkEnd(const char* /*requestId*/, const char* /*metaJson*/)
+{
+	return -1;
+}
+
+int  Host_AIChunkError(const char* /*requestId*/, const char* /*errorJson*/)
+{
+	return -1;
+}
+
+int  Host_MetaCreate(const char* /*objectKind*/, const char* /*fullName*/,
+                       const char* /*propertiesJson*/, char** /*errorMsg*/)
+{
+	return -1; // Phase 3
+}
+
+int  Host_MetaEdit(const char* /*fullName*/, const char* /*jsonPatch*/,
+                     char** /*errorMsg*/)
+{
+	return -1;
+}
+
+int  Host_MetaDelete(const char* /*fullName*/, char** /*errorMsg*/)
+{
+	return -1;
+}
+
+int  Host_MetaQuery(const char* /*fullName*/, const char* /*fieldsFilter*/,
+                      char** /*jsonOut*/, char** /*errorMsg*/)
+{
+	return -1;
+}
+
+// The single ibHostAPI instance handed to every v2+ plugin. Const after
+// initialization; plugins never mutate it. Field order MUST match the
+// pluginApi.h struct declaration — appends only at the tail across ABI
+// bumps. v3 plugins see only the first 12 entries; v4 plugins see
+// everything up to MetaQuery.
 const ibHostAPI g_hostAPI = {
 	&Host_RegisterFunction,
 	&Host_RegisterMenuItem,
@@ -90,6 +162,18 @@ const ibHostAPI g_hostAPI = {
 	&Host_GetNumber,
 	&Host_GetBool,
 	&Host_IsNull,
+	// --- ABI v4 ---
+	&Host_RegisterWebPane,
+	&Host_WebPaneSend,
+	&Host_WebPaneShow,
+	&Host_RegisterAIProvider,
+	&Host_AIChunkEmit,
+	&Host_AIChunkEnd,
+	&Host_AIChunkError,
+	&Host_MetaCreate,
+	&Host_MetaEdit,
+	&Host_MetaDelete,
+	&Host_MetaQuery,
 };
 
 // RAII: on Windows, silence the OS-level "missing DLL" modal that
