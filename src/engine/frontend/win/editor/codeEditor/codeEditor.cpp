@@ -649,19 +649,31 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 	     },
 	     wxID_HIGHEST + 4020);
 
-	// --- Route host-frame commands explicitly to the top-level window.
+	// --- Route host-frame commands explicitly to the host MDI parent.
+	//
 	// wxStyledTextCtrl's PopupMenu does not always propagate
 	// wxEVT_MENU through wxAUI / wxAuiDocMDIFrame parents to the host
-	// frame — child windows of MDI clients eat menu events as they
-	// flow upward. Fire the same event id directly on the top-level
-	// frame so the host's Bind() picks it up regardless of MDI nesting.
+	// frame — wxAuiDocMDIChildFrame is itself a wxFrame on Windows,
+	// so wxGetTopLevelParent stops there instead of climbing to the
+	// outer MDI parent where the host's Bind() lives. Walk the
+	// parent chain manually, firing the event at every frame on the
+	// way up until one of them handles it. ProcessEvent returns true
+	// only when a Bind() matches; on false we keep walking.
 	auto routeUp = [this](int id) {
 		return [this, id](wxCommandEvent&) {
-			wxWindow* top = wxGetTopLevelParent(this);
-			if (top == nullptr) return;
 			wxCommandEvent up(wxEVT_MENU, id);
 			up.SetEventObject(this);
-			top->GetEventHandler()->ProcessEvent(up);
+			for (wxWindow* p = GetParent(); p != nullptr; p = p->GetParent()) {
+				if (p->GetEventHandler()->ProcessEvent(up)) return;
+			}
+			// Fallback — fire on the registered top window (app singleton).
+			// Catches the case where the parent chain breaks above the
+			// MDI client because of detached / floating panes.
+			if (wxTheApp) {
+				if (wxWindow* top = wxTheApp->GetTopWindow()) {
+					top->GetEventHandler()->ProcessEvent(up);
+				}
+			}
 		};
 	};
 	Bind(wxEVT_MENU,
