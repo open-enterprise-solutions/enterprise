@@ -405,6 +405,17 @@ public:
 			return m_methodHelper[lMethodNum].m_lAlias;
 		}
 
+		// Read-only access to the full method/property/constructor lists.
+		// Used by the help-corpus skeleton generator (tools/dumpHelp) to
+		// enumerate every registered system function and property at
+		// build time. Storage layout is stable for the process lifetime
+		// (these vectors are populated once in PrepareNames and never
+		// resized afterwards), so the references are safe for the
+		// caller's iteration window.
+		const std::vector<ibValueMethodHelperMethod>&      GetMethodList() const { return m_methodHelper; }
+		const std::vector<ibValueMethodHelperProperty>&    GetPropList()   const { return m_propHelper; }
+		const std::vector<ibValueMethodHelperConstructor>& GetCtorList()   const { return m_constructorHelper; }
+
 		long GetMethodData(const long lMethodNum) const {
 			if (lMethodNum > GetNMethods())
 				return wxNOT_FOUND;

@@ -4,10 +4,1093 @@
   "locale": "en-US",
   "entries": [
     {
+      "id": "fn.Boolean",
+      "name_local": "Boolean",
+      "name_en": "Boolean",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Boolean(value : any)",
+      "description": "",
+      "syntax_block": "Boolean(value : any)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Number",
+      "name_local": "Number",
+      "name_en": "Number",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Number(value: any)",
+      "description": "",
+      "syntax_block": "Number(value: any)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Date",
+      "name_local": "Date",
+      "name_en": "Date",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Date(value: any)",
+      "description": "",
+      "syntax_block": "Date(value: any)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.String",
+      "name_local": "String",
+      "name_en": "String",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "String(value: any)",
+      "description": "",
+      "syntax_block": "String(value: any)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Round",
+      "name_local": "Round",
+      "name_en": "Round",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Round(num : number, number, roundMode)",
+      "description": "",
+      "syntax_block": "Round(num : number, number, roundMode)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Lnt",
+      "name_local": "Lnt",
+      "name_en": "Lnt",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Lnt(num : number)",
+      "description": "",
+      "syntax_block": "Lnt(num : number)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Log10",
+      "name_local": "Log10",
+      "name_en": "Log10",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Log10(num : number)",
+      "description": "",
+      "syntax_block": "Log10(num : number)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Ln",
+      "name_local": "Ln",
+      "name_en": "Ln",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Ln(num : number)",
+      "description": "",
+      "syntax_block": "Ln(num : number)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Max",
+      "name_local": "Max",
+      "name_en": "Max",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Max(num : number, ...)",
+      "description": "",
+      "syntax_block": "Max(num : number, ...)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Min",
+      "name_local": "Min",
+      "name_en": "Min",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Min(num : number, ...)",
+      "description": "",
+      "syntax_block": "Min(num : number, ...)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Sqrt",
+      "name_local": "Sqrt",
+      "name_en": "Sqrt",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Sqrt(num : number)",
+      "description": "",
+      "syntax_block": "Sqrt(num : number)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.StrLen",
+      "name_local": "StrLen",
+      "name_en": "StrLen",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "StrLen(str : string)",
+      "description": "",
+      "syntax_block": "StrLen(str : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.IsBlankString",
+      "name_local": "IsBlankString",
+      "name_en": "IsBlankString",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "IsBlankString(str : string)",
+      "description": "",
+      "syntax_block": "IsBlankString(str : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.TrimL",
+      "name_local": "TrimL",
+      "name_en": "TrimL",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "TrimL(str : string)",
+      "description": "",
+      "syntax_block": "TrimL(str : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.TrimR",
+      "name_local": "TrimR",
+      "name_en": "TrimR",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "TrimR(str : string)",
+      "description": "",
+      "syntax_block": "TrimR(str : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.TrimAll",
+      "name_local": "TrimAll",
+      "name_en": "TrimAll",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "TrimAll(str : string)",
+      "description": "",
+      "syntax_block": "TrimAll(str : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Left",
+      "name_local": "Left",
+      "name_en": "Left",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Left(str : string, number)",
+      "description": "",
+      "syntax_block": "Left(str : string, number)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Right",
+      "name_local": "Right",
+      "name_en": "Right",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Right(str : string, number)",
+      "description": "",
+      "syntax_block": "Right(str : string, number)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Mid",
+      "name_local": "Mid",
+      "name_en": "Mid",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Mid(str : string, number, number)",
+      "description": "",
+      "syntax_block": "Mid(str : string, number, number)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Find",
+      "name_local": "Find",
+      "name_en": "Find",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Find(str : string, string, number)",
+      "description": "",
+      "syntax_block": "Find(str : string, string, number)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.StrReplace",
+      "name_local": "StrReplace",
+      "name_en": "StrReplace",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "StrReplace(str : string, string, string)",
+      "description": "",
+      "syntax_block": "StrReplace(str : string, string, string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.StrCountOccur",
+      "name_local": "StrCountOccur",
+      "name_en": "StrCountOccur",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "StrCountOccur(str : string, string)",
+      "description": "",
+      "syntax_block": "StrCountOccur(str : string, string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.StrLineCount",
+      "name_local": "StrLineCount",
+      "name_en": "StrLineCount",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "StrLineCount(str : string)",
+      "description": "",
+      "syntax_block": "StrLineCount(str : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.StrGetLine",
+      "name_local": "StrGetLine",
+      "name_en": "StrGetLine",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "StrGetLine(str : string)",
+      "description": "",
+      "syntax_block": "StrGetLine(str : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Upper",
+      "name_local": "Upper",
+      "name_en": "Upper",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Upper(str : string)",
+      "description": "",
+      "syntax_block": "Upper(str : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Lower",
+      "name_local": "Lower",
+      "name_en": "Lower",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Lower(str : string)",
+      "description": "",
+      "syntax_block": "Lower(str : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Chr",
+      "name_local": "Chr",
+      "name_en": "Chr",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Chr(num : number)",
+      "description": "",
+      "syntax_block": "Chr(num : number)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Asc",
+      "name_local": "Asc",
+      "name_en": "Asc",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Asc(str : string)",
+      "description": "",
+      "syntax_block": "Asc(str : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Tstr",
+      "name_local": "Tstr",
+      "name_en": "Tstr",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Tstr(text : string, langCode : string)",
+      "description": "",
+      "syntax_block": "Tstr(text : string, langCode : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.CurrentDate",
+      "name_local": "CurrentDate",
+      "name_en": "CurrentDate",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "CurrentDate()",
+      "description": "",
+      "syntax_block": "CurrentDate()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.WorkingDate",
+      "name_local": "WorkingDate",
+      "name_en": "WorkingDate",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "WorkingDate(d : date)",
+      "description": "",
+      "syntax_block": "WorkingDate(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.AddMonth",
+      "name_local": "AddMonth",
+      "name_en": "AddMonth",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "AddMonth(d : date, num : number)",
+      "description": "",
+      "syntax_block": "AddMonth(d : date, num : number)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.BegOfMonth",
+      "name_local": "BegOfMonth",
+      "name_en": "BegOfMonth",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "BegOfMonth(d : date)",
+      "description": "",
+      "syntax_block": "BegOfMonth(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.EndOfMonth",
+      "name_local": "EndOfMonth",
+      "name_en": "EndOfMonth",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "EndOfMonth(d : date)",
+      "description": "",
+      "syntax_block": "EndOfMonth(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.BegOfQuart",
+      "name_local": "BegOfQuart",
+      "name_en": "BegOfQuart",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "BegOfQuart(d : date)",
+      "description": "",
+      "syntax_block": "BegOfQuart(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.EndOfQuart",
+      "name_local": "EndOfQuart",
+      "name_en": "EndOfQuart",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "EndOfQuart(d : date)",
+      "description": "",
+      "syntax_block": "EndOfQuart(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.BegOfYear",
+      "name_local": "BegOfYear",
+      "name_en": "BegOfYear",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "BegOfYear(d : date)",
+      "description": "",
+      "syntax_block": "BegOfYear(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.EndOfYear",
+      "name_local": "EndOfYear",
+      "name_en": "EndOfYear",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "EndOfYear(d : date)",
+      "description": "",
+      "syntax_block": "EndOfYear(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.BegOfWeek",
+      "name_local": "BegOfWeek",
+      "name_en": "BegOfWeek",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "BegOfWeek(d : date)",
+      "description": "",
+      "syntax_block": "BegOfWeek(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.EndOfWeek",
+      "name_local": "EndOfWeek",
+      "name_en": "EndOfWeek",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "EndOfWeek(d : date)",
+      "description": "",
+      "syntax_block": "EndOfWeek(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.BegOfDay",
+      "name_local": "BegOfDay",
+      "name_en": "BegOfDay",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "BegOfDay(d : date)",
+      "description": "",
+      "syntax_block": "BegOfDay(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.EndOfDay",
+      "name_local": "EndOfDay",
+      "name_en": "EndOfDay",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "EndOfDay(d : date)",
+      "description": "",
+      "syntax_block": "EndOfDay(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.GetYear",
+      "name_local": "GetYear",
+      "name_en": "GetYear",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetYear(d : date)",
+      "description": "",
+      "syntax_block": "GetYear(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.GetMonth",
+      "name_local": "GetMonth",
+      "name_en": "GetMonth",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetMonth(d : date)",
+      "description": "",
+      "syntax_block": "GetMonth(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.GetDay",
+      "name_local": "GetDay",
+      "name_en": "GetDay",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetDay(d : date)",
+      "description": "",
+      "syntax_block": "GetDay(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.GetHour",
+      "name_local": "GetHour",
+      "name_en": "GetHour",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetHour(d : date)",
+      "description": "",
+      "syntax_block": "GetHour(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.GetMinute",
+      "name_local": "GetMinute",
+      "name_en": "GetMinute",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetMinute(d : date)",
+      "description": "",
+      "syntax_block": "GetMinute(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.GetSecond",
+      "name_local": "GetSecond",
+      "name_en": "GetSecond",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetSecond(d : date)",
+      "description": "",
+      "syntax_block": "GetSecond(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.GetWeekOfYear",
+      "name_local": "GetWeekOfYear",
+      "name_en": "GetWeekOfYear",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetWeekOfYear(d : date)",
+      "description": "",
+      "syntax_block": "GetWeekOfYear(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.GetDayOfYear",
+      "name_local": "GetDayOfYear",
+      "name_en": "GetDayOfYear",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetDayOfYear(d : date)",
+      "description": "",
+      "syntax_block": "GetDayOfYear(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.GetDayOfWeek",
+      "name_local": "GetDayOfWeek",
+      "name_en": "GetDayOfWeek",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetDayOfWeek(d : date)",
+      "description": "",
+      "syntax_block": "GetDayOfWeek(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.GetQuartOfYear",
+      "name_local": "GetQuartOfYear",
+      "name_en": "GetQuartOfYear",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetQuartOfYear(d : date)",
+      "description": "",
+      "syntax_block": "GetQuartOfYear(d : date)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.FileDelete",
+      "name_local": "FileDelete",
+      "name_en": "FileDelete",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "FileDelete(fileName : string)",
+      "description": "",
+      "syntax_block": "FileDelete(fileName : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.FileCopy",
+      "name_local": "FileCopy",
+      "name_en": "FileCopy",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "FileCopy(fileDstName : string, fileSrcName : string)",
+      "description": "",
+      "syntax_block": "FileCopy(fileDstName : string, fileSrcName : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.GetTempDir",
+      "name_local": "GetTempDir",
+      "name_en": "GetTempDir",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetTempDir()",
+      "description": "",
+      "syntax_block": "GetTempDir()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.GetTempFileName",
+      "name_local": "GetTempFileName",
+      "name_en": "GetTempFileName",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetTempFileName()",
+      "description": "",
+      "syntax_block": "GetTempFileName()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.ActiveWindow",
+      "name_local": "ActiveWindow",
+      "name_en": "ActiveWindow",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "ActiveWindow()",
+      "description": "",
+      "syntax_block": "ActiveWindow()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
       "id": "fn.Message",
       "name_local": "Message",
       "name_en": "Message",
-      "kind": "system_function",
+      "kind": "system_procedure",
       "category_keys": [
         "global_context",
         "global_functions"
@@ -20,9 +1103,674 @@
       "example": "Message(\"Document saved successfully.\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
-        "fn.Status"
+        "fn.SetStatus"
       ],
       "reviewed": true
+    },
+    {
+      "id": "fn.Alert",
+      "name_local": "Alert",
+      "name_en": "Alert",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Alert(message : string)",
+      "description": "",
+      "syntax_block": "Alert(message : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Question",
+      "name_local": "Question",
+      "name_en": "Question",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Question(message : string, questionMode)",
+      "description": "",
+      "syntax_block": "Question(message : string, questionMode)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.SetStatus",
+      "name_local": "SetStatus",
+      "name_en": "SetStatus",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "SetStatus(text : string)",
+      "description": "",
+      "syntax_block": "SetStatus(text : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.ClearMessages",
+      "name_local": "ClearMessages",
+      "name_en": "ClearMessages",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "ClearMessages()",
+      "description": "",
+      "syntax_block": "ClearMessages()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.SetError",
+      "name_local": "SetError",
+      "name_en": "SetError",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "SetError(string)",
+      "description": "",
+      "syntax_block": "SetError(string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Raise",
+      "name_local": "Raise",
+      "name_en": "Raise",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Raise(string)",
+      "description": "",
+      "syntax_block": "Raise(string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.ErrorDescription",
+      "name_local": "ErrorDescription",
+      "name_en": "ErrorDescription",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "ErrorDescription()",
+      "description": "",
+      "syntax_block": "ErrorDescription()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.IsEmptyValue",
+      "name_local": "IsEmptyValue",
+      "name_en": "IsEmptyValue",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "IsEmptyValue(value : any)",
+      "description": "",
+      "syntax_block": "IsEmptyValue(value : any)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Evaluate",
+      "name_local": "Evaluate",
+      "name_en": "Evaluate",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Evaluate(expr : string)",
+      "description": "",
+      "syntax_block": "Evaluate(expr : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Execute",
+      "name_local": "Execute",
+      "name_en": "Execute",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Execute(expr : string)",
+      "description": "",
+      "syntax_block": "Execute(expr : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Format",
+      "name_local": "Format",
+      "name_en": "Format",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Format(value : any, format : string)",
+      "description": "",
+      "syntax_block": "Format(value : any, format : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Type",
+      "name_local": "Type",
+      "name_en": "Type",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Type(strType : string)",
+      "description": "",
+      "syntax_block": "Type(strType : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.TypeOf",
+      "name_local": "TypeOf",
+      "name_en": "TypeOf",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "TypeOf(value : any)",
+      "description": "",
+      "syntax_block": "TypeOf(value : any)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.Rand",
+      "name_local": "Rand",
+      "name_en": "Rand",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "Rand()",
+      "description": "",
+      "syntax_block": "Rand()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.ArgCount",
+      "name_local": "ArgCount",
+      "name_en": "ArgCount",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "ArgCount()",
+      "description": "",
+      "syntax_block": "ArgCount()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.ArgValue",
+      "name_local": "ArgValue",
+      "name_en": "ArgValue",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "ArgValue()",
+      "description": "",
+      "syntax_block": "ArgValue()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.ComputerName",
+      "name_local": "ComputerName",
+      "name_en": "ComputerName",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "ComputerName()",
+      "description": "",
+      "syntax_block": "ComputerName()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.RunApp",
+      "name_local": "RunApp",
+      "name_en": "RunApp",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "RunApp(command : string)",
+      "description": "",
+      "syntax_block": "RunApp(command : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.SetAppTitle",
+      "name_local": "SetAppTitle",
+      "name_en": "SetAppTitle",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "SetAppTitle(title : string)",
+      "description": "",
+      "syntax_block": "SetAppTitle(title : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.UserDir",
+      "name_local": "UserDir",
+      "name_en": "UserDir",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "UserDir()",
+      "description": "",
+      "syntax_block": "UserDir()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.UserName",
+      "name_local": "UserName",
+      "name_en": "UserName",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "UserName()",
+      "description": "",
+      "syntax_block": "UserName()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.UserPassword",
+      "name_local": "UserPassword",
+      "name_en": "UserPassword",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "UserPassword()",
+      "description": "",
+      "syntax_block": "UserPassword()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.ExclusiveMode",
+      "name_local": "ExclusiveMode",
+      "name_en": "ExclusiveMode",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "ExclusiveMode()",
+      "description": "",
+      "syntax_block": "ExclusiveMode()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.SetExclusive",
+      "name_local": "SetExclusive",
+      "name_en": "SetExclusive",
+      "kind": "system_procedure",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "SetExclusive(on : boolean)",
+      "description": "",
+      "syntax_block": "SetExclusive(on : boolean)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.GeneralLanguage",
+      "name_local": "GeneralLanguage",
+      "name_en": "GeneralLanguage",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GeneralLanguage()",
+      "description": "",
+      "syntax_block": "GeneralLanguage()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.EndJob",
+      "name_local": "EndJob",
+      "name_en": "EndJob",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "EndJob(force : boolean)",
+      "description": "",
+      "syntax_block": "EndJob(force : boolean)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.UserInterruptProcessing",
+      "name_local": "UserInterruptProcessing",
+      "name_en": "UserInterruptProcessing",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "UserInterruptProcessing()",
+      "description": "",
+      "syntax_block": "UserInterruptProcessing()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.AccessRight",
+      "name_local": "AccessRight",
+      "name_en": "AccessRight",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "AccessRight(strRole : string, metadata)",
+      "description": "",
+      "syntax_block": "AccessRight(strRole : string, metadata)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.IsInRole",
+      "name_local": "IsInRole",
+      "name_en": "IsInRole",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "IsInRole(strRole : string)",
+      "description": "",
+      "syntax_block": "IsInRole(strRole : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.GetCommonForm",
+      "name_local": "GetCommonForm",
+      "name_en": "GetCommonForm",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetCommonForm(name : string, owner : any, id : guid)",
+      "description": "",
+      "syntax_block": "GetCommonForm(name : string, owner : any, id : guid)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.ShowCommonForm",
+      "name_local": "ShowCommonForm",
+      "name_en": "ShowCommonForm",
+      "kind": "system_procedure",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "ShowCommonForm(name : string, owner : any, id : guid)",
+      "description": "",
+      "syntax_block": "ShowCommonForm(name : string, owner : any, id : guid)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.GetCommonTemplate",
+      "name_local": "GetCommonTemplate",
+      "name_en": "GetCommonTemplate",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetCommonTemplate(name : string)",
+      "description": "",
+      "syntax_block": "GetCommonTemplate(name : string)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.BeginTransaction",
+      "name_local": "BeginTransaction",
+      "name_en": "BeginTransaction",
+      "kind": "system_procedure",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "BeginTransaction()",
+      "description": "",
+      "syntax_block": "BeginTransaction()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.CommitTransaction",
+      "name_local": "CommitTransaction",
+      "name_en": "CommitTransaction",
+      "kind": "system_procedure",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "CommitTransaction()",
+      "description": "",
+      "syntax_block": "CommitTransaction()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "fn.RollBackTransaction",
+      "name_local": "RollBackTransaction",
+      "name_en": "RollBackTransaction",
+      "kind": "system_procedure",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "RollBackTransaction()",
+      "description": "",
+      "syntax_block": "RollBackTransaction()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
     }
   ]
 }

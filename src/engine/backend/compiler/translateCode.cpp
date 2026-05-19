@@ -98,6 +98,28 @@ struct ibKeyWords s_listKeyWord[] =
 	{"Into"},
 };
 
+// Public hook consumed by the dumpHelp CLI tool (src/engine/dumpHelp).
+// Walks s_listKeyWord in declaration order — same order used by the
+// translator's KEY_* enum block, so callers can rely on positional
+// stability for snapshot / golden-fixture tests. Returns the entry
+// count. extern "C" linkage so the symbol survives name-mangling
+// fluctuation across compilers when dumpHelp links against backend.dll.
+extern "C" BACKEND_API long ibDumpKeyWords(
+    void (*cb)(const wxString& name,
+               const wxString& shortDescription,
+               void*           userdata),
+    void* userdata)
+{
+	if (cb == nullptr) return 0;
+	const size_t n = sizeof(s_listKeyWord) / sizeof(s_listKeyWord[0]);
+	for (size_t i = 0; i < n; ++i) {
+		cb(s_listKeyWord[i].m_strKeyWord,
+		   s_listKeyWord[i].m_strShortDescription,
+		   userdata);
+	}
+	return static_cast<long>(n);
+}
+
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////

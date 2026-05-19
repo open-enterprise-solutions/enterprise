@@ -296,6 +296,7 @@ add_subdirectory("${OES_ENGINE_DIR}/designer")
 add_subdirectory("${OES_ENGINE_DIR}/launcher")
 add_subdirectory("${OES_ENGINE_DIR}/codeRunner")
 add_subdirectory("${OES_ENGINE_DIR}/classChecker")
+add_subdirectory("${OES_ENGINE_DIR}/dumpHelp")
 add_subdirectory("${OES_ENGINE_DIR}/simplePlugin")
 
 # ---------------------------------------------------------------------------
