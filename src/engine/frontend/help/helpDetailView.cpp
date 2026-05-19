@@ -28,15 +28,11 @@ ibHelpDetailView::ibHelpDetailView(wxWindow* parent, ibHelpPaneView* pane)
     : wxPanel(parent, wxID_ANY), m_pane(pane) {
 	m_html = new wxHtmlWindow(this, wxID_ANY);
 
-	// wxHtmlWindow's default font is small on Retina. Bump one notch and
-	// pin Helvetica + Menlo so monospace blocks render distinct from
-	// prose.
-	static const int fontSizes[] = { 10, 11, 12, 14, 16, 20, 28 };
-	m_html->SetFonts(wxT("Helvetica"), wxT("Menlo"), fontSizes);
-
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
 	sizer->Add(m_html, 1, wxEXPAND);
 	SetSizer(sizer);
+
+	ApplyFontScale();
 
 	Bind(wxEVT_HTML_LINK_CLICKED,
 	     &ibHelpDetailView::OnLinkClicked, this);
@@ -49,7 +45,36 @@ ibHelpDetailView::ibHelpDetailView(wxWindow* parent, ibHelpPaneView* pane)
 	             &ibHelpDetailView::OnContextMenu, this);
 }
 
+void ibHelpDetailView::ApplyFontScale() {
+	// Base + boost shifts the whole 7-step ladder uniformly so <font
+	// size="N"> tags keep their relative weighting.
+	const int base = 11 + m_fontSizeBoost;
+	const int sizes[] = {
+	    std::max(6, base - 2), std::max(6, base - 1),
+	    base,                  std::max(6, base + 2),
+	    std::max(6, base + 4), std::max(6, base + 7),
+	    std::max(6, base + 12)
+	};
+	m_html->SetFonts(wxT("Helvetica"), wxT("Menlo"), sizes);
+}
+
+void ibHelpDetailView::AdjustFontSize(int delta) {
+	const int next = m_fontSizeBoost + delta;
+	if (next < -2 || next > 6) return;  // keep in sane range
+	m_fontSizeBoost = next;
+	ApplyFontScale();
+	// Re-render whatever was last shown so the new sizes take effect
+	// immediately — wxHtmlWindow doesn't auto-relayout on SetFonts.
+	if (!m_lastEntryId.IsEmpty() && m_pane) {
+		if (auto corpus = m_pane->GetCorpus()) {
+			if (const ibHelpEntry* e = corpus->FindById(m_lastEntryId))
+				m_html->SetPage(RenderHtml(*e));
+		}
+	}
+}
+
 void ibHelpDetailView::ShowEntry(const ibHelpEntry* entry) {
+	m_lastEntryId = entry ? entry->id : wxString();
 	if (entry == nullptr) {
 		m_html->SetPage(
 		    wxT("<html><body bgcolor=\"#fafbfc\">"

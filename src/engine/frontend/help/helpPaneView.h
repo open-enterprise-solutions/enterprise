@@ -61,6 +61,7 @@ public:
 private:
 	std::shared_ptr<const ibHelpCorpus> m_corpus;
 
+	class wxToolBar* m_toolbar         = nullptr;
 	wxNotebook*       m_notebook       = nullptr;
 	ibHelpTreeView*   m_treeView       = nullptr;
 	ibHelpIndexView*  m_indexView      = nullptr;
@@ -75,6 +76,10 @@ private:
 	std::vector<wxString> m_forward;
 
 	void OnTabSelectionChanged(wxBookCtrlEvent&);
+	void OnToolbarCommand(wxCommandEvent& event);
+	void OnUpdateToolbarUi(wxUpdateUIEvent& event);
+	void ReloadCorpus();
+	void SyncFromEditorCaret();
 
 	// Tab views fire entry-selection notifications through here so
 	// the pane controls the detail view and history state in one

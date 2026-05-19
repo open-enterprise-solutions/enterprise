@@ -21,9 +21,23 @@ public:
 	// nullptr to display the empty / "select an entry" state.
 	void ShowEntry(const ibHelpEntry* entry);
 
+	// Font-size adjustment. wxHtmlWindow's SetFonts accepts a size
+	// array indexed by the <font size="N"> attribute (1..7); we shift
+	// the array up / down by one notch per click and re-render.
+	void AdjustFontSize(int delta);
+
 private:
 	ibHelpPaneView* m_pane = nullptr;
 	wxHtmlWindow*   m_html = nullptr;
+
+	// Base font size offset applied on top of the default Helvetica
+	// scale. Clamped to [-2, +4] to keep the layout sane on Retina
+	// and 96-DPI both. Persisted via the host frame's options.xml in
+	// a follow-up iteration.
+	int             m_fontSizeBoost = 0;
+
+	void ApplyFontScale();
+	wxString        m_lastEntryId;
 
 	// Click on a link in the HTML body (e.g. see_also entries) routes
 	// through the parent pane's ShowEntry so the history stack stays

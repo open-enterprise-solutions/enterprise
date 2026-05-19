@@ -14,16 +14,60 @@
 #include "backend/appData.h"
 #include "backend/help/helpCorpus.h"
 #include "backend/help/helpEntry.h"
+#include "backend/help/helpResolver.h"
 
+#include <wx/artprov.h>
 #include <wx/notebook.h>
 #include <wx/sizer.h>
 #include <wx/splitter.h>
+#include <wx/toolbar.h>
+
+// Local ids for the pane's own toolbar — start above wxID_HIGHEST so we
+// don't collide with anything wx maps automatically.
+namespace {
+constexpr int IDC_HelpBack    = wxID_HIGHEST + 5500;
+constexpr int IDC_HelpForward = wxID_HIGHEST + 5501;
+constexpr int IDC_HelpReload  = wxID_HIGHEST + 5502;
+constexpr int IDC_HelpSync    = wxID_HIGHEST + 5503;
+constexpr int IDC_HelpZoomIn  = wxID_HIGHEST + 5504;
+constexpr int IDC_HelpZoomOut = wxID_HIGHEST + 5505;
+} // namespace
 
 ibHelpPaneView::ibHelpPaneView(wxWindow* parent)
     : wxPanel(parent, wxID_ANY) {
-	// Vertical splitter: notebook on top (navigation surfaces),
-	// detail HTML view on the bottom. The split position is biased
-	// toward navigation since most user time is spent browsing.
+	// Toolbar across the top — back / forward navigation, reload of
+	// the live corpus snapshot, and a "sync from editor cursor" button
+	// that mirrors what RawCtrl+F1 does without leaving the pane.
+	m_toolbar = new wxToolBar(this, wxID_ANY, wxDefaultPosition,
+	                            wxDefaultSize,
+	                            wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
+	const wxSize iconSize = FromDIP(wxSize(16, 16));
+	m_toolbar->SetToolBitmapSize(iconSize);
+	m_toolbar->AddTool(IDC_HelpBack,    _("Back"),
+	    wxArtProvider::GetBitmapBundle(wxART_GO_BACK, wxART_TOOLBAR, iconSize),
+	    _("Back (Alt+Left)"));
+	m_toolbar->AddTool(IDC_HelpForward, _("Forward"),
+	    wxArtProvider::GetBitmapBundle(wxART_GO_FORWARD, wxART_TOOLBAR, iconSize),
+	    _("Forward (Alt+Right)"));
+	m_toolbar->AddSeparator();
+	m_toolbar->AddTool(IDC_HelpSync,    _("Sync from editor"),
+	    wxArtProvider::GetBitmapBundle(wxART_FIND, wxART_TOOLBAR, iconSize),
+	    _("Look up identifier under the editor caret"));
+	m_toolbar->AddTool(IDC_HelpReload,  _("Reload"),
+	    wxArtProvider::GetBitmapBundle(wxART_REDO, wxART_TOOLBAR, iconSize),
+	    _("Reload the help corpus from disk"));
+	m_toolbar->AddSeparator();
+	m_toolbar->AddTool(IDC_HelpZoomIn,  _("Larger text"),
+	    wxArtProvider::GetBitmapBundle(wxART_PLUS, wxART_TOOLBAR, iconSize),
+	    _("Increase the help text size"));
+	m_toolbar->AddTool(IDC_HelpZoomOut, _("Smaller text"),
+	    wxArtProvider::GetBitmapBundle(wxART_MINUS, wxART_TOOLBAR, iconSize),
+	    _("Decrease the help text size"));
+	m_toolbar->Realize();
+
+	// Vertical splitter: notebook on top (navigation surfaces), detail
+	// HTML view on the bottom. The split position is biased toward
+	// navigation since most user time is spent browsing.
 	auto* splitter = new wxSplitterWindow(this, wxID_ANY,
 	                                        wxDefaultPosition, wxDefaultSize,
 	                                        wxSP_LIVE_UPDATE | wxSP_3D);
@@ -44,11 +88,15 @@ ibHelpPaneView::ibHelpPaneView(wxWindow* parent)
 	splitter->SplitHorizontally(m_notebook, m_detailView, 280);
 
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
-	sizer->Add(splitter, 1, wxEXPAND);
+	sizer->Add(m_toolbar, 0, wxEXPAND);
+	sizer->Add(splitter,  1, wxEXPAND);
 	SetSizer(sizer);
 
 	Bind(wxEVT_NOTEBOOK_PAGE_CHANGED,
 	     &ibHelpPaneView::OnTabSelectionChanged, this);
+	Bind(wxEVT_TOOL, &ibHelpPaneView::OnToolbarCommand, this);
+	Bind(wxEVT_UPDATE_UI, &ibHelpPaneView::OnUpdateToolbarUi, this,
+	     IDC_HelpBack, IDC_HelpForward);
 
 	RefreshFromAppData();
 }
@@ -112,4 +160,42 @@ void ibHelpPaneView::OnTabSelectionChanged(wxBookCtrlEvent& event) {
 
 void ibHelpPaneView::OnEntryActivated(const wxString& entryId) {
 	ShowEntry(entryId);
+}
+
+void ibHelpPaneView::OnToolbarCommand(wxCommandEvent& event) {
+	switch (event.GetId()) {
+		case IDC_HelpBack:    NavigateBack();        break;
+		case IDC_HelpForward: NavigateForward();     break;
+		case IDC_HelpReload:  ReloadCorpus();        break;
+		case IDC_HelpSync:    SyncFromEditorCaret(); break;
+		case IDC_HelpZoomIn:  if (m_detailView) m_detailView->AdjustFontSize(+1); break;
+		case IDC_HelpZoomOut: if (m_detailView) m_detailView->AdjustFontSize(-1); break;
+		default: event.Skip();
+	}
+}
+
+void ibHelpPaneView::OnUpdateToolbarUi(wxUpdateUIEvent& event) {
+	switch (event.GetId()) {
+		case IDC_HelpBack:    event.Enable(CanNavigateBack());    break;
+		case IDC_HelpForward: event.Enable(CanNavigateForward()); break;
+		default: event.Skip();
+	}
+}
+
+void ibHelpPaneView::ReloadCorpus() {
+	appData->ReloadHelpCorpus();
+	RefreshFromAppData();
+}
+
+void ibHelpPaneView::SyncFromEditorCaret() {
+	// Delegate to the same routing path the editor's right-click menu
+	// uses — wxID_FRONTEND_SYNTAX_HELPER_LOOKUP propagates up to the
+	// designer frame, which calls OpenHelpForCursor(). Keeps the
+	// codepath single-sourced.
+	wxCommandEvent up(wxEVT_MENU, wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
+	up.SetEventObject(this);
+	if (wxTheApp) {
+		if (wxWindow* top = wxTheApp->GetTopWindow())
+			top->ProcessWindowEvent(up);
+	}
 }
