@@ -53,6 +53,11 @@ public:
 	void NavigateBack();
 	void NavigateForward();
 
+	// Active corpus snapshot. Returned shared_ptr keeps the corpus
+	// alive while the caller dereferences it; safe to capture briefly
+	// in render code without worrying about a concurrent reload.
+	std::shared_ptr<const ibHelpCorpus> GetCorpus() const { return m_corpus; }
+
 private:
 	std::shared_ptr<const ibHelpCorpus> m_corpus;
 

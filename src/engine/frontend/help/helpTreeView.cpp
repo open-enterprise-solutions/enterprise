@@ -14,8 +14,11 @@
 #include "backend/help/helpCategory.h"
 #include "backend/help/helpCorpus.h"
 #include "backend/help/helpEntry.h"
+#include "backend/compiler/compileCode.h"
 
 #include <wx/sizer.h>
+
+#include <functional>
 
 namespace {
 
@@ -59,9 +62,35 @@ void ibHelpTreeView::Rebuild(const std::shared_ptr<const ibHelpCorpus>& corpus) 
 
 void ibHelpTreeView::AddCategoryNode(const ibHelpCategory* node,
                                        const wxTreeItemId&    parent) {
-	// Category label: use the display name if the loader populated
-	// it; fall back to the locale-stable key so the tree shows
-	// SOMETHING even before _categories.json reads land in Phase 3.5.
+	// Skip categories that contain nothing visible in the active syntax
+	// mode — keeps the tree compact in CES configurations where the
+	// "VES terminators" sub-category collapses to empty.
+	const short mode = ibCompileCode::GetCodeStyle();
+	auto entryVisible = [mode](const ibHelpEntry* e) {
+		return e->AppliesToMode(mode);
+	};
+
+	bool hasVisible = false;
+	for (const ibHelpEntry* e : node->entries) {
+		if (entryVisible(e)) { hasVisible = true; break; }
+	}
+	if (!hasVisible) {
+		for (const auto& child : node->children) {
+			// child subtree might still contain visible entries —
+			// check recursively. Cheap walk over the existing tree.
+			std::function<bool(const ibHelpCategory*)> any =
+			    [&](const ibHelpCategory* n) -> bool {
+				for (const ibHelpEntry* e : n->entries)
+					if (entryVisible(e)) return true;
+				for (const auto& c : n->children)
+					if (any(c.get())) return true;
+				return false;
+			};
+			if (any(child.get())) { hasVisible = true; break; }
+		}
+		if (!hasVisible) return;
+	}
+
 	const wxString label =
 	    node->displayName.IsEmpty() ? node->key : node->displayName;
 	const wxTreeItemId item = m_tree->AppendItem(parent, label);
@@ -70,6 +99,7 @@ void ibHelpTreeView::AddCategoryNode(const ibHelpCategory* node,
 		AddCategoryNode(child.get(), item);
 	}
 	for (const ibHelpEntry* entry : node->entries) {
+		if (!entryVisible(entry)) continue;
 		const wxTreeItemId leaf =
 		    m_tree->AppendItem(item, entry->BilingualLabel(), -1, -1,
 		                        new EntryIdData(entry->id));

@@ -8,6 +8,7 @@
 
 #include "backend/help/helpCorpus.h"
 #include "backend/help/helpEntry.h"
+#include "backend/compiler/compileCode.h"
 
 #include <wx/sizer.h>
 
@@ -42,7 +43,9 @@ void ibHelpIndexView::RefreshList(const wxString& prefix) {
 		matches = m_corpus->SearchPrefix(prefix);
 	}
 
+	const short mode = ibCompileCode::GetCodeStyle();
 	for (const ibHelpEntry* e : matches) {
+		if (!e->AppliesToMode(mode)) continue;
 		m_list->Append(e->BilingualLabel());
 		m_ids.push_back(e->id);
 	}

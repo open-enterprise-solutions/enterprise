@@ -233,19 +233,35 @@ void ParseBucket(const wxString&               bucketPath,
 				continue;
 			}
 
-			e.nameLocal    = Utf8(SafeStr(obj, "name_local"));
-			e.nameEn       = Utf8(SafeStr(obj, "name_en"));
-			e.signature    = Utf8(SafeStr(obj, "signature"));
-			e.description  = Utf8(SafeStr(obj, "description"));
-			e.syntaxBlock  = Utf8(SafeStr(obj, "syntax_block"));
-			e.parameters   = Utf8(SafeStr(obj, "parameters"));
-			e.returnDescr  = Utf8(SafeStr(obj, "return_descr"));
-			e.example      = Utf8(SafeStr(obj, "example"));
-			e.availability = Utf8(SafeStr(obj, "availability"));
-			e.kind         = ParseKind(SafeStr(obj, "kind", "keyword"));
-			e.categoryKeys = SafeStrArray(obj, "category_keys");
-			e.seeAlso      = SafeStrArray(obj, "see_also");
-			e.reviewed     = SafeBool(obj, "reviewed", false);
+			e.nameLocal      = Utf8(SafeStr(obj, "name_local"));
+			e.nameEn         = Utf8(SafeStr(obj, "name_en"));
+			e.signature      = Utf8(SafeStr(obj, "signature"));
+			e.description    = Utf8(SafeStr(obj, "description"));
+			e.syntaxBlock    = Utf8(SafeStr(obj, "syntax_block"));
+			e.syntaxBlockVes = Utf8(SafeStr(obj, "syntax_block_ves"));
+			e.parameters     = Utf8(SafeStr(obj, "parameters"));
+			e.returnDescr    = Utf8(SafeStr(obj, "return_descr"));
+			e.example        = Utf8(SafeStr(obj, "example"));
+			e.exampleVes     = Utf8(SafeStr(obj, "example_ves"));
+			e.availability   = Utf8(SafeStr(obj, "availability"));
+			e.kind           = ParseKind(SafeStr(obj, "kind", "keyword"));
+			e.categoryKeys   = SafeStrArray(obj, "category_keys");
+			e.seeAlso        = SafeStrArray(obj, "see_also");
+			e.reviewed       = SafeBool(obj, "reviewed", false);
+
+			// modes: array of "ves" / "ces"; missing or empty = both.
+			const auto modeArr = SafeStrArray(obj, "modes");
+			if (!modeArr.empty()) {
+				unsigned mask = 0u;
+				for (const wxString& m : modeArr) {
+					const wxString low = m.Lower();
+					if      (low == wxT("ves") || low == wxT("vbs"))
+						mask |= ibHelpEntry::kModeVes;
+					else if (low == wxT("ces"))
+						mask |= ibHelpEntry::kModeCes;
+				}
+				if (mask != 0u) e.modes = mask;
+			}
 
 			out.push_back(std::move(e));
 		} catch (const json::exception& ex) {

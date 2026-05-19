@@ -68,8 +68,15 @@ struct BACKEND_API ibHelpEntry {
 	wxString description;
 
 	// Multi-line formatted declaration / call form for the "Syntax"
-	// section of the detail pane.
+	// section of the detail pane. Holds the CES (C-style — `if (…) { … }`)
+	// form, which is the default mode for new configurations.
 	wxString syntaxBlock;
+
+	// Alternative VES (Visual-style — `If … Then … EndIf`) syntax form.
+	// Rendered next to the CES block so authors switching between the
+	// two modes can see them side-by-side. Empty when an entry has only
+	// one canonical form (e.g. operators, preprocessor directives).
+	wxString syntaxBlockVes;
 
 	// Markdown <dl>-style key:value list — one entry per formal parameter.
 	wxString parameters;
@@ -79,8 +86,12 @@ struct BACKEND_API ibHelpEntry {
 	wxString returnDescr;
 
 	// Worked example (markdown fenced code block). Multiple examples
-	// concatenated with blank lines between blocks.
+	// concatenated with blank lines between blocks. CES form by default.
 	wxString example;
+
+	// Worked example in VES syntax. Shown alongside the CES example
+	// when the entry's behaviour differs between the two modes.
+	wxString exampleVes;
 
 	// Free-form tier list — OES runtime targets the entry is valid on
 	// (e.g. "Designer, codeRunner, daemon, wenterprise-server").
@@ -116,6 +127,28 @@ struct BACKEND_API ibHelpEntry {
 	// visually so authors can distinguish "OES platform docs" from
 	// "this configuration's docs".
 	bool fromConfiguration = false;
+
+	// Syntax-mode visibility bitmask. The CES compile mode replaces
+	// keywords like Then / EndIf / EndDo / EndProcedure / EndFunction /
+	// Endtry / Do with `{` `}` braces, so those VES terminator keywords
+	// are dead weight in CES configurations and the tree/index/search
+	// views hide them. JSON key `modes`: array of "ves" / "ces"; missing
+	// or empty means "both modes" (the default).
+	//   bit 0 = VES
+	//   bit 1 = CES
+	enum : unsigned {
+		kModeVes = 1u << 0,
+		kModeCes = 1u << 1,
+		kModeAll = kModeVes | kModeCes,
+	};
+	unsigned modes = kModeAll;
+
+	inline bool AppliesToMode(short codeStyle) const {
+		// codeStyle values match CODE_VES (0) / CODE_CES (1) in
+		// compileContext.h — translate to the bitmask flag.
+		const unsigned want = (codeStyle == 0) ? kModeVes : kModeCes;
+		return (modes & want) != 0u;
+	}
 
 	// "Local / English" composite label. When both names match (English
 	// locale or single-script keyword) returns one form to avoid the

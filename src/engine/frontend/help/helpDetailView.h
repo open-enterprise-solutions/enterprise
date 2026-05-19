@@ -30,7 +30,15 @@ private:
 	// coherent.
 	void OnLinkClicked(wxHtmlLinkEvent& event);
 
-	static wxString RenderHtml(const ibHelpEntry& entry);
+	// Right-click on the HTML pane — opens a Copy / Select All menu
+	// and copies the current selection into the system clipboard. Bound
+	// from the ctor; needs access to m_pane / m_html so it's an
+	// instance method.
+	void OnContextMenu(wxContextMenuEvent& event);
+
+	// Non-static because RenderHtml resolves see_also ids to human
+	// labels via m_pane->GetCorpus().
+	wxString        RenderHtml(const ibHelpEntry& entry) const;
 	static wxString EscapeHtml(const wxString& raw);
 	static wxString FormatCodeBlock(const wxString& code);
 };

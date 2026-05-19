@@ -14,19 +14,23 @@
       ],
       "signature": "Если <Выражение> Тогда ... [ИначеЕсли ... Тогда ...] [Иначе ...] КонецЕсли",
       "description": "Условное выполнение. Вычисляет логическое выражение; при значении Истина выполняет ветку Then, иначе — необязательную ветку ElsIf с собственным выражением, иначе — необязательную ветку Else.",
-      "syntax_block": "If <Expression1> Then\n    // statements\nElsIf <Expression2> Then\n    // statements\nElse\n    // statements\nEndIf",
+      "syntax_block": "if (<Expression1>) {\n    // statements\n} elsif (<Expression2>) {\n    // statements\n} else {\n    // statements\n}",
       "parameters": "<Expression1>, <Expression2> — логические выражения.",
       "return_descr": "",
-      "example": "If userInfo.IsAdmin Then\n    EnableAdminMenu();\nElse\n    HideAdminMenu();\nEndIf",
+      "example": "if (userInfo.IsAdmin) {\n    EnableAdminMenu();\n} else {\n    HideAdminMenu();\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
-        "kw.Then",
         "kw.Else",
         "kw.Elseif",
-        "kw.Endif",
         "kw.While"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "syntax_block_ves": "If <Expression1> Then\n    // statements\nElsIf <Expression2> Then\n    // statements\nElse\n    // statements\nEndIf",
+      "example_ves": "If userInfo.IsAdmin Then\n    EnableAdminMenu();\nElse\n    HideAdminMenu();\nEndIf",
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Then",
@@ -50,7 +54,10 @@
         "kw.Elseif",
         "kw.Endif"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
     },
     {
       "id": "kw.Else",
@@ -73,7 +80,11 @@
         "kw.Elseif",
         "kw.Endif"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Elseif",
@@ -96,7 +107,11 @@
         "kw.Else",
         "kw.Endif"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Endif",
@@ -117,7 +132,10 @@
       "see_also": [
         "kw.If"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
     },
     {
       "id": "kw.For",
@@ -130,22 +148,25 @@
       ],
       "signature": "",
       "description": "Счётный или итераторный цикл. Две формы: индексная (For <i> = <от> To <до> Do) и поэлементная (For Each <Элемент> In <Коллекция> Do).",
-      "syntax_block": "// indexed\nFor i = 1 To 10 Do\n    // body\nEndDo;\n\n// for-each\nFor Each Item In Collection Do\n    // body\nEndDo;",
+      "syntax_block": "// indexed\nfor (i = 1 To 10) {\n    // body\n}\n\n// for-each\nfor each (Item In Collection) {\n    // body\n}",
       "parameters": "",
       "return_descr": "",
-      "example": "For Each Order In Customer.Orders Do\n    Total = Total + Order.Amount;\nEndDo;",
+      "example": "for each (Order In Customer.Orders) {\n    Total = Total + Order.Amount;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
-        "kw.While",
         "kw.Foreach",
         "kw.In",
         "kw.To",
-        "kw.Do",
-        "kw.EndDo",
         "kw.Break",
         "kw.Continue"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "syntax_block_ves": "// indexed\nFor i = 1 To 10 Do\n    // body\nEndDo;\n\n// for-each\nFor Each Item In Collection Do\n    // body\nEndDo;",
+      "example_ves": "For Each Order In Customer.Orders Do\n    Total = Total + Order.Amount;\nEndDo;",
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Foreach",
@@ -168,7 +189,11 @@
         "kw.In",
         "kw.Do"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.To",
@@ -189,7 +214,11 @@
       "see_also": [
         "kw.For"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.In",
@@ -211,7 +240,11 @@
         "kw.For",
         "kw.Foreach"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Do",
@@ -234,7 +267,10 @@
         "kw.For",
         "kw.EndDo"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
     },
     {
       "id": "kw.EndDo",
@@ -257,7 +293,10 @@
         "kw.For",
         "kw.Do"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
     },
     {
       "id": "kw.While",
@@ -270,19 +309,23 @@
       ],
       "signature": "",
       "description": "Цикл с предусловием. Перед каждой итерацией проверяет условие; выполняет тело, пока условие истинно.",
-      "syntax_block": "While <Condition> Do\n    // body\nEndDo;",
+      "syntax_block": "while (<Condition>) {\n    // body\n}",
       "parameters": "",
       "return_descr": "",
-      "example": "Counter = 0;\nWhile Counter < 10 Do\n    Counter = Counter + 1;\nEndDo;",
+      "example": "Counter = 0;\nwhile (Counter < 10) {\n    Counter = Counter + 1;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.For",
-        "kw.Do",
-        "kw.EndDo",
         "kw.Break",
         "kw.Continue"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "syntax_block_ves": "While <Condition> Do\n    // body\nEndDo;",
+      "example_ves": "Counter = 0;\nWhile Counter < 10 Do\n    Counter = Counter + 1;\nEndDo;",
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.GoTo",
@@ -301,7 +344,11 @@
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Not",
@@ -323,7 +370,11 @@
         "kw.And",
         "kw.Or"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.And",
@@ -345,7 +396,11 @@
         "kw.Or",
         "kw.Not"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Or",
@@ -367,7 +422,11 @@
         "kw.And",
         "kw.Not"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Procedure",
@@ -380,19 +439,24 @@
       ],
       "signature": "",
       "description": "Объявляет процедуру — вызываемый блок кода, который выполняет действия, но не возвращает значение. Когда вызывающему нужен результат — используйте Function.",
-      "syntax_block": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Export]\n    // body\nEndProcedure",
+      "syntax_block": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Export] {\n    // body\n}",
       "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Export — делает процедуру доступной из других модулей.",
       "return_descr": "",
-      "example": "Procedure LogMessage(Val Text) Export\n    Message(Text);\nEndProcedure",
+      "example": "Procedure LogMessage(Val Text) Export {\n    Message(Text);\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Function",
-        "kw.EndProcedure",
         "kw.Return",
         "kw.Export",
         "kw.Val"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "syntax_block_ves": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Export]\n    // body\nEndProcedure",
+      "example_ves": "Procedure LogMessage(Val Text) Export\n    Message(Text);\nEndProcedure",
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.EndProcedure",
@@ -413,7 +477,10 @@
       "see_also": [
         "kw.Procedure"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
     },
     {
       "id": "kw.Function",
@@ -426,18 +493,23 @@
       ],
       "signature": "",
       "description": "Объявляет функцию — вызываемый блок кода, возвращающий значение через Return. Функции взаимозаменяемы с процедурами везде, кроме использования в качестве источника выражения.",
-      "syntax_block": "Function <Name>([Val] <Param1>, …) [Export]\n    // body\n    Return <Value>;\nEndFunction",
+      "syntax_block": "Function <Name>([Val] <Param1>, …) [Export] {\n    // body\n    Return <Value>;\n}",
       "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Export — делает функцию доступной из других модулей.",
       "return_descr": "Значение, переданное оператору Return.",
-      "example": "Function Sum(Val A, Val B) Export\n    Return A + B;\nEndFunction",
+      "example": "Function Sum(Val A, Val B) Export {\n    Return A + B;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Procedure",
         "kw.Return",
-        "kw.EndFunction",
         "kw.Export"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "syntax_block_ves": "Function <Name>([Val] <Param1>, …) [Export]\n    // body\n    Return <Value>;\nEndFunction",
+      "example_ves": "Function Sum(Val A, Val B) Export\n    Return A + B;\nEndFunction",
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.EndFunction",
@@ -460,7 +532,10 @@
         "kw.Return",
         "kw.Undefined"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
     },
     {
       "id": "kw.Export",
@@ -483,7 +558,11 @@
         "kw.Function",
         "kw.Var"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Val",
@@ -505,7 +584,11 @@
         "kw.Procedure",
         "kw.Function"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Return",
@@ -527,7 +610,11 @@
         "kw.Function",
         "kw.Procedure"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Try",
@@ -540,17 +627,22 @@
       ],
       "signature": "",
       "description": "Начинает блок обработки исключений. Код внутри отслеживается; возникшее исключение передаёт управление в ветку Except.",
-      "syntax_block": "Try\n    // protected body\nExcept\n    // handler — runs on any raised exception\nEndTry;",
+      "syntax_block": "try {\n    // protected body\n} except {\n    // handler — runs on any raised exception\n}",
       "parameters": "",
       "return_descr": "",
-      "example": "Try\n    Result = ParseNumber(UserInput);\nExcept\n    Message(\"Not a valid number: \" + ErrorDescription());\nEndTry;",
+      "example": "try {\n    Result = ParseNumber(UserInput);\n} except {\n    Message(\"Not a valid number: \" + ErrorDescription());\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Except",
-        "kw.Endtry",
         "kw.Raise"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "syntax_block_ves": "Try\n    // protected body\nExcept\n    // handler — runs on any raised exception\nEndTry;",
+      "example_ves": "Try\n    Result = ParseNumber(UserInput);\nExcept\n    Message(\"Not a valid number: \" + ErrorDescription());\nEndTry;",
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Except",
@@ -573,7 +665,11 @@
         "kw.Endtry",
         "kw.Raise"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Endtry",
@@ -595,7 +691,10 @@
         "kw.Try",
         "kw.Except"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
     },
     {
       "id": "kw.Continue",
@@ -618,7 +717,11 @@
         "kw.While",
         "kw.Break"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Break",
@@ -641,7 +744,11 @@
         "kw.For",
         "kw.Continue"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Raise",
@@ -663,7 +770,11 @@
         "kw.Try",
         "kw.Except"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Var",
@@ -685,7 +796,11 @@
         "kw.Undefined",
         "kw.Export"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.New",
@@ -706,7 +821,11 @@
       "see_also": [
         "kw.Undefined"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Undefined",
@@ -729,7 +848,11 @@
         "kw.New",
         "kw.Var"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.Null",
@@ -750,7 +873,11 @@
       "see_also": [
         "kw.Undefined"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.True",
@@ -774,7 +901,11 @@
         "kw.Or",
         "kw.Not"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.False",
@@ -798,7 +929,11 @@
         "kw.Or",
         "kw.Not"
       ],
-      "reviewed": true
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
     },
     {
       "id": "kw.PpDefine",

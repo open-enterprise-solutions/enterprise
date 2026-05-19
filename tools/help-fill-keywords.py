@@ -28,23 +28,35 @@ DATA = REPO / "data" / "help"
 # same parser.
 AVAIL = "Designer, codeRunner, daemon, wenterprise-server"
 
+# Keywords whose only role is to terminate a VES block. In CES mode
+# their job is taken by `}` and the keyword itself is not part of the
+# grammar — hide them from the tree / index / search in CES configs.
+VES_ONLY_TERMINATORS = {
+    "kw.Then", "kw.Endif", "kw.Endtry", "kw.EndDo",
+    "kw.EndProcedure", "kw.EndFunction", "kw.Do",
+}
+
 # Shared English-only syntax/example bodies. Same string lands in every
 # locale corpus so the visible code in the help pane matches what a
 # developer types into a module — which is always English.
 SHARED = {
     "kw.Procedure": {
-        "syntax_block": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Export]\n    // body\nEndProcedure",
-        "example": "Procedure LogMessage(Val Text) Export\n    Message(Text);\nEndProcedure",
-        "see_also": ["kw.Function", "kw.EndProcedure", "kw.Return", "kw.Export", "kw.Val"],
+        "syntax_block": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Export] {\n    // body\n}",
+        "syntax_block_ves": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Export]\n    // body\nEndProcedure",
+        "example": "Procedure LogMessage(Val Text) Export {\n    Message(Text);\n}",
+        "example_ves": "Procedure LogMessage(Val Text) Export\n    Message(Text);\nEndProcedure",
+        "see_also": ["kw.Function", "kw.Return", "kw.Export", "kw.Val"],
     },
     "kw.EndProcedure": {
         "syntax_block": "Procedure Demo()\n    // …\nEndProcedure",
         "see_also": ["kw.Procedure"],
     },
     "kw.Function": {
-        "syntax_block": "Function <Name>([Val] <Param1>, …) [Export]\n    // body\n    Return <Value>;\nEndFunction",
-        "example": "Function Sum(Val A, Val B) Export\n    Return A + B;\nEndFunction",
-        "see_also": ["kw.Procedure", "kw.Return", "kw.EndFunction", "kw.Export"],
+        "syntax_block": "Function <Name>([Val] <Param1>, …) [Export] {\n    // body\n    Return <Value>;\n}",
+        "syntax_block_ves": "Function <Name>([Val] <Param1>, …) [Export]\n    // body\n    Return <Value>;\nEndFunction",
+        "example": "Function Sum(Val A, Val B) Export {\n    Return A + B;\n}",
+        "example_ves": "Function Sum(Val A, Val B) Export\n    Return A + B;\nEndFunction",
+        "see_also": ["kw.Procedure", "kw.Return", "kw.Export"],
     },
     "kw.EndFunction": {
         "syntax_block": "Function Demo()\n    Return 42;\nEndFunction",
@@ -69,9 +81,11 @@ SHARED = {
         "see_also": ["kw.Undefined", "kw.Export"],
     },
     "kw.If": {
-        "syntax_block": "If <Expression1> Then\n    // statements\nElsIf <Expression2> Then\n    // statements\nElse\n    // statements\nEndIf",
-        "example": "If userInfo.IsAdmin Then\n    EnableAdminMenu();\nElse\n    HideAdminMenu();\nEndIf",
-        "see_also": ["kw.Then", "kw.Else", "kw.Elseif", "kw.Endif", "kw.While"],
+        "syntax_block": "if (<Expression1>) {\n    // statements\n} elsif (<Expression2>) {\n    // statements\n} else {\n    // statements\n}",
+        "syntax_block_ves": "If <Expression1> Then\n    // statements\nElsIf <Expression2> Then\n    // statements\nElse\n    // statements\nEndIf",
+        "example": "if (userInfo.IsAdmin) {\n    EnableAdminMenu();\n} else {\n    HideAdminMenu();\n}",
+        "example_ves": "If userInfo.IsAdmin Then\n    EnableAdminMenu();\nElse\n    HideAdminMenu();\nEndIf",
+        "see_also": ["kw.Else", "kw.Elseif", "kw.While"],
     },
     "kw.Then": {
         "syntax_block": "If <Expr> Then\n    // body\nEndIf;",
@@ -90,14 +104,18 @@ SHARED = {
         "see_also": ["kw.If"],
     },
     "kw.While": {
-        "syntax_block": "While <Condition> Do\n    // body\nEndDo;",
-        "example": "Counter = 0;\nWhile Counter < 10 Do\n    Counter = Counter + 1;\nEndDo;",
-        "see_also": ["kw.For", "kw.Do", "kw.EndDo", "kw.Break", "kw.Continue"],
+        "syntax_block": "while (<Condition>) {\n    // body\n}",
+        "syntax_block_ves": "While <Condition> Do\n    // body\nEndDo;",
+        "example": "Counter = 0;\nwhile (Counter < 10) {\n    Counter = Counter + 1;\n}",
+        "example_ves": "Counter = 0;\nWhile Counter < 10 Do\n    Counter = Counter + 1;\nEndDo;",
+        "see_also": ["kw.For", "kw.Break", "kw.Continue"],
     },
     "kw.For": {
-        "syntax_block": "// indexed\nFor i = 1 To 10 Do\n    // body\nEndDo;\n\n// for-each\nFor Each Item In Collection Do\n    // body\nEndDo;",
-        "example": "For Each Order In Customer.Orders Do\n    Total = Total + Order.Amount;\nEndDo;",
-        "see_also": ["kw.While", "kw.Foreach", "kw.In", "kw.To", "kw.Do", "kw.EndDo", "kw.Break", "kw.Continue"],
+        "syntax_block": "// indexed\nfor (i = 1 To 10) {\n    // body\n}\n\n// for-each\nfor each (Item In Collection) {\n    // body\n}",
+        "syntax_block_ves": "// indexed\nFor i = 1 To 10 Do\n    // body\nEndDo;\n\n// for-each\nFor Each Item In Collection Do\n    // body\nEndDo;",
+        "example": "for each (Order In Customer.Orders) {\n    Total = Total + Order.Amount;\n}",
+        "example_ves": "For Each Order In Customer.Orders Do\n    Total = Total + Order.Amount;\nEndDo;",
+        "see_also": ["kw.Foreach", "kw.In", "kw.To", "kw.Break", "kw.Continue"],
     },
     "kw.Foreach": {
         "syntax_block": "For Each <Item> In <Collection> Do\n    // body\nEndDo;",
@@ -128,9 +146,11 @@ SHARED = {
         "see_also": ["kw.For", "kw.While", "kw.Break"],
     },
     "kw.Try": {
-        "syntax_block": "Try\n    // protected body\nExcept\n    // handler — runs on any raised exception\nEndTry;",
-        "example": "Try\n    Result = ParseNumber(UserInput);\nExcept\n    Message(\"Not a valid number: \" + ErrorDescription());\nEndTry;",
-        "see_also": ["kw.Except", "kw.Endtry", "kw.Raise"],
+        "syntax_block": "try {\n    // protected body\n} except {\n    // handler — runs on any raised exception\n}",
+        "syntax_block_ves": "Try\n    // protected body\nExcept\n    // handler — runs on any raised exception\nEndTry;",
+        "example": "try {\n    Result = ParseNumber(UserInput);\n} except {\n    Message(\"Not a valid number: \" + ErrorDescription());\n}",
+        "example_ves": "Try\n    Result = ParseNumber(UserInput);\nExcept\n    Message(\"Not a valid number: \" + ErrorDescription());\nEndTry;",
+        "see_also": ["kw.Except", "kw.Raise"],
     },
     "kw.Except": {
         "syntax_block": "Try\n    // …\nExcept\n    // recovery\nEndTry;",
@@ -393,10 +413,12 @@ NAME_RESET = list(SHARED.keys())
 
 
 def merge(entry: dict[str, Any], shared: dict[str, Any],
-          prose: dict[str, Any], reset_name: bool) -> bool:
+          prose: dict[str, Any], reset_name: bool, ves_only: bool) -> bool:
     changed = False
-    # Shared (English-only) fields.
-    for key in ("syntax_block", "example", "see_also"):
+    # Shared (English-only) fields. CES form is the primary syntax_block /
+    # example; VES form is the alternative shown beside it.
+    for key in ("syntax_block", "syntax_block_ves",
+                "example", "example_ves", "see_also"):
         if key in shared and entry.get(key) != shared[key]:
             entry[key] = shared[key]
             changed = True
@@ -411,6 +433,11 @@ def merge(entry: dict[str, Any], shared: dict[str, Any],
         if name_en and entry.get("name_local") != name_en:
             entry["name_local"] = name_en
             changed = True
+    # Syntax-mode visibility.
+    want_modes = ["ves"] if ves_only else ["ves", "ces"]
+    if entry.get("modes") != want_modes:
+        entry["modes"] = want_modes
+        changed = True
     if entry.get("availability") != AVAIL:
         entry["availability"] = AVAIL
         changed = True
@@ -432,7 +459,9 @@ def apply(locale: str) -> tuple[int, int]:
         if not shared and not prose:
             continue
         seen += 1
-        if merge(entry, shared, prose, reset_name=eid in NAME_RESET):
+        if merge(entry, shared, prose,
+                  reset_name=eid in NAME_RESET,
+                  ves_only=eid in VES_ONLY_TERMINATORS):
             touched += 1
     file.write_text(
         json.dumps(doc, ensure_ascii=False, indent=2) + "\n",

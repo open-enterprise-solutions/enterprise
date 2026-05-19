@@ -8,6 +8,7 @@
 
 #include "backend/help/helpCorpus.h"
 #include "backend/help/helpEntry.h"
+#include "backend/compiler/compileCode.h"
 
 #include <wx/sizer.h>
 
@@ -46,12 +47,15 @@ void ibHelpSearchView::RefreshList(const wxString& query) {
 	}
 
 	const auto matches = m_corpus->SearchText(query);
-	m_badge->SetLabel(wxString::Format(_("Found: %zu"), matches.size()));
-
+	const short mode = ibCompileCode::GetCodeStyle();
+	size_t visible = 0;
 	for (const ibHelpEntry* e : matches) {
+		if (!e->AppliesToMode(mode)) continue;
 		m_list->Append(e->BilingualLabel());
 		m_ids.push_back(e->id);
+		++visible;
 	}
+	m_badge->SetLabel(wxString::Format(_("Found: %zu"), visible));
 }
 
 void ibHelpSearchView::OnQueryChanged(wxCommandEvent& event) {

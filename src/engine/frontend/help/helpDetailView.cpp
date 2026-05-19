@@ -5,6 +5,10 @@
 // renderer with limited attribute support). The styling here is built on
 // table + cellspacing tricks that work across wxHtmlWindow's actual
 // capabilities rather than CSS that it would silently ignore.
+//
+// `<pre>` is used for code blocks so newlines and indentation survive
+// rendering; the surrounding table cell paints the tinted background
+// because `<pre bgcolor=...>` is unreliable across wxHtmlWindow versions.
 /////////////////////////////////////////////////////////////////////////////
 
 #include "frontend/help/helpDetailView.h"
@@ -14,6 +18,8 @@
 #include "backend/help/helpCorpus.h"
 #include "backend/help/helpEntry.h"
 
+#include <wx/clipbrd.h>
+#include <wx/menu.h>
 #include <wx/sizer.h>
 #include <wx/uri.h>
 
@@ -22,8 +28,8 @@ ibHelpDetailView::ibHelpDetailView(wxWindow* parent, ibHelpPaneView* pane)
 	m_html = new wxHtmlWindow(this, wxID_ANY);
 
 	// wxHtmlWindow's default font is small on Retina. Bump one notch and
-	// pin the serif/sans/mono family so monospace blocks render distinct
-	// from prose.
+	// pin Helvetica + Menlo so monospace blocks render distinct from
+	// prose.
 	static const int fontSizes[] = { 10, 11, 12, 14, 16, 20, 28 };
 	m_html->SetFonts(wxT("Helvetica"), wxT("Menlo"), fontSizes);
 
@@ -33,6 +39,13 @@ ibHelpDetailView::ibHelpDetailView(wxWindow* parent, ibHelpPaneView* pane)
 
 	Bind(wxEVT_HTML_LINK_CLICKED,
 	     &ibHelpDetailView::OnLinkClicked, this);
+
+	// Right-click context menu on the HTML pane — wxHtmlWindow's
+	// built-in handling is "select with mouse drag, Ctrl+C copies"; this
+	// adds an explicit "Copy" item so the discoverable workflow exists
+	// and so we can also offer "Copy all" (entire entry as plain text).
+	m_html->Bind(wxEVT_CONTEXT_MENU,
+	             &ibHelpDetailView::OnContextMenu, this);
 }
 
 void ibHelpDetailView::ShowEntry(const ibHelpEntry* entry) {
@@ -65,40 +78,47 @@ wxString ibHelpDetailView::EscapeHtml(const wxString& raw) {
 	return out;
 }
 
-wxString ibHelpDetailView::FormatCodeBlock(const wxString& code) {
-	wxString escaped;
-	escaped.reserve(code.size());
+namespace {
+
+wxString EscapeForPre(const wxString& code) {
+	// Same as EscapeHtml but newlines stay as real `\n` inside <pre>
+	// so the layout is preserved by the parser.
+	wxString out;
+	out.reserve(code.size());
 	for (auto it = code.begin(); it != code.end(); ++it) {
 		const wxUniChar c = *it;
-		if      (c == wxT('&')) escaped += wxT("&amp;");
-		else if (c == wxT('<')) escaped += wxT("&lt;");
-		else if (c == wxT('>')) escaped += wxT("&gt;");
-		else                    escaped += c;
+		if      (c == wxT('&')) out += wxT("&amp;");
+		else if (c == wxT('<')) out += wxT("&lt;");
+		else if (c == wxT('>')) out += wxT("&gt;");
+		else                    out += c;
 	}
-	// Outer table provides the tinted background + border that wxHtmlWindow
-	// honours; nested <tt> + <font> keeps the monospace family bound to the
-	// code text. cellpadding=8 gives breathing room around the block.
-	return wxT("<table border=\"0\" cellspacing=\"0\" cellpadding=\"8\" "
-	             "bgcolor=\"#f3f4f6\" width=\"100%\"><tr><td>"
-	             "<font face=\"Menlo\" size=\"2\" color=\"#1a1a1a\"><tt>")
-	       + escaped
-	       + wxT("</tt></font></td></tr></table>");
+	return out;
 }
 
-wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) {
+} // namespace
+
+wxString ibHelpDetailView::FormatCodeBlock(const wxString& code) {
+	// Tinted background via outer table; <pre> preserves indentation
+	// and newlines verbatim. The inner <font face="Menlo"> binds the
+	// monospace family to the block content (wxHtmlWindow respects
+	// face= on font inside pre even though it would ignore CSS).
+	return wxT("<table border=\"0\" cellspacing=\"0\" cellpadding=\"8\" "
+	             "bgcolor=\"#f3f4f6\" width=\"100%\"><tr><td>"
+	             "<font face=\"Menlo\" size=\"2\" color=\"#1a1a1a\"><pre>")
+	       + EscapeForPre(code)
+	       + wxT("</pre></font></td></tr></table>");
+}
+
+wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) const {
 	wxString html;
 	html.reserve(4096);
 
-	// Outer container: light page background, inner table holding content
-	// with consistent left-margin via cellpadding.
+	// Outer container with consistent left-margin via cellpadding.
 	html += wxT("<html><body bgcolor=\"#ffffff\">"
 	             "<table border=\"0\" cellpadding=\"12\" cellspacing=\"0\" "
 	             "width=\"100%\"><tr><td>");
 
 	// === Title block ========================================================
-	// Local name as h2 with a coloured underline (table-based since
-	// wxHtmlWindow ignores CSS borders). English alias appears below as
-	// muted subtitle when distinct from local name.
 	html += wxT("<font size=\"5\" color=\"#1f2937\"><b>");
 	html += EscapeHtml(entry.nameLocal.IsEmpty() ? entry.nameEn
 	                                                : entry.nameLocal);
@@ -114,7 +134,6 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) {
 	             "<tr><td></td></tr></table>");
 	html += wxT("<br>");
 
-	// Inline one-liner signature directly under the title.
 	if (!entry.signature.IsEmpty()) {
 		html += wxT("<font face=\"Menlo\" size=\"3\" color=\"#0f172a\">");
 		html += EscapeHtml(entry.signature);
@@ -137,14 +156,54 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) {
 	};
 
 	section(_("Description"),  entry.description, false);
-	section(_("Syntax"),        entry.syntaxBlock, true);
+
+	// Syntax (CES) is the canonical form — show it first. Append the
+	// VES alternative directly below when the entry carries one so the
+	// user comparing modes sees the two forms side by side without a
+	// preference dropdown.
+	if (!entry.syntaxBlock.IsEmpty() || !entry.syntaxBlockVes.IsEmpty()) {
+		html += wxT("<font size=\"3\" color=\"#2563eb\"><b>");
+		html += EscapeHtml(_("Syntax"));
+		html += wxT("</b></font><br>");
+		if (!entry.syntaxBlock.IsEmpty()) {
+			html += wxT("<font size=\"2\" color=\"#6b7280\">CES</font><br>");
+			html += FormatCodeBlock(entry.syntaxBlock);
+		}
+		if (!entry.syntaxBlockVes.IsEmpty()) {
+			html += wxT("<br><font size=\"2\" color=\"#6b7280\">VES</font><br>");
+			html += FormatCodeBlock(entry.syntaxBlockVes);
+		}
+		html += wxT("<br><br>");
+	}
+
 	section(_("Parameters"),    entry.parameters,  false);
 	section(_("Returns"),       entry.returnDescr, false);
-	section(_("Example"),       entry.example,     true);
+
+	if (!entry.example.IsEmpty() || !entry.exampleVes.IsEmpty()) {
+		html += wxT("<font size=\"3\" color=\"#2563eb\"><b>");
+		html += EscapeHtml(_("Example"));
+		html += wxT("</b></font><br>");
+		if (!entry.example.IsEmpty()) {
+			html += wxT("<font size=\"2\" color=\"#6b7280\">CES</font><br>");
+			html += FormatCodeBlock(entry.example);
+		}
+		if (!entry.exampleVes.IsEmpty()) {
+			html += wxT("<br><font size=\"2\" color=\"#6b7280\">VES</font><br>");
+			html += FormatCodeBlock(entry.exampleVes);
+		}
+		html += wxT("<br><br>");
+	}
+
 	section(_("Availability"),  entry.availability, false);
 
 	// === See also ===========================================================
+	// Resolve each id to a human-readable label via the corpus snapshot
+	// held by the pane. Falls back to the raw id when the referenced
+	// entry is missing (a loader warning would have fired at corpus
+	// build time; here we just stay readable).
 	if (!entry.seeAlso.empty()) {
+		auto corpus = m_pane ? m_pane->GetCorpus()
+		                       : std::shared_ptr<const ibHelpCorpus>();
 		html += wxT("<font size=\"3\" color=\"#2563eb\"><b>");
 		html += EscapeHtml(_("See also"));
 		html += wxT("</b></font><br>");
@@ -152,10 +211,19 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) {
 		for (const wxString& ref : entry.seeAlso) {
 			if (!first) html += wxT(" &middot; ");
 			first = false;
+			wxString label = ref;
+			if (corpus) {
+				if (const ibHelpEntry* target = corpus->FindById(ref)) {
+					if (!target->nameLocal.IsEmpty())
+						label = target->nameLocal;
+					else if (!target->nameEn.IsEmpty())
+						label = target->nameEn;
+				}
+			}
 			html += wxT("<a href=\"oeshelp://");
 			html += EscapeHtml(ref);
 			html += wxT("\"><font color=\"#2563eb\">");
-			html += EscapeHtml(ref);
+			html += EscapeHtml(label);
 			html += wxT("</font></a>");
 		}
 		html += wxT("<br><br>");
@@ -180,4 +248,29 @@ void ibHelpDetailView::OnLinkClicked(wxHtmlLinkEvent& event) {
 	if (!href.StartsWith(prefix)) return;
 	const wxString id = href.Mid(prefix.length());
 	if (m_pane) m_pane->ShowEntry(id);
+}
+
+void ibHelpDetailView::OnContextMenu(wxContextMenuEvent& event) {
+	wxMenu menu;
+	menu.Append(wxID_COPY,      _("Copy"));
+	menu.Append(wxID_SELECTALL, _("Select All"));
+
+	const wxString selected = m_html->SelectionToText();
+	menu.Enable(wxID_COPY, !selected.IsEmpty());
+
+	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) {
+		const wxString text = m_html->SelectionToText();
+		if (text.IsEmpty()) return;
+		if (wxTheClipboard->Open()) {
+			wxTheClipboard->SetData(new wxTextDataObject(text));
+			wxTheClipboard->Close();
+		}
+	}, wxID_COPY);
+
+	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) {
+		m_html->SelectAll();
+	}, wxID_SELECTALL);
+
+	m_html->PopupMenu(&menu);
+	event.Skip(false);
 }
