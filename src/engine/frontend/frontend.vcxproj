@@ -27,6 +27,12 @@
     <ClCompile Include="docView\templates\docViewSpreadsheet.cpp" />
     <ClCompile Include="docView\templates\docViewText.cpp" />
     <ClCompile Include="frontend.cpp" />
+    <ClCompile Include="help\helpChooserDialog.cpp" />
+    <ClCompile Include="help\helpDetailView.cpp" />
+    <ClCompile Include="help\helpIndexView.cpp" />
+    <ClCompile Include="help\helpPaneView.cpp" />
+    <ClCompile Include="help\helpSearchView.cpp" />
+    <ClCompile Include="help\helpTreeView.cpp" />
     <ClCompile Include="mainFrame\mainFrame.cpp" />
     <ClCompile Include="mainFrame\mainFrameChild.cpp" />
     <ClCompile Include="mainFrame\mainFrameParts.cpp" />
@@ -347,6 +353,12 @@
     <ClInclude Include="docView\templates\docViewSpreadsheet.h" />
     <ClInclude Include="docView\templates\docViewText.h" />
     <ClInclude Include="frontend.h" />
+    <ClInclude Include="help\helpChooserDialog.h" />
+    <ClInclude Include="help\helpDetailView.h" />
+    <ClInclude Include="help\helpIndexView.h" />
+    <ClInclude Include="help\helpPaneView.h" />
+    <ClInclude Include="help\helpSearchView.h" />
+    <ClInclude Include="help\helpTreeView.h" />
     <ClInclude Include="mainFrame\mainFrame.h" />
     <ClInclude Include="mainFrame\mainFrameChild.h" />
     <ClInclude Include="mainFrame\objinspect\objinspect.h" />

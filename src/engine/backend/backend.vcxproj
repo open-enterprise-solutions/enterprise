@@ -27,6 +27,12 @@
     <ClInclude Include="help\helpLoadError.h" />
     <ClInclude Include="help\helpLoader.h" />
     <ClInclude Include="help\helpResolver.h" />
+    <ClInclude Include="io\ioReader.h" />
+    <ClInclude Include="io\ioWriter.h" />
+    <ClInclude Include="io\jsonReader.h" />
+    <ClInclude Include="io\jsonWriter.h" />
+    <ClInclude Include="io\xmlReader.h" />
+    <ClInclude Include="io\xmlWriter.h" />
     <ClInclude Include="backend.h" />
     <ClInclude Include="backend_spreadsheet.h" />
     <ClInclude Include="backend_exception.h" />
@@ -282,6 +288,10 @@
     <ClCompile Include="help\helpCorpus.cpp" />
     <ClCompile Include="help\helpLoader.cpp" />
     <ClCompile Include="help\helpResolver.cpp" />
+    <ClCompile Include="io\jsonReader.cpp" />
+    <ClCompile Include="io\jsonWriter.cpp" />
+    <ClCompile Include="io\xmlReader.cpp" />
+    <ClCompile Include="io\xmlWriter.cpp" />
     <ClCompile Include="userInfo.cpp" />
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="backend_spreadsheet.cpp" />
