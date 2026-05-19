@@ -482,13 +482,11 @@ int ibPluginManager::CallWebPaneRegister(const wxString& paneId,
 		// Designer hasn't installed callbacks yet — buffer for replay.
 		// Return success so the plugin doesn't treat early-init as
 		// failure; ReplayPendingWebPaneRegistrations will surface the
-		// real result later once the frame wires its lambdas. Buffered
-		// reg always claims the default-pane slot if vacant so chunk
-		// dispatch routes to the replay'd pane once it materialises.
+		// real result later once the frame wires its lambdas. The
+		// default-pane slot is claimed inside the replay loop AFTER
+		// the entry actually registers successfully — a buffered reg
+		// that the frame later rejects must not shadow valid panes.
 		m_pendingWebPaneRegs.push_back({paneId, title, htmlBundlePath, cb, userData});
-		if (m_defaultAIPaneId.IsEmpty() && !paneId.IsEmpty()) {
-			m_defaultAIPaneId = paneId;
-		}
 		return 0;
 	}
 	const int rc = m_webPaneRegister(paneId, title, htmlBundlePath, cb, userData);
@@ -522,6 +520,13 @@ void ibPluginManager::ReplayPendingWebPaneRegistrations()
 		if (rc != 0) {
 			wxLogWarning(wxT("ibPluginManager: deferred RegisterWebPane('%s') returned %d"),
 			             r.paneId, rc);
+			continue;
+		}
+		// Same success-only default-pane assignment as the direct path
+		// in CallWebPaneRegister. Without this guard, a buffered entry
+		// the frame later rejects could permanently shadow valid panes.
+		if (m_defaultAIPaneId.IsEmpty() && !r.paneId.IsEmpty()) {
+			m_defaultAIPaneId = r.paneId;
 		}
 	}
 }

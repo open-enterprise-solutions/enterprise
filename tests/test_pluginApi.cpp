@@ -230,6 +230,37 @@ TEST(PluginRegistry, SanitiseValidatesActualJson) {
 	}
 }
 
+TEST(PluginRegistry, DefaultPaneNotClaimedByBufferedFailedReplay) {
+	// Buffered registration (Designer not wired yet) that the eventual
+	// replay rejects must NOT claim m_defaultAIPaneId. Otherwise a
+	// later successful registration is permanently shadowed and chunk
+	// dispatch routes to a paneId the AUI manager never knew about.
+	ibPluginManager mgr;
+
+	// Phase 1: buffer a registration BEFORE callbacks are installed.
+	EXPECT_EQ(mgr.CallWebPaneRegister(wxT("bad.pane"), wxT("B"),
+	                                     wxT("/tmp/b.html"), nullptr, nullptr), 0);
+
+	// Phase 2: install callbacks where bad.pane is rejected at replay.
+	mgr.SetWebPaneCallbacks(
+	    [](const wxString& paneId, const wxString&, const wxString&,
+	        ibPluginWebMsgFn, void*) -> int {
+	        return paneId == wxT("bad.pane") ? -1 : 0;
+	    },
+	    [](const wxString&, const wxString&) -> int { return 0; },
+	    [](const wxString&) -> int { return 0; });
+	mgr.ReplayPendingWebPaneRegistrations();
+
+	// bad.pane was rejected, so the default slot must still be empty.
+	EXPECT_EQ(mgr.HostAIChunkEmit("rid", "\"x\""), -1)
+	    << "buffered+failed reg must not claim default slot";
+
+	// A subsequent direct registration succeeds and claims the slot.
+	EXPECT_EQ(mgr.CallWebPaneRegister(wxT("good.pane"), wxT("G"),
+	                                     wxT("/tmp/g.html"), nullptr, nullptr), 0);
+	EXPECT_EQ(mgr.HostAIChunkEmit("rid", "\"y\""), 0);
+}
+
 TEST(PluginRegistry, DefaultPaneOnlyOnSuccess) {
 	// Failure path: the underlying register callback returns -1. We
 	// must NOT claim that pane id as the default chunk target — a later
