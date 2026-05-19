@@ -1,4 +1,5 @@
 {
+  "format": "OES-HELP-1.0",
   "schema_version": 1,
   "locale": "en-US",
   "entries": [
@@ -7,7 +8,11 @@
       "name_local": "Date",
       "name_en": "Date",
       "kind": "primitive_type",
-      "category_keys": ["common_lang", "primitive_types", "date"],
+      "category_keys": [
+        "common_lang",
+        "primitive_types",
+        "date"
+      ],
       "signature": "Date(<Year>, <Month>, <Day>) — also accepts a literal: '20170323104525'",
       "description": "Gregorian-calendar date with time precision down to seconds.\n\nDate values cover from 0001-01-01 onward. When parsing from a literal the format is 'YYYYMMDDhhmmss' or any prefix thereof; missing fields default to start-of-day.",
       "syntax_block": "Date(<Year>, <Month>, <Day>)\nDate('YYYYMMDDhhmmss')",
@@ -15,7 +20,9 @@
       "return_descr": "A value of type Date.",
       "example": "today = Date(2026, 5, 19);\nstamp = Date('20260519104525'); // 2026-05-19 10:45:25",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": ["fn.Message"],
+      "see_also": [
+        "fn.Message"
+      ],
       "reviewed": true
     }
   ]

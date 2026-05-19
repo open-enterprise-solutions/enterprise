@@ -30,6 +30,13 @@
 // = bump + migration test against a golden fixture.
 constexpr int kIbHelpSchemaVersion = 1;
 
+// Format identifier in the bucket file header. Aligns with the
+// OES-JSON-1.0 / OES-XML-2.0 metadata-export convention so all OES
+// JSON-on-disk artifacts share the same "format + version" header
+// shape — see metadataConfigurationJSON.cpp for the metadata side.
+// Loader rejects buckets whose format identifier does not match.
+#define IB_HELP_FORMAT_NAME wxT("OES-HELP-1.0")
+
 // Load the help corpus for one locale.
 //
 // `platformDir` — usually `appData->GetInstallDataDir() / "help"`. The

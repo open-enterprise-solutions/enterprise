@@ -143,16 +143,21 @@ ibHelpCorpus::ibHelpCorpus(std::shared_ptr<const ibHelpCorpus> platform,
 	absorb(perConfig.get());
 
 	// Platform first — per-config entries with colliding ids overlay
-	// (§3.6). Use a working map keyed by id so the per-config pass can
-	// find-and-replace efficiently.
-	std::unordered_map<wxString, ibHelpEntry> merged;
+	// (§3.6). Use a side index (id → slot in m_entries) for O(1) overlay
+	// lookups; the entry storage itself stays a std::vector so iteration
+	// order is deterministic across compilers / libstdc++ versions.
+	std::unordered_map<wxString, size_t> slotById;
 	if (platform) {
-		for (const auto& e : platform->m_entries) merged.emplace(e.id, e);
+		m_entries.reserve(platform->m_entries.size());
+		for (const auto& e : platform->m_entries) {
+			slotById.emplace(e.id, m_entries.size());
+			m_entries.push_back(e);
+		}
 	}
 	if (perConfig) {
 		for (const auto& e : perConfig->m_entries) {
-			auto it = merged.find(e.id);
-			if (it != merged.end()) {
+			auto it = slotById.find(e.id);
+			if (it != slotById.end()) {
 				// Overlay — record warning, replace platform entry.
 				ibHelpLoadError w;
 				w.severity = ibHelpLoadSeverity::kWarning;
@@ -160,15 +165,13 @@ ibHelpCorpus::ibHelpCorpus(std::shared_ptr<const ibHelpCorpus> platform,
 				    wxT("Per-configuration entry '%s' overlays platform entry."),
 				    e.id);
 				m_loadErrors.push_back(std::move(w));
-				it->second = e;
+				m_entries[it->second] = e;
 			} else {
-				merged.emplace(e.id, e);
+				slotById.emplace(e.id, m_entries.size());
+				m_entries.push_back(e);
 			}
 		}
 	}
-
-	m_entries.reserve(merged.size());
-	for (auto& kv : merged) m_entries.push_back(std::move(kv.second));
 
 	m_root        = std::make_unique<ibHelpCategory>();
 	m_fingerprint = HashEntries(m_entries, m_locale);
@@ -185,10 +188,20 @@ void ibHelpCorpus::BuildIndexes() {
 		const ibHelpEntry& e = m_entries[i];
 
 		// id lookup — duplicate ids inside one corpus are a loader-level
-		// invariant (LoadHelpCorpus enforces it). On collision the second
-		// occurrence wins; the loader should have already recorded the
-		// fatal error.
-		m_byId[e.id] = i;
+		// invariant (LoadHelpCorpus enforces it). emplace+log on collision
+		// instead of operator[]= so the index does not silently clobber
+		// when a future loader bug lets a duplicate slip through. The
+		// first occurrence wins (it's already in the map).
+		auto ins = m_byId.emplace(e.id, i);
+		if (!ins.second) {
+			ibHelpLoadError w;
+			w.severity = ibHelpLoadSeverity::kFatal;
+			w.message  = wxString::Format(
+			    wxT("Internal: duplicate id '%s' reached BuildIndexes — entry dropped from index."),
+			    e.id);
+			m_loadErrors.push_back(std::move(w));
+			continue;
+		}
 
 		// Name indexes — vector-valued because multiple entries can
 		// legitimately share a localised name (Дата type vs Document

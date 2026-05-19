@@ -29,6 +29,24 @@
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="appData.h" />
+    <ClInclude Include="help\helpCategory.h">
+      <Filter>help</Filter>
+    </ClInclude>
+    <ClInclude Include="help\helpCorpus.h">
+      <Filter>help</Filter>
+    </ClInclude>
+    <ClInclude Include="help\helpEntry.h">
+      <Filter>help</Filter>
+    </ClInclude>
+    <ClInclude Include="help\helpLoadError.h">
+      <Filter>help</Filter>
+    </ClInclude>
+    <ClInclude Include="help\helpLoader.h">
+      <Filter>help</Filter>
+    </ClInclude>
+    <ClInclude Include="help\helpResolver.h">
+      <Filter>help</Filter>
+    </ClInclude>
     <ClInclude Include="uniqueKey.h" />
     <ClInclude Include="srcExplorer.h" />
     <ClInclude Include="databaseLayer\databaseErrorCodes.h">
@@ -674,6 +692,15 @@
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="appData.cpp" />
+    <ClCompile Include="help\helpCorpus.cpp">
+      <Filter>help</Filter>
+    </ClCompile>
+    <ClCompile Include="help\helpLoader.cpp">
+      <Filter>help</Filter>
+    </ClCompile>
+    <ClCompile Include="help\helpResolver.cpp">
+      <Filter>help</Filter>
+    </ClCompile>
     <ClCompile Include="uniqueKey.cpp" />
     <ClCompile Include="databaseLayer\connectionPool.cpp">
       <Filter>databaseLayer</Filter>
@@ -1561,6 +1588,9 @@
     </Filter>
     <Filter Include="utils">
       <UniqueIdentifier>{bc892a4b-bcaa-4561-8a79-069a784639b3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="help">
+      <UniqueIdentifier>{9c5d8b1a-7e3f-4d21-b1c4-2a1f9b8d4e10}</UniqueIdentifier>
     </Filter>
     <Filter Include="databaseLayer\firebird">
       <UniqueIdentifier>{30f3747a-6465-49ff-8cf7-9d11d34be44e}</UniqueIdentifier>

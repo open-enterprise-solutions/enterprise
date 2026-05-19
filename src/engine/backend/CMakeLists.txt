@@ -187,3 +187,26 @@ install(TARGETS backend
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
 )
+
+# Help-corpus data (syntax helper feature, Phase 1+). Installed next to
+# the backend.dll so appData->RebuildHelpCorpus() finds it via the
+# executable-relative locator (appData.cpp uses
+# wxStandardPaths::Get().GetExecutablePath() / data / help). Same
+# layout as the existing `lang/` translation catalogs.
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/data/help"
+    DESTINATION "${CMAKE_INSTALL_BINDIR}/data"
+    FILES_MATCHING
+        PATTERN "*.json"
+)
+
+# Build-tree mirror — copy `data/help/` next to the built binaries so
+# running from `build/bin/<Config>/` works without `cmake --install`.
+# wenterprise-server / designer / codeRunner all use the same exe-dir
+# anchor at runtime.
+add_custom_command(TARGET backend POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/data/help"
+        "$<TARGET_FILE_DIR:backend>/data/help"
+    COMMENT "Mirroring data/help/ next to backend.dll"
+    VERBATIM
+)

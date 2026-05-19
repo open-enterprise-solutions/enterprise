@@ -77,16 +77,29 @@ std::vector<wxString> SafeStrArray(const json& obj, const char* key) {
 // Read an entire file into a string. Returns empty + sets *ok = false on
 // any I/O error. wxFile is used so the loader plays nicely with platforms
 // where std::ifstream's path encoding differs (Windows non-ASCII).
+// wxInvalidOffset from Length() = I/O failure, not "empty file" — handled
+// explicitly. wxFile::Read can return short on signal interrupt / certain
+// network filesystems, so we loop until done or a zero-progress read
+// terminates the loop as a hard failure.
 std::string ReadFile(const wxString& path, bool* ok) {
 	*ok = false;
 	wxFile f(path, wxFile::read);
 	if (!f.IsOpened()) return {};
-	wxFileOffset len = f.Length();
-	if (len <= 0) { *ok = true; return {}; }
+
+	const wxFileOffset len = f.Length();
+	if (len == wxInvalidOffset) return {};   // I/O error
+	if (len == 0)               { *ok = true; return {}; }
+	if (len < 0)                return {};   // defensive — wxInvalidOffset is -1 historically
+
 	std::string buf(static_cast<size_t>(len), '\0');
-	ssize_t got = f.Read(&buf[0], static_cast<size_t>(len));
-	if (got < 0) return {};
-	buf.resize(static_cast<size_t>(got));
+	size_t totalRead = 0;
+	const size_t want = static_cast<size_t>(len);
+	while (totalRead < want) {
+		ssize_t got = f.Read(&buf[totalRead], want - totalRead);
+		if (got < 0)                return {};                       // hard error
+		if (got == 0)               return {};                       // unexpected EOF / no progress
+		totalRead += static_cast<size_t>(got);
+	}
 	// Strip UTF-8 BOM if present (§2.3 — loader tolerates it).
 	if (buf.size() >= 3 &&
 	    static_cast<unsigned char>(buf[0]) == 0xEF &&
@@ -154,6 +167,22 @@ void ParseBucket(const wxString&               bucketPath,
 		e.severity   = ibHelpLoadSeverity::kFatal;
 		e.message    = wxString::Format(
 		    wxT("I/O / allocation failure: %s"), Utf8(ex.what()));
+		errors.push_back(std::move(e));
+		return;
+	}
+
+	// Format identifier gate — aligns with OES-JSON-1.0 / OES-XML-2.0
+	// metadata-export convention. Missing or wrong format is fatal for
+	// the bucket.
+	const std::string fmt = SafeStr(doc, "format");
+	const wxString    expectedFmt = IB_HELP_FORMAT_NAME;
+	if (fmt.empty() || Utf8(fmt) != expectedFmt) {
+		ibHelpLoadError e;
+		e.bucketPath = bucketPath;
+		e.severity   = ibHelpLoadSeverity::kFatal;
+		e.message    = wxString::Format(
+		    wxT("Unexpected or missing format identifier (expected '%s', got '%s')."),
+		    expectedFmt, Utf8(fmt));
 		errors.push_back(std::move(e));
 		return;
 	}
@@ -263,6 +292,10 @@ std::vector<wxString> ListBuckets(const wxString& localeDir) {
 // Build a single-source corpus from a directory. The loader collects
 // entries + errors locally, then constructs the corpus once with
 // everything in hand — no partial corpus exists at any point.
+//
+// May throw std::bad_alloc out of make_shared / index construction;
+// LoadHelpCorpus catches that and returns an empty fallback so the
+// non-throwing contract holds end-to-end.
 std::shared_ptr<const ibHelpCorpus>
 LoadSource(const wxString&               localeCode,
            const wxString&               sourceRoot,
@@ -271,15 +304,41 @@ LoadSource(const wxString&               localeCode,
 	const wxString localeDir =
 	    wxFileName(sourceRoot, localeCode).GetFullPath();
 
+	// Surface missing-locale-directory as a kFatal so operators see
+	// "we shipped without the corpus" rather than the silent
+	// empty-corpus state. Bucket-less directories also count (after the
+	// ParseBucket loop below detects zero files).
+	if (!wxDir::Exists(localeDir)) {
+		ibHelpLoadError err;
+		err.bucketPath = localeDir;
+		err.severity   = ibHelpLoadSeverity::kFatal;
+		err.message    = wxString::Format(
+		    wxT("Help corpus directory does not exist: %s"), localeDir);
+		errorsOut.push_back(std::move(err));
+		return std::make_shared<ibHelpCorpus>(
+		    localeCode, sourceTag, std::vector<ibHelpEntry>{},
+		    std::vector<ibHelpLoadError>{});
+	}
+
 	std::vector<ibHelpEntry>     entries;
 	std::vector<ibHelpLoadError> localErrors;
-	for (const wxString& bucket : ListBuckets(localeDir)) {
+	const auto buckets = ListBuckets(localeDir);
+	for (const wxString& bucket : buckets) {
 		ParseBucket(bucket, entries, localErrors);
+	}
+	if (buckets.empty()) {
+		ibHelpLoadError err;
+		err.bucketPath = localeDir;
+		err.severity   = ibHelpLoadSeverity::kFatal;
+		err.message    = wxString::Format(
+		    wxT("Help corpus directory has no bucket files: %s"), localeDir);
+		localErrors.push_back(std::move(err));
 	}
 
 	// Duplicate-id check within the source. Per §3.6 step 1, duplicates
 	// within a single source are fatal for that entry pair; we drop the
-	// second occurrence and record the error so the first one survives.
+	// second occurrence and record the error (with the SECOND occurrence's
+	// bucket path so operators can locate the offending file).
 	std::vector<ibHelpEntry> deduped;
 	deduped.reserve(entries.size());
 	std::unordered_map<wxString, size_t> seenAt;
@@ -287,7 +346,7 @@ LoadSource(const wxString&               localeCode,
 		auto it = seenAt.find(e.id);
 		if (it != seenAt.end()) {
 			ibHelpLoadError err;
-			err.bucketPath = wxEmptyString;
+			err.bucketPath = localeDir;
 			err.severity   = ibHelpLoadSeverity::kFatal;
 			err.message    = wxString::Format(
 			    wxT("Duplicate id '%s' within source corpus — second occurrence dropped."),
@@ -299,9 +358,14 @@ LoadSource(const wxString&               localeCode,
 		deduped.push_back(std::move(e));
 	}
 
-	for (auto& err : localErrors) errorsOut.push_back(std::move(err));
+	// Errors live INSIDE the corpus snapshot — there is no parallel
+	// errors-on-result vector. Callers see one canonical source via
+	// `corpus->LoadErrors()`. The errorsOut parameter is still in the
+	// signature for backwards compatibility with the outer loader's
+	// catch path but is not used here.
+	(void)errorsOut;
 	return std::make_shared<ibHelpCorpus>(
-	    localeCode, sourceTag, std::move(deduped), std::vector<ibHelpLoadError>{});
+	    localeCode, sourceTag, std::move(deduped), std::move(localErrors));
 }
 
 } // namespace
@@ -312,34 +376,50 @@ ibHelpLoadResult LoadHelpCorpus(const wxString& localeCode,
 	ibHelpLoadResult result;
 	const wxString locale = CanonicaliseLocale(localeCode);
 
-	std::shared_ptr<const ibHelpCorpus> platform =
-	    LoadSource(locale, platformDir,
-	               ibHelpCorpus::Source::kPlatform, result.errors);
+	// Outer net for the non-throwing contract. make_shared, BuildIndexes
+	// (unordered_map allocations), and BuildCategoryTree (unique_ptr
+	// allocations) can all throw std::bad_alloc. Catch as wide as we can
+	// without swallowing programming errors — std::exception covers the
+	// allocation-failure class; anything weirder falls through and the
+	// process probably wanted to die anyway.
+	try {
+		std::shared_ptr<const ibHelpCorpus> platform =
+		    LoadSource(locale, platformDir,
+		               ibHelpCorpus::Source::kPlatform, result.errors);
 
-	std::shared_ptr<const ibHelpCorpus> perConfig;
-	if (!configCacheDir.empty()) {
-		perConfig = LoadSource(locale, configCacheDir,
-		                        ibHelpCorpus::Source::kPerConfiguration,
-		                        result.errors);
-	}
+		std::shared_ptr<const ibHelpCorpus> perConfig;
+		if (!configCacheDir.empty()) {
+			perConfig = LoadSource(locale, configCacheDir,
+			                        ibHelpCorpus::Source::kPerConfiguration,
+			                        result.errors);
+		}
 
-	if (perConfig) {
-		result.corpus = std::make_shared<ibHelpCorpus>(
-		    std::move(platform), std::move(perConfig), locale);
-	} else {
-		result.corpus = std::move(platform);
-	}
-
-	// On total failure (no platform dir, no per-config) `result.corpus`
-	// is still non-null because LoadSource returns an empty corpus for
-	// missing directories. The non-null invariant is documented at the
-	// header and on appData->GetHelpCorpus().
-	if (!result.corpus) {
-		result.corpus = std::make_shared<ibHelpCorpus>(locale);
+		if (perConfig) {
+			result.corpus = std::make_shared<ibHelpCorpus>(
+			    std::move(platform), std::move(perConfig), locale);
+		} else {
+			result.corpus = std::move(platform);
+		}
+	} catch (const std::exception& ex) {
 		ibHelpLoadError e;
 		e.severity = ibHelpLoadSeverity::kFatal;
-		e.message  = wxT("No help corpus could be loaded; falling back to empty.");
+		e.message  = wxString::Format(
+		    wxT("Help corpus construction failed: %s — falling back to empty."),
+		    Utf8(ex.what()));
 		result.errors.push_back(std::move(e));
+		result.corpus.reset();
+	}
+
+	// Always return a non-null corpus so callers can keep the
+	// GetHelpCorpus() invariant branch-free. Both the LoadSource missing-
+	// dir path and the outer catch above can leave `corpus` null.
+	if (!result.corpus) {
+		try {
+			result.corpus = std::make_shared<ibHelpCorpus>(locale);
+		} catch (...) {
+			// If even the empty-corpus alloc fails, the caller's invariant
+			// is best-effort — appData's lazy-init does its own fallback.
+		}
 	}
 
 	return result;

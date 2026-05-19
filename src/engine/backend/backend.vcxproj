@@ -21,6 +21,12 @@
   <ItemGroup>
     <ClInclude Include="actionInfo.h" />
     <ClInclude Include="appData.h" />
+    <ClInclude Include="help\helpCategory.h" />
+    <ClInclude Include="help\helpCorpus.h" />
+    <ClInclude Include="help\helpEntry.h" />
+    <ClInclude Include="help\helpLoadError.h" />
+    <ClInclude Include="help\helpLoader.h" />
+    <ClInclude Include="help\helpResolver.h" />
     <ClInclude Include="backend.h" />
     <ClInclude Include="backend_spreadsheet.h" />
     <ClInclude Include="backend_exception.h" />
@@ -273,6 +279,9 @@
   <ItemGroup>
     <ClCompile Include="appData.cpp" />
     <ClCompile Include="appDataQuery.cpp" />
+    <ClCompile Include="help\helpCorpus.cpp" />
+    <ClCompile Include="help\helpLoader.cpp" />
+    <ClCompile Include="help\helpResolver.cpp" />
     <ClCompile Include="userInfo.cpp" />
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="backend_spreadsheet.cpp" />

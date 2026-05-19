@@ -325,14 +325,18 @@ public:
 	// stays branch-free.
 	std::shared_ptr<const class ibHelpCorpus> GetHelpCorpus() const;
 
-	// Rebuild from disk on a worker thread; atomically swap on success.
-	// Serialised by m_helpReloadMutex — concurrent reload requests
-	// (Phase 5 auto-reload + a hot-key trigger) collapse to latest-wins.
-	// Errors collected during the rebuild are surfaced via
-	// GetLastHelpLoadErrors() (set after each reload completes).
+	// Rebuild from disk; atomically swap on success. Phase 1 runs this
+	// on the calling thread (typical use: once at startup from InitLocale;
+	// Phase 5 will move it onto a worker thread when configuration-save
+	// hooks fire reload). Serialised by m_helpReloadMutex — concurrent
+	// reload requests collapse to latest-wins.
+	//
+	// Errors are queryable through the published corpus snapshot:
+	//   appData->GetHelpCorpus()->LoadErrors()
+	// No parallel error vector on appData itself — keeps the
+	// snapshot-and-errors pair atomic by construction (one shared_ptr
+	// publish, both surfaces visible together).
 	void ReloadHelpCorpus();
-
-	const std::vector<struct ibHelpLoadError>& GetLastHelpLoadErrors() const;
 
 #pragma endregion
 
@@ -442,7 +446,6 @@ private:
 	// phase of concurrent reloads.
 	mutable std::shared_ptr<const class ibHelpCorpus> m_helpCorpus;
 	mutable std::mutex                                m_helpReloadMutex;
-	std::vector<struct ibHelpLoadError>               m_lastHelpLoadErrors;
 
 	// Internal — runs LoadHelpCorpus, publishes via atomic store. Called
 	// once at Init time (with no per-config dir yet) and on every

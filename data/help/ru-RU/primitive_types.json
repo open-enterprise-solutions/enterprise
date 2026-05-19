@@ -1,4 +1,5 @@
 {
+  "format": "OES-HELP-1.0",
   "schema_version": 1,
   "locale": "ru-RU",
   "entries": [
@@ -7,7 +8,11 @@
       "name_local": "Дата",
       "name_en": "Date",
       "kind": "primitive_type",
-      "category_keys": ["common_lang", "primitive_types", "date"],
+      "category_keys": [
+        "common_lang",
+        "primitive_types",
+        "date"
+      ],
       "signature": "Дата(<Год>, <Месяц>, <День>) — также принимает литерал: '20170323104525'",
       "description": "Дата григорианского календаря с точностью времени до секунд.\n\nЗначения типа Дата охватывают период начиная с 0001-01-01. При разборе литерала используется формат 'ГГГГММДДччммсс' или любой его префикс; недостающие поля заполняются значениями начала дня.",
       "syntax_block": "Дата(<Год>, <Месяц>, <День>)\nДата('ГГГГММДДччммсс')",
@@ -15,7 +20,9 @@
       "return_descr": "Значение типа Дата.",
       "example": "today = Дата(2026, 5, 19);\nstamp = Дата('20260519104525'); // 2026-05-19 10:45:25",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": ["fn.Message"],
+      "see_also": [
+        "fn.Message"
+      ],
       "reviewed": true
     }
   ]

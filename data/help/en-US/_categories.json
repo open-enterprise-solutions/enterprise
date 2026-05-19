@@ -1,12 +1,13 @@
 {
+  "format": "OES-HELP-1.0",
   "schema_version": 1,
   "locale": "en-US",
   "categories": {
-    "common_lang":        "Common Language Description",
-    "control_flow":       "Control Flow",
-    "global_context":     "Global Context",
-    "global_functions":   "Global Functions",
-    "primitive_types":    "Primitive Types",
-    "date":               "Date"
+    "common_lang": "Common Language Description",
+    "control_flow": "Control Flow",
+    "global_context": "Global Context",
+    "global_functions": "Global Functions",
+    "primitive_types": "Primitive Types",
+    "date": "Date"
   }
 }
