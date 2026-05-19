@@ -4,11 +4,18 @@
 #include "backend/appData.h"
 #include "backend/plugin/pluginManager.h"
 
-static const wxString s_strContributors =
-	wxT("wxWidgets and wxFormBuilder, Unknown Worlds Entertaiment team\n")
-	wxT("2C team, whose ideas were taken as the basis for building the interpreter\n")
-	wxT("Tomasz Sowa which developed ttmath\n")
-	wxT("And also everyone who was not mentioned here");
+// Contributors string is built per-call so wxGetTranslation hits the live
+// catalog (a `static const wxString = _(...)` would freeze the English
+// form before the locale's .mo is loaded).
+static wxString ContributorsText() {
+	return _("wxWidgets and wxFormBuilder, Unknown Worlds Entertainment team")
+	       + wxString(wxT("\n"))
+	       + _("2C team, whose ideas were taken as the basis for building the interpreter")
+	       + wxString(wxT("\n"))
+	       + _("Tomasz Sowa who developed ttmath")
+	       + wxString(wxT("\n"))
+	       + _("And also everyone who was not mentioned here");
+}
 
 namespace {
 
@@ -46,18 +53,18 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, int id)
 
 	// --- Header block (title, subtitle, copyright link) ---
 	m_staticTextHeader = new wxStaticText(this, wxID_ANY,
-		wxString::Format(wxT("Open Enterprise Solutions, build %i"), GetBuildId()),
+		wxString::Format(_("Open Enterprise Solutions, build %i"), GetBuildId()),
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER_HORIZONTAL);
 	m_staticTextHeader->SetFont(headerFont);
 	root->Add(m_staticTextHeader, 0, wxEXPAND | wxTOP | wxLEFT | wxRIGHT, kPad * 2);
 
 	m_staticTextFramework = new wxStaticText(this, wxID_ANY,
-		wxT("a RAD tool powered by wxWidgets framework"),
+		_("a RAD tool powered by wxWidgets framework"),
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER_HORIZONTAL);
 	root->Add(m_staticTextFramework, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, kPad);
 
 	m_staticTextCommunity = new wxStaticText(this, wxID_ANY,
-		wxT("(c) 2026 OES community"),
+		_("(c) 2026 OES community"),
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER_HORIZONTAL);
 	m_staticTextCommunity->SetFont(linkFont);
 	m_staticTextCommunity->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_HOTLIGHT));
@@ -129,7 +136,7 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, int id)
 	m_staticTextThanks = nullptr;
 
 	m_textCtrlContributors = new wxTextCtrl(thanksSizer->GetStaticBox(), wxID_ANY,
-		s_strContributors, wxDefaultPosition, FromDIP(wxSize(-1, 64)),
+		ContributorsText(), wxDefaultPosition, FromDIP(wxSize(-1, 64)),
 		wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
 	m_textCtrlContributors->SetBackgroundColour(thanksSizer->GetStaticBox()->GetBackgroundColour());
 	thanksSizer->Add(m_textCtrlContributors, 1, wxEXPAND | wxALL, kPad);

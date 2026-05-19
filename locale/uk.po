@@ -5156,3 +5156,31 @@ msgstr "Виберіть статтю в дереві ліворуч або на
 #: src/engine/frontend/help/ (syntax helper UI)
 msgid "Draft — this entry awaits editorial review."
 msgstr "Чернетка — стаття очікує редакторської перевірки."
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Open Enterprise Solutions, build %i"
+msgstr "Open Enterprise Solutions, збірка %i"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "a RAD tool powered by wxWidgets framework"
+msgstr "RAD-інструмент на базі фреймворка wxWidgets"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "(c) 2026 OES community"
+msgstr "(c) 2026 спільнота OES"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "wxWidgets and wxFormBuilder, Unknown Worlds Entertainment team"
+msgstr "wxWidgets та wxFormBuilder, команда Unknown Worlds Entertainment"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "2C team, whose ideas were taken as the basis for building the interpreter"
+msgstr "Команда 2C — ідеї лягли в основу інтерпретатора"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Tomasz Sowa who developed ttmath"
+msgstr "Tomasz Sowa, розробник ttmath"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "And also everyone who was not mentioned here"
+msgstr "Та усім, кого тут не згадали"

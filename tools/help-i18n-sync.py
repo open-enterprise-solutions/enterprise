@@ -63,10 +63,39 @@ STRINGS: dict[str, tuple[str, str]] = {
          "Виберіть статтю в дереві ліворуч або натисніть Ctrl+F1 "
          "на ідентифікаторі в редакторі."),
 
-    # Draft badge under entries awaiting review.
     "Draft — this entry awaits editorial review.":
         ("Черновик — статья ожидает редакторской проверки.",
          "Чернетка — стаття очікує редакторської перевірки."),
+
+    # About dialog — header, subtitle, copyright, info-block labels,
+    # contributors text. Wrapped in _() so the active locale catalog
+    # supplies the translation at runtime.
+    "Open Enterprise Solutions, build %i":
+        ("Open Enterprise Solutions, сборка %i",
+         "Open Enterprise Solutions, збірка %i"),
+    "a RAD tool powered by wxWidgets framework":
+        ("RAD-инструмент на базе фреймворка wxWidgets",
+         "RAD-інструмент на базі фреймворка wxWidgets"),
+    "(c) 2026 OES community":
+        ("(c) 2026 сообщество OES", "(c) 2026 спільнота OES"),
+    "Info":         ("Информация",    "Інформація"),
+    "Application":  ("Приложение",    "Застосунок"),
+    "User":         ("Пользователь",  "Користувач"),
+    "Locale":       ("Локаль",        "Локаль"),
+    "Plugins":      ("Плагины",       "Плагіни"),
+    "Thanks":       ("Благодарности", "Подяки"),
+    "wxWidgets and wxFormBuilder, Unknown Worlds Entertainment team":
+        ("wxWidgets и wxFormBuilder, команда Unknown Worlds Entertainment",
+         "wxWidgets та wxFormBuilder, команда Unknown Worlds Entertainment"),
+    "2C team, whose ideas were taken as the basis for building the interpreter":
+        ("Команда 2C — идеи легли в основу интерпретатора",
+         "Команда 2C — ідеї лягли в основу інтерпретатора"),
+    "Tomasz Sowa who developed ttmath":
+        ("Tomasz Sowa, разработчик ttmath",
+         "Tomasz Sowa, розробник ttmath"),
+    "And also everyone who was not mentioned here":
+        ("И всем, кто не был здесь упомянут",
+         "Та усім, кого тут не згадали"),
 }
 
 

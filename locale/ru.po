@@ -5238,9 +5238,6 @@ msgstr "Запуск OES"
 #~ msgid "Open enterprise solutions, build %i"
 #~ msgstr "Открытые корпоративные решения, создайте %i"
 
-#~ msgid "a RAD tool powered by wxWidgets framework"
-#~ msgstr "инструмент быстрой разработки приложений (RAD), работающий на основе фреймворка wxWidgets"
-
 #~ msgid "(C) 2026 Maxim 'nouverbe' Kornienko"
 #~ msgstr "(C) 2026 Максим 'nouverbe' Корниенко"
 
@@ -5314,3 +5311,31 @@ msgstr "Выберите статью в дереве слева или нажм
 #: src/engine/frontend/help/ (syntax helper UI)
 msgid "Draft — this entry awaits editorial review."
 msgstr "Черновик — статья ожидает редакторской проверки."
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Open Enterprise Solutions, build %i"
+msgstr "Open Enterprise Solutions, сборка %i"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "a RAD tool powered by wxWidgets framework"
+msgstr "RAD-инструмент на базе фреймворка wxWidgets"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "(c) 2026 OES community"
+msgstr "(c) 2026 сообщество OES"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "wxWidgets and wxFormBuilder, Unknown Worlds Entertainment team"
+msgstr "wxWidgets и wxFormBuilder, команда Unknown Worlds Entertainment"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "2C team, whose ideas were taken as the basis for building the interpreter"
+msgstr "Команда 2C — идеи легли в основу интерпретатора"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Tomasz Sowa who developed ttmath"
+msgstr "Tomasz Sowa, разработчик ttmath"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "And also everyone who was not mentioned here"
+msgstr "И всем, кто не был здесь упомянут"

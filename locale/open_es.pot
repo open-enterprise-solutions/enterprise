@@ -5159,3 +5159,31 @@ msgstr ""
 #: src/engine/frontend/help/ (syntax helper UI)
 msgid "Draft — this entry awaits editorial review."
 msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Open Enterprise Solutions, build %i"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "a RAD tool powered by wxWidgets framework"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "(c) 2026 OES community"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "wxWidgets and wxFormBuilder, Unknown Worlds Entertainment team"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "2C team, whose ideas were taken as the basis for building the interpreter"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Tomasz Sowa who developed ttmath"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "And also everyone who was not mentioned here"
+msgstr ""
