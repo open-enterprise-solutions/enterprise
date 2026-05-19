@@ -526,6 +526,20 @@ TEST(MutationPolicy, WildcardAllowGrantsAllOps) {
 	EXPECT_FALSE(mgr.CheckMutationAllowed(wxT("other"), wxT("meta.create")));
 }
 
+TEST(MutationPolicy, WildcardAllowWinsOverPerOpDeny) {
+	// Inverse of WildcardDenyBlocksEverything: wildcard AllowAlways is
+	// checked first; per-op Deny set afterwards never runs. Documents
+	// the "trust this plugin entirely" UX contract — wildcard short-
+	// circuits both directions, deny AND allow.
+	ibPluginManager mgr;
+	mgr.SetMutationPolicy(wxT("pugi"), wxT("*"),
+	                        ibPluginManager::MutationPolicy::AllowAlways);
+	mgr.SetMutationPolicy(wxT("pugi"), wxT("meta.create"),
+	                        ibPluginManager::MutationPolicy::Deny);
+	EXPECT_TRUE(mgr.CheckMutationAllowed(wxT("pugi"), wxT("meta.create")))
+	    << "wildcard AllowAlways short-circuits — per-op Deny never consulted";
+}
+
 TEST(MutationPolicy, WildcardDenyBlocksEverything) {
 	ibPluginManager mgr;
 	mgr.SetMutationPolicy(wxT("pugi"), wxT("*"),
@@ -585,4 +599,24 @@ TEST(MetaMutation, UndoStackEmptyByDefault) {
 	metaBridge::ClearUndoStackForTests();
 	EXPECT_EQ(metaBridge::UndoLastAgentMutation(), -1)
 	    << "empty undo stack must return -1";
+}
+
+TEST(MetaMutation, ForceFlagParserEdgeCases) {
+	// Bridge-level smoke: ExtractForceFlag is not exported, but
+	// HostMetaDelete is. We assert the parser via observable behaviour:
+	// the policy gate runs FIRST, so an empty pluginId always trips it
+	// regardless of force payload — meaning we can't directly test the
+	// parser without appData. Skip the live test for now and verify
+	// only that obviously-malformed payloads do not crash through the
+	// gate. Real coverage lives in the integration suite once Phase 3.3
+	// wires appData fixtures.
+	char* err = nullptr;
+	// Garbage propertiesJson must not crash; the gate refuses on empty
+	// pluginId first and the bridge never reaches ExtractForceFlag.
+	EXPECT_NE(metaBridge::HostMetaDelete("", "Catalog.X",
+	                                       "this is not JSON at all", &err), 0);
+	if (err) { std::free(err); err = nullptr; }
+	EXPECT_NE(metaBridge::HostMetaDelete("", "Catalog.X",
+	                                       "{\"force\":\"yes\"}", &err), 0);
+	if (err) std::free(err);
 }

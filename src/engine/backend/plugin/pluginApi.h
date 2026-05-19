@@ -112,7 +112,14 @@ typedef int (*ibPluginMetaCreateFn)(const char* objectKind, const char* fullName
                                      const char* propertiesJson, char** errorMsg);
 typedef int (*ibPluginMetaEditFn)(const char* fullName, const char* jsonPatch,
                                     char** errorMsg);
-typedef int (*ibPluginMetaDeleteFn)(const char* fullName, char** errorMsg);
+// MetaDelete ABI signature carries propertiesJson so plugin callers
+// can ship the {"force":true} opt-in required for irreversible ops
+// (rm-without-preserve-root convention). Without it the call refuses
+// regardless of policy elevation. propertiesJson may be NULL when the
+// caller has no extra payload — equivalent to {"force":false}.
+typedef int (*ibPluginMetaDeleteFn)(const char* fullName,
+                                      const char* propertiesJson,
+                                      char** errorMsg);
 typedef int (*ibPluginMetaQueryFn)(const char* fullName, const char* fieldsFilter,
                                      char** jsonOut, char** errorMsg);
 
@@ -125,6 +132,11 @@ typedef int (*ibPluginMetaQueryFn)(const char* fullName, const char* fieldsFilte
 // the user a confirmation prompt and either re-call with the policy
 // promoted to AllowSession/AllowAlways, or back off entirely.
 #define IB_PLUGIN_PERMISSION_DENIED 0x0002
+
+// Returned by Meta* fns whose policy gate passed but whose body is
+// still a Phase 3.3 stub. Distinct from -1 so plugins can treat it as
+// "feature pending" rather than retrying the policy elevation loop.
+#define IB_PLUGIN_NOT_IMPLEMENTED 0x0003
 
 // Host-side API table. Function pointers are valid for the lifetime of
 // the plugin (from initialize until just before shutdown). The struct

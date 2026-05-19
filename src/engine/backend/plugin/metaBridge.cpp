@@ -340,19 +340,21 @@ bool GatePolicy(const char* pluginId, const wxString& opName, char** errorMsg)
 	// Build a JSON-shaped diagnostic the agent UI can render as a
 	// confirmation card without a second parse round-trip. The shape
 	// mirrors what well-known IDE assistants emit on permission denial
-	// so a generic agent renderer Just Works.
+	// so a generic agent renderer Just Works. Use nlohmann::json to
+	// auto-escape pluginId/op fields — a hostile or sloppy plugin id
+	// containing `"`/`\\`/control bytes would otherwise produce
+	// malformed JSON and break the agent's parse.
 	const auto policy = pm->GetMutationPolicy(pidW, opName);
 	const char* policyName = (policy == ibPluginManager::MutationPolicy::Deny)
 		? "Deny"
 		: ((policy == ibPluginManager::MutationPolicy::Ask) ? "Ask" : "Allow");
-	std::string envelope = "{\"code\":\"permission_denied\",\"op\":\"";
-	envelope += std::string(opName.utf8_str());
-	envelope += "\",\"pluginId\":\"";
-	envelope += pluginId;
-	envelope += "\",\"policy\":\"";
-	envelope += policyName;
-	envelope += "\",\"hint\":\"call SetMutationPolicy(pluginId, op, AllowSession|AllowAlways) before retrying\"}";
-	SetError(errorMsg, envelope);
+	nlohmann::json env;
+	env["code"]     = "permission_denied";
+	env["op"]       = std::string(opName.utf8_str());
+	env["pluginId"] = std::string(pluginId);
+	env["policy"]   = policyName;
+	env["hint"]     = "call SetMutationPolicy(pluginId, op, AllowSession|AllowAlways) before retrying";
+	SetError(errorMsg, env.dump());
 	return false;
 }
 
@@ -387,21 +389,22 @@ LookupResult LookupTopLevel(const std::string& kind, const std::string& name)
 
 // Detect `force=true` flag in propertiesJson. Used by MetaDelete to
 // require an explicit irreversible-op opt-in even when policy is
-// AllowAlways — matches the `rm --no-preserve-root` convention. The
-// parser is lenient: missing JSON / non-object payload reads as
-// force=false, which is the safe default.
+// AllowAlways — matches the `rm --no-preserve-root` convention.
+//
+// Parser is lenient: missing JSON / non-object payload / malformed
+// input all read as force=false (safe default). nlohmann's
+// allow_exceptions=false returns a discarded_value on parse failure;
+// .is_object() / .find() on that value are no-throw, so no try/catch
+// is needed and adding one would mask future legitimate exception
+// paths.
 bool ExtractForceFlag(const char* propertiesJson)
 {
 	if (propertiesJson == nullptr || *propertiesJson == '\0') return false;
-	try {
-		auto j = nlohmann::json::parse(propertiesJson, nullptr, /*allow_exceptions*/ false);
-		if (!j.is_object()) return false;
-		auto it = j.find("force");
-		if (it == j.end()) return false;
-		return it->is_boolean() ? it->get<bool>() : false;
-	} catch (...) {
-		return false;
-	}
+	auto j = nlohmann::json::parse(propertiesJson, nullptr, /*allow_exceptions*/ false);
+	if (!j.is_object()) return false;
+	auto it = j.find("force");
+	if (it == j.end()) return false;
+	return it->is_boolean() ? it->get<bool>() : false;
 }
 
 } // namespace
@@ -464,7 +467,7 @@ int HostMetaCreate(const char* pluginId,
 	             wxString::FromUTF8(kind),
 	             wxString::FromUTF8(name));
 	SetError(errorMsg, "MetaCreate: object instantiation lands in Phase 3.3");
-	return -1;
+	return IB_PLUGIN_NOT_IMPLEMENTED;
 }
 
 int HostMetaEdit(const char* pluginId,
@@ -478,7 +481,7 @@ int HostMetaEdit(const char* pluginId,
 		return IB_PLUGIN_PERMISSION_DENIED;
 	}
 	SetError(errorMsg, "MetaEdit: RFC 6902 JSON Patch support lands in Phase 3.3");
-	return -1;
+	return IB_PLUGIN_NOT_IMPLEMENTED;
 }
 
 int HostMetaDelete(const char* pluginId,
@@ -525,7 +528,7 @@ int HostMetaDelete(const char* pluginId,
 	             wxString::FromUTF8(pluginId),
 	             wxString::FromUTF8(fullName));
 	SetError(errorMsg, "MetaDelete: RemoveChild + undo land in Phase 3.3");
-	return -1;
+	return IB_PLUGIN_NOT_IMPLEMENTED;
 }
 
 int UndoLastAgentMutation()

@@ -165,15 +165,16 @@ int  Host_MetaEdit(const char* fullName, const char* jsonPatch,
 	                                  fullName, jsonPatch, errorMsg);
 }
 
-int  Host_MetaDelete(const char* fullName, char** errorMsg)
+int  Host_MetaDelete(const char* fullName,
+                       const char* propertiesJson,
+                       char** errorMsg)
 {
-	// Phase 3.2 trampoline does not yet ship the propertiesJson opt-in
-	// hook — the plugin-facing ABI fn only carries (fullName, errorMsg).
-	// Until ABI v5 widens the signature, Host_MetaDelete forces force=false
-	// at the bridge layer; plugins driving destructive ops must call the
-	// metaBridge function directly until the wider signature lands.
+	// ABI carries propertiesJson so plugin callers can ship the
+	// {"force":true} opt-in for irreversible ops. ExtractForceFlag in
+	// metaBridge gates the destructive path; nullptr propertiesJson
+	// reads as force=false (the safe default).
 	return metaBridge::HostMetaDelete(tl_currentPluginId.c_str(),
-	                                    fullName, /*propertiesJson*/ nullptr,
+	                                    fullName, propertiesJson,
 	                                    errorMsg);
 }
 
