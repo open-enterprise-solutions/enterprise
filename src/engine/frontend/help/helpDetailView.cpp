@@ -120,6 +120,43 @@ wxString ibHelpDetailView::EscapeHtml(const wxString& raw) {
 
 namespace {
 
+// Apply a tiny markdown subset to the description / parameters /
+// returns / availability fields: `**bold**` -> <b>bold</b> and
+// `inline code` -> <tt>inline code</tt>. Runs AFTER EscapeHtml so we
+// don't have to worry about HTML injection from the corpus.
+wxString ApplyInlineMarkdown(const wxString& escaped)
+{
+	wxString out;
+	out.reserve(escaped.size());
+
+	bool inBold = false;
+	bool inCode = false;
+	for (size_t i = 0; i < escaped.size(); ++i) {
+		const wxChar c = escaped[i];
+		if (c == wxT('*') && i + 1 < escaped.size() && escaped[i + 1] == wxT('*')) {
+			out += inBold ? wxT("</b>") : wxT("<b>");
+			inBold = !inBold;
+			++i;
+			continue;
+		}
+		if (c == wxT('`')) {
+			out += inCode
+			    ? wxT("</tt></font>")
+			    : wxT("<font face=\"Menlo\" color=\"#0f172a\"><tt>");
+			inCode = !inCode;
+			continue;
+		}
+		out += c;
+	}
+	if (inBold) out += wxT("</b>");
+	if (inCode) out += wxT("</tt></font>");
+	return out;
+}
+
+} // namespace
+
+namespace {
+
 wxString EscapeForPre(const wxString& code) {
 	// Same as EscapeHtml but newlines stay as real `\n` inside <pre>
 	// so the layout is preserved by the parser.
@@ -189,7 +226,7 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) const {
 		if (monospace) html += FormatCodeBlock(body);
 		else {
 			html += wxT("<font color=\"#1f2937\">");
-			html += EscapeHtml(body);
+			html += ApplyInlineMarkdown(EscapeHtml(body));
 			html += wxT("</font>");
 		}
 		html += wxT("<br><br>");
