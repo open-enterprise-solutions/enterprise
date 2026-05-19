@@ -87,7 +87,7 @@ public:
 
 	// === Read path ========================================================
 
-	// Tree root for the helpTreeView (Phase 3 Зміст tab). Owned by the
+	// Tree root for the helpTreeView (Phase 3 Contents tab). Owned by the
 	// corpus; non-null even on an empty corpus (the root has no children
 	// in that case).
 	const ibHelpCategory* GetRoot() const;
@@ -105,7 +105,7 @@ public:
 
 	// Token search over name + signature tokens (Phase 1 — no description
 	// tokens; description tokens land in Phase 6 behind a feature flag,
-	// §3.5). Used by the Phase 3 Пошук tab.
+	// §3.5). Used by the Phase 3 Search tab.
 	std::vector<const ibHelpEntry*> SearchText(const wxString& query) const;
 
 	// === Diagnostics ======================================================
@@ -137,8 +137,8 @@ private:
 	std::unordered_map<wxString, std::vector<ibHelpEntryIndex>> m_byNameLocal;
 
 	// Ordered prefix index. Value is a vector because multiple entries
-	// can share the same normalised prefix key (four "Дата" topics:
-	// type / function / Document property / MomentTime property).
+	// can share the same normalised prefix key (e.g. several entries
+	// with the same identifier in different kinds).
 	std::map<wxString, std::vector<ibHelpEntryIndex>> m_prefixIndex;
 
 	// Token → entries. Built from name + signature tokens only in Phase 1.
@@ -159,8 +159,12 @@ private:
 	void BuildCategoryTree();
 
 	// Free-function accessor used by helpResolver — keeps the resolver
-	// independent of the corpus's internal storage layout.
-	friend std::vector<const ibHelpEntry*> ResolveByName(
+	// independent of the corpus's internal storage layout. BACKEND_API
+	// on the friend declaration must match the linkage on the real
+	// declaration in helpResolver.h, otherwise MSVC raises C2375 on
+	// a dllexport build. clang/gcc accept either form, but matching is
+	// the portable spelling.
+	friend BACKEND_API std::vector<const ibHelpEntry*> ResolveByName(
 	    const ibHelpCorpus&, const wxString&, const struct ibHelpResolveHint&);
 };
 
