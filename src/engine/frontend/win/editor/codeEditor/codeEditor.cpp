@@ -682,14 +682,28 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 	// only when a Bind() matches; on false we keep walking.
 	auto routeUp = [this](int id) {
 		return [this, id](wxCommandEvent&) {
+			wxLogMessage(wxT("[help-router] click id=%d this=%p"),
+			             id, static_cast<void*>(this));
 			wxCommandEvent up(wxEVT_MENU, id);
 			up.SetEventObject(this);
 			for (wxWindow* p = GetParent(); p != nullptr; p = p->GetParent()) {
-				if (p->ProcessWindowEvent(up)) return;
+				const wxString cls = p->GetClassInfo()
+				                       ? p->GetClassInfo()->GetClassName()
+				                       : wxT("?");
+				const bool handled = p->ProcessWindowEvent(up);
+				wxLogMessage(wxT("[help-router] parent=%p class=%s handled=%d"),
+				             static_cast<void*>(p), cls, handled ? 1 : 0);
+				if (handled) return;
 			}
 			if (wxTheApp) {
 				if (wxWindow* top = wxTheApp->GetTopWindow()) {
-					top->ProcessWindowEvent(up);
+					const bool handled = top->ProcessWindowEvent(up);
+					wxLogMessage(wxT("[help-router] top=%p class=%s handled=%d"),
+					             static_cast<void*>(top),
+					             top->GetClassInfo()
+					                 ? top->GetClassInfo()->GetClassName()
+					                 : wxT("?"),
+					             handled ? 1 : 0);
 				}
 			}
 		};

@@ -141,9 +141,14 @@ void ibFrontendDocMDIFrameDesigner::UpdateEditorOptions()
 
 void ibFrontendDocMDIFrameDesigner::EnsureHelpPane()
 {
+	wxLogMessage(wxT("[help-host] EnsureHelpPane enter; pane.IsOk()=%d, m_helpPane=%p"),
+	             m_mgr.GetPane(wxAUI_PANE_HELP).IsOk() ? 1 : 0,
+	             static_cast<void*>(m_helpPane));
 	if (m_mgr.GetPane(wxAUI_PANE_HELP).IsOk()) return;
 
 	m_helpPane = new ibHelpPaneView(this);
+	wxLogMessage(wxT("[help-host] created m_helpPane=%p"),
+	             static_cast<void*>(m_helpPane));
 
 	wxAuiPaneInfo paneInfo;
 	paneInfo.Name(wxAUI_PANE_HELP);
@@ -176,8 +181,11 @@ void ibFrontendDocMDIFrameDesigner::ToggleHelpPane()
 
 void ibFrontendDocMDIFrameDesigner::OpenHelpForCursor()
 {
+	wxLogMessage(wxT("[help-host] OpenHelpForCursor enter"));
 	EnsureHelpPane();
 	wxAuiPaneInfo& pane = m_mgr.GetPane(wxAUI_PANE_HELP);
+	wxLogMessage(wxT("[help-host] pane.IsOk=%d IsShown=%d"),
+	             pane.IsOk() ? 1 : 0, pane.IsShown() ? 1 : 0);
 	if (pane.IsOk() && !pane.IsShown()) {
 		pane.Show(true);
 		m_mgr.Update();
@@ -187,12 +195,17 @@ void ibFrontendDocMDIFrameDesigner::OpenHelpForCursor()
 	wxWindow* focus = wxWindow::FindFocus();
 	if (auto* edit = wxDynamicCast(focus, ibCodeEditor))
 		identifier = edit->GetIdentifierUnderCursor();
+	wxLogMessage(wxT("[help-host] identifier='%s' focus=%p"),
+	             identifier, static_cast<void*>(focus));
 	if (identifier.IsEmpty()) return;
 
 	auto corpus = appData->GetHelpCorpus();
+	wxLogMessage(wxT("[help-host] corpus=%p"),
+	             static_cast<const void*>(corpus.get()));
 	if (!corpus) return;
 	std::vector<const ibHelpEntry*> hits =
 	    ResolveByName(*corpus, identifier);
+	wxLogMessage(wxT("[help-host] hits=%zu"), hits.size());
 	if (hits.empty()) return;
 
 	if (hits.size() == 1) {
