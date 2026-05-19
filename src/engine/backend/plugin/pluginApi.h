@@ -31,8 +31,13 @@ extern "C" {
 // the host does not recognise are rejected by the loader.
 //
 //   1 — initial release. initialize(void* host) called with host = NULL.
-//   2 — initialize(const ibHostAPI* host) gets a non-NULL callback table.
-#define IB_PLUGIN_ABI_VERSION 2
+//   2 — initialize(const ibHostAPI* host) gets a non-NULL callback
+//       table. RegisterFunction(const char*, ibPluginFunctionFn).
+//   3 — RegisterFunction grew an `int paramCount` parameter so the
+//       host's script-side dispatch can bind a builtin with a known
+//       arity. Calling-convention change at the same struct slot;
+//       v2 plugins must be rebuilt against the v3 header.
+#define IB_PLUGIN_ABI_VERSION 3
 
 typedef struct ibPluginInfo_s {
 	int         abi_version;   // must equal a value the host recognises

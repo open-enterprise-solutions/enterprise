@@ -8,6 +8,8 @@
 #ifndef _IB_HELP_INDEX_VIEW_H_
 #define _IB_HELP_INDEX_VIEW_H_
 
+#include "frontend/help/helpDragSource.h"
+
 #include <wx/panel.h>
 #include <wx/textctrl.h>
 #include <wx/listbox.h>
@@ -37,14 +39,7 @@ private:
 	void OnFilterChanged(wxCommandEvent& event);
 	void OnSelection(wxCommandEvent& event);
 
-	// Mouse drag tracking — initial down position + selection captured
-	// at button-press; the drag only fires once the cursor moves past
-	// a small threshold, so plain clicks still navigate normally.
-	void OnListMouseDown(wxMouseEvent& event);
-	void OnListMouseMove(wxMouseEvent& event);
-
-	wxPoint  m_dragStart;
-	wxString m_dragId;
+	ibHelpDragSource m_drag;
 };
 
 #endif // _IB_HELP_INDEX_VIEW_H_

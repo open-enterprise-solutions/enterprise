@@ -8,6 +8,8 @@
 #ifndef _IB_HELP_SEARCH_VIEW_H_
 #define _IB_HELP_SEARCH_VIEW_H_
 
+#include "frontend/help/helpDragSource.h"
+
 #include <wx/panel.h>
 #include <wx/srchctrl.h>
 #include <wx/stattext.h>
@@ -38,11 +40,8 @@ private:
 
 	void OnQueryChanged(wxCommandEvent& event);
 	void OnSelection(wxCommandEvent& event);
-	void OnListMouseDown(wxMouseEvent& event);
-	void OnListMouseMove(wxMouseEvent& event);
 
-	wxPoint  m_dragStart;
-	wxString m_dragId;
+	ibHelpDragSource m_drag;
 };
 
 #endif // _IB_HELP_SEARCH_VIEW_H_
