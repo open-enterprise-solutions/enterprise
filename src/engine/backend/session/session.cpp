@@ -253,6 +253,11 @@ void ibSession::EnsureRoot()
 
 ibSession* ibSession::Current()
 {
+	// Registry lives on appData. Code paths reachable BEFORE appData is
+	// constructed (database-open error reporters during ibAppEnterprise::
+	// OnRun() before CreateFileAppDataEnv finishes) must see nullptr
+	// rather than tripping the registry's invariant assert.
+	if (appData == nullptr) return nullptr;
 	auto& reg = ibSessionRegistry::Instance();
 	const auto tid = std::this_thread::get_id();
 
