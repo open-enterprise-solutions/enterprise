@@ -666,9 +666,11 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 			for (wxWindow* p = GetParent(); p != nullptr; p = p->GetParent()) {
 				if (p->GetEventHandler()->ProcessEvent(up)) return;
 			}
-			// Fallback — fire on the registered top window (app singleton).
-			// Catches the case where the parent chain breaks above the
-			// MDI client because of detached / floating panes.
+			// Fallback for the macOS case where wxAuiMDIChildFrame is a
+			// notebook page rather than a real wxFrame and the parent
+			// chain can stop short of the host frame. Dispatch on the
+			// top window directly — its event handler chain reaches
+			// the designer frame's dynamic Bind() handlers.
 			if (wxTheApp) {
 				if (wxWindow* top = wxTheApp->GetTopWindow()) {
 					top->GetEventHandler()->ProcessEvent(up);

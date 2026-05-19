@@ -87,6 +87,13 @@ public:
 	ibWatchWindow* GetWatchWindow() const { return m_watchWindow; }
 	ibLocalWindow* GetLocalWindow() const { return m_localWindow; }
 
+	// Syntax-helper sidebar lifecycle. Pane is lazy-created on first
+	// toggle / lookup so the corpus load is amortised away from
+	// designer startup.
+	void EnsureHelpPane();
+	void ToggleHelpPane();
+	void OpenHelpForCursor();
+
 	void LoadOptions();
 	void SaveOptions();
 
@@ -154,6 +161,10 @@ private:
 	wxMenu* m_menuSetting;
 	wxMenu* m_menuAdministration;
 	wxMenu* m_menuHelp;
+
+	// Syntax-helper sidebar. Created on first toggle / lookup; owned
+	// by the AUI manager once added.
+	class ibHelpPaneView* m_helpPane = nullptr;
 
 	ibMetadataTree* m_metaWindow;
 

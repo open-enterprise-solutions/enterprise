@@ -9,6 +9,8 @@
 #ifndef _IB_HELP_CHOOSER_DIALOG_H_
 #define _IB_HELP_CHOOSER_DIALOG_H_
 
+#include "frontend/mainFrame/mainFrame.h"  // FRONTEND_API
+
 #include <wx/dialog.h>
 #include <wx/listbox.h>
 
@@ -16,7 +18,7 @@
 
 struct ibHelpEntry;
 
-class ibHelpChooserDialog : public wxDialog {
+class FRONTEND_API ibHelpChooserDialog : public wxDialog {
 public:
 	ibHelpChooserDialog(wxWindow* parent,
 	                    const std::vector<const ibHelpEntry*>& candidates);

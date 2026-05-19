@@ -16,6 +16,8 @@
 #ifndef _IB_HELP_PANE_VIEW_H_
 #define _IB_HELP_PANE_VIEW_H_
 
+#include "frontend/mainFrame/mainFrame.h"  // FRONTEND_API
+
 #include <wx/bookctrl.h>
 #include <wx/panel.h>
 
@@ -29,7 +31,7 @@ class ibHelpSearchView;
 class ibHelpDetailView;
 class wxNotebook;
 
-class ibHelpPaneView : public wxPanel {
+class FRONTEND_API ibHelpPaneView : public wxPanel {
 public:
 	ibHelpPaneView(wxWindow* parent);
 	~ibHelpPaneView() override;
