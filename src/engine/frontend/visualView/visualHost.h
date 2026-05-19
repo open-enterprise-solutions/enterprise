@@ -149,7 +149,7 @@ protected:
 	// / OnCreated / Update / OnUpdated / Cleanup virtuals      *
 	// already take ibFrontendWindow*.
 	virtual wxObject* Create(ibValueFrame* control, ibFrontendWindow* wndParent);
-	virtual void OnCreated(ibValueFrame* control, wxObject* obj, ibFrontendWindow* wndParent, bool firstСreated = false);
+	virtual void OnCreated(ibValueFrame* control, wxObject* obj, ibFrontendWindow* wndParent, bool firstCreated = false);
 	virtual void OnSelected(ibValueFrame* control, wxObject* obj);
 	virtual void Update(ibValueFrame* control, wxObject* obj);
 	virtual void OnUpdated(ibValueFrame* control, wxObject* obj, ibFrontendWindow* wndParent);

@@ -461,10 +461,20 @@ protected:
 	void OnKeyDown(wxKeyEvent& event);
 	void OnCharAdded(wxStyledTextEvent& event);
 	void OnUpdateUI(wxStyledTextEvent& event);
+	void OnContextMenu(wxContextMenuEvent& event);
 	void OnMouseMove(wxMouseEvent& event) {
 		LoadToolTip(event.GetPosition());
 		event.Skip();
 	}
+
+public:
+	// Resolve the identifier under (or selected by) the caret. Returns
+	// an empty string when the caret is on whitespace / punctuation and
+	// nothing is selected. Used by the syntax-helper lookup, "Go to
+	// definition" (Phase 4), and "Find usages" (Phase 4) — all want the
+	// same semantics: explicit selection wins, otherwise the word the
+	// caret is inside.
+	wxString GetIdentifierUnderCursor();
 
 	// ---- Debugger integration hooks ----
 	// Frontend's ibCodeEditor doesn't know about backend's debugClient;

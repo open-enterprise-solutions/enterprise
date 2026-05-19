@@ -439,7 +439,7 @@ wxObject* ibValueModelTableBox::Create(ibFrontendWindow* wxparent, ibVisualHost*
 #endif // OES_USE_WEB
 }
 
-void ibValueModelTableBox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueModelTableBox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 #ifndef OES_USE_WEB
 	ibTableViewCtrl* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(wxobject);
@@ -447,7 +447,7 @@ void ibValueModelTableBox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxpar
 	if (dataViewCtrl != nullptr) ibValueModelTableBox::CreateModel();
 
 	if (visualHost->IsDesignerHost() && GetChildCount() == 0
-		&& firstСreated) {
+		&& firstCreated) {
 		ibValueModelTableBox::AddColumn();
 	}
 #endif

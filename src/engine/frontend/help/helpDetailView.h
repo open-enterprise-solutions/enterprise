@@ -1,7 +1,7 @@
 /////////////////////////////////////////////////////////////////////////////
 // Detail pane — wxHtmlWindow rendering a single ibHelpEntry as
-// structured HTML (Описание / Синтаксис / Параметры / Пример /
-// Доступность sections, 1C-style).
+// structured HTML with Description / Syntax / Parameters / Example /
+// Availability sections.
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_HELP_DETAIL_VIEW_H_

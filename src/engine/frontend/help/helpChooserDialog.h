@@ -1,10 +1,9 @@
 /////////////////////////////////////////////////////////////////////////////
-// "Вибір розділу" — ambiguous-name chooser dialog.
+// Ambiguous-name chooser dialog.
 //
 // Modal wxDialog that lists 2+ candidate entries (returned by
-// ResolveByName) and asks the user to pick one. Mirrors the 1C / BAS
-// chooser layout exactly: list, three buttons (Показати / Відмінити /
-// Довідка). Default action (Enter) is Показати; Esc cancels.
+// ResolveByName) and asks the user to pick one. Three buttons:
+// Show / Cancel / Help. Default action (Enter) is Show; Esc cancels.
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_HELP_CHOOSER_DIALOG_H_
@@ -23,12 +22,12 @@ public:
 	                    const std::vector<const ibHelpEntry*>& candidates);
 
 	// Available after ShowModal returns wxID_OK. Empty string on cancel
-	// or when the user clicked Довідка (the Help button opens the
+	// or when the user clicked Help (the Help button opens the
 	// "About the syntax helper" entry rather than selecting from the
 	// candidate list).
 	wxString GetSelectedId() const { return m_selectedId; }
 
-	// True when the user clicked "Довідка" (Help). Host frame should
+	// True when the user clicked Help. Host frame should
 	// open the help-on-the-helper entry rather than a candidate.
 	bool HelpRequested() const { return m_helpRequested; }
 

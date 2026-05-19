@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////////
-// ibHelpChooserDialog — "Вибір розділу" ambiguous-name picker.
+// ibHelpChooserDialog — ambiguous-name picker.
 //
-// 1C/BAS convention: modal dialog, three buttons (Показати / Відмінити /
-// Довідка). Default action is Показати (Enter); Esc cancels.
+// Modal dialog, three buttons (Show / Cancel / Help). Default action
+// is Show (Enter); Esc cancels.
 /////////////////////////////////////////////////////////////////////////////
 
 #include "frontend/help/helpChooserDialog.h"
@@ -37,12 +37,12 @@ wxString CategoryPath(const ibHelpEntry& e) {
 ibHelpChooserDialog::ibHelpChooserDialog(
     wxWindow* parent,
     const std::vector<const ibHelpEntry*>& candidates)
-    : wxDialog(parent, wxID_ANY, _("Вибір розділу"),
+    : wxDialog(parent, wxID_ANY, _("Select topic"),
                 wxDefaultPosition, wxSize(560, 360),
                 wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER) {
 
 	auto* label = new wxStaticText(this, wxID_ANY,
-	                                 _("Виберіть розділ зі списку:"));
+	                                 _("Select a topic from the list:"));
 
 	m_list = new wxListBox(this, wxID_ANY);
 	for (const ibHelpEntry* e : candidates) {
@@ -56,9 +56,9 @@ ibHelpChooserDialog::ibHelpChooserDialog(
 	}
 	if (!m_ids.empty()) m_list->SetSelection(0);
 
-	auto* btnShow   = new wxButton(this, IDC_ShowSelected, _("Показати"));
-	auto* btnCancel = new wxButton(this, wxID_CANCEL,      _("Відмінити"));
-	auto* btnHelp   = new wxButton(this, IDC_OpenHelp,     _("Довідка"));
+	auto* btnShow   = new wxButton(this, IDC_ShowSelected, _("Show"));
+	auto* btnCancel = new wxButton(this, wxID_CANCEL,      _("Cancel"));
+	auto* btnHelp   = new wxButton(this, IDC_OpenHelp,     _("Help"));
 	btnShow->SetDefault();
 
 	auto* buttons = new wxBoxSizer(wxHORIZONTAL);

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////////
-// ibHelpSearchView — "Пошук" tab.
+// ibHelpSearchView — "Search" tab.
 /////////////////////////////////////////////////////////////////////////////
 
 #include "frontend/help/helpSearchView.h"
@@ -41,13 +41,12 @@ void ibHelpSearchView::RefreshList(const wxString& query) {
 	}
 
 	if (query.IsEmpty()) {
-		m_badge->SetLabel(wxString::Format(
-		    _("Знайдено: 0 (введіть запит)")));
+		m_badge->SetLabel(_("Found: 0 (enter a query)"));
 		return;
 	}
 
 	const auto matches = m_corpus->SearchText(query);
-	m_badge->SetLabel(wxString::Format(_("Знайдено: %zu"), matches.size()));
+	m_badge->SetLabel(wxString::Format(_("Found: %zu"), matches.size()));
 
 	for (const ibHelpEntry* e : matches) {
 		const wxString label =

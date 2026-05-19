@@ -33,8 +33,8 @@ void ibHelpDetailView::ShowEntry(const ibHelpEntry* entry) {
 	if (entry == nullptr) {
 		m_html->SetPage(
 		    wxT("<html><body><p><i>")
-		    + wxString(_("Виберіть запис у дереві ліворуч або через "
-		                  "Ctrl+F1 на ідентифікаторі в редакторі."))
+		    + wxString(_("Select an entry in the tree on the left, or "
+		                  "press Ctrl+F1 on an identifier in the editor."))
 		    + wxT("</i></p></body></html>"));
 		return;
 	}
@@ -76,8 +76,8 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) {
 	html.reserve(2048);
 	html += wxT("<html><body>");
 
-	// Title — local name plus English alias parenthesised, matching
-	// 1C convention "Дата (Date)".
+	// Title — local name plus English alias parenthesised. The
+	// parenthesised English form is omitted when both names match.
 	html += wxT("<h2>");
 	html += EscapeHtml(entry.nameLocal.IsEmpty() ? entry.nameEn
 	                                                : entry.nameLocal);
@@ -99,17 +99,17 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) {
 		html += wxT("</p>");
 	};
 
-	section(_("Опис"),         entry.description, false);
-	section(_("Синтаксис"),    entry.syntaxBlock, true);
-	section(_("Параметри"),    entry.parameters,  false);
-	section(_("Повертає"),     entry.returnDescr, false);
-	section(_("Приклад"),      entry.example,     true);
-	section(_("Доступність"),  entry.availability, false);
+	section(_("Description"),  entry.description, false);
+	section(_("Syntax"),       entry.syntaxBlock, true);
+	section(_("Parameters"),   entry.parameters,  false);
+	section(_("Returns"),      entry.returnDescr, false);
+	section(_("Example"),      entry.example,     true);
+	section(_("Availability"), entry.availability, false);
 
-	// "Див. також" — clickable links into the same pane.
+	// "See also" — clickable links into the same pane.
 	if (!entry.seeAlso.empty()) {
 		html += wxT("<p><b>");
-		html += EscapeHtml(_("Див. також"));
+		html += EscapeHtml(_("See also"));
 		html += wxT(":</b><br>");
 		bool first = true;
 		for (const wxString& ref : entry.seeAlso) {
@@ -126,7 +126,7 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) {
 
 	if (!entry.reviewed) {
 		html += wxT("<hr><p><i><font color=\"#aa6600\">");
-		html += EscapeHtml(_("Чернетка: запис очікує редакторської перевірки."));
+		html += EscapeHtml(_("Draft: this entry awaits editorial review."));
 		html += wxT("</font></i></p>");
 	}
 

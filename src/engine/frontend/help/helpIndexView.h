@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////////
-// "Індекс" tab — alphabetic filter + filtered listbox.
+// "Index" tab — alphabetic filter + filtered listbox.
 //
 // User types into the textbox; the list updates live via
 // corpus->SearchPrefix(). Selection invokes pane's OnEntryActivated.

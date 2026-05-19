@@ -2,7 +2,7 @@
 // Syntax-helper sidebar panel for Designer.
 //
 // One panel widget containing:
-//   - top: wxNotebook with three tabs (Зміст / Індекс / Пошук) that
+//   - top: wxNotebook with three tabs (Contents / Index / Search) that
 //     surface the corpus through different navigation patterns
 //   - bottom: wxHtmlWindow detail view rendering the currently
 //     selected entry as structured HTML

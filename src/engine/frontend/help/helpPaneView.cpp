@@ -35,9 +35,9 @@ ibHelpPaneView::ibHelpPaneView(wxWindow* parent)
 	m_indexView  = new ibHelpIndexView(m_notebook, this);
 	m_searchView = new ibHelpSearchView(m_notebook, this);
 
-	m_notebook->AddPage(m_treeView,   _("Зміст"));
-	m_notebook->AddPage(m_indexView,  _("Індекс"));
-	m_notebook->AddPage(m_searchView, _("Пошук"));
+	m_notebook->AddPage(m_treeView,   _("Contents"));
+	m_notebook->AddPage(m_indexView,  _("Index"));
+	m_notebook->AddPage(m_searchView, _("Search"));
 
 	m_detailView = new ibHelpDetailView(splitter, this);
 

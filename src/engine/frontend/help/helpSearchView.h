@@ -1,7 +1,7 @@
 /////////////////////////////////////////////////////////////////////////////
-// "Пошук" tab — full-text search.
+// "Search" tab — full-text search.
 //
-// wxSearchCtrl on top, "Знайдено: N" badge underneath, wxListBox of
+// wxSearchCtrl on top, "Found: N" badge underneath, wxListBox of
 // ranked results. Drives corpus->SearchText.
 /////////////////////////////////////////////////////////////////////////////
 

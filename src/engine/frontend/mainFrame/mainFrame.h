@@ -331,4 +331,19 @@ public:
 #define wxAUI_PANE_BOTTOM	wxT("bottomWindow"	)
 #define wxAUI_PANE_HELP     wxT("syntaxHelperWindow")
 
+// Host-frame command ids that the editor and other frontend widgets
+// may post upward. Defined in a frontend header (not the designer
+// header) so frontend.dll → designer.exe stays a one-way link — the
+// editor's context-menu code can reference these without pulling in
+// the downstream designer module. The numeric values must not collide
+// with wxStandardID or with the designer-private id block in
+// designer/mainFrame/mainFrameDesigner.h.
+enum {
+    wxID_FRONTEND_SYNTAX_HELPER        = wxID_HIGHEST + 4500,
+    wxID_FRONTEND_SYNTAX_HELPER_LOOKUP = wxID_HIGHEST + 4501,
+    wxID_FRONTEND_DEBUG_STEP_INTO      = wxID_HIGHEST + 4502,
+    wxID_FRONTEND_DEBUG_STEP_OVER      = wxID_HIGHEST + 4503,
+    wxID_FRONTEND_DEBUG_REMOVE_ALL_BREAKPOINTS = wxID_HIGHEST + 4504,
+};
+
 #endif 

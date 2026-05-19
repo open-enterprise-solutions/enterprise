@@ -25,7 +25,7 @@ wxObject* ibValueGridSizer::Create(ibFrontendWindow* /*parent*/, ibVisualHost* /
 #endif
 }
 
-void ibValueGridSizer::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueGridSizer::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 

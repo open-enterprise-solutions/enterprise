@@ -21,7 +21,7 @@ wxObject* ibValueChoice::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return choice;
 }
 
-void ibValueChoice::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueChoice::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 

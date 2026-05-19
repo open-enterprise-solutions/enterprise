@@ -46,10 +46,10 @@ wxObject* ibValueNotebook::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return notebook;
 }
 
-void ibValueNotebook::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueNotebook::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 	if (visualHost->IsDesignerHost() && GetChildCount() == 0
-		&& firstСreated) {
+		&& firstCreated) {
 		ibValueNotebook::AddNotebookPage();
 	}
 

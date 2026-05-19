@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////////
-// "Зміст" tab — hierarchical category tree.
+// "Contents" tab — hierarchical category tree.
 //
 // wxTreeCtrl populated from ibHelpCorpus::GetRoot(). Each tree node
 // is one category or one entry; selection at an entry leaf fires the

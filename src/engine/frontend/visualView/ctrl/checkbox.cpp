@@ -95,7 +95,7 @@ wxObject* ibValueCheckbox::Create(ibFrontendWindow* wxparent, ibVisualHost* visu
 	return checkbox;
 }
 
-void ibValueCheckbox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueCheckbox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 

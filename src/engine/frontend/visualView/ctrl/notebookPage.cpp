@@ -20,7 +20,7 @@ wxObject* ibValueNotebookPage::Create(wxWindow* wxparent, ibVisualHost* visualHo
     return new ibPanelPage(wxparent, wxID_ANY);
 }
 
-void ibValueNotebookPage::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueNotebookPage::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
     ibPanelPage* page = dynamic_cast<ibPanelPage*>(wxobject);
     wxASSERT(page);

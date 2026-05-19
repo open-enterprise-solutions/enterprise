@@ -23,7 +23,7 @@ wxObject* ibValueStaticLine::Create(wxWindow* wxparent, ibVisualHost* visualHost
 	return staticline;
 }
 
-void ibValueStaticLine::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueStaticLine::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 

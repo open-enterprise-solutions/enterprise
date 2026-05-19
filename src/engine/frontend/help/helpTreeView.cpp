@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////////
-// ibHelpTreeView — "Зміст" tab.
+// ibHelpTreeView — "Contents" tab.
 //
 // Walks the category tree owned by the corpus snapshot and builds a
 // wxTreeCtrl. Each tree node carries an entry id in its client data
