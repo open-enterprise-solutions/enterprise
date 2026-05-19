@@ -124,32 +124,82 @@ namespace {
 // returns / availability fields: `**bold**` -> <b>bold</b> and
 // `inline code` -> <tt>inline code</tt>. Runs AFTER EscapeHtml so we
 // don't have to worry about HTML injection from the corpus.
+// Two-pass parser so inline `code` spans are recognised first and
+// excluded from bold processing — keeps `**` verbatim inside code.
+// Unmatched delimiters degrade gracefully: a stray `**` or single
+// backtick is emitted literally instead of corrupting the rest of
+// the output.
 wxString ApplyInlineMarkdown(const wxString& escaped)
 {
-	wxString out;
-	out.reserve(escaped.size());
+	struct Span { size_t begin; size_t end; }; // half-open, content only
+	std::vector<Span> codeSpans;
 
-	bool inBold = false;
-	bool inCode = false;
-	for (size_t i = 0; i < escaped.size(); ++i) {
-		const wxChar c = escaped[i];
-		if (c == wxT('*') && i + 1 < escaped.size() && escaped[i + 1] == wxT('*')) {
-			out += inBold ? wxT("</b>") : wxT("<b>");
-			inBold = !inBold;
-			++i;
-			continue;
+	// Pass 1: locate balanced backtick pairs.
+	for (size_t i = 0; i + 1 < escaped.size(); ++i) {
+		if (escaped[i] != wxT('`')) continue;
+		// Find matching closing backtick. Bail out on newline so
+		// unterminated code on a single line doesn't swallow the
+		// whole paragraph.
+		size_t j = i + 1;
+		while (j < escaped.size() && escaped[j] != wxT('`')) {
+			if (escaped[j] == wxT('\n')) { j = escaped.size(); break; }
+			++j;
 		}
-		if (c == wxT('`')) {
-			out += inCode
-			    ? wxT("</tt></font>")
-			    : wxT("<font face=\"Menlo\" color=\"#0f172a\"><tt>");
-			inCode = !inCode;
-			continue;
-		}
-		out += c;
+		if (j >= escaped.size()) break; // no closing tick
+		codeSpans.push_back({ i + 1, j });
+		i = j;
 	}
-	if (inBold) out += wxT("</b>");
-	if (inCode) out += wxT("</tt></font>");
+
+	// Pass 2: locate balanced ** pairs OUTSIDE code spans. Same
+	// graceful-degrade rule.
+	std::vector<Span> boldSpans;
+	auto inAnyCode = [&codeSpans](size_t i) {
+		for (const auto& s : codeSpans)
+			if (i >= s.begin - 1 && i < s.end + 1) return true; // include delimiters
+		return false;
+	};
+	for (size_t i = 0; i + 1 < escaped.size(); ++i) {
+		if (escaped[i] != wxT('*') || escaped[i + 1] != wxT('*')) continue;
+		if (inAnyCode(i)) { ++i; continue; }
+		size_t j = i + 2;
+		while (j + 1 < escaped.size()) {
+			if (escaped[j] == wxT('*') && escaped[j + 1] == wxT('*') && !inAnyCode(j)) break;
+			++j;
+		}
+		if (j + 1 >= escaped.size() || escaped[j] != wxT('*')) break;
+		boldSpans.push_back({ i + 2, j });
+		i = j + 1;
+	}
+
+	// Pass 3: emit output, wrapping recognised spans with HTML tags.
+	wxString out;
+	out.reserve(escaped.size() + 64);
+	auto codeIt = codeSpans.begin();
+	auto boldIt = boldSpans.begin();
+	for (size_t i = 0; i < escaped.size(); ++i) {
+		// Skip the opening delimiter and emit the tag.
+		if (codeIt != codeSpans.end() && i == codeIt->begin - 1) {
+			out += wxT("<font face=\"Menlo\" color=\"#0f172a\"><tt>");
+			continue;
+		}
+		if (codeIt != codeSpans.end() && i == codeIt->end) {
+			out += wxT("</tt></font>");
+			++codeIt;
+			continue; // skip closing backtick
+		}
+		if (boldIt != boldSpans.end() && i == boldIt->begin - 2) {
+			out += wxT("<b>");
+			++i; // skip the second '*'
+			continue;
+		}
+		if (boldIt != boldSpans.end() && i == boldIt->end) {
+			out += wxT("</b>");
+			++i; // skip the second '*'
+			++boldIt;
+			continue;
+		}
+		out += escaped[i];
+	}
 	return out;
 }
 
