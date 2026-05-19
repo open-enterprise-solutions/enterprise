@@ -26,7 +26,7 @@
     },
     {
       "id": "kw.Then",
-      "name_local": "Then",
+      "name_local": "Тогда",
       "name_en": "Then",
       "kind": "keyword",
       "category_keys": [
@@ -34,18 +34,23 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Завершает условие ветки Если / ИначеЕсли. Тело за Тогда выполняется только при истинности соответствующего выражения.",
+      "syntax_block": "Если <Выражение> Тогда\n    // тело\nКонецЕсли;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.If",
+        "kw.Else",
+        "kw.Elseif",
+        "kw.Endif"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Else",
-      "name_local": "Else",
+      "name_local": "Иначе",
       "name_en": "Else",
       "kind": "keyword",
       "category_keys": [
@@ -53,18 +58,22 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Ветка, выполняющаяся, когда все условия Если / ИначеЕсли оказались ложными.",
+      "syntax_block": "Если <Выр> Тогда\n    // совпало\nИначе\n    // запасной путь\nКонецЕсли;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.If",
+        "kw.Elseif",
+        "kw.Endif"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Elseif",
-      "name_local": "Elseif",
+      "name_local": "ИначеЕсли",
       "name_en": "Elseif",
       "kind": "keyword",
       "category_keys": [
@@ -72,18 +81,22 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Добавляет цепочечное условие к Если. Проверяется, только если каждая предыдущая ветка дала Ложь.",
+      "syntax_block": "Если A Тогда\n    // …\nИначеЕсли B Тогда\n    // …\nИначеЕсли C Тогда\n    // …\nКонецЕсли;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.If",
+        "kw.Else",
+        "kw.Endif"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Endif",
-      "name_local": "Endif",
+      "name_local": "КонецЕсли",
       "name_en": "Endif",
       "kind": "keyword",
       "category_keys": [
@@ -91,18 +104,20 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Закрывает конструкцию Если.",
+      "syntax_block": "Если <Выражение> Тогда\n    // тело\nКонецЕсли;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.If"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.For",
-      "name_local": "For",
+      "name_local": "Для",
       "name_en": "For",
       "kind": "keyword",
       "category_keys": [
@@ -110,18 +125,27 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Счётный или итераторный цикл. Две формы: индексная (Для <i> = <от> По <до> Цикл) и поэлементная (Для Каждого <Элемент> Из <Коллекция> Цикл).",
+      "syntax_block": "// счётная форма\nДля i = 1 По 10 Цикл\n    // тело\nКонецЦикла;\n\n// поэлементная\nДля Каждого Элемент Из Коллекция Цикл\n    // тело\nКонецЦикла;",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "Для Каждого Заказ Из Клиент.Заказы Цикл\n    Итог = Итог + Заказ.Сумма;\nКонецЦикла;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.While",
+        "kw.Foreach",
+        "kw.In",
+        "kw.To",
+        "kw.Do",
+        "kw.EndDo",
+        "kw.Break",
+        "kw.Continue"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Foreach",
-      "name_local": "Foreach",
+      "name_local": "Каждого",
       "name_en": "Foreach",
       "kind": "keyword",
       "category_keys": [
@@ -129,18 +153,22 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Модификатор цикла, вводящий поэлементную итерацию по коллекции.",
+      "syntax_block": "Для Каждого <Элемент> Из <Коллекция> Цикл\n    // тело\nКонецЦикла;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.For",
+        "kw.In",
+        "kw.Do"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.To",
-      "name_local": "To",
+      "name_local": "По",
       "name_en": "To",
       "kind": "keyword",
       "category_keys": [
@@ -148,18 +176,20 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Верхняя граница (включительно) счётного цикла Для.",
+      "syntax_block": "Для i = 1 По 10 Цикл … КонецЦикла;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.For"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.In",
-      "name_local": "In",
+      "name_local": "Из",
       "name_en": "In",
       "kind": "keyword",
       "category_keys": [
@@ -167,18 +197,21 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Указывает коллекцию-источник в цикле Для Каждого.",
+      "syntax_block": "Для Каждого <Элемент> Из <Коллекция> Цикл … КонецЦикла;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.For",
+        "kw.Foreach"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Do",
-      "name_local": "Do",
+      "name_local": "Цикл",
       "name_en": "Do",
       "kind": "keyword",
       "category_keys": [
@@ -186,18 +219,22 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Открывает тело цикла Пока или Для.",
+      "syntax_block": "Пока <Условие> Цикл … КонецЦикла;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.While",
+        "kw.For",
+        "kw.EndDo"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.EndDo",
-      "name_local": "EndDo",
+      "name_local": "КонецЦикла",
       "name_en": "EndDo",
       "kind": "keyword",
       "category_keys": [
@@ -205,18 +242,22 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Закрывает тело цикла Пока или Для.",
+      "syntax_block": "Пока X Цикл\n    // …\nКонецЦикла;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.While",
+        "kw.For",
+        "kw.Do"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.While",
-      "name_local": "While",
+      "name_local": "Пока",
       "name_en": "While",
       "kind": "keyword",
       "category_keys": [
@@ -224,18 +265,24 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Цикл с предусловием. Перед каждой итерацией проверяет условие; выполняет тело, пока условие истинно.",
+      "syntax_block": "Пока <Условие> Цикл\n    // тело\nКонецЦикла;",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "Счётчик = 0;\nПока Счётчик < 10 Цикл\n    Счётчик = Счётчик + 1;\nКонецЦикла;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.For",
+        "kw.Do",
+        "kw.EndDo",
+        "kw.Break",
+        "kw.Continue"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.GoTo",
-      "name_local": "GoTo",
+      "name_local": "Перейти",
       "name_en": "GoTo",
       "kind": "keyword",
       "category_keys": [
@@ -243,18 +290,18 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Безусловный переход к помеченному оператору в пределах того же блока. Применяйте умеренно — почти всегда чище переписать через цикл или функцию.",
+      "syntax_block": "Перейти ~<Метка>;\n…\n~<Метка>:",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [],
-      "reviewed": false
+      "reviewed": true
     },
     {
       "id": "kw.Not",
-      "name_local": "Not",
+      "name_local": "Не",
       "name_en": "Not",
       "kind": "keyword",
       "category_keys": [
@@ -262,18 +309,21 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Логическое отрицание.",
+      "syntax_block": "Не <Выражение>",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "Если Не Пользователь.ВошёлВСистему Тогда\n    ПоказатьФормуВхода();\nКонецЕсли;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.And",
+        "kw.Or"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.And",
-      "name_local": "And",
+      "name_local": "И",
       "name_en": "And",
       "kind": "keyword",
       "category_keys": [
@@ -281,18 +331,21 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Логическое И. Короткое замыкание: правый операнд не вычисляется, если левый — Ложь.",
+      "syntax_block": "<ЛевоеВыражение> И <ПравоеВыражение>",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "Если Пользователь.ВошёлВСистему И Пользователь.Роль = \"админ\" Тогда\n    ПоказатьПанельАдмина();\nКонецЕсли;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Or",
+        "kw.Not"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Or",
-      "name_local": "Or",
+      "name_local": "Или",
       "name_en": "Or",
       "kind": "keyword",
       "category_keys": [
@@ -300,18 +353,21 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Логическое ИЛИ. Короткое замыкание: правый операнд не вычисляется, если левый — Истина.",
+      "syntax_block": "<ЛевоеВыражение> Или <ПравоеВыражение>",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.And",
+        "kw.Not"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Procedure",
-      "name_local": "Procedure",
+      "name_local": "Процедура",
       "name_en": "Procedure",
       "kind": "keyword",
       "category_keys": [
@@ -319,18 +375,24 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
-      "parameters": "",
+      "description": "Объявляет процедуру — вызываемый блок кода, который выполняет действия, но не возвращает значение. Используйте Функция, если вызывающему нужен результат.",
+      "syntax_block": "Процедура <Имя>([Знач] <Парам1>, [Знач] <Парам2>, …) [Экспорт]\n    // тело\nКонецПроцедуры",
+      "parameters": "<Имя> — идентификатор. Знач — параметр передаётся по значению. Экспорт — процедура доступна из других модулей.",
       "return_descr": "",
-      "example": "",
+      "example": "Процедура ВывестиСообщение(Знач Текст) Экспорт\n    Сообщить(Текст);\nКонецПроцедуры",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Function",
+        "kw.EndProcedure",
+        "kw.Return",
+        "kw.Export",
+        "kw.Val"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.EndProcedure",
-      "name_local": "EndProcedure",
+      "name_local": "КонецПроцедуры",
       "name_en": "EndProcedure",
       "kind": "keyword",
       "category_keys": [
@@ -338,18 +400,20 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Закрывает тело процедуры. Управление возвращается из процедуры по достижении КонецПроцедуры.",
+      "syntax_block": "Процедура Пример()\n    // …\nКонецПроцедуры",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Procedure"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Function",
-      "name_local": "Function",
+      "name_local": "Функция",
       "name_en": "Function",
       "kind": "keyword",
       "category_keys": [
@@ -357,18 +421,23 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "description": "Объявляет функцию — вызываемый блок кода, возвращающий значение через Возврат. Функции взаимозаменяемы с процедурами везде, кроме выражений-источников.",
+      "syntax_block": "Функция <Имя>([Знач] <Парам1>, …) [Экспорт]\n    // тело\n    Возврат <Значение>;\nКонецФункции",
+      "parameters": "<Имя> — идентификатор. Знач — передача параметра по значению. Экспорт — функция доступна из других модулей.",
+      "return_descr": "Значение, переданное в оператор Возврат.",
+      "example": "Функция Сумма(Знач А, Знач Б) Экспорт\n    Возврат А + Б;\nКонецФункции",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Procedure",
+        "kw.Return",
+        "kw.EndFunction",
+        "kw.Export"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.EndFunction",
-      "name_local": "EndFunction",
+      "name_local": "КонецФункции",
       "name_en": "EndFunction",
       "kind": "keyword",
       "category_keys": [
@@ -376,18 +445,22 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Закрывает тело функции. Достижение КонецФункции без оператора Возврат приводит к возврату Неопределено.",
+      "syntax_block": "Функция Пример()\n    Возврат 42;\nКонецФункции",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Function",
+        "kw.Return",
+        "kw.Undefined"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Export",
-      "name_local": "Export",
+      "name_local": "Экспорт",
       "name_en": "Export",
       "kind": "keyword",
       "category_keys": [
@@ -395,18 +468,22 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Помечает процедуру, функцию или модульную переменную как доступную из других модулей. Без Экспорт символ виден только в своём модуле.",
+      "syntax_block": "Процедура Работать() Экспорт\n    // тело\nКонецПроцедуры",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "Перем Счётчик Экспорт;  // модульная публичная переменная\n\nФункция Прочесть() Экспорт\n    Возврат Счётчик;\nКонецФункции",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Procedure",
+        "kw.Function",
+        "kw.Var"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Val",
-      "name_local": "Val",
+      "name_local": "Знач",
       "name_en": "Val",
       "kind": "keyword",
       "category_keys": [
@@ -414,18 +491,21 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Модификатор параметра «по значению». Без Знач параметр привязан по ссылке, и присваивания внутри процедуры меняют переменную вызывающего; со Знач берётся локальная копия.",
+      "syntax_block": "Процедура Пример(Знач ТолькоЧтение, Изменяемый)\n    // ТолькоЧтение — копия значения вызывающего;\n    // Изменяемый — присваивание попадёт в переменную вызывающего.\nКонецПроцедуры",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Procedure",
+        "kw.Function"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Return",
-      "name_local": "Return",
+      "name_local": "Возврат",
       "name_en": "Return",
       "kind": "keyword",
       "category_keys": [
@@ -433,18 +513,21 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Выходит из текущей процедуры или функции. Внутри функции может содержать возвращаемое выражение.",
+      "syntax_block": "Возврат;             // выйти из процедуры\nВозврат <Выражение>; // выйти из функции со значением",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "Функция Знак(Знач Х)\n    Если Х < 0 Тогда Возврат -1; КонецЕсли;\n    Если Х > 0 Тогда Возврат 1;  КонецЕсли;\n    Возврат 0;\nКонецФункции",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Function",
+        "kw.Procedure"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Try",
-      "name_local": "Try",
+      "name_local": "Попытка",
       "name_en": "Try",
       "kind": "keyword",
       "category_keys": [
@@ -452,18 +535,22 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Начинает блок обработки исключений. Код внутри отслеживается; возникшее исключение передаёт управление в ветку Исключение.",
+      "syntax_block": "Попытка\n    // защищённый блок\nИсключение\n    // обработчик — запускается при любом исключении\nКонецПопытки;",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "Попытка\n    Результат = РазобратьЧисло(ВводПользователя);\nИсключение\n    Сообщить(\"Не число: \" + ОписаниеОшибки());\nКонецПопытки;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Except",
+        "kw.Endtry",
+        "kw.Raise"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Except",
-      "name_local": "Except",
+      "name_local": "Исключение",
       "name_en": "Except",
       "kind": "keyword",
       "category_keys": [
@@ -471,18 +558,22 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Открывает ветку обработчика конструкции Попытка / Исключение. Выполняется, если защищённый блок породил исключение.",
+      "syntax_block": "Попытка\n    // …\nИсключение\n    // восстановление\nКонецПопытки;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Try",
+        "kw.Endtry",
+        "kw.Raise"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Endtry",
-      "name_local": "Endtry",
+      "name_local": "КонецПопытки",
       "name_en": "Endtry",
       "kind": "keyword",
       "category_keys": [
@@ -490,18 +581,21 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Закрывает конструкцию Попытка / Исключение.",
+      "syntax_block": "Попытка … Исключение … КонецПопытки;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Try",
+        "kw.Except"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Continue",
-      "name_local": "Continue",
+      "name_local": "Продолжить",
       "name_en": "Continue",
       "kind": "keyword",
       "category_keys": [
@@ -509,18 +603,22 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Пропускает остаток текущей итерации цикла; управление переходит к заголовку цикла.",
+      "syntax_block": "Для Каждого Строка Из Таблица Цикл\n    Если Строка.Заголовок Тогда Продолжить; КонецЕсли;\n    Обработать(Строка);\nКонецЦикла;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.For",
+        "kw.While",
+        "kw.Break"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Break",
-      "name_local": "Break",
+      "name_local": "Прервать",
       "name_en": "Break",
       "kind": "keyword",
       "category_keys": [
@@ -528,18 +626,22 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Прерывает ближайший охватывающий цикл; управление переходит за КонецЦикла.",
+      "syntax_block": "Пока Условие Цикл\n    Если СтопУсловие Тогда Прервать; КонецЕсли;\nКонецЦикла;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.While",
+        "kw.For",
+        "kw.Continue"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Raise",
-      "name_local": "Raise",
+      "name_local": "ВызватьИсключение",
       "name_en": "Raise",
       "kind": "keyword",
       "category_keys": [
@@ -547,18 +649,21 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Возбуждает исключение. Без аргумента — перевозбуждает текущее (допустимо только внутри Исключение). С выражением — создаёт новое исключение с этим текстом.",
+      "syntax_block": "ВызватьИсключение;             // перевозбудить текущее\nВызватьИсключение <ВыражениеСтрока>;  // новое исключение",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "Если Сумма < 0 Тогда\n    ВызватьИсключение \"Отрицательная сумма недопустима\";\nКонецЕсли;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Try",
+        "kw.Except"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Var",
-      "name_local": "Var",
+      "name_local": "Перем",
       "name_en": "Var",
       "kind": "keyword",
       "category_keys": [
@@ -566,18 +671,21 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Объявляет одну или несколько локальных переменных (внутри тела процедуры / функции) либо модульных переменных (вне любых блоков). Начальное значение — Неопределено.",
+      "syntax_block": "Перем <Имя1>, <Имя2>, …;\n\nПроцедура Пример()\n    Перем Счётчик, Сумма;\n    Счётчик = 0;\nКонецПроцедуры",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Undefined",
+        "kw.Export"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.New",
-      "name_local": "New",
+      "name_local": "Новый",
       "name_en": "New",
       "kind": "keyword",
       "category_keys": [
@@ -585,18 +693,20 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Создаёт значение встроенного типа (коллекции, обёртки примитивов, читатели запросов / потоков). Имя типа идёт после Новый; аргументы конструктора в скобках, если нужны.",
+      "syntax_block": "<Перем> = Новый <ИмяТипа>(<Аргументы>…);",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "Элементы = Новый Массив;\nЭлементы.Добавить(\"первый\");\nЭлементы.Добавить(\"второй\");\n\nЗапрос = Новый Запрос();\nЗапрос.Текст = \"ВЫБРАТЬ * ИЗ Справочник.Товары\";",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Undefined"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Undefined",
-      "name_local": "Undefined",
+      "name_local": "Неопределено",
       "name_en": "Undefined",
       "kind": "keyword",
       "category_keys": [
@@ -604,14 +714,18 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Сингл-значение «значения ещё нет». Начальное значение любой объявленной, но не инициализированной переменной; естественный результат методов, которым нечего вернуть.",
       "syntax_block": "",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "Перем Х;\nЕсли Х = Неопределено Тогда\n    Х = ВычислитьПоУмолчанию();\nКонецЕсли;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Null",
+        "kw.New",
+        "kw.Var"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Null",
@@ -623,18 +737,20 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
+      "description": "Значение «нет значения» из базы данных — то, что возвращают поля результата запроса при SQL NULL. Отличается от Неопределено; сравнения с обычными значениями всегда дают Ложь.",
       "syntax_block": "",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "Если Выборка.Менеджер = Null Тогда\n    ИмяМенеджера = \"<не назначен>\";\nКонецЕсли;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.Undefined"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.True",
-      "name_local": "True",
+      "name_local": "Истина",
       "name_en": "True",
       "kind": "keyword",
       "category_keys": [
@@ -642,18 +758,23 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Логический литерал — значение «истина».",
+      "syntax_block": "Флаг = Истина;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.False",
+        "kw.And",
+        "kw.Or",
+        "kw.Not"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.False",
-      "name_local": "False",
+      "name_local": "Ложь",
       "name_en": "False",
       "kind": "keyword",
       "category_keys": [
@@ -661,14 +782,19 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "description": "Логический литерал — значение «ложь».",
+      "syntax_block": "Флаг = Ложь;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "kw.True",
+        "kw.And",
+        "kw.Or",
+        "kw.Not"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.PpDefine",

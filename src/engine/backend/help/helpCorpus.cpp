@@ -211,10 +211,12 @@ void ibHelpCorpus::BuildIndexes() {
 		if (!e.nameEn.empty())
 			m_byNameEn[NormaliseKey(e.nameEn)].push_back(i);
 
-		// Prefix index — keyed on the normalised local name so prefix
-		// search in the active locale matches without an extra map walk.
+		// Prefix index — covers BOTH localised and English names so the
+		// Index tab finds entries no matter which alphabet the user types.
 		if (!e.nameLocal.empty())
 			m_prefixIndex[NormaliseKey(e.nameLocal)].push_back(i);
+		if (!e.nameEn.empty() && e.nameEn != e.nameLocal)
+			m_prefixIndex[NormaliseKey(e.nameEn)].push_back(i);
 
 		// Token index — name + signature only in Phase 1 (no description
 		// tokens, see §3.5). Each token maps to a vector of entry slots.

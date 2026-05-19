@@ -49,9 +49,7 @@ void ibHelpSearchView::RefreshList(const wxString& query) {
 	m_badge->SetLabel(wxString::Format(_("Found: %zu"), matches.size()));
 
 	for (const ibHelpEntry* e : matches) {
-		const wxString label =
-		    e->nameLocal.IsEmpty() ? e->nameEn : e->nameLocal;
-		m_list->Append(label);
+		m_list->Append(e->BilingualLabel());
 		m_ids.push_back(e->id);
 	}
 }

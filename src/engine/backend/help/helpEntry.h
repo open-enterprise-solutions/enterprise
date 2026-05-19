@@ -116,6 +116,16 @@ struct BACKEND_API ibHelpEntry {
 	// visually so authors can distinguish "OES platform docs" from
 	// "this configuration's docs".
 	bool fromConfiguration = false;
+
+	// "Local / English" composite label. When both names match (English
+	// locale or single-script keyword) returns one form to avoid the
+	// redundant "Procedure / Procedure" display.
+	inline wxString BilingualLabel() const {
+		if (nameLocal.IsEmpty()) return nameEn;
+		if (nameEn.IsEmpty())    return nameLocal;
+		if (nameLocal == nameEn) return nameLocal;
+		return nameLocal + wxT(" / ") + nameEn;
+	}
 };
 
 #endif // _IB_HELP_ENTRY_H_

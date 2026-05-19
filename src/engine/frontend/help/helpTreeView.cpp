@@ -70,10 +70,8 @@ void ibHelpTreeView::AddCategoryNode(const ibHelpCategory* node,
 		AddCategoryNode(child.get(), item);
 	}
 	for (const ibHelpEntry* entry : node->entries) {
-		const wxString leafLabel =
-		    entry->nameLocal.IsEmpty() ? entry->nameEn : entry->nameLocal;
 		const wxTreeItemId leaf =
-		    m_tree->AppendItem(item, leafLabel, -1, -1,
+		    m_tree->AppendItem(item, entry->BilingualLabel(), -1, -1,
 		                        new EntryIdData(entry->id));
 		m_entryItems[entry->id] = leaf;
 	}
