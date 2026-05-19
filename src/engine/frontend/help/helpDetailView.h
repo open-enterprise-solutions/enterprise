@@ -26,6 +26,12 @@ public:
 	// the array up / down by one notch per click and re-render.
 	void AdjustFontSize(int delta);
 
+	// Persistence — read by the host frame's options.xml writer.
+	// Clamped to [-2, +6] on load so a hand-edited XML can't break
+	// the renderer.
+	int  GetFontSizeBoost() const { return m_fontSizeBoost; }
+	void SetFontSizeBoost(int boost);
+
 private:
 	ibHelpPaneView* m_pane = nullptr;
 	wxHtmlWindow*   m_html = nullptr;

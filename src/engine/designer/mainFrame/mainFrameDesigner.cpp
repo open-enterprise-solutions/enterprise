@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "mainFrameDesigner.h"
+#include "frontend/help/helpPaneView.h"
 #include "backend/debugger/debugClient.h"
 
 #include <wx/config.h>
@@ -125,6 +126,17 @@ void ibFrontendDocMDIFrameDesigner::LoadOptions()
 				}
 				node = node->GetNext();
 			}
+			// Help pane state — extract immediately into the
+			// pending struct so the values survive after `document`
+			// goes out of scope. Applied lazily inside EnsureHelpPane.
+			for (wxXmlNode* h = root->GetChildren(); h; h = h->GetNext()) {
+				if (h->GetName() != wxT("helpPane")) continue;
+				m_pendingHelpState.has = true;
+				m_pendingHelpState.currentId = h->GetAttribute(wxT("currentId"), wxEmptyString);
+				h->GetAttribute(wxT("tab"),       wxEmptyString).ToLong(&m_pendingHelpState.tab);
+				h->GetAttribute(wxT("fontBoost"), wxEmptyString).ToLong(&m_pendingHelpState.fontBoost);
+				break;
+			}
 		}
 	}
 
@@ -170,6 +182,11 @@ void ibFrontendDocMDIFrameDesigner::SaveOptions()
 
 	// Save the key bindings.
 	root->AddChild(m_keyBinder.Save("keybindings"));
+
+	// Save help-pane state (last entry / tab / font boost). No-op when
+	// the pane was never opened in this session.
+	if (m_helpPane)
+		m_helpPane->SaveStateToXml(root);
 
 	wxString directory =
 		wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache) + wxT("\\OES");

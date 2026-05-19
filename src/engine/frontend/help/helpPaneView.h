@@ -58,6 +58,14 @@ public:
 	// in render code without worrying about a concurrent reload.
 	std::shared_ptr<const ibHelpCorpus> GetCorpus() const { return m_corpus; }
 
+	// Persistence — host frame's SaveOptions / LoadOptions wires these
+	// into the per-user options.xml. State preserved across sessions:
+	//   - last viewed entry id
+	//   - detail-view font-size boost
+	//   - active notebook tab index
+	void SaveStateToXml(class wxXmlNode* parent) const;
+	void LoadStateFromXml(const class wxXmlNode* parent);
+
 private:
 	std::shared_ptr<const ibHelpCorpus> m_corpus;
 

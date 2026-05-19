@@ -21,6 +21,7 @@
 #include <wx/sizer.h>
 #include <wx/splitter.h>
 #include <wx/toolbar.h>
+#include <wx/xml/xml.h>
 
 // Local ids for the pane's own toolbar — start above wxID_HIGHEST so we
 // don't collide with anything wx maps automatically.
@@ -185,6 +186,41 @@ void ibHelpPaneView::OnUpdateToolbarUi(wxUpdateUIEvent& event) {
 void ibHelpPaneView::ReloadCorpus() {
 	appData->ReloadHelpCorpus();
 	RefreshFromAppData();
+}
+
+void ibHelpPaneView::SaveStateToXml(wxXmlNode* parent) const {
+	if (parent == nullptr) return;
+	auto* node = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("helpPane"));
+	node->AddAttribute(wxT("currentId"),    m_currentId);
+	node->AddAttribute(wxT("tab"),          wxString::Format(wxT("%d"),
+	                    m_notebook ? m_notebook->GetSelection() : 0));
+	node->AddAttribute(wxT("fontBoost"),    wxString::Format(wxT("%d"),
+	                    m_detailView ? m_detailView->GetFontSizeBoost() : 0));
+	parent->AddChild(node);
+}
+
+void ibHelpPaneView::LoadStateFromXml(const wxXmlNode* parent) {
+	if (parent == nullptr) return;
+	for (const wxXmlNode* node = parent->GetChildren();
+	     node != nullptr;
+	     node = node->GetNext()) {
+		if (node->GetName() != wxT("helpPane")) continue;
+
+		long tab = 0;
+		if (node->GetAttribute(wxT("tab"), wxEmptyString).ToLong(&tab) &&
+		    m_notebook && tab >= 0 && tab < static_cast<long>(m_notebook->GetPageCount()))
+			m_notebook->SetSelection(static_cast<int>(tab));
+
+		long boost = 0;
+		if (node->GetAttribute(wxT("fontBoost"), wxEmptyString).ToLong(&boost) &&
+		    m_detailView)
+			m_detailView->SetFontSizeBoost(static_cast<int>(boost));
+
+		const wxString id = node->GetAttribute(wxT("currentId"), wxEmptyString);
+		if (!id.IsEmpty() && m_corpus && m_corpus->FindById(id))
+			ShowEntry(id);
+		break;
+	}
 }
 
 void ibHelpPaneView::SyncFromEditorCaret() {

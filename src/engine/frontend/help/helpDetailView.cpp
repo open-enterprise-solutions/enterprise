@@ -58,6 +58,20 @@ void ibHelpDetailView::ApplyFontScale() {
 	m_html->SetFonts(wxT("Helvetica"), wxT("Menlo"), sizes);
 }
 
+void ibHelpDetailView::SetFontSizeBoost(int boost) {
+	if (boost < -2) boost = -2;
+	if (boost >  6) boost =  6;
+	if (boost == m_fontSizeBoost) return;
+	m_fontSizeBoost = boost;
+	ApplyFontScale();
+	if (!m_lastEntryId.IsEmpty() && m_pane) {
+		if (auto corpus = m_pane->GetCorpus()) {
+			if (const ibHelpEntry* e = corpus->FindById(m_lastEntryId))
+				m_html->SetPage(RenderHtml(*e));
+		}
+	}
+}
+
 void ibHelpDetailView::AdjustFontSize(int delta) {
 	const int next = m_fontSizeBoost + delta;
 	if (next < -2 || next > 6) return;  // keep in sane range

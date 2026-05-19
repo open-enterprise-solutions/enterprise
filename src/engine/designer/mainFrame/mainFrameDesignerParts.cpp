@@ -8,6 +8,8 @@
 
 #include "frontend/artProvider/artProvider.h"
 
+#include <wx/xml/xml.h>
+
 void ibFrontendDocMDIFrameDesigner::CreateWideGui()
 {
 	m_mainFrameToolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
@@ -164,6 +166,22 @@ void ibFrontendDocMDIFrameDesigner::EnsureHelpPane()
 
 	m_mgr.AddPane(m_helpPane, paneInfo);
 	m_mgr.Update();
+
+	// Apply persisted state from options.xml (last entry id / active
+	// tab / detail font boost) now that the pane exists.
+	if (m_pendingHelpState.has && m_helpPane) {
+		// Construct a tiny throwaway XML wrapper so we can reuse the
+		// pane's LoadStateFromXml entry point — keeps the schema knowledge
+		// in one place.
+		wxXmlNode wrap(wxXML_ELEMENT_NODE, wxT("options"));
+		auto* hp = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("helpPane"));
+		hp->AddAttribute(wxT("currentId"), m_pendingHelpState.currentId);
+		hp->AddAttribute(wxT("tab"),       wxString::Format(wxT("%ld"), m_pendingHelpState.tab));
+		hp->AddAttribute(wxT("fontBoost"), wxString::Format(wxT("%ld"), m_pendingHelpState.fontBoost));
+		wrap.AddChild(hp);
+		m_helpPane->LoadStateFromXml(&wrap);
+		m_pendingHelpState.has = false;  // applied; don't reapply
+	}
 }
 
 void ibFrontendDocMDIFrameDesigner::ToggleHelpPane()

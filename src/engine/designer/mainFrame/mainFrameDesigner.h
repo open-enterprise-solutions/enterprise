@@ -166,6 +166,18 @@ private:
 	// by the AUI manager once added.
 	class ibHelpPaneView* m_helpPane = nullptr;
 
+	// Help-pane state pulled out of options.xml at startup and
+	// applied lazily once EnsureHelpPane creates the widget. The
+	// pane is built on first user invocation, which can happen well
+	// after LoadOptions runs.
+	struct PendingHelpState {
+		bool      has        = false;
+		wxString  currentId;
+		long      tab        = 0;
+		long      fontBoost  = 0;
+	};
+	PendingHelpState m_pendingHelpState;
+
 	ibMetadataTree* m_metaWindow;
 
 	ibOutputWindow* m_outputWindow;
