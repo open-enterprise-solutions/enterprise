@@ -128,6 +128,97 @@ void wxAuiDocDesignerMDIFrame::CreateMetadataPane()
 	m_mgr.AddPane(m_metadataTree, paneInfo);
 }
 
+#include "frontend/help/helpPaneView.h"
+#include "frontend/help/helpChooserDialog.h"
+#include "frontend/win/editor/codeEditor/codeEditor.h"
+#include "backend/appData.h"
+#include "backend/help/helpCorpus.h"
+#include "backend/help/helpResolver.h"
+#include "backend/help/helpEntry.h"
+
+void wxAuiDocDesignerMDIFrame::EnsureHelpPane()
+{
+	if (m_mgr.GetPane(wxAUI_PANE_HELP).IsOk()) return;
+
+	m_helpPane = new ibHelpPaneView(this);
+
+	wxAuiPaneInfo paneInfo;
+	paneInfo.Name(wxAUI_PANE_HELP);
+	paneInfo.Caption(_("Синтаксис-помічник"));
+	paneInfo.Right();
+	paneInfo.Layer(1);
+	paneInfo.MinSize(320, 480);
+	paneInfo.BestSize(360, 600);
+	paneInfo.CloseButton(true);
+	paneInfo.MaximizeButton(false);
+	paneInfo.MinimizeButton(false);
+	paneInfo.Show(true);
+
+	m_mgr.AddPane(m_helpPane, paneInfo);
+	m_mgr.Update();
+}
+
+void wxAuiDocDesignerMDIFrame::ToggleHelpPane()
+{
+	EnsureHelpPane();
+	wxAuiPaneInfo& pane = m_mgr.GetPane(wxAUI_PANE_HELP);
+	if (!pane.IsOk()) return;
+	pane.Show(!pane.IsShown());
+	m_mgr.Update();
+}
+
+void wxAuiDocDesignerMDIFrame::OpenHelpForCursor()
+{
+	EnsureHelpPane();
+	wxAuiPaneInfo& pane = m_mgr.GetPane(wxAUI_PANE_HELP);
+	if (pane.IsOk() && !pane.IsShown()) {
+		pane.Show(true);
+		m_mgr.Update();
+	}
+
+	// Identifier-under-cursor extraction is editor-dependent. Phase 3
+	// ships a minimal hook: resolve the active text-control's currently
+	// selected word (Scintilla's GetSelectedText falls back to the
+	// word at the caret when the selection is empty). If no editor is
+	// active or the resolver returns zero hits, leave the pane open
+	// without changing its current detail view.
+	wxString identifier;
+	wxWindow* focus = wxWindow::FindFocus();
+	if (auto* edit = wxDynamicCast(focus, ibCodeEditor)) {
+		identifier = edit->GetSelectedText();
+		if (identifier.IsEmpty()) {
+			const int pos = edit->GetCurrentPos();
+			const int start = edit->WordStartPosition(pos, true);
+			const int end   = edit->WordEndPosition(pos,   true);
+			if (end > start) identifier = edit->GetTextRange(start, end);
+		}
+	}
+	if (identifier.IsEmpty()) return;
+
+	auto corpus = appData->GetHelpCorpus();
+	if (!corpus) return;
+	std::vector<const ibHelpEntry*> hits =
+	    ResolveByName(*corpus, identifier);
+	if (hits.empty()) return;
+
+	if (hits.size() == 1) {
+		if (m_helpPane) m_helpPane->ShowEntry(hits.front()->id);
+		return;
+	}
+
+	ibHelpChooserDialog dlg(this, hits);
+	if (dlg.ShowModal() != wxID_OK) return;
+	if (dlg.HelpRequested()) {
+		// "Довідка" — open the help-on-the-helper entry. Phase 3 has
+		// no such entry yet; fall back to a neutral first hit so the
+		// button is functional. Phase 7 ships the dedicated topic.
+		if (m_helpPane) m_helpPane->ShowEntry(hits.front()->id);
+		return;
+	}
+	if (!dlg.GetSelectedId().IsEmpty() && m_helpPane)
+		m_helpPane->ShowEntry(dlg.GetSelectedId());
+}
+
 void wxAuiDocDesignerMDIFrame::UpdateEditorOptions()
 {
 	for (auto doc : m_docManager->GetDocumentsVector())

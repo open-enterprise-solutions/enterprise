@@ -128,8 +128,20 @@ void wxAuiDocDesignerMDIFrame::InitializeDefaultMenu()
 	m_menuSetting->Append(wxID_APPLICATION_SETTING, _("Options..."));
 
 	m_menuHelp = new wxMenu;
+	m_menuHelp->Append(wxID_DESIGNER_SYNTAX_HELPER,
+	                    _("Синтаксис-помічник\tCtrl+Alt+F1"));
+	m_menuHelp->Append(wxID_DESIGNER_SYNTAX_HELPER_LOOKUP,
+	                    _("Пошук у Синтаксис-Помічнику\tCtrl+F1"));
+	m_menuHelp->AppendSeparator();
 	m_menuHelp->Append(wxID_DESIGNER_ABOUT, _("About"));
 	m_menuBar->Append(m_menuHelp, wxGetStockLabel(wxID_HELP, wxSTOCK_NOFLAGS));
+
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) { ToggleHelpPane(); },
+	     wxID_DESIGNER_SYNTAX_HELPER);
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) { OpenHelpForCursor(); },
+	     wxID_DESIGNER_SYNTAX_HELPER_LOOKUP);
 
 	Bind(wxEVT_MENU, &wxAuiDocDesignerMDIFrame::OnRollbackConfiguration, this, wxID_DESIGNER_CONFIGURATION_RETURN_DATABASE);
 	Bind(wxEVT_MENU, &wxAuiDocDesignerMDIFrame::OnConfiguration, this, wxID_DESIGNER_CONFIGURATION_LOAD, wxID_DESIGNER_CONFIGURATION_SAVE);

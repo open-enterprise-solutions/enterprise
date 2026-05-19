@@ -42,6 +42,8 @@ enum {
 	wxID_DESIGNER_DATABASE_CLEAR,
 
 	wxID_DESIGNER_ABOUT,
+	wxID_DESIGNER_SYNTAX_HELPER,        // View → Syntax helper toggle
+	wxID_DESIGNER_SYNTAX_HELPER_LOOKUP, // Ctrl+F1 / context-menu lookup
 	wxID_DESIGNER_END
 };
 

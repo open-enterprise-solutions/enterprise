@@ -325,9 +325,10 @@ public:
 	virtual int FilterEvent(wxEvent& event) wxOVERRIDE { return Event_Skip; }
 };
 
-//pane 
+//pane
 #define wxAUI_PANE_METADATA wxT("metadataWindow")
 #define wxAUI_PANE_PROPERTY wxT("propertyWindow")
 #define wxAUI_PANE_BOTTOM	wxT("bottomWindow"	)
+#define wxAUI_PANE_HELP     wxT("syntaxHelperWindow")
 
 #endif 

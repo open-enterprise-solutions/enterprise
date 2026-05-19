@@ -24,6 +24,11 @@ protected:
 	CStackWindow* m_stackWindow;
 	CWatchWindow* m_watchWindow;
 
+	// Syntax-helper sidebar — created on first toggle (View menu) so
+	// the corpus load is amortised away from designer startup. Owned
+	// by the AUI manager once added.
+	class ibHelpPaneView* m_helpPane = nullptr;
+
 protected:
 
 	void InitializeDefaultMenu();
@@ -31,6 +36,16 @@ protected:
 	virtual void CreateMetadataPane();
 	virtual void CreateBottomPane();
 	virtual void CreateWideGui();
+
+	// Syntax-helper pane lifecycle:
+	//   EnsureHelpPane()  — lazy-create and add to AUI manager.
+	//   ToggleHelpPane()  — show / hide via View menu.
+	//   OpenHelpForCursor() — resolve the identifier under the editor
+	//                          cursor, open the pane on the match or
+	//                          surface the chooser dialog (Ctrl+F1).
+	void EnsureHelpPane();
+	void ToggleHelpPane();
+	void OpenHelpForCursor();
 
 	virtual bool AllowClose() const; 
 
