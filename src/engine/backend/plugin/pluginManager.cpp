@@ -15,6 +15,8 @@
 #include <cstdio>
 #include <string>
 
+#include "3rdparty/nlohmann/json.hpp"
+
 #ifdef __WXMSW__
   #include <windows.h>
 #endif
@@ -465,14 +467,6 @@ int ibPluginManager::CallWebPaneRegister(const wxString& paneId,
                                            ibPluginWebMsgFn cb,
                                            void* userData)
 {
-	// Record the first pane id we ever see as the Phase 2 default AI
-	// chunk target. Phase 4 Settings UI will let the user re-pick; until
-	// then, plugins that ship "one pane + one provider" need a routable
-	// target so HostAIChunk* doesn't no-op.
-	if (m_defaultAIPaneId.IsEmpty() && !paneId.IsEmpty()) {
-		m_defaultAIPaneId = paneId;
-	}
-
 	// Contract: RegisterWebPane must be called from the main (UI) thread.
 	// Documented in pluginApi.h. Reasons: (a) the buffer m_pendingWebPaneRegs
 	// is touched without locks and racing it would corrupt the vector;
@@ -488,11 +482,24 @@ int ibPluginManager::CallWebPaneRegister(const wxString& paneId,
 		// Designer hasn't installed callbacks yet — buffer for replay.
 		// Return success so the plugin doesn't treat early-init as
 		// failure; ReplayPendingWebPaneRegistrations will surface the
-		// real result later once the frame wires its lambdas.
+		// real result later once the frame wires its lambdas. Buffered
+		// reg always claims the default-pane slot if vacant so chunk
+		// dispatch routes to the replay'd pane once it materialises.
 		m_pendingWebPaneRegs.push_back({paneId, title, htmlBundlePath, cb, userData});
+		if (m_defaultAIPaneId.IsEmpty() && !paneId.IsEmpty()) {
+			m_defaultAIPaneId = paneId;
+		}
 		return 0;
 	}
-	return m_webPaneRegister(paneId, title, htmlBundlePath, cb, userData);
+	const int rc = m_webPaneRegister(paneId, title, htmlBundlePath, cb, userData);
+	if (rc == 0 && m_defaultAIPaneId.IsEmpty() && !paneId.IsEmpty()) {
+		// Record the first SUCCESSFUL pane id as the Phase 2 default AI
+		// chunk target. Phase 4 Settings UI lets the user re-pick. A
+		// rejected registration (duplicate name, AUI refusal, etc.) must
+		// NOT claim the slot — otherwise later real panes can't route.
+		m_defaultAIPaneId = paneId;
+	}
+	return rc;
 }
 
 ibPluginManager::~ibPluginManager()
@@ -580,20 +587,20 @@ std::string EscapeJsonString(const char* s)
 	return out;
 }
 
-// Validate that `payload` is non-null and looks like JSON (first
-// non-whitespace char is one of `{[`"-0-9truefalsenul`). On invalid
-// input we wrap the raw bytes as a JSON string so the WebView still
-// receives something structurally valid instead of crashing JSON.parse.
+// Validate `payload` parses as JSON. On invalid input we wrap the raw
+// bytes as a JSON string so the WebView still receives something
+// structurally valid instead of crashing JSON.parse. nlohmann's accept()
+// runs a parser in validation-only mode (no AST construction) so the
+// cost is just lexing + balancing — acceptable on hot stream paths.
+// A first-letter heuristic ("t/f/n means valid literal") false-passes
+// inputs like `tabs`, `funky`, `north`, broken `{`, unterminated `"` —
+// those then crash JSON.parse on the WebView side.
 std::string SanitiseJsonValue(const char* payload)
 {
-	if (payload == nullptr) return std::string("null");
-	const char* p = payload;
-	while (*p && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) ++p;
-	const char c = *p;
-	const bool jsonish = (c == '{' || c == '[' || c == '"' ||
-	                      c == '-' || (c >= '0' && c <= '9') ||
-	                      c == 't' || c == 'f' || c == 'n');
-	if (jsonish) return std::string(payload);
+	if (payload == nullptr || *payload == '\0') return std::string("null");
+	if (nlohmann::json::accept(payload)) {
+		return std::string(payload);
+	}
 	std::string s = "\"";
 	s += EscapeJsonString(payload);
 	s += "\"";
@@ -605,6 +612,11 @@ std::string SanitiseJsonValue(const char* payload)
 int ibPluginManager::HostRegisterAIProvider(const ibPluginAIProvider* p)
 {
 	if (p == nullptr || p->providerId == nullptr || *p->providerId == '\0') {
+		return -1;
+	}
+	// A provider with no Query is useless and would NPE-crash the kernel
+	// when Phase 4 settings dispatch routes a prompt to it. Refuse early.
+	if (p->Query == nullptr) {
 		return -1;
 	}
 

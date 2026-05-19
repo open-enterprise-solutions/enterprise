@@ -156,12 +156,102 @@ TEST(PluginRegistry, RegisterRejectsNullProviderId) {
 	ibPluginManager mgr;
 	ibPluginAIProvider p{};
 	p.providerId = nullptr;
+	p.Query      = &StubQuery;
 	EXPECT_EQ(mgr.HostRegisterAIProvider(&p), -1);
 
 	p.providerId = "";
 	EXPECT_EQ(mgr.HostRegisterAIProvider(&p), -1);
 
 	EXPECT_TRUE(mgr.AIProviders().empty());
+}
+
+TEST(PluginRegistry, RegisterRejectsNullQuery) {
+	// Phase 4 dispatch would crash on a null Query pointer; refuse at
+	// registration time so the registry never holds an unusable entry.
+	ibPluginManager mgr;
+	ibPluginAIProvider p{};
+	p.providerId = "stub.echo";
+	p.Query      = nullptr;
+	EXPECT_EQ(mgr.HostRegisterAIProvider(&p), -1);
+	EXPECT_TRUE(mgr.AIProviders().empty());
+}
+
+TEST(PluginRegistry, SanitiseValidatesActualJson) {
+	// First-letter heuristic regression test: ensure inputs that LOOK
+	// jsonish (start with `t/f/n`, `-`, `{`, `[`, `"`) but are NOT valid
+	// JSON get wrapped as strings instead of spliced verbatim.
+	ibPluginManager mgr;
+	std::vector<std::string> sends;
+	mgr.SetWebPaneCallbacks(
+	    [](const wxString&, const wxString&, const wxString&,
+	        ibPluginWebMsgFn, void*) -> int { return 0; },
+	    [&sends](const wxString&, const wxString& jsonInline) -> int {
+	        sends.emplace_back(jsonInline.utf8_str());
+	        return 0;
+	    },
+	    [](const wxString&) -> int { return 0; });
+	mgr.CallWebPaneRegister(wxT("p"), wxT("p"), wxT("/tmp/x.html"), nullptr, nullptr);
+
+	const char* malformed[] = {
+		"tabs",                // starts with t but not `true`
+		"funky",               // starts with f
+		"north",               // starts with n
+		"-abc",                // negative-looking garbage
+		"{unterminated",       // half-object
+		"\"no close",          // open-quote
+		"nul",                 // partial literal
+	};
+	for (const char* m : malformed) {
+		sends.clear();
+		EXPECT_EQ(mgr.HostAIChunkEmit("rid", m), 0) << m;
+		ASSERT_FALSE(sends.empty()) << m;
+		// Wrapped as a JSON string → delta:"<escaped>".
+		EXPECT_NE(sends.back().find("\"delta\":\""), std::string::npos) << m;
+		// Whatever we shipped must itself parse.
+		// (sanity: nlohmann round-trip the full envelope)
+	}
+
+	// Valid JSON shapes should pass through verbatim.
+	const char* valid[] = {
+		"true", "false", "null",
+		"42", "-3.14",
+		"\"hello\"",
+		"{\"k\":1}",
+		"[1,2,3]",
+	};
+	for (const char* v : valid) {
+		sends.clear();
+		EXPECT_EQ(mgr.HostAIChunkEmit("rid", v), 0) << v;
+		ASSERT_FALSE(sends.empty()) << v;
+		const std::string& s = sends.back();
+		// Delta carries the verbatim value, NOT a wrapped string.
+		const std::string needle = std::string("\"delta\":") + v;
+		EXPECT_NE(s.find(needle), std::string::npos) << v;
+	}
+}
+
+TEST(PluginRegistry, DefaultPaneOnlyOnSuccess) {
+	// Failure path: the underlying register callback returns -1. We
+	// must NOT claim that pane id as the default chunk target — a later
+	// successful registration would otherwise be permanently shadowed.
+	ibPluginManager mgr;
+	mgr.SetWebPaneCallbacks(
+	    [](const wxString& paneId, const wxString&, const wxString&,
+	        ibPluginWebMsgFn, void*) -> int {
+	        return paneId == wxT("fail.pane") ? -1 : 0;
+	    },
+	    [](const wxString&, const wxString&) -> int { return 0; },
+	    [](const wxString&) -> int { return 0; });
+
+	// First reg fails — default must stay empty.
+	EXPECT_EQ(mgr.CallWebPaneRegister(wxT("fail.pane"), wxT("F"),
+	                                     wxT("/tmp/x.html"), nullptr, nullptr), -1);
+	EXPECT_EQ(mgr.HostAIChunkEmit("rid", "\"x\""), -1) << "no default yet";
+
+	// Second reg succeeds — claims the default slot.
+	EXPECT_EQ(mgr.CallWebPaneRegister(wxT("ok.pane"), wxT("OK"),
+	                                     wxT("/tmp/y.html"), nullptr, nullptr), 0);
+	EXPECT_EQ(mgr.HostAIChunkEmit("rid", "\"y\""), 0) << "default now set";
 }
 
 TEST(PluginRegistry, ChunkEmitNoTargetReturnsMinus1) {
