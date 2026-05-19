@@ -134,11 +134,16 @@ void ibFrontendDocMDIFrameDesigner::LoadOptions()
 
 	m_keyBinder.AddCommandsFromMenuBar(mb);
 
+	// Always start from defaults so command ids added after the user's
+	// options.xml was written still receive their shipped shortcuts.
+	// Load() then overlays any user-customised bindings on top — its
+	// callees overwrite the keys vector on a per-command basis, so
+	// untouched ids keep their defaults. Without this, every newly
+	// added shortcut (Ctrl+F1 / RawCtrl+F1 / etc.) silently fails to
+	// install on existing installations.
+	SetDefaultHotKeys();
 	if (keyBindingNode != nullptr) {
 		m_keyBinder.Load(keyBindingNode);
-	}
-	else {
-		SetDefaultHotKeys();
 	}
 
 	m_keyBinder.UpdateWindow(this);

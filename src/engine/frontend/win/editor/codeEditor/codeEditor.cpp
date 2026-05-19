@@ -66,6 +66,27 @@ ibCodeEditor::ibCodeEditor(ibMetaDocument* document, wxWindow* parent, wxWindowI
 	UsePopUp(0);
 	Bind(wxEVT_CONTEXT_MENU, &ibCodeEditor::OnContextMenu, this);
 
+	// Free key combinations Scintilla would otherwise consume before they
+	// reach the host frame's accelerator table. Without these CmdKeyClear
+	// calls Scintilla's editor handler eats the key (no-op default action)
+	// and the menu shortcut never fires on Windows / Linux.
+	//   Ctrl+F1                — syntax-helper lookup
+	//   Ctrl+Alt+F1            — toggle the syntax-helper pane
+	//   F9 / Ctrl+Shift+F9     — toggle / enable-disable breakpoint
+	//   F10 / F11              — step over / step into
+	//   F12 / Alt+F12          — go to definition / find usages
+	//   F3 / Shift+F3          — find next / previous
+	CmdKeyClear(WXK_F1, wxSTC_KEYMOD_CTRL);
+	CmdKeyClear(WXK_F1, wxSTC_KEYMOD_CTRL | wxSTC_KEYMOD_ALT);
+	CmdKeyClear(WXK_F9, wxSTC_KEYMOD_NORM);
+	CmdKeyClear(WXK_F9, wxSTC_KEYMOD_CTRL | wxSTC_KEYMOD_SHIFT);
+	CmdKeyClear(WXK_F10, wxSTC_KEYMOD_NORM);
+	CmdKeyClear(WXK_F11, wxSTC_KEYMOD_NORM);
+	CmdKeyClear(WXK_F12, wxSTC_KEYMOD_NORM);
+	CmdKeyClear(WXK_F12, wxSTC_KEYMOD_ALT);
+	CmdKeyClear(WXK_F3, wxSTC_KEYMOD_NORM);
+	CmdKeyClear(WXK_F3, wxSTC_KEYMOD_SHIFT);
+
 	// On zoom step the line height jumps immediately while STC's per-page
 	// width cache repaints column widths only on the next scroll. Re-fit
 	// the margins (line-number / breakpoint / fold) against the now-
