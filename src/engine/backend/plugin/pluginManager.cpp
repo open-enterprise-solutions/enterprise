@@ -17,6 +17,8 @@
 
 #include "3rdparty/nlohmann/json.hpp"
 
+#include "metaBridge.h"
+
 #ifdef __WXMSW__
   #include <windows.h>
 #endif
@@ -159,10 +161,10 @@ int  Host_MetaDelete(const char* /*fullName*/, char** /*errorMsg*/)
 	return -1;
 }
 
-int  Host_MetaQuery(const char* /*fullName*/, const char* /*fieldsFilter*/,
-                      char** /*jsonOut*/, char** /*errorMsg*/)
+int  Host_MetaQuery(const char* fullName, const char* fieldsFilter,
+                      char** jsonOut, char** errorMsg)
 {
-	return -1;
+	return metaBridge::HostMetaQuery(fullName, fieldsFilter, jsonOut, errorMsg);
 }
 
 // The single ibHostAPI instance handed to every v2+ plugin. Const after

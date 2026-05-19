@@ -370,3 +370,80 @@ TEST(PluginRegistry, ChunkEnvelopesAreDistinct) {
 	EXPECT_NE(sends[sends.size()-2].find("\"tokens\":42"),           std::string::npos);
 	EXPECT_NE(sends[sends.size()-1].find("\"code\":\"timeout\""),    std::string::npos);
 }
+
+// ---------------------------------------------------------------------------
+// Phase 3.1 — MetaQuery error-path coverage. Live-walk tests require a
+// loaded ibMetaDataConfiguration fixture and ship with the integration
+// suite; here we exercise the parser + dispatcher boundary only.
+// ---------------------------------------------------------------------------
+#include "backend/plugin/metaBridge.h"
+
+TEST(MetaBridge, KindStringToCLSIDKnownKinds) {
+	EXPECT_NE(metaBridge::KindStringToCLSID("Catalog"),  0ull);
+	EXPECT_NE(metaBridge::KindStringToCLSID("Document"), 0ull);
+	EXPECT_NE(metaBridge::KindStringToCLSID("AccountingRegister"), 0ull);
+	EXPECT_NE(metaBridge::KindStringToCLSID("InformationRegister"), 0ull);
+	EXPECT_NE(metaBridge::KindStringToCLSID("ChartOfAccounts"), 0ull);
+}
+
+TEST(MetaBridge, KindStringToCLSIDUnknownKinds) {
+	EXPECT_EQ(metaBridge::KindStringToCLSID("Bogus"),     0ull);
+	EXPECT_EQ(metaBridge::KindStringToCLSID(""),          0ull);
+	EXPECT_EQ(metaBridge::KindStringToCLSID(nullptr),     0ull);
+	EXPECT_EQ(metaBridge::KindStringToCLSID("catalog"),   0ull) << "case-sensitive";
+}
+
+TEST(MetaBridge, MetaQueryRejectsMalformedFullName) {
+	char* jsonOut = nullptr;
+	char* err     = nullptr;
+	EXPECT_EQ(metaBridge::HostMetaQuery("",          nullptr, &jsonOut, &err), -1);
+	EXPECT_EQ(jsonOut, nullptr);
+	ASSERT_NE(err, nullptr);
+	std::free(err);
+
+	err = nullptr;
+	EXPECT_EQ(metaBridge::HostMetaQuery("NoSeparator", nullptr, &jsonOut, &err), -1);
+	ASSERT_NE(err, nullptr);
+	std::free(err);
+
+	err = nullptr;
+	EXPECT_EQ(metaBridge::HostMetaQuery(".LeadingDot", nullptr, &jsonOut, &err), -1);
+	ASSERT_NE(err, nullptr);
+	std::free(err);
+
+	err = nullptr;
+	EXPECT_EQ(metaBridge::HostMetaQuery("TrailingDot.", nullptr, &jsonOut, &err), -1);
+	ASSERT_NE(err, nullptr);
+	std::free(err);
+}
+
+TEST(MetaBridge, MetaQueryRejectsUnknownKind) {
+	char* jsonOut = nullptr;
+	char* err     = nullptr;
+	EXPECT_EQ(metaBridge::HostMetaQuery("Bogus.X", nullptr, &jsonOut, &err), -1);
+	EXPECT_EQ(jsonOut, nullptr);
+	ASSERT_NE(err, nullptr);
+	const std::string e(err);
+	EXPECT_NE(e.find("unknown kind"), std::string::npos);
+	std::free(err);
+}
+
+TEST(MetaBridge, MetaQueryHandlesMissingConfig) {
+	// activeMetaData == nullptr in this test process — the host must
+	// surface a diagnostic and refuse to dereference. Real configuration
+	// fixtures live in the integration suite.
+	char* jsonOut = nullptr;
+	char* err     = nullptr;
+	EXPECT_EQ(metaBridge::HostMetaQuery("Catalog.X", nullptr, &jsonOut, &err), -1);
+	EXPECT_EQ(jsonOut, nullptr);
+	ASSERT_NE(err, nullptr);
+	const std::string e(err);
+	EXPECT_TRUE(e.find("no configuration") != std::string::npos ||
+	             e.find("not found") != std::string::npos);
+	std::free(err);
+}
+
+TEST(MetaBridge, MetaQueryNullOutPointersAreSafe) {
+	// errorMsg / jsonOut may be NULL — the host must not crash.
+	EXPECT_EQ(metaBridge::HostMetaQuery("Bogus.Y", nullptr, nullptr, nullptr), -1);
+}
