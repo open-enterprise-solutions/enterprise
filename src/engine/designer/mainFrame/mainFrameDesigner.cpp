@@ -212,7 +212,7 @@ void ibFrontendDocMDIFrameDesigner::SaveOptions()
 	// remembered visibility.
 	{
 		std::unordered_map<wxString, bool> combined = m_pendingPluginWebPaneVisible;
-		for (const wxString& paneId : m_pluginWebPaneIds) {
+		for (const wxString& paneId : m_pluginWebPaneOrder) {
 			wxAuiPaneInfo& info = m_mgr.GetPane(paneId);
 			combined[paneId] = info.IsOk() && info.IsShown();
 		}

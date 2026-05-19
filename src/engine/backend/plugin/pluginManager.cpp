@@ -455,6 +455,17 @@ int ibPluginManager::CallWebPaneRegister(const wxString& paneId,
                                            ibPluginWebMsgFn cb,
                                            void* userData)
 {
+	// Contract: RegisterWebPane must be called from the main (UI) thread.
+	// Documented in pluginApi.h. Reasons: (a) the buffer m_pendingWebPaneRegs
+	// is touched without locks and racing it would corrupt the vector;
+	// (b) the WebView pane is a wxWindow and wxWidgets construction is
+	// not thread-safe. Plugins that need worker-thread mutations must
+	// post back via WebPaneSend (which IS thread-safe).
+	if (!wxIsMainThread()) {
+		wxLogWarning(wxT("ibPluginManager::CallWebPaneRegister called off main thread for '%s' — refused"),
+		             paneId);
+		return -1;
+	}
 	if (!m_webPaneRegister) {
 		// Designer hasn't installed callbacks yet — buffer for replay.
 		// Return success so the plugin doesn't treat early-init as

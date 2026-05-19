@@ -13,6 +13,8 @@
 
 #include <wx/xml/xml.h>
 
+#include <algorithm>
+
 void ibFrontendDocMDIFrameDesigner::CreateWideGui()
 {
 	m_mainFrameToolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
@@ -276,12 +278,15 @@ void ibFrontendDocMDIFrameDesigner::WirePluginWebPaneCallbacks()
 
 	pm->SetWebPaneCallbacks(
 	    // RegisterWebPane — wraps an ibPluginWebPane inside a wxAuiPane.
+	    // Single source of truth for "this paneId is live" is the AUI
+	    // manager: GetPane(paneId).IsOk(). m_pluginWebPaneOrder tracks
+	    // registration order ONLY (deterministic default-pane pick); it
+	    // is intentionally NOT used as a uniqueness guard because the
+	    // user closing a pane removes it from AUI but the id would stay
+	    // in the vector — re-registration must succeed.
 	    [this](const wxString& paneId, const wxString& title,
 	            const wxString& htmlBundlePath,
 	            ibPluginWebMsgFn onMessage, void* userData) -> int {
-	        if (m_pluginWebPaneIds.count(paneId)) return -1;
-	        // Reject duplicate name at the AUI level too — AddPane silently
-	        // refuses panes whose Name() collides with an existing one.
 	        if (m_mgr.GetPane(paneId).IsOk()) return -1;
 	        auto* pane = new ibPluginWebPane(this, paneId, title,
 	                                          htmlBundlePath, onMessage, userData);
@@ -300,11 +305,19 @@ void ibFrontendDocMDIFrameDesigner::WirePluginWebPaneCallbacks()
 	        const bool wantVisible = (pit != m_pendingPluginWebPaneVisible.end()) && pit->second;
 	        info.Show(wantVisible);
 	        if (!m_mgr.AddPane(pane, info)) {
-	            delete pane;
+	            // pane is already a wxWindow child of `this`. Bare delete
+	            // would race the parent's destruction list. Destroy()
+	            // schedules safe teardown through the wxWidgets event loop.
+	            pane->Destroy();
 	            return -1;
 	        }
 	        m_mgr.Update();
-	        m_pluginWebPaneIds.insert(paneId);
+	        // Append to order log only on first-time registration. A plugin
+	        // that unregisters+re-registers the same id keeps its slot.
+	        if (std::find(m_pluginWebPaneOrder.begin(), m_pluginWebPaneOrder.end(), paneId)
+		        == m_pluginWebPaneOrder.end()) {
+	            m_pluginWebPaneOrder.push_back(paneId);
+	        }
 	        return 0;
 	    },
 	    // WebPaneSend — thread-safe push. Resolves the live pane through

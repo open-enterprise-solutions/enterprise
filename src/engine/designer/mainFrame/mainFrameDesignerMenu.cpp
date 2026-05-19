@@ -232,11 +232,21 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	Bind(wxEVT_MENU,
 	     [this](wxCommandEvent&) {
 	         WirePluginWebPaneCallbacks();
-	         // Show the first registered plugin pane. Multi-pane UI lives
-	         // under a future View → Plugin Panes submenu (Phase 2).
-	         if (!m_pluginWebPaneIds.empty()) {
-	             auto* pm = appData->GetPluginManager();
-	             if (pm) { pm->CallWebPaneShow(*m_pluginWebPaneIds.begin()); }
+	         // Show the first registered plugin pane that is still live
+	         // (the user may have closed an earlier one — skip stale ids).
+	         // Multi-pane UI lives under a future View → Plugin Panes
+	         // submenu (Phase 2). m_pluginWebPaneOrder preserves
+	         // registration order so the choice is deterministic across
+	         // restarts; with two plugins installed the user always gets
+	         // the same default on RawCtrl+Alt+I.
+	         auto* pm = appData->GetPluginManager();
+	         if (pm) {
+	             for (const wxString& paneId : m_pluginWebPaneOrder) {
+	                 if (m_mgr.GetPane(paneId).IsOk()) {
+	                     pm->CallWebPaneShow(paneId);
+	                     break;
+	                 }
+	             }
 	         }
 	     },
 	     wxID_FRONTEND_PLUGIN_WEB_PANE);

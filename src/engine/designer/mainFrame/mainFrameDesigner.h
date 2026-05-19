@@ -5,7 +5,7 @@
 #include "mainFrame/metaTree/treeConfiguration.h"
 
 #include <unordered_map>
-#include <unordered_set>
+#include <vector>
 
 #if defined(mainFrame)
 #undef mainFrame
@@ -171,11 +171,13 @@ private:
 
 	// Plugin-driven WebView panes — generic infrastructure for any plugin
 	// that wants to embed a wxWebView-based UI (AI assistants, custom
-	// integration dashboards, etc.). Set of registered paneIds; the AUI
+	// integration dashboards, etc.). Ordered registration log; the AUI
 	// manager owns the actual ibPluginWebPane lifecycle. Lookups go via
 	// m_mgr.GetPane(paneId) so a closed-and-destroyed pane never leaves
-	// a dangling pointer behind.
-	std::unordered_set<wxString> m_pluginWebPaneIds;
+	// a dangling pointer behind. The vector preserves registration order
+	// so the "primary pane" picker (RawCtrl+Alt+I default action) is
+	// deterministic across restarts — first registered wins.
+	std::vector<wxString> m_pluginWebPaneOrder;
 	bool m_pluginWebPaneCallbacksRegistered = false;
 	void WirePluginWebPaneCallbacks();
 

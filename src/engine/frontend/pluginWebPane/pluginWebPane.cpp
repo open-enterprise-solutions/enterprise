@@ -116,11 +116,19 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 	     &ibPluginWebPane::OnPushFromOtherThread, this);
 
 	// Inject the boot script at document-start. AddUserScript runs the
-	// snippet BEFORE the page's own scripts evaluate, so DOMContentLoaded
+	// snippet BEFORE the page's own scripts evaluate so DOMContentLoaded
 	// handlers and inline <script> tags both see window.oesHost ready.
-	// This replaces the prior wxEVT_WEBVIEW_LOADED wiring which fired
-	// AFTER DOMContentLoaded and missed the early bind window.
+	//
+	// Backend-portability belt-and-suspenders: wxWebViewIE (legacy MSW
+	// fallback) and some older WebKit2GTK builds silently ignore the
+	// AT_DOCUMENT_START hint and inject at document-end. Bind LOADED as
+	// a secondary injection so the bridge installs there too. The boot
+	// script is idempotent (the `if (window.oesHost && __ready) return`
+	// guard) so a double-fire is a no-op.
 	m_webView->AddUserScript(PluginWebPaneBootScript(), wxWEBVIEW_INJECT_AT_DOCUMENT_START);
+	m_webView->Bind(wxEVT_WEBVIEW_LOADED, [this](wxWebViewEvent&) {
+		if (m_webView) m_webView->RunScript(PluginWebPaneBootScript());
+	});
 
 	const wxString fileUri = wxFileName::FileNameToURL(wxFileName(htmlBundlePath));
 	m_webView->LoadURL(fileUri);
