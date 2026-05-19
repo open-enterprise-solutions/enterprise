@@ -139,6 +139,17 @@ size_t ibPluginManager::LoadAll()
 {
 	UnloadAll();
 
+	// Sandbox / kill-switch. OES_PLUGIN_SANDBOX=1 in the environment
+	// skips plugin discovery entirely — useful for incident response
+	// (a misbehaving plugin won't even load on the next launch) and
+	// for the read-only "viewer" deployments that should never run
+	// third-party code.
+	const wxString sandbox = wxGetenv(wxT("OES_PLUGIN_SANDBOX"));
+	if (sandbox == wxT("1") || sandbox.Lower() == wxT("true")) {
+		wxLogMessage(wxT("Plugin sandbox active (OES_PLUGIN_SANDBOX=1) — skipping plugin discovery."));
+		return 0;
+	}
+
 	g_currentManager = this;
 	struct ManagerGuard { ~ManagerGuard() { g_currentManager = nullptr; } } guard;
 

@@ -6,6 +6,7 @@
 #include "mainFrameDesigner.h"
 
 #include "backend/appData.h"
+#include "backend/plugin/pluginManager.h"
 #include "backend/debugger/debugClient.h"
 #include "backend/session/sessionRegistry.h"
 
@@ -39,6 +40,8 @@ void ibFrontendDocMDIFrameDesigner::OnStartDebug(wxCommandEvent& WXUNUSED(event)
 		}
 	}
 
+	if (auto* pm = appData->GetPluginManager())
+		pm->FireEvent(wxT("BeforeRun"));
 	appData->RunApplication(wxT("enterprise"));
 }
 
@@ -52,6 +55,8 @@ void ibFrontendDocMDIFrameDesigner::OnStartDebugWithoutDebug(wxCommandEvent& WXU
 		}
 	}
 
+	if (auto* pm = appData->GetPluginManager())
+		pm->FireEvent(wxT("BeforeRun"));
 	appData->RunApplication(wxT("enterprise"), false);
 }
 
@@ -78,6 +83,8 @@ static void LaunchWebDebug(wxWindow* parent, bool withDebug)
 	// up; the designer's debugClient then attaches via the manifest's
 	// pid/host (out-of-band of the manifest itself — debug-server still
 	// listens on defaultDebuggerPort+offset).
+	if (auto* pm = appData->GetPluginManager())
+		pm->FireEvent(wxT("BeforeRun"));
 	if (appData->RunApplication(wxT("wenterprise-server"),
 			/*searchDebug=*/withDebug, /*useManifest=*/true) == 0) {
 		wxMessageBox(_("Failed to start wenterprise-server"),
@@ -217,7 +224,12 @@ void ibFrontendDocMDIFrameDesigner::OnUpdateConfiguration(wxCommandEvent& event)
 		canSave = doc->OnSaveModified();
 	}
 
-	// stage one - save database  
+	if (canSave) {
+		if (auto* pm = appData->GetPluginManager())
+			pm->FireEvent(wxT("BeforePublish"));
+	}
+
+	// stage one - save database
 	if (canSave && !activeMetaData->SaveDatabase()) {
 
 		for (const auto& entry : s_restructureInfo) {

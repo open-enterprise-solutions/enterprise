@@ -8,6 +8,8 @@
 
 #include "system/systemManager.h"
 #include "backend/guid.h"  // wxNewUniqueGuid for anonymous-lambda synthetic naming
+#include "backend/appData.h"
+#include "backend/plugin/pluginManager.h"
 
 #pragma warning(push)
 #pragma warning(disable : 4018)
@@ -682,9 +684,11 @@ bool ibCompileCode::Recompile()
 	// prepare context variables
 	PrepareModuleData();
 
-	// compilation 
+	// compilation
 	if (CompileModule()) {
 		m_changedCode = false;
+		if (auto* pm = appData->GetPluginManager())
+			pm->FireEvent(wxT("AfterCompile"));
 		return true;
 	}
 
@@ -712,9 +716,11 @@ bool ibCompileCode::Compile()
 	// prepare context variables
 	PrepareModuleData();
 
-	// compilation 
+	// compilation
 	if (CompileModule()) {
 		m_changedCode = false;
+		if (auto* pm = appData->GetPluginManager())
+			pm->FireEvent(wxT("AfterCompile"));
 		return true;
 	}
 
@@ -744,9 +750,11 @@ bool ibCompileCode::Compile(const wxString& strCode)
 	// prepare context variables
 	PrepareModuleData();
 
-	// compilation 
+	// compilation
 	if (CompileModule()) {
 		m_changedCode = false;
+		if (auto* pm = appData->GetPluginManager())
+			pm->FireEvent(wxT("AfterCompile"));
 		return true;
 	}
 

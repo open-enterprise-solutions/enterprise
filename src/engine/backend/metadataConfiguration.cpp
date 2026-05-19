@@ -5,6 +5,7 @@
 
 #include "backend/backend_mainFrame.h"
 #include "backend/appData.h"
+#include "backend/plugin/pluginManager.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 ibMetaDataConfigurationBase* ibMetaDataConfigurationBase::ms_instance = nullptr;
@@ -666,6 +667,9 @@ bool ibMetaDataConfigurationStorage::OnInitialize(const int flags)
 	// main language code — designer always works with the editorial
 	// baseline of the configuration regardless of OS locale.
 	ibBackendLocalization::SetUserLanguage(GetLangCode());
+
+	if (auto* pm = appData->GetPluginManager())
+		pm->FireEvent(wxT("ConfigLoaded"));
 
 	return true;
 }
