@@ -167,6 +167,17 @@ int  Host_MetaQuery(const char* fullName, const char* fieldsFilter,
 	return metaBridge::HostMetaQuery(fullName, fieldsFilter, jsonOut, errorMsg);
 }
 
+// Cross-DLL safe free for buffers the host malloc'd inside Meta* out
+// parameters. The plugin MUST call this rather than free() — on Windows
+// with mismatched CRTs the heap pages live in different runtimes and
+// plain free() would corrupt the host's heap. macOS / Linux share libc
+// and either path is safe; we still mandate this entry point so plugin
+// code is portable.
+void Host_FreeBuffer(void* buf)
+{
+	std::free(buf);
+}
+
 // The single ibHostAPI instance handed to every v2+ plugin. Const after
 // initialization; plugins never mutate it. Field order MUST match the
 // pluginApi.h struct declaration — appends only at the tail across ABI
@@ -197,6 +208,7 @@ const ibHostAPI g_hostAPI = {
 	&Host_MetaEdit,
 	&Host_MetaDelete,
 	&Host_MetaQuery,
+	&Host_FreeBuffer,
 };
 
 // RAII: on Windows, silence the OS-level "missing DLL" modal that

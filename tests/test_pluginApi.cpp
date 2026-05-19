@@ -72,6 +72,7 @@ TEST(PluginAbi, V4FieldsAppendedAtTail) {
 	EXPECT_LT(offsetof(H, MetaCreate),         offsetof(H, MetaEdit));
 	EXPECT_LT(offsetof(H, MetaEdit),           offsetof(H, MetaDelete));
 	EXPECT_LT(offsetof(H, MetaDelete),         offsetof(H, MetaQuery));
+	EXPECT_LT(offsetof(H, MetaQuery),          offsetof(H, FreeBuffer));
 }
 
 TEST(PluginAbi, LockDeniedCodeIsStable) {
@@ -390,7 +391,30 @@ TEST(MetaBridge, KindStringToCLSIDUnknownKinds) {
 	EXPECT_EQ(metaBridge::KindStringToCLSID("Bogus"),     0ull);
 	EXPECT_EQ(metaBridge::KindStringToCLSID(""),          0ull);
 	EXPECT_EQ(metaBridge::KindStringToCLSID(nullptr),     0ull);
-	EXPECT_EQ(metaBridge::KindStringToCLSID("catalog"),   0ull) << "case-sensitive";
+}
+
+TEST(MetaBridge, KindStringToCLSIDIsCaseInsensitive) {
+	// Agent prompts produce mixed case; lookup must be case-insensitive
+	// so "catalog" / "CATALOG" / "Catalog" all resolve. Canonical-case
+	// labels remain "Catalog" etc. in serialised output.
+	const auto canonical = metaBridge::KindStringToCLSID("Catalog");
+	EXPECT_EQ(metaBridge::KindStringToCLSID("catalog"),  canonical);
+	EXPECT_EQ(metaBridge::KindStringToCLSID("CATALOG"),  canonical);
+	EXPECT_EQ(metaBridge::KindStringToCLSID("CaTaLoG"),  canonical);
+	EXPECT_EQ(metaBridge::KindStringToCLSID("ACCOUNTINGREGISTER"),
+	          metaBridge::KindStringToCLSID("AccountingRegister"));
+}
+
+TEST(MetaBridge, MetaQueryFieldsFilterFailsLoud) {
+	char* jsonOut = nullptr;
+	char* err     = nullptr;
+	EXPECT_EQ(metaBridge::HostMetaQuery("Catalog.X", "name,synonym",
+	                                       &jsonOut, &err), -1);
+	EXPECT_EQ(jsonOut, nullptr);
+	ASSERT_NE(err, nullptr);
+	const std::string e(err);
+	EXPECT_NE(e.find("fieldsFilter"), std::string::npos);
+	std::free(err);
 }
 
 TEST(MetaBridge, MetaQueryRejectsMalformedFullName) {

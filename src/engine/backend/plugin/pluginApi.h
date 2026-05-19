@@ -216,6 +216,13 @@ typedef struct ibHostAPI_s {
 	ibPluginMetaEditFn    MetaEdit;
 	ibPluginMetaDeleteFn  MetaDelete;
 	ibPluginMetaQueryFn   MetaQuery;
+
+	// Free a buffer the host allocated via MetaQuery/MetaCreate/MetaEdit/
+	// MetaDelete out-parameters (jsonOut, errorMsg). The plugin MUST call
+	// this — calling plain free() crashes on Windows when host and plugin
+	// link different CRTs (the canonical mismatched-heap footgun). Safe
+	// to call with NULL.
+	void (*FreeBuffer)(void* buf);
 } ibHostAPI;
 
 // Required export. The DLL announces itself via this fn — abi_version

@@ -16,7 +16,11 @@
 #include "3rdparty/nlohmann/json.hpp"
 
 #include <wx/string.h>
+#include <wx/thread.h>
+#include <wx/log.h>
 
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -28,33 +32,62 @@ namespace {
 // Map plugin-facing kind label → CLSID. The strings here mirror the
 // public XML / JSON serialisation tags (CLAUDE.md §Metadata Object Types)
 // so the same vocabulary works for agents, config import/export, and
-// human-authored tooling. Add new kinds at the tail; do not renumber.
+// human-authored tooling. Keys are stored canonical-case + lower-case so
+// case-insensitive lookups land — agent prompts produce mixed case in
+// the wild; refusing "catalog" but accepting "Catalog" hurts agent DX.
 const std::unordered_map<std::string, unsigned long long>& KindMap()
 {
 	static const std::unordered_map<std::string, unsigned long long> map = {
-		{ "Constant",                     g_metaConstantCLSID                 },
-		{ "Catalog",                      g_metaCatalogCLSID                  },
-		{ "Document",                     g_metaDocumentCLSID                 },
-		{ "Enumeration",                  g_metaEnumerationCLSID              },
-		{ "DataProcessor",                g_metaDataProcessorCLSID            },
-		{ "Report",                       g_metaReportCLSID                   },
-		{ "InformationRegister",          g_metaInformationRegisterCLSID      },
-		{ "AccumulationRegister",         g_metaAccumulationRegisterCLSID     },
-		{ "ChartOfCharacteristicTypes",   g_metaChartOfCharacteristicTypesCLSID },
-		{ "ChartOfAccounts",              g_metaChartOfAccountsCLSID          },
-		{ "AccountingRegister",           g_metaAccountingRegisterCLSID       },
+		{ "constant",                   g_metaConstantCLSID                   },
+		{ "catalog",                    g_metaCatalogCLSID                    },
+		{ "document",                   g_metaDocumentCLSID                   },
+		{ "enumeration",                g_metaEnumerationCLSID                },
+		{ "dataprocessor",              g_metaDataProcessorCLSID              },
+		{ "report",                     g_metaReportCLSID                     },
+		{ "informationregister",        g_metaInformationRegisterCLSID        },
+		{ "accumulationregister",       g_metaAccumulationRegisterCLSID       },
+		{ "chartofcharacteristictypes", g_metaChartOfCharacteristicTypesCLSID },
+		{ "chartofaccounts",            g_metaChartOfAccountsCLSID            },
+		{ "accountingregister",         g_metaAccountingRegisterCLSID         },
 	};
 	return map;
 }
 
-// Reverse lookup — CLSID → kind label. Useful for shipping the kind
-// back in serialised payloads without baking the table in twice.
+// Canonical-case labels mirrored back in serialised JSON output. Keyed
+// by CLSID so we don't have to re-lower-case every emitted entry. Same
+// table as KindMap() but with display-case values + CLSID keys.
+const std::unordered_map<unsigned long long, std::string>& CLSIDToKindMap()
+{
+	static const std::unordered_map<unsigned long long, std::string> map = {
+		{ g_metaConstantCLSID,                   "Constant"                    },
+		{ g_metaCatalogCLSID,                    "Catalog"                     },
+		{ g_metaDocumentCLSID,                   "Document"                    },
+		{ g_metaEnumerationCLSID,                "Enumeration"                 },
+		{ g_metaDataProcessorCLSID,              "DataProcessor"               },
+		{ g_metaReportCLSID,                     "Report"                      },
+		{ g_metaInformationRegisterCLSID,        "InformationRegister"         },
+		{ g_metaAccumulationRegisterCLSID,       "AccumulationRegister"        },
+		{ g_metaChartOfCharacteristicTypesCLSID, "ChartOfCharacteristicTypes"  },
+		{ g_metaChartOfAccountsCLSID,            "ChartOfAccounts"             },
+		{ g_metaAccountingRegisterCLSID,         "AccountingRegister"          },
+	};
+	return map;
+}
+
+// Reverse lookup — O(1) via the precomputed map above.
 std::string CLSIDToKindString(unsigned long long clsid)
 {
-	for (const auto& kv : KindMap()) {
-		if (kv.second == clsid) return kv.first;
-	}
-	return std::string();
+	const auto& map = CLSIDToKindMap();
+	auto it = map.find(clsid);
+	return it == map.end() ? std::string() : it->second;
+}
+
+std::string LowerAscii(const std::string& s)
+{
+	std::string out(s);
+	std::transform(out.begin(), out.end(), out.begin(),
+	               [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+	return out;
 }
 
 // Allocate `s` via malloc so the plugin caller can free() it per
@@ -134,18 +167,39 @@ unsigned long long KindStringToCLSID(const char* kind)
 {
 	if (kind == nullptr || *kind == '\0') return 0;
 	const auto& map = KindMap();
-	auto it = map.find(std::string(kind));
+	auto it = map.find(LowerAscii(std::string(kind)));
 	if (it == map.end()) return 0;
 	return it->second;
 }
 
 int HostMetaQuery(const char* fullName,
-                   const char* /*fieldsFilter*/,
+                   const char* fieldsFilter,
                    char**      jsonOut,
                    char**      errorMsg)
 {
 	if (jsonOut != nullptr) *jsonOut = nullptr;
 	if (errorMsg != nullptr) *errorMsg = nullptr;
+
+	// Thread contract — activeMetaData and its child tree may be
+	// concurrently mutated by Designer UI events (form edits, paste,
+	// debugger session start). Walking the tree from a plugin worker
+	// thread would TOCTOU-race those mutations and produce dangling
+	// pointer reads. Mirror the wxIsMainThread guard pattern from
+	// CallWebPaneRegister; agent calls land on the UI thread already
+	// thanks to the WebView message marshal.
+	if (!wxIsMainThread()) {
+		wxLogWarning(wxT("metaBridge::HostMetaQuery called off main thread — refused"));
+		SetError(errorMsg, "MetaQuery: must be called from the UI thread");
+		return -1;
+	}
+
+	// Phase 3.1 does not yet honour field projection — fail loud so a
+	// caller that depends on it sees the gap immediately instead of
+	// silently receiving the full payload.
+	if (fieldsFilter != nullptr && *fieldsFilter != '\0') {
+		SetError(errorMsg, "MetaQuery: fieldsFilter not yet supported (Phase 3.1)");
+		return -1;
+	}
 
 	std::string kind, name;
 	if (!SplitFullName(fullName, kind, name)) {
@@ -169,15 +223,15 @@ int HostMetaQuery(const char* fullName,
 		return -1;
 	}
 
-	// Manual walk of top-level children — FindObjectByFilter would
-	// match here directly but its overloads are `protected` on the
-	// metaObject base. Walking GetAnyArrayObject<>() is public and
-	// gives us the same answer at the cost of an extra std::vector
-	// allocation per call (acceptable; queries are agent-paced, not
-	// hot-path).
+	// Single snapshot of root's children → no TOCTOU between membership
+	// scan and serialisation. We hold the std::vector locally for the
+	// rest of the call; the pointed-to objects remain valid because we
+	// are on the UI thread (see guard above) and no recursive call to
+	// the Designer reaches here before we return.
+	const std::vector<ibValueMetaObject*> topLevel = root->GetAnyArrayObject<>();
 	const wxString needle = wxString::FromUTF8(name.c_str());
 	ibValueMetaObject* hit = nullptr;
-	for (ibValueMetaObject* child : root->GetAnyArrayObject<>()) {
+	for (ibValueMetaObject* child : topLevel) {
 		if (child == nullptr) continue;
 		if (child->GetClassType() != static_cast<ibClassID>(clsid)) continue;
 		if (child->GetName() != needle) continue;
@@ -189,19 +243,27 @@ int HostMetaQuery(const char* fullName,
 		return -1;
 	}
 
+	// Skip the dump+strdup if the caller didn't want the buffer — saves
+	// an allocation pair and the JSON serialisation pass entirely.
+	if (jsonOut == nullptr) return 0;
+
 	try {
-		nlohmann::json j = SerializeObject(*hit, std::string(fullName), kind);
+		nlohmann::json j = SerializeObject(*hit, std::string(fullName),
+		                                     CLSIDToKindString(static_cast<unsigned long long>(clsid)));
 		const std::string dump = j.dump();
 		char* buf = StrdupForPlugin(dump);
 		if (buf == nullptr) {
 			SetError(errorMsg, "MetaQuery: out of memory");
 			return -1;
 		}
-		if (jsonOut != nullptr) *jsonOut = buf;
-		else std::free(buf); // caller didn't want the data — drop it
+		*jsonOut = buf;
 		return 0;
 	} catch (const std::exception& e) {
-		SetError(errorMsg, std::string("MetaQuery: serialisation failed — ") + e.what());
+		// Generic error to plugin (no internal library leak); detailed
+		// reason to host log for our own debugging.
+		wxLogWarning(wxT("metaBridge::HostMetaQuery serialisation threw: %s"),
+		             wxString::FromUTF8(e.what()));
+		SetError(errorMsg, "MetaQuery: internal serialisation error");
 		return -1;
 	}
 }
