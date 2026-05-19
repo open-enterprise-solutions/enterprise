@@ -275,6 +275,7 @@
     <ClInclude Include="uniqueKey.h" />
     <ClInclude Include="plugin\pluginApi.h" />
     <ClInclude Include="plugin\pluginManager.h" />
+    <ClInclude Include="plugin\pluginValue.h" />
     <ClInclude Include="utils\md5.hpp" />
     <ClInclude Include="utils\sha256.hpp" />
     <ClInclude Include="utils\passwordHash.hpp" />
@@ -618,6 +619,7 @@
     <ClCompile Include="typeDescription.cpp" />
     <ClCompile Include="uniqueKey.cpp" />
     <ClCompile Include="plugin\pluginManager.cpp" />
+    <ClCompile Include="plugin\pluginValue.cpp" />
     <ClCompile Include="utils\md5.cpp" />
     <ClCompile Include="utils\sha256.cpp" />
     <ClCompile Include="utils\passwordHash.cpp" />
