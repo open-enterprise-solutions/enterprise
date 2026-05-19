@@ -1,8 +1,11 @@
 /////////////////////////////////////////////////////////////////////////////
-// Plugin manager implementation.
+// Plugin manager implementation — ABI v1 + v2 dual-stack.
 /////////////////////////////////////////////////////////////////////////////
 
 #include "pluginManager.h"
+#include "pluginValue.h"
+
+#include "backend/appData.h"
 
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
@@ -14,9 +17,84 @@
 #endif
 
 namespace {
-// RAII: on Windows, silence the OS-level "missing DLL" modal that LoadLibrary
-// otherwise pops up for every broken plugin dependency. Other platforms are
-// no-ops.
+
+// Lowest + highest ABI version this build accepts. Plugins built against
+// a number outside [kAbiMin, kAbiMax] are skipped.
+constexpr int kAbiMin = 1;
+constexpr int kAbiMax = IB_PLUGIN_ABI_VERSION;
+
+// The plugin manager currently being loaded — the host-API trampolines
+// dispatch back into it. Set for the duration of LoadAll().
+ibPluginManager* g_currentManager = nullptr;
+
+// Arena that backs Make* / Get* calls for the in-flight initialize /
+// menu-handler / event-callback invocation. Cleared between invocations.
+thread_local ibPluginCallScope* tl_scope = nullptr;
+
+// =========================================================================
+// Host API trampolines — every function is a C symbol with no captures,
+// so wiring is a plain function-pointer table.
+// =========================================================================
+
+int Host_RegisterFunction(const char* name, ibPluginFunctionFn fn)
+{
+	if (g_currentManager == nullptr) return -1;
+	return g_currentManager->HostRegisterFunction(name, fn);
+}
+
+int Host_RegisterMenuItem(const char* label, ibPluginMenuFn handler)
+{
+	if (g_currentManager == nullptr) return -1;
+	return g_currentManager->HostRegisterMenuItem(label, handler);
+}
+
+int Host_Subscribe(const char* event, ibPluginEventFn cb)
+{
+	if (g_currentManager == nullptr) return -1;
+	return g_currentManager->HostSubscribe(event, cb);
+}
+
+void Host_Log(const char* msg, int severity)
+{
+	// Plugins log at any phase; appData may already be NULL during
+	// shutdown. Route through wxLogMessage as a stable fallback.
+	const wxString text = wxString::FromUTF8(msg ? msg : "");
+	switch (severity) {
+		case 1:  wxLogWarning("%s", text); break;
+		case 2:  wxLogError  ("%s", text); break;
+		default: wxLogMessage("%s", text); break;
+	}
+}
+
+ibPluginValue* Host_MakeString(const char* utf8) { return tl_scope ? tl_scope->MakeString(utf8) : nullptr; }
+ibPluginValue* Host_MakeNumber(double n)         { return tl_scope ? tl_scope->MakeNumber(n)    : nullptr; }
+ibPluginValue* Host_MakeBool  (int b)            { return tl_scope ? tl_scope->MakeBool(b)      : nullptr; }
+ibPluginValue* Host_MakeNull  (void)             { return tl_scope ? tl_scope->MakeNull()       : nullptr; }
+const char*    Host_GetString (const ibPluginValue* v) { return ibPluginCallScope::GetString(v); }
+double         Host_GetNumber (const ibPluginValue* v) { return ibPluginCallScope::GetNumber(v); }
+int            Host_GetBool   (const ibPluginValue* v) { return ibPluginCallScope::GetBool(v);   }
+int            Host_IsNull    (const ibPluginValue* v) { return ibPluginCallScope::IsNull(v);    }
+
+// The single ibHostAPI instance handed to every v2 plugin. Const after
+// initialization; plugins never mutate it.
+const ibHostAPI g_hostAPI = {
+	&Host_RegisterFunction,
+	&Host_RegisterMenuItem,
+	&Host_Subscribe,
+	&Host_Log,
+	&Host_MakeString,
+	&Host_MakeNumber,
+	&Host_MakeBool,
+	&Host_MakeNull,
+	&Host_GetString,
+	&Host_GetNumber,
+	&Host_GetBool,
+	&Host_IsNull,
+};
+
+// RAII: on Windows, silence the OS-level "missing DLL" modal that
+// LoadLibrary otherwise pops up for every broken plugin dependency.
+// Other platforms are no-ops.
 struct ScopedSilenceLoadErrors {
 #ifdef __WXMSW__
 	UINT m_prev;
@@ -27,7 +105,27 @@ struct ScopedSilenceLoadErrors {
 	~ScopedSilenceLoadErrors() = default;
 #endif
 };
+
+bool IsValidIdentifier(const char* name)
+{
+	if (name == nullptr || *name == '\0') return false;
+	auto isIdStart = [](char c) {
+		return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+	};
+	auto isIdCont = [&](char c) {
+		return isIdStart(c) || (c >= '0' && c <= '9');
+	};
+	if (!isIdStart(name[0])) return false;
+	for (const char* p = name + 1; *p; ++p)
+		if (!isIdCont(*p)) return false;
+	return true;
+}
+
 } // namespace
+
+// =========================================================================
+// Public manager surface
+// =========================================================================
 
 wxString ibPluginManager::GetPluginsDir()
 {
@@ -41,12 +139,13 @@ size_t ibPluginManager::LoadAll()
 {
 	UnloadAll();
 
+	g_currentManager = this;
+	struct ManagerGuard { ~ManagerGuard() { g_currentManager = nullptr; } } guard;
+
 	const wxString dir = GetPluginsDir();
 	if (!wxDirExists(dir))
 		return 0;
 
-	// Use the platform's dynamic-library suffix via wxDynamicLibrary — avoids
-	// hard-coding ".dll" so the same code works on Linux (.so) / macOS (.dylib).
 	const wxString pattern = wxT("*") + wxDynamicLibrary::GetDllExt(wxDL_MODULE);
 
 	wxArrayString files;
@@ -60,9 +159,6 @@ size_t ibPluginManager::LoadAll()
 		if (!lib->Load(path, wxDL_DEFAULT | wxDL_QUIET))
 			continue;
 
-		// Suppress wx's error log when GetSymbol misses — every unrelated DLL
-		// in the folder will legitimately not export our plugin entry point
-		// and we don't want to spam the UI with "Couldn't find symbol..." popups.
 		ibPluginInfoFn info_fn = nullptr;
 		{
 			wxLogNull noLog;
@@ -73,22 +169,35 @@ size_t ibPluginManager::LoadAll()
 			continue; // not one of ours
 
 		const ibPluginInfo* info = info_fn();
-		if (info == nullptr || info->abi_version != IB_PLUGIN_ABI_VERSION) {
-			wxLogDebug("Skipping plugin '%s': ABI mismatch (got %d, expected %d)",
-				path, info ? info->abi_version : -1, IB_PLUGIN_ABI_VERSION);
+		if (info == nullptr || info->abi_version < kAbiMin || info->abi_version > kAbiMax) {
+			wxLogDebug("Skipping plugin '%s': ABI mismatch (got %d, host supports %d..%d)",
+				path, info ? info->abi_version : -1, kAbiMin, kAbiMax);
 			continue;
 		}
 
-		// Optional initialise hook — a non-zero return aborts the load.
 		ibPluginInitializeFn init_fn = nullptr;
 		{
 			wxLogNull noLog;
 			init_fn = reinterpret_cast<ibPluginInitializeFn>(
 				lib->GetSymbol(wxT("oes_plugin_initialize")));
 		}
-		if (init_fn && init_fn(/*hostContext*/ nullptr) != 0) {
-			wxLogDebug("Plugin '%s' initialize() failed", path);
-			continue;
+		if (init_fn != nullptr) {
+			// v1 plugins expect a void* hostContext (NULL); v2 plugins
+			// expect the ibHostAPI table. Both signatures are pointer-
+			// width parameters so the same function pointer storage
+			// works — gate on abi_version which we already validated.
+			ibPluginCallScope scope;
+			ibPluginCallScope* prev = tl_scope;
+			tl_scope = &scope;
+			const ibHostAPI* host =
+			    (info->abi_version >= 2) ? &g_hostAPI : nullptr;
+			const int rc = init_fn(host);
+			tl_scope = prev;
+			if (rc != 0) {
+				wxLogDebug("Plugin '%s' initialize() failed (rc=%d)",
+				           path, rc);
+				continue;
+			}
 		}
 
 		LoadedPlugin p;
@@ -100,8 +209,10 @@ size_t ibPluginManager::LoadAll()
 			p.m_shutdown = reinterpret_cast<ibPluginShutdownFn>(
 				p.m_lib->GetSymbol(wxT("oes_plugin_shutdown")));
 		}
-		wxLogDebug("Loaded plugin: %s %s", info->name ? info->name : "<unnamed>",
-			info->version ? info->version : "");
+		wxLogDebug("Loaded plugin: %s %s (ABI v%d)",
+			info->name ? info->name : "<unnamed>",
+			info->version ? info->version : "",
+			info->abi_version);
 
 		m_plugins.push_back(std::move(p));
 	}
@@ -111,13 +222,58 @@ size_t ibPluginManager::LoadAll()
 
 void ibPluginManager::UnloadAll()
 {
-	// Reverse order — last-loaded first, matches LIFO expectations for any
-	// dependencies between plugins.
+	// Subscriber + function tables come down first — once the DLLs are
+	// gone any held function pointer would dangle.
+	m_subscribers.clear();
+	m_functions.clear();
+	m_menuItems.clear();
+
 	for (auto it = m_plugins.rbegin(); it != m_plugins.rend(); ++it) {
 		if (it->m_shutdown) {
-			try { it->m_shutdown(); } catch (...) { /* plugin bug — don't take the host down */ }
+			try { it->m_shutdown(); } catch (...) { /* plugin bug */ }
 		}
-		// m_lib's dtor unloads the DLL.
 	}
 	m_plugins.clear();
+}
+
+void ibPluginManager::FireEvent(const wxString& name, ibPluginValue* payload)
+{
+	const std::string key(name.utf8_str());
+	auto it = m_subscribers.find(key);
+	if (it == m_subscribers.end()) return;
+
+	ibPluginCallScope scope;
+	ibPluginCallScope* prev = tl_scope;
+	tl_scope = &scope;
+	for (auto cb : it->second) {
+		try { cb(key.c_str(), payload); }
+		catch (...) { /* plugin bug — swallow */ }
+	}
+	tl_scope = prev;
+}
+
+int ibPluginManager::HostRegisterFunction(const char* name, ibPluginFunctionFn fn)
+{
+	if (fn == nullptr || !IsValidIdentifier(name)) return -1;
+	// Last writer wins — overwrite an existing binding with the same name.
+	const std::string key(name);
+	for (auto& f : m_functions) {
+		if (f.m_name == key) { f.m_fn = fn; return 0; }
+	}
+	m_functions.push_back({ key, fn });
+	return 0;
+}
+
+int ibPluginManager::HostRegisterMenuItem(const char* label, ibPluginMenuFn handler)
+{
+	if (handler == nullptr || label == nullptr || *label == '\0') return -1;
+	m_menuItems.push_back({ std::string(label), handler });
+	return 0;
+}
+
+int ibPluginManager::HostSubscribe(const char* event, ibPluginEventFn cb)
+{
+	if (cb == nullptr || event == nullptr || *event == '\0') return -1;
+	m_subscribers[std::string(event)].push_back(cb);
+	return 0;
 }
