@@ -144,21 +144,37 @@ int  Host_AIChunkError(const char* requestId, const char* errorJson)
 	return g_currentManager->HostAIChunkError(requestId, errorJson);
 }
 
-int  Host_MetaCreate(const char* /*objectKind*/, const char* /*fullName*/,
-                       const char* /*propertiesJson*/, char** /*errorMsg*/)
+// Caller-identity tracker — Phase 3.3 will fan this out per
+// provider Query / onMessage scope. For Phase 3.2 it stays empty; the
+// metaBridge policy gate then refuses (defensive default — never allow
+// mutations from an unauthenticated origin).
+thread_local std::string tl_currentPluginId;
+
+int  Host_MetaCreate(const char* objectKind, const char* fullName,
+                       const char* propertiesJson, char** errorMsg)
 {
-	return -1; // Phase 3
+	return metaBridge::HostMetaCreate(tl_currentPluginId.c_str(),
+	                                    objectKind, fullName,
+	                                    propertiesJson, errorMsg);
 }
 
-int  Host_MetaEdit(const char* /*fullName*/, const char* /*jsonPatch*/,
-                     char** /*errorMsg*/)
+int  Host_MetaEdit(const char* fullName, const char* jsonPatch,
+                     char** errorMsg)
 {
-	return -1;
+	return metaBridge::HostMetaEdit(tl_currentPluginId.c_str(),
+	                                  fullName, jsonPatch, errorMsg);
 }
 
-int  Host_MetaDelete(const char* /*fullName*/, char** /*errorMsg*/)
+int  Host_MetaDelete(const char* fullName, char** errorMsg)
 {
-	return -1;
+	// Phase 3.2 trampoline does not yet ship the propertiesJson opt-in
+	// hook — the plugin-facing ABI fn only carries (fullName, errorMsg).
+	// Until ABI v5 widens the signature, Host_MetaDelete forces force=false
+	// at the bridge layer; plugins driving destructive ops must call the
+	// metaBridge function directly until the wider signature lands.
+	return metaBridge::HostMetaDelete(tl_currentPluginId.c_str(),
+	                                    fullName, /*propertiesJson*/ nullptr,
+	                                    errorMsg);
 }
 
 int  Host_MetaQuery(const char* fullName, const char* fieldsFilter,
@@ -372,6 +388,12 @@ void ibPluginManager::UnloadAll()
 	m_defaultAIPaneId.Clear();
 	m_pendingWebPaneRegs.clear();
 
+	// Session-scoped policy decisions evaporate on UnloadAll. AllowAlways
+	// entries also drop here — Designer reloads them from options.xml on
+	// next LoadAll via SetMutationPolicy (Phase 4). For Phase 3.2 tests
+	// the table is just fully cleared.
+	m_mutationPolicy.clear();
+
 	for (auto it = m_plugins.rbegin(); it != m_plugins.rend(); ++it) {
 		if (it->m_shutdown) {
 			try { it->m_shutdown(); } catch (...) { /* plugin bug */ }
@@ -521,6 +543,82 @@ ibPluginManager::~ibPluginManager()
 	// have replaced us via its own ctor / LoadAll. Single-instance is the
 	// documented invariant for ABI v4 host trampolines.
 	if (g_currentManager == this) g_currentManager = nullptr;
+}
+
+// =========================================================================
+// Mutation policy (Phase 3.2)
+// =========================================================================
+namespace {
+
+std::string PolicyKey(const wxString& pluginId, const wxString& opName)
+{
+	std::string k(pluginId.utf8_str());
+	k += "::";
+	k += std::string(opName.utf8_str());
+	return k;
+}
+
+const char* PolicyName(ibPluginManager::MutationPolicy p)
+{
+	switch (p) {
+	case ibPluginManager::MutationPolicy::Ask:          return "Ask";
+	case ibPluginManager::MutationPolicy::AllowSession: return "AllowSession";
+	case ibPluginManager::MutationPolicy::AllowAlways:  return "AllowAlways";
+	case ibPluginManager::MutationPolicy::Deny:         return "Deny";
+	}
+	return "?";
+}
+
+} // namespace
+
+void ibPluginManager::SetMutationPolicy(const wxString& pluginId,
+                                          const wxString& opName,
+                                          MutationPolicy policy)
+{
+	m_mutationPolicy[PolicyKey(pluginId, opName)] = policy;
+}
+
+ibPluginManager::MutationPolicy
+ibPluginManager::GetMutationPolicy(const wxString& pluginId,
+                                     const wxString& opName) const
+{
+	auto it = m_mutationPolicy.find(PolicyKey(pluginId, opName));
+	if (it != m_mutationPolicy.end()) return it->second;
+	// Defaults: read-only Auto; everything else Ask.
+	if (opName == wxT("meta.query")) return MutationPolicy::AllowAlways;
+	return MutationPolicy::Ask;
+}
+
+bool ibPluginManager::CheckMutationAllowed(const wxString& pluginId,
+                                             const wxString& opName)
+{
+	// Wildcard tier first: a (pluginId, "*") entry overrides per-op
+	// defaults so the user can "trust all from this plugin" once and
+	// stop being re-prompted. Mirrors the "session allowlist by tool
+	// family" pattern modern IDE assistants ship.
+	auto it = m_mutationPolicy.find(PolicyKey(pluginId, wxT("*")));
+	if (it != m_mutationPolicy.end()) {
+		const MutationPolicy w = it->second;
+		if (w == MutationPolicy::AllowSession || w == MutationPolicy::AllowAlways) {
+			wxLogMessage(wxT("[plugin-policy] %s::%s -> ALLOW (wildcard %s)"),
+			             pluginId, opName, wxString::FromUTF8(PolicyName(w)));
+			return true;
+		}
+		if (w == MutationPolicy::Deny) {
+			wxLogMessage(wxT("[plugin-policy] %s::%s -> DENY (wildcard Deny)"),
+			             pluginId, opName);
+			return false;
+		}
+		// Wildcard Ask falls through to the per-op check.
+	}
+
+	const MutationPolicy p = GetMutationPolicy(pluginId, opName);
+	const bool allow = (p == MutationPolicy::AllowSession ||
+	                    p == MutationPolicy::AllowAlways);
+	wxLogMessage(wxT("[plugin-policy] %s::%s -> %s (%s)"),
+	             pluginId, opName, allow ? wxT("ALLOW") : wxT("DENY"),
+	             wxString::FromUTF8(PolicyName(p)));
+	return allow;
 }
 
 void ibPluginManager::ReplayPendingWebPaneRegistrations()

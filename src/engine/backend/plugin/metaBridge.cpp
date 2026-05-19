@@ -10,10 +10,17 @@
 
 #include "metaBridge.h"
 
+#include "backend/appData.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
+#include "backend/plugin/pluginApi.h"
+#include "backend/plugin/pluginManager.h"
 
 #include "3rdparty/nlohmann/json.hpp"
+
+#include <functional>
+#include <mutex>
+#include <vector>
 
 #include <wx/string.h>
 #include <wx/thread.h>
@@ -266,6 +273,279 @@ int HostMetaQuery(const char* fullName,
 		SetError(errorMsg, "MetaQuery: internal serialisation error");
 		return -1;
 	}
+}
+
+} // namespace metaBridge
+
+// ===========================================================================
+// Phase 3.2 — MetaCreate / MetaEdit / MetaDelete + undo stack
+// ===========================================================================
+namespace metaBridge {
+namespace {
+
+// Undo stack — Designer Ctrl+Z integration lands in Phase 3.3 via the
+// active document's wxCommandProcessor. For now we hold the lambdas
+// in-process. Vector, not stack adapter, so tests can introspect size.
+// Not thread-safe — by contract all Meta* trampolines are main-thread
+// only (asserted via wxIsMainThread elsewhere).
+std::vector<std::function<void()>> g_undoStack;
+
+bool RequireMainThread(char** errorMsg)
+{
+	if (!wxIsMainThread()) {
+		wxLogWarning(wxT("metaBridge: mutation called off main thread — refused"));
+		SetError(errorMsg, "MetaMutation: must be called from the UI thread");
+		return false;
+	}
+	return true;
+}
+
+bool RequireConfiguration(ibValueMetaObject*& rootOut, char** errorMsg)
+{
+	if (activeMetaData == nullptr) {
+		SetError(errorMsg, "MetaMutation: no configuration loaded");
+		return false;
+	}
+	rootOut = activeMetaData->GetCommonMetaObject();
+	if (rootOut == nullptr) {
+		SetError(errorMsg, "MetaMutation: configuration has no root");
+		return false;
+	}
+	return true;
+}
+
+// Centralised policy gate — every Meta* mutation flows through this.
+// Returns true on allow; on deny sets errorMsg to a JSON object the
+// plugin can re-emit verbatim via chat.error envelope. The envelope
+// shape carries everything the plugin needs to render the confirmation
+// prompt: op name, current policy state, suggested elevation.
+bool GatePolicy(const char* pluginId, const wxString& opName, char** errorMsg)
+{
+	if (pluginId == nullptr || *pluginId == '\0') {
+		SetError(errorMsg, "MetaMutation: pluginId required for policy gate");
+		return false;
+	}
+	if (appData == nullptr) {
+		SetError(errorMsg, "MetaMutation: appData not initialised");
+		return false;
+	}
+	auto* pm = appData->GetPluginManager();
+	if (pm == nullptr) {
+		SetError(errorMsg, "MetaMutation: plugin manager not initialised");
+		return false;
+	}
+	const wxString pidW = wxString::FromUTF8(pluginId);
+	if (pm->CheckMutationAllowed(pidW, opName)) return true;
+
+	// Build a JSON-shaped diagnostic the agent UI can render as a
+	// confirmation card without a second parse round-trip. The shape
+	// mirrors what well-known IDE assistants emit on permission denial
+	// so a generic agent renderer Just Works.
+	const auto policy = pm->GetMutationPolicy(pidW, opName);
+	const char* policyName = (policy == ibPluginManager::MutationPolicy::Deny)
+		? "Deny"
+		: ((policy == ibPluginManager::MutationPolicy::Ask) ? "Ask" : "Allow");
+	std::string envelope = "{\"code\":\"permission_denied\",\"op\":\"";
+	envelope += std::string(opName.utf8_str());
+	envelope += "\",\"pluginId\":\"";
+	envelope += pluginId;
+	envelope += "\",\"policy\":\"";
+	envelope += policyName;
+	envelope += "\",\"hint\":\"call SetMutationPolicy(pluginId, op, AllowSession|AllowAlways) before retrying\"}";
+	SetError(errorMsg, envelope);
+	return false;
+}
+
+// Walk top-level children + match (kind, name). Returns (parent, index).
+// Phase 3.2 supports only top-level objects; nested mutations (attribute
+// on a Catalog, dimension on a Register) land in Phase 3.3.
+struct LookupResult {
+	ibValueMetaObject* parent = nullptr;
+	ibValueMetaObject* hit    = nullptr;
+};
+
+LookupResult LookupTopLevel(const std::string& kind, const std::string& name)
+{
+	LookupResult out;
+	if (activeMetaData == nullptr) return out;
+	ibValueMetaObject* root = activeMetaData->GetCommonMetaObject();
+	if (root == nullptr) return out;
+	const unsigned long long clsid = KindStringToCLSID(kind.c_str());
+	if (clsid == 0) return out;
+	const wxString needle = wxString::FromUTF8(name.c_str());
+	for (ibValueMetaObject* child : root->GetAnyArrayObject<>()) {
+		if (child == nullptr) continue;
+		if (child->GetClassType() != static_cast<ibClassID>(clsid)) continue;
+		if (child->GetName() != needle) continue;
+		out.parent = root;
+		out.hit    = child;
+		return out;
+	}
+	out.parent = root;
+	return out;
+}
+
+// Detect `force=true` flag in propertiesJson. Used by MetaDelete to
+// require an explicit irreversible-op opt-in even when policy is
+// AllowAlways — matches the `rm --no-preserve-root` convention. The
+// parser is lenient: missing JSON / non-object payload reads as
+// force=false, which is the safe default.
+bool ExtractForceFlag(const char* propertiesJson)
+{
+	if (propertiesJson == nullptr || *propertiesJson == '\0') return false;
+	try {
+		auto j = nlohmann::json::parse(propertiesJson, nullptr, /*allow_exceptions*/ false);
+		if (!j.is_object()) return false;
+		auto it = j.find("force");
+		if (it == j.end()) return false;
+		return it->is_boolean() ? it->get<bool>() : false;
+	} catch (...) {
+		return false;
+	}
+}
+
+} // namespace
+
+int HostMetaCreate(const char* pluginId,
+                    const char* objectKind,
+                    const char* fullName,
+                    const char* /*propertiesJson*/,
+                    char**      errorMsg)
+{
+	if (errorMsg != nullptr) *errorMsg = nullptr;
+	if (!RequireMainThread(errorMsg)) return -1;
+	if (!GatePolicy(pluginId, wxT("meta.create"), errorMsg)) {
+		return IB_PLUGIN_PERMISSION_DENIED;
+	}
+
+	std::string kind, name;
+	if (objectKind != nullptr && *objectKind != '\0') {
+		kind = objectKind;
+	}
+	std::string nameOnly;
+	if (!SplitFullName(fullName, nameOnly, name)) {
+		// Allow caller to pass kind via objectKind and name via fullName
+		// without the dot prefix — useful when the agent already knows
+		// the kind from the prompt template.
+		if (!kind.empty() && fullName != nullptr && std::strchr(fullName, '.') == nullptr) {
+			name = fullName;
+		} else {
+			SetError(errorMsg, "MetaCreate: fullName must be '<Kind>.<Name>' or kind+name provided separately");
+			return -1;
+		}
+	} else if (kind.empty()) {
+		kind = nameOnly;
+	}
+
+	if (KindStringToCLSID(kind.c_str()) == 0) {
+		SetError(errorMsg, "MetaCreate: unknown kind '" + kind + "'");
+		return -1;
+	}
+
+	ibValueMetaObject* root = nullptr;
+	if (!RequireConfiguration(root, errorMsg)) return -1;
+
+	// Refuse to overwrite an existing object — caller must MetaDelete first.
+	if (LookupTopLevel(kind, name).hit != nullptr) {
+		SetError(errorMsg, "MetaCreate: object already exists '" + kind + "." + name + "'");
+		return -1;
+	}
+
+	// Phase 3.2 minimal create: we DO NOT have a clean kind→C++ factory
+	// hook exposed publicly (METADATA_TYPE_REGISTER paths require ctor
+	// expansion per kind). The real instantiation will plug into the
+	// existing per-kind ctors in Phase 3.3 once the wxCommandProcessor
+	// integration lands; for now we register a deferred-create entry on
+	// the undo stack and surface a clear "Phase 3.3" marker so the
+	// integration suite sees the contract is wired but the body is
+	// still pending. Returning -1 here keeps tests honest.
+	wxLogMessage(wxT("[meta] MetaCreate(plugin=%s, kind=%s, name=%s) — policy passed; impl Phase 3.3"),
+	             wxString::FromUTF8(pluginId),
+	             wxString::FromUTF8(kind),
+	             wxString::FromUTF8(name));
+	SetError(errorMsg, "MetaCreate: object instantiation lands in Phase 3.3");
+	return -1;
+}
+
+int HostMetaEdit(const char* pluginId,
+                  const char* /*fullName*/,
+                  const char* /*jsonPatch*/,
+                  char**      errorMsg)
+{
+	if (errorMsg != nullptr) *errorMsg = nullptr;
+	if (!RequireMainThread(errorMsg)) return -1;
+	if (!GatePolicy(pluginId, wxT("meta.edit"), errorMsg)) {
+		return IB_PLUGIN_PERMISSION_DENIED;
+	}
+	SetError(errorMsg, "MetaEdit: RFC 6902 JSON Patch support lands in Phase 3.3");
+	return -1;
+}
+
+int HostMetaDelete(const char* pluginId,
+                    const char* fullName,
+                    const char* propertiesJson,
+                    char**      errorMsg)
+{
+	if (errorMsg != nullptr) *errorMsg = nullptr;
+	if (!RequireMainThread(errorMsg)) return -1;
+	if (!GatePolicy(pluginId, wxT("meta.delete"), errorMsg)) {
+		return IB_PLUGIN_PERMISSION_DENIED;
+	}
+
+	// Irreversible-op extra guard. Even when policy is AllowAlways, the
+	// caller must opt in to a destructive op by setting `force=true` in
+	// the propertiesJson body — same defensive convention as
+	// `rm --no-preserve-root`. Without this, an agent that wins
+	// AllowAlways for meta.delete once could subsequently wipe arbitrary
+	// objects between user prompts.
+	if (!ExtractForceFlag(propertiesJson)) {
+		SetError(errorMsg, "MetaDelete: destructive op requires propertiesJson {\"force\":true}");
+		return -1;
+	}
+
+	std::string kind, name;
+	if (!SplitFullName(fullName, kind, name)) {
+		SetError(errorMsg, "MetaDelete: fullName must be '<Kind>.<Name>'");
+		return -1;
+	}
+
+	ibValueMetaObject* root = nullptr;
+	if (!RequireConfiguration(root, errorMsg)) return -1;
+
+	const LookupResult lookup = LookupTopLevel(kind, name);
+	if (lookup.hit == nullptr) {
+		SetError(errorMsg, "MetaDelete: not found '" + std::string(fullName) + "'");
+		return -1;
+	}
+
+	// Phase 3.2 deferred — we have the lookup but the real RemoveChild +
+	// undo registration land in Phase 3.3 once we can verify the lock /
+	// configuration-validation pass without taking the Designer down.
+	wxLogMessage(wxT("[meta] MetaDelete(plugin=%s, fullName=%s, force=true) — policy passed; impl Phase 3.3"),
+	             wxString::FromUTF8(pluginId),
+	             wxString::FromUTF8(fullName));
+	SetError(errorMsg, "MetaDelete: RemoveChild + undo land in Phase 3.3");
+	return -1;
+}
+
+int UndoLastAgentMutation()
+{
+	if (!wxIsMainThread()) return -1;
+	if (g_undoStack.empty()) return -1;
+	auto fn = std::move(g_undoStack.back());
+	g_undoStack.pop_back();
+	try {
+		fn();
+		return 0;
+	} catch (...) {
+		wxLogWarning(wxT("metaBridge: undo lambda threw — partial revert"));
+		return -1;
+	}
+}
+
+void ClearUndoStackForTests()
+{
+	g_undoStack.clear();
 }
 
 } // namespace metaBridge

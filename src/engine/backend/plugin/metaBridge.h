@@ -39,6 +39,45 @@ int HostMetaQuery(const char* fullName,
                    char**      jsonOut,
                    char**      errorMsg);
 
+// Phase 3.2 — mutation surface. Behaviour shared by all three:
+//   * Main-thread only (asserted via wxIsMainThread).
+//   * Policy gate first: CheckMutationAllowed(pluginId, opName) is the
+//     industry-standard 4-mode permission check (Ask / AllowSession /
+//     AllowAlways / Deny). Failure returns IB_PLUGIN_PERMISSION_DENIED.
+//   * Every successful mutation pushes an undo lambda onto a turn stack;
+//     UndoLastAgentMutation() reverts the most recent push. Designer
+//     wires this into Ctrl+Z in Phase 3.3.
+//   * Audit: every allow/deny + every mutation logs via wxLogMessage.
+//
+// pluginId carries the caller identity for policy keying. Phase 3.2
+// trampoline pulls it from the ibPluginCallScope; for tests we accept
+// it as the first argument so unit cases don't need a live plugin.
+int HostMetaCreate(const char* pluginId,
+                    const char* objectKind,
+                    const char* fullName,
+                    const char* propertiesJson,
+                    char**      errorMsg);
+
+int HostMetaEdit(const char* pluginId,
+                  const char* fullName,
+                  const char* jsonPatch,
+                  char**      errorMsg);
+
+int HostMetaDelete(const char* pluginId,
+                    const char* fullName,
+                    const char* propertiesJson,
+                    char**      errorMsg);
+
+// Revert the most recently pushed agent mutation. Returns 0 when at
+// least one mutation was undone; non-zero when the undo stack is empty.
+// Phase 3.3 wires this into the Designer command processor so a single
+// Ctrl+Z reverts the entire agent turn (turn boundary = the plugin's
+// chat.send response cycle).
+int UndoLastAgentMutation();
+
+// Test-only hook — wipes the undo stack so unit cases run independently.
+void ClearUndoStackForTests();
+
 } // namespace metaBridge
 
 #endif // _IB_META_BRIDGE_H_

@@ -120,6 +120,12 @@ typedef int (*ibPluginMetaQueryFn)(const char* fullName, const char* fieldsFilte
 // target object is exclusive-locked by another user.
 #define IB_PLUGIN_LOCK_DENIED 0x0001
 
+// Permission-denied error code returned by Meta* fns when the active
+// per-(plugin,op) mutation policy is Ask or Deny. Plugins should show
+// the user a confirmation prompt and either re-call with the policy
+// promoted to AllowSession/AllowAlways, or back off entirely.
+#define IB_PLUGIN_PERMISSION_DENIED 0x0002
+
 // Host-side API table. Function pointers are valid for the lifetime of
 // the plugin (from initialize until just before shutdown). The struct
 // layout is part of the ABI: fields MUST NOT be reordered or removed

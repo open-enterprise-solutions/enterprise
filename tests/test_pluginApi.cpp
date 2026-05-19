@@ -471,3 +471,118 @@ TEST(MetaBridge, MetaQueryNullOutPointersAreSafe) {
 	// errorMsg / jsonOut may be NULL — the host must not crash.
 	EXPECT_EQ(metaBridge::HostMetaQuery("Bogus.Y", nullptr, nullptr, nullptr), -1);
 }
+
+// ---------------------------------------------------------------------------
+// Phase 3.2 — mutation policy gate + MetaCreate/Edit/Delete error paths.
+// Live mutation success paths require a config fixture; deferred to the
+// integration suite once Phase 3.3 wires the wxCommandProcessor.
+// ---------------------------------------------------------------------------
+
+TEST(MutationPolicy, DefaultsAreSafe) {
+	// Mutation ops default Ask; query defaults AllowAlways.
+	ibPluginManager mgr;
+	EXPECT_EQ(mgr.GetMutationPolicy(wxT("pugi"), wxT("meta.create")),
+	          ibPluginManager::MutationPolicy::Ask);
+	EXPECT_EQ(mgr.GetMutationPolicy(wxT("pugi"), wxT("meta.edit")),
+	          ibPluginManager::MutationPolicy::Ask);
+	EXPECT_EQ(mgr.GetMutationPolicy(wxT("pugi"), wxT("meta.delete")),
+	          ibPluginManager::MutationPolicy::Ask);
+	EXPECT_EQ(mgr.GetMutationPolicy(wxT("pugi"), wxT("meta.query")),
+	          ibPluginManager::MutationPolicy::AllowAlways);
+}
+
+TEST(MutationPolicy, AskBlocksAndAllowSessionPermits) {
+	ibPluginManager mgr;
+	EXPECT_FALSE(mgr.CheckMutationAllowed(wxT("pugi"), wxT("meta.create")))
+	    << "default Ask must deny";
+	mgr.SetMutationPolicy(wxT("pugi"), wxT("meta.create"),
+	                        ibPluginManager::MutationPolicy::AllowSession);
+	EXPECT_TRUE(mgr.CheckMutationAllowed(wxT("pugi"), wxT("meta.create")));
+}
+
+TEST(MutationPolicy, AllowAlwaysSurvivesQueryOpToo) {
+	ibPluginManager mgr;
+	EXPECT_TRUE(mgr.CheckMutationAllowed(wxT("pugi"), wxT("meta.query")))
+	    << "query default AllowAlways must permit";
+}
+
+TEST(MutationPolicy, ExplicitDenyOverridesEverything) {
+	ibPluginManager mgr;
+	mgr.SetMutationPolicy(wxT("pugi"), wxT("meta.delete"),
+	                        ibPluginManager::MutationPolicy::Deny);
+	EXPECT_FALSE(mgr.CheckMutationAllowed(wxT("pugi"), wxT("meta.delete")));
+}
+
+TEST(MutationPolicy, WildcardAllowGrantsAllOps) {
+	// (pluginId, "*") = AllowAlways means agent gets blanket trust for
+	// every op from that plugin — modern IDE convention.
+	ibPluginManager mgr;
+	mgr.SetMutationPolicy(wxT("pugi"), wxT("*"),
+	                        ibPluginManager::MutationPolicy::AllowAlways);
+	EXPECT_TRUE(mgr.CheckMutationAllowed(wxT("pugi"), wxT("meta.create")));
+	EXPECT_TRUE(mgr.CheckMutationAllowed(wxT("pugi"), wxT("meta.edit")));
+	EXPECT_TRUE(mgr.CheckMutationAllowed(wxT("pugi"), wxT("meta.delete")));
+	// Different plugin sees defaults — Ask still blocks.
+	EXPECT_FALSE(mgr.CheckMutationAllowed(wxT("other"), wxT("meta.create")));
+}
+
+TEST(MutationPolicy, WildcardDenyBlocksEverything) {
+	ibPluginManager mgr;
+	mgr.SetMutationPolicy(wxT("pugi"), wxT("*"),
+	                        ibPluginManager::MutationPolicy::Deny);
+	// Even an explicit AllowAlways per-op can't override wildcard Deny.
+	mgr.SetMutationPolicy(wxT("pugi"), wxT("meta.create"),
+	                        ibPluginManager::MutationPolicy::AllowAlways);
+	EXPECT_FALSE(mgr.CheckMutationAllowed(wxT("pugi"), wxT("meta.create")));
+}
+
+TEST(MutationPolicy, UnloadAllWipesSessionAllowList) {
+	ibPluginManager mgr;
+	mgr.SetMutationPolicy(wxT("pugi"), wxT("meta.create"),
+	                        ibPluginManager::MutationPolicy::AllowSession);
+	EXPECT_TRUE(mgr.CheckMutationAllowed(wxT("pugi"), wxT("meta.create")));
+	mgr.UnloadAll();
+	EXPECT_FALSE(mgr.CheckMutationAllowed(wxT("pugi"), wxT("meta.create")))
+	    << "session allow must evaporate on UnloadAll";
+}
+
+TEST(MetaMutation, CreateRefusesEmptyPluginId) {
+	// Defensive default: an unauthenticated caller (empty pluginId) is
+	// never trusted. Phase 3.3 will wire the per-call scope tracker.
+	char* err = nullptr;
+	const int rc = metaBridge::HostMetaCreate("", "Catalog", "Catalog.Foo",
+	                                            nullptr, &err);
+	EXPECT_NE(rc, 0);
+	ASSERT_NE(err, nullptr);
+	std::free(err);
+}
+
+TEST(MetaMutation, DeleteRequiresForceFlag) {
+	// Reactivated in Phase 3.3 once appData fixture lands. Body retained
+	// in comments as the expectation contract for the integration suite.
+	//
+	//   auto* pm = appData->GetPluginManager();
+	//   pm->SetMutationPolicy("pugi", "meta.delete", AllowAlways);
+	//   ... HostMetaDelete without force=true returns -1 with "force" in msg
+	//   ... HostMetaDelete with    force=true clears the destructive gate
+	GTEST_SKIP() << "Phase 3.3 integration — needs appData fixture";
+}
+
+TEST(MetaMutation, EditStubReportsPhase33) {
+	// Contract: MetaEdit stub returns -1 with errorMsg mentioning Phase 3.3.
+	// Live wiring in Phase 3.3 once appData fixture lands.
+	GTEST_SKIP() << "Phase 3.3 integration — needs appData fixture";
+}
+
+TEST(MetaMutation, PolicyGateEmitsStructuredEnvelope) {
+	// Contract: permission denial returns JSON envelope
+	// {code:"permission_denied", op, pluginId, policy, hint}. Plugin
+	// renders confirmation card from it. Live in Phase 3.3.
+	GTEST_SKIP() << "Phase 3.3 integration — needs appData fixture";
+}
+
+TEST(MetaMutation, UndoStackEmptyByDefault) {
+	metaBridge::ClearUndoStackForTests();
+	EXPECT_EQ(metaBridge::UndoLastAgentMutation(), -1)
+	    << "empty undo stack must return -1";
+}

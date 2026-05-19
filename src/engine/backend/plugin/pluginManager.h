@@ -155,6 +155,38 @@ public:
 	// that registered before callbacks were ready still get their panes.
 	void ReplayPendingWebPaneRegistrations();
 
+	// ---------------------------------------------------------------------
+	// Mutation policy (Phase 3.2). Mirrors the 4-mode permission UX modern
+	// IDE assistants converged on:
+	//
+	//   Ask          — every call prompts user (default for mutations).
+	//   AllowSession — silent until restart; user said "allow this one".
+	//   AllowAlways  — persisted approval; survives restarts.
+	//   Deny         — never allowed; explicit block.
+	//
+	// Policy is keyed by (pluginId, opName) where opName is one of:
+	//   "meta.create"  "meta.edit"  "meta.delete"  "meta.query"
+	// Query defaults to AllowAlways; create/edit/delete default to Ask.
+	//
+	// Even when create/edit are AllowAlways, the meta.delete op carries
+	// an extra safeguard: callers must opt in to irreversible ops via
+	// `force=true` in the propertiesJson — matching the `rm --no-preserve-
+	// root` convention so accidental tab-completion doesn't nuke a
+	// Catalog.
+	// ---------------------------------------------------------------------
+	enum class MutationPolicy : int { Ask = 0, AllowSession = 1, AllowAlways = 2, Deny = 3 };
+
+	void SetMutationPolicy(const wxString& pluginId, const wxString& opName,
+	                        MutationPolicy policy);
+	MutationPolicy GetMutationPolicy(const wxString& pluginId,
+	                                   const wxString& opName) const;
+
+	// Convenience: the agent layer calls this from inside each Meta*
+	// trampoline. Returns true when the mutation may proceed; false
+	// returns IB_PLUGIN_PERMISSION_DENIED to the plugin. Logs every
+	// allow/deny decision through wxLogMessage for audit.
+	bool CheckMutationAllowed(const wxString& pluginId, const wxString& opName);
+
 	// Dispatch a registered plugin function from the script call site.
 	// Sets up the arena scope so Make* / GetString calls inside the
 	// plugin callback see a live ibPluginCallScope; marshals args by
@@ -201,6 +233,13 @@ private:
 	// delivery. Cleared by UnloadAll. Phase 4 replaces with explicit
 	// per-request routing via Settings.
 	wxString m_defaultAIPaneId;
+
+	// Mutation policy table (Phase 3.2). Key = "<pluginId>::<opName>";
+	// absent entries inherit the per-op default — Ask for create/edit/
+	// delete, AllowAlways for query. AllowSession entries are wiped
+	// here on every UnloadAll; AllowAlways entries are persisted via
+	// Designer options.xml in Phase 4.
+	std::unordered_map<std::string, MutationPolicy> m_mutationPolicy;
 };
 
 #endif // _IB_PLUGIN_MANAGER_H_
