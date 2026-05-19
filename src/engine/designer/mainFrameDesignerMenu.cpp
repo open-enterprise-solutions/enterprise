@@ -127,21 +127,50 @@ void wxAuiDocDesignerMDIFrame::InitializeDefaultMenu()
 	m_menuBar->Append(m_menuSetting, _("Tools"));
 	m_menuSetting->Append(wxID_APPLICATION_SETTING, _("Options..."));
 
+	// Syntax-helper items live in the Tools (Сервис) menu, NOT in Help.
+	// On macOS wxWidgets routes the Help menu into the system-native
+	// Help menu which intercepts custom handlers; bound commands fire
+	// nowhere. Tools menu keeps the commands locally dispatched on
+	// every platform. Strings are English in source; gettext .po files
+	// localise to ru-RU / uk-UA at runtime.
+	m_menuSetting->AppendSeparator();
+	// RawCtrl on the accelerator forces the physical Ctrl key on macOS
+	// (wxWidgets normally remaps "Ctrl" to Cmd on Mac). The shortcut
+	// resolves to the literal Control key on every platform, matching
+	// the convention this lookup binding is modelled on.
+	m_menuSetting->Append(wxID_FRONTEND_SYNTAX_HELPER,
+	                       _("Syntax Helper\tRawCtrl+Alt+F1"));
+	m_menuSetting->Append(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP,
+	                       _("Look up in Syntax Helper\tRawCtrl+F1"));
+
 	m_menuHelp = new wxMenu;
-	m_menuHelp->Append(wxID_DESIGNER_SYNTAX_HELPER,
-	                    _("Синтаксис-помічник\tCtrl+Alt+F1"));
-	m_menuHelp->Append(wxID_DESIGNER_SYNTAX_HELPER_LOOKUP,
-	                    _("Пошук у Синтаксис-Помічнику\tCtrl+F1"));
-	m_menuHelp->AppendSeparator();
 	m_menuHelp->Append(wxID_DESIGNER_ABOUT, _("About"));
 	m_menuBar->Append(m_menuHelp, wxGetStockLabel(wxID_HELP, wxSTOCK_NOFLAGS));
 
 	Bind(wxEVT_MENU,
 	     [this](wxCommandEvent&) { ToggleHelpPane(); },
-	     wxID_DESIGNER_SYNTAX_HELPER);
+	     wxID_FRONTEND_SYNTAX_HELPER);
 	Bind(wxEVT_MENU,
 	     [this](wxCommandEvent&) { OpenHelpForCursor(); },
-	     wxID_DESIGNER_SYNTAX_HELPER_LOOKUP);
+	     wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
+
+	// Editor context-menu items use frontend-shared command ids
+	// (frontend.dll cannot depend on the designer header). Forward
+	// the three frontend debug ids to the equivalent designer ids
+	// that the existing OnRunDebugCommand handler dispatches on.
+	auto forward = [this](int designerId) {
+		return [this, designerId](wxCommandEvent&) {
+			wxCommandEvent ev(wxEVT_MENU, designerId);
+			ev.SetEventObject(this);
+			ProcessWindowEvent(ev);
+		};
+	};
+	Bind(wxEVT_MENU, forward(wxID_DESIGNER_DEBUG_STEP_INTO),
+	     wxID_FRONTEND_DEBUG_STEP_INTO);
+	Bind(wxEVT_MENU, forward(wxID_DESIGNER_DEBUG_STEP_OVER),
+	     wxID_FRONTEND_DEBUG_STEP_OVER);
+	Bind(wxEVT_MENU, forward(wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS),
+	     wxID_FRONTEND_DEBUG_REMOVE_ALL_BREAKPOINTS);
 
 	Bind(wxEVT_MENU, &wxAuiDocDesignerMDIFrame::OnRollbackConfiguration, this, wxID_DESIGNER_CONFIGURATION_RETURN_DATABASE);
 	Bind(wxEVT_MENU, &wxAuiDocDesignerMDIFrame::OnConfiguration, this, wxID_DESIGNER_CONFIGURATION_LOAD, wxID_DESIGNER_CONFIGURATION_SAVE);

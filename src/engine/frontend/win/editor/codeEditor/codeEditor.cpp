@@ -58,6 +58,14 @@ ibCodeEditor::ibCodeEditor(ibMetaDocument* document, wxWindow* parent, wxWindowI
 	Connect(wxEVT_STC_CHARADDED, wxStyledTextEventHandler(ibCodeEditor::OnCharAdded), nullptr, this);
 	Connect(wxEVT_MOTION, wxMouseEventHandler(ibCodeEditor::OnMouseMove), nullptr, this);
 
+	// Replace Scintilla's built-in right-click menu with a custom one
+	// so the Designer can inject the syntax-helper lookup item
+	// (Ctrl+F1) above the standard Cut/Copy/Paste. UsePopUp(0)
+	// disables Scintilla's auto popup; wxEVT_CONTEXT_MENU drives our
+	// builder.
+	UsePopUp(0);
+	Bind(wxEVT_CONTEXT_MENU, &ibCodeEditor::OnContextMenu, this);
+
 	// On zoom step the line height jumps immediately while STC's per-page
 	// width cache repaints column widths only on the next scroll. Re-fit
 	// the margins (line-number / breakpoint / fold) against the now-
@@ -532,6 +540,145 @@ void ibCodeEditor::ShowMethods()
 {
 	ibFunctionList dlg(m_document, this);
 	dlg.ShowModal();
+}
+
+wxString ibCodeEditor::GetIdentifierUnderCursor()
+{
+	// Explicit selection wins — user may have selected a multi-word
+	// expression that the autocomplete word-boundary heuristic cannot
+	// see. Callers that want strict identifier-only semantics should
+	// validate the returned string themselves.
+	const wxString sel = GetSelectedText();
+	if (!sel.IsEmpty()) return sel;
+
+	const int pos   = GetCurrentPos();
+	const int start = WordStartPosition(pos, true);
+	const int end   = WordEndPosition  (pos, true);
+	if (end <= start) return wxEmptyString;
+	return GetTextRange(start, end);
+}
+
+#include "frontend/mainFrame/mainFrame.h" // editor / host command ids
+
+void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
+{
+	// Composed-from-commands context menu. Each entry has a stable
+	// menu-event id; events propagate up to the host frame, so a single
+	// editor instance can be embedded under different hosts (Designer
+	// vs codeRunner) without rewiring per host. Items without a host
+	// binding render as disabled stubs — keeps the menu shape stable
+	// while signalling which features are not available in the current
+	// configuration.
+	wxMenu menu;
+
+	// --- Clipboard primitives (wxStyledTextCtrl built-ins) -------------
+	auto* miCut   = menu.Append(wxID_CUT,    _("Cut\tCtrl+X"));
+	auto* miCopy  = menu.Append(wxID_COPY,   _("Copy\tCtrl+C"));
+	auto* miPaste = menu.Append(wxID_PASTE,  _("Paste\tCtrl+V"));
+	miCut  ->Enable(GetSelectionStart() != GetSelectionEnd() && !GetReadOnly());
+	miCopy ->Enable(GetSelectionStart() != GetSelectionEnd());
+	miPaste->Enable(CanPaste());
+
+	// --- Syntax helper lookup — Ctrl+F1 (RawCtrl on macOS for parity) --
+	const wxString identifier = GetIdentifierUnderCursor();
+	auto* miLookup = menu.Append(
+	    wxID_FRONTEND_SYNTAX_HELPER_LOOKUP,
+	    _("Look up in Syntax Helper\tRawCtrl+F1"));
+	miLookup->Enable(!identifier.IsEmpty());
+
+	menu.Append(wxID_SELECTALL, _("Select All\tCtrl+A"));
+	menu.AppendSeparator();
+
+	// --- Navigation -----------------------------------------------------
+	// Phase 3 wires Go to Line locally (it's a public method on this
+	// editor). Find Next / Find Previous / Go to Definition / Find
+	// Usages are command-registry stubs — the menu shape matches the
+	// target IDE layout, but the actions are disabled until the
+	// underlying handlers ship in Phase 4.
+	auto* miFindNext = menu.Append(wxID_HIGHEST + 4001, _("Find Next\tF3"));
+	auto* miFindPrev = menu.Append(wxID_HIGHEST + 4002, _("Find Previous\tShift+F3"));
+	auto* miGotoLine = menu.Append(wxID_HIGHEST + 4003, _("Go to Line...\tCtrl+G"));
+	miFindNext->Enable(false);
+	miFindPrev->Enable(false);
+
+	menu.AppendSeparator();
+
+	auto* miGotoDef    = menu.Append(wxID_HIGHEST + 4010, _("Go to Definition\tF12"));
+	auto* miFindUsages = menu.Append(wxID_HIGHEST + 4011, _("Find Usages\tAlt+F12"));
+	miGotoDef   ->Enable(false);
+	miFindUsages->Enable(false);
+
+	menu.AppendSeparator();
+
+	// --- Breakpoints ----------------------------------------------------
+	// Toggle hits OnEditDebugPoint(line) (codeEditor.h:484), which the
+	// Designer override (codeEditorDesigner.cpp:16) routes through
+	// debugClient. The frontend stub here drives the same path via the
+	// margin-click route — the menu commits the current line and
+	// triggers the existing handler indirectly via menu id, so the
+	// codeRunner / standalone case does not need its own handler.
+	auto* miBpToggle = menu.Append(wxID_HIGHEST + 4020, _("Toggle Breakpoint\tF9"));
+	auto* miBpCond   = menu.Append(wxID_HIGHEST + 4021, _("Conditional Breakpoint..."));
+	auto* miBpEnable = menu.Append(wxID_HIGHEST + 4022, _("Enable / Disable Breakpoint\tCtrl+Shift+F9"));
+	menu.Append(wxID_FRONTEND_DEBUG_REMOVE_ALL_BREAKPOINTS,
+	            _("Remove All Breakpoints"));
+	miBpCond  ->Enable(false);
+	miBpEnable->Enable(false);
+
+	menu.AppendSeparator();
+
+	// --- Debug-session commands ----------------------------------------
+	menu.Append(wxID_FRONTEND_DEBUG_STEP_INTO,  _("Step Into\tF11"));
+	menu.Append(wxID_FRONTEND_DEBUG_STEP_OVER,  _("Step Over\tF10"));
+
+	// --- Local handlers for self-contained items -----------------------
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) { Cut();        }, wxID_CUT);
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) { Copy();       }, wxID_COPY);
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) { Paste();      }, wxID_PASTE);
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) { SelectAll();  }, wxID_SELECTALL);
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) { ShowGotoLine(); }, wxID_HIGHEST + 4003);
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) {
+		     const int line = LineFromPosition(GetCurrentPos()) + 1;
+		     OnEditDebugPoint(line);
+	     },
+	     wxID_HIGHEST + 4020);
+
+	// --- Route host-frame commands explicitly to the top-level window.
+	// wxStyledTextCtrl's PopupMenu does not always propagate
+	// wxEVT_MENU through wxAUI / wxAuiDocMDIFrame parents to the host
+	// frame — child windows of MDI clients eat menu events as they
+	// flow upward. Fire the same event id directly on the top-level
+	// frame so the host's Bind() picks it up regardless of MDI nesting.
+	auto routeUp = [this](int id) {
+		return [this, id](wxCommandEvent&) {
+			wxWindow* top = wxGetTopLevelParent(this);
+			if (top == nullptr) return;
+			wxCommandEvent up(wxEVT_MENU, id);
+			up.SetEventObject(this);
+			top->GetEventHandler()->ProcessEvent(up);
+		};
+	};
+	Bind(wxEVT_MENU,
+	     routeUp(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP),
+	     wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
+	Bind(wxEVT_MENU,
+	     routeUp(wxID_FRONTEND_DEBUG_STEP_INTO),
+	     wxID_FRONTEND_DEBUG_STEP_INTO);
+	Bind(wxEVT_MENU,
+	     routeUp(wxID_FRONTEND_DEBUG_STEP_OVER),
+	     wxID_FRONTEND_DEBUG_STEP_OVER);
+	Bind(wxEVT_MENU,
+	     routeUp(wxID_FRONTEND_DEBUG_REMOVE_ALL_BREAKPOINTS),
+	     wxID_FRONTEND_DEBUG_REMOVE_ALL_BREAKPOINTS);
+
+	PopupMenu(&menu);
+	event.Skip(false);
 }
 
 #include "backend/system/systemManager.h"
