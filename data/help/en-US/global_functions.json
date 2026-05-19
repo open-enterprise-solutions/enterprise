@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "locale": "en-US",
+  "entries": [
+    {
+      "id": "fn.Message",
+      "name_local": "Message",
+      "name_en": "Message",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "Message(<String>, [<Marker>])",
+      "description": "Prints a message to the message window. The marker parameter, when supported, prefixes a pictogram indicating the message's importance.",
+      "syntax_block": "Message(<String>, [<Marker>])",
+      "parameters": "<String> — message text.\n<Marker> — optional severity marker; not implemented in Phase 1 and currently ignored.",
+      "return_descr": "",
+      "example": "Message(\"Document saved successfully.\");",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.Status"],
+      "reviewed": true
+    }
+  ]
+}

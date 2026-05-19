@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "locale": "uk-UA",
+  "entries": [
+    {
+      "id": "fn.Message",
+      "name_local": "Повідомити",
+      "name_en": "Message",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "Повідомити(<Рядок>, [<Маркер>])",
+      "description": "Виводить повідомлення у вікно повідомлень. Параметр маркера, якщо підтримується, додає до повідомлення піктограму, що вказує на його важливість.",
+      "syntax_block": "Повідомити(<Рядок>, [<Маркер>])",
+      "parameters": "<Рядок> — текст повідомлення.\n<Маркер> — необов'язковий маркер важливості; на етапі Phase 1 не реалізований і наразі ігнорується.",
+      "return_descr": "",
+      "example": "Повідомити(\"Документ успішно збережено.\");",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.Status"],
+      "reviewed": true
+    }
+  ]
+}

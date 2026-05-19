@@ -13,6 +13,8 @@
 #include "backend/plugin/pluginManager.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
+#include "backend/help/helpCorpus.h"
+#include "backend/help/helpLoader.h"
 
 #include <thread>
 #include <algorithm>
@@ -538,8 +540,15 @@ bool ibApplicationData::InitLocale(const wxString& locale)
 		// Initialize localization engine
 		ibBackendLocalization::SetUserLanguage(m_locale.GetName());
 
-		//Set default time 
+		//Set default time
 		wxDateTime::SetCountry(wxDateTime::Country::Country_Default);
+
+		// Load the syntax-helper corpus now that the locale is settled.
+		// This is best-effort: missing data/help/<locale>/ produces an
+		// empty corpus with one kFatal warning in m_lastHelpLoadErrors;
+		// startup still succeeds.
+		RebuildHelpCorpus();
+
 		return true;
 	}
 
@@ -1009,6 +1018,69 @@ wxString ibApplicationData::ComputeMd5(const wxString& userPassword) const
 		return ibMD5::ComputeMd5(userPassword);
 
 	return wxEmptyString;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Syntax-helper corpus accessors. See design v5 §3.1 / §3.4.
+//
+// Atomic-on-handle pattern: the corpus itself is immutable; the
+// shared_ptr handle is mutated only via SetHelpCorpus / RebuildHelpCorpus,
+// both serialised through m_helpReloadMutex and published with
+// std::atomic_store_explicit. Reads use atomic_load_explicit on every
+// access so concurrent reload and read paths cannot tear the handle.
+// When the project migrates to C++20, switch the member to
+// std::atomic<std::shared_ptr<const ibHelpCorpus>> — the public ABI of
+// GetHelpCorpus / ReloadHelpCorpus does not change.
+///////////////////////////////////////////////////////////////////////////////
+
+std::shared_ptr<const ibHelpCorpus> ibApplicationData::GetHelpCorpus() const
+{
+	std::shared_ptr<const ibHelpCorpus> snap =
+	    std::atomic_load_explicit(&m_helpCorpus, std::memory_order_acquire);
+	if (snap) return snap;
+
+	// Lazy-init under the reload mutex so multiple early callers don't
+	// race to construct empty fallbacks. Once published, subsequent
+	// readers go through the atomic_load fast path above.
+	std::lock_guard<std::mutex> lk(m_helpReloadMutex);
+	snap = std::atomic_load_explicit(&m_helpCorpus, std::memory_order_acquire);
+	if (!snap) {
+		snap = std::make_shared<ibHelpCorpus>(GetLocale());
+		std::atomic_store_explicit(&m_helpCorpus, snap, std::memory_order_release);
+	}
+	return snap;
+}
+
+void ibApplicationData::ReloadHelpCorpus()
+{
+	RebuildHelpCorpus();
+}
+
+const std::vector<ibHelpLoadError>&
+ibApplicationData::GetLastHelpLoadErrors() const
+{
+	return m_lastHelpLoadErrors;
+}
+
+void ibApplicationData::RebuildHelpCorpus()
+{
+	std::lock_guard<std::mutex> lk(m_helpReloadMutex);
+
+	// Platform corpus dir: <cwd>/data/help/ (the OES install layout
+	// places data/ next to the binaries; same convention as the existing
+	// `lang/` and `web/` directories). Per-config dir not wired in
+	// Phase 1 — that lands in Phase 5 alongside the metadata-driven
+	// entries.
+	const wxString platformDir =
+	    wxGetCwd() + wxFILE_SEP_PATH + wxT("data") + wxFILE_SEP_PATH + wxT("help");
+
+	ibHelpLoadResult result =
+	    LoadHelpCorpus(GetLocale(), platformDir, wxEmptyString);
+
+	m_lastHelpLoadErrors = std::move(result.errors);
+	std::atomic_store_explicit(&m_helpCorpus,
+	                            result.corpus,
+	                            std::memory_order_release);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

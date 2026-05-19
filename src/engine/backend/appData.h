@@ -4,9 +4,11 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
+#include <vector>
 
 #include "backend/backend_core.h"
 
@@ -307,6 +309,33 @@ public:
 
 	wxString GetLocale() const { return m_locale.GetCanonicalName(); }
 
+#pragma region helpCorpus
+
+	// Syntax-helper corpus (design v5 §3.1 / §3.4).
+	//
+	// Single corpus per process — the helper reflects the platform locale
+	// at startup. Readers grab a snapshot via GetHelpCorpus() (atomic
+	// load) and hold the shared_ptr through any operation that uses
+	// returned ibHelpEntry pointers; reload (Phase 5 — configuration
+	// save) builds a NEW corpus and atomically swaps the published
+	// shared_ptr.
+	//
+	// Invariant: GetHelpCorpus() never returns nullptr. On total load
+	// failure the corpus is an empty ibHelpCorpus so the read path
+	// stays branch-free.
+	std::shared_ptr<const class ibHelpCorpus> GetHelpCorpus() const;
+
+	// Rebuild from disk on a worker thread; atomically swap on success.
+	// Serialised by m_helpReloadMutex — concurrent reload requests
+	// (Phase 5 auto-reload + a hot-key trigger) collapse to latest-wins.
+	// Errors collected during the rebuild are surfaced via
+	// GetLastHelpLoadErrors() (set after each reload completes).
+	void ReloadHelpCorpus();
+
+	const std::vector<struct ibHelpLoadError>& GetLastHelpLoadErrors() const;
+
+#pragma endregion
+
 #pragma region session
 
 	// Cluster-wide sys_session snapshot — readers go through
@@ -403,6 +432,22 @@ private:
 	// GetSessionRegistry(). Owns the per-session worker pool too — pool
 	// is an extension of session-management infrastructure.
 	std::unique_ptr<class ibSessionRegistry> m_sessionRegistry;
+
+	// Syntax-helper corpus (design v5 §3.1, §3.4).
+	//
+	// Mutable `shared_ptr` because reload swaps the snapshot in place.
+	// All public access goes through GetHelpCorpus() / ReloadHelpCorpus()
+	// which use atomic_load_explicit / atomic_store_explicit — direct
+	// member access is forbidden. m_helpReloadMutex serialises the build
+	// phase of concurrent reloads.
+	mutable std::shared_ptr<const class ibHelpCorpus> m_helpCorpus;
+	mutable std::mutex                                m_helpReloadMutex;
+	std::vector<struct ibHelpLoadError>               m_lastHelpLoadErrors;
+
+	// Internal — runs LoadHelpCorpus, publishes via atomic store. Called
+	// once at Init time (with no per-config dir yet) and on every
+	// ReloadHelpCorpus() invocation. Holds m_helpReloadMutex.
+	void RebuildHelpCorpus();
 
 public:
 	class ibSessionRegistry* GetSessionRegistry() const { return m_sessionRegistry.get(); }

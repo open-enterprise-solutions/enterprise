@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "locale": "uk-UA",
+  "entries": [
+    {
+      "id": "kw.If",
+      "name_local": "Якщо",
+      "name_en": "If",
+      "kind": "keyword",
+      "category_keys": ["common_lang", "control_flow"],
+      "signature": "Якщо <Вираз> Тоді ... [ІнакшеЯкщо ... Тоді ...] [Інакше ...] КінецьЯкщо",
+      "description": "Умовне виконання.\n\nОбчислює логічний вираз; за значення Істина виконує гілку Тоді, інакше — необов'язкову гілку ІнакшеЯкщо з власним виразом, інакше — необов'язкову гілку Інакше.",
+      "syntax_block": "Якщо <Вираз1> Тоді\n    // оператори\nІнакшеЯкщо <Вираз2> Тоді\n    // оператори\nІнакше\n    // оператори\nКінецьЯкщо",
+      "parameters": "<Вираз1>, <Вираз2> — логічні вирази.",
+      "return_descr": "",
+      "example": "Якщо userInfo.IsAdmin Тоді\n    EnableAdminMenu();\nІнакше\n    HideAdminMenu();\nКінецьЯкщо",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["kw.While"],
+      "reviewed": true
+    }
+  ]
+}

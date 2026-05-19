@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "locale": "ru-RU",
+  "entries": [
+    {
+      "id": "kw.If",
+      "name_local": "Если",
+      "name_en": "If",
+      "kind": "keyword",
+      "category_keys": ["common_lang", "control_flow"],
+      "signature": "Если <Выражение> Тогда ... [ИначеЕсли ... Тогда ...] [Иначе ...] КонецЕсли",
+      "description": "Условное выполнение.\n\nВычисляет логическое выражение; при значении Истина выполняет ветку Тогда, иначе — необязательную ветку ИначеЕсли с собственным выражением, иначе — необязательную ветку Иначе.",
+      "syntax_block": "Если <Выражение1> Тогда\n    // операторы\nИначеЕсли <Выражение2> Тогда\n    // операторы\nИначе\n    // операторы\nКонецЕсли",
+      "parameters": "<Выражение1>, <Выражение2> — логические выражения.",
+      "return_descr": "",
+      "example": "Если userInfo.IsAdmin Тогда\n    EnableAdminMenu();\nИначе\n    HideAdminMenu();\nКонецЕсли",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["kw.While"],
+      "reviewed": true
+    }
+  ]
+}

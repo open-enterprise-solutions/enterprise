@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "locale": "ru-RU",
+  "entries": [
+    {
+      "id": "fn.Message",
+      "name_local": "Сообщить",
+      "name_en": "Message",
+      "kind": "system_function",
+      "category_keys": ["global_context", "global_functions"],
+      "signature": "Сообщить(<Строка>, [<Маркер>])",
+      "description": "Выводит сообщение в окно сообщений. Параметр маркера, если поддерживается, добавляет к сообщению пиктограмму, указывающую на его важность.",
+      "syntax_block": "Сообщить(<Строка>, [<Маркер>])",
+      "parameters": "<Строка> — текст сообщения.\n<Маркер> — необязательный маркер важности; на этапе Phase 1 не реализован и в настоящее время игнорируется.",
+      "return_descr": "",
+      "example": "Сообщить(\"Документ успешно сохранён.\");",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.Status"],
+      "reviewed": true
+    }
+  ]
+}

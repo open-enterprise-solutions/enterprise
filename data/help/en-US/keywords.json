@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "locale": "en-US",
+  "entries": [
+    {
+      "id": "kw.If",
+      "name_local": "If",
+      "name_en": "If",
+      "kind": "keyword",
+      "category_keys": ["common_lang", "control_flow"],
+      "signature": "If <Expression> Then ... [ElsIf ... Then ...] [Else ...] EndIf",
+      "description": "Conditional execution.\n\nEvaluates the boolean expression; runs the Then branch when true, otherwise an optional ElsIf branch with its own expression, otherwise an optional Else branch.",
+      "syntax_block": "If <Expression1> Then\n    // operators\nElsIf <Expression2> Then\n    // operators\nElse\n    // operators\nEndIf",
+      "parameters": "<Expression1>, <Expression2> — boolean expressions.",
+      "return_descr": "",
+      "example": "If userInfo.IsAdmin Then\n    EnableAdminMenu();\nElse\n    HideAdminMenu();\nEndIf",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["kw.While"],
+      "reviewed": true
+    }
+  ]
+}

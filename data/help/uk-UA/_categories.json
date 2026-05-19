@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "locale": "uk-UA",
+  "categories": {
+    "common_lang":        "Загальний опис мови",
+    "control_flow":       "Потік виконання",
+    "global_context":     "Глобальний контекст",
+    "global_functions":   "Глобальні функції",
+    "primitive_types":    "Примітивні типи",
+    "date":               "Дата"
+  }
+}
