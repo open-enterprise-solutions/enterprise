@@ -36,10 +36,10 @@ thread_local ibPluginCallScope* tl_scope = nullptr;
 // so wiring is a plain function-pointer table.
 // =========================================================================
 
-int Host_RegisterFunction(const char* name, ibPluginFunctionFn fn)
+int Host_RegisterFunction(const char* name, int paramCount, ibPluginFunctionFn fn)
 {
 	if (g_currentManager == nullptr) return -1;
-	return g_currentManager->HostRegisterFunction(name, fn);
+	return g_currentManager->HostRegisterFunction(name, paramCount, fn);
 }
 
 int Host_RegisterMenuItem(const char* label, ibPluginMenuFn handler)
@@ -252,15 +252,15 @@ void ibPluginManager::FireEvent(const wxString& name, ibPluginValue* payload)
 	tl_scope = prev;
 }
 
-int ibPluginManager::HostRegisterFunction(const char* name, ibPluginFunctionFn fn)
+int ibPluginManager::HostRegisterFunction(const char* name, int paramCount, ibPluginFunctionFn fn)
 {
 	if (fn == nullptr || !IsValidIdentifier(name)) return -1;
 	// Last writer wins — overwrite an existing binding with the same name.
 	const std::string key(name);
 	for (auto& f : m_functions) {
-		if (f.m_name == key) { f.m_fn = fn; return 0; }
+		if (f.m_name == key) { f.m_paramCount = paramCount; f.m_fn = fn; return 0; }
 	}
-	m_functions.push_back({ key, fn });
+	m_functions.push_back({ key, paramCount, fn });
 	return 0;
 }
 

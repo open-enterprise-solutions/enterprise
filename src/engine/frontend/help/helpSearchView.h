@@ -38,6 +38,11 @@ private:
 
 	void OnQueryChanged(wxCommandEvent& event);
 	void OnSelection(wxCommandEvent& event);
+	void OnListMouseDown(wxMouseEvent& event);
+	void OnListMouseMove(wxMouseEvent& event);
+
+	wxPoint  m_dragStart;
+	wxString m_dragId;
 };
 
 #endif // _IB_HELP_SEARCH_VIEW_H_

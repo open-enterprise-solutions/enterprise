@@ -159,6 +159,18 @@ struct BACKEND_API ibHelpEntry {
 		if (nameLocal == nameEn) return nameLocal;
 		return nameLocal + wxT(" / ") + nameEn;
 	}
+
+	// Text payload for drag-from-helper → drop-into-editor. Returns the
+	// syntax_block template that matches the requested compile style
+	// (codeStyle: 0 = VES, 1 = CES), falling back to the other form and
+	// finally to the entry's identifier when no template is authored.
+	inline wxString InsertTemplate(short codeStyle) const {
+		const bool prefersVes = (codeStyle == 0);
+		if (prefersVes && !syntaxBlockVes.IsEmpty()) return syntaxBlockVes;
+		if (!syntaxBlock.IsEmpty())                   return syntaxBlock;
+		if (!syntaxBlockVes.IsEmpty())                return syntaxBlockVes;
+		return !nameLocal.IsEmpty() ? nameLocal : nameEn;
+	}
 };
 
 #endif // _IB_HELP_ENTRY_H_

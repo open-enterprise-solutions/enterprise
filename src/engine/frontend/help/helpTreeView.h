@@ -40,9 +40,14 @@ private:
 
 	void OnSelChanged(wxTreeEvent& event);
 	void OnItemActivated(wxTreeEvent& event);
+	void OnBeginDrag(wxTreeEvent& event);
 
 	void AddCategoryNode(const ibHelpCategory* node,
 	                      const wxTreeItemId& parent);
+
+	// Need a corpus reference at drag time to resolve entry id →
+	// syntax template; captured from the most recent Rebuild call.
+	std::shared_ptr<const ibHelpCorpus> m_corpus;
 };
 
 #endif // _IB_HELP_TREE_VIEW_H_

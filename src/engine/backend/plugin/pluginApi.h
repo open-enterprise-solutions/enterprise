@@ -75,8 +75,9 @@ typedef struct ibHostAPI_s {
 	// Register a BSL/CES builtin callable from script as `<name>(...)`.
 	// Identifier rules: ASCII letters / digits / underscore, must not
 	// start with a digit. Duplicate names overwrite the prior binding.
-	// Returns 0 on success.
-	int (*RegisterFunction)(const char* name, ibPluginFunctionFn fn);
+	// `paramCount` is the exact arity the script call must satisfy;
+	// use -1 to mark variadic. Returns 0 on success.
+	int (*RegisterFunction)(const char* name, int paramCount, ibPluginFunctionFn fn);
 
 	// Append an item to the Designer's Tools → Plugins submenu.
 	// Plugins running outside Designer (codeRunner, daemon,

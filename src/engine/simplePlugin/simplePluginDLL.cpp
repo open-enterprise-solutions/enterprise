@@ -84,7 +84,7 @@ OES_PLUGIN_EXPORT int oes_plugin_initialize(const ibHostAPI* host)
     }
 
     g_host->Log("simplePlugin: initializing (ABI v2)", 0);
-    g_host->RegisterFunction("PluginEcho",        &PluginEcho);
+    g_host->RegisterFunction("PluginEcho", 1, &PluginEcho);
     g_host->RegisterMenuItem("Plugin Echo Demo",  &OnMenuClick);
     g_host->Subscribe       ("DocumentSaved",      &OnDocumentSaved);
     return 0;

@@ -17,6 +17,8 @@
 #include "backend/compiler/compileCode.h"
 
 #include <wx/sizer.h>
+#include <wx/dnd.h>
+#include <wx/dataobj.h>
 
 #include <functional>
 
@@ -44,9 +46,11 @@ ibHelpTreeView::ibHelpTreeView(wxWindow* parent, ibHelpPaneView* pane)
 
 	Bind(wxEVT_TREE_SEL_CHANGED,    &ibHelpTreeView::OnSelChanged,     this);
 	Bind(wxEVT_TREE_ITEM_ACTIVATED, &ibHelpTreeView::OnItemActivated, this);
+	Bind(wxEVT_TREE_BEGIN_DRAG,     &ibHelpTreeView::OnBeginDrag,      this);
 }
 
 void ibHelpTreeView::Rebuild(const std::shared_ptr<const ibHelpCorpus>& corpus) {
+	m_corpus = corpus;
 	m_tree->DeleteAllItems();
 	m_entryItems.clear();
 
@@ -124,4 +128,17 @@ void ibHelpTreeView::OnSelChanged(wxTreeEvent& event) {
 
 void ibHelpTreeView::OnItemActivated(wxTreeEvent& event) {
 	OnSelChanged(event);
+}
+
+void ibHelpTreeView::OnBeginDrag(wxTreeEvent& event) {
+	if (!m_corpus) return;
+	auto* data = dynamic_cast<EntryIdData*>(m_tree->GetItemData(event.GetItem()));
+	if (data == nullptr) return; // category node — nothing to drag
+	const ibHelpEntry* entry = m_corpus->FindById(data->id);
+	if (entry == nullptr) return;
+	const wxString tpl = entry->InsertTemplate(ibCompileCode::GetCodeStyle());
+	if (tpl.IsEmpty()) return;
+	wxTextDataObject payload(tpl);
+	wxDropSource src(payload, m_tree);
+	src.DoDragDrop(wxDrag_DefaultMove);
 }

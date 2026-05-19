@@ -45,6 +45,7 @@ public:
 	// callable identifier inside the script tokenizer.
 	struct RegisteredFunction {
 		std::string         m_name;
+		int                 m_paramCount = -1;
 		ibPluginFunctionFn  m_fn = nullptr;
 	};
 
@@ -83,7 +84,7 @@ public:
 	// Internal — registration entry points invoked through ibHostAPI
 	// callbacks. Public so the host-bridge translation unit can call
 	// them; not part of the plugin-facing surface.
-	int  HostRegisterFunction(const char* name, ibPluginFunctionFn fn);
+	int  HostRegisterFunction(const char* name, int paramCount, ibPluginFunctionFn fn);
 	int  HostRegisterMenuItem(const char* label, ibPluginMenuFn handler);
 	int  HostSubscribe(const char* event, ibPluginEventFn cb);
 
