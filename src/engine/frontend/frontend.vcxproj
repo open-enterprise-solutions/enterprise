@@ -29,6 +29,7 @@
     <ClCompile Include="frontend.cpp" />
     <ClCompile Include="help\helpChooserDialog.cpp" />
     <ClCompile Include="help\helpDetailView.cpp" />
+    <ClCompile Include="help\helpDragSource.cpp" />
     <ClCompile Include="help\helpIndexView.cpp" />
     <ClCompile Include="help\helpPaneView.cpp" />
     <ClCompile Include="help\helpSearchView.cpp" />
@@ -355,6 +356,7 @@
     <ClInclude Include="frontend.h" />
     <ClInclude Include="help\helpChooserDialog.h" />
     <ClInclude Include="help\helpDetailView.h" />
+    <ClInclude Include="help\helpDragSource.h" />
     <ClInclude Include="help\helpIndexView.h" />
     <ClInclude Include="help\helpPaneView.h" />
     <ClInclude Include="help\helpSearchView.h" />
