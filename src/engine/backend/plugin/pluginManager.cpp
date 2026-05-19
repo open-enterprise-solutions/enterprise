@@ -167,8 +167,11 @@ size_t ibPluginManager::LoadAll()
 	for (const wxString& path : files) {
 
 		auto lib = std::make_unique<wxDynamicLibrary>();
-		if (!lib->Load(path, wxDL_DEFAULT | wxDL_QUIET))
+		if (!lib->Load(path, wxDL_DEFAULT | wxDL_QUIET)) {
+			wxLogMessage(wxT("Plugin '%s' failed to load (missing dependency or wrong arch)"),
+			             path);
 			continue;
+		}
 
 		ibPluginInfoFn info_fn = nullptr;
 		{
@@ -181,8 +184,8 @@ size_t ibPluginManager::LoadAll()
 
 		const ibPluginInfo* info = info_fn();
 		if (info == nullptr || info->abi_version < kAbiMin || info->abi_version > kAbiMax) {
-			wxLogDebug("Skipping plugin '%s': ABI mismatch (got %d, host supports %d..%d)",
-				path, info ? info->abi_version : -1, kAbiMin, kAbiMax);
+			wxLogMessage(wxT("Plugin '%s' rejected: ABI mismatch (got %d, host supports %d..%d)"),
+			             path, info ? info->abi_version : -1, kAbiMin, kAbiMax);
 			continue;
 		}
 
