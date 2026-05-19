@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Sigma Smoke Test</title>
+<title>Plugin WebView Smoke Test</title>
 <style>
   html, body { margin: 0; padding: 0; height: 100%; background: #1e1e1e; color: #e0e0e0; }
   body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 14px; display: flex; flex-direction: column; height: 100vh; }
@@ -19,7 +19,7 @@
 </style>
 </head>
 <body>
-<div id="bar">Sigma — Smoke Test</div>
+<div id="bar">Plugin WebView — Smoke Test</div>
 <div id="log"></div>
 <div id="row">
   <input type="text" id="input" autocomplete="off" placeholder="type and press Enter">
@@ -55,14 +55,14 @@
     if (!text) return;
     input.value = "";
     append(ts() + " you: " + text);
-    if (window.sigma && typeof window.sigma.postMessage === "function") {
+    if (window.oesHost && typeof window.oesHost.postMessage === "function") {
       try {
-        window.sigma.postMessage(JSON.stringify({ type: "smoke.echo", text: text, ts: Date.now() }));
+        window.oesHost.postMessage(JSON.stringify({ type: "smoke.echo", text: text, ts: Date.now() }));
       } catch (e) {
         append(ts() + " [ERR] postMessage threw: " + e, "err");
       }
     } else {
-      append(ts() + " [ERR] sigma channel not wired", "err");
+      append(ts() + " [ERR] oesHost channel not wired", "err");
     }
   }
   document.addEventListener("DOMContentLoaded", function () {
@@ -70,15 +70,15 @@
     document.getElementById("input").addEventListener("keydown", function (e) {
       if (e.key === "Enter") { e.preventDefault(); send(); }
     });
-    if (window.sigma) {
-      window.sigma._recv = onHost;
-      var inbox = window.sigma.__inbox;
+    if (window.oesHost) {
+      window.oesHost._recv = onHost;
+      var inbox = window.oesHost.__inbox;
       if (inbox && inbox.length) {
         for (var i = 0; i < inbox.length; i++) { onHost(inbox[i]); }
-        window.sigma.__inbox = [];
+        window.oesHost.__inbox = [];
       }
     }
-    append(ts() + " sigma sample ready — channel=" + (window.sigma ? "wired" : "missing"));
+    append(ts() + " host bridge ready — channel=" + (window.oesHost ? "wired" : "missing"));
   });
 })();
 </script>

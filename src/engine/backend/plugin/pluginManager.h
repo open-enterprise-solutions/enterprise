@@ -80,7 +80,7 @@ public:
 	// Directory that will be scanned (<exe-dir>/plugins).
 	static wxString GetPluginsDir();
 
-	~ibPluginManager() { UnloadAll(); }
+	~ibPluginManager();
 
 	// Internal — registration entry points invoked through ibHostAPI
 	// callbacks. Public so the host-bridge translation unit can call
@@ -108,11 +108,20 @@ public:
 	                          WebPaneSendFn    send,
 	                          WebPaneShowFn    show);
 
+	// Plugin RegisterWebPane calls fired from oes_plugin_initialize land
+	// here. If callbacks have not been installed yet (plugins loaded
+	// before the Designer frame existed — the normal startup order),
+	// the registration is buffered and returns 0; ReplayPendingWebPaneRegistrations
+	// drains the buffer once the frame installs its callbacks.
 	int CallWebPaneRegister(const wxString& paneId, const wxString& title,
 	                         const wxString& htmlBundlePath,
-	                         ibPluginWebMsgFn cb, void* userData) const;
+	                         ibPluginWebMsgFn cb, void* userData);
 	int CallWebPaneSend(const wxString& paneId, const wxString& jsonInline) const;
 	int CallWebPaneShow(const wxString& paneId) const;
+
+	// Designer calls this immediately after SetWebPaneCallbacks so plugins
+	// that registered before callbacks were ready still get their panes.
+	void ReplayPendingWebPaneRegistrations();
 
 	// Dispatch a registered plugin function from the script call site.
 	// Sets up the arena scope so Make* / GetString calls inside the
@@ -139,6 +148,17 @@ private:
 	WebPaneRegisterFn m_webPaneRegister;
 	WebPaneSendFn     m_webPaneSend;
 	WebPaneShowFn     m_webPaneShow;
+
+	// Buffer of RegisterWebPane calls fired before the Designer installed
+	// its callbacks. Drained by ReplayPendingWebPaneRegistrations.
+	struct PendingWebPaneReg {
+		wxString          paneId;
+		wxString          title;
+		wxString          htmlBundlePath;
+		ibPluginWebMsgFn  onMessage;
+		void*             userData;
+	};
+	std::vector<PendingWebPaneReg> m_pendingWebPaneRegs;
 };
 
 #endif // _IB_PLUGIN_MANAGER_H_

@@ -251,8 +251,11 @@ size_t ibPluginManager::LoadAll()
 		return 0;
 	}
 
-	g_currentManager = this;
-	struct ManagerGuard { ~ManagerGuard() { g_currentManager = nullptr; } } guard;
+	// Note: g_currentManager remains set for the lifetime of *this*; the
+	// dtor clears it. ABI v4 host callbacks (WebPaneSend, AIChunkEmit,
+	// MetaCreate, etc.) fire from chat / worker threads well after
+	// LoadAll returns — a scope-guard that reset to nullptr here would
+	// break every post-init host call.
 
 	const wxString dir = GetPluginsDir();
 	if (!wxDirExists(dir))
@@ -450,10 +453,41 @@ int ibPluginManager::CallWebPaneRegister(const wxString& paneId,
                                            const wxString& title,
                                            const wxString& htmlBundlePath,
                                            ibPluginWebMsgFn cb,
-                                           void* userData) const
+                                           void* userData)
 {
-	if (!m_webPaneRegister) return -1;
+	if (!m_webPaneRegister) {
+		// Designer hasn't installed callbacks yet — buffer for replay.
+		// Return success so the plugin doesn't treat early-init as
+		// failure; ReplayPendingWebPaneRegistrations will surface the
+		// real result later once the frame wires its lambdas.
+		m_pendingWebPaneRegs.push_back({paneId, title, htmlBundlePath, cb, userData});
+		return 0;
+	}
 	return m_webPaneRegister(paneId, title, htmlBundlePath, cb, userData);
+}
+
+ibPluginManager::~ibPluginManager()
+{
+	UnloadAll();
+	// Clear the global only if we still own it — a future instance may
+	// have replaced us via its own ctor / LoadAll. Single-instance is the
+	// documented invariant for ABI v4 host trampolines.
+	if (g_currentManager == this) g_currentManager = nullptr;
+}
+
+void ibPluginManager::ReplayPendingWebPaneRegistrations()
+{
+	if (!m_webPaneRegister) return;
+	std::vector<PendingWebPaneReg> pending;
+	pending.swap(m_pendingWebPaneRegs);
+	for (const auto& r : pending) {
+		const int rc = m_webPaneRegister(r.paneId, r.title, r.htmlBundlePath,
+		                                   r.onMessage, r.userData);
+		if (rc != 0) {
+			wxLogWarning(wxT("ibPluginManager: deferred RegisterWebPane('%s') returned %d"),
+			             r.paneId, rc);
+		}
+	}
 }
 
 int ibPluginManager::CallWebPaneSend(const wxString& paneId,

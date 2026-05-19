@@ -9,7 +9,7 @@
 #include "backend/plugin/pluginManager.h"
 
 #include "frontend/artProvider/artProvider.h"
-#include "frontend/sigma/sigmaPane.h"
+#include "frontend/pluginWebPane/pluginWebPane.h"
 
 #include <wx/xml/xml.h>
 
@@ -252,31 +252,39 @@ void ibFrontendDocMDIFrameDesigner::OpenHelpForCursor()
 }
 
 // ---------------------------------------------------------------------------
-// Sigma AI pane — Phase 1 wiring. Designer registers callbacks with the
-// plugin manager so RegisterWebPane / WebPaneSend / WebPaneShow trampolines
-// in pluginManager.cpp can construct + drive concrete wxAuiPane instances.
+// Plugin WebView pane wiring. Designer registers callbacks with the plugin
+// manager so RegisterWebPane / WebPaneSend / WebPaneShow trampolines in
+// pluginManager.cpp can construct and drive concrete wxAuiPane instances.
 //
-// Provider plugins (pugi-oes-bridge / future Anthropic / OpenAI / Ollama
-// bridges) call host->RegisterWebPane("<id>", "<title>", "<html>", cb, ud)
-// from oes_plugin_initialize; the lambdas below run on the UI thread and
-// add the resulting ibSigmaPane to wxAuiManager.
+// Any plugin (AI assistant bridges like pugi-oes-bridge, custom dashboard
+// plugins, anything that wants a wxWebView surface) calls
+// host->RegisterWebPane("<id>", "<title>", "<html>", cb, ud) from
+// oes_plugin_initialize; the lambdas below run on the UI thread and add
+// the resulting ibPluginWebPane to wxAuiManager.
+//
+// Lookups always go through m_mgr.GetPane(paneId) rather than caching
+// raw ibPluginWebPane* pointers — when the user closes a pane and the
+// AUI manager destroys it, a cached pointer would dangle. The set
+// m_pluginWebPaneIds tracks which ids belong to us for SaveOptions.
 // ---------------------------------------------------------------------------
 
-void ibFrontendDocMDIFrameDesigner::WireSigmaCallbacks()
+void ibFrontendDocMDIFrameDesigner::WirePluginWebPaneCallbacks()
 {
-	if (m_sigmaCallbacksRegistered) return;
+	if (m_pluginWebPaneCallbacksRegistered) return;
 	auto* pm = appData->GetPluginManager();
 	if (pm == nullptr) return;
 
 	pm->SetWebPaneCallbacks(
-	    // RegisterWebPane — wraps an ibSigmaPane inside a wxAuiPane and
-	    // shows it on the right dock by default.
+	    // RegisterWebPane — wraps an ibPluginWebPane inside a wxAuiPane.
 	    [this](const wxString& paneId, const wxString& title,
 	            const wxString& htmlBundlePath,
 	            ibPluginWebMsgFn onMessage, void* userData) -> int {
-	        if (m_sigmaPanes.count(paneId)) return -1;
-	        auto* pane = new ibSigmaPane(this, paneId, title,
-	                                      htmlBundlePath, onMessage, userData);
+	        if (m_pluginWebPaneIds.count(paneId)) return -1;
+	        // Reject duplicate name at the AUI level too — AddPane silently
+	        // refuses panes whose Name() collides with an existing one.
+	        if (m_mgr.GetPane(paneId).IsOk()) return -1;
+	        auto* pane = new ibPluginWebPane(this, paneId, title,
+	                                          htmlBundlePath, onMessage, userData);
 	        wxAuiPaneInfo info;
 	        info.Name(paneId);
 	        info.Caption(title);
@@ -285,31 +293,37 @@ void ibFrontendDocMDIFrameDesigner::WireSigmaCallbacks()
 	        info.BestSize(420, 600);
 	        info.CloseButton(true);
 	        info.MaximizeButton(false);
-	        // Replay persisted visibility from options.xml. Default
-	        // hidden so a brand-new plugin install doesn't pop the pane
-	        // on first launch — the user opens it via Tools menu or
-	        // Ctrl+Alt+I, and that choice persists for next session.
-	        auto pit = m_pendingSigmaVisible.find(paneId);
-	        const bool wantVisible = (pit != m_pendingSigmaVisible.end()) && pit->second;
+	        // Replay persisted visibility from options.xml. Default hidden
+	        // so a brand-new plugin install doesn't pop the pane on first
+	        // launch — user opens via menu or RawCtrl+Alt+I, choice persists.
+	        auto pit = m_pendingPluginWebPaneVisible.find(paneId);
+	        const bool wantVisible = (pit != m_pendingPluginWebPaneVisible.end()) && pit->second;
 	        info.Show(wantVisible);
-	        m_mgr.AddPane(pane, info);
+	        if (!m_mgr.AddPane(pane, info)) {
+	            delete pane;
+	            return -1;
+	        }
 	        m_mgr.Update();
-	        m_sigmaPanes[paneId] = pane;
+	        m_pluginWebPaneIds.insert(paneId);
 	        return 0;
 	    },
-	    // WebPaneSend — thread-safe push to the WebView; ibSigmaPane
-	    // handles the wxThreadEvent marshal for off-UI callers.
+	    // WebPaneSend — thread-safe push. Resolves the live pane through
+	    // the AUI manager so a closed/destroyed pane returns -1 instead
+	    // of dereferencing a cached pointer.
 	    [this](const wxString& paneId, const wxString& jsonInline) -> int {
-	        auto it = m_sigmaPanes.find(paneId);
-	        if (it == m_sigmaPanes.end()) return -1;
-	        it->second->PushMessage(jsonInline);
+	        wxAuiPaneInfo& info = m_mgr.GetPane(paneId);
+	        if (!info.IsOk()) return -1;
+	        // Plain dynamic_cast — ibPluginWebPane lacks the wxRTTI macros
+	        // (it's a simple wxPanel subclass, not a wxObject-declared class
+	        // family). RTTI is enabled project-wide via /GR (MSVC) and the
+	        // default Clang/GCC behaviour.
+	        auto* pane = dynamic_cast<ibPluginWebPane*>(info.window);
+	        if (pane == nullptr) return -1;
+	        pane->PushMessage(jsonInline);
 	        return 0;
 	    },
-	    // WebPaneShow — force-visible flip; creates the AUI pane on
-	    // first call if the registration step skipped Show(true).
+	    // WebPaneShow — force-visible flip.
 	    [this](const wxString& paneId) -> int {
-	        auto it = m_sigmaPanes.find(paneId);
-	        if (it == m_sigmaPanes.end()) return -1;
 	        wxAuiPaneInfo& info = m_mgr.GetPane(paneId);
 	        if (!info.IsOk()) return -1;
 	        if (!info.IsShown()) info.Show(true);
@@ -317,5 +331,12 @@ void ibFrontendDocMDIFrameDesigner::WireSigmaCallbacks()
 	        return 0;
 	    });
 
-	m_sigmaCallbacksRegistered = true;
+	m_pluginWebPaneCallbacksRegistered = true;
+
+	// Replay registrations for plugins that loaded BEFORE the designer
+	// frame existed (their RegisterWebPane calls during oes_plugin_initialize
+	// returned -1 because no callbacks were installed yet). Each plugin
+	// stashes its registration request in ibPluginManager which we now
+	// drain. Without this, the menu would have no pane to show.
+	pm->ReplayPendingWebPaneRegistrations();
 }

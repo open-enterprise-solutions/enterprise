@@ -5,6 +5,7 @@
 #include "mainFrame/metaTree/treeConfiguration.h"
 
 #include <unordered_map>
+#include <unordered_set>
 
 #if defined(mainFrame)
 #undef mainFrame
@@ -168,21 +169,23 @@ private:
 	// by the AUI manager once added.
 	class ibHelpPaneView* m_helpPane = nullptr;
 
-	// Sigma AI panes — multi-provider; one wxAuiPane per registered
-	// paneId. Created on demand via Host_RegisterWebPane callback the
-	// designer registers with the plugin manager. Owned by the AUI
-	// manager once added.
-	std::unordered_map<wxString, class ibSigmaPane*> m_sigmaPanes;
-	bool m_sigmaCallbacksRegistered = false;
-	void WireSigmaCallbacks();
+	// Plugin-driven WebView panes — generic infrastructure for any plugin
+	// that wants to embed a wxWebView-based UI (AI assistants, custom
+	// integration dashboards, etc.). Set of registered paneIds; the AUI
+	// manager owns the actual ibPluginWebPane lifecycle. Lookups go via
+	// m_mgr.GetPane(paneId) so a closed-and-destroyed pane never leaves
+	// a dangling pointer behind.
+	std::unordered_set<wxString> m_pluginWebPaneIds;
+	bool m_pluginWebPaneCallbacksRegistered = false;
+	void WirePluginWebPaneCallbacks();
 
-	// Pre-loaded sigma visibility map from options.xml. Plugins register
-	// their panes asynchronously after LoadOptions has already run, so
-	// the visibility decision happens later inside the RegisterWebPane
+	// Pre-loaded visibility map from options.xml. Plugins register their
+	// panes asynchronously after LoadOptions has already run, so the
+	// visibility decision happens later inside the RegisterWebPane
 	// callback — we look up paneId here and apply Show() at AUI-add time.
 	// Entries persist after consumption so SaveOptions can write back
 	// state for panes that were registered but later closed.
-	std::unordered_map<wxString, bool> m_pendingSigmaVisible;
+	std::unordered_map<wxString, bool> m_pendingPluginWebPaneVisible;
 
 	// Help-pane state pulled out of options.xml at startup and
 	// applied lazily once EnsureHelpPane creates the widget. The

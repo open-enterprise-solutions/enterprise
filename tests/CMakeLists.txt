@@ -37,7 +37,7 @@ add_executable(oes_tests
     test_session.cpp
     test_pagingRamTable.cpp
     test_pluginApi.cpp
-    test_sigmaPane.cpp
+    test_pluginWebPane.cpp
 )
 
 target_link_libraries(oes_tests

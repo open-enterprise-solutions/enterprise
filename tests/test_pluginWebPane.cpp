@@ -1,7 +1,7 @@
 /////////////////////////////////////////////////////////////////////////////
-// ibSigmaPane — headless smoke tests.
+// ibPluginWebPane — headless smoke tests.
 //
-// These tests construct a real ibSigmaPane on top of a hidden wxFrame and
+// These tests construct a real ibPluginWebPane on top of a hidden wxFrame and
 // verify the lifecycle and the cross-thread PushMessage entry point. They
 // are deliberately conservative: wxWebView's actual JS execution is not
 // observable without a display (and on Windows, without the WebView2
@@ -19,7 +19,7 @@
 // headless CI: no DISPLAY/WAYLAND on Linux, no Aqua on macOS sandbox,
 // missing WebView2 runtime on Windows). Skipped tests are NOT failures.
 //
-// IMPORTANT: this test never modifies ibSigmaPane's public API. If a
+// IMPORTANT: this test never modifies ibPluginWebPane's public API. If a
 // future scenario would require a new accessor, leave a `// TODO: needs
 // accessor` comment instead of patching the header.
 /////////////////////////////////////////////////////////////////////////////
@@ -40,7 +40,7 @@
 #include <cstdlib>
 #include <string>
 
-#include "frontend/sigma/sigmaPane.h"
+#include "frontend/pluginWebPane/pluginWebPane.h"
 #include "backend/plugin/pluginApi.h"
 
 namespace {
@@ -71,7 +71,7 @@ void OnMessageStub(const char* /*paneId*/,
 wxString WriteTempHtmlBundle()
 {
     wxString tmpDir = wxStandardPaths::Get().GetTempDir();
-    wxFileName fn(tmpDir, wxT("oes_sigmaPane_test.html"));
+    wxFileName fn(tmpDir, wxT("oes_pluginWebPane_test.html"));
     const wxString path = fn.GetFullPath();
 
     wxFileOutputStream out(path);
@@ -118,7 +118,7 @@ protected:
             m_ownsApp = true;
         }
 
-        m_parent = new wxFrame(nullptr, wxID_ANY, wxT("oes-sigmaPane-test"));
+        m_parent = new wxFrame(nullptr, wxID_ANY, wxT("oes-pluginWebPane-test"));
         m_parent->Hide();
         m_bundlePath = WriteTempHtmlBundle();
         g_messageCounter.store(0, std::memory_order_relaxed);
@@ -152,7 +152,7 @@ TEST_F(SigmaPaneTest, ConstructsAndDestroys) {
     if (m_skipped) return; // GTEST_SKIP already fired in SetUp
 
     int userData = 0;
-    auto* pane = new ibSigmaPane(m_parent,
+    auto* pane = new ibPluginWebPane(m_parent,
                                   wxT("test.pane"),
                                   wxT("Test Pane"),
                                   m_bundlePath,
@@ -163,7 +163,7 @@ TEST_F(SigmaPaneTest, ConstructsAndDestroys) {
     // Pane attached itself to the parent's child list via wxWidgets
     // parenting (there is no public ID accessor we could query; checking
     // child-count is the API-stable way to confirm attachment).
-    // TODO: needs accessor — once ibSigmaPane exposes a list-membership
+    // TODO: needs accessor — once ibPluginWebPane exposes a list-membership
     // helper, prefer that. For now this is the contract observable
     // through the existing public surface.
     EXPECT_EQ(m_parent->GetChildren().GetCount(), 1u);
@@ -176,7 +176,7 @@ TEST_F(SigmaPaneTest, ConstructsAndDestroys) {
 
     // Destroying the parent must cascade to the pane via wxWidgets
     // ownership. We rely on the destructor running without crash; if
-    // ibSigmaPane mishandled m_webView cleanup, ASAN/UBSAN would catch
+    // ibPluginWebPane mishandled m_webView cleanup, ASAN/UBSAN would catch
     // it here.
     m_parent->Destroy();
     m_parent = nullptr;
@@ -188,7 +188,7 @@ TEST_F(SigmaPaneTest, PushMessageFromMainThreadIsSafe) {
     if (m_skipped) return;
 
     int userData = 0;
-    auto* pane = new ibSigmaPane(m_parent,
+    auto* pane = new ibPluginWebPane(m_parent,
                                   wxT("test.pane"),
                                   wxT("Test Pane"),
                                   m_bundlePath,
