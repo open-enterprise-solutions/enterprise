@@ -42,10 +42,12 @@ enum {
 	wxID_DESIGNER_DATABASE_CLEAR,
 
 	wxID_DESIGNER_ABOUT,
-	wxID_DESIGNER_SYNTAX_HELPER,        // View → Syntax helper toggle
-	wxID_DESIGNER_SYNTAX_HELPER_LOOKUP, // Ctrl+F1 / context-menu lookup
 	wxID_DESIGNER_END
 };
+// Note: Syntax-helper command ids live in frontend/mainFrame/mainFrame.h
+// (wxID_FRONTEND_SYNTAX_HELPER / wxID_FRONTEND_SYNTAX_HELPER_LOOKUP) so
+// frontend widgets (e.g. ibCodeEditor's context menu) can post them
+// without taking a dependency on the downstream designer header.
 
 //menu  
 enum {

@@ -370,7 +370,7 @@ int ibAppDesigner::OnExit()
 		if (registry != nullptr) registry->Stop();
 	}
 
-	bool suсcess_exit = wxApp::OnExit();
+	bool success_exit = wxApp::OnExit();
 
 	appDataDestroy();
 
@@ -380,5 +380,5 @@ int ibAppDesigner::OnExit()
 		wxTheClipboard->Close();
 	}
 
-	return suсcess_exit;
+	return success_exit;
 }

@@ -54,7 +54,8 @@ struct BACKEND_API ibHelpResolveHint {
 // an empty vector when nothing matches. Lookup contract:
 //
 //   1. Exact match on the preferred-locale name → all entries with that
-//      name (potentially many — Дата type / function / attribute / …).
+//      name (potentially many — e.g. a primitive type, a function,
+//      and a metadata attribute may all share the same identifier).
 //   2. If the hint pins kind (e.g. kCallExpression → function-like
 //      kinds), filter candidates by kind before returning.
 //   3. parentIdentifier / containingMetaObjectId tighten metadata-class

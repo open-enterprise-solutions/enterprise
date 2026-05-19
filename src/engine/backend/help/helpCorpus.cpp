@@ -204,7 +204,7 @@ void ibHelpCorpus::BuildIndexes() {
 		}
 
 		// Name indexes — vector-valued because multiple entries can
-		// legitimately share a localised name (Дата type vs Document
+		// legitimately share a localised name (primitive type vs Document
 		// attribute vs MomentTime attribute vs function).
 		if (!e.nameLocal.empty())
 			m_byNameLocal[NormaliseKey(e.nameLocal)].push_back(i);

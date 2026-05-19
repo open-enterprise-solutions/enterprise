@@ -217,7 +217,7 @@ public:
 		* @param wxobject The object which was just created.
 		* @param wxparent The wxWidgets parent - the wxObject that the created object was added to.
 		*/
-		virtual void OnCreated(ibValueFrame* control, wxObject* obj, wxWindow* wxparent, bool firstСreated = false);
+		virtual void OnCreated(ibValueFrame* control, wxObject* obj, wxWindow* wxparent, bool firstCreated = false);
 
 		/**
 		* Allows components to do something after they have been updated.

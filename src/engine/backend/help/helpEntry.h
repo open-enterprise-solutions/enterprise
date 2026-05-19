@@ -47,8 +47,9 @@ struct BACKEND_API ibHelpEntry {
 	// collisions become overlays (§3.6).
 	wxString id;
 
-	// Localised identifier ("Дата" in ru-RU, "Date" in en-US). The user
-	// types this in the editor and search bar; resolver matches against it.
+	// Localised identifier — the user types this in the editor and
+	// search bar; resolver matches against it. May coincide with
+	// nameEn for English locales.
 	wxString nameLocal;
 
 	// English identifier ("Date"). Stable join key across locales — used
@@ -56,9 +57,9 @@ struct BACKEND_API ibHelpEntry {
 	// that needs locale-independent reference (id grammar, alias maps).
 	wxString nameEn;
 
-	// One-line call form: "Дата(<Параметр>)" / "Date(<Year>,<Month>,<Day>)".
-	// Used in autocomplete tooltips and as the entry's subtitle in the
-	// detail pane.
+	// One-line call form, e.g. "Date(<Year>, <Month>, <Day>)". Used in
+	// autocomplete tooltips and as the entry's subtitle in the detail
+	// pane.
 	wxString signature;
 
 	// Long-form prose. Authored in markdown (subset documented in §8 —
@@ -66,8 +67,8 @@ struct BACKEND_API ibHelpEntry {
 	// detail-view at display time; not pre-rendered on disk.
 	wxString description;
 
-	// Multi-line formatted declaration / call form for the "Синтаксис" /
-	// "Syntax" section of the detail pane.
+	// Multi-line formatted declaration / call form for the "Syntax"
+	// section of the detail pane.
 	wxString syntaxBlock;
 
 	// Markdown <dl>-style key:value list — one entry per formal parameter.
@@ -81,10 +82,9 @@ struct BACKEND_API ibHelpEntry {
 	// concatenated with blank lines between blocks.
 	wxString example;
 
-	// Free-form tier list — "Толстый клиент, Веб-клиент, Сервер" / the
-	// equivalent OES runtime tiers ("Designer, codeRunner, daemon,
-	// wenterprise-server"). Localised string, no parsing required by
-	// readers.
+	// Free-form tier list — OES runtime targets the entry is valid on
+	// (e.g. "Designer, codeRunner, daemon, wenterprise-server").
+	// Localised string, no parsing required by readers.
 	wxString availability;
 
 	ibHelpKind kind = ibHelpKind::kKeyword;
@@ -96,7 +96,7 @@ struct BACKEND_API ibHelpEntry {
 	//   e.g. {"applied_objects","documents","invoice","properties","code"}
 	std::vector<wxString> categoryKeys;
 
-	// Opaque ids of related entries — rendered as "Див. також" / "See
+	// Opaque ids of related entries — rendered as "See
 	// also" links in the detail pane. Loader validates each at LoadAll
 	// time; dangling ids demote to load warnings (kWarning) and the
 	// entry still loads.

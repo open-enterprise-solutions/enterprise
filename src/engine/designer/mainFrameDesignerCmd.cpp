@@ -144,7 +144,7 @@ void wxAuiDocDesignerMDIFrame::EnsureHelpPane()
 
 	wxAuiPaneInfo paneInfo;
 	paneInfo.Name(wxAUI_PANE_HELP);
-	paneInfo.Caption(_("Синтаксис-помічник"));
+	paneInfo.Caption(_("Syntax Helper"));
 	paneInfo.Right();
 	paneInfo.Layer(1);
 	paneInfo.MinSize(320, 480);
