@@ -8,6 +8,7 @@
     "global_context": "Глобальний контекст",
     "global_functions": "Глобальні функції",
     "primitive_types": "Примітивні типи",
-    "date": "Дата"
+    "date": "Дата",
+    "guide": "Довідка"
   }
 }

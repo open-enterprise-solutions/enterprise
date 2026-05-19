@@ -1,0 +1,25 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en-US",
+  "entries": [
+    {
+      "id": "guide.syntaxHelper",
+      "name_local": "About the Syntax Helper",
+      "name_en": "About the Syntax Helper",
+      "kind": "keyword",
+      "category_keys": [
+        "guide"
+      ],
+      "signature": "",
+      "description": "The Syntax Helper exposes every language keyword, built-in function, primitive type, and metadata accessor available inside an OES configuration. It is read-only documentation that lives alongside the editor — it never modifies your configuration on its own.\n\nThree tabs cover three navigation patterns. Contents groups entries by category. Index lists every name alphabetically with prefix-search. Search runs a token query across names + signatures.\n\nUse the toolbar Back / Forward buttons to retrace your steps, Reload to pull in newly added help files without restarting, Sync to look up the identifier under the editor caret, and the Larger / Smaller text buttons to scale the description font. Press RawCtrl+F1 (Ctrl+F1 on Windows / Linux) in the editor to open the helper on the identifier under the cursor; RawCtrl+Alt+F1 toggles the pane.\n\nDrag-and-drop: pick an entry in the Index or Search list (or the Contents tree) and drag it into the editor — the matching syntax template inserts at the drop position. The template respects the active compile mode (CES braces vs VES End* terminators).",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": true
+    }
+  ]
+}

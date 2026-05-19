@@ -8,6 +8,7 @@
     "global_context": "Global Context",
     "global_functions": "Global Functions",
     "primitive_types": "Primitive Types",
-    "date": "Date"
+    "date": "Date",
+    "guide": "Guide"
   }
 }
