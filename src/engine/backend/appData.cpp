@@ -1066,24 +1066,46 @@ void ibApplicationData::RebuildHelpCorpus()
 	// covers BOTH the build AND the atomic_store — latest waiter wins.
 	std::lock_guard<std::mutex> lk(m_helpReloadMutex);
 
-	// Resolve the platform corpus directory relative to the executable,
-	// NOT the current working directory. Daemon / wenterprise-server /
-	// codeRunner / Designer all set CWD to whatever the shell that
-	// launched them had — production launches from a shortcut / service
-	// / .app bundle cannot rely on CWD. Mirrors InitLocale's existing
-	// approach for `lang/`.
-	wxFileName exeDir(wxStandardPaths::Get().GetExecutablePath());
-	exeDir.SetFullName(wxEmptyString);   // strip the binary name
-	wxString platformDir =
-	    exeDir.GetPath() + wxFILE_SEP_PATH + wxT("data") + wxFILE_SEP_PATH + wxT("help");
+	// Resolve the platform corpus directory. Search order (first hit wins):
+	//   1. <exe-dir>/data/help                          loose-binary layout
+	//   2. <exe-dir>/../../../data/help                 macOS .app bundle —
+	//       exe lives in MyApp.app/Contents/MacOS/, three RemoveLastDir
+	//       walks up out of the bundle so the corpus can sit alongside it
+	//   3. <exe-dir>/../Resources/data/help             alt macOS layout —
+	//       bundled inside the app's Resources directory
+	//   4. <cwd>/data/help                              build-tree / dev
+	//
+	// Mirrors InitLocale's lang/ catalog-lookup pattern and the bundle
+	// fallback used by ReadEngineConfig elsewhere in this file.
+	wxFileName exeFile(wxStandardPaths::Get().GetExecutablePath());
+	const wxString exeDir = exeFile.GetPath();
 
-	// Build / source-tree fallback — useful when running from the
-	// build directory or from a checkout without `make install`. Pure
-	// path-exists check via wxFileName so the appData TU does not need
-	// wxDir / wxFile pulled in for this one decision.
+	auto joinHelp = [](const wxString& base) -> wxString {
+		return base + wxFILE_SEP_PATH + wxT("data") + wxFILE_SEP_PATH + wxT("help");
+	};
+
+	wxString platformDir = joinHelp(exeDir);
+
+#if defined(__WXOSX__) || defined(__APPLE__)
 	if (!wxFileName::DirExists(platformDir)) {
-		wxString cwdCandidate =
-		    wxGetCwd() + wxFILE_SEP_PATH + wxT("data") + wxFILE_SEP_PATH + wxT("help");
+		wxFileName bundleSibling(exeDir, wxEmptyString);
+		bundleSibling.RemoveLastDir(); // MacOS
+		bundleSibling.RemoveLastDir(); // Contents
+		bundleSibling.RemoveLastDir(); // <bundle>.app
+		const wxString candidate = joinHelp(bundleSibling.GetPath());
+		if (wxFileName::DirExists(candidate)) platformDir = candidate;
+	}
+	if (!wxFileName::DirExists(platformDir)) {
+		wxFileName resources(exeDir, wxEmptyString);
+		resources.RemoveLastDir(); // MacOS → Contents
+		resources.AppendDir(wxT("Resources"));
+		const wxString candidate = joinHelp(resources.GetPath());
+		if (wxFileName::DirExists(candidate)) platformDir = candidate;
+	}
+#endif
+
+	if (!wxFileName::DirExists(platformDir)) {
+		const wxString cwdCandidate = joinHelp(wxGetCwd());
 		if (wxFileName::DirExists(cwdCandidate)) platformDir = cwdCandidate;
 	}
 

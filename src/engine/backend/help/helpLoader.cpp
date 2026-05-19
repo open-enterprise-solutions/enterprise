@@ -306,18 +306,21 @@ LoadSource(const wxString&               localeCode,
 
 	// Surface missing-locale-directory as a kFatal so operators see
 	// "we shipped without the corpus" rather than the silent
-	// empty-corpus state. Bucket-less directories also count (after the
-	// ParseBucket loop below detects zero files).
+	// empty-corpus state. The error MUST land inside the constructed
+	// corpus (corpus->LoadErrors()) — appData reads errors only from
+	// the corpus snapshot; the `errorsOut` parameter is legacy
+	// plumbing that LoadHelpCorpus no longer consults.
 	if (!wxDir::Exists(localeDir)) {
 		ibHelpLoadError err;
 		err.bucketPath = localeDir;
 		err.severity   = ibHelpLoadSeverity::kFatal;
 		err.message    = wxString::Format(
 		    wxT("Help corpus directory does not exist: %s"), localeDir);
-		errorsOut.push_back(std::move(err));
+		std::vector<ibHelpLoadError> errs;
+		errs.push_back(std::move(err));
 		return std::make_shared<ibHelpCorpus>(
 		    localeCode, sourceTag, std::vector<ibHelpEntry>{},
-		    std::vector<ibHelpLoadError>{});
+		    std::move(errs));
 	}
 
 	std::vector<ibHelpEntry>     entries;
@@ -412,7 +415,24 @@ ibHelpLoadResult LoadHelpCorpus(const wxString& localeCode,
 
 	// Always return a non-null corpus so callers can keep the
 	// GetHelpCorpus() invariant branch-free. Both the LoadSource missing-
-	// dir path and the outer catch above can leave `corpus` null.
+	// dir path and the outer catch above can leave `corpus` null. When
+	// we fall back to empty here, fold any outer-catch errors into the
+	// corpus's internal LoadErrors so callers see them through the same
+	// surface (appData reads errors only from corpus->LoadErrors()).
+	if (!result.corpus) {
+		try {
+			result.corpus = std::make_shared<ibHelpCorpus>(
+			    locale, ibHelpCorpus::Source::kPlatform,
+			    std::vector<ibHelpEntry>{},
+			    std::move(result.errors));
+			result.errors.clear();
+		} catch (...) {
+			// If even the empty-corpus alloc fails fall to the secondary
+			// no-error fallback below; appData's GetHelpCorpus invariant
+			// is best-effort under OOM and a null shared_ptr here means
+			// "process is past saving anyway".
+		}
+	}
 	if (!result.corpus) {
 		try {
 			result.corpus = std::make_shared<ibHelpCorpus>(locale);
