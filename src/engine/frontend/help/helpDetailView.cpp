@@ -17,6 +17,7 @@
 
 #include "backend/help/helpCorpus.h"
 #include "backend/help/helpEntry.h"
+#include "backend/compiler/compileCode.h"
 
 #include <wx/clipbrd.h>
 #include <wx/menu.h>
@@ -157,42 +158,25 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) const {
 
 	section(_("Description"),  entry.description, false);
 
-	// Syntax (CES) is the canonical form — show it first. Append the
-	// VES alternative directly below when the entry carries one so the
-	// user comparing modes sees the two forms side by side without a
-	// preference dropdown.
-	if (!entry.syntaxBlock.IsEmpty() || !entry.syntaxBlockVes.IsEmpty()) {
-		html += wxT("<font size=\"3\" color=\"#2563eb\"><b>");
-		html += EscapeHtml(_("Syntax"));
-		html += wxT("</b></font><br>");
-		if (!entry.syntaxBlock.IsEmpty()) {
-			html += wxT("<font size=\"2\" color=\"#6b7280\">CES</font><br>");
-			html += FormatCodeBlock(entry.syntaxBlock);
-		}
-		if (!entry.syntaxBlockVes.IsEmpty()) {
-			html += wxT("<br><font size=\"2\" color=\"#6b7280\">VES</font><br>");
-			html += FormatCodeBlock(entry.syntaxBlockVes);
-		}
-		html += wxT("<br><br>");
-	}
+	// Show only the syntax form matching the active compile style. The
+	// alternative form lives in the corpus but distracts when a CES
+	// project doesn't need to see VES braces and vice versa. Falls back
+	// to whichever form is non-empty when the preferred one is missing.
+	const bool prefersVes = (ibCompileCode::GetCodeStyle() == 0);
+	const wxString& activeSyntax =
+	    prefersVes && !entry.syntaxBlockVes.IsEmpty() ? entry.syntaxBlockVes
+	  : !entry.syntaxBlock.IsEmpty()                    ? entry.syntaxBlock
+	  : entry.syntaxBlockVes;
+	section(_("Syntax"), activeSyntax, true);
 
 	section(_("Parameters"),    entry.parameters,  false);
 	section(_("Returns"),       entry.returnDescr, false);
 
-	if (!entry.example.IsEmpty() || !entry.exampleVes.IsEmpty()) {
-		html += wxT("<font size=\"3\" color=\"#2563eb\"><b>");
-		html += EscapeHtml(_("Example"));
-		html += wxT("</b></font><br>");
-		if (!entry.example.IsEmpty()) {
-			html += wxT("<font size=\"2\" color=\"#6b7280\">CES</font><br>");
-			html += FormatCodeBlock(entry.example);
-		}
-		if (!entry.exampleVes.IsEmpty()) {
-			html += wxT("<br><font size=\"2\" color=\"#6b7280\">VES</font><br>");
-			html += FormatCodeBlock(entry.exampleVes);
-		}
-		html += wxT("<br><br>");
-	}
+	const wxString& activeExample =
+	    prefersVes && !entry.exampleVes.IsEmpty() ? entry.exampleVes
+	  : !entry.example.IsEmpty()                    ? entry.example
+	  : entry.exampleVes;
+	section(_("Example"), activeExample, true);
 
 	section(_("Availability"),  entry.availability, false);
 
