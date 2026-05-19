@@ -118,10 +118,10 @@ ibApplicationData::ibApplicationData(ibRunMode runMode) :
 	}
 
 	// Load everything under <exe-dir>/plugins that exports the OES plugin ABI.
-	// Launcher has no script/metadata subsystem so plugins have nothing to hook —
-	// skip it there to avoid paying the scan cost on every connection chooser.
-	if (runMode != eLAUNCHER_MODE)
-		m_pluginManager->LoadAll();
+	// Loaded even in launcher mode so the About dialog (and integration smoke
+	// tests) see the plugin set before a configuration opens. Plugins receive
+	// a host pointer per v3 ABI; they get NULL only for ABI v1/v2.
+	m_pluginManager->LoadAll();
 
 	// Wire session-lifecycle event listeners — drives metadata load on
 	// first auth + per-session runtime bring-up + last-auth-out cleanup.
