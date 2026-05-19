@@ -5091,3 +5091,71 @@ msgstr ""
 #: src/engine/launcher/launcher.h:49
 msgid "Launch OES"
 msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Parameters"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Returns"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Example"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Availability"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "See also"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Syntax Helper"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Show Syntax Helper"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Look up in Syntax Helper"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Contents"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Index"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Search"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Select topic"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Select a topic from the list:"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Found: %zu"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Found: 0 (enter a query)"
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Select an entry in the tree on the left, or press Ctrl+F1 on an identifier in the editor."
+msgstr ""
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Draft — this entry awaits editorial review."
+msgstr ""

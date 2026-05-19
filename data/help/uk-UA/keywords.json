@@ -5,7 +5,7 @@
   "entries": [
     {
       "id": "kw.If",
-      "name_local": "Якщо",
+      "name_local": "If",
       "name_en": "If",
       "kind": "keyword",
       "category_keys": [
@@ -13,20 +13,24 @@
         "control_flow"
       ],
       "signature": "Якщо <Вираз> Тоді ... [ІнакшеЯкщо ... Тоді ...] [Інакше ...] КінецьЯкщо",
-      "description": "Умовне виконання.\n\nОбчислює логічний вираз; за значення Істина виконує гілку Тоді, інакше — необов'язкову гілку ІнакшеЯкщо з власним виразом, інакше — необов'язкову гілку Інакше.",
-      "syntax_block": "Якщо <Вираз1> Тоді\n    // оператори\nІнакшеЯкщо <Вираз2> Тоді\n    // оператори\nІнакше\n    // оператори\nКінецьЯкщо",
-      "parameters": "<Вираз1>, <Вираз2> — логічні вирази.",
+      "description": "Умовне виконання. Обчислює логічний вираз; за значення True виконує гілку Then, інакше — необовʼязкову гілку ElsIf з власним виразом, інакше — необовʼязкову гілку Else.",
+      "syntax_block": "If <Expression1> Then\n    // statements\nElsIf <Expression2> Then\n    // statements\nElse\n    // statements\nEndIf",
+      "parameters": "<Expression1>, <Expression2> — логічні вирази.",
       "return_descr": "",
-      "example": "Якщо userInfo.IsAdmin Тоді\n    EnableAdminMenu();\nІнакше\n    HideAdminMenu();\nКінецьЯкщо",
+      "example": "If userInfo.IsAdmin Then\n    EnableAdminMenu();\nElse\n    HideAdminMenu();\nEndIf",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
+        "kw.Then",
+        "kw.Else",
+        "kw.Elseif",
+        "kw.Endif",
         "kw.While"
       ],
       "reviewed": true
     },
     {
       "id": "kw.Then",
-      "name_local": "Тоді",
+      "name_local": "Then",
       "name_en": "Then",
       "kind": "keyword",
       "category_keys": [
@@ -34,8 +38,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Завершує умову гілки Якщо / ІнакшеЯкщо. Тіло за Тоді виконується лише за істинної умови.",
-      "syntax_block": "Якщо <Вираз> Тоді\n    // тіло\nКінецьЯкщо;",
+      "description": "Завершує умову гілки If / ElsIf. Тіло після Then виконується лише за істинної умови.",
+      "syntax_block": "If <Expr> Then\n    // body\nEndIf;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -50,7 +54,7 @@
     },
     {
       "id": "kw.Else",
-      "name_local": "Інакше",
+      "name_local": "Else",
       "name_en": "Else",
       "kind": "keyword",
       "category_keys": [
@@ -58,8 +62,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Гілка, що виконується, коли всі умови Якщо / ІнакшеЯкщо виявилися хибними.",
-      "syntax_block": "Якщо <Вираз> Тоді\n    // збіг\nІнакше\n    // запасний шлях\nКінецьЯкщо;",
+      "description": "Гілка, що виконується, коли всі умови If / ElsIf виявилися хибними.",
+      "syntax_block": "If <Expr> Then\n    // matched\nElse\n    // fallback\nEndIf;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -73,7 +77,7 @@
     },
     {
       "id": "kw.Elseif",
-      "name_local": "ІнакшеЯкщо",
+      "name_local": "Elseif",
       "name_en": "Elseif",
       "kind": "keyword",
       "category_keys": [
@@ -81,8 +85,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Додає ланцюгову умову до Якщо. Перевіряється, лише якщо кожна попередня гілка дала Хибність.",
-      "syntax_block": "Якщо A Тоді\n    // …\nІнакшеЯкщо B Тоді\n    // …\nКінецьЯкщо;",
+      "description": "Додає ланцюгову умову до If. Перевіряється, лише якщо кожна попередня гілка дала False.",
+      "syntax_block": "If A Then\n    // …\nElsIf B Then\n    // …\nElsIf C Then\n    // …\nEndIf;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -96,7 +100,7 @@
     },
     {
       "id": "kw.Endif",
-      "name_local": "КінецьЯкщо",
+      "name_local": "Endif",
       "name_en": "Endif",
       "kind": "keyword",
       "category_keys": [
@@ -104,8 +108,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Закриває конструкцію Якщо.",
-      "syntax_block": "Якщо <Вираз> Тоді\n    // тіло\nКінецьЯкщо;",
+      "description": "Закриває конструкцію If.",
+      "syntax_block": "If <Expr> Then\n    // body\nEndIf;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -117,7 +121,7 @@
     },
     {
       "id": "kw.For",
-      "name_local": "Для",
+      "name_local": "For",
       "name_en": "For",
       "kind": "keyword",
       "category_keys": [
@@ -125,11 +129,11 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Лічильниковий або ітераторний цикл. Дві форми: індексна (Для <i> = <від> По <до> Цикл) та поелементна (Для Кожного <Елемент> З <Колекція> Цикл).",
-      "syntax_block": "// індексна\nДля i = 1 По 10 Цикл\n    // тіло\nКінецьЦиклу;\n\n// поелементна\nДля Кожного Елемент З Колекція Цикл\n    // тіло\nКінецьЦиклу;",
+      "description": "Лічильниковий або ітераторний цикл. Дві форми: індексна (For <i> = <від> To <до> Do) і поелементна (For Each <Елемент> In <Колекція> Do).",
+      "syntax_block": "// indexed\nFor i = 1 To 10 Do\n    // body\nEndDo;\n\n// for-each\nFor Each Item In Collection Do\n    // body\nEndDo;",
       "parameters": "",
       "return_descr": "",
-      "example": "Для Кожного Замовлення З Клієнт.Замовлення Цикл\n    Підсумок = Підсумок + Замовлення.Сума;\nКінецьЦиклу;",
+      "example": "For Each Order In Customer.Orders Do\n    Total = Total + Order.Amount;\nEndDo;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.While",
@@ -145,7 +149,7 @@
     },
     {
       "id": "kw.Foreach",
-      "name_local": "Кожного",
+      "name_local": "Foreach",
       "name_en": "Foreach",
       "kind": "keyword",
       "category_keys": [
@@ -154,7 +158,7 @@
       ],
       "signature": "",
       "description": "Модифікатор циклу, що вводить поелементну ітерацію по колекції.",
-      "syntax_block": "Для Кожного <Елемент> З <Колекція> Цикл\n    // тіло\nКінецьЦиклу;",
+      "syntax_block": "For Each <Item> In <Collection> Do\n    // body\nEndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -168,7 +172,7 @@
     },
     {
       "id": "kw.To",
-      "name_local": "По",
+      "name_local": "To",
       "name_en": "To",
       "kind": "keyword",
       "category_keys": [
@@ -176,8 +180,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Верхня межа (включно) лічильникового циклу Для.",
-      "syntax_block": "Для i = 1 По 10 Цикл … КінецьЦиклу;",
+      "description": "Верхня межа (включно) лічильникового циклу For.",
+      "syntax_block": "For i = 1 To 10 Do … EndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -189,7 +193,7 @@
     },
     {
       "id": "kw.In",
-      "name_local": "З",
+      "name_local": "In",
       "name_en": "In",
       "kind": "keyword",
       "category_keys": [
@@ -197,8 +201,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Позначає колекцію-джерело в циклі Для Кожного.",
-      "syntax_block": "Для Кожного <Елемент> З <Колекція> Цикл … КінецьЦиклу;",
+      "description": "Позначає колекцію-джерело в циклі For Each.",
+      "syntax_block": "For Each <Item> In <Collection> Do … EndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -211,7 +215,7 @@
     },
     {
       "id": "kw.Do",
-      "name_local": "Цикл",
+      "name_local": "Do",
       "name_en": "Do",
       "kind": "keyword",
       "category_keys": [
@@ -219,8 +223,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Відкриває тіло циклу Поки або Для.",
-      "syntax_block": "Поки <Умова> Цикл … КінецьЦиклу;",
+      "description": "Відкриває тіло циклу While або For.",
+      "syntax_block": "While <Cond> Do … EndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -234,7 +238,7 @@
     },
     {
       "id": "kw.EndDo",
-      "name_local": "КінецьЦиклу",
+      "name_local": "EndDo",
       "name_en": "EndDo",
       "kind": "keyword",
       "category_keys": [
@@ -242,8 +246,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Закриває тіло циклу Поки або Для.",
-      "syntax_block": "Поки X Цикл\n    // …\nКінецьЦиклу;",
+      "description": "Закриває тіло циклу While або For.",
+      "syntax_block": "While X Do\n    // …\nEndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -257,7 +261,7 @@
     },
     {
       "id": "kw.While",
-      "name_local": "Поки",
+      "name_local": "While",
       "name_en": "While",
       "kind": "keyword",
       "category_keys": [
@@ -266,10 +270,10 @@
       ],
       "signature": "",
       "description": "Цикл з передумовою. Перед кожною ітерацією перевіряє умову; виконує тіло, поки умова істинна.",
-      "syntax_block": "Поки <Умова> Цикл\n    // тіло\nКінецьЦиклу;",
+      "syntax_block": "While <Condition> Do\n    // body\nEndDo;",
       "parameters": "",
       "return_descr": "",
-      "example": "Лічильник = 0;\nПоки Лічильник < 10 Цикл\n    Лічильник = Лічильник + 1;\nКінецьЦиклу;",
+      "example": "Counter = 0;\nWhile Counter < 10 Do\n    Counter = Counter + 1;\nEndDo;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.For",
@@ -282,7 +286,7 @@
     },
     {
       "id": "kw.GoTo",
-      "name_local": "Перейти",
+      "name_local": "GoTo",
       "name_en": "GoTo",
       "kind": "keyword",
       "category_keys": [
@@ -290,8 +294,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Безумовний перехід до позначеного оператора в межах того ж блоку.",
-      "syntax_block": "Перейти ~<Мітка>;\n…\n~<Мітка>:",
+      "description": "Безумовний перехід до позначеного оператора в межах того ж блоку. Використовуйте помірно — майже завжди чистіше переписати через цикл або функцію.",
+      "syntax_block": "GoTo ~<Label>;\n…\n~<Label>:",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -301,7 +305,7 @@
     },
     {
       "id": "kw.Not",
-      "name_local": "Не",
+      "name_local": "Not",
       "name_en": "Not",
       "kind": "keyword",
       "category_keys": [
@@ -310,10 +314,10 @@
       ],
       "signature": "",
       "description": "Логічне заперечення.",
-      "syntax_block": "Не <Вираз>",
+      "syntax_block": "Not <Expression>",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "If Not User.IsLoggedIn Then\n    ShowLoginForm();\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.And",
@@ -323,7 +327,7 @@
     },
     {
       "id": "kw.And",
-      "name_local": "І",
+      "name_local": "And",
       "name_en": "And",
       "kind": "keyword",
       "category_keys": [
@@ -331,11 +335,11 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Логічне І. Коротке замикання.",
-      "syntax_block": "<ЛівийВираз> І <ПравийВираз>",
+      "description": "Логічне І. Коротке замикання: правий операнд не обчислюється, якщо лівий — False.",
+      "syntax_block": "<LeftExpr> And <RightExpr>",
       "parameters": "",
       "return_descr": "",
-      "example": "",
+      "example": "If User.IsLoggedIn And User.Role = \"admin\" Then\n    ShowAdminPanel();\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Or",
@@ -345,7 +349,7 @@
     },
     {
       "id": "kw.Or",
-      "name_local": "Або",
+      "name_local": "Or",
       "name_en": "Or",
       "kind": "keyword",
       "category_keys": [
@@ -353,8 +357,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Логічне АБО. Коротке замикання.",
-      "syntax_block": "<ЛівийВираз> Або <ПравийВираз>",
+      "description": "Логічне АБО. Коротке замикання: правий операнд не обчислюється, якщо лівий — True.",
+      "syntax_block": "<LeftExpr> Or <RightExpr>",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -367,7 +371,7 @@
     },
     {
       "id": "kw.Procedure",
-      "name_local": "Процедура",
+      "name_local": "Procedure",
       "name_en": "Procedure",
       "kind": "keyword",
       "category_keys": [
@@ -375,11 +379,11 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Оголошує процедуру — викликаний блок коду, який виконує дії, але не повертає значення. Використовуйте Функція, якщо викликачу потрібен результат.",
-      "syntax_block": "Процедура <Імʼя>([Знач] <Парам1>, [Знач] <Парам2>, …) [Експорт]\n    // тіло\nКінецьПроцедури",
-      "parameters": "<Імʼя> — ідентифікатор. Знач — параметр передається за значенням. Експорт — процедура доступна з інших модулів.",
+      "description": "Оголошує процедуру — викликаний блок коду, що виконує дії, але не повертає значення. Якщо викликачу потрібен результат — використовуйте Function.",
+      "syntax_block": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Export]\n    // body\nEndProcedure",
+      "parameters": "<Name> — ідентифікатор. Val — модифікатор «за значенням». Export — робить процедуру доступною з інших модулів.",
       "return_descr": "",
-      "example": "Процедура ВивестиПовідомлення(Знач Текст) Експорт\n    Повідомити(Текст);\nКінецьПроцедури",
+      "example": "Procedure LogMessage(Val Text) Export\n    Message(Text);\nEndProcedure",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Function",
@@ -392,7 +396,7 @@
     },
     {
       "id": "kw.EndProcedure",
-      "name_local": "КінецьПроцедури",
+      "name_local": "EndProcedure",
       "name_en": "EndProcedure",
       "kind": "keyword",
       "category_keys": [
@@ -400,8 +404,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Закриває тіло процедури. Керування повертається з процедури при досягненні КінецьПроцедури.",
-      "syntax_block": "Процедура Приклад()\n    // …\nКінецьПроцедури",
+      "description": "Закриває тіло процедури. Керування повертається викликачу при досягненні EndProcedure.",
+      "syntax_block": "Procedure Demo()\n    // …\nEndProcedure",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -413,7 +417,7 @@
     },
     {
       "id": "kw.Function",
-      "name_local": "Функція",
+      "name_local": "Function",
       "name_en": "Function",
       "kind": "keyword",
       "category_keys": [
@@ -421,11 +425,11 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Оголошує функцію — викликаний блок коду, що повертає значення через Повернути. Функції взаємозамінні з процедурами скрізь, крім виразів-джерел.",
-      "syntax_block": "Функція <Імʼя>([Знач] <Парам1>, …) [Експорт]\n    // тіло\n    Повернути <Значення>;\nКінецьФункції",
-      "parameters": "<Імʼя> — ідентифікатор. Знач — передача параметра за значенням. Експорт — функція доступна з інших модулів.",
-      "return_descr": "Значення, передане в оператор Повернути.",
-      "example": "Функція Сума(Знач А, Знач Б) Експорт\n    Повернути А + Б;\nКінецьФункції",
+      "description": "Оголошує функцію — викликаний блок коду, що повертає значення через Return. Функції взаємозамінні з процедурами скрізь, окрім використання як джерело виразу.",
+      "syntax_block": "Function <Name>([Val] <Param1>, …) [Export]\n    // body\n    Return <Value>;\nEndFunction",
+      "parameters": "<Name> — ідентифікатор. Val — модифікатор «за значенням». Export — робить функцію доступною з інших модулів.",
+      "return_descr": "Значення, передане оператору Return.",
+      "example": "Function Sum(Val A, Val B) Export\n    Return A + B;\nEndFunction",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Procedure",
@@ -437,7 +441,7 @@
     },
     {
       "id": "kw.EndFunction",
-      "name_local": "КінецьФункції",
+      "name_local": "EndFunction",
       "name_en": "EndFunction",
       "kind": "keyword",
       "category_keys": [
@@ -445,8 +449,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Закриває тіло функції. Досягнення КінецьФункції без оператора Повернути дає Невизначено.",
-      "syntax_block": "Функція Приклад()\n    Повернути 42;\nКінецьФункції",
+      "description": "Закриває тіло функції. Досягнення EndFunction без оператора Return дає Undefined.",
+      "syntax_block": "Function Demo()\n    Return 42;\nEndFunction",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -460,7 +464,7 @@
     },
     {
       "id": "kw.Export",
-      "name_local": "Експорт",
+      "name_local": "Export",
       "name_en": "Export",
       "kind": "keyword",
       "category_keys": [
@@ -468,11 +472,11 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Позначає процедуру, функцію або модульну змінну доступною з інших модулів. Без Експорт символ видно лише у своєму модулі.",
-      "syntax_block": "Процедура Працювати() Експорт\n    // тіло\nКінецьПроцедури",
+      "description": "Позначає процедуру, функцію або модульну змінну доступною з інших модулів. Без Export символ видно лише у своєму модулі.",
+      "syntax_block": "Procedure DoWork() Export\n    // body\nEndProcedure",
       "parameters": "",
       "return_descr": "",
-      "example": "Змінна Лічильник Експорт;\n\nФункція Прочитати() Експорт\n    Повернути Лічильник;\nКінецьФункції",
+      "example": "Var Counter Export;  // module-public variable\n\nFunction Read() Export\n    Return Counter;\nEndFunction",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Procedure",
@@ -483,7 +487,7 @@
     },
     {
       "id": "kw.Val",
-      "name_local": "Знач",
+      "name_local": "Val",
       "name_en": "Val",
       "kind": "keyword",
       "category_keys": [
@@ -491,8 +495,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Модифікатор параметра «за значенням». Без Знач параметр звʼязаний за посиланням; зі Знач береться локальна копія.",
-      "syntax_block": "Процедура Приклад(Знач ЛишеЧитання, Мутабельний)\n    // …\nКінецьПроцедури",
+      "description": "Модифікатор параметра «за значенням». Без Val параметр звʼязаний за посиланням, і присвоєння всередині викликаного коду змінюють змінну викликача; зі Val береться локальна копія.",
+      "syntax_block": "Procedure Demo(Val ReadOnlyParam, MutableParam)\n    // ReadOnlyParam is a copy of the caller's value.\n    // MutableParam writes back into the caller's variable.\nEndProcedure",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -505,7 +509,7 @@
     },
     {
       "id": "kw.Return",
-      "name_local": "Повернути",
+      "name_local": "Return",
       "name_en": "Return",
       "kind": "keyword",
       "category_keys": [
@@ -514,10 +518,10 @@
       ],
       "signature": "",
       "description": "Виходить з поточної процедури або функції. Усередині функції може містити вираз-результат.",
-      "syntax_block": "Повернути;             // вийти з процедури\nПовернути <Вираз>;     // вийти з функції зі значенням",
+      "syntax_block": "Return;                 // exit procedure\nReturn <Expression>;    // exit function with result",
       "parameters": "",
       "return_descr": "",
-      "example": "Функція Знак(Знач Х)\n    Якщо Х < 0 Тоді Повернути -1; КінецьЯкщо;\n    Якщо Х > 0 Тоді Повернути 1;  КінецьЯкщо;\n    Повернути 0;\nКінецьФункції",
+      "example": "Function Sign(Val X)\n    If X < 0 Then Return -1; EndIf;\n    If X > 0 Then Return 1;  EndIf;\n    Return 0;\nEndFunction",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Function",
@@ -527,7 +531,7 @@
     },
     {
       "id": "kw.Try",
-      "name_local": "Спроба",
+      "name_local": "Try",
       "name_en": "Try",
       "kind": "keyword",
       "category_keys": [
@@ -535,11 +539,11 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Починає блок обробки виключень. Код всередині відстежується; виникле виключення передає керування в гілку Виняток.",
-      "syntax_block": "Спроба\n    // захищений блок\nВиняток\n    // обробник\nКінецьСпроби;",
+      "description": "Починає блок обробки виключень. Код всередині відстежується; виникле виключення передає керування в гілку Except.",
+      "syntax_block": "Try\n    // protected body\nExcept\n    // handler — runs on any raised exception\nEndTry;",
       "parameters": "",
       "return_descr": "",
-      "example": "Спроба\n    Результат = РозібратиЧисло(Ввід);\nВиняток\n    Повідомити(\"Не число: \" + ОписПомилки());\nКінецьСпроби;",
+      "example": "Try\n    Result = ParseNumber(UserInput);\nExcept\n    Message(\"Not a valid number: \" + ErrorDescription());\nEndTry;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Except",
@@ -550,7 +554,7 @@
     },
     {
       "id": "kw.Except",
-      "name_local": "Виняток",
+      "name_local": "Except",
       "name_en": "Except",
       "kind": "keyword",
       "category_keys": [
@@ -558,8 +562,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Відкриває гілку обробника конструкції Спроба / Виняток.",
-      "syntax_block": "Спроба\n    // …\nВиняток\n    // відновлення\nКінецьСпроби;",
+      "description": "Відкриває гілку обробника конструкції Try / Except. Виконується, якщо захищений блок породив виключення.",
+      "syntax_block": "Try\n    // …\nExcept\n    // recovery\nEndTry;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -573,7 +577,7 @@
     },
     {
       "id": "kw.Endtry",
-      "name_local": "КінецьСпроби",
+      "name_local": "Endtry",
       "name_en": "Endtry",
       "kind": "keyword",
       "category_keys": [
@@ -581,8 +585,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Закриває конструкцію Спроба / Виняток.",
-      "syntax_block": "Спроба … Виняток … КінецьСпроби;",
+      "description": "Закриває конструкцію Try / Except.",
+      "syntax_block": "Try … Except … EndTry;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -595,7 +599,7 @@
     },
     {
       "id": "kw.Continue",
-      "name_local": "Продовжити",
+      "name_local": "Continue",
       "name_en": "Continue",
       "kind": "keyword",
       "category_keys": [
@@ -604,7 +608,7 @@
       ],
       "signature": "",
       "description": "Пропускає решту поточної ітерації; керування переходить на заголовок циклу.",
-      "syntax_block": "Для Кожного Рядок З Таблиця Цикл\n    Якщо Рядок.Заголовок Тоді Продовжити; КінецьЯкщо;\n    Обробити(Рядок);\nКінецьЦиклу;",
+      "syntax_block": "For Each Row In Table Do\n    If Row.IsHeader Then Continue; EndIf;\n    Process(Row);\nEndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -618,7 +622,7 @@
     },
     {
       "id": "kw.Break",
-      "name_local": "Перервати",
+      "name_local": "Break",
       "name_en": "Break",
       "kind": "keyword",
       "category_keys": [
@@ -626,8 +630,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Перериває найближчий охоплюючий цикл; керування переходить за КінецьЦиклу.",
-      "syntax_block": "Поки Умова Цикл\n    Якщо СтопУмова Тоді Перервати; КінецьЯкщо;\nКінецьЦиклу;",
+      "description": "Перериває найближчий охоплюючий цикл; керування переходить за EndDo.",
+      "syntax_block": "While Cond Do\n    If StopCondition Then Break; EndIf;\n    // …\nEndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -641,7 +645,7 @@
     },
     {
       "id": "kw.Raise",
-      "name_local": "ВикликатиВиняток",
+      "name_local": "Raise",
       "name_en": "Raise",
       "kind": "keyword",
       "category_keys": [
@@ -649,11 +653,11 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Викликає виняток. Без аргументу — перепороджує поточне (лише всередині Виняток).",
-      "syntax_block": "ВикликатиВиняток;\nВикликатиВиняток <Рядок>;",
+      "description": "Викликає виключення. Без аргументу — перепороджує поточне (лише всередині Except). З виразом — створює нове виключення з цим текстом.",
+      "syntax_block": "Raise;                       // re-throw current exception\nRaise <ExpressionString>;    // raise a new exception",
       "parameters": "",
       "return_descr": "",
-      "example": "Якщо Сума < 0 Тоді\n    ВикликатиВиняток \"Відʼємна сума недопустима\";\nКінецьЯкщо;",
+      "example": "If Amount < 0 Then\n    Raise \"Negative amount is not allowed\";\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Try",
@@ -663,7 +667,7 @@
     },
     {
       "id": "kw.Var",
-      "name_local": "Змінна",
+      "name_local": "Var",
       "name_en": "Var",
       "kind": "keyword",
       "category_keys": [
@@ -671,8 +675,8 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Оголошує одну або декілька локальних змінних. Початкове значення — Невизначено.",
-      "syntax_block": "Змінна <Імʼя1>, <Імʼя2>, …;\n\nПроцедура Приклад()\n    Змінна Лічильник, Сума;\n    Лічильник = 0;\nКінецьПроцедури",
+      "description": "Оголошує одну або декілька локальних змінних (усередині тіла процедури / функції) або модульних змінних. Початкове значення — Undefined.",
+      "syntax_block": "Var <Name1>, <Name2>, …;\n\nProcedure Demo()\n    Var Counter, Sum;\n    Counter = 0;\nEndProcedure",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -685,7 +689,7 @@
     },
     {
       "id": "kw.New",
-      "name_local": "Новий",
+      "name_local": "New",
       "name_en": "New",
       "kind": "keyword",
       "category_keys": [
@@ -693,11 +697,11 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Створює значення вбудованого типу (колекції, обгортки примітивів, читачі запитів / потоків).",
-      "syntax_block": "<Змін> = Новий <ІмʼяТипу>(<Аргументи>…);",
+      "description": "Створює значення вбудованого типу (колекції, обгортки примітивів, читачі запитів / потоків). Імʼя типу йде після New; аргументи конструктора в дужках, якщо потрібні.",
+      "syntax_block": "<Var> = New <TypeName>(<Args>…);",
       "parameters": "",
       "return_descr": "",
-      "example": "Елементи = Новий Масив;\nЕлементи.Додати(\"перший\");\nЕлементи.Додати(\"другий\");",
+      "example": "Items = New Array;\nItems.Add(\"first\");\nItems.Add(\"second\");\n\nQuery = New Query();\nQuery.Text = \"SELECT * FROM Catalog.Items\";",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Undefined"
@@ -706,7 +710,7 @@
     },
     {
       "id": "kw.Undefined",
-      "name_local": "Невизначено",
+      "name_local": "Undefined",
       "name_en": "Undefined",
       "kind": "keyword",
       "category_keys": [
@@ -714,11 +718,11 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Сингл-значення «ще немає значення».",
+      "description": "Сингл-значення «ще немає значення». Початкове значення будь-якої оголошеної, але не ініціалізованої змінної; природний результат методів, яким немає що повернути.",
       "syntax_block": "",
       "parameters": "",
       "return_descr": "",
-      "example": "Змінна Х;\nЯкщо Х = Невизначено Тоді\n    Х = ОбчислитиЗаЗамовчуванням();\nКінецьЯкщо;",
+      "example": "Var X;\nIf X = Undefined Then\n    X = ComputeDefault();\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Null",
@@ -737,11 +741,11 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Значення «немає» з результатів запиту до БД (SQL NULL).",
+      "description": "Значення «немає» з результатів запиту до БД (SQL NULL). Відрізняється від Undefined; порівняння зі звичайними значеннями завжди дають False.",
       "syntax_block": "",
       "parameters": "",
       "return_descr": "",
-      "example": "Якщо Вибірка.Менеджер = Null Тоді\n    ІмʼяМенеджера = \"<не призначений>\";\nКінецьЯкщо;",
+      "example": "If Selection.Manager = Null Then\n    ManagerName = \"<unassigned>\";\nEndIf;",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Undefined"
@@ -750,7 +754,7 @@
     },
     {
       "id": "kw.True",
-      "name_local": "Істина",
+      "name_local": "True",
       "name_en": "True",
       "kind": "keyword",
       "category_keys": [
@@ -759,7 +763,7 @@
       ],
       "signature": "",
       "description": "Логічний літерал — істина.",
-      "syntax_block": "Прапорець = Істина;",
+      "syntax_block": "Flag = True;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -774,7 +778,7 @@
     },
     {
       "id": "kw.False",
-      "name_local": "Хибність",
+      "name_local": "False",
       "name_en": "False",
       "kind": "keyword",
       "category_keys": [
@@ -783,7 +787,7 @@
       ],
       "signature": "",
       "description": "Логічний літерал — хибність.",
-      "syntax_block": "Прапорець = Хибність;",
+      "syntax_block": "Flag = False;",
       "parameters": "",
       "return_descr": "",
       "example": "",

@@ -5246,3 +5246,71 @@ msgstr "Запуск OES"
 
 #~ msgid "wetyu"
 #~ msgstr "ветю"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Parameters"
+msgstr "Параметры"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Returns"
+msgstr "Возвращает"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Example"
+msgstr "Пример"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Availability"
+msgstr "Доступность"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "See also"
+msgstr "См. также"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Syntax Helper"
+msgstr "Синтакс-помощник"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Show Syntax Helper"
+msgstr "Показать Синтакс-помощник"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Look up in Syntax Helper"
+msgstr "Искать в Синтакс-помощнике"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Contents"
+msgstr "Содержание"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Index"
+msgstr "Указатель"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Search"
+msgstr "Поиск"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Select topic"
+msgstr "Выбор темы"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Select a topic from the list:"
+msgstr "Выберите тему из списка:"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Found: %zu"
+msgstr "Найдено: %zu"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Found: 0 (enter a query)"
+msgstr "Найдено: 0 (введите запрос)"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Select an entry in the tree on the left, or press Ctrl+F1 on an identifier in the editor."
+msgstr "Выберите статью в дереве слева или нажмите Ctrl+F1 на идентификаторе в редакторе."
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Draft — this entry awaits editorial review."
+msgstr "Черновик — статья ожидает редакторской проверки."

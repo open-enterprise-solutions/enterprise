@@ -210,3 +210,36 @@ add_custom_command(TARGET backend POST_BUILD
     COMMENT "Mirroring data/help/ next to backend.dll"
     VERBATIM
 )
+
+# ---------------------------------------------------------------------------
+# Gettext translation catalogs
+# ---------------------------------------------------------------------------
+# Compile `locale/<lang>.po` -> `lang/<lang>/open_es.mo` next to the binary.
+# wxLocale's catalog lookup uses `lang/<lang>/<catalog>.mo` per the
+# AddCatalogLookupPathPrefix call in appData::SetLocale; the path under
+# the source tree and under the build tree must mirror that layout.
+find_program(MSGFMT_EXECUTABLE msgfmt)
+if(MSGFMT_EXECUTABLE)
+    set(_oes_locales ru uk)
+    foreach(_loc ${_oes_locales})
+        set(_po  "${CMAKE_SOURCE_DIR}/locale/${_loc}.po")
+        set(_mo  "$<TARGET_FILE_DIR:backend>/lang/${_loc}/open_es.mo")
+        set(_src "${CMAKE_SOURCE_DIR}/lang/${_loc}/open_es.mo")
+        if(EXISTS "${_po}")
+            add_custom_command(TARGET backend POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory
+                    "$<TARGET_FILE_DIR:backend>/lang/${_loc}"
+                COMMAND ${MSGFMT_EXECUTABLE}
+                    --output-file "${_mo}" "${_po}"
+                COMMAND ${CMAKE_COMMAND} -E copy
+                    "${_mo}" "${_src}"
+                COMMENT "Compiling translation catalog ${_loc} -> open_es.mo"
+                VERBATIM
+            )
+        endif()
+    endforeach()
+else()
+    message(WARNING "msgfmt not found; translation .mo files will be stale. "
+                     "Install gettext (brew install gettext) to enable "
+                     "automatic .po -> .mo compilation.")
+endif()

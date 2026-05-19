@@ -5088,3 +5088,71 @@ msgstr "Не вдалося запустити wenterprise-server: %s"
 #: src/engine/launcher/launcher.h:49
 msgid "Launch OES"
 msgstr "Запуск OES"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Parameters"
+msgstr "Параметри"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Returns"
+msgstr "Повертає"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Example"
+msgstr "Приклад"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Availability"
+msgstr "Доступність"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "See also"
+msgstr "Див. також"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Syntax Helper"
+msgstr "Синтаксис-помічник"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Show Syntax Helper"
+msgstr "Показати Синтаксис-помічник"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Look up in Syntax Helper"
+msgstr "Шукати в Синтаксис-помічнику"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Contents"
+msgstr "Зміст"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Index"
+msgstr "Покажчик"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Search"
+msgstr "Пошук"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Select topic"
+msgstr "Вибір теми"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Select a topic from the list:"
+msgstr "Виберіть тему зі списку:"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Found: %zu"
+msgstr "Знайдено: %zu"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Found: 0 (enter a query)"
+msgstr "Знайдено: 0 (введіть запит)"
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Select an entry in the tree on the left, or press Ctrl+F1 on an identifier in the editor."
+msgstr "Виберіть статтю в дереві ліворуч або натисніть Ctrl+F1 на ідентифікаторі в редакторі."
+
+#: src/engine/frontend/help/ (syntax helper UI)
+msgid "Draft — this entry awaits editorial review."
+msgstr "Чернетка — стаття очікує редакторської перевірки."
