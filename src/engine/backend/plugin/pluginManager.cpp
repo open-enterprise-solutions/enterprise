@@ -12,6 +12,9 @@
 #include <wx/dir.h>
 #include <wx/log.h>
 
+#include <cstdio>
+#include <string>
+
 #ifdef __WXMSW__
   #include <windows.h>
 #endif
@@ -113,24 +116,28 @@ int  Host_WebPaneShow(const char* paneId)
 	return g_currentManager->CallWebPaneShow(wxString::FromUTF8(paneId));
 }
 
-int  Host_RegisterAIProvider(const ibPluginAIProvider* /*provider*/)
+int  Host_RegisterAIProvider(const ibPluginAIProvider* provider)
 {
-	return -1; // Phase 2
+	if (g_currentManager == nullptr || provider == nullptr) return -1;
+	return g_currentManager->HostRegisterAIProvider(provider);
 }
 
-int  Host_AIChunkEmit(const char* /*requestId*/, const char* /*deltaJson*/)
+int  Host_AIChunkEmit(const char* requestId, const char* deltaJson)
 {
-	return -1;
+	if (g_currentManager == nullptr) return -1;
+	return g_currentManager->HostAIChunkEmit(requestId, deltaJson);
 }
 
-int  Host_AIChunkEnd(const char* /*requestId*/, const char* /*metaJson*/)
+int  Host_AIChunkEnd(const char* requestId, const char* metaJson)
 {
-	return -1;
+	if (g_currentManager == nullptr) return -1;
+	return g_currentManager->HostAIChunkEnd(requestId, metaJson);
 }
 
-int  Host_AIChunkError(const char* /*requestId*/, const char* /*errorJson*/)
+int  Host_AIChunkError(const char* requestId, const char* errorJson)
 {
-	return -1;
+	if (g_currentManager == nullptr) return -1;
+	return g_currentManager->HostAIChunkError(requestId, errorJson);
 }
 
 int  Host_MetaCreate(const char* /*objectKind*/, const char* /*fullName*/,
@@ -345,6 +352,9 @@ void ibPluginManager::UnloadAll()
 	m_subscribers.clear();
 	m_functions.clear();
 	m_menuItems.clear();
+	m_aiProviders.clear();
+	m_defaultAIPaneId.Clear();
+	m_pendingWebPaneRegs.clear();
 
 	for (auto it = m_plugins.rbegin(); it != m_plugins.rend(); ++it) {
 		if (it->m_shutdown) {
@@ -455,6 +465,14 @@ int ibPluginManager::CallWebPaneRegister(const wxString& paneId,
                                            ibPluginWebMsgFn cb,
                                            void* userData)
 {
+	// Record the first pane id we ever see as the Phase 2 default AI
+	// chunk target. Phase 4 Settings UI will let the user re-pick; until
+	// then, plugins that ship "one pane + one provider" need a routable
+	// target so HostAIChunk* doesn't no-op.
+	if (m_defaultAIPaneId.IsEmpty() && !paneId.IsEmpty()) {
+		m_defaultAIPaneId = paneId;
+	}
+
 	// Contract: RegisterWebPane must be called from the main (UI) thread.
 	// Documented in pluginApi.h. Reasons: (a) the buffer m_pendingWebPaneRegs
 	// is touched without locks and racing it would corrupt the vector;
@@ -512,6 +530,137 @@ int ibPluginManager::CallWebPaneShow(const wxString& paneId) const
 {
 	if (!m_webPaneShow) return -1;
 	return m_webPaneShow(paneId);
+}
+
+// =========================================================================
+// AI provider registry + chunk dispatch (ABI v4 Phase 2)
+// =========================================================================
+namespace {
+
+// Drain a NULL-terminated array of C strings into a std::vector<std::string>.
+// Safe against a NULL outer pointer (returns empty vector).
+std::vector<std::string> CollectStrings(const char** arr)
+{
+	std::vector<std::string> out;
+	if (arr == nullptr) return out;
+	for (const char** p = arr; *p != nullptr; ++p) {
+		out.emplace_back(*p);
+	}
+	return out;
+}
+
+// Tiny JSON-string escaper for fields we control (requestId is opaque
+// provider data, deltaJson/metaJson/errorJson are already JSON we splice
+// in literally). Mirrors the WrapAsJsString helper on the frontend side
+// but is backend-local; the backend cannot link against frontend code.
+std::string EscapeJsonString(const char* s)
+{
+	std::string out;
+	if (s == nullptr) return out;
+	for (const char* p = s; *p; ++p) {
+		unsigned char c = static_cast<unsigned char>(*p);
+		switch (c) {
+		case '\\': out += "\\\\"; break;
+		case '"':  out += "\\\""; break;
+		case '\n': out += "\\n";  break;
+		case '\r': out += "\\r";  break;
+		case '\t': out += "\\t";  break;
+		case '\b': out += "\\b";  break;
+		case '\f': out += "\\f";  break;
+		default:
+			if (c < 0x20) {
+				char buf[8];
+				std::snprintf(buf, sizeof(buf), "\\u%04x", c);
+				out += buf;
+			} else {
+				out += static_cast<char>(c);
+			}
+		}
+	}
+	return out;
+}
+
+// Validate that `payload` is non-null and looks like JSON (first
+// non-whitespace char is one of `{[`"-0-9truefalsenul`). On invalid
+// input we wrap the raw bytes as a JSON string so the WebView still
+// receives something structurally valid instead of crashing JSON.parse.
+std::string SanitiseJsonValue(const char* payload)
+{
+	if (payload == nullptr) return std::string("null");
+	const char* p = payload;
+	while (*p && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) ++p;
+	const char c = *p;
+	const bool jsonish = (c == '{' || c == '[' || c == '"' ||
+	                      c == '-' || (c >= '0' && c <= '9') ||
+	                      c == 't' || c == 'f' || c == 'n');
+	if (jsonish) return std::string(payload);
+	std::string s = "\"";
+	s += EscapeJsonString(payload);
+	s += "\"";
+	return s;
+}
+
+} // namespace
+
+int ibPluginManager::HostRegisterAIProvider(const ibPluginAIProvider* p)
+{
+	if (p == nullptr || p->providerId == nullptr || *p->providerId == '\0') {
+		return -1;
+	}
+
+	RegisteredAIProvider entry;
+	entry.providerId     = p->providerId;
+	entry.displayName    = p->displayName ? p->displayName : p->providerId;
+	entry.iconPath       = p->iconPath    ? p->iconPath    : "";
+	entry.supportedModes = CollectStrings(p->supportedModes);
+	entry.Query          = p->Query;
+	entry.Cancel         = p->Cancel;
+	entry.ListModels     = p->ListModels;
+	entry.userData       = p->userData;
+
+	// Replace on duplicate providerId so a plugin re-init lands cleanly
+	// (e.g. the user toggled the plugin off/on in Settings).
+	for (auto& existing : m_aiProviders) {
+		if (existing.providerId == entry.providerId) {
+			existing = std::move(entry);
+			return 0;
+		}
+	}
+	m_aiProviders.push_back(std::move(entry));
+	return 0;
+}
+
+int ibPluginManager::HostAIChunkEmit(const char* requestId, const char* deltaJson)
+{
+	if (m_defaultAIPaneId.IsEmpty() || !m_webPaneSend) return -1;
+	std::string payload = "{\"kind\":\"chat.delta\",\"requestId\":\"";
+	payload += EscapeJsonString(requestId);
+	payload += "\",\"delta\":";
+	payload += SanitiseJsonValue(deltaJson);
+	payload += "}";
+	return m_webPaneSend(m_defaultAIPaneId, wxString::FromUTF8(payload.c_str()));
+}
+
+int ibPluginManager::HostAIChunkEnd(const char* requestId, const char* metaJson)
+{
+	if (m_defaultAIPaneId.IsEmpty() || !m_webPaneSend) return -1;
+	std::string payload = "{\"kind\":\"chat.end\",\"requestId\":\"";
+	payload += EscapeJsonString(requestId);
+	payload += "\",\"meta\":";
+	payload += SanitiseJsonValue(metaJson);
+	payload += "}";
+	return m_webPaneSend(m_defaultAIPaneId, wxString::FromUTF8(payload.c_str()));
+}
+
+int ibPluginManager::HostAIChunkError(const char* requestId, const char* errorJson)
+{
+	if (m_defaultAIPaneId.IsEmpty() || !m_webPaneSend) return -1;
+	std::string payload = "{\"kind\":\"error\",\"requestId\":\"";
+	payload += EscapeJsonString(requestId);
+	payload += "\",\"error\":";
+	payload += SanitiseJsonValue(errorJson);
+	payload += "}";
+	return m_webPaneSend(m_defaultAIPaneId, wxString::FromUTF8(payload.c_str()));
 }
 
 void ibPluginManager::CallMenuHandler(const RegisteredMenuItem& item)

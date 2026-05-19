@@ -79,3 +79,173 @@ TEST(PluginAbi, LockDeniedCodeIsStable) {
 	// even between minor releases.
 	EXPECT_EQ(IB_PLUGIN_LOCK_DENIED, 0x0001);
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2 — AI provider registry + chunk dispatch round-trip.
+// ---------------------------------------------------------------------------
+#include "backend/plugin/pluginManager.h"
+#include <vector>
+#include <string>
+
+namespace {
+struct StubProviderState {
+	int  queryCalls   = 0;
+	int  cancelCalls  = 0;
+	std::string lastRequestJson;
+	std::string lastRequestId;
+};
+StubProviderState* g_stub = nullptr;
+
+int StubQuery(const char* requestJson, const char* requestId, void* /*userData*/) {
+	if (g_stub) {
+		g_stub->queryCalls++;
+		if (requestJson) g_stub->lastRequestJson = requestJson;
+		if (requestId)   g_stub->lastRequestId   = requestId;
+	}
+	return 0;
+}
+int StubCancel(const char* /*requestId*/, void* /*userData*/) {
+	if (g_stub) g_stub->cancelCalls++;
+	return 0;
+}
+int StubListModels(char** out) {
+	if (out) *out = nullptr; // not used in this test
+	return 0;
+}
+
+const char* kStubModes[] = { "chat", "agent", nullptr };
+} // namespace
+
+TEST(PluginRegistry, RegisterAIProviderStoresEntry) {
+	ibPluginManager mgr;
+	ibPluginAIProvider p{};
+	p.providerId     = "stub.echo";
+	p.displayName    = "Stub Echo Provider";
+	p.iconPath       = "/tmp/icon.png";
+	p.supportedModes = kStubModes;
+	p.Query          = &StubQuery;
+	p.Cancel         = &StubCancel;
+	p.ListModels     = &StubListModels;
+	p.userData       = nullptr;
+
+	EXPECT_EQ(mgr.HostRegisterAIProvider(&p), 0);
+	const auto& reg = mgr.AIProviders();
+	ASSERT_EQ(reg.size(), 1u);
+	EXPECT_EQ(reg[0].providerId,  "stub.echo");
+	EXPECT_EQ(reg[0].displayName, "Stub Echo Provider");
+	ASSERT_EQ(reg[0].supportedModes.size(), 2u);
+	EXPECT_EQ(reg[0].supportedModes[0], "chat");
+	EXPECT_EQ(reg[0].supportedModes[1], "agent");
+}
+
+TEST(PluginRegistry, DuplicateProviderIdReplaces) {
+	ibPluginManager mgr;
+	ibPluginAIProvider p{};
+	p.providerId     = "stub.echo";
+	p.displayName    = "First";
+	p.supportedModes = kStubModes;
+	p.Query = &StubQuery;
+	mgr.HostRegisterAIProvider(&p);
+	p.displayName = "Second";
+	mgr.HostRegisterAIProvider(&p);
+	ASSERT_EQ(mgr.AIProviders().size(), 1u);
+	EXPECT_EQ(mgr.AIProviders()[0].displayName, "Second");
+}
+
+TEST(PluginRegistry, RegisterRejectsNullProviderId) {
+	ibPluginManager mgr;
+	ibPluginAIProvider p{};
+	p.providerId = nullptr;
+	EXPECT_EQ(mgr.HostRegisterAIProvider(&p), -1);
+
+	p.providerId = "";
+	EXPECT_EQ(mgr.HostRegisterAIProvider(&p), -1);
+
+	EXPECT_TRUE(mgr.AIProviders().empty());
+}
+
+TEST(PluginRegistry, ChunkEmitNoTargetReturnsMinus1) {
+	// Default state: no pane registered, no WebPaneSend callback.
+	// HostAIChunkEmit should fail-fast rather than crash.
+	ibPluginManager mgr;
+	EXPECT_EQ(mgr.HostAIChunkEmit("req-1", "\"hello\""),   -1);
+	EXPECT_EQ(mgr.HostAIChunkEnd("req-1",  "{\"x\":1}"),    -1);
+	EXPECT_EQ(mgr.HostAIChunkError("req-1","{\"e\":\"x\"}"),-1);
+}
+
+TEST(PluginRegistry, ChunkEmitRoutesToDefaultPane) {
+	ibPluginManager mgr;
+	std::vector<std::pair<std::string,std::string>> captured;
+
+	mgr.SetWebPaneCallbacks(
+	    [&captured](const wxString& paneId, const wxString& /*title*/,
+	                 const wxString& /*html*/,
+	                 ibPluginWebMsgFn /*cb*/, void* /*ud*/) -> int {
+	        captured.emplace_back(std::string(paneId.utf8_str()), std::string());
+	        return 0;
+	    },
+	    [&captured](const wxString& paneId, const wxString& jsonInline) -> int {
+	        captured.emplace_back(std::string(paneId.utf8_str()),
+	                              std::string(jsonInline.utf8_str()));
+	        return 0;
+	    },
+	    [](const wxString&) -> int { return 0; });
+
+	// Simulate a plugin registering its pane.
+	const int rc = mgr.CallWebPaneRegister(wxT("stub.pane"), wxT("Stub"),
+	                                          wxT("/tmp/index.html"), nullptr, nullptr);
+	EXPECT_EQ(rc, 0);
+
+	// Now emit a chunk — should land on stub.pane.
+	EXPECT_EQ(mgr.HostAIChunkEmit("req-7", "\"hello\""), 0);
+	ASSERT_GE(captured.size(), 2u);
+	const auto& last = captured.back();
+	EXPECT_EQ(last.first, "stub.pane");
+	EXPECT_NE(last.second.find("\"kind\":\"chat.delta\""), std::string::npos);
+	EXPECT_NE(last.second.find("\"requestId\":\"req-7\""), std::string::npos);
+	EXPECT_NE(last.second.find("\"delta\":\"hello\""),     std::string::npos);
+}
+
+TEST(PluginRegistry, ChunkEmitEscapesRequestId) {
+	// requestId may contain quotes / backslashes from a malicious plugin.
+	// The JSON envelope must escape them rather than break the wrapping.
+	ibPluginManager mgr;
+	std::string capturedJson;
+	mgr.SetWebPaneCallbacks(
+	    [](const wxString&, const wxString&, const wxString&,
+	        ibPluginWebMsgFn, void*) -> int { return 0; },
+	    [&capturedJson](const wxString&, const wxString& jsonInline) -> int {
+	        capturedJson = std::string(jsonInline.utf8_str());
+	        return 0;
+	    },
+	    [](const wxString&) -> int { return 0; });
+	mgr.CallWebPaneRegister(wxT("p"), wxT("p"), wxT("/tmp/x.html"), nullptr, nullptr);
+
+	EXPECT_EQ(mgr.HostAIChunkEmit("evil\"id\\with", "\"safe\""), 0);
+	EXPECT_NE(capturedJson.find("evil\\\"id\\\\with"), std::string::npos);
+}
+
+TEST(PluginRegistry, ChunkEnvelopesAreDistinct) {
+	ibPluginManager mgr;
+	std::vector<std::string> sends;
+	mgr.SetWebPaneCallbacks(
+	    [](const wxString&, const wxString&, const wxString&,
+	        ibPluginWebMsgFn, void*) -> int { return 0; },
+	    [&sends](const wxString&, const wxString& jsonInline) -> int {
+	        sends.emplace_back(jsonInline.utf8_str());
+	        return 0;
+	    },
+	    [](const wxString&) -> int { return 0; });
+	mgr.CallWebPaneRegister(wxT("p"), wxT("p"), wxT("/tmp/x.html"), nullptr, nullptr);
+
+	mgr.HostAIChunkEmit ("rid", "\"d\"");
+	mgr.HostAIChunkEnd  ("rid", "{\"tokens\":42}");
+	mgr.HostAIChunkError("rid", "{\"code\":\"timeout\"}");
+
+	ASSERT_GE(sends.size(), 3u);
+	EXPECT_NE(sends[sends.size()-3].find("\"kind\":\"chat.delta\""), std::string::npos);
+	EXPECT_NE(sends[sends.size()-2].find("\"kind\":\"chat.end\""),   std::string::npos);
+	EXPECT_NE(sends[sends.size()-1].find("\"kind\":\"error\""),      std::string::npos);
+	EXPECT_NE(sends[sends.size()-2].find("\"tokens\":42"),           std::string::npos);
+	EXPECT_NE(sends[sends.size()-1].find("\"code\":\"timeout\""),    std::string::npos);
+}

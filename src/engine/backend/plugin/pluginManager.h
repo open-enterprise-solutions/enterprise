@@ -89,6 +89,38 @@ public:
 	int  HostRegisterMenuItem(const char* label, ibPluginMenuFn handler);
 	int  HostSubscribe(const char* event, ibPluginEventFn cb);
 
+	// AI provider entry — stored copy of the plugin-supplied struct.
+	// Function pointers are valid for the plugin lifetime (host clears
+	// the registry in UnloadAll). The map is keyed by providerId so a
+	// plugin that re-registers replaces its prior entry cleanly.
+	struct RegisteredAIProvider {
+		std::string                                                providerId;
+		std::string                                                displayName;
+		std::string                                                iconPath;
+		std::vector<std::string>                                   supportedModes;
+		int  (*Query)(const char* requestJson, const char* requestId, void* userData);
+		int  (*Cancel)(const char* requestId, void* userData);
+		int  (*ListModels)(char** jsonOut);
+		void*                                                      userData;
+	};
+
+	// Register an AI provider. Plugin calls this once from
+	// oes_plugin_initialize. Duplicate providerId replaces. Returns 0
+	// on success, -1 if provider or providerId is null.
+	int HostRegisterAIProvider(const ibPluginAIProvider* provider);
+
+	// Lookup table for Settings UI (Phase 4) and dispatch.
+	const std::vector<RegisteredAIProvider>& AIProviders() const { return m_aiProviders; }
+
+	// Plugin chunk-delivery helpers — wrap deltaJson / metaJson / errorJson
+	// in the chat.delta / chat.end / error envelope and forward to the
+	// active pane. Phase 2 routing: target = the first registered pane;
+	// Phase 4 refines this to per-request routing once the Settings
+	// dialog ships and provider selection becomes user-driven.
+	int HostAIChunkEmit (const char* requestId, const char* deltaJson);
+	int HostAIChunkEnd  (const char* requestId, const char* metaJson);
+	int HostAIChunkError(const char* requestId, const char* errorJson);
+
 	// Frontend hookup for ABI v4 WebView pane entries. Designer
 	// registers concrete callbacks on init; backend trampolines
 	// (Host_RegisterWebPane / Host_WebPaneSend / Host_WebPaneShow)
@@ -159,6 +191,16 @@ private:
 		void*             userData;
 	};
 	std::vector<PendingWebPaneReg> m_pendingWebPaneRegs;
+
+	// Registered AI providers. Indexed by providerId for re-registration
+	// replacement; iteration order is registration order so Phase 4
+	// Settings UI can show plugins in the order they loaded.
+	std::vector<RegisteredAIProvider> m_aiProviders;
+
+	// First-registered pane id — Phase 2 default target for AI chunk
+	// delivery. Cleared by UnloadAll. Phase 4 replaces with explicit
+	// per-request routing via Settings.
+	wxString m_defaultAIPaneId;
 };
 
 #endif // _IB_PLUGIN_MANAGER_H_
