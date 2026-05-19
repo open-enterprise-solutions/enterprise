@@ -6,6 +6,7 @@
 #include "docView.h"
 
 #include "backend/appData.h"
+#include "backend/plugin/pluginManager.h"
 #include "backend/session/session.h"
 #include "backend/metaCollection/metaObject.h"
 
@@ -157,10 +158,20 @@ bool ibMetaDocument::OnSaveDocument(const wxString& filename)
 	if (ibSession::IsCurrentForceExit())
 		return false;
 
+	bool ok = false;
 	if (m_metaObject != nullptr)
-		return true;
-	
-	return wxDocument::OnSaveDocument(filename);
+		ok = true;
+	else
+		ok = wxDocument::OnSaveDocument(filename);
+
+	// Fan out to plugin subscribers. Payload stays null for now — the
+	// document filename + metaobject id may be added when the ABI grows
+	// a structured-payload type.
+	if (ok) {
+		if (auto* pm = appData->GetPluginManager())
+			pm->FireEvent(wxT("DocumentSaved"));
+	}
+	return ok;
 }
 
 #include "docManager.h"

@@ -5,6 +5,8 @@
 
 #include "systemManager.h"
 #include "backend/backend_form.h"
+#include "backend/appData.h"
+#include "backend/plugin/pluginManager.h"
 
 enum
 {
@@ -214,6 +216,18 @@ void ibValueSystemFunction::PrepareNames() const
 	m_methodHelper->AppendProc(wxT("BeginTransaction"), wxT("BeginTransaction()"));
 	m_methodHelper->AppendProc(wxT("CommitTransaction"), wxT("CommitTransaction()"));
 	m_methodHelper->AppendProc(wxT("RollBackTransaction"), wxT("RollBackTransaction()"));
+
+	// Plugin-registered BSL builtins. Slot index starts immediately
+	// after enRollBackTransaction so the dispatch in CallAsFunc can
+	// reverse the index arithmetic. AppendFunc returns the assigned
+	// slot — guaranteed contiguous since this runs in a single pass.
+	if (auto* pm = appData->GetPluginManager()) {
+		for (const auto& f : pm->Functions()) {
+			const wxString name = wxString::FromUTF8(f.m_name.c_str());
+			const wxString helper = name + wxT("(...)");
+			m_methodHelper->AppendFunc(name, f.m_paramCount, helper);
+		}
+	}
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -223,6 +237,18 @@ void ibValueSystemFunction::PrepareNames() const
 
 bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
+	// Plugin-registered builtins live above the system enum. Indexes
+	// are contiguous, starting at enRollBackTransaction + 1.
+	if (lMethodNum > enRollBackTransaction) {
+		auto* pm = appData->GetPluginManager();
+		if (pm == nullptr) return false;
+		const long idx = lMethodNum - enRollBackTransaction - 1;
+		const auto& fns = pm->Functions();
+		if (idx < 0 || idx >= static_cast<long>(fns.size())) return false;
+		return pm->CallFunction(fns[static_cast<size_t>(idx)],
+		                          pvarRetValue, paParams, lSizeArray);
+	}
+
 	if (!appData->DesignerMode()) {
 		switch (lMethodNum)
 		{

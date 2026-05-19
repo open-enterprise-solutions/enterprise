@@ -206,19 +206,22 @@ void ibHelpPaneView::LoadStateFromXml(const wxXmlNode* parent) {
 	     node = node->GetNext()) {
 		if (node->GetName() != wxT("helpPane")) continue;
 
-		long tab = 0;
-		if (node->GetAttribute(wxT("tab"), wxEmptyString).ToLong(&tab) &&
-		    m_notebook && tab >= 0 && tab < static_cast<long>(m_notebook->GetPageCount()))
-			m_notebook->SetSelection(static_cast<int>(tab));
-
 		long boost = 0;
 		if (node->GetAttribute(wxT("fontBoost"), wxEmptyString).ToLong(&boost) &&
 		    m_detailView)
 			m_detailView->SetFontSizeBoost(static_cast<int>(boost));
 
+		// Restore entry BEFORE tab — ShowEntry might shift the tab as
+		// a side-effect (highlighting in the tree, etc); applying tab
+		// last preserves the user's saved choice.
 		const wxString id = node->GetAttribute(wxT("currentId"), wxEmptyString);
 		if (!id.IsEmpty() && m_corpus && m_corpus->FindById(id))
 			ShowEntry(id);
+
+		long tab = 0;
+		if (node->GetAttribute(wxT("tab"), wxEmptyString).ToLong(&tab) &&
+		    m_notebook && tab >= 0 && tab < static_cast<long>(m_notebook->GetPageCount()))
+			m_notebook->SetSelection(static_cast<int>(tab));
 		break;
 	}
 }

@@ -88,6 +88,21 @@ public:
 	int  HostRegisterMenuItem(const char* label, ibPluginMenuFn handler);
 	int  HostSubscribe(const char* event, ibPluginEventFn cb);
 
+	// Dispatch a registered plugin function from the script call site.
+	// Sets up the arena scope so Make* / GetString calls inside the
+	// plugin callback see a live ibPluginCallScope; marshals args by
+	// adopting each ibValue into the arena; copies the plugin's return
+	// value out before the arena tears down. Returns false when the
+	// plugin's callback returns non-zero (mapped to a script error).
+	bool CallFunction(const RegisteredFunction& fn,
+	                   class ibValue& retOut,
+	                   class ibValue** paParams,
+	                   long lSizeArray);
+
+	// Same trampoline for menu items — sets up an empty arena so the
+	// handler can still call host->Log / MakeString (rare but legal).
+	void CallMenuHandler(const RegisteredMenuItem& item);
+
 private:
 	std::vector<LoadedPlugin>        m_plugins;
 	std::vector<RegisteredFunction>  m_functions;

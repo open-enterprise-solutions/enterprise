@@ -277,3 +277,57 @@ int ibPluginManager::HostSubscribe(const char* event, ibPluginEventFn cb)
 	m_subscribers[std::string(event)].push_back(cb);
 	return 0;
 }
+
+bool ibPluginManager::CallFunction(const RegisteredFunction& fn,
+                                     ibValue& retOut,
+                                     ibValue** paParams,
+                                     long lSizeArray)
+{
+	if (fn.m_fn == nullptr) return false;
+
+	ibPluginCallScope scope;
+	ibPluginCallScope* prev = tl_scope;
+	tl_scope = &scope;
+
+	std::vector<ibPluginValue*> args;
+	args.reserve(static_cast<size_t>(lSizeArray));
+	for (long i = 0; i < lSizeArray; ++i) {
+		if (paParams && paParams[i]) {
+			args.push_back(scope.AdoptFromValue(*paParams[i]));
+		} else {
+			args.push_back(scope.MakeNull());
+		}
+	}
+
+	ibPluginValue* ret = nullptr;
+	int rc = 1;
+	try {
+		rc = fn.m_fn(args.empty() ? nullptr : args.data(),
+		             static_cast<int>(lSizeArray), &ret);
+	} catch (...) {
+		// Plugin bug — script call site sees a script-side failure
+		// rather than the host tearing down.
+		rc = 1;
+	}
+
+	if (rc == 0) {
+		if (ret != nullptr) {
+			retOut = ret->m_value;  // copy before scope dtor releases ret
+		} else {
+			retOut = ibValue();
+		}
+	}
+
+	tl_scope = prev;
+	return rc == 0;
+}
+
+void ibPluginManager::CallMenuHandler(const RegisteredMenuItem& item)
+{
+	if (item.m_handler == nullptr) return;
+	ibPluginCallScope scope;
+	ibPluginCallScope* prev = tl_scope;
+	tl_scope = &scope;
+	try { item.m_handler(); } catch (...) { /* plugin bug — swallow */ }
+	tl_scope = prev;
+}

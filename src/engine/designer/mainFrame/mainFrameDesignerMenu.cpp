@@ -4,6 +4,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "mainFrameDesigner.h"
+#include "backend/appData.h"
+#include "backend/plugin/pluginManager.h"
 
 //********************************************************************************
 //*                                Hotkey support                                *
@@ -185,6 +187,31 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	                       _("Syntax Helper\tRawCtrl+Alt+F1"));
 	m_menuSetting->Append(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP,
 	                       _("Look up in Syntax Helper\tRawCtrl+F1"));
+
+	// Plugin-supplied menu items live under Tools → Plugins. Built from
+	// the plugin manager's RegisteredMenuItem table. Each click routes
+	// through CallMenuHandler so the plugin's callback runs inside a
+	// host-managed ibPluginCallScope.
+	if (auto* pm = appData->GetPluginManager()) {
+		const auto& items = pm->MenuItems();
+		if (!items.empty()) {
+			auto* pluginsMenu = new wxMenu;
+			constexpr int kPluginIdBase = wxID_HIGHEST + 6000;
+			int slot = 0;
+			for (const auto& item : items) {
+				const int id = kPluginIdBase + slot++;
+				pluginsMenu->Append(id,
+				    wxString::FromUTF8(item.m_label.c_str()));
+				Bind(wxEVT_MENU,
+				     [pm, &item](wxCommandEvent&) {
+				         pm->CallMenuHandler(item);
+				     },
+				     id);
+			}
+			m_menuSetting->AppendSeparator();
+			m_menuSetting->AppendSubMenu(pluginsMenu, _("Plugins"));
+		}
+	}
 
 	m_menuHelp = new wxMenu;
 	m_menuHelp->Append(wxID_DESIGNER_ABOUT, _("About"));
