@@ -13,13 +13,13 @@
 #include "backend/appData.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
+#include "backend/compiler/value.h"
 #include "backend/plugin/pluginApi.h"
 #include "backend/plugin/pluginManager.h"
 
 #include "3rdparty/nlohmann/json.hpp"
 
 #include <functional>
-#include <mutex>
 #include <vector>
 
 #include <wx/string.h>
@@ -440,7 +440,8 @@ int HostMetaCreate(const char* pluginId,
 		kind = nameOnly;
 	}
 
-	if (KindStringToCLSID(kind.c_str()) == 0) {
+	const unsigned long long clsid = KindStringToCLSID(kind.c_str());
+	if (clsid == 0) {
 		SetError(errorMsg, "MetaCreate: unknown kind '" + kind + "'");
 		return -1;
 	}
@@ -454,25 +455,52 @@ int HostMetaCreate(const char* pluginId,
 		return -1;
 	}
 
-	// Phase 3.2 minimal create: we DO NOT have a clean kind→C++ factory
-	// hook exposed publicly (METADATA_TYPE_REGISTER paths require ctor
-	// expansion per kind). The real instantiation will plug into the
-	// existing per-kind ctors in Phase 3.3 once the wxCommandProcessor
-	// integration lands; for now we register a deferred-create entry on
-	// the undo stack and surface a clear "Phase 3.3" marker so the
-	// integration suite sees the contract is wired but the body is
-	// still pending. Returning -1 here keeps tests honest.
-	wxLogMessage(wxT("[meta] MetaCreate(plugin=%s, kind=%s, name=%s) — policy passed; impl Phase 3.3"),
+	// Real instantiation via the metaCtor factory: each metaobject class
+	// registers itself with METADATA_TYPE_REGISTER at static init time;
+	// GetAvailableCtor(clsid) returns the ctor pointer. CreateObject()
+	// allocates a default-constructed instance; we downcast and graft it
+	// onto the configuration root.
+	ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(static_cast<ibClassID>(clsid));
+	if (ctor == nullptr) {
+		SetError(errorMsg, "MetaCreate: no factory registered for kind '" + kind + "'");
+		return -1;
+	}
+	ibValue* raw = ctor->CreateObject();
+	if (raw == nullptr) {
+		SetError(errorMsg, "MetaCreate: factory returned null for kind '" + kind + "'");
+		return -1;
+	}
+	auto* obj = dynamic_cast<ibValueMetaObject*>(raw);
+	if (obj == nullptr) {
+		delete raw;
+		SetError(errorMsg, "MetaCreate: factory product is not an ibValueMetaObject");
+		return -1;
+	}
+
+	const wxString objName = wxString::FromUTF8(name.c_str());
+	obj->SetName(objName);
+	obj->SetParent(root);
+	root->AddChild(obj);
+
+	// Undo lambda: detach + delete. Designer Ctrl+Z (Phase 3.3 wiring
+	// of the wxCommandProcessor) triggers UndoLastAgentMutation which
+	// pops this entry. The capture holds raw pointers — safe because
+	// the undo runs on the same UI thread that performed the create,
+	// and configuration teardown (UnloadAll path) bypasses the agent.
+	g_undoStack.emplace_back([root, obj]() {
+		root->RemoveChild(obj);
+		delete obj;
+	});
+
+	wxLogMessage(wxT("[meta] MetaCreate(plugin=%s) -> %s.%s OK"),
 	             wxString::FromUTF8(pluginId),
-	             wxString::FromUTF8(kind),
-	             wxString::FromUTF8(name));
-	SetError(errorMsg, "MetaCreate: object instantiation lands in Phase 3.3");
-	return IB_PLUGIN_NOT_IMPLEMENTED;
+	             wxString::FromUTF8(kind), objName);
+	return 0;
 }
 
 int HostMetaEdit(const char* pluginId,
-                  const char* /*fullName*/,
-                  const char* /*jsonPatch*/,
+                  const char* fullName,
+                  const char* jsonPatch,
                   char**      errorMsg)
 {
 	if (errorMsg != nullptr) *errorMsg = nullptr;
@@ -480,8 +508,69 @@ int HostMetaEdit(const char* pluginId,
 	if (!GatePolicy(pluginId, wxT("meta.edit"), errorMsg)) {
 		return IB_PLUGIN_PERMISSION_DENIED;
 	}
-	SetError(errorMsg, "MetaEdit: RFC 6902 JSON Patch support lands in Phase 3.3");
-	return IB_PLUGIN_NOT_IMPLEMENTED;
+
+	std::string kind, name;
+	if (!SplitFullName(fullName, kind, name)) {
+		SetError(errorMsg, "MetaEdit: fullName must be '<Kind>.<Name>'");
+		return -1;
+	}
+
+	ibValueMetaObject* root = nullptr;
+	if (!RequireConfiguration(root, errorMsg)) return -1;
+
+	const LookupResult lookup = LookupTopLevel(kind, name);
+	if (lookup.hit == nullptr) {
+		SetError(errorMsg, "MetaEdit: not found '" + std::string(fullName) + "'");
+		return -1;
+	}
+
+	// Phase 3.3 minimal patch: supports a JSON object payload like
+	//   {"synonym":"...", "comment":"..."}
+	// — straight string replacement on the three top-level common
+	// properties. RFC 6902 JSON Patch ops (add/replace/move) on nested
+	// attribute paths land in Phase 3.4 once we expose the property
+	// vocabulary per metaobject kind.
+	if (jsonPatch == nullptr || *jsonPatch == '\0') {
+		SetError(errorMsg, "MetaEdit: empty patch payload");
+		return -1;
+	}
+	auto patch = nlohmann::json::parse(jsonPatch, nullptr, /*allow_exceptions*/ false);
+	if (!patch.is_object()) {
+		SetError(errorMsg, "MetaEdit: patch must be a JSON object (synonym/comment fields)");
+		return -1;
+	}
+
+	// Snapshot old values for the undo lambda BEFORE we mutate.
+	ibValueMetaObject* target = lookup.hit;
+	const wxString oldSynonym = target->GetSynonym();
+	const wxString oldComment = target->GetComment();
+	bool changedSynonym = false;
+	bool changedComment = false;
+
+	if (auto it = patch.find("synonym"); it != patch.end() && it->is_string()) {
+		target->SetSynonym(wxString::FromUTF8(it->get<std::string>()));
+		changedSynonym = true;
+	}
+	if (auto it = patch.find("comment"); it != patch.end() && it->is_string()) {
+		target->SetComment(wxString::FromUTF8(it->get<std::string>()));
+		changedComment = true;
+	}
+	if (!changedSynonym && !changedComment) {
+		SetError(errorMsg, "MetaEdit: patch had no recognised fields (synonym/comment supported)");
+		return -1;
+	}
+
+	g_undoStack.emplace_back([target, oldSynonym, oldComment,
+	                           changedSynonym, changedComment]() {
+		if (changedSynonym) target->SetSynonym(oldSynonym);
+		if (changedComment) target->SetComment(oldComment);
+	});
+
+	wxLogMessage(wxT("[meta] MetaEdit(plugin=%s) -> %s synonym=%d comment=%d"),
+	             wxString::FromUTF8(pluginId),
+	             wxString::FromUTF8(fullName),
+	             (int)changedSynonym, (int)changedComment);
+	return 0;
 }
 
 int HostMetaDelete(const char* pluginId,
@@ -521,14 +610,24 @@ int HostMetaDelete(const char* pluginId,
 		return -1;
 	}
 
-	// Phase 3.2 deferred — we have the lookup but the real RemoveChild +
-	// undo registration land in Phase 3.3 once we can verify the lock /
-	// configuration-validation pass without taking the Designer down.
-	wxLogMessage(wxT("[meta] MetaDelete(plugin=%s, fullName=%s, force=true) — policy passed; impl Phase 3.3"),
+	// Detach from parent. We keep ownership in the undo lambda — a Ctrl+Z
+	// after delete re-AddChilds the same instance, preserving all its
+	// state (properties, child attributes, form blobs). Production
+	// configuration validation hook lives in Phase 3.4 (re-run the
+	// config validator after each mutation; rollback on failure).
+	ibValueMetaObject* parent = lookup.parent;
+	ibValueMetaObject* victim = lookup.hit;
+	parent->RemoveChild(victim);
+
+	g_undoStack.emplace_back([parent, victim]() {
+		victim->SetParent(parent);
+		parent->AddChild(victim);
+	});
+
+	wxLogMessage(wxT("[meta] MetaDelete(plugin=%s) -> %s OK"),
 	             wxString::FromUTF8(pluginId),
 	             wxString::FromUTF8(fullName));
-	SetError(errorMsg, "MetaDelete: RemoveChild + undo land in Phase 3.3");
-	return IB_PLUGIN_NOT_IMPLEMENTED;
+	return 0;
 }
 
 int UndoLastAgentMutation()
