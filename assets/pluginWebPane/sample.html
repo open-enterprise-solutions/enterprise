@@ -2,62 +2,132 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Plugin WebView Smoke Test</title>
+<title>Plugin WebView — Smoke Test</title>
 <style>
   html, body { margin: 0; padding: 0; height: 100%; background: #1e1e1e; color: #e0e0e0; }
   body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 14px; display: flex; flex-direction: column; height: 100vh; }
   #bar { padding: 8px 12px; font-size: 16px; font-weight: bold; border-bottom: 1px solid #333; background: #252525; }
   #log { flex: 1; overflow-y: auto; padding: 8px 12px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
-  #log .row { margin: 2px 0; }
-  #log .err { color: #ff7777; }
+  #log .row { margin: 4px 0; }
+  #log .you { color: #6aa9ff; }
+  #log .host { color: #e0e0e0; }
   #log .raw { color: #ffaa55; }
+  #log .err { background: #2a1d1d; border-left: 3px solid #ff5555; padding: 4px 8px; color: #ff9999; }
+  #log .refusal { background: #2a2516; border-left: 3px solid #d49a32; padding: 4px 8px; color: #f0d28a; }
+  #log .stream { color: #c0e0c0; }
+  #empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; color: #aaa; }
+  #empty .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; max-width: 480px; }
+  #empty .chip { background: #2a2a2a; border: 1px solid #444; border-radius: 14px; padding: 6px 12px; cursor: pointer; font-size: 13px; color: #ccc; }
+  #empty .chip:hover { background: #333; border-color: #6aa9ff; color: #e0e0e0; }
   #row { display: flex; gap: 6px; padding: 8px 12px; border-top: 1px solid #333; background: #252525; }
   #input { flex: 1; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; padding: 6px 8px; font-family: inherit; font-size: 14px; outline: none; }
   #input:focus { border-color: #6aa9ff; }
   #send { background: #3a6ea5; color: #fff; border: 0; padding: 6px 14px; cursor: pointer; font-size: 14px; }
   #send:hover { background: #4a80c0; }
+  #footer { padding: 4px 12px; font-size: 11px; color: #888; border-top: 1px solid #2a2a2a; background: #1e1e1e; min-height: 16px; }
 </style>
 </head>
 <body>
 <div id="bar">Plugin WebView — Smoke Test</div>
 <div id="log"></div>
+<div id="empty" hidden>
+  <div>Send a prompt to get started.</div>
+  <div class="chips" id="chips"></div>
+</div>
 <div id="row">
-  <input type="text" id="input" autocomplete="off" placeholder="type and press Enter">
+  <input type="text" id="input" autocomplete="off" placeholder="ask anything…">
   <button id="send">Send</button>
 </div>
+<div id="footer"></div>
 <script>
 (function () {
+  var prompts = [
+    "Explain Document.ПриходныйКассовыйОрдер",
+    "Generate a Catalog with ІПН + EDRPO attributes",
+    "Review the selected procedure for issues"
+  ];
+
   function ts() {
     var d = new Date();
     var p = function (n) { return (n < 10 ? "0" : "") + n; };
     return "[" + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds()) + "]";
   }
-  var logEl = document.getElementById("log");
+
+  var logEl    = document.getElementById("log");
+  var emptyEl  = document.getElementById("empty");
+  var footerEl = document.getElementById("footer");
+  var streamRows = {};                              // requestId → DOM row
+
+  function showEmpty(show) { emptyEl.hidden = !show; logEl.hidden = !!show; }
+
   function append(text, cls) {
     var div = document.createElement("div");
     div.className = "row" + (cls ? " " + cls : "");
     div.textContent = text;
     logEl.appendChild(div);
     logEl.scrollTop = logEl.scrollHeight;
+    showEmpty(false);
+    return div;
   }
+
+  // chat.delta / chat.end / error envelope routing. Falls back to a
+  // raw render when the inbound JSON doesn't match the known shapes
+  // (e.g. plugin-private message types — this is a sample, not a
+  // production bundle).
   function onHost(jsonString) {
-    try {
-      var obj = JSON.parse(jsonString);
-      var body = (obj && typeof obj.text === "string") ? obj.text : JSON.stringify(obj);
-      append(ts() + " host: " + body);
-    } catch (e) {
-      append(ts() + " [raw] " + String(jsonString), "raw");
+    var obj;
+    try { obj = JSON.parse(jsonString); }
+    catch (e) { append(ts() + " [raw] " + String(jsonString), "raw"); return; }
+
+    if (obj && obj.kind === "chat.delta" && obj.requestId) {
+      var row = streamRows[obj.requestId];
+      if (!row) {
+        row = append(ts() + " host: ", "host stream");
+        streamRows[obj.requestId] = row;
+      }
+      row.textContent += (obj.delta || "");
+      return;
     }
+    if (obj && obj.kind === "chat.end" && obj.requestId) {
+      delete streamRows[obj.requestId];
+      var meta = obj.meta || {};
+      var tokens = (meta.tokens && (meta.tokens.in || 0) + (meta.tokens.out || 0)) || 0;
+      var model  = meta.model || "";
+      var bits = [];
+      if (tokens) bits.push(tokens + " tokens");
+      if (model)  bits.push(model);
+      footerEl.textContent = bits.join(" · ");
+      return;
+    }
+    if (obj && obj.kind === "error") {
+      var err = obj.error || {};
+      // Permission-denied is a refusal — amber callout, not red.
+      var isRefusal = (err.code === "permission_denied");
+      var msg = err.detail || err.code || JSON.stringify(err);
+      append(ts() + " " + msg, isRefusal ? "refusal" : "err");
+      delete streamRows[obj.requestId];
+      return;
+    }
+
+    // Plugin's own message types (smoke test): show as text.
+    var body = (obj && typeof obj.text === "string") ? obj.text : JSON.stringify(obj);
+    append(ts() + " host: " + body, "host");
   }
-  function send() {
+
+  function send(text) {
     var input = document.getElementById("input");
-    var text = input.value;
+    text = text || input.value;
     if (!text) return;
     input.value = "";
-    append(ts() + " you: " + text);
+    append(ts() + " you: " + text, "you");
     if (window.oesHost && typeof window.oesHost.postMessage === "function") {
       try {
-        window.oesHost.postMessage(JSON.stringify({ type: "smoke.echo", text: text, ts: Date.now() }));
+        window.oesHost.postMessage(JSON.stringify({
+          kind: "chat.send",
+          mode: "chat",
+          prompt: text,
+          ts: Date.now()
+        }));
       } catch (e) {
         append(ts() + " [ERR] postMessage threw: " + e, "err");
       }
@@ -65,11 +135,29 @@
       append(ts() + " [ERR] oesHost channel not wired", "err");
     }
   }
+
+  function renderPromptChips() {
+    var box = document.getElementById("chips");
+    for (var i = 0; i < prompts.length; i++) {
+      (function (p) {
+        var c = document.createElement("div");
+        c.className = "chip";
+        c.textContent = p;
+        c.addEventListener("click", function () { send(p); });
+        box.appendChild(c);
+      })(prompts[i]);
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
-    document.getElementById("send").addEventListener("click", send);
+    renderPromptChips();
+    showEmpty(true);
+
+    document.getElementById("send").addEventListener("click", function () { send(); });
     document.getElementById("input").addEventListener("keydown", function (e) {
       if (e.key === "Enter") { e.preventDefault(); send(); }
     });
+
     if (window.oesHost) {
       window.oesHost._recv = onHost;
       var inbox = window.oesHost.__inbox;
@@ -78,7 +166,7 @@
         window.oesHost.__inbox = [];
       }
     }
-    append(ts() + " host bridge ready — channel=" + (window.oesHost ? "wired" : "missing"));
+    footerEl.textContent = "channel=" + (window.oesHost ? "wired" : "missing");
   });
 })();
 </script>
