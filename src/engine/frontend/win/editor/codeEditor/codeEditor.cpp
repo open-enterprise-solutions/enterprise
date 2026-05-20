@@ -652,38 +652,55 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 
 	menu.AppendSeparator();
 
-	// --- Sigma (AI) skills — Phase 6.1 ---------------------------------
-	// Mirrors the right-click skill submenu modern AI IDE assistants
-	// ship (Explain / Review / Fix / Doc-gen / Send to chat). Whole
-	// submenu greys out when no AI provider is registered — the user
-	// installs one via Tools → Plugins and the items light up.
+	// --- AI Assistant skills — Phase 6.1 -------------------------------
+	// Right-click skill submenu modern AI IDE assistants ship (Explain
+	// / Review / Fix / Doc-gen / Send to chat). Submenu label is
+	// dynamic: when a plugin has registered an AI provider, the label
+	// shows that provider's displayName (e.g. "Pugi", "Copilot",
+	// "Claude") — host stays vendor-neutral. With nothing installed
+	// it falls back to a generic "AI Assistant (no plugin installed)"
+	// and all items grey out.
 	{
-		wxMenu* sigmaSub = new wxMenu();
-		auto* miExplain = sigmaSub->Append(wxID_HIGHEST + 4030,
-		                                     _("Explain code\tAlt+I,E"));
-		auto* miReview  = sigmaSub->Append(wxID_HIGHEST + 4031,
-		                                     _("Review code\tAlt+I,R"));
-		auto* miFix     = sigmaSub->Append(wxID_HIGHEST + 4032,
-		                                     _("Fix code\tAlt+I,C"));
-		auto* miDoc     = sigmaSub->Append(wxID_HIGHEST + 4033,
-		                                     _("Generate doc comment\tAlt+I,G"));
-		auto* miSend    = sigmaSub->Append(wxID_HIGHEST + 4034,
-		                                     _("Send selection to chat\tAlt+I,S"));
+		wxMenu* aiSub = new wxMenu();
+		auto* miExplain = aiSub->Append(wxID_HIGHEST + 4030,
+		                                  _("Explain code\tAlt+I,E"));
+		auto* miReview  = aiSub->Append(wxID_HIGHEST + 4031,
+		                                  _("Review code\tAlt+I,R"));
+		auto* miFix     = aiSub->Append(wxID_HIGHEST + 4032,
+		                                  _("Fix code\tAlt+I,C"));
+		auto* miDoc     = aiSub->Append(wxID_HIGHEST + 4033,
+		                                  _("Generate doc comment\tAlt+I,G"));
+		auto* miSend    = aiSub->Append(wxID_HIGHEST + 4034,
+		                                  _("Send selection to chat\tAlt+I,S"));
 
-		const bool hasAI = appData && appData->GetPluginManager()
-		                     && appData->GetPluginManager()->HasAIProviderFor("chat");
+		auto* pm = appData ? appData->GetPluginManager() : nullptr;
+		const bool hasAI = pm && pm->HasAIProviderFor("chat");
 		const bool hasSelection = GetSelectionStart() != GetSelectionEnd();
-		// Items that operate on a selection greyed out when nothing is
-		// selected. Doc-gen works on the current procedure even without
-		// an explicit selection so it stays enabled.
 		miExplain->Enable(hasAI && hasSelection);
 		miReview ->Enable(hasAI && hasSelection);
 		miFix    ->Enable(hasAI && hasSelection);
 		miSend   ->Enable(hasAI && hasSelection);
 		miDoc    ->Enable(hasAI);
 
-		menu.AppendSubMenu(sigmaSub, hasAI ? _("Sigma (AI)")
-		                                    : _("Sigma (no AI plugin installed)"));
+		wxString label;
+		if (hasAI) {
+			// First chat-capable provider claims the label. Multi-
+			// provider future will show a stacked submenu per provider.
+			for (const auto& p : pm->AIProviders()) {
+				bool supportsChat = false;
+				for (const auto& m : p.supportedModes) {
+					if (m == "chat") { supportsChat = true; break; }
+				}
+				if (supportsChat) {
+					label = wxString::FromUTF8(p.displayName);
+					break;
+				}
+			}
+			if (label.IsEmpty()) label = _("AI Assistant");
+		} else {
+			label = _("AI Assistant (no plugin installed)");
+		}
+		menu.AppendSubMenu(aiSub, label);
 	}
 
 	menu.AppendSeparator();
