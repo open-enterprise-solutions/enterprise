@@ -279,23 +279,36 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	         // Fall back to the built-in demo pane so the user can verify
 	         // the WebView infrastructure end-to-end. The sample HTML
 	         // ships next to the executable under assets/pluginWebPane/.
-	         const wxString assetPath = wxStandardPaths::Get().GetResourcesDir()
-	             + wxFILE_SEP_PATH + wxT("assets") + wxFILE_SEP_PATH
-	             + wxT("pluginWebPane") + wxFILE_SEP_PATH + wxT("sample.html");
-	         wxString resolvedPath = assetPath;
+	         // Look for assets/pluginWebPane/sample.html. Production install
+	         // places it under wxStandardPaths Resources; dev builds keep
+	         // it in the repo root several dirs above the .app bundle
+	         // (build/bin/Debug/designer.app/Contents/MacOS/). Walk UP the
+	         // executable directory until we find a sibling `assets/` dir
+	         // containing the bundle.
+	         const wxString rel = wxT("assets") + wxString(wxFILE_SEP_PATH)
+	             + wxT("pluginWebPane") + wxString(wxFILE_SEP_PATH)
+	             + wxT("sample.html");
+	         wxString resolvedPath = wxStandardPaths::Get().GetResourcesDir()
+	             + wxFILE_SEP_PATH + rel;
 	         if (!wxFileExists(resolvedPath)) {
-	             // Dev / non-bundled layouts — look relative to the
-	             // executable directory (build/bin/Debug/designer.app, etc.)
-	             wxFileName exe(wxStandardPaths::Get().GetExecutablePath());
-	             const wxString tries[] = {
-	                 exe.GetPath() + wxT("/../../../../../assets/pluginWebPane/sample.html"),
-	                 exe.GetPath() + wxT("/../../../../assets/pluginWebPane/sample.html"),
-	                 exe.GetPath() + wxT("/assets/pluginWebPane/sample.html"),
-	             };
-	             for (const wxString& t : tries) {
-	                 if (wxFileExists(t)) { resolvedPath = t; break; }
+	             wxString dir = wxFileName(
+	                 wxStandardPaths::Get().GetExecutablePath()).GetPath();
+	             for (int i = 0; i < 12; ++i) {
+	                 const wxString candidate = dir + wxFILE_SEP_PATH + rel;
+	                 if (wxFileExists(candidate)) {
+	                     resolvedPath = candidate;
+	                     break;
+	                 }
+	                 wxFileName up = wxFileName::DirName(dir);
+	                 if (up.GetDirCount() == 0) break; // at filesystem root
+	                 up.RemoveLastDir();
+	                 const wxString parent = up.GetPath();
+	                 if (parent.IsEmpty() || parent == dir) break;
+	                 dir = parent;
 	             }
 	         }
+	         wxLogDebug(wxT("AI Chat sample.html resolved -> %s (exists=%d)"),
+	                    resolvedPath, (int)wxFileExists(resolvedPath));
 	         if (!wxFileExists(resolvedPath)) {
 	             wxMessageBox(_("AI Chat: sample HTML bundle not found.\n"
 	                             "Install a v4 plugin via Tools → Plugins."),
