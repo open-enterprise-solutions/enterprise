@@ -25,10 +25,23 @@
   #send { background: #3a6ea5; color: #fff; border: 0; padding: 6px 14px; cursor: pointer; font-size: 14px; }
   #send:hover { background: #4a80c0; }
   #footer { padding: 4px 12px; font-size: 11px; color: #888; border-top: 1px solid #2a2a2a; background: #1e1e1e; min-height: 16px; }
+  #bar { display: flex; align-items: center; justify-content: space-between; }
+  #mode { background: #2a2a2a; border: 1px solid #444; color: #ccc; padding: 2px 8px; font-size: 12px; border-radius: 12px; cursor: pointer; }
+  #mode.plan { background: #3a3018; border-color: #d49a32; color: #f0d28a; }
+  #mode.agent { background: #1e3a2a; border-color: #4caf50; color: #a5d6a7; }
+  #log .plan { background: #2a2516; border-left: 3px solid #d49a32; padding: 8px 12px; }
+  #log .plan .title { font-weight: bold; color: #f0d28a; margin-bottom: 4px; }
+  #log .plan .mutations { font-family: ui-monospace, monospace; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+  #log .plan .actions { margin-top: 6px; display: flex; gap: 6px; }
+  #log .plan button { padding: 4px 10px; font-size: 12px; border: 0; border-radius: 4px; cursor: pointer; }
+  #log .plan .approve { background: #4caf50; color: #fff; }
+  #log .plan .reject { background: #555; color: #fff; }
+  #log .applied { background: #1e3a2a; border-left: 3px solid #4caf50; padding: 4px 10px; color: #a5d6a7; display: flex; justify-content: space-between; align-items: center; }
+  #log .applied .undo { background: transparent; border: 1px solid #4caf50; color: #a5d6a7; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
 </style>
 </head>
 <body>
-<div id="bar">Plugin WebView — Smoke Test</div>
+<div id="bar"><span>Plugin WebView — Smoke Test</span><span id="mode" title="Click to toggle Chat / Agent / Plan">chat</span></div>
 <div id="log"></div>
 <div id="empty" hidden>
   <div>Send a prompt to get started.</div>
@@ -56,7 +69,22 @@
   var logEl    = document.getElementById("log");
   var emptyEl  = document.getElementById("empty");
   var footerEl = document.getElementById("footer");
+  var modeEl   = document.getElementById("mode");
   var streamRows = {};                              // requestId → DOM row
+  var currentMode = "chat";                          // chat | agent | plan
+  var modes = ["chat", "agent", "plan"];
+
+  function setMode(m) {
+    currentMode = m;
+    modeEl.textContent = m;
+    modeEl.classList.remove("plan", "agent");
+    if (m === "plan")  modeEl.classList.add("plan");
+    if (m === "agent") modeEl.classList.add("agent");
+  }
+  modeEl.addEventListener("click", function () {
+    var i = modes.indexOf(currentMode);
+    setMode(modes[(i + 1) % modes.length]);
+  });
 
   function showEmpty(show) { emptyEl.hidden = !show; logEl.hidden = !!show; }
 
@@ -108,11 +136,100 @@
       delete streamRows[obj.requestId];
       return;
     }
+    if (obj && obj.kind === "agent.plan") {
+      renderPlan(obj);
+      return;
+    }
+    if (obj && obj.kind === "agent.applied") {
+      renderApplied(obj);
+      return;
+    }
 
     // Plugin's own message types (smoke test): show as text.
     var body = (obj && typeof obj.text === "string") ? obj.text : JSON.stringify(obj);
     append(ts() + " host: " + body, "host");
   }
+
+  function renderPlan(obj) {
+    var div = document.createElement("div");
+    div.className = "row plan";
+    var t = document.createElement("div");
+    t.className = "title";
+    t.textContent = "Agent plan: " + (obj.rationale || "");
+    div.appendChild(t);
+    var m = document.createElement("div");
+    m.className = "mutations";
+    var lines = (obj.mutations || []).map(function (mu) {
+      var parts = [mu.op || "?", mu.kind || "", mu.fullName || ""];
+      return "  " + parts.filter(Boolean).join(" ");
+    }).join("\n");
+    m.textContent = lines;
+    div.appendChild(m);
+    var actions = document.createElement("div");
+    actions.className = "actions";
+    var ok = document.createElement("button");
+    ok.className = "approve";
+    ok.textContent = "Approve";
+    ok.addEventListener("click", function () {
+      sendRaw({ kind: "agent.approve", planId: obj.planId,
+                 conversationId: obj.conversationId });
+      div.remove();
+    });
+    var no = document.createElement("button");
+    no.className = "reject";
+    no.textContent = "Reject";
+    no.addEventListener("click", function () {
+      sendRaw({ kind: "agent.reject", planId: obj.planId,
+                 conversationId: obj.conversationId });
+      div.remove();
+    });
+    actions.appendChild(ok); actions.appendChild(no);
+    div.appendChild(actions);
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+    showEmpty(false);
+  }
+
+  function renderApplied(obj) {
+    var div = document.createElement("div");
+    div.className = "row applied";
+    var label = document.createElement("span");
+    label.textContent = (obj.ok === false)
+      ? ("✗ " + (obj.error || "mutation failed"))
+      : ("✓ Mutation " + (obj.mutationIndex !== undefined ? "#" + obj.mutationIndex : "applied"));
+    div.appendChild(label);
+    if (obj.ok !== false) {
+      var undo = document.createElement("button");
+      undo.className = "undo";
+      undo.textContent = "Undo";
+      undo.addEventListener("click", function () {
+        sendRaw({ kind: "agent.undo", planId: obj.planId });
+      });
+      div.appendChild(undo);
+    }
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+    showEmpty(false);
+  }
+
+  function sendRaw(obj) {
+    if (window.oesHost && typeof window.oesHost.postMessage === "function") {
+      try {
+        window.oesHost.postMessage(JSON.stringify(obj));
+      } catch (e) {
+        append(ts() + " [ERR] postMessage threw: " + e, "err");
+      }
+    }
+  }
+
+  // Slash-command vocabulary. Maps the typed prefix to an editor.skill
+  // envelope op, mirroring the right-click submenu in Phase 6.1.
+  var slashOps = {
+    "/explain": "explain",
+    "/review":  "review",
+    "/fix":     "fix",
+    "/doc":     "doc",
+  };
 
   function send(text) {
     var input = document.getElementById("input");
@@ -120,11 +237,29 @@
     if (!text) return;
     input.value = "";
     append(ts() + " you: " + text, "you");
+
+    // Slash command interception — first token routes to editor.skill
+    // envelope instead of chat.send. Mirrors the 1c-ai-dev-kit /skill
+    // invocation pattern. Remainder of the line (if any) becomes the
+    // extra prompt context. The host's editor.skill handler currently
+    // ships in Phase 6.1; the plugin's onMessage picks it up.
+    var firstSpace = text.indexOf(" ");
+    var head = (firstSpace === -1 ? text : text.substring(0, firstSpace)).toLowerCase();
+    if (slashOps[head]) {
+      sendRaw({
+        kind: "editor.skill",
+        op:   slashOps[head],
+        prompt: (firstSpace === -1 ? "" : text.substring(firstSpace + 1)),
+        ts:   Date.now()
+      });
+      return;
+    }
+
     if (window.oesHost && typeof window.oesHost.postMessage === "function") {
       try {
         window.oesHost.postMessage(JSON.stringify({
           kind: "chat.send",
-          mode: "chat",
+          mode: currentMode,
           prompt: text,
           ts: Date.now()
         }));
