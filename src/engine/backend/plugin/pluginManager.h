@@ -121,6 +121,19 @@ public:
 	int HostAIChunkEnd  (const char* requestId, const char* metaJson);
 	int HostAIChunkError(const char* requestId, const char* errorJson);
 
+	// Per-plugin BYOK env cache populated at LoadAll. Accessible via the
+	// ABI v4 ReadPluginEnv trampoline; the calling plugin's id is
+	// resolved from the host-side thread-local scope.
+	using PluginEnvMap =
+	    std::unordered_map<std::string,
+	                       std::unordered_map<std::string, std::string>>;
+	const PluginEnvMap& PluginEnv() const { return m_pluginEnv; }
+	void SetPluginEnvForTests(PluginEnvMap env) { m_pluginEnv = std::move(env); }
+
+	// Read a plugin env value. Returns empty string when absent.
+	std::string ReadPluginEnv(const std::string& pluginId,
+	                            const std::string& key) const;
+
 	// Frontend hookup for ABI v4 WebView pane entries. Designer
 	// registers concrete callbacks on init; backend trampolines
 	// (Host_RegisterWebPane / Host_WebPaneSend / Host_WebPaneShow)
@@ -238,8 +251,12 @@ private:
 	// absent entries inherit the per-op default — Ask for create/edit/
 	// delete, AllowAlways for query. AllowSession entries are wiped
 	// here on every UnloadAll; AllowAlways entries are persisted via
-	// Designer options.xml in Phase 4.
+	// plugins.json5 (Phase 4.1).
 	std::unordered_map<std::string, MutationPolicy> m_mutationPolicy;
+
+	// Per-plugin BYOK env cache (Phase 4.2). Populated by LoadAll from
+	// byokEnv::LoadAll; cleared on UnloadAll.
+	PluginEnvMap m_pluginEnv;
 };
 
 #endif // _IB_PLUGIN_MANAGER_H_

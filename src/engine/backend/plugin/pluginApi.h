@@ -241,6 +241,14 @@ typedef struct ibHostAPI_s {
 	// link different CRTs (the canonical mismatched-heap footgun). Safe
 	// to call with NULL.
 	void (*FreeBuffer)(void* buf);
+
+	// Read a BYOK secret from the plugin's own <pluginId>.env file.
+	// The calling plugin's id is resolved from a host-side thread-local
+	// scope (set during oes_plugin_initialize + provider Query); plugins
+	// cannot read each other's keys. Returns a malloc'd UTF-8 buffer
+	// the plugin MUST free via FreeBuffer; returns NULL when the key
+	// is absent or the caller has no resolvable plugin scope.
+	char* (*ReadPluginEnv)(const char* key);
 } ibHostAPI;
 
 // Required export. The DLL announces itself via this fn — abi_version

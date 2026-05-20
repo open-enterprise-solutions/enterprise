@@ -13,12 +13,14 @@
 #include <wx/log.h>
 
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 #include "3rdparty/nlohmann/json.hpp"
 
 #include "metaBridge.h"
 #include "pluginsConfig.h"
+#include "byokEnv.h"
 
 #ifdef __WXMSW__
   #include <windows.h>
@@ -196,6 +198,25 @@ void Host_FreeBuffer(void* buf)
 	std::free(buf);
 }
 
+// Read a key from the calling plugin's BYOK env file. Returns a
+// malloc'd UTF-8 string the plugin frees via Host_FreeBuffer, or NULL
+// when the key is absent / no plugin scope is active. Plugin identity
+// comes from tl_currentPluginId which the host sets at oes_plugin_initialize
+// and provider Query call sites — plugins cannot spoof another's id.
+char* Host_ReadPluginEnv(const char* key)
+{
+	if (key == nullptr || *key == '\0') return nullptr;
+	if (g_currentManager == nullptr) return nullptr;
+	if (tl_currentPluginId.empty()) return nullptr; // no calling-plugin scope
+	const std::string v = g_currentManager->ReadPluginEnv(tl_currentPluginId, key);
+	if (v.empty()) return nullptr;
+	const size_t n = v.size() + 1;
+	void* mem = std::malloc(n);
+	if (mem == nullptr) return nullptr;
+	std::memcpy(mem, v.c_str(), n);
+	return static_cast<char*>(mem);
+}
+
 // The single ibHostAPI instance handed to every v2+ plugin. Const after
 // initialization; plugins never mutate it. Field order MUST match the
 // pluginApi.h struct declaration — appends only at the tail across ABI
@@ -227,6 +248,7 @@ const ibHostAPI g_hostAPI = {
 	&Host_MetaDelete,
 	&Host_MetaQuery,
 	&Host_FreeBuffer,
+	&Host_ReadPluginEnv,
 };
 
 // RAII: on Windows, silence the OS-level "missing DLL" modal that
@@ -309,6 +331,12 @@ size_t ibPluginManager::LoadAll()
 	const pluginsConfig::Snapshot snap = pluginsConfig::Load();
 	pluginsConfig::Apply(snap, *this);
 
+	// Phase 4.2 — load BYOK env files into the manager cache. Plugins
+	// read their tokens via the ABI v4 ReadPluginEnv trampoline; the
+	// host enforces caller-pluginId isolation via the tl_currentPluginId
+	// scope set around each oes_plugin_initialize call below.
+	m_pluginEnv = byokEnv::LoadAll();
+
 	const wxString pattern = wxT("*") + wxDynamicLibrary::GetDllExt(wxDL_MODULE);
 
 	wxArrayString files;
@@ -367,9 +395,16 @@ size_t ibPluginManager::LoadAll()
 			ibPluginCallScope scope;
 			ibPluginCallScope* prev = tl_scope;
 			tl_scope = &scope;
+			// Phase 4.2 scope — push the calling plugin's id so its
+			// ReadPluginEnv calls during init resolve to its own .env.
+			// Pop on every return path so the next plugin's init sees
+			// a clean scope.
+			const std::string prevPluginId = tl_currentPluginId;
+			tl_currentPluginId = pluginIdNarrow;
 			const ibHostAPI* host =
 			    (info->abi_version >= 2) ? &g_hostAPI : nullptr;
 			const int rc = init_fn(host);
+			tl_currentPluginId = prevPluginId;
 			tl_scope = prev;
 			if (rc != 0) {
 				wxLogDebug("Plugin '%s' initialize() failed (rc=%d)",
@@ -408,6 +443,7 @@ void ibPluginManager::UnloadAll()
 	m_aiProviders.clear();
 	m_defaultAIPaneId.Clear();
 	m_pendingWebPaneRegs.clear();
+	m_pluginEnv.clear();
 
 	// Drain the agent undo stack BEFORE the configuration tree is freed.
 	// Without this every undo lambda holds dangling pointers; the
@@ -615,6 +651,16 @@ ibPluginManager::GetMutationPolicy(const wxString& pluginId,
 	// Defaults: read-only Auto; everything else Ask.
 	if (opName == wxT("meta.query")) return MutationPolicy::AllowAlways;
 	return MutationPolicy::Ask;
+}
+
+std::string ibPluginManager::ReadPluginEnv(const std::string& pluginId,
+                                              const std::string& key) const
+{
+	auto pit = m_pluginEnv.find(pluginId);
+	if (pit == m_pluginEnv.end()) return std::string();
+	auto kit = pit->second.find(key);
+	if (kit == pit->second.end()) return std::string();
+	return kit->second;
 }
 
 bool ibPluginManager::CheckMutationAllowed(const wxString& pluginId,

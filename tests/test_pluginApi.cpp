@@ -73,6 +73,7 @@ TEST(PluginAbi, V4FieldsAppendedAtTail) {
 	EXPECT_LT(offsetof(H, MetaEdit),           offsetof(H, MetaDelete));
 	EXPECT_LT(offsetof(H, MetaDelete),         offsetof(H, MetaQuery));
 	EXPECT_LT(offsetof(H, MetaQuery),          offsetof(H, FreeBuffer));
+	EXPECT_LT(offsetof(H, FreeBuffer),         offsetof(H, ReadPluginEnv));
 }
 
 TEST(PluginAbi, LockDeniedCodeIsStable) {
@@ -795,4 +796,79 @@ TEST(PluginsConfig, JSONCCommentsAllowed) {
 	})");
 	const auto snap = pluginsConfig::Load();
 	EXPECT_FALSE(pluginsConfig::IsEnabled(snap, "pugi-oes-bridge"));
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4.2 — BYOK env file per plugin.
+// ---------------------------------------------------------------------------
+#include "backend/plugin/byokEnv.h"
+
+TEST(ByokEnv, RoundTripSaveLoad) {
+	ScopedPluginsConfig fx("{}");
+	byokEnv::KeyMap keys = {
+		{"OPENAI_API_KEY", "sk-abc-123"},
+		{"WITH_QUOTES",    "value with \"quotes\" and \\backslash"},
+		{"MULTILINE",      "line1\nline2\ttab"},
+	};
+	EXPECT_EQ(byokEnv::Save("pugi-oes-bridge", keys), 0);
+
+	const auto loaded = byokEnv::LoadAll();
+	auto it = loaded.find("pugi-oes-bridge");
+	ASSERT_NE(it, loaded.end());
+	EXPECT_EQ(it->second.at("OPENAI_API_KEY"), "sk-abc-123");
+	EXPECT_EQ(it->second.at("WITH_QUOTES"),    "value with \"quotes\" and \\backslash");
+	EXPECT_EQ(it->second.at("MULTILINE"),      "line1\nline2\ttab");
+}
+
+TEST(ByokEnv, GetReturnsEmptyOnMiss) {
+	ScopedPluginsConfig fx("{}");
+	byokEnv::Save("pugi", {{"K", "V"}});
+	const auto env = byokEnv::LoadAll();
+	EXPECT_EQ(byokEnv::Get(env, "pugi", "K"),         "V");
+	EXPECT_EQ(byokEnv::Get(env, "pugi", "missing"),   "");
+	EXPECT_EQ(byokEnv::Get(env, "other-plugin", "K"), "");
+}
+
+TEST(ByokEnv, ParsesCommentsAndBlankLines) {
+	ScopedPluginsConfig fx("{}");
+	// Write by hand to exercise the parser on raw dotenv input rather
+	// than a Save() round-trip.
+	const wxString path = byokEnv::GetEnvFilePath("manual");
+	wxFileName fn(path);
+	fn.Mkdir(0700, wxPATH_MKDIR_FULL);
+	{
+		std::ofstream f(std::string(path.utf8_str()), std::ios::binary);
+		f << "# top-level comment\n";
+		f << "\n";
+		f << "  # indented comment\n";
+		f << "FOO=bar\n";
+		f << "  SPACED  =  baz  \n";
+		f << "QUOTED=\"with spaces\"\n";
+		f << "NOEQUAL_LINE_IGNORED\n";
+		f << "=value_without_key_ignored\n";
+	}
+
+	const auto env = byokEnv::LoadAll();
+	auto it = env.find("manual");
+	ASSERT_NE(it, env.end());
+	EXPECT_EQ(it->second.at("FOO"),    "bar");
+	EXPECT_EQ(it->second.at("SPACED"), "baz");
+	EXPECT_EQ(it->second.at("QUOTED"), "with spaces");
+	EXPECT_EQ(it->second.count("NOEQUAL_LINE_IGNORED"), 0u);
+	EXPECT_EQ(it->second.count(""), 0u);
+}
+
+TEST(ByokEnv, ManagerReadPluginEnvIsolated) {
+	// Two plugins, each with its own env. ReadPluginEnv must return
+	// only the caller's own keys.
+	ibPluginManager mgr;
+	ibPluginManager::PluginEnvMap env = {
+		{ "pugi",  {{"TOKEN", "pugi-secret"}}  },
+		{ "other", {{"TOKEN", "other-secret"}} },
+	};
+	mgr.SetPluginEnvForTests(std::move(env));
+	EXPECT_EQ(mgr.ReadPluginEnv("pugi",  "TOKEN"), "pugi-secret");
+	EXPECT_EQ(mgr.ReadPluginEnv("other", "TOKEN"), "other-secret");
+	EXPECT_EQ(mgr.ReadPluginEnv("pugi",  "MISSING"), "");
+	EXPECT_EQ(mgr.ReadPluginEnv("nobody","TOKEN"),   "");
 }
