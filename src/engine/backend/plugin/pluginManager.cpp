@@ -12,9 +12,18 @@
 #include <wx/dir.h>
 #include <wx/log.h>
 
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
+#include <unordered_map>
 
 #include "3rdparty/nlohmann/json.hpp"
 
@@ -25,6 +34,27 @@
 #ifdef __WXMSW__
   #include <windows.h>
 #endif
+
+// Persistent diagnostic log — appended to /tmp/oes-diag.log on every
+// shim / plugin-load event. Always-on. Lets us debug runtime without
+// a terminal because Designer launched via Finder sends stderr to
+// ~/Library/Logs where it's harder to grep. File-scope (not
+// namespace-anonymous) so member functions can call it too.
+static void DiagLog(const char* fmt, ...)
+{
+	FILE* f = std::fopen("/tmp/oes-diag.log", "a");
+	if (f == nullptr) return;
+	std::time_t now = std::time(nullptr);
+	char ts[32];
+	std::strftime(ts, sizeof(ts), "%H:%M:%S", std::localtime(&now));
+	std::fprintf(f, "[%s] ", ts);
+	va_list ap;
+	va_start(ap, fmt);
+	std::vfprintf(f, fmt, ap);
+	va_end(ap);
+	std::fputc('\n', f);
+	std::fclose(f);
+}
 
 namespace {
 
@@ -290,6 +320,13 @@ bool IsValidIdentifier(const char* name)
 
 wxString ibPluginManager::GetPluginsDir()
 {
+	// OES_PLUGINS_DIR overrides the default. Lets integration tests
+	// (and packaged tarball installs) point at an arbitrary directory
+	// without having to copy .bundle files next to the test binary.
+	const wxString override = wxGetenv(wxT("OES_PLUGINS_DIR"));
+	if (!override.IsEmpty()) {
+		return override;
+	}
 	wxFileName fn(wxStandardPaths::Get().GetExecutablePath());
 	fn.AppendDir("plugins");
 	fn.SetFullName(wxEmptyString);
@@ -298,6 +335,7 @@ wxString ibPluginManager::GetPluginsDir()
 
 size_t ibPluginManager::LoadAll()
 {
+	DiagLog("LoadAll: enter");
 	// Make the host-trampolines see this instance for the entire app
 	// lifetime, not just the duration of LoadAll. WebPaneSend etc. fire
 	// long after init returns.
@@ -407,6 +445,36 @@ size_t ibPluginManager::LoadAll()
 			// a clean scope.
 			const std::string prevPluginId = tl_currentPluginId;
 			tl_currentPluginId = pluginIdNarrow;
+
+			// Phase 7.5 universal env injection. ABI v4 plugins read
+			// their tokens via Host_ReadPluginEnv (which honours
+			// caller-id isolation). v3 plugins (pre-trampoline) call
+			// getenv() directly — Pugi being the live example,
+			// expecting PUGI_BASE_URL / PUGI_OES_API_KEY / PUGI_TENANT_ID.
+			// Export this plugin's BYOK .env values into the process env
+			// just before init_fn so v3 plugins see them. v4 plugins
+			// also benefit (a plugin that registers shared keys via
+			// ReadPluginEnv AND uses getenv for backwards-compat will
+			// continue to work). The values leak into the process env
+			// for the rest of the Designer session, which is acceptable
+			// in single-tenant Designer; UnloadAll does not unset them
+			// because v3 plugins can't be partially unloaded anyway.
+			{
+				auto envIt = m_pluginEnv.find(pluginIdNarrow);
+				if (envIt != m_pluginEnv.end()) {
+					for (const auto& kv : envIt->second) {
+#if defined(_WIN32)
+						_putenv_s(kv.first.c_str(), kv.second.c_str());
+#else
+						setenv(kv.first.c_str(), kv.second.c_str(), /*overwrite=*/1);
+#endif
+					}
+					wxLogDebug(wxT("Plugin '%s': injected %zu env keys into process env"),
+					           wxString::FromUTF8(pluginIdNarrow),
+					           envIt->second.size());
+				}
+			}
+
 			const ibHostAPI* host =
 			    (info->abi_version >= 2) ? &g_hostAPI : nullptr;
 			const int rc = init_fn(host);
@@ -432,10 +500,16 @@ size_t ibPluginManager::LoadAll()
 			info->name ? info->name : "<unnamed>",
 			info->version ? info->version : "",
 			info->abi_version);
+		DiagLog("LoadAll: loaded '%s' v%s ABI%d, %zu functions registered so far",
+		        info->name ? info->name : "?",
+		        info->version ? info->version : "?",
+		        info->abi_version, m_functions.size());
 
 		m_plugins.push_back(std::move(p));
 	}
 
+	DiagLog("LoadAll: exit, total plugins=%zu functions=%zu providers=%zu",
+	        m_plugins.size(), m_functions.size(), m_aiProviders.size());
 	return m_plugins.size();
 }
 
@@ -565,6 +639,7 @@ void ibPluginManager::SetWebPaneCallbacks(WebPaneRegisterFn reg,
 	m_webPaneRegister = std::move(reg);
 	m_webPaneSend     = std::move(send);
 	m_webPaneShow     = std::move(show);
+	DiagLog("SetWebPaneCallbacks installed");
 }
 
 int ibPluginManager::CallWebPaneRegister(const wxString& paneId,
@@ -721,6 +796,535 @@ void ibPluginManager::ReplayPendingWebPaneRegistrations()
 			m_defaultAIPaneId = r.paneId;
 		}
 	}
+}
+
+// =========================================================================
+// Legacy LLMQuery shim (Phase 7.5)
+//
+// ABI v3 plugins (pre-WebPane era) expose chat capability through the
+// script-callable `LLMQuery(prompt, locale)` function. They cannot
+// register an AI provider or WebView pane because those host trampolines
+// only exist in ABI v4. The shim closes that gap: it inspects the
+// registered-function table, and when LLMQuery is present and no v4
+// chat provider has claimed the slot, it stands up a synthetic AI
+// provider + WebView pane that:
+//
+//   - speaks the same chat.send / editor.skill envelope contract as
+//     sample.html and aiBridge
+//   - dispatches each user prompt through CallFunction(LLMQuery, ...)
+//     on the main thread (the v3 plugin owns its HTTP threading
+//     internally — Pugi blocks until the Anvil response lands)
+//   - emits a single chat.delta with the full response, then chat.end
+//
+// This is a one-way bridge: streaming chat.delta chunks aren't possible
+// because LLMQuery returns the final string in one shot. For the v3
+// ecosystem the UX trade-off is acceptable — Anvil typical first-
+// token-to-final is ~2-8s, the pane shows the answer in one block.
+// =========================================================================
+namespace {
+
+// Single-instance shim state. Holds the LLMQuery function pointer and
+// the pane id we registered so OnPaneMessage can route back. Mutex
+// guards concurrent re-registration during plugin reload sequences.
+struct LegacyShimState {
+	ibPluginManager*                                  manager     = nullptr;
+	ibPluginManager::RegisteredFunction               llmFn;
+	std::string                                       paneId;
+	std::mutex                                        mu;
+};
+
+LegacyShimState& Shim()
+{
+	static LegacyShimState s;
+	return s;
+}
+
+// Per-request cancellation tokens. Stop Generation: the pane fires
+// `agent.cancel` with the original requestId; the worker thread polls
+// the atomic between chunk emits and bails out early. shared_ptr lets
+// the worker capture the token by value — the map entry can be erased
+// the moment the worker's still-alive copy is the only owner, no
+// dangling reference.
+//
+// Synchronous LLMQuery cannot itself be interrupted (single C call,
+// blocks on httplib socket), so cancellation only stops the chunked
+// emit phase that follows. That's still the user-visible "Stop" —
+// chunks stop rendering immediately and chat.end carries cancelled:true.
+std::mutex                                                          g_cancelMu;
+std::unordered_map<std::string, std::shared_ptr<std::atomic<bool>>> g_cancelTokens;
+
+std::shared_ptr<std::atomic<bool>> AllocCancelToken(const std::string& requestId)
+{
+	auto tok = std::make_shared<std::atomic<bool>>(false);
+	std::lock_guard<std::mutex> lk(g_cancelMu);
+	g_cancelTokens[requestId] = tok;
+	return tok;
+}
+
+void EraseCancelToken(const std::string& requestId)
+{
+	std::lock_guard<std::mutex> lk(g_cancelMu);
+	g_cancelTokens.erase(requestId);
+}
+
+bool TripCancelToken(const std::string& requestId)
+{
+	std::lock_guard<std::mutex> lk(g_cancelMu);
+	auto it = g_cancelTokens.find(requestId);
+	if (it == g_cancelTokens.end()) return false;
+	it->second->store(true);
+	return true;
+}
+
+// (DiagLog defined at file scope above — see top of file)
+
+// Escape a UTF-8 string for embedding inside a JSON string literal.
+// Same shape the editor.skill encoder produces — keeps the parser on
+// the sample.html side happy without pulling nlohmann into the wire-up.
+std::string JsonEscape(const std::string& s)
+{
+	std::string out;
+	out.reserve(s.size() + 8);
+	for (char c : s) {
+		const auto u = static_cast<unsigned char>(c);
+		switch (c) {
+		case '\\': out += "\\\\"; break;
+		case '"':  out += "\\\""; break;
+		case '\n': out += "\\n";  break;
+		case '\r': out += "\\r";  break;
+		case '\t': out += "\\t";  break;
+		default:
+			if (u < 0x20) {
+				char buf[8];
+				std::snprintf(buf, sizeof(buf), "\\u%04x", u);
+				out += buf;
+			} else {
+				out += c;
+			}
+		}
+	}
+	return out;
+}
+
+// Build the user-facing prompt from an editor.skill envelope. Mirrors
+// the right-click submenu labels in codeEditor.cpp so the v3 plugin
+// receives a self-explanatory natural-language request instead of a
+// raw opcode + code blob.
+std::string BuildEditorSkillPrompt(const std::string& op,
+                                     const std::string& language,
+                                     const std::string& code)
+{
+	std::string label;
+	if      (op == "explain") label = "Explain the following code:";
+	else if (op == "review")  label = "Review the following code for bugs and improvements:";
+	else if (op == "fix")     label = "Fix the issues in the following code and return the corrected version:";
+	else if (op == "doc")     label = "Write a documentation comment for the following code:";
+	else if (op == "send")    label = "Discuss the following code with me:";
+	else                       label = "Process the following code (" + op + "):";
+
+	std::string out = label;
+	out += "\n\n```";
+	out += language.empty() ? "ces" : language;
+	out += "\n";
+	out += code;
+	out += "\n```";
+	return out;
+}
+
+// Pane message dispatcher. Parses inbound envelopes on the caller
+// thread (UI), then offloads the blocking LLMQuery call to a detached
+// std::thread so the Designer stays responsive while Pugi waits ~4-12s
+// for an Anvil reply. Emits chat.delta in small chunks for a typewriter
+// effect — gives the user immediate visual feedback that the request
+// is alive even while the same TCP round-trip is in flight.
+//
+// Threading note: ibPluginManager::CallWebPaneSend is thread-safe — it
+// routes through ibPluginWebPane::PushMessage which queues a wxThreadEvent
+// when called off the main thread. So the worker can emit chat.delta
+// directly without an extra wxTheApp->CallAfter step. CallFunction is
+// also safe in a worker because the tl_scope inside the manager is
+// thread_local; each worker gets a fresh scope.
+void LegacyShimOnPaneMessage(const char* paneId, const char* jsonInline, void* /*userData*/)
+{
+	DiagLog("OnPaneMessage: pane='%s' bytes=%zu payload[0..120]=%.120s",
+	        paneId ? paneId : "?",
+	        jsonInline ? std::strlen(jsonInline) : 0,
+	        jsonInline ? jsonInline : "");
+	auto& shim = Shim();
+	if (shim.manager == nullptr || shim.llmFn.m_fn == nullptr) {
+		DiagLog("  FAIL: shim not initialised (manager=%p fn=%p)",
+		        (void*)shim.manager, (void*)shim.llmFn.m_fn);
+		wxLogMessage(wxT("LegacyLLMShim: OnPaneMessage fired but shim not initialised"));
+		return;
+	}
+	if (paneId == nullptr || jsonInline == nullptr) return;
+
+	nlohmann::json env;
+	try {
+		env = nlohmann::json::parse(jsonInline);
+	} catch (const std::exception& e) {
+		DiagLog("  FAIL: malformed envelope: %s", e.what());
+		return;
+	}
+
+	const std::string kind = env.value("kind", "");
+
+	// Stop Generation: pane sends agent.cancel with the original
+	// requestId. Trip the per-request atomic; the detached worker polls
+	// it between chunk emits and bails. Handled before the chat.send /
+	// editor.skill gate so a cancel of a still-pending request doesn't
+	// trigger the "ignoring kind=" diag noise.
+	if (kind == "agent.cancel") {
+		const std::string rid = env.value("requestId", "");
+		const bool tripped = TripCancelToken(rid);
+		DiagLog("agent.cancel received for rid=%s tripped=%d", rid.c_str(), tripped ? 1 : 0);
+		return;
+	}
+
+	if (kind != "chat.send" && kind != "editor.skill") {
+		DiagLog("  ignoring kind='%s'", kind.c_str());
+		return;
+	}
+
+	const std::string requestId = env.value("requestId", "");
+
+	// Build the prompt + locale on the caller thread, snapshot to
+	// owned std::string so the worker captures by value (no string
+	// view lifetimes crossing thread boundary).
+	std::string prompt;
+	if (kind == "chat.send") {
+		prompt = env.value("text", env.value("prompt", std::string{}));
+	} else { // editor.skill
+		const std::string op       = env.value("op",       std::string{});
+		const std::string language = env.value("language", std::string{});
+		const std::string code     = env.value("code",     std::string{});
+		prompt = BuildEditorSkillPrompt(op, language, code);
+	}
+	if (prompt.empty()) return;
+
+	std::string locale = env.value("locale", std::string{});
+	if (locale.empty()) locale = "uk-UA";
+
+	DiagLog("  spawning worker: kind=%s rid=%s locale=%s prompt_size=%zu",
+	        kind.c_str(), requestId.c_str(), locale.c_str(), prompt.size());
+
+	// Capture by value into the worker. shim.manager + llmFn are static
+	// process-lifetime pointers — safe to reference from the detached
+	// thread for the entire Designer session.
+	ibPluginManager*                   mgr = shim.manager;
+	ibPluginManager::RegisteredFunction fn  = shim.llmFn;
+	const std::string                   paneIdOwned(paneId);
+	const std::string                   ridOwned   (requestId);
+	std::string                         promptOwned(std::move(prompt));
+	std::string                         localeOwned(std::move(locale));
+
+	// Allocate the cancel token BEFORE spawning so a near-instant
+	// agent.cancel from the pane can still find a registered entry. No
+	// requestId == nothing to cancel (legacy callers); skip the token in
+	// that case so the map doesn't grow unbounded keyed by "".
+	std::shared_ptr<std::atomic<bool>> cancelTok =
+	    ridOwned.empty() ? nullptr : AllocCancelToken(ridOwned);
+
+	std::thread([mgr, fn, paneIdOwned, ridOwned, promptOwned, localeOwned, cancelTok]() {
+		auto emit = [&](const std::string& body) {
+			mgr->CallWebPaneSend(wxString::FromUTF8(paneIdOwned.c_str()),
+			                       wxString::FromUTF8(body.c_str()));
+		};
+
+		// LLMQuery is synchronous; it owns its own httplib client which
+		// blocks the worker thread, not the UI thread. That is the
+		// whole point of doing this off-main.
+		ibValue vPrompt; vPrompt.SetString(wxString::FromUTF8(promptOwned.c_str()));
+		ibValue vLocale; vLocale.SetString(wxString::FromUTF8(localeOwned.c_str()));
+		ibValue* args[2] = { &vPrompt, &vLocale };
+		ibValue ret;
+		const auto t0 = std::chrono::steady_clock::now();
+		const bool ok = mgr->CallFunction(fn, ret, args, 2);
+		const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+		    std::chrono::steady_clock::now() - t0).count();
+
+		if (!ok) {
+			DiagLog("  worker: LLMQuery FAILED after %lld ms", (long long)ms);
+			std::string err =
+			    "{\"kind\":\"error\",\"error\":{\"code\":\"shim_call_failed\","
+			    "\"detail\":\"LLMQuery returned failure — check plugin env vars\"}";
+			if (!ridOwned.empty()) {
+				err += ",\"requestId\":\"" + JsonEscape(ridOwned) + "\"";
+			}
+			err += "}";
+			emit(err);
+			if (!ridOwned.empty()) EraseCancelToken(ridOwned);
+			return;
+		}
+
+		const std::string rawResponse = std::string(ret.GetString().utf8_str().data());
+
+		// Pugi-style v3 plugins return the full MCP transport envelope
+		// as a JSON string. Extract the user-facing text.
+		std::string response = rawResponse;
+		{
+			auto parsed = nlohmann::json::parse(rawResponse, nullptr, /*allow_exceptions=*/false);
+			if (!parsed.is_discarded() && parsed.is_object()) {
+				if (parsed.contains("result")) {
+					const auto& res = parsed["result"];
+					if (res.is_object() && res.contains("content") && res["content"].is_string()) {
+						response = res["content"].get<std::string>();
+					} else if (res.is_string()) {
+						response = res.get<std::string>();
+					}
+				} else if (parsed.contains("content") && parsed["content"].is_string()) {
+					response = parsed["content"].get<std::string>();
+				} else if (parsed.contains("error")) {
+					const auto& errNode = parsed["error"];
+					if (errNode.is_string()) {
+						response = "[error] " + errNode.get<std::string>();
+					} else if (errNode.is_object()) {
+						response = "[error] " + errNode.dump();
+					}
+				}
+			}
+		}
+
+		DiagLog("  worker: CallFunction OK %lld ms, raw=%zu, unwrapped=%zu",
+		        (long long)ms, rawResponse.size(), response.size());
+
+		// Typewriter streaming. Pugi's LLMQuery is one-shot so we have
+		// no real upstream chunks; split the response into roughly
+		// sentence-sized pieces and emit chat.delta one at a time with
+		// a short sleep between so the user sees the text appear
+		// progressively rather than all at once. ~24 chunks/sec feels
+		// natural without overloading the pane re-render.
+		const size_t kChunkChars = 96;
+		const std::chrono::milliseconds kChunkDelay(40);
+		size_t i = 0;
+		size_t chunksEmitted = 0;
+		bool   cancelled = false;
+		while (i < response.size()) {
+			// Cancellation poll — set by agent.cancel from the pane. We
+			// check BEFORE each chunk emit so a flag flipped between
+			// sleeps is honoured on the very next iteration.
+			if (cancelTok && cancelTok->load()) {
+				cancelled = true;
+				DiagLog("  worker: cancel flag observed, stopping after %zu chunks",
+				        chunksEmitted);
+				break;
+			}
+
+			// Try to break on a UTF-8 codepoint boundary so we don't
+			// split a multibyte character down the middle (Cyrillic
+			// is two bytes per glyph).
+			size_t end = std::min(i + kChunkChars, response.size());
+			while (end < response.size() && (static_cast<unsigned char>(response[end]) & 0xC0) == 0x80) {
+				++end;
+			}
+			std::string chunk = response.substr(i, end - i);
+			i = end;
+
+			std::string delta = "{\"kind\":\"chat.delta\"";
+			if (!ridOwned.empty()) {
+				delta += ",\"requestId\":\"" + JsonEscape(ridOwned) + "\"";
+			}
+			delta += ",\"delta\":\"" + JsonEscape(chunk) + "\"}";
+			emit(delta);
+			++chunksEmitted;
+
+			if (i < response.size()) {
+				std::this_thread::sleep_for(kChunkDelay);
+			}
+		}
+
+		std::string endEnvelope = "{\"kind\":\"chat.end\"";
+		if (!ridOwned.empty()) {
+			endEnvelope += ",\"requestId\":\"" + JsonEscape(ridOwned) + "\"";
+		}
+		endEnvelope += ",\"meta\":{\"model\":\"legacy-llm-shim\"";
+		if (cancelled) endEnvelope += ",\"cancelled\":true";
+		endEnvelope += "}}";
+		emit(endEnvelope);
+		if (!ridOwned.empty()) EraseCancelToken(ridOwned);
+		DiagLog("  worker: done, emitted %zu chars in %zu chunks cancelled=%d",
+		        response.size(), chunksEmitted, cancelled ? 1 : 0);
+	}).detach();
+}
+
+} // namespace
+
+void ibPluginManager::CompleteCodeAsync(const wxString& prompt,
+                                          const wxString& locale,
+                                          CompleteCodeCallback onResult)
+{
+	DiagLog("CompleteCodeAsync: prompt_size=%zu locale=%s",
+	        prompt.length(), locale.utf8_str().data());
+
+	// Locate LLMQuery — same path the shim uses. v4 native provider
+	// support is a follow-up: aiBridge's Query is currently a no-op so
+	// the shim's LLMQuery is the only live route to an LLM.
+	const RegisteredFunction* llmFn = nullptr;
+	for (const auto& f : m_functions) {
+		if (f.m_name == "LLMQuery") { llmFn = &f; break; }
+	}
+	if (llmFn == nullptr) {
+		DiagLog("  CompleteCode: no LLMQuery — onResult(false)");
+		if (onResult) onResult(false, wxEmptyString,
+		                         _("AI completion provider is not available"));
+		return;
+	}
+
+	// Capture by value for the worker. The function table doesn't
+	// shuffle live entries (LoadAll is the only mutator and tests
+	// confirm it doesn't run mid-session), so storing a copy of the
+	// RegisteredFunction is safe.
+	RegisteredFunction         fnCopy = *llmFn;
+	ibPluginManager*           mgr    = this;
+	const std::string          promptOwned(prompt.utf8_str().data());
+	const std::string          localeOwned(
+	    locale.IsEmpty() ? std::string("uk-UA")
+	                     : std::string(locale.utf8_str().data()));
+	auto                       cb      = std::move(onResult);
+
+	std::thread([mgr, fnCopy, promptOwned, localeOwned, cb]() {
+		ibValue vPrompt; vPrompt.SetString(wxString::FromUTF8(promptOwned.c_str()));
+		ibValue vLocale; vLocale.SetString(wxString::FromUTF8(localeOwned.c_str()));
+		ibValue* args[2] = { &vPrompt, &vLocale };
+		ibValue ret;
+		const auto t0 = std::chrono::steady_clock::now();
+		const bool ok = mgr->CallFunction(fnCopy, ret, args, 2);
+		const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+		    std::chrono::steady_clock::now() - t0).count();
+
+		wxString text;
+		wxString err;
+		if (!ok) {
+			err = _("LLM call failed — check plugin credentials");
+		} else {
+			const std::string raw(ret.GetString().utf8_str().data());
+			// Unwrap Pugi MCP envelope or use raw text. Same logic the
+			// chat shim uses — keeps response shape behaviour identical.
+			std::string content = raw;
+			auto parsed = nlohmann::json::parse(raw, nullptr, /*allow_exceptions=*/false);
+			if (!parsed.is_discarded() && parsed.is_object() && parsed.contains("result")) {
+				const auto& r = parsed["result"];
+				if (r.is_object() && r.contains("content") && r["content"].is_string()) {
+					content = r["content"].get<std::string>();
+				} else if (r.is_string()) {
+					content = r.get<std::string>();
+				}
+			} else if (!parsed.is_discarded() && parsed.is_object() &&
+			           parsed.contains("error")) {
+				err = wxString::FromUTF8(parsed["error"].dump().c_str());
+				content.clear();
+			}
+			text = wxString::FromUTF8(content.c_str());
+		}
+
+		DiagLog("  CompleteCode: %lld ms ok=%d text_size=%zu",
+		        (long long)ms, ok ? 1 : 0, text.length());
+
+		// Marshal back to the UI thread before invoking the callback.
+		// Callers (codeEditor) touch wx widgets which are not
+		// thread-safe; CallAfter queues a wxEvent that the wxApp drains
+		// on the main thread.
+		if (cb && wxTheApp != nullptr) {
+			wxTheApp->CallAfter([cb, ok, text, err]() {
+				cb(ok && err.IsEmpty(), text, err);
+			});
+		}
+	}).detach();
+}
+
+void ibPluginManager::ScanForLegacyLLMShim(const wxString& htmlBundlePath)
+{
+	DiagLog("ScanForLegacyLLMShim: invoked, bundle='%s', exists=%d",
+	        htmlBundlePath.utf8_str().data(), (int)wxFileExists(htmlBundlePath));
+	DiagLog("  plugins loaded: %zu", m_plugins.size());
+	for (const auto& p : m_plugins) {
+		DiagLog("    - %s ABI v%d",
+		        p.m_info ? p.m_info->name : "?",
+		        p.m_info ? p.m_info->abi_version : -1);
+	}
+	DiagLog("  functions registered: %zu", m_functions.size());
+	for (const auto& f : m_functions) {
+		DiagLog("    - %s/%d", f.m_name.c_str(), f.m_paramCount);
+	}
+	DiagLog("  AI providers: %zu", m_aiProviders.size());
+	for (const auto& a : m_aiProviders) {
+		DiagLog("    - %s (modes:%zu)", a.providerId.c_str(), a.supportedModes.size());
+	}
+	DiagLog("  WebPaneCallbacks installed: register=%d send=%d show=%d",
+	        (int)(bool)m_webPaneRegister, (int)(bool)m_webPaneSend, (int)(bool)m_webPaneShow);
+
+	// Skip when a real v4 plugin already covers chat mode — no point
+	// stacking a shim on top of a working provider.
+	if (HasAIProviderFor("chat")) {
+		DiagLog("  SKIP: v4 chat provider already registered");
+		wxLogDebug(wxT("LegacyLLMShim: v4 chat provider already registered — skipping shim"));
+		return;
+	}
+
+	// Locate the LLMQuery function in the post-load registry.
+	const RegisteredFunction* found = nullptr;
+	for (const auto& f : m_functions) {
+		if (f.m_name == "LLMQuery") { found = &f; break; }
+	}
+	if (found == nullptr) {
+		DiagLog("  SKIP: no LLMQuery function registered (v3 plugin failed to init?)");
+		wxLogDebug(wxT("LegacyLLMShim: no plugin exposes LLMQuery — nothing to bridge"));
+		return;
+	}
+	if (htmlBundlePath.IsEmpty() || !wxFileExists(htmlBundlePath)) {
+		DiagLog("  SKIP: bundle missing or empty path");
+		wxLogWarning(wxT("LegacyLLMShim: sample.html bundle not found — shim disabled"));
+		return;
+	}
+
+	auto& shim = Shim();
+	std::lock_guard<std::mutex> lk(shim.mu);
+	shim.manager = this;
+	shim.llmFn   = *found;
+	shim.paneId  = "legacy.llm-shim.chat";
+
+	// Synthesise an AI provider entry so HasAIProviderFor("chat") flips
+	// true and the editor right-click submenu enables. Cancel/ListModels
+	// stay null — the shim's only path is via the pane.
+	RegisteredAIProvider prov;
+	prov.providerId     = "legacy.llm-shim";
+	prov.displayName    = "AI Assistant (legacy bridge)";
+	prov.iconPath       = "";
+	prov.supportedModes = { "chat", "agent" };
+	prov.Query          = nullptr;
+	prov.Cancel         = nullptr;
+	prov.ListModels     = nullptr;
+	prov.userData       = nullptr;
+
+	// Drop any prior synthetic entry under the same providerId so
+	// reload sequences stay clean.
+	for (auto it = m_aiProviders.begin(); it != m_aiProviders.end(); ) {
+		if (it->providerId == prov.providerId) it = m_aiProviders.erase(it);
+		else                                   ++it;
+	}
+	m_aiProviders.push_back(std::move(prov));
+
+	const wxString paneId(wxString::FromUTF8(shim.paneId.c_str()));
+	const int rc = CallWebPaneRegister(paneId,
+	                                     _("AI Assistant"),
+	                                     htmlBundlePath,
+	                                     &LegacyShimOnPaneMessage,
+	                                     nullptr);
+	if (rc != 0) {
+		DiagLog("  FAIL: CallWebPaneRegister returned %d (likely no callbacks installed)", rc);
+		wxLogWarning(wxT("LegacyLLMShim: CallWebPaneRegister('%s') returned %d"),
+		             paneId, rc);
+		// Tear down the synthetic provider on registration failure so the
+		// menu doesn't pretend the shim is live.
+		for (auto it = m_aiProviders.begin(); it != m_aiProviders.end(); ) {
+			if (it->providerId == "legacy.llm-shim") it = m_aiProviders.erase(it);
+			else                                       ++it;
+		}
+		return;
+	}
+	DiagLog("  OK: bridged LLMQuery -> pane '%s'. defaultAIPaneId='%s'",
+	        paneId.utf8_str().data(), m_defaultAIPaneId.utf8_str().data());
+	wxLogMessage(wxT("LegacyLLMShim: bridging LLMQuery -> pane '%s'"), paneId);
 }
 
 int ibPluginManager::CallWebPaneSend(const wxString& paneId,

@@ -19,7 +19,11 @@
 #include <wx/textdlg.h>
 #include <wx/msgdlg.h>
 #include <wx/filedlg.h>
+#include <wx/utils.h>            // wxBusyCursor
 
+#include "backend/compiler/value.h"  // ibValue for Test connection
+
+#include <chrono>
 #include <unordered_set>
 
 namespace {
@@ -31,6 +35,7 @@ enum {
 	ID_EDIT_BYOK,
 	ID_INSTALL,
 	ID_UNINSTALL,
+	ID_TEST_CONNECTION,
 };
 } // namespace
 
@@ -81,6 +86,14 @@ ibPluginManagerDialog::ibPluginManagerDialog(wxWindow* parent)
 	auto* byokBtn = new wxButton(this, ID_EDIT_BYOK, _("Edit API token…"));
 	right->Add(byokBtn, 0, wxBOTTOM, 8);
 
+	// Test-connection button — round-trips a 'ping' prompt through the
+	// plugin's chat path so the user can verify token + endpoint are
+	// correct without leaving the dialog. Result lands in a modal that
+	// shows latency and the first ~512 chars of the response (or the
+	// error envelope from the plugin if the call failed).
+	auto* testBtn = new wxButton(this, ID_TEST_CONNECTION, _("Test connection"));
+	right->Add(testBtn, 0, wxBOTTOM, 8);
+
 	auto* installRow = new wxBoxSizer(wxHORIZONTAL);
 	installRow->Add(new wxButton(this, ID_INSTALL,   _("Install from file…")), 0, wxRIGHT, 4);
 	installRow->Add(new wxButton(this, ID_UNINSTALL, _("Uninstall…")),         0);
@@ -98,6 +111,7 @@ ibPluginManagerDialog::ibPluginManagerDialog(wxWindow* parent)
 	Bind(wxEVT_BUTTON,        &ibPluginManagerDialog::OnEditByok,  this, ID_EDIT_BYOK);
 	Bind(wxEVT_BUTTON,        &ibPluginManagerDialog::OnInstall,   this, ID_INSTALL);
 	Bind(wxEVT_BUTTON,        &ibPluginManagerDialog::OnUninstall, this, ID_UNINSTALL);
+	Bind(wxEVT_BUTTON,        &ibPluginManagerDialog::OnTestConnection, this, ID_TEST_CONNECTION);
 	Bind(wxEVT_LIST_ITEM_SELECTED,
 	     [this](wxListEvent& e) {
 	         wxCommandEvent fake(wxEVT_LIST_ITEM_SELECTED, e.GetIndex());
@@ -289,6 +303,90 @@ void ibPluginManagerDialog::OnInstall(wxCommandEvent& /*event*/)
 	wxMessageBox(_("Plugin installed. Restart Designer to load it."),
 	             _("Install plugin"), wxICON_INFORMATION);
 	RebuildList();
+}
+
+void ibPluginManagerDialog::OnTestConnection(wxCommandEvent& /*event*/)
+{
+	auto* pm = appData ? appData->GetPluginManager() : nullptr;
+	if (pm == nullptr) {
+		wxMessageBox(_("Plugin manager not initialised."),
+		             _("Test connection"), wxICON_ERROR, this);
+		return;
+	}
+
+	// Discover the call path: prefer LLMQuery (covers v3 Pugi + the
+	// legacy-shim bridge over v3); fall back to a v4 AI provider's
+	// Query when one is registered without LLMQuery.
+	const ibPluginManager::RegisteredFunction* llmFn = nullptr;
+	for (const auto& f : pm->Functions()) {
+		if (f.m_name == "LLMQuery") { llmFn = &f; break; }
+	}
+	const bool haveV4Provider = pm->HasAIProviderFor("chat");
+
+	if (llmFn == nullptr && !haveV4Provider) {
+		wxMessageBox(_("No AI provider is registered.\n\n"
+		                "Enable a plugin that exposes LLMQuery, or install "
+		                "an ABI v4 plugin that registers a chat provider."),
+		             _("Test connection"), wxICON_WARNING, this);
+		return;
+	}
+
+	// Block the UI thread while the call runs — for a one-off ping
+	// that's fine. Anvil's typical first-token-to-final is ~2-8s.
+	wxBusyCursor busy;
+	const auto t0 = std::chrono::steady_clock::now();
+
+	wxString resultText;
+	bool ok = false;
+
+	if (llmFn != nullptr) {
+		ibValue vPrompt; vPrompt.SetString(wxT("ping"));
+		ibValue vLocale; vLocale.SetString(wxT("uk-UA"));
+		ibValue* args[2] = { &vPrompt, &vLocale };
+		ibValue ret;
+		ok = pm->CallFunction(*llmFn, ret, args, 2);
+		if (ok) resultText = ret.GetString();
+	} else {
+		// v4 path — direct provider.Query call. We synthesise a request
+		// envelope shaped like a chat.send so the plugin can route it
+		// through its normal handler. Phase 4 wire-back: the response
+		// arrives over chat.delta/end via the pane; for the dialog we
+		// just measure that the Query trampoline returned 0 (acceptance).
+		const auto& providers = pm->AIProviders();
+		if (!providers.empty() && providers[0].Query != nullptr) {
+			const char* req = R"({"prompt":"ping","locale":"uk-UA"})";
+			const int rc = providers[0].Query(req, "test-conn", providers[0].userData);
+			ok = (rc == 0);
+			resultText = ok
+			    ? _("Provider accepted the test prompt. Reply will arrive in the chat pane.")
+			    : _("Provider returned a non-zero status — check log.");
+		}
+	}
+
+	const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+	    std::chrono::steady_clock::now() - t0).count();
+
+	if (!ok) {
+		wxMessageBox(
+		    wxString::Format(_("Test FAILED after %lld ms.\n\n"
+		                        "Likely causes: missing/invalid API token, "
+		                        "wrong endpoint URL, or network error.\n\n"
+		                        "Open Designer's stderr (run from terminal) "
+		                        "to see the plugin's HTTP error."),
+		                      static_cast<long long>(ms)),
+		    _("Test connection"), wxICON_ERROR, this);
+		return;
+	}
+
+	// Truncate long responses for readability.
+	wxString shown = resultText;
+	if (shown.length() > 512) shown = shown.Left(512) + wxT("…");
+
+	wxMessageBox(
+	    wxString::Format(_("Test OK in %lld ms.\n\n%s"),
+	                      static_cast<long long>(ms),
+	                      shown),
+	    _("Test connection"), wxICON_INFORMATION, this);
 }
 
 void ibPluginManagerDialog::OnUninstall(wxCommandEvent& /*event*/)

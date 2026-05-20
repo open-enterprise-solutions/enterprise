@@ -38,6 +38,9 @@ add_executable(oes_tests
     # test_pagingRamTable.cpp  # disabled: ibValueTableRow abstract class regression
     test_pluginApi.cpp
     test_pluginWebPane.cpp
+    test_pluginWebPaneHistory.cpp
+    test_legacyShim.cpp
+    test_pluginLoadIntegration.cpp
 )
 
 target_link_libraries(oes_tests

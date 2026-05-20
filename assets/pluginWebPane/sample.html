@@ -4,36 +4,107 @@
 <meta charset="utf-8">
 <title>AI Assistant</title>
 <style>
-  html, body { margin: 0; padding: 0; height: 100%; background: #1e1e1e; color: #e0e0e0; }
+  /* Adaptive theme — matches the user's OS Light / Dark setting via
+   * prefers-color-scheme. Defaults to light because the OES Designer
+   * Aqua chrome is light, and a black pane sandwiched between white
+   * AUI tabs reads as "broken extension." Dark mode kicks in only
+   * when the OS itself is in dark mode. */
+  :root {
+    color-scheme: light dark;
+    --bg:        #f6f6f7;
+    --fg:        #1d1d1f;
+    --muted:     #6b6b70;
+    --panel-bg:  #ffffff;
+    --panel-fg:  #1d1d1f;
+    --border:    #d6d6d8;
+    --row-bg:    #f0f0f2;
+    --input-bg:  #ffffff;
+    --input-fg:  #1d1d1f;
+    --input-bd:  #c0c0c4;
+    --accent:    #2762d4;
+    --accent-fg: #ffffff;
+    --you-fg:    #2762d4;
+    --host-fg:   #1d1d1f;
+    --raw-fg:    #c25b00;
+    --err-bg:    #ffe9e9;
+    --err-bd:    #d33;
+    --err-fg:    #a30000;
+    --refusal-bg:#fff5d6;
+    --refusal-bd:#caa238;
+    --refusal-fg:#6b4d0a;
+    --stream-fg: #1d6e2c;
+    --footer-fg: #888;
+    --chip-bg:   #ececef;
+    --chip-bd:   #c0c0c4;
+    --chip-fg:   #444;
+    --plan-bg:   #fff5d6;
+    --plan-bd:   #caa238;
+    --plan-fg:   #5a4108;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:        #1e1e1e;
+      --fg:        #e0e0e0;
+      --muted:     #aaa;
+      --panel-bg:  #252525;
+      --panel-fg:  #e0e0e0;
+      --border:    #333;
+      --row-bg:    #252525;
+      --input-bg:  #1a1a1a;
+      --input-fg:  #e0e0e0;
+      --input-bd:  #444;
+      --accent:    #3a6ea5;
+      --accent-fg: #fff;
+      --you-fg:    #6aa9ff;
+      --host-fg:   #e0e0e0;
+      --raw-fg:    #ffaa55;
+      --err-bg:    #2a1d1d;
+      --err-bd:    #ff5555;
+      --err-fg:    #ff9999;
+      --refusal-bg:#2a2516;
+      --refusal-bd:#d49a32;
+      --refusal-fg:#f0d28a;
+      --stream-fg: #c0e0c0;
+      --footer-fg: #888;
+      --chip-bg:   #2a2a2a;
+      --chip-bd:   #444;
+      --chip-fg:   #ccc;
+      --plan-bg:   #2a2516;
+      --plan-bd:   #d49a32;
+      --plan-fg:   #f0d28a;
+    }
+  }
+
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--fg); }
   body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 14px; display: flex; flex-direction: column; height: 100vh; }
-  #bar { padding: 8px 12px; font-size: 16px; font-weight: bold; border-bottom: 1px solid #333; background: #252525; }
+  #bar { padding: 8px 12px; font-size: 16px; font-weight: bold; border-bottom: 1px solid var(--border); background: var(--panel-bg); color: var(--panel-fg); }
   #log { flex: 1; overflow-y: auto; padding: 8px 12px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
   #log .row { margin: 4px 0; }
-  #log .you { color: #6aa9ff; }
-  #log .host { color: #e0e0e0; }
-  #log .raw { color: #ffaa55; }
-  #log .err { background: #2a1d1d; border-left: 3px solid #ff5555; padding: 4px 8px; color: #ff9999; }
-  #log .refusal { background: #2a2516; border-left: 3px solid #d49a32; padding: 4px 8px; color: #f0d28a; }
-  #log .stream { color: #c0e0c0; }
-  #empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; color: #aaa; }
+  #log .you { color: var(--you-fg); }
+  #log .host { color: var(--host-fg); }
+  #log .raw { color: var(--raw-fg); }
+  #log .err { background: var(--err-bg); border-left: 3px solid var(--err-bd); padding: 4px 8px; color: var(--err-fg); }
+  #log .refusal { background: var(--refusal-bg); border-left: 3px solid var(--refusal-bd); padding: 4px 8px; color: var(--refusal-fg); }
+  #log .stream { color: var(--stream-fg); }
+  #empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; color: var(--muted); }
   #empty[hidden] { display: none !important; }
   #log[hidden]   { display: none !important; }
   #empty .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; max-width: 480px; }
-  #empty .chip { background: #2a2a2a; border: 1px solid #444; border-radius: 14px; padding: 6px 12px; cursor: pointer; font-size: 13px; color: #ccc; }
-  #empty .chip:hover { background: #333; border-color: #6aa9ff; color: #e0e0e0; }
-  #row { display: flex; gap: 6px; padding: 8px 12px; border-top: 1px solid #333; background: #252525; }
-  #input { flex: 1; background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; padding: 6px 8px; font-family: inherit; font-size: 14px; outline: none; }
-  #input:focus { border-color: #6aa9ff; }
-  #send { background: #3a6ea5; color: #fff; border: 0; padding: 6px 14px; cursor: pointer; font-size: 14px; }
-  #send:hover { background: #4a80c0; }
-  #footer { padding: 4px 12px; font-size: 11px; color: #888; border-top: 1px solid #2a2a2a; background: #1e1e1e; min-height: 16px; }
+  #empty .chip { background: var(--chip-bg); border: 1px solid var(--chip-bd); border-radius: 14px; padding: 6px 12px; cursor: pointer; font-size: 13px; color: var(--chip-fg); }
+  #empty .chip:hover { background: var(--row-bg); border-color: var(--accent); color: var(--fg); }
+  #row { display: flex; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--border); background: var(--panel-bg); }
+  #input { flex: 1; background: var(--input-bg); color: var(--input-fg); border: 1px solid var(--input-bd); padding: 6px 8px; font-family: inherit; font-size: 14px; outline: none; }
+  #input:focus { border-color: var(--accent); }
+  #send { background: var(--accent); color: var(--accent-fg); border: 0; padding: 6px 14px; cursor: pointer; font-size: 14px; }
+  #send:hover { filter: brightness(1.1); }
+  #footer { padding: 4px 12px; font-size: 11px; color: var(--footer-fg); border-top: 1px solid var(--border); background: var(--bg); min-height: 16px; }
   #bar { display: flex; align-items: center; justify-content: space-between; }
-  #mode { background: #2a2a2a; border: 1px solid #444; color: #ccc; padding: 2px 8px; font-size: 12px; border-radius: 12px; cursor: pointer; }
-  #mode.plan { background: #3a3018; border-color: #d49a32; color: #f0d28a; }
-  #mode.agent { background: #1e3a2a; border-color: #4caf50; color: #a5d6a7; }
-  #log .plan { background: #2a2516; border-left: 3px solid #d49a32; padding: 8px 12px; }
-  #log .plan .title { font-weight: bold; color: #f0d28a; margin-bottom: 4px; }
-  #log .plan .mutations { font-family: ui-monospace, monospace; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+  #mode { background: var(--chip-bg); border: 1px solid var(--chip-bd); color: var(--chip-fg); padding: 2px 8px; font-size: 12px; border-radius: 12px; cursor: pointer; }
+  #mode.plan { background: var(--plan-bg); border-color: var(--plan-bd); color: var(--plan-fg); }
+  #mode.agent { background: var(--refusal-bg); border-color: var(--refusal-bd); color: var(--refusal-fg); }
+  #log .plan { background: var(--plan-bg); border-left: 3px solid var(--plan-bd); padding: 8px 12px; }
+  #log .plan .title { font-weight: bold; color: var(--plan-fg); margin-bottom: 4px; }
+  #log .plan .mutations { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); white-space: pre-wrap; }
   #log .plan .actions { margin-top: 6px; display: flex; gap: 6px; }
   #log .plan button { padding: 4px 10px; font-size: 12px; border: 0; border-radius: 4px; cursor: pointer; }
   #log .plan .approve { background: #4caf50; color: #fff; }
@@ -73,7 +144,12 @@
         "Review code for issues",
         "Generate doc comment"
       ],
-      noChannel: "[ERR] oesHost channel not wired"
+      noChannel: "[ERR] oesHost channel not wired",
+      opExplain: "Explain the following code",
+      opReview:  "Review the following code",
+      opFix:     "Fix the following code",
+      opDoc:     "Write a doc comment for",
+      opSend:    "Discuss this code"
     },
     ru: {
       title:    "AI Assistant",
@@ -85,7 +161,12 @@
         "Проверь код на ошибки",
         "Сгенерируй документирующий комментарий"
       ],
-      noChannel: "[ОШИБКА] канал oesHost не подключён"
+      noChannel: "[ОШИБКА] канал oesHost не подключён",
+      opExplain: "Объясни следующий код",
+      opReview:  "Проверь следующий код",
+      opFix:     "Исправь следующий код",
+      opDoc:     "Сгенерируй документирующий комментарий для",
+      opSend:    "Обсудим этот код"
     }
   }[lang];
   var prompts = L.chips;
@@ -172,6 +253,33 @@
     }
     if (obj && obj.kind === "agent.applied") {
       renderApplied(obj);
+      return;
+    }
+    // Editor right-click skill envelope — the editor pushes this in via
+    // WebPaneSend so the user can see WHAT they asked for. Render as an
+    // outgoing message + bounce a chat.send back to the plugin so the
+    // round-trip uses the same path as a manual input.
+    if (obj && obj.kind === "editor.skill") {
+      var op = obj.op || "send";
+      var labelMap = {
+        explain: (L.opExplain || "Explain code"),
+        review:  (L.opReview  || "Review code"),
+        fix:     (L.opFix     || "Fix code"),
+        doc:     (L.opDoc     || "Write a doc comment"),
+        send:    (L.opSend    || "Discuss code")
+      };
+      var langTag = obj.language ? obj.language : "ces";
+      var heading = labelMap[op] || op;
+      append(ts() + " you: " + heading + "  ```" + langTag + "\n" +
+             (obj.code || "") + "\n```", "user");
+      // Forward as chat.send. requestId comes back from the host inside
+      // chat.delta / chat.end so we can stitch the reply into a row.
+      var rid = "skill-" + Date.now().toString(36) + "-"
+                + Math.random().toString(36).slice(2, 8);
+      var prompt = heading + ":\n\n```" + langTag + "\n" +
+                   (obj.code || "") + "\n```";
+      sendRaw({ kind: "chat.send", requestId: rid, text: prompt,
+                  locale: (navigator.language || "uk-UA"), mode: currentMode });
       return;
     }
 
@@ -287,10 +395,15 @@
 
     if (window.oesHost && typeof window.oesHost.postMessage === "function") {
       try {
+        var rid = "chat-" + Date.now().toString(36) + "-"
+                  + Math.random().toString(36).slice(2, 8);
         window.oesHost.postMessage(JSON.stringify({
           kind: "chat.send",
+          requestId: rid,
           mode: currentMode,
-          prompt: text,
+          text: text,           // shim reads "text" first
+          prompt: text,         // legacy v3 shim fallback
+          locale: (navigator.language || "uk-UA"),
           ts: Date.now()
         }));
       } catch (e) {

@@ -55,3 +55,40 @@ endif()
 # code also uses std::thread directly.
 find_package(Threads REQUIRED)
 target_link_libraries(aiBridge PRIVATE Threads::Threads)
+
+# Copy sample.html next to the .bundle (root CMakeLists.txt forces our
+# LIBRARY_OUTPUT_DIRECTORY back to ${CMAKE_BINARY_DIR}/bin/${CONFIG}/, so
+# the .bundle lands there alongside designer/launcher binaries). Then
+# also stage both files into designer.app/Contents/MacOS/plugins/ on
+# macOS so Designer's plugin scanner — which reads from <exe>/plugins/
+# — actually finds the freshly built plugin. Without this step a stale
+# copy from a previous build keeps loading.
+set(AIBRIDGE_SAMPLE_HTML "${CMAKE_SOURCE_DIR}/assets/pluginWebPane/sample.html")
+if(EXISTS "${AIBRIDGE_SAMPLE_HTML}")
+    add_custom_command(TARGET aiBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${AIBRIDGE_SAMPLE_HTML}"
+            "$<TARGET_FILE_DIR:aiBridge>/sample.html"
+        COMMENT "aiBridge: stage sample.html next to plugin binary"
+        VERBATIM)
+else()
+    message(WARNING "aiBridge: ${AIBRIDGE_SAMPLE_HTML} not found — pane will lack UI")
+endif()
+
+# On macOS the designer target builds a .app bundle. Mirror the plugin
+# binary + asset into its plugins/ subdir so a fresh `cmake --build` puts
+# the just-compiled .bundle where the loader actually scans. depends-on
+# designer so the .app directory tree exists before we copy into it.
+if(APPLE AND TARGET designer)
+    add_custom_command(TARGET aiBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_FILE_DIR:designer>/plugins"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:aiBridge>"
+            "$<TARGET_FILE_DIR:designer>/plugins/$<TARGET_FILE_NAME:aiBridge>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${AIBRIDGE_SAMPLE_HTML}"
+            "$<TARGET_FILE_DIR:designer>/plugins/sample.html"
+        COMMENT "aiBridge: install into designer.app/Contents/MacOS/plugins/"
+        VERBATIM)
+endif()

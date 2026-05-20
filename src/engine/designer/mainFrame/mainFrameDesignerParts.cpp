@@ -12,6 +12,8 @@
 #include "frontend/pluginWebPane/pluginWebPane.h"
 
 #include <wx/xml/xml.h>
+#include <wx/stdpaths.h>
+#include <wx/filename.h>
 
 #include <algorithm>
 
@@ -352,4 +354,38 @@ void ibFrontendDocMDIFrameDesigner::WirePluginWebPaneCallbacks()
 	// stashes its registration request in ibPluginManager which we now
 	// drain. Without this, the menu would have no pane to show.
 	pm->ReplayPendingWebPaneRegistrations();
+
+	// Legacy-shim bridge for ABI v3 plugins that expose LLMQuery but
+	// not a v4 chat pane (Pugi being the live example). Resolve the
+	// bundled sample.html once and hand the path to the manager — it
+	// stands up a synthetic AI provider + pane on the same protocol
+	// real v4 plugins use, so chat / editor.skill / menu wiring all
+	// route through one codepath. Skips silently when no LLMQuery
+	// function was registered (no v3 plugin loaded, or a v4 plugin
+	// already covers chat mode).
+	{
+		const wxString rel = wxT("assets") + wxString(wxFILE_SEP_PATH)
+		    + wxT("pluginWebPane") + wxString(wxFILE_SEP_PATH)
+		    + wxT("sample.html");
+		wxString shimBundle = wxStandardPaths::Get().GetResourcesDir()
+		    + wxFILE_SEP_PATH + rel;
+		if (!wxFileExists(shimBundle)) {
+			wxString dir = wxFileName(
+			    wxStandardPaths::Get().GetExecutablePath()).GetPath();
+			for (int i = 0; i < 12; ++i) {
+				const wxString candidate = dir + wxFILE_SEP_PATH + rel;
+				if (wxFileExists(candidate)) { shimBundle = candidate; break; }
+				wxFileName up = wxFileName::DirName(dir);
+				if (up.GetDirCount() == 0) break;
+				up.RemoveLastDir();
+				const wxString parent = up.GetPath();
+				if (parent.IsEmpty() || parent == dir) break;
+				dir = parent;
+			}
+		}
+		// The shim no-ops cleanly when the bundle is missing — pass
+		// whatever we resolved (empty path falls through inside the
+		// manager). Logging there carries the diagnosis.
+		pm->ScanForLegacyLLMShim(shimBundle);
+	}
 }

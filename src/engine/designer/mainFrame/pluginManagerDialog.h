@@ -43,6 +43,7 @@ private:
 	void OnSelectionChanged(wxCommandEvent& event);
 	void OnInstall(wxCommandEvent& event);
 	void OnUninstall(wxCommandEvent& event);
+	void OnTestConnection(wxCommandEvent& event);
 
 	// Reload the listbox + right-pane fields from the current snapshot.
 	void RebuildList();

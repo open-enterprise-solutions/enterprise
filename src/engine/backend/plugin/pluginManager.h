@@ -119,6 +119,49 @@ public:
 	// when no usable provider has been installed.
 	bool HasAIProviderFor(const std::string& mode) const;
 
+	// Phase 6 universal routing: paneId of the active AI provider's
+	// WebView. Editor's right-click skills, ghost-text completion, and
+	// the AI Assistant menu all dispatch to this id rather than hard-
+	// coding individual pane names. Returns empty when no AI plugin has
+	// registered a pane yet — callers should treat that as "no AI" and
+	// grey out / fall back to a demo pane.
+	wxString GetDefaultAIPaneId() const { return m_defaultAIPaneId; }
+
+	// Phase 7.5 legacy-shim: when an ABI v3 plugin exposes the
+	// LLMQuery(prompt, locale) script function but doesn't speak the
+	// v4 chat-pane protocol, synthesise an AI provider entry + chat
+	// pane that forwards chat.send / editor.skill envelopes through
+	// LLMQuery and emits the response as a single chat.delta + chat.end
+	// pair. Lets the v3 ecosystem (Pugi, internal vendor plugins) work
+	// inside the Designer chat UI without a rebuild. No-op when a v4
+	// AI provider already covers the "chat" mode.
+	//
+	// Must be called AFTER SetWebPaneCallbacks + ReplayPending so the
+	// shim pane registration succeeds rather than buffering. Designer
+	// calls this from WirePluginWebPaneCallbacks once the WebView wiring
+	// is live and the sample.html bundle path has been resolved.
+	void ScanForLegacyLLMShim(const wxString& htmlBundlePath);
+
+	// Phase 6.2.b inline completion. Runs an LLM call in a worker
+	// thread and invokes `onResult` on the main UI thread with the
+	// plain-text completion (no markdown, no envelopes). Routes through
+	// the same v3-shim path as chat so any plugin exposing LLMQuery
+	// (or a v4 AI provider in the future) backs ghost-text without
+	// extra wiring.
+	//
+	// Callback signature:
+	//   void onResult(bool ok, const wxString& completionText, const wxString& errMessage);
+	//
+	// onResult is invoked exactly once. If no AI provider is registered
+	// or LLMQuery is missing, onResult fires with ok=false, errMessage
+	// describing the gap, completionText empty.
+	using CompleteCodeCallback = std::function<void(bool ok,
+	                                                 const wxString& text,
+	                                                 const wxString& err)>;
+	void CompleteCodeAsync(const wxString& prompt,
+	                        const wxString& locale,
+	                        CompleteCodeCallback onResult);
+
 	// Plugin chunk-delivery helpers — wrap deltaJson / metaJson / errorJson
 	// in the chat.delta / chat.end / error envelope and forward to the
 	// active pane. Phase 2 routing: target = the first registered pane;

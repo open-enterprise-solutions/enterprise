@@ -1,23 +1,29 @@
 /////////////////////////////////////////////////////////////////////////////
-// ibPluginWebPane — generic plugin-driven WebView pane inside the host.
+// ibPluginWebPane — native plugin-driven assistant pane inside the host.
 //
-// Platform infrastructure for embedding plugin-supplied web UI (HTML/JS/CSS)
-// in a dockable Designer pane. Used by AI assistant plugins, future custom
-// integration UIs, anything that ships its own browser surface.
+// PLATFORM HISTORY (2026-05-20 refactor):
+//   - Original: wxWebView-based pane loading an HTML/JS/CSS bundle. Heavy
+//     dependency on platform-specific browser runtime (WebKit on macOS,
+//     WebView2 on Windows); message dispatch traversed JS bridge with
+//     several object-lifetime hazards and noticeable UI latency.
+//   - Now: native wxPanel composition built from wx::core widgets only —
+//     wxHtmlWindow for the rendered transcript, wxTextCtrl for input.
+//     Lightweight (Code::Blocks AI plugin pattern), zero JS, zero
+//     external browser process. Markdown rendered server-side via the
+//     vendored md4c CommonMark parser at src/3rdparty/md4c.
 //
-// A wxPanel wrapping wxWebView. The WebView loads an HTML bundle the plugin
-// supplies. Host owns the dockable container, lifecycle, persistence, and
-// the bidirectional JSON channel; UX inside the WebView is plugin code.
+// Channel contract (unchanged from plugin POV):
+//   - host → pane:  PushMessage(jsonInline) parses one of the standard
+//                   envelopes — chat.delta / chat.end / error /
+//                   agent.plan / agent.applied — and updates the
+//                   transcript.
+//   - pane → host:  user input or button events build a chat.send
+//                   envelope and invoke the plugin's onMessage callback
+//                   exactly the way wxWebView's postMessage did.
 //
-// Channel contract:
-//   - JS → host:  window.oesHost.postMessage(jsonString)
-//                 → wxEVT_WEBVIEW_SCRIPT_MESSAGE_RECEIVED →
-//                 plugin's ibPluginWebMsgFn callback (paneId, jsonInline, userData)
-//   - host → JS:  PushMessage(jsonInline) → wxWebView::RunScript("window.oesHost._recv(...)")
-//                 Thread-safe; off-UI callers marshal via wxQueueEvent.
-//
-// Plugins drive panes through the ABI v4 host callbacks:
-//   ibHostAPI::RegisterWebPane, WebPaneSend, WebPaneShow.
+// The htmlBundlePath constructor arg stays in the signature for ABI v4
+// compatibility but is now ignored — the pane does not load a static
+// bundle anymore. Plugins can pass an empty string.
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_PLUGIN_WEB_PANE_H_
@@ -29,17 +35,33 @@
 
 #include <wx/panel.h>
 #include <wx/string.h>
+#include <wx/timer.h>
 
-class wxWebView;
-class wxWebViewEvent;
+#include <vector>
+
+class wxHtmlWindow;
+class wxTextCtrl;
+class wxButton;
+class wxStaticText;
+class wxCommandEvent;
+class wxThreadEvent;
+class wxHtmlLinkEvent;
+class wxKeyEvent;
+class wxFocusEvent;
+class wxListBox;
+class wxMouseEvent;
+
+class ibSlashCommandPopup;
+class ibChatContextPopup;
 
 class FRONTEND_API ibPluginWebPane : public wxPanel {
 public:
 	// paneId is the stable identifier the plugin registered. title is the
-	// visible AUI caption. htmlBundlePath is an absolute filesystem path
-	// to the entry HTML loaded via file:// URL. onMessage is the C
-	// callback for JS-originated messages. userData is the plugin's
-	// opaque handle, forwarded on every invocation.
+	// visible AUI caption. htmlBundlePath is RETAINED in the signature for
+	// source-level compatibility with the previous wxWebView pane but is
+	// IGNORED — the new native pane is self-contained. onMessage receives
+	// user-driven envelopes (chat.send / agent.approve / etc); userData is
+	// forwarded unchanged.
 	ibPluginWebPane(wxWindow* parent,
 	                const wxString& paneId,
 	                const wxString& title,
@@ -47,22 +69,189 @@ public:
 	                ibPluginWebMsgFn onMessage,
 	                void* userData);
 
-	// Push a JSON message from the host into the WebView. Thread-safe;
-	// off-UI callers marshal through wxQueueEvent before RunScript.
+	// Destructor — flushes the debounced save timer so a pending write
+	// hits disk before the pane is torn down. Pane shutdown happens via
+	// wxWindow ownership (parent::Destroy() cascades), but in practice
+	// pluginManager calls Destroy explicitly during unload; either path
+	// runs this dtor on the main thread.
+	~ibPluginWebPane() override;
+
+	// Push a host-originated JSON envelope into the pane. Parsed locally
+	// and applied to the transcript. Thread-safe: off-UI callers marshal
+	// through a queued wxThreadEvent so wxHtmlWindow stays on the main
+	// thread.
 	void PushMessage(const wxString& jsonInline);
 
 	const wxString& GetPaneId() const { return m_paneId; }
 	const wxString& GetTitle()  const { return m_title;  }
 
+	// One transcript entry. Markdown is the canonical body; HTML is the
+	// rendered cache used during incremental re-renders. role drives the
+	// visual styling (Вы / Ассистент / Система / Ошибка).
+	//
+	// Public so the file-scope RoleLabel helper in the implementation
+	// can reference Entry::Role without a friend declaration. The class
+	// invariant — only the pane mutates m_entries — is enforced by the
+	// fact that the vector itself stays private. Declared BEFORE the
+	// test-only hooks so AppendEntryForTests can take an Entry by value
+	// without a forward declaration trick.
+	struct Entry {
+		enum class Role { User, Assistant, System, Error, Plan };
+		Role     role     = Role::User;
+		wxString markdown;
+		wxString requestId;          // for streaming reconciliation
+		wxString planId;             // agent.plan / agent.applied only
+		wxString conversationId;     // agent.plan / agent.applied only
+		wxString rationale;          // agent.plan only
+		wxString mutations;          // agent.plan only
+		bool     applied  = false;   // agent.applied set this true
+		// Fenced code blocks extracted from `markdown` during render.
+		// First = language tag, second = raw code body. Populated by
+		// RenderTranscript so OnLinkClicked can resolve oes-copy /
+		// oes-apply URLs back to the original text without re-parsing.
+		std::vector<std::pair<wxString, wxString>> codeBlocks;
+	};
+
+	// Test-only hooks. SetConfigHashForTests installs a stable bucket
+	// (production reads from activeMetaData) and ReloadHistoryFromDisk
+	// re-runs the load path against the now-current bucket so a fresh
+	// pane can verify "saved-then-restored" without process restart.
+	void SetConfigHashForTests(const wxString& configHash);
+	void ReloadHistoryFromDisk();
+	void SetPersistEnabledForTests(bool enabled);
+	size_t GetEntryCountForTests() const { return m_entries.size(); }
+	void AppendEntryForTests(Entry entry);
+
 private:
-	wxWebView*       m_webView    = nullptr;
+
+	wxHtmlWindow*    m_history    = nullptr;
+	wxTextCtrl*      m_input      = nullptr;
+	wxButton*        m_sendBtn    = nullptr;
+	wxButton*        m_newChatBtn = nullptr;
+	wxStaticText*    m_statusBar  = nullptr;
+
 	wxString         m_paneId;
 	wxString         m_title;
 	ibPluginWebMsgFn m_onMessage  = nullptr;
 	void*            m_userData   = nullptr;
 
-	void OnScriptMessage(wxWebViewEvent& event);
+	// Per-configuration storage bucket for the persisted transcript.
+	// Computed once at construction from activeMetaData's config name so
+	// switching configurations starts a fresh chat — same model 1С
+	// Workmate uses ("each конфигурация has its own chat history").
+	wxString         m_configHash;
+
+	// Debounced save timer. Fires 500ms after the most recent append so
+	// a busy chat.delta stream doesn't hit the disk on every chunk.
+	wxTimer          m_saveTimer;
+
+	// Disable persistence — set by tests that don't want stray files
+	// under ~/Library/Preferences. Default false (production = persist).
+	bool             m_persistEnabled = true;
+
+private:
+	std::vector<Entry> m_entries;
+
+	// Indicates we are currently accumulating chat.delta chunks for an
+	// in-flight assistant turn. Set on first chat.delta, cleared on
+	// chat.end / error. m_pendingRequestId remembers which requestId is
+	// active so out-of-order envelopes can be sanity-checked.
+	bool             m_pending           = false;
+	wxString         m_pendingRequestId;
+
+	void OnSendClicked(wxCommandEvent& event);
+	void OnInputEnter(wxCommandEvent& event);
+	void OnInputText(wxCommandEvent& event);
+	void OnInputKeyDown(wxKeyEvent& event);
+	void OnInputKillFocus(wxFocusEvent& event);
+	void OnLinkClicked(wxHtmlLinkEvent& event);
 	void OnPushFromOtherThread(wxThreadEvent& event);
+
+	// Slash-command autocomplete popup. Owned by the pane; created lazily
+	// the first time the user types '/'. Anchored below m_input and
+	// dismissed when focus moves out or the prefix stops matching.
+	ibSlashCommandPopup* m_slashPopup = nullptr;
+
+	// "@" context-token autocomplete popup. Lazily created on first '@'
+	// keystroke; lists matching metadata objects and editor specials
+	// (@selection / @file / @open). Same dismiss policy as the slash
+	// popup so keyboard / focus handling is uniform.
+	ibChatContextPopup*  m_atPopup    = nullptr;
+
+	// New-chat button handler — confirms with the user, clears m_entries,
+	// deletes the persisted file, and re-renders the empty transcript.
+	void OnNewChatClicked(wxCommandEvent& event);
+
+	// Debounced-save timer fire. Persists m_entries to disk and resets
+	// the timer. Defensive against re-entry from cascaded events.
+	void OnSaveTimer(wxTimerEvent& event);
+
+	// Schedule a save. Resets the debounce timer so a flurry of appends
+	// collapses into one disk write 500ms after the last entry.
+	void ScheduleSave();
+
+	// Force a save now (test hook + path used at destruction).
+	void SaveNow();
+
+	// Update / show / hide the slash popup based on m_input's current
+	// contents. Called from OnInputText.
+	void RefreshSlashPopup();
+
+	// Update / show / hide the @-token popup. Driven by OnInputText.
+	void RefreshAtPopup();
+
+	// Insert "@<fullName> " into m_input at the cursor, replacing the
+	// trailing "@<partial>" the user was typing. Mirrors the slash flow.
+	void AcceptAtSuggestion(const wxString& fullName);
+
+	// Replace the leading "/<partial>" prefix in m_input with the picked
+	// command plus a trailing space, and dismiss the popup. Wired into
+	// ibSlashCommandPopup via a callback.
+	void AcceptSlashCommand(const wxString& command);
+
+	// If `text` starts with a known slash command, emit an editor.skill
+	// envelope and return true. Otherwise return false so the caller falls
+	// back to the standard chat.send path.
+	bool TryDispatchSlashCommand(const wxString& text);
+
+	// oes-copy: / oes-apply: link handlers — extract the code block
+	// referenced by the URL's <entryIdx>:<blockIdx> spec and either
+	// shove it onto the clipboard or splice it into the focused
+	// wxStyledTextCtrl.
+	void HandleCopyLink(const wxString& spec);
+	void HandleApplyLink(const wxString& spec);
+
+	// Parse the inbound envelope and apply it. Pure UI-thread work; the
+	// off-thread variant queues a wxThreadEvent that ends up here.
+	void DispatchEnvelope(const wxString& jsonInline);
+
+	// Append a new transcript entry and re-render.
+	void AppendEntry(Entry entry);
+
+	// Update the assistant streaming entry by appending delta text.
+	// Creates the entry on first call.
+	void AppendStreamingDelta(const wxString& requestId, const wxString& delta);
+
+	// Close the current streaming entry (chat.end). meta is rendered into
+	// the status bar (model, token count).
+	void CompleteStreaming(const wxString& requestId, const wxString& meta);
+
+	// Build the full HTML transcript and SetPage it on the history widget.
+	void RenderTranscript();
+
+	// Helper: send a chat.send envelope built from the input box contents.
+	void DispatchUserPrompt(const wxString& prompt);
+
+	// Toggle the Send button label between "Отправить" and "Стоп" based
+	// on m_pending. Routed through one helper so every entry/exit point
+	// of the streaming state machine stays in sync — no scattered
+	// SetLabel calls to forget.
+	void UpdateSendButtonLabel();
+
+	// Build an agent.cancel envelope for the in-flight request and ship
+	// it through m_onMessage so the worker side trips its cancel token
+	// and stops emitting further chat.delta chunks.
+	void DispatchCancelRequest();
 };
 
 #endif // _IB_PLUGIN_WEB_PANE_H_

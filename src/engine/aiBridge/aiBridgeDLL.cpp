@@ -34,10 +34,22 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
+
+#if defined(__APPLE__) || defined(__linux__)
+#include <dlfcn.h>
+#include <libgen.h>
+#include <limits.h>   // PATH_MAX
+#endif
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 
 // OES_PLUGIN_EXPORT comes from backend/plugin/pluginApi.h.
 
@@ -50,19 +62,84 @@ std::mutex                   g_workersMu;
 std::vector<std::thread>     g_workers;
 std::atomic<bool>            g_shuttingDown{false};
 
-// Read an env value from the per-plugin BYOK store, falling back to a
-// caller-supplied default. Returns std::string for ergonomics; the
-// raw buffer the host hands us is freed via FreeBuffer right after.
+// Per-request cancel tokens for the Stop Generation feature. Pane fires
+// agent.cancel with the original requestId; the worker polls between
+// SSE chunks. shared_ptr lets the worker capture by value so erase from
+// the map can't dangle.
+std::mutex                                                          g_cancelMu;
+std::unordered_map<std::string, std::shared_ptr<std::atomic<bool>>> g_cancelTokens;
+
+std::shared_ptr<std::atomic<bool>> AllocCancelToken(const std::string& rid)
+{
+	auto tok = std::make_shared<std::atomic<bool>>(false);
+	std::lock_guard<std::mutex> lk(g_cancelMu);
+	g_cancelTokens[rid] = tok;
+	return tok;
+}
+
+void EraseCancelToken(const std::string& rid)
+{
+	std::lock_guard<std::mutex> lk(g_cancelMu);
+	g_cancelTokens.erase(rid);
+}
+
+bool TripCancelToken(const std::string& rid)
+{
+	std::lock_guard<std::mutex> lk(g_cancelMu);
+	auto it = g_cancelTokens.find(rid);
+	if (it == g_cancelTokens.end()) return false;
+	it->second->store(true);
+	return true;
+}
+
+// Cached env snapshot — populated once at initialize() because the host's
+// ReadPluginEnv trampoline depends on a thread-local `currentPluginId`
+// that is only set during oes_plugin_initialize(). Worker threads
+// spawned later (RunChatRequest) cannot reach the env via the host;
+// reading it once here, while we're on the init thread, sidesteps that
+// entirely.
+std::mutex                                  g_envMu;
+std::unordered_map<std::string, std::string> g_envCache;
+
+void PrimeEnvCache(const char* const* keys)
+{
+	if (g_host == nullptr || g_host->ReadPluginEnv == nullptr) return;
+	std::lock_guard<std::mutex> lk(g_envMu);
+	for (const char* const* p = keys; *p != nullptr; ++p) {
+		char* buf = g_host->ReadPluginEnv(*p);
+		if (buf == nullptr) {
+			g_envCache.erase(*p);
+			continue;
+		}
+		g_envCache[*p] = buf;
+		if (g_host->FreeBuffer) g_host->FreeBuffer(buf);
+	}
+}
+
+// Read a cached env value (worker-thread safe). Falls back to the
+// supplied default when the key is missing. If the cache is empty (no
+// PrimeEnvCache called yet), tries the live host trampoline as a
+// best-effort fallback — useful for the init phase itself.
 std::string ReadEnv(const char* key, const char* fallback)
 {
-	if (g_host == nullptr || g_host->ReadPluginEnv == nullptr) {
-		return fallback ? std::string(fallback) : std::string();
+	{
+		std::lock_guard<std::mutex> lk(g_envMu);
+		auto it = g_envCache.find(key);
+		if (it != g_envCache.end()) return it->second;
 	}
-	char* buf = g_host->ReadPluginEnv(key);
-	if (buf == nullptr) return fallback ? std::string(fallback) : std::string();
-	std::string out(buf);
-	if (g_host->FreeBuffer) g_host->FreeBuffer(buf);
-	return out;
+	// Fallback: try the live trampoline. Works only on the init thread
+	// where tl_currentPluginId is set, which is exactly the path that
+	// primes the cache below — so this branch covers any code path that
+	// hits ReadEnv before PrimeEnvCache runs.
+	if (g_host != nullptr && g_host->ReadPluginEnv != nullptr) {
+		char* buf = g_host->ReadPluginEnv(key);
+		if (buf != nullptr) {
+			std::string out(buf);
+			if (g_host->FreeBuffer) g_host->FreeBuffer(buf);
+			return out;
+		}
+	}
+	return fallback ? std::string(fallback) : std::string();
 }
 
 // Split a URL into (scheme+host, path). Trivial parser — enough for
@@ -124,17 +201,170 @@ void EmitEnd(const std::string& requestId, const std::string& model,
 	g_host->WebPaneSend(g_paneId, s.c_str());
 }
 
+// Emit the chat.end envelope with cancelled:true. The Pugi-MCP path
+// stops mid-typewriter when cancellation trips; the SSE path stops mid-
+// receiver. Both reach this so the pane sees the same wire signal.
+void EmitCancelledEnd(const std::string& requestId, const std::string& model,
+                      int tokensIn, int tokensOut)
+{
+	if (g_host == nullptr || g_host->WebPaneSend == nullptr) return;
+	nlohmann::json env;
+	env["kind"]      = "chat.end";
+	env["requestId"] = requestId;
+	env["meta"]      = nlohmann::json::object();
+	env["meta"]["model"]      = model;
+	env["meta"]["cancelled"]  = true;
+	if (tokensIn > 0 || tokensOut > 0) {
+		env["meta"]["tokens"]            = nlohmann::json::object();
+		env["meta"]["tokens"]["in"]      = tokensIn;
+		env["meta"]["tokens"]["out"]     = tokensOut;
+	}
+	const std::string s = env.dump();
+	g_host->WebPaneSend(g_paneId, s.c_str());
+}
+
+// Emit the response text as a typewriter-streamed sequence of chat.delta
+// envelopes followed by chat.end. Used by the Pugi-MCP path (single-
+// response endpoint) so the UI gets the same incremental render the
+// SSE OpenAI path produces. Skipped on empty input. Honours a cancel
+// token between chunks — when tripped, emits chat.end{cancelled:true}
+// and returns early without finishing the body.
+void EmitTypewriter(const std::string& requestId, const std::string& text,
+                     const std::string& model, int approxTokens,
+                     const std::shared_ptr<std::atomic<bool>>& cancelTok)
+{
+	const size_t kChunkChars = 96;
+	const std::chrono::milliseconds kChunkDelay(40);
+	size_t i = 0;
+	while (i < text.size()) {
+		if (cancelTok && cancelTok->load()) {
+			EmitCancelledEnd(requestId, model, approxTokens, approxTokens);
+			return;
+		}
+		size_t end = std::min(i + kChunkChars, text.size());
+		// UTF-8 codepoint-safe boundary — never split a multibyte glyph.
+		while (end < text.size() && (static_cast<unsigned char>(text[end]) & 0xC0) == 0x80) {
+			++end;
+		}
+		EmitDelta(requestId, text.substr(i, end - i));
+		i = end;
+		if (i < text.size()) std::this_thread::sleep_for(kChunkDelay);
+	}
+	EmitEnd(requestId, model, approxTokens, approxTokens);
+}
+
+// Pugi-MCP request path. Talks to mcp.pugi.io / Anvil with the request
+// shape that backend actually expects:
+//   POST  <endpoint>
+//   H:    Authorization: Bearer <token>
+//         X-Pugi-Tenant: <tenant-uuid>
+//         Content-Type: application/json
+//   Body: {"name":"llm_query","input":{"prompt":"...","locale":"uk-UA"}}
+// Response: 200/201 {"result":{"content":"...","model":"...",...}}
+//           4xx     {"message":"...","statusCode":N}
+// Single-shot — no SSE. Streaming effect is faked via EmitTypewriter.
+void RunPugiMcpRequest(std::string requestId, std::string prompt,
+                        const std::string& endpoint, const std::string& token,
+                        const std::string& tenant,   const std::string& locale,
+                        const std::shared_ptr<std::atomic<bool>>& cancelTok)
+{
+	const auto [base, path] = SplitUrl(endpoint);
+	if (base.empty()) {
+		EmitError("aiBridge: malformed ENDPOINT URL: " + endpoint);
+		return;
+	}
+
+	httplib::Client cli(base);
+	cli.set_connection_timeout(15);
+	cli.set_read_timeout(120);
+	cli.set_follow_location(true);
+
+	nlohmann::json body;
+	body["name"]            = "llm_query";
+	body["input"]           = nlohmann::json::object();
+	body["input"]["prompt"] = prompt;
+	body["input"]["locale"] = locale.empty() ? std::string("uk-UA") : locale;
+
+	httplib::Headers headers = {
+		{ "Authorization", "Bearer " + token },
+		{ "X-Pugi-Tenant", tenant            },
+		{ "Content-Type",  "application/json" },
+		{ "Accept",        "application/json" },
+	};
+
+	const std::string bodyStr = body.dump();
+	auto res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
+	if (!res) {
+		EmitError("aiBridge[pugi-mcp]: HTTP failed — " +
+		           std::string(httplib::to_string(res.error())));
+		return;
+	}
+	if (res->status >= 400) {
+		EmitError("aiBridge[pugi-mcp]: HTTP " + std::to_string(res->status) +
+		           " — " + res->body.substr(0, 256));
+		return;
+	}
+
+	// Extract result.content. Tolerate result-as-string fallback for
+	// any backend version that returns a flat shape.
+	std::string content;
+	std::string respModel = "pugi-mcp";
+	auto parsed = nlohmann::json::parse(res->body, nullptr, /*allow_exceptions=*/false);
+	if (!parsed.is_discarded() && parsed.is_object() && parsed.contains("result")) {
+		const auto& r = parsed["result"];
+		if (r.is_object()) {
+			if (r.contains("content") && r["content"].is_string()) {
+				content = r["content"].get<std::string>();
+			}
+			if (r.contains("model") && r["model"].is_string()) {
+				respModel = r["model"].get<std::string>();
+			}
+		} else if (r.is_string()) {
+			content = r.get<std::string>();
+		}
+	}
+	if (content.empty()) {
+		// Server returned something we can't unwrap — emit raw so the
+		// user sees the actual diagnostic, not a silent failure.
+		content = res->body;
+	}
+
+	const int approxTokens = static_cast<int>(content.size() / 4);
+	EmitTypewriter(requestId, content, respModel, approxTokens, cancelTok);
+}
+
 // Worker thread body — performs the HTTP POST + streams chunks back to
-// the pane. Owns its own httplib::Client; no shared state.
-void RunChatRequest(std::string requestId, std::string prompt, std::string mode)
+// the pane. Owns its own httplib::Client; no shared state. cancelTok
+// is the per-request stop signal; receiver polls it between SSE frames
+// so a pane-fired agent.cancel halts further delta emits.
+void RunChatRequest(std::string requestId, std::string prompt, std::string mode,
+                    std::shared_ptr<std::atomic<bool>> cancelTok)
 {
 	const std::string token    = ReadEnv("TOKEN",    "");
+	const std::string protocol = ReadEnv("PROTOCOL", "openai");  // or "pugi-mcp"
 	const std::string endpoint = ReadEnv("ENDPOINT",
-	                                       "https://api.openai.com/v1/chat/completions");
+	                                       protocol == "pugi-mcp"
+	                                          ? "https://mcp.pugi.io/api/oes-mcp/invoke"
+	                                          : "https://api.openai.com/v1/chat/completions");
 	const std::string model    = ReadEnv("MODEL",    "gpt-4o-mini");
 
 	if (token.empty()) {
 		EmitError("aiBridge: no TOKEN in plugin env. Set it via Tools → Plugins → Edit API token.");
+		return;
+	}
+
+	// Pugi-MCP branch — bypass the OpenAI SSE path entirely.
+	if (protocol == "pugi-mcp") {
+		const std::string tenant = ReadEnv("TENANT", "");
+		if (tenant.empty()) {
+			EmitError("aiBridge[pugi-mcp]: TENANT env var is required (tenant UUID).");
+			return;
+		}
+		const std::string locale = ReadEnv("LOCALE", "uk-UA");
+		const std::string ridCopy = requestId;
+		RunPugiMcpRequest(std::move(requestId), std::move(prompt),
+		                    endpoint, token, tenant, locale, cancelTok);
+		EraseCancelToken(ridCopy);
 		return;
 	}
 
@@ -201,8 +431,16 @@ void RunChatRequest(std::string requestId, std::string prompt, std::string mode)
 		}
 	};
 
+	bool cancelled = false;
 	auto receiver = [&](const char* data, size_t len) {
 		if (g_shuttingDown.load()) return false;
+		// Cancellation check per receive callback — httplib invokes this
+		// once per socket read, so the worst-case latency between Stop
+		// click and chunks halting is one TCP frame.
+		if (cancelTok && cancelTok->load()) {
+			cancelled = true;
+			return false;
+		}
 		sseBuf.append(data, len);
 		while (true) {
 			const auto end = sseBuf.find("\n\n");
@@ -231,18 +469,32 @@ void RunChatRequest(std::string requestId, std::string prompt, std::string mode)
 	const std::string bodyStr = body.dump();
 	auto res = cli.Post(path.c_str(), headers, bodyStr, "application/json", receiver);
 
+	// Cancel path: receiver returned false because cancelTok flipped. The
+	// httplib Post return value is "no res / connection closed" in that
+	// case — we don't want to surface that as a transport error. Emit
+	// chat.end{cancelled:true} so the pane wraps up cleanly.
+	if (cancelled) {
+		EraseCancelToken(requestId);
+		const int tokensIn = static_cast<int>(prompt.size() / 4);
+		EmitCancelledEnd(requestId, model, tokensIn, tokensOut);
+		return;
+	}
+
 	if (!res) {
+		EraseCancelToken(requestId);
 		EmitError("aiBridge: HTTP failed — " +
 		           std::string(httplib::to_string(res.error())));
 		return;
 	}
 	if (res->status >= 400) {
+		EraseCancelToken(requestId);
 		EmitError("aiBridge: HTTP " + std::to_string(res->status) +
 		           " — " + res->body.substr(0, 256));
 		return;
 	}
 	const int tokensIn = static_cast<int>(prompt.size() / 4);
 	EmitEnd(requestId, model, tokensIn, tokensOut);
+	EraseCancelToken(requestId);
 }
 
 // Called by the host whenever the WebView pane posts a message. We
@@ -258,6 +510,15 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 		if (j.is_discarded() || !j.is_object()) return;
 		if (!j.contains("kind") || !j["kind"].is_string()) return;
 		const std::string kind = j["kind"].get<std::string>();
+
+		// Stop Generation: pane fires agent.cancel with the original
+		// requestId. Trip the token so the in-flight worker exits early.
+		if (kind == "agent.cancel") {
+			const std::string rid = j.value("requestId", std::string());
+			TripCancelToken(rid);
+			return;
+		}
+
 		if (kind != "chat.send" && kind != "editor.skill") return;
 
 		std::string prompt = j.value("prompt", std::string());
@@ -284,15 +545,25 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 		}
 		if (prompt.empty()) return;
 
-		const std::string requestId = "req-" + std::to_string(
-		    std::chrono::steady_clock::now().time_since_epoch().count());
+		// Prefer the envelope's requestId so the pane's agent.cancel
+		// keying lines up with the worker's token. Fall back to a fresh
+		// id only when the caller didn't provide one (older bundles).
+		std::string requestId = j.value("requestId", std::string());
+		if (requestId.empty()) {
+			requestId = "req-" + std::to_string(
+			    std::chrono::steady_clock::now().time_since_epoch().count());
+		}
 		const std::string mode = j.value("mode", std::string("chat"));
+
+		// Allocate the cancel token before spawning so a near-instant
+		// agent.cancel still finds a registered entry.
+		auto cancelTok = AllocCancelToken(requestId);
 
 		// Spawn a detached worker so the host's UI thread returns
 		// immediately. Track the thread so shutdown can join + drain.
 		{
 			std::lock_guard<std::mutex> lk(g_workersMu);
-			g_workers.emplace_back(RunChatRequest, requestId, prompt, mode);
+			g_workers.emplace_back(RunChatRequest, requestId, prompt, mode, cancelTok);
 		}
 	} catch (...) {
 		// Plugin-side bug — surface a single error envelope so the user
@@ -306,26 +577,96 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 // builds; sample.html lives 4 dirs up. Production install would ship
 // the bundle next to the dylib via CMake install rules; for dev we
 // search upwards (matches the host's fallback behaviour).
+// Resolves the absolute filesystem path of the loaded plugin shared
+// library itself. CWD-relative lookups are unreliable on macOS when the
+// app is launched via Finder (CWD == "/"), so we anchor to our own
+// binary's location and walk from there.
+std::string PluginSelfDir()
+{
+#if defined(__APPLE__) || defined(__linux__)
+	Dl_info info{};
+	if (dladdr(reinterpret_cast<void*>(&PluginSelfDir), &info) != 0 &&
+	    info.dli_fname != nullptr) {
+		char abs[PATH_MAX];
+		if (realpath(info.dli_fname, abs) != nullptr) {
+			std::string p(abs);
+			const auto slash = p.find_last_of('/');
+			if (slash != std::string::npos) return p.substr(0, slash);
+		}
+	}
+#elif defined(_WIN32)
+	HMODULE hm = nullptr;
+	if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+	                        GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+	                        reinterpret_cast<LPCSTR>(&PluginSelfDir), &hm) != 0) {
+		char buf[MAX_PATH];
+		const DWORD n = GetModuleFileNameA(hm, buf, MAX_PATH);
+		if (n > 0 && n < MAX_PATH) {
+			std::string p(buf, n);
+			const auto slash = p.find_last_of("\\/");
+			if (slash != std::string::npos) return p.substr(0, slash);
+		}
+	}
+#endif
+	return std::string();
+}
+
+bool FileExists(const std::string& path)
+{
+	if (path.empty()) return false;
+	FILE* f = std::fopen(path.c_str(), "rb");
+	if (f == nullptr) return false;
+	std::fclose(f);
+	return true;
+}
+
 std::string LocateSampleBundle()
 {
-	// Lazy: rely on the same env the user typed in plugins.json5 dialog?
-	// No — host's CallWebPaneRegister wants an absolute path. We hard-
-	// code the dev layout and let install rules override later.
-	static const char* candidates[] = {
+	// Anchor on our own .bundle/.dylib/.dll path, then walk up the
+	// tree looking for assets/pluginWebPane/sample.html. The dev layout
+	// puts the binary at build/bin/plugins/libaiBridge.bundle — six
+	// `..` levels reach the repo root. Installed layout puts assets
+	// next to the binary directory or one level up. Try both.
+	std::string base = PluginSelfDir();
+	if (!base.empty()) {
+		static const char* suffixes[] = {
+			"/assets/pluginWebPane/sample.html",
+			"/../assets/pluginWebPane/sample.html",
+			"/../../assets/pluginWebPane/sample.html",
+			"/../../../assets/pluginWebPane/sample.html",
+			"/../../../../assets/pluginWebPane/sample.html",
+			"/../../../../../assets/pluginWebPane/sample.html",
+			"/../../../../../../assets/pluginWebPane/sample.html",
+			"/sample.html",
+		};
+		for (const char* s : suffixes) {
+			std::string candidate = base + s;
+			if (FileExists(candidate)) {
+#if defined(__APPLE__) || defined(__linux__)
+				char abs[PATH_MAX];
+				if (realpath(candidate.c_str(), abs) != nullptr) {
+					return std::string(abs);
+				}
+#endif
+				return candidate;
+			}
+		}
+	}
+
+	// Last-resort CWD fallback (kept for `codeRunner` / unit-test
+	// scenarios where CWD === repo root).
+	static const char* cwdCandidates[] = {
 		"./assets/pluginWebPane/sample.html",
 		"../assets/pluginWebPane/sample.html",
 		"../../assets/pluginWebPane/sample.html",
-		"../../../assets/pluginWebPane/sample.html",
-		"../../../../assets/pluginWebPane/sample.html",
-		"../../../../../assets/pluginWebPane/sample.html",
-		"../../../../../../assets/pluginWebPane/sample.html",
 	};
-	for (const char* c : candidates) {
-		FILE* f = std::fopen(c, "rb");
-		if (f != nullptr) {
-			std::fclose(f);
+	for (const char* c : cwdCandidates) {
+		if (FileExists(c)) {
+#if defined(__APPLE__) || defined(__linux__)
 			char abs[PATH_MAX];
 			if (realpath(c, abs) != nullptr) return std::string(abs);
+#endif
+			return std::string(c);
 		}
 	}
 	return std::string();
@@ -365,6 +706,17 @@ OES_PLUGIN_EXPORT int oes_plugin_initialize(const ibHostAPI* host)
 	if (g_host == nullptr) return 0;
 	g_host->Log("aiBridge: initializing (ABI v4)", 0);
 
+	// Cache all env keys we'll need at runtime. The host's ReadPluginEnv
+	// is gated by a thread-local plugin id that is ONLY valid inside
+	// this init call; worker threads spawned for chat requests cannot
+	// reach the env any other way. Read once + remember.
+	static const char* kCachedEnvKeys[] = {
+		"TOKEN", "PROTOCOL", "ENDPOINT", "MODEL",
+		"TENANT", "LOCALE",
+		nullptr
+	};
+	PrimeEnvCache(kCachedEnvKeys);
+
 	// Register as AI provider so the editor's HasAIProviderFor("chat")
 	// gate flips ON and the right-click submenu enables.
 	ibPluginAIProvider prov{};
@@ -380,13 +732,24 @@ OES_PLUGIN_EXPORT int oes_plugin_initialize(const ibHostAPI* host)
 
 	// Register WebView pane. The host will Show() it on first AI Chat
 	// click via the Tools menu fallback path.
+	const std::string selfDir = PluginSelfDir();
+	if (!selfDir.empty()) {
+		const std::string msg = "aiBridge: plugin dir = " + selfDir;
+		g_host->Log(msg.c_str(), 0);
+	}
 	const std::string bundle = LocateSampleBundle();
 	if (bundle.empty()) {
-		g_host->Log("aiBridge: sample.html not found — pane not registered", 1);
+		g_host->Log("aiBridge: sample.html not found — pane not registered. "
+		              "Expected at <pluginDir>/sample.html or relative to repo root.", 1);
 		return 0;
+	}
+	{
+		const std::string msg = "aiBridge: sample.html = " + bundle;
+		g_host->Log(msg.c_str(), 0);
 	}
 	g_host->RegisterWebPane(g_paneId, "AI Assistant", bundle.c_str(),
 	                          &OnPaneMessage, nullptr);
+	g_host->Log("aiBridge: pane registered as aiBridge.chat", 0);
 	return 0;
 }
 

@@ -491,6 +491,12 @@ public:
 private:
 	wxString m_sigmaPending;
 	int      m_sigmaPendingLine = -1;
+	// Generation token — incremented on every TriggerSigmaCompletion so
+	// async callbacks from prior requests can be ignored when a newer
+	// completion has superseded them. Race-free without a mutex because
+	// reads/writes happen exclusively on the UI thread (the worker's
+	// callback is marshalled through wxApp::CallAfter).
+	unsigned m_sigmaCompletionGeneration = 0;
 
 public:
 

@@ -167,6 +167,15 @@ add_subdirectory("${OES_3RDPARTY_DIR}/wxWidgets" "${CMAKE_BINARY_DIR}/wxWidgets"
 # are available as imported targets.
 
 # ---------------------------------------------------------------------------
+# md4c — vendored CommonMark markdown→HTML parser. Used by frontend's
+# native AI Assistant pane to render assistant replies inside a
+# wxHtmlWindow (no WebView dependency).
+# ---------------------------------------------------------------------------
+if(EXISTS "${OES_3RDPARTY_DIR}/md4c/CMakeLists.txt")
+    add_subdirectory("${OES_3RDPARTY_DIR}/md4c" "${CMAKE_BINARY_DIR}/md4c")
+endif()
+
+# ---------------------------------------------------------------------------
 # Optional database drivers — find system libraries
 # ---------------------------------------------------------------------------
 

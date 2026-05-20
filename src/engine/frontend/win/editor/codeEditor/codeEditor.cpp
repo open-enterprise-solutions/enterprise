@@ -794,26 +794,23 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 			json += esc(code);
 			json += wxT("\"}");
 
-			// Pick the first available pane; if none, the AI Chat fallback
-			// pane registered by the Tools menu still works because the
-			// menu opens the demo bundle and CallWebPaneSend lands there.
-			// We delegate to the main frame's "open + show" path by firing
-			// the AI Chat command; the handler creates the pane on demand.
+			// Open / focus the AI Assistant pane via the main-frame handler
+			// (creates it lazily if no plugin registered one), then route
+			// the skill envelope to whichever pane the plugin manager
+			// considers default. The default is the first SUCCESSFUL
+			// RegisterWebPane call; if the user has installed an AI plugin
+			// that pane id matches. Falling back to the menu's demo bundle
+			// keeps the path alive even when no real provider exists, but
+			// in that case the envelope dies silently — which is fine
+			// because HasAIProviderFor() greyed the menu out anyway.
 			wxCommandEvent openEvt(wxEVT_MENU, wxID_FRONTEND_PLUGIN_WEB_PANE);
 			openEvt.SetEventObject(this);
 			for (wxWindow* p = GetParent(); p != nullptr; p = p->GetParent()) {
 				if (p->ProcessWindowEvent(openEvt)) break;
 			}
-			// Send the skill envelope to whichever pane is now the default.
-			// The plugin manager keeps the default-pane id alive across
-			// the whole session.
-			pm->CallWebPaneSend(wxT("designer.demo.chat"), json);
-			for (const auto& prov : pm->AIProviders()) {
-				(void)prov;
-				// Phase 6.1 routes via WebPaneSend only; future Phase 6.2
-				// adds direct provider.Query routing for /slash-commands.
-				break;
-			}
+			wxString target = pm->GetDefaultAIPaneId();
+			if (target.IsEmpty()) target = wxT("designer.demo.chat");
+			pm->CallWebPaneSend(target, json);
 		};
 	};
 	Bind(wxEVT_MENU, sendSkill(wxT("explain")), wxID_HIGHEST + 4030);
@@ -1225,29 +1222,94 @@ void ibCodeEditor::TriggerSigmaCompletion()
 	DismissSigmaCompletion();
 
 	auto* pm = appData ? appData->GetPluginManager() : nullptr;
-	if (pm == nullptr || !pm->HasAIProviderFor("helper")) {
-		AnnotationSetText(LineFromPosition(GetCurrentPos()),
-		    wxT("Sigma: no AI provider with \"helper\" mode installed."));
-		AnnotationSetStyle(LineFromPosition(GetCurrentPos()), wxSTC_STYLE_INDENTGUIDE);
+	// HasAIProviderFor("chat") instead of "helper": the legacy-LLM-shim
+	// registers under chat+agent modes (no separate "helper" mode in
+	// v3 plugins), and aiBridge synthesises the same set. Until a real
+	// completion-only provider mode lands, "chat" is the reliable gate.
+	if (pm == nullptr ||
+	    (!pm->HasAIProviderFor("chat") && !pm->HasAIProviderFor("helper"))) {
+		const int line = LineFromPosition(GetCurrentPos());
+		AnnotationSetText(line,
+		    wxT("AI Assistant: provider not configured. Tools → Plugins → enable aiBridge."));
+		AnnotationSetStyle(line, wxSTC_STYLE_INDENTGUIDE);
 		AnnotationSetVisible(wxSTC_ANNOTATION_BOXED);
-		// Auto-clear after a few seconds via a timer would be nicer; for
-		// Phase 6.2.a the message stays until the next ContextMenu /
-		// TriggerSigmaCompletion call.
 		return;
 	}
 
-	// Build editor.complete envelope. Real provider dispatch lands in
-	// Phase 6.2.b once Host_EditorCompletionRespond ABI is added — for
-	// now we show a stub annotation so the UI affordance is testable
-	// without a v4 plugin that supports inline completion.
-	const int line = LineFromPosition(GetCurrentPos());
-	const wxString prefix = GetLine(line);
-	wxLogDebug(wxT("[sigma] TriggerSigmaCompletion line=%d prefix=%s"),
-	           line, prefix);
+	const int caretLine = LineFromPosition(GetCurrentPos());
 
-	// Stub completion — replace with real round-trip in Phase 6.2.b.
-	ShowSigmaCompletion(wxT("// AI suggestion: implement TODO above\n"
-	                          "// Tab to accept   Esc to dismiss"));
+	// Build prompt with surrounding context. Cursor's autocomplete UX
+	// shows that ~50 preceding lines + the active comment / partial line
+	// gives the model enough context to produce a useful continuation
+	// without burning tokens on the whole module. The instruction line
+	// at the top tells the LLM to output ONLY code, no prose, no
+	// markdown fences, matching the indent of the line where the
+	// completion will land.
+	const int contextStart = std::max(0, caretLine - 50);
+	wxString context;
+	for (int i = contextStart; i <= caretLine; ++i) {
+		context += GetLine(i);
+	}
+
+	wxString promptText;
+	promptText += wxT("You are an OES Designer inline code completion engine.\n");
+	promptText += wxT("Language: CES (Open Enterprise Solutions, C-flavoured ");
+	promptText += wxT("variant of 1C BSL — keywords are English: Procedure, ");
+	promptText += wxT("Function, If, For, While, Var, New, etc.).\n");
+	promptText += wxT("Task: continue the code below directly after the cursor. ");
+	promptText += wxT("If the last line is a comment describing what to do, ");
+	promptText += wxT("write the matching implementation. Output ONLY raw code ");
+	promptText += wxT("with proper indentation. Do not include markdown fences, ");
+	promptText += wxT("explanations, or repeat the existing lines.\n\n");
+	promptText += wxT("=== existing code ===\n");
+	promptText += context;
+	promptText += wxT("\n=== continue ===\n");
+
+	// Indicator annotation while we wait so the user knows the request
+	// fired (Cursor's "loading" pulse equivalent). Replaced when the
+	// callback fires.
+	AnnotationSetText(caretLine, wxT("…"));
+	AnnotationSetStyle(caretLine, wxSTC_STYLE_INDENTGUIDE);
+	AnnotationSetVisible(wxSTC_ANNOTATION_BOXED);
+
+	const long pendingLineSnapshot = caretLine;
+	const long pendingPosSnapshot  = GetCurrentPos();
+
+	// Lambda captures `this` — codeEditor must outlive the inflight
+	// request. wxStyledTextCtrl widgets are owned by the document view;
+	// closing the tab destroys this object. The CompleteCodeAsync
+	// callback runs on the UI thread via wxApp::CallAfter, but the
+	// editor may be gone by then. Use a generation token to ignore
+	// stale callbacks.
+	++m_sigmaCompletionGeneration;
+	const unsigned gen = m_sigmaCompletionGeneration;
+
+	pm->CompleteCodeAsync(promptText, wxT("uk-UA"),
+	    [this, gen, pendingLineSnapshot, pendingPosSnapshot]
+	    (bool ok, const wxString& text, const wxString& err) {
+		if (gen != m_sigmaCompletionGeneration) return;  // stale — superseded
+		if (!ok || text.IsEmpty()) {
+			AnnotationSetText(pendingLineSnapshot,
+			    err.IsEmpty() ? _("AI: empty completion") : err);
+			AnnotationSetStyle(pendingLineSnapshot, wxSTC_STYLE_INDENTGUIDE);
+			AnnotationSetVisible(wxSTC_ANNOTATION_BOXED);
+			return;
+		}
+		wxString cleaned = text;
+		// Strip stray markdown fences if the model couldn't help itself.
+		cleaned.Replace(wxT("```ces"), wxString(), false);
+		cleaned.Replace(wxT("```bsl"), wxString(), false);
+		cleaned.Replace(wxT("```"),    wxString(), false);
+		cleaned.Trim(/*fromRight=*/false);
+		cleaned.Trim(/*fromRight=*/true);
+		// Move caret back to the original position so the accepted text
+		// lands in the right spot even if the user touched the buffer
+		// during the request.
+		if (pendingPosSnapshot >= 0 && pendingPosSnapshot <= GetLastPosition()) {
+			SetEmptySelection(pendingPosSnapshot);
+		}
+		ShowSigmaCompletion(cleaned);
+	});
 }
 
 void ibCodeEditor::ShowSigmaCompletion(const wxString& text)
