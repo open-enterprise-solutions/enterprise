@@ -387,9 +387,12 @@ TEST(NumberMath, AbsAndSign) {
 // Get/SetBuffer (binary serialisation)
 // ===========================================================================
 
-TEST(NumberBuffer, ZeroSize9) {
+TEST(NumberBuffer, ZeroIsZeroBytes) {
+    // Compact-zero encoding (number.h §"Compact-zero encoding"): zero
+    // produces a 0-byte buffer, no allocation, no I/O on chunked writes.
+    // SetBuffer recovers zero from len == 0.
     wxMemoryBuffer blob = ibNumber().GetBuffer();
-    EXPECT_EQ(blob.GetDataLen(), 9u);
+    EXPECT_EQ(blob.GetDataLen(), 0u);
 }
 
 TEST(NumberBuffer, RoundTripZero) {
@@ -416,9 +419,18 @@ TEST(NumberBuffer, RoundTripFiftyDigits) {
     EXPECT_EQ(b, a);
 }
 
-TEST(NumberBuffer, NullPointerRejected) {
+TEST(NumberBuffer, NullPointerWithLenZeroIsZero) {
+    // Empty input → SetZero (matches GetBuffer's compact-zero encoding).
+    // Null pointer is fine when length is zero — we never read it.
+    ibNumber b(7);
+    EXPECT_TRUE(b.SetBuffer(nullptr, 0));
+    EXPECT_TRUE(b.IsZero());
+}
+
+TEST(NumberBuffer, NullPointerWithLenNonZeroRejected) {
+    // Genuine programming error — refuse instead of dereferencing.
     ibNumber b;
-    EXPECT_FALSE(b.SetBuffer(nullptr, 0));
+    EXPECT_FALSE(b.SetBuffer(nullptr, 16));
 }
 
 TEST(NumberBuffer, OutParamReuseOverwrites) {
