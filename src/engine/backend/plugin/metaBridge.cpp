@@ -590,11 +590,16 @@ int HostMetaEdit(const char* pluginId,
 	// Strict-key validation. Unknown keys are rejected to keep the
 	// contract honest — silently dropping "name":"Pwn" would let an
 	// agent send mutation payloads the host doesn't understand and
-	// think they applied.
+	// think they applied. The unknown-key string is sanitised through
+	// the audit-log helper before being splashed into errorMsg so a
+	// malicious plugin cannot inject newlines / NUL bytes into the
+	// error envelope the host may eventually re-log.
 	for (auto& kv : patch.items()) {
 		const std::string& k = kv.key();
 		if (k != "synonym" && k != "comment") {
-			SetError(errorMsg, "MetaEdit: unknown key '" + k +
+			const wxString safe = SanitiseForLog(wxString::FromUTF8(k));
+			SetError(errorMsg, "MetaEdit: unknown key '" +
+			                    std::string(safe.utf8_str()) +
 			                    "' (supported: synonym, comment)");
 			return -1;
 		}
@@ -620,17 +625,35 @@ int HostMetaEdit(const char* pluginId,
 		return -1;
 	}
 
-	// Capture by fullName + re-resolve at undo time. A raw `target`
-	// pointer would dangle if the same object got MetaDelete'd between
-	// edit and undo. Epoch-gating below also catches config-reload.
+	// Capture by fullName + re-resolve at undo time + identity-check
+	// against the original target pointer. A raw `target` capture alone
+	// would dangle on intervening MetaDelete; epoch-gating catches
+	// config-reload; the identity check guards the narrow window where
+	// an object of the same fullName is delete-then-recreated between
+	// edit and undo — without it the undo would silently apply the old
+	// synonym/comment to the impostor.
+	ibValueMetaObject* originalTarget = lookup.hit;
 	const std::string fullNameCopy(fullName);
-	g_undoStack.push_back({[fullNameCopy, oldSynonym, oldComment,
+	g_undoStack.push_back({[originalTarget, fullNameCopy,
+	                          oldSynonym, oldComment,
 	                          changedSynonym, changedComment]() {
-		// Re-resolve target — kind/name parsing matches the create path.
 		std::string k, n;
-		if (!SplitFullName(fullNameCopy.c_str(), k, n)) return;
+		if (!SplitFullName(fullNameCopy.c_str(), k, n)) {
+			wxLogWarning(wxT("metaBridge: MetaEdit undo skipped — bad fullName '%s'"),
+			             SanitiseForLog(wxString::FromUTF8(fullNameCopy)));
+			return;
+		}
 		const LookupResult lookup = LookupTopLevel(k, n);
-		if (lookup.hit == nullptr) return;
+		if (lookup.hit == nullptr) {
+			wxLogWarning(wxT("metaBridge: MetaEdit undo skipped — target '%s' no longer in tree"),
+			             SanitiseForLog(wxString::FromUTF8(fullNameCopy)));
+			return;
+		}
+		if (lookup.hit != originalTarget) {
+			wxLogWarning(wxT("metaBridge: MetaEdit undo skipped — target '%s' identity changed (delete + recreate?)"),
+			             SanitiseForLog(wxString::FromUTF8(fullNameCopy)));
+			return;
+		}
 		if (changedSynonym) lookup.hit->SetSynonym(oldSynonym);
 		if (changedComment) lookup.hit->SetComment(oldComment);
 	}, g_configEpoch});

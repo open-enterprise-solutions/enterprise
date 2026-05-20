@@ -389,6 +389,13 @@ void ibPluginManager::UnloadAll()
 	m_defaultAIPaneId.Clear();
 	m_pendingWebPaneRegs.clear();
 
+	// Drain the agent undo stack BEFORE the configuration tree is freed.
+	// Without this every undo lambda holds dangling pointers; the
+	// epoch-gate inside metaBridge catches them but the shared_ptr-owned
+	// MetaDelete victims would leak otherwise. NotifyConfigurationUnload
+	// advances the epoch + clears the stack, firing custom deleters.
+	metaBridge::NotifyConfigurationUnload();
+
 	// Session-scoped policy decisions evaporate on UnloadAll. AllowAlways
 	// entries also drop here — Designer reloads them from options.xml on
 	// next LoadAll via SetMutationPolicy (Phase 4). For Phase 3.2 tests
