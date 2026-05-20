@@ -112,9 +112,19 @@ public:
 	// (funcName, params**, size) overload — a forwarding ref accepts
 	// anything otherwise, and `&args...` on a non-ibValue arg yields
 	// pointer-to-array / int* which the array init in the body rejects.
+	//
+	// std::decay_t strips refs + cv-quals so a `const ibValue&` arg
+	// also satisfies the constraint (binds to const ibValue*; the
+	// non-const ibValue** target intentionally rejects const at the
+	// body level — same behaviour as a direct CallAsProc on a const
+	// lvalue, but with a clearer SFINAE-rejection if needed later).
+	//
+	// Temporaries (ibValue(7)) are safe: the implicit `ibValue* ppParams[]`
+	// array lives for the full expression of the inner CallAsProc call,
+	// which consumes ppParams before returning.
 	template <typename ...Types,
 	          typename = std::enable_if_t<
-	              (std::is_same_v<std::remove_reference_t<Types>, ibValue> && ...)>>
+	              (std::is_same_v<std::decay_t<Types>, ibValue> && ...)>>
 	inline void CallAsProc(const wxString& funcName, Types&&... args) {
 		ibValue* ppParams[] = { &args..., nullptr };
 		CallAsProc(funcName, ppParams, (const long)sizeof ...(args));
@@ -122,7 +132,7 @@ public:
 
 	template <typename ...Types,
 	          typename = std::enable_if_t<
-	              (std::is_same_v<std::remove_reference_t<Types>, ibValue> && ...)>>
+	              (std::is_same_v<std::decay_t<Types>, ibValue> && ...)>>
 	inline void CallAsFunc(const wxString& funcName, ibValue& pvarRetValue, Types&&... args) {
 		ibValue* ppParams[] = { &args..., nullptr };
 		CallAsFunc(funcName, pvarRetValue, ppParams, (const long)sizeof ...(args));
