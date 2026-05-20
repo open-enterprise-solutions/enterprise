@@ -682,25 +682,13 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 		miSend   ->Enable(hasAI && hasSelection);
 		miDoc    ->Enable(hasAI);
 
-		wxString label;
-		if (hasAI) {
-			// First chat-capable provider claims the label. Multi-
-			// provider future will show a stacked submenu per provider.
-			for (const auto& p : pm->AIProviders()) {
-				bool supportsChat = false;
-				for (const auto& m : p.supportedModes) {
-					if (m == "chat") { supportsChat = true; break; }
-				}
-				if (supportsChat) {
-					label = wxString::FromUTF8(p.displayName);
-					break;
-				}
-			}
-			if (label.IsEmpty()) label = _("AI Assistant");
-		} else {
-			label = _("AI Assistant (no plugin installed)");
-		}
-		menu.AppendSubMenu(aiSub, label);
+		// Always "AI Assistant" — host-neutral; specific provider name
+		// is intentionally not exposed in the submenu label, matching
+		// the way Cursor / Copilot / Cody never put the LLM vendor in
+		// menu UI.
+		menu.AppendSubMenu(aiSub, hasAI
+		    ? _("AI Assistant")
+		    : _("AI Assistant (no plugin installed)"));
 	}
 
 	menu.AppendSeparator();
