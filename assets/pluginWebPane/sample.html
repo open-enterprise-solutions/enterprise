@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>AI Assistant (demo bundle)</title>
+<title>AI Assistant</title>
 <style>
   html, body { margin: 0; padding: 0; height: 100%; background: #1e1e1e; color: #e0e0e0; }
   body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 14px; display: flex; flex-direction: column; height: 100vh; }
@@ -43,24 +43,52 @@
 </style>
 </head>
 <body>
-<div id="bar"><span>AI Assistant (demo bundle)</span><span id="mode" title="Click to toggle Chat / Agent / Plan">chat</span></div>
+<div id="bar"><span id="title">AI Assistant</span><span id="mode" title="Click to toggle Chat / Agent / Plan">chat</span></div>
 <div id="log"></div>
 <div id="empty" hidden>
-  <div>Send a prompt to get started.</div>
+  <div id="emptyLabel">Send a prompt to get started.</div>
   <div class="chips" id="chips"></div>
 </div>
 <div id="row">
-  <input type="text" id="input" autocomplete="off" placeholder="ask anything…">
+  <input type="text" id="input" autocomplete="off">
   <button id="send">Send</button>
 </div>
 <div id="footer"></div>
 <script>
 (function () {
-  var prompts = [
-    "Explain Document.ПриходныйКассовыйОрдер",
-    "Generate a Catalog with ІПН + EDRPO attributes",
-    "Review the selected procedure for issues"
-  ];
+  // Locale dispatch — picks Russian when the browser/wxWebView locale
+  // starts with "ru", falls back to English otherwise. Real plugin
+  // bundles can extend this dict; for the host demo we cover only
+  // the two languages the Designer ships UI in today.
+  var lang = (navigator.language || "en").toLowerCase().startsWith("ru")
+    ? "ru" : "en";
+  var L = {
+    en: {
+      title:    "AI Assistant",
+      empty:    "Send a prompt to get started.",
+      ask:      "ask anything…",
+      send:     "Send",
+      chips: [
+        "Explain selected code",
+        "Review code for issues",
+        "Generate doc comment"
+      ],
+      noChannel: "[ERR] oesHost channel not wired"
+    },
+    ru: {
+      title:    "AI Assistant",
+      empty:    "Отправьте запрос для начала.",
+      ask:      "введите запрос…",
+      send:     "Отправить",
+      chips: [
+        "Объясни выделенный код",
+        "Проверь код на ошибки",
+        "Сгенерируй документирующий комментарий"
+      ],
+      noChannel: "[ОШИБКА] канал oesHost не подключён"
+    }
+  }[lang];
+  var prompts = L.chips;
 
   function ts() {
     var d = new Date();
@@ -269,7 +297,7 @@
         append(ts() + " [ERR] postMessage threw: " + e, "err");
       }
     } else {
-      append(ts() + " [ERR] oesHost channel not wired", "err");
+      append(ts() + " " + L.noChannel, "err");
     }
   }
 
@@ -287,6 +315,13 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
+    // Apply locale strings.
+    document.getElementById("title").textContent      = L.title;
+    document.getElementById("emptyLabel").textContent = L.empty;
+    document.getElementById("input").placeholder      = L.ask;
+    document.getElementById("send").textContent       = L.send;
+    document.title                                     = L.title;
+
     renderPromptChips();
     showEmpty(true);
 

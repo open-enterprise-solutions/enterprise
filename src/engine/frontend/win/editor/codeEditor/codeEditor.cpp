@@ -663,15 +663,15 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 	{
 		wxMenu* aiSub = new wxMenu();
 		auto* miExplain = aiSub->Append(wxID_HIGHEST + 4030,
-		                                  _("Explain code\tAlt+I,E"));
+		                                  _("Объяснить код\tAlt+I,E"));
 		auto* miReview  = aiSub->Append(wxID_HIGHEST + 4031,
-		                                  _("Review code\tAlt+I,R"));
+		                                  _("Проверить код\tAlt+I,R"));
 		auto* miFix     = aiSub->Append(wxID_HIGHEST + 4032,
-		                                  _("Fix code\tAlt+I,C"));
+		                                  _("Исправить код\tAlt+I,C"));
 		auto* miDoc     = aiSub->Append(wxID_HIGHEST + 4033,
-		                                  _("Generate doc comment\tAlt+I,G"));
+		                                  _("Сгенерировать документирующий комментарий\tAlt+I,G"));
 		auto* miSend    = aiSub->Append(wxID_HIGHEST + 4034,
-		                                  _("Send selection to chat\tAlt+I,S"));
+		                                  _("Отправить выделенное в чат\tAlt+I,S"));
 
 		auto* pm = appData ? appData->GetPluginManager() : nullptr;
 		const bool hasAI = pm && pm->HasAIProviderFor("chat");

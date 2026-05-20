@@ -199,7 +199,7 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	m_menuSetting->Append(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP,
 	                       _("Look up in Syntax Helper\tRawCtrl+F1"));
 	m_menuSetting->Append(wxID_FRONTEND_PLUGIN_WEB_PANE,
-	                       _("AI Chat\tRawCtrl+Alt+I"));
+	                       _("AI Assistant\tRawCtrl+Alt+I"));
 	m_menuSetting->Append(wxID_FRONTEND_PLUGIN_MANAGER,
 	                       _("Plugins…"));
 
@@ -312,12 +312,12 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	         if (!wxFileExists(resolvedPath)) {
 	             wxMessageBox(_("AI Chat: sample HTML bundle not found.\n"
 	                             "Install a v4 plugin via Tools → Plugins."),
-	                          _("AI Chat"), wxICON_INFORMATION, this);
+	                          _("AI Assistant"), wxICON_INFORMATION, this);
 	             return;
 	         }
 	         const int rc = pm->CallWebPaneRegister(
 	             wxT("designer.demo.chat"),
-	             _("AI Chat (demo)"),
+	             _("AI Assistant"),
 	             resolvedPath,
 	             /*onMessage*/ nullptr,
 	             /*userData*/  nullptr);
