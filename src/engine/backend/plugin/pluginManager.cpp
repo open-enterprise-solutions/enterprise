@@ -71,12 +71,14 @@ int Host_Subscribe(const char* event, ibPluginEventFn cb)
 void Host_Log(const char* msg, int severity)
 {
 	// Plugins log at any phase; appData may already be NULL during
-	// shutdown. Route through wxLogMessage as a stable fallback.
+	// shutdown. Route through wxLog as a stable fallback. Severity 0
+	// (info) takes wxLogDebug so plugin-init chatter doesn't surface
+	// in the wxLog flush modal; warnings and errors still bubble.
 	const wxString text = wxString::FromUTF8(msg ? msg : "");
 	switch (severity) {
 		case 1:  wxLogWarning("%s", text); break;
 		case 2:  wxLogError  ("%s", text); break;
-		default: wxLogMessage("%s", text); break;
+		default: wxLogDebug  ("%s", text); break;
 	}
 }
 
@@ -310,7 +312,7 @@ size_t ibPluginManager::LoadAll()
 	// third-party code.
 	const wxString sandbox = wxGetenv(wxT("OES_PLUGIN_SANDBOX"));
 	if (sandbox == wxT("1") || sandbox.Lower() == wxT("true")) {
-		wxLogMessage(wxT("Plugin sandbox active (OES_PLUGIN_SANDBOX=1) — skipping plugin discovery."));
+		wxLogDebug(wxT("Plugin sandbox active (OES_PLUGIN_SANDBOX=1) — skipping plugin discovery."));
 		return 0;
 	}
 
@@ -376,8 +378,12 @@ size_t ibPluginManager::LoadAll()
 		const std::string pluginIdNarrow(info->name ? info->name : "");
 		if (!pluginIdNarrow.empty() &&
 		    !pluginsConfig::IsEnabled(snap, pluginIdNarrow)) {
-			wxLogMessage(wxT("Plugin '%s' disabled in plugins.json5 — skipping"),
-			             wxString::FromUTF8(pluginIdNarrow));
+			// Informational — wxLogDebug stays out of the
+			// wxLog::FlushActive modal that appears at first event-loop
+			// tick. User-visible disable status lives in the Tools →
+			// Plugins dialog where it belongs.
+			wxLogDebug(wxT("Plugin '%s' disabled in plugins.json5 — skipping"),
+			           wxString::FromUTF8(pluginIdNarrow));
 			continue;
 		}
 
@@ -674,12 +680,12 @@ bool ibPluginManager::CheckMutationAllowed(const wxString& pluginId,
 	if (it != m_mutationPolicy.end()) {
 		const MutationPolicy w = it->second;
 		if (w == MutationPolicy::AllowSession || w == MutationPolicy::AllowAlways) {
-			wxLogMessage(wxT("[plugin-policy] %s::%s -> ALLOW (wildcard %s)"),
+			wxLogDebug(wxT("[plugin-policy] %s::%s -> ALLOW (wildcard %s)"),
 			             pluginId, opName, wxString::FromUTF8(PolicyName(w)));
 			return true;
 		}
 		if (w == MutationPolicy::Deny) {
-			wxLogMessage(wxT("[plugin-policy] %s::%s -> DENY (wildcard Deny)"),
+			wxLogDebug(wxT("[plugin-policy] %s::%s -> DENY (wildcard Deny)"),
 			             pluginId, opName);
 			return false;
 		}
@@ -689,7 +695,7 @@ bool ibPluginManager::CheckMutationAllowed(const wxString& pluginId,
 	const MutationPolicy p = GetMutationPolicy(pluginId, opName);
 	const bool allow = (p == MutationPolicy::AllowSession ||
 	                    p == MutationPolicy::AllowAlways);
-	wxLogMessage(wxT("[plugin-policy] %s::%s -> %s (%s)"),
+	wxLogDebug(wxT("[plugin-policy] %s::%s -> %s (%s)"),
 	             pluginId, opName, allow ? wxT("ALLOW") : wxT("DENY"),
 	             wxString::FromUTF8(PolicyName(p)));
 	return allow;

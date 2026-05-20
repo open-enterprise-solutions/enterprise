@@ -547,7 +547,7 @@ int HostMetaCreate(const char* pluginId,
 		delete obj;
 	}, g_configEpoch});
 
-	wxLogMessage(wxT("[meta] MetaCreate(plugin=%s) -> %s.%s OK"),
+	wxLogDebug(wxT("[meta] MetaCreate(plugin=%s) -> %s.%s OK"),
 	             SanitiseForLog(wxString::FromUTF8(pluginId)),
 	             SanitiseForLog(wxString::FromUTF8(kind)),
 	             SanitiseForLog(objName));
@@ -678,7 +678,7 @@ int HostMetaEdit(const char* pluginId,
 		if (changedComment) lookup.hit->SetComment(oldComment);
 	}, g_configEpoch});
 
-	wxLogMessage(wxT("[meta] MetaEdit(plugin=%s) -> %s synonym=%d comment=%d"),
+	wxLogDebug(wxT("[meta] MetaEdit(plugin=%s) -> %s synonym=%d comment=%d"),
 	             SanitiseForLog(wxString::FromUTF8(pluginId)),
 	             SanitiseForLog(wxString::FromUTF8(fullName)),
 	             (int)changedSynonym, (int)changedComment);
@@ -750,7 +750,7 @@ int HostMetaDelete(const char* pluginId,
 		*released = true;
 	}, g_configEpoch});
 
-	wxLogMessage(wxT("[meta] MetaDelete(plugin=%s) -> %s OK"),
+	wxLogDebug(wxT("[meta] MetaDelete(plugin=%s) -> %s OK"),
 	             SanitiseForLog(wxString::FromUTF8(pluginId)),
 	             SanitiseForLog(wxString::FromUTF8(fullName)));
 	return 0;

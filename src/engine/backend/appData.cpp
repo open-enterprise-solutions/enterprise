@@ -121,6 +121,15 @@ ibApplicationData::ibApplicationData(ibRunMode runMode) :
 	// Loaded even in launcher mode so the About dialog (and integration smoke
 	// tests) see the plugin set before a configuration opens. Plugins receive
 	// a host pointer per v3 ABI; they get NULL only for ABI v1/v2.
+	// Defensive: wxLog::TimeStampMS calls strftime under a locale-aware
+	// format string. macOS dev machines with LC_TIME unset trigger an
+	// assert "strftime() failed" in datetime.cpp:295 — visible as a modal
+	// "wxWidgets Debug Alert" mid-startup. Drop timestamps entirely so
+	// every wxLog* path inside LoadAll (and beyond) skips the strftime
+	// call. wxLog still records the entry; only the leading "[HH:MM:SS]"
+	// goes away.
+	wxLog::SetTimestamp(wxString());
+
 	m_pluginManager->LoadAll();
 
 	// Wire session-lifecycle event listeners — drives metadata load on
