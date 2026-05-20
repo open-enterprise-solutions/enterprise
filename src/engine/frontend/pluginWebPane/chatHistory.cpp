@@ -36,11 +36,12 @@ const char* RoleToString(ibPluginWebPane::Entry::Role role)
 {
 	using R = ibPluginWebPane::Entry::Role;
 	switch (role) {
-	case R::User:      return "user";
-	case R::Assistant: return "assistant";
-	case R::System:    return "system";
-	case R::Error:     return "error";
-	case R::Plan:      return "plan";
+	case R::User:         return "user";
+	case R::Assistant:    return "assistant";
+	case R::System:       return "system";
+	case R::Error:        return "error";
+	case R::Plan:         return "plan";
+	case R::TripleReview: return "tripleReview";
 	}
 	return "user";
 }
@@ -48,11 +49,12 @@ const char* RoleToString(ibPluginWebPane::Entry::Role role)
 ibPluginWebPane::Entry::Role RoleFromString(const std::string& s)
 {
 	using R = ibPluginWebPane::Entry::Role;
-	if (s == "user")      return R::User;
-	if (s == "assistant") return R::Assistant;
-	if (s == "system")    return R::System;
-	if (s == "error")     return R::Error;
-	if (s == "plan")      return R::Plan;
+	if (s == "user")         return R::User;
+	if (s == "assistant")    return R::Assistant;
+	if (s == "system")       return R::System;
+	if (s == "error")        return R::Error;
+	if (s == "plan")         return R::Plan;
+	if (s == "tripleReview") return R::TripleReview;
 	return R::User;
 }
 
@@ -137,6 +139,44 @@ bool Save(const wxString& configHash,
 		j["rationale"]      = std::string(e.rationale.utf8_str());
 		j["mutations"]      = std::string(e.mutations.utf8_str());
 		j["applied"]        = e.applied;
+
+		// TripleReview-only fields. Written for every role so the schema
+		// stays uniform; readers that don't know these fields just ignore
+		// them, and roles that don't use them carry zero/empty defaults.
+		if (e.role == ibPluginWebPane::Entry::Role::TripleReview) {
+			j["verdict"]       = std::string(e.verdict.utf8_str());
+			j["verdictReason"] = std::string(e.verdictReason.utf8_str());
+			j["countP0"]       = e.countP0;
+			j["countP1"]       = e.countP1;
+			j["countP2"]       = e.countP2;
+			j["countP3"]       = e.countP3;
+
+			nlohmann::json reviewers = nlohmann::json::array();
+			for (const auto& r : e.reviewers) {
+				nlohmann::json rj;
+				rj["model"]     = std::string(r.model.utf8_str());
+				rj["content"]   = std::string(r.content.utf8_str());
+				rj["p0"]        = r.p0;
+				rj["p1"]        = r.p1;
+				rj["p2"]        = r.p2;
+				rj["p3"]        = r.p3;
+				rj["latencyMs"] = r.latencyMs;
+				reviewers.push_back(std::move(rj));
+			}
+			j["reviewers"] = std::move(reviewers);
+
+			nlohmann::json findings = nlohmann::json::array();
+			for (const auto& f : e.findings) {
+				nlohmann::json fj;
+				fj["severity"] = std::string(f.severity.utf8_str());
+				fj["reviewer"] = std::string(f.reviewer.utf8_str());
+				fj["line"]     = f.line;
+				fj["message"]  = std::string(f.message.utf8_str());
+				fj["fix"]      = std::string(f.fix.utf8_str());
+				findings.push_back(std::move(fj));
+			}
+			j["findings"] = std::move(findings);
+		}
 		arr.push_back(std::move(j));
 	}
 	doc["entries"] = std::move(arr);
@@ -210,6 +250,41 @@ bool Load(const wxString& configHash,
 		e.rationale      = wxString::FromUTF8(j.value("rationale",      "").c_str());
 		e.mutations      = wxString::FromUTF8(j.value("mutations",      "").c_str());
 		e.applied        = j.value("applied", false);
+
+		// TripleReview-only fields. Missing keys (older files / non-tripleReview
+		// roles) parse as defaults — backward compatible by construction.
+		e.verdict       = wxString::FromUTF8(j.value("verdict",       "").c_str());
+		e.verdictReason = wxString::FromUTF8(j.value("verdictReason", "").c_str());
+		e.countP0       = j.value("countP0", 0);
+		e.countP1       = j.value("countP1", 0);
+		e.countP2       = j.value("countP2", 0);
+		e.countP3       = j.value("countP3", 0);
+		if (j.contains("reviewers") && j["reviewers"].is_array()) {
+			for (const auto& r : j["reviewers"]) {
+				if (!r.is_object()) continue;
+				ibPluginWebPane::Entry::ReviewerSummary rs;
+				rs.model     = wxString::FromUTF8(r.value("model",   "").c_str());
+				rs.content   = wxString::FromUTF8(r.value("content", "").c_str());
+				rs.p0        = r.value("p0", 0);
+				rs.p1        = r.value("p1", 0);
+				rs.p2        = r.value("p2", 0);
+				rs.p3        = r.value("p3", 0);
+				rs.latencyMs = r.value("latencyMs", 0L);
+				e.reviewers.push_back(std::move(rs));
+			}
+		}
+		if (j.contains("findings") && j["findings"].is_array()) {
+			for (const auto& f : j["findings"]) {
+				if (!f.is_object()) continue;
+				ibPluginWebPane::Entry::Finding fd;
+				fd.severity = wxString::FromUTF8(f.value("severity", "").c_str());
+				fd.reviewer = wxString::FromUTF8(f.value("reviewer", "").c_str());
+				fd.line     = f.value("line", 0);
+				fd.message  = wxString::FromUTF8(f.value("message",  "").c_str());
+				fd.fix      = wxString::FromUTF8(f.value("fix",      "").c_str());
+				e.findings.push_back(std::move(fd));
+			}
+		}
 		// codeBlocks not persisted; RenderTranscript re-extracts.
 		entries.push_back(std::move(e));
 	}

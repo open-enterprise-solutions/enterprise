@@ -197,16 +197,39 @@ InstallResult Install(const wxString& zipPath, bool allowOverwrite,
 		return InstallResult::IoError;
 	}
 	wxZipInputStream zip(f);
+	// SEC-P1-7: compute the canonical staging root once for prefix check.
+	wxFileName stagingRoot(stagingDir, wxEmptyString);
+	stagingRoot.Normalize(wxPATH_NORM_ABSOLUTE | wxPATH_NORM_DOTS);
+	const wxString stagingRootPath = stagingRoot.GetPath() + wxFILE_SEP_PATH;
 	std::unique_ptr<wxZipEntry> entry;
 	while ((entry.reset(zip.GetNextEntry())), entry.get() != nullptr) {
 		const wxString name = entry->GetName();
-		// Reject path traversal — bundles must stay rooted at staging.
-		if (name.Contains(wxT("..")) || name.StartsWith(wxT("/"))) {
+		// SEC-P1-7: refuse symlink entries — a zip carrying a symlink
+		// could point outside stagingDir and a later extract would write
+		// through it. wxZipEntry exposes file mode bits when the archive
+		// was made on a Unix system; treat anything that looks like a
+		// symlink as hostile.
+		if (entry->IsMadeByUnix()) {
+			const int mode = static_cast<int>(entry->GetMode());
+			if ((mode & 0xF000) == 0xA000) { // S_IFLNK
+				if (errorMsg) *errorMsg = wxT("zip entry is a symlink — refused");
+				RmRf(stagingDir);
+				return InstallResult::BadZip;
+			}
+		}
+		// SEC-P1-7: canonicalise the computed output path and verify it
+		// stays under stagingRoot. Substring "..". heuristic missed cases
+		// like backslash separators on POSIX, "....//", or UTF-8 normalised
+		// dots; comparing real paths catches them all.
+		wxFileName outName(stagingDir + wxFILE_SEP_PATH + name);
+		outName.Normalize(wxPATH_NORM_ABSOLUTE | wxPATH_NORM_DOTS);
+		const wxString outFull = outName.GetFullPath();
+		if (!outFull.StartsWith(stagingRootPath)) {
 			if (errorMsg) *errorMsg = wxT("zip entry escapes bundle root");
 			RmRf(stagingDir);
 			return InstallResult::BadZip;
 		}
-		const wxString outPath = stagingDir + wxFILE_SEP_PATH + name;
+		const wxString outPath = outFull;
 		wxString sub;
 		if (!ExtractEntry(zip, *entry, outPath, &sub)) {
 			if (errorMsg) *errorMsg = sub;

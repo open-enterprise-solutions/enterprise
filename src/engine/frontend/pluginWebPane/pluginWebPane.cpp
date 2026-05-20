@@ -21,6 +21,10 @@
 #include "frontend/pluginWebPane/chatHistory.h"
 #include "frontend/pluginWebPane/chatContext.h"
 
+// SEC-P1-9: ScopedPluginIdGuard so onMessage dispatches scope caller pid.
+#include "backend/appData.h"
+#include "backend/plugin/pluginManager.h"
+
 #include "3rdparty/md4c/md4c-html.h"
 #include "3rdparty/nlohmann/json.hpp"
 
@@ -38,6 +42,22 @@
 #include <functional>
 
 namespace {
+
+// SEC-P1-9: resolve the registering plugin's id for a paneId and push it
+// into the host-side tl_currentPluginId for the duration of an onMessage
+// call. Without this scope, any host trampoline the plugin fires
+// synchronously (Meta*, ReadPluginEnv) sees an empty pluginId and fails
+// the policy gate / env-isolation check. Falls back to an empty guard
+// when appData / pluginManager aren't available (tests).
+std::unique_ptr<ScopedPluginIdGuard> MakePaneScopeGuard(const wxString& paneId)
+{
+	if (appData == nullptr) return nullptr;
+	auto* pm = appData->GetPluginManager();
+	if (pm == nullptr) return nullptr;
+	const std::string pid = pm->GetPluginIdForPane(paneId);
+	if (pid.empty()) return nullptr;
+	return std::make_unique<ScopedPluginIdGuard>(pid);
+}
 
 // Event ID for the cross-thread push channel. Off-UI callers cannot touch
 // wxHtmlWindow directly; they post a queued event that this pane drains on
@@ -409,13 +429,38 @@ wxString RoleLabel(ibPluginWebPane::Entry::Role role)
 {
 	using R = ibPluginWebPane::Entry::Role;
 	switch (role) {
-	case R::User:      return _("Вы");
-	case R::Assistant: return _("Ассистент");
-	case R::System:    return _("Система");
-	case R::Error:     return _("Ошибка");
-	case R::Plan:      return _("План");
+	case R::User:         return _("Вы");
+	case R::Assistant:    return _("Ассистент");
+	case R::System:       return _("Система");
+	case R::Error:        return _("Ошибка");
+	case R::Plan:         return _("План");
+	case R::TripleReview: return _("Triple-review");
 	}
 	return wxEmptyString;
+}
+
+// Map a verdict string to its (bgcolor, fgcolor) badge palette. PASS = green,
+// WARN = amber, BLOCK = red. Unknown verdicts fall back to a neutral grey so
+// a forward-compatible payload still renders something legible.
+void VerdictBadgeColors(const wxString& verdict,
+                          const char*& outBg, const char*& outFg)
+{
+	if      (verdict == wxT("PASS"))  { outBg = "#16a34a"; outFg = "#ffffff"; }
+	else if (verdict == wxT("WARN"))  { outBg = "#d97706"; outFg = "#ffffff"; }
+	else if (verdict == wxT("BLOCK")) { outBg = "#b91c1c"; outFg = "#ffffff"; }
+	else                               { outBg = "#6b7280"; outFg = "#ffffff"; }
+}
+
+// Map a severity tag to its cell background. Mirrors the badge palette but
+// at a lower saturation since count cells sit inside the transcript row and
+// shouldn't outshine the verdict badge above them.
+const char* SeverityBgColor(const wxString& severity)
+{
+	if      (severity == wxT("P0")) return "#fecaca";
+	else if (severity == wxT("P1")) return "#fed7aa";
+	else if (severity == wxT("P2")) return "#fde68a";
+	else if (severity == wxT("P3")) return "#e5e7eb";
+	return "#f3f4f6";
 }
 
 } // namespace
@@ -613,14 +658,15 @@ void ibPluginWebPane::DispatchEnvelope(const wxString& jsonInline)
 		const std::string language = env.value("language", "ces");
 		const std::string code     = env.value("code",     "");
 		wxString opLabel;
-		if      (op == "explain") opLabel = _("Объясни следующий код");
-		else if (op == "review")  opLabel = _("Проверь следующий код");
-		else if (op == "fix")     opLabel = _("Исправь следующий код");
-		else if (op == "doc")     opLabel = _("Сгенерируй документирующий комментарий для");
-		else if (op == "send")    opLabel = _("Обсудим этот код");
-		else                       opLabel = _("Обработай код") + wxString(wxT(" (")) +
-		                                       wxString::FromUTF8(op.c_str()) +
-		                                       wxString(wxT(")"));
+		if      (op == "explain")       opLabel = _("Объясни следующий код");
+		else if (op == "review")        opLabel = _("Проверь следующий код");
+		else if (op == "fix")           opLabel = _("Исправь следующий код");
+		else if (op == "doc")           opLabel = _("Сгенерируй документирующий комментарий для");
+		else if (op == "send")          opLabel = _("Обсудим этот код");
+		else if (op == "triple-review") opLabel = _("Triple-review модуля");
+		else                             opLabel = _("Обработай код") + wxString(wxT(" (")) +
+		                                            wxString::FromUTF8(op.c_str()) +
+		                                            wxString(wxT(")"));
 		const wxString lang = wxString::FromUTF8(language.c_str());
 		const wxString src  = wxString::FromUTF8(code.c_str());
 
@@ -665,6 +711,58 @@ void ibPluginWebPane::DispatchEnvelope(const wxString& jsonInline)
 			}
 		}
 		RenderTranscript();
+		return;
+	}
+	if (kind == "agent.tripleReview") {
+		// aiBridge wraps the Anvil triple_review tool response into this
+		// envelope; the `result` object carries the verdict + reviewers
+		// + findings. Fill an Entry record without trying to also produce
+		// a flat markdown body — the dedicated render path below has full
+		// access to the structured data and never falls back to markdown.
+		Entry e;
+		e.role      = Entry::Role::TripleReview;
+		e.requestId = wxString::FromUTF8(env.value("requestId", "").c_str());
+
+		if (env.contains("result") && env["result"].is_object()) {
+			const auto& res = env["result"];
+			e.verdict       = wxString::FromUTF8(res.value("verdict", "").c_str());
+			e.verdictReason = wxString::FromUTF8(res.value("reason",  "").c_str());
+
+			if (res.contains("counts") && res["counts"].is_object()) {
+				const auto& c = res["counts"];
+				e.countP0 = c.value("P0", 0);
+				e.countP1 = c.value("P1", 0);
+				e.countP2 = c.value("P2", 0);
+				e.countP3 = c.value("P3", 0);
+			}
+			if (res.contains("reviewers") && res["reviewers"].is_array()) {
+				for (const auto& r : res["reviewers"]) {
+					if (!r.is_object()) continue;
+					Entry::ReviewerSummary rs;
+					rs.model     = wxString::FromUTF8(r.value("model",   "").c_str());
+					rs.content   = wxString::FromUTF8(r.value("content", "").c_str());
+					rs.p0        = r.value("p0", 0);
+					rs.p1        = r.value("p1", 0);
+					rs.p2        = r.value("p2", 0);
+					rs.p3        = r.value("p3", 0);
+					rs.latencyMs = r.value("latencyMs", 0L);
+					e.reviewers.push_back(std::move(rs));
+				}
+			}
+			if (res.contains("findings") && res["findings"].is_array()) {
+				for (const auto& f : res["findings"]) {
+					if (!f.is_object()) continue;
+					Entry::Finding fd;
+					fd.severity = wxString::FromUTF8(f.value("severity", "").c_str());
+					fd.reviewer = wxString::FromUTF8(f.value("reviewer", "").c_str());
+					fd.line     = f.value("line", 0);
+					fd.message  = wxString::FromUTF8(f.value("message",  "").c_str());
+					fd.fix      = wxString::FromUTF8(f.value("fix",      "").c_str());
+					e.findings.push_back(std::move(fd));
+				}
+			}
+		}
+		AppendEntry(std::move(e));
 		return;
 	}
 
@@ -755,11 +853,12 @@ void ibPluginWebPane::RenderTranscript()
 		const char* bg = "#ffffff";
 		const char* roleColor = "#374151";
 		switch (e.role) {
-		case Entry::Role::User:      bg = "#f3f4f6"; roleColor = "#2563eb"; break;
-		case Entry::Role::Assistant: bg = "#ffffff"; roleColor = "#1f2937"; break;
-		case Entry::Role::System:    bg = "#f5f5f5"; roleColor = "#6b7280"; break;
-		case Entry::Role::Error:     bg = "#fef2f2"; roleColor = "#b91c1c"; break;
-		case Entry::Role::Plan:      bg = "#fff7ed"; roleColor = "#9a3412"; break;
+		case Entry::Role::User:         bg = "#f3f4f6"; roleColor = "#2563eb"; break;
+		case Entry::Role::Assistant:    bg = "#ffffff"; roleColor = "#1f2937"; break;
+		case Entry::Role::System:       bg = "#f5f5f5"; roleColor = "#6b7280"; break;
+		case Entry::Role::Error:        bg = "#fef2f2"; roleColor = "#b91c1c"; break;
+		case Entry::Role::Plan:         bg = "#fff7ed"; roleColor = "#9a3412"; break;
+		case Entry::Role::TripleReview: bg = "#f8fafc"; roleColor = "#0f172a"; break;
 		}
 
 		doc += wxString::Format(
@@ -795,6 +894,98 @@ void ibPluginWebPane::RenderTranscript()
 				    HtmlEscape(e.planId),
 				    HtmlEscape(e.conversationId),
 				    HtmlEscape(_("Отклонить")));
+			}
+		} else if (e.role == Entry::Role::TripleReview) {
+			// Verdict badge + reason line. Single-row table with a coloured
+			// left cell — wxHtmlWindow renders <table bgcolor> reliably and
+			// CSS backgrounds are unsupported here.
+			const char* badgeBg = "#6b7280";
+			const char* badgeFg = "#ffffff";
+			VerdictBadgeColors(e.verdict, badgeBg, badgeFg);
+			doc += wxT("<table cellspacing=\"0\" cellpadding=\"6\" border=\"0\"><tr>");
+			doc += wxString::Format(
+			    wxT("<td bgcolor=\"%s\"><font color=\"%s\"><b>&nbsp;%s — %s&nbsp;</b></font></td>"),
+			    wxString::FromUTF8(badgeBg),
+			    wxString::FromUTF8(badgeFg),
+			    HtmlEscape(_("Вердикт")),
+			    HtmlEscape(e.verdict.IsEmpty() ? wxString(wxT("—")) : e.verdict));
+			doc += wxT("<td>&nbsp;");
+			if (!e.verdictReason.IsEmpty()) {
+				doc += HtmlEscape(e.verdictReason);
+			}
+			doc += wxT("</td></tr></table>");
+
+			// Counts row — one cell per severity with its own bg colour.
+			doc += wxT("<p><b>");
+			doc += HtmlEscape(_("Резюме"));
+			doc += wxT("</b>: ");
+			const wxString sevTags[4] = {
+			    wxT("P0"), wxT("P1"), wxT("P2"), wxT("P3")
+			};
+			const int sevCounts[4] = {
+			    e.countP0, e.countP1, e.countP2, e.countP3
+			};
+			for (int si = 0; si < 4; ++si) {
+				doc += wxString::Format(
+				    wxT("<font size=\"-1\"><table cellspacing=\"0\" cellpadding=\"3\" border=\"0\" "
+				        "bgcolor=\"%s\"><tr><td>&nbsp;%s: %d&nbsp;</td></tr></table></font>&nbsp;"),
+				    wxString::FromUTF8(SeverityBgColor(sevTags[si])),
+				    HtmlEscape(sevTags[si]),
+				    sevCounts[si]);
+			}
+			doc += wxT("</p>");
+
+			// Reviewers section — one table per model. Heading cell carries
+			// the model name + latency; body cell holds the model's content
+			// (rendered as a pre block to preserve the bullet-style output
+			// reviewers usually emit).
+			if (!e.reviewers.empty()) {
+				doc += wxT("<p><b>");
+				doc += HtmlEscape(_("Рецензенты"));
+				doc += wxT("</b></p>");
+				for (const auto& r : e.reviewers) {
+					doc += wxT("<table width=\"100%\" cellspacing=\"0\" cellpadding=\"6\" border=\"0\">");
+					doc += wxString::Format(
+					    wxT("<tr><td bgcolor=\"#e5e7eb\"><b>%s</b>"
+					        "&nbsp;&nbsp;<font size=\"-1\" color=\"#6b7280\">"
+					        "P0:%d&nbsp;P1:%d&nbsp;P2:%d&nbsp;P3:%d&nbsp;·&nbsp;%ld ms"
+					        "</font></td></tr>"),
+					    HtmlEscape(r.model),
+					    r.p0, r.p1, r.p2, r.p3, r.latencyMs);
+					doc += wxT("<tr><td bgcolor=\"#f9fafb\"><pre>");
+					doc += HtmlEscape(r.content);
+					doc += wxT("</pre></td></tr></table>");
+				}
+			}
+
+			// Findings table — severity / line / reviewer / message / fix.
+			// Five-column layout; severity cell carries its palette colour
+			// so a quick scan reveals where the P0s sit.
+			if (!e.findings.empty()) {
+				doc += wxT("<p><b>");
+				doc += HtmlEscape(_("Замечания"));
+				doc += wxT("</b></p>");
+				doc += wxT("<table width=\"100%\" cellspacing=\"0\" cellpadding=\"4\" border=\"1\">");
+				doc += wxT("<tr bgcolor=\"#e5e7eb\">");
+				doc += wxT("<td><b>") + HtmlEscape(_("Серьёзность")) + wxT("</b></td>");
+				doc += wxT("<td><b>") + HtmlEscape(_("Строка"))       + wxT("</b></td>");
+				doc += wxT("<td><b>") + HtmlEscape(_("Рецензент"))    + wxT("</b></td>");
+				doc += wxT("<td><b>") + HtmlEscape(_("Описание"))     + wxT("</b></td>");
+				doc += wxT("<td><b>") + HtmlEscape(_("Исправление")) + wxT("</b></td>");
+				doc += wxT("</tr>");
+				for (const auto& f : e.findings) {
+					doc += wxT("<tr>");
+					doc += wxString::Format(
+					    wxT("<td bgcolor=\"%s\"><b>%s</b></td>"),
+					    wxString::FromUTF8(SeverityBgColor(f.severity)),
+					    HtmlEscape(f.severity));
+					doc += wxString::Format(wxT("<td>%d</td>"), f.line);
+					doc += wxT("<td>") + HtmlEscape(f.reviewer) + wxT("</td>");
+					doc += wxT("<td>") + HtmlEscape(f.message)  + wxT("</td>");
+					doc += wxT("<td>") + HtmlEscape(f.fix)      + wxT("</td>");
+					doc += wxT("</tr>");
+				}
+				doc += wxT("</table>");
 			}
 		} else {
 			// Extract code fences from the markdown body BEFORE md4c

@@ -672,6 +672,11 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 		                                  _("Сгенерировать документирующий комментарий\tAlt+I,G"));
 		auto* miSend    = aiSub->Append(wxID_HIGHEST + 4034,
 		                                  _("Отправить выделенное в чат\tAlt+I,S"));
+		// Triple-review operates on the whole module (no selection
+		// requirement) — aiBridge fans the text out to multiple LLMs
+		// for a consensus verdict.
+		auto* miTriple  = aiSub->Append(wxID_HIGHEST + 4035,
+		                                  _("Triple-review модуля\tAlt+I,T"));
 
 		auto* pm = appData ? appData->GetPluginManager() : nullptr;
 		const bool hasAI = pm && pm->HasAIProviderFor("chat");
@@ -681,6 +686,9 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 		miFix    ->Enable(hasAI && hasSelection);
 		miSend   ->Enable(hasAI && hasSelection);
 		miDoc    ->Enable(hasAI);
+		// Triple-review reads the whole module — gated only on provider
+		// availability, not on a non-empty selection.
+		miTriple ->Enable(hasAI && GetTextLength() > 0);
 
 		// Always "AI Assistant" — host-neutral; specific provider name
 		// is intentionally not exposed in the submenu label, matching
@@ -762,14 +770,28 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 		return [this, op](wxCommandEvent&) {
 			auto* pm = appData ? appData->GetPluginManager() : nullptr;
 			if (pm == nullptr) return;
-			const wxString sel = GetSelectedText();
-			// Doc-gen falls back to the current line when nothing is
-			// selected — matches the "Generate doc comment for cursor
-			// procedure" UX in modern AI IDE assistants.
-			wxString code = sel;
-			if (code.IsEmpty() && op == wxT("doc")) {
-				const int line = LineFromPosition(GetCurrentPos());
-				code = GetLine(line);
+			// Triple-review reads the whole module text and tags the
+			// language so aiBridge / the LLMs know which syntax they're
+			// looking at. Every other skill keeps the legacy
+			// "selection-or-current-line" behaviour.
+			const bool wholeModule = (op == wxT("triple-review"));
+			wxString code;
+			wxString language = wxT("ces");
+			if (wholeModule) {
+				code = GetText();
+				language = (ibCompileCode::GetCodeStyle() == CODE_VES)
+				    ? wxString(wxT("VES"))
+				    : wxString(wxT("CES"));
+			} else {
+				const wxString sel = GetSelectedText();
+				// Doc-gen falls back to the current line when nothing is
+				// selected — matches the "Generate doc comment for cursor
+				// procedure" UX in modern AI IDE assistants.
+				code = sel;
+				if (code.IsEmpty() && op == wxT("doc")) {
+					const int line = LineFromPosition(GetCurrentPos());
+					code = GetLine(line);
+				}
 			}
 			// Build envelope by hand — bringing nlohmann into the
 			// frontend editor.cpp would widen the include surface; the
@@ -788,10 +810,16 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 				}
 				return out;
 			};
+			const wxString rid = wxString::Format(wxT("skill-%lld"),
+			                                       static_cast<long long>(wxGetUTCTime()));
 			wxString json = wxT("{\"kind\":\"editor.skill\",\"op\":\"");
 			json += op;
-			json += wxT("\",\"language\":\"ces\",\"code\":\"");
+			json += wxT("\",\"language\":\"");
+			json += language;
+			json += wxT("\",\"code\":\"");
 			json += esc(code);
+			json += wxT("\",\"requestId\":\"");
+			json += rid;
 			json += wxT("\"}");
 
 			// Open / focus the AI Assistant pane via the main-frame handler
@@ -813,11 +841,12 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 			pm->CallWebPaneSend(target, json);
 		};
 	};
-	Bind(wxEVT_MENU, sendSkill(wxT("explain")), wxID_HIGHEST + 4030);
-	Bind(wxEVT_MENU, sendSkill(wxT("review")),  wxID_HIGHEST + 4031);
-	Bind(wxEVT_MENU, sendSkill(wxT("fix")),     wxID_HIGHEST + 4032);
-	Bind(wxEVT_MENU, sendSkill(wxT("doc")),     wxID_HIGHEST + 4033);
-	Bind(wxEVT_MENU, sendSkill(wxT("send")),    wxID_HIGHEST + 4034);
+	Bind(wxEVT_MENU, sendSkill(wxT("explain")),       wxID_HIGHEST + 4030);
+	Bind(wxEVT_MENU, sendSkill(wxT("review")),        wxID_HIGHEST + 4031);
+	Bind(wxEVT_MENU, sendSkill(wxT("fix")),           wxID_HIGHEST + 4032);
+	Bind(wxEVT_MENU, sendSkill(wxT("doc")),           wxID_HIGHEST + 4033);
+	Bind(wxEVT_MENU, sendSkill(wxT("send")),          wxID_HIGHEST + 4034);
+	Bind(wxEVT_MENU, sendSkill(wxT("triple-review")), wxID_HIGHEST + 4035);
 
 	Bind(wxEVT_MENU,
 	     routeUp(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP),

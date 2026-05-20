@@ -44,10 +44,17 @@ public:
 	// Registered BSL/CES builtin — name + function pointer. The system
 	// manager iterates this set after plugin load and binds each as a
 	// callable identifier inside the script tokenizer.
+	//
+	// SEC-P1-9: m_pluginId carries the registering plugin's identity so
+	// CallFunction can push it into tl_currentPluginId for the duration
+	// of the call. Without it, worker threads invoking host trampolines
+	// (Host_MetaCreate / Edit / Delete / ReadPluginEnv) saw an empty
+	// scope and were denied by the policy gate.
 	struct RegisteredFunction {
 		std::string         m_name;
 		int                 m_paramCount = -1;
 		ibPluginFunctionFn  m_fn = nullptr;
+		std::string         m_pluginId;
 	};
 
 	// Registered Designer Tools → Plugins submenu item. The Designer
@@ -180,6 +187,11 @@ public:
 	const PluginEnvMap& PluginEnv() const { return m_pluginEnv; }
 	void SetPluginEnvForTests(PluginEnvMap env) { m_pluginEnv = std::move(env); }
 
+	// SEC-P1-8: unset every env key that LoadAll exported into the process
+	// env (so tokens don't leak to forked subprocesses + crash dumps across
+	// config reloads). Called from UnloadAll. Public so tests can observe.
+	void UnsetInjectedEnvKeys();
+
 	// Read a plugin env value. Returns empty string when absent.
 	std::string ReadPluginEnv(const std::string& pluginId,
 	                            const std::string& key) const;
@@ -217,6 +229,21 @@ public:
 	// Designer calls this immediately after SetWebPaneCallbacks so plugins
 	// that registered before callbacks were ready still get their panes.
 	void ReplayPendingWebPaneRegistrations();
+
+	// SEC-P1-9: resolve the registering plugin for a given paneId. Empty
+	// when the paneId wasn't seen at register-time (host-synthesised pane,
+	// stale post-UnloadAll lookup, or hostile inbound message id). Frontend
+	// dispatch uses this to push tl_currentPluginId around the onMessage
+	// call so meta-mutation trampolines see the correct caller identity.
+	std::string GetPluginIdForPane(const wxString& paneId) const;
+
+	// SEC-P1-9: thread-safe push of caller-plugin identity for the duration
+	// of an off-main-thread dispatch (pane message, deferred callback, AI
+	// worker). Returns the previous value so callers can restore it on the
+	// way out via PopCallerPluginId(). Use the ScopedPluginIdGuard RAII
+	// helper from inside dispatcher lambdas — exception-safe.
+	static std::string PushCallerPluginId(const std::string& pluginId);
+	static void        PopCallerPluginId(const std::string& restore);
 
 	// ---------------------------------------------------------------------
 	// Mutation policy (Phase 3.2). Mirrors the 4-mode permission UX modern
@@ -284,8 +311,16 @@ private:
 		wxString          htmlBundlePath;
 		ibPluginWebMsgFn  onMessage;
 		void*             userData;
+		std::string       pluginId; // SEC-P1-9: register-time identity
 	};
 	std::vector<PendingWebPaneReg> m_pendingWebPaneRegs;
+
+	// SEC-P1-9: paneId → pluginId of the registering plugin. Used by the
+	// frontend dispatch to push tl_currentPluginId for the duration of the
+	// onMessage call so inbound pane messages can hit Meta* trampolines
+	// without falling foul of the policy gate's "no caller-pluginId scope"
+	// short-circuit. Populated by CallWebPaneRegister + ReplayPending.
+	std::unordered_map<std::string, std::string> m_paneIdToPluginId;
 
 	// Registered AI providers. Indexed by providerId for re-registration
 	// replacement; iteration order is registration order so Phase 4
@@ -307,6 +342,27 @@ private:
 	// Per-plugin BYOK env cache (Phase 4.2). Populated by LoadAll from
 	// byokEnv::LoadAll; cleared on UnloadAll.
 	PluginEnvMap m_pluginEnv;
+
+	// SEC-P1-8: env keys exported into the process env per plugin via the
+	// universal v3 env-injection path in LoadAll. UnloadAll iterates this
+	// map and calls unsetenv() for every entry so tokens don't survive in
+	// the process env across config reloads.
+	std::unordered_map<std::string, std::vector<std::string>> m_injectedEnvKeys;
+};
+
+// SEC-P1-9: RAII guard around tl_currentPluginId. Use inside dispatcher
+// lambdas / worker threads when calling into a plugin from a thread other
+// than the one that ran oes_plugin_initialize. Restores the prior value
+// even if the dispatched call throws.
+class BACKEND_API ScopedPluginIdGuard {
+public:
+	explicit ScopedPluginIdGuard(const std::string& pluginId)
+	    : m_prev(ibPluginManager::PushCallerPluginId(pluginId)) {}
+	~ScopedPluginIdGuard() { ibPluginManager::PopCallerPluginId(m_prev); }
+	ScopedPluginIdGuard(const ScopedPluginIdGuard&) = delete;
+	ScopedPluginIdGuard& operator=(const ScopedPluginIdGuard&) = delete;
+private:
+	std::string m_prev;
 };
 
 #endif // _IB_PLUGIN_MANAGER_H_

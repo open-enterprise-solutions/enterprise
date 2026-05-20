@@ -17,19 +17,31 @@
 //     "version": 1,
 //     "savedAt": "2026-05-20T12:34:56Z",
 //     "entries": [
-//       { "role": "user|assistant|system|error|plan",
+//       { "role": "user|assistant|system|error|plan|tripleReview",
 //         "markdown": "...",
 //         "requestId": "...",
 //         "planId": "...",
 //         "conversationId": "...",
 //         "rationale": "...",
 //         "mutations": "...",
-//         "applied": false }
+//         "applied": false,
+//         "verdict": "PASS|WARN|BLOCK",       // tripleReview only
+//         "verdictReason": "...",              // tripleReview only
+//         "countP0": 0, "countP1": 0,
+//         "countP2": 0, "countP3": 0,
+//         "reviewers": [ {"model":"...","content":"...","p0":0,"p1":0,
+//                         "p2":0,"p3":0,"latencyMs":0} ],
+//         "findings": [ {"severity":"P0","reviewer":"...","line":0,
+//                         "message":"...","fix":"..."} ] }
 //     ]
 //   }
 //
 // codeBlocks are NOT persisted — RenderTranscript() re-extracts them from
 // `markdown` on the next render pass, so they round-trip for free.
+//
+// Backward compatibility: when reading a file produced before the
+// tripleReview fields were added, the missing fields parse as their
+// defaults (empty strings / zero ints / empty arrays). No version bump.
 //
 // Hard cap: kMaxEntries (200). Save() drops oldest entries beyond the cap
 // before writing to disk so a long session can't fill /Library/Preferences

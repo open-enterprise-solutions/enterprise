@@ -96,7 +96,34 @@ public:
 	// test-only hooks so AppendEntryForTests can take an Entry by value
 	// without a forward declaration trick.
 	struct Entry {
-		enum class Role { User, Assistant, System, Error, Plan };
+		enum class Role { User, Assistant, System, Error, Plan, TripleReview };
+
+		// Per-reviewer summary in a TripleReview entry. One row per LLM
+		// model that participated; counts are the model's own
+		// [P0]/[P1]/[P2]/[P3] findings and latencyMs is the wall-clock
+		// cost of that model's call.
+		struct ReviewerSummary {
+			wxString model;
+			wxString content;
+			int      p0        = 0;
+			int      p1        = 0;
+			int      p2        = 0;
+			int      p3        = 0;
+			long     latencyMs = 0;
+		};
+
+		// Single finding inside a TripleReview entry. Severity is the raw
+		// "P0"/"P1"/"P2"/"P3" tag emitted by aiBridge; we keep it as a
+		// string so future severity additions (e.g. "INFO") flow through
+		// without a schema change here.
+		struct Finding {
+			wxString severity;
+			wxString reviewer;
+			int      line = 0;
+			wxString message;
+			wxString fix;
+		};
+
 		Role     role     = Role::User;
 		wxString markdown;
 		wxString requestId;          // for streaming reconciliation
@@ -110,6 +137,18 @@ public:
 		// RenderTranscript so OnLinkClicked can resolve oes-copy /
 		// oes-apply URLs back to the original text without re-parsing.
 		std::vector<std::pair<wxString, wxString>> codeBlocks;
+
+		// agent.tripleReview only. Verdict is "PASS"/"WARN"/"BLOCK" (string
+		// so unknown future values render without code change). Counts are
+		// the aggregated tally across all reviewers.
+		wxString verdict;
+		wxString verdictReason;
+		int      countP0 = 0;
+		int      countP1 = 0;
+		int      countP2 = 0;
+		int      countP3 = 0;
+		std::vector<ReviewerSummary> reviewers;
+		std::vector<Finding>         findings;
 	};
 
 	// Test-only hooks. SetConfigHashForTests installs a stable bucket

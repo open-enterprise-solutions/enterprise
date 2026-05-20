@@ -58,6 +58,21 @@ namespace {
 const ibHostAPI* g_host    = nullptr;
 const char*      g_paneId  = "aiBridge.chat";
 
+// SEC-P0-1: write the unredacted HTTP error body to a diagnostic file
+// only when OES_AI_DEBUG_UNSAFE=1. User-visible EmitError envelopes
+// never receive the body slice — even truncated to 256 bytes, OpenAI
+// error payloads can echo back the bearer token / request body.
+void DiagWriteUnsafeBody(const char* phase, int status, const std::string& body)
+{
+	const char* gate = std::getenv("OES_AI_DEBUG_UNSAFE");
+	if (gate == nullptr || std::strcmp(gate, "1") != 0) return;
+	FILE* f = std::fopen("/tmp/oes-diag.log", "a");
+	if (f == nullptr) return;
+	std::fprintf(f, "[aiBridge.unsafe] %s HTTP %d body[0..512]=%.512s\n",
+	             phase ? phase : "?", status, body.c_str());
+	std::fclose(f);
+}
+
 std::mutex                   g_workersMu;
 std::vector<std::thread>     g_workers;
 std::atomic<bool>            g_shuttingDown{false};
@@ -154,6 +169,25 @@ std::pair<std::string, std::string> SplitUrl(const std::string& url)
 		return {url, "/"};
 	}
 	return {url.substr(0, pathStart), url.substr(pathStart)};
+}
+
+// SEC-P1-6: scheme allow-list + HTTPS support precondition. Returns empty
+// string on success, an error reason on rejection. Only http:// and
+// https:// are permitted; an https:// endpoint without OpenSSL support
+// must refuse — silently downgrading to plaintext leaks the bearer.
+std::string ValidateEndpointScheme(const std::string& url)
+{
+	if (url.rfind("http://", 0) == 0) {
+		return std::string();
+	}
+	if (url.rfind("https://", 0) == 0) {
+#ifndef CPPHTTPLIB_OPENSSL_SUPPORT
+		return "aiBridge: HTTPS endpoint requires OpenSSL — rebuild with OpenSSL or use http://";
+#else
+		return std::string();
+#endif
+	}
+	return "aiBridge: only http:// and https:// schemes are allowed";
 }
 
 // Sends a chat.error envelope to the pane.
@@ -263,11 +297,24 @@ void EmitTypewriter(const std::string& requestId, const std::string& text,
 // Response: 200/201 {"result":{"content":"...","model":"...",...}}
 //           4xx     {"message":"...","statusCode":N}
 // Single-shot — no SSE. Streaming effect is faked via EmitTypewriter.
+//
+// Optional `toolName` overrides the default "llm_query"; used by the
+// triple-review op which calls Anvil's `triple_review` tool instead.
+// Optional `extraInput` is merged into the input object — triple_review
+// expects extra fields like `code`, `language`, `context`.
+// renderedResponse, when non-empty, replaces the response-text extracted
+// from result.content; lets the caller insert the structured-findings
+// envelope (see RunTripleReview) before typewriting.
 void RunPugiMcpRequest(std::string requestId, std::string prompt,
                         const std::string& endpoint, const std::string& token,
                         const std::string& tenant,   const std::string& locale,
                         const std::shared_ptr<std::atomic<bool>>& cancelTok)
 {
+	// SEC-P1-6: scheme + HTTPS precondition.
+	if (auto why = ValidateEndpointScheme(endpoint); !why.empty()) {
+		EmitError(why);
+		return;
+	}
 	const auto [base, path] = SplitUrl(endpoint);
 	if (base.empty()) {
 		EmitError("aiBridge: malformed ENDPOINT URL: " + endpoint);
@@ -277,7 +324,11 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 	httplib::Client cli(base);
 	cli.set_connection_timeout(15);
 	cli.set_read_timeout(120);
-	cli.set_follow_location(true);
+	// SEC-P1-5: never follow cross-origin redirects with Authorization +
+	// X-Pugi-Tenant attached. cpp-httplib's follower replays full headers
+	// to the redirect target — a redirect to an attacker host would leak
+	// the bearer. Surface 3xx as an explicit error instead.
+	cli.set_follow_location(false);
 
 	nlohmann::json body;
 	body["name"]            = "llm_query";
@@ -299,9 +350,18 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 		           std::string(httplib::to_string(res.error())));
 		return;
 	}
+	// SEC-P1-5: 3xx is no longer auto-followed. Refuse rather than re-
+	// emit Authorization to a different origin.
+	if (res->status >= 300 && res->status < 400) {
+		EmitError("aiBridge[pugi-mcp]: server returned redirect; bearer not forwarded for security");
+		return;
+	}
 	if (res->status >= 400) {
-		EmitError("aiBridge[pugi-mcp]: HTTP " + std::to_string(res->status) +
-		           " — " + res->body.substr(0, 256));
+		// SEC-P0-1: redact body — OpenAI/Anvil error payloads echo back
+		// the bearer token and/or original request body. Unredacted slice
+		// goes to /tmp/oes-diag.log only when OES_AI_DEBUG_UNSAFE=1.
+		DiagWriteUnsafeBody("pugi-mcp", res->status, res->body);
+		EmitError("aiBridge[pugi-mcp]: HTTP " + std::to_string(res->status));
 		return;
 	}
 
@@ -331,6 +391,124 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 
 	const int approxTokens = static_cast<int>(content.size() / 4);
 	EmitTypewriter(requestId, content, respModel, approxTokens, cancelTok);
+}
+
+// Triple-review path — calls the `triple_review` Anvil tool with the raw
+// CES/VES module text, then emits a structured `agent.tripleReview`
+// envelope so the pane can render the verdict + per-reviewer findings as
+// a table instead of raw JSON.
+//
+// Server contract (confirmed via the Pugi smoke run, 2026-05-20):
+//   input  = { code, language: "CES"|"VES"|"BSL", locale, context? }
+//   output = {
+//     verdict:  "PASS"|"WARN"|"BLOCK",
+//     reason:   "<one-line summary>",
+//     reviewerCount: N,
+//     reviewers: [ {model, content, p0, p1, p2, p3, latencyMs} ],
+//     findings:  [ {severity:"P0..P3", line:N, message, fix, reviewer} ],
+//     counts:    { P0, P1, P2, P3 }
+//   }
+//
+// On 4xx / network error we emit a `kind: "error"` envelope so the pane's
+// existing error path renders it consistently with chat failures.
+void RunTripleReview(std::string requestId, std::string code,
+                      const std::string& endpoint, const std::string& token,
+                      const std::string& tenant,   const std::string& locale,
+                      const std::string& language,
+                      const std::shared_ptr<std::atomic<bool>>& cancelTok)
+{
+	// SEC-P1-6: scheme + HTTPS precondition.
+	if (auto why = ValidateEndpointScheme(endpoint); !why.empty()) {
+		EmitError(why);
+		return;
+	}
+	const auto [base, path] = SplitUrl(endpoint);
+	if (base.empty()) {
+		EmitError("aiBridge[triple-review]: malformed ENDPOINT URL: " + endpoint);
+		return;
+	}
+
+	httplib::Client cli(base);
+	cli.set_connection_timeout(15);
+	// Triple-review fans out across multiple models server-side and can
+	// reasonably take longer than a single llm_query — bump the read
+	// timeout. cancelTok still lets the user stop sooner.
+	cli.set_read_timeout(180);
+	// SEC-P1-5: refuse redirects so bearer + X-Pugi-Tenant aren't replayed.
+	cli.set_follow_location(false);
+
+	nlohmann::json body;
+	body["name"]              = "triple_review";
+	body["input"]             = nlohmann::json::object();
+	body["input"]["code"]     = code;
+	body["input"]["language"] = language.empty() ? std::string("CES") : language;
+	body["input"]["locale"]   = locale.empty()   ? std::string("uk-UA") : locale;
+
+	httplib::Headers headers = {
+		{ "Authorization", "Bearer " + token },
+		{ "X-Pugi-Tenant", tenant            },
+		{ "Content-Type",  "application/json" },
+		{ "Accept",        "application/json" },
+	};
+
+	const std::string bodyStr = body.dump();
+	auto res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
+	if (!res) {
+		EmitError("aiBridge[triple-review]: HTTP failed — " +
+		           std::string(httplib::to_string(res.error())));
+		return;
+	}
+	// SEC-P1-5: refuse 3xx — see RunPugiMcpRequest for the rationale.
+	if (res->status >= 300 && res->status < 400) {
+		EmitError("aiBridge[triple-review]: server returned redirect; bearer not forwarded for security");
+		return;
+	}
+	if (res->status >= 400) {
+		// SEC-P0-1: redact body — see RunPugiMcpRequest.
+		DiagWriteUnsafeBody("triple-review", res->status, res->body);
+		EmitError("aiBridge[triple-review]: HTTP " + std::to_string(res->status));
+		return;
+	}
+
+	// Honour an inline cancel — the work is done server-side, but the
+	// user may have hit Stop before the response landed. Skip the
+	// envelope emit and let chat.end clean up.
+	if (cancelTok && cancelTok->load()) {
+		EmitCancelledEnd(requestId, "triple_review", 0, 0);
+		return;
+	}
+
+	auto parsed = nlohmann::json::parse(res->body, nullptr, /*allow_exceptions=*/false);
+	if (parsed.is_discarded() || !parsed.is_object() ||
+	    !parsed.contains("result") || !parsed["result"].is_object()) {
+		EmitError("aiBridge[triple-review]: malformed response envelope");
+		return;
+	}
+	const auto& result = parsed["result"];
+
+	// Emit a single agent.tripleReview envelope containing the whole
+	// result object. The pane has a dedicated renderer that walks
+	// reviewers[] / findings[] / counts to lay out a structured verdict
+	// view — no string parsing on the OES side.
+	nlohmann::json env;
+	env["kind"]      = "agent.tripleReview";
+	env["requestId"] = requestId;
+	env["result"]    = result;
+	const std::string payload = env.dump();
+	if (g_host != nullptr && g_host->WebPaneSend != nullptr) {
+		g_host->WebPaneSend(g_paneId, payload.c_str());
+	}
+
+	// Also emit chat.end so the pane's pending-streaming state resets
+	// cleanly. Tokens here are approximate — sum the reviewer counts.
+	int tokensIn = static_cast<int>(code.size() / 4);
+	int tokensOut = 0;
+	if (result.contains("reviewers") && result["reviewers"].is_array()) {
+		for (const auto& rv : result["reviewers"]) {
+			tokensOut += rv.value("tokensUsed", 0);
+		}
+	}
+	EmitEnd(requestId, "triple_review", tokensIn, tokensOut);
 }
 
 // Worker thread body — performs the HTTP POST + streams chunks back to
@@ -368,6 +546,11 @@ void RunChatRequest(std::string requestId, std::string prompt, std::string mode,
 		return;
 	}
 
+	// SEC-P1-6: scheme + HTTPS precondition.
+	if (auto why = ValidateEndpointScheme(endpoint); !why.empty()) {
+		EmitError(why);
+		return;
+	}
 	const auto [base, path] = SplitUrl(endpoint);
 	if (base.empty()) {
 		EmitError("aiBridge: malformed ENDPOINT URL: " + endpoint);
@@ -377,7 +560,8 @@ void RunChatRequest(std::string requestId, std::string prompt, std::string mode,
 	httplib::Client cli(base);
 	cli.set_connection_timeout(15);
 	cli.set_read_timeout(120);
-	cli.set_follow_location(true);
+	// SEC-P1-5: refuse 3xx — see RunPugiMcpRequest.
+	cli.set_follow_location(false);
 
 	// Build OpenAI-compatible chat-completions request body. Streaming
 	// is requested so the host renders incremental chat.delta chunks
@@ -486,10 +670,18 @@ void RunChatRequest(std::string requestId, std::string prompt, std::string mode,
 		           std::string(httplib::to_string(res.error())));
 		return;
 	}
+	// SEC-P1-5: refuse 3xx — auto-follow is disabled, so a 3xx now bubbles
+	// up here rather than chaining the bearer to the redirect target.
+	if (res->status >= 300 && res->status < 400) {
+		EraseCancelToken(requestId);
+		EmitError("aiBridge: server returned redirect; bearer not forwarded for security");
+		return;
+	}
 	if (res->status >= 400) {
 		EraseCancelToken(requestId);
-		EmitError("aiBridge: HTTP " + std::to_string(res->status) +
-		           " — " + res->body.substr(0, 256));
+		// SEC-P0-1: redact body — see RunPugiMcpRequest.
+		DiagWriteUnsafeBody("chat", res->status, res->body);
+		EmitError("aiBridge: HTTP " + std::to_string(res->status));
 		return;
 	}
 	const int tokensIn = static_cast<int>(prompt.size() / 4);
@@ -523,6 +715,42 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 
 		std::string prompt = j.value("prompt", std::string());
 		const std::string op = j.value("op", std::string());
+
+		// editor.skill op="triple-review" — call the Anvil triple_review
+		// MCP tool directly (different request shape than llm_query) so
+		// the pane gets structured per-reviewer findings + verdict
+		// instead of free-text. Worker spawned inline because the path
+		// uses pugi-mcp credentials regardless of PROTOCOL.
+		if (kind == "editor.skill" && op == "triple-review") {
+			const std::string token = ReadEnv("TOKEN", "");
+			const std::string endpoint = ReadEnv("ENDPOINT",
+			    "https://mcp.pugi.io/api/oes-mcp/invoke");
+			const std::string tenant   = ReadEnv("TENANT", "");
+			const std::string locale   = ReadEnv("LOCALE", "uk-UA");
+			if (token.empty() || tenant.empty()) {
+				EmitError("aiBridge[triple-review]: requires TOKEN + TENANT in env.");
+				return;
+			}
+			std::string requestId = j.value("requestId", std::string());
+			if (requestId.empty()) {
+				requestId = "req-" + std::to_string(
+				    std::chrono::steady_clock::now().time_since_epoch().count());
+			}
+			const std::string code     = j.value("code",     std::string());
+			const std::string language = j.value("language", std::string("CES"));
+			auto cancelTok = AllocCancelToken(requestId);
+			{
+				std::lock_guard<std::mutex> lk(g_workersMu);
+				g_workers.emplace_back(
+				    [requestId, code, endpoint, token, tenant, locale, language, cancelTok]() {
+					RunTripleReview(requestId, code, endpoint, token, tenant,
+					                  locale, language, cancelTok);
+					EraseCancelToken(requestId);
+				});
+			}
+			return;
+		}
+
 		if (kind == "editor.skill") {
 			const std::string code = j.value("code", std::string());
 			// Wrap the skill into a chat prompt with a stable preamble.
@@ -755,15 +983,30 @@ OES_PLUGIN_EXPORT int oes_plugin_initialize(const ibHostAPI* host)
 
 OES_PLUGIN_EXPORT void oes_plugin_shutdown(void)
 {
+	// SEC-P0-4: set the shutdown flag BEFORE the join loop so any worker
+	// blocked inside cli.Post()'s receiver callback returns false on the
+	// next read tick and unblocks. detach() was racy — once this function
+	// returned, g_host became null while a worker could still be mid-emit.
 	g_shuttingDown.store(true);
+	// Trip every in-flight cancel token too so the SSE receiver's
+	// cancelTok->load() short-circuits on the next chunk. Belt-and-braces
+	// with g_shuttingDown; either path stops the worker.
+	{
+		std::lock_guard<std::mutex> lk(g_cancelMu);
+		for (auto& kv : g_cancelTokens) {
+			if (kv.second) kv.second->store(true);
+		}
+	}
 	std::vector<std::thread> drain;
 	{
 		std::lock_guard<std::mutex> lk(g_workersMu);
 		drain.swap(g_workers);
 	}
 	for (auto& t : drain) {
-		if (t.joinable()) t.detach(); // best-effort; httplib client owns the socket
+		if (t.joinable()) t.join();
 	}
+	// g_host nulled AFTER the join so workers can still safely call
+	// WebPaneSend in any wind-down path before they observe g_shuttingDown.
 	if (g_host) g_host->Log("aiBridge: shutting down", 0);
 	g_host = nullptr;
 }

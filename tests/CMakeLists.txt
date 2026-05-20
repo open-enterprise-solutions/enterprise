@@ -41,7 +41,22 @@ add_executable(oes_tests
     test_pluginWebPaneHistory.cpp
     test_legacyShim.cpp
     test_pluginLoadIntegration.cpp
+    test_tripleReviewIntegration.cpp
 )
+
+# ---------------------------------------------------------------------------
+# OpenSSL for the triple-review integration test's direct HTTPS probe.
+# cpp-httplib needs CPPHTTPLIB_OPENSSL_SUPPORT defined to enable TLS; the
+# test's call site does this with #define before #include "httplib.h",
+# but we still need to link OpenSSL::SSL + OpenSSL::Crypto. Without
+# OpenSSL on this machine the test skips itself at runtime — but if
+# OpenSSL is missing here, the test won't compile, so we make it
+# conditional.
+# ---------------------------------------------------------------------------
+find_package(OpenSSL QUIET)
+if(OpenSSL_FOUND)
+    message(STATUS "tests: OpenSSL found — triple-review HTTPS probe enabled")
+endif()
 
 target_link_libraries(oes_tests
     PRIVATE
@@ -53,6 +68,17 @@ target_link_libraries(oes_tests
         GTest::gtest
         GTest::gtest_main
 )
+
+if(OpenSSL_FOUND)
+    target_link_libraries(oes_tests PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    if(APPLE)
+        # cpp-httplib + OpenSSL pull in SecTrust* via the keychain trust-
+        # anchor support — link the system frameworks they live in.
+        target_link_libraries(oes_tests PRIVATE
+            "-framework CoreFoundation"
+            "-framework Security")
+    endif()
+endif()
 
 target_include_directories(oes_tests PRIVATE
     "${CMAKE_SOURCE_DIR}/src"

@@ -233,6 +233,122 @@ TEST(PluginLoadIntegration, DesignerWireUpDispatchesChatSendToShim) {
 	       "blocked or returned silently. Check Pugi network connectivity.";
 }
 
+TEST(PluginLoadIntegration, AiBridgeTripleReviewToolReachable) {
+	// Same dlopen pattern as DesignerWireUpDispatchesChatSendToShim, but
+	// fires an editor.skill{op:"triple-review"} envelope at the aiBridge
+	// pane instead of a chat.send at the shim pane. Proves the triple-
+	// review code path inside aiBridge.bundle is reachable from the
+	// host's RegisterWebPane → OnPaneMessage dispatch chain.
+	const wxString pluginsDir = FindBundledPluginsDir();
+	if (pluginsDir.IsEmpty()) {
+		GTEST_SKIP() << "plugins dir missing";
+	}
+	setenv("OES_PLUGINS_DIR", pluginsDir.utf8_str(), 1);
+
+	// Inject real pugi creds from the BYOK file so aiBridge passes its
+	// "requires TOKEN + TENANT" guard. If the env file is missing this
+	// test still RUNS — aiBridge will emit an error envelope which proves
+	// the dispatch chain is alive (the path under test). We only fail if
+	// the dispatch produces nothing at all.
+	const char* envFile = "/Users/yuriibulakh/Library/Preferences/OES/plugins/pugi-oes-bridge.env";
+	std::string apiKey, tenant, baseUrl, locale = "uk-UA";
+	{
+		FILE* f = std::fopen(envFile, "r");
+		if (f != nullptr) {
+			char line[1024];
+			while (std::fgets(line, sizeof(line), f) != nullptr) {
+				std::string s(line);
+				while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
+				if (s.empty() || s[0] == '#') continue;
+				const auto eq = s.find('=');
+				if (eq == std::string::npos) continue;
+				const std::string k = s.substr(0, eq);
+				const std::string v = s.substr(eq + 1);
+				if (k == "PUGI_OES_API_KEY") apiKey  = v;
+				if (k == "PUGI_TENANT_ID")   tenant  = v;
+				if (k == "PUGI_BASE_URL")    baseUrl = v;
+				if (k == "PUGI_OES_LOCALE")  locale  = v;
+			}
+			std::fclose(f);
+		}
+	}
+	if (baseUrl.empty()) baseUrl = "https://mcp.pugi.io";
+	while (!baseUrl.empty() && baseUrl.back() == '/') baseUrl.pop_back();
+	const std::string endpoint = baseUrl + "/api/oes-mcp/invoke";
+
+	if (!apiKey.empty()) setenv("TOKEN",  apiKey.c_str(), 1);
+	else                  setenv("TOKEN",  "test_no_creds_token", 1);
+	setenv("ENDPOINT", endpoint.c_str(), 1);
+	if (!tenant.empty()) setenv("TENANT", tenant.c_str(),  1);
+	else                  setenv("TENANT", "00000000-fake-tenant", 1);
+	setenv("LOCALE",   locale.c_str(),    1);
+	setenv("PROTOCOL", "pugi-mcp",        1);
+	setenv("PUGI_BASE_URL",    baseUrl.c_str(),  1);
+	setenv("PUGI_OES_API_KEY", apiKey.empty() ? "test_no_creds_token" : apiKey.c_str(), 1);
+	setenv("PUGI_TENANT_ID",   tenant.empty() ? "00000000-fake-tenant" : tenant.c_str(), 1);
+	setenv("PUGI_OES_LOCALE",  locale.c_str(),                                            1);
+
+	ibPluginManager pm;
+	std::vector<wxString> registeredPanes;
+	ibPluginWebMsgFn paneOnMessage = nullptr;
+	void*            paneUserData  = nullptr;
+	std::vector<std::pair<wxString, wxString>> outboundSends;
+
+	pm.SetWebPaneCallbacks(
+	    [&](const wxString& paneId, const wxString& /*title*/,
+	         const wxString& /*path*/, ibPluginWebMsgFn cb, void* ud) -> int {
+	        registeredPanes.push_back(paneId);
+	        if (paneId.StartsWith(wxT("aiBridge"))) {
+	            paneOnMessage = cb;
+	            paneUserData  = ud;
+	        }
+	        return 0;
+	    },
+	    [&](const wxString& paneId, const wxString& json) -> int {
+	        outboundSends.push_back({paneId, json});
+	        return 0;
+	    },
+	    [](const wxString& /*paneId*/) -> int { return 0; }
+	);
+	pm.LoadAll();
+	pm.ReplayPendingWebPaneRegistrations();
+
+	if (paneOnMessage == nullptr) {
+		// Diagnostic
+		for (const auto& p : registeredPanes) {
+			std::cerr << "[triple-review-tool] registered pane: "
+			          << std::string(p.utf8_str()) << "\n";
+		}
+		GTEST_SKIP() << "aiBridge.chat pane did not register — sample.html "
+		                "missing from plugins dir?";
+	}
+
+	// Fire the triple-review envelope.
+	const char* envelope =
+	    R"({"kind":"editor.skill","op":"triple-review","requestId":"reach-1",)"
+	    R"("code":"Procedure Q() Export\n    x = 1;\nEndProcedure\n","language":"CES"})";
+	paneOnMessage("aiBridge.chat", envelope, paneUserData);
+
+	// Wait up to 90s for any outbound envelope. Triple-review fans out
+	// across multiple models server-side and can take 20-60s end-to-end.
+	for (int waited = 0; waited < 90000 && outboundSends.empty(); waited += 100) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
+
+	std::cerr << "[triple-review-tool] outbound=" << outboundSends.size() << "\n";
+	for (const auto& s : outboundSends) {
+		std::cerr << "  -> " << std::string(s.second.utf8_str()).substr(0, 160) << "\n";
+	}
+
+	// Pass if aiBridge emitted SOMETHING — tripleReview envelope OR error
+	// envelope. Both prove the editor.skill{op:"triple-review"} dispatch
+	// path is wired up. Silent dead air is the only real failure mode.
+	EXPECT_FALSE(outboundSends.empty())
+	    << "aiBridge accepted editor.skill{op:triple-review} but emitted "
+	       "nothing within 90s — dispatch chain is broken or the worker "
+	       "thread hung. Check OnPaneMessage's editor.skill branch.";
+}
+
 TEST(PluginLoadIntegration, EnvInjectionFeedsV3Plugins) {
 	const wxString pluginsDir = FindBundledPluginsDir();
 	if (pluginsDir.IsEmpty()) {

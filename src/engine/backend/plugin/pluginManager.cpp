@@ -35,15 +35,51 @@
   #include <windows.h>
 #endif
 
-// Persistent diagnostic log — appended to /tmp/oes-diag.log on every
-// shim / plugin-load event. Always-on. Lets us debug runtime without
-// a terminal because Designer launched via Finder sends stderr to
-// ~/Library/Logs where it's harder to grep. File-scope (not
-// namespace-anonymous) so member functions can call it too.
+#ifndef _WIN32
+  #include <sys/stat.h>   // SEC-P0-2: chmod to lock diag log to 0600
+#endif
+
+// SEC-P0-2: persistent diagnostic log relocated to a per-user dir with
+// 0600 mode. Was /tmp/oes-diag.log which is world-readable on shared
+// hosts and leaked payload slices alongside requestId. Now lives under
+// the user data dir (~/Library/Logs/OES/diag.log on macOS, equivalent
+// on other platforms). Path resolved once + cached.
+static const std::string& DiagLogPath()
+{
+	static std::string cached;
+	static bool        resolved = false;
+	if (resolved) return cached;
+	resolved = true;
+	// SEC-P0-2: wxStandardPaths::Get() routes through wxAppConsole, which
+	// dereferences a NULL wxApp pointer when no wxEntryStart has been
+	// run (the unit-test harness case). Return an empty path so DiagLog
+	// becomes a no-op rather than crashing in libc++ string construction
+	// inside wxAppConsoleBase::GetAppName.
+	if (wxAppConsole::GetInstance() == nullptr) {
+		cached.clear();
+		return cached;
+	}
+	const wxString dir = wxStandardPaths::Get().GetUserDataDir()
+	    + wxFILE_SEP_PATH + wxT("Logs");
+	if (!wxFileName::DirExists(dir)) {
+		wxFileName::Mkdir(dir, 0700, wxPATH_MKDIR_FULL);
+	}
+	const wxString full = dir + wxFILE_SEP_PATH + wxT("diag.log");
+	cached.assign(full.utf8_str().data());
+	return cached;
+}
+
 static void DiagLog(const char* fmt, ...)
 {
-	FILE* f = std::fopen("/tmp/oes-diag.log", "a");
+	const std::string& path = DiagLogPath();
+	if (path.empty()) return;
+	FILE* f = std::fopen(path.c_str(), "a");
 	if (f == nullptr) return;
+#ifndef _WIN32
+	// SEC-P0-2: 0600 — owner-only. fopen on POSIX honours umask; chmod
+	// pins the mode regardless. Cheap to call every open.
+	::chmod(path.c_str(), 0600);
+#endif
 	std::time_t now = std::time(nullptr);
 	char ts[32];
 	std::strftime(ts, sizeof(ts), "%H:%M:%S", std::localtime(&now));
@@ -333,6 +369,16 @@ wxString ibPluginManager::GetPluginsDir()
 	return fn.GetPath();
 }
 
+// Forward declarations for helpers defined later in the file. UnloadAll
+// is the last LoadAll-adjacent method and we want it to call into the
+// shim-worker drain + env-rollback paths without re-ordering the bigger
+// helpers further down.
+namespace { void JoinAndDrainShimWorkers(); }
+
+// (SEC-P1-8: real impl of UnsetInjectedEnvKeys lives further down, see
+// the helper near JoinAndDrainShimWorkers. Stub removed — was a duplicate
+// inserted by an aborted security-fix pass.)
+
 size_t ibPluginManager::LoadAll()
 {
 	DiagLog("LoadAll: enter");
@@ -462,12 +508,18 @@ size_t ibPluginManager::LoadAll()
 			{
 				auto envIt = m_pluginEnv.find(pluginIdNarrow);
 				if (envIt != m_pluginEnv.end()) {
+					// SEC-P1-8: remember which keys we set so UnloadAll can
+					// unset them. Per-plugin so reloads don't double-track.
+					auto& tracked = m_injectedEnvKeys[pluginIdNarrow];
+					tracked.clear();
+					tracked.reserve(envIt->second.size());
 					for (const auto& kv : envIt->second) {
 #if defined(_WIN32)
 						_putenv_s(kv.first.c_str(), kv.second.c_str());
 #else
 						setenv(kv.first.c_str(), kv.second.c_str(), /*overwrite=*/1);
 #endif
+						tracked.push_back(kv.first);
 					}
 					wxLogDebug(wxT("Plugin '%s': injected %zu env keys into process env"),
 					           wxString::FromUTF8(pluginIdNarrow),
@@ -515,6 +567,16 @@ size_t ibPluginManager::LoadAll()
 
 void ibPluginManager::UnloadAll()
 {
+	// SEC-P0-3: drain shim worker threads BEFORE clearing m_functions /
+	// dropping plugin DLLs. Workers capture RegisteredFunction by value;
+	// fn.m_fn points into the DLL we're about to unload. Joining first
+	// guarantees no in-flight call can dereference a freed module.
+	JoinAndDrainShimWorkers();
+
+	// SEC-P1-8: roll back per-plugin env injections so tokens don't leak
+	// to forked subprocesses or crash dumps across config reloads.
+	UnsetInjectedEnvKeys();
+
 	// Subscriber + function tables come down first — once the DLLs are
 	// gone any held function pointer would dangle.
 	m_subscribers.clear();
@@ -523,6 +585,7 @@ void ibPluginManager::UnloadAll()
 	m_aiProviders.clear();
 	m_defaultAIPaneId.Clear();
 	m_pendingWebPaneRegs.clear();
+	m_paneIdToPluginId.clear();   // SEC-P1-9
 	m_pluginEnv.clear();
 
 	// Drain the agent undo stack BEFORE the configuration tree is freed.
@@ -565,12 +628,20 @@ void ibPluginManager::FireEvent(const wxString& name, ibPluginValue* payload)
 int ibPluginManager::HostRegisterFunction(const char* name, int paramCount, ibPluginFunctionFn fn)
 {
 	if (fn == nullptr || !IsValidIdentifier(name)) return -1;
+	// SEC-P1-9: capture the registering plugin's id from the init-thread
+	// scope so CallFunction can push it on every dispatch.
+	const std::string callerPid = tl_currentPluginId;
 	// Last writer wins — overwrite an existing binding with the same name.
 	const std::string key(name);
 	for (auto& f : m_functions) {
-		if (f.m_name == key) { f.m_paramCount = paramCount; f.m_fn = fn; return 0; }
+		if (f.m_name == key) {
+			f.m_paramCount = paramCount;
+			f.m_fn         = fn;
+			f.m_pluginId   = callerPid;
+			return 0;
+		}
 	}
-	m_functions.push_back({ key, paramCount, fn });
+	m_functions.push_back({ key, paramCount, fn, callerPid });
 	return 0;
 }
 
@@ -598,6 +669,13 @@ bool ibPluginManager::CallFunction(const RegisteredFunction& fn,
 	ibPluginCallScope scope;
 	ibPluginCallScope* prev = tl_scope;
 	tl_scope = &scope;
+
+	// SEC-P1-9: push the registering plugin's id so any host trampoline
+	// (Meta*, ReadPluginEnv) called from inside fn.m_fn resolves caller
+	// identity correctly — even when CallFunction runs on a worker thread
+	// where tl_currentPluginId would otherwise be empty.
+	const std::string prevPid = tl_currentPluginId;
+	tl_currentPluginId = fn.m_pluginId;
 
 	std::vector<ibPluginValue*> args;
 	args.reserve(static_cast<size_t>(lSizeArray));
@@ -629,6 +707,8 @@ bool ibPluginManager::CallFunction(const RegisteredFunction& fn,
 	}
 
 	tl_scope = prev;
+	// SEC-P1-9: restore prior caller-pid scope.
+	tl_currentPluginId = prevPid;
 	return rc == 0;
 }
 
@@ -659,6 +739,10 @@ int ibPluginManager::CallWebPaneRegister(const wxString& paneId,
 		             paneId);
 		return -1;
 	}
+	// SEC-P1-9: snapshot the registering plugin's id (set during init_fn).
+	// Stashed alongside paneId so inbound pane messages can push the
+	// scope around the dispatched onMessage call.
+	const std::string registrantPid = tl_currentPluginId;
 	if (!m_webPaneRegister) {
 		// Designer hasn't installed callbacks yet — buffer for replay.
 		// Return success so the plugin doesn't treat early-init as
@@ -667,7 +751,7 @@ int ibPluginManager::CallWebPaneRegister(const wxString& paneId,
 		// default-pane slot is claimed inside the replay loop AFTER
 		// the entry actually registers successfully — a buffered reg
 		// that the frame later rejects must not shadow valid panes.
-		m_pendingWebPaneRegs.push_back({paneId, title, htmlBundlePath, cb, userData});
+		m_pendingWebPaneRegs.push_back({paneId, title, htmlBundlePath, cb, userData, registrantPid});
 		return 0;
 	}
 	const int rc = m_webPaneRegister(paneId, title, htmlBundlePath, cb, userData);
@@ -678,7 +762,31 @@ int ibPluginManager::CallWebPaneRegister(const wxString& paneId,
 		// NOT claim the slot — otherwise later real panes can't route.
 		m_defaultAIPaneId = paneId;
 	}
+	if (rc == 0 && !paneId.IsEmpty()) {
+		// SEC-P1-9: record paneId → pluginId so dispatchers can scope
+		// tl_currentPluginId on inbound messages.
+		m_paneIdToPluginId[std::string(paneId.utf8_str())] = registrantPid;
+	}
 	return rc;
+}
+
+std::string ibPluginManager::GetPluginIdForPane(const wxString& paneId) const
+{
+	auto it = m_paneIdToPluginId.find(std::string(paneId.utf8_str()));
+	if (it == m_paneIdToPluginId.end()) return std::string();
+	return it->second;
+}
+
+std::string ibPluginManager::PushCallerPluginId(const std::string& pluginId)
+{
+	std::string prev = tl_currentPluginId;
+	tl_currentPluginId = pluginId;
+	return prev;
+}
+
+void ibPluginManager::PopCallerPluginId(const std::string& restore)
+{
+	tl_currentPluginId = restore;
 }
 
 ibPluginManager::~ibPluginManager()
@@ -744,6 +852,25 @@ std::string ibPluginManager::ReadPluginEnv(const std::string& pluginId,
 	return kit->second;
 }
 
+void ibPluginManager::UnsetInjectedEnvKeys()
+{
+	// SEC-P1-8: clear every env entry we set during LoadAll. Bearer tokens
+	// in the live env are visible to fork()'d helpers + crash dumps; we
+	// don't want them to outlive the plugin's load cycle. POSIX unsetenv
+	// is the documented inverse of setenv; Windows mirrors it via empty
+	// value to _putenv_s.
+	for (const auto& [pluginId, keys] : m_injectedEnvKeys) {
+		for (const auto& k : keys) {
+#if defined(_WIN32)
+			_putenv_s(k.c_str(), "");
+#else
+			unsetenv(k.c_str());
+#endif
+		}
+	}
+	m_injectedEnvKeys.clear();
+}
+
 bool ibPluginManager::CheckMutationAllowed(const wxString& pluginId,
                                              const wxString& opName)
 {
@@ -795,6 +922,11 @@ void ibPluginManager::ReplayPendingWebPaneRegistrations()
 		if (m_defaultAIPaneId.IsEmpty() && !r.paneId.IsEmpty()) {
 			m_defaultAIPaneId = r.paneId;
 		}
+		// SEC-P1-9: deferred regs land here on the same code path; mirror
+		// the paneId→pluginId stash so dispatch can scope tl_currentPluginId.
+		if (!r.paneId.IsEmpty()) {
+			m_paneIdToPluginId[std::string(r.paneId.utf8_str())] = r.pluginId;
+		}
 	}
 }
 
@@ -837,6 +969,31 @@ LegacyShimState& Shim()
 {
 	static LegacyShimState s;
 	return s;
+}
+
+// SEC-P0-3: track every spawned shim worker so UnloadAll / shim reset
+// can quiesce them before the manager pointer (or LLMQuery fn pointer)
+// dies. Workers poll g_shimShutdown between emits + skip remaining work
+// when set. Mirrors the pattern aiBridge uses for g_workers + g_shuttingDown.
+std::mutex                g_shimWorkersMu;
+std::vector<std::thread>  g_shimWorkers;
+std::atomic<bool>         g_shimShutdown{false};
+
+// Join + drain every spawned shim worker. Called from ibPluginManager
+// when the shim is about to be replaced (re-Scan) or torn down (UnloadAll).
+// Must NOT be called from a worker thread itself — would self-deadlock.
+void JoinAndDrainShimWorkers()
+{
+	g_shimShutdown.store(true);
+	std::vector<std::thread> drain;
+	{
+		std::lock_guard<std::mutex> lk(g_shimWorkersMu);
+		drain.swap(g_shimWorkers);
+	}
+	for (auto& t : drain) {
+		if (t.joinable()) t.join();
+	}
+	g_shimShutdown.store(false);
 }
 
 // Per-request cancellation tokens. Stop Generation: the pane fires
@@ -946,10 +1103,12 @@ std::string BuildEditorSkillPrompt(const std::string& op,
 // thread_local; each worker gets a fresh scope.
 void LegacyShimOnPaneMessage(const char* paneId, const char* jsonInline, void* /*userData*/)
 {
-	DiagLog("OnPaneMessage: pane='%s' bytes=%zu payload[0..120]=%.120s",
+	// SEC-P0-2: never log the inbound payload — it carries the raw user
+	// prompt and (in editor.skill envelopes) source code. kind+requestId
+	// suffice for forensics; parse them out below before logging.
+	DiagLog("OnPaneMessage: pane='%s' bytes=%zu",
 	        paneId ? paneId : "?",
-	        jsonInline ? std::strlen(jsonInline) : 0,
-	        jsonInline ? jsonInline : "");
+	        jsonInline ? std::strlen(jsonInline) : 0);
 	auto& shim = Shim();
 	if (shim.manager == nullptr || shim.llmFn.m_fn == nullptr) {
 		DiagLog("  FAIL: shim not initialised (manager=%p fn=%p)",
@@ -1025,8 +1184,14 @@ void LegacyShimOnPaneMessage(const char* paneId, const char* jsonInline, void* /
 	std::shared_ptr<std::atomic<bool>> cancelTok =
 	    ridOwned.empty() ? nullptr : AllocCancelToken(ridOwned);
 
-	std::thread([mgr, fn, paneIdOwned, ridOwned, promptOwned, localeOwned, cancelTok]() {
+	// SEC-P0-3: track the worker so UnloadAll can quiesce it before
+	// `mgr` (and the captured RegisteredFunction's m_fn pointer, which
+	// lives in the soon-to-be-unloaded plugin DLL) become invalid.
+	auto worker = std::thread([mgr, fn, paneIdOwned, ridOwned, promptOwned, localeOwned, cancelTok]() {
 		auto emit = [&](const std::string& body) {
+			// SEC-P0-3: don't touch `mgr` after shutdown trip — it may be
+			// mid-destruction. Worker exits silently; UnloadAll wins.
+			if (g_shimShutdown.load()) return;
 			mgr->CallWebPaneSend(wxString::FromUTF8(paneIdOwned.c_str()),
 			                       wxString::FromUTF8(body.c_str()));
 		};
@@ -1100,6 +1265,14 @@ void LegacyShimOnPaneMessage(const char* paneId, const char* jsonInline, void* /
 		size_t chunksEmitted = 0;
 		bool   cancelled = false;
 		while (i < response.size()) {
+			// SEC-P0-3: shutdown trumps everything — bail without emitting
+			// further chat.delta + skip the trailing chat.end (manager may
+			// already be tearing down its callbacks).
+			if (g_shimShutdown.load()) {
+				DiagLog("  worker: shutdown flag observed, aborting after %zu chunks",
+				        chunksEmitted);
+				return;
+			}
 			// Cancellation poll — set by agent.cancel from the pane. We
 			// check BEFORE each chunk emit so a flag flipped between
 			// sleeps is honoured on the very next iteration.
@@ -1144,7 +1317,12 @@ void LegacyShimOnPaneMessage(const char* paneId, const char* jsonInline, void* /
 		if (!ridOwned.empty()) EraseCancelToken(ridOwned);
 		DiagLog("  worker: done, emitted %zu chars in %zu chunks cancelled=%d",
 		        response.size(), chunksEmitted, cancelled ? 1 : 0);
-	}).detach();
+	});
+	// SEC-P0-3: register worker for shutdown drain (replaces detach()).
+	{
+		std::lock_guard<std::mutex> lk(g_shimWorkersMu);
+		g_shimWorkers.push_back(std::move(worker));
+	}
 }
 
 } // namespace
@@ -1182,7 +1360,10 @@ void ibPluginManager::CompleteCodeAsync(const wxString& prompt,
 	                     : std::string(locale.utf8_str().data()));
 	auto                       cb      = std::move(onResult);
 
-	std::thread([mgr, fnCopy, promptOwned, localeOwned, cb]() {
+	auto worker = std::thread([mgr, fnCopy, promptOwned, localeOwned, cb]() {
+		// SEC-P0-3: short-circuit when shutdown trips before we even
+		// dispatch the call — fnCopy.m_fn points into the plugin DLL.
+		if (g_shimShutdown.load()) return;
 		ibValue vPrompt; vPrompt.SetString(wxString::FromUTF8(promptOwned.c_str()));
 		ibValue vLocale; vLocale.SetString(wxString::FromUTF8(localeOwned.c_str()));
 		ibValue* args[2] = { &vPrompt, &vLocale };
@@ -1224,16 +1405,26 @@ void ibPluginManager::CompleteCodeAsync(const wxString& prompt,
 		// Callers (codeEditor) touch wx widgets which are not
 		// thread-safe; CallAfter queues a wxEvent that the wxApp drains
 		// on the main thread.
-		if (cb && wxTheApp != nullptr) {
+		// SEC-P0-3: skip the UI callback when shutting down — wxTheApp
+		// may already be tearing down its event queue.
+		if (cb && wxTheApp != nullptr && !g_shimShutdown.load()) {
 			wxTheApp->CallAfter([cb, ok, text, err]() {
 				cb(ok && err.IsEmpty(), text, err);
 			});
 		}
-	}).detach();
+	});
+	// SEC-P0-3: register worker for shutdown drain (replaces detach()).
+	{
+		std::lock_guard<std::mutex> lk(g_shimWorkersMu);
+		g_shimWorkers.push_back(std::move(worker));
+	}
 }
 
 void ibPluginManager::ScanForLegacyLLMShim(const wxString& htmlBundlePath)
 {
+	// SEC-P0-3: re-Scan replaces shim state. Drain prior workers so they
+	// can't fire WebPaneSend with stale captures (paneId/manager).
+	JoinAndDrainShimWorkers();
 	DiagLog("ScanForLegacyLLMShim: invoked, bundle='%s', exists=%d",
 	        htmlBundlePath.utf8_str().data(), (int)wxFileExists(htmlBundlePath));
 	DiagLog("  plugins loaded: %zu", m_plugins.size());
