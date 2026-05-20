@@ -402,19 +402,23 @@ LookupResult LookupTopLevel(const std::string& kind, const std::string& name)
 
 // Audit-log helper. Plugin-supplied identifiers (pluginId, fullName)
 // can carry newlines / NUL bytes / ANSI escapes that break grep-based
-// forensics. Strip control chars + cap length to 256 chars before
-// logging. Not a security boundary — plugins are loaded code — but
-// hygiene for incident review.
+// forensics. Strip control chars + cap length at 256 code points
+// (NOT code units — wxString.size() counts UTF-16 units on MSW, so
+// a separate counter avoids halving the visible budget for emoji /
+// supplementary-plane content). Not a security boundary — plugins are
+// loaded code — but hygiene for incident review.
 wxString SanitiseForLog(const wxString& in)
 {
 	wxString out;
 	out.reserve(in.size());
-	int dropped = 0;
+	int     emitted = 0;
+	int     dropped = 0;
 	for (wxUniChar c : in) {
-		if (out.size() >= 256) { dropped += 1; continue; }
+		if (emitted >= 256) { dropped += 1; continue; }
 		const auto v = static_cast<unsigned>(c.GetValue());
-		if (v < 0x20 || v == 0x7F) { out += wxT('?'); }
-		else                        { out += c; }
+		if (v < 0x20 || v == 0x7F) out += wxT('?');
+		else                        out += c;
+		++emitted;
 	}
 	if (dropped > 0) {
 		out += wxString::Format(wxT("…[+%dch]"), dropped);
@@ -572,7 +576,10 @@ int HostMetaEdit(const char* pluginId,
 		SetError(errorMsg, "MetaEdit: empty patch payload");
 		return -1;
 	}
-	const std::size_t patchLen = std::strlen(jsonPatch);
+	// strnlen bounds the walk so a hostile plugin shipping a non-null-
+	// terminated buffer can't make us read past kMaxPatchBytes + 1 bytes
+	// before the cap fires.
+	const std::size_t patchLen = ::strnlen(jsonPatch, kMaxPatchBytes + 1);
 	if (patchLen > kMaxPatchBytes) {
 		SetError(errorMsg, "MetaEdit: patch exceeds 1 MB hard cap");
 		return -1;

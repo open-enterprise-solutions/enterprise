@@ -79,7 +79,10 @@ int UndoLastAgentMutation();
 // the internal epoch + clears the stack so shared_ptr-owned victims
 // from MetaDelete are freed cleanly + pending undo entries become
 // inert. MUST run on the main thread before the old activeMetaData is
-// freed.
+// freed. Idempotent — safe to call repeatedly (e.g. UnloadAll fires
+// twice on process exit: once from ~ibApplicationData, once from
+// ~ibPluginManager). Each repeated call clears an already-empty stack
+// and bumps the epoch.
 void NotifyConfigurationUnload();
 
 // Test-only hook — wipes the undo stack so unit cases run independently.
