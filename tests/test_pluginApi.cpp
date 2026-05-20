@@ -922,3 +922,94 @@ TEST(PluginsConfig, SaveAtomicityLeavesPriorOnTempFailure) {
 	EXPECT_FALSE(wxFileExists(tmp))
 	    << "temp file must be consumed by atomic rename";
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4.4 — pluginInstaller ReadManifest + path-traversal guards.
+// ---------------------------------------------------------------------------
+#include "backend/plugin/pluginInstaller.h"
+#include <wx/zipstrm.h>
+#include <wx/wfstream.h>
+
+namespace {
+// Create a minimal .zip with manifest.json + a fake binary at tmpPath.
+// Caller removes the file when done.
+void CreateZipBundle(const wxString& tmpPath, const std::string& manifestJson,
+                       const std::string& binaryName, bool includeBinary = true)
+{
+	wxFFileOutputStream out(tmpPath);
+	wxZipOutputStream zip(out);
+	{
+		zip.PutNextEntry(wxT("manifest.json"));
+		zip.Write(manifestJson.data(), manifestJson.size());
+	}
+	if (includeBinary && !binaryName.empty()) {
+		zip.PutNextEntry(wxString::FromUTF8(binaryName));
+		const char body[] = "BINARY-PAYLOAD";
+		zip.Write(body, sizeof(body) - 1);
+	}
+}
+} // namespace
+
+TEST(PluginInstaller, ReadManifestSucceedsOnWellFormed) {
+	const wxString zip = wxFileName::CreateTempFileName(wxT("oes_inst_zip_"));
+	CreateZipBundle(zip,
+	    R"({"pluginId":"pugi","version":"1.2.3","abiVersion":4,
+	         "binary":"pugi.dylib"})",
+	    "pugi.dylib");
+
+	pluginInstaller::Manifest m;
+	wxString err;
+	EXPECT_TRUE(pluginInstaller::ReadManifest(zip, m, &err)) << err.ToStdString();
+	EXPECT_EQ(m.pluginId,   "pugi");
+	EXPECT_EQ(m.version,    "1.2.3");
+	EXPECT_EQ(m.abiVersion, 4);
+	EXPECT_EQ(m.binary,     "pugi.dylib");
+	wxRemoveFile(zip);
+}
+
+TEST(PluginInstaller, ReadManifestRejectsMissingFields) {
+	const wxString zip = wxFileName::CreateTempFileName(wxT("oes_inst_zip2_"));
+	CreateZipBundle(zip, R"({"pluginId":"only"})", "");
+
+	pluginInstaller::Manifest m;
+	wxString err;
+	EXPECT_FALSE(pluginInstaller::ReadManifest(zip, m, &err));
+	EXPECT_NE(err.Find("missing required fields"), wxNOT_FOUND);
+	wxRemoveFile(zip);
+}
+
+TEST(PluginInstaller, ReadManifestRejectsPathTraversalInBinary) {
+	const wxString zip = wxFileName::CreateTempFileName(wxT("oes_inst_zip3_"));
+	CreateZipBundle(zip,
+	    R"({"pluginId":"evil","version":"1.0.0","abiVersion":4,
+	         "binary":"../../etc/passwd"})", "x");
+
+	pluginInstaller::Manifest m;
+	wxString err;
+	EXPECT_FALSE(pluginInstaller::ReadManifest(zip, m, &err));
+	EXPECT_NE(err.Find("relative path"), wxNOT_FOUND);
+	wxRemoveFile(zip);
+}
+
+TEST(PluginInstaller, ReadManifestRejectsAbsoluteBinary) {
+	const wxString zip = wxFileName::CreateTempFileName(wxT("oes_inst_zip4_"));
+	CreateZipBundle(zip,
+	    R"({"pluginId":"evil","version":"1.0.0","abiVersion":4,
+	         "binary":"/etc/passwd"})", "x");
+	pluginInstaller::Manifest m;
+	wxString err;
+	EXPECT_FALSE(pluginInstaller::ReadManifest(zip, m, &err));
+	wxRemoveFile(zip);
+}
+
+TEST(PluginInstaller, ReadManifestRejectsNonZip) {
+	const wxString notZip = wxFileName::CreateTempFileName(wxT("oes_notzip_"));
+	{
+		std::ofstream f(std::string(notZip.utf8_str()), std::ios::binary);
+		f << "this is not a zip file";
+	}
+	pluginInstaller::Manifest m;
+	wxString err;
+	EXPECT_FALSE(pluginInstaller::ReadManifest(notZip, m, &err));
+	wxRemoveFile(notZip);
+}

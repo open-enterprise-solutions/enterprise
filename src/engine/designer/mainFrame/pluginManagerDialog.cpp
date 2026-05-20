@@ -8,6 +8,7 @@
 #include "backend/plugin/pluginManager.h"
 #include "backend/plugin/pluginsConfig.h"
 #include "backend/plugin/byokEnv.h"
+#include "backend/plugin/pluginInstaller.h"
 
 #include <wx/sizer.h>
 #include <wx/listctrl.h>
@@ -17,6 +18,7 @@
 #include <wx/button.h>
 #include <wx/textdlg.h>
 #include <wx/msgdlg.h>
+#include <wx/filedlg.h>
 
 #include <unordered_set>
 
@@ -27,6 +29,8 @@ enum {
 	ID_ENDPOINT,
 	ID_BYOK_REF,
 	ID_EDIT_BYOK,
+	ID_INSTALL,
+	ID_UNINSTALL,
 };
 } // namespace
 
@@ -65,6 +69,11 @@ ibPluginManagerDialog::ibPluginManagerDialog(wxWindow* parent)
 	auto* byokBtn = new wxButton(this, ID_EDIT_BYOK, _("Edit API token…"));
 	right->Add(byokBtn, 0, wxBOTTOM, 8);
 
+	auto* installRow = new wxBoxSizer(wxHORIZONTAL);
+	installRow->Add(new wxButton(this, ID_INSTALL,   _("Install from file…")), 0, wxRIGHT, 4);
+	installRow->Add(new wxButton(this, ID_UNINSTALL, _("Uninstall…")),         0);
+	right->Add(installRow, 0, wxBOTTOM, 8);
+
 	right->AddStretchSpacer(1);
 
 	auto* dialogButtons = CreateStdDialogButtonSizer(wxOK | wxCANCEL);
@@ -73,8 +82,10 @@ ibPluginManagerDialog::ibPluginManagerDialog(wxWindow* parent)
 
 	SetSizer(root);
 
-	Bind(wxEVT_BUTTON,        &ibPluginManagerDialog::OnApply,    this, wxID_OK);
-	Bind(wxEVT_BUTTON,        &ibPluginManagerDialog::OnEditByok, this, ID_EDIT_BYOK);
+	Bind(wxEVT_BUTTON,        &ibPluginManagerDialog::OnApply,     this, wxID_OK);
+	Bind(wxEVT_BUTTON,        &ibPluginManagerDialog::OnEditByok,  this, ID_EDIT_BYOK);
+	Bind(wxEVT_BUTTON,        &ibPluginManagerDialog::OnInstall,   this, ID_INSTALL);
+	Bind(wxEVT_BUTTON,        &ibPluginManagerDialog::OnUninstall, this, ID_UNINSTALL);
 	Bind(wxEVT_LIST_ITEM_SELECTED,
 	     [this](wxListEvent& e) {
 	         wxCommandEvent fake(wxEVT_LIST_ITEM_SELECTED, e.GetIndex());
@@ -205,6 +216,76 @@ void ibPluginManagerDialog::OnEditByok(wxCommandEvent& /*event*/)
 		wxMessageBox(_("Failed to write env file. See log for details."),
 		             _("BYOK"), wxICON_ERROR);
 	}
+}
+
+void ibPluginManagerDialog::OnInstall(wxCommandEvent& /*event*/)
+{
+	wxFileDialog dlg(this, _("Install plugin"), wxEmptyString, wxEmptyString,
+	    _("Plugin bundles (*.zip)|*.zip|All files|*"),
+	    wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+	if (dlg.ShowModal() != wxID_OK) return;
+	const wxString zipPath = dlg.GetPath();
+
+	pluginInstaller::Manifest m;
+	wxString err;
+	if (!pluginInstaller::ReadManifest(zipPath, m, &err)) {
+		wxMessageBox(wxString::Format(_("Cannot read manifest: %s"), err),
+		             _("Install plugin"), wxICON_ERROR);
+		return;
+	}
+
+	const wxString summary = wxString::Format(
+	    _("Install %s %s (ABI %d)?\n\nFrom: %s"),
+	    wxString::FromUTF8(m.pluginId), wxString::FromUTF8(m.version),
+	    m.abiVersion, zipPath);
+	const auto choice = wxMessageBox(summary, _("Confirm install"),
+	    wxYES_NO | wxICON_QUESTION);
+	if (choice != wxYES) return;
+
+	auto rc = pluginInstaller::Install(zipPath, /*allowOverwrite*/ false, &err);
+	if (rc == pluginInstaller::InstallResult::AlreadyExists) {
+		const auto over = wxMessageBox(
+		    _("Same version already installed. Overwrite?"),
+		    _("Install plugin"), wxYES_NO | wxICON_QUESTION);
+		if (over != wxYES) return;
+		rc = pluginInstaller::Install(zipPath, /*allowOverwrite*/ true, &err);
+	}
+	if (rc != pluginInstaller::InstallResult::OK) {
+		wxMessageBox(wxString::Format(_("Install failed: %s"), err),
+		             _("Install plugin"), wxICON_ERROR);
+		return;
+	}
+
+	wxMessageBox(_("Plugin installed. Restart Designer to load it."),
+	             _("Install plugin"), wxICON_INFORMATION);
+	RebuildList();
+}
+
+void ibPluginManagerDialog::OnUninstall(wxCommandEvent& /*event*/)
+{
+	if (m_activeRow < 0) return;
+	const auto& r = m_snap.rows[m_activeRow];
+
+	const auto choice = wxMessageBox(
+	    wxString::Format(_("Uninstall %s?\n\nThis removes the plugin "
+	                        "files and your saved API key for it."),
+	                      r.displayName),
+	    _("Uninstall plugin"), wxYES_NO | wxICON_WARNING);
+	if (choice != wxYES) return;
+
+	const std::string idNarrow(r.pluginId.utf8_str());
+	if (pluginInstaller::Uninstall(idNarrow) != 0) {
+		wxMessageBox(_("Uninstall reported errors. See log for details."),
+		             _("Uninstall plugin"), wxICON_ERROR);
+	}
+
+	// Drop plugins.json5 entry too — uninstall = remove every trace.
+	auto snap = pluginsConfig::Load();
+	snap.plugins.erase(idNarrow);
+	snap.policies.erase(idNarrow);
+	pluginsConfig::Save(snap);
+
+	RebuildList();
 }
 
 void ibPluginManagerDialog::OnApply(wxCommandEvent& event)
