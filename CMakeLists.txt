@@ -298,6 +298,7 @@ add_subdirectory("${OES_ENGINE_DIR}/codeRunner")
 add_subdirectory("${OES_ENGINE_DIR}/classChecker")
 add_subdirectory("${OES_ENGINE_DIR}/dumpHelp")
 add_subdirectory("${OES_ENGINE_DIR}/simplePlugin")
+add_subdirectory("${OES_ENGINE_DIR}/aiBridge")
 
 # ---------------------------------------------------------------------------
 # Unit tests (Google Test)
