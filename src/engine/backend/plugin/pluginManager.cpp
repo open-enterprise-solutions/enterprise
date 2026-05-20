@@ -18,6 +18,7 @@
 #include "3rdparty/nlohmann/json.hpp"
 
 #include "metaBridge.h"
+#include "pluginsConfig.h"
 
 #ifdef __WXMSW__
   #include <windows.h>
@@ -301,6 +302,13 @@ size_t ibPluginManager::LoadAll()
 	if (!wxDirExists(dir))
 		return 0;
 
+	// Load persistent per-plugin overrides (enabled/disabled, mutation
+	// policy persisted across sessions). Apply policies before the DLL
+	// scan so plugins that call SetMutationPolicy from oes_plugin_initialize
+	// see them already in place.
+	const pluginsConfig::Snapshot snap = pluginsConfig::Load();
+	pluginsConfig::Apply(snap, *this);
+
 	const wxString pattern = wxT("*") + wxDynamicLibrary::GetDllExt(wxDL_MODULE);
 
 	wxArrayString files;
@@ -330,6 +338,18 @@ size_t ibPluginManager::LoadAll()
 		if (info == nullptr || info->abi_version < kAbiMin || info->abi_version > kAbiMax) {
 			wxLogMessage(wxT("Plugin '%s' rejected: ABI mismatch (got %d, host supports %d..%d)"),
 			             path, info ? info->abi_version : -1, kAbiMin, kAbiMax);
+			continue;
+		}
+
+		// Persistent enable/disable from plugins.json5. Disabled plugins
+		// stay on disk but never run their oes_plugin_initialize. The
+		// Tools → Plugins dialog flips the toggle without ripping files
+		// off the filesystem.
+		const std::string pluginIdNarrow(info->name ? info->name : "");
+		if (!pluginIdNarrow.empty() &&
+		    !pluginsConfig::IsEnabled(snap, pluginIdNarrow)) {
+			wxLogMessage(wxT("Plugin '%s' disabled in plugins.json5 — skipping"),
+			             wxString::FromUTF8(pluginIdNarrow));
 			continue;
 		}
 

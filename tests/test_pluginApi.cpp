@@ -678,3 +678,121 @@ TEST(MetaMutation, ForceFlagParserEdgeCases) {
 	                                       "{\"force\":\"yes\"}", &err), 0);
 	if (err) std::free(err);
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4.1 — plugins.json5 enable/disable + policy persistence.
+// ---------------------------------------------------------------------------
+#include "backend/plugin/pluginsConfig.h"
+#include <wx/filename.h>
+#include <wx/wfstream.h>
+#include <wx/utils.h>
+#include <fstream>
+
+namespace {
+// Write a plugins.json5 to a temp directory + point OES_PLUGIN_CONFIG_DIR
+// at it. Returns the temp dir path so the test can clean up.
+struct ScopedPluginsConfig {
+	wxString tmpDir;
+	ScopedPluginsConfig(const std::string& body) {
+		tmpDir = wxFileName::CreateTempFileName(wxT("oes_pcfg_"));
+		wxRemoveFile(tmpDir);     // CreateTempFileName creates a file; we want a dir
+		wxFileName::Mkdir(tmpDir, 0700, wxPATH_MKDIR_FULL);
+		const wxString path = tmpDir + wxFILE_SEP_PATH + wxT("plugins.json5");
+		{
+			std::ofstream f(std::string(path.utf8_str()), std::ios::binary);
+			f.write(body.data(), body.size());
+		}
+		wxSetEnv(wxT("OES_PLUGIN_CONFIG_DIR"), tmpDir);
+	}
+	~ScopedPluginsConfig() {
+		wxUnsetEnv(wxT("OES_PLUGIN_CONFIG_DIR"));
+		const wxString path = tmpDir + wxFILE_SEP_PATH + wxT("plugins.json5");
+		wxRemoveFile(path);
+		wxFileName::Rmdir(tmpDir);
+	}
+};
+} // namespace
+
+TEST(PluginsConfig, EmptyFileLeavesDefaults) {
+	ScopedPluginsConfig fx("");
+	const auto snap = pluginsConfig::Load();
+	EXPECT_TRUE(snap.plugins.empty());
+	EXPECT_TRUE(snap.policies.empty());
+	EXPECT_TRUE(pluginsConfig::IsEnabled(snap, "pugi-oes-bridge"))
+	    << "absent entries default to enabled";
+}
+
+TEST(PluginsConfig, MalformedJsonReadsAsDefaults) {
+	ScopedPluginsConfig fx("{not json at all");
+	const auto snap = pluginsConfig::Load();
+	EXPECT_TRUE(snap.plugins.empty());
+}
+
+TEST(PluginsConfig, EnabledFlagHonored) {
+	ScopedPluginsConfig fx(R"({
+		"plugins": {
+			"pugi-oes-bridge": { "enabled": false },
+			"simplePlugin":    { "enabled": true,
+			                    "endpoint": "https://example/api" }
+		}
+	})");
+	const auto snap = pluginsConfig::Load();
+	EXPECT_FALSE(pluginsConfig::IsEnabled(snap, "pugi-oes-bridge"));
+	EXPECT_TRUE (pluginsConfig::IsEnabled(snap, "simplePlugin"));
+	EXPECT_TRUE (pluginsConfig::IsEnabled(snap, "unmentioned"))
+	    << "absent entries stay enabled by default";
+
+	auto it = snap.plugins.find("simplePlugin");
+	ASSERT_NE(it, snap.plugins.end());
+	EXPECT_EQ(it->second.endpoint, wxT("https://example/api"));
+}
+
+TEST(PluginsConfig, PolicySnapshotParses) {
+	ScopedPluginsConfig fx(R"({
+		"policy": {
+			"pugi-oes-bridge": {
+				"*":           "AllowAlways",
+				"meta.delete": "Deny",
+				"meta.create": "AllowSession"
+			}
+		}
+	})");
+	const auto snap = pluginsConfig::Load();
+	auto it = snap.policies.find("pugi-oes-bridge");
+	ASSERT_NE(it, snap.policies.end());
+	EXPECT_EQ(it->second.ops.at("*"),
+	          ibPluginManager::MutationPolicy::AllowAlways);
+	EXPECT_EQ(it->second.ops.at("meta.delete"),
+	          ibPluginManager::MutationPolicy::Deny);
+	EXPECT_EQ(it->second.ops.at("meta.create"),
+	          ibPluginManager::MutationPolicy::AllowSession);
+}
+
+TEST(PluginsConfig, ApplyWritesToManager) {
+	ScopedPluginsConfig fx(R"({
+		"policy": {
+			"pugi-oes-bridge": {
+				"meta.create": "AllowAlways"
+			}
+		}
+	})");
+	const auto snap = pluginsConfig::Load();
+	ibPluginManager mgr;
+	pluginsConfig::Apply(snap, mgr);
+	EXPECT_EQ(mgr.GetMutationPolicy(wxT("pugi-oes-bridge"), wxT("meta.create")),
+	          ibPluginManager::MutationPolicy::AllowAlways);
+}
+
+TEST(PluginsConfig, JSONCCommentsAllowed) {
+	// nlohmann allows /* … */ + // when ignore_comments=true.
+	ScopedPluginsConfig fx(R"({
+		// session-only comment
+		"plugins": {
+			/* multi-line
+			   block */
+			"pugi-oes-bridge": { "enabled": false }
+		}
+	})");
+	const auto snap = pluginsConfig::Load();
+	EXPECT_FALSE(pluginsConfig::IsEnabled(snap, "pugi-oes-bridge"));
+}
