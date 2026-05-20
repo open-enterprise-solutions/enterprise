@@ -8,13 +8,18 @@ set(AIBRIDGE_SOURCES
     aiBridgeDLL.cpp
 )
 
-add_library(aiBridge SHARED ${AIBRIDGE_SOURCES})
+# MODULE (not SHARED) so macOS gets a .bundle extension matching what
+# wxDynamicLibrary::GetDllExt(wxDL_MODULE) returns — that's the file
+# pattern ibPluginManager::LoadAll scans for.
+add_library(aiBridge MODULE ${AIBRIDGE_SOURCES})
 
 set_target_properties(aiBridge PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/plugins
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/plugins
+    PREFIX "lib"
+    SUFFIX ".bundle"
 )
 
 target_compile_definitions(aiBridge PRIVATE NOPCH)

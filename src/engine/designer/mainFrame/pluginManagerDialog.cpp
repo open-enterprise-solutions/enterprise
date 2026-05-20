@@ -53,7 +53,19 @@ ibPluginManagerDialog::ibPluginManagerDialog(wxWindow* parent)
 	wxFont boldFont = m_descLabel->GetFont();
 	boldFont.MakeBold();
 	m_descLabel->SetFont(boldFont);
-	right->Add(m_descLabel, 0, wxBOTTOM, 6);
+	right->Add(m_descLabel, 0, wxBOTTOM, 2);
+
+	m_versionLabel = new wxStaticText(this, wxID_ANY, wxEmptyString);
+	wxFont smallFont = m_versionLabel->GetFont();
+	smallFont.SetPointSize(smallFont.GetPointSize() - 1);
+	m_versionLabel->SetFont(smallFont);
+	m_versionLabel->SetForegroundColour(wxColour(128, 128, 128));
+	right->Add(m_versionLabel, 0, wxBOTTOM, 2);
+
+	m_descriptionLbl = new wxStaticText(this, wxID_ANY, wxEmptyString,
+	                                       wxDefaultPosition, wxDefaultSize,
+	                                       wxALIGN_LEFT);
+	right->Add(m_descriptionLbl, 0, wxBOTTOM | wxEXPAND, 8);
 
 	m_enabledCheck = new wxCheckBox(this, ID_ENABLED, _("Enabled"));
 	right->Add(m_enabledCheck, 0, wxBOTTOM, 8);
@@ -125,8 +137,10 @@ void ibPluginManagerDialog::RebuildList()
 			                ? wxString::FromUTF8(p.m_info->name)
 			                : wxFileName(p.m_path).GetName();
 			r.displayName = r.pluginId;
-			if (p.m_info && p.m_info->version) {
-				r.version = wxString::FromUTF8(p.m_info->version);
+			if (p.m_info) {
+				if (p.m_info->version)     r.version     = wxString::FromUTF8(p.m_info->version);
+				if (p.m_info->description) r.description = wxString::FromUTF8(p.m_info->description);
+				if (p.m_info->vendor)      r.vendor      = wxString::FromUTF8(p.m_info->vendor);
 			}
 			r.enabled = true;
 			r.loaded  = true;
@@ -174,9 +188,25 @@ void ibPluginManagerDialog::OnSelectionChanged(wxCommandEvent& event)
 	m_activeRow = idx;
 	const auto& r = m_snap.rows[idx];
 	m_descLabel->SetLabel(r.displayName);
+
+	// Version / vendor line: "1.0.0 — Open Enterprise Solutions"
+	wxString verLine;
+	if (!r.version.IsEmpty()) verLine += r.version;
+	if (!r.vendor.IsEmpty()) {
+		if (!verLine.IsEmpty()) verLine += wxT(" — ");
+		verLine += r.vendor;
+	}
+	m_versionLabel->SetLabel(verLine);
+
+	// Description multi-line wrap. wxALIGN_LEFT plus Wrap() makes it
+	// fit the right pane's natural width without horizontal scroll.
+	m_descriptionLbl->SetLabel(r.description);
+	m_descriptionLbl->Wrap(360);
+
 	m_enabledCheck->SetValue(r.enabled);
 	m_endpointEdit->SetValue(r.endpoint);
 	m_byokRefEdit ->SetValue(r.byokRef);
+	Layout();
 }
 
 void ibPluginManagerDialog::CaptureCurrentRow()

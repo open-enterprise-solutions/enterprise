@@ -55,6 +55,9 @@ private:
 	wxTextCtrl*    m_endpointEdit   = nullptr;
 	wxTextCtrl*    m_byokRefEdit    = nullptr;
 	wxStaticText*  m_descLabel      = nullptr;
+	wxStaticText*  m_versionLabel   = nullptr;
+	wxStaticText*  m_authorLabel    = nullptr;
+	wxStaticText*  m_descriptionLbl = nullptr;
 	int            m_activeRow      = -1;
 
 	// In-memory snapshot — initialised from pluginsConfig::Load() at
@@ -64,6 +67,8 @@ private:
 			wxString  pluginId;
 			wxString  displayName;
 			wxString  version;
+			wxString  description;
+			wxString  vendor;
 			bool      enabled  = true;
 			bool      loaded   = false;     // currently live in pm.Loaded()?
 			wxString  endpoint;

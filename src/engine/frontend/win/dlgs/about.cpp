@@ -112,16 +112,25 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, int id)
 
 			wxString text;
 			for (const auto& p : plugins) {
-				text << wxString::FromUTF8(p.m_info->name ? p.m_info->name : "?")
-					<< wxT("  ")
-					<< wxString::FromUTF8(p.m_info->version ? p.m_info->version : "")
-					<< wxT("\n");
+				if (p.m_info == nullptr) continue;
+				const wxString name   = wxString::FromUTF8(p.m_info->name        ? p.m_info->name        : "?");
+				const wxString ver    = wxString::FromUTF8(p.m_info->version     ? p.m_info->version     : "");
+				const wxString desc   = wxString::FromUTF8(p.m_info->description ? p.m_info->description : "");
+				const wxString vendor = wxString::FromUTF8(p.m_info->vendor      ? p.m_info->vendor      : "");
+				text << name;
+				if (!ver.IsEmpty())    text << wxT("  ") << ver;
+				if (!vendor.IsEmpty()) text << wxT("   — ") << vendor;
+				text << wxT("\n");
+				if (!desc.IsEmpty()) {
+					text << wxT("    ") << desc << wxT("\n");
+				}
+				text << wxT("\n");
 			}
-			if (!text.empty() && text.Last() == wxT('\n'))
+			while (!text.IsEmpty() && (text.Last() == wxT('\n') || text.Last() == wxT(' ')))
 				text.RemoveLast();
 
 			wxTextCtrl* list = new wxTextCtrl(pluginsSizer->GetStaticBox(), wxID_ANY,
-				text, wxDefaultPosition, FromDIP(wxSize(-1, 48)),
+				text, wxDefaultPosition, FromDIP(wxSize(-1, 120)),
 				wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
 			list->SetBackgroundColour(pluginsSizer->GetStaticBox()->GetBackgroundColour());
 			pluginsSizer->Add(list, 1, wxEXPAND | wxALL, kPad);
