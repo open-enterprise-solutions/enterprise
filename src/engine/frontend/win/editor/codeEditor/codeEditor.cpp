@@ -10,6 +10,8 @@
 #include "frontend/docView/docView.h"
 #include "res/bitmaps_res.h"
 
+#include <wx/tokenzr.h>
+
 #define DEF_LINENUMBER_ID 0
 #define DEF_BREAKPOINT_ID 1
 #define DEF_FOLDING_ID 2
@@ -1114,6 +1116,33 @@ void ibCodeEditor::OnKeyDown(wxKeyEvent& event)
 		event.Skip(); return;
 	}
 
+	// Sigma AI inline completion hotkeys:
+	//   Ctrl+I (RawCtrl+I on macOS)    — request completion at caret
+	//   Tab inside pending suggestion  — accept + insert
+	//   Esc inside pending suggestion  — dismiss
+	// Tab/Esc only intercepted when a suggestion is pending; otherwise
+	// they fall through to default Scintilla behaviour.
+	if ((event.RawControlDown() || event.ControlDown()) &&
+	    !event.ShiftDown() && !event.AltDown() &&
+	    event.GetKeyCode() == 'I') {
+		TriggerSigmaCompletion();
+		return;
+	}
+	if (HasPendingSigmaCompletion()) {
+		if (event.GetKeyCode() == WXK_TAB) {
+			AcceptSigmaCompletion();
+			return;
+		}
+		if (event.GetKeyCode() == WXK_ESCAPE) {
+			DismissSigmaCompletion();
+			return;
+		}
+		// Any other key dismisses the suggestion + falls through so the
+		// user's typing actually lands in the buffer instead of being
+		// interpreted as part of the AI affordance.
+		DismissSigmaCompletion();
+	}
+
 	switch (event.GetKeyCode())
 	{
 	case WXK_LEFT:
@@ -1179,4 +1208,87 @@ void ibCodeEditor::OnKeyDown(wxKeyEvent& event)
 		break;
 	default: event.Skip(); break;
 	}
+}
+
+// ===========================================================================
+// Sigma AI inline completion (Phase 6.2)
+// ===========================================================================
+
+void ibCodeEditor::TriggerSigmaCompletion()
+{
+	// Dismiss any pending suggestion first — a fresh trigger replaces.
+	DismissSigmaCompletion();
+
+	auto* pm = appData ? appData->GetPluginManager() : nullptr;
+	if (pm == nullptr || !pm->HasAIProviderFor("helper")) {
+		AnnotationSetText(LineFromPosition(GetCurrentPos()),
+		    wxT("Sigma: no AI provider with \"helper\" mode installed."));
+		AnnotationSetStyle(LineFromPosition(GetCurrentPos()), wxSTC_STYLE_INDENTGUIDE);
+		AnnotationSetVisible(wxSTC_ANNOTATION_BOXED);
+		// Auto-clear after a few seconds via a timer would be nicer; for
+		// Phase 6.2.a the message stays until the next ContextMenu /
+		// TriggerSigmaCompletion call.
+		return;
+	}
+
+	// Build editor.complete envelope. Real provider dispatch lands in
+	// Phase 6.2.b once Host_EditorCompletionRespond ABI is added — for
+	// now we show a stub annotation so the UI affordance is testable
+	// without a v4 plugin that supports inline completion.
+	const int line = LineFromPosition(GetCurrentPos());
+	const wxString prefix = GetLine(line);
+	wxLogDebug(wxT("[sigma] TriggerSigmaCompletion line=%d prefix=%s"),
+	           line, prefix);
+
+	// Stub completion — replace with real round-trip in Phase 6.2.b.
+	ShowSigmaCompletion(wxT("// AI suggestion: implement TODO above\n"
+	                          "// Tab to accept   Esc to dismiss"));
+}
+
+void ibCodeEditor::ShowSigmaCompletion(const wxString& text)
+{
+	const int line = LineFromPosition(GetCurrentPos());
+	m_sigmaPending     = text;
+	m_sigmaPendingLine = line;
+	AnnotationSetText(line, text);
+	AnnotationSetStyle(line, wxSTC_STYLE_INDENTGUIDE);
+	AnnotationSetVisible(wxSTC_ANNOTATION_BOXED);
+}
+
+void ibCodeEditor::AcceptSigmaCompletion()
+{
+	if (m_sigmaPending.IsEmpty()) return;
+	// Strip the keybinding hint footer lines from the inserted body —
+	// callers pass user-facing text that includes "Tab/Esc" instructions;
+	// only the code portion (line(s) NOT prefixed with "//") goes into
+	// the buffer. For Phase 6.2.a the stub embeds both; real Phase 6.2.b
+	// suggestions will be code-only and bypass this filter.
+	wxString insertText;
+	wxStringTokenizer tok(m_sigmaPending, wxT("\n"));
+	while (tok.HasMoreTokens()) {
+		const wxString l = tok.GetNextToken();
+		wxString trimmed = l;
+		trimmed.Trim(false);
+		if (trimmed.StartsWith(wxT("// AI suggestion")) ||
+		    trimmed.StartsWith(wxT("// Tab"))) {
+			continue;
+		}
+		if (!insertText.IsEmpty()) insertText += wxT("\n");
+		insertText += l;
+	}
+	if (insertText.IsEmpty()) insertText = m_sigmaPending;
+
+	const int pos = GetCurrentPos();
+	InsertText(pos, insertText);
+	SetEmptySelection(pos + insertText.length());
+	DismissSigmaCompletion();
+}
+
+void ibCodeEditor::DismissSigmaCompletion()
+{
+	if (m_sigmaPendingLine >= 0) {
+		AnnotationSetText(m_sigmaPendingLine, wxEmptyString);
+	}
+	m_sigmaPending.Clear();
+	m_sigmaPendingLine = -1;
 }

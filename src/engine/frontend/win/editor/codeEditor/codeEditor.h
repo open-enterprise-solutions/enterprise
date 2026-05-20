@@ -476,6 +476,24 @@ public:
 	// caret is inside.
 	wxString GetIdentifierUnderCursor();
 
+	// ---- Sigma AI inline completion (Phase 6.2) ----
+	// Manual-trigger ghost-text suggestion below the current line via
+	// Scintilla annotation. Tab inside an active suggestion inserts;
+	// Esc dismisses; any other navigation also dismisses. Annotations
+	// stay out of the wxCommandProcessor undo stack — they're visual
+	// only until the user commits via Tab.
+	void TriggerSigmaCompletion();
+	void ShowSigmaCompletion(const wxString& text);
+	void AcceptSigmaCompletion();
+	void DismissSigmaCompletion();
+	bool HasPendingSigmaCompletion() const { return !m_sigmaPending.IsEmpty(); }
+
+private:
+	wxString m_sigmaPending;
+	int      m_sigmaPendingLine = -1;
+
+public:
+
 	// ---- Debugger integration hooks ----
 	// Frontend's ibCodeEditor doesn't know about backend's debugClient;
 	// designer's ibCodeDesigner subclass overrides these to forward to
