@@ -69,11 +69,18 @@ int HostMetaDelete(const char* pluginId,
                     char**      errorMsg);
 
 // Revert the most recently pushed agent mutation. Returns 0 when at
-// least one mutation was undone; non-zero when the undo stack is empty.
-// Phase 3.3 wires this into the Designer command processor so a single
-// Ctrl+Z reverts the entire agent turn (turn boundary = the plugin's
-// chat.send response cycle).
+// least one mutation was undone; non-zero when the undo stack is empty
+// or every remaining entry belongs to a stale configuration epoch
+// (those get dropped silently with a wxLog audit line).
 int UndoLastAgentMutation();
+
+// Designer / pluginManager calls this when activeMetaData is about to
+// be replaced (configuration reload, project switch, abort). Advances
+// the internal epoch + clears the stack so shared_ptr-owned victims
+// from MetaDelete are freed cleanly + pending undo entries become
+// inert. MUST run on the main thread before the old activeMetaData is
+// freed.
+void NotifyConfigurationUnload();
 
 // Test-only hook — wipes the undo stack so unit cases run independently.
 void ClearUndoStackForTests();

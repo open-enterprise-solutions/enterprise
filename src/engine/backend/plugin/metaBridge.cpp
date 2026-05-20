@@ -20,6 +20,7 @@
 #include "3rdparty/nlohmann/json.hpp"
 
 #include <functional>
+#include <memory>
 #include <vector>
 
 #include <wx/string.h>
@@ -283,12 +284,24 @@ int HostMetaQuery(const char* fullName,
 namespace metaBridge {
 namespace {
 
-// Undo stack — Designer Ctrl+Z integration lands in Phase 3.3 via the
-// active document's wxCommandProcessor. For now we hold the lambdas
-// in-process. Vector, not stack adapter, so tests can introspect size.
-// Not thread-safe — by contract all Meta* trampolines are main-thread
-// only (asserted via wxIsMainThread elsewhere).
-std::vector<std::function<void()>> g_undoStack;
+// Undo stack — Designer Ctrl+Z integration lands in Phase 3.4 via the
+// active document's wxCommandProcessor. Held in-process; vector for
+// test introspection. By contract every entry point asserts main-thread
+// (wxIsMainThread), so no mutex is needed yet; Phase 3.4 plumbing of
+// the Designer command processor stays on the UI thread.
+//
+// Each entry pairs an undo callable with the configuration epoch that
+// was active when the mutation ran. g_configEpoch advances on every
+// UnloadAll-of-configuration (or any other configuration teardown).
+// On undo we compare the stored epoch to the live one — if they differ,
+// the entry refers to a dead tree and we skip it instead of dereferenc-
+// ing a freed pointer (the Claude P0 dangling-pointer class of bugs).
+struct UndoEntry {
+	std::function<void()> fn;
+	unsigned long long    epoch;
+};
+std::vector<UndoEntry> g_undoStack;
+unsigned long long     g_configEpoch = 1;
 
 bool RequireMainThread(char** errorMsg)
 {
@@ -387,6 +400,33 @@ LookupResult LookupTopLevel(const std::string& kind, const std::string& name)
 	return out;
 }
 
+// Audit-log helper. Plugin-supplied identifiers (pluginId, fullName)
+// can carry newlines / NUL bytes / ANSI escapes that break grep-based
+// forensics. Strip control chars + cap length to 256 chars before
+// logging. Not a security boundary — plugins are loaded code — but
+// hygiene for incident review.
+wxString SanitiseForLog(const wxString& in)
+{
+	wxString out;
+	out.reserve(in.size());
+	int dropped = 0;
+	for (wxUniChar c : in) {
+		if (out.size() >= 256) { dropped += 1; continue; }
+		const auto v = static_cast<unsigned>(c.GetValue());
+		if (v < 0x20 || v == 0x7F) { out += wxT('?'); }
+		else                        { out += c; }
+	}
+	if (dropped > 0) {
+		out += wxString::Format(wxT("…[+%dch]"), dropped);
+	}
+	return out;
+}
+
+// 1 MB hard cap on patch payloads — defends the host against memory
+// exhaustion from a hostile plugin that ships a megabyte of "{a:1,…}".
+// The nlohmann parser would otherwise allocate proportional to input.
+constexpr std::size_t kMaxPatchBytes = 1024 * 1024;
+
 // Detect `force=true` flag in propertiesJson. Used by MetaDelete to
 // require an explicit irreversible-op opt-in even when policy is
 // AllowAlways — matches the `rm --no-preserve-root` convention.
@@ -482,19 +522,17 @@ int HostMetaCreate(const char* pluginId,
 	obj->SetParent(root);
 	root->AddChild(obj);
 
-	// Undo lambda: detach + delete. Designer Ctrl+Z (Phase 3.3 wiring
-	// of the wxCommandProcessor) triggers UndoLastAgentMutation which
-	// pops this entry. The capture holds raw pointers — safe because
-	// the undo runs on the same UI thread that performed the create,
-	// and configuration teardown (UnloadAll path) bypasses the agent.
-	g_undoStack.emplace_back([root, obj]() {
+	// Undo lambda: detach + delete. Epoch-gated so a configuration
+	// reload between create and undo doesn't deref a freed root.
+	g_undoStack.push_back({[root, obj]() {
 		root->RemoveChild(obj);
 		delete obj;
-	});
+	}, g_configEpoch});
 
 	wxLogMessage(wxT("[meta] MetaCreate(plugin=%s) -> %s.%s OK"),
-	             wxString::FromUTF8(pluginId),
-	             wxString::FromUTF8(kind), objName);
+	             SanitiseForLog(wxString::FromUTF8(pluginId)),
+	             SanitiseForLog(wxString::FromUTF8(kind)),
+	             SanitiseForLog(objName));
 	return 0;
 }
 
@@ -534,10 +572,32 @@ int HostMetaEdit(const char* pluginId,
 		SetError(errorMsg, "MetaEdit: empty patch payload");
 		return -1;
 	}
+	const std::size_t patchLen = std::strlen(jsonPatch);
+	if (patchLen > kMaxPatchBytes) {
+		SetError(errorMsg, "MetaEdit: patch exceeds 1 MB hard cap");
+		return -1;
+	}
 	auto patch = nlohmann::json::parse(jsonPatch, nullptr, /*allow_exceptions*/ false);
+	if (patch.is_discarded()) {
+		SetError(errorMsg, "MetaEdit: patch failed to parse as JSON");
+		return -1;
+	}
 	if (!patch.is_object()) {
 		SetError(errorMsg, "MetaEdit: patch must be a JSON object (synonym/comment fields)");
 		return -1;
+	}
+
+	// Strict-key validation. Unknown keys are rejected to keep the
+	// contract honest — silently dropping "name":"Pwn" would let an
+	// agent send mutation payloads the host doesn't understand and
+	// think they applied.
+	for (auto& kv : patch.items()) {
+		const std::string& k = kv.key();
+		if (k != "synonym" && k != "comment") {
+			SetError(errorMsg, "MetaEdit: unknown key '" + k +
+			                    "' (supported: synonym, comment)");
+			return -1;
+		}
 	}
 
 	// Snapshot old values for the undo lambda BEFORE we mutate.
@@ -560,15 +620,24 @@ int HostMetaEdit(const char* pluginId,
 		return -1;
 	}
 
-	g_undoStack.emplace_back([target, oldSynonym, oldComment,
-	                           changedSynonym, changedComment]() {
-		if (changedSynonym) target->SetSynonym(oldSynonym);
-		if (changedComment) target->SetComment(oldComment);
-	});
+	// Capture by fullName + re-resolve at undo time. A raw `target`
+	// pointer would dangle if the same object got MetaDelete'd between
+	// edit and undo. Epoch-gating below also catches config-reload.
+	const std::string fullNameCopy(fullName);
+	g_undoStack.push_back({[fullNameCopy, oldSynonym, oldComment,
+	                          changedSynonym, changedComment]() {
+		// Re-resolve target — kind/name parsing matches the create path.
+		std::string k, n;
+		if (!SplitFullName(fullNameCopy.c_str(), k, n)) return;
+		const LookupResult lookup = LookupTopLevel(k, n);
+		if (lookup.hit == nullptr) return;
+		if (changedSynonym) lookup.hit->SetSynonym(oldSynonym);
+		if (changedComment) lookup.hit->SetComment(oldComment);
+	}, g_configEpoch});
 
 	wxLogMessage(wxT("[meta] MetaEdit(plugin=%s) -> %s synonym=%d comment=%d"),
-	             wxString::FromUTF8(pluginId),
-	             wxString::FromUTF8(fullName),
+	             SanitiseForLog(wxString::FromUTF8(pluginId)),
+	             SanitiseForLog(wxString::FromUTF8(fullName)),
 	             (int)changedSynonym, (int)changedComment);
 	return 0;
 }
@@ -610,23 +679,37 @@ int HostMetaDelete(const char* pluginId,
 		return -1;
 	}
 
-	// Detach from parent. We keep ownership in the undo lambda — a Ctrl+Z
-	// after delete re-AddChilds the same instance, preserving all its
-	// state (properties, child attributes, form blobs). Production
-	// configuration validation hook lives in Phase 3.4 (re-run the
-	// config validator after each mutation; rollback on failure).
+	// Detach from parent + take ownership of the orphaned subtree.
+	// Ownership protocol:
+	//   - shared_ptr<bool> `released` flag captured by BOTH the custom
+	//     deleter and the undo lambda.
+	//   - If undo never fires (stack cleared on configuration reload,
+	//     undo entry popped past, process exits), the deleter destroys
+	//     victim cleanly — no leak.
+	//   - If undo fires, it sets *released=true and reattaches victim
+	//     to its old parent. The deleter then no-ops when the last
+	//     shared_ptr (the lambda's capture) dies, leaving the
+	//     configuration tree as victim's new owner.
 	ibValueMetaObject* parent = lookup.parent;
 	ibValueMetaObject* victim = lookup.hit;
 	parent->RemoveChild(victim);
 
-	g_undoStack.emplace_back([parent, victim]() {
-		victim->SetParent(parent);
-		parent->AddChild(victim);
-	});
+	auto released = std::make_shared<bool>(false);
+	std::shared_ptr<ibValueMetaObject> owned(victim,
+		[released](ibValueMetaObject* p) {
+			if (!*released) delete p;
+		});
+
+	g_undoStack.push_back({[parent, owned, released]() mutable {
+		ibValueMetaObject* p = owned.get();
+		p->SetParent(parent);
+		parent->AddChild(p);
+		*released = true;
+	}, g_configEpoch});
 
 	wxLogMessage(wxT("[meta] MetaDelete(plugin=%s) -> %s OK"),
-	             wxString::FromUTF8(pluginId),
-	             wxString::FromUTF8(fullName));
+	             SanitiseForLog(wxString::FromUTF8(pluginId)),
+	             SanitiseForLog(wxString::FromUTF8(fullName)));
 	return 0;
 }
 
@@ -634,10 +717,21 @@ int UndoLastAgentMutation()
 {
 	if (!wxIsMainThread()) return -1;
 	if (g_undoStack.empty()) return -1;
-	auto fn = std::move(g_undoStack.back());
+
+	// Skip entries that belong to a previous configuration epoch — their
+	// captured root/parent/object pointers refer to a freed tree.
+	while (!g_undoStack.empty() &&
+	       g_undoStack.back().epoch != g_configEpoch) {
+		wxLogMessage(wxT("metaBridge: dropping stale undo entry (epoch %llu vs %llu)"),
+		             g_undoStack.back().epoch, g_configEpoch);
+		g_undoStack.pop_back();
+	}
+	if (g_undoStack.empty()) return -1;
+
+	auto entry = std::move(g_undoStack.back());
 	g_undoStack.pop_back();
 	try {
-		fn();
+		entry.fn();
 		return 0;
 	} catch (...) {
 		wxLogWarning(wxT("metaBridge: undo lambda threw — partial revert"));
@@ -645,9 +739,21 @@ int UndoLastAgentMutation()
 	}
 }
 
+// Designer / pluginManager calls this when activeMetaData is about to
+// be replaced (configuration reload, project switch, abort). Advances
+// the epoch + clears the stack so the deletes-with-shared_ptr-owners
+// fire their custom deleters and pending undo entries become inert.
+// MUST run on the main thread before the old activeMetaData is freed.
+void NotifyConfigurationUnload()
+{
+	g_undoStack.clear();      // shared_ptr deleters fire here → no leaks
+	++g_configEpoch;
+}
+
 void ClearUndoStackForTests()
 {
 	g_undoStack.clear();
+	++g_configEpoch;
 }
 
 } // namespace metaBridge
