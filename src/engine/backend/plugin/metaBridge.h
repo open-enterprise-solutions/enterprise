@@ -21,6 +21,8 @@
 
 #include "backend/backend.h"
 
+class ibPluginManager;
+
 namespace metaBridge {
 
 // Resolve a kind label ("Catalog", "Document", "AccountingRegister", …)
@@ -85,8 +87,18 @@ int UndoLastAgentMutation();
 // and bumps the epoch.
 void NotifyConfigurationUnload();
 
-// Test-only hook — wipes the undo stack so unit cases run independently.
+// Test-only hook — wipes the undo stack + advances the epoch so unit
+// cases run independently from any prior state.
 void ClearUndoStackForTests();
+
+// Test-only hook — inject a pluginManager pointer that the Meta*
+// trampolines use instead of pulling appData->GetPluginManager().
+// Call with a manager constructed in test scope; clear with nullptr
+// in TearDown so production paths return to using appData.
+//
+// Lets the GTEST_SKIP'd Phase 3.4 integration cases run without
+// booting a full ibApplicationData fixture.
+void SetPluginManagerOverrideForTests(::ibPluginManager* override);
 
 } // namespace metaBridge
 

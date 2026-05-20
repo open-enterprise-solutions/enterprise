@@ -303,6 +303,13 @@ struct UndoEntry {
 std::vector<UndoEntry> g_undoStack;
 unsigned long long     g_configEpoch = 1;
 
+// Test override — when non-null, GatePolicy uses this manager instead
+// of appData->GetPluginManager(). Production code never touches it.
+// Backend has no fixture infrastructure of its own, so this is the
+// cheapest way to exercise the policy gate in unit tests without
+// booting a full ibApplicationData.
+ibPluginManager* g_testPluginManagerOverride = nullptr;
+
 bool RequireMainThread(char** errorMsg)
 {
 	if (!wxIsMainThread()) {
@@ -338,14 +345,21 @@ bool GatePolicy(const char* pluginId, const wxString& opName, char** errorMsg)
 		SetError(errorMsg, "MetaMutation: pluginId required for policy gate");
 		return false;
 	}
-	if (appData == nullptr) {
-		SetError(errorMsg, "MetaMutation: appData not initialised");
-		return false;
-	}
-	auto* pm = appData->GetPluginManager();
+	// Tests inject the manager via SetPluginManagerOverrideForTests so
+	// the policy gate exercises real CheckMutationAllowed without
+	// booting a full ibApplicationData. Production code never sees the
+	// override branch — it stays nullptr.
+	ibPluginManager* pm = g_testPluginManagerOverride;
 	if (pm == nullptr) {
-		SetError(errorMsg, "MetaMutation: plugin manager not initialised");
-		return false;
+		if (appData == nullptr) {
+			SetError(errorMsg, "MetaMutation: appData not initialised");
+			return false;
+		}
+		pm = appData->GetPluginManager();
+		if (pm == nullptr) {
+			SetError(errorMsg, "MetaMutation: plugin manager not initialised");
+			return false;
+		}
 	}
 	const wxString pidW = wxString::FromUTF8(pluginId);
 	if (pm->CheckMutationAllowed(pidW, opName)) return true;
@@ -557,21 +571,10 @@ int HostMetaEdit(const char* pluginId,
 		return -1;
 	}
 
-	ibValueMetaObject* root = nullptr;
-	if (!RequireConfiguration(root, errorMsg)) return -1;
-
-	const LookupResult lookup = LookupTopLevel(kind, name);
-	if (lookup.hit == nullptr) {
-		SetError(errorMsg, "MetaEdit: not found '" + std::string(fullName) + "'");
-		return -1;
-	}
-
-	// Phase 3.3 minimal patch: supports a JSON object payload like
-	//   {"synonym":"...", "comment":"..."}
-	// — straight string replacement on the three top-level common
-	// properties. RFC 6902 JSON Patch ops (add/replace/move) on nested
-	// attribute paths land in Phase 3.4 once we expose the property
-	// vocabulary per metaobject kind.
+	// Patch shape validation runs BEFORE the configuration check so a
+	// caller that ships a malformed JSON gets the right diagnostic even
+	// when there's no active configuration. Order: cheap, deterministic
+	// checks first; only then expensive configuration lookups.
 	if (jsonPatch == nullptr || *jsonPatch == '\0') {
 		SetError(errorMsg, "MetaEdit: empty patch payload");
 		return -1;
@@ -610,6 +613,16 @@ int HostMetaEdit(const char* pluginId,
 			                    "' (supported: synonym, comment)");
 			return -1;
 		}
+	}
+
+	// Now that patch syntax is verified, look up the target.
+	ibValueMetaObject* root = nullptr;
+	if (!RequireConfiguration(root, errorMsg)) return -1;
+
+	const LookupResult lookup = LookupTopLevel(kind, name);
+	if (lookup.hit == nullptr) {
+		SetError(errorMsg, "MetaEdit: not found '" + std::string(fullName) + "'");
+		return -1;
 	}
 
 	// Snapshot old values for the undo lambda BEFORE we mutate.
@@ -784,6 +797,11 @@ void ClearUndoStackForTests()
 {
 	g_undoStack.clear();
 	++g_configEpoch;
+}
+
+void SetPluginManagerOverrideForTests(ibPluginManager* override)
+{
+	g_testPluginManagerOverride = override;
 }
 
 } // namespace metaBridge

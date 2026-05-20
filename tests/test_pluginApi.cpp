@@ -571,28 +571,86 @@ TEST(MetaMutation, CreateRefusesEmptyPluginId) {
 	std::free(err);
 }
 
+// Helper RAII to swap in a test pluginManager override + clear on dtor.
+struct ScopedPluginManager {
+	ibPluginManager pm;
+	ScopedPluginManager() {
+		metaBridge::ClearUndoStackForTests();
+		metaBridge::SetPluginManagerOverrideForTests(&pm);
+	}
+	~ScopedPluginManager() {
+		metaBridge::SetPluginManagerOverrideForTests(nullptr);
+		metaBridge::ClearUndoStackForTests();
+	}
+};
+
 TEST(MetaMutation, DeleteRequiresForceFlag) {
-	// Reactivated in Phase 3.3 once appData fixture lands. Body retained
-	// in comments as the expectation contract for the integration suite.
-	//
-	//   auto* pm = appData->GetPluginManager();
-	//   pm->SetMutationPolicy("pugi", "meta.delete", AllowAlways);
-	//   ... HostMetaDelete without force=true returns -1 with "force" in msg
-	//   ... HostMetaDelete with    force=true clears the destructive gate
-	GTEST_SKIP() << "Phase 3.3 integration — needs appData fixture";
+	ScopedPluginManager fx;
+	fx.pm.SetMutationPolicy(wxT("pugi"), wxT("meta.delete"),
+	                          ibPluginManager::MutationPolicy::AllowAlways);
+
+	char* err = nullptr;
+	int rc = metaBridge::HostMetaDelete("pugi", "Catalog.Foo",
+	                                       /*propertiesJson*/ nullptr, &err);
+	EXPECT_NE(rc, 0);
+	ASSERT_NE(err, nullptr);
+	EXPECT_NE(std::string(err).find("force"), std::string::npos);
+	std::free(err);
+
+	// With force=true the gate clears; downstream returns "not found"
+	// since the test fixture has no activeMetaData configuration —
+	// but the error MUST NOT cite "force" anymore.
+	err = nullptr;
+	rc = metaBridge::HostMetaDelete("pugi", "Catalog.Foo",
+	                                   "{\"force\":true}", &err);
+	EXPECT_NE(rc, 0);
+	if (err != nullptr) {
+		EXPECT_EQ(std::string(err).find("force requires"), std::string::npos);
+		std::free(err);
+	}
 }
 
-TEST(MetaMutation, EditStubReportsPhase33) {
-	// Contract: MetaEdit stub returns -1 with errorMsg mentioning Phase 3.3.
-	// Live wiring in Phase 3.3 once appData fixture lands.
-	GTEST_SKIP() << "Phase 3.3 integration — needs appData fixture";
+TEST(MetaMutation, EditStubGuards) {
+	ScopedPluginManager fx;
+	fx.pm.SetMutationPolicy(wxT("pugi"), wxT("meta.edit"),
+	                          ibPluginManager::MutationPolicy::AllowSession);
+
+	// Empty patch
+	char* err = nullptr;
+	EXPECT_NE(metaBridge::HostMetaEdit("pugi", "Catalog.Foo", "", &err), 0);
+	if (err) { std::free(err); err = nullptr; }
+
+	// Malformed JSON
+	EXPECT_NE(metaBridge::HostMetaEdit("pugi", "Catalog.Foo", "{not json", &err), 0);
+	ASSERT_NE(err, nullptr);
+	EXPECT_NE(std::string(err).find("parse"), std::string::npos);
+	std::free(err);
+	err = nullptr;
+
+	// Unknown key
+	EXPECT_NE(metaBridge::HostMetaEdit("pugi", "Catalog.Foo",
+	                                      "{\"name\":\"Pwn\"}", &err), 0);
+	ASSERT_NE(err, nullptr);
+	EXPECT_NE(std::string(err).find("unknown key"), std::string::npos);
+	std::free(err);
 }
 
 TEST(MetaMutation, PolicyGateEmitsStructuredEnvelope) {
-	// Contract: permission denial returns JSON envelope
-	// {code:"permission_denied", op, pluginId, policy, hint}. Plugin
-	// renders confirmation card from it. Live in Phase 3.3.
-	GTEST_SKIP() << "Phase 3.3 integration — needs appData fixture";
+	ScopedPluginManager fx;
+	fx.pm.SetMutationPolicy(wxT("pugi"), wxT("meta.create"),
+	                          ibPluginManager::MutationPolicy::Ask);
+
+	char* err = nullptr;
+	const int rc = metaBridge::HostMetaCreate("pugi", "Catalog",
+	                                            "Catalog.Foo", nullptr, &err);
+	EXPECT_EQ(rc, IB_PLUGIN_PERMISSION_DENIED);
+	ASSERT_NE(err, nullptr);
+	const std::string envelope(err);
+	EXPECT_NE(envelope.find("\"code\":\"permission_denied\""), std::string::npos);
+	EXPECT_NE(envelope.find("\"op\":\"meta.create\""),           std::string::npos);
+	EXPECT_NE(envelope.find("\"pluginId\":\"pugi\""),            std::string::npos);
+	EXPECT_NE(envelope.find("\"hint\""),                         std::string::npos);
+	std::free(err);
 }
 
 TEST(MetaMutation, UndoStackEmptyByDefault) {
