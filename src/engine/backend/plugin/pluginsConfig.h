@@ -79,6 +79,11 @@ void Apply(const Snapshot& snap, ibPluginManager& pm);
 // Absent entries treat as enabled (opt-out default).
 bool IsEnabled(const Snapshot& snap, const std::string& pluginId);
 
+// Serialise + persist a snapshot back to plugins.json5. Creates parent
+// dirs as needed. Atomic via temp-file + rename so an interrupted write
+// can't corrupt the live config. Returns 0 on success, -1 on error.
+int Save(const Snapshot& snap);
+
 } // namespace pluginsConfig
 
 #endif // _IB_PLUGINS_CONFIG_H_

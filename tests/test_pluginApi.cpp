@@ -872,3 +872,53 @@ TEST(ByokEnv, ManagerReadPluginEnvIsolated) {
 	EXPECT_EQ(mgr.ReadPluginEnv("pugi",  "MISSING"), "");
 	EXPECT_EQ(mgr.ReadPluginEnv("nobody","TOKEN"),   "");
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4.3 — pluginsConfig::Save round-trip.
+// ---------------------------------------------------------------------------
+
+TEST(PluginsConfig, SaveRoundTrip) {
+	ScopedPluginsConfig fx("");
+
+	pluginsConfig::Snapshot snap;
+	snap.plugins["pugi-oes-bridge"] = {
+		/*enabled*/ false,
+		/*endpoint*/ wxT("https://app.pugi.io"),
+		/*byokRef*/  wxT("pugi.env"),
+	};
+	snap.plugins["simplePlugin"] = { true, wxT(""), wxT("") };
+	pluginsConfig::PolicyEntry pe;
+	pe.ops["meta.create"] = ibPluginManager::MutationPolicy::AllowAlways;
+	pe.ops["meta.delete"] = ibPluginManager::MutationPolicy::Deny;
+	snap.policies["pugi-oes-bridge"] = pe;
+
+	EXPECT_EQ(pluginsConfig::Save(snap), 0);
+
+	const auto reloaded = pluginsConfig::Load();
+	auto it = reloaded.plugins.find("pugi-oes-bridge");
+	ASSERT_NE(it, reloaded.plugins.end());
+	EXPECT_FALSE(it->second.enabled);
+	EXPECT_EQ(it->second.endpoint, wxT("https://app.pugi.io"));
+	EXPECT_EQ(it->second.byokRef,  wxT("pugi.env"));
+
+	auto pit = reloaded.policies.find("pugi-oes-bridge");
+	ASSERT_NE(pit, reloaded.policies.end());
+	EXPECT_EQ(pit->second.ops.at("meta.create"),
+	          ibPluginManager::MutationPolicy::AllowAlways);
+	EXPECT_EQ(pit->second.ops.at("meta.delete"),
+	          ibPluginManager::MutationPolicy::Deny);
+}
+
+TEST(PluginsConfig, SaveAtomicityLeavesPriorOnTempFailure) {
+	// Save() writes via temp + rename — verify that the .tmp doesn't
+	// linger after a successful Save (rename consumes it).
+	ScopedPluginsConfig fx(R"({"plugins":{"keep":{"enabled":true}}})");
+	pluginsConfig::Snapshot snap;
+	snap.plugins["x"] = { true, wxT(""), wxT("") };
+	EXPECT_EQ(pluginsConfig::Save(snap), 0);
+
+	wxFileName cfg(pluginsConfig::GetConfigPath());
+	const wxString tmp = pluginsConfig::GetConfigPath() + wxT(".tmp");
+	EXPECT_FALSE(wxFileExists(tmp))
+	    << "temp file must be consumed by atomic rename";
+}

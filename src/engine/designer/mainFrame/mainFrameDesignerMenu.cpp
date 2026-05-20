@@ -8,6 +8,8 @@
 #include "backend/plugin/pluginManager.h"
 #include "backend/plugin/metaBridge.h"
 
+#include "mainFrame/pluginManagerDialog.h"
+
 //********************************************************************************
 //*                                Hotkey support                                *
 //********************************************************************************
@@ -194,6 +196,8 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	                       _("Look up in Syntax Helper\tRawCtrl+F1"));
 	m_menuSetting->Append(wxID_FRONTEND_PLUGIN_WEB_PANE,
 	                       _("AI Chat\tRawCtrl+Alt+I"));
+	m_menuSetting->Append(wxID_FRONTEND_PLUGIN_MANAGER,
+	                       _("Plugins…"));
 
 	// Plugin-supplied menu items live under Tools → Plugins. Built from
 	// the plugin manager's RegisteredMenuItem table. Each click routes
@@ -236,6 +240,16 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	         }
 	     },
 	     wxID_UNDO);
+
+	// Tools → Plugins — Phase 4.3 settings dialog. Read/write of
+	// plugins.json5 + BYOK env files lives entirely inside the dialog;
+	// the menu handler is a thin show-modal shim.
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) {
+	         ibPluginManagerDialog dlg(this);
+	         dlg.ShowModal();
+	     },
+	     wxID_FRONTEND_PLUGIN_MANAGER);
 
 	Bind(wxEVT_MENU,
 	     [this](wxCommandEvent&) { ToggleHelpPane(); },
