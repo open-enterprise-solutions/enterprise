@@ -112,6 +112,13 @@ public:
 	// Lookup table for Settings UI (Phase 4) and dispatch.
 	const std::vector<RegisteredAIProvider>& AIProviders() const { return m_aiProviders; }
 
+	// Phase 6 editor-integration gate. Returns true when at least one
+	// AI provider is registered AND advertises the requested mode (e.g.
+	// "chat" / "agent"). Used to grey out context-menu skills, ghost-
+	// text completion triggers, and the AI marker auto-fix lightbulb
+	// when no usable provider has been installed.
+	bool HasAIProviderFor(const std::string& mode) const;
+
 	// Plugin chunk-delivery helpers — wrap deltaJson / metaJson / errorJson
 	// in the chat.delta / chat.end / error envelope and forward to the
 	// active pane. Phase 2 routing: target = the first registered pane;

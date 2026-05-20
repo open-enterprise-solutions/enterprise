@@ -580,6 +580,8 @@ wxString ibCodeEditor::GetIdentifierUnderCursor()
 }
 
 #include "frontend/mainFrame/mainFrame.h" // editor / host command ids
+#include "backend/plugin/pluginManager.h" // appData->GetPluginManager() Sigma gate
+#include "backend/appData.h"
 
 void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 {
@@ -648,6 +650,42 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 
 	menu.AppendSeparator();
 
+	// --- Sigma (AI) skills — Phase 6.1 ---------------------------------
+	// Mirrors the right-click skill submenu modern AI IDE assistants
+	// ship (Explain / Review / Fix / Doc-gen / Send to chat). Whole
+	// submenu greys out when no AI provider is registered — the user
+	// installs one via Tools → Plugins and the items light up.
+	{
+		wxMenu* sigmaSub = new wxMenu();
+		auto* miExplain = sigmaSub->Append(wxID_HIGHEST + 4030,
+		                                     _("Explain code\tAlt+I,E"));
+		auto* miReview  = sigmaSub->Append(wxID_HIGHEST + 4031,
+		                                     _("Review code\tAlt+I,R"));
+		auto* miFix     = sigmaSub->Append(wxID_HIGHEST + 4032,
+		                                     _("Fix code\tAlt+I,C"));
+		auto* miDoc     = sigmaSub->Append(wxID_HIGHEST + 4033,
+		                                     _("Generate doc comment\tAlt+I,G"));
+		auto* miSend    = sigmaSub->Append(wxID_HIGHEST + 4034,
+		                                     _("Send selection to chat\tAlt+I,S"));
+
+		const bool hasAI = appData && appData->GetPluginManager()
+		                     && appData->GetPluginManager()->HasAIProviderFor("chat");
+		const bool hasSelection = GetSelectionStart() != GetSelectionEnd();
+		// Items that operate on a selection greyed out when nothing is
+		// selected. Doc-gen works on the current procedure even without
+		// an explicit selection so it stays enabled.
+		miExplain->Enable(hasAI && hasSelection);
+		miReview ->Enable(hasAI && hasSelection);
+		miFix    ->Enable(hasAI && hasSelection);
+		miSend   ->Enable(hasAI && hasSelection);
+		miDoc    ->Enable(hasAI);
+
+		menu.AppendSubMenu(sigmaSub, hasAI ? _("Sigma (AI)")
+		                                    : _("Sigma (no AI plugin installed)"));
+	}
+
+	menu.AppendSeparator();
+
 	// --- Debug-session commands ----------------------------------------
 	menu.Append(wxID_FRONTEND_DEBUG_STEP_INTO,  _("Step Into\tF11"));
 	menu.Append(wxID_FRONTEND_DEBUG_STEP_OVER,  _("Step Over\tF10"));
@@ -708,6 +746,75 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 			}
 		};
 	};
+	// Sigma skill clicks — build an editor.skill JSON envelope and ship
+	// it to the default AI pane via WebPaneSend. Plugin's onMessage
+	// handler picks it up, runs the corresponding prompt template, and
+	// streams the reply back through the chat.delta envelope. The pane
+	// will auto-open via CallWebPaneShow before the envelope arrives.
+	auto sendSkill = [this](const wxString& op) {
+		return [this, op](wxCommandEvent&) {
+			auto* pm = appData ? appData->GetPluginManager() : nullptr;
+			if (pm == nullptr) return;
+			const wxString sel = GetSelectedText();
+			// Doc-gen falls back to the current line when nothing is
+			// selected — matches the "Generate doc comment for cursor
+			// procedure" UX in modern AI IDE assistants.
+			wxString code = sel;
+			if (code.IsEmpty() && op == wxT("doc")) {
+				const int line = LineFromPosition(GetCurrentPos());
+				code = GetLine(line);
+			}
+			// Build envelope by hand — bringing nlohmann into the
+			// frontend editor.cpp would widen the include surface; the
+			// JSON is small and field set is fixed.
+			auto esc = [](const wxString& s) {
+				wxString out; out.reserve(s.size() + 8);
+				for (wxUniChar c : s) {
+					const auto v = static_cast<unsigned>(c.GetValue());
+					if (c == wxT('\\')) out += wxT("\\\\");
+					else if (c == wxT('"')) out += wxT("\\\"");
+					else if (c == wxT('\n')) out += wxT("\\n");
+					else if (c == wxT('\r')) out += wxT("\\r");
+					else if (c == wxT('\t')) out += wxT("\\t");
+					else if (v < 0x20) out += wxString::Format(wxT("\\u%04x"), v);
+					else out += c;
+				}
+				return out;
+			};
+			wxString json = wxT("{\"kind\":\"editor.skill\",\"op\":\"");
+			json += op;
+			json += wxT("\",\"language\":\"ces\",\"code\":\"");
+			json += esc(code);
+			json += wxT("\"}");
+
+			// Pick the first available pane; if none, the AI Chat fallback
+			// pane registered by the Tools menu still works because the
+			// menu opens the demo bundle and CallWebPaneSend lands there.
+			// We delegate to the main frame's "open + show" path by firing
+			// the AI Chat command; the handler creates the pane on demand.
+			wxCommandEvent openEvt(wxEVT_MENU, wxID_FRONTEND_PLUGIN_WEB_PANE);
+			openEvt.SetEventObject(this);
+			for (wxWindow* p = GetParent(); p != nullptr; p = p->GetParent()) {
+				if (p->ProcessWindowEvent(openEvt)) break;
+			}
+			// Send the skill envelope to whichever pane is now the default.
+			// The plugin manager keeps the default-pane id alive across
+			// the whole session.
+			pm->CallWebPaneSend(wxT("designer.demo.chat"), json);
+			for (const auto& prov : pm->AIProviders()) {
+				(void)prov;
+				// Phase 6.1 routes via WebPaneSend only; future Phase 6.2
+				// adds direct provider.Query routing for /slash-commands.
+				break;
+			}
+		};
+	};
+	Bind(wxEVT_MENU, sendSkill(wxT("explain")), wxID_HIGHEST + 4030);
+	Bind(wxEVT_MENU, sendSkill(wxT("review")),  wxID_HIGHEST + 4031);
+	Bind(wxEVT_MENU, sendSkill(wxT("fix")),     wxID_HIGHEST + 4032);
+	Bind(wxEVT_MENU, sendSkill(wxT("doc")),     wxID_HIGHEST + 4033);
+	Bind(wxEVT_MENU, sendSkill(wxT("send")),    wxID_HIGHEST + 4034);
+
 	Bind(wxEVT_MENU,
 	     routeUp(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP),
 	     wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);

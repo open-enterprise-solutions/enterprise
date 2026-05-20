@@ -806,6 +806,18 @@ std::string SanitiseJsonValue(const char* payload)
 
 } // namespace
 
+bool ibPluginManager::HasAIProviderFor(const std::string& mode) const
+{
+	if (m_aiProviders.empty()) return false;
+	if (mode.empty()) return true; // any provider counts
+	for (const auto& p : m_aiProviders) {
+		for (const auto& m : p.supportedModes) {
+			if (m == mode) return true;
+		}
+	}
+	return false;
+}
+
 int ibPluginManager::HostRegisterAIProvider(const ibPluginAIProvider* p)
 {
 	if (p == nullptr || p->providerId == nullptr || *p->providerId == '\0') {
