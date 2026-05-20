@@ -6,6 +6,7 @@
 #include "mainFrameDesigner.h"
 #include "backend/appData.h"
 #include "backend/plugin/pluginManager.h"
+#include "backend/plugin/metaBridge.h"
 
 //********************************************************************************
 //*                                Hotkey support                                *
@@ -222,6 +223,19 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	m_menuHelp = new wxMenu;
 	m_menuHelp->Append(wxID_DESIGNER_ABOUT, _("About"));
 	m_frameMenuBar->Append(m_menuHelp, wxGetStockLabel(wxID_HELP, wxSTOCK_NOFLAGS));
+
+	// Ctrl+Z hook for agent mutations. Tried BEFORE wxDocument's default
+	// undo routing so "Ctrl+Z reverts whole agent turn" (Phase 3.4 spec)
+	// works at the configuration level. When the agent undo stack is
+	// empty we Skip() so the focused editor's command processor handles
+	// it the normal wxWidgets way (form/module editor undo).
+	Bind(wxEVT_MENU,
+	     [](wxCommandEvent& evt) {
+	         if (metaBridge::UndoLastAgentMutation() != 0) {
+	             evt.Skip();   // empty stack → fall through to editor undo
+	         }
+	     },
+	     wxID_UNDO);
 
 	Bind(wxEVT_MENU,
 	     [this](wxCommandEvent&) { ToggleHelpPane(); },
