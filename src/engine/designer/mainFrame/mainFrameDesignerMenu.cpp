@@ -10,6 +10,10 @@
 
 #include "mainFrame/pluginManagerDialog.h"
 
+#include <wx/stdpaths.h>
+#include <wx/filename.h>
+#include <wx/msgdlg.h>
+
 //********************************************************************************
 //*                                Hotkey support                                *
 //********************************************************************************
@@ -260,21 +264,52 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	Bind(wxEVT_MENU,
 	     [this](wxCommandEvent&) {
 	         WirePluginWebPaneCallbacks();
+	         auto* pm = appData->GetPluginManager();
+	         if (pm == nullptr) return;
+
 	         // Show the first registered plugin pane that is still live
 	         // (the user may have closed an earlier one — skip stale ids).
-	         // Multi-pane UI lives under a future View → Plugin Panes
-	         // submenu (Phase 2). m_pluginWebPaneOrder preserves
-	         // registration order so the choice is deterministic across
-	         // restarts; with two plugins installed the user always gets
-	         // the same default on RawCtrl+Alt+I.
-	         auto* pm = appData->GetPluginManager();
-	         if (pm) {
-	             for (const wxString& paneId : m_pluginWebPaneOrder) {
-	                 if (m_mgr.GetPane(paneId).IsOk()) {
-	                     pm->CallWebPaneShow(paneId);
-	                     break;
-	                 }
+	         for (const wxString& paneId : m_pluginWebPaneOrder) {
+	             if (m_mgr.GetPane(paneId).IsOk()) {
+	                 pm->CallWebPaneShow(paneId);
+	                 return;
 	             }
+	         }
+	         // No plugin registered a WebView pane (e.g. pre-v4 Pugi).
+	         // Fall back to the built-in demo pane so the user can verify
+	         // the WebView infrastructure end-to-end. The sample HTML
+	         // ships next to the executable under assets/pluginWebPane/.
+	         const wxString assetPath = wxStandardPaths::Get().GetResourcesDir()
+	             + wxFILE_SEP_PATH + wxT("assets") + wxFILE_SEP_PATH
+	             + wxT("pluginWebPane") + wxFILE_SEP_PATH + wxT("sample.html");
+	         wxString resolvedPath = assetPath;
+	         if (!wxFileExists(resolvedPath)) {
+	             // Dev / non-bundled layouts — look relative to the
+	             // executable directory (build/bin/Debug/designer.app, etc.)
+	             wxFileName exe(wxStandardPaths::Get().GetExecutablePath());
+	             const wxString tries[] = {
+	                 exe.GetPath() + wxT("/../../../../../assets/pluginWebPane/sample.html"),
+	                 exe.GetPath() + wxT("/../../../../assets/pluginWebPane/sample.html"),
+	                 exe.GetPath() + wxT("/assets/pluginWebPane/sample.html"),
+	             };
+	             for (const wxString& t : tries) {
+	                 if (wxFileExists(t)) { resolvedPath = t; break; }
+	             }
+	         }
+	         if (!wxFileExists(resolvedPath)) {
+	             wxMessageBox(_("AI Chat: sample HTML bundle not found.\n"
+	                             "Install a v4 plugin via Tools → Plugins."),
+	                          _("AI Chat"), wxICON_INFORMATION, this);
+	             return;
+	         }
+	         const int rc = pm->CallWebPaneRegister(
+	             wxT("designer.demo.chat"),
+	             _("AI Chat (demo)"),
+	             resolvedPath,
+	             /*onMessage*/ nullptr,
+	             /*userData*/  nullptr);
+	         if (rc == 0) {
+	             pm->CallWebPaneShow(wxT("designer.demo.chat"));
 	         }
 	     },
 	     wxID_FRONTEND_PLUGIN_WEB_PANE);

@@ -163,8 +163,12 @@ int Save(const Snapshot& snap)
 
 	const wxString final = GetConfigPath();
 	wxFileName fn(final);
-	if (!fn.Mkdir(0700, wxPATH_MKDIR_FULL)) {
-		// Mkdir returns false when dir exists — not an error.
+	// fn carries the FULL filename; Mkdir as instance method would try
+	// to create the file path itself as a directory. Use the static
+	// overload on fn.GetPath() so we materialise only the parent dir.
+	const wxString parentDir = fn.GetPath();
+	if (!wxFileName::DirExists(parentDir)) {
+		wxFileName::Mkdir(parentDir, 0700, wxPATH_MKDIR_FULL);
 	}
 
 	// Atomic swap via temp + rename. A crashed write leaves the prior

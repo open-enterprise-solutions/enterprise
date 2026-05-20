@@ -147,9 +147,9 @@ int Save(const std::string& pluginId, const KeyMap& keys)
 	const wxString path = GetEnvFilePath(pluginId);
 
 	wxFileName fn(path);
-	if (!fn.Mkdir(0700, wxPATH_MKDIR_FULL)) {
-		// Mkdir returns false when dir already exists — not an error.
-		// Real failures show via the subsequent open() error.
+	const wxString parentDir = fn.GetPath();
+	if (!wxFileName::DirExists(parentDir)) {
+		wxFileName::Mkdir(parentDir, 0700, wxPATH_MKDIR_FULL);
 	}
 
 	std::ofstream f(std::string(path.utf8_str()), std::ios::binary | std::ios::trunc);
