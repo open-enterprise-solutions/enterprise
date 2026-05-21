@@ -9,7 +9,7 @@
 
 bool ibValueRecordSetObjectInformationRegister::WriteRecordSet(bool replace, bool clearTable)
 {
-	if (!appData->DesignerMode())
+	if (!appData->DesignerMode() || ibApplicationData::DesignerDataWriteEnabled())
 	{
 		ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
 

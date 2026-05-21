@@ -11,7 +11,7 @@
 
 ibValueReferenceDataObject* ibValueManagerDataObjectCatalog::FindByCode(const ibValue& cParam) const 
 {
-	if (!appData->DesignerMode()) {
+	if (!appData->DesignerMode() || ibApplicationData::DesignerDataWriteEnabled()) {
 
 		const auto db = ses_query;
 
@@ -43,7 +43,7 @@ ibValueReferenceDataObject* ibValueManagerDataObjectCatalog::FindByCode(const ib
 
 ibValueReferenceDataObject* ibValueManagerDataObjectCatalog::FindByDescription(const ibValue& cParam) const
 {
-	if (!appData->DesignerMode()) {
+	if (!appData->DesignerMode() || ibApplicationData::DesignerDataWriteEnabled()) {
 
 		const auto db = ses_query;
 

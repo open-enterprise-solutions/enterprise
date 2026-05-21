@@ -16,7 +16,13 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/partial/catalog.h"
+#include "backend/metaCollection/partial/catalogManager.h"
 #include "backend/metaCollection/partial/document.h"
+#include "backend/metaCollection/partial/informationRegister.h"
+#include "backend/metaCollection/partial/accumulationRegister.h"
+#include "backend/metaCollection/partial/reference/reference.h"
+#include "backend/metaCollection/partial/tabularSection/tabularSection.h"
+#include "backend/objCtor.h"
 #include "backend/value_ptr.h"
 #include "3rdparty/nlohmann/json.hpp"
 #include "templateWizardPayload.h"
@@ -184,8 +190,13 @@ static ibValueMetaObject* FindTopLevelObject(const std::string& fullName)
 	const size_t dot = fullName.find('.');
 	if (dot == std::string::npos) return nullptr;
 	const std::string kind = NormalizedKind(fullName.substr(0, dot));
-	const ibClassID clsid = kind == "catalog" ? g_metaCatalogCLSID :
-	                        kind == "document" ? g_metaDocumentCLSID : 0;
+	const std::string lowerKind = LowerAscii(kind);
+	const ibClassID clsid =
+	    lowerKind == "catalog" ? g_metaCatalogCLSID :
+	    lowerKind == "document" ? g_metaDocumentCLSID :
+	    lowerKind == "informationregister" ? g_metaInformationRegisterCLSID :
+	    lowerKind == "accumulationregister" ? g_metaAccumulationRegisterCLSID :
+	    0;
 	const wxString name = wxString::FromUTF8(fullName.substr(dot + 1).c_str());
 	for (ibValueMetaObject* child : root->GetAnyArrayObject<>()) {
 		if (child == nullptr || child->IsDeleted()) continue;
@@ -226,12 +237,55 @@ static ibValue JsonToValue(const nlohmann::json& v, const wxString& key)
 	return ibValue();
 }
 
-static bool ApplyRowFields(ibValueRecordDataObjectRef* object,
+static bool ResolveCatalogReference(const ibValueMetaObjectAttributeBase* attr,
+                                    const ibValue& rawValue,
+                                    ibValue& outValue)
+{
+	if (attr == nullptr || activeMetaData == nullptr || rawValue.IsEmpty()) {
+		return false;
+	}
+	if (rawValue.GetType() != ibValueTypes::TYPE_STRING) return false;
+	for (const auto& clsid : attr->GetTypeDesc().GetClsidList()) {
+		const ibCtorMetaValueType* ctor = activeMetaData->GetTypeCtor(clsid);
+		if (ctor == nullptr ||
+		    ctor->GetMetaTypeCtor() != ibCtorObjectMetaType_Reference) {
+			continue;
+		}
+		const auto* target =
+		    dynamic_cast<const ibValueMetaObjectCatalog*>(ctor->GetMetaObject());
+		if (target == nullptr) continue;
+		ibValueManagerDataObjectCatalog manager(target);
+		ibValuePtr<ibValueReferenceDataObject> ref(
+		    manager.FindByCode(rawValue));
+		if (ref && !ref->IsEmptyRef()) {
+			outValue = ref;
+			return true;
+		}
+		ref = manager.FindByDescription(rawValue);
+		if (ref && !ref->IsEmptyRef()) {
+			outValue = ref;
+			return true;
+		}
+	}
+	return false;
+}
+
+static ibValue RowValueForAttribute(const ibValueMetaObjectAttributeBase* attr,
+                                    const nlohmann::json& value,
+                                    const wxString& key)
+{
+	ibValue rawValue = JsonToValue(value, key);
+	ibValue refValue;
+	if (ResolveCatalogReference(attr, rawValue, refValue)) return refValue;
+	return rawValue;
+}
+
+static bool ApplyRowFields(ibValueDataObject* object,
+                           const ibValueMetaObjectCompositeData* meta,
                            const nlohmann::json& row,
                            wxString& error)
 {
 	if (object == nullptr || !row.is_object()) return false;
-	const auto* meta = object->GetMetaObject();
 	if (meta == nullptr) return false;
 	for (auto& [rawKey, value] : row.items()) {
 		if (value.is_array() || value.is_object()) continue;
@@ -248,7 +302,7 @@ static bool ApplyRowFields(ibValueRecordDataObjectRef* object,
 		}
 		if (attr == nullptr) continue;
 		if (!object->SetValueByMetaID(attr->GetMetaID(),
-		                              JsonToValue(value, key))) {
+		                              RowValueForAttribute(attr, value, key))) {
 			const bool requiredCore =
 			    key.CmpNoCase(wxT("Code")) == 0 ||
 			    key.CmpNoCase(wxT("Description")) == 0 ||
@@ -266,6 +320,114 @@ static bool ApplyRowFields(ibValueRecordDataObjectRef* object,
 		}
 	}
 	return true;
+}
+
+static bool ApplyRecordRowFields(ibValueModelTableBase::ibValueModelReturnLine* line,
+                                 const ibValueMetaObjectCompositeData* meta,
+                                 const nlohmann::json& row,
+                                 wxString& error)
+{
+	if (line == nullptr || !row.is_object()) return false;
+	if (meta == nullptr) return false;
+	for (auto& [rawKey, value] : row.items()) {
+		if (value.is_array() || value.is_object()) continue;
+		const wxString key = CanonicalRowKey(rawKey);
+		ibValueMetaObjectAttributeBase* attr = nullptr;
+		for (auto* candidate : meta->GetGenericAttributeArrayObject()) {
+			if (candidate == nullptr || candidate->IsDeleted()) continue;
+			wxString objectName;
+			if (!candidate->GetObjectNameAsString(objectName)) continue;
+			if (objectName.CmpNoCase(key) == 0) {
+				attr = candidate;
+				break;
+			}
+		}
+		if (attr == nullptr) continue;
+		if (!line->SetValueByMetaID(attr->GetMetaID(),
+		                            RowValueForAttribute(attr, value, key))) {
+			if (attr->FillCheck()) {
+				error = wxString::Format(_("failed to set field '%s'"), key);
+				return false;
+			}
+			wxLogWarning("Template Wizard: skipped demo-data register field '%s' "
+			             "because the raw JSON value does not match the "
+			             "metadata attribute type yet.",
+			             key);
+		}
+	}
+	return true;
+}
+
+static bool ApplyTabularRows(ibValueRecordDataObjectRef* object,
+                             const ibValueMetaObjectRecordData* meta,
+                             const nlohmann::json& row,
+                             wxString& error)
+{
+	if (object == nullptr || meta == nullptr || !row.is_object()) return false;
+	for (auto& [rawKey, value] : row.items()) {
+		if (!value.is_array()) continue;
+		const wxString tableName = wxString::FromUTF8(rawKey.c_str());
+		ibValueMetaObjectTableData* tableMeta = nullptr;
+		for (auto* candidate : meta->GetTableArrayObject()) {
+			if (candidate == nullptr || candidate->IsDeleted()) continue;
+			wxString objectName;
+			if (!candidate->GetObjectNameAsString(objectName)) continue;
+			if (objectName.CmpNoCase(tableName) == 0) {
+				tableMeta = candidate;
+				break;
+			}
+		}
+		if (tableMeta == nullptr) continue;
+		ibValueModel* model = nullptr;
+		if (!object->GetModel(model, tableMeta->GetMetaID()) || model == nullptr) {
+			error = wxString::Format(_("failed to open tabular section '%s'"),
+			                         tableName);
+			return false;
+		}
+		auto* table = dynamic_cast<ibValueTabularSectionDataObjectBase*>(model);
+		if (table == nullptr) {
+			error = wxString::Format(_("target '%s' is not a tabular section"),
+			                         tableName);
+			return false;
+		}
+		for (const auto& item : value) {
+			if (!item.is_object()) continue;
+			const long index = table->AppendRow();
+			ibValuePtr<ibValueModelTableBase::ibValueModelReturnLine> line(
+			    table->GetRowAt(table->GetItem(index)));
+			if (!line) {
+				error = wxString::Format(_("failed to add row to '%s'"),
+				                         tableName);
+				return false;
+			}
+			if (!ApplyRecordRowFields(line, tableMeta, item, error)) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+static bool InsertRegisterRow(ibValueMetaObjectRegisterData* meta,
+                              const nlohmann::json& row,
+                              wxString& error)
+{
+	if (meta == nullptr) return false;
+	ibValuePtr<ibValueRecordSetObject> recordSet(
+	    meta->CreateRecordSetObjectValue());
+	if (!recordSet) {
+		error = _("failed to create register record set");
+		return false;
+	}
+	const long index = recordSet->AppendRow();
+	ibValuePtr<ibValueModelTableBase::ibValueModelReturnLine> line(
+	    recordSet->GetRowAt(recordSet->GetItem(index)));
+	if (!line) {
+		error = _("failed to create register row");
+		return false;
+	}
+	if (!ApplyRecordRowFields(line, meta, row, error)) return false;
+	return recordSet->WriteRecordSet(/*replace=*/false, /*clearTable=*/true);
 }
 
 static bool InsertDataRow(const std::string& kind,
@@ -296,7 +458,8 @@ static bool InsertDataRow(const std::string& kind,
 			error = _("failed to create catalog row object");
 			return false;
 		}
-		if (!ApplyRowFields(object, row, error)) return false;
+		if (!ApplyRowFields(object, catalog, row, error)) return false;
+		if (!ApplyTabularRows(object, catalog, row, error)) return false;
 		return object->WriteObject();
 	}
 	if (lowerKind == "document") {
@@ -311,10 +474,20 @@ static bool InsertDataRow(const std::string& kind,
 			error = _("failed to create document row object");
 			return false;
 		}
-		if (!ApplyRowFields(object, row, error)) return false;
+		if (!ApplyRowFields(object, document, row, error)) return false;
+		if (!ApplyTabularRows(object, document, row, error)) return false;
 		return object->WriteObject(
 		    ibDocumentWriteMode::ibDocumentWriteMode_Write,
 		    ibDocumentPostingMode::ibDocumentPostingMode_Regular);
+	}
+	if (lowerKind == "informationregister" ||
+	    lowerKind == "accumulationregister") {
+		auto* reg = dynamic_cast<ibValueMetaObjectRegisterData*>(meta);
+		if (reg == nullptr) {
+			error = _("target is not a register");
+			return false;
+		}
+		return InsertRegisterRow(reg, row, error);
 	}
 	error = _("data rows for this metadata kind are not supported yet");
 	return false;
