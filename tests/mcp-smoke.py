@@ -128,7 +128,8 @@ def main() -> int:
         failures.append(f"tools/list: only {len(tools)} tools, expected >=37")
     for required in ("meta_query", "meta_create", "list_objects", "config_info",
                      "snapshots_list", "snapshot_rollback",
-                     "headless_smoke_run", "validate_query", "execute_query"):
+                     "headless_smoke_run", "validate_query", "execute_query",
+                     "get_event_log"):
         if required not in names:
             failures.append(f"tools/list: missing tool '{required}'")
 

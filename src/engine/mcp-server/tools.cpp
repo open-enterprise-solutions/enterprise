@@ -2465,6 +2465,141 @@ nlohmann::json ToolExecuteQuery(const nlohmann::json& args)
 	return env;
 }
 
+bool HasColumnCaseInsensitive(const wxArrayString& columns, const wxString& wanted)
+{
+	for (size_t i = 0; i < columns.GetCount(); ++i) {
+		if (columns[i].CmpNoCase(wanted) == 0) return true;
+	}
+	return false;
+}
+
+wxString FirstExistingColumn(const wxArrayString& columns,
+                             const std::vector<wxString>& names)
+{
+	for (const auto& name : names) {
+		if (HasColumnCaseInsensitive(columns, name)) return name;
+	}
+	return wxEmptyString;
+}
+
+nlohmann::json ToolGetEventLog(const nlohmann::json& args)
+{
+	if (auto err = RequireConfig()) return *err;
+
+	int limit = 50;
+	if (args.is_object() && args.contains("limit") && args["limit"].is_number_integer()) {
+		limit = args["limit"].get<int>();
+	}
+	if (limit < 1) limit = 1;
+	if (limit > 500) limit = 500;
+
+	nlohmann::json structured;
+	structured["ok"] = true;
+	structured["available"] = false;
+	structured["table"] = std::string(wxString(event_table).utf8_str());
+	structured["columns"] = nlohmann::json::array();
+	structured["events"] = nlohmann::json::array();
+	structured["limit"] = limit;
+
+	auto db = db_query;
+	if (!db->TableExists(event_table)) {
+		structured["reason"] = "event table is not present in this configuration";
+		nlohmann::json env = TextResult("get_event_log: event table not present");
+		env["structuredContent"] = std::move(structured);
+		return env;
+	}
+
+	const wxArrayString columns = db->GetColumns(event_table);
+	for (size_t i = 0; i < columns.GetCount(); ++i) {
+		structured["columns"].push_back(std::string(columns[i].utf8_str()));
+	}
+
+	const wxString dateCol = FirstExistingColumn(columns,
+		{ wxT("createdAt"), wxT("timestamp"), wxT("time"), wxT("date"), wxT("created") });
+	const wxString levelCol = FirstExistingColumn(columns,
+		{ wxT("level"), wxT("severity"), wxT("type") });
+	const wxString userCol = FirstExistingColumn(columns,
+		{ wxT("userName"), wxT("user"), wxT("username") });
+
+	wxString sql = wxT("SELECT * FROM ");
+	sql += event_table;
+	std::vector<std::pair<wxString, std::string>> filters;
+	const std::string since = ArgString(args, "since");
+	const std::string level = ArgString(args, "level");
+	const std::string user = ArgString(args, "user");
+	if (!since.empty() && !dateCol.IsEmpty()) {
+		filters.push_back({ dateCol + wxT(" >= ?"), since });
+	}
+	if (!level.empty() && !levelCol.IsEmpty()) {
+		filters.push_back({ levelCol + wxT(" = ?"), level });
+	}
+	if (!user.empty() && !userCol.IsEmpty()) {
+		filters.push_back({ userCol + wxT(" = ?"), user });
+	}
+	if (!filters.empty()) {
+		sql += wxT(" WHERE ");
+		for (size_t i = 0; i < filters.size(); ++i) {
+			if (i > 0) sql += wxT(" AND ");
+			sql += filters[i].first;
+		}
+	}
+	if (!dateCol.IsEmpty()) {
+		sql += wxT(" ORDER BY ");
+		sql += dateCol;
+		sql += wxT(" DESC");
+	}
+
+	try {
+		ibStatementGuard stmt(db, db->PrepareStatement(sql));
+		if (!stmt) return StructuredError("get_event_log: prepare failed");
+		for (size_t i = 0; i < filters.size(); ++i) {
+			stmt->SetParamString(static_cast<int>(i + 1),
+				wxString::FromUTF8(filters[i].second.c_str()));
+		}
+		ibResultSetGuard rs(db, stmt->RunQueryWithResults());
+		if (!rs) return StructuredError("get_event_log: query returned no result set");
+
+		ibResultSetMetaData* md = rs->GetMetaData();
+		const int colCount = md ? md->GetColumnCount() : 0;
+		std::vector<int> types;
+		types.reserve(colCount);
+		std::vector<std::string> names;
+		names.reserve(colCount);
+		for (int i = 1; i <= colCount; ++i) {
+			types.push_back(md->GetColumnType(i));
+			names.push_back(std::string(md->GetColumnName(i).utf8_str()));
+		}
+		if (md) rs->CloseMetaData(md);
+
+		int count = 0;
+		while (rs->Next()) {
+			if (count >= limit) {
+				structured["truncated"] = true;
+				break;
+			}
+			nlohmann::json row = nlohmann::json::object();
+			for (int i = 1; i <= colCount; ++i) {
+				row[names[static_cast<size_t>(i - 1)]] =
+					QueryValueToJson(rs.get(), i, types[static_cast<size_t>(i - 1)]);
+			}
+			structured["events"].push_back(std::move(row));
+			++count;
+		}
+		structured["available"] = true;
+		structured["count"] = structured["events"].size();
+		if (!structured.contains("truncated")) structured["truncated"] = false;
+	} catch (const ibBackendException& e) {
+		return StructuredError(std::string("get_event_log: ") +
+		                       std::string(e.GetErrorDescription().utf8_str()));
+	} catch (const std::exception& e) {
+		return StructuredError(std::string("get_event_log: ") + e.what());
+	}
+
+	nlohmann::json env = TextResult("get_event_log: OK");
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
 // =========================================================================
 // Tool: config_info
 // =========================================================================
@@ -5524,6 +5659,47 @@ const std::vector<ToolEntry>& BuildRegistry()
 			  std::move(executeOut)
 			},
 			&ToolExecuteQuery
+		});
+	}
+	{
+		nlohmann::json eventOut;
+		eventOut["type"] = "object";
+		eventOut["properties"] = {
+			{ "ok",        nlohmann::json{ {"type","boolean"} } },
+			{ "available", nlohmann::json{ {"type","boolean"} } },
+			{ "table",     nlohmann::json{ {"type","string"} } },
+			{ "columns",   nlohmann::json{ {"type","array"} } },
+			{ "events",    nlohmann::json{ {"type","array"} } },
+			{ "count",     nlohmann::json{ {"type","integer"} } },
+			{ "limit",     nlohmann::json{ {"type","integer"} } },
+			{ "truncated", nlohmann::json{ {"type","boolean"} } },
+			{ "reason",    nlohmann::json{ {"type","string"} } },
+		};
+		eventOut["required"] = nlohmann::json::array(
+			{ "ok", "available", "table", "columns", "events", "limit" });
+
+		nlohmann::json limitIn;
+		limitIn["type"] = "integer";
+		limitIn["default"] = 50;
+		limitIn["minimum"] = 1;
+		limitIn["maximum"] = 500;
+		limitIn["description"] = "Maximum event rows to return";
+
+		table.push_back({
+			{ "get_event_log",
+			  "Read the system event journal table when present. Filters are "
+			  "applied only to columns that exist in the current schema; older "
+			  "configs without sys_event return available=false and an empty list.",
+			  schemaObj({
+			    { "since", str("Optional lower date/time bound, matched against createdAt/timestamp/date when present") },
+			    { "level", str("Optional level/severity/type filter") },
+			    { "user",  str("Optional user/userName filter") },
+			    { "limit", limitIn },
+			  }, {}),
+			  ann(true, false, true, false),
+			  std::move(eventOut)
+			},
+			&ToolGetEventLog
 		});
 	}
 
