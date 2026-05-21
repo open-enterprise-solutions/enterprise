@@ -1018,10 +1018,130 @@ std::pair<std::string, std::string> PugiSplitUrl(const std::string& url)
 }
 
 // =========================================================================
+// Local RAG fallback chain — when Pugi cloud is unreachable (transport
+// error or 5xx), and OES_MCP_RAG_FALLBACK_URL is set, oes-mcp tries the
+// local oes-rag-local sidecar before returning the offline envelope.
+//
+// Wire contract: the sidecar exposes POST /llm and POST /query on a
+// loopback HTTP port. We route llm-shaped tool calls to /llm and pass
+// through everything else as the raw input on the assumption the sidecar
+// understands the same `{name, input}` shape oes-mcp uses.
+//
+// Stamping: any successful local response gets `_source =
+// "local-rag-fallback"` injected into its structuredContent (if present)
+// or as a top-level marker, so the caller can tell cloud vs local apart.
+//
+// Strict allow-list: only tools that benefit from RAG-style retrieval
+// (llm_query, sigma_check, oes_template_*) attempt the local fallback.
+// Pure metadata tools (meta_query etc.) don't make this round trip —
+// they're already local and never hit Pugi in the first place.
+// =========================================================================
+namespace {
+
+bool ToolIsRagFriendly(const std::string& toolName)
+{
+	return toolName == "llm_query"
+	    || toolName == "sigma_check"
+	    || toolName == "oes_templates_list"
+	    || toolName == "oes_template_get"
+	    || toolName == "oes_template_customize"
+	    || toolName == "oes_demo_data_get";
+}
+
+// TryLocalRagFallback — POST to the sidecar. Returns true on a 2xx local
+// response with *payloadOut populated as a usable MCP envelope. Returns
+// false (and leaves *payloadOut untouched) on any error — caller then
+// falls through to the offline envelope.
+bool TryLocalRagFallback(const std::string& toolName,
+                         const nlohmann::json& input,
+                         nlohmann::json* payloadOut)
+{
+	const char* urlEnv = std::getenv("OES_MCP_RAG_FALLBACK_URL");
+	if (!urlEnv || !*urlEnv) return false;
+	if (!ToolIsRagFriendly(toolName)) return false;
+
+	int timeoutMs = 2000;
+	if (const char* tEnv = std::getenv("OES_MCP_RAG_FALLBACK_TIMEOUT_MS")) {
+		const int parsed = std::atoi(tEnv);
+		if (parsed > 0 && parsed < 60000) timeoutMs = parsed;
+	}
+
+	// Split base URL (scheme://host:port) from path. Sidecar exposes
+	// fixed endpoint names regardless of toolName; we pick the right
+	// one based on whether the tool is LLM-shaped or retrieval-shaped.
+	const std::string url = urlEnv;
+	const auto schemeEnd  = url.find("://");
+	if (schemeEnd == std::string::npos) return false;
+	const auto pathStart  = url.find('/', schemeEnd + 3);
+	const std::string base = (pathStart == std::string::npos)
+	    ? url : url.substr(0, pathStart);
+
+	// Route: llm_query -> /llm (chat-style), everything else -> /query
+	// (retrieval-style). v2 may add per-tool routing.
+	const char* endpoint = (toolName == "llm_query") ? "/llm" : "/query";
+
+	httplib::Client cli(base);
+	cli.set_connection_timeout(0, timeoutMs * 1000);  // microseconds
+	cli.set_read_timeout(0, timeoutMs * 1000);
+	cli.set_follow_location(false);
+
+	nlohmann::json body;
+	if (toolName == "llm_query") {
+		// Sidecar /llm expects {prompt, model}; map from Pugi shape if present.
+		if (input.is_object()) {
+			if (input.contains("prompt")) body["prompt"] = input["prompt"];
+			else if (input.contains("text")) body["prompt"] = input["text"];
+			if (input.contains("model")) body["model"] = input["model"];
+		}
+	} else {
+		// Retrieval-friendly tools: feed a text query the sidecar can match.
+		// We extract any string fields likely to carry user intent; sidecar
+		// concatenates them at the substring layer.
+		std::string text;
+		if (input.is_object()) {
+			for (const char* k : { "userPrompt", "query", "text", "templateId" }) {
+				if (input.contains(k) && input[k].is_string()) {
+					if (!text.empty()) text.push_back(' ');
+					text += input[k].get<std::string>();
+				}
+			}
+		}
+		body["text"] = text;
+		body["topK"] = 5;
+	}
+
+	auto res = cli.Post(endpoint, body.dump(), "application/json");
+	if (!res || res->status < 200 || res->status >= 300) return false;
+
+	auto parsed = nlohmann::json::parse(res->body, nullptr,
+	                                    /*allow_exceptions=*/false);
+	if (parsed.is_discarded() || !parsed.is_object()) return false;
+
+	// Sidecar already returns a usable envelope (content[] + optional
+	// structuredContent). Stamp the source marker on whichever container
+	// is present so callers can tell cloud vs local apart.
+	if (parsed.contains("structuredContent") &&
+	    parsed["structuredContent"].is_object()) {
+		parsed["structuredContent"]["_source"] = "local-rag-fallback";
+	} else {
+		parsed["_source"] = "local-rag-fallback";
+	}
+	*payloadOut = std::move(parsed);
+	return true;
+}
+
+} // namespace
+
+// =========================================================================
 // PugiHttpInvoke — shared proxy plumbing for sigma_check + oes_templates_*
 // tools.  Validates config, POSTs `{name, input}` to Pugi's invoke endpoint,
 // passes the response back through Pugi's `result` unwrap, and folds the
 // fail-open contract (transport / missing-creds → caller-shaped envelope).
+//
+// Degradation chain (when OES_MCP_RAG_FALLBACK_URL is set and the tool is
+// RAG-friendly):  Pugi cloud → local oes-rag-local sidecar → offline envelope.
+// Triggered on transport errors and 5xx responses; 4xx surfaces directly
+// (those are client-side validation errors not retryable locally).
 //
 // Callers supply:
 //   toolName     — used in error strings and the request body's "name" field
@@ -1085,7 +1205,13 @@ nlohmann::json PugiHttpInvoke(const std::string& toolName,
 	const std::string bodyStr = body.dump();
 	auto res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
 	if (!res) {
-		// Network / connect / timeout — fail open.
+		// Network / connect / timeout — try local sidecar first (only when
+		// OES_MCP_RAG_FALLBACK_URL is set AND tool is RAG-friendly), then
+		// fall open to offline envelope.
+		nlohmann::json localPayload;
+		if (TryLocalRagFallback(toolName, input, &localPayload)) {
+			return localPayload;
+		}
 		return offlineMaker(
 		    std::string("transport error: ") + httplib::to_string(res.error()));
 	}
@@ -1094,6 +1220,20 @@ nlohmann::json PugiHttpInvoke(const std::string& toolName,
 		return TextResult(
 		    toolName + ": Pugi returned redirect; bearer not forwarded for security",
 		    true);
+	}
+	if (res->status >= 500) {
+		// 5xx — server-side failure, treat like a transport error and
+		// try local fallback before failing open. 4xx skips this path
+		// (those are client-side validation errors not retryable locally).
+		nlohmann::json localPayload;
+		if (TryLocalRagFallback(toolName, input, &localPayload)) {
+			return localPayload;
+		}
+		std::string snippet = res->body.size() > 500
+		    ? res->body.substr(0, 500) + "..."
+		    : res->body;
+		return offlineMaker(
+		    "Pugi returned " + std::to_string(res->status) + ": " + snippet);
 	}
 	if (res->status >= 400) {
 		// Pugi returned an error envelope. Surface a clean message and

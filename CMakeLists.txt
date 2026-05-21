@@ -309,6 +309,7 @@ add_subdirectory("${OES_ENGINE_DIR}/dumpHelp")
 add_subdirectory("${OES_ENGINE_DIR}/simplePlugin")
 add_subdirectory("${OES_ENGINE_DIR}/aiBridge")
 add_subdirectory("${OES_ENGINE_DIR}/mcp-server")
+add_subdirectory("${OES_ENGINE_DIR}/oes-rag-local")
 
 # ---------------------------------------------------------------------------
 # Unit tests (Google Test)
