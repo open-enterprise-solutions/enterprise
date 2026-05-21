@@ -1485,6 +1485,19 @@ int UndoLastAgentMutation()
 	}
 }
 
+size_t UndoStackSize()
+{
+	// Count entries that belong to the current epoch — stale entries will
+	// be dropped by the next UndoLastAgentMutation call but should not be
+	// visible to the transaction layer (it would miscalculate the rollback
+	// depth and try to pop entries that no longer apply).
+	size_t count = 0;
+	for (const auto& e : g_undoStack) {
+		if (e.epoch == g_configEpoch) ++count;
+	}
+	return count;
+}
+
 // Designer / pluginManager calls this when activeMetaData is about to
 // be replaced (configuration reload, project switch, abort). Advances
 // the epoch + clears the stack so the deletes-with-shared_ptr-owners

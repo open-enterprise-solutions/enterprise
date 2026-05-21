@@ -87,6 +87,15 @@ int UndoLastAgentMutation();
 // and bumps the epoch.
 void NotifyConfigurationUnload();
 
+// Return the number of live undo entries that belong to the current
+// configuration epoch. Used by the MCP transaction layer to snapshot
+// the stack depth before a multi-step mutation so it can roll back
+// exactly the entries pushed during the transaction.
+//
+// Must be called from the main thread (same contract as UndoLastAgentMutation).
+// Returns 0 when the stack is empty or appData is not initialised.
+size_t UndoStackSize();
+
 // Test-only hook — wipes the undo stack + advances the epoch so unit
 // cases run independently from any prior state.
 void ClearUndoStackForTests();

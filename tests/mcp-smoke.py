@@ -124,8 +124,8 @@ def main() -> int:
     lst = recv(proc)
     tools = lst.get("result", {}).get("tools", [])
     names = {t["name"] for t in tools if "name" in t}
-    if len(tools) < 34:
-        failures.append(f"tools/list: only {len(tools)} tools, expected >=34")
+    if len(tools) < 37:
+        failures.append(f"tools/list: only {len(tools)} tools, expected >=37")
     for required in ("meta_query", "meta_create", "list_objects", "config_info",
                      "snapshots_list", "snapshot_rollback"):
         if required not in names:
@@ -959,6 +959,164 @@ def main() -> int:
                 failures.append(
                     "snapshot_rollback: expected isError for unknown id, "
                     f"got: {sn_env}")
+
+    # 8h) Transactional staging tools (added 2026-05-21).
+    # Three tools: transaction_begin / transaction_commit / transaction_rollback.
+    # All three must be advertised in tools/list with the correct annotations.
+    # Protocol-level contract (--no-config or real config — both apply):
+    #   - transaction_begin returns ok=true + transactionId
+    #   - double transaction_begin returns isError (OES_E_TX_ALREADY_ACTIVE)
+    #   - transaction_commit with valid id returns ok=true
+    #   - transaction_commit with unknown id returns isError (OES_E_TX_NOT_FOUND)
+    #   - transaction_rollback with unknown id returns isError (OES_E_TX_NOT_FOUND)
+    # The transaction tools do NOT require a loaded config (they operate on
+    # the metaBridge undo stack, which is always present).
+    tx_tools = ("transaction_begin", "transaction_commit", "transaction_rollback")
+    for required in tx_tools:
+        if required not in names:
+            failures.append(f"tools/list: missing tool '{required}'")
+            continue
+        td_tx = declared.get(required)
+        if td_tx is None:
+            continue
+        ann_tx = td_tx.get("annotations") or {}
+        # All three: openWorld=false, readOnly=false.
+        if ann_tx.get("openWorldHint") is True:
+            failures.append(f"{required}: openWorldHint must be false")
+        if ann_tx.get("readOnlyHint") is True:
+            failures.append(f"{required}: readOnlyHint must be false (mutating)")
+        # transaction_rollback must carry destructiveHint=true (it undoes mutations).
+        if required == "transaction_rollback":
+            if ann_tx.get("destructiveHint") is not True:
+                failures.append("transaction_rollback: destructiveHint must be true")
+        # transaction_commit and transaction_rollback are idempotent.
+        if required in ("transaction_commit", "transaction_rollback"):
+            if ann_tx.get("idempotentHint") is not True:
+                failures.append(f"{required}: idempotentHint must be true")
+        # transaction_begin must declare an outputSchema (transactionId field).
+        out_schema_tx = td_tx.get("outputSchema")
+        if not isinstance(out_schema_tx, dict) or out_schema_tx.get("type") != "object":
+            failures.append(f"{required}: missing/malformed outputSchema")
+
+    # Probe: transaction_begin -> returns transactionId.
+    tx_id = None
+    if "transaction_begin" in names:
+        send(proc, {
+            "jsonrpc": "2.0", "id": 1100, "method": "tools/call",
+            "params": {
+                "name": "transaction_begin",
+                "arguments": {"label": "smoke-test"},
+            },
+        })
+        tb_resp = recv(proc, timeout_s=5.0)
+        tb_env = tb_resp.get("result")
+        if not isinstance(tb_env, dict):
+            failures.append(f"transaction_begin: no result envelope: {tb_resp}")
+        elif tb_env.get("isError"):
+            failures.append(
+                f"transaction_begin: unexpected isError: {tb_env}")
+        else:
+            sc = tb_env.get("structuredContent")
+            if not isinstance(sc, dict):
+                failures.append("transaction_begin: success envelope missing structuredContent")
+            else:
+                tx_id = sc.get("transactionId")
+                if not tx_id:
+                    failures.append(
+                        "transaction_begin: structuredContent missing transactionId")
+                if "undoStackBefore" not in sc:
+                    failures.append(
+                        "transaction_begin: structuredContent missing undoStackBefore")
+
+        # Probe: double transaction_begin must return isError.
+        send(proc, {
+            "jsonrpc": "2.0", "id": 1101, "method": "tools/call",
+            "params": {"name": "transaction_begin", "arguments": {}},
+        })
+        tb2_resp = recv(proc, timeout_s=5.0)
+        tb2_env = tb2_resp.get("result")
+        if not isinstance(tb2_env, dict):
+            failures.append(f"transaction_begin double: no result: {tb2_resp}")
+        elif not tb2_env.get("isError"):
+            failures.append(
+                "transaction_begin double: expected isError (already active), "
+                f"got: {tb2_env}")
+        else:
+            sc2 = tb2_env.get("structuredContent") or {}
+            if sc2.get("errorCode") != "OES_E_TX_ALREADY_ACTIVE":
+                failures.append(
+                    "transaction_begin double: expected errorCode "
+                    f"OES_E_TX_ALREADY_ACTIVE, got: {sc2.get('errorCode')}")
+
+    # Probe: transaction_commit on the id we just opened.
+    if tx_id and "transaction_commit" in names:
+        send(proc, {
+            "jsonrpc": "2.0", "id": 1102, "method": "tools/call",
+            "params": {"name": "transaction_commit",
+                       "arguments": {"transactionId": tx_id}},
+        })
+        tc_resp = recv(proc, timeout_s=5.0)
+        tc_env = tc_resp.get("result")
+        if not isinstance(tc_env, dict):
+            failures.append(f"transaction_commit: no result: {tc_resp}")
+        elif tc_env.get("isError"):
+            failures.append(
+                f"transaction_commit: unexpected isError for valid id: {tc_env}")
+        else:
+            sc_tc = tc_env.get("structuredContent") or {}
+            if sc_tc.get("ok") is not True:
+                failures.append(
+                    f"transaction_commit: structuredContent.ok must be true: {sc_tc}")
+            if "mutationsApplied" not in sc_tc:
+                failures.append(
+                    "transaction_commit: structuredContent missing mutationsApplied")
+            if "undoStackAfter" not in sc_tc:
+                failures.append(
+                    "transaction_commit: structuredContent missing undoStackAfter")
+
+    # Probe: transaction_commit with unknown id must return isError.
+    if "transaction_commit" in names:
+        send(proc, {
+            "jsonrpc": "2.0", "id": 1103, "method": "tools/call",
+            "params": {"name": "transaction_commit",
+                       "arguments": {"transactionId": "00000000-0000-0000-0000-000000000000"}},
+        })
+        tc_unk_resp = recv(proc, timeout_s=5.0)
+        tc_unk_env = tc_unk_resp.get("result")
+        if not isinstance(tc_unk_env, dict):
+            failures.append(f"transaction_commit unknown-id: no result: {tc_unk_resp}")
+        elif not tc_unk_env.get("isError"):
+            failures.append(
+                "transaction_commit unknown-id: expected isError, "
+                f"got: {tc_unk_env}")
+        else:
+            sc_unk = tc_unk_env.get("structuredContent") or {}
+            if sc_unk.get("errorCode") != "OES_E_TX_NOT_FOUND":
+                failures.append(
+                    "transaction_commit unknown-id: expected OES_E_TX_NOT_FOUND, "
+                    f"got: {sc_unk.get('errorCode')}")
+
+    # Probe: transaction_rollback with unknown id must return isError.
+    if "transaction_rollback" in names:
+        send(proc, {
+            "jsonrpc": "2.0", "id": 1104, "method": "tools/call",
+            "params": {"name": "transaction_rollback",
+                       "arguments": {"transactionId": "00000000-0000-0000-0000-000000000000"}},
+        })
+        tr_unk_resp = recv(proc, timeout_s=5.0)
+        tr_unk_env = tr_unk_resp.get("result")
+        if not isinstance(tr_unk_env, dict):
+            failures.append(f"transaction_rollback unknown-id: no result: {tr_unk_resp}")
+        elif not tr_unk_env.get("isError"):
+            failures.append(
+                "transaction_rollback unknown-id: expected isError, "
+                f"got: {tr_unk_env}")
+        else:
+            sc_tr_unk = tr_unk_env.get("structuredContent") or {}
+            if sc_tr_unk.get("errorCode") != "OES_E_TX_NOT_FOUND":
+                failures.append(
+                    "transaction_rollback unknown-id: expected OES_E_TX_NOT_FOUND, "
+                    f"got: {sc_tr_unk.get('errorCode')}")
 
     proc.stdin.close()
     proc.wait(timeout=3)

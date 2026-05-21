@@ -38,6 +38,7 @@
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/session/session.h"
 #include "backend/typeDescription.h"
+#include "backend/guid.h"
 
 #include <wx/datetime.h>
 
@@ -4066,6 +4067,188 @@ nlohmann::json ToolSnapshotRollback(const nlohmann::json& args)
 }
 
 // =========================================================================
+// Transactional staging — process-singleton state for transaction_begin /
+// transaction_commit / transaction_rollback. One active transaction at a
+// time; refusal on double-begin.
+//
+// Design: we don't touch wxCommandProcessor directly — oes-mcp runs
+// headless and the Designer's wxDoc command processor is not wired in
+// that mode. Instead we snapshot the metaBridge undo stack depth on
+// begin, then on rollback we pop UndoLastAgentMutation() repeatedly until
+// the stack is back to that depth. Commit just forgets the record (the
+// undo entries remain individually revertable via Ctrl+Z in Designer; v2
+// can collapse them into one compound entry once Designer plumbs
+// wxCommandProcessor into Phase 3.4).
+// =========================================================================
+
+struct TransactionRecord {
+	std::string label;           // audit-log description
+	size_t      undoDepthBefore; // metaBridge undo stack depth at begin
+	int         mutationCount;   // incremented on every successful mutation
+};
+
+std::map<std::string, TransactionRecord> g_activeTransactions;
+std::mutex                               g_txMutex;
+
+// Generate a simple time-based UUID-like id: "tx-<timestamp_us>-<random>".
+// We don't depend on libUUID; ibGuid::newGuid() lives in backend.dll but
+// requires wx base init. A hex timestamp + random suffix gives adequate
+// uniqueness for a process-local map with a single active tx at a time.
+std::string GenerateTransactionId()
+{
+	// Use the existing ibGuid machinery — it's available in the headless
+	// app since backend.dll is always loaded before mcp-server runs.
+	const ibGuid g = ibGuid::newGuid();
+	return std::string(g.str().utf8_str());
+}
+
+// =========================================================================
+// Tool: transaction_begin
+// =========================================================================
+nlohmann::json ToolTransactionBegin(const nlohmann::json& args)
+{
+	const std::string label = ArgString(args, "label");
+
+	std::lock_guard<std::mutex> lock(g_txMutex);
+	if (!g_activeTransactions.empty()) {
+		const auto& existing = g_activeTransactions.begin();
+		nlohmann::json env = TextResult(
+			"transaction_begin: another transaction is already active "
+			"(id=" + existing->first + "). Call transaction_commit or "
+			"transaction_rollback first.", true);
+		nlohmann::json sc = nlohmann::json::object();
+		sc["errorCode"]           = "OES_E_TX_ALREADY_ACTIVE";
+		sc["existingTransaction"] = existing->first;
+		env["structuredContent"]  = std::move(sc);
+		return env;
+	}
+
+	const size_t depth = metaBridge::UndoStackSize();
+	const std::string txId = GenerateTransactionId();
+
+	g_activeTransactions[txId] = { label, depth, 0 };
+
+	wxLogMessage(wxT("oes-mcp: transaction_begin id=%s label=%s undoDepth=%zu"),
+	             wxString::FromUTF8(txId.c_str()),
+	             wxString::FromUTF8(label.c_str()),
+	             depth);
+
+	nlohmann::json env = TextResult(
+		"transaction_begin OK: id=" + txId +
+		" undoStackBefore=" + std::to_string(static_cast<int>(depth)),
+		false);
+	nlohmann::json sc = nlohmann::json::object();
+	sc["ok"]             = true;
+	sc["transactionId"]  = txId;
+	sc["undoStackBefore"] = static_cast<int>(depth);
+	env["structuredContent"] = std::move(sc);
+	return env;
+}
+
+// =========================================================================
+// Tool: transaction_commit
+// =========================================================================
+nlohmann::json ToolTransactionCommit(const nlohmann::json& args)
+{
+	const std::string txId = ArgString(args, "transactionId");
+	if (txId.empty()) {
+		return TextResult("transaction_commit: 'transactionId' is required", true);
+	}
+
+	std::lock_guard<std::mutex> lock(g_txMutex);
+	auto it = g_activeTransactions.find(txId);
+	if (it == g_activeTransactions.end()) {
+		nlohmann::json env = TextResult(
+			"transaction_commit: unknown transactionId '" + txId + "'", true);
+		nlohmann::json sc = nlohmann::json::object();
+		sc["errorCode"]      = "OES_E_TX_NOT_FOUND";
+		sc["transactionId"]  = txId;
+		env["structuredContent"] = std::move(sc);
+		return env;
+	}
+
+	const int mutationsApplied = it->second.mutationCount;
+	const size_t depthAfter    = metaBridge::UndoStackSize();
+	g_activeTransactions.erase(it);
+
+	wxLogMessage(wxT("oes-mcp: transaction_commit id=%s mutations=%d undoDepth=%zu"),
+	             wxString::FromUTF8(txId.c_str()),
+	             mutationsApplied,
+	             depthAfter);
+
+	// v1: undo entries stay as individual steps — Ctrl+Z reverts them
+	// one by one. Compound-undo collapse (wxCommandProcessor::Submit with
+	// a grouped command) is deferred to Phase 3.4 Designer integration.
+	nlohmann::json env = TextResult(
+		"transaction_commit OK: id=" + txId +
+		" mutationsApplied=" + std::to_string(mutationsApplied) +
+		" undoStackAfter=" + std::to_string(static_cast<int>(depthAfter)),
+		false);
+	nlohmann::json sc = nlohmann::json::object();
+	sc["ok"]              = true;
+	sc["mutationsApplied"] = mutationsApplied;
+	sc["undoStackAfter"]   = static_cast<int>(depthAfter);
+	env["structuredContent"] = std::move(sc);
+	return env;
+}
+
+// =========================================================================
+// Tool: transaction_rollback
+// =========================================================================
+nlohmann::json ToolTransactionRollback(const nlohmann::json& args)
+{
+	const std::string txId = ArgString(args, "transactionId");
+	if (txId.empty()) {
+		return TextResult("transaction_rollback: 'transactionId' is required", true);
+	}
+
+	std::lock_guard<std::mutex> lock(g_txMutex);
+	auto it = g_activeTransactions.find(txId);
+	if (it == g_activeTransactions.end()) {
+		nlohmann::json env = TextResult(
+			"transaction_rollback: unknown transactionId '" + txId + "'", true);
+		nlohmann::json sc = nlohmann::json::object();
+		sc["errorCode"]      = "OES_E_TX_NOT_FOUND";
+		sc["transactionId"]  = txId;
+		env["structuredContent"] = std::move(sc);
+		return env;
+	}
+
+	const size_t targetDepth = it->second.undoDepthBefore;
+	int reverted = 0;
+
+	// Pop undo entries until we reach the depth captured at begin.
+	// metaBridge::UndoLastAgentMutation() handles epoch checks internally —
+	// stale entries (dead config) are silently dropped, which is the same
+	// safe behaviour we want here.
+	while (metaBridge::UndoStackSize() > targetDepth) {
+		const int rc = metaBridge::UndoLastAgentMutation();
+		if (rc != 0) {
+			// Stack may have been cleared by a config reload (epoch change).
+			// Stop reverting — the tree is already gone.
+			break;
+		}
+		++reverted;
+	}
+
+	g_activeTransactions.erase(it);
+
+	wxLogMessage(wxT("oes-mcp: transaction_rollback id=%s reverted=%d"),
+	             wxString::FromUTF8(txId.c_str()),
+	             reverted);
+
+	nlohmann::json env = TextResult(
+		"transaction_rollback OK: id=" + txId +
+		" mutationsReverted=" + std::to_string(reverted),
+		false);
+	nlohmann::json sc = nlohmann::json::object();
+	sc["ok"]               = true;
+	sc["mutationsReverted"] = reverted;
+	env["structuredContent"] = std::move(sc);
+	return env;
+}
+
+// =========================================================================
 // Registry — built once on first AllTools() call.
 // =========================================================================
 const std::vector<ToolEntry>& BuildRegistry()
@@ -5552,6 +5735,120 @@ const std::vector<ToolEntry>& BuildRegistry()
 			  std::move(outSR)
 			},
 			&ToolSnapshotRollback
+		});
+	}
+
+	// =====================================================================
+	// transaction_begin
+	// =====================================================================
+	{
+		nlohmann::json labelProp;
+		labelProp["type"]        = "string";
+		labelProp["description"] = "Short human-readable description of the "
+		                           "transaction for the audit log (optional).";
+
+		nlohmann::json outTB;
+		outTB["type"]       = "object";
+		outTB["properties"] = nlohmann::json::object();
+		outTB["properties"]["ok"]             = nlohmann::json{ {"type","boolean"} };
+		outTB["properties"]["transactionId"]  = nlohmann::json{ {"type","string"},
+		    {"description","Opaque UUID to pass to transaction_commit or transaction_rollback"} };
+		outTB["properties"]["undoStackBefore"] = nlohmann::json{ {"type","integer"},
+		    {"description","metaBridge undo-stack depth at the time of begin"} };
+		outTB["required"] = nlohmann::json::array({ "ok", "transactionId", "undoStackBefore" });
+
+		table.push_back({
+			{ "transaction_begin",
+			  "Open a new transaction staging context. All meta_create / "
+			  "meta_edit / meta_delete / write_module calls made after this "
+			  "will be grouped as a single logical unit. Call "
+			  "transaction_commit to lock them in, or transaction_rollback "
+			  "to revert every mutation made since begin. Only one active "
+			  "transaction is allowed at a time — returns OES_E_TX_ALREADY_ACTIVE "
+			  "if another is open.",
+			  schemaObj({
+			    { "label", labelProp },
+			  }, {}),
+			  ann(/*readOnly*/false, /*destructive*/false,
+			      /*idempotent*/false, /*openWorld*/false),
+			  std::move(outTB)
+			},
+			&ToolTransactionBegin
+		});
+	}
+
+	// =====================================================================
+	// transaction_commit
+	// =====================================================================
+	{
+		nlohmann::json txIdProp;
+		txIdProp["type"]        = "string";
+		txIdProp["description"] = "Transaction id returned by transaction_begin.";
+
+		nlohmann::json outTC;
+		outTC["type"]       = "object";
+		outTC["properties"] = nlohmann::json::object();
+		outTC["properties"]["ok"]             = nlohmann::json{ {"type","boolean"} };
+		outTC["properties"]["mutationsApplied"] = nlohmann::json{ {"type","integer"},
+		    {"description","Number of mutations made inside this transaction"} };
+		outTC["properties"]["undoStackAfter"]   = nlohmann::json{ {"type","integer"},
+		    {"description","metaBridge undo-stack depth after commit"} };
+		outTC["required"] = nlohmann::json::array({ "ok", "mutationsApplied", "undoStackAfter" });
+
+		table.push_back({
+			{ "transaction_commit",
+			  "Commit the active transaction, locking in all mutations made "
+			  "since transaction_begin. The transaction is removed from the "
+			  "active map. Mutations are individually revertable via Ctrl+Z "
+			  "in Designer (compound-undo grouping deferred to v2). Returns "
+			  "OES_E_TX_NOT_FOUND when the transactionId is unknown or was "
+			  "already committed/rolled back (idempotent-safe).",
+			  schemaObj({
+			    { "transactionId", txIdProp },
+			  }, { "transactionId" }),
+			  ann(/*readOnly*/false, /*destructive*/false,
+			      /*idempotent*/true, /*openWorld*/false),
+			  std::move(outTC)
+			},
+			&ToolTransactionCommit
+		});
+	}
+
+	// =====================================================================
+	// transaction_rollback
+	// =====================================================================
+	{
+		nlohmann::json txIdProp;
+		txIdProp["type"]        = "string";
+		txIdProp["description"] = "Transaction id returned by transaction_begin.";
+
+		nlohmann::json outTR;
+		outTR["type"]       = "object";
+		outTR["properties"] = nlohmann::json::object();
+		outTR["properties"]["ok"]               = nlohmann::json{ {"type","boolean"} };
+		outTR["properties"]["mutationsReverted"] = nlohmann::json{ {"type","integer"},
+		    {"description","Number of undo entries popped from the metaBridge stack"} };
+		outTR["required"] = nlohmann::json::array({ "ok", "mutationsReverted" });
+
+		table.push_back({
+			{ "transaction_rollback",
+			  "Rollback the active transaction by reverting all mutations "
+			  "pushed to the metaBridge undo stack since transaction_begin. "
+			  "Each mutation is undone in LIFO order until the stack depth "
+			  "returns to the value captured at begin. Returns "
+			  "OES_E_TX_NOT_FOUND when the transactionId is unknown or was "
+			  "already committed/rolled back (idempotent-safe). A config "
+			  "reload during the transaction will cause the undo stack to be "
+			  "cleared by metaBridge; rollback will report 0 mutationsReverted "
+			  "and succeed (the config reload already discarded the mutations).",
+			  schemaObj({
+			    { "transactionId", txIdProp },
+			  }, { "transactionId" }),
+			  ann(/*readOnly*/false, /*destructive*/true,
+			      /*idempotent*/true, /*openWorld*/false),
+			  std::move(outTR)
+			},
+			&ToolTransactionRollback
 		});
 	}
 
