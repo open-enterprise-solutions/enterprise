@@ -1002,7 +1002,7 @@ nlohmann::json SigmaOfflineEnvelope(const std::string& reason)
 }
 
 // MCP: split scheme+host vs path — same trivial parser aiBridge uses.
-std::pair<std::string, std::string> SigmaSplitUrl(const std::string& url)
+std::pair<std::string, std::string> PugiSplitUrl(const std::string& url)
 {
 	const auto schemeEnd = url.find("://");
 	if (schemeEnd == std::string::npos) return {std::string(), std::string()};
@@ -1011,18 +1011,31 @@ std::pair<std::string, std::string> SigmaSplitUrl(const std::string& url)
 	return {url.substr(0, pathStart), url.substr(pathStart)};
 }
 
-nlohmann::json ToolSigmaCheck(const nlohmann::json& args)
-{
-	// Input shape: { metadata: object, moduleCode?: string, rules?: string[] }
-	if (!args.is_object() || !args.contains("metadata")) {
-		return TextResult("sigma_check: 'metadata' is required", true);
-	}
+// =========================================================================
+// PugiHttpInvoke — shared proxy plumbing for sigma_check + oes_templates_*
+// tools.  Validates config, POSTs `{name, input}` to Pugi's invoke endpoint,
+// passes the response back through Pugi's `result` unwrap, and folds the
+// fail-open contract (transport / missing-creds → caller-shaped envelope).
+//
+// Callers supply:
+//   toolName     — used in error strings and the request body's "name" field
+//   input        — the JSON object passed through as `input` to Pugi
+//   offlineMaker — caller picks the structuredContent shape for fail-open
+//                   (sigma_check returns ok=true; new tools return ok=false)
+//
+// Return: a full MCP `tools/call` result envelope (content[] + optional
+// structuredContent + optional isError).  Never throws — every failure
+// surfaces as a well-formed envelope so the agent loop keeps running.
+// =========================================================================
+using PugiOfflineMaker = std::function<nlohmann::json(const std::string& reason)>;
 
+nlohmann::json PugiHttpInvoke(const std::string& toolName,
+                              const nlohmann::json& input,
+                              const PugiOfflineMaker& offlineMaker)
+{
 	const PugiConfig cfg = LoadPugiConfig();
 	if (cfg.endpoint.empty() || cfg.token.empty() || cfg.tenant.empty()) {
-		// Treat missing creds as offline so the agent loop survives
-		// when oes-mcp is launched outside the Designer environment.
-		return SigmaOfflineEnvelope(
+		return offlineMaker(
 		    "no Pugi credentials configured (need OES_PUGI_ENDPOINT/TOKEN/TENANT "
 		    "or aiBridge.env with ENDPOINT/TOKEN/TENANT)");
 	}
@@ -1032,32 +1045,23 @@ nlohmann::json ToolSigmaCheck(const nlohmann::json& args)
 	//   { "name": "<tool>", "input": { ...args... } }
 	// The Pugi gateway rejects {tool, arguments} with a 400, so we mirror
 	// what its OpenAPI schema actually accepts.
-	nlohmann::json input = nlohmann::json::object();
-	input["metadata"] = args["metadata"];
-	if (args.contains("moduleCode") && args["moduleCode"].is_string()) {
-		input["moduleCode"] = args["moduleCode"];
-	}
-	if (args.contains("rules") && args["rules"].is_array()) {
-		input["rules"] = args["rules"];
-	}
-
 	nlohmann::json body;
-	body["name"]  = "sigma_check";
-	body["input"] = std::move(input);
+	body["name"]  = toolName;
+	body["input"] = input;
 
 	// Scheme + HTTPS precondition. If we were built without OpenSSL the
 	// https://mcp.pugi.io endpoint can't even connect — fail open rather
 	// than spelunking through cpp-httplib's TLS errors.
 #ifndef CPPHTTPLIB_OPENSSL_SUPPORT
 	if (cfg.endpoint.rfind("https://", 0) == 0) {
-		return SigmaOfflineEnvelope(
+		return offlineMaker(
 		    "oes-mcp built without OpenSSL; cannot reach https:// Pugi endpoint");
 	}
 #endif
 
-	const auto [base, path] = SigmaSplitUrl(cfg.endpoint);
+	const auto [base, path] = PugiSplitUrl(cfg.endpoint);
 	if (base.empty()) {
-		return TextResult("sigma_check: malformed ENDPOINT URL: " + cfg.endpoint, true);
+		return TextResult(toolName + ": malformed ENDPOINT URL: " + cfg.endpoint, true);
 	}
 
 	httplib::Client cli(base);
@@ -1076,13 +1080,13 @@ nlohmann::json ToolSigmaCheck(const nlohmann::json& args)
 	auto res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
 	if (!res) {
 		// Network / connect / timeout — fail open.
-		return SigmaOfflineEnvelope(
+		return offlineMaker(
 		    std::string("transport error: ") + httplib::to_string(res.error()));
 	}
 	if (res->status >= 300 && res->status < 400) {
 		// Redirect with Authorization attached would leak the bearer.
 		return TextResult(
-		    "sigma_check: Pugi returned redirect; bearer not forwarded for security",
+		    toolName + ": Pugi returned redirect; bearer not forwarded for security",
 		    true);
 	}
 	if (res->status >= 400) {
@@ -1093,7 +1097,7 @@ nlohmann::json ToolSigmaCheck(const nlohmann::json& args)
 		    ? res->body.substr(0, 500) + "..."
 		    : res->body;
 		return TextResult(
-		    "sigma_check: Pugi returned " + std::to_string(res->status) +
+		    toolName + ": Pugi returned " + std::to_string(res->status) +
 		    ": " + snippet, true);
 	}
 
@@ -1104,7 +1108,7 @@ nlohmann::json ToolSigmaCheck(const nlohmann::json& args)
 		    ? res->body.substr(0, 500) + "..."
 		    : res->body;
 		return TextResult(
-		    "sigma_check: Pugi returned non-JSON response: " + snippet, true);
+		    toolName + ": Pugi returned non-JSON response: " + snippet, true);
 	}
 
 	// Pugi wraps tool output in {"result": {...}}. The inner result may
@@ -1140,6 +1144,162 @@ nlohmann::json ToolSigmaCheck(const nlohmann::json& args)
 		}
 	}
 	return env;
+}
+
+// Generic offline envelope for the template-proxy tools: ok=false, offline=true.
+// (sigma_check uses a different shape — ok=true, validation deferred — so it
+// keeps its own SigmaOfflineEnvelope.)
+nlohmann::json PugiOfflineEnvelope(const std::string& toolName, const std::string& reason)
+{
+	nlohmann::json env;
+	nlohmann::json content = nlohmann::json::array();
+	nlohmann::json item;
+	item["type"] = "text";
+	item["text"] = toolName + ": Pugi unreachable, offline mode: " + reason;
+	content.push_back(item);
+	env["content"] = std::move(content);
+
+	nlohmann::json structured;
+	structured["ok"]      = false;
+	structured["offline"] = true;
+	structured["reason"]  = reason;
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+nlohmann::json ToolSigmaCheck(const nlohmann::json& args)
+{
+	// Input shape: { metadata: object, moduleCode?: string, rules?: string[] }
+	if (!args.is_object() || !args.contains("metadata")) {
+		return TextResult("sigma_check: 'metadata' is required", true);
+	}
+
+	// sigma_check's offline envelope is "validation deferred, ok=true" — the
+	// Designer save flow inspects offline=true to decide whether to gate.
+	// New template-proxy tools use the generic ok=false offline envelope,
+	// so we keep both shapes side by side.
+	nlohmann::json input = nlohmann::json::object();
+	input["metadata"] = args["metadata"];
+	if (args.contains("moduleCode") && args["moduleCode"].is_string()) {
+		input["moduleCode"] = args["moduleCode"];
+	}
+	if (args.contains("rules") && args["rules"].is_array()) {
+		input["rules"] = args["rules"];
+	}
+
+	return PugiHttpInvoke("sigma_check", input, SigmaOfflineEnvelope);
+}
+
+// =========================================================================
+// Pugi template-proxy tools — oes_templates_list / oes_template_get /
+// oes_template_customize / oes_demo_data_get.  All four reuse the shared
+// PugiHttpInvoke helper; each only differs in how it shapes its `input`
+// envelope and which arg validation it performs client-side.
+// =========================================================================
+
+// oes_templates_list: enumerates the 4 production OES configuration templates
+// (accounting-demo / manufacturing-demo / services-demo / trade-demo).
+nlohmann::json ToolOesTemplatesList(const nlohmann::json& args)
+{
+	nlohmann::json input = nlohmann::json::object();
+	if (args.is_object()) {
+		if (args.contains("locale") && args["locale"].is_string()) {
+			input["locale"] = args["locale"];
+		}
+		if (args.contains("tags") && args["tags"].is_array()) {
+			input["tags"] = args["tags"];
+		}
+	}
+	return PugiHttpInvoke("oes_templates_list", input,
+		[](const std::string& reason) {
+			return PugiOfflineEnvelope("oes_templates_list", reason);
+		});
+}
+
+// oes_template_get: fetch full template structure (mutations[]) and optional
+// demo data rows.  Trust Pugi's shape — passthrough.
+nlohmann::json ToolOesTemplateGet(const nlohmann::json& args)
+{
+	if (!args.is_object() || !args.contains("templateId") ||
+	    !args["templateId"].is_string() || args["templateId"].get<std::string>().empty()) {
+		return TextResult("oes_template_get: 'templateId' is required", true);
+	}
+
+	nlohmann::json input = nlohmann::json::object();
+	input["templateId"] = args["templateId"];
+	if (args.contains("includeData") && args["includeData"].is_boolean()) {
+		input["includeData"] = args["includeData"];
+	} else {
+		input["includeData"] = false;  // explicit default per spec
+	}
+	if (args.contains("locale") && args["locale"].is_string()) {
+		input["locale"] = args["locale"];
+	}
+
+	return PugiHttpInvoke("oes_template_get", input,
+		[](const std::string& reason) {
+			return PugiOfflineEnvelope("oes_template_get", reason);
+		});
+}
+
+// oes_template_customize: clone a template + apply user modifications.
+// Hybrid input: explicit `modifications` object OR natural-language
+// `userPrompt` (the Sigma agent reasons over the prompt on the Pugi side).
+nlohmann::json ToolOesTemplateCustomize(const nlohmann::json& args)
+{
+	if (!args.is_object() || !args.contains("templateId") ||
+	    !args["templateId"].is_string() || args["templateId"].get<std::string>().empty()) {
+		return TextResult("oes_template_customize: 'templateId' is required", true);
+	}
+
+	nlohmann::json input = nlohmann::json::object();
+	input["templateId"] = args["templateId"];
+	if (args.contains("modifications") && args["modifications"].is_object()) {
+		input["modifications"] = args["modifications"];
+	}
+	if (args.contains("userPrompt") && args["userPrompt"].is_string()) {
+		input["userPrompt"] = args["userPrompt"];
+	}
+
+	return PugiHttpInvoke("oes_template_customize", input,
+		[](const std::string& reason) {
+			return PugiOfflineEnvelope("oes_template_customize", reason);
+		});
+}
+
+// oes_demo_data_get: fetch demo data rows.  Two mutually-exclusive modes:
+//   - templateId  → cached, O(1) Pugi lookup
+//   - configHints → LLM-generated, ~3s Anvil call
+// Spec says "exactly one of {templateId, configHints} required — validate
+// client-side before round-tripping to Pugi" (Pugi may not enforce).
+nlohmann::json ToolOesDemoDataGet(const nlohmann::json& args)
+{
+	const bool hasTemplateId =
+	    args.is_object() && args.contains("templateId") &&
+	    args["templateId"].is_string() && !args["templateId"].get<std::string>().empty();
+	const bool hasConfigHints =
+	    args.is_object() && args.contains("configHints") &&
+	    args["configHints"].is_object() && !args["configHints"].empty();
+
+	if (hasTemplateId && hasConfigHints) {
+		return TextResult(
+		    "oes_demo_data_get: provide exactly one of 'templateId' or "
+		    "'configHints', not both", true);
+	}
+	if (!hasTemplateId && !hasConfigHints) {
+		return TextResult(
+		    "oes_demo_data_get: one of 'templateId' or 'configHints' is "
+		    "required", true);
+	}
+
+	nlohmann::json input = nlohmann::json::object();
+	if (hasTemplateId)  input["templateId"]  = args["templateId"];
+	if (hasConfigHints) input["configHints"] = args["configHints"];
+
+	return PugiHttpInvoke("oes_demo_data_get", input,
+		[](const std::string& reason) {
+			return PugiOfflineEnvelope("oes_demo_data_get", reason);
+		});
 }
 
 // =========================================================================
@@ -1577,6 +1737,180 @@ const std::vector<ToolEntry>& BuildRegistry()
 			  ann(true, false, true, /*openWorld=*/true)
 			},
 			&ToolSigmaCheck
+		});
+	}
+	// =====================================================================
+	// Pugi template-proxy tools — added 2026-05-21.  All four are HTTP
+	// proxies into Pugi's template catalogue / demo-data generator; they
+	// reuse the same PugiHttpInvoke helper sigma_check uses (10s timeout,
+	// fail-open envelope, bearer-token redirect guard, OpenSSL precondition).
+	// openWorldHint=true on every tool because the result depends on external
+	// state (Pugi's catalogue + Anvil's LLM generator).
+	// =====================================================================
+	{
+		// oes_templates_list — declares a structured output schema so the
+		// agent can index template metadata without parsing the text payload.
+		// The other three template tools pass through Pugi's response shape
+		// verbatim (Pugi owns the contract there).
+		nlohmann::json synonymProp;
+		synonymProp["type"]                 = "object";
+		synonymProp["additionalProperties"] = nlohmann::json{ {"type","string"} };
+		synonymProp["description"]          = "Locale -> label map";
+
+		nlohmann::json tagsArr;
+		tagsArr["type"]  = "array";
+		tagsArr["items"] = nlohmann::json{ {"type","string"} };
+
+		nlohmann::json previewModulesArr;
+		previewModulesArr["type"]  = "array";
+		previewModulesArr["items"] = nlohmann::json{ {"type","string"} };
+
+		nlohmann::json thumbnailProp;
+		thumbnailProp["type"] = nlohmann::json::array({ "string", "null" });
+
+		nlohmann::json tplItem;
+		tplItem["type"]       = "object";
+		tplItem["properties"] = nlohmann::json::object();
+		tplItem["properties"]["id"]              = nlohmann::json{ {"type","string"} };
+		tplItem["properties"]["version"]         = nlohmann::json{ {"type","string"} };
+		tplItem["properties"]["name"]            = synonymProp;
+		tplItem["properties"]["description"]     = synonymProp;
+		tplItem["properties"]["tags"]            = tagsArr;
+		tplItem["properties"]["objectCount"]     = nlohmann::json{ {"type","integer"} };
+		tplItem["properties"]["demoRowCount"]    = nlohmann::json{ {"type","integer"} };
+		tplItem["properties"]["minHostAbi"]      = nlohmann::json{ {"type","integer"} };
+		tplItem["properties"]["thumbnailUrl"]    = thumbnailProp;
+		tplItem["properties"]["previewModules"]  = previewModulesArr;
+
+		nlohmann::json outList;
+		outList["type"]       = "object";
+		outList["properties"] = nlohmann::json::object();
+		outList["properties"]["templates"] = nlohmann::json{
+			{"type", "array"}, {"items", tplItem}
+		};
+		outList["required"] = nlohmann::json::array({ "templates" });
+
+		// Input schema: optional locale (string|null) + optional tags (string[]).
+		nlohmann::json localeIn;
+		localeIn["type"]        = nlohmann::json::array({ "string", "null" });
+		localeIn["description"] = "Preferred locale tag for name/description (e.g. 'uk', 'ru'); null = server default";
+		nlohmann::json tagsIn;
+		tagsIn["type"]        = "array";
+		tagsIn["items"]       = nlohmann::json{ {"type","string"} };
+		tagsIn["description"] = "Optional tag filter (intersection)";
+
+		table.push_back({
+			{ "oes_templates_list",
+			  "List 4 production OES configuration templates from Pugi: "
+			  "accounting-demo, manufacturing-demo, services-demo, "
+			  "trade-demo. Returns structuredContent.templates[] with id, "
+			  "version, locale-keyed name/description, tags, object/row "
+			  "counts, minHostAbi, optional thumbnail and previewModules.",
+			  schemaObj({
+			    { "locale", localeIn },
+			    { "tags",   tagsIn   },
+			  }, {}),
+			  ann(true, false, true, /*openWorld=*/true),
+			  std::move(outList)
+			},
+			&ToolOesTemplatesList
+		});
+	}
+	{
+		// oes_template_get — passthrough (Pugi owns the mutations[]/demoData[]
+		// shape).  Input enum guards client-side against unknown template ids
+		// so we don't waste a Pugi round-trip on typos.
+		nlohmann::json templateIdEnum;
+		templateIdEnum["type"] = "string";
+		templateIdEnum["enum"] = nlohmann::json::array({
+			"accounting-demo", "manufacturing-demo", "services-demo", "trade-demo"
+		});
+		templateIdEnum["description"] = "Template id (enum-checked client-side)";
+
+		nlohmann::json includeDataProp;
+		includeDataProp["type"]        = "boolean";
+		includeDataProp["default"]     = false;
+		includeDataProp["description"] = "Include demoData rows alongside structure";
+
+		nlohmann::json localeIn;
+		localeIn["type"]        = nlohmann::json::array({ "string", "null" });
+		localeIn["description"] = "Preferred locale tag for synonyms";
+
+		table.push_back({
+			{ "oes_template_get",
+			  "Fetch full template structure (mutations[]) and optional demo "
+			  "data rows for application via the Pugi proxy. "
+			  "Pugi returns {structure:[mutations[]], demoData:[inserts[]]} — "
+			  "passthrough shape.",
+			  schemaObj({
+			    { "templateId",  templateIdEnum  },
+			    { "includeData", includeDataProp },
+			    { "locale",      localeIn        },
+			  }, { "templateId" }),
+			  ann(true, false, true, /*openWorld=*/true)
+			},
+			&ToolOesTemplateGet
+		});
+	}
+	{
+		// oes_template_customize — passthrough.  Hybrid input: explicit
+		// modifications object OR natural-language userPrompt (or both).
+		// `templateId` is required; we don't lock the enum here because Pugi
+		// may accept user-cloned template ids in the future.
+		nlohmann::json modsProp;
+		modsProp["type"]        = "object";
+		modsProp["description"] = "Rename map, swap operations, exclude lists — schema defined by Pugi";
+
+		nlohmann::json promptProp;
+		promptProp["type"]        = nlohmann::json::array({ "string", "null" });
+		promptProp["description"] = "Natural-language tweak request (Sigma agent reasons over it)";
+
+		table.push_back({
+			{ "oes_template_customize",
+			  "Clone an OES template + apply user modifications via the Pugi "
+			  "proxy. Hybrid: explicit `modifications` field OR natural-language "
+			  "`userPrompt` (Sigma agent reasons). Returns customized "
+			  "mutations[] in Pugi's passthrough shape.",
+			  schemaObj({
+			    { "templateId",    str("Template id to clone") },
+			    { "modifications", modsProp                    },
+			    { "userPrompt",    promptProp                  },
+			  }, { "templateId" }),
+			  // readOnly=false: it generates a new artefact, but destructive=false
+			  // (no prior state lost — clone, not overwrite). Idempotent at the
+			  // server level: same inputs → same mutations[].
+			  ann(false, false, true, /*openWorld=*/true)
+			},
+			&ToolOesTemplateCustomize
+		});
+	}
+	{
+		// oes_demo_data_get — passthrough.  Mutually-exclusive input:
+		// templateId (O(1) cached) XOR configHints (LLM-generated, ~3s).
+		// Validation is enforced in ToolOesDemoDataGet client-side; Pugi may
+		// not enforce so we don't relay a malformed request to it.
+		nlohmann::json templateIdProp;
+		templateIdProp["type"]        = nlohmann::json::array({ "string", "null" });
+		templateIdProp["description"] = "Template id for O(1) cached demo data";
+
+		nlohmann::json hintsProp;
+		hintsProp["type"]        = nlohmann::json::array({ "object", "null" });
+		hintsProp["description"] = "Schema-aware LLM generation context — describe target config structure";
+
+		table.push_back({
+			{ "oes_demo_data_get",
+			  "Fetch demo data rows from Pugi. Two modes — provide EXACTLY "
+			  "ONE: templateId (cached) OR configHints (LLM-generated, ~3s "
+			  "Anvil call). Returns Pugi passthrough shape "
+			  "{rows:[{op:'insert', kind, fullName, rows:[...], "
+			  "postAfterInsert:bool}]}.",
+			  schemaObj({
+			    { "templateId",  templateIdProp },
+			    { "configHints", hintsProp      },
+			  }, {}),
+			  ann(true, false, true, /*openWorld=*/true)
+			},
+			&ToolOesDemoDataGet
 		});
 	}
 	table.push_back({

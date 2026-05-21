@@ -231,6 +231,68 @@ def main() -> int:
             failures.append(
                 f"{tool_name}: structuredContent missing required keys {missing}")
 
+    # 8b) Pugi template-proxy tools (added 2026-05-21). All four must be
+    # advertised by tools/list and must respond to tools/call with a
+    # well-formed envelope. Three outcomes are acceptable per spec:
+    #   a) success envelope with content[] (Pugi reachable + populated)
+    #   b) Pugi-error envelope (isError=true; mock mode or remote 4xx)
+    #   c) offline envelope (no aiBridge.env / no creds)
+    template_tools = (
+        "oes_templates_list",
+        "oes_template_get",
+        "oes_template_customize",
+        "oes_demo_data_get",
+    )
+    for required in template_tools:
+        if required not in names:
+            failures.append(f"tools/list: missing tool '{required}'")
+    # oes_templates_list also declares an outputSchema — verify it.
+    td_list = declared.get("oes_templates_list")
+    if td_list is not None:
+        out_schema = td_list.get("outputSchema")
+        if not isinstance(out_schema, dict) or out_schema.get("type") != "object":
+            failures.append("oes_templates_list: missing/malformed outputSchema")
+        elif "templates" not in out_schema.get("properties", {}):
+            failures.append("oes_templates_list: outputSchema missing 'templates' property")
+
+    # tools/call probes — args chosen to pass client-side validation so the
+    # only failure surface is the Pugi round-trip itself.
+    template_probes = [
+        ("oes_templates_list",     {}),
+        ("oes_template_get",       {"templateId": "accounting-demo"}),
+        ("oes_template_customize", {"templateId": "accounting-demo",
+                                    "userPrompt": "rename Контрагенты to Партнёры"}),
+        ("oes_demo_data_get",      {"templateId": "accounting-demo"}),
+    ]
+    for idx, (tool_name, tool_args) in enumerate(template_probes, start=200):
+        send(proc, {
+            "jsonrpc": "2.0", "id": idx, "method": "tools/call",
+            "params": {"name": tool_name, "arguments": tool_args},
+        })
+        # Pugi round-trip can take a few seconds; mirror sigma_check's timeout.
+        resp = recv(proc, timeout_s=15.0)
+        env = resp.get("result")
+        if not isinstance(env, dict):
+            failures.append(f"{tool_name}: no result envelope: {resp}")
+            continue
+        # All three acceptable outcomes carry a non-empty content[] list.
+        if not isinstance(env.get("content"), list) or not env["content"]:
+            failures.append(f"{tool_name}: malformed envelope (no content): {env}")
+
+    # Validation guard for oes_demo_data_get: both args together → isError.
+    send(proc, {
+        "jsonrpc": "2.0", "id": 299, "method": "tools/call",
+        "params": {"name": "oes_demo_data_get",
+                   "arguments": {"templateId": "accounting-demo",
+                                 "configHints": {"kind": "Catalog"}}},
+    })
+    bad = recv(proc, timeout_s=15.0)
+    bad_env = bad.get("result") or {}
+    if not bad_env.get("isError"):
+        failures.append(
+            "oes_demo_data_get: both templateId+configHints should be "
+            f"rejected client-side, got: {bad_env}")
+
     proc.stdin.close()
     proc.wait(timeout=3)
 
