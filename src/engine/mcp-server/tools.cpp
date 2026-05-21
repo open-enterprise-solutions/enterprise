@@ -48,14 +48,20 @@
 #include <wx/string.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <cstdlib>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
 #include <functional>
+#include <iomanip>
 #include <map>
 #include <mutex>
 #include <optional>
 #include <regex>
 #include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -80,6 +86,71 @@ nlohmann::json TextResult(const std::string& text, bool isError = false)
 	env["content"] = std::move(content);
 	if (isError) env["isError"] = true;
 	return env;
+}
+
+std::mutex g_mcpAuditMu;
+
+std::string LocalTimestamp(char dateOut[11])
+{
+	std::time_t now = std::time(nullptr);
+	std::tm tmNow{};
+#if defined(_WIN32)
+	localtime_s(&tmNow, &now);
+#else
+	localtime_r(&now, &tmNow);
+#endif
+	std::ostringstream ts;
+	ts << std::put_time(&tmNow, "%Y-%m-%dT%H:%M:%S%z");
+	if (dateOut != nullptr) {
+		std::strftime(dateOut, 11, "%Y-%m-%d", &tmNow);
+	}
+	return ts.str();
+}
+
+std::filesystem::path McpAuditDir()
+{
+	wxString configDir;
+	if (appData != nullptr) configDir = appData->GetFileDirectory();
+	if (!configDir.IsEmpty()) {
+		return std::filesystem::path(std::string(configDir.utf8_str())) /
+		       ".oes" / "mcp-audit";
+	}
+	return std::filesystem::current_path() / ".oes" / "mcp-audit";
+}
+
+bool ResultIsError(const nlohmann::json& result)
+{
+	return result.is_object() &&
+	       result.contains("isError") &&
+	       result["isError"].is_boolean() &&
+	       result["isError"].get<bool>();
+}
+
+void McpAuditWrite(const std::string& event, nlohmann::json fields)
+{
+	try {
+		char date[11] = {};
+		nlohmann::json row = nlohmann::json::object();
+		row["ts"]    = LocalTimestamp(date);
+		row["event"] = event;
+		if (fields.is_object()) {
+			for (auto it = fields.begin(); it != fields.end(); ++it) {
+				row[it.key()] = it.value();
+			}
+		}
+
+		const std::filesystem::path dir = McpAuditDir();
+		std::filesystem::create_directories(dir);
+		const std::filesystem::path file =
+		    dir / (std::string("mcp-") + date + ".jsonl");
+
+		std::lock_guard<std::mutex> lk(g_mcpAuditMu);
+		std::ofstream out(file, std::ios::binary | std::ios::app);
+		if (!out.is_open()) return;
+		out << row.dump() << '\n';
+	} catch (...) {
+		// Telemetry must never change tool semantics.
+	}
 }
 
 nlohmann::json JsonResult(const nlohmann::json& payload)
@@ -7021,12 +7092,34 @@ const std::vector<ToolEntry>& AllTools()
 
 nlohmann::json DispatchTool(const std::string& name, const nlohmann::json& args)
 {
+	const auto started = std::chrono::steady_clock::now();
+	const std::string argsDump = args.dump();
 	for (const auto& t : AllTools()) {
 		if (t.desc.name == name) {
-			return t.fn(args);
+			nlohmann::json result = t.fn(args);
+			const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+				std::chrono::steady_clock::now() - started).count();
+			McpAuditWrite("tool.call", {
+				{ "tool",        name },
+				{ "ok",          !ResultIsError(result) },
+				{ "durationMs",  elapsed },
+				{ "argsBytes",   static_cast<int>(argsDump.size()) },
+				{ "resultBytes", static_cast<int>(result.dump().size()) },
+			});
+			return result;
 		}
 	}
-	return TextResult("oes-mcp: unknown tool '" + name + "'", true);
+	nlohmann::json result = TextResult("oes-mcp: unknown tool '" + name + "'", true);
+	const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now() - started).count();
+	McpAuditWrite("tool.call", {
+		{ "tool",        name },
+		{ "ok",          false },
+		{ "durationMs",  elapsed },
+		{ "argsBytes",   static_cast<int>(argsDump.size()) },
+		{ "resultBytes", static_cast<int>(result.dump().size()) },
+	});
+	return result;
 }
 
 } // namespace mcpServer

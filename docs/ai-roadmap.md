@@ -92,7 +92,7 @@ Conkurent analysis (mcp-1c free tier 9 tools, Go binary, BM25 + BSL synonyms, au
 - [x] **done** t3-002: Multi-LLM profile switcher UI in chat header — native pane adds a per-request profile selector (`По умолчанию`, `Pugi`, `OpenAI fast`, `OpenAI quality`), chat envelopes carry `profile`, and aiBridge resolves it to Pugi MCP or OpenAI-compatible endpoint/model (`MODEL_FAST`, `MODEL_QUALITY`) without rewriting plugin env.
 - [x] **done** t3-003: Voice input in chat pane — native wx pane now exposes a `Голос` button that focuses the chat input and hands off to OS-level dictation (macOS/Windows/Linux status text). Full Web Speech API path is not applicable after the wxWebView removal.
 - [x] **done** t3-004: Onboarding wizard — Designer Tools → `Подключить AI…` opens a native setup dialog with the generated `claude mcp add oes ...` command, aiBridge env-file path, required Pugi keys, smoke prompt, demo `/agent` prompt, copy buttons, and a direct Plugins dialog handoff.
-- [ ] **pending** t3-005: Telemetry loop — oes-mcp writes structured logs to `.oes/mcp-audit/<ts>.jsonl`, weekly aggregate identifies skill gaps. ~1 week.
+- [x] **done** t3-005: Telemetry loop — `oes-mcp` writes one structured JSONL row per `tools/call` to `.oes/mcp-audit/mcp-YYYY-MM-DD.jsonl` (tool, ok/error, duration, arg/result sizes; no prompt/code payload). Weekly aggregation remains a downstream reporting task.
 - [ ] **pending** t3-006: Resumable chat from past message — Cursor pattern. Edit prior message, rerun forward. ~1 week.
 - [ ] **pending** t3-007: Smart Snap — pin metadata object to context across messages. ~3 days.
 - [ ] **pending** t3-008: Score-gated reliability — Sigma reports self-confidence; <70% flags "suitability concern". ~2 days.
