@@ -1361,6 +1361,12 @@ void ibCodeEditor::OnKeyDown(wxKeyEvent& event)
 		}
 		return;
 	}
+	if (!event.ControlDown() && !event.RawControlDown() &&
+	    !event.AltDown() && !event.ShiftDown() &&
+	    event.GetKeyCode() == WXK_F1) {
+		TriggerDocCommentSkill();
+		return;
+	}
 
 	switch (event.GetKeyCode())
 	{
@@ -1438,6 +1444,88 @@ void ibCodeEditor::OnKeyDown(wxKeyEvent& event)
 // ===========================================================================
 // Sigma AI inline completion (Phase 6.2)
 // ===========================================================================
+
+wxString ibCodeEditor::FindNearestRoutineSignature() const
+{
+	int line = LineFromPosition(GetCurrentPos());
+	const int minLine = line > 80 ? line - 80 : 0;
+	for (; line >= minLine; --line) {
+		wxString text = const_cast<ibCodeEditor*>(this)->GetLine(line);
+		text.Trim(false).Trim(true);
+		if (text.IsEmpty()) continue;
+		const wxString lower = text.Lower();
+		if (lower.StartsWith(wxT("procedure ")) ||
+		    lower.StartsWith(wxT("function ")) ||
+		    lower.StartsWith(wxT("процедура ")) ||
+		    lower.StartsWith(wxT("функция "))) {
+			wxString signature = text;
+			for (int next = line + 1;
+			     next < GetLineCount() && next < line + 8;
+			     ++next) {
+				wxString extra = const_cast<ibCodeEditor*>(this)->GetLine(next);
+				extra.Trim(false).Trim(true);
+				if (extra.IsEmpty()) break;
+				signature += wxT("\n") + extra;
+				if (extra.Find(wxT("{")) != wxNOT_FOUND ||
+				    extra.Find(wxT(")")) != wxNOT_FOUND) {
+					break;
+				}
+			}
+			return signature;
+		}
+	}
+	return const_cast<ibCodeEditor*>(this)->GetLine(LineFromPosition(GetCurrentPos()));
+}
+
+void ibCodeEditor::TriggerDocCommentSkill()
+{
+	auto* pm = appData ? appData->GetPluginManager() : nullptr;
+	if (pm == nullptr || !pm->HasAIProviderFor("chat")) {
+		wxBell();
+		return;
+	}
+
+	wxString code = GetSelectedText();
+	if (code.IsEmpty()) code = FindNearestRoutineSignature();
+	code.Trim(false).Trim(true);
+	if (code.IsEmpty()) {
+		wxBell();
+		return;
+	}
+
+	auto esc = [](const wxString& s) {
+		wxString out; out.reserve(s.size() + 8);
+		for (wxUniChar c : s) {
+			const auto v = static_cast<unsigned>(c.GetValue());
+			if (c == wxT('\\')) out += wxT("\\\\");
+			else if (c == wxT('"')) out += wxT("\\\"");
+			else if (c == wxT('\n')) out += wxT("\\n");
+			else if (c == wxT('\r')) out += wxT("\\r");
+			else if (c == wxT('\t')) out += wxT("\\t");
+			else if (v < 0x20) out += wxString::Format(wxT("\\u%04x"), v);
+			else out += c;
+		}
+		return out;
+	};
+
+	const wxString rid = wxString::Format(wxT("skill-%lld"),
+	                                      static_cast<long long>(wxGetUTCTime()));
+	wxString json = wxT("{\"kind\":\"editor.skill\",\"op\":\"doc\","
+	                    "\"language\":\"ces\",\"code\":\"");
+	json += esc(code);
+	json += wxT("\",\"requestId\":\"");
+	json += rid;
+	json += wxT("\"}");
+
+	wxCommandEvent openEvt(wxEVT_MENU, wxID_FRONTEND_PLUGIN_WEB_PANE);
+	openEvt.SetEventObject(this);
+	for (wxWindow* p = GetParent(); p != nullptr; p = p->GetParent()) {
+		if (p->ProcessWindowEvent(openEvt)) break;
+	}
+	wxString target = pm->GetDefaultAIPaneId();
+	if (target.IsEmpty()) target = wxT("designer.demo.chat");
+	pm->CallWebPaneSend(target, json);
+}
 
 void ibCodeEditor::TriggerSigmaCompletion()
 {

@@ -483,6 +483,8 @@ public:
 	// stay out of the wxCommandProcessor undo stack — they're visual
 	// only until the user commits via Tab.
 	void TriggerSigmaCompletion();
+	void TriggerDocCommentSkill();
+	wxString FindNearestRoutineSignature() const;
 	void ShowSigmaCompletion(const wxString& text);
 	void AcceptSigmaCompletion();
 	void DismissSigmaCompletion();
