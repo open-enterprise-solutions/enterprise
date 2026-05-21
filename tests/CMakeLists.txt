@@ -74,6 +74,9 @@ set(OES_TESTS_SOURCES
     # Covers basMapping (kind + type qualifier), basXmlReader (single-file
     # parse + root manifest), basCfReader (deferred unpacker stub).
     test_basMigration.cpp
+    # Auto-snapshot manager — capture / list / load / mark consumed /
+    # prune. Pure file-IO so no DB / metaBridge fixtures required.
+    test_snapshotManager.cpp
 )
 # SEC-P2-3: only pull the triple-review integration test in when OpenSSL is
 # available — the source unconditionally includes <openssl/*> via httplib.

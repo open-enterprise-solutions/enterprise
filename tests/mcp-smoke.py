@@ -124,11 +124,36 @@ def main() -> int:
     lst = recv(proc)
     tools = lst.get("result", {}).get("tools", [])
     names = {t["name"] for t in tools if "name" in t}
-    if len(tools) < 32:
-        failures.append(f"tools/list: only {len(tools)} tools, expected >=32")
-    for required in ("meta_query", "meta_create", "list_objects", "config_info"):
+    if len(tools) < 34:
+        failures.append(f"tools/list: only {len(tools)} tools, expected >=34")
+    for required in ("meta_query", "meta_create", "list_objects", "config_info",
+                     "snapshots_list", "snapshot_rollback"):
         if required not in names:
             failures.append(f"tools/list: missing tool '{required}'")
+
+    # Auto-snapshot tools (added 2026-05-21): assert annotations match the
+    # design — snapshots_list is read-only/idempotent; snapshot_rollback
+    # carries the destructive hint so agents prompt the user even on
+    # dry-run (per spec, hint is a property of the tool, not the call).
+    declared_for_snap = {t["name"]: t for t in tools}
+    sl = declared_for_snap.get("snapshots_list")
+    if sl is not None:
+        ann = sl.get("annotations", {})
+        if ann.get("readOnlyHint") is not True:
+            failures.append("snapshots_list: readOnlyHint must be true")
+        if ann.get("destructiveHint") is True:
+            failures.append("snapshots_list: destructiveHint must be false")
+        if not isinstance(sl.get("outputSchema"), dict):
+            failures.append("snapshots_list: missing outputSchema")
+    sr = declared_for_snap.get("snapshot_rollback")
+    if sr is not None:
+        ann = sr.get("annotations", {})
+        if ann.get("destructiveHint") is not True:
+            failures.append("snapshot_rollback: destructiveHint must be true")
+        if ann.get("idempotentHint") is not True:
+            failures.append("snapshot_rollback: idempotentHint must be true")
+        if not isinstance(sr.get("outputSchema"), dict):
+            failures.append("snapshot_rollback: missing outputSchema")
 
     # 3) tools/call config_info
     send(proc, {
@@ -899,6 +924,41 @@ def main() -> int:
                 failures.append(
                     f"{tool_name}: expected isError in --no-config mode, "
                     f"got: {rf_env}")
+
+    # 8d) Auto-snapshot tools (added 2026-05-21). In --no-config mode
+    # snapshots_list must return a structured error (no config loaded —
+    # the store is config-relative), and snapshot_rollback must reject
+    # an unknown id with isError + structuredContent.errorCode.
+    # In real-config mode, snapshots_list succeeds (possibly with an
+    # empty list) and snapshot_rollback on an unknown id still surfaces
+    # the OES_E_SNAPSHOT_NOT_FOUND envelope.
+    snapshot_probes = [
+        ("snapshots_list",    {"limit": 10}),
+        ("snapshot_rollback", {"snapshotId": "00000000T000000-9999", "dryRun": True}),
+    ]
+    for idx, (tool_name, tool_args) in enumerate(snapshot_probes, start=500):
+        send(proc, {
+            "jsonrpc": "2.0", "id": idx, "method": "tools/call",
+            "params": {"name": tool_name, "arguments": tool_args},
+        })
+        sn_resp = recv(proc, timeout_s=5.0)
+        sn_env = sn_resp.get("result")
+        if not isinstance(sn_env, dict):
+            failures.append(f"{tool_name}: no result envelope: {sn_resp}")
+            continue
+        # Both probes target failure paths in --no-config mode. In real-
+        # config mode, snapshots_list legitimately succeeds; the rollback
+        # probe always errors because the id is fabricated.
+        if tool_name == "snapshots_list" and protocol_only:
+            if not sn_env.get("isError"):
+                failures.append(
+                    "snapshots_list: expected isError in --no-config mode, "
+                    f"got: {sn_env}")
+        if tool_name == "snapshot_rollback":
+            if not sn_env.get("isError"):
+                failures.append(
+                    "snapshot_rollback: expected isError for unknown id, "
+                    f"got: {sn_env}")
 
     proc.stdin.close()
     proc.wait(timeout=3)

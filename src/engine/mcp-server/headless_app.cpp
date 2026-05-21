@@ -16,6 +16,7 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/utils/configLock.hpp"
+#include "backend/migration/snapshotManager.hpp"
 
 #include <wx/string.h>
 #include <wx/filename.h>
@@ -23,7 +24,9 @@
 
 #include <atomic>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -40,6 +43,12 @@ DiagSink            g_diag = nullptr;
 // our pid). Zero when no lock is held — Shutdown checks this and skips
 // Release in --no-config / failed-init paths.
 std::int64_t        g_lockHolderId = 0;
+
+// MCP auto-snapshot: lazy-created. Init builds it as soon as we know
+// `g_loadedPath`; Shutdown clears it. nullptr when --no-config OR when
+// the env var is set to a disabled value and no snapshots already
+// live on disk.
+std::unique_ptr<migration::snapshots::ibSnapshotManager> g_snapshotMgr;
 
 // MCP: emit a single diagnostic line through whatever sink the caller
 // installed. Falls back to stderr so unit tests + interactive shells
@@ -288,6 +297,17 @@ InitOutcome Init(const HeadlessConfig& cfg, DiagSink diagSink)
 	GrantMcpServerWildcardPolicy();
 	g_loadedPath = dirPath;
 	g_ready.store(true);
+
+	// MCP auto-snapshot: build the per-config manager. Mode honours the
+	// env var; OES_MCP_AUTO_SNAPSHOT=false leaves the manager live but
+	// in Disabled mode so List/Load still surface any prior snapshots.
+	{
+		const char* envVal = std::getenv("OES_MCP_AUTO_SNAPSHOT");
+		const auto mode = migration::snapshots::ParseCaptureModeFromEnv(envVal);
+		g_snapshotMgr.reset(new migration::snapshots::ibSnapshotManager(
+			wxString::FromUTF8(dirPath.c_str()), mode));
+	}
+
 	Diag("oes-mcp: configuration ready at " + dirPath +
 	     " (shared lock holderId=" + std::to_string(g_lockHolderId) + ")");
 	return InitOutcome::Ok;
@@ -339,6 +359,7 @@ void Shutdown()
 
 	g_ready.store(false);
 	g_loadedPath.clear();
+	g_snapshotMgr.reset();
 }
 
 bool IsLockStillHeld()
@@ -411,6 +432,11 @@ bool SaveConfiguration(const std::string& path, std::string& errOut)
 const std::string& LoadedConfigPath()
 {
 	return g_loadedPath;
+}
+
+migration::snapshots::ibSnapshotManager* GetSnapshotManager()
+{
+	return g_snapshotMgr.get();
 }
 
 } // namespace mcpServer

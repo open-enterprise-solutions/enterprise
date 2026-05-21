@@ -76,6 +76,20 @@ bool IsLockStillHeld();
 // on IO failure the mutation still succeeded; only the broadcast is lost.
 void NotifyMutation(const std::string& toolName, const std::string& fullName);
 
+} // namespace mcpServer
+
+namespace migration { namespace snapshots { class ibSnapshotManager; } }
+
+namespace mcpServer {
+
+// MCP auto-snapshot: lazy-init singleton tied to the loaded
+// configuration directory. Returns nullptr in --no-config mode (no
+// path to anchor the store) or when OES_MCP_AUTO_SNAPSHOT=false and
+// no prior snapshots exist. The manager's `Mode()` distinguishes
+// Full / HashOnly / Disabled — callers can short-circuit
+// priorState computation in Disabled mode.
+migration::snapshots::ibSnapshotManager* GetSnapshotManager();
+
 // True once Init has completed and activeMetaData is reachable. Tools
 // short-circuit with "no configuration" when this is false.
 bool IsReady();

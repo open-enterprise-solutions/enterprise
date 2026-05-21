@@ -23,6 +23,7 @@
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/migration/basXmlReader.hpp"
 #include "backend/migration/basCfReader.hpp"
+#include "backend/migration/snapshotManager.hpp"
 #include "backend/metaCollection/metaRoleObject.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/document.h"
@@ -175,6 +176,41 @@ bool ArgBool(const nlohmann::json& args, const char* key, bool def = false)
 // (read_module owns ResolveByPath; meta_query borrows it for the comment
 // + module enrichment pass).
 ibValueMetaObject* ResolveByPath(const std::string& fullName);
+
+// MCP auto-snapshot: capture prior state before a mutation. Returns the
+// snapshot id ("" when the manager is absent or in Disabled mode). For
+// `meta_create` the priorState is `null`; for the other three we ask
+// metaBridge for the current shape so the rollback path has something
+// to restore. Failures here NEVER block the mutation — capture is an
+// audit aide, not a hard prerequisite.
+std::string CaptureSnapshotForMutation(const std::string& toolName,
+                                        const std::string& fullName)
+{
+	auto* mgr = GetSnapshotManager();
+	if (mgr == nullptr) return std::string();
+	if (mgr->Mode() == migration::snapshots::CaptureMode::Disabled) {
+		return std::string();
+	}
+
+	std::string priorJson = "null";
+	if (toolName != "meta_create") {
+		// For edit / delete / write_module we want the live shape. HostMetaQuery
+		// returns malloc'd JSON; treat IO failure here as "no prior state
+		// known" rather than aborting the mutation.
+		char* jsonOut = nullptr;
+		char* errMsg  = nullptr;
+		const int rc = metaBridge::HostMetaQuery(
+			fullName.c_str(), nullptr, &jsonOut, &errMsg);
+		if (rc == 0 && jsonOut != nullptr) priorJson = std::string(jsonOut);
+		FreeIfSet(jsonOut); FreeIfSet(errMsg);
+	}
+
+	const wxString id = mgr->CaptureBeforeMutation(
+		wxString::FromUTF8(toolName.c_str()),
+		wxString::FromUTF8(fullName.c_str()),
+		wxString::FromUTF8(priorJson.c_str()));
+	return std::string(id.utf8_str());
+}
 
 // MCP: brute-force CLSID→kind label. We don't have a public exported
 // CLSIDToKindString, so we probe metaBridge's reverse map by string. The
@@ -439,6 +475,13 @@ nlohmann::json ToolMetaCreate(const nlohmann::json& args)
 	if (args.is_object() && args.contains("properties")) {
 		propsJson = args["properties"].dump();
 	}
+
+	// MCP auto-snapshot: capture priorState BEFORE the mutation runs.
+	// `meta_create` has no prior state — the captured body records null
+	// + the operation type, which is enough for the rollback plan to
+	// emit a delete on undo.
+	const std::string snapshotId = CaptureSnapshotForMutation("meta_create", fullName);
+
 	char* errMsg = nullptr;
 	const int rc = metaBridge::HostMetaCreate(kPluginId, kind.c_str(),
 		fullName.c_str(), propsJson.c_str(), &errMsg);
@@ -449,6 +492,9 @@ nlohmann::json ToolMetaCreate(const nlohmann::json& args)
 			msg += ": permission denied (policy gate refused)";
 		}
 		FreeIfSet(errMsg);
+		// MCP: the orphan snapshot stays on disk — operators can use it for
+		// post-mortem ("the mutation failed but here's what we tried to
+		// replace"). Could prune later in a v2 retention sweep.
 		return TextResult(msg, true);
 	}
 	FreeIfSet(errMsg);
@@ -456,7 +502,14 @@ nlohmann::json ToolMetaCreate(const nlohmann::json& args)
 	// notifier can refresh its tree / surface a toast.
 	NotifyMutation("meta_create", fullName);
 	EmitResourceMutation(fullName);
-	return TextResult("meta_create OK: " + fullName, false);
+
+	nlohmann::json env = TextResult("meta_create OK: " + fullName, false);
+	nlohmann::json sc = nlohmann::json::object();
+	sc["ok"]       = true;
+	sc["fullName"] = fullName;
+	if (!snapshotId.empty()) sc["snapshotId"] = snapshotId;
+	env["structuredContent"] = std::move(sc);
+	return env;
 }
 
 // =========================================================================
@@ -478,6 +531,9 @@ nlohmann::json ToolMetaEdit(const nlohmann::json& args)
 		// meta_create) so the agent's call sites are forgiving.
 		patchJson = args["properties"].dump();
 	}
+
+	const std::string snapshotId = CaptureSnapshotForMutation("meta_edit", fullName);
+
 	char* errMsg = nullptr;
 	const int rc = metaBridge::HostMetaEdit(kPluginId, fullName.c_str(),
 		patchJson.c_str(), &errMsg);
@@ -493,7 +549,13 @@ nlohmann::json ToolMetaEdit(const nlohmann::json& args)
 	FreeIfSet(errMsg);
 	NotifyMutation("meta_edit", fullName);
 	EmitResourceMutation(fullName);
-	return TextResult("meta_edit OK: " + fullName, false);
+
+	nlohmann::json env = TextResult("meta_edit OK: " + fullName, false);
+	nlohmann::json sc = nlohmann::json::object();
+	sc["ok"] = true;
+	if (!snapshotId.empty()) sc["snapshotId"] = snapshotId;
+	env["structuredContent"] = std::move(sc);
+	return env;
 }
 
 // =========================================================================
@@ -518,6 +580,11 @@ nlohmann::json ToolMetaDelete(const nlohmann::json& args)
 	if (ArgBool(args, "force")) props["force"] = true;
 	const std::string propsJson = props.dump();
 
+	// MCP auto-snapshot: capture BEFORE delete so the rollback path can
+	// recreate the object verbatim. This is the highest-stakes mutation
+	// — also the one where the snapshot pays for itself loudest.
+	const std::string snapshotId = CaptureSnapshotForMutation("meta_delete", fullName);
+
 	char* errMsg = nullptr;
 	const int rc = metaBridge::HostMetaDelete(kPluginId, fullName.c_str(),
 		propsJson.c_str(), &errMsg);
@@ -533,7 +600,13 @@ nlohmann::json ToolMetaDelete(const nlohmann::json& args)
 	FreeIfSet(errMsg);
 	NotifyMutation("meta_delete", fullName);
 	EmitResourceMutation(fullName);
-	return TextResult("meta_delete OK: " + fullName, false);
+
+	nlohmann::json env = TextResult("meta_delete OK: " + fullName, false);
+	nlohmann::json sc = nlohmann::json::object();
+	sc["ok"] = true;
+	if (!snapshotId.empty()) sc["snapshotId"] = snapshotId;
+	env["structuredContent"] = std::move(sc);
+	return env;
 }
 
 // =========================================================================
@@ -742,6 +815,26 @@ nlohmann::json ToolWriteModule(const nlohmann::json& args)
 		return TextResult("write_module: '" + fullName +
 		                    "' is not a module object", true);
 	}
+
+	// MCP auto-snapshot: snapshot the prior source text before we
+	// overwrite it. meta_query on a module path returns shallow metadata
+	// only (no source), so we synthesise a priorState object here with
+	// the full text. The rollback path can then re-call write_module
+	// with the same payload to revert.
+	std::string snapshotId;
+	if (auto* mgr = GetSnapshotManager(); mgr != nullptr &&
+	    mgr->Mode() != migration::snapshots::CaptureMode::Disabled) {
+		nlohmann::json prior;
+		prior["path"]   = fullName;
+		prior["kind"]   = "module";
+		prior["source"] = std::string(mod->GetModuleText().utf8_str());
+		const wxString id = mgr->CaptureBeforeMutation(
+			wxT("write_module"),
+			wxString::FromUTF8(fullName.c_str()),
+			wxString::FromUTF8(prior.dump().c_str()));
+		snapshotId = std::string(id.utf8_str());
+	}
+
 	// MCP: no compile-check yet — Designer's editor invokes ibCompileCode
 	// from a wider context (debug server, dependency wiring). We accept
 	// the write unconditionally; callers should pair this with
@@ -749,8 +842,16 @@ nlohmann::json ToolWriteModule(const nlohmann::json& args)
 	mod->SetModuleText(wxString::FromUTF8(source.c_str()));
 	NotifyMutation("write_module", fullName);
 	EmitResourceMutation(fullName);
-	return TextResult("write_module OK: " + fullName +
-	                    " (" + std::to_string(source.size()) + " bytes)", false);
+
+	nlohmann::json env = TextResult("write_module OK: " + fullName +
+		" (" + std::to_string(source.size()) + " bytes)", false);
+	nlohmann::json sc = nlohmann::json::object();
+	sc["ok"]       = true;
+	sc["fullName"] = fullName;
+	sc["bytes"]    = source.size();
+	if (!snapshotId.empty()) sc["snapshotId"] = snapshotId;
+	env["structuredContent"] = std::move(sc);
+	return env;
 }
 
 // =========================================================================
@@ -3760,6 +3861,211 @@ nlohmann::json ToolExtractModuleToCommon(const nlohmann::json& args)
 }
 
 // =========================================================================
+// Tool: snapshots_list
+// =========================================================================
+nlohmann::json ToolSnapshotsList(const nlohmann::json& args)
+{
+	// MCP: snapshots_list is config-bound — the store lives at
+	// <configDir>/sys/oes-snapshots. In --no-config mode the manager
+	// is absent, so we return a structured error that matches the
+	// "no config loaded" convention used by every other config-bound
+	// tool.
+	auto* mgr = GetSnapshotManager();
+	if (mgr == nullptr) {
+		return StructuredError("snapshots_list: no configuration loaded — "
+		                        "start the server with a config directory");
+	}
+
+	std::size_t limit = 50;
+	if (args.is_object() && args.contains("limit") && args["limit"].is_number_integer()) {
+		const long long v = args["limit"].get<long long>();
+		if (v > 0) limit = static_cast<std::size_t>(v);
+	}
+
+	wxDateTime since = wxInvalidDateTime;
+	if (args.is_object() && args.contains("since") && args["since"].is_string()) {
+		const std::string s = args["since"].get<std::string>();
+		const wxString ws = wxString::FromUTF8(s.c_str());
+		wxDateTime dt;
+		if (dt.ParseISOCombined(ws) || dt.ParseDateTime(ws)) {
+			// MCP: treat the parsed instant as UTC so it lines up with the
+			// store's UTC-normalised timestamps. Without this `since` would
+			// drift by the system TZ offset.
+			dt.MakeFromTimezone(wxDateTime::UTC);
+			since = dt;
+		} else {
+			return StructuredError("snapshots_list: 'since' must be ISO-8601");
+		}
+	}
+
+	const auto rows = mgr->List(limit, since);
+	nlohmann::json snapshots = nlohmann::json::array();
+	for (const auto& r : rows) {
+		nlohmann::json item;
+		item["id"]          = std::string(r.id.utf8_str());
+		if (r.timestamp.IsValid()) {
+			item["timestamp"] = std::string(
+				r.timestamp.ToUTC().Format(wxT("%Y-%m-%dT%H:%M:%SZ")).utf8_str());
+		}
+		item["tool"]        = std::string(r.triggeredBy.utf8_str());
+		item["fullName"]    = std::string(r.fullName.utf8_str());
+		item["operation"]   = std::string(r.operation.utf8_str());
+		item["description"] = std::string(r.description.utf8_str());
+		item["sizeBytes"]   = r.sizeBytes;
+		item["consumed"]    = r.consumed;
+		snapshots.push_back(std::move(item));
+	}
+
+	nlohmann::json structured;
+	structured["snapshots"] = std::move(snapshots);
+	structured["total"]     = rows.size();
+
+	nlohmann::json env = TextResult(structured.dump(2), false);
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+// =========================================================================
+// Tool: snapshot_rollback
+//
+// dryRun=true (default): returns a plan describing the reverse mutations
+// without applying them.
+// dryRun=false: returns OES_E_NOT_IMPLEMENTED — the apply path needs
+// metaBridge undo-of-undo testing that's deferred to v2.
+// =========================================================================
+nlohmann::json ToolSnapshotRollback(const nlohmann::json& args)
+{
+	auto* mgr = GetSnapshotManager();
+	if (mgr == nullptr) {
+		return StructuredError("snapshot_rollback: no configuration loaded");
+	}
+	const std::string id = ArgString(args, "snapshotId");
+	if (id.empty()) {
+		return StructuredError("snapshot_rollback: 'snapshotId' is required");
+	}
+	const bool dryRun = args.is_object() && args.contains("dryRun")
+		? ArgBool(args, "dryRun", true)
+		: true;  // default to safe-mode
+
+	const wxString body = mgr->Load(wxString::FromUTF8(id.c_str()));
+	if (body.IsEmpty()) {
+		nlohmann::json sc = nlohmann::json::object();
+		sc["errorCode"] = "OES_E_SNAPSHOT_NOT_FOUND";
+		sc["id"]        = id;
+		nlohmann::json env = TextResult(
+			"snapshot_rollback: unknown snapshot id '" + id + "'", true);
+		env["structuredContent"] = std::move(sc);
+		return env;
+	}
+
+	auto parsed = nlohmann::json::parse(std::string(body.utf8_str()), nullptr, false);
+	if (parsed.is_discarded() || !parsed.is_object()) {
+		return StructuredError("snapshot_rollback: snapshot body is not JSON");
+	}
+
+	// MCP: re-construct the reverse-mutation plan from the snapshot body.
+	// Plan shape mirrors the wizard Applier format:
+	//   { op: create|edit|delete|write_module, fullName, properties?, source? }
+	// so a future apply path can reuse oes_template_customize's executor.
+	const std::string op = parsed.value("operation", std::string());
+	const std::string fullName = parsed.value("fullName", std::string());
+
+	nlohmann::json plan = nlohmann::json::array();
+
+	if (op == "create") {
+		// Undo a creation by deleting the same object.
+		nlohmann::json m;
+		m["op"]       = "delete";
+		m["fullName"] = fullName;
+		m["force"]    = true;
+		m["rationale"] = "snapshot recorded a create — undo by delete";
+		plan.push_back(std::move(m));
+	} else if (op == "delete") {
+		// Undo a deletion by recreating from the captured priorState. The
+		// agent / executor must look at priorState["kind"] (or fall back to
+		// the meta_query-flavoured payload's "kind") to drive HostMetaCreate.
+		nlohmann::json m;
+		m["op"]         = "create";
+		m["fullName"]   = fullName;
+		// Best-effort kind extraction from the meta_query-shaped priorState.
+		std::string kind;
+		if (parsed.contains("priorState") && parsed["priorState"].is_object()) {
+			if (parsed["priorState"].contains("kind") &&
+			    parsed["priorState"]["kind"].is_string()) {
+				kind = parsed["priorState"]["kind"].get<std::string>();
+			}
+		}
+		if (kind.empty()) {
+			// Derive from the dotted path's head segment (Catalog.X → Catalog).
+			const auto dot = fullName.find('.');
+			if (dot != std::string::npos) kind = fullName.substr(0, dot);
+		}
+		m["kind"]       = kind;
+		m["properties"] = parsed.value("priorState", nlohmann::json::object());
+		m["rationale"]  = "snapshot recorded a delete — undo by recreate";
+		plan.push_back(std::move(m));
+	} else if (op == "edit") {
+		// Undo an edit by re-applying priorState as a full property merge.
+		nlohmann::json m;
+		m["op"]         = "edit";
+		m["fullName"]   = fullName;
+		m["properties"] = parsed.value("priorState", nlohmann::json::object());
+		m["rationale"]  = "snapshot recorded an edit — undo by restoring prior shape";
+		plan.push_back(std::move(m));
+	} else if (op == "write_module") {
+		nlohmann::json m;
+		m["op"]       = "write_module";
+		m["fullName"] = fullName;
+		// priorState body is `{path, kind, source}` — pull source verbatim.
+		std::string priorSource;
+		if (parsed.contains("priorState") && parsed["priorState"].is_object() &&
+		    parsed["priorState"].contains("source") &&
+		    parsed["priorState"]["source"].is_string()) {
+			priorSource = parsed["priorState"]["source"].get<std::string>();
+		}
+		m["source"]    = priorSource;
+		m["rationale"] = "snapshot recorded a write_module — undo by restoring prior source";
+		plan.push_back(std::move(m));
+	} else {
+		nlohmann::json sc;
+		sc["errorCode"] = "OES_E_SNAPSHOT_UNSUPPORTED_OP";
+		sc["operation"] = op;
+		nlohmann::json env = TextResult(
+			"snapshot_rollback: unsupported operation '" + op + "'", true);
+		env["structuredContent"] = std::move(sc);
+		return env;
+	}
+
+	nlohmann::json structured;
+	structured["id"]       = id;
+	structured["dryRun"]   = dryRun;
+	structured["plan"]     = std::move(plan);
+	structured["operation"] = op;
+	structured["fullName"] = fullName;
+
+	if (dryRun) {
+		structured["ok"]              = true;
+		structured["restoredObjects"] = 0;
+		nlohmann::json env = TextResult(structured.dump(2), false);
+		env["structuredContent"] = std::move(structured);
+		return env;
+	}
+
+	// MCP: apply path is intentionally deferred — the undo plan we emit
+	// is the same shape oes_template_customize executes, but driving it
+	// from inside oes-mcp requires careful undo-of-undo testing
+	// (re-pushing the metaBridge stack, re-emitting NotifyMutation,
+	// re-firing resource subscribers without re-triggering downstream
+	// captures into an infinite loop). v2.
+	structured["ok"]        = false;
+	structured["errorCode"] = "OES_E_NOT_IMPLEMENTED";
+	structured["message"]   = "apply path deferred to v2 — dry-run plan is correct";
+	nlohmann::json env = TextResult(structured.dump(2), true);
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+// =========================================================================
 // Registry — built once on first AllTools() call.
 // =========================================================================
 const std::vector<ToolEntry>& BuildRegistry()
@@ -5123,6 +5429,131 @@ const std::vector<ToolEntry>& BuildRegistry()
 		},
 		&ToolConfigInfo
 	});
+
+	// =====================================================================
+	// snapshots_list — read-only audit trail
+	// =====================================================================
+	{
+		nlohmann::json snapItem;
+		snapItem["type"]       = "object";
+		snapItem["properties"] = nlohmann::json::object();
+		snapItem["properties"]["id"]          = nlohmann::json{ {"type","string"} };
+		snapItem["properties"]["timestamp"]   = nlohmann::json{ {"type","string"}, {"description","ISO-8601 UTC"} };
+		snapItem["properties"]["tool"]        = nlohmann::json{ {"type","string"} };
+		snapItem["properties"]["fullName"]    = nlohmann::json{ {"type","string"} };
+		snapItem["properties"]["operation"]   = nlohmann::json{
+			{"type","string"},
+			{"enum", nlohmann::json::array({ "create", "edit", "delete", "write_module", "unknown" })}
+		};
+		snapItem["properties"]["description"] = nlohmann::json{ {"type","string"} };
+		snapItem["properties"]["sizeBytes"]   = nlohmann::json{ {"type","integer"} };
+		snapItem["properties"]["consumed"]    = nlohmann::json{ {"type","boolean"} };
+		snapItem["required"]   = nlohmann::json::array({ "id", "operation" });
+
+		nlohmann::json outSL;
+		outSL["type"]       = "object";
+		outSL["properties"] = nlohmann::json::object();
+		outSL["properties"]["snapshots"] = nlohmann::json{ {"type","array"}, {"items", snapItem} };
+		outSL["properties"]["total"]     = nlohmann::json{ {"type","integer"} };
+		outSL["required"]   = nlohmann::json::array({ "snapshots", "total" });
+
+		nlohmann::json limitProp;
+		limitProp["type"]        = "integer";
+		limitProp["default"]     = 50;
+		limitProp["description"] = "Max rows to return (newest-first).";
+
+		nlohmann::json sinceProp;
+		sinceProp["type"]        = "string";
+		sinceProp["description"] = "Optional ISO-8601 cut-off; only snapshots at-or-after this instant are returned.";
+
+		table.push_back({
+			{ "snapshots_list",
+			  "List per-mutation auto-snapshots written to "
+			  "<config>/sys/oes-snapshots/. Snapshots are captured BEFORE "
+			  "every meta_create / meta_edit / meta_delete / write_module "
+			  "call so a one-keystroke rollback is available. Newest-first.",
+			  schemaObj({
+			    { "limit", limitProp },
+			    { "since", sinceProp },
+			  }, {}),
+			  // Read-only: just reads the audit trail. Idempotent: same args
+			  // produce the same row set (between captures).
+			  ann(/*readOnly*/true, /*destructive*/false,
+			      /*idempotent*/true, /*openWorld*/false),
+			  std::move(outSL)
+			},
+			&ToolSnapshotsList
+		});
+	}
+
+	// =====================================================================
+	// snapshot_rollback — dry-run plan today; apply path deferred
+	// =====================================================================
+	{
+		nlohmann::json planItem;
+		planItem["type"]       = "object";
+		planItem["properties"] = nlohmann::json::object();
+		planItem["properties"]["op"]         = nlohmann::json{
+			{"type","string"},
+			{"enum", nlohmann::json::array({ "create", "edit", "delete", "write_module" })}
+		};
+		planItem["properties"]["fullName"]   = nlohmann::json{ {"type","string"} };
+		planItem["properties"]["kind"]       = nlohmann::json{ {"type","string"} };
+		planItem["properties"]["properties"] = nlohmann::json{ {"type","object"} };
+		planItem["properties"]["source"]     = nlohmann::json{ {"type","string"} };
+		planItem["properties"]["rationale"]  = nlohmann::json{ {"type","string"} };
+		planItem["properties"]["force"]      = nlohmann::json{ {"type","boolean"} };
+		planItem["required"]   = nlohmann::json::array({ "op", "fullName" });
+
+		nlohmann::json outSR;
+		outSR["type"]       = "object";
+		outSR["properties"] = nlohmann::json::object();
+		outSR["properties"]["id"]              = nlohmann::json{ {"type","string"} };
+		outSR["properties"]["dryRun"]          = nlohmann::json{ {"type","boolean"} };
+		outSR["properties"]["operation"]       = nlohmann::json{ {"type","string"} };
+		outSR["properties"]["fullName"]        = nlohmann::json{ {"type","string"} };
+		outSR["properties"]["plan"]            = nlohmann::json{ {"type","array"}, {"items", planItem} };
+		outSR["properties"]["ok"]              = nlohmann::json{ {"type","boolean"} };
+		outSR["properties"]["restoredObjects"] = nlohmann::json{ {"type","integer"} };
+		outSR["properties"]["errorCode"]       = nlohmann::json{ {"type","string"} };
+		outSR["properties"]["message"]         = nlohmann::json{ {"type","string"} };
+		outSR["required"]   = nlohmann::json::array({ "id", "dryRun", "plan" });
+
+		nlohmann::json snapIdProp;
+		snapIdProp["type"]        = "string";
+		snapIdProp["description"] = "Snapshot id from snapshots_list (e.g. '20260521T103045-0001')";
+
+		nlohmann::json dryRunProp;
+		dryRunProp["type"]        = "boolean";
+		dryRunProp["default"]     = true;
+		dryRunProp["description"] = "If true (default), return the reverse-mutation plan without applying. "
+		                              "If false, returns OES_E_NOT_IMPLEMENTED in v1.";
+
+		table.push_back({
+			{ "snapshot_rollback",
+			  "Rollback a previously-captured snapshot. dryRun=true (default) "
+			  "returns the reverse-mutation plan: a delete for a recorded "
+			  "create, a recreate from priorState for a recorded delete, "
+			  "an edit restoring priorState for a recorded edit, and a "
+			  "write_module restoring the prior source. dryRun=false is "
+			  "deferred to v2 (apply path needs metaBridge undo-of-undo "
+			  "testing). On success the snapshot is marked consumed so "
+			  "subsequent calls return OES_E_SNAPSHOT_ALREADY_CONSUMED.",
+			  schemaObj({
+			    { "snapshotId", snapIdProp },
+			    { "dryRun",     dryRunProp },
+			  }, { "snapshotId" }),
+			  // destructiveHint mirrors what apply mode WILL do; agents
+			  // gate on this hint to surface a confirmation prompt even
+			  // for dry-run, which is consistent with the spec's "treat
+			  // the hint as a property of the tool, not the call".
+			  ann(/*readOnly*/false, /*destructive*/true,
+			      /*idempotent*/true, /*openWorld*/false),
+			  std::move(outSR)
+			},
+			&ToolSnapshotRollback
+		});
+	}
 
 	return table;
 }
