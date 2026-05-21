@@ -502,6 +502,19 @@ const char* SeverityBgColor(const wxString& severity)
 	return "#f3f4f6";
 }
 
+int MetaConfidencePercent(const nlohmann::json& meta)
+{
+	if (!meta.is_object() || !meta.contains("confidence") ||
+	    !meta["confidence"].is_number()) {
+		return -1;
+	}
+	double value = meta["confidence"].get<double>();
+	if (value >= 0.0 && value <= 1.0) value *= 100.0;
+	if (value < 0.0) value = 0.0;
+	if (value > 100.0) value = 100.0;
+	return static_cast<int>(value + 0.5);
+}
+
 } // namespace
 
 ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
@@ -990,10 +1003,24 @@ void ibPluginWebPane::DispatchEnvelope(const wxString& jsonInline)
 	if (kind == "chat.end") {
 		const std::string rid = env.value("requestId", "");
 		std::string metaText;
+		int confidencePercent = -1;
+		bool suitabilityConcern = false;
 		if (env.contains("meta") && env["meta"].is_object()) {
 			const auto& meta = env["meta"];
 			const std::string model = meta.value("model", "");
 			if (!model.empty()) metaText = "model: " + model;
+			confidencePercent = MetaConfidencePercent(meta);
+			if (confidencePercent >= 0) {
+				if (!metaText.empty()) metaText += " · ";
+				metaText += "confidence: " + std::to_string(confidencePercent) + "%";
+			}
+			suitabilityConcern =
+			    meta.value("suitabilityConcern", false) ||
+			    (confidencePercent >= 0 && confidencePercent < 70);
+			if (suitabilityConcern) {
+				if (!metaText.empty()) metaText += " · ";
+				metaText += "suitability concern";
+			}
 			if (meta.contains("tokens") && meta["tokens"].is_object()) {
 				const auto& tok = meta["tokens"];
 				const int in  = tok.value("in",  0);
@@ -1006,6 +1033,14 @@ void ibPluginWebPane::DispatchEnvelope(const wxString& jsonInline)
 		}
 		CompleteStreaming(wxString::FromUTF8(rid.c_str()),
 		                   wxString::FromUTF8(metaText.c_str()));
+		if (suitabilityConcern) {
+			Entry e;
+			e.role = Entry::Role::System;
+			e.markdown = wxString::Format(
+			    _("Предупреждение: confidence %d%% ниже порога 70%%. Проверьте ответ перед применением."),
+			    confidencePercent >= 0 ? confidencePercent : 0);
+			AppendEntry(std::move(e));
+		}
 		return;
 	}
 	if (kind == "error") {

@@ -631,10 +631,39 @@ void EmitDelta(const std::string& requestId, const std::string& delta)
 	g_host->WebPaneSend(g_paneId, s.c_str());
 }
 
+int NormalizeConfidencePercent(double value)
+{
+	if (value >= 0.0 && value <= 1.0) value *= 100.0;
+	if (value < 0.0) value = 0.0;
+	if (value > 100.0) value = 100.0;
+	return static_cast<int>(value + 0.5);
+}
+
+int ExtractConfidencePercent(const nlohmann::json& obj)
+{
+	if (!obj.is_object()) return -1;
+	static const char* kKeys[] = {
+		"confidence",
+		"selfConfidence",
+		"suitabilityScore",
+		"score",
+		nullptr
+	};
+	for (const char** key = kKeys; *key != nullptr; ++key) {
+		if (!obj.contains(*key) || !obj[*key].is_number()) continue;
+		return NormalizeConfidencePercent(obj[*key].get<double>());
+	}
+	if (obj.contains("reliability") && obj["reliability"].is_object()) {
+		return ExtractConfidencePercent(obj["reliability"]);
+	}
+	return -1;
+}
+
 // Sends the chat.end envelope so the pane closes its streaming row +
 // renders the footer cost meter.
 void EmitEnd(const std::string& requestId, const std::string& model,
-              int tokensIn, int tokensOut)
+              int tokensIn, int tokensOut, int confidencePercent = -1,
+              const char* confidenceSource = nullptr)
 {
 	if (g_host == nullptr || g_host->WebPaneSend == nullptr) return;
 	nlohmann::json env;
@@ -642,6 +671,13 @@ void EmitEnd(const std::string& requestId, const std::string& model,
 	env["requestId"] = requestId;
 	env["meta"]      = nlohmann::json::object();
 	env["meta"]["model"] = model;
+	if (confidencePercent >= 0) {
+		env["meta"]["confidence"] = confidencePercent;
+		env["meta"]["suitabilityConcern"] = confidencePercent < 70;
+		if (confidenceSource != nullptr && confidenceSource[0] != '\0') {
+			env["meta"]["confidenceSource"] = confidenceSource;
+		}
+	}
 	if (tokensIn > 0 || tokensOut > 0) {
 		env["meta"]["tokens"]            = nlohmann::json::object();
 		env["meta"]["tokens"]["in"]      = tokensIn;
@@ -681,7 +717,8 @@ void EmitCancelledEnd(const std::string& requestId, const std::string& model,
 // and returns early without finishing the body.
 void EmitTypewriter(const std::string& requestId, const std::string& text,
                      const std::string& model, int approxTokens,
-                     const std::shared_ptr<std::atomic<bool>>& cancelTok)
+                     const std::shared_ptr<std::atomic<bool>>& cancelTok,
+                     int confidencePercent = -1)
 {
 	const size_t kChunkChars = 96;
 	const std::chrono::milliseconds kChunkDelay(40);
@@ -700,7 +737,8 @@ void EmitTypewriter(const std::string& requestId, const std::string& text,
 		i = end;
 		if (i < text.size()) std::this_thread::sleep_for(kChunkDelay);
 	}
-	EmitEnd(requestId, model, approxTokens, approxTokens);
+	EmitEnd(requestId, model, approxTokens, approxTokens,
+	        confidencePercent, confidencePercent >= 0 ? "pugi" : nullptr);
 }
 
 // Pugi-MCP request path. Talks to mcp.pugi.io / Anvil with the request
@@ -781,6 +819,7 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 	// any backend version that returns a flat shape.
 	std::string content;
 	std::string respModel = "pugi-mcp";
+	int confidencePercent = -1;
 	auto parsed = nlohmann::json::parse(res.body, nullptr, /*allow_exceptions=*/false);
 	if (!parsed.is_discarded() && parsed.is_object() && parsed.contains("result")) {
 		const auto& r = parsed["result"];
@@ -791,6 +830,7 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 			if (r.contains("model") && r["model"].is_string()) {
 				respModel = r["model"].get<std::string>();
 			}
+			confidencePercent = ExtractConfidencePercent(r);
 		} else if (r.is_string()) {
 			content = r.get<std::string>();
 		}
@@ -809,8 +849,10 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 		{ "status",    res.status },
 		{ "model",     respModel },
 		{ "chars",     static_cast<int>(content.size()) },
+		{ "confidence", confidencePercent },
 	});
-	EmitTypewriter(requestId, content, respModel, approxTokens, cancelTok);
+	EmitTypewriter(requestId, content, respModel, approxTokens, cancelTok,
+	               confidencePercent);
 }
 
 // Triple-review path — calls the `triple_review` Anvil tool with the raw
@@ -929,7 +971,9 @@ void RunTripleReview(std::string requestId, std::string code,
 			tokensOut += rv.value("tokensUsed", 0);
 		}
 	}
-	EmitEnd(requestId, "triple_review", tokensIn, tokensOut);
+	const int confidencePercent = ExtractConfidencePercent(result);
+	EmitEnd(requestId, "triple_review", tokensIn, tokensOut,
+	        confidencePercent, confidencePercent >= 0 ? "pugi" : nullptr);
 }
 
 // AGENT-MODE: fire-and-forget POST to oes_agent_resolve. Closes the round-
@@ -1045,6 +1089,7 @@ void RunOesAgent(std::string requestId, std::string prompt,
 	const std::string rationale      = result.value("rationale",      std::string());
 	const std::string model          = result.value("model",          std::string("oes_agent"));
 	const int         tokensUsed     = result.value("tokensUsed",     0);
+	const int         confidencePercent = ExtractConfidencePercent(result);
 
 	nlohmann::json mutations = nlohmann::json::array();
 	if (result.contains("mutations") && result["mutations"].is_array()) {
@@ -1055,6 +1100,7 @@ void RunOesAgent(std::string requestId, std::string prompt,
 		{ "planId",    planId },
 		{ "model",     model },
 		{ "mutations", static_cast<int>(mutations.size()) },
+		{ "confidence", confidencePercent },
 	});
 
 	// AGENT-MODE: stash {planId → {conversationId, mutations}} so the
@@ -1081,7 +1127,8 @@ void RunOesAgent(std::string requestId, std::string prompt,
 	}
 
 	// Close streaming-state for the pane's pending row.
-	EmitEnd(requestId, model, static_cast<int>(prompt.size() / 4), tokensUsed);
+	EmitEnd(requestId, model, static_cast<int>(prompt.size() / 4), tokensUsed,
+	        confidencePercent, confidencePercent >= 0 ? "pugi" : nullptr);
 }
 
 // AGENT-MODE: walk the cached plan's mutations[] and dispatch each one

@@ -95,7 +95,7 @@ Conkurent analysis (mcp-1c free tier 9 tools, Go binary, BM25 + BSL synonyms, au
 - [x] **done** t3-005: Telemetry loop — `oes-mcp` writes one structured JSONL row per `tools/call` to `.oes/mcp-audit/mcp-YYYY-MM-DD.jsonl` (tool, ok/error, duration, arg/result sizes; no prompt/code payload). Weekly aggregation remains a downstream reporting task.
 - [x] **done** t3-006: Resumable chat from past message — user-message rows now expose `Редактировать и повторить`; clicking it moves that prompt back into the input, truncates later transcript entries, saves the shortened history, and lets the user edit/rerun forward.
 - [x] **done** t3-007: Smart Snap — chat header now lets users pin `@Kind.Name` metadata tokens from the input; pinned objects are shown in the header and automatically resolved into the hidden context block for every later message until cleared or a new chat starts.
-- [ ] **pending** t3-008: Score-gated reliability — Sigma reports self-confidence; <70% flags "suitability concern". ~2 days.
+- [x] **done** t3-008: Score-gated reliability — aiBridge now accepts Pugi result fields `confidence` / `selfConfidence` / `suitabilityScore` / `reliability.score`, normalizes them to `chat.end.meta.confidence`, and Designer flags `<70%` as a visible suitability warning before the user applies output.
 - [ ] **pending** t3-009: Tech debt scoring 0-100 — composite metric (LOC + complexity + duplication + dead code). Pro tier monetization feature (mcp-1c Pro pattern). ~1 week.
 - [ ] **pending** t3-010: Security audit MCP tool — port mcp-1c's 11 SEC rules to OES context (SQL injection scan, eval misuse, unsafe deserialize). Pro tier. ~1 week.
 
@@ -157,6 +157,7 @@ Fresh install → wizard → Pugi key → claude mcp add → ready in 3 clicks.
 ## Blocked items
 
 - **Pugi sigma_check production endpoint** (blocks mcp-003 real validation) — Pugi returns 503 Phase-0 scaffold. Action: ping Pugi team to ship real sigma_check beyond mock mode. Our proxy is ready.
+- **Pugi confidence fields for chat/agent** — OES now consumes confidence metadata, but Pugi must emit one of `confidence`, `selfConfidence`, `suitabilityScore`, or `reliability.score` from `ai_chat_query`, `oes_agent`, and `triple_review` result envelopes for the gate to activate on real traffic.
 - **t1-002 retry** — Anthropic API 529 Overloaded at 2026-05-21. Transient. Retry agent in 10-30 min.
 
 ## Done
