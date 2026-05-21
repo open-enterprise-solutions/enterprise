@@ -96,7 +96,7 @@ Conkurent analysis (mcp-1c free tier 9 tools, Go binary, BM25 + BSL synonyms, au
 - [x] **done** t3-006: Resumable chat from past message — user-message rows now expose `Редактировать и повторить`; clicking it moves that prompt back into the input, truncates later transcript entries, saves the shortened history, and lets the user edit/rerun forward.
 - [x] **done** t3-007: Smart Snap — chat header now lets users pin `@Kind.Name` metadata tokens from the input; pinned objects are shown in the header and automatically resolved into the hidden context block for every later message until cleared or a new chat starts.
 - [x] **done** t3-008: Score-gated reliability — aiBridge now accepts Pugi result fields `confidence` / `selfConfidence` / `suitabilityScore` / `reliability.score`, normalizes them to `chat.end.meta.confidence`, and Designer flags `<70%` as a visible suitability warning before the user applies output.
-- [ ] **pending** t3-009: Tech debt scoring 0-100 — composite metric (LOC + complexity + duplication + dead code). Pro tier monetization feature (mcp-1c Pro pattern). ~1 week.
+- [x] **done** t3-009: Tech debt scoring 0-100 — new read-only MCP tool `tech_debt_score` scores all modules or one module using LOC, branch-keyword complexity, TODO/FIXME markers, duplicated non-comment lines, and unreferenced procedure/function declarations; returns structured hot spots for reporting.
 - [ ] **pending** t3-010: Security audit MCP tool — port mcp-1c's 11 SEC rules to OES context (SQL injection scan, eval misuse, unsafe deserialize). Pro tier. ~1 week.
 
 ## Tier 4 — Infrastructure / business

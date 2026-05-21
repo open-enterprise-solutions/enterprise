@@ -2048,6 +2048,260 @@ nlohmann::json ToolSearchText(const nlohmann::json& args)
 }
 
 // =========================================================================
+// Tool: tech_debt_score — lightweight module debt metric.
+// =========================================================================
+namespace {
+
+struct DebtModule {
+	std::string path;
+	std::string source;
+	int loc = 0;
+	int commentLines = 0;
+	int complexity = 1;
+	int todoCount = 0;
+	int duplicateLines = 0;
+	int deadSymbols = 0;
+	std::vector<std::string> declaredSymbols;
+};
+
+std::string LowerUtf8(std::string s)
+{
+	std::transform(s.begin(), s.end(), s.begin(),
+		[](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+	return s;
+}
+
+std::string TrimAscii(const std::string& s)
+{
+	size_t begin = 0;
+	while (begin < s.size() && std::isspace(static_cast<unsigned char>(s[begin]))) {
+		++begin;
+	}
+	size_t end = s.size();
+	while (end > begin && std::isspace(static_cast<unsigned char>(s[end - 1]))) {
+		--end;
+	}
+	return s.substr(begin, end - begin);
+}
+
+bool ContainsCI(const std::string& haystack, const std::string& needle)
+{
+	return LowerUtf8(haystack).find(LowerUtf8(needle)) != std::string::npos;
+}
+
+int CountNeedlesCI(const std::string& haystack,
+                   const std::vector<std::string>& needles)
+{
+	const std::string h = LowerUtf8(haystack);
+	int count = 0;
+	for (const auto& needle : needles) {
+		const std::string n = LowerUtf8(needle);
+		size_t pos = h.find(n);
+		while (pos != std::string::npos) {
+			++count;
+			pos = h.find(n, pos + n.size());
+		}
+	}
+	return count;
+}
+
+void CollectModulesForDebt(ibValueMetaObject* node,
+                           const std::string& parentPath,
+                           std::vector<DebtModule>& out)
+{
+	if (node == nullptr) return;
+	const std::string name = std::string(node->GetName().utf8_str());
+	const std::string path = parentPath.empty() ? name : (parentPath + "." + name);
+	if (auto* mod = dynamic_cast<ibValueMetaObjectModuleBase*>(node)) {
+		DebtModule m;
+		m.path = path;
+		m.source = std::string(mod->GetModuleText().utf8_str());
+		out.push_back(std::move(m));
+	}
+	const std::vector<ibValueMetaObject*> children = node->GetAnyArrayObject<>();
+	for (ibValueMetaObject* child : children) {
+		CollectModulesForDebt(child, path, out);
+	}
+}
+
+std::vector<std::string> ExtractDeclaredSymbols(const std::string& source)
+{
+	std::vector<std::string> out;
+	try {
+		const std::regex rx(
+			"(Procedure|Function|Процедура|Функция)\\s+([A-Za-z_А-Яа-яІіЇїЄєҐґ0-9_]+)",
+			std::regex::ECMAScript | std::regex::icase);
+		for (std::sregex_iterator it(source.begin(), source.end(), rx), end;
+		     it != end; ++it) {
+			if (it->size() >= 3) out.push_back((*it)[2].str());
+		}
+	} catch (const std::regex_error&) {
+	}
+	return out;
+}
+
+void AnalyzeDebtModules(std::vector<DebtModule>& modules)
+{
+	std::map<std::string, int> normalizedLineCounts;
+	std::string allSources;
+	for (auto& m : modules) {
+		allSources += "\n" + m.source;
+		std::istringstream in(m.source);
+		std::string line;
+		while (std::getline(in, line)) {
+			const std::string trimmed = TrimAscii(line);
+			if (trimmed.empty()) continue;
+			++m.loc;
+			if (trimmed.rfind("//", 0) == 0) {
+				++m.commentLines;
+				continue;
+			}
+			if (ContainsCI(trimmed, "todo") ||
+			    ContainsCI(trimmed, "fixme") ||
+			    ContainsCI(trimmed, "костыль")) {
+				++m.todoCount;
+			}
+			if (trimmed.size() >= 24) {
+				normalizedLineCounts[LowerUtf8(trimmed)]++;
+			}
+		}
+		m.complexity = 1 + CountNeedlesCI(m.source, {
+			"if ", "if(", "если ", "elseif", "иначеесли",
+			"for ", "for(", "foreach", "для ", "каждого ",
+			"while ", "while(", "пока ", "try", "попытка",
+			"case ", "switch", "select "
+		});
+		m.declaredSymbols = ExtractDeclaredSymbols(m.source);
+	}
+
+	for (auto& m : modules) {
+		std::istringstream in(m.source);
+		std::string line;
+		while (std::getline(in, line)) {
+			const std::string trimmed = TrimAscii(line);
+			if (trimmed.size() < 24 || trimmed.rfind("//", 0) == 0) continue;
+			auto it = normalizedLineCounts.find(LowerUtf8(trimmed));
+			if (it != normalizedLineCounts.end() && it->second > 1) {
+				++m.duplicateLines;
+			}
+		}
+		for (const auto& symbol : m.declaredSymbols) {
+			if (symbol.empty()) continue;
+			const int refs = CountNeedlesCI(allSources, { symbol });
+			if (refs <= 1) ++m.deadSymbols;
+		}
+	}
+}
+
+double ModuleDebtScore(const DebtModule& m)
+{
+	double score = 0.0;
+	if (m.loc > 200) score += (m.loc - 200) / 8.0;
+	if (m.complexity > 12) score += (m.complexity - 12) * 2.2;
+	score += m.todoCount * 4.0;
+	score += m.duplicateLines * 1.5;
+	score += m.deadSymbols * 8.0;
+	if (score > 100.0) score = 100.0;
+	return score;
+}
+
+} // namespace
+
+nlohmann::json ToolTechDebtScore(const nlohmann::json& args)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+	const std::string fullName = ArgString(args, "fullName");
+	std::vector<DebtModule> modules;
+
+	if (!fullName.empty()) {
+		ibValueMetaObject* node = ResolveByPath(fullName);
+		if (node == nullptr) {
+			return StructuredError("tech_debt_score: path not found '" + fullName + "'");
+		}
+		auto* mod = dynamic_cast<ibValueMetaObjectModuleBase*>(node);
+		if (mod == nullptr) {
+			return StructuredError("tech_debt_score: '" + fullName +
+			                       "' is not a module object");
+		}
+		DebtModule m;
+		m.path = fullName;
+		m.source = std::string(mod->GetModuleText().utf8_str());
+		modules.push_back(std::move(m));
+	} else {
+		ibValueMetaObject* root = activeMetaData->GetCommonMetaObject();
+		if (root != nullptr) {
+			const std::vector<ibValueMetaObject*> top = root->GetAnyArrayObject<>();
+			for (ibValueMetaObject* child : top) {
+				CollectModulesForDebt(child, std::string(), modules);
+			}
+		}
+	}
+
+	AnalyzeDebtModules(modules);
+
+	nlohmann::json hotSpots = nlohmann::json::array();
+	int totalLoc = 0;
+	int totalComplexity = 0;
+	int totalTodo = 0;
+	int totalDup = 0;
+	int totalDead = 0;
+	double weightedScore = 0.0;
+	for (const auto& m : modules) {
+		const double score = ModuleDebtScore(m);
+		totalLoc += m.loc;
+		totalComplexity += m.complexity;
+		totalTodo += m.todoCount;
+		totalDup += m.duplicateLines;
+		totalDead += m.deadSymbols;
+		weightedScore += score * std::max(1, m.loc);
+
+		if (score >= 10.0 || m.todoCount > 0 || m.deadSymbols > 0 ||
+		    m.duplicateLines > 0) {
+			nlohmann::json h;
+			h["path"] = m.path;
+			h["score"] = static_cast<int>(score + 0.5);
+			h["loc"] = m.loc;
+			h["complexity"] = m.complexity;
+			h["todoCount"] = m.todoCount;
+			h["duplicateLines"] = m.duplicateLines;
+			h["deadSymbols"] = m.deadSymbols;
+			hotSpots.push_back(std::move(h));
+		}
+	}
+
+	std::vector<nlohmann::json> sorted;
+	for (const auto& h : hotSpots) sorted.push_back(h);
+	std::sort(sorted.begin(), sorted.end(),
+		[](const nlohmann::json& a, const nlohmann::json& b) {
+			return a.value("score", 0) > b.value("score", 0);
+		});
+	hotSpots = nlohmann::json::array();
+	for (size_t i = 0; i < sorted.size() && i < 20; ++i) {
+		hotSpots.push_back(std::move(sorted[i]));
+	}
+
+	const int debtScore = totalLoc > 0
+		? static_cast<int>((weightedScore / totalLoc) + 0.5)
+		: 0;
+
+	nlohmann::json out;
+	out["debtScore"] = debtScore;
+	out["healthScore"] = 100 - debtScore;
+	out["moduleCount"] = modules.size();
+	out["loc"] = totalLoc;
+	out["complexity"] = totalComplexity;
+	out["todoCount"] = totalTodo;
+	out["duplicateLines"] = totalDup;
+	out["deadSymbols"] = totalDead;
+	out["hotSpots"] = std::move(hotSpots);
+	out["method"] = "loc + branch keywords + TODO/FIXME + duplicate non-comment lines + unreferenced declarations";
+
+	nlohmann::json env = TextResult(out.dump(2));
+	env["structuredContent"] = std::move(out);
+	return env;
+}
+
+// =========================================================================
 // Tool: save_config
 // =========================================================================
 nlohmann::json ToolSaveConfig(const nlohmann::json& args)
@@ -5738,6 +5992,49 @@ const std::vector<ToolEntry>& BuildRegistry()
 		},
 		&ToolSearchText
 	});
+	{
+		nlohmann::json hotItem;
+		hotItem["type"]       = "object";
+		hotItem["properties"] = nlohmann::json::object();
+		hotItem["properties"]["path"]           = nlohmann::json{ {"type","string"} };
+		hotItem["properties"]["score"]          = nlohmann::json{ {"type","integer"} };
+		hotItem["properties"]["loc"]            = nlohmann::json{ {"type","integer"} };
+		hotItem["properties"]["complexity"]     = nlohmann::json{ {"type","integer"} };
+		hotItem["properties"]["todoCount"]      = nlohmann::json{ {"type","integer"} };
+		hotItem["properties"]["duplicateLines"] = nlohmann::json{ {"type","integer"} };
+		hotItem["properties"]["deadSymbols"]    = nlohmann::json{ {"type","integer"} };
+		hotItem["required"] = nlohmann::json::array({ "path", "score" });
+
+		nlohmann::json outDebt;
+		outDebt["type"]       = "object";
+		outDebt["properties"] = nlohmann::json::object();
+		outDebt["properties"]["debtScore"]      = nlohmann::json{ {"type","integer"}, {"description","0 = clean, 100 = high debt"} };
+		outDebt["properties"]["healthScore"]    = nlohmann::json{ {"type","integer"}, {"description","100 - debtScore"} };
+		outDebt["properties"]["moduleCount"]    = nlohmann::json{ {"type","integer"} };
+		outDebt["properties"]["loc"]            = nlohmann::json{ {"type","integer"} };
+		outDebt["properties"]["complexity"]     = nlohmann::json{ {"type","integer"} };
+		outDebt["properties"]["todoCount"]      = nlohmann::json{ {"type","integer"} };
+		outDebt["properties"]["duplicateLines"] = nlohmann::json{ {"type","integer"} };
+		outDebt["properties"]["deadSymbols"]    = nlohmann::json{ {"type","integer"} };
+		outDebt["properties"]["hotSpots"]       = nlohmann::json{ {"type","array"}, {"items", hotItem} };
+		outDebt["properties"]["method"]         = nlohmann::json{ {"type","string"} };
+		outDebt["required"] = nlohmann::json::array({ "debtScore", "healthScore", "moduleCount", "hotSpots" });
+
+		table.push_back({
+			{ "tech_debt_score",
+			  "Compute a 0..100 technical-debt score for all modules or one "
+			  "module. The metric combines LOC, branch-keyword complexity, "
+			  "TODO/FIXME markers, duplicated non-comment lines, and declared "
+			  "procedures/functions with no references.",
+			  schemaObj({
+			    { "fullName", str("Optional module path, e.g. 'Catalog.X.ObjectModule'. Empty = all modules.") },
+			  }, {}),
+			  ann(true, false, true, false),
+			  std::move(outDebt)
+			},
+			&ToolTechDebtScore
+		});
+	}
 	table.push_back({
 		{ "save_config",
 		  "Persist the live configuration to a .OES-DB snapshot. Empty path "
