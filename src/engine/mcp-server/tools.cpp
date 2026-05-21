@@ -3311,25 +3311,11 @@ nlohmann::json ToolConfigInfo(const nlohmann::json& /*args*/)
 // =========================================================================
 // Tool: form_layout_read / form_layout_set
 //
-// DEFERRED — see `backend/metaCollection/formLayoutBlob.hpp` for the
-// architectural blocker. The form data blob held by
-// `ibValueMetaObjectFormBase` is a binary chunk format whose per-
-// control payloads are deserialised by frontend `ibValueFrame`
-// subclasses. Backend has no neutral schema for the property layouts,
-// so a backend-side parser would be either a fragile re-implementation
-// of all ~25 control classes (option a) or a cross-cutting split of
-// `ibValueFrame` into data + visual halves (option b).
-//
-// These tools still register in `tools/list` so agents see they exist
-// and the deferral is visible in `description`. Calls against any
-// path return `isError:true` with structuredContent.errorCode set to
-// a stable code (`OES_E_FORM_BLOB_GUI_DEPENDENCY` when the form
-// exists, `OES_E_NOT_A_FORM` for non-form targets, `OES_E_NOT_FOUND`
-// for missing paths, `OES_E_NO_CONFIG` in `--no-config` mode).
-//
-// When the backing implementation lands, only `ToolFormLayoutRead`
-// and `ToolFormLayoutSet` need to change — DTO + validator + tool
-// registration stay as-is.
+// The native Designer form blob remains a frontend-owned binary chunk
+// format. MCP exposes a backend-safe sidecar DSL instead:
+//   <config>/.oes/form-layouts/<escaped-fullName>.xml
+// This gives agents a stable JSON/XML control-tree surface today
+// without decoding or mutating the legacy visual blob.
 // =========================================================================
 
 nlohmann::json BuildFormLayoutError(const std::string& tool,
@@ -3341,6 +3327,117 @@ nlohmann::json BuildFormLayoutError(const std::string& tool,
 	sc["errorCode"] = errorCode;
 	sc["message"]   = message;
 	sc["deferred"]  = (errorCode == "OES_E_FORM_BLOB_GUI_DEPENDENCY");
+	env["structuredContent"] = std::move(sc);
+	return env;
+}
+
+std::string FormLayoutSidecarName(const std::string& fullName)
+{
+	std::ostringstream out;
+	const char* hex = "0123456789ABCDEF";
+	for (unsigned char ch : fullName) {
+		if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+		    (ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
+			out << (char)ch;
+		} else {
+			out << '%' << hex[(ch >> 4) & 0x0F] << hex[ch & 0x0F];
+		}
+	}
+	out << ".xml";
+	return out.str();
+}
+
+std::filesystem::path FormLayoutSidecarPath(const std::string& fullName)
+{
+	return std::filesystem::path(LoadedConfigPath()) / ".oes" /
+	       "form-layouts" / FormLayoutSidecarName(fullName);
+}
+
+wxString JsonStringToWx(const nlohmann::json& j, const char* key)
+{
+	if (!j.is_object()) return wxEmptyString;
+	auto it = j.find(key);
+	if (it == j.end() || !it->is_string()) return wxEmptyString;
+	return wxString::FromUTF8(it->get<std::string>().c_str());
+}
+
+int JsonIntOr(const nlohmann::json& j, const char* key, int fallback = 0)
+{
+	if (!j.is_object()) return fallback;
+	auto it = j.find(key);
+	if (it == j.end() || !it->is_number_integer()) return fallback;
+	return it->get<int>();
+}
+
+ibFormLayoutControl JsonToFormControl(const nlohmann::json& j)
+{
+	ibFormLayoutControl ctrl;
+	ctrl.id      = JsonStringToWx(j, "id");
+	ctrl.kind    = JsonStringToWx(j, "kind");
+	ctrl.name    = JsonStringToWx(j, "name");
+	ctrl.binding = JsonStringToWx(j, "binding");
+	if (auto it = j.find("synonym"); it != j.end() && it->is_object()) {
+		for (auto& [locale, val] : it->items()) {
+			if (val.is_string())
+				ctrl.synonym[wxString::FromUTF8(locale.c_str())] =
+					wxString::FromUTF8(val.get<std::string>().c_str());
+		}
+	}
+	if (auto it = j.find("geometry"); it != j.end() && it->is_object()) {
+		ctrl.geometry.x      = JsonIntOr(*it, "x");
+		ctrl.geometry.y      = JsonIntOr(*it, "y");
+		ctrl.geometry.width  = JsonIntOr(*it, "width");
+		ctrl.geometry.height = JsonIntOr(*it, "height");
+	}
+	if (auto it = j.find("children"); it != j.end() && it->is_array()) {
+		for (const auto& child : *it) {
+			if (child.is_object())
+				ctrl.children.push_back(JsonToFormControl(child));
+		}
+	}
+	return ctrl;
+}
+
+nlohmann::json FormControlToJson(const ibFormLayoutControl& ctrl)
+{
+	nlohmann::json j = nlohmann::json::object();
+	j["id"]      = std::string(ctrl.id.utf8_str());
+	j["kind"]    = std::string(ctrl.kind.utf8_str());
+	j["name"]    = std::string(ctrl.name.utf8_str());
+	j["binding"] = std::string(ctrl.binding.utf8_str());
+	j["geometry"] = {
+		{ "x", ctrl.geometry.x },
+		{ "y", ctrl.geometry.y },
+		{ "width", ctrl.geometry.width },
+		{ "height", ctrl.geometry.height },
+	};
+	nlohmann::json syn = nlohmann::json::object();
+	for (const auto& kv : ctrl.synonym)
+		syn[std::string(kv.first.utf8_str())] = std::string(kv.second.utf8_str());
+	j["synonym"] = std::move(syn);
+	nlohmann::json children = nlohmann::json::array();
+	for (const auto& child : ctrl.children)
+		children.push_back(FormControlToJson(child));
+	j["children"] = std::move(children);
+	return j;
+}
+
+nlohmann::json FormLayoutToResult(const std::string& tool,
+                                  const std::string& fullName,
+                                  const ibFormLayoutBlob& dto,
+                                  const std::filesystem::path& sidecarPath)
+{
+	nlohmann::json sc = nlohmann::json::object();
+	sc["fullName"] = fullName;
+	sc["formKind"] = std::string(dto.formKind.utf8_str());
+	sc["format"]   = "xml-sidecar-v1";
+	sc["sidecarPath"] = sidecarPath.string();
+	nlohmann::json controls = nlohmann::json::array();
+	for (const auto& ctrl : dto.controls)
+		controls.push_back(FormControlToJson(ctrl));
+	sc["controls"] = std::move(controls);
+
+	nlohmann::json env = TextResult(tool + ": ok", false);
 	env["structuredContent"] = std::move(sc);
 	return env;
 }
@@ -3394,8 +3491,27 @@ nlohmann::json ToolFormLayoutRead(const nlohmann::json& args)
 		"form_layout_read", fullName, failure);
 	if (formNode == nullptr) return failure;
 
-	// We have a real form. The serializer is deferred; surface that
-	// fact deterministically so agents can branch on errorCode.
+	const auto sidecarPath = FormLayoutSidecarPath(fullName);
+	if (std::filesystem::exists(sidecarPath)) {
+		std::ifstream f(sidecarPath, std::ios::binary);
+		std::ostringstream ss;
+		ss << f.rdbuf();
+		const std::string raw = ss.str();
+		wxMemoryBuffer xml;
+		if (!raw.empty())
+			xml.AppendData(raw.data(), raw.size());
+		ibFormLayoutBlob dto;
+		wxString errMsg;
+		if (ibFormLayoutSerializer::ParseFromBlob(xml, dto, errMsg))
+			return FormLayoutToResult("form_layout_read", fullName, dto, sidecarPath);
+		return BuildFormLayoutError("form_layout_read",
+			std::string(errMsg.utf8_str()),
+			"form layout sidecar is malformed: " + sidecarPath.string());
+	}
+
+	// No XML sidecar yet. Fall back to the native blob only to report
+	// a precise state; backend still doesn't parse legacy control
+	// payloads.
 	const wxMemoryBuffer blob = formNode->GetFormData();
 	ibFormLayoutBlob dto;
 	wxString errMsg;
@@ -3404,12 +3520,11 @@ nlohmann::json ToolFormLayoutRead(const nlohmann::json& args)
 	const std::string errorCode = std::string(errMsg.utf8_str());
 	std::string humanMsg;
 	if (errorCode == "OES_E_FORM_BLOB_EMPTY") {
-		humanMsg = "form has no stored layout yet (open it once in "
-		            "Designer to materialise the blob)";
+		humanMsg = "form has no MCP XML layout sidecar yet; call "
+		            "form_layout_set to create one";
 	} else {
-		humanMsg = "form layout requires architectural work to expose "
-		            "without GUI deps — see backend/metaCollection/"
-		            "formLayoutBlob.hpp";
+		humanMsg = "native form blob is not backend-readable; call "
+		            "form_layout_set to create the XML sidecar DSL";
 	}
 	return BuildFormLayoutError("form_layout_read", errorCode, humanMsg);
 }
@@ -3422,25 +3537,14 @@ nlohmann::json ToolFormLayoutSet(const nlohmann::json& args)
 		"form_layout_set", fullName, failure);
 	if (formNode == nullptr) return failure;
 
-	// Mirror the read-side deferral message. We still walk the
-	// validator over the incoming `controls` so the surface area is
-	// exercised even today — that catches malformed agent input
-	// before it would ever reach a real serializer.
 	ibFormLayoutBlob dto;
+	dto.formKind = JsonStringToWx(args, "formKind");
+	if (dto.formKind.IsEmpty()) dto.formKind = wxT("CustomForm");
 	auto itControls = args.find("controls");
 	if (itControls != args.end() && itControls->is_array()) {
-		// Minimal walk: each control entry is shape-checked but we
-		// don't deeply populate the DTO (no real serializer to feed).
-		// Future implementation replaces this stub with a full mapper
-		// from JSON -> DTO.
 		for (const auto& c : *itControls) {
 			if (!c.is_object()) continue;
-			ibFormLayoutControl ctrl;
-			if (c.contains("id")      && c["id"].is_string())      ctrl.id      = wxString::FromUTF8(c["id"].get<std::string>().c_str());
-			if (c.contains("kind")    && c["kind"].is_string())    ctrl.kind    = wxString::FromUTF8(c["kind"].get<std::string>().c_str());
-			if (c.contains("name")    && c["name"].is_string())    ctrl.name    = wxString::FromUTF8(c["name"].get<std::string>().c_str());
-			if (c.contains("binding") && c["binding"].is_string()) ctrl.binding = wxString::FromUTF8(c["binding"].get<std::string>().c_str());
-			dto.controls.push_back(ctrl);
+			dto.controls.push_back(JsonToFormControl(c));
 		}
 	}
 	const auto issues = ibFormLayoutValidator::Validate(dto);
@@ -3462,14 +3566,27 @@ nlohmann::json ToolFormLayoutSet(const nlohmann::json& args)
 		return env;
 	}
 
-	// DTO accepted. Write path remains deferred.
-	return BuildFormLayoutError(
-		"form_layout_set",
-		std::string(wxString(ibFormLayoutError::kGuiDependency).utf8_str()),
-		"form layout writes require architectural work to expose "
-		"without GUI deps — DTO validated successfully but the "
-		"serializer is deferred; see backend/metaCollection/"
-		"formLayoutBlob.hpp");
+	wxMemoryBuffer xml;
+	wxString errMsg;
+	if (!ibFormLayoutSerializer::SerializeToBlob(dto, xml, errMsg)) {
+		return BuildFormLayoutError("form_layout_set",
+			std::string(errMsg.utf8_str()),
+			"failed to serialize form layout XML sidecar");
+	}
+	const auto sidecarPath = FormLayoutSidecarPath(fullName);
+	std::filesystem::create_directories(sidecarPath.parent_path());
+	std::ofstream f(sidecarPath, std::ios::binary | std::ios::trunc);
+	if (!f.is_open()) {
+		return BuildFormLayoutError("form_layout_set", "OES_E_IO",
+			"cannot open form layout sidecar for write: " + sidecarPath.string());
+	}
+	f.write(static_cast<const char*>(xml.GetData()), (std::streamsize)xml.GetDataLen());
+	f.close();
+	if (!f) {
+		return BuildFormLayoutError("form_layout_set", "OES_E_IO",
+			"failed to write form layout sidecar: " + sidecarPath.string());
+	}
+	return FormLayoutToResult("form_layout_set", fullName, dto, sidecarPath);
 }
 
 // =========================================================================
@@ -6521,12 +6638,9 @@ const std::vector<ToolEntry>& BuildRegistry()
 		});
 	}
 
-	// MCP: form_layout_read — DEFERRED. The form blob format is
-	// readable at the chunk envelope level (backend has the chunk
-	// reader) but per-control payloads are deserialised by frontend
-	// `ibValueFrame` subclasses; backend has no neutral schema. See
-	// `backend/metaCollection/formLayoutBlob.hpp` for the
-	// architectural options. Tool registers so agents see it exists.
+	// MCP: form_layout_read — reads the backend-safe XML sidecar DSL.
+	// The native Designer binary blob remains frontend-owned and is
+	// not decoded here.
 	{
 		nlohmann::json controlItem;
 		controlItem["type"]       = "object";
@@ -6552,15 +6666,12 @@ const std::vector<ToolEntry>& BuildRegistry()
 			{ "form_layout_read",
 			  "Read an OES form's control tree as JSON. fullName is "
 			  "'<Kind>.<Name>.Forms.<FormName>' (e.g. "
-			  "'Catalog.Контрагенты.Forms.ItemForm'). STATUS: "
-			  "DEFERRED — the form data blob is a binary chunk format "
-			  "whose per-control payloads are read by frontend control "
-			  "classes; backend has no neutral schema. Calls against a "
-			  "real form return isError with "
-			  "structuredContent.errorCode = "
-			  "'OES_E_FORM_BLOB_GUI_DEPENDENCY'. Path-resolution and "
-			  "kind errors return their own stable codes "
-			  "(OES_E_NOT_FOUND / OES_E_NOT_A_FORM).",
+			  "'Catalog.Контрагенты.Forms.ItemForm'). Reads the MCP "
+			  "XML sidecar at .oes/form-layouts; if no sidecar exists, "
+			  "returns OES_E_FORM_BLOB_EMPTY or "
+			  "OES_E_FORM_BLOB_GUI_DEPENDENCY for the native binary "
+			  "blob. Path-resolution and kind errors return stable "
+			  "codes (OES_E_NOT_FOUND / OES_E_NOT_A_FORM).",
 			  schemaObj({
 			    { "fullName", str("Form full path, e.g. 'Catalog.X.Forms.ItemForm'") },
 			  }, { "fullName" }),
@@ -6571,11 +6682,8 @@ const std::vector<ToolEntry>& BuildRegistry()
 		});
 	}
 
-	// MCP: form_layout_set — DEFERRED for the same reason. The DTO
-	// validator runs against any incoming `controls` so agents can
-	// shake out structural input bugs today; the actual write path
-	// to the form blob requires the same architectural work as the
-	// read side.
+	// MCP: form_layout_set — validates JSON and writes the XML sidecar.
+	// It intentionally does not mutate the native Designer binary blob.
 	{
 		nlohmann::json controlItem;
 		controlItem["type"]       = "object";
@@ -6602,16 +6710,11 @@ const std::vector<ToolEntry>& BuildRegistry()
 
 		table.push_back({
 			{ "form_layout_set",
-			  "Overwrite an OES form's control tree from JSON. STATUS: "
-			  "DEFERRED — the on-disk write path is blocked on the "
-			  "same architectural work as form_layout_read. Agent-"
-			  "supplied DTOs are still validated (duplicate id, "
-			  "missing kind/name, negative geometry) and surfaced as "
-			  "OES_E_INVALID_LAYOUT before the deferral message — "
-			  "useful for shaking out client-side bugs today. On a "
-			  "well-formed DTO the call returns isError with "
-			  "structuredContent.errorCode = "
-			  "'OES_E_FORM_BLOB_GUI_DEPENDENCY'.",
+			  "Overwrite the MCP XML sidecar for an OES form's control "
+			  "tree from JSON. The native Designer binary blob is left "
+			  "untouched. Agent-supplied DTOs are validated (duplicate "
+			  "id, missing kind/name, negative geometry) and surfaced "
+			  "as OES_E_INVALID_LAYOUT before any write.",
 			  schemaObj({
 			    { "fullName", str("Form full path") },
 			    { "controls", controlsIn },

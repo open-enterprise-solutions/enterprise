@@ -2,8 +2,8 @@
 // formLayoutBlob — neutral DTO + parser interface for the on-disk form
 // layout blob held by `ibValueMetaObjectFormBase::GetFormData()`.
 //
-// STATUS (2026-05-21): DEFERRED — backend-only parsing of the binary
-// chunk format is blocked because the per-control payloads in
+// STATUS (2026-05-21): HYBRID — backend-only parsing of the legacy
+// binary chunk format is blocked because the per-control payloads in
 // `eDataBlock` are read positionally by frontend control classes
 // (`ibValueFrame::LoadData` overrides under
 // `src/engine/frontend/visualView/ctrl/`). Backend has the outer
@@ -19,17 +19,17 @@
 //   (c) introducing a parallel XML form-DSL that Designer writes
 //       alongside the binary blob, and MCP reads/writes the XML.
 //
-// This header keeps the DTO types in backend (no wxWidgets GUI deps —
-// only `wxString`, `std::vector`, `std::map`, `int`) so that whichever
-// approach lands later, the agent-facing surface is already shaped.
+// The MCP surface now uses option (c): a parallel XML form DSL stored
+// as a sidecar by oes-mcp. The serializer below can read/write that
+// XML DSL from backend without GUI deps. Legacy binary blobs still
+// return kGuiDependency so Designer's native binary path remains
+// untouched until a frontend-side bridge is added.
 //
 // Two-DLL boundary: backend.dll only includes `wx/string.h`,
 // `wx/buffer.h`, and standard library — NEVER any GUI header. The
-// `ibFormLayoutSerializer` methods below are declared but their
-// implementations return the "GUI dependency" error code; do NOT add
-// a real parser here that walks per-control payloads — that
-// implementation belongs in frontend or behind a backend-side schema
-// registry.
+// Do NOT add a parser here that walks legacy per-control payloads —
+// that implementation belongs in frontend or behind a backend-side
+// schema registry. XML DSL parsing/serialising is allowed here.
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_FORM_LAYOUT_BLOB_HPP_
@@ -64,6 +64,9 @@ BACKEND_API extern const wxChar* const kNotFound;             // "OES_E_NOT_FOUN
 // The form has no stored blob yet (empty buffer — newly created
 // form that the user hasn't opened in Designer yet).
 BACKEND_API extern const wxChar* const kEmptyBlob;            // "OES_E_FORM_BLOB_EMPTY"
+
+// XML sidecar is malformed or doesn't match the expected FormLayout root.
+BACKEND_API extern const wxChar* const kInvalidDsl;           // "OES_E_FORM_DSL_INVALID"
 
 } // namespace ibFormLayoutError
 

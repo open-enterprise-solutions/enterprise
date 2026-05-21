@@ -2,13 +2,8 @@
 // test_formLayoutBlob — locks in the DTO + validator contract for the
 // form-layout authoring surface (MCP form_layout_read / form_layout_set).
 //
-// STATUS (2026-05-21): the serializer is DEFERRED — see
-// `src/engine/backend/metaCollection/formLayoutBlob.hpp` for the
-// architectural blocker. These tests assert the deferral contract:
-// the parser MUST report `OES_E_FORM_BLOB_GUI_DEPENDENCY` on any
-// non-empty input and `OES_E_FORM_BLOB_EMPTY` on empty input. When
-// the real parser lands these assertions flip naturally — the test
-// file is the contract.
+// STATUS (2026-05-21): legacy binary form blobs remain deferred, but
+// the MCP-facing XML sidecar DSL is readable/writable in backend.
 //
 // The validator runs against agent-supplied DTOs even today (the MCP
 // write path lints input before bouncing it on the deferral) so the
@@ -21,9 +16,8 @@
 #include "backend/metaCollection/formLayoutBlob.hpp"
 
 // -----------------------------------------------------------------------
-// Serializer contract — deferred. Empty blob -> kEmptyBlob, otherwise
-// kGuiDependency. The day the parser lands these flip to checking the
-// actual round-trip; the test file documents which assertions move.
+// Serializer contract — XML sidecar round-trip; legacy binary stays
+// deferred with kGuiDependency.
 // -----------------------------------------------------------------------
 
 TEST(FormLayoutSerializer, ParseRejectsEmptyBlobWithEmptyCode)
@@ -51,7 +45,7 @@ TEST(FormLayoutSerializer, ParseDeferredOnNonEmptyBlob)
     EXPECT_EQ(err, wxString(ibFormLayoutError::kGuiDependency));
 }
 
-TEST(FormLayoutSerializer, SerializeAlwaysDeferred)
+TEST(FormLayoutSerializer, SerializeAndParseXmlSidecar)
 {
     ibFormLayoutBlob in;
     in.formKind = wxT("ItemForm");
@@ -60,12 +54,53 @@ TEST(FormLayoutSerializer, SerializeAlwaysDeferred)
     btn.kind    = wxT("Button");
     btn.name    = wxT("OkButton");
     btn.synonym[wxT("ru")] = wxT("ОК");
+    btn.binding = wxT("Object.Name");
+    btn.geometry.x = 10;
+    btn.geometry.y = 20;
+    btn.geometry.width = 80;
+    btn.geometry.height = 24;
     in.controls.push_back(btn);
 
     wxMemoryBuffer out;
     wxString err;
-    EXPECT_FALSE(ibFormLayoutSerializer::SerializeToBlob(in, out, err));
-    EXPECT_EQ(err, wxString(ibFormLayoutError::kGuiDependency));
+    ASSERT_TRUE(ibFormLayoutSerializer::SerializeToBlob(in, out, err));
+    EXPECT_TRUE(err.IsEmpty());
+    ASSERT_GT(out.GetDataLen(), 0u);
+
+    ibFormLayoutBlob parsed;
+    ASSERT_TRUE(ibFormLayoutSerializer::ParseFromBlob(out, parsed, err));
+    EXPECT_EQ(parsed.formKind, wxT("ItemForm"));
+    ASSERT_EQ(parsed.controls.size(), 1u);
+    EXPECT_EQ(parsed.controls[0].id, wxT("ctl_001"));
+    EXPECT_EQ(parsed.controls[0].kind, wxT("Button"));
+    EXPECT_EQ(parsed.controls[0].name, wxT("OkButton"));
+    EXPECT_EQ(parsed.controls[0].binding, wxT("Object.Name"));
+    EXPECT_EQ(parsed.controls[0].geometry.x, 10);
+    EXPECT_EQ(parsed.controls[0].geometry.y, 20);
+    EXPECT_EQ(parsed.controls[0].geometry.width, 80);
+    EXPECT_EQ(parsed.controls[0].geometry.height, 24);
+    EXPECT_EQ(parsed.controls[0].synonym[wxT("ru")], wxT("ОК"));
+}
+
+TEST(FormLayoutSerializer, ParsesNestedXmlControls)
+{
+    const char xml[] =
+        "<FormLayout version=\"1\" formKind=\"ListForm\">"
+        "  <control id=\"g\" kind=\"Group\" name=\"Main\" width=\"100\" height=\"50\">"
+        "    <control id=\"b\" kind=\"Button\" name=\"Run\" x=\"1\" y=\"2\" width=\"3\" height=\"4\"/>"
+        "  </control>"
+        "</FormLayout>";
+    wxMemoryBuffer buf;
+    buf.AppendData(xml, sizeof(xml) - 1);
+
+    ibFormLayoutBlob parsed;
+    wxString err;
+    ASSERT_TRUE(ibFormLayoutSerializer::ParseFromBlob(buf, parsed, err));
+    EXPECT_EQ(parsed.formKind, wxT("ListForm"));
+    ASSERT_EQ(parsed.controls.size(), 1u);
+    ASSERT_EQ(parsed.controls[0].children.size(), 1u);
+    EXPECT_EQ(parsed.controls[0].children[0].name, wxT("Run"));
+    EXPECT_EQ(parsed.controls[0].children[0].geometry.width, 3);
 }
 
 // -----------------------------------------------------------------------
@@ -224,4 +259,6 @@ TEST(FormLayoutErrorCodes, AreStableStrings)
                  wxT("OES_E_NOT_FOUND"));
     EXPECT_STREQ(ibFormLayoutError::kEmptyBlob,
                  wxT("OES_E_FORM_BLOB_EMPTY"));
+    EXPECT_STREQ(ibFormLayoutError::kInvalidDsl,
+                 wxT("OES_E_FORM_DSL_INVALID"));
 }
