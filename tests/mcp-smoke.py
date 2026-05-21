@@ -331,6 +331,78 @@ def main() -> int:
                     failures.append(
                         f"run_tests: structuredContent missing keys {missing_rt}")
 
+    # 8d) Form-layout authoring tools (added 2026-05-21). Both
+    # form_layout_read and form_layout_set are advertised with
+    # outputSchema today, but their server-side implementation is
+    # DEFERRED — they always return isError. The smoke test pins:
+    #   - both names visible in tools/list
+    #   - outputSchema declared on both
+    #   - --no-config mode: returns isError (RequireConfig path) with
+    #     a structuredContent envelope carrying errorCode
+    form_layout_tools = ("form_layout_read", "form_layout_set")
+    for required in form_layout_tools:
+        if required not in names:
+            failures.append(f"tools/list: missing tool '{required}'")
+            continue
+        td_fl = declared.get(required)
+        if td_fl is None:
+            continue
+        out_schema_fl = td_fl.get("outputSchema")
+        if not isinstance(out_schema_fl, dict) or out_schema_fl.get("type") != "object":
+            failures.append(f"{required}: missing/malformed outputSchema")
+        # Annotations sanity: form_layout_read is read-only, set is
+        # destructive (overwrites the entire form layout when wired).
+        ann_fl = td_fl.get("annotations") or {}
+        if required == "form_layout_read" and ann_fl.get("readOnlyHint") is not True:
+            failures.append("form_layout_read: readOnlyHint must be true")
+        if required == "form_layout_set" and ann_fl.get("destructiveHint") is not True:
+            failures.append("form_layout_set: destructiveHint must be true")
+        if ann_fl.get("openWorldHint") is True:
+            failures.append(f"{required}: openWorldHint must be false")
+
+    if "form_layout_read" in names:
+        send(proc, {
+            "jsonrpc": "2.0", "id": 500, "method": "tools/call",
+            "params": {"name": "form_layout_read",
+                       "arguments": {"fullName": "Catalog.SmokeProbe.Forms.ItemForm"}},
+        })
+        fr_resp = recv(proc, timeout_s=5.0)
+        fr_env = fr_resp.get("result")
+        if not isinstance(fr_env, dict):
+            failures.append(f"form_layout_read: no result envelope: {fr_resp}")
+        elif not fr_env.get("isError"):
+            failures.append(
+                f"form_layout_read: expected isError (deferred + "
+                f"--no-config), got: {fr_env}")
+        else:
+            sc = fr_env.get("structuredContent")
+            if not isinstance(sc, dict) or "errorCode" not in sc:
+                failures.append(
+                    f"form_layout_read: error envelope missing "
+                    f"structuredContent.errorCode: {fr_env}")
+
+    if "form_layout_set" in names:
+        send(proc, {
+            "jsonrpc": "2.0", "id": 501, "method": "tools/call",
+            "params": {"name": "form_layout_set",
+                       "arguments": {"fullName": "Catalog.SmokeProbe.Forms.ItemForm",
+                                     "controls": []}},
+        })
+        fs_resp = recv(proc, timeout_s=5.0)
+        fs_env = fs_resp.get("result")
+        if not isinstance(fs_env, dict):
+            failures.append(f"form_layout_set: no result envelope: {fs_resp}")
+        elif not fs_env.get("isError"):
+            failures.append(
+                f"form_layout_set: expected isError (deferred + "
+                f"--no-config), got: {fs_env}")
+        else:
+            sc = fs_env.get("structuredContent")
+            if not isinstance(sc, dict) or "errorCode" not in sc:
+                failures.append(
+                    f"form_layout_set: error envelope missing "
+                    f"structuredContent.errorCode: {fs_env}")
+
     # Validation guard for oes_demo_data_get: both args together → isError.
     send(proc, {
         "jsonrpc": "2.0", "id": 299, "method": "tools/call",

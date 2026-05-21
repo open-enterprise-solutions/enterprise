@@ -65,6 +65,11 @@ set(OES_TESTS_SOURCES
     # `@test` discovery. End-to-end run_tests envelope shape is covered
     # by mcp-smoke.py.
     test_testRunner.cpp
+    # Form-layout authoring (MCP form_layout_read / form_layout_set).
+    # Serializer is DEFERRED (see formLayoutBlob.hpp); these tests
+    # pin the deferral contract + validator-level checks that run
+    # today against agent-supplied DTOs.
+    test_formLayoutBlob.cpp
 )
 # SEC-P2-3: only pull the triple-review integration test in when OpenSSL is
 # available — the source unconditionally includes <openssl/*> via httplib.

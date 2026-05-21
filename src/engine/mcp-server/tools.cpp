@@ -18,6 +18,8 @@
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/compileContext.h"
 #include "backend/testing/testRunner.hpp"
+#include "backend/metaCollection/formLayoutBlob.hpp"
+#include "backend/metaCollection/metaFormObject.h"
 
 #include "3rdparty/nlohmann/json.hpp"
 #include "3rdparty/cpp-httplib/httplib.h"
@@ -1618,6 +1620,170 @@ nlohmann::json ToolConfigInfo(const nlohmann::json& /*args*/)
 }
 
 // =========================================================================
+// Tool: form_layout_read / form_layout_set
+//
+// DEFERRED — see `backend/metaCollection/formLayoutBlob.hpp` for the
+// architectural blocker. The form data blob held by
+// `ibValueMetaObjectFormBase` is a binary chunk format whose per-
+// control payloads are deserialised by frontend `ibValueFrame`
+// subclasses. Backend has no neutral schema for the property layouts,
+// so a backend-side parser would be either a fragile re-implementation
+// of all ~25 control classes (option a) or a cross-cutting split of
+// `ibValueFrame` into data + visual halves (option b).
+//
+// These tools still register in `tools/list` so agents see they exist
+// and the deferral is visible in `description`. Calls against any
+// path return `isError:true` with structuredContent.errorCode set to
+// a stable code (`OES_E_FORM_BLOB_GUI_DEPENDENCY` when the form
+// exists, `OES_E_NOT_A_FORM` for non-form targets, `OES_E_NOT_FOUND`
+// for missing paths, `OES_E_NO_CONFIG` in `--no-config` mode).
+//
+// When the backing implementation lands, only `ToolFormLayoutRead`
+// and `ToolFormLayoutSet` need to change — DTO + validator + tool
+// registration stay as-is.
+// =========================================================================
+
+nlohmann::json BuildFormLayoutError(const std::string& tool,
+                                      const std::string& errorCode,
+                                      const std::string& message)
+{
+	nlohmann::json env = TextResult(tool + ": " + message, true);
+	nlohmann::json sc = nlohmann::json::object();
+	sc["errorCode"] = errorCode;
+	sc["message"]   = message;
+	sc["deferred"]  = (errorCode == "OES_E_FORM_BLOB_GUI_DEPENDENCY");
+	env["structuredContent"] = std::move(sc);
+	return env;
+}
+
+// Resolve a form path -> ibValueMetaObjectFormBase*. Returns nullptr
+// and fills `failure` with the error envelope on any miss; caller
+// just returns the envelope. Every error envelope this helper emits
+// carries structuredContent.errorCode so agents can branch
+// programmatically — including the --no-config path, where the
+// shared `RequireConfig()` envelope is upgraded to a structured form.
+ibValueMetaObjectFormBase* ResolveFormByPath(const std::string& tool,
+                                               const std::string& fullName,
+                                               nlohmann::json& failure)
+{
+	if (!IsReady()) {
+		failure = BuildFormLayoutError(tool, "OES_E_NO_CONFIG",
+		                                "no configuration loaded — start the "
+		                                "server with an OES configuration "
+		                                "directory in argv[1] or "
+		                                "OES_CONFIG_PATH");
+		return nullptr;
+	}
+	if (fullName.empty()) {
+		failure = BuildFormLayoutError(tool, "OES_E_INVALID_ARG",
+		                                "'fullName' is required (e.g. "
+		                                "'Catalog.X.Forms.ItemForm')");
+		return nullptr;
+	}
+	ibValueMetaObject* node = ResolveByPath(fullName);
+	if (node == nullptr) {
+		failure = BuildFormLayoutError(tool,
+		                                std::string(wxString(ibFormLayoutError::kNotFound).utf8_str()),
+		                                "path not found '" + fullName + "'");
+		return nullptr;
+	}
+	auto* formNode = dynamic_cast<ibValueMetaObjectFormBase*>(node);
+	if (formNode == nullptr) {
+		failure = BuildFormLayoutError(tool,
+		                                std::string(wxString(ibFormLayoutError::kNotAForm).utf8_str()),
+		                                "'" + fullName + "' is not a form");
+		return nullptr;
+	}
+	return formNode;
+}
+
+nlohmann::json ToolFormLayoutRead(const nlohmann::json& args)
+{
+	const std::string fullName = ArgString(args, "fullName");
+	nlohmann::json failure;
+	ibValueMetaObjectFormBase* formNode = ResolveFormByPath(
+		"form_layout_read", fullName, failure);
+	if (formNode == nullptr) return failure;
+
+	// We have a real form. The serializer is deferred; surface that
+	// fact deterministically so agents can branch on errorCode.
+	const wxMemoryBuffer blob = formNode->GetFormData();
+	ibFormLayoutBlob dto;
+	wxString errMsg;
+	(void)ibFormLayoutSerializer::ParseFromBlob(blob, dto, errMsg);
+
+	const std::string errorCode = std::string(errMsg.utf8_str());
+	std::string humanMsg;
+	if (errorCode == "OES_E_FORM_BLOB_EMPTY") {
+		humanMsg = "form has no stored layout yet (open it once in "
+		            "Designer to materialise the blob)";
+	} else {
+		humanMsg = "form layout requires architectural work to expose "
+		            "without GUI deps — see backend/metaCollection/"
+		            "formLayoutBlob.hpp";
+	}
+	return BuildFormLayoutError("form_layout_read", errorCode, humanMsg);
+}
+
+nlohmann::json ToolFormLayoutSet(const nlohmann::json& args)
+{
+	const std::string fullName = ArgString(args, "fullName");
+	nlohmann::json failure;
+	ibValueMetaObjectFormBase* formNode = ResolveFormByPath(
+		"form_layout_set", fullName, failure);
+	if (formNode == nullptr) return failure;
+
+	// Mirror the read-side deferral message. We still walk the
+	// validator over the incoming `controls` so the surface area is
+	// exercised even today — that catches malformed agent input
+	// before it would ever reach a real serializer.
+	ibFormLayoutBlob dto;
+	auto itControls = args.find("controls");
+	if (itControls != args.end() && itControls->is_array()) {
+		// Minimal walk: each control entry is shape-checked but we
+		// don't deeply populate the DTO (no real serializer to feed).
+		// Future implementation replaces this stub with a full mapper
+		// from JSON -> DTO.
+		for (const auto& c : *itControls) {
+			if (!c.is_object()) continue;
+			ibFormLayoutControl ctrl;
+			if (c.contains("id")      && c["id"].is_string())      ctrl.id      = wxString::FromUTF8(c["id"].get<std::string>().c_str());
+			if (c.contains("kind")    && c["kind"].is_string())    ctrl.kind    = wxString::FromUTF8(c["kind"].get<std::string>().c_str());
+			if (c.contains("name")    && c["name"].is_string())    ctrl.name    = wxString::FromUTF8(c["name"].get<std::string>().c_str());
+			if (c.contains("binding") && c["binding"].is_string()) ctrl.binding = wxString::FromUTF8(c["binding"].get<std::string>().c_str());
+			dto.controls.push_back(ctrl);
+		}
+	}
+	const auto issues = ibFormLayoutValidator::Validate(dto);
+	if (!issues.empty()) {
+		nlohmann::json env = TextResult(
+			"form_layout_set: input failed DTO validation", true);
+		nlohmann::json sc = nlohmann::json::object();
+		sc["errorCode"] = "OES_E_INVALID_LAYOUT";
+		nlohmann::json arr = nlohmann::json::array();
+		for (const auto& iss : issues) {
+			nlohmann::json e;
+			e["code"]    = std::string(iss.code.utf8_str());
+			e["message"] = std::string(iss.message.utf8_str());
+			e["path"]    = std::string(iss.path.utf8_str());
+			arr.push_back(std::move(e));
+		}
+		sc["issues"] = std::move(arr);
+		env["structuredContent"] = std::move(sc);
+		return env;
+	}
+
+	// DTO accepted. Write path remains deferred.
+	return BuildFormLayoutError(
+		"form_layout_set",
+		std::string(wxString(ibFormLayoutError::kGuiDependency).utf8_str()),
+		"form layout writes require architectural work to expose "
+		"without GUI deps — DTO validated successfully but the "
+		"serializer is deferred; see backend/metaCollection/"
+		"formLayoutBlob.hpp");
+}
+
+// =========================================================================
 // Registry — built once on first AllTools() call.
 // =========================================================================
 const std::vector<ToolEntry>& BuildRegistry()
@@ -2210,6 +2376,111 @@ const std::vector<ToolEntry>& BuildRegistry()
 			  std::move(outRT)
 			},
 			&ToolRunTests
+		});
+	}
+
+	// MCP: form_layout_read — DEFERRED. The form blob format is
+	// readable at the chunk envelope level (backend has the chunk
+	// reader) but per-control payloads are deserialised by frontend
+	// `ibValueFrame` subclasses; backend has no neutral schema. See
+	// `backend/metaCollection/formLayoutBlob.hpp` for the
+	// architectural options. Tool registers so agents see it exists.
+	{
+		nlohmann::json controlItem;
+		controlItem["type"]       = "object";
+		controlItem["properties"] = nlohmann::json::object();
+		controlItem["properties"]["id"]       = nlohmann::json{ {"type","string"} };
+		controlItem["properties"]["kind"]     = nlohmann::json{ {"type","string"} };
+		controlItem["properties"]["name"]     = nlohmann::json{ {"type","string"} };
+		controlItem["properties"]["binding"]  = nlohmann::json{ {"type","string"} };
+		controlItem["properties"]["synonym"]  = nlohmann::json{ {"type","object"} };
+		controlItem["properties"]["geometry"] = nlohmann::json{ {"type","object"} };
+		controlItem["properties"]["children"] = nlohmann::json{ {"type","array"} };
+
+		nlohmann::json outFR;
+		outFR["type"]       = "object";
+		outFR["properties"] = nlohmann::json::object();
+		outFR["properties"]["fullName"] = nlohmann::json{ {"type","string"} };
+		outFR["properties"]["formKind"] = nlohmann::json{ {"type","string"} };
+		outFR["properties"]["controls"] = nlohmann::json{ {"type","array"}, {"items", controlItem} };
+		outFR["properties"]["errorCode"] = nlohmann::json{ {"type","string"} };
+		outFR["properties"]["deferred"]  = nlohmann::json{ {"type","boolean"} };
+
+		table.push_back({
+			{ "form_layout_read",
+			  "Read an OES form's control tree as JSON. fullName is "
+			  "'<Kind>.<Name>.Forms.<FormName>' (e.g. "
+			  "'Catalog.Контрагенты.Forms.ItemForm'). STATUS: "
+			  "DEFERRED — the form data blob is a binary chunk format "
+			  "whose per-control payloads are read by frontend control "
+			  "classes; backend has no neutral schema. Calls against a "
+			  "real form return isError with "
+			  "structuredContent.errorCode = "
+			  "'OES_E_FORM_BLOB_GUI_DEPENDENCY'. Path-resolution and "
+			  "kind errors return their own stable codes "
+			  "(OES_E_NOT_FOUND / OES_E_NOT_A_FORM).",
+			  schemaObj({
+			    { "fullName", str("Form full path, e.g. 'Catalog.X.Forms.ItemForm'") },
+			  }, { "fullName" }),
+			  ann(/*readOnly*/true, /*destructive*/false, /*idempotent*/true, /*openWorld*/false),
+			  std::move(outFR)
+			},
+			&ToolFormLayoutRead
+		});
+	}
+
+	// MCP: form_layout_set — DEFERRED for the same reason. The DTO
+	// validator runs against any incoming `controls` so agents can
+	// shake out structural input bugs today; the actual write path
+	// to the form blob requires the same architectural work as the
+	// read side.
+	{
+		nlohmann::json controlItem;
+		controlItem["type"]       = "object";
+		controlItem["properties"] = nlohmann::json::object();
+		controlItem["properties"]["id"]       = nlohmann::json{ {"type","string"} };
+		controlItem["properties"]["kind"]     = nlohmann::json{ {"type","string"} };
+		controlItem["properties"]["name"]     = nlohmann::json{ {"type","string"} };
+		controlItem["properties"]["binding"]  = nlohmann::json{ {"type","string"} };
+		controlItem["properties"]["geometry"] = nlohmann::json{ {"type","object"} };
+		controlItem["properties"]["children"] = nlohmann::json{ {"type","array"} };
+
+		nlohmann::json outFS;
+		outFS["type"]       = "object";
+		outFS["properties"] = nlohmann::json::object();
+		outFS["properties"]["ok"]              = nlohmann::json{ {"type","boolean"} };
+		outFS["properties"]["controlsApplied"] = nlohmann::json{ {"type","integer"} };
+		outFS["properties"]["warnings"]        = nlohmann::json{ {"type","array"}, {"items", nlohmann::json{ {"type","string"} }} };
+		outFS["properties"]["errorCode"]       = nlohmann::json{ {"type","string"} };
+
+		nlohmann::json controlsIn;
+		controlsIn["type"]        = "array";
+		controlsIn["items"]       = controlItem;
+		controlsIn["description"] = "Full replacement control tree (depth-first list)";
+
+		table.push_back({
+			{ "form_layout_set",
+			  "Overwrite an OES form's control tree from JSON. STATUS: "
+			  "DEFERRED — the on-disk write path is blocked on the "
+			  "same architectural work as form_layout_read. Agent-"
+			  "supplied DTOs are still validated (duplicate id, "
+			  "missing kind/name, negative geometry) and surfaced as "
+			  "OES_E_INVALID_LAYOUT before the deferral message — "
+			  "useful for shaking out client-side bugs today. On a "
+			  "well-formed DTO the call returns isError with "
+			  "structuredContent.errorCode = "
+			  "'OES_E_FORM_BLOB_GUI_DEPENDENCY'.",
+			  schemaObj({
+			    { "fullName", str("Form full path") },
+			    { "controls", controlsIn },
+			    { "validate", boolP("Run DTO validation (default true)") },
+			  }, { "fullName", "controls" }),
+			  // destructive=true: when implemented, overwrites the
+			  // entire form layout. Idempotent on identical input.
+			  ann(/*readOnly*/false, /*destructive*/true, /*idempotent*/true, /*openWorld*/false),
+			  std::move(outFS)
+			},
+			&ToolFormLayoutSet
 		});
 	}
 
