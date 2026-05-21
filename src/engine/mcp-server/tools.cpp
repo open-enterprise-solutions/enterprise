@@ -55,6 +55,7 @@
 #include <mutex>
 #include <optional>
 #include <regex>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -2183,6 +2184,283 @@ nlohmann::json ToolHeadlessSmokeRun(const nlohmann::json& args)
 	}
 
 	nlohmann::json env = TextResult(text, !ok);
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+// =========================================================================
+// Tools: validate_query / execute_query
+//
+// Read-only database query helper for MCP clients. The safety policy is:
+//   - only SELECT / WITH statements are accepted;
+//   - obvious DDL/DML/control tokens are rejected before prepare;
+//   - parameters are bound through ibPreparedStatement.
+// =========================================================================
+std::string SqlMaskLiteralsAndComments(const std::string& sql)
+{
+	std::string out;
+	out.reserve(sql.size());
+	bool inSingle = false;
+	bool inDouble = false;
+	bool inLineComment = false;
+	bool inBlockComment = false;
+	for (size_t i = 0; i < sql.size(); ++i) {
+		const char c = sql[i];
+		const char n = (i + 1 < sql.size()) ? sql[i + 1] : '\0';
+		if (inLineComment) {
+			if (c == '\n') {
+				inLineComment = false;
+				out.push_back(c);
+			} else {
+				out.push_back(' ');
+			}
+			continue;
+		}
+		if (inBlockComment) {
+			if (c == '*' && n == '/') {
+				inBlockComment = false;
+				out.push_back(' ');
+				out.push_back(' ');
+				++i;
+			} else {
+				out.push_back(' ');
+			}
+			continue;
+		}
+		if (!inSingle && !inDouble && c == '-' && n == '-') {
+			inLineComment = true;
+			out.push_back(' ');
+			out.push_back(' ');
+			++i;
+			continue;
+		}
+		if (!inSingle && !inDouble && c == '/' && n == '*') {
+			inBlockComment = true;
+			out.push_back(' ');
+			out.push_back(' ');
+			++i;
+			continue;
+		}
+		if (!inDouble && c == '\'') {
+			inSingle = !inSingle;
+			out.push_back(' ');
+			continue;
+		}
+		if (!inSingle && c == '"') {
+			inDouble = !inDouble;
+			out.push_back(' ');
+			continue;
+		}
+		out.push_back((inSingle || inDouble)
+			? ' '
+			: static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+	}
+	return out;
+}
+
+std::string TrimSqlCopy(std::string s)
+{
+	auto notSpace = [](unsigned char c) {
+		return c != ' ' && c != '\t' && c != '\r' && c != '\n';
+	};
+	while (!s.empty() && !notSpace(static_cast<unsigned char>(s.front()))) {
+		s.erase(s.begin());
+	}
+	while (!s.empty() && !notSpace(static_cast<unsigned char>(s.back()))) {
+		s.pop_back();
+	}
+	return s;
+}
+
+nlohmann::json ValidateReadOnlySql(const std::string& sql)
+{
+	nlohmann::json out;
+	out["ok"] = false;
+	out["readOnly"] = false;
+	out["errors"] = nlohmann::json::array();
+
+	const std::string trimmed = TrimSqlCopy(sql);
+	if (trimmed.empty()) {
+		out["errors"].push_back("query is empty");
+		return out;
+	}
+	const std::string masked = TrimSqlCopy(SqlMaskLiteralsAndComments(trimmed));
+	if (masked.empty()) {
+		out["errors"].push_back("query has no executable statement");
+		return out;
+	}
+	if (masked.find(';') != std::string::npos &&
+	    masked.find(';') != masked.size() - 1) {
+		out["errors"].push_back("multiple statements are not allowed");
+		return out;
+	}
+
+	std::smatch m;
+	if (!std::regex_search(masked, m, std::regex("^([a-z]+)"))) {
+		out["errors"].push_back("cannot determine query verb");
+		return out;
+	}
+	const std::string verb = m[1].str();
+	if (verb != "select" && verb != "with") {
+		out["errors"].push_back("only SELECT/WITH read-only queries are allowed");
+		return out;
+	}
+
+	static const std::set<std::string> banned = {
+		"insert", "update", "delete", "merge", "create", "alter", "drop",
+		"truncate", "grant", "revoke", "vacuum", "attach", "detach",
+		"call", "execute", "exec", "replace",
+	};
+	std::regex wordRe("[a-z_]+");
+	for (auto it = std::sregex_iterator(masked.begin(), masked.end(), wordRe);
+	     it != std::sregex_iterator(); ++it) {
+		const std::string word = it->str();
+		if (banned.find(word) != banned.end()) {
+			out["errors"].push_back("write/control token is not allowed: " + word);
+			return out;
+		}
+	}
+
+	out["ok"] = true;
+	out["readOnly"] = true;
+	return out;
+}
+
+void BindQueryParams(ibPreparedStatement* stmt, const nlohmann::json& params)
+{
+	if (stmt == nullptr || !params.is_array()) return;
+	int index = 1;
+	for (const auto& p : params) {
+		if (p.is_null()) {
+			stmt->SetParamNull(index);
+		} else if (p.is_boolean()) {
+			stmt->SetParamBool(index, p.get<bool>());
+		} else if (p.is_number_integer()) {
+			stmt->SetParamInt(index, p.get<int>());
+		} else if (p.is_number_float()) {
+			stmt->SetParamDouble(index, p.get<double>());
+		} else if (p.is_string()) {
+			const std::string s = p.get<std::string>();
+			stmt->SetParamString(index, wxString::FromUTF8(s.c_str()));
+		} else {
+			stmt->SetParamString(index, wxString::FromUTF8(p.dump().c_str()));
+		}
+		++index;
+	}
+}
+
+nlohmann::json QueryValueToJson(ibDatabaseResultSet* rs, int col, int type)
+{
+	if (rs->IsFieldNull(col)) return nullptr;
+	switch (type) {
+	case ibResultSetMetaData::COLUMN_INTEGER:
+		return rs->GetResultInt(col);
+	case ibResultSetMetaData::COLUMN_DOUBLE:
+		return rs->GetResultDouble(col);
+	case ibResultSetMetaData::COLUMN_BOOL:
+		return rs->GetResultBool(col);
+	case ibResultSetMetaData::COLUMN_DATE:
+		return std::string(rs->GetResultDate(col).FormatISOCombined(' ').utf8_str());
+	case ibResultSetMetaData::COLUMN_BLOB: {
+		wxMemoryBuffer buffer;
+		rs->GetResultBlob(col, buffer);
+		return std::string("<blob ") + std::to_string(buffer.GetDataLen()) + " bytes>";
+	}
+	default:
+		return std::string(rs->GetResultString(col).utf8_str());
+	}
+}
+
+nlohmann::json ToolValidateQuery(const nlohmann::json& args)
+{
+	const std::string query = ArgString(args, "query");
+	nlohmann::json structured = ValidateReadOnlySql(query);
+	nlohmann::json env = TextResult(structured["ok"].get<bool>()
+		? "validate_query: OK"
+		: "validate_query: rejected", !structured["ok"].get<bool>());
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+nlohmann::json ToolExecuteQuery(const nlohmann::json& args)
+{
+	if (auto err = RequireConfig()) return *err;
+	const std::string query = ArgString(args, "query");
+	nlohmann::json validation = ValidateReadOnlySql(query);
+	if (!validation["ok"].get<bool>()) {
+		nlohmann::json env = TextResult("execute_query: rejected", true);
+		env["structuredContent"] = std::move(validation);
+		return env;
+	}
+
+	int maxRows = 50;
+	if (args.is_object() && args.contains("maxRows") && args["maxRows"].is_number_integer()) {
+		maxRows = args["maxRows"].get<int>();
+	}
+	if (maxRows < 1) maxRows = 1;
+	if (maxRows > 500) maxRows = 500;
+
+	nlohmann::json structured;
+	structured["ok"] = false;
+	structured["readOnly"] = true;
+	structured["columns"] = nlohmann::json::array();
+	structured["rows"] = nlohmann::json::array();
+	structured["truncated"] = false;
+
+	try {
+		auto db = db_query;
+		ibStatementGuard stmt(db, db->PrepareStatement(wxString::FromUTF8(query.c_str())));
+		if (!stmt) {
+			return StructuredError("execute_query: prepare failed");
+		}
+		if (args.is_object() && args.contains("params")) {
+			BindQueryParams(stmt.get(), args["params"]);
+		}
+		ibResultSetGuard rs(db, stmt->RunQueryWithResults());
+		if (!rs) {
+			return StructuredError("execute_query: query returned no result set");
+		}
+
+		ibResultSetMetaData* md = rs->GetMetaData();
+		const int colCount = md ? md->GetColumnCount() : 0;
+		std::vector<int> types;
+		types.reserve(colCount);
+		for (int i = 1; i <= colCount; ++i) {
+			const int type = md->GetColumnType(i);
+			types.push_back(type);
+			nlohmann::json col;
+			col["name"] = std::string(md->GetColumnName(i).utf8_str());
+			col["type"] = type;
+			col["size"] = md->GetColumnSize(i);
+			structured["columns"].push_back(std::move(col));
+		}
+		if (md) rs->CloseMetaData(md);
+
+		int rowCount = 0;
+		while (rs->Next()) {
+			if (rowCount >= maxRows) {
+				structured["truncated"] = true;
+				break;
+			}
+			nlohmann::json row = nlohmann::json::object();
+			for (int i = 1; i <= colCount; ++i) {
+				const std::string name =
+					structured["columns"][static_cast<size_t>(i - 1)]["name"].get<std::string>();
+				row[name] = QueryValueToJson(rs.get(), i, types[static_cast<size_t>(i - 1)]);
+			}
+			structured["rows"].push_back(std::move(row));
+			++rowCount;
+		}
+		structured["ok"] = true;
+		structured["rowCount"] = structured["rows"].size();
+	} catch (const ibBackendException& e) {
+		return StructuredError(std::string("execute_query: ") +
+		                       std::string(e.GetErrorDescription().utf8_str()));
+	} catch (const std::exception& e) {
+		return StructuredError(std::string("execute_query: ") + e.what());
+	}
+
+	nlohmann::json env = TextResult("execute_query: OK");
 	env["structuredContent"] = std::move(structured);
 	return env;
 }
@@ -5182,6 +5460,70 @@ const std::vector<ToolEntry>& BuildRegistry()
 			  std::move(outSmoke)
 			},
 			&ToolHeadlessSmokeRun
+		});
+	}
+	{
+		nlohmann::json paramsIn;
+		paramsIn["type"] = "array";
+		paramsIn["items"] = nlohmann::json::object();
+		paramsIn["description"] = "Positional parameters bound to ? placeholders";
+
+		nlohmann::json maxRowsIn;
+		maxRowsIn["type"] = "integer";
+		maxRowsIn["default"] = 50;
+		maxRowsIn["minimum"] = 1;
+		maxRowsIn["maximum"] = 500;
+		maxRowsIn["description"] = "Maximum rows to return";
+
+		nlohmann::json validateOut;
+		validateOut["type"] = "object";
+		validateOut["properties"] = {
+			{ "ok",       nlohmann::json{ {"type","boolean"} } },
+			{ "readOnly", nlohmann::json{ {"type","boolean"} } },
+			{ "errors",   nlohmann::json{ {"type","array"}, {"items", nlohmann::json{ {"type","string"} }} } },
+		};
+		validateOut["required"] = nlohmann::json::array({ "ok", "readOnly", "errors" });
+
+		nlohmann::json executeOut;
+		executeOut["type"] = "object";
+		executeOut["properties"] = {
+			{ "ok",        nlohmann::json{ {"type","boolean"} } },
+			{ "readOnly",  nlohmann::json{ {"type","boolean"} } },
+			{ "columns",   nlohmann::json{ {"type","array"} } },
+			{ "rows",      nlohmann::json{ {"type","array"} } },
+			{ "rowCount",  nlohmann::json{ {"type","integer"} } },
+			{ "truncated", nlohmann::json{ {"type","boolean"} } },
+		};
+		executeOut["required"] = nlohmann::json::array(
+			{ "ok", "readOnly", "columns", "rows", "truncated" });
+
+		table.push_back({
+			{ "validate_query",
+			  "Validate that a SQL query is read-only and safe for execute_query. "
+			  "Only SELECT/WITH statements are accepted; DDL/DML/control tokens "
+			  "are rejected before database prepare.",
+			  schemaObj({
+			    { "query", str("SQL SELECT/WITH query to validate") },
+			  }, { "query" }),
+			  ann(true, false, true, false),
+			  std::move(validateOut)
+			},
+			&ToolValidateQuery
+		});
+		table.push_back({
+			{ "execute_query",
+			  "Run a read-only SQL SELECT/WITH query against the live config "
+			  "database. Parameters are bound via ibPreparedStatement; mutating "
+			  "SQL is rejected before prepare. Returns columns and up to maxRows rows.",
+			  schemaObj({
+			    { "query",   str("SQL SELECT/WITH query. Use ? placeholders for params") },
+			    { "params",  paramsIn },
+			    { "maxRows", maxRowsIn },
+			  }, { "query" }),
+			  ann(true, false, false, false),
+			  std::move(executeOut)
+			},
+			&ToolExecuteQuery
 		});
 	}
 
