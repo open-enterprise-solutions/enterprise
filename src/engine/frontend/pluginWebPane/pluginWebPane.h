@@ -334,6 +334,7 @@ private:
 	// wxExecute. Reports outcomes back into the transcript as
 	// System / Error entries.
 	void HandleCommitLink(const wxString& spec);
+	void HandleResumeLink(const wxString& spec);
 
 	// Parse the inbound envelope and apply it. Pure UI-thread work; the
 	// off-thread variant queues a wxThreadEvent that ends up here.

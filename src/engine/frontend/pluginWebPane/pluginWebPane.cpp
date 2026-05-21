@@ -1353,6 +1353,13 @@ void ibPluginWebPane::RenderTranscript()
 			        "<a href=\"oes-copyreply:%zu\">%s</a></font>"),
 			    entryIdx, HtmlEscape(_("Скопировать ответ")));
 		}
+		if (e.role == Entry::Role::User && !e.markdown.IsEmpty()) {
+			const size_t entryIdx = static_cast<size_t>(&e - &m_entries[0]);
+			doc += wxString::Format(
+			    wxT("&nbsp;&nbsp;<font size=\"-1\">"
+			        "<a href=\"oes-resume:%zu\">%s</a></font>"),
+			    entryIdx, HtmlEscape(_("Редактировать и повторить")));
+		}
 		doc += wxT("<br>");
 
 		if (e.role == Entry::Role::Plan) {
@@ -2138,6 +2145,10 @@ void ibPluginWebPane::OnLinkClicked(wxHtmlLinkEvent& event)
 		}
 		return;
 	}
+	if (href.StartsWith(wxT("oes-resume:"))) {
+		HandleResumeLink(href.Mid(wxString(wxT("oes-resume:")).length()));
+		return;
+	}
 	// oes-apply:<entryIdx>:<blockIdx> — insert / replace in the editor.
 	if (href.StartsWith(wxT("oes-apply:"))) {
 		HandleApplyLink(href.Mid(wxString(wxT("oes-apply:")).length()));
@@ -2276,6 +2287,36 @@ void ibPluginWebPane::HandleApplyLink(const wxString& spec)
 	stc->ReplaceSelection(code);
 	stc->SetFocus();
 	if (m_statusBar) m_statusBar->SetLabel(_("Вставлено в редактор"));
+}
+
+void ibPluginWebPane::HandleResumeLink(const wxString& spec)
+{
+	long ei = 0;
+	if (!spec.ToLong(&ei)) return;
+	if (ei < 0 || ei >= static_cast<long>(m_entries.size())) return;
+	if (m_entries[ei].role != Entry::Role::User) return;
+
+	if (m_pending) {
+		if (m_statusBar) {
+			m_statusBar->SetLabel(_("Дождитесь ответа или нажмите Стоп."));
+		}
+		return;
+	}
+
+	const wxString prompt = m_entries[ei].markdown;
+	if (m_input != nullptr) {
+		m_input->SetValue(prompt);
+		m_input->SetInsertionPointEnd();
+		m_input->SetFocus();
+	}
+
+	m_entries.erase(m_entries.begin() + ei, m_entries.end());
+	m_pendingRequestId.Clear();
+	RenderTranscript();
+	ScheduleSave();
+	if (m_statusBar) {
+		m_statusBar->SetLabel(_("Сообщение перенесено в поле ввода."));
+	}
 }
 
 // COMMIT-MSG: oes-commit:<entryIdx>:<blockIdx> — copy the proposed
