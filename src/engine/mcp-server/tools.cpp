@@ -2302,6 +2302,128 @@ nlohmann::json ToolTechDebtScore(const nlohmann::json& args)
 }
 
 // =========================================================================
+// Tool: security_audit — lightweight module security scan.
+// =========================================================================
+nlohmann::json ToolSecurityAudit(const nlohmann::json& args)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+	const std::string fullName = ArgString(args, "fullName");
+	int maxFindings = 200;
+	if (args.is_object() && args.contains("maxFindings") &&
+	    args["maxFindings"].is_number_integer()) {
+		maxFindings = args["maxFindings"].get<int>();
+	}
+	if (maxFindings < 1) maxFindings = 1;
+	if (maxFindings > 1000) maxFindings = 1000;
+
+	std::vector<DebtModule> modules;
+	if (!fullName.empty()) {
+		ibValueMetaObject* node = ResolveByPath(fullName);
+		if (node == nullptr) {
+			return StructuredError("security_audit: path not found '" + fullName + "'");
+		}
+		auto* mod = dynamic_cast<ibValueMetaObjectModuleBase*>(node);
+		if (mod == nullptr) {
+			return StructuredError("security_audit: '" + fullName +
+			                       "' is not a module object");
+		}
+		DebtModule m;
+		m.path = fullName;
+		m.source = std::string(mod->GetModuleText().utf8_str());
+		modules.push_back(std::move(m));
+	} else {
+		ibValueMetaObject* root = activeMetaData->GetCommonMetaObject();
+		if (root != nullptr) {
+			const std::vector<ibValueMetaObject*> top = root->GetAnyArrayObject<>();
+			for (ibValueMetaObject* child : top) {
+				CollectModulesForDebt(child, std::string(), modules);
+			}
+		}
+	}
+
+	struct Rule {
+		const char* id;
+		const char* severity;
+		const char* title;
+		std::vector<std::string> needles;
+	};
+	const std::vector<Rule> rules = {
+		{ "SEC001", "P0", "Possible SQL string concatenation", { "runquery(", "execute_query(", "выполнитьзапрос(" } },
+		{ "SEC002", "P0", "Dynamic code execution", { "eval(", "execute(", "выполнить(", "вычислить(" } },
+		{ "SEC003", "P1", "Plain HTTP endpoint", { "http://" } },
+		{ "SEC004", "P1", "Hardcoded credential-like literal", { "password", "passwd", "api_key", "apikey", "token", "secret", "пароль" } },
+		{ "SEC005", "P2", "Broad exception handler", { "catch (...)", "catch(...)" } },
+		{ "SEC006", "P2", "Unsafe deserialization/import surface", { "deserialize", "unserialize", "прочитатьjson", "readjson" } },
+		{ "SEC007", "P1", "External process or shell execution", { "shellexecute", "system(", "process.start", "запуститьприложение" } },
+		{ "SEC008", "P2", "Absolute temporary/user path", { "/tmp/", "c:\\\\", "appdata", "temp\\" } },
+		{ "SEC009", "P2", "Debug or unsafe diagnostic output", { "debug", "trace", "console.log", "сообщить(" } },
+		{ "SEC010", "P1", "Permission or policy override", { "allowalways", "allowsession", "setmutationpolicy" } },
+		{ "SEC011", "P2", "Explicit TODO/FIXME near security-sensitive code", { "todo", "fixme", "security", "unsafe", "небезопас" } },
+	};
+
+	nlohmann::json findings = nlohmann::json::array();
+	std::map<std::string, int> severityCounts = {
+		{ "P0", 0 }, { "P1", 0 }, { "P2", 0 }, { "P3", 0 }
+	};
+
+	for (const auto& m : modules) {
+		std::istringstream in(m.source);
+		std::string line;
+		int lineNo = 0;
+		while (std::getline(in, line)) {
+			++lineNo;
+			const std::string trimmed = TrimAscii(line);
+			if (trimmed.empty()) continue;
+			const std::string lowered = LowerUtf8(trimmed);
+			for (const auto& rule : rules) {
+				bool hit = false;
+				for (const auto& needle : rule.needles) {
+					if (lowered.find(LowerUtf8(needle)) != std::string::npos) {
+						hit = true;
+						break;
+					}
+				}
+				if (!hit) continue;
+				nlohmann::json f;
+				f["ruleId"] = rule.id;
+				f["severity"] = rule.severity;
+				f["title"] = rule.title;
+				f["path"] = m.path;
+				f["line"] = lineNo;
+				f["snippet"] = trimmed.substr(0, 220);
+				findings.push_back(std::move(f));
+				severityCounts[rule.severity]++;
+				if (static_cast<int>(findings.size()) >= maxFindings) break;
+			}
+			if (static_cast<int>(findings.size()) >= maxFindings) break;
+		}
+		if (static_cast<int>(findings.size()) >= maxFindings) break;
+	}
+
+	const bool truncated = static_cast<int>(findings.size()) >= maxFindings;
+	const int p0 = severityCounts["P0"];
+	const int p1 = severityCounts["P1"];
+	const int p2 = severityCounts["P2"];
+	std::string verdict = "PASS";
+	if (p0 > 0) verdict = "BLOCK";
+	else if (p1 > 0 || p2 > 0) verdict = "WARN";
+
+	nlohmann::json out;
+	out["ok"] = (verdict == "PASS");
+	out["verdict"] = verdict;
+	out["moduleCount"] = modules.size();
+	out["findingCount"] = findings.size();
+	out["truncated"] = truncated;
+	out["counts"] = severityCounts;
+	out["findings"] = std::move(findings);
+	out["ruleset"] = "OES-SEC-11";
+
+	nlohmann::json env = TextResult(out.dump(2), verdict == "BLOCK");
+	env["structuredContent"] = std::move(out);
+	return env;
+}
+
+// =========================================================================
 // Tool: save_config
 // =========================================================================
 nlohmann::json ToolSaveConfig(const nlohmann::json& args)
@@ -6033,6 +6155,63 @@ const std::vector<ToolEntry>& BuildRegistry()
 			  std::move(outDebt)
 			},
 			&ToolTechDebtScore
+		});
+	}
+	{
+		nlohmann::json findingItem;
+		findingItem["type"]       = "object";
+		findingItem["properties"] = nlohmann::json::object();
+		findingItem["properties"]["ruleId"]   = nlohmann::json{ {"type","string"} };
+		findingItem["properties"]["severity"] = nlohmann::json{ {"type","string"}, {"enum", nlohmann::json::array({ "P0", "P1", "P2", "P3" })} };
+		findingItem["properties"]["title"]    = nlohmann::json{ {"type","string"} };
+		findingItem["properties"]["path"]     = nlohmann::json{ {"type","string"} };
+		findingItem["properties"]["line"]     = nlohmann::json{ {"type","integer"} };
+		findingItem["properties"]["snippet"]  = nlohmann::json{ {"type","string"} };
+		findingItem["required"] = nlohmann::json::array({ "ruleId", "severity", "path", "line" });
+
+		nlohmann::json countsObj;
+		countsObj["type"]       = "object";
+		countsObj["properties"] = nlohmann::json::object();
+		countsObj["properties"]["P0"] = nlohmann::json{ {"type","integer"} };
+		countsObj["properties"]["P1"] = nlohmann::json{ {"type","integer"} };
+		countsObj["properties"]["P2"] = nlohmann::json{ {"type","integer"} };
+		countsObj["properties"]["P3"] = nlohmann::json{ {"type","integer"} };
+
+		nlohmann::json outSec;
+		outSec["type"]       = "object";
+		outSec["properties"] = nlohmann::json::object();
+		outSec["properties"]["ok"]           = nlohmann::json{ {"type","boolean"} };
+		outSec["properties"]["verdict"]      = nlohmann::json{ {"type","string"}, {"enum", nlohmann::json::array({ "PASS", "WARN", "BLOCK" })} };
+		outSec["properties"]["moduleCount"]  = nlohmann::json{ {"type","integer"} };
+		outSec["properties"]["findingCount"] = nlohmann::json{ {"type","integer"} };
+		outSec["properties"]["truncated"]    = nlohmann::json{ {"type","boolean"} };
+		outSec["properties"]["counts"]       = countsObj;
+		outSec["properties"]["findings"]     = nlohmann::json{ {"type","array"}, {"items", findingItem} };
+		outSec["properties"]["ruleset"]      = nlohmann::json{ {"type","string"} };
+		outSec["required"] = nlohmann::json::array({ "ok", "verdict", "findingCount", "findings" });
+
+		nlohmann::json maxFindings;
+		maxFindings["type"]        = "integer";
+		maxFindings["minimum"]     = 1;
+		maxFindings["maximum"]     = 1000;
+		maxFindings["default"]     = 200;
+		maxFindings["description"] = "Maximum findings to return";
+
+		table.push_back({
+			{ "security_audit",
+			  "Scan module sources with the OES-SEC-11 lightweight ruleset "
+			  "(SQL string execution, dynamic execution, plaintext HTTP, "
+			  "credential-like literals, broad catch, unsafe deserialize, "
+			  "external process launch, absolute temp paths, debug output, "
+			  "permission overrides, and security TODOs).",
+			  schemaObj({
+			    { "fullName", str("Optional module path, e.g. 'Catalog.X.ObjectModule'. Empty = all modules.") },
+			    { "maxFindings", maxFindings },
+			  }, {}),
+			  ann(true, false, true, false),
+			  std::move(outSec)
+			},
+			&ToolSecurityAudit
 		});
 	}
 	table.push_back({
