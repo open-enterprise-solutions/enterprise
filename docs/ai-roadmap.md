@@ -66,7 +66,7 @@ On each tick:
 - [x] **done** t2-006 (1c4d1b35): 3 transactional staging tools (begin/commit/rollback). Single-active-tx guard, ibGuid UUIDs, metaBridge::UndoStackSize() new API, epoch-safe rollback. Tool count 40→43.
 - [x] **done** t2-007 (40ed5703): 4-mode permission selector in Designer chat top — read-only / confirm-all / confirm-writes / auto. Modes are wired to plugin mutation policy; approve temporarily elevates write ops and restores after apply/error/reject.
 - [x] **done** t2-008 (db48d970): Custom slash commands UI in Designer Plugin Manager. Stored in `plugins.json5` as `slashCommands`; native chat popup merges user commands with built-ins and dispatches custom rows through `chat.send`.
-- [ ] **pending** t2-009: Doc-comment skill (#std453-equivalent) — F1 on procedure → auto-generated header with params, return, examples. ~3 days.
+- [x] **done** t2-009 (b4fac2a3): Doc-comment skill — F1 in the code editor sends `editor.skill op="doc"` for the selection or nearest procedure/function signature, opening the assistant pane and reusing the existing documentation-comment flow.
 - [ ] **pending** t2-010: AI-generated code audit trail — inline `// AI: 2026-MM-DD HH:mm` comments inserted by aiBridge before commit. ~1 day.
 - [ ] **pending** t2-011: Smoke validation post-apply — `headless_smoke_run` MCP tool runs codeRunner against config, returns load/compile status. ~3 days.
 - [ ] **pending** t2-012: Sigma reject diagnostic playbook — natural-language explainer when sigma_check returns isError (call llm_query persona=sigma). ~2 days.
