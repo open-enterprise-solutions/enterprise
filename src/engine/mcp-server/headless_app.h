@@ -94,6 +94,11 @@ migration::snapshots::ibSnapshotManager* GetSnapshotManager();
 // short-circuit with "no configuration" when this is false.
 bool IsReady();
 
+// True while Init is actively loading a configuration. This lets the
+// stdio server advertise tools immediately and return a precise
+// "configuration is still loading" envelope from config-bound tools.
+bool IsLoading();
+
 // Save the live configuration back to a .OES-DB zip at `path`. Empty
 // path persists to the currently-loaded config's source path when one
 // was known; in directory-mode this falls back to writing into the

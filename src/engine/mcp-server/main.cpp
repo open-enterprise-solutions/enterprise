@@ -33,6 +33,7 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <thread>
 
 #if defined(__unix__) || defined(__APPLE__)
 #include <unistd.h>
@@ -258,10 +259,9 @@ int main(int argc, char** argv)
 	if (const char* p = std::getenv("OES_MCP_PWD"))    cfg.ibPassword = p;
 	if (const char* l = std::getenv("OES_MCP_LOCALE")) cfg.locale     = l;
 
-	if (!noConfig) {
-		// MCP concurrency: Init returns an enum so we can map an exclusive-
-		// lock conflict to a distinct exit code (2). Generic failures stay
-		// on exit code 1.
+	if (ciMode && !noConfig) {
+		// CI mode is deliberately blocking: pipelines need a deterministic
+		// process exit code after the configuration has really loaded.
 		const auto outcome = mcpServer::Init(cfg, &DiagToStderr);
 		if (outcome == mcpServer::InitOutcome::LockedExclusive) {
 			std::fprintf(stderr,
@@ -272,7 +272,7 @@ int main(int argc, char** argv)
 			std::fprintf(stderr, "oes-mcp: configuration load failed — exiting\n");
 			return 1;
 		}
-	} else {
+	} else if (noConfig) {
 		std::fprintf(stderr,
 			"oes-mcp: --no-config mode — config-bound tools will report isError\n");
 	}
@@ -312,6 +312,26 @@ int main(int argc, char** argv)
 		}
 		mcpServer::Shutdown();
 		return report.value("ok", false) ? 0 : 1;
+	}
+
+	std::thread initThread;
+	std::atomic<int> initOutcomeCode{static_cast<int>(mcpServer::InitOutcome::Ok)};
+	if (!noConfig) {
+		initThread = std::thread([cfg, &initOutcomeCode] {
+			const auto outcome = mcpServer::Init(cfg, &DiagToStderr);
+			initOutcomeCode.store(static_cast<int>(outcome));
+			if (outcome == mcpServer::InitOutcome::LockedExclusive) {
+				std::fprintf(stderr,
+					"oes-mcp: configuration locked exclusively; stdio remains up "
+					"for tools/list and config_info\n");
+				std::fflush(stderr);
+			} else if (outcome != mcpServer::InitOutcome::Ok) {
+				std::fprintf(stderr,
+					"oes-mcp: background configuration load failed; stdio remains "
+					"up for protocol-only methods\n");
+				std::fflush(stderr);
+			}
+		});
 	}
 
 	// =========================================================================
@@ -602,6 +622,14 @@ int main(int argc, char** argv)
 
 	std::fprintf(stderr, "oes-mcp: shutting down\n");
 	std::fflush(stderr);
+	if (initThread.joinable()) initThread.join();
+	const int finalInitOutcome = initOutcomeCode.load();
 	mcpServer::Shutdown();
+	if (!noConfig && finalInitOutcome == static_cast<int>(mcpServer::InitOutcome::LockedExclusive)) {
+		return 2;
+	}
+	if (!noConfig && finalInitOutcome != static_cast<int>(mcpServer::InitOutcome::Ok)) {
+		return 1;
+	}
 	return 0;
 }

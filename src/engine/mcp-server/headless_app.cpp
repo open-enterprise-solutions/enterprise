@@ -36,6 +36,7 @@ namespace {
 
 std::mutex          g_mu;
 std::atomic<bool>   g_ready{false};
+std::atomic<bool>   g_loading{false};
 std::string         g_loadedPath;
 DiagSink            g_diag = nullptr;
 
@@ -125,6 +126,11 @@ InitOutcome Init(const HeadlessConfig& cfg, DiagSink diagSink)
 	if (g_ready.load()) {
 		return InitOutcome::Ok;  // idempotent — second Init after success no-ops.
 	}
+
+	g_loading.store(true);
+	struct LoadingGuard {
+		~LoadingGuard() { g_loading.store(false); }
+	} loadingGuard;
 
 	if (cfg.configPath.empty()) {
 		Diag("oes-mcp: configPath is empty (set argv[1] or OES_CONFIG_PATH)");
@@ -358,6 +364,7 @@ void Shutdown()
 	}
 
 	g_ready.store(false);
+	g_loading.store(false);
 	g_loadedPath.clear();
 	g_snapshotMgr.reset();
 }
@@ -395,6 +402,11 @@ void NotifyMutation(const std::string& toolName, const std::string& fullName)
 bool IsReady()
 {
 	return g_ready.load();
+}
+
+bool IsLoading()
+{
+	return g_loading.load();
 }
 
 bool SaveConfiguration(const std::string& path, std::string& errOut)

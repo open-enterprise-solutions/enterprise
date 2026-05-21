@@ -116,8 +116,9 @@ bool MatchTemplate(const std::string& templateUri,
 std::string ReadConfigCurrent(const std::map<std::string, std::string>&)
 {
 	nlohmann::json out;
-	out["ready"] = IsReady();
-	out["path"]  = LoadedConfigPath();
+	out["ready"]   = IsReady();
+	out["loading"] = IsLoading();
+	out["path"]    = LoadedConfigPath();
 
 	if (!IsReady() || activeMetaData == nullptr) {
 		out["name"]        = "";

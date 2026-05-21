@@ -122,6 +122,16 @@ void FreeIfSet(char* p)
 std::optional<nlohmann::json> RequireConfig()
 {
 	if (!IsReady()) {
+		if (IsLoading()) {
+			nlohmann::json env = TextResult(
+				"oes-mcp: configuration is still loading; retry this tool "
+				"after config_info.ready becomes true", true);
+			env["structuredContent"] = {
+				{ "errorCode", "OES_E_CONFIG_LOADING" },
+				{ "loading", true },
+			};
+			return env;
+		}
 		return TextResult("oes-mcp: no configuration loaded — start the server "
 		                    "with an OES configuration directory in argv[1] or "
 		                    "OES_CONFIG_PATH", true);
@@ -2837,6 +2847,7 @@ nlohmann::json ToolConfigInfo(const nlohmann::json& /*args*/)
 {
 	nlohmann::json out;
 	out["ready"]       = IsReady();
+	out["loading"]     = IsLoading();
 	out["configPath"]  = LoadedConfigPath();
 	if (!IsReady() || activeMetaData == nullptr) {
 		return JsonResult(out);
