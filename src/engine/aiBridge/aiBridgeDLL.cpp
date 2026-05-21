@@ -35,6 +35,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cctype>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -58,6 +59,14 @@ namespace {
 
 const ibHostAPI* g_host    = nullptr;
 const char*      g_paneId  = "aiBridge.chat";
+
+void DiagWrite(const std::string& line)
+{
+	FILE* f = std::fopen("/tmp/oes-diag.log", "a");
+	if (f == nullptr) return;
+	std::fprintf(f, "%s\n", line.c_str());
+	std::fclose(f);
+}
 
 // SEC-P0-1: write the unredacted HTTP error body to a diagnostic file
 // only when OES_AI_DEBUG_UNSAFE=1. User-visible EmitError envelopes
@@ -107,6 +116,35 @@ struct ClientGuard {
 	ClientGuard(const ClientGuard&) = delete;
 	ClientGuard& operator=(const ClientGuard&) = delete;
 };
+
+constexpr const char* kHttpUserAgent = "OES-Designer/1.0";
+
+httplib::Headers MakeJsonHeaders(const std::string& token,
+                                  const std::string& tenant,
+                                  const char* accept = "application/json")
+{
+	httplib::Headers headers = {
+		{ "Authorization", "Bearer " + token },
+		{ "Content-Type",  "application/json" },
+		{ "Accept",        accept ? accept : "application/json" },
+		{ "User-Agent",    kHttpUserAgent },
+	};
+	if (!tenant.empty()) {
+		headers.emplace("X-Tenant-Id", tenant);
+	}
+	return headers;
+}
+
+void CloseClient(httplib::Client& cli)
+{
+	try {
+		cli.stop();
+	} catch (const std::exception& e) {
+		DiagWrite("aiBridge: client close exception: " + std::string(e.what()));
+	} catch (...) {
+		DiagWrite("aiBridge: client close exception");
+	}
+}
 
 // Per-request cancel tokens for the Stop Generation feature. Pane fires
 // agent.cancel with the original requestId; the worker polls between
@@ -197,6 +235,91 @@ std::string ReadEnv(const char* key, const char* fallback)
 		}
 	}
 	return fallback ? std::string(fallback) : std::string();
+}
+
+std::string ReadEnvAny(const char* key1, const char* key2,
+                       const char* key3, const char* fallback)
+{
+	std::string value = ReadEnv(key1, "");
+	if (!value.empty()) return value;
+	if (key2 != nullptr) {
+		value = ReadEnv(key2, "");
+		if (!value.empty()) return value;
+	}
+	if (key3 != nullptr) {
+		value = ReadEnv(key3, "");
+		if (!value.empty()) return value;
+	}
+	return fallback ? std::string(fallback) : std::string();
+}
+
+std::string TrimCopy(std::string value)
+{
+	const auto notSpace = [](unsigned char c) {
+		return c != ' ' && c != '\t' && c != '\r' && c != '\n';
+	};
+	while (!value.empty() && !notSpace(static_cast<unsigned char>(value.front()))) {
+		value.erase(value.begin());
+	}
+	while (!value.empty() && !notSpace(static_cast<unsigned char>(value.back()))) {
+		value.pop_back();
+	}
+	if (value.size() >= 2 &&
+	    ((value.front() == '"' && value.back() == '"') ||
+	     (value.front() == '\'' && value.back() == '\''))) {
+		value = value.substr(1, value.size() - 2);
+	}
+	return value;
+}
+
+std::string NormalizePugiLocale(std::string raw)
+{
+	raw = TrimCopy(raw);
+	if (raw.empty()) return "uk-UA";
+	std::string lower;
+	lower.reserve(raw.size());
+	for (unsigned char c : raw) {
+		lower.push_back(static_cast<char>(std::tolower(c)));
+	}
+	if (lower == "uk" || lower == "uk_ua" || lower == "uk-ua") return "uk-UA";
+	if (lower == "ru" || lower == "ru_ru" || lower == "ru-ru" ||
+	    lower == "be" || lower == "be_by" || lower == "be-by") return "ru-RU";
+	if (lower == "en" || lower == "en_us" || lower == "en-us" ||
+	    lower == "c" || lower == "posix") return "en-US";
+	return "en-US";
+}
+
+std::string PugiEndpoint()
+{
+	const std::string explicitEndpoint = TrimCopy(ReadEnv("ENDPOINT", ""));
+	if (!explicitEndpoint.empty()) return explicitEndpoint;
+
+	std::string base = TrimCopy(ReadEnv("PUGI_BASE_URL", "https://mcp.pugi.io"));
+	while (!base.empty() && base.back() == '/') base.pop_back();
+	if (base.empty()) return "https://mcp.pugi.io/api/oes-mcp/invoke";
+	if (base.size() >= 19 &&
+	    base.compare(base.size() - 19, 19, "/api/oes-mcp/invoke") == 0) {
+		return base;
+	}
+	return base + "/api/oes-mcp/invoke";
+}
+
+std::string PugiToken()
+{
+	return TrimCopy(ReadEnvAny("TOKEN", "PUGI_OES_API_KEY",
+	                          "PUGI_TENANT_TOKEN", ""));
+}
+
+std::string PugiTenant()
+{
+	return TrimCopy(ReadEnvAny("TENANT", "PUGI_TENANT_ID",
+	                          "PUGI_TENANT", ""));
+}
+
+std::string PugiLocale()
+{
+	return NormalizePugiLocale(ReadEnvAny("LOCALE", "PUGI_OES_LOCALE",
+	                                     nullptr, "uk-UA"));
 }
 
 // Split a URL into (scheme+host, path). Trivial parser — enough for
@@ -333,9 +456,9 @@ void EmitTypewriter(const std::string& requestId, const std::string& text,
 // shape that backend actually expects:
 //   POST  <endpoint>
 //   H:    Authorization: Bearer <token>
-//         X-Pugi-Tenant: <tenant-uuid>
+//         X-Tenant-Id: <tenant-uuid>
 //         Content-Type: application/json
-//   Body: {"name":"llm_query","input":{"prompt":"...","locale":"uk-UA"}}
+//   Body: {"name":"ai_chat_query","input":{"prompt":"...","locale":"uk-UA"}}
 // Response: 200/201 {"result":{"content":"...","model":"...",...}}
 //           4xx     {"message":"...","statusCode":N}
 // Single-shot — no SSE. Streaming effect is faked via EmitTypewriter.
@@ -350,6 +473,7 @@ void EmitTypewriter(const std::string& requestId, const std::string& text,
 void RunPugiMcpRequest(std::string requestId, std::string prompt,
                         const std::string& endpoint, const std::string& token,
                         const std::string& tenant,   const std::string& locale,
+                        const std::string& mode,
                         const std::shared_ptr<std::atomic<bool>>& cancelTok)
 {
 	// SEC-P1-6: scheme + HTTPS precondition.
@@ -367,7 +491,7 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 	cli.set_connection_timeout(15);
 	cli.set_read_timeout(60);   // SEC-P2-1: was 120s; Anvil llm_query <30s typical
 	// SEC-P1-5: never follow cross-origin redirects with Authorization +
-	// X-Pugi-Tenant attached. cpp-httplib's follower replays full headers
+	// X-Tenant-Id attached. cpp-httplib's follower replays full headers
 	// to the redirect target — a redirect to an attacker host would leak
 	// the bearer. Surface 3xx as an explicit error instead.
 	cli.set_follow_location(false);
@@ -379,20 +503,29 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 	}
 
 	nlohmann::json body;
-	body["name"]            = "llm_query";
-	body["input"]           = nlohmann::json::object();
-	body["input"]["prompt"] = prompt;
-	body["input"]["locale"] = locale.empty() ? std::string("uk-UA") : locale;
+	body["name"]                     = "ai_chat_query";
+	body["input"]                    = nlohmann::json::object();
+	body["input"]["prompt"]          = prompt;
+	body["input"]["locale"]          = NormalizePugiLocale(locale);
+	body["input"]["conversation"]    = nlohmann::json::array();
+	body["input"]["mode"]            = mode.empty() ? std::string("chat") : mode;
 
-	httplib::Headers headers = {
-		{ "Authorization", "Bearer " + token },
-		{ "X-Pugi-Tenant", tenant            },
-		{ "Content-Type",  "application/json" },
-		{ "Accept",        "application/json" },
-	};
+	httplib::Headers headers = MakeJsonHeaders(token, tenant);
 
 	const std::string bodyStr = body.dump();
-	auto res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
+	httplib::Result res;
+	try {
+		res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
+		CloseClient(cli);
+	} catch (const std::exception& e) {
+		CloseClient(cli);
+		EmitError(std::string("aiBridge[pugi-mcp]: transport exception — ") + e.what());
+		return;
+	} catch (...) {
+		CloseClient(cli);
+		EmitError("aiBridge[pugi-mcp]: transport exception");
+		return;
+	}
 	if (!res) {
 		EmitError("aiBridge[pugi-mcp]: HTTP failed — " +
 		           std::string(httplib::to_string(res.error())));
@@ -482,7 +615,7 @@ void RunTripleReview(std::string requestId, std::string code,
 	// 60s ceiling means a single failed reviewer surfaces an explicit
 	// timeout to the user instead of freezing the Designer for 3 minutes.
 	cli.set_read_timeout(60);
-	// SEC-P1-5: refuse redirects so bearer + X-Pugi-Tenant aren't replayed.
+	// SEC-P1-5: refuse redirects so bearer + X-Tenant-Id aren't replayed.
 	cli.set_follow_location(false);
 	// SEC-P2-1: register before Post() so shutdown can stop() us mid-flight.
 	ClientGuard guard(&cli);
@@ -496,17 +629,24 @@ void RunTripleReview(std::string requestId, std::string code,
 	body["input"]             = nlohmann::json::object();
 	body["input"]["code"]     = code;
 	body["input"]["language"] = language.empty() ? std::string("CES") : language;
-	body["input"]["locale"]   = locale.empty()   ? std::string("uk-UA") : locale;
+	body["input"]["locale"]   = NormalizePugiLocale(locale);
 
-	httplib::Headers headers = {
-		{ "Authorization", "Bearer " + token },
-		{ "X-Pugi-Tenant", tenant            },
-		{ "Content-Type",  "application/json" },
-		{ "Accept",        "application/json" },
-	};
+	httplib::Headers headers = MakeJsonHeaders(token, tenant);
 
 	const std::string bodyStr = body.dump();
-	auto res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
+	httplib::Result res;
+	try {
+		res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
+		CloseClient(cli);
+	} catch (const std::exception& e) {
+		CloseClient(cli);
+		EmitError(std::string("aiBridge[triple-review]: transport exception — ") + e.what());
+		return;
+	} catch (...) {
+		CloseClient(cli);
+		EmitError("aiBridge[triple-review]: transport exception");
+		return;
+	}
 	if (!res) {
 		EmitError("aiBridge[triple-review]: HTTP failed — " +
 		           std::string(httplib::to_string(res.error())));
@@ -595,13 +735,18 @@ void PostAgentResolve(const std::string& endpoint, const std::string& token,
 	body["input"]["appliedOps"]         = appliedOps;
 	body["input"]["failedOps"]          = failedOps;
 
-	httplib::Headers headers = {
-		{ "Authorization", "Bearer " + token },
-		{ "X-Pugi-Tenant", tenant            },
-		{ "Content-Type",  "application/json" },
-		{ "Accept",        "application/json" },
-	};
-	(void)cli.Post(path.c_str(), headers, body.dump(), "application/json");
+	httplib::Headers headers = MakeJsonHeaders(token, tenant);
+	try {
+		(void)cli.Post(path.c_str(), headers, body.dump(), "application/json");
+		CloseClient(cli);
+	} catch (const std::exception& e) {
+		CloseClient(cli);
+		DiagWrite("aiBridge[oes-agent-resolve]: transport exception: " +
+		          std::string(e.what()));
+	} catch (...) {
+		CloseClient(cli);
+		DiagWrite("aiBridge[oes-agent-resolve]: transport exception");
+	}
 }
 
 // AGENT-MODE: oes_agent path — calls the `oes_agent` Anvil tool with the
@@ -641,7 +786,7 @@ void RunOesAgent(std::string requestId, std::string prompt,
 	body["name"]              = "oes_agent";
 	body["input"]             = nlohmann::json::object();
 	body["input"]["prompt"]   = prompt;
-	body["input"]["locale"]   = locale.empty() ? std::string("uk-UA") : locale;
+	body["input"]["locale"]   = NormalizePugiLocale(locale);
 	// AGENT-MODE: forward Designer context verbatim when provided; the
 	// server uses it to disambiguate fullName references like "Catalog2".
 	if (!contextJson.empty()) {
@@ -651,14 +796,21 @@ void RunOesAgent(std::string requestId, std::string prompt,
 		}
 	}
 
-	httplib::Headers headers = {
-		{ "Authorization", "Bearer " + token },
-		{ "X-Pugi-Tenant", tenant            },
-		{ "Content-Type",  "application/json" },
-		{ "Accept",        "application/json" },
-	};
+	httplib::Headers headers = MakeJsonHeaders(token, tenant);
 
-	auto res = cli.Post(path.c_str(), headers, body.dump(), "application/json");
+	httplib::Result res;
+	try {
+		res = cli.Post(path.c_str(), headers, body.dump(), "application/json");
+		CloseClient(cli);
+	} catch (const std::exception& e) {
+		CloseClient(cli);
+		EmitError(std::string("aiBridge[oes-agent]: transport exception — ") + e.what());
+		return;
+	} catch (...) {
+		CloseClient(cli);
+		EmitError("aiBridge[oes-agent]: transport exception");
+		return;
+	}
 	if (!res) {
 		EmitError("aiBridge[oes-agent]: HTTP failed — " +
 		           std::string(httplib::to_string(res.error())));
@@ -828,28 +980,28 @@ void RunChatRequest(std::string requestId, std::string prompt, std::string mode,
 {
 	const std::string token    = ReadEnv("TOKEN",    "");
 	const std::string protocol = ReadEnv("PROTOCOL", "openai");  // or "pugi-mcp"
-	const std::string endpoint = ReadEnv("ENDPOINT",
-	                                       protocol == "pugi-mcp"
-	                                          ? "https://mcp.pugi.io/api/oes-mcp/invoke"
-	                                          : "https://api.openai.com/v1/chat/completions");
+	const std::string endpoint = protocol == "pugi-mcp"
+	    ? PugiEndpoint()
+	    : ReadEnv("ENDPOINT", "https://api.openai.com/v1/chat/completions");
 	const std::string model    = ReadEnv("MODEL",    "gpt-4o-mini");
 
-	if (token.empty()) {
+	if (protocol != "pugi-mcp" && token.empty()) {
 		EmitError("aiBridge: no TOKEN in plugin env. Set it via Tools → Plugins → Edit API token.");
 		return;
 	}
 
 	// Pugi-MCP branch — bypass the OpenAI SSE path entirely.
 	if (protocol == "pugi-mcp") {
-		const std::string tenant = ReadEnv("TENANT", "");
-		if (tenant.empty()) {
-			EmitError("aiBridge[pugi-mcp]: TENANT env var is required (tenant UUID).");
+		const std::string pugiToken = PugiToken();
+		const std::string tenant = PugiTenant();
+		if (pugiToken.empty()) {
+			EmitError("aiBridge[pugi-mcp]: TOKEN or PUGI_OES_API_KEY is required.");
 			return;
 		}
-		const std::string locale = ReadEnv("LOCALE", "uk-UA");
+		const std::string locale = PugiLocale();
 		const std::string ridCopy = requestId;
 		RunPugiMcpRequest(std::move(requestId), std::move(prompt),
-		                    endpoint, token, tenant, locale, cancelTok);
+		                    endpoint, pugiToken, tenant, locale, mode, cancelTok);
 		EraseCancelToken(ridCopy);
 		return;
 	}
@@ -895,11 +1047,8 @@ void RunChatRequest(std::string requestId, std::string prompt, std::string mode,
 	usr["content"] = prompt;
 	body["messages"].push_back(usr);
 
-	httplib::Headers headers = {
-		{ "Authorization", "Bearer " + token },
-		{ "Content-Type",  "application/json" },
-		{ "Accept",        "text/event-stream" },
-	};
+	httplib::Headers headers = MakeJsonHeaders(token, std::string(),
+	                                           "text/event-stream");
 
 	// SSE parser state. Each "data: <json>\n\n" frame is a chat
 	// completion chunk. The body comes in as raw bytes from
@@ -965,7 +1114,21 @@ void RunChatRequest(std::string requestId, std::string prompt, std::string mode,
 	};
 
 	const std::string bodyStr = body.dump();
-	auto res = cli.Post(path.c_str(), headers, bodyStr, "application/json", receiver);
+	httplib::Result res;
+	try {
+		res = cli.Post(path.c_str(), headers, bodyStr, "application/json", receiver);
+		CloseClient(cli);
+	} catch (const std::exception& e) {
+		CloseClient(cli);
+		EraseCancelToken(requestId);
+		EmitError(std::string("aiBridge: transport exception — ") + e.what());
+		return;
+	} catch (...) {
+		CloseClient(cli);
+		EraseCancelToken(requestId);
+		EmitError("aiBridge: transport exception");
+		return;
+	}
 
 	// Cancel path: receiver returned false because cancelTok flipped. The
 	// httplib Post return value is "no res / connection closed" in that
@@ -1049,10 +1212,9 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 				plan = it->second;
 			}
 
-			const std::string endpoint = ReadEnv("ENDPOINT",
-			    "https://mcp.pugi.io/api/oes-mcp/invoke");
-			const std::string token  = ReadEnv("TOKEN",  "");
-			const std::string tenant = ReadEnv("TENANT", "");
+			const std::string endpoint = PugiEndpoint();
+			const std::string token  = PugiToken();
+			const std::string tenant = PugiTenant();
 
 			if (kind == "agent.reject") {
 				// AGENT-MODE: nothing to walk — just close the round-trip.
@@ -1105,13 +1267,12 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 		// instead of free-text. Worker spawned inline because the path
 		// uses pugi-mcp credentials regardless of PROTOCOL.
 		if (kind == "editor.skill" && op == "triple-review") {
-			const std::string token = ReadEnv("TOKEN", "");
-			const std::string endpoint = ReadEnv("ENDPOINT",
-			    "https://mcp.pugi.io/api/oes-mcp/invoke");
-			const std::string tenant   = ReadEnv("TENANT", "");
-			const std::string locale   = ReadEnv("LOCALE", "uk-UA");
-			if (token.empty() || tenant.empty()) {
-				EmitError("aiBridge[triple-review]: requires TOKEN + TENANT in env.");
+			const std::string token = PugiToken();
+			const std::string endpoint = PugiEndpoint();
+			const std::string tenant   = PugiTenant();
+			const std::string locale   = PugiLocale();
+			if (token.empty()) {
+				EmitError("aiBridge[triple-review]: requires TOKEN or PUGI_OES_API_KEY in env.");
 				return;
 			}
 			std::string requestId = j.value("requestId", std::string());
@@ -1141,13 +1302,12 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 		// openObjects, currentSelection) is packed verbatim into the
 		// server payload.
 		if (kind == "editor.skill" && op == "agent") {
-			const std::string token = ReadEnv("TOKEN", "");
-			const std::string endpoint = ReadEnv("ENDPOINT",
-			    "https://mcp.pugi.io/api/oes-mcp/invoke");
-			const std::string tenant   = ReadEnv("TENANT", "");
-			const std::string locale   = ReadEnv("LOCALE", "uk-UA");
-			if (token.empty() || tenant.empty()) {
-				EmitError("aiBridge[oes-agent]: requires TOKEN + TENANT in env.");
+			const std::string token = PugiToken();
+			const std::string endpoint = PugiEndpoint();
+			const std::string tenant   = PugiTenant();
+			const std::string locale   = PugiLocale();
+			if (token.empty()) {
+				EmitError("aiBridge[oes-agent]: requires TOKEN or PUGI_OES_API_KEY in env.");
 				return;
 			}
 			std::string requestId = j.value("requestId", std::string());
@@ -1410,6 +1570,8 @@ OES_PLUGIN_EXPORT int oes_plugin_initialize(const ibHostAPI* host)
 	static const char* kCachedEnvKeys[] = {
 		"TOKEN", "PROTOCOL", "ENDPOINT", "MODEL",
 		"TENANT", "LOCALE",
+		"PUGI_BASE_URL", "PUGI_OES_API_KEY", "PUGI_TENANT_TOKEN",
+		"PUGI_TENANT_ID", "PUGI_TENANT", "PUGI_OES_LOCALE",
 		nullptr
 	};
 	PrimeEnvCache(kCachedEnvKeys);

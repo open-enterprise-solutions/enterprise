@@ -1369,6 +1369,7 @@ nlohmann::json PugiHttpInvoke(const std::string& toolName,
 		{ "X-Tenant-Id",   cfg.tenant            },
 		{ "Content-Type",  "application/json"    },
 		{ "Accept",        "application/json"    },
+		{ "User-Agent",    "oes-mcp/1.0"         },
 	};
 
 	const std::string bodyStr = body.dump();

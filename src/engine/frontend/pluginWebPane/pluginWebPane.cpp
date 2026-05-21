@@ -651,7 +651,6 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 
 	// Render initial empty state (transcript with no entries shows a
 	// short hint line so the pane does not look broken on first load).
-	ApplyPermissionModePolicy();
 	RenderTranscript();
 }
 
@@ -1860,6 +1859,7 @@ bool ibPluginWebPane::TryDispatchSlashCommand(const wxString& text)
 	try {
 		m_onMessage(paneIdUtf8.c_str(), payload.c_str(), m_userData);
 	} catch (...) {
+		RestorePlanPolicyAfterApply();
 		Entry err;
 		err.role     = Entry::Role::Error;
 		err.markdown = _("Не удалось отправить запрос — плагин вернул исключение.");
