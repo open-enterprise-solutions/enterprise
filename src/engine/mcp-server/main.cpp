@@ -29,6 +29,7 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <string>
 
@@ -59,6 +60,8 @@ void PrintHelp()
 		"oes-mcp — Model Context Protocol server for OES Designer\n"
 		"\n"
 		"Usage: oes-mcp [<config-path>]\n"
+		"       oes-mcp --install <config-path> [--name <server-name>]\n"
+		"       oes-mcp --install-dry-run <config-path> [--name <server-name>]\n"
 		"\n"
 		"If <config-path> is omitted, the OES_CONFIG_PATH environment\n"
 		"variable is used. The configuration path is a directory containing\n"
@@ -75,6 +78,63 @@ void PrintHelp()
 		"      --args=<config-path>\n");
 }
 
+std::string ShellQuote(const std::string& value)
+{
+	std::string out = "'";
+	for (char c : value) {
+		if (c == '\'') out += "'\\''";
+		else out.push_back(c);
+	}
+	out += "'";
+	return out;
+}
+
+int RunInstall(int argc, char** argv, int installArgIndex, bool dryRun)
+{
+	std::string configPath;
+	std::string serverName = "oes-local";
+	for (int i = installArgIndex + 1; i < argc; ++i) {
+		const std::string a = argv[i];
+		if (a == "--name" && i + 1 < argc) {
+			serverName = argv[++i];
+			continue;
+		}
+		if (configPath.empty() && !a.empty() && a[0] != '-') {
+			configPath = a;
+			continue;
+		}
+	}
+	if (configPath.empty()) {
+		std::fprintf(stderr, "oes-mcp: --install requires <config-path>\n");
+		return 1;
+	}
+	const char* verbose = std::getenv("OES_MCP_INSTALL_VERBOSE");
+	if (verbose == nullptr || std::string(verbose) != "1") {
+		(void)std::freopen("/dev/null", "w", stderr);
+	}
+
+	const std::string exePath =
+		std::filesystem::absolute(std::filesystem::path(argv[0])).string();
+	const std::string cmd =
+		"claude mcp add " + ShellQuote(serverName) +
+		" --transport=stdio --command=" + ShellQuote(exePath) +
+		" --args=" + ShellQuote(configPath);
+
+	std::fprintf(stdout, "%s\n", cmd.c_str());
+	if (dryRun) return 0;
+
+	const int rc = std::system(cmd.c_str());
+	if (rc != 0) {
+		std::fprintf(stdout,
+			"oes-mcp: claude mcp add failed with exit code %d\n", rc);
+		return 1;
+	}
+	std::fprintf(stdout,
+		"oes-mcp: installed server '%s' for config '%s'\n",
+		serverName.c_str(), configPath.c_str());
+	return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -88,6 +148,12 @@ int main(int argc, char** argv)
 		if (a == "--help" || a == "-h") {
 			PrintHelp();
 			return 0;
+		}
+		if (a == "--install") {
+			return RunInstall(argc, argv, i, /*dryRun=*/false);
+		}
+		if (a == "--install-dry-run") {
+			return RunInstall(argc, argv, i, /*dryRun=*/true);
 		}
 		// MCP: --no-config keeps the server running without loading a
 		// configuration. Used by the smoke test + CI to validate the
