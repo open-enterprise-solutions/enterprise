@@ -22,11 +22,22 @@
 
 namespace mcpServer {
 
+// MCP: tool behaviour hints (spec 2025-06-18). All four must be set so the
+// client never has to guess defaults; downstream agents key off these to
+// route calls (e.g. allow-list read-only tools in restricted modes).
+struct ToolAnnotations {
+	bool readOnlyHint    = false;   // does NOT modify environment
+	bool destructiveHint = false;   // may perform destructive updates
+	bool idempotentHint  = false;   // repeated calls with same args = same effect
+	bool openWorldHint   = false;   // interacts with external world
+};
+
 // Static descriptor — what `tools/list` ships back to the client.
 struct ToolDescriptor {
-	std::string    name;
-	std::string    description;
-	nlohmann::json inputSchema;   // JSON Schema object
+	std::string     name;
+	std::string     description;
+	nlohmann::json  inputSchema;   // JSON Schema object
+	ToolAnnotations annotations;   // MCP 2025-06-18 hint block
 };
 
 // Concrete tool entry: a descriptor + the dispatch fn that takes the

@@ -183,6 +183,14 @@ int main(int argc, char** argv)
 			item["name"]        = t.desc.name;
 			item["description"] = t.desc.description;
 			item["inputSchema"] = t.desc.inputSchema;
+			// MCP spec 2025-06-18: behaviour hints. All four always emitted
+			// so clients never have to guess defaults.
+			nlohmann::json ann;
+			ann["readOnlyHint"]    = t.desc.annotations.readOnlyHint;
+			ann["destructiveHint"] = t.desc.annotations.destructiveHint;
+			ann["idempotentHint"]  = t.desc.annotations.idempotentHint;
+			ann["openWorldHint"]   = t.desc.annotations.openWorldHint;
+			item["annotations"]    = std::move(ann);
 			arr.push_back(item);
 		}
 		nlohmann::json out;

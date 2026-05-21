@@ -579,6 +579,17 @@ const std::vector<ToolEntry>& BuildRegistry()
 	auto boolP = [](const std::string& desc) {
 		nlohmann::json p; p["type"] = "boolean"; p["description"] = desc; return p;
 	};
+	// MCP: hint quad per spec 2025-06-18. Order: readOnly, destructive,
+	// idempotent, openWorld. openWorld is false for every tool — oes-mcp is
+	// a closed metadata domain bound to the active configuration.
+	auto ann = [](bool readOnly, bool destructive, bool idempotent, bool openWorld) {
+		ToolAnnotations a;
+		a.readOnlyHint    = readOnly;
+		a.destructiveHint = destructive;
+		a.idempotentHint  = idempotent;
+		a.openWorldHint   = openWorld;
+		return a;
+	};
 
 	table.push_back({
 		{ "meta_query",
@@ -586,7 +597,8 @@ const std::vector<ToolEntry>& BuildRegistry()
 		  "'<Kind>.<Name>' (e.g. 'Catalog.Контрагенты').",
 		  schemaObj({
 		    { "fullName", str("Object full name, e.g. 'Catalog.Контрагенты'") },
-		  }, { "fullName" })
+		  }, { "fullName" }),
+		  ann(true, false, true, false)
 		},
 		&ToolMetaQuery
 	});
@@ -598,7 +610,10 @@ const std::vector<ToolEntry>& BuildRegistry()
 		    { "kind",       str("Object kind: Catalog, Document, Form, ItemForm, ...") },
 		    { "fullName",   str("Full path, e.g. 'Catalog.X' or 'Catalog.X.Forms.Y'") },
 		    { "properties", obj("Object properties (synonym, attributes, controls, etc.)") },
-		  }, { "kind", "fullName" })
+		  }, { "kind", "fullName" }),
+		  // Non-destructive (creates new — no prior state lost) but not
+		  // idempotent: second call with same fullName errors on duplicate.
+		  ann(false, false, false, false)
 		},
 		&ToolMetaCreate
 	});
@@ -610,7 +625,11 @@ const std::vector<ToolEntry>& BuildRegistry()
 		    { "fullName",   str("Full path of the object to edit") },
 		    { "patch",      obj("Patch object (or properties merge)") },
 		    { "properties", obj("Alias for 'patch'") },
-		  }, { "fullName" })
+		  }, { "fullName" }),
+		  // Non-destructive in the spec sense (no data loss — overwrites
+		  // fields); idempotent because re-applying the same patch yields
+		  // the same final state.
+		  ann(false, false, true, false)
 		},
 		&ToolMetaEdit
 	});
@@ -622,7 +641,10 @@ const std::vector<ToolEntry>& BuildRegistry()
 		    { "fullName",   str("Full path of the object to delete") },
 		    { "force",      boolP("Must be true to confirm an irreversible delete") },
 		    { "properties", obj("Optional extra properties forwarded to HostMetaDelete") },
-		  }, { "fullName" })
+		  }, { "fullName" }),
+		  // Destructive — drops prior state. Idempotent: second delete on a
+		  // missing object is a no-op tail (terminal state matches).
+		  ann(false, true, true, false)
 		},
 		&ToolMetaDelete
 	});
@@ -632,7 +654,8 @@ const std::vector<ToolEntry>& BuildRegistry()
 		  "result (Catalog / Document / ...). Empty kind returns all.",
 		  schemaObj({
 		    { "kind", str("Optional kind filter (Catalog, Document, ...). Empty = all.") },
-		  }, {})
+		  }, {}),
+		  ann(true, false, true, false)
 		},
 		&ToolListObjects
 	});
@@ -643,7 +666,8 @@ const std::vector<ToolEntry>& BuildRegistry()
 		  "'CommonModules.Y'.",
 		  schemaObj({
 		    { "fullName", str("Dotted module path") },
-		  }, { "fullName" })
+		  }, { "fullName" }),
+		  ann(true, false, true, false)
 		},
 		&ToolReadModule
 	});
@@ -654,7 +678,10 @@ const std::vector<ToolEntry>& BuildRegistry()
 		  schemaObj({
 		    { "fullName", str("Dotted module path") },
 		    { "source",   str("New CES/VES source text") },
-		  }, { "fullName", "source" })
+		  }, { "fullName", "source" }),
+		  // Destructive — replaces prior source text. Idempotent: writing the
+		  // same source twice produces the same module state.
+		  ann(false, true, true, false)
 		},
 		&ToolWriteModule
 	});
@@ -665,14 +692,16 @@ const std::vector<ToolEntry>& BuildRegistry()
 		  schemaObj({
 		    { "source", str("Source text") },
 		    { "mode",   str("ces|ves (case-insensitive). Default: ces") },
-		  }, {})
+		  }, {}),
+		  ann(true, false, true, false)
 		},
 		&ToolCompileCheck
 	});
 	table.push_back({
 		{ "sigma_check",
 		  "Run the Σ-invariant checks. Deferred in v1 — returns isError:true.",
-		  schemaObj({}, {})
+		  schemaObj({}, {}),
+		  ann(true, false, true, false)
 		},
 		&ToolSigmaCheck
 	});
@@ -684,7 +713,8 @@ const std::vector<ToolEntry>& BuildRegistry()
 		  schemaObj({
 		    { "query", str("Search query (substring or regex)") },
 		    { "regex", boolP("Treat query as ECMAScript regex") },
-		  }, { "query" })
+		  }, { "query" }),
+		  ann(true, false, true, false)
 		},
 		&ToolSearchText
 	});
@@ -694,7 +724,10 @@ const std::vector<ToolEntry>& BuildRegistry()
 		  "writes 'config.OES-DB' next to the loaded configuration directory.",
 		  schemaObj({
 		    { "path", str("Optional target path for the .OES-DB snapshot") },
-		  }, {})
+		  }, {}),
+		  // Writes to disk but the result is a deterministic snapshot of
+		  // current in-memory state — not destructive, idempotent.
+		  ann(false, false, true, false)
 		},
 		&ToolSaveConfig
 	});
@@ -702,7 +735,8 @@ const std::vector<ToolEntry>& BuildRegistry()
 		{ "config_info",
 		  "Return readiness state, loaded configuration path, top-level "
 		  "object count, and root name.",
-		  schemaObj({}, {})
+		  schemaObj({}, {}),
+		  ann(true, false, true, false)
 		},
 		&ToolConfigInfo
 	});
