@@ -13,11 +13,13 @@
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/plugin/metaBridge.h"
 #include "backend/plugin/pluginApi.h"
+#include "backend/plugin/byokEnv.h"
 #include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/compileContext.h"
 
 #include "3rdparty/nlohmann/json.hpp"
+#include "3rdparty/cpp-httplib/httplib.h"
 
 #include <wx/string.h>
 
@@ -25,6 +27,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <functional>
+#include <mutex>
 #include <optional>
 #include <regex>
 #include <string>
@@ -263,7 +266,6 @@ nlohmann::json ToolListObjects(const nlohmann::json& args)
 		item["synonym"] = std::string(obj->GetSynonym().utf8_str());
 		// Reuse metaBridge's display-case kind label so the JSON output
 		// is consistent across tools (Catalog, not catalog).
-		const wxString needle = obj->GetName();
 		// MCP: brute-force CLSID→string by trying every known kind — we
 		// don't have a public CLSIDToKindString export. There are ~11
 		// top-level kinds so this stays O(1) per row.
@@ -618,17 +620,240 @@ nlohmann::json ToolCompileCheck(const nlohmann::json& args)
 }
 
 // =========================================================================
-// Tool: sigma_check
+// Tool: sigma_check — HTTP proxy to Pugi MCP service
+//
+// Σ-invariant validation lives on the Pugi side (cloud RAG over BAS
+// Бухгалтерія 2.1 UA + OES_DEMO). oes-mcp only proxies the request and
+// passes the verdict back to the caller.
+//
+// Configuration (priority order):
+//   1. $OES_PUGI_ENDPOINT / $OES_PUGI_TOKEN / $OES_PUGI_TENANT env vars
+//   2. <plugins-config-dir>/aiBridge.env (ENDPOINT, TOKEN, TENANT keys)
+//
+// Fail-open contract: on any transport / connectivity failure the tool
+// returns a non-error envelope with structuredContent.ok=true,
+// offline=true, warning=... — the caller decides whether to proceed.
+// This keeps the Designer save flow usable offline.
 // =========================================================================
+struct PugiConfig {
+	std::string endpoint;
+	std::string token;
+	std::string tenant;
+	bool        loaded = false;
+};
+
+std::mutex& PugiConfigMutex()
+{
+	static std::mutex m;
+	return m;
+}
+
+PugiConfig& PugiConfigCache()
+{
+	static PugiConfig cfg;
+	return cfg;
+}
+
+// MCP: read endpoint/token/tenant from env vars first, then fall back to
+// the byokEnv aiBridge.env file. Cached after first successful load so
+// subsequent tool calls don't re-stat the env file. A reload simply means
+// restarting oes-mcp — Designer's plugin manager owns the live edit path.
+PugiConfig LoadPugiConfig()
+{
+	{
+		std::lock_guard<std::mutex> lk(PugiConfigMutex());
+		if (PugiConfigCache().loaded) return PugiConfigCache();
+	}
+
+	PugiConfig out;
+
+	auto envOrEmpty = [](const char* key) -> std::string {
+		const char* v = std::getenv(key);
+		return v ? std::string(v) : std::string();
+	};
+	out.endpoint = envOrEmpty("OES_PUGI_ENDPOINT");
+	out.token    = envOrEmpty("OES_PUGI_TOKEN");
+	out.tenant   = envOrEmpty("OES_PUGI_TENANT");
+
+	// Fill missing pieces from the aiBridge.env file (byokEnv namespace
+	// already handles dotenv parsing, quoted values, perms warnings).
+	if (out.endpoint.empty() || out.token.empty() || out.tenant.empty()) {
+		const byokEnv::PluginEnv all = byokEnv::LoadAll();
+		const std::string pluginId   = "aiBridge";
+		if (out.endpoint.empty()) out.endpoint = byokEnv::Get(all, pluginId, "ENDPOINT");
+		if (out.token.empty())    out.token    = byokEnv::Get(all, pluginId, "TOKEN");
+		if (out.tenant.empty())   out.tenant   = byokEnv::Get(all, pluginId, "TENANT");
+	}
+
+	out.loaded = true;
+	{
+		std::lock_guard<std::mutex> lk(PugiConfigMutex());
+		PugiConfigCache() = out;
+	}
+	return out;
+}
+
+// MCP: produce the fail-open envelope. Tool is annotated readOnly=true
+// so the agent can keep going — the caller (Designer save flow, agent
+// chain) inspects structuredContent.offline to decide whether to gate.
+nlohmann::json SigmaOfflineEnvelope(const std::string& reason)
+{
+	nlohmann::json env;
+	nlohmann::json content = nlohmann::json::array();
+	nlohmann::json item;
+	item["type"] = "text";
+	item["text"] = "sigma_check: Pugi unreachable, validation skipped (offline mode): " + reason;
+	content.push_back(item);
+	env["content"] = std::move(content);
+
+	nlohmann::json structured;
+	structured["ok"]      = true;
+	structured["offline"] = true;
+	structured["warning"] = "validation deferred";
+	structured["reason"]  = reason;
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+// MCP: split scheme+host vs path — same trivial parser aiBridge uses.
+std::pair<std::string, std::string> SigmaSplitUrl(const std::string& url)
+{
+	const auto schemeEnd = url.find("://");
+	if (schemeEnd == std::string::npos) return {std::string(), std::string()};
+	const auto pathStart = url.find('/', schemeEnd + 3);
+	if (pathStart == std::string::npos) return {url, "/"};
+	return {url.substr(0, pathStart), url.substr(pathStart)};
+}
+
 nlohmann::json ToolSigmaCheck(const nlohmann::json& args)
 {
-	// MCP: deferred — the Σ-invariant builtin is not registered on the
-	// system manager in this branch. The hook lives here so a future
-	// commit can wire ibValueSigmaCheck without breaking clients that
-	// already enumerate the tool table.
-	(void)args;
-	return TextResult("sigma_check: deferred — Σ-invariant checks are not "
-	                    "yet exposed through the MCP surface in v1", true);
+	// Input shape: { metadata: object, moduleCode?: string, rules?: string[] }
+	if (!args.is_object() || !args.contains("metadata")) {
+		return TextResult("sigma_check: 'metadata' is required", true);
+	}
+
+	const PugiConfig cfg = LoadPugiConfig();
+	if (cfg.endpoint.empty() || cfg.token.empty() || cfg.tenant.empty()) {
+		// Treat missing creds as offline so the agent loop survives
+		// when oes-mcp is launched outside the Designer environment.
+		return SigmaOfflineEnvelope(
+		    "no Pugi credentials configured (need OES_PUGI_ENDPOINT/TOKEN/TENANT "
+		    "or aiBridge.env with ENDPOINT/TOKEN/TENANT)");
+	}
+
+	// Build the request body — matches the proven Pugi MCP invocation
+	// shape aiBridge uses for its llm_query / triple_review calls:
+	//   { "name": "<tool>", "input": { ...args... } }
+	// The Pugi gateway rejects {tool, arguments} with a 400, so we mirror
+	// what its OpenAPI schema actually accepts.
+	nlohmann::json input = nlohmann::json::object();
+	input["metadata"] = args["metadata"];
+	if (args.contains("moduleCode") && args["moduleCode"].is_string()) {
+		input["moduleCode"] = args["moduleCode"];
+	}
+	if (args.contains("rules") && args["rules"].is_array()) {
+		input["rules"] = args["rules"];
+	}
+
+	nlohmann::json body;
+	body["name"]  = "sigma_check";
+	body["input"] = std::move(input);
+
+	// Scheme + HTTPS precondition. If we were built without OpenSSL the
+	// https://mcp.pugi.io endpoint can't even connect — fail open rather
+	// than spelunking through cpp-httplib's TLS errors.
+#ifndef CPPHTTPLIB_OPENSSL_SUPPORT
+	if (cfg.endpoint.rfind("https://", 0) == 0) {
+		return SigmaOfflineEnvelope(
+		    "oes-mcp built without OpenSSL; cannot reach https:// Pugi endpoint");
+	}
+#endif
+
+	const auto [base, path] = SigmaSplitUrl(cfg.endpoint);
+	if (base.empty()) {
+		return TextResult("sigma_check: malformed ENDPOINT URL: " + cfg.endpoint, true);
+	}
+
+	httplib::Client cli(base);
+	cli.set_connection_timeout(5);
+	cli.set_read_timeout(10);   // 10s ceiling per spec — stdio loop can't block longer.
+	cli.set_follow_location(false);  // SEC: never replay bearer to redirect target.
+
+	httplib::Headers headers = {
+		{ "Authorization", "Bearer " + cfg.token },
+		{ "X-Tenant-Id",   cfg.tenant            },
+		{ "Content-Type",  "application/json"    },
+		{ "Accept",        "application/json"    },
+	};
+
+	const std::string bodyStr = body.dump();
+	auto res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
+	if (!res) {
+		// Network / connect / timeout — fail open.
+		return SigmaOfflineEnvelope(
+		    std::string("transport error: ") + httplib::to_string(res.error()));
+	}
+	if (res->status >= 300 && res->status < 400) {
+		// Redirect with Authorization attached would leak the bearer.
+		return TextResult(
+		    "sigma_check: Pugi returned redirect; bearer not forwarded for security",
+		    true);
+	}
+	if (res->status >= 400) {
+		// Pugi returned an error envelope. Surface a clean message and
+		// truncate the raw body so we don't echo back potentially
+		// sensitive request slices.
+		std::string snippet = res->body.size() > 500
+		    ? res->body.substr(0, 500) + "..."
+		    : res->body;
+		return TextResult(
+		    "sigma_check: Pugi returned " + std::to_string(res->status) +
+		    ": " + snippet, true);
+	}
+
+	// 2xx — parse JSON. On parse failure surface the (truncated) body.
+	auto parsed = nlohmann::json::parse(res->body, nullptr, /*allow_exceptions=*/false);
+	if (parsed.is_discarded() || !parsed.is_object()) {
+		std::string snippet = res->body.size() > 500
+		    ? res->body.substr(0, 500) + "..."
+		    : res->body;
+		return TextResult(
+		    "sigma_check: Pugi returned non-JSON response: " + snippet, true);
+	}
+
+	// Pugi wraps tool output in {"result": {...}}. The inner result may
+	// itself be a full MCP envelope (content[] + structuredContent) OR a
+	// flat shape — we accept both. Older test backends sometimes return
+	// the envelope at the top level too, so we check both.
+	const nlohmann::json* payload = &parsed;
+	if (parsed.contains("result") && parsed["result"].is_object()) {
+		payload = &parsed["result"];
+	}
+
+	nlohmann::json env;
+	if (payload->contains("content") && (*payload)["content"].is_array()) {
+		env["content"] = (*payload)["content"];
+	} else {
+		nlohmann::json content = nlohmann::json::array();
+		nlohmann::json item;
+		item["type"] = "text";
+		item["text"] = payload->dump(2);
+		content.push_back(item);
+		env["content"] = std::move(content);
+	}
+
+	if (payload->contains("structuredContent")) {
+		env["structuredContent"] = (*payload)["structuredContent"];
+		// Mirror ok=false → isError=true so MCP clients that branch on
+		// the envelope flag (rather than digging into structuredContent)
+		// still see the failure.
+		const auto& sc = (*payload)["structuredContent"];
+		if (sc.is_object() && sc.contains("ok") && sc["ok"].is_boolean() &&
+		    !sc["ok"].get<bool>()) {
+			env["isError"] = true;
+		}
+	}
+	return env;
 }
 
 // =========================================================================
@@ -915,14 +1140,34 @@ const std::vector<ToolEntry>& BuildRegistry()
 		},
 		&ToolCompileCheck
 	});
-	table.push_back({
-		{ "sigma_check",
-		  "Run the Σ-invariant checks. Deferred in v1 — returns isError:true.",
-		  schemaObj({}, {}),
-		  ann(true, false, true, false)
-		},
-		&ToolSigmaCheck
-	});
+	{
+		// sigma_check pulls in array-typed and object-typed parameters that
+		// the local lambdas don't cover, so we build the schema inline here.
+		nlohmann::json rulesProp;
+		rulesProp["type"]        = "array";
+		rulesProp["items"]       = nlohmann::json::object();
+		rulesProp["items"]["type"] = "string";
+		rulesProp["description"] = "Optional rule filter (e.g. ['Σ-unique','Σ-balance'])";
+		table.push_back({
+			{ "sigma_check",
+			  "Validate a metadata snapshot against Σ-invariants via the Pugi "
+			  "MCP service (cloud RAG over BAS Бухгалтерія 2.1 UA + OES_DEMO). "
+			  "Returns structuredContent.ok plus a violations[] list when rules "
+			  "fail. Fails open with offline:true when Pugi is unreachable so "
+			  "callers can choose whether to abort or proceed.",
+			  schemaObj({
+			    { "metadata",   obj("Metadata snapshot to validate (e.g. result of meta_query on Catalog/Document/Register)") },
+			    { "moduleCode", str("Optional module source to include in validation context") },
+			    { "rules",      rulesProp },
+			  }, { "metadata" }),
+			  // openWorldHint=true: this tool now reaches an external HTTP
+			  // service (mcp.pugi.io), so the agent should treat its result
+			  // as dependent on outside state rather than the in-memory config.
+			  ann(true, false, true, /*openWorld=*/true)
+			},
+			&ToolSigmaCheck
+		});
+	}
 	table.push_back({
 		{ "search_text",
 		  "Full-text search across module sources, names, and synonyms. "

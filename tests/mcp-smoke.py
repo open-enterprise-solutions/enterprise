@@ -147,6 +147,28 @@ def main() -> int:
         if "result" not in save:
             failures.append(f"save_config: no result: {save}")
 
+    # 6) tools/call sigma_check — proxies to Pugi MCP. The tool MUST
+    # always return a well-formed envelope: either a real Pugi response,
+    # a Pugi-side error (isError=true with HTTP status), or the offline
+    # fail-open envelope. Any of those is acceptable; the failure mode is
+    # the server crashing or returning no result.
+    send(proc, {
+        "jsonrpc": "2.0", "id": 6, "method": "tools/call",
+        "params": {
+            "name": "sigma_check",
+            "arguments": {"metadata": {"kind": "Catalog", "name": "SmokeTest"}},
+        },
+    })
+    sigma = recv(proc, timeout_s=15.0)  # Pugi roundtrip can take a few seconds.
+    if "result" not in sigma:
+        failures.append(f"sigma_check: no result envelope: {sigma}")
+    else:
+        env = sigma["result"]
+        # Envelope must carry at least content[] (per MCP spec). isError
+        # and structuredContent are optional but the content list is not.
+        if not isinstance(env.get("content"), list) or not env["content"]:
+            failures.append(f"sigma_check: malformed envelope (no content): {env}")
+
     proc.stdin.close()
     proc.wait(timeout=3)
 

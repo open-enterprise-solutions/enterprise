@@ -36,6 +36,7 @@ target_include_directories(oes-mcp PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine
     ${CMAKE_SOURCE_DIR}/src/engine/backend
     ${CMAKE_SOURCE_DIR}/src/3rdparty
+    ${CMAKE_SOURCE_DIR}/src/3rdparty/cpp-httplib
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
@@ -53,6 +54,26 @@ target_link_libraries(oes-mcp PRIVATE
     wx::aui
     wx::stc
 )
+
+# OpenSSL — required for the Pugi MCP proxy in sigma_check. Without it
+# the tool falls back to its offline-mode envelope (fail-open) since the
+# Pugi endpoint is https://. Same gating aiBridge uses.
+find_package(OpenSSL QUIET)
+if(OpenSSL_FOUND)
+    message(STATUS "oes-mcp: OpenSSL found — sigma_check HTTPS proxy enabled")
+    target_compile_definitions(oes-mcp PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
+    target_link_libraries(oes-mcp PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    if(APPLE)
+        target_link_libraries(oes-mcp PRIVATE
+            "-framework CoreFoundation"
+            "-framework Security")
+    endif()
+else()
+    message(STATUS "oes-mcp: no OpenSSL — sigma_check will run in offline (fail-open) mode")
+endif()
+
+find_package(Threads REQUIRED)
+target_link_libraries(oes-mcp PRIVATE Threads::Threads)
 
 include(GNUInstallDirs)
 install(TARGETS oes-mcp
