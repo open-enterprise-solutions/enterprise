@@ -86,6 +86,45 @@ static wxString PickLocalizedFromMap(const nlohmann::json& maybeMap,
 	return wxString();
 }
 
+static wxString AddPreviewModulesFromListResponse(
+    const wxString& detailResponseJson,
+    const std::vector<wxString>& previewModules)
+{
+	if (previewModules.empty()) return detailResponseJson;
+
+	auto parsed = nlohmann::json::parse(
+	    std::string(detailResponseJson.utf8_str()),
+	    nullptr, false);
+	if (parsed.is_discarded() || !parsed.is_object()) {
+		return detailResponseJson;
+	}
+
+	nlohmann::json* payload = &parsed;
+	if (parsed.contains("result") && parsed["result"].is_object()) {
+		payload = &parsed["result"];
+	} else if (parsed.contains("structuredContent") &&
+	           parsed["structuredContent"].is_object()) {
+		payload = &parsed["structuredContent"];
+	}
+
+	if (payload->contains("previewModules") &&
+	    (*payload)["previewModules"].is_array() &&
+	    !(*payload)["previewModules"].empty()) {
+		return detailResponseJson;
+	}
+
+	nlohmann::json modules = nlohmann::json::array();
+	for (const wxString& module : previewModules) {
+		if (!module.IsEmpty()) {
+			modules.push_back(std::string(module.utf8_str()));
+		}
+	}
+	if (modules.empty()) return detailResponseJson;
+
+	(*payload)["previewModules"] = std::move(modules);
+	return wxString::FromUTF8(parsed.dump().c_str());
+}
+
 // ---------------------------------------------------------------------------
 // HTTP helper — POSTs to the configured template provider and returns
 // the raw response body. Used by all three fetch-* paths. Runs on a
@@ -781,21 +820,24 @@ void ibTemplateWizard::OnTemplatesListResponse(const wxString& responseJson)
 
 void ibTemplateWizard::OnTemplateGetResponse(const wxString& responseJson)
 {
-	m_templateGetResponseJson = responseJson;
 	// Find the chosen template's display name for the preview header.
 	wxString name = m_selectedTemplateId, version;
+	std::vector<wxString> previewModules;
 	for (const auto& t : m_templates) {
 		if (t.id == m_selectedTemplateId) {
 			name = t.name;
 			version = t.version;
+			previewModules = t.previewModules;
 			break;
 		}
 	}
+	m_templateGetResponseJson =
+	    AddPreviewModulesFromListResponse(responseJson, previewModules);
 	if (m_previewPage != nullptr) {
-		m_previewPage->LoadFrom(responseJson, name, version);
+		m_previewPage->LoadFrom(m_templateGetResponseJson, name, version);
 	}
 	if (m_customizePage != nullptr) {
-		m_customizePage->LoadObjectsFrom(responseJson);
+		m_customizePage->LoadObjectsFrom(m_templateGetResponseJson);
 	}
 	GoTo(PAGE_PREVIEW);
 }
@@ -804,17 +846,20 @@ void ibTemplateWizard::OnTemplateCustomizeResponse(const wxString& responseJson)
 {
 	// The customized response has the same mutations[] shape — re-load
 	// the preview page and bring the user back to it for confirmation.
-	m_templateGetResponseJson = responseJson;
 	wxString name = m_selectedTemplateId, version;
+	std::vector<wxString> previewModules;
 	for (const auto& t : m_templates) {
 		if (t.id == m_selectedTemplateId) {
 			name = t.name;
 			version = t.version;
+			previewModules = t.previewModules;
 			break;
 		}
 	}
+	m_templateGetResponseJson =
+	    AddPreviewModulesFromListResponse(responseJson, previewModules);
 	if (m_previewPage != nullptr) {
-		m_previewPage->LoadFrom(responseJson,
+		m_previewPage->LoadFrom(m_templateGetResponseJson,
 		                          name + _(" (модифицирован)"),
 		                          version);
 	}
@@ -841,9 +886,7 @@ void ibTemplateWizard::OnGalleryEmptyConfig(wxCommandEvent&)
 void ibTemplateWizard::OnGalleryCardClicked(const wxString& templateId)
 {
 	m_selectedTemplateId = templateId;
-	// Use includeData=false here — the preview only needs structure;
-	// demo data is fetched lazily on Apply when the user opts in.
-	StartFetchTemplateGet(templateId, /*includeData=*/false);
+	StartFetchTemplateGet(templateId, /*includeData=*/true);
 }
 
 void ibTemplateWizard::OnPreviewBack(wxCommandEvent&)
