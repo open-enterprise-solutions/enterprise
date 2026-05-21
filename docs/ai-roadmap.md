@@ -76,7 +76,7 @@ On each tick:
 
 Conkurent analysis (mcp-1c free tier 9 tools, Go binary, BM25 + BSL synonyms, auto-install, --ci mode). Their MIT code studied 2026-05-21. We borrow patterns + tool name shapes for cross-tool compatibility. Their paid tier (linter/optimizer/semantic-search) = our Pugi Pro roadmap.
 
-- [ ] **pending** t2-013: `execute_query` + `validate_query` MCP tools — let agents run SELECT/ВЫБРАТЬ queries against live config DB with parameters. ibPreparedStatement enforced. ~2 days.
+- [x] **done** t2-013 (d57d9e2a): `execute_query` + `validate_query` MCP tools — read-only SQL guard accepts SELECT/WITH only, rejects DDL/DML/control tokens before prepare, binds params through `ibPreparedStatement`, caps results to `maxRows`, and returns structured columns/rows. Smoke covers allowed SELECT and rejected DROP.
 - [ ] **pending** t2-014: `get_event_log` MCP tool — read system event journal with filters (date/level/user). ~1 day.
 - [ ] **pending** t2-015: `bsl_syntax_help` equivalent → `oes_syntax_help` MCP tool — wrap 91 builtins + 43 keywords + opcode quick-ref. Pre-built lookup from `docs/oes-product-reference.md` § 5. ~1 day.
 - [ ] **pending** t2-016: `search_text` → `search_code` rewrite with BM25 ranking + CES/VES synonyms (RU↔EN keyword pairs). Sharded indexing (parallel by core count), disk cache, non-blocking start. ~3 days. Most impact tool for agents.
