@@ -15,6 +15,7 @@
 #include "backend/backend_exception.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
+#include "backend/utils/configLock.hpp"
 
 #include <wx/string.h>
 #include <wx/filename.h>
@@ -24,6 +25,7 @@
 #include <cstdio>
 #include <cstring>
 #include <mutex>
+#include <sstream>
 #include <string>
 
 namespace mcpServer {
@@ -33,6 +35,11 @@ std::mutex          g_mu;
 std::atomic<bool>   g_ready{false};
 std::string         g_loadedPath;
 DiagSink            g_diag = nullptr;
+
+// MCP concurrency: id returned by ibConfigLock::TryAcquire (currently
+// our pid). Zero when no lock is held — Shutdown checks this and skips
+// Release in --no-config / failed-init paths.
+std::int64_t        g_lockHolderId = 0;
 
 // MCP: emit a single diagnostic line through whatever sink the caller
 // installed. Falls back to stderr so unit tests + interactive shells
@@ -81,20 +88,38 @@ void GrantMcpServerWildcardPolicy()
 		ibPluginManager::MutationPolicy::AllowAlways);
 }
 
+// MCP concurrency: render a holders[] list into a single short line for the
+// "configuration is locked" diagnostic. Tries to surface pid + program +
+// since so the operator can identify which Designer to restart.
+std::string FormatHolders(const std::vector<ibConfigLock::Holder>& holders)
+{
+	std::ostringstream ss;
+	for (std::size_t i = 0; i < holders.size(); ++i) {
+		if (i > 0) ss << ", ";
+		ss << "{pid=" << holders[i].pid;
+		if (!holders[i].program.empty()) ss << " program=" << holders[i].program;
+		ss << " mode=" << (holders[i].mode == ibConfigLock::Mode::Exclusive
+			? "exclusive" : "shared");
+		if (!holders[i].since.empty()) ss << " since=" << holders[i].since;
+		ss << "}";
+	}
+	return ss.str();
+}
+
 } // namespace
 
-bool Init(const HeadlessConfig& cfg, DiagSink diagSink)
+InitOutcome Init(const HeadlessConfig& cfg, DiagSink diagSink)
 {
 	std::lock_guard<std::mutex> lk(g_mu);
 	g_diag = diagSink;
 
 	if (g_ready.load()) {
-		return true;  // idempotent — second Init after success no-ops.
+		return InitOutcome::Ok;  // idempotent — second Init after success no-ops.
 	}
 
 	if (cfg.configPath.empty()) {
 		Diag("oes-mcp: configPath is empty (set argv[1] or OES_CONFIG_PATH)");
-		return false;
+		return InitOutcome::GenericFailure;
 	}
 
 	// MCP: route on path shape. A directory (or a path ending in /sys.fdb)
@@ -109,12 +134,72 @@ bool Init(const HeadlessConfig& cfg, DiagSink diagSink)
 		Diag("oes-mcp: .OES-DB snapshot loading is not supported yet — "
 		     "extract the configuration to a directory containing sys.fdb "
 		     "and pass that directory instead");
-		return false;
+		return InitOutcome::GenericFailure;
 	}
 	// Strip /sys.fdb suffix when present so the operator can pass either form.
 	if (EndsWithIgnoreCase(dirPath, "/sys.fdb") ||
 	    EndsWithIgnoreCase(dirPath, "\\sys.fdb")) {
 		dirPath = DirOf(dirPath);
+	}
+
+	// =====================================================================
+	// MCP concurrency — Layer 1: probe the configuration directory lock.
+	// =====================================================================
+	// Acquire a SHARED lock before bringing appData up. Designer (legacy)
+	// holds an exclusive lock by default; if we see one we refuse to start
+	// and instruct the operator to switch Designer to shared mode. If
+	// nothing's there or only shared holders, we add our shared entry —
+	// many MCP servers + a shared-mode Designer can coexist this way.
+	//
+	// Lock is RELEASED in Shutdown() (or on failure paths inside Init).
+	// We do not block on the lock — TryAcquire is non-blocking; an
+	// exclusive holder is a hard "go away" signal, not a wait-for-retry
+	// signal (the operator action is to restart Designer).
+	{
+		const wxString wxDir = wxString::FromUTF8(dirPath.c_str());
+		// Sweep dead-pid entries first so a crashed Designer doesn't
+		// poison every subsequent MCP launch. SweepDeadHolders is a no-op
+		// when nothing's stale.
+		const std::size_t reaped = ibConfigLock::SweepDeadHolders(wxDir);
+		if (reaped > 0) {
+			Diag(std::string("oes-mcp: reaped ") + std::to_string(reaped) +
+			     " stale lock holder(s) (process(es) gone)");
+		}
+
+		std::vector<ibConfigLock::Holder> blockers;
+		std::int64_t holderId = 0;
+		const auto outcome = ibConfigLock::TryAcquire(wxDir,
+			ibConfigLock::Mode::Shared,
+			std::string("oes-mcp"),
+			&holderId,
+			&blockers);
+		switch (outcome) {
+		case ibConfigLock::Acquire::Ok:
+			g_lockHolderId = holderId;
+			break;
+		case ibConfigLock::Acquire::ConflictExclusive:
+			Diag("oes-mcp: configuration is locked exclusively by another "
+			     "process (likely Designer GUI in exclusive mode).");
+			Diag("oes-mcp: to use MCP concurrently, restart Designer in "
+			     "shared mode: File -> Open Shared (or via menu setting).");
+			Diag(std::string("oes-mcp: existing holders: ") +
+			     FormatHolders(blockers));
+			return InitOutcome::LockedExclusive;
+		case ibConfigLock::Acquire::ConflictShared:
+			// Asked shared, got shared conflict → impossible per the lock
+			// state machine, but defensive: treat as generic failure.
+			Diag("oes-mcp: lock manager reported a shared-mode conflict for a "
+			     "shared-mode acquisition; aborting");
+			return InitOutcome::GenericFailure;
+		case ibConfigLock::Acquire::IoError:
+			Diag("oes-mcp: could not access lock file under " + dirPath +
+			     "/sys (permissions / disk full?)");
+			return InitOutcome::GenericFailure;
+		case ibConfigLock::Acquire::MalformedManifest:
+			Diag("oes-mcp: lock manifest at " + dirPath +
+			     "/sys/.oes.lock is malformed; please delete the file and retry");
+			return InitOutcome::GenericFailure;
+		}
 	}
 
 	try {
@@ -130,17 +215,25 @@ bool Init(const HeadlessConfig& cfg, DiagSink diagSink)
 			}
 			Diag(msg);
 			ibApplicationData::DestroyAppDataEnv();
-			return false;
+			// Release the lock we acquired moments ago — appData failed to
+			// boot, so we never actually attached to the configuration.
+			ibConfigLock::Release(wxString::FromUTF8(dirPath.c_str()), g_lockHolderId);
+			g_lockHolderId = 0;
+			return InitOutcome::GenericFailure;
 		}
 	} catch (const ibBackendException& e) {
 		Diag(std::string("oes-mcp: backend exception during init: ") +
 		     std::string(e.GetErrorDescription().utf8_str()));
 		ibApplicationData::DestroyAppDataEnv();
-		return false;
+		ibConfigLock::Release(wxString::FromUTF8(dirPath.c_str()), g_lockHolderId);
+		g_lockHolderId = 0;
+		return InitOutcome::GenericFailure;
 	} catch (const std::exception& e) {
 		Diag(std::string("oes-mcp: std::exception during init: ") + e.what());
 		ibApplicationData::DestroyAppDataEnv();
-		return false;
+		ibConfigLock::Release(wxString::FromUTF8(dirPath.c_str()), g_lockHolderId);
+		g_lockHolderId = 0;
+		return InitOutcome::GenericFailure;
 	}
 
 	// MCP: appData lives, but activeMetaData is only attached after a
@@ -161,7 +254,9 @@ bool Init(const HeadlessConfig& cfg, DiagSink diagSink)
 		if (session == nullptr) {
 			Diag("oes-mcp: CreateSession returned nullptr — registry refused");
 			ibApplicationData::DestroyAppDataEnv();
-			return false;
+			ibConfigLock::Release(wxString::FromUTF8(dirPath.c_str()), g_lockHolderId);
+			g_lockHolderId = 0;
+			return InitOutcome::GenericFailure;
 		}
 		const wxString user = wxString::FromUTF8(cfg.ibUser.c_str());
 		const wxString pass = wxString::FromUTF8(cfg.ibPassword.c_str());
@@ -169,32 +264,49 @@ bool Init(const HeadlessConfig& cfg, DiagSink diagSink)
 			Diag("oes-mcp: session->Open rejected credentials");
 			session->Close();
 			ibApplicationData::DestroyAppDataEnv();
-			return false;
+			ibConfigLock::Release(wxString::FromUTF8(dirPath.c_str()), g_lockHolderId);
+			g_lockHolderId = 0;
+			return InitOutcome::GenericFailure;
 		}
 	} catch (const ibBackendException& e) {
 		Diag(std::string("oes-mcp: session open threw: ") +
 		     std::string(e.GetErrorDescription().utf8_str()));
 		ibApplicationData::DestroyAppDataEnv();
-		return false;
+		ibConfigLock::Release(wxString::FromUTF8(dirPath.c_str()), g_lockHolderId);
+		g_lockHolderId = 0;
+		return InitOutcome::GenericFailure;
 	}
 
 	if (activeMetaData == nullptr) {
 		Diag("oes-mcp: configuration loaded but activeMetaData is null");
 		ibApplicationData::DestroyAppDataEnv();
-		return false;
+		ibConfigLock::Release(wxString::FromUTF8(dirPath.c_str()), g_lockHolderId);
+		g_lockHolderId = 0;
+		return InitOutcome::GenericFailure;
 	}
 
 	GrantMcpServerWildcardPolicy();
 	g_loadedPath = dirPath;
 	g_ready.store(true);
-	Diag("oes-mcp: configuration ready at " + dirPath);
-	return true;
+	Diag("oes-mcp: configuration ready at " + dirPath +
+	     " (shared lock holderId=" + std::to_string(g_lockHolderId) + ")");
+	return InitOutcome::Ok;
+}
+
+bool InitLegacy(const HeadlessConfig& cfg, DiagSink diagSink)
+{
+	return Init(cfg, diagSink) == InitOutcome::Ok;
 }
 
 void Shutdown()
 {
 	std::lock_guard<std::mutex> lk(g_mu);
-	if (!g_ready.load()) return;
+	if (!g_ready.load()) {
+		// Edge case: a failed Init may have stamped a lock entry then
+		// rolled back to GenericFailure; the lock was released in-place
+		// in those paths, so g_lockHolderId is already 0. Nothing to do.
+		return;
+	}
 
 	try {
 		// metaBridge holds an undo stack keyed by config epoch; clearing
@@ -211,8 +323,52 @@ void Shutdown()
 	}
 
 	ibApplicationData::DestroyAppDataEnv();
+
+	// MCP concurrency: release the shared lock LAST. If Release fails the
+	// holder entry stays in the manifest with our pid, but our pid is now
+	// dead — the next process to call SweepDeadHolders will reap it.
+	if (g_lockHolderId != 0 && !g_loadedPath.empty()) {
+		const wxString wxDir = wxString::FromUTF8(g_loadedPath.c_str());
+		const bool ok = ibConfigLock::Release(wxDir, g_lockHolderId);
+		if (!ok) {
+			Diag("oes-mcp: lock release failed (entry will be reaped by next "
+			     "process via SweepDeadHolders)");
+		}
+		g_lockHolderId = 0;
+	}
+
 	g_ready.store(false);
 	g_loadedPath.clear();
+}
+
+bool IsLockStillHeld()
+{
+	// MCP concurrency Layer 2: re-probe the manifest. Returns true iff our
+	// entry is still listed AND no exclusive holder appeared. We tolerate
+	// arbitrary shared holders (other MCP servers, codeRunner, ...) — they
+	// are not conflicts.
+	if (g_lockHolderId == 0 || g_loadedPath.empty()) {
+		// Never acquired (--no-config or pre-Init). Treat as "no lock to
+		// worry about" — the per-tool guard short-circuits cleanly.
+		return true;
+	}
+	const wxString wxDir = wxString::FromUTF8(g_loadedPath.c_str());
+	if (ibConfigLock::HasLiveExclusiveHolder(wxDir)) return false;
+	return ibConfigLock::IsHolderStillLive(wxDir, g_lockHolderId);
+}
+
+void NotifyMutation(const std::string& toolName, const std::string& fullName)
+{
+	// MCP concurrency Layer 3: change broadcast. Designer's notifier polls
+	// the marker file via wxTimer; the seq counter dedupes across reads.
+	if (g_loadedPath.empty()) return;  // --no-config — nothing to broadcast.
+	const wxString wxDir = wxString::FromUTF8(g_loadedPath.c_str());
+	ibConfigLock::MutationMarker m;
+	m.tool     = toolName;
+	m.fullName = fullName;
+	m.pluginId = "mcp-server";
+	// seq is auto-assigned by WriteMutationMarker (reads prior seq + 1).
+	ibConfigLock::WriteMutationMarker(wxDir, m);
 }
 
 bool IsReady()

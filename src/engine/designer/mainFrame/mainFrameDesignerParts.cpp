@@ -86,6 +86,18 @@ void ibFrontendDocMDIFrameDesigner::CreateWideGui()
 
 	// tell the manager to "commit" all the changes just made
 	m_mgr.Update();
+
+	// MCP concurrency Layer 3: arm the external-mutation notifier for the
+	// directory the launcher loaded. Empty in SERVER mode (no file path);
+	// the notifier short-circuits gracefully. Best-effort — if appData is
+	// somehow null at this point we just skip wiring; the notifier can
+	// also be (re)armed later from configuration-swap paths.
+	if (appData != nullptr) {
+		const wxString& dir = appData->GetFileDirectory();
+		if (!dir.IsEmpty()) {
+			StartExternalMutationNotifier(dir);
+		}
+	}
 }
 
 #include "frontend/win/ctrls/floatingNotebook.h"

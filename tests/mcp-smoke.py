@@ -10,6 +10,9 @@ the documented contract:
   3. tools/call config_info → success
   4. tools/call list_objects → returns array (may be empty if no config)
   5. tools/call save_config  → succeeds when a config is loaded
+  6. lock-conflict path — when sys/.oes.lock pins an exclusive holder
+     held by a live pid, oes-mcp must exit code 2 with the documented
+     "configuration is locked exclusively" diagnostic on stderr.
 
 Skips when the binary does not exist (build target not configured).
 Skips load-bound assertions when no OES_CONFIG_PATH is set.
@@ -21,6 +24,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -229,6 +233,81 @@ def main() -> int:
 
     proc.stdin.close()
     proc.wait(timeout=3)
+
+    # 9) Lock-conflict path (Designer concurrency, 2026-05-21). When a
+    # configuration directory contains a sys/.oes.lock manifest pinning
+    # an EXCLUSIVE holder whose pid is alive, oes-mcp must refuse to
+    # start and exit with code 2. We exercise this against a freshly
+    # created empty directory — we don't need a real sys.fdb because
+    # the lock probe runs BEFORE CreateFileAppDataEnv.
+    #
+    # We use the current python interpreter's pid as the "live exclusive
+    # holder" so the liveness probe sees a real process. The probe is
+    # best-effort cross-platform (signal 0 / OpenProcess) and treats
+    # this script's pid as alive.
+    print("INFO: probing lock-conflict path with a synthetic exclusive holder",
+          file=sys.stderr)
+    with tempfile.TemporaryDirectory(prefix="oes-mcp-lock-") as tmp:
+        sys_dir = Path(tmp) / "sys"
+        sys_dir.mkdir()
+        lock_manifest = {
+            "seq": 1,
+            "holders": [
+                {
+                    "pid":     os.getpid(),
+                    "mode":    "exclusive",
+                    "since":   "2026-05-21T00:00:00Z",
+                    "program": "smoke-test-fake-designer",
+                }
+            ],
+        }
+        (sys_dir / ".oes.lock").write_text(json.dumps(lock_manifest))
+
+        result = subprocess.run(
+            [str(binary), tmp],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=20,
+        )
+        if result.returncode != 2:
+            failures.append(
+                f"lock-conflict: expected exit code 2, got {result.returncode}. "
+                f"stderr:\n{result.stderr.decode('utf-8', 'replace')}"
+            )
+        # The diagnostic must mention exclusive locking so operators can
+        # see what to do (restart Designer in shared mode). We accept any
+        # of the spec phrases — the wording can drift over translations.
+        stderr_text = result.stderr.decode("utf-8", "replace")
+        if "locked exclusively" not in stderr_text:
+            failures.append(
+                f"lock-conflict: stderr missing 'locked exclusively' phrase. "
+                f"Got:\n{stderr_text}"
+            )
+
+    # 10) Clean-dir path. A configuration directory with NO lock file at
+    # all must not blow up the lock probe — oes-mcp should treat the
+    # absence as "no conflict" and proceed to the normal config load
+    # (which may then succeed or fail on its own merits). We test by
+    # pointing oes-mcp at an empty temp dir and expecting it NOT to exit
+    # with code 2. The config load itself will fail (no sys.fdb), giving
+    # exit code 1 — that's fine; the lock-probe path is what's under
+    # test.
+    print("INFO: probing clean-dir path (no .oes.lock present)", file=sys.stderr)
+    with tempfile.TemporaryDirectory(prefix="oes-mcp-clean-") as clean_dir:
+        result = subprocess.run(
+            [str(binary), clean_dir],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=20,
+        )
+        if result.returncode == 2:
+            failures.append(
+                f"clean-dir: false positive lock conflict — exit code 2 with "
+                f"no .oes.lock present. stderr:\n"
+                f"{result.stderr.decode('utf-8', 'replace')}"
+            )
 
     if failures:
         print("FAIL:", file=sys.stderr)

@@ -11,9 +11,20 @@
 #ifndef _IB_MCP_HEADLESS_APP_H_
 #define _IB_MCP_HEADLESS_APP_H_
 
+#include <cstdint>
 #include <string>
 
 namespace mcpServer {
+
+// MCP: classify Init failures so main() can map to the right process exit
+// code. The Designer-concurrency spec (2026-05-21) calls for exit code 2
+// when an exclusive lock is held by Designer; other failures keep the
+// generic exit code 1.
+enum class InitOutcome {
+	Ok = 0,
+	GenericFailure = 1,        // config didn't load, auth refused, etc.
+	LockedExclusive = 2,       // another process holds an exclusive lock
+};
 
 struct HeadlessConfig {
 	// Path to the OES configuration. Two shapes accepted:
@@ -39,13 +50,31 @@ struct HeadlessConfig {
 // for the JSON-RPC channel.
 using DiagSink = void(*)(const char* line);
 
-// Bring up appData and load the configuration. Returns true on success;
-// on failure the diagSink (if non-null) receives a human-readable cause.
-// Idempotent: a second Init call after success is a no-op and returns true.
-bool Init(const HeadlessConfig& cfg, DiagSink diagSink);
+// Bring up appData and load the configuration. Returns Ok on success; on
+// failure the diagSink (if non-null) receives a human-readable cause and
+// the outcome distinguishes lock conflicts from generic load failures.
+// Idempotent: a second Init call after a success returns Ok without
+// re-running the bring-up sequence.
+InitOutcome Init(const HeadlessConfig& cfg, DiagSink diagSink);
 
-// Tear down appData. Safe to call multiple times.
+// Back-compat overload — older callers can ignore the outcome enum.
+// Returns true iff the underlying Init returned Ok.
+bool InitLegacy(const HeadlessConfig& cfg, DiagSink diagSink);
+
+// Tear down appData. Safe to call multiple times. Also releases any
+// configuration-directory lock acquired by Init.
 void Shutdown();
+
+// MCP-concurrency Layer 2: returns true while our cooperatively-acquired
+// lock on the loaded configuration is still valid (the manifest still
+// lists our entry AND no exclusive holder has appeared since we acquired).
+// Per-mutation guard for tools.cpp.
+bool IsLockStillHeld();
+
+// MCP-concurrency Layer 3: write a mutation marker so Designer's
+// notifier can surface a "config changed externally" toast. Best-effort —
+// on IO failure the mutation still succeeded; only the broadcast is lost.
+void NotifyMutation(const std::string& toolName, const std::string& fullName);
 
 // True once Init has completed and activeMetaData is reachable. Tools
 // short-circuit with "no configuration" when this is false.

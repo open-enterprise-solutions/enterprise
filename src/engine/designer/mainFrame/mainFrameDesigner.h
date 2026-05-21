@@ -220,6 +220,22 @@ private:
 	// AI Assistant Markers panel (Workmate parity). Lazily created.
 	class ibAiMarkersPanel* m_aiMarkersPanel = nullptr;
 
+	// MCP concurrency notifier — polls the configuration directory's
+	// .oes-mcp-mutation marker every ~2.5s and surfaces a status-bar
+	// toast when oes-mcp (or another cooperating tool) reports a write.
+	// Lazily allocated on first config open; lives for the rest of the
+	// Designer process. See externalMutationNotifier.{h,cpp}.
+	class ibExternalMutationNotifier* m_externalMutationNotifier = nullptr;
+
+public:
+	// Activate the external-mutation notifier for the given configuration
+	// directory. Called from CreateWideGui (initial open) and from any
+	// path that swaps configurations. Pass an empty string to deactivate.
+	void StartExternalMutationNotifier(const wxString& configDir);
+	void StopExternalMutationNotifier();
+
+private:
+
 	// Plugin-driven WebView panes — generic infrastructure for any plugin
 	// that wants to embed a wxWebView-based UI (AI assistants, custom
 	// integration dashboards, etc.). Ordered registration log; the AUI

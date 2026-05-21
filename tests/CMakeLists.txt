@@ -57,6 +57,10 @@ set(OES_TESTS_SOURCES
     test_pluginWebPaneHistory.cpp
     test_legacyShim.cpp
     test_pluginLoadIntegration.cpp
+    # Designer <-> oes-mcp concurrency primitives (configLock, mutation
+    # marker). Same-process gtest coverage; inter-process semantics are
+    # exercised by tests/mcp-smoke.py.
+    test_configLock.cpp
 )
 # SEC-P2-3: only pull the triple-review integration test in when OpenSSL is
 # available — the source unconditionally includes <openssl/*> via httplib.

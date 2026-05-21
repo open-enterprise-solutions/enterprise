@@ -6,6 +6,7 @@
 #include "mainFrameDesigner.h"
 #include "frontend/help/helpPaneView.h"
 #include "backend/debugger/debugClient.h"
+#include "backend/appData.h"
 
 #include <wx/config.h>
 #include <wx/fileconf.h>
@@ -14,6 +15,7 @@
 
 #include "docManager/docManager.h"
 #include "debugger/debugClientImpl.h"
+#include "externalMutationNotifier.h"
 
 ///////////////////////////////////////////////////////////////////
 
@@ -46,7 +48,33 @@ ibFrontendDocMDIFrameDesigner::ibFrontendDocMDIFrameDesigner(const wxString& tit
 
 ibFrontendDocMDIFrameDesigner::~ibFrontendDocMDIFrameDesigner()
 {
+	// MCP concurrency: stop polling before dropping the notifier — the
+	// timer would otherwise fire after the heap entry behind m_frame is
+	// gone. wxDELETE on m_externalMutationNotifier triggers its dtor's
+	// Stop() but explicit stop here removes any race window.
+	if (m_externalMutationNotifier != nullptr) {
+		m_externalMutationNotifier->Stop();
+	}
+	wxDELETE(m_externalMutationNotifier);
 	wxDELETE(m_docManager);
+}
+
+void ibFrontendDocMDIFrameDesigner::StartExternalMutationNotifier(const wxString& configDir)
+{
+	// MCP concurrency Layer 3: lazy-init on first open. Outliving the
+	// frame is impossible — the dtor deletes the notifier before the
+	// frame's heap entry is freed.
+	if (m_externalMutationNotifier == nullptr) {
+		m_externalMutationNotifier = new ibExternalMutationNotifier(this);
+	}
+	m_externalMutationNotifier->Start(configDir);
+}
+
+void ibFrontendDocMDIFrameDesigner::StopExternalMutationNotifier()
+{
+	if (m_externalMutationNotifier != nullptr) {
+		m_externalMutationNotifier->Stop();
+	}
 }
 
 void ibFrontendDocMDIFrameDesigner::CreateGUI()

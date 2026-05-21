@@ -103,6 +103,32 @@ std::optional<nlohmann::json> RequireConfig()
 	return std::nullopt;
 }
 
+// MCP concurrency Layer 2: re-probe the configuration lock at the start of
+// every MUTATING tool. Read-only tools don't call this (the session-start
+// lock from Layer 1 is enough — read paths see a consistent in-memory
+// tree). If an exclusive holder appeared since our session started, or
+// our own entry was reaped (unusual, but possible if someone hand-edited
+// the manifest), we refuse the mutation with a structured error so the
+// agent can retry / surface the issue to the user.
+//
+// The error envelope shape matches the Designer-concurrency spec:
+//   isError: true
+//   structuredContent.errorCode = "OES_E_LOCK_LOST"
+//   structuredContent.retry = true
+std::optional<nlohmann::json> RequireLockStillHeld(const char* toolName)
+{
+	if (IsLockStillHeld()) return std::nullopt;
+	nlohmann::json env = TextResult(
+		std::string(toolName) +
+		": another process holds exclusive lock — mutation aborted",
+		true);
+	nlohmann::json sc = nlohmann::json::object();
+	sc["errorCode"] = "OES_E_LOCK_LOST";
+	sc["retry"]     = true;
+	env["structuredContent"] = std::move(sc);
+	return env;
+}
+
 // MCP: pull a string field from args with a sensible default. Returns
 // empty string on missing/wrong-type rather than throwing so individual
 // tools can validate with a clearer message.
@@ -330,6 +356,8 @@ nlohmann::json ToolMetaQuery(const nlohmann::json& args)
 nlohmann::json ToolMetaCreate(const nlohmann::json& args)
 {
 	if (auto fail = RequireConfig(); fail) return *fail;
+	// MCP concurrency Layer 2: lock re-check before any mutation.
+	if (auto lockFail = RequireLockStillHeld("meta_create"); lockFail) return *lockFail;
 	const std::string kind     = ArgString(args, "kind");
 	const std::string fullName = ArgString(args, "fullName");
 	if (kind.empty() || fullName.empty()) {
@@ -355,6 +383,9 @@ nlohmann::json ToolMetaCreate(const nlohmann::json& args)
 		return TextResult(msg, true);
 	}
 	FreeIfSet(errMsg);
+	// MCP concurrency Layer 3: broadcast successful mutation so Designer's
+	// notifier can refresh its tree / surface a toast.
+	NotifyMutation("meta_create", fullName);
 	return TextResult("meta_create OK: " + fullName, false);
 }
 
@@ -364,6 +395,7 @@ nlohmann::json ToolMetaCreate(const nlohmann::json& args)
 nlohmann::json ToolMetaEdit(const nlohmann::json& args)
 {
 	if (auto fail = RequireConfig(); fail) return *fail;
+	if (auto lockFail = RequireLockStillHeld("meta_edit"); lockFail) return *lockFail;
 	const std::string fullName = ArgString(args, "fullName");
 	if (fullName.empty()) {
 		return TextResult("meta_edit: 'fullName' is required", true);
@@ -389,6 +421,7 @@ nlohmann::json ToolMetaEdit(const nlohmann::json& args)
 		return TextResult(msg, true);
 	}
 	FreeIfSet(errMsg);
+	NotifyMutation("meta_edit", fullName);
 	return TextResult("meta_edit OK: " + fullName, false);
 }
 
@@ -398,6 +431,7 @@ nlohmann::json ToolMetaEdit(const nlohmann::json& args)
 nlohmann::json ToolMetaDelete(const nlohmann::json& args)
 {
 	if (auto fail = RequireConfig(); fail) return *fail;
+	if (auto lockFail = RequireLockStillHeld("meta_delete"); lockFail) return *lockFail;
 	const std::string fullName = ArgString(args, "fullName");
 	if (fullName.empty()) {
 		return TextResult("meta_delete: 'fullName' is required", true);
@@ -426,6 +460,7 @@ nlohmann::json ToolMetaDelete(const nlohmann::json& args)
 		return TextResult(msg, true);
 	}
 	FreeIfSet(errMsg);
+	NotifyMutation("meta_delete", fullName);
 	return TextResult("meta_delete OK: " + fullName, false);
 }
 
@@ -620,6 +655,7 @@ nlohmann::json ToolReadModule(const nlohmann::json& args)
 nlohmann::json ToolWriteModule(const nlohmann::json& args)
 {
 	if (auto fail = RequireConfig(); fail) return *fail;
+	if (auto lockFail = RequireLockStillHeld("write_module"); lockFail) return *lockFail;
 	const std::string fullName = ArgString(args, "fullName");
 	const std::string source   = ArgString(args, "source");
 	if (fullName.empty()) {
@@ -639,6 +675,7 @@ nlohmann::json ToolWriteModule(const nlohmann::json& args)
 	// the write unconditionally; callers should pair this with
 	// `compile_check` when validation matters.
 	mod->SetModuleText(wxString::FromUTF8(source.c_str()));
+	NotifyMutation("write_module", fullName);
 	return TextResult("write_module OK: " + fullName +
 	                    " (" + std::to_string(source.size()) + " bytes)", false);
 }
@@ -1205,11 +1242,13 @@ nlohmann::json ToolSearchText(const nlohmann::json& args)
 nlohmann::json ToolSaveConfig(const nlohmann::json& args)
 {
 	if (auto fail = RequireConfig(); fail) return *fail;
+	if (auto lockFail = RequireLockStillHeld("save_config"); lockFail) return *lockFail;
 	const std::string path = ArgString(args, "path");
 	std::string err;
 	if (!SaveConfiguration(path, err)) {
 		return TextResult("save_config failed: " + err, true);
 	}
+	NotifyMutation("save_config", path.empty() ? LoadedConfigPath() : path);
 	nlohmann::json out;
 	out["saved"] = true;
 	out["path"]  = path.empty() ? (LoadedConfigPath() + "/config.OES-DB") : path;

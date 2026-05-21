@@ -135,7 +135,16 @@ int main(int argc, char** argv)
 	if (const char* l = std::getenv("OES_MCP_LOCALE")) cfg.locale     = l;
 
 	if (!noConfig) {
-		if (!mcpServer::Init(cfg, &DiagToStderr)) {
+		// MCP concurrency: Init returns an enum so we can map an exclusive-
+		// lock conflict to a distinct exit code (2). Generic failures stay
+		// on exit code 1.
+		const auto outcome = mcpServer::Init(cfg, &DiagToStderr);
+		if (outcome == mcpServer::InitOutcome::LockedExclusive) {
+			std::fprintf(stderr,
+				"oes-mcp: aborting (configuration locked exclusively)\n");
+			return 2;
+		}
+		if (outcome != mcpServer::InitOutcome::Ok) {
 			std::fprintf(stderr, "oes-mcp: configuration load failed — exiting\n");
 			return 1;
 		}

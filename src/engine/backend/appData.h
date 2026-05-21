@@ -455,6 +455,14 @@ private:
 public:
 	class ibSessionRegistry* GetSessionRegistry() const { return m_sessionRegistry.get(); }
 
+	// MCP concurrency: directory containing sys.fdb when running in
+	// FILE mode. Empty in SERVER mode. Used by the Designer-side
+	// external mutation notifier (and any future tool that needs the
+	// config-dir path without re-deriving it from CreateFileAppDataEnv's
+	// argument). Kept a const accessor — m_strFile is set once at
+	// CreateFileAppDataEnv time and stable for the lifetime of appData.
+	const wxString& GetFileDirectory() const { return m_strFile; }
+
 private:
 
 	bool m_connected_to_db = false;
