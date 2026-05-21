@@ -23,6 +23,7 @@
 
 #include <wx/init.h>
 #include <wx/app.h>
+#include <wx/debug.h>
 #include <wx/log.h>
 
 #include <atomic>
@@ -32,6 +33,10 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+
+#if defined(__unix__) || defined(__APPLE__)
+#include <unistd.h>
+#endif
 
 namespace {
 
@@ -54,6 +59,45 @@ void DiagToStderr(const char* line)
 	std::fflush(stderr);
 }
 
+std::filesystem::path StderrLogPath()
+{
+	if (const char* xdg = std::getenv("XDG_CACHE_HOME")) {
+		if (*xdg != '\0') {
+			return std::filesystem::path(xdg) / "oes-mcp" / "stderr.log";
+		}
+	}
+	if (const char* home = std::getenv("HOME")) {
+		if (*home != '\0') {
+			return std::filesystem::path(home) / ".cache" / "oes-mcp" /
+				"stderr.log";
+		}
+	}
+	return std::filesystem::temp_directory_path() / "oes-mcp-stderr.log";
+}
+
+bool ShouldRedirectStderr()
+{
+	if (const char* mode = std::getenv("OES_MCP_STDERR")) {
+		const std::string value(mode);
+		if (value == "inherit" || value == "stderr") return false;
+		if (value == "log" || value == "file") return true;
+	}
+#if defined(__unix__) || defined(__APPLE__)
+	return !::isatty(STDIN_FILENO) || !::isatty(STDOUT_FILENO);
+#else
+	return false;
+#endif
+}
+
+void RedirectStderrForPipeMode()
+{
+	if (!ShouldRedirectStderr()) return;
+	const std::filesystem::path path = StderrLogPath();
+	std::error_code ec;
+	std::filesystem::create_directories(path.parent_path(), ec);
+	(void)std::freopen(path.string().c_str(), "a", stderr);
+}
+
 void PrintHelp()
 {
 	std::fprintf(stderr,
@@ -73,6 +117,7 @@ void PrintHelp()
 		"  OES_MCP_USER     IB user for the system session (default: empty)\n"
 		"  OES_MCP_PWD      IB password for the system session\n"
 		"  OES_MCP_LOCALE   BCP-47 locale (default: empty / appData default)\n"
+		"  OES_MCP_STDERR   inherit|log (default: log when stdio is piped)\n"
 		"\n"
 		"Stdio transport. Wire into Claude Code via:\n"
 		"  claude mcp add oes-local --transport=stdio --command=oes-mcp \\\n"
@@ -167,6 +212,12 @@ int main(int argc, char** argv)
 		if (a == "--no-config") { noConfig = true; continue; }
 		// First positional arg = config path.
 		if (configPath.empty() && a.size() > 0 && a[0] != '-') configPath = a;
+	}
+
+	RedirectStderrForPipeMode();
+	if (ShouldRedirectStderr()) {
+		wxDisableAsserts();
+		wxLog::SetLogLevel(wxLOG_Warning);
 	}
 
 	if (configPath.empty() && !noConfig) {

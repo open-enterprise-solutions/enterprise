@@ -99,6 +99,8 @@ def main() -> int:
         return 1
 
     failures: list[str] = []
+    inherit_stderr_env = os.environ.copy()
+    inherit_stderr_env["OES_MCP_STDERR"] = "inherit"
 
     # 1) initialize
     send(proc, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
@@ -1217,6 +1219,7 @@ def main() -> int:
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=inherit_stderr_env,
             timeout=20,
         )
         if result.returncode != 2:
@@ -1249,6 +1252,7 @@ def main() -> int:
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=inherit_stderr_env,
             timeout=20,
         )
         if result.returncode == 2:
