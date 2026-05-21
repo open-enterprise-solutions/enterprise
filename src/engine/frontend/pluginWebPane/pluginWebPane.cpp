@@ -23,6 +23,7 @@
 
 // SEC-P1-9: ScopedPluginIdGuard so onMessage dispatches scope caller pid.
 #include "backend/appData.h"
+#include "backend/compiler/compileCode.h"
 #include "backend/plugin/pluginManager.h"
 
 #include "3rdparty/md4c/md4c-html.h"
@@ -571,6 +572,44 @@ int MetaConfidencePercent(const nlohmann::json& meta)
 	return static_cast<int>(value + 0.5);
 }
 
+wxString CurrentSyntaxTag()
+{
+	return ibCompileCode::GetCodeStyle() == CODE_VES ? wxT("VES") : wxT("CES");
+}
+
+bool LooksLikeAgentCreationRequest(const wxString& text)
+{
+	wxString lower = text.Lower();
+	if (lower.Find(wxT("через агента")) != wxNOT_FOUND ||
+	    lower.Find(wxT("через агент"))  != wxNOT_FOUND) {
+		return true;
+	}
+
+	const bool hasCreateVerb =
+	    lower.Find(wxT("создай"))   != wxNOT_FOUND ||
+	    lower.Find(wxT("создать"))  != wxNOT_FOUND ||
+	    lower.Find(wxT("створи"))   != wxNOT_FOUND ||
+	    lower.Find(wxT("створити")) != wxNOT_FOUND ||
+	    lower.Find(wxT("добавь"))   != wxNOT_FOUND ||
+	    lower.Find(wxT("додай"))    != wxNOT_FOUND ||
+	    lower.Find(wxT("add "))     != wxNOT_FOUND ||
+	    lower.Find(wxT("create "))  != wxNOT_FOUND;
+	if (!hasCreateVerb) return false;
+
+	static const wxString kMetadataWords[] = {
+		wxT("справочник"), wxT("довідник"), wxT("каталог"), wxT("catalog"),
+		wxT("документ"),   wxT("document"),
+		wxT("регистр"),    wxT("реєстр"),   wxT("register"),
+		wxT("отчет"),      wxT("звіт"),     wxT("report"),
+		wxT("перечислен"), wxT("enum"),
+		wxT("конфигурац"), wxT("конфігурац"), wxT("configuration"),
+	};
+	for (const auto& word : kMetadataWords) {
+		if (lower.Find(word) != wxNOT_FOUND) return true;
+	}
+	return false;
+}
+
 } // namespace
 
 ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
@@ -599,6 +638,13 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 	m_permissionMode->SetSelection(static_cast<int>(m_permissionModeValue));
 	m_permissionMode->SetMinSize(wxSize(FromDIP(150), -1));
 	policyRow->Add(m_permissionMode, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
+	               FromDIP(4));
+	m_syntaxModeLabel = new wxStaticText(this, wxID_ANY,
+	                                     _("Syntax: ") + CurrentSyntaxTag());
+	m_syntaxModeLabel->SetForegroundColour(wxColour(90, 96, 110));
+	m_syntaxModeLabel->SetToolTip(
+	    _("Current configuration script syntax. The assistant uses it silently."));
+	policyRow->Add(m_syntaxModeLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
 	               FromDIP(4));
 	root->Add(policyRow, 0, wxEXPAND | wxTOP, FromDIP(4));
 
@@ -2092,7 +2138,8 @@ bool ibPluginWebPane::TryDispatchSlashCommand(const wxString& text)
 	env["kind"]      = "editor.skill";
 	env["requestId"] = std::string(rid.utf8_str());
 	env["op"]        = std::string(match->op.utf8_str());
-	env["language"]  = "ces";
+	env["language"]  = std::string(CurrentSyntaxTag().Lower().utf8_str());
+	env["syntax"]    = std::string(CurrentSyntaxTag().utf8_str());
 	env["code"]      = std::string(body.utf8_str());
 	// AGENT-MODE: the agent skill expects the body to be the user's
 	// natural-language instruction, not code — surface it as `prompt` so
@@ -2126,10 +2173,73 @@ bool ibPluginWebPane::TryDispatchSlashCommand(const wxString& text)
 	return true;
 }
 
+void ibPluginWebPane::DispatchAgentPrompt(const wxString& prompt)
+{
+	if (prompt.IsEmpty()) return;
+	if (m_permissionModeValue == PermissionMode::ConfirmAll &&
+	    !ConfirmAgentAction(_("request a change plan"))) {
+		return;
+	}
+
+	Entry e;
+	e.role     = Entry::Role::User;
+	e.markdown = prompt;
+	AppendEntry(std::move(e));
+
+	if (m_onMessage == nullptr) {
+		Entry err;
+		err.role     = Entry::Role::Error;
+		err.markdown = _("Agent provider is not connected.");
+		AppendEntry(std::move(err));
+		return;
+	}
+
+	wxWindow* searchRoot = wxGetTopLevelParent(this);
+	const wxString contextBlock =
+	    ibChatContext::BuildContextBlock(BuildPinnedContextProbe(prompt),
+	                                     searchRoot);
+	const wxString outboundPrompt = contextBlock.IsEmpty()
+	    ? prompt
+	    : contextBlock + prompt;
+
+	const wxString rid = wxString::Format(wxT("agent-%lld"),
+	                                      static_cast<long long>(wxGetUTCTime()));
+	nlohmann::json env;
+	env["kind"]      = "editor.skill";
+	env["requestId"] = std::string(rid.utf8_str());
+	env["op"]        = "agent";
+	env["language"]  = std::string(CurrentSyntaxTag().Lower().utf8_str());
+	env["syntax"]    = std::string(CurrentSyntaxTag().utf8_str());
+	env["code"]      = std::string(outboundPrompt.utf8_str());
+	env["prompt"]    = std::string(outboundPrompt.utf8_str());
+
+	wxString localeName;
+	if (wxLocale* loc = wxGetLocale()) localeName = loc->GetCanonicalName();
+	if (localeName.IsEmpty()) localeName = wxT("uk-UA");
+	env["locale"] = std::string(localeName.utf8_str());
+
+	const std::string payload = env.dump();
+	const std::string paneIdUtf8(m_paneId.utf8_str().data());
+	auto pidGuard = MakePaneScopeGuard(m_paneId);
+	try {
+		m_onMessage(paneIdUtf8.c_str(), payload.c_str(), m_userData);
+	} catch (...) {
+		RestorePlanPolicyAfterApply();
+		Entry err;
+		err.role     = Entry::Role::Error;
+		err.markdown = _("Failed to send the request to the agent provider.");
+		AppendEntry(std::move(err));
+	}
+}
+
 void ibPluginWebPane::DispatchUserPrompt(const wxString& prompt)
 {
 	if (m_onMessage == nullptr) return;
 	if (prompt.IsEmpty()) return;
+	if (LooksLikeAgentCreationRequest(prompt)) {
+		DispatchAgentPrompt(prompt);
+		return;
+	}
 
 	// Show the user prompt in the transcript immediately so the wait
 	// for the assistant reply doesn't look like the click did nothing.
@@ -2171,6 +2281,7 @@ void ibPluginWebPane::DispatchUserPrompt(const wxString& prompt)
 	env["text"]      = std::string(outboundPrompt.utf8_str());
 	env["prompt"]    = std::string(outboundPrompt.utf8_str()); // v3-shim fallback
 	env["profile"]   = std::string(CurrentModelProfileId().utf8_str());
+	env["syntax"]    = std::string(CurrentSyntaxTag().utf8_str());
 	// Locale: prefer the live wxLocale name, fall back to the Designer
 	// development default.
 	wxString localeName;

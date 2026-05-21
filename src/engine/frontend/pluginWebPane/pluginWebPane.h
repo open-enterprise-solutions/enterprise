@@ -200,6 +200,7 @@ private:
 	wxButton*        m_clearPinnedContextBtn = nullptr;
 	wxChoice*        m_modelProfile = nullptr;
 	wxChoice*        m_permissionMode = nullptr;
+	wxStaticText*    m_syntaxModeLabel = nullptr;
 	wxStaticText*    m_pinnedContextLabel = nullptr;
 	wxStaticText*    m_statusBar  = nullptr;
 
@@ -362,6 +363,7 @@ private:
 
 	// Helper: send a chat.send envelope built from the input box contents.
 	void DispatchUserPrompt(const wxString& prompt);
+	void DispatchAgentPrompt(const wxString& prompt);
 
 	// Toggle the Send button label between "Отправить" and "Стоп" based
 	// on m_pending. Routed through one helper so every entry/exit point

@@ -92,6 +92,18 @@ std::string LocalTimestamp(char dateOut[11])
 	return ts.str();
 }
 
+std::string ApplySyntaxInstruction(std::string prompt, const std::string& syntax)
+{
+	if (syntax.empty()) return prompt;
+	std::string normalized = syntax;
+	std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+	               [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+	if (normalized != "CES" && normalized != "VES") return prompt;
+	return "[OES Designer context]\nCurrent script syntax: " + normalized +
+	       ". Use this syntax for code examples. Do not announce or mention syntax switching in the answer.\n"
+	       "[/OES Designer context]\n\n" + prompt;
+}
+
 std::filesystem::path AuditDir()
 {
 #if defined(_WIN32)
@@ -1674,6 +1686,7 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 			if (j.contains("configName"))      ctx["configName"]      = j["configName"];
 			if (j.contains("openObjects"))     ctx["openObjects"]     = j["openObjects"];
 			if (j.contains("currentSelection"))ctx["currentSelection"]= j["currentSelection"];
+			if (j.contains("syntax"))          ctx["syntax"]          = j["syntax"];
 			if (j.contains("context") && j["context"].is_object()) {
 				for (auto it = j["context"].begin(); it != j["context"].end(); ++it) {
 					ctx[it.key()] = it.value();
@@ -1754,6 +1767,8 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 		}
 		const std::string mode = j.value("mode", std::string("chat"));
 		const std::string profile = j.value("profile", std::string("env"));
+		prompt = ApplySyntaxInstruction(std::move(prompt),
+		                                j.value("syntax", std::string()));
 
 		// Allocate the cancel token before spawning so a near-instant
 		// agent.cancel still finds a registered entry.

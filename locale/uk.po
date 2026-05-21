@@ -5224,3 +5224,23 @@ msgstr "Наберіть @ у полі введення, виберіть об'�
 #: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
 msgid "Context reset"
 msgstr "Контекст скинуто"
+
+#: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
+msgid "Syntax: "
+msgstr "Синтаксис: "
+
+#: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
+msgid "Current configuration script syntax. The assistant uses it silently."
+msgstr "Поточний синтаксис скриптів конфігурації. Асистент використовує його без окремого повідомлення."
+
+#: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
+msgid "request a change plan"
+msgstr "запросити план змін"
+
+#: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
+msgid "Agent provider is not connected."
+msgstr "Провайдер агента не підключений."
+
+#: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
+msgid "Failed to send the request to the agent provider."
+msgstr "Не вдалося надіслати запит провайдеру агента."
