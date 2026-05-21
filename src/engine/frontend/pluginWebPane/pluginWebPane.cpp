@@ -136,6 +136,62 @@ wxString HtmlEscape(const wxString& s)
 	return out;
 }
 
+wxString UnwrapProviderJsonDelta(const wxString& delta)
+{
+	const wxString trimmed = delta.Strip(wxString::both);
+	if (!trimmed.StartsWith(wxT("{"))) return delta;
+
+	const wxScopedCharBuffer utf8 = trimmed.utf8_str();
+	auto parsed = nlohmann::json::parse(utf8.data(), nullptr, false);
+	if (parsed.is_discarded() || !parsed.is_object()) return delta;
+	if (!parsed.contains("result") || !parsed["result"].is_object()) return delta;
+
+	const auto& result = parsed["result"];
+	if (result.contains("content") &&
+	    result["content"].is_string() &&
+	    !result["content"].get<std::string>().empty()) {
+		return wxString::FromUTF8(result["content"].get<std::string>().c_str());
+	}
+
+	if (result.value("draft", false)) {
+		wxString msg = _("Provider вернул пустой черновой ответ.");
+		if (result.contains("plan") && result["plan"].is_object()) {
+			const auto& plan = result["plan"];
+			const std::string reason =
+			    plan.value("draftReason", std::string());
+			if (!reason.empty()) {
+				msg += wxT(" ");
+				msg += wxString::FromUTF8(reason.c_str());
+				msg += wxT(".");
+			}
+			if (plan.contains("reviewers") && plan["reviewers"].is_array()) {
+				wxString errs;
+				for (const auto& reviewer : plan["reviewers"]) {
+					if (!reviewer.is_object()) continue;
+					const std::string model =
+					    reviewer.value("model", std::string());
+					const std::string error =
+					    reviewer.value("error", std::string());
+					if (error.empty()) continue;
+					if (!errs.IsEmpty()) errs += wxT("; ");
+					if (!model.empty()) {
+						errs += wxString::FromUTF8(model.c_str());
+						errs += wxT(": ");
+					}
+					errs += wxString::FromUTF8(error.c_str());
+				}
+				if (!errs.IsEmpty()) {
+					msg += wxT("\n");
+					msg += errs;
+				}
+			}
+		}
+		return msg;
+	}
+
+	return delta;
+}
+
 // CES keyword set — kept in sync with backend/compiler/translateCode.cpp's
 // s_listKeyWord. Used to colorize ```ces / ```bsl / ```oes code blocks in
 // the transcript the same way the in-editor Scintilla lexer paints them.
@@ -536,10 +592,10 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 	               0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT,
 	               FromDIP(4));
 	m_modelProfile = new wxChoice(this, wxID_ANY);
-	m_modelProfile->Append(_("По умолчанию"));
-	m_modelProfile->Append(_("Провайдер"));
-	m_modelProfile->Append(_("OpenAI fast"));
-	m_modelProfile->Append(_("OpenAI quality"));
+	m_modelProfile->Append(_("Авто (.env)"));
+	m_modelProfile->Append(_("Pugi / Sigma"));
+	m_modelProfile->Append(_("OpenAI быстрый"));
+	m_modelProfile->Append(_("OpenAI качественный"));
 	m_modelProfile->SetSelection(0);
 	policyRow->Add(m_modelProfile, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
 	               FromDIP(12));
@@ -605,7 +661,7 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 	m_newChatBtn = new wxButton(this, wxID_ANY, _("Новый чат"));
 	btnRow->Add(m_newChatBtn, 0, wxALL, FromDIP(4));
 
-	m_voiceBtn = new wxButton(this, wxID_ANY, _("Голос"));
+	m_voiceBtn = new wxButton(this, wxID_ANY, _("Диктовка"));
 	btnRow->Add(m_voiceBtn, 0, wxALL, FromDIP(4));
 
 	m_sendBtn = new wxButton(this, wxID_ANY, _("Отправить"));
@@ -770,7 +826,7 @@ wxString ibPluginWebPane::CurrentModelProfileLabel() const
 	if (m_modelProfile != nullptr && sel >= 0) {
 		return m_modelProfile->GetString(sel);
 	}
-	return _("По умолчанию");
+	return _("Авто (.env)");
 }
 
 void ibPluginWebPane::OnModelProfileChanged(wxCommandEvent& /*event*/)
@@ -1352,6 +1408,7 @@ void ibPluginWebPane::AppendEntry(Entry entry)
 void ibPluginWebPane::AppendStreamingDelta(const wxString& requestId,
                                             const wxString& delta)
 {
+	const wxString cleanDelta = UnwrapProviderJsonDelta(delta);
 	// Locate an existing assistant entry for this request — could be
 	// either a real streaming entry from a prior delta, OR the "Думаю…"
 	// placeholder we inserted in DispatchUserPrompt so the user sees
@@ -1370,7 +1427,7 @@ void ibPluginWebPane::AppendStreamingDelta(const wxString& requestId,
 	if (target == nullptr) {
 		Entry e;
 		e.role      = Entry::Role::Assistant;
-		e.markdown  = delta;
+		e.markdown  = cleanDelta;
 		e.requestId = requestId;
 		// COMMIT-MSG: tag the entry when its rid was registered as a
 		// commit-message turn. The flag drives RenderCesCodeBlock to
@@ -1382,7 +1439,7 @@ void ibPluginWebPane::AppendStreamingDelta(const wxString& requestId,
 		m_entries.push_back(std::move(e));
 	} else if (target->markdown == _("Думаю…")) {
 		// First real delta replacing the placeholder.
-		target->markdown = delta;
+		target->markdown = cleanDelta;
 		// Placeholder was created in DispatchUserPrompt before the
 		// rid was registered with m_commitRequestIds (the order is:
 		// DispatchUserPrompt mints rid → registers it → creates the
@@ -1394,7 +1451,7 @@ void ibPluginWebPane::AppendStreamingDelta(const wxString& requestId,
 			target->commitSuggestion = true;
 		}
 	} else {
-		target->markdown += delta;
+		target->markdown += cleanDelta;
 	}
 	m_pending          = true;
 	m_pendingRequestId = requestId;

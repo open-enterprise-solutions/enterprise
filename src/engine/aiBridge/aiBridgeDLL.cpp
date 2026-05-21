@@ -631,6 +631,68 @@ void EmitDelta(const std::string& requestId, const std::string& delta)
 	g_host->WebPaneSend(g_paneId, s.c_str());
 }
 
+std::string JoinReviewerErrors(const nlohmann::json& plan)
+{
+	if (!plan.is_object() ||
+	    !plan.contains("reviewers") ||
+	    !plan["reviewers"].is_array()) {
+		return std::string();
+	}
+	std::string out;
+	for (const auto& reviewer : plan["reviewers"]) {
+		if (!reviewer.is_object()) continue;
+		const std::string model = reviewer.value("model", std::string());
+		const std::string err   = reviewer.value("error", std::string());
+		if (err.empty()) continue;
+		if (!out.empty()) out += "; ";
+		if (!model.empty()) out += model + ": ";
+		out += err;
+	}
+	return out;
+}
+
+std::string ExtractProviderDiagnostic(const nlohmann::json& parsed)
+{
+	if (!parsed.is_object()) return "provider returned an empty response";
+	if (parsed.contains("message") && parsed["message"].is_string()) {
+		return parsed["message"].get<std::string>();
+	}
+	if (parsed.contains("error")) {
+		if (parsed["error"].is_string()) {
+			return parsed["error"].get<std::string>();
+		}
+		if (parsed["error"].is_object()) {
+			const auto& err = parsed["error"];
+			const std::string msg = err.value("message", std::string());
+			const std::string detail = err.value("detail", std::string());
+			if (!msg.empty()) return msg;
+			if (!detail.empty()) return detail;
+		}
+	}
+	if (parsed.contains("result") && parsed["result"].is_object()) {
+		const auto& result = parsed["result"];
+		if (result.contains("error") && result["error"].is_string()) {
+			return result["error"].get<std::string>();
+		}
+		if (result.contains("message") && result["message"].is_string()) {
+			return result["message"].get<std::string>();
+		}
+		if (result.value("draft", false)) {
+			std::string detail = "provider returned an empty draft response";
+			if (result.contains("plan") && result["plan"].is_object()) {
+				const auto& plan = result["plan"];
+				const std::string reason =
+				    plan.value("draftReason", std::string());
+				const std::string reviewerErrors = JoinReviewerErrors(plan);
+				if (!reason.empty()) detail += " (" + reason + ")";
+				if (!reviewerErrors.empty()) detail += ": " + reviewerErrors;
+			}
+			return detail;
+		}
+	}
+	return "provider returned an empty response";
+}
+
 int NormalizeConfidencePercent(double value)
 {
 	if (value >= 0.0 && value <= 1.0) value *= 100.0;
@@ -836,9 +898,16 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 		}
 	}
 	if (content.empty()) {
-		// Server returned something we can't unwrap — emit raw so the
-		// user sees the actual diagnostic, not a silent failure.
-		content = res.body;
+		const std::string detail = ExtractProviderDiagnostic(parsed);
+		AuditWrite("chat.error", {
+			{ "requestId", requestId },
+			{ "protocol",  "pugi-mcp" },
+			{ "tool",      "ai_chat_query" },
+			{ "status",    res.status },
+			{ "detail",    detail },
+		});
+		EmitError("aiBridge[pugi-mcp]: " + detail);
+		return;
 	}
 
 	const int approxTokens = static_cast<int>(content.size() / 4);
