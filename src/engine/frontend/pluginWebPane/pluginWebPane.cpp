@@ -588,19 +588,7 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 	auto* root = new wxBoxSizer(wxVERTICAL);
 
 	auto* policyRow = new wxBoxSizer(wxHORIZONTAL);
-	policyRow->Add(new wxStaticText(this, wxID_ANY, _("Профиль")),
-	               0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT,
-	               FromDIP(4));
-	m_modelProfile = new wxChoice(this, wxID_ANY);
-	m_modelProfile->Append(_("Авто (.env)"));
-	m_modelProfile->Append(_("Pugi / Sigma"));
-	m_modelProfile->Append(_("OpenAI быстрый"));
-	m_modelProfile->Append(_("OpenAI качественный"));
-	m_modelProfile->SetSelection(0);
-	policyRow->Add(m_modelProfile, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
-	               FromDIP(12));
-
-	policyRow->Add(new wxStaticText(this, wxID_ANY, _("Режим агента")),
+	policyRow->Add(new wxStaticText(this, wxID_ANY, _("Доступ")),
 	               0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT,
 	               FromDIP(4));
 	m_permissionMode = new wxChoice(this, wxID_ANY);
@@ -609,22 +597,25 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 	m_permissionMode->Append(_("Подтверждать изменения"));
 	m_permissionMode->Append(_("Авто"));
 	m_permissionMode->SetSelection(static_cast<int>(m_permissionModeValue));
+	m_permissionMode->SetMinSize(wxSize(FromDIP(150), -1));
 	policyRow->Add(m_permissionMode, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
 	               FromDIP(4));
+	root->Add(policyRow, 0, wxEXPAND | wxTOP, FromDIP(4));
 
+	auto* contextRow = new wxBoxSizer(wxHORIZONTAL);
 	m_pinContextBtn = new wxButton(this, wxID_ANY, _("Закрепить @"));
-	policyRow->Add(m_pinContextBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
+	contextRow->Add(m_pinContextBtn, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT,
 	               FromDIP(4));
 
 	m_clearPinnedContextBtn = new wxButton(this, wxID_ANY, _("Очистить"));
-	policyRow->Add(m_clearPinnedContextBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
+	contextRow->Add(m_clearPinnedContextBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
 	               FromDIP(4));
 
 	m_pinnedContextLabel = new wxStaticText(this, wxID_ANY, wxEmptyString);
 	m_pinnedContextLabel->SetForegroundColour(wxColour(90, 96, 110));
-	policyRow->Add(m_pinnedContextLabel, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT,
+	contextRow->Add(m_pinnedContextLabel, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT,
 	               FromDIP(4));
-	root->Add(policyRow, 0, wxEXPAND | wxTOP, FromDIP(4));
+	root->Add(contextRow, 0, wxEXPAND | wxTOP, FromDIP(2));
 
 	// Drop wxHW_NO_SELECTION so the user can drag-select transcript text
 	// and copy with Cmd+C (system menu Edit→Copy is still available).
@@ -675,9 +666,6 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 	m_clearPinnedContextBtn->Bind(wxEVT_BUTTON,
 	                              &ibPluginWebPane::OnClearPinnedContextClicked,
 	                              this);
-	m_modelProfile->Bind(wxEVT_CHOICE,
-	                      &ibPluginWebPane::OnModelProfileChanged,
-	                      this);
 	m_permissionMode->Bind(wxEVT_CHOICE,
 	                        &ibPluginWebPane::OnPermissionModeChanged,
 	                        this);
@@ -822,7 +810,7 @@ wxString ibPluginWebPane::CurrentModelProfileLabel() const
 	if (m_modelProfile != nullptr && sel >= 0) {
 		return m_modelProfile->GetString(sel);
 	}
-	return _("Авто (.env)");
+	return _("Основной");
 }
 
 void ibPluginWebPane::OnModelProfileChanged(wxCommandEvent& /*event*/)
