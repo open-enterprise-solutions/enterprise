@@ -202,17 +202,6 @@ httplib::Headers MakeJsonHeaders(const std::string& token,
 	return headers;
 }
 
-void CloseClient(httplib::Client& cli)
-{
-	try {
-		cli.stop();
-	} catch (const std::exception& e) {
-		DiagWrite("aiBridge: client close exception: " + std::string(e.what()));
-	} catch (...) {
-		DiagWrite("aiBridge: client close exception");
-	}
-}
-
 // Per-request cancel tokens for the Stop Generation feature. Pane fires
 // agent.cancel with the original requestId; the worker polls between
 // SSE chunks. shared_ptr lets the worker capture by value so erase from
@@ -591,13 +580,10 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 	httplib::Result res;
 	try {
 		res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
-		CloseClient(cli);
 	} catch (const std::exception& e) {
-		CloseClient(cli);
 		EmitError(std::string("aiBridge[pugi-mcp]: transport exception — ") + e.what());
 		return;
 	} catch (...) {
-		CloseClient(cli);
 		EmitError("aiBridge[pugi-mcp]: transport exception");
 		return;
 	}
@@ -733,13 +719,10 @@ void RunTripleReview(std::string requestId, std::string code,
 	httplib::Result res;
 	try {
 		res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
-		CloseClient(cli);
 	} catch (const std::exception& e) {
-		CloseClient(cli);
 		EmitError(std::string("aiBridge[triple-review]: transport exception — ") + e.what());
 		return;
 	} catch (...) {
-		CloseClient(cli);
 		EmitError("aiBridge[triple-review]: transport exception");
 		return;
 	}
@@ -853,13 +836,10 @@ void PostAgentResolve(const std::string& endpoint, const std::string& token,
 	});
 	try {
 		(void)cli.Post(path.c_str(), headers, body.dump(), "application/json");
-		CloseClient(cli);
 	} catch (const std::exception& e) {
-		CloseClient(cli);
 		DiagWrite("aiBridge[oes-agent-resolve]: transport exception: " +
 		          std::string(e.what()));
 	} catch (...) {
-		CloseClient(cli);
 		DiagWrite("aiBridge[oes-agent-resolve]: transport exception");
 	}
 }
@@ -923,13 +903,10 @@ void RunOesAgent(std::string requestId, std::string prompt,
 	httplib::Result res;
 	try {
 		res = cli.Post(path.c_str(), headers, body.dump(), "application/json");
-		CloseClient(cli);
 	} catch (const std::exception& e) {
-		CloseClient(cli);
 		EmitError(std::string("aiBridge[oes-agent]: transport exception — ") + e.what());
 		return;
 	} catch (...) {
-		CloseClient(cli);
 		EmitError("aiBridge[oes-agent]: transport exception");
 		return;
 	}
@@ -1263,14 +1240,11 @@ void RunChatRequest(std::string requestId, std::string prompt, std::string mode,
 	httplib::Result res;
 	try {
 		res = cli.Post(path.c_str(), headers, bodyStr, "application/json", receiver);
-		CloseClient(cli);
 	} catch (const std::exception& e) {
-		CloseClient(cli);
 		EraseCancelToken(requestId);
 		EmitError(std::string("aiBridge: transport exception — ") + e.what());
 		return;
 	} catch (...) {
-		CloseClient(cli);
 		EraseCancelToken(requestId);
 		EmitError("aiBridge: transport exception");
 		return;
@@ -1397,19 +1371,14 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 				return;
 			}
 
-			// Approve path — walk mutations on a worker so the main thread
-			// isn't blocked while MetaCreate touches activeMetaData.
-			// MetaCreate itself asserts wxIsMainThread, so we wxQueueEvent
-			// the actual work… but in headless / test paths there is no UI
-			// loop. Run inline on a worker; metaBridge will reject via the
-			// main-thread guard if we're really off-thread in production,
-			// and aiBridge surfaces that as a per-op error.
+			// Approve path — walk mutations synchronously while this
+			// OnPaneMessage dispatch is still on the UI thread and still
+			// carries the pane's pluginId policy scope. MetaCreate/Edit/Delete
+			// require both; moving this work to a background worker trips the
+			// main-thread guard and loses tl_currentPluginId.
 			auto muts = plan.mutations;
 			auto conv = plan.conversationId;
-			std::lock_guard<std::mutex> lk(g_workersMu);
-			g_workers.emplace_back([planId, conv, muts, endpoint, token, tenant]() {
-				RunAgentApply(planId, conv, muts, endpoint, token, tenant);
-			});
+			RunAgentApply(planId, conv, muts, endpoint, token, tenant);
 			return;
 		}
 
