@@ -112,7 +112,7 @@ Conkurent analysis (mcp-1c free tier 9 tools, Go binary, BM25 + BSL synonyms, au
 - [x] **done** t5-002: Inline caches on `OPER_CALL_METHOD` and attribute dispatch — per-Execute monomorphic caches resolve method/prop indexes once per instruction pointer and target class, without mutating bytecode or AOT format.
 - [x] **done** t5-003: Adaptive numeric specialization for generic arithmetic/compare opcodes — hot numeric pairs specialize after repeated hits and deopt back to generic helpers when operand types change.
 - [x] **done** t5-004: AOT bytecode cache hash-keyed validation — cache load now checks deterministic source/kind/compiler version fingerprints before deserializing, while existing format-version and dependency-version checks keep upgrade/dependency drift tolerant.
-- [~] **blocked:closure-parser-runtime** t5-005: Closure capture runtime — bytecode/runtime scaffolding exists (`OPER_CALL_CLOSURE`, `OPER_LFUNC`, captured heap-frame chain), but executable coverage is not reliable yet. Current VES anonymous-function samples either fail under the default CES test mode or hang/abort when forced to VES, so this must be fixed as parser/runtime work before marking closure capture complete.
+- [x] **done** t5-005: Closure capture runtime — headless compile no longer dereferences `appData`, VES closure tests run under explicit syntax mode, direct host calls heap-promote escaping frames, and host/LINQ lambda invocation preserves captured frame chains for outer parameters and mutable locals.
 
 ---
 

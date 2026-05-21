@@ -16,6 +16,8 @@
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
 
+#include <wx/debug.h>
+
 namespace {
 
 bool TryCompile(ibCompileCode& cc, const wxString& src) {
@@ -33,6 +35,21 @@ size_t CountOpcode(const ibByteCode& bc, short oper) {
 		if (u.m_numOper == oper) ++n;
 	return n;
 }
+
+class ScopedCodeStyle {
+public:
+	explicit ScopedCodeStyle(short style)
+		: m_prev(ibCompileCode::GetCodeStyle())
+	{
+		wxDisableAsserts();
+		ibCompileCode::SetCodeStyle(style);
+	}
+	~ScopedCodeStyle() {
+		ibCompileCode::SetCodeStyle(m_prev);
+	}
+private:
+	short m_prev;
+};
 
 } // namespace
 
@@ -289,6 +306,7 @@ const ibByteCode::ibByteFunction* FindFirstLambda(const ibByteCode& bc) {
 } // namespace
 
 TEST(ClosureCapture, LambdaReferencingOuterLocalCompiles) {
+	ScopedCodeStyle style(CODE_VES);
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
 		wxT("Function makeAdder(n)\n")
@@ -300,6 +318,7 @@ TEST(ClosureCapture, LambdaReferencingOuterLocalCompiles) {
 }
 
 TEST(ClosureCapture, OuterFnMarkedNeedsHeapFrameAfterCapture) {
+	ScopedCodeStyle style(CODE_VES);
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
 		wxT("Function makeAdder(n)\n")
@@ -316,6 +335,7 @@ TEST(ClosureCapture, OuterFnMarkedNeedsHeapFrameAfterCapture) {
 }
 
 TEST(ClosureCapture, NoCaptureLeavesNeedsHeapFrameFalse) {
+	ScopedCodeStyle style(CODE_VES);
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	// No inner lambda → no capture → no heap-frame requirement.
 	const wxString src =
@@ -331,6 +351,7 @@ TEST(ClosureCapture, NoCaptureLeavesNeedsHeapFrameFalse) {
 }
 
 TEST(ClosureCapture, LambdaBodyEmitsDepthGreaterOrEqualOneForCapturedVar) {
+	ScopedCodeStyle style(CODE_VES);
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
 		wxT("Function makeAdder(n)\n")

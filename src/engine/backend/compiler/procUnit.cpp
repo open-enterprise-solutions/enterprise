@@ -1765,17 +1765,29 @@ void ibProcUnit::CallAsProc(const long lCodeLine, ibValue** ppParams, const long
 		return;
 	}
 
-	ibRunContext cRunContext(index3);// number of local variables
+	const ibByteCode::ibByteFunction* bfn = m_pByteCode->FindFunctionByEntry(lCodeLine);
+	const bool useHeapFrame = bfn != nullptr && bfn->m_needsHeapFrame;
+	std::shared_ptr<ibRunContext> heapCtx;
+	ibRunContext stackCtx;
+	ibRunContext* pCallContext = nullptr;
+	if (useHeapFrame) {
+		heapCtx = std::make_shared<ibRunContext>(index3);
+		pCallContext = heapCtx.get();
+	} else {
+		stackCtx.SetLocalCount(index3);
+		pCallContext = &stackCtx;
+	}
 
-	cRunContext.m_lParamCount = array3;//number of formal parameters
-	cRunContext.m_lStart = lCodeLine;
+	pCallContext->m_lParamCount = array3;//number of formal parameters
+	pCallContext->m_lStart = lCodeLine;
+	pCallContext->m_parentRunContext = &m_cCurContext;
 	// m_currentFunction set by OPER_FUNC handler in Execute (tape-driven).
 
 	//load parameters
-	memcpy(&cRunContext.m_pRefLocVars[0], &ppParams[0], std::min(lSizeArray, cRunContext.m_lParamCount) * sizeof(ibValue*));
+	memcpy(&pCallContext->m_pRefLocVars[0], &ppParams[0], std::min(lSizeArray, pCallContext->m_lParamCount) * sizeof(ibValue*));
 
 	//execute arbitrary code
-	Execute(&cRunContext, nullptr, false);
+	Execute(pCallContext, nullptr, false);
 }
 
 //Calling a function by its address in the byte code array
@@ -1796,17 +1808,29 @@ void ibProcUnit::CallAsFunc(const long lCodeLine, ibValue& pvarRetValue, ibValue
 		return;
 	}
 
-	ibRunContext cRunContext(index3);// number of local variables
+	const ibByteCode::ibByteFunction* bfn = m_pByteCode->FindFunctionByEntry(lCodeLine);
+	const bool useHeapFrame = bfn != nullptr && bfn->m_needsHeapFrame;
+	std::shared_ptr<ibRunContext> heapCtx;
+	ibRunContext stackCtx;
+	ibRunContext* pCallContext = nullptr;
+	if (useHeapFrame) {
+		heapCtx = std::make_shared<ibRunContext>(index3);
+		pCallContext = heapCtx.get();
+	} else {
+		stackCtx.SetLocalCount(index3);
+		pCallContext = &stackCtx;
+	}
 
-	cRunContext.m_lParamCount = array3;//number of formal parameters
-	cRunContext.m_lStart = lCodeLine;
+	pCallContext->m_lParamCount = array3;//number of formal parameters
+	pCallContext->m_lStart = lCodeLine;
+	pCallContext->m_parentRunContext = &m_cCurContext;
 	// m_currentFunction set by OPER_FUNC handler in Execute (tape-driven).
 
 	//load parameters
-	memcpy(&cRunContext.m_pRefLocVars[0], &ppParams[0], std::min(lSizeArray, cRunContext.m_lParamCount) * sizeof(ibValue*));
+	memcpy(&pCallContext->m_pRefLocVars[0], &ppParams[0], std::min(lSizeArray, pCallContext->m_lParamCount) * sizeof(ibValue*));
 
 	//execute arbitrary code
-	Execute(&cRunContext, &pvarRetValue, false);
+	Execute(pCallContext, &pvarRetValue, false);
 }
 
 long ibProcUnit::FindProp(const wxString& strPropName) const

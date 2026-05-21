@@ -687,7 +687,7 @@ bool ibCompileCode::Recompile()
 	// compilation
 	if (CompileModule()) {
 		m_changedCode = false;
-		if (auto* pm = appData->GetPluginManager())
+		if (auto* pm = appData ? appData->GetPluginManager() : nullptr)
 			pm->FireEvent(wxT("AfterCompile"));
 		return true;
 	}
@@ -719,7 +719,7 @@ bool ibCompileCode::Compile()
 	// compilation
 	if (CompileModule()) {
 		m_changedCode = false;
-		if (auto* pm = appData->GetPluginManager())
+		if (auto* pm = appData ? appData->GetPluginManager() : nullptr)
 			pm->FireEvent(wxT("AfterCompile"));
 		return true;
 	}
@@ -753,7 +753,7 @@ bool ibCompileCode::Compile(const wxString& strCode)
 	// compilation
 	if (CompileModule()) {
 		m_changedCode = false;
-		if (auto* pm = appData->GetPluginManager())
+		if (auto* pm = appData ? appData->GetPluginManager() : nullptr)
 			pm->FireEvent(wxT("AfterCompile"));
 		return true;
 	}

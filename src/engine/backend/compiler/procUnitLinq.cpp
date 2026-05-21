@@ -75,14 +75,26 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 	}
 
 
-	ibRunContext cRunContext(lambdaVarCount);
-	cRunContext.m_lStart          = bfn->m_lCodeLine + 1;
-	cRunContext.m_lParamCount     = lambdaParamCount;
-	cRunContext.m_currentFunction = bfn;
+	std::shared_ptr<ibRunContext> heapCtx;
+	ibRunContext stackCtx;
+	ibRunContext* pCallContext = nullptr;
+	if (fn.m_needsHeapFrame) {
+		heapCtx = std::make_shared<ibRunContext>(lambdaVarCount);
+		pCallContext = heapCtx.get();
+	} else {
+		stackCtx.SetLocalCount(lambdaVarCount);
+		pCallContext = &stackCtx;
+	}
+	pCallContext->m_lStart          = bfn->m_lCodeLine + 1;
+	pCallContext->m_lParamCount     = lambdaParamCount;
+	pCallContext->m_currentFunction = bfn;
+	pCallContext->m_parentRunContext = !fn.m_capturedFrames.empty()
+		? fn.m_capturedFrames[0].get()
+		: nullptr;
 
 	// Bind first argCount params to the host-supplied refs.
 	for (long i = 0; i < argCount; ++i)
-		cRunContext.m_pRefLocVars[i] = argPtrs[i];
+		pCallContext->m_pRefLocVars[i] = argPtrs[i];
 
 	// Fill missing tail params from compile-time defaults.
 	const ibByteCode* pLocalByteCode = fn.GetParentBc();
@@ -99,10 +111,10 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 			ibBackendCoreException::Error(
 				_("LINQ: lambda missing required argument '%s'"), nm);
 		}
-		CopyValue(cRunContext.m_pLocVars[i], pLocalByteCode->m_listConst[puDef.m_numIndex]);
+		CopyValue(pCallContext->m_pLocVars[i], pLocalByteCode->m_listConst[puDef.m_numIndex]);
 	}
 
-	fn.Execute(&cRunContext, &retVal, /*bDelta*/false);
+	fn.Execute(pCallContext, &retVal, /*bDelta*/false);
 
 }
 

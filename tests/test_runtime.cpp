@@ -18,6 +18,8 @@
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
 
+#include <wx/debug.h>
+
 namespace {
 
 bool TryCompile(ibCompileCode& cc, const wxString& src) {
@@ -36,6 +38,21 @@ bool TryExecute(ibProcUnit& pu, const ibByteCode& bc) {
 		return false;
 	}
 }
+
+class ScopedCodeStyle {
+public:
+	explicit ScopedCodeStyle(short style)
+		: m_prev(ibCompileCode::GetCodeStyle())
+	{
+		wxDisableAsserts();
+		ibCompileCode::SetCodeStyle(style);
+	}
+	~ScopedCodeStyle() {
+		ibCompileCode::SetCodeStyle(m_prev);
+	}
+private:
+	short m_prev;
+};
 
 } // namespace
 
@@ -272,6 +289,64 @@ TEST(RuntimeTest, RecursiveFactorial) {
 	ibValue* params[] = { &n, nullptr };
 	EXPECT_TRUE(pu.CallAsFunc(wxT("Fact"), ret, params, 1));
 	EXPECT_EQ(ret.GetInteger(), 720);
+}
+
+TEST(RuntimeTest, LambdaCapturesOuterParameter) {
+	ScopedCodeStyle style(CODE_VES);
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function MakeAdder(n)\n")
+		wxT("  Return Function(x)\n")
+		wxT("           Return x + n;\n")
+		wxT("         EndFunction;\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue add5;
+	ibValue n(5);
+	ibValue* params[] = { &n, nullptr };
+	ASSERT_TRUE(pu.CallAsFunc(wxT("MakeAdder"), add5, params, 1));
+
+	ibValue x(7);
+	ibValue ret;
+	ASSERT_TRUE(InvokeLambdaWithArg(add5, x, ret));
+	EXPECT_EQ(ret.GetType(), ibValueTypes::TYPE_NUMBER);
+	EXPECT_EQ(ret.GetInteger(), 12);
+}
+
+TEST(RuntimeTest, LambdaCapturesMutableOuterLocal) {
+	ScopedCodeStyle style(CODE_VES);
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function MakeCounter(start)\n")
+		wxT("  var value;\n")
+		wxT("  value = start;\n")
+		wxT("  Return Function(step)\n")
+		wxT("           value = value + step;\n")
+		wxT("           Return value;\n")
+		wxT("         EndFunction;\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue counter;
+	ibValue start(10);
+	ibValue* params[] = { &start, nullptr };
+	ASSERT_TRUE(pu.CallAsFunc(wxT("MakeCounter"), counter, params, 1));
+
+	ibValue step2(2);
+	ibValue ret;
+	ASSERT_TRUE(InvokeLambdaWithArg(counter, step2, ret));
+	EXPECT_EQ(ret.GetInteger(), 12);
+
+	ibValue step3(3);
+	ASSERT_TRUE(InvokeLambdaWithArg(counter, step3, ret));
+	EXPECT_EQ(ret.GetInteger(), 15);
 }
 
 // ===========================================================================
