@@ -519,6 +519,18 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 	auto* root = new wxBoxSizer(wxVERTICAL);
 
 	auto* policyRow = new wxBoxSizer(wxHORIZONTAL);
+	policyRow->Add(new wxStaticText(this, wxID_ANY, _("Профиль")),
+	               0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT,
+	               FromDIP(4));
+	m_modelProfile = new wxChoice(this, wxID_ANY);
+	m_modelProfile->Append(_("По умолчанию"));
+	m_modelProfile->Append(_("Pugi"));
+	m_modelProfile->Append(_("OpenAI fast"));
+	m_modelProfile->Append(_("OpenAI quality"));
+	m_modelProfile->SetSelection(0);
+	policyRow->Add(m_modelProfile, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
+	               FromDIP(12));
+
 	policyRow->Add(new wxStaticText(this, wxID_ANY, _("Режим агента")),
 	               0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT,
 	               FromDIP(4));
@@ -575,6 +587,9 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 
 	m_sendBtn   ->Bind(wxEVT_BUTTON, &ibPluginWebPane::OnSendClicked,    this);
 	m_newChatBtn->Bind(wxEVT_BUTTON, &ibPluginWebPane::OnNewChatClicked, this);
+	m_modelProfile->Bind(wxEVT_CHOICE,
+	                      &ibPluginWebPane::OnModelProfileChanged,
+	                      this);
 	m_permissionMode->Bind(wxEVT_CHOICE,
 	                        &ibPluginWebPane::OnPermissionModeChanged,
 	                        this);
@@ -698,6 +713,33 @@ ibPluginWebPane::~ibPluginWebPane()
 	if (m_saveTimer.IsRunning()) {
 		m_saveTimer.Stop();
 		SaveNow();
+	}
+}
+
+wxString ibPluginWebPane::CurrentModelProfileId() const
+{
+	const int sel = m_modelProfile ? m_modelProfile->GetSelection() : 0;
+	switch (sel) {
+	case 1: return wxT("pugi");
+	case 2: return wxT("openai-fast");
+	case 3: return wxT("openai-quality");
+	default: return wxT("env");
+	}
+}
+
+wxString ibPluginWebPane::CurrentModelProfileLabel() const
+{
+	const int sel = m_modelProfile ? m_modelProfile->GetSelection() : 0;
+	if (m_modelProfile != nullptr && sel >= 0) {
+		return m_modelProfile->GetString(sel);
+	}
+	return _("По умолчанию");
+}
+
+void ibPluginWebPane::OnModelProfileChanged(wxCommandEvent& /*event*/)
+{
+	if (m_statusBar) {
+		m_statusBar->SetLabel(_("Профиль: ") + CurrentModelProfileLabel());
 	}
 }
 
@@ -1947,6 +1989,7 @@ void ibPluginWebPane::DispatchUserPrompt(const wxString& prompt)
 	env["requestId"] = std::string(rid.utf8_str());
 	env["text"]      = std::string(outboundPrompt.utf8_str());
 	env["prompt"]    = std::string(outboundPrompt.utf8_str()); // v3-shim fallback
+	env["profile"]   = std::string(CurrentModelProfileId().utf8_str());
 	// Locale: prefer the live wxLocale name, fall back to "uk-UA" which
 	// is the OES Designer dev-mode default Pugi uses.
 	wxString localeName;

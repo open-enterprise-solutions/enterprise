@@ -196,6 +196,7 @@ private:
 	wxTextCtrl*      m_input      = nullptr;
 	wxButton*        m_sendBtn    = nullptr;
 	wxButton*        m_newChatBtn = nullptr;
+	wxChoice*        m_modelProfile = nullptr;
 	wxChoice*        m_permissionMode = nullptr;
 	wxStaticText*    m_statusBar  = nullptr;
 
@@ -253,6 +254,9 @@ private:
 	PermissionMode  m_permissionModeValue = PermissionMode::ConfirmWrites;
 	bool            m_planPolicyElevated  = false;
 
+	wxString CurrentModelProfileId() const;
+	wxString CurrentModelProfileLabel() const;
+	void OnModelProfileChanged(wxCommandEvent& event);
 	void OnPermissionModeChanged(wxCommandEvent& event);
 	void ApplyPermissionModePolicy();
 	void ElevatePlanPolicyForApply();

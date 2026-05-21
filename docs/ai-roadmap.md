@@ -89,7 +89,7 @@ Conkurent analysis (mcp-1c free tier 9 tools, Go binary, BM25 + BSL synonyms, au
 ## Tier 3 — Polish (6-12 months)
 
 - [x] **done** t3-001: Web client invalidation broadcast — `wfrontend` sweep now watches the MCP mutation marker (`sys/.oes-mcp-mutation`) written by oes-mcp, bumps `metaGeneration`, evicts web sessions, and reloads metadata through the same Close/Load/Run path used by the existing `sys_config.file_guid` watcher. Build `wfrontend` + `wenterprise-server` PASS.
-- [ ] **pending** t3-002: Multi-LLM profile switcher UI in chat header (BYOK already exists, needs UI). ~3 days.
+- [x] **done** t3-002: Multi-LLM profile switcher UI in chat header — native pane adds a per-request profile selector (`По умолчанию`, `Pugi`, `OpenAI fast`, `OpenAI quality`), chat envelopes carry `profile`, and aiBridge resolves it to Pugi MCP or OpenAI-compatible endpoint/model (`MODEL_FAST`, `MODEL_QUALITY`) without rewriting plugin env.
 - [ ] **pending** t3-003: Voice input in chat pane — Web Speech API integration if wxWebView, else mic-button placeholder. ~2 days.
 - [ ] **pending** t3-004: Onboarding wizard — Designer Tools → "Подключить AI" → step-by-step install Claude Code, claude mcp add, Pugi key, demo Catalog. ~1 week.
 - [ ] **pending** t3-005: Telemetry loop — oes-mcp writes structured logs to `.oes/mcp-audit/<ts>.jsonl`, weekly aggregate identifies skill gaps. ~1 week.

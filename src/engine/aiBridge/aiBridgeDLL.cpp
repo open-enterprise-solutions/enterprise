@@ -383,7 +383,52 @@ std::string PugiTenant()
 std::string PugiLocale()
 {
 	return NormalizePugiLocale(ReadEnvAny("LOCALE", "PUGI_OES_LOCALE",
-	                                     nullptr, "uk-UA"));
+	                                      nullptr, "uk-UA"));
+}
+
+struct ChatProfile {
+	std::string id;
+	std::string protocol;
+	std::string endpoint;
+	std::string model;
+};
+
+ChatProfile ResolveChatProfile(std::string requested)
+{
+	requested = TrimCopy(std::move(requested));
+	if (requested == "pugi") {
+		return {
+			"pugi",
+			"pugi-mcp",
+			PugiEndpoint(),
+			"pugi-mcp",
+		};
+	}
+	if (requested == "openai-fast") {
+		return {
+			"openai-fast",
+			"openai",
+			ReadEnv("ENDPOINT", "https://api.openai.com/v1/chat/completions"),
+			ReadEnv("MODEL_FAST", "gpt-4o-mini"),
+		};
+	}
+	if (requested == "openai-quality") {
+		return {
+			"openai-quality",
+			"openai",
+			ReadEnv("ENDPOINT", "https://api.openai.com/v1/chat/completions"),
+			ReadEnv("MODEL_QUALITY", "gpt-4o"),
+		};
+	}
+	const std::string protocol = ReadEnv("PROTOCOL", "openai");
+	return {
+		requested.empty() ? std::string("env") : requested,
+		protocol,
+		protocol == "pugi-mcp"
+		    ? PugiEndpoint()
+		    : ReadEnv("ENDPOINT", "https://api.openai.com/v1/chat/completions"),
+		ReadEnv("MODEL", "gpt-4o-mini"),
+	};
 }
 
 // Split a URL into (scheme+host, path). Trivial parser — enough for
@@ -1146,14 +1191,14 @@ void RunAgentApply(std::string planId, std::string conversationId,
 // is the per-request stop signal; receiver polls it between SSE frames
 // so a pane-fired agent.cancel halts further delta emits.
 void RunChatRequest(std::string requestId, std::string prompt, std::string mode,
+                    std::string profile,
                     std::shared_ptr<std::atomic<bool>> cancelTok)
 {
 	const std::string token    = ReadEnv("TOKEN",    "");
-	const std::string protocol = ReadEnv("PROTOCOL", "openai");  // or "pugi-mcp"
-	const std::string endpoint = protocol == "pugi-mcp"
-	    ? PugiEndpoint()
-	    : ReadEnv("ENDPOINT", "https://api.openai.com/v1/chat/completions");
-	const std::string model    = ReadEnv("MODEL",    "gpt-4o-mini");
+	const ChatProfile resolved = ResolveChatProfile(std::move(profile));
+	const std::string protocol = resolved.protocol;  // "openai" or "pugi-mcp"
+	const std::string endpoint = resolved.endpoint;
+	const std::string model    = resolved.model;
 
 	if (protocol != "pugi-mcp" && token.empty()) {
 		EmitError("aiBridge: no TOKEN in plugin env. Set it via Tools → Plugins → Edit API token.");
@@ -1223,6 +1268,7 @@ void RunChatRequest(std::string requestId, std::string prompt, std::string mode,
 		{ "requestId", requestId },
 		{ "protocol",  "openai" },
 		{ "mode",      mode },
+		{ "profile",   resolved.id },
 		{ "model",     model },
 		{ "chars",     static_cast<int>(prompt.size()) },
 	});
@@ -1591,6 +1637,7 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 			    std::chrono::steady_clock::now().time_since_epoch().count());
 		}
 		const std::string mode = j.value("mode", std::string("chat"));
+		const std::string profile = j.value("profile", std::string("env"));
 
 		// Allocate the cancel token before spawning so a near-instant
 		// agent.cancel still finds a registered entry.
@@ -1600,7 +1647,8 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 		// immediately. Track the thread so shutdown can join + drain.
 		{
 			std::lock_guard<std::mutex> lk(g_workersMu);
-			g_workers.emplace_back(RunChatRequest, requestId, prompt, mode, cancelTok);
+			g_workers.emplace_back(RunChatRequest, requestId, prompt, mode,
+			                       profile, cancelTok);
 		}
 	} catch (...) {
 		// Plugin-side bug — surface a single error envelope so the user
@@ -1754,6 +1802,7 @@ OES_PLUGIN_EXPORT int oes_plugin_initialize(const ibHostAPI* host)
 	// reach the env any other way. Read once + remember.
 	static const char* kCachedEnvKeys[] = {
 		"TOKEN", "PROTOCOL", "ENDPOINT", "MODEL",
+		"MODEL_FAST", "MODEL_QUALITY",
 		"TENANT", "LOCALE",
 		"PUGI_BASE_URL", "PUGI_OES_API_KEY", "PUGI_TENANT_TOKEN",
 		"PUGI_TENANT_ID", "PUGI_TENANT", "PUGI_OES_LOCALE",
