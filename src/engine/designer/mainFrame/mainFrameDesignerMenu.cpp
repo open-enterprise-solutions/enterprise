@@ -7,6 +7,7 @@
 #include "backend/appData.h"
 #include "backend/plugin/pluginManager.h"
 #include "backend/plugin/metaBridge.h"
+#include "backend/plugin/byokEnv.h"
 
 #include "mainFrame/pluginManagerDialog.h"
 #include "mainFrame/templateWizard.h"
@@ -14,6 +15,12 @@
 #include <wx/stdpaths.h>
 #include <wx/filename.h>
 #include <wx/msgdlg.h>
+#include <wx/sizer.h>
+#include <wx/stattext.h>
+#include <wx/textctrl.h>
+#include <wx/button.h>
+#include <wx/clipbrd.h>
+#include <wx/dataobj.h>
 
 //********************************************************************************
 //*                                Hotkey support                                *
@@ -77,6 +84,128 @@ enum MDI_MENU_ID
 #include <wx/config.h>
 
 #include "frontend/artProvider/artProvider.h"
+
+namespace {
+
+wxString ShellQuote(const wxString& value)
+{
+	wxString out = value;
+	out.Replace(wxT("'"), wxT("'\\''"));
+	return wxT("'") + out + wxT("'");
+}
+
+wxString ResolveOesMcpPath()
+{
+	wxFileName exe(wxStandardPaths::Get().GetExecutablePath());
+	wxString dir = exe.GetPath();
+	for (int i = 0; i < 10; ++i) {
+		wxFileName candidate(dir, wxT("oes-mcp"));
+		if (wxFileExists(candidate.GetFullPath())) {
+			return candidate.GetFullPath();
+		}
+		wxFileName up = wxFileName::DirName(dir);
+		if (up.GetDirCount() == 0) break;
+		up.RemoveLastDir();
+		const wxString parent = up.GetPath();
+		if (parent.IsEmpty() || parent == dir) break;
+		dir = parent;
+	}
+	return wxT("oes-mcp");
+}
+
+bool CopyTextToClipboard(const wxString& text)
+{
+	if (!wxTheClipboard->Open()) return false;
+	wxTheClipboard->SetData(new wxTextDataObject(text));
+	wxTheClipboard->Close();
+	return true;
+}
+
+class ibAiOnboardingDialog final : public wxDialog {
+public:
+	ibAiOnboardingDialog(wxWindow* parent)
+	    : wxDialog(parent, wxID_ANY, _("Подключить AI"),
+	               wxDefaultPosition, wxSize(760, 520),
+	               wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+	{
+		const wxString configDir = appData ? appData->GetFileDirectory() : wxString();
+		const wxString mcpPath   = ResolveOesMcpPath();
+		const wxString envPath   = byokEnv::GetEnvFilePath("aiBridge");
+		const wxString mcpCommand =
+		    wxT("claude mcp add oes --transport=stdio --command ") +
+		    ShellQuote(mcpPath) +
+		    (configDir.IsEmpty()
+		        ? wxString()
+		        : wxT(" --args ") + ShellQuote(configDir));
+
+		auto* root = new wxBoxSizer(wxVERTICAL);
+		auto* intro = new wxStaticText(this, wxID_ANY,
+		    _("Проверка подключения Designer к локальному MCP и Pugi."));
+		wxFont titleFont = intro->GetFont();
+		titleFont.MakeBold();
+		intro->SetFont(titleFont);
+		root->Add(intro, 0, wxEXPAND | wxALL, FromDIP(8));
+
+		auto* details = new wxTextCtrl(this, wxID_ANY, wxEmptyString,
+		                               wxDefaultPosition, wxDefaultSize,
+		                               wxTE_MULTILINE | wxTE_READONLY |
+		                               wxTE_DONTWRAP | wxHSCROLL);
+		wxFont mono = details->GetFont();
+		mono.SetFamily(wxFONTFAMILY_TELETYPE);
+		details->SetFont(mono);
+
+		wxString body;
+		body << "1. Claude Code MCP command\n"
+		     << mcpCommand << "\n\n"
+		     << "2. Pugi/plugin env file\n"
+		     << envPath << "\n\n"
+		     << "Expected keys:\n"
+		     << "PROTOCOL=pugi-mcp\n"
+		     << "PUGI_BASE_URL=https://mcp.pugi.io\n"
+		     << "PUGI_OES_API_KEY=<key>\n"
+		     << "PUGI_TENANT_ID=<tenant-id>\n"
+		     << "PUGI_OES_LOCALE=uk-UA\n\n"
+		     << "3. Smoke prompt\n"
+		     << "Open Tools -> AI Assistant and send: ты кто?\n\n"
+		     << "4. Demo object prompt\n"
+		     << "/agent Створи довідник Контрагенти з полями Назва, ЄДРПОУ, Телефон";
+		details->SetValue(body);
+		root->Add(details, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(8));
+
+		auto* buttons = new wxBoxSizer(wxHORIZONTAL);
+		auto* copyCmd = new wxButton(this, wxID_ANY, _("Копировать MCP команду"));
+		auto* copyEnv = new wxButton(this, wxID_ANY, _("Копировать путь env"));
+		auto* plugins = new wxButton(this, wxID_ANY, _("Открыть Plugins"));
+		auto* close   = new wxButton(this, wxID_CLOSE, _("Закрыть"));
+		buttons->Add(copyCmd, 0, wxRIGHT, FromDIP(4));
+		buttons->Add(copyEnv, 0, wxRIGHT, FromDIP(4));
+		buttons->Add(plugins, 0, wxRIGHT, FromDIP(4));
+		buttons->AddStretchSpacer(1);
+		buttons->Add(close, 0);
+		root->Add(buttons, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(8));
+		SetSizer(root);
+
+		copyCmd->Bind(wxEVT_BUTTON, [this, mcpCommand](wxCommandEvent&) {
+			if (CopyTextToClipboard(mcpCommand)) {
+				wxMessageBox(_("MCP команда скопирована."), _("Подключить AI"),
+				             wxOK | wxICON_INFORMATION, this);
+			}
+		});
+		copyEnv->Bind(wxEVT_BUTTON, [this, envPath](wxCommandEvent&) {
+			if (CopyTextToClipboard(envPath)) {
+				wxMessageBox(_("Путь env скопирован."), _("Подключить AI"),
+				             wxOK | wxICON_INFORMATION, this);
+			}
+		});
+		plugins->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+			ibPluginManagerDialog dlg(this);
+			dlg.ShowModal();
+		});
+		close->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { EndModal(wxID_CLOSE); });
+	}
+};
+
+} // namespace
 
 void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 {
@@ -225,6 +354,8 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	                       _("Syntax Helper\tRawCtrl+Alt+F1"));
 	m_menuSetting->Append(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP,
 	                       _("Look up in Syntax Helper\tRawCtrl+F1"));
+	m_menuSetting->Append(wxID_DESIGNER_AI_ONBOARDING,
+	                       _("Подключить AI…"));
 	m_menuSetting->Append(wxID_FRONTEND_PLUGIN_WEB_PANE,
 	                       _("AI Assistant\tRawCtrl+Alt+I"));
 	m_menuSetting->Append(wxID_FRONTEND_PLUGIN_MANAGER,
@@ -296,6 +427,12 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	Bind(wxEVT_MENU,
 	     [this](wxCommandEvent&) { OpenHelpForCursor(); },
 	     wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) {
+	         ibAiOnboardingDialog dlg(this);
+	         dlg.ShowModal();
+	     },
+	     wxID_DESIGNER_AI_ONBOARDING);
 
 	// Workmate-parity Project Search by metadata. Ensures the pane,
 	// raises it, focuses the query input — same UX shape as the

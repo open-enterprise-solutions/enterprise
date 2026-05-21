@@ -65,6 +65,8 @@ enum {
 	// no keyboard shortcut by default (rarely-invoked flagship action).
 	wxID_DESIGNER_TEMPLATE_WIZARD,
 
+	wxID_DESIGNER_AI_ONBOARDING,
+
 	wxID_DESIGNER_END
 };
 // Note: Syntax-helper command ids live in frontend/mainFrame/mainFrame.h
@@ -281,4 +283,4 @@ private:
 	ibWatchWindow* m_watchWindow;
 	ibLocalWindow* m_localWindow;
 };
-#endif 
+#endif
