@@ -506,8 +506,79 @@ void ibProcUnit::Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDe
 		long propNum = wxNOT_FOUND;
 		bool valid = false;
 	};
+	struct BinaryOpInlineCache {
+		int kind = 0; // 0=cold, 1=number pair
+		int hits = 0;
+	};
 	std::vector<MethodInlineCache> methodInlineCaches;
 	std::vector<PropInlineCache> propInlineCaches;
+	std::vector<BinaryOpInlineCache> binaryOpInlineCaches;
+
+	auto tryAdaptiveBinaryOp = [&](long ip, short op,
+	                               ibValue& out,
+	                               const ibValue& lhs,
+	                               const ibValue& rhs) -> bool {
+		if (binaryOpInlineCaches.empty())
+			binaryOpInlineCaches.resize(lFinish);
+		BinaryOpInlineCache& cache = binaryOpInlineCaches[ip];
+		const bool numberPair =
+			lhs.GetType() == ibValueTypes::TYPE_NUMBER &&
+			rhs.GetType() == ibValueTypes::TYPE_NUMBER;
+		if (!numberPair) {
+			cache.kind = 0;
+			cache.hits = 0;
+			return false;
+		}
+		if (cache.kind != 1) {
+			cache.hits++;
+			if (cache.hits < 2)
+				return false;
+			cache.kind = 1;
+		}
+		const ibNumber& lhsNumber = lhs.GetNumber();
+		const ibNumber& rhsNumber = rhs.GetNumber();
+		switch (op) {
+		case OPER_ADD:
+			SetTypeNumber(out, lhsNumber + rhsNumber);
+			return true;
+		case OPER_SUB:
+			SetTypeNumber(out, lhsNumber - rhsNumber);
+			return true;
+		case OPER_MULT:
+			SetTypeNumber(out, lhsNumber * rhsNumber);
+			return true;
+		case OPER_DIV:
+			if (rhsNumber.IsZero())
+				ibBackendCoreException::Error(_("Divide by zero"));
+			SetTypeNumber(out, lhsNumber / rhsNumber);
+			return true;
+		case OPER_MOD:
+			if (rhsNumber.IsZero())
+				ibBackendCoreException::Error(_("Divide by zero"));
+			SetTypeNumber(out, lhsNumber % rhsNumber);
+			return true;
+		case OPER_EQ:
+			SetTypeBoolean(out, lhsNumber == rhsNumber);
+			return true;
+		case OPER_NE:
+			SetTypeBoolean(out, lhsNumber != rhsNumber);
+			return true;
+		case OPER_GT:
+			SetTypeBoolean(out, lhsNumber > rhsNumber);
+			return true;
+		case OPER_LS:
+			SetTypeBoolean(out, lhsNumber < rhsNumber);
+			return true;
+		case OPER_GE:
+			SetTypeBoolean(out, lhsNumber >= rhsNumber);
+			return true;
+		case OPER_LE:
+			SetTypeBoolean(out, lhsNumber <= rhsNumber);
+			return true;
+		default:
+			return false;
+		}
+	};
 
 	std::vector<ibTryLabel> tryList;
 
@@ -608,20 +679,20 @@ start_label:
 
 op_OPER_CONST: CopyValue(variable1, m_pByteCode->m_listConst[index2]); goto threaded_dispatch_done;
 op_OPER_CONSTN: SetTypeNumber(variable1, index2); goto threaded_dispatch_done;
-op_OPER_ADD: AddValue(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
-op_OPER_SUB: SubValue(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
-op_OPER_DIV: DivValue(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
-op_OPER_MOD: ModValue(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
-op_OPER_MULT: MultValue(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_ADD: if (!tryAdaptiveBinaryOp(lCodeLine, OPER_ADD, variable1, cvariable2, cvariable3)) AddValue(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_SUB: if (!tryAdaptiveBinaryOp(lCodeLine, OPER_SUB, variable1, cvariable2, cvariable3)) SubValue(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_DIV: if (!tryAdaptiveBinaryOp(lCodeLine, OPER_DIV, variable1, cvariable2, cvariable3)) DivValue(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_MOD: if (!tryAdaptiveBinaryOp(lCodeLine, OPER_MOD, variable1, cvariable2, cvariable3)) ModValue(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_MULT: if (!tryAdaptiveBinaryOp(lCodeLine, OPER_MULT, variable1, cvariable2, cvariable3)) MultValue(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
 op_OPER_LET: CopyValue(variable1, cvariable2); goto threaded_dispatch_done;
 op_OPER_INVERT: SetTypeNumber(variable1, -cvariable2.GetNumber()); goto threaded_dispatch_done;
 op_OPER_NOT: SetTypeBoolean(variable1, IsEmptyValue(cvariable2)); goto threaded_dispatch_done;
-op_OPER_EQ: CompareValueEQ(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
-op_OPER_NE: CompareValueNE(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
-op_OPER_GT: CompareValueGT(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
-op_OPER_LS: CompareValueLS(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
-op_OPER_GE: CompareValueGE(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
-op_OPER_LE: CompareValueLE(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_EQ: if (!tryAdaptiveBinaryOp(lCodeLine, OPER_EQ, variable1, cvariable2, cvariable3)) CompareValueEQ(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_NE: if (!tryAdaptiveBinaryOp(lCodeLine, OPER_NE, variable1, cvariable2, cvariable3)) CompareValueNE(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_GT: if (!tryAdaptiveBinaryOp(lCodeLine, OPER_GT, variable1, cvariable2, cvariable3)) CompareValueGT(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_LS: if (!tryAdaptiveBinaryOp(lCodeLine, OPER_LS, variable1, cvariable2, cvariable3)) CompareValueLS(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_GE: if (!tryAdaptiveBinaryOp(lCodeLine, OPER_GE, variable1, cvariable2, cvariable3)) CompareValueGE(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_LE: if (!tryAdaptiveBinaryOp(lCodeLine, OPER_LE, variable1, cvariable2, cvariable3)) CompareValueLE(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
 op_OPER_ADD_T1: variable1.m_fData = cvariable2.m_fData + cvariable3.m_fData; goto threaded_dispatch_done;
 op_OPER_SUB_T1: variable1.m_fData = cvariable2.m_fData - cvariable3.m_fData; goto threaded_dispatch_done;
 op_OPER_DIV_T1: if (cvariable3.m_fData.IsZero()) { ibBackendCoreException::Error(_("Divide by zero")); } variable1.m_fData = cvariable2.m_fData / cvariable3.m_fData; goto threaded_dispatch_done;
