@@ -1916,6 +1916,116 @@ nlohmann::json ToolRunTests(const nlohmann::json& args)
 }
 
 // =========================================================================
+// Tool: headless_smoke_run
+//
+// Post-apply validation shortcut. It reports whether the configuration is
+// loaded, whether startup compile reached a usable root, and optionally runs
+// the functional test suite. It is intentionally read-only: tests execute
+// through the same fixture rollback path as run_tests.
+// =========================================================================
+nlohmann::json ToolHeadlessSmokeRun(const nlohmann::json& args)
+{
+	const bool runTests = ArgBool(args, "runTests", true);
+	const bool stopOnFirstFailure = ArgBool(args, "stopOnFirstFailure", true);
+
+	nlohmann::json structured = nlohmann::json::object();
+	structured["load"] = nlohmann::json::object();
+	structured["load"]["ok"] = IsReady() && activeMetaData != nullptr;
+	structured["load"]["configPath"] = LoadedConfigPath();
+
+	if (!IsReady() || activeMetaData == nullptr) {
+		structured["ok"] = false;
+		structured["compile"] = {
+			{ "ok", false },
+			{ "phase", "startup" },
+			{ "message", "configuration is not loaded" },
+		};
+		structured["tests"] = {
+			{ "run", false },
+			{ "summary", nullptr },
+		};
+		nlohmann::json env = TextResult(
+			"headless_smoke_run: no configuration loaded", true);
+		env["structuredContent"] = std::move(structured);
+		return env;
+	}
+
+	if (auto* root = activeMetaData->GetCommonMetaObject()) {
+		structured["load"]["name"] = std::string(root->GetName().utf8_str());
+	}
+
+	structured["compile"] = {
+		{ "ok", true },
+		{ "phase", "startup" },
+		{ "message", "configuration loaded and startup compile completed" },
+	};
+
+	bool ok = true;
+	if (runTests) {
+		ibTesting::TestRunOptions opts;
+		opts.stopOnFirstFailure = stopOnFirstFailure;
+		const std::string filter = ArgString(args, "filter");
+		if (!filter.empty()) {
+			opts.filter = wxString::FromUTF8(filter.c_str());
+		}
+		if (args.is_object()) {
+			auto mit = args.find("modules");
+			if (mit != args.end() && mit->is_array()) {
+				for (const auto& m : *mit) {
+					if (m.is_string()) {
+						opts.moduleFilter.push_back(
+							wxString::FromUTF8(m.get<std::string>().c_str()));
+					}
+				}
+			}
+		}
+
+		ibTesting::TestRun run = ibTesting::RunTests(opts);
+		nlohmann::json summary;
+		summary["total"]            = run.summary.total;
+		summary["passed"]           = run.summary.passed;
+		summary["failed"]           = run.summary.failed;
+		summary["errored"]          = run.summary.errored;
+		summary["skipped"]          = run.summary.skipped;
+		summary["durationMs"]       = run.summary.durationMs;
+		summary["fixtureDegraded"]  = run.summary.fixtureDegraded;
+		if (!run.error.IsEmpty()) {
+			summary["error"] = std::string(run.error.utf8_str());
+			ok = false;
+		}
+		if (run.summary.failed > 0 || run.summary.errored > 0) {
+			ok = false;
+		}
+		structured["tests"] = {
+			{ "run", true },
+			{ "summary", std::move(summary) },
+		};
+	} else {
+		structured["tests"] = {
+			{ "run", false },
+			{ "summary", nullptr },
+		};
+	}
+	structured["ok"] = ok;
+
+	std::string text = ok
+		? std::string("headless_smoke_run: OK")
+		: std::string("headless_smoke_run: failed");
+	if (structured.contains("tests") &&
+	    structured["tests"].contains("summary") &&
+	    structured["tests"]["summary"].is_object()) {
+		const auto& s = structured["tests"]["summary"];
+		text += " (tests total=" + std::to_string(s.value("total", 0)) +
+		        " failed=" + std::to_string(s.value("failed", 0)) +
+		        " errored=" + std::to_string(s.value("errored", 0)) + ")";
+	}
+
+	nlohmann::json env = TextResult(text, !ok);
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+// =========================================================================
 // Tool: config_info
 // =========================================================================
 nlohmann::json ToolConfigInfo(const nlohmann::json& /*args*/)
@@ -4842,6 +4952,74 @@ const std::vector<ToolEntry>& BuildRegistry()
 			  std::move(outRT)
 			},
 			&ToolRunTests
+		});
+	}
+	{
+		nlohmann::json smokeLoad;
+		smokeLoad["type"] = "object";
+		smokeLoad["properties"] = {
+			{ "ok", nlohmann::json{ {"type","boolean"} } },
+			{ "configPath", nlohmann::json{ {"type","string"} } },
+			{ "name", nlohmann::json{ {"type","string"} } },
+		};
+
+		nlohmann::json smokeCompile;
+		smokeCompile["type"] = "object";
+		smokeCompile["properties"] = {
+			{ "ok", nlohmann::json{ {"type","boolean"} } },
+			{ "phase", nlohmann::json{ {"type","string"} } },
+			{ "message", nlohmann::json{ {"type","string"} } },
+		};
+
+		nlohmann::json smokeTests;
+		smokeTests["type"] = "object";
+		smokeTests["properties"] = {
+			{ "run", nlohmann::json{ {"type","boolean"} } },
+			{ "summary", nlohmann::json{ {"type", nlohmann::json::array({"object", "null"})} } },
+		};
+
+		nlohmann::json outSmoke;
+		outSmoke["type"] = "object";
+		outSmoke["properties"] = {
+			{ "ok", nlohmann::json{ {"type","boolean"} } },
+			{ "load", smokeLoad },
+			{ "compile", smokeCompile },
+			{ "tests", smokeTests },
+		};
+		outSmoke["required"] = nlohmann::json::array({ "ok", "load", "compile", "tests" });
+
+		nlohmann::json runTestsIn;
+		runTestsIn["type"] = "boolean";
+		runTestsIn["default"] = true;
+		runTestsIn["description"] = "Run functional tests after load/compile checks";
+
+		nlohmann::json stopIn;
+		stopIn["type"] = "boolean";
+		stopIn["default"] = true;
+		stopIn["description"] = "Stop functional tests after first failure/error";
+
+		nlohmann::json modulesIn;
+		modulesIn["type"] = "array";
+		modulesIn["items"] = nlohmann::json{ {"type","string"} };
+		modulesIn["description"] = "Restrict tests to these module full names";
+
+		table.push_back({
+			{ "headless_smoke_run",
+			  "Post-apply validation shortcut for agents. Verifies the "
+			  "headless configuration is loaded, reports startup compile "
+			  "status, and optionally runs the functional test suite through "
+			  "the same rollback fixture as run_tests. Returns "
+			  "structuredContent.ok plus load/compile/tests details.",
+			  schemaObj({
+			    { "runTests",           runTestsIn },
+			    { "stopOnFirstFailure", stopIn     },
+			    { "filter",             str("Optional test-name glob filter") },
+			    { "modules",            modulesIn  },
+			  }, {}),
+			  ann(/*readOnly*/true, /*destructive*/false, /*idempotent*/true, /*openWorld*/false),
+			  std::move(outSmoke)
+			},
+			&ToolHeadlessSmokeRun
 		});
 	}
 

@@ -127,7 +127,8 @@ def main() -> int:
     if len(tools) < 37:
         failures.append(f"tools/list: only {len(tools)} tools, expected >=37")
     for required in ("meta_query", "meta_create", "list_objects", "config_info",
-                     "snapshots_list", "snapshot_rollback"):
+                     "snapshots_list", "snapshot_rollback",
+                     "headless_smoke_run"):
         if required not in names:
             failures.append(f"tools/list: missing tool '{required}'")
 
@@ -173,11 +174,31 @@ def main() -> int:
     if "result" not in objs:
         failures.append(f"list_objects: no result: {objs}")
 
-    # 5) tools/call save_config — skipped in --no-config mode (would just
+    # 5) tools/call headless_smoke_run — in --no-config mode it must return a
+    # structured isError rather than crash; with a loaded config it should
+    # return load/compile/tests fields.
+    send(proc, {
+        "jsonrpc": "2.0", "id": 5, "method": "tools/call",
+        "params": {
+            "name": "headless_smoke_run",
+            "arguments": {"runTests": False},
+        },
+    })
+    smoke = recv(proc)
+    if "result" not in smoke:
+        failures.append(f"headless_smoke_run: no result: {smoke}")
+    else:
+        sc = smoke["result"].get("structuredContent", {})
+        for key in ("ok", "load", "compile", "tests"):
+            if key not in sc:
+                failures.append(
+                    f"headless_smoke_run: structuredContent missing {key}: {sc}")
+
+    # 6) tools/call save_config — skipped in --no-config mode (would just
     # report isError; protocol-only mode already proved by step 4).
     if not protocol_only:
         send(proc, {
-            "jsonrpc": "2.0", "id": 5, "method": "tools/call",
+            "jsonrpc": "2.0", "id": 6, "method": "tools/call",
             "params": {"name": "save_config", "arguments": {}},
         })
         save = recv(proc)
@@ -186,13 +207,13 @@ def main() -> int:
         if "result" not in save:
             failures.append(f"save_config: no result: {save}")
 
-    # 6) tools/call sigma_check — proxies to Pugi MCP. The tool MUST
+    # 7) tools/call sigma_check — proxies to Pugi MCP. The tool MUST
     # always return a well-formed envelope: either a real Pugi response,
     # a Pugi-side error (isError=true with HTTP status), or the offline
     # fail-open envelope. Any of those is acceptable; the failure mode is
     # the server crashing or returning no result.
     send(proc, {
-        "jsonrpc": "2.0", "id": 6, "method": "tools/call",
+        "jsonrpc": "2.0", "id": 7, "method": "tools/call",
         "params": {
             "name": "sigma_check",
             "arguments": {"metadata": {"kind": "Catalog", "name": "SmokeTest"}},
@@ -208,7 +229,7 @@ def main() -> int:
         if not isinstance(env.get("content"), list) or not env["content"]:
             failures.append(f"sigma_check: malformed envelope (no content): {env}")
 
-    # 7) MCP spec 2025-06-18: tools/list MUST surface outputSchema for the
+    # 8) MCP spec 2025-06-18: tools/list MUST surface outputSchema for the
     # three read-heavy tools (meta_query, list_objects, read_module). The
     # other tools either return unstructured text or already document the
     # shape in their description.
