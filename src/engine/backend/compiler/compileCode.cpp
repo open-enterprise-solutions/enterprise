@@ -1562,18 +1562,11 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 {
 
-	// Parse signature into a context that parents into m_rootContext.
-	// Closure capture (Phase A 2026-05-11+): m_parentContext rewired
-	// below to the CALLER's context so the lambda body's GetVariable
-	// can walk past the lambda boundary into outer fn locals (resolved
-	// at depth ≥ 1 via existing m_pppArrayList chain layout —
-	// the lambda boundary `break` in GetVariable was lifted at the
-	// same time). Previously this line nullified m_parentContext,
-	// enforcing the strict isolation discipline that has been
-	// superseded by the per-frame heap-promotion design (see
-	// docs/closure-capture.md). Runtime wiring still pending — Phase A
-	// is compile-only; running code that captures outer locals crashes
-	// until Phase B lands.
+	// Parse signature into a context that parents into the caller's
+	// context. The lambda body can therefore resolve outer-function
+	// locals at depth >= 1; those enclosing functions are lazily marked
+	// for heap-frame promotion so escaping function values keep their
+	// captured frames alive at runtime.
 	std::shared_ptr<ibCompileContext::ibFunction> createdFunction;
 	std::unique_ptr<ibCompileContext> functionContextOwner;
 	int errorPlace = 0;

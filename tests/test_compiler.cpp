@@ -256,16 +256,16 @@ TEST(CompilerAOT, RealCompileOutputRoundTrips) {
 }
 
 // ===========================================================================
-// Closure capture — Phase A (compile-side emit only; runtime not wired)
+// Closure capture — compile-side metadata
 // ===========================================================================
 //
 // Verifies:
 //   * Lambda body references outer-fn local — compile succeeds (was
-//     ERROR_VAR_NOT_FOUND pre-Phase-A).
+//     ERROR_VAR_NOT_FOUND before closure capture support.
 //   * Outer fn's ibByteFunction.m_needsHeapFrame = true after lambda
 //     captures one of its locals.
 //   * Bytecode dump shows OPER_GET inside lambda body reading at
-//     m_numArray ≥ 1 (m_pppArrayList depth past lambda's own frame).
+//     m_numArray >= 1 (m_pppArrayList depth past lambda's own frame).
 //   * Functions with NO inner lambda stay at m_needsHeapFrame = false.
 
 namespace {
