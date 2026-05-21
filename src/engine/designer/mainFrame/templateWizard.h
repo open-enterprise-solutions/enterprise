@@ -158,6 +158,9 @@ private:
 
 	// ----- Busy-state UI -----
 	void SetBusy(bool busy, const wxString& message);
+	void ShowGalleryMessage(const wxString& title,
+	                        const wxString& body,
+	                        bool showPluginsButton);
 
 private:
 	// ----- Page books + nav -----

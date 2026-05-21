@@ -19,6 +19,7 @@
 #include <wx/log.h>
 #include <wx/thread.h>
 #include <wx/progdlg.h>
+#include "frontend/mainFrame/mainFrame.h"
 #include <memory>
 
 #include <cctype>
@@ -332,6 +333,75 @@ bool ibTemplateWizard::ReadTemplateProvider(std::string& tokenOut,
 	return false;
 }
 
+void ibTemplateWizard::ShowGalleryMessage(const wxString& title,
+                                           const wxString& body,
+                                           bool showPluginsButton)
+{
+	if (m_galleryGridSizer == nullptr || m_galleryScroller == nullptr) return;
+	m_galleryGridSizer->Clear(/*delete_windows=*/true);
+	m_cards.clear();
+	if (m_galleryStatus != nullptr) {
+		m_galleryStatus->SetLabel(wxEmptyString);
+	}
+
+	auto* card = new wxPanel(m_galleryScroller, wxID_ANY);
+	card->SetBackgroundColour(wxColour(248, 250, 252));
+	auto* outer = new wxBoxSizer(wxVERTICAL);
+	outer->AddStretchSpacer(1);
+
+	auto* inner = new wxPanel(card, wxID_ANY, wxDefaultPosition,
+	                          wxSize(560, -1), wxBORDER_SIMPLE);
+	inner->SetBackgroundColour(*wxWHITE);
+	auto* box = new wxBoxSizer(wxVERTICAL);
+
+	auto* titleText = new wxStaticText(inner, wxID_ANY, title);
+	wxFont titleFont = titleText->GetFont();
+	titleFont.MakeBold();
+	titleFont.SetPointSize(titleFont.GetPointSize() + 2);
+	titleText->SetFont(titleFont);
+	box->Add(titleText, 0, wxLEFT | wxRIGHT | wxTOP, 18);
+
+	auto* bodyText = new wxStaticText(inner, wxID_ANY, body,
+	                                  wxDefaultPosition, wxDefaultSize,
+	                                  wxST_NO_AUTORESIZE);
+	bodyText->SetForegroundColour(wxColour(82, 94, 112));
+	bodyText->Wrap(510);
+	box->Add(bodyText, 0, wxLEFT | wxRIGHT | wxTOP, 18);
+
+	if (showPluginsButton) {
+		auto* row = new wxBoxSizer(wxHORIZONTAL);
+		auto* pluginsBtn = new wxButton(inner, wxID_ANY, _("Открыть Plugins"));
+		auto* retryBtn = new wxButton(inner, wxID_ANY, _("Повторить"));
+		row->Add(pluginsBtn, 0, wxRIGHT, 8);
+		row->Add(retryBtn, 0);
+		box->Add(row, 0, wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 18);
+
+		pluginsBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+			wxCommandEvent evt(wxEVT_MENU, wxID_FRONTEND_PLUGIN_MANAGER);
+			evt.SetEventObject(this);
+			for (wxWindow* p = GetParent(); p != nullptr; p = p->GetParent()) {
+				if (p->ProcessWindowEvent(evt)) return;
+			}
+			if (wxTheApp != nullptr && wxTheApp->GetTopWindow() != nullptr) {
+				wxTheApp->GetTopWindow()->ProcessWindowEvent(evt);
+			}
+		});
+		retryBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+			StartFetchTemplatesList();
+		});
+	} else {
+		box->AddSpacer(18);
+	}
+
+	inner->SetSizerAndFit(box);
+	outer->Add(inner, 0, wxALIGN_CENTER | wxALL, 24);
+	outer->AddStretchSpacer(1);
+	card->SetSizer(outer);
+	m_galleryGridSizer->Add(card, 1, wxEXPAND);
+	m_galleryScroller->Layout();
+	m_galleryScroller->FitInside();
+}
+
 // ---------------------------------------------------------------------------
 // Page navigation.
 // ---------------------------------------------------------------------------
@@ -444,9 +514,14 @@ void ibTemplateWizard::StartFetchTemplatesList()
 	wxString credErr;
 	if (!ReadTemplateProvider(token, tenant, locale, endpoint,
 	                          listTool, getTool, customizeTool, credErr)) {
-		if (m_galleryStatus != nullptr) {
-			m_galleryStatus->SetLabel(credErr);
-		}
+		ShowGalleryMessage(
+		    _("Шаблоны недоступны"),
+		    _("Расширение для шаблонов не настроено. Если plugin уже установлен, "
+		      "перезапустите Designer: OES автоматически добавит совместимые "
+		      "template-provider ключи из существующего plugin env. Если после "
+		      "рестарта список не появился, откройте Plugins и проверьте TOKEN, "
+		      "ENDPOINT и состояние plugin."),
+		    true);
 		return;
 	}
 	const long epoch = m_requestEpoch.fetch_add(1) + 1;

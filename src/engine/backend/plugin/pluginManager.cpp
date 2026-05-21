@@ -100,6 +100,75 @@ namespace {
 constexpr int kAbiMin = 1;
 constexpr int kAbiMax = IB_PLUGIN_ABI_VERSION;  // bumped to 4
 
+bool EnvHasNonEmpty(const ibPluginManager::PluginEnvMap::mapped_type& env,
+                    const std::string& key)
+{
+	auto it = env.find(key);
+	return it != env.end() && !it->second.empty();
+}
+
+std::string EnvGetFirst(const ibPluginManager::PluginEnvMap::mapped_type& env,
+                        std::initializer_list<const char*> keys)
+{
+	for (const char* key : keys) {
+		if (key == nullptr) continue;
+		auto it = env.find(key);
+		if (it != env.end() && !it->second.empty()) return it->second;
+	}
+	return {};
+}
+
+bool LooksLikeTemplateEndpoint(const std::string& endpoint)
+{
+	return endpoint.find("/api/oes-mcp/invoke") != std::string::npos ||
+	       endpoint.find("oes-mcp") != std::string::npos;
+}
+
+void EnsureTemplateProviderEnv(ibPluginManager::PluginEnvMap& envAll)
+{
+	for (auto& kv : envAll) {
+		auto& env = kv.second;
+		if (EnvHasNonEmpty(env, "OES_TEMPLATE_PROVIDER")) continue;
+
+		const std::string endpoint = EnvGetFirst(env, { "ENDPOINT" });
+		const std::string token = EnvGetFirst(env, { "TOKEN" });
+		if (endpoint.empty() || token.empty() ||
+		    !LooksLikeTemplateEndpoint(endpoint)) {
+			continue;
+		}
+
+		env["OES_TEMPLATE_PROVIDER"] = "1";
+		if (!EnvHasNonEmpty(env, "OES_TEMPLATE_ENDPOINT")) {
+			env["OES_TEMPLATE_ENDPOINT"] = endpoint;
+		}
+		if (!EnvHasNonEmpty(env, "OES_TEMPLATE_TOKEN")) {
+			env["OES_TEMPLATE_TOKEN"] = token;
+		}
+		const std::string tenant = EnvGetFirst(env, { "TENANT" });
+		if (!tenant.empty() && !EnvHasNonEmpty(env, "OES_TEMPLATE_TENANT")) {
+			env["OES_TEMPLATE_TENANT"] = tenant;
+		}
+		const std::string locale = EnvGetFirst(env, { "LOCALE" });
+		if (!locale.empty() && !EnvHasNonEmpty(env, "OES_TEMPLATE_LOCALE")) {
+			env["OES_TEMPLATE_LOCALE"] = locale;
+		}
+		if (!EnvHasNonEmpty(env, "OES_TEMPLATE_LIST_TOOL")) {
+			env["OES_TEMPLATE_LIST_TOOL"] = "oes_templates_list";
+		}
+		if (!EnvHasNonEmpty(env, "OES_TEMPLATE_GET_TOOL")) {
+			env["OES_TEMPLATE_GET_TOOL"] = "oes_template_get";
+		}
+		if (!EnvHasNonEmpty(env, "OES_TEMPLATE_CUSTOMIZE_TOOL")) {
+			env["OES_TEMPLATE_CUSTOMIZE_TOOL"] = "oes_template_customize";
+		}
+
+		if (byokEnv::Save(kv.first, env) == 0) {
+			wxLogDebug(wxT("Plugin '%s': enabled template provider env aliases"),
+			           wxString::FromUTF8(kv.first.c_str()));
+		}
+	}
+}
+
 // The plugin manager currently being loaded — the host-API trampolines
 // dispatch back into it. Set for the duration of LoadAll() AND kept
 // pointing at the most recently constructed manager so callbacks fired
@@ -426,6 +495,7 @@ size_t ibPluginManager::LoadAll()
 	// host enforces caller-pluginId isolation via the tl_currentPluginId
 	// scope set around each oes_plugin_initialize call below.
 	m_pluginEnv = byokEnv::LoadAll();
+	EnsureTemplateProviderEnv(m_pluginEnv);
 
 	const wxString pattern = wxT("*") + wxDynamicLibrary::GetDllExt(wxDL_MODULE);
 
