@@ -1759,16 +1759,9 @@ OES_PLUGIN_EXPORT void oes_plugin_shutdown(void)
 			if (kv.second) kv.second->store(true);
 		}
 	}
-	// SEC-P2-1: shut down every in-flight client's socket. The non-streaming
-	// Pugi-MCP / triple-review paths sit inside a single blocking Post() that
-	// the receiver-callback gate cannot interrupt; stop() shuts down the
-	// socket so Post() returns immediately with a transport error.
-	{
-		std::lock_guard<std::mutex> lk(g_clientsMu);
-		for (auto* c : g_activeClients) {
-			if (c) c->stop();
-		}
-	}
+	// Avoid httplib::Client::stop() here: on macOS it can abort inside
+	// close_socket() when the request is already completing. Workers use
+	// short request timeouts, so shutdown waits for natural completion.
 	std::vector<std::thread> drain;
 	{
 		std::lock_guard<std::mutex> lk(g_workersMu);
