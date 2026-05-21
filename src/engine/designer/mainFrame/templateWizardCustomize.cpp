@@ -14,6 +14,7 @@
 #include <wx/translation.h>
 
 #include "3rdparty/nlohmann/json.hpp"
+#include "templateWizardPayload.h"
 
 ibTemplateWizardCustomizePage::ibTemplateWizardCustomizePage(wxWindow* parent,
                                                                 BackCallback  onBack,
@@ -128,18 +129,15 @@ void ibTemplateWizardCustomizePage::LoadObjectsFrom(
 		payload = &parsed["structuredContent"];
 	}
 
-	const nlohmann::json* mutations = nullptr;
-	if (payload->contains("structure") && (*payload)["structure"].is_array()) {
-		mutations = &(*payload)["structure"];
-	} else if (payload->contains("mutations") && (*payload)["mutations"].is_array()) {
-		mutations = &(*payload)["mutations"];
-	}
+	const nlohmann::json* mutations =
+	    ibTemplateWizardPayload::PickMutations(*payload);
 	if (mutations == nullptr) return;
 
 	long row = 0;
 	for (const auto& m : *mutations) {
 		if (!m.is_object()) continue;
-		const std::string fullName = m.value("fullName", std::string());
+		const std::string fullName =
+		    ibTemplateWizardPayload::StringField(m, "fullName", "name", "path");
 		if (fullName.empty()) continue;
 		const wxString wxFullName = wxString::FromUTF8(fullName.c_str());
 		m_objectFullNames.push_back(wxFullName);

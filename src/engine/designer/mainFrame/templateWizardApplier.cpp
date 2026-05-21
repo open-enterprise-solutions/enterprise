@@ -11,6 +11,7 @@
 
 #include "backend/plugin/metaBridge.h"
 #include "3rdparty/nlohmann/json.hpp"
+#include "templateWizardPayload.h"
 
 namespace ibTemplateWizardApplier {
 
@@ -32,18 +33,6 @@ static const nlohmann::json* UnwrapPayload(const nlohmann::json& root)
 	return &root;
 }
 
-// Look up structure[] or mutations[] inside payload.
-static const nlohmann::json* PickMutations(const nlohmann::json& payload)
-{
-	if (payload.contains("structure") && payload["structure"].is_array()) {
-		return &payload["structure"];
-	}
-	if (payload.contains("mutations") && payload["mutations"].is_array()) {
-		return &payload["mutations"];
-	}
-	return nullptr;
-}
-
 ApplyResult Apply(const wxString& responseJson, bool includeData)
 {
 	ApplyResult result;
@@ -58,11 +47,12 @@ ApplyResult Apply(const wxString& responseJson, bool includeData)
 		return result;
 	}
 	const nlohmann::json* payload = UnwrapPayload(parsed);
-	const nlohmann::json* mutations = PickMutations(*payload);
+	const nlohmann::json* mutations =
+	    ibTemplateWizardPayload::PickMutations(*payload);
 	if (mutations == nullptr || mutations->empty()) {
 		OpResult op;
 		op.op    = wxT("(empty)");
-		op.error = wxT("no mutations[] / structure[] in template response");
+		op.error = wxT("no template mutations in response");
 		result.ops.push_back(op);
 		result.failureCount = 1;
 		return result;
@@ -81,12 +71,23 @@ ApplyResult Apply(const wxString& responseJson, bool includeData)
 			++result.failureCount;
 			continue;
 		}
-		const std::string opStr   = m.value("op",       std::string("create"));
-		const std::string kindStr = m.value("kind",     std::string());
-		const std::string fullName= m.value("fullName", std::string());
-		const std::string props   = m.contains("properties")
-		                              ? m["properties"].dump()
-		                              : std::string("{}");
+		const std::string opField = ibTemplateWizardPayload::StringField(m, "op");
+		const std::string opStr = opField.empty()
+		                            ? std::string("create")
+		                            : opField;
+		std::string fullName =
+		    ibTemplateWizardPayload::StringField(m, "fullName", "name", "path");
+		std::string kindStr =
+		    ibTemplateWizardPayload::StringField(m, "kind", "type");
+		if (kindStr.empty()) {
+			kindStr = ibTemplateWizardPayload::InferKindFromFullName(fullName);
+		}
+		const nlohmann::json* propsObj = nullptr;
+		if (m.contains("properties")) propsObj = &m["properties"];
+		else if (m.contains("props")) propsObj = &m["props"];
+		else if (m.contains("definition")) propsObj = &m["definition"];
+		const std::string props = propsObj != nullptr ? propsObj->dump()
+		                                              : std::string("{}");
 
 		op.op       = wxString::FromUTF8(opStr.c_str());
 		op.kind     = wxString::FromUTF8(kindStr.c_str());

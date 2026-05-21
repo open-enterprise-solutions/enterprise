@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "3rdparty/nlohmann/json.hpp"
+#include "templateWizardPayload.h"
 
 ibTemplateWizardPreviewPage::ibTemplateWizardPreviewPage(wxWindow* parent,
                                                           BackCallback     onBack,
@@ -127,14 +128,8 @@ void ibTemplateWizardPreviewPage::LoadFrom(const wxString& responseJson,
 		payload = &parsed["structuredContent"];
 	}
 
-	// Walk structure[] or mutations[] — same shape: array of mutation
-	// objects {op, kind, fullName, properties}.
-	const nlohmann::json* mutations = nullptr;
-	if (payload->contains("structure") && (*payload)["structure"].is_array()) {
-		mutations = &(*payload)["structure"];
-	} else if (payload->contains("mutations") && (*payload)["mutations"].is_array()) {
-		mutations = &(*payload)["mutations"];
-	}
+	const nlohmann::json* mutations =
+	    ibTemplateWizardPayload::PickMutations(*payload);
 
 	if (mutations == nullptr || mutations->empty()) {
 		m_structureTree->AppendItem(root, _("(Шаблон не содержит объектов)"));
@@ -143,15 +138,22 @@ void ibTemplateWizardPreviewPage::LoadFrom(const wxString& responseJson,
 		std::unordered_map<std::string, wxTreeItemId> kindBuckets;
 		for (const auto& m : *mutations) {
 			if (!m.is_object()) continue;
-			const std::string kind = m.value("kind", std::string());
-			const std::string fullName = m.value("fullName", std::string());
-			if (kind.empty()) continue;
+			std::string fullName =
+			    ibTemplateWizardPayload::StringField(m, "fullName", "name", "path");
+			std::string kind =
+			    ibTemplateWizardPayload::StringField(m, "kind", "type");
+			if (kind.empty()) {
+				kind = ibTemplateWizardPayload::InferKindFromFullName(fullName);
+			}
+			if (kind.empty() && fullName.empty()) continue;
+			if (kind.empty()) kind = "Object";
 			auto it = kindBuckets.find(kind);
 			if (it == kindBuckets.end()) {
 				wxTreeItemId bucket = m_structureTree->AppendItem(
 				    root, wxString::FromUTF8(kind.c_str()));
 				it = kindBuckets.emplace(kind, bucket).first;
 			}
+			if (fullName.empty()) fullName = kind;
 			m_structureTree->AppendItem(it->second,
 			                              wxString::FromUTF8(fullName.c_str()));
 		}
