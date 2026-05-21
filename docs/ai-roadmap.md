@@ -65,7 +65,7 @@ On each tick:
 - [x] **done** t2-005 (9475a082): Auto-snapshot system — `ibSnapshotManager` backend, 4 mutation handlers wired (meta_create/edit/delete + write_module), 2 new MCP tools (snapshots_list REAL, snapshot_rollback dryRun-mode REAL/apply STUB). Env `OES_MCP_AUTO_SNAPSHOT` (true/false/hash-only). 9/9 gtests pass. Tool count 34→36.
 - [x] **done** t2-006 (1c4d1b35): 3 transactional staging tools (begin/commit/rollback). Single-active-tx guard, ibGuid UUIDs, metaBridge::UndoStackSize() new API, epoch-safe rollback. Tool count 40→43.
 - [x] **done** t2-007 (40ed5703): 4-mode permission selector in Designer chat top — read-only / confirm-all / confirm-writes / auto. Modes are wired to plugin mutation policy; approve temporarily elevates write ops and restores after apply/error/reject.
-- [ ] **pending** t2-008: Custom slash commands UI in Designer settings. Stored in plugin .json5. ~3 days.
+- [x] **done** t2-008 (db48d970): Custom slash commands UI in Designer Plugin Manager. Stored in `plugins.json5` as `slashCommands`; native chat popup merges user commands with built-ins and dispatches custom rows through `chat.send`.
 - [ ] **pending** t2-009: Doc-comment skill (#std453-equivalent) — F1 on procedure → auto-generated header with params, return, examples. ~3 days.
 - [ ] **pending** t2-010: AI-generated code audit trail — inline `// AI: 2026-MM-DD HH:mm` comments inserted by aiBridge before commit. ~1 day.
 - [ ] **pending** t2-011: Smoke validation post-apply — `headless_smoke_run` MCP tool runs codeRunner against config, returns load/compile status. ~3 days.
