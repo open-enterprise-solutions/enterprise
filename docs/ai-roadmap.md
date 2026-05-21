@@ -82,7 +82,7 @@ Conkurent analysis (mcp-1c free tier 9 tools, Go binary, BM25 + BSL synonyms, au
 - [x] **done** t2-016 (d8631832): `search_text` / `search_code` ranking pass — OES RU/UA/EN synonym expansion, term scoring, score-sorted hits, `maxResults`, and structuredContent. Disk-cache/non-blocking cold-start indexing is covered by t2-018.
 - [x] **done** t2-017 (f136893d): `--install` / `--install-dry-run` command in `oes-mcp` — generates and optionally runs `claude mcp add <name> --transport=stdio --command=<this-binary> --args=<configPath>`. Help updated; dry-run verified. Designer wizard wrapper remains t3-004.
 - [ ] **pending** t2-018: Non-blocking config load — `tools/list` works immediately; metadata-dependent tools queue or return "indexing" status until ready. Improves cold-start UX. ~2 days.
-- [ ] **pending** t2-019: CI/CD mode `--ci --json` flag — quality gates for pipelines (sigma_check + compile_check + run_tests, exit code 0/1, JSON report). ~2 days.
+- [x] **done** t2-019 (c7bd0c9a): CI/CD mode `--ci --json` — loads the config, runs `headless_smoke_run` as the quality gate, emits JSON/text report, and exits 0/1 for pipelines. `--no-config` returns JSON failure with exit 1.
 - [x] **done** t2-020 (dec7f315): Tool name aliases — `get_metadata_tree` → `list_objects`, `get_object_structure` → `meta_query`, `get_configuration_info` → `config_info`, `search_code` → `search_text`. Cross-tool compatibility. Tool count 39→43.
 - [ ] **pending** t2-021: Stderr discipline check vs mcp-1c Issue #14 — ensure pipe-mode stderr redirects to `~/.cache/oes-mcp/stderr.log` (already similar but verify). ~30min.
 
