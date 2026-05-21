@@ -2600,6 +2600,145 @@ nlohmann::json ToolGetEventLog(const nlohmann::json& args)
 	return env;
 }
 
+std::string LowerAscii(std::string s)
+{
+	for (char& c : s) {
+		c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+	}
+	return s;
+}
+
+void AddSyntaxItems(nlohmann::json& items,
+                    const std::string& category,
+                    const std::vector<std::string>& names,
+                    const std::string& description,
+                    const std::string& query)
+{
+	const std::string q = LowerAscii(query);
+	for (const auto& name : names) {
+		const std::string hay = LowerAscii(name + " " + category + " " + description);
+		if (!q.empty() && hay.find(q) == std::string::npos) continue;
+		nlohmann::json item;
+		item["name"] = name;
+		item["kind"] = category;
+		item["description"] = description;
+		items.push_back(std::move(item));
+	}
+}
+
+nlohmann::json ToolOesSyntaxHelp(const nlohmann::json& args)
+{
+	const std::string query = ArgString(args, "query");
+	std::string topic = ArgString(args, "topic");
+	topic = LowerAscii(topic);
+
+	nlohmann::json structured;
+	structured["ok"] = true;
+	structured["query"] = query;
+	structured["topic"] = topic.empty() ? "all" : topic;
+	structured["items"] = nlohmann::json::array();
+
+	auto includeTopic = [&](const char* name) {
+		return topic.empty() || topic == "all" || topic == name;
+	};
+
+	if (includeTopic("keyword")) {
+		AddSyntaxItems(structured["items"], "keyword", {
+			"if", "then", "else", "elseif", "endif", "for", "foreach",
+			"to", "in", "do", "enddo", "while", "goto", "not", "and", "or",
+			"procedure", "endprocedure", "function", "endfunction", "export",
+			"return", "val", "try", "except", "endtry", "raise", "var", "new",
+			"undefined", "null", "true", "false", "#define", "#undef",
+			"#ifdef", "#ifndef", "#elsedef", "#endifdef", "#region",
+			"#endregion", "from", "where", "select", "orderby", "ascending",
+			"descending", "take", "skip", "distinct", "join", "on", "equals",
+			"group", "by", "into",
+		}, "English-only CES/VES language keyword", query);
+	}
+
+	if (includeTopic("builtin")) {
+		AddSyntaxItems(structured["items"], "builtin:math", {
+			"Abs", "Int", "Round", "Exp", "Log", "Sqrt", "Sin", "Cos",
+			"Tan", "ASin", "ACos", "ATan", "ATan2", "Pow",
+		}, "numeric built-in function", query);
+		AddSyntaxItems(structured["items"], "builtin:string", {
+			"StrLen", "Left", "Right", "Mid", "Lower", "Upper", "TrimL",
+			"TrimR", "Trim", "Find", "Replace", "Substitute", "StrConcat",
+			"StrSplit", "StrRepeat", "StrReverse", "StrStartsWith",
+			"StrEndsWith", "StrCompare", "Format", "FormatNumber",
+			"FormatDate", "FormatTime", "FormatBoolean",
+		}, "string formatting/manipulation built-in function", query);
+		AddSyntaxItems(structured["items"], "builtin:datetime", {
+			"Now", "Date", "Time", "Year", "Month", "Day", "Hour", "Minute",
+			"Second", "DayOfWeek", "AddMonths", "BeginOfMonth", "EndOfMonth",
+			"BeginOfQuarter", "EndOfQuarter", "BeginOfYear", "EndOfYear",
+			"WeekBefore", "MonthBefore", "QuarterBefore", "YearBefore",
+		}, "date/time built-in function", query);
+		AddSyntaxItems(structured["items"], "builtin:type", {
+			"TypeOf", "IsUndefined", "IsNull", "IsNumber", "IsString",
+			"IsDate", "IsBoolean", "IsReference", "IsStructure", "IsArray",
+		}, "type checking built-in function", query);
+		AddSyntaxItems(structured["items"], "builtin:collection", {
+			"ArrayNew", "ArrayAppend", "ArrayInsert", "ArrayDelete",
+			"ArrayResize", "ArrayClone", "ArrayIndexOf", "StructureNew",
+			"StructureInsert", "StructureDelete", "StructureProperties",
+			"StructurePropertyValue", "StructureClear",
+		}, "array/structure built-in function", query);
+		AddSyntaxItems(structured["items"], "builtin:runtime", {
+			"Query", "UploadResults", "SaveResults", "Execute",
+			"CallProcedure", "CallFunction", "Eval", "Break", "LogLine",
+			"LogTable", "Random", "MD5", "Hash", "Convert",
+			"PresentationValueToObject", "ObjectPresentationValue",
+		}, "runtime/database/debugging built-in function", query);
+	}
+
+	if (includeTopic("opcode")) {
+		AddSyntaxItems(structured["items"], "opcode", {
+			"OPER_ADD", "OPER_SUB", "OPER_MULT", "OPER_DIV", "OPER_MOD",
+			"OPER_GT", "OPER_EQ", "OPER_LS", "OPER_GE", "OPER_LE", "OPER_NE",
+			"OPER_NOT", "OPER_AND", "OPER_OR", "OPER_GOTO", "OPER_IF",
+			"OPER_FOR", "OPER_FOREACH", "OPER_IN", "OPER_NEXT",
+			"OPER_LET", "OPER_CONST", "OPER_SET", "OPER_FUNC",
+			"OPER_CALL", "OPER_CALL_METHOD", "OPER_RET", "OPER_LFUNC",
+			"OPER_CALL_LAMBDA", "OPER_CALL_LINQ", "OPER_NEW", "OPER_TRY",
+			"OPER_RAISE",
+		}, "bytecode instruction family; exact constants live in codeDef.h", query);
+	}
+
+	if (includeTopic("example")) {
+		auto addExample = [&](const char* name, const char* mode, const char* code) {
+			const std::string hay = LowerAscii(std::string(name) + " " + mode + " " + code);
+			if (!query.empty() && hay.find(LowerAscii(query)) == std::string::npos) return;
+			nlohmann::json item;
+			item["name"] = name;
+			item["kind"] = "example";
+			item["mode"] = mode;
+			item["code"] = code;
+			structured["items"].push_back(std::move(item));
+		};
+		addExample("procedure-current-date-days-to-new-year", "CES",
+			"Function DaysToNewYear() {\n"
+			"    today = Date();\n"
+			"    nextYear = Year(today) + 1;\n"
+			"    return Date(nextYear, 1, 1) - today;\n"
+			"}");
+		addExample("if-block", "CES",
+			"if (value > 0) {\n    return true;\n} else {\n    return false;\n}");
+		addExample("ves-function", "VES",
+			"Function IsPositive(value)\n"
+			"    If value > 0 Then\n"
+			"        Return true\n"
+			"    EndIf\n"
+			"    Return false\n"
+			"EndFunction");
+	}
+
+	structured["count"] = structured["items"].size();
+	nlohmann::json env = TextResult(structured.dump(2));
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
 // =========================================================================
 // Tool: config_info
 // =========================================================================
@@ -5700,6 +5839,35 @@ const std::vector<ToolEntry>& BuildRegistry()
 			  std::move(eventOut)
 			},
 			&ToolGetEventLog
+		});
+	}
+	{
+		nlohmann::json syntaxOut;
+		syntaxOut["type"] = "object";
+		syntaxOut["properties"] = {
+			{ "ok",    nlohmann::json{ {"type","boolean"} } },
+			{ "query", nlohmann::json{ {"type","string"} } },
+			{ "topic", nlohmann::json{ {"type","string"} } },
+			{ "items", nlohmann::json{ {"type","array"} } },
+			{ "count", nlohmann::json{ {"type","integer"} } },
+		};
+		syntaxOut["required"] = nlohmann::json::array(
+			{ "ok", "query", "topic", "items", "count" });
+
+		table.push_back({
+			{ "oes_syntax_help",
+			  "Lookup OES CES/VES language keywords, built-in functions, "
+			  "bytecode opcode families, and short code examples from the "
+			  "local product reference. Use topic=keyword|builtin|opcode|example "
+			  "to narrow results.",
+			  schemaObj({
+			    { "query", str("Optional search term, e.g. Date, if, Array, OPER_CALL") },
+			    { "topic", str("Optional topic: keyword, builtin, opcode, example, all") },
+			  }, {}),
+			  ann(true, false, true, false),
+			  std::move(syntaxOut)
+			},
+			&ToolOesSyntaxHelp
 		});
 	}
 

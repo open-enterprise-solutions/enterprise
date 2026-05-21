@@ -129,7 +129,7 @@ def main() -> int:
     for required in ("meta_query", "meta_create", "list_objects", "config_info",
                      "snapshots_list", "snapshot_rollback",
                      "headless_smoke_run", "validate_query", "execute_query",
-                     "get_event_log"):
+                     "get_event_log", "oes_syntax_help"):
         if required not in names:
             failures.append(f"tools/list: missing tool '{required}'")
 
@@ -221,11 +221,25 @@ def main() -> int:
     if rsc.get("ok") or not rejected.get("result", {}).get("isError"):
         failures.append(f"validate_query: expected mutating SQL rejection: {rejected}")
 
-    # 8) tools/call save_config — skipped in --no-config mode (would just
+    # 8) tools/call oes_syntax_help — local reference lookup should work in
+    # protocol-only mode.
+    send(proc, {
+        "jsonrpc": "2.0", "id": 8, "method": "tools/call",
+        "params": {
+            "name": "oes_syntax_help",
+            "arguments": {"query": "Date", "topic": "builtin"},
+        },
+    })
+    syntax = recv(proc)
+    ssc = syntax.get("result", {}).get("structuredContent", {})
+    if not ssc.get("ok") or int(ssc.get("count", 0)) < 1:
+        failures.append(f"oes_syntax_help: expected at least one Date match: {syntax}")
+
+    # 9) tools/call save_config — skipped in --no-config mode (would just
     # report isError; protocol-only mode already proved by step 4).
     if not protocol_only:
         send(proc, {
-            "jsonrpc": "2.0", "id": 8, "method": "tools/call",
+            "jsonrpc": "2.0", "id": 9, "method": "tools/call",
             "params": {"name": "save_config", "arguments": {}},
         })
         save = recv(proc)
@@ -234,13 +248,13 @@ def main() -> int:
         if "result" not in save:
             failures.append(f"save_config: no result: {save}")
 
-    # 9) tools/call sigma_check — proxies to Pugi MCP. The tool MUST
+    # 10) tools/call sigma_check — proxies to Pugi MCP. The tool MUST
     # always return a well-formed envelope: either a real Pugi response,
     # a Pugi-side error (isError=true with HTTP status), or the offline
     # fail-open envelope. Any of those is acceptable; the failure mode is
     # the server crashing or returning no result.
     send(proc, {
-        "jsonrpc": "2.0", "id": 9, "method": "tools/call",
+        "jsonrpc": "2.0", "id": 10, "method": "tools/call",
         "params": {
             "name": "sigma_check",
             "arguments": {"metadata": {"kind": "Catalog", "name": "SmokeTest"}},
@@ -256,7 +270,7 @@ def main() -> int:
         if not isinstance(env.get("content"), list) or not env["content"]:
             failures.append(f"sigma_check: malformed envelope (no content): {env}")
 
-    # 10) MCP spec 2025-06-18: tools/list MUST surface outputSchema for the
+    # 11) MCP spec 2025-06-18: tools/list MUST surface outputSchema for the
     # three read-heavy tools (meta_query, list_objects, read_module). The
     # other tools either return unstructured text or already document the
     # shape in their description.
