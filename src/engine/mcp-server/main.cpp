@@ -15,6 +15,7 @@
 
 #include "headless_app.h"
 #include "jsonrpc.h"
+#include "prompts.h"
 #include "resources.h"
 #include "tools.h"
 
@@ -180,6 +181,13 @@ int main(int argc, char** argv)
 		resourcesCap["subscribe"]   = true;
 		resourcesCap["listChanged"] = true;
 		out["capabilities"]["resources"] = std::move(resourcesCap);
+		// MCP spec 2025-06-18: prompts capability. listChanged=true mirrors
+		// the resources flag — v1 table is static but the bit lets us
+		// evolve without a protocol bump. Prompts are USER-controlled (slash
+		// commands), distinct from tools (model-controlled).
+		nlohmann::json promptsCap;
+		promptsCap["listChanged"] = true;
+		out["capabilities"]["prompts"] = std::move(promptsCap);
 		out["serverInfo"]      = nlohmann::json::object();
 		out["serverInfo"]["name"]    = "oes-mcp";
 		out["serverInfo"]["version"] = "1.0";
@@ -346,6 +354,66 @@ int main(int argc, char** argv)
 		return nlohmann::json::object();
 	});
 
+	// =========================================================================
+	// Prompts (MCP spec 2025-06-18)
+	// =========================================================================
+
+	// MCP: `prompts/list` — returns the prompt catalogue. Each entry
+	// advertises name, description, arguments[]. The renderer fn is NOT
+	// surfaced; clients invoke it via `prompts/get`.
+	disp.Register("prompts/list", [](const nlohmann::json& /*params*/) {
+		nlohmann::json arr = nlohmann::json::array();
+		for (const auto& p : mcpServer::AllPrompts().List()) {
+			nlohmann::json item;
+			item["name"]        = p.name;
+			item["description"] = p.description;
+			nlohmann::json argsArr = nlohmann::json::array();
+			for (const auto& a : p.arguments) {
+				nlohmann::json ai;
+				ai["name"]        = a.name;
+				ai["description"] = a.description;
+				ai["required"]    = a.required;
+				argsArr.push_back(std::move(ai));
+			}
+			item["arguments"]   = std::move(argsArr);
+			arr.push_back(std::move(item));
+		}
+		nlohmann::json out;
+		out["prompts"] = std::move(arr);
+		return out;
+	});
+
+	// MCP: `prompts/get` — params {name, arguments}. Returns
+	// {description, messages:[{role, content:{type:"text", text}}]}.
+	// Missing required args or unknown prompt name throw a JSON error
+	// envelope which the dispatcher re-emits as JSON-RPC -32602.
+	disp.Register("prompts/get", [](const nlohmann::json& params) {
+		if (!params.is_object() || !params.contains("name") ||
+		    !params["name"].is_string()) {
+			nlohmann::json err;
+			err["code"]    = mcpServer::errc::kInvalidParams;
+			err["message"] = "prompts/get: 'name' is required";
+			throw err;
+		}
+		const std::string name = params["name"].get<std::string>();
+		std::map<std::string, std::string> args;
+		if (params.contains("arguments") && params["arguments"].is_object()) {
+			for (auto it = params["arguments"].begin();
+			     it != params["arguments"].end(); ++it) {
+				// MCP spec: prompt arguments are strings. Coerce numbers /
+				// booleans defensively so a sloppy client doesn't trip the
+				// renderer over a type mismatch.
+				if (it.value().is_string()) {
+					args[it.key()] = it.value().get<std::string>();
+				} else if (it.value().is_number() || it.value().is_boolean()) {
+					args[it.key()] = it.value().dump();
+				}
+				// null / object / array → skip (treat as absent)
+			}
+		}
+		return mcpServer::AllPrompts().Get(name, args);
+	});
+
 	// MCP: install the notify sink. tools.cpp calls EmitResourceUpdated()
 	// after every successful save_config / meta.* mutation; the sink here
 	// formats it as a JSON-RPC notification on stdout. Stdout is shared
@@ -366,8 +434,9 @@ int main(int argc, char** argv)
 	// Stdio loop
 	// =========================================================================
 	std::fprintf(stderr,
-		"oes-mcp: ready on stdio, %zu tools registered\n",
-		mcpServer::AllTools().size());
+		"oes-mcp: ready on stdio, %zu tools / %zu prompts registered\n",
+		mcpServer::AllTools().size(),
+		mcpServer::AllPrompts().List().size());
 	std::fflush(stderr);
 
 	mcpServer::RunStdioLoop(disp, [] { return g_stop.load(); });

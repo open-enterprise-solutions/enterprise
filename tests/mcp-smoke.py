@@ -704,6 +704,126 @@ def main() -> int:
     if "result" not in unsub_resp:
         failures.append(f"resources/unsubscribe: no result: {unsub_resp}")
 
+    # 10) MCP prompts (spec 2025-06-18, added 2026-05-21).
+    #
+    # 7 prompts surfaced as slash commands in MCP hosts:
+    #   oes:new-catalog, oes:new-document, oes:migrate-1c-xml,
+    #   oes:explain-object, oes:audit-security, oes:write-report,
+    #   oes:write-form.
+    #
+    # initialize must already advertise capabilities.prompts.listChanged=true
+    # (asserted in section 1 below — re-checked here for completeness so
+    # this section is self-contained).
+    prompts_cap = caps.get("prompts") if isinstance(caps, dict) else None
+    if not isinstance(prompts_cap, dict):
+        failures.append("initialize: capabilities.prompts missing")
+    elif prompts_cap.get("listChanged") is not True:
+        failures.append(
+            f"initialize: capabilities.prompts.listChanged must be true, "
+            f"got: {prompts_cap}")
+
+    # prompts/list — must return 7 descriptors with name + description +
+    # arguments.
+    send(proc, {"jsonrpc": "2.0", "id": 1000, "method": "prompts/list", "params": {}})
+    p_list = recv(proc)
+    p_arr = p_list.get("result", {}).get("prompts", [])
+    p_names = {p.get("name") for p in p_arr if isinstance(p, dict)}
+    expected_prompts = {
+        "oes:new-catalog",
+        "oes:new-document",
+        "oes:migrate-1c-xml",
+        "oes:explain-object",
+        "oes:audit-security",
+        "oes:write-report",
+        "oes:write-form",
+    }
+    missing_prompts = expected_prompts - p_names
+    if missing_prompts:
+        failures.append(f"prompts/list: missing {missing_prompts} (got {p_names})")
+    if len(p_arr) < 7:
+        failures.append(f"prompts/list: expected >=7 entries, got {len(p_arr)}")
+    # Shape check on every entry: name + description + arguments[] present.
+    for entry in p_arr:
+        if not isinstance(entry, dict):
+            continue
+        if not entry.get("name"):
+            failures.append(f"prompts/list: entry missing name: {entry}")
+        if not entry.get("description"):
+            failures.append(
+                f"prompts/list: entry '{entry.get('name')}' missing description")
+        if not isinstance(entry.get("arguments"), list):
+            failures.append(
+                f"prompts/list: entry '{entry.get('name')}' "
+                f"arguments must be a list")
+
+    # prompts/get on oes:new-catalog with {name: "Test"} — must return 1
+    # user message containing the canonical tool sequence markers.
+    send(proc, {
+        "jsonrpc": "2.0", "id": 1001, "method": "prompts/get",
+        "params": {"name": "oes:new-catalog", "arguments": {"name": "Test"}},
+    })
+    nc_resp = recv(proc)
+    nc_result = nc_resp.get("result")
+    if not isinstance(nc_result, dict):
+        failures.append(f"prompts/get oes:new-catalog: no result: {nc_resp}")
+    else:
+        msgs = nc_result.get("messages", [])
+        if not isinstance(msgs, list) or len(msgs) != 1:
+            failures.append(
+                f"prompts/get oes:new-catalog: expected exactly 1 message, "
+                f"got: {msgs}")
+        else:
+            first = msgs[0]
+            if not isinstance(first, dict):
+                failures.append(
+                    f"prompts/get oes:new-catalog: message not an object: {first}")
+            else:
+                if first.get("role") != "user":
+                    failures.append(
+                        f"prompts/get oes:new-catalog: role must be 'user', "
+                        f"got: {first.get('role')}")
+                content = first.get("content")
+                if not isinstance(content, dict):
+                    failures.append(
+                        f"prompts/get oes:new-catalog: content not an object")
+                elif content.get("type") != "text":
+                    failures.append(
+                        f"prompts/get oes:new-catalog: content.type must "
+                        f"be 'text', got: {content.get('type')}")
+                else:
+                    txt = content.get("text", "")
+                    for marker in ("meta_create", "sigma_check"):
+                        if marker not in txt:
+                            failures.append(
+                                f"prompts/get oes:new-catalog: rendered text "
+                                f"missing '{marker}' marker")
+                    if "Test" not in txt:
+                        failures.append(
+                            "prompts/get oes:new-catalog: rendered text does "
+                            "not substitute the 'name' argument")
+
+    # prompts/get with a missing required argument — must return error.
+    send(proc, {
+        "jsonrpc": "2.0", "id": 1002, "method": "prompts/get",
+        "params": {"name": "oes:new-catalog", "arguments": {}},
+    })
+    miss_resp = recv(proc)
+    miss_err = miss_resp.get("error")
+    if not isinstance(miss_err, dict) or miss_err.get("code") != -32602:
+        failures.append(
+            f"prompts/get missing-arg: expected error -32602, got: {miss_resp}")
+
+    # prompts/get on unknown name — must return error.
+    send(proc, {
+        "jsonrpc": "2.0", "id": 1003, "method": "prompts/get",
+        "params": {"name": "oes:does-not-exist", "arguments": {}},
+    })
+    unk_resp = recv(proc)
+    unk_err = unk_resp.get("error")
+    if not isinstance(unk_err, dict) or unk_err.get("code") != -32602:
+        failures.append(
+            f"prompts/get unknown-name: expected error -32602, got: {unk_resp}")
+
     proc.stdin.close()
     proc.wait(timeout=3)
 

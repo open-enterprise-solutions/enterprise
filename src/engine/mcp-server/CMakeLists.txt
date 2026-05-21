@@ -15,6 +15,7 @@ set(OES_MCP_SOURCES
     jsonrpc.cpp
     tools.cpp
     resources.cpp
+    prompts.cpp
     headless_app.cpp
 )
 
