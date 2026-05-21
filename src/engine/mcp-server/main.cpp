@@ -62,6 +62,7 @@ void PrintHelp()
 		"Usage: oes-mcp [<config-path>]\n"
 		"       oes-mcp --install <config-path> [--name <server-name>]\n"
 		"       oes-mcp --install-dry-run <config-path> [--name <server-name>]\n"
+		"       oes-mcp --ci [--json] [<config-path>]\n"
 		"\n"
 		"If <config-path> is omitted, the OES_CONFIG_PATH environment\n"
 		"variable is used. The configuration path is a directory containing\n"
@@ -142,6 +143,8 @@ int main(int argc, char** argv)
 	// MCP: route --help / -h before wx init so users without a config
 	// can still discover the binary.
 	bool noConfig = false;
+	bool ciMode = false;
+	bool jsonMode = false;
 	std::string configPath;
 	for (int i = 1; i < argc; ++i) {
 		const std::string a = argv[i];
@@ -155,6 +158,8 @@ int main(int argc, char** argv)
 		if (a == "--install-dry-run") {
 			return RunInstall(argc, argv, i, /*dryRun=*/true);
 		}
+		if (a == "--ci") { ciMode = true; continue; }
+		if (a == "--json") { jsonMode = true; continue; }
 		// MCP: --no-config keeps the server running without loading a
 		// configuration. Used by the smoke test + CI to validate the
 		// JSON-RPC handshake / tools/list shape without a sys.fdb.
@@ -219,6 +224,43 @@ int main(int argc, char** argv)
 	} else {
 		std::fprintf(stderr,
 			"oes-mcp: --no-config mode — config-bound tools will report isError\n");
+	}
+
+	if (ciMode) {
+		nlohmann::json report;
+		report["ok"] = !noConfig && mcpServer::IsReady();
+		report["configLoaded"] = !noConfig && mcpServer::IsReady();
+		report["toolCount"] = mcpServer::AllTools().size();
+		report["checks"] = nlohmann::json::object();
+		if (noConfig || !mcpServer::IsReady()) {
+			report["checks"]["load"] = {
+				{ "ok", false },
+				{ "message", "configuration is not loaded" },
+			};
+		} else {
+			report["checks"]["load"] = {
+				{ "ok", true },
+				{ "configPath", configPath },
+			};
+			nlohmann::json args;
+			args["runTests"] = true;
+			args["stopOnFirstFailure"] = true;
+			nlohmann::json smoke = mcpServer::DispatchTool("headless_smoke_run", args);
+			report["checks"]["headless_smoke_run"] = smoke.value(
+				"structuredContent", nlohmann::json::object());
+			if (smoke.contains("isError") && smoke["isError"].is_boolean() &&
+			    smoke["isError"].get<bool>()) {
+				report["ok"] = false;
+			}
+		}
+		if (jsonMode) {
+			std::cout << report.dump(2) << std::endl;
+		} else {
+			std::cout << (report.value("ok", false)
+				? "oes-mcp ci: OK" : "oes-mcp ci: FAILED") << std::endl;
+		}
+		mcpServer::Shutdown();
+		return report.value("ok", false) ? 0 : 1;
 	}
 
 	// =========================================================================
