@@ -197,8 +197,11 @@ private:
 	wxButton*        m_sendBtn    = nullptr;
 	wxButton*        m_newChatBtn = nullptr;
 	wxButton*        m_voiceBtn   = nullptr;
+	wxButton*        m_pinContextBtn = nullptr;
+	wxButton*        m_clearPinnedContextBtn = nullptr;
 	wxChoice*        m_modelProfile = nullptr;
 	wxChoice*        m_permissionMode = nullptr;
+	wxStaticText*    m_pinnedContextLabel = nullptr;
 	wxStaticText*    m_statusBar  = nullptr;
 
 	wxString         m_paneId;
@@ -254,6 +257,7 @@ private:
 	};
 	PermissionMode  m_permissionModeValue = PermissionMode::ConfirmWrites;
 	bool            m_planPolicyElevated  = false;
+	std::vector<wxString> m_pinnedContextTokens;
 
 	wxString CurrentModelProfileId() const;
 	wxString CurrentModelProfileLabel() const;
@@ -273,6 +277,10 @@ private:
 	void OnInputKillFocus(wxFocusEvent& event);
 	void OnLinkClicked(wxHtmlLinkEvent& event);
 	void OnPushFromOtherThread(wxThreadEvent& event);
+	void OnPinContextClicked(wxCommandEvent& event);
+	void OnClearPinnedContextClicked(wxCommandEvent& event);
+	void RefreshPinnedContextLabel();
+	wxString BuildPinnedContextProbe(const wxString& prompt) const;
 
 	// Slash-command autocomplete popup. Owned by the pane; created lazily
 	// the first time the user types '/'. Anchored below m_input and

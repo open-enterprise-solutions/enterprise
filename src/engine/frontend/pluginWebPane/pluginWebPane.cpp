@@ -542,6 +542,19 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 	m_permissionMode->SetSelection(static_cast<int>(m_permissionModeValue));
 	policyRow->Add(m_permissionMode, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
 	               FromDIP(4));
+
+	m_pinContextBtn = new wxButton(this, wxID_ANY, _("Закрепить @"));
+	policyRow->Add(m_pinContextBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
+	               FromDIP(4));
+
+	m_clearPinnedContextBtn = new wxButton(this, wxID_ANY, _("Очистить"));
+	policyRow->Add(m_clearPinnedContextBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
+	               FromDIP(4));
+
+	m_pinnedContextLabel = new wxStaticText(this, wxID_ANY, wxEmptyString);
+	m_pinnedContextLabel->SetForegroundColour(wxColour(90, 96, 110));
+	policyRow->Add(m_pinnedContextLabel, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT,
+	               FromDIP(4));
 	root->Add(policyRow, 0, wxEXPAND | wxTOP, FromDIP(4));
 
 	// Drop wxHW_NO_SELECTION so the user can drag-select transcript text
@@ -591,6 +604,12 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 	m_sendBtn   ->Bind(wxEVT_BUTTON, &ibPluginWebPane::OnSendClicked,    this);
 	m_newChatBtn->Bind(wxEVT_BUTTON, &ibPluginWebPane::OnNewChatClicked, this);
 	m_voiceBtn  ->Bind(wxEVT_BUTTON, &ibPluginWebPane::OnVoiceClicked,   this);
+	m_pinContextBtn->Bind(wxEVT_BUTTON,
+	                      &ibPluginWebPane::OnPinContextClicked,
+	                      this);
+	m_clearPinnedContextBtn->Bind(wxEVT_BUTTON,
+	                              &ibPluginWebPane::OnClearPinnedContextClicked,
+	                              this);
 	m_modelProfile->Bind(wxEVT_CHOICE,
 	                      &ibPluginWebPane::OnModelProfileChanged,
 	                      this);
@@ -706,6 +725,7 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 
 	// Render initial empty state (transcript with no entries shows a
 	// short hint line so the pane does not look broken on first load).
+	RefreshPinnedContextLabel();
 	RenderTranscript();
 }
 
@@ -769,6 +789,72 @@ void ibPluginWebPane::OnVoiceClicked(wxCommandEvent& /*event*/)
 		    _("Поле ввода активно. Запустите системную диктовку."));
 	}
 #endif
+}
+
+void ibPluginWebPane::RefreshPinnedContextLabel()
+{
+	if (m_pinnedContextLabel == nullptr) return;
+	wxString label = _("Контекст: ");
+	if (m_pinnedContextTokens.empty()) {
+		label += wxT("—");
+	} else {
+		for (size_t i = 0; i < m_pinnedContextTokens.size(); ++i) {
+			if (i > 0) label += wxT(", ");
+			label += wxT("@") + m_pinnedContextTokens[i];
+		}
+	}
+	m_pinnedContextLabel->SetLabel(label);
+	if (m_clearPinnedContextBtn != nullptr) {
+		m_clearPinnedContextBtn->Enable(!m_pinnedContextTokens.empty());
+	}
+}
+
+wxString ibPluginWebPane::BuildPinnedContextProbe(const wxString& prompt) const
+{
+	if (m_pinnedContextTokens.empty()) return prompt;
+	wxString probe = prompt;
+	for (const auto& token : m_pinnedContextTokens) {
+		probe += wxT("\n@") + token;
+	}
+	return probe;
+}
+
+void ibPluginWebPane::OnPinContextClicked(wxCommandEvent& /*event*/)
+{
+	if (m_input == nullptr) return;
+	const std::vector<wxString> tokens =
+	    ibChatContext::ExtractTokens(m_input->GetValue());
+	size_t added = 0;
+	for (const auto& token : tokens) {
+		if (token.CmpNoCase(wxT("selection")) == 0 ||
+		    token.CmpNoCase(wxT("file"))      == 0 ||
+		    token.CmpNoCase(wxT("open"))      == 0) {
+			continue;
+		}
+		bool exists = false;
+		for (const auto& pinned : m_pinnedContextTokens) {
+			if (pinned.CmpNoCase(token) == 0) { exists = true; break; }
+		}
+		if (exists) continue;
+		m_pinnedContextTokens.push_back(token);
+		++added;
+	}
+	RefreshPinnedContextLabel();
+	if (m_statusBar != nullptr) {
+		m_statusBar->SetLabel(
+		    added > 0
+		        ? _("Контекст закреплён")
+		        : _("Добавьте @объект в поле ввода и нажмите «Закрепить @»."));
+	}
+}
+
+void ibPluginWebPane::OnClearPinnedContextClicked(wxCommandEvent& /*event*/)
+{
+	m_pinnedContextTokens.clear();
+	RefreshPinnedContextLabel();
+	if (m_statusBar != nullptr) {
+		m_statusBar->SetLabel(_("Закреплённый контекст очищен"));
+	}
 }
 
 void ibPluginWebPane::OnPermissionModeChanged(wxCommandEvent& /*event*/)
@@ -1829,6 +1915,8 @@ void ibPluginWebPane::OnNewChatClicked(wxCommandEvent& /*event*/)
 	                             wxYES_NO | wxICON_QUESTION, this);
 	if (rc != wxYES) return;
 	m_entries.clear();
+	m_pinnedContextTokens.clear();
+	RefreshPinnedContextLabel();
 	m_pending = false;
 	m_pendingRequestId.Clear();
 	UpdateSendButtonLabel();
@@ -2001,7 +2089,8 @@ void ibPluginWebPane::DispatchUserPrompt(const wxString& prompt)
 	// resolvable references; in that case we send the prompt unchanged.
 	wxWindow* searchRoot = wxGetTopLevelParent(this);
 	const wxString contextBlock =
-	    ibChatContext::BuildContextBlock(prompt, searchRoot);
+	    ibChatContext::BuildContextBlock(BuildPinnedContextProbe(prompt),
+	                                     searchRoot);
 	const wxString outboundPrompt = contextBlock.IsEmpty()
 	    ? prompt
 	    : contextBlock + prompt;

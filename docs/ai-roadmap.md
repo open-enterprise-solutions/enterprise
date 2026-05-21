@@ -94,7 +94,7 @@ Conkurent analysis (mcp-1c free tier 9 tools, Go binary, BM25 + BSL synonyms, au
 - [x] **done** t3-004: Onboarding wizard — Designer Tools → `Подключить AI…` opens a native setup dialog with the generated `claude mcp add oes ...` command, aiBridge env-file path, required Pugi keys, smoke prompt, demo `/agent` prompt, copy buttons, and a direct Plugins dialog handoff.
 - [x] **done** t3-005: Telemetry loop — `oes-mcp` writes one structured JSONL row per `tools/call` to `.oes/mcp-audit/mcp-YYYY-MM-DD.jsonl` (tool, ok/error, duration, arg/result sizes; no prompt/code payload). Weekly aggregation remains a downstream reporting task.
 - [x] **done** t3-006: Resumable chat from past message — user-message rows now expose `Редактировать и повторить`; clicking it moves that prompt back into the input, truncates later transcript entries, saves the shortened history, and lets the user edit/rerun forward.
-- [ ] **pending** t3-007: Smart Snap — pin metadata object to context across messages. ~3 days.
+- [x] **done** t3-007: Smart Snap — chat header now lets users pin `@Kind.Name` metadata tokens from the input; pinned objects are shown in the header and automatically resolved into the hidden context block for every later message until cleared or a new chat starts.
 - [ ] **pending** t3-008: Score-gated reliability — Sigma reports self-confidence; <70% flags "suitability concern". ~2 days.
 - [ ] **pending** t3-009: Tech debt scoring 0-100 — composite metric (LOC + complexity + duplication + dead code). Pro tier monetization feature (mcp-1c Pro pattern). ~1 week.
 - [ ] **pending** t3-010: Security audit MCP tool — port mcp-1c's 11 SEC rules to OES context (SQL injection scan, eval misuse, unsafe deserialize). Pro tier. ~1 week.
