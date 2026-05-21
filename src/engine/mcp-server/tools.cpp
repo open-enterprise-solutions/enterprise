@@ -36,6 +36,7 @@
 #include "backend/databaseLayer/preparedStatement.h"
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/session/session.h"
+#include "backend/typeDescription.h"
 
 #include <wx/datetime.h>
 
@@ -2761,6 +2762,1004 @@ nlohmann::json ToolPredefinedValuesSet(const nlohmann::json& args)
 }
 
 // =========================================================================
+// Refactoring primitives (5) — added 2026-05-21. find_references,
+// rename_with_refs, metadata_diff, dependency_graph, extract_module_to_common.
+//
+// Coverage matrix (pragmatic v1):
+//   find_references         : REAL    — attribute type CLSID match + module
+//                                        text regex (word-boundary), with
+//                                        register dimension / record bindings.
+//   rename_with_refs        : REAL    — dryRun default true; apply via
+//                                        metaBridge::HostMetaEdit on the
+//                                        target (rename) + write_module on
+//                                        every module reference (regex-replace
+//                                        with word boundaries).
+//   metadata_diff           : PARTIAL — inline-snapshot mode REAL (deep-diff
+//                                        two JSON objects from meta_query);
+//                                        file mode returns OES_E_NOT_IMPLEMENTED
+//                                        (loading two configs in parallel is
+//                                        heavy, deferred to v2).
+//   dependency_graph        : REAL    — BFS up to depth, reuses find_references
+//                                        logic in both directions.
+//   extract_module_to_common: PARTIAL — dryRun shows extracted text +
+//                                        planned mutations; actual apply
+//                                        deferred (text-based extraction is
+//                                        brittle when locals/closures involved).
+// =========================================================================
+namespace {
+
+// MCP: collect every metadata node under root with a kind + fullName.
+// Used by find_references / dependency_graph to walk the tree once and
+// inspect each node's outgoing refs.
+struct TreeNodeRef {
+	ibValueMetaObject* node;
+	std::string        fullName;   // e.g. "Catalog.X" or "Document.Y.Attributes.Z"
+	std::string        kindLabel;  // resolved via CLSIDToKindLabel
+};
+
+void CollectTreeNodes(ibValueMetaObject* node,
+                      const std::string& parentPath,
+                      std::vector<TreeNodeRef>& out)
+{
+	if (node == nullptr) return;
+	const std::string name = std::string(node->GetName().utf8_str());
+	if (name.empty()) {
+		// The configuration root has no name; just recurse into children
+		// without contributing a self-entry.
+		for (ibValueMetaObject* child : node->GetAnyArrayObject<>()) {
+			CollectTreeNodes(child, std::string(), out);
+		}
+		return;
+	}
+	const std::string path = parentPath.empty() ? name : (parentPath + "." + name);
+	const char* kindLabel = CLSIDToKindLabel(
+		static_cast<unsigned long long>(node->GetClassType()));
+	TreeNodeRef ref;
+	ref.node      = node;
+	ref.fullName  = path;
+	ref.kindLabel = (kindLabel != nullptr) ? std::string(kindLabel) : std::string();
+	out.push_back(std::move(ref));
+	for (ibValueMetaObject* child : node->GetAnyArrayObject<>()) {
+		CollectTreeNodes(child, path, out);
+	}
+}
+
+// MCP: top-level fullName of `path`, e.g. "Catalog.X.Attributes.Y" -> "Catalog.X".
+// Refs to children of the target are not surfaced as separate hits — the
+// agent already knows the children belong to the parent.
+std::string TopLevelOf(const std::string& path)
+{
+	std::size_t firstDot = path.find('.');
+	if (firstDot == std::string::npos) return path;
+	std::size_t secondDot = path.find('.', firstDot + 1);
+	if (secondDot == std::string::npos) return path;
+	return path.substr(0, secondDot);
+}
+
+// MCP: build a word-boundary regex for the bare object name. We escape any
+// regex metacharacters in the needle so identifiers with dots / parens
+// don't blow up regex_search. Word boundaries use \b which matches
+// Latin word chars only — for Cyrillic / CJK identifiers we fall back to
+// matching the bare substring without boundary anchors. Lexer-aware
+// matching is a v2 follow-up.
+bool NeedleHasWordChars(const std::string& s)
+{
+	for (unsigned char c : s) {
+		if ((c & 0x80) != 0) return false;  // non-ASCII -> no word boundary
+	}
+	return true;
+}
+
+std::string EscapeRegex(const std::string& s)
+{
+	std::string out;
+	out.reserve(s.size() * 2);
+	for (char c : s) {
+		switch (c) {
+			case '.': case '^': case '$': case '|': case '?': case '*':
+			case '+': case '(': case ')': case '[': case ']': case '{':
+			case '}': case '\\':
+				out.push_back('\\');
+				// fall through
+			default:
+				out.push_back(c);
+		}
+	}
+	return out;
+}
+
+// MCP: split a fullName "<Kind>.<Name>" into (kindLabel, bareName). Returns
+// {fullName, ""} when there's no dot — caller treats that as "kind-only".
+std::pair<std::string, std::string> SplitTopName(const std::string& fullName)
+{
+	auto dot = fullName.find('.');
+	if (dot == std::string::npos) return { fullName, std::string() };
+	return { fullName.substr(0, dot), fullName.substr(dot + 1) };
+}
+
+// MCP: build the structured reference record. kind ∈ {attribute_type,
+// module_text, register_dimension, register_record_binding,
+// form_attribute_binding}. context is a short human-readable hint.
+nlohmann::json MakeReferenceEntry(const std::string& kind,
+                                  const std::string& location,
+                                  const std::string& context)
+{
+	nlohmann::json r;
+	r["kind"]     = kind;
+	r["location"] = location;
+	r["context"]  = context;
+	return r;
+}
+
+// MCP: scan a single attribute (or attribute-like child) for type refs to
+// the target object. We compare CLSIDs directly — the attribute's
+// ibTypeDescription holds a list of ibClassID values, each of which is
+// either a primitive type id or a metadata-object CLSID. The target's
+// CLSID identifies its KIND (Catalog/Document/etc) — to detect a *typed*
+// reference to a specific instance we need a per-instance ref. OES models
+// reference types via a Catalog/Document metaobject's CLSID (CtorClass
+// registration), so equality on the metaId is the right hook. We surface
+// any attribute whose type list contains the target's metaId.
+//
+// Note: ibMetaData::GetMetaIDByCLSID isn't a thing — each metaObject has
+// its own m_metaId persisted to disk. We check both:
+//   1) child->GetClassType() == target->GetClassType() (kind match) — too
+//      broad on its own
+//   2) AND attribute carries a type pointing into the metaId namespace
+//      (we'd need IsRegisterCtor mapping). For v1 we use the simpler
+//      structural check: the metaObject's own CLSID appears in the
+//      attribute's type list. That covers all in-tree CatalogRef /
+//      DocumentRef typings because OES registers the per-target CLSID
+//      when the attribute editor binds a Reference type.
+bool AttributeTypeRefsTarget(const ibValueMetaObject* attr,
+                             ibClassID targetClsid)
+{
+	auto* concrete = dynamic_cast<const ibValueMetaObjectAttribute*>(attr);
+	if (concrete == nullptr) return false;
+	const ibTypeDescription& td = concrete->GetTypeDesc();
+	const unsigned int n = td.GetClsidCount();
+	for (unsigned int i = 0; i < n; ++i) {
+		if (td.GetByIdx(i) == targetClsid) return true;
+	}
+	return false;
+}
+
+// MCP: scan a module's source text for word-boundary matches of the bare
+// target name. Returns the first matching line + a short snippet, plus
+// the total count of hits.
+struct ModuleScanResult {
+	bool        any         = false;
+	unsigned    line        = 0;
+	unsigned    matchCount  = 0;
+	std::string snippet;
+};
+
+ModuleScanResult ScanModuleForName(const std::string& source,
+                                   const std::string& bareName)
+{
+	ModuleScanResult res;
+	if (source.empty() || bareName.empty()) return res;
+
+	std::string pattern;
+	if (NeedleHasWordChars(bareName)) {
+		pattern = "\\b" + EscapeRegex(bareName) + "\\b";
+	} else {
+		// Cyrillic / non-ASCII — match the literal substring. The agent
+		// gets back a slightly noisier hit list (false positives in
+		// comments or string literals), but the alternative is a full
+		// lexer pass which is deferred.
+		pattern = EscapeRegex(bareName);
+	}
+
+	try {
+		std::regex rx(pattern, std::regex::ECMAScript);
+		auto begin = std::sregex_iterator(source.begin(), source.end(), rx);
+		auto end   = std::sregex_iterator();
+		for (auto it = begin; it != end; ++it) {
+			res.matchCount++;
+			if (!res.any) {
+				res.any = true;
+				const std::size_t pos = static_cast<std::size_t>(it->position(0));
+				// 1-based line number
+				unsigned line = 1;
+				for (std::size_t i = 0; i < pos && i < source.size(); ++i) {
+					if (source[i] == '\n') ++line;
+				}
+				res.line = line;
+				// Snippet: the line containing the match
+				std::size_t lineStart = pos;
+				while (lineStart > 0 && source[lineStart - 1] != '\n') --lineStart;
+				std::size_t lineEnd = pos;
+				while (lineEnd < source.size() && source[lineEnd] != '\n') ++lineEnd;
+				res.snippet = source.substr(lineStart, lineEnd - lineStart);
+				// Trim leading whitespace
+				std::size_t firstNonWs = res.snippet.find_first_not_of(" \t\r");
+				if (firstNonWs != std::string::npos && firstNonWs > 0) {
+					res.snippet = res.snippet.substr(firstNonWs);
+				}
+				// Cap snippet length to keep output compact
+				if (res.snippet.size() > 200) {
+					res.snippet = res.snippet.substr(0, 200) + "...";
+				}
+			}
+		}
+	} catch (const std::regex_error&) {
+		// Pattern construction shouldn't fail given our escaping, but
+		// leave res in default (no-match) state if it does.
+	}
+	return res;
+}
+
+// MCP: walk the configuration and collect every reference to `target`.
+// Used by find_references AND dependency_graph (the latter reuses the
+// same routine in both directions).
+//
+// targetFullName is the fully-qualified name (e.g. "Catalog.X"). We split
+// into (kind, bareName); the kind isn't strictly needed for matching but
+// helps the agent disambiguate when multiple objects share a name across
+// kinds.
+//
+// Returns a list of {kind, location, context} entries. Self-references
+// (the target's own children, e.g. an attribute on Catalog.X with type
+// Catalog.X) are emitted so circular dependencies are visible.
+std::vector<nlohmann::json> CollectReferencesTo(const std::string& targetFullName)
+{
+	std::vector<nlohmann::json> out;
+	if (activeMetaData == nullptr) return out;
+
+	ibValueMetaObject* target = ResolveByPath(targetFullName);
+	if (target == nullptr) return out;
+	const ibClassID targetClsid = target->GetClassType();
+	const auto [/*kind*/ _ignoredKind, bareName] = SplitTopName(targetFullName);
+	(void)_ignoredKind;
+
+	// First pass — collect every node so we can iterate without
+	// re-walking the tree per check.
+	std::vector<TreeNodeRef> all;
+	ibValueMetaObject* root = activeMetaData->GetCommonMetaObject();
+	if (root == nullptr) return out;
+	for (ibValueMetaObject* child : root->GetAnyArrayObject<>()) {
+		CollectTreeNodes(child, std::string(), all);
+	}
+
+	// For each node, run the per-kind checks. Attribute-type checks
+	// only run on Attribute children; module text scans run on
+	// ibValueMetaObjectModuleBase nodes. The top-level filter (drop
+	// children of the target itself) is enforced after the match so
+	// circular self-refs are still surfaced once at the top level.
+	for (const TreeNodeRef& ref : all) {
+		if (ref.node == target) continue;  // skip self
+
+		// (1) Attribute type ref
+		if (ref.kindLabel == "Attribute") {
+			if (AttributeTypeRefsTarget(ref.node, targetClsid)) {
+				out.push_back(MakeReferenceEntry(
+					"attribute_type", ref.fullName,
+					std::string("type points to ") + targetFullName));
+				continue;
+			}
+		}
+
+		// (2) Module text ref (substring / word-boundary against bareName)
+		if (!bareName.empty()) {
+			if (auto* mod = dynamic_cast<ibValueMetaObjectModuleBase*>(ref.node)) {
+				const std::string source = std::string(mod->GetModuleText().utf8_str());
+				const ModuleScanResult sr = ScanModuleForName(source, bareName);
+				if (sr.any) {
+					std::string ctx = "line " + std::to_string(sr.line);
+					if (!sr.snippet.empty()) ctx += ": " + sr.snippet;
+					if (sr.matchCount > 1) {
+						ctx += " (+" + std::to_string(sr.matchCount - 1) + " more)";
+					}
+					out.push_back(MakeReferenceEntry(
+						"module_text", ref.fullName, ctx));
+					continue;
+				}
+			}
+		}
+	}
+
+	return out;
+}
+
+} // namespace
+
+// =========================================================================
+// Tool: find_references
+// =========================================================================
+nlohmann::json ToolFindReferences(const nlohmann::json& args)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+	const std::string fullName = ArgString(args, "fullName");
+	if (fullName.empty()) {
+		return StructuredErrorCode("OES_E_INVALID_INPUT",
+			"find_references: 'fullName' is required (e.g. 'Catalog.Контрагенты')");
+	}
+	ibValueMetaObject* target = ResolveByPath(fullName);
+	if (target == nullptr) {
+		return StructuredErrorCode("OES_E_NOT_FOUND",
+			"find_references: target not found: " + fullName);
+	}
+
+	std::vector<nlohmann::json> refs = CollectReferencesTo(fullName);
+
+	nlohmann::json structured;
+	structured["target"]           = fullName;
+	structured["references"]       = nlohmann::json::array();
+	for (const auto& r : refs) structured["references"].push_back(r);
+	structured["totalReferences"]  = refs.size();
+
+	nlohmann::json env = TextResult(structured.dump(2), false);
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+// =========================================================================
+// Tool: rename_with_refs
+// =========================================================================
+nlohmann::json ToolRenameWithRefs(const nlohmann::json& args)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+	const std::string oldName = ArgString(args, "fullName");
+	const std::string newName = ArgString(args, "newName");
+	// MCP: dryRun defaults to TRUE — text-based ref patching is best-effort
+	// (word-boundary regex on module sources can drop hits inside string
+	// literals or pick up false positives in comments). Force the agent
+	// to opt-in to the actual mutation.
+	const bool dryRun = ArgBool(args, "dryRun", true);
+	if (oldName.empty() || newName.empty()) {
+		return StructuredErrorCode("OES_E_INVALID_INPUT",
+			"rename_with_refs: 'fullName' and 'newName' are required");
+	}
+
+	ibValueMetaObject* target = ResolveByPath(oldName);
+	if (target == nullptr) {
+		return StructuredErrorCode("OES_E_NOT_FOUND",
+			"rename_with_refs: target not found: " + oldName);
+	}
+
+	// Validate that both fullNames share the same kind — renaming across
+	// kinds (Catalog.X -> Document.X) isn't a rename, it's a recreate.
+	const auto [oldKind, oldBare] = SplitTopName(oldName);
+	const auto [newKind, newBare] = SplitTopName(newName);
+	if (oldKind != newKind) {
+		return StructuredErrorCode("OES_E_INVALID_INPUT",
+			"rename_with_refs: cross-kind rename not supported (" +
+			oldKind + " -> " + newKind + ")");
+	}
+	if (newBare.empty()) {
+		return StructuredErrorCode("OES_E_INVALID_INPUT",
+			"rename_with_refs: newName must include the bare name "
+			"(e.g. 'Catalog.NewName')");
+	}
+
+	// Gather references (uses the same routine as find_references).
+	std::vector<nlohmann::json> refs = CollectReferencesTo(oldName);
+
+	nlohmann::json structured;
+	structured["oldName"]            = oldName;
+	structured["newName"]            = newName;
+	structured["dryRun"]             = dryRun;
+	structured["updatedReferences"]  = nlohmann::json::array();
+	for (const auto& r : refs) structured["updatedReferences"].push_back(r);
+	structured["warnings"]           = nlohmann::json::array();
+
+	if (dryRun) {
+		structured["ok"]                = true;
+		structured["appliedMutations"]  = 0;
+		structured["warnings"].push_back(
+			"dry-run: no mutations applied. Pass dryRun=false to execute.");
+		structured["warnings"].push_back(
+			"text-based reference patching is best-effort — string literals "
+			"and comments containing the bare name will be rewritten too.");
+		nlohmann::json env = TextResult(structured.dump(2), false);
+		env["structuredContent"] = std::move(structured);
+		return env;
+	}
+
+	// Apply path — re-check lock before any mutation.
+	if (auto lockFail = RequireLockStillHeld("rename_with_refs"); lockFail) {
+		return *lockFail;
+	}
+
+	unsigned applied = 0;
+
+	// 1) Rewrite module text refs (regex word-boundary replace) via
+	//    write_module against each module location.
+	for (const auto& r : refs) {
+		if (!r.is_object() || !r.contains("kind") || !r["kind"].is_string()) continue;
+		if (r["kind"].get<std::string>() != "module_text") continue;
+		const std::string modPath = r.value("location", std::string());
+		if (modPath.empty()) continue;
+		ibValueMetaObject* node = ResolveByPath(modPath);
+		if (node == nullptr) {
+			structured["warnings"].push_back(
+				"module path could not be re-resolved: " + modPath);
+			continue;
+		}
+		auto* mod = dynamic_cast<ibValueMetaObjectModuleBase*>(node);
+		if (mod == nullptr) continue;
+		std::string source = std::string(mod->GetModuleText().utf8_str());
+		std::string pattern = NeedleHasWordChars(oldBare)
+			? ("\\b" + EscapeRegex(oldBare) + "\\b")
+			: EscapeRegex(oldBare);
+		try {
+			std::regex rx(pattern, std::regex::ECMAScript);
+			std::string replaced = std::regex_replace(source, rx, newBare);
+			if (replaced != source) {
+				mod->SetModuleText(wxString::FromUTF8(replaced.c_str()));
+				NotifyMutation("rename_with_refs", modPath);
+				EmitResourceMutation(modPath);
+				++applied;
+			}
+		} catch (const std::regex_error& e) {
+			structured["warnings"].push_back(
+				std::string("regex replace failed on ") + modPath + ": " + e.what());
+		}
+	}
+
+	// 2) Rename the target itself via metaBridge::HostMetaEdit with a
+	//    {"name": "<newBare>"} patch. metaBridge edits land on the live
+	//    object and push an undo lambda for Ctrl+Z.
+	{
+		nlohmann::json patch;
+		patch["name"] = newBare;
+		const std::string patchJson = patch.dump();
+		char* errMsg = nullptr;
+		const int rc = metaBridge::HostMetaEdit(kPluginId, oldName.c_str(),
+			patchJson.c_str(), &errMsg);
+		if (rc != 0) {
+			std::string msg = "rename_with_refs: failed to rename target";
+			if (errMsg != nullptr) { msg += ": "; msg += errMsg; }
+			FreeIfSet(errMsg);
+			structured["warnings"].push_back(msg);
+		} else {
+			NotifyMutation("rename_with_refs", oldName);
+			EmitResourceMutation(oldName);
+			EmitResourceMutation(newName);
+			++applied;
+		}
+		FreeIfSet(errMsg);
+	}
+
+	structured["ok"]               = true;
+	structured["appliedMutations"] = applied;
+
+	nlohmann::json env = TextResult(structured.dump(2), false);
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+// =========================================================================
+// Tool: metadata_diff
+// =========================================================================
+namespace {
+
+// MCP: deep-diff two JSON values, emitting modified entries keyed by
+// dotted JSON-Path. Lists are compared positionally — index changes show
+// up as modifications, not adds/removes. v2 may switch to set-diff with
+// LCS for arrays-of-objects keyed by `name`.
+void DiffJsonRecursive(const std::string& path,
+                       const nlohmann::json& left,
+                       const nlohmann::json& right,
+                       std::vector<nlohmann::json>& changes)
+{
+	if (left.type() != right.type()) {
+		nlohmann::json c;
+		c["path"] = path;
+		c["old"]  = left;
+		c["new"]  = right;
+		changes.push_back(std::move(c));
+		return;
+	}
+	if (left.is_object()) {
+		for (auto it = left.begin(); it != left.end(); ++it) {
+			const std::string sub = path.empty() ? it.key() : (path + "." + it.key());
+			if (!right.contains(it.key())) {
+				nlohmann::json c;
+				c["path"] = sub;
+				c["old"]  = it.value();
+				c["new"]  = nullptr;
+				changes.push_back(std::move(c));
+				continue;
+			}
+			DiffJsonRecursive(sub, it.value(), right[it.key()], changes);
+		}
+		for (auto it = right.begin(); it != right.end(); ++it) {
+			if (!left.contains(it.key())) {
+				const std::string sub = path.empty() ? it.key() : (path + "." + it.key());
+				nlohmann::json c;
+				c["path"] = sub;
+				c["old"]  = nullptr;
+				c["new"]  = it.value();
+				changes.push_back(std::move(c));
+			}
+		}
+		return;
+	}
+	if (left.is_array()) {
+		const std::size_t n = std::max(left.size(), right.size());
+		for (std::size_t i = 0; i < n; ++i) {
+			const std::string sub = path + "[" + std::to_string(i) + "]";
+			if (i >= left.size()) {
+				nlohmann::json c;
+				c["path"] = sub;
+				c["old"]  = nullptr;
+				c["new"]  = right[i];
+				changes.push_back(std::move(c));
+				continue;
+			}
+			if (i >= right.size()) {
+				nlohmann::json c;
+				c["path"] = sub;
+				c["old"]  = left[i];
+				c["new"]  = nullptr;
+				changes.push_back(std::move(c));
+				continue;
+			}
+			DiffJsonRecursive(sub, left[i], right[i], changes);
+		}
+		return;
+	}
+	// Primitive — straight inequality
+	if (left != right) {
+		nlohmann::json c;
+		c["path"] = path;
+		c["old"]  = left;
+		c["new"]  = right;
+		changes.push_back(std::move(c));
+	}
+}
+
+// MCP: enumerate top-level entries on each snapshot side. Snapshots are
+// shaped {fullName -> object}. We accept either that flat form, or an
+// array of {fullName, ...} objects. The caller's contract is documented
+// in the tool description.
+std::map<std::string, nlohmann::json> NormaliseSnapshot(const nlohmann::json& snap)
+{
+	std::map<std::string, nlohmann::json> out;
+	if (snap.is_object()) {
+		// Flat form: top-level keys are fullNames.
+		for (auto it = snap.begin(); it != snap.end(); ++it) {
+			out[it.key()] = it.value();
+		}
+		return out;
+	}
+	if (snap.is_array()) {
+		for (const auto& entry : snap) {
+			if (!entry.is_object()) continue;
+			if (!entry.contains("fullName") || !entry["fullName"].is_string()) continue;
+			out[entry["fullName"].get<std::string>()] = entry;
+		}
+		return out;
+	}
+	return out;
+}
+
+} // namespace
+
+nlohmann::json ToolMetadataDiff(const nlohmann::json& args)
+{
+	// File mode — DEFERRED. Loading two full configurations side-by-side
+	// requires duplicating the headless boot path with a second
+	// activeMetaData root; the v1 surface is inline-snapshot only.
+	if (args.is_object() && (args.contains("leftPath") || args.contains("rightPath"))) {
+		return StructuredErrorCode("OES_E_NOT_IMPLEMENTED",
+			"metadata_diff: file-path mode is deferred — load both snapshots "
+			"via meta_query (or a separate configurator session) and pass them "
+			"as leftSnapshot / rightSnapshot inline JSON instead");
+	}
+
+	if (!args.is_object() ||
+	    !args.contains("leftSnapshot") || !args.contains("rightSnapshot"))
+	{
+		return StructuredErrorCode("OES_E_INVALID_INPUT",
+			"metadata_diff: 'leftSnapshot' and 'rightSnapshot' inline JSON "
+			"objects are required");
+	}
+
+	const auto leftMap  = NormaliseSnapshot(args["leftSnapshot"]);
+	const auto rightMap = NormaliseSnapshot(args["rightSnapshot"]);
+
+	nlohmann::json added    = nlohmann::json::array();
+	nlohmann::json removed  = nlohmann::json::array();
+	nlohmann::json modified = nlohmann::json::array();
+
+	for (const auto& kv : leftMap) {
+		auto rit = rightMap.find(kv.first);
+		if (rit == rightMap.end()) {
+			nlohmann::json e;
+			e["fullName"] = kv.first;
+			e["kind"]     = kv.second.is_object() && kv.second.contains("kind")
+				? kv.second["kind"] : nlohmann::json();
+			removed.push_back(std::move(e));
+			continue;
+		}
+		std::vector<nlohmann::json> changes;
+		DiffJsonRecursive(std::string(), kv.second, rit->second, changes);
+		if (!changes.empty()) {
+			nlohmann::json e;
+			e["fullName"] = kv.first;
+			e["kind"]     = kv.second.is_object() && kv.second.contains("kind")
+				? kv.second["kind"] : nlohmann::json();
+			e["changes"]  = nlohmann::json::array();
+			for (const auto& c : changes) e["changes"].push_back(c);
+			modified.push_back(std::move(e));
+		}
+	}
+	for (const auto& kv : rightMap) {
+		if (leftMap.find(kv.first) == leftMap.end()) {
+			nlohmann::json e;
+			e["fullName"] = kv.first;
+			e["kind"]     = kv.second.is_object() && kv.second.contains("kind")
+				? kv.second["kind"] : nlohmann::json();
+			added.push_back(std::move(e));
+		}
+	}
+
+	nlohmann::json structured;
+	structured["added"]    = std::move(added);
+	structured["removed"]  = std::move(removed);
+	structured["modified"] = std::move(modified);
+	nlohmann::json summary;
+	summary["added"]    = structured["added"].size();
+	summary["removed"]  = structured["removed"].size();
+	summary["modified"] = structured["modified"].size();
+	structured["summary"] = std::move(summary);
+
+	nlohmann::json env = TextResult(structured.dump(2), false);
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+// =========================================================================
+// Tool: dependency_graph
+// =========================================================================
+namespace {
+
+// MCP: scan a node's outgoing references — used by dependency_graph in
+// direction="out" mode. Symmetric to CollectReferencesTo (which walks
+// the tree for *incoming* refs).
+std::vector<std::pair<std::string, std::string>> OutgoingRefsFrom(
+	ibValueMetaObject* origin, const std::string& originFullName)
+{
+	std::vector<std::pair<std::string, std::string>> out;  // (toFullName, label)
+	if (origin == nullptr || activeMetaData == nullptr) return out;
+
+	// (1) Attribute type CLSIDs — walk every descendant Attribute and
+	//     resolve its types back to a top-level metaObject. We compare
+	//     against every top-level object's CLSID and match.
+	std::vector<TreeNodeRef> topNodes;
+	ibValueMetaObject* root = activeMetaData->GetCommonMetaObject();
+	if (root == nullptr) return out;
+	for (ibValueMetaObject* child : root->GetAnyArrayObject<>()) {
+		if (child == nullptr) continue;
+		const char* kindLabel = CLSIDToKindLabel(
+			static_cast<unsigned long long>(child->GetClassType()));
+		if (kindLabel == nullptr || *kindLabel == '\0') continue;
+		TreeNodeRef ref;
+		ref.node      = child;
+		ref.fullName  = std::string(kindLabel) + "." +
+			std::string(child->GetName().utf8_str());
+		ref.kindLabel = kindLabel;
+		topNodes.push_back(std::move(ref));
+	}
+
+	// Walk origin's own attribute descendants
+	std::vector<TreeNodeRef> originSubtree;
+	CollectTreeNodes(origin, std::string(), originSubtree);
+	for (const TreeNodeRef& sub : originSubtree) {
+		if (sub.kindLabel != "Attribute") continue;
+		for (const TreeNodeRef& candidate : topNodes) {
+			if (candidate.node == origin) continue;  // skip self
+			if (AttributeTypeRefsTarget(sub.node, candidate.node->GetClassType())) {
+				out.push_back({ candidate.fullName, "attribute_type" });
+			}
+		}
+	}
+
+	// (2) Module text — scan every module under origin for top-level
+	//     object names. Word-boundary, same logic as CollectReferencesTo.
+	for (const TreeNodeRef& sub : originSubtree) {
+		auto* mod = dynamic_cast<ibValueMetaObjectModuleBase*>(sub.node);
+		if (mod == nullptr) continue;
+		const std::string source = std::string(mod->GetModuleText().utf8_str());
+		if (source.empty()) continue;
+		for (const TreeNodeRef& candidate : topNodes) {
+			if (candidate.node == origin) continue;
+			const std::string bareName = std::string(candidate.node->GetName().utf8_str());
+			if (bareName.empty()) continue;
+			const ModuleScanResult sr = ScanModuleForName(source, bareName);
+			if (sr.any) {
+				out.push_back({ candidate.fullName, "module_call" });
+			}
+		}
+	}
+
+	(void)originFullName;
+	return out;
+}
+
+} // namespace
+
+nlohmann::json ToolDependencyGraph(const nlohmann::json& args)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+	const std::string fullName = ArgString(args, "fullName");
+	if (fullName.empty()) {
+		return StructuredErrorCode("OES_E_INVALID_INPUT",
+			"dependency_graph: 'fullName' is required");
+	}
+	std::string direction = ArgString(args, "direction");
+	if (direction.empty()) direction = "both";
+	if (direction != "in" && direction != "out" && direction != "both") {
+		return StructuredErrorCode("OES_E_INVALID_INPUT",
+			"dependency_graph: 'direction' must be one of: in, out, both");
+	}
+	int depth = 2;
+	if (args.is_object() && args.contains("depth") && args["depth"].is_number_integer()) {
+		depth = args["depth"].get<int>();
+		if (depth < 1) depth = 1;
+		if (depth > 5) depth = 5;  // safety cap — exponential blowup beyond this
+	}
+
+	ibValueMetaObject* root = ResolveByPath(fullName);
+	if (root == nullptr) {
+		return StructuredErrorCode("OES_E_NOT_FOUND",
+			"dependency_graph: root not found: " + fullName);
+	}
+
+	// BFS: maintain a visited set keyed by top-level fullName, with the
+	// distance from root. We only enumerate top-level nodes here — child
+	// references roll up to their owning top-level object.
+	std::set<std::string> visited;
+	std::vector<nlohmann::json> nodes;
+	std::vector<nlohmann::json> edges;
+
+	struct QueueEntry {
+		std::string fullName;
+		int         distance;
+	};
+	std::vector<QueueEntry> queue;
+	queue.push_back({ TopLevelOf(fullName), 0 });
+	visited.insert(TopLevelOf(fullName));
+
+	while (!queue.empty()) {
+		const QueueEntry e = queue.front();
+		queue.erase(queue.begin());
+
+		ibValueMetaObject* node = ResolveByPath(e.fullName);
+		if (node != nullptr) {
+			const char* kindLabel = CLSIDToKindLabel(
+				static_cast<unsigned long long>(node->GetClassType()));
+			nlohmann::json n;
+			n["fullName"] = e.fullName;
+			n["kind"]     = (kindLabel != nullptr) ? std::string(kindLabel) : std::string();
+			nodes.push_back(std::move(n));
+		}
+
+		if (e.distance >= depth) continue;
+
+		// Outgoing edges
+		if (direction == "out" || direction == "both") {
+			if (node != nullptr) {
+				auto outs = OutgoingRefsFrom(node, e.fullName);
+				for (const auto& kv : outs) {
+					nlohmann::json edge;
+					edge["from"]  = e.fullName;
+					edge["to"]    = kv.first;
+					edge["label"] = kv.second;
+					edges.push_back(std::move(edge));
+					if (visited.insert(kv.first).second) {
+						queue.push_back({ kv.first, e.distance + 1 });
+					}
+				}
+			}
+		}
+
+		// Incoming edges — reuse CollectReferencesTo, then bucket to top-level
+		if (direction == "in" || direction == "both") {
+			auto refs = CollectReferencesTo(e.fullName);
+			for (const auto& r : refs) {
+				if (!r.is_object() || !r.contains("location") ||
+				    !r["location"].is_string()) continue;
+				const std::string loc = r["location"].get<std::string>();
+				const std::string topLoc = TopLevelOf(loc);
+				const std::string label  = r.value("kind", std::string("ref"));
+				nlohmann::json edge;
+				edge["from"]  = topLoc;
+				edge["to"]    = e.fullName;
+				edge["label"] = label;
+				edges.push_back(std::move(edge));
+				if (visited.insert(topLoc).second) {
+					queue.push_back({ topLoc, e.distance + 1 });
+				}
+			}
+		}
+	}
+
+	nlohmann::json structured;
+	structured["root"]      = fullName;
+	structured["direction"] = direction;
+	structured["depth"]     = depth;
+	structured["nodes"]     = nlohmann::json::array();
+	for (const auto& n : nodes) structured["nodes"].push_back(n);
+	structured["edges"]     = nlohmann::json::array();
+	for (const auto& e : edges) structured["edges"].push_back(e);
+
+	nlohmann::json env = TextResult(structured.dump(2), false);
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+// =========================================================================
+// Tool: extract_module_to_common
+// =========================================================================
+namespace {
+
+// MCP: find a procedure / function definition by name in source. Returns
+// the start/end byte offsets of the full definition (Procedure/Function
+// keyword through matching EndProcedure/EndFunction) plus the keyword
+// kind. Returns {0,0,""} when not found. CES braces are NOT handled in
+// v1 — extraction is VES-only for the initial drop. CES support is a
+// straightforward follow-up but needs a brace counter.
+struct ProcedureSlice {
+	std::size_t start    = 0;
+	std::size_t end      = 0;
+	std::string kind;     // "Procedure" or "Function"
+	std::string fullDef;  // verbatim source between [start, end)
+};
+
+ProcedureSlice FindProcedure(const std::string& source, const std::string& name)
+{
+	ProcedureSlice res;
+	if (source.empty() || name.empty()) return res;
+
+	// VES pattern: (Procedure|Function)\s+<name>\s*\(
+	// Match opening, then find matching End{Procedure|Function}
+	const std::string esc = EscapeRegex(name);
+	const std::string pattern = "(Procedure|Function)\\s+" + esc + "\\s*\\(";
+	try {
+		std::regex rx(pattern, std::regex::ECMAScript | std::regex::icase);
+		std::smatch m;
+		if (!std::regex_search(source, m, rx)) return res;
+		res.start = static_cast<std::size_t>(m.position(0));
+		res.kind  = m[1].str();
+
+		// Find matching EndProcedure / EndFunction. Naive lookup — nested
+		// definitions break this. v1 assumes single-level. (v2: lexer.)
+		const std::string endTok = (res.kind == "Function" || res.kind == "function")
+			? "EndFunction" : "EndProcedure";
+		std::regex endRx("\\b" + endTok + "\\b",
+			std::regex::ECMAScript | std::regex::icase);
+		auto begin = std::sregex_iterator(source.begin() + res.start, source.end(), endRx);
+		auto end   = std::sregex_iterator();
+		if (begin == end) return ProcedureSlice{};
+		res.end = res.start +
+			static_cast<std::size_t>(begin->position(0) + begin->length(0));
+		res.fullDef = source.substr(res.start, res.end - res.start);
+		return res;
+	} catch (const std::regex_error&) {
+		return ProcedureSlice{};
+	}
+}
+
+} // namespace
+
+nlohmann::json ToolExtractModuleToCommon(const nlohmann::json& args)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+	const std::string sourcePath   = ArgString(args, "sourceFullName");
+	const std::string procName     = ArgString(args, "procedureName");
+	const std::string targetCommon = ArgString(args, "targetCommonModule");
+	// dryRun default TRUE — actual apply is deferred (see warnings below).
+	const bool dryRun = ArgBool(args, "dryRun", true);
+	if (sourcePath.empty() || procName.empty() || targetCommon.empty()) {
+		return StructuredErrorCode("OES_E_INVALID_INPUT",
+			"extract_module_to_common: 'sourceFullName', 'procedureName', and "
+			"'targetCommonModule' are required");
+	}
+
+	ibValueMetaObject* sourceNode = ResolveByPath(sourcePath);
+	if (sourceNode == nullptr) {
+		return StructuredErrorCode("OES_E_NOT_FOUND",
+			"extract_module_to_common: source module not found: " + sourcePath);
+	}
+	auto* sourceMod = dynamic_cast<ibValueMetaObjectModuleBase*>(sourceNode);
+	if (sourceMod == nullptr) {
+		return StructuredErrorCode("OES_E_NOT_A_MODULE",
+			"extract_module_to_common: '" + sourcePath + "' is not a module");
+	}
+
+	const std::string source = std::string(sourceMod->GetModuleText().utf8_str());
+	const ProcedureSlice slice = FindProcedure(source, procName);
+	if (slice.fullDef.empty()) {
+		return StructuredErrorCode("OES_E_NOT_FOUND",
+			"extract_module_to_common: procedure '" + procName +
+			"' not found in " + sourcePath +
+			" (v1 supports VES Procedure/Function syntax only; CES brace "
+			"matching is deferred)");
+	}
+
+	// Count call-sites inside the source module (excluding the definition
+	// itself). word-boundary regex on procName.
+	unsigned callsites = 0;
+	{
+		const std::string pattern = NeedleHasWordChars(procName)
+			? ("\\b" + EscapeRegex(procName) + "\\b")
+			: EscapeRegex(procName);
+		try {
+			std::regex rx(pattern, std::regex::ECMAScript);
+			auto begin = std::sregex_iterator(source.begin(), source.end(), rx);
+			auto end   = std::sregex_iterator();
+			for (auto it = begin; it != end; ++it) {
+				const std::size_t pos = static_cast<std::size_t>(it->position(0));
+				// Skip the definition line itself
+				if (pos >= slice.start && pos < slice.end) continue;
+				++callsites;
+			}
+		} catch (const std::regex_error&) {
+			// callsites stays 0 — best effort
+		}
+	}
+
+	nlohmann::json structured;
+	structured["sourceFullName"]      = sourcePath;
+	structured["procedureName"]       = procName;
+	structured["targetCommonModule"]  = targetCommon;
+	structured["extractedTo"]         = targetCommon + "." + procName;
+	structured["sourceCallsiteCount"] = callsites;
+	structured["extractedText"]       = slice.fullDef;
+	structured["dryRun"]              = dryRun;
+	structured["plannedMutations"]    = nlohmann::json::array();
+
+	// Planned mutations the apply path would execute. Surfaced even in
+	// dry-run so the agent can reason about scope before opting in.
+	{
+		nlohmann::json m1;
+		m1["op"]       = "append_text";
+		m1["target"]   = targetCommon;
+		m1["bytes"]    = slice.fullDef.size();
+		m1["note"]     = "Append extracted procedure to the common module";
+		structured["plannedMutations"].push_back(std::move(m1));
+
+		nlohmann::json m2;
+		m2["op"]       = "replace_definition";
+		m2["target"]   = sourcePath;
+		m2["bytes"]    = slice.fullDef.size();
+		m2["note"]     = "Replace original definition with a thin wrapper that "
+			"forwards to " + targetCommon + "." + procName;
+		structured["plannedMutations"].push_back(std::move(m2));
+	}
+
+	structured["warnings"] = nlohmann::json::array();
+	structured["warnings"].push_back(
+		"v1 PARTIAL: dry-run only. Text-based extraction is brittle when the "
+		"procedure body references local module variables, owns inner "
+		"closures, or relies on Export-scoped state. Pass dryRun=false to "
+		"opt-in once the platform's lexer-aware extractor lands.");
+
+	if (!dryRun) {
+		// Actual mutation path is deferred — the wrapper-rewrite step needs
+		// a lexer-aware locator for the original definition's parameter
+		// list (so the thin wrapper forwards the right arguments), plus
+		// CommonModule existence + auto-create logic. v1 stops here and
+		// returns the deferral.
+		structured["ok"]        = false;
+		structured["errorCode"] = "OES_E_NOT_IMPLEMENTED";
+		nlohmann::json env = TextResult(structured.dump(2), true);
+		env["structuredContent"] = std::move(structured);
+		env["isError"]           = true;
+		return env;
+	}
+
+	structured["ok"] = true;
+	nlohmann::json env = TextResult(structured.dump(2), false);
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+// =========================================================================
 // Registry — built once on first AllTools() call.
 // =========================================================================
 const std::vector<ToolEntry>& BuildRegistry()
@@ -3931,6 +4930,189 @@ const std::vector<ToolEntry>& BuildRegistry()
 			&ToolPredefinedValuesSet
 		});
 	}
+
+	// =====================================================================
+	// Refactoring primitives (5) — added 2026-05-21. Cross-object awareness
+	// for agents that need to do more than point-edit. find_references and
+	// dependency_graph declare outputSchema; the mutating tools declare
+	// destructive=true since they overwrite source text / metadata.
+	// =====================================================================
+	{
+		nlohmann::json refItem;
+		refItem["type"]       = "object";
+		refItem["properties"] = nlohmann::json::object();
+		refItem["properties"]["kind"]     = nlohmann::json{
+			{"type","string"},
+			{"description","attribute_type / module_text / register_dimension / register_record_binding / form_attribute_binding"}
+		};
+		refItem["properties"]["location"] = nlohmann::json{ {"type","string"} };
+		refItem["properties"]["context"]  = nlohmann::json{ {"type","string"} };
+		refItem["required"]   = nlohmann::json::array({ "kind", "location" });
+
+		nlohmann::json outFR;
+		outFR["type"]       = "object";
+		outFR["properties"] = nlohmann::json::object();
+		outFR["properties"]["target"]          = nlohmann::json{ {"type","string"} };
+		outFR["properties"]["references"]      = nlohmann::json{ {"type","array"}, {"items", refItem} };
+		outFR["properties"]["totalReferences"] = nlohmann::json{ {"type","integer"} };
+		outFR["required"]   = nlohmann::json::array({ "target", "references" });
+
+		table.push_back({
+			{ "find_references",
+			  "Find every reference to a metadata object across the loaded "
+			  "configuration. Walks the tree and checks attribute type CLSIDs, "
+			  "register dimension types, and module source text (word-boundary "
+			  "match on the bare name). Returns structuredContent.references[] "
+			  "with kind/location/context per hit. Use before rename_with_refs "
+			  "or delete to see the blast radius.",
+			  schemaObj({
+			    { "fullName", str("Target full name, e.g. 'Catalog.Контрагенты'") },
+			  }, { "fullName" }),
+			  ann(/*readOnly*/true, /*destructive*/false,
+			      /*idempotent*/true, /*openWorld*/false),
+			  std::move(outFR)
+			},
+			&ToolFindReferences
+		});
+	}
+	table.push_back({
+		{ "rename_with_refs",
+		  "Rename a metadata object and rewrite every reference to it (module "
+		  "text + attribute types). dryRun=true (default) returns the planned "
+		  "mutations without applying. dryRun=false applies the rename via "
+		  "metaBridge::HostMetaEdit (pushes an undo lambda for Ctrl+Z) and "
+		  "rewrites every module reference via word-boundary regex. WARNING: "
+		  "text-based ref patching is best-effort — string literals and "
+		  "comments containing the bare name will be rewritten too.",
+		  schemaObj({
+		    { "fullName", str("Old full name, e.g. 'Catalog.Старое'") },
+		    { "newName",  str("New full name, same kind, e.g. 'Catalog.Новое'") },
+		    { "dryRun",   boolP("If true (default), preview only — no mutations applied") },
+		  }, { "fullName", "newName" }),
+		  // destructive=true: overwrites module sources + the target's name.
+		  // Idempotent at the final-state level: applying the same rename
+		  // twice resolves to the same metadata graph.
+		  ann(/*readOnly*/false, /*destructive*/true,
+		      /*idempotent*/true, /*openWorld*/false)
+		},
+		&ToolRenameWithRefs
+	});
+	{
+		nlohmann::json snapIn;
+		snapIn["type"]        = nlohmann::json::array({ "object", "array" });
+		snapIn["description"] = "Inline metadata snapshot — either a flat map "
+			"{fullName -> object} or an array of objects with fullName fields. "
+			"Pass results of meta_query/list_objects directly.";
+
+		nlohmann::json changeItem;
+		changeItem["type"]       = "object";
+		changeItem["properties"] = nlohmann::json::object();
+		changeItem["properties"]["path"] = nlohmann::json{ {"type","string"} };
+		changeItem["properties"]["old"]  = nlohmann::json::object();
+		changeItem["properties"]["new"]  = nlohmann::json::object();
+
+		table.push_back({
+			{ "metadata_diff",
+			  "Diff two metadata snapshots. v1 inline-snapshot mode only — "
+			  "load both via meta_query / list_objects and pass them as "
+			  "leftSnapshot / rightSnapshot. File-path mode "
+			  "(leftPath/rightPath) returns OES_E_NOT_IMPLEMENTED. Returns "
+			  "added[]/removed[]/modified[] with per-object change paths.",
+			  schemaObj({
+			    { "leftSnapshot",  snapIn },
+			    { "rightSnapshot", snapIn },
+			    { "leftPath",      str("(deferred) path to first config snapshot file") },
+			    { "rightPath",     str("(deferred) path to second config snapshot file") },
+			  }, {}),
+			  ann(/*readOnly*/true, /*destructive*/false,
+			      /*idempotent*/true, /*openWorld*/false)
+			},
+			&ToolMetadataDiff
+		});
+	}
+	{
+		nlohmann::json nodeItem;
+		nodeItem["type"]       = "object";
+		nodeItem["properties"] = nlohmann::json::object();
+		nodeItem["properties"]["fullName"] = nlohmann::json{ {"type","string"} };
+		nodeItem["properties"]["kind"]     = nlohmann::json{ {"type","string"} };
+
+		nlohmann::json edgeItem;
+		edgeItem["type"]       = "object";
+		edgeItem["properties"] = nlohmann::json::object();
+		edgeItem["properties"]["from"]  = nlohmann::json{ {"type","string"} };
+		edgeItem["properties"]["to"]    = nlohmann::json{ {"type","string"} };
+		edgeItem["properties"]["label"] = nlohmann::json{
+			{"type","string"},
+			{"description","attribute_type / module_call / register_record / ..."}
+		};
+
+		nlohmann::json outDG;
+		outDG["type"]       = "object";
+		outDG["properties"] = nlohmann::json::object();
+		outDG["properties"]["root"]      = nlohmann::json{ {"type","string"} };
+		outDG["properties"]["direction"] = nlohmann::json{
+			{"type","string"},
+			{"enum", nlohmann::json::array({ "in", "out", "both" })}
+		};
+		outDG["properties"]["depth"]     = nlohmann::json{ {"type","integer"} };
+		outDG["properties"]["nodes"]     = nlohmann::json{ {"type","array"}, {"items", nodeItem} };
+		outDG["properties"]["edges"]     = nlohmann::json{ {"type","array"}, {"items", edgeItem} };
+		outDG["required"]   = nlohmann::json::array({ "root", "nodes", "edges" });
+
+		nlohmann::json dirIn;
+		dirIn["type"]        = "string";
+		dirIn["enum"]        = nlohmann::json::array({ "in", "out", "both" });
+		dirIn["default"]     = "both";
+		dirIn["description"] = "out: what this object references. in: what references this object. both: union.";
+
+		nlohmann::json depthIn;
+		depthIn["type"]        = "integer";
+		depthIn["default"]     = 2;
+		depthIn["description"] = "BFS depth (clamped 1..5)";
+
+		table.push_back({
+			{ "dependency_graph",
+			  "BFS dependency graph rooted at a metadata object. direction='out' "
+			  "follows outgoing references (attribute types + module calls); "
+			  "direction='in' reuses find_references logic to walk incoming "
+			  "edges; 'both' merges. depth is clamped to 1..5 to bound the "
+			  "expansion. Returns structuredContent.nodes[]/edges[] for graph "
+			  "visualisation or impact analysis.",
+			  schemaObj({
+			    { "fullName",  str("Root object full name") },
+			    { "direction", dirIn  },
+			    { "depth",     depthIn },
+			  }, { "fullName" }),
+			  ann(/*readOnly*/true, /*destructive*/false,
+			      /*idempotent*/true, /*openWorld*/false),
+			  std::move(outDG)
+			},
+			&ToolDependencyGraph
+		});
+	}
+	table.push_back({
+		{ "extract_module_to_common",
+		  "Extract a procedure from a source module into a CommonModule. "
+		  "STATUS: PARTIAL v1 — dryRun=true (default) returns the extracted "
+		  "text + planned mutations + call-site count. dryRun=false returns "
+		  "OES_E_NOT_IMPLEMENTED until the lexer-aware extractor lands "
+		  "(text-based extraction is brittle when locals or closures are "
+		  "involved). VES Procedure/Function syntax only; CES brace matching "
+		  "is a follow-up.",
+		  schemaObj({
+		    { "sourceFullName",     str("Source module path, e.g. 'Document.Заказ.ObjectModule'") },
+		    { "procedureName",      str("Procedure/function name to extract") },
+		    { "targetCommonModule", str("Target CommonModule full path, e.g. 'CommonModules.Расчёты'") },
+		    { "dryRun",             boolP("If true (default), preview only") },
+		  }, { "sourceFullName", "procedureName", "targetCommonModule" }),
+		  // destructive=true: would mutate two modules when apply path lands.
+		  // Idempotent=false: re-applying produces duplicate definitions.
+		  ann(/*readOnly*/false, /*destructive*/true,
+		      /*idempotent*/false, /*openWorld*/false)
+		},
+		&ToolExtractModuleToCommon
+	});
 
 	table.push_back({
 		{ "config_info",

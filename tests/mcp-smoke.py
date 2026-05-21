@@ -124,8 +124,8 @@ def main() -> int:
     lst = recv(proc)
     tools = lst.get("result", {}).get("tools", [])
     names = {t["name"] for t in tools if "name" in t}
-    if len(tools) < 27:
-        failures.append(f"tools/list: only {len(tools)} tools, expected >=27")
+    if len(tools) < 32:
+        failures.append(f"tools/list: only {len(tools)} tools, expected >=32")
     for required in ("meta_query", "meta_create", "list_objects", "config_info"):
         if required not in names:
             failures.append(f"tools/list: missing tool '{required}'")
@@ -823,6 +823,82 @@ def main() -> int:
     if not isinstance(unk_err, dict) or unk_err.get("code") != -32602:
         failures.append(
             f"prompts/get unknown-name: expected error -32602, got: {unk_resp}")
+
+    # 8g) Refactoring primitives (5) — added 2026-05-21. find_references,
+    # rename_with_refs, metadata_diff, dependency_graph,
+    # extract_module_to_common. All 5 must be advertised; find_references
+    # and dependency_graph declare outputSchema. In --no-config mode every
+    # tool returns isError because RequireConfig fails first.
+    refactor_tools_readonly = {
+        "find_references":   True,  # outputSchema required
+        "dependency_graph":  True,  # outputSchema required
+    }
+    refactor_tools_other = {
+        "rename_with_refs":         False,  # destructive=true
+        "metadata_diff":            True,   # readOnly=true (inline-snapshot mode)
+        "extract_module_to_common": False,  # destructive=true
+    }
+    for required in (*refactor_tools_readonly.keys(), *refactor_tools_other.keys()):
+        if required not in names:
+            failures.append(f"tools/list: missing tool '{required}'")
+            continue
+        td_rf = declared.get(required)
+        if td_rf is None:
+            continue
+        ann_rf = td_rf.get("annotations") or {}
+        if ann_rf.get("openWorldHint") is True:
+            failures.append(f"{required}: openWorldHint must be false")
+        # Read-only ones must declare outputSchema.
+        if required in refactor_tools_readonly:
+            if ann_rf.get("readOnlyHint") is not True:
+                failures.append(f"{required}: readOnlyHint must be true")
+            out_schema_rf = td_rf.get("outputSchema")
+            if not isinstance(out_schema_rf, dict) or out_schema_rf.get("type") != "object":
+                failures.append(f"{required}: missing/malformed outputSchema")
+        # Destructive ones: destructiveHint=true except metadata_diff.
+        else:
+            if required == "metadata_diff":
+                if ann_rf.get("readOnlyHint") is not True:
+                    failures.append(f"{required}: readOnlyHint must be true")
+            else:
+                if ann_rf.get("destructiveHint") is not True:
+                    failures.append(f"{required}: destructiveHint must be true")
+
+    # In --no-config mode every refactor tool returns isError. We probe each
+    # with minimal valid args so the path-walking lands on RequireConfig.
+    refactor_probes = [
+        ("find_references",    {"fullName": "Catalog.SmokeProbe"}),
+        ("rename_with_refs",   {"fullName": "Catalog.SmokeProbe",
+                                 "newName": "Catalog.SmokeProbe2",
+                                 "dryRun": True}),
+        ("metadata_diff",      {"leftSnapshot": {}, "rightSnapshot": {}}),
+        ("dependency_graph",   {"fullName": "Catalog.SmokeProbe",
+                                 "direction": "both", "depth": 2}),
+        ("extract_module_to_common",
+            {"sourceFullName":     "Document.SmokeProbe.ObjectModule",
+             "procedureName":      "Foo",
+             "targetCommonModule": "CommonModules.Smoke",
+             "dryRun":             True}),
+    ]
+    for idx, (tool_name, tool_args) in enumerate(refactor_probes, start=800):
+        send(proc, {
+            "jsonrpc": "2.0", "id": idx, "method": "tools/call",
+            "params": {"name": tool_name, "arguments": tool_args},
+        })
+        rf_resp = recv(proc, timeout_s=5.0)
+        rf_env = rf_resp.get("result")
+        if not isinstance(rf_env, dict):
+            failures.append(f"{tool_name}: no result envelope: {rf_resp}")
+            continue
+        if not rf_env.get("isError"):
+            # metadata_diff with empty snapshots is a valid call that
+            # legitimately succeeds (returns empty added/removed/modified).
+            # All other refactor tools require a loaded config — flag if
+            # they succeed in --no-config mode.
+            if protocol_only and tool_name != "metadata_diff":
+                failures.append(
+                    f"{tool_name}: expected isError in --no-config mode, "
+                    f"got: {rf_env}")
 
     proc.stdin.close()
     proc.wait(timeout=3)
