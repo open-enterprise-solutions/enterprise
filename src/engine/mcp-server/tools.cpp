@@ -1792,6 +1792,13 @@ nlohmann::json ToolSearchText(const nlohmann::json& args)
 		return TextResult("search_text: 'query' is required", true);
 	}
 	const bool useRegex = ArgBool(args, "regex");
+	int maxResults = 50;
+	if (args.is_object() && args.contains("maxResults") &&
+	    args["maxResults"].is_number_integer()) {
+		maxResults = args["maxResults"].get<int>();
+	}
+	if (maxResults < 1) maxResults = 1;
+	if (maxResults > 500) maxResults = 500;
 
 	// MCP: case-insensitive compare for substring mode. We lowercase both
 	// sides once. Regex mode honours std::regex flags as-is.
@@ -1801,6 +1808,53 @@ nlohmann::json ToolSearchText(const nlohmann::json& args)
 		return s;
 	};
 	const std::string needle = useRegex ? query : lower(query);
+	auto tokenize = [&](const std::string& text) {
+		std::vector<std::string> out;
+		std::string cur;
+		const std::string lowered = lower(text);
+		for (unsigned char c : lowered) {
+			if (std::isalnum(c) || c == '_' || c >= 128) {
+				cur.push_back(static_cast<char>(c));
+			} else if (!cur.empty()) {
+				out.push_back(cur);
+				cur.clear();
+			}
+		}
+		if (!cur.empty()) out.push_back(cur);
+		return out;
+	};
+	std::vector<std::string> terms = tokenize(query);
+	if (terms.empty()) terms.push_back(needle);
+
+	const std::vector<std::vector<std::string>> synonymGroups = {
+		{ "catalog", "справочник", "довідник", "directory" },
+		{ "document", "документ" },
+		{ "register", "регистр", "регістр" },
+		{ "attribute", "реквизит", "реквізит", "field" },
+		{ "form", "форма" },
+		{ "module", "модуль" },
+		{ "date", "дата" },
+		{ "code", "код" },
+		{ "description", "name", "наименование", "найменування", "опис", "назва" },
+		{ "counterparty", "контрагент", "контрагенти", "контрагенты" },
+		{ "product", "товар", "номенклатура" },
+		{ "posting", "проведение", "проведення" },
+	};
+	for (const auto& group : synonymGroups) {
+		bool hit = false;
+		for (const auto& t : terms) {
+			if (std::find(group.begin(), group.end(), t) != group.end()) {
+				hit = true;
+				break;
+			}
+		}
+		if (!hit) continue;
+		for (const auto& synonym : group) {
+			if (std::find(terms.begin(), terms.end(), synonym) == terms.end()) {
+				terms.push_back(synonym);
+			}
+		}
+	}
 
 	std::optional<std::regex> rx;
 	if (useRegex) {
@@ -1813,7 +1867,27 @@ nlohmann::json ToolSearchText(const nlohmann::json& args)
 
 	auto matches = [&](const std::string& haystack) -> bool {
 		if (useRegex) return std::regex_search(haystack, *rx);
-		return lower(haystack).find(needle) != std::string::npos;
+		const std::string h = lower(haystack);
+		for (const auto& term : terms) {
+			if (h.find(term) != std::string::npos) return true;
+		}
+		return false;
+	};
+	auto score = [&](const std::string& haystack, double boost) {
+		if (useRegex) return matches(haystack) ? boost : 0.0;
+		const std::string h = lower(haystack);
+		double s = 0.0;
+		for (const auto& term : terms) {
+			std::size_t pos = h.find(term);
+			if (pos == std::string::npos) continue;
+			s += 1.5 * boost;
+			while (pos != std::string::npos) {
+				s += 0.35 * boost;
+				pos = h.find(term, pos + term.size());
+			}
+		}
+		if (h.find(needle) != std::string::npos) s += 2.0 * boost;
+		return s;
 	};
 
 	nlohmann::json hits = nlohmann::json::array();
@@ -1830,8 +1904,10 @@ nlohmann::json ToolSearchText(const nlohmann::json& args)
 		if (matches(name) || matches(syn)) {
 			nlohmann::json h;
 			h["path"]    = path;
-			h["field"]   = matches(name) ? "name" : "synonym";
-			h["snippet"] = matches(name) ? name : syn;
+			const bool nameHit = matches(name);
+			h["field"]   = nameHit ? "name" : "synonym";
+			h["snippet"] = nameHit ? name : syn;
+			h["score"]   = nameHit ? score(name, 3.0) : score(syn, 2.2);
 			hits.push_back(h);
 		}
 
@@ -1852,6 +1928,7 @@ nlohmann::json ToolSearchText(const nlohmann::json& args)
 				h["path"]    = path + ".module";
 				h["field"]   = "source";
 				h["snippet"] = src.substr(begin, len);
+				h["score"]   = score(src, 1.0);
 				hits.push_back(h);
 			}
 		}
@@ -1870,9 +1947,23 @@ nlohmann::json ToolSearchText(const nlohmann::json& args)
 
 	nlohmann::json out;
 	out["query"] = query;
+	out["terms"] = terms;
 	out["count"] = hits.size();
-	out["hits"]  = std::move(hits);
-	return JsonResult(out);
+	std::vector<nlohmann::json> sorted;
+	for (const auto& h : hits) sorted.push_back(h);
+	std::sort(sorted.begin(), sorted.end(),
+		[](const nlohmann::json& a, const nlohmann::json& b) {
+			return a.value("score", 0.0) > b.value("score", 0.0);
+		});
+	nlohmann::json ranked = nlohmann::json::array();
+	for (size_t i = 0; i < sorted.size() && static_cast<int>(i) < maxResults; ++i) {
+		ranked.push_back(std::move(sorted[i]));
+	}
+	out["truncated"] = sorted.size() > ranked.size();
+	out["hits"] = std::move(ranked);
+	nlohmann::json env = TextResult(out.dump(2));
+	env["structuredContent"] = std::move(out);
+	return env;
 }
 
 // =========================================================================
@@ -5553,12 +5644,13 @@ const std::vector<ToolEntry>& BuildRegistry()
 	}
 	table.push_back({
 		{ "search_text",
-		  "Full-text search across module sources, names, and synonyms. "
-		  "Defaults to case-insensitive substring; pass regex=true for "
-		  "ECMAScript regex.",
+		  "Ranked full-text search across module sources, names, and synonyms. "
+		  "Defaults to case-insensitive term search with OES RU/UA/EN synonym "
+		  "expansion; pass regex=true for ECMAScript regex.",
 		  schemaObj({
 		    { "query", str("Search query (substring or regex)") },
 		    { "regex", boolP("Treat query as ECMAScript regex") },
+		    { "maxResults", str("Maximum hits to return, 1..500 (default 50)") },
 		  }, { "query" }),
 		  ann(true, false, true, false)
 		},
