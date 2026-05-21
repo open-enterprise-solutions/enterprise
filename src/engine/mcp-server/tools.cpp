@@ -5555,6 +5555,33 @@ const std::vector<ToolEntry>& BuildRegistry()
 		});
 	}
 
+	// mcp-1c compatibility aliases (inspired by feenlace/mcp-1c MIT,
+	// 2026-05-21 t2-020). Agents trained on mcp-1c tool names work
+	// against oes-mcp without rewriting prompts. Aliases share the
+	// same handler, schemas, and annotations as their canonical tool;
+	// only `name` differs and the description carries an "[alias]" tag.
+	{
+		const std::pair<const char*, const char*> aliasMap[] = {
+			{ "meta_query",   "get_object_structure"   },
+			{ "config_info",  "get_configuration_info" },
+			{ "search_text",  "search_code"            },
+			{ "list_objects", "get_metadata_tree"      },
+		};
+		const size_t baseCount = table.size();
+		for (const auto& pair : aliasMap) {
+			for (size_t i = 0; i < baseCount; ++i) {
+				if (table[i].desc.name != pair.first) continue;
+				ToolEntry alias = table[i];
+				alias.desc.name = pair.second;
+				alias.desc.description =
+				    std::string("[alias of ") + pair.first + "] " +
+				    table[i].desc.description;
+				table.push_back(std::move(alias));
+				break;
+			}
+		}
+	}
+
 	return table;
 }
 
