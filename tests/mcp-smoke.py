@@ -114,8 +114,8 @@ def main() -> int:
     lst = recv(proc)
     tools = lst.get("result", {}).get("tools", [])
     names = {t["name"] for t in tools if "name" in t}
-    if len(tools) < 10:
-        failures.append(f"tools/list: only {len(tools)} tools, expected >=10")
+    if len(tools) < 27:
+        failures.append(f"tools/list: only {len(tools)} tools, expected >=27")
     for required in ("meta_query", "meta_create", "list_objects", "config_info"):
         if required not in names:
             failures.append(f"tools/list: missing tool '{required}'")
@@ -469,6 +469,84 @@ def main() -> int:
         failures.append(
             "oes_demo_data_get: both templateId+configHints should be "
             f"rejected client-side, got: {bad_env}")
+
+    # 8f) Role / ACL / Journal / Register / Predefined tools (added 2026-05-21).
+    # All 8 must be advertised in tools/list. Read-only ones declare
+    # outputSchema; mutating ones don't. In --no-config mode every tool
+    # returns isError because RequireConfig fails first.
+    new_tools_readonly = {
+        "role_list":              True,   # outputSchema required
+        "role_acl_read":          True,
+        "journal_query":          True,
+        "register_query":         True,
+        "predefined_values_list": True,
+    }
+    new_tools_mutating = {
+        "role_acl_set":           True,   # destructiveHint required
+        "register_write":         False,  # additive
+        "predefined_values_set":  True,
+    }
+    for required in (*new_tools_readonly.keys(), *new_tools_mutating.keys()):
+        if required not in names:
+            failures.append(f"tools/list: missing tool '{required}'")
+            continue
+        td_new = declared.get(required)
+        if td_new is None:
+            continue
+        ann_new = td_new.get("annotations") or {}
+        # openWorld=false on every new tool (closed metadata domain).
+        if ann_new.get("openWorldHint") is True:
+            failures.append(f"{required}: openWorldHint must be false")
+        # Read-only ones must declare outputSchema.
+        if required in new_tools_readonly:
+            if ann_new.get("readOnlyHint") is not True:
+                failures.append(f"{required}: readOnlyHint must be true")
+            out_schema_new = td_new.get("outputSchema")
+            if not isinstance(out_schema_new, dict) or out_schema_new.get("type") != "object":
+                failures.append(f"{required}: missing/malformed outputSchema")
+        # Mutating ones — destructiveHint per per-tool expectation.
+        else:
+            expected_destructive = new_tools_mutating[required]
+            if ann_new.get("destructiveHint") is not expected_destructive:
+                failures.append(
+                    f"{required}: destructiveHint must be {expected_destructive}")
+
+    # In --no-config mode every new tool returns isError. We probe each
+    # with minimal valid args so the path-walking and shape-checking lands
+    # on the RequireConfig guard rather than failing client-side validation.
+    new_tool_probes = [
+        ("role_list",              {}),
+        ("role_acl_read",          {"fullName": "Role.Smoke"}),
+        ("role_acl_set",           {"fullName": "Role.Smoke", "permissions": []}),
+        ("journal_query",          {"fullName": "Document.Smoke"}),
+        ("register_query",         {"fullName": "AccumulationRegister.Smoke"}),
+        ("register_write",         {"fullName": "AccumulationRegister.Smoke",
+                                    "recordType": "Receive",
+                                    "period": "2026-01-01T00:00:00"}),
+        ("predefined_values_list", {"fullName": "Catalog.Smoke"}),
+        ("predefined_values_set",  {"fullName": "Catalog.Smoke",
+                                    "predefined": [{"name": "Demo"}]}),
+    ]
+    for idx, (tool_name, tool_args) in enumerate(new_tool_probes, start=700):
+        send(proc, {
+            "jsonrpc": "2.0", "id": idx, "method": "tools/call",
+            "params": {"name": tool_name, "arguments": tool_args},
+        })
+        nt_resp = recv(proc, timeout_s=5.0)
+        nt_env = nt_resp.get("result")
+        if not isinstance(nt_env, dict):
+            failures.append(f"{tool_name}: no result envelope: {nt_resp}")
+            continue
+        if not nt_env.get("isError"):
+            # In --no-config mode every new tool must return isError. With
+            # a real config some tools might succeed (e.g. role_list with
+            # zero roles) — accept that too. Only flag when --no-config
+            # mode produces a success envelope (means RequireConfig was
+            # skipped, which would be a regression).
+            if protocol_only:
+                failures.append(
+                    f"{tool_name}: expected isError in --no-config mode, "
+                    f"got: {nt_env}")
 
     proc.stdin.close()
     proc.wait(timeout=3)

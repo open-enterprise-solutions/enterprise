@@ -22,6 +22,21 @@
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/migration/basXmlReader.hpp"
 #include "backend/migration/basCfReader.hpp"
+#include "backend/metaCollection/metaRoleObject.h"
+#include "backend/metaCollection/partial/commonObject.h"
+#include "backend/metaCollection/partial/document.h"
+#include "backend/metaCollection/partial/informationRegister.h"
+#include "backend/metaCollection/partial/accumulationRegister.h"
+#include "backend/metaCollection/partial/accumulationRegisterEnum.h"
+#include "backend/metaCollection/partial/enumeration.h"
+#include "backend/metaCollection/enumeration/metaEnumObject.h"
+#include "backend/metaCollection/attribute/metaAttributeObject.h"
+#include "backend/databaseLayer/databaseLayer.h"
+#include "backend/databaseLayer/preparedStatement.h"
+#include "backend/databaseLayer/databaseResultSet.h"
+#include "backend/session/session.h"
+
+#include <wx/datetime.h>
 
 #include "3rdparty/nlohmann/json.hpp"
 #include "3rdparty/cpp-httplib/httplib.h"
@@ -2075,6 +2090,622 @@ nlohmann::json ToolImportBasCf(const nlohmann::json& args)
 }
 
 // =========================================================================
+// Role / ACL / Journal / Register / Predefined tools (8) — added 2026-05-21.
+//
+// Coverage matrix (discovery findings):
+//   role_list              : REAL    — ibValueMetaObjectRole exists (MD_ROLE)
+//   role_acl_read          : STUB    — Role has no permissions data model yet
+//   role_acl_set           : STUB    — same
+//   journal_query          : PARTIAL — Document mode REAL via SQL; Journal mode
+//                                       returns OES_E_KIND_NOT_SUPPORTED
+//                                       (no ibValueMetaObjectJournal class)
+//   register_query         : REAL    — records mode via ses_query prepared stmt
+//                                       (balance/turnover deferred — manager
+//                                       paths are session-scoped and bind to
+//                                       value-model tables, not raw JSON)
+//   register_write         : STUB    — write path goes through CreateRecordSet
+//                                       which is not invokable from the MCP
+//                                       boundary; agent should write a posting
+//                                       module via write_module instead
+//   predefined_values_list : REAL    — Catalog/ChartOfChar via
+//                                       GetPredefinedValueArray; Enumeration
+//                                       via ibValueMetaObjectEnum children
+//   predefined_values_set  : STUB    — append/set/delete API exists on the
+//                                       parent class but routing it through
+//                                       the metaBridge undo lambda needs an
+//                                       Edit-policy extension that hasn't
+//                                       landed yet; STUB unlocks the surface.
+// =========================================================================
+
+namespace {
+
+// MCP: structured error helper with errorCode set. Callers pass a stable
+// OES_E_* code plus a human-readable reason; output schema for these tools
+// accepts the same shape across success/error so the agent never branches
+// on "maybe missing" structuredContent.
+nlohmann::json StructuredErrorCode(const std::string& code, const std::string& reason)
+{
+	nlohmann::json env = TextResult(reason, true);
+	nlohmann::json sc = nlohmann::json::object();
+	sc["errorCode"] = code;
+	sc["message"]   = reason;
+	env["structuredContent"] = std::move(sc);
+	return env;
+}
+
+// MCP: split "<Kind>.<Name>" head — separate kind label from the bare
+// object name so we can look up the live ibValueMetaObject by both the
+// CLSID filter (kind) and name match.
+std::pair<std::string, std::string> SplitKindAndName(const std::string& fullName)
+{
+	auto dot = fullName.find('.');
+	if (dot == std::string::npos) return { fullName, std::string() };
+	return { fullName.substr(0, dot), fullName.substr(dot + 1) };
+}
+
+} // namespace
+
+// =========================================================================
+// Tool: role_list
+// =========================================================================
+nlohmann::json ToolRoleList(const nlohmann::json& /*args*/)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+
+	ibMetaDataConfigurationBase* mc = activeMetaData;
+	if (mc == nullptr) {
+		return StructuredErrorCode("OES_E_NO_CONFIG", "role_list: no configuration");
+	}
+	ibValueMetaObject* root = mc->GetCommonMetaObject();
+	if (root == nullptr) {
+		return StructuredErrorCode("OES_E_NO_CONFIG", "role_list: configuration has no root");
+	}
+
+	nlohmann::json roles = nlohmann::json::array();
+	const std::vector<ibValueMetaObject*> all = root->GetAnyArrayObject<>();
+	for (const ibValueMetaObject* obj : all) {
+		if (obj == nullptr) continue;
+		// Filter by CLSID — Role is the only kind we surface here.
+		if (obj->GetClassType() != g_metaRoleCLSID) continue;
+		nlohmann::json item;
+		item["fullName"] = std::string("Role.") + std::string(obj->GetName().utf8_str());
+		item["name"]     = std::string(obj->GetName().utf8_str());
+		item["synonym"]  = std::string(obj->GetSynonym().utf8_str());
+		item["comment"]  = std::string(obj->GetComment().utf8_str());
+		roles.push_back(std::move(item));
+	}
+
+	nlohmann::json structured;
+	structured["count"] = roles.size();
+	structured["roles"] = std::move(roles);
+
+	const std::string textBody = structured.dump(2);
+	nlohmann::json env = TextResult(textBody, false);
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+// =========================================================================
+// Tool: role_acl_read — DEFERRED
+// =========================================================================
+nlohmann::json ToolRoleAclRead(const nlohmann::json& args)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+	const std::string fullName = ArgString(args, "fullName");
+	if (fullName.empty()) {
+		return StructuredErrorCode("OES_E_INVALID_INPUT",
+			"role_acl_read: 'fullName' is required (e.g. 'Role.Administrator')");
+	}
+	ibValueMetaObject* node = ResolveByPath(fullName);
+	if (node == nullptr) {
+		return StructuredErrorCode("OES_E_NOT_FOUND",
+			"role_acl_read: role not found: " + fullName);
+	}
+	if (node->GetClassType() != g_metaRoleCLSID) {
+		return StructuredErrorCode("OES_E_NOT_A_ROLE",
+			"role_acl_read: object is not a Role: " + fullName);
+	}
+	// Real impl is blocked on the Role permissions data model — today the
+	// platform's access-rights are stored per data-class (Catalog/Document
+	// /Register own m_roleRead/m_roleWrite/m_roleDelete pointers to a Role
+	// instance) rather than on the Role itself. Surfacing the inverse view
+	// requires a global walk + role-pointer-equality probe that bypasses
+	// the metadata Save/Load contract; we defer until t2-001-roles ships.
+	return StructuredErrorCode("OES_E_NOT_IMPLEMENTED",
+		"role_acl_read: Role permissions data model is not yet implemented in "
+		"OES backend. Role objects exist as tree nodes but carry no per-"
+		"subject permission matrix. Deferred until t2-001-roles ships.");
+}
+
+// =========================================================================
+// Tool: role_acl_set — DEFERRED
+// =========================================================================
+nlohmann::json ToolRoleAclSet(const nlohmann::json& args)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+	if (auto lockFail = RequireLockStillHeld("role_acl_set"); lockFail) return *lockFail;
+	const std::string fullName = ArgString(args, "fullName");
+	if (fullName.empty()) {
+		return StructuredErrorCode("OES_E_INVALID_INPUT",
+			"role_acl_set: 'fullName' is required");
+	}
+	// Same architectural block as role_acl_read; the write path needs a
+	// data model to write into.
+	return StructuredErrorCode("OES_E_NOT_IMPLEMENTED",
+		"role_acl_set: Role permissions data model is not yet implemented. "
+		"Deferred until t2-001-roles ships.");
+}
+
+// =========================================================================
+// Tool: journal_query — Document-mode REAL, Journal-mode DEFERRED
+// =========================================================================
+nlohmann::json ToolJournalQuery(const nlohmann::json& args)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+
+	const std::string fullName = ArgString(args, "fullName");
+	if (fullName.empty()) {
+		return StructuredErrorCode("OES_E_INVALID_INPUT",
+			"journal_query: 'fullName' is required (e.g. 'Document.SalesOrder')");
+	}
+
+	auto [kindHead, /*objName*/objNameUnused] = SplitKindAndName(fullName);
+	(void)objNameUnused;
+	if (kindHead == "Journal" || kindHead == "DocumentJournal") {
+		// No ibValueMetaObjectJournal class exists in backend yet (the BAS
+		// migration table flags DocumentJournal as Deferred). Surface this
+		// up-front so the agent doesn't probe further.
+		return StructuredErrorCode("OES_E_KIND_NOT_SUPPORTED",
+			"journal_query: Journal/DocumentJournal metadata kind is not "
+			"implemented in OES backend yet. Use Document.<Name> instead "
+			"to query a single document's rows. Deferred via BAS mapping "
+			"table.");
+	}
+	if (kindHead != "Document") {
+		return StructuredErrorCode("OES_E_KIND_NOT_SUPPORTED",
+			"journal_query: only 'Document.<Name>' is supported today "
+			"(got '" + kindHead + "')");
+	}
+
+	ibValueMetaObject* node = ResolveByPath(fullName);
+	if (node == nullptr) {
+		return StructuredErrorCode("OES_E_NOT_FOUND",
+			"journal_query: document not found: " + fullName);
+	}
+	auto* doc = dynamic_cast<ibValueMetaObjectDocument*>(node);
+	if (doc == nullptr) {
+		return StructuredErrorCode("OES_E_NOT_A_DOCUMENT",
+			"journal_query: resolved object is not a Document: " + fullName);
+	}
+
+	// Filters (all optional)
+	wxDateTime dateFromVal;
+	wxDateTime dateToVal;
+	bool haveFrom = false;
+	bool haveTo   = false;
+	bool havePosted = false;
+	bool postedFilter = false;
+	int  limit  = 100;
+	int  offset = 0;
+
+	if (args.is_object()) {
+		if (args.contains("filters") && args["filters"].is_object()) {
+			const auto& f = args["filters"];
+			if (f.contains("dateFrom") && f["dateFrom"].is_string()) {
+				const wxString s = wxString::FromUTF8(f["dateFrom"].get<std::string>().c_str());
+				if (dateFromVal.ParseISOCombined(s) || dateFromVal.ParseISODate(s)) {
+					haveFrom = true;
+				}
+			}
+			if (f.contains("dateTo") && f["dateTo"].is_string()) {
+				const wxString s = wxString::FromUTF8(f["dateTo"].get<std::string>().c_str());
+				if (dateToVal.ParseISOCombined(s) || dateToVal.ParseISODate(s)) {
+					haveTo = true;
+				}
+			}
+			if (f.contains("posted") && f["posted"].is_boolean()) {
+				havePosted   = true;
+				postedFilter = f["posted"].get<bool>();
+			}
+		}
+		if (args.contains("limit") && args["limit"].is_number_integer()) {
+			limit = args["limit"].get<int>();
+			if (limit < 1)    limit = 1;
+			if (limit > 1000) limit = 1000;
+		}
+		if (args.contains("offset") && args["offset"].is_number_integer()) {
+			offset = args["offset"].get<int>();
+			if (offset < 0) offset = 0;
+		}
+	}
+
+	// Build prepared statement. We use the predefined Date/Posted attributes
+	// the Document base class exposes; their composite-column names are
+	// resolved by GetCompositeSQLFieldName so the same query works across
+	// every database driver.
+	const ibValueMetaObjectAttributeBase* attrDate    = doc->GetDocumentDate();
+	const ibValueMetaObjectAttributeBase* attrPosted  = doc->GetDocumentPosted();
+
+	wxString query = wxT("SELECT * FROM %s");
+	bool firstWhere = true;
+	if (haveFrom && attrDate) {
+		query += firstWhere ? wxT(" WHERE ") : wxT(" AND ");
+		query += ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attrDate, wxT(">="));
+		firstWhere = false;
+	}
+	if (haveTo && attrDate) {
+		query += firstWhere ? wxT(" WHERE ") : wxT(" AND ");
+		query += ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attrDate, wxT("<="));
+		firstWhere = false;
+	}
+	if (havePosted && attrPosted) {
+		query += firstWhere ? wxT(" WHERE ") : wxT(" AND ");
+		query += ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attrPosted);
+		firstWhere = false;
+	}
+
+	if (ses_query == nullptr || !ses_query->IsOpen()) {
+		return StructuredErrorCode("OES_E_NO_SESSION",
+			"journal_query: session database is not open — start oes-mcp "
+			"with a real configuration directory");
+	}
+
+	ibPreparedStatement* stmt = nullptr;
+	try {
+		stmt = ses_query->PrepareStatement(query, doc->GetTableNameDB());
+	} catch (const ibBackendException& err) {
+		return StructuredErrorCode("OES_E_QUERY_FAILED",
+			std::string("journal_query: PrepareStatement failed: ")
+			+ std::string(err.GetErrorDescription().utf8_str()));
+	}
+	if (stmt == nullptr) {
+		return StructuredErrorCode("OES_E_QUERY_FAILED",
+			"journal_query: PrepareStatement returned null");
+	}
+
+	int pos = 1;
+	if (haveFrom && attrDate) {
+		ibValueMetaObjectAttributeBase::SetValueAttribute(attrDate, dateFromVal, stmt, pos);
+	}
+	if (haveTo && attrDate) {
+		ibValueMetaObjectAttributeBase::SetValueAttribute(attrDate, dateToVal, stmt, pos);
+	}
+	if (havePosted && attrPosted) {
+		ibValueMetaObjectAttributeBase::SetValueAttribute(attrPosted, postedFilter, stmt, pos);
+	}
+
+	nlohmann::json rows = nlohmann::json::array();
+	int totalSeen = 0;
+	try {
+		ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
+		if (rs != nullptr) {
+			while (rs->Next()) {
+				++totalSeen;
+				if (totalSeen <= offset) continue;
+				if (static_cast<int>(rows.size()) >= limit) continue;
+				nlohmann::json row = nlohmann::json::object();
+				for (const auto* attr : doc->GetGenericAttributeArrayObject()) {
+					if (attr == nullptr) continue;
+					ibValue cell;
+					if (ibValueMetaObjectAttributeBase::GetValueAttribute(attr, cell, rs)) {
+						// Stringify — keeps the JSON shape stable across
+						// every attribute type without re-implementing
+						// ibValue → JSON.
+						row[std::string(attr->GetName().utf8_str())] =
+							std::string(cell.GetString().utf8_str());
+					}
+				}
+				rows.push_back(std::move(row));
+			}
+			ses_query->CloseResultSet(rs);
+		}
+		ses_query->CloseStatement(stmt);
+	} catch (const ibBackendException& err) {
+		return StructuredErrorCode("OES_E_QUERY_FAILED",
+			std::string("journal_query: RunQueryWithResults failed: ")
+			+ std::string(err.GetErrorDescription().utf8_str()));
+	}
+
+	nlohmann::json structured;
+	structured["fullName"] = fullName;
+	structured["count"]    = rows.size();
+	structured["total"]    = totalSeen;
+	structured["limit"]    = limit;
+	structured["offset"]   = offset;
+	structured["rows"]     = std::move(rows);
+
+	const std::string textBody = structured.dump(2);
+	nlohmann::json env = TextResult(textBody, false);
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+// =========================================================================
+// Tool: register_query — records-mode REAL; balance/turnover DEFERRED
+// =========================================================================
+nlohmann::json ToolRegisterQuery(const nlohmann::json& args)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+
+	const std::string fullName = ArgString(args, "fullName");
+	if (fullName.empty()) {
+		return StructuredErrorCode("OES_E_INVALID_INPUT",
+			"register_query: 'fullName' is required "
+			"(e.g. 'InformationRegister.PriceList')");
+	}
+	std::string mode = ArgString(args, "mode");
+	if (mode.empty()) mode = "records";
+
+	if (mode != "records") {
+		// balance/turnover requires the manager's aggregation pipeline which
+		// builds tables seeded with per-register CLSIDs and a live
+		// ibValueModelTable target; not invokable from the MCP boundary
+		// today. Returning a stable code lets agents choose between waiting
+		// for impl or building the aggregate in script via write_module.
+		return StructuredErrorCode("OES_E_NOT_SUPPORTED_FOR_KIND",
+			"register_query: mode='" + mode + "' is deferred. Only "
+			"mode='records' is supported today; use a CES/VES query module "
+			"for balance / turnover until the aggregation API lands.");
+	}
+
+	ibValueMetaObject* node = ResolveByPath(fullName);
+	if (node == nullptr) {
+		return StructuredErrorCode("OES_E_NOT_FOUND",
+			"register_query: register not found: " + fullName);
+	}
+	auto* reg = dynamic_cast<ibValueMetaObjectRegisterData*>(node);
+	if (reg == nullptr) {
+		return StructuredErrorCode("OES_E_NOT_A_REGISTER",
+			"register_query: resolved object is not a Register: " + fullName);
+	}
+
+	int limit = 100;
+	if (args.is_object() && args.contains("limit") && args["limit"].is_number_integer()) {
+		limit = args["limit"].get<int>();
+		if (limit < 1)    limit = 1;
+		if (limit > 1000) limit = 1000;
+	}
+
+	// Map filter keys (string names from the caller) to dimension attrs.
+	std::map<const ibValueMetaObjectAttributeBase*, ibValue> dimFilter;
+	if (args.is_object() && args.contains("filters") && args["filters"].is_object()) {
+		const auto& f = args["filters"];
+		for (const auto* dim : reg->GetDimentionArrayObject()) {
+			if (dim == nullptr) continue;
+			const std::string dname = std::string(dim->GetName().utf8_str());
+			if (!f.contains(dname)) continue;
+			const auto& jv = f[dname];
+			ibValue iv;
+			if (jv.is_string()) {
+				iv = ibValue(wxString::FromUTF8(jv.get<std::string>().c_str()));
+			} else if (jv.is_number_integer()) {
+				iv = ibValue(static_cast<int>(jv.get<long long>()));
+			} else if (jv.is_boolean()) {
+				iv = ibValue(jv.get<bool>());
+			} else {
+				continue;
+			}
+			dimFilter.emplace(dim, std::move(iv));
+		}
+	}
+
+	if (ses_query == nullptr || !ses_query->IsOpen()) {
+		return StructuredErrorCode("OES_E_NO_SESSION",
+			"register_query: session database is not open");
+	}
+
+	wxString query = wxT("SELECT * FROM %s");
+	bool firstWhere = true;
+	for (const auto& kv : dimFilter) {
+		query += firstWhere ? wxT(" WHERE ") : wxT(" AND ");
+		query += ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(kv.first);
+		firstWhere = false;
+	}
+
+	ibPreparedStatement* stmt = nullptr;
+	try {
+		stmt = ses_query->PrepareStatement(query, reg->GetTableNameDB());
+	} catch (const ibBackendException& err) {
+		return StructuredErrorCode("OES_E_QUERY_FAILED",
+			std::string("register_query: PrepareStatement failed: ")
+			+ std::string(err.GetErrorDescription().utf8_str()));
+	}
+	if (stmt == nullptr) {
+		return StructuredErrorCode("OES_E_QUERY_FAILED",
+			"register_query: PrepareStatement returned null");
+	}
+
+	int pos = 1;
+	for (const auto& kv : dimFilter) {
+		ibValueMetaObjectAttributeBase::SetValueAttribute(kv.first, kv.second, stmt, pos);
+	}
+
+	nlohmann::json rows = nlohmann::json::array();
+	int totalSeen = 0;
+	try {
+		ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
+		if (rs != nullptr) {
+			while (rs->Next()) {
+				++totalSeen;
+				if (static_cast<int>(rows.size()) >= limit) continue;
+				nlohmann::json row = nlohmann::json::object();
+				for (const auto* attr : reg->GetGenericAttributeArrayObject()) {
+					if (attr == nullptr) continue;
+					ibValue cell;
+					if (ibValueMetaObjectAttributeBase::GetValueAttribute(attr, cell, rs)) {
+						row[std::string(attr->GetName().utf8_str())] =
+							std::string(cell.GetString().utf8_str());
+					}
+				}
+				rows.push_back(std::move(row));
+			}
+			ses_query->CloseResultSet(rs);
+		}
+		ses_query->CloseStatement(stmt);
+	} catch (const ibBackendException& err) {
+		return StructuredErrorCode("OES_E_QUERY_FAILED",
+			std::string("register_query: RunQueryWithResults failed: ")
+			+ std::string(err.GetErrorDescription().utf8_str()));
+	}
+
+	nlohmann::json structured;
+	structured["fullName"] = fullName;
+	structured["mode"]     = mode;
+	structured["count"]    = rows.size();
+	structured["total"]    = totalSeen;
+	structured["rows"]     = std::move(rows);
+
+	const std::string textBody = structured.dump(2);
+	nlohmann::json env = TextResult(textBody, false);
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+// =========================================================================
+// Tool: register_write — DEFERRED
+// =========================================================================
+nlohmann::json ToolRegisterWrite(const nlohmann::json& args)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+	if (auto lockFail = RequireLockStillHeld("register_write"); lockFail) return *lockFail;
+	const std::string fullName = ArgString(args, "fullName");
+	if (fullName.empty()) {
+		return StructuredErrorCode("OES_E_INVALID_INPUT",
+			"register_write: 'fullName' is required");
+	}
+	// Validate target shape so the deferral message is contextual.
+	ibValueMetaObject* node = ResolveByPath(fullName);
+	if (node == nullptr) {
+		return StructuredErrorCode("OES_E_NOT_FOUND",
+			"register_write: register not found: " + fullName);
+	}
+	if (dynamic_cast<ibValueMetaObjectAccumulationRegister*>(node) == nullptr) {
+		return StructuredErrorCode("OES_E_KIND_NOT_SUPPORTED",
+			"register_write: only AccumulationRegister is in scope today "
+			"(got '" + fullName + "')");
+	}
+	// Real impl would go through the per-register RecordSet manager
+	// (ibValueManagerDataObjectAccumulationRegister) — that path expects a
+	// live posting transaction associated with a Document recorder, which
+	// the MCP boundary doesn't have. Agents should write a posting
+	// procedure via `write_module` against the Document's module instead;
+	// that procedure can then call the register's API in CES/VES.
+	return StructuredErrorCode("OES_E_NOT_IMPLEMENTED",
+		"register_write: direct register writes from MCP are deferred. "
+		"AccumulationRegister writes are bound to a Document.Posting() "
+		"transaction context which the MCP server does not have. Use "
+		"`write_module` to author a CES/VES posting procedure on the "
+		"recorder Document instead.");
+}
+
+// =========================================================================
+// Tool: predefined_values_list — REAL for Catalog/ChartOfChar/Enumeration
+// =========================================================================
+nlohmann::json ToolPredefinedValuesList(const nlohmann::json& args)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+
+	const std::string fullName = ArgString(args, "fullName");
+	if (fullName.empty()) {
+		return StructuredErrorCode("OES_E_INVALID_INPUT",
+			"predefined_values_list: 'fullName' is required "
+			"(e.g. 'Catalog.X' or 'Enumeration.Y')");
+	}
+	ibValueMetaObject* node = ResolveByPath(fullName);
+	if (node == nullptr) {
+		return StructuredErrorCode("OES_E_NOT_FOUND",
+			"predefined_values_list: object not found: " + fullName);
+	}
+
+	nlohmann::json predefined = nlohmann::json::array();
+	std::string kind;
+
+	// Catalog / ChartOfCharacteristicTypes — values held in
+	// m_predefinedObjectVector on the hierarchy-mutable-ref base.
+	if (auto* hier = dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(node)) {
+		kind = "Hierarchy";
+		for (const auto& pv : hier->GetPredefinedValueArray()) {
+			if (pv == nullptr) continue;
+			nlohmann::json item;
+			item["name"]        = std::string(pv->GetPredefinedName().utf8_str());
+			item["code"]        = std::string(pv->GetPredefinedCode().utf8_str());
+			item["description"] = std::string(pv->GetPredefinedDescription().utf8_str());
+			item["isFolder"]    = pv->IsPredefinedFolder();
+			item["parent"]      = std::string(pv->GetPredefinedParentName().utf8_str());
+			predefined.push_back(std::move(item));
+		}
+	}
+	// Enumeration — values are ibValueMetaObjectEnum children in the tree.
+	else if (dynamic_cast<ibValueMetaObjectEnumeration*>(node) != nullptr) {
+		kind = "Enumeration";
+		const std::vector<ibValueMetaObject*> kids = node->GetAnyArrayObject<>();
+		for (const ibValueMetaObject* child : kids) {
+			if (child == nullptr) continue;
+			if (child->GetClassType() != g_metaEnumCLSID) continue;
+			nlohmann::json item;
+			item["name"]    = std::string(child->GetName().utf8_str());
+			item["synonym"] = std::string(child->GetSynonym().utf8_str());
+			item["comment"] = std::string(child->GetComment().utf8_str());
+			predefined.push_back(std::move(item));
+		}
+	}
+	else {
+		return StructuredErrorCode("OES_E_KIND_NOT_SUPPORTED",
+			"predefined_values_list: object does not carry predefined "
+			"values (supported: Catalog, ChartOfCharacteristicTypes, "
+			"Enumeration). Got: " + fullName);
+	}
+
+	nlohmann::json structured;
+	structured["fullName"]   = fullName;
+	structured["kind"]       = kind;
+	structured["count"]      = predefined.size();
+	structured["predefined"] = std::move(predefined);
+
+	const std::string textBody = structured.dump(2);
+	nlohmann::json env = TextResult(textBody, false);
+	env["structuredContent"] = std::move(structured);
+	return env;
+}
+
+// =========================================================================
+// Tool: predefined_values_set — DEFERRED
+// =========================================================================
+nlohmann::json ToolPredefinedValuesSet(const nlohmann::json& args)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+	if (auto lockFail = RequireLockStillHeld("predefined_values_set"); lockFail) return *lockFail;
+	const std::string fullName = ArgString(args, "fullName");
+	if (fullName.empty()) {
+		return StructuredErrorCode("OES_E_INVALID_INPUT",
+			"predefined_values_set: 'fullName' is required");
+	}
+	// Validate target shape so the deferral message is contextual.
+	ibValueMetaObject* node = ResolveByPath(fullName);
+	if (node == nullptr) {
+		return StructuredErrorCode("OES_E_NOT_FOUND",
+			"predefined_values_set: object not found: " + fullName);
+	}
+	const bool isHier = dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(node) != nullptr;
+	const bool isEnum = dynamic_cast<ibValueMetaObjectEnumeration*>(node) != nullptr;
+	if (!isHier && !isEnum) {
+		return StructuredErrorCode("OES_E_KIND_NOT_SUPPORTED",
+			"predefined_values_set: object does not carry predefined values "
+			"(supported: Catalog, ChartOfCharacteristicTypes, Enumeration)");
+	}
+	// Real impl needs an Edit-policy extension that wires the
+	// AppendPredefinedValue / SetPredefinedValue / DeletePredefinedValue
+	// trio (or the Enumeration child-add path) into a metaBridge undo
+	// lambda. The data model exists; the metaBridge routing doesn't.
+	return StructuredErrorCode("OES_E_NOT_IMPLEMENTED",
+		"predefined_values_set: predefined-value mutation routing through "
+		"metaBridge is deferred. Backend has AppendPredefinedValue / "
+		"SetPredefinedValue / DeletePredefinedValue, but the policy-gated "
+		"undo lambda wiring hasn't landed. Use Designer's Predefined "
+		"Values dialog for now.");
+}
+
+// =========================================================================
 // Registry — built once on first AllTools() call.
 // =========================================================================
 const std::vector<ToolEntry>& BuildRegistry()
@@ -2913,6 +3544,336 @@ const std::vector<ToolEntry>& BuildRegistry()
 			  std::move(outCf)
 			},
 			&ToolImportBasCf
+		});
+	}
+
+	// =====================================================================
+	// Role / ACL / Journal / Register / Predefined tools — added 2026-05-21.
+	// Five tools register an outputSchema (the read-only ones). Three
+	// mutators (role_acl_set, register_write, predefined_values_set) are
+	// deferred stubs that still register so the surface is complete.
+	// =====================================================================
+	{
+		// role_list — read-only enumeration. Output schema is small: one
+		// fullName/name/synonym/comment record per Role.
+		nlohmann::json roleItem;
+		roleItem["type"]       = "object";
+		roleItem["properties"] = nlohmann::json::object();
+		roleItem["properties"]["fullName"] = nlohmann::json{ {"type","string"} };
+		roleItem["properties"]["name"]     = nlohmann::json{ {"type","string"} };
+		roleItem["properties"]["synonym"]  = nlohmann::json{ {"type","string"} };
+		roleItem["properties"]["comment"]  = nlohmann::json{ {"type","string"} };
+		roleItem["required"]   = nlohmann::json::array({ "fullName", "name" });
+
+		nlohmann::json outRL;
+		outRL["type"]       = "object";
+		outRL["properties"] = nlohmann::json::object();
+		outRL["properties"]["count"] = nlohmann::json{ {"type","integer"} };
+		outRL["properties"]["roles"] = nlohmann::json{ {"type","array"}, {"items", roleItem} };
+		outRL["required"]   = nlohmann::json::array({ "count", "roles" });
+
+		table.push_back({
+			{ "role_list",
+			  "Enumerate every Role metadata object in the loaded "
+			  "configuration. Returns structuredContent.roles[] with "
+			  "fullName/name/synonym/comment. Role permissions matrix "
+			  "(subjects -> rights) is exposed by role_acl_read (currently "
+			  "deferred — Role objects exist as tree nodes but carry no "
+			  "permissions data model yet).",
+			  schemaObj({}, {}),
+			  ann(/*readOnly*/true, /*destructive*/false,
+			      /*idempotent*/true, /*openWorld*/false),
+			  std::move(outRL)
+			},
+			&ToolRoleList
+		});
+	}
+	{
+		// role_acl_read — DEFERRED but advertises outputSchema so the agent
+		// can branch on errorCode without re-parsing the text payload.
+		nlohmann::json permItem;
+		permItem["type"]       = "object";
+		permItem["properties"] = nlohmann::json::object();
+		permItem["properties"]["object"]  = nlohmann::json{ {"type","string"} };
+		permItem["properties"]["right"]   = nlohmann::json{ {"type","string"} };
+		permItem["properties"]["granted"] = nlohmann::json{ {"type","boolean"} };
+		permItem["properties"]["rls"]     = nlohmann::json{ {"type","string"} };
+
+		nlohmann::json outRR;
+		outRR["type"]       = "object";
+		outRR["properties"] = nlohmann::json::object();
+		outRR["properties"]["role"]        = nlohmann::json{ {"type","string"} };
+		outRR["properties"]["permissions"] = nlohmann::json{ {"type","array"}, {"items", permItem} };
+		outRR["properties"]["errorCode"]   = nlohmann::json{ {"type","string"} };
+		outRR["properties"]["message"]     = nlohmann::json{ {"type","string"} };
+
+		table.push_back({
+			{ "role_acl_read",
+			  "Read the access-rights matrix for a Role (subject objects -> "
+			  "rights -> granted/RLS). STATUS: DEFERRED — Role objects "
+			  "currently carry no permission matrix in the OES metadata "
+			  "model; access rights are stored per data-class "
+			  "(Catalog/Document/Register own m_roleRead/m_roleWrite/"
+			  "m_roleDelete pointers). Calls return isError with "
+			  "structuredContent.errorCode='OES_E_NOT_IMPLEMENTED' until "
+			  "t2-001-roles ships.",
+			  schemaObj({
+			    { "fullName", str("Role full path, e.g. 'Role.Administrator'") },
+			  }, { "fullName" }),
+			  ann(/*readOnly*/true, /*destructive*/false,
+			      /*idempotent*/true, /*openWorld*/false),
+			  std::move(outRR)
+			},
+			&ToolRoleAclRead
+		});
+	}
+	{
+		// role_acl_set — DEFERRED, mutation half of role_acl_read.
+		nlohmann::json permItem;
+		permItem["type"]       = "object";
+		permItem["properties"] = nlohmann::json::object();
+		permItem["properties"]["object"]  = nlohmann::json{ {"type","string"} };
+		permItem["properties"]["right"]   = nlohmann::json{ {"type","string"} };
+		permItem["properties"]["granted"] = nlohmann::json{ {"type","boolean"} };
+		permItem["properties"]["rls"]     = nlohmann::json{ {"type","string"} };
+
+		nlohmann::json permsIn;
+		permsIn["type"]        = "array";
+		permsIn["items"]       = permItem;
+		permsIn["description"] = "Full replacement permission matrix";
+
+		table.push_back({
+			{ "role_acl_set",
+			  "Replace the access-rights matrix for a Role. STATUS: "
+			  "DEFERRED — same architectural block as role_acl_read; the "
+			  "platform has no per-Role permission data model to write "
+			  "into yet. Returns isError with "
+			  "structuredContent.errorCode='OES_E_NOT_IMPLEMENTED'.",
+			  schemaObj({
+			    { "fullName",    str("Role full path") },
+			    { "permissions", permsIn },
+			  }, { "fullName", "permissions" }),
+			  ann(/*readOnly*/false, /*destructive*/true,
+			      /*idempotent*/true, /*openWorld*/false)
+			},
+			&ToolRoleAclSet
+		});
+	}
+	{
+		// journal_query — Document-mode REAL, Journal-mode DEFERRED.
+		nlohmann::json rowItem;
+		rowItem["type"]                 = "object";
+		rowItem["additionalProperties"] = true;
+		rowItem["description"]          = "Document row — keys mirror the document's attribute names";
+
+		nlohmann::json filtersProp;
+		filtersProp["type"]       = "object";
+		filtersProp["properties"] = nlohmann::json::object();
+		filtersProp["properties"]["dateFrom"] = nlohmann::json{
+			{"type", nlohmann::json::array({"string","null"})},
+			{"description","ISO-8601 date or datetime (inclusive lower bound)"}
+		};
+		filtersProp["properties"]["dateTo"]   = nlohmann::json{
+			{"type", nlohmann::json::array({"string","null"})},
+			{"description","ISO-8601 date or datetime (inclusive upper bound)"}
+		};
+		filtersProp["properties"]["posted"]   = nlohmann::json{
+			{"type", nlohmann::json::array({"boolean","null"})},
+			{"description","Posted flag filter"}
+		};
+		filtersProp["properties"]["type"]     = nlohmann::json{
+			{"type", nlohmann::json::array({"string","null"})},
+			{"description","Document type filter — reserved for future Journal mode"}
+		};
+
+		nlohmann::json outJQ;
+		outJQ["type"]       = "object";
+		outJQ["properties"] = nlohmann::json::object();
+		outJQ["properties"]["fullName"] = nlohmann::json{ {"type","string"} };
+		outJQ["properties"]["count"]    = nlohmann::json{ {"type","integer"} };
+		outJQ["properties"]["total"]    = nlohmann::json{ {"type","integer"} };
+		outJQ["properties"]["limit"]    = nlohmann::json{ {"type","integer"} };
+		outJQ["properties"]["offset"]   = nlohmann::json{ {"type","integer"} };
+		outJQ["properties"]["rows"]     = nlohmann::json{ {"type","array"}, {"items", rowItem} };
+		outJQ["properties"]["errorCode"]= nlohmann::json{ {"type","string"} };
+
+		table.push_back({
+			{ "journal_query",
+			  "Read rows from a Document table with date/posted filters. "
+			  "fullName='Document.<Name>' is REAL today; "
+			  "fullName='Journal.<Name>' / 'DocumentJournal.<Name>' returns "
+			  "structuredContent.errorCode='OES_E_KIND_NOT_SUPPORTED' "
+			  "because OES has no ibValueMetaObjectJournal class yet (BAS "
+			  "migration table flags DocumentJournal as Deferred). All "
+			  "filters use ibPreparedStatement — no SQL injection.",
+			  schemaObj({
+			    { "fullName", str("Document or Journal full name") },
+			    { "filters",  filtersProp },
+			    { "limit",    nlohmann::json{ {"type","integer"}, {"default", 100}, {"description","Max rows to return (1..1000)"} } },
+			    { "offset",   nlohmann::json{ {"type","integer"}, {"default", 0},   {"description","Row offset (>=0)"} } },
+			  }, { "fullName" }),
+			  ann(/*readOnly*/true, /*destructive*/false,
+			      /*idempotent*/true, /*openWorld*/false),
+			  std::move(outJQ)
+			},
+			&ToolJournalQuery
+		});
+	}
+	{
+		// register_query — records-mode REAL.
+		nlohmann::json rowItem;
+		rowItem["type"]                 = "object";
+		rowItem["additionalProperties"] = true;
+		rowItem["description"]          = "Register row — keys mirror dimension + resource names";
+
+		nlohmann::json filtersProp;
+		filtersProp["type"]                 = "object";
+		filtersProp["additionalProperties"] = true;
+		filtersProp["description"]          = "Dimension filter values keyed by dimension name";
+
+		nlohmann::json modeIn;
+		modeIn["type"]        = "string";
+		modeIn["enum"]        = nlohmann::json::array({ "records", "balance", "turnover" });
+		modeIn["default"]     = "records";
+		modeIn["description"] = "Query mode — 'records' is REAL today; "
+			"'balance'/'turnover' return OES_E_NOT_SUPPORTED_FOR_KIND";
+
+		nlohmann::json outRQ;
+		outRQ["type"]       = "object";
+		outRQ["properties"] = nlohmann::json::object();
+		outRQ["properties"]["fullName"] = nlohmann::json{ {"type","string"} };
+		outRQ["properties"]["mode"]     = nlohmann::json{ {"type","string"} };
+		outRQ["properties"]["count"]    = nlohmann::json{ {"type","integer"} };
+		outRQ["properties"]["total"]    = nlohmann::json{ {"type","integer"} };
+		outRQ["properties"]["rows"]     = nlohmann::json{ {"type","array"}, {"items", rowItem} };
+		outRQ["properties"]["errorCode"]= nlohmann::json{ {"type","string"} };
+
+		table.push_back({
+			{ "register_query",
+			  "Query an InformationRegister or AccumulationRegister. "
+			  "mode='records' returns raw rows filtered by dimensions "
+			  "(REAL via ibPreparedStatement). mode='balance'/'turnover' "
+			  "are DEFERRED — the manager aggregation pipeline binds to "
+			  "ibValueModelTable and isn't reachable from the MCP "
+			  "boundary; agents should author CES/VES query modules "
+			  "instead until the standalone aggregation API lands.",
+			  schemaObj({
+			    { "fullName", str("'InformationRegister.<Name>' or 'AccumulationRegister.<Name>'") },
+			    { "mode",     modeIn },
+			    { "filters",  filtersProp },
+			    { "period",   nlohmann::json{ {"type", nlohmann::json::array({"string","null"})}, {"description","ISO-8601 period for periodic InformationRegister (reserved)"} } },
+			    { "limit",    nlohmann::json{ {"type","integer"}, {"default", 100}, {"description","Max rows (1..1000)"} } },
+			  }, { "fullName" }),
+			  ann(/*readOnly*/true, /*destructive*/false,
+			      /*idempotent*/true, /*openWorld*/false),
+			  std::move(outRQ)
+			},
+			&ToolRegisterQuery
+		});
+	}
+	table.push_back({
+		{ "register_write",
+		  "Write a single record into an AccumulationRegister "
+		  "(programmatic fixture / migration path). STATUS: DEFERRED — "
+		  "AccumulationRegister writes are bound to a Document.Posting() "
+		  "transaction which the MCP boundary doesn't carry. Returns "
+		  "isError with structuredContent.errorCode='OES_E_NOT_IMPLEMENTED' "
+		  "and guides the agent to write a posting procedure via "
+		  "write_module on the recorder Document.",
+		  schemaObj({
+		    { "fullName",   str("'AccumulationRegister.<Name>'") },
+		    { "recordType", str("'Receive' or 'Expense'") },
+		    { "period",     str("ISO-8601 period") },
+		    { "document",   str("Optional recorder document reference") },
+		    { "dimensions", obj("Dimension values keyed by name") },
+		    { "resources",  obj("Resource values keyed by name") },
+		  }, { "fullName", "recordType", "period" }),
+		  // destructive=false: the deferred behaviour is additive (insert
+		  // a record); idempotent=false: same payload twice yields two
+		  // rows when implemented. openWorld=false: closed metadata domain.
+		  ann(/*readOnly*/false, /*destructive*/false,
+		      /*idempotent*/false, /*openWorld*/false)
+		},
+		&ToolRegisterWrite
+	});
+	{
+		// predefined_values_list — REAL for Catalog/ChartOfChar/Enumeration.
+		nlohmann::json item;
+		item["type"]       = "object";
+		item["properties"] = nlohmann::json::object();
+		item["properties"]["name"]        = nlohmann::json{ {"type","string"} };
+		item["properties"]["code"]        = nlohmann::json{ {"type","string"} };
+		item["properties"]["description"] = nlohmann::json{ {"type","string"} };
+		item["properties"]["synonym"]     = nlohmann::json{ {"type","string"} };
+		item["properties"]["comment"]     = nlohmann::json{ {"type","string"} };
+		item["properties"]["isFolder"]    = nlohmann::json{ {"type","boolean"} };
+		item["properties"]["parent"]      = nlohmann::json{ {"type","string"} };
+
+		nlohmann::json outPL;
+		outPL["type"]       = "object";
+		outPL["properties"] = nlohmann::json::object();
+		outPL["properties"]["fullName"]   = nlohmann::json{ {"type","string"} };
+		outPL["properties"]["kind"]       = nlohmann::json{ {"type","string"} };
+		outPL["properties"]["count"]      = nlohmann::json{ {"type","integer"} };
+		outPL["properties"]["predefined"] = nlohmann::json{ {"type","array"}, {"items", item} };
+		outPL["required"]   = nlohmann::json::array({ "fullName", "predefined" });
+
+		table.push_back({
+			{ "predefined_values_list",
+			  "List predefined items on a Catalog / "
+			  "ChartOfCharacteristicTypes (returns "
+			  "{name, code, description, isFolder, parent}) or the value "
+			  "elements of an Enumeration (returns {name, synonym, "
+			  "comment}). Other kinds return "
+			  "OES_E_KIND_NOT_SUPPORTED.",
+			  schemaObj({
+			    { "fullName", str("Object full name, e.g. 'Catalog.Roles' or 'Enumeration.OrderState'") },
+			  }, { "fullName" }),
+			  ann(/*readOnly*/true, /*destructive*/false,
+			      /*idempotent*/true, /*openWorld*/false),
+			  std::move(outPL)
+			},
+			&ToolPredefinedValuesList
+		});
+	}
+	{
+		// predefined_values_set — DEFERRED.
+		nlohmann::json item;
+		item["type"]       = "object";
+		item["properties"] = nlohmann::json::object();
+		item["properties"]["name"]        = nlohmann::json{ {"type","string"} };
+		item["properties"]["code"]        = nlohmann::json{ {"type","string"} };
+		item["properties"]["description"] = nlohmann::json{ {"type","string"} };
+		item["properties"]["synonym"]     = nlohmann::json{ {"type","string"} };
+		item["properties"]["isFolder"]    = nlohmann::json{ {"type","boolean"} };
+		item["properties"]["parent"]      = nlohmann::json{ {"type","string"} };
+		item["required"]   = nlohmann::json::array({ "name" });
+
+		nlohmann::json predefinedIn;
+		predefinedIn["type"]        = "array";
+		predefinedIn["items"]       = item;
+		predefinedIn["description"] = "Full replacement predefined list";
+
+		table.push_back({
+			{ "predefined_values_set",
+			  "Replace the predefined-values list on a Catalog / "
+			  "ChartOfCharacteristicTypes / Enumeration. STATUS: DEFERRED "
+			  "— backend has AppendPredefinedValue / SetPredefinedValue "
+			  "/ DeletePredefinedValue but the policy-gated metaBridge "
+			  "undo lambda for predefined-value mutations hasn't landed. "
+			  "Returns isError with "
+			  "structuredContent.errorCode='OES_E_NOT_IMPLEMENTED'.",
+			  schemaObj({
+			    { "fullName",   str("Object full name") },
+			    { "predefined", predefinedIn },
+			  }, { "fullName", "predefined" }),
+			  // destructive=true: when implemented, replaces the entire
+			  // predefined list. idempotent=true: same payload twice =
+			  // same final state.
+			  ann(/*readOnly*/false, /*destructive*/true,
+			      /*idempotent*/true, /*openWorld*/false)
+			},
+			&ToolPredefinedValuesSet
 		});
 	}
 
