@@ -59,6 +59,12 @@ enum {
 	// menu id — toggles the dockable aggregated marker list.
 	wxID_DESIGNER_AI_MARKERS,
 
+	// Template Wizard ("Создать из шаблона..."). Designer-private menu
+	// id — opens the gallery → preview → customize modal that builds a
+	// new configuration from a Pugi-served template. File menu only;
+	// no keyboard shortcut by default (rarely-invoked flagship action).
+	wxID_DESIGNER_TEMPLATE_WIZARD,
+
 	wxID_DESIGNER_END
 };
 // Note: Syntax-helper command ids live in frontend/mainFrame/mainFrame.h

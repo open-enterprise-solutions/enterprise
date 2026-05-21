@@ -9,6 +9,7 @@
 #include "backend/plugin/metaBridge.h"
 
 #include "mainFrame/pluginManagerDialog.h"
+#include "mainFrame/templateWizard.h"
 
 #include <wx/stdpaths.h>
 #include <wx/filename.h>
@@ -85,6 +86,12 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	m_menuFile = new wxMenu();
 
 	m_menuFile->Append(wxID_NEW);
+	// Flagship "голое решение из коробки" — opens the template wizard
+	// (gallery → preview → customize → apply via metaBridge mutations).
+	// Placed before Open so it sits in the user's first natural scan of
+	// the File menu when starting a new project.
+	m_menuFile->Append(wxID_DESIGNER_TEMPLATE_WIZARD,
+	                    _("Новая конфигурация из шаблона…"));
 	m_menuFile->Append(wxID_OPEN);
 
 	m_menuFile->Append(wxID_CLOSE);
@@ -274,6 +281,14 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	         dlg.ShowModal();
 	     },
 	     wxID_FRONTEND_PLUGIN_MANAGER);
+
+	// File → Новая конфигурация из шаблона… — opens the flagship template
+	// wizard. The wizard is a modal wxDialog so the menu handler is a
+	// one-liner static helper; all the gallery/preview/customize/apply
+	// state lives inside the dialog itself.
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) { ibTemplateWizard::Run(this); },
+	     wxID_DESIGNER_TEMPLATE_WIZARD);
 
 	Bind(wxEVT_MENU,
 	     [this](wxCommandEvent&) { ToggleHelpPane(); },
