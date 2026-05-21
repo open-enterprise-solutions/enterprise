@@ -494,6 +494,21 @@ void ibProcUnit::Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDe
 	long lFinish = (long)m_pByteCode->m_listCode.size();
 	long lPrevLine = wxNOT_FOUND;
 
+	struct MethodInlineCache {
+		ibClassID classId = 0;
+		long methodNum = wxNOT_FOUND;
+		long paramCount = wxNOT_FOUND;
+		bool hasRetVal = false;
+		bool valid = false;
+	};
+	struct PropInlineCache {
+		ibClassID classId = 0;
+		long propNum = wxNOT_FOUND;
+		bool valid = false;
+	};
+	std::vector<MethodInlineCache> methodInlineCaches;
+	std::vector<PropInlineCache> propInlineCaches;
+
 	std::vector<ibTryLabel> tryList;
 
 	// Cache once per Execute — interpreter state pointer + session
@@ -745,18 +760,50 @@ threaded_dispatch_fallback:
 			} break;
 			case OPER_SET_A:
 			{//setting attribute
+				const long callIp = lCodeLine;
 				const wxString& strPropName = m_pByteCode->m_listConst[index2].m_sData;
-				const long lPropNum = variable1.FindProp(strPropName);
+				const ibClassID classId = variable1.GetClassType();
+				if (propInlineCaches.empty())
+					propInlineCaches.resize(lFinish);
+				PropInlineCache& cache = propInlineCaches[callIp];
+				long lPropNum = wxNOT_FOUND;
+				if (cache.valid && cache.classId == classId) {
+					lPropNum = cache.propNum;
+				}
+				else {
+					lPropNum = variable1.FindProp(strPropName);
+					if (lPropNum >= 0) {
+						cache.classId = classId;
+						cache.propNum = lPropNum;
+						cache.valid = true;
+					}
+				}
 				if (lPropNum < 0) CheckAndError(variable1, strPropName);
 				if (!variable1.IsPropWritable(lPropNum)) ibBackendCoreException::Error(_("Object field not writable (%s)"), strPropName);
 				variable1.SetPropVal(lPropNum, GetValue(cvariable3));
 			} break;
 			case OPER_GET_A://get attribute
 			{
+				const long callIp = lCodeLine;
 				ibValue* pRetValue = &variable1;
 				ibValue* pVariable2 = &variable2;
 				const wxString& strPropName = m_pByteCode->m_listConst[index3].m_sData;
-				const long lPropNum = variable2.FindProp(strPropName);
+				const ibClassID classId = pVariable2->GetClassType();
+				if (propInlineCaches.empty())
+					propInlineCaches.resize(lFinish);
+				PropInlineCache& cache = propInlineCaches[callIp];
+				long lPropNum = wxNOT_FOUND;
+				if (cache.valid && cache.classId == classId) {
+					lPropNum = cache.propNum;
+				}
+				else {
+					lPropNum = pVariable2->FindProp(strPropName);
+					if (lPropNum >= 0) {
+						cache.classId = classId;
+						cache.propNum = lPropNum;
+						cache.valid = true;
+					}
+				}
 				if (lPropNum < 0) CheckAndError(variable2, strPropName);
 				if (!variable2.IsPropReadable(lPropNum)) ibBackendCoreException::Error(_("Object field not readable (%s)"), strPropName);
 				// Scope-local props (ThisObject / ThisForm / RegisterRecords)
@@ -777,18 +824,37 @@ threaded_dispatch_fallback:
 			}
 			case OPER_CALL_METHOD://method call
 			{
+				const long callIp = lCodeLine;
 				ibValue* pRetValue = &variable1;
 				ibValue* pVariable2 = &variable2;
 
 				const wxString& funcName = m_pByteCode->m_listConst[index3].m_sData;
-				// Resolve method number on every call. Bytecode is a const
-				// template at runtime — no opcode-level cache patching.
-				// (The previous "cache" path stored resolved method # /
-				// object ref into m_param4 on first call; never actually
-				// improved warm-path performance and complicated AOT.)
 				// LINQ pipeline ops (Where / Select / ...) are NOT handled
 				// here — compile-side emits OPER_CALL_LINQ for them.
-				long lMethodNum = pVariable2->FindMethod(funcName);
+				const ibClassID classId = pVariable2->GetClassType();
+				if (methodInlineCaches.empty())
+					methodInlineCaches.resize(lFinish);
+				MethodInlineCache& cache = methodInlineCaches[callIp];
+				long lMethodNum = wxNOT_FOUND;
+				long paramCount = wxNOT_FOUND;
+				bool hasRetVal = false;
+				if (cache.valid && cache.classId == classId) {
+					lMethodNum = cache.methodNum;
+					paramCount = cache.paramCount;
+					hasRetVal = cache.hasRetVal;
+				}
+				else {
+					lMethodNum = pVariable2->FindMethod(funcName);
+					if (lMethodNum >= 0) {
+						paramCount = pVariable2->GetNParams(lMethodNum);
+						hasRetVal = pVariable2->HasRetVal(lMethodNum);
+						cache.classId = classId;
+						cache.methodNum = lMethodNum;
+						cache.paramCount = paramCount;
+						cache.hasRetVal = hasRetVal;
+						cache.valid = true;
+					}
+				}
 
 				if (lMethodNum < 0)
 					CheckAndError(variable2, funcName);
@@ -798,13 +864,10 @@ threaded_dispatch_fallback:
 
 				// too many parameters — per-class methods have a meaningful
 				// compile-time GetNParams.
-				{
-					const long paramCount = pVariable2->GetNParams(lMethodNum);
-					if (paramCount < cRunContext.m_lParamCount)
-						ibBackendCoreException::Error(ERROR_MANY_PARAMS, funcName, funcName);
-					else if (paramCount == wxNOT_FOUND && cRunContext.m_lParamCount == 0)
-						ibBackendCoreException::Error(ERROR_MANY_PARAMS, funcName, funcName);
-				}
+				if (paramCount < cRunContext.m_lParamCount)
+					ibBackendCoreException::Error(ERROR_MANY_PARAMS, funcName, funcName);
+				else if (paramCount == wxNOT_FOUND && cRunContext.m_lParamCount == 0)
+					ibBackendCoreException::Error(ERROR_MANY_PARAMS, funcName, funcName);
 
 				//load parameters
 				for (long i = 0; i < cRunContext.m_lParamCount; i++) {
@@ -830,7 +893,7 @@ threaded_dispatch_fallback:
 					}
 				}
 
-				if (pVariable2->HasRetVal(lMethodNum)) {
+				if (hasRetVal) {
 					pVariable2->CallAsFunc(lMethodNum, *pRetValue, cRunContext.m_pRefLocVars, cRunContext.m_lParamCount);
 				}
 				else {
