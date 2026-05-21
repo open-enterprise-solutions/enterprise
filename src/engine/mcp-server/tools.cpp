@@ -1100,6 +1100,7 @@ struct PugiConfig {
 	std::string endpoint;
 	std::string token;
 	std::string tenant;
+	std::string locale;
 	bool        loaded = false;
 };
 
@@ -1113,6 +1114,42 @@ PugiConfig& PugiConfigCache()
 {
 	static PugiConfig cfg;
 	return cfg;
+}
+
+std::string NormalizePugiLocale(std::string raw)
+{
+	for (char& c : raw) {
+		if (c == '_') c = '-';
+		c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+	}
+	if (raw.empty() || raw == "c" || raw == "posix" ||
+	    raw.rfind("en", 0) == 0) {
+		return "en-US";
+	}
+	if (raw == "uk" || raw.rfind("uk-", 0) == 0) {
+		return "uk-UA";
+	}
+	if (raw == "ru" || raw.rfind("ru-", 0) == 0 ||
+	    raw == "be" || raw.rfind("be-", 0) == 0) {
+		return "ru-RU";
+	}
+	return "en-US";
+}
+
+std::string NormalizePugiEndpoint(std::string raw)
+{
+	while (!raw.empty() && (raw.back() == ' ' || raw.back() == '\t' ||
+	                         raw.back() == '\r' || raw.back() == '\n')) {
+		raw.pop_back();
+	}
+	while (!raw.empty() && raw.back() == '/') raw.pop_back();
+	if (raw.empty()) return "https://mcp.pugi.io/api/oes-mcp/invoke";
+	const std::string suffix = "/api/oes-mcp/invoke";
+	if (raw.size() >= suffix.size() &&
+	    raw.compare(raw.size() - suffix.size(), suffix.size(), suffix) == 0) {
+		return raw;
+	}
+	return raw + suffix;
 }
 
 // MCP: read endpoint/token/tenant from env vars first, then fall back to
@@ -1135,21 +1172,75 @@ PugiConfig LoadPugiConfig()
 	out.endpoint = envOrEmpty("OES_PUGI_ENDPOINT");
 	out.token    = envOrEmpty("OES_PUGI_TOKEN");
 	out.tenant   = envOrEmpty("OES_PUGI_TENANT");
+	out.locale   = envOrEmpty("OES_PUGI_LOCALE");
+	if (out.endpoint.empty()) out.endpoint = envOrEmpty("PUGI_BASE_URL");
+	if (out.token.empty())    out.token    = envOrEmpty("PUGI_OES_API_KEY");
+	if (out.tenant.empty())   out.tenant   = envOrEmpty("PUGI_TENANT_ID");
+	if (out.tenant.empty())   out.tenant   = envOrEmpty("PUGI_TENANT");
+	if (out.locale.empty())   out.locale   = envOrEmpty("PUGI_OES_LOCALE");
+	if (out.locale.empty())   out.locale   = envOrEmpty("LOCALE");
 
 	// Fill missing pieces from the aiBridge.env file (byokEnv namespace
 	// already handles dotenv parsing, quoted values, perms warnings).
-	if (out.endpoint.empty() || out.token.empty() || out.tenant.empty()) {
+	if (out.endpoint.empty() || out.token.empty() ||
+	    out.tenant.empty() || out.locale.empty()) {
 		const byokEnv::PluginEnv all = byokEnv::LoadAll();
 		const std::string pluginId   = "aiBridge";
 		if (out.endpoint.empty()) out.endpoint = byokEnv::Get(all, pluginId, "ENDPOINT");
 		if (out.token.empty())    out.token    = byokEnv::Get(all, pluginId, "TOKEN");
 		if (out.tenant.empty())   out.tenant   = byokEnv::Get(all, pluginId, "TENANT");
+		if (out.endpoint.empty()) out.endpoint = byokEnv::Get(all, pluginId, "PUGI_BASE_URL");
+		if (out.token.empty())    out.token    = byokEnv::Get(all, pluginId, "PUGI_OES_API_KEY");
+		if (out.tenant.empty())   out.tenant   = byokEnv::Get(all, pluginId, "PUGI_TENANT_ID");
+		if (out.tenant.empty())   out.tenant   = byokEnv::Get(all, pluginId, "PUGI_TENANT");
+		if (out.locale.empty())   out.locale   = byokEnv::Get(all, pluginId, "PUGI_OES_LOCALE");
+		if (out.locale.empty())   out.locale   = byokEnv::Get(all, pluginId, "LOCALE");
 	}
+	if (out.endpoint.empty()) out.endpoint = "https://mcp.pugi.io";
+	out.endpoint = NormalizePugiEndpoint(out.endpoint);
+	out.locale = NormalizePugiLocale(out.locale);
 
 	out.loaded = true;
 	{
 		std::lock_guard<std::mutex> lk(PugiConfigMutex());
 		PugiConfigCache() = out;
+	}
+	return out;
+}
+
+bool EnvelopeIsError(const nlohmann::json& env)
+{
+	return env.is_object() && env.contains("isError") &&
+	       env["isError"].is_boolean() && env["isError"].get<bool>();
+}
+
+bool EnvelopeHasOkFalse(const nlohmann::json& env)
+{
+	if (!env.is_object() || !env.contains("structuredContent") ||
+	    !env["structuredContent"].is_object()) {
+		return false;
+	}
+	const auto& sc = env["structuredContent"];
+	return sc.contains("ok") && sc["ok"].is_boolean() &&
+	       !sc["ok"].get<bool>();
+}
+
+std::string TextFromEnvelope(const nlohmann::json& env, size_t maxLen = 4000)
+{
+	std::string out;
+	if (env.is_object() && env.contains("content") && env["content"].is_array()) {
+		for (const auto& item : env["content"]) {
+			if (!item.is_object()) continue;
+			auto it = item.find("text");
+			if (it == item.end() || !it->is_string()) continue;
+			if (!out.empty()) out += "\n";
+			out += it->get<std::string>();
+			if (out.size() >= maxLen) break;
+		}
+	}
+	if (out.size() > maxLen) {
+		out.resize(maxLen);
+		out += "...";
 	}
 	return out;
 }
@@ -1329,10 +1420,10 @@ nlohmann::json PugiHttpInvoke(const std::string& toolName,
                               const PugiOfflineMaker& offlineMaker)
 {
 	const PugiConfig cfg = LoadPugiConfig();
-	if (cfg.endpoint.empty() || cfg.token.empty() || cfg.tenant.empty()) {
+	if (cfg.endpoint.empty() || cfg.token.empty()) {
 		return offlineMaker(
-		    "no Pugi credentials configured (need OES_PUGI_ENDPOINT/TOKEN/TENANT "
-		    "or aiBridge.env with ENDPOINT/TOKEN/TENANT)");
+		    "no Pugi credentials configured (need OES_PUGI_ENDPOINT/TOKEN "
+		    "or aiBridge.env with ENDPOINT/TOKEN)");
 	}
 
 	// Build the request body — matches the proven Pugi MCP invocation
@@ -1366,11 +1457,13 @@ nlohmann::json PugiHttpInvoke(const std::string& toolName,
 
 	httplib::Headers headers = {
 		{ "Authorization", "Bearer " + cfg.token },
-		{ "X-Tenant-Id",   cfg.tenant            },
 		{ "Content-Type",  "application/json"    },
 		{ "Accept",        "application/json"    },
 		{ "User-Agent",    "oes-mcp/1.0"         },
 	};
+	if (!cfg.tenant.empty()) {
+		headers.emplace("X-Tenant-Id", cfg.tenant);
+	}
 
 	const std::string bodyStr = body.dump();
 	auto res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
@@ -1503,7 +1596,76 @@ nlohmann::json ToolSigmaCheck(const nlohmann::json& args)
 		input["rules"] = args["rules"];
 	}
 
-	return PugiHttpInvoke("sigma_check", input, SigmaOfflineEnvelope);
+	nlohmann::json env = PugiHttpInvoke("sigma_check", input, SigmaOfflineEnvelope);
+	bool needsDiagnostic = EnvelopeIsError(env) || EnvelopeHasOkFalse(env);
+	if (!needsDiagnostic && env.contains("structuredContent") &&
+	    env["structuredContent"].is_object()) {
+		const auto& sc = env["structuredContent"];
+		const bool offline = sc.contains("offline") && sc["offline"].is_boolean() &&
+		                     sc["offline"].get<bool>();
+		const std::string reason = sc.contains("reason") && sc["reason"].is_string()
+			? sc["reason"].get<std::string>() : std::string();
+		needsDiagnostic = offline && reason.rfind("Pugi returned", 0) == 0;
+	}
+	if (!needsDiagnostic) {
+		return env;
+	}
+
+	const PugiConfig cfg = LoadPugiConfig();
+	if (cfg.token.empty()) {
+		return env;
+	}
+
+	std::string verdict = TextFromEnvelope(env, 2500);
+	if (verdict.empty() && env.contains("structuredContent")) {
+		verdict = env["structuredContent"].dump(2);
+		if (verdict.size() > 2500) {
+			verdict.resize(2500);
+			verdict += "...";
+		}
+	}
+
+	std::string prompt;
+	prompt += "Ты Sigma-эксперт OES. Объясни результат sigma_check ";
+	prompt += "кратко и прикладно: причина, риск, как исправить в конфигурации. ";
+	prompt += "Не переписывай весь JSON, дай список действий.\n\n";
+	prompt += "Metadata:\n";
+	prompt += input["metadata"].dump(2);
+	if (prompt.size() > 5000) {
+		prompt.resize(5000);
+		prompt += "...";
+	}
+	prompt += "\n\nsigma_check result:\n";
+	prompt += verdict.empty() ? env.dump(2) : verdict;
+
+	nlohmann::json diagInput;
+	diagInput["prompt"] = prompt;
+	diagInput["locale"] = cfg.locale.empty() ? "uk-UA" : cfg.locale;
+	diagInput["maxTokens"] = 700;
+
+	nlohmann::json diag = PugiHttpInvoke("llm_query", diagInput,
+		[](const std::string& reason) {
+			return PugiOfflineEnvelope("llm_query", reason);
+		});
+
+	if (!env.contains("structuredContent") || !env["structuredContent"].is_object()) {
+		env["structuredContent"] = nlohmann::json::object();
+	}
+	if (!EnvelopeIsError(diag)) {
+		const std::string text = TextFromEnvelope(diag, 3000);
+		if (!text.empty()) {
+			env["structuredContent"]["diagnostic"] = text;
+			if (env.contains("content") && env["content"].is_array()) {
+				nlohmann::json item;
+				item["type"] = "text";
+				item["text"] = std::string("sigma_check diagnostic:\n") + text;
+				env["content"].push_back(std::move(item));
+			}
+		}
+	} else {
+		env["structuredContent"]["diagnosticUnavailable"] = TextFromEnvelope(diag, 1000);
+	}
+	return env;
 }
 
 // =========================================================================
