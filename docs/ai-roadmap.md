@@ -67,7 +67,8 @@ On each tick:
 - [x] **done** t2-007 (40ed5703): 4-mode permission selector in Designer chat top — read-only / confirm-all / confirm-writes / auto. Modes are wired to plugin mutation policy; approve temporarily elevates write ops and restores after apply/error/reject.
 - [x] **done** t2-008 (db48d970): Custom slash commands UI in Designer Plugin Manager. Stored in `plugins.json5` as `slashCommands`; native chat popup merges user commands with built-ins and dispatches custom rows through `chat.send`.
 - [x] **done** t2-009 (b4fac2a3): Doc-comment skill — F1 in the code editor sends `editor.skill op="doc"` for the selection or nearest procedure/function signature, opening the assistant pane and reusing the existing documentation-comment flow.
-- [ ] **pending** t2-010: AI-generated code audit trail — inline `// AI: 2026-MM-DD HH:mm` comments inserted by aiBridge before commit. ~1 day.
+- [x] **done** hotfix-pugi-chat (ef6247d9): Designer chat transport hardening — Pugi headers use `X-Tenant-Id` + `User-Agent`, Pugi env compatibility (`PUGI_BASE_URL`, `PUGI_OES_API_KEY`, `PUGI_TENANT_ID`, `PUGI_OES_LOCALE`), locale normalization (`uk`→`uk-UA`), chat path uses `ai_chat_query`, HTTP transport exceptions are caught, and cpp-httplib clients are closed explicitly. Build + targeted aiBridge tests + live Pugi API smoke PASS.
+- [x] **done** t2-010 (88f8b01c): Neutral assistant action audit trail — aiBridge writes structured JSONL events to `~/.oes/ai-audit/aiBridge-YYYY-MM-DD.jsonl` for chat/review/agent/apply/commit-message actions. Records requestId/tool/status/counts/sizes, never tokens or full prompt/code, and never inserts attribution comments into user modules or commit messages.
 - [ ] **pending** t2-011: Smoke validation post-apply — `headless_smoke_run` MCP tool runs codeRunner against config, returns load/compile status. ~3 days.
 - [ ] **pending** t2-012: Sigma reject diagnostic playbook — natural-language explainer when sigma_check returns isError (call llm_query persona=sigma). ~2 days.
 
@@ -102,6 +103,8 @@ Conkurent analysis (mcp-1c free tier 9 tools, Go binary, BM25 + BSL synonyms, au
 
 - [ ] **pending** t4-001: Pugi tier billing infra — free / pro / enterprise / air-gapped. Usage tracking, quota enforcement, upgrade flow. PUGI-SIDE, not OES. Blocked on Pugi team.
 - [ ] **pending** t4-002: Schema/RAG re-ingestion pipeline — БП обновляется → cron Pugi re-index. PUGI-SIDE. Blocked.
+- [ ] **pending** t4-003: Pugi API contract cleanup — document/keep stable `ai_chat_query`, `llm_query`, `oes_agent`, `oes_agent_resolve`, template tools; accept both `X-Tenant-Id` and legacy `X-Pugi-Tenant` for bridge compatibility; publish `/api/oes-mcp/tools` schema for OES smoke tests. PUGI-SIDE.
+- [ ] **pending** t4-004: Pugi locale compatibility — accept legacy short locales (`uk`, `ru`, `en`) or expose a clear migration warning. OES now normalizes, but external clients still hit the strict zod enum. PUGI-SIDE.
 
 ## Tier 5 — VM performance (long-term, after product-market fit)
 

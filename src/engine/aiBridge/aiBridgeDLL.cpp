@@ -36,8 +36,13 @@
 #include <cstdlib>
 #include <cstring>
 #include <cctype>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -66,6 +71,68 @@ void DiagWrite(const std::string& line)
 	if (f == nullptr) return;
 	std::fprintf(f, "%s\n", line.c_str());
 	std::fclose(f);
+}
+
+std::mutex g_auditMu;
+
+std::string LocalTimestamp(char dateOut[11])
+{
+	std::time_t now = std::time(nullptr);
+	std::tm tmNow{};
+#if defined(_WIN32)
+	localtime_s(&tmNow, &now);
+#else
+	localtime_r(&now, &tmNow);
+#endif
+	std::ostringstream ts;
+	ts << std::put_time(&tmNow, "%Y-%m-%dT%H:%M:%S%z");
+	if (dateOut != nullptr) {
+		std::strftime(dateOut, 11, "%Y-%m-%d", &tmNow);
+	}
+	return ts.str();
+}
+
+std::filesystem::path AuditDir()
+{
+#if defined(_WIN32)
+	const char* home = std::getenv("USERPROFILE");
+#else
+	const char* home = std::getenv("HOME");
+#endif
+	if (home == nullptr || *home == '\0') {
+		return std::filesystem::temp_directory_path() / "oes" / "ai-audit";
+	}
+	return std::filesystem::path(home) / ".oes" / "ai-audit";
+}
+
+void AuditWrite(std::string event, nlohmann::json fields = nlohmann::json::object())
+{
+	try {
+		char date[11] = {};
+		nlohmann::json row = nlohmann::json::object();
+		row["ts"]     = LocalTimestamp(date);
+		row["plugin"] = "aiBridge";
+		row["event"]  = std::move(event);
+		if (fields.is_object()) {
+			for (auto it = fields.begin(); it != fields.end(); ++it) {
+				row[it.key()] = it.value();
+			}
+		}
+
+		const std::filesystem::path dir = AuditDir();
+		std::filesystem::create_directories(dir);
+		const std::filesystem::path file =
+		    dir / (std::string("aiBridge-") + date + ".jsonl");
+
+		std::lock_guard<std::mutex> lk(g_auditMu);
+		std::ofstream out(file, std::ios::binary | std::ios::app);
+		if (!out.is_open()) return;
+		out << row.dump() << '\n';
+	} catch (const std::exception& e) {
+		DiagWrite("aiBridge audit write exception: " + std::string(e.what()));
+	} catch (...) {
+		DiagWrite("aiBridge audit write exception");
+	}
 }
 
 // SEC-P0-1: write the unredacted HTTP error body to a diagnostic file
@@ -513,6 +580,14 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 	httplib::Headers headers = MakeJsonHeaders(token, tenant);
 
 	const std::string bodyStr = body.dump();
+	AuditWrite("chat.request", {
+		{ "requestId", requestId },
+		{ "protocol",  "pugi-mcp" },
+		{ "tool",      "ai_chat_query" },
+		{ "mode",      body["input"]["mode"] },
+		{ "locale",    body["input"]["locale"] },
+		{ "chars",     static_cast<int>(prompt.size()) },
+	});
 	httplib::Result res;
 	try {
 		res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
@@ -542,6 +617,12 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 		// the bearer token and/or original request body. Unredacted slice
 		// goes to /tmp/oes-diag.log only when OES_AI_DEBUG_UNSAFE=1.
 		DiagWriteUnsafeBody("pugi-mcp", res->status, res->body);
+		AuditWrite("chat.error", {
+			{ "requestId", requestId },
+			{ "protocol",  "pugi-mcp" },
+			{ "tool",      "ai_chat_query" },
+			{ "status",    res->status },
+		});
 		EmitError("aiBridge[pugi-mcp]: HTTP " + std::to_string(res->status));
 		return;
 	}
@@ -571,6 +652,14 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 	}
 
 	const int approxTokens = static_cast<int>(content.size() / 4);
+	AuditWrite("chat.response", {
+		{ "requestId", requestId },
+		{ "protocol",  "pugi-mcp" },
+		{ "tool",      "ai_chat_query" },
+		{ "status",    res->status },
+		{ "model",     respModel },
+		{ "chars",     static_cast<int>(content.size()) },
+	});
 	EmitTypewriter(requestId, content, respModel, approxTokens, cancelTok);
 }
 
@@ -634,6 +723,13 @@ void RunTripleReview(std::string requestId, std::string code,
 	httplib::Headers headers = MakeJsonHeaders(token, tenant);
 
 	const std::string bodyStr = body.dump();
+	AuditWrite("review.request", {
+		{ "requestId", requestId },
+		{ "tool",      "triple_review" },
+		{ "language",  body["input"]["language"] },
+		{ "locale",    body["input"]["locale"] },
+		{ "chars",     static_cast<int>(code.size()) },
+	});
 	httplib::Result res;
 	try {
 		res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
@@ -660,6 +756,11 @@ void RunTripleReview(std::string requestId, std::string code,
 	if (res->status >= 400) {
 		// SEC-P0-1: redact body — see RunPugiMcpRequest.
 		DiagWriteUnsafeBody("triple-review", res->status, res->body);
+		AuditWrite("review.error", {
+			{ "requestId", requestId },
+			{ "tool",      "triple_review" },
+			{ "status",    res->status },
+		});
 		EmitError("aiBridge[triple-review]: HTTP " + std::to_string(res->status));
 		return;
 	}
@@ -679,6 +780,14 @@ void RunTripleReview(std::string requestId, std::string code,
 		return;
 	}
 	const auto& result = parsed["result"];
+	AuditWrite("review.response", {
+		{ "requestId", requestId },
+		{ "tool",      "triple_review" },
+		{ "status",    res->status },
+		{ "verdict",   result.value("verdict", std::string()) },
+		{ "findings",  result.contains("findings") && result["findings"].is_array()
+		                  ? static_cast<int>(result["findings"].size()) : 0 },
+	});
 
 	// Emit a single agent.tripleReview envelope containing the whole
 	// result object. The pane has a dedicated renderer that walks
@@ -736,6 +845,12 @@ void PostAgentResolve(const std::string& endpoint, const std::string& token,
 	body["input"]["failedOps"]          = failedOps;
 
 	httplib::Headers headers = MakeJsonHeaders(token, tenant);
+	AuditWrite("agent.resolve", {
+		{ "planId",     planId },
+		{ "action",     action },
+		{ "appliedOps", static_cast<int>(appliedOps.size()) },
+		{ "failedOps",  static_cast<int>(failedOps.size()) },
+	});
 	try {
 		(void)cli.Post(path.c_str(), headers, body.dump(), "application/json");
 		CloseClient(cli);
@@ -798,6 +913,13 @@ void RunOesAgent(std::string requestId, std::string prompt,
 
 	httplib::Headers headers = MakeJsonHeaders(token, tenant);
 
+	AuditWrite("agent.request", {
+		{ "requestId",  requestId },
+		{ "tool",       "oes_agent" },
+		{ "locale",     body["input"]["locale"] },
+		{ "chars",      static_cast<int>(prompt.size()) },
+		{ "hasContext", body["input"].contains("context") },
+	});
 	httplib::Result res;
 	try {
 		res = cli.Post(path.c_str(), headers, body.dump(), "application/json");
@@ -822,6 +944,11 @@ void RunOesAgent(std::string requestId, std::string prompt,
 	}
 	if (res->status >= 400) {
 		DiagWriteUnsafeBody("oes-agent", res->status, res->body);
+		AuditWrite("agent.error", {
+			{ "requestId", requestId },
+			{ "tool",      "oes_agent" },
+			{ "status",    res->status },
+		});
 		EmitError("aiBridge[oes-agent]: HTTP " + std::to_string(res->status));
 		return;
 	}
@@ -847,6 +974,12 @@ void RunOesAgent(std::string requestId, std::string prompt,
 	if (result.contains("mutations") && result["mutations"].is_array()) {
 		mutations = result["mutations"];
 	}
+	AuditWrite("agent.plan", {
+		{ "requestId", requestId },
+		{ "planId",    planId },
+		{ "model",     model },
+		{ "mutations", static_cast<int>(mutations.size()) },
+	});
 
 	// AGENT-MODE: stash {planId → {conversationId, mutations}} so the
 	// approve / reject handlers can resolve without a server round-trip.
@@ -946,6 +1079,12 @@ void RunAgentApply(std::string planId, std::string conversationId,
 	if (g_host->WebPaneSend != nullptr) {
 		g_host->WebPaneSend(g_paneId, payload.c_str());
 	}
+	AuditWrite("agent.apply", {
+		{ "planId",     planId },
+		{ "mutations",  static_cast<int>(mutations.size()) },
+		{ "appliedOps", static_cast<int>(appliedOps.size()) },
+		{ "failedOps",  static_cast<int>(failedOps.size()) },
+	});
 
 	// Close the server round-trip. action depends on whether anything failed.
 	std::string action = "approved";
@@ -1049,6 +1188,13 @@ void RunChatRequest(std::string requestId, std::string prompt, std::string mode,
 
 	httplib::Headers headers = MakeJsonHeaders(token, std::string(),
 	                                           "text/event-stream");
+	AuditWrite("chat.request", {
+		{ "requestId", requestId },
+		{ "protocol",  "openai" },
+		{ "mode",      mode },
+		{ "model",     model },
+		{ "chars",     static_cast<int>(prompt.size()) },
+	});
 
 	// SSE parser state. Each "data: <json>\n\n" frame is a chat
 	// completion chunk. The body comes in as raw bytes from
@@ -1158,10 +1304,21 @@ void RunChatRequest(std::string requestId, std::string prompt, std::string mode,
 		EraseCancelToken(requestId);
 		// SEC-P0-1: redact body — see RunPugiMcpRequest.
 		DiagWriteUnsafeBody("chat", res->status, res->body);
+		AuditWrite("chat.error", {
+			{ "requestId", requestId },
+			{ "protocol",  "openai" },
+			{ "status",    res->status },
+		});
 		EmitError("aiBridge: HTTP " + std::to_string(res->status));
 		return;
 	}
 	const int tokensIn = static_cast<int>(prompt.size() / 4);
+	AuditWrite("chat.response", {
+		{ "requestId", requestId },
+		{ "protocol",  "openai" },
+		{ "model",     model },
+		{ "tokensOut", tokensOut },
+	});
 	EmitEnd(requestId, model, tokensIn, tokensOut);
 	EraseCancelToken(requestId);
 }
@@ -1354,6 +1511,11 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 
 		if (kind == "editor.skill") {
 			const std::string code = j.value("code", std::string());
+			AuditWrite(op == "commit" ? "commit_message.request" : "skill.request", {
+				{ "op",      op.empty() ? std::string("send") : op },
+				{ "chars",   static_cast<int>(code.size()) },
+				{ "hasPrompt", !j.value("prompt", std::string()).empty() },
+			});
 			// Wrap the skill into a chat prompt with a stable preamble.
 			// op="commit" carries a git diff (not source code), so the
 			// preamble spells out the Conventional-Commits format we
