@@ -603,16 +603,22 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 	root->Add(policyRow, 0, wxEXPAND | wxTOP, FromDIP(4));
 
 	auto* contextRow = new wxBoxSizer(wxHORIZONTAL);
-	m_pinContextBtn = new wxButton(this, wxID_ANY, _("Закрепить @"));
+	m_pinContextBtn = new wxButton(this, wxID_ANY, _("Add context"));
+	m_pinContextBtn->SetToolTip(
+	    _("Adds selected @objects from the input field to the persistent chat context"));
 	contextRow->Add(m_pinContextBtn, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT,
 	               FromDIP(4));
 
-	m_clearPinnedContextBtn = new wxButton(this, wxID_ANY, _("Очистить"));
+	m_clearPinnedContextBtn = new wxButton(this, wxID_ANY, _("Reset"));
+	m_clearPinnedContextBtn->SetToolTip(
+	    _("Removes all pinned objects from the current chat context"));
 	contextRow->Add(m_clearPinnedContextBtn, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
 	               FromDIP(4));
 
 	m_pinnedContextLabel = new wxStaticText(this, wxID_ANY, wxEmptyString);
 	m_pinnedContextLabel->SetForegroundColour(wxColour(90, 96, 110));
+	m_pinnedContextLabel->SetToolTip(
+	    _("Objects that are automatically sent to the assistant with each question"));
 	contextRow->Add(m_pinnedContextLabel, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT,
 	               FromDIP(4));
 	root->Add(contextRow, 0, wxEXPAND | wxTOP, FromDIP(2));
@@ -823,9 +829,9 @@ void ibPluginWebPane::OnModelProfileChanged(wxCommandEvent& /*event*/)
 void ibPluginWebPane::RefreshPinnedContextLabel()
 {
 	if (m_pinnedContextLabel == nullptr) return;
-	wxString label = _("Контекст: ");
+	wxString label = _("Context: ");
 	if (m_pinnedContextTokens.empty()) {
-		label += wxT("—");
+		label += _("none");
 	} else {
 		for (size_t i = 0; i < m_pinnedContextTokens.size(); ++i) {
 			if (i > 0) label += wxT(", ");
@@ -872,8 +878,8 @@ void ibPluginWebPane::OnPinContextClicked(wxCommandEvent& /*event*/)
 	if (m_statusBar != nullptr) {
 		m_statusBar->SetLabel(
 		    added > 0
-		        ? _("Контекст закреплён")
-		        : _("Добавьте @объект в поле ввода и нажмите «Закрепить @»."));
+		        ? _("Context added")
+		        : _("Type @ in the input field, choose an object, then click Add context."));
 	}
 }
 
@@ -882,7 +888,7 @@ void ibPluginWebPane::OnClearPinnedContextClicked(wxCommandEvent& /*event*/)
 	m_pinnedContextTokens.clear();
 	RefreshPinnedContextLabel();
 	if (m_statusBar != nullptr) {
-		m_statusBar->SetLabel(_("Закреплённый контекст очищен"));
+		m_statusBar->SetLabel(_("Context reset"));
 	}
 }
 

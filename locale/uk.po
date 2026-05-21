@@ -5184,3 +5184,43 @@ msgstr "Tomasz Sowa, розробник ttmath"
 #: src/engine/frontend/help/ (syntax helper UI)
 msgid "And also everyone who was not mentioned here"
 msgstr "Та усім, кого тут не згадали"
+
+#: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
+msgid "Add context"
+msgstr "Додати контекст"
+
+#: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
+msgid "Adds selected @objects from the input field to the persistent chat context"
+msgstr "Додає вибрані @об'єкти з поля введення до постійного контексту чату"
+
+#: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
+msgid "Reset"
+msgstr "Скинути"
+
+#: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
+msgid "Removes all pinned objects from the current chat context"
+msgstr "Прибирає всі закріплені об'єкти з контексту поточного чату"
+
+#: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
+msgid "Objects that are automatically sent to the assistant with each question"
+msgstr "Об'єкти, які автоматично передаватимуться асистенту разом із запитанням"
+
+#: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
+msgid "Context: "
+msgstr "Контекст: "
+
+#: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
+msgid "none"
+msgstr "немає"
+
+#: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
+msgid "Context added"
+msgstr "Контекст додано"
+
+#: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
+msgid "Type @ in the input field, choose an object, then click Add context."
+msgstr "Наберіть @ у полі введення, виберіть об'єкт і натисніть «Додати контекст»."
+
+#: src/engine/frontend/pluginWebPane/pluginWebPane.cpp
+msgid "Context reset"
+msgstr "Контекст скинуто"
