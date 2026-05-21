@@ -101,6 +101,8 @@ Conkurent analysis (mcp-1c free tier 9 tools, Go binary, BM25 + BSL synonyms, au
 
 ## Tier 4 — Infrastructure / business
 
+Pugi-side handoff spec: `docs/pugi-backend-tasks.md`.
+
 - [ ] **pending** t4-001: Pugi tier billing infra — free / pro / enterprise / air-gapped. Usage tracking, quota enforcement, upgrade flow. PUGI-SIDE, not OES. Blocked on Pugi team.
 - [ ] **pending** t4-002: Schema/RAG re-ingestion pipeline — БП обновляется → cron Pugi re-index. PUGI-SIDE. Blocked.
 - [ ] **pending** t4-003: Pugi API contract cleanup — document/keep stable `ai_chat_query`, `llm_query`, `oes_agent`, `oes_agent_resolve`, template tools; accept both `X-Tenant-Id` and legacy `X-Pugi-Tenant` for bridge compatibility; publish `/api/oes-mcp/tools` schema for OES smoke tests. PUGI-SIDE.
