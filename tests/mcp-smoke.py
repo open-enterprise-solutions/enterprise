@@ -279,6 +279,58 @@ def main() -> int:
         if not isinstance(env.get("content"), list) or not env["content"]:
             failures.append(f"{tool_name}: malformed envelope (no content): {env}")
 
+    # 8c) Functional test runner (added 2026-05-21). Tool must be
+    # advertised in tools/list with an outputSchema declaring summary +
+    # tests[] shape. In --no-config mode, run_tests returns isError
+    # because activeMetaData isn't loaded.
+    if "run_tests" not in names:
+        failures.append("tools/list: missing tool 'run_tests'")
+    else:
+        td_rt = declared.get("run_tests")
+        if td_rt is not None:
+            out_schema_rt = td_rt.get("outputSchema")
+            if not isinstance(out_schema_rt, dict) or out_schema_rt.get("type") != "object":
+                failures.append("run_tests: missing/malformed outputSchema")
+            else:
+                props_rt = out_schema_rt.get("properties", {})
+                for required_prop in ("summary", "tests"):
+                    if required_prop not in props_rt:
+                        failures.append(
+                            f"run_tests: outputSchema missing '{required_prop}' property")
+            # Annotations sanity: readOnly=true, openWorld=false. The tool
+            # touches the DB transiently but rollback yields a net-read
+            # semantic; agents should treat it as read-only.
+            ann_rt = td_rt.get("annotations") or {}
+            if ann_rt.get("openWorldHint") is True:
+                failures.append("run_tests: openWorldHint must be false")
+        send(proc, {
+            "jsonrpc": "2.0", "id": 400, "method": "tools/call",
+            "params": {"name": "run_tests", "arguments": {"filter": "*"}},
+        })
+        rt_resp = recv(proc, timeout_s=10.0)
+        rt_env = rt_resp.get("result")
+        if not isinstance(rt_env, dict):
+            failures.append(f"run_tests: no result envelope: {rt_resp}")
+        elif protocol_only:
+            # --no-config mode: must surface isError with a structuredContent
+            # error envelope (OES_E_NO_CONFIG).
+            if not rt_env.get("isError"):
+                failures.append(
+                    "run_tests: expected isError in --no-config mode, "
+                    f"got: {rt_env}")
+        else:
+            # Config-loaded mode: envelope must include structuredContent
+            # with summary+tests keys (test list may be empty if no @test
+            # markers exist in the config).
+            sc = rt_env.get("structuredContent")
+            if not isinstance(sc, dict):
+                failures.append("run_tests: success envelope missing structuredContent")
+            else:
+                missing_rt = {"summary", "tests"} - set(sc.keys())
+                if missing_rt:
+                    failures.append(
+                        f"run_tests: structuredContent missing keys {missing_rt}")
+
     # Validation guard for oes_demo_data_get: both args together → isError.
     send(proc, {
         "jsonrpc": "2.0", "id": 299, "method": "tools/call",

@@ -109,7 +109,22 @@ enum
 	enGetCommonTemplate,
 	enBeginTransaction,
 	enCommitTransaction,
-	enRollBackTransaction
+	enRollBackTransaction,
+	//--- Test assertions:
+	enAssertEquals,
+	enAssertNotEquals,
+	enAssertNotNull,
+	enAssertTrue,
+	enAssertFalse,
+	enAssertGreater,
+	enAssertLess,
+	enAssertThrows,
+
+	// Sentinel — keep this LAST. The plugin-builtin block below indexes
+	// its plugin slots starting at enLastSystemBuiltin + 1, so adding new
+	// system builtins above (between enRollBackTransaction and this
+	// sentinel) is safe without re-wiring the plugin offset.
+	enLastSystemBuiltin = enAssertThrows
 };
 
 void ibValueSystemFunction::PrepareNames() const
@@ -217,8 +232,20 @@ void ibValueSystemFunction::PrepareNames() const
 	m_methodHelper->AppendProc(wxT("CommitTransaction"), wxT("CommitTransaction()"));
 	m_methodHelper->AppendProc(wxT("RollBackTransaction"), wxT("RollBackTransaction()"));
 
+	//--- Test assertions: registered as procedures (no return value).
+	//    -1 paramCount = variadic so the optional `message` trailing arg
+	//    doesn't trip the strict arity check.
+	m_methodHelper->AppendProc(wxT("AssertEquals"), -1, wxT("AssertEquals(actual : any, expected : any, message : string)"));
+	m_methodHelper->AppendProc(wxT("AssertNotEquals"), -1, wxT("AssertNotEquals(actual : any, expected : any, message : string)"));
+	m_methodHelper->AppendProc(wxT("AssertNotNull"), -1, wxT("AssertNotNull(value : any, message : string)"));
+	m_methodHelper->AppendProc(wxT("AssertTrue"), -1, wxT("AssertTrue(condition : boolean, message : string)"));
+	m_methodHelper->AppendProc(wxT("AssertFalse"), -1, wxT("AssertFalse(condition : boolean, message : string)"));
+	m_methodHelper->AppendProc(wxT("AssertGreater"), -1, wxT("AssertGreater(a : number, b : number, message : string)"));
+	m_methodHelper->AppendProc(wxT("AssertLess"), -1, wxT("AssertLess(a : number, b : number, message : string)"));
+	m_methodHelper->AppendProc(wxT("AssertThrows"), -1, wxT("AssertThrows(callable : function, expectedMsgContains : string, message : string)"));
+
 	// Plugin-registered BSL builtins. Slot index starts immediately
-	// after enRollBackTransaction so the dispatch in CallAsFunc can
+	// after the last system builtin so the dispatch in CallAsFunc can
 	// reverse the index arithmetic. AppendFunc returns the assigned
 	// slot — guaranteed contiguous since this runs in a single pass.
 	if (auto* pm = appData->GetPluginManager()) {
@@ -238,11 +265,11 @@ void ibValueSystemFunction::PrepareNames() const
 bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	// Plugin-registered builtins live above the system enum. Indexes
-	// are contiguous, starting at enRollBackTransaction + 1.
-	if (lMethodNum > enRollBackTransaction) {
+	// are contiguous, starting at enLastSystemBuiltin + 1.
+	if (lMethodNum > enLastSystemBuiltin) {
 		auto* pm = appData->GetPluginManager();
 		if (pm == nullptr) return false;
-		const long idx = lMethodNum - enRollBackTransaction - 1;
+		const long idx = lMethodNum - enLastSystemBuiltin - 1;
 		const auto& fns = pm->Functions();
 		if (idx < 0 || idx >= static_cast<long>(fns.size())) return false;
 		return pm->CallFunction(fns[static_cast<size_t>(idx)],
@@ -375,6 +402,36 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enBeginTransaction: BeginTransaction(); return true;
 		case enCommitTransaction: CommitTransaction(); return true;
 		case enRollBackTransaction: RollBackTransaction(); return true;
+			//--- Тестовые assert'ы — proc-style, no return value. We accept
+			//    a function call as well so VES/CES code that writes
+			//    `AssertEquals(x, 1)` without a leading `;` semicolon
+			//    parses uniformly through both paths.
+		case enAssertEquals:
+			AssertEquals(*paParams[0], *paParams[1], lSizeArray > 2 ? paParams[2]->GetString() : wxString());
+			return true;
+		case enAssertNotEquals:
+			AssertNotEquals(*paParams[0], *paParams[1], lSizeArray > 2 ? paParams[2]->GetString() : wxString());
+			return true;
+		case enAssertNotNull:
+			AssertNotNull(*paParams[0], lSizeArray > 1 ? paParams[1]->GetString() : wxString());
+			return true;
+		case enAssertTrue:
+			AssertTrue(*paParams[0], lSizeArray > 1 ? paParams[1]->GetString() : wxString());
+			return true;
+		case enAssertFalse:
+			AssertFalse(*paParams[0], lSizeArray > 1 ? paParams[1]->GetString() : wxString());
+			return true;
+		case enAssertGreater:
+			AssertGreater(*paParams[0], *paParams[1], lSizeArray > 2 ? paParams[2]->GetString() : wxString());
+			return true;
+		case enAssertLess:
+			AssertLess(*paParams[0], *paParams[1], lSizeArray > 2 ? paParams[2]->GetString() : wxString());
+			return true;
+		case enAssertThrows:
+			AssertThrows(*paParams[0],
+			             lSizeArray > 1 ? paParams[1]->GetString() : wxString(),
+			             lSizeArray > 2 ? paParams[2]->GetString() : wxString());
+			return true;
 		}
 	}
 	else
@@ -434,6 +491,33 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 		case enBeginTransaction: BeginTransaction(); return true;
 		case enCommitTransaction: CommitTransaction(); return true;
 		case enRollBackTransaction: RollBackTransaction(); return true;
+			//--- Тестовые assert'ы:
+		case enAssertEquals:
+			AssertEquals(*paParams[0], *paParams[1], lSizeArray > 2 ? paParams[2]->GetString() : wxString());
+			return true;
+		case enAssertNotEquals:
+			AssertNotEquals(*paParams[0], *paParams[1], lSizeArray > 2 ? paParams[2]->GetString() : wxString());
+			return true;
+		case enAssertNotNull:
+			AssertNotNull(*paParams[0], lSizeArray > 1 ? paParams[1]->GetString() : wxString());
+			return true;
+		case enAssertTrue:
+			AssertTrue(*paParams[0], lSizeArray > 1 ? paParams[1]->GetString() : wxString());
+			return true;
+		case enAssertFalse:
+			AssertFalse(*paParams[0], lSizeArray > 1 ? paParams[1]->GetString() : wxString());
+			return true;
+		case enAssertGreater:
+			AssertGreater(*paParams[0], *paParams[1], lSizeArray > 2 ? paParams[2]->GetString() : wxString());
+			return true;
+		case enAssertLess:
+			AssertLess(*paParams[0], *paParams[1], lSizeArray > 2 ? paParams[2]->GetString() : wxString());
+			return true;
+		case enAssertThrows:
+			AssertThrows(*paParams[0],
+			             lSizeArray > 1 ? paParams[1]->GetString() : wxString(),
+			             lSizeArray > 2 ? paParams[2]->GetString() : wxString());
+			return true;
 		}
 	}
 	else

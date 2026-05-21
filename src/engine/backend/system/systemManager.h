@@ -127,6 +127,24 @@ public:
 	static void CommitTransaction();
 	static void RollBackTransaction();
 
+	//--- Test assertions: every helper throws ibBackendTestAssertException
+	//    on failure. The test runner is the canonical catcher; outside the
+	//    runner a failure surfaces as a regular backend error.
+	static void AssertEquals(const ibValue& actual, const ibValue& expected, const wxString& message = wxEmptyString);
+	static void AssertNotEquals(const ibValue& actual, const ibValue& expected, const wxString& message = wxEmptyString);
+	static void AssertNotNull(const ibValue& value, const wxString& message = wxEmptyString);
+	static void AssertTrue(const ibValue& condition, const wxString& message = wxEmptyString);
+	static void AssertFalse(const ibValue& condition, const wxString& message = wxEmptyString);
+	static void AssertGreater(const ibValue& a, const ibValue& b, const wxString& message = wxEmptyString);
+	static void AssertLess(const ibValue& a, const ibValue& b, const wxString& message = wxEmptyString);
+	// callable must wrap an ibValueFunction (anonymous Function expression
+	// or a forwarded export). On no-throw → assertion failure; on throw,
+	// when expectedMsgContains is non-empty, also matches against the
+	// error description as a substring.
+	static void AssertThrows(ibValue& callable,
+	                         const wxString& expectedMsgContains = wxEmptyString,
+	                         const wxString& message = wxEmptyString);
+
 public:
 
 	ibValueSystemFunction() :

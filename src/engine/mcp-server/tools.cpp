@@ -17,6 +17,7 @@
 #include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/compileContext.h"
+#include "backend/testing/testRunner.hpp"
 
 #include "3rdparty/nlohmann/json.hpp"
 #include "3rdparty/cpp-httplib/httplib.h"
@@ -27,6 +28,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <functional>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <regex>
@@ -1416,6 +1418,186 @@ nlohmann::json ToolSaveConfig(const nlohmann::json& args)
 }
 
 // =========================================================================
+// Tool: run_tests
+//
+// Executes every `@test` procedure across the loaded configuration's
+// modules. Each test runs inside a database-transaction fixture so writes
+// auto-rollback between tests. Returns a structured report (summary +
+// per-test results); failures include actual/expected/assertion shape so
+// the agent can surface them without parsing text.
+//
+// Annotations: readOnly=true (mutates DB but rolled back so net = read);
+// destructive=false; idempotent=true; openWorld=false.
+// =========================================================================
+nlohmann::json ToolRunTests(const nlohmann::json& args)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+
+	ibTesting::TestRunOptions opts;
+	if (args.is_object()) {
+		auto fit = args.find("filter");
+		if (fit != args.end() && fit->is_string()) {
+			opts.filter = wxString::FromUTF8(fit->get<std::string>().c_str());
+		}
+		auto mit = args.find("modules");
+		if (mit != args.end() && mit->is_array()) {
+			for (const auto& m : *mit) {
+				if (m.is_string()) {
+					opts.moduleFilter.push_back(
+						wxString::FromUTF8(m.get<std::string>().c_str()));
+				}
+			}
+		}
+		auto sit = args.find("stopOnFirstFailure");
+		if (sit != args.end() && sit->is_boolean()) {
+			opts.stopOnFirstFailure = sit->get<bool>();
+		}
+	}
+	const std::string fmt = ArgString(args, "format");
+
+	ibTesting::TestRun run = ibTesting::RunTests(opts);
+
+	// Top-level fatal — surface as isError with structured envelope so
+	// the agent can branch deterministically (matches the existing
+	// StructuredError pattern).
+	if (!run.error.IsEmpty()) {
+		nlohmann::json env = TextResult(
+			std::string("run_tests: ") + run.error.utf8_str().data(), true);
+		nlohmann::json sc;
+		sc["errorCode"] = "OES_E_NO_CONFIG";
+		sc["error"]     = std::string(run.error.utf8_str().data());
+		env["structuredContent"] = std::move(sc);
+		return env;
+	}
+
+	auto statusToString = [](ibTesting::TestStatus s) -> const char* {
+		switch (s) {
+		case ibTesting::TestStatus::Passed:  return "passed";
+		case ibTesting::TestStatus::Failed:  return "failed";
+		case ibTesting::TestStatus::Error:   return "error";
+		case ibTesting::TestStatus::Skipped: return "skipped";
+		}
+		return "unknown";
+	};
+
+	nlohmann::json summary;
+	summary["total"]            = run.summary.total;
+	summary["passed"]           = run.summary.passed;
+	summary["failed"]           = run.summary.failed;
+	summary["errored"]          = run.summary.errored;
+	summary["skipped"]          = run.summary.skipped;
+	summary["durationMs"]       = run.summary.durationMs;
+	summary["fixtureDegraded"]  = run.summary.fixtureDegraded;
+
+	nlohmann::json testsArr = nlohmann::json::array();
+	for (const auto& r : run.tests) {
+		nlohmann::json t;
+		t["name"]       = std::string(r.name.utf8_str().data());
+		t["procedure"]  = std::string(r.procedure.utf8_str().data());
+		t["module"]     = std::string(r.module.utf8_str().data());
+		t["status"]     = statusToString(r.status);
+		t["durationMs"] = r.durationMs;
+		if (r.status == ibTesting::TestStatus::Failed ||
+		    r.status == ibTesting::TestStatus::Error) {
+			nlohmann::json f;
+			f["assertion"] = std::string(r.failure.assertion.utf8_str().data());
+			f["actual"]    = std::string(r.failure.actualText.utf8_str().data());
+			f["expected"]  = std::string(r.failure.expectedText.utf8_str().data());
+			f["message"]   = std::string(r.failure.message.utf8_str().data());
+			f["line"]      = r.failure.line;
+			t["failure"]   = std::move(f);
+		}
+		testsArr.push_back(std::move(t));
+	}
+
+	nlohmann::json structured;
+	structured["summary"] = std::move(summary);
+	structured["tests"]   = std::move(testsArr);
+
+	// Text rendition — JSON for `json`/default, "junit" stub for the
+	// CI-import path, plain-text human-readable for `text`. JUnit XML
+	// dump is intentionally minimal (testsuites/testcase) so a CI
+	// runner like GitHub Actions can consume it via xUnit reporter.
+	std::string textRender;
+	if (fmt == "junit") {
+		std::string xml;
+		xml.reserve(1024);
+		xml += "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+		xml += "<testsuites name=\"oes\" tests=\"" + std::to_string(run.summary.total) +
+		        "\" failures=\"" + std::to_string(run.summary.failed) +
+		        "\" errors=\"" + std::to_string(run.summary.errored) + "\">\n";
+		// Group by module
+		std::map<std::string, std::vector<const ibTesting::TestResult*>> byModule;
+		for (const auto& r : run.tests) {
+			byModule[std::string(r.module.utf8_str().data())].push_back(&r);
+		}
+		for (const auto& kv : byModule) {
+			xml += "  <testsuite name=\"" + kv.first + "\" tests=\"" +
+			        std::to_string(kv.second.size()) + "\">\n";
+			for (const auto* r : kv.second) {
+				xml += "    <testcase classname=\"" + kv.first +
+				        "\" name=\"" + std::string(r->name.utf8_str().data()) +
+				        "\" time=\"" + std::to_string(r->durationMs / 1000.0) + "\"";
+				if (r->status == ibTesting::TestStatus::Passed ||
+				    r->status == ibTesting::TestStatus::Skipped) {
+					xml += "/>\n";
+				} else {
+					xml += ">\n      <failure message=\"" +
+					        std::string(r->failure.message.utf8_str().data()) + "\"/>\n";
+					xml += "    </testcase>\n";
+				}
+			}
+			xml += "  </testsuite>\n";
+		}
+		xml += "</testsuites>\n";
+		textRender = std::move(xml);
+	} else if (fmt == "text") {
+		std::string txt;
+		txt += "Tests: " + std::to_string(run.summary.total) +
+		        "  passed: " + std::to_string(run.summary.passed) +
+		        "  failed: " + std::to_string(run.summary.failed) +
+		        "  errored: " + std::to_string(run.summary.errored) +
+		        "  skipped: " + std::to_string(run.summary.skipped) +
+		        "  (" + std::to_string(run.summary.durationMs) + "ms)\n";
+		for (const auto& r : run.tests) {
+			txt += "  ";
+			txt += statusToString(r.status);
+			txt += "  ";
+			txt += std::string(r.module.utf8_str().data());
+			txt += " :: ";
+			txt += std::string(r.name.utf8_str().data());
+			txt += "\n";
+			if (r.status == ibTesting::TestStatus::Failed ||
+			    r.status == ibTesting::TestStatus::Error) {
+				txt += "      ";
+				txt += std::string(r.failure.message.utf8_str().data());
+				txt += "\n";
+			}
+		}
+		textRender = std::move(txt);
+	} else {
+		// Default: pretty JSON dump of the structured payload.
+		textRender = structured.dump(2);
+	}
+
+	nlohmann::json content = nlohmann::json::array();
+	nlohmann::json item;
+	item["type"] = "text";
+	item["text"] = std::move(textRender);
+	content.push_back(std::move(item));
+
+	nlohmann::json env;
+	env["content"]           = std::move(content);
+	env["structuredContent"] = std::move(structured);
+	// Carry isError when any test failed/errored so the agent's standard
+	// "did this tool succeed?" branch reflects test-suite-as-a-whole.
+	if (run.summary.failed > 0 || run.summary.errored > 0) {
+		env["isError"] = true;
+	}
+	return env;
+}
+
+// =========================================================================
 // Tool: config_info
 // =========================================================================
 nlohmann::json ToolConfigInfo(const nlohmann::json& /*args*/)
@@ -1939,6 +2121,98 @@ const std::vector<ToolEntry>& BuildRegistry()
 		},
 		&ToolSaveConfig
 	});
+	{
+		// outputSchema for run_tests — summary + per-test details, used
+		// by the agent to branch without re-parsing the text payload.
+		nlohmann::json failureItem;
+		failureItem["type"]       = "object";
+		failureItem["properties"] = nlohmann::json::object();
+		failureItem["properties"]["assertion"] = nlohmann::json{ {"type","string"} };
+		failureItem["properties"]["actual"]    = nlohmann::json{ {"type","string"} };
+		failureItem["properties"]["expected"]  = nlohmann::json{ {"type","string"} };
+		failureItem["properties"]["message"]   = nlohmann::json{ {"type","string"} };
+		failureItem["properties"]["line"]      = nlohmann::json{ {"type","integer"} };
+
+		nlohmann::json testItem;
+		testItem["type"]       = "object";
+		testItem["properties"] = nlohmann::json::object();
+		testItem["properties"]["name"]       = nlohmann::json{ {"type","string"} };
+		testItem["properties"]["procedure"]  = nlohmann::json{ {"type","string"} };
+		testItem["properties"]["module"]     = nlohmann::json{ {"type","string"} };
+		testItem["properties"]["status"]     = nlohmann::json{
+			{"type","string"},
+			{"enum", nlohmann::json::array({"passed","failed","error","skipped"})}
+		};
+		testItem["properties"]["durationMs"] = nlohmann::json{ {"type","integer"} };
+		testItem["properties"]["failure"]    = failureItem;
+		testItem["required"]   = nlohmann::json::array({ "name", "module", "status" });
+
+		nlohmann::json summaryProp;
+		summaryProp["type"]       = "object";
+		summaryProp["properties"] = nlohmann::json::object();
+		summaryProp["properties"]["total"]            = nlohmann::json{ {"type","integer"} };
+		summaryProp["properties"]["passed"]           = nlohmann::json{ {"type","integer"} };
+		summaryProp["properties"]["failed"]           = nlohmann::json{ {"type","integer"} };
+		summaryProp["properties"]["errored"]          = nlohmann::json{ {"type","integer"} };
+		summaryProp["properties"]["skipped"]          = nlohmann::json{ {"type","integer"} };
+		summaryProp["properties"]["durationMs"]       = nlohmann::json{ {"type","integer"} };
+		summaryProp["properties"]["fixtureDegraded"]  = nlohmann::json{ {"type","boolean"} };
+
+		nlohmann::json outRT;
+		outRT["type"]       = "object";
+		outRT["properties"] = nlohmann::json::object();
+		outRT["properties"]["summary"] = std::move(summaryProp);
+		outRT["properties"]["tests"]   = nlohmann::json{ {"type","array"}, {"items", testItem} };
+		outRT["required"]   = nlohmann::json::array({ "summary", "tests" });
+
+		nlohmann::json filterIn;
+		filterIn["type"]        = nlohmann::json::array({ "string", "null" });
+		filterIn["description"] = "Glob pattern on test names ('TestОрдер*'). Empty/null = all.";
+
+		nlohmann::json modulesIn;
+		modulesIn["type"]        = "array";
+		modulesIn["items"]       = nlohmann::json{ {"type","string"} };
+		modulesIn["description"] = "Restrict to these module full names";
+
+		nlohmann::json fmtIn;
+		fmtIn["type"]        = "string";
+		fmtIn["enum"]        = nlohmann::json::array({ "json", "junit", "text" });
+		fmtIn["default"]     = "json";
+		fmtIn["description"] = "Text-payload format (structuredContent is JSON in all modes)";
+
+		nlohmann::json stopIn;
+		stopIn["type"]        = "boolean";
+		stopIn["default"]     = false;
+		stopIn["description"] = "Stop the run after the first failure/error";
+
+		table.push_back({
+			{ "run_tests",
+			  "Execute every `// @test`-annotated procedure across the "
+			  "loaded configuration's modules. Each test runs inside a "
+			  "database-transaction fixture (writes auto-roll-back). "
+			  "Returns structuredContent.summary + tests[] with status, "
+			  "duration, and failure shape (assertion/actual/expected/"
+			  "message/line) on Failed/Error. isError surfaces when any "
+			  "test failed or errored so agents can branch deterministically.",
+			  schemaObj({
+			    { "filter",             filterIn  },
+			    { "modules",            modulesIn },
+			    { "format",             fmtIn     },
+			    { "stopOnFirstFailure", stopIn    },
+			  }, {}),
+			  // readOnly=true: net effect is read (fixture rollback). But
+			  // we DO touch the DB transiently; clients with strict
+			  // read-only policy will see this annotation and accept it,
+			  // which matches the semantic intent. destructive=false,
+			  // idempotent=true (same tests + same inputs = same report),
+			  // openWorld=false (no network).
+			  ann(/*readOnly*/true, /*destructive*/false, /*idempotent*/true, /*openWorld*/false),
+			  std::move(outRT)
+			},
+			&ToolRunTests
+		});
+	}
+
 	table.push_back({
 		{ "config_info",
 		  "Return readiness state, loaded configuration path, top-level "

@@ -985,3 +985,176 @@ void ibValueSystemFunction::RollBackTransaction()
 
 	ses_query->RollBack();
 }
+
+////////////////////////////////////////////////////////////////////////////
+//                              Test assertions                            //
+////////////////////////////////////////////////////////////////////////////
+//
+// Every helper throws ibBackendTestAssertException via the static Error()
+// factory on failure. The test runner is the canonical catcher; outside
+// the runner the throw surfaces through the regular backend error path
+// (ProcessError → frame), which is fine for ad-hoc Evaluate() probes.
+//
+// Eval-mode guard intentionally OMITTED — unlike Raise/SetError, an
+// assertion is a deterministic check the caller wants to fire even in
+// debugger watch contexts. If a watch expression triggers an assertion
+// fail, that's signal, not noise.
+
+#include "backend/backend_exception.h"
+#include "backend/compiler/procUnitValues.h"   // AsFunction for AssertThrows
+
+namespace {
+
+// Stringify an ibValue for use inside an assertion failure message. We
+// only need a stable text round-trip; the runner picks up actual/expected
+// as plain text and ships them through MCP structuredContent.
+wxString StringifyValueForAssert(const ibValue& v)
+{
+	const ibValueTypes t = v.GetType();
+	switch (t) {
+	case ibValueTypes::TYPE_EMPTY:   return wxT("Empty");
+	case ibValueTypes::TYPE_NULL:    return wxT("Null");
+	case ibValueTypes::TYPE_BOOLEAN: return v.GetBoolean() ? wxT("True") : wxT("False");
+	case ibValueTypes::TYPE_STRING:  return wxT("\"") + v.GetString() + wxT("\"");
+	default:                         return v.GetString();
+	}
+}
+
+} // namespace
+
+void ibValueSystemFunction::AssertEquals(const ibValue& actual, const ibValue& expected, const wxString& message)
+{
+	if (actual == expected) return;
+	ibBackendTestAssertException::Error(
+		wxT("AssertEquals"),
+		StringifyValueForAssert(actual),
+		StringifyValueForAssert(expected),
+		message);
+}
+
+void ibValueSystemFunction::AssertNotEquals(const ibValue& actual, const ibValue& expected, const wxString& message)
+{
+	if (actual != expected) return;
+	ibBackendTestAssertException::Error(
+		wxT("AssertNotEquals"),
+		StringifyValueForAssert(actual),
+		wxT("not ") + StringifyValueForAssert(expected),
+		message);
+}
+
+void ibValueSystemFunction::AssertNotNull(const ibValue& value, const wxString& message)
+{
+	if (!value.IsEmpty()) return;
+	ibBackendTestAssertException::Error(
+		wxT("AssertNotNull"),
+		StringifyValueForAssert(value),
+		wxT("non-null"),
+		message);
+}
+
+void ibValueSystemFunction::AssertTrue(const ibValue& condition, const wxString& message)
+{
+	if (condition.GetBoolean()) return;
+	ibBackendTestAssertException::Error(
+		wxT("AssertTrue"),
+		StringifyValueForAssert(condition),
+		wxT("True"),
+		message);
+}
+
+void ibValueSystemFunction::AssertFalse(const ibValue& condition, const wxString& message)
+{
+	if (!condition.GetBoolean()) return;
+	ibBackendTestAssertException::Error(
+		wxT("AssertFalse"),
+		StringifyValueForAssert(condition),
+		wxT("False"),
+		message);
+}
+
+void ibValueSystemFunction::AssertGreater(const ibValue& a, const ibValue& b, const wxString& message)
+{
+	if (a > b) return;
+	ibBackendTestAssertException::Error(
+		wxT("AssertGreater"),
+		StringifyValueForAssert(a),
+		wxT("> ") + StringifyValueForAssert(b),
+		message);
+}
+
+void ibValueSystemFunction::AssertLess(const ibValue& a, const ibValue& b, const wxString& message)
+{
+	if (a < b) return;
+	ibBackendTestAssertException::Error(
+		wxT("AssertLess"),
+		StringifyValueForAssert(a),
+		wxT("< ") + StringifyValueForAssert(b),
+		message);
+}
+
+void ibValueSystemFunction::AssertThrows(ibValue& callable,
+                                          const wxString& expectedMsgContains,
+                                          const wxString& message)
+{
+	ibValueFunction* fn = AsFunction(&callable);
+	if (fn == nullptr) {
+		ibBackendTestAssertException::Error(
+			wxT("AssertThrows"),
+			wxT("non-callable"),
+			wxT("Function value"),
+			message);
+		return;
+	}
+
+	bool didThrow = false;
+	wxString actualMsg;
+	try {
+		// AssertThrows takes a callable wrapping a 0-arg Function. The
+		// helper consumes the lambda's TYPE_REFFER wrapper just like
+		// InvokeLambdaWithArg, but we want zero-arg invocation — pass
+		// a TYPE_UNDEFINED placeholder. Lambdas with declared params
+		// receive Undefined; lambdas with zero declared params ignore
+		// it (Execute drives by m_listLocals shape, not arg count).
+		ibValue noArg;
+		ibValue retVal;
+		// Re-use the public host helper so the lambda exec path is
+		// the same one LINQ uses. Failure here (non-callable) maps
+		// to the "lambda did not throw" branch — the caller asked
+		// the lambda to throw, and the lambda refused to even run,
+		// which is morally the same outcome.
+		InvokeLambdaWithArg(callable, noArg, retVal);
+	}
+	catch (const ibBackendTestAssertException&) {
+		// Inner assertion shouldn't be swallowed by an outer AssertThrows
+		// — propagate it as a real test failure.
+		throw;
+	}
+	catch (const ibBackendException& err) {
+		didThrow = true;
+		actualMsg = err.GetErrorDescription();
+	}
+	catch (...) {
+		didThrow = true;
+		actualMsg = wxT("<non-backend exception>");
+	}
+
+	if (!didThrow) {
+		ibBackendTestAssertException::Error(
+			wxT("AssertThrows"),
+			wxT("did not throw"),
+			wxT("throws exception") +
+				(expectedMsgContains.IsEmpty()
+					? wxString(wxEmptyString)
+					: wxT(" containing \"") + expectedMsgContains + wxT("\"")),
+			message);
+		return;
+	}
+
+	if (!expectedMsgContains.IsEmpty() && actualMsg.Find(expectedMsgContains) == wxNOT_FOUND) {
+		ibBackendTestAssertException::Error(
+			wxT("AssertThrows"),
+			wxT("\"") + actualMsg + wxT("\""),
+			wxT("error message containing \"") + expectedMsgContains + wxT("\""),
+			message);
+	}
+}
