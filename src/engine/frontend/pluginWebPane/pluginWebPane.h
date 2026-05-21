@@ -43,6 +43,7 @@
 class wxHtmlWindow;
 class wxTextCtrl;
 class wxButton;
+class wxChoice;
 class wxStaticText;
 class wxCommandEvent;
 class wxThreadEvent;
@@ -195,6 +196,7 @@ private:
 	wxTextCtrl*      m_input      = nullptr;
 	wxButton*        m_sendBtn    = nullptr;
 	wxButton*        m_newChatBtn = nullptr;
+	wxChoice*        m_permissionMode = nullptr;
 	wxStaticText*    m_statusBar  = nullptr;
 
 	wxString         m_paneId;
@@ -241,6 +243,22 @@ private:
 	// DispatchUserPrompt call to register the new rid in
 	// m_commitRequestIds. Cleared inside DispatchUserPrompt.
 	bool             m_nextPromptIsCommit = false;
+
+	enum class PermissionMode {
+		ReadOnly = 0,
+		ConfirmAll,
+		ConfirmWrites,
+		Auto
+	};
+	PermissionMode  m_permissionModeValue = PermissionMode::ConfirmWrites;
+	bool            m_planPolicyElevated  = false;
+
+	void OnPermissionModeChanged(wxCommandEvent& event);
+	void ApplyPermissionModePolicy();
+	void ElevatePlanPolicyForApply();
+	void RestorePlanPolicyAfterApply();
+	bool ConfirmAgentAction(const wxString& actionLabel) const;
+	bool IsReadOnlyMode() const { return m_permissionModeValue == PermissionMode::ReadOnly; }
 
 	void OnSendClicked(wxCommandEvent& event);
 	void OnInputEnter(wxCommandEvent& event);

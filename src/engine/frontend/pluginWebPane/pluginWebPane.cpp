@@ -30,6 +30,7 @@
 
 #include <wx/sizer.h>
 #include <wx/button.h>
+#include <wx/choice.h>
 #include <wx/stattext.h>
 #include <wx/textctrl.h>
 #include <wx/html/htmlwin.h>
@@ -516,6 +517,20 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 {
 	auto* root = new wxBoxSizer(wxVERTICAL);
 
+	auto* policyRow = new wxBoxSizer(wxHORIZONTAL);
+	policyRow->Add(new wxStaticText(this, wxID_ANY, _("Режим агента")),
+	               0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT,
+	               FromDIP(4));
+	m_permissionMode = new wxChoice(this, wxID_ANY);
+	m_permissionMode->Append(_("Только чтение"));
+	m_permissionMode->Append(_("Подтверждать всё"));
+	m_permissionMode->Append(_("Подтверждать изменения"));
+	m_permissionMode->Append(_("Авто"));
+	m_permissionMode->SetSelection(static_cast<int>(m_permissionModeValue));
+	policyRow->Add(m_permissionMode, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
+	               FromDIP(4));
+	root->Add(policyRow, 0, wxEXPAND | wxTOP, FromDIP(4));
+
 	// Drop wxHW_NO_SELECTION so the user can drag-select transcript text
 	// and copy with Cmd+C (system menu Edit→Copy is still available).
 	// Default behaviour with selection enabled mirrors any other native
@@ -559,6 +574,9 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 
 	m_sendBtn   ->Bind(wxEVT_BUTTON, &ibPluginWebPane::OnSendClicked,    this);
 	m_newChatBtn->Bind(wxEVT_BUTTON, &ibPluginWebPane::OnNewChatClicked, this);
+	m_permissionMode->Bind(wxEVT_CHOICE,
+	                        &ibPluginWebPane::OnPermissionModeChanged,
+	                        this);
 	copyAllBtn  ->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
 		wxString out;
 		for (const auto& e : m_entries) {
@@ -633,6 +651,7 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 
 	// Render initial empty state (transcript with no entries shows a
 	// short hint line so the pane does not look broken on first load).
+	ApplyPermissionModePolicy();
 	RenderTranscript();
 }
 
@@ -645,6 +664,97 @@ ibPluginWebPane::~ibPluginWebPane()
 		m_saveTimer.Stop();
 		SaveNow();
 	}
+}
+
+void ibPluginWebPane::OnPermissionModeChanged(wxCommandEvent& /*event*/)
+{
+	const int sel = m_permissionMode ? m_permissionMode->GetSelection() : -1;
+	if (sel >= static_cast<int>(PermissionMode::ReadOnly) &&
+	    sel <= static_cast<int>(PermissionMode::Auto)) {
+		m_permissionModeValue = static_cast<PermissionMode>(sel);
+	}
+	RestorePlanPolicyAfterApply();
+	ApplyPermissionModePolicy();
+	if (m_statusBar == nullptr) return;
+	switch (m_permissionModeValue) {
+	case PermissionMode::ReadOnly:
+		m_statusBar->SetLabel(_("Режим агента: только чтение"));
+		break;
+	case PermissionMode::ConfirmAll:
+		m_statusBar->SetLabel(_("Режим агента: подтверждать всё"));
+		break;
+	case PermissionMode::ConfirmWrites:
+		m_statusBar->SetLabel(_("Режим агента: подтверждать изменения"));
+		break;
+	case PermissionMode::Auto:
+		m_statusBar->SetLabel(_("Режим агента: авто"));
+		break;
+	}
+}
+
+void ibPluginWebPane::ApplyPermissionModePolicy()
+{
+	if (appData == nullptr) return;
+	auto* pm = appData->GetPluginManager();
+	if (pm == nullptr) return;
+
+	const std::string pid = pm->GetPluginIdForPane(m_paneId);
+	if (pid.empty()) return;
+	const wxString pluginId = wxString::FromUTF8(pid.c_str());
+
+	using Policy = ibPluginManager::MutationPolicy;
+	pm->SetMutationPolicy(pluginId, wxT("meta.query"), Policy::AllowAlways);
+
+	Policy mutationPolicy = Policy::Ask;
+	switch (m_permissionModeValue) {
+	case PermissionMode::ReadOnly:
+		mutationPolicy = Policy::Deny;
+		break;
+	case PermissionMode::ConfirmAll:
+	case PermissionMode::ConfirmWrites:
+		mutationPolicy = Policy::Ask;
+		break;
+	case PermissionMode::Auto:
+		mutationPolicy = Policy::AllowSession;
+		break;
+	}
+
+	pm->SetMutationPolicy(pluginId, wxT("meta.create"), mutationPolicy);
+	pm->SetMutationPolicy(pluginId, wxT("meta.edit"),   mutationPolicy);
+	pm->SetMutationPolicy(pluginId, wxT("meta.delete"), mutationPolicy);
+}
+
+void ibPluginWebPane::ElevatePlanPolicyForApply()
+{
+	if (appData == nullptr) return;
+	auto* pm = appData->GetPluginManager();
+	if (pm == nullptr) return;
+
+	const std::string pid = pm->GetPluginIdForPane(m_paneId);
+	if (pid.empty()) return;
+	const wxString pluginId = wxString::FromUTF8(pid.c_str());
+
+	using Policy = ibPluginManager::MutationPolicy;
+	pm->SetMutationPolicy(pluginId, wxT("meta.create"), Policy::AllowSession);
+	pm->SetMutationPolicy(pluginId, wxT("meta.edit"),   Policy::AllowSession);
+	pm->SetMutationPolicy(pluginId, wxT("meta.delete"), Policy::AllowSession);
+	m_planPolicyElevated = true;
+}
+
+void ibPluginWebPane::RestorePlanPolicyAfterApply()
+{
+	if (!m_planPolicyElevated) return;
+	m_planPolicyElevated = false;
+	ApplyPermissionModePolicy();
+}
+
+bool ibPluginWebPane::ConfirmAgentAction(const wxString& actionLabel) const
+{
+	return wxMessageBox(
+	           wxString::Format(_("Разрешить действие: %s?"), actionLabel),
+	           _("Подтверждение"),
+	           wxYES_NO | wxNO_DEFAULT | wxICON_WARNING,
+	           const_cast<ibPluginWebPane*>(this)) == wxYES;
 }
 
 void ibPluginWebPane::PushMessage(const wxString& jsonInline)
@@ -708,6 +818,7 @@ void ibPluginWebPane::DispatchEnvelope(const wxString& jsonInline)
 		return;
 	}
 	if (kind == "error") {
+		RestorePlanPolicyAfterApply();
 		std::string code, detail;
 		if (env.contains("error") && env["error"].is_object()) {
 			const auto& err = env["error"];
@@ -801,6 +912,11 @@ void ibPluginWebPane::DispatchEnvelope(const wxString& jsonInline)
 		// chat.delta, so DispatchUserPrompt's chat.send wrapper would lose
 		// the op + context fields.
 		if (op == "triple-review" || op == "agent") {
+			if (op == "agent" &&
+			    m_permissionModeValue == PermissionMode::ConfirmAll &&
+			    !ConfirmAgentAction(_("запросить план изменений"))) {
+				return;
+			}
 			Entry e;
 			e.role     = Entry::Role::User;
 			if (op == "agent" && code.empty()) {
@@ -866,6 +982,7 @@ void ibPluginWebPane::DispatchEnvelope(const wxString& jsonInline)
 				e.applied = true;
 			}
 		}
+		RestorePlanPolicyAfterApply();
 		RenderTranscript();
 		return;
 	}
@@ -1930,6 +2047,26 @@ void ibPluginWebPane::OnLinkClicked(wxHtmlLinkEvent& event)
 	const wxString planId = rest.BeforeFirst(wxT('/'));
 	const wxString convId = rest.AfterFirst(wxT('/'));
 
+	if (action == wxT("approve")) {
+		if (IsReadOnlyMode()) {
+			Entry err;
+			err.role     = Entry::Role::Error;
+			err.markdown = _("Режим \"Только чтение\" запрещает применение плана.");
+			AppendEntry(std::move(err));
+			return;
+		}
+		if ((m_permissionModeValue == PermissionMode::ConfirmAll ||
+		     m_permissionModeValue == PermissionMode::ConfirmWrites) &&
+		    !ConfirmAgentAction(_("применить план изменений"))) {
+			return;
+		}
+		if (m_permissionModeValue != PermissionMode::Auto) {
+			ElevatePlanPolicyForApply();
+		}
+	} else if (action == wxT("reject")) {
+		RestorePlanPolicyAfterApply();
+	}
+
 	nlohmann::json env;
 	env["kind"]           = (action == wxT("approve")) ? "agent.approve"
 	                       : (action == wxT("reject"))  ? "agent.reject"
@@ -1946,6 +2083,7 @@ void ibPluginWebPane::OnLinkClicked(wxHtmlLinkEvent& event)
 		m_onMessage(paneIdUtf8.c_str(), payload.c_str(), m_userData);
 	} catch (...) {
 		// Plugin bug — keep host alive.
+		RestorePlanPolicyAfterApply();
 	}
 }
 
