@@ -504,6 +504,51 @@ void ibProcUnit::Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDe
 	ibSession*       const cancelSession = ibSession::Current();
 	ibProcUnitState* const state         = ibSession::GetPUState();
 
+#if defined(__GNUC__) || defined(__clang__)
+#define OES_VM_THREADED_DISPATCH 1
+	constexpr long kThreadedDispatchSize = TYPE_DELTA4 + OPER_END + 1;
+	const void* threadedDispatch[kThreadedDispatchSize] = {};
+	threadedDispatch[OPER_CONST] = &&op_OPER_CONST;
+	threadedDispatch[OPER_CONSTN] = &&op_OPER_CONSTN;
+	threadedDispatch[OPER_ADD] = &&op_OPER_ADD;
+	threadedDispatch[OPER_SUB] = &&op_OPER_SUB;
+	threadedDispatch[OPER_DIV] = &&op_OPER_DIV;
+	threadedDispatch[OPER_MOD] = &&op_OPER_MOD;
+	threadedDispatch[OPER_MULT] = &&op_OPER_MULT;
+	threadedDispatch[OPER_LET] = &&op_OPER_LET;
+	threadedDispatch[OPER_NOT] = &&op_OPER_NOT;
+	threadedDispatch[OPER_INVERT] = &&op_OPER_INVERT;
+	threadedDispatch[OPER_EQ] = &&op_OPER_EQ;
+	threadedDispatch[OPER_NE] = &&op_OPER_NE;
+	threadedDispatch[OPER_GT] = &&op_OPER_GT;
+	threadedDispatch[OPER_LS] = &&op_OPER_LS;
+	threadedDispatch[OPER_GE] = &&op_OPER_GE;
+	threadedDispatch[OPER_LE] = &&op_OPER_LE;
+	threadedDispatch[OPER_ADD + TYPE_DELTA1] = &&op_OPER_ADD_T1;
+	threadedDispatch[OPER_SUB + TYPE_DELTA1] = &&op_OPER_SUB_T1;
+	threadedDispatch[OPER_DIV + TYPE_DELTA1] = &&op_OPER_DIV_T1;
+	threadedDispatch[OPER_MOD + TYPE_DELTA1] = &&op_OPER_MOD_T1;
+	threadedDispatch[OPER_MULT + TYPE_DELTA1] = &&op_OPER_MULT_T1;
+	threadedDispatch[OPER_LET + TYPE_DELTA1] = &&op_OPER_LET_T1;
+	threadedDispatch[OPER_NOT + TYPE_DELTA1] = &&op_OPER_NOT_T1;
+	threadedDispatch[OPER_INVERT + TYPE_DELTA1] = &&op_OPER_INVERT_T1;
+	threadedDispatch[OPER_EQ + TYPE_DELTA1] = &&op_OPER_EQ_T1;
+	threadedDispatch[OPER_NE + TYPE_DELTA1] = &&op_OPER_NE_T1;
+	threadedDispatch[OPER_GT + TYPE_DELTA1] = &&op_OPER_GT_T1;
+	threadedDispatch[OPER_LS + TYPE_DELTA1] = &&op_OPER_LS_T1;
+	threadedDispatch[OPER_GE + TYPE_DELTA1] = &&op_OPER_GE_T1;
+	threadedDispatch[OPER_LE + TYPE_DELTA1] = &&op_OPER_LE_T1;
+	threadedDispatch[OPER_ADD + TYPE_DELTA2] = &&op_OPER_ADD_T2;
+	threadedDispatch[OPER_LET + TYPE_DELTA2] = &&op_OPER_LET_T2;
+	threadedDispatch[OPER_ADD + TYPE_DELTA3] = &&op_OPER_ADD_T3;
+	threadedDispatch[OPER_SUB + TYPE_DELTA3] = &&op_OPER_SUB_T3;
+	threadedDispatch[OPER_LET + TYPE_DELTA3] = &&op_OPER_LET_T3;
+	threadedDispatch[OPER_LET + TYPE_DELTA4] = &&op_OPER_LET_T4;
+	threadedDispatch[OPER_NOT + TYPE_DELTA4] = &&op_OPER_NOT_T4;
+#else
+#define OES_VM_THREADED_DISPATCH 0
+#endif
+
 start_label:
 
 	try { //slower by 2-3% for each nested module
@@ -536,6 +581,56 @@ start_label:
 			if (debugServer != nullptr && !ibBackendException::IsEvalMode())
 				debugServer->EnterDebugger(pContext, curCode, lPrevLine);
 
+#if OES_VM_THREADED_DISPATCH
+			{
+				const long op = curCode.m_numOper;
+				if (op >= 0 && op < kThreadedDispatchSize &&
+				    threadedDispatch[op] != nullptr) {
+					goto *threadedDispatch[op];
+				}
+				}
+				goto threaded_dispatch_fallback;
+
+op_OPER_CONST: CopyValue(variable1, m_pByteCode->m_listConst[index2]); goto threaded_dispatch_done;
+op_OPER_CONSTN: SetTypeNumber(variable1, index2); goto threaded_dispatch_done;
+op_OPER_ADD: AddValue(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_SUB: SubValue(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_DIV: DivValue(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_MOD: ModValue(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_MULT: MultValue(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_LET: CopyValue(variable1, cvariable2); goto threaded_dispatch_done;
+op_OPER_INVERT: SetTypeNumber(variable1, -cvariable2.GetNumber()); goto threaded_dispatch_done;
+op_OPER_NOT: SetTypeBoolean(variable1, IsEmptyValue(cvariable2)); goto threaded_dispatch_done;
+op_OPER_EQ: CompareValueEQ(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_NE: CompareValueNE(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_GT: CompareValueGT(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_LS: CompareValueLS(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_GE: CompareValueGE(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_LE: CompareValueLE(variable1, cvariable2, cvariable3); goto threaded_dispatch_done;
+op_OPER_ADD_T1: variable1.m_fData = cvariable2.m_fData + cvariable3.m_fData; goto threaded_dispatch_done;
+op_OPER_SUB_T1: variable1.m_fData = cvariable2.m_fData - cvariable3.m_fData; goto threaded_dispatch_done;
+op_OPER_DIV_T1: if (cvariable3.m_fData.IsZero()) { ibBackendCoreException::Error(_("Divide by zero")); } variable1.m_fData = cvariable2.m_fData / cvariable3.m_fData; goto threaded_dispatch_done;
+op_OPER_MOD_T1: if (cvariable3.m_fData.IsZero()) { ibBackendCoreException::Error(_("Divide by zero")); } variable1.m_fData = cvariable2.m_fData.Round() % cvariable3.m_fData.Round(); goto threaded_dispatch_done;
+op_OPER_MULT_T1: variable1.m_fData = cvariable2.m_fData * cvariable3.m_fData; goto threaded_dispatch_done;
+op_OPER_LET_T1: variable1.m_fData = cvariable2.m_fData; goto threaded_dispatch_done;
+op_OPER_NOT_T1: variable1.m_fData = cvariable2.m_fData.IsZero(); goto threaded_dispatch_done;
+op_OPER_INVERT_T1: variable1.m_fData = -cvariable2.m_fData; goto threaded_dispatch_done;
+op_OPER_EQ_T1: variable1.m_fData = (cvariable2.m_fData == cvariable3.m_fData); goto threaded_dispatch_done;
+op_OPER_NE_T1: variable1.m_fData = (cvariable2.m_fData != cvariable3.m_fData); goto threaded_dispatch_done;
+op_OPER_GT_T1: variable1.m_fData = (cvariable2.m_fData > cvariable3.m_fData); goto threaded_dispatch_done;
+op_OPER_LS_T1: variable1.m_fData = (cvariable2.m_fData < cvariable3.m_fData); goto threaded_dispatch_done;
+op_OPER_GE_T1: variable1.m_fData = (cvariable2.m_fData >= cvariable3.m_fData); goto threaded_dispatch_done;
+op_OPER_LE_T1: variable1.m_fData = (cvariable2.m_fData <= cvariable3.m_fData); goto threaded_dispatch_done;
+op_OPER_ADD_T2: variable1.m_sData = cvariable2.m_sData + cvariable3.m_sData; goto threaded_dispatch_done;
+op_OPER_LET_T2: variable1.m_sData = cvariable2.m_sData; goto threaded_dispatch_done;
+op_OPER_ADD_T3: variable1.m_dData = cvariable2.m_dData + cvariable3.m_dData; goto threaded_dispatch_done;
+op_OPER_SUB_T3: variable1.m_dData = cvariable2.m_dData - cvariable3.m_dData; goto threaded_dispatch_done;
+op_OPER_LET_T3: variable1.m_dData = cvariable2.m_dData; goto threaded_dispatch_done;
+op_OPER_LET_T4: variable1.m_bData = cvariable2.m_bData; goto threaded_dispatch_done;
+op_OPER_NOT_T4: variable1.m_bData = !cvariable2.m_bData; goto threaded_dispatch_done;
+
+threaded_dispatch_fallback:
+#endif
 			switch (curCode.m_numOper)
 			{
 			case OPER_CONST: CopyValue(variable1, m_pByteCode->m_listConst[index2]); break;
@@ -886,7 +981,8 @@ start_label:
 				if (!GetArrayValue(variable1, variable2, cvariable3))
 					ibBackendCoreException::Error(_("Cannot get array value '%s'"), cvariable3.GetString());
 				break; //getting the array value
-			case OPER_GOTO: case OPER_ENDTRY:
+			case OPER_GOTO:
+			case OPER_ENDTRY:
 			{
 				const long tryCodeLine = index1;
 				const long trySize = tryList.size() - 1;
@@ -1227,6 +1323,9 @@ start_label:
 			case OPER_LE + TYPE_DELTA4: variable1.m_bData = (cvariable2.m_bData <= cvariable3.m_bData); break;
 			case OPER_IF + TYPE_DELTA4: if (!cvariable1.m_bData) lCodeLine = index2 - 1; break;
 			}
+#if OES_VM_THREADED_DISPATCH
+threaded_dispatch_done:
+#endif
 			lCodeLine++;
 		}
 	}
@@ -1281,6 +1380,8 @@ start_label:
 		ibBackendException::ProcessError(err, m_pByteCode->m_listCode[lCodeLine]);
 	}
 }
+
+#undef OES_VM_THREADED_DISPATCH
 
 //nRunModule parameters:
 //false-do not run
