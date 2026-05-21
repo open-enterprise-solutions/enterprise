@@ -37,6 +37,7 @@
 #include <wx/log.h>
 #include <wx/clipbrd.h>
 #include <wx/dataobj.h>
+#include <wx/menu.h>
 #include <wx/msgdlg.h>
 #include <wx/stc/stc.h>
 // COMMIT-MSG: wxExecute / wxArrayString for spawning `git commit -F`
@@ -619,6 +620,41 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 			if (m_statusBar) m_statusBar->SetLabel(_("Скопировано"));
 		}
 		// Don't Skip — we owned this combo.
+	});
+	m_history->Bind(wxEVT_CONTEXT_MENU, [this](wxContextMenuEvent& evt) {
+		wxMenu menu;
+		const int idCopy = wxWindow::NewControlId();
+		const int idCopyAll = wxWindow::NewControlId();
+		menu.Append(idCopy, _("Копировать"));
+		menu.Append(idCopyAll, _("Скопировать всё"));
+
+		auto copyText = [this](bool all) {
+			wxString out;
+			if (!all) out = m_history->SelectionToText();
+			if (out.IsEmpty()) {
+				for (const auto& e : m_entries) {
+					out += e.markdown;
+					out += wxT("\n\n");
+				}
+			}
+			if (!out.IsEmpty() && wxTheClipboard->Open()) {
+				wxTheClipboard->SetData(new wxTextDataObject(out));
+				wxTheClipboard->Close();
+				if (m_statusBar) {
+					m_statusBar->SetLabel(all ? _("Весь чат скопирован")
+					                          : _("Скопировано"));
+				}
+			}
+		};
+		menu.Bind(wxEVT_MENU, [copyText](wxCommandEvent&) { copyText(false); },
+		          idCopy);
+		menu.Bind(wxEVT_MENU, [copyText](wxCommandEvent&) { copyText(true); },
+		          idCopyAll);
+		wxPoint pos = evt.GetPosition();
+		pos = (pos == wxDefaultPosition)
+		        ? wxPoint(FromDIP(8), FromDIP(8))
+		        : m_history->ScreenToClient(pos);
+		m_history->PopupMenu(&menu, pos);
 	});
 	m_input  ->Bind(wxEVT_TEXT_ENTER, &ibPluginWebPane::OnInputEnter, this);
 	m_input  ->Bind(wxEVT_TEXT,       &ibPluginWebPane::OnInputText,  this);

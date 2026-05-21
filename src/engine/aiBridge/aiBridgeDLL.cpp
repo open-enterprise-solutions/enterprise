@@ -419,6 +419,148 @@ std::string ValidateEndpointScheme(const std::string& url)
 	return "aiBridge: only http:// and https:// schemes are allowed";
 }
 
+std::string ShellQuote(const std::string& value)
+{
+	std::string out = "'";
+	for (char c : value) {
+		if (c == '\'') out += "'\\''";
+		else out.push_back(c);
+	}
+	out += "'";
+	return out;
+}
+
+std::string CurlConfigEscape(const std::string& value)
+{
+	std::string out;
+	out.reserve(value.size());
+	for (char c : value) {
+		if (c == '\\' || c == '"') out.push_back('\\');
+		out.push_back(c);
+	}
+	return out;
+}
+
+std::filesystem::path TempPath(const char* suffix)
+{
+	const auto ticks = std::chrono::steady_clock::now().time_since_epoch().count();
+	const auto tid = std::hash<std::thread::id>{}(std::this_thread::get_id());
+	std::ostringstream name;
+	name << "aibridge-" << ticks << "-" << tid << suffix;
+	return std::filesystem::temp_directory_path() / name.str();
+}
+
+struct CurlResponse {
+	int status = 0;
+	std::string body;
+	std::string error;
+};
+
+CurlResponse CurlPostJson(const std::string& endpoint,
+                          const std::string& token,
+                          const std::string& tenant,
+                          const nlohmann::json& body,
+                          int timeoutSec)
+{
+	CurlResponse out;
+	const std::filesystem::path bodyPath = TempPath(".json");
+	const std::filesystem::path cfgPath  = TempPath(".curl");
+
+	try {
+		{
+			std::ofstream f(bodyPath, std::ios::binary);
+			if (!f.is_open()) {
+				out.error = "cannot create request body file";
+				return out;
+			}
+			f << body.dump();
+			std::error_code ec;
+			std::filesystem::permissions(
+				bodyPath,
+				std::filesystem::perms::owner_read |
+				std::filesystem::perms::owner_write,
+				std::filesystem::perm_options::replace,
+				ec);
+		}
+		{
+			std::ofstream f(cfgPath, std::ios::binary);
+			if (!f.is_open()) {
+				out.error = "cannot create curl config file";
+				std::error_code ec;
+				std::filesystem::remove(bodyPath, ec);
+				return out;
+			}
+			f << "silent\n";
+			f << "show-error\n";
+			f << "request = \"POST\"\n";
+			f << "url = \"" << CurlConfigEscape(endpoint) << "\"\n";
+			f << "max-time = " << timeoutSec << "\n";
+			f << "header = \"Authorization: Bearer "
+			  << CurlConfigEscape(token) << "\"\n";
+			f << "header = \"Content-Type: application/json\"\n";
+			f << "header = \"Accept: application/json\"\n";
+			f << "header = \"User-Agent: " << kHttpUserAgent << "\"\n";
+			if (!tenant.empty()) {
+				f << "header = \"X-Tenant-Id: "
+				  << CurlConfigEscape(tenant) << "\"\n";
+			}
+			f << "data-binary = \"@" << CurlConfigEscape(bodyPath.string())
+			  << "\"\n";
+			f << "write-out = \"\\n%{http_code}\"\n";
+			std::error_code ec;
+			std::filesystem::permissions(
+				cfgPath,
+				std::filesystem::perms::owner_read |
+				std::filesystem::perms::owner_write,
+				std::filesystem::perm_options::replace,
+				ec);
+		}
+
+		const std::string curl =
+			std::filesystem::exists("/usr/bin/curl") ? "/usr/bin/curl" : "curl";
+		const std::string cmd = ShellQuote(curl) + " --config " +
+		                        ShellQuote(cfgPath.string()) + " 2>&1";
+		FILE* pipe = popen(cmd.c_str(), "r");
+		if (pipe == nullptr) {
+			out.error = "cannot start curl";
+		} else {
+			char buf[4096];
+			while (std::fgets(buf, sizeof(buf), pipe) != nullptr) {
+				out.body += buf;
+			}
+			(void)pclose(pipe);
+		}
+	} catch (const std::exception& e) {
+		out.error = e.what();
+	} catch (...) {
+		out.error = "curl transport exception";
+	}
+
+	std::error_code ec;
+	std::filesystem::remove(bodyPath, ec);
+	std::filesystem::remove(cfgPath, ec);
+
+	std::string text = out.body;
+	while (!text.empty() &&
+	       (text.back() == '\n' || text.back() == '\r' || text.back() == ' ')) {
+		text.pop_back();
+	}
+	if (text.size() >= 3 &&
+	    std::isdigit(static_cast<unsigned char>(text[text.size() - 1])) &&
+	    std::isdigit(static_cast<unsigned char>(text[text.size() - 2])) &&
+	    std::isdigit(static_cast<unsigned char>(text[text.size() - 3]))) {
+		out.status = std::atoi(text.substr(text.size() - 3).c_str());
+		text.erase(text.size() - 3);
+		if (!text.empty() && text.back() == '\n') text.pop_back();
+		if (!text.empty() && text.back() == '\r') text.pop_back();
+		out.body = text;
+	}
+	if (out.status == 0 && out.error.empty()) {
+		out.error = out.body.empty() ? "curl returned no HTTP status" : out.body;
+	}
+	return out;
+}
+
 // Sends a chat.error envelope to the pane.
 void EmitError(const std::string& message)
 {
@@ -545,22 +687,6 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 		EmitError(why);
 		return;
 	}
-	const auto [base, path] = SplitUrl(endpoint);
-	if (base.empty()) {
-		EmitError("aiBridge: malformed ENDPOINT URL: " + endpoint);
-		return;
-	}
-
-	httplib::Client& cli = NewHttpClient(base);
-	cli.set_connection_timeout(15);
-	cli.set_read_timeout(60);   // SEC-P2-1: was 120s; Anvil llm_query <30s typical
-	// SEC-P1-5: never follow cross-origin redirects with Authorization +
-	// X-Tenant-Id attached. cpp-httplib's follower replays full headers
-	// to the redirect target — a redirect to an attacker host would leak
-	// the bearer. Surface 3xx as an explicit error instead.
-	cli.set_follow_location(false);
-	// SEC-P2-1: register before Post() so shutdown can stop() us mid-flight.
-	ClientGuard guard(&cli);
 	if (g_shuttingDown.load()) {
 		EmitError("aiBridge[pugi-mcp]: shutdown in progress");
 		return;
@@ -574,9 +700,6 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 	body["input"]["conversation"]    = nlohmann::json::array();
 	body["input"]["mode"]            = mode.empty() ? std::string("chat") : mode;
 
-	httplib::Headers headers = MakeJsonHeaders(token, tenant);
-
-	const std::string bodyStr = body.dump();
 	AuditWrite("chat.request", {
 		{ "requestId", requestId },
 		{ "protocol",  "pugi-mcp" },
@@ -585,39 +708,27 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 		{ "locale",    body["input"]["locale"] },
 		{ "chars",     static_cast<int>(prompt.size()) },
 	});
-	httplib::Result res;
-	try {
-		res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
-	} catch (const std::exception& e) {
-		EmitError(std::string("aiBridge[pugi-mcp]: transport exception — ") + e.what());
-		return;
-	} catch (...) {
-		EmitError("aiBridge[pugi-mcp]: transport exception");
+	const CurlResponse res = CurlPostJson(endpoint, token, tenant, body, 70);
+	if (res.status == 0) {
+		EmitError("aiBridge[pugi-mcp]: HTTP failed — " + res.error);
 		return;
 	}
-	if (!res) {
-		EmitError("aiBridge[pugi-mcp]: HTTP failed — " +
-		           std::string(httplib::to_string(res.error())));
-		return;
-	}
-	// SEC-P1-5: 3xx is no longer auto-followed. Refuse rather than re-
-	// emit Authorization to a different origin.
-	if (res->status >= 300 && res->status < 400) {
+	if (res.status >= 300 && res.status < 400) {
 		EmitError("aiBridge[pugi-mcp]: server returned redirect; bearer not forwarded for security");
 		return;
 	}
-	if (res->status >= 400) {
+	if (res.status >= 400) {
 		// SEC-P0-1: redact body — OpenAI/Anvil error payloads echo back
 		// the bearer token and/or original request body. Unredacted slice
 		// goes to /tmp/oes-diag.log only when OES_AI_DEBUG_UNSAFE=1.
-		DiagWriteUnsafeBody("pugi-mcp", res->status, res->body);
+		DiagWriteUnsafeBody("pugi-mcp", res.status, res.body);
 		AuditWrite("chat.error", {
 			{ "requestId", requestId },
 			{ "protocol",  "pugi-mcp" },
 			{ "tool",      "ai_chat_query" },
-			{ "status",    res->status },
+			{ "status",    res.status },
 		});
-		EmitError("aiBridge[pugi-mcp]: HTTP " + std::to_string(res->status));
+		EmitError("aiBridge[pugi-mcp]: HTTP " + std::to_string(res.status));
 		return;
 	}
 
@@ -625,7 +736,7 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 	// any backend version that returns a flat shape.
 	std::string content;
 	std::string respModel = "pugi-mcp";
-	auto parsed = nlohmann::json::parse(res->body, nullptr, /*allow_exceptions=*/false);
+	auto parsed = nlohmann::json::parse(res.body, nullptr, /*allow_exceptions=*/false);
 	if (!parsed.is_discarded() && parsed.is_object() && parsed.contains("result")) {
 		const auto& r = parsed["result"];
 		if (r.is_object()) {
@@ -642,7 +753,7 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 	if (content.empty()) {
 		// Server returned something we can't unwrap — emit raw so the
 		// user sees the actual diagnostic, not a silent failure.
-		content = res->body;
+		content = res.body;
 	}
 
 	const int approxTokens = static_cast<int>(content.size() / 4);
@@ -650,7 +761,7 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 		{ "requestId", requestId },
 		{ "protocol",  "pugi-mcp" },
 		{ "tool",      "ai_chat_query" },
-		{ "status",    res->status },
+		{ "status",    res.status },
 		{ "model",     respModel },
 		{ "chars",     static_cast<int>(content.size()) },
 	});
@@ -686,22 +797,6 @@ void RunTripleReview(std::string requestId, std::string code,
 		EmitError(why);
 		return;
 	}
-	const auto [base, path] = SplitUrl(endpoint);
-	if (base.empty()) {
-		EmitError("aiBridge[triple-review]: malformed ENDPOINT URL: " + endpoint);
-		return;
-	}
-
-	httplib::Client& cli = NewHttpClient(base);
-	cli.set_connection_timeout(15);
-	// SEC-P2-1: was 180s; Anvil triple_review typically responds <30s — a
-	// 60s ceiling means a single failed reviewer surfaces an explicit
-	// timeout to the user instead of freezing the Designer for 3 minutes.
-	cli.set_read_timeout(60);
-	// SEC-P1-5: refuse redirects so bearer + X-Tenant-Id aren't replayed.
-	cli.set_follow_location(false);
-	// SEC-P2-1: register before Post() so shutdown can stop() us mid-flight.
-	ClientGuard guard(&cli);
 	if (g_shuttingDown.load()) {
 		EmitError("aiBridge[triple-review]: shutdown in progress");
 		return;
@@ -714,9 +809,6 @@ void RunTripleReview(std::string requestId, std::string code,
 	body["input"]["language"] = language.empty() ? std::string("CES") : language;
 	body["input"]["locale"]   = NormalizePugiLocale(locale);
 
-	httplib::Headers headers = MakeJsonHeaders(token, tenant);
-
-	const std::string bodyStr = body.dump();
 	AuditWrite("review.request", {
 		{ "requestId", requestId },
 		{ "tool",      "triple_review" },
@@ -724,35 +816,25 @@ void RunTripleReview(std::string requestId, std::string code,
 		{ "locale",    body["input"]["locale"] },
 		{ "chars",     static_cast<int>(code.size()) },
 	});
-	httplib::Result res;
-	try {
-		res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
-	} catch (const std::exception& e) {
-		EmitError(std::string("aiBridge[triple-review]: transport exception — ") + e.what());
-		return;
-	} catch (...) {
-		EmitError("aiBridge[triple-review]: transport exception");
-		return;
-	}
-	if (!res) {
-		EmitError("aiBridge[triple-review]: HTTP failed — " +
-		           std::string(httplib::to_string(res.error())));
+	const CurlResponse res = CurlPostJson(endpoint, token, tenant, body, 70);
+	if (res.status == 0) {
+		EmitError("aiBridge[triple-review]: HTTP failed — " + res.error);
 		return;
 	}
 	// SEC-P1-5: refuse 3xx — see RunPugiMcpRequest for the rationale.
-	if (res->status >= 300 && res->status < 400) {
+	if (res.status >= 300 && res.status < 400) {
 		EmitError("aiBridge[triple-review]: server returned redirect; bearer not forwarded for security");
 		return;
 	}
-	if (res->status >= 400) {
+	if (res.status >= 400) {
 		// SEC-P0-1: redact body — see RunPugiMcpRequest.
-		DiagWriteUnsafeBody("triple-review", res->status, res->body);
+		DiagWriteUnsafeBody("triple-review", res.status, res.body);
 		AuditWrite("review.error", {
 			{ "requestId", requestId },
 			{ "tool",      "triple_review" },
-			{ "status",    res->status },
+			{ "status",    res.status },
 		});
-		EmitError("aiBridge[triple-review]: HTTP " + std::to_string(res->status));
+		EmitError("aiBridge[triple-review]: HTTP " + std::to_string(res.status));
 		return;
 	}
 
@@ -764,7 +846,7 @@ void RunTripleReview(std::string requestId, std::string code,
 		return;
 	}
 
-	auto parsed = nlohmann::json::parse(res->body, nullptr, /*allow_exceptions=*/false);
+	auto parsed = nlohmann::json::parse(res.body, nullptr, /*allow_exceptions=*/false);
 	if (parsed.is_discarded() || !parsed.is_object() ||
 	    !parsed.contains("result") || !parsed["result"].is_object()) {
 		EmitError("aiBridge[triple-review]: malformed response envelope");
@@ -774,7 +856,7 @@ void RunTripleReview(std::string requestId, std::string code,
 	AuditWrite("review.response", {
 		{ "requestId", requestId },
 		{ "tool",      "triple_review" },
-		{ "status",    res->status },
+		{ "status",    res.status },
 		{ "verdict",   result.value("verdict", std::string()) },
 		{ "findings",  result.contains("findings") && result["findings"].is_array()
 		                  ? static_cast<int>(result["findings"].size()) : 0 },
@@ -816,14 +898,6 @@ void PostAgentResolve(const std::string& endpoint, const std::string& token,
                        const std::vector<int>& failedOps)
 {
 	if (auto why = ValidateEndpointScheme(endpoint); !why.empty()) return;
-	const auto [base, path] = SplitUrl(endpoint);
-	if (base.empty()) return;
-
-	httplib::Client& cli = NewHttpClient(base);
-	cli.set_connection_timeout(5);
-	cli.set_read_timeout(10);
-	cli.set_follow_location(false);
-	ClientGuard guard(&cli);
 	if (g_shuttingDown.load()) return;
 
 	nlohmann::json body;
@@ -835,20 +909,17 @@ void PostAgentResolve(const std::string& endpoint, const std::string& token,
 	body["input"]["appliedOps"]         = appliedOps;
 	body["input"]["failedOps"]          = failedOps;
 
-	httplib::Headers headers = MakeJsonHeaders(token, tenant);
 	AuditWrite("agent.resolve", {
 		{ "planId",     planId },
 		{ "action",     action },
 		{ "appliedOps", static_cast<int>(appliedOps.size()) },
 		{ "failedOps",  static_cast<int>(failedOps.size()) },
 	});
-	try {
-		(void)cli.Post(path.c_str(), headers, body.dump(), "application/json");
-	} catch (const std::exception& e) {
-		DiagWrite("aiBridge[oes-agent-resolve]: transport exception: " +
-		          std::string(e.what()));
-	} catch (...) {
-		DiagWrite("aiBridge[oes-agent-resolve]: transport exception");
+	const CurlResponse res = CurlPostJson(endpoint, token, tenant, body, 15);
+	if (res.status == 0) {
+		DiagWrite("aiBridge[oes-agent-resolve]: HTTP failed: " + res.error);
+	} else if (res.status >= 400) {
+		DiagWriteUnsafeBody("oes-agent-resolve", res.status, res.body);
 	}
 }
 
@@ -867,19 +938,6 @@ void RunOesAgent(std::string requestId, std::string prompt,
 		EmitError(why);
 		return;
 	}
-	const auto [base, path] = SplitUrl(endpoint);
-	if (base.empty()) {
-		EmitError("aiBridge[oes-agent]: malformed ENDPOINT URL: " + endpoint);
-		return;
-	}
-
-	httplib::Client& cli = NewHttpClient(base);
-	cli.set_connection_timeout(15);
-	// AGENT-MODE: 180s — qwen-3-235b planning calls can run long on first
-	// invocation when the server warm-loads weights.
-	cli.set_read_timeout(180);
-	cli.set_follow_location(false);
-	ClientGuard guard(&cli);
 	if (g_shuttingDown.load()) {
 		EmitError("aiBridge[oes-agent]: shutdown in progress");
 		return;
@@ -899,8 +957,6 @@ void RunOesAgent(std::string requestId, std::string prompt,
 		}
 	}
 
-	httplib::Headers headers = MakeJsonHeaders(token, tenant);
-
 	AuditWrite("agent.request", {
 		{ "requestId",  requestId },
 		{ "tool",       "oes_agent" },
@@ -908,33 +964,23 @@ void RunOesAgent(std::string requestId, std::string prompt,
 		{ "chars",      static_cast<int>(prompt.size()) },
 		{ "hasContext", body["input"].contains("context") },
 	});
-	httplib::Result res;
-	try {
-		res = cli.Post(path.c_str(), headers, body.dump(), "application/json");
-	} catch (const std::exception& e) {
-		EmitError(std::string("aiBridge[oes-agent]: transport exception — ") + e.what());
-		return;
-	} catch (...) {
-		EmitError("aiBridge[oes-agent]: transport exception");
+	const CurlResponse res = CurlPostJson(endpoint, token, tenant, body, 190);
+	if (res.status == 0) {
+		EmitError("aiBridge[oes-agent]: HTTP failed — " + res.error);
 		return;
 	}
-	if (!res) {
-		EmitError("aiBridge[oes-agent]: HTTP failed — " +
-		           std::string(httplib::to_string(res.error())));
-		return;
-	}
-	if (res->status >= 300 && res->status < 400) {
+	if (res.status >= 300 && res.status < 400) {
 		EmitError("aiBridge[oes-agent]: server returned redirect; bearer not forwarded for security");
 		return;
 	}
-	if (res->status >= 400) {
-		DiagWriteUnsafeBody("oes-agent", res->status, res->body);
+	if (res.status >= 400) {
+		DiagWriteUnsafeBody("oes-agent", res.status, res.body);
 		AuditWrite("agent.error", {
 			{ "requestId", requestId },
 			{ "tool",      "oes_agent" },
-			{ "status",    res->status },
+			{ "status",    res.status },
 		});
-		EmitError("aiBridge[oes-agent]: HTTP " + std::to_string(res->status));
+		EmitError("aiBridge[oes-agent]: HTTP " + std::to_string(res.status));
 		return;
 	}
 	if (cancelTok && cancelTok->load()) {
@@ -942,7 +988,7 @@ void RunOesAgent(std::string requestId, std::string prompt,
 		return;
 	}
 
-	auto parsed = nlohmann::json::parse(res->body, nullptr, false);
+	auto parsed = nlohmann::json::parse(res.body, nullptr, false);
 	if (parsed.is_discarded() || !parsed.is_object() ||
 	    !parsed.contains("result") || !parsed["result"].is_object()) {
 		EmitError("aiBridge[oes-agent]: malformed response envelope");
