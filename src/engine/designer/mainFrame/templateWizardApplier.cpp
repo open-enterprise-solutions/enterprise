@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "backend/appData.h"
+#include "backend/backend_exception.h"
 #include "backend/plugin/metaBridge.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
@@ -476,6 +477,23 @@ static bool InsertDataRow(const std::string& kind,
 		}
 		if (!ApplyRowFields(object, document, row, error)) return false;
 		if (!ApplyTabularRows(object, document, row, error)) return false;
+		if (postAfterInsert) {
+			try {
+				if (object->WriteObject(
+				        ibDocumentWriteMode::ibDocumentWriteMode_Posting,
+				        ibDocumentPostingMode::ibDocumentPostingMode_Regular)) {
+					return true;
+				}
+			}
+			catch (const ibBackendException& err) {
+				wxLogWarning("Template Wizard: document posting failed for %s: %s",
+				             fullName, err.GetErrorDescription());
+			}
+			catch (const std::exception& err) {
+				wxLogWarning("Template Wizard: document posting failed for %s: %s",
+				             fullName, wxString::FromUTF8(err.what()));
+			}
+		}
 		return object->WriteObject(
 		    ibDocumentWriteMode::ibDocumentWriteMode_Write,
 		    ibDocumentPostingMode::ibDocumentPostingMode_Regular);
