@@ -6,6 +6,7 @@
 
 #include "tools.h"
 #include "headless_app.h"
+#include "resources.h"
 
 #include "backend/appData.h"
 #include "backend/metadataConfiguration.h"
@@ -197,6 +198,52 @@ const char* CLSIDToKindLabel(unsigned long long cls)
 		if (metaBridge::KindStringToCLSID(*p) == cls) return *p;
 	}
 	return "";
+}
+
+// MCP: derive any resource URIs that should be invalidated by a mutation
+// to `fullName`. Top-level Catalog.X → oes://catalog/X. Any path ending
+// in a known module suffix → oes://module/<owner>/<kind>. Mutations on
+// nested children (Catalog.X.Attributes.Y) bubble up to the owning
+// Catalog so subscribers on the parent get refreshed without per-child
+// subscriptions. Always also fires oes://config/current so manifest
+// watchers stay live.
+void EmitResourceMutation(const std::string& fullName)
+{
+	EmitResourceUpdated("oes://config/current");
+	if (fullName.empty()) return;
+
+	// Split on '.' so we can inspect the head.
+	std::vector<std::string> segs;
+	std::string cur;
+	for (char c : fullName) {
+		if (c == '.') { segs.push_back(cur); cur.clear(); }
+		else            cur.push_back(c);
+	}
+	if (!cur.empty()) segs.push_back(cur);
+	if (segs.empty()) return;
+
+	// Catalog.X[.anything] → invalidate oes://catalog/X.
+	if (segs[0] == "Catalog" && segs.size() >= 2) {
+		EmitResourceUpdated("oes://catalog/" + segs[1]);
+	}
+
+	// Module-flavoured tail? The known module kinds are the only suffixes
+	// that map to a module resource. Anything else doesn't have a per-
+	// path resource so we skip.
+	if (segs.size() >= 2) {
+		const std::string& tail = segs.back();
+		const bool moduleTail =
+			tail == "ObjectModule" || tail == "ManagerModule" ||
+			tail == "Module"       || tail == "CommonModule";
+		if (moduleTail) {
+			std::string owner;
+			for (std::size_t i = 0; i + 1 < segs.size(); ++i) {
+				if (!owner.empty()) owner += ".";
+				owner += segs[i];
+			}
+			EmitResourceUpdated("oes://module/" + owner + "/" + tail);
+		}
+	}
 }
 
 // =========================================================================
@@ -407,6 +454,7 @@ nlohmann::json ToolMetaCreate(const nlohmann::json& args)
 	// MCP concurrency Layer 3: broadcast successful mutation so Designer's
 	// notifier can refresh its tree / surface a toast.
 	NotifyMutation("meta_create", fullName);
+	EmitResourceMutation(fullName);
 	return TextResult("meta_create OK: " + fullName, false);
 }
 
@@ -443,6 +491,7 @@ nlohmann::json ToolMetaEdit(const nlohmann::json& args)
 	}
 	FreeIfSet(errMsg);
 	NotifyMutation("meta_edit", fullName);
+	EmitResourceMutation(fullName);
 	return TextResult("meta_edit OK: " + fullName, false);
 }
 
@@ -482,6 +531,7 @@ nlohmann::json ToolMetaDelete(const nlohmann::json& args)
 	}
 	FreeIfSet(errMsg);
 	NotifyMutation("meta_delete", fullName);
+	EmitResourceMutation(fullName);
 	return TextResult("meta_delete OK: " + fullName, false);
 }
 
@@ -697,6 +747,7 @@ nlohmann::json ToolWriteModule(const nlohmann::json& args)
 	// `compile_check` when validation matters.
 	mod->SetModuleText(wxString::FromUTF8(source.c_str()));
 	NotifyMutation("write_module", fullName);
+	EmitResourceMutation(fullName);
 	return TextResult("write_module OK: " + fullName +
 	                    " (" + std::to_string(source.size()) + " bytes)", false);
 }
@@ -1570,6 +1621,10 @@ nlohmann::json ToolSaveConfig(const nlohmann::json& args)
 		return TextResult("save_config failed: " + err, true);
 	}
 	NotifyMutation("save_config", path.empty() ? LoadedConfigPath() : path);
+	// MCP resources: a successful save flips the manifest. Subscribed
+	// clients on oes://config/current get a fresh ping; the matcher
+	// drops it on the floor when no one's listening.
+	EmitResourceUpdated("oes://config/current");
 	nlohmann::json out;
 	out["saved"] = true;
 	out["path"]  = path.empty() ? (LoadedConfigPath() + "/config.OES-DB") : path;

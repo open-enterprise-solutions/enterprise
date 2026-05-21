@@ -105,6 +105,16 @@ def main() -> int:
     init = recv(proc)
     if init.get("result", {}).get("serverInfo", {}).get("name") != "oes-mcp":
         failures.append(f"initialize: unexpected response: {init}")
+    # MCP spec 2025-06-18: capabilities.resources.subscribe must be true so
+    # clients know they can call resources/subscribe. capabilities.tools is
+    # advertised as an object with listChanged: true.
+    caps = init.get("result", {}).get("capabilities", {})
+    if not isinstance(caps.get("resources"), dict):
+        failures.append("initialize: capabilities.resources missing")
+    elif caps["resources"].get("subscribe") is not True:
+        failures.append(
+            f"initialize: capabilities.resources.subscribe must be true, "
+            f"got: {caps.get('resources')}")
 
     # notifications/initialized — no response expected
     send(proc, {"jsonrpc": "2.0", "method": "notifications/initialized"})
@@ -547,6 +557,152 @@ def main() -> int:
                 failures.append(
                     f"{tool_name}: expected isError in --no-config mode, "
                     f"got: {nt_env}")
+
+    # 9) MCP resources (spec 2025-06-18, added 2026-05-21).
+    #
+    # The server advertises 5 resources:
+    #   concrete  - oes://config/current, oes://sigma-rules
+    #   templates - oes://catalog/{name}, oes://module/{owner}/{kind},
+    #               oes://docs/syntax/{lang}
+    # We assert list shapes, then probe a few reads. The docs/syntax read
+    # depends on docs/oes-product-reference.md being reachable from CWD;
+    # since the smoke test runs from the repo root that's the default.
+
+    # resources/list — concrete only.
+    send(proc, {"jsonrpc": "2.0", "id": 900, "method": "resources/list", "params": {}})
+    r_list = recv(proc)
+    r_arr = r_list.get("result", {}).get("resources", [])
+    r_uris = {r.get("uri") for r in r_arr if isinstance(r, dict)}
+    if "oes://config/current" not in r_uris:
+        failures.append(f"resources/list: missing oes://config/current ({r_arr})")
+    if "oes://sigma-rules" not in r_uris:
+        failures.append(f"resources/list: missing oes://sigma-rules ({r_arr})")
+    if len(r_arr) < 2:
+        failures.append(f"resources/list: expected >=2 concrete entries, got {len(r_arr)}")
+
+    # resources/templates/list — templates only.
+    send(proc, {"jsonrpc": "2.0", "id": 901, "method": "resources/templates/list", "params": {}})
+    t_list = recv(proc)
+    t_arr = t_list.get("result", {}).get("resourceTemplates", [])
+    t_uris = {t.get("uriTemplate") for t in t_arr if isinstance(t, dict)}
+    for expected_template in (
+        "oes://catalog/{name}",
+        "oes://module/{owner}/{kind}",
+        "oes://docs/syntax/{lang}",
+    ):
+        if expected_template not in t_uris:
+            failures.append(
+                f"resources/templates/list: missing {expected_template} ({t_arr})")
+    if len(t_arr) < 3:
+        failures.append(
+            f"resources/templates/list: expected >=3 templates, got {len(t_arr)}")
+
+    # resources/read on oes://sigma-rules — must return >=4 rules.
+    send(proc, {
+        "jsonrpc": "2.0", "id": 902, "method": "resources/read",
+        "params": {"uri": "oes://sigma-rules"},
+    })
+    sr_resp = recv(proc)
+    sr_contents = sr_resp.get("result", {}).get("contents", [])
+    if not sr_contents:
+        failures.append(f"resources/read sigma-rules: no contents ({sr_resp})")
+    else:
+        sr_text = sr_contents[0].get("text", "")
+        try:
+            sr_obj = json.loads(sr_text)
+        except json.JSONDecodeError as e:
+            failures.append(f"resources/read sigma-rules: invalid JSON: {e}")
+            sr_obj = None
+        if isinstance(sr_obj, dict):
+            rules = sr_obj.get("rules", [])
+            if len(rules) < 4:
+                failures.append(
+                    f"resources/read sigma-rules: expected >=4 rules, got {len(rules)}")
+            rule_names = {r.get("name") for r in rules if isinstance(r, dict)}
+            for required_rule in ("Σ-unique", "Σ-balance", "Σ-nonneg", "Σ-files"):
+                if required_rule not in rule_names:
+                    failures.append(
+                        f"resources/read sigma-rules: missing rule '{required_rule}'")
+
+    # resources/read on oes://docs/syntax/ces — must return non-empty markdown.
+    # Set OES_DOCS_PATH via subprocess env if available (smoke might run
+    # outside the repo root). The fallback inside resources.cpp walks the
+    # CWD-relative paths so this typically passes from repo root.
+    send(proc, {
+        "jsonrpc": "2.0", "id": 903, "method": "resources/read",
+        "params": {"uri": "oes://docs/syntax/ces"},
+    })
+    ds_resp = recv(proc)
+    ds_result = ds_resp.get("result")
+    if isinstance(ds_result, dict):
+        ds_contents = ds_result.get("contents", [])
+        if not ds_contents:
+            failures.append(f"resources/read docs/syntax/ces: no contents")
+        else:
+            ds_text = ds_contents[0].get("text", "")
+            if not ds_text or len(ds_text) < 100:
+                failures.append(
+                    f"resources/read docs/syntax/ces: text too short "
+                    f"({len(ds_text)} bytes) — likely doc lookup failed")
+    elif ds_resp.get("error", {}).get("code") == -32603:
+        # Internal error — the docs file wasn't reachable. Acceptable
+        # when smoke runs outside the repo (CI containers, etc.) but
+        # noisy when running from the dev tree; flag as INFO not failure.
+        print(f"INFO: resources/read docs/syntax/ces returned -32603 "
+              f"(docs file not on path): {ds_resp.get('error', {}).get('message')}",
+              file=sys.stderr)
+    else:
+        failures.append(f"resources/read docs/syntax/ces: unexpected envelope: {ds_resp}")
+
+    # resources/read on an unknown URI — must return JSON-RPC error -32602.
+    send(proc, {
+        "jsonrpc": "2.0", "id": 904, "method": "resources/read",
+        "params": {"uri": "oes://does-not-exist"},
+    })
+    un_resp = recv(proc)
+    un_err = un_resp.get("error")
+    if not isinstance(un_err, dict) or un_err.get("code") != -32602:
+        failures.append(
+            f"resources/read unknown: expected error -32602, got: {un_resp}")
+
+    # resources/subscribe — concrete URI accepted.
+    send(proc, {
+        "jsonrpc": "2.0", "id": 905, "method": "resources/subscribe",
+        "params": {"uri": "oes://config/current"},
+    })
+    sub_resp = recv(proc)
+    if "result" not in sub_resp:
+        failures.append(f"resources/subscribe: no result: {sub_resp}")
+
+    # resources/subscribe on a template-expanded URI — accepted (matches
+    # the registered template). Use a name that won't exist; subscribe
+    # only validates the template match, not the underlying object.
+    send(proc, {
+        "jsonrpc": "2.0", "id": 906, "method": "resources/subscribe",
+        "params": {"uri": "oes://catalog/SmokeProbe"},
+    })
+    sub2_resp = recv(proc)
+    if "result" not in sub2_resp:
+        failures.append(f"resources/subscribe (template): no result: {sub2_resp}")
+
+    # resources/subscribe on a URI that matches no resource — error.
+    send(proc, {
+        "jsonrpc": "2.0", "id": 907, "method": "resources/subscribe",
+        "params": {"uri": "oes://nope/wat"},
+    })
+    sub3_resp = recv(proc)
+    if "error" not in sub3_resp:
+        failures.append(
+            f"resources/subscribe (unknown): expected error envelope: {sub3_resp}")
+
+    # resources/unsubscribe — always succeeds (set semantics).
+    send(proc, {
+        "jsonrpc": "2.0", "id": 908, "method": "resources/unsubscribe",
+        "params": {"uri": "oes://config/current"},
+    })
+    unsub_resp = recv(proc)
+    if "result" not in unsub_resp:
+        failures.append(f"resources/unsubscribe: no result: {unsub_resp}")
 
     proc.stdin.close()
     proc.wait(timeout=3)

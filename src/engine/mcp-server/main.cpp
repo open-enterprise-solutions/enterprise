@@ -15,6 +15,7 @@
 
 #include "headless_app.h"
 #include "jsonrpc.h"
+#include "resources.h"
 #include "tools.h"
 
 #include "3rdparty/nlohmann/json.hpp"
@@ -159,11 +160,26 @@ int main(int argc, char** argv)
 	mcpServer::Dispatcher disp;
 
 	// MCP: `initialize` — first call, returns capabilities + serverInfo.
+	// Spec 2025-06-18: declare tools.listChanged + resources.{subscribe,
+	// listChanged}. listChanged is wired as a no-op today (the tool table
+	// is static for the process lifetime) but advertised so the client
+	// knows the server speaks the latest protocol surface.
 	disp.Register("initialize", [](const nlohmann::json& /*params*/) {
 		nlohmann::json out;
 		out["protocolVersion"] = "2024-11-05";
 		out["capabilities"]    = nlohmann::json::object();
-		out["capabilities"]["tools"] = nlohmann::json::object();
+		nlohmann::json toolsCap;
+		toolsCap["listChanged"] = true;
+		out["capabilities"]["tools"] = std::move(toolsCap);
+		// MCP: resources capability — subscribe=true means the client may
+		// send resources/subscribe; listChanged=true means we will emit
+		// notifications/resources/list_changed if the catalogue ever
+		// mutates at runtime (v1: static, but the bit is advertised so
+		// future versions can roll without a breaking change).
+		nlohmann::json resourcesCap;
+		resourcesCap["subscribe"]   = true;
+		resourcesCap["listChanged"] = true;
+		out["capabilities"]["resources"] = std::move(resourcesCap);
 		out["serverInfo"]      = nlohmann::json::object();
 		out["serverInfo"]["name"]    = "oes-mcp";
 		out["serverInfo"]["version"] = "1.0";
@@ -234,6 +250,116 @@ int main(int argc, char** argv)
 	// connection is live. Cheap to implement.
 	disp.Register("ping", [](const nlohmann::json& /*params*/) {
 		return nlohmann::json::object();
+	});
+
+	// =========================================================================
+	// Resources (MCP spec 2025-06-18)
+	// =========================================================================
+
+	// MCP: `resources/list` — concrete resources only (templates go through
+	// resources/templates/list per spec). Each entry advertises uri, name,
+	// description, mimeType.
+	disp.Register("resources/list", [](const nlohmann::json& /*params*/) {
+		nlohmann::json arr = nlohmann::json::array();
+		for (const auto& r : mcpServer::AllResources().ListConcrete()) {
+			nlohmann::json item;
+			item["uri"]         = r.uri;
+			item["name"]        = r.name;
+			item["description"] = r.description;
+			item["mimeType"]    = r.mimeType;
+			arr.push_back(std::move(item));
+		}
+		nlohmann::json out;
+		out["resources"] = std::move(arr);
+		return out;
+	});
+
+	// MCP: `resources/templates/list` — RFC-6570 URI templates. The
+	// payload uses uriTemplate (not uri) per spec to distinguish a
+	// template from a concrete URI when the client renders both lists.
+	disp.Register("resources/templates/list", [](const nlohmann::json& /*params*/) {
+		nlohmann::json arr = nlohmann::json::array();
+		for (const auto& r : mcpServer::AllResources().ListTemplates()) {
+			nlohmann::json item;
+			item["uriTemplate"] = r.uri;
+			item["name"]        = r.name;
+			item["description"] = r.description;
+			item["mimeType"]    = r.mimeType;
+			arr.push_back(std::move(item));
+		}
+		nlohmann::json out;
+		out["resourceTemplates"] = std::move(arr);
+		return out;
+	});
+
+	// MCP: `resources/read` — params {uri}. Returns
+	// {contents:[{uri, mimeType, text}]}. The registry's Read() throws
+	// a JSON error envelope on unknown URI which the dispatcher re-emits
+	// as a JSON-RPC error per the existing throw-by-value handler shape.
+	disp.Register("resources/read", [](const nlohmann::json& params) {
+		if (!params.is_object() || !params.contains("uri") ||
+		    !params["uri"].is_string()) {
+			nlohmann::json err;
+			err["code"]    = mcpServer::errc::kInvalidParams;
+			err["message"] = "resources/read: 'uri' is required";
+			throw err;
+		}
+		const std::string uri = params["uri"].get<std::string>();
+		return mcpServer::AllResources().Read(uri);
+	});
+
+	// MCP: `resources/subscribe` — track interest in a URI so future
+	// notifications/resources/updated fire only for subscribed URIs. v1
+	// is in-memory per process. The URI must match an existing concrete
+	// resource or expand from a registered template (so subscriptions on
+	// `oes://catalog/Foo` are accepted even though the registered entry
+	// is `oes://catalog/{name}`).
+	disp.Register("resources/subscribe", [](const nlohmann::json& params) {
+		if (!params.is_object() || !params.contains("uri") ||
+		    !params["uri"].is_string()) {
+			nlohmann::json err;
+			err["code"]    = mcpServer::errc::kInvalidParams;
+			err["message"] = "resources/subscribe: 'uri' is required";
+			throw err;
+		}
+		const std::string uri = params["uri"].get<std::string>();
+		if (mcpServer::AllResources().FindMatching(uri) == nullptr) {
+			nlohmann::json err;
+			err["code"]    = mcpServer::errc::kInvalidParams;
+			err["message"] = "resources/subscribe: no resource matches '" + uri + "'";
+			throw err;
+		}
+		mcpServer::Subscribe(uri);
+		return nlohmann::json::object();
+	});
+
+	disp.Register("resources/unsubscribe", [](const nlohmann::json& params) {
+		if (!params.is_object() || !params.contains("uri") ||
+		    !params["uri"].is_string()) {
+			nlohmann::json err;
+			err["code"]    = mcpServer::errc::kInvalidParams;
+			err["message"] = "resources/unsubscribe: 'uri' is required";
+			throw err;
+		}
+		const std::string uri = params["uri"].get<std::string>();
+		mcpServer::Unsubscribe(uri);
+		return nlohmann::json::object();
+	});
+
+	// MCP: install the notify sink. tools.cpp calls EmitResourceUpdated()
+	// after every successful save_config / meta.* mutation; the sink here
+	// formats it as a JSON-RPC notification on stdout. Stdout is shared
+	// with the dispatcher's response writer — both protect their writes
+	// with std::flush so a notification interleaved between responses is
+	// still parseable.
+	mcpServer::SetNotifySink([](const std::string& uri) {
+		nlohmann::json note;
+		note["jsonrpc"] = "2.0";
+		note["method"]  = "notifications/resources/updated";
+		nlohmann::json p;
+		p["uri"]        = uri;
+		note["params"]  = std::move(p);
+		std::cout << note.dump() << '\n' << std::flush;
 	});
 
 	// =========================================================================
