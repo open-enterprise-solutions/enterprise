@@ -70,7 +70,7 @@ On each tick:
 - [x] **done** hotfix-pugi-chat (ef6247d9): Designer chat transport hardening — Pugi headers use `X-Tenant-Id` + `User-Agent`, Pugi env compatibility (`PUGI_BASE_URL`, `PUGI_OES_API_KEY`, `PUGI_TENANT_ID`, `PUGI_OES_LOCALE`), locale normalization (`uk`→`uk-UA`), chat path uses `ai_chat_query`, HTTP transport exceptions are caught, and cpp-httplib clients are closed explicitly. Build + targeted aiBridge tests + live Pugi API smoke PASS.
 - [x] **done** t2-010 (ff2fd13a): Neutral assistant action audit trail — aiBridge writes structured JSONL events to `~/.oes/ai-audit/aiBridge-YYYY-MM-DD.jsonl` for chat/review/agent/apply/commit-message actions. Records requestId/tool/status/counts/sizes, never tokens or full prompt/code, and never inserts attribution comments into user modules or commit messages.
 - [x] **done** t2-011 (6eaca142): Smoke validation post-apply — `headless_smoke_run` MCP tool reports load/compile status and can run functional tests through the existing rollback fixture. Smoke test covers the tool in `--no-config` protocol mode.
-- [ ] **pending** t2-012: Sigma reject diagnostic playbook — natural-language explainer when sigma_check returns isError (call llm_query persona=sigma). ~2 days.
+- [x] **done** t2-012 (a5a45390): Sigma reject diagnostic playbook — `sigma_check` now appends a natural-language diagnostic from Pugi `llm_query` when the Pugi verdict is `isError`, `ok:false`, or a Pugi-side scaffold 5xx. `oes-mcp` also accepts Pugi env aliases (`PUGI_BASE_URL`, `PUGI_OES_API_KEY`, optional tenant, normalized locale). Live proxy smoke reaches Pugi; current Pugi `sigma_check` still returns scaffold 503, tracked in Tier 4.
 
 ## Tier 2.5 — mcp-1c parity (inspired by feenlace/mcp-1c MIT)
 
