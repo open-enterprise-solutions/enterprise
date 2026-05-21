@@ -110,7 +110,7 @@ void ibTemplateWizardPreviewPage::LoadFrom(const wxString& responseJson,
 	m_modulesList->Clear();
 
 	// Parse the JSON response — tolerate both "structure" and "mutations"
-	// keys at the top level since Pugi's contract has churned.
+	// keys at the top level because provider contracts may evolve.
 	auto parsed = nlohmann::json::parse(std::string(responseJson.utf8_str()),
 	                                       nullptr, /*allow_exceptions=*/false);
 	if (parsed.is_discarded() || !parsed.is_object()) {
@@ -118,7 +118,7 @@ void ibTemplateWizardPreviewPage::LoadFrom(const wxString& responseJson,
 		return;
 	}
 
-	// Unwrap result.* if present (Pugi sometimes wraps payload).
+	// Unwrap result.* if present (MCP-style providers often wrap payload).
 	const nlohmann::json* payload = &parsed;
 	if (parsed.contains("result") && parsed["result"].is_object()) {
 		payload = &parsed["result"];
@@ -158,7 +158,7 @@ void ibTemplateWizardPreviewPage::LoadFrom(const wxString& responseJson,
 		m_structureTree->ExpandAll();
 	}
 
-	// demoData[] — populate the second tab. Pugi shape per spec:
+	// demoData[] — populate the second tab. Provider shape per spec:
 	// [{kind, fullName, rows:[{...},{...}], postAfterInsert?}]
 	if (payload->contains("demoData") && (*payload)["demoData"].is_array()) {
 		long row = 0;

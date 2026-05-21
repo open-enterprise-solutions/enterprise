@@ -61,7 +61,7 @@ enum {
 
 	// Template Wizard ("Создать из шаблона..."). Designer-private menu
 	// id — opens the gallery → preview → customize modal that builds a
-	// new configuration from a Pugi-served template. File menu only;
+	// new configuration from an extension-served template. File menu only;
 	// no keyboard shortcut by default (rarely-invoked flagship action).
 	wxID_DESIGNER_TEMPLATE_WIZARD,
 

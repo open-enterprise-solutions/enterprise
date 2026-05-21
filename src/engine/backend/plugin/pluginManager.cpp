@@ -499,8 +499,7 @@ size_t ibPluginManager::LoadAll()
 			// Phase 7.5 universal env injection. ABI v4 plugins read
 			// their tokens via Host_ReadPluginEnv (which honours
 			// caller-id isolation). v3 plugins (pre-trampoline) call
-			// getenv() directly — Pugi being the live example,
-			// expecting PUGI_BASE_URL / PUGI_OES_API_KEY / PUGI_TENANT_ID.
+			// getenv() directly and expect their provider-specific keys.
 			// Export this plugin's BYOK .env values into the process env
 			// just before init_fn so v3 plugins see them. v4 plugins
 			// also benefit (a plugin that registers shared keys via
@@ -987,8 +986,7 @@ void ibPluginManager::ReplayPendingWebPaneRegistrations()
 //   - speaks the same chat.send / editor.skill envelope contract as
 //     sample.html and aiBridge
 //   - dispatches each user prompt through CallFunction(LLMQuery, ...)
-//     on the main thread (the v3 plugin owns its HTTP threading
-//     internally — Pugi blocks until the Anvil response lands)
+//     on the main thread (the v3 plugin owns its own transport)
 //   - emits a single chat.delta with the full response, then chat.end
 //
 // This is a one-way bridge: streaming chat.delta chunks aren't possible
@@ -1133,8 +1131,8 @@ std::string BuildEditorSkillPrompt(const std::string& op,
 
 // Pane message dispatcher. Parses inbound envelopes on the caller
 // thread (UI), then offloads the blocking LLMQuery call to a detached
-// std::thread so the Designer stays responsive while Pugi waits ~4-12s
-// for an Anvil reply. Emits chat.delta in small chunks for a typewriter
+// std::thread so the Designer stays responsive while the provider waits
+// for a reply. Emits chat.delta in small chunks for a typewriter
 // effect — gives the user immediate visual feedback that the request
 // is alive even while the same TCP round-trip is in flight.
 //
@@ -1267,8 +1265,8 @@ void LegacyShimOnPaneMessage(const char* paneId, const char* jsonInline, void* /
 
 		const std::string rawResponse = std::string(ret.GetString().utf8_str().data());
 
-		// Pugi-style v3 plugins return the full MCP transport envelope
-		// as a JSON string. Extract the user-facing text.
+		// Some v3 plugins return the full MCP transport envelope as a
+		// JSON string. Extract the user-facing text.
 		std::string response = rawResponse;
 		{
 			auto parsed = nlohmann::json::parse(rawResponse, nullptr, /*allow_exceptions=*/false);
@@ -1296,7 +1294,7 @@ void LegacyShimOnPaneMessage(const char* paneId, const char* jsonInline, void* /
 		DiagLog("  worker: CallFunction OK %lld ms, raw=%zu, unwrapped=%zu",
 		        (long long)ms, rawResponse.size(), response.size());
 
-		// Typewriter streaming. Pugi's LLMQuery is one-shot so we have
+		// Typewriter streaming. Legacy LLMQuery is one-shot so we have
 		// no real upstream chunks; split the response into roughly
 		// sentence-sized pieces and emit chat.delta one at a time with
 		// a short sleep between so the user sees the text appear
@@ -1422,7 +1420,7 @@ void ibPluginManager::CompleteCodeAsync(const wxString& prompt,
 			err = _("LLM call failed — check plugin credentials");
 		} else {
 			const std::string raw(ret.GetString().utf8_str().data());
-			// Unwrap Pugi MCP envelope or use raw text. Same logic the
+			// Unwrap MCP envelope or use raw text. Same logic the
 			// chat shim uses — keeps response shape behaviour identical.
 			std::string content = raw;
 			auto parsed = nlohmann::json::parse(raw, nullptr, /*allow_exceptions=*/false);

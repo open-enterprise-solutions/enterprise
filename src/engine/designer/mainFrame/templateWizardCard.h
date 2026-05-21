@@ -12,10 +12,8 @@
 // gallery-page sizer routes that through OnGalleryCardClicked which
 // records the templateId and advances to Page 2.
 //
-// Thumbnail fetch is fire-and-forget on a worker thread (cpp-httplib
-// against the thumbnailUrl); on success we wxQueueEvent the decoded
-// bitmap back to the card's wxThreadEvent handler. Failure falls back
-// to a generic placeholder so the card never blocks the gallery render.
+// Thumbnail fetch is fire-and-forget on a worker thread. Failure falls
+// back to a generic placeholder so the card never blocks the gallery.
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_TEMPLATE_WIZARD_CARD_H_

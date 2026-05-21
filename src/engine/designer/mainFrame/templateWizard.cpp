@@ -7,6 +7,7 @@
 #include "templateWizardPreview.h"
 #include "templateWizardCustomize.h"
 #include "templateWizardApplier.h"
+#include "templateWizardHttp.h"
 
 #include <wx/simplebook.h>
 #include <wx/sizer.h>
@@ -20,6 +21,7 @@
 #include <wx/progdlg.h>
 #include <memory>
 
+#include <cctype>
 #include <thread>
 #include <atomic>
 #include <string>
@@ -28,15 +30,10 @@
 #include "backend/appData.h"
 #include "backend/plugin/pluginManager.h"
 #include "3rdparty/nlohmann/json.hpp"
-#include "../../../3rdparty/cpp-httplib/httplib.h"
 
 // Plugin id used for grants + metaBridge audit. Must match the literal
 // inside ibTemplateWizardApplier.cpp (s_kWizardPluginId).
 static const wxString s_kWizardPluginId = wxT("designer.templateWizard");
-
-// Default Pugi MCP endpoint when aiBridge.env doesn't override it.
-static const wxString s_kDefaultEndpoint =
-    wxT("https://mcp.pugi.io/api/oes-mcp/invoke");
 
 // Custom event type used by worker threads to post responses back.
 wxDEFINE_EVENT(EVT_TEMPLATE_WIZARD_THREAD, wxThreadEvent);
@@ -89,8 +86,9 @@ static wxString PickLocalizedFromMap(const nlohmann::json& maybeMap,
 }
 
 // ---------------------------------------------------------------------------
-// HTTP helper — POSTs to Pugi MCP and returns the raw response body.
-// Used by all three fetch-* paths. Runs on a worker thread.
+// HTTP helper — POSTs to the configured template provider and returns
+// the raw response body. Used by all three fetch-* paths. Runs on a
+// worker thread.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -101,6 +99,80 @@ struct McpInvokeResult {
 	std::string error;
 };
 
+struct TemplateProviderConfig {
+	std::string pluginId;
+	std::string endpoint;
+	std::string token;
+	std::string tenant;
+	std::string locale;
+	std::string listTool      = "oes_templates_list";
+	std::string getTool       = "oes_template_get";
+	std::string customizeTool = "oes_template_customize";
+};
+
+std::string FirstEnvValue(const ibPluginManager::PluginEnvMap::mapped_type& env,
+                          std::initializer_list<const char*> keys)
+{
+	for (const char* key : keys) {
+		if (key == nullptr) continue;
+		auto it = env.find(key);
+		if (it != env.end() && !it->second.empty()) return it->second;
+	}
+	return {};
+}
+
+bool EnvFlagEnabled(const ibPluginManager::PluginEnvMap::mapped_type& env,
+                    const char* key)
+{
+	auto it = env.find(key);
+	if (it == env.end()) return false;
+	std::string value = it->second;
+	for (char& c : value) {
+		c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+	}
+	return value == "1" || value == "true" || value == "yes" ||
+	       value == "on";
+}
+
+bool BuildProviderConfig(const std::string& pluginId,
+                         const ibPluginManager::PluginEnvMap::mapped_type& env,
+                         const std::string& localeFallback,
+                         TemplateProviderConfig& out)
+{
+	if (!EnvFlagEnabled(env, "OES_TEMPLATE_PROVIDER")) return false;
+	TemplateProviderConfig cfg;
+	cfg.pluginId = pluginId;
+	cfg.endpoint = FirstEnvValue(env, {
+		"OES_TEMPLATE_ENDPOINT", "TEMPLATE_ENDPOINT", "ENDPOINT"
+	});
+	cfg.token = FirstEnvValue(env, {
+		"OES_TEMPLATE_TOKEN", "TEMPLATE_TOKEN", "TOKEN"
+	});
+	cfg.tenant = FirstEnvValue(env, {
+		"OES_TEMPLATE_TENANT", "TEMPLATE_TENANT", "TENANT"
+	});
+	cfg.locale = FirstEnvValue(env, {
+		"OES_TEMPLATE_LOCALE", "TEMPLATE_LOCALE", "LOCALE"
+	});
+	cfg.listTool = FirstEnvValue(env, {
+		"OES_TEMPLATE_LIST_TOOL", "TEMPLATE_LIST_TOOL"
+	});
+	cfg.getTool = FirstEnvValue(env, {
+		"OES_TEMPLATE_GET_TOOL", "TEMPLATE_GET_TOOL"
+	});
+	cfg.customizeTool = FirstEnvValue(env, {
+		"OES_TEMPLATE_CUSTOMIZE_TOOL", "TEMPLATE_CUSTOMIZE_TOOL"
+	});
+	if (cfg.locale.empty()) cfg.locale = localeFallback;
+	if (cfg.listTool.empty()) cfg.listTool = "oes_templates_list";
+	if (cfg.getTool.empty()) cfg.getTool = "oes_template_get";
+	if (cfg.customizeTool.empty()) cfg.customizeTool = "oes_template_customize";
+	cfg.endpoint = ibTemplateWizardHttp::NormalizeEndpoint(cfg.endpoint, {});
+	if (cfg.endpoint.empty() || cfg.token.empty()) return false;
+	out = std::move(cfg);
+	return true;
+}
+
 McpInvokeResult InvokeMcpTool(const std::string& endpoint,
                                 const std::string& token,
                                 const std::string& tenant,
@@ -109,52 +181,18 @@ McpInvokeResult InvokeMcpTool(const std::string& endpoint,
                                 int timeoutSec)
 {
 	McpInvokeResult out;
-	// Split URL — same trivial parser as aiBridge.
-	const auto schemeEnd = endpoint.find("://");
-	if (schemeEnd == std::string::npos) {
-		out.error = "malformed endpoint URL";
-		return out;
-	}
-	const auto pathStart = endpoint.find('/', schemeEnd + 3);
-	const std::string base = (pathStart == std::string::npos)
-	                              ? endpoint
-	                              : endpoint.substr(0, pathStart);
-	const std::string path = (pathStart == std::string::npos)
-	                              ? "/"
-	                              : endpoint.substr(pathStart);
-
-	httplib::Client cli(base);
-	cli.set_connection_timeout(10);
-	cli.set_read_timeout(timeoutSec);
-	cli.set_follow_location(false);   // never replay bearer to a redirect
-
 	nlohmann::json body;
 	body["name"]  = toolName;
 	body["input"] = input;
 
-	httplib::Headers headers = {
-		{ "Authorization", "Bearer " + token   },
-		{ "X-Pugi-Tenant", tenant              },
-		{ "Content-Type",  "application/json"  },
-		{ "Accept",        "application/json"  },
-	};
-	const std::string bodyStr = body.dump();
-	auto res = cli.Post(path.c_str(), headers, bodyStr, "application/json");
-	if (!res) {
-		out.error = std::string("HTTP transport failed: ") +
-		             httplib::to_string(res.error());
-		return out;
+	ibTemplateWizardHttp::Response res =
+	    ibTemplateWizardHttp::PostJson(endpoint, token, tenant, body, timeoutSec);
+	out.ok    = res.Ok();
+	out.body  = res.body;
+	out.error = res.error;
+	if (!out.ok && out.error.empty()) {
+		out.error = "HTTP " + std::to_string(res.status);
 	}
-	if (res->status >= 300 && res->status < 400) {
-		out.error = "server returned redirect; refusing to replay bearer";
-		return out;
-	}
-	if (res->status >= 400) {
-		out.error = "HTTP " + std::to_string(res->status);
-		return out;
-	}
-	out.ok   = true;
-	out.body = res->body;
 	return out;
 }
 
@@ -252,14 +290,17 @@ void ibTemplateWizard::RestoreWizardPolicy()
 }
 
 // ---------------------------------------------------------------------------
-// Credentials — pull TOKEN/TENANT/LOCALE/ENDPOINT from aiBridge.env.
+// Template provider discovery.
 // ---------------------------------------------------------------------------
 
-bool ibTemplateWizard::ReadAiBridgeCreds(std::string& tokenOut,
-                                            std::string& tenantOut,
-                                            std::string& localeOut,
-                                            std::string& endpointOut,
-                                            wxString&    errorOut) const
+bool ibTemplateWizard::ReadTemplateProvider(std::string& tokenOut,
+                                              std::string& tenantOut,
+                                              std::string& localeOut,
+                                              std::string& endpointOut,
+                                              std::string& listToolOut,
+                                              std::string& getToolOut,
+                                              std::string& customizeToolOut,
+                                              wxString&    errorOut) const
 {
 	if (appData == nullptr) {
 		errorOut = _("appData не инициализирован");
@@ -270,20 +311,25 @@ bool ibTemplateWizard::ReadAiBridgeCreds(std::string& tokenOut,
 		errorOut = _("Plugin manager не инициализирован");
 		return false;
 	}
-	const std::string pluginId("aiBridge");
-	tokenOut    = pm->ReadPluginEnv(pluginId, "TOKEN");
-	tenantOut   = pm->ReadPluginEnv(pluginId, "TENANT");
-	localeOut   = pm->ReadPluginEnv(pluginId, "LOCALE");
-	endpointOut = pm->ReadPluginEnv(pluginId, "ENDPOINT");
-	if (endpointOut.empty()) endpointOut = std::string(s_kDefaultEndpoint.utf8_str());
-	if (localeOut.empty())   localeOut = std::string(m_localeKey.utf8_str());
-
-	if (tokenOut.empty() || tenantOut.empty()) {
-		errorOut = _("В aiBridge.env отсутствуют TOKEN или TENANT. "
-		              "Откройте Tools → Plugins, чтобы их задать.");
-		return false;
+	const std::string localeFallback(m_localeKey.utf8_str());
+	TemplateProviderConfig cfg;
+	for (const auto& kv : pm->PluginEnv()) {
+		if (BuildProviderConfig(kv.first, kv.second, localeFallback, cfg)) {
+			tokenOut         = cfg.token;
+			tenantOut        = cfg.tenant;
+			localeOut        = cfg.locale;
+			endpointOut      = cfg.endpoint;
+			listToolOut      = cfg.listTool;
+			getToolOut       = cfg.getTool;
+			customizeToolOut = cfg.customizeTool;
+			return true;
+		}
 	}
-	return true;
+
+	errorOut = _("Не найден plugin-provider шаблонов. Установите расширение, "
+	              "которое задаёт OES_TEMPLATE_PROVIDER=1, "
+	              "OES_TEMPLATE_ENDPOINT и OES_TEMPLATE_TOKEN.");
+	return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -388,15 +434,16 @@ wxWindow* ibTemplateWizard::BuildCustomizePage(wxWindow* parent)
 }
 
 // ---------------------------------------------------------------------------
-// Worker thread launchers — all three POST to Pugi via cpp-httplib.
+// Worker thread launchers — all three POST to the selected provider.
 // On success post a wxThreadEvent back with the response body.
 // ---------------------------------------------------------------------------
 
 void ibTemplateWizard::StartFetchTemplatesList()
 {
-	std::string token, tenant, locale, endpoint;
+	std::string token, tenant, locale, endpoint, listTool, getTool, customizeTool;
 	wxString credErr;
-	if (!ReadAiBridgeCreds(token, tenant, locale, endpoint, credErr)) {
+	if (!ReadTemplateProvider(token, tenant, locale, endpoint,
+	                          listTool, getTool, customizeTool, credErr)) {
 		if (m_galleryStatus != nullptr) {
 			m_galleryStatus->SetLabel(credErr);
 		}
@@ -405,11 +452,11 @@ void ibTemplateWizard::StartFetchTemplatesList()
 	const long epoch = m_requestEpoch.fetch_add(1) + 1;
 
 	SetBusy(true, _("Получение списка шаблонов…"));
-	std::thread([this, token, tenant, locale, endpoint, epoch]() {
+	std::thread([this, token, tenant, locale, endpoint, listTool, epoch]() {
 		nlohmann::json input;
 		input["locale"] = locale;
 		McpInvokeResult r = InvokeMcpTool(endpoint, token, tenant,
-		                                     "oes_templates_list", input,
+		                                     listTool, input,
 		                                     /*timeoutSec=*/15);
 		auto* evt = new wxThreadEvent(EVT_TEMPLATE_WIZARD_THREAD);
 		ibTemplateWizardThreadPayload payload;
@@ -429,9 +476,10 @@ void ibTemplateWizard::StartFetchTemplatesList()
 void ibTemplateWizard::StartFetchTemplateGet(const wxString& templateId,
                                                 bool includeData)
 {
-	std::string token, tenant, locale, endpoint;
+	std::string token, tenant, locale, endpoint, listTool, getTool, customizeTool;
 	wxString credErr;
-	if (!ReadAiBridgeCreds(token, tenant, locale, endpoint, credErr)) {
+	if (!ReadTemplateProvider(token, tenant, locale, endpoint,
+	                          listTool, getTool, customizeTool, credErr)) {
 		wxMessageBox(credErr, _("Template Wizard"), wxICON_ERROR, this);
 		return;
 	}
@@ -439,14 +487,14 @@ void ibTemplateWizard::StartFetchTemplateGet(const wxString& templateId,
 	SetBusy(true, _("Получение структуры шаблона…"));
 
 	const std::string templateIdUtf8(templateId.utf8_str());
-	std::thread([this, token, tenant, locale, endpoint,
+	std::thread([this, token, tenant, locale, endpoint, getTool,
 	              templateIdUtf8, includeData, epoch]() {
 		nlohmann::json input;
 		input["templateId"]  = templateIdUtf8;
 		input["includeData"] = includeData;
 		input["locale"]      = locale;
 		McpInvokeResult r = InvokeMcpTool(endpoint, token, tenant,
-		                                     "oes_template_get", input,
+		                                     getTool, input,
 		                                     /*timeoutSec=*/30);
 		auto* evt = new wxThreadEvent(EVT_TEMPLATE_WIZARD_THREAD);
 		ibTemplateWizardThreadPayload payload;
@@ -467,9 +515,10 @@ void ibTemplateWizard::StartFetchTemplateCustomize(const wxString& templateId,
                                                       const wxString& modificationsJson,
                                                       const wxString& userPrompt)
 {
-	std::string token, tenant, locale, endpoint;
+	std::string token, tenant, locale, endpoint, listTool, getTool, customizeTool;
 	wxString credErr;
-	if (!ReadAiBridgeCreds(token, tenant, locale, endpoint, credErr)) {
+	if (!ReadTemplateProvider(token, tenant, locale, endpoint,
+	                          listTool, getTool, customizeTool, credErr)) {
 		wxMessageBox(credErr, _("Template Wizard"), wxICON_ERROR, this);
 		return;
 	}
@@ -483,7 +532,7 @@ void ibTemplateWizard::StartFetchTemplateCustomize(const wxString& templateId,
 	const std::string modsUtf8(modificationsJson.utf8_str());
 	const std::string promptUtf8(userPrompt.utf8_str());
 
-	std::thread([this, token, tenant, locale, endpoint,
+	std::thread([this, token, tenant, locale, endpoint, customizeTool,
 	              templateIdUtf8, modsUtf8, promptUtf8, epoch]() {
 		nlohmann::json input;
 		input["templateId"] = templateIdUtf8;
@@ -498,7 +547,7 @@ void ibTemplateWizard::StartFetchTemplateCustomize(const wxString& templateId,
 		}
 		// Customize calls can be slow on first invocation (Sigma warm-up).
 		McpInvokeResult r = InvokeMcpTool(endpoint, token, tenant,
-		                                     "oes_template_customize", input,
+		                                     customizeTool, input,
 		                                     /*timeoutSec=*/45);
 		auto* evt = new wxThreadEvent(EVT_TEMPLATE_WIZARD_THREAD);
 		ibTemplateWizardThreadPayload payload;
@@ -529,7 +578,7 @@ void ibTemplateWizard::OnThreadResponse(wxThreadEvent& event)
 	SetBusy(false, wxEmptyString);
 
 	if (payload.m_kind == ibTemplateWizardThreadPayload::Kind::Error) {
-		wxMessageBox(_("Не удалось получить ответ от Pugi:\n") +
+		wxMessageBox(_("Не удалось получить ответ от provider:\n") +
 		               payload.m_error,
 		              _("Template Wizard"), wxICON_ERROR, this);
 		return;

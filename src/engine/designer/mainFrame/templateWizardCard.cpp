@@ -3,6 +3,7 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include "templateWizardCard.h"
+#include "templateWizardHttp.h"
 
 #include <wx/sizer.h>
 #include <wx/stattext.h>
@@ -13,13 +14,12 @@
 #include <wx/image.h>
 #include <wx/thread.h>
 #include <wx/dcmemory.h>
+#include <wx/weakref.h>
 
 #include <thread>
 #include <atomic>
 #include <memory>
 #include <string>
-
-#include "../../../3rdparty/cpp-httplib/httplib.h"
 
 // Card geometry — sized for the 2x2 layout on a typical 1280x800 wizard.
 // Width is fixed; height adjusts to content via wxBoxSizer.
@@ -148,16 +148,6 @@ void ibTemplateCard::OnLeaveWindow(wxMouseEvent& event)
 void ibTemplateCard::OnThumbnailLoaded(wxThreadEvent& event)
 {
 	// Payload: raw bytes of an image (PNG/JPEG) the worker downloaded.
-	const wxString payloadStr = event.GetString();
-	if (payloadStr.empty()) return;
-
-	// Convert wxString-of-bytes back into a memory buffer + decode.
-	// wxString stores UTF-8 here for raw bytes; we recover via .ToUTF8(),
-	// but that re-encodes for control chars. Instead the worker writes
-	// the buffer pointer via SetExtraLong + wxThreadEvent::Clone hack —
-	// simpler: keep the bytes in a static map keyed by event id. For
-	// this implementation the buffer rides in the event's payload as
-	// a wxMemoryBuffer set via SetPayload.
 	auto buf = event.GetPayload<wxMemoryBuffer>();
 	if (buf.GetDataLen() == 0) return;
 
@@ -179,44 +169,21 @@ void ibTemplateCard::OnThumbnailLoaded(wxThreadEvent& event)
 void ibTemplateCard::StartThumbnailFetch()
 {
 	const std::string url = std::string(m_thumbnailUrl.utf8_str());
-	auto* sink = this;     // raw — see lifetime note below
-	std::thread([url, sink]() {
-		// Lifetime note: the gallery owns the cards and lives for the
-		// duration of the wizard's ShowModal. The wizard is modal so the
-		// user can't close it mid-fetch through another path — but they
-		// CAN dismiss via the Cancel button. In that case we'll be
-		// freed; the wxQueueEvent below would target a freed widget.
-		// To stay safe we'd need a wxWeakRef<wxEvtHandler>, but the
-		// modal-ness of the wizard means the worst case is one zombie
-		// queued event landing on a freed handler before the runloop
-		// exits. wxQueueEvent against a dead handler is a no-op on
-		// modern wxWidgets — it inspects m_eventHandler validity.
-		// Accept the residual race; the placeholder stays as fallback.
-
-		// Split URL → host + path
-		auto split = [](const std::string& u) -> std::pair<std::string, std::string> {
-			const auto schemeEnd = u.find("://");
-			if (schemeEnd == std::string::npos) return {{}, {}};
-			const auto pathStart = u.find('/', schemeEnd + 3);
-			if (pathStart == std::string::npos) {
-				return { u, "/" };
-			}
-			return { u.substr(0, pathStart), u.substr(pathStart) };
-		};
-		const auto [base, path] = split(url);
-		if (base.empty()) return;
-		httplib::Client cli(base);
-		cli.set_connection_timeout(5);
-		cli.set_read_timeout(10);
-		cli.set_follow_location(true);
-		auto res = cli.Get(path.c_str());
-		if (!res || res->status >= 300) return;
-
+	wxWeakRef<ibTemplateCard> weakSelf(this);
+	std::thread([url, weakSelf]() {
+		std::string body;
+		if (!ibTemplateWizardHttp::GetBytes(url, body, 10)) return;
 		wxMemoryBuffer mb;
-		mb.AppendData(res->body.data(), res->body.size());
+		mb.AppendData(body.data(), body.size());
 
-		auto* evt = new wxThreadEvent(EVT_CARD_THUMBNAIL_LOADED);
-		evt->SetPayload(mb);
-		wxQueueEvent(sink, evt);
+		auto* self = weakSelf.get();
+		if (self == nullptr) return;
+		self->CallAfter([weakSelf, mb]() mutable {
+			auto* s = weakSelf.get();
+			if (s == nullptr) return;
+			wxThreadEvent evt(EVT_CARD_THUMBNAIL_LOADED);
+			evt.SetPayload(mb);
+			s->OnThumbnailLoaded(evt);
+		});
 	}).detach();
 }

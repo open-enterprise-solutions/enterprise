@@ -1,19 +1,16 @@
 /////////////////////////////////////////////////////////////////////////////
 // ibTemplateWizard — modal "Создать из шаблона..." wizard for OES Designer.
 //
-// Flagship "голое решение из коробки" UX: gallery of 4 production templates
-// (accounting-demo, manufacturing-demo, services-demo, trade-demo) →
+// Template-provider UX: gallery supplied by an extension plugin →
 // preview → optional customize → apply via metaBridge mutations.
 //
 // Three pages, swapped inside a single wxDialog via wxSimplebook:
 //   Page 1 — Gallery: 2x2 card grid; click selects + advances.
 //   Page 2 — Preview: tree of objects, demo data summary, module list.
-//   Page 3 — Customize: rename map, exclude, or natural-language tweak
-//            via oes_template_customize Pugi tool.
+//   Page 3 — Customize: rename map, exclude, or provider-side tweak.
 //
-// All MCP tool calls run on worker threads (cpp-httplib direct POST to
-// https://mcp.pugi.io/api/oes-mcp/invoke) with credentials read from the
-// aiBridge plugin's BYOK env (TOKEN/TENANT/LOCALE). Results post back to
+// Provider calls run on worker threads with credentials read from the
+// selected plugin's BYOK env (OES_TEMPLATE_* / TEMPLATE_*). Results post back to
 // the UI thread via wxQueueEvent + bound wxEVT_THREAD handler.
 //
 // Apply walks the cached mutations[] from the template through
@@ -109,9 +106,9 @@ private:
 	wxWindow* BuildCustomizePage(wxWindow* parent);
 
 	// ----- Worker-thread launchers -----
-	// All three start a std::thread that POSTs to Pugi, then queues a
-	// wxThreadEvent back to the UI. The launchers bump m_requestEpoch
-	// so any earlier in-flight fetch is dropped on arrival.
+	// All three start a std::thread that POSTs to the selected provider,
+	// then queues a wxThreadEvent back to the UI. The launchers bump
+	// m_requestEpoch so any earlier in-flight fetch is dropped on arrival.
 	void StartFetchTemplatesList();
 	void StartFetchTemplateGet(const wxString& templateId, bool includeData);
 	void StartFetchTemplateCustomize(const wxString& templateId,
@@ -146,14 +143,18 @@ private:
 	void GrantWizardPolicy();
 	void RestoreWizardPolicy();
 
-	// ----- Credentials helper -----
-	// Fetches TOKEN/TENANT/LOCALE/ENDPOINT from aiBridge.env via the
-	// plugin manager. Returns false + diagnostic if any are missing.
-	bool ReadAiBridgeCreds(std::string& tokenOut,
-	                        std::string& tenantOut,
-	                        std::string& localeOut,
-	                        std::string& endpointOut,
-	                        wxString&    errorOut) const;
+	// ----- Provider helper -----
+	// Fetches endpoint/token/tenant/locale/tool names from the first
+	// plugin env that opts into OES_TEMPLATE_PROVIDER=1. Returns false +
+	// diagnostic if no provider is configured.
+	bool ReadTemplateProvider(std::string& tokenOut,
+	                          std::string& tenantOut,
+	                          std::string& localeOut,
+	                          std::string& endpointOut,
+	                          std::string& listToolOut,
+	                          std::string& getToolOut,
+	                          std::string& customizeToolOut,
+	                          wxString&    errorOut) const;
 
 	// ----- Busy-state UI -----
 	void SetBusy(bool busy, const wxString& message);

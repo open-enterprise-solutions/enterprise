@@ -88,8 +88,8 @@ typedef void (*ibPluginWebMsgFn)(const char* paneId, const char* jsonInline, voi
 // `supportedModes` is a NULL-terminated array of strings drawn from
 // {"chat", "agent", "helper"}.
 typedef struct ibPluginAIProvider_s {
-	const char*  providerId;        // unique stable id, e.g. "pugi.sigma"
-	const char*  displayName;       // e.g. "Sigma (Pugi × OES)"
+	const char*  providerId;        // unique stable id, e.g. "vendor.sigma"
+	const char*  displayName;       // e.g. "Sigma"
 	const char*  iconPath;          // optional absolute path
 	const char** supportedModes;    // NULL-terminated
 	int  (*Query)(const char* requestJson,

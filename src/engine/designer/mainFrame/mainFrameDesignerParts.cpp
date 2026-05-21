@@ -428,8 +428,8 @@ void ibFrontendDocMDIFrameDesigner::OpenHelpForCursor()
 // manager so RegisterWebPane / WebPaneSend / WebPaneShow trampolines in
 // pluginManager.cpp can construct and drive concrete wxAuiPane instances.
 //
-// Any plugin (AI assistant bridges like pugi-oes-bridge, custom dashboard
-// plugins, anything that wants a wxWebView surface) calls
+// Any plugin (assistant bridges, custom dashboard plugins, anything that
+// wants a wxWebView surface) calls
 // host->RegisterWebPane("<id>", "<title>", "<html>", cb, ud) from
 // oes_plugin_initialize; the lambdas below run on the UI thread and add
 // the resulting ibPluginWebPane to wxAuiManager.
@@ -524,7 +524,7 @@ void ibFrontendDocMDIFrameDesigner::WirePluginWebPaneCallbacks()
 	pm->ReplayPendingWebPaneRegistrations();
 
 	// Legacy-shim bridge for ABI v3 plugins that expose LLMQuery but
-	// not a v4 chat pane (Pugi being the live example). Resolve the
+	// not a v4 chat pane. Resolve the
 	// bundled sample.html once and hand the path to the manager — it
 	// stands up a synthetic AI provider + pane on the same protocol
 	// real v4 plugins use, so chat / editor.skill / menu wiring all

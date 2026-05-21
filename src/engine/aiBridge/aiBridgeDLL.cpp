@@ -396,9 +396,9 @@ struct ChatProfile {
 ChatProfile ResolveChatProfile(std::string requested)
 {
 	requested = TrimCopy(std::move(requested));
-	if (requested == "pugi") {
+	if (requested == "provider" || requested == "pugi") {
 		return {
-			"pugi",
+			requested == "provider" ? "provider" : "pugi",
 			"pugi-mcp",
 			PugiEndpoint(),
 			"pugi-mcp",

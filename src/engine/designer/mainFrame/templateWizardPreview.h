@@ -7,9 +7,9 @@
 //   2. Demo data   — wxListCtrl of sampled demoData rows (when present).
 //   3. Модули      — wxListBox of previewModule names; double-click opens
 //                     a read-only wxStyledTextCtrl pop-up showing module
-//                     source (also from previewModules[] if Pugi returns
-//                     {name, source} pairs; we tolerate either flat-strings
-//                     or objects).
+//                     source (also from previewModules[] if the provider
+//                     returns {name, source} pairs; we tolerate either
+//                     flat-strings or objects).
 //
 // Bottom row: "Включить демо-данные" checkbox (default on), then
 // [Назад] [Настроить] [Применить как есть] buttons.
@@ -48,10 +48,10 @@ public:
 	~ibTemplateWizardPreviewPage() override = default;
 
 	// Populates the tree + lists from an oes_template_get response.
-	// Tolerates Pugi's expected shape:
+	// Tolerates provider shape:
 	//   { structure: [{op,kind,fullName,properties}], demoData: [...] }
-	// AND the alternative {mutations:[...]} shape some older Pugi
-	// versions return. Missing keys produce empty tabs (not an error —
+	// AND the alternative {mutations:[...]} shape some providers return.
+	// Missing keys produce empty tabs (not an error —
 	// the user still sees the template name/version in the header).
 	void LoadFrom(const wxString& responseJson,
 	               const wxString& templateName,

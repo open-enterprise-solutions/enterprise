@@ -687,8 +687,8 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 	// Right-click skill submenu modern AI IDE assistants ship (Explain
 	// / Review / Fix / Doc-gen / Send to chat). Submenu label is
 	// dynamic: when a plugin has registered an AI provider, the label
-	// shows that provider's displayName (e.g. "Pugi", "Copilot",
-	// "Claude") — host stays vendor-neutral. With nothing installed
+	// shows that provider's displayName — host stays vendor-neutral.
+	// With nothing installed
 	// it falls back to a generic "AI Assistant (no plugin installed)"
 	// and all items grey out.
 	{
@@ -739,9 +739,7 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 		miCommit ->Enable(hasAI);
 
 		// Always "AI Assistant" — host-neutral; specific provider name
-		// is intentionally not exposed in the submenu label, matching
-		// the way Cursor / Copilot / Cody never put the LLM vendor in
-		// menu UI.
+		// is intentionally not exposed in the submenu label.
 		menu.AppendSubMenu(aiSub, hasAI
 		    ? _("AI Assistant")
 		    : _("AI Assistant (no plugin installed)"));
@@ -905,7 +903,7 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 
 	// COMMIT-MSG: dedicated handler — editor buffer is irrelevant; the
 	// LLM input is `git diff`. Capture staged + unstaged diff under
-	// section headers, cap the total at 50 KB (Pugi prompt budget),
+	// section headers, cap the total at 50 KB,
 	// and ship through the same editor.skill / CallWebPaneSend pipeline
 	// the rest of the skills use. aiBridge's opLabels carries the
 	// Russian Conventional-Commits prompt for op="commit".

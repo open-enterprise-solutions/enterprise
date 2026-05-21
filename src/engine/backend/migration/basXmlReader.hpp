@@ -5,7 +5,7 @@
 // The output shape matches `oes_template_get` / `oes_template_customize`
 // passthrough: { summary: {...}, mutations: [{op,kind,fullName,
 // properties|source|syntaxMode}, ...] }. The wizard Applier on the
-// other end (Pugi / Designer) consumes this verbatim.
+// other end consumes this verbatim.
 //
 // Design choices:
 //   - Single facade — three internal layers (root manifest scan, per-

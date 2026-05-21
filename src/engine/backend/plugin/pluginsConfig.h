@@ -7,15 +7,15 @@
 //
 //   {
 //     "plugins": {
-//       "pugi-oes-bridge": {
+//       "vendor-template-provider": {
 //         "enabled":  true,
-//         "endpoint": "https://app.pugi.io/api/v1/oes-mcp/invoke",
-//         "byokRef":  "pugi.env"          // optional, see byokEnv.h
+//         "endpoint": "https://provider.example/api/oes-mcp/invoke",
+//         "byokRef":  "provider.env"      // optional, see byokEnv.h
 //       },
 //       "simplePlugin": { "enabled": false }
 //     },
 //     "policy": {
-//       "pugi-oes-bridge": {
+//       "vendor-template-provider": {
 //         "*":            "AllowAlways",   // wildcard
 //         "meta.delete":  "Ask"            // override per op
 //       }

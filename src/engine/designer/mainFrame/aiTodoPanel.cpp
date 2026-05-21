@@ -289,7 +289,7 @@ void ibAiTodoPanel::DispatchToAiPane(const wxString& title)
 	// (returns -1 when unknown, which we ignore).
 	//
 	// Build the envelope: editor.skill op="send" with a synthetic prompt.
-	// Same shape pugi-oes-bridge already routes through aiBridge.
+	// Same shape the plugin chat pane protocol accepts.
 	nlohmann::json env;
 	env["kind"]    = "editor.skill";
 	env["op"]      = "send";
@@ -299,20 +299,10 @@ void ibAiTodoPanel::DispatchToAiPane(const wxString& title)
 	const std::string payload = env.dump();
 	const wxString payloadW   = wxString::FromUTF8(payload.c_str());
 
-	// Iterate registered ids via the menu's bookkeeping. The frame field
-	// is private; we accept the resulting cost of trying every paneId
-	// reported by the plugin manager's web-pane-id list (when one exists)
-	// via a single static stem the plugin commonly uses. Best-effort.
-	//
-	// The simplest stable path: post a wxCommandEvent that the menu would
-	// fire when the user invokes "Show AI pane" — that path already does
-	// "find first registered pane and show it", so we just push the
-	// payload after the menu opens it.
-	//
-	// Send via CallWebPaneSend to a canonical id. If unknown, no harm.
-	const wxString canonicalId = wxT("pugi-oes-bridge.assistant");
-	pm->CallWebPaneSend(canonicalId, payloadW);
-	pm->CallWebPaneShow(canonicalId);
+	const wxString paneId = pm->GetDefaultAIPaneId();
+	if (paneId.IsEmpty()) return;
+	pm->CallWebPaneSend(paneId, payloadW);
+	pm->CallWebPaneShow(paneId);
 }
 
 void ibAiTodoPanel::Rebuild()

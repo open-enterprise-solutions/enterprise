@@ -3,15 +3,15 @@
 //
 // Bundle layout:
 //   manifest.json         { pluginId, version, abiVersion, binary }
-//   <binary>              e.g. pugi-oes-bridge.dylib
+//   <binary>              e.g. template-provider.dylib
 //   webview/…             optional WebView HTML/JS for the AI chat pane
 //
 // manifest.json schema:
 //   {
-//     "pluginId":   "pugi-oes-bridge",     // required, must match real plugin id
+//     "pluginId":   "template-provider",   // required, must match real plugin id
 //     "version":    "0.3.1",               // required, dotted-decimal
 //     "abiVersion": 4,                     // required, integer
-//     "binary":     "pugi-oes-bridge.dylib"// required, relative to bundle root
+//     "binary":     "template-provider.dylib" // required, relative to bundle root
 //   }
 //
 // Install target:

@@ -537,7 +537,7 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 	               FromDIP(4));
 	m_modelProfile = new wxChoice(this, wxID_ANY);
 	m_modelProfile->Append(_("По умолчанию"));
-	m_modelProfile->Append(_("Pugi"));
+	m_modelProfile->Append(_("Провайдер"));
 	m_modelProfile->Append(_("OpenAI fast"));
 	m_modelProfile->Append(_("OpenAI quality"));
 	m_modelProfile->SetSelection(0);
@@ -757,7 +757,7 @@ wxString ibPluginWebPane::CurrentModelProfileId() const
 {
 	const int sel = m_modelProfile ? m_modelProfile->GetSelection() : 0;
 	switch (sel) {
-	case 1: return wxT("pugi");
+	case 1: return wxT("provider");
 	case 2: return wxT("openai-fast");
 	case 3: return wxT("openai-quality");
 	default: return wxT("env");
@@ -1213,10 +1213,10 @@ void ibPluginWebPane::DispatchEnvelope(const wxString& jsonInline)
 		return;
 	}
 	if (kind == "agent.subtask") {
-		// Workmate-parity subtask decomposition. Pugi (or any future agent
-		// emitter) sends one envelope per parent plan; the children come
-		// pre-populated with their initial status ("pending" by default).
-		// dependsOn carries other subtask ids that block this row.
+		// Subtask decomposition: provider sends one envelope per parent
+		// plan; children come pre-populated with their initial status
+		// ("pending" by default). dependsOn carries other subtask ids
+		// that block this row.
 		Entry e;
 		e.role         = Entry::Role::Subtasks;
 		e.parentPlanId = wxString::FromUTF8(env.value("parentPlanId", "").c_str());
@@ -1425,10 +1425,9 @@ void ibPluginWebPane::RenderTranscript()
 	wxString doc;
 	doc.reserve(8192);
 
-	// Body bg uses the assistant-row color so an assistant row blends into
-	// the canvas — the user / error / plan rows stand out as the framed
-	// boxes. Mirrors the Cursor / GitHub Copilot "assistant text on the
-	// page surface, user input in a bubble" convention.
+	// Body bg uses the response-row color so a response row blends into
+	// the canvas while the user / error / plan rows stand out as framed
+	// boxes.
 	doc += wxT("<html><body bgcolor=\"#fafbfc\" text=\"#1f2937\">");
 	doc += wxT("<table width=\"100%\" cellspacing=\"6\" cellpadding=\"8\" border=\"0\">");
 
@@ -2149,8 +2148,8 @@ void ibPluginWebPane::DispatchUserPrompt(const wxString& prompt)
 	env["text"]      = std::string(outboundPrompt.utf8_str());
 	env["prompt"]    = std::string(outboundPrompt.utf8_str()); // v3-shim fallback
 	env["profile"]   = std::string(CurrentModelProfileId().utf8_str());
-	// Locale: prefer the live wxLocale name, fall back to "uk-UA" which
-	// is the OES Designer dev-mode default Pugi uses.
+	// Locale: prefer the live wxLocale name, fall back to the Designer
+	// development default.
 	wxString localeName;
 	if (wxLocale* loc = wxGetLocale()) localeName = loc->GetCanonicalName();
 	if (localeName.IsEmpty()) localeName = wxT("uk-UA");

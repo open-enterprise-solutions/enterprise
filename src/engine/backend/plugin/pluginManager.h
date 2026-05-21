@@ -139,7 +139,7 @@ public:
 	// v4 chat-pane protocol, synthesise an AI provider entry + chat
 	// pane that forwards chat.send / editor.skill envelopes through
 	// LLMQuery and emits the response as a single chat.delta + chat.end
-	// pair. Lets the v3 ecosystem (Pugi, internal vendor plugins) work
+	// pair. Lets the v3 ecosystem and internal vendor plugins work
 	// inside the Designer chat UI without a rebuild. No-op when a v4
 	// AI provider already covers the "chat" mode.
 	//

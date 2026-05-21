@@ -463,8 +463,8 @@ void ibPluginManagerDialog::OnTestConnection(wxCommandEvent& /*event*/)
 		return;
 	}
 
-	// Discover the call path: prefer LLMQuery (covers v3 Pugi + the
-	// legacy-shim bridge over v3); fall back to a v4 AI provider's
+	// Discover the call path: prefer LLMQuery (covers legacy-shim
+	// bridges); fall back to a v4 AI provider's
 	// Query when one is registered without LLMQuery.
 	const ibPluginManager::RegisteredFunction* llmFn = nullptr;
 	for (const auto& f : pm->Functions()) {
@@ -851,7 +851,7 @@ void ibPluginManagerDialog::RunDiagnostics()
 #endif
 
 	// ---------------- Check 5 — required env keys present ---------------
-	// For aiBridge: TOKEN + TENANT. Other plugins: TOKEN only.
+	// Accept canonical TOKEN plus generic template-provider aliases.
 	// VALUES ARE NEVER PRINTED. Secret-looking keys are flagged
 	// <redacted> in the "other keys" inventory.
 	const auto envAll = byokEnv::LoadAll();
@@ -860,29 +860,43 @@ void ibPluginManagerDialog::RunDiagnostics()
 	    ? pluginEnvIt->second
 	    : byokEnv::KeyMap();
 
-	std::vector<std::string> requiredKeys;
-	requiredKeys.emplace_back("TOKEN");
-	if (r.pluginId.Lower().Contains(wxT("aibridge")) ||
-	    r.pluginId.Lower().Contains(wxT("ai_bridge"))) {
-		requiredKeys.emplace_back("TENANT");
+	auto hasAny = [&keys](std::initializer_list<const char*> names) {
+		for (const char* name : names) {
+			auto it = keys.find(name);
+			if (it != keys.end() && !it->second.empty()) return true;
+		}
+		return false;
+	};
+	const bool isAiBridge =
+	    r.pluginId.Lower().Contains(wxT("aibridge")) ||
+	    r.pluginId.Lower().Contains(wxT("ai_bridge"));
+	std::vector<std::string> primaryKeys;
+	std::vector<std::pair<std::string, bool>> requiredGroups;
+	if (isAiBridge) {
+		primaryKeys = { "TOKEN", "OES_TEMPLATE_TOKEN", "TEMPLATE_TOKEN" };
+		requiredGroups.emplace_back("TOKEN/OES_TEMPLATE_TOKEN",
+		                            hasAny({ "TOKEN", "OES_TEMPLATE_TOKEN",
+		                                     "TEMPLATE_TOKEN" }));
+	} else {
+		primaryKeys = { "TOKEN" };
+		requiredGroups.emplace_back("TOKEN", hasAny({ "TOKEN" }));
 	}
-	for (const auto& key : requiredKeys) {
-		auto it = keys.find(key);
-		const bool present = (it != keys.end() && !it->second.empty());
+	for (const auto& group : requiredGroups) {
+		const bool present = group.second;
 		if (present) {
 			DiagLine(true, wxString::Format(
 			    _("Ключ %s: присутствует (значение скрыто <redacted>)"),
-			    wxString::FromUTF8(key.c_str())));
+			    wxString::FromUTF8(group.first.c_str())));
 		} else {
 			DiagLine(false, wxString::Format(_("Ключ %s: отсутствует"),
-			    wxString::FromUTF8(key.c_str())));
+			    wxString::FromUTF8(group.first.c_str())));
 		}
 	}
 	if (!keys.empty()) {
 		wxString other;
 		for (const auto& [k, v] : keys) {
 			bool isRequired = false;
-			for (const auto& req : requiredKeys) {
+			for (const auto& req : primaryKeys) {
 				if (k == req) { isRequired = true; break; }
 			}
 			if (isRequired) continue;

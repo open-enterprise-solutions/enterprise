@@ -140,7 +140,7 @@ public:
 
 		auto* root = new wxBoxSizer(wxVERTICAL);
 		auto* intro = new wxStaticText(this, wxID_ANY,
-		    _("Проверка подключения Designer к локальному MCP и Pugi."));
+		    _("Проверка подключения Designer к локальному MCP и расширениям."));
 		wxFont titleFont = intro->GetFont();
 		titleFont.MakeBold();
 		intro->SetFont(titleFont);
@@ -157,14 +157,17 @@ public:
 		wxString body;
 		body << "1. Claude Code MCP command\n"
 		     << mcpCommand << "\n\n"
-		     << "2. Pugi/plugin env file\n"
+		     << "2. Plugin env file\n"
 		     << envPath << "\n\n"
 		     << "Expected keys:\n"
-		     << "PROTOCOL=pugi-mcp\n"
-		     << "PUGI_BASE_URL=https://mcp.pugi.io\n"
-		     << "PUGI_OES_API_KEY=<key>\n"
-		     << "PUGI_TENANT_ID=<tenant-id>\n"
-		     << "PUGI_OES_LOCALE=uk-UA\n\n"
+		     << "TOKEN=<provider-token>\n"
+		     << "ENDPOINT=<provider-endpoint>\n"
+		     << "LOCALE=uk-UA\n"
+		     << "OES_TEMPLATE_PROVIDER=1\n"
+		     << "OES_TEMPLATE_ENDPOINT=<provider-template-endpoint>\n"
+		     << "OES_TEMPLATE_TOKEN=<provider-token>\n"
+		     << "OES_TEMPLATE_TENANT=<tenant-id optional>\n"
+		     << "OES_TEMPLATE_LOCALE=uk-UA\n\n"
 		     << "3. Smoke prompt\n"
 		     << "Open Tools -> AI Assistant and send: ты кто?\n\n"
 		     << "4. Demo object prompt\n"
@@ -464,7 +467,7 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	                 return;
 	             }
 	         }
-	         // No plugin registered a WebView pane (e.g. pre-v4 Pugi).
+	         // No plugin registered a WebView pane.
 	         // Fall back to the built-in demo pane so the user can verify
 	         // the WebView infrastructure end-to-end. The sample HTML
 	         // ships next to the executable under assets/pluginWebPane/.

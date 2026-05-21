@@ -131,10 +131,10 @@ ApplyResult Apply(const wxString& responseJson, bool includeData)
 	}
 
 	// Demo data — walk demoData[] when requested. Each row becomes a
-	// best-effort create inside the matching Catalog/Document. Pugi's
-	// shape is {kind, fullName, rows:[{...}], postAfterInsert?}. We
-	// emit one meta.create per row using fullName (Pugi disambiguates
-	// per-row keys server-side; client just relays).
+	// best-effort create inside the matching Catalog/Document. Provider
+	// shape is {kind, fullName, rows:[{...}], postAfterInsert?}. We emit
+	// one meta.create per row using fullName; provider-specific row-key
+	// disambiguation stays server-side.
 	if (includeData &&
 	    payload->contains("demoData") &&
 	    (*payload)["demoData"].is_array()) {
