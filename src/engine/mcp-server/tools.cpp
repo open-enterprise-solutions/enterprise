@@ -20,6 +20,8 @@
 #include "backend/testing/testRunner.hpp"
 #include "backend/metaCollection/formLayoutBlob.hpp"
 #include "backend/metaCollection/metaFormObject.h"
+#include "backend/migration/basXmlReader.hpp"
+#include "backend/migration/basCfReader.hpp"
 
 #include "3rdparty/nlohmann/json.hpp"
 #include "3rdparty/cpp-httplib/httplib.h"
@@ -1784,6 +1786,155 @@ nlohmann::json ToolFormLayoutSet(const nlohmann::json& args)
 }
 
 // =========================================================================
+// Tool: import_bas_xml — BAS / 1С Configuration.xml -> OES mutations[]
+// =========================================================================
+
+// Build the structuredContent envelope shared by both BAS import tools.
+nlohmann::json BuildBasImportEnvelope(const migration::bas::ImportResult& r,
+                                       bool preview)
+{
+	nlohmann::json sc = nlohmann::json::object();
+
+	nlohmann::json summary = nlohmann::json::object();
+	summary["totalScanned"]    = r.totalScanned;
+	summary["imported"]        = r.imported;
+	summary["skippedDeleted"]  = r.skippedDeleted;
+	summary["skippedDeferred"] = r.skippedDeferred;
+	summary["skippedUnknown"]  = r.skippedUnknown;
+	summary["skippedFiltered"] = r.skippedFiltered;
+	summary["parseFailures"]   = r.parseFailures;
+
+	nlohmann::json counts = nlohmann::json::object();
+	for (const auto& kv : r.countsByKind) {
+		counts[std::string(kv.first.utf8_str().data())] = kv.second;
+	}
+	summary["counts"] = std::move(counts);
+	sc["summary"]     = std::move(summary);
+
+	nlohmann::json warns = nlohmann::json::array();
+	for (const auto& w : r.warnings) {
+		warns.push_back(std::string(w.utf8_str().data()));
+	}
+	sc["warnings"] = std::move(warns);
+
+	// MCP: mutations[] is the payload the wizard Applier consumes.
+	// Pass through verbatim — same shape as oes_template_get.
+	sc["mutations"] = r.mutations;
+	sc["preview"]   = preview;
+	return sc;
+}
+
+nlohmann::json ToolImportBasXml(const nlohmann::json& args)
+{
+	// MCP: read-only against the OES configuration (we don't apply
+	// mutations here — the wizard Applier does). But we DO require a
+	// loaded config so the response can be threaded into oes_template_*
+	// pipelines downstream.
+	if (auto fail = RequireConfig(); fail) return *fail;
+
+	const std::string configurationPath = ArgString(args, "configurationPath");
+	if (configurationPath.empty()) {
+		nlohmann::json env = TextResult(
+			"import_bas_xml: 'configurationPath' is required", true);
+		nlohmann::json sc = nlohmann::json::object();
+		sc["errorCode"] = "OES_E_BAS_INVALID_INPUT";
+		env["structuredContent"] = std::move(sc);
+		return env;
+	}
+
+	migration::bas::ImportOptions opts;
+	opts.configurationPath = wxString::FromUTF8(configurationPath.c_str());
+	const std::string objectsRoot = ArgString(args, "objectsRoot");
+	if (!objectsRoot.empty()) {
+		opts.objectsRoot = wxString::FromUTF8(objectsRoot.c_str());
+	}
+	opts.skipDeleted = args.is_object() && args.contains("skipDeleted")
+		? ArgBool(args, "skipDeleted", true)
+		: true;
+	opts.preview = ArgBool(args, "preview", false);
+	if (args.is_object() && args.contains("objectFilter")
+	    && args["objectFilter"].is_array())
+	{
+		for (const auto& v : args["objectFilter"]) {
+			if (v.is_string()) {
+				opts.filter.push_back(
+					wxString::FromUTF8(v.get<std::string>().c_str()));
+			}
+		}
+	}
+
+	migration::bas::ImportResult r =
+		migration::bas::ImportXmlConfiguration(opts);
+
+	if (r.fatal) {
+		nlohmann::json env = TextResult(
+			std::string("import_bas_xml: ") +
+			std::string(r.fatalMsg.utf8_str().data()), true);
+		nlohmann::json sc = nlohmann::json::object();
+		sc["errorCode"] = std::string(r.fatalCode.utf8_str().data());
+		env["structuredContent"] = std::move(sc);
+		return env;
+	}
+
+	nlohmann::json sc = BuildBasImportEnvelope(r, opts.preview);
+
+	nlohmann::json env = TextResult(
+		std::string("import_bas_xml: scanned ")
+		+ std::to_string(r.totalScanned)
+		+ " / imported "
+		+ std::to_string(r.imported)
+		+ " / deferred "
+		+ std::to_string(r.skippedDeferred)
+		+ " / deleted "
+		+ std::to_string(r.skippedDeleted)
+		+ " / warnings "
+		+ std::to_string(r.warnings.size()),
+		false);
+	env["structuredContent"] = std::move(sc);
+	return env;
+}
+
+// =========================================================================
+// Tool: import_bas_cf — binary .cf archive (deferred unpacker)
+// =========================================================================
+
+nlohmann::json ToolImportBasCf(const nlohmann::json& args)
+{
+	if (auto fail = RequireConfig(); fail) return *fail;
+
+	const std::string cfPath = ArgString(args, "cfPath");
+	if (cfPath.empty()) {
+		nlohmann::json env = TextResult(
+			"import_bas_cf: 'cfPath' is required", true);
+		nlohmann::json sc = nlohmann::json::object();
+		sc["errorCode"] = "OES_E_BAS_INVALID_INPUT";
+		env["structuredContent"] = std::move(sc);
+		return env;
+	}
+
+	migration::bas::CfReadResult r =
+		migration::bas::ReadCfArchive(wxString::FromUTF8(cfPath.c_str()));
+
+	// All paths through v1 surface an error envelope — Ok branch is
+	// reserved for the future unpacker.
+	const bool isError = r.status != migration::bas::CfStatus::Ok;
+	nlohmann::json env = TextResult(
+		std::string("import_bas_cf: ")
+		+ std::string(r.message.utf8_str().data()),
+		isError);
+
+	nlohmann::json sc = nlohmann::json::object();
+	if (!r.errorCode.empty()) {
+		sc["errorCode"] = std::string(r.errorCode.utf8_str().data());
+	}
+	if (r.status == migration::bas::CfStatus::Ok) {
+		sc = BuildBasImportEnvelope(r.import, /*preview=*/false);
+	}
+	env["structuredContent"] = std::move(sc);
+	return env;
+}
+
+// =========================================================================
 // Registry — built once on first AllTools() call.
 // =========================================================================
 const std::vector<ToolEntry>& BuildRegistry()
@@ -2481,6 +2632,147 @@ const std::vector<ToolEntry>& BuildRegistry()
 			  std::move(outFS)
 			},
 			&ToolFormLayoutSet
+		});
+	}
+
+	// =====================================================================
+	// BAS / 1С migration tools — added 2026-05-21. Read external corpus
+	// files on disk (Configuration.xml + per-object XML, or binary .cf),
+	// emit mutations[] in the same passthrough shape oes_template_get
+	// returns so the existing wizard Applier (preview + apply) handles
+	// the rest. openWorld=false (local file read), destructive=false
+	// (additive only — wizard owns the apply decision).
+	// =====================================================================
+	{
+		nlohmann::json filterArr;
+		filterArr["type"]        = "array";
+		filterArr["items"]       = nlohmann::json{ {"type","string"} };
+		filterArr["description"] =
+			"Glob patterns ('Catalog.Контрагенты' or 'Document.*'). "
+			"Multiple patterns OR-combine. Empty = no filter.";
+
+		nlohmann::json objectsRootProp;
+		objectsRootProp["type"]        = nlohmann::json::array({ "string", "null" });
+		objectsRootProp["description"] =
+			"Directory holding per-object subtrees. Defaults to dirname(configurationPath).";
+
+		nlohmann::json skipDeletedProp;
+		skipDeletedProp["type"]        = "boolean";
+		skipDeletedProp["default"]     = true;
+		skipDeletedProp["description"] =
+			"Skip legacy migration-debt objects whose names start with "
+			"'Удалить...' / 'УДАЛИТЬ...' / 'Видалити...' (BAS has ~80).";
+
+		nlohmann::json previewProp;
+		previewProp["type"]        = "boolean";
+		previewProp["default"]     = false;
+		previewProp["description"] =
+			"Dry-run flag passed through to the response envelope. The wizard "
+			"Applier decides preview vs apply downstream — this tool always "
+			"returns mutations[] without applying.";
+
+		// Output schema — the wizard Applier indexes summary.counts +
+		// mutations[] without parsing the text payload.
+		nlohmann::json mutItem;
+		mutItem["type"]       = "object";
+		mutItem["properties"] = nlohmann::json::object();
+		mutItem["properties"]["op"]         = nlohmann::json{ {"type","string"} };
+		mutItem["properties"]["kind"]       = nlohmann::json{ {"type","string"} };
+		mutItem["properties"]["fullName"]   = nlohmann::json{ {"type","string"} };
+		mutItem["properties"]["properties"] = nlohmann::json{ {"type","object"} };
+		mutItem["required"]   = nlohmann::json::array({ "op", "kind", "fullName" });
+
+		nlohmann::json summaryProp;
+		summaryProp["type"]       = "object";
+		summaryProp["properties"] = nlohmann::json::object();
+		summaryProp["properties"]["totalScanned"]    = nlohmann::json{ {"type","integer"} };
+		summaryProp["properties"]["imported"]        = nlohmann::json{ {"type","integer"} };
+		summaryProp["properties"]["skippedDeleted"]  = nlohmann::json{ {"type","integer"} };
+		summaryProp["properties"]["skippedDeferred"] = nlohmann::json{ {"type","integer"} };
+		summaryProp["properties"]["skippedUnknown"]  = nlohmann::json{ {"type","integer"} };
+		summaryProp["properties"]["skippedFiltered"] = nlohmann::json{ {"type","integer"} };
+		summaryProp["properties"]["parseFailures"]   = nlohmann::json{ {"type","integer"} };
+		summaryProp["properties"]["counts"]          = nlohmann::json{ {"type","object"} };
+
+		nlohmann::json outXml;
+		outXml["type"]       = "object";
+		outXml["properties"] = nlohmann::json::object();
+		outXml["properties"]["summary"]   = summaryProp;
+		outXml["properties"]["mutations"] = nlohmann::json{ {"type","array"}, {"items", mutItem} };
+		outXml["properties"]["warnings"]  = nlohmann::json{
+			{"type","array"}, {"items", nlohmann::json{ {"type","string"} }} };
+		outXml["properties"]["preview"]   = nlohmann::json{ {"type","boolean"} };
+		outXml["required"]   = nlohmann::json::array({ "summary", "mutations" });
+
+		table.push_back({
+			{ "import_bas_xml",
+			  "Import a BAS / 1С Configuration.xml + per-object XML tree, "
+			  "emitting mutations[] in the same passthrough shape as "
+			  "oes_template_get so the existing wizard Applier handles "
+			  "preview + apply. Top-8 OES-supported kinds (Catalog, "
+			  "Document, Enumeration, Constant, InformationRegister, "
+			  "AccumulationRegister, ChartOfAccounts, "
+			  "ChartOfCharacteristicTypes, Report, DataProcessor, "
+			  "CommonModule) are emitted directly; Subsystem / Role / "
+			  "Form-blob / Template kinds are skipped as DEFERRED "
+			  "(structuredContent.warnings explains why).",
+			  schemaObj({
+			    { "configurationPath", str("Path to root Configuration.xml file") },
+			    { "objectsRoot",       objectsRootProp },
+			    { "objectFilter",      filterArr },
+			    { "skipDeleted",       skipDeletedProp },
+			    { "preview",           previewProp },
+			  }, { "configurationPath" }),
+			  // readOnly=false (we read external files and produce a fresh
+			  // artefact, not just a snapshot of in-memory state); but
+			  // destructive=false (no prior state lost) and openWorld=false
+			  // (local filesystem only). Idempotent at the file level —
+			  // same inputs = same mutations[].
+			  ann(/*readOnly*/false, /*destructive*/false,
+			      /*idempotent*/true, /*openWorld*/false),
+			  std::move(outXml)
+			},
+			&ToolImportBasXml
+		});
+	}
+	{
+		// import_bas_cf — binary archive. Output schema mirrors XML
+		// import so a future unpacker can swap in without breaking the
+		// agent contract; v1 always returns isError with
+		// structuredContent.errorCode = OES_E_BAS_CF_UNSUPPORTED.
+		nlohmann::json mutItem;
+		mutItem["type"]       = "object";
+		mutItem["properties"] = nlohmann::json::object();
+		mutItem["properties"]["op"]         = nlohmann::json{ {"type","string"} };
+		mutItem["properties"]["kind"]       = nlohmann::json{ {"type","string"} };
+		mutItem["properties"]["fullName"]   = nlohmann::json{ {"type","string"} };
+		mutItem["properties"]["properties"] = nlohmann::json{ {"type","object"} };
+
+		nlohmann::json outCf;
+		outCf["type"]       = "object";
+		outCf["properties"] = nlohmann::json::object();
+		outCf["properties"]["errorCode"] = nlohmann::json{ {"type","string"} };
+		outCf["properties"]["summary"]   = nlohmann::json{ {"type","object"} };
+		outCf["properties"]["mutations"] = nlohmann::json{ {"type","array"}, {"items", mutItem} };
+		outCf["properties"]["warnings"]  = nlohmann::json{
+			{"type","array"}, {"items", nlohmann::json{ {"type","string"} }} };
+
+		table.push_back({
+			{ "import_bas_cf",
+			  "Import a BAS / 1С binary .cf archive. STATUS: DEFERRED — "
+			  ".cf is a proprietary LZF-compressed container; v1 detects "
+			  "the magic header and returns isError with structuredContent."
+			  "errorCode='OES_E_BAS_CF_UNSUPPORTED' plus actionable guidance "
+			  "(open in 1С/BAS Configurator, run 'Dump configuration files' "
+			  "to export XML, then call import_bas_xml on the result).",
+			  schemaObj({
+			    { "cfPath", str("Filesystem path to the .cf archive") },
+			  }, { "cfPath" }),
+			  ann(/*readOnly*/false, /*destructive*/false,
+			      /*idempotent*/true, /*openWorld*/false),
+			  std::move(outCf)
+			},
+			&ToolImportBasCf
 		});
 	}
 

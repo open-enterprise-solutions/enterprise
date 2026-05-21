@@ -70,6 +70,10 @@ set(OES_TESTS_SOURCES
     # pin the deferral contract + validator-level checks that run
     # today against agent-supplied DTOs.
     test_formLayoutBlob.cpp
+    # BAS / 1С XML + .cf migration to OES mutations[].
+    # Covers basMapping (kind + type qualifier), basXmlReader (single-file
+    # parse + root manifest), basCfReader (deferred unpacker stub).
+    test_basMigration.cpp
 )
 # SEC-P2-3: only pull the triple-review integration test in when OpenSSL is
 # available — the source unconditionally includes <openssl/*> via httplib.

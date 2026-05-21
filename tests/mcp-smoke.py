@@ -403,6 +403,59 @@ def main() -> int:
                     f"form_layout_set: error envelope missing "
                     f"structuredContent.errorCode: {fs_env}")
 
+    # 8e) BAS / 1С migration tools (added 2026-05-21). Both must be
+    # advertised in tools/list with outputSchema and annotations.
+    # In --no-config mode they return isError (RequireConfig path);
+    # smoke verifies the envelope shape.
+    bas_tools = ("import_bas_xml", "import_bas_cf")
+    for required in bas_tools:
+        if required not in names:
+            failures.append(f"tools/list: missing tool '{required}'")
+            continue
+        td_bas = declared.get(required)
+        if td_bas is None:
+            continue
+        out_schema_bas = td_bas.get("outputSchema")
+        if not isinstance(out_schema_bas, dict) or out_schema_bas.get("type") != "object":
+            failures.append(f"{required}: missing/malformed outputSchema")
+        # Both BAS tools read local files only — openWorld MUST be false.
+        ann_bas = td_bas.get("annotations") or {}
+        if ann_bas.get("openWorldHint") is True:
+            failures.append(f"{required}: openWorldHint must be false (local file read)")
+        # destructive=false (additive — wizard Applier owns apply decision).
+        if ann_bas.get("destructiveHint") is True:
+            failures.append(f"{required}: destructiveHint must be false")
+
+    # Probe import_bas_xml: in --no-config mode -> isError (no config loaded).
+    if "import_bas_xml" in names:
+        send(proc, {
+            "jsonrpc": "2.0", "id": 600, "method": "tools/call",
+            "params": {"name": "import_bas_xml",
+                       "arguments": {"configurationPath": "/nonexistent/Configuration.xml"}},
+        })
+        bx_resp = recv(proc, timeout_s=5.0)
+        bx_env = bx_resp.get("result")
+        if not isinstance(bx_env, dict):
+            failures.append(f"import_bas_xml: no result envelope: {bx_resp}")
+        elif not bx_env.get("isError"):
+            failures.append(
+                f"import_bas_xml: expected isError in --no-config mode, got: {bx_env}")
+
+    # Probe import_bas_cf: same expectation.
+    if "import_bas_cf" in names:
+        send(proc, {
+            "jsonrpc": "2.0", "id": 601, "method": "tools/call",
+            "params": {"name": "import_bas_cf",
+                       "arguments": {"cfPath": "/nonexistent/fake.cf"}},
+        })
+        bc_resp = recv(proc, timeout_s=5.0)
+        bc_env = bc_resp.get("result")
+        if not isinstance(bc_env, dict):
+            failures.append(f"import_bas_cf: no result envelope: {bc_resp}")
+        elif not bc_env.get("isError"):
+            failures.append(
+                f"import_bas_cf: expected isError in --no-config mode, got: {bc_env}")
+
     # Validation guard for oes_demo_data_get: both args together → isError.
     send(proc, {
         "jsonrpc": "2.0", "id": 299, "method": "tools/call",
