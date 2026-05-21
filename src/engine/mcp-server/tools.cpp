@@ -14,12 +14,15 @@
 #include "backend/plugin/metaBridge.h"
 #include "backend/plugin/pluginApi.h"
 #include "backend/backend_exception.h"
+#include "backend/compiler/compileCode.h"
+#include "backend/compiler/compileContext.h"
 
 #include "3rdparty/nlohmann/json.hpp"
 
 #include <wx/string.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <functional>
 #include <optional>
@@ -392,16 +395,226 @@ nlohmann::json ToolWriteModule(const nlohmann::json& args)
 // =========================================================================
 // Tool: compile_check
 // =========================================================================
+
+// MCP: capturing subclass — overrides DoSetError so we keep the structured
+// fields (line / column / message / code) before the base re-throws via
+// ProcessError. The compiler is fail-fast: it throws on the FIRST error,
+// so at most one entry lands in the errors[] array per call. We honour
+// that — multi-error reporting would require a different parser stance.
+class CompileCheckCapture : public ibCompileCode {
+public:
+	CompileCheckCapture(const wxString& moduleName, const wxString& docPath)
+		: ibCompileCode(moduleName, docPath, false)
+		, m_captured(false)
+		, m_capturedCode(0)
+		, m_capturedLine(0)
+		, m_capturedColumn(0)
+	{}
+
+	bool        m_captured;
+	int         m_capturedCode;
+	unsigned int m_capturedLine;
+	unsigned int m_capturedColumn;
+	std::string m_capturedDesc;     // formatted error description
+	std::string m_capturedRawDesc;  // raw strErrorDesc (without the codeError template)
+
+protected:
+
+	// MCP: column is computed from currPos by walking back to the previous
+	// newline in the source buffer (m_strBuffer lives on ibTranslateCode).
+	// currLine is already 1-based when SetError forwards from the base
+	// translator path.
+	void DoSetError(int codeError,
+		const wxString& strFileName, const wxString& strModuleName, const wxString& strDocPath,
+		unsigned int currPos, unsigned int currLine,
+		const wxString& strErrorDesc) const override
+	{
+		// Cast away const because the capture members are mutable-by-intent
+		// for this debug-only subclass. The base method is `const` so we
+		// can override but writing through `this` needs the const-cast.
+		auto* self = const_cast<CompileCheckCapture*>(this);
+		self->m_captured     = true;
+		self->m_capturedCode = codeError;
+		self->m_capturedLine = currLine;
+
+		// Column: walk back from currPos to the previous '\n' or buffer
+		// start. m_strBuffer is the (uppercased) source buffer; positions
+		// are byte offsets into it.
+		unsigned int colStart = 0;
+		if (!m_strBuffer.empty() && currPos > 0) {
+			unsigned int i = (currPos >= m_strBuffer.length())
+				? static_cast<unsigned int>(m_strBuffer.length() - 1)
+				: currPos;
+			for (; i > 0; --i) {
+				if (m_strBuffer[i] == wxT('\n')) { colStart = i + 1; break; }
+			}
+		}
+		self->m_capturedColumn = (currPos >= colStart) ? (currPos - colStart + 1) : 1;
+		self->m_capturedRawDesc = std::string(strErrorDesc.utf8_str());
+
+		// MCP: re-use base's formatting so the human-readable message
+		// matches Designer's compile output. ProcessError throws, which
+		// unwinds the parser back to ibCompileCode::Compile's `return
+		// false` path. We catch the throw at the call site.
+		ibCompileCode::DoSetError(codeError, strFileName, strModuleName,
+			strDocPath, currPos, currLine, strErrorDesc);
+	}
+};
+
 nlohmann::json ToolCompileCheck(const nlohmann::json& args)
 {
-	// MCP: deferred — ibCompileCode::Compile requires a live owner module
-	// and context plumbing that we can't synthesise from a bare source
-	// string without dragging in significant compile-side state. Returning
-	// a clear "deferred" envelope is more honest than a false-positive.
-	(void)args;
-	return TextResult("compile_check: deferred — call write_module then run "
-	                    "Designer's compile pass; standalone compile against "
-	                    "raw source is not yet wired in oes-mcp v1", true);
+	const std::string source = ArgString(args, "source");
+	if (source.empty()) {
+		return TextResult("compile_check: 'source' is required", true);
+	}
+
+	// MCP: syntaxMode is the canonical key per the v1 schema; `mode` is
+	// accepted as a back-compat alias. Empty / unknown → CES (the platform
+	// default for new modules since 2026-05-10).
+	std::string syntaxMode = ArgString(args, "syntaxMode");
+	if (syntaxMode.empty()) syntaxMode = ArgString(args, "mode");
+	std::transform(syntaxMode.begin(), syntaxMode.end(), syntaxMode.begin(),
+		[](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+	short codeStyle = CODE_CES;
+	if (syntaxMode == "ves") codeStyle = CODE_VES;
+	else if (!syntaxMode.empty() && syntaxMode != "ces") {
+		return TextResult("compile_check: 'syntaxMode' must be 'ces' or 'ves'", true);
+	}
+
+	// MCP: real compile needs appData live — the success path of
+	// ibCompileCode::Compile fires AfterCompile through appData's plugin
+	// manager. Without a loaded configuration appData is nullptr and the
+	// success path would segfault. Failure paths don't touch appData, but
+	// we refuse the whole call to keep behaviour predictable across both
+	// outcomes.
+	if (!IsReady() || appData == nullptr) {
+		return TextResult("compile_check requires a loaded configuration "
+			"(start oes-mcp with a config path; --no-config mode is not "
+			"supported for this tool)", true);
+	}
+
+	// MCP: optional context — when supplied, we resolve the metadata module
+	// to inherit its module-name / doc-path for error attribution. Identifier
+	// resolution against parent attributes is not wired here (would require
+	// AddContextVariable plumbing matching what ibCompileModule does at load
+	// time); we accept the arg for future expansion and surface a note in
+	// the structured payload.
+	wxString moduleName(wxT("mcp.compile_check"));
+	wxString docPath(wxT("memory"));
+	std::string contextNote;
+	const std::string contextPath = ArgString(args, "context");
+	if (!contextPath.empty()) {
+		ibValueMetaObject* node = ResolveByPath(contextPath);
+		if (node == nullptr) {
+			return TextResult("compile_check: context path not found '" +
+				contextPath + "'", true);
+		}
+		if (dynamic_cast<ibValueMetaObjectModuleBase*>(node) == nullptr) {
+			return TextResult("compile_check: context '" + contextPath +
+				"' is not a module object", true);
+		}
+		moduleName = node->GetName();
+		// MCP: docPath stays "memory" — using the real module guid would
+		// trip up ProcessError's activeMetaData lookup, since our source
+		// isn't the module's persisted text.
+		contextNote = "context attached to '" + contextPath +
+			"' for module-name attribution only; identifier resolution "
+			"against context attributes is not yet wired";
+	}
+
+	// Снимок прежнего синтаксиса — глобал у компилятора, восстановим в finally.
+	const short savedStyle = ibCompileCode::GetCodeStyle();
+	ibCompileCode::SetCodeStyle(codeStyle);
+
+	CompileCheckCapture cc(moduleName, docPath);
+	bool compileOk = false;
+	std::string fallbackMsg;
+	try {
+		compileOk = cc.Compile(wxString::FromUTF8(source.c_str()));
+	} catch (const ibBackendException& e) {
+		// Capture path — DoSetError already stamped m_captured*. The
+		// thrown message goes into fallbackMsg in case the capture
+		// didn't fire (e.g. early lexer throw).
+		fallbackMsg = std::string(e.GetErrorDescription().utf8_str());
+	} catch (const std::exception& e) {
+		fallbackMsg = std::string("std::exception during compile: ") + e.what();
+	} catch (...) {
+		fallbackMsg = "unknown exception during compile";
+	}
+
+	// Восстанавливаем глобальный стиль независимо от исхода.
+	ibCompileCode::SetCodeStyle(savedStyle);
+
+	if (compileOk && !cc.m_captured) {
+		nlohmann::json env;
+		nlohmann::json content = nlohmann::json::array();
+		nlohmann::json item;
+		item["type"] = "text";
+		item["text"] = "OK";
+		content.push_back(std::move(item));
+		env["content"] = std::move(content);
+
+		nlohmann::json structured;
+		structured["ok"]       = true;
+		structured["warnings"] = nlohmann::json::array();
+		if (!contextNote.empty()) structured["note"] = contextNote;
+		env["structuredContent"] = std::move(structured);
+		return env;
+	}
+
+	// Build the structured errors array. With the fail-fast compiler this
+	// is always at most one entry.
+	nlohmann::json errors = nlohmann::json::array();
+	std::string humanMsg;
+	if (cc.m_captured) {
+		nlohmann::json err;
+		err["line"]     = static_cast<unsigned int>(cc.m_capturedLine);
+		err["column"]   = static_cast<unsigned int>(cc.m_capturedColumn);
+		err["severity"] = "error";
+		// Prefer the formatted error description (with the codeError template
+		// substituted) — falls back to raw text when the captured raw desc
+		// alone already carries the full message.
+		std::string msg = std::string(
+			ibBackendException::Format(cc.m_capturedCode,
+				wxString::FromUTF8(cc.m_capturedRawDesc.c_str())).utf8_str());
+		if (msg.empty()) msg = cc.m_capturedRawDesc;
+		err["message"]  = msg;
+		err["code"]     = cc.m_capturedCode;
+		errors.push_back(err);
+
+		humanMsg = "compile error at line " + std::to_string(cc.m_capturedLine) +
+		            ", column " + std::to_string(cc.m_capturedColumn) + ": " + msg;
+	} else {
+		// Fallback path — compile failed without our DoSetError firing.
+		// Surface the thrown message verbatim so the agent has something
+		// to act on.
+		humanMsg = fallbackMsg.empty()
+			? std::string("compile_check: unknown failure (no error captured)")
+			: ("compile_check: " + fallbackMsg);
+		nlohmann::json err;
+		err["line"]     = 0;
+		err["column"]   = 0;
+		err["severity"] = "error";
+		err["message"]  = humanMsg;
+		err["code"]     = -1;
+		errors.push_back(err);
+	}
+
+	nlohmann::json env;
+	nlohmann::json content = nlohmann::json::array();
+	nlohmann::json item;
+	item["type"] = "text";
+	item["text"] = humanMsg;
+	content.push_back(std::move(item));
+	env["content"] = std::move(content);
+	env["isError"] = true;
+
+	nlohmann::json structured;
+	structured["ok"]     = false;
+	structured["errors"] = std::move(errors);
+	if (!contextNote.empty()) structured["note"] = contextNote;
+	env["structuredContent"] = std::move(structured);
+	return env;
 }
 
 // =========================================================================
@@ -687,12 +900,17 @@ const std::vector<ToolEntry>& BuildRegistry()
 	});
 	table.push_back({
 		{ "compile_check",
-		  "Validate CES/VES source. Deferred in v1 — returns isError:true so "
-		  "callers know to invoke Designer's compile pass.",
+		  "Validate CES/VES source via ibCompileCode. On success returns "
+		  "structuredContent.ok=true; on failure returns isError:true and "
+		  "structuredContent.errors[] with line/column/message/severity. "
+		  "Requires a loaded configuration.",
 		  schemaObj({
-		    { "source", str("Source text") },
-		    { "mode",   str("ces|ves (case-insensitive). Default: ces") },
-		  }, {}),
+		    { "source",     str("CES or VES source code to validate") },
+		    { "syntaxMode", str("'ces' or 'ves' (case-insensitive). Default: ces") },
+		    { "mode",       str("Alias for 'syntaxMode' (back-compat)") },
+		    { "context",    str("Optional metadata object full name to compile in "
+		                          "context (e.g. 'Catalog.X.ObjectModule')") },
+		  }, { "source" }),
 		  ann(true, false, true, false)
 		},
 		&ToolCompileCheck
