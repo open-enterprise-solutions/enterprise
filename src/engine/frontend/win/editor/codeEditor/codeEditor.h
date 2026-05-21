@@ -498,6 +498,31 @@ private:
 	// callback is marshalled through wxApp::CallAfter).
 	unsigned m_sigmaCompletionGeneration = 0;
 
+	// AUTO-TRIGGER: Idle-detect timer fires after the user pauses typing.
+	// Workmate-style "type a // comment, pause, get suggestion below"
+	// flow. Restarted on every keystroke; expires after kIdleMs with
+	// no activity. On expiry we check whether the cursor is on an empty
+	// line that follows a comment line (the only context where blind
+	// auto-completion is wanted) and fire TriggerSigmaCompletion.
+	wxTimer  m_sigmaIdleTimer;
+
+	// Operating mode for the auto-trigger. 0=off, 1=manual (hotkey only),
+	// 2=auto-moderate (idle 700ms after Enter on a comment line),
+	// 3=auto-intensive (idle 350ms after any keystroke). Read from
+	// pluginManager BYOK env (key "AI_AUTOCOMPLETE_MODE") at startup so
+	// the user can change it without recompiling. Defaults to 2.
+	int      m_sigmaAutoMode = 2;
+
+	void OnSigmaIdleTimer(wxTimerEvent& event);
+	// Restart the idle timer with the right delay for the current mode.
+	// Caller invokes after every CharAdded / KeyDown event so we
+	// debounce naturally.
+	void ArmSigmaIdleTimer();
+	// True when cursor context is "comment line" — the only condition
+	// under which auto-trigger should fire blind (avoids burning tokens
+	// every time the user types regular code).
+	bool CursorIsCommentLine() const;
+
 public:
 
 	// ---- Debugger integration hooks ----

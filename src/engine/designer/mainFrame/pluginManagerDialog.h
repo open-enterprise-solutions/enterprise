@@ -31,6 +31,7 @@ class wxListView;
 class wxCheckBox;
 class wxTextCtrl;
 class wxStaticText;
+class wxChoice;
 
 class FRONTEND_API ibPluginManagerDialog : public wxDialog {
 public:
@@ -44,6 +45,17 @@ private:
 	void OnInstall(wxCommandEvent& event);
 	void OnUninstall(wxCommandEvent& event);
 	void OnTestConnection(wxCommandEvent& event);
+
+	// Diagnostics — Workmate parity. Runs a series of checks against
+	// the currently selected plugin and streams pass/fail markers into
+	// m_diagOutput. RunDiagnostics is the entry point; the individual
+	// Diag* helpers each append one line and return true/false.
+	void OnRunDiagnostics(wxCommandEvent& event);
+	void OnCopyDiagReport(wxCommandEvent& event);
+	void RunDiagnostics();
+	void DiagLine(bool pass, const wxString& message);
+	void DiagInfo(const wxString& message);
+	void DiagClear();
 
 	// Reload the listbox + right-pane fields from the current snapshot.
 	void RebuildList();
@@ -59,7 +71,16 @@ private:
 	wxStaticText*  m_versionLabel   = nullptr;
 	wxStaticText*  m_authorLabel    = nullptr;
 	wxStaticText*  m_descriptionLbl = nullptr;
+	// Workmate-parity inline-completion operating mode. Persisted into
+	// the active plugin's .env file under OES_AI_AUTOCOMPLETE_MODE; the
+	// codeEditor reads the value as a process env var at construction.
+	wxChoice*      m_autocompleteMode = nullptr;
 	int            m_activeRow      = -1;
+
+	// Diagnostics widgets — wxTextCtrl in read-only multi-line mode is
+	// the cheapest streaming console. We append text + scroll-to-end
+	// after each Diag* call so the user sees progress as checks run.
+	wxTextCtrl*    m_diagOutput     = nullptr;
 
 	// In-memory snapshot — initialised from pluginsConfig::Load() at
 	// open, mutated by the UI, persisted via pluginsConfig::Save on OK.
@@ -74,6 +95,10 @@ private:
 			bool      loaded   = false;     // currently live in pm.Loaded()?
 			wxString  endpoint;
 			wxString  byokRef;
+			// 0..3, -1 = "inherit / unset". Mirrors codeEditor's
+			// m_sigmaAutoMode enum: 0 off, 1 manual-only, 2 auto-moderate,
+			// 3 auto-intensive.
+			int       autocompleteMode = -1;
 		};
 		std::vector<Row> rows;
 	};

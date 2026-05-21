@@ -8,6 +8,7 @@
 #include "frontend/frontend.h"
 
 #include <map>
+#include <vector>
 
 //
 // Forward declarations.
@@ -43,6 +44,21 @@ private:
 	std::map<long, lineOutputData_t> m_listCodeInfo;
 
 public:
+
+	// AI Markers panel readback. One snapshot record per code-attached
+	// output line — file, doc path, source line, message text, severity
+	// ("error"|"warning"|"info"). Used by ibAiMarkersPanel to ingest the
+	// output window's accumulated diagnostic state without duplicating
+	// the storage. Allocated fresh on every call, so calling it on a hot
+	// path would be wasteful; the panel pulls only on explicit refresh.
+	struct OutputLineSnapshot {
+		wxString fileName;
+		wxString docPath;
+		int      srcLine = 0;
+		wxString message;
+		wxString severity;   // "error" | "warning" | "info"
+	};
+	std::vector<OutputLineSnapshot> CollectAttachedLines() const;
 
 	static ibOutputWindow* GetOutputWindow();
 

@@ -79,6 +79,12 @@ protected:
 	void OnPropertyGridExpand(wxPropertyGridEvent& event);
 	void OnPropertyGridItemSelected(wxPropertyGridEvent& event);
 
+	// Workmate parity — right-click on a "Synonym/Comment/Tooltip/Title/
+	// Caption" cell pops a "Сгенерировать через AI" context menu and
+	// dispatches ibAIPropertyHelper::RunGenerate. Non-text properties
+	// fall through to the default wxPG behaviour.
+	void OnPropertyGridRightClick(wxPropertyGridEvent& event);
+
 	void OnBitmapPropertyChanged(wxCommandEvent& event);
 	void OnChildFocus(wxChildFocusEvent& event);
 

@@ -20,10 +20,20 @@
 
 #ifndef _WIN32
 #include <unistd.h>
+#include <sys/stat.h>
+#else
+#include <windows.h>
 #endif
 
 namespace pluginInstaller {
 namespace {
+
+// SEC-CR-P1-2: zip-bomb caps. Per-entry, cumulative, and entry-count
+// ceilings reject pathological archives (1 KB zip expanding to 4 GB,
+// 1M empty entries, etc.) before they exhaust disk or inode tables.
+constexpr size_t kMaxEntrySize      = 50ull * 1024 * 1024;
+constexpr size_t kMaxTotalExtracted = 500ull * 1024 * 1024;
+constexpr size_t kMaxEntryCount     = 10000;
 
 // Stream a single zip entry into outPath (creating parent dirs).
 bool ExtractEntry(wxZipInputStream& zip, wxZipEntry& entry,
@@ -67,9 +77,21 @@ bool FindAndReadManifest(const wxString& zipPath, std::string& outBuf,
 		return false;
 	}
 	std::unique_ptr<wxZipEntry> entry;
+	// SEC-CR-P1-2: cap scan length so a zip with 1M empty entries can't
+	// stall the installer just to find a manifest that isn't there.
+	size_t scanned = 0;
 	while ((entry.reset(zip.GetNextEntry())), entry.get() != nullptr) {
+		if (++scanned > kMaxEntryCount) {
+			if (errorMsg) *errorMsg = _("zip has too many entries");
+			return false;
+		}
 		const wxString name = entry->GetName();
 		if (name == wxT("manifest.json")) {
+			// SEC-CR-P1-2: cap manifest size; legit manifests are < 50 KB.
+			if (entry->GetSize() > static_cast<wxFileOffset>(kMaxEntrySize)) {
+				if (errorMsg) *errorMsg = _("manifest.json exceeds size limit");
+				return false;
+			}
 			if (!zip.OpenEntry(*entry)) {
 				if (errorMsg) *errorMsg = wxT("could not open manifest.json");
 				return false;
@@ -79,6 +101,10 @@ bool FindAndReadManifest(const wxString& zipPath, std::string& outBuf,
 			while (zip.CanRead()) {
 				zip.Read(buf, sizeof(buf));
 				outBuf.append(buf, zip.LastRead());
+				if (outBuf.size() > kMaxEntrySize) {
+					if (errorMsg) *errorMsg = _("manifest.json exceeds size limit");
+					return false;
+				}
 				if (zip.LastRead() == 0) break;
 			}
 			return true;
@@ -88,10 +114,32 @@ bool FindAndReadManifest(const wxString& zipPath, std::string& outBuf,
 	return false;
 }
 
+// SEC-CR-P1-3: report whether `path` is a symlink WITHOUT following it.
+// Uninstall recurses into the plugin bundle dir; if any subentry is a
+// symlink to /Users/<owner>/.ssh (or C:\Windows), wxDirExists would say
+// "yes that's a dir" and RmRf would walk into the link target.
+bool IsSymlink(const wxString& path)
+{
+#if defined(_WIN32)
+	const DWORD attrs = ::GetFileAttributesW(path.wc_str());
+	if (attrs == INVALID_FILE_ATTRIBUTES) return false;
+	return (attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+#else
+	struct stat st;
+	if (::lstat(std::string(path.utf8_str()).c_str(), &st) != 0) return false;
+	return S_ISLNK(st.st_mode);
+#endif
+}
+
 // Recursive directory remove. wxDir::Rmdir handles non-empty? No — we
 // roll it ourselves because plugin dirs contain nested webview/ etc.
 bool RmRf(const wxString& root)
 {
+	// SEC-CR-P1-3: if the root itself is a symlink, unlink the link and
+	// stop — never follow into the target.
+	if (IsSymlink(root)) {
+		return wxRemoveFile(root);
+	}
 	if (!wxDirExists(root)) return true;
 	wxDir dir(root);
 	if (!dir.IsOpened()) return false;
@@ -99,7 +147,14 @@ bool RmRf(const wxString& root)
 	bool more = dir.GetFirst(&name);
 	while (more) {
 		const wxString sub = root + wxFILE_SEP_PATH + name;
-		if (wxDirExists(sub)) {
+		// SEC-CR-P1-3: refuse to recurse into a symlinked subdir; remove
+		// the link itself instead. Without this check, an attacker who can
+		// drop a symlink inside the plugin bundle (or who compromises a
+		// plugin's update logic) gets RmRf-as-root semantics on the link
+		// target.
+		if (IsSymlink(sub)) {
+			wxRemoveFile(sub);
+		} else if (wxDirExists(sub)) {
 			if (!RmRf(sub)) return false;
 		} else {
 			wxRemoveFile(sub);
@@ -201,8 +256,36 @@ InstallResult Install(const wxString& zipPath, bool allowOverwrite,
 	wxFileName stagingRoot(stagingDir, wxEmptyString);
 	stagingRoot.Normalize(wxPATH_NORM_ABSOLUTE | wxPATH_NORM_DOTS);
 	const wxString stagingRootPath = stagingRoot.GetPath() + wxFILE_SEP_PATH;
+	// SEC-CR-P1-2: track cumulative declared size + entry count to detect
+	// zip bombs before extraction blows past disk quotas.
+	size_t totalDeclared = 0;
+	size_t entryCount    = 0;
 	std::unique_ptr<wxZipEntry> entry;
 	while ((entry.reset(zip.GetNextEntry())), entry.get() != nullptr) {
+		if (++entryCount > kMaxEntryCount) {
+			if (errorMsg) *errorMsg = _("zip has too many entries");
+			RmRf(stagingDir);
+			return InstallResult::BadZip;
+		}
+		// SEC-CR-P1-2: reject any single entry whose declared size is
+		// pathological. Note: wxZip honours declared sizes; a malicious
+		// archive can still under-declare, so ExtractEntry's stream
+		// truncation is the second line of defence.
+		const wxFileOffset declared = entry->GetSize();
+		if (declared > 0 &&
+		    static_cast<size_t>(declared) > kMaxEntrySize) {
+			if (errorMsg) *errorMsg = _("zip entry exceeds per-file size limit");
+			RmRf(stagingDir);
+			return InstallResult::BadZip;
+		}
+		if (declared > 0) {
+			totalDeclared += static_cast<size_t>(declared);
+			if (totalDeclared > kMaxTotalExtracted) {
+				if (errorMsg) *errorMsg = _("zip total extracted size exceeds limit");
+				RmRf(stagingDir);
+				return InstallResult::BadZip;
+			}
+		}
 		const wxString name = entry->GetName();
 		// SEC-P1-7: refuse symlink entries — a zip carrying a symlink
 		// could point outside stagingDir and a later extract would write

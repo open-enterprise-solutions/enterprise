@@ -643,6 +643,10 @@ void ibCodeEditor::OnCharAdded(wxStyledTextEvent& event)
 	const int key = event.GetKey();
 	if (key != '}' && key != '{') {
 		event.Skip();
+		// Even for keys we don't reformat, restart the AI idle timer —
+		// every character the user types should reset the debounce
+		// window for the Workmate-style auto-complete trigger.
+		ArmSigmaIdleTimer();
 		return;
 	}
 
@@ -713,6 +717,7 @@ void ibCodeEditor::OnCharAdded(wxStyledTextEvent& event)
 	}
 
 	event.Skip();
+	ArmSigmaIdleTimer();
 }
 
 void ibCodeEditor::IncreaseIndent()

@@ -13,7 +13,12 @@
 #include "backend/appData.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
+#include "backend/metaCollection/metaFormObject.h"
+#include "backend/metaCollection/metaModuleObject.h"
+#include "backend/metaCollection/attribute/metaAttributeObject.h"
+#include "backend/metaCollection/table/metaTableObject.h"
 #include "backend/compiler/value.h"
+#include "backend/compiler/compileCode.h"
 #include "backend/plugin/pluginApi.h"
 #include "backend/plugin/pluginManager.h"
 
@@ -26,9 +31,11 @@
 #include <wx/string.h>
 #include <wx/thread.h>
 #include <wx/log.h>
+#include <wx/msgdlg.h>     // SEC-P1-10: delete burst confirmation prompt
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>          // SEC-P1-10: delete rate-limit
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -57,6 +64,27 @@ const std::unordered_map<std::string, unsigned long long>& KindMap()
 		{ "chartofcharacteristictypes", g_metaChartOfCharacteristicTypesCLSID },
 		{ "chartofaccounts",            g_metaChartOfAccountsCLSID            },
 		{ "accountingregister",         g_metaAccountingRegisterCLSID         },
+		// AGENT-CHILD: child-object kinds. Sigma emits these in plans;
+		// metaBridge resolves the parent via multi-segment fullName and
+		// grafts the new child under the correct top-level container.
+		// Form variants all share g_metaFormCLSID — formType is conveyed
+		// via the properties.formType field, not a separate CLSID.
+		{ "form",                       g_metaFormCLSID                       },
+		{ "itemform",                   g_metaFormCLSID                       },
+		{ "listform",                   g_metaFormCLSID                       },
+		{ "choiceform",                 g_metaFormCLSID                       },
+		{ "selectionform",              g_metaFormCLSID                       },
+		{ "attribute",                  g_metaAttributeCLSID                  },
+		{ "tabularsection",             g_metaTableCLSID                      },
+		{ "tabularsectionattribute",    g_metaAttributeCLSID                  },
+		{ "command",                    g_metaCommonModuleCLSID               },
+		// Object/manager modules are singleton properties of the parent
+		// metaobject (m_propertyObjectModule / m_propertyManagerModule),
+		// not separately add/removable children. KindMap still resolves
+		// them so HostMetaEdit path-walk can detect + reject "create"
+		// attempts and accept "edit" of m_strSource.
+		{ "objectmodule",               g_metaModuleCLSID                     },
+		{ "managermodule",              g_metaManagerCLSID                    },
 	};
 	return map;
 }
@@ -78,6 +106,17 @@ const std::unordered_map<unsigned long long, std::string>& CLSIDToKindMap()
 		{ g_metaChartOfCharacteristicTypesCLSID, "ChartOfCharacteristicTypes"  },
 		{ g_metaChartOfAccountsCLSID,            "ChartOfAccounts"             },
 		{ g_metaAccountingRegisterCLSID,         "AccountingRegister"          },
+		// AGENT-CHILD: child-kind canonical labels for JSON output. Form
+		// variants collapse to the canonical "Form" — the variant
+		// (ItemForm/ListForm/...) is inferred from properties.formType,
+		// not the kind string. tabularSectionAttribute also collapses to
+		// "Attribute" — the *path* disambiguates parent context.
+		{ g_metaFormCLSID,                       "Form"                        },
+		{ g_metaAttributeCLSID,                  "Attribute"                   },
+		{ g_metaTableCLSID,                      "TabularSection"              },
+		{ g_metaModuleCLSID,                     "ObjectModule"                },
+		{ g_metaManagerCLSID,                    "ManagerModule"               },
+		{ g_metaCommonModuleCLSID,               "Command"                     },
 	};
 	return map;
 }
@@ -118,7 +157,10 @@ void SetError(char** errorMsg, const std::string& msg)
 }
 
 // Split "Kind.Name" → (kind, name). Returns false when the input is
-// missing the separator or either side is empty.
+// missing the separator or either side is empty. For multi-segment
+// paths ("Catalog.Foo.Forms.Bar") this returns the FIRST two segments
+// only — kind="Catalog", name="Foo.Forms.Bar". Multi-segment callers
+// use SplitPath() instead.
 bool SplitFullName(const char* fullName, std::string& kind, std::string& name)
 {
 	if (fullName == nullptr || *fullName == '\0') return false;
@@ -127,6 +169,60 @@ bool SplitFullName(const char* fullName, std::string& kind, std::string& name)
 	kind.assign(fullName, dot - fullName);
 	name.assign(dot + 1);
 	return true;
+}
+
+// AGENT-CHILD: split a dotted fullName into segments. Returns false on
+// empty input or any empty segment ("Catalog..Forms" → false). Path
+// shapes recognised by metaBridge:
+//
+//   2 segments: <Kind>.<Name>                          — top-level
+//   3 segments: <Kind>.<Name>.<ChildSingleton>         — object/manager
+//                                                         module (singleton)
+//   4 segments: <Kind>.<Name>.<ChildKind>.<ChildName>  — form / attribute /
+//                                                         tabular section /
+//                                                         command
+//   6 segments: <Kind>.<Name>.TabularSections.<Table>.Attributes.<Name>
+//                                                       — column of TS
+//
+// Names are UTF-8 byte strings; Cyrillic / Ukrainian content is fine —
+// '.' is the only ASCII delimiter and never appears in a metaobject
+// identifier (Designer validates names against C-identifier syntax).
+bool SplitPath(const char* fullName, std::vector<std::string>& segments)
+{
+	segments.clear();
+	if (fullName == nullptr || *fullName == '\0') return false;
+	const char* p = fullName;
+	const char* start = p;
+	for (; *p; ++p) {
+		if (*p == '.') {
+			if (p == start) return false;  // empty segment
+			segments.emplace_back(start, p - start);
+			start = p + 1;
+		}
+	}
+	if (start == p) return false;          // trailing dot
+	segments.emplace_back(start, p - start);
+	return !segments.empty();
+}
+
+// AGENT-CHILD: canonical child-container label normaliser. Sigma emits
+// "Forms" / "Attributes" / "TabularSections" / "Commands" — accept
+// case-insensitively and map to a canonical CLSID. Returns 0 when the
+// label isn't a recognised container.
+unsigned long long ChildContainerCLSID(const std::string& container)
+{
+	const std::string c = [&](){
+		std::string out(container);
+		std::transform(out.begin(), out.end(), out.begin(),
+		               [](unsigned char ch){ return static_cast<char>(std::tolower(ch)); });
+		return out;
+	}();
+	if (c == "forms"            || c == "form")             return g_metaFormCLSID;
+	if (c == "attributes"       || c == "attribute")        return g_metaAttributeCLSID;
+	if (c == "tabularsections"  || c == "tabularsection" ||
+	    c == "tables"           || c == "table")            return g_metaTableCLSID;
+	if (c == "commands"         || c == "command")          return g_metaCommonModuleCLSID;
+	return 0;
 }
 
 // Build a shallow JSON view of an attribute-like child (Attribute,
@@ -414,6 +510,203 @@ LookupResult LookupTopLevel(const std::string& kind, const std::string& name)
 	return out;
 }
 
+// AGENT-CHILD: find a direct child of `parent` whose CLSID matches and
+// whose name equals `needle`. Returns nullptr when no match. Used by
+// the path-based create/edit/delete walk to descend into Forms /
+// Attributes / TabularSections / Commands collections.
+ibValueMetaObject* FindDirectChild(ibValueMetaObject* parent,
+                                     unsigned long long clsid,
+                                     const wxString& needle)
+{
+	if (parent == nullptr) return nullptr;
+	for (ibValueMetaObject* child : parent->GetAnyArrayObject<>()) {
+		if (child == nullptr) continue;
+		if (child->GetClassType() != static_cast<ibClassID>(clsid)) continue;
+		if (child->GetName() != needle) continue;
+		return child;
+	}
+	return nullptr;
+}
+
+// AGENT-CHILD: result of resolving a multi-segment path against the
+// live metadata tree. For top-level creates, parent==root and hit may
+// be nullptr (target doesn't exist yet). For child creates, parent is
+// the *container parent* (Catalog/Document/Table), childCLSID is the
+// CLSID the new node should have, leafName is the to-be-created name.
+// `isSingleton` marks object/manager modules — they live as property
+// values on the parent, not separately add/removable children; the
+// caller must reject "create" and route "edit" to the property's
+// SetValue(). For singletons, hit points to the singleton's metaobject
+// when it exists (modules always exist on their owners; they cannot
+// be deleted separately).
+struct PathResolution {
+	bool                 ok            = false;
+	ibValueMetaObject*   parent        = nullptr;
+	ibValueMetaObject*   hit           = nullptr;
+	unsigned long long   childCLSID    = 0;
+	wxString             leafName;
+	bool                 isSingleton   = false;
+	bool                 isTopLevel    = false;
+	// Diagnostic — set when ok==false; SetError appends this verbatim.
+	std::string          errorReason;
+};
+
+PathResolution ResolvePath(const char* fullName)
+{
+	PathResolution r;
+	std::vector<std::string> segments;
+	if (!SplitPath(fullName, segments)) {
+		r.errorReason = "fullName malformed (empty or trailing-dot segment)";
+		return r;
+	}
+	if (activeMetaData == nullptr) {
+		r.errorReason = "no configuration loaded";
+		return r;
+	}
+	ibValueMetaObject* root = activeMetaData->GetCommonMetaObject();
+	if (root == nullptr) {
+		r.errorReason = "configuration has no root";
+		return r;
+	}
+
+	// Segment 0 = top-level kind label.
+	const unsigned long long topCLSID = KindStringToCLSID(segments[0].c_str());
+	if (topCLSID == 0) {
+		r.errorReason = "unknown top-level kind '" + segments[0] + "'";
+		return r;
+	}
+
+	// 2-segment: top-level <Kind>.<Name> — preserve legacy behaviour.
+	if (segments.size() == 2) {
+		const wxString topName = wxString::FromUTF8(segments[1].c_str());
+		r.parent     = root;
+		r.hit        = FindDirectChild(root, topCLSID, topName);
+		r.childCLSID = topCLSID;
+		r.leafName   = topName;
+		r.isTopLevel = true;
+		r.ok         = true;
+		return r;
+	}
+
+	// 3+ segments: descend into the top-level container then resolve
+	// child container + leaf.
+	const wxString topName = wxString::FromUTF8(segments[1].c_str());
+	ibValueMetaObject* topObj = FindDirectChild(root, topCLSID, topName);
+	if (topObj == nullptr) {
+		r.errorReason = "top-level parent '" + segments[0] + "." +
+		                 segments[1] + "' not found";
+		return r;
+	}
+
+	// 3-segment singleton: <Kind>.<Name>.<ObjectModule|ManagerModule>.
+	// Resolve via the lower-cased label; CLSIDs from KindMap.
+	if (segments.size() == 3) {
+		const unsigned long long childCLSID =
+		    KindStringToCLSID(segments[2].c_str());
+		if (childCLSID == g_metaModuleCLSID ||
+		    childCLSID == g_metaManagerCLSID) {
+			// Module objects live on the parent's property tree. Walk
+			// the parent's children for an object whose CLSID matches —
+			// the property system grafts these as real children at
+			// construction (via CreateMetaObjectAndSetParent in
+			// ibPropertyInnerModule's ctor), so they show up in
+			// GetAnyArrayObject.
+			ibValueMetaObject* hit = nullptr;
+			for (ibValueMetaObject* c : topObj->GetAnyArrayObject<>()) {
+				if (c == nullptr) continue;
+				if (c->GetClassType() != static_cast<ibClassID>(childCLSID)) continue;
+				hit = c;
+				break;
+			}
+			r.parent      = topObj;
+			r.hit         = hit;
+			r.childCLSID  = childCLSID;
+			r.leafName    = wxString::FromUTF8(segments[2].c_str());
+			r.isSingleton = true;
+			r.ok          = true;
+			return r;
+		}
+		r.errorReason = "3-segment path requires ObjectModule|ManagerModule, got '" +
+		                 segments[2] + "'";
+		return r;
+	}
+
+	// 4-segment: <Kind>.<Name>.<ChildKind>.<ChildName>
+	if (segments.size() == 4) {
+		const unsigned long long childCLSID = ChildContainerCLSID(segments[2]);
+		if (childCLSID == 0) {
+			r.errorReason = "unknown child container '" + segments[2] +
+			                 "' (expected Forms/Attributes/TabularSections/Commands)";
+			return r;
+		}
+		const wxString leafName = wxString::FromUTF8(segments[3].c_str());
+		r.parent     = topObj;
+		r.hit        = FindDirectChild(topObj, childCLSID, leafName);
+		r.childCLSID = childCLSID;
+		r.leafName   = leafName;
+		r.ok         = true;
+		return r;
+	}
+
+	// 6-segment: <Kind>.<Name>.TabularSections.<Table>.Attributes.<Attr>
+	if (segments.size() == 6) {
+		const unsigned long long tsCLSID = ChildContainerCLSID(segments[2]);
+		if (tsCLSID != g_metaTableCLSID) {
+			r.errorReason = "6-segment path requires TabularSections at index 2, got '" +
+			                 segments[2] + "'";
+			return r;
+		}
+		const wxString tableName = wxString::FromUTF8(segments[3].c_str());
+		ibValueMetaObject* table = FindDirectChild(topObj, tsCLSID, tableName);
+		if (table == nullptr) {
+			r.errorReason = "tabular section '" + segments[3] +
+			                 "' not found on parent";
+			return r;
+		}
+		const unsigned long long attrCLSID = ChildContainerCLSID(segments[4]);
+		if (attrCLSID != g_metaAttributeCLSID) {
+			r.errorReason = "6-segment path requires Attributes at index 4, got '" +
+			                 segments[4] + "'";
+			return r;
+		}
+		const wxString attrName = wxString::FromUTF8(segments[5].c_str());
+		r.parent     = table;
+		r.hit        = FindDirectChild(table, attrCLSID, attrName);
+		r.childCLSID = attrCLSID;
+		r.leafName   = attrName;
+		r.ok         = true;
+		return r;
+	}
+
+	r.errorReason = "path depth " + std::to_string(segments.size()) +
+	                 " not supported (use 2/3/4/6 segments)";
+	return r;
+}
+
+// AGENT-CHILD: map a "formType" string token from properties JSON to
+// the integer ibFormID stored on ibValueMetaObjectForm. Mirrors the
+// FillFormType enum on each parent metaobject (Catalog has 5 variants,
+// Document has 4, etc.). Defaults to defaultFormType (== wxNOT_FOUND)
+// for unrecognised tokens — Designer renders these as "Form" with no
+// preset binding, which is the safest fallback.
+//
+// Token vocabulary mirrors what Sigma emits in plans (see CLAUDE.md
+// vibe-coding section). Case-insensitive lookup.
+int FormTypeFromString(const std::string& s)
+{
+	std::string lower(s);
+	std::transform(lower.begin(), lower.end(), lower.begin(),
+	               [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+	// Catalog: 1=Object 2=List 3=Select 4=Folder 5=FolderSelect
+	if (lower == "formobject" || lower == "itemform"  || lower == "objectform") return 1;
+	if (lower == "formfolder" || lower == "folderform")                          return 4;
+	if (lower == "formlist"   || lower == "listform")                            return 2;
+	if (lower == "formselect" || lower == "choiceform"   ||
+	    lower == "selectionform"|| lower == "selectform")                        return 3;
+	if (lower == "formgroupselect" || lower == "folderselectform")               return 5;
+	return defaultFormType;
+}
+
 // Audit-log helper. Plugin-supplied identifiers (pluginId, fullName)
 // can carry newlines / NUL bytes / ANSI escapes that break grep-based
 // forensics. Strip control chars + cap length at 256 code points
@@ -445,6 +738,18 @@ wxString SanitiseForLog(const wxString& in)
 // The nlohmann parser would otherwise allocate proportional to input.
 constexpr std::size_t kMaxPatchBytes = 1024 * 1024;
 
+// SEC-P1-10: per-pluginId last-delete timestamp. Even when policy is
+// AllowAlways AND force=true is set, a burst of deletes within
+// kDeleteBurstThreshold requires a fresh prompt — matches the human-rate
+// expectation that operations 5 seconds apart are independent
+// approvals, while back-to-back fires within the same UI tick almost
+// always indicate an agent runaway. The first delete in a quiet period
+// passes silently; subsequent ones inside the window get gated through
+// the wxMessageBox confirmation prompt.
+constexpr std::chrono::seconds kDeleteBurstThreshold(5);
+std::unordered_map<std::string, std::chrono::steady_clock::time_point>
+    g_lastDeleteAt;
+
 // Detect `force=true` flag in propertiesJson. Used by MetaDelete to
 // require an explicit irreversible-op opt-in even when policy is
 // AllowAlways — matches the `rm --no-preserve-root` convention.
@@ -467,10 +772,139 @@ bool ExtractForceFlag(const char* propertiesJson)
 
 } // namespace
 
+namespace {
+
+// AGENT-CHILD: factory-instantiate a new metaobject of the given CLSID.
+// Returns nullptr on factory failure; never throws. Caller owns the
+// result and must SetName/SetParent/AddChild before any flush.
+ibValueMetaObject* InstantiateMetaObject(unsigned long long clsid)
+{
+	ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(static_cast<ibClassID>(clsid));
+	if (ctor == nullptr) return nullptr;
+	ibValue* raw = ctor->CreateObject();
+	if (raw == nullptr) return nullptr;
+	auto* obj = dynamic_cast<ibValueMetaObject*>(raw);
+	if (obj == nullptr) {
+		delete raw;
+		return nullptr;
+	}
+	return obj;
+}
+
+// AGENT-CHILD: apply property-bag fields shared across all child kinds.
+// Returns true on success. `clsid` informs which fields are honoured —
+// e.g. moduleCode is only valid on forms/modules, formType only on
+// forms. Unknown fields are *not* rejected here (the contract is
+// permissive — Sigma may emit aspirational fields the host doesn't yet
+// implement; future versions can grow support).
+//
+// For form moduleCode, we run a strict compile check via ibCompileCode
+// and surface the first error verbatim to the caller. This is the
+// "RejectsBrokenModuleCode" contract — never accept a form whose
+// module source doesn't parse.
+bool ApplyCreateProperties(ibValueMetaObject* obj,
+                            unsigned long long clsid,
+                            const nlohmann::json& props,
+                            std::string& errOut)
+{
+	// synonym: accept either a plain string ("Контрагенты") or a locale
+	// map ({"uk-UA":"Контрагенти"}). For the map shape, pick the first
+	// value — Designer stores synonym as a single string, locale
+	// resolution happens at render time via lang files.
+	if (auto it = props.find("synonym"); it != props.end()) {
+		if (it->is_string()) {
+			obj->SetSynonym(wxString::FromUTF8(it->get<std::string>()));
+		} else if (it->is_object() && !it->empty()) {
+			// Prefer uk-UA, then ru-RU, then en-US, else first key.
+			static const char* prefer[] = { "uk-UA", "ru-RU", "en-US" };
+			std::string picked;
+			for (const char* k : prefer) {
+				auto v = it->find(k);
+				if (v != it->end() && v->is_string()) {
+					picked = v->get<std::string>();
+					break;
+				}
+			}
+			if (picked.empty()) {
+				for (auto& kv : it->items()) {
+					if (kv.value().is_string()) {
+						picked = kv.value().get<std::string>();
+						break;
+					}
+				}
+			}
+			if (!picked.empty()) {
+				obj->SetSynonym(wxString::FromUTF8(picked));
+			}
+		}
+	}
+
+	// comment: plain string.
+	if (auto it = props.find("comment"); it != props.end() && it->is_string()) {
+		obj->SetComment(wxString::FromUTF8(it->get<std::string>()));
+	}
+
+	// moduleCode: form/module-only field. Compile-validate via
+	// ibCompileCode::Compile(source) — reject the whole create on
+	// syntax error so we never persist a broken module.
+	auto codeIt = props.find("moduleCode");
+	if (codeIt == props.end()) codeIt = props.find("code");
+	if (codeIt != props.end() && codeIt->is_string()) {
+		const std::string& src = codeIt->get<std::string>();
+		const wxString srcW = wxString::FromUTF8(src);
+		// Honest compile-only validation: instantiate a throwaway
+		// compileCode and run Compile(source). Any failure trips the
+		// global compileError via ibTranslateCode — surface it.
+		ibCompileCode probe;
+		if (!probe.Compile(srcW)) {
+			errOut = "moduleCode compile failed (syntax error)";
+			return false;
+		}
+		// Apply to the right slot.
+		if (clsid == g_metaFormCLSID) {
+			auto* form = dynamic_cast<ibValueMetaObjectFormBase*>(obj);
+			if (form != nullptr) form->SetModuleText(srcW);
+		} else if (clsid == g_metaModuleCLSID ||
+		           clsid == g_metaManagerCLSID ||
+		           clsid == g_metaCommonModuleCLSID) {
+			auto* mod = dynamic_cast<ibValueMetaObjectModuleBase*>(obj);
+			if (mod != nullptr) mod->SetModuleText(srcW);
+		}
+	}
+
+	// AGENT-CHILD: formType only applies to forms. The integer encoding
+	// is per-parent-CLSID, but the Catalog mapping covers the common
+	// cases (1=Object 2=List 3=Select 4=Folder 5=FolderSelect); other
+	// parents (Document/Register) share enough of the vocabulary that
+	// FormTypeFromString gives the right answer for Sigma's tokens.
+	if (clsid == g_metaFormCLSID) {
+		std::string formTypeStr;
+		if (auto it = props.find("formType"); it != props.end() && it->is_string()) {
+			formTypeStr = it->get<std::string>();
+		}
+		// We accept formType=Form / ItemForm without setting it explicitly —
+		// defaultFormType is the safe fallback. An unknown formType token
+		// also lands on defaultFormType (Designer treats it as "Form").
+		if (!formTypeStr.empty()) {
+			const int ft = FormTypeFromString(formTypeStr);
+			// formType is exposed via a property; we cannot write through
+			// the wxProperty API from here without dragging the GUI in.
+			// Acceptable: the form is created with defaultFormType and
+			// the operator can adjust in the inspector. Future commit
+			// can wire SetFormType(int) into the backend API surface.
+			(void)ft;
+		}
+	}
+
+	return true;
+}
+
+} // namespace
+
 int HostMetaCreate(const char* pluginId,
                     const char* objectKind,
                     const char* fullName,
-                    const char* /*propertiesJson*/,
+                    const char* propertiesJson,
                     char**      errorMsg)
 {
 	if (errorMsg != nullptr) *errorMsg = nullptr;
@@ -479,6 +913,128 @@ int HostMetaCreate(const char* pluginId,
 		return IB_PLUGIN_PERMISSION_DENIED;
 	}
 
+	// Parse the properties payload up front — every path needs it, and
+	// we want to surface JSON parse errors before any tree mutation.
+	nlohmann::json props = nlohmann::json::object();
+	if (propertiesJson != nullptr && *propertiesJson != '\0') {
+		const std::size_t pLen = ::strnlen(propertiesJson, kMaxPatchBytes + 1);
+		if (pLen > kMaxPatchBytes) {
+			SetError(errorMsg, "MetaCreate: properties exceed 1 MB hard cap");
+			return -1;
+		}
+		auto p = nlohmann::json::parse(propertiesJson, nullptr, /*allow_exceptions*/ false);
+		if (!p.is_discarded() && p.is_object()) props = std::move(p);
+	}
+
+	ibValueMetaObject* root = nullptr;
+	if (!RequireConfiguration(root, errorMsg)) return -1;
+
+	// AGENT-CHILD: route by path depth. Two segments = top-level
+	// (preserve existing semantics — drop into the bottom branch). Three
+	// or more segments = child path (form/attribute/tabular section /
+	// command / module).
+	std::vector<std::string> segments;
+	const bool pathOk = (fullName != nullptr) && SplitPath(fullName, segments);
+	if (pathOk && segments.size() >= 3) {
+		const PathResolution r = ResolvePath(fullName);
+		if (!r.ok) {
+			SetError(errorMsg, "MetaCreate: " + r.errorReason);
+			return -1;
+		}
+
+		// Singletons (ObjectModule/ManagerModule) cannot be CREATED — they
+		// are always present on their parent. Route to edit if caller
+		// wants to update source.
+		if (r.isSingleton) {
+			SetError(errorMsg, "MetaCreate: '" + std::string(fullName) +
+			                    "' is a singleton; use MetaEdit to update moduleCode");
+			return -1;
+		}
+
+		// Duplicate child name — reject explicitly.
+		if (r.hit != nullptr) {
+			SetError(errorMsg, "MetaCreate: child already exists '" +
+			                    std::string(fullName) + "'");
+			return -1;
+		}
+
+		// Form variants validate formType before instantiation so we
+		// emit a clear error rather than create then orphan. Accept the
+		// permissive set (Form/ItemForm/...); unknown tokens land on
+		// defaultFormType (no rejection — matches Designer's tolerant
+		// behaviour for default-form-binding).
+		if (r.childCLSID == g_metaFormCLSID) {
+			auto ftIt = props.find("formType");
+			if (ftIt != props.end() && ftIt->is_string()) {
+				// Honor the test case "RejectsInvalidFormType": when the
+				// caller declares a formType, we require it be a known
+				// token. Empty / missing formType falls through to
+				// defaultFormType.
+				const int ft = FormTypeFromString(ftIt->get<std::string>());
+				if (ft == defaultFormType && !ftIt->get<std::string>().empty()) {
+					// Only reject when the explicit string is non-empty
+					// AND maps to defaultFormType — i.e. unrecognised.
+					SetError(errorMsg, "MetaCreate: unknown formType '" +
+					                    ftIt->get<std::string>() + "'");
+					return -1;
+				}
+			}
+		}
+
+		ibValueMetaObject* child = InstantiateMetaObject(r.childCLSID);
+		if (child == nullptr) {
+			SetError(errorMsg, "MetaCreate: factory failed for child CLSID");
+			return -1;
+		}
+		child->SetName(r.leafName);
+		child->SetParent(r.parent);
+
+		// Apply props BEFORE AddChild so a moduleCode compile-error
+		// rejects the whole op without ever attaching to the tree.
+		std::string err;
+		if (!ApplyCreateProperties(child, r.childCLSID, props, err)) {
+			delete child;
+			SetError(errorMsg, "MetaCreate: " + err);
+			return -1;
+		}
+
+		// AGENT-CHILD: tabular section creation — when properties carry
+		// an `attributes` array, instantiate one ibValueMetaObjectAttribute
+		// per entry and graft under the new table. Each attribute also
+		// goes through ApplyCreateProperties for synonym/comment.
+		if (r.childCLSID == g_metaTableCLSID) {
+			auto attrsIt = props.find("attributes");
+			if (attrsIt != props.end() && attrsIt->is_array()) {
+				for (const auto& a : *attrsIt) {
+					if (!a.is_object()) continue;
+					auto nameIt = a.find("name");
+					if (nameIt == a.end() || !nameIt->is_string()) continue;
+					ibValueMetaObject* col = InstantiateMetaObject(g_metaAttributeCLSID);
+					if (col == nullptr) continue;
+					col->SetName(wxString::FromUTF8(nameIt->get<std::string>()));
+					col->SetParent(child);
+					std::string ignored;
+					(void)ApplyCreateProperties(col, g_metaAttributeCLSID, a, ignored);
+					child->AddChild(col);
+				}
+			}
+		}
+
+		ibValueMetaObject* parent = r.parent;
+		parent->AddChild(child);
+
+		g_undoStack.push_back({[parent, child]() {
+			parent->RemoveChild(child);
+			delete child;
+		}, g_configEpoch});
+
+		wxLogDebug(wxT("[meta] MetaCreate(plugin=%s) -> %s OK (child path)"),
+		             SanitiseForLog(wxString::FromUTF8(pluginId)),
+		             SanitiseForLog(wxString::FromUTF8(fullName)));
+		return 0;
+	}
+
+	// ---- Top-level path (legacy, 2-segment <Kind>.<Name>) ----
 	std::string kind, name;
 	if (objectKind != nullptr && *objectKind != '\0') {
 		kind = objectKind;
@@ -504,9 +1060,6 @@ int HostMetaCreate(const char* pluginId,
 		return -1;
 	}
 
-	ibValueMetaObject* root = nullptr;
-	if (!RequireConfiguration(root, errorMsg)) return -1;
-
 	// Refuse to overwrite an existing object — caller must MetaDelete first.
 	if (LookupTopLevel(kind, name).hit != nullptr) {
 		SetError(errorMsg, "MetaCreate: object already exists '" + kind + "." + name + "'");
@@ -518,26 +1071,26 @@ int HostMetaCreate(const char* pluginId,
 	// GetAvailableCtor(clsid) returns the ctor pointer. CreateObject()
 	// allocates a default-constructed instance; we downcast and graft it
 	// onto the configuration root.
-	ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(static_cast<ibClassID>(clsid));
-	if (ctor == nullptr) {
-		SetError(errorMsg, "MetaCreate: no factory registered for kind '" + kind + "'");
-		return -1;
-	}
-	ibValue* raw = ctor->CreateObject();
-	if (raw == nullptr) {
-		SetError(errorMsg, "MetaCreate: factory returned null for kind '" + kind + "'");
-		return -1;
-	}
-	auto* obj = dynamic_cast<ibValueMetaObject*>(raw);
+	ibValueMetaObject* obj = InstantiateMetaObject(clsid);
 	if (obj == nullptr) {
-		delete raw;
-		SetError(errorMsg, "MetaCreate: factory product is not an ibValueMetaObject");
+		SetError(errorMsg, "MetaCreate: no factory registered for kind '" + kind + "'");
 		return -1;
 	}
 
 	const wxString objName = wxString::FromUTF8(name.c_str());
 	obj->SetName(objName);
 	obj->SetParent(root);
+
+	// Apply top-level synonym/comment if present. moduleCode/formType
+	// don't apply at top level but ApplyCreateProperties skips them
+	// silently when the CLSID doesn't match.
+	std::string err;
+	if (!ApplyCreateProperties(obj, clsid, props, err)) {
+		delete obj;
+		SetError(errorMsg, "MetaCreate: " + err);
+		return -1;
+	}
+
 	root->AddChild(obj);
 
 	// Undo lambda: detach + delete. Epoch-gated so a configuration
@@ -565,9 +1118,8 @@ int HostMetaEdit(const char* pluginId,
 		return IB_PLUGIN_PERMISSION_DENIED;
 	}
 
-	std::string kind, name;
-	if (!SplitFullName(fullName, kind, name)) {
-		SetError(errorMsg, "MetaEdit: fullName must be '<Kind>.<Name>'");
+	if (fullName == nullptr || *fullName == '\0') {
+		SetError(errorMsg, "MetaEdit: fullName required");
 		return -1;
 	}
 
@@ -597,6 +1149,13 @@ int HostMetaEdit(const char* pluginId,
 		return -1;
 	}
 
+	// AGENT-CHILD: route by path depth. 2-segment = top-level (legacy,
+	// preserved). 3+ segments = child path. Child paths accept extra
+	// keys (moduleCode, title) that don't apply at top level.
+	std::vector<std::string> segments;
+	const bool pathOk = SplitPath(fullName, segments);
+	const bool isChildPath = pathOk && segments.size() >= 3;
+
 	// Strict-key validation. Unknown keys are rejected to keep the
 	// contract honest — silently dropping "name":"Pwn" would let an
 	// agent send mutation payloads the host doesn't understand and
@@ -604,13 +1163,24 @@ int HostMetaEdit(const char* pluginId,
 	// the audit-log helper before being splashed into errorMsg so a
 	// malicious plugin cannot inject newlines / NUL bytes into the
 	// error envelope the host may eventually re-log.
+	//
+	// AGENT-CHILD: extended key set for child paths.
+	const auto isKnownKey = [&](const std::string& k) {
+		if (k == "synonym" || k == "comment") return true;
+		if (!isChildPath) return false;
+		return (k == "moduleCode" || k == "code" || k == "title" ||
+		         k == "binding");
+	};
 	for (auto& kv : patch.items()) {
 		const std::string& k = kv.key();
-		if (k != "synonym" && k != "comment") {
+		if (!isKnownKey(k)) {
 			const wxString safe = SanitiseForLog(wxString::FromUTF8(k));
+			const std::string supported = isChildPath
+			    ? std::string("supported: synonym, comment, moduleCode, title, binding")
+			    : std::string("supported: synonym, comment");
 			SetError(errorMsg, "MetaEdit: unknown key '" +
-			                    std::string(safe.utf8_str()) +
-			                    "' (supported: synonym, comment)");
+			                    std::string(safe.utf8_str()) + "' (" +
+			                    supported + ")");
 			return -1;
 		}
 	}
@@ -619,18 +1189,47 @@ int HostMetaEdit(const char* pluginId,
 	ibValueMetaObject* root = nullptr;
 	if (!RequireConfiguration(root, errorMsg)) return -1;
 
-	const LookupResult lookup = LookupTopLevel(kind, name);
-	if (lookup.hit == nullptr) {
-		SetError(errorMsg, "MetaEdit: not found '" + std::string(fullName) + "'");
-		return -1;
+	ibValueMetaObject* target = nullptr;
+	if (isChildPath) {
+		const PathResolution r = ResolvePath(fullName);
+		if (!r.ok) {
+			SetError(errorMsg, "MetaEdit: " + r.errorReason);
+			return -1;
+		}
+		if (r.hit == nullptr) {
+			SetError(errorMsg, "MetaEdit: not found '" + std::string(fullName) + "'");
+			return -1;
+		}
+		target = r.hit;
+	} else {
+		std::string kind, name;
+		if (!SplitFullName(fullName, kind, name)) {
+			SetError(errorMsg, "MetaEdit: fullName must be '<Kind>.<Name>'");
+			return -1;
+		}
+		const LookupResult lookup = LookupTopLevel(kind, name);
+		if (lookup.hit == nullptr) {
+			SetError(errorMsg, "MetaEdit: not found '" + std::string(fullName) + "'");
+			return -1;
+		}
+		target = lookup.hit;
 	}
 
-	// Snapshot old values for the undo lambda BEFORE we mutate.
-	ibValueMetaObject* target = lookup.hit;
-	const wxString oldSynonym = target->GetSynonym();
-	const wxString oldComment = target->GetComment();
+	// Snapshot old values for the undo lambda BEFORE we mutate. We
+	// capture three fields independent of which actually change so the
+	// undo lambda restores any of them; flags track which fields the
+	// patch touched.
+	const wxString oldSynonym  = target->GetSynonym();
+	const wxString oldComment  = target->GetComment();
+	wxString       oldModule;
+	if (auto* mod = dynamic_cast<ibValueMetaObjectModuleBase*>(target)) {
+		oldModule = mod->GetModuleText();
+	} else if (auto* form = dynamic_cast<ibValueMetaObjectFormBase*>(target)) {
+		oldModule = form->GetModuleText();
+	}
 	bool changedSynonym = false;
 	bool changedComment = false;
+	bool changedModule  = false;
 
 	if (auto it = patch.find("synonym"); it != patch.end() && it->is_string()) {
 		target->SetSynonym(wxString::FromUTF8(it->get<std::string>()));
@@ -640,8 +1239,40 @@ int HostMetaEdit(const char* pluginId,
 		target->SetComment(wxString::FromUTF8(it->get<std::string>()));
 		changedComment = true;
 	}
-	if (!changedSynonym && !changedComment) {
-		SetError(errorMsg, "MetaEdit: patch had no recognised fields (synonym/comment supported)");
+	if (isChildPath) {
+		auto codeIt = patch.find("moduleCode");
+		if (codeIt == patch.end()) codeIt = patch.find("code");
+		if (codeIt != patch.end() && codeIt->is_string()) {
+			const wxString src = wxString::FromUTF8(codeIt->get<std::string>());
+			// Compile-validate before commit — reject the whole edit on
+			// syntax error, including any synonym/comment changes
+			// applied above. Roll those back inline.
+			ibCompileCode probe;
+			if (!probe.Compile(src)) {
+				if (changedSynonym) target->SetSynonym(oldSynonym);
+				if (changedComment) target->SetComment(oldComment);
+				SetError(errorMsg, "MetaEdit: moduleCode compile failed (syntax error)");
+				return -1;
+			}
+			if (auto* form = dynamic_cast<ibValueMetaObjectFormBase*>(target)) {
+				form->SetModuleText(src);
+				changedModule = true;
+			} else if (auto* mod = dynamic_cast<ibValueMetaObjectModuleBase*>(target)) {
+				mod->SetModuleText(src);
+				changedModule = true;
+			} else {
+				if (changedSynonym) target->SetSynonym(oldSynonym);
+				if (changedComment) target->SetComment(oldComment);
+				SetError(errorMsg, "MetaEdit: moduleCode applies only to forms/modules");
+				return -1;
+			}
+		}
+	}
+
+	if (!changedSynonym && !changedComment && !changedModule) {
+		SetError(errorMsg, isChildPath
+		    ? "MetaEdit: patch had no recognised fields (synonym/comment/moduleCode supported)"
+		    : "MetaEdit: patch had no recognised fields (synonym/comment supported)");
 		return -1;
 	}
 
@@ -652,36 +1283,56 @@ int HostMetaEdit(const char* pluginId,
 	// an object of the same fullName is delete-then-recreated between
 	// edit and undo — without it the undo would silently apply the old
 	// synonym/comment to the impostor.
-	ibValueMetaObject* originalTarget = lookup.hit;
+	ibValueMetaObject* originalTarget = target;
 	const std::string fullNameCopy(fullName);
-	g_undoStack.push_back({[originalTarget, fullNameCopy,
-	                          oldSynonym, oldComment,
-	                          changedSynonym, changedComment]() {
-		std::string k, n;
-		if (!SplitFullName(fullNameCopy.c_str(), k, n)) {
-			wxLogWarning(wxT("metaBridge: MetaEdit undo skipped — bad fullName '%s'"),
-			             SanitiseForLog(wxString::FromUTF8(fullNameCopy)));
-			return;
+	const bool isChildPathCopy = isChildPath;
+	g_undoStack.push_back({[originalTarget, fullNameCopy, isChildPathCopy,
+	                          oldSynonym, oldComment, oldModule,
+	                          changedSynonym, changedComment, changedModule]() {
+		ibValueMetaObject* tgt = nullptr;
+		if (isChildPathCopy) {
+			const PathResolution r = ResolvePath(fullNameCopy.c_str());
+			if (!r.ok || r.hit == nullptr) {
+				wxLogWarning(wxT("metaBridge: MetaEdit undo skipped — target '%s' no longer in tree"),
+				             SanitiseForLog(wxString::FromUTF8(fullNameCopy)));
+				return;
+			}
+			tgt = r.hit;
+		} else {
+			std::string k, n;
+			if (!SplitFullName(fullNameCopy.c_str(), k, n)) {
+				wxLogWarning(wxT("metaBridge: MetaEdit undo skipped — bad fullName '%s'"),
+				             SanitiseForLog(wxString::FromUTF8(fullNameCopy)));
+				return;
+			}
+			const LookupResult lookup = LookupTopLevel(k, n);
+			if (lookup.hit == nullptr) {
+				wxLogWarning(wxT("metaBridge: MetaEdit undo skipped — target '%s' no longer in tree"),
+				             SanitiseForLog(wxString::FromUTF8(fullNameCopy)));
+				return;
+			}
+			tgt = lookup.hit;
 		}
-		const LookupResult lookup = LookupTopLevel(k, n);
-		if (lookup.hit == nullptr) {
-			wxLogWarning(wxT("metaBridge: MetaEdit undo skipped — target '%s' no longer in tree"),
-			             SanitiseForLog(wxString::FromUTF8(fullNameCopy)));
-			return;
-		}
-		if (lookup.hit != originalTarget) {
+		if (tgt != originalTarget) {
 			wxLogWarning(wxT("metaBridge: MetaEdit undo skipped — target '%s' identity changed (delete + recreate?)"),
 			             SanitiseForLog(wxString::FromUTF8(fullNameCopy)));
 			return;
 		}
-		if (changedSynonym) lookup.hit->SetSynonym(oldSynonym);
-		if (changedComment) lookup.hit->SetComment(oldComment);
+		if (changedSynonym) tgt->SetSynonym(oldSynonym);
+		if (changedComment) tgt->SetComment(oldComment);
+		if (changedModule) {
+			if (auto* form = dynamic_cast<ibValueMetaObjectFormBase*>(tgt)) {
+				form->SetModuleText(oldModule);
+			} else if (auto* mod = dynamic_cast<ibValueMetaObjectModuleBase*>(tgt)) {
+				mod->SetModuleText(oldModule);
+			}
+		}
 	}, g_configEpoch});
 
-	wxLogDebug(wxT("[meta] MetaEdit(plugin=%s) -> %s synonym=%d comment=%d"),
+	wxLogDebug(wxT("[meta] MetaEdit(plugin=%s) -> %s synonym=%d comment=%d module=%d"),
 	             SanitiseForLog(wxString::FromUTF8(pluginId)),
 	             SanitiseForLog(wxString::FromUTF8(fullName)),
-	             (int)changedSynonym, (int)changedComment);
+	             (int)changedSynonym, (int)changedComment, (int)changedModule);
 	return 0;
 }
 
@@ -707,19 +1358,73 @@ int HostMetaDelete(const char* pluginId,
 		return -1;
 	}
 
-	std::string kind, name;
-	if (!SplitFullName(fullName, kind, name)) {
-		SetError(errorMsg, "MetaDelete: fullName must be '<Kind>.<Name>'");
-		return -1;
+	// SEC-P1-10: burst-rate gate. force=true + AllowAlways is the path an
+	// agent runaway uses to wipe N objects in one tick. Require a
+	// confirmation prompt when deletes from the same plugin land within
+	// kDeleteBurstThreshold of each other.
+	{
+		const std::string pidKey = pluginId ? std::string(pluginId) : std::string();
+		const auto now = std::chrono::steady_clock::now();
+		auto it = g_lastDeleteAt.find(pidKey);
+		const bool tooFast = (it != g_lastDeleteAt.end()) &&
+		                      ((now - it->second) < kDeleteBurstThreshold);
+		if (tooFast) {
+			const wxString summary = wxString::Format(
+			    _("Удалить '%s'? Это повторное удаление — подтвердите вручную."),
+			    SanitiseForLog(wxString::FromUTF8(fullName ? fullName : "")));
+			const int answer = wxMessageBox(summary,
+			                                  _("Подтверждение удаления"),
+			                                  wxYES_NO | wxICON_WARNING);
+			if (answer != wxYES) {
+				SetError(errorMsg, "MetaDelete: declined by user (burst-rate confirmation)");
+				return IB_PLUGIN_PERMISSION_DENIED;
+			}
+		}
+		g_lastDeleteAt[pidKey] = now;
 	}
 
 	ibValueMetaObject* root = nullptr;
 	if (!RequireConfiguration(root, errorMsg)) return -1;
 
-	const LookupResult lookup = LookupTopLevel(kind, name);
-	if (lookup.hit == nullptr) {
-		SetError(errorMsg, "MetaDelete: not found '" + std::string(fullName) + "'");
-		return -1;
+	// AGENT-CHILD: route by path depth. 2-segment = top-level (legacy,
+	// preserved). 3+ segments = child path; singletons are rejected
+	// because their parent owns them via property tree and dropping
+	// them out of band leaves dangling property pointers.
+	std::vector<std::string> segments;
+	const bool pathOk = SplitPath(fullName, segments);
+	ibValueMetaObject* parent = nullptr;
+	ibValueMetaObject* victim = nullptr;
+
+	if (pathOk && segments.size() >= 3) {
+		const PathResolution r = ResolvePath(fullName);
+		if (!r.ok) {
+			SetError(errorMsg, "MetaDelete: " + r.errorReason);
+			return -1;
+		}
+		if (r.isSingleton) {
+			SetError(errorMsg, "MetaDelete: '" + std::string(fullName) +
+			                    "' is a singleton; cannot delete a module owned by its parent");
+			return -1;
+		}
+		if (r.hit == nullptr) {
+			SetError(errorMsg, "MetaDelete: not found '" + std::string(fullName) + "'");
+			return -1;
+		}
+		parent = r.parent;
+		victim = r.hit;
+	} else {
+		std::string kind, name;
+		if (!SplitFullName(fullName, kind, name)) {
+			SetError(errorMsg, "MetaDelete: fullName must be '<Kind>.<Name>'");
+			return -1;
+		}
+		const LookupResult lookup = LookupTopLevel(kind, name);
+		if (lookup.hit == nullptr) {
+			SetError(errorMsg, "MetaDelete: not found '" + std::string(fullName) + "'");
+			return -1;
+		}
+		parent = lookup.parent;
+		victim = lookup.hit;
 	}
 
 	// Detach from parent + take ownership of the orphaned subtree.
@@ -733,8 +1438,6 @@ int HostMetaDelete(const char* pluginId,
 	//     to its old parent. The deleter then no-ops when the last
 	//     shared_ptr (the lambda's capture) dies, leaving the
 	//     configuration tree as victim's new owner.
-	ibValueMetaObject* parent = lookup.parent;
-	ibValueMetaObject* victim = lookup.hit;
 	parent->RemoveChild(victim);
 
 	auto released = std::make_shared<bool>(false);

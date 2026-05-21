@@ -11,6 +11,9 @@
 #include "res/bitmaps_res.h"
 
 #include <wx/tokenzr.h>
+#include <wx/timer.h>
+#include <wx/log.h>
+#include <wx/utils.h>   // wxGetenv
 
 #define DEF_LINENUMBER_ID 0
 #define DEF_BREAKPOINT_ID 1
@@ -59,6 +62,34 @@ ibCodeEditor::ibCodeEditor(ibMetaDocument* document, wxWindow* parent, wxWindowI
 	Connect(wxEVT_KEY_DOWN, wxKeyEventHandler(ibCodeEditor::OnKeyDown), nullptr, this);
 	Connect(wxEVT_STC_CHARADDED, wxStyledTextEventHandler(ibCodeEditor::OnCharAdded), nullptr, this);
 	Connect(wxEVT_MOTION, wxMouseEventHandler(ibCodeEditor::OnMouseMove), nullptr, this);
+
+	// AUTO-TRIGGER: idle-detect timer for Workmate-style inline completion.
+	// Owner + Bind route wxEVT_TIMER through OnSigmaIdleTimer; ArmSigmaIdleTimer
+	// (called from OnCharAdded / OnKeyDown) restarts it on every keystroke.
+	m_sigmaIdleTimer.SetOwner(this);
+	Bind(wxEVT_TIMER, &ibCodeEditor::OnSigmaIdleTimer, this, m_sigmaIdleTimer.GetId());
+
+	// Operating mode is sourced from process env. Plugins inject env keys
+	// only during their init_fn scope (security: SEC-CR-P1-1), so this
+	// value comes from the user's shell or from a manual /etc setup until
+	// we surface a session-level setting. wxAtoi returns 0 on empty / bad
+	// input; clamp to the valid 0..3 range and fall back to 2 (auto-moderate)
+	// when the env var is absent OR contains garbage.
+	{
+		const wxString envMode = wxGetenv(wxT("OES_AI_AUTOCOMPLETE_MODE"));
+		long parsed = -1;
+		if (!envMode.IsEmpty() && envMode.ToLong(&parsed) && parsed >= 0 && parsed <= 3) {
+			m_sigmaAutoMode = static_cast<int>(parsed);
+		} else {
+			m_sigmaAutoMode = 2;
+		}
+	}
+
+	// Free Ctrl+Alt+Space so Scintilla doesn't swallow the hotkey before
+	// our OnKeyDown sees it. Used as the manual-trigger shortcut for the
+	// inline AI completion (Workmate parity — code.1c.ai bind it to the
+	// same chord).
+	CmdKeyClear(' ', wxSTC_KEYMOD_CTRL | wxSTC_KEYMOD_ALT);
 
 	// Replace Scintilla's built-in right-click menu with a custom one
 	// so the Designer can inject the syntax-helper lookup item
@@ -677,6 +708,17 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 		// for a consensus verdict.
 		auto* miTriple  = aiSub->Append(wxID_HIGHEST + 4035,
 		                                  _("Triple-review модуля\tAlt+I,T"));
+		// AGENT-MODE: 7th skill — drive the oes_agent MCP tool to create
+		// real metadata objects. Always enabled when AI is present (no
+		// selection / text required — the agent works from a prompt).
+		auto* miAgent   = aiSub->Append(wxID_HIGHEST + 4036,
+		                                  _("Создать объект через агента\tAlt+I,A"));
+		// COMMIT-MSG: 8th skill — mirrors 1С:Workmate "Generate Commit
+		// Message". Editor buffer is irrelevant here; inputs come from
+		// `git diff` invoked at click time. Lives on the AI Assistant
+		// submenu so VCS-adjacent AI flows stay in one place.
+		auto* miCommit  = aiSub->Append(wxID_HIGHEST + 4037,
+		                                  _("Сгенерировать сообщение коммита\tAlt+I,M"));
 
 		auto* pm = appData ? appData->GetPluginManager() : nullptr;
 		const bool hasAI = pm && pm->HasAIProviderFor("chat");
@@ -689,6 +731,12 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 		// Triple-review reads the whole module — gated only on provider
 		// availability, not on a non-empty selection.
 		miTriple ->Enable(hasAI && GetTextLength() > 0);
+		miAgent  ->Enable(hasAI);
+		// Commit-message is editor-independent — gate only on AI
+		// availability. The git-repo / staged-changes check happens
+		// inside the click handler so the menu doesn't spawn a child
+		// process on every right-click.
+		miCommit ->Enable(hasAI);
 
 		// Always "AI Assistant" — host-neutral; specific provider name
 		// is intentionally not exposed in the submenu label, matching
@@ -774,7 +822,11 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 			// language so aiBridge / the LLMs know which syntax they're
 			// looking at. Every other skill keeps the legacy
 			// "selection-or-current-line" behaviour.
-			const bool wholeModule = (op == wxT("triple-review"));
+			// AGENT-MODE: the agent skill ships the whole module as
+			// context — the user's prompt becomes the natural-language
+			// instruction, the editor body grounds it.
+			const bool wholeModule = (op == wxT("triple-review") ||
+			                            op == wxT("agent"));
 			wxString code;
 			wxString language = wxT("ces");
 			if (wholeModule) {
@@ -847,6 +899,128 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 	Bind(wxEVT_MENU, sendSkill(wxT("doc")),           wxID_HIGHEST + 4033);
 	Bind(wxEVT_MENU, sendSkill(wxT("send")),          wxID_HIGHEST + 4034);
 	Bind(wxEVT_MENU, sendSkill(wxT("triple-review")), wxID_HIGHEST + 4035);
+	// AGENT-MODE: agent skill reuses sendSkill so the editor.skill envelope
+	// shape stays uniform; aiBridge dispatches on op="agent" to RunOesAgent.
+	Bind(wxEVT_MENU, sendSkill(wxT("agent")),         wxID_HIGHEST + 4036);
+
+	// COMMIT-MSG: dedicated handler — editor buffer is irrelevant; the
+	// LLM input is `git diff`. Capture staged + unstaged diff under
+	// section headers, cap the total at 50 KB (Pugi prompt budget),
+	// and ship through the same editor.skill / CallWebPaneSend pipeline
+	// the rest of the skills use. aiBridge's opLabels carries the
+	// Russian Conventional-Commits prompt for op="commit".
+	Bind(wxEVT_MENU, [this](wxCommandEvent&) {
+		auto* pm = appData ? appData->GetPluginManager() : nullptr;
+		if (pm == nullptr) return;
+
+		// `git` not in PATH → log + dialog and bail; the menu does
+		// not pre-check because spawning a child on every right-click
+		// is wasteful.
+		wxArrayString verOut, verErr;
+		const long verRc = wxExecute(wxT("git --version"), verOut, verErr,
+		                              wxEXEC_SYNC | wxEXEC_NODISABLE);
+		if (verRc != 0) {
+			wxLogMessage(wxT("[commit] git not found in PATH, skipping commit message generation"));
+			wxMessageBox(_("Утилита git не найдена в PATH. Установите git и повторите."),
+			              _("Сгенерировать сообщение коммита"),
+			              wxOK | wxICON_INFORMATION);
+			return;
+		}
+
+		// Verify the CWD is inside a git repo. `git rev-parse
+		// --show-toplevel` exits 0 inside one; outside a repo it
+		// exits 128.
+		wxArrayString topOut, topErr;
+		const long topRc = wxExecute(wxT("git rev-parse --show-toplevel"),
+		                              topOut, topErr,
+		                              wxEXEC_SYNC | wxEXEC_NODISABLE);
+		if (topRc != 0 || topOut.IsEmpty()) {
+			wxMessageBox(_("Текущий каталог не является git-репозиторием."),
+			              _("Сгенерировать сообщение коммита"),
+			              wxOK | wxICON_INFORMATION);
+			return;
+		}
+
+		// Capture staged + unstaged diffs separately. `--no-pager` so
+		// git doesn't pipe through less; `--no-color` so the LLM
+		// doesn't see ANSI escapes.
+		wxArrayString stagedOut, stagedErr;
+		wxExecute(wxT("git --no-pager diff --cached --no-color"),
+		           stagedOut, stagedErr,
+		           wxEXEC_SYNC | wxEXEC_NODISABLE);
+		wxArrayString unstagedOut, unstagedErr;
+		wxExecute(wxT("git --no-pager diff --no-color"),
+		           unstagedOut, unstagedErr,
+		           wxEXEC_SYNC | wxEXEC_NODISABLE);
+
+		// Concatenate with section headers. Empty sections drop so
+		// the LLM doesn't waste context on "(empty)" labels.
+		wxString diff;
+		auto append = [&diff](const wxString& header, const wxArrayString& lines) {
+			if (lines.IsEmpty()) return;
+			diff += header;
+			diff += wxT("\n");
+			for (const wxString& ln : lines) {
+				diff += ln;
+				diff += wxT("\n");
+			}
+			diff += wxT("\n");
+		};
+		append(wxT("=== staged (git diff --cached) ==="), stagedOut);
+		append(wxT("=== unstaged (git diff) ==="),       unstagedOut);
+
+		if (diff.IsEmpty()) {
+			wxMessageBox(_("Нет изменений для коммита (ни staged, ни unstaged)."),
+			              _("Сгенерировать сообщение коммита"),
+			              wxOK | wxICON_INFORMATION);
+			return;
+		}
+
+		// Cap payload at 50 KB. Past this the prompt budget pushes
+		// context out at the LLM side regardless.
+		constexpr size_t kMaxDiffBytes = 50 * 1024;
+		if (diff.utf8_str().length() > kMaxDiffBytes) {
+			diff = diff.Mid(0, kMaxDiffBytes);
+			diff += wxT("\n\n[diff truncated]\n");
+		}
+
+		// JSON-escape mirror of the sendSkill helper, inlined here
+		// to keep the handler self-contained.
+		auto esc = [](const wxString& s) {
+			wxString out; out.reserve(s.size() + 8);
+			for (wxUniChar c : s) {
+				const auto v = static_cast<unsigned>(c.GetValue());
+				if (c == wxT('\\')) out += wxT("\\\\");
+				else if (c == wxT('"')) out += wxT("\\\"");
+				else if (c == wxT('\n')) out += wxT("\\n");
+				else if (c == wxT('\r')) out += wxT("\\r");
+				else if (c == wxT('\t')) out += wxT("\\t");
+				else if (v < 0x20) out += wxString::Format(wxT("\\u%04x"), v);
+				else out += c;
+			}
+			return out;
+		};
+		const wxString rid = wxString::Format(wxT("skill-%lld"),
+		                                       static_cast<long long>(wxGetUTCTime()));
+		wxString json = wxT("{\"kind\":\"editor.skill\",\"op\":\"commit\","
+		                   "\"language\":\"diff\",\"code\":\"");
+		json += esc(diff);
+		json += wxT("\",\"requestId\":\"");
+		json += rid;
+		json += wxT("\"}");
+
+		// Open / focus the AI pane (lazy-created when no plugin has
+		// registered one) and ship the envelope to the default chat
+		// pane. Same path as the other skill clicks.
+		wxCommandEvent openEvt(wxEVT_MENU, wxID_FRONTEND_PLUGIN_WEB_PANE);
+		openEvt.SetEventObject(this);
+		for (wxWindow* p = GetParent(); p != nullptr; p = p->GetParent()) {
+			if (p->ProcessWindowEvent(openEvt)) break;
+		}
+		wxString target = pm->GetDefaultAIPaneId();
+		if (target.IsEmpty()) target = wxT("designer.demo.chat");
+		pm->CallWebPaneSend(target, json);
+	}, wxID_HIGHEST + 4037);
 
 	Bind(wxEVT_MENU,
 	     routeUp(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP),
@@ -1149,16 +1323,13 @@ void ibCodeEditor::OnKeyDown(wxKeyEvent& event)
 
 	// Sigma AI inline completion hotkeys:
 	//   Ctrl+I (RawCtrl+I on macOS)    — request completion at caret
+	//   Ctrl+Alt+Space                 — Workmate-parity manual trigger
 	//   Tab inside pending suggestion  — accept + insert
 	//   Esc inside pending suggestion  — dismiss
 	// Tab/Esc only intercepted when a suggestion is pending; otherwise
-	// they fall through to default Scintilla behaviour.
-	if ((event.RawControlDown() || event.ControlDown()) &&
-	    !event.ShiftDown() && !event.AltDown() &&
-	    event.GetKeyCode() == 'I') {
-		TriggerSigmaCompletion();
-		return;
-	}
+	// they fall through to default Scintilla behaviour. Accept MUST run
+	// before the idle-timer rearm path below so the existing pending
+	// suggestion gets committed instead of redundantly re-firing the LLM.
 	if (HasPendingSigmaCompletion()) {
 		if (event.GetKeyCode() == WXK_TAB) {
 			AcceptSigmaCompletion();
@@ -1172,6 +1343,23 @@ void ibCodeEditor::OnKeyDown(wxKeyEvent& event)
 		// user's typing actually lands in the buffer instead of being
 		// interpreted as part of the AI affordance.
 		DismissSigmaCompletion();
+	}
+	if ((event.RawControlDown() || event.ControlDown()) &&
+	    !event.ShiftDown() && !event.AltDown() &&
+	    event.GetKeyCode() == 'I') {
+		TriggerSigmaCompletion();
+		return;
+	}
+	// Ctrl+Alt+Space — manual trigger. Off-mode disables the hotkey
+	// (m_sigmaAutoMode == 0); manual-only mode (1) and both auto modes
+	// (2/3) still respond. We consume the event so Scintilla doesn't
+	// insert a literal space.
+	if (event.ControlDown() && event.AltDown() && !event.ShiftDown() &&
+	    event.GetKeyCode() == WXK_SPACE) {
+		if (m_sigmaAutoMode != 0) {
+			TriggerSigmaCompletion();
+		}
+		return;
 	}
 
 	switch (event.GetKeyCode())
@@ -1239,6 +1427,12 @@ void ibCodeEditor::OnKeyDown(wxKeyEvent& event)
 		break;
 	default: event.Skip(); break;
 	}
+
+	// Restart the idle timer for the Workmate-style auto-trigger. The
+	// hotkey paths above all return early, so we only land here for
+	// regular typing / navigation — exactly the events that should
+	// restart the debounce window.
+	ArmSigmaIdleTimer();
 }
 
 // ===========================================================================
@@ -1301,6 +1495,12 @@ void ibCodeEditor::TriggerSigmaCompletion()
 	AnnotationSetStyle(caretLine, wxSTC_STYLE_INDENTGUIDE);
 	AnnotationSetVisible(wxSTC_ANNOTATION_BOXED);
 
+	// Status bar phase ping — designer's bottom bar shows AI activity so
+	// the user always knows whether the platform is talking to a remote
+	// model. wxLogStatus routes to the active top-level wxFrame (Designer
+	// main frame). Workmate parity for the visible spinner.
+	wxLogStatus(_("AI: запрос отправлен…"));
+
 	const long pendingLineSnapshot = caretLine;
 	const long pendingPosSnapshot  = GetCurrentPos();
 
@@ -1322,6 +1522,7 @@ void ibCodeEditor::TriggerSigmaCompletion()
 			    err.IsEmpty() ? _("AI: empty completion") : err);
 			AnnotationSetStyle(pendingLineSnapshot, wxSTC_STYLE_INDENTGUIDE);
 			AnnotationSetVisible(wxSTC_ANNOTATION_BOXED);
+			wxLogStatus(_("AI: ошибка"));
 			return;
 		}
 		wxString cleaned = text;
@@ -1338,6 +1539,7 @@ void ibCodeEditor::TriggerSigmaCompletion()
 			SetEmptySelection(pendingPosSnapshot);
 		}
 		ShowSigmaCompletion(cleaned);
+		wxLogStatus(_("AI: готово"));
 	});
 }
 
@@ -1387,4 +1589,60 @@ void ibCodeEditor::DismissSigmaCompletion()
 	}
 	m_sigmaPending.Clear();
 	m_sigmaPendingLine = -1;
+}
+
+// ===========================================================================
+// Workmate-style auto-trigger — Phase 6.2.c
+// ===========================================================================
+
+bool ibCodeEditor::CursorIsCommentLine() const
+{
+	const int line = LineFromPosition(GetCurrentPos());
+	if (line < 0) return false;
+
+	// wxStyledTextCtrl::GetLine is non-const in wx 3.x (it returns by value
+	// but isn't marked const). Cast away constness — the read is logically
+	// const and there's no side-effecting state mutation in STC's GetLine.
+	auto* self = const_cast<ibCodeEditor*>(this);
+	wxString current = self->GetLine(line);
+	current.Trim(true);   // trailing CR / LF / WS
+	current.Trim(false);  // leading WS
+
+	if (current.StartsWith(wxT("//"))) return true;
+
+	// Workmate parity: user writes `// describe what` + Enter ⇒ cursor
+	// lands on a blank line directly below the comment. We want the
+	// trigger to fire there, not only while the user is still on the
+	// comment line itself.
+	if (current.IsEmpty() && line > 0) {
+		wxString prior = self->GetLine(line - 1);
+		prior.Trim(true);
+		prior.Trim(false);
+		if (prior.StartsWith(wxT("//"))) return true;
+	}
+	return false;
+}
+
+void ibCodeEditor::ArmSigmaIdleTimer()
+{
+	// Mode gate. 0 (off) and 1 (manual-only — hotkey path) skip the
+	// debounce entirely so we don't spin a wxTimer the user can never
+	// trip. Auto modes set per-mode delay matching Workmate / Cursor
+	// defaults: moderate = 700ms post-pause, intensive = 350ms.
+	if (m_sigmaIdleTimer.IsRunning()) m_sigmaIdleTimer.Stop();
+	if (m_sigmaAutoMode == 0 || m_sigmaAutoMode == 1) return;
+	const int delayMs = (m_sigmaAutoMode == 3) ? 350 : 700;
+	m_sigmaIdleTimer.StartOnce(delayMs);
+}
+
+void ibCodeEditor::OnSigmaIdleTimer(wxTimerEvent& /*event*/)
+{
+	// Comment-line gate: blind auto-trigger only on lines that look like
+	// task descriptions. Anything else costs the user tokens for no UX
+	// win. m_sigmaPending guard prevents stacking a second request on
+	// top of an in-flight one — the in-flight callback will resolve and
+	// the user can re-arm on the next keystroke.
+	if (HasPendingSigmaCompletion()) return;
+	if (!CursorIsCommentLine())      return;
+	TriggerSigmaCompletion();
 }

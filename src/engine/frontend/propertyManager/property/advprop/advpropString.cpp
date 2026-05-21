@@ -2,6 +2,13 @@
 
 #include "backend/propertyManager/property/propertyString.h"
 #include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/aiPropertyHelper.h"
+#include "frontend/mainFrame/objinspect/objinspect.h"
+
+#include <wx/button.h>
+#include <wx/log.h>
+#include <wx/sizer.h>
+#include <wx/timer.h>
 
 // register frontend property 
 class ibPropertyStringLoader
@@ -233,6 +240,77 @@ bool wxTStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 		if (!HasFlag(wxPGFlags::ReadOnly))
 			btnSizerFlags |= wxOK;
 		wxStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(btnSizerFlags);
+
+		// Workmate-parity "AI" button — visible for the synonym / comment /
+		// tooltip / title family. Clicking it dispatches the helper which
+		// calls the active AI provider's CompleteCodeAsync. While the
+		// request is in flight the button shows "…" and is disabled. The
+		// dialog stays open so the user can inspect the proposed text
+		// before pressing OK.
+		ibProperty* aiBackingProperty = m_ownerProperty != nullptr
+		    ? m_ownerProperty->GetProperty(GetBaseName())
+		    : nullptr;
+		if (!HasFlag(wxPGFlags::ReadOnly) && aiBackingProperty != nullptr &&
+		    ibAIPropertyHelper::IsAIEligible(GetBaseName())) {
+			wxButton* aiButton = new wxButton(dlg, wxID_ANY, wxT("AI"));
+			aiButton->SetToolTip(_("Сгенерировать через AI"));
+			buttonSizer->Insert(0, aiButton, wxSizerFlags(0).Border(wxRIGHT, spacing));
+
+			// Stash a self-owning poll timer on the button so its label /
+			// enabled state and the visible language editors stay in
+			// sync as the async LLM call completes. wxTimer fires on the
+			// UI thread; once IsBusy flips to false we refresh and stop.
+			auto* pollTimer = new wxTimer();
+			pollTimer->SetOwner(aiButton);
+			ibProperty* propCapture = aiBackingProperty;
+			auto* locArrayPtr = &locArray;
+			const wxString priorLabel = aiButton->GetLabel();
+
+			aiButton->Bind(wxEVT_TIMER,
+			    [aiButton, propCapture, locArrayPtr, priorLabel, pollTimer]
+			    (wxTimerEvent&) {
+				if (ibAIPropertyHelper::IsBusy()) return; // still waiting
+				pollTimer->Stop();
+				aiButton->Enable(true);
+				aiButton->SetLabel(priorLabel);
+				if (auto* sp = dynamic_cast<ibPropertyStringBase*>(propCapture)) {
+					ibBackendLocalizationEntryArray arr;
+					ibBackendLocalization::CreateLocalizationArray(sp->GetValueAsString(), arr);
+					for (auto& pair : *locArrayPtr) {
+						const wxString lang = pair.first->GetLangCode();
+						auto found = std::find_if(arr.begin(), arr.end(),
+						    [&](const ibBackendLocalizationEntry& e) {
+							return stringUtils::CompareString(e.m_code, lang);
+						});
+						if (found != arr.end()) pair.second->SetValue(found->m_data);
+					}
+				}
+			});
+
+			aiButton->Bind(wxEVT_BUTTON,
+			    [aiButton, propCapture, pollTimer]
+			    (wxCommandEvent&) {
+				// Spec: clicking again while pending is a no-op.
+				if (ibAIPropertyHelper::IsBusy() || !aiButton->IsEnabled()) return;
+				aiButton->Enable(false);
+				aiButton->SetLabel(wxT("…"));
+				ibAIPropertyHelper::RunGenerate(
+				    aiButton, /*pgManager=*/nullptr, /*pgProperty=*/nullptr,
+				    propCapture, propCapture->GetPropertyObject());
+				// 100 ms keeps the dialog responsive without burning
+				// CPU. The provider round-trip is dominated by the
+				// model call, not the polling interval.
+				pollTimer->Start(100);
+			});
+
+			aiButton->Bind(wxEVT_DESTROY,
+			    [pollTimer](wxWindowDestroyEvent& evt) {
+				pollTimer->Stop();
+				delete pollTimer;
+				evt.Skip();
+			});
+		}
+
 		topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));
 
 		dlg->SetSizer(topsizer);
@@ -303,6 +381,66 @@ bool wxMStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 	if (!HasFlag(wxPGFlags::ReadOnly))
 		btnSizerFlags |= wxOK;
 	wxStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(btnSizerFlags);
+
+	// AI button — wxMStringProperty backs the "Comment" cell (and other
+	// long-string fields). When the wxPGProperty's name matches one of
+	// the AI-eligible identifiers, surface the same generator flow we
+	// expose on wxTStringProperty. The owning ibPropertyObject is
+	// reachable via the propGrid's current property selection: the
+	// grid stores a wxClientData-style backpointer on each wxPGProperty
+	// through the ibObjectInspector m_propMap. We fish out the
+	// inspector to dereference it.
+	ibProperty* aiBackingProperty = nullptr;
+	ibPropertyObject* aiOwner = nullptr;
+	if (ibObjectInspector* inspector = ibObjectInspector::GetObjectInspector()) {
+		aiOwner = inspector->GetSelectedObject();
+		if (aiOwner != nullptr)
+			aiBackingProperty = aiOwner->GetProperty(GetBaseName());
+	}
+	if (!HasFlag(wxPGFlags::ReadOnly) && aiBackingProperty != nullptr &&
+	    ibAIPropertyHelper::IsAIEligible(GetBaseName())) {
+		wxButton* aiButton = new wxButton(dlg, wxID_ANY, wxT("AI"));
+		aiButton->SetToolTip(_("Сгенерировать через AI"));
+		buttonSizer->Insert(0, aiButton, wxSizerFlags(0).Border(wxRIGHT, spacing));
+
+		auto* pollTimer = new wxTimer();
+		pollTimer->SetOwner(aiButton);
+		ibProperty* propCapture = aiBackingProperty;
+		ibPropertyObject* ownerCapture = aiOwner;
+		const wxString priorLabel = aiButton->GetLabel();
+
+		aiButton->Bind(wxEVT_TIMER,
+		    [aiButton, propCapture, ed, priorLabel, pollTimer]
+		    (wxTimerEvent&) {
+			if (ibAIPropertyHelper::IsBusy()) return;
+			pollTimer->Stop();
+			aiButton->Enable(true);
+			aiButton->SetLabel(priorLabel);
+			if (auto* sp = dynamic_cast<ibPropertyStringBase*>(propCapture)) {
+				ed->SetValue(sp->GetValueAsString());
+			}
+		});
+
+		aiButton->Bind(wxEVT_BUTTON,
+		    [aiButton, propCapture, ownerCapture, pollTimer]
+		    (wxCommandEvent&) {
+			if (ibAIPropertyHelper::IsBusy() || !aiButton->IsEnabled()) return;
+			aiButton->Enable(false);
+			aiButton->SetLabel(wxT("…"));
+			ibAIPropertyHelper::RunGenerate(
+			    aiButton, /*pgManager=*/nullptr, /*pgProperty=*/nullptr,
+			    propCapture, ownerCapture);
+			pollTimer->Start(100);
+		});
+
+		aiButton->Bind(wxEVT_DESTROY,
+		    [pollTimer](wxWindowDestroyEvent& evt) {
+			pollTimer->Stop();
+			delete pollTimer;
+			evt.Skip();
+		});
+	}
+
 	topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));
 
 	dlg->SetSizer(topsizer);

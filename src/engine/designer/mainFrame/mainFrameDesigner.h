@@ -45,6 +45,20 @@ enum {
 	wxID_DESIGNER_DATABASE_CLEAR,
 
 	wxID_DESIGNER_ABOUT,
+
+	// Project Search panel (Workmate parity). Designer-private menu id,
+	// bound to Ctrl+Shift+F. Designer-owned so the binding survives
+	// frontend.dll / external rebuilds without touching the shared header.
+	wxID_DESIGNER_PROJECT_SEARCH,
+
+	// AI Assistant TODO list panel (Workmate parity). Designer-private
+	// menu id — toggles the dockable list of accumulated agent tasks.
+	wxID_DESIGNER_AI_TODO,
+
+	// AI Assistant Markers panel (Workmate parity). Designer-private
+	// menu id — toggles the dockable aggregated marker list.
+	wxID_DESIGNER_AI_MARKERS,
+
 	wxID_DESIGNER_END
 };
 // Note: Syntax-helper command ids live in frontend/mainFrame/mainFrame.h
@@ -74,10 +88,10 @@ public:
 
 	virtual ~ibFrontendDocMDIFrameDesigner();
 
-	void Message(const wxString& strMessage, ibStatusMessage status) { m_outputWindow->SharedOutput(strMessage, status); }
-	void ClearMessage() { m_outputWindow->ClearAll(); }
+	void Message(const wxString& strMessage, ibStatusMessage status) override { m_outputWindow->SharedOutput(strMessage, status); }
+	void ClearMessage() override { m_outputWindow->ClearAll(); }
 
-	void BackendError(const wxString& strFileName, const wxString& strDocPath, const long line, const wxString& strErrorMessage) const {
+	void BackendError(const wxString& strFileName, const wxString& strDocPath, const long line, const wxString& strErrorMessage) const override {
 		m_outputWindow->SharedOutput(strErrorMessage, ibStatusMessage::ibStatusMessage_Error, strFileName, strDocPath, line);
 	}
 
@@ -89,6 +103,10 @@ public:
 	ibStackWindow* GetStackWindow() const { return m_stackWindow; }
 	ibWatchWindow* GetWatchWindow() const { return m_watchWindow; }
 	ibLocalWindow* GetLocalWindow() const { return m_localWindow; }
+	// Accessor for the Configuration tree pane — required by the
+	// Project Search panel so it can route OpenFormMDI calls without
+	// reaching into AUI internals.
+	ibMetadataTree* GetMetadataTreeWindow() const { return m_metaWindow; }
 
 	// Syntax-helper sidebar lifecycle. Pane is lazy-created on first
 	// toggle / lookup so the corpus load is amortised away from
@@ -96,6 +114,29 @@ public:
 	void EnsureHelpPane();
 	void ToggleHelpPane();
 	void OpenHelpForCursor();
+
+	// Project Search pane (Workmate parity: "Project Search — by
+	// metadata"). The pane is created together with the Configuration
+	// tree but starts hidden; Ctrl+Shift+F brings it to focus.
+	void EnsureProjectSearchPane();
+	void ToggleProjectSearchPane();
+	void FocusProjectSearchPane();
+
+	// AI Assistant TODO list (Workmate parity: "Управление: TODO лист,
+	// Подзадача, Команда системы, Проекты"). Stores per-configuration
+	// rows under ~/Library/Preferences/OES/ai-todo/<configHash>.json.
+	// Pane is lazily created on first toggle so cold-start cost stays
+	// flat for users who never open it.
+	void EnsureAiTodoPane();
+	void ToggleAiTodoPane();
+	void FocusAiTodoPane();
+
+	// AI Markers panel (Workmate parity: "Маркеры: Установка и удаление
+	// маркеров в редакторе"). Aggregates editor markers across the
+	// project. Lazy-created on first toggle.
+	void EnsureAiMarkersPane();
+	void ToggleAiMarkersPane();
+	void FocusAiMarkersPane();
 
 	void LoadOptions();
 	void SaveOptions();
@@ -117,8 +158,8 @@ protected:
 	virtual void CreateBottomPane();
 	virtual void CreateWideGui();
 
-	virtual bool AllowRun() const;
-	virtual bool AllowClose() const;
+	virtual bool AllowRun() const override;
+	virtual bool AllowClose() const override;
 
 	/**
 	* Adds the default profile to the hot keys.
@@ -168,6 +209,16 @@ private:
 	// Syntax-helper sidebar. Created on first toggle / lookup; owned
 	// by the AUI manager once added.
 	class ibHelpPaneView* m_helpPane = nullptr;
+
+	// Project Search panel (Ctrl+Shift+F). Created lazily on first
+	// toggle/focus; owned by the AUI manager once added.
+	class ibProjectSearchPanel* m_projectSearchPanel = nullptr;
+
+	// AI Assistant TODO panel (Workmate parity). Lazily created.
+	class ibAiTodoPanel* m_aiTodoPanel = nullptr;
+
+	// AI Assistant Markers panel (Workmate parity). Lazily created.
+	class ibAiMarkersPanel* m_aiMarkersPanel = nullptr;
 
 	// Plugin-driven WebView panes — generic infrastructure for any plugin
 	// that wants to embed a wxWebView-based UI (AI assistants, custom

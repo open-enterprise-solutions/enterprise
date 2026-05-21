@@ -33,6 +33,9 @@ ibSlashCommandPopup::AllCommands()
 		{ wxT("/test"),     wxT("test"),     _("Написать тесты") },
 		{ wxT("/refactor"), wxT("refactor"), _("Рефакторинг") },
 		{ wxT("/commit"),   wxT("commit"),   _("Сообщение коммита") },
+		// AGENT-MODE: drives the oes_agent MCP tool — body is the natural-
+		// language request ("Создай справочник X с реквизитами…").
+		{ wxT("/agent"),    wxT("agent"),    _("Создать объект через агента") },
 	};
 	return kCommands;
 }

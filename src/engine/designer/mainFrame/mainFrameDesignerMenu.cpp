@@ -51,6 +51,13 @@ void ibFrontendDocMDIFrameDesigner::SetDefaultHotKeys()
 	// Default plugin-driven AI chat pane toggle. RawCtrl for the same
 	// macOS-vs-Cmd reason as the Syntax Helper entries above.
 	m_keyBinder.SetShortcut(wxID_FRONTEND_PLUGIN_WEB_PANE,      wxT("RawCtrl+Alt+I"));
+
+	// Project Search panel (Workmate parity). Ctrl+Shift+F so it lives
+	// next to wxID_FIND (Ctrl+F) without colliding with the editor's
+	// own document-scope find dialog. RawCtrl keeps the literal Control
+	// key on macOS — Cmd+F is the system find pattern and we don't want
+	// to steal it.
+	m_keyBinder.SetShortcut(wxID_DESIGNER_PROJECT_SEARCH,      wxT("RawCtrl+Shift+F"));
 }
 
 //********************************************************************************
@@ -113,6 +120,19 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	m_menuEdit->Append(wxID_SELECTALL);
 	m_menuEdit->AppendSeparator();
 	m_menuEdit->Append(wxID_FIND);
+	// Workmate-parity "Project Search by metadata". Ctrl+Shift+F so it
+	// doesn't collide with the editor's wxID_FIND (Ctrl+F) — the latter
+	// scopes the current document, this one scopes the configuration.
+	m_menuEdit->Append(wxID_DESIGNER_PROJECT_SEARCH,
+	                    _("Поиск по метаданным…\tRawCtrl+Shift+F"));
+
+	// Workmate-parity AI Assistant panes — TODO list and aggregated
+	// Markers. No keyboard shortcut by default; users open them via
+	// the Edit menu like other dockable views.
+	m_menuEdit->Append(wxID_DESIGNER_AI_TODO,
+	                    _("Задачи AI-ассистента"));
+	m_menuEdit->Append(wxID_DESIGNER_AI_MARKERS,
+	                    _("Маркеры AI-ассистента"));
 
 	m_frameMenuBar->Append(m_menuEdit, wxGetStockLabel(wxID_EDIT));
 
@@ -261,6 +281,23 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	Bind(wxEVT_MENU,
 	     [this](wxCommandEvent&) { OpenHelpForCursor(); },
 	     wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
+
+	// Workmate-parity Project Search by metadata. Ensures the pane,
+	// raises it, focuses the query input — same UX shape as the
+	// Syntax Helper "open and ready to type" pattern.
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) { FocusProjectSearchPane(); },
+	     wxID_DESIGNER_PROJECT_SEARCH);
+
+	// Workmate-parity AI Assistant panes — TODO list and aggregated
+	// Markers. Toggle on each invocation so a second click hides
+	// the panel; the same pattern Syntax Helper uses.
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) { ToggleAiTodoPane(); },
+	     wxID_DESIGNER_AI_TODO);
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) { ToggleAiMarkersPane(); },
+	     wxID_DESIGNER_AI_MARKERS);
 	Bind(wxEVT_MENU,
 	     [this](wxCommandEvent&) {
 	         WirePluginWebPaneCallbacks();

@@ -38,6 +38,7 @@
 #include <wx/timer.h>
 
 #include <vector>
+#include <set>
 
 class wxHtmlWindow;
 class wxTextCtrl;
@@ -96,7 +97,19 @@ public:
 	// test-only hooks so AppendEntryForTests can take an Entry by value
 	// without a forward declaration trick.
 	struct Entry {
-		enum class Role { User, Assistant, System, Error, Plan, TripleReview };
+		enum class Role { User, Assistant, System, Error, Plan, TripleReview, Subtasks };
+
+		// One subtask row inside an `agent.subtask` envelope. Status drives
+		// the rendered icon in the tree view; "pending" / "running" / "done"
+		// / "failed" are the canonical values, but unknown future tags fall
+		// through to the neutral pending icon so a forward-rev envelope
+		// never blanks the row.
+		struct Subtask {
+			wxString id;
+			wxString title;
+			wxString status;                  // "pending" / "running" / "done" / "failed"
+			std::vector<wxString> dependsOn;  // ids of subtasks that must finish first
+		};
 
 		// Per-reviewer summary in a TripleReview entry. One row per LLM
 		// model that participated; counts are the model's own
@@ -132,6 +145,12 @@ public:
 		wxString rationale;          // agent.plan only
 		wxString mutations;          // agent.plan only
 		bool     applied  = false;   // agent.applied set this true
+		// COMMIT-MSG: marks an assistant entry whose body is a proposed
+		// git commit message (i.e. it was generated for an editor.skill
+		// op="commit" turn). Renders an extra "Использовать как коммит"
+		// link on each code block in the entry; oes-commit:<e>:<b> link
+		// scheme runs `git commit -m <body>` after user confirmation.
+		bool     commitSuggestion = false;
 		// Fenced code blocks extracted from `markdown` during render.
 		// First = language tag, second = raw code body. Populated by
 		// RenderTranscript so OnLinkClicked can resolve oes-copy /
@@ -149,6 +168,15 @@ public:
 		int      countP3 = 0;
 		std::vector<ReviewerSummary> reviewers;
 		std::vector<Finding>         findings;
+
+		// agent.subtask only. Workmate-style task decomposition: an agent
+		// plan that's too large for one context window emits a list of
+		// child tasks here. parentPlanId links back to the originating
+		// agent.plan entry so the panel can render a parent/children tree.
+		// Subsequent agent.subtaskStatus envelopes (matched by parentPlanId)
+		// mutate `subtasks[i].status` in place and trigger a re-render.
+		wxString             parentPlanId;
+		std::vector<Subtask> subtasks;
 	};
 
 	// Test-only hooks. SetConfigHashForTests installs a stable bucket
@@ -197,6 +225,22 @@ private:
 	// active so out-of-order envelopes can be sanity-checked.
 	bool             m_pending           = false;
 	wxString         m_pendingRequestId;
+
+	// COMMIT-MSG: requestIds whose assistant reply should be tagged as
+	// a commit-message suggestion. Populated when DispatchEnvelope sees
+	// an editor.skill op="commit" envelope (or when DispatchUserPrompt
+	// rewrites a /commit slash to chat.send). Consulted by
+	// AppendStreamingDelta when it creates the streaming entry, so the
+	// "Использовать как коммит" link only renders on the right reply
+	// and not on every code block in the transcript.
+	std::set<wxString> m_commitRequestIds;
+
+	// COMMIT-MSG: one-shot sentinel — when an editor.skill op="commit"
+	// envelope routes through DispatchUserPrompt (which mints a fresh
+	// rid for the outbound chat.send), this flag tells the next
+	// DispatchUserPrompt call to register the new rid in
+	// m_commitRequestIds. Cleared inside DispatchUserPrompt.
+	bool             m_nextPromptIsCommit = false;
 
 	void OnSendClicked(wxCommandEvent& event);
 	void OnInputEnter(wxCommandEvent& event);
@@ -259,6 +303,13 @@ private:
 	// wxStyledTextCtrl.
 	void HandleCopyLink(const wxString& spec);
 	void HandleApplyLink(const wxString& spec);
+
+	// COMMIT-MSG: oes-commit:<entryIdx>:<blockIdx> link handler.
+	// Confirms with the user, copies the message to the clipboard,
+	// and (when confirmed) runs `git commit -m "<message>"` via
+	// wxExecute. Reports outcomes back into the transcript as
+	// System / Error entries.
+	void HandleCommitLink(const wxString& spec);
 
 	// Parse the inbound envelope and apply it. Pure UI-thread work; the
 	// off-thread variant queues a wxThreadEvent that ends up here.

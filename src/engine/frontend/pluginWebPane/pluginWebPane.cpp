@@ -38,8 +38,19 @@
 #include <wx/dataobj.h>
 #include <wx/msgdlg.h>
 #include <wx/stc/stc.h>
+// COMMIT-MSG: wxExecute / wxArrayString for spawning `git commit -F`
+// when the user clicks "Использовать как коммит" in a commit-suggestion
+// reply. wxFileName::CreateTempFileName + wxFile write the message
+// body to disk so multi-line commit text survives shell quoting on
+// every platform.
+#include <wx/utils.h>
+#include <wx/arrstr.h>
+#include <wx/filename.h>
+#include <wx/file.h>
+#include <wx/filefn.h>
 
 #include <functional>
+#include <unordered_map>
 
 namespace {
 
@@ -336,22 +347,47 @@ wxString HighlightCes(const wxString& code)
 // left and action links on the right (light grey background); bottom
 // row is the coloured code body inside a <pre>.
 wxString RenderCesCodeBlock(size_t entryIdx, size_t blockIdx,
-                              const wxString& lang, const wxString& code)
+                              const wxString& lang, const wxString& code,
+                              bool commitSuggestion)
 {
 	wxString html;
 	html += wxT("<table width=\"100%\" cellspacing=\"0\" cellpadding=\"6\" border=\"0\">");
+	// Header row: language tag (left) + action links (right). Commit
+	// suggestions append a third link "Использовать как коммит" that
+	// HandleCommitLink picks up and runs `git commit -m` after
+	// confirmation. Render the extra link inline so wxHtmlWindow keeps
+	// the right-align flow in one cell.
+	wxString rightLinks;
+	rightLinks += wxString::Format(
+	    wxT("<a href=\"oes-copy:%zu:%zu\">%s</a>"),
+	    entryIdx, blockIdx, HtmlEscape(_("Копировать")));
+	rightLinks += wxT("&nbsp;&nbsp;");
+	rightLinks += wxString::Format(
+	    wxT("<a href=\"oes-apply:%zu:%zu\">%s</a>"),
+	    entryIdx, blockIdx, HtmlEscape(_("Применить")));
+	if (commitSuggestion) {
+		rightLinks += wxT("&nbsp;&nbsp;");
+		rightLinks += wxString::Format(
+		    wxT("<a href=\"oes-commit:%zu:%zu\">%s</a>"),
+		    entryIdx, blockIdx,
+		    HtmlEscape(_("Использовать как коммит")));
+	}
+	// Single-column layout: language tag on top-left, action links on
+	// the NEXT line (not a right-aligned cell) so they don't clip when
+	// the pane is narrow. wxHtmlWindow doesn't reflow right-aligned
+	// table cells into the visible width — they just walk off-screen
+	// (observed at <420px pane width on macOS).
 	html += wxString::Format(
 	    wxT("<tr><td bgcolor=\"#eef0f3\">"
-	        "<font size=\"-1\" color=\"#6b7280\">%s</font></td>"
-	        "<td align=\"right\" bgcolor=\"#eef0f3\">"
-	        "<font size=\"-1\">"
-	        "<a href=\"oes-copy:%zu:%zu\">%s</a>&nbsp;&nbsp;"
-	        "<a href=\"oes-apply:%zu:%zu\">%s</a>"
-	        "</font></td></tr>"),
+	        "<font size=\"-1\" color=\"#6b7280\">%s</font><br>"
+	        "<font size=\"-1\">%s</font>"
+	        "</td></tr>"),
 	    HtmlEscape(lang.IsEmpty() ? wxT("ces") : lang),
-	    entryIdx, blockIdx, HtmlEscape(_("Копировать")),
-	    entryIdx, blockIdx, HtmlEscape(_("Применить")));
-	html += wxT("<tr><td colspan=\"2\" bgcolor=\"#f8f9fa\"><pre>");
+	    rightLinks);
+	// Code body in its own row. wxHtmlWindow <pre> does NOT wrap long
+	// lines — we accept horizontal scroll inside the pane for code
+	// blocks. Wrapping CES would break indent and obscure the syntax.
+	html += wxT("<tr><td bgcolor=\"#f8f9fa\"><pre>");
 	html += HighlightCes(code);
 	html += wxT("</pre></td></tr>");
 	html += wxT("</table>");
@@ -435,6 +471,7 @@ wxString RoleLabel(ibPluginWebPane::Entry::Role role)
 	case R::Error:        return _("Ошибка");
 	case R::Plan:         return _("План");
 	case R::TripleReview: return _("Triple-review");
+	case R::Subtasks:     return _("Подзадачи");
 	}
 	return wxEmptyString;
 }
@@ -504,6 +541,13 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 	// stretchable spacer leftward, so adding the new-chat button first
 	// would push it under the spacer. Add it AFTER the spacer + BEFORE
 	// the send button so the layout reads:  [status…]  [New]  [Send].
+	// "Скопировать всё" — dumps the entire transcript as plain markdown
+	// to the system clipboard. wxHtmlWindow's selection-to-clipboard
+	// (Cmd+C / Ctrl+C) is unreliable across roles + code blocks, so
+	// expose an explicit button. Equivalent to Workmate's "Copy chat".
+	auto* copyAllBtn = new wxButton(this, wxID_ANY, _("Скопировать всё"));
+	btnRow->Add(copyAllBtn, 0, wxALL, FromDIP(4));
+
 	m_newChatBtn = new wxButton(this, wxID_ANY, _("Новый чат"));
 	btnRow->Add(m_newChatBtn, 0, wxALL, FromDIP(4));
 
@@ -515,6 +559,49 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 
 	m_sendBtn   ->Bind(wxEVT_BUTTON, &ibPluginWebPane::OnSendClicked,    this);
 	m_newChatBtn->Bind(wxEVT_BUTTON, &ibPluginWebPane::OnNewChatClicked, this);
+	copyAllBtn  ->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+		wxString out;
+		for (const auto& e : m_entries) {
+			wxString label;
+			switch (e.role) {
+			case Entry::Role::User:         label = wxT("## Вы\n");        break;
+			case Entry::Role::Assistant:    label = wxT("## Ассистент\n"); break;
+			case Entry::Role::System:       label = wxT("## Система\n");   break;
+			case Entry::Role::Error:        label = wxT("## Ошибка\n");    break;
+			case Entry::Role::Plan:         label = wxT("## План\n");      break;
+			case Entry::Role::TripleReview: label = wxT("## Triple-review\n"); break;
+			case Entry::Role::Subtasks:     label = wxT("## Подзадачи\n"); break;
+			}
+			out += label;
+			out += e.markdown;
+			out += wxT("\n\n---\n\n");
+		}
+		if (wxTheClipboard->Open()) {
+			wxTheClipboard->SetData(new wxTextDataObject(out));
+			wxTheClipboard->Close();
+			if (m_statusBar) m_statusBar->SetLabel(_("Весь чат скопирован"));
+		}
+	});
+
+	// Cmd+C / Ctrl+C on the history widget — fall back to "copy whole
+	// transcript" when wxHtmlWindow returns an empty selection. Solves
+	// "Cmd+A then Cmd+C copies nothing" on macOS.
+	m_history->Bind(wxEVT_CHAR_HOOK, [this](wxKeyEvent& evt) {
+		const bool isCopy = (evt.GetKeyCode() == 'C') &&
+		                     (evt.CmdDown() || evt.ControlDown());
+		if (!isCopy) { evt.Skip(); return; }
+		const wxString sel = m_history->SelectionToText();
+		wxString out = sel;
+		if (out.IsEmpty()) {
+			for (const auto& e : m_entries) { out += e.markdown; out += wxT("\n\n"); }
+		}
+		if (!out.IsEmpty() && wxTheClipboard->Open()) {
+			wxTheClipboard->SetData(new wxTextDataObject(out));
+			wxTheClipboard->Close();
+			if (m_statusBar) m_statusBar->SetLabel(_("Скопировано"));
+		}
+		// Don't Skip — we owned this combo.
+	});
 	m_input  ->Bind(wxEVT_TEXT_ENTER, &ibPluginWebPane::OnInputEnter, this);
 	m_input  ->Bind(wxEVT_TEXT,       &ibPluginWebPane::OnInputText,  this);
 	// EVT_CHAR_HOOK fires before native key dispatch, which lets us
@@ -664,19 +751,88 @@ void ibPluginWebPane::DispatchEnvelope(const wxString& jsonInline)
 		else if (op == "doc")           opLabel = _("Сгенерируй документирующий комментарий для");
 		else if (op == "send")          opLabel = _("Обсудим этот код");
 		else if (op == "triple-review") opLabel = _("Triple-review модуля");
+		else if (op == "agent")         opLabel = _("Создать через агента");
+		else if (op == "commit")        opLabel = _("Сгенерируй сообщение коммита для следующего diff");
 		else                             opLabel = _("Обработай код") + wxString(wxT(" (")) +
 		                                            wxString::FromUTF8(op.c_str()) +
 		                                            wxString(wxT(")"));
 		const wxString lang = wxString::FromUTF8(language.c_str());
 		const wxString src  = wxString::FromUTF8(code.c_str());
 
-		Entry e;
-		e.role     = Entry::Role::User;
-		e.markdown = opLabel + wxT(":\n\n```") + lang + wxT("\n") + src + wxT("\n```");
-		AppendEntry(std::move(e));
+		// COMMIT-MSG: remember the original envelope requestId so the
+		// assistant reply for this turn renders the extra
+		// "Использовать как коммит" link. DispatchUserPrompt below
+		// builds a fresh requestId for the outbound chat.send (older
+		// worker contracts), so we also register that one once we
+		// know the value. Easiest path: capture rid from the
+		// envelope here, and an additional sentinel matched by
+		// AppendStreamingDelta heuristically. We use a separate flag
+		// instead: every assistant entry whose user-row immediately
+		// preceded it with the commit opLabel gets tagged at chat.end
+		// time (CompleteStreaming) via a back-fill pass.
+		const bool isCommitTurn = (op == "commit");
+		if (isCommitTurn) {
+			// Record the envelope's own rid (if the worker happens to
+			// echo it back unchanged) AND set the one-shot sentinel so
+			// DispatchUserPrompt below registers its newly-minted
+			// chat-<ts> rid as well. Belt-and-braces: either path tags
+			// the assistant reply.
+			const std::string ridUtf8 = env.value("requestId", "");
+			if (!ridUtf8.empty()) {
+				m_commitRequestIds.insert(wxString::FromUTF8(ridUtf8.c_str()));
+			}
+			m_nextPromptIsCommit = true;
+		}
 
-		// Re-emit as chat.send so the plugin can route through its
-		// normal LLM path.
+		// SEC-CODEX-P1: triple-review uses a DIFFERENT MCP tool on the
+		// server (name="triple_review"), not the chat llm_query path.
+		// Bouncing through DispatchUserPrompt would re-emit as chat.send
+		// and drop the op + raw code — aiBridge's special-case only
+		// fires for editor.skill envelopes. Forward the original
+		// envelope verbatim so aiBridge sees op="triple-review" and
+		// routes to RunTripleReview. Render a user-row HERE because
+		// the direct-dispatch branch below does NOT call
+		// DispatchUserPrompt (which is what appends the user row in
+		// the chat-skill branch). Non-triple-review skills append via
+		// DispatchUserPrompt only — appending here too would duplicate
+		// the row.
+		// AGENT-MODE: op="agent" follows the same direct-dispatch path —
+		// aiBridge routes it to RunOesAgent which emits agent.plan, not
+		// chat.delta, so DispatchUserPrompt's chat.send wrapper would lose
+		// the op + context fields.
+		if (op == "triple-review" || op == "agent") {
+			Entry e;
+			e.role     = Entry::Role::User;
+			if (op == "agent" && code.empty()) {
+				// AGENT-MODE: agent skill carries the natural-language
+				// request in `prompt` when invoked from /agent slash; show
+				// it raw rather than as a (empty) code block.
+				const std::string promptStr = env.value("prompt", std::string());
+				e.markdown = opLabel + wxT(": ") + wxString::FromUTF8(promptStr.c_str());
+			} else {
+				e.markdown = opLabel + wxT(":\n\n```") + lang + wxT("\n") + src + wxT("\n```");
+			}
+			AppendEntry(std::move(e));
+			if (m_onMessage != nullptr) {
+				const std::string paneIdUtf8(m_paneId.utf8_str().data());
+				const std::string envUtf8(jsonInline.utf8_str().data());
+				try {
+					m_onMessage(paneIdUtf8.c_str(), envUtf8.c_str(), m_userData);
+				} catch (...) {
+					Entry err;
+					err.role     = Entry::Role::Error;
+					err.markdown = (op == "agent")
+					    ? _("Не удалось отправить запрос агенту.")
+					    : _("Не удалось отправить запрос на triple-review.");
+					AppendEntry(std::move(err));
+				}
+			}
+			return;
+		}
+
+		// Other skills (explain/review/fix/doc/send) bounce through
+		// chat.send because the legacy llm_query tool handles them
+		// uniformly as natural-language prompts.
 		DispatchUserPrompt(opLabel + wxT(":\n\n```") + lang + wxT("\n") + src + wxT("\n```"));
 		return;
 	}
@@ -711,6 +867,64 @@ void ibPluginWebPane::DispatchEnvelope(const wxString& jsonInline)
 			}
 		}
 		RenderTranscript();
+		return;
+	}
+	if (kind == "agent.subtask") {
+		// Workmate-parity subtask decomposition. Pugi (or any future agent
+		// emitter) sends one envelope per parent plan; the children come
+		// pre-populated with their initial status ("pending" by default).
+		// dependsOn carries other subtask ids that block this row.
+		Entry e;
+		e.role         = Entry::Role::Subtasks;
+		e.parentPlanId = wxString::FromUTF8(env.value("parentPlanId", "").c_str());
+		if (env.contains("subtasks") && env["subtasks"].is_array()) {
+			for (const auto& st : env["subtasks"]) {
+				if (!st.is_object()) continue;
+				Entry::Subtask s;
+				s.id     = wxString::FromUTF8(st.value("id",     "").c_str());
+				s.title  = wxString::FromUTF8(st.value("title",  "").c_str());
+				s.status = wxString::FromUTF8(st.value("status", "pending").c_str());
+				if (st.contains("dependsOn") && st["dependsOn"].is_array()) {
+					for (const auto& d : st["dependsOn"]) {
+						if (d.is_string()) {
+							s.dependsOn.push_back(
+							    wxString::FromUTF8(d.get<std::string>().c_str()));
+						}
+					}
+				}
+				e.subtasks.push_back(std::move(s));
+			}
+		}
+		AppendEntry(std::move(e));
+		return;
+	}
+	if (kind == "agent.subtaskStatus") {
+		// Single-row update — match by parentPlanId then by subtask id.
+		// Missing parent / missing id silently no-op (delivery may race a
+		// "New chat" clear; surfacing an Error row would be more noise
+		// than signal for a status ping).
+		const wxString parentPlanId = wxString::FromUTF8(
+		    env.value("parentPlanId", "").c_str());
+		const wxString subtaskId    = wxString::FromUTF8(
+		    env.value("id", "").c_str());
+		const wxString newStatus    = wxString::FromUTF8(
+		    env.value("status", "").c_str());
+		if (parentPlanId.IsEmpty() || subtaskId.IsEmpty()) return;
+		bool changed = false;
+		for (auto& ent : m_entries) {
+			if (ent.role != Entry::Role::Subtasks) continue;
+			if (ent.parentPlanId != parentPlanId)  continue;
+			for (auto& s : ent.subtasks) {
+				if (s.id == subtaskId) {
+					if (!newStatus.IsEmpty()) s.status = newStatus;
+					changed = true;
+				}
+			}
+		}
+		if (changed) {
+			RenderTranscript();
+			ScheduleSave();
+		}
 		return;
 	}
 	if (kind == "agent.tripleReview") {
@@ -795,22 +1009,53 @@ void ibPluginWebPane::AppendEntry(Entry entry)
 void ibPluginWebPane::AppendStreamingDelta(const wxString& requestId,
                                             const wxString& delta)
 {
-	// First chunk of a turn — create the assistant entry.
-	if (!m_pending || m_pendingRequestId != requestId) {
+	// Locate an existing assistant entry for this request — could be
+	// either a real streaming entry from a prior delta, OR the "Думаю…"
+	// placeholder we inserted in DispatchUserPrompt so the user sees
+	// immediate feedback. The placeholder shares the same requestId; on
+	// first real delta we OVERWRITE its markdown instead of appending,
+	// otherwise the placeholder text leaks into the rendered assistant
+	// reply and corrupts md4c fence parsing.
+	Entry* target = nullptr;
+	for (auto& ent : m_entries) {
+		if (ent.role == Entry::Role::Assistant &&
+		    ent.requestId == requestId) {
+			target = &ent;
+			break;
+		}
+	}
+	if (target == nullptr) {
 		Entry e;
 		e.role      = Entry::Role::Assistant;
 		e.markdown  = delta;
 		e.requestId = requestId;
-		m_entries.push_back(std::move(e));
-		m_pending          = true;
-		m_pendingRequestId = requestId;
-		UpdateSendButtonLabel();
-	} else {
-		// Append to existing streaming entry.
-		if (!m_entries.empty()) {
-			m_entries.back().markdown += delta;
+		// COMMIT-MSG: tag the entry when its rid was registered as a
+		// commit-message turn. The flag drives RenderCesCodeBlock to
+		// emit the extra "Использовать как коммит" link on every
+		// fenced block inside this entry.
+		if (m_commitRequestIds.find(requestId) != m_commitRequestIds.end()) {
+			e.commitSuggestion = true;
 		}
+		m_entries.push_back(std::move(e));
+	} else if (target->markdown == _("Думаю…")) {
+		// First real delta replacing the placeholder.
+		target->markdown = delta;
+		// Placeholder was created in DispatchUserPrompt before the
+		// rid was registered with m_commitRequestIds (the order is:
+		// DispatchUserPrompt mints rid → registers it → creates the
+		// "Думаю…" placeholder Entry). The Entry was therefore created
+		// with commitSuggestion=false; back-fill it here on the first
+		// real delta so the rendered links appear.
+		if (!target->commitSuggestion &&
+		    m_commitRequestIds.find(requestId) != m_commitRequestIds.end()) {
+			target->commitSuggestion = true;
+		}
+	} else {
+		target->markdown += delta;
 	}
+	m_pending          = true;
+	m_pendingRequestId = requestId;
+	UpdateSendButtonLabel();
 	RenderTranscript();
 	// Stream deltas only schedule the debounced save; the timer collapses
 	// many chunks into one disk write 500ms after the final delta.
@@ -837,8 +1082,12 @@ void ibPluginWebPane::RenderTranscript()
 	wxString doc;
 	doc.reserve(8192);
 
-	doc += wxT("<html><body bgcolor=\"#ffffff\" text=\"#1f2937\">");
-	doc += wxT("<table width=\"100%\" cellspacing=\"0\" cellpadding=\"8\" border=\"0\">");
+	// Body bg uses the assistant-row color so an assistant row blends into
+	// the canvas — the user / error / plan rows stand out as the framed
+	// boxes. Mirrors the Cursor / GitHub Copilot "assistant text on the
+	// page surface, user input in a bubble" convention.
+	doc += wxT("<html><body bgcolor=\"#fafbfc\" text=\"#1f2937\">");
+	doc += wxT("<table width=\"100%\" cellspacing=\"6\" cellpadding=\"8\" border=\"0\">");
 
 	if (m_entries.empty()) {
 		doc += wxT("<tr><td><font color=\"#6b7280\" size=\"-1\">");
@@ -847,28 +1096,42 @@ void ibPluginWebPane::RenderTranscript()
 	}
 
 	for (const auto& e : m_entries) {
-		// Pick a row background that distinguishes the role without
-		// veering into the playful side. User rows = subtle blue gray;
-		// assistant rows = white; system/error rows = warning tints.
+		// Pick a row background that visually separates entries. User
+		// rows get a subtle blue tint so the question reads as the
+		// boundary; assistant rows get pure white so the markdown body
+		// has the highest contrast against the muted canvas around it.
 		const char* bg = "#ffffff";
 		const char* roleColor = "#374151";
 		switch (e.role) {
-		case Entry::Role::User:         bg = "#f3f4f6"; roleColor = "#2563eb"; break;
+		case Entry::Role::User:         bg = "#dbeafe"; roleColor = "#1d4ed8"; break;
 		case Entry::Role::Assistant:    bg = "#ffffff"; roleColor = "#1f2937"; break;
-		case Entry::Role::System:       bg = "#f5f5f5"; roleColor = "#6b7280"; break;
-		case Entry::Role::Error:        bg = "#fef2f2"; roleColor = "#b91c1c"; break;
-		case Entry::Role::Plan:         bg = "#fff7ed"; roleColor = "#9a3412"; break;
-		case Entry::Role::TripleReview: bg = "#f8fafc"; roleColor = "#0f172a"; break;
+		case Entry::Role::System:       bg = "#f1f5f9"; roleColor = "#475569"; break;
+		case Entry::Role::Error:        bg = "#fee2e2"; roleColor = "#b91c1c"; break;
+		case Entry::Role::Plan:         bg = "#ffedd5"; roleColor = "#9a3412"; break;
+		case Entry::Role::TripleReview: bg = "#ecfeff"; roleColor = "#0e7490"; break;
+		case Entry::Role::Subtasks:     bg = "#f5f3ff"; roleColor = "#6d28d9"; break;
 		}
 
 		doc += wxString::Format(
 		    wxT("<tr><td bgcolor=\"%s\">"),
 		    wxString::FromUTF8(bg));
 
+		// Role label + per-entry actions. Assistant rows get a
+		// "Скопировать ответ" link that copies the whole markdown body
+		// to the clipboard (separate from per-code-block Copy buttons).
 		doc += wxString::Format(
-		    wxT("<font size=\"-1\" color=\"%s\"><b>%s</b></font><br>"),
+		    wxT("<font size=\"-1\" color=\"%s\"><b>%s</b></font>"),
 		    wxString::FromUTF8(roleColor),
 		    HtmlEscape(RoleLabel(e.role)));
+		if (e.role == Entry::Role::Assistant && !e.markdown.IsEmpty() &&
+		    e.markdown != _("Думаю…")) {
+			const size_t entryIdx = static_cast<size_t>(&e - &m_entries[0]);
+			doc += wxString::Format(
+			    wxT("&nbsp;&nbsp;<font size=\"-1\">"
+			        "<a href=\"oes-copyreply:%zu\">%s</a></font>"),
+			    entryIdx, HtmlEscape(_("Скопировать ответ")));
+		}
+		doc += wxT("<br>");
 
 		if (e.role == Entry::Role::Plan) {
 			if (!e.rationale.IsEmpty()) {
@@ -987,6 +1250,87 @@ void ibPluginWebPane::RenderTranscript()
 				}
 				doc += wxT("</table>");
 			}
+		} else if (e.role == Entry::Role::Subtasks) {
+			// Workmate-parity tree view. wxHtmlWindow does NOT render the
+			// nested-list bullet styles modern browsers offer, so we build a
+			// flat two-column table with an indentation prefix per row.
+			// Column 1 = status icon (emoji-free per repo policy; ASCII
+			// symbol inside a coloured table cell). Column 2 = subtask
+			// title; dependsOn rows shift right by one level so the
+			// parent/children relationship reads at a glance.
+			if (!e.parentPlanId.IsEmpty()) {
+				doc += wxT("<font size=\"-1\" color=\"#6b7280\">");
+				doc += HtmlEscape(_("План"));
+				doc += wxT(": ");
+				doc += HtmlEscape(e.parentPlanId);
+				doc += wxT("</font><br>");
+			}
+			if (e.subtasks.empty()) {
+				doc += wxT("<i>");
+				doc += HtmlEscape(_("Список подзадач пуст."));
+				doc += wxT("</i>");
+			} else {
+				// Build an id-set so dependsOn entries whose target sits
+				// in the SAME subtasks block render as children (indented).
+				// dependsOn ids that point outside the block render at the
+				// root level — we can't safely guess their parent without
+				// more context.
+				std::unordered_map<wxString, size_t> idIndex;
+				for (size_t si = 0; si < e.subtasks.size(); ++si) {
+					if (!e.subtasks[si].id.IsEmpty()) {
+						idIndex[e.subtasks[si].id] = si;
+					}
+				}
+				doc += wxT("<table cellspacing=\"0\" cellpadding=\"4\" border=\"0\" width=\"100%\">");
+				for (const auto& s : e.subtasks) {
+					// Status palette — keep grey for unknown so a forward-rev
+					// envelope doesn't paint the row red.
+					const char* statusBg = "#e5e7eb";
+					const char* statusFg = "#374151";
+					wxString statusSym = wxT("?");
+					if      (s.status == wxT("pending")) { statusBg = "#e5e7eb"; statusFg = "#4b5563"; statusSym = wxT("o"); }
+					else if (s.status == wxT("running")) { statusBg = "#dbeafe"; statusFg = "#1d4ed8"; statusSym = wxT(">"); }
+					else if (s.status == wxT("done"))    { statusBg = "#dcfce7"; statusFg = "#15803d"; statusSym = wxT("v"); }
+					else if (s.status == wxT("failed"))  { statusBg = "#fee2e2"; statusFg = "#b91c1c"; statusSym = wxT("x"); }
+
+					// Indent rows that depend on another row in THIS block.
+					// Single level — Workmate parity, not a generic DAG.
+					bool isChild = false;
+					for (const auto& dep : s.dependsOn) {
+						if (idIndex.find(dep) != idIndex.end()) { isChild = true; break; }
+					}
+					const wxString indent = isChild ? wxT("&nbsp;&nbsp;&nbsp;&nbsp;") : wxString();
+
+					doc += wxT("<tr>");
+					doc += wxString::Format(
+					    wxT("<td width=\"24\" bgcolor=\"%s\" align=\"center\"><font color=\"%s\"><b>%s</b></font></td>"),
+					    wxString::FromUTF8(statusBg),
+					    wxString::FromUTF8(statusFg),
+					    HtmlEscape(statusSym));
+					doc += wxT("<td>");
+					doc += indent;
+					doc += HtmlEscape(s.title.IsEmpty() ? s.id : s.title);
+					if (!s.id.IsEmpty()) {
+						doc += wxT("&nbsp;&nbsp;<font size=\"-1\" color=\"#9ca3af\">");
+						doc += HtmlEscape(s.id);
+						doc += wxT("</font>");
+					}
+					if (!s.dependsOn.empty()) {
+						wxString deps;
+						for (size_t di = 0; di < s.dependsOn.size(); ++di) {
+							if (di > 0) deps += wxT(", ");
+							deps += s.dependsOn[di];
+						}
+						doc += wxT("<br><font size=\"-1\" color=\"#9ca3af\">");
+						doc += HtmlEscape(_("зависит от"));
+						doc += wxT(": ");
+						doc += HtmlEscape(deps);
+						doc += wxT("</font>");
+					}
+					doc += wxT("</td></tr>");
+				}
+				doc += wxT("</table>");
+			}
 		} else {
 			// Extract code fences from the markdown body BEFORE md4c
 			// sees them — replace each with a unique placeholder, run
@@ -1005,7 +1349,8 @@ void ibPluginWebPane::RenderTranscript()
 				    /*entryIdx*/ static_cast<size_t>(&e - &m_entries[0]),
 				    /*blockIdx*/ bi,
 				    blocks[bi].first,
-				    blocks[bi].second);
+				    blocks[bi].second,
+				    /*commitSuggestion*/ e.commitSuggestion);
 				body.Replace(placeholder, html);
 			}
 			// Persist code blocks on the entry so link handlers can
@@ -1075,6 +1420,17 @@ void ibPluginWebPane::OnInputKeyDown(wxKeyEvent& event)
 	    : (m_atPopup && m_atPopup->IsShown())
 	        ? static_cast<wxPopupTransientWindow*>(m_atPopup)
 	    : nullptr;
+
+	// Shift+Enter (with no popup steering) inserts a newline rather than
+	// sending. Without this the wxTE_PROCESS_ENTER style hands Shift+Enter
+	// to OnInputEnter the same way plain Enter — sending mid-paragraph.
+	if (activePopup == nullptr &&
+	    (event.GetKeyCode() == WXK_RETURN ||
+	     event.GetKeyCode() == WXK_NUMPAD_ENTER) &&
+	    event.ShiftDown()) {
+		m_input->WriteText(wxT("\n"));
+		return;
+	}
 	if (activePopup == nullptr) { event.Skip(); return; }
 
 	// Polymorphic dispatch via a tiny lambda — keeps the switch statement
@@ -1354,6 +1710,12 @@ bool ibPluginWebPane::TryDispatchSlashCommand(const wxString& text)
 	env["op"]        = std::string(match->op.utf8_str());
 	env["language"]  = "ces";
 	env["code"]      = std::string(body.utf8_str());
+	// AGENT-MODE: the agent skill expects the body to be the user's
+	// natural-language instruction, not code — surface it as `prompt` so
+	// aiBridge's RunOesAgent uses it directly rather than the code fallback.
+	if (match->op == wxT("agent")) {
+		env["prompt"] = std::string(body.utf8_str());
+	}
 
 	wxString localeName;
 	if (wxLocale* loc = wxGetLocale()) localeName = loc->GetCanonicalName();
@@ -1361,9 +1723,15 @@ bool ibPluginWebPane::TryDispatchSlashCommand(const wxString& text)
 	env["locale"]    = std::string(localeName.utf8_str());
 
 	const std::string payload = env.dump();
-	const wxScopedCharBuffer paneIdUtf8 = m_paneId.utf8_str();
+	// SEC-P1-12: std::string owns the bytes outright — was wxScopedCharBuffer
+	// which holds a refcounted handle to the wxString's internal buffer
+	// that could free under us if m_paneId is mutated.
+	const std::string paneIdUtf8(m_paneId.utf8_str().data());
+	// SEC-P1-9: scope tl_currentPluginId for the duration of the onMessage
+	// call so synchronous host trampolines see the registering plugin's id.
+	auto pidGuard = MakePaneScopeGuard(m_paneId);
 	try {
-		m_onMessage(paneIdUtf8.data(), payload.c_str(), m_userData);
+		m_onMessage(paneIdUtf8.c_str(), payload.c_str(), m_userData);
 	} catch (...) {
 		Entry err;
 		err.role     = Entry::Role::Error;
@@ -1402,6 +1770,15 @@ void ibPluginWebPane::DispatchUserPrompt(const wxString& prompt)
 	// every field so a tiny snprintf-free path is enough.
 	const wxString rid = wxString::Format(wxT("chat-%lld"),
 	                                        static_cast<long long>(wxGetUTCTime()));
+
+	// COMMIT-MSG: if the caller upstream (DispatchEnvelope for an
+	// op="commit" editor.skill) flagged this prompt as a commit-message
+	// generation turn, register the freshly minted rid so the assistant
+	// streaming entry picks up the commitSuggestion flag.
+	if (m_nextPromptIsCommit) {
+		m_commitRequestIds.insert(rid);
+		m_nextPromptIsCommit = false;
+	}
 	nlohmann::json env;
 	env["kind"]      = "chat.send";
 	env["requestId"] = std::string(rid.utf8_str());
@@ -1423,9 +1800,30 @@ void ibPluginWebPane::DispatchUserPrompt(const wxString& prompt)
 	m_pendingRequestId = rid;
 	UpdateSendButtonLabel();
 
-	const wxScopedCharBuffer paneIdUtf8 = m_paneId.utf8_str();
+	// Thinking indicator — visible feedback while the assistant
+	// computes. wxHtmlWindow can't animate, so we use a static "…"
+	// row that gets cleared by the first chat.delta (AppendStreamingDelta
+	// replaces the pending entry when it matches m_pendingRequestId).
+	// Status bar carries the live phase label as well.
+	Entry waiting;
+	waiting.role      = Entry::Role::Assistant;
+	waiting.markdown  = _("Думаю…");
+	waiting.requestId = rid;
+	// COMMIT-MSG: tag the placeholder up front so the assistant entry
+	// keeps its commitSuggestion=true once chat.delta back-fills the
+	// body — RenderCesCodeBlock relies on this flag at render time.
+	if (m_commitRequestIds.find(rid) != m_commitRequestIds.end()) {
+		waiting.commitSuggestion = true;
+	}
+	AppendEntry(std::move(waiting));
+	if (m_statusBar) m_statusBar->SetLabel(_("Отправлено, ждём ответа…"));
+
+	// SEC-P1-12: std::string ownership — see DispatchEnvelope.
+	const std::string paneIdUtf8(m_paneId.utf8_str().data());
+	// SEC-P1-9: scope tl_currentPluginId for the onMessage dispatch.
+	auto pidGuard = MakePaneScopeGuard(m_paneId);
 	try {
-		m_onMessage(paneIdUtf8.data(), payload.c_str(), m_userData);
+		m_onMessage(paneIdUtf8.c_str(), payload.c_str(), m_userData);
 	} catch (...) {
 		Entry err;
 		err.role     = Entry::Role::Error;
@@ -1460,9 +1858,12 @@ void ibPluginWebPane::DispatchCancelRequest()
 	env["requestId"] = std::string(m_pendingRequestId.utf8_str());
 	const std::string payload = env.dump();
 
-	const wxScopedCharBuffer paneIdUtf8 = m_paneId.utf8_str();
+	// SEC-P1-12: std::string ownership.
+	const std::string paneIdUtf8(m_paneId.utf8_str().data());
+	// SEC-P1-9: scope tl_currentPluginId for the cancel envelope.
+	auto pidGuard = MakePaneScopeGuard(m_paneId);
 	try {
-		m_onMessage(paneIdUtf8.data(), payload.c_str(), m_userData);
+		m_onMessage(paneIdUtf8.c_str(), payload.c_str(), m_userData);
 	} catch (...) {
 		// Plugin bug while cancelling — keep host alive.
 	}
@@ -1486,9 +1887,34 @@ void ibPluginWebPane::OnLinkClicked(wxHtmlLinkEvent& event)
 		HandleCopyLink(href.Mid(wxString(wxT("oes-copy:")).length()));
 		return;
 	}
+	// oes-copyreply:<entryIdx> — copy the whole assistant markdown body
+	// (everything between the role label and the next entry, including
+	// any code blocks). Mirrors Workmate's "Copy reply" button.
+	if (href.StartsWith(wxT("oes-copyreply:"))) {
+		const wxString idx = href.Mid(wxString(wxT("oes-copyreply:")).length());
+		long ei = 0;
+		if (idx.ToLong(&ei) && ei >= 0 &&
+		    ei < static_cast<long>(m_entries.size())) {
+			const auto& e = m_entries[ei];
+			if (wxTheClipboard->Open()) {
+				wxTheClipboard->SetData(new wxTextDataObject(e.markdown));
+				wxTheClipboard->Close();
+				if (m_statusBar) m_statusBar->SetLabel(_("Ответ скопирован"));
+			}
+		}
+		return;
+	}
 	// oes-apply:<entryIdx>:<blockIdx> — insert / replace in the editor.
 	if (href.StartsWith(wxT("oes-apply:"))) {
 		HandleApplyLink(href.Mid(wxString(wxT("oes-apply:")).length()));
+		return;
+	}
+	// COMMIT-MSG: oes-commit:<entryIdx>:<blockIdx> — copy the message
+	// to the clipboard AND run `git commit -m "<message>"` after a
+	// confirmation modal. Only ever rendered on entries the pane
+	// flagged as commit-message suggestions.
+	if (href.StartsWith(wxT("oes-commit:"))) {
+		HandleCommitLink(href.Mid(wxString(wxT("oes-commit:")).length()));
 		return;
 	}
 
@@ -1512,9 +1938,12 @@ void ibPluginWebPane::OnLinkClicked(wxHtmlLinkEvent& event)
 	env["conversationId"] = std::string(convId.utf8_str());
 	const std::string payload = env.dump();
 
-	const wxScopedCharBuffer paneIdUtf8 = m_paneId.utf8_str();
+	// SEC-P1-12: std::string ownership.
+	const std::string paneIdUtf8(m_paneId.utf8_str().data());
+	// SEC-P1-9: scope tl_currentPluginId for the plan-action envelope.
+	auto pidGuard = MakePaneScopeGuard(m_paneId);
 	try {
-		m_onMessage(paneIdUtf8.data(), payload.c_str(), m_userData);
+		m_onMessage(paneIdUtf8.c_str(), payload.c_str(), m_userData);
 	} catch (...) {
 		// Plugin bug — keep host alive.
 	}
@@ -1592,6 +2021,147 @@ void ibPluginWebPane::HandleApplyLink(const wxString& spec)
 	stc->ReplaceSelection(code);
 	stc->SetFocus();
 	if (m_statusBar) m_statusBar->SetLabel(_("Вставлено в редактор"));
+}
+
+// COMMIT-MSG: oes-commit:<entryIdx>:<blockIdx> — copy the proposed
+// message to the clipboard AND run `git commit -m "<message>"` after
+// user confirmation. The link is only rendered when the assistant
+// entry was flagged as a commit suggestion (commitSuggestion=true);
+// outside that context, the URL scheme is never emitted.
+void ibPluginWebPane::HandleCommitLink(const wxString& spec)
+{
+	const wxString eStr = spec.BeforeFirst(wxT(':'));
+	const wxString bStr = spec.AfterFirst(wxT(':'));
+	long ei = 0, bi = 0;
+	if (!eStr.ToLong(&ei) || !bStr.ToLong(&bi)) return;
+	if (ei < 0 || ei >= static_cast<long>(m_entries.size())) return;
+	const auto& e = m_entries[ei];
+	if (bi < 0 || bi >= static_cast<long>(e.codeBlocks.size())) return;
+
+	const wxString& message = e.codeBlocks[bi].second;
+	if (message.IsEmpty()) {
+		if (m_statusBar) m_statusBar->SetLabel(_("Сообщение коммита пусто"));
+		return;
+	}
+
+	// Clipboard copy first — even if the user cancels the commit, the
+	// message stays on the clipboard for manual paste.
+	if (wxTheClipboard->Open()) {
+		wxTheClipboard->SetData(new wxTextDataObject(message));
+		wxTheClipboard->Close();
+	}
+
+	// Build a confirmation modal showing the message body so the user
+	// sees exactly what's about to land. wxYES_NO + wxICON_QUESTION is
+	// the platform-standard "yes runs, no cancels" shape.
+	wxString preview = message;
+	// Trim to ~10 lines for the dialog preview; the full body still
+	// goes to git unchanged.
+	{
+		int newlines = 0;
+		for (size_t i = 0; i < preview.size(); ++i) {
+			if (preview[i] == wxT('\n')) {
+				if (++newlines == 10) {
+					preview = preview.Mid(0, i);
+					preview += wxT("\n…");
+					break;
+				}
+			}
+		}
+	}
+	const wxString question =
+	    wxString::Format(_("Создать коммит с этим сообщением?\n\n%s"),
+	                      preview);
+	const int answer = wxMessageBox(question,
+	                                  _("Использовать как коммит"),
+	                                  wxYES_NO | wxICON_QUESTION);
+	if (answer != wxYES) {
+		if (m_statusBar) m_statusBar->SetLabel(
+		    _("Коммит отменён, сообщение скопировано в буфер"));
+		return;
+	}
+
+	// Verify there is something to commit BEFORE invoking git. `git
+	// diff --cached --quiet` exits 1 when there ARE staged changes
+	// (counter-intuitive but documented) and 0 when there are none.
+	wxArrayString diffOut, diffErr;
+	const long diffRc = wxExecute(
+	    wxT("git diff --cached --quiet"),
+	    diffOut, diffErr,
+	    wxEXEC_SYNC | wxEXEC_NODISABLE);
+	if (diffRc == 0) {
+		// rc==0 means no staged changes.
+		Entry err;
+		err.role     = Entry::Role::Error;
+		err.markdown = _("Нет staged-изменений (выполните `git add` перед коммитом).");
+		AppendEntry(std::move(err));
+		return;
+	}
+
+	// Build the git invocation. We pass the message via a temp file
+	// (`git commit -F <file>`) rather than `-m` so multi-line bodies
+	// survive shell quoting on all three platforms. wxExecute on
+	// Windows uses CreateProcess which doesn't reinterpret \n inside
+	// double-quotes; the -F path is robust.
+	const wxString tmpPath = wxFileName::CreateTempFileName(wxT("oes-commit-"));
+	if (tmpPath.IsEmpty()) {
+		Entry err;
+		err.role     = Entry::Role::Error;
+		err.markdown = _("Не удалось создать временный файл сообщения.");
+		AppendEntry(std::move(err));
+		return;
+	}
+	{
+		wxFile f(tmpPath, wxFile::write);
+		if (!f.IsOpened()) {
+			Entry err;
+			err.role     = Entry::Role::Error;
+			err.markdown = _("Не удалось открыть временный файл сообщения.");
+			AppendEntry(std::move(err));
+			return;
+		}
+		const wxScopedCharBuffer buf = message.utf8_str();
+		f.Write(buf.data(), buf.length());
+	}
+
+	const wxString cmd = wxT("git commit -F \"") + tmpPath + wxT("\"");
+	wxArrayString outLines, errLines;
+	const long rc = wxExecute(cmd, outLines, errLines,
+	                            wxEXEC_SYNC | wxEXEC_NODISABLE);
+	// Best-effort cleanup; wxRemoveFile drops the temp file even if
+	// git couldn't read it.
+	wxRemoveFile(tmpPath);
+
+	if (rc == 0) {
+		Entry sys;
+		sys.role     = Entry::Role::System;
+		wxString body = _("Коммит создан.");
+		if (!outLines.IsEmpty()) {
+			body += wxT("\n\n```\n");
+			for (const wxString& ln : outLines) {
+				body += ln;
+				body += wxT("\n");
+			}
+			body += wxT("```");
+		}
+		sys.markdown = body;
+		AppendEntry(std::move(sys));
+		if (m_statusBar) m_statusBar->SetLabel(_("Коммит создан"));
+	} else {
+		Entry err;
+		err.role     = Entry::Role::Error;
+		wxString body = _("Команда git вернула ошибку.");
+		if (!errLines.IsEmpty()) {
+			body += wxT("\n\n```\n");
+			for (const wxString& ln : errLines) {
+				body += ln;
+				body += wxT("\n");
+			}
+			body += wxT("```");
+		}
+		err.markdown = body;
+		AppendEntry(std::move(err));
+	}
 }
 
 // (UpdateSendButtonLabel / DispatchCancelRequest defined earlier — this

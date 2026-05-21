@@ -29,6 +29,7 @@
 #include "3rdparty/cpp-httplib/httplib.h"
 #include "3rdparty/nlohmann/json.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -77,12 +78,53 @@ std::mutex                   g_workersMu;
 std::vector<std::thread>     g_workers;
 std::atomic<bool>            g_shuttingDown{false};
 
+// SEC-P2-1: every in-flight httplib::Client registers itself here so
+// oes_plugin_shutdown can call ->stop() and the worker's blocking Post()
+// unblocks immediately instead of waiting out the full read timeout.
+std::mutex                                  g_clientsMu;
+std::vector<httplib::Client*>               g_activeClients;
+
+void RegisterClient(httplib::Client* c)
+{
+	std::lock_guard<std::mutex> lk(g_clientsMu);
+	g_activeClients.push_back(c);
+}
+
+void UnregisterClient(httplib::Client* c)
+{
+	std::lock_guard<std::mutex> lk(g_clientsMu);
+	g_activeClients.erase(
+	    std::remove(g_activeClients.begin(), g_activeClients.end(), c),
+	    g_activeClients.end());
+}
+
+// RAII binder — register on construction, unregister on destruction so
+// every early return path is covered without explicit cleanup.
+struct ClientGuard {
+	httplib::Client* cli;
+	explicit ClientGuard(httplib::Client* c) : cli(c) { RegisterClient(cli); }
+	~ClientGuard() { UnregisterClient(cli); }
+	ClientGuard(const ClientGuard&) = delete;
+	ClientGuard& operator=(const ClientGuard&) = delete;
+};
+
 // Per-request cancel tokens for the Stop Generation feature. Pane fires
 // agent.cancel with the original requestId; the worker polls between
 // SSE chunks. shared_ptr lets the worker capture by value so erase from
 // the map can't dangle.
 std::mutex                                                          g_cancelMu;
 std::unordered_map<std::string, std::shared_ptr<std::atomic<bool>>> g_cancelTokens;
+
+// AGENT-MODE: oes_agent plan cache — Approve/Reject handlers look up the
+// server-issued planId here to recover the conversationId + mutations[]
+// without re-asking the server. Cleared on resolve so a long Designer
+// session doesn't accumulate plans forever.
+struct CachedPlan {
+	std::string    conversationId;
+	nlohmann::json mutations;   // array of {op, kind, fullName, properties}
+};
+std::mutex                                  g_plansMu;
+std::unordered_map<std::string, CachedPlan> g_planCache;
 
 std::shared_ptr<std::atomic<bool>> AllocCancelToken(const std::string& rid)
 {
@@ -323,12 +365,18 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 
 	httplib::Client cli(base);
 	cli.set_connection_timeout(15);
-	cli.set_read_timeout(120);
+	cli.set_read_timeout(60);   // SEC-P2-1: was 120s; Anvil llm_query <30s typical
 	// SEC-P1-5: never follow cross-origin redirects with Authorization +
 	// X-Pugi-Tenant attached. cpp-httplib's follower replays full headers
 	// to the redirect target — a redirect to an attacker host would leak
 	// the bearer. Surface 3xx as an explicit error instead.
 	cli.set_follow_location(false);
+	// SEC-P2-1: register before Post() so shutdown can stop() us mid-flight.
+	ClientGuard guard(&cli);
+	if (g_shuttingDown.load()) {
+		EmitError("aiBridge[pugi-mcp]: shutdown in progress");
+		return;
+	}
 
 	nlohmann::json body;
 	body["name"]            = "llm_query";
@@ -430,12 +478,18 @@ void RunTripleReview(std::string requestId, std::string code,
 
 	httplib::Client cli(base);
 	cli.set_connection_timeout(15);
-	// Triple-review fans out across multiple models server-side and can
-	// reasonably take longer than a single llm_query — bump the read
-	// timeout. cancelTok still lets the user stop sooner.
-	cli.set_read_timeout(180);
+	// SEC-P2-1: was 180s; Anvil triple_review typically responds <30s — a
+	// 60s ceiling means a single failed reviewer surfaces an explicit
+	// timeout to the user instead of freezing the Designer for 3 minutes.
+	cli.set_read_timeout(60);
 	// SEC-P1-5: refuse redirects so bearer + X-Pugi-Tenant aren't replayed.
 	cli.set_follow_location(false);
+	// SEC-P2-1: register before Post() so shutdown can stop() us mid-flight.
+	ClientGuard guard(&cli);
+	if (g_shuttingDown.load()) {
+		EmitError("aiBridge[triple-review]: shutdown in progress");
+		return;
+	}
 
 	nlohmann::json body;
 	body["name"]              = "triple_review";
@@ -511,6 +565,260 @@ void RunTripleReview(std::string requestId, std::string code,
 	EmitEnd(requestId, "triple_review", tokensIn, tokensOut);
 }
 
+// AGENT-MODE: fire-and-forget POST to oes_agent_resolve. Closes the round-
+// trip after Approve / Reject / Partial. Failures are swallowed — the user
+// already saw the plan apply, server-side bookkeeping is best-effort.
+void PostAgentResolve(const std::string& endpoint, const std::string& token,
+                       const std::string& tenant,
+                       const std::string& planId, const std::string& conversationId,
+                       const std::string& action,
+                       const std::vector<int>& appliedOps,
+                       const std::vector<int>& failedOps)
+{
+	if (auto why = ValidateEndpointScheme(endpoint); !why.empty()) return;
+	const auto [base, path] = SplitUrl(endpoint);
+	if (base.empty()) return;
+
+	httplib::Client cli(base);
+	cli.set_connection_timeout(5);
+	cli.set_read_timeout(10);
+	cli.set_follow_location(false);
+	ClientGuard guard(&cli);
+	if (g_shuttingDown.load()) return;
+
+	nlohmann::json body;
+	body["name"]                       = "oes_agent_resolve";
+	body["input"]                       = nlohmann::json::object();
+	body["input"]["planId"]             = planId;
+	body["input"]["conversationId"]     = conversationId;
+	body["input"]["action"]             = action;
+	body["input"]["appliedOps"]         = appliedOps;
+	body["input"]["failedOps"]          = failedOps;
+
+	httplib::Headers headers = {
+		{ "Authorization", "Bearer " + token },
+		{ "X-Pugi-Tenant", tenant            },
+		{ "Content-Type",  "application/json" },
+		{ "Accept",        "application/json" },
+	};
+	(void)cli.Post(path.c_str(), headers, body.dump(), "application/json");
+}
+
+// AGENT-MODE: oes_agent path — calls the `oes_agent` Anvil tool with the
+// user prompt + Designer context, receives a structured plan, and emits
+// an `agent.plan` envelope so the pane renders rationale + mutations +
+// Approve/Reject links. The plan is also cached so the approve handler
+// can walk the mutations[] without round-tripping the server again.
+void RunOesAgent(std::string requestId, std::string prompt,
+                  const std::string& endpoint, const std::string& token,
+                  const std::string& tenant,   const std::string& locale,
+                  const std::string& contextJson,
+                  const std::shared_ptr<std::atomic<bool>>& cancelTok)
+{
+	if (auto why = ValidateEndpointScheme(endpoint); !why.empty()) {
+		EmitError(why);
+		return;
+	}
+	const auto [base, path] = SplitUrl(endpoint);
+	if (base.empty()) {
+		EmitError("aiBridge[oes-agent]: malformed ENDPOINT URL: " + endpoint);
+		return;
+	}
+
+	httplib::Client cli(base);
+	cli.set_connection_timeout(15);
+	// AGENT-MODE: 180s — qwen-3-235b planning calls can run long on first
+	// invocation when the server warm-loads weights.
+	cli.set_read_timeout(180);
+	cli.set_follow_location(false);
+	ClientGuard guard(&cli);
+	if (g_shuttingDown.load()) {
+		EmitError("aiBridge[oes-agent]: shutdown in progress");
+		return;
+	}
+
+	nlohmann::json body;
+	body["name"]              = "oes_agent";
+	body["input"]             = nlohmann::json::object();
+	body["input"]["prompt"]   = prompt;
+	body["input"]["locale"]   = locale.empty() ? std::string("uk-UA") : locale;
+	// AGENT-MODE: forward Designer context verbatim when provided; the
+	// server uses it to disambiguate fullName references like "Catalog2".
+	if (!contextJson.empty()) {
+		auto ctx = nlohmann::json::parse(contextJson, nullptr, false);
+		if (!ctx.is_discarded() && ctx.is_object()) {
+			body["input"]["context"] = ctx;
+		}
+	}
+
+	httplib::Headers headers = {
+		{ "Authorization", "Bearer " + token },
+		{ "X-Pugi-Tenant", tenant            },
+		{ "Content-Type",  "application/json" },
+		{ "Accept",        "application/json" },
+	};
+
+	auto res = cli.Post(path.c_str(), headers, body.dump(), "application/json");
+	if (!res) {
+		EmitError("aiBridge[oes-agent]: HTTP failed — " +
+		           std::string(httplib::to_string(res.error())));
+		return;
+	}
+	if (res->status >= 300 && res->status < 400) {
+		EmitError("aiBridge[oes-agent]: server returned redirect; bearer not forwarded for security");
+		return;
+	}
+	if (res->status >= 400) {
+		DiagWriteUnsafeBody("oes-agent", res->status, res->body);
+		EmitError("aiBridge[oes-agent]: HTTP " + std::to_string(res->status));
+		return;
+	}
+	if (cancelTok && cancelTok->load()) {
+		EmitCancelledEnd(requestId, "oes_agent", 0, 0);
+		return;
+	}
+
+	auto parsed = nlohmann::json::parse(res->body, nullptr, false);
+	if (parsed.is_discarded() || !parsed.is_object() ||
+	    !parsed.contains("result") || !parsed["result"].is_object()) {
+		EmitError("aiBridge[oes-agent]: malformed response envelope");
+		return;
+	}
+	const auto& result = parsed["result"];
+	const std::string planId         = result.value("planId",         std::string());
+	const std::string conversationId = result.value("conversationId", std::string());
+	const std::string rationale      = result.value("rationale",      std::string());
+	const std::string model          = result.value("model",          std::string("oes_agent"));
+	const int         tokensUsed     = result.value("tokensUsed",     0);
+
+	nlohmann::json mutations = nlohmann::json::array();
+	if (result.contains("mutations") && result["mutations"].is_array()) {
+		mutations = result["mutations"];
+	}
+
+	// AGENT-MODE: stash {planId → {conversationId, mutations}} so the
+	// approve / reject handlers can resolve without a server round-trip.
+	if (!planId.empty()) {
+		std::lock_guard<std::mutex> lk(g_plansMu);
+		g_planCache[planId] = CachedPlan{ conversationId, mutations };
+	}
+
+	// Emit the agent.plan envelope — pane's DispatchEnvelope renders it
+	// with rationale + per-mutation lines + Approve/Reject links.
+	nlohmann::json env;
+	env["kind"]            = "agent.plan";
+	env["requestId"]       = requestId;
+	env["planId"]          = planId;
+	env["conversationId"]  = conversationId;
+	env["rationale"]       = rationale;
+	env["mutations"]       = mutations;
+	if (result.contains("rollbackHints")) env["rollbackHints"] = result["rollbackHints"];
+	if (result.contains("language"))      env["language"]      = result["language"];
+	const std::string payload = env.dump();
+	if (g_host != nullptr && g_host->WebPaneSend != nullptr) {
+		g_host->WebPaneSend(g_paneId, payload.c_str());
+	}
+
+	// Close streaming-state for the pane's pending row.
+	EmitEnd(requestId, model, static_cast<int>(prompt.size() / 4), tokensUsed);
+}
+
+// AGENT-MODE: walk the cached plan's mutations[] and dispatch each one
+// to the host's MetaCreate / MetaEdit / MetaDelete trampoline. Tracks
+// appliedOps[] + failedOps[] by mutation index. On a per-op failure we
+// emit a kind:"error" envelope describing which op failed (so the user
+// sees the diagnostic) and continue with the remaining ops — partial
+// apply is preferred over all-or-nothing because each MetaCreate is
+// already individually undoable via Ctrl+Z.
+void RunAgentApply(std::string planId, std::string conversationId,
+                    nlohmann::json mutations,
+                    const std::string& endpoint, const std::string& token,
+                    const std::string& tenant)
+{
+	if (g_host == nullptr) return;
+
+	std::vector<int> appliedOps;
+	std::vector<int> failedOps;
+
+	for (size_t i = 0; i < mutations.size(); ++i) {
+		const auto& m = mutations[i];
+		if (!m.is_object()) { failedOps.push_back(static_cast<int>(i)); continue; }
+		const std::string op       = m.value("op",       std::string());
+		const std::string kind     = m.value("kind",     std::string());
+		const std::string fullName = m.value("fullName", std::string());
+		const std::string props    = m.contains("properties")
+		                                ? m["properties"].dump()
+		                                : std::string("{}");
+
+		int rc = -1;
+		char* err = nullptr;
+		if (op == "create" && g_host->MetaCreate != nullptr) {
+			rc = g_host->MetaCreate(kind.c_str(), fullName.c_str(),
+			                          props.c_str(), &err);
+		} else if (op == "edit" && g_host->MetaEdit != nullptr) {
+			// AGENT-MODE: MetaEdit takes jsonPatch — pass the properties
+			// blob verbatim; server-side prompt is responsible for emitting
+			// RFC 6902 shape when op=edit.
+			rc = g_host->MetaEdit(fullName.c_str(), props.c_str(), &err);
+		} else if (op == "delete" && g_host->MetaDelete != nullptr) {
+			rc = g_host->MetaDelete(fullName.c_str(), props.c_str(), &err);
+		} else {
+			EmitError("aiBridge[oes-agent]: unknown op '" + op + "' at index " +
+			           std::to_string(i));
+			failedOps.push_back(static_cast<int>(i));
+			continue;
+		}
+
+		if (rc == 0) {
+			appliedOps.push_back(static_cast<int>(i));
+		} else {
+			std::string detail = "op[" + std::to_string(i) + "] " + op + " " +
+			                       kind + " " + fullName + " failed (rc=" +
+			                       std::to_string(rc) + ")";
+			if (err != nullptr) detail += ": " + std::string(err);
+			EmitError("aiBridge[oes-agent]: " + detail);
+			failedOps.push_back(static_cast<int>(i));
+		}
+		if (err != nullptr && g_host->FreeBuffer != nullptr) {
+			g_host->FreeBuffer(err);
+		}
+	}
+
+	// Emit agent.applied so the pane marks the plan row as resolved.
+	nlohmann::json env;
+	env["kind"]        = "agent.applied";
+	env["planId"]      = planId;
+	env["appliedOps"]  = appliedOps;
+	env["failedOps"]   = failedOps;
+	const std::string payload = env.dump();
+	if (g_host->WebPaneSend != nullptr) {
+		g_host->WebPaneSend(g_paneId, payload.c_str());
+	}
+
+	// Close the server round-trip. action depends on whether anything failed.
+	std::string action = "approved";
+	if (!failedOps.empty()) {
+		action = appliedOps.empty() ? "rejected" : "partial";
+	}
+	// AGENT-MODE: fire-and-forget on a separate worker so the apply path
+	// returns immediately and the test / UI doesn't wait on the HTTP POST.
+	// Mirrors the reject path's shape.
+	{
+		std::lock_guard<std::mutex> lk(g_workersMu);
+		g_workers.emplace_back([endpoint, token, tenant, planId, conversationId,
+		                          action, appliedOps, failedOps]() {
+			PostAgentResolve(endpoint, token, tenant, planId, conversationId,
+			                  action, appliedOps, failedOps);
+		});
+	}
+
+	// Drop the cached plan — single-shot approve/reject by design.
+	{
+		std::lock_guard<std::mutex> lk(g_plansMu);
+		g_planCache.erase(planId);
+	}
+}
+
 // Worker thread body — performs the HTTP POST + streams chunks back to
 // the pane. Owns its own httplib::Client; no shared state. cancelTok
 // is the per-request stop signal; receiver polls it between SSE frames
@@ -562,6 +870,12 @@ void RunChatRequest(std::string requestId, std::string prompt, std::string mode,
 	cli.set_read_timeout(120);
 	// SEC-P1-5: refuse 3xx — see RunPugiMcpRequest.
 	cli.set_follow_location(false);
+	// SEC-P2-1: register before Post() so shutdown can stop() us mid-flight.
+	ClientGuard chatGuard(&cli);
+	if (g_shuttingDown.load()) {
+		EmitError("aiBridge: shutdown in progress");
+		return;
+	}
 
 	// Build OpenAI-compatible chat-completions request body. Streaming
 	// is requested so the host renders incremental chat.delta chunks
@@ -711,6 +1025,75 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 			return;
 		}
 
+		// AGENT-MODE: agent.approve / agent.reject — pane fires these when
+		// the user clicks the Approve/Reject link on a rendered plan row.
+		// Approve walks mutations[] through MetaCreate/Edit/Delete. Reject
+		// just closes the server-side round-trip.
+		if (kind == "agent.approve" || kind == "agent.reject") {
+			const std::string planId = j.value("planId", std::string());
+			if (planId.empty()) {
+				EmitError("aiBridge[oes-agent]: agent." +
+				           std::string(kind == "agent.approve" ? "approve" : "reject") +
+				           " missing planId");
+				return;
+			}
+
+			CachedPlan plan;
+			{
+				std::lock_guard<std::mutex> lk(g_plansMu);
+				auto it = g_planCache.find(planId);
+				if (it == g_planCache.end()) {
+					EmitError("aiBridge[oes-agent]: no cached plan for planId=" + planId);
+					return;
+				}
+				plan = it->second;
+			}
+
+			const std::string endpoint = ReadEnv("ENDPOINT",
+			    "https://mcp.pugi.io/api/oes-mcp/invoke");
+			const std::string token  = ReadEnv("TOKEN",  "");
+			const std::string tenant = ReadEnv("TENANT", "");
+
+			if (kind == "agent.reject") {
+				// AGENT-MODE: nothing to walk — just close the round-trip.
+				std::lock_guard<std::mutex> lk(g_workersMu);
+				g_workers.emplace_back([planId, conv = plan.conversationId,
+				                          endpoint, token, tenant]() {
+					PostAgentResolve(endpoint, token, tenant, planId, conv,
+					                  "rejected", {}, {});
+				});
+				// Drop cached plan so a stale Approve click later no-ops.
+				std::lock_guard<std::mutex> pk(g_plansMu);
+				g_planCache.erase(planId);
+				// Emit applied so the pane greys the plan row.
+				nlohmann::json env;
+				env["kind"]       = "agent.applied";
+				env["planId"]     = planId;
+				env["appliedOps"] = nlohmann::json::array();
+				env["failedOps"]  = nlohmann::json::array();
+				const std::string payload = env.dump();
+				if (g_host != nullptr && g_host->WebPaneSend != nullptr) {
+					g_host->WebPaneSend(g_paneId, payload.c_str());
+				}
+				return;
+			}
+
+			// Approve path — walk mutations on a worker so the main thread
+			// isn't blocked while MetaCreate touches activeMetaData.
+			// MetaCreate itself asserts wxIsMainThread, so we wxQueueEvent
+			// the actual work… but in headless / test paths there is no UI
+			// loop. Run inline on a worker; metaBridge will reject via the
+			// main-thread guard if we're really off-thread in production,
+			// and aiBridge surfaces that as a per-op error.
+			auto muts = plan.mutations;
+			auto conv = plan.conversationId;
+			std::lock_guard<std::mutex> lk(g_workersMu);
+			g_workers.emplace_back([planId, conv, muts, endpoint, token, tenant]() {
+				RunAgentApply(planId, conv, muts, endpoint, token, tenant);
+			});
+			return;
+		}
+
 		if (kind != "chat.send" && kind != "editor.skill") return;
 
 		std::string prompt = j.value("prompt", std::string());
@@ -751,22 +1134,103 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 			return;
 		}
 
+		// AGENT-MODE: editor.skill op="agent" — call the `oes_agent` Anvil
+		// tool to produce a structured plan. The user's natural-language
+		// request lives in `prompt`; the editor's current code (when any)
+		// rides along as additional context. Designer context (configName,
+		// openObjects, currentSelection) is packed verbatim into the
+		// server payload.
+		if (kind == "editor.skill" && op == "agent") {
+			const std::string token = ReadEnv("TOKEN", "");
+			const std::string endpoint = ReadEnv("ENDPOINT",
+			    "https://mcp.pugi.io/api/oes-mcp/invoke");
+			const std::string tenant   = ReadEnv("TENANT", "");
+			const std::string locale   = ReadEnv("LOCALE", "uk-UA");
+			if (token.empty() || tenant.empty()) {
+				EmitError("aiBridge[oes-agent]: requires TOKEN + TENANT in env.");
+				return;
+			}
+			std::string requestId = j.value("requestId", std::string());
+			if (requestId.empty()) {
+				requestId = "req-" + std::to_string(
+				    std::chrono::steady_clock::now().time_since_epoch().count());
+			}
+			// AGENT-MODE: the user's intent — prefer explicit `prompt`,
+			// fall back to `code` so the right-click "Create object via
+			// agent" submenu (which has no separate prompt field) works.
+			std::string agentPrompt = j.value("prompt", std::string());
+			if (agentPrompt.empty()) {
+				agentPrompt = j.value("code", std::string());
+			}
+			if (agentPrompt.empty()) {
+				EmitError("aiBridge[oes-agent]: empty prompt");
+				return;
+			}
+
+			// AGENT-MODE: assemble context — pass through known fields.
+			nlohmann::json ctx = nlohmann::json::object();
+			if (j.contains("configName"))      ctx["configName"]      = j["configName"];
+			if (j.contains("openObjects"))     ctx["openObjects"]     = j["openObjects"];
+			if (j.contains("currentSelection"))ctx["currentSelection"]= j["currentSelection"];
+			if (j.contains("context") && j["context"].is_object()) {
+				for (auto it = j["context"].begin(); it != j["context"].end(); ++it) {
+					ctx[it.key()] = it.value();
+				}
+			}
+			const std::string contextJson = ctx.dump();
+
+			auto cancelTok = AllocCancelToken(requestId);
+			{
+				std::lock_guard<std::mutex> lk(g_workersMu);
+				g_workers.emplace_back(
+				    [requestId, agentPrompt, endpoint, token, tenant, locale, contextJson, cancelTok]() {
+					RunOesAgent(requestId, agentPrompt, endpoint, token, tenant,
+					              locale, contextJson, cancelTok);
+					EraseCancelToken(requestId);
+				});
+			}
+			return;
+		}
+
 		if (kind == "editor.skill") {
 			const std::string code = j.value("code", std::string());
 			// Wrap the skill into a chat prompt with a stable preamble.
+			// op="commit" carries a git diff (not source code), so the
+			// preamble spells out the Conventional-Commits format we
+			// want back — the LLM otherwise tends to drift into long
+			// narrative summaries. Mirrors 1С:Workmate "Generate Commit
+			// Message". The fence language is "diff" so the LLM sees
+			// the payload as a diff, not as runnable code.
 			static const char* opLabels[][2] = {
 			    {"explain", "Объясни этот код."},
 			    {"review",  "Проверь код на ошибки и улучши его."},
 			    {"fix",     "Найди ошибки и предложи исправление."},
 			    {"doc",     "Сгенерируй документирующий комментарий."},
 			    {"send",    "Прокомментируй этот код."},
+			    {"commit",
+			     "Проанализируй следующий git diff и сгенерируй сообщение "
+			     "коммита в стиле Conventional Commits на русском языке. "
+			     "Сначала верни сообщение одним блоком кода без посторонних "
+			     "пояснений вокруг блока — оно должно быть готово к "
+			     "копированию и вставке в `git commit -m`.\n\n"
+			     "Формат:\n"
+			     "<тип>(<область>): <краткое описание до 72 символов>\n\n"
+			     "<детальное описание изменений по пунктам, если их "
+			     "больше одного>\n\n"
+			     "Типы: feat, fix, refactor, docs, test, chore, build, ci, "
+			     "perf, style. Область — опциональная, в скобках."},
 			    {nullptr,   nullptr},
 			};
 			const char* preamble = "Прокомментируй этот код.";
 			for (auto* row = opLabels[0]; row[0] != nullptr; row += 2) {
 				if (op == row[0]) { preamble = row[1]; break; }
 			}
-			prompt = std::string(preamble) + "\n\n```\n" + code + "\n```";
+			// op=commit ships its payload as a diff; everything else
+			// is source code in CES/VES. The fence language hint helps
+			// the LLM treat the body correctly.
+			const std::string fenceLang = (op == "commit") ? "diff" : "";
+			prompt = std::string(preamble) + "\n\n```" + fenceLang + "\n" +
+			         code + "\n```";
 			if (!j.value("prompt", std::string()).empty()) {
 				prompt += "\n\n" + j["prompt"].get<std::string>();
 			}
@@ -932,6 +1396,11 @@ OES_PLUGIN_EXPORT int oes_plugin_initialize(const ibHostAPI* host)
 {
 	g_host = host;
 	if (g_host == nullptr) return 0;
+	// SEC-P2-1: clear the shutdown latch from any prior load cycle. Static
+	// state persists across dlclose+dlopen on macOS/Linux when the dynamic
+	// linker caches the image; without this the next session's workers
+	// would short-circuit on the inherited "true".
+	g_shuttingDown.store(false);
 	g_host->Log("aiBridge: initializing (ABI v4)", 0);
 
 	// Cache all env keys we'll need at runtime. The host's ReadPluginEnv
@@ -995,6 +1464,16 @@ OES_PLUGIN_EXPORT void oes_plugin_shutdown(void)
 		std::lock_guard<std::mutex> lk(g_cancelMu);
 		for (auto& kv : g_cancelTokens) {
 			if (kv.second) kv.second->store(true);
+		}
+	}
+	// SEC-P2-1: shut down every in-flight client's socket. The non-streaming
+	// Pugi-MCP / triple-review paths sit inside a single blocking Post() that
+	// the receiver-callback gate cannot interrupt; stop() shuts down the
+	// socket so Post() returns immediately with a transport error.
+	{
+		std::lock_guard<std::mutex> lk(g_clientsMu);
+		for (auto* c : g_activeClients) {
+			if (c) c->stop();
 		}
 	}
 	std::vector<std::thread> drain;

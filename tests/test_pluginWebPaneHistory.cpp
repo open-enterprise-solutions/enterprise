@@ -519,6 +519,121 @@ TEST_F(ChatHistoryFixture, V1FilesWithoutTripleReviewFieldsStillLoad) {
 	EXPECT_EQ(restored[0].countP0, 0);
 	EXPECT_TRUE(restored[0].reviewers.empty());
 	EXPECT_TRUE(restored[0].findings.empty());
+	// Subtasks fields are also expected to default empty for non-Subtasks
+	// roles — ibChatHistory::Save only writes them when the role matches.
+	EXPECT_TRUE(restored[0].parentPlanId.IsEmpty());
+	EXPECT_TRUE(restored[0].subtasks.empty());
+
+	ibChatHistory::Clear(bucket);
+}
+
+// ---------------------------------------------------------------------------
+// agent.subtask / agent.subtaskStatus envelope dispatch — Workmate parity.
+// ---------------------------------------------------------------------------
+
+TEST_F(ChatHistoryFixture, SubtaskEnvelopeDispatchesAndStatusUpdates) {
+	if (m_skipped) return;
+
+	const wxString bucket = TestBucket("subtasks-dispatch");
+	ibChatHistory::Clear(bucket);
+
+	auto* pane = new ibPluginWebPane(m_parent,
+	                                  wxT("test.pane.subtasks"),
+	                                  wxT("Subtasks Test"),
+	                                  wxEmptyString,
+	                                  &OnMessageStub,
+	                                  nullptr);
+	pane->SetConfigHashForTests(bucket);
+	pane->SetPersistEnabledForTests(false);
+
+	// Initial agent.subtask envelope establishes the list. st-2 depends
+	// on st-1 so the panel should later render it as a child row.
+	const wxString initial =
+	    wxT("{\"kind\":\"agent.subtask\",")
+	    wxT("\"parentPlanId\":\"plan-001\",")
+	    wxT("\"subtasks\":[")
+	    wxT("  {\"id\":\"st-1\",\"title\":\"Создать справочник Контрагенты\",\"status\":\"pending\"},")
+	    wxT("  {\"id\":\"st-2\",\"title\":\"Создать форму элемента\",\"status\":\"pending\",\"dependsOn\":[\"st-1\"]}")
+	    wxT("]}");
+	pane->PushMessage(initial);
+	EXPECT_EQ(pane->GetEntryCountForTests(), 1u);
+
+	// Promote st-1 to "running"; agent.subtaskStatus must mutate the row
+	// without creating a second Subtasks entry.
+	const wxString runningUpdate =
+	    wxT("{\"kind\":\"agent.subtaskStatus\",")
+	    wxT("\"parentPlanId\":\"plan-001\",")
+	    wxT("\"id\":\"st-1\",")
+	    wxT("\"status\":\"running\"}");
+	pane->PushMessage(runningUpdate);
+	EXPECT_EQ(pane->GetEntryCountForTests(), 1u);
+
+	// And then mark st-1 done. Status updates with an unknown parentPlanId
+	// silently no-op — verified by sending a stray update that shouldn't
+	// touch our entry.
+	const wxString doneUpdate =
+	    wxT("{\"kind\":\"agent.subtaskStatus\",")
+	    wxT("\"parentPlanId\":\"plan-001\",")
+	    wxT("\"id\":\"st-1\",")
+	    wxT("\"status\":\"done\"}");
+	pane->PushMessage(doneUpdate);
+	const wxString strayUpdate =
+	    wxT("{\"kind\":\"agent.subtaskStatus\",")
+	    wxT("\"parentPlanId\":\"plan-NOPE\",")
+	    wxT("\"id\":\"st-1\",")
+	    wxT("\"status\":\"failed\"}");
+	pane->PushMessage(strayUpdate);
+	EXPECT_EQ(pane->GetEntryCountForTests(), 1u);
+
+	pane->Destroy();
+	ibChatHistory::Clear(bucket);
+}
+
+// ---------------------------------------------------------------------------
+// Subtasks entry round-trip — persist and restore parentPlanId + subtasks.
+// ---------------------------------------------------------------------------
+
+TEST_F(ChatHistoryFixture, SubtaskEntryPersistsAcrossPaneLifetime) {
+	if (m_skipped) return;
+
+	const wxString bucket = TestBucket("subtasks-persist");
+	ibChatHistory::Clear(bucket);
+
+	std::vector<ibPluginWebPane::Entry> snapshot;
+	{
+		ibPluginWebPane::Entry e;
+		e.role         = ibPluginWebPane::Entry::Role::Subtasks;
+		e.parentPlanId = wxT("plan-007");
+
+		ibPluginWebPane::Entry::Subtask a;
+		a.id     = wxT("st-1");
+		a.title  = wxT("Создать справочник Контрагенты");
+		a.status = wxT("done");
+		e.subtasks.push_back(std::move(a));
+
+		ibPluginWebPane::Entry::Subtask b;
+		b.id     = wxT("st-2");
+		b.title  = wxT("Создать форму элемента");
+		b.status = wxT("running");
+		b.dependsOn.push_back(wxT("st-1"));
+		e.subtasks.push_back(std::move(b));
+
+		snapshot.push_back(std::move(e));
+	}
+	ASSERT_TRUE(ibChatHistory::Save(bucket, snapshot));
+
+	std::vector<ibPluginWebPane::Entry> restored;
+	ASSERT_TRUE(ibChatHistory::Load(bucket, restored));
+	ASSERT_EQ(restored.size(), 1u);
+	EXPECT_EQ(restored[0].role,         ibPluginWebPane::Entry::Role::Subtasks);
+	EXPECT_EQ(restored[0].parentPlanId, wxT("plan-007"));
+	ASSERT_EQ(restored[0].subtasks.size(), 2u);
+	EXPECT_EQ(restored[0].subtasks[0].id,     wxT("st-1"));
+	EXPECT_EQ(restored[0].subtasks[0].status, wxT("done"));
+	EXPECT_EQ(restored[0].subtasks[1].id,     wxT("st-2"));
+	EXPECT_EQ(restored[0].subtasks[1].status, wxT("running"));
+	ASSERT_EQ(restored[0].subtasks[1].dependsOn.size(), 1u);
+	EXPECT_EQ(restored[0].subtasks[1].dependsOn[0], wxT("st-1"));
 
 	ibChatHistory::Clear(bucket);
 }

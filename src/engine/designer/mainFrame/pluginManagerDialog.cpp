@@ -9,22 +9,35 @@
 #include "backend/plugin/pluginsConfig.h"
 #include "backend/plugin/byokEnv.h"
 #include "backend/plugin/pluginInstaller.h"
+#include "backend/plugin/pluginApi.h"   // IB_PLUGIN_ABI_VERSION + ibPluginInfo
 
 #include <wx/sizer.h>
+#include <wx/statbox.h>
 #include <wx/listctrl.h>
 #include <wx/checkbox.h>
 #include <wx/stattext.h>
 #include <wx/textctrl.h>
 #include <wx/button.h>
+#include <wx/choice.h>
 #include <wx/textdlg.h>
 #include <wx/msgdlg.h>
 #include <wx/filedlg.h>
 #include <wx/utils.h>            // wxBusyCursor
+#include <wx/filename.h>
+#include <wx/log.h>
+#include <wx/uri.h>
+#include <wx/socket.h>
+#include <wx/clipbrd.h>
+#include <wx/dynlib.h>
 
 #include "backend/compiler/value.h"  // ibValue for Test connection
 
 #include <chrono>
 #include <unordered_set>
+
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
 
 namespace {
 enum {
@@ -36,12 +49,21 @@ enum {
 	ID_INSTALL,
 	ID_UNINSTALL,
 	ID_TEST_CONNECTION,
+	ID_AUTOCOMPLETE_MODE,
+	ID_RUN_DIAGNOSTICS,
+	ID_COPY_DIAG_REPORT,
 };
+
+// Persistence key for the inline-completion operating mode. Stored under
+// the active plugin's .env file (mode 0600). codeEditor reads it as a
+// process env var at construction. Centralised here so both sides
+// reference the same literal.
+constexpr const char kAutocompleteModeKey[] = "OES_AI_AUTOCOMPLETE_MODE";
 } // namespace
 
 ibPluginManagerDialog::ibPluginManagerDialog(wxWindow* parent)
 	: wxDialog(parent, wxID_ANY, _("Plugins"),
-	            wxDefaultPosition, wxSize(720, 480),
+	            wxDefaultPosition, wxSize(760, 640),
 	            wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
 	auto* root = new wxBoxSizer(wxHORIZONTAL);
@@ -86,6 +108,20 @@ ibPluginManagerDialog::ibPluginManagerDialog(wxWindow* parent)
 	auto* byokBtn = new wxButton(this, ID_EDIT_BYOK, _("Edit API token…"));
 	right->Add(byokBtn, 0, wxBOTTOM, 8);
 
+	// Workmate-style inline-completion operating mode. Order MUST match
+	// the integer encoding used by codeEditor's m_sigmaAutoMode:
+	//   index 0 → 0 (off), index 1 → 1 (manual), index 2 → 2 (moderate),
+	//   index 3 → 3 (intensive).
+	right->Add(new wxStaticText(this, wxID_ANY,
+	             _("AI inline completion")), 0, wxBOTTOM, 2);
+	m_autocompleteMode = new wxChoice(this, ID_AUTOCOMPLETE_MODE);
+	m_autocompleteMode->Append(_("Off"));
+	m_autocompleteMode->Append(_("Только по горячей клавише"));
+	m_autocompleteMode->Append(_("Авто (умеренно)"));
+	m_autocompleteMode->Append(_("Авто (интенсивно)"));
+	m_autocompleteMode->SetSelection(2);  // default — auto-moderate
+	right->Add(m_autocompleteMode, 0, wxEXPAND | wxBOTTOM, 8);
+
 	// Test-connection button — round-trips a 'ping' prompt through the
 	// plugin's chat path so the user can verify token + endpoint are
 	// correct without leaving the dialog. Result lands in a modal that
@@ -99,7 +135,30 @@ ibPluginManagerDialog::ibPluginManagerDialog(wxWindow* parent)
 	installRow->Add(new wxButton(this, ID_UNINSTALL, _("Uninstall…")),         0);
 	right->Add(installRow, 0, wxBOTTOM, 8);
 
-	right->AddStretchSpacer(1);
+	// Diagnostics block — Workmate parity. "If something isn't working,
+	// open the Diagnostics section and click Start. The automatic check
+	// will identify the issue or generate a report for support."
+	auto* diagBox = new wxStaticBox(this, wxID_ANY, _("Диагностика"));
+	auto* diagSizer = new wxStaticBoxSizer(diagBox, wxVERTICAL);
+
+	auto* diagBtnRow = new wxBoxSizer(wxHORIZONTAL);
+	diagBtnRow->Add(new wxButton(this, ID_RUN_DIAGNOSTICS,
+	                             _("Запустить диагностику")), 0, wxRIGHT, 4);
+	diagBtnRow->Add(new wxButton(this, ID_COPY_DIAG_REPORT,
+	                             _("Скопировать отчёт в буфер")), 0);
+	diagSizer->Add(diagBtnRow, 0, wxBOTTOM | wxEXPAND, 4);
+
+	m_diagOutput = new wxTextCtrl(this, wxID_ANY, wxEmptyString,
+	                                wxDefaultPosition, wxSize(-1, 160),
+	                                wxTE_MULTILINE | wxTE_READONLY |
+	                                wxTE_DONTWRAP | wxHSCROLL);
+	// Monospace font so PASS/FAIL columns align across lines — easier
+	// for the user (or support) to scan the report visually.
+	wxFont mono = m_diagOutput->GetFont();
+	mono.SetFamily(wxFONTFAMILY_TELETYPE);
+	m_diagOutput->SetFont(mono);
+	diagSizer->Add(m_diagOutput, 1, wxEXPAND);
+	right->Add(diagSizer, 1, wxEXPAND | wxBOTTOM, 8);
 
 	auto* dialogButtons = CreateStdDialogButtonSizer(wxOK | wxCANCEL);
 	if (dialogButtons) right->Add(dialogButtons, 0, wxEXPAND | wxTOP, 8);
@@ -112,6 +171,10 @@ ibPluginManagerDialog::ibPluginManagerDialog(wxWindow* parent)
 	Bind(wxEVT_BUTTON,        &ibPluginManagerDialog::OnInstall,   this, ID_INSTALL);
 	Bind(wxEVT_BUTTON,        &ibPluginManagerDialog::OnUninstall, this, ID_UNINSTALL);
 	Bind(wxEVT_BUTTON,        &ibPluginManagerDialog::OnTestConnection, this, ID_TEST_CONNECTION);
+	Bind(wxEVT_BUTTON,        &ibPluginManagerDialog::OnRunDiagnostics,
+	     this, ID_RUN_DIAGNOSTICS);
+	Bind(wxEVT_BUTTON,        &ibPluginManagerDialog::OnCopyDiagReport,
+	     this, ID_COPY_DIAG_REPORT);
 	Bind(wxEVT_LIST_ITEM_SELECTED,
 	     [this](wxListEvent& e) {
 	         wxCommandEvent fake(wxEVT_LIST_ITEM_SELECTED, e.GetIndex());
@@ -136,6 +199,9 @@ void ibPluginManagerDialog::RebuildList()
 	m_list->DeleteAllItems();
 
 	const auto config = pluginsConfig::Load();
+	// Pulled once outside the loop — LoadAll walks the plugins dir and
+	// parses every <id>.env file, which is heavier than a per-row check.
+	const auto envAll = byokEnv::LoadAll();
 
 	// Union of loaded plugins + persisted entries: the dialog shows both
 	// (a) plugins that are currently live in the manager and (b) entries
@@ -166,6 +232,18 @@ void ibPluginManagerDialog::RebuildList()
 				r.byokRef  = it->second.byokRef;
 				r.enabled  = it->second.enabled; // honour explicit override
 			}
+			// Inline-completion mode: pulled from this plugin's .env file.
+			// Missing / unparseable → keep the row's -1 sentinel (the UI
+			// renders that as "auto-moderate" default in the choice).
+			{
+				const std::string raw = byokEnv::Get(envAll, idNarrow, kAutocompleteModeKey);
+				if (!raw.empty()) {
+					try {
+						const int v = std::stoi(raw);
+						if (v >= 0 && v <= 3) r.autocompleteMode = v;
+					} catch (...) { /* malformed value — ignore */ }
+				}
+			}
 			seen.insert(idNarrow);
 			m_snap.rows.push_back(std::move(r));
 		}
@@ -181,6 +259,15 @@ void ibPluginManagerDialog::RebuildList()
 		r.endpoint    = entry.endpoint;
 		r.byokRef     = entry.byokRef;
 		r.loaded      = false;
+		{
+			const std::string raw = byokEnv::Get(envAll, pluginId, kAutocompleteModeKey);
+			if (!raw.empty()) {
+				try {
+					const int v = std::stoi(raw);
+					if (v >= 0 && v <= 3) r.autocompleteMode = v;
+				} catch (...) { /* malformed value — ignore */ }
+			}
+		}
 		m_snap.rows.push_back(std::move(r));
 	}
 
@@ -220,6 +307,11 @@ void ibPluginManagerDialog::OnSelectionChanged(wxCommandEvent& event)
 	m_enabledCheck->SetValue(r.enabled);
 	m_endpointEdit->SetValue(r.endpoint);
 	m_byokRefEdit ->SetValue(r.byokRef);
+	// -1 sentinel means "unset" — show the default (index 2 = auto-moderate)
+	// so the user sees what would actually be in effect.
+	m_autocompleteMode->SetSelection(r.autocompleteMode >= 0
+	                                  ? r.autocompleteMode
+	                                  : 2);
 	Layout();
 }
 
@@ -230,6 +322,8 @@ void ibPluginManagerDialog::CaptureCurrentRow()
 	r.enabled  = m_enabledCheck->GetValue();
 	r.endpoint = m_endpointEdit->GetValue();
 	r.byokRef  = m_byokRefEdit ->GetValue();
+	const int sel = m_autocompleteMode->GetSelection();
+	r.autocompleteMode = (sel >= 0 && sel <= 3) ? sel : -1;
 }
 
 void ibPluginManagerDialog::OnEditByok(wxCommandEvent& /*event*/)
@@ -439,9 +533,388 @@ void ibPluginManagerDialog::OnApply(wxCommandEvent& event)
 		return;
 	}
 
+	// Persist the inline-completion mode under each plugin's .env file.
+	// We re-read existing keys + merge so the AI-token key (and any other
+	// values an installer may have written) survive this save. -1 means
+	// "leave unset" — the user didn't explicitly choose a mode, so we
+	// don't poison their env with a default.
+	auto envAll = byokEnv::LoadAll();
+	for (const auto& r : m_snap.rows) {
+		if (r.autocompleteMode < 0) continue;
+		const std::string idNarrow(r.pluginId.utf8_str());
+		byokEnv::KeyMap keys = envAll[idNarrow];
+		keys[kAutocompleteModeKey] = std::to_string(r.autocompleteMode);
+		if (byokEnv::Save(idNarrow, keys) != 0) {
+			wxLogMessage(_("Failed to persist AI autocomplete mode for plugin %s"),
+			             r.pluginId);
+		}
+	}
+
 	if (toggleChanged) {
 		wxMessageBox(_("Plugin enable/disable changes take effect after restart."),
 		             _("Plugins"), wxICON_INFORMATION);
 	}
 	event.Skip();   // proceed with default OK handling (close dialog)
+}
+
+// ===========================================================================
+// Diagnostics — Workmate parity
+//
+// Streams pass/fail markers into m_diagOutput so the user sees progress as
+// each check runs. Output uses ASCII PASS/FAIL prefixes + a mono font so
+// columns align across lines — easier for the user (or support) to scan
+// visually after copying the report. Russian text for the descriptions;
+// secrets (tokens, passwords) are NEVER printed — the redacted-placeholder
+// rule lives in the env-keys check and in LooksLikeSecretKey().
+// ===========================================================================
+namespace {
+
+const wxString kPass = wxT("[ OK ] ");
+const wxString kFail = wxT("[FAIL] ");
+const wxString kInfo = wxT("  ...  ");
+
+// Heuristic: a key whose name suggests a secret. Used by the env-keys
+// check so we never print the actual value of credentials in the report.
+bool LooksLikeSecretKey(const std::string& key)
+{
+	std::string lower = key;
+	for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+	return lower.find("token")    != std::string::npos
+	    || lower.find("secret")   != std::string::npos
+	    || lower.find("password") != std::string::npos
+	    || lower.find("apikey")   != std::string::npos
+	    || lower.find("api_key")  != std::string::npos
+	    || lower.find("key")      != std::string::npos;
+}
+
+// Split "https://host:port/path" → (scheme, host, port). port defaults to
+// the scheme-implied value (443 for https, 80 for http). Returns false
+// when the URL is malformed or the scheme is neither http nor https.
+bool ParseEndpoint(const wxString& url,
+                   wxString& scheme, wxString& host, int& port)
+{
+	if (url.IsEmpty()) return false;
+	wxURI uri(url);
+	if (!uri.HasScheme() || !uri.HasServer()) return false;
+	scheme = uri.GetScheme().Lower();
+	host = uri.GetServer();
+	if (uri.HasPort()) {
+		long p = 0;
+		if (uri.GetPort().ToLong(&p) && p > 0 && p < 65536) {
+			port = static_cast<int>(p);
+		} else {
+			return false;
+		}
+	} else {
+		port = (scheme == wxT("https")) ? 443 : (scheme == wxT("http") ? 80 : -1);
+	}
+	if (scheme != wxT("https") && scheme != wxT("http")) return false;
+	return !host.IsEmpty() && port > 0;
+}
+
+// Plain TCP connect with a hard timeout. Returns true when the 3-way
+// handshake completes. SetTimeout on the client governs the blocking
+// Connect(); we always Close() to avoid leaving a half-open socket behind.
+bool TcpConnectWithTimeout(const wxString& host, int port,
+                            int timeoutSec, wxString* outDetail)
+{
+	wxIPV4address addr;
+	if (!addr.Hostname(host)) {
+		if (outDetail) *outDetail = wxString::Format(_("DNS не разрешён: %s"), host);
+		return false;
+	}
+	addr.Service(static_cast<wxUint16>(port));
+
+	wxSocketClient sock(wxSOCKET_BLOCK | wxSOCKET_WAITALL);
+	sock.SetTimeout(timeoutSec);
+	if (!sock.Connect(addr, true)) {
+		if (outDetail) {
+			*outDetail = wxString::Format(_("connect() не удался (host=%s:%d)"),
+			                              host, port);
+		}
+		return false;
+	}
+	sock.Close();
+	return true;
+}
+
+} // namespace
+
+void ibPluginManagerDialog::DiagClear()
+{
+	if (m_diagOutput != nullptr) m_diagOutput->Clear();
+}
+
+void ibPluginManagerDialog::DiagLine(bool pass, const wxString& message)
+{
+	if (m_diagOutput == nullptr) return;
+	m_diagOutput->AppendText((pass ? kPass : kFail) + message + wxT("\n"));
+	// Force the user to see progress as we run — without an explicit
+	// Update() wx batches AppendText through the event loop, which on
+	// macOS holds the whole report back until the run completes.
+	m_diagOutput->Update();
+}
+
+void ibPluginManagerDialog::DiagInfo(const wxString& message)
+{
+	if (m_diagOutput == nullptr) return;
+	m_diagOutput->AppendText(kInfo + message + wxT("\n"));
+	m_diagOutput->Update();
+}
+
+void ibPluginManagerDialog::OnRunDiagnostics(wxCommandEvent& /*event*/)
+{
+	RunDiagnostics();
+}
+
+void ibPluginManagerDialog::OnCopyDiagReport(wxCommandEvent& /*event*/)
+{
+	if (m_diagOutput == nullptr) return;
+	const wxString text = m_diagOutput->GetValue();
+	if (text.IsEmpty()) {
+		wxMessageBox(_("Отчёт пуст — сначала запустите диагностику."),
+		             _("Диагностика"), wxICON_INFORMATION, this);
+		return;
+	}
+	if (wxTheClipboard->Open()) {
+		wxTheClipboard->SetData(new wxTextDataObject(text));
+		wxTheClipboard->Close();
+		wxLogStatus(_("Отчёт скопирован в буфер обмена"));
+	} else {
+		wxMessageBox(_("Не удалось открыть буфер обмена."),
+		             _("Диагностика"), wxICON_ERROR, this);
+	}
+}
+
+void ibPluginManagerDialog::RunDiagnostics()
+{
+	DiagClear();
+	if (m_activeRow < 0 || m_activeRow >= static_cast<int>(m_snap.rows.size())) {
+		DiagInfo(_("Выберите плагин в списке слева, затем повторите запуск."));
+		return;
+	}
+
+	// Snapshot the current UI state so the diagnostics reflect what the
+	// user just typed (e.g. endpoint edit they haven't OK'd yet).
+	CaptureCurrentRow();
+	const auto& r = m_snap.rows[m_activeRow];
+	const std::string idNarrow(r.pluginId.utf8_str());
+
+	DiagInfo(wxString::Format(_("Плагин: %s"), r.pluginId));
+	DiagInfo(wxString::Format(_("Версия: %s"),
+	    r.version.IsEmpty() ? wxString(_("неизвестно")) : r.version));
+	DiagInfo(wxString::Format(_("Endpoint: %s"),
+	    r.endpoint.IsEmpty() ? wxString(_("не задан")) : r.endpoint));
+	m_diagOutput->AppendText(wxT("\n"));
+
+	// ---------------- Check 1 — plugin file exists ----------------------
+	// We probe the path ibPluginManager actually scans. On macOS the
+	// extension is .bundle; the spec naming matches that. On Win/Linux
+	// the file may live as .dll / .so — we check the platform-native
+	// extension first AND .bundle so the macOS-shaped spec still
+	// produces an actionable result on any platform.
+	const wxString pluginsDir = ibPluginManager::GetPluginsDir();
+	const wxString nativeExt  = wxDynamicLibrary::GetDllExt(wxDL_MODULE);
+	wxFileName fnNative(pluginsDir, wxString(wxT("lib")) + r.pluginId + nativeExt);
+	wxFileName fnAlt(pluginsDir, wxString(wxT("lib")) + r.pluginId + wxT(".bundle"));
+	wxFileName fnBare(pluginsDir, r.pluginId + nativeExt);
+	wxString pluginFilePath;
+	if (fnNative.FileExists())    pluginFilePath = fnNative.GetFullPath();
+	else if (fnAlt.FileExists())  pluginFilePath = fnAlt.GetFullPath();
+	else if (fnBare.FileExists()) pluginFilePath = fnBare.GetFullPath();
+	if (!pluginFilePath.IsEmpty()) {
+		DiagLine(true, wxString::Format(_("Файл плагина найден: %s"), pluginFilePath));
+	} else {
+		DiagLine(false, wxString::Format(_("Файл плагина НЕ найден в %s"), pluginsDir));
+	}
+
+	// ---------------- Check 2 — ABI version >= 3 ------------------------
+	int abi = -1;
+	auto* pm = appData ? appData->GetPluginManager() : nullptr;
+	if (pm != nullptr) {
+		for (const auto& p : pm->Loaded()) {
+			const wxString id = p.m_info && p.m_info->name
+			    ? wxString::FromUTF8(p.m_info->name)
+			    : wxFileName(p.m_path).GetName();
+			if (id == r.pluginId && p.m_info) {
+				abi = p.m_info->abi_version;
+				break;
+			}
+		}
+	}
+	if (abi < 0) {
+		DiagLine(false, _("ABI плагина: плагин не загружен — невозможно прочитать abi_version"));
+	} else if (abi >= 3) {
+		DiagLine(true, wxString::Format(
+		    _("ABI плагина: %d (требуется >= 3, текущая хост-версия %d)"),
+		    abi, IB_PLUGIN_ABI_VERSION));
+	} else {
+		DiagLine(false, wxString::Format(
+		    _("ABI плагина: %d (требуется >= 3) — обновите плагин"), abi));
+	}
+
+	// ---------------- Check 3 — BYOK env file exists --------------------
+	const wxString envPath = byokEnv::GetEnvFilePath(idNarrow);
+	const bool envExists = wxFileName::FileExists(envPath);
+	if (envExists) {
+		DiagLine(true, wxString::Format(_("BYOK env найден: %s"), envPath));
+	} else {
+		DiagLine(false, wxString::Format(_("BYOK env НЕ найден: %s"), envPath));
+	}
+
+	// ---------------- Check 4 — BYOK file mode 0600 ---------------------
+	// Unix-only. On Windows we acknowledge that ACLs aren't checked here
+	// (byokEnv::Save enforces user-only ACL at write time).
+#ifndef _WIN32
+	if (envExists) {
+		struct stat st{};
+		if (::stat(std::string(envPath.utf8_str()).c_str(), &st) == 0) {
+			const mode_t mode = st.st_mode & 0777;
+			if (mode == 0600) {
+				DiagLine(true, _("Права BYOK env: 0600 — корректно"));
+			} else {
+				DiagLine(false, wxString::Format(
+				    _("Права BYOK env: 0%o — должно быть 0600 (chmod 600 %s)"),
+				    static_cast<unsigned>(mode), envPath));
+			}
+		} else {
+			DiagLine(false, _("Не удалось прочитать stat() для BYOK env"));
+		}
+	} else {
+		DiagInfo(_("Проверка прав 0600 пропущена — файл отсутствует"));
+	}
+#else
+	if (envExists) {
+		DiagLine(true, _("Права BYOK env: NTFS ACL (проверка пропущена на Windows)"));
+	} else {
+		DiagInfo(_("Проверка прав пропущена — файл отсутствует"));
+	}
+#endif
+
+	// ---------------- Check 5 — required env keys present ---------------
+	// For aiBridge: TOKEN + TENANT. Other plugins: TOKEN only.
+	// VALUES ARE NEVER PRINTED. Secret-looking keys are flagged
+	// <redacted> in the "other keys" inventory.
+	const auto envAll = byokEnv::LoadAll();
+	auto pluginEnvIt = envAll.find(idNarrow);
+	const byokEnv::KeyMap keys = (pluginEnvIt != envAll.end())
+	    ? pluginEnvIt->second
+	    : byokEnv::KeyMap();
+
+	std::vector<std::string> requiredKeys;
+	requiredKeys.emplace_back("TOKEN");
+	if (r.pluginId.Lower().Contains(wxT("aibridge")) ||
+	    r.pluginId.Lower().Contains(wxT("ai_bridge"))) {
+		requiredKeys.emplace_back("TENANT");
+	}
+	for (const auto& key : requiredKeys) {
+		auto it = keys.find(key);
+		const bool present = (it != keys.end() && !it->second.empty());
+		if (present) {
+			DiagLine(true, wxString::Format(
+			    _("Ключ %s: присутствует (значение скрыто <redacted>)"),
+			    wxString::FromUTF8(key.c_str())));
+		} else {
+			DiagLine(false, wxString::Format(_("Ключ %s: отсутствует"),
+			    wxString::FromUTF8(key.c_str())));
+		}
+	}
+	if (!keys.empty()) {
+		wxString other;
+		for (const auto& [k, v] : keys) {
+			bool isRequired = false;
+			for (const auto& req : requiredKeys) {
+				if (k == req) { isRequired = true; break; }
+			}
+			if (isRequired) continue;
+			if (!other.IsEmpty()) other += wxT(", ");
+			other += wxString::FromUTF8(k.c_str());
+			if (LooksLikeSecretKey(k)) other += wxT("=<redacted>");
+		}
+		if (!other.IsEmpty()) {
+			DiagInfo(wxString::Format(_("Другие ключи в env: %s"), other));
+		}
+	}
+
+	// ---------------- Check 6 — TCP reach (5s timeout) ------------------
+	// "Reachable" here means the kernel saw a SYN-ACK — enough to
+	// distinguish "captive portal / DNS broken" from "host is fine
+	// but token is wrong" without needing TLS material.
+	if (r.endpoint.IsEmpty()) {
+		DiagLine(false, _("Endpoint не задан — TCP-проверка пропущена"));
+	} else {
+		wxString scheme, host;
+		int port = 0;
+		if (!ParseEndpoint(r.endpoint, scheme, host, port)) {
+			DiagLine(false, wxString::Format(
+			    _("Некорректный URL endpoint: %s (ожидается http(s)://host[:port])"),
+			    r.endpoint));
+		} else {
+			DiagInfo(wxString::Format(_("Проверка TCP %s:%d (timeout 5s)…"), host, port));
+			wxBusyCursor busy;
+			wxString detail;
+			const bool ok = TcpConnectWithTimeout(host, port, 5, &detail);
+			if (ok) {
+				DiagLine(true, wxString::Format(
+				    _("TCP %s:%d — соединение установлено"), host, port));
+			} else {
+				DiagLine(false, wxString::Format(_("TCP %s:%d — %s"),
+				    host, port, detail.IsEmpty() ? _("ошибка") : detail));
+			}
+		}
+	}
+
+	// ---------------- Check 7 — Auth (llm_query ping) -------------------
+	// Reuses the existing TestConnection path: ibPluginManager's
+	// LLMQuery script function or, for v4 plugins, AIProvider.Query.
+	// Response body is NOT logged (could echo prompt fragments that we
+	// don't want in a support report).
+	if (pm == nullptr) {
+		DiagLine(false, _("Plugin manager не инициализирован — auth-ping пропущен"));
+	} else {
+		const ibPluginManager::RegisteredFunction* llmFn = nullptr;
+		for (const auto& f : pm->Functions()) {
+			if (f.m_name == "LLMQuery") { llmFn = &f; break; }
+		}
+		const bool haveV4Provider = pm->HasAIProviderFor("chat");
+		if (llmFn == nullptr && !haveV4Provider) {
+			DiagLine(false, _("Auth-ping пропущен: ни LLMQuery, ни v4 chat-провайдер не зарегистрированы"));
+		} else {
+			DiagInfo(_("Отправка llm_query ping…"));
+			wxBusyCursor busy;
+			const auto t0 = std::chrono::steady_clock::now();
+			bool ok = false;
+			int rcStatus = -1;
+			if (llmFn != nullptr) {
+				ibValue vPrompt; vPrompt.SetString(wxT("ping"));
+				ibValue vLocale; vLocale.SetString(wxT("uk-UA"));
+				ibValue* args[2] = { &vPrompt, &vLocale };
+				ibValue ret;
+				ok = pm->CallFunction(*llmFn, ret, args, 2);
+				rcStatus = ok ? 200 : -1;
+			} else {
+				const auto& providers = pm->AIProviders();
+				if (!providers.empty() && providers[0].Query != nullptr) {
+					const char* req = R"({"prompt":"ping","locale":"uk-UA"})";
+					rcStatus = providers[0].Query(req, "diag-ping",
+					                              providers[0].userData);
+					ok = (rcStatus == 0);
+				}
+			}
+			const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+			    std::chrono::steady_clock::now() - t0).count();
+			if (ok) {
+				DiagLine(true, wxString::Format(
+				    _("Auth-ping OK за %lld ms (HTTP %d)"),
+				    static_cast<long long>(ms), rcStatus));
+			} else {
+				DiagLine(false, wxString::Format(
+				    _("Auth-ping НЕ удался за %lld ms (rc=%d) — проверьте токен и endpoint"),
+				    static_cast<long long>(ms), rcStatus));
+			}
+		}
+	}
+
+	m_diagOutput->AppendText(wxT("\n"));
+	DiagInfo(_("Диагностика завершена. Используйте «Скопировать отчёт в буфер» для отправки в поддержку."));
 }

@@ -185,6 +185,47 @@ int ibOutputWindow::GetCurrentLine() const
 	return y;
 }
 
+std::vector<ibOutputWindow::OutputLineSnapshot>
+ibOutputWindow::CollectAttachedLines() const
+{
+	// Walk every code-attached output line. m_listCodeInfo maps a STC
+	// line number → (fileName, docPath, srcLine); the marker bitmask
+	// for that same line tells us whether SharedOutput tagged it as
+	// info / warning / error. We surface the message text via GetLine
+	// so the panel doesn't need a parallel "message" column inside
+	// outputWindow — the source of truth stays here.
+	std::vector<OutputLineSnapshot> out;
+	out.reserve(m_listCodeInfo.size());
+	for (const auto& pair : m_listCodeInfo) {
+		const long line = pair.first;
+		// MarkerGet returns 0 when no markers — treat as "info" so the
+		// panel still renders the row. Severity reads the highest-bit
+		// marker first (error > warning > info), matching the same
+		// priority ibStatusMessage uses.
+		const int mask = const_cast<ibOutputWindow*>(this)->MarkerGet(line);
+		const char* severity = "info";
+		if ((mask & (1 << ibStatusMessage_Error))   != 0)      severity = "error";
+		else if ((mask & (1 << ibStatusMessage_Warning)) != 0) severity = "warning";
+
+		wxString messageText = const_cast<ibOutputWindow*>(this)->GetLine(line);
+		// Strip the trailing newline that GetLine includes — purely
+		// cosmetic for the marker grid.
+		while (!messageText.IsEmpty() &&
+		       (messageText.Last() == '\n' || messageText.Last() == '\r')) {
+			messageText.RemoveLast();
+		}
+
+		OutputLineSnapshot s;
+		s.fileName = pair.second.m_fileName;
+		s.docPath  = pair.second.m_docPath;
+		s.srcLine  = pair.second.m_currLine;
+		s.message  = messageText;
+		s.severity = wxString::FromUTF8(severity);
+		out.push_back(std::move(s));
+	}
+	return out;
+}
+
 #include "frontend/docView/docManager.h"
 #include "backend/metadataConfiguration.h"
 

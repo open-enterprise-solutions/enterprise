@@ -11,6 +11,18 @@
 #include "frontend/artProvider/artProvider.h"
 #include "frontend/pluginWebPane/pluginWebPane.h"
 
+#include "projectSearchPanel.h"
+#include "aiTodoPanel.h"
+#include "aiMarkersPanel.h"
+
+// Project Search pane name — designer-private, parallel to the existing
+// wxAUI_PANE_HELP / wxAUI_PANE_METADATA constants in frontend/mainFrame.h.
+// Living in the .cpp keeps the constant scoped to designer and avoids
+// touching the shared frontend header for a designer-only widget.
+#define wxAUI_PANE_PROJECT_SEARCH wxT("projectSearchWindow")
+#define wxAUI_PANE_AI_TODO        wxT("aiTodoWindow")
+#define wxAUI_PANE_AI_MARKERS     wxT("aiMarkersWindow")
+
 #include <wx/xml/xml.h>
 #include <wx/stdpaths.h>
 #include <wx/filename.h>
@@ -130,6 +142,150 @@ void ibFrontendDocMDIFrameDesigner::CreateMetadataPane()
 	paneInfo.MinSize(250, 0);
 
 	m_mgr.AddPane(m_metaWindow, paneInfo);
+}
+
+void ibFrontendDocMDIFrameDesigner::EnsureProjectSearchPane()
+{
+	if (m_mgr.GetPane(wxAUI_PANE_PROJECT_SEARCH).IsOk()) return;
+
+	m_projectSearchPanel = new ibProjectSearchPanel(this);
+
+	wxAuiPaneInfo paneInfo;
+	paneInfo.Name(wxAUI_PANE_PROJECT_SEARCH);
+	paneInfo.Caption(_("Поиск по метаданным"));
+	paneInfo.Left();
+	paneInfo.Layer(1);
+	paneInfo.MinSize(280, 240);
+	paneInfo.BestSize(320, 480);
+	paneInfo.CloseButton(true);
+	paneInfo.MaximizeButton(false);
+	paneInfo.MinimizeButton(false);
+	paneInfo.Show(true);
+
+	m_mgr.AddPane(m_projectSearchPanel, paneInfo);
+	m_mgr.Update();
+}
+
+void ibFrontendDocMDIFrameDesigner::ToggleProjectSearchPane()
+{
+	const bool firstCreate = !m_mgr.GetPane(wxAUI_PANE_PROJECT_SEARCH).IsOk();
+	EnsureProjectSearchPane();
+	wxAuiPaneInfo& pane = m_mgr.GetPane(wxAUI_PANE_PROJECT_SEARCH);
+	if (!pane.IsOk()) return;
+	if (!firstCreate) pane.Show(!pane.IsShown());
+	m_mgr.Update();
+}
+
+void ibFrontendDocMDIFrameDesigner::FocusProjectSearchPane()
+{
+	EnsureProjectSearchPane();
+	wxAuiPaneInfo& pane = m_mgr.GetPane(wxAUI_PANE_PROJECT_SEARCH);
+	if (pane.IsOk() && !pane.IsShown()) {
+		pane.Show(true);
+		m_mgr.Update();
+	}
+	if (m_projectSearchPanel != nullptr) {
+		m_projectSearchPanel->FocusQueryInput();
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AI Assistant TODO list pane (Workmate parity).
+// Pane state is owned by the AUI manager once created; m_aiTodoPanel
+// is the typed handle the toggle/focus helpers route through so we don't
+// need a wxDynamicCast on every call. Lazy-create on first toggle to
+// keep cold-start cost flat for users who never open the pane.
+// ---------------------------------------------------------------------------
+
+void ibFrontendDocMDIFrameDesigner::EnsureAiTodoPane()
+{
+	if (m_mgr.GetPane(wxAUI_PANE_AI_TODO).IsOk()) return;
+
+	m_aiTodoPanel = new ibAiTodoPanel(this);
+
+	wxAuiPaneInfo paneInfo;
+	paneInfo.Name(wxAUI_PANE_AI_TODO);
+	paneInfo.Caption(_("Задачи AI-ассистента"));
+	paneInfo.Right();
+	paneInfo.Layer(1);
+	paneInfo.MinSize(360, 320);
+	paneInfo.BestSize(420, 480);
+	paneInfo.CloseButton(true);
+	paneInfo.MaximizeButton(false);
+	paneInfo.MinimizeButton(false);
+	paneInfo.Show(true);
+
+	m_mgr.AddPane(m_aiTodoPanel, paneInfo);
+	m_mgr.Update();
+}
+
+void ibFrontendDocMDIFrameDesigner::ToggleAiTodoPane()
+{
+	const bool firstCreate = !m_mgr.GetPane(wxAUI_PANE_AI_TODO).IsOk();
+	EnsureAiTodoPane();
+	wxAuiPaneInfo& pane = m_mgr.GetPane(wxAUI_PANE_AI_TODO);
+	if (!pane.IsOk()) return;
+	if (!firstCreate) pane.Show(!pane.IsShown());
+	m_mgr.Update();
+}
+
+void ibFrontendDocMDIFrameDesigner::FocusAiTodoPane()
+{
+	EnsureAiTodoPane();
+	wxAuiPaneInfo& pane = m_mgr.GetPane(wxAUI_PANE_AI_TODO);
+	if (pane.IsOk() && !pane.IsShown()) {
+		pane.Show(true);
+		m_mgr.Update();
+	}
+	if (m_aiTodoPanel != nullptr) {
+		m_aiTodoPanel->FocusQuickAdd();
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AI Assistant Markers pane (Workmate parity).
+// ---------------------------------------------------------------------------
+
+void ibFrontendDocMDIFrameDesigner::EnsureAiMarkersPane()
+{
+	if (m_mgr.GetPane(wxAUI_PANE_AI_MARKERS).IsOk()) return;
+
+	m_aiMarkersPanel = new ibAiMarkersPanel(this);
+
+	wxAuiPaneInfo paneInfo;
+	paneInfo.Name(wxAUI_PANE_AI_MARKERS);
+	paneInfo.Caption(_("Маркеры AI-ассистента"));
+	paneInfo.Bottom();
+	paneInfo.Layer(1);
+	paneInfo.MinSize(420, 160);
+	paneInfo.BestSize(640, 220);
+	paneInfo.CloseButton(true);
+	paneInfo.MaximizeButton(false);
+	paneInfo.MinimizeButton(false);
+	paneInfo.Show(true);
+
+	m_mgr.AddPane(m_aiMarkersPanel, paneInfo);
+	m_mgr.Update();
+}
+
+void ibFrontendDocMDIFrameDesigner::ToggleAiMarkersPane()
+{
+	const bool firstCreate = !m_mgr.GetPane(wxAUI_PANE_AI_MARKERS).IsOk();
+	EnsureAiMarkersPane();
+	wxAuiPaneInfo& pane = m_mgr.GetPane(wxAUI_PANE_AI_MARKERS);
+	if (!pane.IsOk()) return;
+	if (!firstCreate) pane.Show(!pane.IsShown());
+	m_mgr.Update();
+}
+
+void ibFrontendDocMDIFrameDesigner::FocusAiMarkersPane()
+{
+	EnsureAiMarkersPane();
+	wxAuiPaneInfo& pane = m_mgr.GetPane(wxAUI_PANE_AI_MARKERS);
+	if (pane.IsOk() && !pane.IsShown()) {
+		pane.Show(true);
+		m_mgr.Update();
+	}
 }
 
 void ibFrontendDocMDIFrameDesigner::UpdateEditorOptions()

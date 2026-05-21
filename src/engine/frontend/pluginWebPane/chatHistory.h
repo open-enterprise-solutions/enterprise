@@ -17,7 +17,7 @@
 //     "version": 1,
 //     "savedAt": "2026-05-20T12:34:56Z",
 //     "entries": [
-//       { "role": "user|assistant|system|error|plan|tripleReview",
+//       { "role": "user|assistant|system|error|plan|tripleReview|subtasks",
 //         "markdown": "...",
 //         "requestId": "...",
 //         "planId": "...",

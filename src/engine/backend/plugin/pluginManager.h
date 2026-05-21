@@ -343,11 +343,17 @@ private:
 	// byokEnv::LoadAll; cleared on UnloadAll.
 	PluginEnvMap m_pluginEnv;
 
-	// SEC-P1-8: env keys exported into the process env per plugin via the
-	// universal v3 env-injection path in LoadAll. UnloadAll iterates this
-	// map and calls unsetenv() for every entry so tokens don't survive in
-	// the process env across config reloads.
-	std::unordered_map<std::string, std::vector<std::string>> m_injectedEnvKeys;
+	// SEC-P1-8 / P2-2: env keys exported into the process env per plugin via
+	// the universal v3 env-injection path in LoadAll. UnloadAll iterates
+	// this map and restores the prior value (or unsets if there was none)
+	// so tokens don't survive in the process env across config reloads AND
+	// pre-existing user-set values aren't wiped by the unload.
+	struct InjectedEnv {
+		std::string key;
+		bool        wasSet = false;   // was the key set in the env before injection
+		std::string prior;            // its value at that moment
+	};
+	std::unordered_map<std::string, std::vector<InjectedEnv>> m_injectedEnvKeys;
 };
 
 // SEC-P1-9: RAII guard around tl_currentPluginId. Use inside dispatcher

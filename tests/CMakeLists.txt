@@ -24,9 +24,25 @@ set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 # ---------------------------------------------------------------------------
+# OpenSSL for the triple-review integration test's direct HTTPS probe.
+# cpp-httplib needs CPPHTTPLIB_OPENSSL_SUPPORT defined to enable TLS; the
+# test's call site does this with #define before #include "httplib.h",
+# but we still need to link OpenSSL::SSL + OpenSSL::Crypto. Without
+# OpenSSL on this machine the integration test is excluded from the
+# sources list entirely so it can't drag <openssl/*> into a build that
+# has nothing to satisfy it.
+# ---------------------------------------------------------------------------
+find_package(OpenSSL QUIET)
+if(OpenSSL_FOUND)
+    message(STATUS "tests: OpenSSL found — triple-review HTTPS probe enabled")
+else()
+    message(STATUS "tests: OpenSSL not found — skipping test_tripleReviewIntegration.cpp")
+endif()
+
+# ---------------------------------------------------------------------------
 # Test executable
 # ---------------------------------------------------------------------------
-add_executable(oes_tests
+set(OES_TESTS_SOURCES
     test_clsid.cpp
     test_value.cpp
     test_number.cpp
@@ -41,22 +57,15 @@ add_executable(oes_tests
     test_pluginWebPaneHistory.cpp
     test_legacyShim.cpp
     test_pluginLoadIntegration.cpp
-    test_tripleReviewIntegration.cpp
 )
-
-# ---------------------------------------------------------------------------
-# OpenSSL for the triple-review integration test's direct HTTPS probe.
-# cpp-httplib needs CPPHTTPLIB_OPENSSL_SUPPORT defined to enable TLS; the
-# test's call site does this with #define before #include "httplib.h",
-# but we still need to link OpenSSL::SSL + OpenSSL::Crypto. Without
-# OpenSSL on this machine the test skips itself at runtime — but if
-# OpenSSL is missing here, the test won't compile, so we make it
-# conditional.
-# ---------------------------------------------------------------------------
-find_package(OpenSSL QUIET)
+# SEC-P2-3: only pull the triple-review integration test in when OpenSSL is
+# available — the source unconditionally includes <openssl/*> via httplib.
 if(OpenSSL_FOUND)
-    message(STATUS "tests: OpenSSL found — triple-review HTTPS probe enabled")
+    list(APPEND OES_TESTS_SOURCES test_tripleReviewIntegration.cpp)
+    # AGENT-MODE: oes_agent integration suite — same OpenSSL gate.
+    list(APPEND OES_TESTS_SOURCES test_oesAgentIntegration.cpp)
 endif()
+add_executable(oes_tests ${OES_TESTS_SOURCES})
 
 target_link_libraries(oes_tests
     PRIVATE

@@ -25,6 +25,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <regex>           // SEC-P1-11: validate configHash before path use
 #include <sstream>
 #include <iomanip>
 #include <string>
@@ -42,6 +43,7 @@ const char* RoleToString(ibPluginWebPane::Entry::Role role)
 	case R::Error:        return "error";
 	case R::Plan:         return "plan";
 	case R::TripleReview: return "tripleReview";
+	case R::Subtasks:     return "subtasks";
 	}
 	return "user";
 }
@@ -55,6 +57,7 @@ ibPluginWebPane::Entry::Role RoleFromString(const std::string& s)
 	if (s == "error")        return R::Error;
 	if (s == "plan")         return R::Plan;
 	if (s == "tripleReview") return R::TripleReview;
+	if (s == "subtasks")     return R::Subtasks;
 	return R::User;
 }
 
@@ -90,15 +93,33 @@ wxString ComputeConfigHash()
 	return ComputeConfigHashFor(name);
 }
 
+// SEC-P1-11: std::hash<std::string> is libc++-implementation-defined,
+// collides between releases, and on some platforms returns a 32-bit value
+// padded into size_t — meaning the printed hex was effectively 32 bits
+// of entropy. Roll FNV-1a 64-bit instead: deterministic across builds,
+// no DOS-resistance salt needed because the bucket key is local (no
+// adversarial network input), and produces a stable 16-char lowercase
+// hex digest matching the existing on-disk file layout.
+namespace {
+std::uint64_t Fnv1a64(const std::string& s)
+{
+	std::uint64_t h = 0xcbf29ce484222325ULL;
+	for (unsigned char c : s) {
+		h ^= c;
+		h *= 0x100000001b3ULL;
+	}
+	return h;
+}
+} // namespace
+
 wxString ComputeConfigHashFor(const wxString& configName)
 {
-	std::string key = configName.IsEmpty()
+	const std::string key = configName.IsEmpty()
 	    ? std::string("default")
 	    : std::string(configName.utf8_str());
-	const std::size_t h = std::hash<std::string>{}(key);
 	std::ostringstream oss;
 	oss << std::hex << std::setw(16) << std::setfill('0')
-	    << static_cast<std::uint64_t>(h);
+	    << Fnv1a64(key);
 	return wxString::FromUTF8(oss.str().c_str());
 }
 
@@ -106,7 +127,16 @@ wxString PathForBucket(const wxString& configHash)
 {
 	const wxString root = StorageRoot();
 	if (root.IsEmpty()) return wxEmptyString;
-	wxFileName fn(root, configHash + wxT(".json"));
+	// SEC-P1-11: validate the hash string before using it as a file name.
+	// A hostile caller passing "../../etc/passwd" would otherwise escape
+	// the bucket dir. Fall back to "default" on mismatch — preserves the
+	// "we always have a usable path" contract callers rely on.
+	static const std::regex kHexRe(R"(^[0-9a-f]{16}$)");
+	const std::string asNarrow(configHash.utf8_str());
+	const wxString safe = std::regex_match(asNarrow, kHexRe)
+	    ? configHash
+	    : wxString(wxT("default"));
+	wxFileName fn(root, safe + wxT(".json"));
 	return fn.GetFullPath();
 }
 
@@ -176,6 +206,27 @@ bool Save(const wxString& configHash,
 				findings.push_back(std::move(fj));
 			}
 			j["findings"] = std::move(findings);
+		}
+
+		// Subtasks-only fields. Same uniform-schema approach as TripleReview:
+		// written only on the Subtasks role; absent on other entries so
+		// readers that pre-date the field default cleanly to empty.
+		if (e.role == ibPluginWebPane::Entry::Role::Subtasks) {
+			j["parentPlanId"] = std::string(e.parentPlanId.utf8_str());
+			nlohmann::json subtasks = nlohmann::json::array();
+			for (const auto& s : e.subtasks) {
+				nlohmann::json sj;
+				sj["id"]     = std::string(s.id.utf8_str());
+				sj["title"]  = std::string(s.title.utf8_str());
+				sj["status"] = std::string(s.status.utf8_str());
+				nlohmann::json deps = nlohmann::json::array();
+				for (const auto& d : s.dependsOn) {
+					deps.push_back(std::string(d.utf8_str()));
+				}
+				sj["dependsOn"] = std::move(deps);
+				subtasks.push_back(std::move(sj));
+			}
+			j["subtasks"] = std::move(subtasks);
 		}
 		arr.push_back(std::move(j));
 	}
@@ -283,6 +334,29 @@ bool Load(const wxString& configHash,
 				fd.message  = wxString::FromUTF8(f.value("message",  "").c_str());
 				fd.fix      = wxString::FromUTF8(f.value("fix",      "").c_str());
 				e.findings.push_back(std::move(fd));
+			}
+		}
+
+		// Subtasks-only fields. Older files (pre-Subtasks landing) miss
+		// these keys; the value() defaults restore an empty list, matching
+		// the "missing entry" semantic for non-Subtasks roles.
+		e.parentPlanId = wxString::FromUTF8(j.value("parentPlanId", "").c_str());
+		if (j.contains("subtasks") && j["subtasks"].is_array()) {
+			for (const auto& st : j["subtasks"]) {
+				if (!st.is_object()) continue;
+				ibPluginWebPane::Entry::Subtask s;
+				s.id     = wxString::FromUTF8(st.value("id",     "").c_str());
+				s.title  = wxString::FromUTF8(st.value("title",  "").c_str());
+				s.status = wxString::FromUTF8(st.value("status", "").c_str());
+				if (st.contains("dependsOn") && st["dependsOn"].is_array()) {
+					for (const auto& d : st["dependsOn"]) {
+						if (d.is_string()) {
+							s.dependsOn.push_back(
+							    wxString::FromUTF8(d.get<std::string>().c_str()));
+						}
+					}
+				}
+				e.subtasks.push_back(std::move(s));
 			}
 		}
 		// codeBlocks not persisted; RenderTranscript re-extracts.

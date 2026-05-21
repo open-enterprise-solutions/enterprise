@@ -382,12 +382,16 @@ namespace { void JoinAndDrainShimWorkers(); }
 size_t ibPluginManager::LoadAll()
 {
 	DiagLog("LoadAll: enter");
+
+	// SEC-CR-P2: drain previous load FIRST. Setting g_currentManager
+	// before UnloadAll let shutdown callbacks on worker threads see
+	// an instance whose tables UnloadAll was busy emptying.
+	UnloadAll();
+
 	// Make the host-trampolines see this instance for the entire app
 	// lifetime, not just the duration of LoadAll. WebPaneSend etc. fire
 	// long after init returns.
 	g_currentManager = this;
-
-	UnloadAll();
 
 	// Sandbox / kill-switch. OES_PLUGIN_SANDBOX=1 in the environment
 	// skips plugin discovery entirely — useful for incident response
@@ -508,18 +512,24 @@ size_t ibPluginManager::LoadAll()
 			{
 				auto envIt = m_pluginEnv.find(pluginIdNarrow);
 				if (envIt != m_pluginEnv.end()) {
-					// SEC-P1-8: remember which keys we set so UnloadAll can
-					// unset them. Per-plugin so reloads don't double-track.
+					// SEC-P1-8 / P2-2: remember each key's prior state BEFORE
+					// overwriting so UnloadAll restores it instead of wiping
+					// a value the user set in their shell env.
 					auto& tracked = m_injectedEnvKeys[pluginIdNarrow];
 					tracked.clear();
 					tracked.reserve(envIt->second.size());
 					for (const auto& kv : envIt->second) {
+						InjectedEnv rec;
+						rec.key = kv.first;
+						const char* priorRaw = std::getenv(kv.first.c_str());
+						rec.wasSet = (priorRaw != nullptr);
+						if (rec.wasSet) rec.prior = priorRaw;
 #if defined(_WIN32)
 						_putenv_s(kv.first.c_str(), kv.second.c_str());
 #else
 						setenv(kv.first.c_str(), kv.second.c_str(), /*overwrite=*/1);
 #endif
-						tracked.push_back(kv.first);
+						tracked.push_back(std::move(rec));
 					}
 					wxLogDebug(wxT("Plugin '%s': injected %zu env keys into process env"),
 					           wxString::FromUTF8(pluginIdNarrow),
@@ -532,6 +542,32 @@ size_t ibPluginManager::LoadAll()
 			const int rc = init_fn(host);
 			tl_currentPluginId = prevPluginId;
 			tl_scope = prev;
+
+			// SEC-CR-P1-1: scope env injection to JUST this plugin's
+			// init_fn call. Without per-init restore, plugin B's
+			// oes_plugin_initialize could call getenv() and observe
+			// plugin A's bearer tokens.
+			{
+				auto envIt = m_injectedEnvKeys.find(pluginIdNarrow);
+				if (envIt != m_injectedEnvKeys.end()) {
+					for (const auto& r : envIt->second) {
+						if (r.wasSet) {
+#if defined(_WIN32)
+							_putenv_s(r.key.c_str(), r.prior.c_str());
+#else
+							setenv(r.key.c_str(), r.prior.c_str(), /*overwrite=*/1);
+#endif
+						} else {
+#if defined(_WIN32)
+							_putenv_s(r.key.c_str(), "");
+#else
+							unsetenv(r.key.c_str());
+#endif
+						}
+					}
+				}
+			}
+
 			if (rc != 0) {
 				wxLogDebug("Plugin '%s' initialize() failed (rc=%d)",
 				           path, rc);
@@ -791,11 +827,11 @@ void ibPluginManager::PopCallerPluginId(const std::string& restore)
 
 ibPluginManager::~ibPluginManager()
 {
-	UnloadAll();
-	// Clear the global only if we still own it — a future instance may
-	// have replaced us via its own ctor / LoadAll. Single-instance is the
-	// documented invariant for ABI v4 host trampolines.
+	// SEC-CR-P2: clear the trampoline pointer BEFORE UnloadAll so plugin
+	// shutdown callbacks firing on worker threads can't dispatch into a
+	// half-destroyed manager (m_functions cleared, m_subscribers gone).
 	if (g_currentManager == this) g_currentManager = nullptr;
+	UnloadAll();
 }
 
 // =========================================================================
@@ -854,18 +890,25 @@ std::string ibPluginManager::ReadPluginEnv(const std::string& pluginId,
 
 void ibPluginManager::UnsetInjectedEnvKeys()
 {
-	// SEC-P1-8: clear every env entry we set during LoadAll. Bearer tokens
-	// in the live env are visible to fork()'d helpers + crash dumps; we
-	// don't want them to outlive the plugin's load cycle. POSIX unsetenv
-	// is the documented inverse of setenv; Windows mirrors it via empty
-	// value to _putenv_s.
-	for (const auto& [pluginId, keys] : m_injectedEnvKeys) {
-		for (const auto& k : keys) {
+	// SEC-P1-8 / P2-2: restore each env entry to its pre-injection state.
+	// Bearer tokens shouldn't outlive the plugin's load cycle, but if the
+	// user had set TOKEN themselves before launching Designer we MUST put
+	// the original value back — unconditional unsetenv() wiped it.
+	for (const auto& [pluginId, recs] : m_injectedEnvKeys) {
+		for (const auto& r : recs) {
+			if (r.wasSet) {
 #if defined(_WIN32)
-			_putenv_s(k.c_str(), "");
+				_putenv_s(r.key.c_str(), r.prior.c_str());
 #else
-			unsetenv(k.c_str());
+				setenv(r.key.c_str(), r.prior.c_str(), /*overwrite=*/1);
 #endif
+			} else {
+#if defined(_WIN32)
+				_putenv_s(r.key.c_str(), "");
+#else
+				unsetenv(r.key.c_str());
+#endif
+			}
 		}
 	}
 	m_injectedEnvKeys.clear();

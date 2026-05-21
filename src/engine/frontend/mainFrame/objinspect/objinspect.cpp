@@ -1,5 +1,7 @@
 #include "objinspect.h"
 
+#include "frontend/propertyManager/aiPropertyHelper.h"
+
 enum {
 	WXOES_PROPERTY_GRID = wxID_HIGHEST + 1000
 };
@@ -14,6 +16,7 @@ EVT_PG_CHANGED(WXOES_PROPERTY_GRID, ibObjectInspector::OnPropertyGridChanged)
 EVT_PG_ITEM_COLLAPSED(WXOES_PROPERTY_GRID, ibObjectInspector::OnPropertyGridExpand)
 EVT_PG_ITEM_EXPANDED(WXOES_PROPERTY_GRID, ibObjectInspector::OnPropertyGridExpand)
 EVT_PG_SELECTED(WXOES_PROPERTY_GRID, ibObjectInspector::OnPropertyGridItemSelected)
+EVT_PG_RIGHT_CLICK(WXOES_PROPERTY_GRID, ibObjectInspector::OnPropertyGridRightClick)
 EVT_CHILD_FOCUS(ibObjectInspector::OnChildFocus)
 wxEND_EVENT_TABLE()
 
@@ -354,6 +357,41 @@ void ibObjectInspector::OnPropertyGridItemSelected(wxPropertyGridEvent& event)
 			m_currentSel->OnPropertySelected(it->second);
 		}
 	}
+}
+
+void ibObjectInspector::OnPropertyGridRightClick(wxPropertyGridEvent& event)
+{
+	// Workmate-parity hook: surface "Сгенерировать через AI" when the
+	// user right-clicks a synonym/comment/tooltip/title cell. Default
+	// wxPropertyGrid behaviour (description in the help box) is
+	// preserved for non-AI properties by calling event.Skip().
+	wxPGProperty* propPtr = event.GetProperty();
+	if (propPtr == nullptr || m_currentSel == nullptr) {
+		event.Skip();
+		return;
+	}
+
+	auto it = m_propMap.find(propPtr);
+	if (it == m_propMap.end()) {
+		// Composite/child properties — walk one level up like the
+		// selection handler does.
+		propPtr = propPtr->GetParent();
+		it = m_propMap.find(propPtr);
+	}
+
+	if (it == m_propMap.end()) { event.Skip(); return; }
+
+	ibProperty* prop = it->second;
+	if (prop == nullptr || !ibAIPropertyHelper::IsAIEligible(prop->GetName())) {
+		event.Skip();
+		return;
+	}
+
+	// Mark the property as the active one so subsequent edits in the
+	// helper land on the right cell, then pop the menu.
+	m_pg->SelectProperty(propPtr, false);
+	ibAIPropertyHelper::ShowContextMenu(m_pg->GetGrid(), m_pg,
+	                                     propPtr, prop, m_currentSel);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
