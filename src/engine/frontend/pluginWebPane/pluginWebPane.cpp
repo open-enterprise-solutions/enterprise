@@ -610,6 +610,37 @@ bool LooksLikeAgentCreationRequest(const wxString& text)
 	return false;
 }
 
+bool LooksLikeAgentCreationFollowup(const wxString& text)
+{
+	const wxString lower = text.Lower();
+	return lower.Find(wxT("создай"))    != wxNOT_FOUND ||
+	       lower.Find(wxT("создать"))   != wxNOT_FOUND ||
+	       lower.Find(wxT("створи"))    != wxNOT_FOUND ||
+	       lower.Find(wxT("створити"))  != wxNOT_FOUND ||
+	       lower.Find(wxT("згенеруй"))  != wxNOT_FOUND ||
+	       lower.Find(wxT("сгенерир"))  != wxNOT_FOUND ||
+	       lower.Find(wxT("примени"))   != wxNOT_FOUND ||
+	       lower.Find(wxT("застосуй"))  != wxNOT_FOUND;
+}
+
+bool ContainsMetadataCreationContext(const wxString& text)
+{
+	const wxString lower = text.Lower();
+	static const wxString kMetadataWords[] = {
+		wxT("справочник"), wxT("довідник"), wxT("каталог"), wxT("catalog"),
+		wxT("физлиц"),     wxT("фізичн"),   wxT("контрагент"),
+		wxT("документ"),   wxT("document"),
+		wxT("регистр"),    wxT("реєстр"),   wxT("register"),
+		wxT("отчет"),      wxT("звіт"),     wxT("report"),
+		wxT("перечислен"), wxT("enum"),
+		wxT("конфигурац"), wxT("конфігурац"), wxT("configuration"),
+	};
+	for (const auto& word : kMetadataWords) {
+		if (lower.Find(word) != wxNOT_FOUND) return true;
+	}
+	return false;
+}
+
 } // namespace
 
 ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
@@ -898,6 +929,20 @@ wxString ibPluginWebPane::BuildPinnedContextProbe(const wxString& prompt) const
 		probe += wxT("\n@") + token;
 	}
 	return probe;
+}
+
+bool ibPluginWebPane::HasRecentMetadataCreationContext() const
+{
+	int inspected = 0;
+	for (auto it = m_entries.rbegin(); it != m_entries.rend() && inspected < 8;
+	     ++it, ++inspected) {
+		if (it->role != Entry::Role::User &&
+		    it->role != Entry::Role::Assistant) {
+			continue;
+		}
+		if (ContainsMetadataCreationContext(it->markdown)) return true;
+	}
+	return false;
 }
 
 void ibPluginWebPane::OnPinContextClicked(wxCommandEvent& /*event*/)
@@ -2173,7 +2218,8 @@ bool ibPluginWebPane::TryDispatchSlashCommand(const wxString& text)
 	return true;
 }
 
-void ibPluginWebPane::DispatchAgentPrompt(const wxString& prompt)
+void ibPluginWebPane::DispatchAgentPrompt(const wxString& prompt,
+                                          const wxString& displayPrompt)
 {
 	if (prompt.IsEmpty()) return;
 	if (m_permissionModeValue == PermissionMode::ConfirmAll &&
@@ -2183,7 +2229,7 @@ void ibPluginWebPane::DispatchAgentPrompt(const wxString& prompt)
 
 	Entry e;
 	e.role     = Entry::Role::User;
-	e.markdown = prompt;
+	e.markdown = displayPrompt.IsEmpty() ? prompt : displayPrompt;
 	AppendEntry(std::move(e));
 
 	if (m_onMessage == nullptr) {
@@ -2238,6 +2284,30 @@ void ibPluginWebPane::DispatchUserPrompt(const wxString& prompt)
 	if (prompt.IsEmpty()) return;
 	if (LooksLikeAgentCreationRequest(prompt)) {
 		DispatchAgentPrompt(prompt);
+		return;
+	}
+	if (LooksLikeAgentCreationFollowup(prompt) &&
+	    HasRecentMetadataCreationContext()) {
+		std::vector<wxString> contextLines;
+		for (auto it = m_entries.rbegin();
+		     it != m_entries.rend() && contextLines.size() < 6; ++it) {
+			if (it->role != Entry::Role::User &&
+			    it->role != Entry::Role::Assistant) {
+				continue;
+			}
+			contextLines.push_back(
+			    (it->role == Entry::Role::User ? wxT("User: ")
+			                                   : wxT("Assistant: ")) +
+			    it->markdown);
+		}
+		wxString agentPrompt = wxT("Recent conversation context:\n");
+		for (auto it = contextLines.rbegin(); it != contextLines.rend(); ++it) {
+			agentPrompt += *it + wxT("\n\n");
+		}
+		agentPrompt += wxT("\nUser follow-up: ");
+		agentPrompt += prompt;
+		agentPrompt += wxT("\nCreate the metadata object(s) described above in OES Designer. Return an agent plan for approval.");
+		DispatchAgentPrompt(agentPrompt, prompt);
 		return;
 	}
 

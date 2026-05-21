@@ -7,7 +7,9 @@
 #include <wx/log.h>
 
 #include <cstdlib>
+#include <cctype>
 #include <string>
+#include <vector>
 
 #include "backend/plugin/metaBridge.h"
 #include "3rdparty/nlohmann/json.hpp"
@@ -31,6 +33,141 @@ static const nlohmann::json* UnwrapPayload(const nlohmann::json& root)
 		return &root["structuredContent"];
 	}
 	return &root;
+}
+
+static std::string LowerAscii(std::string s)
+{
+	for (char& ch : s) {
+		ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+	}
+	return s;
+}
+
+static std::string NormalizedKind(std::string kind)
+{
+	const std::string lower = LowerAscii(kind);
+	if (lower == "enum") return "Enumeration";
+	if (lower == "commonmodule") return "CommonModule";
+	if (lower == "commonform") return "CommonForm";
+	if (lower == "commontemplate") return "CommonTemplate";
+	if (lower == "dimension") return "Dimension";
+	if (lower == "resource") return "Resource";
+	if (kind.empty()) return kind;
+	kind[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(kind[0])));
+	return kind;
+}
+
+static std::string NormalizedOp(const nlohmann::json& m)
+{
+	std::string op = ibTemplateWizardPayload::StringField(
+	    m, "op", "operation", "action");
+	if (op.empty()) return "create";
+	op = LowerAscii(op);
+	if (op == "meta.create" || op == "createobject") return "create";
+	if (op == "meta.edit"   || op == "update")       return "edit";
+	if (op == "meta.delete" || op == "remove")       return "delete";
+	if (op == "insert") return "data-insert";
+	return op;
+}
+
+static bool IsConfigurationMutation(const std::string& kind,
+                                    const std::string& fullName)
+{
+	return LowerAscii(kind) == "configuration" ||
+	       LowerAscii(ibTemplateWizardPayload::InferKindFromFullName(fullName)) ==
+	           "configuration";
+}
+
+static void PushChildMutation(std::vector<nlohmann::json>& out,
+                              const std::string& parentFullName,
+                              const char* container,
+                              const char* kind,
+                              const nlohmann::json& item,
+                              const char* fallbackFormType = nullptr)
+{
+	if (!item.is_object() && !item.is_string()) return;
+	nlohmann::json props = nlohmann::json::object();
+	std::string name;
+	if (item.is_string()) {
+		name = item.get<std::string>();
+	} else {
+		name = ibTemplateWizardPayload::StringField(item, "name");
+		props = item;
+		if (fallbackFormType != nullptr && !props.contains("formType")) {
+			props["formType"] = fallbackFormType;
+		}
+		if (props.contains("kind") && !props.contains("formType") &&
+		    std::string(kind) == "Form" && props["kind"].is_string()) {
+			props["formType"] = props["kind"].get<std::string>();
+		}
+	}
+	if (name.empty()) return;
+	nlohmann::json child;
+	child["op"] = "create";
+	child["kind"] = kind;
+	child["fullName"] = parentFullName + "." + container + "." + name;
+	child["properties"] = props;
+	out.push_back(std::move(child));
+}
+
+static void ExpandTemplateMutation(const nlohmann::json& m,
+                                   std::vector<nlohmann::json>& out)
+{
+	if (!m.is_object()) return;
+	out.push_back(m);
+	const std::string op = NormalizedOp(m);
+	if (op != "create") return;
+	std::string fullName =
+	    ibTemplateWizardPayload::StringField(m, "fullName", "name", "path");
+	if (fullName.empty()) return;
+	const nlohmann::json* props = nullptr;
+	if (m.contains("properties")) props = &m["properties"];
+	else if (m.contains("props")) props = &m["props"];
+	else if (m.contains("definition")) props = &m["definition"];
+	if (props == nullptr || !props->is_object()) return;
+
+	if (props->contains("attributes") && (*props)["attributes"].is_array()) {
+		for (const auto& item : (*props)["attributes"]) {
+			PushChildMutation(out, fullName, "Attributes", "Attribute", item);
+		}
+	}
+	if (props->contains("dimensions") && (*props)["dimensions"].is_array()) {
+		for (const auto& item : (*props)["dimensions"]) {
+			PushChildMutation(out, fullName, "Dimensions", "Dimension", item);
+		}
+	}
+	if (props->contains("resources") && (*props)["resources"].is_array()) {
+		for (const auto& item : (*props)["resources"]) {
+			PushChildMutation(out, fullName, "Resources", "Resource", item);
+		}
+	}
+	if (props->contains("forms") && (*props)["forms"].is_array()) {
+		for (const auto& item : (*props)["forms"]) {
+			PushChildMutation(out, fullName, "Forms", "Form", item, "Form");
+		}
+	}
+	if (props->contains("tabularSections") &&
+	    (*props)["tabularSections"].is_array()) {
+		for (const auto& item : (*props)["tabularSections"]) {
+			PushChildMutation(out, fullName, "TabularSections",
+			                  "TabularSection", item);
+		}
+	}
+}
+
+static int CountDemoRows(const nlohmann::json& payload)
+{
+	if (!payload.contains("demoData") || !payload["demoData"].is_array()) {
+		return 0;
+	}
+	int total = 0;
+	for (const auto& di : payload["demoData"]) {
+		if (!di.is_object()) continue;
+		if (di.contains("rows") && di["rows"].is_array()) {
+			total += static_cast<int>(di["rows"].size());
+		}
+	}
+	return total;
 }
 
 ApplyResult Apply(const wxString& responseJson, bool includeData)
@@ -58,11 +195,16 @@ ApplyResult Apply(const wxString& responseJson, bool includeData)
 		return result;
 	}
 
+	std::vector<nlohmann::json> expanded;
+	for (const auto& m : *mutations) {
+		ExpandTemplateMutation(m, expanded);
+	}
+
 	// Walk mutations sequentially. Per spec we prefer partial-apply over
 	// all-or-nothing: each metaBridge mutation is individually undoable
 	// via Ctrl+Z, so a failure mid-walk leaves the user with a recoverable
 	// state.
-	for (const auto& m : *mutations) {
+	for (const auto& m : expanded) {
 		OpResult op;
 		if (!m.is_object()) {
 			op.op    = wxT("(skip)");
@@ -71,10 +213,7 @@ ApplyResult Apply(const wxString& responseJson, bool includeData)
 			++result.failureCount;
 			continue;
 		}
-		const std::string opField = ibTemplateWizardPayload::StringField(m, "op");
-		const std::string opStr = opField.empty()
-		                            ? std::string("create")
-		                            : opField;
+		const std::string opStr = NormalizedOp(m);
 		std::string fullName =
 		    ibTemplateWizardPayload::StringField(m, "fullName", "name", "path");
 		std::string kindStr =
@@ -82,6 +221,7 @@ ApplyResult Apply(const wxString& responseJson, bool includeData)
 		if (kindStr.empty()) {
 			kindStr = ibTemplateWizardPayload::InferKindFromFullName(fullName);
 		}
+		kindStr = NormalizedKind(kindStr);
 		const nlohmann::json* propsObj = nullptr;
 		if (m.contains("properties")) propsObj = &m["properties"];
 		else if (m.contains("props")) propsObj = &m["props"];
@@ -92,6 +232,14 @@ ApplyResult Apply(const wxString& responseJson, bool includeData)
 		op.op       = wxString::FromUTF8(opStr.c_str());
 		op.kind     = wxString::FromUTF8(kindStr.c_str());
 		op.fullName = wxString::FromUTF8(fullName.c_str());
+
+		if (IsConfigurationMutation(kindStr, fullName)) {
+			op.op = wxT("configure");
+			op.success = true;
+			++result.successCount;
+			result.ops.push_back(op);
+			continue;
+		}
 
 		char* err = nullptr;
 		int rc = -1;
@@ -131,49 +279,7 @@ ApplyResult Apply(const wxString& responseJson, bool includeData)
 		result.ops.push_back(op);
 	}
 
-	// Demo data — walk demoData[] when requested. Each row becomes a
-	// best-effort create inside the matching Catalog/Document. Provider
-	// shape is {kind, fullName, rows:[{...}], postAfterInsert?}. We emit
-	// one meta.create per row using fullName; provider-specific row-key
-	// disambiguation stays server-side.
-	if (includeData &&
-	    payload->contains("demoData") &&
-	    (*payload)["demoData"].is_array()) {
-		for (const auto& di : (*payload)["demoData"]) {
-			if (!di.is_object()) continue;
-			const std::string kind     = di.value("kind",     std::string());
-			const std::string fullName = di.value("fullName", std::string());
-			if (kind.empty() || fullName.empty()) continue;
-			if (!di.contains("rows") || !di["rows"].is_array()) continue;
-			for (const auto& row : di["rows"]) {
-				if (!row.is_object()) continue;
-				OpResult op;
-				op.op       = wxT("data-insert");
-				op.kind     = wxString::FromUTF8(kind.c_str());
-				op.fullName = wxString::FromUTF8(fullName.c_str());
-				const std::string props = row.dump();
-				char* err = nullptr;
-				const int rc = metaBridge::HostMetaCreate(
-				    s_kWizardPluginId,
-				    kind.c_str(),
-				    fullName.c_str(),
-				    props.c_str(),
-				    &err);
-				if (rc == 0) {
-					op.success = true;
-					++result.successCount;
-				} else {
-					op.success = false;
-					op.error = err != nullptr
-					    ? wxString::FromUTF8(err)
-					    : wxString::Format(wxT("rc=%d"), rc);
-					++result.failureCount;
-				}
-				if (err != nullptr) std::free(err);
-				result.ops.push_back(op);
-			}
-		}
-	}
+	if (includeData) result.skippedDataRows = CountDemoRows(*payload);
 
 	return result;
 }

@@ -8,6 +8,7 @@
 #include "templateWizardCustomize.h"
 #include "templateWizardApplier.h"
 #include "templateWizardHttp.h"
+#include "metaTree/treeConfiguration.h"
 
 #include <wx/simplebook.h>
 #include <wx/sizer.h>
@@ -985,8 +986,22 @@ void ibTemplateWizard::ApplyMutations()
 
 	wxString summary;
 	if (r.failureCount == 0) {
+		if (activeMetaData != nullptr) {
+			activeMetaData->Modify(true);
+			if (auto* tree = dynamic_cast<ibMetadataTree*>(
+			        activeMetaData->GetMetaTree())) {
+				tree->Load(activeMetaData);
+			}
+		}
 		summary = wxString::Format(
 		    _("Готово. Создано объектов: %d."), r.successCount);
+		if (r.skippedDataRows > 0) {
+			summary += wxString::Format(
+			    _("\n\nДемо-данные подготовлены (%d строк), но запись строк "
+			      "пока отключена: нужен отдельный API данных, MetaCreate "
+			      "создаёт только метаданные."),
+			    r.skippedDataRows);
+		}
 		wxMessageBox(summary, _("Template Wizard"),
 		              wxICON_INFORMATION, this);
 		EndModal(wxID_OK);
@@ -997,6 +1012,11 @@ void ibTemplateWizard::ApplyMutations()
 	summary = wxString::Format(
 	    _("Применено успешно: %d.\nОшибок: %d.\n\n"),
 	    r.successCount, r.failureCount);
+	if (r.skippedDataRows > 0) {
+		summary += wxString::Format(
+		    _("Демо-данные не записаны: %d строк ожидают отдельный API данных.\n\n"),
+		    r.skippedDataRows);
+	}
 	int shown = 0;
 	for (const auto& op : r.ops) {
 		if (op.success) continue;

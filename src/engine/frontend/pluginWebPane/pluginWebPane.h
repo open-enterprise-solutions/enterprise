@@ -280,6 +280,7 @@ private:
 	void OnClearPinnedContextClicked(wxCommandEvent& event);
 	void RefreshPinnedContextLabel();
 	wxString BuildPinnedContextProbe(const wxString& prompt) const;
+	bool HasRecentMetadataCreationContext() const;
 
 	// Slash-command autocomplete popup. Owned by the pane; created lazily
 	// the first time the user types '/'. Anchored below m_input and
@@ -363,7 +364,8 @@ private:
 
 	// Helper: send a chat.send envelope built from the input box contents.
 	void DispatchUserPrompt(const wxString& prompt);
-	void DispatchAgentPrompt(const wxString& prompt);
+	void DispatchAgentPrompt(const wxString& prompt,
+	                         const wxString& displayPrompt = wxString());
 
 	// Toggle the Send button label between "Отправить" and "Стоп" based
 	// on m_pending. Routed through one helper so every entry/exit point

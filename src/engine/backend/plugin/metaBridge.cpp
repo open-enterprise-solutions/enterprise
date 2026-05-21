@@ -56,7 +56,15 @@ const std::unordered_map<std::string, unsigned long long>& KindMap()
 		{ "constant",                   g_metaConstantCLSID                   },
 		{ "catalog",                    g_metaCatalogCLSID                    },
 		{ "document",                   g_metaDocumentCLSID                   },
+		{ "enum",                       g_metaEnumerationCLSID                },
 		{ "enumeration",                g_metaEnumerationCLSID                },
+		{ "commonmodule",               g_metaCommonModuleCLSID               },
+		{ "commonform",                 g_metaCommonFormCLSID                 },
+		{ "commontemplate",             g_metaCommonTemplateCLSID             },
+		{ "picture",                    g_metaPictureCLSID                    },
+		{ "interface",                  g_metaInterfaceCLSID                  },
+		{ "role",                       g_metaRoleCLSID                       },
+		{ "language",                   g_metaLanguageCLSID                   },
 		{ "dataprocessor",              g_metaDataProcessorCLSID              },
 		{ "report",                     g_metaReportCLSID                     },
 		{ "informationregister",        g_metaInformationRegisterCLSID        },
@@ -75,6 +83,8 @@ const std::unordered_map<std::string, unsigned long long>& KindMap()
 		{ "choiceform",                 g_metaFormCLSID                       },
 		{ "selectionform",              g_metaFormCLSID                       },
 		{ "attribute",                  g_metaAttributeCLSID                  },
+		{ "dimension",                  g_metaDimensionCLSID                  },
+		{ "resource",                   g_metaResourceCLSID                   },
 		{ "tabularsection",             g_metaTableCLSID                      },
 		{ "tabularsectionattribute",    g_metaAttributeCLSID                  },
 		{ "command",                    g_metaCommonModuleCLSID               },
@@ -219,6 +229,8 @@ unsigned long long ChildContainerCLSID(const std::string& container)
 	}();
 	if (c == "forms"            || c == "form")             return g_metaFormCLSID;
 	if (c == "attributes"       || c == "attribute")        return g_metaAttributeCLSID;
+	if (c == "dimensions"       || c == "dimension")        return g_metaDimensionCLSID;
+	if (c == "resources"        || c == "resource")         return g_metaResourceCLSID;
 	if (c == "tabularsections"  || c == "tabularsection" ||
 	    c == "tables"           || c == "table")            return g_metaTableCLSID;
 	if (c == "commands"         || c == "command")          return g_metaCommonModuleCLSID;
@@ -853,10 +865,19 @@ bool ApplyCreateProperties(ibValueMetaObject* obj,
 		const std::string& src = codeIt->get<std::string>();
 		const wxString srcW = wxString::FromUTF8(src);
 		// Honest compile-only validation: instantiate a throwaway
-		// compileCode and run Compile(source). Any failure trips the
-		// global compileError via ibTranslateCode — surface it.
+		// compileCode and run Compile(source). Template providers may send
+		// modules in the other supported syntax, so try the active mode
+		// first, then the alternate mode, and restore the global mode.
 		ibCompileCode probe;
-		if (!probe.Compile(srcW)) {
+		const short priorStyle = ibCompileCode::GetCodeStyle();
+		bool compileOk = probe.Compile(srcW);
+		if (!compileOk) {
+			ibCompileCode::SetCodeStyle(priorStyle == CODE_CES ? CODE_VES : CODE_CES);
+			ibCompileCode alternateProbe;
+			compileOk = alternateProbe.Compile(srcW);
+			ibCompileCode::SetCodeStyle(priorStyle);
+		}
+		if (!compileOk) {
 			errOut = "moduleCode compile failed (syntax error)";
 			return false;
 		}
