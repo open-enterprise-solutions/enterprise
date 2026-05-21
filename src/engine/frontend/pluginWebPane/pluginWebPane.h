@@ -196,6 +196,7 @@ private:
 	wxTextCtrl*      m_input      = nullptr;
 	wxButton*        m_sendBtn    = nullptr;
 	wxButton*        m_newChatBtn = nullptr;
+	wxButton*        m_voiceBtn   = nullptr;
 	wxChoice*        m_modelProfile = nullptr;
 	wxChoice*        m_permissionMode = nullptr;
 	wxStaticText*    m_statusBar  = nullptr;
@@ -256,6 +257,7 @@ private:
 
 	wxString CurrentModelProfileId() const;
 	wxString CurrentModelProfileLabel() const;
+	void OnVoiceClicked(wxCommandEvent& event);
 	void OnModelProfileChanged(wxCommandEvent& event);
 	void OnPermissionModeChanged(wxCommandEvent& event);
 	void ApplyPermissionModePolicy();

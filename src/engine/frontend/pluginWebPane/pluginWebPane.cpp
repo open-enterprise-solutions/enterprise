@@ -579,6 +579,9 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 	m_newChatBtn = new wxButton(this, wxID_ANY, _("Новый чат"));
 	btnRow->Add(m_newChatBtn, 0, wxALL, FromDIP(4));
 
+	m_voiceBtn = new wxButton(this, wxID_ANY, _("Голос"));
+	btnRow->Add(m_voiceBtn, 0, wxALL, FromDIP(4));
+
 	m_sendBtn = new wxButton(this, wxID_ANY, _("Отправить"));
 	btnRow->Add(m_sendBtn, 0, wxALL, FromDIP(4));
 	root->Add(btnRow, 0, wxEXPAND);
@@ -587,6 +590,7 @@ ibPluginWebPane::ibPluginWebPane(wxWindow* parent,
 
 	m_sendBtn   ->Bind(wxEVT_BUTTON, &ibPluginWebPane::OnSendClicked,    this);
 	m_newChatBtn->Bind(wxEVT_BUTTON, &ibPluginWebPane::OnNewChatClicked, this);
+	m_voiceBtn  ->Bind(wxEVT_BUTTON, &ibPluginWebPane::OnVoiceClicked,   this);
 	m_modelProfile->Bind(wxEVT_CHOICE,
 	                      &ibPluginWebPane::OnModelProfileChanged,
 	                      this);
@@ -741,6 +745,30 @@ void ibPluginWebPane::OnModelProfileChanged(wxCommandEvent& /*event*/)
 	if (m_statusBar) {
 		m_statusBar->SetLabel(_("Профиль: ") + CurrentModelProfileLabel());
 	}
+}
+
+void ibPluginWebPane::OnVoiceClicked(wxCommandEvent& /*event*/)
+{
+	if (m_input != nullptr) {
+		m_input->SetFocus();
+		m_input->SetInsertionPointEnd();
+	}
+#if defined(__WXOSX__)
+	if (m_statusBar) {
+		m_statusBar->SetLabel(
+		    _("Поле ввода активно. Запустите системную диктовку macOS."));
+	}
+#elif defined(__WXMSW__)
+	if (m_statusBar) {
+		m_statusBar->SetLabel(
+		    _("Поле ввода активно. Запустите диктовку Windows."));
+	}
+#else
+	if (m_statusBar) {
+		m_statusBar->SetLabel(
+		    _("Поле ввода активно. Запустите системную диктовку."));
+	}
+#endif
 }
 
 void ibPluginWebPane::OnPermissionModeChanged(wxCommandEvent& /*event*/)
