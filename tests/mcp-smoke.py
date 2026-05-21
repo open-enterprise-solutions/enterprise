@@ -169,6 +169,64 @@ def main() -> int:
         if not isinstance(env.get("content"), list) or not env["content"]:
             failures.append(f"sigma_check: malformed envelope (no content): {env}")
 
+    # 7) MCP spec 2025-06-18: tools/list MUST surface outputSchema for the
+    # three read-heavy tools (meta_query, list_objects, read_module). The
+    # other tools either return unstructured text or already document the
+    # shape in their description.
+    declared = {t["name"]: t for t in tools}
+    for required_name in ("meta_query", "list_objects", "read_module"):
+        td = declared.get(required_name)
+        if td is None:
+            continue  # already reported above
+        out_schema = td.get("outputSchema")
+        if not isinstance(out_schema, dict) or out_schema.get("type") != "object":
+            failures.append(f"{required_name}: missing/malformed outputSchema in tools/list")
+        elif "properties" not in out_schema:
+            failures.append(f"{required_name}: outputSchema has no properties")
+
+    # 8) tools/call meta_query, list_objects, read_module — when not an
+    # error envelope, MUST emit structuredContent matching the declared
+    # outputSchema (basic shape check: required keys present).
+    #
+    # In --no-config mode these tools return isError envelopes (no config
+    # loaded); the spec allows structuredContent to be omitted or carry an
+    # error-shaped object in that case. We only assert presence of the
+    # required keys when isError is false.
+    expected_required = {
+        "meta_query":   {"fullName", "kind"},
+        "list_objects": {"count", "objects"},
+        "read_module":  {"path", "kind", "source"},
+    }
+    probes = [
+        ("meta_query",   {"fullName": "Catalog.SmokeProbe"}),
+        ("list_objects", {}),
+        ("read_module",  {"fullName": "Catalog.SmokeProbe.ObjectModule"}),
+    ]
+    for idx, (tool_name, tool_args) in enumerate(probes, start=100):
+        send(proc, {
+            "jsonrpc": "2.0", "id": idx, "method": "tools/call",
+            "params": {"name": tool_name, "arguments": tool_args},
+        })
+        resp = recv(proc)
+        env = resp.get("result")
+        if not isinstance(env, dict):
+            failures.append(f"{tool_name}: no result envelope: {resp}")
+            continue
+        if env.get("isError"):
+            # Acceptable in --no-config mode or when the probe target
+            # doesn't exist. We don't enforce structuredContent shape on
+            # error envelopes — error shape is allowed to differ from the
+            # declared outputSchema per spec.
+            continue
+        sc = env.get("structuredContent")
+        if not isinstance(sc, dict):
+            failures.append(f"{tool_name}: success envelope missing structuredContent")
+            continue
+        missing = expected_required[tool_name] - set(sc.keys())
+        if missing:
+            failures.append(
+                f"{tool_name}: structuredContent missing required keys {missing}")
+
     proc.stdin.close()
     proc.wait(timeout=3)
 

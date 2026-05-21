@@ -64,6 +64,26 @@ nlohmann::json JsonResult(const nlohmann::json& payload)
 	return TextResult(payload.dump(2), false);
 }
 
+// MCP spec 2025-06-18: tools that declare an outputSchema emit
+// structuredContent inline (see ToolMetaQuery / ToolListObjects /
+// ToolReadModule below). Each tool builds the structured payload itself
+// because the text representation is a pretty-JSON dump of the same
+// fields — wrapping that in a helper would force two passes.
+
+// Error envelope with a minimal structuredContent.{error} shape — spec
+// allows the structured payload to deviate from outputSchema on isError
+// (the schema describes success), but emitting *something* keeps the
+// agent's branch on `result.structuredContent` exhaustive instead of
+// needing a "maybe missing" fallback.
+nlohmann::json StructuredError(const std::string& reason)
+{
+	nlohmann::json env = TextResult(reason, true);
+	nlohmann::json err = nlohmann::json::object();
+	err["error"] = reason;
+	env["structuredContent"] = std::move(err);
+	return env;
+}
+
 // Free a malloc'd buffer that metaBridge returned via its out-params.
 void FreeIfSet(char* p)
 {
@@ -102,16 +122,78 @@ bool ArgBool(const nlohmann::json& args, const char* key, bool def = false)
 	return it->get<bool>();
 }
 
+// Forward decls — bodies live next to the tools that introduced them
+// (read_module owns ResolveByPath; meta_query borrows it for the comment
+// + module enrichment pass).
+ibValueMetaObject* ResolveByPath(const std::string& fullName);
+
+// MCP: brute-force CLSID→kind label. We don't have a public exported
+// CLSIDToKindString, so we probe metaBridge's reverse map by string. The
+// candidate set covers every top-level + child kind the tools surface;
+// returns empty string when nothing matches.
+const char* CLSIDToKindLabel(unsigned long long cls)
+{
+	static const char* kCandidates[] = {
+		// Top-level business objects
+		"Catalog", "Document", "Enumeration", "Constant",
+		"InformationRegister", "AccumulationRegister",
+		"DataProcessor", "ExternalDataProcessor",
+		"Report", "ExternalReport",
+		"ChartOfCharacteristicTypes", "ChartOfAccounts",
+		"AccountingRegister",
+		// Child kinds the agent walks into
+		"Attribute", "TabularSection", "Form", "Command",
+		"Module", "CommonModule", "ManagerModule",
+		nullptr
+	};
+	for (const char* const* p = kCandidates; *p; ++p) {
+		if (metaBridge::KindStringToCLSID(*p) == cls) return *p;
+	}
+	return "";
+}
+
 // =========================================================================
 // Tool: meta_query
 // =========================================================================
+
+// MCP: locale-keyed synonym map. metaBridge only surfaces a single string
+// today; we emit it under the empty-string key as a "default locale"
+// placeholder so the schema's locale→label shape stays honest. When a
+// multi-locale property model lands the caller can swap to BCP-47 keys
+// without breaking consumers.
+nlohmann::json SynonymMap(const std::string& syn)
+{
+	nlohmann::json m = nlohmann::json::object();
+	if (!syn.empty()) m[""] = syn;
+	return m;
+}
+
+// MCP: build the attribute-shape JSON object matching outputSchema's
+// `attributes[]` items. type/length/precision aren't exposed via the
+// shallow metaBridge serialiser yet — emit them only when we can pull
+// them off the live metaObject. For Phase 3.1 that means "name + synonym",
+// type qualifiers wait on a future metaBridge surface.
+nlohmann::json BuildAttributeEntry(const ibValueMetaObject* attr)
+{
+	nlohmann::json a;
+	a["name"]    = std::string(attr->GetName().utf8_str());
+	a["type"]    = "";  // placeholder — type qualifier surface not exported yet
+	a["synonym"] = SynonymMap(std::string(attr->GetSynonym().utf8_str()));
+	return a;
+}
+
 nlohmann::json ToolMetaQuery(const nlohmann::json& args)
 {
 	if (auto fail = RequireConfig(); fail) return *fail;
 	const std::string fullName = ArgString(args, "fullName");
 	if (fullName.empty()) {
-		return TextResult("meta_query: 'fullName' is required (e.g. 'Catalog.Contractors')", true);
+		return StructuredError("meta_query: 'fullName' is required "
+		                         "(e.g. 'Catalog.Contractors')");
 	}
+
+	// First pass — let metaBridge resolve the object and produce the
+	// existing JSON payload (we keep emitting it inside `content` for
+	// back-compat with clients that don't read structuredContent yet).
 	char* jsonOut = nullptr;
 	char* errMsg  = nullptr;
 	const int rc = metaBridge::HostMetaQuery(fullName.c_str(), nullptr, &jsonOut, &errMsg);
@@ -119,15 +201,127 @@ nlohmann::json ToolMetaQuery(const nlohmann::json& args)
 		std::string msg = "meta_query failed";
 		if (errMsg != nullptr) { msg += ": "; msg += errMsg; }
 		FreeIfSet(errMsg); FreeIfSet(jsonOut);
-		return TextResult(msg, true);
+		return StructuredError(msg);
 	}
 	std::string payload = (jsonOut != nullptr) ? std::string(jsonOut) : std::string("{}");
 	FreeIfSet(jsonOut); FreeIfSet(errMsg);
-	// MCP: pretty-print the JSON so Claude Code's text-content renderer
-	// surfaces it readably. The raw payload is single-line dump.
+
+	// Second pass — walk the live node to enrich. metaBridge's flat
+	// `children` array bundles every kind together; we split it into the
+	// typed buckets outputSchema declares (attributes, tabularSections,
+	// forms, commands, modules) without re-querying.
+	nlohmann::json structured;
+	structured["fullName"] = fullName;
+
+	ibValueMetaObject* node = ResolveByPath(fullName);
+	std::string kindLabel;
+	std::string synonymStr;
+	std::string commentStr;
+	if (node != nullptr) {
+		kindLabel  = CLSIDToKindLabel(static_cast<unsigned long long>(node->GetClassType()));
+		synonymStr = std::string(node->GetSynonym().utf8_str());
+		commentStr = std::string(node->GetComment().utf8_str());
+	}
+
+	// Fall back to metaBridge's payload fields when ResolveByPath fails
+	// (e.g. fullName mapped through a kind alias the path-resolver doesn't
+	// recognise) — keeps the structured envelope filled in.
 	auto parsed = nlohmann::json::parse(payload, nullptr, false);
-	if (parsed.is_discarded()) return TextResult(payload, false);
-	return JsonResult(parsed);
+	if (parsed.is_object()) {
+		if (kindLabel.empty() && parsed.contains("kind") && parsed["kind"].is_string()) {
+			kindLabel = parsed["kind"].get<std::string>();
+		}
+		if (synonymStr.empty() && parsed.contains("synonym") && parsed["synonym"].is_string()) {
+			synonymStr = parsed["synonym"].get<std::string>();
+		}
+	}
+
+	structured["kind"]    = kindLabel;
+	structured["synonym"] = SynonymMap(synonymStr);
+	structured["comment"] = commentStr;
+
+	nlohmann::json attributes      = nlohmann::json::array();
+	nlohmann::json tabularSections = nlohmann::json::array();
+	nlohmann::json forms           = nlohmann::json::array();
+	nlohmann::json commands        = nlohmann::json::array();
+	nlohmann::json modules         = nlohmann::json::array();
+
+	if (node != nullptr) {
+		const std::vector<ibValueMetaObject*> all = node->GetAnyArrayObject<>();
+		for (const ibValueMetaObject* child : all) {
+			if (child == nullptr) continue;
+			const unsigned long long cls = static_cast<unsigned long long>(child->GetClassType());
+			const std::string childLabel = CLSIDToKindLabel(cls);
+
+			// Bucket assignment — string-compare on the resolved kind label
+			// keeps the routing readable and survives any CLSID renumbering.
+			if (childLabel == "Attribute") {
+				attributes.push_back(BuildAttributeEntry(child));
+				continue;
+			}
+			if (childLabel == "TabularSection") {
+				nlohmann::json ts;
+				ts["name"]    = std::string(child->GetName().utf8_str());
+				ts["synonym"] = SynonymMap(std::string(child->GetSynonym().utf8_str()));
+				nlohmann::json tsAttrs = nlohmann::json::array();
+				const std::vector<ibValueMetaObject*> tsKids = child->GetAnyArrayObject<>();
+				for (const ibValueMetaObject* grand : tsKids) {
+					if (grand == nullptr) continue;
+					if (CLSIDToKindLabel(static_cast<unsigned long long>(grand->GetClassType()))
+					    != std::string("Attribute")) continue;
+					tsAttrs.push_back(BuildAttributeEntry(grand));
+				}
+				ts["attributes"] = std::move(tsAttrs);
+				tabularSections.push_back(std::move(ts));
+				continue;
+			}
+			if (childLabel == "Form") {
+				nlohmann::json f;
+				f["name"] = std::string(child->GetName().utf8_str());
+				f["kind"] = childLabel;
+				forms.push_back(std::move(f));
+				continue;
+			}
+			if (childLabel == "Command") {
+				nlohmann::json c;
+				c["name"] = std::string(child->GetName().utf8_str());
+				commands.push_back(std::move(c));
+				continue;
+			}
+			// Module / CommonModule / ManagerModule — anything that derives
+			// from ibValueMetaObjectModuleBase is a module the agent might
+			// want to read via read_module.
+			if (dynamic_cast<const ibValueMetaObjectModuleBase*>(child) != nullptr) {
+				nlohmann::json m;
+				// Translate the OES kind label into the schema's enum:
+				//   Module        → ObjectModule (per-instance object code)
+				//   ManagerModule → ManagerModule
+				//   CommonModule  → ObjectModule (closest fit — common modules
+				//                   carry per-object code without a manager)
+				// Anything else falls back to CommonModule which is the
+				// safest "shared code" bucket.
+				if (childLabel == "Module")              m["kind"] = "ObjectModule";
+				else if (childLabel == "ManagerModule")  m["kind"] = "ManagerModule";
+				else if (childLabel == "CommonModule")   m["kind"] = "ObjectModule";
+				else                                      m["kind"] = "ObjectModule";
+				modules.push_back(std::move(m));
+				continue;
+			}
+		}
+	}
+
+	structured["attributes"]      = std::move(attributes);
+	structured["tabularSections"] = std::move(tabularSections);
+	structured["forms"]           = std::move(forms);
+	structured["commands"]        = std::move(commands);
+	structured["modules"]         = std::move(modules);
+
+	// Text content keeps the existing pretty-printed JSON payload so any
+	// client that still reads `content[].text` doesn't regress.
+	const std::string textBody = parsed.is_discarded() ? payload : parsed.dump(2);
+	nlohmann::json env = TextResult(textBody, false);
+	env["structuredContent"] = std::move(structured);
+	return env;
 }
 
 // =========================================================================
@@ -243,17 +437,29 @@ nlohmann::json ToolListObjects(const nlohmann::json& args)
 	if (auto fail = RequireConfig(); fail) return *fail;
 
 	const std::string kindFilter = ArgString(args, "kind");
+	const std::string namePattern = ArgString(args, "namePattern");
 	const unsigned long long clsidFilter = kindFilter.empty()
 		? 0ull
 		: metaBridge::KindStringToCLSID(kindFilter.c_str());
 	if (!kindFilter.empty() && clsidFilter == 0ull) {
-		return TextResult("list_objects: unknown kind '" + kindFilter + "'", true);
+		return StructuredError("list_objects: unknown kind '" + kindFilter + "'");
 	}
 
 	ibMetaDataConfigurationBase* mc = activeMetaData;
-	if (mc == nullptr) return TextResult("list_objects: no configuration", true);
+	if (mc == nullptr) return StructuredError("list_objects: no configuration");
 	ibValueMetaObject* root = mc->GetCommonMetaObject();
-	if (root == nullptr) return TextResult("list_objects: configuration has no root", true);
+	if (root == nullptr) return StructuredError("list_objects: configuration has no root");
+
+	// MCP: optional namePattern — ECMAScript regex against the object name.
+	// Bad pattern → error envelope; empty pattern means "match all".
+	std::optional<std::regex> namRx;
+	if (!namePattern.empty()) {
+		try {
+			namRx.emplace(namePattern, std::regex::ECMAScript | std::regex::icase);
+		} catch (const std::regex_error& e) {
+			return StructuredError(std::string("list_objects: invalid namePattern: ") + e.what());
+		}
+	}
 
 	nlohmann::json objects = nlohmann::json::array();
 	const std::vector<ibValueMetaObject*> all = root->GetAnyArrayObject<>();
@@ -261,39 +467,40 @@ nlohmann::json ToolListObjects(const nlohmann::json& args)
 		if (obj == nullptr) continue;
 		const ibClassID cls = obj->GetClassType();
 		if (clsidFilter != 0ull && static_cast<unsigned long long>(cls) != clsidFilter) continue;
+		const std::string name = std::string(obj->GetName().utf8_str());
+		if (namRx && !std::regex_search(name, *namRx)) continue;
+
+		// MCP: outputSchema requires fullName+kind on each entry; skip rows
+		// where we can't resolve the kind label (would produce a partial
+		// row that fails schema validation downstream).
+		const char* kindLabel = CLSIDToKindLabel(static_cast<unsigned long long>(cls));
+		if (kindLabel == nullptr || *kindLabel == '\0') continue;
+
 		nlohmann::json item;
-		item["name"]    = std::string(obj->GetName().utf8_str());
-		item["synonym"] = std::string(obj->GetSynonym().utf8_str());
-		// Reuse metaBridge's display-case kind label so the JSON output
-		// is consistent across tools (Catalog, not catalog).
-		// MCP: brute-force CLSID→string by trying every known kind — we
-		// don't have a public CLSIDToKindString export. There are ~11
-		// top-level kinds so this stays O(1) per row.
-		const char* candidates[] = {
-			"Catalog", "Document", "Enumeration", "Constant",
-			"InformationRegister", "AccumulationRegister",
-			"DataProcessor", "Report",
-			"ChartOfCharacteristicTypes", "ChartOfAccounts",
-			"AccountingRegister",
-			nullptr
-		};
-		for (const char* const* p = candidates; *p; ++p) {
-			if (metaBridge::KindStringToCLSID(*p) == static_cast<unsigned long long>(cls)) {
-				item["kind"] = std::string(*p);
-				break;
-			}
-		}
-		// Best-effort fullName — only emitted when we recognise the kind.
-		if (item.contains("kind")) {
-			item["fullName"] = item["kind"].get<std::string>() + "." +
-			                    item["name"].get<std::string>();
-		}
-		objects.push_back(item);
+		item["fullName"] = std::string(kindLabel) + "." + name;
+		item["kind"]     = kindLabel;
+		// outputSchema declares synonym as a single string (primary locale
+		// label) — keep it flat here. meta_query, which surfaces the full
+		// per-locale map, is the place for the richer shape.
+		item["synonym"]  = std::string(obj->GetSynonym().utf8_str());
+		objects.push_back(std::move(item));
 	}
-	nlohmann::json out;
-	out["count"]   = objects.size();
-	out["objects"] = std::move(objects);
-	return JsonResult(out);
+
+	nlohmann::json filter = nlohmann::json::object();
+	if (!kindFilter.empty())   filter["kind"]        = kindFilter;
+	if (!namePattern.empty())  filter["namePattern"] = namePattern;
+
+	nlohmann::json structured;
+	structured["count"]   = objects.size();
+	structured["filter"]  = std::move(filter);
+	structured["objects"] = std::move(objects);
+
+	// Preserve the existing text rendering — pretty JSON of the same shape
+	// is what existing tests/clients expect inside content[0].text.
+	const std::string textBody = structured.dump(2);
+	nlohmann::json env = TextResult(textBody, false);
+	env["structuredContent"] = std::move(structured);
+	return env;
 }
 
 // =========================================================================
@@ -348,21 +555,63 @@ nlohmann::json ToolReadModule(const nlohmann::json& args)
 	if (auto fail = RequireConfig(); fail) return *fail;
 	const std::string fullName = ArgString(args, "fullName");
 	if (fullName.empty()) {
-		return TextResult("read_module: 'fullName' is required (e.g. 'Catalog.X.ObjectModule')", true);
+		return StructuredError("read_module: 'fullName' is required "
+		                         "(e.g. 'Catalog.X.ObjectModule')");
 	}
 	ibValueMetaObject* node = ResolveByPath(fullName);
 	if (node == nullptr) {
-		return TextResult("read_module: path not found '" + fullName + "'", true);
+		return StructuredError("read_module: path not found '" + fullName + "'");
 	}
 	auto* mod = dynamic_cast<ibValueMetaObjectModuleBase*>(node);
 	if (mod == nullptr) {
-		return TextResult("read_module: '" + fullName +
-		                    "' is not a module object", true);
+		return StructuredError("read_module: '" + fullName +
+		                         "' is not a module object");
 	}
-	nlohmann::json out;
-	out["fullName"] = fullName;
-	out["source"]   = std::string(mod->GetModuleText().utf8_str());
-	return JsonResult(out);
+
+	const std::string source = std::string(mod->GetModuleText().utf8_str());
+
+	// Map the OES module CLSID to the schema's enum. CommonModule lives
+	// at top level (not nested under a Catalog/Document), so we treat it
+	// as an ObjectModule for the schema — the path itself disambiguates
+	// the location, the enum just classifies the *kind* of source.
+	const std::string kindLabel = CLSIDToKindLabel(
+		static_cast<unsigned long long>(node->GetClassType()));
+	std::string schemaKind = "ObjectModule";
+	if      (kindLabel == "ManagerModule") schemaKind = "ManagerModule";
+	else if (kindLabel == "Form")          schemaKind = "FormModule";
+	else if (kindLabel == "Command")       schemaKind = "CommandModule";
+	// Default ("ObjectModule") covers Module + CommonModule.
+
+	// Line count — count '\n' + 1 for the last (potentially unterminated)
+	// line. Empty source yields 0.
+	unsigned long long lineCount = 0;
+	if (!source.empty()) {
+		lineCount = 1;
+		for (char c : source) if (c == '\n') ++lineCount;
+	}
+
+	nlohmann::json structured;
+	structured["path"]       = fullName;
+	structured["kind"]       = schemaKind;
+	// MCP: syntaxMode is a process-global compiler setting (see
+	// docs/lambda.md). Modules don't carry their own mode flag yet, so we
+	// surface the current global as the best-available signal — callers
+	// that need per-module syntax can override via compile_check's own
+	// syntaxMode arg.
+	structured["syntaxMode"] = (ibCompileCode::GetCodeStyle() == CODE_VES)
+		? std::string("ves") : std::string("ces");
+	structured["source"]     = source;
+	structured["lineCount"]  = lineCount;
+	structured["byteSize"]   = static_cast<unsigned long long>(source.size());
+
+	// Text content: keep the existing pretty-JSON rendering of the same
+	// payload so the old contract (json-in-text) keeps working.
+	nlohmann::json textPayload;
+	textPayload["fullName"] = fullName;
+	textPayload["source"]   = source;
+	nlohmann::json env = TextResult(textPayload.dump(2), false);
+	env["structuredContent"] = std::move(structured);
+	return env;
 }
 
 // =========================================================================
@@ -1029,17 +1278,82 @@ const std::vector<ToolEntry>& BuildRegistry()
 		return a;
 	};
 
-	table.push_back({
-		{ "meta_query",
-		  "Read an OES metadata object's structure as JSON. fullName is "
-		  "'<Kind>.<Name>' (e.g. 'Catalog.Контрагенты').",
-		  schemaObj({
-		    { "fullName", str("Object full name, e.g. 'Catalog.Контрагенты'") },
-		  }, { "fullName" }),
-		  ann(true, false, true, false)
-		},
-		&ToolMetaQuery
-	});
+	{
+		// MCP spec 2025-06-18: outputSchema for meta_query. Declares the
+		// shape of structuredContent on success — attributes/tabularSections/
+		// forms/commands/modules are typed buckets the agent can index into
+		// without parsing the text payload.
+		nlohmann::json attrItem;
+		attrItem["type"]       = "object";
+		attrItem["properties"] = nlohmann::json::object();
+		attrItem["properties"]["name"]      = nlohmann::json{ {"type","string"} };
+		attrItem["properties"]["type"]      = nlohmann::json{ {"type","string"} };
+		attrItem["properties"]["length"]    = nlohmann::json{ {"type","integer"} };
+		attrItem["properties"]["precision"] = nlohmann::json{ {"type","integer"} };
+		attrItem["properties"]["synonym"]   = nlohmann::json{ {"type","object"} };
+		attrItem["required"]   = nlohmann::json::array({ "name", "type" });
+
+		nlohmann::json tsItem;
+		tsItem["type"]       = "object";
+		tsItem["properties"] = nlohmann::json::object();
+		tsItem["properties"]["name"]       = nlohmann::json{ {"type","string"} };
+		tsItem["properties"]["synonym"]    = nlohmann::json{ {"type","object"} };
+		tsItem["properties"]["attributes"] = nlohmann::json{ {"type","array"}, {"items", attrItem} };
+
+		nlohmann::json formItem;
+		formItem["type"]       = "object";
+		formItem["properties"] = nlohmann::json::object();
+		formItem["properties"]["name"] = nlohmann::json{ {"type","string"} };
+		formItem["properties"]["kind"] = nlohmann::json{ {"type","string"} };
+
+		nlohmann::json cmdItem;
+		cmdItem["type"]       = "object";
+		cmdItem["properties"] = nlohmann::json::object();
+		cmdItem["properties"]["name"] = nlohmann::json{ {"type","string"} };
+
+		nlohmann::json modItem;
+		modItem["type"]       = "object";
+		modItem["properties"] = nlohmann::json::object();
+		modItem["properties"]["kind"] = nlohmann::json{
+			{"type","string"},
+			{"enum", nlohmann::json::array({"ObjectModule","ManagerModule","FormModule","CommandModule"})}
+		};
+
+		nlohmann::json synonymProp;
+		synonymProp["type"]                 = "object";
+		synonymProp["additionalProperties"] = nlohmann::json{ {"type","string"} };
+		synonymProp["description"]          = "Locale -> label map";
+
+		nlohmann::json outMQ;
+		outMQ["type"]       = "object";
+		outMQ["properties"] = nlohmann::json::object();
+		outMQ["properties"]["fullName"]        = nlohmann::json{ {"type","string"} };
+		outMQ["properties"]["kind"]            = nlohmann::json{ {"type","string"}, {"description","Catalog/Document/InformationRegister/etc"} };
+		outMQ["properties"]["synonym"]         = synonymProp;
+		outMQ["properties"]["comment"]         = nlohmann::json{ {"type","string"} };
+		outMQ["properties"]["attributes"]      = nlohmann::json{ {"type","array"}, {"items", attrItem} };
+		outMQ["properties"]["tabularSections"] = nlohmann::json{ {"type","array"}, {"items", tsItem} };
+		outMQ["properties"]["forms"]           = nlohmann::json{ {"type","array"}, {"items", formItem} };
+		outMQ["properties"]["commands"]        = nlohmann::json{ {"type","array"}, {"items", cmdItem} };
+		outMQ["properties"]["modules"]         = nlohmann::json{ {"type","array"}, {"items", modItem} };
+		outMQ["required"]   = nlohmann::json::array({ "fullName", "kind" });
+
+		table.push_back({
+			{ "meta_query",
+			  "Read an OES metadata object's structure as JSON. fullName is "
+			  "'<Kind>.<Name>' (e.g. 'Catalog.Контрагенты'). Returns "
+			  "structuredContent with typed buckets for attributes, "
+			  "tabularSections, forms, commands, modules — no text parsing "
+			  "needed.",
+			  schemaObj({
+			    { "fullName", str("Object full name, e.g. 'Catalog.Контрагенты'") },
+			  }, { "fullName" }),
+			  ann(true, false, true, false),
+			  std::move(outMQ)
+			},
+			&ToolMetaQuery
+		});
+	}
 	table.push_back({
 		{ "meta_create",
 		  "Create a new OES metadata object or child (Catalog, Document, "
@@ -1086,29 +1400,87 @@ const std::vector<ToolEntry>& BuildRegistry()
 		},
 		&ToolMetaDelete
 	});
-	table.push_back({
-		{ "list_objects",
-		  "Enumerate top-level metadata objects. Filter by kind to scope the "
-		  "result (Catalog / Document / ...). Empty kind returns all.",
-		  schemaObj({
-		    { "kind", str("Optional kind filter (Catalog, Document, ...). Empty = all.") },
-		  }, {}),
-		  ann(true, false, true, false)
-		},
-		&ToolListObjects
-	});
-	table.push_back({
-		{ "read_module",
-		  "Read the CES/VES source of an object/manager/common/form module. "
-		  "fullName is the dotted path, e.g. 'Catalog.X.ObjectModule' or "
-		  "'CommonModules.Y'.",
-		  schemaObj({
-		    { "fullName", str("Dotted module path") },
-		  }, { "fullName" }),
-		  ann(true, false, true, false)
-		},
-		&ToolReadModule
-	});
+	{
+		// outputSchema for list_objects — count + filter + objects[].
+		nlohmann::json objItem;
+		objItem["type"]       = "object";
+		objItem["properties"] = nlohmann::json::object();
+		objItem["properties"]["fullName"] = nlohmann::json{ {"type","string"} };
+		objItem["properties"]["kind"]     = nlohmann::json{ {"type","string"} };
+		objItem["properties"]["synonym"]  = nlohmann::json{ {"type","string"}, {"description","Primary locale label"} };
+		objItem["required"]   = nlohmann::json::array({ "fullName", "kind" });
+
+		nlohmann::json filterProp;
+		filterProp["type"]       = "object";
+		filterProp["properties"] = nlohmann::json::object();
+		filterProp["properties"]["kind"]        = nlohmann::json{ {"type","string"} };
+		filterProp["properties"]["namePattern"] = nlohmann::json{ {"type","string"} };
+
+		nlohmann::json outLO;
+		outLO["type"]       = "object";
+		outLO["properties"] = nlohmann::json::object();
+		outLO["properties"]["count"]   = nlohmann::json{ {"type","integer"} };
+		outLO["properties"]["filter"]  = std::move(filterProp);
+		outLO["properties"]["objects"] = nlohmann::json{ {"type","array"}, {"items", objItem} };
+		outLO["required"]   = nlohmann::json::array({ "count", "objects" });
+
+		table.push_back({
+			{ "list_objects",
+			  "Enumerate top-level metadata objects. Filter by kind to scope the "
+			  "result (Catalog / Document / ...). Optional namePattern is an "
+			  "ECMAScript regex against the object name. Empty filters return all.",
+			  schemaObj({
+			    { "kind",        str("Optional kind filter (Catalog, Document, ...). Empty = all.") },
+			    { "namePattern", str("Optional ECMAScript regex against object name (case-insensitive)") },
+			  }, {}),
+			  ann(true, false, true, false),
+			  std::move(outLO)
+			},
+			&ToolListObjects
+		});
+	}
+	{
+		// outputSchema for read_module — path/kind/syntaxMode/source +
+		// derived line/byte counts so the agent can decide whether to chunk
+		// the read without re-fetching.
+		nlohmann::json outRM;
+		outRM["type"]       = "object";
+		outRM["properties"] = nlohmann::json::object();
+		outRM["properties"]["path"]       = nlohmann::json{
+			{"type","string"},
+			{"description","Resolved metadata path, e.g. Catalog.X.ObjectModule"}
+		};
+		outRM["properties"]["kind"]       = nlohmann::json{
+			{"type","string"},
+			{"enum", nlohmann::json::array({"ObjectModule","ManagerModule","FormModule","CommandModule"})}
+		};
+		outRM["properties"]["syntaxMode"] = nlohmann::json{
+			{"type","string"},
+			{"enum", nlohmann::json::array({"ces","ves"})}
+		};
+		outRM["properties"]["source"]     = nlohmann::json{
+			{"type","string"},
+			{"description","Full module source text"}
+		};
+		outRM["properties"]["lineCount"]  = nlohmann::json{ {"type","integer"} };
+		outRM["properties"]["byteSize"]   = nlohmann::json{ {"type","integer"} };
+		outRM["required"]   = nlohmann::json::array({ "path", "kind", "source" });
+
+		table.push_back({
+			{ "read_module",
+			  "Read the CES/VES source of an object/manager/common/form module. "
+			  "fullName is the dotted path, e.g. 'Catalog.X.ObjectModule' or "
+			  "'CommonModules.Y'. Returns structuredContent with path, kind, "
+			  "syntaxMode, source, lineCount, byteSize.",
+			  schemaObj({
+			    { "fullName", str("Dotted module path") },
+			  }, { "fullName" }),
+			  ann(true, false, true, false),
+			  std::move(outRM)
+			},
+			&ToolReadModule
+		});
+	}
 	table.push_back({
 		{ "write_module",
 		  "Replace the source of a module object. Pair with compile_check / "

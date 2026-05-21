@@ -33,11 +33,20 @@ struct ToolAnnotations {
 };
 
 // Static descriptor — what `tools/list` ships back to the client.
+// MCP spec 2025-06-18: outputSchema (optional) declares the shape of
+// `structuredContent` the tool returns on success. When non-null the
+// `tools/list` handler emits it alongside `inputSchema`; consumers can
+// then validate `structuredContent` against it without parsing text.
+//
+// outputSchema sits AFTER annotations on purpose: existing 4-field
+// aggregate inits stay valid (trailing members value-initialise to null),
+// so tools that don't declare a structured shape just omit it.
 struct ToolDescriptor {
 	std::string     name;
 	std::string     description;
 	nlohmann::json  inputSchema;   // JSON Schema object
 	ToolAnnotations annotations;   // MCP 2025-06-18 hint block
+	nlohmann::json  outputSchema;  // JSON Schema object — null when not declared
 };
 
 // Concrete tool entry: a descriptor + the dispatch fn that takes the

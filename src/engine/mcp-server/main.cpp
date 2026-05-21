@@ -183,6 +183,12 @@ int main(int argc, char** argv)
 			item["name"]        = t.desc.name;
 			item["description"] = t.desc.description;
 			item["inputSchema"] = t.desc.inputSchema;
+			// MCP spec 2025-06-18: outputSchema is optional. Emit only when
+			// the tool actually declares one — omitting is the spec-correct
+			// signal that the tool returns unstructured content only.
+			if (!t.desc.outputSchema.is_null()) {
+				item["outputSchema"] = t.desc.outputSchema;
+			}
 			// MCP spec 2025-06-18: behaviour hints. All four always emitted
 			// so clients never have to guess defaults.
 			nlohmann::json ann;
