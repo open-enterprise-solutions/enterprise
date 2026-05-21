@@ -63,7 +63,7 @@ bool ibByteCodeCache::Save(const ibByteCode& bc)
 	return true;
 }
 
-bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId)
+bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const ibGuid* expectedVersion)
 {
 	if (db_query == nullptr) return false;
 	if (!db_query->TableExists(bytecode_cache_table)) return false;
@@ -72,7 +72,7 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId)
 
 	ibStatementGuard sel(db_query,
 		db_query->PrepareStatement(
-			wxT("SELECT bc_blob FROM %s WHERE descriptor_id = ?;"),
+			wxT("SELECT bytecode_version, bc_blob FROM %s WHERE descriptor_id = ?;"),
 			bytecode_cache_table));
 	if (!sel) return false;
 	sel->SetParamString(1, wxString(descId));
@@ -84,11 +84,21 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId)
 
 	bool ok = false;
 	if (rs->Next()) {
+		const wxString rowVersion = rs->GetResultString(1);
+		if (expectedVersion != nullptr &&
+		    ibGuid(rowVersion) != *expectedVersion) {
+			sel->CloseResultSet(rs);
+			return false;
+		}
 		wxMemoryBuffer blob;
-		rs->GetResultBlob(1, blob);
+		rs->GetResultBlob(2, blob);
 		if (blob.GetDataLen() > 0) {
 			ibReaderMemory reader(blob);
 			ok = outBc.DeserializeAOT(reader);
+			if (ok && expectedVersion != nullptr &&
+			    outBc.m_version != *expectedVersion) {
+				ok = false;
+			}
 		}
 	}
 	sel->CloseResultSet(rs);

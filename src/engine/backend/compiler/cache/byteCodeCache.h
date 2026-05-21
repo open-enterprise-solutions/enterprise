@@ -43,7 +43,7 @@ public:
 	//   false — no row, or DeserializeAOT rejected the blob (magic /
 	//           format-version mismatch). Caller treats as miss and
 	//           recompiles from source.
-	static bool Load(ibByteCode& outBc, const ibGuid& descId);
+	static bool Load(ibByteCode& outBc, const ibGuid& descId, const ibGuid* expectedVersion = nullptr);
 
 	// DELETE the cache row for one descriptor. Used by Designer's
 	// OnSaveMetaObject / OnDeleteMetaObject hooks to keep the cache

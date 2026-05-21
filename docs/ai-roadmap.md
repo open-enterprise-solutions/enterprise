@@ -111,7 +111,7 @@ Conkurent analysis (mcp-1c free tier 9 tools, Go binary, BM25 + BSL synonyms, au
 - [x] **done** t5-001: Threaded dispatch fast path in `ibProcUnit::Execute` — GCC/Clang computed-goto dispatch now covers hot arithmetic/copy/compare opcodes and typed-delta value ops, while control-flow opcodes stay on the existing switch fallback.
 - [x] **done** t5-002: Inline caches on `OPER_CALL_METHOD` and attribute dispatch — per-Execute monomorphic caches resolve method/prop indexes once per instruction pointer and target class, without mutating bytecode or AOT format.
 - [x] **done** t5-003: Adaptive numeric specialization for generic arithmetic/compare opcodes — hot numeric pairs specialize after repeated hits and deopt back to generic helpers when operand types change.
-- [ ] **pending** t5-004: AOT bytecode cache hash-keyed invalidation, file format, version-tolerance. ~2 weeks.
+- [x] **done** t5-004: AOT bytecode cache hash-keyed validation — cache load now checks deterministic source/kind/compiler version fingerprints before deserializing, while existing format-version and dependency-version checks keep upgrade/dependency drift tolerant.
 - [ ] **pending** t5-005: Closure capture (Lua upvalue model) — `ibUpvalue` heap cell, `OPER_CLOSE_UPVALS` opcode. ~3 weeks.
 
 ---

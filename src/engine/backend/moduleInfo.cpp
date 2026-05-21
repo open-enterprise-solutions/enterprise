@@ -8,6 +8,34 @@
 #include "appData.h"                 // DesignerMode() guard in Compile()
 #include "backend/compiler/cache/byteCodeCache.h"              // AOT cache Load / Save
 #include "backend/metaCollection/metaModuleObject.h"  // ibValueMetaObjectModuleBase full type for GetGuid/GetClassType
+#include "backend/utils/md5.hpp"
+
+namespace {
+
+ibGuid MakeByteCodeVersion(const ibValueMetaObjectModuleBase* meta)
+{
+	if (meta == nullptr)
+		return ibGuid();
+
+	const wxString seed =
+		wxString(meta->GetGuid()) + wxT("\n") +
+		meta->GetFullName() + wxT("\n") +
+		wxString::Format(wxT("%llu"), (unsigned long long)meta->GetClassType()) + wxT("\n") +
+		meta->GetModuleText() + wxT("\n") +
+		wxT("bytecode-aot-format-v10");
+	const wxString md5 = ibMD5::ComputeMd5(seed);
+	if (md5.length() != 32)
+		return ibGuid();
+	const wxString guid =
+		md5.Mid(0, 8) + wxT("-") +
+		md5.Mid(8, 4) + wxT("-") +
+		md5.Mid(12, 4) + wxT("-") +
+		md5.Mid(16, 4) + wxT("-") +
+		md5.Mid(20, 12);
+	return ibGuid(guid);
+}
+
+} // namespace
 
 ibRuntimeModuleDataObject::ibRuntimeModuleDataObject() :
 	m_compileModule(nullptr)
@@ -110,6 +138,7 @@ bool ibRuntimeModuleDataObject::Compile()
 
 	ibByteCode& bc = m_compileModule->m_cByteCode;
 	const ibValueMetaObjectModuleBase* meta = GetMetaForCompile();
+	const ibGuid expectedVersion = MakeByteCodeVersion(meta);
 
 	// Phase A — find a usable bytecode.
 	//
@@ -125,7 +154,7 @@ bool ibRuntimeModuleDataObject::Compile()
 	//     unified assemble path at the bottom — descriptor doesn't
 	//     care which arm produced bc.
 	bool ready = false;
-	if (meta != nullptr && ibByteCodeCache::Load(bc, meta->GetGuid())) {
+	if (meta != nullptr && ibByteCodeCache::Load(bc, meta->GetGuid(), &expectedVersion)) {
 		if (bc.ResolveAndVerifyDependencies()) {
 			// Restore live pointers AOT skipped on serialize. m_parent
 			// points at the parent compile module's bytecode —
@@ -163,11 +192,12 @@ bool ibRuntimeModuleDataObject::Compile()
 			bc.m_id = meta->GetGuid();
 			bc.m_descriptorClsid = meta->GetClassType();
 		}
-		// Per-compile version fingerprint. Random GUID for now —
-		// dependents snapshot it in m_dependencyVersions so any
-		// successful recompile makes their cached rows fail the dep
-		// version check (Step 4) and forces re-resolve.
-		bc.m_version = ibGuid::newGuid();
+		// Deterministic compile fingerprint. Dependents snapshot it
+		// in m_dependencyVersions, so source / descriptor-kind /
+		// compiler-seed drift makes their cached rows miss and re-resolve.
+		bc.m_version = expectedVersion.isValid()
+			? expectedVersion
+			: ibGuid::newGuid();
 		// Persist the freshly-compiled bytecode. Best-effort — Save
 		// returns false on serialization rejection (e.g. non-primitive
 		// constants) or DB error; the runtime keeps the live bc and
