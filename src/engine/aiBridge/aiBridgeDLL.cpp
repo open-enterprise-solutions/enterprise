@@ -154,9 +154,8 @@ std::mutex                   g_workersMu;
 std::vector<std::thread>     g_workers;
 std::atomic<bool>            g_shuttingDown{false};
 
-// SEC-P2-1: every in-flight httplib::Client registers itself here so
-// oes_plugin_shutdown can call ->stop() and the worker's blocking Post()
-// unblocks immediately instead of waiting out the full read timeout.
+// Track in-flight httplib::Client instances so shutdown can wait for the
+// owning workers without leaving stale active-client entries behind.
 std::mutex                                  g_clientsMu;
 std::vector<httplib::Client*>               g_activeClients;
 
@@ -183,6 +182,15 @@ struct ClientGuard {
 	ClientGuard(const ClientGuard&) = delete;
 	ClientGuard& operator=(const ClientGuard&) = delete;
 };
+
+httplib::Client& NewHttpClient(const std::string& base)
+{
+	// cpp-httplib's SSL client destructor can abort on macOS when SSL state
+	// is still attached to the internal socket after a completed request.
+	// aiBridge is a process-lifetime plugin; keep clients alive until
+	// process exit instead of destroying them on the worker stack.
+	return *new httplib::Client(base);
+}
 
 constexpr const char* kHttpUserAgent = "OES-Designer/1.0";
 
@@ -543,7 +551,7 @@ void RunPugiMcpRequest(std::string requestId, std::string prompt,
 		return;
 	}
 
-	httplib::Client cli(base);
+	httplib::Client& cli = NewHttpClient(base);
 	cli.set_connection_timeout(15);
 	cli.set_read_timeout(60);   // SEC-P2-1: was 120s; Anvil llm_query <30s typical
 	// SEC-P1-5: never follow cross-origin redirects with Authorization +
@@ -684,7 +692,7 @@ void RunTripleReview(std::string requestId, std::string code,
 		return;
 	}
 
-	httplib::Client cli(base);
+	httplib::Client& cli = NewHttpClient(base);
 	cli.set_connection_timeout(15);
 	// SEC-P2-1: was 180s; Anvil triple_review typically responds <30s — a
 	// 60s ceiling means a single failed reviewer surfaces an explicit
@@ -811,7 +819,7 @@ void PostAgentResolve(const std::string& endpoint, const std::string& token,
 	const auto [base, path] = SplitUrl(endpoint);
 	if (base.empty()) return;
 
-	httplib::Client cli(base);
+	httplib::Client& cli = NewHttpClient(base);
 	cli.set_connection_timeout(5);
 	cli.set_read_timeout(10);
 	cli.set_follow_location(false);
@@ -865,7 +873,7 @@ void RunOesAgent(std::string requestId, std::string prompt,
 		return;
 	}
 
-	httplib::Client cli(base);
+	httplib::Client& cli = NewHttpClient(base);
 	cli.set_connection_timeout(15);
 	// AGENT-MODE: 180s — qwen-3-235b planning calls can run long on first
 	// invocation when the server warm-loads weights.
@@ -1133,7 +1141,7 @@ void RunChatRequest(std::string requestId, std::string prompt, std::string mode,
 		return;
 	}
 
-	httplib::Client cli(base);
+	httplib::Client& cli = NewHttpClient(base);
 	cli.set_connection_timeout(15);
 	cli.set_read_timeout(120);
 	// SEC-P1-5: refuse 3xx — see RunPugiMcpRequest.
