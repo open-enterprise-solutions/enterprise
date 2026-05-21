@@ -98,6 +98,28 @@ Snapshot Load()
 		}
 	}
 
+	if (auto slashIt = j.find("slashCommands");
+	    slashIt != j.end() && slashIt->is_array()) {
+		for (const auto& body : *slashIt) {
+			if (!body.is_object()) continue;
+			SlashCommandEntry e;
+			if (auto it = body.find("name"); it != body.end() && it->is_string()) {
+				e.name = wxString::FromUTF8(it->get<std::string>());
+			}
+			if (auto it = body.find("description"); it != body.end() && it->is_string()) {
+				e.description = wxString::FromUTF8(it->get<std::string>());
+			}
+			if (auto it = body.find("prompt"); it != body.end() && it->is_string()) {
+				e.prompt = wxString::FromUTF8(it->get<std::string>());
+			}
+			e.name.Trim(false).Trim(true);
+			if (!e.name.StartsWith(wxT("/"))) e.name.Prepend(wxT("/"));
+			if (!e.name.IsEmpty() && !e.prompt.IsEmpty()) {
+				snap.slashCommands.push_back(std::move(e));
+			}
+		}
+	}
+
 	return snap;
 }
 
@@ -160,6 +182,21 @@ int Save(const Snapshot& snap)
 		if (!ops.empty()) policy[pluginId] = std::move(ops);
 	}
 	if (!policy.empty()) root["policy"] = std::move(policy);
+
+	if (!snap.slashCommands.empty()) {
+		nlohmann::json slash = nlohmann::json::array();
+		for (const auto& cmd : snap.slashCommands) {
+			if (cmd.name.IsEmpty() || cmd.prompt.IsEmpty()) continue;
+			nlohmann::json e = nlohmann::json::object();
+			e["name"] = std::string(cmd.name.utf8_str());
+			if (!cmd.description.IsEmpty()) {
+				e["description"] = std::string(cmd.description.utf8_str());
+			}
+			e["prompt"] = std::string(cmd.prompt.utf8_str());
+			slash.push_back(std::move(e));
+		}
+		if (!slash.empty()) root["slashCommands"] = std::move(slash);
+	}
 
 	const wxString final = GetConfigPath();
 	wxFileName fn(final);

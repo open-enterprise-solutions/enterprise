@@ -37,6 +37,8 @@ public:
 		wxString name;         // e.g. "/explain"
 		wxString op;           // editor.skill op token: "explain"
 		wxString description;  // localized, displayed after em-dash
+		wxString prompt;       // non-empty for user-defined chat commands
+		bool     custom = false;
 	};
 
 	using SelectCallback = std::function<void(const wxString& command)>;
@@ -59,10 +61,10 @@ public:
 	// and dismiss the popup. No-op if no rows are visible.
 	void AcceptSelection();
 
-	// Static catalogue of supported commands. Stable across instances —
-	// the pane consults this list when matching user-entered slash text
-	// to a known op token. Localized at call time via wxGetTranslation.
-	static const std::vector<Command>& AllCommands();
+	// Catalogue of supported commands. Built-ins are stable; user-defined
+	// rows are loaded from plugins.json5 on each call so the pane sees
+	// settings changes after it is reopened.
+	static std::vector<Command> AllCommands();
 
 private:
 	wxListBox*       m_list    = nullptr;

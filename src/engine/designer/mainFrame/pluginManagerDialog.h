@@ -24,6 +24,7 @@
 #define _IB_PLUGIN_MANAGER_DIALOG_H_
 
 #include "frontend/mainFrame/mainFrame.h"  // FRONTEND_API
+#include "backend/plugin/pluginsConfig.h"
 
 #include <wx/dialog.h>
 
@@ -75,6 +76,7 @@ private:
 	// the active plugin's .env file under OES_AI_AUTOCOMPLETE_MODE; the
 	// codeEditor reads the value as a process env var at construction.
 	wxChoice*      m_autocompleteMode = nullptr;
+	wxTextCtrl*    m_slashCommandsEdit = nullptr;
 	int            m_activeRow      = -1;
 
 	// Diagnostics widgets — wxTextCtrl in read-only multi-line mode is
@@ -103,6 +105,7 @@ private:
 		std::vector<Row> rows;
 	};
 	Snap m_snap;
+	std::vector<pluginsConfig::SlashCommandEntry> m_slashCommands;
 };
 
 #endif // _IB_PLUGIN_MANAGER_DIALOG_H_

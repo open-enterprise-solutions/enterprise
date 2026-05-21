@@ -59,6 +59,48 @@ enum {
 // process env var at construction. Centralised here so both sides
 // reference the same literal.
 constexpr const char kAutocompleteModeKey[] = "OES_AI_AUTOCOMPLETE_MODE";
+
+wxString FormatSlashCommands(
+    const std::vector<pluginsConfig::SlashCommandEntry>& commands)
+{
+	wxString out;
+	for (const auto& c : commands) {
+		if (c.name.IsEmpty() || c.prompt.IsEmpty()) continue;
+		out += c.name + wxT(" | ") + c.description + wxT(" | ") + c.prompt + wxT("\n");
+	}
+	return out;
+}
+
+std::vector<pluginsConfig::SlashCommandEntry>
+ParseSlashCommands(const wxString& text)
+{
+	std::vector<pluginsConfig::SlashCommandEntry> out;
+	wxString rest = text;
+	while (!rest.IsEmpty()) {
+		wxString line = rest.BeforeFirst(wxT('\n'));
+		rest = rest.AfterFirst(wxT('\n'));
+		line.Trim(false).Trim(true);
+		if (line.IsEmpty()) {
+			if (rest == line) break;
+			continue;
+		}
+
+		pluginsConfig::SlashCommandEntry c;
+		c.name = line.BeforeFirst(wxT('|'));
+		wxString tail = line.AfterFirst(wxT('|'));
+		c.description = tail.BeforeFirst(wxT('|'));
+		c.prompt = tail.AfterFirst(wxT('|'));
+		c.name.Trim(false).Trim(true);
+		c.description.Trim(false).Trim(true);
+		c.prompt.Trim(false).Trim(true);
+		if (!c.name.StartsWith(wxT("/"))) c.name.Prepend(wxT("/"));
+		if (!c.name.IsEmpty() && !c.prompt.IsEmpty()) {
+			out.push_back(std::move(c));
+		}
+		if (rest == line) break;
+	}
+	return out;
+}
 } // namespace
 
 ibPluginManagerDialog::ibPluginManagerDialog(wxWindow* parent)
@@ -121,6 +163,15 @@ ibPluginManagerDialog::ibPluginManagerDialog(wxWindow* parent)
 	m_autocompleteMode->Append(_("Авто (интенсивно)"));
 	m_autocompleteMode->SetSelection(2);  // default — auto-moderate
 	right->Add(m_autocompleteMode, 0, wxEXPAND | wxBOTTOM, 8);
+
+	right->Add(new wxStaticText(this, wxID_ANY,
+	             _("Пользовательские slash-команды")), 0, wxBOTTOM, 2);
+	m_slashCommandsEdit = new wxTextCtrl(this, wxID_ANY, wxEmptyString,
+	                                      wxDefaultPosition, wxSize(-1, 78),
+	                                      wxTE_MULTILINE | wxTE_DONTWRAP);
+	m_slashCommandsEdit->SetToolTip(
+	    _("Одна команда на строку: /имя | описание | промпт"));
+	right->Add(m_slashCommandsEdit, 0, wxEXPAND | wxBOTTOM, 8);
 
 	// Test-connection button — round-trips a 'ping' prompt through the
 	// plugin's chat path so the user can verify token + endpoint are
@@ -199,6 +250,10 @@ void ibPluginManagerDialog::RebuildList()
 	m_list->DeleteAllItems();
 
 	const auto config = pluginsConfig::Load();
+	m_slashCommands = config.slashCommands;
+	if (m_slashCommandsEdit != nullptr) {
+		m_slashCommandsEdit->SetValue(FormatSlashCommands(m_slashCommands));
+	}
 	// Pulled once outside the loop — LoadAll walks the plugins dir and
 	// parses every <id>.env file, which is heavier than a per-row check.
 	const auto envAll = byokEnv::LoadAll();
@@ -518,6 +573,10 @@ void ibPluginManagerDialog::OnApply(wxCommandEvent& event)
 	// preserved from the loaded config — Phase 4.3 dialog doesn't yet
 	// edit policy; that ships with the per-op permission editor.
 	pluginsConfig::Snapshot snap = pluginsConfig::Load();
+	if (m_slashCommandsEdit != nullptr) {
+		m_slashCommands = ParseSlashCommands(m_slashCommandsEdit->GetValue());
+	}
+	snap.slashCommands = m_slashCommands;
 	bool toggleChanged = false;
 	for (const auto& r : m_snap.rows) {
 		const std::string idNarrow(r.pluginId.utf8_str());

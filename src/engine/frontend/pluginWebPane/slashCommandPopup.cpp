@@ -4,6 +4,8 @@
 
 #include "frontend/pluginWebPane/slashCommandPopup.h"
 
+#include "backend/plugin/pluginsConfig.h"
+
 #include <wx/listbox.h>
 #include <wx/sizer.h>
 #include <wx/intl.h>
@@ -18,26 +20,39 @@ constexpr int kMaxVisibleRows = 6;
 
 } // namespace
 
-const std::vector<ibSlashCommandPopup::Command>&
+std::vector<ibSlashCommandPopup::Command>
 ibSlashCommandPopup::AllCommands()
 {
 	// Lazy-init so wxGetTranslation has a live locale by the time this
 	// table is first read (the pane is constructed inside the Designer
 	// frame, well after wxLocale is wired up).
-	static const std::vector<Command> kCommands = {
-		{ wxT("/explain"),  wxT("explain"),  _("Объяснить выделенный код") },
-		{ wxT("/review"),   wxT("review"),   _("Проверить код") },
-		{ wxT("/fix"),      wxT("fix"),      _("Исправить ошибки") },
-		{ wxT("/doc"),      wxT("doc"),      _("Сгенерировать документацию") },
-		{ wxT("/send"),     wxT("send"),     _("Отправить выделенное") },
-		{ wxT("/test"),     wxT("test"),     _("Написать тесты") },
-		{ wxT("/refactor"), wxT("refactor"), _("Рефакторинг") },
-		{ wxT("/commit"),   wxT("commit"),   _("Сообщение коммита") },
+	std::vector<Command> commands = {
+		{ wxT("/explain"),  wxT("explain"),  _("Объяснить выделенный код"), wxEmptyString, false },
+		{ wxT("/review"),   wxT("review"),   _("Проверить код"), wxEmptyString, false },
+		{ wxT("/fix"),      wxT("fix"),      _("Исправить ошибки"), wxEmptyString, false },
+		{ wxT("/doc"),      wxT("doc"),      _("Сгенерировать документацию"), wxEmptyString, false },
+		{ wxT("/send"),     wxT("send"),     _("Отправить выделенное"), wxEmptyString, false },
+		{ wxT("/test"),     wxT("test"),     _("Написать тесты"), wxEmptyString, false },
+		{ wxT("/refactor"), wxT("refactor"), _("Рефакторинг"), wxEmptyString, false },
+		{ wxT("/commit"),   wxT("commit"),   _("Сообщение коммита"), wxEmptyString, false },
 		// AGENT-MODE: drives the oes_agent MCP tool — body is the natural-
 		// language request ("Создай справочник X с реквизитами…").
-		{ wxT("/agent"),    wxT("agent"),    _("Создать объект через агента") },
+		{ wxT("/agent"),    wxT("agent"),    _("Создать объект через агента"), wxEmptyString, false },
 	};
-	return kCommands;
+	const auto config = pluginsConfig::Load();
+	for (const auto& row : config.slashCommands) {
+		if (row.name.IsEmpty() || row.prompt.IsEmpty()) continue;
+		Command c;
+		c.name = row.name;
+		c.op = wxT("custom");
+		c.description = row.description.IsEmpty()
+		                ? _("Пользовательская команда")
+		                : row.description;
+		c.prompt = row.prompt;
+		c.custom = true;
+		commands.push_back(std::move(c));
+	}
+	return commands;
 }
 
 ibSlashCommandPopup::ibSlashCommandPopup(wxWindow* parent,

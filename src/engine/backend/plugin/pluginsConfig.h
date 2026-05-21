@@ -39,6 +39,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace pluginsConfig {
 
@@ -53,11 +54,19 @@ struct PolicyEntry {
 	std::unordered_map<std::string, ibPluginManager::MutationPolicy> ops;
 };
 
+struct SlashCommandEntry {
+	wxString name;
+	wxString description;
+	wxString prompt;
+};
+
 struct Snapshot {
 	// pluginId → PluginEntry
 	std::unordered_map<std::string, PluginEntry> plugins;
 	// pluginId → PolicyEntry
 	std::unordered_map<std::string, PolicyEntry> policies;
+	// User-defined slash commands shown by the native chat pane.
+	std::vector<SlashCommandEntry> slashCommands;
 };
 
 // Absolute path to plugins.json5 (creates parent dirs if absent —

@@ -1803,6 +1803,16 @@ bool ibPluginWebPane::TryDispatchSlashCommand(const wxString& text)
 	}
 	if (match == nullptr) return false;  // unknown — let chat.send handle it
 
+	if (match->custom) {
+		wxString prompt = match->prompt;
+		if (!body.IsEmpty()) {
+			if (!prompt.IsEmpty()) prompt += wxT("\n\n");
+			prompt += body;
+		}
+		DispatchUserPrompt(prompt);
+		return true;
+	}
+
 	// Echo the user-facing prompt into the transcript so the chat
 	// history reflects what was actually sent.
 	{
