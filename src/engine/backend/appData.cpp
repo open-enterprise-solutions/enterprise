@@ -49,6 +49,23 @@ std::shared_ptr<ibDatabaseLayer> ibApplicationData::GetDatabaseLayer()
 ///////////////////////////////////////////////////////////////////////////////
 
 ibApplicationData* ibApplicationData::s_instance = nullptr;
+static thread_local bool gs_designerDataWrite = false;
+
+bool ibApplicationData::DesignerDataWriteEnabled()
+{
+	return gs_designerDataWrite;
+}
+
+ibApplicationData::ScopedDesignerDataWrite::ScopedDesignerDataWrite()
+	: m_previous(gs_designerDataWrite)
+{
+	gs_designerDataWrite = true;
+}
+
+ibApplicationData::ScopedDesignerDataWrite::~ScopedDesignerDataWrite()
+{
+	gs_designerDataWrite = m_previous;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 

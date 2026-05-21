@@ -215,6 +215,14 @@ public:
 
 	bool LauncherMode() const { return m_runMode == ibRunMode::eLAUNCHER_MODE; }
 	bool DesignerMode() const { return m_runMode == ibRunMode::eDESIGNER_MODE; }
+	static bool DesignerDataWriteEnabled();
+	class ScopedDesignerDataWrite {
+	public:
+		ScopedDesignerDataWrite();
+		~ScopedDesignerDataWrite();
+	private:
+		bool m_previous = false;
+	};
 	bool EnterpriseMode() const {
 		return m_runMode == ibRunMode::eENTERPRISE_MODE
 			|| m_runMode == ibRunMode::eWEB_ENTERPRISE_MODE;

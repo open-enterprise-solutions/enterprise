@@ -994,12 +994,16 @@ void ibTemplateWizard::ApplyMutations()
 			}
 		}
 		summary = wxString::Format(
-		    _("Готово. Создано объектов: %d."), r.successCount);
+		    _("Готово. Применено операций: %d."), r.successCount);
+		if (r.insertedDataRows > 0) {
+			summary += wxString::Format(
+			    _("\n\nДемо-данные: записано строк: %d."),
+			    r.insertedDataRows);
+		}
 		if (r.skippedDataRows > 0) {
 			summary += wxString::Format(
-			    _("\n\nДемо-данные подготовлены (%d строк), но запись строк "
-			      "пока отключена: нужен отдельный API данных, MetaCreate "
-			      "создаёт только метаданные."),
+			    _("\n\nПропущено строк демо-данных: %d. "
+			      "Подробности доступны в диагностике применения."),
 			    r.skippedDataRows);
 		}
 		wxMessageBox(summary, _("Template Wizard"),
@@ -1014,8 +1018,8 @@ void ibTemplateWizard::ApplyMutations()
 	    r.successCount, r.failureCount);
 	if (r.skippedDataRows > 0) {
 		summary += wxString::Format(
-		    _("Демо-данные не записаны: %d строк ожидают отдельный API данных.\n\n"),
-		    r.skippedDataRows);
+		    _("Демо-данные: записано %d, пропущено %d.\n\n"),
+		    r.insertedDataRows, r.skippedDataRows);
 	}
 	int shown = 0;
 	for (const auto& op : r.ops) {

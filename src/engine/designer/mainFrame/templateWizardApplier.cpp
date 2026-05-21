@@ -11,7 +11,13 @@
 #include <string>
 #include <vector>
 
+#include "backend/appData.h"
 #include "backend/plugin/metaBridge.h"
+#include "backend/metadataConfiguration.h"
+#include "backend/metaCollection/metaObject.h"
+#include "backend/metaCollection/partial/catalog.h"
+#include "backend/metaCollection/partial/document.h"
+#include "backend/value_ptr.h"
 #include "3rdparty/nlohmann/json.hpp"
 #include "templateWizardPayload.h"
 
@@ -170,6 +176,150 @@ static int CountDemoRows(const nlohmann::json& payload)
 	return total;
 }
 
+static ibValueMetaObject* FindTopLevelObject(const std::string& fullName)
+{
+	if (activeMetaData == nullptr) return nullptr;
+	ibValueMetaObject* root = activeMetaData->GetCommonMetaObject();
+	if (root == nullptr) return nullptr;
+	const size_t dot = fullName.find('.');
+	if (dot == std::string::npos) return nullptr;
+	const std::string kind = NormalizedKind(fullName.substr(0, dot));
+	const ibClassID clsid = kind == "catalog" ? g_metaCatalogCLSID :
+	                        kind == "document" ? g_metaDocumentCLSID : 0;
+	const wxString name = wxString::FromUTF8(fullName.substr(dot + 1).c_str());
+	for (ibValueMetaObject* child : root->GetAnyArrayObject<>()) {
+		if (child == nullptr || child->IsDeleted()) continue;
+		if (child->GetName() != name) continue;
+		if (clsid == 0 || child->GetClassType() == clsid) return child;
+	}
+	return nullptr;
+}
+
+static wxString CanonicalRowKey(const std::string& key)
+{
+	const std::string lower = LowerAscii(key);
+	if (lower == "code")        return wxT("Code");
+	if (lower == "description") return wxT("Description");
+	if (lower == "number")      return wxT("Number");
+	if (lower == "date")        return wxT("Date");
+	if (lower == "period")      return wxT("Period");
+	return wxString::FromUTF8(key.c_str());
+}
+
+static ibValue JsonToValue(const nlohmann::json& v, const wxString& key)
+{
+	if (v.is_boolean()) return ibValue(v.get<bool>());
+	if (v.is_number_float()) return ibValue(v.get<double>());
+	if (v.is_number_integer()) return ibValue(static_cast<double>(v.get<long long>()));
+	if (v.is_number_unsigned()) return ibValue(static_cast<double>(v.get<unsigned long long>()));
+	if (v.is_string()) {
+		const std::string s = v.get<std::string>();
+		const wxString ws = wxString::FromUTF8(s.c_str());
+		const wxString lowerKey = key.Lower();
+		if (lowerKey == wxT("date") || lowerKey == wxT("period") ||
+		    lowerKey.Find(wxT("дата")) != wxNOT_FOUND) {
+			wxDateTime dt;
+			if (dt.ParseISODate(ws)) return ibValue(dt);
+		}
+		return ibValue(ws);
+	}
+	return ibValue();
+}
+
+static bool ApplyRowFields(ibValueRecordDataObjectRef* object,
+                           const nlohmann::json& row,
+                           wxString& error)
+{
+	if (object == nullptr || !row.is_object()) return false;
+	const auto* meta = object->GetMetaObject();
+	if (meta == nullptr) return false;
+	for (auto& [rawKey, value] : row.items()) {
+		if (value.is_array() || value.is_object()) continue;
+		const wxString key = CanonicalRowKey(rawKey);
+		ibValueMetaObjectAttributeBase* attr = nullptr;
+		for (auto* candidate : meta->GetGenericAttributeArrayObject()) {
+			if (candidate == nullptr || candidate->IsDeleted()) continue;
+			wxString objectName;
+			if (!candidate->GetObjectNameAsString(objectName)) continue;
+			if (objectName.CmpNoCase(key) == 0) {
+				attr = candidate;
+				break;
+			}
+		}
+		if (attr == nullptr) continue;
+		if (!object->SetValueByMetaID(attr->GetMetaID(),
+		                              JsonToValue(value, key))) {
+			const bool requiredCore =
+			    key.CmpNoCase(wxT("Code")) == 0 ||
+			    key.CmpNoCase(wxT("Description")) == 0 ||
+			    key.CmpNoCase(wxT("Number")) == 0 ||
+			    key.CmpNoCase(wxT("Date")) == 0 ||
+			    key.CmpNoCase(wxT("Period")) == 0;
+			if (requiredCore) {
+				error = wxString::Format(_("failed to set field '%s'"), key);
+				return false;
+			}
+			wxLogWarning("Template Wizard: skipped demo-data field '%s' "
+			             "because the raw JSON value does not match the "
+			             "metadata attribute type yet.",
+			             key);
+		}
+	}
+	return true;
+}
+
+static bool InsertDataRow(const std::string& kind,
+                          const std::string& fullName,
+                          const nlohmann::json& row,
+                          bool postAfterInsert,
+                          wxString& error)
+{
+	(void)postAfterInsert; // posting needs reference resolution; insert visible rows first.
+	ibValueMetaObject* meta = FindTopLevelObject(fullName);
+	if (meta == nullptr) {
+		error = _("metadata object not found");
+		return false;
+	}
+	const std::string lowerKind = LowerAscii(kind.empty()
+	    ? ibTemplateWizardPayload::InferKindFromFullName(fullName)
+	    : kind);
+	if (lowerKind == "catalog") {
+		auto* catalog =
+		    dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(meta);
+		if (catalog == nullptr) {
+			error = _("target is not a catalog");
+			return false;
+		}
+		ibValuePtr<ibValueRecordDataObjectHierarchyRef> object(
+		    catalog->CreateObjectValue(ibObjectMode::OBJECT_ITEM));
+		if (!object) {
+			error = _("failed to create catalog row object");
+			return false;
+		}
+		if (!ApplyRowFields(object, row, error)) return false;
+		return object->WriteObject();
+	}
+	if (lowerKind == "document") {
+		auto* document = dynamic_cast<ibValueMetaObjectDocument*>(meta);
+		if (document == nullptr) {
+			error = _("target is not a document");
+			return false;
+		}
+		ibValuePtr<ibValueRecordDataObjectDocument> object(
+		    document->CreateObjectValue());
+		if (!object) {
+			error = _("failed to create document row object");
+			return false;
+		}
+		if (!ApplyRowFields(object, row, error)) return false;
+		return object->WriteObject(
+		    ibDocumentWriteMode::ibDocumentWriteMode_Write,
+		    ibDocumentPostingMode::ibDocumentPostingMode_Regular);
+	}
+	error = _("data rows for this metadata kind are not supported yet");
+	return false;
+}
+
 ApplyResult Apply(const wxString& responseJson, bool includeData)
 {
 	ApplyResult result;
@@ -279,7 +429,52 @@ ApplyResult Apply(const wxString& responseJson, bool includeData)
 		result.ops.push_back(op);
 	}
 
-	if (includeData) result.skippedDataRows = CountDemoRows(*payload);
+	if (includeData) {
+		const int totalRows = CountDemoRows(*payload);
+		if (totalRows > 0 && result.failureCount == 0) {
+			if (activeMetaData == nullptr ||
+			    !activeMetaData->SaveDatabase(saveConfigFlag)) {
+				OpResult op;
+				op.op = wxT("data-prepare");
+				op.error = _("failed to save configuration before inserting demo data");
+				result.ops.push_back(op);
+				++result.failureCount;
+				result.skippedDataRows += totalRows;
+			} else {
+				ibApplicationData::ScopedDesignerDataWrite writeScope;
+				for (const auto& di : (*payload)["demoData"]) {
+					if (!di.is_object()) continue;
+					const std::string kind =
+					    ibTemplateWizardPayload::StringField(di, "kind", "type");
+					const std::string fullName =
+					    ibTemplateWizardPayload::StringField(di, "fullName", "name", "path");
+					const bool postAfterInsert =
+					    di.value("postAfterInsert", false);
+					if (!di.contains("rows") || !di["rows"].is_array()) continue;
+					for (const auto& row : di["rows"]) {
+						OpResult op;
+						op.op = wxT("data-insert");
+						op.kind = wxString::FromUTF8(kind.c_str());
+						op.fullName = wxString::FromUTF8(fullName.c_str());
+						wxString err;
+						if (InsertDataRow(kind, fullName, row, postAfterInsert, err)) {
+							op.success = true;
+							++result.successCount;
+							++result.insertedDataRows;
+						} else {
+							op.success = false;
+							op.error = err;
+							++result.failureCount;
+							++result.skippedDataRows;
+						}
+						result.ops.push_back(op);
+					}
+				}
+			}
+		} else {
+			result.skippedDataRows += totalRows;
+		}
+	}
 
 	return result;
 }

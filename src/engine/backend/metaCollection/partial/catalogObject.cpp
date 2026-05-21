@@ -135,7 +135,7 @@ ibBackendValueForm* ibValueRecordDataObjectCatalog::GetFormValue(const wxString&
 
 bool ibValueRecordDataObjectCatalog::WriteObject()
 {
-	if (!appData->DesignerMode())
+	if (!appData->DesignerMode() || ibApplicationData::DesignerDataWriteEnabled())
 	{
 		// Acquire a pool connection for this method's worth of DB
 		// work. Nested calls (register writes, BeforeWrite/OnWrite
@@ -217,7 +217,7 @@ bool ibValueRecordDataObjectCatalog::WriteObject()
 
 bool ibValueRecordDataObjectCatalog::DeleteObject()
 {
-	if (!appData->DesignerMode())
+	if (!appData->DesignerMode() || ibApplicationData::DesignerDataWriteEnabled())
 	{
 		// Acquire a pool connection for this method's DB work; nested
 		// calls (BeforeDelete / OnDelete script hooks) inherit it via

@@ -224,7 +224,7 @@ ibBackendValueForm* ibValueRecordDataObjectDocument::GetFormValue(const wxString
 
 bool ibValueRecordDataObjectDocument::WriteObject(ibDocumentWriteMode writeMode, ibDocumentPostingMode postingMode)
 {
-	if (!appData->DesignerMode())
+	if (!appData->DesignerMode() || ibApplicationData::DesignerDataWriteEnabled())
 	{
 		// Acquire a pool connection for this Write + register posting.
 		// Document writes + nested RegisterRecordSet writes must share
@@ -390,7 +390,7 @@ bool ibValueRecordDataObjectDocument::WriteObject(ibDocumentWriteMode writeMode,
 
 bool ibValueRecordDataObjectDocument::DeleteObject()
 {
-	if (!appData->DesignerMode())
+	if (!appData->DesignerMode() || ibApplicationData::DesignerDataWriteEnabled())
 	{
 		// Acquire a pool connection for the Delete path. Register
 		// cleanup (DeleteRecordSet on each linked register) runs
