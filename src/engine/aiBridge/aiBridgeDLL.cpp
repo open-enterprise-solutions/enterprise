@@ -45,6 +45,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unordered_set>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -206,6 +207,14 @@ bool IsConfigurationMutation(const std::string& kind,
 	       LowerAscii(InferKindFromFullName(fullName)) == "configuration";
 }
 
+bool IsAlreadyExistsError(const std::string& detail)
+{
+	const std::string lower = LowerAscii(detail);
+	return lower.find("already exists") != std::string::npos ||
+	       lower.find("child already exists") != std::string::npos ||
+	       lower.find("object already exists") != std::string::npos;
+}
+
 const nlohmann::json* PickArrayField(const nlohmann::json& payload,
                                      const char* key)
 {
@@ -351,6 +360,7 @@ nlohmann::json NormalizeAgentMutations(const nlohmann::json& payload)
 	for (const auto& mutation : *mutations) {
 		ExpandAgentMutation(mutation, expanded);
 	}
+	std::unordered_set<std::string> seen;
 	for (auto& mutation : expanded) {
 		if (!mutation.is_object()) continue;
 		const std::string op = NormalizedMetaOp(mutation);
@@ -364,6 +374,8 @@ nlohmann::json NormalizeAgentMutations(const nlohmann::json& payload)
 		mutation["op"] = op;
 		mutation["kind"] = kind;
 		mutation["fullName"] = fullName;
+		const std::string dedupeKey = op + "\n" + kind + "\n" + fullName;
+		if (!seen.insert(dedupeKey).second) continue;
 		normalized.push_back(std::move(mutation));
 	}
 	return normalized;
@@ -1557,10 +1569,19 @@ void RunAgentApply(std::string planId, std::string conversationId,
 		if (rc == 0) {
 			appliedOps.push_back(static_cast<int>(i));
 		} else {
+			const std::string errText = err != nullptr ? std::string(err)
+			                                           : std::string();
+			if (op == "create" && IsAlreadyExistsError(errText)) {
+				appliedOps.push_back(static_cast<int>(i));
+				if (err != nullptr && g_host->FreeBuffer != nullptr) {
+					g_host->FreeBuffer(err);
+				}
+				continue;
+			}
 			std::string detail = "op[" + std::to_string(i) + "] " + op + " " +
 			                       kind + " " + fullName + " failed (rc=" +
 			                       std::to_string(rc) + ")";
-			if (err != nullptr) detail += ": " + std::string(err);
+			if (err != nullptr) detail += ": " + errText;
 			EmitError("aiBridge[oes-agent]: " + detail);
 			failedOps.push_back(static_cast<int>(i));
 		}
