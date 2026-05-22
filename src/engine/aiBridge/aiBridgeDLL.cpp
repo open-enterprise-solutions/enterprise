@@ -46,6 +46,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #if defined(__APPLE__) || defined(__linux__)
@@ -102,6 +103,228 @@ std::string ApplySyntaxInstruction(std::string prompt, const std::string& syntax
 	return "[OES Designer context]\nCurrent script syntax: " + normalized +
 	       ". Use this syntax for code examples. Do not announce or mention syntax switching in the answer.\n"
 	       "[/OES Designer context]\n\n" + prompt;
+}
+
+std::string LowerAscii(std::string s)
+{
+	for (char& ch : s) {
+		ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+	}
+	return s;
+}
+
+std::string JsonStringField(const nlohmann::json& obj,
+                            const char* a,
+                            const char* b = nullptr,
+                            const char* c = nullptr)
+{
+	const char* keys[] = { a, b, c };
+	for (const char* key : keys) {
+		if (key == nullptr) continue;
+		if (obj.contains(key) && obj[key].is_string()) {
+			return obj[key].get<std::string>();
+		}
+	}
+	return std::string();
+}
+
+std::string InferKindFromFullName(const std::string& fullName)
+{
+	const size_t dot = fullName.find('.');
+	return dot == std::string::npos ? std::string() : fullName.substr(0, dot);
+}
+
+std::string NormalizedMetaKind(std::string kind)
+{
+	const std::string lower = LowerAscii(kind);
+	if (lower == "enum") return "Enumeration";
+	if (lower == "commonmodule") return "CommonModule";
+	if (lower == "commonform") return "CommonForm";
+	if (lower == "commontemplate") return "CommonTemplate";
+	if (lower == "dimension") return "Dimension";
+	if (lower == "resource") return "Resource";
+	if (kind.empty()) return kind;
+	kind[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(kind[0])));
+	return kind;
+}
+
+std::string NormalizedMetaOp(const nlohmann::json& m)
+{
+	std::string op = JsonStringField(m, "op", "operation", "action");
+	if (op.empty()) return "create";
+	op = LowerAscii(op);
+	if (op == "meta.create" || op == "createobject") return "create";
+	if (op == "meta.edit" || op == "update") return "edit";
+	if (op == "meta.delete" || op == "remove") return "delete";
+	return op;
+}
+
+bool IsConfigurationMutation(const std::string& kind,
+                             const std::string& fullName)
+{
+	return LowerAscii(kind) == "configuration" ||
+	       LowerAscii(InferKindFromFullName(fullName)) == "configuration";
+}
+
+const nlohmann::json* PickArrayField(const nlohmann::json& payload,
+                                     const char* key)
+{
+	if (payload.contains(key) && payload[key].is_array()) {
+		return &payload[key];
+	}
+	return nullptr;
+}
+
+const nlohmann::json* PickNestedArray(const nlohmann::json& payload,
+                                      const char* objectKey,
+                                      const char* arrayKey)
+{
+	if (!payload.contains(objectKey) || !payload[objectKey].is_object()) {
+		return nullptr;
+	}
+	return PickArrayField(payload[objectKey], arrayKey);
+}
+
+const nlohmann::json* PickMutationArray(const nlohmann::json& payload)
+{
+	const char* direct[] = {
+	    "structureMutations",
+	    "metadataMutations",
+	    "structure",
+	    "mutations",
+	    "objects",
+	};
+	const std::pair<const char*, const char*> nested[] = {
+	    { "plan",         "mutations" },
+	    { "plan",         "structure" },
+	    { "template",     "mutations" },
+	    { "template",     "structure" },
+	    { "mutationPlan", "mutations" },
+	};
+	for (const char* key : direct) {
+		if (const auto* arr = PickArrayField(payload, key)) return arr;
+	}
+	for (const auto& item : nested) {
+		if (const auto* arr = PickNestedArray(payload, item.first, item.second)) {
+			return arr;
+		}
+	}
+	return nullptr;
+}
+
+const nlohmann::json* PickPropertiesObject(const nlohmann::json& mutation)
+{
+	if (mutation.contains("properties") && mutation["properties"].is_object()) {
+		return &mutation["properties"];
+	}
+	if (mutation.contains("props") && mutation["props"].is_object()) {
+		return &mutation["props"];
+	}
+	if (mutation.contains("definition") && mutation["definition"].is_object()) {
+		return &mutation["definition"];
+	}
+	return nullptr;
+}
+
+void PushAgentChildMutation(std::vector<nlohmann::json>& out,
+                            const std::string& parentFullName,
+                            const char* container,
+                            const char* kind,
+                            const nlohmann::json& item,
+                            const char* fallbackFormType = nullptr)
+{
+	if (!item.is_object() && !item.is_string()) return;
+	nlohmann::json props = nlohmann::json::object();
+	std::string name;
+	if (item.is_string()) {
+		name = item.get<std::string>();
+	} else {
+		name = JsonStringField(item, "name");
+		props = item;
+		if (fallbackFormType != nullptr && !props.contains("formType")) {
+			props["formType"] = fallbackFormType;
+		}
+		if (std::string(kind) == "Form" &&
+		    props.contains("kind") && props["kind"].is_string() &&
+		    !props.contains("formType")) {
+			props["formType"] = props["kind"].get<std::string>();
+		}
+	}
+	if (name.empty()) return;
+	nlohmann::json child;
+	child["op"] = "create";
+	child["kind"] = kind;
+	child["fullName"] = parentFullName + "." + container + "." + name;
+	child["properties"] = props;
+	out.push_back(std::move(child));
+}
+
+void ExpandAgentMutation(const nlohmann::json& mutation,
+                         std::vector<nlohmann::json>& out)
+{
+	if (!mutation.is_object()) return;
+	out.push_back(mutation);
+	if (NormalizedMetaOp(mutation) != "create") return;
+	const std::string fullName =
+	    JsonStringField(mutation, "fullName", "name", "path");
+	if (fullName.empty()) return;
+	const nlohmann::json* props = PickPropertiesObject(mutation);
+	if (props == nullptr) return;
+
+	if (props->contains("attributes") && (*props)["attributes"].is_array()) {
+		for (const auto& item : (*props)["attributes"]) {
+			PushAgentChildMutation(out, fullName, "Attributes", "Attribute", item);
+		}
+	}
+	if (props->contains("dimensions") && (*props)["dimensions"].is_array()) {
+		for (const auto& item : (*props)["dimensions"]) {
+			PushAgentChildMutation(out, fullName, "Dimensions", "Dimension", item);
+		}
+	}
+	if (props->contains("resources") && (*props)["resources"].is_array()) {
+		for (const auto& item : (*props)["resources"]) {
+			PushAgentChildMutation(out, fullName, "Resources", "Resource", item);
+		}
+	}
+	if (props->contains("forms") && (*props)["forms"].is_array()) {
+		for (const auto& item : (*props)["forms"]) {
+			PushAgentChildMutation(out, fullName, "Forms", "Form", item, "Form");
+		}
+	}
+	if (props->contains("tabularSections") &&
+	    (*props)["tabularSections"].is_array()) {
+		for (const auto& item : (*props)["tabularSections"]) {
+			PushAgentChildMutation(out, fullName, "TabularSections",
+			                       "TabularSection", item);
+		}
+	}
+}
+
+nlohmann::json NormalizeAgentMutations(const nlohmann::json& payload)
+{
+	nlohmann::json normalized = nlohmann::json::array();
+	const nlohmann::json* mutations = PickMutationArray(payload);
+	if (mutations == nullptr) return normalized;
+
+	std::vector<nlohmann::json> expanded;
+	for (const auto& mutation : *mutations) {
+		ExpandAgentMutation(mutation, expanded);
+	}
+	for (auto& mutation : expanded) {
+		if (!mutation.is_object()) continue;
+		const std::string op = NormalizedMetaOp(mutation);
+		std::string fullName =
+		    JsonStringField(mutation, "fullName", "name", "path");
+		std::string kind = JsonStringField(mutation, "kind", "type");
+		if (kind.empty()) kind = InferKindFromFullName(fullName);
+		kind = NormalizedMetaKind(kind);
+		if (op.empty() || fullName.empty()) continue;
+		mutation["op"] = op;
+		mutation["kind"] = kind;
+		mutation["fullName"] = fullName;
+		normalized.push_back(std::move(mutation));
+	}
+	return normalized;
 }
 
 std::filesystem::path AuditDir()
@@ -1172,9 +1395,9 @@ void RunOesAgent(std::string requestId, std::string prompt,
 	const int         tokensUsed     = result.value("tokensUsed",     0);
 	const int         confidencePercent = ExtractConfidencePercent(result);
 
-	nlohmann::json mutations = nlohmann::json::array();
-	if (result.contains("mutations") && result["mutations"].is_array()) {
-		mutations = result["mutations"];
+	nlohmann::json mutations = NormalizeAgentMutations(result);
+	if (mutations.empty()) {
+		EmitError("aiBridge[oes-agent]: plan contains no metadata operations");
 	}
 	AuditWrite("agent.plan", {
 		{ "requestId", requestId },
@@ -1232,28 +1455,58 @@ void RunAgentApply(std::string planId, std::string conversationId,
 	for (size_t i = 0; i < mutations.size(); ++i) {
 		const auto& m = mutations[i];
 		if (!m.is_object()) { failedOps.push_back(static_cast<int>(i)); continue; }
-		const std::string op       = m.value("op",       std::string());
-		const std::string kind     = m.value("kind",     std::string());
-		const std::string fullName = m.value("fullName", std::string());
-		const std::string props    = m.contains("properties")
-		                                ? m["properties"].dump()
-		                                : std::string("{}");
+		const std::string op = NormalizedMetaOp(m);
+		std::string kind = JsonStringField(m, "kind", "type");
+		std::string fullName = JsonStringField(m, "fullName", "name", "path");
+		if (kind.empty()) kind = InferKindFromFullName(fullName);
+		kind = NormalizedMetaKind(kind);
+		const nlohmann::json* propsObj = PickPropertiesObject(m);
+		const std::string props = propsObj != nullptr ? propsObj->dump()
+		                                              : std::string("{}");
+		if (fullName.empty()) {
+			EmitError("aiBridge[oes-agent]: empty fullName at index " +
+			           std::to_string(i));
+			failedOps.push_back(static_cast<int>(i));
+			continue;
+		}
+		if (IsConfigurationMutation(kind, fullName)) {
+			appliedOps.push_back(static_cast<int>(i));
+			continue;
+		}
 
 		int rc = -1;
 		char* err = nullptr;
-		if (op == "create" && g_host->MetaCreate != nullptr) {
-			rc = g_host->MetaCreate(kind.c_str(), fullName.c_str(),
-			                          props.c_str(), &err);
-		} else if (op == "edit" && g_host->MetaEdit != nullptr) {
-			// AGENT-MODE: MetaEdit takes jsonPatch — pass the properties
-			// blob verbatim; server-side prompt is responsible for emitting
-			// RFC 6902 shape when op=edit.
-			rc = g_host->MetaEdit(fullName.c_str(), props.c_str(), &err);
-		} else if (op == "delete" && g_host->MetaDelete != nullptr) {
-			rc = g_host->MetaDelete(fullName.c_str(), props.c_str(), &err);
-		} else {
-			EmitError("aiBridge[oes-agent]: unknown op '" + op + "' at index " +
-			           std::to_string(i));
+		try {
+			if (op == "create" && g_host->MetaCreate != nullptr) {
+				rc = g_host->MetaCreate(kind.c_str(), fullName.c_str(),
+				                          props.c_str(), &err);
+			} else if (op == "edit" && g_host->MetaEdit != nullptr) {
+				// AGENT-MODE: MetaEdit takes jsonPatch — pass the properties
+				// blob verbatim; server-side prompt is responsible for emitting
+				// RFC 6902 shape when op=edit.
+				rc = g_host->MetaEdit(fullName.c_str(), props.c_str(), &err);
+			} else if (op == "delete" && g_host->MetaDelete != nullptr) {
+				rc = g_host->MetaDelete(fullName.c_str(), props.c_str(), &err);
+			} else {
+				EmitError("aiBridge[oes-agent]: unknown op '" + op + "' at index " +
+				           std::to_string(i));
+				failedOps.push_back(static_cast<int>(i));
+				continue;
+			}
+		} catch (const std::exception& e) {
+			EmitError("aiBridge[oes-agent]: op[" + std::to_string(i) +
+			           "] threw: " + e.what());
+			if (err != nullptr && g_host->FreeBuffer != nullptr) {
+				g_host->FreeBuffer(err);
+			}
+			failedOps.push_back(static_cast<int>(i));
+			continue;
+		} catch (...) {
+			EmitError("aiBridge[oes-agent]: op[" + std::to_string(i) +
+			           "] threw");
+			if (err != nullptr && g_host->FreeBuffer != nullptr) {
+				g_host->FreeBuffer(err);
+			}
 			failedOps.push_back(static_cast<int>(i));
 			continue;
 		}
@@ -1781,10 +2034,14 @@ void OnPaneMessage(const char* paneId, const char* jsonInline, void* /*ud*/)
 			g_workers.emplace_back(RunChatRequest, requestId, prompt, mode,
 			                       profile, cancelTok);
 		}
-	} catch (...) {
+	} catch (const std::exception& e) {
 		// Plugin-side bug — surface a single error envelope so the user
 		// sees something instead of silent dead air.
-		EmitError("aiBridge: onMessage threw");
+		DiagWrite("aiBridge onMessage exception: " + std::string(e.what()));
+		EmitError("aiBridge: onMessage exception — " + std::string(e.what()));
+	} catch (...) {
+		DiagWrite("aiBridge onMessage exception");
+		EmitError("aiBridge: onMessage exception");
 	}
 }
 
