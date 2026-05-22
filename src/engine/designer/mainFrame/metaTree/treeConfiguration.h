@@ -427,6 +427,7 @@ public:
 	void InitTree();
 
 	bool Load(ibMetaDataConfigurationBase* metadata = nullptr);
+	virtual void ReloadFromMetadata() override { Load(m_metaData); }
 	bool Save();
 
 	void Search(const wxString& strSearch);
@@ -435,4 +436,4 @@ public:
 	void ClearTree();
 };
 
-#endif 
+#endif

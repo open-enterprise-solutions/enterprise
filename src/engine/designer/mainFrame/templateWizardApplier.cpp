@@ -56,6 +56,124 @@ static std::string LowerAscii(std::string s)
 	return s;
 }
 
+static bool ContainsCyrillicUtf8(const std::string& s)
+{
+	for (size_t i = 0; i + 1 < s.size(); ++i) {
+		const unsigned char a = static_cast<unsigned char>(s[i]);
+		const unsigned char b = static_cast<unsigned char>(s[i + 1]);
+		if ((a == 0xD0 && b >= 0x80 && b <= 0xBF) ||
+		    (a == 0xD1 && b >= 0x80 && b <= 0xBF)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static std::string TransliterateCyrillic(std::string s)
+{
+	static const std::pair<const char*, const char*> map[] = {
+	    {"Щ","Shch"},{"щ","shch"},{"Ш","Sh"},{"ш","sh"},
+	    {"Ч","Ch"},{"ч","ch"},{"Ц","Ts"},{"ц","ts"},
+	    {"Ю","Yu"},{"ю","yu"},{"Я","Ya"},{"я","ya"},
+	    {"Є","Ye"},{"є","ye"},{"Ї","Yi"},{"ї","yi"},
+	    {"Ё","Yo"},{"ё","yo"},{"Ж","Zh"},{"ж","zh"},
+	    {"Х","Kh"},{"х","kh"},{"Ґ","G"},{"ґ","g"},
+	    {"А","A"},{"а","a"},{"Б","B"},{"б","b"},
+	    {"В","V"},{"в","v"},{"Г","G"},{"г","g"},
+	    {"Д","D"},{"д","d"},{"Е","E"},{"е","e"},
+	    {"З","Z"},{"з","z"},{"И","I"},{"и","i"},
+	    {"І","I"},{"і","i"},{"Й","Y"},{"й","y"},
+	    {"К","K"},{"к","k"},{"Л","L"},{"л","l"},
+	    {"М","M"},{"м","m"},{"Н","N"},{"н","n"},
+	    {"О","O"},{"о","o"},{"П","P"},{"п","p"},
+	    {"Р","R"},{"р","r"},{"С","S"},{"с","s"},
+	    {"Т","T"},{"т","t"},{"У","U"},{"у","u"},
+	    {"Ф","F"},{"ф","f"},{"Ы","Y"},{"ы","y"},
+	    {"Э","E"},{"э","e"},{"Ь",""},{"ь",""},
+	    {"Ъ",""},{"ъ",""},{"’",""},{"'",""},
+	};
+	for (const auto& item : map) {
+		const std::string from(item.first);
+		const std::string to(item.second);
+		size_t pos = 0;
+		while ((pos = s.find(from, pos)) != std::string::npos) {
+			s.replace(pos, from.size(), to);
+			pos += to.size();
+		}
+	}
+	return s;
+}
+
+static bool IsDirectChildContainer(const std::string& segment)
+{
+	const std::string lower = LowerAscii(segment);
+	return lower == "forms" || lower == "form" ||
+	       lower == "attributes" || lower == "attribute" ||
+	       lower == "dimensions" || lower == "dimension" ||
+	       lower == "resources" || lower == "resource" ||
+	       lower == "commands" || lower == "command" ||
+	       lower == "tabularsections" || lower == "tabularsection";
+}
+
+static std::vector<std::string> SplitDottedPath(const std::string& s)
+{
+	std::vector<std::string> parts;
+	size_t start = 0;
+	while (start <= s.size()) {
+		const size_t dot = s.find('.', start);
+		if (dot == std::string::npos) {
+			parts.push_back(s.substr(start));
+			break;
+		}
+		parts.push_back(s.substr(start, dot - start));
+		start = dot + 1;
+	}
+	return parts;
+}
+
+static std::string LeafNameFromPossiblyQualifiedName(const std::string& name)
+{
+	const auto parts = SplitDottedPath(name);
+	return parts.empty() ? name : parts.back();
+}
+
+static std::string NormalizeTechnicalNameSegment(const std::string& segment)
+{
+	if (segment.empty() || IsDirectChildContainer(segment)) return segment;
+	std::string s = ContainsCyrillicUtf8(segment)
+	    ? TransliterateCyrillic(segment)
+	    : segment;
+	std::string out;
+	out.reserve(s.size());
+	bool upperNext = false;
+	for (unsigned char ch : s) {
+		if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+		    (ch >= '0' && ch <= '9') || ch == '_') {
+			out.push_back(upperNext && ch >= 'a' && ch <= 'z'
+			    ? static_cast<char>(std::toupper(ch))
+			    : static_cast<char>(ch));
+			upperNext = false;
+		} else {
+			upperNext = !out.empty();
+		}
+	}
+	if (out.empty()) out = "Object";
+	if (out[0] >= '0' && out[0] <= '9') out.insert(out.begin(), '_');
+	return out;
+}
+
+static std::string NormalizeTechnicalFullName(const std::string& fullName)
+{
+	const auto parts = SplitDottedPath(fullName);
+	if (parts.empty()) return fullName;
+	std::string out;
+	for (size_t i = 0; i < parts.size(); ++i) {
+		if (i > 0) out += ".";
+		out += NormalizeTechnicalNameSegment(parts[i]);
+	}
+	return out;
+}
+
 static std::string NormalizedKind(std::string kind)
 {
 	const std::string lower = LowerAscii(kind);
@@ -102,9 +220,10 @@ static void PushChildMutation(std::vector<nlohmann::json>& out,
 	nlohmann::json props = nlohmann::json::object();
 	std::string name;
 	if (item.is_string()) {
-		name = item.get<std::string>();
+		name = LeafNameFromPossiblyQualifiedName(item.get<std::string>());
 	} else {
-		name = ibTemplateWizardPayload::StringField(item, "name");
+		name = LeafNameFromPossiblyQualifiedName(
+		    ibTemplateWizardPayload::StringField(item, "name", "fullName", "path"));
 		props = item;
 		if (fallbackFormType != nullptr && !props.contains("formType")) {
 			props["formType"] = fallbackFormType;
@@ -118,7 +237,12 @@ static void PushChildMutation(std::vector<nlohmann::json>& out,
 	nlohmann::json child;
 	child["op"] = "create";
 	child["kind"] = kind;
-	child["fullName"] = parentFullName + "." + container + "." + name;
+	const std::string fullName = parentFullName + "." + container + "." + name;
+	child["fullName"] = NormalizeTechnicalFullName(fullName);
+	if (child["fullName"].get<std::string>() != fullName &&
+	    !props.contains("synonym")) {
+		props["synonym"] = name;
+	}
 	child["properties"] = props;
 	out.push_back(std::move(child));
 }
@@ -511,7 +635,8 @@ static bool InsertDataRow(const std::string& kind,
 	return false;
 }
 
-ApplyResult Apply(const wxString& responseJson, bool includeData)
+ApplyResult Apply(const wxString& responseJson, bool includeData,
+                  ProgressCallback progress)
 {
 	ApplyResult result;
 	auto parsed = nlohmann::json::parse(std::string(responseJson.utf8_str()),
@@ -545,18 +670,23 @@ ApplyResult Apply(const wxString& responseJson, bool includeData)
 	// all-or-nothing: each metaBridge mutation is individually undoable
 	// via Ctrl+Z, so a failure mid-walk leaves the user with a recoverable
 	// state.
+	const int totalOps = static_cast<int>(expanded.size());
+	int currentOp = 0;
 	for (const auto& m : expanded) {
 		OpResult op;
+		++currentOp;
 		if (!m.is_object()) {
 			op.op    = wxT("(skip)");
 			op.error = wxT("non-object entry in mutations[]");
+			if (progress) progress(currentOp, totalOps, op);
 			result.ops.push_back(op);
 			++result.failureCount;
 			continue;
 		}
 		const std::string opStr = NormalizedOp(m);
-		std::string fullName =
+		const std::string originalFullName =
 		    ibTemplateWizardPayload::StringField(m, "fullName", "name", "path");
+		std::string fullName = NormalizeTechnicalFullName(originalFullName);
 		std::string kindStr =
 		    ibTemplateWizardPayload::StringField(m, "kind", "type");
 		if (kindStr.empty()) {
@@ -567,12 +697,18 @@ ApplyResult Apply(const wxString& responseJson, bool includeData)
 		if (m.contains("properties")) propsObj = &m["properties"];
 		else if (m.contains("props")) propsObj = &m["props"];
 		else if (m.contains("definition")) propsObj = &m["definition"];
-		const std::string props = propsObj != nullptr ? propsObj->dump()
-		                                              : std::string("{}");
+		nlohmann::json propsJson = propsObj != nullptr
+		    ? *propsObj
+		    : nlohmann::json::object();
+		if (fullName != originalFullName && !propsJson.contains("synonym")) {
+			propsJson["synonym"] = LeafNameFromPossiblyQualifiedName(originalFullName);
+		}
+		const std::string props = propsJson.dump();
 
 		op.op       = wxString::FromUTF8(opStr.c_str());
 		op.kind     = wxString::FromUTF8(kindStr.c_str());
 		op.fullName = wxString::FromUTF8(fullName.c_str());
+		if (progress) progress(currentOp, totalOps, op);
 
 		if (IsConfigurationMutation(kindStr, fullName)) {
 			op.op = wxT("configure");

@@ -805,20 +805,22 @@ TEST(MetaMutation, CreateRejectsBrokenModuleCode) {
 
 TEST(MetaMutation, EditAcceptsModuleCodeKeyOnChildPath) {
 	// AGENT-CHILD: extended-key validator must accept `moduleCode` on
-	// child paths but reject it on top-level paths. Verify the unknown-
-	// key gate fires only on top-level.
+	// child paths and top-level module objects. Top-level non-module
+	// objects fail downstream, not in the unknown-key gate.
 	ScopedPluginManager fx;
 	fx.pm.SetMutationPolicy(wxT("pugi"), wxT("meta.edit"),
 	                          ibPluginManager::MutationPolicy::AllowAlways);
 
-	// Top-level: moduleCode is NOT in the supported set.
+	// Top-level: moduleCode is syntactically accepted. With no live
+	// activeMetaData, this still fails at lookup/config resolution, but
+	// it must not be reported as an unknown key.
 	char* err = nullptr;
 	int rc = metaBridge::HostMetaEdit("pugi", "Catalog.Foo",
 	                                     "{\"moduleCode\":\"X\"}", &err);
 	EXPECT_NE(rc, 0);
 	ASSERT_NE(err, nullptr);
-	EXPECT_NE(std::string(err).find("unknown key"), std::string::npos)
-	    << "top-level path must reject 'moduleCode' as unknown key";
+	EXPECT_EQ(std::string(err).find("unknown key"), std::string::npos)
+	    << "top-level path must accept 'moduleCode' for CommonModule edits";
 	std::free(err);
 
 	// Child path: moduleCode is accepted (the failure becomes a

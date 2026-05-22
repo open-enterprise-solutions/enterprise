@@ -38,6 +38,7 @@ public:
 	virtual void CloseMetaObject(ibValueMetaObject* obj) = 0;
 
 	virtual void UpdateChoiceSelection() {}
+	virtual void ReloadFromMetadata() {}
 
 protected:
 

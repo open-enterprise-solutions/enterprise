@@ -20,9 +20,11 @@
 #include <wx/log.h>
 #include <wx/thread.h>
 #include <wx/progdlg.h>
+#include <wx/app.h>
 #include "frontend/mainFrame/mainFrame.h"
 #include <memory>
 
+#include <algorithm>
 #include <cctype>
 #include <thread>
 #include <atomic>
@@ -976,11 +978,26 @@ void ibTemplateWizard::ApplyMutations()
 	    _("Применение шаблона"),
 	    _("Создаются объекты конфигурации…"),
 	    100, this,
-	    wxPD_APP_MODAL | wxPD_AUTO_HIDE | wxPD_ELAPSED_TIME);
+	    wxPD_APP_MODAL | wxPD_AUTO_HIDE | wxPD_ELAPSED_TIME |
+	    wxPD_SMOOTH);
 
 	ibTemplateWizardApplier::ApplyResult r =
 	    ibTemplateWizardApplier::Apply(m_templateGetResponseJson,
-	                                     m_includeData && cachedHasDemo);
+	                                     m_includeData && cachedHasDemo,
+	                                     [progress = progress.get()](
+	                                         int current, int total,
+	                                         const ibTemplateWizardApplier::OpResult& op) {
+	                                         if (progress == nullptr) return;
+	                                         const int maxValue = total > 0 ? total : 1;
+	                                         const int value = std::min(current, maxValue);
+	                                         progress->SetRange(maxValue);
+	                                         wxString msg = wxString::Format(
+	                                             _("Создаётся %d/%d: %s %s"),
+	                                             value, maxValue,
+	                                             op.op, op.fullName);
+	                                         progress->Update(value, msg);
+	                                         wxTheApp->Yield(true);
+	                                     });
 
 	progress.reset();
 

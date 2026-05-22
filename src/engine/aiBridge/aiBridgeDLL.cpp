@@ -156,7 +156,83 @@ bool IsDirectChildContainer(const std::string& segment)
 	       lower == "attributes" || lower == "attribute" ||
 	       lower == "dimensions" || lower == "dimension" ||
 	       lower == "resources" || lower == "resource" ||
-	       lower == "commands" || lower == "command";
+	       lower == "commands" || lower == "command" ||
+	       lower == "tabularsections" || lower == "tabularsection";
+}
+
+bool ContainsCyrillicUtf8(const std::string& s)
+{
+	for (size_t i = 0; i + 1 < s.size(); ++i) {
+		const unsigned char a = static_cast<unsigned char>(s[i]);
+		const unsigned char b = static_cast<unsigned char>(s[i + 1]);
+		if (a == 0xD0 || a == 0xD1) {
+			if ((a == 0xD0 && b >= 0x80 && b <= 0xBF) ||
+			    (a == 0xD1 && b >= 0x80 && b <= 0xBF)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+std::string TransliterateCyrillic(std::string s)
+{
+	static const std::pair<const char*, const char*> map[] = {
+	    {"Щ","Shch"},{"щ","shch"},{"Ш","Sh"},{"ш","sh"},
+	    {"Ч","Ch"},{"ч","ch"},{"Ц","Ts"},{"ц","ts"},
+	    {"Ю","Yu"},{"ю","yu"},{"Я","Ya"},{"я","ya"},
+	    {"Є","Ye"},{"є","ye"},{"Ї","Yi"},{"ї","yi"},
+	    {"Ё","Yo"},{"ё","yo"},{"Ж","Zh"},{"ж","zh"},
+	    {"Х","Kh"},{"х","kh"},{"Ґ","G"},{"ґ","g"},
+	    {"А","A"},{"а","a"},{"Б","B"},{"б","b"},
+	    {"В","V"},{"в","v"},{"Г","G"},{"г","g"},
+	    {"Д","D"},{"д","d"},{"Е","E"},{"е","e"},
+	    {"З","Z"},{"з","z"},{"И","I"},{"и","i"},
+	    {"І","I"},{"і","i"},{"Й","Y"},{"й","y"},
+	    {"К","K"},{"к","k"},{"Л","L"},{"л","l"},
+	    {"М","M"},{"м","m"},{"Н","N"},{"н","n"},
+	    {"О","O"},{"о","o"},{"П","P"},{"п","p"},
+	    {"Р","R"},{"р","r"},{"С","S"},{"с","s"},
+	    {"Т","T"},{"т","t"},{"У","U"},{"у","u"},
+	    {"Ф","F"},{"ф","f"},{"Ы","Y"},{"ы","y"},
+	    {"Э","E"},{"э","e"},{"Ь",""},{"ь",""},
+	    {"Ъ",""},{"ъ",""},{"’",""},{"'",""},
+	};
+	for (const auto& item : map) {
+		const std::string from(item.first);
+		const std::string to(item.second);
+		size_t pos = 0;
+		while ((pos = s.find(from, pos)) != std::string::npos) {
+			s.replace(pos, from.size(), to);
+			pos += to.size();
+		}
+	}
+	return s;
+}
+
+std::string NormalizeTechnicalNameSegment(const std::string& segment)
+{
+	if (segment.empty() || IsDirectChildContainer(segment)) return segment;
+	std::string s = ContainsCyrillicUtf8(segment)
+	    ? TransliterateCyrillic(segment)
+	    : segment;
+	std::string out;
+	out.reserve(s.size());
+	bool upperNext = false;
+	for (unsigned char ch : s) {
+		if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+		    (ch >= '0' && ch <= '9') || ch == '_') {
+			out.push_back(upperNext && ch >= 'a' && ch <= 'z'
+			    ? static_cast<char>(std::toupper(ch))
+			    : static_cast<char>(ch));
+			upperNext = false;
+		} else {
+			upperNext = !out.empty();
+		}
+	}
+	if (out.empty()) out = "Object";
+	if (out[0] >= '0' && out[0] <= '9') out.insert(out.begin(), '_');
+	return out;
 }
 
 std::string LeafNameFromPossiblyQualifiedName(const std::string& name)
@@ -168,11 +244,19 @@ std::string LeafNameFromPossiblyQualifiedName(const std::string& name)
 std::string NormalizeAgentFullName(const std::string& fullName)
 {
 	const auto parts = SplitDottedPath(fullName);
-	if (parts.size() > 4 && IsDirectChildContainer(parts[2])) {
-		return parts[0] + "." + parts[1] + "." + parts[2] + "." +
-		       parts.back();
+	if (parts.size() == 5 && IsDirectChildContainer(parts[2])) {
+		return NormalizeTechnicalNameSegment(parts[0]) + "." +
+		       NormalizeTechnicalNameSegment(parts[1]) + "." +
+		       parts[2] + "." +
+		       NormalizeTechnicalNameSegment(parts.back());
 	}
-	return fullName;
+	if (parts.empty()) return fullName;
+	std::string out;
+	for (size_t i = 0; i < parts.size(); ++i) {
+		if (i > 0) out += ".";
+		out += NormalizeTechnicalNameSegment(parts[i]);
+	}
+	return out;
 }
 
 std::string NormalizedMetaKind(std::string kind)
@@ -364,9 +448,9 @@ nlohmann::json NormalizeAgentMutations(const nlohmann::json& payload)
 	for (auto& mutation : expanded) {
 		if (!mutation.is_object()) continue;
 		const std::string op = NormalizedMetaOp(mutation);
-		std::string fullName =
+		const std::string originalFullName =
 		    JsonStringField(mutation, "fullName", "name", "path");
-		fullName = NormalizeAgentFullName(fullName);
+		std::string fullName = NormalizeAgentFullName(originalFullName);
 		std::string kind = JsonStringField(mutation, "kind", "type");
 		if (kind.empty()) kind = InferKindFromFullName(fullName);
 		kind = NormalizedMetaKind(kind);
@@ -374,6 +458,18 @@ nlohmann::json NormalizeAgentMutations(const nlohmann::json& payload)
 		mutation["op"] = op;
 		mutation["kind"] = kind;
 		mutation["fullName"] = fullName;
+		if (fullName != originalFullName) {
+			nlohmann::json* props = nullptr;
+			if (mutation.contains("properties") && mutation["properties"].is_object()) {
+				props = &mutation["properties"];
+			} else {
+				mutation["properties"] = nlohmann::json::object();
+				props = &mutation["properties"];
+			}
+			if (!props->contains("synonym")) {
+				props->operator[]("synonym") = LeafNameFromPossiblyQualifiedName(originalFullName);
+			}
+		}
 		const std::string dedupeKey = op + "\n" + kind + "\n" + fullName;
 		if (!seen.insert(dedupeKey).second) continue;
 		normalized.push_back(std::move(mutation));
@@ -1527,6 +1623,18 @@ void RunAgentApply(std::string planId, std::string conversationId,
 		if (IsConfigurationMutation(kind, fullName)) {
 			appliedOps.push_back(static_cast<int>(i));
 			continue;
+		}
+		if (g_host->WebPaneSend != nullptr) {
+			nlohmann::json progress;
+			progress["kind"]     = "agent.progress";
+			progress["planId"]   = planId;
+			progress["index"]    = static_cast<int>(i + 1);
+			progress["total"]    = static_cast<int>(mutations.size());
+			progress["op"]       = op;
+			progress["metaKind"] = kind;
+			progress["fullName"] = fullName;
+			const std::string payload = progress.dump();
+			g_host->WebPaneSend(g_paneId, payload.c_str());
 		}
 
 		int rc = -1;

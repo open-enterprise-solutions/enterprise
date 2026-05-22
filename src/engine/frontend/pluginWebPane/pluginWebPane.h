@@ -145,6 +145,7 @@ public:
 		wxString conversationId;     // agent.plan / agent.applied only
 		wxString rationale;          // agent.plan only
 		wxString mutations;          // agent.plan only
+		wxString applyStatus;        // agent.progress only
 		bool     applied  = false;   // agent.applied set this true
 		// COMMIT-MSG: marks an assistant entry whose body is a proposed
 		// git commit message (i.e. it was generated for an editor.skill

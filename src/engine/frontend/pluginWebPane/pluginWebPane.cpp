@@ -24,6 +24,8 @@
 // SEC-P1-9: ScopedPluginIdGuard so onMessage dispatches scope caller pid.
 #include "backend/appData.h"
 #include "backend/compiler/compileCode.h"
+#include "backend/metadataConfiguration.h"
+#include "backend/backend_metatree.h"
 #include "backend/plugin/pluginManager.h"
 
 #include "3rdparty/md4c/md4c-html.h"
@@ -1318,9 +1320,36 @@ void ibPluginWebPane::DispatchEnvelope(const wxString& jsonInline)
 		for (auto& e : m_entries) {
 			if (e.role == Entry::Role::Plan && e.planId == planId) {
 				e.applied = true;
+				e.applyStatus.clear();
+			}
+		}
+		if (activeMetaData != nullptr) {
+			activeMetaData->Modify(true);
+			if (auto* tree = activeMetaData->GetMetaTree()) {
+				tree->ReloadFromMetadata();
 			}
 		}
 		RestorePlanPolicyAfterApply();
+		RenderTranscript();
+		return;
+	}
+	if (kind == "agent.progress") {
+		const wxString planId = wxString::FromUTF8(env.value("planId", "").c_str());
+		const int index = env.value("index", 0);
+		const int total = env.value("total", 0);
+		const wxString op = wxString::FromUTF8(env.value("op", "").c_str());
+		const wxString fullName = wxString::FromUTF8(env.value("fullName", "").c_str());
+		wxString status = wxString::Format(_("Создаётся %d/%d: %s %s"),
+		                                   index, total, op, fullName);
+		for (auto& e : m_entries) {
+			if (e.role == Entry::Role::Plan && e.planId == planId) {
+				e.applyStatus = status;
+				break;
+			}
+		}
+		if (m_statusBar != nullptr) {
+			m_statusBar->SetLabel(status);
+		}
 		RenderTranscript();
 		return;
 	}
@@ -1601,6 +1630,11 @@ void ibPluginWebPane::RenderTranscript()
 			}
 			if (!e.mutations.IsEmpty()) {
 				doc += wxT("<pre>") + HtmlEscape(e.mutations) + wxT("</pre>");
+			}
+			if (!e.applyStatus.IsEmpty()) {
+				doc += wxT("<font color=\"#1d4ed8\" size=\"-1\"><b>");
+				doc += HtmlEscape(e.applyStatus);
+				doc += wxT("</b></font><br>");
 			}
 			if (e.applied) {
 				doc += wxT("<font color=\"#059669\" size=\"-1\"><b>");

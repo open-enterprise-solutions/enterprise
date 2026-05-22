@@ -19,6 +19,7 @@
 #define _IB_TEMPLATE_WIZARD_APPLIER_H_
 
 #include <wx/string.h>
+#include <functional>
 #include <vector>
 
 namespace ibTemplateWizardApplier {
@@ -45,7 +46,12 @@ struct ApplyResult {
 // catalog/document demoData rows are inserted into the freshly saved DB.
 //
 // Must be called from the UI (main) thread — metaBridge asserts.
-ApplyResult Apply(const wxString& responseJson, bool includeData);
+using ProgressCallback = std::function<void(int current,
+                                            int total,
+                                            const OpResult& op)>;
+
+ApplyResult Apply(const wxString& responseJson, bool includeData,
+                  ProgressCallback progress = ProgressCallback());
 
 }  // namespace ibTemplateWizardApplier
 
