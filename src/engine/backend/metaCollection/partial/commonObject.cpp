@@ -90,6 +90,60 @@ ibBackendValueForm* ibValueMetaObjectGenericData::CreateAndBuildForm(const wxStr
 }
 
 #pragma endregion
+
+bool ibValueMetaObjectGenericData::MaterializeFormData(
+	ibValueMetaObjectFormBase* metaForm, wxString& error) const
+{
+	error.clear();
+	if (metaForm == nullptr)
+		return true;
+
+	class ibSourceDataObjectGuard {
+	public:
+		ibSourceDataObjectGuard(ibSourceDataObject* srcObject) : m_srcObject(srcObject) {
+			if (m_srcObject != nullptr) m_srcObject->SourceIncrRef();
+		}
+		~ibSourceDataObjectGuard() {
+			if (m_srcObject != nullptr) m_srcObject->SourceDecrRef();
+		}
+	private:
+		ibSourceDataObject* m_srcObject;
+	};
+
+	ibSourceDataObject* srcObject = CreateSourceObject(metaForm);
+	ibSourceDataObjectGuard sourceGuard(srcObject);
+	ibBackendValueForm* valueForm = nullptr;
+	try {
+		if (ibSession::CurrentFrame() == nullptr) {
+			return true;
+		}
+		valueForm = ibBackendValueForm::CreateNewForm(
+			metaForm, nullptr, srcObject, metaForm->GetGuid());
+		if (valueForm == nullptr) {
+			error = _("failed to create form value");
+			return false;
+		}
+		valueForm->BuildForm(metaForm->GetTypeForm());
+		const bool saved = metaForm->SaveFormData(valueForm);
+		wxDELETE(valueForm);
+		if (!saved || metaForm->GetFormData().IsEmpty()) {
+			error = _("generated form layout is empty");
+			return false;
+		}
+		return true;
+	}
+	catch (const ibBackendException& e) {
+		wxDELETE(valueForm);
+		error = e.GetErrorDescription();
+		return false;
+	}
+	catch (...) {
+		wxDELETE(valueForm);
+		error = _("unknown form materialization error");
+		return false;
+	}
+}
+
 #pragma region _template_builder_h_
 
 ibValueSpreadsheetDocument* ibValueMetaObjectGenericData::GetTemplate(const wxString& strTemplateName) const

@@ -15,10 +15,13 @@
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metaCollection/metaModuleObject.h"
+#include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/metaCollection/table/metaTableObject.h"
 #include "backend/compiler/value.h"
 #include "backend/compiler/compileCode.h"
+#include "backend/objCtor.h"
+#include "backend/propertyManager/property/propertyBoolean.h"
 #include "backend/plugin/pluginApi.h"
 #include "backend/plugin/pluginManager.h"
 
@@ -61,6 +64,8 @@ const std::unordered_map<std::string, unsigned long long>& KindMap()
 		{ "commonmodule",               g_metaCommonModuleCLSID               },
 		{ "commonform",                 g_metaCommonFormCLSID                 },
 		{ "commontemplate",             g_metaCommonTemplateCLSID             },
+		{ "template",                   g_metaTemplateCLSID                   },
+		{ "printform",                  g_metaTemplateCLSID                   },
 		{ "picture",                    g_metaPictureCLSID                    },
 		{ "interface",                  g_metaInterfaceCLSID                  },
 		{ "role",                       g_metaRoleCLSID                       },
@@ -122,6 +127,7 @@ const std::unordered_map<unsigned long long, std::string>& CLSIDToKindMap()
 		// not the kind string. tabularSectionAttribute also collapses to
 		// "Attribute" — the *path* disambiguates parent context.
 		{ g_metaFormCLSID,                       "Form"                        },
+		{ g_metaTemplateCLSID,                   "Template"                    },
 		{ g_metaAttributeCLSID,                  "Attribute"                   },
 		{ g_metaTableCLSID,                      "TabularSection"              },
 		{ g_metaModuleCLSID,                     "ObjectModule"                },
@@ -228,6 +234,8 @@ unsigned long long ChildContainerCLSID(const std::string& container)
 		return out;
 	}();
 	if (c == "forms"            || c == "form")             return g_metaFormCLSID;
+	if (c == "templates"        || c == "template" ||
+	    c == "printforms"       || c == "printform")        return g_metaTemplateCLSID;
 	if (c == "attributes"       || c == "attribute")        return g_metaAttributeCLSID;
 	if (c == "dimensions"       || c == "dimension")        return g_metaDimensionCLSID;
 	if (c == "resources"        || c == "resource")         return g_metaResourceCLSID;
@@ -249,6 +257,15 @@ nlohmann::json SerializeChildShallow(const ibValueMetaObject& child)
 	j["synonym"] = std::string(child.GetSynonym().utf8_str());
 	const std::string kind = CLSIDToKindString(child.GetClassType());
 	if (!kind.empty()) j["kind"] = kind;
+	if (const auto* form = dynamic_cast<const ibValueMetaObjectFormBase*>(&child)) {
+		j["formType"] = static_cast<int>(form->GetTypeForm());
+		j["formDataBytes"] = static_cast<int>(form->GetFormData().GetDataLen());
+	}
+	if (const auto* attr = dynamic_cast<const ibValueMetaObjectAttributeBase*>(&child)) {
+		const ibTypeDescription& td = attr->GetTypeDesc();
+		j["typeClassCount"] = static_cast<int>(td.GetClsidList().size());
+		if (td.IsOk()) j["typeClass"] = static_cast<unsigned long long>(td.GetFirstClsid());
+	}
 	return j;
 }
 
@@ -263,6 +280,18 @@ nlohmann::json SerializeObject(const ibValueMetaObject& obj,
 	j["kind"]     = kind;
 	j["name"]     = std::string(obj.GetName().utf8_str());
 	j["synonym"]  = std::string(obj.GetSynonym().utf8_str());
+	if (const auto* form = dynamic_cast<const ibValueMetaObjectFormBase*>(&obj)) {
+		j["formType"] = static_cast<int>(form->GetTypeForm());
+		j["formDataBytes"] = static_cast<int>(form->GetFormData().GetDataLen());
+	}
+	if (const auto* mod = dynamic_cast<const ibValueMetaObjectModuleBase*>(&obj)) {
+		j["moduleCodeBytes"] = static_cast<int>(mod->GetModuleText().utf8_str().length());
+	}
+	if (const auto* attr = dynamic_cast<const ibValueMetaObjectAttributeBase*>(&obj)) {
+		const ibTypeDescription& td = attr->GetTypeDesc();
+		j["typeClassCount"] = static_cast<int>(td.GetClsidList().size());
+		if (td.IsOk()) j["typeClass"] = static_cast<unsigned long long>(td.GetFirstClsid());
+	}
 
 	// Children are the only nested shape we surface in Phase 3.1. The
 	// caller (an LLM agent) walks the array; deeper introspection
@@ -873,6 +902,169 @@ bool RunCreatedMetaObject(ibValueMetaObject* object, std::string& err)
 	return true;
 }
 
+bool SetGeneratedFormType(ibValueMetaObjectFormBase* form,
+                          const nlohmann::json& props,
+                          std::string& errOut)
+{
+	if (form == nullptr) return true;
+	std::string formTypeStr;
+	if (auto it = props.find("formType"); it != props.end() && it->is_string()) {
+		formTypeStr = it->get<std::string>();
+	}
+	if (formTypeStr.empty()) return true;
+	const int ft = FormTypeFromString(formTypeStr);
+	if (ft == defaultFormType && !IsDefaultFormTypeToken(formTypeStr)) {
+		errOut = "unknown formType '" + formTypeStr + "'";
+		return false;
+	}
+	ibProperty* p = form->GetProperty(wxT("FormType"));
+	if (p == nullptr) return true;
+	p->SetValue(wxVariant(static_cast<long>(ft)));
+	if (form->GetTypeForm() != ft) {
+		errOut = "formType is not valid for this metadata object";
+		return false;
+	}
+	return true;
+}
+
+ibValueMetaObject* FindTopLevelByKindAndName(const std::string& kind,
+                                             const std::string& name)
+{
+	const LookupResult r = LookupTopLevel(kind, name);
+	return r.hit;
+}
+
+bool ResolveMetaTypeClass(const std::string& rawType, ibClassID& clsid)
+{
+	std::string type = rawType;
+	std::transform(type.begin(), type.end(), type.begin(),
+	               [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+	if (type == "bool" || type == "boolean") {
+		clsid = ibValue::GetIDByVT(ibValueTypes::TYPE_BOOLEAN);
+		return true;
+	}
+	if (type == "number" || type == "numeric" || type == "integer" ||
+	    type == "int" || type == "decimal") {
+		clsid = ibValue::GetIDByVT(ibValueTypes::TYPE_NUMBER);
+		return true;
+	}
+	if (type == "date" || type == "datetime") {
+		clsid = ibValue::GetIDByVT(ibValueTypes::TYPE_DATE);
+		return true;
+	}
+	if (type == "string" || type == "str" || type == "text") {
+		clsid = ibValue::GetIDByVT(ibValueTypes::TYPE_STRING);
+		return true;
+	}
+
+	const auto dot = rawType.find('.');
+	if (dot != std::string::npos) {
+		std::string kind = rawType.substr(0, dot);
+		std::string name = rawType.substr(dot + 1);
+		ibCtorObjectMetaType metaType = ibCtorObjectMetaType::ibCtorObjectMetaType_Reference;
+		if (LowerAscii(kind) == "catalogref") kind = "Catalog";
+		else if (LowerAscii(kind) == "documentref") kind = "Document";
+		else if (LowerAscii(kind) == "enumerationref") kind = "Enumeration";
+		else if (LowerAscii(kind) == "chartofaccountsref") kind = "ChartOfAccounts";
+		else if (LowerAscii(kind) == "chartofcharacteristictypesref") kind = "ChartOfCharacteristicTypes";
+		else if (LowerAscii(kind) == "catalog" ||
+		         LowerAscii(kind) == "document" ||
+		         LowerAscii(kind) == "enumeration" ||
+		         LowerAscii(kind) == "chartofaccounts" ||
+		         LowerAscii(kind) == "chartofcharacteristictypes") {
+			metaType = ibCtorObjectMetaType::ibCtorObjectMetaType_Reference;
+		} else {
+			return false;
+		}
+		ibValueMetaObject* meta = FindTopLevelByKindAndName(kind, name);
+		if (meta == nullptr || activeMetaData == nullptr) return false;
+		const ibCtorMetaValueType* ctor = activeMetaData->GetTypeCtor(meta, metaType);
+		if (ctor == nullptr) return false;
+		clsid = ctor->GetClassType();
+		return true;
+	}
+	return false;
+}
+
+bool ApplyTypeProperties(ibValueMetaObject* obj,
+                         const nlohmann::json& props,
+                         std::string& errOut)
+{
+	auto* attr = dynamic_cast<ibValueMetaObjectAttributeBase*>(obj);
+	if (attr == nullptr) return true;
+
+	auto typeIt = props.find("type");
+	if (typeIt == props.end()) typeIt = props.find("valueType");
+	if (typeIt == props.end()) return true;
+	if (!typeIt->is_string()) {
+		errOut = "type must be a string";
+		return false;
+	}
+
+	ibClassID clsid = 0;
+	const std::string typeName = typeIt->get<std::string>();
+	if (!ResolveMetaTypeClass(typeName, clsid)) {
+		errOut = "unknown attribute type '" + typeName + "'";
+		return false;
+	}
+
+	ibTypeDescription::ibTypeData typeData;
+	if (auto it = props.find("length"); it != props.end() && it->is_number_integer()) {
+		typeData.SetString(static_cast<unsigned short>(std::max(1, it->get<int>())));
+	}
+	if (auto it = props.find("precision"); it != props.end() && it->is_number_integer()) {
+		const int precision = std::max(1, std::min(38, it->get<int>()));
+		int scale = 0;
+		if (auto sc = props.find("scale"); sc != props.end() && sc->is_number_integer()) {
+			scale = std::max(0, std::min(precision, sc->get<int>()));
+		} else if (auto sc2 = props.find("fractionDigits"); sc2 != props.end() && sc2->is_number_integer()) {
+			scale = std::max(0, std::min(precision, sc2->get<int>()));
+		}
+		const bool nonNegative =
+		    props.value("nonNegative", false) || props.value("positiveOnly", false);
+		typeData.SetNumber(static_cast<unsigned char>(precision),
+		                   static_cast<unsigned char>(scale),
+		                   nonNegative);
+	}
+	attr->GetTypeDesc().SetDefaultMetaType(clsid, typeData);
+
+	if (auto it = props.find("required"); it != props.end() && it->is_boolean()) {
+		if (auto* fill = dynamic_cast<ibPropertyBoolean*>(obj->GetProperty(wxT("FillCheck")))) {
+			fill->SetValue(it->get<bool>());
+		}
+	}
+	return true;
+}
+
+bool MaterializeGeneratedForm(ibValueMetaObjectFormBase* form,
+                              ibValueMetaObject* parent,
+                              std::string& errOut)
+{
+	if (form == nullptr || parent == nullptr) return true;
+	if (!form->GetFormData().IsEmpty()) return true;
+
+	auto* generic = dynamic_cast<ibValueMetaObjectGenericData*>(parent);
+	if (generic == nullptr) return true;
+	wxString error;
+	if (!generic->MaterializeFormData(form, error)) {
+		errOut = std::string("generated form build failed: ") +
+		         std::string(error.utf8_str());
+		return false;
+	}
+	return true;
+}
+
+void RefreshGeneratedFormsForParent(ibValueMetaObject* parent)
+{
+	auto* generic = dynamic_cast<ibValueMetaObjectGenericData*>(parent);
+	if (generic == nullptr) return;
+	for (ibValueMetaObjectFormBase* form : generic->GetFormArrayObject()) {
+		if (form == nullptr || !form->GetFormData().IsEmpty()) continue;
+		std::string ignored;
+		(void)MaterializeGeneratedForm(form, parent, ignored);
+	}
+}
+
 // AGENT-CHILD: apply property-bag fields shared across all child kinds.
 // Returns true on success. `clsid` informs which fields are honoured —
 // e.g. moduleCode is only valid on forms/modules, formType only on
@@ -969,23 +1161,11 @@ bool ApplyCreateProperties(ibValueMetaObject* obj,
 	// parents (Document/Register) share enough of the vocabulary that
 	// FormTypeFromString gives the right answer for Sigma's tokens.
 	if (clsid == g_metaFormCLSID) {
-		std::string formTypeStr;
-		if (auto it = props.find("formType"); it != props.end() && it->is_string()) {
-			formTypeStr = it->get<std::string>();
-		}
-		// We accept formType=Form / ItemForm without setting it explicitly —
-		// defaultFormType is the safe fallback. An unknown formType token
-		// also lands on defaultFormType (Designer treats it as "Form").
-		if (!formTypeStr.empty()) {
-			const int ft = FormTypeFromString(formTypeStr);
-			// formType is exposed via a property; we cannot write through
-			// the wxProperty API from here without dragging the GUI in.
-			// Acceptable: the form is created with defaultFormType and
-			// the operator can adjust in the inspector. Future commit
-			// can wire SetFormType(int) into the backend API surface.
-			(void)ft;
-		}
+		if (!SetGeneratedFormType(dynamic_cast<ibValueMetaObjectFormBase*>(obj),
+		                          props, errOut)) return false;
 	}
+
+	if (!ApplyTypeProperties(obj, props, errOut)) return false;
 
 	return true;
 }
@@ -1101,6 +1281,23 @@ int HostMetaCreate(const char* pluginId,
 			SetError(errorMsg, "MetaCreate: " + err);
 			return -1;
 		}
+		if (!ApplyCreateProperties(child, r.childCLSID, props, err)) {
+			DestroyCreatedMetaObject(r.parent, child);
+			SetError(errorMsg, "MetaCreate: " + err);
+			return -1;
+		}
+		if (r.childCLSID == g_metaFormCLSID &&
+		    !MaterializeGeneratedForm(dynamic_cast<ibValueMetaObjectFormBase*>(child),
+		                              r.parent, err)) {
+			DestroyCreatedMetaObject(r.parent, child);
+			SetError(errorMsg, "MetaCreate: " + err);
+			return -1;
+		}
+		if (r.childCLSID == g_metaAttributeCLSID ||
+		    r.childCLSID == g_metaDimensionCLSID ||
+		    r.childCLSID == g_metaResourceCLSID) {
+			RefreshGeneratedFormsForParent(r.parent);
+		}
 
 		// AGENT-CHILD: tabular section creation — when properties carry
 		// an `attributes` array, create one attribute child per entry.
@@ -1123,9 +1320,10 @@ int HostMetaCreate(const char* pluginId,
 					}
 					col->SetName(wxString::FromUTF8(nameIt->get<std::string>()));
 					std::string ignored;
-					(void)ApplyCreateProperties(col, g_metaAttributeCLSID, a, ignored);
 					(void)RunCreatedMetaObject(col, ignored);
+					(void)ApplyCreateProperties(col, g_metaAttributeCLSID, a, ignored);
 				}
+				RefreshGeneratedFormsForParent(r.parent);
 			}
 		}
 

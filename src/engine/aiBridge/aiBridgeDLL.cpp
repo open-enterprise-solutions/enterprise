@@ -157,6 +157,8 @@ bool IsDirectChildContainer(const std::string& segment)
 	       lower == "dimensions" || lower == "dimension" ||
 	       lower == "resources" || lower == "resource" ||
 	       lower == "commands" || lower == "command" ||
+	       lower == "templates" || lower == "template" ||
+	       lower == "printforms" || lower == "printform" ||
 	       lower == "tabularsections" || lower == "tabularsection";
 }
 
@@ -257,6 +259,40 @@ std::string NormalizeAgentFullName(const std::string& fullName)
 		out += NormalizeTechnicalNameSegment(parts[i]);
 	}
 	return out;
+}
+
+std::string NormalizeAgentTypeName(const std::string& typeName)
+{
+	const auto parts = SplitDottedPath(typeName);
+	if (parts.size() != 2) return typeName;
+	const std::string lowerKind = LowerAscii(parts[0]);
+	if (lowerKind != "catalogref" && lowerKind != "documentref" &&
+	    lowerKind != "enumerationref" &&
+	    lowerKind != "chartofaccountsref" &&
+	    lowerKind != "chartofcharacteristictypesref" &&
+	    lowerKind != "catalog" && lowerKind != "document" &&
+	    lowerKind != "enumeration" &&
+	    lowerKind != "chartofaccounts" &&
+	    lowerKind != "chartofcharacteristictypes") {
+		return typeName;
+	}
+	return parts[0] + "." + NormalizeTechnicalNameSegment(parts[1]);
+}
+
+void NormalizeAgentPropertyTypes(nlohmann::json& value)
+{
+	if (value.is_object()) {
+		for (auto& kv : value.items()) {
+			if ((kv.key() == "type" || kv.key() == "valueType") &&
+			    kv.value().is_string()) {
+				kv.value() = NormalizeAgentTypeName(kv.value().get<std::string>());
+			} else {
+				NormalizeAgentPropertyTypes(kv.value());
+			}
+		}
+	} else if (value.is_array()) {
+		for (auto& item : value) NormalizeAgentPropertyTypes(item);
+	}
 }
 
 std::string NormalizedMetaKind(std::string kind)
@@ -393,6 +429,32 @@ void PushAgentChildMutation(std::vector<nlohmann::json>& out,
 	out.push_back(std::move(child));
 }
 
+void PushAgentModuleEdit(std::vector<nlohmann::json>& out,
+                         const std::string& parentFullName,
+                         const char* moduleName,
+                         const nlohmann::json& moduleValue)
+{
+	if (!moduleValue.is_string() && !moduleValue.is_object()) return;
+	nlohmann::json patch = nlohmann::json::object();
+	if (moduleValue.is_string()) {
+		patch["moduleCode"] = moduleValue.get<std::string>();
+	} else {
+		patch = moduleValue;
+		if (!patch.contains("moduleCode") && patch.contains("code")) {
+			patch["moduleCode"] = patch["code"];
+		}
+	}
+	if (!patch.contains("moduleCode") || !patch["moduleCode"].is_string()) {
+		return;
+	}
+	nlohmann::json edit;
+	edit["op"] = "edit";
+	edit["kind"] = moduleName;
+	edit["fullName"] = parentFullName + "." + moduleName;
+	edit["properties"] = patch;
+	out.push_back(std::move(edit));
+}
+
 void ExpandAgentMutation(const nlohmann::json& mutation,
                          std::vector<nlohmann::json>& out)
 {
@@ -425,11 +487,39 @@ void ExpandAgentMutation(const nlohmann::json& mutation,
 			PushAgentChildMutation(out, fullName, "Forms", "Form", item, "Form");
 		}
 	}
+	if (props->contains("templates") && (*props)["templates"].is_array()) {
+		for (const auto& item : (*props)["templates"]) {
+			PushAgentChildMutation(out, fullName, "Templates", "Template", item);
+		}
+	}
+	if (props->contains("printForms") && (*props)["printForms"].is_array()) {
+		for (const auto& item : (*props)["printForms"]) {
+			PushAgentChildMutation(out, fullName, "Templates", "Template", item);
+		}
+	}
 	if (props->contains("tabularSections") &&
 	    (*props)["tabularSections"].is_array()) {
 		for (const auto& item : (*props)["tabularSections"]) {
 			PushAgentChildMutation(out, fullName, "TabularSections",
 			                       "TabularSection", item);
+		}
+	}
+	if (props->contains("objectModule")) {
+		PushAgentModuleEdit(out, fullName, "ObjectModule", (*props)["objectModule"]);
+	}
+	if (props->contains("managerModule")) {
+		PushAgentModuleEdit(out, fullName, "ManagerModule", (*props)["managerModule"]);
+	}
+	if (props->contains("modules") && (*props)["modules"].is_array()) {
+		for (const auto& item : (*props)["modules"]) {
+			if (!item.is_object()) continue;
+			std::string moduleName = JsonStringField(item, "kind", "name", "type");
+			if (moduleName.empty()) continue;
+			moduleName = NormalizedMetaKind(moduleName);
+			if (moduleName == "Module") moduleName = "ObjectModule";
+			if (moduleName == "ObjectModule" || moduleName == "ManagerModule") {
+				PushAgentModuleEdit(out, fullName, moduleName.c_str(), item);
+			}
 		}
 	}
 }
@@ -469,6 +559,9 @@ nlohmann::json NormalizeAgentMutations(const nlohmann::json& payload)
 			if (!props->contains("synonym")) {
 				props->operator[]("synonym") = LeafNameFromPossiblyQualifiedName(originalFullName);
 			}
+		}
+		if (mutation.contains("properties")) {
+			NormalizeAgentPropertyTypes(mutation["properties"]);
 		}
 		const std::string dedupeKey = op + "\n" + kind + "\n" + fullName;
 		if (!seen.insert(dedupeKey).second) continue;
@@ -1489,8 +1582,29 @@ void RunOesAgent(std::string requestId, std::string prompt,
 	nlohmann::json body;
 	body["name"]              = "oes_agent";
 	body["input"]             = nlohmann::json::object();
-	body["input"]["prompt"]   = prompt;
+	body["input"]["prompt"]   =
+	    "[OES metadata generation requirements]\n"
+	    "- Return executable metadata mutations, not prose-only guidance.\n"
+	    "- Technical object names must be English identifiers; put Ukrainian/Russian user labels into synonym/comment fields.\n"
+	    "- Before choosing a complex type, use the provided Designer context and existing metadata names. Reuse existing CatalogRef/DocumentRef/EnumerationRef/ChartOfAccountsRef/ChartOfCharacteristicTypesRef types instead of creating duplicate string fields.\n"
+	    "- Full object creation must include applicable attributes with concrete types, tabular sections, dimensions/resources, forms, object and manager modules, posting/business logic, print templates, roles/rights when applicable, and reports for business workflows.\n"
+	    "- For accounting configurations, model ChartOfAccounts and subconto explicitly. Do not require off-balance accounts to close to zero.\n"
+	    "- Emit modules in the current syntax from context.syntax. Do not mix CES and VES.\n"
+	    "- Supported mutation shapes include child objects under Attributes, Dimensions, Resources, TabularSections, Forms, Templates, plus ObjectModule/ManagerModule edits.\n"
+	    "[/OES metadata generation requirements]\n\n" + prompt;
 	body["input"]["locale"]   = NormalizePugiLocale(locale);
+	body["input"]["requirements"] = {
+		{ "technicalNames", "english" },
+		{ "labelsInSynonyms", true },
+		{ "reuseExistingTypes", true },
+		{ "includeForms", true },
+		{ "includeModules", true },
+		{ "includePostingLogic", true },
+		{ "includePrintTemplates", true },
+		{ "includeRoles", true },
+		{ "includeReports", true },
+		{ "offBalanceMayNotBalanceToZero", true }
+	};
 	// AGENT-MODE: forward Designer context verbatim when provided; the
 	// server uses it to disambiguate fullName references like "Catalog2".
 	if (!contextJson.empty()) {

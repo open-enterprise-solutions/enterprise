@@ -152,21 +152,26 @@ def main():
                 qok, qdetail = query(root)
                 record(f"query {root}", qok, qdetail if not qok else "")
 
+        roots_by_kind = {r.split(".", 1)[0]: r for r in created_roots}
+        ref_catalog = roots_by_kind.get("Catalog")
+        ref_type = f"CatalogRef.{ref_catalog.split('.', 1)[1]}" if ref_catalog else "String"
+
         child_cases = [
             ("Catalog", "Attributes.Phone", "Attribute", {"type": "String", "length": 20, "synonym": "Телефон"}),
             ("Catalog", "Forms.ItemForm", "Form", {"formType": "ItemForm", "synonym": "Форма елемента"}),
+            ("Catalog", "Templates.PrintForm", "Template", {"synonym": "Друкована форма"}),
             ("Catalog", "TabularSections.Contacts", "TabularSection", {"synonym": "Контакти", "attributes": [{"name": "Value", "type": "String", "length": 80, "synonym": "Значення"}]}),
             ("Document", "Attributes.Amount", "Attribute", {"type": "Number", "precision": 2, "synonym": "Сума"}),
+            ("Document", "Attributes.Counterparty", "Attribute", {"type": ref_type, "synonym": "Контрагент"}),
             ("Document", "Forms.ItemForm", "Form", {"formType": "ItemForm", "synonym": "Форма документа"}),
             ("Document", "TabularSections.Lines", "TabularSection", {"synonym": "Рядки", "attributes": [{"name": "Quantity", "type": "Number", "precision": 3, "synonym": "Кількість"}]}),
             ("Report", "Forms.ReportForm", "Form", {"formType": "Form", "synonym": "Форма звіту"}),
             ("DataProcessor", "Forms.ProcessorForm", "Form", {"formType": "Form", "synonym": "Форма обробки"}),
-            ("InformationRegister", "Dimensions.Counterparty", "Dimension", {"type": "CatalogRef.Counterparties", "synonym": "Контрагент"}),
+            ("InformationRegister", "Dimensions.Counterparty", "Dimension", {"type": ref_type, "synonym": "Контрагент"}),
             ("InformationRegister", "Resources.Amount", "Resource", {"type": "Number", "precision": 2, "synonym": "Сума"}),
-            ("AccumulationRegister", "Dimensions.Warehouse", "Dimension", {"type": "CatalogRef.Warehouses", "synonym": "Склад"}),
+            ("AccumulationRegister", "Dimensions.Warehouse", "Dimension", {"type": ref_type, "synonym": "Склад"}),
             ("AccumulationRegister", "Resources.Quantity", "Resource", {"type": "Number", "precision": 3, "synonym": "Кількість"}),
         ]
-        roots_by_kind = {r.split(".", 1)[0]: r for r in created_roots}
         for parent_kind, suffix, kind, props in child_cases:
             root = roots_by_kind.get(parent_kind)
             if not root:
@@ -180,6 +185,16 @@ def main():
                 print(f"query {full_name}", file=sys.stderr, flush=True)
                 qok, qdetail = query(full_name)
                 record(f"query {full_name}", qok, qdetail if not qok else "")
+                if qok and kind in ("Attribute", "Dimension", "Resource"):
+                    sc = qdetail.get("structuredContent", {})
+                    text = qdetail.get("content", [{}])[0].get("text", "{}")
+                    try:
+                        payload = json.loads(text)
+                    except json.JSONDecodeError:
+                        payload = {}
+                    type_count = payload.get("typeClassCount", 0)
+                    record(f"type {full_name}", type_count > 0,
+                           f"typeClassCount={type_count}")
 
         module_targets = [
             ("Catalog", "ObjectModule"),

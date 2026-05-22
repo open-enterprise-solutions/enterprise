@@ -79,10 +79,28 @@ bool ibVisualEditorNotebook::ibVisualEditor::LoadForm()
 
 	auto* cc = metaData->GetCompileCache();
 	if (!cc || !cc->FindCompileModule(creator, m_valueForm)) {
-		m_valueForm = new ibValueForm(creator, nullptr);
-		if (!creator->LoadFormData(m_valueForm)) {
-			wxDELETE(m_valueForm);
-			return false;
+		if (!creator->GetFormData().IsEmpty()) {
+			m_valueForm = new ibValueForm(creator, nullptr);
+			if (!creator->LoadFormData(m_valueForm)) {
+				wxDELETE(m_valueForm);
+				return false;
+			}
+		}
+		else {
+			auto* parent = dynamic_cast<ibValueMetaObjectGenericData*>(
+				const_cast<ibValueMetaObject*>(creator->GetParent()));
+			if (parent != nullptr) {
+				m_valueForm = dynamic_cast<ibValueForm*>(
+					parent->CreateObjectForm(
+						const_cast<ibValueMetaObjectFormBase*>(creator)));
+				if (m_valueForm != nullptr) {
+					const_cast<ibValueMetaObjectFormBase*>(creator)->SaveFormData(m_valueForm);
+				}
+			}
+			if (m_valueForm == nullptr) {
+				m_valueForm = new ibValueForm(creator, nullptr);
+				m_valueForm->BuildForm(creator->GetTypeForm());
+			}
 		}
 	}
 

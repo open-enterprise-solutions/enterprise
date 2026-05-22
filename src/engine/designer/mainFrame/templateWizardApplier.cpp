@@ -112,6 +112,8 @@ static bool IsDirectChildContainer(const std::string& segment)
 	       lower == "dimensions" || lower == "dimension" ||
 	       lower == "resources" || lower == "resource" ||
 	       lower == "commands" || lower == "command" ||
+	       lower == "templates" || lower == "template" ||
+	       lower == "printforms" || lower == "printform" ||
 	       lower == "tabularsections" || lower == "tabularsection";
 }
 
@@ -172,6 +174,40 @@ static std::string NormalizeTechnicalFullName(const std::string& fullName)
 		out += NormalizeTechnicalNameSegment(parts[i]);
 	}
 	return out;
+}
+
+static std::string NormalizeTypeName(const std::string& typeName)
+{
+	const auto parts = SplitDottedPath(typeName);
+	if (parts.size() != 2) return typeName;
+	const std::string lowerKind = LowerAscii(parts[0]);
+	if (lowerKind != "catalogref" && lowerKind != "documentref" &&
+	    lowerKind != "enumerationref" &&
+	    lowerKind != "chartofaccountsref" &&
+	    lowerKind != "chartofcharacteristictypesref" &&
+	    lowerKind != "catalog" && lowerKind != "document" &&
+	    lowerKind != "enumeration" &&
+	    lowerKind != "chartofaccounts" &&
+	    lowerKind != "chartofcharacteristictypes") {
+		return typeName;
+	}
+	return parts[0] + "." + NormalizeTechnicalNameSegment(parts[1]);
+}
+
+static void NormalizePropertyTypes(nlohmann::json& value)
+{
+	if (value.is_object()) {
+		for (auto& kv : value.items()) {
+			if ((kv.key() == "type" || kv.key() == "valueType") &&
+			    kv.value().is_string()) {
+				kv.value() = NormalizeTypeName(kv.value().get<std::string>());
+			} else {
+				NormalizePropertyTypes(kv.value());
+			}
+		}
+	} else if (value.is_array()) {
+		for (auto& item : value) NormalizePropertyTypes(item);
+	}
 }
 
 static std::string NormalizedKind(std::string kind)
@@ -247,6 +283,32 @@ static void PushChildMutation(std::vector<nlohmann::json>& out,
 	out.push_back(std::move(child));
 }
 
+static void PushModuleEdit(std::vector<nlohmann::json>& out,
+                           const std::string& parentFullName,
+                           const char* moduleName,
+                           const nlohmann::json& moduleValue)
+{
+	if (!moduleValue.is_string() && !moduleValue.is_object()) return;
+	nlohmann::json patch = nlohmann::json::object();
+	if (moduleValue.is_string()) {
+		patch["moduleCode"] = moduleValue.get<std::string>();
+	} else {
+		patch = moduleValue;
+		if (!patch.contains("moduleCode") && patch.contains("code")) {
+			patch["moduleCode"] = patch["code"];
+		}
+	}
+	if (!patch.contains("moduleCode") || !patch["moduleCode"].is_string()) {
+		return;
+	}
+	nlohmann::json edit;
+	edit["op"] = "edit";
+	edit["kind"] = moduleName;
+	edit["fullName"] = parentFullName + "." + moduleName;
+	edit["properties"] = patch;
+	out.push_back(std::move(edit));
+}
+
 static void ExpandTemplateMutation(const nlohmann::json& m,
                                    std::vector<nlohmann::json>& out)
 {
@@ -283,11 +345,39 @@ static void ExpandTemplateMutation(const nlohmann::json& m,
 			PushChildMutation(out, fullName, "Forms", "Form", item, "Form");
 		}
 	}
+	if (props->contains("templates") && (*props)["templates"].is_array()) {
+		for (const auto& item : (*props)["templates"]) {
+			PushChildMutation(out, fullName, "Templates", "Template", item);
+		}
+	}
+	if (props->contains("printForms") && (*props)["printForms"].is_array()) {
+		for (const auto& item : (*props)["printForms"]) {
+			PushChildMutation(out, fullName, "Templates", "Template", item);
+		}
+	}
 	if (props->contains("tabularSections") &&
 	    (*props)["tabularSections"].is_array()) {
 		for (const auto& item : (*props)["tabularSections"]) {
 			PushChildMutation(out, fullName, "TabularSections",
 			                  "TabularSection", item);
+		}
+	}
+	if (props->contains("objectModule")) {
+		PushModuleEdit(out, fullName, "ObjectModule", (*props)["objectModule"]);
+	}
+	if (props->contains("managerModule")) {
+		PushModuleEdit(out, fullName, "ManagerModule", (*props)["managerModule"]);
+	}
+	if (props->contains("modules") && (*props)["modules"].is_array()) {
+		for (const auto& item : (*props)["modules"]) {
+			if (!item.is_object()) continue;
+			std::string moduleName =
+			    ibTemplateWizardPayload::StringField(item, "kind", "name", "type");
+			moduleName = NormalizedKind(moduleName);
+			if (moduleName == "Module") moduleName = "ObjectModule";
+			if (moduleName == "ObjectModule" || moduleName == "ManagerModule") {
+				PushModuleEdit(out, fullName, moduleName.c_str(), item);
+			}
 		}
 	}
 }
@@ -703,6 +793,7 @@ ApplyResult Apply(const wxString& responseJson, bool includeData,
 		if (fullName != originalFullName && !propsJson.contains("synonym")) {
 			propsJson["synonym"] = LeafNameFromPossiblyQualifiedName(originalFullName);
 		}
+		NormalizePropertyTypes(propsJson);
 		const std::string props = propsJson.dump();
 
 		op.op       = wxString::FromUTF8(opStr.c_str());

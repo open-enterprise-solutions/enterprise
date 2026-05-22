@@ -39,6 +39,7 @@
 #include "backend/session/session.h"
 #include "backend/typeDescription.h"
 #include "backend/guid.h"
+#include "backend/objCtor.h"
 
 #include <wx/datetime.h>
 
@@ -311,7 +312,7 @@ const char* CLSIDToKindLabel(unsigned long long cls)
 		"AccountingRegister",
 		// Child kinds the agent walks into
 		"Attribute", "TabularSection", "Form", "Command",
-		"Module", "CommonModule", "ManagerModule",
+		"Module", "CommonModule", "ManagerModule", "Template",
 		nullptr
 	};
 	for (const char* const* p = kCandidates; *p; ++p) {
@@ -382,17 +383,69 @@ nlohmann::json SynonymMap(const std::string& syn)
 	return m;
 }
 
+std::string ValueTypeName(ibValueTypes type)
+{
+	switch (type) {
+	case ibValueTypes::TYPE_BOOLEAN: return "Boolean";
+	case ibValueTypes::TYPE_NUMBER:  return "Number";
+	case ibValueTypes::TYPE_DATE:    return "Date";
+	case ibValueTypes::TYPE_STRING:  return "String";
+	case ibValueTypes::TYPE_NULL:    return "Null";
+	case ibValueTypes::TYPE_EMPTY:   return "Undefined";
+	default:                         return "";
+	}
+}
+
+std::string TypeClassName(ibClassID clsid)
+{
+	const ibValueTypes vt = ibValue::GetVTByID(clsid);
+	std::string primitive = ValueTypeName(vt);
+	if (!primitive.empty()) return primitive;
+
+	if (activeMetaData != nullptr) {
+		const ibCtorMetaValueType* ctor = activeMetaData->GetTypeCtor(clsid);
+		if (ctor != nullptr) {
+			return std::string(ctor->GetClassName().utf8_str());
+		}
+	}
+
+	try {
+		wxString name = ibValue::GetNameObjectFromID(clsid);
+		if (!name.empty()) return std::string(name.utf8_str());
+	} catch (const ibBackendException&) {
+		// Unknown dynamic type: keep the numeric CLSID below so callers can
+		// still compare exact types without losing information.
+	}
+	return std::to_string(static_cast<unsigned long long>(clsid));
+}
+
 // MCP: build the attribute-shape JSON object matching outputSchema's
-// `attributes[]` items. type/length/precision aren't exposed via the
-// shallow metaBridge serialiser yet — emit them only when we can pull
-// them off the live metaObject. For Phase 3.1 that means "name + synonym",
-// type qualifiers wait on a future metaBridge surface.
+// `attributes[]` items. The type field is derived from ibTypeDescription so
+// agents can reuse existing CatalogRef/DocumentRef/etc. instead of degrading
+// every generated property to String.
 nlohmann::json BuildAttributeEntry(const ibValueMetaObject* attr)
 {
 	nlohmann::json a;
 	a["name"]    = std::string(attr->GetName().utf8_str());
-	a["type"]    = "";  // placeholder — type qualifier surface not exported yet
+	a["type"]    = "";
 	a["synonym"] = SynonymMap(std::string(attr->GetSynonym().utf8_str()));
+	if (const auto* typed = dynamic_cast<const ibValueMetaObjectAttributeBase*>(attr)) {
+		const ibTypeDescription& td = typed->GetTypeDesc();
+		a["typeClassCount"] = static_cast<int>(td.GetClsidList().size());
+		nlohmann::json classes = nlohmann::json::array();
+		std::string joined;
+		for (const auto& clsid : td.GetClsidList()) {
+			const std::string name = TypeClassName(clsid);
+			if (!joined.empty()) joined += "|";
+			joined += name;
+			classes.push_back({
+				{ "id", static_cast<unsigned long long>(clsid) },
+				{ "name", name }
+			});
+		}
+		a["type"] = joined;
+		a["typeClasses"] = std::move(classes);
+	}
 	return a;
 }
 
