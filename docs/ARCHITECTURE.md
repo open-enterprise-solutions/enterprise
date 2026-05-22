@@ -207,7 +207,7 @@ Each opcode has type-specialised variants selected by adding `TYPE_DELTA1` (numb
 
 ### Keyword Inventory
 
-44 keywords defined in `KEY_*` enumerators (e.g., `KEY_IF`, `KEY_FOR`, `KEY_FOREACH`, `KEY_PROCEDURE`, `KEY_FUNCTION`, `KEY_TRY`, `KEY_EXCEPT`, `KEY_ENDTRY`, `KEY_RAISE`, `KEY_NEW`, etc.) plus preprocessor keywords (`KEY_DEFINE`, `KEY_UNDEF`, `KEY_IFDEF`, `KEY_IFNDEF`, `KEY_REGION`, `KEY_ENDREGION`). Keywords are English-only — there are no Cyrillic / Russian-language synonyms (unlike 1C:Enterprise). Two parallel syntax modes share these keywords and compile to the same bytecode:
+44 keywords defined in `KEY_*` enumerators (e.g., `KEY_IF`, `KEY_FOR`, `KEY_FOREACH`, `KEY_PROCEDURE`, `KEY_FUNCTION`, `KEY_TRY`, `KEY_EXCEPT`, `KEY_ENDTRY`, `KEY_RAISE`, `KEY_NEW`, etc.) plus preprocessor keywords (`KEY_DEFINE`, `KEY_UNDEF`, `KEY_IFDEF`, `KEY_IFNDEF`, `KEY_REGION`, `KEY_ENDREGION`). Keywords are English-only — there are no Cyrillic / Russian-language synonyms. Two parallel syntax modes share these keywords and compile to the same bytecode:
 - **VES** — Visual-Basic-style: `If c Then … EndIf`, `For Each x In coll … EndDo`, `Procedure F() … EndProcedure`. Keyword-fenced blocks.
 - **CES** — C-style: `if (c) { … }`, `for each (x in coll) { … }`, `Procedure F() { … }`. Brace-delimited. Default for new configurations since 2026-05-10.
 

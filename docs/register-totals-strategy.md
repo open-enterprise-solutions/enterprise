@@ -4,8 +4,7 @@ Architecture proposal for OES register storage that moves the
 "totals" maintenance burden from C++ application code into the
 database via triggers, while preserving the same read latency
 profile as the classic denormalized totals table pattern (used by
-OES today, and by similar enterprise platforms such as 1C:Enterprise,
-ERPNext, Sage). Status: **design discussed 2026-04-30, not yet
+OES today, and by similar enterprise platforms). Status: **design discussed 2026-04-30, not yet
 implemented.** Expected first target: PostgreSQL production, with FB
 embedded sharing the same pattern at smaller scale.
 
@@ -27,9 +26,8 @@ updates `totals_X` rows from C++. Two problems compound:
    `totals` update, or if a code path forgets to update `totals`, or
    if a backdated movement is inserted without recalculating
    subsequent periods, totals diverges from movements. The traditional
-   compensation is a "totals recalculation" command (1C:Enterprise's
-   `пересчёт итогов`, ERPNext's `repost`) — periodic full rebuild from
-   movements. Operationally heavy, prone to inconsistency windows.
+   compensation is a "totals recalculation" command — periodic full
+   rebuild from movements. Operationally heavy, prone to inconsistency windows.
 2. **Maintenance code in C++.** Logic for "this kind of register's
    totals update for this kind of dimension/resource" lives in
    `*Query.cpp` files, hand-written per type. Schema changes
@@ -163,7 +161,7 @@ Fitness for ~10 K concurrent readers asking for current balance:
 
 ### Write path (movement INSERT triggering totals UPDATE)
 
-For 100 active writers (document-posting workload, comparable to 1C:Enterprise / ERPNext throughput profiles):
+For 100 active writers (typical document-posting workload):
 
 - ~5–10 movements per posted document, ~1 doc/min per writer →
   500–1000 mov-writes/min → ~10–20 trigger fires/sec.

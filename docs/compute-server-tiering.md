@@ -3,7 +3,7 @@
 Roadmap for splitting OES into a 3-tier application: thin presentation
 clients (GUI + web frontend) talking over a network protocol to a
 dedicated compute server that owns runtime state, worker pool, and
-connection pool. Same shape as other enterprise low-code platforms with a compute-server tier (1C:Enterprise `rphost`, Mendix Runtime nodes, OutSystems compute cluster).
+connection pool. Same shape as other enterprise low-code platforms with a compute-server tier.
 
 > **Status:** aspirational. Phases 1-2 have foundational work
 > landed (connection pool). Phases 3+ require new processes,
