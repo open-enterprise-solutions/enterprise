@@ -134,6 +134,46 @@ std::string InferKindFromFullName(const std::string& fullName)
 	return dot == std::string::npos ? std::string() : fullName.substr(0, dot);
 }
 
+std::vector<std::string> SplitDottedPath(const std::string& path)
+{
+	std::vector<std::string> parts;
+	size_t start = 0;
+	while (start <= path.size()) {
+		const size_t dot = path.find('.', start);
+		const size_t end = dot == std::string::npos ? path.size() : dot;
+		if (end > start) parts.emplace_back(path.substr(start, end - start));
+		if (dot == std::string::npos) break;
+		start = dot + 1;
+	}
+	return parts;
+}
+
+bool IsDirectChildContainer(const std::string& segment)
+{
+	const std::string lower = LowerAscii(segment);
+	return lower == "forms" || lower == "form" ||
+	       lower == "attributes" || lower == "attribute" ||
+	       lower == "dimensions" || lower == "dimension" ||
+	       lower == "resources" || lower == "resource" ||
+	       lower == "commands" || lower == "command";
+}
+
+std::string LeafNameFromPossiblyQualifiedName(const std::string& name)
+{
+	const auto parts = SplitDottedPath(name);
+	return parts.empty() ? name : parts.back();
+}
+
+std::string NormalizeAgentFullName(const std::string& fullName)
+{
+	const auto parts = SplitDottedPath(fullName);
+	if (parts.size() > 4 && IsDirectChildContainer(parts[2])) {
+		return parts[0] + "." + parts[1] + "." + parts[2] + "." +
+		       parts.back();
+	}
+	return fullName;
+}
+
 std::string NormalizedMetaKind(std::string kind)
 {
 	const std::string lower = LowerAscii(kind);
@@ -237,9 +277,10 @@ void PushAgentChildMutation(std::vector<nlohmann::json>& out,
 	nlohmann::json props = nlohmann::json::object();
 	std::string name;
 	if (item.is_string()) {
-		name = item.get<std::string>();
+		name = LeafNameFromPossiblyQualifiedName(item.get<std::string>());
 	} else {
-		name = JsonStringField(item, "name");
+		name = LeafNameFromPossiblyQualifiedName(
+		    JsonStringField(item, "name", "fullName", "path"));
 		props = item;
 		if (fallbackFormType != nullptr && !props.contains("formType")) {
 			props["formType"] = fallbackFormType;
@@ -315,6 +356,7 @@ nlohmann::json NormalizeAgentMutations(const nlohmann::json& payload)
 		const std::string op = NormalizedMetaOp(mutation);
 		std::string fullName =
 		    JsonStringField(mutation, "fullName", "name", "path");
+		fullName = NormalizeAgentFullName(fullName);
 		std::string kind = JsonStringField(mutation, "kind", "type");
 		if (kind.empty()) kind = InferKindFromFullName(fullName);
 		kind = NormalizedMetaKind(kind);
@@ -1458,6 +1500,7 @@ void RunAgentApply(std::string planId, std::string conversationId,
 		const std::string op = NormalizedMetaOp(m);
 		std::string kind = JsonStringField(m, "kind", "type");
 		std::string fullName = JsonStringField(m, "fullName", "name", "path");
+		fullName = NormalizeAgentFullName(fullName);
 		if (kind.empty()) kind = InferKindFromFullName(fullName);
 		kind = NormalizedMetaKind(kind);
 		const nlohmann::json* propsObj = PickPropertiesObject(m);

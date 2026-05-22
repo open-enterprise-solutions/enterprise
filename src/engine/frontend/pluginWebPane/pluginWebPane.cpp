@@ -1157,7 +1157,6 @@ void ibPluginWebPane::DispatchEnvelope(const wxString& jsonInline)
 		return;
 	}
 	if (kind == "error") {
-		RestorePlanPolicyAfterApply();
 		std::string code, detail;
 		if (env.contains("error") && env["error"].is_object()) {
 			const auto& err = env["error"];
