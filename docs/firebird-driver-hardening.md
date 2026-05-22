@@ -8,9 +8,10 @@ Headers and plugin layout (`engine13`, `icu63`) are correct for FB 5.0
 — legacy C-API and plugin engine version did not bump between 4.x and
 5.x.
 
-> **Status:** landed in working tree, uncommitted. Build pending. No
-> known regressions; existing metadata-driven Apply paths exercise
-> the changed code on the desktop / wenterprise-server smoke runs.
+> **Status:** landed. Shipped in v1.3.0 (2026-05-12). No known
+> regressions on FB 5.0 embedded; metadata-driven Apply paths
+> exercise the changed code in desktop / wenterprise-server smoke
+> runs.
 
 ---
 

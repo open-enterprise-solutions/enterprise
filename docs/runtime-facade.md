@@ -1,73 +1,113 @@
 # Runtime facade — per-session ibValueModuleManager
 
 Design of the OES runtime layer after the refactor: `ibValueModuleManager`
-becomes the per-session root, nested runtimes are attached through a
-descriptor-owned map, bytecode decoupling + AOT persistent cache as
-follow-up. This document records the architectural decisions of the
-2026-04-22 session and the implementation phase plan.
+becomes the per-session root, nested runtimes hang off descriptor-
+owned mixins, bytecode decoupling + AOT persistent cache as follow-up.
+This document records the architectural decisions of the 2026-04-22
+session and the implementation phase plan. Verified against tree on
+2026-05-22.
 
-> **Status (2026-05-03):** ~12 of 17 steps landed.
+> **Status:** 16 of 17 steps landed; only Step 12 (cross-bc metadata
+> refs by guid) is still open.
+>
+> **Verified-in-tree resolution (one map, not two).** Reading "session's
+> ProcUnit map" in earlier drafts of this doc was misleading. The
+> shipped shape is simpler:
+> - Each descriptor (`ibRuntimeModuleDataObject` in `moduleInfo.h:17`)
+>   owns a single `std::shared_ptr<ibProcUnit> m_procUnit`.
+> - `ibValueModuleManager::AttachRuntime(session)` walks the
+>   descriptors and (re)builds their `m_procUnit` for that session,
+>   serialised by `m_runtimeMutex`. `DetachRuntime(session)` is the
+>   symmetric tear-down.
+> - `GetProcUnit()` returns the descriptor's current slot; the
+>   shared_ptr pins it against fast-F5 UAF
+>   (`project_refresh_execute_crash.md`). There is no session-keyed
+>   `std::map<ibSession*, ...>` per descriptor today.
+>
+> This is the actual scaling ceiling for concurrent web sessions on
+> the same descriptor — they coordinate through the runtime mutex
+> rather than each holding their own ProcUnit. The session-keyed-
+> map form remains the design target for high-concurrency web; for
+> the current single-session-per-descriptor-at-a-time workload the
+> mutex form is sufficient.
 >
 > Done:
 > - **1-2** — descriptors compose `ibRuntimeModuleDataObject`
 >   (`backend/moduleInfo.h:17`) with `m_compileModule`, `m_procUnit`
 >   (shared_ptr — pins against fast-F5 UAF), `m_binder`, `m_parent`.
->   `GetProcUnit()` is session-aware (looks in session's ProcUnit map
->   under `ibSessionScope`, falls back to descriptor-owned slot).
->   `appData/webSession` Connect/Disconnect call `AttachRuntime`
->   / `DetachRuntime` on the per-session root.
+>   `appData::Connect` / `ibWebSession::Login` route through
+>   `ibSession::EnsureRoot` + `CompileRoot`; `CompileRoot` itself
+>   calls `m_root->AttachRuntime(this)` (folded in 2026-05-XX — was
+>   formerly an explicit `mm->AttachRuntime(s)` from the caller). The
+>   `appData/webSession` legacy hop is removed.
+> - **3** — `InitRuntimeForSession` / `ExitRuntimeForSession` renamed
+>   to `AttachRuntime(session)` / `DetachRuntime(session)` on
+>   `ibValueModuleManager`. Privatisation behind the descriptor stays
+>   open — methods remain public on mm because the registry's
+>   3-phase `NotifyAuthenticated` still calls them through
+>   `session->CompileRoot()` directly. A private form would require
+>   a façade on `ibSession::Start/Stop` first; not blocking.
 > - **4** — Start/Stop pair lives on `ibValueModuleManager`; descriptor
 >   subclasses inherit through `ibRuntimeModuleDataObject`.
+> - **5** — Facade is `ExecAsProc` / `ExecAsFunc` on
+>   `ibRuntimeModuleDataObject` itself (`moduleInfo.h:18-38` public
+>   variadic sugar; `:160-184` protected array form). Mirrors
+>   `ibProcUnit::CallAsProc/Func` shape — variadic packs into
+>   `ibValue*[]` and forwards. shared_ptr pin against fast-F5 UAF,
+>   null-safety. Better placement than the original `mm->CallAsProc(
+>   obj, method, ...)` sketch — each descriptor pins its own
+>   ProcUnit, no mm hop. 38 object call-sites in 9 files
+>   (catalog/document/charts/registers/common/constant) migrated from
+>   raw `m_procUnit->CallAsProc` to variadic `ExecAsProc`; 8 dispatch
+>   callers (3 mm + 4 record-data + frontend's `form.cpp`) qualified-
+>   call the protected array form via
+>   `ibRuntimeModuleDataObject::ExecAsProc`.
 > - **6-7** — `m_parent` on the runtime base (raw ptr; invariant
 >   "parent outlives child" enforced by owning containers — equivalent
 >   to weak_ptr without cycle risk). `m_compileModule` + `m_byteCode`
 >   live on the descriptor's runtime mixin, not on a singleton mm.
-> - **8** — bytecode self-contained: zero accesses to
->   `byteCode->m_compileModule` / `bc->m_compileModule` left in code
->   (AOT serialize/deserialize works because bc carries everything it
->   needs). `m_dependencyIds` / `m_dependencyVersions`,
->   `bc.CreateBinder()` factory, process-wide registry — all on bc.
+> - **8** — bytecode self-contained. Grep confirms zero accesses to
+>   `byteCode->m_compileModule` / `bc->m_compileModule` in tree. AOT
+>   `Serialize` / `Deserialize` round-trip carries every field the bc
+>   needs (`m_dependencyIds`, `m_dependencyVersions`,
+>   `bc.CreateBinder()` factory, process-wide bytecode registry — all
+>   on bc). What's NOT decoupled yet is cross-bc metadata reference
+>   encoding — that's Step 12.
 > - **9** — object-value composed via descriptor's runtime mixin; no
 >   shared mm field.
 > - **10** — Designer = compile + intellisense only.
->   `InitializeRuntime` / `Compile` / `Run` are no-ops in Designer mode
->   (gated at `moduleInfo.h:46-51`).
+>   `InitializeRuntime` / `Compile` / `Run` short-circuit in Designer
+>   mode at the descriptor level. Designer-side compile cache extracted
+>   to `ibMetaData::GetCompileCache()` (`metadata-mm-decoupling.md`)
+>   so a headless designer compile path works without a wx tree.
 > - **11** — extern binder factory (`bc.CreateBinder()`) on bytecode;
 >   per-descriptor `m_binder` with `SetVar` for per-execute binding.
-> - **13-17** — AOT cache pipeline (Steps 1-4 of `next-session-aot.md`,
->   landed 2026-05-02): `SerializeAOT`/`DeserializeAOT`,
->   `sys_bytecode_cache` table, three-arm Compile hook (cache-hit /
->   miss / drift), dependency registry + `ResolveAndVerifyDependencies`,
->   Designer `OnSaveMetaObject`/`OnDeleteMetaObject` invalidation.
->   Step 5 (automated invalidation gtests) pending.
->
-> - **3** — `InitRuntimeForSession` / `ExitRuntimeForSession` renamed
->   to `AttachRuntime(session)` / `DetachRuntime(session)` on
->   `ibValueModuleManager`. 14 files touched (declaration, definition,
->   8 callsites, 5 comment refs). Privatisation behind the descriptor
->   stays open — methods remain public on mm because external callers
->   (`appData::Connect` / `webSession::Login` / `mainFrameParts`) still
->   drive them directly; a future Attach/Detach private form would
->   require a façade on `ibSession::Start/Stop` first.
-> - **5** — landed. Facade is `ExecAsProc` / `ExecAsFunc` on
->   `ibRuntimeModuleDataObject` itself (`moduleInfo.h:18-38` public
->   variadic sugar; `:160-184` protected array form). Mirrors
->   `ibProcUnit::CallAsProc/Func` shape — variadic packs into
->   `ibValue*[]` and forwards. Session-aware `GetProcUnit()` resolve,
->   shared_ptr pin against fast-F5 UAF, null-safety. Better placement
->   than the original `mm->CallAsProc(obj, method, ...)` sketch — each
->   descriptor pins its own ProcUnit, no mm hop. 38 object call-sites
->   in 9 files (catalog/document/charts/registers/common/constant)
->   migrated from raw `m_procUnit->CallAsProc` to variadic
->   `ExecAsProc`; 8 dispatch callers (3 mm + 4 record-data + frontend's
->   `form.cpp`) qualified-call the protected array form via
->   `ibRuntimeModuleDataObject::ExecAsProc`.
+>   Replaces compile-time `AddContextVariable` staging.
+> - **13-17** — AOT cache pipeline landed (`backend/compiler/cache/
+>   byteCodeCache.{h,cpp}`): `SerializeAOT` / `DeserializeAOT`
+>   (`kAOTFormatVersion = 10` after CES + closure-capture + LINQ
+>   opcode shifts), `sys_bytecode_cache` table with UPSERT semantics,
+>   three-arm `Compile` hook (cache-hit / miss / drift via magic +
+>   format-version reject), dependency registry +
+>   `ResolveAndVerifyDependencies`, Designer
+>   `OnSaveMetaObject`/`OnDeleteMetaObject` cascading invalidate.
+>   Step 5 of the AOT subplan (automated invalidation gtests) is the
+>   only remaining piece — manual verification was the bring-up
+>   tactic; tests can backfill.
 >
 > Remaining:
 > - **12** — `ibMetadataRef{guid}` encoding for cross-bc metadata refs
->   (`Catalogs.Products` etc) so AOT blobs survive descriptor renames.
-> - locale `.po` / `.pot` cleanup for `_("AttachRuntime main: %s")` —
->   regenerate via xgettext + msgmerge in a follow-up.
+>   (`Catalogs.Products` etc). Today bytecode stores names; AOT blobs
+>   survive recompiles only while descriptor names are stable.
+>   Renaming a descriptor invalidates dependent caches — works, just
+>   not optimal. Cross-bc ref → resolve-by-guid is the closure here.
+> - **Adjacent (not numbered in original plan):** per-descriptor
+>   per-session map form of Step 1. Today's single-slot +
+>   `m_runtimeMutex` works; high-concurrency web is the use case that
+>   would actually need the map. Not blocked by anything except
+>   profiling evidence that the mutex is the bottleneck.
+> - **locale cleanup** — `_("AttachRuntime main: %s")` strings need an
+>   xgettext + msgmerge pass for ru/uk .po files.
 
 ---
 
@@ -87,6 +127,15 @@ follow-up. This document records the architectural decisions of the
 ---
 
 ## Goal
+
+> **Reading note.** Sections from here through "Phase plan" describe
+> the **target** architecture as designed in 2026-04-22, including
+> API shapes (`m_runtimes` map, `activeMetaData->GetModuleManager(
+> session)`, etc.) that did **not** land literally. The Status banner
+> at the top of this document records what actually shipped: a
+> simpler descriptor-owned single-slot model with `m_runtimeMutex`,
+> driven from `ibSession::CompileRoot`. Treat the design narrative
+> below as the direction-of-travel reference, not API documentation.
 
 Today the runtime layer is spread across several singleton paths:
 
@@ -522,29 +571,40 @@ Brief summary:
 
 17 steps, incremental. Risk estimates — medium-high after step 5.
 
-> **Progress as of 2026-05-03.**
-> - **Step 1 — landed (different shape).** Descriptors compose
->   `ibRuntimeModuleDataObject` (`backend/moduleInfo.h:17`) — owns
->   `m_compileModule`, `m_procUnit` (shared, pins against UAF),
->   `m_binder`, `m_parent`. `GetProcUnit()` is session-aware: looks
->   in the session's ProcUnit map first (via `ibSessionScope`), falls
->   back to descriptor-owned slot. No literal `m_runtimes` map needed
->   — the lookup chain provides per-session resolution on top of the
->   descriptor-owned slot.
-> - **Step 2 — partially landed.** `appData.cpp Connect` →
->   `s->GetModuleManager()->AttachRuntime(s)`; `Disconnect`
->   symmetric. `webSession.cpp Login/Destroy` follows the same
->   pattern. The interface is still named `AttachRuntime` /
->   `DetachRuntime` rather than `Attach` / `Detach` — step 3
->   (rename + privatise) is the remaining cleanup.
+> **Progress (verified 2026-05-22).**
+> - **Step 1 — landed (single-slot form, not literal map).**
+>   Descriptors compose `ibRuntimeModuleDataObject`
+>   (`backend/moduleInfo.h:17`) — owns `m_compileModule`, `m_procUnit`
+>   (shared_ptr, pins against UAF), `m_binder`, `m_parent`. The
+>   descriptor's slot is rebuilt per session by `AttachRuntime(s)` /
+>   `DetachRuntime(s)` under `m_runtimeMutex`. No
+>   `std::map<ibSession*, ...>` per descriptor today; the map form
+>   stays as the design target if multi-session-per-descriptor
+>   concurrency becomes a measured bottleneck.
+> - **Step 2 — landed.** `ibSession::EnsureRoot` / `CompileRoot` are
+>   the entry; `CompileRoot` itself calls `m_root->AttachRuntime(this)`
+>   (folded in — was formerly an explicit caller-side hop from
+>   `appData::Connect` / `ibWebSession::Login`). 3-phase
+>   `NotifyAuthenticated` (OnFirstConnect → EnsureRoot →
+>   OnAuthenticated) is the registry-side contract.
+> - **Step 3 — landed (privatisation deferred).** `AttachRuntime` /
+>   `DetachRuntime` are public on mm because the session calls them
+>   from `CompileRoot` / `DestroyRoot`. Privatising would require a
+>   session-side façade; cosmetic, not blocking.
+> - **Step 8 — fully landed.** Zero `bc->m_compileModule` accesses in
+>   tree (`backend/compiler/`). bytecode carries
+>   `m_dependencyIds` / `m_dependencyVersions`, `bc.CreateBinder()`
+>   factory, process-wide registry + `Find`. AOT round-trip
+>   demonstrates self-containment (cache row is the only payload).
 > - **Adjacent precursors (2026-04-26):** `ibCompileValueCache`
 >   extracted from designer's GUI tree onto `ibMetaData` (precursor
 >   for step 10 — designer without runtimes); `ibSession::EnsureRoot()`
 >   + 3-phase `NotifyAuthenticated` — root-mm ownership on session.
-> - **Step 8 building blocks landed via AOT cache (2026-05-02):**
->   bytecode carries its own `m_dependencyIds` / `m_dependencyVersions`,
->   `bc.CreateBinder()` factory, process-wide registry + `Find`. Full
->   "byteCode->m_compileModule back-pointer removed" not yet done.
+> - **Steps 13-17 — AOT cache pipeline landed
+>   (`backend/compiler/cache/byteCodeCache.{h,cpp}`).** `kAOTFormat
+>   Version = 10`, UPSERT row per descriptor, dependency registry,
+>   Designer Save / Delete cascading invalidate. Only automated
+>   invalidation gtests remain.
 
 
 | Step | What | Risk |

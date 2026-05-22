@@ -1,11 +1,22 @@
 # Worker pool — thread_local audit
 
-Prerequisite for replacing the per-session worker thread (web today's
-`ibWebApplication::WorkerLoop`) with a process-level shared `ibWorkerPool`
-that swaps sessions on a fixed set of worker threads. The same pool is
-the substrate for the future compute server (`oes-server.exe`) and stays
-in single-worker form on desktop GUI (`enterprise.exe`) to keep
-wxApp's main-loop semantics.
+> **Status:** the pool itself shipped in v1.3.0 (`ibWorkerPool` +
+> `ibWorkerPoolHeadless` in `backend/session/`, per-session `ibProc
+> UnitState` lease swap). `ibWebApplication::WorkerLoop` /
+> `StartWorker` / `StopWorker` are gone — web sessions dispatch
+> through `ibSession::Submit` which forwards to the pool. This
+> document remains useful as the **audit record** that decided
+> what gets saved / restored / cleared at session swap; the
+> prescriptions in §"Pool contract" are the contract the shipped
+> pool implements.
+
+Prerequisite analysis for the (now-landed) replacement of the
+per-session worker thread (web's former `ibWebApplication::WorkerLoop`)
+with a process-level shared `ibWorkerPool` that swaps sessions on a
+fixed set of worker threads. The same pool is the substrate for the
+future compute server (`oes-server.exe`) and stays in single-worker
+form on desktop GUI (`enterprise.exe`) to keep wxApp's main-loop
+semantics.
 
 This document enumerates every `thread_local` (and thread-bound static)
 in our own code, classifies it, and prescribes the migration.

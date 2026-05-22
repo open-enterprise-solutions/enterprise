@@ -143,11 +143,12 @@ ibWebSession::OnExit
     │     │                                              thread-local state
     │     │                                              is valid
     │     ├── StopWorker()
-    │     ├── ExitMainModuleSafe(session->GetModuleManager())
+    │     ├── ExitMainModuleSafe(session->m_root)
     │     │     BeforeExit() → CallAsProc("beforeExit", bCancel)
     │     │     OnExit()     → CallAsProc("onExit")
     │     ├── { ibSessionScope exitScope(session);
-    │     │     └── mm->DetachRuntime(session)
+    │     │     └── session->DestroyRoot()
+    │     │           m_root->DetachRuntime(this) + DestroyMainModule().
     │     │           Releases this session's ProcUnit on every touched
     │     │           descriptor (under m_runtimeMutex). Bytecode stays
     │     │           on the descriptor for the next session.
@@ -221,6 +222,9 @@ process-level — it dispatches commands by `sessionGuid` to the
 matching session's debug state.
 
 The former `ibValuePtr<ibValueModuleManagerConfiguration> m_moduleManager`
-field is gone — `GetModuleManager()` returns
-`session->GetModuleManager()` (each session has its own root mm
-under `ibSession::m_root`).
+field on `ibWebApplication` is gone. Each session owns its own root
+mm directly via `ibSession::m_root` (ibValuePtr); any caller that used
+to access `app->GetModuleManager()` now goes through the session
+pointer it already has in scope. `ibMetaData::GetModuleManager()` is
+also gone — see `docs/metadata-mm-decoupling.md` for the full
+metadata / runtime split.

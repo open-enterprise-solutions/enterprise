@@ -70,7 +70,7 @@ NotifyAuthenticated(s):
 
   2. s->EnsureRoot()        # idempotent CreateRoot(activeMetaData)
                             # session's own root mm allocated NOW
-                            # — so step 3 listeners see GetModuleManager() != null
+                            # — so step 3 listeners see session->m_root != null
 
   3. OnAuthenticated listeners (every authenticated session):
        appData lambda:
@@ -78,15 +78,17 @@ NotifyAuthenticated(s):
          ├── (Shared mode + no fallback) registry.SetFallback(s)
          ├── (one-shot) activeMetaData->RunDatabase()
          │     # fires OnBefore/AfterRunMetaObject which reach into
-         │     # session->GetModuleManager() and the metadata-side
+         │     # session->m_root and the metadata-side
          │     # ibCompileValueCache — both required to be live by now
-         ├── s->CompileRoot()
-         └── (runtime modes) mm->AttachRuntime(s)
+         └── s->CompileRoot()
+                            # CreateMainModule + m_root->AttachRuntime(this)
+                            # — folded into CompileRoot; appData no
+                            # longer calls AttachRuntime separately
 ```
 
-**Why three phases, not two.** The pre-2026-04-26 layout fired `OnFirstConnect` then `OnAuthenticated` directly. `CreateRoot` lived in `appData`'s `OnAuthenticated` listener, and `RunDatabase` was nominally below it but ordering was easy to flip. The crash that drove this refactor was `OnBeforeRunMetaObject` reading `ibSession::Current()->GetModuleManager()` while `RunDatabase` was iterating — mm null because `CreateRoot` hadn't run yet on the very first session. Putting `EnsureRoot` between phases makes the contract explicit: every `OnAuthenticated` listener can rely on `s->GetModuleManager()` being non-null when `activeMetaData` is set.
+**Why three phases, not two.** The pre-2026-04-26 layout fired `OnFirstConnect` then `OnAuthenticated` directly. `CreateRoot` lived in `appData`'s `OnAuthenticated` listener, and `RunDatabase` was nominally below it but ordering was easy to flip. The crash that drove this refactor was `OnBeforeRunMetaObject` reading `ibSession::Current()->m_root` while `RunDatabase` was iterating — m_root null because `CreateRoot` hadn't run yet on the very first session. Putting `EnsureRoot` between phases makes the contract explicit: every `OnAuthenticated` listener can rely on `s->m_root` being non-null when `activeMetaData` is set.
 
-**Where `CreateRoot` lives.** In `ibSession`. The session is the owner of its root mm; the registry just calls the hook at the right moment. `appData`'s `OnAuthenticated` no longer touches `CreateRoot` — only `RunDatabase`/`CompileRoot`/`AttachRuntime`.
+**Where `CreateRoot` lives.** In `ibSession`. The session is the owner of its root mm; the registry just calls the hook at the right moment. `appData`'s `OnAuthenticated` no longer touches `CreateRoot` — only `RunDatabase`. `AttachRuntime` is folded into `session->CompileRoot()` itself, so the listener chain ends at `CompileRoot`.
 
 ## Lifecycle (web per-cookie)
 
@@ -192,7 +194,7 @@ POST /login { user, password }
 const wxString& ibApplicationData::GetUserName() const {
     return GetUserInfo().m_strUserName;
 }
-const ibApplicationDataUserInfo& ibApplicationData::GetUserInfo() const {
+const ibUserInfo& ibApplicationData::GetUserInfo() const {
     if (auto* ctx = ibSession::Current())
         return ctx->GetUserInfo();   // per-session mirror
     return m_userInfo;                // fallback (pre-auth, codeRunner)
@@ -238,17 +240,22 @@ Concrete `HoldRowLocks` / `TryProbeRowLock` impls — FB only so far. On other d
 18. **Eager initial sweep + refresh** — Active Users isn't empty at startup.
 19. **INSERT split (6-col + ext-UPDATE)** — legacy-schema tolerant.
 
-## What remains (priority ↓)
+## What remains (priority ↓, verified 2026-05-22)
 
-- Concrete `HoldRowLocks / TryProbeRowLock` for PG / MySQL / MSSQL.
-- `signal` column in sys_session + admin kick/reload dispatcher + `/admin/sessions` endpoint.
-- Snapshot SELECT reads the new columns into `ibApplicationDataSessionArray` (pid/address/currentActivity accessors).
-- Cookie / ibGuid unification on web (currently the cookie is separate).
-- Full removal of singleton `m_userInfo/m_sessionGuid/m_sessionRawPassword` fields (currently dual-write + fallback).
-- Remove `SessionScope::Current()` legacy thread-local (after migrating `AppUser()`-style built-ins onto `ibProcUnit::GetSession()`).
-- Real auth in web login — currently accepts any user/pwd on an open-access DB; for a populated sys_user the path already goes through `AuthenticateUser`.
+- Concrete `HoldRowLocks / TryProbeRowLock` for **MySQL / MSSQL**. FB and PG are landed (see "TryProbeRowLock across drivers" section below).
+- Snapshot SELECT reading the new columns (`pid` / `address` / `currentActivity` / `kind`) into `ibSessionSnapshot` accessors. Columns are written by `InsertSessionRow` / `ProcessSetActivity`; consumer-side accessors on the snapshot are the gap.
+- Full removal of singleton `m_userInfo` / `m_sessionRawPassword` fields on `ibApplicationData` (currently dual-write + fallback for codeRunner / pre-auth paths).
+- Remove `SessionScope::Current()` legacy thread-local (after migrating `AppUser()`-style built-ins onto explicit session pointers via `ibProcUnit::GetSession()`).
 - Interactive verification: designer-exclusive policy under two simultaneous designer.exe processes.
 - Designer Active-Users UI: a "Kind" column from `ibSessionKind` (WebServer / WebClient / Enterprise / Designer / Service). Data is already in the snapshot via `GetSessionKind(idx)`.
+
+**Closed since the original list:**
+
+- ~~`signal` column + admin kick/reload dispatcher + `/admin/sessions` endpoint~~ — landed; see "Admin signals (kick / reload)" section.
+- ~~Cookie / ibGuid unification on web~~ — landed; see "Unified session id across web layers".
+- ~~`m_sessionGuid` singleton on `ibApplicationData`~~ — gone; session guid lives in `ibSessionIdentity::m_guid`.
+- ~~Per-driver NoWait plumbing (PG / MySQL / MSSQL)~~ — landed for transaction-options; concrete row-lock probe still pending for MySQL / MSSQL only.
+- ~~Web login real-auth~~ — open-access mode passes through `AuthenticateUser` like populated sys_user; same code path.
 
 ## ibSessionKind (landed 2026-04-20)
 
