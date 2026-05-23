@@ -150,7 +150,12 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	this->Centre(wxBOTH);
 
 	// Connect Events
-	m_buttonBrowseFile->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogConnection::BrowseFileOnButtonClick), NULL, this);
+	m_buttonBrowseFile->Bind(wxEVT_BUTTON,
+	                         &ibDialogConnection::BrowseFileOnButtonClick,
+	                         this);
+	m_buttonBrowseFile->Bind(wxEVT_LEFT_UP,
+	                         &ibDialogConnection::BrowseFileOnMouseUp,
+	                         this);
 	m_buttonTestConnection->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogConnection::TestConnectionOnButtonClick), NULL, this);
 	m_buttonSaveConnection->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogConnection::SaveConnectionOnButtonClick), NULL, this);
 }
@@ -161,19 +166,44 @@ void ibDialogConnection::OnModeChanged(wxCommandEvent& event)
 	event.Skip();
 }
 
-void ibDialogConnection::BrowseFileOnButtonClick(wxCommandEvent& event)
+void ibDialogConnection::BrowseFile()
 {
 	wxString initialPath = m_textCtrlFilePath->GetValue();
 	if (initialPath.IsEmpty()) {
 		initialPath = wxStandardPaths::Get().GetDocumentsDir();
 	}
 
-	wxDirDialog dlg(this, _("Select database folder"), initialPath,
-	                wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
+	wxDialog dlg(this, wxID_ANY, _("Select database folder"), wxDefaultPosition,
+	             wxSize(560, 420), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+	wxGenericDirCtrl* dirCtrl = new wxGenericDirCtrl(
+		&dlg, wxID_ANY, initialPath, wxDefaultPosition, wxDefaultSize,
+		wxDIRCTRL_DIR_ONLY | wxDIRCTRL_SELECT_FIRST);
+	mainSizer->Add(dirCtrl, 1, wxALL | wxEXPAND, FromDIP(8));
+
+	wxStdDialogButtonSizer* buttonSizer = new wxStdDialogButtonSizer();
+	buttonSizer->AddButton(new wxButton(&dlg, wxID_OK));
+	buttonSizer->AddButton(new wxButton(&dlg, wxID_CANCEL));
+	buttonSizer->Realize();
+	mainSizer->Add(buttonSizer, 0, wxALL | wxALIGN_RIGHT, FromDIP(8));
+
+	dlg.SetSizer(mainSizer);
+	dlg.Layout();
+	dlg.CentreOnParent();
+
 	if (dlg.ShowModal() == wxID_OK) {
-		m_textCtrlFilePath->SetValue(dlg.GetPath());
+		m_textCtrlFilePath->SetValue(dirCtrl->GetPath());
 	}
-	event.Skip();
+}
+
+void ibDialogConnection::BrowseFileOnButtonClick(wxCommandEvent& event)
+{
+	BrowseFile();
+}
+
+void ibDialogConnection::BrowseFileOnMouseUp(wxMouseEvent& event)
+{
+	BrowseFile();
 }
 
 #ifdef OES_USE_POSTGRESQL

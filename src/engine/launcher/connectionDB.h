@@ -15,8 +15,9 @@
 #include <wx/button.h>
 #include <wx/frame.h>
 #include <wx/radiobut.h>
-#include <wx/dirdlg.h>
 #include <wx/stdpaths.h>
+#include <wx/event.h>
+#include <wx/generic/dirctrlg.h>
 
 #include "frontend/frontend.h"
 
@@ -51,6 +52,7 @@ class ibDialogConnection : public wxDialog {
 	wxButton* m_buttonSaveConnection;
 
 	void UpdateModeVisibility();
+	void BrowseFile();
 
 public:
 
@@ -77,6 +79,7 @@ public:
 protected:
 	void OnModeChanged(wxCommandEvent& event);
 	void BrowseFileOnButtonClick(wxCommandEvent& event);
+	void BrowseFileOnMouseUp(wxMouseEvent& event);
 	void TestConnectionOnButtonClick(wxCommandEvent& event);
 	void SaveConnectionOnButtonClick(wxCommandEvent& event);
 };
