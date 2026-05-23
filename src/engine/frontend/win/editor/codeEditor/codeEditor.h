@@ -144,35 +144,59 @@ private:
 		}
 
 		int GetFoldMask(int line) const {
-			int level = 0; short flag = 0; int prev_line = -1;
+			// Accumulate ALL deltas up to and including `line` for the
+			// cumulative indent level, AND the per-line net for the flag.
+			// The previous version had a `prev_line != v.line` guard around
+			// `level += v.delta` which dropped every foldpoint past the
+			// first one on a given line — so a single-line `from..select`
+			// or `{ stmt; }` pair (Open +1, Close -1) contributed only +1
+			// to the running level. Across a large file with many such
+			// pairs the level drifted upward monotonically and indent ran
+			// away. Flag is decided by the NET of deltas on the queried
+			// line: net>0 = HEADER (opener), net<0 = WHITE (closer),
+			// net==0 with a mark (Else/ElseIf/Except) = ELSE, else BASE.
+			int level = 0;
+			int netHere = 0;
+			bool hasMark = false;
 			for (const auto& v : m_folding_vector) {
 
 				if (v.line > line)
 					break;
 
-				if (prev_line != v.line) {
+				level += v.delta;
 
-					if (v.line == line && v.delta > 0)
-						flag = wxSTC_FOLDLEVELHEADER_FLAG;
-					else if (v.line == line && v.delta < 0)
-						flag = wxSTC_FOLDLEVELWHITE_FLAG;
-					else if (v.line == line && v.delta == 0)
-						flag = wxSTC_FOLDLEVELELSE_FLAG;
-
-					level += v.delta;
+				if (v.line == line) {
+					netHere += v.delta;
+					if (v.delta == 0)
+						hasMark = true;
 				}
-
-				prev_line = v.line;
 			}
 
 			if (level < 0) level = 0;
 
-			if ((flag & wxSTC_FOLDLEVELHEADER_FLAG) != 0)
-				return wxSTC_FOLDLEVELBASE_FLAG + (level - 1) | flag;
-			else if ((flag & wxSTC_FOLDLEVELWHITE_FLAG) != 0)
-				return wxSTC_FOLDLEVELBASE_FLAG + (level + 1) | flag;
-
-			return wxSTC_FOLDLEVELBASE_FLAG + level | flag;
+			if (netHere > 0) {
+				// Header line sits at the outer (parent) indent; PrepareTABs
+				// adds +1 for the body that follows the header. `level`
+				// already includes this line's opens, so subtract 1 to
+				// match the existing decoder.
+				return wxSTC_FOLDLEVELBASE_FLAG + (level - 1) | wxSTC_FOLDLEVELHEADER_FLAG;
+			}
+			if (netHere < 0) {
+				// Closer line: PrepareTABs WHITE branch subtracts 1 to land
+				// at parent indent. `level` already retreated past the
+				// closes — add 1 so the decoder lands at the right spot.
+				return wxSTC_FOLDLEVELBASE_FLAG + (level + 1) | wxSTC_FOLDLEVELWHITE_FLAG;
+			}
+			if (hasMark) {
+				// Else/ElseIf/Except marker on a net-zero line. PrepareTABs
+				// ELSE branch subtracts 1 to align with the parent.
+				return wxSTC_FOLDLEVELBASE_FLAG + level | wxSTC_FOLDLEVELELSE_FLAG;
+			}
+			// Plain line OR balanced inline pair (Open + Close on the same
+			// source line, e.g. one-liner `from x in arr select x` or
+			// `{ stmt; }`). Net effect is zero, line sits at the surrounding
+			// scope's indent — no fold marker.
+			return wxSTC_FOLDLEVELBASE_FLAG + level;
 		}
 
 	private:
@@ -303,6 +327,21 @@ private:
 				}
 
 				if (FoldKind k = OpenKindFor(lex.m_numData); k != FoldKindCount) {
+					// Multi-from LINQ: `from a in X from b in Y select Z` is
+					// ONE logical query — one Open at the first `from`, one
+					// Close at the `select`. Subsequent `from`s while a Linq
+					// query is still open (count[Linq] > 0) are clause
+					// continuations, not new fold regions. Without this the
+					// parser emitted +N opens but only -1 close, leaving
+					// N-1 unbalanced opens dangling for the rest of the
+					// file — every line after a multi-from / nested-from
+					// then sat at level >= 1 in GetFoldMask, and
+					// FormatSelection re-indented subsequent code at the
+					// wrong depth. Same logic naturally covers nested LINQ
+					// in a parenthesised subexpression — inner LINQ shares
+					// the outer's fold without stair-stepping.
+					if (k == FoldLinq && m_counts[FoldLinq] > 0)
+						continue;
 					OpenFold(lex.m_numLine, k);
 					continue;
 				}
