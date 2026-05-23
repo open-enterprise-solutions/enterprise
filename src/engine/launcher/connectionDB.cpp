@@ -1,5 +1,7 @@
 #include "connectionDB.h"
 
+#include <wx/filename.h>
+#include <wx/textdlg.h>
 #include <wx/xml/xml.h>
 
 void ibDialogConnection::InitConnection(
@@ -181,11 +183,51 @@ void ibDialogConnection::BrowseFile()
 		wxDIRCTRL_DIR_ONLY | wxDIRCTRL_SELECT_FIRST);
 	mainSizer->Add(dirCtrl, 1, wxALL | wxEXPAND, FromDIP(8));
 
+	wxBoxSizer* actionsSizer = new wxBoxSizer(wxHORIZONTAL);
+	wxButton* newFolderButton = new wxButton(&dlg, wxID_ANY, _("New folder"));
+	actionsSizer->Add(newFolderButton, 0, wxRIGHT, FromDIP(8));
+	actionsSizer->AddStretchSpacer(1);
+
 	wxStdDialogButtonSizer* buttonSizer = new wxStdDialogButtonSizer();
 	buttonSizer->AddButton(new wxButton(&dlg, wxID_OK));
 	buttonSizer->AddButton(new wxButton(&dlg, wxID_CANCEL));
 	buttonSizer->Realize();
-	mainSizer->Add(buttonSizer, 0, wxALL | wxALIGN_RIGHT, FromDIP(8));
+	actionsSizer->Add(buttonSizer, 0);
+	mainSizer->Add(actionsSizer, 0, wxALL | wxEXPAND, FromDIP(8));
+
+	newFolderButton->Bind(wxEVT_BUTTON, [dirCtrl, &dlg](wxCommandEvent&) {
+		wxString parentPath = dirCtrl->GetPath();
+		if (parentPath.IsEmpty()) {
+			parentPath = wxStandardPaths::Get().GetDocumentsDir();
+		}
+
+		wxTextEntryDialog nameDialog(&dlg, _("Folder name:"), _("New folder"));
+		if (nameDialog.ShowModal() != wxID_OK)
+			return;
+
+		wxString folderName = nameDialog.GetValue().Trim(true).Trim(false);
+		if (folderName.IsEmpty())
+			return;
+
+		if (folderName.Find(wxFileName::GetPathSeparator()) != wxNOT_FOUND) {
+			wxMessageBox(_("Folder name must not contain path separators."),
+				_("New folder"), wxOK | wxICON_WARNING, &dlg);
+			return;
+		}
+
+		wxFileName newFolder(parentPath, wxEmptyString);
+		newFolder.AppendDir(folderName);
+		const wxString newPath = newFolder.GetPath();
+
+		if (!wxFileName::Mkdir(newPath, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL)) {
+			wxMessageBox(_("Failed to create folder."),
+				_("New folder"), wxOK | wxICON_ERROR, &dlg);
+			return;
+		}
+
+		dirCtrl->ReCreateTree();
+		dirCtrl->SetPath(newPath);
+	});
 
 	dlg.SetSizer(mainSizer);
 	dlg.Layout();
