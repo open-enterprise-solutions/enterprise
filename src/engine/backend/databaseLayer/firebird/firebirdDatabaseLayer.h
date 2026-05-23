@@ -76,6 +76,13 @@ public:
 		return DATABASELAYER_FIREBIRD;
 	}
 
+	// FB-specific: route to `ReconnectIfLeaderChanged()` so callers
+	// holding long-lived connections (session registry's heartbeat /
+	// snapshot jobs) can recover after a leader handoff without
+	// looping forever on the dead TCP socket to the old leader's
+	// spawned firebird.exe.
+	virtual bool ReconnectIfStale() override;
+
 	// Row-level pessimistic locks. FB implementation: the "hold" path uses
 	// the regular wait-mode TX and SELECT ... WITH LOCK on the given rows;
 	// the probe opens a separate nowait TX so contention surfaces as a lock
@@ -110,6 +117,26 @@ protected:
 private:
 
 	void InterpretErrorCodes();
+
+	// Reconnect-on-leader-handoff. When `firebirdLeaderMode` reports a
+	// connect URL different from `m_currentConnectUrl` (leader died /
+	// handed off / we self-promoted), close the existing FB handle
+	// (best-effort) and re-attach against the new URL. Returns true
+	// if a reattach happened (so caller knows the previous TX / cursor
+	// state is gone), false on no-op (URL still matches or remote mode).
+	//
+	// Called from `DoBeginTransaction` — single point where we know
+	// there's no in-flight TX / prepared statement / open cursor to
+	// surprise. Mid-TX connection loss continues to surface as a
+	// regular exception; the *next* BeginTransaction picks up the
+	// reconnect.
+	bool ReconnectIfLeaderChanged();
+
+	// URL that the current `isc_db_handle` was attached with. Set on
+	// successful `Open`; compared against `ibFirebirdLeaderMode::
+	// CurrentConnectUrl()` on the reconnect path. Empty when no
+	// connection / standalone mode (no leader-mode involvement).
+	wxString m_currentConnectUrl;
 
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 	ibInterfaceFirebird* m_pInterface;

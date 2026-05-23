@@ -1,7 +1,15 @@
 #include "firebirdInterface.h"
+#include "firebirdBootstrap.h"
 
 bool ibInterfaceFirebird::Init()
 {
+	// Locate _fb/ subfolder next to the executable + set DLL search
+	// path + FIREBIRD env var, so subsequent fbclient.dll load resolves
+	// from there and engine13.dll / firebird.conf / firebird.msg / intl
+	// / ICU all chain together correctly. Idempotent — repeat ctors
+	// only re-check cached state.
+	ibFirebirdBootstrap::Init();
+
 	bool bLoaded = m_FirebirdDLL.Load(wxDynamicLibrary::CanonicalizeName(wxT("fbclient")));
 #if defined(__WXOSX__) || defined(__APPLE__)
 	if (!bLoaded) {
@@ -332,6 +340,28 @@ bool ibInterfaceFirebird::Init()
 	{
 		return false;
 	}
+
+	// Services API — best-effort load. Missing symbols leave the
+	// member pointers as null; ibFirebirdMaintenance handles that
+	// by reporting "Services API unavailable" instead of crashing.
+	// Every FB client from 2.5 onwards exports these, so the null
+	// path is effectively unreachable in practice — guard exists
+	// for defensive layering.
+	symbol = wxT("isc_service_attach");
+	if (m_FirebirdDLL.HasSymbol(symbol))
+		m_pIscServiceAttach = (isc_service_attachType)m_FirebirdDLL.GetSymbol(symbol);
+
+	symbol = wxT("isc_service_detach");
+	if (m_FirebirdDLL.HasSymbol(symbol))
+		m_pIscServiceDetach = (isc_service_detachType)m_FirebirdDLL.GetSymbol(symbol);
+
+	symbol = wxT("isc_service_start");
+	if (m_FirebirdDLL.HasSymbol(symbol))
+		m_pIscServiceStart = (isc_service_startType)m_FirebirdDLL.GetSymbol(symbol);
+
+	symbol = wxT("isc_service_query");
+	if (m_FirebirdDLL.HasSymbol(symbol))
+		m_pIscServiceQuery = (isc_service_queryType)m_FirebirdDLL.GetSymbol(symbol);
 
 	return true;
 }

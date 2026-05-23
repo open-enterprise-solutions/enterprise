@@ -79,6 +79,10 @@
     <ClCompile Include="visualView\ctrl\boxsizer_res.cpp">      <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\gridsizer_res.cpp">     <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\staticboxsizer_res.cpp"><Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBox.cpp">          <Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBox_res.cpp">      <Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumn.cpp">    <Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumn_res.cpp"><Filter>visualView\ctrl</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="wfrontend.h" />

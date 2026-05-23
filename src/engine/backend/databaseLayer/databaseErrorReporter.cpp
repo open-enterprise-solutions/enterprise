@@ -40,9 +40,25 @@ void ibDatabaseErrorReporter::ResetErrorCodes()
 #include "backend/backend_exception.h"
 #include "backend/system/systemManager.h"
 
+#include <wx/thread.h>
+
 void ibDatabaseErrorReporter::ThrowDatabaseException()
 {
-	ibValueSystemFunction::Message(GetErrorMessage());
+	// Only push to the GUI message panel from the main (GUI) thread.
+	// `ibValueSystemFunction::Message` chains into the frontend
+	// output window (wxStyledTextCtrl::AppendText), which fires
+	// Scintilla notifications that propagate to wxWidgets event
+	// dispatch. Driving that from a non-main thread (e.g. our
+	// session-registry `JobRefreshSnapshot` background worker
+	// surfacing a DB error after the leader vanished) races with
+	// the main thread's idle handler over the wxAuiMDIParentFrame
+	// recursion guard, fires `wxASSERT(m_flag > 0)` from
+	// `~wxRecursionGuard` ("unbalanced wxRecursionGuards!?") and
+	// crashes. Background errors still surface via the C++ exception
+	// thrown below — caller's catch handler can route the message
+	// to the UI on the right thread if it wants to.
+	if (wxThread::IsMain())
+		ibValueSystemFunction::Message(GetErrorMessage());
 
 #if _USE_DATABASE_LAYER_EXCEPTIONS == 0
 	try {

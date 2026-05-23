@@ -129,10 +129,37 @@
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="backend_core.h" />
+    <ClInclude Include="databaseLayer\firebird\firebirdBlobCompression.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdBootstrap.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdCommon.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
     <ClInclude Include="databaseLayer\firebird\firebirdDatabaseLayer.h">
       <Filter>databaseLayer\firebird</Filter>
     </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdHlc.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
     <ClInclude Include="databaseLayer\firebird\firebirdInterface.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdLeaderMode.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdLease.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdLocalServer.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdMaintenance.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdMaintenanceScheduler.h">
       <Filter>databaseLayer\firebird</Filter>
     </ClInclude>
     <ClInclude Include="databaseLayer\firebird\firebirdParameter.h">
@@ -145,6 +172,9 @@
       <Filter>databaseLayer\firebird</Filter>
     </ClInclude>
     <ClInclude Include="databaseLayer\firebird\firebirdPreparedStatementWrapper.h">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\firebird\firebirdReplicationConfig.h">
       <Filter>databaseLayer\firebird</Filter>
     </ClInclude>
     <ClInclude Include="databaseLayer\firebird\firebirdResultSet.h">
@@ -636,6 +666,39 @@
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="characteristicCtor.h" />
+    <ClInclude Include="plugin\pluginApi.h">
+      <Filter>plugin</Filter>
+    </ClInclude>
+    <ClInclude Include="plugin\pluginManager.h">
+      <Filter>plugin</Filter>
+    </ClInclude>
+    <ClInclude Include="session\session.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\sessionPolicy.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\sessionRegistry.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\sessionSnapshot.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\designerExclusivePolicy.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\workerPool.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="session\workerPoolHeadless.h">
+      <Filter>session</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\passwordHash.hpp">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\sha256.hpp">
+      <Filter>utils</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="backend.cpp" />
@@ -746,10 +809,34 @@
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="backend_core.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdBlobCompression.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdBootstrap.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
     <ClCompile Include="databaseLayer\firebird\firebirdDatabaseLayer.cpp">
       <Filter>databaseLayer\firebird</Filter>
     </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdHlc.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
     <ClCompile Include="databaseLayer\firebird\firebirdInterface.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdLeaderMode.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdLease.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdLocalServer.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdMaintenance.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdMaintenanceScheduler.cpp">
       <Filter>databaseLayer\firebird</Filter>
     </ClCompile>
     <ClCompile Include="databaseLayer\firebird\firebirdParameter.cpp">
@@ -762,6 +849,9 @@
       <Filter>databaseLayer\firebird</Filter>
     </ClCompile>
     <ClCompile Include="databaseLayer\firebird\firebirdPreparedStatementWrapper.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdReplicationConfig.cpp">
       <Filter>databaseLayer\firebird</Filter>
     </ClCompile>
     <ClCompile Include="databaseLayer\firebird\firebirdResultSet.cpp">
@@ -1536,6 +1626,30 @@
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="characteristicCtor.cpp" />
+    <ClCompile Include="plugin\pluginManager.cpp">
+      <Filter>plugin</Filter>
+    </ClCompile>
+    <ClCompile Include="session\session.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\sessionRegistry.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\sessionSnapshot.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\designerExclusivePolicy.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\workerPoolHeadless.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\passwordHash.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\sha256.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="debugger">
@@ -1664,6 +1778,12 @@
     <Filter Include="res">
       <UniqueIdentifier>{a0483170-54a9-48af-976d-9a8f5c30d00b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="plugin">
+      <UniqueIdentifier>{6b3a8c2e-1f5d-4f4d-9c2a-9f5b1a3d4e6f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="session">
+      <UniqueIdentifier>{d4f2a1b8-3e9c-4b5a-8d7f-1c2e3a4b5c6d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="databaseLayer\postgres\engine\dll\libcrypto-3-x64.dll">
@@ -1686,6 +1806,39 @@
     </CopyFileToFolders>
     <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\firebird.msg">
       <Filter>databaseLayer\firebird\engine\dll</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\firebird_x86.exe">
+      <Filter>databaseLayer\firebird\engine\dll</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\firebird_x64.exe">
+      <Filter>databaseLayer\firebird\engine\dll</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\security5.fdb">
+      <Filter>databaseLayer\firebird\engine\dll</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\srp_x86.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\srp_x64.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\chacha_x86.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\chacha_x64.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\legacy_auth_x86.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\legacy_auth_x64.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\legacy_usermanager_x86.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\plugins\legacy_usermanager_x64.dll">
+      <Filter>databaseLayer\firebird\engine\dll\plugins</Filter>
     </CopyFileToFolders>
     <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\firebird.conf">
       <Filter>databaseLayer\firebird\engine\dll</Filter>

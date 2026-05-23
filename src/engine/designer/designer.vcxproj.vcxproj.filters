@@ -24,12 +24,6 @@
     <ClCompile Include="win\ctrl\menuBar.cpp">
       <Filter>win\ctrl</Filter>
     </ClCompile>
-    <ClCompile Include="win\dlg\lineInput\lineInput.cpp">
-      <Filter>win\dlg\lineInput</Filter>
-    </ClCompile>
-    <ClCompile Include="win\dlg\functionSearcher\functionSearcher.cpp">
-      <Filter>win\dlg\functionSearcher</Filter>
-    </ClCompile>
     <ClCompile Include="win\dlg\debugItem\debugItem.cpp">
       <Filter>win\dlg\debugItem</Filter>
     </ClCompile>
@@ -42,22 +36,7 @@
     <ClCompile Include="mainFrame\metatree\treeConfigurationEvent.cpp">
       <Filter>mainFrame\metaTree</Filter>
     </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditor.cpp">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditorInterpreter.cpp">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditorInterpreterContext.cpp">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditorLoader.cpp">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditorParser.cpp">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditorPrintOut.cpp">
+    <ClCompile Include="win\editor\codeEditor\codeEditorDesigner.cpp">
       <Filter>win\editor\codeEditor</Filter>
     </ClCompile>
     <ClCompile Include="win\editor\interfaceEditor\interfaceEditor.cpp">
@@ -89,21 +68,6 @@
     </ClCompile>
     <ClCompile Include="win\editor\visualEditor\visualEditorPanel.cpp">
       <Filter>win\editor\visualEditor</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\components\autoComplete.cpp">
-      <Filter>win\editor\codeEditor\components</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\components\callTip.cpp">
-      <Filter>win\editor\codeEditor\components</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\components\helpers\listBoxVisualData.cpp">
-      <Filter>win\editor\codeEditor\components\helpers</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\components\helpers\listBoxWnd.cpp">
-      <Filter>win\editor\codeEditor\components\helpers</Filter>
-    </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\components\helpers\popupWnd.cpp">
-      <Filter>win\editor\codeEditor\components\helpers</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\output\outputWindow.cpp">
       <Filter>mainFrame\output</Filter>
@@ -183,28 +147,13 @@
     <ClInclude Include="win\ctrl\menuBar.h">
       <Filter>win\ctrl</Filter>
     </ClInclude>
-    <ClInclude Include="win\dlg\lineInput\lineInput.h">
-      <Filter>win\dlg\lineInput</Filter>
-    </ClInclude>
-    <ClInclude Include="win\dlg\functionSearcher\functionSearcher.h">
-      <Filter>win\dlg\functionSearcher</Filter>
-    </ClInclude>
     <ClInclude Include="win\dlg\debugItem\debugItem.h">
       <Filter>win\dlg\debugItem</Filter>
     </ClInclude>
     <ClInclude Include="mainFrame\metatree\treeConfiguration.h">
       <Filter>mainFrame\metaTree</Filter>
     </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\codeEditor.h">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\codeEditorInterpreter.h">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\codeEditorParser.h">
-      <Filter>win\editor\codeEditor</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\codeEditorPrintOut.h">
+    <ClInclude Include="win\editor\codeEditor\codeEditorDesigner.h">
       <Filter>win\editor\codeEditor</Filter>
     </ClInclude>
     <ClInclude Include="win\editor\interfaceEditor\interfaceEditor.h">
@@ -227,24 +176,6 @@
     </ClInclude>
     <ClInclude Include="win\editor\visualEditor\res\visualResource.h">
       <Filter>win\editor\visualEditor\res</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\components\autoComplete.h">
-      <Filter>win\editor\codeEditor\components</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\components\callTip.h">
-      <Filter>win\editor\codeEditor\components</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\components\helpers\fontAscent.h">
-      <Filter>win\editor\codeEditor\components\helpers</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\components\helpers\listBoxVisualData.h">
-      <Filter>win\editor\codeEditor\components\helpers</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\components\helpers\listBoxWnd.h">
-      <Filter>win\editor\codeEditor\components\helpers</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\components\helpers\popupWnd.h">
-      <Filter>win\editor\codeEditor\components\helpers</Filter>
     </ClInclude>
     <ClInclude Include="mainFrame\output\outputWindow.h">
       <Filter>mainFrame\output</Filter>
@@ -320,12 +251,6 @@
     <Filter Include="win\dlg">
       <UniqueIdentifier>{5ddaa2ef-2ff7-4097-9b80-5c9c0216286a}</UniqueIdentifier>
     </Filter>
-    <Filter Include="win\dlg\lineInput">
-      <UniqueIdentifier>{d29e56d6-c979-4241-96e7-03617fd6a0ac}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="win\dlg\functionSearcher">
-      <UniqueIdentifier>{6193570b-cda3-4822-af4e-45f8adf62eb8}</UniqueIdentifier>
-    </Filter>
     <Filter Include="win\dlg\debugItem">
       <UniqueIdentifier>{5e0faed8-dfa4-403c-94e2-55fe546f844f}</UniqueIdentifier>
     </Filter>
@@ -352,12 +277,6 @@
     </Filter>
     <Filter Include="win\editor\visualEditor\res">
       <UniqueIdentifier>{5192482e-2b7d-4a91-81d6-72579d67caef}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="win\editor\codeEditor\components">
-      <UniqueIdentifier>{a1eb94f4-2aa0-4296-874f-6a11da1b0a97}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="win\editor\codeEditor\components\helpers">
-      <UniqueIdentifier>{084b864c-316e-404b-9027-03e72c37fec4}</UniqueIdentifier>
     </Filter>
     <Filter Include="mainFrame\output">
       <UniqueIdentifier>{67b44ba1-54f0-4913-b0f8-09a1f1185b79}</UniqueIdentifier>

@@ -677,6 +677,29 @@ private:
 	// watchdogs read this to detect a stuck thread (separate future commit).
 	std::atomic<std::uint64_t>                   m_tickCounter  { 0 };
 
+	// Post-handoff soft landing. After an FB cluster leader handoff the
+	// FB driver self-heals m_writeConn on the next DoRunQuery* — but
+	// during the gap, our heartbeat couldn't UPDATE lastActive on our
+	// own rows. Without protection, the very first JobSweepStale that
+	// fires on the new leader will see lastActive trailing by >
+	// kStaleCutoffSec and DELETE rows whose owners are alive but just
+	// couldn't write. Visible to the user as Active Users blinking
+	// empty. Two coordinated mechanisms:
+	//
+	//   - m_refreshFailedLastTick is set when JobRefreshSnapshot's
+	//     SELECT throws (likely cause: dead leader). Cleared on the
+	//     next successful refresh. The "false→true→false" transition
+	//     is the "we just recovered from a handoff" edge — when we
+	//     observe it we (a) immediately bump our own rows' lastActive
+	//     and (b) extend the sweep-suppression deadline.
+	//
+	//   - m_sweepSuppressUntilMs is a steady-clock-millis deadline.
+	//     JobSweepStale early-returns while now() < deadline. Picked
+	//     generously (5 s) so every cluster member has a chance to
+	//     reconnect and re-heartbeat before any pruning happens.
+	std::atomic<bool>                            m_refreshFailedLastTick { false };
+	std::atomic<std::int64_t>                    m_sweepSuppressUntilMs  { 0 };
+
 	// Priority bins — one deque per ibPriority value. Drain iterates
 	// bins top-down so Urgent evictions always overtake Normal adds in
 	// a given tick.

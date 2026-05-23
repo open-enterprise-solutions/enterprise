@@ -63,6 +63,20 @@ typedef void (ISC_EXPORT *isc_decode_sql_timeType)(const ISC_TIME*, void*);
 typedef ISC_STATUS(ISC_EXPORT *isc_get_segmentType)(ISC_STATUS*, isc_blob_handle*,
 	unsigned short*, unsigned short, ISC_SCHAR*);
 
+// Services API — for gbak/nbackup/sweep through fbclient without
+// spawning child processes. Service attachment authenticates once,
+// then `isc_service_start` enqueues an action (backup, restore,
+// repair, etc.) described by an SPB (Service Parameter Block).
+// `isc_service_query` polls progress / waits for completion.
+typedef ISC_STATUS(ISC_EXPORT *isc_service_attachType)(ISC_STATUS*, unsigned short,
+	const ISC_SCHAR*, isc_svc_handle*, unsigned short, const ISC_SCHAR*);
+typedef ISC_STATUS(ISC_EXPORT *isc_service_detachType)(ISC_STATUS*, isc_svc_handle*);
+typedef ISC_STATUS(ISC_EXPORT *isc_service_startType)(ISC_STATUS*, isc_svc_handle*,
+	isc_resv_handle*, unsigned short, const ISC_SCHAR*);
+typedef ISC_STATUS(ISC_EXPORT *isc_service_queryType)(ISC_STATUS*, isc_svc_handle*,
+	isc_resv_handle*, unsigned short, const ISC_SCHAR*, unsigned short,
+	const ISC_SCHAR*, unsigned short, ISC_SCHAR*);
+
 class ibInterfaceFirebird
 {
 public:
@@ -101,6 +115,11 @@ public:
 	isc_decode_sql_dateType GetIscDecodeSqlDate() { return m_pIscDecodeSqlDate; }
 	isc_decode_sql_timeType GetIscDecodeSqlTime() { return m_pIscDecodeSqlTime; }
 	isc_get_segmentType GetIscGetSegment() { return m_pIscGetSegment; }
+
+	isc_service_attachType GetIscServiceAttach() { return m_pIscServiceAttach; }
+	isc_service_detachType GetIscServiceDetach() { return m_pIscServiceDetach; }
+	isc_service_startType  GetIscServiceStart()  { return m_pIscServiceStart;  }
+	isc_service_queryType  GetIscServiceQuery()  { return m_pIscServiceQuery;  }
 
 private:
 	wxDynamicLibrary m_FirebirdDLL;
@@ -143,6 +162,16 @@ private:
 	isc_decode_sql_dateType m_pIscDecodeSqlDate = nullptr;
 	isc_decode_sql_timeType m_pIscDecodeSqlTime = nullptr;
 	isc_get_segmentType m_pIscGetSegment = nullptr;
+
+	// Services API — for gbak/nbackup/sweep via fbclient without
+	// shelling out to gbak.exe. Loaded best-effort: if the symbol
+	// is missing (extremely old FB clients), the pointer stays
+	// null and `ibFirebirdMaintenance` reports the operation as
+	// unsupported instead of crashing.
+	isc_service_attachType m_pIscServiceAttach = nullptr;
+	isc_service_detachType m_pIscServiceDetach = nullptr;
+	isc_service_startType  m_pIscServiceStart  = nullptr;
+	isc_service_queryType  m_pIscServiceQuery  = nullptr;
 };
 
 #endif // __FIREBIRD_INTERFACES_H__

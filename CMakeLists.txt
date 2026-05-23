@@ -66,6 +66,18 @@ option(OES_USE_POSTGRESQL  "Enable PostgreSQL database driver"  OFF)
 option(OES_USE_MYSQL       "Enable MySQL database driver"       OFF)
 option(OES_USE_ODBC        "Enable ODBC database driver"        OFF)
 
+# Phase-6 local FB server — required for shared-file (leader-election)
+# deployments so the leader process can expose a TCP listener that
+# followers connect to. ON by default since leader-mode is the primary
+# multi-user story for the FB driver. The `firebird.exe` binary is not
+# vendored in the repo (~5 MB, version-specific); operator drops FB 5's
+# `bin/firebird.exe` into `src/engine/backend/databaseLayer/firebird/
+# engine/dll/` and it gets copied into `_fb/` at build time. Build still
+# works without the binary, but leader-mode will degrade to embedded-
+# only single-user. Turn OFF to exclude the spawn code entirely (saves
+# ~20 KB, drops winsock dependency in the TU).
+option(OES_FB_LOCALSERVER  "Enable Firebird out-of-process local server (Phase 6)" ON)
+
 # SQLite is always available (embedded sources in the project).
 
 # ---------------------------------------------------------------------------
@@ -197,6 +209,10 @@ if(OES_USE_FIREBIRD)
             INTERFACE_INCLUDE_DIRECTORIES "${FIREBIRD_INCLUDE_DIR}"
         )
         add_compile_definitions(OES_USE_FIREBIRD)
+        if(OES_FB_LOCALSERVER)
+            add_compile_definitions(OES_FB_LOCALSERVER)
+            message(STATUS "OES_FB_LOCALSERVER: ON — firebird.exe must be present in _fb/ at runtime")
+        endif()
     else()
         message(FATAL_ERROR "OES_USE_FIREBIRD is ON but Firebird client library was not found.")
     endif()

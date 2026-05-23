@@ -254,6 +254,18 @@ public:
 
 	virtual int GetDatabaseLayerType() const = 0;
 
+	// Best-effort reconnect when an external cluster event has
+	// invalidated this connection — currently triggered by the FB
+	// driver's leader-mode handoff (followers' TCP to the old
+	// leader's spawned firebird.exe is dead once a new leader takes
+	// over). Default no-op (other drivers don't have cluster events
+	// that move connections around). Long-lived background-thread
+	// callers (session-registry heartbeat / snapshot jobs) call
+	// this from their catch handlers so the next tick gets a fresh
+	// handle instead of looping forever on the dead one. Returns
+	// true if a reattach happened.
+	virtual bool ReconnectIfStale() { return false; }
+
 	// ---- Row-level pessimistic locks (cluster-level session coordination) ----
 	//
 	// Used by ibSessionRegistry to hold / probe pessimistic locks on rows of

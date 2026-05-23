@@ -432,8 +432,8 @@ void ibPreparedStatementFirebird::SetInvalidParameterPositionError(int nPosition
 
 void ibPreparedStatementFirebird::InterpretErrorCodes()
 {
-	wxLogError(wxT("FirebirdPreparesStatement::InterpretErrorCodes()\n"));
-
+	// "I'm in this function" — see firebirdResultSet for the same
+	// strip rationale.
 	long nSqlCode = m_pInterface->GetIscSqlcode()(m_Status);
 	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode));
 	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, m_Status));

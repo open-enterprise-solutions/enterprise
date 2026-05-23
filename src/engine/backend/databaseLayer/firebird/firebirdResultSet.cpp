@@ -1,6 +1,7 @@
 #include "firebirdResultSet.h"
 #include "firebirdResultSetMetaData.h"
 #include "firebirdDatabaseLayer.h"
+#include "firebirdBlobCompression.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/databaseLayer/databaseLayerException.h"
 
@@ -453,16 +454,18 @@ void* ibDatabaseResultSetFirebird::GetResultBlob(int nField, wxMemoryBuffer& buf
 			}
 			m_pInterface->GetIscCloseBlob()(m_Status, &pBlob);
 
-			// Some memory buffer juggling to make sure there's no extra space allocated
 			tempBuffer.SetDataLen(bufferSize);
 			tempBuffer.SetBufSize(bufferSize);
-			wxMemoryBuffer tempBufferExactSize(bufferSize);
-			void* pBuffer = tempBufferExactSize.GetWriteBuf(bufferSize);
-			memcpy(pBuffer, tempBuffer.GetData(), bufferSize);
-			tempBufferExactSize.UngetWriteBuf(bufferSize);
-			tempBufferExactSize.SetDataLen(bufferSize);
-			tempBufferExactSize.SetBufSize(bufferSize);
-			buffer = tempBufferExactSize;
+
+			// Unwrap the OESC magic-header envelope. Three cases:
+			//   1. Magic present, flag = zlib → decompress.
+			//   2. Magic present, flag = raw  → strip the 6-byte header.
+			//   3. No magic (legacy BLOB written before this code path) →
+			//      return the bytes verbatim.
+			// The decision lives entirely in Unwrap; the read path never
+			// branches on type-of-payload.
+			buffer = ibFirebirdBlobCompression::Unwrap(tempBuffer.GetData(),
+			                                           bufferSize);
 		}
 		else if (nType == SQL_TEXT)
 		{
@@ -643,8 +646,10 @@ int ibDatabaseResultSetFirebird::LookupField(const wxString& strField)
 
 void ibDatabaseResultSetFirebird::InterpretErrorCodes()
 {
-	wxLogError(wxT("ibDatabaseResultSetFirebird::InterpretErrorCodes()\n"));
-
+	// Diagnostic-only — the real error is decoded below and surfaced
+	// via SetErrorMessage. Was wxLogError previously, but that just
+	// printed "I'm in this function" on every fbclient failure
+	// without adding context.
 	long nSqlCode = m_pInterface->GetIscSqlcode()(m_Status);
 	SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode));
 	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, m_Status));

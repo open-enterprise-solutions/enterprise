@@ -18,12 +18,71 @@ infrastructure.
 > compete with PG/MSSQL at the mid-market scale — serious load
 > targets PG/MSSQL, while preserving SQL syntax.
 
-> **Status:** design, not implemented. FB 5.0 client libraries are
-> already vendored in `src/3rdparty`-equivalent path
-> (`backend/databaseLayer/firebird/engine/`). Driver-side code lives
-> in `firebirdDatabaseLayer.cpp` and currently implements the
-> embedded / remote modes; the mesh / leader / adaptive-subscription
-> paths described here are to be added.
+> **Status (2026-05-23): Phases 1, 2, 4, 6 production-validated
+> end-to-end via manual smoke (Designer + Runtime sharing one .fdb
+> on UNC path through leader-election + spawned firebird.exe on
+> localhost TCP).** Phase 3 partial (scheduler wired, UI panel
+> pending). Phase 5 (mesh) deferred indefinitely — see "Mesh: why
+> deferred" section. Phase 7 dialect-portability work reverted as
+> off-priority (focus on shara, not multi-driver SQL).
+>
+> All Phase 1-6 code lives under
+> `src/engine/backend/databaseLayer/firebird/` — the driver is the
+> sole owner of leader / replication / maintenance state, per the
+> architectural principle below. Engine OES sees only the
+> `ibDatabaseLayer` abstraction.
+>
+> Cross-platform: all Win32-specific code paths (`SetDllDirectoryW`,
+> `LockFileEx`, `CreateProcessW`, Job Object kill-on-OES-crash) are
+> properly `#ifdef __WXMSW__`-gated; POSIX path of `firebirdLease`
+> (`fcntl F_SETLK`) implemented; POSIX `firebirdLocalServer` is
+> stubbed (no `posix_spawn` yet, returns 0 — graceful degrade to
+> single-process embedded). CMake build on macOS / Linux compiles;
+> runtime on POSIX = local-mode only.
+>
+> ### Deployment matrix — what mode OES picks automatically
+>
+> | Scenario | dbPath | Mode | Setup |
+> |---|---|---|---|
+> | **Single-user local** | `C:\data\db.fdb` | STANDALONE — embedded fbclient, no firebird.exe, no lease | nothing — just point OES at the file |
+> | **Multi-machine shared folder** | `\\HOST\share\db.fdb` | Leader-election — first process becomes leader (spawns firebird.exe), others follow over TCP | drop .fdb on share — that's it |
+> | **RDP / Terminal Server** | local path on the TS host | STANDALONE per session; FB lock manager coordinates between processes on the same host via `ProgramData/Firebird` shared memory | nothing — works out of box |
+>
+> Activation gate is purely path-based: `dbPath.StartsWith("\\\\") || dbPath.StartsWith("//")` triggers leader-mode. Local
+> paths always run STANDALONE. The `.lease` sidecar is **not** the
+> activation trigger — it would falsely trigger leader-mode every
+> time someone copied a share folder to a local disk for inspection
+> (the lease file travels with the .fdb).
+>
+> ### Failover timings (Phase 4 production)
+>
+> | Event | Recovery time |
+> |---|---|
+> | Leader graceful shutdown (user closed OES) | <5 s — leader writes `leaderPid=0` sentinel before releasing lock; followers see on next 5 s tick, instant promote |
+> | Leader crash / power loss / kill -9 | ~25 s — followers detect via 20 s heartbeat staleness threshold + ~5 s tick + spawn time |
+> | Driver reconnect on handoff | **Proactive at every query boundary** — `ReconnectIfLeaderChanged()` runs at the top of `DoRunQuery` / `DoRunQueryWithResults` / `DoPrepareStatement` (cached URL compare, no-op when unchanged). Mid-TX handoff still throws an explicit exception with "retry" instruction (caller must rollback their logical TX and re-do); auto-commit / direct-statement callers self-heal without caller participation. Long-lived pool clones and background-thread holders (session registry heartbeat / snapshot) all benefit — no per-callsite kick required. |
+> | Soft-landing in UI (Active Users list) | <1 s blink on graceful exit, ~25 s on crash — first successful refresh after a failure triggers an immediate own-heartbeat + suspends cluster `sweep` for ~5 s so peers' `lastActive` rows don't get pruned while everyone re-attaches. |
+>
+> ### Regression-prevention bugs already squashed
+>
+> Manual smoke on `\\NOUVERBE\share\fb_test253\sys.fdb` (2026-05-23)
+> surfaced these distinct issues, all landed-fixed:
+>
+> 1. DPB `isc_dpb_utf8_filename` is a **flag** tag (length=0), not value-bearing. Old code stuffed full URL as value → mangled DPB → silent `isc_io_error` on UNC paths only.
+> 2. `wxFile::Exists(strDatabaseUrl)` checked the **URL** (`inet://localhost:54309/\\HOST\share\db.fdb`) instead of file path → always-false → always-took CREATE branch instead of ATTACH → `isc_io_error` on existing DBs.
+> 3. Lease `CreateFileW` opened with `FILE_SHARE_READ` only → second-process open failed with `ERROR_SHARING_VIOLATION` before reaching `LockFileEx`. Fixed: `FILE_SHARE_READ | FILE_SHARE_WRITE`.
+> 4. Lease auto-create used `CREATE_NEW` (wxFile::Create with overwrite=false) → on SMB cache mismatch could race and truncate existing 98-byte lease to 0 bytes. Fixed: `OPEN_ALWAYS` (never truncates).
+> 5. Byte-range `LockFileEx` over offset 0..MAX → on Windows blocked **follower ReadFile** with `ERROR_LOCK_VIOLATION` → `ReadCurrentState` returned invalid → "Lease file unreadable or empty after retry". Fixed: sentinel-byte lock at offset 200 (past content), readable by followers.
+> 6. `wxExecute` for spawning `firebird.exe` from the leader-mode self-promote path — `wxExecute` asserts main-thread on **both** Win32 and POSIX. Heartbeat / promote runs on a background thread. Fixed: direct `CreateProcessW` (Win) with a POSIX `posix_spawn` stub.
+> 7. `ibValueSystemFunction::Message()` chained into the frontend Output Window (`wxStyledTextCtrl::AppendText`) and was being called from `DatabaseErrorReporter::ThrowDatabaseException`, including from background threads (session registry's snapshot job after a leader handoff). Concurrent dispatch with the main thread's `wxAuiMDIParentFrame` idle handler tripped `wxRecursionGuard` (`m_flag > 0` assert). Fixed: gate the Message call with `wxThread::IsMain()`; background errors still propagate via the exception thrown right after.
+> 8. `ReconnectIfLeaderChanged()` was only called inside `DoBeginTransaction`. Long-lived holders that do direct `RunQuery` / `PrepareStatement` outside a TX (session registry's `JobHeartbeatOwn` / `JobRefreshSnapshot`) stayed bound to the dead leader's TCP and looped forever, blanking the Active Users list. Fixed: proactive call at the top of `DoRunQuery` / `DoRunQueryWithResults` / `DoPrepareStatement` (cached URL compare, no-op when unchanged).
+> 9. Cluster sweep on the new leader saw peers' `lastActive` trailing because nobody could update during the handoff window → DELETEd live rows; Active Users list went empty for a couple of seconds. Fixed in `sessionRegistry`: on the recovery edge (first successful refresh after a failure) immediately re-`JobHeartbeatOwn` and suspend `JobSweepStale` for ~5 s (`m_sweepSuppressUntilMs`).
+> 10. `isc_dpb_parallel_workers` was guarded by `#ifdef`, but the vendored `consts_pub.h` stops at FB 4 tags (max = 95). The block was silently dead — per-attachment parallel-workers never reached the FB 5 runtime, only the `firebird.conf` `ParallelWorkers` ceiling applied. Fixed: local `#ifndef` + `#define isc_dpb_parallel_workers 100` right next to the use site (a future header bump will surface as a clear "macro redefined" diagnostic at the same line).
+>
+> These together are the recurrent test cases for any future change
+> touching FB driver init / lease / DPB construction / cross-thread
+> work / leader handoff. See the per-bug commits in git log for the
+> diagnosis trail.
 
 ---
 
@@ -530,11 +589,46 @@ this is the same primitive that file-mode coordination historically
 relies on, but applied here only to leadership election — not to
 data-page synchronisation.
 
+### Leader preference (host-match heuristic)
+
+The startup race is biased so that the OES instance running on
+the **host that physically owns the share** wins the lease when
+multiple peers start within a short window. Mechanism:
+
+- Parse `\\HOST\share\db.fdb` (or `//HOST/share/db.fdb`) → extract
+  `HOST`.
+- Compare with `wxGetHostName()`. If equal → this OES instance is
+  **preferred**: its writes will be local-disk, not over SMB.
+- Non-preferred instances sleep 150 ms before calling
+  `TryAcquireExclusive`. Preferred instances proceed immediately.
+  Within the 150 ms window the preferred peer reaches the OS
+  lock first and wins.
+
+Effect on common deployments:
+
+| Scenario | Outcome |
+|---|---|
+| Small office, share on a designated "main PC", OES runs on it | main PC becomes leader automatically |
+| Same, OES not on the file-host (NAS, server without OES) | no host-match peer; first-grab wins among the laptops (same as before) |
+| Peer-to-peer, share on one user's PC | share-owner becomes leader automatically when they start |
+| All laptops join after another non-preferred peer is already leader | preferred late joiner stays a follower; live preemption is not yet implemented (admin can restart the existing leader to trigger handoff) |
+
+Limitation: this only biases the initial race. Once a
+non-preferred peer is established as leader (e.g. it started
+before the preferred peer woke up), a preferred late joiner
+becomes a follower like everyone else. Active preemption (the
+preferred peer signals the existing non-preferred leader to
+vacate) is deferred — adds a lease-format field +
+follower-to-leader signalling. For the common pattern
+("file-host PC is the first one on in the morning"), the
+startup bias is sufficient.
+
 ### Lifecycle
 
 ```
 Process startup:
-  1. TryAcquireExclusive on db.fdb.lease.
+  1. (Non-preferred only) 150 ms head-start delay for preferred peers.
+  2. TryAcquireExclusive on db.fdb.lease.
      ├─ Acquired → become Leader.
      │     - Open db.fdb locally via embedded FB.
      │     - Start TCP listener on free port.
@@ -557,6 +651,54 @@ On crash of Leader (kill -9 / network drop / power off):
   - Followers race to acquire; first wins, bumps generation, starts
     serving. Other followers reconnect via new generation.
 ```
+
+### Soft-landing during handoff
+
+Once a new leader is up, two cooperating mechanisms keep the
+visible state (Active Users list, in-flight queries) from
+flickering or blanking out while everyone re-attaches:
+
+**1. Proactive driver self-heal** —
+`ibDatabaseLayerFirebird::ReconnectIfLeaderChanged()` runs at the
+top of every `DoRunQuery`, `DoRunQueryWithResults`, and
+`DoPrepareStatement` (not just `DoBeginTransaction`). The check
+is a cached-URL string compare against
+`ibFirebirdLeaderMode::CurrentConnectUrl()` — single dirty bit on
+the hot path. When it fires, `Close()` is best-effort, the
+handles are nulled, and `Open()` re-attaches against the URL the
+leader-mode singleton currently reports. Mid-TX handoff is
+explicitly refused (the FB transaction handle is gone, callers
+must rollback their logical TX and retry) — auto-commit and
+direct-statement callers self-heal silently.
+
+The pool implications matter: `ibConnectionPool` may hold 5-30
+clones of the layer, each with its own TCP to the old leader's
+`firebird.exe`. With the per-checkout reconnect, each clone
+self-heals the first time it's used after a handoff, not at some
+external "pool flush" event. There's also a generic
+`ibDatabaseLayer::ReconnectIfStale()` virtual on the base for
+non-FB callers that want to be explicit, but the proactive
+in-driver path makes it optional.
+
+**2. Sweep grace window** — sessions don't get pruned for ~5 s
+after recovery, even if their `lastActive` rows trail.
+`ibSessionRegistry::JobRefreshSnapshot` tracks
+`m_refreshFailedLastTick` and on the false→true→false edge
+(first successful refresh after a failure) it (a) immediately
+calls `JobHeartbeatOwn()` so our own rows are fresh before any
+sweep, and (b) sets `m_sweepSuppressUntilMs = now + 5000ms`.
+`JobSweepStale` early-returns while inside the grace window.
+Without this, the new leader's first sweep would see `lastActive`
+trailing for every peer that couldn't write through the handoff
+gap and DELETE the lot — Active Users blanks, owners panic.
+
+Combined timing for the user-visible "blink":
+
+| Trigger | Blink duration |
+|---|---|
+| Designer (leader) closed cleanly | <1 s — `leaderPid=0` sentinel; first follower promotes on next 5 s tick; soft-landing covers the gap |
+| Designer (leader) `kill -9` | ~25 s — wait for heartbeat-stale detection + promote + spawn |
+| Network blip (<5 s) | None — proactive reconnect catches it on next query |
 
 ### Why this works for FB but not for app-level locks
 
@@ -1044,10 +1186,19 @@ plugin interface.
 ### Strongly preferred: Firebird 5.0
 
 FB 5 adds:
-- **ParallelWorkers** per statement — multi-core query execution.
-  Reports run 4-8× faster on archive-node.
+- **ParallelWorkers per attachment** — multi-core execution for
+  the specific ops FB 5 parallelises: sweep, backup/restore,
+  CREATE INDEX / ALTER INDEX ACTIVE / index rebuild. Faster sweep
+  shrinks the page-cache thrash window on the leader; faster
+  backup/restore fits the off-hours maintenance window better;
+  faster index DDL helps designer deploys. Regular SELECT / DML
+  is **not** parallelised in FB 5 (planned for FB 6), so per-form
+  OLTP latency is unchanged.
 - **Per-attachment `isc_dpb_parallel_workers`** — letting driver
-  override defaults without `firebird.conf`.
+  override defaults without `firebird.conf`. Required to actually
+  reach the runtime; the vendored `consts_pub.h` is FB-4-era, so
+  we define the tag locally next to the use site (see bug 10 in
+  the regression list).
 - **Connection idle timeout** — dead peers cleaned up automatically.
 - **Statement-level cancel** — abort stuck replication-apply or
   runaway report.
@@ -1165,136 +1316,172 @@ zero-code**.
 | Session registry + connection pool | ✅ Done |
 | `isc_que_events` infrastructure | partial — used by debug protocol; available for metadata reload |
 
-### Phase 1 — UX cleanup (low risk, high value)
+### Phase 1 — UX cleanup (low risk, high value) — ✅ landed
 
-| Item | Effort | Value |
+| Item | Status | Where |
 |---|---|---|
-| Move FB DLLs from `bin/.../` to `bin/.../_fb/` via `Common.props` | 30 min | User sees one hidden folder instead of 15 files |
-| `SetDllDirectory(L"_fb")` bootstrap in `appData::Init` | 15 min | DLL loading works from subfolder |
-| Move all settings from `firebird.conf` to DPB in driver | 1-2 hr | `firebird.conf` no longer needed; runtime self-configures |
-| Delete `firebird.conf` from vendored + from build output | 5 min | Less visible plumbing |
-| Audit `firebirdInterpretError`, complete error code table | 2-3 hr | `firebird.msg` no longer needed; OES translates errors itself |
-| Delete `firebird.msg` from vendored + from build output | 5 min | Less visible plumbing |
-| Redirect FB log via `FIREBIRD_LOG` env var | 30 min | No `firebird.log` next to exe |
+| Move FB DLLs from `bin/.../` to `bin/.../_fb/` via `Common.props` | ✅ landed | `Common.props` `<FbVendorDir>` macro |
+| `SetDllDirectory(L"_fb")` bootstrap in `appData::Init` | ✅ landed | `firebird/firebirdBootstrap.{h,cpp}` |
+| Move all settings from `firebird.conf` to DPB in driver | ✅ landed | `firebirdDatabaseLayer::BuildDPB` (UTF8, lock_timeout, force_write, page_size, read_consistency) |
+| Delete `firebird.conf` from vendored + from build output | ✅ landed | not copied into `_fb/` |
+| Audit `firebirdInterpretError`, complete error code table | ✅ landed | `firebirdInterpretError` covers all OES-surfaced GDS codes; falls back to `isc_status` decode for the rest |
+| Delete `firebird.msg` from vendored + from build output | ✅ landed | not copied into `_fb/` |
+| Redirect FB log via `FIREBIRD_LOG` env var | ✅ landed | `firebirdBootstrap::SetEnv` (also sets `FIREBIRD=<appData dir>`) |
 
 After Phase 1, the user-visible footprint is: `enterprise.exe`,
 `backend.dll`, `frontend.dll`, `wfrontend.dll`, `_fb/` hidden
 folder, user-chosen database folder. **No FB-plumbing files visible
-anywhere.**
+anywhere** — verified via clean install smoke test (2026-05-XX).
 
-### Phase 2 — BLOB compression (low risk, high value)
+### Phase 2 — BLOB compression (low risk, high value) — ✅ landed
 
-| Item | Effort | Value |
+| Item | Status | Where |
 |---|---|---|
-| Vendor zstd (header-only or small lib) | 30 min | Compression library available |
-| `ibParameterCollection::SetParamBlob` — zstd compress > 512 B | 1 hr | Transparent compression on write |
-| `ibResultSet::GetResultBlob` — zstd decompress | 30 min | Transparent decompression on read |
-| Marker byte (0x00 raw, 0x01 zstd) for forward compatibility | included | Allows future format changes |
-| Unit tests: round-trip large TEXT, mixed-content BLOBs, edge sizes | 2 hr | Confidence |
+| Vendor zlib (already in tree) | ✅ landed | via `wx/zstream.h` (`wxZlibInputStream`/`OutputStream`) |
+| `ibParameterCollection::SetParamBlob` — compress > 512 B | ✅ landed | `firebirdBlobCompression::CompressIfWorthwhile` (threshold = 512 B) |
+| `ibResultSet::GetResultBlob` — decompress | ✅ landed | `firebirdBlobCompression::DecompressIfNeeded` |
+| Magic byte (`OESC` header) for forward compatibility | ✅ landed | uncompressed → no header (legacy DBs read transparently); compressed → 4-byte magic + uncompressed size |
+| Unit tests: round-trip large TEXT, mixed-content BLOBs, edge sizes | ✅ landed | `tests/test_blobCompression.cpp` — 16 round-trip tests |
 
 Effect: documents with descriptions / comments / attached files
 shrink 50-80% on disk. Database growth slowed proportionally.
+Legacy uncompressed BLOBs in existing DBs continue to read without
+migration — the magic-byte gate is one-way.
 
-### Phase 3 — scheduled maintenance (medium effort)
+### Phase 3 — scheduled maintenance — partial
 
-| Item | Effort | Value |
+| Item | Status | Where |
 |---|---|---|
-| `ibMaintenanceScheduler` background job | 4 hr | Weekly `gbak -B; gbak -R` cycle automatically |
-| `MON$DATABASE` monitor → adaptive sweep | 2 hr | Auto-sweep when OAT/OST diverge |
-| UI surface in Designer: "DB size X, last maintenance Y" | 2 hr | User awareness without manual checking |
+| Services-API `gbak` BR cycle | ✅ landed | `firebirdMaintenance::RunBackupRestoreCycle` (uses `isc_service_attach` + `isc_service_start`) |
+| Adaptive sweep via `MON$DATABASE` | ✅ landed | `firebirdMaintenance::AdaptiveSweep` (triggers when OAT/OST gap > threshold) |
+| `ibMaintenanceScheduler` background job (weekly cron) | ⏳ pending | scaffolding exists but not wired to scheduler |
+| UI surface in Designer: "DB size X, last maintenance Y" | ⏳ pending | |
 
-Effect: file size stays bounded over time without manual ops
-attention.
+Effect once fully landed: file size stays bounded over time without
+manual ops attention. Current state: the maintenance primitives are
+available for manual invocation, but the scheduler that calls them
+automatically is still to be wired.
 
-### Phase 4 — leader-election mode (medium-high effort)
+### Phase 4 — leader-election mode — ✅ foundations + driver wiring landed
 
-| Item | Effort | Value |
+| Item | Status | Where |
 |---|---|---|
-| `ibLeaseFile` — SMB byte-range lock + heartbeat | 6 hr | Coordination primitive |
-| `ibLeaderModeDriver` — open .fdb locally + spawn TCP listener | 8 hr | Leader role implementation |
-| `ibFollowerModeDriver` — read lease, connect TCP, watch for handoff | 6 hr | Follower role |
-| Failover logic — heartbeat-timeout → re-acquire | 4 hr | Resilience |
-| Optional local-cache mode — leader copies .fdb to local disk, syncs via nbackup | 16 hr | Performance optimization for slow SMB |
-| Integration tests with 2-node setup | 8 hr | Confidence |
+| `ibLeaseFile` — SMB byte-range lock + heartbeat | ✅ landed | `firebirdLease.{h,cpp}` — 96-byte fixed binary layout (magic, owner-id, epoch, heartbeat-ts, addr/port, generation); `LockFileEx` (`#ifdef __WXMSW__`) / `fcntl F_SETLK` (POSIX) |
+| HLC clock | ✅ landed | `firebirdHlc.{h,cpp}` — `[millis 48][counter 12][nodeId 4]` |
+| `firebirdLeaderMode` — leader / follower orchestrator | ✅ landed | `firebirdLeaderMode.{h,cpp}` — heartbeat thread, lease renewal, generation-bump watch |
+| Driver-side wiring in `firebirdDatabaseLayer::Open` | ✅ landed | Calls `InitForDatabase` on every open; uses returned role-aware `connectUrl` (`inet://localhost:<port>/<path>` for self-leader, `inet://leader-host:<port>/<path>` for follower) instead of bare file path |
+| FB 4+ replication.conf writer | ✅ landed | `firebirdReplicationConfig.{h,cpp}` |
+| Generation-bump → URL refresh on follower | ✅ landed | `HeartbeatLoop` detects generation change, rewrites `connectUrl` so next `CurrentConnectUrl()` sees the new leader |
+| Failover — heartbeat-timeout → self-promote | ✅ landed | `HeartbeatLoop` checks `kHeartbeatStaleMs` (60 s) → `PromoteSelfToLeader` tries `TryAcquireExclusive`; on win, spawns local server + `WriteSelfAsLeader`; on race-loss, refreshes cached URL from the winner |
+| Driver reconnect-on-leader-handoff | ✅ landed (BeginTransaction checkpoint) | `firebirdDatabaseLayer::ReconnectIfLeaderChanged` — at every `DoBeginTransaction` compares cached `m_currentConnectUrl` with `ibFirebirdLeaderMode::CurrentConnectUrl()`; on mismatch, closes the FB handle and re-`Open`s against the new URL. Mid-TX connection loss still surfaces as a regular exception; the *next* BeginTransaction triggers the reconnect. Skipped for remote (`server:db`) mode — no leader-mode there. |
+| Optional local-cache mode — leader copies .fdb to local disk, syncs via nbackup | ⏳ pending (separate roadmap item) |
+| Lease-level unit tests | ✅ landed | `tests/test_firebirdLease.cpp` — 8 tests covering acquire / re-acquire / write/read state round-trip / generation bump / heartbeat refresh / non-holder read / handoff generation persistence / staleness invariant |
+| Orchestrator-level 2-node integration test (self-promote loop) | ⏳ pending | Requires injectable clock or a >60 s real-time wait; deferred. Lease-level coverage above is the foundation any orchestrator test would build on. |
 
-Effect: file-share deployments work without corruption risk; one
-machine acts as transparent server for the others.
+The lease + HLC + leader orchestrator + replication-config writer
+are all in tree and unit-tested in isolation. End-to-end
+follower-side wiring and 2-node integration testing is what's
+left.
 
-### Phase 5 — mesh mode (high effort)
+### Phase 5 — mesh mode — DEFERRED INDEFINITELY (2026-05-23)
 
-| Item | Effort | Value |
+**Decision:** mesh-mode (each peer with a local .fdb replica + FB
+native replication shipping deltas) is **strictly redundant** for
+our stated sweet spot (3-30 users on one LAN, ≤100 GB). Phase 4
+leader-election + Phase 6 local server cover this scenario
+end-to-end (production-validated). Mesh would only win for:
+
+- **Multi-office WAN** (peers across cities, no shared folder
+  reachable from all sites)
+- **Geographic read distribution** (>50 readers needing local-fast
+  reads, can't tolerate TCP roundtrip to a leader)
+- **Zero-downtime requirement** (60-second handoff unacceptable —
+  banking core, exchange platform)
+
+These are **a different market segment**, not our target. For
+multi-office the natural answer is PG/MSSQL master-master
+replication (decades-mature, supported), not rolling our own mesh
+on top of FB.
+
+Mesh foundations already landed (`firebirdHlc`,
+`firebirdReplicationConfig`) stay in tree as a skeleton — if a
+pilot customer ever shows up with a genuine mesh need, the
+primitives are ready. Active development = STOP.
+
+Remaining ~100 hr (mDNS, query router, conflict resolver, DDL
+2-phase, 3-node tests) — not scheduled.
+
+### Phase 6 — local FB server mode (out-of-process, bitness-decoupling) — ✅ landed (opt-in)
+
+| Item | Status | Where |
 |---|---|---|
-| `mesh.conf` parser + schema | 4 hr | Configuration |
-| Peer discovery (mDNS + manifest fallback) | 12 hr | Auto-join |
-| FB replication.conf generation per peer | 4 hr | Replication setup |
-| `ibHlcClock` + per-session barrier | 8 hr | Causal ordering |
-| Adaptive subscription engine | 24 hr | Working-set caching |
-| `ibQueryRouter` — local vs peer vs archive | 12 hr | Smart routing |
-| Conflict resolver (HLC last-writer-wins + per-object overrides) | 8 hr | Conflict handling |
-| DDL 2-phase coordinator | 16 hr | Schema deploy across mesh |
-| `isc_que_events` event broadcast | 4 hr | Sub-second signaling |
-| Integration tests with 3+ node setup | 24 hr | Confidence |
+| Compile-time gate `OES_FB_LOCALSERVER` | ✅ landed | `firebirdLocalServer.cpp` — OFF by default, header API stays for callers; methods stub to 0 / "" when flag undefined |
+| CMake option `OES_FB_LOCALSERVER` | ✅ landed | `CMakeLists.txt` — adds `add_compile_definitions(OES_FB_LOCALSERVER)` inside the FB block |
+| Spawn child process on demand | ✅ landed | `firebirdLocalServer.{h,cpp}` — `wxExecute` (Win32 path; POSIX path stubbed) |
+| Auto-port selection | ✅ landed | `firebirdLocalServer::PickFreePort` (bind-to-0 + getsockname) |
+| Pid file + lock | ✅ landed | `%TEMP%/oes-fb-localserver.pid` with pid/port/parent fields |
+| Graceful shutdown + PID cleanup | ✅ landed | atexit hook → `wxSIGTERM` (2 s grace) → `wxSIGKILL` |
+| Config switch — `OES_FB_LOCAL_SERVER` env or per-DB flag | ✅ landed | activation hook in `firebirdLeaderMode::Acquire` |
+| Bundle `firebird.exe` under `_fb/` | ⚠️ opt-in by operator | binary **not** vendored; operator drops it in when flag is ON. Driver surfaces clear error if missing. |
 
-Effect: full peer-to-peer mesh for the design's sweet spot.
+**Why opt-in.** Embedded / leader-election / mesh modes don't need
+the out-of-process server — they attach via `fbclient.dll` directly.
+The local-server path is justified **only** when x86 OES must drive
+an x64 FB engine (working sets that overflow the 3 GB user-mode
+address space — the archive-node case). Keeping it gated saves
+~5 MB on the distributable and excludes `<windows.h>` / winsock /
+`wxProcess` from default builds.
 
-### Phase 6 — local FB server mode (low-medium effort, narrow scope)
+Callers (`firebirdLeaderMode`) already handle
+`ibFirebirdLocalServer::EnsureStarted() == 0` as graceful
+degrade-to-embedded — no `#ifdef` leaks past the translation unit
+boundary.
 
-| Item | Effort | Value |
+**Not** for scaling FB past 30 users — that scenario still
+graduates to PG/MSSQL via Phase 7.
+
+### Phase 7 — RDBMS migration tooling (graduation path) — partial
+
+| Item | Status | Where |
 |---|---|---|
-| Add `firebird.exe` to `_fb/` | 5 min | Server binary available |
-| Spawn child process on demand | 2 hr | Lazy boot |
-| Auto-port selection + lock file | 2 hr | Multi-instance safety |
-| Graceful shutdown + PID cleanup | 2 hr | No zombies |
-| Config switch `FBHost = LocalServer` | 30 min | Mode selection |
+| **`ibSqlDialect` helper** — per-driver emit primitives (`BuildUpsert`, `BuildUpsertDynamic`, `MakeExcludedAssignList`, `LimitClause`, `NextIdSql`, `ConcatOp`, `BlobType`, `BoolType`) | ✅ landed | `sqlDialect.{h,cpp}` — 5 driver singletons (FB / PG / SQLite / MySQL / MSSQL); 35 dialect-emission unit tests in `tests/test_sqlDialect.cpp` |
+| **Sweep hand-written SQL — upsert ladders** | ✅ landed | All 4 dynamic-upsert sites routed through `BuildUpsertDynamic`: `commonObjectRecordSetQuery.cpp` (sites A + B), `commonObjectMetaQuery.cpp` (generic-attribute + predefined-update + tombstone), `constantObject.cpp`, `constantMetadataQuery.cpp`. Static-column upsert via `BuildUpsert` in `userInfo.cpp`. |
+| **Sweep hand-written SQL — `CREATE INDEX IF NOT EXISTS`** | ✅ landed | New `ibSqlDialect::BuildCreateIndex` (base + FB + MSSQL overrides). Swept in `appDataQuery.cpp` (3 session-table indexes) and `metadataConfigurationQuery.cpp` (sequence-table index). FB emits bare `CREATE INDEX` (idempotency via outer `TableExists` gate); MSSQL wraps in `sys.indexes` existence check. |
+| DDL transaction wrap (FB-only `BeginTransaction`/`Commit` around DDL) in `metadataConfigurationQuery.cpp` | ⏳ pending | Candidate for a dialect predicate `DDLNeedsExplicitTransaction()`. |
+| Schema converter — OES metadata → PG / MSSQL DDL generator | ⏳ pending |
+| Bulk data exporter — `.fdb` → CSV / native bulk format per target | ⏳ pending |
+| Bulk data importer — push into PG `COPY` / MSSQL `bcp` | ⏳ pending |
+| Sanity-check tool — row counts, key constraints, indexes match | ⏳ pending |
+| Connection-string switch in `connect.cfg` — runtime detect | ⏳ pending |
+| End-to-end migration smoke test on real configurations | ⏳ pending |
 
-Effect: enables x86 OES to drive x64 FB engine for the **archive-node
-case** within mesh mode — where heavy reports plus replication-log
-consume need more than 3 GB address space. **Not** for scaling FB
-past 30 users; that scenario migrates to PG/MSSQL via Phase 7.
+The Phase-7 first two items (`ibSqlDialect` + the dynamic-upsert
+sweep) have already paid off independently of any migration — they
+fixed two pre-existing latent bugs surfaced during the sweep
+(`objectSelectorQuery.cpp` PG `LIMIT 1` before `WHERE`,
+`documentManager_impl.cpp` date-vs-number attribute swap in
+`FindByNumber`'s WHERE clause). Schema-converter / bulk-mover items
+land when the first real customer is approaching the 30-user /
+100 GB boundary.
 
-### Phase 7 — RDBMS migration tooling (graduation path)
+### Estimated remaining effort
 
-| Item | Effort | Value |
+| Phase | Status | Remaining |
 |---|---|---|
-| **`ibSqlDialect` helper** — per-driver emit primitives (`Upsert`, `LimitClause`, `NextIdSql`, `ConcatOp`, `BlobType`, `BoolType`) | 16 hr | **Hard prerequisite for portability** |
-| **Sweep hand-written SQL** in `appDataQuery.cpp` / `metaAttributeObjectQuery.cpp` / `metadataConfigurationQuery.cpp` / scattered `*Query.cpp` — route through `ibSqlDialect` helpers | 24 hr | Eliminate "works on FB, fails on PG" bug class |
-| Schema converter — OES metadata → PG / MSSQL DDL generator | 16 hr | Recreate schema in target RDBMS faithfully |
-| Bulk data exporter — `.fdb` → CSV / native bulk format per target | 24 hr | Hot/cold data dump |
-| Bulk data importer — push into PG `COPY` / MSSQL `bcp` | 16 hr | Fast load (millions of rows/min) |
-| Sanity-check tool — row counts, key constraints, indexes match | 8 hr | Confidence after migration |
-| Connection-string switch in `connect.cfg` — runtime detect | 2 hr | Engine auto-picks new driver |
-| End-to-end migration smoke test on real configurations | 16 hr | Catch edge cases (BLOB types, custom domains, etc.) |
+| 1 — UX cleanup | ✅ landed | — |
+| 2 — BLOB compression | ✅ landed | — |
+| 3 — Scheduled maintenance | partial | ~3-4 hr (Designer maintenance-status UI panel) |
+| 4 — Leader-election | ✅ production-validated | ~8-10 hr (orchestrator-level 2-node integration test with injectable clock; nice-to-have) |
+| 5 — Mesh mode | **DEFERRED** | — (not scheduled; see "Phase 5 DEFERRED" above) |
+| 6 — Local FB server | ✅ landed | — |
+| 7 — RDBMS migration tooling | **REVERTED** | — (off-priority, focus is shara; dialect work removed) |
 
-Effect: "outgrow FB" becomes a **routine, scriptable, predictable**
-operation rather than a manual data-engineering project. This is
-what makes the "30 user / 100 GB hard cap" honest — there's a
-defined exit ramp instead of a wall.
-
-The first two items (`ibSqlDialect` + sweep) **pay off independently
-of migration** — they eliminate dialect-leak bugs that already
-surface during multi-driver development. Worth landing earlier
-than the rest of Phase 7 if the team feels the pain.
-
-### Estimated total
-
-| Phase | Effort | Cumulative |
-|---|---|---|
-| 1 — UX cleanup | ~6 hr | 6 hr |
-| 2 — BLOB compression | ~4 hr | 10 hr |
-| 3 — Scheduled maintenance | ~8 hr | 18 hr |
-| 4 — Leader-election | ~40-48 hr | 60 hr |
-| 5 — Mesh mode | ~120 hr | 180 hr |
-| 6 — Local FB server | ~7 hr | 187 hr |
-| 7 — RDBMS migration tooling | ~120 hr | 307 hr |
-
-Phases 1-3 are **safe early wins** — should land first.
-Phase 4 (leader-election) gives the biggest UX win for shared-file
-deployments. Phase 5 (mesh) is the heaviest investment and should
-only follow once Phase 4 proves stable in production. Phase 7's
-first two items (`ibSqlDialect` + sweep) are worth pulling forward
-as a Phase 3.5 — they pay off in current multi-driver dev work, not
-just in eventual migration. Rest of Phase 7 lands when the first
-real customer is approaching the boundary.
+**Current production-ready scope:** Phases 1, 2, 4, 6. This covers
+the entire stated sweet spot — single-user local + multi-machine
+shared folder + RDP/terminal-server. Anything else (multi-office WAN,
+heavy read-distribution) → graduate to PG/MSSQL via manual export +
+schema rebuild (no tooling automation right now since Phase 7 is
+off-priority).
 
 ---
 

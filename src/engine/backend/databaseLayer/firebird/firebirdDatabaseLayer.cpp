@@ -11,6 +11,9 @@
 
 #include "firebirdPreparedStatement.h"
 #include "firebirdResultSet.h"
+#include "firebirdLeaderMode.h"
+#include "firebirdLocalServer.h"
+#include "firebirdMaintenanceScheduler.h"
 
 #include <wx/file.h>
 #include <wx/stdpaths.h>
@@ -221,11 +224,33 @@ bool ibDatabaseLayerFirebird::Open()
 	//wxCSConv conv(wxT("UTF-8"));
 	//SetEncoding(&conv);
 
-	// Combine the server and databsae path strings to pass into the isc_attach_databse function
+	// Leader-election orchestrator hook. UNC / SMB paths route
+	// through `ibFirebirdLeaderMode::InitForDatabase` which decides
+	// whether this process is leader (acquired the SMB byte-range
+	// lock and hosts the database locally via a child `firebird.exe`
+	// TCP listener) or follower (someone else is leader; attach to
+	// them over TCP). Local paths bypass the orchestrator and
+	// always go embedded — same behaviour as before leader-mode
+	// landed.
 	wxString strDatabaseUrl;
-
 	if (m_strServer.IsEmpty()) {
-		strDatabaseUrl = m_strDatabase; // Embedded database, just supply the file name
+		const auto lm = ibFirebirdLeaderMode::InitForDatabase(m_strDatabase);
+		if (!lm.ok) {
+			SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
+			SetErrorMessage(lm.errorMessage);
+			ThrowDatabaseException();
+			return false;
+		}
+		if (lm.role == ibFirebirdLeaderMode::Role::Standalone) {
+			// No lease — normal embedded attach by file path.
+			strDatabaseUrl = m_strDatabase;
+		} else {
+			// Leader or follower — orchestrator hands back the right
+			// attach URL (either `inet://localhost:<port>/<path>` for
+			// the leader's own embedded-via-TCP path, or
+			// `inet://leader-host:<port>/<path>` for followers).
+			strDatabaseUrl = lm.connectUrl;
+		}
 	}
 	else {
 		strDatabaseUrl = m_strServer + wxT(":") + m_strDatabase;
@@ -292,9 +317,99 @@ bool ibDatabaseLayerFirebird::Open()
 		dpbBuffer.push_back(sizeof(sTimeZone) - 1);
 		dpbBuffer.append(sTimeZone);
 
+		// sweep_interval — how many transactions between automatic
+		// sweep passes (background MVCC garbage collection that frees
+		// pages occupied by dead row versions). FB default is 20000;
+		// we tighten to 5000 so active-OLTP databases don't accumulate
+		// as much dead-version bloat before sweep reclaims it. Sweep
+		// runs in the background on the connection that triggers it
+		// (typical impact: brief CPU spike, no DML pause). Encoded
+		// as 4-byte little-endian per legacy DPB.
+		{
+			const uint32_t sweepInterval = 5000;
+			dpbBuffer.push_back(isc_dpb_sweep_interval);
+			dpbBuffer.push_back(4);
+			dpbBuffer.push_back((char)(sweepInterval       & 0xFF));
+			dpbBuffer.push_back((char)((sweepInterval >> 8 ) & 0xFF));
+			dpbBuffer.push_back((char)((sweepInterval >> 16) & 0xFF));
+			dpbBuffer.push_back((char)((sweepInterval >> 24) & 0xFF));
+		}
+
+		// num_buffers — per-attachment page-cache size in pages. Default
+		// DefaultDbCachePages = 2048 (32 MB at 16K pages) is set in
+		// firebird.conf; we set it via DPB too so the driver owns the
+		// policy and firebird.conf becomes a fallback for engine-level
+		// settings only (ServerMode = Classic for RDP coordination,
+		// which has no DPB equivalent). Encoded as 4-byte little-endian
+		// integer per the dpb_num_buffers convention.
+		{
+			const uint32_t numBuffers = 2048;
+			dpbBuffer.push_back(isc_dpb_num_buffers);
+			dpbBuffer.push_back(4);
+			dpbBuffer.push_back((char)(numBuffers       & 0xFF));
+			dpbBuffer.push_back((char)((numBuffers >> 8 ) & 0xFF));
+			dpbBuffer.push_back((char)((numBuffers >> 16) & 0xFF));
+			dpbBuffer.push_back((char)((numBuffers >> 24) & 0xFF));
+		}
+
+		// parallel_workers (FB 5) — per-attachment cap for the
+		// operations FB 5 actually parallelises. ParallelWorkers in
+		// firebird.conf is the global ceiling; this DPB value is the
+		// upper bound for THIS connection (clamped to ≤
+		// MaxParallelWorkers from conf). Encoded as 4-byte
+		// little-endian integer.
+		//
+		// What FB 5 parallelises with this knob (the things OES
+		// actually triggers):
+		//   - Sweep — ibFirebirdMaintenance::RunSweep; faster finish
+		//     ⇒ smaller window of page-cache thrash.
+		//   - Backup / Restore — RunBackupRestoreCycle in the off-
+		//     hours maintenance window.
+		//   - CREATE INDEX / ALTER INDEX ACTIVE / index rebuild —
+		//     designer deploys, data-import flows.
+		//
+		// What it does NOT parallelise in FB 5: regular SELECT (no
+		// parallel scan yet — planned for FB 6), DML, OLTP in
+		// general. OES's per-form OLTP-light query mix sees no
+		// per-query latency change; the win is entirely in those
+		// backend-task durations on the leader.
+		//
+		// Our vendored consts_pub.h is FB-4-era and stops at
+		// isc_dpb_decfloat_traps (95); the parallel_workers tag was
+		// added in FB 5. We're running against the FB 5.0.5 runtime,
+		// so define it locally with the upstream value. The previous
+		// `#ifdef isc_dpb_parallel_workers` guard silently skipped
+		// the whole block because the symbol wasn't defined, leaving
+		// per-attachment parallelism off. On a future header bump,
+		// the duplicate `#define` will surface as a clear "macro
+		// redefined" diagnostic at this site.
+#ifndef isc_dpb_parallel_workers
+#define isc_dpb_parallel_workers 100
+#endif
+		{
+			const uint32_t parallelWorkers = 2;
+			dpbBuffer.push_back((char)isc_dpb_parallel_workers);
+			dpbBuffer.push_back(4);
+			dpbBuffer.push_back((char)(parallelWorkers       & 0xFF));
+			dpbBuffer.push_back((char)((parallelWorkers >> 8 ) & 0xFF));
+			dpbBuffer.push_back((char)((parallelWorkers >> 16) & 0xFF));
+			dpbBuffer.push_back((char)((parallelWorkers >> 24) & 0xFF));
+		}
+
+		// isc_dpb_utf8_filename is a FLAG (boolean) DPB tag — it tells
+		// the engine "the database filename in the attach call is
+		// encoded in UTF-8". It carries NO value (length byte = 0).
+		//
+		// Previously this stuffed the full URL as the tag's value,
+		// which malformed the DPB. Non-UNC paths apparently survived
+		// (engine ignored / skipped the bogus value), but UNC paths
+		// (`\\host\share\db.fdb`) tripped a CreateFile attempt against
+		// the bogus data and returned isc_io_error (335544344) before
+		// the real attach completed. Server-side attach still appeared
+		// to succeed (lock files were created in ProgramData), but
+		// fbclient never saw a successful response.
 		dpbBuffer.push_back(isc_dpb_utf8_filename);
-		dpbBuffer.push_back(urlLength);
-		dpbBuffer.append(urlBuffer);
+		dpbBuffer.push_back(0);
 
 		if (m_strUser.length() > 0)
 		{
@@ -336,7 +451,16 @@ bool ibDatabaseLayerFirebird::Open()
 
 	if (m_strServer.IsEmpty())
 	{
-		if (!wxFile::Exists(strDatabaseUrl)){
+		// Check existence by *file path*, not by `strDatabaseUrl`.
+		// In leader-mode the URL is a TCP form like
+		// `inet://localhost:<port>/\\host\share\db.fdb` — wxFile::Exists
+		// against that always returns false, which used to silently
+		// route us into the CREATE branch even when the DB already
+		// existed on the share. FB then tried to CREATE over the URL
+		// and surfaced isc_io_error (335544344). The actual file path
+		// (m_strDatabase) is what should drive the create-vs-attach
+		// decision.
+		if (!wxFile::Exists(m_strDatabase)){
 
 			wxFileName fileDatabase(m_strDatabase);
 			// Mkdir(..., wxPATH_MKDIR_FULL) is the recursive variant —
@@ -376,12 +500,47 @@ bool ibDatabaseLayerFirebird::Open()
 		return false;
 	}
 
+	// Cache the URL the new isc_db_handle was attached against so
+	// ReconnectIfLeaderChanged can later detect leader handoff and
+	// reattach. Empty m_strServer = local/leader-mode path; remote
+	// (`server:db`) bypasses leader-mode entirely.
+	m_currentConnectUrl = strDatabaseUrl;
+
+	wxLogDebug(wxT("ibDatabaseLayerFirebird: attached to %s"),
+	           strDatabaseUrl);
+
+	// Spin up the maintenance scheduler — ONLY for Standalone single-
+	// process embedded. Leader-mode (our own spawned firebird.exe
+	// holds the .fdb via TCP) cannot do gbak BR-cycle's atomic SWAP:
+	// Windows rename fails with sharing violation, POSIX silently
+	// re-points the inode leaving the running server on a stale
+	// file. Followers must not touch the shared DB at all. Remote
+	// `server:db` mode delegates maintenance to whoever owns the
+	// remote server.
+	if (m_strServer.IsEmpty()
+	 && ibFirebirdLeaderMode::CurrentRole() == ibFirebirdLeaderMode::Role::Standalone) {
+		ibFirebirdMaintenance::ServiceConnection conn;
+		conn.username = m_strUser;
+		conn.password = m_strPassword;
+		// conn.server stays empty → service_mgr on local host
+		ibFirebirdMaintenanceScheduler::Start(m_pInterface, m_strDatabase, conn);
+	}
+
 	return true;
 }
 
-// close database  
+// close database
 bool ibDatabaseLayerFirebird::Close()
 {
+	// NOTE: maintenance scheduler is intentionally NOT stopped here.
+	// ibDatabaseLayerFirebird instances are cloned per pool slot, and
+	// the pool open/closes connections constantly — stopping the
+	// scheduler on every Close would kill it the first time any
+	// connection returns to the pool. Scheduler is a process-wide
+	// singleton tied to leader-mode lifetime (Started lazily on first
+	// Open in leader/standalone role; stopped via atexit hook
+	// registered in MaintenanceScheduler::Start itself).
+
 	CloseResultSets();
 	CloseStatements();
 
@@ -421,6 +580,13 @@ bool ibDatabaseLayerFirebird::IsOpen()
 void ibDatabaseLayerFirebird::DoBeginTransaction(const ibTxOptions& opts)
 {
 	ResetErrorCodes();
+
+	// Single reconnect-on-leader-handoff checkpoint per TX boundary.
+	// Reattach to the current leader URL if it has changed since our
+	// last Open. Cheap on the hot path (URL string compare) when no
+	// handoff happened. If reconnect fires, m_pDatabase is the fresh
+	// handle below.
+	ReconnectIfLeaderChanged();
 
 	if (!m_pDatabase)
 		return;
@@ -667,6 +833,13 @@ bool ibDatabaseLayerFirebird::TryProbeRowLock(const wxString& tableName,
 int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQuery)
 {
 	ResetErrorCodes();
+	// Proactive leader-handoff check: any caller (TX-bound or direct
+	// auto-commit) gets a self-healed connection before the query is
+	// dispatched. Hot path is a single cached-string compare against
+	// the leader-mode URL — no-op when nothing changed. If a handoff
+	// happened mid-TX, this surfaces as an exception, which is exactly
+	// what we want — caller must rollback and retry. See header.
+	ReconnectIfLeaderChanged();
 	if (m_pDatabase != 0)
 	{
 		wxCharBuffer sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
@@ -762,10 +935,13 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxString& strQuery)
 {
 	ResetErrorCodes();
+	// Self-heal after leader handoff before the SELECT — see
+	// DoRunQuery for the rationale. Cheap when no handoff happened.
+	ReconnectIfLeaderChanged();
 	if (m_pDatabase != 0)
 	{
 		wxCharBuffer sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
-#if DEBUG 
+#if DEBUG
 		wxLogDebug(wxT("Running query: \"%s\""), (const char*)sqlDebugBuffer);
 #endif
 		wxArrayString QueryArray = ParseQueries(strQuery);
@@ -997,6 +1173,10 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 ibPreparedStatement* ibDatabaseLayerFirebird::DoPrepareStatement(const wxString& strQuery)
 {
 	ResetErrorCodes();
+	// Self-heal after leader handoff so the statement is built against
+	// the new firebird.exe handle, not the dead one — see DoRunQuery
+	// for the rationale.
+	ReconnectIfLeaderChanged();
 
 	ibPreparedStatementFirebird* pStatement = ibPreparedStatementFirebird::CreateStatement(m_pInterface, m_pDatabase, m_pTransaction, strQuery, GetEncoding());
 	if (pStatement && (pStatement->GetErrorCode() != DATABASE_LAYER_OK))
@@ -1339,6 +1519,90 @@ void ibDatabaseLayerFirebird::InterpretErrorCodes()
 	}
 }
 
+bool ibDatabaseLayerFirebird::ReconnectIfStale()
+{
+	// Public hook on the base — forwards to our private leader-mode
+	// reconnect logic. Callers from outside the FB driver use this
+	// generic API; the FB-specific routing stays encapsulated.
+	return ReconnectIfLeaderChanged();
+}
+
+bool ibDatabaseLayerFirebird::ReconnectIfLeaderChanged()
+{
+	// Remote `server:db` mode has no leader-mode involvement — caller
+	// configured a fixed FB server, not a shared-file path through the
+	// orchestrator. Skip.
+	if (!m_strServer.IsEmpty())
+		return false;
+
+	const wxString currentLeaderUrl = ibFirebirdLeaderMode::CurrentConnectUrl();
+
+	// Empty = leader-mode never initialised (no UNC path → standalone
+	// path) or shut down. Nothing to reconnect against.
+	if (currentLeaderUrl.IsEmpty())
+		return false;
+
+	// URL still matches cache = no handoff happened since our last
+	// attach. Hot path; this is the common case on every
+	// BeginTransaction call.
+	if (currentLeaderUrl == m_currentConnectUrl)
+		return false;
+
+	// Hard fail if caller is mid-transaction. Reconnect tears down
+	// the FB handle; any uncommitted work on the old leader is
+	// lost. Surfacing this as a clean exception is much safer than
+	// silently re-pointing the handle and letting the caller commit
+	// a half-statement-tx onto the new leader. Caller is expected
+	// to catch, rollback their logical TX, and retry from scratch.
+	if (m_pTransaction != 0) {
+		wxLogError(wxT("ibDatabaseLayerFirebird: leader handoff during ")
+		           wxT("active transaction (was %s, now %s) — caller must ")
+		           wxT("rollback and retry"),
+		           m_currentConnectUrl, currentLeaderUrl);
+		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
+		SetErrorMessage(wxT("Leader handoff during active transaction; "
+		                    "transaction state lost. Retry."));
+		ThrowDatabaseException();
+		return false;
+	}
+
+	// Per-pool-clone log — every clone in ibConnectionPool::m_entries
+	// hits this when the leader URL changes, so a 20-clone pool would
+	// spam 20 identical "handoff detected" lines per cluster event.
+	// Cluster-level handoff is already logged once by
+	// ibFirebirdLeaderMode's heartbeat thread. Debug only.
+	wxLogDebug(wxT("ibDatabaseLayerFirebird: leader handoff detected ")
+	           wxT("(was %s, now %s); reconnecting"),
+	           m_currentConnectUrl, currentLeaderUrl);
+
+	// Tear down the existing handle — best-effort. If the underlying
+	// TCP socket is already dead (leader process gone), Close will
+	// fail; we ignore that and march on to the fresh Open. CloseResultSets
+	// and CloseStatements inside Close invalidate any caller-held
+	// result-set / prepared statement so subsequent use surfaces as
+	// "handle invalid" rather than silently reading from the old
+	// connection.
+	try { Close(); } catch (...) { /* best-effort */ }
+	m_pDatabase = 0;
+	m_pTransaction = 0;
+	m_currentConnectUrl.Clear();
+
+	// Open() re-runs InitForDatabase + attach against whatever URL
+	// the leader-mode singleton currently reports. m_strDatabase is
+	// unchanged, so leader-mode's per-dbPath cache resolves the same
+	// orchestrator state. Catch any exception from Open — caller
+	// invoked us from DoBeginTransaction which doesn't expect reconnect
+	// to throw; surface as logged failure instead.
+	bool opened = false;
+	try { opened = Open(); } catch (...) { opened = false; }
+	if (!opened) {
+		wxLogError(wxT("ibDatabaseLayerFirebird: reconnect against new ")
+		           wxT("leader URL %s failed"), currentLeaderUrl);
+		return false;
+	}
+	return true;
+}
+
 bool ibDatabaseLayerFirebird::IsAvailable()
 {
 	bool bAvailable = false;
@@ -1347,4 +1611,5 @@ bool ibDatabaseLayerFirebird::IsAvailable()
 	wxDELETE(pInterface);
 	return bAvailable;
 }
+
 

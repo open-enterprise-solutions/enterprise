@@ -1408,6 +1408,27 @@ void ibSessionRegistry::JobSweepStale()
 {
 	if (!m_ownsSysSession || !m_writeConn) return;
 
+	// Post-handoff grace — see m_sweepSuppressUntilMs in the header
+	// for the rationale. During the ~5 s after we recover from a
+	// failed refresh, peers' lastActive may be trailing for "we just
+	// reconnected" reasons rather than "owner is actually dead", so
+	// we skip pruning until everyone has had a chance to bump their
+	// own rows.
+	{
+		const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::steady_clock::now().time_since_epoch()).count();
+		const auto deadline = m_sweepSuppressUntilMs.load(std::memory_order_acquire);
+		if (deadline != 0 && nowMs < deadline) {
+			static std::int64_t lastLoggedDeadline = -1;
+			if (lastLoggedDeadline != deadline) {
+				SESSION_LOG("[session sweep] suppressed for "
+				          << (deadline - nowMs) << " ms (post-handoff grace)");
+				lastLoggedDeadline = deadline;
+			}
+			return;
+		}
+	}
+
 	// Liveness detection — `lastActive` staleness. Each process's
 	// `JobHeartbeatOwn` UPDATEs lastActive every 1s on its own rows,
 	// so any row whose lastActive trails `now` by more than
@@ -1467,21 +1488,42 @@ void ibSessionRegistry::JobHeartbeatOwn()
 	if (!m_ownsSysSession || !m_writeConn) return;
 	if (m_own.empty()) return;
 
-	const wxDateTime now = wxDateTime::Now();
-	ibStatementGuard stmt(m_writeConn.get(),
-		m_writeConn->PrepareStatement(
-			wxT("UPDATE %s SET lastActive = ? WHERE session = ?;"),
-			session_table));
-	if (!stmt) return;
+	// Wrap the whole body — PrepareStatement can throw on a dead
+	// connection, and that happens during shutdown of a leader
+	// process: atexit kills the spawned firebird.exe before this
+	// background-thread heartbeat job has been told to stop. The
+	// throw would escape into the scheduler thread and abort the
+	// process. Silently return on any failure — the registry will
+	// be torn down by Shutdown shortly anyway, and "transient: next
+	// tick retries" is the correct semantics for live failures too.
+	//
+	// On failure we also kick `ReconnectIfStale` so the next tick
+	// runs against a freshly-attached connection — without this,
+	// after a cluster-level FB leader handoff our long-lived
+	// m_writeConn would loop forever on the dead TCP socket to the
+	// previous leader's spawned firebird.exe.
+	try {
+		ibStatementGuard stmt(m_writeConn.get(),
+			m_writeConn->PrepareStatement(
+				wxT("UPDATE %s SET lastActive = ? WHERE session = ?;"),
+				session_table));
+		if (!stmt) return;
 
-	for (const auto& kv : m_own) {
-		if (!kv.second || !kv.second->Inserted()) continue;
-		try {
-			stmt->SetParamDate  (1, now);
-			stmt->SetParamString(2, wxString::FromUTF8(kv.first.c_str()));
-			stmt->RunQuery();
+		const wxDateTime now = wxDateTime::Now();
+		for (const auto& kv : m_own) {
+			if (!kv.second || !kv.second->Inserted()) continue;
+			try {
+				stmt->SetParamDate  (1, now);
+				stmt->SetParamString(2, wxString::FromUTF8(kv.first.c_str()));
+				stmt->RunQuery();
+			}
+			catch (...) { /* transient — next tick retries */ }
 		}
-		catch (...) { /* transient — next tick retries */ }
+	}
+	catch (...) {
+		// Shutdown race / dead connection — next tick retries.
+		// Self-heal after leader handoff is handled inside the FB
+		// driver's DoRunQuery* / DoPrepareStatement.
 	}
 }
 
@@ -1553,11 +1595,19 @@ void ibSessionRegistry::JobCheckSignal()
 	if (pending.empty()) return;
 
 	// Act-phase: dispatch the signal, then clear the cell so the
-	// directive fires exactly once per admin write.
-	ibStatementGuard clearStmt(writer,
-		writer->PrepareStatement(
+	// directive fires exactly once per admin write. PrepareStatement
+	// can throw on a dead connection during shutdown; null clearStmt
+	// after a failed prepare means the signal stays in DB and will
+	// be picked up next tick (or by a peer process) — acceptable
+	// for a one-shot kick / reload directive.
+	ibPreparedStatement* clearStmtRaw = nullptr;
+	try {
+		clearStmtRaw = writer->PrepareStatement(
 			wxT("UPDATE %s SET signal = NULL WHERE session = ?;"),
-			session_table));
+			session_table);
+	}
+	catch (...) { /* dead connection — skip clear, signal stays */ }
+	ibStatementGuard clearStmt(writer, clearStmtRaw);
 
 	for (const auto& p : pending) {
 		SESSION_LOG("[session SIGNAL] guid=" << (const char*)p.guid.ToUTF8().data()
@@ -1684,11 +1734,41 @@ void ibSessionRegistry::JobRefreshSnapshot()
 	catch (const ibBackendException& err) {
 		SESSION_LOG("[session REFRESH] SELECT failed: "
 		          << (const char*)err.GetErrorDescription().ToUTF8().data());
+		// Self-heal after a leader handoff is handled inside the FB
+		// driver's DoRunQuery* — the next tick attaches to whichever
+		// leader is current. Record the failure so the recovery edge
+		// (next successful refresh) can trigger the soft-landing
+		// protocol (immediate own-heartbeat + sweep suppression).
+		m_refreshFailedLastTick.store(true, std::memory_order_release);
 		return;
 	}
 	catch (...) {
 		SESSION_LOG("[session REFRESH] SELECT failed: unknown exception");
+		m_refreshFailedLastTick.store(true, std::memory_order_release);
 		return;
+	}
+
+	// Recovery edge — previous tick failed, this one succeeded. That
+	// almost always means we just rode through an FB leader handoff:
+	// our long-lived m_writeConn was on the dead leader's TCP, the
+	// FB driver's proactive ReconnectIfLeaderChanged() at the top of
+	// DoRunQueryWithResults reattached us to the new leader. During
+	// the gap we couldn't UPDATE our own rows' lastActive. Two
+	// follow-ups soften the landing for the cluster:
+	//   1. Immediately bump our own rows so the next sweep on ANY
+	//      member doesn't see us as stale.
+	//   2. Extend sweep suppression — give peers ~5 s to do the same
+	//      before any pruning happens (kPostHandoffGraceMs below).
+	if (m_refreshFailedLastTick.exchange(false, std::memory_order_acq_rel)) {
+		SESSION_LOG("[session REFRESH] recovered after failure — "
+		          << "running soft-landing protocol");
+		try { JobHeartbeatOwn(); } catch (...) {}
+
+		constexpr std::int64_t kPostHandoffGraceMs = 5000;
+		const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::steady_clock::now().time_since_epoch()).count();
+		m_sweepSuppressUntilMs.store(nowMs + kPostHandoffGraceMs,
+		                             std::memory_order_release);
 	}
 
 	static unsigned lastCount = UINT_MAX;
