@@ -237,6 +237,15 @@ std::string NormalizeTechnicalNameSegment(const std::string& segment)
 	return out;
 }
 
+std::string NormalizeAgentPathKindSegment(const std::string& segment)
+{
+	const std::string lower = LowerAscii(segment);
+	if (lower == "subsystem") return "Interface";
+	if (lower == "enum") return "Enumeration";
+	if (lower == "inforegister") return "InformationRegister";
+	return NormalizeTechnicalNameSegment(segment);
+}
+
 std::string LeafNameFromPossiblyQualifiedName(const std::string& name)
 {
 	const auto parts = SplitDottedPath(name);
@@ -247,7 +256,7 @@ std::string NormalizeAgentFullName(const std::string& fullName)
 {
 	const auto parts = SplitDottedPath(fullName);
 	if (parts.size() == 5 && IsDirectChildContainer(parts[2])) {
-		return NormalizeTechnicalNameSegment(parts[0]) + "." +
+		return NormalizeAgentPathKindSegment(parts[0]) + "." +
 		       NormalizeTechnicalNameSegment(parts[1]) + "." +
 		       parts[2] + "." +
 		       NormalizeTechnicalNameSegment(parts.back());
@@ -256,7 +265,9 @@ std::string NormalizeAgentFullName(const std::string& fullName)
 	std::string out;
 	for (size_t i = 0; i < parts.size(); ++i) {
 		if (i > 0) out += ".";
-		out += NormalizeTechnicalNameSegment(parts[i]);
+		out += (i == 0)
+		    ? NormalizeAgentPathKindSegment(parts[i])
+		    : NormalizeTechnicalNameSegment(parts[i]);
 	}
 	return out;
 }
@@ -267,21 +278,64 @@ std::string NormalizeAgentTypeName(const std::string& typeName)
 	if (parts.size() != 2) return typeName;
 	const std::string lowerKind = LowerAscii(parts[0]);
 	if (lowerKind != "catalogref" && lowerKind != "documentref" &&
+	    lowerKind != "enumref" &&
 	    lowerKind != "enumerationref" &&
 	    lowerKind != "chartofaccountsref" &&
 	    lowerKind != "chartofcharacteristictypesref" &&
 	    lowerKind != "catalog" && lowerKind != "document" &&
+	    lowerKind != "enum" &&
 	    lowerKind != "enumeration" &&
 	    lowerKind != "chartofaccounts" &&
 	    lowerKind != "chartofcharacteristictypes") {
 		return typeName;
 	}
-	return parts[0] + "." + NormalizeTechnicalNameSegment(parts[1]);
+	std::string kind = parts[0];
+	if (lowerKind == "enum") kind = "Enumeration";
+	else if (lowerKind == "enumref") kind = "EnumerationRef";
+	return kind + "." + NormalizeTechnicalNameSegment(parts[1]);
+}
+
+void NormalizeAgentPropertyReferenceType(nlohmann::json& obj)
+{
+	if (!obj.is_object()) return;
+	nlohmann::json* type = nullptr;
+	if (obj.contains("type") && obj["type"].is_string()) {
+		type = &obj["type"];
+	} else if (obj.contains("valueType") && obj["valueType"].is_string()) {
+		type = &obj["valueType"];
+	}
+	if (type == nullptr) return;
+	const std::string lowerType = LowerAscii(type->get<std::string>());
+	auto setRef = [&](const char* field, const char* refKind) {
+		if (!obj.contains(field) || !obj[field].is_string()) return false;
+		const std::string target = obj[field].get<std::string>();
+		if (target.empty()) return false;
+		*type = std::string(refKind) + "." + NormalizeTechnicalNameSegment(target);
+		return true;
+	};
+	if (lowerType == "catalogref" || lowerType == "catalog") {
+		(void)setRef("catalog", "CatalogRef");
+	} else if (lowerType == "documentref" || lowerType == "document") {
+		(void)setRef("document", "DocumentRef");
+	} else if (lowerType == "enum" || lowerType == "enumeration" ||
+	           lowerType == "enumref" || lowerType == "enumerationref") {
+		if (!setRef("enum", "EnumerationRef")) {
+			(void)setRef("enumeration", "EnumerationRef");
+		}
+	} else if (lowerType == "chartofaccountsref" ||
+	           lowerType == "chartofaccounts") {
+		(void)setRef("chartOfAccounts", "ChartOfAccountsRef");
+	} else if (lowerType == "chartofcharacteristictypesref" ||
+	           lowerType == "chartofcharacteristictypes") {
+		(void)setRef("chartOfCharacteristicTypes",
+		             "ChartOfCharacteristicTypesRef");
+	}
 }
 
 void NormalizeAgentPropertyTypes(nlohmann::json& value)
 {
 	if (value.is_object()) {
+		NormalizeAgentPropertyReferenceType(value);
 		for (auto& kv : value.items()) {
 			if ((kv.key() == "type" || kv.key() == "valueType") &&
 			    kv.value().is_string()) {
@@ -302,6 +356,8 @@ std::string NormalizedMetaKind(std::string kind)
 	if (lower == "commonmodule") return "CommonModule";
 	if (lower == "commonform") return "CommonForm";
 	if (lower == "commontemplate") return "CommonTemplate";
+	if (lower == "subsystem") return "Interface";
+	if (lower == "inforegister") return "InformationRegister";
 	if (lower == "dimension") return "Dimension";
 	if (lower == "resource") return "Resource";
 	if (kind.empty()) return kind;
@@ -395,6 +451,34 @@ const nlohmann::json* PickPropertiesObject(const nlohmann::json& mutation)
 	return nullptr;
 }
 
+std::string OwnerFullNameFromAgentProperties(const nlohmann::json& props)
+{
+	std::string owner = JsonStringField(props, "owner", "ownerFullName", "parent");
+	if (owner.empty() && props.contains("metadataObject") &&
+	    props["metadataObject"].is_string()) {
+		owner = props["metadataObject"].get<std::string>();
+	}
+	return owner.empty() ? owner : NormalizeAgentFullName(owner);
+}
+
+std::string AgentModuleTargetFromOwner(const std::string& owner,
+                                       const nlohmann::json& props)
+{
+	if (owner.empty()) return std::string();
+	std::string moduleKind = JsonStringField(props, "moduleKind", "moduleType", "kind");
+	moduleKind = NormalizedMetaKind(moduleKind);
+	const std::string lowerModuleKind = LowerAscii(moduleKind);
+	const std::string lowerOwner = LowerAscii(owner);
+	if (lowerModuleKind == "formmodule" ||
+	    lowerOwner.find(".forms.") != std::string::npos) {
+		return owner;
+	}
+	if (lowerModuleKind == "managermodule" || lowerModuleKind == "manager") {
+		return owner + ".ManagerModule";
+	}
+	return owner + ".ObjectModule";
+}
+
 void PushAgentChildMutation(std::vector<nlohmann::json>& out,
                             const std::string& parentFullName,
                             const char* container,
@@ -459,12 +543,48 @@ void ExpandAgentMutation(const nlohmann::json& mutation,
                          std::vector<nlohmann::json>& out)
 {
 	if (!mutation.is_object()) return;
-	out.push_back(mutation);
-	if (NormalizedMetaOp(mutation) != "create") return;
+	nlohmann::json normalized = mutation;
+	const std::string op = NormalizedMetaOp(mutation);
+	std::string mutationKind = JsonStringField(mutation, "kind", "type");
+	mutationKind = NormalizedMetaKind(mutationKind);
+	const nlohmann::json* propsForOwner = PickPropertiesObject(mutation);
+	if (op == "create" && propsForOwner != nullptr) {
+		const std::string owner = OwnerFullNameFromAgentProperties(*propsForOwner);
+		const std::string name = LeafNameFromPossiblyQualifiedName(
+		    JsonStringField(mutation, "fullName", "name", "path"));
+		if (!owner.empty() && !name.empty()) {
+			if (mutationKind == "Form") {
+				normalized["kind"] = "Form";
+				normalized["fullName"] = owner + ".Forms." +
+				                         NormalizeTechnicalNameSegment(name);
+				if (!normalized["properties"].is_object()) {
+					normalized["properties"] = nlohmann::json::object();
+				}
+				if (!normalized["properties"].contains("formType")) {
+					normalized["properties"]["formType"] =
+					    JsonStringField(*propsForOwner, "formType", "kind");
+				}
+			} else if (mutationKind == "Command") {
+				normalized["kind"] = "Command";
+				normalized["fullName"] = owner + ".Commands." +
+				                         NormalizeTechnicalNameSegment(name);
+			} else if (mutationKind == "Module") {
+				const std::string target =
+				    AgentModuleTargetFromOwner(owner, *propsForOwner);
+				if (!target.empty()) {
+					normalized["op"] = "edit";
+					normalized["kind"] = LeafNameFromPossiblyQualifiedName(target);
+					normalized["fullName"] = target;
+				}
+			}
+		}
+	}
+	out.push_back(normalized);
+	if (op != "create") return;
 	const std::string fullName =
-	    JsonStringField(mutation, "fullName", "name", "path");
+	    JsonStringField(normalized, "fullName", "name", "path");
 	if (fullName.empty()) return;
-	const nlohmann::json* props = PickPropertiesObject(mutation);
+	const nlohmann::json* props = PickPropertiesObject(normalized);
 	if (props == nullptr) return;
 
 	if (props->contains("attributes") && (*props)["attributes"].is_array()) {
@@ -506,6 +626,9 @@ void ExpandAgentMutation(const nlohmann::json& mutation,
 	}
 	if (props->contains("objectModule")) {
 		PushAgentModuleEdit(out, fullName, "ObjectModule", (*props)["objectModule"]);
+	}
+	if (props->contains("module")) {
+		PushAgentModuleEdit(out, fullName, "ObjectModule", (*props)["module"]);
 	}
 	if (props->contains("managerModule")) {
 		PushAgentModuleEdit(out, fullName, "ManagerModule", (*props)["managerModule"]);
@@ -1585,7 +1708,13 @@ void RunOesAgent(std::string requestId, std::string prompt,
 	body["input"]["prompt"]   =
 	    "[OES metadata generation requirements]\n"
 	    "- Return executable metadata mutations, not prose-only guidance.\n"
-	    "- Technical object names must be English identifiers; put Ukrainian/Russian user labels into synonym/comment fields.\n"
+	    "- Treat the user's request as a business-process design brief unless they explicitly ask for a single metadata object. Do not reduce descriptions like \"order desk\", \"service desk\", \"procurement flow\", or \"sales workflow\" to one Catalog.\n"
+	    "- From the business process, derive the full configuration shape: actors and roles, lifecycle statuses, master data catalogs, documents/events, registers for state and totals, forms, commands, modules/business logic, print templates, and operational/analytical reports.\n"
+	    "- For an order-desk/order-workbench process, model customers, operators/responsible users, orders/requests, statuses, queue/assignment/processing result, registers for workload/results, role rights, working forms, and reports/KPIs.\n"
+	    "- If critical details are missing, choose reasonable defaults and record assumptions in rationale/comment fields. Ask for clarification only when executable metadata cannot be produced safely.\n"
+	    "- Technical object names, methods, parameters, and variables must be English ASCII identifiers: Catalog.Customer, Document.ServiceOrder, Enumeration.OrderStatus, BeforeWrite, Posting, RecalculateTotals, customer, totalAmount. Put Ukrainian/Russian user labels only into synonym/title/comment fields.\n"
+	    "- Use the BAS business-pattern RAG in Pugi before designing non-trivial workflows. Retrieve closest BAS documents/forms/modules and mirror their structural pattern, not their localized technical names.\n"
+	    "- A full configuration must include ConfigurationModule for startup/global behavior when needed, CommonModules for shared services, Roles with object rights, Interfaces/sections/commands for navigation, and reports wired into roles/interfaces.\n"
 	    "- Before choosing a complex type, use the provided Designer context and existing metadata names. Reuse existing CatalogRef/DocumentRef/EnumerationRef/ChartOfAccountsRef/ChartOfCharacteristicTypesRef types instead of creating duplicate string fields.\n"
 	    "- Full object creation must include applicable attributes with concrete types, tabular sections, dimensions/resources, forms, object and manager modules, posting/business logic, print templates, roles/rights when applicable, and reports for business workflows.\n"
 	    "- For accounting configurations, model ChartOfAccounts and subconto explicitly. Do not require off-balance accounts to close to zero.\n"
@@ -1595,15 +1724,63 @@ void RunOesAgent(std::string requestId, std::string prompt,
 	body["input"]["locale"]   = NormalizePugiLocale(locale);
 	body["input"]["requirements"] = {
 		{ "technicalNames", "english" },
+		{ "methodAndVariableNames", "english" },
+		{ "asciiIdentifiers", true },
 		{ "labelsInSynonyms", true },
+		{ "useBasRagReference", true },
+		{ "basRagWorkspace", "oes_ces" },
+		{ "basRagNamespace", "bas-business-patterns" },
 		{ "reuseExistingTypes", true },
+		{ "interpretAsBusinessProcess", true },
+		{ "avoidSingleObjectCollapse", true },
+		{ "deriveActorsAndRoles", true },
+		{ "includeLifecycleStatuses", true },
+		{ "includeWorkflowObjects", true },
+		{ "includeRegisters", true },
 		{ "includeForms", true },
+		{ "includeCommands", true },
 		{ "includeModules", true },
+		{ "includeConfigurationModule", true },
+		{ "includeCommonModules", true },
 		{ "includePostingLogic", true },
 		{ "includePrintTemplates", true },
 		{ "includeRoles", true },
+		{ "includeRights", true },
+		{ "includeInterfaces", true },
+		{ "wireObjectsIntoInterfaces", true },
 		{ "includeReports", true },
+		{ "includeDashboardsOrKpiReports", true },
 		{ "offBalanceMayNotBalanceToZero", true }
+	};
+	body["input"]["referenceRetrieval"] = {
+		{ "workspace", "oes_ces" },
+		{ "namespace", "bas-business-patterns" },
+		{ "topK", 5 },
+		{ "requiredArtifacts", {
+			"Document.xml",
+			"Forms/*/Ext/Form.xml",
+			"Forms/*/Ext/Form/Module.bsl",
+			"Ext/ObjectModule.bsl",
+			"Ext/ManagerModule.bsl",
+			"CommonModules/*/Ext/Module.bsl",
+			"Configuration/Ext/Module.bsl",
+			"Roles/*.xml",
+			"Interfaces/*.xml",
+			"Templates/*.xml"
+		}},
+		{ "mustReturnPatterns", {
+			"metadata",
+			"formLayout",
+			"formEvents",
+			"objectPosting",
+			"managerQueries",
+			"commonServices",
+			"configurationModule",
+			"rolesRights",
+			"interfacesNavigation",
+			"printForms",
+			"reports"
+		}}
 	};
 	// AGENT-MODE: forward Designer context verbatim when provided; the
 	// server uses it to disambiguate fullName references like "Catalog2".
@@ -1662,6 +1839,7 @@ void RunOesAgent(std::string requestId, std::string prompt,
 	nlohmann::json mutations = NormalizeAgentMutations(result);
 	if (mutations.empty()) {
 		EmitError("aiBridge[oes-agent]: plan contains no metadata operations");
+		return;
 	}
 	AuditWrite("agent.plan", {
 		{ "requestId", requestId },

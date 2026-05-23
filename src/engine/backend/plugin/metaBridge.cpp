@@ -87,6 +87,8 @@ const std::unordered_map<std::string, unsigned long long>& KindMap()
 		{ "listform",                   g_metaFormCLSID                       },
 		{ "choiceform",                 g_metaFormCLSID                       },
 		{ "selectionform",              g_metaFormCLSID                       },
+		{ "enumvalue",                  g_metaEnumCLSID                       },
+		{ "enumerationvalue",           g_metaEnumCLSID                       },
 		{ "attribute",                  g_metaAttributeCLSID                  },
 		{ "dimension",                  g_metaDimensionCLSID                  },
 		{ "resource",                   g_metaResourceCLSID                   },
@@ -127,6 +129,7 @@ const std::unordered_map<unsigned long long, std::string>& CLSIDToKindMap()
 		// not the kind string. tabularSectionAttribute also collapses to
 		// "Attribute" — the *path* disambiguates parent context.
 		{ g_metaFormCLSID,                       "Form"                        },
+		{ g_metaEnumCLSID,                       "EnumValue"                   },
 		{ g_metaTemplateCLSID,                   "Template"                    },
 		{ g_metaAttributeCLSID,                  "Attribute"                   },
 		{ g_metaTableCLSID,                      "TabularSection"              },
@@ -237,6 +240,9 @@ unsigned long long ChildContainerCLSID(const std::string& container)
 	if (c == "templates"        || c == "template" ||
 	    c == "printforms"       || c == "printform")        return g_metaTemplateCLSID;
 	if (c == "attributes"       || c == "attribute")        return g_metaAttributeCLSID;
+	if (c == "values"           || c == "value" ||
+	    c == "enumvalues"       || c == "enumvalue" ||
+	    c == "enumerationvalues"|| c == "enumerationvalue") return g_metaEnumCLSID;
 	if (c == "dimensions"       || c == "dimension")        return g_metaDimensionCLSID;
 	if (c == "resources"        || c == "resource")         return g_metaResourceCLSID;
 	if (c == "tabularsections"  || c == "tabularsection" ||
@@ -764,7 +770,8 @@ int FormTypeFromString(const std::string& s)
 	if (lower.empty() || lower == "form" || lower == "defaultform" ||
 	    lower == "default")                                                   return defaultFormType;
 	// Catalog: 1=Object 2=List 3=Select 4=Folder 5=FolderSelect
-	if (lower == "formobject" || lower == "itemform"  || lower == "objectform") return 1;
+	if (lower == "formobject" || lower == "itemform"  || lower == "objectform" ||
+	    lower == "documentform" || lower == "formdocument" || lower == "elementform") return 1;
 	if (lower == "formfolder" || lower == "folderform")                          return 4;
 	if (lower == "formlist"   || lower == "listform")                            return 2;
 	if (lower == "formselect" || lower == "choiceform"   ||

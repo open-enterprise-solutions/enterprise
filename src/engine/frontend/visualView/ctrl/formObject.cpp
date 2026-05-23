@@ -27,6 +27,68 @@
 // already ifdef'd inside it).
 #include "toolBar.h"
 #include "tableBox.h"
+
+namespace {
+
+void SetControlCaption(ibValueFrame* control, const wxString& caption)
+{
+	if (control == nullptr || caption.IsEmpty()) return;
+	if (ibProperty* prop = control->GetProperty(wxT("Title"))) {
+		prop->SetValue(caption);
+	}
+}
+
+void SetControlOrient(ibValueFrame* control, long orient)
+{
+	if (control == nullptr) return;
+	if (ibProperty* prop = control->GetProperty(wxT("Orient"))) {
+		prop->SetValue(wxVariant(orient));
+	}
+}
+
+std::string LooseFormKey(const wxString& value)
+{
+	std::string out;
+	const std::string src = std::string(value.utf8_str());
+	for (unsigned char ch : src) {
+		if (ch >= 'A' && ch <= 'Z') {
+			out.push_back(static_cast<char>(ch - 'A' + 'a'));
+		} else if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) {
+			out.push_back(static_cast<char>(ch));
+		}
+	}
+	return out;
+}
+
+bool IsFooterField(const ibSourceExplorer& src)
+{
+	const std::string key =
+	    LooseFormKey(src.GetSourceName()) + LooseFormKey(src.GetSourceSynonym());
+	return key.find("komentar") != std::string::npos ||
+	       key.find("comment") != std::string::npos ||
+	       key.find("prymitka") != std::string::npos ||
+	       key.find("primechan") != std::string::npos ||
+	       key.find("vidpovidal") != std::string::npos ||
+	       key.find("otvetstven") != std::string::npos ||
+	       key.find("responsible") != std::string::npos;
+}
+
+ibValueFrame* EnsureStaticGroup(ibValueForm* form,
+                                ibValueFrame*& group,
+                                const wxString& name,
+                                const wxString& title)
+{
+	if (group != nullptr) return group;
+	group = form->CreateControl(wxT("Staticboxsizer"));
+	if (group != nullptr) {
+		group->SetControlName(name);
+		SetControlCaption(group, title);
+		SetControlOrient(group, wxVERTICAL);
+	}
+	return group;
+}
+
+} // namespace
 #ifdef OES_USE_WEB
 #include "frontend/web/webApplication.h"
 #include "frontend/web/webFrame.h"
@@ -92,7 +154,12 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 
 			mainTableBox->SetControlName(sourceExplorer.GetSourceName());
 			mainTableBox->SetSource(sourceExplorer.GetSourceId());
+			SetControlCaption(mainTableBox, sourceExplorer.GetSourceSynonym());
 		}
+
+		ibValueFrame* headerGroup = nullptr;
+		ibValueFrame* tablesGroup = nullptr;
+		ibValueFrame* footerGroup = nullptr;
 
 		for (unsigned int idx = 0; idx < sourceExplorer.GetHelperCount(); idx++) {
 
@@ -106,27 +173,31 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 				tableBoxColumn->SetControlName(mainTableBox->GetControlName() + nextSourceExplorer.GetSourceName());
 				tableBoxColumn->SetVisibleColumn(nextSourceExplorer.IsVisible() || sourceExplorer.GetHelperCount() == 1);
 				tableBoxColumn->SetSource(nextSourceExplorer.GetSourceId());
+				SetControlCaption(tableBoxColumn, nextSourceExplorer.GetSourceSynonym());
 			}
 			else
 			{
 				prevSrcData = nullptr;
 
 				if (nextSourceExplorer.IsTableSection()) {
+					ibValueFrame* parentGroup = EnsureStaticGroup(
+						this, tablesGroup, wxT("TablesGroup"), _("Табличные части"));
 
 					ibValueToolbar* toolBar =
 						wxDynamicCast(
-							ibValueForm::CreateControl(wxT("Toolbar")), ibValueToolbar
+							ibValueForm::CreateControl(wxT("Toolbar"), parentGroup), ibValueToolbar
 						);
 
 					toolBar->SetControlName(wxT("Toolbar") + nextSourceExplorer.GetSourceName());
 
 					ibValueModelTableBox* tableBox =
 						wxDynamicCast(
-							ibValueForm::CreateControl(wxT("Tablebox")), ibValueModelTableBox
+							ibValueForm::CreateControl(wxT("Tablebox"), parentGroup), ibValueModelTableBox
 						);
 
 					tableBox->SetControlName(nextSourceExplorer.GetSourceName());
 					tableBox->SetSource(nextSourceExplorer.GetSourceId());
+					SetControlCaption(tableBox, nextSourceExplorer.GetSourceSynonym());
 
 					toolBar->SetActionSrc(tableBox->GetControlID());
 
@@ -161,25 +232,28 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 							wxDynamicCast(
 								ibValueForm::CreateControl(wxT("TableboxColumn"), tableBox), ibValueModelTableBoxColumn
 							);
-						tableBoxColumn->SetControlName(tableBox->GetControlName() + colSourceExplorer.GetSourceName());
-						//tableBoxColumn->SetCaption(colSourceExplorer.GetSourceSynonym());
-						tableBoxColumn->SetVisibleColumn(colSourceExplorer.IsVisible()
-							|| nextSourceExplorer.GetHelperCount() == 1);
-						tableBoxColumn->SetSource(colSourceExplorer.GetSourceId());
+							tableBoxColumn->SetControlName(tableBox->GetControlName() + colSourceExplorer.GetSourceName());
+							SetControlCaption(tableBoxColumn, colSourceExplorer.GetSourceSynonym());
+							tableBoxColumn->SetVisibleColumn(colSourceExplorer.IsVisible()
+								|| nextSourceExplorer.GetHelperCount() == 1);
+							tableBoxColumn->SetSource(colSourceExplorer.GetSourceId());
+						}
 					}
-				}
-				else {
-					if (nextSourceExplorer.ContainType(ibValueTypes::TYPE_BOOLEAN)
-						&& nextSourceExplorer.GetClsidList().size() == 1) {
-						ibValueCheckbox* checkbox =
-							wxDynamicCast(
-								ibValueForm::CreateControl(wxT("Checkbox")), ibValueCheckbox
-							);
-						checkbox->SetControlName(nextSourceExplorer.GetSourceName());
-						//checkbox->SetCaption(nextSourceExplorer.GetSourceSynonym());
-						checkbox->EnableWindow(nextSourceExplorer.IsEnabled());
-						checkbox->VisibleWindow(nextSourceExplorer.IsVisible());
-						checkbox->SetSource(nextSourceExplorer.GetSourceId());
+					else {
+						ibValueFrame* fieldParent = IsFooterField(nextSourceExplorer)
+							? EnsureStaticGroup(this, footerGroup, wxT("FooterGroup"), _("Дополнительно"))
+							: EnsureStaticGroup(this, headerGroup, wxT("HeaderGroup"), _("Шапка"));
+						if (nextSourceExplorer.ContainType(ibValueTypes::TYPE_BOOLEAN)
+							&& nextSourceExplorer.GetClsidList().size() == 1) {
+							ibValueCheckbox* checkbox =
+								wxDynamicCast(
+									ibValueForm::CreateControl(wxT("Checkbox"), fieldParent), ibValueCheckbox
+								);
+							checkbox->SetControlName(nextSourceExplorer.GetSourceName());
+							SetControlCaption(checkbox, nextSourceExplorer.GetSourceSynonym());
+							checkbox->EnableWindow(nextSourceExplorer.IsEnabled());
+							checkbox->VisibleWindow(nextSourceExplorer.IsVisible());
+							checkbox->SetSource(nextSourceExplorer.GetSourceId());
 					}
 					else {
 
@@ -191,15 +265,15 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 						if (nextSourceExplorer.GetClsidList().size() != 1)
 							selButton = true;
 
-						ibValueTextCtrl* textCtrl =
-							wxDynamicCast(
-								ibValueForm::CreateControl(wxT("Textctrl")), ibValueTextCtrl
-							);
-						textCtrl->SetControlName(nextSourceExplorer.GetSourceName());
-						//textCtrl->SetCaption(nextSourceExplorer.GetSourceSynonym());
-						textCtrl->EnableWindow(nextSourceExplorer.IsEnabled());
-						textCtrl->VisibleWindow(nextSourceExplorer.IsVisible());
-						textCtrl->SetSource(nextSourceExplorer.GetSourceId());
+							ibValueTextCtrl* textCtrl =
+								wxDynamicCast(
+									ibValueForm::CreateControl(wxT("Textctrl"), fieldParent), ibValueTextCtrl
+								);
+							textCtrl->SetControlName(nextSourceExplorer.GetSourceName());
+							SetControlCaption(textCtrl, nextSourceExplorer.GetSourceSynonym());
+							textCtrl->EnableWindow(nextSourceExplorer.IsEnabled());
+							textCtrl->VisibleWindow(nextSourceExplorer.IsVisible());
+							textCtrl->SetSource(nextSourceExplorer.GetSourceId());
 
 						textCtrl->SetSelectButton(selButton);
 						textCtrl->SetOpenButton(false);

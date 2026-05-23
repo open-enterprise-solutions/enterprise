@@ -256,6 +256,45 @@ bool ArgBool(const nlohmann::json& args, const char* key, bool def = false)
 	return it->get<bool>();
 }
 
+bool CompileSourceBasic(const std::string& source,
+                        const std::string& syntaxMode,
+                        std::string& error)
+{
+	std::string mode = syntaxMode;
+	std::transform(mode.begin(), mode.end(), mode.begin(),
+		[](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+	if (!mode.empty() && mode != "ces" && mode != "ves") {
+		error = "syntaxMode must be 'ces' or 'ves'";
+		return false;
+	}
+	const short savedStyle = ibCompileCode::GetCodeStyle();
+	auto compileWith = [&](short style) {
+		ibCompileCode::SetCodeStyle(style);
+		ibCompileCode cc;
+		return cc.Compile(wxString::FromUTF8(source.c_str()));
+	};
+	bool ok = false;
+	try {
+		if (mode == "ces") {
+			ok = compileWith(CODE_CES);
+		} else if (mode == "ves") {
+			ok = compileWith(CODE_VES);
+		} else {
+			ok = compileWith(savedStyle);
+			if (!ok) ok = compileWith(savedStyle == CODE_CES ? CODE_VES : CODE_CES);
+		}
+	} catch (const ibBackendException& e) {
+		error = std::string(e.GetErrorDescription().utf8_str());
+	} catch (const std::exception& e) {
+		error = std::string("std::exception during compile: ") + e.what();
+	} catch (...) {
+		error = "unknown exception during compile";
+	}
+	ibCompileCode::SetCodeStyle(savedStyle);
+	if (!ok && error.empty()) error = "module source compile failed";
+	return ok;
+}
+
 // Forward decls — bodies live next to the tools that introduced them
 // (read_module owns ResolveByPath; meta_query borrows it for the comment
 // + module enrichment pass).
@@ -951,6 +990,28 @@ nlohmann::json ToolWriteModule(const nlohmann::json& args)
 		return TextResult("write_module: '" + fullName +
 		                    "' is not a module object", true);
 	}
+	const bool compileBeforeWrite = ArgBool(args, "compileBeforeWrite", true);
+	if (compileBeforeWrite) {
+		std::string compileError;
+		const std::string syntaxMode = ArgString(args, "syntaxMode").empty()
+		    ? ArgString(args, "mode")
+		    : ArgString(args, "syntaxMode");
+		if (!CompileSourceBasic(source, syntaxMode, compileError)) {
+			nlohmann::json env = TextResult(
+			    "write_module: compile_check failed before write: " + compileError,
+			    true);
+			nlohmann::json sc = nlohmann::json::object();
+			sc["ok"] = false;
+			sc["fullName"] = fullName;
+			sc["compiled"] = false;
+			sc["errorCode"] = "OES_E_COMPILE_FAILED";
+			sc["errors"] = nlohmann::json::array({
+			    { { "message", compileError }, { "severity", "error" } }
+			});
+			env["structuredContent"] = std::move(sc);
+			return env;
+		}
+	}
 
 	// MCP auto-snapshot: snapshot the prior source text before we
 	// overwrite it. meta_query on a module path returns shallow metadata
@@ -971,10 +1032,6 @@ nlohmann::json ToolWriteModule(const nlohmann::json& args)
 		snapshotId = std::string(id.utf8_str());
 	}
 
-	// MCP: no compile-check yet — Designer's editor invokes ibCompileCode
-	// from a wider context (debug server, dependency wiring). We accept
-	// the write unconditionally; callers should pair this with
-	// `compile_check` when validation matters.
 	mod->SetModuleText(wxString::FromUTF8(source.c_str()));
 	NotifyMutation("write_module", fullName);
 	EmitResourceMutation(fullName);
@@ -985,6 +1042,7 @@ nlohmann::json ToolWriteModule(const nlohmann::json& args)
 	sc["ok"]       = true;
 	sc["fullName"] = fullName;
 	sc["bytes"]    = source.size();
+	sc["compiled"] = compileBeforeWrite;
 	if (!snapshotId.empty()) sc["snapshotId"] = snapshotId;
 	env["structuredContent"] = std::move(sc);
 	return env;
@@ -1500,6 +1558,12 @@ bool TryLocalRagFallback(const std::string& toolName,
 					text += input[k].get<std::string>();
 				}
 			}
+			for (const char* k : { "requirements", "referenceRetrieval", "context" }) {
+				if (input.contains(k) && input[k].is_object()) {
+					if (!text.empty()) text.push_back(' ');
+					text += input[k].dump();
+				}
+			}
 		}
 		body["text"] = text;
 		body["topK"] = 5;
@@ -1543,6 +1607,8 @@ bool TryLocalRagFallback(const std::string& toolName,
 //   input        — the JSON object passed through as `input` to Pugi
 //   offlineMaker — caller picks the structuredContent shape for fail-open
 //                   (sigma_check returns ok=true; new tools return ok=false)
+//   readTimeoutSec — per-tool read timeout; generation tools are slower than
+//                    cached catalogue lookups.
 //
 // Return: a full MCP `tools/call` result envelope (content[] + optional
 // structuredContent + optional isError).  Never throws — every failure
@@ -1552,7 +1618,8 @@ using PugiOfflineMaker = std::function<nlohmann::json(const std::string& reason)
 
 nlohmann::json PugiHttpInvoke(const std::string& toolName,
                               const nlohmann::json& input,
-                              const PugiOfflineMaker& offlineMaker)
+                              const PugiOfflineMaker& offlineMaker,
+                              int readTimeoutSec = 10)
 {
 	const PugiConfig cfg = LoadPugiConfig();
 	if (cfg.endpoint.empty() || cfg.token.empty()) {
@@ -1587,7 +1654,7 @@ nlohmann::json PugiHttpInvoke(const std::string& toolName,
 
 	httplib::Client cli(base);
 	cli.set_connection_timeout(5);
-	cli.set_read_timeout(10);   // 10s ceiling per spec — stdio loop can't block longer.
+	cli.set_read_timeout(readTimeoutSec);
 	cli.set_follow_location(false);  // SEC: never replay bearer to redirect target.
 
 	httplib::Headers headers = {
@@ -1685,6 +1752,18 @@ nlohmann::json PugiHttpInvoke(const std::string& toolName,
 		if (sc.is_object() && sc.contains("ok") && sc["ok"].is_boolean() &&
 		    !sc["ok"].get<bool>()) {
 			env["isError"] = true;
+		}
+	}
+	if (payload->contains("error") && (*payload)["error"].is_object()) {
+		env["isError"] = true;
+		if (!env.contains("structuredContent") ||
+		    !env["structuredContent"].is_object()) {
+			env["structuredContent"] = nlohmann::json::object();
+		}
+		env["structuredContent"]["ok"] = false;
+		env["structuredContent"]["error"] = (*payload)["error"];
+		if (payload->contains("planId")) {
+			env["structuredContent"]["planId"] = (*payload)["planId"];
 		}
 	}
 	return env;
@@ -1867,17 +1946,44 @@ nlohmann::json ToolOesTemplateCustomize(const nlohmann::json& args)
 
 	nlohmann::json input = nlohmann::json::object();
 	input["templateId"] = args["templateId"];
+	if (args.contains("baseTemplateId") && args["baseTemplateId"].is_string() &&
+	    !args["baseTemplateId"].get<std::string>().empty()) {
+		input["baseTemplateId"] = args["baseTemplateId"];
+	} else {
+		input["baseTemplateId"] = args["templateId"];
+	}
+	if (args.contains("includeData") && args["includeData"].is_boolean()) {
+		input["includeData"] = args["includeData"];
+	}
+	if (args.contains("locale") && args["locale"].is_string()) {
+		input["locale"] = args["locale"];
+	}
 	if (args.contains("modifications") && args["modifications"].is_object()) {
 		input["modifications"] = args["modifications"];
 	}
 	if (args.contains("userPrompt") && args["userPrompt"].is_string()) {
 		input["userPrompt"] = args["userPrompt"];
 	}
+	if (args.contains("instructions") && args["instructions"].is_string()) {
+		input["instructions"] = args["instructions"];
+	} else if (input.contains("userPrompt")) {
+		input["instructions"] = input["userPrompt"];
+	} else {
+		input["instructions"] =
+		    "Apply the selected template as-is, preserving a complete runnable OES configuration.";
+	}
+	if (args.contains("requirements") && args["requirements"].is_object()) {
+		input["requirements"] = args["requirements"];
+	}
+	if (args.contains("referenceRetrieval") && args["referenceRetrieval"].is_object()) {
+		input["referenceRetrieval"] = args["referenceRetrieval"];
+	}
 
 	return PugiHttpInvoke("oes_template_customize", input,
 		[](const std::string& reason) {
 			return PugiOfflineEnvelope("oes_template_customize", reason);
-		});
+		},
+		/*readTimeoutSec=*/240);
 }
 
 // oes_demo_data_get: fetch demo data rows.  Two mutually-exclusive modes:
@@ -6039,11 +6145,15 @@ const std::vector<ToolEntry>& BuildRegistry()
 	}
 	table.push_back({
 		{ "write_module",
-		  "Replace the source of a module object. Pair with compile_check / "
-		  "Designer compile pass for validation.",
+		  "Replace the source of a module object. By default runs "
+		  "compile_check before writing; set compileBeforeWrite=false only "
+		  "for explicit draft/repair workflows.",
 		  schemaObj({
 		    { "fullName", str("Dotted module path") },
 		    { "source",   str("New CES/VES source text") },
+		    { "syntaxMode", str("'ces' or 'ves'. Empty means try active syntax then alternate") },
+		    { "mode", str("Alias for syntaxMode") },
+		    { "compileBeforeWrite", boolP("Run compile_check before writing (default true)") },
 		  }, { "fullName", "source" }),
 		  // Destructive — replaces prior source text. Idempotent: writing the
 		  // same source twice produces the same module state.
@@ -6099,7 +6209,7 @@ const std::vector<ToolEntry>& BuildRegistry()
 	// =====================================================================
 	// Pugi template-proxy tools — added 2026-05-21.  All four are HTTP
 	// proxies into Pugi's template catalogue / demo-data generator; they
-	// reuse the same PugiHttpInvoke helper sigma_check uses (10s timeout,
+	// reuse the same PugiHttpInvoke helper sigma_check uses (per-tool timeout,
 	// fail-open envelope, bearer-token redirect guard, OpenSSL precondition).
 	// openWorldHint=true on every tool because the result depends on external
 	// state (Pugi's catalogue + Anvil's LLM generator).
@@ -6222,6 +6332,27 @@ const std::vector<ToolEntry>& BuildRegistry()
 		promptProp["type"]        = nlohmann::json::array({ "string", "null" });
 		promptProp["description"] = "Natural-language tweak request (Sigma agent reasons over it)";
 
+		nlohmann::json instructionsProp;
+		instructionsProp["type"]        = nlohmann::json::array({ "string", "null" });
+		instructionsProp["description"] = "Pugi v2 natural-language instructions; when omitted, userPrompt is mirrored into instructions";
+
+		nlohmann::json baseTemplateIdProp;
+		baseTemplateIdProp["type"]        = nlohmann::json::array({ "string", "null" });
+		baseTemplateIdProp["description"] = "Pugi v2 base template id; defaults to templateId when omitted";
+
+		nlohmann::json includeDataCustomizeProp;
+		includeDataCustomizeProp["type"]        = "boolean";
+		includeDataCustomizeProp["default"]     = false;
+		includeDataCustomizeProp["description"] = "Ask Pugi to include demoData rows in the customized payload";
+
+		nlohmann::json requirementsProp;
+		requirementsProp["type"]        = "object";
+		requirementsProp["description"] = "Generation requirements passed through to Pugi, including English technical identifiers and BAS business-pattern RAG requirements";
+
+		nlohmann::json referenceProp;
+		referenceProp["type"]        = "object";
+		referenceProp["description"] = "RAG retrieval request passed through to Pugi, e.g. workspace=oes_bas_business namespace=bas-business-patterns";
+
 		table.push_back({
 			{ "oes_template_customize",
 			  "Clone an OES template + apply user modifications via the Pugi "
@@ -6230,8 +6361,14 @@ const std::vector<ToolEntry>& BuildRegistry()
 			  "mutations[] in Pugi's passthrough shape.",
 			  schemaObj({
 			    { "templateId",    str("Template id to clone") },
+			    { "baseTemplateId", baseTemplateIdProp         },
+			    { "includeData",   includeDataCustomizeProp    },
+			    { "locale",        str("Locale/language hint") },
 			    { "modifications", modsProp                    },
 			    { "userPrompt",    promptProp                  },
+			    { "instructions",  instructionsProp            },
+			    { "requirements",  requirementsProp            },
+			    { "referenceRetrieval", referenceProp           },
 			  }, { "templateId" }),
 			  // readOnly=false: it generates a new artefact, but destructive=false
 			  // (no prior state lost — clone, not overwrite). Idempotent at the

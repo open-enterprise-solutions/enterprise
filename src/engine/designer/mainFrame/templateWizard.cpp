@@ -32,7 +32,9 @@
 #include <vector>
 
 #include "backend/appData.h"
+#include "backend/metadataConfiguration.h"
 #include "backend/plugin/pluginManager.h"
+#include "backend/metaCollection/metaLanguageObject.h"
 #include "3rdparty/nlohmann/json.hpp"
 
 // Plugin id used for grants + metaBridge audit. Must match the literal
@@ -126,6 +128,67 @@ static wxString AddPreviewModulesFromListResponse(
 
 	(*payload)["previewModules"] = std::move(modules);
 	return wxString::FromUTF8(parsed.dump().c_str());
+}
+
+static wxString ProviderErrorFromResponse(const wxString& responseJson)
+{
+	auto parsed = nlohmann::json::parse(
+	    std::string(responseJson.utf8_str()), nullptr, false);
+	if (parsed.is_discarded() || !parsed.is_object()) return wxString();
+	const nlohmann::json* payload = &parsed;
+	if (parsed.contains("result") && parsed["result"].is_object()) {
+		payload = &parsed["result"];
+	} else if (parsed.contains("structuredContent") &&
+	           parsed["structuredContent"].is_object()) {
+		payload = &parsed["structuredContent"];
+	}
+	if (!payload->contains("error") || !(*payload)["error"].is_object()) {
+		return wxString();
+	}
+	const auto& err = (*payload)["error"];
+	std::string msg = "Provider returned error";
+	if (err.contains("code") && err["code"].is_string()) {
+		msg += " [";
+		msg += err["code"].get<std::string>();
+		msg += "]";
+	}
+	if (err.contains("detail") && err["detail"].is_string()) {
+		msg += ": ";
+		msg += err["detail"].get<std::string>();
+	}
+	if (err.contains("message") && err["message"].is_string()) {
+		msg += ": ";
+		msg += err["message"].get<std::string>();
+	}
+	return wxString::FromUTF8(msg.c_str());
+}
+
+static bool CurrentConfigurationHasUserMetadata()
+{
+	if (activeMetaData == nullptr) return false;
+	ibValueMetaObject* root = activeMetaData->GetCommonMetaObject();
+	if (root == nullptr) return false;
+	for (ibValueMetaObject* child : root->GetAnyArrayObject<>()) {
+		if (child == nullptr || child->IsDeleted()) continue;
+		const ibClassID clsid = child->GetClassType();
+		if (clsid == g_metaLanguageCLSID) continue;
+		if (clsid == g_metaCommonModuleCLSID ||
+		    clsid == g_metaConstantCLSID ||
+		    clsid == g_metaCatalogCLSID ||
+		    clsid == g_metaDocumentCLSID ||
+		    clsid == g_metaEnumerationCLSID ||
+		    clsid == g_metaDataProcessorCLSID ||
+		    clsid == g_metaReportCLSID ||
+		    clsid == g_metaInformationRegisterCLSID ||
+		    clsid == g_metaAccumulationRegisterCLSID ||
+		    clsid == g_metaChartOfCharacteristicTypesCLSID ||
+		    clsid == g_metaChartOfAccountsCLSID ||
+		    clsid == g_metaRoleCLSID ||
+		    clsid == g_metaInterfaceCLSID) {
+			return true;
+		}
+	}
+	return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -653,19 +716,98 @@ void ibTemplateWizard::StartFetchTemplateCustomize(const wxString& templateId,
 	              templateIdUtf8, modsUtf8, promptUtf8, epoch]() {
 		nlohmann::json input;
 		input["templateId"] = templateIdUtf8;
+		input["baseTemplateId"] = templateIdUtf8;
+		input["includeData"] = true;
+		input["locale"] = locale;
 		if (!modsUtf8.empty()) {
 			auto parsed = nlohmann::json::parse(modsUtf8, nullptr, false);
 			if (!parsed.is_discarded() && parsed.is_object()) {
 				input["modifications"] = parsed;
 			}
 		}
+		input["instructions"] = promptUtf8.empty()
+		    ? std::string("Apply the selected template as-is, preserving a complete runnable OES configuration.")
+		    : promptUtf8;
 		if (!promptUtf8.empty()) {
-			input["userPrompt"] = promptUtf8;
+			input["userPrompt"] =
+			    "[OES template customization requirements]\n"
+			    "- Treat the user request as a business-process customization brief, not as a request for one metadata object, unless the user explicitly asks for only one object.\n"
+			    "- Preserve and extend the selected template into a complete runnable configuration: catalogs/master data, documents/events, registers, lifecycle statuses, forms, commands, modules/business logic, roles/rights, print templates, and reports/KPIs where applicable.\n"
+			    "- Use BAS/1C RAG as the canonical reference before generating. Retrieve the nearest real BAS documents by business domain and copy their structural patterns: header fields, tabular sections, footer/comment block, command bar, posting mode, object module, manager module, form module events, roles/rights, print templates, reports, and conditional visibility/enabled rules.\n"
+			    "- Technical identifiers must be English ASCII names: Catalog.Customer, Document.ServiceOrder, Enumeration.OrderStatus, methods like BeforeWrite/Posting/RecalculateTotals, variables like customer/totalAmount. Put Russian/Ukrainian user text only into synonym/title/comment fields.\n"
+			    "- A complete configuration must include ConfigurationModule when startup/global behavior is needed, CommonModules for shared business services, Roles with object rights, Interfaces/sections/commands for user navigation, and reports connected to roles/interfaces.\n"
+			    "- A generated document form is not complete unless it has BAS-style sections: command panel, header (Number, Date, Organization/Firma, business partners/resources, operation/status), main tabular sections with toolbar, totals where applicable, and footer fields such as Responsible and Comment.\n"
+			    "- A generated document is not complete unless its ObjectModule contains write/posting hooks and register movement logic appropriate to the selected registers. Form modules should contain OnOpen/OnChange-style handlers for state-dependent visibility, availability, dependent-field filling, and recalculation.\n"
+			    "- If details are missing, choose practical defaults and encode assumptions in comments/rationale rather than returning an incomplete object-only plan.\n"
+			    "[/OES template customization requirements]\n\n" + promptUtf8;
+			input["instructions"] = input["userPrompt"];
+			input["requirements"] = {
+			    { "interpretAsBusinessProcess", true },
+			    { "avoidSingleObjectCollapse", true },
+			    { "technicalNames", "english-ascii" },
+			    { "methodAndVariableNames", "english" },
+			    { "labelsInSynonyms", true },
+			    { "useBasRagReference", true },
+			    { "retrieveNearestBasDocuments", true },
+			    { "includeBasStyleFormLayout", true },
+			    { "includeFormModules", true },
+			    { "includeStateDependentUi", true },
+			    { "includePostingLogic", true },
+			    { "includeWorkflowObjects", true },
+			    { "includeLifecycleStatuses", true },
+			    { "includeRegisters", true },
+			    { "includeForms", true },
+			    { "includeCommands", true },
+			    { "includeModules", true },
+			    { "includeConfigurationModule", true },
+			    { "includeCommonModules", true },
+			    { "includeObjectModules", true },
+			    { "includeManagerModules", true },
+			    { "includeRoles", true },
+			    { "includeRights", true },
+			    { "includeInterfaces", true },
+			    { "wireObjectsIntoInterfaces", true },
+			    { "includePrintTemplates", true },
+			    { "includeReports", true },
+			    { "includeDashboardsOrKpiReports", true }
+			};
+			input["referenceRetrieval"] = {
+			    { "corpus", "BAS_BUH+OES_DEMO" },
+			    { "workspace", "oes_ces" },
+			    { "namespace", "bas-business-patterns" },
+			    { "topK", 5 },
+			    { "requiredArtifacts", {
+			        "Document.xml",
+			        "Forms/*/Ext/Form.xml",
+			        "Forms/*/Ext/Form/Module.bsl",
+			        "Ext/ObjectModule.bsl",
+			        "Ext/ManagerModule.bsl",
+			        "CommonModules/*/Ext/Module.bsl",
+			        "Configuration/Ext/Module.bsl",
+			        "Roles/*.xml",
+			        "Interfaces/*.xml",
+			        "Rights.xml",
+			        "Templates/*.xml"
+			    }},
+			    { "mustReturnPatterns", {
+			        "metadata",
+			        "formLayout",
+			        "formEvents",
+			        "objectPosting",
+			        "managerQueries",
+			        "commonServices",
+			        "configurationModule",
+			        "rolesRights",
+			        "interfacesNavigation",
+			        "printForms",
+			        "reports"
+			    }}
+			};
 		}
 		// Customize calls can be slow on first invocation (Sigma warm-up).
 		McpInvokeResult r = InvokeMcpTool(endpoint, token, tenant,
 		                                     customizeTool, input,
-		                                     /*timeoutSec=*/45);
+		                                     /*timeoutSec=*/240);
 		auto* evt = new wxThreadEvent(EVT_TEMPLATE_WIZARD_THREAD);
 		ibTemplateWizardThreadPayload payload;
 		payload.m_requestEpoch = epoch;
@@ -823,6 +965,12 @@ void ibTemplateWizard::OnTemplatesListResponse(const wxString& responseJson)
 
 void ibTemplateWizard::OnTemplateGetResponse(const wxString& responseJson)
 {
+	const wxString providerError = ProviderErrorFromResponse(responseJson);
+	if (!providerError.IsEmpty()) {
+		wxMessageBox(_("Provider не вернул структуру шаблона:\n") + providerError,
+		             _("Template Wizard"), wxICON_ERROR, this);
+		return;
+	}
 	// Find the chosen template's display name for the preview header.
 	wxString name = m_selectedTemplateId, version;
 	std::vector<wxString> previewModules;
@@ -847,6 +995,12 @@ void ibTemplateWizard::OnTemplateGetResponse(const wxString& responseJson)
 
 void ibTemplateWizard::OnTemplateCustomizeResponse(const wxString& responseJson)
 {
+	const wxString providerError = ProviderErrorFromResponse(responseJson);
+	if (!providerError.IsEmpty()) {
+		wxMessageBox(_("Provider не смог изменить шаблон:\n") + providerError,
+		             _("Template Wizard"), wxICON_ERROR, this);
+		return;
+	}
 	// The customized response has the same mutations[] shape — re-load
 	// the preview page and bring the user back to it for confirmation.
 	wxString name = m_selectedTemplateId, version;
@@ -931,6 +1085,30 @@ void ibTemplateWizard::ApplyMutations()
 		return;
 	}
 
+	if (CurrentConfigurationHasUserMetadata()) {
+		wxMessageDialog modeDlg(
+		    this,
+		    _("В текущей конфигурации уже есть объекты метаданных.\n\n"
+		      "Добавить шаблон в существующую конфигурацию или начать новую?"),
+		    _("Template Wizard"),
+		    wxYES_NO | wxCANCEL | wxICON_QUESTION);
+		modeDlg.SetYesNoCancelLabels(_("Добавить в текущую"),
+		                             _("Новая конфигурация"),
+		                             _("Отмена"));
+		const int mode = modeDlg.ShowModal();
+		if (mode == wxID_CANCEL) return;
+		if (mode == wxID_NO) {
+			wxMessageBox(
+			    _("Создание новой конфигурации должно выполняться в пустой базе/"
+			      "новом файле конфигурации, чтобы не удалить текущие объекты "
+			      "без штатного сценария закрытия документов.\n\n"
+			      "Откройте пустую конфигурацию и запустите wizard снова, либо "
+			      "выберите «Добавить в текущую»."),
+			    _("Template Wizard"), wxICON_INFORMATION, this);
+			return;
+		}
+	}
+
 	// Check whether demoData is present in the cached response when
 	// the user opted in.
 	bool cachedHasDemo = false;
@@ -1002,6 +1180,57 @@ void ibTemplateWizard::ApplyMutations()
 	progress.reset();
 
 	wxString summary;
+	if (r.failureCount == 0 && r.successCount == 0) {
+		wxMessageBox(
+		    _("Шаблон не создал ни одной операции метаданных. "
+		      "Окно оставлено открытым; проверьте ответ provider или выберите другой шаблон."),
+		    _("Template Wizard"), wxICON_WARNING, this);
+		return;
+	}
+	if (r.preflightFailureCount > 0) {
+		summary = wxString::Format(
+		    _("Камеральная проверка конфигурации не пройдена до применения.\n\n"
+		      "Ошибок preflight: %d\n"
+		      "Оценка полноты: %d/100\n\n"
+		      "Конфигурация не применялась. Окно оставлено открытым. "
+		      "Подробный отчёт записан в template-wizard-last-apply.json."),
+		    r.preflightFailureCount, r.completenessScore);
+		wxMessageBox(summary, _("Template Wizard"), wxICON_WARNING, this);
+		return;
+	}
+	if (m_includeData && r.expectedDataRows > 0 &&
+	    r.insertedDataRows < r.expectedDataRows) {
+		summary = wxString::Format(
+		    _("Структура применена не полностью: демо-данные ожидались, "
+		      "но записаны не все строки.\n\n"
+		      "Ожидалось строк: %d\n"
+		      "Записано строк: %d\n"
+		      "Пропущено строк: %d\n\n"
+		      "Окно оставлено открытым. Подробный отчёт записан в "
+		      "template-wizard-last-apply.json рядом с конфигурацией."),
+		    r.expectedDataRows, r.insertedDataRows, r.skippedDataRows);
+		wxMessageBox(summary, _("Template Wizard"), wxICON_WARNING, this);
+		return;
+	}
+	if (r.missingObjectCount > 0) {
+		summary = wxString::Format(
+		    _("Конфигурация создана не полностью: проверка метаданных "
+		      "нашла отсутствующие объекты после применения шаблона.\n\n"
+		      "Ожидалось объектов/форм/реквизитов: %d\n"
+		      "Не найдено: %d\n\n"
+		      "Окно оставлено открытым. Подробный отчёт записан в "
+		      "template-wizard-last-apply.json."),
+		    r.expectedObjectCount, r.missingObjectCount);
+		wxMessageBox(summary, _("Template Wizard"), wxICON_WARNING, this);
+		return;
+	}
+	if (m_includeData && r.expectedDataRows == 0) {
+		wxMessageBox(
+		    _("В ответе шаблона нет demoData, хотя включено применение "
+		      "демо-данных. Окно оставлено открытым для диагностики."),
+		    _("Template Wizard"), wxICON_WARNING, this);
+		return;
+	}
 	if (r.failureCount == 0) {
 		if (activeMetaData != nullptr) {
 			activeMetaData->Modify(true);
@@ -1011,7 +1240,14 @@ void ibTemplateWizard::ApplyMutations()
 			}
 		}
 		summary = wxString::Format(
-		    _("Готово. Применено операций: %d."), r.successCount);
+		    _("Готово. Применено операций: %d.\n\n"
+		      "Камеральная проверка: %d/100."),
+		    r.successCount, r.completenessScore);
+		if (r.completenessWarningCount > 0) {
+			summary += wxString::Format(
+			    _("\nПредупреждений полноты: %d. Подробности в диагностике."),
+			    r.completenessWarningCount);
+		}
 		if (r.insertedDataRows > 0) {
 			summary += wxString::Format(
 			    _("\n\nДемо-данные: записано строк: %d."),

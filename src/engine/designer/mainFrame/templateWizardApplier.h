@@ -36,6 +36,12 @@ struct ApplyResult {
 	std::vector<OpResult> ops;
 	int    successCount = 0;
 	int    failureCount = 0;
+	int    expectedObjectCount = 0;
+	int    missingObjectCount = 0;
+	int    preflightFailureCount = 0;
+	int    completenessWarningCount = 0;
+	int    completenessScore = 0;
+	int    expectedDataRows = 0;
 	int    insertedDataRows = 0;
 	int    skippedDataRows = 0;
 };
