@@ -15,7 +15,7 @@ void ibDialogConnection::InitConnection(
 	if (bFileMode) {
 		m_radioFile->SetValue(true);
 		m_radioServer->SetValue(false);
-		m_dirPickerFile->SetPath(strFilePath);
+		m_textCtrlFilePath->SetValue(strFilePath);
 	}
 	else {
 		m_radioFile->SetValue(false);
@@ -78,8 +78,10 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	m_staticTextFilePath = new wxStaticText(this, wxID_ANY, _("Database folder:"), wxDefaultPosition, wxDefaultSize, 0);
 	m_staticTextFilePath->Wrap(-1);
 	sizerFilePath->Add(m_staticTextFilePath, 1, wxALIGN_CENTER_VERTICAL, 0);
-	m_dirPickerFile = new wxDirPickerCtrl(this, wxID_ANY, wxEmptyString, _("Select database folder"), wxDefaultPosition, wxDefaultSize, wxDIRP_USE_TEXTCTRL | wxDIRP_DIR_MUST_EXIST);
-	sizerFilePath->Add(m_dirPickerFile, 3, wxALL | wxEXPAND, FromDIP(5));
+	m_textCtrlFilePath = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
+	sizerFilePath->Add(m_textCtrlFilePath, 3, wxALL | wxEXPAND, FromDIP(5));
+	m_buttonBrowseFile = new wxButton(this, wxID_ANY, _("Browse"), wxDefaultPosition, wxDefaultSize, 0);
+	sizerFilePath->Add(m_buttonBrowseFile, 0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(5));
 	m_sizerFileMode->Add(sizerFilePath, 0, wxEXPAND, FromDIP(5));
 	mainSizer->Add(m_sizerFileMode, 0, wxEXPAND, FromDIP(5));
 
@@ -148,6 +150,7 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	this->Centre(wxBOTH);
 
 	// Connect Events
+	m_buttonBrowseFile->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogConnection::BrowseFileOnButtonClick), NULL, this);
 	m_buttonTestConnection->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogConnection::TestConnectionOnButtonClick), NULL, this);
 	m_buttonSaveConnection->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogConnection::SaveConnectionOnButtonClick), NULL, this);
 }
@@ -155,6 +158,21 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 void ibDialogConnection::OnModeChanged(wxCommandEvent& event)
 {
 	UpdateModeVisibility();
+	event.Skip();
+}
+
+void ibDialogConnection::BrowseFileOnButtonClick(wxCommandEvent& event)
+{
+	wxString initialPath = m_textCtrlFilePath->GetValue();
+	if (initialPath.IsEmpty()) {
+		initialPath = wxStandardPaths::Get().GetDocumentsDir();
+	}
+
+	wxDirDialog dlg(this, _("Select database folder"), initialPath,
+	                wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
+	if (dlg.ShowModal() == wxID_OK) {
+		m_textCtrlFilePath->SetValue(dlg.GetPath());
+	}
 	event.Skip();
 }
 
