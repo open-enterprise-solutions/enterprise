@@ -322,7 +322,7 @@ OES distinguishes between **metadata** (compile-time, process-wide, shared) and 
 
 `ibSessionScope` (legacy) and `ibSessionThreadBinding` (preferred for app entry points) are the RAII helpers that bind a session to the calling thread. The interpreter no longer reads global `thread_local` state directly: `ibProcUnitState` lives under `ibSession` (`session.h`), and the only `thread_local` slot in `session.cpp` is a fallback for sessionless callers (codeRunner sandbox / system bootstrap). The worker pool (`workerPool.h` + `workerPoolHeadless.cpp`) leases a session into a thread via `tl_currentLease` and runs the request on it.
 
-Runtime ProcUnits are not held in a per-session map on `ibSession` itself. Each module descriptor (`ibModuleDataObject`) keeps its own `m_procUnit`. Per-session ProcUnit ownership through a descriptor map is the target end-state of the runtime-facade plan (see [`runtime-facade.md`](runtime-facade.md), step 1) — not yet landed.
+Runtime ProcUnits live on per-session descriptors. The session's root `ibValueModuleManagerConfiguration` (`ibSession::m_root`) owns common modules, forms, and per-instance object runtimes; each child is its own descriptor (`ibRuntimeModuleDataObject`) carrying its own `shared_ptr<ibProcUnit>`. Concurrent web sessions therefore each work on their own descriptor instances — no shared ProcUnit, no cross-session execution mutex. See `runtime-facade.md` for the descriptor composition / parent chain details.
 
 ### ibSessionRegistry
 
@@ -336,37 +336,34 @@ Runtime ProcUnits are not held in a per-session map on `ibSession` itself. Each 
 
 The registry supports multiple concurrent sessions (N on web, 1 on desktop) through the same mechanism. See `project_session_registry_refactor` memory entry for the current implementation status.
 
-### Runtime ownership — current state and direction
+### Runtime ownership
 
-**Current:**
-- Compile state (`ibCompileCode` with immutable `ibByteCode`) lives on the descriptor (`ibModuleDataObject`) and is shared across sessions.
-- ProcUnits are kept on the descriptor itself (`ibModuleDataObject::m_procUnit`). The descriptor's runtime is rebuilt for each session by `ibValueModuleManager::AttachRuntime(session)` and torn down by `DetachRuntime(session)` — both serialised by `m_runtimeMutex`. There is no per-session ProcUnit map yet; the descriptor's ProcUnit is single-occupancy at any given moment, so concurrent web sessions on the same descriptor must coordinate through the runtime mutex (current scaling ceiling).
-- The session's root `ibValueModuleManagerConfiguration` is owned by `ibSession::m_root` (intrusive-refcounted via `ibValuePtr`). `ibSession::CreateRoot(metaData)` allocates it; `ibSession::CompileRoot()` runs `CreateMainModule`; `appData`'s `OnAuthenticated` listener then drives `RunDatabase` (one-shot per process) + `CompileRoot` + `mm->AttachRuntime(session)`.
-- `BeforeStart / OnStart / BeforeExit / OnExit` events dispatch through the session's root module manager.
+**Compile state — shared, immutable.** `ibCompileCode` produces an `ibByteCode` that lives on the configuration's compile descriptor (`ibCompileModule` on `ibValueMetaObjectModuleBase`). One bytecode per module is shared across all sessions; rebuilt only on Designer edit or metadata reload. AOT cache (`sys_bytecode_cache` via `ibByteCodeCache`) lets `Compile()` skip the parse+emit on cache hits — see [AOT cache](#ast-cache) below.
 
-**Direction (in progress, see [`runtime-facade.md`](runtime-facade.md)):**
-
-`ibValueModuleManager` becomes the per-session runtime root. The descriptor's `m_procUnit` field disappears in favour of a per-descriptor `m_runtimes : map<ibSession*, shared_ptr<ibModuleDataObject>>`. Nested nodes (common module, catalog/document instance, form, external DP) inherit from `ibModuleDataObject + ibValue` and parent up via `weak_ptr<ibModuleDataObject> m_parent`. Eval is the only exception — outside the descriptor map, parent set from `ibValueModuleManager::Current()` at compile time.
-
-Target structure for a runtime node:
+**Runtime state — per-session, owned via descriptors.** Each session owns its own runtime tree:
 
 ```
-ibModuleDataObject (per-session)
-  ├── compileModule  — back-ref to compile state (descriptor-shared)
-  ├── procUnit       — shared_ptr<ibProcUnit> (mutable runtime state)
-  └── parent         — weak_ptr<ibModuleDataObject> (common→root, form→object|root, eval→Current())
-
-ibValueModuleManager : ibModuleDataObject (root only — per-session singleton)
-  ├── m_session     — which session owns it
-  └── m_context     — runtime context (locals frame chain)
+ibSession::m_root  →  ibValueModuleManagerConfiguration  (per-session root)
+                       │
+                       ├── ibValueModuleUnit             (per common module)
+                       │     └── m_procUnit : shared_ptr<ibProcUnit>
+                       ├── ibValueModuleUnit             (per common module)
+                       │     └── m_procUnit : shared_ptr<ibProcUnit>
+                       └── ...
 ```
 
-- Main module = session's runtime root; common modules, forms, per-instance catalog/document runtimes hang off as children via `parent` weak chain.
-- Script dispatch walks the parent chain — each runtime reaches enclosing globals through parent's procUnit.
-- Teardown cascade: session.Stop() iterates `m_touchedDescriptors` and calls `_DropRuntime(this)` on each; the descriptor drops its `shared_ptr<runtime>` for that session, the runtime dtor releases its procUnit, parent weak refs expire bottom-up.
-- `ibByteCode` becomes self-contained (holds its own moduleName, rootContext, parent-bytecode ref); the `byteCode->m_compileModule` back-pointer is removed. This decouples runtime lifetime from `ibCompileCode` lifetime — metadata reload can drop compile state while running sessions hold their bytecode through their shared_ptr.
+- The root manager `m_compileModule` references the shared compile state; its `m_procUnit` is the session's main module ProcUnit.
+- Each common module wraps a child `ibRuntimeModuleDataObject` (`backend/moduleInfo.h`) carrying its own `shared_ptr<ibProcUnit>` and `m_binder` (per-execute context-var binder produced by `bc.CreateBinder()`).
+- Forms, per-instance catalog/document runtimes, external data processors / reports hang off as children of the root via the same descriptor mixin (`m_parent` raw-pointer chain; container enforces parent-outlives-child).
+- Concurrent sessions therefore run on **physically separate** ProcUnit instances. The shared resource is the immutable `ibByteCode` (read-only); per-session frame stacks, locals, and binders are isolated.
 
-**Same model for desktop and web** — desktop has N=1 session (process-wide, `AccessMode::Single`), web has N per-cookie (`AccessMode::Shared`). The `ibSessionRegistry + ibSession + ibSessionScope + runtime tree` stack is identical; differences are only in session count and threading (desktop = wx main thread dispatches scripts; web = per-session worker thread via `RunOnWorker`).
+**`m_runtimeMutex` guards bring-up vs teardown, not execution.** `ibValueModuleManager::AttachRuntime(session)` (called from `ibApplicationData::Connect` for desktop / `ibWebSession::Login` for web) builds the runtime tree under the lock. `DetachRuntime(session)` drops it under the same lock. Per-session script execution does NOT take this lock — different sessions execute in parallel on their own descriptors.
+
+**Worker pool dispatch.** Script execution runs on a worker thread leased via `ibWorkerPool` (`backend/session/workerPool.h` + headless impl). Each request leases a session into `tl_currentLease` for the call's duration; `ibSession::Current()` resolves through this slot. Desktop has N=1 session on the wx main thread; web has N per-cookie sessions, each pinned to its own worker. The script interpreter never touches global `thread_local` state directly — `ibProcUnitState` lives under `ibSession`, the one `thread_local` fallback in `session.cpp` exists only for sessionless callers (codeRunner sandbox / system bootstrap).
+
+**Same model for desktop and web** — the only difference is session count and entry threading. The `ibSessionRegistry + ibSession + ibSessionScope + per-session runtime tree + worker pool` stack is identical across all run modes.
+
+**Bytecode self-contained.** `ibByteCode` holds its own moduleName, rootContext, parent-bytecode ref, and dependency manifest. There is no `byteCode->m_compileModule` back-pointer; runtime lifetime is decoupled from `ibCompileCode` lifetime, so metadata reload can drop compile state while running sessions hold their bytecode through their shared_ptr.
 
 ### Designer — compile only
 
