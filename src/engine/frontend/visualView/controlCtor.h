@@ -61,10 +61,20 @@ public:
 	}
 };
 
-#define CONTROL_TYPE_REGISTER(class_info, class_name, class_type, clsid)\
+// 4-arg (legacy): explicit clsid.
+#define CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, clsid)\
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_c_), new ibCtorControlType<class_info>(wxT(class_name), wxT(class_type), clsid))
+// 3-arg (new): clsid = ib_clsid_hash(class_name).
+#define CONTROL_TYPE_REGISTER_3(class_info, class_name, class_type)\
+CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, ib_clsid_hash(class_name))
+#define CONTROL_TYPE_REGISTER(...) IB_DISPATCH(CONTROL_TYPE_REGISTER_, __VA_ARGS__)
 
-#define S_CONTROL_TYPE_REGISTER(class_info, class_name, class_type, clsid)\
+// 4-arg (legacy): explicit clsid.
+#define S_CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, clsid)\
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_sc_), new ibCtorSystemControlType<class_info>(wxT(class_name), wxT(class_type), clsid))
+// 3-arg (new): clsid = ib_clsid_hash(class_name).
+#define S_CONTROL_TYPE_REGISTER_3(class_info, class_name, class_type)\
+S_CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, ib_clsid_hash(class_name))
+#define S_CONTROL_TYPE_REGISTER(...) IB_DISPATCH(S_CONTROL_TYPE_REGISTER_, __VA_ARGS__)
 
 #endif 

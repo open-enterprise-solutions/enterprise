@@ -95,7 +95,7 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // integers, so a v9 reader loading a v10-written blob (or vice versa)
 // would dispatch the wrong handler on every post-shift opcode. Bump
 // rejects v9 → safe recompile + repopulate. Payload layout unchanged.
-constexpr uint16_t kAOTFormatVersion = 10;
+constexpr uint16_t kAOTFormatVersion = 12; // CLSID encoding globally switched from 8-byte ASCII pack to FNV-1a 64 hash
 constexpr uint16_t kAOTFlagPortable  = 0x0001;       // unused — host-endian today
 
 // Sentinel for an over-large collection — guards Deserialize against

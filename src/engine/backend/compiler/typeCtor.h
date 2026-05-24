@@ -1,6 +1,8 @@
 #ifndef _TYPE_CTOR_H__
 #define _TYPE_CTOR_H__
 
+#include "backend/clsid.h"      // ibClassID, ib_clsid_hash
+
 class ibValue;
 class ibCtorAbstractType;
 
@@ -35,6 +37,19 @@ public:
 
 #define GENERATE_REGISTER(class_name, class_type, class_so)\
 	const value_register class_type = class_so;
+
+/////////////////////////////////////////////////////////////////////////
+// Variadic-macro plumbing for *_TYPE_REGISTER overload-by-arity.
+// Lets the same macro name accept either an explicit CLSID
+// (legacy 3-arg / 4-arg form) or auto-hash from class_name
+// (new 2-arg / 3-arg form, CLSID = ib_clsid_hash(class_name)).
+
+#define IB_EXPAND(x) x
+#define IB_CONCAT2(a, b) a##b
+#define IB_CONCAT(a, b) IB_CONCAT2(a, b)
+#define IB_VA_PICK5(_1, _2, _3, _4, _5, N, ...) N
+#define IB_VA_COUNT(...) IB_EXPAND(IB_VA_PICK5(__VA_ARGS__, 5, 4, 3, 2, 1))
+#define IB_DISPATCH(prefix, ...) IB_EXPAND(IB_CONCAT(prefix, IB_VA_COUNT(__VA_ARGS__))(__VA_ARGS__))
 
 /////////////////////////////////////////////////////////////////////////
 
@@ -109,8 +124,13 @@ public:
 	virtual ibValue* CreateObject() const { return new T(m_valType); }
 };
 
-#define PRIMITIVE_TYPE_REGISTER(class_info, class_name, class_type, clsid)\
+// 4-arg (legacy): explicit clsid.
+#define PRIMITIVE_TYPE_REGISTER_4(class_info, class_name, class_type, clsid)\
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_s_), new ibCtorPrimitiveType<class_info>(wxT(class_name), class_type, clsid))
+// 3-arg (new): clsid = ib_clsid_hash(class_name).
+#define PRIMITIVE_TYPE_REGISTER_3(class_info, class_name, class_type)\
+PRIMITIVE_TYPE_REGISTER_4(class_info, class_name, class_type, ib_clsid_hash(class_name))
+#define PRIMITIVE_TYPE_REGISTER(...) IB_DISPATCH(PRIMITIVE_TYPE_REGISTER_, __VA_ARGS__)
 
 // object value register - array, struct, etc.. 
 template <class T>
@@ -134,8 +154,13 @@ public:
 	virtual ibValue* CreateObject() const { return new T(); }
 };
 
-#define VALUE_TYPE_REGISTER(class_info, class_name, clsid)\
+// 3-arg (legacy): explicit clsid.
+#define VALUE_TYPE_REGISTER_3(class_info, class_name, clsid)\
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_val_), new ibCtorValueType<class_info>(wxT(class_name), clsid))
+// 2-arg (new): clsid = ib_clsid_hash(class_name).
+#define VALUE_TYPE_REGISTER_2(class_info, class_name)\
+VALUE_TYPE_REGISTER_3(class_info, class_name, ib_clsid_hash(class_name))
+#define VALUE_TYPE_REGISTER(...) IB_DISPATCH(VALUE_TYPE_REGISTER_, __VA_ARGS__)
 
 // object with non-create object
 template <class T>
@@ -159,8 +184,13 @@ public:
 	virtual ibValue* CreateObject() const { return nullptr; }
 };
 
-#define SYSTEM_TYPE_REGISTER(class_info, class_name, clsid)\
+// 3-arg (legacy): explicit clsid.
+#define SYSTEM_TYPE_REGISTER_3(class_info, class_name, clsid)\
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_so_), new ibCtorSystemType<class_info>(wxT(class_name), clsid))
+// 2-arg (new): clsid = ib_clsid_hash(class_name).
+#define SYSTEM_TYPE_REGISTER_2(class_info, class_name)\
+SYSTEM_TYPE_REGISTER_3(class_info, class_name, ib_clsid_hash(class_name))
+#define SYSTEM_TYPE_REGISTER(...) IB_DISPATCH(SYSTEM_TYPE_REGISTER_, __VA_ARGS__)
 
 //enumeration register - windowOrient, etc...
 template <class T>
@@ -188,8 +218,13 @@ public:
 	};
 };
 
-#define ENUM_TYPE_REGISTER(class_info, class_name, clsid)\
+// 3-arg (legacy): explicit clsid.
+#define ENUM_TYPE_REGISTER_3(class_info, class_name, clsid)\
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_e_), new ibCtorEnumType<class_info>(wxT(class_name), clsid))
+// 2-arg (new): clsid = ib_clsid_hash(class_name).
+#define ENUM_TYPE_REGISTER_2(class_info, class_name)\
+ENUM_TYPE_REGISTER_3(class_info, class_name, ib_clsid_hash(class_name))
+#define ENUM_TYPE_REGISTER(...) IB_DISPATCH(ENUM_TYPE_REGISTER_, __VA_ARGS__)
 
 template <class T>
 class ibCtorContextType : public ibCtorSingleType {
@@ -220,7 +255,12 @@ public:
 	virtual ibValue* CreateObject() const { return m_innerObject; }
 };
 
-#define CONTEXT_TYPE_REGISTER(class_info, class_name, clsid)\
+// 3-arg (legacy): explicit clsid.
+#define CONTEXT_TYPE_REGISTER_3(class_info, class_name, clsid)\
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_ctx_), new ibCtorContextType<class_info>(wxT(class_name), clsid))
+// 2-arg (new): clsid = ib_clsid_hash(class_name).
+#define CONTEXT_TYPE_REGISTER_2(class_info, class_name)\
+CONTEXT_TYPE_REGISTER_3(class_info, class_name, ib_clsid_hash(class_name))
+#define CONTEXT_TYPE_REGISTER(...) IB_DISPATCH(CONTEXT_TYPE_REGISTER_, __VA_ARGS__)
 
 #endif // !_SINGLE_OBJECT_H__
