@@ -123,4 +123,37 @@
       <OutputFile>$(oesLibDir)$(TargetName).lib</OutputFile>
     </Lib>
   </ItemDefinitionGroup>
+
+  <!--
+    App-local MSVC CRT for Release deployments.
+    Copies msvcp140.dll / vcruntime140.dll / vcruntime140_1.dll next to
+    the output binaries so the package runs on machines without VC++
+    Redistributable installed.
+
+    Debug runtime is non-redistributable by license, so this only fires
+    in Release. UCRT (ucrtbase.dll + api-ms-win-crt-*.dll) is part of
+    Windows 10/11 and is intentionally NOT copied.
+
+    Source path resolves dynamically via $(VCToolsRedistDir) +
+    $(PlatformShortName) (x86/x64) + $(PlatformToolsetVersion) (143 for
+    v143), so the rule survives toolset upgrades.
+  -->
+  <Target Name="CopyMsvcCRT"
+          AfterTargets="Build"
+          Condition="$(Configuration.StartsWith('Release'))">
+    <PropertyGroup>
+      <!-- $(VCToolsRedistDir) is unreliable on some installations; build from
+           $(VCInstallDir) + $(VCToolsVersion) which are always populated. -->
+      <_CRTRedistPath>$(VCInstallDir)Redist\MSVC\$(VCToolsVersion)\$(PlatformShortName)\Microsoft.VC$(PlatformToolsetVersion).CRT\</_CRTRedistPath>
+    </PropertyGroup>
+    <ItemGroup>
+      <_CRTFiles Include="$(_CRTRedistPath)msvcp140.dll" />
+      <_CRTFiles Include="$(_CRTRedistPath)vcruntime140.dll" />
+      <_CRTFiles Include="$(_CRTRedistPath)vcruntime140_1.dll" Condition="Exists('$(_CRTRedistPath)vcruntime140_1.dll')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_CRTFiles)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true"
+          ContinueOnError="true" />
+  </Target>
 </Project>
