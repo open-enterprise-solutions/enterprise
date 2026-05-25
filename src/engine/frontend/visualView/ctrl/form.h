@@ -52,6 +52,24 @@ public:
 	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }
 	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
 
+	// Soft-lock state. m_lockBadgeHolder holds the blocking user's name
+	// when TryAcquireFormLock conflicted on open; empty means the form
+	// is editable normally. UI consumers (future lock-icon overlay /
+	// status bar) read GetLockBadgeHolder to decide whether to render
+	// the badge — title decoration was tried and rolled back as too
+	// noisy (titles in OES are already long with code + description).
+	//
+	// RefreshLockBadge: re-attempt acquire and flip badge accordingly.
+	// On success — clear badge (we now hold the lock, form editable).
+	// On persistent conflict — update holder if it changed. Called
+	// from UpdateForm so cross-user notifier ticks naturally refresh
+	// lock state alongside data state; explicit callers (focus / poll
+	// timer) may invoke directly too. Safe no-op when not in soft-
+	// lock state.
+	void SetLockBadge(const wxString& holderName) { m_lockBadgeHolder = holderName; }
+	const wxString& GetLockBadgeHolder() const { return m_lockBadgeHolder; }
+	void RefreshLockBadge();
+
 	wxColour GetForegroundColour() const { return m_propertyFG->GetValueAsColour(); }
 	wxColour GetBackgroundColour() const { return m_propertyBG->GetValueAsColour(); }
 
@@ -364,6 +382,10 @@ private:
 	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryFrame, wxT("Enabled"), _("Enabled"), _("Enable or disable the window for user input.Note that when a parent window is disabled, all of its children are disabled as well and they are reenabled again when the parent is."), true);
 	ibPropertyCategory* m_categorySizer = ibPropertyObject::CreatePropertyCategory(wxT("Sizer"), _("Sizer"));
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, wxT("Orient"), _("Orient"), wxVERTICAL);
+
+	// Soft-lock badge — user name of the session that holds the lock.
+	// Empty when the form is editable; set on form-open conflict.
+	wxString m_lockBadgeHolder;
 
 	friend class ibValueControl;
 	friend class ibValueFormCollectionControl;

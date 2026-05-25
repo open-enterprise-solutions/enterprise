@@ -60,6 +60,13 @@ ibValueForm::~ibValueForm()
 
 	if (m_controlOwner != nullptr) m_controlOwner->ControlDecrRef();
 	if (m_sourceObject != nullptr) m_sourceObject->SourceDecrRef();
+	// sys_lock release intentionally tied to source LIFETIME, not form
+	// lifetime — m_formLockHandle on the source RAII-DELETEs the row
+	// when the source's last ref drops (form's DecrRef above is one
+	// such ref; scripts holding the value contribute others). While
+	// any holder is alive the source is still "in use" by someone, so
+	// keeping the lock matches user-visible semantics. See
+	// docs/record-locks.md Phase B.3.
 }
 
 void ibValueForm::Update(wxObject* wxobject, ibVisualHost* visualHost)

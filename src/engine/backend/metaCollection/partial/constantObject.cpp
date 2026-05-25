@@ -10,6 +10,7 @@
 #include "backend/appData.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/session/session.h"
+#include "backend/lock/lockManager.h"
 
 //***********************************************************************
 //*                           constant value                            *
@@ -305,6 +306,19 @@ ibValue ibValueRecordDataObjectConstant::GetConstValue() const
 
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
+bool ibValueRecordDataObjectConstant::TryAcquireFormLock(ibLockMode mode)
+{
+	if (m_formLockHandle.IsValid()) return true;   // already held
+
+	// Constant is one row globally — namespace IS the key, no per-row
+	// sub-identifier. ForNamespace encapsulates the empty-keyFields
+	// shape so call sites stay clean.
+	m_formLockHandle = ibLockManager::Instance().Acquire({
+		ibLockItem::ForNamespace(m_metaObject->GetDocPath(), mode)
+	});
+	return true;
+}
+
 bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 {
 	if (appData->DesignerMode())
@@ -327,6 +341,25 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 	ibBackendValueForm* const valueForm = GetForm();
 
 	scope.SafeBeginTransaction();
+
+	// Layer-1 DB row-lock on this constant's singleton row. Concurrent
+	// writes to different constants don't conflict (each constant has
+	// its own table); concurrent writes to THIS constant serialize on
+	// the RECORD_KEY='6' row via the driver's FOR UPDATE / WITH LOCK.
+	// See docs/record-locks.md.
+	{
+		const wxString hint = scope->RowLockHint();
+		const wxString lockSql = wxT("SELECT 1 FROM ") + tableName
+		                       + wxT(" WHERE RECORD_KEY = '6'")
+		                       + (hint.IsEmpty() ? wxString() : wxT(" ") + hint)
+		                       + wxT(";");
+		ibDatabaseResultSet* lockRs = scope->RunQueryWithResults(lockSql);
+		if (lockRs != nullptr) {
+			// Drain — only the lock side effect matters.
+			while (lockRs->Next()) {}
+			scope->CloseResultSet(lockRs);
+		}
+	}
 
 	auto rollback = [&]() {
 		m_constValue = constValue;
