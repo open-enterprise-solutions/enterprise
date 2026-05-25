@@ -89,6 +89,8 @@ bool ibValueRecordDataObjectChartOfAccounts::WriteObject()
 				ibBackendValueForm* const valueForm = GetForm();
 				{
 					scope.SafeBeginTransaction();
+					TryAcquireFormLock();  // soft-lock: throw on cross-session conflict
+					LockAndCheckDataVersion(/*bump=*/true);  // see docs/record-locks.md
 					{ ibValue cancel = false; ExecAsProc(wxT("BeforeWrite"), cancel);
 						if (cancel.GetBoolean()) { scope.SafeRollBackTransaction(); ibBackendCoreException::Error(_("Failed to write object in db!")); return false; } }
 					bool newObject = IsNewObject();
@@ -132,6 +134,8 @@ bool ibValueRecordDataObjectChartOfAccounts::DeleteObject()
 				ibBackendValueForm* const valueForm = GetForm();
 				{
 					scope.SafeBeginTransaction();
+					TryAcquireFormLock();  // soft-lock: throw on cross-session conflict
+					LockAndCheckDataVersion(/*bump=*/false);  // no bump — row is deleted
 					{ ibValue cancel = false; ExecAsProc(wxT("BeforeDelete"), cancel);
 						if (cancel.GetBoolean()) { scope.SafeRollBackTransaction(); ibBackendCoreException::Error(_("Failed to delete object in db!")); return false; } }
 					if (!DeleteData()) { scope.SafeRollBackTransaction(); ibBackendCoreException::Error(_("Failed to delete object in db!")); return false; }
@@ -146,7 +150,7 @@ bool ibValueRecordDataObjectChartOfAccounts::DeleteObject()
 	return true;
 }
 
-enum Func { enIsNew = 0, enCopy, enFill, enWrite, enDelete, enModified, enGetForm, enGetTemplate, enGetMetadata };
+enum Func { enIsNew = 0, enCopy, enFill, enWrite, enDelete, enModified, enGetForm, enGetTemplate, enGetMetadata, enLock, enUnlock };
 
 void ibValueRecordDataObjectChartOfAccounts::PrepareNames() const
 {
@@ -160,6 +164,8 @@ void ibValueRecordDataObjectChartOfAccounts::PrepareNames() const
 	m_methodHelper->AppendFunc(wxT("GetFormObject"), 3, wxT("GetFormObject(name : string, owner : any , id : guid)"));
 	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
 	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	m_methodHelper->AppendProc(wxT("Lock"),   wxT("Lock()"));
+	m_methodHelper->AppendProc(wxT("Unlock"), wxT("Unlock()"));
 	m_methodHelper->AppendProp(wxT("ThisObject"), true, false, true, eThisObject, eSystem);
 	wxString objectName;
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
@@ -208,6 +214,8 @@ bool ibValueRecordDataObjectChartOfAccounts::CallAsFunc(const long lMethodNum, i
 	case Func::enGetForm: pvarRetValue = GetFormValue(lSizeArray > 0 ? paParams[0]->GetString() : wxString(wxEmptyString), lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr); return true;
 	case Func::enGetTemplate: pvarRetValue = m_metaObject->GetTemplate(paParams[0]->GetString()); return true;
 	case Func::enGetMetadata: pvarRetValue = m_metaObject; return true;
+	case Func::enLock:   TryAcquireFormLock(); return true;
+	case Func::enUnlock: ReleaseFormLock();    return true;
 	}
 	return ibRuntimeModuleDataObject::ExecAsFunc(GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray);
 }

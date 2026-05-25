@@ -27,6 +27,7 @@
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseResultSet.h"
+#include "backend/lock/lockManager.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaObjectMetadata.h"
@@ -725,6 +726,50 @@ WFRONTEND_API std::string wfrontendDiagJSON()
 	return root.dump();
 }
 
+WFRONTEND_API std::string wfrontendLocksJSON()
+{
+	nlohmann::json arr = nlohmann::json::array();
+	try {
+		const auto rows = ibLockManager::Instance().GetSnapshot();
+		for (const auto& r : rows) {
+			// Render key as "field1=val1, field2=val2" for at-a-glance UI.
+			// keyData on the snapshot row is already the canonical text
+			// produced by lockKeyHash — reuse it verbatim.
+			nlohmann::json row = {
+				{ "lockGuid",    r.lockGuid.str().ToStdString(wxConvUTF8) },
+				{ "sessionGuid", r.sessionGuid.str().ToStdString(wxConvUTF8) },
+				{ "namespace",   r.namespaceName.ToStdString(wxConvUTF8) },
+				{ "key",         r.keyData.ToStdString(wxConvUTF8) },
+				{ "mode",        r.lockMode == ibLockMode::Shared ? "Shared" : "Exclusive" },
+				{ "acquiredAt",  r.acquiredAt.IsValid()
+				                    ? r.acquiredAt.FormatISOCombined().ToStdString(wxConvUTF8)
+				                    : std::string() },
+				{ "user",        r.userName.ToStdString(wxConvUTF8) },
+				{ "computer",    r.computer.ToStdString(wxConvUTF8) },
+			};
+			arr.push_back(std::move(row));
+		}
+	}
+	catch (const ibBackendException&) {
+		// Snapshot is best-effort observability — never propagate.
+	}
+	catch (...) {}
+	return arr.dump();
+}
+
+WFRONTEND_API bool wfrontendForceReleaseLockByGuid(const std::string& lockGuid)
+{
+	try {
+		const ibGuid g(wxString::FromUTF8(lockGuid.c_str()));
+		if (!g.isValid()) return false;
+		std::vector<ibGuid> one{ g };
+		ibLockManager::Instance().ReleaseRows(one);
+		return true;
+	}
+	catch (const ibBackendException&) { return false; }
+	catch (...)                        { return false; }
+}
+
 WFRONTEND_API void wfrontendShutdown()
 {
 	std::lock_guard<std::mutex> lock(g_initMutex);
@@ -1042,6 +1087,52 @@ WFRONTEND_API std::string wfrontendOpenForm(const std::string& sessionId, int me
 
 namespace {
 
+// Convert a caught backend exception into the structured JSON body
+// returned by every dispatch handler. Distinguishes the kinds the web
+// client surfaces differently (each gets its own dialog / toast /
+// no-op so the UX matches the actual condition):
+//
+//   ibBackendLockException::VersionChanged → {error:"lock_conflict", kind:"version_changed"}
+//     UX: "object was changed, please reload"
+//   ibBackendLockException::RowLockTimeout → {error:"lock_conflict", kind:"row_lock_timeout"}
+//     UX: "object is being edited by another user, try later"
+//   ibBackendAccessException → {error:"forbidden"}
+//     UX: "not enough access rights"
+//   ibBackendInterruptException → {error:"interrupted"}
+//     UX: silent (user pressed cancel — they know)
+//   everything else (ibBackendCoreException etc.) → {error:"script_exception", message:"..."}
+//     UX: generic error toast carrying the actual text — never lose info
+//
+// See docs/record-locks.md for the lock-specific shape.
+std::string ExceptionToJson(const ibBackendException& e)
+{
+	nlohmann::json j;
+
+	if (auto* lockEx = dynamic_cast<const ibBackendLockException*>(&e)) {
+		j["error"] = "lock_conflict";
+		j["kind"]  = (lockEx->GetKind() == ibBackendLockException::Kind::VersionChanged)
+		               ? "version_changed" : "row_lock_timeout";
+		j["message"] = std::string(e.GetErrorDescription().utf8_str());
+		return j.dump();
+	}
+
+	if (dynamic_cast<const ibBackendAccessException*>(&e) != nullptr) {
+		j["error"] = "forbidden";
+		j["message"] = std::string(e.GetErrorDescription().utf8_str());
+		return j.dump();
+	}
+
+	if (dynamic_cast<const ibBackendInterruptException*>(&e) != nullptr) {
+		j["error"] = "interrupted";
+		j["message"] = std::string(e.GetErrorDescription().utf8_str());
+		return j.dump();
+	}
+
+	j["error"]   = "script_exception";
+	j["message"] = std::string(e.GetErrorDescription().utf8_str());
+	return j.dump();
+}
+
 // Recursively visit every metadata node and collect form descendants.
 void CollectForms(const ibValueMetaObject* node, nlohmann::json& out)
 {
@@ -1085,8 +1176,8 @@ std::string FireActionInSession(ibWebSession* session, int controlID)
 			if (!app->DispatchControlAction(controlID))
 				return "{}";
 		}
-		catch (const ibBackendException&) {
-			return R"({"error":"script exception"})";
+		catch (const ibBackendException& e) {
+			return ExceptionToJson(e);
 		}
 		catch (...) {
 			return R"({"error":"unknown exception"})";
@@ -1132,8 +1223,8 @@ std::string FireKindInSession(ibWebSession* session, int controlID,
 			if (!app->Dispatch(controlID, wkind, wxString()))
 				return "{}";
 		}
-		catch (const ibBackendException&) {
-			return R"({"error":"script exception"})";
+		catch (const ibBackendException& e) {
+			return ExceptionToJson(e);
 		}
 		catch (...) {
 			return R"({"error":"unknown exception"})";
@@ -1180,8 +1271,8 @@ std::string FireTextChangeInSession(ibWebSession* session, int controlID,
 			if (!app->DispatchTextChange(controlID, w))
 				return "{}";
 		}
-		catch (const ibBackendException&) {
-			return R"({"error":"script exception"})";
+		catch (const ibBackendException& e) {
+			return ExceptionToJson(e);
 		}
 		catch (...) {
 			return R"({"error":"unknown exception"})";
@@ -1226,8 +1317,8 @@ std::string FireToggleInSession(ibWebSession* session, int controlID, bool check
 			if (!app->DispatchToggle(controlID, checked))
 				return "{}";
 		}
-		catch (const ibBackendException&) {
-			return R"({"error":"script exception"})";
+		catch (const ibBackendException& e) {
+			return ExceptionToJson(e);
 		}
 		catch (...) {
 			return R"({"error":"unknown exception"})";

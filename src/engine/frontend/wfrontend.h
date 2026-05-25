@@ -174,6 +174,23 @@ WFRONTEND_API bool wfrontendReloadSessionByGuid(const std::string& sessionGuid);
 // last-refreshed snapshot. Returns "{}" on any internal failure.
 WFRONTEND_API std::string wfrontendDiagJSON();
 
+// sys_lock snapshot — JSON array of cluster-wide held locks for
+// /admin/locks and the designer's Active Users → Locks sub-pane. Shape:
+//   [ { "lockGuid":"<uuid>", "sessionGuid":"<uuid>",
+//       "namespace":"Catalog.Goods", "key":"Ref=<uuid>",
+//       "mode":"Exclusive", "acquiredAt":"2026-05-24T10:11:12",
+//       "user":"ivanov", "computer":"WS-42" }, ... ]
+// Reads the same snapshot ibLockManager::GetSnapshot returns; one row
+// per held sys_lock entry. Returns "[]" on internal failure.
+WFRONTEND_API std::string wfrontendLocksJSON();
+
+// Force-release one sys_lock row by its lockGuid. Owner is not asked —
+// admin override (e.g. session went zombie, user can't release through
+// the UI). Returns true iff the DELETE ran without error (row may
+// already have been released by the natural path; that's still "ok"
+// from the admin's view). Used by DELETE /admin/locks/<lockGuid>.
+WFRONTEND_API bool wfrontendForceReleaseLockByGuid(const std::string& lockGuid);
+
 // Current tab count for the session (0 if the session doesn't exist or
 // isn't authenticated yet). Used by GET / to decide whether F5 should
 // swap an empty session for a fresh one (re-running OnStart).

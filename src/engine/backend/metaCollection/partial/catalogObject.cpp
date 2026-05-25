@@ -95,7 +95,7 @@ void ibValueRecordDataObjectCatalog::ShowFormValue(const wxString& strFormName, 
 		return;
 	}
 
-	//if form is not initialized then generate  
+	//if form is not initialized then generate
 	ibBackendValueForm* const valueForm =
 		GetFormValue(strFormName, ownerControl);
 
@@ -158,6 +158,23 @@ bool ibValueRecordDataObjectCatalog::WriteObject()
 				ibBackendValueForm* const valueForm = GetForm();
 				{
 					scope.SafeBeginTransaction();
+
+					// Soft-lock model (Phase B.3): if form-open swallowed
+					// a conflict, the long-held sys_lock isn't held by
+					// us. Try to acquire it now — if still held by
+					// another session → throw LockConflict, save
+					// aborts with "X is locked by user Y". Idempotent
+					// when we already hold the lock from form-open.
+					TryAcquireFormLock();
+
+					// Optimistic-concurrency Write protection: acquire DB
+					// row lock for the rest of this TX and verify the
+					// loaded DataVersion still matches; throw on mismatch.
+					// Bumps m_listObjectValue[DataVersion] so SaveData
+					// stamps the row with a fresh version on commit.
+					// See docs/record-locks.md. RAII scope rolls back
+					// the TX on throw.
+					LockAndCheckDataVersion(/*bump=*/true);
 
 					{
 						ibValue cancel = false;
@@ -251,6 +268,15 @@ bool ibValueRecordDataObjectCatalog::DeleteObject()
 				{
 					scope.SafeBeginTransaction();
 
+					// Soft-lock: re-acquire long-held lock if not held —
+					// throw on conflict with another session.
+					TryAcquireFormLock();
+
+					// Lock the row + verify DataVersion before delete —
+					// catches "another user just edited what I'm about
+					// to delete". No bump (row is going away).
+					LockAndCheckDataVersion(/*bump=*/false);
+
 					{
 						ibValue cancel = false;
 						ExecAsProc(wxT("BeforeDelete"), cancel);
@@ -297,7 +323,9 @@ enum Func {
 	enModified,
 	enGetForm,
 	enGetTemplate,
-	enGetMetadata
+	enGetMetadata,
+	enLock,
+	enUnlock
 };
 
 //****************************************************************************
@@ -317,6 +345,8 @@ void ibValueRecordDataObjectCatalog::PrepareNames() const
 	m_methodHelper->AppendFunc(wxT("GetFormObject"), 3, wxT("GetFormObject(name : string, owner : any , id : guid)"));
 	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
 	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	m_methodHelper->AppendProc(wxT("Lock"),   wxT("Lock()"));
+	m_methodHelper->AppendProc(wxT("Unlock"), wxT("Unlock()"));
 
 	m_methodHelper->AppendProp(wxT("ThisObject"), true, false, true, eThisObject, eSystem);
 
@@ -437,6 +467,12 @@ bool ibValueRecordDataObjectCatalog::CallAsFunc(const long lMethodNum, ibValue& 
 		return true;
 	case Func::enGetMetadata:
 		pvarRetValue = m_metaObject;
+		return true;
+	case Func::enLock:
+		TryAcquireFormLock();
+		return true;
+	case Func::enUnlock:
+		ReleaseFormLock();
 		return true;
 	}
 

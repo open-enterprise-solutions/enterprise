@@ -150,6 +150,12 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::WriteObject()
 				{
 					scope.SafeBeginTransaction();
 
+					// Soft-lock (Phase B.3): throw on cross-session conflict.
+					TryAcquireFormLock();
+
+					// Lock + version-check + bump — see docs/record-locks.md.
+					LockAndCheckDataVersion(/*bump=*/true);
+
 					{
 						ibValue cancel = false;
 						ExecAsProc(wxT("BeforeWrite"), cancel);
@@ -239,6 +245,12 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::DeleteObject()
 				{
 					scope.SafeBeginTransaction();
 
+					// Soft-lock (Phase B.3): throw on cross-session conflict.
+					TryAcquireFormLock();
+
+					// Lock + version-check (no bump — row is deleted).
+					LockAndCheckDataVersion(/*bump=*/false);
+
 					{
 						ibValue cancel = false;
 						ExecAsProc(wxT("BeforeDelete"), cancel);
@@ -285,7 +297,9 @@ enum Func {
 	enModified,
 	enGetForm,
 	enGetTemplate,
-	enGetMetadata
+	enGetMetadata,
+	enLock,
+	enUnlock
 };
 
 //****************************************************************************
@@ -305,6 +319,8 @@ void ibValueRecordDataObjectChartOfCharacteristicTypes::PrepareNames() const
 	m_methodHelper->AppendFunc(wxT("GetFormObject"), 3, wxT("GetFormObject(name : string, owner : any , id : guid)"));
 	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
 	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	m_methodHelper->AppendProc(wxT("Lock"),   wxT("Lock()"));
+	m_methodHelper->AppendProc(wxT("Unlock"), wxT("Unlock()"));
 
 	m_methodHelper->AppendProp(wxT("ThisObject"), true, false, true, eThisObject, eSystem);
 
@@ -422,6 +438,12 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsFunc(const long lM
 		return true;
 	case Func::enGetMetadata:
 		pvarRetValue = m_metaObject;
+		return true;
+	case Func::enLock:
+		TryAcquireFormLock();
+		return true;
+	case Func::enUnlock:
+		ReleaseFormLock();
 		return true;
 	}
 

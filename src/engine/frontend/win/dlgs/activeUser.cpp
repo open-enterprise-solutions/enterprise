@@ -5,6 +5,8 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/session/sessionSnapshot.h"
+#include "backend/lock/lockManager.h"
+#include "backend/backend_exception.h"
 
 #include <wx/menu.h>
 
@@ -60,6 +62,55 @@ void ibDialogActiveUser::RefreshActiveUserTable()
 
 #include "frontend/visualView/ctrl/frame.h"
 
+void ibDialogActiveUser::RefreshLocksTable()
+{
+	if (m_locksTable == nullptr) return;
+
+	std::vector<ibLockSnapshotRow> rows;
+	try { rows = ibLockManager::Instance().GetSnapshot(); }
+	catch (...) { rows.clear(); }
+
+	// Only rebuild when the row count actually changed — RefreshActiveUserTable
+	// gates on a content hash; sys_lock has no equivalent hash yet, so use the
+	// cheap size check. Acceptable: lock churn is rare relative to the 1s tick,
+	// and a stale row count quickly resolves on the next acquire/release.
+	if (rows.size() == m_lastLockRowCount && m_locksTable->GetItemCount() > 0)
+		return;
+	m_lastLockRowCount = rows.size();
+
+	long selectedRow = m_locksTable->GetNextItem(-1, wxLIST_NEXT_ALL,
+		wxLIST_STATE_SELECTED);
+	wxString selectedGuid;
+	if (selectedRow != -1)
+		selectedGuid = m_locksTable->GetItemText(selectedRow, 5);
+
+	m_locksTable->ClearAll();
+	m_locksTable->AppendColumn(_("Namespace"), wxLIST_FORMAT_LEFT, 180);
+	m_locksTable->AppendColumn(_("Key"),       wxLIST_FORMAT_LEFT, 200);
+	m_locksTable->AppendColumn(_("Mode"),      wxLIST_FORMAT_LEFT, 70);
+	m_locksTable->AppendColumn(_("User"),      wxLIST_FORMAT_LEFT, 100);
+	m_locksTable->AppendColumn(_("Acquired"),  wxLIST_FORMAT_LEFT, 140);
+	m_locksTable->AppendColumn(_("LockGuid"),  wxLIST_FORMAT_LEFT, 0); // hidden
+
+	for (const auto& r : rows) {
+		const long index = m_locksTable->InsertItem(
+			m_locksTable->GetItemCount(), r.namespaceName);
+		m_locksTable->SetItem(index, 0, r.namespaceName);
+		m_locksTable->SetItem(index, 1, r.keyData);
+		m_locksTable->SetItem(index, 2,
+			r.lockMode == ibLockMode::Shared ? _("Shared") : _("Exclusive"));
+		m_locksTable->SetItem(index, 3, r.userName);
+		m_locksTable->SetItem(index, 4,
+			r.acquiredAt.IsValid() ? r.acquiredAt.FormatISOCombined() : wxString());
+		m_locksTable->SetItem(index, 5, r.lockGuid.str());
+
+		if (!selectedGuid.IsEmpty() && r.lockGuid.str() == selectedGuid)
+			m_locksTable->SetItemState(index,
+				wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED,
+				wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
+	}
+}
+
 ibDialogActiveUser::ibDialogActiveUser(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) :
 	wxDialog(parent, id, title, pos, size, style), m_activeTableScanner(new wxTimer)
 {
@@ -67,8 +118,16 @@ ibDialogActiveUser::ibDialogActiveUser(wxWindow* parent, wxWindowID id, const wx
 
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
-	m_activeTable = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
-	mainSizer->Add(m_activeTable, 1, wxALL | wxEXPAND, FromDIP(5));
+	m_notebook = new wxNotebook(this, wxID_ANY);
+	mainSizer->Add(m_notebook, 1, wxALL | wxEXPAND, FromDIP(5));
+
+	m_activeTable = new wxListCtrl(m_notebook, wxID_ANY, wxDefaultPosition,
+		wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
+	m_notebook->AddPage(m_activeTable, _("Users"), true);
+
+	m_locksTable = new wxListCtrl(m_notebook, wxID_ANY, wxDefaultPosition,
+		wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
+	m_notebook->AddPage(m_locksTable, _("Locks"), false);
 
 	wxDialog::SetSizer(mainSizer);
 	wxDialog::Layout();
@@ -81,17 +140,19 @@ ibDialogActiveUser::ibDialogActiveUser(wxWindow* parent, wxWindowID id, const wx
 	wxDialog::SetFocus();
 
 	m_activeTable->SetForegroundColour(wxDefaultStypeFGColour);
-	//m_activeTable->SetBackgroundColour(wxDefaultStypeBGColour);
+	m_locksTable->SetForegroundColour(wxDefaultStypeFGColour);
 
 	RefreshActiveUserTable();
+	RefreshLocksTable();
 
 	m_activeTableScanner->Bind(wxEVT_TIMER, &ibDialogActiveUser::OnIdleHandler, this);
 	m_activeTableScanner->Start(1000);
 
-	// Right-click on a row shows the admin context menu. Bound after the
-	// initial refresh so m_activeTable definitely exists.
+	// Right-click context menus — bound after lists exist.
 	m_activeTable->Bind(wxEVT_LIST_ITEM_RIGHT_CLICK,
 		&ibDialogActiveUser::OnContextMenu, this);
+	m_locksTable->Bind(wxEVT_LIST_ITEM_RIGHT_CLICK,
+		&ibDialogActiveUser::OnLocksContextMenu, this);
 }
 
 ibDialogActiveUser::~ibDialogActiveUser()
@@ -100,12 +161,17 @@ ibDialogActiveUser::~ibDialogActiveUser()
 	m_activeTableScanner->Unbind(wxEVT_TIMER, &ibDialogActiveUser::OnIdleHandler, this);
 	m_activeTable->Unbind(wxEVT_LIST_ITEM_RIGHT_CLICK,
 		&ibDialogActiveUser::OnContextMenu, this);
+	if (m_locksTable != nullptr) {
+		m_locksTable->Unbind(wxEVT_LIST_ITEM_RIGHT_CLICK,
+			&ibDialogActiveUser::OnLocksContextMenu, this);
+	}
 }
 
 namespace {
 enum {
-	ID_ActiveUser_Kick   = wxID_HIGHEST + 1001,
-	ID_ActiveUser_Reload = wxID_HIGHEST + 1002,
+	ID_ActiveUser_Kick           = wxID_HIGHEST + 1001,
+	ID_ActiveUser_Reload         = wxID_HIGHEST + 1002,
+	ID_ActiveUser_ForceReleaseLock = wxID_HIGHEST + 1003,
 };
 } // namespace
 
@@ -188,5 +254,63 @@ void ibDialogActiveUser::OnReloadSelected(wxCommandEvent&)
 
 	if (!ibSessionRegistry::Instance().Reload(guid)) {
 		wxLogWarning(_("Failed to queue reload for session %s"), guid);
+	}
+}
+
+void ibDialogActiveUser::OnLocksContextMenu(wxListEvent& event)
+{
+	const long row = event.GetIndex();
+	if (row < 0) return;
+
+	// Same admin-only gate as kick/reload — runtime users get read-only view.
+	if (!appData->DesignerMode()) return;
+
+	const wxString lockGuid = m_locksTable->GetItemText(row, 5);
+	if (lockGuid.IsEmpty()) return;
+
+	wxMenu menu;
+	menu.Append(ID_ActiveUser_ForceReleaseLock, _("Force release"));
+	menu.Bind(wxEVT_MENU, &ibDialogActiveUser::OnForceReleaseSelected, this,
+		ID_ActiveUser_ForceReleaseLock);
+	PopupMenu(&menu);
+}
+
+void ibDialogActiveUser::OnForceReleaseSelected(wxCommandEvent&)
+{
+	const long row = m_locksTable->GetNextItem(-1, wxLIST_NEXT_ALL,
+		wxLIST_STATE_SELECTED);
+	if (row < 0) return;
+
+	const wxString lockGuid = m_locksTable->GetItemText(row, 5);
+	if (lockGuid.IsEmpty()) return;
+
+	const wxString ns   = m_locksTable->GetItemText(row, 0);
+	const wxString user = m_locksTable->GetItemText(row, 3);
+
+	const int answer = wxMessageBox(
+		wxString::Format(_("Force-release lock on '%s' held by '%s'?"),
+			ns, user.IsEmpty() ? _("(unknown)") : user),
+		wxTheApp->GetAppDisplayName(), wxYES_NO | wxICON_QUESTION, this);
+	if (answer != wxYES) return;
+
+	try {
+		const ibGuid g(lockGuid);
+		if (!g.isValid()) {
+			wxLogWarning(_("Invalid lock guid: %s"), lockGuid);
+			return;
+		}
+		std::vector<ibGuid> one{ g };
+		ibLockManager::Instance().ReleaseRows(one);
+		// Force immediate refresh — the 1s timer would catch this anyway,
+		// but the operator just clicked, give instant feedback.
+		m_lastLockRowCount = static_cast<size_t>(-1);
+		RefreshLocksTable();
+	}
+	catch (const ibBackendException& err) {
+		wxLogWarning(_("Failed to release lock %s: %s"),
+			lockGuid, err.GetErrorDescription());
+	}
+	catch (...) {
+		wxLogWarning(_("Failed to release lock %s"), lockGuid);
 	}
 }

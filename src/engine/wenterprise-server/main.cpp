@@ -847,6 +847,26 @@ int main(int argc, char** argv)
 			res.set_content(ok ? "queued\n" : "failed\n", "text/plain");
 		});
 
+	// GET /admin/locks — JSON array of held sys_lock rows cluster-wide.
+	// One entry per held lock; see wfrontendLocksJSON shape. Cheap to
+	// call (single SELECT, no joins).
+	svr.Get(prefix + "/admin/locks",
+		[](const httplib::Request&, httplib::Response& res) {
+			res.set_content(wfrontendLocksJSON(), "application/json");
+		});
+
+	// DELETE /admin/locks/<lockGuid> — admin force-release for the
+	// named row. Use when a session went zombie before releasing, or
+	// the user can't unblock through the normal UI. Returns 200 on
+	// success, 500 on error (already-gone is success — best-effort).
+	svr.Delete(prefix + R"(/admin/locks/([0-9a-fA-F\-]+))",
+		[](const httplib::Request& req, httplib::Response& res) {
+			const std::string guid = req.matches[1].str();
+			const bool ok = wfrontendForceReleaseLockByGuid(guid);
+			res.status = ok ? 200 : 500;
+			res.set_content(ok ? "released\n" : "failed\n", "text/plain");
+		});
+
 	std::cout << wfrontendVersion() << std::endl;
 
 	// Two-phase bind — we need the real port BEFORE InitBackend so

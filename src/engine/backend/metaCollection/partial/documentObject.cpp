@@ -184,7 +184,7 @@ void ibValueRecordDataObjectDocument::ShowFormValue(const wxString& strFormName,
 		return;
 	}
 
-	//if form is not initialized then generate  
+	//if form is not initialized then generate
 	ibBackendValueForm* const valueForm =
 		GetFormValue(strFormName, ownerControl);
 
@@ -259,6 +259,20 @@ bool ibValueRecordDataObjectDocument::WriteObject(ibDocumentWriteMode writeMode,
 				ibBackendValueForm* const valueForm = GetForm();
 				{
 					scope.SafeBeginTransaction();
+
+					// Soft-lock (Phase B.3): re-attempt long-held lock
+					// acquire if not held from form-open — throw on
+					// conflict with another session.
+					TryAcquireFormLock();
+
+					// Optimistic-concurrency Write protection: lock the
+					// Document row + verify DataVersion + bump for the
+					// upcoming UPSERT. Register record-sets cascading
+					// off this Document Write ride under the same
+					// row-lock — the recorder = this Document's ref,
+					// so any concurrent re-post blocks here.
+					// See docs/record-locks.md.
+					LockAndCheckDataVersion(/*bump=*/true);
 
 					{
 						ibValue cancel = false;
@@ -412,6 +426,16 @@ bool ibValueRecordDataObjectDocument::DeleteObject()
 				ibBackendValueForm* const valueForm = GetForm();
 				{
 					scope.SafeBeginTransaction();
+
+					// Soft-lock: throw on conflict with another session.
+					TryAcquireFormLock();
+
+					// Lock the Document row + verify DataVersion before
+					// delete. Cascading register record-set deletes
+					// (this Document is the recorder) ride under the
+					// same row-lock — no bump needed (row is going away).
+					LockAndCheckDataVersion(/*bump=*/false);
+
 					{
 						ibValue cancel = false;
 						ExecAsProc(wxT("BeforeDelete"), cancel);
@@ -469,7 +493,9 @@ enum Func {
 	eModified,
 	eGetFormObject,
 	enGetTemplate,
-	eGetMetadata
+	eGetMetadata,
+	eLock,
+	eUnlock
 };
 
 enum Prop {
@@ -490,6 +516,8 @@ void ibValueRecordDataObjectDocument::PrepareNames() const
 	m_methodHelper->AppendFunc(wxT("GetFormObject"), 2, wxT("GetFormObject(name : string, owner : any)"));
 	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
 	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	m_methodHelper->AppendProc(wxT("Lock"),   wxT("Lock()"));
+	m_methodHelper->AppendProc(wxT("Unlock"), wxT("Unlock()"));
 
 	m_methodHelper->AppendProp(wxT("ThisObject"), true, false, true, eThisObject, eSystem);
 	m_methodHelper->AppendProp(wxT("RegisterRecords"), true, false, true, eRegisterRecords, eSystem);
@@ -619,6 +647,12 @@ bool ibValueRecordDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue&
 		return true;
 	case Func::eGetMetadata:
 		pvarRetValue = m_metaObject;
+		return true;
+	case Func::eLock:
+		TryAcquireFormLock();
+		return true;
+	case Func::eUnlock:
+		ReleaseFormLock();
 		return true;
 	}
 
