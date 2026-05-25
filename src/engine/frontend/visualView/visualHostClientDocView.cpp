@@ -116,6 +116,13 @@ bool ibFormVisualDocument::Save()
 		ibValueSystemFunction::Alert(err.GetErrorDescription());
 		success = false;
 	}
+	catch (const ibBackendLockException& err) {
+		// Version-conflict / row-lock-timeout — show the actual reason
+		// ("changed by another user, please reload") instead of the
+		// generic "An error occurred". Same pattern as access-denied.
+		ibValueSystemFunction::Alert(err.GetErrorDescription());
+		success = false;
+	}
 	catch (const ibBackendException&) {
 		ibValueSystemFunction::Alert(_("An error occurred while trying to save the form!"));
 		success = false;

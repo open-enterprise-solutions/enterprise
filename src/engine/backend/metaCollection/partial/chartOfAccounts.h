@@ -129,6 +129,7 @@ protected:
 			m_propertyAttributeCurrency->GetMetaObject(),
 			m_propertyAttributeMaxSubcontoCount->GetMetaObject(),
 			m_propertyAttributeReference->GetMetaObject(),
+			m_propertyAttributeDataVersion->GetMetaObject(),
 			m_propertyAttributeDeletionMark->GetMetaObject(),
 		};
 		return true;

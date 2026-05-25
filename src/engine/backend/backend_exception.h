@@ -217,6 +217,72 @@ public:
 	static void Error();
 };
 
+// Concurrent-write protection failures surfaced by the Write-time
+// DataVersion check or the DB-side row-lock acquisition.
+// See docs/record-locks.md.
+class BACKEND_API ibBackendLockException : public ibBackendException {
+public:
+	enum class Kind {
+		// DataVersion stored on the row does not match the version
+		// the caller loaded — somebody else wrote between this
+		// caller's Read and Write. UI: "Object was changed by
+		// another user, please reload".
+		VersionChanged,
+
+		// SELECT ... FOR UPDATE / WITH LOCK acquisition timed out
+		// or returned a NOWAIT lock-conflict. UI: "Object is being
+		// edited by another user, try again later".
+		RowLockTimeout,
+
+		// sys_lock acquire failed — another session holds a
+		// conflicting lock on the same (namespace, key). Long-held
+		// pessimistic lock (form-open by another user, etc.).
+		// UI: "Object is locked by user X".
+		LockConflict,
+	};
+
+	Kind GetKind() const { return m_kind; }
+
+	// Identity of the session/user blocking us. Populated only on
+	// Kind::LockConflict — empty for VersionChanged / RowLockTimeout.
+	// Soft-lock UI uses this to render the form-caption badge without
+	// parsing the message string.
+	const wxString& GetBlockingUser() const { return m_blockingUser; }
+	const wxString& GetObjectName()   const { return m_objectName; }
+
+	// Throw a VersionChanged kind. Message is formatted as
+	// "<objectSynonym>: data version changed (expected <expected>,
+	// found <actual>)" — caller may show the synonym to user, the
+	// version strings are diagnostic-only.
+	[[noreturn]] static void VersionChangedThrow(const wxString& objectSynonym,
+	                                              const wxString& expected,
+	                                              const wxString& actual);
+
+	// Throw a RowLockTimeout kind. Message includes the synonym; the
+	// DB driver-level reason (timeout / NOWAIT conflict) is logged
+	// via ibBackendException::ProcessError chain.
+	[[noreturn]] static void RowLockTimeoutThrow(const wxString& objectSynonym);
+
+	// Throw a LockConflict kind. Used by ibLockManager::Acquire when
+	// another session holds a conflicting sys_lock row on the same
+	// (namespace, key). Message reads "<objectName> is locked by
+	// user <blockingUser>" — UI surfaces it directly.
+	[[noreturn]] static void LockConflictThrow(const wxString& objectName,
+	                                            const wxString& blockingUser);
+
+private:
+	ibBackendLockException(Kind kind, const wxString& msg)
+		: ibBackendException(msg), m_kind(kind) {}
+	ibBackendLockException(Kind kind, const wxString& msg,
+	                       const wxString& objectName,
+	                       const wxString& blockingUser)
+		: ibBackendException(msg), m_kind(kind),
+		  m_objectName(objectName), m_blockingUser(blockingUser) {}
+	Kind m_kind;
+	wxString m_objectName;
+	wxString m_blockingUser;
+};
+
 #pragma endregion
 
 #endif

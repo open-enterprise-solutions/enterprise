@@ -302,6 +302,38 @@ public:
 	                             const wxString& pkColumn,
 	                             const wxString& pkValue) { (void)tableName; (void)pkColumn; (void)pkValue; return false; }
 
+	// ---- Row-level pessimistic write lock for Write-time DataVersion check ----
+	//
+	// Used by the optimistic-concurrency Write protection: every
+	// mutable-ref WriteObject does a `SELECT DataVersion FROM <tbl>
+	// WHERE pk = ? <RowLockHint> <NoWaitClause>` inside its TX to pin
+	// the row, compares against the version loaded at Read, then
+	// updates. The two virtuals return the per-driver clause text.
+	// Default empty (SQLite: single-writer naturally, no hint).
+	//
+	// See docs/record-locks.md for the full design.
+
+	// SQL fragment appended to SELECT to take a row-level write lock
+	// for the rest of the current TX. Per-driver:
+	//   Firebird  : "WITH LOCK"
+	//   PostgreSQL: "FOR UPDATE"
+	//   MySQL     : "FOR UPDATE"
+	//   ODBC/MSSQL: "WITH (UPDLOCK, ROWLOCK)" — placed AFTER FROM,
+	//               not at end of statement (driver overrides whole
+	//               clause shape via its own AppendRowLockHint helper
+	//               where needed; default callers always append at end)
+	//   SQLite    : "" (single-writer)
+	virtual wxString RowLockHint() const { return wxEmptyString; }
+
+	// SQL fragment appended after RowLockHint() to make acquisition
+	// fail fast instead of waiting. Used for probe-style callers; the
+	// regular Write path doesn't use it (wait at the driver's default
+	// timeout — TPB-level on FB, session-level on MSSQL/MySQL).
+	//   PostgreSQL: "NOWAIT"
+	//   MySQL 8+  : "NOWAIT"
+	//   Other     : "" (NOWAIT carried via TX options where supported)
+	virtual wxString NoWaitClause() const { return wxEmptyString; }
+
 	/// Close all result set objects that have been generated but not yet closed
 	void CloseResultSets();
 

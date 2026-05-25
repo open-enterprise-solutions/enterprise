@@ -384,4 +384,33 @@ void ibBackendAccessException::Error()
 	throw ibBackendAccessException();
 }
 
+void ibBackendLockException::VersionChangedThrow(const wxString& objectSynonym,
+                                                  const wxString& expected,
+                                                  const wxString& actual)
+{
+	const wxString msg = wxString::Format(
+		_("%s: data was changed by another user. Please reload (expected version %s, found %s)."),
+		objectSynonym, expected, actual);
+	throw ibBackendLockException(Kind::VersionChanged, msg);
+}
+
+void ibBackendLockException::RowLockTimeoutThrow(const wxString& objectSynonym)
+{
+	const wxString msg = wxString::Format(
+		_("%s is currently being edited by another user. Please try again."),
+		objectSynonym);
+	throw ibBackendLockException(Kind::RowLockTimeout, msg);
+}
+
+void ibBackendLockException::LockConflictThrow(const wxString& objectName,
+                                                const wxString& blockingUser)
+{
+	const wxString msg = blockingUser.IsEmpty()
+		? wxString::Format(
+			_("%s is locked by another session."), objectName)
+		: wxString::Format(
+			_("%s is locked by user %s."), objectName, blockingUser);
+	throw ibBackendLockException(Kind::LockConflict, msg, objectName, blockingUser);
+}
+
 #pragma endregion

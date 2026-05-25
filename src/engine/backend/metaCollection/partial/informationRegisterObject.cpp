@@ -26,6 +26,12 @@ bool ibValueRecordSetObjectInformationRegister::WriteRecordSet(bool replace, boo
 			{
 				scope.SafeBeginTransaction();
 
+				// Lock by key set — recorder for IR-Subordinate, or
+				// period+dimensions for non-recorder IR. Uniform path,
+				// FillArrayObjectByDimention picks the right keys.
+				// See docs/record-locks.md.
+				LockByKeys();
+
 				{
 					ibValue cancel = false;
 					ExecAsProc(wxT("BeforeWrite"), cancel);
@@ -81,6 +87,9 @@ bool ibValueRecordSetObjectInformationRegister::DeleteRecordSet()
 
 			{
 				scope.SafeBeginTransaction();
+
+				// Lock by key set before delete — same shape as Write.
+				LockByKeys();
 
 				{
 					ibValue cancel = false;

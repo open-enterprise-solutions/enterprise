@@ -19,6 +19,72 @@
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 
 #include "backend/system/systemManager.h"
+#include "backend/backend_exception.h"
+
+bool ibValueRecordSetObject::LockByKeys()
+{
+	if (m_metaObject == nullptr || m_keyValues.empty())
+		return true;
+
+	const auto db = ses_query;
+	const wxString tableName = m_metaObject->GetTableNameDB();
+	const wxString hint = db->RowLockHint();
+
+	int position = 1;
+	wxString queryText = wxT("SELECT 1 FROM ") + tableName;
+	bool firstWhere = true;
+
+	// Mirrors ExistData() — iterates the register's dimension key set
+	// (FillArrayObjectByDimention returns {recorder} for AR/AcR and
+	// IR-Subordinate, {period, dim1, dim2, ...} for non-recorder IR)
+	// filtered by FindKeyValue so partially-populated record sets only
+	// constrain on the keys actually bound.
+	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
+			continue;
+		queryText += (firstWhere ? wxT(" WHERE ") : wxT(" AND "))
+		           + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(object);
+		firstWhere = false;
+	}
+
+	// No key fields populated — nothing meaningful to scope the lock to.
+	// Skip silently; the caller's UPSERT path will catch any unique-key
+	// conflict via the DB constraint instead.
+	if (firstWhere)
+		return true;
+
+	if (!hint.IsEmpty())
+		queryText += wxT(" ") + hint;
+	queryText += wxT(";");
+
+	ibStatementGuard statement(db, db->PrepareStatement(queryText));
+	if (!statement)
+		ibBackendCoreException::Error(_("Failed to prepare register-lock query"));
+
+	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
+			continue;
+		ibValueMetaObjectAttributeBase::SetValueAttribute(
+			object,
+			m_keyValues.at(object->GetMetaID()),
+			statement.get(),
+			position
+		);
+	}
+
+	ibDatabaseResultSet* resultSet = statement->RunQueryWithResults();
+	if (resultSet == nullptr)
+		ibBackendCoreException::Error(_("Failed to acquire register lock"));
+	// Drain — we want the lock side effect, not the row data. For
+	// recorder-keyed registers this may iterate N existing lines
+	// (the FOR UPDATE locks all of them); for empty key buckets the
+	// loop exits immediately and we still hold the lock against
+	// concurrent INSERTs (gap-lock semantics per driver — see
+	// docs/record-locks.md).
+	while (resultSet->Next()) {}
+	db->CloseResultSet(resultSet);
+	return true;
+}
 
 bool ibValueRecordSetObject::ExistData()
 {

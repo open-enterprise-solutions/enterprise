@@ -26,6 +26,14 @@ bool ibValueRecordSetObjectAccumulationRegister::WriteRecordSet(bool replace, bo
 			{
 				scope.SafeBeginTransaction();
 
+				// Lock matching register rows by full key set (recorder
+				// for AccumulationRegister). Cascade case from
+				// Document.Write is re-entrant — already locked by
+				// upstream Document row-lock + this register query for
+				// the same recorder runs in the same TX, no extra
+				// contention. See docs/record-locks.md.
+				LockByKeys();
+
 				{
 					ibValue cancel = false;
 					ExecAsProc(wxT("BeforeWrite"), cancel);
@@ -81,6 +89,9 @@ bool ibValueRecordSetObjectAccumulationRegister::DeleteRecordSet()
 
 			{
 				scope.SafeBeginTransaction();
+
+				// Lock by key set before delete — same shape as Write.
+				LockByKeys();
 
 				{
 					ibValue cancel = false;

@@ -121,6 +121,7 @@ protected:
 			m_propertyAttributeParent->GetMetaObject(),
 			m_propertyAttributeIsFolder->GetMetaObject(),
 			m_propertyAttributeReference->GetMetaObject(),
+			m_propertyAttributeDataVersion->GetMetaObject(),
 			m_propertyAttributeDeletionMark->GetMetaObject(),
 		};
 		return true;

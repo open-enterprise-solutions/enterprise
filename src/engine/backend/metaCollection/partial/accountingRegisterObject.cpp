@@ -31,6 +31,10 @@ bool ibValueRecordSetObjectAccountingRegister::WriteRecordSet(bool replace, bool
 			{
 				scope.SafeBeginTransaction();
 
+				// Lock by key set (recorder for AccountingRegister).
+				// See docs/record-locks.md.
+				LockByKeys();
+
 				{
 					ibValue cancel = false;
 					ExecAsProc(wxT("BeforeWrite"), cancel);
@@ -86,6 +90,9 @@ bool ibValueRecordSetObjectAccountingRegister::DeleteRecordSet()
 
 			{
 				scope.SafeBeginTransaction();
+
+				// Lock by key set before delete — same shape as Write.
+				LockByKeys();
 
 				{
 					ibValue cancel = false;

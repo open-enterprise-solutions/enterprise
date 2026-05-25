@@ -70,6 +70,14 @@ public:
 	virtual bool TryProbeRowLock(const wxString& tableName,
 		const wxString& pkColumn, const wxString& pkValue) override;
 
+	// Write-time row-lock dialect (see docs/record-locks.md). MySQL/
+	// InnoDB locks via "SELECT ... FOR UPDATE"; "NOWAIT" is honoured on
+	// MySQL 8+. Older versions ignore the keyword and rely on the
+	// session-level `innodb_lock_wait_timeout=1` already plumbed via
+	// ibTxOptions::noWait — both paths fail fast under contention.
+	wxString RowLockHint() const override { return wxT("FOR UPDATE"); }
+	wxString NoWaitClause() const override { return wxT("NOWAIT"); }
+
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
 	virtual bool TableExists(const wxString& table);
 	virtual bool ViewExists(const wxString& view);

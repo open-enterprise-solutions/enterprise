@@ -419,6 +419,8 @@ ibSourceExplorer ibValueListDataObjectRef::GetSourceExplorer() const
 			srcHelper.AppendSource(object, true, false);
 		else if (m_metaObject->IsDataDeletionMark(object->GetMetaID()))
 			srcHelper.AppendSource(object, true, false);
+		else if (m_metaObject->IsDataVersion(object->GetMetaID()))
+			srcHelper.AppendSource(object, true, false);
 		else
 			srcHelper.AppendSource(object, true, true);
 	}
@@ -648,6 +650,8 @@ ibSourceExplorer ibValueModelTreeDataObjectFolderRef::GetSourceExplorer() const
 		else if (m_metaObject->IsDataDeletionMark(object->GetMetaID()))
 			srcHelper.AppendSource(object, true, false);
 		else if (m_metaObject->IsDataPredefinedName(object->GetMetaID()))
+			srcHelper.AppendSource(object, true, false);
+		else if (m_metaObject->IsDataVersion(object->GetMetaID()))
 			srcHelper.AppendSource(object, true, false);
 		else if (m_metaObject->IsDataParent(object->GetMetaID()))
 			srcHelper.AppendSource(object, true, false);

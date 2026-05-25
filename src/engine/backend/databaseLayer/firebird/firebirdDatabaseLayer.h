@@ -96,6 +96,13 @@ public:
 	                             const wxString& pkColumn,
 	                             const wxString& pkValue);
 
+	// Write-time row-lock dialect (see docs/record-locks.md). FB takes
+	// the pessimistic lock via "SELECT ... WITH LOCK"; the NOWAIT
+	// modifier is carried at TPB level (isc_tpb_nowait) — set via
+	// ibTxOptions::noWait — so the SQL-level clause stays empty.
+	wxString RowLockHint() const override { return wxT("WITH LOCK"); }
+	wxString NoWaitClause() const override { return wxEmptyString; }
+
 protected:
 
 	// query database

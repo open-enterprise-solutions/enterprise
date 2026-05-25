@@ -61,6 +61,16 @@ public:
 	virtual bool TryProbeRowLock(const wxString& tableName,
 		const wxString& pkColumn, const wxString& pkValue) override;
 
+	// Write-time row-lock dialect (see docs/record-locks.md). MSSQL
+	// behind ODBC takes the row lock via table hint
+	// "WITH (UPDLOCK, ROWLOCK)" placed after FROM <table>. Callers that
+	// build the SELECT need to place the hint inline (not at end of
+	// statement); a future helper on the layer can wrap that. NOWAIT
+	// is carried session-side via `SET LOCK_TIMEOUT 0` (ibTxOptions::
+	// noWait), so the SQL clause stays empty.
+	wxString RowLockHint() const override { return wxT("WITH (UPDLOCK, ROWLOCK)"); }
+	wxString NoWaitClause() const override { return wxEmptyString; }
+
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
 	virtual bool TableExists(const wxString& table);
 	virtual bool ViewExists(const wxString& view);

@@ -109,6 +109,7 @@ protected:
 			m_propertyAttributeDate->GetMetaObject(),
 			m_propertyAttributePosted->GetMetaObject(),
 			m_propertyAttributeReference->GetMetaObject(),
+			m_propertyAttributeDataVersion->GetMetaObject(),
 			m_propertyAttributeDeletionMark->GetMetaObject()
 		};
 

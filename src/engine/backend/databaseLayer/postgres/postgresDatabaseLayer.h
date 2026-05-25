@@ -71,6 +71,14 @@ public:
 	virtual bool TryProbeRowLock(const wxString& tableName,
 		const wxString& pkColumn, const wxString& pkValue) override;
 
+	// Write-time row-lock dialect (see docs/record-locks.md). PG locks
+	// rows via "SELECT ... FOR UPDATE"; appending "NOWAIT" raises
+	// SQLSTATE 55P03 (lock_not_available) instead of blocking. The
+	// Write path leaves NOWAIT off and waits at the driver's default
+	// lock_timeout; probe-style callers append it.
+	wxString RowLockHint() const override { return wxT("FOR UPDATE"); }
+	wxString NoWaitClause() const override { return wxT("NOWAIT"); }
+
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
 	virtual bool DatabaseExists(const wxString& table);
 	virtual bool TableExists(const wxString& table);

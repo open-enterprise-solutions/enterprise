@@ -856,6 +856,42 @@ window.OES.warn   = (m) => outputAppend(m, 'warn');
 window.OES.error  = (m) => outputAppend(m, 'error');
 window.OES.debug  = (m) => outputAppend(m, 'debug');
 
+// Surfaces a backend exception response (the JSON shape produced by
+// wfrontend.cpp::ExceptionToJson) to the user — dialog for "you need
+// to do something" cases (lock conflict, forbidden), toast for
+// "something went wrong" cases (script exception), silence for
+// interrupted (user pressed cancel — they already know). Returns
+// true when the payload was an error response (caller should skip
+// the success render path), false otherwise. See docs/record-locks.md.
+window.OES.handleBackendError = (j) => {
+  if (!j || typeof j !== 'object' || !j.error) return false;
+  const msg = j.message || '';
+  switch (j.error) {
+    case 'lock_conflict':
+      if (j.kind === 'version_changed') {
+        OES.alert(msg || 'Объект был изменён другим пользователем. Перечитайте.',
+                  'Конфликт версий');
+      } else {
+        // row_lock_timeout — short blocking conflict, not a state mismatch.
+        // Toast (not dialog) so user can retry without ceremony.
+        OES.error(msg || 'Объект сейчас редактируется другим пользователем. Попробуйте позже.');
+      }
+      break;
+    case 'forbidden':
+      OES.alert(msg || 'Недостаточно прав для выполнения операции.',
+                'Доступ запрещён');
+      break;
+    case 'interrupted':
+      // User pressed Cancel — silent. Server-side ibBackendInterruptException.
+      break;
+    case 'script_exception':
+    default:
+      OES.error(msg || 'Ошибка выполнения операции.');
+      break;
+  }
+  return true;
+};
+
 let inflight=0, loadingTimer=null, lastError=false;
 // Set by pollDebugStatus from /debug-status. dbgMode reflects wes
 // process-wide --debug; dbgPaused reflects this tab's session being
@@ -1629,6 +1665,7 @@ class Button extends BaseControl{
         if(r.ok){
           const tree=await r.json();
           if(tree&&!tree.error){ main.innerHTML=''; main.appendChild(render(tree)); }
+          else OES.handleBackendError(tree);
         }
       };
     }
@@ -1698,6 +1735,7 @@ class TextCtrl extends BaseControl{
         if(r.ok){
           const tree=await r.json();
           if(tree&&!tree.error){ main.innerHTML=''; main.appendChild(render(tree)); }
+          else OES.handleBackendError(tree);
         }
       };
       el.addEventListener('change',commit);
@@ -1820,6 +1858,7 @@ class Tool extends BaseControl{
             main.innerHTML='';
             if(Object.keys(tree).length>0) main.appendChild(render(tree));
           }
+          else OES.handleBackendError(tree);
           // Tool actions can close / open / switch forms (ActionClose,
           // custom scripts that call OpenForm). Refresh the tab strip
           // so the dying tab disappears immediately instead of waiting
@@ -1853,6 +1892,7 @@ class CheckBox extends BaseControl{
         if(r.ok){
           const tree=await r.json();
           if(tree&&!tree.error){ main.innerHTML=''; main.appendChild(render(tree)); }
+          else OES.handleBackendError(tree);
         }
       });
     }

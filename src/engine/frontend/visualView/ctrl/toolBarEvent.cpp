@@ -103,6 +103,18 @@ void ibValueToolbar::OnTool(wxCommandEvent& event)
 			(void)err;
 #endif
 		}
+		catch (const ibBackendLockException& err) {
+#ifndef OES_USE_WEB
+			// Same pattern as access-denied — version-conflict and
+			// row-lock-timeout both need user-visible "reload and retry"
+			// feedback. Web routes the same exception through wfrontend's
+			// ExceptionToJson → OES.handleBackendError toast/alert, so
+			// here we silent-swallow on web to avoid double-surfacing.
+			ibValueSystemFunction::Alert(err.GetErrorDescription());
+#else
+			(void)err;
+#endif
+		}
 		catch (const ibBackendException&) {
 		}
 	}
