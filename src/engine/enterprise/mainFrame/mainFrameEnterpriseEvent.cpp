@@ -9,6 +9,7 @@
 #include "win/dlg/enterpriseOption.h"
 
 #include "frontend/win/dlgs/activeUser.h"
+#include "frontend/win/dlgs/auditLog.h"
 #include "frontend/win/dlgs/about.h"
 
 void ibFrontendDocMDIFrameEnterprise::OnClickAllOperation(wxCommandEvent& event)
@@ -30,6 +31,14 @@ void ibFrontendDocMDIFrameEnterprise::OnToolsSettings(wxCommandEvent& event)
 void ibFrontendDocMDIFrameEnterprise::OnActiveUsers(wxCommandEvent& event)
 {
 	ibDialogActiveUser* dlg = new ibDialogActiveUser(this, wxID_ANY);
+	dlg->Show();
+
+	event.Skip();
+}
+
+void ibFrontendDocMDIFrameEnterprise::OnAuditLog(wxCommandEvent& event)
+{
+	ibDialogAuditLog* dlg = new ibDialogAuditLog(this, wxID_ANY);
 	dlg->Show();
 
 	event.Skip();

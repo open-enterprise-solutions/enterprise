@@ -51,6 +51,7 @@ enum {
 	wxID_APPLICATION_SETTING,
 	wxID_APPLICATION_USERS,
 	wxID_APPLICATION_ACTIVE_USERS,
+	wxID_APPLICATION_AUDIT_LOG,
 	wxID_APPLICATION_CONNECTION,
 };
 
@@ -137,6 +138,7 @@ protected:
 	void OnToolsSettings(wxCommandEvent& event);
 	void OnUsers(wxCommandEvent& event);
 	void OnActiveUsers(wxCommandEvent& event);
+	void OnAuditLog(wxCommandEvent& event);
 	void OnConnection(wxCommandEvent& event);
 
 	void OnAbout(wxCommandEvent& event);

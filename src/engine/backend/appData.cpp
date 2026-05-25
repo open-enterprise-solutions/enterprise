@@ -6,16 +6,19 @@
 #include "backend/appData.h"
 
 #include <thread>
+#include <algorithm>
 
 #include <wx/filename.h>
+#include <wx/stdpaths.h>
 
 #include "backend/utils/passwordHash.hpp"
 #include "backend/plugin/pluginManager.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
+#include "backend/logger/logger.h"
+#include "backend/logger/loggerSweep.h"
 
-#include <thread>
-#include <algorithm>
+
 #include "backend/moduleManager/moduleManager.h"
 
 //databases
@@ -34,11 +37,76 @@ std::shared_ptr<ibDatabaseLayer> ibApplicationData::GetDatabaseLayer()
 	return ibConnectionPool::GetDatabaseLayer();
 }
 
+wxString ibApplicationData::ResolveLogDir() const
+{
+	const wxString sep = wxFileName::GetPathSeparator();
+	if (m_dbMode == ibDatabaseMode::eFILE) {
+		// Lives next to sys.fdb — admins see logs alongside the base.
+		return m_strFile + sep + wxT("oeslog");
+	}
+	if (m_dbMode == ibDatabaseMode::eSERVER) {
+		// Per-user persistent location. %TEMP% would be wiped by
+		// Windows disk cleanup; %LOCALAPPDATA% survives reboots and
+		// "очистка временных файлов". Until compute-server arrives
+		// this is the only place a client's journal lives.
+		wxString tag = m_strDatabase;
+		if (tag.IsEmpty()) tag = m_strServer;
+		if (tag.IsEmpty()) tag = wxT("default");
+		// Sanitise — path separators in db names would break Mkdir.
+		tag.Replace(wxT("\\"), wxT("_"));
+		tag.Replace(wxT("/"),  wxT("_"));
+		tag.Replace(wxT(":"),  wxT("_"));
+		return wxStandardPaths::Get().GetUserLocalDataDir()
+		       + sep + wxT("OES") + sep + tag + sep + wxT("logs");
+	}
+	return wxEmptyString;
+}
+
+void ibApplicationData::CreateLogger()
+{
+	if (m_runMode == ibRunMode::eLAUNCHER_MODE) return;
+	const wxString dir = ResolveLogDir();
+	if (dir.IsEmpty()) return;
+	try {
+		m_logger = std::make_unique<ibLogger>(dir);
+	} catch (...) {
+		// Best-effort — logger init must not break appData bring-up.
+		m_logger.reset();
+	}
+	// Retention — kick off the daily-sweep thread. Default 90 days.
+	// StartDailySweep also runs RunOnce once immediately on entry, so
+	// .olg files older than the cutoff are removed before the first
+	// 24h tick. Thread is joined inside ~ibLogger.
+	if (m_logger) {
+		const int retentionDays = 90;
+		m_logger->StartDailySweep(retentionDays);
+	}
+}
+
 //sandbox
 #include "metadataConfiguration.h"
 
 // ibSessionSnapshot moved to backend/session/sessionSnapshot.{h,cpp}
 // — implementation lives next to ibSessionRegistry that produces it.
+
+namespace {
+
+// Short label for session.opened / session.closed audit rows. Mirrors
+// ibSessionKind values; kept local to appData.cpp because the only
+// consumer is the listener wiring below.
+wxString DescribeSessionKind(ibSessionKind k) {
+	switch (k) {
+	case ibSessionKind::Launcher:   return wxT("Launcher");
+	case ibSessionKind::Designer:   return wxT("Designer");
+	case ibSessionKind::Enterprise: return wxT("Enterprise");
+	case ibSessionKind::Service:    return wxT("Service");
+	case ibSessionKind::WebServer:  return wxT("WebServer");
+	case ibSessionKind::WebClient:  return wxT("WebClient");
+	}
+	return wxT("Unknown");
+}
+
+}   // namespace
 
 ///////////////////////////////////////////////////////////////////////////////
 //								ibApplicationData
@@ -145,6 +213,17 @@ void ibApplicationData::WireSessionEvents()
 	// for runtime-enabled modes.
 	registry->OnAuthenticated([this](ibSession* s) {
 		if (s == nullptr) return;
+		// session.opened goes through Audit BEFORE we bind so the row
+		// already has session_id resolved from the freshly-attached
+		// ibSession::Current() once BindSessionToThread runs below.
+		try {
+			if (ibLog) {
+				ibLog->Audit(wxT("session"), wxT("opened"),
+				             wxString::Format(wxT("kind=%s id=%s"),
+				                              DescribeSessionKind(s->GetKind()),
+				                              s->GetId()));
+			}
+		} catch (...) {}
 		ibSession::BindSessionToThread(s, std::this_thread::get_id());
 		auto* registry = m_sessionRegistry.get();
 		if (registry && registry->GetAccessMode() == ibSession::AccessMode::Shared
@@ -184,6 +263,18 @@ void ibApplicationData::WireSessionEvents()
 	// thread originally pinned them.
 	registry->OnDisconnect([this](ibSession* s) {
 		if (s == nullptr) return;
+		// Capture session.closed BEFORE UnbindSession + DestroyRoot —
+		// ibSession::Current() still resolves to `s` so the audit row
+		// carries the right session_id / user_name. After UnbindSession
+		// the user identity is gone.
+		try {
+			if (ibLog) {
+				ibLog->Audit(wxT("session"), wxT("closed"),
+				             wxString::Format(wxT("kind=%s id=%s"),
+				                              DescribeSessionKind(s->GetKind()),
+				                              s->GetId()));
+			}
+		} catch (...) {}
 		if (auto* mm = s->GetManagerModule())
 			mm->DetachRuntime(s);
 		s->DestroyRoot();
@@ -215,6 +306,14 @@ void ibApplicationData::WireSessionEvents()
 
 ibApplicationData::~ibApplicationData()
 {
+	// Logger first — drains pending audit rows (session close, etc.)
+	// while ibSession::Current() is still resolvable and the
+	// connection pool still owns live ibDatabaseLayers. The logger
+	// holds its OWN SQLite handle for .olg files, so it does not
+	// reach into the pool, but we still want to flush before any
+	// caller's last Audit call disappears with the registry.
+	if (m_logger) m_logger.reset();
+
 	// Stop is the kill-switch: it submits Remove@Urgent for every session
 	// still in m_own (technical wes session, stranded per-tab sessions),
 	// then drains the queue before joining the worker — so every
@@ -369,6 +468,11 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 			if (!SetLocaleAppDataEnv(strLocale))
 				return false;
 
+			// Audit + trace logger — built after pool + tables so the
+			// first Audit row (session.opened) can fire on the next
+			// Authenticate.
+			s_instance->CreateLogger();
+
 			return true;
 		}
 		return false;
@@ -426,6 +530,12 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 
 			ibApplicationData::MigrateTableSession();
 			ibApplicationData::MigrateTableBytecodeCache();
+
+			// Audit + trace logger. In server-mode the .olg directory
+			// lives under %LOCALAPPDATA% — every client of this PG/FB
+			// server keeps its own journal locally until compute-server
+			// arrives.
+			s_instance->CreateLogger();
 
 			return true;
 		}
@@ -773,11 +883,22 @@ bool ibApplicationData::AuthenticateUser(const wxString& strUserName,
 		return true;
 
 	outInfo = ibUserInfo::Read(strUserName);
-	if (!outInfo.IsOk())
+	if (!outInfo.IsOk()) {
+		try {
+			if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_failed"),
+			                        wxString::Format(wxT("user=%s reason=unknown"), strUserName));
+		} catch (...) {}
 		return false;
+	}
 
-	if (!ibPasswordHash::Verify(strUserPassword, outInfo.m_strUserPassword))
+	if (!ibPasswordHash::Verify(strUserPassword, outInfo.m_strUserPassword)) {
+		try {
+			if (ibLog) ibLog->Audit(wxT("auth"), wxT("login_failed"),
+			                        wxString::Format(wxT("user=%s reason=bad_password"), strUserName),
+			                        outInfo.m_strUserGuid, /*refMetaId=*/0);
+		} catch (...) {}
 		return false;
+	}
 
 	// Lazy upgrade: if we just verified a legacy MD5 hash or a PBKDF2 hash
 	// with a below-policy iteration count, re-store the password using the
@@ -787,6 +908,9 @@ bool ibApplicationData::AuthenticateUser(const wxString& strUserName,
 		try {
 			outInfo.m_strUserPassword = ibPasswordHash::Hash(strUserPassword);
 			(void)ibUserInfo::Save(outInfo);
+			if (ibLog) ibLog->Audit(wxT("auth"), wxT("password_rehash"),
+			                        wxString::Format(wxT("user=%s"), strUserName),
+			                        outInfo.m_strUserGuid, /*refMetaId=*/0);
 		} catch (...) {
 			// ignore — login already succeeded
 		}
@@ -820,8 +944,19 @@ bool ibApplicationData::Login(const wxString& strUserName,
 	// Open-access pass-through: verification succeeded but no real user
 	// was resolved (sys_user empty + caller supplied no creds). Caller
 	// treats this as "auth settled"; nothing to install.
-	if (outInfo.IsOk())
+	if (outInfo.IsOk()) {
 		InstallUser(outInfo, strUserPassword);
+		try {
+			if (ibLog) {
+				// ref_meta_id = 0 marks a system-table (sys_user) ref —
+				// viewer recognises 0 as "not a metadata object, drill via
+				// the User Admin form keyed by m_strUserGuid instead".
+				ibLog->Audit(wxT("auth"), wxT("login"),
+				             wxString::Format(wxT("user=%s"), strUserName),
+				             outInfo.m_strUserGuid, /*refMetaId=*/0);
+			}
+		} catch (...) {}
+	}
 
 	return true;
 }

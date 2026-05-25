@@ -18,10 +18,21 @@ constexpr unsigned int eBlockLang = 0x0234550;
 void ReadPasswordChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
 {
 	ibReaderMemory reader(buffer);
-	info.m_strUserGuid     = reader.r_stringZ();
-	info.m_strUserName     = reader.r_stringZ();
-	info.m_strUserFullName = reader.r_stringZ();
-	info.m_strUserPassword = reader.r_stringZ();
+	// Atomic-on-success: a malformed chunk (length header corrupt past
+	// field N) used to assign N-1 garbage strings into `info` before
+	// the throw — the partial state defeated FillFromRow's own
+	// chunk-level try/catch (info already had a non-empty password
+	// from chunk garbage, so Verify against the user-typed password
+	// failed even for users created without a password).  Read into
+	// locals first, commit only after all four reads succeed.
+	wxString g = reader.r_stringZ();
+	wxString n = reader.r_stringZ();
+	wxString f = reader.r_stringZ();
+	wxString p = reader.r_stringZ();
+	info.m_strUserGuid     = std::move(g);
+	info.m_strUserName     = std::move(n);
+	info.m_strUserFullName = std::move(f);
+	info.m_strUserPassword = std::move(p);
 }
 
 void ReadRoleChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
@@ -31,17 +42,32 @@ void ReadRoleChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
 	info.m_roleArray.reserve(count);
 	for (unsigned int idx = 0; idx < count; idx++) {
 		ibUserInfo::ibUserRole entry;
-		entry.m_strRoleGuid = reader.r_stringZ();
-		entry.m_miRoleId    = reader.r_s32();
-		info.m_roleArray.emplace_back(std::move(entry));
+		// Read defensively — a sys_user row written before a metadata
+		// version that removed the role's class will have stale guid /
+		// truncated payload. Catch reader exceptions per-entry so one
+		// bad role doesn't brick the whole sys_user Read (and therefore
+		// the login flow).  Subsequent loop turns try the next role;
+		// downstream code resolves roles from m_roleArray, so unknown
+		// guids just degrade to "no access" instead of throwing.
+		try {
+			entry.m_strRoleGuid = reader.r_stringZ();
+			entry.m_miRoleId    = reader.r_s32();
+			info.m_roleArray.emplace_back(std::move(entry));
+		} catch (...) {
+			// Buffer truncated or malformed past this point — stop
+			// reading roles; whatever was already collected stays.
+			break;
+		}
 	}
 }
 
 void ReadLanguageChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
 {
 	ibReaderMemory reader(buffer);
-	info.m_strLanguageGuid = reader.r_stringZ();
-	info.m_strLanguageCode = reader.r_stringZ();
+	wxString g = reader.r_stringZ();
+	wxString c = reader.r_stringZ();
+	info.m_strLanguageGuid = std::move(g);
+	info.m_strLanguageCode = std::move(c);
 }
 
 wxMemoryBuffer WritePasswordChunk(const ibUserInfo& info)
@@ -87,9 +113,13 @@ void FillFromRow(ibDatabaseResultSet* row, ibUserInfo& info)
 	ibReaderMemory reader(buffer);
 
 	wxMemoryBuffer chunk;
-	if (reader.r_chunk(eBlockPswd, chunk)) ReadPasswordChunk(chunk, info);
-	if (reader.r_chunk(eBlockRole, chunk)) ReadRoleChunk    (chunk, info);
-	if (reader.r_chunk(eBlockLang, chunk)) ReadLanguageChunk(chunk, info);
+	// Each chunk reader is wrapped so a malformed / version-mismatched
+	// section (e.g. role chunk for a metadata version that has moved on)
+	// doesn't bring down the whole sys_user Read — login still gets
+	// identity + password and the affected chunk's fields stay default.
+	try { if (reader.r_chunk(eBlockPswd, chunk)) ReadPasswordChunk(chunk, info); } catch (...) {}
+	try { if (reader.r_chunk(eBlockRole, chunk)) ReadRoleChunk    (chunk, info); } catch (...) {}
+	try { if (reader.r_chunk(eBlockLang, chunk)) ReadLanguageChunk(chunk, info); } catch (...) {}
 }
 
 } // namespace

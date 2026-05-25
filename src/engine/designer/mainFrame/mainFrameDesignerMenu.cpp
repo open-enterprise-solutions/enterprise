@@ -154,6 +154,8 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
 	menuItem = m_menuAdministration->Append(wxID_APPLICATION_ACTIVE_USERS, _("Active users"));
 	menuItem->Enable(activeMetaData->AccessRight_ActiveUsers());
+	menuItem = m_menuAdministration->Append(wxID_APPLICATION_AUDIT_LOG, _("Registration journal"));
+	menuItem->Enable(activeMetaData->AccessRight_ActiveUsers());
 	m_menuAdministration->AppendSeparator();
 	menuItem = m_menuAdministration->Append(wxID_DESIGNER_DATABASE_LOAD_FROM_FILE, _("Restore database"));
 	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
@@ -189,6 +191,7 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnToolsSettings, this, wxID_APPLICATION_SETTING);
 	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnUsers, this, wxID_APPLICATION_USERS);
 	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnActiveUsers, this, wxID_APPLICATION_ACTIVE_USERS);
+	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnAuditLog, this, wxID_APPLICATION_AUDIT_LOG);
 	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnConnection, this, wxID_APPLICATION_CONNECTION);
 
 	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnLoadDatabase, this, wxID_DESIGNER_DATABASE_LOAD_FROM_FILE);

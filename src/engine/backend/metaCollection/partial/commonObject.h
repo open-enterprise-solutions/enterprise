@@ -1488,8 +1488,8 @@ public:
 	// on ref-flavour leaves, no-op on Ext). valueForm->Modify uses the
 	// virtual IsModified() — Ref leaves return m_objModified, Ext keeps
 	// the default `false` from ibSourceDataObject.
-	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr) override;
-	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr) override;
+	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
+	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
 
 protected:
 	// Leaf-specific form-id enum value for the current object state.

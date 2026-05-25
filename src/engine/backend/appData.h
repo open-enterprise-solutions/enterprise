@@ -19,6 +19,10 @@
 
 #define db_query  (ibApplicationData::GetDatabaseLayer())
 
+// Audit + trace logger. One per process, lifetime managed by
+// ibApplicationData. Resolves to nullptr before Init / after Destroy.
+#define ibLog     (ibApplicationData::GetLogger())
+
 enum ibRunMode {
 	eLAUNCHER_MODE = 1,		// for create db, only backmode
 	eDESIGNER_MODE = 2,		// backmode + frontmode
@@ -405,10 +409,37 @@ private:
 	// is an extension of session-management infrastructure.
 	std::unique_ptr<class ibSessionRegistry> m_sessionRegistry;
 
+	// Audit + trace logger. Built after the DB + connection pool are
+	// live; torn down first in the dtor so the writer thread can drain
+	// while every other subsystem is still alive (and able to provide
+	// session_id / user_name via ibSession::Current()).
+	std::unique_ptr<class ibLogger> m_logger;
+
 public:
 	class ibSessionRegistry* GetSessionRegistry() const { return m_sessionRegistry.get(); }
 
+	// Audit + trace logger. Created during CreateFile/Server AppDataEnv
+	// once the DB is open + the connection pool is initialised; destroyed
+	// at the top of ~ibApplicationData before the registry stops, so
+	// teardown writes still find a live sink. Returns nullptr if logger
+	// initialisation failed (disk full, no write permission on log dir);
+	// callers must null-check.
+	static class ibLogger* GetLogger() {
+		return s_instance != nullptr ? s_instance->m_logger.get() : nullptr;
+	}
+
 private:
+
+	// Build the absolute path for the .olg directory:
+	//   - file-mode   → <m_strFile>/oeslog
+	//   - server-mode → <wxStandardPaths::GetUserLocalDataDir>/OES/<db>/logs
+	// Called from CreateFile/Server AppDataEnv after m_dbMode is set.
+	wxString ResolveLogDir() const;
+
+	// Stand up m_logger using ResolveLogDir(). No-op for LAUNCHER mode
+	// (no session / no audit surface). Failures are swallowed — the
+	// process must keep running even if the log dir is not writable.
+	void CreateLogger();
 
 	bool m_connected_to_db = false;
 	bool m_created_metadata = false;

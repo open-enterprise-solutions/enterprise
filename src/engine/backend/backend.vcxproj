@@ -22,6 +22,14 @@
     <ClInclude Include="actionInfo.h" />
     <ClInclude Include="appData.h" />
     <ClInclude Include="backend.h" />
+    <ClInclude Include="logger\logger.h" />
+    <ClInclude Include="logger\loggerEntry.h" />
+    <ClInclude Include="logger\loggerQueue.h" />
+    <ClInclude Include="logger\loggerReader.h" />
+    <ClInclude Include="logger\loggerSink.h" />
+    <ClInclude Include="logger\loggerSinkSqlite.h" />
+    <ClInclude Include="logger\loggerSweep.h" />
+    <ClInclude Include="logger\loggerWriter.h" />
     <ClInclude Include="backend_spreadsheet.h" />
     <ClInclude Include="backend_exception.h" />
     <ClInclude Include="session\designerExclusivePolicy.h" />
@@ -289,6 +297,12 @@
   <ItemGroup>
     <ClCompile Include="appData.cpp" />
     <ClCompile Include="appDataQuery.cpp" />
+    <ClCompile Include="logger\logger.cpp" />
+    <ClCompile Include="logger\loggerQueue.cpp" />
+    <ClCompile Include="logger\loggerReader.cpp" />
+    <ClCompile Include="logger\loggerSinkSqlite.cpp" />
+    <ClCompile Include="logger\loggerSweep.cpp" />
+    <ClCompile Include="logger\loggerWriter.cpp" />
     <ClCompile Include="userInfo.cpp" />
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="backend_spreadsheet.cpp" />

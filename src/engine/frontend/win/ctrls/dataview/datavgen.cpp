@@ -3950,7 +3950,12 @@ void ibDataViewCtrl::Init()
 	m_editorRenderer = NULL;
 	m_selectionMode = ibDataViewSelectionMode::ibDataViewSelectRow;
 
-	m_viewMode = ibDataViewViewMode::ibDataViewTree;
+	// Default view mode = flat List.  Tree mode requires per-row
+	// IsContainer guards (BuildTreeHelper) that bail on a flat
+	// list's invalid root item, leaving the control empty even when
+	// the model has rows.  Callers that need tree semantics flip via
+	// SetViewMode after construction.
+	m_viewMode = ibDataViewViewMode::ibDataViewList;
 
 	m_lastOnSame = false;
 	m_renameTimer = new ibDataViewRenameTimer(this);

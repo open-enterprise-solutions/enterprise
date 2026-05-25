@@ -476,6 +476,14 @@ void ibFrontendDocMDIFrameDesigner::OnActiveUsers(wxCommandEvent& event)
 	dlg->Show();
 }
 
+#include "frontend/win/dlgs/auditLog.h"
+
+void ibFrontendDocMDIFrameDesigner::OnAuditLog(wxCommandEvent& event)
+{
+	ibWindowPtr<ibDialogAuditLog> dlg(new ibDialogAuditLog(this, wxID_ANY));
+	dlg->Show();
+}
+
 #include "frontend/win/dlgs/connectionDB.h"
 
 void ibFrontendDocMDIFrameDesigner::OnConnection(wxCommandEvent& event)

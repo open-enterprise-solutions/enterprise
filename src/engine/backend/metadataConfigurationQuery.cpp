@@ -5,6 +5,7 @@
 
 #include "backend/utils/md5.hpp"
 #include "backend/appData.h"
+#include "backend/logger/logger.h"
 #include "backend/backend_exception.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -301,6 +302,18 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 	struct AutoRelease {
 		~AutoRelease() { ibRestructureInfo::ReleaseAutoExclusive(); }
 	} autoRelease;
+
+	// DDL apply audit. saveConfigFlag = full apply (DDL + seed); without
+	// it the call is a metadata-only save (no schema change). Two events
+	// distinguish admin-relevant DDL from background metadata-only writes.
+	if (ibLog && ibLog->IsEnabled(ibLogLevel::Audit)) {
+		const bool fullApply = (flags & saveConfigFlag) != 0;
+		const wxString evt = roolback
+			? wxT("apply_failed")
+			: (fullApply ? wxT("applied") : wxT("saved"));
+		ibLog->Audit(wxT("metadata"), evt,
+		             wxString::Format(wxT("flags=0x%X"), flags));
+	}
 
 	if (roolback) {
 

@@ -30,6 +30,30 @@
     </ClInclude>
     <ClInclude Include="appData.h" />
     <ClInclude Include="uniqueKey.h" />
+    <ClInclude Include="logger\logger.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerEntry.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerQueue.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerReader.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerSink.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerSinkSqlite.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerSweep.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="logger\loggerWriter.h">
+      <Filter>logger</Filter>
+    </ClInclude>
     <ClInclude Include="srcExplorer.h" />
     <ClInclude Include="databaseLayer\databaseErrorCodes.h">
       <Filter>databaseLayer</Filter>
@@ -756,6 +780,24 @@
     </ClCompile>
     <ClCompile Include="appData.cpp" />
     <ClCompile Include="uniqueKey.cpp" />
+    <ClCompile Include="logger\logger.cpp">
+      <Filter>logger</Filter>
+    </ClCompile>
+    <ClCompile Include="logger\loggerQueue.cpp">
+      <Filter>logger</Filter>
+    </ClCompile>
+    <ClCompile Include="logger\loggerReader.cpp">
+      <Filter>logger</Filter>
+    </ClCompile>
+    <ClCompile Include="logger\loggerSinkSqlite.cpp">
+      <Filter>logger</Filter>
+    </ClCompile>
+    <ClCompile Include="logger\loggerSweep.cpp">
+      <Filter>logger</Filter>
+    </ClCompile>
+    <ClCompile Include="logger\loggerWriter.cpp">
+      <Filter>logger</Filter>
+    </ClCompile>
     <ClCompile Include="databaseLayer\connectionPool.cpp">
       <Filter>databaseLayer</Filter>
     </ClCompile>
@@ -1708,6 +1750,9 @@
     </Filter>
     <Filter Include="utils">
       <UniqueIdentifier>{bc892a4b-bcaa-4561-8a79-069a784639b3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="logger">
+      <UniqueIdentifier>{7c4a5d12-9b3e-4f88-a2e1-3d6c4f1a5b27}</UniqueIdentifier>
     </Filter>
     <Filter Include="databaseLayer\firebird">
       <UniqueIdentifier>{30f3747a-6465-49ff-8cf7-9d11d34be44e}</UniqueIdentifier>
