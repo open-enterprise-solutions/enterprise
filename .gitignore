@@ -262,3 +262,10 @@ build/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+# Local working dirs
+.cache/
+.oes/
+tests/gui/
+tools/rag/
+var/
+web/
