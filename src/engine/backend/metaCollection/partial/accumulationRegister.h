@@ -1,4 +1,4 @@
-﻿#ifndef __ACCUMULATION_REGISTER_H__
+#ifndef __ACCUMULATION_REGISTER_H__
 #define __ACCUMULATION_REGISTER_H__
 
 #include "commonObject.h"
@@ -127,31 +127,22 @@ public:
 
 protected:
 
-	//get default attributes
-	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-
-		if (GetRegisterType() == ibRegisterType::eBalances) {
-			array = {
-				m_propertyAttributeLineActive->GetMetaObject(),
-				m_propertyAttributePeriod->GetMetaObject(),
-				m_propertyAttributibRecordType->GetMetaObject(),
-				m_propertyAttributeRecorder->GetMetaObject(),
-				m_propertyAttributeLineNumber->GetMetaObject()
-			};
-		}
-		else {
-			array = { m_propertyAttributeLineActive->GetMetaObject(),
-				m_propertyAttributePeriod->GetMetaObject(),
-				m_propertyAttributeRecorder->GetMetaObject(),
-				m_propertyAttributeLineNumber->GetMetaObject()
-			};
-		}
-
+	// Additive contract — RegisterData base is empty. AccumulationRegister
+	// appends its line attributes; Balances mode adds the RecordType
+	// (Debit / Credit) flag, Turnovers mode omits it.
+	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
+		ibValueMetaObjectRegisterData::FillArrayObjectByPredefinedAttribute(array);
+		array.push_back(m_propertyAttributeLineActive->GetMetaObject());
+		array.push_back(m_propertyAttributePeriod->GetMetaObject());
+		if (GetRegisterType() == ibRegisterType::eBalances)
+			array.push_back(m_propertyAttributibRecordType->GetMetaObject());
+		array.push_back(m_propertyAttributeRecorder->GetMetaObject());
+		array.push_back(m_propertyAttributeLineNumber->GetMetaObject());
 		return true;
 	}
 
 	//get dimension keys 
-	virtual bool FillArrayObjectByDimention(
+	virtual bool FillArrayObjectByDimension(
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		array = { m_propertyAttributeRecorder->GetMetaObject() };
 		return true;
@@ -217,8 +208,8 @@ public:
 	{
 	}
 
-	virtual bool WriteRecordSet(bool replace = true, bool clearTable = true);
-	virtual bool DeleteRecordSet();
+	// WriteRecordSet / DeleteRecordSet inherited from
+	// ibValueRecordSetObject (Phase B template-method).
 
 	//////////////////////////////////////////////////////////////////////////////
 

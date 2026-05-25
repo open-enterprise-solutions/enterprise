@@ -1,4 +1,4 @@
-﻿#ifndef __DATA_PROCESSOR_H__
+#ifndef __DATA_PROCESSOR_H__
 #define __DATA_PROCESSOR_H__
 
 #include "commonObject.h"
@@ -41,27 +41,27 @@ public:
 	virtual wxIcon GetIcon() const;
 	static wxIcon GetIconGroup();
 
-	//events: 
+	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
 	virtual bool OnLoadMetaObject(ibMetaData* metaData);
 	virtual bool OnSaveMetaObject(int flags);
 	virtual bool OnDeleteMetaObject();
 
-	//for designer 
+	//for designer
 	virtual bool OnReloadMetaObject();
 
-	//module manager is started or exit 
+	//module manager is started or exit
 	virtual bool OnBeforeRunMetaObject(int flags);
 	virtual bool OnAfterRunMetaObject(int flags);
 
 	virtual bool OnBeforeCloseMetaObject();
 	virtual bool OnAfterCloseMetaObject();
 
-	//form events 
+	//form events
 	virtual void OnCreateFormObject(ibValueMetaObjectFormBase* metaForm);
 	virtual void OnRemoveMetaForm(ibValueMetaObjectFormBase* metaForm);
 
-	//create associate value 
+	//create associate value
 	virtual ibValueMetaObjectFormBase* GetDefaultFormByID(const ibFormID& id) const;
 
 #pragma region _form_builder_h_
@@ -88,7 +88,7 @@ protected:
 	//create object data with meta form
 	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
 
-	//load & save metaData from DB 
+	//load & save metaData from DB
 	virtual bool LoadData(ibReaderMemory& reader);
 	virtual bool SaveData(ibWriterMemory& writer);
 
@@ -140,11 +140,14 @@ class ibValueRecordDataObjectDataProcessor : public ibValueRecordDataObjectExt {
 	ibValueRecordDataObjectDataProcessor(const ibValueRecordDataObjectDataProcessor& source);
 public:
 
-#pragma region _form_builder_h_
-	//support show 
-	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
-	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
-#pragma endregion
+	// ShowFormValue / GetFormValue inherited from base. DataProcessor
+	// has a single form-id (eFormDataProcessor) and no CloseOnOwnerClose
+	// behaviour (Ext branch keeps the default OnFormCreated no-op).
+protected:
+	virtual ibFormID GetCurrentObjectFormID() const override {
+		return ibValueMetaObjectDataProcessor::eFormDataProcessor;
+	}
+public:
 
 	//support actionData
 	virtual ibActionCollection GetActionCollection(const ibFormID& formType);

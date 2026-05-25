@@ -1,4 +1,4 @@
-﻿#ifndef __INFORMATION_REGISTER_H__
+#ifndef __INFORMATION_REGISTER_H__
 #define __INFORMATION_REGISTER_H__
 
 #include "commonObject.h"
@@ -107,12 +107,16 @@ public:
 
 protected:
 
-	//get default attributes
-	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
+	// Additive contract — IR's predefined attribute set depends on
+	// WriteRegisterMode + Periodicity (some IR variants are just (key,
+	// value) maps with no period/recorder). Base RegisterData is empty,
+	// so the chain call is a no-op; kept for consistency with the
+	// additive convention.
+	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
+		ibValueMetaObjectRegisterData::FillArrayObjectByPredefinedAttribute(array);
 
-		if (GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder) {
+		if (GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder)
 			array.emplace_back(m_propertyAttributeLineActive->GetMetaObject());
-		}
 
 		if (GetPeriodicity() != ibPeriodicity::eNonPeriodic ||
 			GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder) {
@@ -128,7 +132,7 @@ protected:
 	}
 
 	//get dimension keys 
-	virtual bool FillArrayObjectByDimention(
+	virtual bool FillArrayObjectByDimension(
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 
 		if (GetWriteRegisterMode() != ibWriteRegisterMode::eSubordinateRecorder) {
@@ -242,8 +246,8 @@ public:
 		return new ibValueRecordSetObjectInformationRegister(*this);
 	}
 
-	virtual bool WriteRecordSet(bool replace = true, bool clearTable = true);
-	virtual bool DeleteRecordSet();
+	// WriteRecordSet / DeleteRecordSet inherited from
+	// ibValueRecordSetObject (Phase B template-method).
 
 	//****************************************************************************
 	//*                              Support methods                             *

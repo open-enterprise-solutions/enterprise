@@ -399,7 +399,7 @@ ibValueListRegisterObject::Fetch(const ibFetchRequest<ibUniqueKeyPair>& req) con
 	const std::vector<ibValueMetaObjectAttributeBase*>& vecAttr =
 		m_metaObject->GetGenericAttributeArrayObject();
 	const std::vector<ibValueMetaObjectAttributeBase*>& vecDim =
-		m_metaObject->GetGenericDimentionArrayObject();
+		m_metaObject->GetGenericDimensionArrayObject();
 
 	ibDatabaseResultSet* rs = statement->RunQueryWithResults();
 	if (rs != nullptr) {

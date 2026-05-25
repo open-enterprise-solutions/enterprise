@@ -371,7 +371,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 		ExecAsProc(wxT("BeforeWrite"), cancel);
 		if (cancel.GetBoolean()) {
 			rollback();
-			ibBackendCoreException::Error(_("failed to write object in db!"));
+			ibBackendCoreException::Error(_("Failed to write object in db!"));
 			return false;
 		}
 	}

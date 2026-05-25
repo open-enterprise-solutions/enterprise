@@ -1,4 +1,4 @@
-﻿#ifndef __REPORT_H__
+#ifndef __REPORT_H__
 #define __REPORT_H__
 
 #include "commonObject.h"
@@ -40,27 +40,27 @@ public:
 	virtual wxIcon GetIcon() const;
 	static wxIcon GetIconGroup();
 
-	//events: 
+	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
 	virtual bool OnLoadMetaObject(ibMetaData* metaData);
 	virtual bool OnSaveMetaObject(int flags);
 	virtual bool OnDeleteMetaObject();
 
-	//for designer 
+	//for designer
 	virtual bool OnReloadMetaObject();
 
-	//module manager is started or exit 
+	//module manager is started or exit
 	virtual bool OnBeforeRunMetaObject(int flags);
 	virtual bool OnAfterRunMetaObject(int flags);
 
 	virtual bool OnBeforeCloseMetaObject();
 	virtual bool OnAfterCloseMetaObject();
 
-	//form events 
+	//form events
 	virtual void OnCreateFormObject(ibValueMetaObjectFormBase* metaForm);
 	virtual void OnRemoveMetaForm(ibValueMetaObjectFormBase* metaForm);
 
-	//create associate value 
+	//create associate value
 	virtual ibValueMetaObjectFormBase* GetDefaultFormByID(const ibFormID& id) const;
 
 #pragma region _form_builder_h_
@@ -76,7 +76,7 @@ public:
 	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
 	virtual void ProcessCommand(unsigned int id);
 
-	//get command section 
+	//get command section
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Report; }
 
 protected:
@@ -90,7 +90,7 @@ protected:
 	//create object data with meta form
 	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
 
-	//load & save metaData from DB 
+	//load & save metaData from DB
 	virtual bool LoadData(ibReaderMemory& reader);
 	virtual bool SaveData(ibWriterMemory& writer);
 
@@ -143,11 +143,13 @@ class ibValueRecordDataObjectReport : public ibValueRecordDataObjectExt {
 	ibValueRecordDataObjectReport(const ibValueMetaObjectReport* metaObject);
 public:
 
-#pragma region _form_builder_h_
-	//support show 
-	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
-	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
-#pragma endregion
+	// ShowFormValue / GetFormValue inherited from base. Report has a
+	// single form-id.
+protected:
+	virtual ibFormID GetCurrentObjectFormID() const override {
+		return ibValueMetaObjectReport::eFormReport;
+	}
+public:
 
 	//support actionData
 	virtual ibActionCollection GetActionCollection(const ibFormID& formType);

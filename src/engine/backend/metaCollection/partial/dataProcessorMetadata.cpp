@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : dataProcessor - metaData
 ////////////////////////////////////////////////////////////////////////////
@@ -95,7 +95,7 @@ bool ibValueMetaObjectDataProcessor::LoadData(ibReaderMemory& dataReader)
 	(*m_propertyObjectModule)->LoadMeta(dataReader);
 	(*m_propertyManagerModule)->LoadMeta(dataReader);
 
-	//Load default form 
+	//Load default form
 	m_propertyDefFormObject->SetValue(GetIdByGuid(dataReader.r_stringZ()));
 
 	return ibValueMetaObjectRecordDataExt::LoadData(dataReader);
@@ -107,7 +107,7 @@ bool ibValueMetaObjectDataProcessor::SaveData(ibWriterMemory& dataWritter)
 	(*m_propertyObjectModule)->SaveMeta(dataWritter);
 	(*m_propertyManagerModule)->SaveMeta(dataWritter);
 
-	//Save default form 
+	//Save default form
 	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()));
 
 	return ibValueMetaObjectRecordDataExt::SaveData(dataWritter);

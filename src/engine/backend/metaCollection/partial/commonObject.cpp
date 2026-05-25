@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : common classes for catalogs, docs etc..  
 ////////////////////////////////////////////////////////////////////////////
@@ -460,6 +460,21 @@ bool ibValueMetaObjectRecordDataEnumRef::OnAfterCloseMetaObject()
 
 ibValueMetaObjectRecordDataMutableRef::ibValueMetaObjectRecordDataMutableRef() : ibValueMetaObjectRecordDataRef()
 {
+	// Default script-hook procedure signatures common across all
+	// mutable-ref kinds (Catalog / Document / ChartOfAccounts /
+	// ChartOfCharacteristicTypes). Each leaf metaobject ctor only
+	// has to register its variation (Document overrides BeforeWrite
+	// with extra writeMode/postingMode args; Catalog/ChartOf*/Chart
+	// OfChar* add SetNewCode; Document adds SetNewNumber / Posting /
+	// UndoPosting). SetDefaultProcedure semantics is insert_or_assign,
+	// so the leaf's later registration cleanly overwrites the default
+	// when the shape differs.
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"),  ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"),      ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"),     ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Filling"),      ibContentHelper::eProcedureHelper, { wxT("Source"), wxT("StandartProcessing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnCopy"),       ibContentHelper::eProcedureHelper, { wxT("Source") });
 }
 
 ibValueMetaObjectRecordDataMutableRef::~ibValueMetaObjectRecordDataMutableRef()
@@ -1431,6 +1446,50 @@ ibBackendValueForm* ibValueRecordDataObject::GetForm() const
 	return ibBackendValueForm::FindFormByUniqueKey(m_objGuid);
 }
 
+//----------------------------------------------------------------------
+// Universal form-open trampolines (ShowFormValue / GetFormValue).
+// Promoted from the per-leaf duplicates in HierarchyRef, Document,
+// DataProcessor and Report. Per-leaf variation collapses to two
+// virtual hooks (GetCurrentObjectFormID + OnFormCreated). See header.
+//----------------------------------------------------------------------
+
+void ibValueRecordDataObject::ShowFormValue(const wxString& strFormName, ibBackendControlFrame* ownerControl)
+{
+	ibBackendValueForm* const foundedForm = GetForm();
+	if (foundedForm && foundedForm->IsShown()) {
+		foundedForm->ActivateForm();
+		return;
+	}
+
+	ibBackendValueForm* const valueForm = GetFormValue(strFormName, ownerControl);
+	if (valueForm != nullptr) {
+		valueForm->Modify(IsModified());
+		valueForm->ShowForm();
+	}
+}
+
+ibBackendValueForm* ibValueRecordDataObject::GetFormValue(const wxString& strFormName, ibBackendControlFrame* ownerControl)
+{
+	ibBackendValueForm* const foundedForm = GetForm();
+	if (foundedForm != nullptr)
+		return foundedForm;
+
+	ibBackendValueForm* createdForm = GetMetaObject()->CreateAndBuildForm(
+		strFormName,
+		GetCurrentObjectFormID(),
+		ownerControl,
+		this,
+		m_objGuid
+	);
+	// Ref-flavour leaves used to set CloseOnOwnerClose(false) per-leaf;
+	// Ext (DataProcessor / Report) didn't. The flag is harmless when
+	// the form has no owner-close interplay — set unconditionally to
+	// keep the universal path simple.
+	if (createdForm != nullptr)
+		createdForm->CloseOnOwnerClose(false);
+	return createdForm;
+}
+
 ibClassID ibValueRecordDataObject::GetClassType() const
 {
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
@@ -2112,10 +2171,14 @@ ibValueReferenceDataObject* ibValueRecordDataObjectRef::GetReference() const
 }
 
 //***********************************************************************
-//*                        ibValueRecordDataObjectHierarchyRef					*           
+//*                        ibValueRecordDataObjectHierarchyRef					*
 //***********************************************************************
 
 wxIMPLEMENT_ABSTRACT_CLASS(ibValueRecordDataObjectHierarchyRef, ibValueRecordDataObjectRef);
+// Symmetric placeholder for the Document-flavour axis — see
+// commonObject.h for the rationale. Empty body; reflection registry
+// needs the wxIMPLEMENT so RTTI works the same as the Hierarchy side.
+wxIMPLEMENT_ABSTRACT_CLASS(ibValueRecordDataObjectRecorderRef, ibValueRecordDataObjectRef);
 
 ibValueRecordDataObjectHierarchyRef::ibValueRecordDataObjectHierarchyRef(const ibValueMetaObjectRecordDataHierarchyMutableRef* metaObject, const ibGuid& objGuid, ibObjectMode objMode)
 	: ibValueRecordDataObjectRef(metaObject, objGuid), m_objMode(objMode)
@@ -2325,8 +2388,455 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject(const ibValueRecord
 	m_objModified = true;
 }
 
+
+//----------------------------------------------------------------------
+// Phase B — template-method Write/Delete on
+// ibValueRecordDataObjectHierarchyRef. The 3 hierarchy-mutable-ref
+// leaves (Catalog / ChartOfAccounts / ChartOfCharacteristicTypes)
+// share byte-identical pipelines mod class-name qualification on
+// IsNewObject / GenerateUniqueIdentifier / ResetUniqueIdentifier;
+// virtual dispatch lets the same body serve all three.
+//----------------------------------------------------------------------
+
+bool ibValueRecordDataObjectHierarchyRef::WriteObject()
+{
+	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
+	if (!BeginWriteScope(scope)) return true;
+
+	ibBackendValueForm* const valueForm = GetForm();
+	const bool newObject = IsNewObject();
+
+	{
+		ibValue cancel = false;
+		ExecAsProc(wxT("BeforeWrite"), cancel);
+		if (cancel.GetBoolean()) {
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			return false;
+		}
+	}
+
+	bool generateUniqueIdentifier = false;
+	if (!IsSetUniqueIdentifier()) {
+		ibValue prefix = "", standartProcessing = true;
+		ExecAsProc(wxT("SetNewCode"), prefix, standartProcessing);
+		if (standartProcessing.GetBoolean())
+			generateUniqueIdentifier = GenerateUniqueIdentifier(prefix.GetString());
+	}
+
+	if (!SaveData()) {
+		if (generateUniqueIdentifier) ResetUniqueIdentifier();
+		scope.SafeRollBackTransaction();
+		ibBackendCoreException::Error(_("Failed to write object in db!"));
+		return false;
+	}
+
+	{
+		ibValue cancel = false;
+		ExecAsProc(wxT("OnWrite"), cancel);
+		if (cancel.GetBoolean()) {
+			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			return false;
+		}
+	}
+
+	CommitWriteScope(scope, valueForm, newObject);
+	return true;
+}
+
+bool ibValueRecordDataObjectHierarchyRef::DeleteObject()
+{
+	// Predefined-guard fires before the scope — pure policy check that
+	// doesn't need a TX. DesignerMode is checked first so the predefined
+	// lookup itself doesn't run during metadata editing.
+	if (!appData->DesignerMode()) {
+		const ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObject = GetMetaObject();
+		wxASSERT(valueMetaObject);
+		const ibGuid& objGuid = GetGuid();
+		if (valueMetaObject->FindPredefinedValue(objGuid) != nullptr) {
+			ibBackendCoreException::Error(_("Attempting to delete a predefined element!"));
+			return false;
+		}
+	}
+
+	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
+	if (!BeginDeleteScope(scope)) return true;
+
+	ibBackendValueForm* const valueForm = GetForm();
+
+	{
+		ibValue cancel = false;
+		ExecAsProc(wxT("BeforeDelete"), cancel);
+		if (cancel.GetBoolean()) {
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to delete object in db!"));
+			return false;
+		}
+	}
+
+	if (!DeleteData()) {
+		scope.SafeRollBackTransaction();
+		ibBackendCoreException::Error(_("Failed to delete object in db!"));
+		return false;
+	}
+
+	{
+		ibValue cancel = false;
+		ExecAsProc(wxT("OnDelete"), cancel);
+		if (cancel.GetBoolean()) {
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to delete object in db!"));
+			return false;
+		}
+	}
+
+	CommitDeleteScope(scope, valueForm);
+	return true;
+}
+
+
+//*********************************************************************************************
+//*           ibValueRecordDataObjectRecorderRef::ibRecorderRegister	                      *
+//*********************************************************************************************
+// Per-recorder register holder. Iterates the leaf metaobject's
+// RecordDescription, creates one ibValueRecordSetObject per declared
+// register seeded with this recorder's reference, fans Write/Delete
+// across all of them. Promoted from being nested in Document with the
+// Phase B-Recorder split. Leaf-metaobject access stays generic via
+// the GetRecordDescription virtual hook on RecorderRef.
+
+wxIMPLEMENT_DYNAMIC_CLASS(ibValueRecordDataObjectRecorderRef::ibRecorderRegister, ibValue);
+
+void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::CreateRecordSet()
+{
+	const ibMetaDescription* metaDesc = m_recorder->GetRecordDescription();
+	if (metaDesc == nullptr) return;   // recorder without static description — no cascade
+	const ibMetaData* metaData = m_recorder->GetMetaObject()->GetMetaData();
+	wxASSERT(metaData);
+
+	ibRecorderRegister::ClearRecordSet();
+
+	for (unsigned int idx = 0; idx < metaDesc->GetTypeCount(); idx++) {
+		ibValueMetaObjectRegisterData* metaObject = metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(metaDesc->GetByIdx(idx));
+		if (metaObject == nullptr || !metaObject->IsAllowed())
+			continue;
+		ibValueMetaObjectAttributePredefined* registerRecord = metaObject->GetRegisterRecorder();
+		wxASSERT(registerRecord);
+		ibValuePtr<ibValueRecordSetObject> recordSet(metaObject->CreateRecordSetObjectValue());
+		recordSet->SetKeyValue(registerRecord->GetMetaID(), m_recorder->GetReference());
+		m_records.insert_or_assign(metaObject->GetMetaID(), recordSet);
+	}
+
+	PrepareNames();
+}
+
+bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::WriteRecordSet()
+{
+	for (auto& pair : m_records) {
+		ibValueRecordSetObject* record = pair.second;
+		wxASSERT(record);
+		try {
+			if (!record->WriteRecordSet())
+				return false;
+		}
+		catch (...) { return false; }
+	}
+	return true;
+}
+
+bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::DeleteRecordSet()
+{
+	for (auto& pair : m_records) {
+		ibValueRecordSetObject* record = pair.second;
+		wxASSERT(record);
+		try {
+			if (!record->DeleteRecordSet())
+				return false;
+		}
+		catch (...) { return false; }
+	}
+	return true;
+}
+
+void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::ClearRecordSet()
+{
+	m_records.clear();
+}
+
+void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::RefreshRecordSet()
+{
+	for (auto& pair : m_records) {
+		ibValueRecordSetObject* record = pair.second;
+		wxASSERT(record);
+		const ibValueMetaObjectRegisterData* object = record->GetMetaObject();
+		wxASSERT(object);
+		ibBackendValueForm* backendFrame = ibBackendValueForm::FindFormBySourceUniqueKey(object->GetGuid());
+		if (backendFrame != nullptr) backendFrame->UpdateForm();
+	}
+}
+
+ibValueRecordDataObjectRecorderRef::ibRecorderRegister::ibRecorderRegister(ibValueRecordDataObjectRecorderRef* recorder) :
+	ibValue(ibValueTypes::TYPE_VALUE), m_recorder(recorder), m_methodHelper(new ibValueMethodHelper())
+{
+	ibRecorderRegister::CreateRecordSet();
+}
+
+ibValueRecordDataObjectRecorderRef::ibRecorderRegister::~ibRecorderRegister()
+{
+	ibRecorderRegister::ClearRecordSet();
+	wxDELETE(m_methodHelper);
+}
+
+namespace { enum { enWriteRegister = 0 }; }
+
+void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::PrepareNames() const
+{
+	m_methodHelper->ClearHelper();
+	m_methodHelper->AppendFunc(wxT("Write"), wxT("Write()"));
+	for (auto& pair : m_records) {
+		ibValueRecordSetObject* record = pair.second;
+		wxASSERT(record);
+		const ibValueMetaObjectRegisterData* metaObject = record->GetMetaObject();
+		wxASSERT(metaObject);
+		m_methodHelper->AppendProp(metaObject->GetName(), true, false, pair.first);
+	}
+}
+
+bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::SetPropVal(const long /*lPropNum*/, const ibValue& /*varPropVal*/)
+{
+	return false;
+}
+
+bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+{
+	auto it = m_records.find(m_methodHelper->GetPropData(lPropNum));
+	if (it != m_records.end()) {
+		pvarPropVal = it->second;
+		return true;
+	}
+	return false;
+}
+
+bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::CallAsFunc(const long lMethodNum, ibValue& /*pvarRetValue*/, ibValue** /*paParams*/, const long /*lSizeArray*/)
+{
+	switch (lMethodNum) {
+	case enWriteRegister:
+		WriteRecordSet();
+		return true;
+	}
+	return false;
+}
+
+//*********************************************************************************************
+//*               ibValueRecordDataObjectRecorderRef — ctors + scaffold                       *
+//*********************************************************************************************
+
+ibValueRecordDataObjectRecorderRef::ibValueRecordDataObjectRecorderRef(
+	const ibValueMetaObjectRecordDataMutableRef* metaObject, const ibGuid& objGuid) :
+	ibValueRecordDataObjectRef(metaObject, objGuid)
+{
+	// m_registerRecords is intentionally NOT initialized here — the
+	// leaf ctor calls InitRegisterRecords() once its own vtable is
+	// active so ibRecorderRegister::CreateRecordSet's virtual call
+	// to GetRecordDescription dispatches to the leaf override. See
+	// the header for the full rationale.
+}
+
+ibValueRecordDataObjectRecorderRef::ibValueRecordDataObjectRecorderRef(
+	const ibValueRecordDataObjectRecorderRef& src) :
+	ibValueRecordDataObjectRef(src)
+{
+	// Same as the primary ctor — leaf does InitRegisterRecords.
+}
+
+ibValueRecordDataObjectRecorderRef::~ibValueRecordDataObjectRecorderRef() = default;
+
+void ibValueRecordDataObjectRecorderRef::InitRegisterRecords()
+{
+	wxASSERT(m_registerRecords == nullptr);
+	m_registerRecords = new ibRecorderRegister(this);
+}
+
+bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMode, ibDocumentPostingMode postingMode)
+{
+	// Posting pre-guard: leaf-specific check (Document's DeletionMark
+	// blocks posting). Default hook returns true (ok to proceed).
+	if (!appData->DesignerMode()
+	    && writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting
+	    && !CheckDeletionMarkOnPosting(writeMode))
+	{
+		ibBackendCoreException::Error(_("Failed to post object in db!"));
+		return false;
+	}
+
+	// Scaffold via Phase A Begin/CommitWriteScope. Per-recorder middle:
+	// BeforeWrite(wm, pm) + ApplyPostedAttributeOnWrite hook + SetNew
+	// Number codegen + FillDefaultDateForNew hook + SaveData +
+	// register cascade (CreateRecordSet for new, Posting/UndoPosting
+	// scripts + WriteRecordSet/DeleteRecordSet) + OnWrite.
+	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
+	if (!BeginWriteScope(scope)) return true;
+
+	ibBackendValueForm* const valueForm = GetForm();
+	const bool newObject = IsNewObject();
+
+	{
+		ibValue cancel = false;
+		ExecAsProc(wxT("BeforeWrite"), cancel,
+			ibValue::CreateEnumObject<ibValueEnumDocumentWriteMode>(writeMode),
+			ibValue::CreateEnumObject<ibValueEnumDocumentPostingMode>(postingMode)
+		);
+		if (cancel.GetBoolean()) {
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			return false;
+		}
+		ApplyPostedAttributeOnWrite(writeMode);
+	}
+
+	bool generateUniqueIdentifier = false;
+	if (!IsSetUniqueIdentifier()) {
+		ibValue prefix = "", standartProcessing = true;
+		ExecAsProc(wxT("SetNewNumber"), prefix, standartProcessing);
+		if (standartProcessing.GetBoolean())
+			generateUniqueIdentifier = GenerateUniqueIdentifier(prefix.GetString());
+	}
+
+	if (newObject)
+		FillDefaultDateForNew();
+
+	if (!SaveData()) {
+		if (generateUniqueIdentifier) ResetUniqueIdentifier();
+		scope.SafeRollBackTransaction();
+		ibBackendCoreException::Error(_("Failed to write object in db!"));
+		return false;
+	}
+
+	if (newObject)
+		m_registerRecords->CreateRecordSet();
+
+	// Posting / UndoPosting cascade — scripts then the matching
+	// register set Write/Delete. The cascade rides under this recorder's
+	// row-lock from BeginWriteScope, so concurrent re-posts on the same
+	// recorder serialise here.
+	if (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting) {
+		ibValue cancel = false;
+		ExecAsProc(wxT("Posting"), cancel,
+			ibValue::CreateEnumObject<ibValueEnumDocumentPostingMode>(postingMode));
+		if (cancel.GetBoolean()) {
+			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			return false;
+		}
+		if (!m_registerRecords->WriteRecordSet()) {
+			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			return false;
+		}
+	}
+	else if (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_UndoPosting) {
+		ibValue cancel = false;
+		ExecAsProc(wxT("UndoPosting"), cancel);
+		if (cancel.GetBoolean()) {
+			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			return false;
+		}
+		if (!m_registerRecords->DeleteRecordSet()) {
+			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			return false;
+		}
+	}
+
+	{
+		ibValue cancel = false;
+		ExecAsProc(wxT("OnWrite"), cancel);
+		if (cancel.GetBoolean()) {
+			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			return false;
+		}
+	}
+
+	CommitWriteScope(scope, valueForm, newObject);
+	m_registerRecords->RefreshRecordSet();
+	return true;
+}
+
+void ibValueRecordDataObjectRecorderRef::SetDeletionMark(bool deletionMark)
+{
+	// Recorder-flavour of the deletion-mark algorithm: same as the
+	// catalog/charts path (set the flag + SaveModify) but with an
+	// up-front un-post so the row's movements clear before the mark
+	// lands. UndoPosting is a no-op for non-posted recorders via the
+	// IsPosted / ApplyPostedAttributeOnWrite hooks.
+	if (m_newObject)
+		return;
+	WriteObject(ibDocumentWriteMode::ibDocumentWriteMode_UndoPosting,
+	             ibDocumentPostingMode::ibDocumentPostingMode_Regular);
+	ibValueRecordDataObjectRef::SetDeletionMark(deletionMark);
+}
+
+bool ibValueRecordDataObjectRecorderRef::DeleteObject()
+{
+	// Scaffold via Phase A Begin/CommitDeleteScope. Per-recorder middle:
+	// BeforeDelete + register-set DeleteRecordSet (cascading off this
+	// recorder) + OnDelete + DeleteData. The register clear runs
+	// BEFORE OnDelete + DeleteData so the recorder row exists for any
+	// script side-effects and so the cascade uses recorder-level
+	// row-locks for serialization.
+	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
+	if (!BeginDeleteScope(scope)) return true;
+
+	ibBackendValueForm* const valueForm = GetForm();
+
+	{
+		ibValue cancel = false;
+		ExecAsProc(wxT("BeforeDelete"), cancel);
+		if (cancel.GetBoolean()) {
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to delete object in db!"));
+			return false;
+		}
+	}
+
+	if (!m_registerRecords->DeleteRecordSet()) {
+		scope.SafeRollBackTransaction();
+		ibBackendCoreException::Error(_("Failed to delete object in db!"));
+		return false;
+	}
+
+	{
+		ibValue cancel = false;
+		ExecAsProc(wxT("OnDelete"), cancel);
+		if (cancel.GetBoolean()) {
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to delete object in db!"));
+			return false;
+		}
+	}
+
+	if (!DeleteData()) {
+		scope.SafeRollBackTransaction();
+		ibBackendCoreException::Error(_("Failed to delete object in db!"));
+		return false;
+	}
+
+	CommitDeleteScope(scope, valueForm);
+	m_registerRecords->RefreshRecordSet();
+	return true;
+}
+
 //***********************************************************************
-//*						     metaData									* 
+//*						     metaData									*
 //***********************************************************************
 
 wxIMPLEMENT_ABSTRACT_CLASS(ibValueRecordSetObject, ibValueModelRamTableBase);
@@ -2584,7 +3094,7 @@ void ibValueRecordManagerObject::PrepareEmptyObject(const ibValueRecordManagerOb
 void ibValueRecordSetObject::CreateEmptyKey()
 {
 	m_keyValues.clear();
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (object->IsDeleted())
 			continue;
 		m_keyValues.insert_or_assign(
@@ -2673,6 +3183,85 @@ m_methodHelper(new ibValueMethodHelper())
 ibValueRecordSetObject::~ibValueRecordSetObject()
 {
 	wxDELETE(m_methodHelper);
+}
+
+
+//----------------------------------------------------------------------
+// Phase B template-method Write/Delete for register-set leaves.
+// Accumulation / Accounting / Information are byte-identical mod
+// SaveData / DeleteData (virtual). The base owns this scaffold;
+// subclasses inherit it verbatim and override only SaveData /
+// DeleteData with their per-type UPSERT / DELETE SQL.
+//----------------------------------------------------------------------
+
+bool ibValueRecordSetObject::WriteRecordSet(bool replace, bool clearTable)
+{
+	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
+	if (!BeginRecordSetWriteScope(scope)) return true;
+
+	{
+		ibValue cancel = false;
+		ExecAsProc(wxT("BeforeWrite"), cancel);
+		if (cancel.GetBoolean()) {
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			return false;
+		}
+	}
+
+	if (!SaveData(replace, clearTable)) {
+		scope.SafeRollBackTransaction();
+		ibBackendCoreException::Error(_("Failed to write object in db!"));
+		return false;
+	}
+
+	{
+		ibValue cancel = false;
+		ExecAsProc(wxT("OnWrite"), cancel);
+		if (cancel.GetBoolean()) {
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			return false;
+		}
+	}
+
+	CommitRecordSetScope(scope);
+	return true;
+}
+
+bool ibValueRecordSetObject::DeleteRecordSet()
+{
+	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
+	if (!BeginRecordSetDeleteScope(scope)) return true;
+
+	{
+		ibValue cancel = false;
+		ExecAsProc(wxT("BeforeDelete"), cancel);
+		if (cancel.GetBoolean()) {
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to delete object in db!"));
+			return false;
+		}
+	}
+
+	if (!DeleteData()) {
+		scope.SafeRollBackTransaction();
+		ibBackendCoreException::Error(_("Failed to delete object in db!"));
+		return false;
+	}
+
+	{
+		ibValue cancel = false;
+		ExecAsProc(wxT("OnDelete"), cancel);
+		if (cancel.GetBoolean()) {
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("Failed to delete object in db!"));
+			return false;
+		}
+	}
+
+	CommitRecordSetScope(scope);
+	return true;
 }
 
 bool ibValueRecordSetObject::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
@@ -3086,7 +3675,7 @@ void ibValueRecordKeyObject::PrepareNames() const
 	wxString objectName;
 
 	//fill custom attributes 
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (object->IsDeleted())
 			continue;
 		if (!object->GetObjectNameAsString(objectName))
@@ -3107,7 +3696,7 @@ void ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::PrepareName
 	const ibValueMetaObjectRegisterData* metaObject = m_recordSet->GetMetaObject();
 	if (metaObject != nullptr) {
 		wxString objectName;
-		for (const auto object : metaObject->GetGenericDimentionArrayObject()) {
+		for (const auto object : metaObject->GetGenericDimensionArrayObject()) {
 			if (object->IsDeleted())
 				continue;
 			if (!object->GetObjectNameAsString(objectName))
@@ -3223,6 +3812,8 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueReco
 //**********************************************************************
 //*                       Runtime register                             *
 //**********************************************************************
+
+SYSTEM_TYPE_REGISTER(ibValueRecordDataObjectRecorderRef::ibRecorderRegister, "RecordRegister", string_to_clsid("VL_RECR"));
 
 SYSTEM_TYPE_REGISTER(ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection, "RecordSetRegisterColumn", string_to_clsid("VL_RSCL"));
 SYSTEM_TYPE_REGISTER(ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::ibValueRecordSetRegisterColumnInfo, "RecordSetRegisterColumnInfo", string_to_clsid("VL_RSCI"));

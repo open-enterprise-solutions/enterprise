@@ -55,100 +55,10 @@ ibSourceExplorer ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer() con
 	return srcHelper;
 }
 
-#pragma region _form_builder_h_
-void ibValueRecordDataObjectChartOfAccounts::ShowFormValue(const wxString& strFormName, ibBackendControlFrame* ownerControl)
-{
-	ibBackendValueForm* const foundedForm = GetForm();
-	if (foundedForm && foundedForm->IsShown()) { foundedForm->ActivateForm(); return; }
-	ibBackendValueForm* const valueForm = GetFormValue(strFormName, ownerControl);
-	if (valueForm != nullptr) { valueForm->Modify(m_objModified); valueForm->ShowForm(); }
-}
+// ShowFormValue / GetFormValue moved up to HierarchyRef.
 
-ibBackendValueForm* ibValueRecordDataObjectChartOfAccounts::GetFormValue(const wxString& strFormName, ibBackendControlFrame* ownerControl)
-{
-	ibBackendValueForm* const foundedForm = GetForm();
-	if (foundedForm == nullptr) {
-		ibBackendValueForm* createdForm = m_metaObject->CreateAndBuildForm(strFormName,
-			m_objMode == ibObjectMode::OBJECT_ITEM ? ibValueMetaObjectChartOfAccounts::eFormObject : ibValueMetaObjectChartOfAccounts::eFormFolder,
-			ownerControl, this, m_objGuid);
-		if (createdForm != nullptr) createdForm->CloseOnOwnerClose(false);
-		return createdForm;
-	}
-	return foundedForm;
-}
-#pragma endregion
-
-bool ibValueRecordDataObjectChartOfAccounts::WriteObject()
-{
-	if (!appData->DesignerMode()) {
-		ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
-		if (!scope || !scope->IsOpen()) ibBackendCoreException::Error(_("Database is not open!"));
-		if (!ibBackendException::IsEvalMode()) {
-			if (!m_metaObject->AccessRight_Write()) { ibBackendAccessException::Error(); return false; }
-			{
-				ibBackendValueForm* const valueForm = GetForm();
-				{
-					scope.SafeBeginTransaction();
-					TryAcquireFormLock();  // soft-lock: throw on cross-session conflict
-					LockAndCheckDataVersion(/*bump=*/true);  // see docs/record-locks.md
-					{ ibValue cancel = false; ExecAsProc(wxT("BeforeWrite"), cancel);
-						if (cancel.GetBoolean()) { scope.SafeRollBackTransaction(); ibBackendCoreException::Error(_("Failed to write object in db!")); return false; } }
-					bool newObject = IsNewObject();
-					bool generateUniqueIdentifier = false;
-					if (!IsSetUniqueIdentifier()) {
-						ibValue prefix = "", standartProcessing = true;
-						ExecAsProc(wxT("SetNewCode"), prefix, standartProcessing);
-						if (standartProcessing.GetBoolean()) generateUniqueIdentifier = GenerateUniqueIdentifier(prefix.GetString());
-					}
-					if (!SaveData()) {
-						if (generateUniqueIdentifier) ResetUniqueIdentifier();
-						scope.SafeRollBackTransaction(); ibBackendCoreException::Error(_("Failed to write object in db!")); return false;
-					}
-					{ ibValue cancel = false; ExecAsProc(wxT("OnWrite"), cancel);
-						if (cancel.GetBoolean()) { if (generateUniqueIdentifier) ResetUniqueIdentifier();
-							scope.SafeRollBackTransaction(); ibBackendCoreException::Error(_("Failed to write object in db!")); return false; } }
-					scope.SafeCommitTransaction();
-					if (newObject && valueForm != nullptr) valueForm->NotifyCreate(GetReference());
-					else if (valueForm != nullptr) valueForm->NotifyChange(GetReference());
-				}
-				m_objModified = false;
-			}
-		}
-	}
-	return true;
-}
-
-bool ibValueRecordDataObjectChartOfAccounts::DeleteObject()
-{
-	if (!appData->DesignerMode()) {
-		ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
-		if (!scope || !scope->IsOpen()) ibBackendCoreException::Error(_("Database is not open!"));
-		if (!ibBackendException::IsEvalMode()) {
-			if (!m_metaObject->AccessRight_Delete()) { ibBackendAccessException::Error(); return false; }
-			const ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObject = GetMetaObject();
-			wxASSERT(valueMetaObject);
-			const ibGuid& objGuid = GetGuid();
-			const auto predefinedValue = valueMetaObject->FindPredefinedValue(objGuid);
-			if (predefinedValue != nullptr) { ibBackendCoreException::Error(_("Attempting to delete a predefined element!")); return false; }
-			{
-				ibBackendValueForm* const valueForm = GetForm();
-				{
-					scope.SafeBeginTransaction();
-					TryAcquireFormLock();  // soft-lock: throw on cross-session conflict
-					LockAndCheckDataVersion(/*bump=*/false);  // no bump — row is deleted
-					{ ibValue cancel = false; ExecAsProc(wxT("BeforeDelete"), cancel);
-						if (cancel.GetBoolean()) { scope.SafeRollBackTransaction(); ibBackendCoreException::Error(_("Failed to delete object in db!")); return false; } }
-					if (!DeleteData()) { scope.SafeRollBackTransaction(); ibBackendCoreException::Error(_("Failed to delete object in db!")); return false; }
-					{ ibValue cancel = false; ExecAsProc(wxT("OnDelete"), cancel);
-						if (cancel.GetBoolean()) { scope.SafeRollBackTransaction(); ibBackendCoreException::Error(_("Failed to delete object in db!")); return false; } }
-					scope.SafeCommitTransaction();
-					if (valueForm != nullptr) valueForm->NotifyDelete(GetReference());
-				}
-			}
-		}
-	}
-	return true;
-}
+// WriteObject / DeleteObject inherited from
+// ibValueRecordDataObjectHierarchyRef — see commonObjectRefQuery.cpp.
 
 enum Func { enIsNew = 0, enCopy, enFill, enWrite, enDelete, enModified, enGetForm, enGetTemplate, enGetMetadata, enLock, enUnlock };
 

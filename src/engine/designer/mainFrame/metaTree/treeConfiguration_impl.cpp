@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : metaTree window
 ////////////////////////////////////////////////////////////////////////////
@@ -1271,8 +1271,8 @@ void ibMetadataTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, c
 	wxASSERT(metaObjectValue);
 
 	//Список измерений 
-	const wxTreeItemId& hDimentions = AppendGroupItem(hParentID, g_metaDimensionCLSID, objectDimensionsName);
-	for (auto metaDimension : metaObjectValue->GetDimentionArrayObject()) {
+	const wxTreeItemId& hDimensions = AppendGroupItem(hParentID, g_metaDimensionCLSID, objectDimensionsName);
+	for (auto metaDimension : metaObjectValue->GetDimensionArrayObject()) {
 
 		if (metaDimension->IsDeleted())
 			continue;
@@ -1286,7 +1286,7 @@ void ibMetadataTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, c
 		//	&& strName.Find(m_strSearch) < 0)
 		//	continue;
 
-		AppendItem(hDimentions, metaDimension);
+		AppendItem(hDimensions, metaDimension);
 	}
 
 	//Список ресурсов 
@@ -1366,8 +1366,8 @@ void ibMetadataTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObject, 
 	wxASSERT(metaObjectValue);
 
 	//Список измерений 
-	const wxTreeItemId& hDimentions = AppendGroupItem(hParentID, g_metaDimensionCLSID, objectDimensionsName);
-	for (auto metaDimension : metaObjectValue->GetDimentionArrayObject()) {
+	const wxTreeItemId& hDimensions = AppendGroupItem(hParentID, g_metaDimensionCLSID, objectDimensionsName);
+	for (auto metaDimension : metaObjectValue->GetDimensionArrayObject()) {
 
 		if (metaDimension->IsDeleted())
 			continue;
@@ -1381,7 +1381,7 @@ void ibMetadataTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObject, 
 		//	&& strName.Find(m_strSearch) < 0)
 		//	continue;
 
-		AppendItem(hDimentions, metaDimension);
+		AppendItem(hDimensions, metaDimension);
 	}
 
 	//Список ресурсов 

@@ -993,7 +993,7 @@ bool ibValueMetaObjectRegisterData::CreateAndUpdateTableDB(ibMetaDataConfigurati
 		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 			return false;
 
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 				return false;
 			retCode = ProcessDimension(tableName,
@@ -1034,7 +1034,7 @@ bool ibValueMetaObjectRegisterData::CreateAndUpdateTableDB(ibMetaDataConfigurati
 		}
 		else {
 			bool firstMatching = true;
-			for (const auto object : GetGenericDimentionArrayObject()) {
+			for (const auto object : GetGenericDimensionArrayObject()) {
 				queryText += (firstMatching ? "" : ",") + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 				if (firstMatching) {
 					firstMatching = false;
@@ -1080,7 +1080,7 @@ bool ibValueMetaObjectRegisterData::CreateAndUpdateTableDB(ibMetaDataConfigurati
 			}
 
 			//dimensions from dst 
-			for (const auto object : dstValue->GetDimentionArrayObject()) {
+			for (const auto object : dstValue->GetDimensionArrayObject()) {
 				ibValueMetaObject* foundedMeta =
 					ibValueMetaObjectRegisterData::FindDimensionObjectByFilter(object->GetGuid());
 				if (foundedMeta == nullptr) {
@@ -1091,7 +1091,7 @@ bool ibValueMetaObjectRegisterData::CreateAndUpdateTableDB(ibMetaDataConfigurati
 			}
 
 			//dimensions current
-			for (const auto object : GetDimentionArrayObject()) {
+			for (const auto object : GetDimensionArrayObject()) {
 				retCode = ProcessDimension(tableName,
 					object, dstValue->FindDimensionObjectByFilter(object->GetGuid())
 				);

@@ -82,11 +82,8 @@ public:
 
 protected:
 
-	//predefined array 
-	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-		array = { m_propertyAttributeReference->GetMetaObject() };
-		return true;
-	}
+	// FillArrayObjectByPredefinedAttribute inherited from the Ref base —
+	// Enumeration has no extra predefined attributes beyond Reference.
 
 	//searched array 
 	virtual bool FillArrayObjectBySearched(std::vector<ibValueMetaObjectAttributeBase*>& array) const {

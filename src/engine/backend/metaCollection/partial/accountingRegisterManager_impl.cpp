@@ -60,7 +60,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 	}
 
 	// Dimension columns
-	for (auto dimension : m_metaObject->GetDimentionArrayObject()) {
+	for (auto dimension : m_metaObject->GetDimensionArrayObject()) {
 		colCollection->AddColumn(
 			dimension->GetName(),
 			dimension->GetTypeDesc(),
@@ -80,7 +80,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 	// Parse dimension filter
 	ibValueStructure* valFilter = nullptr; std::map<ibValueMetaObjectAttributeBase*, ibValue> selFilter;
 	if (cFilter.ConvertToValue(valFilter)) {
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValue vSelValue;
 			if (valFilter->Property(object->GetName(), vSelValue)) {
 				selFilter.insert_or_assign(
@@ -138,7 +138,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 	}
 
 	// Dimension fields in outer select
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		ibValueMetaObjectAttributeBase::ibSQLField sqlDimension = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 		sqlQuery += "," + sqlDimension.m_fieldTypeName;
 		for (auto dataType : sqlDimension.m_types) {
@@ -172,7 +172,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
 
 	// Dimensions in inner select
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 	}
 
@@ -221,7 +221,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
 
 	// Group by dimensions
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 	}
 
@@ -300,7 +300,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 		}
 
 		// Read dimensions
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValue retVal;
 			if (ibValueMetaObjectAttributeBase::GetValueAttribute(object, retVal, resultSet))
 				retLine->SetAt(object->GetName(), retVal);
@@ -369,7 +369,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 	}
 
 	// Dimension columns
-	for (auto dimension : m_metaObject->GetDimentionArrayObject()) {
+	for (auto dimension : m_metaObject->GetDimensionArrayObject()) {
 		colCollection->AddColumn(
 			dimension->GetName(),
 			dimension->GetTypeDesc(),
@@ -394,7 +394,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 	// Parse dimension filter
 	ibValueStructure* valFilter = nullptr; std::map<ibValueMetaObjectAttributeBase*, ibValue> selFilter;
 	if (cFilter.ConvertToValue(valFilter)) {
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValue vSelValue;
 			if (valFilter->Property(object->GetName(), vSelValue)) {
 				selFilter.insert_or_assign(
@@ -452,7 +452,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 	}
 
 	// Dimension fields in outer select
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		ibValueMetaObjectAttributeBase::ibSQLField sqlDimension = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 		sqlQuery += "," + sqlDimension.m_fieldTypeName;
 		for (auto dataType : sqlDimension.m_types) {
@@ -487,7 +487,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
 
 	// Dimensions in inner select
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 	}
 
@@ -541,7 +541,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
 
 	// Group by dimensions
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 	}
 
@@ -627,7 +627,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 		}
 
 		// Read dimensions
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValue retValue;
 			if (ibValueMetaObjectAttributeBase::GetValueAttribute(object, retValue, resultSet))
 				retLine->SetAt(object->GetName(), retValue);
@@ -694,7 +694,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::DrCrTurnovers(const ibValue&
 	// Parse dimension filter
 	ibValueStructure* valFilter = nullptr; std::map<ibValueMetaObjectAttributeBase*, ibValue> selFilter;
 	if (cFilter.ConvertToValue(valFilter)) {
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValue vSelValue;
 			if (valFilter->Property(object->GetName(), vSelValue)) {
 				selFilter.insert_or_assign(
@@ -999,7 +999,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	}
 
 	// Dimension columns
-	for (auto dimension : m_metaObject->GetDimentionArrayObject()) {
+	for (auto dimension : m_metaObject->GetDimensionArrayObject()) {
 		colCollection->AddColumn(
 			dimension->GetName(),
 			dimension->GetTypeDesc(),
@@ -1034,7 +1034,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	// Parse dimension filter
 	ibValueStructure* valFilter = nullptr; std::map<ibValueMetaObjectAttributeBase*, ibValue> selFilter;
 	if (cFilter.ConvertToValue(valFilter)) {
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValue vSelValue;
 			if (valFilter->Property(object->GetName(), vSelValue)) {
 				selFilter.insert_or_assign(
@@ -1100,7 +1100,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	}
 
 	// Dimension fields in outer select
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		ibValueMetaObjectAttributeBase::ibSQLField sqlDimension = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 		sqlQuery += "," + sqlDimension.m_fieldTypeName;
 		for (auto dataType : sqlDimension.m_types) {
@@ -1137,7 +1137,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
 
 	// Dimensions in inner select
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 	}
 
@@ -1186,7 +1186,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto2());
 	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
 
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 	}
 
@@ -1208,7 +1208,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
 
 	// Dimensions in turnovers inner select
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 	}
 
@@ -1261,7 +1261,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto2());
 	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
 
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 	}
 
@@ -1315,7 +1315,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	}
 
 	// Dimensions
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		ibValueMetaObjectAttributeBase::ibSQLField sqlDimension = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 		outerQuery += "," + sqlDimension.m_fieldTypeName;
 		for (auto dataType : sqlDimension.m_types) {
@@ -1352,7 +1352,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	outerQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto2());
 	outerQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
 
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		outerQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 	}
 
@@ -1444,7 +1444,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 		}
 
 		// Read dimensions
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValue retVal;
 			if (ibValueMetaObjectAttributeBase::GetValueAttribute(object, retVal, resultSet))
 				retLine->SetAt(object->GetName(), retVal);

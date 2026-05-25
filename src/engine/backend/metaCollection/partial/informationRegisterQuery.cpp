@@ -17,7 +17,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceFirstTableDB(ibMe
 
 		wxString sqlViewColumn =
 			ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributePeriod->GetMetaObject());
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			sqlViewColumn += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : GetResourceArrayObject()) {
@@ -37,7 +37,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceFirstTableDB(ibMe
 			}
 		}
 
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += ", T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {
@@ -67,7 +67,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceFirstTableDB(ibMe
 
 		sqlQuery += " FROM (SELECT ";
 		sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributePeriod->GetMetaObject(), "MIN");
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : GetResourceArrayObject()) {
@@ -76,7 +76,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceFirstTableDB(ibMe
 		sqlQuery += " FROM " + tableName;
 		sqlQuery += " GROUP BY ";
 		sqlQuery += sqlCol.m_fieldTypeName;
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : GetResourceArrayObject()) {
@@ -86,7 +86,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceFirstTableDB(ibMe
 			"INNER JOIN " + tableName + " AS T2 "
 			" ON ";
 		sqlQuery += " T1." + sqlCol.m_fieldTypeName + " = T2." + sqlCol.m_fieldTypeName;
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += " AND T1." + sqlDim.m_fieldTypeName + " = T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {
@@ -123,7 +123,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceFirstTableDB(ibMe
 
 		wxString sqlViewColumn =
 			ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributePeriod->GetMetaObject());
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			sqlViewColumn += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : GetResourceArrayObject()) {
@@ -143,7 +143,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceFirstTableDB(ibMe
 			}
 		}
 
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += ", T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {
@@ -173,7 +173,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceFirstTableDB(ibMe
 
 		sqlQuery += " FROM (SELECT ";
 		sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributePeriod->GetMetaObject(), "MAX");
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : GetResourceArrayObject()) {
@@ -182,7 +182,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceFirstTableDB(ibMe
 		sqlQuery += " FROM " + tableName;
 		sqlQuery += " GROUP BY ";
 		sqlQuery += sqlCol.m_fieldTypeName;
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : GetResourceArrayObject()) {
@@ -192,7 +192,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceFirstTableDB(ibMe
 			"INNER JOIN " + tableName + " AS T2 "
 			" ON ";
 		sqlQuery += " T1." + sqlCol.m_fieldTypeName + " = T2." + sqlCol.m_fieldTypeName;
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += " AND T1." + sqlDim.m_fieldTypeName + " = T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {
@@ -246,7 +246,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceLastTableDB(ibMet
 
 		wxString sqlViewColumn =
 			ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributePeriod->GetMetaObject());
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			sqlViewColumn += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : GetResourceArrayObject()) {
@@ -266,7 +266,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceLastTableDB(ibMet
 			}
 		}
 
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += ", T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {
@@ -296,7 +296,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceLastTableDB(ibMet
 
 		sqlQuery += " FROM (SELECT ";
 		sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributePeriod->GetMetaObject(), "MAX");
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : GetResourceArrayObject()) {
@@ -305,7 +305,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceLastTableDB(ibMet
 		sqlQuery += " FROM " + tableName;
 		sqlQuery += " GROUP BY ";
 		sqlQuery += sqlCol.m_fieldTypeName;
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : GetResourceArrayObject()) {
@@ -315,7 +315,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceLastTableDB(ibMet
 			"INNER JOIN " + tableName + " AS T2 "
 			" ON ";
 		sqlQuery += " T1." + sqlCol.m_fieldTypeName + " = T2." + sqlCol.m_fieldTypeName;
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += " AND T1." + sqlDim.m_fieldTypeName + " = T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {
@@ -352,7 +352,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceLastTableDB(ibMet
 
 		wxString sqlViewColumn =
 			ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributePeriod->GetMetaObject());
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			sqlViewColumn += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : GetResourceArrayObject()) {
@@ -372,7 +372,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceLastTableDB(ibMet
 			}
 		}
 
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += ", T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {
@@ -402,7 +402,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceLastTableDB(ibMet
 
 		sqlQuery += " FROM (SELECT ";
 		sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_propertyAttributePeriod->GetMetaObject(), "MAX");
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : GetResourceArrayObject()) {
@@ -411,7 +411,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceLastTableDB(ibMet
 		sqlQuery += " FROM " + tableName;
 		sqlQuery += " GROUP BY ";
 		sqlQuery += sqlCol.m_fieldTypeName;
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : GetResourceArrayObject()) {
@@ -421,7 +421,7 @@ bool ibValueMetaObjectInformationRegister::CreateAndUpdateSliceLastTableDB(ibMet
 			"INNER JOIN " + tableName + " AS T2 "
 			" ON ";
 		sqlQuery += " T1." + sqlCol.m_fieldTypeName + " = T2." + sqlCol.m_fieldTypeName;
-		for (const auto object : GetDimentionArrayObject()) {
+		for (const auto object : GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += " AND T1." + sqlDim.m_fieldTypeName + " = T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {

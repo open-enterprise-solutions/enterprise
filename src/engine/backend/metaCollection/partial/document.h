@@ -101,18 +101,14 @@ public:
 
 protected:
 
-	//predefined array 
-	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-
-		array = {
-			m_propertyAttributeNumber->GetMetaObject(),
-			m_propertyAttributeDate->GetMetaObject(),
-			m_propertyAttributePosted->GetMetaObject(),
-			m_propertyAttributeReference->GetMetaObject(),
-			m_propertyAttributeDataVersion->GetMetaObject(),
-			m_propertyAttributeDeletionMark->GetMetaObject()
-		};
-
+	// Additive contract — chains to MutableRef. Document adds Number,
+	// Date, Posted (its signature trio) on top of Ref/DeletionMark/
+	// DataVersion.
+	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
+		ibValueMetaObjectRecordDataMutableRef::FillArrayObjectByPredefinedAttribute(array);
+		array.push_back(m_propertyAttributeNumber->GetMetaObject());
+		array.push_back(m_propertyAttributeDate->GetMetaObject());
+		array.push_back(m_propertyAttributePosted->GetMetaObject());
 		return true;
 	}
 
@@ -208,93 +204,25 @@ private:
 //*                                      Object                                              *
 //********************************************************************************************
 
-class ibValueRecordDataObjectDocument : public ibValueRecordDataObjectRef {
-public:
-	class ibRecorderRegisterDocument : public ibValue {
-		wxDECLARE_DYNAMIC_CLASS(ibRecorderRegisterDocument);
-	public:
-
-		void CreateRecordSet();
-		bool WriteRecordSet();
-		bool DeleteRecordSet();
-		void ClearRecordSet();
-
-		void RefreshRecordSet();
-
-		ibRecorderRegisterDocument(ibValueRecordDataObjectDocument* currentDoc = nullptr);
-		virtual ~ibRecorderRegisterDocument();
-
-		//standart override 
-		virtual ibValueMethodHelper* GetPMethods() const {
-			//PrepareNames();
-			return m_methodHelper;
-		}
-
-		virtual void PrepareNames() const;
-		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
-
-		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
-		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
-
-		//check is empty
-		virtual bool IsEmpty() const { return false; }
-
-	private:
-		ibValueRecordDataObjectDocument* m_document;
-		std::map<ibMetaID, ibValuePtr<ibValueRecordSetObject>> m_records;
-		ibValueMethodHelper* m_methodHelper;
-	};
+class ibValueRecordDataObjectDocument : public ibValueRecordDataObjectRecorderRef {
 protected:
 	ibValueRecordDataObjectDocument(const ibValueMetaObjectDocument* metaObject = nullptr, const ibGuid& guid = wxNullGuid);
 	ibValueRecordDataObjectDocument(const ibValueRecordDataObjectDocument& source);
 public:
 	virtual ~ibValueRecordDataObjectDocument();
 
-	bool IsPosted() const;
+	// ibRecorderRegister + m_registerRecords + ClearRecordSet /
+	// UpdateRecordSet + WriteObject / DeleteObject / SaveModify
+	// scaffold all live on ibValueRecordDataObjectRecorderRef.
+	// Document only contributes leaf-specific hook overrides below.
 
-	void ClearRecordSet() {
-		wxASSERT(m_registerRecords);
-		m_registerRecords->ClearRecordSet();
-	}
-
-	void UpdateRecordSet() {
-		wxASSERT(m_registerRecords);
-		m_registerRecords->ClearRecordSet();
-		m_registerRecords->CreateRecordSet();
-	}
-
-	//****************************************************************************
-	//*                              Support id's                                *
-	//****************************************************************************
-
-	//save modify 
-	virtual bool SaveModify() {
-		return WriteObject(
-			IsPosted() ? ibDocumentWriteMode::ibDocumentWriteMode_Posting : ibDocumentWriteMode::ibDocumentWriteMode_Write,
-			ibDocumentPostingMode::ibDocumentPostingMode_Regular
-		);
-	}
-
-	//default methods
-	virtual bool FillObject(ibValue& vFillObject) const {
-		return Filling(vFillObject);
-	}
-
-	virtual ibValueRecordDataObjectRef* CopyObject(bool showValue = false) {
-		ibValueRecordDataObjectRef* objectRef = CopyObjectValue();
-		if (objectRef != nullptr && showValue)
-			objectRef->ShowFormValue();
-		return objectRef;
-	}
-
-	virtual bool WriteObject() {
-		return WriteObject(
-			IsPosted() ? ibDocumentWriteMode::ibDocumentWriteMode_Posting : ibDocumentWriteMode::ibDocumentWriteMode_Write,
-			ibDocumentPostingMode::ibDocumentPostingMode_Regular
-		);
-	}
-	virtual bool WriteObject(ibDocumentWriteMode writeMode, ibDocumentPostingMode postingMode);
-	virtual bool DeleteObject();
+	// Hook overrides for Document-specific posting semantics. See
+	// ibValueRecordDataObjectRecorderRef in commonObject.h.
+	virtual bool IsPosted() const override;
+	virtual bool CheckDeletionMarkOnPosting(ibDocumentWriteMode wm) const override;
+	virtual void ApplyPostedAttributeOnWrite(ibDocumentWriteMode wm) override;
+	virtual void FillDefaultDateForNew() override;
+	virtual const ibMetaDescription* GetRecordDescription() const override;
 
 	//****************************************************************************
 	//*                              Support methods                             *
@@ -314,20 +242,23 @@ public:
 	//support source data 
 	virtual ibSourceExplorer GetSourceExplorer() const;
 
-#pragma region _form_builder_h_
-	//support show 
-	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
-	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
-#pragma endregion
+	// ShowFormValue / GetFormValue inherited from base. Document has
+	// a single form-id (no folder/item branching) — hook below.
+protected:
+	virtual ibFormID GetCurrentObjectFormID() const override {
+		return ibValueMetaObjectDocument::eFormObject;
+	}
+public:
 
 	//support actionData
 	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
 	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
 
-public:
-	virtual void SetDeletionMark(bool deletionMark = true);
+	// SetDeletionMark inherited from ibValueRecordDataObjectRecorderRef
+	// (un-post then base SetDeletionMark) — common algorithm across
+	// recorder-flavour ref-objects.
+
 private:
-	ibValuePtr<ibRecorderRegisterDocument> m_registerRecords;
 	friend class ibValue;
 };
 

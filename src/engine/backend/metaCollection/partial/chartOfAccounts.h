@@ -115,23 +115,17 @@ public:
 
 protected:
 
-	//predefined array
-	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-		array = {
-			m_propertyAttributePredefined->GetMetaObject(),
-			m_propertyAttributeCode->GetMetaObject(),
-			m_propertyAttributeDescription->GetMetaObject(),
-			m_propertyAttributeParent->GetMetaObject(),
-			m_propertyAttributeIsFolder->GetMetaObject(),
-			m_propertyAttributeAccountType->GetMetaObject(),
-			m_propertyAttributeOffBalance->GetMetaObject(),
-			m_propertyAttributeQuantitative->GetMetaObject(),
-			m_propertyAttributeCurrency->GetMetaObject(),
-			m_propertyAttributeMaxSubcontoCount->GetMetaObject(),
-			m_propertyAttributeReference->GetMetaObject(),
-			m_propertyAttributeDataVersion->GetMetaObject(),
-			m_propertyAttributeDeletionMark->GetMetaObject(),
-		};
+	// Additive contract — chains to HierarchyMutableRef. ChartOfAccounts
+	// appends accounting-specific attributes (AccountType, OffBalance,
+	// Quantitative, Currency, MaxSubcontoCount) on top of the inherited
+	// Hierarchy + MutableRef set.
+	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
+		ibValueMetaObjectRecordDataHierarchyMutableRef::FillArrayObjectByPredefinedAttribute(array);
+		array.push_back(m_propertyAttributeAccountType->GetMetaObject());
+		array.push_back(m_propertyAttributeOffBalance->GetMetaObject());
+		array.push_back(m_propertyAttributeQuantitative->GetMetaObject());
+		array.push_back(m_propertyAttributeCurrency->GetMetaObject());
+		array.push_back(m_propertyAttributeMaxSubcontoCount->GetMetaObject());
 		return true;
 	}
 
@@ -277,19 +271,9 @@ class ibValueRecordDataObjectChartOfAccounts : public ibValueRecordDataObjectHie
 	ibValueRecordDataObjectChartOfAccounts(const ibValueRecordDataObjectChartOfAccounts& source);
 public:
 
-	//save modify
-	virtual bool SaveModify() { return WriteObject(); }
-
-	//default methods
-	virtual bool FillObject(ibValue& vFillObject) const { return Filling(vFillObject); }
-	virtual ibValueRecordDataObjectRef* CopyObject(bool showValue = false) {
-		ibValueRecordDataObjectRef* objectRef = CopyObjectValue();
-		if (objectRef != nullptr && showValue)
-			objectRef->ShowFormValue();
-		return objectRef;
-	}
-	virtual bool WriteObject();
-	virtual bool DeleteObject();
+	// SaveModify / FillObject / CopyObject / WriteObject / DeleteObject
+	// inherited from ibValueRecordDataObjectHierarchyRef and
+	// ibValueRecordDataObjectRef.
 
 	virtual void PrepareNames() const;
 
@@ -301,10 +285,14 @@ public:
 	//support source data
 	virtual ibSourceExplorer GetSourceExplorer() const;
 
-#pragma region _form_builder_h_
-	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* owner = nullptr);
-	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* owner = nullptr);
-#pragma endregion
+	// ShowFormValue / GetFormValue inherited from HierarchyRef.
+protected:
+	virtual ibFormID GetCurrentObjectFormID() const override {
+		return m_objMode == ibObjectMode::OBJECT_ITEM
+			? ibValueMetaObjectChartOfAccounts::eFormObject
+			: ibValueMetaObjectChartOfAccounts::eFormFolder;
+	}
+public:
 
 	//support actionData
 	virtual ibActionCollection GetActionCollection(const ibFormID& formType);

@@ -14,6 +14,7 @@
 #include "backend/appData.h"
 #include "backend/session/session.h"
 #include "backend/databaseLayer/connectionPool.h"
+#include "backend/databaseLayer/connectionScope.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
@@ -35,11 +36,11 @@ bool ibValueRecordSetObject::LockByKeys()
 	bool firstWhere = true;
 
 	// Mirrors ExistData() — iterates the register's dimension key set
-	// (FillArrayObjectByDimention returns {recorder} for AR/AcR and
+	// (FillArrayObjectByDimension returns {recorder} for AR/AcR and
 	// IR-Subordinate, {period, dim1, dim2, ...} for non-recorder IR)
 	// filtered by FindKeyValue so partially-populated record sets only
 	// constrain on the keys actually bound.
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 			continue;
 		queryText += (firstWhere ? wxT(" WHERE ") : wxT(" AND "))
@@ -61,7 +62,7 @@ bool ibValueRecordSetObject::LockByKeys()
 	if (!statement)
 		ibBackendCoreException::Error(_("Failed to prepare register-lock query"));
 
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 			continue;
 		ibValueMetaObjectAttributeBase::SetValueAttribute(
@@ -86,6 +87,52 @@ bool ibValueRecordSetObject::LockByKeys()
 	return true;
 }
 
+//----------------------------------------------------------------------
+// Phase A scaffold helpers — register-side counterpart of
+// ibValueRecordDataObjectRef's Begin*/Commit*. Lives next to the
+// LockByKeys query method it calls into. See commonObject.h docs.
+//----------------------------------------------------------------------
+
+bool ibValueRecordSetObject::BeginRecordSetWriteScope(ibConnectionScope& scope)
+{
+	if (appData->DesignerMode())          return false;
+	if (!scope || !scope->IsOpen())
+		ibBackendCoreException::Error(_("Database is not open!"));
+	if (ibBackendException::IsEvalMode()) return false;
+
+	if (!m_metaObject->AccessRight_Write()) {
+		ibBackendAccessException::Error();
+		return false;
+	}
+
+	scope.SafeBeginTransaction();
+	LockByKeys();
+	return true;
+}
+
+bool ibValueRecordSetObject::BeginRecordSetDeleteScope(ibConnectionScope& scope)
+{
+	if (appData->DesignerMode())          return false;
+	if (!scope || !scope->IsOpen())
+		ibBackendCoreException::Error(_("Database is not open!"));
+	if (ibBackendException::IsEvalMode()) return false;
+
+	if (!m_metaObject->AccessRight_Delete()) {
+		ibBackendAccessException::Error();
+		return false;
+	}
+
+	scope.SafeBeginTransaction();
+	LockByKeys();
+	return true;
+}
+
+void ibValueRecordSetObject::CommitRecordSetScope(ibConnectionScope& scope)
+{
+	scope.SafeCommitTransaction();
+	m_objModified = false;
+}
+
 bool ibValueRecordSetObject::ExistData()
 {
 	const auto db = ses_query;
@@ -96,7 +143,7 @@ bool ibValueRecordSetObject::ExistData()
 	                          : "SELECT 1 FROM " + tableName;
 	bool firstWhere = true;
 
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 			continue;
 		queryText += (firstWhere ? " WHERE " : " AND ")
@@ -111,7 +158,7 @@ bool ibValueRecordSetObject::ExistData()
 	if (!statement)
 		return false;
 
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 			continue;
 		ibValueMetaObjectAttributeBase::SetValueAttribute(
@@ -141,7 +188,7 @@ bool ibValueRecordSetObject::ExistData(ibNumber& lastNum)
 	wxString queryText = "SELECT MAX(" + lineNumField + ") FROM " + tableName;
 	bool firstWhere = true;
 
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 			continue;
 		queryText += (firstWhere ? " WHERE " : " AND ")
@@ -154,7 +201,7 @@ bool ibValueRecordSetObject::ExistData(ibNumber& lastNum)
 	if (!statement)
 		return false;
 
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 			continue;
 		ibValueMetaObjectAttributeBase::SetValueAttribute(
@@ -186,7 +233,7 @@ bool ibValueRecordSetObject::ReadData(const ibUniqueKeyPair& key)
 	wxString tableName = m_metaObject->GetTableNameDB();
 	wxString queryText = "SELECT * FROM " + tableName; bool firstWhere = true;
 
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!key.FindKey(object->GetMetaID()))
 			continue;
 		if (firstWhere) {
@@ -201,7 +248,7 @@ bool ibValueRecordSetObject::ReadData(const ibUniqueKeyPair& key)
 	ibStatementGuard statement(db, db->PrepareStatement(queryText));
 	if (!statement)
 		return false;
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!key.FindKey(object->GetMetaID()))
 			continue;
 		ibValueMetaObjectAttributeBase::SetValueAttribute(
@@ -216,7 +263,7 @@ bool ibValueRecordSetObject::ReadData(const ibUniqueKeyPair& key)
 		return false;
 	while (resultSet->Next()) {
 		ibValueTableRow* rowData = new ibValueTableRow();
-		for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::GetValueAttribute(object, rowData->AppendTableValue(object->GetMetaID()), resultSet);
 		}
 		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
@@ -240,7 +287,7 @@ bool ibValueRecordSetObject::ReadData()
 	wxString tableName = m_metaObject->GetTableNameDB();
 	wxString queryText = "SELECT * FROM " + tableName; bool firstWhere = true;
 
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 			continue;
 		if (firstWhere) {
@@ -255,7 +302,7 @@ bool ibValueRecordSetObject::ReadData()
 	ibStatementGuard statement(db, db->PrepareStatement(queryText));
 	if (!statement)
 		return false;
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 			continue;
 		ibValueMetaObjectAttributeBase::SetValueAttribute(
@@ -270,7 +317,7 @@ bool ibValueRecordSetObject::ReadData()
 		return false;
 	while (resultSet->Next()) {
 		ibValueTableRow* rowData = new ibValueTableRow();
-		for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::GetValueAttribute(object, rowData->AppendTableValue(object->GetMetaID()), resultSet);
 		}
 		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
@@ -368,7 +415,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 		else
 		{
 			bool firstMatching = true;
-			for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+			for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 				queryText += (firstMatching ? "" : ",") + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 				if (firstMatching) {
 					firstMatching = false;
@@ -440,7 +487,7 @@ bool ibValueRecordSetObject::DeleteData()
 
 	wxString tableName = m_metaObject->GetTableNameDB();
 	wxString queryText = "DELETE FROM " + tableName; bool firstWhere = true;
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 			continue;
 		if (firstWhere) {
@@ -458,7 +505,7 @@ bool ibValueRecordSetObject::DeleteData()
 	if (statement == nullptr)
 		return false;
 
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 			continue;
 		ibValueMetaObjectAttributeBase::SetValueAttribute(

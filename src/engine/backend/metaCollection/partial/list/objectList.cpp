@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : list data 
 ////////////////////////////////////////////////////////////////////////////
@@ -914,7 +914,7 @@ ibDataViewItem ibValueListRegisterObject::FindRowValue(const ibValue& varValue, 
 				pRefData->GetValueByMetaID(attrLine->GetMetaID()));
 	}
 	else {
-		for (auto& dim : m_metaObject->GetGenericDimentionArrayObject())
+		for (auto& dim : m_metaObject->GetGenericDimensionArrayObject())
 			stub->AppendNodeValue(dim->GetMetaID(),
 				pRefData->GetValueByMetaID(dim->GetMetaID()));
 	}
@@ -942,7 +942,7 @@ ibValueListRegisterObject::ibValueListRegisterObject(const ibValueMetaObjectRegi
 		ibValueListDataObject::AppendSort(metaObject->GetRegisterPeriod());
 	}
 
-	for (auto& dimension : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (auto& dimension : m_metaObject->GetGenericDimensionArrayObject()) {
 		ibValueListDataObject::AppendSort(dimension, true, true, true);
 	}
 }

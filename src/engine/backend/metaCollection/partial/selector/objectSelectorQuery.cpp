@@ -103,7 +103,7 @@ void ibValueSelectorRegisterDataObject::Reset()
 				ibValueMetaObjectAttributeBase::GetValueAttribute(attributeNumberLine, keyRow[attributeNumberLine->GetMetaID()], resultSet);
 			}
 			else {
-				for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+				for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 					ibValueMetaObjectAttributeBase::GetValueAttribute(object, keyRow[object->GetMetaID()], resultSet);
 				}
 			}
@@ -127,7 +127,7 @@ bool ibValueSelectorRegisterDataObject::Read()
 
 	if (ses_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
 		queryText = "SELECT * FROM " + m_metaObject->GetTableNameDB() + " LIMIT 1"; bool firstWhere = true;
-		for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (firstWhere) {
 				queryText = queryText + " WHERE ";
 			}
@@ -140,7 +140,7 @@ bool ibValueSelectorRegisterDataObject::Read()
 	}
 	else {
 		queryText = "SELECT FIRST 1 * FROM " + m_metaObject->GetTableNameDB(); bool firstWhere = true;
-		for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (firstWhere) {
 				queryText = queryText + " WHERE ";
 			}
@@ -158,7 +158,7 @@ bool ibValueSelectorRegisterDataObject::Read()
 	if (statement == nullptr)
 		return false;
 
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		ibValueMetaObjectAttributeBase::SetValueAttribute(
 			object,
 			m_keyValues.at(object->GetMetaID()),
@@ -173,7 +173,7 @@ bool ibValueSelectorRegisterDataObject::Read()
 		isLoaded = true;
 		//load attributes 
 		ibMetaValueArray keyTable, rowTable;
-		for (const auto object : m_metaObject->GetGenericDimentionArrayObject())
+		for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
 			ibValueMetaObjectAttributeBase::GetValueAttribute(object, keyTable[object->GetMetaID()], resultSet);
 		for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
 			ibValueMetaObjectAttributeBase::GetValueAttribute(object, rowTable[object->GetMetaID()], resultSet);

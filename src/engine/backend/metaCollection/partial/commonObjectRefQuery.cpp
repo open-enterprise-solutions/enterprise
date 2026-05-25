@@ -13,7 +13,9 @@
 #include "backend/appData.h"
 #include "backend/session/session.h"
 #include "backend/databaseLayer/connectionPool.h"
+#include "backend/databaseLayer/connectionScope.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
+#include "backend/backend_form.h"
 
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
@@ -175,6 +177,73 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 	}
 
 	return true;
+}
+
+//----------------------------------------------------------------------
+// Phase A scaffold helpers — pre/post bookkeeping extracted from the
+// per-subclass WriteObject / DeleteObject bodies. Lives here next to
+// the lock methods (TryAcquireFormLock / LockAndCheckDataVersion)
+// they call into — the helpers themselves are lock-orchestration over
+// the DB-query primitives, so this is their natural home.
+// See commonObject.h ibValueRecordDataObjectRef Begin*/Commit* docs.
+//----------------------------------------------------------------------
+
+bool ibValueRecordDataObjectRef::BeginWriteScope(ibConnectionScope& scope)
+{
+	if (appData->DesignerMode())          return false;   // designer skip
+	if (!scope || !scope->IsOpen())
+		ibBackendCoreException::Error(_("Database is not open!"));
+	if (ibBackendException::IsEvalMode()) return false;   // eval skip
+
+	if (!m_metaObject->AccessRight_Write()) {
+		ibBackendAccessException::Error();   // throws — return for warning silence
+		return false;
+	}
+
+	scope.SafeBeginTransaction();
+	TryAcquireFormLock();                                  // soft-lock re-attempt
+	LockAndCheckDataVersion(/*bump=*/true);                // row lock + version + bump
+	return true;
+}
+
+bool ibValueRecordDataObjectRef::BeginDeleteScope(ibConnectionScope& scope)
+{
+	if (appData->DesignerMode())          return false;
+	if (!scope || !scope->IsOpen())
+		ibBackendCoreException::Error(_("Database is not open!"));
+	if (ibBackendException::IsEvalMode()) return false;
+
+	if (!m_metaObject->AccessRight_Delete()) {
+		ibBackendAccessException::Error();
+		return false;
+	}
+
+	scope.SafeBeginTransaction();
+	TryAcquireFormLock();
+	LockAndCheckDataVersion(/*bump=*/false);               // no bump — row going away
+	return true;
+}
+
+void ibValueRecordDataObjectRef::CommitWriteScope(ibConnectionScope& scope,
+                                                   ibBackendValueForm* valueForm,
+                                                   bool newObject)
+{
+	scope.SafeCommitTransaction();
+
+	if (valueForm != nullptr) {
+		if (newObject) valueForm->NotifyCreate(GetReference());
+		else           valueForm->NotifyChange(GetReference());
+	}
+	m_objModified = false;
+}
+
+void ibValueRecordDataObjectRef::CommitDeleteScope(ibConnectionScope& scope,
+                                                    ibBackendValueForm* valueForm)
+{
+	scope.SafeCommitTransaction();
+
+	if (valueForm != nullptr)
+		valueForm->NotifyDelete(GetReference());
 }
 
 bool ibValueRecordDataObjectRef::SaveData()

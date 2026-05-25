@@ -29,7 +29,7 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cFilter)
 
 	ibValueStructure* valFilter = nullptr; std::map<ibValueMetaObjectAttributeBase*, ibValue> selFilter;
 	if (cFilter.ConvertToValue(valFilter)) {
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValue vSelValue;
 			if (valFilter->Property(object->GetName(), vSelValue)) {
 				selFilter.insert_or_assign(
@@ -108,7 +108,7 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cPeriod,
 		m_metaObject->GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder) {
 		ibValueStructure* valFilter = nullptr; std::map<ibValueMetaObjectAttributeBase*, ibValue> selFilter;
 		if (cFilter.ConvertToValue(valFilter)) {
-			for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+			for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 				ibValue vSelValue;
 				if (valFilter->Property(object->GetName(), vSelValue)) {
 					selFilter.insert_or_assign(
@@ -177,7 +177,7 @@ ibValue ibValueManagerDataObjectInformationRegister::GetFirst(const ibValue& cPe
 		m_metaObject->GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder) {
 		ibValueStructure* valFilter = nullptr; std::map<ibValueMetaObjectAttributeBase*, ibValue> selFilter;
 		if (cFilter.ConvertToValue(valFilter)) {
-			for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+			for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 				ibValue vSelValue;
 				if (valFilter->Property(object->GetName(), vSelValue)) {
 					selFilter.insert_or_assign(
@@ -202,7 +202,7 @@ ibValue ibValueManagerDataObjectInformationRegister::GetFirst(const ibValue& cPe
 			}
 		}
 
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += ", T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {
@@ -232,7 +232,7 @@ ibValue ibValueManagerDataObjectInformationRegister::GetFirst(const ibValue& cPe
 
 		sqlQuery += " FROM (SELECT ";
 		sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterPeriod(), "MIN");
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : m_metaObject->GetResourceArrayObject()) {
@@ -243,7 +243,7 @@ ibValue ibValueManagerDataObjectInformationRegister::GetFirst(const ibValue& cPe
 		sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterPeriod(), ">=");
 		sqlQuery += " GROUP BY ";
 		sqlQuery += sqlCol.m_fieldTypeName;
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : m_metaObject->GetResourceArrayObject()) {
@@ -265,7 +265,7 @@ ibValue ibValueManagerDataObjectInformationRegister::GetFirst(const ibValue& cPe
 			}
 		}
 
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += " AND T1." + sqlDim.m_fieldTypeName + " = T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {
@@ -356,7 +356,7 @@ ibValue ibValueManagerDataObjectInformationRegister::GetLast(const ibValue& cPer
 		m_metaObject->GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder) {
 		ibValueStructure* valFilter = nullptr; std::map<ibValueMetaObjectAttributeBase*, ibValue> selFilter;
 		if (cFilter.ConvertToValue(valFilter)) {
-			for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+			for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 				ibValue vSelValue;
 				if (valFilter->Property(object->GetName(), vSelValue)) {
 					selFilter.insert_or_assign(
@@ -381,7 +381,7 @@ ibValue ibValueManagerDataObjectInformationRegister::GetLast(const ibValue& cPer
 			}
 		}
 
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += ", T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {
@@ -411,7 +411,7 @@ ibValue ibValueManagerDataObjectInformationRegister::GetLast(const ibValue& cPer
 
 		sqlQuery += " FROM (SELECT ";
 		sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterPeriod(), "MAX");
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : m_metaObject->GetResourceArrayObject()) {
@@ -422,7 +422,7 @@ ibValue ibValueManagerDataObjectInformationRegister::GetLast(const ibValue& cPer
 		sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterPeriod(), "<=");
 		sqlQuery += " GROUP BY ";
 		sqlQuery += sqlCol.m_fieldTypeName;
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : m_metaObject->GetResourceArrayObject()) {
@@ -444,7 +444,7 @@ ibValue ibValueManagerDataObjectInformationRegister::GetLast(const ibValue& cPer
 			}
 		}
 
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += " AND T1." + sqlDim.m_fieldTypeName + " = T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {
@@ -543,7 +543,7 @@ ibValue ibValueManagerDataObjectInformationRegister::SliceFirst(const ibValue& c
 		m_metaObject->GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder) {
 		ibValueStructure* valFilter = nullptr; std::map<ibValueMetaObjectAttributeBase*, ibValue> selFilter;
 		if (cFilter.ConvertToValue(valFilter)) {
-			for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+			for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 				ibValue vSelValue;
 				if (valFilter->Property(object->GetName(), vSelValue)) {
 					selFilter.insert_or_assign(
@@ -568,7 +568,7 @@ ibValue ibValueManagerDataObjectInformationRegister::SliceFirst(const ibValue& c
 			}
 		}
 
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += ", T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {
@@ -598,7 +598,7 @@ ibValue ibValueManagerDataObjectInformationRegister::SliceFirst(const ibValue& c
 
 		sqlQuery += " FROM (SELECT ";
 		sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterPeriod(), "MIN");
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : m_metaObject->GetResourceArrayObject()) {
@@ -609,7 +609,7 @@ ibValue ibValueManagerDataObjectInformationRegister::SliceFirst(const ibValue& c
 		sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterPeriod(), ">=");
 		sqlQuery += " GROUP BY ";
 		sqlQuery += sqlCol.m_fieldTypeName;
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : m_metaObject->GetResourceArrayObject()) {
@@ -631,7 +631,7 @@ ibValue ibValueManagerDataObjectInformationRegister::SliceFirst(const ibValue& c
 			}
 		}
 
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += " AND T1." + sqlDim.m_fieldTypeName + " = T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {
@@ -733,7 +733,7 @@ ibValue ibValueManagerDataObjectInformationRegister::SliceLast(const ibValue& cP
 		m_metaObject->GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder) {
 		ibValueStructure* valFilter = nullptr; std::map<ibValueMetaObjectAttributeBase*, ibValue> selFilter;
 		if (cFilter.ConvertToValue(valFilter)) {
-			for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+			for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 				ibValue vSelValue;
 				if (valFilter->Property(object->GetName(), vSelValue)) {
 					selFilter.insert_or_assign(
@@ -758,7 +758,7 @@ ibValue ibValueManagerDataObjectInformationRegister::SliceLast(const ibValue& cP
 			}
 		}
 
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += ", T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {
@@ -788,7 +788,7 @@ ibValue ibValueManagerDataObjectInformationRegister::SliceLast(const ibValue& cP
 
 		sqlQuery += " FROM (SELECT ";
 		sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterPeriod(), "MAX");
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : m_metaObject->GetResourceArrayObject()) {
@@ -799,7 +799,7 @@ ibValue ibValueManagerDataObjectInformationRegister::SliceLast(const ibValue& cP
 		sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterPeriod(), "<=");
 		sqlQuery += " GROUP BY ";
 		sqlQuery += sqlCol.m_fieldTypeName;
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		}
 		for (const auto object : m_metaObject->GetResourceArrayObject()) {
@@ -821,7 +821,7 @@ ibValue ibValueManagerDataObjectInformationRegister::SliceLast(const ibValue& cP
 			}
 		}
 
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 			sqlQuery += " AND T1." + sqlDim.m_fieldTypeName + " = T2." + sqlDim.m_fieldTypeName;
 			for (auto dataType : sqlDim.m_types) {

@@ -7,126 +7,8 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibValueRecordSetObjectInformationRegister::WriteRecordSet(bool replace, bool clearTable)
-{
-	if (!appData->DesignerMode())
-	{
-		ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
-
-		if (!scope || !scope->IsOpen())
-			ibBackendCoreException::Error(_("Database is not open!"));
-
-		if (!ibBackendException::IsEvalMode())
-		{
-			if (!m_metaObject->AccessRight_Write()) {
-				ibBackendAccessException::Error();
-				return false;
-			}
-
-			{
-				scope.SafeBeginTransaction();
-
-				// Lock by key set — recorder for IR-Subordinate, or
-				// period+dimensions for non-recorder IR. Uniform path,
-				// FillArrayObjectByDimention picks the right keys.
-				// See docs/record-locks.md.
-				LockByKeys();
-
-				{
-					ibValue cancel = false;
-					ExecAsProc(wxT("BeforeWrite"), cancel);
-
-					if (cancel.GetBoolean()) {
-						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to write object in db!"));
-						return false;
-					}
-				}
-
-				if (!SaveData(replace, clearTable)) {
-					scope.SafeRollBackTransaction();
-					ibBackendCoreException::Error(_("Failed to write object in db!"));
-					return false;
-				}
-
-				{
-					ibValue cancel = false;
-					ExecAsProc(wxT("OnWrite"), cancel);
-					if (cancel.GetBoolean()) {
-						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to write object in db!"));
-						return false;
-					}
-				}
-
-				scope.SafeCommitTransaction();
-			}
-
-			m_objModified = false;
-		}
-	}
-
-	return true;
-}
-
-bool ibValueRecordSetObjectInformationRegister::DeleteRecordSet()
-{
-	if (!appData->DesignerMode())
-	{
-		ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
-
-		if (!scope || !scope->IsOpen())
-			ibBackendCoreException::Error(_("Database is not open!"));
-
-		if (!ibBackendException::IsEvalMode())
-		{
-			if (!m_metaObject->AccessRight_Delete()) {
-				ibBackendAccessException::Error();
-				return false;
-			}
-
-			{
-				scope.SafeBeginTransaction();
-
-				// Lock by key set before delete — same shape as Write.
-				LockByKeys();
-
-				{
-					ibValue cancel = false;
-					ExecAsProc(wxT("BeforeWrite"), cancel);
-
-					if (cancel.GetBoolean()) {
-						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to write object in db!"));
-						return false;
-					}
-				}
-
-				if (!DeleteData()) {
-					scope.SafeRollBackTransaction();
-					ibBackendCoreException::Error(_("Failed to write object in db!"));
-					return false;
-				}
-
-				{
-					ibValue cancel = false;
-					ExecAsProc(wxT("OnWrite"), cancel);
-					if (cancel.GetBoolean()) {
-						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to write object in db!"));
-						return false;
-					}
-				}
-
-				scope.SafeCommitTransaction();
-			}
-
-			m_objModified = false;
-		}
-	}
-
-	return true;
-}
+// WriteRecordSet / DeleteRecordSet inherited from ibValueRecordSetObject
+// (Phase B template-method) — see commonObjectRecordSetQuery.cpp.
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -145,7 +27,7 @@ ibSourceExplorer ibValueRecordManagerObjectInformationRegister::GetSourceExplore
 		}
 	}
 
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		srcHelper.AppendSource(object);
 	}
 

@@ -22,7 +22,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Balance(const ibValue& cPe
 	ibValueModelTable* retTable = ibValue::CreateAndPrepareValueRef<ibValueModelTable>();
 	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
-	for (auto dimension : m_metaObject->GetDimentionArrayObject()) {
+	for (auto dimension : m_metaObject->GetDimensionArrayObject()) {
 		ibValueModelTable::ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo =
 			colCollection->AddColumn(
 				dimension->GetName(),
@@ -43,7 +43,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Balance(const ibValue& cPe
 
 		ibValueStructure* valFilter = nullptr; std::map<ibValueMetaObjectAttributeBase*, ibValue> selFilter;
 		if (cFilter.ConvertToValue(valFilter)) {
-			for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+			for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 				ibValue vSelValue;
 				if (valFilter->Property(object->GetName(), vSelValue)) {
 					selFilter.insert_or_assign(
@@ -58,7 +58,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Balance(const ibValue& cPe
 
 		wxString sqlQuery = " SELECT "; bool firstSelect = true;
 
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 
 			ibValueMetaObjectAttributeBase::ibSQLField sqlDimension = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 
@@ -87,7 +87,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Balance(const ibValue& cPe
 
 		sqlQuery += " FROM ( SELECT "; firstSelect = true;
 
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			sqlQuery += (firstSelect ? "" : ",") + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 			firstSelect = false;
 		}
@@ -114,7 +114,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Balance(const ibValue& cPe
 
 		sqlQuery += " GROUP BY "; bool firstGroupBy = true;
 
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			sqlQuery += (firstGroupBy ? "" : ",") + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 			firstGroupBy = false;
 		}
@@ -163,7 +163,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Balance(const ibValue& cPe
 		while (resultSet->Next()) {
 			ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
 			wxASSERT(retLine);
-			for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+			for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 				ibValue retVal;
 				if (ibValueMetaObjectAttributeBase::GetValueAttribute(object, retVal, resultSet))
 					retLine->SetAt(object->GetName(), retVal);
@@ -193,7 +193,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Turnovers(const ibValue& c
 	ibValueModelTable* retTable = ibValue::CreateAndPrepareValueRef<ibValueModelTable>();
 	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
-	for (auto dimension : m_metaObject->GetDimentionArrayObject()) {
+	for (auto dimension : m_metaObject->GetDimensionArrayObject()) {
 		ibValueModelTable::ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo =
 			colCollection->AddColumn(
 				dimension->GetName(),
@@ -223,7 +223,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Turnovers(const ibValue& c
 
 	ibValueStructure* valFilter = nullptr; std::map<ibValueMetaObjectAttributeBase*, ibValue> selFilter;
 	if (cFilter.ConvertToValue(valFilter)) {
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValue vSelValue;
 			if (valFilter->Property(object->GetName(), vSelValue)) {
 				selFilter.insert_or_assign(
@@ -238,7 +238,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Turnovers(const ibValue& c
 
 	wxString sqlQuery = " SELECT "; bool firstSelect = true;
 
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 
 		ibValueMetaObjectAttributeBase::ibSQLField sqlDimension = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
 
@@ -273,7 +273,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Turnovers(const ibValue& c
 
 	sqlQuery += " FROM ( SELECT "; firstSelect = true;
 
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		sqlQuery += (firstSelect ? "" : ",") + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		firstSelect = false;
 	}
@@ -316,7 +316,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Turnovers(const ibValue& c
 
 	sqlQuery += " GROUP BY "; bool firstGroupBy = true;
 
-	for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		sqlQuery += (firstGroupBy ? "" : ",") + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
 		firstGroupBy = false;
 	}
@@ -380,7 +380,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Turnovers(const ibValue& c
 
 		ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
 		wxASSERT(retLine);
-		for (const auto object : m_metaObject->GetDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 			ibValue retValue;
 			if (ibValueMetaObjectAttributeBase::GetValueAttribute(object, retValue, resultSet))
 				retLine->SetAt(object->GetName(), retValue);

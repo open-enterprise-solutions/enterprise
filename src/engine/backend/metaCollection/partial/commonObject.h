@@ -1,10 +1,21 @@
-﻿#ifndef __COMMON_OBJECT_H__
+#ifndef __COMMON_OBJECT_H__
 #define __COMMON_OBJECT_H__
 
 #include "reference/reference.h"
 #include "backend/uniqueKey.h"
 #include "backend/lock/lockHandle.h"
 #include "backend/lock/lockTypes.h"
+// documentEnum.h carries ibDocumentWriteMode / ibDocumentPostingMode —
+// pulled here so ibValueRecordDataObjectRecorderRef::WriteObject can
+// take typed enum args. Wrappers (ibValueEnumDocument*) stay private
+// to documentEnum.h; only the plain enum values bleed up.
+#include "backend/metaCollection/partial/documentEnum.h"
+// ibConnectionScope is used by-reference in the Phase A Begin*/Commit*
+// scaffold helper signatures on ibValueRecordDataObjectRef +
+// ibValueRecordSetObject. Pulling the real header here avoids a
+// global forward-decl in this header. ibBackendValueForm is already
+// visible transitively via metaFormObject.h below.
+#include "backend/databaseLayer/connectionScope.h"
 
 //special object 
 #include "backend/metaCollection/metaModuleObject.h"
@@ -61,7 +72,7 @@ class BACKEND_API ibValueRecordSetObject;
 
 class BACKEND_API ibSourceExplorer;
 
-//special names 
+//special names
 #define guidName wxT("uuid")
 
 //********************************************************************************************
@@ -406,7 +417,7 @@ enum ibObjectMode {
 	OBJECT_FOLDER
 };
 
-//meta object with file 
+//meta object with file
 class BACKEND_API ibValueMetaObjectRecordDataExt : public ibValueMetaObjectRecordData {
 	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectRecordDataExt);
 public:
@@ -424,7 +435,7 @@ public:
 	//пїЅreate from file?
 	virtual bool IsExternalCreate() const { return false; }
 
-	//module manager is started or exit 
+	//module manager is started or exit
 	virtual bool OnBeforeRunMetaObject(int flags);
 	virtual bool OnAfterCloseMetaObject();
 
@@ -435,7 +446,7 @@ public:
 	//create single object
 	virtual ibValueRecordDataObject* CreateRecordDataObjectValue() const;
 
-	//get command section 
+	//get command section
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Service; }
 
 protected:
@@ -602,9 +613,15 @@ public:
 
 protected:
 
-	//predefined array 
+	// Predefined-attribute contract — ADDITIVE. Every override must
+	// call its parent's FillArrayObjectByPredefinedAttribute first
+	// (or push_back base entries explicitly) so the subclass list
+	// always carries the inherited predefined columns. Forgetting a
+	// base entry used to silently drop the attribute from runtime
+	// (DataVersion bug pre-Phase-A) — the additive contract makes
+	// that mistake structurally impossible.
 	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-		array = { m_propertyAttributeReference->GetMetaObject() };
+		array.push_back(m_propertyAttributeReference->GetMetaObject());
 		return true;
 	}
 
@@ -627,7 +644,24 @@ private:
 	ibPropertyContainer<>* m_propertyAttributeOrder = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateNumber(wxT("Order"), _("Order"), wxEmptyString, 6, true));
 };
 
-//meta object with reference and deletion mark 
+// Helper macro — emits the Read/Write/Delete role triplet + their
+// AccessRight_* helpers. Used by both ibValueMetaObjectRecordDataMutableRef
+// and ibValueMetaObjectRegisterData (independent branches of the tree
+// share the same RWD policy). The macro is parameterised on the
+// stored role-name for "Write" because MutableRef historically stored
+// it as "Wrire" (legacy typo) while RegisterData stored "Write" —
+// fixing the typo requires a metadata migration tracked separately.
+#define IB_DECLARE_RWD_ROLE_TRIPLET(writeStorageName) \
+private: \
+	ibRole* m_roleRead   = ibValueMetaObject::CreateRole(wxT("Read"),   _("Read")); \
+	ibRole* m_roleWrite  = ibValueMetaObject::CreateRole(wxT(writeStorageName), _("Write")); \
+	ibRole* m_roleDelete = ibValueMetaObject::CreateRole(wxT("Delete"), _("Delete")); \
+public: \
+	bool AccessRight_Read()   const { return IsFullAccess() || AccessRight(m_roleRead);   } \
+	bool AccessRight_Write()  const { return IsFullAccess() || AccessRight(m_roleWrite);  } \
+	bool AccessRight_Delete() const { return IsFullAccess() || AccessRight(m_roleDelete); }
+
+//meta object with reference and deletion mark
 class BACKEND_API ibValueMetaObjectRecordDataMutableRef : public ibValueMetaObjectRecordDataRef {
 	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectRecordDataMutableRef);
 protected:
@@ -640,13 +674,9 @@ public:
 	virtual bool AccessRight_Show() const { return AccessRight_Read(); }
 #pragma endregion
 
-	ibMetaDescription& GetGenerationDescription() const { return m_propertyGeneration->GetValueAsMetaDesc(); }
+	IB_DECLARE_RWD_ROLE_TRIPLET("Wrire")   // legacy storage typo — kept until migration arc
 
-#pragma region access
-	bool AccessRight_Read() const { return IsFullAccess() || AccessRight(m_roleRead); }
-	bool AccessRight_Write() const { return IsFullAccess() || AccessRight(m_roleWrite); }
-	bool AccessRight_Delete() const { return IsFullAccess() || AccessRight(m_roleDelete); }
-#pragma endregion
+	ibMetaDescription& GetGenerationDescription() const { return m_propertyGeneration->GetValueAsMetaDesc(); }
 
 	ibValueMetaObjectAttributePredefined* GetDataVersion() const { return m_propertyAttributeDataVersion->GetMetaObject(); }
 	bool IsDataVersion(const ibMetaID& id) const { return id == (*m_propertyAttributeDataVersion)->GetMetaID(); }
@@ -689,14 +719,14 @@ public:
 
 protected:
 
-	//predefined array 
-	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-
-		array = {
-			m_propertyAttributeReference->GetMetaObject(),
-			m_propertyAttributeDeletionMark->GetMetaObject()
-		};
-
+	// Predefined-attribute contract is ADDITIVE (see base class doc).
+	// MutableRef adds DeletionMark + DataVersion on top of Ref's
+	// Reference column. Hierarchy + each leaf extend further; chain
+	// of base calls guarantees no slot ever disappears silently.
+	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
+		ibValueMetaObjectRecordDataRef::FillArrayObjectByPredefinedAttribute(array);
+		array.push_back(m_propertyAttributeDeletionMark->GetMetaObject());
+		array.push_back(m_propertyAttributeDataVersion->GetMetaObject());
 		return true;
 	}
 
@@ -731,16 +761,11 @@ protected:
 	ibPropertyContainer<>* m_propertyAttributeDataVersion = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("DataVersion"), _("Data version"), wxEmptyString, 12, ibItemMode_Folder_Item));
 	ibPropertyContainer<>* m_propertyAttributeDeletionMark = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(wxT("DeletionMark"), _("Deletion mark"), wxEmptyString));
 
-private:
-
-#pragma region role
-	ibRole* m_roleRead = ibValueMetaObject::CreateRole(wxT("Read"), _("Read"));
-	ibRole* m_roleWrite = ibValueMetaObject::CreateRole(wxT("Wrire"), _("Write"));
-	ibRole* m_roleDelete = ibValueMetaObject::CreateRole(wxT("Delete"), _("Delete"));
-#pragma endregion
+	// Read/Write/Delete role triplet emitted by IB_DECLARE_RWD_ROLE_TRIPLET
+	// above (in the public access region).
 };
 
-//meta object with reference and deletion mark and group/object type and predefined values 
+//meta object with reference and deletion mark and group/object type and predefined values
 class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	public ibValueMetaObjectRecordDataMutableRef {
 	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectRecordDataHierarchyMutableRef);
@@ -930,19 +955,16 @@ protected:
 
 protected:
 
-	//predefined array 
-	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-
-		array = {
-			m_propertyAttributePredefined->GetMetaObject(),
-			m_propertyAttributeCode->GetMetaObject(),
-			m_propertyAttributeDescription->GetMetaObject(),
-			m_propertyAttributeParent->GetMetaObject(),
-			m_propertyAttributeIsFolder->GetMetaObject(),
-			m_propertyAttributeReference->GetMetaObject(),
-			m_propertyAttributeDeletionMark->GetMetaObject(),
-		};
-
+	// Additive predefined-attribute contract (see base). Hierarchy
+	// adds Predefined / Code / Description / Parent / IsFolder on top
+	// of MutableRef's Reference + DeletionMark + DataVersion.
+	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
+		ibValueMetaObjectRecordDataMutableRef::FillArrayObjectByPredefinedAttribute(array);
+		array.push_back(m_propertyAttributePredefined->GetMetaObject());
+		array.push_back(m_propertyAttributeCode->GetMetaObject());
+		array.push_back(m_propertyAttributeDescription->GetMetaObject());
+		array.push_back(m_propertyAttributeParent->GetMetaObject());
+		array.push_back(m_propertyAttributeIsFolder->GetMetaObject());
 		return true;
 	}
 
@@ -984,11 +1006,7 @@ public:
 	virtual bool AccessRight_Show() const { return AccessRight_Read(); }
 #pragma endregion
 
-#pragma region access
-	bool AccessRight_Read() const { return IsFullAccess() || AccessRight(m_roleRead); }
-	bool AccessRight_Write() const { return IsFullAccess() || AccessRight(m_roleWrite); }
-	bool AccessRight_Delete() const { return IsFullAccess() || AccessRight(m_roleDelete); }
-#pragma endregion
+	IB_DECLARE_RWD_ROLE_TRIPLET("Write")
 
 	ibValueMetaObjectAttributePredefined* GetRegisterActive() const { return m_propertyAttributeLineActive->GetMetaObject(); }
 	bool IsRegisterActive(const ibMetaID& id) const { return id == (*m_propertyAttributeLineActive)->GetMetaID(); }
@@ -1012,10 +1030,10 @@ public:
 		return array;
 	}
 
-	//dimention
-	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericDimentionArrayObject(
+	//Dimension
+	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericDimensionArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
-		FillArrayObjectByDimention(array);
+		FillArrayObjectByDimension(array);
 		return array;
 	}
 
@@ -1031,7 +1049,7 @@ public:
 	}
 
 	//dimension
-	std::vector<ibValueMetaObjectDimension*> GetDimentionArrayObject(
+	std::vector<ibValueMetaObjectDimension*> GetDimensionArrayObject(
 		std::vector<ibValueMetaObjectDimension*> array = std::vector<ibValueMetaObjectDimension*>()) const {
 		FillArrayObjectByFilter<ibValueMetaObjectDimension>(array, { g_metaDimensionCLSID });
 		return array;
@@ -1057,7 +1075,7 @@ public:
 	// me a Pair from this register" entry points.
 	ibUniqueKeyPair CreateUniqueKeyPair() const {
 		ibMetaValueArray values;
-		for (const auto* attr : GetGenericDimentionArrayObject())
+		for (const auto* attr : GetGenericDimensionArrayObject())
 			values.insert_or_assign(attr->GetMetaID(), attr->CreateValue());
 		return ibUniqueKeyPair(values);
 	}
@@ -1066,7 +1084,7 @@ public:
 	// (filtered to dimensions actually owned by this register).
 	ibUniqueKeyPair CreateUniqueKeyPair(const ibMetaValueArray& keyValues) const {
 		ibMetaValueArray values;
-		for (const auto* attr : GetGenericDimentionArrayObject()) {
+		for (const auto* attr : GetGenericDimensionArrayObject()) {
 			const auto it = keyValues.find(attr->GetMetaID());
 			if (it != keyValues.end())
 				values.insert_or_assign(attr->GetMetaID(), it->second);
@@ -1184,7 +1202,7 @@ protected:
 	}
 
 	//get dimension keys 
-	virtual bool FillArrayObjectByDimention(
+	virtual bool FillArrayObjectByDimension(
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaDimensionCLSID });
 		return true;
@@ -1216,13 +1234,8 @@ protected:
 	ibPropertyContainer<>* m_propertyAttributeRecorder = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Recorder"), _("Recorder"), wxEmptyString));
 	ibPropertyContainer<>* m_propertyAttributeLineNumber = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateNumber(wxT("LineNumber"), _("Line number"), wxEmptyString, 15, 0));
 
-private:
-
-#pragma region role
-	ibRole* m_roleRead = ibValueMetaObject::CreateRole(wxT("Read"), _("Read"));
-	ibRole* m_roleWrite = ibValueMetaObject::CreateRole(wxT("Write"), _("Write"));
-	ibRole* m_roleDelete = ibValueMetaObject::CreateRole(wxT("Delete"), _("Delete"));
-#pragma endregion
+	// Read/Write/Delete role triplet emitted by IB_DECLARE_RWD_ROLE_TRIPLET
+	// above (in the public access region).
 };
 
 //********************************************************************************************
@@ -1467,15 +1480,30 @@ public:
 	virtual ibBackendValueForm* GetForm() const;
 
 #pragma region _form_builder_h_
-	//support show 
-	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr) = 0;
-	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr) = 0;
-#pragma endregion 
+	// Universal form-open trampolines. Hoisted from per-leaf code that
+	// followed the same shape across HierarchyRef, RecorderRef (Document)
+	// and Ext (DataProcessor / Report). Variation per leaf collapses to
+	// two hooks: GetCurrentObjectFormID (form-id enum value) and
+	// OnFormCreated (post-creation tweak — e.g. CloseOnOwnerClose(false)
+	// on ref-flavour leaves, no-op on Ext). valueForm->Modify uses the
+	// virtual IsModified() — Ref leaves return m_objModified, Ext keeps
+	// the default `false` from ibSourceDataObject.
+	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr) override;
+	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr) override;
+
+protected:
+	// Leaf-specific form-id enum value for the current object state.
+	// Hierarchy returns eFormObject / eFormFolder by m_objMode;
+	// Document / DataProcessor / Report return a single fixed id.
+	virtual ibFormID GetCurrentObjectFormID() const = 0;
+public:
+
+#pragma endregion
 
 	//default showing
 	virtual void ShowValue() override { ShowFormValue(); }
 
-	//save modify 
+	//save modify
 	virtual bool SaveModify() override { return true; }
 
 	//Get ref class
@@ -1612,10 +1640,26 @@ public:
 	//default methods
 	virtual bool Generate();
 
-	//filling object 
+	//filling object
 	virtual bool Filling(ibValue cValue = ibValue()) const;
 
-	//support source set/get data 
+	// Script-exposed FillObject + CopyObject — all 4 ref leaves
+	// (Catalog / Document / ChartOfAccounts /
+	// ChartOfCharacteristicTypes) had byte-identical inline copies of
+	// these. Hoisted here so the convenience layer lives in one place.
+	// Filling / CopyObjectValue / ShowFormValue are virtual — leaves
+	// don't need to override unless they want different defaults.
+	virtual bool FillObject(ibValue& vFillObject) const {
+		return Filling(vFillObject);
+	}
+	virtual ibValueRecordDataObjectRef* CopyObject(bool showValue = false) {
+		ibValueRecordDataObjectRef* objectRef = CopyObjectValue();
+		if (objectRef != nullptr && showValue)
+			objectRef->ShowFormValue();
+		return objectRef;
+	}
+
+	//support source set/get data
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal);
 	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const;
 
@@ -1626,7 +1670,7 @@ public:
 		return ibValue();
 	}
 
-	//get unique identifier 
+	//get unique identifier
 	virtual ibUniqueKey GetGuid() const { return m_objGuid; }
 
 	//copy new object
@@ -1670,7 +1714,47 @@ protected:
 	// scope on the WriteObject / DeleteObject hot path).
 	bool LockAndCheckDataVersion(bool bump = true);
 
-	//code/number generator 
+	// Phase A Write/Delete scaffold helpers — extract the pre/post
+	// boilerplate (designer/eval skip, scope/access checks, TX begin,
+	// lock + version check; commit + notify + clear-modified) so
+	// subclass methods reduce to just the per-type middle (BeforeWrite
+	// hook, codegen, SaveData, OnWrite hook).
+	//
+	// Usage pattern (caller side):
+	//
+	//   bool ibValueRecordDataObjectCatalog::WriteObject() {
+	//     ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
+	//     if (!BeginWriteScope(scope)) return true;          // designer / eval
+	//
+	//     ibBackendValueForm* const valueForm = GetForm();
+	//     const bool newObject = IsNewObject();
+	//
+	//     /* === middle: BeforeWrite + codegen + SaveData + OnWrite === */
+	//
+	//     CommitWriteScope(scope, valueForm, newObject);
+	//     return true;
+	//   }
+	//
+	// Begin*Scope returns true to proceed, false to skip silently
+	// (designer / eval mode). Throws ibBackendAccessException on
+	// access denial; ibBackendLockException on lock conflict /
+	// version mismatch; ibBackendCoreException on DB-not-open.
+	//
+	// Commit*Scope assumes the middle completed without throwing. If
+	// the middle threw, scope's RAII rollback fires automatically and
+	// Commit*Scope never runs.
+	//
+	// Document keeps its inline scaffold (writeMode/postingMode args +
+	// register-cascade state machine) — Phase B may promote it.
+	// Constants stay inline (single use, single file).
+	bool BeginWriteScope (ibConnectionScope& scope);
+	bool BeginDeleteScope(ibConnectionScope& scope);
+	void CommitWriteScope (ibConnectionScope& scope,
+	                        ibBackendValueForm* valueForm, bool newObject);
+	void CommitDeleteScope(ibConnectionScope& scope,
+	                        ibBackendValueForm* valueForm);
+
+	//code/number generator
 	virtual bool IsSetUniqueIdentifier() const;
 
 	virtual bool GenerateUniqueIdentifier(const wxString& strPrefix);
@@ -1701,7 +1785,7 @@ public:
 	bool TryAcquireFormLock(ibLockMode mode = ibLockMode::Exclusive) override;
 };
 
-//Object with reference type and group/object type 
+//Object with reference type and group/object type
 class BACKEND_API ibValueRecordDataObjectHierarchyRef : public ibValueRecordDataObjectRef {
 	wxDECLARE_ABSTRACT_CLASS(ibValueRecordDataObjectHierarchyRef);
 protected:
@@ -1727,7 +1811,7 @@ public:
 	//copy new object
 	virtual ibValueRecordDataObjectRef* CopyObjectValue();
 
-	//support source set/get data 
+	//support source set/get data
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal);
 	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const;
 
@@ -1737,6 +1821,35 @@ public:
 			return retValue;
 		return ibValue();
 	}
+
+	// Phase B template-method scaffolds. The 3 hierarchy-mutable-ref
+	// leaves (Catalog / ChartOfAccounts / ChartOfCharacteristicTypes)
+	// share byte-identical Write/Delete pipelines — BeforeWrite cancel
+	// + SetNewCode codegen + SaveData + OnWrite cancel for Write;
+	// predefined-guard + BeforeDelete + DeleteData + OnDelete for
+	// Delete. Both are implemented here once and inherited verbatim by
+	// the leaves (zero per-subclass override). All variation points
+	// resolve through virtual dispatch — GenerateUniqueIdentifier /
+	// ResetUniqueIdentifier / SaveData / DeleteData / metaobject's
+	// FindPredefinedValue / IsNewObject.
+	//
+	// Document keeps its inline scaffold (writeMode/postingMode args +
+	// posting state machine + register cascade). Promoting it to a
+	// hook-based extension of this scaffold is Phase C.
+	virtual bool WriteObject()  override;
+	virtual bool DeleteObject() override;
+
+	// SaveModify route for the form's auto-save path. 3 hierarchy
+	// leaves use it as a thin trampoline — Catalog / ChartOfAccounts /
+	// ChartOfCharacteristicTypes each used to declare an identical
+	// inline copy; consolidated here. Document overrides because its
+	// Write takes (writeMode, postingMode).
+	virtual bool SaveModify() override { return WriteObject(); }
+
+	// ShowFormValue / GetFormValue + GetCurrentObjectFormID hook live
+	// on ibValueRecordDataObject (universal). Each leaf overrides
+	// GetCurrentObjectFormID with its m_objMode-aware pair (Hierarchy)
+	// or single id (Document / Ext).
 
 protected:
 	virtual bool ReadData();
@@ -1748,10 +1861,124 @@ protected:
 	//folder or object catalog
 	ibObjectMode m_objMode;
 };
+
+// Intermediate base for ref-objects that carry register movements.
+// Mirrors ibValueRecordDataObjectHierarchyRef on the other axis —
+// Hierarchy adds folder/item mode + predefined-value policy; this
+// adds posting state + register cascade. Today there's exactly one
+// descendant (ibValueRecordDataObjectDocument), but the class is a
+// structural placeholder + actual scaffold owner so that:
+//   • a second postable type (business process, task object, custom
+//     1С-style document) can slot in without touching the leaf
+//     hierarchy;
+//   • cross-cutting concerns scoped to "ref with movements" land in
+//     one place instead of being scattered across N leaf cpps.
+//
+// The posting-state-machine + register cascade live here. Document-
+// specific bits (DeletionMark posting guard, DocumentPosted attribute
+// mutation, default DocDate fill) are hooks the concrete leaf overrides.
+class BACKEND_API ibValueRecordDataObjectRecorderRef : public ibValueRecordDataObjectRef {
+	wxDECLARE_ABSTRACT_CLASS(ibValueRecordDataObjectRecorderRef);
+public:
+	// Per-recorder register holder. Iterates the leaf metaobject's
+	// RecordDescription, creates one ibValueRecordSetObject per
+	// declared register seeded with this recorder's reference, and
+	// fans Write/Delete across all of them.
+	class BACKEND_API ibRecorderRegister : public ibValue {
+		wxDECLARE_DYNAMIC_CLASS(ibRecorderRegister);
+	public:
+		void CreateRecordSet();
+		bool WriteRecordSet();
+		bool DeleteRecordSet();
+		void ClearRecordSet();
+		void RefreshRecordSet();
+
+		ibRecorderRegister(ibValueRecordDataObjectRecorderRef* recorder = nullptr);
+		virtual ~ibRecorderRegister();
+
+		virtual ibValueMethodHelper* GetPMethods() const { return m_methodHelper; }
+		virtual void PrepareNames() const;
+		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
+
+		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
+		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
+
+		virtual bool IsEmpty() const { return false; }
+
+	private:
+		ibValueRecordDataObjectRecorderRef* m_recorder;
+		std::map<ibMetaID, ibValuePtr<ibValueRecordSetObject>> m_records;
+		ibValueMethodHelper* m_methodHelper;
+	};
+
+protected:
+	ibValueRecordDataObjectRecorderRef(const ibValueMetaObjectRecordDataMutableRef* metaObject, const ibGuid& objGuid);
+	ibValueRecordDataObjectRecorderRef(const ibValueRecordDataObjectRecorderRef& src);
+
+	// Late-bind of the register-cascade holder. The leaf ctor must
+	// call this from its OWN body (not init list) so the most-derived
+	// vtable is in place — ibRecorderRegister::CreateRecordSet
+	// dispatches the virtual GetRecordDescription() back to the leaf;
+	// doing the new in RecorderRef's init list would resolve it to
+	// the pure-virtual in RecorderRef and trip __purecall during
+	// construction. See documentObject.cpp Document ctors.
+	void InitRegisterRecords();
+
+public:
+	virtual ~ibValueRecordDataObjectRecorderRef();
+
+	// Public helpers for register access from form scripts / Document
+	// subclass override paths.
+	void ClearRecordSet()  { wxASSERT(m_registerRecords); m_registerRecords->ClearRecordSet(); }
+	void UpdateRecordSet() { wxASSERT(m_registerRecords); m_registerRecords->ClearRecordSet(); m_registerRecords->CreateRecordSet(); }
+
+	// Write/Delete scaffold. The 2-arg WriteObject is the canonical
+	// entry; the no-arg trampoline picks (Write/UndoPosting | Posting
+	// based on IsPosted, Regular postingMode) — matches how the
+	// auto-save / SaveModify path used to call it from Document.
+	virtual bool WriteObject() override {
+		return WriteObject(
+			IsPosted() ? ibDocumentWriteMode::ibDocumentWriteMode_Posting
+			           : ibDocumentWriteMode::ibDocumentWriteMode_Write,
+			ibDocumentPostingMode::ibDocumentPostingMode_Regular);
+	}
+	virtual bool WriteObject(ibDocumentWriteMode writeMode, ibDocumentPostingMode postingMode);
+	virtual bool DeleteObject() override;
+	virtual bool SaveModify() override { return WriteObject(); }
+
+	// Marking a recorder for deletion is the same algorithm as for
+	// catalogs / charts (set DeletionMark + SaveModify) plus an
+	// up-front un-post — setting DeletionMark on a posted recorder
+	// implies undoing its movements before the row is marked.
+	// UndoPosting is a no-op when IsPosted() returns false, so a
+	// future recorder-flavour without movements still works.
+	virtual void SetDeletionMark(bool deletionMark = true) override;
+
+	// Hooks for leaf-specific Document state. Defaults are no-op so a
+	// future plain "recorder" type without these Document concepts
+	// (e.g. a bare business-process recorder) doesn't need to override.
+	virtual bool IsPosted() const                                          { return false; }
+	virtual bool CheckDeletionMarkOnPosting(ibDocumentWriteMode /*wm*/) const { return true; }   // true = ok to proceed
+	virtual void ApplyPostedAttributeOnWrite(ibDocumentWriteMode /*wm*/)   {}
+	virtual void FillDefaultDateForNew()                                   {}
+
+	// Description of registers the recorder writes movements into.
+	// Returns null for recorder types with no fixed movement description
+	// (rare; the cascade just no-ops in that case). Document forwards
+	// to its metaobject's GetRecordDescription so ibRecorderRegister::
+	// CreateRecordSet stays Document-agnostic.
+	virtual const ibMetaDescription* GetRecordDescription() const = 0;
+
+protected:
+	// Register holder owned by the recorder. Created in ctor, lives
+	// for the lifetime of the recorder value.
+	ibValuePtr<ibRecorderRegister> m_registerRecords;
+};
+
 #pragma endregion
 
-//object with register type 
-#pragma region registers 
+//object with register type
+#pragma region registers
 class BACKEND_API ibValueRecordKeyObject : public ibValue {
 	wxDECLARE_ABSTRACT_CLASS(ibValueRecordKeyObject);
 public:
@@ -2067,9 +2294,15 @@ public:
 	virtual bool LoadDataFromTable(ibValueModelTableBase* srcTable);
 	virtual ibValueModelTableBase* SaveDataToTable() const;
 
-	//default methods
-	virtual bool WriteRecordSet(bool replace = true, bool clearTable = true) = 0;
-	virtual bool DeleteRecordSet() = 0;
+	// Phase B template-method scaffolds. The 3 register-set leaves
+	// (Accumulation / Accounting / Information) have byte-identical
+	// Write/Delete pipelines mod class-name qualification on
+	// SaveData / DeleteData — the base owns the scaffold here, the
+	// leaves inherit it verbatim (zero per-subclass override).
+	// SaveData(replace, clearTable) / DeleteData() resolve through
+	// virtual dispatch into the leaf's type-specific UPSERT SQL.
+	virtual bool WriteRecordSet(bool replace = true, bool clearTable = true);
+	virtual bool DeleteRecordSet();
 
 	//array
 	virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue) override;
@@ -2125,6 +2358,28 @@ protected:
 	// scope on the WriteRecordSet / DeleteRecordSet hot path).
 	// See docs/record-locks.md "Registers — keyed by recorder Document".
 	bool LockByKeys();
+
+	// Phase A scaffold helpers — register-side counterparts of the
+	// ibValueRecordDataObjectRef Begin*/Commit* pair. Subclasses
+	// (Accumulation / Accounting / Information) reduce to per-type
+	// middle (BeforeWrite + SaveData + OnWrite cancel handling).
+	//
+	// Usage:
+	//   bool ibValueRecordSetObjectXxx::WriteRecordSet(bool r, bool c) {
+	//     ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
+	//     if (!BeginRecordSetWriteScope(scope)) return true;
+	//     /* === middle: BeforeWrite + SaveData(r, c) + OnWrite === */
+	//     CommitRecordSetScope(scope);
+	//     return true;
+	//   }
+	//
+	// Begin runs designer/eval skip + scope/access check + TX begin +
+	// LockByKeys; Commit runs SafeCommitTransaction + clears
+	// m_objModified. No Notify on register-side (they're owned by a
+	// recorder Document, the Document's Write fires the form notify).
+	bool BeginRecordSetWriteScope (ibConnectionScope& scope);
+	bool BeginRecordSetDeleteScope(ibConnectionScope& scope);
+	void CommitRecordSetScope     (ibConnectionScope& scope);
 
 	////////////////////////////////////////
 

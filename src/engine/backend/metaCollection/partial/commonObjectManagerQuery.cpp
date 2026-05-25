@@ -34,7 +34,7 @@ bool ibValueRecordManagerObject::ExistData()
 		wxString tableName = m_metaObject->GetTableNameDB(); int position = 1;
 		wxString queryText = "SELECT * FROM " + tableName; bool firstWhere = true;
 
-		for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (firstWhere) {
 				queryText = queryText + " WHERE ";
 			}
@@ -48,7 +48,7 @@ bool ibValueRecordManagerObject::ExistData()
 		ibPreparedStatement* statement = scope->PrepareStatement(queryText);
 
 		if (statement != nullptr) {
-			for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+			for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 				ibValue retValue; m_recordLine->GetValueByMetaID(object->GetMetaID(), retValue);
 				ibValueMetaObjectAttributeBase::SetValueAttribute(
 					object,
@@ -106,7 +106,7 @@ bool ibValueRecordManagerObject::SaveData(bool replace)
 
 	m_recordSet->m_keyValues.clear();
 	wxASSERT(m_recordLine);
-	for (const auto object : m_metaObject->GetGenericDimentionArrayObject()) {
+	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		ibValue retValue; m_recordLine->GetValueByMetaID(object->GetMetaID(), retValue);
 		m_recordSet->m_keyValues.insert_or_assign(
 			object->GetMetaID(), retValue

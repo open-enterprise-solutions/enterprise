@@ -28,7 +28,7 @@ ibRegisterSqlBuilder::IdentityAttrs(const ibValueMetaObjectRegisterData* meta)
 	if (meta->HasPeriod())
 		ret.push_back(meta->GetRegisterPeriod());
 
-	for (auto& dim : meta->GetGenericDimentionArrayObject())
+	for (auto& dim : meta->GetGenericDimensionArrayObject())
 		ret.push_back(dim);
 
 	return ret;

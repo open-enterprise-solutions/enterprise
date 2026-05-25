@@ -1,4 +1,4 @@
-﻿#ifndef __ACCOUNTING_REGISTER_H__
+#ifndef __ACCOUNTING_REGISTER_H__
 #define __ACCOUNTING_REGISTER_H__
 
 #include "commonObject.h"
@@ -130,24 +130,25 @@ public:
 
 protected:
 
-	//get default attributes
-	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-		array = {
-			m_propertyAttributeLineActive->GetMetaObject(),
-			m_propertyAttributePeriod->GetMetaObject(),
-			m_propertyAttributeRecordType->GetMetaObject(),
-			m_propertyAttributeAccount->GetMetaObject(),
-			m_propertyAttributeSubconto1->GetMetaObject(),
-			m_propertyAttributeSubconto2->GetMetaObject(),
-			m_propertyAttributeSubconto3->GetMetaObject(),
-			m_propertyAttributeRecorder->GetMetaObject(),
-			m_propertyAttributeLineNumber->GetMetaObject()
-		};
+	// Additive contract — RegisterData base has no predefined attrs of
+	// its own (returns false with empty array); AccountingRegister
+	// provides the full posting-line attribute set.
+	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
+		ibValueMetaObjectRegisterData::FillArrayObjectByPredefinedAttribute(array);
+		array.push_back(m_propertyAttributeLineActive->GetMetaObject());
+		array.push_back(m_propertyAttributePeriod->GetMetaObject());
+		array.push_back(m_propertyAttributeRecordType->GetMetaObject());
+		array.push_back(m_propertyAttributeAccount->GetMetaObject());
+		array.push_back(m_propertyAttributeSubconto1->GetMetaObject());
+		array.push_back(m_propertyAttributeSubconto2->GetMetaObject());
+		array.push_back(m_propertyAttributeSubconto3->GetMetaObject());
+		array.push_back(m_propertyAttributeRecorder->GetMetaObject());
+		array.push_back(m_propertyAttributeLineNumber->GetMetaObject());
 		return true;
 	}
 
 	//get dimension keys
-	virtual bool FillArrayObjectByDimention(
+	virtual bool FillArrayObjectByDimension(
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		array = { m_propertyAttributeRecorder->GetMetaObject() };
 		return true;
@@ -223,8 +224,8 @@ public:
 	ibValueRecordSetObjectAccountingRegister(const ibValueRecordSetObjectAccountingRegister& source) :
 		ibValueRecordSetObject(source) {}
 
-	virtual bool WriteRecordSet(bool replace = true, bool clearTable = true);
-	virtual bool DeleteRecordSet();
+	// WriteRecordSet / DeleteRecordSet inherited from
+	// ibValueRecordSetObject (Phase B template-method).
 
 	virtual bool SaveVirtualTable();
 	virtual bool DeleteVirtualTable();
