@@ -10,6 +10,7 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "workerPool.h"
 #include "workerPoolHeadless.h"
+#include "backend/lock/lockManager.h"
 
 #include <chrono>
 #include <iostream>
@@ -1203,6 +1204,13 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 	NotifyDisconnect(&s);
 	(void)wasAuthenticated;
 
+	// Drop any long-held sys_lock rows owned by this session before the
+	// row teardown below. Cluster-aware — every wes process owning the
+	// session sees the DELETE on next snapshot tick (or on next acquire
+	// attempt against the same key, which then succeeds). See
+	// docs/record-locks.md "Planned upgrade path".
+	ibLockManager::Instance().OnSessionEnd(s.Identity().m_guid);
+
 	if (m_ownsSysSession && m_writeConn && s.Inserted()) {
 		const wxString guidStr = s.GetId();
 		DeleteSessionRow(m_writeConn.get(), guidStr);
@@ -1480,6 +1488,18 @@ void ibSessionRegistry::JobSweepStale()
 	}
 	for (const wxString& g : zombies) {
 		try { DeleteSessionRow(writer, g); } catch (...) {}
+	}
+
+	// Cluster-wide sys_lock cleanup — drop any long-held lock rows
+	// owned by the zombies we just removed from sys_session. Without
+	// this a force-killed process can leave permanent locks behind.
+	if (!zombies.empty()) {
+		std::vector<ibGuid> deadGuids;
+		deadGuids.reserve(zombies.size());
+		for (const wxString& g : zombies)
+			deadGuids.emplace_back(g);
+		try { ibLockManager::Instance().OnZombieSweep(deadGuids); }
+		catch (...) {}
 	}
 }
 

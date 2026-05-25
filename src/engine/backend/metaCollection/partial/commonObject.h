@@ -3,6 +3,8 @@
 
 #include "reference/reference.h"
 #include "backend/uniqueKey.h"
+#include "backend/lock/lockHandle.h"
+#include "backend/lock/lockTypes.h"
 
 //special object 
 #include "backend/metaCollection/metaModuleObject.h"
@@ -1234,7 +1236,22 @@ public:
 
 	virtual ~ibSourceDataObject() {}
 
-	//override default type object 
+	// Long-held sys_lock acquire/release for form-open hold pattern.
+	// Default = no-op (sources without a meaningful lock identity
+	// — DataProcessor, Report — just silently succeed). Concrete
+	// data-bound sources override:
+	//   ibValueRecordDataObjectRef → keys by ref guid
+	//   (future) ibValueRecordSetObject → keys by m_keyValues
+	//   (future) ibValueConstantDataObject → keys by const name
+	//
+	// Storage lives on the base (m_formLockHandle below) — overrides
+	// reuse the same field for RAII release on source dtor.
+	//
+	// See docs/record-locks.md "Planned upgrade path" / Phase B.3.
+	virtual bool TryAcquireFormLock(ibLockMode /*mode*/ = ibLockMode::Exclusive) { return true; }
+	virtual void ReleaseFormLock() { m_formLockHandle.Release(); }
+
+	//override default type object
 	virtual bool IsNewObject() const { return true; }
 
 	//standart override 
@@ -1267,6 +1284,14 @@ public:
 	//counter
 	virtual void SourceIncrRef() = 0;
 	virtual void SourceDecrRef() = 0;
+
+protected:
+	// Storage for TryAcquireFormLock / ReleaseFormLock. RAII-released
+	// on source destruction (form holds source via refcount; source
+	// dies when form closes → handle dtor DELETEs sys_lock row).
+	// Empty by default; populated by concrete-source overrides of
+	// TryAcquireFormLock.
+	ibLockHandle m_formLockHandle;
 };
 
 //********************************************************************************************
@@ -1619,6 +1644,32 @@ protected:
 	virtual bool SaveData();
 	virtual bool DeleteData();
 
+	// Optimistic-concurrency Write protection.
+	//
+	// Two-layer defence (see docs/record-locks.md):
+	//   Layer 1 — issues `SELECT DataVersion FROM <tbl> WHERE uuid = ?
+	//             <RowLockHint>` inside the current TX. The driver-side
+	//             row-lock pins the row until the surrounding scope
+	//             Commit/Rollback fires; concurrent writers block (or
+	//             fail-fast under NOWAIT TX options).
+	//   Layer 2 — compares the freshly-read DataVersion against the
+	//             value captured at ReadData time (m_loadedDataVersion).
+	//             A mismatch means somebody else committed between our
+	//             Read and now → throws ibBackendLockException::
+	//             VersionChanged.
+	//   Bump   — when `bump = true` (the default; pass false on Delete
+	//             where the row is going away), allocates a fresh
+	//             ibDataVersion::NewStamp() and writes it into
+	//             m_listObjectValue[DataVersion.MetaID] so the next
+	//             SaveData() picks it up in its UPSERT.
+	//
+	// New objects (m_newObject == true) skip both layers — there's
+	// nothing to compare against and nothing to lock.
+	//
+	// Must be called inside an active TX (the SafeBeginTransaction
+	// scope on the WriteObject / DeleteObject hot path).
+	bool LockAndCheckDataVersion(bool bump = true);
+
 	//code/number generator 
 	virtual bool IsSetUniqueIdentifier() const;
 
@@ -1635,6 +1686,19 @@ protected:
 	bool m_objModified;
 	const ibValueMetaObjectRecordDataMutableRef* m_metaObject;
 	ibReference* m_reference_impl;
+
+	// Captured at successful ReadData; compared against the row's
+	// current DataVersion at Write/Delete time. Empty for new objects.
+	// See LockAndCheckDataVersion + docs/record-locks.md.
+	wxString m_loadedDataVersion;
+
+public:
+	// Override ibSourceDataObject::TryAcquireFormLock — keys the lock
+	// by this object's ref guid in the "<Kind>.<Name>" namespace.
+	// No-op for new (unsaved) objects — nothing to identify yet.
+	// Throws ibBackendLockException::LockConflict on conflict; caller
+	// (form-open path) decides whether to propagate or degrade.
+	bool TryAcquireFormLock(ibLockMode mode = ibLockMode::Exclusive) override;
 };
 
 //Object with reference type and group/object type 
@@ -2031,6 +2095,36 @@ protected:
 	virtual bool ReadData(const ibUniqueKeyPair& key);
 	virtual bool SaveData(bool replace = true, bool clearTable = true);
 	virtual bool DeleteData();
+
+	// Layer-1 DB row-lock for register record-set writes. Locks the
+	// matching rows on this register's own table by the full key set
+	// (m_keyValues) — uniform across all register shapes:
+	//   • recorder-keyed (Accumulation / Accounting / IR-Subordinate)
+	//     → m_keyValues holds Recorder field → lock all rows for that
+	//       recorder
+	//   • dimension-keyed (Information Register without recorder)
+	//     → m_keyValues holds dimensions + optional period → lock the
+	//       matching row(s)
+	//
+	// Concurrent Document.Write / direct RecordSet.Write that produce
+	// the same key set serialize through the driver's FOR UPDATE /
+	// WITH LOCK. The cascade case (Document.Write fires register
+	// writes for its own ref inside the same TX) is re-entrant — the
+	// rows are already locked by this TX, so the second acquire is a
+	// no-op at the DB level.
+	//
+	// No DataVersion check (registers don't carry one; Document.Write
+	// does the version-check on the Document row itself).
+	//
+	// Skipped silently when m_keyValues is empty or m_metaObject has
+	// no resolvable key attributes (defensive — should not happen on a
+	// well-formed register but doesn't crash on a partially-initialized
+	// record set).
+	//
+	// Must be called inside an active TX (the SafeBeginTransaction
+	// scope on the WriteRecordSet / DeleteRecordSet hot path).
+	// See docs/record-locks.md "Registers — keyed by recorder Document".
+	bool LockByKeys();
 
 	////////////////////////////////////////
 

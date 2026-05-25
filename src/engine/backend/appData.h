@@ -370,6 +370,7 @@ private:
 	static void CreateTableUser();
 	static void CreateTableSession();
 	static void CreateTableEvent();
+	static void CreateTableLock();
 	static void MigrateTableSession();
 	// Additive — creates sys_bytecode_cache if missing. Runs in any
 	// runMode after the existing-tables gate, so DBs initialised before
@@ -446,6 +447,7 @@ private:
 #define sequence_table			wxT("sys_sequence")
 #define event_table				wxT("sys_event")
 #define bytecode_cache_table	wxT("sys_bytecode_cache")
+#define lock_table				wxT("sys_lock")
 ///////////////////////////////////////////////////////////////////////////////
 
 #endif

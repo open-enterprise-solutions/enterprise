@@ -693,7 +693,25 @@
     <ClInclude Include="session\workerPoolHeadless.h">
       <Filter>session</Filter>
     </ClInclude>
+    <ClInclude Include="lock\lockTypes.h">
+      <Filter>lock</Filter>
+    </ClInclude>
+    <ClInclude Include="lock\lockHandle.h">
+      <Filter>lock</Filter>
+    </ClInclude>
+    <ClInclude Include="lock\lockHolder.h">
+      <Filter>lock</Filter>
+    </ClInclude>
+    <ClInclude Include="lock\lockKeyHash.h">
+      <Filter>lock</Filter>
+    </ClInclude>
+    <ClInclude Include="lock\lockManager.h">
+      <Filter>lock</Filter>
+    </ClInclude>
     <ClInclude Include="utils\passwordHash.hpp">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\dataVersion.hpp">
       <Filter>utils</Filter>
     </ClInclude>
     <ClInclude Include="utils\sha256.hpp">
@@ -1644,7 +1662,22 @@
     <ClCompile Include="session\workerPoolHeadless.cpp">
       <Filter>session</Filter>
     </ClCompile>
+    <ClCompile Include="lock\lockHandle.cpp">
+      <Filter>lock</Filter>
+    </ClCompile>
+    <ClCompile Include="lock\lockHolder.cpp">
+      <Filter>lock</Filter>
+    </ClCompile>
+    <ClCompile Include="lock\lockKeyHash.cpp">
+      <Filter>lock</Filter>
+    </ClCompile>
+    <ClCompile Include="lock\lockManager.cpp">
+      <Filter>lock</Filter>
+    </ClCompile>
     <ClCompile Include="utils\passwordHash.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\dataVersion.cpp">
       <Filter>utils</Filter>
     </ClCompile>
     <ClCompile Include="utils\sha256.cpp">
@@ -1783,6 +1816,9 @@
     </Filter>
     <Filter Include="session">
       <UniqueIdentifier>{d4f2a1b8-3e9c-4b5a-8d7f-1c2e3a4b5c6d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="lock">
+      <UniqueIdentifier>{6c0f1d2a-7b3e-4d8a-9f1c-2e3b5a6c7d8e}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

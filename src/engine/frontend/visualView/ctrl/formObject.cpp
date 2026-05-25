@@ -471,7 +471,64 @@ void ibValueForm::ShowForm(ibBackendMetaDocument* doc, bool createContext)
 	}
 
 	if (!createContext || !appData->DesignerMode()) {
+		// Soft-lock UX (docs/record-locks.md Phase B.3): try to acquire
+		// the long-held sys_lock on the form's source, but DO NOT
+		// block form open on conflict. Users can view / edit
+		// in-memory even when another session holds the lock; the
+		// Write path re-attempts the acquire and fails the save with
+		// "X is locked by user Y" if conflict persists at save time.
+		// This avoids over-restrictive "form refuses to open" UX
+		// while still preventing lost updates.
+		if (ibSourceDataObject* const src = GetSourceObject()) {
+			try {
+				src->TryAcquireFormLock();
+			}
+			catch (const ibBackendLockException& lockErr) {
+				// Conflict — surface the blocking user as a caption badge
+				// so the operator knows "view-only" status without
+				// attempting to save. Form opens regardless; Write path
+				// will re-throw if conflict persists at save time.
+				if (lockErr.GetKind() == ibBackendLockException::Kind::LockConflict)
+					SetLockBadge(lockErr.GetBlockingUser());
+			}
+			catch (const ibBackendException&) {
+				// Non-conflict lock-infra error (DB transient etc.) —
+				// silent. Write path will re-check at save time.
+			}
+			catch (...) {
+				// Defensive — unknown exception, still open form.
+			}
+		}
+
 		CreateDocForm(docParent, createContext);
+	}
+}
+
+void ibValueForm::RefreshLockBadge()
+{
+	if (m_lockBadgeHolder.IsEmpty())
+		return;   // not in soft-lock view-only state — nothing to refresh
+
+	ibSourceDataObject* const src = GetSourceObject();
+	if (src == nullptr)
+		return;
+
+	try {
+		src->TryAcquireFormLock();
+		// Acquire succeeded — lock is now ours, badge clears.
+		m_lockBadgeHolder.clear();
+	}
+	catch (const ibBackendLockException& err) {
+		// Still locked. Holder may have changed (one process released,
+		// another took over) — keep the field in sync so UI surfaces
+		// the current truth.
+		if (err.GetKind() == ibBackendLockException::Kind::LockConflict
+		    && !err.GetBlockingUser().IsEmpty()) {
+			m_lockBadgeHolder = err.GetBlockingUser();
+		}
+	}
+	catch (...) {
+		// Transient DB error — leave badge as-is. Next tick re-tries.
 	}
 }
 
@@ -480,7 +537,10 @@ void ibValueForm::UpdateForm()
 	if (ibBackendException::IsEvalMode())
 		return;
 
-	
+	// Cross-user notifier tick is the natural pulse for lock-state
+	// refresh too. Cheap when badge is empty (early return).
+	RefreshLockBadge();
+
 	ibFormVisualDocument* const ownerDocForm = GetVisualDocument();
 
 	if (ownerDocForm != nullptr) {

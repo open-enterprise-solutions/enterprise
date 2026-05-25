@@ -351,6 +351,7 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 				ibApplicationData::CreateTableSession();
 				ibApplicationData::CreateTableUser();
 				ibApplicationData::CreateTableEvent();
+				ibApplicationData::CreateTableLock();
 			}
 			else if (!ibApplicationData::TableAlreadyCreated()) {
 				DestroyAppDataEnv();
@@ -361,6 +362,9 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 			// INSERT / snapshot SELECT assume pid / address / currentActivity.
 			ibApplicationData::MigrateTableSession();
 			ibApplicationData::MigrateTableBytecodeCache();
+			// sys_lock — long-held pessimistic lock table. Idempotent
+			// CREATE so existing DBs pick it up on startup.
+			ibApplicationData::CreateTableLock();
 
 			if (!SetLocaleAppDataEnv(strLocale))
 				return false;
@@ -413,6 +417,7 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 				ibApplicationData::CreateTableSession();
 				ibApplicationData::CreateTableUser();
 				ibApplicationData::CreateTableEvent();
+				ibApplicationData::CreateTableLock();
 			}
 			else if (!ibApplicationData::TableAlreadyCreated()) {
 				DestroyAppDataEnv();

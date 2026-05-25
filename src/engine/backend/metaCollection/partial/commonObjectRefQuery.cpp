@@ -19,6 +19,9 @@
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 
 #include "backend/system/systemManager.h"
+#include "backend/backend_exception.h"
+#include "backend/utils/dataVersion.hpp"
+#include "backend/lock/lockManager.h"
 
 bool ibValueRecordDataObjectRef::ReadData()
 {
@@ -61,7 +64,117 @@ bool ibValueRecordDataObjectRef::ReadData(const ibGuid& srcGuid)
 		}
 	}
 	db->CloseResultSet(resultSet);
+
+	// Capture DataVersion at Read time — the Write/Delete path's
+	// LockAndCheckDataVersion compares this against the row's current
+	// version to detect concurrent updates. New objects (no row yet)
+	// leave m_loadedDataVersion empty so the check is skipped on first
+	// Save. See docs/record-locks.md.
+	if (succes && !m_newObject) {
+		const auto dvAttr = m_metaObject->GetDataVersion();
+		if (dvAttr != nullptr) {
+			const auto it = m_listObjectValue.find(dvAttr->GetMetaID());
+			if (it != m_listObjectValue.end())
+				m_loadedDataVersion = it->second.GetString();
+		}
+	}
 	return succes;
+}
+
+bool ibValueRecordDataObjectRef::TryAcquireFormLock(ibLockMode mode)
+{
+	if (m_newObject)            return true;  // no DB row to identify yet
+	if (m_formLockHandle.IsValid()) return true;  // already held
+
+	// Default options — wait at driver's normal lock-timeout. Throws
+	// ibBackendLockException::LockConflict if another session holds an
+	// incompatible lock; caller propagates as form-open failure.
+	m_formLockHandle = ibLockManager::Instance().Acquire({
+		ibLockItem::ForRef(m_metaObject->GetDocPath(), m_objGuid, mode)
+	});
+	return true;
+}
+
+bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
+{
+	const auto db = ses_query;
+	const auto dvAttr = m_metaObject != nullptr ? m_metaObject->GetDataVersion() : nullptr;
+
+	// No DataVersion attribute declared on this metaobject (shouldn't
+	// happen for mutable-refs — DataVersion is hard-wired in
+	// ibValueMetaObjectRecordDataMutableRef — but stay defensive so
+	// future metaobject kinds that opt out don't trip an assert).
+	if (dvAttr == nullptr)
+		return true;
+
+	const ibMetaID dvId = dvAttr->GetMetaID();
+
+	// Existing rows only — new ones have no DB row to lock and no
+	// prior version to compare. The bump still fires below so the
+	// freshly-inserted row carries a valid initial stamp.
+	if (!m_newObject && !m_loadedDataVersion.IsEmpty()) {
+		const wxString hint = db->RowLockHint();
+		const wxString dvCols = ibValueMetaObjectAttributeBase::GetSQLFieldName(dvAttr);
+		const wxString tableName = m_metaObject->GetTableNameDB();
+
+		// One round-trip — takes the row lock and reads the current
+		// DataVersion in the same query. Mirrors what ReadData does
+		// for the load path; reuses GetValueAttribute for parsing so
+		// any future type-discriminator change lands in one place.
+		const wxString sql = wxString::Format(
+			wxT("SELECT %s FROM %s WHERE uuid = ? %s;"),
+			dvCols, tableName, hint);
+
+		ibStatementGuard st(db, db->PrepareStatement(sql));
+		if (!st)
+			ibBackendCoreException::Error(_("Failed to prepare write-lock query"));
+		st->SetParamString(1, m_objGuid.str());
+
+		ibDatabaseResultSet* rs = st->RunQueryWithResults();
+		if (rs == nullptr)
+			ibBackendCoreException::Error(_("Failed to acquire write lock on row"));
+
+		wxString dbVer;
+		bool rowFound = false;
+		if (rs->Next()) {
+			rowFound = true;
+			ibValue dvValue;
+			ibValueMetaObjectAttributeBase::GetValueAttribute(dvAttr, dvValue, rs);
+			dbVer = dvValue.GetString();
+		}
+		db->CloseResultSet(rs);
+
+		// Row disappeared between our load and write — somebody else
+		// committed a DELETE. Treat as a version conflict for UX
+		// consistency: same "reload and retry" recovery path.
+		if (!rowFound) {
+			ibBackendLockException::VersionChangedThrow(
+				m_metaObject->GetSynonym(),
+				m_loadedDataVersion,
+				wxT("<deleted>"));
+		}
+
+		if (dbVer != m_loadedDataVersion) {
+			ibBackendLockException::VersionChangedThrow(
+				m_metaObject->GetSynonym(),
+				m_loadedDataVersion,
+				dbVer);
+		}
+	}
+
+	// Bump for Write paths so SaveData's UPSERT stamps the row with a
+	// fresh version. Skipped on Delete (the row is going away).
+	if (bump) {
+		const wxString newStamp = ibDataVersion::NewStamp();
+		SetValueByMetaID(dvId, ibValue(newStamp));
+		// Future ReadData→Write cycles on the same in-memory object
+		// (e.g. script that calls Write twice in a row without
+		// reloading) compare against the newly-stamped value, so the
+		// second Write sees consistency.
+		m_loadedDataVersion = newStamp;
+	}
+
+	return true;
 }
 
 bool ibValueRecordDataObjectRef::SaveData()

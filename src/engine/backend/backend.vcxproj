@@ -31,6 +31,11 @@
     <ClInclude Include="session\sessionSnapshot.h" />
     <ClInclude Include="session\workerPool.h" />
     <ClInclude Include="session\workerPoolHeadless.h" />
+    <ClInclude Include="lock\lockTypes.h" />
+    <ClInclude Include="lock\lockHandle.h" />
+    <ClInclude Include="lock\lockHolder.h" />
+    <ClInclude Include="lock\lockKeyHash.h" />
+    <ClInclude Include="lock\lockManager.h" />
     <ClInclude Include="backend_core.h" />
     <ClInclude Include="backend_mainFrame.h" />
     <ClInclude Include="backend_picture.h" />
@@ -276,6 +281,7 @@
     <ClInclude Include="utils\md5.hpp" />
     <ClInclude Include="utils\sha256.hpp" />
     <ClInclude Include="utils\passwordHash.hpp" />
+    <ClInclude Include="utils\dataVersion.hpp" />
     <ClInclude Include="valueInfo.h" />
     <ClInclude Include="value_cast.h" />
     <ClInclude Include="value_ptr.h" />
@@ -292,6 +298,10 @@
     <ClCompile Include="session\sessionRegistry.cpp" />
     <ClCompile Include="session\sessionSnapshot.cpp" />
     <ClCompile Include="session\workerPoolHeadless.cpp" />
+    <ClCompile Include="lock\lockHandle.cpp" />
+    <ClCompile Include="lock\lockHolder.cpp" />
+    <ClCompile Include="lock\lockKeyHash.cpp" />
+    <ClCompile Include="lock\lockManager.cpp" />
     <ClCompile Include="backend_core.cpp" />
     <ClCompile Include="backend_mainFrame.cpp" />
     <ClCompile Include="backend_picture.cpp" />
@@ -621,6 +631,7 @@
     <ClCompile Include="utils\md5.cpp" />
     <ClCompile Include="utils\sha256.cpp" />
     <ClCompile Include="utils\passwordHash.cpp" />
+    <ClCompile Include="utils\dataVersion.cpp" />
     <ClCompile Include="value_cast.cpp" />
   </ItemGroup>
   <ItemGroup>
