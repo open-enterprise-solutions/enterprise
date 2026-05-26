@@ -187,3 +187,36 @@ install(TARGETS backend
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
 )
+
+# ---------------------------------------------------------------------------
+# Syntax-helper content stage — pack syntaxHelper/<locale>/*.json into
+# $<TARGET_FILE_DIR:backend>/help/<locale>.hlk (zip, DEFLATE) so the
+# runtime locator finds one file per locale next to the exe. Source-
+# of-truth is the source tree; dev runs read from there directly via
+# the walk-up fallback in ibHelpService::ResolvePlatformDir (loader's
+# ResolveSource picks zip when present, dir otherwise).
+#
+# `cmake -E tar c ... --format=zip` is built into CMake 3.18+ (project
+# requires 3.20). One custom command per locale so a touched-but-not-
+# changed locale doesn't repack everything.
+# ---------------------------------------------------------------------------
+file(GLOB SYNTAX_HELPER_LOCALE_DIRS LIST_DIRECTORIES TRUE
+    RELATIVE "${CMAKE_SOURCE_DIR}/syntaxHelper"
+    "${CMAKE_SOURCE_DIR}/syntaxHelper/*")
+add_custom_command(TARGET backend POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:backend>/help"
+    COMMENT "Packing syntax-helper content into bin/help/*.hlk"
+    VERBATIM)
+foreach(LOC ${SYNTAX_HELPER_LOCALE_DIRS})
+    if(IS_DIRECTORY "${CMAKE_SOURCE_DIR}/syntaxHelper/${LOC}")
+        add_custom_command(TARGET backend POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E chdir
+                "${CMAKE_SOURCE_DIR}/syntaxHelper/${LOC}"
+                ${CMAKE_COMMAND} -E tar c
+                "$<TARGET_FILE_DIR:backend>/help/${LOC}.hlk"
+                --format=zip "."
+            COMMENT "  → ${LOC}.hlk"
+            VERBATIM)
+    endif()
+endforeach()

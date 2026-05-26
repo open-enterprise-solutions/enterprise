@@ -1,0 +1,1376 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "kw.If",
+      "name_local": "If",
+      "name_en": "If",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "Если <Выражение> Тогда ... [ИначеЕсли ... Тогда ...] [Иначе ...] КонецЕсли",
+      "description": "Условное выполнение. Вычисляет логическое выражение; при значении Истина выполняет ветку Then, иначе — необязательную ветку ElsIf с собственным выражением, иначе — необязательную ветку Else.",
+      "syntax_block": "if (<Expression1>) {\n    // statements\n} elsif (<Expression2>) {\n    // statements\n} else {\n    // statements\n}",
+      "parameters": "<Expression1>, <Expression2> — логические выражения.",
+      "return_descr": "",
+      "example": "if (userInfo.IsAdmin) {\n    EnableAdminMenu();\n} else {\n    HideAdminMenu();\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Else",
+        "kw.Elseif",
+        "kw.While"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "If <Expression1> Then\n    // statements\nElsIf <Expression2> Then\n    // statements\nElse\n    // statements\nEndIf",
+      "example_ves": "If userInfo.IsAdmin Then\n    EnableAdminMenu();\nElse\n    HideAdminMenu();\nEndIf",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Then",
+      "name_local": "Then",
+      "name_en": "Then",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Завершает условие ветки If / ElsIf. Тело после Then выполняется только при истинности соответствующего выражения.",
+      "syntax_block": "If <Expr> Then\n    // body\nEndIf;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.If",
+        "kw.Else",
+        "kw.Elseif",
+        "kw.Endif"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.Else",
+      "name_local": "Else",
+      "name_en": "Else",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Ветка, выполняющаяся, когда все условия If / ElsIf оказались ложными.",
+      "syntax_block": "If <Expr> Then\n    // matched\nElse\n    // fallback\nEndIf;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.If",
+        "kw.Elseif",
+        "kw.Endif"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Elseif",
+      "name_local": "Elseif",
+      "name_en": "Elseif",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Добавляет цепочечное условие к If. Проверяется, только если каждая предыдущая ветка дала Ложь.",
+      "syntax_block": "If A Then\n    // …\nElsIf B Then\n    // …\nElsIf C Then\n    // …\nEndIf;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.If",
+        "kw.Else",
+        "kw.Endif"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Endif",
+      "name_local": "Endif",
+      "name_en": "Endif",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Закрывает конструкцию If.",
+      "syntax_block": "If <Expr> Then\n    // body\nEndIf;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.If"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.For",
+      "name_local": "For",
+      "name_en": "For",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Счётный или итераторный цикл. Две формы: индексная (For <i> = <от> To <до> Do) и поэлементная (For Each <Элемент> In <Коллекция> Do).",
+      "syntax_block": "// indexed\nfor (i = 1 To 10) {\n    // body\n}\n\n// for-each\nfor each (Item In Collection) {\n    // body\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "for each (Order In Customer.Orders) {\n    Total = Total + Order.Amount;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Foreach",
+        "kw.In",
+        "kw.To",
+        "kw.Break",
+        "kw.Continue"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "// indexed\nFor i = 1 To 10 Do\n    // body\nEndDo;\n\n// for-each\nFor Each Item In Collection Do\n    // body\nEndDo;",
+      "example_ves": "For Each Order In Customer.Orders Do\n    Total = Total + Order.Amount;\nEndDo;",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Foreach",
+      "name_local": "Foreach",
+      "name_en": "Foreach",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Модификатор цикла, вводящий поэлементную итерацию по коллекции.",
+      "syntax_block": "For Each <Item> In <Collection> Do\n    // body\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.For",
+        "kw.In",
+        "kw.Do"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.To",
+      "name_local": "To",
+      "name_en": "To",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Верхняя граница (включительно) счётного цикла For.",
+      "syntax_block": "For i = 1 To 10 Do … EndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.For"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.In",
+      "name_local": "In",
+      "name_en": "In",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Указывает коллекцию-источник в цикле For Each.",
+      "syntax_block": "For Each <Item> In <Collection> Do … EndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.For",
+        "kw.Foreach"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Do",
+      "name_local": "Do",
+      "name_en": "Do",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Открывает тело цикла While или For.",
+      "syntax_block": "While <Cond> Do … EndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.While",
+        "kw.For",
+        "kw.EndDo"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.EndDo",
+      "name_local": "EndDo",
+      "name_en": "EndDo",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Закрывает тело цикла While или For.",
+      "syntax_block": "While X Do\n    // …\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.While",
+        "kw.For",
+        "kw.Do"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.While",
+      "name_local": "While",
+      "name_en": "While",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Цикл с предусловием. Перед каждой итерацией проверяет условие; выполняет тело, пока условие истинно.",
+      "syntax_block": "while (<Condition>) {\n    // body\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Counter = 0;\nwhile (Counter < 10) {\n    Counter = Counter + 1;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.For",
+        "kw.Break",
+        "kw.Continue"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "While <Condition> Do\n    // body\nEndDo;",
+      "example_ves": "Counter = 0;\nWhile Counter < 10 Do\n    Counter = Counter + 1;\nEndDo;",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.GoTo",
+      "name_local": "GoTo",
+      "name_en": "GoTo",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Безусловный переход к помеченному оператору в пределах того же блока. Применяйте умеренно — почти всегда чище переписать через цикл или функцию.",
+      "syntax_block": "GoTo ~<Label>;\n…\n~<Label>:",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Not",
+      "name_local": "Not",
+      "name_en": "Not",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Логическое отрицание.",
+      "syntax_block": "Not <Expression>",
+      "parameters": "",
+      "return_descr": "",
+      "example": "If Not User.IsLoggedIn Then\n    ShowLoginForm();\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.And",
+        "kw.Or"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.And",
+      "name_local": "And",
+      "name_en": "And",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Логическое И. Короткое замыкание: правый операнд не вычисляется, если левый — False.",
+      "syntax_block": "<LeftExpr> And <RightExpr>",
+      "parameters": "",
+      "return_descr": "",
+      "example": "If User.IsLoggedIn And User.Role = \"admin\" Then\n    ShowAdminPanel();\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Or",
+        "kw.Not"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Or",
+      "name_local": "Or",
+      "name_en": "Or",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Логическое ИЛИ. Короткое замыкание: правый операнд не вычисляется, если левый — True.",
+      "syntax_block": "<LeftExpr> Or <RightExpr>",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.And",
+        "kw.Not"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Procedure",
+      "name_local": "Procedure",
+      "name_en": "Procedure",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Объявляет процедуру — вызываемый блок кода, который выполняет действия, но не возвращает значение. Когда вызывающему нужен результат — используйте Function.",
+      "syntax_block": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Export] {\n    // body\n}",
+      "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Export — делает процедуру доступной из других модулей.",
+      "return_descr": "",
+      "example": "Procedure LogMessage(Val Text) Export {\n    Message(Text);\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Function",
+        "kw.Return",
+        "kw.Export",
+        "kw.Val"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Export]\n    // body\nEndProcedure",
+      "example_ves": "Procedure LogMessage(Val Text) Export\n    Message(Text);\nEndProcedure",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.EndProcedure",
+      "name_local": "EndProcedure",
+      "name_en": "EndProcedure",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Закрывает тело процедуры. Управление возвращается вызывающему коду при достижении EndProcedure.",
+      "syntax_block": "Procedure Demo()\n    // …\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Procedure"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.Function",
+      "name_local": "Function",
+      "name_en": "Function",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Объявляет функцию — вызываемый блок кода, возвращающий значение через Return. Функции взаимозаменяемы с процедурами везде, кроме использования в качестве источника выражения.",
+      "syntax_block": "Function <Name>([Val] <Param1>, …) [Export] {\n    // body\n    Return <Value>;\n}",
+      "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Export — делает функцию доступной из других модулей.",
+      "return_descr": "Значение, переданное оператору Return.",
+      "example": "Function Sum(Val A, Val B) Export {\n    Return A + B;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Procedure",
+        "kw.Return",
+        "kw.Export"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "Function <Name>([Val] <Param1>, …) [Export]\n    // body\n    Return <Value>;\nEndFunction",
+      "example_ves": "Function Sum(Val A, Val B) Export\n    Return A + B;\nEndFunction",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.EndFunction",
+      "name_local": "EndFunction",
+      "name_en": "EndFunction",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Закрывает тело функции. Достижение EndFunction без оператора Return приводит к возврату Undefined.",
+      "syntax_block": "Function Demo()\n    Return 42;\nEndFunction",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Function",
+        "kw.Return",
+        "kw.Undefined"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.Export",
+      "name_local": "Export",
+      "name_en": "Export",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Помечает процедуру, функцию или модульную переменную как доступную из других модулей. Без Export символ виден только в своём модуле.",
+      "syntax_block": "Procedure DoWork() Export\n    // body\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Var Counter Export;  // module-public variable\n\nFunction Read() Export\n    Return Counter;\nEndFunction",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Procedure",
+        "kw.Function",
+        "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Val",
+      "name_local": "Val",
+      "name_en": "Val",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Модификатор параметра «по значению». Без Val параметр связан по ссылке, и присваивания внутри вызываемого кода меняют переменную вызывающего; со Val берётся локальная копия.",
+      "syntax_block": "Procedure Demo(Val ReadOnlyParam, MutableParam)\n    // ReadOnlyParam is a copy of the caller's value.\n    // MutableParam writes back into the caller's variable.\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Procedure",
+        "kw.Function"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Return",
+      "name_local": "Return",
+      "name_en": "Return",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Завершает текущую процедуру или функцию. Внутри функции может содержать возвращаемое выражение.",
+      "syntax_block": "Return;                 // exit procedure\nReturn <Expression>;    // exit function with result",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Function Sign(Val X)\n    If X < 0 Then Return -1; EndIf;\n    If X > 0 Then Return 1;  EndIf;\n    Return 0;\nEndFunction",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Function",
+        "kw.Procedure"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Try",
+      "name_local": "Try",
+      "name_en": "Try",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Начинает блок обработки исключений. Код внутри отслеживается; возникшее исключение передаёт управление в ветку Except.",
+      "syntax_block": "try {\n    // protected body\n} except {\n    // handler — runs on any raised exception\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "try {\n    Result = ParseNumber(UserInput);\n} except {\n    Message(\"Not a valid number: \" + ErrorDescription());\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Except",
+        "kw.Raise"
+      ],
+      "reviewed": true,
+      "syntax_block_ves": "Try\n    // protected body\nExcept\n    // handler — runs on any raised exception\nEndTry;",
+      "example_ves": "Try\n    Result = ParseNumber(UserInput);\nExcept\n    Message(\"Not a valid number: \" + ErrorDescription());\nEndTry;",
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Except",
+      "name_local": "Except",
+      "name_en": "Except",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Открывает ветку обработчика конструкции Try / Except. Выполняется, если защищённый блок породил исключение.",
+      "syntax_block": "Try\n    // …\nExcept\n    // recovery\nEndTry;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Try",
+        "kw.Endtry",
+        "kw.Raise"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Endtry",
+      "name_local": "Endtry",
+      "name_en": "Endtry",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Закрывает конструкцию Try / Except.",
+      "syntax_block": "Try … Except … EndTry;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Try",
+        "kw.Except"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "kw.Continue",
+      "name_local": "Continue",
+      "name_en": "Continue",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Пропускает остаток текущей итерации цикла; управление переходит к заголовку цикла.",
+      "syntax_block": "For Each Row In Table Do\n    If Row.IsHeader Then Continue; EndIf;\n    Process(Row);\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.For",
+        "kw.While",
+        "kw.Break"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Break",
+      "name_local": "Break",
+      "name_en": "Break",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Прерывает ближайший охватывающий цикл; управление переходит за EndDo.",
+      "syntax_block": "While Cond Do\n    If StopCondition Then Break; EndIf;\n    // …\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.While",
+        "kw.For",
+        "kw.Continue"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Raise",
+      "name_local": "Raise",
+      "name_en": "Raise",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Возбуждает исключение. Без аргумента — перевозбуждает текущее (допустимо только внутри Except). С выражением — создаёт новое исключение с этим текстом.",
+      "syntax_block": "Raise;                       // re-throw current exception\nRaise <ExpressionString>;    // raise a new exception",
+      "parameters": "",
+      "return_descr": "",
+      "example": "If Amount < 0 Then\n    Raise \"Negative amount is not allowed\";\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Try",
+        "kw.Except"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Var",
+      "name_local": "Var",
+      "name_en": "Var",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Объявляет одну или несколько локальных переменных (внутри тела процедуры / функции) либо модульных переменных (вне любых блоков). Начальное значение — Undefined.",
+      "syntax_block": "Var <Name1>, <Name2>, …;\n\nProcedure Demo()\n    Var Counter, Sum;\n    Counter = 0;\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Undefined",
+        "kw.Export"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.New",
+      "name_local": "New",
+      "name_en": "New",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Создаёт значение встроенного типа (коллекции, обёртки примитивов, читатели запросов / потоков). Имя типа идёт после New; аргументы конструктора в скобках, если нужны.",
+      "syntax_block": "<Var> = New <TypeName>(<Args>…);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Items = New Array;\nItems.Add(\"first\");\nItems.Add(\"second\");\n\nQuery = New Query();\nQuery.Text = \"SELECT * FROM Catalog.Items\";",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Undefined"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Undefined",
+      "name_local": "Undefined",
+      "name_en": "Undefined",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Сингл-значение «значения ещё нет». Начальное значение любой объявленной, но не инициализированной переменной; естественный результат методов, которым нечего вернуть.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Var X;\nIf X = Undefined Then\n    X = ComputeDefault();\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Null",
+        "kw.New",
+        "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Null",
+      "name_local": "Null",
+      "name_en": "Null",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Значение «нет значения» из баз данных — то, что возвращают поля результата запроса при SQL NULL. Отличается от Undefined; сравнения с обычными значениями всегда дают False.",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "If Selection.Manager = Null Then\n    ManagerName = \"<unassigned>\";\nEndIf;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Undefined"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.True",
+      "name_local": "True",
+      "name_en": "True",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Логический литерал — значение «истина».",
+      "syntax_block": "Flag = True;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.False",
+        "kw.And",
+        "kw.Or",
+        "kw.Not"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.False",
+      "name_local": "False",
+      "name_en": "False",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Логический литерал — значение «ложь».",
+      "syntax_block": "Flag = False;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.True",
+        "kw.And",
+        "kw.Or",
+        "kw.Not"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.PpDefine",
+      "name_local": "#Define",
+      "name_en": "#Define",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.PpUndef",
+      "name_local": "#Undef",
+      "name_en": "#Undef",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.PpIfdef",
+      "name_local": "#Ifdef",
+      "name_en": "#Ifdef",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.PpIfndef",
+      "name_local": "#Ifndef",
+      "name_en": "#Ifndef",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.PpElse",
+      "name_local": "#Else",
+      "name_en": "#Else",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.PpEndif",
+      "name_local": "#Endif",
+      "name_en": "#Endif",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.PpRegion",
+      "name_local": "#Region",
+      "name_en": "#Region",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.PpEndRegion",
+      "name_local": "#EndRegion",
+      "name_en": "#EndRegion",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.From",
+      "name_local": "From",
+      "name_en": "From",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.Where",
+      "name_local": "Where",
+      "name_en": "Where",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.Select",
+      "name_local": "Select",
+      "name_en": "Select",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.OrderBy",
+      "name_local": "OrderBy",
+      "name_en": "OrderBy",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.Ascending",
+      "name_local": "Ascending",
+      "name_en": "Ascending",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.Descending",
+      "name_local": "Descending",
+      "name_en": "Descending",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.Take",
+      "name_local": "Take",
+      "name_en": "Take",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.Skip",
+      "name_local": "Skip",
+      "name_en": "Skip",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.Distinct",
+      "name_local": "Distinct",
+      "name_en": "Distinct",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.Join",
+      "name_local": "Join",
+      "name_en": "Join",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.On",
+      "name_local": "On",
+      "name_en": "On",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.Equals",
+      "name_local": "Equals",
+      "name_en": "Equals",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.Group",
+      "name_local": "Group",
+      "name_en": "Group",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.By",
+      "name_local": "By",
+      "name_en": "By",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    },
+    {
+      "id": "kw.Into",
+      "name_local": "Into",
+      "name_en": "Into",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "",
+      "syntax_block": "",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    }
+  ]
+}

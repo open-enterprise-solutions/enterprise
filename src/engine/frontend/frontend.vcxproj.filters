@@ -1,6 +1,27 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <ClCompile Include="syntaxHelper\helpChooserDialog.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpDetailView.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpDragSource.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpIndexView.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpPaneView.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpSearchView.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpTreeView.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
     <ClCompile Include="mainFrame\mainFrame.cpp">
       <Filter>mainFrame</Filter>
     </ClCompile>
@@ -958,6 +979,27 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="syntaxHelper\helpChooserDialog.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpDetailView.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpDragSource.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpIndexView.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpPaneView.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpSearchView.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpTreeView.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
     <ClInclude Include="mainFrame\mainFrame.h">
       <Filter>mainFrame</Filter>
     </ClInclude>
@@ -1732,6 +1774,9 @@
     </Filter>
     <Filter Include="mainFrame">
       <UniqueIdentifier>{4d75f131-22b3-42a7-90cd-b47e61bcc564}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="syntaxHelper">
+      <UniqueIdentifier>{2f5a8d61-3c87-4b9e-a4f6-1d8e2c507b3a}</UniqueIdentifier>
     </Filter>
     <Filter Include="mainFrame\objinspect">
       <UniqueIdentifier>{5b008341-e88f-4993-8e8d-7caa98ba8c3e}</UniqueIdentifier>

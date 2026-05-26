@@ -24,6 +24,13 @@
     <ClInclude Include="appDataCtorToken.h" />
     <ClInclude Include="appEnv.h" />
     <ClInclude Include="backend.h" />
+    <ClInclude Include="syntaxHelper\helpCategory.h" />
+    <ClInclude Include="syntaxHelper\helpCorpus.h" />
+    <ClInclude Include="syntaxHelper\helpEntry.h" />
+    <ClInclude Include="syntaxHelper\helpLoader.h" />
+    <ClInclude Include="syntaxHelper\helpLoadError.h" />
+    <ClInclude Include="syntaxHelper\helpResolver.h" />
+    <ClInclude Include="syntaxHelper\helpService.h" />
     <ClInclude Include="logger\logger.h" />
     <ClInclude Include="logger\loggerEntry.h" />
     <ClInclude Include="logger\loggerQueue.h" />
@@ -301,6 +308,10 @@
     <ClCompile Include="appData.cpp" />
     <ClCompile Include="appDataQuery.cpp" />
     <ClCompile Include="appEnv.cpp" />
+    <ClCompile Include="syntaxHelper\helpCorpus.cpp" />
+    <ClCompile Include="syntaxHelper\helpLoader.cpp" />
+    <ClCompile Include="syntaxHelper\helpResolver.cpp" />
+    <ClCompile Include="syntaxHelper\helpService.cpp" />
     <ClCompile Include="logger\logger.cpp" />
     <ClCompile Include="logger\loggerQueue.cpp" />
     <ClCompile Include="logger\loggerReader.cpp" />
@@ -1220,4 +1231,32 @@
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
   </ImportGroup>
+  <!--
+    Syntax-helper content stage. Pack syntaxHelper\(locale)\*.json into
+    $(OutDir)help\(locale).hlk (zip, DEFLATE) so the runtime locator
+    finds one file per locale next to the exe in production. Source-of-
+    truth is $(SolutionDir)syntaxHelper; dev runs read from there
+    directly via the walk-up fallback in ibHelpService::ResolvePlatformDir
+    (loader's ResolveSource picks zip when present, dir otherwise).
+
+    PowerShell Compress-Archive is preferred over tar.exe because tar
+    with the "-C dir ." form prefixes every entry with "./", which the
+    wxZipInputStream-side parser handles non-trivially (asserts on
+    debug builds for the bare "./" dir marker). Compress-Archive
+    writes entries as bare leaf names without that prefix and without
+    a directory entry. -Force overwrites; the .pack-stamp.txt sentinel
+    drives MSBuild Inputs/Outputs so the Target re-runs only when
+    source JSON or build-tree state changed.
+  -->
+  <Target Name="StageSyntaxHelperContent" AfterTargets="Build"
+          Inputs="$(SolutionDir)syntaxHelper\**\*.json"
+          Outputs="$(OutDir)help\.pack-stamp.txt">
+    <MakeDir Directories="$(OutDir)help" />
+    <ItemGroup>
+      <SyntaxHelperLocales Include="$([System.IO.Directory]::GetDirectories('$(SolutionDir)syntaxHelper'))" />
+    </ItemGroup>
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;Add-Type -A 'System.IO.Compression.FileSystem'; if (Test-Path '$(OutDir)help\%(SyntaxHelperLocales.Filename).hlk') { Remove-Item '$(OutDir)help\%(SyntaxHelperLocales.Filename).hlk' -Force }; [IO.Compression.ZipFile]::CreateFromDirectory('%(SyntaxHelperLocales.FullPath)', '$(OutDir)help\%(SyntaxHelperLocales.Filename).hlk', 'Optimal', 0)&quot;"
+          WorkingDirectory="$(SolutionDir)" />
+    <Touch Files="$(OutDir)help\.pack-stamp.txt" AlwaysCreate="true" />
+  </Target>
 </Project>

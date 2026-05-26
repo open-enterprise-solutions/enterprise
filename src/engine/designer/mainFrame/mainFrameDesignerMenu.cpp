@@ -31,6 +31,13 @@ void ibFrontendDocMDIFrameDesigner::SetDefaultHotKeys()
 	m_keyBinder.SetShortcut(wxID_DESIGNER_DEBUG_NEXT_POINT, wxT("F9"));
 
 	m_keyBinder.SetShortcut(wxID_DESIGNER_ABOUT, wxT("F1"));
+
+	// Syntax helper. RawCtrl forces literal Control on macOS where
+	// wxWidgets otherwise rewrites "Ctrl" to Cmd; on Windows / Linux
+	// RawCtrl is identical to Ctrl. Without these SetShortcut calls
+	// ibKeyBinder strips the accelerator labels during LoadOptions.
+	m_keyBinder.SetShortcut(wxID_FRONTEND_SYNTAX_HELPER,        wxT("RawCtrl+Alt+F1"));
+	m_keyBinder.SetShortcut(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP, wxT("RawCtrl+F1"));
 }
 
 //********************************************************************************
@@ -172,6 +179,17 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	m_menuSetting->Append(wxID_APPLICATION_SETTING, _("Options..."));
 
 	m_menuHelp = new wxMenu;
+	// Syntax helper lives in the Help menu — main entry points for
+	// users looking for language reference. RawCtrl forces the literal
+	// Control key on every platform (wxWidgets maps "Ctrl" to Cmd on
+	// macOS). NB: on macOS the Help menu can be intercepted by the
+	// system-native Help search; if that surfaces as a real problem
+	// these can move to Tools (Windows is the primary platform now).
+	m_menuHelp->Append(wxID_FRONTEND_SYNTAX_HELPER,
+	                   _("Syntax Helper\tRawCtrl+Alt+F1"));
+	m_menuHelp->Append(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP,
+	                   _("Look up in Syntax Helper\tRawCtrl+F1"));
+	m_menuHelp->AppendSeparator();
 	m_menuHelp->Append(wxID_DESIGNER_ABOUT, _("About"));
 	m_frameMenuBar->Append(m_menuHelp, wxGetStockLabel(wxID_HELP, wxSTOCK_NOFLAGS));
 
@@ -199,6 +217,15 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnClearDatabase, this, wxID_DESIGNER_DATABASE_CLEAR);
 
 	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameDesigner::OnAbout, this, wxID_DESIGNER_ABOUT);
+
+	// Syntax helper — lambda bindings, no member fn to lose to the
+	// designer header.
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) { ToggleHelpPane(); },
+	     wxID_FRONTEND_SYNTAX_HELPER);
+	Bind(wxEVT_MENU,
+	     [this](wxCommandEvent&) { OpenHelpForCursor(); },
+	     wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
 
 	LoadOptions();
 }

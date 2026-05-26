@@ -31,6 +31,27 @@
     <ClInclude Include="appData.h" />
     <ClInclude Include="appDataCtorToken.h" />
     <ClInclude Include="uniqueKey.h" />
+    <ClInclude Include="syntaxHelper\helpCategory.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpCorpus.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpEntry.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpLoader.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpLoadError.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpResolver.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="syntaxHelper\helpService.h">
+      <Filter>syntaxHelper</Filter>
+    </ClInclude>
     <ClInclude Include="logger\logger.h">
       <Filter>logger</Filter>
     </ClInclude>
@@ -784,6 +805,18 @@
     </ClCompile>
     <ClCompile Include="appData.cpp" />
     <ClCompile Include="uniqueKey.cpp" />
+    <ClCompile Include="syntaxHelper\helpCorpus.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpLoader.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpResolver.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
+    <ClCompile Include="syntaxHelper\helpService.cpp">
+      <Filter>syntaxHelper</Filter>
+    </ClCompile>
     <ClCompile Include="logger\logger.cpp">
       <Filter>logger</Filter>
     </ClCompile>
@@ -1766,6 +1799,9 @@
     </Filter>
     <Filter Include="logger">
       <UniqueIdentifier>{7c4a5d12-9b3e-4f88-a2e1-3d6c4f1a5b27}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="syntaxHelper">
+      <UniqueIdentifier>{1a4f8e02-7b66-4f9b-9d3a-6c2e8b1d5f04}</UniqueIdentifier>
     </Filter>
     <Filter Include="databaseLayer\firebird">
       <UniqueIdentifier>{30f3747a-6465-49ff-8cf7-9d11d34be44e}</UniqueIdentifier>

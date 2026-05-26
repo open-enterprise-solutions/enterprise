@@ -112,6 +112,7 @@ OES runs on a single coordinator — `ibApplicationData` (`backend/appData.h`) �
   │   m_lockManager      ◄── sys_lock coordinator                   │
   │   m_logger           ◄── audit + trace sink (.olg)              │
   │   m_sessionRegistry  ◄── ibSession registry + worker pool       │
+  │   m_helpService      ◄── syntax-helper corpus (.hlk per locale) │
   │   m_activeMetaData   ◄── per-runMode fabric, populated later    │
   │                                                                 │
   │   (each ctor takes ib::AppDataCtorToken — see below)            │
@@ -136,6 +137,8 @@ The init list is **the** ordering contract. Listed in the order they're construc
 | 2 | `m_pluginManager` | Loads `plugins/*.dll` | Plugins may need `db_query` (=pool). |
 | 3 | `m_lockManager` | `sys_lock` table coordinator | Independent — could move; ordered for readability. |
 | 4 | `m_sessionRegistry` | Session registry + worker pool | After pool so first session can already check connections out. `m_logger` is created lazily in `CreateLogger()` after the DB opens; not in init list. |
+
+`m_helpService` (syntax-helper corpus) is constructed lazily in `InitLocale()` once the platform locale is settled — corpus directory naming depends on the canonicalised locale code, so the service can't come up before locale resolution finishes. See `docs/syntax-helper-design.md` for the loader / `ZipSource` / pack-on-build pipeline.
 
 `m_activeMetaData` is populated later by `CreateActiveMetaData(mode, flags)` — the fabric picks a concrete subclass (`ibMetaDataConfiguration` for runtime, `ibMetaDataConfigurationStorage` for designer) by `runMode`. Launcher/codeRunner have no metadata at all.
 

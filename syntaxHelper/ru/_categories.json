@@ -1,0 +1,14 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "categories": {
+    "common_lang": "Общее описание языка",
+    "control_flow": "Поток выполнения",
+    "global_context": "Глобальный контекст",
+    "global_functions": "Глобальные функции",
+    "primitive_types": "Примитивные типы",
+    "date": "Дата",
+    "guide": "Справка"
+  }
+}

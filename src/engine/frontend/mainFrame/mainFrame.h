@@ -325,9 +325,25 @@ public:
 	virtual int FilterEvent(wxEvent& event) wxOVERRIDE { return Event_Skip; }
 };
 
-//pane 
+//pane
 #define wxAUI_PANE_METADATA wxT("metadataWindow")
 #define wxAUI_PANE_PROPERTY wxT("propertyWindow")
-#define wxAUI_PANE_BOTTOM	wxT("bottomWindow"	)
+#define wxAUI_PANE_BOTTOM   wxT("bottomWindow")
+#define wxAUI_PANE_HELP     wxT("syntaxHelperWindow")
+
+// Host-frame command ids that the editor and other frontend widgets
+// may post upward. Defined in a frontend header (not the designer
+// header) so frontend.dll → designer.exe stays a one-way link — the
+// editor's context-menu code (subphase 1.3) can reference these
+// without pulling in the downstream designer module. The numeric
+// values must not collide with wxStandardID or with the designer-
+// private id block in designer/mainFrame/mainFrameDesigner.h.
+enum {
+    wxID_FRONTEND_SYNTAX_HELPER        = wxID_HIGHEST + 4500,
+    wxID_FRONTEND_SYNTAX_HELPER_LOOKUP = wxID_HIGHEST + 4501,
+    // Values 4502+ reserved for unrelated frontend features
+    // (debug step shortcuts / plugin manager / plugin web pane) —
+    // landed in separate PRs.
+};
 
 #endif 

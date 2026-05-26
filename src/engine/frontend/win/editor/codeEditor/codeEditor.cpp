@@ -117,6 +117,35 @@ ibCodeEditor::ibCodeEditor(ibMetaDocument* document, wxWindow* parent, wxWindowI
 
 	Bind(wxEVT_STC_UPDATEUI, &ibCodeEditor::OnUpdateUI, this);
 
+	// Custom context menu — replaces wxSTC's built-in popup with one
+	// that adds the Syntax Helper Look-Up item alongside the standard
+	// edit actions. The Look-Up item posts wxID_FRONTEND_SYNTAX_HELPER_LOOKUP
+	// upward through the parent chain so the host frame
+	// (mainFrameDesigner's OpenHelpForCursor binding) handles it without
+	// the editor depending on the downstream designer header. See
+	// subphase 1.3 — codeEditor knows nothing about the help corpus.
+	UsePopUp(wxSTC_POPUP_NEVER);
+	Bind(wxEVT_CONTEXT_MENU, &ibCodeEditor::OnContextMenu, this);
+	Bind(wxEVT_MENU, [this](wxCommandEvent&) { Cut();        }, wxID_CUT);
+	Bind(wxEVT_MENU, [this](wxCommandEvent&) { Copy();       }, wxID_COPY);
+	Bind(wxEVT_MENU, [this](wxCommandEvent&) { Paste();      }, wxID_PASTE);
+	Bind(wxEVT_MENU, [this](wxCommandEvent&) { SelectAll();  }, wxID_SELECTALL);
+	Bind(wxEVT_MENU, [this](wxCommandEvent& ev) {
+		// Walk parent chain firing wxEVT_MENU at every wxWindow until
+		// one handles. wxStyledTextCtrl's PopupMenu does not always
+		// propagate through wxAUI / wxAuiDocMDIFrame parents to the
+		// outermost MDI host where the host Bind() lives.
+		wxCommandEvent up(wxEVT_MENU, wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
+		up.SetEventObject(this);
+		for (wxWindow* p = GetParent(); p != nullptr; p = p->GetParent()) {
+			if (p->ProcessWindowEvent(up)) return;
+		}
+		if (wxTheApp) {
+			if (wxWindow* top = wxTheApp->GetTopWindow())
+				top->ProcessWindowEvent(up);
+		}
+	}, wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
+
 	// Setup the dwell time before a tooltip is displayed.
 	SetMouseDwellTime(200);
 
@@ -881,4 +910,43 @@ void ibCodeEditor::OnKeyDown(wxKeyEvent& event)
 		break;
 	default: event.Skip(); break;
 	}
+}
+
+wxString ibCodeEditor::GetIdentifierUnderCursor()
+{
+	// Explicit selection wins — user may have selected a multi-word
+	// expression that the autocomplete word-boundary heuristic cannot
+	// see. Callers that want strict identifier-only semantics should
+	// validate the returned string themselves.
+	const wxString sel = GetSelectedText();
+	if (!sel.IsEmpty()) return sel;
+
+	const int pos   = GetCurrentPos();
+	const int start = WordStartPosition(pos, true);
+	const int end   = WordEndPosition  (pos, true);
+	if (end <= start) return wxEmptyString;
+	return GetTextRange(start, end);
+}
+
+#include "frontend/mainFrame/mainFrame.h"  // wxID_FRONTEND_SYNTAX_HELPER_LOOKUP
+
+void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
+{
+	wxMenu menu;
+	menu.Append(wxID_CUT,        _("Cut")     + wxT("\tCtrl+X"))->Enable(GetSelectionStart() != GetSelectionEnd() && IsEditable());
+	menu.Append(wxID_COPY,       _("Copy")    + wxT("\tCtrl+C"))->Enable(GetSelectionStart() != GetSelectionEnd());
+	menu.Append(wxID_PASTE,      _("Paste")   + wxT("\tCtrl+V"))->Enable(CanPaste());
+	menu.Append(wxID_SELECTALL,  _("Select all") + wxT("\tCtrl+A"));
+
+	menu.AppendSeparator();
+	menu.Append(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP,
+	            _("Look up in Syntax Helper") + wxT("\tRawCtrl+F1"));
+
+	wxPoint pt = event.GetPosition();
+	if (pt == wxDefaultPosition) {
+		// Keyboard-triggered (Shift+F10 / Menu key) — anchor at caret.
+		const int pos = GetCurrentPos();
+		pt = ClientToScreen(wxPoint(PointFromPosition(pos).x, PointFromPosition(pos).y));
+	}
+	PopupMenu(&menu, ScreenToClient(pt));
 }

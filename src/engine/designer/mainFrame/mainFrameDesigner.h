@@ -44,8 +44,12 @@ enum {
 	wxID_DESIGNER_ABOUT,
 	wxID_DESIGNER_END
 };
+// Note: Syntax-helper command ids live in frontend/mainFrame/mainFrame.h
+// (wxID_FRONTEND_SYNTAX_HELPER / wxID_FRONTEND_SYNTAX_HELPER_LOOKUP) so
+// frontend widgets (e.g. ibCodeEditor's context menu) can post them
+// without taking a dependency on the downstream designer header.
 
-//menu  
+//menu
 enum {
 	wxID_APPLICATION_DEBUG = wxID_HIGHEST + 1,
 	wxID_APPLICATION_SETTING,
@@ -83,6 +87,15 @@ public:
 	ibStackWindow* GetStackWindow() const { return m_stackWindow; }
 	ibWatchWindow* GetWatchWindow() const { return m_watchWindow; }
 	ibLocalWindow* GetLocalWindow() const { return m_localWindow; }
+
+	// Syntax-helper sidebar lifecycle. Pane is lazy-created on first
+	// toggle / lookup so the corpus load is amortised away from
+	// designer startup. OpenHelpForCursor: resolve the identifier
+	// at the focused editor's caret and either drive the pane to the
+	// single match or open the chooser on multiple matches.
+	void EnsureHelpPane();
+	void ToggleHelpPane();
+	void OpenHelpForCursor();
 
 	void LoadOptions();
 	void SaveOptions();
@@ -152,6 +165,13 @@ private:
 	wxMenu* m_menuSetting;
 	wxMenu* m_menuAdministration;
 	wxMenu* m_menuHelp;
+
+	// Syntax-helper sidebar. Created on first toggle; owned by the
+	// AUI manager once added. XML state persistence (last entry id /
+	// active tab / detail font boost) lands as a separate cosmetic
+	// step — pane works fully without it, just doesn't remember
+	// position across sessions.
+	class ibHelpPaneView* m_helpPane = nullptr;
 
 	ibMetadataTree* m_metaWindow;
 

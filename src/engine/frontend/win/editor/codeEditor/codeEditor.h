@@ -402,6 +402,19 @@ private:
 
 public:
 
+	// Resolve identifier at the caret (or current selection if non-empty).
+	// Used by syntax-helper Look-Up flow — host frame asks the focused
+	// editor for the identifier under the cursor and feeds it to
+	// ibHelpResolver. Returns wxEmptyString if the caret is not on a
+	// word boundary.
+	wxString GetIdentifierUnderCursor();
+
+	// Custom right-click menu: standard Cut/Copy/Paste/SelectAll +
+	// "Look up in Syntax Helper". The Look-Up item posts
+	// wxID_FRONTEND_SYNTAX_HELPER_LOOKUP up the parent chain so the
+	// host frame handles it (subphase 1.3b).
+	void OnContextMenu(wxContextMenuEvent& event);
+
 	// Build a `Procedure name(args) ... End`/`{...}` template suitable for
 	// inserting at a free spot in a module — CES uses brace-fenced bodies,
 	// VES uses keyword fences. Mode is read from ibCompileCode (process-

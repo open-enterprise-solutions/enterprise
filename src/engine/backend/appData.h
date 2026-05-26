@@ -47,6 +47,7 @@ enum ibDatabaseMode {
 
 class BACKEND_API ibDatabaseLayer;
 class BACKEND_API ibSession;
+class BACKEND_API ibHelpService;  // defined in backend/help/helpService.h
 enum class ibSessionKind : int;   // defined in backend/session/session.h
 
 // ibSessionSnapshot — cluster-wide sys_session snapshot — moved to
@@ -458,6 +459,11 @@ private:
 	// (no AV, no hidden assert in Release).
 	std::unique_ptr<class ibSessionRegistry> m_sessionRegistry;
 
+	// Syntax-helper corpus owner. Same ownership shape as logger /
+	// lockManager — lives with appData. Lazy-built in InitLocale once
+	// the platform locale is settled; null before that.
+	std::unique_ptr<class ibHelpService> m_helpService;
+
 	// Active configuration metadata. Polymorphic — concrete subclass
 	// (`ibMetaDataConfiguration` for runtime modes,
 	// `ibMetaDataConfigurationStorage` for designer) chosen by the
@@ -483,6 +489,13 @@ public:
 	// as the other subsystem accessors.
 	static class ibLockManager* GetLockManager() {
 		return s_instance != nullptr ? s_instance->m_lockManager.get() : nullptr;
+	}
+
+	// Syntax-helper corpus service. Null before InitLocale runs (the
+	// service is constructed lazily there, once the platform locale is
+	// settled) and after DestroyAppDataEnv. Callers MUST null-check.
+	static class ibHelpService* GetHelpService() {
+		return s_instance != nullptr ? s_instance->m_helpService.get() : nullptr;
 	}
 
 	// Active configuration metadata accessor. nullptr in launcher /

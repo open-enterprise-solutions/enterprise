@@ -130,3 +130,106 @@ void ibFrontendDocMDIFrameDesigner::UpdateEditorOptions()
 
 	m_outputWindow->SetFontColorSettings(GetFontColorSettings());
 }
+
+// ---------------------------------------------------------------------------
+// Syntax-helper sidebar — lazy AUI pane. wxAUI_PANE_HELP constant
+// lives in frontend/mainFrame/mainFrame.h alongside the other pane
+// names so the editor and other frontend widgets can address the same
+// pane without depending on this designer header.
+// ---------------------------------------------------------------------------
+
+#include "frontend/syntaxHelper/helpPaneView.h"
+#include "frontend/syntaxHelper/helpChooserDialog.h"
+#include "frontend/win/editor/codeEditor/codeEditor.h"
+#include "backend/appData.h"
+#include "backend/syntaxHelper/helpService.h"
+#include "backend/syntaxHelper/helpCorpus.h"
+#include "backend/syntaxHelper/helpResolver.h"
+#include "backend/syntaxHelper/helpEntry.h"
+
+void ibFrontendDocMDIFrameDesigner::EnsureHelpPane()
+{
+	if (m_mgr.GetPane(wxAUI_PANE_HELP).IsOk()) return;
+
+	m_helpPane = new ibHelpPaneView(this);
+
+	wxAuiPaneInfo paneInfo;
+	paneInfo.Name(wxAUI_PANE_HELP);
+	paneInfo.Caption(_("Syntax Helper"));
+	paneInfo.Right();
+	paneInfo.Layer(1);
+	paneInfo.MinSize(320, 480);
+	paneInfo.BestSize(360, 600);
+	paneInfo.CloseButton(true);
+	paneInfo.MaximizeButton(false);
+	paneInfo.MinimizeButton(false);
+	paneInfo.Show(true);
+
+	m_mgr.AddPane(m_helpPane, paneInfo);
+	m_mgr.Update();
+
+	// XML state persistence (last entry id / active tab / detail font
+	// boost) lands as a separate cosmetic step — pane is functional
+	// without it, just doesn't remember position across sessions.
+}
+
+void ibFrontendDocMDIFrameDesigner::ToggleHelpPane()
+{
+	const bool firstCreate = !m_mgr.GetPane(wxAUI_PANE_HELP).IsOk();
+	EnsureHelpPane();
+	wxAuiPaneInfo& pane = m_mgr.GetPane(wxAUI_PANE_HELP);
+	if (!pane.IsOk()) return;
+	// EnsureHelpPane already adds the pane visible. On the first
+	// invocation a naive "flip" would immediately hide it; only toggle
+	// on subsequent invocations.
+	if (!firstCreate) pane.Show(!pane.IsShown());
+	m_mgr.Update();
+}
+
+void ibFrontendDocMDIFrameDesigner::OpenHelpForCursor()
+{
+	EnsureHelpPane();
+	wxAuiPaneInfo& pane = m_mgr.GetPane(wxAUI_PANE_HELP);
+	if (pane.IsOk() && !pane.IsShown()) {
+		pane.Show(true);
+		m_mgr.Update();
+	}
+
+	// Take identifier from the focused editor if it's an ibCodeEditor.
+	// Other focused widgets (metaTree, dialogs) don't carry a script-
+	// language identifier under the caret, so silently no-op — user
+	// can still type in the search tab manually.
+	wxString identifier;
+	if (auto* edit = wxDynamicCast(wxWindow::FindFocus(), ibCodeEditor))
+		identifier = edit->GetIdentifierUnderCursor();
+	if (identifier.IsEmpty()) return;
+
+	auto* helpService = appData ? appData->GetHelpService() : nullptr;
+	auto corpus = helpService ? helpService->GetCorpus() : nullptr;
+	if (!corpus) return;
+
+	std::vector<const ibHelpEntry*> hits = ResolveByName(*corpus, identifier);
+	if (hits.empty()) return;
+
+	if (hits.size() == 1) {
+		if (m_helpPane) m_helpPane->ShowEntry(hits.front()->id);
+		return;
+	}
+
+	// Multiple matches → modal section-chooser dialog. Three buttons:
+	// Show (drives the pane), Cancel (no-op), Help (opens the
+	// on-helper guide entry).
+	ibHelpChooserDialog dlg(this, hits);
+	if (dlg.ShowModal() != wxID_OK) return;
+	if (dlg.HelpRequested()) {
+		// "Help" button — open the well-known on-helper guide entry
+		// if it exists; otherwise close silently (showing an
+		// arbitrary candidate would mislead the user).
+		static const wxString kGuideId = wxT("guide.syntaxHelper");
+		if (corpus->FindById(kGuideId) && m_helpPane)
+			m_helpPane->ShowEntry(kGuideId);
+		return;
+	}
+	if (!dlg.GetSelectedId().IsEmpty() && m_helpPane)
+		m_helpPane->ShowEntry(dlg.GetSelectedId());
+}

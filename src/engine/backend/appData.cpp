@@ -11,7 +11,7 @@
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
 
-#include "backend/utils/passwordHash.hpp"
+#include "backend/syntaxHelper/helpService.h"
 #include "backend/plugin/pluginManager.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
@@ -19,6 +19,7 @@
 #include "backend/logger/loggerSweep.h"
 #include "backend/lock/lockManager.h"
 
+#include "backend/utils/passwordHash.hpp"
 
 #include "backend/moduleManager/moduleManager.h"
 
@@ -683,8 +684,12 @@ bool ibApplicationData::InitLocale(const wxString& locale)
 		// Initialize localization engine
 		ibBackendLocalization::SetUserLanguage(m_locale.GetName());
 
-		//Set default time 
+		//Set default time
 		wxDateTime::SetCountry(wxDateTime::Country::Country_Default);
+
+		// Syntax-helper corpus comes up here — locale is settled.
+		m_helpService.reset(new ibHelpService(ib::AppDataCtorToken{}, m_locale.GetCanonicalName()));
+
 		return true;
 	}
 

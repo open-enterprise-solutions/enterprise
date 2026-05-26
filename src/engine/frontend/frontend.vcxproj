@@ -27,6 +27,13 @@
     <ClCompile Include="docView\templates\docViewSpreadsheet.cpp" />
     <ClCompile Include="docView\templates\docViewText.cpp" />
     <ClCompile Include="frontend.cpp" />
+    <ClCompile Include="syntaxHelper\helpChooserDialog.cpp" />
+    <ClCompile Include="syntaxHelper\helpDetailView.cpp" />
+    <ClCompile Include="syntaxHelper\helpDragSource.cpp" />
+    <ClCompile Include="syntaxHelper\helpIndexView.cpp" />
+    <ClCompile Include="syntaxHelper\helpPaneView.cpp" />
+    <ClCompile Include="syntaxHelper\helpSearchView.cpp" />
+    <ClCompile Include="syntaxHelper\helpTreeView.cpp" />
     <ClCompile Include="mainFrame\mainFrame.cpp" />
     <ClCompile Include="mainFrame\mainFrameChild.cpp" />
     <ClCompile Include="mainFrame\mainFrameParts.cpp" />
@@ -350,6 +357,13 @@
     <ClInclude Include="diagnostics\oesApp.h" />
     <ClInclude Include="diagnostics\oesConsole.h" />
     <ClInclude Include="frontend.h" />
+    <ClInclude Include="syntaxHelper\helpChooserDialog.h" />
+    <ClInclude Include="syntaxHelper\helpDetailView.h" />
+    <ClInclude Include="syntaxHelper\helpDragSource.h" />
+    <ClInclude Include="syntaxHelper\helpIndexView.h" />
+    <ClInclude Include="syntaxHelper\helpPaneView.h" />
+    <ClInclude Include="syntaxHelper\helpSearchView.h" />
+    <ClInclude Include="syntaxHelper\helpTreeView.h" />
     <ClInclude Include="mainFrame\mainFrame.h" />
     <ClInclude Include="mainFrame\mainFrameChild.h" />
     <ClInclude Include="mainFrame\objinspect\objinspect.h" />
