@@ -347,6 +347,8 @@
     <ClInclude Include="docView\templates\docViewHelp.h" />
     <ClInclude Include="docView\templates\docViewSpreadsheet.h" />
     <ClInclude Include="docView\templates\docViewText.h" />
+    <ClInclude Include="diagnostics\oesApp.h" />
+    <ClInclude Include="diagnostics\oesConsole.h" />
     <ClInclude Include="frontend.h" />
     <ClInclude Include="mainFrame\mainFrame.h" />
     <ClInclude Include="mainFrame\mainFrameChild.h" />

@@ -13,6 +13,7 @@
 
 #include "backend/appData.h"
 #include "backend/session/session.h"
+#include "frontend/diagnostics/oesConsole.h"
 
 static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 	// Short names stay legacy; long names match wenterprise-server /
@@ -36,8 +37,12 @@ int main(int argc, char** argv)
 {
 	wxApp::CheckBuildOptions(WX_BUILD_OPTIONS_SIGNATURE, "daemon");
 
-	wxInitializer initializer(argc, argv);
-	if (!initializer.IsOk()) {
+	// wxInitializer + wxSocketBase::Initialize + ibCrashGuard::Install,
+	// in one line. Headless: no wxApp, faults from worker / debug-listener
+	// threads write minidumps and surface platform-native messages
+	// instead of silent abort.
+	ibOesConsoleBoot boot(wxT("daemon"), argc, argv);
+	if (!boot.IsOk()) {
 		fprintf(stderr, "Failed to initialize the wxWidgets library, aborting.");
 		return -1;
 	}
@@ -81,7 +86,7 @@ int main(int argc, char** argv)
 #endif // wxUSE_LOG
 #endif
 
-	wxSocketBase::Initialize();
+	// wxSocketBase::Initialize() already ran inside ibOesConsoleBoot above.
 
 	// Init appData (sets AccessMode internally based on runMode).
 	bool connected = appDataCreateServer(ibRunMode::eENTERPRISE_MODE,
@@ -99,7 +104,8 @@ int main(int argc, char** argv)
 	// in ibApplicationData ctor) handle metadata load + per-session
 	// runtime bring-up through OnFirstConnect / OnAuthenticated.
 	ibSession* session = appData->CreateSession();
-	if (session == nullptr || !session->Open(strIBUser, strIBPassword)) {
+	if (session == nullptr ||
+	    session->Open(strIBUser, strIBPassword) != ibSession::OpenResult::Authenticated) {
 		appDataDestroy();
 		return 1;
 	}

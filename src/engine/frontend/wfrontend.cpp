@@ -322,10 +322,11 @@ private:
 
 			// Guard against shutdown that landed between wait and the
 			// registry / metadata accesses below. wfrontendShutdown
-			// destroys appData; if the sweep fires its first call after
-			// that point ibSessionRegistry::Instance()'s assert would
-			// trip and the host crashes during orderly teardown
-			// (debug-spawn wes svr.stop path).
+			// destroys appData; with the post-2026-05-26 nullable
+			// Instance() this branch is no longer the only safety net
+			// (each Instance() callsite null-checks too), but bailing
+			// early avoids the metadata-watch + signal-check work when
+			// we already know there's nothing left to do.
 			if (appData == nullptr)
 				return;
 
@@ -363,7 +364,8 @@ private:
 			//    watch so an operator can force a re-login cycle even
 			//    if the file_guid hasn't changed (e.g. ad-hoc kick-all
 			//    from an admin console).
-			if (ibSessionRegistry::Instance().ConsumeReloadRequest()) {
+			auto* reloadReg = ibApplicationData::GetSessionRegistry();
+			if (reloadReg != nullptr && reloadReg->ConsumeReloadRequest()) {
 				std::cerr << "[signal] reload directive — evicting "
 				          << "all user sessions" << std::endl;
 				std::vector<std::string> ids;
@@ -558,9 +560,10 @@ bool FinishConnect(const std::string& ibUser, const std::string& ibPassword)
 	// per-tab WebClient sessions auto-link to it.
 	ibSession* session = appData->CreateSession();
 	if (session == nullptr ||
-	    !session->Open(
+	    session->Open(
 	        wxString::FromUTF8(ibUser.c_str()),
-	        wxString::FromUTF8(ibPassword.c_str())))
+	        wxString::FromUTF8(ibPassword.c_str()))
+	      != ibSession::OpenResult::Authenticated)
 	{
 		RememberError();
 		appDataDestroy();
@@ -660,14 +663,14 @@ WFRONTEND_API bool wfrontendKickSessionByGuid(const std::string& sessionGuid)
 	// Delegates to the registry's admin helper — same UPDATE path the
 	// designer dialog uses, so kick-via-HTTP and kick-via-designer share
 	// exactly one implementation.
-	return ibSessionRegistry::Instance().Kick(
-		wxString::FromUTF8(sessionGuid.c_str()));
+	auto* reg = ibApplicationData::GetSessionRegistry();
+	return reg != nullptr && reg->Kick(wxString::FromUTF8(sessionGuid.c_str()));
 }
 
 WFRONTEND_API bool wfrontendReloadSessionByGuid(const std::string& sessionGuid)
 {
-	return ibSessionRegistry::Instance().Reload(
-		wxString::FromUTF8(sessionGuid.c_str()));
+	auto* reg = ibApplicationData::GetSessionRegistry();
+	return reg != nullptr && reg->Reload(wxString::FromUTF8(sessionGuid.c_str()));
 }
 
 #include "backend/session/workerPoolHeadless.h"
@@ -682,7 +685,7 @@ WFRONTEND_API std::string wfrontendDiagJSON()
 	};
 
 	// --- Worker pool (headless impl carries the size counters) -----
-	if (auto* registry = &ibSessionRegistry::Instance()) {
+	if (auto* registry = ibApplicationData::GetSessionRegistry()) {
 		if (auto* base = registry->GetWorkerPool()) {
 			if (auto* hl = dynamic_cast<ibWorkerPoolHeadless*>(base)) {
 				root["workerPool"] = {
@@ -705,7 +708,10 @@ WFRONTEND_API std::string wfrontendDiagJSON()
 	}
 
 	// --- Sessions snapshot ---------------------------------------
-	const ibSessionSnapshot snap = ibSessionRegistry::Instance().GetClusterSnapshot();
+	auto* snapReg = ibApplicationData::GetSessionRegistry();
+	const ibSessionSnapshot snap = snapReg != nullptr
+		? snapReg->GetClusterSnapshot()
+		: ibSessionSnapshot();
 	const unsigned int total = snap.GetSessionCount();
 	unsigned int active = 0;
 	std::map<std::string, unsigned int> byKind;
@@ -730,7 +736,8 @@ WFRONTEND_API std::string wfrontendLocksJSON()
 {
 	nlohmann::json arr = nlohmann::json::array();
 	try {
-		const auto rows = ibLockManager::Instance().GetSnapshot();
+		auto* lm = ibApplicationData::GetLockManager();
+		const auto rows = lm != nullptr ? lm->GetSnapshot() : std::vector<ibLockSnapshotRow>{};
 		for (const auto& r : rows) {
 			// Render key as "field1=val1, field2=val2" for at-a-glance UI.
 			// keyData on the snapshot row is already the canonical text
@@ -753,7 +760,7 @@ WFRONTEND_API std::string wfrontendLocksJSON()
 	catch (const ibBackendException&) {
 		// Snapshot is best-effort observability — never propagate.
 	}
-	catch (...) {}
+	catch (...) { /* swallowed: same as above, observability endpoint must not throw */ }
 	return arr.dump();
 }
 
@@ -763,7 +770,9 @@ WFRONTEND_API bool wfrontendForceReleaseLockByGuid(const std::string& lockGuid)
 		const ibGuid g(wxString::FromUTF8(lockGuid.c_str()));
 		if (!g.isValid()) return false;
 		std::vector<ibGuid> one{ g };
-		ibLockManager::Instance().ReleaseRows(one);
+		auto* lm = ibApplicationData::GetLockManager();
+		if (lm == nullptr) return false;
+		lm->ReleaseRows(one);
 		return true;
 	}
 	catch (const ibBackendException&) { return false; }
@@ -827,10 +836,18 @@ WFRONTEND_API void wfrontendSetProcessExitHook(void (*hook)())
 
 	static bool wired = false;
 	if (!wired) {
+		// Registry hooks live for the registry's lifetime. SetProcessExitHook
+		// is called from main() after InitBackend, so the registry is alive
+		// here — null-check is defensive against a future caller that wires
+		// hooks before InitBackend.
+		auto* reg = ibApplicationData::GetSessionRegistry();
+		if (reg == nullptr) return;
+
 		// Keep-alive predicate: wes process stays up while at least
 		// one WebClient session is registered against the WebServer.
-		ibSessionRegistry::Instance().OnShouldKeepAlive([]() {
-			return ibSessionRegistry::Instance().HasClients();
+		reg->OnShouldKeepAlive([]() {
+			auto* r = ibApplicationData::GetSessionRegistry();
+			return r != nullptr && r->HasClients();
 		});
 
 		// Last-disconnect listener: in a debug-spawned wes the registry
@@ -841,7 +858,7 @@ WFRONTEND_API void wfrontendSetProcessExitHook(void (*hook)())
 		// (regular multi-user) leaves wfrontendDebugMode() false → no
 		// kill. Sticky atomic guards against re-entry if the cascade
 		// fires multiple last-disconnects during shutdown.
-		ibSessionRegistry::Instance().OnLastDisconnect([]() {
+		reg->OnLastDisconnect([]() {
 			if (wfrontendDebugMode())
 				wfrontendCallProcessExitHook();
 		});
@@ -850,7 +867,7 @@ WFRONTEND_API void wfrontendSetProcessExitHook(void (*hook)())
 		// Picks up the wes-WebServer fallback case (debug-thread
 		// Current() resolves to the system row when the queue is
 		// empty; that bare ibSession's virtual OnForceExit is empty).
-		ibSessionRegistry::Instance().OnForceExit([](ibSession*) {
+		reg->OnForceExit([](ibSession*) {
 			if (wfrontendDebugMode())
 				wfrontendCallProcessExitHook();
 		});
@@ -870,7 +887,9 @@ WFRONTEND_API bool wfrontendSessionPaused(const std::string& sessionId)
 {
 	if (!g_initialized.load() || appData == nullptr)
 		return false;
-	auto* sess = ibSessionRegistry::Instance().Find(wxString::FromUTF8(sessionId.c_str()));
+	auto* reg = ibApplicationData::GetSessionRegistry();
+	if (reg == nullptr) return false;
+	auto* sess = reg->Find(wxString::FromUTF8(sessionId.c_str()));
 	if (sess == nullptr) return false;
 	auto* d = sess->Debug();
 	if (d == nullptr) return false;

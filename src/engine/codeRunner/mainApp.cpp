@@ -7,11 +7,12 @@
 
 #include "backend/appData.h"
 
-bool ibAppCodeRunner::OnInit()
+bool ibAppCodeRunner::DoOnInit()
 {
 	if (m_codeRunner)
-		return false; 
+		return false;
 
+	// Crash plumbing is wired by ibWxApp::OnInit before this runs.
 	ibApplicationData::CreateAppDataEnv(ibRunMode::eENTERPRISE_MODE);
 	m_codeRunner = new ibFrameCodeRunner(nullptr, wxID_ANY);
 

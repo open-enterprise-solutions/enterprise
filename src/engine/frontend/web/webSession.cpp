@@ -129,7 +129,7 @@ bool ibWebSession::Login(const wxString& user, const wxString& password)
 	// OnShowAuthenticate. Base ibSession returns false there — web's
 	// HTTP login form is the user-visible prompt, driven from the
 	// client-side, not from a modal.
-	if (!m_session->Open(user, password)) {
+	if (m_session->Open(user, password) != ibSession::OpenResult::Authenticated) {
 		m_session->Close();   // submit Remove → sys_session row DELETEd
 		m_session.reset();
 		return false;

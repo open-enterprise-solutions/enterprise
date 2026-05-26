@@ -3,13 +3,16 @@
 
 #include <wx/app.h>
 #include "codeRunner.h"
+#include "frontend/diagnostics/oesApp.h"
 
 class ibAppCodeRunner :
-	public wxApp {
+	public ibWxApp {
 public:
 
-	virtual bool OnInit();
-	virtual int OnExit();
+	wxString GetExeName() const override { return wxT("codeRunner"); }
+
+	bool DoOnInit() override;
+	int OnExit() override;
 
 	void AppendOutput(const wxString& str);
 

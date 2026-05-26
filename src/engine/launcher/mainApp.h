@@ -3,12 +3,15 @@
 
 #include <wx/app.h>
 #include "launcher.h"
+#include "frontend/diagnostics/oesApp.h"
 
 class ibAppLauncher :
-	public wxApp {
+	public ibWxApp {
 public:
-	virtual bool OnInit();
-	virtual int OnExit();
+	wxString GetExeName() const override { return wxT("launcher"); }
+
+	bool DoOnInit() override;
+	int OnExit() override;
 
 private:
 	ibFrameLauncher* m_launcher = nullptr;

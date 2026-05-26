@@ -205,7 +205,18 @@ public:
 	// Non-GUI sessions inherit the default OnShowAuthenticate (false) so
 	// the fallback no-ops and Authenticate reports the original failure;
 	// GUI app OnInit terminates the process in that case.
-	bool Open(const wxString& user, const wxString& password);
+	//
+	// Tri-state result. Callers used to treat `bool == false` as "show
+	// error", which surfaced "Authentication failed" even when the user
+	// just clicked Cancel on the login dialog. Distinguishing the two
+	// lets the GUI app exit silently on cancel and only message on a
+	// real auth failure.
+	enum class OpenResult {
+		Authenticated,   // creds accepted (silent or via dialog)
+		Failed,          // creds rejected — show "Authentication failed"
+		Cancelled,       // user cancelled the interactive dialog — silent exit
+	};
+	OpenResult Open(const wxString& user, const wxString& password);
 
 	// Interactive prompt event — fires only when silent Attach fails.
 	// Overridden by ibGUISession (shared for designer + enterprise; shows

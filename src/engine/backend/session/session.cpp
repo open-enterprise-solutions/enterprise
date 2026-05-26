@@ -83,8 +83,12 @@ void ibSession::Close(bool force)
 		return;
 
 	// Submit Remove@Urgent — registry-thread ProcessRemove erases m_own,
-	// which drops the last shared_ptr and destroys this session.
-	auto& reg = ibSessionRegistry::Instance();
+	// which drops the last shared_ptr and destroys this session. Tolerate
+	// post-teardown calls (Close arriving from a dtor chain after appData
+	// has been destroyed) — nothing to do, the registry is gone with us.
+	ibSessionRegistry* const regPtr = ibApplicationData::GetSessionRegistry();
+	if (regPtr == nullptr) return;
+	auto& reg = *regPtr;
 	if (reg.IsFatal())
 		return;
 	ibRegistryRequest req;
@@ -95,7 +99,9 @@ void ibSession::Close(bool force)
 
 void ibSession::Detach(std::chrono::milliseconds timeout)
 {
-	auto& reg = ibSessionRegistry::Instance();
+	ibSessionRegistry* const regPtr = ibApplicationData::GetSessionRegistry();
+	if (regPtr == nullptr) return;
+	auto& reg = *regPtr;
 	if (reg.IsFatal()) return;
 	if (State() != ibSessionState::Added) return;
 
@@ -113,7 +119,9 @@ void ibSession::Detach(std::chrono::milliseconds timeout)
 
 void ibSession::SetActivity(const wxString& activity)
 {
-	auto& reg = ibSessionRegistry::Instance();
+	ibSessionRegistry* const regPtr = ibApplicationData::GetSessionRegistry();
+	if (regPtr == nullptr) return;
+	auto& reg = *regPtr;
 	if (reg.IsFatal()) return;
 
 	ibRegistryRequest req;
@@ -128,7 +136,10 @@ void ibSession::SetExclusive(bool on)
 	// Registry runs the queue handshake + wait and gives us back the
 	// verdict; we only translate it into an exception for the script
 	// layer. Granted == success path (acquire AND release).
-	const ibExclusiveResult r = ibSessionRegistry::Instance().SetExclusive(this, on);
+	ibSessionRegistry* const regPtr = ibApplicationData::GetSessionRegistry();
+	if (regPtr == nullptr)
+		ibBackendCoreException::Error(_("Session registry not initialised"));
+	const ibExclusiveResult r = regPtr->SetExclusive(this, on);
 	switch (r) {
 	case ibExclusiveResult::Granted:
 		return;
@@ -253,7 +264,13 @@ void ibSession::EnsureRoot()
 
 ibSession* ibSession::Current()
 {
-	auto& reg = ibSessionRegistry::Instance();
+	// Hot path — runs from BackendError handlers, logging, every script
+	// opcode that asks for the current session. Must tolerate pre-appData
+	// (bootstrap statics) and post-appData (process teardown listeners)
+	// states without faulting.
+	ibSessionRegistry* const regPtr = ibApplicationData::GetSessionRegistry();
+	if (regPtr == nullptr) return nullptr;
+	auto& reg = *regPtr;
 	const auto tid = std::this_thread::get_id();
 
 	// Debug-thread redirection: a thread registered as a debug-server
@@ -299,27 +316,38 @@ ibSession* ibSession::Current()
 
 void ibSession::SetAccessMode(AccessMode mode)
 {
-	ibSessionRegistry::Instance().SetAccessMode(mode);
+	// Static config setter — set once at process start by appData's ctor.
+	// Null registry means we're outside the appData lifetime; ignore.
+	if (auto* reg = ibApplicationData::GetSessionRegistry())
+		reg->SetAccessMode(mode);
 }
 
 ibSession::AccessMode ibSession::GetAccessMode()
 {
-	return ibSessionRegistry::Instance().GetAccessMode();
+	// Default to Single if no registry — the most conservative fallback
+	// (one session per process). Pre-appData / post-appData readers see
+	// a sane value instead of faulting.
+	auto* reg = ibApplicationData::GetSessionRegistry();
+	return reg != nullptr ? reg->GetAccessMode() : AccessMode::Single;
 }
 
 void ibSession::SetFallback(ibSession* s)
 {
-	ibSessionRegistry::Instance().SetFallback(s);
+	if (auto* reg = ibApplicationData::GetSessionRegistry())
+		reg->SetFallback(s);
 }
 
 void ibSession::ClearFallback()
 {
-	ibSessionRegistry::Instance().ClearFallback();
+	if (auto* reg = ibApplicationData::GetSessionRegistry())
+		reg->ClearFallback();
 }
 
 ibSession* ibSession::GetByThread(std::thread::id tid)
 {
-	const auto mode = ibSessionRegistry::Instance().GetAccessMode();
+	ibSessionRegistry* const regPtr = ibApplicationData::GetSessionRegistry();
+	if (regPtr == nullptr) return nullptr;
+	const auto mode = regPtr->GetAccessMode();
 	std::shared_lock<std::shared_mutex> lk(s_currentMutex);
 	switch (mode) {
 	case AccessMode::Single:
@@ -330,7 +358,7 @@ ibSession* ibSession::GetByThread(std::thread::id tid)
 		if (auto it = s_currentByThread.find(tid); it != s_currentByThread.end()) {
 			if (auto sp = it->second.lock()) return sp.get();
 		}
-		return ibSessionRegistry::Instance().GetFallback();
+		return regPtr->GetFallback();
 	}
 	return nullptr;
 }
@@ -455,13 +483,16 @@ void ibSession::RequestForceExit()
 	// Registry fan-out — covers session kinds whose virtual OnForceExit
 	// is the empty base (wes' WebServer technical session). Without it,
 	// a debug-thread Current() that falls back to the system row would
-	// close it but no host listener would learn about it.
-	ibSessionRegistry::Instance().NotifyForceExit(this);
+	// close it but no host listener would learn about it. Tolerate a
+	// post-teardown trigger silently — there's no one left to notify.
+	if (auto* reg = ibApplicationData::GetSessionRegistry())
+		reg->NotifyForceExit(this);
 }
 
 std::future<void> ibSession::Submit(std::function<void()> task)
 {
-	auto* pool = ibSessionRegistry::Instance().GetWorkerPool();
+	ibSessionRegistry* const regPtr = ibApplicationData::GetSessionRegistry();
+	auto* pool = regPtr != nullptr ? regPtr->GetWorkerPool() : nullptr;
 	if (pool != nullptr)
 		return pool->Submit(this, std::move(task));
 
@@ -523,14 +554,16 @@ ibAuthState ibSession::WaitForAuth(ibAuthState from, std::chrono::milliseconds t
 	return m_auth.load(std::memory_order_acquire);
 }
 
-bool ibSession::Open(const wxString& user, const wxString& password)
+ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& password)
 {
 	// Must be Added (registry accepted the session); Anonymous or AuthFailed
 	// on the auth axis — either is a valid retry point.
-	if (State() != ibSessionState::Added) return false;
+	if (State() != ibSessionState::Added) return OpenResult::Failed;
 
-	auto& reg = ibSessionRegistry::Instance();
-	if (reg.IsFatal()) return false;
+	ibSessionRegistry* const regPtr = ibApplicationData::GetSessionRegistry();
+	if (regPtr == nullptr) return OpenResult::Failed;
+	auto& reg = *regPtr;
+	if (reg.IsFatal()) return OpenResult::Failed;
 
 	constexpr auto timeout = std::chrono::seconds(20);
 
@@ -565,7 +598,7 @@ bool ibSession::Open(const wxString& user, const wxString& password)
 		// resolves Current() to THIS session (the registry-fallback
 		// trap is closed at that level, no extra scope needed here).
 		reg.NotifyAuthenticated(this);
-		return true;
+		return OpenResult::Authenticated;
 	}
 
 	// Interactive fallback — GUI override shows login dialog (shared for
@@ -582,12 +615,17 @@ bool ibSession::Open(const wxString& user, const wxString& password)
 		ibSessionScope scope(this);
 		dlgOk = OnShowAuthenticate(user, password);
 	}
-	if (!dlgOk) return false;
+	// Dialog returning false == user clicked Cancel. Distinguish from
+	// "creds rejected by server" so the GUI app's no-session branch
+	// stays silent on cancel and only messages on a real auth failure.
+	if (!dlgOk) return OpenResult::Cancelled;
 
 	res = submitAttach(m_userInfo.m_strUserName, m_sessionRawPassword);
-	if (res == ibAuthState::Authenticated)
+	if (res == ibAuthState::Authenticated) {
 		reg.NotifyAuthenticated(this);
-	return res == ibAuthState::Authenticated;
+		return OpenResult::Authenticated;
+	}
+	return OpenResult::Failed;
 }
 
 // --- ibSessionThreadBinding --------------------------------------------

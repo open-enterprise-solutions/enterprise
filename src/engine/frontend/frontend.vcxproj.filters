@@ -1030,6 +1030,12 @@
     <ClInclude Include="win\dlgs\formSelector\formSelector.h">
       <Filter>win\dlgs\formSelector</Filter>
     </ClInclude>
+    <ClInclude Include="diagnostics\oesApp.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
+    <ClInclude Include="diagnostics\oesConsole.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
     <ClInclude Include="frontend.h" />
     <ClInclude Include="visualView\controlCtor.h">
       <Filter>visualView</Filter>
@@ -1732,6 +1738,9 @@
     </Filter>
     <Filter Include="docView">
       <UniqueIdentifier>{442f0471-db57-440c-aa5f-f6a20e933269}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="diagnostics">
+      <UniqueIdentifier>{f9e9c1c0-3c4e-4f43-8b41-9b8f3e0a1d7c}</UniqueIdentifier>
     </Filter>
     <Filter Include="docView\templates">
       <UniqueIdentifier>{de8c1ef4-820a-4c8f-ab29-c012e37d6b0a}</UniqueIdentifier>
