@@ -299,6 +299,7 @@
     <ClCompile Include="win\ctrls\treelistctrl.cpp" />
     <ClCompile Include="win\dlgs\about.cpp" />
     <ClCompile Include="win\dlgs\activeUser.cpp" />
+    <ClCompile Include="win\dlgs\auditLog.cpp" />
     <ClCompile Include="win\dlgs\applyChange.cpp" />
     <ClCompile Include="session\guiSession.cpp" />
     <ClCompile Include="session\workerPoolGUI.cpp" />
@@ -556,6 +557,7 @@
     <ClInclude Include="win\ctrls\treelistctrl.h" />
     <ClInclude Include="win\dlgs\about.h" />
     <ClInclude Include="win\dlgs\activeUser.h" />
+    <ClInclude Include="win\dlgs\auditLog.h" />
     <ClInclude Include="win\dlgs\applyChange.h" />
     <ClInclude Include="session\guiSession.h" />
     <ClInclude Include="session\workerPoolGUI.h" />

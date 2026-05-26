@@ -16,6 +16,7 @@
 #include "backend/databaseLayer/connectionScope.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/backend_form.h"
+#include "backend/logger/logger.h"
 
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
@@ -230,6 +231,25 @@ void ibValueRecordDataObjectRef::CommitWriteScope(ibConnectionScope& scope,
 {
 	scope.SafeCommitTransaction();
 
+	// Audit AFTER SafeCommitTransaction — the row is durable. If the
+	// commit threw, RAII rollback fires and we never get here. Source
+	// "record" is universal (Catalog / Document / ChartOf* all route
+	// through this scaffold); ref_guid + ref_meta_id let the viewer
+	// drill back to the actual object that was written.
+	if (ibLog && ibLog->IsEnabled(ibLogLevel::Audit)) {
+		const wxString refGuid = m_reference_impl
+			? ibGuid(m_reference_impl->m_guid).str()
+			: wxString();
+		const int refMetaId = m_reference_impl
+			? static_cast<int>(m_reference_impl->m_id)
+			: 0;
+		ibLog->Audit(wxT("record"),
+		             newObject ? wxT("created") : wxT("saved"),
+		             GetSourceCaption(),
+		             refGuid,
+		             refMetaId);
+	}
+
 	if (valueForm != nullptr) {
 		if (newObject) valueForm->NotifyCreate(GetReference());
 		else           valueForm->NotifyChange(GetReference());
@@ -241,6 +261,17 @@ void ibValueRecordDataObjectRef::CommitDeleteScope(ibConnectionScope& scope,
                                                     ibBackendValueForm* valueForm)
 {
 	scope.SafeCommitTransaction();
+
+	if (ibLog && ibLog->IsEnabled(ibLogLevel::Audit)) {
+		const wxString refGuid = m_reference_impl
+			? ibGuid(m_reference_impl->m_guid).str()
+			: wxString();
+		const int refMetaId = m_reference_impl
+			? static_cast<int>(m_reference_impl->m_id)
+			: 0;
+		ibLog->Audit(wxT("record"), wxT("deleted"),
+		             GetSourceCaption(), refGuid, refMetaId);
+	}
 
 	if (valueForm != nullptr)
 		valueForm->NotifyDelete(GetReference());

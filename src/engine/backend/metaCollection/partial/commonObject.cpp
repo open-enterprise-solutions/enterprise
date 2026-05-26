@@ -270,6 +270,7 @@ bool ibValueMetaObjectRecordDataRef::OnCreateMetaObject(ibMetaData* metaData, in
 }
 
 #include "backend/appData.h"
+#include "backend/logger/logger.h"
 #include "databaseLayer/databaseLayer.h"
 
 bool ibValueMetaObjectRecordDataRef::OnLoadMetaObject(ibMetaData* metaData)
@@ -460,21 +461,10 @@ bool ibValueMetaObjectRecordDataEnumRef::OnAfterCloseMetaObject()
 
 ibValueMetaObjectRecordDataMutableRef::ibValueMetaObjectRecordDataMutableRef() : ibValueMetaObjectRecordDataRef()
 {
-	// Default script-hook procedure signatures common across all
-	// mutable-ref kinds (Catalog / Document / ChartOfAccounts /
-	// ChartOfCharacteristicTypes). Each leaf metaobject ctor only
-	// has to register its variation (Document overrides BeforeWrite
-	// with extra writeMode/postingMode args; Catalog/ChartOf*/Chart
-	// OfChar* add SetNewCode; Document adds SetNewNumber / Posting /
-	// UndoPosting). SetDefaultProcedure semantics is insert_or_assign,
-	// so the leaf's later registration cleanly overwrites the default
-	// when the shape differs.
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"),  ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"),      ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"),     ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Filling"),      ibContentHelper::eProcedureHelper, { wxT("Source"), wxT("StandartProcessing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnCopy"),       ibContentHelper::eProcedureHelper, { wxT("Source") });
+	// m_propertyObjectModule is declared on the leaf metaobjects
+	// (Catalog / Document / ChartOf*) and isn't visible from this
+	// base ctor — common-default SetDefaultProcedure registration
+	// stays in each leaf's own ctor where the field is in scope.
 }
 
 ibValueMetaObjectRecordDataMutableRef::~ibValueMetaObjectRecordDataMutableRef()
@@ -2764,6 +2754,23 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 			ibBackendCoreException::Error(_("Failed to write object in db!"));
 			return false;
 		}
+	}
+
+	// Posting / UndoPosting audit. Layered on top of the generic
+	// record.saved that CommitWriteScope emits — admin sees BOTH the
+	// row change and the posting state change as distinct events.
+	// Plain ibDocumentWriteMode_Write skips this — the generic
+	// record.* audit covers it.
+	if (ibLog && ibLog->IsEnabled(ibLogLevel::Audit)
+	    && writeMode != ibDocumentWriteMode::ibDocumentWriteMode_Write)
+	{
+		const wxString refGuid = m_reference_impl
+			? ibGuid(m_reference_impl->m_guid).str() : wxString();
+		const int refMetaId = m_reference_impl
+			? static_cast<int>(m_reference_impl->m_id) : 0;
+		const wxString evt = (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting)
+			? wxT("posted") : wxT("unposted");
+		ibLog->Audit(wxT("document"), evt, GetSourceCaption(), refGuid, refMetaId);
 	}
 
 	CommitWriteScope(scope, valueForm, newObject);

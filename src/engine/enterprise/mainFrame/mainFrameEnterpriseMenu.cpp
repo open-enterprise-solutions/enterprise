@@ -90,6 +90,7 @@ void ibFrontendDocMDIFrameEnterprise::InitializeDefaultMenu()
 	if (activeMetaData->AccessRight_ActiveUsers()) {
 		m_menuAdministration = new wxMenu;
 		m_menuAdministration->Append(wxID_ENTERPRISE_ACTIVE_USERS, _("Active users"));
+		m_menuAdministration->Append(wxID_ENTERPRISE_AUDIT_LOG,    _("Registration journal"));
 		m_frameMenuBar->Append(m_menuAdministration, _("Administration"));
 	}
 
@@ -108,6 +109,7 @@ void ibFrontendDocMDIFrameEnterprise::InitializeDefaultMenu()
 	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameEnterprise::OnClickAllOperation, this, wxID_ENTERPRISE_ALL_OPERATIONS);
 	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameEnterprise::OnToolsSettings, this, wxID_ENTERPRISE_SETTING);
 	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameEnterprise::OnActiveUsers, this, wxID_ENTERPRISE_ACTIVE_USERS);
+	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameEnterprise::OnAuditLog, this, wxID_ENTERPRISE_AUDIT_LOG);
 	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameEnterprise::OnAbout, this, wxID_ENTERPRISE_ABOUT);
 
 	m_keyBinder.UpdateWindow(this);

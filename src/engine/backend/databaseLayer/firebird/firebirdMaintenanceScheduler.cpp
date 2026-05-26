@@ -25,6 +25,15 @@ struct SchedulerState {
 	std::atomic<bool>                running{false};
 	std::thread                      worker;
 
+	// Worker-exit signal — set true by the worker right before its
+	// thread function returns. Replaces the std::async-based timed
+	// join in Stop() which was unsafe at DLL-detach time (TPP teardown
+	// kills CreateThreadpoolWork, which std::async ultimately calls;
+	// atexit handler in DllMain detach hit INVALID_PARAMETER c000000d).
+	std::mutex                       doneMu;
+	std::condition_variable          doneCv;
+	bool                             workerDone = false;
+
 	// Wall-clock UNIX ms timestamps for "last successful". 0 means
 	// "never run since process start". Persistence to disk would
 	// elevate this to "never run on this DB" instead.
@@ -149,6 +158,14 @@ void WorkerLoop(SchedulerState* st) {
 			                    wxT("threw; continuing"));
 		}
 	}
+
+	// Signal Stop()'s timed wait that we're done. Has to happen
+	// AFTER the loop exits — Stop polls workerDone via doneCv.
+	{
+		std::lock_guard<std::mutex> g(st->doneMu);
+		st->workerDone = true;
+	}
+	st->doneCv.notify_all();
 }
 
 } // namespace
@@ -200,6 +217,10 @@ void ibFirebirdMaintenanceScheduler::Start(
 		st.iface  = iface;
 		st.conn   = conn;
 		st.stopRequested.store(false);
+		{
+			std::lock_guard<std::mutex> dg(st.doneMu);
+			st.workerDone = false;
+		}
 		st.worker = std::thread(WorkerLoop, &st);
 		st.running.store(true);
 	}
@@ -228,33 +249,31 @@ void ibFirebirdMaintenanceScheduler::Stop()
 		if (st.worker.get_id() == std::this_thread::get_id()) {
 			st.worker.detach();
 		} else {
-			// Join with timeout — std::thread has no native timed-join,
-			// so wrap the join in a std::async future and wait_for it.
-			// BR-cycle can hold the worker for tens of minutes (gbak
-			// on multi-GB DB); blocking process shutdown for that
-			// long is worse than detaching mid-operation. Detached
-			// thread keeps running in background until BR finishes
-			// or the process actually exits; SchedulerState is a
-			// function-local static destroyed AFTER atexit, so it
-			// stays valid for the detached thread's remaining ticks.
+			// Timed wait WITHOUT spawning a helper thread. The worker
+			// sets workerDone + notifies the CV right before returning;
+			// we wait_for up to the grace window then either join (if
+			// done) or detach (if still in a long BR-cycle). The old
+			// std::async-based timed join exploded at DLL-detach time
+			// because Windows TPP is torn down before atexit handlers
+			// run, and std::async needs CreateThreadpoolWork — see the
+			// crash dump trail at ibFirebirdMaintenanceScheduler::Stop+
+			// std::async → MSVCP140D!Concurrency::details::_Schedule_chore.
 			constexpr int kJoinGraceSeconds = 5;
 			using namespace std::chrono;
-			auto fut = std::async(std::launch::async, [&st]() {
+			std::unique_lock<std::mutex> lk(st.doneMu);
+			const bool done = st.doneCv.wait_for(lk, seconds(kJoinGraceSeconds),
+				[&st]{ return st.workerDone; });
+			lk.unlock();
+			if (done) {
 				if (st.worker.joinable())
 					st.worker.join();
-			});
-			if (fut.wait_for(seconds(kJoinGraceSeconds))
-			    == std::future_status::timeout) {
+			} else {
 				if (st.worker.joinable())
 					st.worker.detach();
 				ibFb::LogThreadSafe(wxString::Format(
 					wxT("ibFirebirdMaintenanceScheduler: worker still ")
 					wxT("running after %d s grace; detaching"),
 					kJoinGraceSeconds));
-				// The join-helper future is now blocked forever on
-				// the original worker. Detach it from our call frame
-				// so its destructor doesn't block process exit.
-				fut.wait_for(seconds(0));  // no-op, prevents unused warning
 			}
 		}
 	}

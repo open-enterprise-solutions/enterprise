@@ -15,6 +15,7 @@ enum {
 	wxID_ENTERPRISE_SETTING,
 	wxID_ENTERPRISE_USERS,
 	wxID_ENTERPRISE_ACTIVE_USERS,
+	wxID_ENTERPRISE_AUDIT_LOG,
 
 	wxID_ENTERPRISE_ABOUT,
 	wxID_ENTERPRISE_END
@@ -62,6 +63,7 @@ protected:
 	void OnClickAllOperation(wxCommandEvent& event);
 	void OnToolsSettings(wxCommandEvent& event);
 	void OnActiveUsers(wxCommandEvent& event);
+	void OnAuditLog(wxCommandEvent& event);
 	void OnAbout(wxCommandEvent& event);
 
 private:

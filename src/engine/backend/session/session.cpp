@@ -569,12 +569,20 @@ bool ibSession::Open(const wxString& user, const wxString& password)
 	}
 
 	// Interactive fallback — GUI override shows login dialog (shared for
-	// designer + enterprise via ibGUISession::OnShowAuthenticate). The
-	// dialog's OK handler calls appData->Login under the main thread's
-	// ibSessionScope bound to this session, so m_userInfo /
-	// m_sessionRawPassword on `this` are populated on `true` return. On
-	// false return auth fails and the caller reports the original error.
-	if (!OnShowAuthenticate(user, password)) return false;
+	// designer + enterprise via ibGUISession::OnShowAuthenticate). Pin
+	// `this` as Current() for the dialog's lifetime so the OK handler's
+	// appData->Login → InstallUser writes m_userInfo / m_sessionRawPassword
+	// onto THIS session (Current() resolves to it). Without the scope,
+	// InstallUser would target whatever the calling thread last bound —
+	// often nullptr in pre-auth flows — and m_userInfo would stay empty,
+	// making submitAttach below fire with blank creds (= "invalid user
+	// or password" on the second pass through ProcessAttach).
+	bool dlgOk;
+	{
+		ibSessionScope scope(this);
+		dlgOk = OnShowAuthenticate(user, password);
+	}
+	if (!dlgOk) return false;
 
 	res = submitAttach(m_userInfo.m_strUserName, m_sessionRawPassword);
 	if (res == ibAuthState::Authenticated)

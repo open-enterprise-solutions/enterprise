@@ -38,6 +38,7 @@ add_executable(oes_tests
     test_pagingRamTable.cpp
     test_blobCompression.cpp
     test_firebirdLease.cpp
+    test_logger.cpp
 )
 
 target_link_libraries(oes_tests

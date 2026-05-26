@@ -158,6 +158,20 @@ public:
 	// implement base methods
 	virtual unsigned int GetChildren(const ibDataViewItem& item, ibDataViewItemArray& children) const wxOVERRIDE;
 
+	// Bridge the legacy GetChildren API to the new fetch contract that
+	// ibDataViewCtrl::BuildListHelper uses after the paged refactor.
+	// Without this an IndexListModel-backed control sees 0 rows even
+	// after Reset(N) because GetFirstFetch defaults to 0 on the base.
+	// Index-list models are not paged (IsPagedModel() stays false),
+	// so the first fetch is just "give me everything" — delegate to
+	// GetChildren, which already returns m_hash.
+	virtual unsigned int GetFirstFetch(const ibDataViewItem& parent,
+		const ibDataViewItem& /*anchor*/, int /*count*/,
+		ibDataViewItemArray& out) const wxOVERRIDE
+	{
+		return GetChildren(parent, out);
+	}
+
 	unsigned int GetCount() const wxOVERRIDE { return (unsigned int)m_hash.GetCount(); }
 
 private:
