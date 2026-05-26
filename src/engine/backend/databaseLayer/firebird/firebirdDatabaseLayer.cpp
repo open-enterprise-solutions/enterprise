@@ -709,7 +709,7 @@ bool ibDatabaseLayerFirebird::HoldRowLocks(const wxString& tableName,
 	// would interleave in unhelpful ways.
 	if (m_rowLocksHeld) {
 		try { Commit(); } catch (...) {
-			try { RollBack(); } catch (...) {}
+			try { RollBack(); } catch (...) { /* swallowed: rollback after commit fail — TX state already lost, nothing else to do */ }
 		}
 		m_rowLocksHeld = false;
 	}
@@ -734,7 +734,7 @@ bool ibDatabaseLayerFirebird::HoldRowLocks(const wxString& tableName,
 
 	ibPreparedStatement* stmt = DoPrepareStatement(sql);
 	if (!stmt) {
-		try { RollBack(); } catch (...) {}
+		try { RollBack(); } catch (...) { /* swallowed: rollback on prepare-fail path, TX may not even have started */ }
 		return false;
 	}
 
@@ -758,7 +758,7 @@ bool ibDatabaseLayerFirebird::HoldRowLocks(const wxString& tableName,
 	CloseStatement(stmt);
 
 	if (!sqlOk || lockedCount != int(pkValues.size())) {
-		try { RollBack(); } catch (...) {}
+		try { RollBack(); } catch (...) { /* swallowed: rollback on partial-lock-acquisition fail; caller treats false as "no lock" */ }
 		return false;
 	}
 
@@ -776,7 +776,7 @@ void ibDatabaseLayerFirebird::ReleaseRowLocks()
 		// Commit failed — TX may still be open and holding locks.
 		// Try a rollback so the cluster coordination row isn't left
 		// pinned by a dead-but-uncommitted TX of ours.
-		try { RollBack(); } catch (...) {}
+		try { RollBack(); } catch (...) { /* swallowed: rollback after commit fail — TX state already lost, nothing left to do */ }
 	}
 	m_rowLocksHeld = false;
 }
@@ -825,7 +825,7 @@ bool ibDatabaseLayerFirebird::TryProbeRowLock(const wxString& tableName,
 	}
 
 	// Always release — probe must never keep a lock outliving the call.
-	try { RollBack(); } catch (...) {}
+	try { RollBack(); } catch (...) { /* swallowed: TryProbeRowLock always rolls back so no lock survives — failure here means lock is gone anyway */ }
 	return gotLock;
 }
 
@@ -1110,19 +1110,11 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				//  so that we can ignore the error messages
 				m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
 
-				// Wrap the result set deletion in try/catch block if using exceptions.
-				//We want to make sure the original error gets to the user
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-				try
-				{
-#endif
-					delete pResultSet;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-				}
-				catch (ibDatabaseLayerException& e)
-				{
-				}
-#endif
+				// Swallow any throw from the result-set dtor — we are
+				// already on the error path; the original isc_dsql_*
+				// failure is what we want the caller to see, not a
+				// secondary cleanup exception.
+				try { delete pResultSet; } catch (const ibBackendException&) {}
 
 				ThrowDatabaseException();
 			}
@@ -1137,19 +1129,10 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				//  so that we can ignore the error messages
 				m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
 
-				// Wrap the result set deletion in try/catch block if using exceptions.
-				//  We want to make sure the isc_dsql_execute error gets to the user
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-				try
-				{
-#endif
-					delete pResultSet;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-				}
-				catch (ibDatabaseLayerException& e)
-				{
-				}
-#endif
+				// Swallow any throw from the result-set dtor — the
+				// isc_dsql_execute failure above is the user-visible
+				// error; a secondary cleanup exception would mask it.
+				try { delete pResultSet; } catch (const ibBackendException&) {}
 
 				ThrowDatabaseException();
 				return NULL;
@@ -1201,11 +1184,7 @@ bool ibDatabaseLayerFirebird::TableExists(const wxString& table)
 	//  in case of an error
 	ibPreparedStatement* pStatement = NULL;
 	ibDatabaseResultSet* pResult = NULL;
-
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxString tableUpperCase = table.Upper();
 		wxString query = wxT("SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NULL AND RDB$RELATION_NAME=?;");
 		pStatement = DoPrepareStatement(query);
@@ -1224,10 +1203,7 @@ bool ibDatabaseLayerFirebird::TableExists(const wxString& table)
 				}
 			}
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	}
-	catch (ibDatabaseLayerException& e)
-	{
+
 		if (pResult != NULL)
 		{
 			CloseResultSet(pResult);
@@ -1239,25 +1215,23 @@ bool ibDatabaseLayerFirebird::TableExists(const wxString& table)
 			CloseStatement(pStatement);
 			pStatement = NULL;
 		}
-
-		throw e;
-		}
-#endif
-
-	if (pResult != NULL)
-	{
-		CloseResultSet(pResult);
-		pResult = NULL;
 	}
-
-	if (pStatement != NULL)
-	{
-		CloseStatement(pStatement);
-		pStatement = NULL;
+	catch (const ibBackendException&) {
+		// Close any still-open resources before propagating; preserves the
+		// in-flight exception (sqlstate / native_code on derived types).
+		if (pResult != NULL) {
+			CloseResultSet(pResult);
+			pResult = NULL;
+		}
+		if (pStatement != NULL) {
+			CloseStatement(pStatement);
+			pStatement = NULL;
+		}
+		throw;
 	}
 
 	return bReturn;
-	}
+}
 
 bool ibDatabaseLayerFirebird::ViewExists(const wxString& view)
 {
@@ -1267,11 +1241,7 @@ bool ibDatabaseLayerFirebird::ViewExists(const wxString& view)
 	//  in case of an error
 	ibPreparedStatement* pStatement = NULL;
 	ibDatabaseResultSet* pResult = NULL;
-
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxString viewUpperCase = view.Upper();
 		wxString query = wxT("SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NOT NULL AND RDB$RELATION_NAME=?;");
 		pStatement = DoPrepareStatement(query);
@@ -1290,10 +1260,7 @@ bool ibDatabaseLayerFirebird::ViewExists(const wxString& view)
 				}
 			}
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	}
-	catch (ibDatabaseLayerException& e)
-	{
+
 		if (pResult != NULL)
 		{
 			CloseResultSet(pResult);
@@ -1305,35 +1272,30 @@ bool ibDatabaseLayerFirebird::ViewExists(const wxString& view)
 			CloseStatement(pStatement);
 			pStatement = NULL;
 		}
-
-		throw e;
-		}
-#endif
-
-	if (pResult != NULL)
-	{
-		CloseResultSet(pResult);
-		pResult = NULL;
 	}
-
-	if (pStatement != NULL)
-	{
-		CloseStatement(pStatement);
-		pStatement = NULL;
+	catch (const ibBackendException&) {
+		// Close any still-open resources before propagating; preserves the
+		// in-flight exception (sqlstate / native_code on derived types).
+		if (pResult != NULL) {
+			CloseResultSet(pResult);
+			pResult = NULL;
+		}
+		if (pStatement != NULL) {
+			CloseStatement(pStatement);
+			pStatement = NULL;
+		}
+		throw;
 	}
 
 	return bReturn;
-	}
+}
 
 wxArrayString ibDatabaseLayerFirebird::GetTables()
 {
 	wxArrayString returnArray;
 
 	ibDatabaseResultSet* pResult = NULL;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxString query = wxT("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NULL");
 		pResult = ExecuteQuery(query);
 
@@ -1341,38 +1303,32 @@ wxArrayString ibDatabaseLayerFirebird::GetTables()
 		{
 			returnArray.Add(pResult->GetResultString(1).Trim());
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	}
-	catch (ibDatabaseLayerException& e)
-	{
+
 		if (pResult != NULL)
 		{
 			CloseResultSet(pResult);
 			pResult = NULL;
 		}
-
-		throw e;
+	}
+	catch (const ibBackendException&) {
+		// Close any still-open result set before propagating; preserves the
+		// in-flight exception (sqlstate / native_code on derived types).
+		if (pResult != NULL) {
+			CloseResultSet(pResult);
+			pResult = NULL;
 		}
-#endif
-
-	if (pResult != NULL)
-	{
-		CloseResultSet(pResult);
-		pResult = NULL;
+		throw;
 	}
 
 	return returnArray;
-	}
+}
 
 wxArrayString ibDatabaseLayerFirebird::GetViews()
 {
 	wxArrayString returnArray;
 
 	ibDatabaseResultSet* pResult = NULL;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxString query = wxT("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NOT NULL");
 		pResult = ExecuteQuery(query);
 
@@ -1380,28 +1336,25 @@ wxArrayString ibDatabaseLayerFirebird::GetViews()
 		{
 			returnArray.Add(pResult->GetResultString(1).Trim());
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	}
-	catch (ibDatabaseLayerException& e)
-	{
+
 		if (pResult != NULL)
 		{
 			CloseResultSet(pResult);
 			pResult = NULL;
 		}
-
-		throw e;
+	}
+	catch (const ibBackendException&) {
+		// Close any still-open result set before propagating; preserves the
+		// in-flight exception (sqlstate / native_code on derived types).
+		if (pResult != NULL) {
+			CloseResultSet(pResult);
+			pResult = NULL;
 		}
-#endif
-
-	if (pResult != NULL)
-	{
-		CloseResultSet(pResult);
-		pResult = NULL;
+		throw;
 	}
 
 	return returnArray;
-	}
+}
 
 wxArrayString ibDatabaseLayerFirebird::GetColumns(const wxString& table)
 {
@@ -1411,11 +1364,7 @@ wxArrayString ibDatabaseLayerFirebird::GetColumns(const wxString& table)
 	//  in case of an error
 	ibPreparedStatement* pStatement = NULL;
 	ibDatabaseResultSet* pResult = NULL;
-
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxString tableUpperCase = table.Upper();
 		wxString query = wxT("SELECT RDB$FIELD_NAME FROM RDB$RELATION_FIELDS WHERE RDB$RELATION_NAME=?;");
 		pStatement = DoPrepareStatement(query);
@@ -1431,10 +1380,8 @@ wxArrayString ibDatabaseLayerFirebird::GetColumns(const wxString& table)
 				}
 			}
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	}
-	catch (ibDatabaseLayerException& e)
-	{
+
+
 		if (pResult != NULL)
 		{
 			CloseResultSet(pResult);
@@ -1446,31 +1393,88 @@ wxArrayString ibDatabaseLayerFirebird::GetColumns(const wxString& table)
 			CloseStatement(pStatement);
 			pStatement = NULL;
 		}
-
-		throw e;
-		}
-#endif
-
-	if (pResult != NULL)
-	{
-		CloseResultSet(pResult);
-		pResult = NULL;
 	}
-
-	if (pStatement != NULL)
-	{
-		CloseStatement(pStatement);
-		pStatement = NULL;
+	catch (const ibBackendException&) {
+		// Close any still-open resources before propagating; preserves the
+		// in-flight exception (sqlstate / native_code on derived types).
+		if (pResult != NULL) {
+			CloseResultSet(pResult);
+			pResult = NULL;
+		}
+		if (pStatement != NULL) {
+			CloseStatement(pStatement);
+			pStatement = NULL;
+		}
+		throw;
 	}
 
 	return returnArray;
-	}
+}
 
 int ibDatabaseLayerFirebird::TranslateErrorCode(int nCode)
 {
 	// Ultimately, this will probably be a map of Firebird database error code values to ibDatabaseLayer values
 	// For now though, we'll just return the original error code
 	return nCode;
+}
+
+ibBackendDatabaseException::Kind ibDatabaseLayerFirebird::ClassifyDatabaseError(int nativeCode) const
+{
+	// Firebird stashes the primary `isc_*` gds code into m_nErrorCode
+	// via SetErrorCode(...) at every error path. The full status
+	// vector (isc_status[]) carries detail, but the primary code is
+	// what callers branch on.
+	//
+	// Symbolic names from interbase/ibase.h — we use the raw integer
+	// values to avoid pulling the FB headers into this classifier.
+	// They are part of FB's stable ABI (isc_*. macros are in iberror.h
+	// and don't change between minor versions).
+	using Kind = ibBackendDatabaseException::Kind;
+
+	switch (nativeCode) {
+		// --- ConnectionLost ---
+		case 335544721: // isc_network_error
+		case 335544722: // isc_net_connect_err
+		case 335544723: // isc_net_connect_listen_err
+		case 335544724: // isc_net_event_connect_err
+		case 335544725: // isc_net_event_listen_err
+		case 335544726: // isc_net_read_err
+		case 335544727: // isc_net_write_err
+		case 335544741: // isc_server_misconfigured
+		case 335544856: // isc_att_shutdown
+			return Kind::ConnectionLost;
+
+		// --- Deadlock / lock conflict ---
+		case 335544336: // isc_deadlock
+		case 335544345: // isc_lock_conflict
+		case 335544510: // isc_lock_timeout — but FB labels this as a
+		                // *conflict* (the wait actually expired); we
+		                // surface as Timeout below.
+			return Kind::Deadlock;
+
+		// --- Timeout ---
+		case 335544855: // isc_cancelled (statement cancelled, often via timeout)
+			return Kind::Timeout;
+
+		// --- Constraint violations ---
+		case 335544349: // isc_no_dup
+		case 335544466: // isc_foreign_key
+		case 335544347: // isc_not_valid (CHECK violation)
+		case 335544665: // isc_unique_key_violation
+		case 335544558: // isc_check_constraint
+			return Kind::Constraint;
+
+		// --- Syntax / DSQL parse errors ---
+		case 335544343: // isc_dsql_error
+		case 336397208: // isc_dsql_command_err
+		case 336397210: // isc_dsql_token_unk_err
+		case 336003075: // isc_dsql_relation_err
+		case 336003085: // isc_dsql_field_err
+			return Kind::Syntax;
+
+		default:
+			return Kind::Unknown;
+	}
 }
 
 //wxString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, ISC_STATUS_ARRAY status)

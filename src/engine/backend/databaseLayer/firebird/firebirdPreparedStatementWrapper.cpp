@@ -253,19 +253,10 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 		SetErrorCode(pResultSet->GetErrorCode());
 		SetErrorMessage(pResultSet->GetErrorMessage());
 
-		// Wrap the result set deletion in try/catch block if using exceptions.
-		// We want to make sure the original error gets to the user
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		try
-		{
-#endif
-			delete pResultSet;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		}
-		catch (ibDatabaseLayerException& e)
-		{
-		}
-#endif
+		// Swallow a possible throw from ~ibDatabaseResultSet — the
+		// original isc_dsql_* error must reach the caller via
+		// ThrowDatabaseException; secondary cleanup throw would mask it.
+		try { delete pResultSet; } catch (const ibBackendException&) {}
 
 		ThrowDatabaseException();
 	}
@@ -285,19 +276,10 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 	{
 		InterpretErrorCodes();
 
-		// Wrap the result set deletion in try/catch block if using exceptions.
-		//We want to make sure the isc_dsql_execute2 error gets to the user
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		try
-		{
-#endif
-			delete pResultSet;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		}
-		catch (ibDatabaseLayerException& e)
-		{
-		}
-#endif
+		// Swallow on cleanup — isc_dsql_execute2 error above is the
+		// user-visible one (ThrowDatabaseException below); a secondary
+		// throw from the result-set dtor would mask it.
+		try { delete pResultSet; } catch (const ibBackendException&) {}
 		ThrowDatabaseException();
 		return NULL;
 	}

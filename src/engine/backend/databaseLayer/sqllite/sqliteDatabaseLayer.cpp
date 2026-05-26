@@ -314,10 +314,13 @@ bool ibDatabaseLayerSQLite::TableExists(const wxString& table)
 	ibPreparedStatement* pStatement = nullptr;
 	ibDatabaseResultSet* pResult = nullptr;
 
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	// Probe via sqlite_master — if the prepared statement or query
+	// throws a structured DB exception (ThrowDatabaseException path),
+	// treat the table as "not present" and let the cleanup below
+	// release whatever we managed to allocate. Callers that need the
+	// distinct error path use a raw ibPreparedStatement themselves;
+	// TableExists is the convenience predicate.
+	try {
 		wxString attach = wxT("sqlite_master"), t = table;
 		size_t pos_attach = table.find('.');
 		if (pos_attach > 0) {
@@ -342,25 +345,10 @@ bool ibDatabaseLayerSQLite::TableExists(const wxString& table)
 				}
 			}
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	}
-	catch (ibDatabaseLayerException& e)
-	{
-		if (pResult != nullptr)
-		{
-			CloseResultSet(pResult);
-			pResult = nullptr;
-		}
-
-		if (pStatement != nullptr)
-		{
-			CloseStatement(pStatement);
-			pStatement = nullptr;
-		}
-
-		throw e;
+	catch (const ibBackendDatabaseException&) {
+		bReturn = false;
 	}
-#endif
 
 	if (pResult != nullptr)
 	{
@@ -386,10 +374,7 @@ bool ibDatabaseLayerSQLite::ViewExists(const wxString& view)
 	ibPreparedStatement* pStatement = nullptr;
 	ibDatabaseResultSet* pResult = nullptr;
 
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxString attach = wxT("sqlite_master"), v = view;
 		size_t pos_attach = view.find('.');
 		if (pos_attach > 0) {
@@ -414,25 +399,10 @@ bool ibDatabaseLayerSQLite::ViewExists(const wxString& view)
 				}
 			}
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	}
-	catch (ibDatabaseLayerException& e)
-	{
-		if (pResult != nullptr)
-		{
-			CloseResultSet(pResult);
-			pResult = nullptr;
-		}
-
-		if (pStatement != nullptr)
-		{
-			CloseStatement(pStatement);
-			pStatement = nullptr;
-		}
-
-		throw e;
+	catch (const ibBackendDatabaseException&) {
+		bReturn = false;
 	}
-#endif
 
 	if (pResult != nullptr)
 	{
@@ -454,10 +424,7 @@ wxArrayString ibDatabaseLayerSQLite::GetTables()
 	wxArrayString returnArray;
 
 	ibDatabaseResultSet* pResult = nullptr;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxString query = wxT("SELECT name FROM sqlite_master WHERE type='table';");
 		pResult = ExecuteQuery(query);
 
@@ -465,19 +432,10 @@ wxArrayString ibDatabaseLayerSQLite::GetTables()
 		{
 			returnArray.Add(pResult->GetResultString(1));
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	}
-	catch (ibDatabaseLayerException& e)
-	{
-		if (pResult != nullptr)
-		{
-			CloseResultSet(pResult);
-			pResult = nullptr;
-		}
-
-		throw e;
+	catch (const ibBackendDatabaseException&) {
+		// Best-effort enumeration — partial results stay in the array.
 	}
-#endif
 
 	if (pResult != nullptr)
 	{
@@ -493,10 +451,7 @@ wxArrayString ibDatabaseLayerSQLite::GetViews()
 	wxArrayString returnArray;
 
 	ibDatabaseResultSet* pResult = nullptr;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxString query = wxT("SELECT name FROM sqlite_master WHERE type='view';");
 		pResult = ExecuteQuery(query);
 
@@ -504,19 +459,10 @@ wxArrayString ibDatabaseLayerSQLite::GetViews()
 		{
 			returnArray.Add(pResult->GetResultString(1));
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	}
-	catch (ibDatabaseLayerException& e)
-	{
-		if (pResult != nullptr)
-		{
-			CloseResultSet(pResult);
-			pResult = nullptr;
-		}
-
-		throw e;
+	catch (const ibBackendDatabaseException&) {
+		// Best-effort enumeration — partial results stay in the array.
 	}
-#endif
 
 	if (pResult != nullptr)
 	{
@@ -536,10 +482,7 @@ wxArrayString ibDatabaseLayerSQLite::GetColumns(const wxString& table)
 	ibDatabaseResultSet* pResult = nullptr;
 	ibResultSetMetaData* pMetaData = nullptr;
 
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxCharBuffer tableNameBuffer = ConvertToUnicodeStream(table);
 		wxString query = wxString::Format(wxT("SELECT * FROM '%s' LIMIT 0;"), table.c_str());
 		pResult = ExecuteQuery(query);
@@ -551,26 +494,11 @@ wxArrayString ibDatabaseLayerSQLite::GetColumns(const wxString& table)
 		{
 			returnArray.Add(pMetaData->GetColumnName(i));
 		}
-
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
 	}
-	catch (ibDatabaseLayerException& e)
-	{
-		if (pMetaData != nullptr)
-		{
-			pResult->CloseMetaData(pMetaData);
-			pMetaData = nullptr;
-		}
-
-		if (pResult != nullptr)
-		{
-			CloseResultSet(pResult);
-			pResult = nullptr;
-		}
-
-		throw e;
+	catch (const ibBackendDatabaseException&) {
+		// Missing table / bad name → empty column list, cleanup below
+		// still runs.
 	}
-#endif
 
 	if (pMetaData != nullptr)
 	{
@@ -667,5 +595,28 @@ int ibDatabaseLayerSQLite::TranslateErrorCode(int nCode)
 	}
 	*/
 	return nReturn;
+}
+
+ibBackendDatabaseException::Kind ibDatabaseLayerSQLite::ClassifyDatabaseError(int nativeCode) const
+{
+	// SQLite returns a single-int result code via sqlite3_errcode().
+	// The values are part of SQLite's stable ABI (sqlite3.h SQLITE_*
+	// macros) so the integer literals are safe.
+	using Kind = ibBackendDatabaseException::Kind;
+	switch (nativeCode) {
+		case 5:  // SQLITE_BUSY  — database file locked by another process / writer
+		case 6:  // SQLITE_LOCKED — table locked by a concurrent connection
+			return Kind::Timeout;
+
+		case 19: // SQLITE_CONSTRAINT
+			return Kind::Constraint;
+
+		case 1:  // SQLITE_ERROR  — catch-all for SQL errors / missing table
+		case 21: // SQLITE_MISUSE — library used incorrectly (usually a bad prepared statement)
+			return Kind::Syntax;
+
+		default:
+			return Kind::Unknown;
+	}
 }
 
