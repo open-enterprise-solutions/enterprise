@@ -29,6 +29,8 @@
 
 #include <wx/string.h>
 
+#include <atomic>
+
 class ibInterfaceFirebird;
 
 class BACKEND_API ibFirebirdMaintenance {
@@ -57,10 +59,19 @@ public:
 	// instead of waiting for FB's internal `SweepInterval` threshold.
 	// Synchronous: blocks the calling thread until sweep completes.
 	// Typical duration on a 5 GB database with light bloat: 5-30 s.
+	//
+	// `cancelToken` — optional pointer to an atomic flag the caller
+	// can flip to abort an in-progress wait. Polled inside the
+	// service-query loop; on cancel the in-flight isc_service is
+	// detached and the function returns Status::Timeout. Without
+	// this, a process-shutdown Stop() that comes mid-sweep could
+	// detach the worker thread, which then uses `iface` after the
+	// driver has freed it → 0xdddddddd vtable read.
 	static Status RunSweep(
 		ibInterfaceFirebird* iface,
 		const wxString& databasePath,
-		const ServiceConnection& conn);
+		const ServiceConnection& conn,
+		const std::atomic<bool>* cancelToken = nullptr);
 
 	// Backup + Restore cycle. Runs gbak -B to a temp `.fbk` file,
 	// then gbak -R into a temp `.fdb` file, then atomic-renames the
@@ -89,10 +100,15 @@ public:
 	// directory as the source .fdb — for shared-folder deployments
 	// this means a gigabytes-over-SMB roundtrip. Prefer running BR
 	// after copying the .fdb to local disk for the maintenance run.
+	// `cancelToken` semantics — same as RunSweep above. BR cycle is
+	// the long one (minutes for large DBs); without cancel the
+	// shutdown race becomes a near-certainty if a user closes during
+	// a maintenance window.
 	static Status RunBackupRestoreCycle(
 		ibInterfaceFirebird* iface,
 		const wxString& databasePath,
-		const ServiceConnection& conn);
+		const ServiceConnection& conn,
+		const std::atomic<bool>* cancelToken = nullptr);
 
 	// Human-readable error string for a status.
 	static wxString StatusToString(Status s);

@@ -74,20 +74,31 @@ void AppendSpbInt32(std::string& spb, char tag, int32_t value) {
 
 // Wait for the service operation to complete by polling
 // `isc_info_svc_running`. Returns true on clean completion, false
-// on timeout or query failure.
+// on timeout, query failure, or external cancel.
 //
 // Response buffer is sized large enough that `isc_info_truncated`
 // is rare even for verbose gbak output. On truncation we re-issue
 // the query: leaving the stdout chunks un-drained stalls the
 // service thread once its internal write buffer fills (long gbak
 // runs hit this within a few minutes).
+//
+// `cancelToken` — when not nullptr and *cancelToken == true the
+// loop bails out fast (returns false). The caller treats this as
+// the same exit path as timeout — service handle is detached,
+// status is Timeout. The token must remain alive for the whole
+// call; the scheduler owns the atomic and outlives the worker.
 bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
                               isc_svc_handle& svc,
                               ISC_STATUS_ARRAY& status,
-                              int timeoutSeconds)
+                              int timeoutSeconds,
+                              const std::atomic<bool>* cancelToken)
 {
 	using namespace std::chrono;
 	const auto deadline = steady_clock::now() + seconds(timeoutSeconds);
+	auto canceled = [cancelToken]() {
+		return cancelToken != nullptr
+		    && cancelToken->load(std::memory_order_acquire);
+	};
 
 	// We query both `isc_info_svc_running` (still going?) and
 	// `isc_info_svc_line` (drain stdout-equivalent) so the service
@@ -101,6 +112,8 @@ bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
 	std::vector<char> resp(256 * 1024);
 
 	while (steady_clock::now() < deadline) {
+		if (canceled()) return false;
+
 		bool truncated = true;
 		bool sawRunningTag = false;
 		bool stillRunning = false;
@@ -109,7 +122,11 @@ bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
 		// re-issuing the query until the response fits without
 		// truncation. Bounded by an iteration cap so a server stuck
 		// in pathological output-flood doesn't spin us forever.
+		// Cancel check first inside drain too — gbak can spew tens
+		// of KB per tick and the drain loop would otherwise sit
+		// there for a non-trivial slice ignoring shutdown.
 		for (int drain = 0; drain < 16 && truncated; ++drain) {
+			if (canceled()) return false;
 			const ISC_STATUS rc = iface->GetIscServiceQuery()(
 				status, &svc, nullptr,
 				0, nullptr,
@@ -175,7 +192,8 @@ bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
 ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunSweep(
 	ibInterfaceFirebird* iface,
 	const wxString& databasePath,
-	const ServiceConnection& conn)
+	const ServiceConnection& conn,
+	const std::atomic<bool>* cancelToken)
 {
 	if (iface == nullptr
 	 || iface->GetIscServiceAttach() == nullptr
@@ -227,7 +245,8 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunSweep(
 	}
 
 	// Sweep on a multi-GB DB can take several minutes; give it 30.
-	const bool ok = WaitForServiceCompletion(iface, svc, status, /*timeoutSeconds=*/1800);
+	const bool ok = WaitForServiceCompletion(
+		iface, svc, status, /*timeoutSeconds=*/1800, cancelToken);
 
 	iface->GetIscServiceDetach()(status, &svc);
 	return ok ? Status::Ok : Status::Timeout;
@@ -236,7 +255,8 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunSweep(
 ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 	ibInterfaceFirebird* iface,
 	const wxString& databasePath,
-	const ServiceConnection& conn)
+	const ServiceConnection& conn,
+	const std::atomic<bool>* cancelToken)
 {
 	if (iface == nullptr
 	 || iface->GetIscServiceAttach() == nullptr
@@ -294,7 +314,8 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 
 		// Backup on a 100 GB DB: ~5-15 minutes on modern SSD. Give
 		// it 30.
-		const bool ok = WaitForServiceCompletion(iface, svc, status, 1800);
+		const bool ok = WaitForServiceCompletion(
+			iface, svc, status, 1800, cancelToken);
 		iface->GetIscServiceDetach()(status, &svc);
 
 		if (!ok) {
@@ -334,7 +355,8 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 			return Status::StartFailed;
 		}
 
-		const bool ok = WaitForServiceCompletion(iface, svc, status, 1800);
+		const bool ok = WaitForServiceCompletion(
+			iface, svc, status, 1800, cancelToken);
 		iface->GetIscServiceDetach()(status, &svc);
 
 		if (!ok) {

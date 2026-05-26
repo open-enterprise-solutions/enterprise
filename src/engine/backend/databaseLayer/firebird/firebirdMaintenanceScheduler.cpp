@@ -102,7 +102,8 @@ void RunMaintenanceCycle(SchedulerState* st) {
 		ibFb::LogThreadSafe(wxString::Format(
 			wxT("ibFirebirdMaintenanceScheduler: running sweep on %s"),
 			dbPath));
-		const auto status = ibFirebirdMaintenance::RunSweep(iface, dbPath, conn);
+		const auto status = ibFirebirdMaintenance::RunSweep(
+			iface, dbPath, conn, &st->stopRequested);
 		if (status == ibFirebirdMaintenance::Status::Ok) {
 			st->lastSweepMs.store(NowUnixMs());
 		} else {
@@ -125,7 +126,7 @@ void RunMaintenanceCycle(SchedulerState* st) {
 			wxT("ibFirebirdMaintenanceScheduler: running BR cycle on %s"),
 			dbPath));
 		const auto status = ibFirebirdMaintenance::RunBackupRestoreCycle(
-			iface, dbPath, conn);
+			iface, dbPath, conn, &st->stopRequested);
 		if (status == ibFirebirdMaintenance::Status::Ok) {
 			st->lastBackupRestoreMs.store(NowUnixMs());
 		} else {
@@ -249,32 +250,39 @@ void ibFirebirdMaintenanceScheduler::Stop()
 		if (st.worker.get_id() == std::this_thread::get_id()) {
 			st.worker.detach();
 		} else {
-			// Timed wait WITHOUT spawning a helper thread. The worker
-			// sets workerDone + notifies the CV right before returning;
-			// we wait_for up to the grace window then either join (if
-			// done) or detach (if still in a long BR-cycle). The old
-			// std::async-based timed join exploded at DLL-detach time
-			// because Windows TPP is torn down before atexit handlers
-			// run, and std::async needs CreateThreadpoolWork — see the
-			// crash dump trail at ibFirebirdMaintenanceScheduler::Stop+
-			// std::async → MSVCP140D!Concurrency::details::_Schedule_chore.
-			constexpr int kJoinGraceSeconds = 5;
+			// Full join — NO detach fallback.
+			//
+			// History: previous version waited 5 s for the worker and
+			// then detach()ed if it hadn't exited. That left the
+			// detached thread alive while main proceeded to tear down
+			// the FB driver pool; the detached worker kept calling
+			// iface->GetIscServiceQuery() on freed memory →
+			// EIP=0xdddddddd in WaitForServiceCompletion (see crash
+			// dump 2026-05-26).
+			//
+			// stopRequested now propagates as a cancelToken into
+			// RunSweep / RunBackupRestoreCycle / WaitForServiceCompletion;
+			// the worker checks it on every iteration of the service-
+			// query poll loop, so it exits in <=200 ms (one poll tick)
+			// no matter where in maintenance it sits. The grace wait
+			// below is purely a "log if anomalous" instrument — we
+			// still join after, never detach.
+			constexpr int kAnomalyLogSeconds = 30;
 			using namespace std::chrono;
 			std::unique_lock<std::mutex> lk(st.doneMu);
-			const bool done = st.doneCv.wait_for(lk, seconds(kJoinGraceSeconds),
+			const bool done = st.doneCv.wait_for(lk, seconds(kAnomalyLogSeconds),
 				[&st]{ return st.workerDone; });
 			lk.unlock();
-			if (done) {
-				if (st.worker.joinable())
-					st.worker.join();
-			} else {
-				if (st.worker.joinable())
-					st.worker.detach();
+			if (!done) {
 				ibFb::LogThreadSafe(wxString::Format(
-					wxT("ibFirebirdMaintenanceScheduler: worker still ")
-					wxT("running after %d s grace; detaching"),
-					kJoinGraceSeconds));
+					wxT("ibFirebirdMaintenanceScheduler: worker did not ")
+					wxT("acknowledge cancel within %d s — still joining ")
+					wxT("(cancel token may not be plumbed through some ")
+					wxT("blocking call)"),
+					kAnomalyLogSeconds));
 			}
+			if (st.worker.joinable())
+				st.worker.join();
 		}
 	}
 
