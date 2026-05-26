@@ -4,14 +4,15 @@
 
 1. [System Overview](#system-overview)
 2. [Layer Descriptions](#layer-descriptions)
-3. [Module Descriptions](#module-descriptions)
-4. [Bytecode Engine](#bytecode-engine)
-5. [Metadata System](#metadata-system)
-6. [Sessions and Runtime Ownership](#sessions-and-runtime-ownership)
-7. [Database Abstraction](#database-abstraction)
-8. [Form System](#form-system)
-9. [Debugger Architecture](#debugger-architecture)
-10. [Key Data Flows](#key-data-flows)
+3. [Application Bootstrap and Ownership](#application-bootstrap-and-ownership)
+4. [Module Descriptions](#module-descriptions)
+5. [Bytecode Engine](#bytecode-engine)
+6. [Metadata System](#metadata-system)
+7. [Sessions and Runtime Ownership](#sessions-and-runtime-ownership)
+8. [Database Abstraction](#database-abstraction)
+9. [Form System](#form-system)
+10. [Debugger Architecture](#debugger-architecture)
+11. [Key Data Flows](#key-data-flows)
 
 ---
 
@@ -85,6 +86,146 @@ Shared frontend objects:
 - **`ibVisualHost` / `ibVisualHostClient`** — render and input routing surface. Desktop = wxWindow; web = `ibWebWindow` tree serialised to JSON.
 - **Doc-view frames** — backend-facing interface `ibBackendDocFrame` (renamed from the historical `ibBackendDocMDIFrame`); concrete implementations are `ibFrontendDocMDIFrame` (desktop, wraps `wxAuiMDIParentFrame` + `wxDocParentFrameAnyBase`) and `ibWebFrame` (web). Children are `CAuiDocChildFrame` / `ibDialogDocChildFrame` on desktop and `ibWebDocChildFrame` on web. The frame is owned by the `ibSession` that created it (no process-level singleton on the backend side); legacy `mainFrame` macro still exists in `frontend/mainFrame/mainFrame.h` as a frontend-local accessor for the GUI singleton, but new backend code reaches the frame through `ibSession::Current()->GetFrame()` or `ibSession::CurrentFrame()`. Template-mixin rewrite to follow `wxDocParentFrameAny` is partial — `ibFrontendDocMDIFrame` keeps the "MDI" suffix until the frontend-side rename lands.
 - **`ibCodeEditor`** (`frontend/win/editor/codeEditor/`) — the Scintilla-based script editor. Lives in `frontend.dll` so any GUI host can use it: `designer.exe` (its module/form editors), `codeRunner.exe` (sessionless scratch runner). Highlighter, fold parser, auto-indent on Enter, format / increase / decrease indent, comment add/remove, Ctrl-Space autocomplete, GotoLine + ProceduresAndFunctions dialogs all live here. Debugger integration is a designer-only concern, kept out of the base via six virtual hooks (`IsDebuggerEnterLoop`, `OnEditDebugPoint`, `OnPatchModule`, `OnEvaluateAutocomplete`, `OnEvaluateToolTip`, `RefreshBreakpointMarkers`); designer's `ibCodeEditorDesigner` (`designer/win/editor/codeEditor/codeEditorDesigner.{h,cpp}`) overrides them with `debugClient->…` calls. Document-less / sessionless mode: passing `nullptr` for the `ibMetaDocument*` skips metadata-driven autocomplete and breakpoint markers but keeps everything else functional — codeRunner uses this to embed the same editor without any DB / metadata / debug infrastructure.
+
+---
+
+## Application Bootstrap and Ownership
+
+OES runs on a single coordinator — `ibApplicationData` (`backend/appData.h`) — that owns every process-wide subsystem. No subsystem has a static `Instance()` of its own; every `Get*()` returns `nullptr` before bring-up and after teardown, callers null-check. The pattern is the same for every entry-point binary (enterprise / designer / launcher / codeRunner / daemon / wes); only the run-mode flag and the wxApp class change.
+
+### The sandwich
+
+```
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ exe-specific main()                                             │
+  │   • argv parsing, runMode pick                                  │
+  │   • ibCrashGuard::Install (headless) OR ibWxApp::OnInit (GUI)   │
+  │   • appDataCreateFile / appDataCreateServer                     │
+  └────────────────────────────┬────────────────────────────────────┘
+                               │
+                               ▼
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ ibApplicationData ctor — wires every subsystem in init order    │
+  │                                                                 │
+  │   m_connectionPool   ◄── primary DB layer, lazy clones          │
+  │   m_pluginManager    ◄── scans plugins/ and loads .dll          │
+  │   m_lockManager      ◄── sys_lock coordinator                   │
+  │   m_logger           ◄── audit + trace sink (.olg)              │
+  │   m_sessionRegistry  ◄── ibSession registry + worker pool       │
+  │   m_activeMetaData   ◄── per-runMode fabric, populated later    │
+  │                                                                 │
+  │   (each ctor takes ib::AppDataCtorToken — see below)            │
+  └────────────────────────────┬────────────────────────────────────┘
+                               │
+                               ▼
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ ibSession (per-cookie on web, single on desktop)                │
+  │   • holds a connection holder out of the pool                   │
+  │   • owns a per-session ibProcUnit (runtime)                     │
+  │   • frame/document graph on GUI; visual host on web             │
+  └─────────────────────────────────────────────────────────────────┘
+```
+
+### Construction order (`ibApplicationData::ibApplicationData`)
+
+The init list is **the** ordering contract. Listed in the order they're constructed:
+
+| # | Field | What it does | Why this slot |
+|---|---|---|---|
+| 1 | `m_connectionPool` | Pool of `ibDatabaseLayer` — master + lazy clones | Everything else needs DB access; this must exist first. |
+| 2 | `m_pluginManager` | Loads `plugins/*.dll` | Plugins may need `db_query` (=pool). |
+| 3 | `m_lockManager` | `sys_lock` table coordinator | Independent — could move; ordered for readability. |
+| 4 | `m_sessionRegistry` | Session registry + worker pool | After pool so first session can already check connections out. `m_logger` is created lazily in `CreateLogger()` after the DB opens; not in init list. |
+
+`m_activeMetaData` is populated later by `CreateActiveMetaData(mode, flags)` — the fabric picks a concrete subclass (`ibMetaDataConfiguration` for runtime, `ibMetaDataConfigurationStorage` for designer) by `runMode`. Launcher/codeRunner have no metadata at all.
+
+### Destruction order (`~ibApplicationData`)
+
+The destructor does **business actions only** (the explicit hooks each subsystem needs before its dtor fires). It does NOT call `reset()` on any `unique_ptr` field — destruction is left to the compiler-generated sweep in **reverse declaration order**. Declaration order in `appData.h` is chosen so reverse sweep gives the safe sequence:
+
+```
+~ibApplicationData() {
+    m_activeMetaData->OnDestroy();      // business hook
+    m_sessionRegistry->Stop();          // drain workers, DELETE sys_session
+    m_pluginManager->UnloadAll();       // each plugin sees Destroy()
+    m_connectionPool->Shutdown();       // invalidate handouts
+    // dtor sweep follows:
+    //   m_activeMetaData    (last declared → destroyed first)
+    //   m_sessionRegistry
+    //   m_logger            (own SQLite, no external deps)
+    //   m_lockManager
+    //   m_pluginManager
+    //   m_connectionPool    (first declared → destroyed last)
+}
+```
+
+If a new subsystem joins, **add the business hook to the dtor body** and **append the field in declaration order so it dies before its dependencies**.
+
+### Token pattern for subsystem construction
+
+Every owned subsystem's ctor takes `ib::AppDataCtorToken` (`backend/appDataCtorToken.h`) as its first argument. The token's default ctor is private; only `ibApplicationData` is a friend, so only it can mint a token. External code that tries `new ibSessionRegistry(…)` gets a compile error — token is unreachable.
+
+Why a token instead of `friend class ibApplicationData` on each subsystem header? Friend scattered across 7 headers means refactoring appData ripples into every owned class. A single token type centralises the "who can build subsystems" decision; subsystem headers stay clean and declare ctors public.
+
+Unit tests build subsystems directly (no full appData) — the test CMake target defines `OES_TESTING`, which opens the token's default ctor inside test TUs only. Production builds (sln / CMake non-test) leave it undefined and the gate stays closed.
+
+### Entry-point helpers
+
+Two header-only helpers in `frontend/diagnostics/` cover the boilerplate every binary needs at startup. Header-only = no link-time `frontend.dll` dependency; both helpers only call `BACKEND_API ibCrashGuard::*` plus wx primitives the binary already links.
+
+| Binary type | Helper | What it wires |
+|---|---|---|
+| GUI (`enterprise` / `designer` / `codeRunner` / `launcher`) | `ibWxApp` base class (`oesApp.h`) | `wxApp::OnInit` → `ibCrashGuard::Install` + `DoOnInit()`; `OnRun` → try/catch around `DoOnRun()`; 3 exception overrides (main-loop / unhandled / fatal). Subclass overrides only `GetExeName()` + optional `DoOnRun()`. |
+| Console (`wenterprise-server` / `daemon`) | `ibOesConsoleBoot` RAII (`oesConsole.h`) | Single object that holds a `wxInitializer`, runs `wxSocketBase::Initialize`, calls `ibCrashGuard::Install`. `IsOk()` checks the wx init result. |
+
+### Crash plumbing layers
+
+```
+  backend/diagnostics/crashGuard.{h,cpp}  ─── BACKEND_API. Headless:
+                                              SEH filter / signal handlers /
+                                              minidump writer / std::set_terminate /
+                                              <exe>_terminate.log + <exe>_startup.log /
+                                              MessageBoxW (Win) | fprintf+stderr (POSIX)
+                                              No wx UI, no main loop required.
+
+  frontend/diagnostics/oesApp.h           ─── Header-only. wxApp pipeline:
+                                              wxDebugReportPreviewStd, wxMessageBox,
+                                              wxLogError, wxTheApp->CallAfter. Delegates
+                                              logging to crashGuard.
+
+  frontend/diagnostics/oesConsole.h       ─── Header-only. RAII boot helper for
+                                              console binaries. Wraps wxInitializer +
+                                              wxSocket init + crashGuard::Install.
+
+  wfrontend layer (web)                   ─── cpp-httplib set_exception_handler in
+                                              wes' main.cpp emits JSON 500 with
+                                              Kind / native_code / sqlstate. crashGuard
+                                              handles process-level faults underneath.
+```
+
+### Exception taxonomy
+
+```
+  ibBackendException                      ─── base; per-thread error chain
+    │                                          (PushLastError / DrainLastErrors).
+    │
+    ├── ibBackendDatabaseException        ─── DB-tier failure. Enum Kind:
+    │     │                                    ConnectionLost / Syntax / Constraint /
+    │     │                                    Deadlock / Timeout / Unknown.
+    │     │                                    IsRetryable() derived from Kind.
+    │     │
+    │     └── ibDatabaseLayerException    ─── Concrete driver throw. Adds
+    │                                          GetDriverErrorCode() + GetSqlState().
+    │                                          Created via static Throw(...).
+    │
+    └── (other backend categories)
+```
+
+Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorReporter` subclass maps the driver's native code (Firebird `isc_*` gds, PG SQLSTATE int, MySQL errno, ODBC SQLSTATE, SQLite result code) to a Kind. The mapping is regression-tested in `tests/test_dbTaxonomy.cpp` — if a future driver bump flips `SQLITE_CONSTRAINT (19)` away from `Kind::Constraint`, the test fails before code that branches on `IsRetryable()` silently misroutes.
+
+`catch` discipline:
+- **Inside RAII destructors and rollback / cleanup paths**: `catch (...) {}` is intentional (a destructor that throws is worse than a swallowed error during cleanup).
+- **Inside business logic**: never swallow — log via the per-thread chain, rethrow, or surface via `ibCrashReporter::ReportStartupError` / `ibWxApp::OnExceptionInMainLoop`.
 
 ---
 
