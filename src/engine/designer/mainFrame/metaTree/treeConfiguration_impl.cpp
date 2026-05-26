@@ -7,6 +7,7 @@
 #include "frontend/mainFrame/objinspect/objinspect.h"
 #include "frontend/docView/docManager.h"
 #include "backend/appData.h"
+#include "backend/appEnv.h"
 
 #define metadataName _("Metadata")
 #define commonName _("Common")
@@ -1972,7 +1973,7 @@ bool ibMetadataTree::Load(ibMetaDataConfigurationBase* metaData)
 {
 	m_metaTreeCtrl->Freeze();
 	ClearTree();
-	m_metaData = metaData ? metaData : ibMetaDataConfiguration::Get();
+	m_metaData = metaData ? metaData : appEnv::ActiveMetaData();
 	FillData(); //Fill all data from metaData
 	m_metaData->SetMetaTree(this);
 	m_metaTreeCtrl->SelectItem(m_treeMETADATA);

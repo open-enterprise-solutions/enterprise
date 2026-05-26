@@ -1688,28 +1688,53 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 
 	ibBackendException::ibEvalModeScope evalScope;
 
+	// Helper — render an exception into the watch result slot so the
+	// debugger panel can show *what* went wrong instead of an empty
+	// row + silent `false` return. Watch handler in the designer prints
+	// the result via ibValue::ToString; a string-typed ibValue with
+	// "<error: msg>" reads naturally.
+	auto reportFailure = [&pvarRetValue](const wxString& msg) {
+		pvarRetValue = ibValue(wxString(wxT("<error: ")) + msg + wxT(">"));
+	};
+
 	auto iterator = std::find_if(pRunContext->m_listEval.begin(), pRunContext->m_listEval.end(),
 		[strExpression](const auto pair) {return stringUtils::CompareString(strExpression, pair.first); });
 
 	std::shared_ptr<ibProcUnitEvaluate> runEvaluate = nullptr;
 	if (iterator == pRunContext->m_listEval.end()) { //this text has not yet been compiled
+		try {
+			auto compileExpression = std::make_unique<ibCompileEval>(pRunContext);
+			compileExpression->Load(strExpression);
 
-		auto compileExpression = std::make_unique<ibCompileEval>(pRunContext);
-		compileExpression->Load(strExpression);
+			auto evalUnit = std::make_shared<ibProcUnitEvaluate>();
+			// Transfer ownership BEFORE CompileExpression so the unique_ptr
+			// cleans up on any throw / failure path. No back-pointer wiring
+			// on bytecode side; eval finds its compileCode via GetCompileCode().
+			ibCompileCode& cModuleRef = *compileExpression;
+			evalUnit->TakeCompileCode(std::move(compileExpression));
+			if (!evalUnit->CompileExpression(pRunContext, pvarRetValue, cModuleRef, compileBlock)) {
+				// CompileExpression's own diagnostics path already wrote the
+				// reason into pvarRetValue when it can; if it's still empty
+				// (compile aborted without producing a value), fill in a
+				// generic note so the watch row isn't blank.
+				if (pvarRetValue.GetType() == ibValueTypes::TYPE_EMPTY)
+					reportFailure(_("compile failed"));
+				return false;
+			}
 
-		auto evalUnit = std::make_shared<ibProcUnitEvaluate>();
-		// Transfer ownership BEFORE CompileExpression so the unique_ptr
-		// cleans up on any throw / failure path. No back-pointer wiring
-		// on bytecode side; eval finds its compileCode via GetCompileCode().
-		ibCompileCode& cModuleRef = *compileExpression;
-		evalUnit->TakeCompileCode(std::move(compileExpression));
-		if (!evalUnit->CompileExpression(pRunContext, pvarRetValue, cModuleRef, compileBlock))
+			runEvaluate = evalUnit;
+
+			//everything is OK
+			pRunContext->m_listEval.insert_or_assign(stringUtils::MakeUpper(strExpression), runEvaluate);
+		}
+		catch (const ibBackendException& e) {
+			reportFailure(e.GetErrorDescription());
 			return false;
-
-		runEvaluate = evalUnit;
-
-		//everything is OK
-		pRunContext->m_listEval.insert_or_assign(stringUtils::MakeUpper(strExpression), runEvaluate);
+		}
+		catch (const std::exception& e) {
+			reportFailure(wxString::FromUTF8(e.what()));
+			return false;
+		}
 	}
 	else {
 		runEvaluate = iterator->second;
@@ -1726,7 +1751,16 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 	try {
 		runEvaluate->Execute(&runEvaluate->m_cCurContext, &pvarRetValue, /*bDelta=*/false);
 	}
-	catch (const ibBackendException&) {
+	catch (const ibBackendException& e) {
+		// Carry the message into the watch result. Previous behaviour
+		// (bare `return false`) made the panel show a blank row for
+		// any runtime failure — user couldn't tell apart a deliberately-
+		// undefined identifier from a deadlock during the eval.
+		reportFailure(e.GetErrorDescription());
+		return false;
+	}
+	catch (const std::exception& e) {
+		reportFailure(wxString::FromUTF8(e.what()));
 		return false;
 	}
 

@@ -23,6 +23,7 @@
 //     Submit after that point must not pretend to succeed.
 
 #include "backend/backend.h"
+#include "backend/appDataCtorToken.h"
 #include "backend/databaseLayer/connectionHolder.h"   // ibSingleConnectionHolder base
 #include "session.h"
 #include "sessionPolicy.h"   // unique_ptr<ibSessionPolicy> needs complete type
@@ -149,7 +150,12 @@ class ibDatabaseLayer;
 
 class BACKEND_API ibSessionRegistry {
 public:
-	static ibSessionRegistry& Instance();
+	// No static `Instance()` on the class itself — the registry is a
+	// member of ibApplicationData, owned for the duration of appData's
+	// lifetime. Reach it through `ibApplicationData::GetSessionRegistry()`
+	// (static accessor — returns nullptr pre-appData / post-appData).
+	// This keeps a single coordinator pattern: subsystems do not own
+	// their own global state, they exist only because appData is alive.
 
 	// ---- Legacy direct API ----
 	// Imperative create-and-go shortcuts, retained for in-process callers
@@ -438,18 +444,19 @@ public:
 	bool IsThreadAlive() const { return m_threadAlive.load(std::memory_order_acquire); }
 	bool IsFatal()       const { return m_fatal.load(std::memory_order_acquire); }
 
-	// maxWorkers — hard cap on the worker pool's OS-thread count. 0
-	// means no pool (single-session GUI modes — designer, enterprise,
-	// daemon). Headless modes (wenterprise-server, future oes-server)
-	// pass a positive value sized by the host based on hardware
-	// concurrency. The pool is allocated here so registry's lifecycle
-	// owns it end-to-end: pool stops before sessions tear down inside
-	// our Stop().
-	explicit ibSessionRegistry(std::size_t maxWorkers = 0);
 	~ibSessionRegistry();
 
 	ibSessionRegistry(const ibSessionRegistry&)            = delete;
 	ibSessionRegistry& operator=(const ibSessionRegistry&) = delete;
+
+	// Construction restricted to ibApplicationData via the
+	// ib::AppDataCtorToken gate — only appData can mint the token.
+	// maxWorkers — hard cap on the worker pool's OS-thread count. 0
+	// means no pool (single-session GUI modes); headless modes pass a
+	// positive value sized by hardware concurrency. Pool is allocated
+	// here so the registry's lifecycle owns it end-to-end.
+	explicit ibSessionRegistry(ib::AppDataCtorToken,
+	                           std::size_t maxWorkers = 0);
 
 private:
 
@@ -540,7 +547,12 @@ public:
 private:
 
 	// Fatal fail-stop. Does NOT return — logs `why` + std::terminate.
-	[[noreturn]] void Die(const wxString& why);
+	// Pre-2026-05-26 this was [[noreturn]] (always std::terminate'd).
+	// Now it returns normally when m_started is false (soft-fail at
+	// startup — producer sees IsFatal()) and only terminates after the
+	// first successful drain. Attribute removed accordingly; callers
+	// must not assume the call never returns.
+	void Die(const wxString& why);
 
 	// --- storage (thread-owned; only ThreadBody touches after Start) ---
 	// Until queue-based Add lands, m_sessions is written by Create/Destroy
@@ -668,6 +680,17 @@ private:
 	std::atomic<bool>                            m_threadAlive  { false };
 	std::atomic<bool>                            m_fatal        { false };
 	wxString                                     m_fatalReason;  // set before m_fatal = true
+
+	// True after ThreadBody completed its first full main-loop iteration
+	// (drain + housekeeping ticks). Before that, Die() takes a soft-fail
+	// path: set m_fatal + m_fatalReason and return, letting the producer
+	// (session->Open / Connect / Authenticate) observe IsFatal() and
+	// surface a readable startup error through the top-level OnRun
+	// try/catch. After m_started is true, ThreadBody is committed —
+	// sys_session reflects state that other processes consume, so a
+	// fatal there cannot leave that state in limbo and Die() routes to
+	// std::terminate as before.
+	std::atomic<bool>                            m_started      { false };
 
 	// "reload" admin signal latch — set by JobCheckSignal, consumed by
 	// ConsumeReloadRequest() on the caller's polling tick.

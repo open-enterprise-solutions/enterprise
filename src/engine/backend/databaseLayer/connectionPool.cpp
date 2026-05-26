@@ -170,8 +170,8 @@ void ibConnectionPool::ReleaseAll(ibDatabaseConnectionHolder* holder)
 	// pending statements from the previous user.
 	for (auto& c : conns) {
 		if (!c) continue;
-		try { c->CloseResultSets(); } catch (...) {}
-		try { c->CloseStatements(); } catch (...) {}
+		try { c->CloseResultSets(); } catch (...) { /* swallowed: cleanup before reparking conn — driver error here would otherwise leak into the next checkout */ }
+		try { c->CloseStatements(); } catch (...) { /* swallowed: same as above */ }
 	}
 }
 
@@ -298,7 +298,7 @@ ibConnectionScope ibConnectionPool::GetFreeConnection()
 }
 
 
-ibConnectionPool::ibConnectionPool() = default;
+ibConnectionPool::ibConnectionPool(ib::AppDataCtorToken) {}
 
 ibConnectionPool::~ibConnectionPool()
 {

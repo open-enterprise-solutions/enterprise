@@ -11,10 +11,13 @@
 
 struct ibRunContext;
 class ibSession;
+class ibMetaDataConfiguration;
 
+// Lifecycle: owned by ibMetaDataConfiguration as a unique_ptr field
+// (private ctor + friend). Ctor/dtor maintain the `ms_debugServer`
+// process-wide cache so the interpreter hot path keeps a single
+// indirect read, but ownership is strictly metadata's.
 #define debugServer           (ibDebuggerServer::Get())
-#define debugServerInit(f)    (ibDebuggerServer::Initialize(f))
-#define debugServerDestroy()  (ibDebuggerServer::Destroy())
 
 #include "backend/backend_core.h"
 #include "debugDefs.h"
@@ -111,15 +114,18 @@ class BACKEND_API ibDebuggerServer {
 	};
 
 	ibDebuggerServer();
+	friend class ibMetaDataConfiguration;
 
 public:
 
 	virtual ~ibDebuggerServer();
-	static ibDebuggerServer* Get() { return ms_debugServer; }
 
-	// Force the static appData instance to Init()
-	static void Initialize(const int flags);
-	static void Destroy();
+	// Process-wide cache. ms_debugServer is maintained by ctor/dtor —
+	// owner is always the active ibMetaDataConfiguration::m_debugServer
+	// unique_ptr. Hot-path readers (procUnit interpreter, exception
+	// path) use `debugServer` macro which expands to this Get() —
+	// single inline indirect read; identical to pre-refactor cost.
+	static ibDebuggerServer* Get() { return ms_debugServer; }
 
 	bool EnableDebugging() const { return m_socketConnectionThread != nullptr; }
 

@@ -12,7 +12,9 @@
 
 void ibDialogActiveUser::RefreshActiveUserTable()
 {
-	const ibSessionSnapshot arr = ibSessionRegistry::Instance().GetClusterSnapshot();
+	auto* reg = ibApplicationData::GetSessionRegistry();
+	if (reg == nullptr) return;
+	const ibSessionSnapshot arr = reg->GetClusterSnapshot();
 
 	if (m_sessionArrayHash != arr.GetSessionArrayHash()) {
 
@@ -67,7 +69,10 @@ void ibDialogActiveUser::RefreshLocksTable()
 	if (m_locksTable == nullptr) return;
 
 	std::vector<ibLockSnapshotRow> rows;
-	try { rows = ibLockManager::Instance().GetSnapshot(); }
+	try {
+		if (auto* lm = ibApplicationData::GetLockManager())
+			rows = lm->GetSnapshot();
+	}
 	catch (...) { rows.clear(); }
 
 	// Only rebuild when the row count actually changed — RefreshActiveUserTable
@@ -228,7 +233,8 @@ void ibDialogActiveUser::OnKickSelected(wxCommandEvent&)
 		wxTheApp->GetAppDisplayName(), wxYES_NO | wxICON_QUESTION, this);
 	if (answer != wxYES) return;
 
-	if (!ibSessionRegistry::Instance().Kick(guid)) {
+	auto* reg = ibApplicationData::GetSessionRegistry();
+	if (reg == nullptr || !reg->Kick(guid)) {
 		wxLogWarning(_("Failed to queue kick for session %s"), guid);
 	}
 }
@@ -252,7 +258,8 @@ void ibDialogActiveUser::OnReloadSelected(wxCommandEvent&)
 		}
 	}
 
-	if (!ibSessionRegistry::Instance().Reload(guid)) {
+	auto* reg = ibApplicationData::GetSessionRegistry();
+	if (reg == nullptr || !reg->Reload(guid)) {
 		wxLogWarning(_("Failed to queue reload for session %s"), guid);
 	}
 }
@@ -300,7 +307,12 @@ void ibDialogActiveUser::OnForceReleaseSelected(wxCommandEvent&)
 			return;
 		}
 		std::vector<ibGuid> one{ g };
-		ibLockManager::Instance().ReleaseRows(one);
+		auto* lm = ibApplicationData::GetLockManager();
+		if (lm == nullptr) {
+			wxLogWarning(_("Lock manager not available"));
+			return;
+		}
+		lm->ReleaseRows(one);
 		// Force immediate refresh — the 1s timer would catch this anyway,
 		// but the operator just clicked, give instant feedback.
 		m_lastLockRowCount = static_cast<size_t>(-1);

@@ -84,6 +84,18 @@ public:
 
 	static bool IsAvailable();
 
+	// SQLSTATE-based classification — ODBC's standard error identifier
+	// is the same 5-char SQLSTATE as SQL standard / PostgreSQL. Backends
+	// reachable through ODBC (MSSQL, Oracle, DB2, etc.) all funnel their
+	// errors through this format, so the class-digit dispatch is the
+	// portable choice.
+	ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const override;
+	wxString GetSqlState() const override { return m_lastSqlState; }
+
+	// Stash the most recent SQLSTATE pulled from SQLGetDiagRec so the
+	// next ThrowDatabaseException carries it.
+	void SetLastSqlState(const wxString& s) { m_lastSqlState = s; }
+
 protected:
 
 	// query database
@@ -121,6 +133,11 @@ private:
 
 	bool m_bIsConnected;
 	ibInterfaceODBC* m_pInterface;
+
+	// Stashed by SetLastSqlState() — most recent SQLSTATE pulled from
+	// SQLGetDiagRec. Travels with the next ThrowDatabaseException so
+	// admin logs see what the driver actually reported.
+	wxString m_lastSqlState;
 
 public:
 

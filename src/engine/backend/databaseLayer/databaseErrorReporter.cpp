@@ -1,6 +1,6 @@
 #include "databaseErrorReporter.h"
 #include "databaseErrorCodes.h"
-#include "databaseLayerException.h"
+#include "databaseLayerException.h"   // ibDatabaseLayerException::Throw
 
 ibDatabaseErrorReporter::ibDatabaseErrorReporter()
 {
@@ -37,37 +37,30 @@ void ibDatabaseErrorReporter::ResetErrorCodes()
 	m_nErrorCode = DATABASE_LAYER_OK;
 }
 
-#include "backend/backend_exception.h"
-#include "backend/system/systemManager.h"
-
-#include <wx/thread.h>
-
 void ibDatabaseErrorReporter::ThrowDatabaseException()
 {
-	// Only push to the GUI message panel from the main (GUI) thread.
-	// `ibValueSystemFunction::Message` chains into the frontend
-	// output window (wxStyledTextCtrl::AppendText), which fires
-	// Scintilla notifications that propagate to wxWidgets event
-	// dispatch. Driving that from a non-main thread (e.g. our
-	// session-registry `JobRefreshSnapshot` background worker
-	// surfacing a DB error after the leader vanished) races with
-	// the main thread's idle handler over the wxAuiMDIParentFrame
-	// recursion guard, fires `wxASSERT(m_flag > 0)` from
-	// `~wxRecursionGuard` ("unbalanced wxRecursionGuards!?") and
-	// crashes. Background errors still surface via the C++ exception
-	// thrown below — caller's catch handler can route the message
-	// to the UI on the right thread if it wants to.
-	if (wxThread::IsMain())
-		ibValueSystemFunction::Message(GetErrorMessage());
-
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 0
-	try {
-#endif
-		ibBackendCoreException::Error(GetErrorMessage());
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 0
-	}
-	catch (...) {
-	}
-#endif
+	// The reporter's only job is to throw. UI surface decisions belong
+	// to the catch site — runtime (ibProcUnit) routes through script-
+	// level `Try / Except`; non-runtime callers (startup, login dialog,
+	// web handler, registry ThreadBody, worker pool task) each install
+	// their own try/catch with the right output (file log, MessageBox,
+	// HTTP 500, output window). The previous "Message(GetErrorMessage())
+	// only when main-thread" branch was a single hard-coded sink that
+	// fired inconsistently (silent on background threads, doubled with
+	// the catch-site dialog on main) and pinned the reporter to
+	// ibValueSystemFunction — a frontend dependency from a backend
+	// layer. Removing it leaves one clean responsibility.
+	//
+	// Virtual dispatch into the concrete driver's classifier — FB walks
+	// its isc_status array, PG/MySQL/ODBC consult SQLSTATE, SQLite stays
+	// with the default Unknown. GetSqlState() comes from the same
+	// per-driver override so admin logs see what the engine actually
+	// reported. Kind / native_code / sqlstate / message all travel on
+	// the exception; the catch site decides what to surface.
+	ibDatabaseLayerException::Throw(
+		ClassifyDatabaseError(m_nErrorCode),
+		m_nErrorCode,
+		GetSqlState(),
+		m_strErrorMessage);
 }
 

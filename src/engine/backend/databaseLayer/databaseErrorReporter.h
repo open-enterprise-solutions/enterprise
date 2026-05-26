@@ -13,6 +13,7 @@
 #endif
 
 #include "databaseLayerDef.h"
+#include "databaseLayerException.h"   // ibBackendDatabaseException::Kind
 
 class BACKEND_API ibDatabaseErrorReporter
 {
@@ -27,6 +28,23 @@ public:
 	int GetErrorCode();
 
 	void ResetErrorCodes();
+
+	// Classify the driver-native error code into a portable Kind so
+	// catch-handlers can pick retry / no-retry without parsing the
+	// message string. Default returns Unknown — subclasses (the
+	// per-driver ibDatabaseLayer*) override with mappings rooted in
+	// their native error space (FB isc_status, PG SQLSTATE int,
+	// MySQL errno, ODBC SQLSTATE).
+	virtual ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const {
+		(void)nativeCode;
+		return ibBackendDatabaseException::Kind::Unknown;
+	}
+
+	// Driver-native SQLSTATE (5-char) when the engine reports one. PG /
+	// MySQL / ODBC expose SQLSTATE; Firebird and SQLite don't, so the
+	// default empty string is correct for them. Populated by per-driver
+	// override at the moment the error is set.
+	virtual wxString GetSqlState() const { return wxEmptyString; }
 
 protected:
 

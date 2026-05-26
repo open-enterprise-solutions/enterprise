@@ -95,6 +95,21 @@ public:
 	static int TranslateErrorCode(int nCode);
 	static bool IsAvailable();
 
+	// Map the most recent error's SQLSTATE (set in m_lastSqlState by
+	// the result-set / driver helpers when libpq surfaces a structured
+	// error) to a portable Kind. SQLSTATE is the canonical PostgreSQL
+	// error identifier — class digits (first two) drive most of the
+	// classification (23 = integrity violation → Constraint, 40 =
+	// transaction rollback → Deadlock, 42 = syntax/access → Syntax, 08
+	// = connection exception → ConnectionLost).
+	ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const override;
+	wxString GetSqlState() const override { return m_lastSqlState; }
+
+	// Internal hook for libpq error paths — called from places that
+	// already have a PGresult* in hand to stash the SQLSTATE so the
+	// next ThrowDatabaseException carries it.
+	void SetLastSqlState(const wxString& s) { m_lastSqlState = s; }
+
 protected:
 
 	// query database
@@ -122,6 +137,11 @@ private:
 	wxString m_strPort;
 
 	void* m_pDatabase;
+
+	// Stashed by SetLastSqlState() — the most recent SQLSTATE libpq
+	// surfaced via PQresultErrorField(PG_DIAG_SQLSTATE). Travels with
+	// the next ThrowDatabaseException so admin logs see it.
+	wxString m_lastSqlState;
 };
 
 #endif // __POSTGRESQL_DATABASE_LAYER_H__

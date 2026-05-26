@@ -51,7 +51,9 @@ void ibGUISession::AttachFrame(ibFrontendDocMDIFrame* frame)
 	// Hop to the main thread, notify the user, close the frame.
 	// Process exits through wxApp's normal shutdown.
 	ibSession* sessSelf = this;
-	ibSessionRegistry::Instance().OnReload([sessSelf](ibSession* target) {
+	auto* reg = ibApplicationData::GetSessionRegistry();
+	if (reg == nullptr) return;
+	reg->OnReload([sessSelf](ibSession* target) {
 		if (target != sessSelf) return;
 		if (wxTheApp == nullptr) return;
 		wxTheApp->CallAfter([]() {

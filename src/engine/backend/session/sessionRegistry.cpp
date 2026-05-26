@@ -60,17 +60,12 @@ void LogSession(const std::string& msg)
 
 #define SESSION_LOG(expr) do { std::ostringstream _o; _o << expr; LogSession(_o.str()); } while(0)
 
-ibSessionRegistry& ibSessionRegistry::Instance()
-{
-	// Owned by ibApplicationData since 2026-04-25 — registry's lifetime
-	// matches appData's. Construction order: appData ctor → m_sessionRegistry.
-	// Callers that hit Instance() before appData exists are bugs (tests
-	// that need a registry should create their own ibApplicationData).
-	wxASSERT(appData != nullptr);
-	return *appData->GetSessionRegistry();
-}
+// No static `Instance()` definition here — accessor moved to
+// `ibApplicationData::GetSessionRegistry()` (declared inline in appData.h).
+// Single coordinator pattern: subsystems do not own their own global
+// state, they exist for the duration of appData.
 
-ibSessionRegistry::ibSessionRegistry(std::size_t maxWorkers)
+ibSessionRegistry::ibSessionRegistry(ib::AppDataCtorToken, std::size_t maxWorkers)
 {
 	// Allocate the worker pool here so registry owns the whole
 	// session-management subsystem end-to-end: pool stops before
@@ -433,7 +428,7 @@ void ibSessionRegistry::Stop()
 			ibRegistryRequest req;
 			req.kind    = ibRegistryRequestKind::Remove;
 			req.session = s;
-			try { ProcessRemove(req); } catch (...) {}
+			try { ProcessRemove(req); } catch (...) { /* swallowed: registry-Stop fan-out, keep going so every owned row gets a Remove attempt even if one fails */ }
 		}
 	}
 
@@ -1031,7 +1026,7 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 	// designer's INSERTed row, so the exclusion policy permits the second
 	// instance. Refresh is on this thread (consumer), so it can't deadlock
 	// with itself.
-	try { JobRefreshSnapshot(); } catch (...) {}
+	try { JobRefreshSnapshot(); } catch (...) { /* swallowed: best-effort pre-policy refresh, stale snapshot is acceptable here */ }
 
 	// Policy veto chain — first reject wins.
 	for (auto& p : m_policies) {
@@ -1209,7 +1204,8 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 	// session sees the DELETE on next snapshot tick (or on next acquire
 	// attempt against the same key, which then succeeds). See
 	// docs/record-locks.md "Planned upgrade path".
-	ibLockManager::Instance().OnSessionEnd(s.Identity().m_guid);
+	if (auto* lm = ibApplicationData::GetLockManager())
+		lm->OnSessionEnd(s.Identity().m_guid);
 
 	if (m_ownsSysSession && m_writeConn && s.Inserted()) {
 		const wxString guidStr = s.GetId();
@@ -1407,7 +1403,7 @@ void ibSessionRegistry::ProcessSetActivity(ibRegistryRequest& req)
 	if (!stmt) return;
 	stmt->SetParamString(1, req.activity);
 	stmt->SetParamString(2, guidStr);
-	try { stmt->RunQuery(); } catch (...) {}
+	try { stmt->RunQuery(); } catch (...) { /* swallowed: SetActivity is a UI-state hint, not a correctness signal — a failed UPDATE just means peer dialogs show a stale label until the next tick */ }
 }
 
 // --- Periodic jobs (placeholders) ----------------------------------------
@@ -1487,7 +1483,7 @@ void ibSessionRegistry::JobSweepStale()
 		          << " zombie row(s) from sys_session");
 	}
 	for (const wxString& g : zombies) {
-		try { DeleteSessionRow(writer, g); } catch (...) {}
+		try { DeleteSessionRow(writer, g); } catch (...) { /* swallowed: per-row cleanup loop, keep going even if one row's DELETE fails (next sweep retries) */ }
 	}
 
 	// Cluster-wide sys_lock cleanup — drop any long-held lock rows
@@ -1498,8 +1494,11 @@ void ibSessionRegistry::JobSweepStale()
 		deadGuids.reserve(zombies.size());
 		for (const wxString& g : zombies)
 			deadGuids.emplace_back(g);
-		try { ibLockManager::Instance().OnZombieSweep(deadGuids); }
-		catch (...) {}
+		try {
+			if (auto* lm = ibApplicationData::GetLockManager())
+				lm->OnZombieSweep(deadGuids);
+		}
+		catch (...) { /* swallowed: lock cleanup is best-effort, next sweep retries on stale rows */ }
 	}
 }
 
@@ -1782,7 +1781,7 @@ void ibSessionRegistry::JobRefreshSnapshot()
 	if (m_refreshFailedLastTick.exchange(false, std::memory_order_acq_rel)) {
 		SESSION_LOG("[session REFRESH] recovered after failure — "
 		          << "running soft-landing protocol");
-		try { JobHeartbeatOwn(); } catch (...) {}
+		try { JobHeartbeatOwn(); } catch (...) { /* swallowed: soft-landing heartbeat after refresh recovery — next regular tick will retry */ }
 
 		constexpr std::int64_t kPostHandoffGraceMs = 5000;
 		const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -1841,8 +1840,8 @@ void ibSessionRegistry::ThreadBody() noexcept
 	//     `kStaleCutoffSec` staleness check so even when the FB engine
 	//     hasn't rolled back the orphan lock TXs yet, we still DELETE
 	//     rows whose lastActive is older than the cutoff.
-	try { JobSweepStale();      } catch (...) {}
-	try { JobRefreshSnapshot(); } catch (...) {}
+	try { JobSweepStale();      } catch (...) { /* swallowed: eager initial sweep is best-effort; periodic ticks below will retry */ }
+	try { JobRefreshSnapshot(); } catch (...) { /* swallowed: eager initial refresh is best-effort; periodic ticks below will retry */ }
 
 	try {
 		while (!m_stop.load(std::memory_order_acquire)) {
@@ -1891,6 +1890,16 @@ void ibSessionRegistry::ThreadBody() noexcept
 			}
 
 			m_tickCounter.fetch_add(1, std::memory_order_release);
+
+			// Mark startup complete after the first full iteration —
+			// drain + housekeeping ran without an exception, so sys_session
+			// has reached a consistent state for this process. From now
+			// on Die() takes the hard std::terminate path; before now
+			// (e.g. an exception inside the very first ProcessAdd /
+			// JobHeartbeatOwn after eager sweep) it soft-fails so the
+			// producer surfaces a startup error instead of the process
+			// vanishing.
+			m_started.store(true, std::memory_order_release);
 		}
 
 		// Graceful stop: drain urgent work one last time so pending
@@ -1922,13 +1931,30 @@ void ibSessionRegistry::Die(const wxString& why)
 	m_fatal.store(true, std::memory_order_release);
 	m_threadAlive.store(false, std::memory_order_release);
 
-	// Log first — want this to survive even if terminate_handler blocks.
+	// Log first — survives both the soft-fail and the std::terminate paths.
 	std::cerr << "[session] FATAL: " << why.ToUTF8().data() << std::endl;
 	wxLog::FlushActive();
 
-	// std::terminate lets a custom terminate_handler log / dump before exit;
-	// abort() would skip any registered handler. Either way the process
-	// stops — registry-thread death means sys_session lies, nothing good
-	// can come from continuing.
+	// Soft-fail path: ThreadBody never completed its first main-loop
+	// iteration. The thread had no committed sys_session writes (other
+	// than the eager sweep's DELETEs of stale rows, which are idempotent
+	// across runs), so there's no cluster-visible inconsistency to clean
+	// up. Return — producer (session->Open) blocks on WaitForAuth, the
+	// timeout elapses, Open returns false, and the top-level OnRun catch
+	// turns the recorded m_fatalReason into a startup-error dialog. No
+	// silent terminate, no minidump-less death.
+	if (!m_started.load(std::memory_order_acquire)) {
+		// Wake any producer that's parked on a session's auth cv so they
+		// observe IsFatal() promptly instead of waiting the full 20s.
+		m_submitCv.notify_all();
+		return;
+	}
+
+	// Steady-state failure: registry was alive and consistent. Pretending
+	// otherwise would let stale state propagate cluster-wide. std::terminate
+	// lets a custom terminate_handler log / dump before exit; abort() would
+	// skip any registered handler. Either way the process stops —
+	// registry-thread death means sys_session lies, nothing good can come
+	// from continuing.
 	std::terminate();
 }

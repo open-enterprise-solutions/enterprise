@@ -152,6 +152,24 @@ ibWorkerPoolHeadless::ClaimSessionLocked()
 
 void ibWorkerPoolHeadless::WorkerLoop()
 {
+	// RAII-guard for the m_aliveWorkers decrement + Stop-cv notify.
+	// Pre-2026-05-26 this bookkeeping lived at function tail; an
+	// exception escaping the inner try (set_exception OOM, predicate
+	// fault, ibSessionScope ctor throwing) bypassed it, the worker
+	// died alive-counted, and Stop() blocked forever on the cv. Tying
+	// it to a local dtor closes that hole: any path out of WorkerLoop
+	// (clean exit, exception, std::terminate after std::set_terminate
+	// transforms it back) walks past this and decrements once.
+	struct BookkeepingOnExit {
+		ibWorkerPoolHeadless* self;
+		~BookkeepingOnExit() {
+			self->m_aliveWorkers.fetch_sub(1, std::memory_order_acq_rel);
+			std::lock_guard<std::mutex> lk(self->m_stopMtx);
+			self->m_stopCv.notify_all();
+		}
+	} bookkeeping{ this };
+
+	try {
 	for (;;) {
 		ibSession*       session = nullptr;
 		ibSessionQueue*  q       = nullptr;
@@ -218,18 +236,20 @@ void ibWorkerPoolHeadless::WorkerLoop()
 		q->leased.store(false);
 		m_cv.notify_one();
 	}
+	}
+	catch (...) {
+		// Last-chance log of an unexpected escape from the inner loop —
+		// every individual task is already wrapped above, so reaching
+		// here implies a fault in the worker scaffolding itself
+		// (ibSessionScope ctor, mutex lock, set_exception OOM). Log,
+		// then fall through to BookkeepingOnExit. Without this catch,
+		// std::terminate would fire and skip the bookkeeping dtor.
+		LogWorkerException(wxT("worker pool loop"));
+	}
 
-	// Detached exit — bookkeeping for Stop()'s wait.
-	if (m_aliveWorkers.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-		// We were the last worker — wake any Stop() waiter.
-		std::lock_guard<std::mutex> lk(m_stopMtx);
-		m_stopCv.notify_all();
-	}
-	else {
-		// Notify anyway; Stop's predicate will re-check the count.
-		std::lock_guard<std::mutex> lk(m_stopMtx);
-		m_stopCv.notify_all();
-	}
+	// m_aliveWorkers decrement + Stop-cv notify happen in BookkeepingOnExit's
+	// dtor — guarantees one notify per WorkerLoop entry regardless of how
+	// we leave.
 }
 
 void ibWorkerPoolHeadless::Stop()

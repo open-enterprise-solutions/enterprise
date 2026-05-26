@@ -313,7 +313,10 @@ bool ibValueRecordDataObjectConstant::TryAcquireFormLock(ibLockMode mode)
 	// Constant is one row globally — namespace IS the key, no per-row
 	// sub-identifier. ForNamespace encapsulates the empty-keyFields
 	// shape so call sites stay clean.
-	m_formLockHandle = ibLockManager::Instance().Acquire({
+	auto* lm = ibApplicationData::GetLockManager();
+	if (lm == nullptr)
+		ibBackendCoreException::Error(_("Lock manager not initialised"));
+	m_formLockHandle = lm->Acquire({
 		ibLockItem::ForNamespace(m_metaObject->GetDocPath(), mode)
 	});
 	return true;

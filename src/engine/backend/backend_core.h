@@ -80,8 +80,6 @@ enum ibValueTypes {
 #define _USE_NET_COMPRESSOR 0
 //use dynamic linking 
 #define _USE_DYNAMIC_DATABASE_LAYER_LINKING 1
-//don't use exception in db layer
-#define _USE_DATABASE_LAYER_EXCEPTIONS 0
 
 //max precision 
 #define MAX_PRECISION_NUMBER 32

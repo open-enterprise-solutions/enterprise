@@ -208,14 +208,17 @@ int ibDatabaseResultSetSQLite::LookupField(const wxString& strField)
 
 	if (SearchIterator == m_FieldLookupMap.end())
 	{
-		wxString msg(wxT("Field '") + strField + wxT("' not found in the resultset"));
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		ibDatabaseLayerException error(DATABASE_LAYER_FIELD_NOT_IN_RESULTSET, msg);
-		throw error;
-#else
-		wxLogError(msg);
-#endif
-		return -1;
+		// Throw rather than return -1: caller code paths in OES routinely
+		// pass LookupField's result straight into GetResultXxx with no
+		// sentinel check, so a missed field used to surface as a silent
+		// wrong-column read. With ibDatabaseLayerException unified into
+		// ibBackendException, the throw lands in the same handler chain
+		// every other DB error uses.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_FIELD_NOT_IN_RESULTSET,
+			/*sqlState*/ wxEmptyString,
+			wxT("Field '") + strField + wxT("' not found in the resultset"));
 	}
 	else
 	{

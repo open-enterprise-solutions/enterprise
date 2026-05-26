@@ -37,6 +37,7 @@
 // through the pool directly.
 
 #include "backend/backend.h"
+#include "backend/appDataCtorToken.h"
 
 #include <chrono>
 #include <condition_variable>
@@ -52,11 +53,17 @@ class ibSingleConnectionHolder;
 
 class BACKEND_API ibConnectionPool {
 public:
-	ibConnectionPool();
 	~ibConnectionPool();
 
 	ibConnectionPool(const ibConnectionPool&) = delete;
 	ibConnectionPool& operator=(const ibConnectionPool&) = delete;
+
+	// Construction restricted to ibApplicationData via the
+	// ib::AppDataCtorToken gate — appData owns the pool for its
+	// lifetime, same pattern as the other appData-owned subsystems.
+	// Callers reach the pool through ibApplicationData::GetConnectionPool().
+	explicit ibConnectionPool(ib::AppDataCtorToken);
+
 
 	// Initialise. `primary` is the already-opened master connection —
 	// the pool takes shared ownership and also uses it as the first

@@ -22,22 +22,26 @@ wxCriticalSection ibDebuggerClient::ms_criticalSectionConnection2;
 wxCriticalSection ibDebuggerClient::ms_criticalSectionConnection3;
 ///////////////////////////////////////////////////////////////////////
 
-bool ibDebuggerClient::Initialize()
+ibDebuggerClient::ibDebuggerClient() :
+	m_activeSocket(nullptr),
+	m_adapter(new ibDebuggerClientAdapter),
+	m_enterLoop(false), m_connectionSuccess(false)
 {
 	if (!ibDebuggerClient::TableAlreadyCreated()) {
 		ibDebuggerClient::CreateBreakpointDatabase();
 	}
-
-	if (ms_debugClient != nullptr)
-		ms_debugClient->Destroy();
-
-	ms_debugClient = new ibDebuggerClient();
-	return true;
+	ms_debugClient = this;
 }
 
-void ibDebuggerClient::Destroy()
+ibDebuggerClient::~ibDebuggerClient()
 {
-	wxDELETE(ms_debugClient);
+	while (m_listConnection.size()) {
+		m_listConnection[m_listConnection.size() - 1]->Delete();
+	}
+	wxDELETE(m_adapter);
+
+	if (ms_debugClient == this)
+		ms_debugClient = nullptr;
 }
 
 //special functions:

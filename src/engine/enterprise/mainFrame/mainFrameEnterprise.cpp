@@ -73,7 +73,8 @@ void ibFrontendDocMDIFrameEnterprise::BackendError(const wxString& strFileName, 
 	// once, Remove submitted for each session row. GUI ends with the
 	// app exiting through wx's normal teardown.
 	if (retCode == 3) {
-		ibSessionRegistry::Instance().CloseAll(true);
+		if (auto* reg = ibApplicationData::GetSessionRegistry())
+			reg->CloseAll(true);
 	}
 }
 

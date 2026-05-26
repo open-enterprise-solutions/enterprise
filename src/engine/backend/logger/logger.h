@@ -33,7 +33,11 @@ class ibValue;
 // dropped-count surfaces as a self-log row from the writer.
 class BACKEND_API ibLogger {
 public:
-    // dir = absolute path to the .olg directory. Created if missing.
+    // Owned by ibApplicationData (`m_logger`) — production callers reach
+    // it through `ibApplicationData::GetLogger()` or the `ibLog` macro.
+    // The ctor stays public only so unit tests (tests/test_logger.cpp)
+    // can construct standalone instances against scratch directories;
+    // application code MUST NOT instantiate it directly.
     explicit ibLogger(const wxString& dir,
                       std::size_t maxQueue = 100000,
                       std::size_t maxBatch = 256,

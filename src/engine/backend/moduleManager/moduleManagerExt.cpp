@@ -36,7 +36,7 @@ std::map<wxString, ibValue*>& ibValueModuleManagerExternalDataProcessor::GetCont
 }
 
 ibValueModuleManagerExternalDataProcessor::ibValueModuleManagerExternalDataProcessor(ibMetaData* metadata, ibValueMetaObjectDataProcessor* metaObject)
-	: ibValueModuleManager(ibMetaDataConfiguration::Get(), metaObject ? metaObject->GetObjectModule() : nullptr)
+	: ibValueModuleManager(appEnv::ActiveMetaData(), metaObject ? metaObject->GetObjectModule() : nullptr)
 {
 	m_objectValue = new ibValueRecordDataObjectDataProcessor(metaObject);
 	//set complile module 
@@ -238,7 +238,7 @@ std::map<wxString, ibValue*>& ibValueModuleManagerExternalReport::GetContextVari
 }
 
 ibValueModuleManagerExternalReport::ibValueModuleManagerExternalReport(ibMetaData* metadata, ibValueMetaObjectReport* metaObject)
-	: ibValueModuleManager(ibMetaDataConfiguration::Get(), metaObject ? metaObject->GetObjectModule() : nullptr)
+	: ibValueModuleManager(appEnv::ActiveMetaData(), metaObject ? metaObject->GetObjectModule() : nullptr)
 {
 	m_objectValue = new ibValueRecordDataObjectReport(metaObject);
 	//set complile module 

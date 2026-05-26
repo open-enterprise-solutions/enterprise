@@ -6,40 +6,16 @@
 #include "backend/backend_mainFrame.h"
 #include "backend/appData.h"
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////
-ibMetaDataConfigurationBase* ibMetaDataConfigurationBase::ms_instance = nullptr;
-//////////////////////////////////////////////////////////////////////////////////////////////////////
-
-bool ibMetaDataConfigurationBase::Initialize(ibRunMode mode, const int flags)
-{
-	if (ms_instance == nullptr) {
-
-		switch (mode)
-		{
-		case eLAUNCHER_MODE: break;
-		case eDESIGNER_MODE:
-			ms_instance = new ibMetaDataConfigurationStorage();
-			break;
-		default:
-			ms_instance = new ibMetaDataConfiguration();
-			break;
-		}
-
-		return ms_instance != nullptr ?
-			ms_instance->OnInitialize(flags) : false;
-	}
-
-	return false;
-}
-
-bool ibMetaDataConfigurationBase::Destroy()
-{
-	if (ms_instance != nullptr) {
-		ms_instance->OnDestroy();
-	}
-	wxDELETE(ms_instance);
-	return true;
-}
+// ms_instance / Get / Initialize / Destroy retired — ownership moved
+// to ibApplicationData::m_activeMetaData (a unique_ptr). The fabric
+// lives on ibApplicationData::CreateActiveMetaData / DestroyActiveMetaData;
+// callers reach the active metadata through `appEnv::ActiveMetaData()`
+// (which the legacy `activeMetaData` macro now redirects to).
+//
+// Subclass ctors are private + friend ibApplicationData, so `new
+// ibMetaDataConfiguration()` outside that fabric is a compile error —
+// matches the strict ownership rule used by the rest of the appEnv
+// subsystems (sessionRegistry / lockManager / ...).
 
 #include <fstream>
 
@@ -584,11 +560,17 @@ bool ibMetaDataConfiguration::OnInitialize(const int flags)
 	if (!ibMetaDataConfigurationStorage::TableAlreadyCreated())
 		return false;
 
-	// One debug server per process, bound to the singleton metadata
-	// configuration. Per-session debug context (ibSession::Debug) layers
-	// on top — handshake is process-level, EnterLoop / step routing is
-	// per-session via sessionGuid.
-	debugServerInit(flags);
+	// One debug server per process — for now bound to the active
+	// metadata configuration. Per-session debug context
+	// (ibSession::Debug) layers on top — handshake is process-level,
+	// EnterLoop / step routing is per-session via sessionGuid.
+	//
+	// Conceptually the debugger lives *above* metadata (it would
+	// remain shared if a process ever hosted multiple configurations
+	// simultaneously). Today the runtime stays 1:1, so owning it here
+	// keeps the lifecycle close to where flags arrive. Move up to
+	// ibApplicationData::m_debugServer if multi-metadata lands.
+	m_debugServer.reset(new ibDebuggerServer());
 
 	if (!LoadDatabase())
 		return false;
@@ -617,13 +599,22 @@ bool ibMetaDataConfiguration::OnInitialize(const int flags)
 
 bool ibMetaDataConfiguration::OnDestroy()
 {
-	debugServerDestroy();
+	// Dtor would do this anyway; explicit reset keeps the order
+	// deterministic — debug server is shut down before m_commonObject
+	// and friends start unwinding, mirroring the symmetric order of
+	// OnInitialize.
+	m_debugServer.reset();
 	return true;
 }
 
+// Out-of-line — m_debugServer holds a unique_ptr<ibDebuggerServer>
+// (forward-declared in metadataConfiguration.h). default_delete needs
+// the full type here.
+ibMetaDataConfiguration::~ibMetaDataConfiguration() = default;
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-ibMetaDataConfiguration::ibMetaDataConfiguration() :
+ibMetaDataConfiguration::ibMetaDataConfiguration(ib::AppDataCtorToken) :
 	ibMetaDataConfigurationFile(), m_configNew(true)
 {
 }
@@ -642,8 +633,10 @@ bool ibMetaDataConfigurationStorage::OnInitialize(const int flags)
 		ibMetaDataConfigurationStorage::CreateConfigSequence();
 	}
 
-	// Initialize debugger
-	debugClientInit();
+	// Designer-side debugger client. Same 1:1-with-metadata footing as
+	// m_debugServer above — promoted to ibApplicationData if multi-metadata
+	// hosting becomes a thing.
+	m_debugClient.reset(new ibDebuggerClient());
 
 	// Load database
 	if (!LoadDatabase())
@@ -672,15 +665,15 @@ bool ibMetaDataConfigurationStorage::OnInitialize(const int flags)
 
 bool ibMetaDataConfigurationStorage::OnDestroy()
 {
-	debugClientDestroy();
-
+	m_debugClient.reset();
 	return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-ibMetaDataConfigurationStorage::ibMetaDataConfigurationStorage() :
-	ibMetaDataConfiguration(), m_configMetadata(new ibMetaDataConfiguration()) {
+ibMetaDataConfigurationStorage::ibMetaDataConfigurationStorage(ib::AppDataCtorToken token) :
+	ibMetaDataConfiguration(token),
+	m_configMetadata(new ibMetaDataConfiguration(token)) {
 	// Designer-edit configuration → allocate compile-value cache so
 	// metadata-collection callsites (Add/Find/RemoveCompileModule) gate
 	// on `if (auto* cc = metaData->GetCompileCache())` instead of the

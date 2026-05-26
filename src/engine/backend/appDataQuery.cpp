@@ -187,18 +187,18 @@ void ibApplicationData::MigrateTableSession()
 	}
 	if (!has(wxT("address"))) {
 		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD address VARCHAR(256)"), session_table); }
-		catch (...) {}
+		catch (...) { /* swallowed: best-effort migration; driver may not support this DDL */ }
 	}
 	if (!has(wxT("currentActivity"))) {
 		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD currentActivity VARCHAR(128)"), session_table); }
-		catch (...) {}
+		catch (...) { /* swallowed: best-effort migration; driver may not support this DDL */ }
 	}
 	if (!has(wxT("kind"))) {
 		// ibSessionKind — session-level role (WebServer=5, WebClient=100,
 		// desktop kinds share numeric values with ibRunMode). Distinct
 		// from `application` which stores process-level ibRunMode.
 		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD kind INTEGER"), session_table); }
-		catch (...) {}
+		catch (...) { /* swallowed: best-effort migration; driver may not support this DDL */ }
 	}
 	if (!has(wxT("signal"))) {
 		// Admin → registry control channel. A non-empty value is picked
@@ -206,14 +206,14 @@ void ibApplicationData::MigrateTableSession()
 		// tick; the handler acts and clears the signal. "kick" is the
 		// first supported value — more (reload, refresh) may follow.
 		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD signal VARCHAR(32)"), session_table); }
-		catch (...) {}
+		catch (...) { /* swallowed: best-effort migration; driver may not support this DDL */ }
 	}
 	if (!has(wxT("exclusive"))) {
 		// Process-wide monopoly mode marker. 1 = this session holds
 		// exclusive; cluster-aware gate in ProcessAdd / ProcessSetExclusive
 		// reads peer rows to detect another process holding it.
 		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD exclusive INTEGER"), session_table); }
-		catch (...) {}
+		catch (...) { /* swallowed: best-effort migration; driver may not support this DDL */ }
 	}
 }
 

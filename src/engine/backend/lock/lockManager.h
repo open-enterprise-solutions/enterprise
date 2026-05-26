@@ -23,6 +23,7 @@
 #ifndef _IB_LOCK_MANAGER_H_
 #define _IB_LOCK_MANAGER_H_
 
+#include "backend/appDataCtorToken.h"
 #include "backend/lock/lockTypes.h"
 #include "backend/lock/lockHandle.h"
 #include "backend/lock/lockHolder.h"
@@ -46,7 +47,13 @@ struct BACKEND_API ibLockSnapshotRow {
 
 class BACKEND_API ibLockManager {
 public:
-	static ibLockManager& Instance();
+	// No public static accessor — `ibLockManager` is created exclusively
+	// by `ibApplicationData` (ctor reaches it via `friend` below) and
+	// reached through `ibApplicationData::GetLockManager()` which
+	// returns nullptr pre-appData / post-appData. Mirrors the
+	// session-registry and connection-pool ownership pattern: subsystems
+	// do not own their own global state, they exist for the duration
+	// of appData and only.
 
 	// Acquire a batch of locks atomically — either all granted or
 	// none (throws on conflict). Throws ibBackendLockException::
@@ -93,9 +100,19 @@ public:
 	// lock. Wired in Phase B.5.
 	std::vector<ibLockSnapshotRow> GetSnapshot() const;
 
-private:
-	ibLockManager();
+	// Destructor must be public so std::unique_ptr<ibLockManager>'s
+	// default_delete can fire from inside `<memory>` (which is not a
+	// friend). ctor stays private — that's where the owner-only rule
+	// matters; allowing delete on a managed pointer doesn't reopen the
+	// construction path.
 	~ibLockManager() = default;
+
+	// Construction restricted to ibApplicationData via the
+	// ib::AppDataCtorToken gate — appData is the owning coordinator;
+	// lifetime is tied to its ctor/dtor.
+	explicit ibLockManager(ib::AppDataCtorToken);
+
+private:
 	ibLockManager(const ibLockManager&) = delete;
 	ibLockManager& operator=(const ibLockManager&) = delete;
 

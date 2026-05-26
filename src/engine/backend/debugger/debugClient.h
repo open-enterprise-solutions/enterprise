@@ -3,9 +3,11 @@
 
 #include <wx/thread.h>
 
+// Lifecycle: owned by ibMetaDataConfigurationStorage as a unique_ptr
+// field (private ctor + friend). Same cache-pointer pattern as
+// ibDebuggerServer — designer / codeEditor hot paths read the static
+// slot directly through the macro.
 #define debugClient           (ibDebuggerClient::Get())
-#define debugClientInit()     (ibDebuggerClient::Initialize())
-#define debugClientDestroy()  (ibDebuggerClient::Destroy())
 
 #include "debugClientBridge.h"
 
@@ -141,28 +143,19 @@ class BACKEND_API ibDebuggerClient {
 		friend class ibDebuggerClient;
 	};
 
-	ibDebuggerClient() :
-		m_activeSocket(nullptr),
-		m_adapter(new ibDebuggerClientAdapter),
-		m_enterLoop(false), m_connectionSuccess(false)
-	{
-	}
+	ibDebuggerClient();
+	friend class ibMetaDataConfigurationStorage;
 
 public:
 
 	void SetBridge(ibDebuggerClientBridge* bridge) { m_adapter->SetBridge(bridge); }
 
-	virtual ~ibDebuggerClient() {
-		while (m_listConnection.size()) {
-			m_listConnection[m_listConnection.size() - 1]->Delete();
-		}
-		wxDELETE(m_adapter);
-	}
+	virtual ~ibDebuggerClient();
 
+	// Process-wide cache. Hot-path readers (codeEditor, watchWindow,
+	// stackWindow, etc.) go through this static slot via the
+	// `debugClient` macro. Ctor/dtor maintain ms_debugClient.
 	static ibDebuggerClient* Get() { return ms_debugClient; }
-
-	static bool Initialize();
-	static void Destroy();
 
 public:
 

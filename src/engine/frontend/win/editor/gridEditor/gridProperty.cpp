@@ -208,7 +208,7 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyChanged(ibProperty
 
 ibMetaData* ibGridEditor::ibPropertyGridEditorSpreadsheet::GetMetaData() const
 {
-	return ibMetaDataConfiguration::Get();
+	return appEnv::ActiveMetaData();
 }
 
 void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyCreated(ibProperty* property)

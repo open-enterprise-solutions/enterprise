@@ -76,7 +76,7 @@ ibConnectionScope::~ibConnectionScope()
 	// TX on the conn. Swallow driver exceptions here — propagating
 	// from a dtor would std::terminate.
 	if (m_activeTx && m_conn) {
-		try { m_conn->RollBack(); } catch (...) {}
+		try { m_conn->RollBack(); } catch (...) { /* swallowed: see comment above — throw from dtor would std::terminate */ }
 		m_activeTx = false;
 	}
 
@@ -107,7 +107,7 @@ ibConnectionScope& ibConnectionScope::operator=(ibConnectionScope&& other) noexc
 		// the holder if we owned it) before adopting the source's
 		// state.
 		if (m_activeTx && m_conn) {
-			try { m_conn->RollBack(); } catch (...) {}
+			try { m_conn->RollBack(); } catch (...) { /* swallowed: move-assign rolls back own state before adopting other's — same dtor-safety rule */ }
 		}
 		if (m_ownsConn && m_holder) {
 			if (auto* pool = ibApplicationData::GetConnectionPool())

@@ -357,14 +357,14 @@ int ibDatabaseResultSetMySQL::LookupField(const wxString& strField)
 
 	if (SearchIterator == m_FieldLookupMap.end())
 	{
-		wxString msg(wxT("Field '") + strField + wxT("' not found in the resultset"));
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		ibDatabaseLayerException error(DATABASE_LAYER_FIELD_NOT_IN_RESULTSET, msg);
-		throw error;
-#else
-		wxLogError(msg);
-		return -1;
-#endif
+		// See sqliteResultSet.cpp for the rationale — caller code rarely
+		// checks the -1 sentinel, so we throw to land in the unified
+		// ibBackendException handler chain instead.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_FIELD_NOT_IN_RESULTSET,
+			/*sqlState*/ wxEmptyString,
+			wxT("Field '") + strField + wxT("' not found in the resultset"));
 	}
 	else
 	{
@@ -377,14 +377,15 @@ MYSQL_BIND* ibDatabaseResultSetMySQL::GetResultBinding(int nField)
 	IntToMysqlParameterMap::iterator finder = m_BindingWrappers.find(nField - 1);
 	if (finder == m_BindingWrappers.end())
 	{
-		wxString msg(wxT("Field '") + wxString::Format(wxT("%d"), nField) + wxT("' not found in the resultset"));
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		ibDatabaseLayerException error(DATABASE_LAYER_FIELD_NOT_IN_RESULTSET, msg);
-		throw error;
-#else
-		wxLogError(msg);
-		return nullptr;
-#endif
+		// Same rationale as the LookupField throw above — silent
+		// nullptr return used to propagate into the caller's
+		// dereference path; throwing surfaces the bad field index
+		// at the actual fault site.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_FIELD_NOT_IN_RESULTSET,
+			/*sqlState*/ wxEmptyString,
+			wxT("Field '") + wxString::Format(wxT("%d"), nField) + wxT("' not found in the resultset"));
 	}
 	else
 	{

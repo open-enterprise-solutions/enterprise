@@ -29,6 +29,7 @@
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="appData.h" />
+    <ClInclude Include="appDataCtorToken.h" />
     <ClInclude Include="uniqueKey.h" />
     <ClInclude Include="logger\logger.h">
       <Filter>logger</Filter>
@@ -278,6 +279,9 @@
     </ClInclude>
     <ClInclude Include="backend_mainFrame.h" />
     <ClInclude Include="backend_exception.h" />
+    <ClInclude Include="diagnostics\crashGuard.h">
+      <Filter>diagnostics</Filter>
+    </ClInclude>
     <ClInclude Include="stringUtils.h" />
     <ClInclude Include="typeconv.h" />
     <ClInclude Include="clsid.h" />
@@ -810,6 +814,9 @@
     <ClCompile Include="databaseLayer\databaseLayer.cpp">
       <Filter>databaseLayer</Filter>
     </ClCompile>
+    <ClCompile Include="databaseLayer\databaseLayerException.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
     <ClCompile Include="databaseLayer\databaseQueryParser.cpp">
       <Filter>databaseLayer</Filter>
     </ClCompile>
@@ -991,6 +998,9 @@
     </ClCompile>
     <ClCompile Include="backend_mainFrame.cpp" />
     <ClCompile Include="backend_exception.cpp" />
+    <ClCompile Include="diagnostics\crashGuard.cpp">
+      <Filter>diagnostics</Filter>
+    </ClCompile>
     <ClCompile Include="fileSystem\lz\lzhuf.cpp">
       <Filter>fileSystem\lz</Filter>
     </ClCompile>
@@ -1729,6 +1739,9 @@
   <ItemGroup>
     <Filter Include="debugger">
       <UniqueIdentifier>{e7188396-0035-47b0-b863-be1ec229b525}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="diagnostics">
+      <UniqueIdentifier>{a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d}</UniqueIdentifier>
     </Filter>
     <Filter Include="moduleManager">
       <UniqueIdentifier>{ac49a1b3-bb42-4b4f-9b17-a6ec169f254f}</UniqueIdentifier>

@@ -1922,7 +1922,7 @@ ibParamValue ibPrecompileCode::GetExpression(int priority)
 				ibValue valObject;
 				if (!type.IsEmpty()) {
 					try { valObject = ibValue::CreateObject(type); }
-					catch (...) {}
+					catch (...) { /* swallowed: IntelliSense skeleton — unknown type leaves valObject empty, autocomplete just shows fewer hints */ }
 				}
 				m_activeContext->AddVariable(realName, type, false, false, valObject);
 

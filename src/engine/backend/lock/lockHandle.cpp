@@ -1,5 +1,6 @@
 #include "backend/lock/lockHandle.h"
 #include "backend/lock/lockManager.h"
+#include "backend/appData.h"   // ibApplicationData::GetLockManager
 
 ibLockHandle::ibLockHandle() = default;
 
@@ -43,6 +44,7 @@ void ibLockHandle::Release()
 	// regardless of DB outcome — best-effort release; if the row
 	// already vanished (cluster cleanup, force-release from admin)
 	// we still want our handle to forget it.
-	ibLockManager::Instance().ReleaseRows(m_lockGuids);
+	if (auto* lm = ibApplicationData::GetLockManager())
+		lm->ReleaseRows(m_lockGuids);
 	m_lockGuids.clear();
 }

@@ -358,7 +358,7 @@ bool ibDatabaseLayerMySQL::TryProbeRowLock(const wxString& tableName,
 		catch (...) { gotLock = false; }
 		CloseStatement(stmt);
 	}
-	try { RollBack(); } catch (...) {}
+	try { RollBack(); } catch (...) { /* swallowed: TryProbeRowLock always rolls back so no lock survives — failure here means lock is gone anyway */ }
 	return gotLock;
 }
 
@@ -529,11 +529,7 @@ bool ibDatabaseLayerMySQL::TableExists(const wxString& table)
 	//  in case of an error
 	ibPreparedStatement* pStatement = nullptr;
 	ibDatabaseResultSet* pResult = nullptr;
-
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxString query = wxT("SHOW TABLE STATUS WHERE Comment != 'VIEW' AND Name=?;");
 		pStatement = DoPrepareStatement(query);
 		if (pStatement)
@@ -550,10 +546,7 @@ bool ibDatabaseLayerMySQL::TableExists(const wxString& table)
 				}
 			}
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	}
-	catch (ibDatabaseLayerException& e)
-	{
+
 		if (pResult != nullptr)
 		{
 			CloseResultSet(pResult);
@@ -565,21 +558,19 @@ bool ibDatabaseLayerMySQL::TableExists(const wxString& table)
 			CloseStatement(pStatement);
 			pStatement = nullptr;
 		}
-
-		throw e;
 	}
-#endif
-
-	if (pResult != nullptr)
-	{
-		CloseResultSet(pResult);
-		pResult = nullptr;
-	}
-
-	if (pStatement != nullptr)
-	{
-		CloseStatement(pStatement);
-		pStatement = nullptr;
+	catch (const ibBackendException&) {
+		// Close any still-open resources before propagating; preserves the
+		// in-flight exception (sqlstate / native_code on derived types).
+		if (pResult != nullptr) {
+			CloseResultSet(pResult);
+			pResult = nullptr;
+		}
+		if (pStatement != nullptr) {
+			CloseStatement(pStatement);
+			pStatement = nullptr;
+		}
+		throw;
 	}
 
 	return bReturn;
@@ -610,11 +601,7 @@ bool ibDatabaseLayerMySQL::ViewExists(const wxString& view)
 	//  in case of an error
 	ibPreparedStatement* pStatement = nullptr;
 	ibDatabaseResultSet* pResult = nullptr;
-
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxString query = wxT("SHOW TABLE STATUS WHERE Comment = 'VIEW' AND Name=?;");
 		pStatement = DoPrepareStatement(query);
 		if (pStatement)
@@ -631,10 +618,7 @@ bool ibDatabaseLayerMySQL::ViewExists(const wxString& view)
 				}
 			}
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	}
-	catch (ibDatabaseLayerException& e)
-	{
+
 		if (pResult != nullptr)
 		{
 			CloseResultSet(pResult);
@@ -646,21 +630,19 @@ bool ibDatabaseLayerMySQL::ViewExists(const wxString& view)
 			CloseStatement(pStatement);
 			pStatement = nullptr;
 		}
-
-		throw e;
 	}
-#endif
-
-	if (pResult != nullptr)
-	{
-		CloseResultSet(pResult);
-		pResult = nullptr;
-	}
-
-	if (pStatement != nullptr)
-	{
-		CloseStatement(pStatement);
-		pStatement = nullptr;
+	catch (const ibBackendException&) {
+		// Close any still-open resources before propagating; preserves the
+		// in-flight exception (sqlstate / native_code on derived types).
+		if (pResult != nullptr) {
+			CloseResultSet(pResult);
+			pResult = nullptr;
+		}
+		if (pStatement != nullptr) {
+			CloseStatement(pStatement);
+			pStatement = nullptr;
+		}
+		throw;
 	}
 
 	return bReturn;
@@ -673,10 +655,7 @@ wxArrayString ibDatabaseLayerMySQL::GetTables()
 	if (m_pInterface->GetMysqlGetServerVersion()((MYSQL*)m_pDatabase) >= 50010)
 	{
 		ibDatabaseResultSet* pResult = nullptr;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		try
-		{
-#endif
+		try {
 			wxString query = wxT("SHOW TABLE STATUS WHERE Comment != 'VIEW';");
 			pResult = ExecuteQuery(query);
 
@@ -686,24 +665,21 @@ wxArrayString ibDatabaseLayerMySQL::GetTables()
 				if (!table.IsEmpty())
 					returnArray.Add(table);
 			}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		}
-		catch (ibDatabaseLayerException& e)
-		{
+
 			if (pResult != nullptr)
 			{
 				CloseResultSet(pResult);
 				pResult = nullptr;
 			}
-
-			throw e;
 		}
-#endif
-
-		if (pResult != nullptr)
-		{
-			CloseResultSet(pResult);
-			pResult = nullptr;
+		catch (const ibBackendException&) {
+			// Close any still-open result set before propagating; preserves the
+			// in-flight exception (sqlstate / native_code on derived types).
+			if (pResult != nullptr) {
+				CloseResultSet(pResult);
+				pResult = nullptr;
+			}
+			throw;
 		}
 	}
 
@@ -734,10 +710,7 @@ wxArrayString ibDatabaseLayerMySQL::GetViews()
 	if (m_pInterface->GetMysqlGetServerVersion()((MYSQL*)m_pDatabase) >= 50010)
 	{
 		ibDatabaseResultSet* pResult = nullptr;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		try
-		{
-#endif
+		try {
 			wxString query = wxT("SHOW TABLE STATUS WHERE Comment = 'VIEW';");
 			pResult = ExecuteQuery(query);
 
@@ -745,24 +718,21 @@ wxArrayString ibDatabaseLayerMySQL::GetViews()
 			{
 				returnArray.Add(pResult->GetResultString(1).Trim());
 			}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		}
-		catch (ibDatabaseLayerException& e)
-		{
+
 			if (pResult != nullptr)
 			{
 				CloseResultSet(pResult);
 				pResult = nullptr;
 			}
-
-			throw e;
 		}
-#endif
-
-		if (pResult != nullptr)
-		{
-			CloseResultSet(pResult);
-			pResult = nullptr;
+		catch (const ibBackendException&) {
+			// Close any still-open result set before propagating; preserves the
+			// in-flight exception (sqlstate / native_code on derived types).
+			if (pResult != nullptr) {
+				CloseResultSet(pResult);
+				pResult = nullptr;
+			}
+			throw;
 		}
 	}
 
@@ -775,10 +745,7 @@ wxArrayString ibDatabaseLayerMySQL::GetColumns(const wxString& table)
 	// Keep these variables outside of scope so that we can clean them up
 	//  in case of an error
 	ibDatabaseResultSet* pResult = nullptr;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try
-	{
-#endif
+	try {
 		wxString query = wxString::Format(wxT("SHOW COLUMNS FROM %s;"), table.c_str());
 		pResult = ExecuteQuery(query);
 
@@ -786,24 +753,21 @@ wxArrayString ibDatabaseLayerMySQL::GetColumns(const wxString& table)
 		{
 			returnArray.Add(pResult->GetResultString(1).Trim());
 		}
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	}
-	catch (ibDatabaseLayerException& e)
-	{
+
 		if (pResult != nullptr)
 		{
 			CloseResultSet(pResult);
 			pResult = nullptr;
 		}
-
-		throw e;
 	}
-#endif
-
-	if (pResult != nullptr)
-	{
-		CloseResultSet(pResult);
-		pResult = nullptr;
+	catch (const ibBackendException&) {
+		// Close any still-open result set before propagating; preserves the
+		// in-flight exception (sqlstate / native_code on derived types).
+		if (pResult != nullptr) {
+			CloseResultSet(pResult);
+			pResult = nullptr;
+		}
+		throw;
 	}
 
 
@@ -816,6 +780,32 @@ int ibDatabaseLayerMySQL::TranslateErrorCode(int nCode)
 	// For now though, we'll just return error
 	return nCode;
 	//return DATABASE_LAYER_ERROR;
+}
+
+ibBackendDatabaseException::Kind ibDatabaseLayerMySQL::ClassifyDatabaseError(int nativeCode) const
+{
+	using Kind = ibBackendDatabaseException::Kind;
+	switch (nativeCode) {
+		// Server-side error codes — server has accepted the connection
+		// and returned a structured error.
+		case 1213: return Kind::Deadlock;   // ER_LOCK_DEADLOCK
+		case 1205: return Kind::Timeout;    // ER_LOCK_WAIT_TIMEOUT
+		case 1062:                          // ER_DUP_ENTRY
+		case 1452:                          // ER_NO_REFERENCED_ROW (FK)
+		case 1451:                          // ER_ROW_IS_REFERENCED (FK)
+		case 1048: return Kind::Constraint; // ER_BAD_NULL_ERROR (NOT NULL)
+		case 1064:                          // ER_PARSE_ERROR
+		case 1054:                          // ER_BAD_FIELD_ERROR
+		case 1146: return Kind::Syntax;     // ER_NO_SUCH_TABLE
+
+		// Client-side error codes (CR_* range, mysql/errmsg.h).
+		case 2002:                          // CR_CONNECTION_ERROR (unix socket)
+		case 2003:                          // CR_CONN_HOST_ERROR (TCP)
+		case 2006:                          // CR_SERVER_GONE_ERROR
+		case 2013: return Kind::ConnectionLost; // CR_SERVER_LOST
+
+		default:   return Kind::Unknown;
+	}
 }
 
 bool ibDatabaseLayerMySQL::IsAvailable()

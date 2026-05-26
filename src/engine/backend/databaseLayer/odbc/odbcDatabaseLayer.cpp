@@ -351,7 +351,7 @@ bool ibDatabaseLayerODBC::TryProbeRowLock(const wxString& tableName,
 		catch (...) { gotLock = false; }
 		CloseStatement(stmt);
 	}
-	try { RollBack(); } catch (...) {}
+	try { RollBack(); } catch (...) { /* swallowed: TryProbeRowLock always rolls back so no lock survives — failure here means lock is gone anyway */ }
 	return gotLock;
 }
 
@@ -730,7 +730,44 @@ void ibDatabaseLayerODBC::InterpretErrorCodes(long nCode, void* stmth_ptr)
 		SetErrorCode((int)iNativeCode);
 		//SetErrorMessage(wxString((wxChar*)strBuffer));
 		SetErrorMessage(ConvertFromUnicodeStream((char*)strBuffer));
+		// Stash the 5-char SQLSTATE for ClassifyDatabaseError + the
+		// exception's GetSqlState() — without this the override
+		// returns empty and class-digit dispatch can't fire.
+		SetLastSqlState(ConvertFromUnicodeStream((char*)strState));
 	}
+}
+
+ibBackendDatabaseException::Kind ibDatabaseLayerODBC::ClassifyDatabaseError(int nativeCode) const
+{
+	// Same SQLSTATE class-digit dispatch as PostgreSQL — ODBC standardises
+	// on the SQL-spec SQLSTATE format, so the classification is portable.
+	// See https://learn.microsoft.com/en-us/sql/odbc/reference/appendixes/appendix-a-odbc-error-codes
+	using Kind = ibBackendDatabaseException::Kind;
+	if (m_lastSqlState.length() >= 2) {
+		const wxString cls = m_lastSqlState.Left(2);
+		if (cls == wxT("08")) return Kind::ConnectionLost;
+		if (cls == wxT("23")) return Kind::Constraint;
+		if (cls == wxT("42")) return Kind::Syntax;
+		if (cls == wxT("57")) return Kind::ConnectionLost;
+		if (cls == wxT("HY")) {
+			// HYT00 = ODBC timeout expired; HYT01 = connection timeout
+			if (m_lastSqlState == wxT("HYT00") || m_lastSqlState == wxT("HYT01"))
+				return Kind::Timeout;
+		}
+		if (cls == wxT("40")) {
+			// MSSQL surfaces deadlock as native error 1205 with SQLSTATE
+			// 40001 (serialization failure) — we treat both as Deadlock
+			// since the engine already rolled the TX back.
+			if (m_lastSqlState == wxT("40001") || m_lastSqlState == wxT("40P01"))
+				return Kind::Deadlock;
+			return Kind::Timeout;
+		}
+	}
+
+	// MSSQL native code fallback — deadlock victim signal arrives even
+	// when SQLSTATE 40001 isn't surfaced by the driver.
+	if (nativeCode == 1205) return Kind::Deadlock;
+	return Kind::Unknown;
 }
 
 bool ibDatabaseLayerODBC::IsAvailable()

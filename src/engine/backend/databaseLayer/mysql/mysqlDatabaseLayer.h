@@ -92,6 +92,18 @@ public:
 	static int TranslateErrorCode(int nCode);
 	static bool IsAvailable();
 
+	// Map a MySQL errno (as returned by mysql_errno()) to a portable
+	// Kind. Common codes:
+	//   1213 = ER_LOCK_DEADLOCK     → Deadlock
+	//   1205 = ER_LOCK_WAIT_TIMEOUT → Timeout
+	//   1062 = ER_DUP_ENTRY         → Constraint
+	//   1452 = ER_NO_REFERENCED_ROW → Constraint
+	//   1064 = ER_PARSE_ERROR       → Syntax
+	//   2002 = CR_CONNECTION_ERROR  → ConnectionLost
+	//   2006 = CR_SERVER_GONE_ERROR → ConnectionLost
+	//   2013 = CR_SERVER_LOST       → ConnectionLost
+	ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const override;
+
 protected:
 
 	// query database

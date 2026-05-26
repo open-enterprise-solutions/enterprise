@@ -1,6 +1,8 @@
 #ifndef __APP_DATA_H__
 #define __APP_DATA_H__
 
+#include "backend/appDataCtorToken.h"
+
 #include <atomic>
 #include <functional>
 #include <memory>
@@ -50,7 +52,7 @@ enum class ibSessionKind : int;   // defined in backend/session/session.h
 // ibSessionSnapshot — cluster-wide sys_session snapshot — moved to
 // backend/session/sessionSnapshot.h. Producer is ibSessionRegistry's
 // JobRefreshSnapshot; consumers (designer Active Users dialog) read
-// it through ibSessionRegistry::Instance().GetClusterSnapshot().
+// it through ibApplicationData::GetSessionRegistry()->GetClusterSnapshot().
 
 #pragma region config
 struct ibApplicationDataConfigInfo {
@@ -314,9 +316,10 @@ public:
 #pragma region session
 
 	// Cluster-wide sys_session snapshot — readers go through
-	// ibSessionRegistry::Instance().GetClusterSnapshot() directly.
-	// Snapshot type ibSessionSnapshot lives in
-	// backend/session/sessionSnapshot.h.
+	// ibApplicationData::GetSessionRegistry()->GetClusterSnapshot()
+	// directly (the accessor returns nullptr pre-appData / post-appData;
+	// callers MUST null-check). Snapshot type ibSessionSnapshot lives
+	// in backend/session/sessionSnapshot.h.
 
 	class ibPluginManager* GetPluginManager() const { return m_pluginManager.get(); }
 
@@ -395,28 +398,114 @@ private:
 	ibApplicationDataConfigInfo m_configInfo;
 #pragma endregion
 
-	std::unique_ptr<class ibPluginManager> m_pluginManager;
+	// Subsystem ownership — order below is THE teardown contract.
+	// C++ destroys members in reverse declaration order, so the last
+	// field declared dies first. We use that to encode dependencies
+	// without any explicit `reset()` in ~ibApplicationData; the dtor
+	// only calls the business-level hooks (Stop / UnloadAll / OnDestroy
+	// / Shutdown) and then lets default destruction unwind in the
+	// safe order.
+	//
+	// Destruction order (top of stack = destroyed first):
+	//   1. m_activeMetaData   — OnDestroy already ran above; its
+	//                            polymorphic dtor (Storage→Configuration→
+	//                            File→Base) needs db_query for some
+	//                            paths, so it goes BEFORE pool / registry.
+	//   2. m_sessionRegistry  — Stop() already drained workers; dtor
+	//                            cleans up the session vector. Session
+	//                            destructors may still want pool.
+	//   3. m_logger           — own SQLite handle, no external deps;
+	//                            placed here so its writer thread joins
+	//                            while everything below is still alive
+	//                            for the rare audit-on-shutdown row.
+	//   4. m_lockManager      — no external deps.
+	//   5. m_pluginManager    — UnloadAll already called Destroy on
+	//                            each plugin while host was live; dtor
+	//                            just clears the vector.
+	//   6. m_connectionPool   — last to die. Holds the master DB layer
+	//                            that every other subsystem might want
+	//                            during their own destruction.
+	//
+	// Declared in REVERSE of the above (first declared = last destroyed):
+
 	// Connection pool — the sole owner of every ibDatabaseLayer in
 	// the process. Master (opened at Init) plus lazy clones up to
 	// maxSize. `db_query` / GetDatabaseLayer resolve through the
 	// pool; ibApplicationData keeps no direct DB handle of its own.
 	std::unique_ptr<class ibConnectionPool> m_connectionPool;
 
-	// Session manager (registry). Owned here — created in ctor, destroyed
-	// in dtor. Process-wide singleton in practice (appData itself is one),
-	// accessed via ibSessionRegistry::Instance() facade or directly via
-	// GetSessionRegistry(). Owns the per-session worker pool too — pool
-	// is an extension of session-management infrastructure.
-	std::unique_ptr<class ibSessionRegistry> m_sessionRegistry;
+	// Plugin manager — registry of loaded backend plugins. UnloadAll
+	// is called explicitly in ~ibApplicationData so each plugin sees
+	// Destroy() while the host is still up.
+	std::unique_ptr<class ibPluginManager> m_pluginManager;
 
-	// Audit + trace logger. Built after the DB + connection pool are
-	// live; torn down first in the dtor so the writer thread can drain
-	// while every other subsystem is still alive (and able to provide
-	// session_id / user_name via ibSession::Current()).
+	// Long-held pessimistic lock coordinator (sys_lock table). No
+	// external dependencies on teardown.
+	std::unique_ptr<class ibLockManager> m_lockManager;
+
+	// Audit + trace logger. Owns its own SQLite handle (not the pool's).
+	// Built after the DB + connection pool are live; declared here so
+	// it's destroyed before the registry — its writer thread joins in
+	// the dtor and rare "log on close" rows still land before flush.
 	std::unique_ptr<class ibLogger> m_logger;
 
+	// Session manager (registry). Owned here — created in ctor, destroyed
+	// in dtor. Single coordinator pattern: appData owns the registry,
+	// the connection pool, the lock manager, plugin manager — everything
+	// process-wide lives only for the duration of appData. No subsystem
+	// has its own static `Instance()`; readers go through the static
+	// accessors below, which return nullptr pre-appData and post-appData
+	// (no AV, no hidden assert in Release).
+	std::unique_ptr<class ibSessionRegistry> m_sessionRegistry;
+
+	// Active configuration metadata. Polymorphic — concrete subclass
+	// (`ibMetaDataConfiguration` for runtime modes,
+	// `ibMetaDataConfigurationStorage` for designer) chosen by the
+	// fabric `CreateActiveMetaData` based on runMode. nullptr in
+	// launcher / codeRunner (no DB-backed metadata). Declared last so
+	// reverse-order destruction kills it first — OnDestroy ran already
+	// in the dtor above, dtor itself wraps up.
+	std::unique_ptr<class ibMetaDataConfigurationBase> m_activeMetaData;
+
 public:
-	class ibSessionRegistry* GetSessionRegistry() const { return m_sessionRegistry.get(); }
+	// Static accessor — returns nullptr when no appData is alive.
+	// Mirrors GetConnectionPool's shape. Callers MUST null-check; the
+	// signature documents the precondition that this can come up empty.
+	// Hot path: backend code that already has an `appData` pointer in
+	// scope can short-circuit to `appData->m_sessionRegistry.get()`
+	// through the private field — but the public surface is one entry.
+	static class ibSessionRegistry* GetSessionRegistry() {
+		return s_instance != nullptr ? s_instance->m_sessionRegistry.get() : nullptr;
+	}
+
+	// Returns nullptr when no appData is alive. Replaces the historical
+	// `ibLockManager::Instance()` Meyers singleton — same nullable shape
+	// as the other subsystem accessors.
+	static class ibLockManager* GetLockManager() {
+		return s_instance != nullptr ? s_instance->m_lockManager.get() : nullptr;
+	}
+
+	// Active configuration metadata accessor. nullptr in launcher /
+	// codeRunner; nullptr before CreateActiveMetaData fires for the
+	// first time. The legacy `activeMetaData` macro redirects to
+	// `appEnv::ActiveMetaData()` which calls this.
+	static class ibMetaDataConfigurationBase* GetActiveMetaData() {
+		return s_instance != nullptr ? s_instance->m_activeMetaData.get() : nullptr;
+	}
+
+	// Fabric — pick subclass by runMode and stash it in m_activeMetaData.
+	// Returns false if construction or OnInitialize failed; nullptr modes
+	// (launcher) return true with no-op so callers can branch uniformly.
+	// Replaces the historical `ibMetaDataConfigurationBase::Initialize`
+	// static. The `metaDataCreate(mode, f)` macro routes here.
+	static bool CreateActiveMetaData(enum ibRunMode mode, int flags);
+
+	// Symmetric tear-down — fires OnDestroy via the polymorphic dtor
+	// chain when the unique_ptr resets, drops the ptr. Idempotent (no-op
+	// when already null). No public macro for this one — the legacy
+	// `metaDataDestroy()` was retired; ~ibApplicationData calls this on
+	// shutdown, and external callers go through the function directly.
+	static bool DestroyActiveMetaData();
 
 	// Audit + trace logger. Created during CreateFile/Server AppDataEnv
 	// once the DB is open + the connection pool is initialised; destroyed

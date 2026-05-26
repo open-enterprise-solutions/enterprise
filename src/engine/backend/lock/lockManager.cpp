@@ -61,13 +61,10 @@ wxString BuildDeleteByGuidsSQL(const std::vector<ibGuid>& guids)
 
 } // namespace
 
-ibLockManager& ibLockManager::Instance()
-{
-	static ibLockManager s_instance;
-	return s_instance;
-}
+// No Instance() — ibApplicationData owns the only instance. Callers
+// reach it through ibApplicationData::GetLockManager().
 
-ibLockManager::ibLockManager() = default;
+ibLockManager::ibLockManager(ib::AppDataCtorToken) {}
 
 ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
                                      const ibLockOptions&           opts,

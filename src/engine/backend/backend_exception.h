@@ -1,6 +1,8 @@
 #ifndef _backend_exception_h__
 #define _backend_exception_h__
 
+#include <vector>
+
 enum { //Error message numbers
 	ERROR_USAGE = 0,
 	ERROR_FILE_READ,
@@ -112,8 +114,13 @@ public:
 	WX_DEFINE_VARARG_FUNC(static wxString, Format, 1, (const wxFormatErrorString&),
 		DoFormatWchar, DoFormatUtf8);
 
-	//get error description
-	const wxString GetErrorDescription() const { return m_strErrorDescription; }
+	// Out-of-line — BACKEND_API class + inline body decays to
+	// dllimport-only in consumer TUs. When the call sits inside a
+	// lambda (e.g. cpp-httplib's set_exception_handler in wes/main.cpp)
+	// MSVC can decline to inline and then the linker hunts the symbol
+	// in backend.dll's export table, where the inline never got
+	// emitted. Defining the body in .cpp guarantees the export.
+	const wxString GetErrorDescription() const;
 
 	//error from proc unit/compile module
 	static void ProcessError(const ibBackendException& err, const struct ibByteUnit& error);
@@ -124,11 +131,24 @@ public:
 	);
 
 	static wxString FindErrorCodeLine(const wxString& sBuffer, unsigned int currPos);
-	static wxString GetLastError() {
-		const wxString strLastError = ms_strError;
-		ms_strError = wxEmptyString;
-		return strLastError;
-	}
+
+	// Returns the most recent error description and clears it. Kept for
+	// the legacy callers (mainApp.cpp's startup `appDataCreate*` failure
+	// path); new code should prefer GetLastErrorChain / DrainLastErrors
+	// to see the whole sequence of failures that led to the visible one.
+	static wxString GetLastError();
+
+	// Per-thread error chain. Every ibBackendException ctor pushes its
+	// message onto the calling thread's chain; readers drain it after
+	// a failed startup / login / metadata-load attempt to display ALL
+	// recorded reasons, not just the last one. Previous single-string
+	// ms_strError lost information whenever a catch (...) {} site
+	// constructed a fresh wrapped exception, masking the root cause.
+	static std::vector<wxString> DrainLastErrors();
+
+	// Read-only peek — does not clear. Useful for diagnostics dialogs
+	// that want to surface the chain without consuming it.
+	static std::vector<wxString> PeekLastErrors();
 
 	static bool IsErrorOutputProcessing();
 
@@ -162,7 +182,13 @@ public:
 protected:
 
 	static wxString FormatV(const wxString& fmt, va_list& list);
-	static wxString ms_strError;
+
+	// Push a freshly-constructed error onto the calling thread's chain.
+	// Called from ibBackendException's ctor — every thrown exception
+	// adds itself to the per-thread history. The chain is bounded
+	// (oldest entries dropped beyond the cap) to keep memory predictable
+	// when a runaway loop keeps throwing.
+	static void PushLastError(const wxString& description);
 
 private:
 
@@ -282,6 +308,15 @@ private:
 	wxString m_objectName;
 	wxString m_blockingUser;
 };
+
+// DB-tier exception classes (ibBackendDatabaseException +
+// ibDatabaseLayerException) live in
+// backend/databaseLayer/databaseLayerException.h — co-located with the
+// rest of the database layer code. They derive from ibBackendException
+// (declared here) but are not visible from this header. Code that
+// needs to throw or specifically catch DB-tier failures includes
+// `backend/databaseLayer/databaseLayerException.h`; everyone else
+// catches at `ibBackendException` and is content with the message.
 
 #pragma endregion
 

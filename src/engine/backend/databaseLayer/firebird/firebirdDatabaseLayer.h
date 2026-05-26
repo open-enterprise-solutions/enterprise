@@ -59,6 +59,17 @@ public:
 	static wxString TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, void* status);
 	static bool IsAvailable();
 
+	// Map an isc_status[1] value (the FB "primary" gds code stashed
+	// into m_nErrorCode by every error path in this driver) to a
+	// portable Kind. FB doesn't expose SQLSTATE — the gds codes are
+	// the authoritative identifier. Common ones:
+	//   isc_lock_conflict / isc_deadlock              → Deadlock
+	//   isc_lock_timeout                              → Timeout
+	//   isc_network_error / isc_net_*                 → ConnectionLost
+	//   isc_dsql_command_err / isc_dsql_token_unk_err → Syntax
+	//   isc_unique_key_violation / isc_foreign_key    → Constraint
+	ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const override;
+
 	void SetServer(const wxString& strServer) { m_strServer = strServer; }
 	void SetDatabase(const wxString& strDatabase) { m_strDatabase = strDatabase; }
 	void SetUser(const wxString& strUser) { m_strUser = strUser; }

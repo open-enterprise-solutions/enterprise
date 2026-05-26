@@ -3,14 +3,33 @@
 
 #include <vector>
 
+#include <memory>
+
 #include "backend/metadata.h"
 #include "backend/appData.h"
+#include "backend/appEnv.h"   // appEnv::ActiveMetaData accessor
+
+class ibDebuggerServer;
+class ibDebuggerClient;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-#define activeMetaData		(ibMetaDataConfiguration::Get())
+// activeMetaData — process-wide configuration metadata. Owned by
+// ibApplicationData (m_activeMetaData); reached through the thin
+// appEnv accessor. nullptr in modes that don't host metadata
+// (launcher, codeRunner). See backend/appEnv.h for the rationale on
+// the namespace-fasad over appData's static getters.
+#define activeMetaData			(appEnv::ActiveMetaData())
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-#define metaDataCreate(mode, f) (ibMetaDataConfiguration::Initialize(mode, f))
-#define metaDataDestroy()		(ibMetaDataConfiguration::Destroy())
+// Lifecycle — fabric on ibApplicationData picks the concrete subclass
+// by runMode and stashes the unique_ptr in m_activeMetaData. Returns
+// true on success (or true with no-op for modes that don't allocate
+// metadata, like launcher).
+//
+// `metaDataDestroy()` macro was retired — nobody called it; teardown
+// happens through `~ibApplicationData`, which resets m_activeMetaData
+// (firing the polymorphic dtor chain). Outside-caller-driven destroy
+// would go through `ibApplicationData::DestroyActiveMetaData()` directly.
+#define metaDataCreate(mode, f)	(ibApplicationData::CreateActiveMetaData(mode, f))
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
 enum ibConfigType {
@@ -31,7 +50,15 @@ public:
 	virtual bool AccessRight_ModeAllFunction() const { return true; }
 #pragma endregion
 
+protected:
+	// Construction restricted to ibApplicationData::CreateActiveMetaData
+	// via the ib::AppDataCtorToken gate. Concrete subclasses take the
+	// token as the first ctor argument; the base ctor stays protected
+	// + arg-less so the chain compiles without re-passing the token at
+	// every level.
 	ibMetaDataConfigurationBase() : ibMetaData() {}
+
+public:
 
 	virtual wxString GetConfigMD5() const = 0;
 	virtual wxString GetConfigName() const = 0;
@@ -77,19 +104,19 @@ public:
 	bool LoadConfigFromFile(const wxString& strFileName);
 	bool SaveConfigToFile(const wxString& strFileName);
 
-protected:
-
-	virtual bool OnInitialize(const int flag) { return true; }
-	virtual bool OnDestroy() { return true; }
-
 public:
 
-	static ibMetaDataConfigurationBase* Get() { return ms_instance; }
-	static bool Initialize(enum ibRunMode mode, const int flag);
-	static bool Destroy();
-
-private:
-	static ibMetaDataConfigurationBase* ms_instance;
+	// Called by the appData fabric right after construction (OnInitialize)
+	// and right before destruction (OnDestroy). Subclasses override to
+	// wire run-mode-specific state. Singleton Get()/Initialize()/Destroy()
+	// retired — ownership is on ibApplicationData::m_activeMetaData; the
+	// fabric is ibApplicationData::CreateActiveMetaData.
+	//
+	// Public so the appData fabric / ~ibApplicationData can call them
+	// through a base-class pointer without a friend declaration.
+	// Construction itself stays gated on ib::AppDataCtorToken.
+	virtual bool OnInitialize(const int flag) { return true; }
+	virtual bool OnDestroy() { return true; }
 };
 
 class BACKEND_API ibMetaDataConfigurationFile : public ibMetaDataConfigurationBase {
@@ -106,6 +133,13 @@ public:
 
 	virtual bool IsConfigOpen() const { return m_configOpened; }
 
+	// Public ctor — `ibMetaDataConfigurationFile` is NOT the appData-
+	// owned active metadata (those are the leaf subclasses
+	// `ibMetaDataConfiguration` and `ibMetaDataConfigurationStorage`,
+	// which have private ctor + friend ibApplicationData). The File
+	// base is instantiated directly by designer document views that
+	// load a stand-alone .obk / XML / JSON for inspection — that is
+	// per-document scratch state, not a coordinator singleton.
 	ibMetaDataConfigurationFile();
 	virtual ~ibMetaDataConfigurationFile();
 
@@ -169,7 +203,6 @@ protected:
 
 class BACKEND_API ibMetaDataConfiguration : public ibMetaDataConfigurationFile {
 public:
-	ibMetaDataConfiguration();
 	virtual bool LoadConfigFromFile(const wxString& strFileName) {
 		if (ibMetaDataConfigurationFile::LoadConfigFromFile(strFileName)) {
 			Modify(true); //set modify for check metaData
@@ -177,6 +210,11 @@ public:
 		}
 		return false;
 	}
+
+	// Out-of-line — m_debugServer holds a forward-declared ibDebuggerServer
+	// (heavy header), default_delete needs the full type so the dtor lives
+	// in metadataConfiguration.cpp where debugServer.h is included.
+	virtual ~ibMetaDataConfiguration();
 
 	virtual wxString GetConfigName() const { return m_commonObject->GetName(); }
 	virtual ibGuid GetConfigGuid() const { return m_metaGuid; }
@@ -192,10 +230,25 @@ protected:
 	virtual bool OnInitialize(const int flag);
 	virtual bool OnDestroy();
 
+public:
+	// Construction restricted to ibApplicationData::CreateActiveMetaData
+	// (and to ibMetaDataConfigurationStorage, which composes an inner
+	// ibMetaDataConfiguration as the "saved" reference baseline against
+	// which designer edits are compared). Both gate on the
+	// ib::AppDataCtorToken — appData mints once, Storage forwards the
+	// token it received when constructing its inner baseline.
+	explicit ibMetaDataConfiguration(ib::AppDataCtorToken);
+
 protected:
 
 	ibGuid m_metaGuid;
 	bool m_configNew;
+
+	// Owned debugger server — one per process, lifecycle bound to the
+	// active metadata. The static `ibDebuggerServer::ms_debugServer`
+	// cache is published in ctor and retired in dtor; the `debugServer`
+	// macro reads that slot.
+	std::unique_ptr<ibDebuggerServer> m_debugServer;
 };
 
 class BACKEND_API ibMetaDataConfigurationStorage : public ibMetaDataConfiguration {
@@ -209,8 +262,13 @@ class BACKEND_API ibMetaDataConfigurationStorage : public ibMetaDataConfiguratio
 
 public:
 
-	ibMetaDataConfigurationStorage();
 	virtual ~ibMetaDataConfigurationStorage();
+
+	// Construction restricted to ibApplicationData::CreateActiveMetaData
+	// via the ib::AppDataCtorToken gate. The inner baseline reference
+	// (m_configMetadata) is constructed by forwarding the same token.
+	explicit ibMetaDataConfigurationStorage(ib::AppDataCtorToken);
+
 
 	//is config save
 	virtual bool IsConfigSave() const {
@@ -299,6 +357,11 @@ private:
 	bool SaveSequenceToBuffer(ibWriterMemory& writer);
 
 	ibMetaDataConfiguration* m_configMetadata;
+
+	// Designer-side debugger client. Same ownership pattern as
+	// m_debugServer on the base; cached pointer through
+	// `ibDebuggerClient::ms_debugClient`.
+	std::unique_ptr<ibDebuggerClient> m_debugClient;
 };
 
 #define sign_metadata 0x1236F362122FE

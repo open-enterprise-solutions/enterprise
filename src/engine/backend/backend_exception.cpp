@@ -13,7 +13,45 @@
 
 #include "backend_mainFrame.h"
 
-wxString ibBackendException::ms_strError;
+namespace {
+// Per-thread error history. Bounded to prevent runaway-throw loops from
+// growing the vector without limit (compile-side runaway, FB error in a
+// reconnect-retry loop, etc.). 64 entries are plenty for any startup or
+// login sequence we want to surface to the user.
+constexpr std::size_t kErrorChainMax = 64;
+thread_local std::vector<wxString> tl_errorChain;
+} // namespace
+
+void ibBackendException::PushLastError(const wxString& description)
+{
+	if (description.IsEmpty()) return;
+	if (tl_errorChain.size() >= kErrorChainMax)
+		tl_errorChain.erase(tl_errorChain.begin());
+	tl_errorChain.push_back(description);
+}
+
+wxString ibBackendException::GetLastError()
+{
+	// Drain semantics preserved for legacy callers (mainApp's
+	// appDataCreate* failure path). Returns the most recent entry and
+	// clears the chain — same one-string surface as before.
+	if (tl_errorChain.empty()) return wxEmptyString;
+	wxString last = tl_errorChain.back();
+	tl_errorChain.clear();
+	return last;
+}
+
+std::vector<wxString> ibBackendException::DrainLastErrors()
+{
+	std::vector<wxString> out;
+	out.swap(tl_errorChain);
+	return out;
+}
+
+std::vector<wxString> ibBackendException::PeekLastErrors()
+{
+	return tl_errorChain;
+}
 
 //////////////////////////////////////////////////////////////////////
 //					List of error messages							//
@@ -98,6 +136,11 @@ static wxString gs_listErrorString[] =
 // Error handling
 //////////////////////////////////////////////////////////////////////
 
+const wxString ibBackendException::GetErrorDescription() const
+{
+	return m_strErrorDescription;
+}
+
 ibBackendException::ibBackendException(const wxString& strErrorDescription)
 	: m_strErrorDescription(strErrorDescription), m_errorHandled(false)
 {
@@ -108,7 +151,11 @@ ibBackendException::ibBackendException(const wxString& strErrorDescription)
 	if (auto* puState = ibSession::GetPUState())
 		puState->Raise();
 
-	ms_strError = strErrorDescription;
+	// Append to the calling thread's chain so consumers can see the
+	// full sequence of failures that produced the visible one. Previous
+	// single-string ms_strError dropped every prior failure on the next
+	// throw, leaving the user with a misleading "last in wins" message.
+	PushLastError(strErrorDescription);
 }
 
 #include "backend/metaCollection/metaModuleObject.h"
@@ -240,7 +287,11 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 		}
 	}
 
-	ms_strError = strErrorMessage;
+	// Push the processed message (with module / line decoration) onto
+	// the per-thread chain too — ProcessExceptionError runs after the
+	// raw ctor already pushed the bare m_strErrorDescription, so the
+	// chain now carries both: the bare cause + the formatted view.
+	PushLastError(strErrorMessage);
 
 #ifdef DEBUG
 	wxLogDebug(strErrorMessage);
@@ -412,5 +463,9 @@ void ibBackendLockException::LockConflictThrow(const wxString& objectName,
 			_("%s is locked by user %s."), objectName, blockingUser);
 	throw ibBackendLockException(Kind::LockConflict, msg, objectName, blockingUser);
 }
+
+// ibBackendDatabaseException + ibDatabaseLayerException implementations
+// live in backend/databaseLayer/databaseLayerException.cpp, next to the
+// rest of the database layer.
 
 #pragma endregion

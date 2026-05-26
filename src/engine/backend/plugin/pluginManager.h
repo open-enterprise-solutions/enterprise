@@ -7,6 +7,7 @@
 #define _IB_PLUGIN_MANAGER_H_
 
 #include "backend/backend.h"
+#include "backend/appDataCtorToken.h"
 #include "backend/plugin/pluginApi.h"
 
 #include <wx/dynlib.h>
@@ -15,9 +16,16 @@
 
 class BACKEND_API ibPluginManager {
 public:
-	ibPluginManager() = default;
 	ibPluginManager(const ibPluginManager&) = delete;
 	ibPluginManager& operator=(const ibPluginManager&) = delete;
+
+	// Construction restricted to ibApplicationData via the
+	// ib::AppDataCtorToken gate — same pattern as the other
+	// appData-owned subsystems. Production callers reach the plugin
+	// manager through `ibApplicationData::m_pluginManager` (no public
+	// static accessor today — appData uses it directly during startup).
+	explicit ibPluginManager(ib::AppDataCtorToken) {}
+
 
 	struct LoadedPlugin {
 		wxString               m_path;

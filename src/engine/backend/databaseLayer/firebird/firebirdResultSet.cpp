@@ -629,14 +629,14 @@ int ibDatabaseResultSetFirebird::LookupField(const wxString& strField)
 
 	if (SearchIterator == m_FieldLookupMap.end())
 	{
-		wxString msg(wxT("Field '") + strField + wxT("' not found in the resultset"));
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		ibDatabaseLayerException error(DATABASE_LAYER_FIELD_NOT_IN_RESULTSET, msg);
-		throw error;
-#else
-		wxLogError(msg);
-#endif
-		return -1;
+		// See sqliteResultSet.cpp for the rationale — caller code rarely
+		// checks the -1 sentinel, so we throw to land in the unified
+		// ibBackendException handler chain instead.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_FIELD_NOT_IN_RESULTSET,
+			/*sqlState*/ wxEmptyString,
+			wxT("Field '") + strField + wxT("' not found in the resultset"));
 	}
 	else
 	{

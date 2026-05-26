@@ -23,27 +23,18 @@
 ibDebuggerServer* ibDebuggerServer::ms_debugServer = nullptr;
 ///////////////////////////////////////////////////////////////////////
 
-void ibDebuggerServer::Initialize(const int flags)
-{
-	if (ms_debugServer != nullptr)
-		ms_debugServer->Destroy();
-
-	ms_debugServer = new ibDebuggerServer();
-}
-
-void ibDebuggerServer::Destroy()
-{
-	if (ms_debugServer != nullptr)
-		ms_debugServer->ShutdownServer();
-
-	wxDELETE(ms_debugServer);
-}
-
 ibDebuggerServer::ibDebuggerServer() :
 	m_bUseDebug(false), m_bDoLoop(false), m_bDebugLoop(false), m_bDebugStopLine(false),
 	m_numCurrentNumberStopContext(0),
 	m_runContext(nullptr), m_socketConnectionThread(nullptr)
 {
+	// One per process — owned by ibMetaDataConfiguration. The static
+	// `ms_debugServer` is a hot-path cache (interpreter steps read it
+	// every opcode through the `debugServer` macro); ctor publishes,
+	// dtor retires. If somebody constructs a second one before the
+	// first dies, last-writer wins and the first will null the slot
+	// in its dtor only if it still owns it.
+	ms_debugServer = this;
 }
 
 ibDebuggerServer::~ibDebuggerServer()
@@ -51,6 +42,9 @@ ibDebuggerServer::~ibDebuggerServer()
 	// Hard guarantee: worker thread is joined BEFORE the CV/mutex fields disappear.
 	// Safe to call twice — ShutdownServer already handles nullptr m_socketConnectionThread.
 	ShutdownServer();
+
+	if (ms_debugServer == this)
+		ms_debugServer = nullptr;
 }
 
 bool ibDebuggerServer::CreateServer(const wxString& hostName, unsigned short startPort, bool wait)
@@ -165,7 +159,9 @@ void ibDebuggerServer::WakeDebugSession(const wxString& sessionGuid)
 	// stay parked at their own breakpoints.
 	if (sessionGuid.IsEmpty()) { WakeAllDebugSessions(); return; }
 
-	ibSession* sess = ibSessionRegistry::Instance().Find(sessionGuid);
+	auto* reg = ibApplicationData::GetSessionRegistry();
+	if (reg == nullptr) return;
+	ibSession* sess = reg->Find(sessionGuid);
 	if (sess == nullptr) return;
 	auto* d = sess->Debug();
 	if (d == nullptr) return;
@@ -252,8 +248,11 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 	// Register this session in the registry's debug queue so debug-thread
 	// Current() redirects to it (front-of-queue is the active target).
 	// Multiple sessions can be parked simultaneously — they rotate as
-	// each one resumes and is removed from the queue.
-	ibSessionRegistry::Instance().EnterDebugLoop(sess);
+	// each one resumes and is removed from the queue. Skip when the
+	// registry is gone (post-teardown debug step) — the loop below will
+	// just exit on m_bDebugLoop being false anyway.
+	if (auto* reg = ibApplicationData::GetSessionRegistry())
+		reg->EnterDebugLoop(sess);
 
 	//create stream for this loop
 #ifdef __WXMSW__
@@ -278,8 +277,10 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 
 	// Symmetric leave — front rotation happens automatically: the next
 	// parked session (if any) becomes the new active target for any
-	// debug-thread Current() lookup.
-	ibSessionRegistry::Instance().LeaveDebugLoop(sess);
+	// debug-thread Current() lookup. Same tolerance as EnterDebugLoop
+	// above for the post-teardown case.
+	if (auto* reg = ibApplicationData::GetSessionRegistry())
+		reg->LeaveDebugLoop(sess);
 
 #ifdef __WXMSW__
 	ibValueOLE::ReleaseStreamForDispatch();
@@ -717,7 +718,8 @@ wxThread::ExitCode ibDebuggerServer::ibDebuggerServerConnection::Entry()
 	// ibSession to this thread directly). Symmetric Unregister at
 	// every exit path below.
 	const auto debugTid = std::this_thread::get_id();
-	ibSessionRegistry::Instance().RegisterDebugThread(debugTid);
+	if (auto* reg = ibApplicationData::GetSessionRegistry())
+		reg->RegisterDebugThread(debugTid);
 
 	ExitCode retCode = 0;
 
@@ -734,7 +736,11 @@ wxThread::ExitCode ibDebuggerServer::ibDebuggerServerConnection::Entry()
 	}
 #endif // !_WXMSW
 
-	ibSessionRegistry::Instance().UnregisterDebugThread(debugTid);
+	// Symmetric unregister — tolerate a teardown that's already nulled
+	// appData (debug listener thread can outlive ibApplicationData on the
+	// crash path; we don't want to AV here on the way out).
+	if (auto* reg = ibApplicationData::GetSessionRegistry())
+		reg->UnregisterDebugThread(debugTid);
 
 	if (ms_debugServer != nullptr)
 		ms_debugServer->ResetDebugger();
@@ -1248,9 +1254,11 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		// so this turns Pause into abort rather than pause-and-inspect.
 		// Acceptable for now — users should set breakpoints for
 		// inspection; Pause is the "I gave up, stop it" button.
-		if (auto* pool = ibSessionRegistry::Instance().GetWorkerPool()) {
-			if (auto* sess = ibSessionRegistry::Instance().Find(sid))
-				pool->CancelSession(sess);
+		if (auto* reg = ibApplicationData::GetSessionRegistry()) {
+			if (auto* pool = reg->GetWorkerPool()) {
+				if (auto* sess = reg->Find(sid))
+					pool->CancelSession(sess);
+			}
 		}
 	}
 	else if (commandFromClient == CommandId_Detach) {

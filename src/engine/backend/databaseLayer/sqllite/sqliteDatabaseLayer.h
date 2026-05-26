@@ -62,6 +62,18 @@ public:
 
 	static int TranslateErrorCode(int nCode);
 
+	// SQLite has no SQLSTATE — classification reads its single-int
+	// SQLITE_* result code (m_nErrorCode is the raw sqlite3_errcode()).
+	// Common codes:
+	//   SQLITE_BUSY (5) / SQLITE_LOCKED (6) → Timeout (single-process
+	//       lock contention — under our wxThread / worker-pool model
+	//       this is effectively a wait timeout)
+	//   SQLITE_CONSTRAINT (19)              → Constraint
+	//   SQLITE_ERROR (1) / SQLITE_MISUSE (21) → Syntax (best-effort —
+	//       SQLITE_ERROR is the catch-all "SQL error or missing
+	//       database", most often a parse/schema issue)
+	ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const override;
+
 protected:
 
 	// query database

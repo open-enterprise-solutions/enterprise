@@ -17,6 +17,7 @@
 #include "backend/session/sessionRegistry.h"
 #include "backend/logger/logger.h"
 #include "backend/logger/loggerSweep.h"
+#include "backend/lock/lockManager.h"
 
 
 #include "backend/moduleManager/moduleManager.h"
@@ -150,9 +151,19 @@ static std::size_t PickConnectionMinIdle(ibRunMode runMode)
 ibApplicationData::ibApplicationData(ibRunMode runMode) :
 	m_runMode(runMode),
 	m_strComputer(wxGetHostName()),
-	m_pluginManager(std::make_unique<ibPluginManager>()),
-	m_connectionPool(std::make_unique<ibConnectionPool>()),
-	m_sessionRegistry(std::make_unique<ibSessionRegistry>(PickWorkerCount(runMode))),
+	// `unique_ptr(new X(...))` rather than `make_unique` — every
+	// subsystem ctor takes an `ib::AppDataCtorToken` and `make_unique`
+	// isn't a friend of the token. Direct `new X(...)` works because
+	// this TU is `ibApplicationData`'s and can mint the token.
+	//
+	// Init order matches the declaration order in appData.h —
+	// connectionPool first, activeMetaData last. See the ownership
+	// block in the header for the destruction contract that this
+	// order encodes.
+	m_connectionPool(std::unique_ptr<ibConnectionPool>(new ibConnectionPool(ib::AppDataCtorToken{}))),
+	m_pluginManager(std::unique_ptr<ibPluginManager>(new ibPluginManager(ib::AppDataCtorToken{}))),
+	m_lockManager(std::unique_ptr<ibLockManager>(new ibLockManager(ib::AppDataCtorToken{}))),
+	m_sessionRegistry(std::unique_ptr<ibSessionRegistry>(new ibSessionRegistry(ib::AppDataCtorToken{}, PickWorkerCount(runMode)))),
 	m_dbMode(ibDatabaseMode::eNONE),
 	m_locale_lang(wxLanguage::wxLANGUAGE_UNKNOWN)
 {
@@ -193,6 +204,50 @@ ibApplicationData::ibApplicationData(ibRunMode runMode) :
 		WireSessionEvents();
 }
 
+// Fabric — replaces ibMetaDataConfigurationBase::Initialize. Picks the
+// subclass by runMode (the same switch the legacy static used) and
+// stashes it under `m_activeMetaData`. Single ownership, polymorphic
+// dtor chain on reset.
+bool ibApplicationData::CreateActiveMetaData(ibRunMode mode, int flags)
+{
+	if (s_instance == nullptr)
+		return false;
+	if (s_instance->m_activeMetaData)
+		return false;   // already initialised — caller passes a fresh appData
+
+	// Same dispatch the historical Initialize() did. The metadata
+	// subclass ctors are gated on ib::AppDataCtorToken — this TU is
+	// ibApplicationData's, so it can mint the token; nobody outside
+	// can. Launcher mode has no metadata at all — that's a successful
+	// no-op so callers can branch uniformly.
+	switch (mode) {
+	case eLAUNCHER_MODE:
+		return true;
+	case eDESIGNER_MODE:
+		s_instance->m_activeMetaData.reset(new ibMetaDataConfigurationStorage(ib::AppDataCtorToken{}));
+		break;
+	default:
+		s_instance->m_activeMetaData.reset(new ibMetaDataConfiguration(ib::AppDataCtorToken{}));
+		break;
+	}
+
+	return s_instance->m_activeMetaData
+		? s_instance->m_activeMetaData->OnInitialize(flags)
+		: false;
+}
+
+bool ibApplicationData::DestroyActiveMetaData()
+{
+	if (s_instance == nullptr) return true;
+	if (s_instance->m_activeMetaData) {
+		s_instance->m_activeMetaData->OnDestroy();
+	}
+	// reset() fires the polymorphic dtor chain → subclass ~Storage /
+	// ~Configuration / ~File / ~Base in order.
+	s_instance->m_activeMetaData.reset();
+	return true;
+}
+
 void ibApplicationData::WireSessionEvents()
 {
 	auto* registry = m_sessionRegistry.get();
@@ -202,9 +257,14 @@ void ibApplicationData::WireSessionEvents()
 	// only. CreateRoot / RunDatabase / CompileRoot live in OnAuthenticated
 	// (and the designer's manual RunDatabase after mainFrameShow) — this
 	// listener is just the one-shot metadata bootstrap.
+	//
+	// Direct CreateActiveMetaData call — we are inside ibApplicationData
+	// already, so the legacy `metaDataCreate(...)` macro indirection
+	// (which expands to `ibApplicationData::CreateActiveMetaData(...)`)
+	// just adds a step. The macro stays for outside callers.
 	registry->OnFirstConnect([this](ibSession* /*s*/) {
 		if (m_created_metadata) return;
-		if (!metaDataCreate(m_runMode, m_loadMetadataFlags)) return;
+		if (!CreateActiveMetaData(m_runMode, m_loadMetadataFlags)) return;
 		m_created_metadata = true;
 	});
 
@@ -299,42 +359,48 @@ void ibApplicationData::WireSessionEvents()
 		// goes through ProcessExitHook (wes' main → svr->stop()) or
 		// wxTheApp->Exit (desktop), with ShouldKeepAlive declining when
 		// non-debug clients are still live.
-		if (!ibSessionRegistry::Instance().ShouldKeepAlive())
-			ibSessionRegistry::Instance().CloseAll(true);
+		if (auto* reg = ibApplicationData::GetSessionRegistry()) {
+			if (!reg->ShouldKeepAlive())
+				reg->CloseAll(true);
+		}
 	});
 }
 
 ibApplicationData::~ibApplicationData()
 {
-	// Logger first — drains pending audit rows (session close, etc.)
-	// while ibSession::Current() is still resolvable and the
-	// connection pool still owns live ibDatabaseLayers. The logger
-	// holds its OWN SQLite handle for .olg files, so it does not
-	// reach into the pool, but we still want to flush before any
-	// caller's last Audit call disappears with the registry.
-	if (m_logger) m_logger.reset();
+	// Business-action sequence — every subsystem with a pre-dtor hook
+	// (Stop / UnloadAll / OnDestroy / Shutdown) gets it called here in
+	// the order that matches the declaration-order destruction below.
+	//
+	// We do NOT reset() any unique_ptr field; the compiler-generated
+	// destruction sweeps fields in reverse declaration order, and the
+	// order was chosen (see appData.h ownership block) so that every
+	// field's dtor finds its dependencies still alive.
+	//
+	// 1. activeMetaData first — OnDestroy may save state, close compile
+	//    caches, run cascading detach; those paths still want db_query.
+	if (m_activeMetaData) m_activeMetaData->OnDestroy();
 
-	// Stop is the kill-switch: it submits Remove@Urgent for every session
-	// still in m_own (technical wes session, stranded per-tab sessions),
-	// then drains the queue before joining the worker — so every
-	// sys_session row DELETEs and OnDisconnect listeners fire before any
-	// other member of appData dies. m_sessionRegistry itself is destroyed
-	// at the end of this dtor; its own dtor calls Stop again best-effort.
+	// 2. Stop the registry — submits Remove@Urgent for every session
+	//    still in m_own, drains the queue, joins the worker. sys_session
+	//    DELETEs + OnDisconnect listeners fire before pool dies.
 	if (m_sessionRegistry) m_sessionRegistry->Stop();
 
-	// Worker pool is stopped inside the registry's own Stop() above —
-	// pool lives on the registry. No separate teardown needed here.
-
-	// Explicit early unload so plugins see Destroy() while the host is still
-	// alive; also clears the vector before appData's other members die.
+	// 3. Plugins see Destroy() while the host is still alive. The
+	//    registry's vector clears here too — but m_pluginManager's
+	//    own dtor will fire later via the reverse-declaration sweep.
 	if (m_pluginManager) m_pluginManager->UnloadAll();
 
-	// Pool shutdown — close every connection it owns (master + clones),
-	// invalidate outstanding hand-outs via m_shutdown so their deleters
-	// drop the captured ref instead of re-parking. Run AFTER the
-	// session registry's Stop so any session-bound DB work has
-	// completed; before m_connectionPool's own destruction below.
+	// 4. Pool — close master + clones, invalidate outstanding hand-outs.
+	//    Runs AFTER the registry's Stop so any session-bound DB work
+	//    has already completed.
 	if (m_connectionPool) m_connectionPool->Shutdown();
+
+	// From here the default destructor unwinds in reverse declaration
+	// order: m_activeMetaData → m_sessionRegistry → m_logger →
+	// m_lockManager → m_pluginManager → m_connectionPool. Each step is
+	// a normal unique_ptr<T>::~unique_ptr() that fires the polymorphic
+	// dtor chain on T — no explicit reset() needed.
 }
 
 
@@ -400,21 +466,12 @@ wxString ibApplicationData::ComputeMd5() const
 bool ibApplicationData::CreateAppDataEnv(ibRunMode runMode)
 {
 	if (s_instance != nullptr) s_instance->DestroyAppDataEnv();
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try {
-#endif
 		s_instance = new ibApplicationData(runMode);
 		s_instance->ReadEngineConfig();
 
 		if (!SetLocaleAppDataEnv())
 			return false;
 		return true;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	}
-	catch (const ibDatabaseLayerException* err) {
-		return false;
-	}
-#endif
 	return false;
 }
 
@@ -423,9 +480,6 @@ bool ibApplicationData::CreateAppDataEnv(ibRunMode runMode)
 bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& strDirDatabase, const wxString& strLocale)
 {
 	if (s_instance != nullptr) s_instance->DestroyAppDataEnv();
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try {
-#endif
 		std::shared_ptr<ibDatabaseLayerFirebird> db(new ibDatabaseLayerFirebird());
 
 		wxString pathSep = wxFileName::GetPathSeparator();
@@ -476,12 +530,6 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 			return true;
 		}
 		return false;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	}
-	catch (const ibDatabaseLayerException* err) {
-		return false;
-	}
-#endif
 	return false;
 }
 
@@ -489,9 +537,6 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 	const wxString& strUser, const wxString& strPassword, const wxString& strDatabase, const wxString& strLocale)
 {
 	if (s_instance != nullptr) s_instance->DestroyAppDataEnv();
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	try {
-#endif
 		std::shared_ptr<ibDatabaseLayerPostgres> db(new ibDatabaseLayerPostgres());
 		if (db->Open(strServer, strPort, strDatabase, strUser, strPassword)) {
 
@@ -540,12 +585,6 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 			return true;
 		}
 		return false;
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-	}
-	catch (const ibDatabaseLayerException* err) {
-		return false;
-	}
-#endif
 	return false;
 }
 
@@ -929,7 +968,7 @@ void ibApplicationData::InstallUser(const ibUserInfo& info,
 	// session there is nowhere to install — the caller is in a pre-auth
 	// path that has no business calling this.
 	if (auto* ctx = ibSession::Current()) {
-		if (auto* registry = GetSessionRegistry())
+		if (auto* registry = ibApplicationData::GetSessionRegistry())
 			registry->InstallUser(ctx, info, rawPassword);
 	}
 }

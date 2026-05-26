@@ -672,7 +672,7 @@ void ibRestructureInfo::RequireExclusiveForDDL()
 	// session is attached). Nobody else can be connected at this stage, so
 	// skip the gate entirely.
 	auto* session  = ibSession::Current();
-	auto* registry = appData != nullptr ? appData->GetSessionRegistry() : nullptr;
+	auto* registry = ibApplicationData::GetSessionRegistry();
 	if (session == nullptr || registry == nullptr) return;
 
 	// Normal apply — try to acquire exclusive. Succeeds only if we are the
@@ -695,7 +695,7 @@ void ibRestructureInfo::ReleaseAutoExclusive()
 	if (!ts_acquiredByGate) return;
 	ts_acquiredByGate = false;
 	auto* session  = ibSession::Current();
-	auto* registry = appData != nullptr ? appData->GetSessionRegistry() : nullptr;
+	auto* registry = ibApplicationData::GetSessionRegistry();
 	if (session != nullptr && registry != nullptr) {
 		registry->SetExclusive(session, false);
 	}

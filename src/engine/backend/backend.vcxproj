@@ -21,6 +21,8 @@
   <ItemGroup>
     <ClInclude Include="actionInfo.h" />
     <ClInclude Include="appData.h" />
+    <ClInclude Include="appDataCtorToken.h" />
+    <ClInclude Include="appEnv.h" />
     <ClInclude Include="backend.h" />
     <ClInclude Include="logger\logger.h" />
     <ClInclude Include="logger\loggerEntry.h" />
@@ -32,6 +34,7 @@
     <ClInclude Include="logger\loggerWriter.h" />
     <ClInclude Include="backend_spreadsheet.h" />
     <ClInclude Include="backend_exception.h" />
+    <ClInclude Include="diagnostics\crashGuard.h" />
     <ClInclude Include="session\designerExclusivePolicy.h" />
     <ClInclude Include="session\session.h" />
     <ClInclude Include="session\sessionPolicy.h" />
@@ -297,6 +300,7 @@
   <ItemGroup>
     <ClCompile Include="appData.cpp" />
     <ClCompile Include="appDataQuery.cpp" />
+    <ClCompile Include="appEnv.cpp" />
     <ClCompile Include="logger\logger.cpp" />
     <ClCompile Include="logger\loggerQueue.cpp" />
     <ClCompile Include="logger\loggerReader.cpp" />
@@ -307,6 +311,7 @@
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="backend_spreadsheet.cpp" />
     <ClCompile Include="backend_exception.cpp" />
+    <ClCompile Include="diagnostics\crashGuard.cpp" />
     <ClCompile Include="session\designerExclusivePolicy.cpp" />
     <ClCompile Include="session\session.cpp" />
     <ClCompile Include="session\sessionRegistry.cpp" />
@@ -354,6 +359,7 @@
     <ClCompile Include="databaseLayer\connectionScope.cpp" />
     <ClCompile Include="databaseLayer\databaseErrorReporter.cpp" />
     <ClCompile Include="databaseLayer\databaseLayer.cpp" />
+    <ClCompile Include="databaseLayer\databaseLayerException.cpp" />
     <ClCompile Include="databaseLayer\databaseQueryParser.cpp" />
     <ClCompile Include="databaseLayer\databaseResultSet.cpp" />
     <ClCompile Include="databaseLayer\databaseStringConverter.cpp" />

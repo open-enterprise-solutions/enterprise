@@ -11,8 +11,8 @@ void ThrowErrorTypeOperation(const wxString& fromType, wxClassInfo* clsInfo)
 		
 		if (clsInfo != nullptr) {
 			const ibClassID& clsid = ibValue::GetTypeIDByRef(clsInfo);
-			if (ibMetaDataConfiguration::Get()) {
-				className = ibMetaDataConfiguration::Get()->GetNameObjectFromID(clsid);
+			if (auto* md = appEnv::ActiveMetaData()) {
+				className = md->GetNameObjectFromID(clsid);
 			}
 			else {
 				className = ibValue::GetNameObjectFromID(clsid);

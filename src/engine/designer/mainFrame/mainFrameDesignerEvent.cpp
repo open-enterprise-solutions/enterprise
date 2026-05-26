@@ -6,8 +6,37 @@
 #include "mainFrameDesigner.h"
 
 #include "backend/appData.h"
+#include "backend/backend_exception.h"
 #include "backend/debugger/debugClient.h"
 #include "backend/session/sessionRegistry.h"
+
+namespace {
+// Show a backend-level error chain in a single message box. Used by
+// designer save / load / structure-update paths after a backend
+// operation throws — DrainLastErrors() consumes the per-thread chain
+// pushed by every ibBackendException ctor, so the user sees the root
+// cause along with any wrapping context, not just the last one.
+void ShowBackendErrorChain(wxWindow* parent,
+                            const wxString& caption,
+                            const wxString& heading,
+                            const wxString& detail = wxEmptyString)
+{
+	wxString body = heading;
+	if (!detail.IsEmpty()) {
+		body += wxT("\n\n");
+		body += detail;
+	}
+	const auto chain = ibBackendException::DrainLastErrors();
+	if (!chain.empty()) {
+		body += wxT("\n\n--- backend error chain ---");
+		for (std::size_t i = 0; i < chain.size(); ++i) {
+			body += wxT("\n");
+			body += chain[i];
+		}
+	}
+	wxMessageBox(body, caption, wxOK | wxCENTRE | wxICON_ERROR, parent);
+}
+} // namespace
 
 #include "frontend/window_ptr.h"
 
@@ -24,38 +53,13 @@
 
 #include "backend/metadataConfiguration.h"
 
-void ibFrontendDocMDIFrameDesigner::OnStartDebug(wxCommandEvent& WXUNUSED(event))
-{
-	if (debugClient->HasConnections()) {
-		wxMessageBox(_("Debugger is already running!"));
-		return;
-	}
-
-	if (activeMetaData->IsModified()) {
-		if (wxMessageBox(wxString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"), activeMetaData->GetConfigName()), wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_QUESTION, this) == wxYES) {
-			if (!activeMetaData->SaveDatabase(saveConfigFlag)) {
-				return;
-			}
-		}
-	}
-
-	appData->RunApplication(wxT("enterprise"));
-}
-
-void ibFrontendDocMDIFrameDesigner::OnStartDebugWithoutDebug(wxCommandEvent& WXUNUSED(event))
-{
-	if (activeMetaData->IsModified()) {
-		if (wxMessageBox(wxString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"), activeMetaData->GetConfigName()), wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_QUESTION, this) == wxYES) {
-			if (!activeMetaData->SaveDatabase(saveConfigFlag)) {
-				return;
-			}
-		}
-	}
-
-	appData->RunApplication(wxT("enterprise"), false);
-}
-
-static bool SaveIfModifiedBeforeWebDebug(wxWindow* parent)
+// Common shape for the three places that save the configuration before
+// kicking off a child process (enterprise.exe / wenterprise-server.exe
+// for debug). Returns true when the configuration is in a state safe to
+// launch — either no save was needed, the user declined to save, or the
+// save succeeded. Returns false only when a save was attempted and it
+// failed (then the dialog already showed the chain — caller bails).
+static bool SaveBeforeChildLaunch(wxWindow* parent)
 {
 	if (!activeMetaData->IsModified())
 		return true;
@@ -66,7 +70,53 @@ static bool SaveIfModifiedBeforeWebDebug(wxWindow* parent)
 		wxYES_NO | wxCENTRE | wxICON_QUESTION, parent);
 	if (ans != wxYES)
 		return true;
-	return activeMetaData->SaveDatabase(saveConfigFlag);
+
+	try {
+		if (!activeMetaData->SaveDatabase(saveConfigFlag)) {
+			ShowBackendErrorChain(parent, wxMessageBoxCaptionStr,
+				_("Failed to save configuration before launching the runtime."));
+			return false;
+		}
+	}
+	catch (const ibBackendException& e) {
+		ShowBackendErrorChain(parent, wxMessageBoxCaptionStr,
+			_("Pre-launch save aborted by a backend error."),
+			e.GetErrorDescription());
+		return false;
+	}
+	catch (const std::exception& e) {
+		ShowBackendErrorChain(parent, wxMessageBoxCaptionStr,
+			_("Pre-launch save aborted by an internal error."),
+			wxString::FromUTF8(e.what()));
+		return false;
+	}
+	return true;
+}
+
+void ibFrontendDocMDIFrameDesigner::OnStartDebug(wxCommandEvent& WXUNUSED(event))
+{
+	if (debugClient->HasConnections()) {
+		wxMessageBox(_("Debugger is already running!"));
+		return;
+	}
+
+	if (!SaveBeforeChildLaunch(this))
+		return;
+
+	appData->RunApplication(wxT("enterprise"));
+}
+
+void ibFrontendDocMDIFrameDesigner::OnStartDebugWithoutDebug(wxCommandEvent& WXUNUSED(event))
+{
+	if (!SaveBeforeChildLaunch(this))
+		return;
+
+	appData->RunApplication(wxT("enterprise"), false);
+}
+
+static bool SaveIfModifiedBeforeWebDebug(wxWindow* parent)
+{
+	return SaveBeforeChildLaunch(parent);
 }
 
 static void LaunchWebDebug(wxWindow* parent, bool withDebug)
@@ -217,40 +267,57 @@ void ibFrontendDocMDIFrameDesigner::OnUpdateConfiguration(wxCommandEvent& event)
 		canSave = doc->OnSaveModified();
 	}
 
-	// stage one - save database  
-	if (canSave && !activeMetaData->SaveDatabase()) {
+	// DB calls below can throw ibDatabaseLayerException (constraint
+	// violation on schema change, deadlock, lost connection mid-DDL).
+	// Pre-2026-05-26 the layer swallowed and only set m_strErrorMessage;
+	// now an unhandled throw would unwind through the wx event handler
+	// into wxApp::OnUnhandledException → debug-report dialog with no
+	// user-readable text. Wrap both stages so save / update DDL errors
+	// land in a proper message box with the backend error chain.
+	try {
+		// stage one - save database
+		if (canSave && !activeMetaData->SaveDatabase()) {
 
-		for (const auto& entry : s_restructureInfo) {
-			if (entry.type == ibRestructure::error)
-				outputWindow->OutputError(entry.descr);
+			for (const auto& entry : s_restructureInfo) {
+				if (entry.type == ibRestructure::error)
+					outputWindow->OutputError(entry.descr);
+			}
+
+			ShowBackendErrorChain(this, wxMessageBoxCaptionStr,
+				_("Failed to save database!"));
+
+			return;
 		}
 
-		wxMessageBox(_("Failed to save database!"),
-			wxMessageBoxCaptionStr, wxOK | wxCENTRE | wxICON_ERROR, this
-		);
+		// stage two - update database
+		if (canSave && activeMetaData->OnBeforeSaveDatabase(saveConfigFlag)) {
 
-		return;
+			bool roolback = false, success = true;
+
+			if (activeMetaData->OnSaveDatabase(saveConfigFlag)) {
+				roolback = !ibDialogApplyChange::ShowApplyChange(s_restructureInfo, this);
+			}
+			else {
+				success = false;
+			}
+
+			success = activeMetaData->OnAfterSaveDatabase(roolback || !success, saveConfigFlag);
+
+			if (!success) {
+				ShowBackendErrorChain(this, wxMessageBoxCaptionStr,
+					_("Failed to update database!"));
+			}
+		}
 	}
-
-	// stage two - update database  
-	if (canSave && activeMetaData->OnBeforeSaveDatabase(saveConfigFlag)) {
-
-		bool roolback = false, success = true;
-
-		if (activeMetaData->OnSaveDatabase(saveConfigFlag)) {
-			roolback = !ibDialogApplyChange::ShowApplyChange(s_restructureInfo, this);
-		}
-		else {
-			success = false;
-		}
-
-		success = activeMetaData->OnAfterSaveDatabase(roolback || !success, saveConfigFlag);
-
-		if (!success) {
-			wxMessageBox(_("Failed to update database!"),
-				wxMessageBoxCaptionStr, wxOK | wxCENTRE | wxICON_ERROR, this
-			);
-		}
+	catch (const ibBackendException& e) {
+		ShowBackendErrorChain(this, wxMessageBoxCaptionStr,
+			_("Configuration update was aborted by a backend error."),
+			e.GetErrorDescription());
+	}
+	catch (const std::exception& e) {
+		ShowBackendErrorChain(this, wxMessageBoxCaptionStr,
+			_("Configuration update was aborted by an internal error."),
+			wxString::FromUTF8(e.what()));
 	}
 }
 
@@ -284,12 +351,26 @@ void ibFrontendDocMDIFrameDesigner::OnLoadDatabase(wxCommandEvent& event)
 	if (!success)
 		return;
 
-	if (appData->LoadDatabase(openFileDialog.GetPath())) {
-		wxMessageBox(_("Loading of tasks completed successful. Restart the program!"));
-		ibSessionRegistry::Instance().CloseAll(true);
+	try {
+		if (appData->LoadDatabase(openFileDialog.GetPath())) {
+			wxMessageBox(_("Loading of tasks completed successful. Restart the program!"));
+			if (auto* reg = ibApplicationData::GetSessionRegistry())
+				reg->CloseAll(true);
+		}
+		else {
+			ShowBackendErrorChain(this, wxMessageBoxCaptionStr,
+				_("Error when trying to load database from a file!"));
+		}
 	}
-	else {
-		wxMessageBox(_("Error when trying to load database from a file!!"));
+	catch (const ibBackendException& e) {
+		ShowBackendErrorChain(this, wxMessageBoxCaptionStr,
+			_("Loading the database failed."),
+			e.GetErrorDescription());
+	}
+	catch (const std::exception& e) {
+		ShowBackendErrorChain(this, wxMessageBoxCaptionStr,
+			_("Loading the database failed with an internal error."),
+			wxString::FromUTF8(e.what()));
 	}
 
 	event.Skip();

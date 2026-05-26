@@ -241,14 +241,12 @@ bool ibDatatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_han
 	int nReturn = m_pInterface->GetIscCreateBlob2()(status, &database, &transaction, &m_pBlob, &m_BlobId, 0, NULL);
 	if (nReturn != 0)
 	{
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		long nSqlCode = m_pInterface->GetIscSqlcode()(status);
-		ibDatabaseLayerException error(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode),
+		const long nSqlCode = m_pInterface->GetIscSqlcode()(status);
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode),
+			/*sqlState*/ wxEmptyString,
 			ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, status));
-
-		throw error;
-#endif
-		//isc_print_status(status);
 		return false;
 	}
 
@@ -260,15 +258,12 @@ bool ibDatatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_han
 		nReturn = m_pInterface->GetIscPutSegment()(status, &m_pBlob, segLen, dataPtr);
 		if (nReturn != 0)
 		{
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-			long nSqlCode = m_pInterface->GetIscSqlcode()(status);
-			ibDatabaseLayerException error(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode),
+			const long nSqlCode = m_pInterface->GetIscSqlcode()(status);
+			ibDatabaseLayerException::Throw(
+				ibBackendDatabaseException::Kind::Unknown,
+				ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode),
+				/*sqlState*/ wxEmptyString,
 				ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, status));
-
-			throw error;
-#endif
-
-			//isc_print_status(status);
 			return false;
 		}
 
@@ -280,15 +275,12 @@ bool ibDatatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_han
 
 	if (nReturn != 0)
 	{
-#if _USE_DATABASE_LAYER_EXCEPTIONS == 1
-		long nSqlCode = m_pInterface->GetIscSqlcode()(status);
-		ibDatabaseLayerException error(ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode),
+		const long nSqlCode = m_pInterface->GetIscSqlcode()(status);
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode),
+			/*sqlState*/ wxEmptyString,
 			ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, status));
-
-		throw error;
-#endif
-
-		//isc_print_status(status);
 		return false;
 	}
 

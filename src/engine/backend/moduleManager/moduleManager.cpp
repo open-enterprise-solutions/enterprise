@@ -270,8 +270,10 @@ bool ibValueModuleManagerConfiguration::CreateMainModule()
 	// reverse lookup (m_own scan, match by root mm pointer) so the
 	// fire site doesn't depend on ibSession::Current()'s thread-binding
 	// state at compile time.
-	if (auto* session = ibSessionRegistry::Instance().FindSessionByRoot(this))
-		ibSessionRegistry::Instance().NotifyAfterCompile(session);
+	if (auto* reg = ibApplicationData::GetSessionRegistry()) {
+		if (auto* session = reg->FindSessionByRoot(this))
+			reg->NotifyAfterCompile(session);
+	}
 
 	return true;
 }
