@@ -18,12 +18,12 @@
 // ---------------------------------------------------------------------------
 
 TEST(ConnectionPool, IsInitialisedFalseBeforeInit) {
-    ibConnectionPool pool;
+    ibConnectionPool pool(ib::AppDataCtorToken{});
     EXPECT_FALSE(pool.IsInitialised());
 }
 
 TEST(ConnectionPool, IsInitialisedAfterInit) {
-    ibConnectionPool pool;
+    ibConnectionPool pool(ib::AppDataCtorToken{});
     auto primary = std::make_shared<MockDatabaseLayer>();
     pool.Init(primary, /*maxSize=*/8, /*minIdle=*/2);
     EXPECT_TRUE(pool.IsInitialised());
@@ -31,7 +31,7 @@ TEST(ConnectionPool, IsInitialisedAfterInit) {
 }
 
 TEST(ConnectionPool, ShutdownClearsInitialised) {
-    ibConnectionPool pool;
+    ibConnectionPool pool(ib::AppDataCtorToken{});
     auto primary = std::make_shared<MockDatabaseLayer>();
     pool.Init(primary, 8, 2);
     pool.Shutdown();
@@ -43,7 +43,7 @@ TEST(ConnectionPool, ShutdownClearsInitialised) {
 // ---------------------------------------------------------------------------
 
 TEST(ConnectionPool, MaxAndMinIdleConfigured) {
-    ibConnectionPool pool;
+    ibConnectionPool pool(ib::AppDataCtorToken{});
     auto primary = std::make_shared<MockDatabaseLayer>();
     pool.Init(primary, /*maxSize=*/16, /*minIdle=*/4);
     EXPECT_EQ(pool.MaxSize(), 16u);
@@ -52,7 +52,7 @@ TEST(ConnectionPool, MaxAndMinIdleConfigured) {
 }
 
 TEST(ConnectionPool, LiveSizeAtLeastMinIdleAfterInit) {
-    ibConnectionPool pool;
+    ibConnectionPool pool(ib::AppDataCtorToken{});
     auto primary = std::make_shared<MockDatabaseLayer>();
     pool.Init(primary, /*maxSize=*/8, /*minIdle=*/3);
     // Init should pre-warm to at least minIdle entries (master + clones).
@@ -61,7 +61,7 @@ TEST(ConnectionPool, LiveSizeAtLeastMinIdleAfterInit) {
 }
 
 TEST(ConnectionPool, LiveSizeNeverExceedsMax) {
-    ibConnectionPool pool;
+    ibConnectionPool pool(ib::AppDataCtorToken{});
     auto primary = std::make_shared<MockDatabaseLayer>();
     pool.Init(primary, /*maxSize=*/2, /*minIdle=*/0);
     EXPECT_LE(pool.LiveSize(), 2u);
@@ -69,7 +69,7 @@ TEST(ConnectionPool, LiveSizeNeverExceedsMax) {
 }
 
 TEST(ConnectionPool, ShutdownIsIdempotent) {
-    ibConnectionPool pool;
+    ibConnectionPool pool(ib::AppDataCtorToken{});
     auto primary = std::make_shared<MockDatabaseLayer>();
     pool.Init(primary, 4, 1);
     pool.Shutdown();
@@ -78,7 +78,7 @@ TEST(ConnectionPool, ShutdownIsIdempotent) {
 }
 
 TEST(ConnectionPool, ReinitializeReplacesPrimary) {
-    ibConnectionPool pool;
+    ibConnectionPool pool(ib::AppDataCtorToken{});
     auto first  = std::make_shared<MockDatabaseLayer>();
     auto second = std::make_shared<MockDatabaseLayer>();
     pool.Init(first, 4, 1);
@@ -93,7 +93,7 @@ TEST(ConnectionPool, ReinitializeReplacesPrimary) {
 // ---------------------------------------------------------------------------
 
 TEST(ConnectionPool, IdleSizeDoesNotExceedLive) {
-    ibConnectionPool pool;
+    ibConnectionPool pool(ib::AppDataCtorToken{});
     auto primary = std::make_shared<MockDatabaseLayer>();
     pool.Init(primary, 8, 4);
     EXPECT_LE(pool.IdleSize(), pool.LiveSize());

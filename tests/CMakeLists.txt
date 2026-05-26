@@ -39,6 +39,7 @@ add_executable(oes_tests
     test_blobCompression.cpp
     test_firebirdLease.cpp
     test_logger.cpp
+    test_dbTaxonomy.cpp
 )
 
 target_link_libraries(oes_tests
@@ -47,6 +48,11 @@ target_link_libraries(oes_tests
         GTest::gtest
         GTest::gtest_main
 )
+
+# Tests need to construct app-owned subsystems directly (no full appData
+# bring-up). OES_TESTING opens ib::AppDataCtorToken's default ctor; see
+# backend/appDataCtorToken.h.
+target_compile_definitions(oes_tests PRIVATE OES_TESTING)
 
 target_include_directories(oes_tests PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
