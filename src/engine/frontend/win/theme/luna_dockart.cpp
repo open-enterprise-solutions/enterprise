@@ -480,7 +480,11 @@ void wxAuiLunaDockArt::DrawSash(wxDC& dc, wxWindow *window, int orientation, con
 #else
 	wxUnusedVar(window);
 	wxUnusedVar(orientation);
-	dc.SetPen(m_sashPen);
+	// Same trap as in DrawGripper: m_sashPen has wxPENSTYLE_DOT, and
+	// using it for the sash rectangle outline left dotted-pattern
+	// pixels along the moving sash edges on resize. Brush fill is
+	// sufficient as the sash visual.
+	dc.SetPen(*wxTRANSPARENT_PEN);
 	dc.SetBrush(m_sashBrush);
 	dc.DrawRectangle(rect.x, rect.y, rect.width, rect.height);
 #endif
@@ -672,7 +676,12 @@ void wxAuiLunaDockArt::DrawGripper(wxDC& dc,
 	const wxRect& rect,
 	wxAuiPaneInfo& pane)
 {
-	dc.SetPen(m_sashPen);
+	// m_sashPen has wxPENSTYLE_DOT — using it as the gripper outline
+	// pen left dotted-pattern pixels along the gripper border, which
+	// looked like rendering residue on resize. Outline is unnecessary
+	// here: the gripper visual is the brush fill + the explicit dot
+	// pattern drawn below via m_gripperPen1/2/3.
+	dc.SetPen(*wxTRANSPARENT_PEN);
 	dc.SetBrush(m_gripperBrush);
 
 	dc.DrawRectangle(rect.x, rect.y, rect.width, rect.height);

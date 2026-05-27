@@ -98,6 +98,14 @@ bool ibFrontendDocMDIFrame::Create(const wxString& title,
 	m_mgr.SetManagedWindow(this);
 	m_mgr.SetArtProvider(new wxAuiLunaDockArt());
 
+	// Disable live pane-border resize — wxAUI_MGR_LIVE_RESIZE is part
+	// of wxAUI_MGR_DEFAULT and triggers a full Layout pass through
+	// every pane on every mouse-move during border drag, which is
+	// expensive on complex pane content (Syntax Helper especially)
+	// and shows up as a "jelly" lag. Ghost-rect drag + commit on
+	// mouse-up matches VS / Eclipse and stays lag-free.
+	m_mgr.SetFlags(m_mgr.GetFlags() & ~wxAUI_MGR_LIVE_RESIZE);
+
 #ifdef __WXMSW__
 	SetIcon(wxICON(oes));
 #endif

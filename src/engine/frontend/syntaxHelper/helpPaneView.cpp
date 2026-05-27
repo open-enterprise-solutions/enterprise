@@ -68,12 +68,19 @@ ibHelpPaneView::ibHelpPaneView(wxWindow* parent)
 	m_toolbar->Realize();
 
 	// Vertical splitter: notebook on top (navigation surfaces), detail
-	// HTML view on the bottom. The split position is biased toward
-	// navigation since most user time is spent browsing.
+	// HTML view on the bottom. Most user time is spent reading the
+	// detail pane, so on resize the detail absorbs all new space
+	// (sash gravity 0.0 = top keeps its size). The initial top height
+	// is small — categories list shouldn't dominate the pane.
+	// No wxSP_LIVE_UPDATE — live sash drag continuously resizes both
+	// children, and native EDIT/LISTBOX/SysTreeView32 then repaint
+	// on every WM_SIZE; WS_EX_COMPOSITED doesn't fully suppress that
+	// on Win32. Ghost-line drag + final commit on mouse-up is the
+	// flicker-free trade-off.
 	auto* splitter = new wxSplitterWindow(this, wxID_ANY,
 	                                        wxDefaultPosition, wxDefaultSize,
-	                                        wxSP_LIVE_UPDATE | wxSP_3D);
-	splitter->SetSashGravity(0.45);
+	                                        wxSP_3DSASH);
+	splitter->SetSashGravity(0.0);
 	splitter->SetMinimumPaneSize(80);
 
 	m_notebook   = new wxNotebook(splitter, wxID_ANY);
@@ -87,7 +94,7 @@ ibHelpPaneView::ibHelpPaneView(wxWindow* parent)
 
 	m_detailView = new ibHelpDetailView(splitter, this);
 
-	splitter->SplitHorizontally(m_notebook, m_detailView, 280);
+	splitter->SplitHorizontally(m_notebook, m_detailView, FromDIP(180));
 
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
 	sizer->Add(m_toolbar, 0, wxEXPAND);
