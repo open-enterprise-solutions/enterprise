@@ -72,6 +72,12 @@
     <ClCompile Include="mainFrame\output\outputWindow.cpp">
       <Filter>mainFrame\output</Filter>
     </ClCompile>
+    <ClCompile Include="mainFrame\configCompare\configCompareDialog.cpp">
+      <Filter>mainFrame\configCompare</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\configCompare\configCompareModel.cpp">
+      <Filter>mainFrame\configCompare</Filter>
+    </ClCompile>
     <ClCompile Include="mainFrame\local\localWindow.cpp">
       <Filter>mainFrame\local</Filter>
     </ClCompile>
@@ -180,6 +186,12 @@
     <ClInclude Include="mainFrame\output\outputWindow.h">
       <Filter>mainFrame\output</Filter>
     </ClInclude>
+    <ClInclude Include="mainFrame\configCompare\configCompareDialog.h">
+      <Filter>mainFrame\configCompare</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\configCompare\configCompareModel.h">
+      <Filter>mainFrame\configCompare</Filter>
+    </ClInclude>
     <ClInclude Include="mainFrame\local\localWindow.h">
       <Filter>mainFrame\local</Filter>
     </ClInclude>
@@ -283,6 +295,9 @@
     </Filter>
     <Filter Include="mainFrame\local">
       <UniqueIdentifier>{63e7cb2a-c403-4e3c-8808-60eba28029a1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\configCompare">
+      <UniqueIdentifier>{a13c2f8b-7e91-4d3e-9c44-2f0b87a5e6d1}</UniqueIdentifier>
     </Filter>
     <Filter Include="mainFrame\stack">
       <UniqueIdentifier>{a93087ef-1dcf-4f86-bc7b-4453be5e5513}</UniqueIdentifier>

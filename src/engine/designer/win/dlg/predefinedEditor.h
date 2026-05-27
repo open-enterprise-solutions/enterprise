@@ -73,9 +73,12 @@ class ibDialogPredefinedEditor : public wxDialog {
 
 		virtual bool IsContainer(const ibDataViewItem& item) const override;
 
-		// define current parent for hierarchical view 
-		virtual unsigned int GetChildren(const ibDataViewItem& parent,
-			ibDataViewItemArray& array) const override;
+		// define current parent for hierarchical view — single-shot
+		// fetch on the new contract; non-paged, so Next/Prev stay at
+		// the base default (return 0).
+		virtual unsigned int GetFirstFetch(const ibDataViewItem& parent,
+			const ibDataViewItem& anchor, int count,
+			ibDataViewItemArray& out) const override;
 
 		// override sorting to always sort branches ascendingly
 		virtual bool HasDefaultCompare() const override { return true; }

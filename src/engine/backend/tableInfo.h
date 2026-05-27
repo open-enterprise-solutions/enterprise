@@ -212,9 +212,9 @@ protected:
 			return m_ownerModel->HasContainerColumns(item);
 		}
 
-		virtual unsigned int GetChildren(const ibDataViewItem& item, ibDataViewItemArray& children) const {
-			return m_ownerModel->GetChildren(item, children);
-		}
+		// GetFirstFetch delegate lives further down with its Next/Prev
+		// siblings — keep all three forwarders together so the paged
+		// contract reads as one block.
 
 		// default compare function
 		virtual int Compare(const ibDataViewItem& item1, const ibDataViewItem& item2,
@@ -742,7 +742,11 @@ public:
 
 	// Is the container just a header or an item with all columns
 	virtual bool HasContainerColumns(const ibDataViewItem& item) const { return false; }
-	virtual unsigned int GetChildren(const ibDataViewItem& item, ibDataViewItemArray& children) const = 0;
+
+	// GetChildren removed — concretes implement GetFirstFetch (and
+	// GetNextFetch / GetPrevFetch when paged). Old non-paged sources
+	// just return the whole batch from GetFirstFetch and leave Next /
+	// Prev as base-default no-ops.
 
 	// default compare function
 	virtual int Compare(const ibDataViewItem& item1, const ibDataViewItem& item2,
@@ -1008,15 +1012,9 @@ public:
 		return IsEnabledByRow(item, col);
 	}
 
-	// Children query — DB-backed concrete classes pull rows via
-	// Get*Fetch and don't expose a full-table GetChildren walk;
-	// RAM-backed (ibValueModelRamTableBase) overrides to walk
-	// m_nodeValues.  Default returns 0 here so the base remains
-	// instantiable abstract for non-RAM concretes.
-	virtual unsigned int GetChildren(const ibDataViewItem& WXUNUSED(parent),
-		ibDataViewItemArray& WXUNUSED(array)) const override {
-		return 0;
-	}
+	// Children query: DB-backed concretes pull rows via Get*Fetch;
+	// the base default returns 0 (inherited from ibValueModel), so
+	// no override is needed here for the non-RAM tier.
 
 	// implement some base class pure virtual directly
 	virtual ibDataViewItem GetParent(const ibDataViewItem& WXUNUSED(item)) const override {
@@ -1252,41 +1250,10 @@ public:
 		return ibDataViewItem(nullptr);
 	}
 
-	virtual unsigned int GetChildren(const ibDataViewItem& parent, ibDataViewItemArray& array) const override {
-		if (parent.IsOk())
-			return 0;
-		// Mirror BuildVisibleView's filter+sort so narrow ItemInserted /
-		// ValueChanged paths in the control (which probe GetChildren
-		// for insertion position) see the same row order Get*Fetch
-		// returns — otherwise the tree node lands at the m_nodeValues
-		// index instead of the view index, which mismatches the
-		// fetched buffer.
-		auto view = BuildVisibleView();
-		unsigned int count = static_cast<unsigned int>(view.size());
-		if (count == 0)
-			return 0;
-		array.Alloc(count);
-		for (auto* node : view) {
-			array.Add(ibDataViewItem(node));
-		}
-		return count;
-	}
-
-	// Legacy unfiltered/unsorted counterpart kept private for the
-	// rare call site that needs the raw vector — currently none
-	// outside this class.
-	unsigned int GetChildrenRaw(const ibDataViewItem& parent, ibDataViewItemArray& array) const {
-		if (parent.IsOk())
-			return 0;
-		unsigned int count = static_cast<unsigned int>(m_nodeValues.size());
-		if (count == 0)
-			return 0;
-		array.Alloc(count);
-		for (auto& node : m_nodeValues) {
-			array.Add(ibDataViewItem(node));
-		}
-		return count;
-	}
+	// Note: the universal GetFirstFetch override is further down in
+	// this class (it handles both the paged and full-batch cases by
+	// inspecting `count`); the migration from the legacy GetChildren
+	// API folded the old single-shot path into that one impl.
 
 	// Build a filtered + sorted view of m_nodeValues.  Filter comes
 	// from m_filterRow (eFilter / eFilterByColumn / eFilterClear UI
@@ -1698,12 +1665,10 @@ public:
 		return node->IsContainer();
 	}
 
-	// Paged path uses Get*Fetch directly; the wx-style GetChildren
-	// walker only feeds the in-memory tree consumer (Ram-tree-base
-	// override).  Default returns the children stored on the node
-	// itself when one is supplied; null parent has no fallback root
-	// here.
-	virtual unsigned int GetChildren(const ibDataViewItem& parent,
+	// Default returns the children stored on the node itself when
+	// one is supplied; null parent has no fallback root here.
+	virtual unsigned int GetFirstFetch(const ibDataViewItem& parent,
+		const ibDataViewItem& /*anchor*/, int /*count*/,
 		ibDataViewItemArray& array) const override {
 		ibValueTreeNode* node = GetViewData<ibValueTreeNode>(parent);
 		if (node == nullptr)
@@ -1943,16 +1908,9 @@ public:
 
 	/////////////////////////////////////////////////////////
 
-	// Null-parent fallback to the invisible root — reproduces the
-	// pre-split behaviour for callers that pass an empty item to
-	// mean "top of the tree".
-	virtual unsigned int GetChildren(const ibDataViewItem& parent,
-		ibDataViewItemArray& array) const override {
-		ibValueTreeNode* node = GetViewData<ibValueTreeNode>(parent);
-		if (node == nullptr)
-			return ibValueModelTreeBase::GetChildren(ibDataViewItem(m_root), array);
-		return ibValueModelTreeBase::GetChildren(parent, array);
-	}
+	// Null-parent fallback is handled by the paged GetFirstFetch
+	// override above — that one routes an empty parent to m_root's
+	// children. No separate non-paged single-shot override here.
 
 	// GetParent stops at the invisible root: a node whose parent is
 	// m_root reports no parent (it sits at the top level).

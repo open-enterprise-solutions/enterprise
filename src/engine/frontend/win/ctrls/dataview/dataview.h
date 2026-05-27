@@ -155,22 +155,13 @@ public:
 	virtual unsigned GetRow(const ibDataViewItem& item) const wxOVERRIDE;
 	ibDataViewItem GetItem(unsigned int row) const;
 
-	// implement base methods
-	virtual unsigned int GetChildren(const ibDataViewItem& item, ibDataViewItemArray& children) const wxOVERRIDE;
-
-	// Bridge the legacy GetChildren API to the new fetch contract that
-	// ibDataViewCtrl::BuildListHelper uses after the paged refactor.
-	// Without this an IndexListModel-backed control sees 0 rows even
-	// after Reset(N) because GetFirstFetch defaults to 0 on the base.
-	// Index-list models are not paged (IsPagedModel() stays false),
-	// so the first fetch is just "give me everything" — delegate to
-	// GetChildren, which already returns m_hash.
+	// implement base methods — non-paged: GetFirstFetch returns the
+	// whole hash in one call; Next/Prev stay at base default (0) so
+	// the dataview knows the source is exhausted after the first
+	// batch.
 	virtual unsigned int GetFirstFetch(const ibDataViewItem& parent,
-		const ibDataViewItem& /*anchor*/, int /*count*/,
-		ibDataViewItemArray& out) const wxOVERRIDE
-	{
-		return GetChildren(parent, out);
-	}
+		const ibDataViewItem& anchor, int count,
+		ibDataViewItemArray& out) const wxOVERRIDE;
 
 	unsigned int GetCount() const wxOVERRIDE { return (unsigned int)m_hash.GetCount(); }
 
@@ -214,8 +205,9 @@ public:
 		unsigned int column, bool ascending) const wxOVERRIDE;
 	virtual bool HasDefaultCompare() const wxOVERRIDE;
 
-	// implement base methods
-	virtual unsigned int GetChildren(const ibDataViewItem& item, ibDataViewItemArray& children) const wxOVERRIDE;
+	// Virtual-list models are row-tag based; the dataview reads them
+	// via GetCount() + GetValueByRow(), not via the fetch API, so we
+	// leave GetFirstFetch at the base default (returns 0).
 
 	unsigned int GetCount() const wxOVERRIDE { return m_size; }
 
@@ -1281,7 +1273,9 @@ public:
 		const ibDataViewItem& item, unsigned int col) wxOVERRIDE;
 	virtual ibDataViewItem GetParent(const ibDataViewItem& item) const wxOVERRIDE;
 	virtual bool IsContainer(const ibDataViewItem& item) const wxOVERRIDE;
-	virtual unsigned int GetChildren(const ibDataViewItem& item, ibDataViewItemArray& children) const wxOVERRIDE;
+	virtual unsigned int GetFirstFetch(const ibDataViewItem& parent,
+		const ibDataViewItem& anchor, int count,
+		ibDataViewItemArray& out) const wxOVERRIDE;
 
 	virtual int Compare(const ibDataViewItem& item1, const ibDataViewItem& item2,
 		unsigned int column, bool ascending) const wxOVERRIDE;

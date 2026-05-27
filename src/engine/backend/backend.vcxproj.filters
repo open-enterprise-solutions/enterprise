@@ -345,6 +345,9 @@
     <ClInclude Include="metaCollection\metaModuleObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\metaDiff.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\metaObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
@@ -1091,6 +1094,9 @@
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaModuleObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaDiff.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaObject.cpp">

@@ -48,8 +48,10 @@ bool ibDialogPredefinedEditor::ibDataViewPredefinedTreeStore::IsContainer(const 
 	return true;
 }
 
-unsigned int ibDialogPredefinedEditor::ibDataViewPredefinedTreeStore::GetChildren(const ibDataViewItem& parent,
-	ibDataViewItemArray& array) const
+unsigned int ibDialogPredefinedEditor::ibDataViewPredefinedTreeStore::GetFirstFetch(
+	const ibDataViewItem& parent,
+	const ibDataViewItem& /*anchor*/, int /*count*/,
+	ibDataViewItemArray& out) const
 {
 	// Root-level request: return every predefined whose parent is null.
 	// Folder-level request: return predefineds whose GetPredefinedParent()
@@ -63,10 +65,10 @@ unsigned int ibDialogPredefinedEditor::ibDataViewPredefinedTreeStore::GetChildre
 	for (const auto& object : m_valueMetaObjectHierarchy->GetPredefinedValueArray()) {
 		const ibPredefinedValueObject* const itemParent = object->GetPredefinedParent().get();
 		if (itemParent == parentObj)
-			array.Add(ibDataViewItem(object.get()));
+			out.Add(ibDataViewItem(object.get()));
 	}
 
-	return array.Count();
+	return out.Count();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////

@@ -597,7 +597,22 @@ public:
 
 	// define hierarchy
 	virtual ibDataViewItem GetParent(const ibDataViewItem& item) const = 0;
-	virtual bool IsContainer(const ibDataViewItem& item) const = 0;
+
+	// Default container check delegates to the refcounted item's
+	// own IsContainer() — that virtual lives on the row object the
+	// model handed out (ibDataViewObject subclass), which is the
+	// natural source of truth: the model knows about rows; the row
+	// knows whether it has children. Subclasses only override when
+	// they store hierarchy outside the row object (e.g. row holds a
+	// flat record + parent lookup uses an external index).
+	//
+	// The empty (invisible) root is always treated as a container so
+	// BuildTree's initial top-level fetch isn't skipped.
+	virtual bool IsContainer(const ibDataViewItem& item) const
+	{
+		if (!item.IsOk()) return true;
+		return item.IsContainer();
+	}
 
 	// Is the container just a header or an item with all columns
 	virtual bool HasContainerColumns(const ibDataViewItem& WXUNUSED(item)) const
@@ -605,7 +620,10 @@ public:
 		return false;
 	}
 
-	virtual unsigned int GetChildren(const ibDataViewItem& item, ibDataViewItemArray& children) const = 0;
+	// GetChildren has been removed in favour of the unified fetch
+	// contract — every "give me this parent's children" call now goes
+	// through GetFirstFetch (with paged variants GetNextFetch /
+	// GetPrevFetch for sources that need to stream).
 
 	// delegated notifiers
 	bool ItemInserted(const ibDataViewItem& parent, const ibDataViewItem& item);

@@ -176,6 +176,7 @@
     <ClInclude Include="metaCollection\metaFormObject.h" />
     <ClInclude Include="metaCollection\metaSpreadsheetObject.h" />
     <ClInclude Include="metaCollection\metaModuleObject.h" />
+    <ClInclude Include="metaCollection\metaDiff.h" />
     <ClInclude Include="metaCollection\metaObject.h" />
     <ClInclude Include="metaCollection\metaObjectMetadata.h" />
     <ClInclude Include="metaCollection\metaObjectMetadataEnum.h" />
@@ -453,6 +454,7 @@
     <ClCompile Include="metaCollection\metaModuleObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaModuleObjectProperty.cpp" />
     <ClCompile Include="metaCollection\metaModuleObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaDiff.cpp" />
     <ClCompile Include="metaCollection\metaObject.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadata.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadataEnum.cpp" />

@@ -197,6 +197,8 @@
     <ClCompile Include="docManager\templates\docViewRole.cpp" />
     <ClCompile Include="mainApp.cpp" />
     <ClCompile Include="mainAppEvent.cpp" />
+    <ClCompile Include="mainFrame\configCompare\configCompareDialog.cpp" />
+    <ClCompile Include="mainFrame\configCompare\configCompareModel.cpp" />
     <ClCompile Include="mainFrame\debugger\debugClientImpl.cpp" />
     <ClCompile Include="mainFrame\local\localWindow.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesigner.cpp" />
@@ -242,6 +244,8 @@
     <ClInclude Include="docManager\templates\docViewModuleEditor.h" />
     <ClInclude Include="docManager\templates\docViewRole.h" />
     <ClInclude Include="mainApp.h" />
+    <ClInclude Include="mainFrame\configCompare\configCompareDialog.h" />
+    <ClInclude Include="mainFrame\configCompare\configCompareModel.h" />
     <ClInclude Include="mainFrame\debugger\debugClientImpl.h" />
     <ClInclude Include="mainFrame\local\localWindow.h" />
     <ClInclude Include="mainFrame\mainFrameDesigner.h" />

@@ -206,12 +206,17 @@ ibDataViewItem ibDataViewIndexListModel::GetItem(unsigned int row) const
 	return ibDataViewItem(m_hash[row]);
 }
 
-unsigned int ibDataViewIndexListModel::GetChildren(const ibDataViewItem& item, ibDataViewItemArray& children) const
+unsigned int ibDataViewIndexListModel::GetFirstFetch(const ibDataViewItem& parent,
+	const ibDataViewItem& /*anchor*/, int /*count*/,
+	ibDataViewItemArray& out) const
 {
-	if (item.IsOk())
+	// Non-paged: a real parent has no children here; the invisible
+	// root gets every row in one batch and Next/Prev stay base-default
+	// no-ops so the dataview sees a single-shot fetch.
+	if (parent.IsOk())
 		return 0;
 
-	children = m_hash;
+	out = m_hash;
 
 	return m_hash.GetCount();
 }
@@ -318,11 +323,6 @@ int ibDataViewVirtualListModel::Compare(const ibDataViewItem& item1,
 		return pos1 - pos2;
 	else
 		return pos2 - pos1;
-}
-
-unsigned int ibDataViewVirtualListModel::GetChildren(const ibDataViewItem& WXUNUSED(item), ibDataViewItemArray& WXUNUSED(children)) const
-{
-	return 0;  // should we report an error ?
 }
 
 #endif  // __WXOSX__
@@ -2584,16 +2584,18 @@ ibDataViewItem ibDataViewTreeStore::GetParent(const ibDataViewItem& item) const
 	return parent->GetItem();
 }
 
-unsigned int ibDataViewTreeStore::GetChildren(const ibDataViewItem& item, ibDataViewItemArray& children) const
+unsigned int ibDataViewTreeStore::GetFirstFetch(const ibDataViewItem& parent,
+	const ibDataViewItem& /*anchor*/, int /*count*/,
+	ibDataViewItemArray& out) const
 {
-	ibDataViewTreeStoreContainerNode* node = FindContainerNode(item);
+	ibDataViewTreeStoreContainerNode* node = FindContainerNode(parent);
 	if (!node) return 0;
 
 	ibDataViewTreeStoreNodes::iterator iter;
 	for (iter = node->GetChildren().begin(); iter != node->GetChildren().end(); ++iter)
 	{
 		ibDataViewTreeStoreNode* child = *iter;
-		children.Add(child->GetItem());
+		out.Add(child->GetItem());
 	}
 
 	return node->GetChildren().size();

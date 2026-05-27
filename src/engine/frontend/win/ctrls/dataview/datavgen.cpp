@@ -1859,7 +1859,7 @@ bool ibDataViewCtrl::DoItemInserted(const ibDataViewItem& parent, const ibDataVi
 			// There's no sorting, so we need to select an insertion position
 
 			ibDataViewItemArray modelSiblings;
-			GetModel()->GetChildren(parent, modelSiblings);
+			GetModel()->GetFirstFetch(parent, ibDataViewItem(), -1, modelSiblings);
 			const int modelSiblingsSize = modelSiblings.size();
 
 			// Pointer-identity search: ibDataViewItemArray::Index uses
@@ -3387,7 +3387,14 @@ static void BuildHierarchicalHelper(ibDataViewCtrl* window, const ibDataViewMode
 static void BuildTreeHelper(ibDataViewCtrl* window, const ibDataViewModel* model,
 	const ibDataViewItem& item, ibDataViewTreeNode* node)
 {
-	if (!item.IsContainer())
+	// Skip only real leaf items — the invisible root passed in by
+	// BuildTree() is an empty (Mode::Empty) ibDataViewItem whose
+	// IsContainer() returns false unconditionally, so the bare
+	// `!item.IsContainer()` check used to bail out before fetching
+	// the top-level rows. That left Tree-mode controls empty after
+	// Cleared() / AssociateModel re-fires (paths that pass through
+	// here with the empty root). Treat the empty root as a container.
+	if (item.IsOk() && !item.IsContainer())
 		return;
 
 	ibDataViewItemArray children;

@@ -37,7 +37,8 @@ enterprise/
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── BUILD.md
-│   └── ui-palette.md         # Interior-design palette — source of truth for UI colours
+│   ├── ui-palette.md         # Interior-design palette — source of truth for UI colours
+│   └── configuration-compare.md  # Compare/Merge feature — walker, model, Apply paths
 └── src/
     ├── 3rdparty/wxWidgets/  # Submodule
     └── engine/
