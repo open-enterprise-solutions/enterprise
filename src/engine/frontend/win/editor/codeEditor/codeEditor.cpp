@@ -10,6 +10,8 @@
 #include "frontend/docView/docView.h"
 #include "res/bitmaps_res.h"
 
+#include <wx/artprov.h>
+
 #define DEF_LINENUMBER_ID 0
 #define DEF_BREAKPOINT_ID 1
 #define DEF_FOLDING_ID 2
@@ -933,14 +935,34 @@ wxString ibCodeEditor::GetIdentifierUnderCursor()
 void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 {
 	wxMenu menu;
-	menu.Append(wxID_CUT,        _("Cut")     + wxT("\tCtrl+X"))->Enable(GetSelectionStart() != GetSelectionEnd() && IsEditable());
-	menu.Append(wxID_COPY,       _("Copy")    + wxT("\tCtrl+C"))->Enable(GetSelectionStart() != GetSelectionEnd());
-	menu.Append(wxID_PASTE,      _("Paste")   + wxT("\tCtrl+V"))->Enable(CanPaste());
-	menu.Append(wxID_SELECTALL,  _("Select all") + wxT("\tCtrl+A"));
+
+	// Syntax helper lookup goes first — primary action for an
+	// identifier-aware editor. Disabled when the cursor isn't over
+	// an identifier (whitespace, between tokens).
+	const wxString identifier = GetIdentifierUnderCursor();
+	auto* miLookup = menu.Append(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP,
+	                             _("Look up in Syntax Helper") + wxT("\tRawCtrl+F1"));
+	miLookup->SetBitmap(wxArtProvider::GetBitmap(wxART_HELP_BOOK, wxART_MENU));
+	miLookup->Enable(!identifier.IsEmpty());
 
 	menu.AppendSeparator();
-	menu.Append(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP,
-	            _("Look up in Syntax Helper") + wxT("\tRawCtrl+F1"));
+
+	// Standard clipboard primitives.
+	auto* miCut       = menu.Append(wxID_CUT,       _("Cut")        + wxT("\tCtrl+X"));
+	auto* miCopy      = menu.Append(wxID_COPY,      _("Copy")       + wxT("\tCtrl+C"));
+	auto* miPaste     = menu.Append(wxID_PASTE,     _("Paste")      + wxT("\tCtrl+V"));
+	auto* miSelectAll = menu.Append(wxID_SELECTALL, _("Select all") + wxT("\tCtrl+A"));
+
+	miCut  ->SetBitmap(wxArtProvider::GetBitmap(wxART_CUT,   wxART_MENU));
+	miCopy ->SetBitmap(wxArtProvider::GetBitmap(wxART_COPY,  wxART_MENU));
+	miPaste->SetBitmap(wxArtProvider::GetBitmap(wxART_PASTE, wxART_MENU));
+	// Select All — no canonical wxArt id; left unset so the row aligns
+	// with the icon column without a placeholder.
+	(void)miSelectAll;
+
+	miCut  ->Enable(GetSelectionStart() != GetSelectionEnd() && IsEditable());
+	miCopy ->Enable(GetSelectionStart() != GetSelectionEnd());
+	miPaste->Enable(CanPaste());
 
 	wxPoint pt = event.GetPosition();
 	if (pt == wxDefaultPosition) {

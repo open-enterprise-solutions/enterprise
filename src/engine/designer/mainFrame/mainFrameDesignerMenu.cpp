@@ -179,16 +179,17 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	m_menuSetting->Append(wxID_APPLICATION_SETTING, _("Options..."));
 
 	m_menuHelp = new wxMenu;
-	// Syntax helper lives in the Help menu — main entry points for
-	// users looking for language reference. RawCtrl forces the literal
-	// Control key on every platform (wxWidgets maps "Ctrl" to Cmd on
-	// macOS). NB: on macOS the Help menu can be intercepted by the
-	// system-native Help search; if that surfaces as a real problem
-	// these can move to Tools (Windows is the primary platform now).
+	// Syntax helper pane toggle. Cursor look-up has no menu entry —
+	// the editor's right-click context menu and the RawCtrl+F1
+	// accelerator (m_keyBinder) cover that path; a second top-level
+	// menu surface for the same action just confuses the menubar.
+	// RawCtrl forces the literal Control key on every platform
+	// (wxWidgets maps "Ctrl" to Cmd on macOS). NB: on macOS the Help
+	// menu can be intercepted by the system-native Help search; if
+	// that surfaces as a real problem this can move to Tools (Windows
+	// is the primary platform now).
 	m_menuHelp->Append(wxID_FRONTEND_SYNTAX_HELPER,
 	                   _("Syntax Helper\tRawCtrl+Alt+F1"));
-	m_menuHelp->Append(wxID_FRONTEND_SYNTAX_HELPER_LOOKUP,
-	                   _("Look up in Syntax Helper\tRawCtrl+F1"));
 	m_menuHelp->AppendSeparator();
 	m_menuHelp->Append(wxID_DESIGNER_ABOUT, _("About"));
 	m_frameMenuBar->Append(m_menuHelp, wxGetStockLabel(wxID_HELP, wxSTOCK_NOFLAGS));
