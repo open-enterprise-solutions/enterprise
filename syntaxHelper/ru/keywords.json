@@ -70,7 +70,8 @@
       ],
       "signature": "",
       "description": "Ветка, выполняющаяся, когда все условия If / ElsIf оказались ложными.",
-      "syntax_block": "If <Expr> Then\n    // matched\nElse\n    // fallback\nEndIf;",
+      "syntax_block": "if (<Expr>) {\n    // matched\n} else {\n    // fallback\n}",
+      "syntax_block_ves": "If <Expr> Then\n    // matched\nElse\n    // fallback\nEndIf;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -97,7 +98,8 @@
       ],
       "signature": "",
       "description": "Добавляет цепочечное условие к If. Проверяется, только если каждая предыдущая ветка дала Ложь.",
-      "syntax_block": "If A Then\n    // …\nElsIf B Then\n    // …\nElsIf C Then\n    // …\nEndIf;",
+      "syntax_block": "if (A) {\n    // …\n} elsif (B) {\n    // …\n} elsif (C) {\n    // …\n}",
+      "syntax_block_ves": "If A Then\n    // …\nElsIf B Then\n    // …\nElsIf C Then\n    // …\nEndIf;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -179,7 +181,8 @@
       ],
       "signature": "",
       "description": "Модификатор цикла, вводящий поэлементную итерацию по коллекции.",
-      "syntax_block": "For Each <Item> In <Collection> Do\n    // body\nEndDo;",
+      "syntax_block": "Foreach (<Item> In <Collection>) {\n    // body\n}",
+      "syntax_block_ves": "Foreach <Item> In <Collection> Do\n    // body\nEndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -206,7 +209,8 @@
       ],
       "signature": "",
       "description": "Верхняя граница (включительно) счётного цикла For.",
-      "syntax_block": "For i = 1 To 10 Do … EndDo;",
+      "syntax_block": "for (i = 1 To 10) {\n    // body\n}",
+      "syntax_block_ves": "For i = 1 To 10 Do … EndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -230,8 +234,9 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Указывает коллекцию-источник в цикле For Each.",
-      "syntax_block": "For Each <Item> In <Collection> Do … EndDo;",
+      "description": "Указывает коллекцию-источник в цикле Foreach.",
+      "syntax_block": "Foreach (<Item> In <Collection>) {\n    // body\n}",
+      "syntax_block_ves": "Foreach <Item> In <Collection> Do … EndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -548,7 +553,8 @@
       ],
       "signature": "",
       "description": "Помечает процедуру, функцию или модульную переменную как доступную из других модулей. Без Export символ виден только в своём модуле.",
-      "syntax_block": "Procedure DoWork() Export\n    // body\nEndProcedure",
+      "syntax_block": "Procedure DoWork() Export {\n    // body\n}",
+      "syntax_block_ves": "Procedure DoWork() Export\n    // body\nEndProcedure",
       "parameters": "",
       "return_descr": "",
       "example": "Var Counter Export;  // module-public variable\n\nFunction Read() Export\n    Return Counter;\nEndFunction",
@@ -575,7 +581,8 @@
       ],
       "signature": "",
       "description": "Модификатор параметра «по значению». Без Val параметр связан по ссылке, и присваивания внутри вызываемого кода меняют переменную вызывающего; со Val берётся локальная копия.",
-      "syntax_block": "Procedure Demo(Val ReadOnlyParam, MutableParam)\n    // ReadOnlyParam is a copy of the caller's value.\n    // MutableParam writes back into the caller's variable.\nEndProcedure",
+      "syntax_block": "Procedure Demo(Val ReadOnlyParam, MutableParam) {\n    // ReadOnlyParam is a copy of the caller's value.\n    // MutableParam writes back into the caller's variable.\n}",
+      "syntax_block_ves": "Procedure Demo(Val ReadOnlyParam, MutableParam)\n    // ReadOnlyParam is a copy of the caller's value.\n    // MutableParam writes back into the caller's variable.\nEndProcedure",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -655,7 +662,8 @@
       ],
       "signature": "",
       "description": "Открывает ветку обработчика конструкции Try / Except. Выполняется, если защищённый блок породил исключение.",
-      "syntax_block": "Try\n    // …\nExcept\n    // recovery\nEndTry;",
+      "syntax_block": "try {\n    // …\n} except {\n    // recovery\n}",
+      "syntax_block_ves": "Try\n    // …\nExcept\n    // recovery\nEndTry;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -707,7 +715,8 @@
       ],
       "signature": "",
       "description": "Пропускает остаток текущей итерации цикла; управление переходит к заголовку цикла.",
-      "syntax_block": "For Each Row In Table Do\n    If Row.IsHeader Then Continue; EndIf;\n    Process(Row);\nEndDo;",
+      "syntax_block": "Foreach (Row In Table) {\n    if (Row.IsHeader) { Continue; }\n    Process(Row);\n}",
+      "syntax_block_ves": "Foreach Row In Table Do\n    If Row.IsHeader Then Continue; EndIf;\n    Process(Row);\nEndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -733,8 +742,9 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Прерывает ближайший охватывающий цикл; управление переходит за EndDo.",
-      "syntax_block": "While Cond Do\n    If StopCondition Then Break; EndIf;\n    // …\nEndDo;",
+      "description": "Прерывает ближайший охватывающий цикл; управление переходит за закрывающую скобку (или EndDo в VES).",
+      "syntax_block": "while (Cond) {\n    if (StopCondition) { Break; }\n    // …\n}",
+      "syntax_block_ves": "While Cond Do\n    If StopCondition Then Break; EndIf;\n    // …\nEndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -787,7 +797,8 @@
       ],
       "signature": "",
       "description": "Объявляет одну или несколько локальных переменных (внутри тела процедуры / функции) либо модульных переменных (вне любых блоков). Начальное значение — Undefined.",
-      "syntax_block": "Var <Name1>, <Name2>, …;\n\nProcedure Demo()\n    Var Counter, Sum;\n    Counter = 0;\nEndProcedure",
+      "syntax_block": "Var <Name1>, <Name2>, …;\n\nProcedure Demo() {\n    Var Counter, Sum;\n    Counter = 0;\n}",
+      "syntax_block_ves": "Var <Name1>, <Name2>, …;\n\nProcedure Demo()\n    Var Counter, Sum;\n    Counter = 0;\nEndProcedure",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -1094,17 +1105,26 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "from <Item> in <Source>",
+      "description": "Открывает блочный LINQ-запрос. Привязывает переменную элемента к каждому элементу исходной коллекции. Первая клауза любого block-syntax LINQ-запроса.",
+      "syntax_block": "from <Item> in <Source>\n    where <Condition>\n    select <Item>;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Where",
+        "kw.Select",
+        "kw.In"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Where",
@@ -1113,17 +1133,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "where <BooleanExpression>",
+      "description": "Клауза фильтра в LINQ-запросе — оставляет строки, удовлетворяющие булевому выражению. Может появляться несколько раз; условия объединяются неявным AND.",
+      "syntax_block": "from x in arr where x > 5 select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.From",
+        "kw.Select"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Select",
@@ -1132,17 +1160,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "select <Expression> | select { Field = expr, ... }",
+      "description": "Клауза проекции — закрывает блочный LINQ-запрос, эмитируя одну строку на каждое совпадение. Форма `select <Expr>` для скаляра, или `select { Field = expr, ... }` для анонимной строки-Structure.",
+      "syntax_block": "from o in orders select o.Total;\n\nfrom o in orders select { N = o.N, Total = o.Total };",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.From",
+        "kw.Where"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.OrderBy",
@@ -1151,17 +1187,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "orderby <Expression> [ascending|descending]",
+      "description": "Клауза сортировки LINQ-запроса. Направление по умолчанию — возрастание; добавьте `descending` для убывания. Один ключ сортировки — для много-колоночной комбинируйте составным выражением.",
+      "syntax_block": "from x in arr orderby x select x;\nfrom x in arr orderby x descending select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Ascending",
+        "kw.Descending"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Ascending",
@@ -1170,17 +1214,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "ascending",
+      "description": "Модификатор направления для клаузы `orderby` — сортирует по возрастанию. По умолчанию когда направление не указано; редко требуется явно.",
+      "syntax_block": "from x in arr orderby x ascending select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.OrderBy",
+        "kw.Descending"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Descending",
@@ -1189,17 +1241,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "descending",
+      "description": "Модификатор направления для клаузы `orderby` — сортирует по убыванию.",
+      "syntax_block": "from x in arr orderby x descending select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.OrderBy",
+        "kw.Ascending"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Take",
@@ -1208,17 +1268,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "take <Count>",
+      "description": "Ограничивает результат LINQ-запроса первыми N строками. Комбинируется со `skip` для пагинации.",
+      "syntax_block": "from x in arr take 10 select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Skip",
+        "kw.From"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Skip",
@@ -1227,17 +1295,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "skip <Count>",
+      "description": "Отбрасывает первые N строк LINQ-запроса. Обычно комбинируется со `take` для пагинации.",
+      "syntax_block": "from x in arr skip 5 take 10 select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Take",
+        "kw.From"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Distinct",
@@ -1246,17 +1322,24 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "distinct",
+      "description": "Удаляет дубликаты строк из результата LINQ-запроса. Завершающая клауза после `select`.",
+      "syntax_block": "from x in arr select x distinct;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Select"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Join",
@@ -1265,17 +1348,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "join <Var> in <Source> on <OuterKey> equals <InnerKey>",
+      "description": "Внутренне присоединяет вторичную коллекцию к LINQ-запросу. Совпадение ключа задаётся через `on outerKey equals innerKey`. Внешняя строка парится с каждой совпадающей внутренней.",
+      "syntax_block": "from c in customers\n  join s in sales on c.Id equals s.CustId\n  select { Name = c.Name, Amount = s.Amount };",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.On",
+        "kw.Equals"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.On",
@@ -1284,17 +1375,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "on <OuterKey> equals <InnerKey>",
+      "description": "Заголовок клаузы ключа join'а. Пара́рует ключ внешней строки (слева от `equals`) с ключом внутренней строки (справа). Используется только внутри клауз `join`.",
+      "syntax_block": "from c in customers\n  join s in sales on c.Id equals s.CustId\n  select ...;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Join",
+        "kw.Equals"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Equals",
@@ -1303,17 +1402,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "<OuterKey> equals <InnerKey>",
+      "description": "Оператор сопоставления ключей join'а. Используется только в форме `on <leftKey> equals <rightKey>`.",
+      "syntax_block": "... on c.Id equals s.CustId ...",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Join",
+        "kw.On"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Group",
@@ -1322,17 +1429,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "group <Element> by <Key> [into <ContVar>]",
+      "description": "Группирует строки LINQ-запроса по ключу. Терминальная форма `group X by K` производит `Array<Structure{Key, Values:Array}>`. Нетерминальная `group X by K into g` открывает продолжающий блок, привязанный к `g`.",
+      "syntax_block": "from p in people group p.Name by p.Country;\n\nfrom p in people\n  group p.Name by p.Country into g\n  where g.Values.Count() > 1\n  select { Country = g.Key, Names = g.Values };",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.By",
+        "kw.Into"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.By",
@@ -1341,17 +1456,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "by <Key>",
+      "description": "Заголовок клаузы ключа группировки — `group <Element> by <Key>`. Связывает элемент строки с её ключом группы.",
+      "syntax_block": "from p in people group p.Name by p.Country;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Group",
+        "kw.Into"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Into",
@@ -1360,17 +1483,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "into <Var>",
+      "description": "Открывает нетерминальное продолжение `group ... into <var>`. Привязывает `<var>` к каждой группе `Structure{Key, Values}`. Продолжайте клаузами `where / orderby / select`.",
+      "syntax_block": "from p in people\n  group p.Name by p.Country into g\n  select { Country = g.Key, Names = g.Values };",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Group",
+        "kw.By"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     }
   ]
 }

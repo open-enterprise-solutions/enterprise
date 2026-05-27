@@ -70,7 +70,8 @@
       ],
       "signature": "",
       "description": "Гілка, що виконується, коли всі умови If / ElsIf виявилися хибними.",
-      "syntax_block": "If <Expr> Then\n    // matched\nElse\n    // fallback\nEndIf;",
+      "syntax_block": "if (<Expr>) {\n    // matched\n} else {\n    // fallback\n}",
+      "syntax_block_ves": "If <Expr> Then\n    // matched\nElse\n    // fallback\nEndIf;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -97,7 +98,8 @@
       ],
       "signature": "",
       "description": "Додає ланцюгову умову до If. Перевіряється, лише якщо кожна попередня гілка дала False.",
-      "syntax_block": "If A Then\n    // …\nElsIf B Then\n    // …\nElsIf C Then\n    // …\nEndIf;",
+      "syntax_block": "if (A) {\n    // …\n} elsif (B) {\n    // …\n} elsif (C) {\n    // …\n}",
+      "syntax_block_ves": "If A Then\n    // …\nElsIf B Then\n    // …\nElsIf C Then\n    // …\nEndIf;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -179,7 +181,8 @@
       ],
       "signature": "",
       "description": "Модифікатор циклу, що вводить поелементну ітерацію по колекції.",
-      "syntax_block": "For Each <Item> In <Collection> Do\n    // body\nEndDo;",
+      "syntax_block": "Foreach (<Item> In <Collection>) {\n    // body\n}",
+      "syntax_block_ves": "Foreach <Item> In <Collection> Do\n    // body\nEndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -206,7 +209,8 @@
       ],
       "signature": "",
       "description": "Верхня межа (включно) лічильникового циклу For.",
-      "syntax_block": "For i = 1 To 10 Do … EndDo;",
+      "syntax_block": "for (i = 1 To 10) {\n    // body\n}",
+      "syntax_block_ves": "For i = 1 To 10 Do … EndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -231,7 +235,8 @@
       ],
       "signature": "",
       "description": "Позначає колекцію-джерело в циклі For Each.",
-      "syntax_block": "For Each <Item> In <Collection> Do … EndDo;",
+      "syntax_block": "Foreach (<Item> In <Collection>) {\n    // body\n}",
+      "syntax_block_ves": "Foreach <Item> In <Collection> Do … EndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -548,7 +553,8 @@
       ],
       "signature": "",
       "description": "Позначає процедуру, функцію або модульну змінну доступною з інших модулів. Без Export символ видно лише у своєму модулі.",
-      "syntax_block": "Procedure DoWork() Export\n    // body\nEndProcedure",
+      "syntax_block": "Procedure DoWork() Export {\n    // body\n}",
+      "syntax_block_ves": "Procedure DoWork() Export\n    // body\nEndProcedure",
       "parameters": "",
       "return_descr": "",
       "example": "Var Counter Export;  // module-public variable\n\nFunction Read() Export\n    Return Counter;\nEndFunction",
@@ -575,7 +581,8 @@
       ],
       "signature": "",
       "description": "Модифікатор параметра «за значенням». Без Val параметр звʼязаний за посиланням, і присвоєння всередині викликаного коду змінюють змінну викликача; зі Val береться локальна копія.",
-      "syntax_block": "Procedure Demo(Val ReadOnlyParam, MutableParam)\n    // ReadOnlyParam is a copy of the caller's value.\n    // MutableParam writes back into the caller's variable.\nEndProcedure",
+      "syntax_block": "Procedure Demo(Val ReadOnlyParam, MutableParam) {\n    // ReadOnlyParam is a copy of the caller's value.\n    // MutableParam writes back into the caller's variable.\n}",
+      "syntax_block_ves": "Procedure Demo(Val ReadOnlyParam, MutableParam)\n    // ReadOnlyParam is a copy of the caller's value.\n    // MutableParam writes back into the caller's variable.\nEndProcedure",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -655,7 +662,8 @@
       ],
       "signature": "",
       "description": "Відкриває гілку обробника конструкції Try / Except. Виконується, якщо захищений блок породив виключення.",
-      "syntax_block": "Try\n    // …\nExcept\n    // recovery\nEndTry;",
+      "syntax_block": "try {\n    // …\n} except {\n    // recovery\n}",
+      "syntax_block_ves": "Try\n    // …\nExcept\n    // recovery\nEndTry;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -707,7 +715,8 @@
       ],
       "signature": "",
       "description": "Пропускає решту поточної ітерації; керування переходить на заголовок циклу.",
-      "syntax_block": "For Each Row In Table Do\n    If Row.IsHeader Then Continue; EndIf;\n    Process(Row);\nEndDo;",
+      "syntax_block": "Foreach (Row In Table) {\n    if (Row.IsHeader) { Continue; }\n    Process(Row);\n}",
+      "syntax_block_ves": "Foreach Row In Table Do\n    If Row.IsHeader Then Continue; EndIf;\n    Process(Row);\nEndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -734,7 +743,8 @@
       ],
       "signature": "",
       "description": "Перериває найближчий охоплюючий цикл; керування переходить за EndDo.",
-      "syntax_block": "While Cond Do\n    If StopCondition Then Break; EndIf;\n    // …\nEndDo;",
+      "syntax_block": "while (Cond) {\n    if (StopCondition) { Break; }\n    // …\n}",
+      "syntax_block_ves": "While Cond Do\n    If StopCondition Then Break; EndIf;\n    // …\nEndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -787,7 +797,8 @@
       ],
       "signature": "",
       "description": "Оголошує одну або декілька локальних змінних (усередині тіла процедури / функції) або модульних змінних. Початкове значення — Undefined.",
-      "syntax_block": "Var <Name1>, <Name2>, …;\n\nProcedure Demo()\n    Var Counter, Sum;\n    Counter = 0;\nEndProcedure",
+      "syntax_block": "Var <Name1>, <Name2>, …;\n\nProcedure Demo() {\n    Var Counter, Sum;\n    Counter = 0;\n}",
+      "syntax_block_ves": "Var <Name1>, <Name2>, …;\n\nProcedure Demo()\n    Var Counter, Sum;\n    Counter = 0;\nEndProcedure",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -1094,17 +1105,26 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "from <Item> in <Source>",
+      "description": "Відкриває блочний LINQ-запит. Прив'язує змінну елемента до кожного елемента вихідної колекції. Перша клауза будь-якого block-syntax LINQ-запиту.",
+      "syntax_block": "from <Item> in <Source>\n    where <Condition>\n    select <Item>;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Where",
+        "kw.Select",
+        "kw.In"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Where",
@@ -1113,17 +1133,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "where <BooleanExpression>",
+      "description": "Клауза фільтра в LINQ-запиті — залишає рядки, що задовольняють булевий вираз. Може з'являтися кілька разів; умови об'єднуються неявним AND.",
+      "syntax_block": "from x in arr where x > 5 select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.From",
+        "kw.Select"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Select",
@@ -1132,17 +1160,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "select <Expression> | select { Field = expr, ... }",
+      "description": "Клауза проекції — закриває блочний LINQ-запит, видаючи один рядок на кожне співпадіння. Форма `select <Expr>` для скаляра, або `select { Field = expr, ... }` для анонімного рядка-Structure.",
+      "syntax_block": "from o in orders select o.Total;\n\nfrom o in orders select { N = o.N, Total = o.Total };",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.From",
+        "kw.Where"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.OrderBy",
@@ -1151,17 +1187,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "orderby <Expression> [ascending|descending]",
+      "description": "Клауза сортування LINQ-запиту. Напрямок за замовчуванням — зростання; додайте `descending` для спадання. Один ключ сортування — для багатоколонного використовуйте складений вираз.",
+      "syntax_block": "from x in arr orderby x select x;\nfrom x in arr orderby x descending select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Ascending",
+        "kw.Descending"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Ascending",
@@ -1170,17 +1214,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "ascending",
+      "description": "Модифікатор напрямку для клаузи `orderby` — сортує за зростанням. За замовчуванням коли напрямок не вказано; рідко потрібен явно.",
+      "syntax_block": "from x in arr orderby x ascending select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.OrderBy",
+        "kw.Descending"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Descending",
@@ -1189,17 +1241,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "descending",
+      "description": "Модифікатор напрямку для клаузи `orderby` — сортує за спаданням.",
+      "syntax_block": "from x in arr orderby x descending select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.OrderBy",
+        "kw.Ascending"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Take",
@@ -1208,17 +1268,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "take <Count>",
+      "description": "Обмежує результат LINQ-запиту першими N рядками. Комбінується зі `skip` для пагінації.",
+      "syntax_block": "from x in arr take 10 select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Skip",
+        "kw.From"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Skip",
@@ -1227,17 +1295,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "skip <Count>",
+      "description": "Відкидає перші N рядків LINQ-запиту. Зазвичай комбінується зі `take` для пагінації.",
+      "syntax_block": "from x in arr skip 5 take 10 select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Take",
+        "kw.From"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Distinct",
@@ -1246,17 +1322,24 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "distinct",
+      "description": "Видаляє дублікати рядків з результату LINQ-запиту. Завершальна клауза після `select`.",
+      "syntax_block": "from x in arr select x distinct;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Select"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Join",
@@ -1265,17 +1348,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "join <Var> in <Source> on <OuterKey> equals <InnerKey>",
+      "description": "Внутрішньо приєднує вторинну колекцію до LINQ-запиту. Збіг ключа задається через `on outerKey equals innerKey`. Зовнішній рядок поєднується з кожним відповідним внутрішнім.",
+      "syntax_block": "from c in customers\n  join s in sales on c.Id equals s.CustId\n  select { Name = c.Name, Amount = s.Amount };",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.On",
+        "kw.Equals"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.On",
@@ -1284,17 +1375,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "on <OuterKey> equals <InnerKey>",
+      "description": "Заголовок клаузи ключа join'у. Поєднує ключ зовнішнього рядка (зліва від `equals`) з ключем внутрішнього рядка (справа). Використовується лише всередині клауз `join`.",
+      "syntax_block": "from c in customers\n  join s in sales on c.Id equals s.CustId\n  select ...;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Join",
+        "kw.Equals"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Equals",
@@ -1303,17 +1402,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "<OuterKey> equals <InnerKey>",
+      "description": "Оператор зіставлення ключів join'у. Використовується лише у формі `on <leftKey> equals <rightKey>`.",
+      "syntax_block": "... on c.Id equals s.CustId ...",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Join",
+        "kw.On"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Group",
@@ -1322,17 +1429,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "group <Element> by <Key> [into <ContVar>]",
+      "description": "Групує рядки LINQ-запиту за ключем. Термінальна форма `group X by K` створює `Array<Structure{Key, Values:Array}>`. Нетермінальна `group X by K into g` відкриває продовжуючий блок, прив'язаний до `g`.",
+      "syntax_block": "from p in people group p.Name by p.Country;\n\nfrom p in people\n  group p.Name by p.Country into g\n  where g.Values.Count() > 1\n  select { Country = g.Key, Names = g.Values };",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.By",
+        "kw.Into"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.By",
@@ -1341,17 +1456,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "by <Key>",
+      "description": "Заголовок клаузи ключа групування — `group <Element> by <Key>`. Пов'язує елемент рядка з його ключем групи.",
+      "syntax_block": "from p in people group p.Name by p.Country;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Group",
+        "kw.Into"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Into",
@@ -1360,17 +1483,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "into <Var>",
+      "description": "Відкриває нетермінальне продовження `group ... into <var>`. Прив'язує `<var>` до кожної групи `Structure{Key, Values}`. Продовжуйте клаузами `where / orderby / select`.",
+      "syntax_block": "from p in people\n  group p.Name by p.Country into g\n  select { Country = g.Key, Names = g.Values };",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Group",
+        "kw.By"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     }
   ]
 }

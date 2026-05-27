@@ -70,7 +70,8 @@
       ],
       "signature": "",
       "description": "Branch executed when every preceding If / ElsIf condition was false.",
-      "syntax_block": "If <Expr> Then\n    // matched\nElse\n    // fallback\nEndIf;",
+      "syntax_block": "if (<Expr>) {\n    // matched\n} else {\n    // fallback\n}",
+      "syntax_block_ves": "If <Expr> Then\n    // matched\nElse\n    // fallback\nEndIf;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -97,7 +98,8 @@
       ],
       "signature": "",
       "description": "Adds a chained condition to an If statement. Evaluated only if every earlier branch's condition was false.",
-      "syntax_block": "If A Then\n    // …\nElsIf B Then\n    // …\nElsIf C Then\n    // …\nEndIf;",
+      "syntax_block": "if (A) {\n    // …\n} elsif (B) {\n    // …\n} elsif (C) {\n    // …\n}",
+      "syntax_block_ves": "If A Then\n    // …\nElsIf B Then\n    // …\nElsIf C Then\n    // …\nEndIf;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -179,7 +181,8 @@
       ],
       "signature": "",
       "description": "Loop modifier introducing for-each iteration over a collection.",
-      "syntax_block": "For Each <Item> In <Collection> Do\n    // body\nEndDo;",
+      "syntax_block": "Foreach (<Item> In <Collection>) {\n    // body\n}",
+      "syntax_block_ves": "Foreach <Item> In <Collection> Do\n    // body\nEndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -206,7 +209,8 @@
       ],
       "signature": "",
       "description": "Upper bound (inclusive) of the indexed For loop.",
-      "syntax_block": "For i = 1 To 10 Do … EndDo;",
+      "syntax_block": "for (i = 1 To 10) {\n    // body\n}",
+      "syntax_block_ves": "For i = 1 To 10 Do … EndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -231,7 +235,8 @@
       ],
       "signature": "",
       "description": "Marks the collection expression in a for-each loop.",
-      "syntax_block": "For Each <Item> In <Collection> Do … EndDo;",
+      "syntax_block": "Foreach (<Item> In <Collection>) {\n    // body\n}",
+      "syntax_block_ves": "Foreach <Item> In <Collection> Do … EndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -548,7 +553,8 @@
       ],
       "signature": "",
       "description": "Marks a procedure, function, or module-level variable as accessible from other modules. Without Export the symbol is private to its defining module.",
-      "syntax_block": "Procedure DoWork() Export\n    // body\nEndProcedure",
+      "syntax_block": "Procedure DoWork() Export {\n    // body\n}",
+      "syntax_block_ves": "Procedure DoWork() Export\n    // body\nEndProcedure",
       "parameters": "",
       "return_descr": "",
       "example": "Var Counter Export;  // module-public variable\n\nFunction Read() Export\n    Return Counter;\nEndFunction",
@@ -575,7 +581,8 @@
       ],
       "signature": "",
       "description": "Pass-by-value parameter modifier. Without Val the parameter is bound by reference and assignments inside the callee mutate the caller's binding; with Val a local copy is taken.",
-      "syntax_block": "Procedure Demo(Val ReadOnlyParam, MutableParam)\n    // ReadOnlyParam is a copy of the caller's value.\n    // MutableParam writes back into the caller's variable.\nEndProcedure",
+      "syntax_block": "Procedure Demo(Val ReadOnlyParam, MutableParam) {\n    // ReadOnlyParam is a copy of the caller's value.\n    // MutableParam writes back into the caller's variable.\n}",
+      "syntax_block_ves": "Procedure Demo(Val ReadOnlyParam, MutableParam)\n    // ReadOnlyParam is a copy of the caller's value.\n    // MutableParam writes back into the caller's variable.\nEndProcedure",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -655,7 +662,8 @@
       ],
       "signature": "",
       "description": "Opens the handler branch of a Try / Except construct. Runs when the protected body raises an exception.",
-      "syntax_block": "Try\n    // …\nExcept\n    // recovery\nEndTry;",
+      "syntax_block": "try {\n    // …\n} except {\n    // recovery\n}",
+      "syntax_block_ves": "Try\n    // …\nExcept\n    // recovery\nEndTry;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -707,7 +715,8 @@
       ],
       "signature": "",
       "description": "Skips the rest of the current loop iteration; execution resumes at the loop header.",
-      "syntax_block": "For Each Row In Table Do\n    If Row.IsHeader Then Continue; EndIf;\n    Process(Row);\nEndDo;",
+      "syntax_block": "Foreach (Row In Table) {\n    if (Row.IsHeader) { Continue; }\n    Process(Row);\n}",
+      "syntax_block_ves": "Foreach Row In Table Do\n    If Row.IsHeader Then Continue; EndIf;\n    Process(Row);\nEndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -734,7 +743,8 @@
       ],
       "signature": "",
       "description": "Aborts the innermost enclosing loop and continues after EndDo.",
-      "syntax_block": "While Cond Do\n    If StopCondition Then Break; EndIf;\n    // …\nEndDo;",
+      "syntax_block": "while (Cond) {\n    if (StopCondition) { Break; }\n    // …\n}",
+      "syntax_block_ves": "While Cond Do\n    If StopCondition Then Break; EndIf;\n    // …\nEndDo;",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -787,7 +797,8 @@
       ],
       "signature": "",
       "description": "Declares one or more local variables (inside a procedure / function body) or module-level variables (outside any callable). Initial value is Undefined.",
-      "syntax_block": "Var <Name1>, <Name2>, …;\n\nProcedure Demo()\n    Var Counter, Sum;\n    Counter = 0;\nEndProcedure",
+      "syntax_block": "Var <Name1>, <Name2>, …;\n\nProcedure Demo() {\n    Var Counter, Sum;\n    Counter = 0;\n}",
+      "syntax_block_ves": "Var <Name1>, <Name2>, …;\n\nProcedure Demo()\n    Var Counter, Sum;\n    Counter = 0;\nEndProcedure",
       "parameters": "",
       "return_descr": "",
       "example": "",
@@ -1094,17 +1105,26 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "from <Item> in <Source>",
+      "description": "Opens a LINQ block-syntax query. Binds an item variable to each element of the source collection. First clause of any block-syntax LINQ query.",
+      "syntax_block": "from <Item> in <Source>\n    where <Condition>\n    select <Item>;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Where",
+        "kw.Select",
+        "kw.In"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Where",
@@ -1113,17 +1133,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "where <BooleanExpression>",
+      "description": "Filter clause in a LINQ query — keeps rows satisfying the boolean expression. May appear multiple times; conditions chain via implicit AND.",
+      "syntax_block": "from x in arr where x > 5 select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.From",
+        "kw.Select"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Select",
@@ -1132,17 +1160,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "select <Expression> | select { Field = expr, ... }",
+      "description": "Projection clause — closes the LINQ block-syntax query by emitting one row per match. Form `select <Expr>` for a scalar, or `select { Field = expr, ... }` for an anonymous Structure row.",
+      "syntax_block": "from o in orders select o.Total;\n\nfrom o in orders select { N = o.N, Total = o.Total };",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.From",
+        "kw.Where"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.OrderBy",
@@ -1151,17 +1187,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "orderby <Expression> [ascending|descending]",
+      "description": "Sort clause for a LINQ query. Default direction ascending; append `descending` for reverse. Single sort key supported — for multi-column sort use a composed expression.",
+      "syntax_block": "from x in arr orderby x select x;\nfrom x in arr orderby x descending select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Ascending",
+        "kw.Descending"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Ascending",
@@ -1170,17 +1214,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "ascending",
+      "description": "Direction modifier on an `orderby` clause — sorts ascending. Default when no direction is given; rarely needed explicitly.",
+      "syntax_block": "from x in arr orderby x ascending select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.OrderBy",
+        "kw.Descending"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Descending",
@@ -1189,17 +1241,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "descending",
+      "description": "Direction modifier on an `orderby` clause — sorts descending.",
+      "syntax_block": "from x in arr orderby x descending select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.OrderBy",
+        "kw.Ascending"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Take",
@@ -1208,17 +1268,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "take <Count>",
+      "description": "Limits the LINQ query result to the first N rows. Combined with `skip` for paging.",
+      "syntax_block": "from x in arr take 10 select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Skip",
+        "kw.From"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Skip",
@@ -1227,17 +1295,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "skip <Count>",
+      "description": "Drops the first N rows from a LINQ query. Usually combined with `take` for paging.",
+      "syntax_block": "from x in arr skip 5 take 10 select x;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Take",
+        "kw.From"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Distinct",
@@ -1246,17 +1322,24 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "distinct",
+      "description": "Removes duplicate rows from a LINQ query result. Trailing clause after `select`.",
+      "syntax_block": "from x in arr select x distinct;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Select"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Join",
@@ -1265,17 +1348,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "join <Var> in <Source> on <OuterKey> equals <InnerKey>",
+      "description": "Inner-joins a secondary collection into a LINQ query. Key match specified via `on outerKey equals innerKey`. Outer row pairs with each matching inner row.",
+      "syntax_block": "from c in customers\n  join s in sales on c.Id equals s.CustId\n  select { Name = c.Name, Amount = s.Amount };",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.On",
+        "kw.Equals"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.On",
@@ -1284,17 +1375,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "on <OuterKey> equals <InnerKey>",
+      "description": "Join key clause head. Pairs an outer-row key (left of `equals`) with an inner-row key (right). Used only inside `join` clauses.",
+      "syntax_block": "from c in customers\n  join s in sales on c.Id equals s.CustId\n  select ...;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Join",
+        "kw.Equals"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Equals",
@@ -1303,17 +1402,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "<OuterKey> equals <InnerKey>",
+      "description": "Join key match operator. Used only in `on <leftKey> equals <rightKey>` form.",
+      "syntax_block": "... on c.Id equals s.CustId ...",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Join",
+        "kw.On"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Group",
@@ -1322,17 +1429,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "group <Element> by <Key> [into <ContVar>]",
+      "description": "Groups rows in a LINQ query by a key. Terminal form `group X by K` produces `Array<Structure{Key, Values:Array}>`. Non-terminal `group X by K into g` opens a continuation block bound to `g`.",
+      "syntax_block": "from p in people group p.Name by p.Country;\n\nfrom p in people\n  group p.Name by p.Country into g\n  where g.Values.Count() > 1\n  select { Country = g.Key, Names = g.Values };",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.By",
+        "kw.Into"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.By",
@@ -1341,17 +1456,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "by <Key>",
+      "description": "Group key clause head — `group <Element> by <Key>`. Pairs the per-row element with its group key.",
+      "syntax_block": "from p in people group p.Name by p.Country;",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Group",
+        "kw.Into"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     },
     {
       "id": "kw.Into",
@@ -1360,17 +1483,25 @@
       "kind": "keyword",
       "category_keys": [
         "common_lang",
-        "control_flow"
+        "linq"
       ],
-      "signature": "",
-      "description": "",
-      "syntax_block": "",
+      "signature": "into <Var>",
+      "description": "Opens a non-terminal `group ... into <var>` continuation. Binds `<var>` to each `Structure{Key, Values}` group. Continue with `where / orderby / select` clauses.",
+      "syntax_block": "from p in people\n  group p.Name by p.Country into g\n  select { Country = g.Key, Names = g.Values };",
       "parameters": "",
       "return_descr": "",
       "example": "",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": [
+        "guide.linq",
+        "kw.Group",
+        "kw.By"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     }
   ]
 }

@@ -9,6 +9,7 @@
     "global_functions": "Глобальні функції",
     "primitive_types": "Примітивні типи",
     "date": "Дата",
+    "linq": "LINQ — запити до колекцій",
     "guide": "Довідка"
   }
 }

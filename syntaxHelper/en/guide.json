@@ -20,6 +20,32 @@
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [],
       "reviewed": true
+    },
+    {
+      "id": "guide.linq",
+      "name_local": "LINQ — collection queries",
+      "name_en": "LINQ — collection queries",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "from <item> in <source> [where ...] [orderby ...] [group ... by ... [into ...]] select ...",
+      "description": "LINQ — language-integrated queries against in-memory collections. Two parallel surfaces compile to the same primitives.\n\n**Block syntax** (eager): `from <var> in <source>` opens the query; `where / var / orderby [asc|desc] / group X by K [into g] / join b in Y on a.K equals b.K / skip N / take N / distinct` clauses; closes with `select <expr>` or `select { F = expr, ... }`. Materialises to an Array immediately.\n\n**Chain syntax** (lazy): `arr.Where(λ).Select(λ).Distinct().Take(10).ToArray()`. 31 operations available — pipeline (Where / Select / Distinct / OrderBy / OrderByDescending / GroupBy / Join / Skip / Take / SkipWhile / TakeWhile / Reverse / Concat / Union / Intersect / Except / WhereIndexed / SelectIndexed), terminals (Count / ToArray / First / Last / Single / Any / ElementAt / Contains / SequenceEqual / Aggregate plus *OrDefault variants), aggregations (Sum / Min / Max / Average — with optional lambda selector).\n\nLambdas close over outer-scope locals: `var k = 5; arr.Where(Function(x) { return x > k; })`.\n\nLINQ keywords compile identically in CES and VES modes.",
+      "syntax_block": "var q = from o in orders\n        where o.Total > 100\n        var doubled = o.Total * 2\n        orderby o.Date descending\n        select { N = o.N, V = doubled };",
+      "parameters": "",
+      "return_descr": "Array of selected rows (block syntax) or lazy iterable (chain syntax).",
+      "example": "// chain syntax — lazy pipeline\nvar bigOnes = arr.Where(Function(x) { return x > 5; })\n                 .OrderByDescending(Function(x) { return x; })\n                 .Take(10)\n                 .ToArray();\n\n// aggregations with lambda selector\nvar total = arr.Sum();\nvar avgK  = arr.Average(Function(x) { return x.K; });\n\n// group-into continuation\nvar pairs = from p in people\n            group p.Name by p.Country into g\n            where g.Values.Count() > 1\n            select { Country = g.Key, Names = g.Values };",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.From",
+        "kw.Where",
+        "kw.Select",
+        "kw.OrderBy",
+        "kw.Join",
+        "kw.Group"
+      ],
+      "reviewed": true
     }
   ]
 }

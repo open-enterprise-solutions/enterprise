@@ -20,6 +20,32 @@
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [],
       "reviewed": true
+    },
+    {
+      "id": "guide.linq",
+      "name_local": "LINQ — запити до колекцій",
+      "name_en": "LINQ — collection queries",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq"
+      ],
+      "signature": "from <item> in <source> [where ...] [orderby ...] [group ... by ... [into ...]] select ...",
+      "description": "LINQ — вбудовані в мову запити до колекцій у памʼяті. Два паралельні синтаксиси компілюються в одні й ті ж примітиви.\n\n**Блочний синтаксис** (eager): `from <var> in <source>` відкриває запит; далі клаузи `where / var / orderby [asc|desc] / group X by K [into g] / join b in Y on a.K equals b.K / skip N / take N / distinct`; закривається `select <expr>` або `select { F = expr, ... }`. Одразу матеріалізується в Array.\n\n**Ланцюговий синтаксис** (lazy): `arr.Where(λ).Select(λ).Distinct().Take(10).ToArray()`. Доступно 31 операція — конвеєрні (Where / Select / Distinct / OrderBy / OrderByDescending / GroupBy / Join / Skip / Take / SkipWhile / TakeWhile / Reverse / Concat / Union / Intersect / Except / WhereIndexed / SelectIndexed), термінальні (Count / ToArray / First / Last / Single / Any / ElementAt / Contains / SequenceEqual / Aggregate плюс *OrDefault варіанти), агрегації (Sum / Min / Max / Average — опційно з лямбда-селектором).\n\nЛямбди захоплюють локальні змінні зовнішнього scope: `var k = 5; arr.Where(Function(x) { return x > k; })`.\n\nLINQ-ключові слова компілюються однаково в режимах CES і VES.",
+      "syntax_block": "var q = from o in orders\n        where o.Total > 100\n        var doubled = o.Total * 2\n        orderby o.Date descending\n        select { N = o.N, V = doubled };",
+      "parameters": "",
+      "return_descr": "Масив вибраних рядків (блочний синтаксис) або лінивий ітератор (ланцюговий синтаксис).",
+      "example": "// ланцюговий синтаксис — лінивий конвеєр\nvar bigOnes = arr.Where(Function(x) { return x > 5; })\n                 .OrderByDescending(Function(x) { return x; })\n                 .Take(10)\n                 .ToArray();\n\n// агрегації з лямбда-селектором\nvar total = arr.Sum();\nvar avgK  = arr.Average(Function(x) { return x.K; });\n\n// group-into continuation\nvar pairs = from p in people\n            group p.Name by p.Country into g\n            where g.Values.Count() > 1\n            select { Country = g.Key, Names = g.Values };",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.From",
+        "kw.Where",
+        "kw.Select",
+        "kw.OrderBy",
+        "kw.Join",
+        "kw.Group"
+      ],
+      "reviewed": true
     }
   ]
 }

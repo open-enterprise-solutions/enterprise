@@ -9,6 +9,7 @@
     "global_functions": "Global Functions",
     "primitive_types": "Primitive Types",
     "date": "Date",
+    "linq": "LINQ — collection queries",
     "guide": "Guide"
   }
 }
