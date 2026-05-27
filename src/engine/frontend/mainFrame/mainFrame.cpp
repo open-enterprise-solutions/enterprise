@@ -192,9 +192,16 @@ wxAuiMDIClientWindow* ibFrontendDocMDIFrame::OnCreateClient()
 			// respects dark/light mode.
 			SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_APPWORKSPACE));
 			SetBackgroundStyle(wxBG_STYLE_SYSTEM);
+#else
+			// Powder-blue MDI workspace — interior-design dominant
+			// chrome tone (the "walls" of the application). Forms /
+			// docs sit on this as a calm cool backdrop. The historical
+			// dark-navy AppWorkspace would otherwise leak through, so
+			// we override both paint + erase below.
+			SetBackgroundColour(wxColour(184, 201, 212));  // #B8C9D4 powder blue
+#endif
 			Bind(wxEVT_PAINT, &wxAuiMDIClientWindowImpl::OnPaint, this);
 			Bind(wxEVT_ERASE_BACKGROUND, &wxAuiMDIClientWindowImpl::OnEraseBackground, this);
-#endif
 		}
 
 	protected:
@@ -207,7 +214,6 @@ wxAuiMDIClientWindow* ibFrontendDocMDIFrame::OnCreateClient()
 			return selection;
 		}
 
-#ifdef __WXOSX__
 		void OnPaint(wxPaintEvent& event) {
 			wxPaintDC dc(this);
 			dc.SetBackground(wxBrush(GetBackgroundColour()));
@@ -222,7 +228,6 @@ wxAuiMDIClientWindow* ibFrontendDocMDIFrame::OnCreateClient()
 				dc->Clear();
 			}
 		}
-#endif
 	};
 
 	return new wxAuiMDIClientWindowImpl(this);

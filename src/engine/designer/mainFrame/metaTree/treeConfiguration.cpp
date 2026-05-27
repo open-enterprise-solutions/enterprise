@@ -59,9 +59,14 @@ ibMetadataTree::ibMetadataTree(wxWindow* parent, int id)
 
 	m_metaTreeToolbar->SetArtProvider(new wxAuiLunaToolBarArt());
 
+	// Card-style depth: panel slightly darker than tree creates a
+	// "raised card" effect — the tree floats above the panel surround
+	// rather than blending into pure-white background. AUI's dark
+	// dock background already frames the pane; this is the inner tier.
+	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue panel
 	//Create main tree
 	m_metaTreeCtrl = new ibMetaTreeCtrl(this);
-	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 250, 250));
+	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 247, 240));  // #FAF7F0 cream tree (matches editor)
 
 	//set image list
 	m_metaTreeCtrl->AssignImageList(
@@ -110,9 +115,14 @@ ibMetadataTree::ibMetadataTree(ibMetaDocument* docParent, wxWindow* parent, int 
 
 	m_metaTreeToolbar->SetArtProvider(new wxAuiLunaToolBarArt());
 
+	// Card-style depth: panel slightly darker than tree creates a
+	// "raised card" effect — the tree floats above the panel surround
+	// rather than blending into pure-white background. AUI's dark
+	// dock background already frames the pane; this is the inner tier.
+	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue panel
 	//Create main tree
 	m_metaTreeCtrl = new ibMetaTreeCtrl(this);
-	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 250, 250));
+	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 247, 240));  // #FAF7F0 cream tree (matches editor)
 
 	//set image list
 	m_metaTreeCtrl->AssignImageList(

@@ -39,9 +39,30 @@
 #endif
 #endif
 
-#define THEME_COLOUR_MAIN wxColour(68, 88, 123) 
-#define THEME_COLOUR_BORDER wxColour(41, 57, 85) 
-#define THEME_COLOUR_BACKGROUND wxColour(156, 170, 193) 
+// Interior-design palette — cool dominant chrome + warm focal accent.
+// Inspired by the powder-blue-room-with-terracotta-ottoman composition:
+// the dominant surface is calming dusty blue (walls/sofas), the content
+// is warm-neutral cream (a comfortable canvas for text), and a strong
+// terracotta accent draws the eye to selections / active states (the
+// ottoman). Cool framing + warm content + warm focal point — same idea
+// designers use to give a room both calm and energy.
+//   cream     #FAF7F0  — editor / tree / lists (content surfaces)
+//   powder    #B8C9D4  — MDI workspace + dock + panel frames (walls)
+//   light     #C8D6DF  — tab strip + status bar (lighter chrome)
+//   inactive  #D8E2EB  — inactive caption bar (palest chrome)
+//   sofa      #5A7B95  — active caption top (saturated dusty blue)
+//   deep      #3F5C77  — active caption bottom (deepest blue)
+//   white     #FFFFFF  — active caption text
+//   text      #3F5C77  — inactive caption text (deep blue, on light bg)
+//   border    #A8BAC8  — light dusty blue-grey pane outlines (subtle)
+//   accent    #D97757  — terracotta selection / active row (ottoman)
+//   accent2   #B85A38  — deep terracotta links / hover
+// Border picks a tone just one step darker than the chrome (#B8C9D4)
+// so pane edges are visible but don't draw the eye — earlier #94A6B4
+// read as a hard frame against the cream content.
+#define THEME_COLOUR_MAIN       wxColour(0xA8, 0xBA, 0xC8)  // #A8BAC8 light dusty (sash/gripper)
+#define THEME_COLOUR_BORDER     wxColour(0xA8, 0xBA, 0xC8)  // #A8BAC8 light dusty (border)
+#define THEME_COLOUR_BACKGROUND wxColour(0xB8, 0xC9, 0xD4)  // #B8C9D4 powder blue (dock bg)
 
 // -- wxAuiLunaDockArt class implementation --
 
@@ -170,9 +191,16 @@ wxAuiLunaDockArt::wxAuiLunaDockArt() : wxAuiDockArt()
 	m_sashSize = wxWindow::FromDIP(3, nullptr);
 #endif
 	m_captionSize = wxWindow::FromDIP(17, nullptr);
-	m_borderSize = 2;
+	// 1px border (was 2) — modern flat look. The slate border colour
+	// already provides enough definition at 1px against the lighter
+	// pane content.
+	m_borderSize = 1;
 	m_buttonSize = wxWindow::FromDIP(14, nullptr);
 	m_gripperSize = wxWindow::FromDIP(9, nullptr);
+	// Subtle vertical 2-tone band. Two very close slate tones in each
+	// caption — readable as gentle "depth" instead of either a 2000s
+	// saturated highlight band OR a fully flat plate. Eye-comfort sweet
+	// spot: catches light without drawing attention.
 	m_gradientType = wxAUI_GRADIENT_VERTICAL;
 
 	InitBitmaps();
@@ -276,13 +304,18 @@ void wxAuiLunaDockArt::UpdateColoursFromSystem()
 	wxColor darker4Colour = baseColour.ChangeLightness(50);
 	wxColor darker5Colour = baseColour.ChangeLightness(40);
 
-	m_activeCaptionColour = wxColour(206, 212, 221).ChangeLightness(30);//wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
-	m_activeCaptionGradientColour = wxAuiLightContrastColour(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT));
-	m_activeCaptionTextColour = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT);
-	
-	m_inactiveCaptionColour = baseColour;
-	m_inactiveCaptionGradientColour = baseColour;
-	m_inactiveCaptionTextColour = *wxWHITE;
+	// Interior-design caption palette. Active = saturated dusty blue
+	// vertical band (sofa-blue top → deep blue bottom). Inactive =
+	// palest powder blue → light dusty (between #D8E2EB and #C5D2DC),
+	// recedes into the powder-blue chrome but still has visible depth
+	// thanks to the ~12 lightness step.
+	m_activeCaptionColour          = wxColour(0x5A, 0x7B, 0x95);     // #5A7B95 sofa-blue top
+	m_activeCaptionGradientColour  = wxColour(0x3F, 0x5C, 0x77);     // #3F5C77 deep blue bottom
+	m_activeCaptionTextColour      = wxColour(0xFF, 0xFF, 0xFF);     // #FFFFFF white
+
+	m_inactiveCaptionColour         = wxColour(0xD8, 0xE2, 0xEB);    // #D8E2EB palest powder top
+	m_inactiveCaptionGradientColour = wxColour(0xC5, 0xD2, 0xDC);    // #C5D2DC light dusty bottom
+	m_inactiveCaptionTextColour     = wxColour(0x3F, 0x5C, 0x77);    // #3F5C77 deep blue text
 
 	m_sashBrush = wxBrush(baseColour);
 	m_backgroundBrush = wxBrush(baseColour);

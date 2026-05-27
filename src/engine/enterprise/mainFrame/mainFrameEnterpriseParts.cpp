@@ -61,12 +61,17 @@ void ibFrontendDocMDIFrameEnterprise::CreateWideGui()
 
 	SetStatusBar(new ibDocBottomStatusBar(this));
 	SetStatusText(_("Ready"));
-	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(wxAUI_DOCKART_BACKGROUND_COLOUR, wxAUI_DEFAULT_COLOUR);
+	// Note: the luna dock art (set in the base ctor) already exposes
+	// powder-blue (#B8C9D4) via wxAUI_DOCKART_BACKGROUND_COLOUR; don't
+	// override with wxAUI_DEFAULT_COLOUR — that's the legacy dark navy.
+	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(
+		wxAUI_DOCKART_BACKGROUND_COLOUR, wxColour(0xB8, 0xC9, 0xD4));
 
-	// Ensure the client window has proper background (dark blue theme)
+	// MDI client background — powder blue, matches the rest of the
+	// chrome. Was hardcoded #44587B dark navy.
 	wxAuiMDIClientWindow* clientWnd = GetClientWindow();
 	if (clientWnd != nullptr) {
-		clientWnd->SetBackgroundColour(wxColour(68, 88, 123));
+		clientWnd->SetBackgroundColour(wxColour(0xB8, 0xC9, 0xD4));
 	}
 
 	SetMinSize(wxSize(400, 380));

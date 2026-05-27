@@ -21,7 +21,7 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ibVisualEditorHost(i
 {
 	ibVisualHost::SetExtraStyle(wxWS_EX_BLOCK_EVENTS);
 
-	SetOwnBackgroundColour(wxColour(192, 192, 192));
+	SetOwnBackgroundColour(wxColour(0xD8, 0xE2, 0xEB));  // #D8E2EB palest powder — light background so form card pops
 
 	m_back = new ibDesignerWindow(this, wxID_ANY, wxPoint(10, 10));
 	m_back->GetEventHandler()->Connect(wxID_ANY, wxEVT_LEFT_DOWN, wxMouseEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnClickBackPanel), nullptr, this);
@@ -438,7 +438,7 @@ ibDesignerWindow::ibDesignerWindow(wxWindow* parent, int id, const wxPoint& pos,
 	m_selItem = nullptr;
 	m_actPanel = nullptr;
 
-	SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
+	SetBackgroundColour(wxColour(0xD8, 0xE2, 0xEB));  // #D8E2EB palest powder — light background so form card pops
 	GetFrameContentPanel()->PushEventHandler(
 		new ibHighlightPaintHandler(GetFrameContentPanel())
 	);

@@ -91,7 +91,7 @@ void ibHelpDetailView::ShowEntry(const ibHelpEntry* entry) {
 	m_lastEntryId = entry ? entry->id : wxString();
 	if (entry == nullptr) {
 		m_html->SetPage(
-		    wxT("<html><body bgcolor=\"#fafbfc\">"
+		    wxT("<html><body bgcolor=\"#FAF7F0\">"
 		         "<table border=\"0\" cellpadding=\"20\" width=\"100%\"><tr><td>"
 		         "<font color=\"#888888\" size=\"3\"><i>")
 		    + wxString(_("Select an entry in the tree on the left, or "
@@ -241,7 +241,10 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) const {
 	html.reserve(4096);
 
 	// Outer container with consistent left-margin via cellpadding.
-	html += wxT("<html><body bgcolor=\"#ffffff\">"
+	// Cream bg #FAF7F0 — matches the content tier in the interior
+	// palette (docs/ui-palette.md). Keeps the syntax helper inside
+	// the warm content family instead of reading as a cool island.
+	html += wxT("<html><body bgcolor=\"#FAF7F0\">"
 	             "<table border=\"0\" cellpadding=\"12\" cellspacing=\"0\" "
 	             "width=\"100%\"><tr><td>");
 

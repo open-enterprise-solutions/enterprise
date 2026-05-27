@@ -25,6 +25,11 @@ END_EVENT_TABLE()
 ibWatchWindow::ibWatchWindow(wxWindow* parent, wxWindowID winid)
 	: ibWatchCtrl(parent, winid, wxDefaultPosition, wxDefaultSize)
 {
+	// Light cream content surface — one tier lighter than the editor
+	// cream so debugger lists read as the lightest content tier (where
+	// the eye lands most often during debugging).
+	SetBackgroundColour(wxColour(253, 251, 245));  // #FDFBF5 light cream
+
 	m_root = AddRoot(_T("Root"));
 	SetItemText(m_root, 1, _T("Root"));
 

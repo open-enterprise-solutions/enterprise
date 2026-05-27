@@ -190,7 +190,9 @@ void ibFrameLauncher::SaveListIB() {
 ibFrameLauncher::ibFrameLauncher(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : wxFrame(parent, id, title, pos, size, style)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
-	this->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
+	// Interior palette — powder-blue frame (matches enterprise / designer
+	// chrome). Was system BTNFACE (Win98 light grey).
+	this->SetBackgroundColour(wxColour(0xB8, 0xC9, 0xD4));  // #B8C9D4 powder blue
 
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizerLeft = new wxBoxSizer(wxVERTICAL);

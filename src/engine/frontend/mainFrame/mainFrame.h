@@ -285,8 +285,12 @@ public:
 		const wxString& name = wxStatusBarNameStr)
 		: wxStatusBar(parent, id, style, name)
 	{
-		wxStatusBar::SetBackgroundColour(wxAUI_DEFAULT_COLOUR);
-		wxStatusBar::SetForegroundColour(wxAUI_WHITE_COLOUR);
+		// Light dusty status bar — sits between the powder-blue MDI
+		// workspace and the cream content panes; deep-blue text reads
+		// cleanly. Matches the interior-design palette (see
+		// luna_dockart.cpp).
+		wxStatusBar::SetBackgroundColour(wxColour(0xC8, 0xD6, 0xDF));   // #C8D6DF light dusty
+		wxStatusBar::SetForegroundColour(wxColour(0x3F, 0x5C, 0x77));   // #3F5C77 deep dusty blue
 
 		m_statusBarText = new wxStaticText(this, wxID_ANY, wxEmptyString, wxPoint(5, 5), wxDefaultSize, 0);
 		m_statusBarText->Show();

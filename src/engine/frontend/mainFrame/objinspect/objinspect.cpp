@@ -198,12 +198,15 @@ wxPropertyGridManager* ibObjectInspector::CreatePropertyGridManager(wxWindow* pa
 	pg->SetForegroundColour(wxDefaultStypeFGColour);
 	pg->SetBackgroundColour(wxDefaultStypeBGColour);
 
-	pg->GetGrid()->SetMarginColour(wxDefaultStypeBGColour.ChangeLightness(95));
-	
-	pg->GetGrid()->SetCaptionBackgroundColour(wxDefaultStypeBGColour.ChangeLightness(95));
+	// Margin + category captions = light dusty blue (one tier between
+	// cream cells and powder-blue chrome). Replaces darkened cream that
+	// looked muddy against the new palette.
+	pg->GetGrid()->SetMarginColour(wxColour(0xE6, 0xEE, 0xF5));            // #E6EEF5 light powder
 
-	pg->GetGrid()->SetCaptionTextColour(*wxBLACK);
-	pg->GetGrid()->SetCellDisabledTextColour(*wxBLACK);
+	pg->GetGrid()->SetCaptionBackgroundColour(wxColour(0xC8, 0xD6, 0xDF)); // #C8D6DF light dusty
+
+	pg->GetGrid()->SetCaptionTextColour(wxColour(0x3F, 0x5C, 0x77));       // #3F5C77 deep dusty blue
+	pg->GetGrid()->SetCellDisabledTextColour(wxColour(0x94, 0xA6, 0xB4));  // #94A6B4 dusty blue-grey
 
 	pg->GetGrid()->SetCellTextColour(*wxBLACK);
 

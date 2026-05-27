@@ -32,8 +32,13 @@ class FRONTEND_API ibVisualHostClient;
 #include "backend/actionInfo.h"
 #include "backend/moduleInfo.h"
 
-#define wxDefaultStypeFGColour wxColour(0, 120, 215)
-#define wxDefaultStypeBGColour wxColour(235, 235, 241)
+// Default foreground / background for designer-created form controls,
+// toolbars, dataviews, dialogs. Aligned with interior palette: deep
+// dusty blue text on cream content surface. Was Windows-blue accent
+// (#0078D7) + light off-white grey (#EBEBF1) — both clashed with the
+// powder-blue + cream + terracotta palette.
+#define wxDefaultStypeFGColour wxColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
+#define wxDefaultStypeBGColour wxColour(0xFA, 0xF7, 0xF0)  // #FAF7F0 cream content
 
 #include "backend/fileSystem/fs.h"
 

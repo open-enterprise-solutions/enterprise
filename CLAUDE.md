@@ -36,7 +36,8 @@ enterprise/
 ├── CLAUDE.md                # This file
 ├── docs/
 │   ├── ARCHITECTURE.md
-│   └── BUILD.md
+│   ├── BUILD.md
+│   └── ui-palette.md         # Interior-design palette — source of truth for UI colours
 └── src/
     ├── 3rdparty/wxWidgets/  # Submodule
     └── engine/

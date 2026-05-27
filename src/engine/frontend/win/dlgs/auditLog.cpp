@@ -132,6 +132,7 @@ ibDialogAuditLog::ibDialogAuditLog(wxWindow* parent, wxWindowID id,
     , m_tailTimer(new wxTimer)
 {
     SetSizeHints(wxSize(640, 320), wxDefaultSize);
+    this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue dialog
 
     if (appData && appData->GetLogger())
         m_reader = std::make_unique<ibLoggerReader>(appData->GetLogger()->GetLogDir());

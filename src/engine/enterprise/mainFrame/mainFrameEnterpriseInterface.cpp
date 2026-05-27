@@ -7,11 +7,12 @@
 #include <wx/tglbtn.h>
 #include <wx/hyperlink.h>
 
-// Adaptive theme colors — follow the OS theme (light / dark / high contrast)
-// instead of the old hard-coded 1C-style beige+navy which clashed with
-// modern Windows themes and was unreadable on dark mode.
-#define THEME_COLOUR_MAIN    wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)
-#define THEME_COLOUR_BORDER  wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)
+// Interior-design palette (see luna_dockart.cpp). Subsystem chrome
+// uses the same powder-blue + dusty-border tones as the rest of the
+// frontend so the home page sits in the same visual world as the
+// document panes.
+#define THEME_COLOUR_MAIN    wxColour(0xB8, 0xC9, 0xD4)  // #B8C9D4 powder blue
+#define THEME_COLOUR_BORDER  wxColour(0xA8, 0xBA, 0xC8)  // #A8BAC8 light dusty
 
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaInterfaceObject.h"
@@ -734,8 +735,9 @@ class ibSubSystemWindow : public wxWindow {
 			m_mainWindow = new ibScrolledSubWindow(this, wxID_ANY);
 			m_mainWindow->SetScrollRate(5, FromDIP(5));
 
-			m_mainWindow->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT));
-			//m_mainWindow->SetBackgroundColour(THEME_COLOUR_BORDER);
+			// Cream content surface inside the popup — matches editor /
+			// tree / lists. Was system HIGHLIGHTTEXT (pure white).
+			m_mainWindow->SetBackgroundColour(wxColour(0xFA, 0xF7, 0xF0));  // #FAF7F0 cream
 
 			bSizer1->Add(m_mainWindow, 1, wxEXPAND | wxALL, 0);
 
@@ -821,7 +823,10 @@ public:
 			if (object->AccessRight_Use()) CreateSubMenu(object);
 		}
 
-		wxWindow::SetBackgroundColour(wxAUI_DEFAULT_COLOUR.ChangeLightness(85));
+		// Interior palette — light dusty (one tier between powder chrome
+		// and the cream popup interior). Was wxAUI_DEFAULT_COLOUR
+		// (dark navy) lightened — read as a muddy mid-grey.
+		wxWindow::SetBackgroundColour(wxColour(0xC8, 0xD6, 0xDF));  // #C8D6DF light dusty
 	}
 
 protected:

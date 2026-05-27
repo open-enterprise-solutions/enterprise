@@ -170,13 +170,16 @@ private:
 				if (pg != nullptr) {
 					wxPGProperty* id = m_pg->Append(pg);
 					if (m_style != wxOES_OI_MULTIPAGE_STYLE) {
-						// Most common classes will be showed with a slightly different colour.
+						// Per-class tint — interior palette. Window props get
+						// the warm focal hue (light terracotta), common get
+						// neutral cream, sizerItem gets the cool tier (light
+						// powder). Replaces XP-era yellow/light-blue/cyan.
 						if (stringUtils::CompareString(name, wxT("window")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(255, 255, 205)); // yellow
+							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF8, 0xE3, 0xD5)); // light terracotta
 						else if (stringUtils::CompareString(name, wxT("common")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(240, 240, 255)); // light blue
+							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF5, 0xE8, 0xD5)); // light cream
 						else if (stringUtils::CompareString(name, wxT("sizerItem")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(220, 255, 255)); // cyan
+							m_pg->SetPropertyBackgroundColour(id, wxColour(0xE6, 0xEE, 0xF5)); // light powder
 					}
 
 					std::map< wxString, bool >::iterator it = m_isExpanded.find(strPropName);
@@ -248,13 +251,13 @@ private:
 					wxPGProperty* id = m_pg->Append(eg);
 					m_pg->SetPropertyHelpString(id, wxGetTranslation(event->GetHelp()));
 					if (m_style != wxOES_OI_MULTIPAGE_STYLE) {
-						// Most common classes will be showed with a slightly different colour.
+						// Per-class tint — interior palette (see above).
 						if (stringUtils::CompareString(name, wxT("window")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(255, 255, 205)); // yellow
+							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF8, 0xE3, 0xD5)); // light terracotta
 						else if (stringUtils::CompareString(name, wxT("common")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(240, 240, 255)); // light blue
+							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF5, 0xE8, 0xD5)); // light cream
 						else if (stringUtils::CompareString(name, wxT("sizerItem")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(220, 255, 255)); // cyan
+							m_pg->SetPropertyBackgroundColour(id, wxColour(0xE6, 0xEE, 0xF5)); // light powder
 					}
 
 					std::map< wxString, bool >::iterator it = m_isExpanded.find(eventName);

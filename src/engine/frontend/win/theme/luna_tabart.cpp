@@ -22,8 +22,13 @@
 #include <wx/osx/private.h>
 #endif
 
-#define THEME_COLOUR_MAIN wxColour(255, 232, 166) 
-#define THEME_COLOUR_BORDER wxColour(41, 57, 85) 
+// Interior palette tab. Active tab matches the cream content surface
+// (#FAF7F0) — open document reads as a continuous warm card sitting in
+// the cool dusty-blue chrome. Border = light dusty (#A8BAC8), same as
+// pane borders — visible but subtle. Tab strip (DrawBackground) uses
+// light dusty blue #C8D6DF — soft blue frame around the cream tab.
+#define THEME_COLOUR_MAIN wxColour(0xFA, 0xF7, 0xF0)
+#define THEME_COLOUR_BORDER wxColour(0xA8, 0xBA, 0xC8)
 
 class wxAuiCommandCapture : public wxEvtHandler
 {
@@ -223,14 +228,26 @@ void wxAuiLunaTabArt::UpdateColoursFromSystem()
 //	wxColor baseColour = wxSystemSettings::GetColour(wxSYS_COLOUR_3DFACE);
 //#endif
 
-	wxColor baseColour = THEME_COLOUR_BORDER;
+	// Tab strip background — light dusty blue (#C8D6DF). Cooler than
+	// the cream active-tab interior (#FAF7F0), warmer than the deeper
+	// powder-blue MDI workspace. Reads as a soft transition band
+	// between the chrome and the document.
+	wxColor baseColour = wxColour(0xC8, 0xD6, 0xDF);
 
 	m_activeColour = baseColour;
 	m_baseColour = baseColour;
 
-	m_borderPen = wxPen(THEME_COLOUR_MAIN);
-	m_baseColourPen = wxPen(THEME_COLOUR_MAIN);
-	m_baseColourBrush = wxBrush(THEME_COLOUR_MAIN);
+	// Tab separator pen — light dusty, matches pane borders.
+	m_borderPen = wxPen(THEME_COLOUR_BORDER);
+
+	// Bottom "shelf" under the tabs — neutral warm taupe, NOT the
+	// near-white active-tab interior. Creates a clear band between the
+	// cool light-dusty tab strip above and the cream content below.
+	// Sandstone (#E8D8BE) read as too yellow; #E0D8CC drops the yellow
+	// undertone — still leans warm against the cool strip, but the
+	// reduced saturation reads as a calm shelf, not a distinct band.
+	m_baseColourPen = wxPen(wxColour(0xE0, 0xD8, 0xCC));
+	m_baseColourBrush = wxBrush(wxColour(0xE0, 0xD8, 0xCC));
 }
 
 wxAuiTabArt* wxAuiLunaTabArt::Clone()
@@ -641,10 +658,12 @@ void wxAuiLunaTabArt::DrawTab(wxDC& dc,
 		caption,
 		tab_width - (text_offset - tab_x) - close_button_width);
 
-	// draw tab text
+	// draw tab text — deep dusty blue (#3F5C77) on the light dusty
+	// inactive strip; black on the cream active tab. Active still
+	// distinctly weightier.
 	if (!page.active)
 	{
-		dc.SetTextForeground(*wxWHITE);
+		dc.SetTextForeground(wxColour(0x3F, 0x5C, 0x77));
 	}
 	else
 	{

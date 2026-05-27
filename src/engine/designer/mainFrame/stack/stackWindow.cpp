@@ -51,6 +51,10 @@ wxEND_EVENT_TABLE()
 ibStackWindow::ibStackWindow(wxWindow* parent, int id) :
 	wxPanel(parent, id), m_treeCtrl(new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT))
 {
+	// Card-style depth — panel powder-blue, list cream (matches editor).
+	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue panel
+	m_treeCtrl->SetBackgroundColour(wxColour(253, 251, 245));  // #FDFBF5 light cream list
+
 	m_columnSize[0] = 0.09f;
 	m_columnSize[1] = -120;
 

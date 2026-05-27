@@ -60,7 +60,10 @@ void ibFrontendDocMDIFrameDesigner::CreateWideGui()
 
 	SetStatusBar(new ibDocBottomStatusBar(this));
 	SetStatusText(_("Ready"));
-	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(wxAUI_DOCKART_BACKGROUND_COLOUR, wxAUI_DEFAULT_COLOUR);
+	// Keep interior palette — luna dock art already exposes powder-blue
+	// (#B8C9D4); don't reset it to wxAUI_DEFAULT_COLOUR (legacy navy).
+	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(
+		wxAUI_DOCKART_BACKGROUND_COLOUR, wxColour(0xB8, 0xC9, 0xD4));
 	SetMinSize(wxSize(400, 380));
 
 	// tell the manager to "commit" all the changes just made
