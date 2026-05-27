@@ -46,7 +46,7 @@ var q = from o in arr                // source binding (`from` is KEY_FROM)
         distinct;                    // KEY_DISTINCT — post-projection dedup
 
 Message("count: " + q.Count());
-foreach (x in q) { Message(x); }
+Foreach (x In q) { Message(x); }
 ```
 
 Block compiles to a real `OPER_FOREACH` loop emitting `__r.Add(...)`
@@ -115,7 +115,7 @@ trailing params from compile-time defaults.
 The two syntaxes compose freely: a block-syntax result is an
 `ibValueArray`, so `.Where(λ).Count()` works on it via chain
 infrastructure. A chain-syntax result is an `ibValueQuery`, so
-`for each x in q` iterates it.
+`Foreach x In q` iterates it.
 
 ---
 
@@ -127,7 +127,7 @@ Detected at expression start by the KEY_FROM keyword (added to
 KEY_ORDERBY / KEY_ASCENDING / KEY_DESCENDING / KEY_GROUP / KEY_BY /
 KEY_INTO / KEY_JOIN / KEY_ON / KEY_EQUALS`) are also reserved in
 the lexer so the code editor highlights them uniformly. KEY_IN is
-reused from the existing `For Each ... In` construct.
+reused from the existing `Foreach ... In` construct.
 
 ```
 linq-block := KEY_FROM <id> KEY_IN <expr>
