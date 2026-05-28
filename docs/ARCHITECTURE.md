@@ -277,7 +277,7 @@ Metadata object hierarchy. Every business object type extends `ibValueMetaObject
 
 | File | Class | Role |
 |---|---|---|
-| `systemManager.h/cpp` | `ibSystemManager` | Built-in function dispatcher; registers 88 built-in functions |
+| `systemManager.h/cpp` | `ibSystemManager` | Built-in function dispatcher; registers ~93 built-in functions (count drifts as features land; grep `AppendFunc\|AppendProc` for the live total) |
 | `systemEnum.h` | enums | System-level enumeration constants |
 
 ### `src/engine/frontend/visualView/`
@@ -336,7 +336,7 @@ Opcodes are defined as plain integer constants in `src/engine/backend/compiler/c
 | Control flow | `OPER_GOTO`, `OPER_IF`, `OPER_FOR`, `OPER_FOREACH`, `OPER_IN`, `OPER_NEXT`, `OPER_NEXT_ITER` |
 | Variables | `OPER_LET`, `OPER_CONST`, `OPER_CONSTN`, `OPER_SET`, `OPER_SETREF`, `OPER_SETCONST` |
 | Functions | `OPER_FUNC`, `OPER_ENDFUNC`, `OPER_CALL`, `OPER_CALL_CLOSURE` (heap-frame variant when the callee has an inner lambda capturing locals), `OPER_CALL_METHOD`, `OPER_RET` |
-| Lambdas | `OPER_LFUNC`, `OPER_ENDLFUNC` (anonymous body fences — distinct from `OPER_FUNC`/`OPER_ENDFUNC` so a containing named-function's module-init skip doesn't terminate on a nested lambda's terminator), `OPER_FUNC_PTR` (materialises an `ibValueFunction` wrapper into a slot), `OPER_CALL_LAMBDA` (dynamic call — target read from a slot at runtime, must wrap an `ibValueFunction`). See `docs/lambda.md`. |
+| Lambdas | `OPER_LFUNC` (anonymous body entry — materialises an `ibValueFunction` value at its dest slot in one step), `OPER_ENDLFUNC` (body close — distinct from `OPER_FUNC`/`OPER_ENDFUNC` so a containing named-function's module-init skip doesn't terminate on a nested lambda's terminator), `OPER_CALL_LAMBDA` (dynamic call — target read from a slot at runtime, must wrap an `ibValueFunction`). See `docs/lambda.md`. `OPER_FUNC_PTR` was an earlier separate materialise opcode — retired; doc references kept for git-blame readability only. |
 | LINQ | `OPER_CALL_LINQ` — universal pipeline method on an iterable receiver (Where / Select / OrderBy / GroupBy / Join / Skip / Take / Aggregate / ...). Compile-side detects LINQ method names at chain-method emit time and chooses this opcode over `OPER_CALL_METHOD`; runtime reads the `ibValue::ibLinqMethod` enum id directly from `m_param3.m_numIndex` (no const-string lookup, no `FindMethod` walk) and dispatches through the virtual `ibValue::DispatchLinqMethod`. See `docs/linq.md`. |
 | Arrays | `OPER_GET_ARRAY`, `OPER_SET_ARRAY`, `OPER_CHECK_ARRAY`, `OPER_SET_ARRAY_SIZE`, `OPER_ENTER_A`, `OPER_GET_A`, `OPER_SET_A` |
 | Objects | `OPER_NEW`, `OPER_SET_TYPE` |
@@ -454,7 +454,7 @@ OES distinguishes between **metadata** (compile-time, process-wide, shared) and 
 - **Working date** — `m_workDate` per-session (replaces the legacy static `ibValueSystemFunction::ms_workDate` so two web sessions don't step on each other).
 - **Configuration language** — `m_languageCode` (explicit override) plus `m_resolvedLanguageCode` (cached `override || user-default`). Selects which metadata synonym / form-label translation is shown. Per-session so concurrent web tabs each render their own user's language. Distinct from the platform's wxLocale (UI gettext, process-wide). Routed through `ibBackendLocalization::GetActiveLanguage()` / `SetActiveLanguage()`.
 - **Root module manager** — `m_root : ibValuePtr<ibValueModuleManagerConfiguration>`. Created via `EnsureRoot()` in `ibSessionRegistry::NotifyAuthenticated`'s middle phase (between `OnFirstConnect` and `OnAuthenticated` listener phases). Stays nullptr for sessions that never run scripts (Designer, WebServer technical, Launcher).
-- **Frame** — `m_frame : ibBackendDocFrame*` (non-owning) for plain `ibSession`, or overridden virtual `GetFrame()` on `ibGUISession`. The frame belongs to the session, not to a process-wide singleton.
+- **Frame** — `virtual ibBackendDocFrame* GetFrame() const { return nullptr; }` on base `ibSession`. Frame storage lives on derived sessions that have a GUI surface (e.g. `ibWebClientSession::SetFrame(ibWebFrame*)`; `ibGUISession` desktop variants). Base has no `m_frame` field — null means "no frame on this session" (codeRunner / classChecker / wenterprise-server technical session). The frame belongs to the session that created it, not to a process-wide singleton.
 - **Per-session debug** — optional `ibDebugSession` (CV/mutex + per-session watch expressions + run context) so concurrent web sessions can each enter their own debug loop without blocking.
 - **Exclusive (monopoly) mode** — `m_exclusive`. At most one session in the registry holds it; while held, every other Connect parks until release.
 - **Server back-link** — `m_server : weak_ptr<ibSession>` from a server-spawned client to the session that hosts it (e.g., wes's WebClient → wes's WebServer). Used by shutdown logic, cluster topology, and admin UI.

@@ -571,7 +571,11 @@ struct ibLeaseFileV1 {
 ### Acquisition protocol
 
 ```cpp
-ibLeaseAcquireResult ibLeaseFile::TryAcquireExclusive() {
+// Actual class in tree: `ibFirebirdLease`
+// (`backend/databaseLayer/firebird/firebirdLease.h:61`).
+// "Lease file" in this section's prose refers to the same class
+// from a different angle.
+ibLeaseAcquireResult ibFirebirdLease::TryAcquireExclusive() {
     HANDLE h = CreateFileW(L"db.fdb.lease", GENERIC_READ | GENERIC_WRITE,
                            FILE_SHARE_READ, ...);
     OVERLAPPED ov = {};

@@ -195,9 +195,10 @@ POST /login { user, password }
 
 ### 7. Session-aware user accessors
 
-**Idea:** the web HTTP worker thread runs under `SessionScope(cookieSession)`. The singleton `appData->GetUserName()` used to read `m_userInfo` — last-login-wins on multi-tab. Now:
+**Idea:** the web HTTP worker thread runs under `SessionScope(cookieSession)`. The singleton `appData->GetUserName()` used to read `m_userInfo` — last-login-wins on multi-tab. The transitional shape (now historical — the singleton field has since been removed) looked like:
 
 ```cpp
+// HISTORICAL (transitional shape pre-removal of singleton):
 const wxString& ibApplicationData::GetUserName() const {
     return GetUserInfo().m_strUserName;
 }
@@ -208,7 +209,7 @@ const ibUserInfo& ibApplicationData::GetUserInfo() const {
 }
 ```
 
-25+ call-sites picked up the behaviour automatically. Singleton fields stayed as fallback — not deleted (a follow-up cleanup).
+25+ call-sites picked up the behaviour automatically. Singleton `m_userInfo` / `m_sessionRawPassword` fields are now **fully removed** from `ibApplicationData` (verified 2026-05-28 — grep over `appData.{h,cpp}` returns 0 occurrences); accessors resolve through `ibSession::Current()` only.
 
 ### 8. Per-driver NoWait plumbing
 
@@ -251,10 +252,12 @@ Concrete `HoldRowLocks` / `TryProbeRowLock` impls — FB only so far. On other d
 
 - Concrete `HoldRowLocks / TryProbeRowLock` for **MySQL / MSSQL**. FB and PG are landed (see "TryProbeRowLock across drivers" section below).
 - Snapshot SELECT reading the new columns (`pid` / `address` / `currentActivity` / `kind`) into `ibSessionSnapshot` accessors. Columns are written by `InsertSessionRow` / `ProcessSetActivity`; consumer-side accessors on the snapshot are the gap.
-- Full removal of singleton `m_userInfo` / `m_sessionRawPassword` fields on `ibApplicationData` (currently dual-write + fallback for codeRunner / pre-auth paths).
 - Remove `SessionScope::Current()` legacy thread-local (after migrating `AppUser()`-style built-ins onto explicit session pointers via `ibProcUnit::GetSession()`).
 - Interactive verification: designer-exclusive policy under two simultaneous designer.exe processes.
-- Designer Active-Users UI: a "Kind" column from `ibSessionKind` (WebServer / WebClient / Enterprise / Designer / Service). Data is already in the snapshot via `GetSessionKind(idx)`.
+
+**Closed since the original list:**
+- ~~Full removal of singleton `m_userInfo` / `m_sessionRawPassword` fields on `ibApplicationData`~~ — done; grep over `appData.{h,cpp}` returns 0 occurrences. The Gotcha-7 "session-aware user accessors" code sketch below still shows the dual-write transitional shape for historical readability.
+- ~~Designer Active-Users UI: a "Kind" column from `ibSessionKind`~~ — `JobRefreshSnapshot` reads the `kind` column and `GetSessionKind(idx)` exposes it; UI column lives in `ibDialogActiveUser`.
 
 **Closed since the original list:**
 

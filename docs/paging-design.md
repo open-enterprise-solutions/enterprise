@@ -1,11 +1,17 @@
 # Paged data fetching for ibValueListDataObject / ibValueModelTreeDataObject
 
-**Status:** Phase 4 + tape paging shipped, evolved into universal
-`Get*Fetch` architecture (§8). Backend Fetch contract is shared by
-desktop wxDataView fork, headless callers, and the upcoming web
-frontend. Sections 1-7 describe the original templated buffer design
-(landed); §8 documents the consolidated direction we converged on
-during the 2026-05-05 session.
+**Status:** **The universal `Get*Fetch` contract (§8) is what lives
+in code today.** Sections 1-7 describe an earlier templated-buffer
+design (`ibTableViewBuffer` / `ibTreeViewBuffer` / `ibPagingLog`)
+that **did not survive** the §8 convergence — those symbols are
+**not** in the current tree. The actual paging implementation is:
+`ibFetchAnchor / ibFetchRequest / ibFetchResponse` templates in
+`backend/tableInfo.h`, per-model `GetFirstFetch / GetNextFetch /
+GetPrevFetch` virtuals on `ibDataViewModel` + `ibValueModel`,
+control-driven prefetch + lying scrollbar inside `ibDataViewCtrl`.
+Keep §1-7 as design history; treat §8 as the canonical reference.
+Backend Fetch contract shared by desktop wxDataView fork, headless
+callers, and the upcoming web frontend.
 
 **Goal:** unified, well-behaved batched fetch for OES dynamic lists and trees.
 The GUI must not stall on scroll, must not double-fetch, must support lazy tree
@@ -387,17 +393,14 @@ Each landed concrete class:
   unreachable when `IsPaged()` is on. Removal — Phase 7.
 * `FindRowByKey` deferred (selection re-locate audit pending; see §5).
 
-### Phase 4 diagnostics — `ibPagingLog` ✅ landed 2026-05-05
-`BACKEND_API void ibPagingLog(const char* fmt, ...)` — single sink,
-emits to `wxLogDebug` (Debug-only) and appends a timestamped line to
-`paging.log` in the working directory (any build).  Wired at:
-* Buffer entry points: `NotifyViewportChanged`, `ResetForFilterOrSort`,
-  `DispatchReset` / `Forward` / `Backward`.
-* All three Fetch impls: entry (table + count + anchor + direction),
-  full SQL after build (Ref only), post-exec (rows + hasMore).
-
-Open the file alongside the running enterprise / wes process to trace
-buffer / fetch behaviour without attaching a debugger.
+### Phase 4 diagnostics — `ibPagingLog` (retired)
+The `ibPagingLog` sink was useful during the 2026-05-05..09 paging
+arc and has since been stripped from the tree (no occurrences in
+`src/engine/`). The lying-scrollbar / control-driven prefetch design
+proved stable enough that the per-row diagnostic file (`paging.log`)
+became more noise than signal. Prefer `wxLogDebug` at coarse entry
+points (`PagedRefresh`, `PagedBootstrap`, `OnPagedFetch{Forward,Backward}Result`)
+when revisiting paging behaviour.
 
 ### Phase 5 — eviction + refcount pinning
 * `PinForSelection` / `UnpinForSelection` wired to control's `Select` /
@@ -621,7 +624,7 @@ re-fetches via `Get*Fetch`.
 
 | feature | state |
 |---|---|
-| `ibTableViewBuffer<TKey,TRow>` tape paging (Ref) | ✅ landed Phase 4 |
+| Tape paging on Ref via per-model `Fetch(req)` + dispatcher in `ibDataViewCtrl` | ✅ landed Phase 4 — original `ibTableViewBuffer` template did not survive the §8 convergence; functionality moved into the control |
 | `ibValueListSqlBuilder` (filter/order/cursor) | ✅ landed |
 | Single-batch paged Enum / Register | ✅ landed |
 | `ibPagingLog` diagnostics → `paging.log` | ✅ landed |

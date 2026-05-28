@@ -371,17 +371,28 @@ If any inner `scope2.SafeRollBackTransaction()` fires, it sets
 `m_txAborted = true` on the conn; the outer `scope.SafeCommitTransaction`
 then silently becomes a real `DoRollBack`. Atomicity preserved.
 
-### Registry-style (non-TL, parallel conns on one thread)
+### Registry-style (custom holders, parallel conns on one thread)
+
+The `CheckoutIndependent` primitive shown in older drafts is gone.
+After the 2026-04-28 holder-keyed refactor the registry owns two
+typed `ibSessionRegistryConnectionHolder` instances and acquires
+free conns through their `AcquireFreeConnection()` (which wraps
+`Pool::Checkout` internally, returning a `shared_ptr<ibDatabaseLayer>`
+with no holder pinning):
 
 ```cpp
-// ibSessionRegistry::Start — needs 3 parallel conns on its own thread
-m_lockConn  = pool->CheckoutIndependent();   // raw Checkout, no TL touch
-m_writeConn = pool->CheckoutIndependent();
-m_probeConn = pool->CheckoutIndependent();
+// ibSessionRegistry::Start — needs 2 parallel conns on its own thread
+m_writeConn = m_writeHolder.AcquireFreeConnection();
+m_probeConn = m_probeHolder.AcquireFreeConnection();
+// The historical m_lockConn (third connection for pessimistic-lock
+// liveness) was retired together with HoldRowLocks — see
+// docs/session-registry.md "Gotchas" #4.
 ```
 
-`CheckoutIndependent` does NOT install TL — each returned conn is the
-caller's sole owner. Drops re-park via custom deleter.
+`AcquireFreeConnection` does NOT install scope binding — each
+returned conn is the caller's sole owner until the `shared_ptr`
+drops, at which point the custom deleter re-parks the entry in the
+pool.
 
 ### Legacy `db_query->X()` without scope
 
@@ -573,15 +584,21 @@ declare a static `ibSingleConnectionHolder` and pass its address to
    sees `m_shutdown` → releases without parking. Layer destructed.
    **Order:** stop all workers → join threads → pool.Shutdown.
 
-7. **TL overhead on hot paths.** Each `scope ctor/dtor` does a TL
-   push/pop + shared_ptr copy (atomic refcount bump). ~10ns on hot
-   path — fine for per-method scope; avoid per-iteration scope in
-   tight loops.
+7. **Scope ctor/dtor overhead.** Each `ibConnectionScope`
+   construction / destruction does a holder lookup in `m_entries`
+   under `m_mutex` + shared_ptr copy (atomic refcount bump). ~50-100ns
+   on hot path — fine for per-method scope; avoid per-iteration
+   scope in tight loops. Earlier drafts described a thread-local
+   slot; the model no longer uses TLS — see §"Holder reservation
+   slots" below.
 
-8. **Scope inheritance across threads doesn't happen.** TL is
-   per-thread. If worker thread dispatches sub-task to another
-   thread via a callback/lambda, that callback does NOT inherit the
-   scope's conn. Must explicitly pass shared_ptr or open a new scope.
+8. **Scope inheritance across threads doesn't happen automatically.**
+   Holders are bound by identity (`ibSession*`), and a session is
+   pinned to a thread via `ibSessionScope` / `ibSessionThreadBinding`.
+   If worker dispatches sub-task to another thread via a callback,
+   that callback does NOT inherit the source holder's reservation.
+   Must explicitly pass shared_ptr or open a new scope under the
+   target session.
 
 9. **TX TL not cleared on bare `Begin` + crash.** If code does
    `db_query->BeginTransaction()` without scope/guard, throws, and

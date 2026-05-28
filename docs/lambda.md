@@ -58,13 +58,20 @@ source of truth for frame shape (paramCount / varCount / bCodeRet),
 parameter metadata (`m_listParam` with byref + defaults, `m_listParamRealName`
 with names), and locals (`m_listLocals` for eval).
 
-The lambda **value** at runtime is `ibValueFunction`: just two fields
-— a pointer into the parent bytecode and a func index:
+The lambda **value** at runtime is `ibValueFunction`. At the initial
+lambda landing this was two fields (parent bytecode + func index);
+closure capture (2026-05-11..12, see `docs/closure-capture.md`)
+added the captured-frame chain. The current in-tree shape
+(`backend/compiler/procUnitValues.h`):
 
 ```cpp
 class ibValueFunction : public ibValue {
     const ibByteCode* m_parentBc  = nullptr;
     long              m_funcIndex = -1;
+
+    // Closure-capture fields (added with Phase A/B/C/D of closure):
+    std::vector<std::shared_ptr<ibRunContext>> m_capturedFrames;
+    bool                                       m_needsHeapFrame = false;
 public:
     const ibByteCode::ibByteFunction* GetFunction() const {
         return &m_parentBc->m_listFunc[m_funcIndex];
@@ -261,8 +268,11 @@ Name-keyed lookups in `m_listFunc` (`FindFunction`, `FindMethod`,
 
 ## AOT format
 
-Bumped to **v5** (2026-05-10 PM). v3→v4 added the `m_param2` arg-count
-stamp on `OPER_CALL_LAMBDA`; v4→v5 swapped the lambda metadata model from
+Bumped to **v5** (2026-05-10 PM) at the lambda landing; current
+format version in tree is **v12** (`byteCodeAOT.cpp::kAOTFormatVersion`)
+after subsequent bumps for closure capture (v10) and CLSID encoding
+switch (v12). v3→v4 added the `m_param2` arg-count stamp on
+`OPER_CALL_LAMBDA`; v4→v5 swapped the lambda metadata model from
 inline `ibLambdaInfo` (operand-resident: paramCount/varCount/bCodeRet
 on OPER_LFUNC's m_param3/m_param4) to `m_listFunc`-resident
 `ibByteFunction` (single source of truth, frame shape derived via
@@ -274,7 +284,7 @@ on OPER_LFUNC's m_param3/m_param4) to `m_listFunc`-resident
 
 Backend / compiler:
 
-- `src/engine/backend/compiler/codeDef.h` — 4 lambda opcodes
+- `src/engine/backend/compiler/codeDef.h` — 3 live lambda opcodes (`OPER_LFUNC`, `OPER_ENDLFUNC`, `OPER_CALL_LAMBDA`); `OPER_FUNC_PTR` was the earlier separate materialise opcode, retired when `OPER_LFUNC` absorbed value-materialisation
 - `src/engine/backend/compiler/byteCode.h` — `ibFnKind::Lambda` enum + `IsLambda()` helper, `IsCrossBcVisible()` filter
 - `src/engine/backend/compiler/byteCodeAOT.cpp` — version v5
 - `src/engine/backend/compiler/compileContext.h` — `RETURN_LAMBDA_FUNCTION` / `RETURN_LAMBDA_PROCEDURE` enum kinds

@@ -85,7 +85,7 @@ session and the implementation phase plan. Verified against tree on
 >   Replaces compile-time `AddContextVariable` staging.
 > - **13-17** — AOT cache pipeline landed (`backend/compiler/cache/
 >   byteCodeCache.{h,cpp}`): `SerializeAOT` / `DeserializeAOT`
->   (`kAOTFormatVersion = 10` after CES + closure-capture + LINQ
+>   (`kAOTFormatVersion = 12` (was 10 at AOT landing, bumped twice since) after CES + closure-capture + LINQ
 >   opcode shifts), `sys_bytecode_cache` table with UPSERT semantics,
 >   three-arm `Compile` hook (cache-hit / miss / drift via magic +
 >   format-version reject), dependency registry +

@@ -111,7 +111,16 @@ Designer keeps non-const access through:
    `treeDataReport.cpp` call `dataProcessor->ProcessCommand(ID_METATREE_OPEN_MODULE)`
    instead of duplicating `OpenFormMDI(metaObject->GetObjectModule())`
 
-## Remaining const_casts (13, all legitimate)
+## Remaining const_casts in metaCollection (3, all legitimate)
+
+> **Count caveat (2026-05-28 audit):** the original "13 legitimate
+> `const_cast`s remain" claim was the metaCollection-narrow count
+> at landing. Process-wide grep across `src/engine/backend/` now
+> finds 28 occurrences across 17 files (mostly outside the
+> const-meta surface — `propertyManager`, `firebirdHlc`,
+> `mysql/engine/`, etc.). The 3 in `metaObject.h::ConvertToValue`
+> below are still the only ones touching the const-meta path; the
+> "floor of 13" figure is no longer accurate process-wide.
 
 - 3 in `metaObject.h::ConvertToValue` template — canonical `dynamic_cast`
   through `const_cast<ibValueMetaObject*>(this)`. Standard C++ pattern;

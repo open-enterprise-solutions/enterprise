@@ -12,7 +12,7 @@
 >   orderby (asc/desc) / join / group by [into g]` (terminal + non-
 >   terminal — `into g` opens a continuation with `g` bound to
 >   `Structure{Key, Values}`).
-> - Chain: 31 ops — pipeline (Where / Select / Distinct / OrderBy /
+> - Chain: 32 ops — pipeline (Where / Select / Distinct / OrderBy /
 >   OrderByDescending / GroupBy / Join / Skip / Take / SkipWhile /
 >   TakeWhile / Reverse / Concat / Union / Intersect / Except /
 >   WhereIndexed / SelectIndexed), terminals (Count / ToArray /
@@ -541,7 +541,7 @@ Tests renamed: `test_linq_nested_group.txt`,
   FirstOrDefault / ElementAt(n) / ElementAtOrDefault(n) /
   Contains(value) / SequenceEqual(other)`; reducer
   `Aggregate(seed, λ)`; indexed `WhereIndexed(λ) / SelectIndexed(λ)`
-  (lambda takes `(elem, index)`). 31 methods total on chain
+  (lambda takes `(elem, index)`). 32 methods total on chain
   surface. `OrDefault` semantics fix: dispatcher always writes
   ret (even on empty paths) — `CopyValue(ret, ibValue())` resets
   caller's slot from stale leftover. Smoke
@@ -629,7 +629,7 @@ Quick reference for LINQ contexts:
 | `src/engine/backend/compiler/value.cpp` | Per-class method resolver (`FindMethod / GetNParams / HasRetVal / GetMethodName / GetMethodHelper`) — LINQ surface lives entirely on the `OPER_CALL_LINQ` path |
 | `src/engine/backend/system/value/valueArray.h` | `Contains` method + `enContains` enum, aggregation declarations (Sum/Min/Max/Average + selector overloads), `DispatchLinqMethod` override |
 | `src/engine/backend/system/value/valueArray.cpp` | Aggregation impls; selector dispatch in CallAsFunc; `InvokeLambdaWithArg` integration; `DispatchLinqMethod` override (7 short-circuits — Count / ToArray / ElementAt / Contains / Last / First / Any direct on the underlying vector) |
-| `src/engine/backend/compiler/byteCodeAOT.cpp` | `kAOTFormatVersion = 10` (opcode-shift after `OPER_CALL_LINQ` insertion) |
+| `src/engine/backend/compiler/byteCodeAOT.cpp` | `kAOTFormatVersion` was bumped to 10 at the `OPER_CALL_LINQ` insertion; **current in-tree value is 12** after a later CLSID encoding switch — always read the constant from the source file rather than this table |
 | `src/engine/backend/backend.vcxproj` + `.filters` | New files registered (compileContextLinqData.h, procUnitLinq.cpp, procUnitValues.h) |
 | `src/engine/frontend/win/editor/codeEditor/codeEditor.h` | `FoldLinq` kind in `ibFoldLevelParser`; `KEY_FROM` opens, `KEY_SELECT` / `KEY_GROUP` close |
 | `src/engine/frontend/win/editor/codeEditor/codeEditorLoader.cpp` | `AddKeywordFromObject` lists class-native methods only — LINQ chain surface intentionally hidden from `.`-dropdown (block syntax is the front door for users) |
