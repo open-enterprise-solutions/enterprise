@@ -1,59 +1,59 @@
-# 13. Мониторинг и логирование
+# 13. Monitoring and Logging
 
-## Стек мониторинга
+## Monitoring stack
 
-| Компонент | Инструмент | Назначение |
+| Component | Tool | Purpose |
 |-----------|-----------|------------|
-| Логи приложения | wxLog + файловый вывод | Сбор и запись событий |
-| Логи БД | Собственный обработчик ошибок ibDatabaseLayer | Медленные запросы, ошибки соединения |
-| Метрики производительности | Intel VTune / Windows Performance Monitor | CPU, RAM, I/O, время выполнения |
-| Дампы при сбоях | Windows Error Reporting / MiniDump | Анализ аварийных завершений |
-| Диагностика в runtime | DebugView (Sysinternals) | Перехват OutputDebugString |
-| Тест производительности | Very Sleepy / Superluminal | Профилирование CPU |
+| Application logs | wxLog + file output | Event capture and storage |
+| DB logs | ibDatabaseLayer custom error handler | Slow queries, connection errors |
+| Performance metrics | Intel VTune / Windows Performance Monitor | CPU, RAM, I/O, execution time |
+| Crash dumps | Windows Error Reporting / MiniDump | Postmortem of crashes |
+| Runtime diagnostics | DebugView (Sysinternals) | Capture OutputDebugString |
+| Performance testing | Very Sleepy / Superluminal | CPU profiling |
 
 ---
 
-## Логирование
+## Logging
 
-### Принципы
+### Principles
 
-1. **Уровни** — `wxLogError`, `wxLogWarning`, `wxLogMessage` (info), `wxLogDebug` — в Release только Warning и выше
-2. **Контекст** — каждое сообщение содержит: модуль, операцию, значимые параметры
-3. **Без чувствительных данных** — никаких паролей, строк подключения в открытом виде, персональных данных пользователей
-4. **Не логировать SQL с пользовательскими данными** — только шаблоны запросов
-5. **Атомарность** — одна логическая операция = один лог-блок с результатом
+1. **Levels** — `wxLogError`, `wxLogWarning`, `wxLogMessage` (info), `wxLogDebug` — in Release only Warning and above
+2. **Context** — every message contains: module, operation, key parameters
+3. **No sensitive data** — no passwords, connection strings in clear text, no user PII
+4. **Don't log SQL with user data** — only query templates
+5. **Atomicity** — one logical operation = one log block with its result
 
-### Уровни wxLog
+### wxLog levels
 
-| Макрос | Уровень | Когда использовать |
+| Macro | Level | When to use |
 |--------|---------|-------------------|
-| `wxLogError` | Error | Ошибка, требующая внимания; операция не выполнена |
-| `wxLogWarning` | Warning | Нештатная ситуация, работа продолжена с ограничениями |
-| `wxLogMessage` | Info | Значимые события: открытие БД, сохранение документа |
-| `wxLogVerbose` | Verbose | Детальная диагностика (только Debug-сборка) |
-| `wxLogDebug` | Debug | Отладочная информация (только Debug-сборка) |
+| `wxLogError` | Error | Error needing attention; operation failed |
+| `wxLogWarning` | Warning | Abnormal situation, work continues with limitations |
+| `wxLogMessage` | Info | Significant events: opening a DB, saving a document |
+| `wxLogVerbose` | Verbose | Detailed diagnostics (Debug build only) |
+| `wxLogDebug` | Debug | Debug information (Debug build only) |
 
-### Формат сообщений
+### Message format
 
-Единый формат для структурированного разбора:
-
-```
-[МОДУЛЬ] Действие: результат | param1=value1 param2=value2
-```
-
-Примеры:
+A uniform format for structured parsing:
 
 ```
-[Database] Открытие соединения: успешно | dsn=firebird://localhost/mydb
-[Database] Выполнение запроса: ошибка | table=documents duration_ms=0
-[Designer] Сохранение документа: успешно | doc_id=1042 rows=15
-[Report] Генерация отчёта: ошибка | report=balance detail=Нет данных за период
+[MODULE] Action: result | param1=value1 param2=value2
 ```
 
-### Настройка wxLog в приложении
+Examples:
+
+```
+[Database] Open connection: success | dsn=firebird://localhost/mydb
+[Database] Execute query: error | table=documents duration_ms=0
+[Designer] Save document: success | doc_id=1042 rows=15
+[Report] Generate report: error | report=balance detail=No data for period
+```
+
+### Setting up wxLog in the application
 
 ```cpp
-// main.cpp — инициализация логирования
+// main.cpp — initialize logging
 
 #include <wx/log.h>
 #include <wx/ffile.h>
@@ -80,57 +80,57 @@ protected:
     }
 };
 
-// В App::OnInit()
+// In App::OnInit()
 wxString logPath = wxStandardPaths::Get().GetUserDataDir() + "/logs/oes.log";
 wxLog* fileLog = new OesFileLog(logPath);
 wxLog::SetActiveTarget(fileLog);
 
 #ifdef NDEBUG
-    wxLog::SetLogLevel(wxLOG_Warning);   // Release: Warning и выше
+    wxLog::SetLogLevel(wxLOG_Warning);   // Release: Warning and above
 #else
-    wxLog::SetLogLevel(wxLOG_Debug);     // Debug: всё
+    wxLog::SetLogLevel(wxLOG_Debug);     // Debug: everything
 #endif
 ```
 
-### Что логировать
+### What to log
 
-| Событие | Уровень | Пример |
+| Event | Level | Example |
 |---------|---------|--------|
-| Открытие/закрытие БД | Info | `[Database] Соединение открыто: firebird://localhost/db` |
-| Ошибка подключения к БД | Error | `[Database] Ошибка соединения: connection refused` |
-| Медленный запрос (> 1 сек) | Warning | `[Database] Медленный запрос: table=reports duration_ms=1540` |
-| Сохранение документа | Info | `[Designer] Документ сохранён: id=42` |
-| Ошибка сохранения | Error | `[Designer] Ошибка сохранения: disk full` |
-| Инициализация модуля | Info | `[Module] Модуль отчётов инициализирован` |
-| Неожиданное исключение | Error | `[Core] Unhandled exception: what()=...` |
-| Смена пользователя/сессии | Info | `[Auth] Авторизация: user=admin` |
+| DB open/close | Info | `[Database] Connection opened: firebird://localhost/db` |
+| DB connection error | Error | `[Database] Connection error: connection refused` |
+| Slow query (> 1 sec) | Warning | `[Database] Slow query: table=reports duration_ms=1540` |
+| Save document | Info | `[Designer] Document saved: id=42` |
+| Save error | Error | `[Designer] Save error: disk full` |
+| Module initialization | Info | `[Module] Reports module initialized` |
+| Unexpected exception | Error | `[Core] Unhandled exception: what()=...` |
+| User/session change | Info | `[Auth] Login: user=admin` |
 
-### Чего НЕ логировать
+### What NOT to log
 
-- Пароли и строки подключения целиком
-- SQL-параметры с персональными данными (имена, ИНН, телефоны)
-- Полные бинарные буферы
-- Приватные ключи и токены
+- Passwords and full connection strings
+- SQL parameters with personal data (names, tax IDs, phone numbers)
+- Full binary buffers
+- Private keys and tokens
 
 ---
 
-## Файлы логов
+## Log files
 
-### Расположение
+### Location
 
 ```
 Windows: %APPDATA%\OES\logs\
-  oes.log          — текущий лог
-  oes_2026-04-10.log  — ротированный (по дате)
+  oes.log          — current log
+  oes_2026-04-10.log  — rotated (by date)
 
 Cross-platform (wxStandardPaths):
   wxStandardPaths::Get().GetUserDataDir() + "/logs/"
 ```
 
-### Ротация логов
+### Log rotation
 
 ```cpp
-// Простая ротация: при старте приложения переименовать старый лог
+// Simple rotation: rename the old log when the application starts
 void RotateLogFile(const wxString& logPath)
 {
     if (wxFileExists(logPath))
@@ -141,7 +141,7 @@ void RotateLogFile(const wxString& logPath)
         wxRenameFile(logPath, dated);
     }
 
-    // Удалить логи старше 30 дней
+    // Delete logs older than 30 days
     wxString logDir = wxFileName(logPath).GetPath();
     wxArrayString oldLogs;
     wxDir::GetAllFiles(logDir, &oldLogs, "oes_*.log");
@@ -160,12 +160,12 @@ void RotateLogFile(const wxString& logPath)
 
 ---
 
-## Обработка ошибок БД
+## DB error handling
 
-### Логирование ошибок ibDatabaseLayer
+### Logging ibDatabaseLayer errors
 
 ```cpp
-// Обёртка для безопасного выполнения запросов с логированием
+// Wrapper for safe query execution with logging
 bool ExecuteQuery(ibDatabaseLayer* db, const wxString& sql,
                   const wxString& context)
 {
@@ -177,19 +177,19 @@ bool ExecuteQuery(ibDatabaseLayer* db, const wxString& sql,
 
     if (!ok)
     {
-        wxLogError("[Database] Ошибка запроса | context=%s error=%s",
+        wxLogError("[Database] Query error | context=%s error=%s",
             context, db->GetErrorMessage());
         return false;
     }
 
     if (elapsed > 1000)
     {
-        wxLogWarning("[Database] Медленный запрос | context=%s duration_ms=%ld",
+        wxLogWarning("[Database] Slow query | context=%s duration_ms=%ld",
             context, elapsed);
     }
     else
     {
-        wxLogVerbose("[Database] Запрос выполнен | context=%s duration_ms=%ld",
+        wxLogVerbose("[Database] Query completed | context=%s duration_ms=%ld",
             context, elapsed);
     }
 
@@ -197,22 +197,22 @@ bool ExecuteQuery(ibDatabaseLayer* db, const wxString& sql,
 }
 ```
 
-### Логирование ошибок соединения
+### Logging connection errors
 
 ```cpp
 bool ibDatabaseLayer::OpenConnection(const DbConnectionParams& params)
 {
-    wxLogMessage("[Database] Открытие соединения | driver=%s host=%s db=%s",
+    wxLogMessage("[Database] Opening connection | driver=%s host=%s db=%s",
         params.driver, params.host, params.database);
 
     if (!Open(params.BuildDSN()))
     {
-        wxLogError("[Database] Ошибка соединения | driver=%s host=%s error=%s",
+        wxLogError("[Database] Connection error | driver=%s host=%s error=%s",
             params.driver, params.host, GetErrorMessage());
         return false;
     }
 
-    wxLogMessage("[Database] Соединение открыто успешно | driver=%s",
+    wxLogMessage("[Database] Connection opened successfully | driver=%s",
         params.driver);
     return true;
 }
@@ -220,11 +220,11 @@ bool ibDatabaseLayer::OpenConnection(const DbConnectionParams& params)
 
 ---
 
-## Аварийные дампы (Crash Dumps)
+## Crash dumps
 
-> **Примечание: этот раздел актуален только для Windows.**
-> На Linux аварийное завершение обрабатывается через обработчики сигналов (`SIGSEGV`, `SIGABRT`) и core dump-файлы.
-> Для анализа core dumps на Linux используйте `gdb -c core ./OES` или `coredumpctl debug`.
+> **Note: this section applies to Windows only.**
+> On Linux crashes are handled via signal handlers (`SIGSEGV`, `SIGABRT`) and core dump files.
+> To analyze a core dump on Linux use `gdb -c core ./OES` or `coredumpctl debug`.
 
 ### Windows MiniDump
 
@@ -256,22 +256,22 @@ LONG WINAPI OesUnhandledExceptionFilter(EXCEPTION_POINTERS* exInfo)
         CloseHandle(hFile);
     }
 
-    wxLogError("[Core] Критическое исключение. Дамп сохранён: %s", dumpPath);
+    wxLogError("[Core] Critical exception. Dump saved: %s", dumpPath);
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
-// В App::OnInit() — до любой другой инициализации
+// In App::OnInit() — before any other initialization
 SetUnhandledExceptionFilter(OesUnhandledExceptionFilter);
 ```
 
 ---
 
-## Диагностика производительности
+## Performance diagnostics
 
-### Замер времени операций
+### Measuring operation time
 
 ```cpp
-// Вспомогательный RAII-класс для замера и логирования
+// Helper RAII class for measuring and logging
 class OesScopeTimer
 {
 public:
@@ -286,12 +286,12 @@ public:
         long elapsed = m_sw.Time();
         if (elapsed >= m_warnMs)
         {
-            wxLogWarning("[Perf] Медленная операция: %s | duration_ms=%ld",
+            wxLogWarning("[Perf] Slow operation: %s | duration_ms=%ld",
                 m_operation, elapsed);
         }
         else
         {
-            wxLogVerbose("[Perf] Операция завершена: %s | duration_ms=%ld",
+            wxLogVerbose("[Perf] Operation completed: %s | duration_ms=%ld",
                 m_operation, elapsed);
         }
     }
@@ -302,19 +302,19 @@ private:
     long       m_warnMs;
 };
 
-// Использование
+// Usage
 void ReportModule::GenerateReport(const ReportParams& params)
 {
     OesScopeTimer timer("GenerateReport", 1000);
-    // ... логика генерации
+    // ... generation logic
 }
 ```
 
 ---
 
-## Health Check (диагностика состояния)
+## Health check
 
-### Функция проверки состояния приложения
+### Application health check function
 
 ```cpp
 struct OesHealthStatus
@@ -329,7 +329,7 @@ OesHealthStatus OesApp::CheckHealth()
 {
     OesHealthStatus status;
 
-    // Проверка соединения с БД
+    // Check the DB connection
     if (m_db && m_db->IsOpen())
     {
         ibResultSet* rs = m_db->RunQueryWithResults("SELECT 1 FROM RDB$DATABASE");
@@ -337,18 +337,18 @@ OesHealthStatus OesApp::CheckHealth()
         if (rs) rs->Close();
     }
 
-    // Проверка конфигурации
+    // Check configuration
     status.configOk = wxFileExists(m_configPath);
 
-    // Проверка свободного места на диске (минимум 100 МБ)
-    // Проверяем место на диске там, где хранятся данные приложения,
-    // а не в текущем рабочем каталоге (wxGetCwd() может указывать на системный диск).
+    // Check free disk space (at least 100 MB)
+    // Check the disk where application data is stored,
+    // not the current working directory (wxGetCwd() may point to the system drive).
     wxDiskspaceSize_t freeSpace = 0;
     wxString appDataDir = wxStandardPaths::Get().GetUserDataDir();
     wxGetDiskSpace(appDataDir, nullptr, &freeSpace);
     status.diskSpaceOk = (freeSpace > 100LL * 1024 * 1024);
 
-    // Итоговый статус
+    // Final status
     if (!status.databaseOk)
         status.summary += "Database: ERROR; ";
     if (!status.configOk)
@@ -365,25 +365,25 @@ OesHealthStatus OesApp::CheckHealth()
 
 ---
 
-## Чеклист мониторинга
+## Monitoring checklist
 
-### При разработке
+### During development
 
-- [ ] Все публичные методы слоя БД логируют ошибки через `wxLogError`
-- [ ] Медленные операции (> 500 мс) логируются через `wxLogWarning`
-- [ ] Инициализация модулей логируется через `wxLogMessage`
-- [ ] Нет чувствительных данных в логах
+- [ ] All public DB layer methods log errors via `wxLogError`
+- [ ] Slow operations (> 500 ms) are logged via `wxLogWarning`
+- [ ] Module initialization is logged via `wxLogMessage`
+- [ ] No sensitive data in logs
 
-### При сборке Release
+### When building Release
 
-- [ ] Уровень лога установлен в `wxLOG_Warning` (не Debug)
-- [ ] Подключён обработчик аварийных завершений (MiniDump)
-- [ ] Путь к логам указывает в `%APPDATA%\OES\logs\`
-- [ ] Ротация логов активна
+- [ ] Log level set to `wxLOG_Warning` (not Debug)
+- [ ] Crash handler hooked up (MiniDump)
+- [ ] Log path points to `%APPDATA%\OES\logs\`
+- [ ] Log rotation enabled
 
-### Периодически
+### Periodically
 
-- [ ] Проверить логи на наличие повторяющихся ошибок
-- [ ] Проанализировать предупреждения о медленных запросах
-- [ ] Убедиться, что дампы (если есть) проанализированы
-- [ ] Очистить старые лог-файлы (> 30 дней)
+- [ ] Review logs for recurring errors
+- [ ] Analyze warnings about slow queries
+- [ ] Ensure crash dumps (if any) have been analyzed
+- [ ] Clean up old log files (> 30 days)

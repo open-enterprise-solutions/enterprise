@@ -1,89 +1,89 @@
-# 19. Производительность
+# 19. Performance
 
-## Целевые показатели
+## Target metrics
 
-| Операция | Цель | Критично |
+| Operation | Target | Critical |
 |----------|------|---------|
-| Запуск приложения | < 3 сек | > 10 сек |
-| Открытие документа | < 1 сек | > 5 сек |
-| Генерация отчёта (100 строк) | < 2 сек | > 10 сек |
-| Сохранение документа | < 500 мс | > 3 сек |
-| SQL-запрос (один объект) | < 50 мс | > 500 мс |
-| SQL-запрос (список, 1000 строк) | < 500 мс | > 3 сек |
-| Рендер страницы дизайнера | < 16 мс (60 fps) | > 100 мс |
-| Переключение вкладок / диалогов | < 200 мс | > 1 сек |
+| App startup | < 3 sec | > 10 sec |
+| Opening a document | < 1 sec | > 5 sec |
+| Generating a report (100 rows) | < 2 sec | > 10 sec |
+| Saving a document | < 500 ms | > 3 sec |
+| SQL query (single object) | < 50 ms | > 500 ms |
+| SQL query (list, 1000 rows) | < 500 ms | > 3 sec |
+| Designer page rendering | < 16 ms (60 fps) | > 100 ms |
+| Tab/dialog switching | < 200 ms | > 1 sec |
 
 ---
 
-## Профилирование
+## Profiling
 
 ### Intel VTune Profiler (Windows)
 
-Основной инструмент для анализа CPU hotspots:
+The primary tool for CPU hotspot analysis:
 
 ```
-1. Запустить OES в конфигурации Release с /DEBUG символами
+1. Run OES in Release with /DEBUG symbols
 2. VTune → New Analysis → Hotspots (CPU)
-3. Запустить приложение, воспроизвести медленный сценарий
-4. Остановить коллекцию
-5. Анализ:
-   - Bottom-Up → найти функции с наибольшим CPU Time
-   - Call Stack → понять, откуда вызывается горячая функция
-   - Source View → точное место в коде
+3. Run the app, reproduce the slow scenario
+4. Stop the collection
+5. Analysis:
+   - Bottom-Up → find functions with the highest CPU Time
+   - Call Stack → understand where the hot function is called from
+   - Source View → exact spot in the code
 ```
 
-### Very Sleepy (бесплатный, Windows)
+### Very Sleepy (free, Windows)
 
 ```
-1. Запустить OES
-2. Very Sleepy → Attach to process → выбрать OES.exe
-3. Start / Stop профилирование во время медленной операции
-4. Анализ Call Tree — найти hotspot
+1. Run OES
+2. Very Sleepy → Attach to process → pick OES.exe
+3. Start / Stop profiling during the slow operation
+4. Inspect Call Tree — find the hotspot
 ```
 
 ### Visual Studio Diagnostic Tools
 
 ```
 Debug → Performance Profiler → CPU Usage
-— без остановки приложения, прямо в IDE
-— полезно для быстрого выявления регрессий
+— no need to stop the app, runs straight in the IDE
+— useful for spotting regressions quickly
 ```
 
-### perf (Linux / кросс-платформенная сборка)
+### perf (Linux / cross-platform build)
 
 ```bash
-# Собрать с символами отладки
+# Build with debug symbols
 cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
-# Профилирование
+# Profile
 perf record -g ./OES
 perf report --stdio
 
 # Flamegraph
-# Требуется клонировать репозиторий brendangregg/FlameGraph:
+# Requires cloning brendangregg/FlameGraph:
 #   git clone https://github.com/brendangregg/FlameGraph ~/FlameGraph
-# Затем добавить в PATH:
+# Then add it to PATH:
 #   export PATH="$HOME/FlameGraph:$PATH"
 perf script | stackcollapse-perf.pl | flamegraph.pl > flame.svg
 ```
 
 ---
 
-## Оптимизация работы с базой данных
+## Database optimization
 
-### N+1 запросы — главная проблема производительности
+### N+1 queries — the main performance problem
 
 ```cpp
-// НЕПРАВИЛЬНО — N+1: один запрос на список + N запросов на детали
-std::vector<DocumentInfo> docs = m_repo->GetList();  // 1 запрос
+// WRONG — N+1: one query for the list + N queries for details
+std::vector<DocumentInfo> docs = m_repo->GetList();  // 1 query
 for (auto& doc : docs)
 {
-    // Каждый вызов — отдельный SELECT
-    doc.sections = m_sectionRepo->GetByDocId(doc.id);  // N запросов
-    doc.owner    = m_userRepo->GetById(doc.ownerId);    // ещё N запросов
+    // Each call — a separate SELECT
+    doc.sections = m_sectionRepo->GetByDocId(doc.id);  // N queries
+    doc.owner    = m_userRepo->GetById(doc.ownerId);    // another N queries
 }
 
-// ПРАВИЛЬНО — JOIN в одном запросе
+// RIGHT — JOIN in a single query
 ibPreparedStatement* stmt = db->PrepareStatement(R"(
     SELECT d.id, d.name, d.status,
            s.id AS sec_id, s.title AS sec_title,
@@ -94,20 +94,20 @@ ibPreparedStatement* stmt = db->PrepareStatement(R"(
     WHERE d.is_deleted = 0
     ORDER BY d.id, s.sort_order
 )");
-// Затем собрать объектный граф из flat result set
+// Then assemble the object graph from a flat result set
 ```
 
-### Оптимизация подготовленных выражений
+### Prepared statement optimization
 
 ```cpp
-// Переиспользуйте prepared statements — не пересоздавайте на каждый вызов
+// Reuse prepared statements — do not re-create on every call
 class OesDocumentRepository
 {
 public:
     explicit OesDocumentRepository(ibDatabaseLayer* db)
         : m_db(db)
     {
-        // Подготовить один раз при создании репозитория
+        // Prepare once when the repository is created
         m_stmtGetById = m_db->PrepareStatement(
             "SELECT id, name, status FROM documents WHERE id = ?");
         m_stmtInsert  = m_db->PrepareStatement(
@@ -122,7 +122,7 @@ public:
 
     bool GetById(int id, DocumentData& out, wxString& err)
     {
-        // Использовать уже подготовленное выражение
+        // Reuse the prepared statement
         m_stmtGetById->SetParamInt(1, id);
         OesResultSetGuard rs(m_stmtGetById->RunQueryWithResults());
         // ...
@@ -135,28 +135,28 @@ private:
 };
 ```
 
-### Пагинация — обязательно для списков
+### Pagination — mandatory for lists
 
 ```cpp
-// Всегда ограничивать выборку — никогда SELECT без LIMIT
+// Always cap the result set — never SELECT without LIMIT
 struct QueryParams
 {
     int     page      = 1;
-    int     pageSize  = 50;   // максимум 500
+    int     pageSize  = 50;   // max 500
     wxString sortField = "created_at";
     bool    sortAsc   = false;
     wxString filter;
 };
 
 // Firebird: ROWS M TO N
-// ВНИМАНИЕ: синтаксис "ROWS ? TO ?" поддерживается не всеми версиями
-// драйверов ibDatabase/IBPP как параметризованные placeholder-ы.
-// Если драйвер не поддерживает — используйте безопасную альтернативу:
+// NOTE: the "ROWS ? TO ?" syntax is not supported as parameterized
+// placeholders by every version of the ibDatabase/IBPP driver.
+// If the driver does not support it — use the safe alternative:
 //   "SELECT ... FROM ... ORDER BY ... ROWS " + rowFrom + " TO " + rowTo
-// или предпочтительный синтаксис FIRST/SKIP (обратный порядок аргументов):
+// or the preferred FIRST/SKIP syntax (note the argument order):
 //   "SELECT FIRST ? SKIP ? id, name, status FROM documents ..."
-// где FIRST = pageSize, SKIP = (page-1)*pageSize.
-// Проверяйте документацию используемой версии обёртки над Firebird API.
+// where FIRST = pageSize, SKIP = (page-1)*pageSize.
+// Verify the docs of the Firebird API wrapper you're using.
 
 ibPreparedStatement* stmt = db->PrepareStatement(
     "SELECT id, name, status "
@@ -170,7 +170,7 @@ int rowTo   = params.page * params.pageSize;
 stmt->SetParamInt(1, rowFrom);
 stmt->SetParamInt(2, rowTo);
 
-// Более переносимая альтернатива для Firebird (FIRST ? SKIP ?):
+// More portable Firebird alternative (FIRST ? SKIP ?):
 // ibPreparedStatement* stmt = db->PrepareStatement(
 //     "SELECT FIRST ? SKIP ? id, name, status "
 //     "FROM documents WHERE is_deleted = 0 ORDER BY created_at DESC"
@@ -182,24 +182,24 @@ stmt->SetParamInt(2, rowTo);
 // ... "LIMIT ? OFFSET ?"
 ```
 
-### Индексы — анализ планов запросов
+### Indexes — query plan analysis
 
 ```sql
--- Firebird: анализ плана
+-- Firebird: plan analysis
 SET PLANONLY;
 SELECT * FROM documents WHERE status = 'active' ORDER BY created_at DESC;
--- Вывод: PLAN (DOCUMENTS ORDER IDX_DOCUMENTS_STATUS) — индекс используется
--- Или:   PLAN (DOCUMENTS NATURAL) — full scan, нужен индекс!
+-- Output: PLAN (DOCUMENTS ORDER IDX_DOCUMENTS_STATUS) — index used
+-- Or:     PLAN (DOCUMENTS NATURAL) — full scan, needs an index!
 
--- Добавить индекс
+-- Add the index
 CREATE INDEX idx_documents_status_created
   ON documents (status, created_at DESC);
 ```
 
-### Пакетные операции (Batch Insert/Update)
+### Batch operations (Batch Insert/Update)
 
 ```cpp
-// Медленно — отдельный INSERT на каждую строку
+// Slow — a separate INSERT for every row
 for (const auto& item : items)
 {
     ibPreparedStatement* stmt = db->PrepareStatement(
@@ -210,7 +210,7 @@ for (const auto& item : items)
     stmt->Close();
 }
 
-// Быстро — один prepared statement, транзакция, batch
+// Fast — one prepared statement, one transaction, batch
 {
     ibTransactionGuard txn(db);
     OesStatementGuard stmt(db->PrepareStatement(
@@ -224,25 +224,25 @@ for (const auto& item : items)
     }
     txn.Commit();
 }
-// Транзакция + один PreparedStatement = 10-100x быстрее
+// One transaction + one PreparedStatement = 10-100x faster
 ```
 
 ---
 
-## Оптимизация UI
+## UI optimization
 
-### Избегать лишних Refresh / Repaint
+### Avoid extra Refresh / Repaint
 
 ```cpp
-// Неправильно — перерисовка на каждое изменение
+// Wrong — repaint on every change
 for (const auto& item : items)
 {
-    m_grid->SetCellValue(row, 0, item.name);   // каждый вызов — repaint
+    m_grid->SetCellValue(row, 0, item.name);   // each call — repaint
     m_grid->SetCellValue(row, 1, item.status);
     row++;
 }
 
-// Правильно — заморозить обновление
+// Right — freeze updates
 m_grid->BeginBatch();
 for (const auto& item : items)
 {
@@ -253,10 +253,10 @@ for (const auto& item : items)
 m_grid->EndBatch();
 ```
 
-### Виртуальный список для больших данных
+### Virtual list for large data
 
 ```cpp
-// wxListCtrl в режиме wxLC_VIRTUAL — не хранит все элементы в памяти
+// wxListCtrl in wxLC_VIRTUAL mode — doesn't keep every item in memory
 class OesDocumentList : public wxListCtrl
 {
 public:
@@ -273,7 +273,7 @@ public:
     }
 
 protected:
-    // Вызывается только для видимых строк
+    // Called only for visible rows
     wxString OnGetItemText(long item, long column) const override
     {
         if (item < 0 || item >= (long)m_items.size()) return {};
@@ -291,11 +291,11 @@ private:
 };
 ```
 
-### Длительные операции в фоновом потоке
+### Long operations on a background thread
 
 ```cpp
-// Не блокировать UI-поток операциями > 100 мс
-// Использовать wxThread или std::thread + wxQueueEvent
+// Do not block the UI thread with operations > 100 ms
+// Use wxThread or std::thread + wxQueueEvent
 
 class OesReportGeneratorThread : public wxThread
 {
@@ -312,7 +312,7 @@ protected:
     {
         ReportResult result = m_engine->Generate(m_params);
 
-        // Отправить результат в UI-поток (потокобезопасно)
+        // Send the result to the UI thread (thread-safe)
         auto* evt = new wxThreadEvent(OES_EVT_REPORT_DONE);
         evt->SetPayload(result);
         wxQueueEvent(m_handler, evt);
@@ -325,7 +325,7 @@ private:
     std::unique_ptr<IReportEngine> m_engine = CreateReportEngine();
 };
 
-// В UI-обработчике:
+// In the UI handler:
 void OesReportView::OnGenerateReport(wxCommandEvent&)
 {
     m_progressBar->Show();
@@ -334,7 +334,7 @@ void OesReportView::OnGenerateReport(wxCommandEvent&)
     auto* thread = new OesReportGeneratorThread(this, GetParams());
     if (thread->Run() != wxTHREAD_NO_ERROR)
     {
-        wxLogError("[Report] Не удалось запустить поток генерации");
+        wxLogError("[Report] Failed to start the generation thread");
         delete thread;
     }
 }
@@ -348,64 +348,64 @@ void OesReportView::OnReportDone(wxThreadEvent& evt)
     if (result.success)
         LoadResult(result);
     else
-        wxMessageBox(result.errorMsg, "Ошибка генерации отчёта",
+        wxMessageBox(result.errorMsg, "Report generation error",
                      wxOK | wxICON_ERROR, this);
 }
 ```
 
 ---
 
-## Оптимизация памяти
+## Memory optimization
 
-### Профилирование памяти
+### Memory profiling
 
-**Dr. Memory (Windows, бесплатный):**
+**Dr. Memory (Windows, free):**
 ```
 drmemory -light -- OES.exe
-— Находит утечки, use-after-free, invalid reads/writes
+— finds leaks, use-after-free, invalid reads/writes
 ```
 
-**Address Sanitizer (MSVC 2019+, Debug-сборка):**
+**Address Sanitizer (MSVC 2019+, Debug build):**
 ```
-В .vcxproj: C/C++ → Enable Address Sanitizer: Yes (/fsanitize=address)
-— Ловит переполнения буфера, use-after-free в runtime
+In .vcxproj: C/C++ → Enable Address Sanitizer: Yes (/fsanitize=address)
+— catches buffer overflows, use-after-free at runtime
 ```
 
 **Visual Studio Diagnostic Tools:**
 ```
 Debug → Windows → Diagnostic Tools → Memory Usage
-— Снимок кучи, сравнение снимков до/после операции
+— heap snapshot, compare before/after an operation
 ```
 
-### Избегать лишних копирований
+### Avoid unnecessary copies
 
 ```cpp
-// Дорого — копирование строки при каждом вызове
+// Expensive — copies the string on every call
 wxString GetDocumentName(int id)
 {
-    return m_documents[id].name;   // копирование wxString
+    return m_documents[id].name;   // wxString copy
 }
 
-// Дешевле — константная ссылка (если объект живёт достаточно долго)
+// Cheaper — const reference (if the object lives long enough)
 const wxString& GetDocumentName(int id) const
 {
     return m_documents[id].name;
 }
 
-// Move-семантика для передачи больших объектов
+// Move semantics for passing large objects
 void SetDocumentList(std::vector<DocumentInfo> items)
 {
-    m_items = std::move(items);   // O(1) вместо O(n)
+    m_items = std::move(items);   // O(1) instead of O(n)
 }
 ```
 
-### Кэширование тяжёлых вычислений
+### Caching heavy computations
 
 ```cpp
 class OesDashboardModel
 {
 public:
-    // Кэш статистики — пересчитывается только при изменении данных
+    // Stats cache — recomputed only when data changes
     const DashboardStats& GetStats()
     {
         if (m_statsDirty)
@@ -418,7 +418,7 @@ public:
 
     void OnDocumentChanged()
     {
-        m_statsDirty = true;  // инвалидация кэша
+        m_statsDirty = true;  // invalidate the cache
     }
 
 private:
@@ -429,64 +429,64 @@ private:
 };
 ```
 
-### Cache-friendly структуры данных
+### Cache-friendly data structures
 
 ```cpp
-// Плохо — Array of Structures (AoS): при итерации — cache miss на каждом поле
+// Bad — Array of Structures (AoS): iteration — cache miss on each field
 struct DocumentRecord {
     int     id;
-    wxString name;    // большой объект
-    wxString status;  // большой объект
-    wxString content; // очень большой объект
+    wxString name;    // big object
+    wxString status;  // big object
+    wxString content; // very big object
     wxDateTime createdAt;
 };
 std::vector<DocumentRecord> m_docs;
 
-// При рендере списка (только id, name, status) — тянем весь content в кэш
+// When rendering the list (id, name, status only) — pulls the whole content into cache
 
-// Лучше — разделить "горячие" и "холодные" данные
-struct DocumentSummary {  // маленький, для списков
+// Better — split "hot" and "cold" data
+struct DocumentSummary {  // small, for lists
     int     id;
     wxString name;
     wxString status;
 };
 
-struct DocumentDetail {   // большой, загружается по требованию
+struct DocumentDetail {   // large, loaded on demand
     int     id;
     wxString content;
     wxString rawData;
 };
 
-std::vector<DocumentSummary> m_summaries;  // всегда в памяти
-// Детали — загружаются при открытии конкретного документа
+std::vector<DocumentSummary> m_summaries;  // always in memory
+// Details — loaded when a specific document is opened
 ```
 
 ---
 
-## Оптимизация сборки
+## Build optimization
 
 ### Release vs Debug
 
 ```
 Debug:
-  /MDd, /Od (без оптимизации), /Z7 (символы отладки)
-  → медленно, но удобно для отладки
+  /MDd, /Od (no optimization), /Z7 (debug symbols)
+  → slow, but easy to debug
 
 Release:
-  /MD, /O2 (оптимизация скорости) или /Os (размер)
+  /MD, /O2 (speed) or /Os (size)
   /Oi (intrinsics), /GL (whole program optimization)
-  → максимальная производительность
+  → maximum performance
 
-RelWithDebInfo (для профилирования):
-  /MD, /O2, /Zi + /DEBUG при линковке
-  → скорость Release + символы для профайлера
+RelWithDebInfo (for profiling):
+  /MD, /O2, /Zi + /DEBUG at link time
+  → Release speed + symbols for the profiler
 ```
 
 ### Precompiled Headers (PCH)
 
 ```cpp
-// stdafx.h / pch.h — предкомпилированный заголовок
-// Включить все тяжёлые, редко меняющиеся заголовки
+// stdafx.h / pch.h — precompiled header
+// Include all heavy, rarely-changing headers
 #pragma once
 #include <wx/wx.h>
 #include <wx/string.h>
@@ -501,19 +501,19 @@ RelWithDebInfo (для профилирования):
 // target_precompile_headers(OES PRIVATE src/stdafx.h)
 ```
 
-### Unity Build (ускорение компиляции)
+### Unity Build (compilation speedup)
 
 ```cmake
-# CMakeLists.txt — объединить несколько .cpp в одну единицу компиляции
+# CMakeLists.txt — combine multiple .cpp into a single translation unit
 set_target_properties(OES PROPERTIES UNITY_BUILD ON)
-# Сокращает время компиляции в 2-5 раз для больших проектов
+# Cuts compile time by 2-5x for large projects
 ```
 
 ---
 
-## Нагрузочное тестирование
+## Load testing
 
-### Тест с большими объёмами данных
+### Test with large data volumes
 
 ```cpp
 // tests/performance/test_bulk_operations.cpp
@@ -538,34 +538,34 @@ TEST(PerformanceTest, BulkInsert_1000Documents_Under5Seconds)
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::high_resolution_clock::now() - start).count();
 
-    EXPECT_LT(elapsed, 5000) << "Вставка 1000 документов заняла " << elapsed << " мс";
+    EXPECT_LT(elapsed, 5000) << "Inserting 1000 documents took " << elapsed << " ms";
 }
 
-// ВАЖНО: OesDocumentList — это wxListCtrl (наследник wxWindow).
-// wxWidgets-контролы требуют родительского окна; передача nullptr приводит
-// к неопределённому поведению или крашу. Такой тест является
-// ИНТЕГРАЦИОННЫМ и должен выполняться с родительским фреймом.
+// IMPORTANT: OesDocumentList is a wxListCtrl (derived from wxWindow).
+// wxWidgets controls need a parent window; passing nullptr is undefined
+// behaviour or causes a crash. Such a test is an INTEGRATION test and
+// must run with a parent frame.
 //
-// Паттерн wxTestableFrame (доступен в wxWidgets >= 3.1):
+// wxTestableFrame pattern (available in wxWidgets >= 3.1):
 //
 //   class RenderListTest : public wxTestCase   // wxWidgets test suite
 //   {
 //       void TestRenderList() {
 //           wxTestableFrame* frame = new wxTestableFrame();
 //           OesDocumentList* list  = new OesDocumentList(frame);
-//           // ... тест ...
+//           // ... test ...
 //           frame->Destroy();
 //       }
 //   };
 //
-// В среде Google Test (без event loop) используйте wxApp::SetInstance +
-// wxEntryStart / wxEntryCleanup, либо вынесите этот тест в отдельный
-// исполняемый файл интеграционных тестов, запускаемых в CI на Windows.
+// In a Google Test environment (no event loop) use wxApp::SetInstance +
+// wxEntryStart / wxEntryCleanup, or extract this test into a separate
+// integration-test binary that runs in CI on Windows.
 
-// Пример интеграционного теста (requires wxApp и visible frame):
+// Integration test example (requires wxApp and a visible frame):
 // TEST(PerformanceIntegrationTest, RenderList_10000Items_Under200ms)
 // {
-//     // Предполагается, что wxApp уже инициализирован в main_test.cpp
+//     // Assumes wxApp is already initialized in main_test.cpp
 //     wxFrame* frame = new wxFrame(nullptr, wxID_ANY, "Test");
 //     frame->Show();
 //
@@ -581,46 +581,46 @@ TEST(PerformanceTest, BulkInsert_1000Documents_Under5Seconds)
 //     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
 //         std::chrono::high_resolution_clock::now() - start).count();
 //
-//     EXPECT_LT(elapsed, 200) << "Установка 10000 элементов заняла " << elapsed << " мс";
+//     EXPECT_LT(elapsed, 200) << "Setting 10000 items took " << elapsed << " ms";
 //     frame->Destroy();
 // }
 ```
 
 ---
 
-## Инструменты
+## Tools
 
-| Инструмент | Назначение | Платформа |
+| Tool | Purpose | Platform |
 |------------|-----------|-----------|
 | Intel VTune | CPU hotspots, threading | Windows |
-| Very Sleepy | CPU profiling (бесплатный) | Windows |
-| Visual Studio Diagnostic Tools | CPU, память, в IDE | Windows |
-| Dr. Memory | Утечки памяти, invalid access | Windows / Linux |
+| Very Sleepy | CPU profiling (free) | Windows |
+| Visual Studio Diagnostic Tools | CPU, memory, in-IDE | Windows |
+| Dr. Memory | Memory leaks, invalid access | Windows / Linux |
 | Address Sanitizer (ASan) | Buffer overflow, use-after-free | MSVC 2019+ / GCC / Clang |
 | perf + Flamegraph | CPU profiling | Linux |
-| Valgrind (massif) | Анализ кучи | Linux |
-| WinDbg | Анализ дампов, memory | Windows |
-| `wxStopWatch` | Замер времени в коде | Кросс-платформенный |
+| Valgrind (massif) | Heap analysis | Linux |
+| WinDbg | Dump analysis, memory | Windows |
+| `wxStopWatch` | In-code timing | Cross-platform |
 
 ---
 
-## Чеклист производительности
+## Performance checklist
 
-### Перед релизом
+### Before release
 
-- [ ] Приложение запускается < 3 сек на целевом железе (Core i5, 8 GB RAM, HDD)
-- [ ] Открытие типичного документа < 1 сек
-- [ ] Нет N+1 запросов в новых репозиториях
-- [ ] Длительные операции (> 500 мс) вынесены в фоновый поток
-- [ ] Пагинация включена на всех списках (pageSize ≤ 500)
-- [ ] Индексы добавлены для новых полей фильтрации и сортировки
-- [ ] Нет `SELECT *` в production-запросах
-- [ ] Транзакции используются для batch-операций
+- [ ] App starts in < 3 sec on target hardware (Core i5, 8 GB RAM, HDD)
+- [ ] Opening a typical document < 1 sec
+- [ ] No N+1 queries in new repositories
+- [ ] Long operations (> 500 ms) moved to a background thread
+- [ ] Pagination enabled on every list (pageSize ≤ 500)
+- [ ] Indexes added for new filter/sort columns
+- [ ] No `SELECT *` in production queries
+- [ ] Transactions used for batch operations
 
-### Периодически
+### Periodically
 
-- [ ] Профилирование сценария "открытие большого проекта" (VTune / Very Sleepy)
-- [ ] Анализ планов медленных SQL-запросов (PLAN / EXPLAIN)
-- [ ] Проверка утечек памяти (Dr. Memory или ASan-сборка)
-- [ ] Нагрузочный тест: 10 000 документов в списке, генерация 500-строчного отчёта
-- [ ] Проверка потребления RAM при работе в течение 8 часов (нет утечек)
+- [ ] Profile the "open large project" scenario (VTune / Very Sleepy)
+- [ ] Analyze plans for slow SQL queries (PLAN / EXPLAIN)
+- [ ] Check for memory leaks (Dr. Memory or ASan build)
+- [ ] Load test: 10 000 documents in the list, 500-row report generation
+- [ ] RAM usage check after 8 hours of work (no leaks)

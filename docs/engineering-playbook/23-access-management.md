@@ -1,115 +1,115 @@
-# 23. Управление доступами
+# 23. Access Management
 
-## Принцип минимальных привилегий
+## Principle of least privilege
 
-> Каждый участник получает **минимально необходимый** уровень доступа для выполнения своей работы. Не больше.
+> Every team member receives the **minimum required** access level to do their job. Nothing more.
 
 ---
 
-## Матрица доступов
+## Access matrix
 
 ### GitHub
 
-| Роль | Repos (свой Team) | Repos (чужой Team) | Org settings | Billing |
+| Role | Repos (own Team) | Repos (other Team) | Org settings | Billing |
 |------|-------------------|-------------------|-------------|---------|
 | Developer | Write | — | — | — |
-| Senior/Lead | Write + branch protection | Read (по запросу) | — | — |
+| Senior/Lead | Write + branch protection | Read (on request) | — | — |
 | Build/Release | Write + Tags | Read | — | — |
 | CTO/Owner | Admin | Admin | Admin | Admin |
 
-### Серверы сборки / CI (SSH)
+### Build / CI servers (SSH)
 
-| Роль | Build Server | Release Storage | Signing Key |
+| Role | Build Server | Release Storage | Signing Key |
 |------|-------------|-----------------|-------------|
 | Junior Dev | — | — | — |
-| Developer | Read (логи сборки) | — | — |
-| Senior/Lead | Full (запуск сборок) | Read | — |
+| Developer | Read (build logs) | — | — |
+| Senior/Lead | Full (trigger builds) | Read | — |
 | Build Engineer | Full | Full | Restricted |
 | CTO | Full | Full | Full |
 
-### Базы данных (Firebird / PostgreSQL / SQLite)
+### Databases (Firebird / PostgreSQL / SQLite)
 
-| Роль | SELECT | INSERT/UPDATE | DELETE | ALTER/DROP | Backup (gbak) |
+| Role | SELECT | INSERT/UPDATE | DELETE | ALTER/DROP | Backup (gbak) |
 |------|--------|-------------|--------|-----------|---------------|
-| App (ORM) | ✅ | ✅ | ✅ | — | — |
-| Developer (staging) | ✅ | ✅ | — | — | — |
-| Senior/Lead | ✅ | ✅ | ✅ (staging) | — | — |
-| DBA / DevOps | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Backup cron | ✅ | — | — | — | ✅ |
-| Read-only reporter | ✅ | — | — | — | — |
+| App (ORM) | yes | yes | yes | — | — |
+| Developer (staging) | yes | yes | — | — | — |
+| Senior/Lead | yes | yes | yes (staging) | — | — |
+| DBA / DevOps | yes | yes | yes | yes | yes |
+| Backup cron | yes | — | — | — | yes |
+| Read-only reporter | yes | — | — | — | — |
 
-### Доступ к production-данным клиентов
+### Access to customer production data
 
-> **Никто из разработчиков не имеет прямого доступа к production БД клиентов без явного запроса и одобрения.**
+> **No developer has direct access to a customer production DB without an explicit request and approval.**
 
-| Событие | Кто одобряет | Способ доступа | Фиксация |
+| Event | Who approves | Access method | Record |
 |---------|-------------|----------------|---------|
-| Диагностика инцидента | CTO + клиент | Временный read-only | Jira-тикет |
-| Миграция данных | CTO | Скрипт под наблюдением | PR + лог |
-| Восстановление из бэкапа | CTO + клиент | Через DevOps | Протокол |
+| Incident diagnostics | CTO + customer | Temporary read-only | Jira ticket |
+| Data migration | CTO | Supervised script | PR + log |
+| Restore from backup | CTO + customer | Through DevOps | Protocol |
 
-### Внешние сервисы
+### External services
 
-| Сервис | Developer | Lead | Build Engineer | CTO |
+| Service | Developer | Lead | Build Engineer | CTO |
 |--------|-----------|------|----------------|-----|
 | GitHub Actions Secrets | — | — | Full | Full |
 | Code Signing Certificate | — | — | Restricted | Full |
 | Release CDN | — | Read | Full | Full |
 | Crash Report Server | Read | Full | — | Full |
 | Update Server | — | Read | Full | Full |
-| Jira | Write (свой проект) | Admin (свой проект) | — | Admin |
-| Telegram Bot (алерты) | — | Read | Full | Full |
+| Jira | Write (own project) | Admin (own project) | — | Admin |
+| Telegram Bot (alerts) | — | Read | Full | Full |
 
-### Лицензионные ключи и дистрибутив
+### License keys and distribution
 
-| Действие | Роль |
+| Action | Role |
 |----------|------|
-| Создание trial-ключа клиенту | Lead или CTO |
-| Создание коммерческой лицензии | CTO |
-| Публикация релиза на сайте | Build Engineer + CTO |
-| Подписание инсталлятора | Build Engineer (сертификат в HSM/сейфе) |
+| Issue a trial key to a customer | Lead or CTO |
+| Issue a commercial license | CTO |
+| Publish a release on the site | Build Engineer + CTO |
+| Sign the installer | Build Engineer (certificate in HSM/safe) |
 
 ---
 
-## Процесс выдачи доступа
+## Access provisioning
 
-### Запрос
+### Request
 
 ```
-1. Разработчик → запрос в Telegram/Jira:
-   "Нужен доступ к [что] для [зачем] до [дата если временный]"
+1. Developer → request in Telegram/Jira:
+   "Need access to [what] for [why] until [date if temporary]"
 
-2. Тимлид → одобряет или отклоняет
+2. Tech lead → approves or rejects
 
-3. DevOps/Admin → выдаёт доступ
+3. DevOps/Admin → grants access
 
-4. Фиксация:
-   - Кто запросил
-   - Кто одобрил
-   - Что выдано (конкретно)
-   - Когда + срок действия (если временный)
+4. Recorded:
+   - Who requested
+   - Who approved
+   - What was granted (specifically)
+   - When + expiration (if temporary)
 ```
 
-### GitHub — добавление в Team
+### GitHub — adding to a Team
 
 ```bash
-# Через GitHub UI:
+# Via GitHub UI:
 # Organization → People → Invite member → Add to Team
 
-# Или через CLI:
+# Or via CLI:
 gh api orgs/OES-TEAM/teams/TEAM/memberships/USERNAME -f role=member
 ```
 
-### Доступ к build-серверу
+### Access to the build server
 
 ```bash
-# 1. Разработчик генерирует ed25519 ключ
+# 1. Developer generates an ed25519 key
 ssh-keygen -t ed25519 -C "name@company.com" -f ~/.ssh/oes_build_key
 
-# 2. Отправляет ПУБЛИЧНЫЙ ключ через защищённый канал (не Telegram!)
+# 2. Sends the PUBLIC key through a secure channel (not Telegram!)
 cat ~/.ssh/oes_build_key.pub
 
-# 3. DevOps добавляет — создаёт отдельного пользователя, не root
+# 3. DevOps adds it — creates a dedicated user, not root
 useradd -m -s /bin/bash developer_name
 mkdir -p /home/developer_name/.ssh
 echo "ssh-ed25519 AAAA... name@company.com" \
@@ -117,54 +117,54 @@ echo "ssh-ed25519 AAAA... name@company.com" \
 chmod 700  /home/developer_name/.ssh
 chmod 600  /home/developer_name/.ssh/authorized_keys
 
-# 4. Ограничить доступ (только логи CMake)
+# 4. Restrict access (CMake logs only)
 # /etc/sudoers.d/developer_name:
 # developer_name ALL=(ALL) NOPASSWD: /usr/bin/cmake --build *
 # developer_name ALL=(ALL) NOPASSWD: /usr/bin/tail -f /var/log/build.log
 ```
 
-### База данных Firebird — пользователи
+### Firebird database — users
 
 ```sql
--- Firebird: пользователи управляются через gsec или SQL (Firebird 3+)
+-- Firebird: users are managed through gsec or SQL (Firebird 3+)
 
--- ВАЖНО: Firebird НЕ поддерживает "GRANT ... ON ALL TABLES TO ..."
--- (в отличие от PostgreSQL). Права нужно выдавать пер-таблично.
--- Используйте роли и скрипт для автоматизации:
+-- IMPORTANT: Firebird does NOT support "GRANT ... ON ALL TABLES TO ..."
+-- (unlike PostgreSQL). Grants must be issued per table.
+-- Use roles and a script to automate:
 
--- 1. Создать роль
+-- 1. Create roles
 CREATE ROLE ROLE_READONLY;
 CREATE ROLE ROLE_APP;
 
--- 2. Выдать права роли на каждую таблицу (повторить для всех таблиц)
---    Или сгенерировать скрипт из системных таблиц:
+-- 2. Grant role privileges on each table (repeat for every table)
+--    Or generate the script from system tables:
 -- SELECT 'GRANT SELECT ON ' || RDB$RELATION_NAME || ' TO ROLE_READONLY;'
 --   FROM RDB$RELATIONS
 --  WHERE RDB$SYSTEM_FLAG = 0 AND RDB$VIEW_BLR IS NULL;
 GRANT SELECT ON DOCUMENTS         TO ROLE_READONLY;
 GRANT SELECT ON DOCUMENT_SECTIONS TO ROLE_READONLY;
 GRANT SELECT ON USERS              TO ROLE_READONLY;
--- ... остальные таблицы ...
+-- ... other tables ...
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON DOCUMENTS         TO ROLE_APP;
 GRANT SELECT, INSERT, UPDATE, DELETE ON DOCUMENT_SECTIONS TO ROLE_APP;
--- ... остальные таблицы ...
+-- ... other tables ...
 
--- 3. Создать пользователей и назначить роли
+-- 3. Create users and assign roles
 CREATE USER DEV_READONLY PASSWORD 'strong-password';
 GRANT ROLE_READONLY TO DEV_READONLY;
 
 CREATE USER OES_APP PASSWORD 'strong-password';
 GRANT ROLE_APP TO OES_APP;
 
--- Пользователь для бэкапа
+-- Backup user
 CREATE USER BACKUP_CRON PASSWORD 'strong-password';
--- gbak требует только CONNECT
+-- gbak only needs CONNECT
 ```
 
 ```sql
--- PostgreSQL (для дополнительных БД)
--- Read-only для разработчика
+-- PostgreSQL (for additional DBs)
+-- Read-only for a developer
 CREATE USER dev_readonly WITH PASSWORD 'strong-password';
 GRANT CONNECT ON DATABASE oes_db TO dev_readonly;
 GRANT USAGE ON SCHEMA public TO dev_readonly;
@@ -172,67 +172,67 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO dev_readonly;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
     GRANT SELECT ON TABLES TO dev_readonly;
 
--- Полный доступ для приложения
+-- Full access for the application
 CREATE USER oes_app WITH PASSWORD 'strong-password';
 GRANT ALL PRIVILEGES ON DATABASE oes_db TO oes_app;
 ```
 
 ---
 
-## Процесс отзыва доступа
+## Access revocation
 
-### Когда отзывать
+### When to revoke
 
-| Событие | Действие | Срок |
+| Event | Action | Deadline |
 |---------|---------|------|
-| Увольнение | Отозвать ВСЁ | Немедленно (в тот же день) |
-| Перевод на другой проект | Отозвать доступы старого проекта | В течение 1 дня |
-| Завершение контракта подрядчика | Отозвать ВСЁ | В последний день |
-| Компрометация ключа/пароля | Отозвать + ротировать | Немедленно (в течение часа) |
-| Неактивность > 90 дней | Отозвать, можно восстановить | При обнаружении |
+| Termination | Revoke EVERYTHING | Immediately (same day) |
+| Move to another project | Revoke old project access | Within 1 day |
+| Contractor contract ends | Revoke EVERYTHING | Last day |
+| Key/password compromise | Revoke + rotate | Immediately (within an hour) |
+| Inactivity > 90 days | Revoke, can be restored | When discovered |
 
-### Чеклист отзыва (offboarding)
+### Offboarding checklist
 
 ```
-□ GitHub
-  □ Удалить из организации
-  □ Удалить из всех Teams
-  □ Проверить личные access tokens (revoke)
-  □ Проверить deploy keys (если персональные)
+[ ] GitHub
+  [ ] Remove from the organization
+  [ ] Remove from every Team
+  [ ] Check personal access tokens (revoke)
+  [ ] Check deploy keys (if personal)
 
-□ Build / CI серверы
-  □ Удалить SSH ключ из authorized_keys на ВСЕХ серверах
-  □ Удалить пользователя (userdel -r)
-  □ Проверить cron jobs от имени этого пользователя
-  □ Проверить screen/tmux сессии
+[ ] Build / CI servers
+  [ ] Remove SSH key from authorized_keys on EVERY server
+  [ ] Remove the user (userdel -r)
+  [ ] Check cron jobs owned by this user
+  [ ] Check screen/tmux sessions
 
-□ Базы данных
-  □ Firebird: DROP USER или REVOKE через gsec/isql
-  □ PostgreSQL: REVOKE + DROP USER
-  □ Сменить shared пароли, если использовались
+[ ] Databases
+  [ ] Firebird: DROP USER or REVOKE via gsec/isql
+  [ ] PostgreSQL: REVOKE + DROP USER
+  [ ] Rotate shared passwords if any were used
 
-□ Внешние сервисы
-  □ Jira — деактивировать учётную запись
-  □ Confluence — деактивировать
-  □ Crash Report Server — удалить доступ
-  □ Update Server — удалить доступ
+[ ] External services
+  [ ] Jira — deactivate the account
+  [ ] Confluence — deactivate
+  [ ] Crash Report Server — remove access
+  [ ] Update Server — remove access
 
-□ Подписывающий сертификат
-  □ Убедиться, что физический USB-токен возвращён
-  □ Проверить, нет ли экспортированных копий
+[ ] Signing certificate
+  [ ] Confirm the physical USB token was returned
+  [ ] Check whether exported copies exist
 
-□ Коммуникации
-  □ Удалить из Telegram групп проектов
-  □ Удалить из Slack/Discord
-  □ Отозвать корпоративный email
+[ ] Communication
+  [ ] Remove from project Telegram groups
+  [ ] Remove from Slack/Discord
+  [ ] Disable corporate email
 ```
 
-### Скрипт автоматического отзыва доступов
+### Automated revocation script
 
 ```bash
 #!/bin/bash
-# offboard.sh — скрипт отзыва доступов при оффбординге
-# Использование: ./offboard.sh github_username
+# offboard.sh — access revocation script for offboarding
+# Usage: ./offboard.sh github_username
 
 USERNAME=$1
 
@@ -248,7 +248,7 @@ echo "Removing from GitHub org..."
 gh api -X DELETE orgs/OES-TEAM/members/$USERNAME 2>/dev/null \
   && echo "OK GitHub" || echo "WARN: GitHub (manual check needed)"
 
-# Build-серверы
+# Build servers
 for SERVER in build.oes-internal.com staging.oes-internal.com; do
   echo "Removing SSH key from $SERVER..."
   ssh admin@$SERVER "
@@ -257,7 +257,7 @@ for SERVER in build.oes-internal.com staging.oes-internal.com; do
   " && echo "OK $SERVER" || echo "WARN: $SERVER (manual check needed)"
 done
 
-# Firebird (через isql)
+# Firebird (through isql)
 echo "Revoking Firebird access..."
 ssh admin@db.oes-internal.com "
   isql -user SYSDBA -pass masterkey <<EOF
@@ -268,73 +268,73 @@ EOF
 " && echo "OK Firebird" || echo "WARN: Firebird (manual check needed)"
 
 echo ""
-echo "=== Ручные шаги ==="
-echo "□ Jira / Confluence — деактивировать вручную"
-echo "□ Telegram группы — удалить вручную"
-echo "□ Проверить возврат USB-токена с сертификатом (если выдавался)"
-echo "□ Ротировать shared пароли, к которым был доступ"
+echo "=== Manual steps ==="
+echo "[ ] Jira / Confluence — deactivate manually"
+echo "[ ] Telegram groups — remove manually"
+echo "[ ] Verify return of the USB token with the certificate (if issued)"
+echo "[ ] Rotate shared passwords this user had access to"
 ```
 
 ---
 
-## Ротация секретов
+## Secret rotation
 
-### График ротации
+### Rotation schedule
 
-| Секрет | Периодичность | Как |
+| Secret | Frequency | How |
 |--------|-------------|-----|
-| SSH ключи build-серверов | Раз в год | Перегенерировать, обновить у всех |
-| Firebird SYSDBA пароль | Раз в 6 месяцев | `gsec -modify SYSDBA -pw new_password` |
-| PostgreSQL пароли | Раз в 6 месяцев | `ALTER USER ... PASSWORD '...'` |
-| Code signing certificate | По сроку действия (обычно 1-3 года) | Новый CSR → CA |
-| Update server API key | Раз в год | Перегенерировать в панели сервера |
-| Crash report server token | Раз в год | Ротировать в конфиге |
-| Лицензионный мастер-ключ | При компрометации | Новый ключ + уведомление клиентов |
+| Build server SSH keys | Once a year | Regenerate, refresh on every host |
+| Firebird SYSDBA password | Every 6 months | `gsec -modify SYSDBA -pw new_password` |
+| PostgreSQL passwords | Every 6 months | `ALTER USER ... PASSWORD '...'` |
+| Code signing certificate | At expiration (usually 1-3 years) | New CSR → CA |
+| Update server API key | Once a year | Regenerate in the server console |
+| Crash report server token | Once a year | Rotate in the config |
+| License master key | On compromise | New key + customer notification |
 
-### При компрометации — немедленно
+### On compromise — immediately
 
 ```
-1. Определить что скомпрометировано (ключ, сертификат, пароль)
-2. Немедленно заблокировать/отозвать (revoke)
-3. Проверить журналы — был ли использован злоумышленником
-4. Уведомить команду + руководство
-5. Для code signing cert: уведомить CA об отзыве
-6. Postmortem: как утёк, как предотвратить повторение
+1. Identify what was compromised (key, certificate, password)
+2. Immediately revoke (block/revoke)
+3. Inspect logs — was it used by an attacker
+4. Notify the team + leadership
+5. For a code signing cert: notify the CA to revoke
+6. Postmortem: how it leaked, how to prevent a recurrence
 ```
 
 ---
 
-## Аудит доступов
+## Access audit
 
-### Ежемесячно
+### Monthly
 
 ```
-□ Проверить список участников GitHub org — все ли актуальны?
-□ Проверить SSH ключи на build-серверах — нет ли лишних?
-□ Проверить пользователей Firebird/PostgreSQL — нет ли неиспользуемых?
-□ Проверить GitHub personal access tokens — нет ли просроченных?
-□ Проверить, у кого есть доступ к code signing сертификату
-□ Проверить журнал установок — не устанавливает ли кто-то неподписанные сборки
+[ ] Review GitHub org members — are they all current?
+[ ] Review SSH keys on build servers — any stragglers?
+[ ] Review Firebird/PostgreSQL users — any unused?
+[ ] Review GitHub personal access tokens — any stale?
+[ ] Review who has access to the code signing certificate
+[ ] Review install logs — anyone installing unsigned builds
 ```
 
-### Инструменты
+### Tools
 
 ```bash
-# Кто имеет SSH доступ к build-серверу?
+# Who has SSH access to the build server?
 cat /home/*/.ssh/authorized_keys
 
-# Пользователи Firebird
+# Firebird users
 isql -user SYSDBA -pass masterkey -e \
   "SELECT SEC\$USER_NAME FROM SEC\$USERS;"
 
-# Пользователи PostgreSQL
+# PostgreSQL users
 sudo -u postgres psql -c \
   "SELECT usename, usesuper, usecreatedb FROM pg_user;"
 
-# Кто в GitHub org?
+# Who's in the GitHub org?
 gh api orgs/OES-TEAM/members --jq '.[].login'
 
-# Активные сессии на build-сервере
+# Active sessions on the build server
 who
 last -20
 ```

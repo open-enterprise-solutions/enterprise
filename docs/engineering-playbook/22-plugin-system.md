@@ -1,61 +1,61 @@
-# 22. Система плагинов (C++ Plugin Architecture)
+# 22. Plugin System (C++ Plugin Architecture)
 
-## Когда применимо
+## When it applies
 
-Этот раздел актуален для всех компонентов OES, которые должны поддерживать:
-- Сторонние коннекторы к источникам данных (СУБД, REST API, файловые форматы)
-- Кастомные виджеты и компоненты дизайнера форм
-- Экспортёры отчётов (PDF, Excel, XML, HTML)
-- Провайдеры аутентификации (LDAP, SAML, OAuth)
-- Пользовательские действия (scripting hooks) в бизнес-логике
+This section is relevant for every OES component that needs to support:
+- Third-party data source connectors (DBMS, REST API, file formats)
+- Custom widgets and form designer components
+- Report exporters (PDF, Excel, XML, HTML)
+- Authentication providers (LDAP, SAML, OAuth)
+- User actions (scripting hooks) in business logic
 
 ---
 
-## Архитектурные принципы
+## Architectural principles
 
-### Золотое правило ABI-стабильности
+### The golden rule of ABI stability
 
-> **Публичный C-интерфейс плагина НИКОГДА не меняется без инкремента мажорной версии ABI. Нарушение этого правила приводит к крашу при загрузке несовместимого плагина.**
+> **The public C plugin interface NEVER changes without bumping the major ABI version. Violating this rule causes crashes when loading incompatible plugins.**
 
-### Ключевые ограничения C++ плагинов
+### Key constraints of C++ plugins
 
-| Проблема | Причина | Решение |
+| Problem | Cause | Solution |
 |----------|---------|---------|
-| Несовместимость C++ ABI | Разные компиляторы/версии | `extern "C"` экспорты |
-| Разные CRT (Windows) | Статическая/динамическая линковка | Единый `MSVCRT` в контракте |
-| Исключения через границу DLL | Несовместимая RTTI | Не пробрасывать исключения |
-| Разные `std::string` layouts | ABI между STL реализациями | Передавать только `const char*` |
-| Объекты wxWidgets через границу | Версия wxWidgets | Только C-примитивы в API |
+| C++ ABI mismatch | Different compilers/versions | `extern "C"` exports |
+| Different CRTs (Windows) | Static/dynamic linkage | Single `MSVCRT` in the contract |
+| Exceptions across DLL boundary | Incompatible RTTI | Do not propagate exceptions |
+| Different `std::string` layouts | ABI between STL implementations | Pass `const char*` only |
+| wxWidgets objects across boundary | wxWidgets version | Only C primitives in the API |
 
-### Слои архитектуры
+### Architecture layers
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│  OES Core (ядро приложения)                                │
+│  OES Core (application kernel)                             │
 │  ┌─────────────────────────────────────────────────────┐  │
 │  │  PluginManager                                       │  │
-│  │  - Загрузка/выгрузка DLL/SO                         │  │
-│  │  - Проверка версии ABI                               │  │
-│  │  - Реестр загруженных плагинов                       │  │
+│  │  - Loads/unloads DLL/SO                             │  │
+│  │  - Verifies ABI version                              │  │
+│  │  - Registry of loaded plugins                        │  │
 │  └────────────────┬────────────────────────────────────┘  │
 │                   │ C ABI (extern "C")                      │
 ├───────────────────┼────────────────────────────────────────┤
-│  Plugin Interface │ (oes_plugin_api.h — публичный заголовок)│
-│  IOesPlugin (pure │ virtual через C-обёртки)                │
+│  Plugin Interface │ (oes_plugin_api.h — public header)      │
+│  IOesPlugin (pure │ virtual through C wrappers)             │
 ├───────────────────┼────────────────────────────────────────┤
-│  Plugin Instance  │ (DLL/SO — сторонний код)                │
+│  Plugin Instance  │ (DLL/SO — third-party code)             │
 │  MyDataConnector  │ : IOesPlugin                            │
 └────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Публичный Plugin API (oes_plugin_api.h)
+## Public Plugin API (oes_plugin_api.h)
 
 ```cpp
 // include/oes_plugin_api.h
-// ПУБЛИЧНЫЙ ЗАГОЛОВОК — часть стабильного ABI
-// Версия: изменения в MAJOR нарушают совместимость
+// PUBLIC HEADER — part of the stable ABI
+// Version: changes to MAJOR break compatibility
 #pragma once
 
 #include <stdint.h>
@@ -64,20 +64,20 @@
 extern "C" {
 #endif
 
-// ─── Версия ABI ───────────────────────────────────────────────────────────────
+// ─── ABI version ─────────────────────────────────────────────────────────────
 #define OES_PLUGIN_ABI_MAJOR 2
 #define OES_PLUGIN_ABI_MINOR 0
 
-// ─── Типы плагинов ────────────────────────────────────────────────────────────
+// ─── Plugin types ────────────────────────────────────────────────────────────
 typedef enum OesPluginType {
-    OES_PLUGIN_DATA_SOURCE   = 1,  // Источник данных (СУБД, файл, REST)
-    OES_PLUGIN_REPORT_EXPORT = 2,  // Экспортёр отчётов
-    OES_PLUGIN_WIDGET        = 3,  // Кастомный UI-виджет
-    OES_PLUGIN_AUTH_PROVIDER = 4,  // Провайдер аутентификации
-    OES_PLUGIN_SCRIPT_HOOK   = 5,  // Хук бизнес-логики
+    OES_PLUGIN_DATA_SOURCE   = 1,  // Data source (DBMS, file, REST)
+    OES_PLUGIN_REPORT_EXPORT = 2,  // Report exporter
+    OES_PLUGIN_WIDGET        = 3,  // Custom UI widget
+    OES_PLUGIN_AUTH_PROVIDER = 4,  // Authentication provider
+    OES_PLUGIN_SCRIPT_HOOK   = 5,  // Business logic hook
 } OesPluginType;
 
-// ─── Коды результата ──────────────────────────────────────────────────────────
+// ─── Result codes ────────────────────────────────────────────────────────────
 typedef enum OesResult {
     OES_OK              = 0,
     OES_ERROR           = 1,
@@ -87,19 +87,19 @@ typedef enum OesResult {
     OES_ERROR_AUTH      = 5,
 } OesResult;
 
-// ─── Метаданные плагина ───────────────────────────────────────────────────────
+// ─── Plugin metadata ─────────────────────────────────────────────────────────
 typedef struct OesPluginMeta {
-    uint32_t    abiMajor;       // Должно равняться OES_PLUGIN_ABI_MAJOR
+    uint32_t    abiMajor;       // Must equal OES_PLUGIN_ABI_MAJOR
     uint32_t    abiMinor;
     OesPluginType type;
-    const char* id;             // "com.example.my-connector" — уникальный ID
+    const char* id;             // "com.example.my-connector" — unique ID
     const char* name;           // "My DB Connector"
     const char* version;        // "1.2.0"
     const char* author;
     const char* licenseType;    // "LGPL-2.1", "Commercial", "MIT"
 } OesPluginMeta;
 
-// ─── Уровни логирования ───────────────────────────────────────────────────────
+// ─── Log levels ──────────────────────────────────────────────────────────────
 typedef enum OesLogLevel {
     OES_LOG_DEBUG   = 0,
     OES_LOG_INFO    = 1,
@@ -107,38 +107,38 @@ typedef enum OesLogLevel {
     OES_LOG_ERROR   = 3,
 } OesLogLevel;
 
-// ─── Хост-контекст (что предоставляет ядро плагину) ──────────────────────────
+// ─── Host context (what the core provides to the plugin) ─────────────────────
 typedef struct OesHostContext {
-    // Логирование (плагин использует, не имея своего логгера)
+    // Logging (plugin uses without owning a logger)
     void (*logMessage)(void* hostData, OesLogLevel level, const char* message);
 
-    // Доступ к настройкам плагина из хранилища OES
+    // Access plugin settings from OES storage
     const char* (*getSetting)(void* hostData, const char* key);
 
-    void* hostData;  // Непрозрачный указатель ядра
+    void* hostData;  // Opaque pointer to the core
 } OesHostContext;
 
-// ─── Базовый интерфейс плагина (таблица функций) ─────────────────────────────
+// ─── Base plugin interface (function table) ──────────────────────────────────
 typedef struct OesPluginVTable {
-    // Инициализация с хост-контекстом. Возвращает OES_OK при успехе.
+    // Initialize with the host context. Returns OES_OK on success.
     OesResult (*initialize)(void* plugin, const OesHostContext* host);
 
-    // Освобождение ресурсов. Всегда вызывается перед выгрузкой DLL.
+    // Release resources. Always called before unloading the DLL.
     void      (*shutdown)(void* plugin);
 
-    // Получить метаданные плагина.
+    // Return plugin metadata.
     const OesPluginMeta* (*getMeta)(void* plugin);
 } OesPluginVTable;
 
 typedef struct OesPlugin {
     const OesPluginVTable* vtable;
-    void*                  impl;   // Непрозрачный указатель на реализацию
+    void*                  impl;   // Opaque implementation pointer
 } OesPlugin;
 
-// ─── Обязательные экспорты DLL ────────────────────────────────────────────────
+// ─── Required DLL exports ────────────────────────────────────────────────────
 
-// Создать экземпляр плагина. Вызывается ядром после загрузки DLL.
-// DLL владеет объектом до вызова OesDestroyPlugin.
+// Create a plugin instance. Called by the core after the DLL is loaded.
+// The DLL owns the object until OesDestroyPlugin is called.
 #ifdef _WIN32
 #  define OES_EXPORT __declspec(dllexport)
 #else
@@ -148,7 +148,7 @@ typedef struct OesPlugin {
 typedef OesPlugin* (*OesCreatePluginFn)(void);
 typedef void       (*OesDestroyPluginFn)(OesPlugin*);
 
-// Имена функций для GetProcAddress / dlsym
+// Function names for GetProcAddress / dlsym
 #define OES_FN_CREATE_PLUGIN  "OesCreatePlugin"
 #define OES_FN_DESTROY_PLUGIN "OesDestroyPlugin"
 
@@ -159,7 +159,7 @@ typedef void       (*OesDestroyPluginFn)(OesPlugin*);
 
 ---
 
-## PluginManager (ядро OES)
+## PluginManager (OES core)
 
 ```cpp
 // src/plugin_manager.h
@@ -176,7 +176,7 @@ struct LoadedPlugin {
     OesPlugin*        plugin    = nullptr;
     OesDestroyPluginFn destroyFn = nullptr;
     std::string       path;
-    std::string       id;   // дублируется для удобства обратного обхода
+    std::string       id;   // duplicated for convenient reverse traversal
 };
 
 class PluginManager {
@@ -184,26 +184,26 @@ public:
     explicit PluginManager(OesHostContext hostContext);
     ~PluginManager();
 
-    // Загрузить один плагин из файла (DLL/SO)
+    // Load one plugin from a file (DLL/SO)
     bool LoadPlugin(const std::string& path, std::string& errorOut);
 
-    // Загрузить все плагины из директории
+    // Load every plugin in a directory
     int  LoadDirectory(const std::string& dir);
 
-    // Выгрузить конкретный плагин по ID
+    // Unload a specific plugin by ID
     void UnloadPlugin(const std::string& pluginId);
 
-    // Получить список загруженных плагинов
+    // List loaded plugins
     std::vector<const OesPluginMeta*> GetAllMeta() const;
 
-    // Получить плагин по ID и типу
+    // Find a plugin by ID and type
     OesPlugin* FindPlugin(const std::string& id,
                           OesPluginType type) const;
 
 private:
     OesHostContext m_hostContext;
     std::unordered_map<std::string, LoadedPlugin> m_plugins;
-    // Порядок загрузки — для корректной выгрузки в обратном порядке
+    // Load order — needed to unload in reverse order
     std::vector<std::string> m_loadOrder;
 
     bool CheckAbiCompatibility(const OesPluginMeta* meta,
@@ -222,9 +222,9 @@ PluginManager::PluginManager(OesHostContext hostContext)
 {}
 
 PluginManager::~PluginManager() {
-    // Выгружаем СТРОГО в обратном порядке загрузки:
-    // плагины могут зависеть от других плагинов, загруженных ранее,
-    // поэтому итерация по unordered_map не подходит — порядок не определён.
+    // Unload STRICTLY in reverse load order:
+    // plugins may depend on others loaded earlier,
+    // so iterating an unordered_map is wrong — order is undefined.
     for (auto it = m_loadOrder.rbegin(); it != m_loadOrder.rend(); ++it) {
         auto mapIt = m_plugins.find(*it);
         if (mapIt == m_plugins.end()) continue;
@@ -237,7 +237,7 @@ PluginManager::~PluginManager() {
     }
     m_plugins.clear();
     m_loadOrder.clear();
-    // wxDynamicLibrary освобождается деструктором unique_ptr
+    // wxDynamicLibrary is freed by the unique_ptr destructor
 }
 
 bool PluginManager::LoadPlugin(const std::string& path,
@@ -245,41 +245,41 @@ bool PluginManager::LoadPlugin(const std::string& path,
 {
     auto lib = std::make_unique<wxDynamicLibrary>();
     if (!lib->Load(path, wxDL_NOW | wxDL_QUIET)) {
-        errorOut = "Не удалось загрузить библиотеку: " + path;
+        errorOut = "Failed to load library: " + path;
         return false;
     }
 
-    // Получить фабричные функции
+    // Get factory functions
     auto createFn = reinterpret_cast<OesCreatePluginFn>(
         lib->GetSymbol(OES_FN_CREATE_PLUGIN));
     auto destroyFn = reinterpret_cast<OesDestroyPluginFn>(
         lib->GetSymbol(OES_FN_DESTROY_PLUGIN));
 
     if (!createFn || !destroyFn) {
-        errorOut = "Плагин не экспортирует " OES_FN_CREATE_PLUGIN
+        errorOut = "Plugin does not export " OES_FN_CREATE_PLUGIN
                    " / " OES_FN_DESTROY_PLUGIN;
         return false;
     }
 
     OesPlugin* plugin = createFn();
     if (!plugin || !plugin->vtable) {
-        errorOut = "OesCreatePlugin вернул nullptr";
+        errorOut = "OesCreatePlugin returned nullptr";
         return false;
     }
 
-    // Проверить совместимость ABI
+    // Verify ABI compatibility
     const OesPluginMeta* meta = plugin->vtable->getMeta(plugin->impl);
     if (!CheckAbiCompatibility(meta, errorOut)) {
         destroyFn(plugin);
         return false;
     }
 
-    // Инициализировать плагин
+    // Initialize the plugin
     OesResult result = plugin->vtable->initialize(
         plugin->impl, &m_hostContext);
     if (result != OES_OK) {
-        errorOut = std::string("Инициализация плагина ")
-                   + meta->id + " завершилась с ошибкой: "
+        errorOut = std::string("Plugin ")
+                   + meta->id + " initialization failed with code: "
                    + std::to_string(result);
         destroyFn(plugin);
         return false;
@@ -292,7 +292,7 @@ bool PluginManager::LoadPlugin(const std::string& path,
     lp.path      = path;
     lp.id        = meta->id;
 
-    m_loadOrder.push_back(meta->id);        // запомнить порядок загрузки
+    m_loadOrder.push_back(meta->id);        // remember the load order
     m_plugins[meta->id] = std::move(lp);
     return true;
 }
@@ -301,15 +301,15 @@ bool PluginManager::CheckAbiCompatibility(
     const OesPluginMeta* meta, std::string& errorOut)
 {
     if (!meta) {
-        errorOut = "getMeta() вернул nullptr";
+        errorOut = "getMeta() returned nullptr";
         return false;
     }
 
     if (meta->abiMajor != OES_PLUGIN_ABI_MAJOR) {
-        errorOut = std::string("Несовместимая версия ABI плагина ")
-                   + meta->id + ": ожидается major="
+        errorOut = std::string("Plugin ABI version mismatch for ")
+                   + meta->id + ": expected major="
                    + std::to_string(OES_PLUGIN_ABI_MAJOR)
-                   + ", получено major="
+                   + ", got major="
                    + std::to_string(meta->abiMajor);
         return false;
     }
@@ -339,7 +339,7 @@ int PluginManager::LoadDirectory(const std::string& dir) {
         if (LoadPlugin(fullPath, err))
             ++loaded;
         else
-            wxLogWarning("Плагин '%s' не загружен: %s",
+            wxLogWarning("Plugin '%s' failed to load: %s",
                          fullPath, err);
         found = wxdir.GetNext(&filename);
     }
@@ -349,20 +349,20 @@ int PluginManager::LoadDirectory(const std::string& dir) {
 
 ---
 
-## Реализация плагина (сторонний код)
+## Plugin implementation (third-party code)
 
 ```cpp
 // my_plugin/my_data_connector.cpp
-// Пример плагина — коннектор к внешнему REST API
+// Example plugin — a connector to an external REST API
 
 #include "oes_plugin_api.h"
 #include <string>
 #include <cstring>
 #include <cstdlib>
 
-// ─── Данные плагина ────────────────────────────────────────────────────────────
+// ─── Plugin data ─────────────────────────────────────────────────────────────
 static const OesPluginMeta g_meta = {
-    OES_PLUGIN_ABI_MAJOR,     // abiMajor — ДОЛЖНО совпадать с ядром
+    OES_PLUGIN_ABI_MAJOR,     // abiMajor — MUST match the core
     OES_PLUGIN_ABI_MINOR,     // abiMinor
     OES_PLUGIN_DATA_SOURCE,   // type
     "com.example.rest-connector",
@@ -377,7 +377,7 @@ struct MyConnectorImpl {
     std::string           baseUrl;
 };
 
-// ─── VTable функции ────────────────────────────────────────────────────────────
+// ─── VTable functions ────────────────────────────────────────────────────────
 static OesResult Initialize(void* impl, const OesHostContext* host) {
     auto* self = static_cast<MyConnectorImpl*>(impl);
     self->host = host;
@@ -385,19 +385,19 @@ static OesResult Initialize(void* impl, const OesHostContext* host) {
     const char* url = host->getSetting(host->hostData, "rest_base_url");
     if (!url || url[0] == '\0') {
         host->logMessage(host->hostData, OES_LOG_WARNING,
-            "rest_base_url не задан — используем значение по умолчанию");
+            "rest_base_url not set — using the default value");
         self->baseUrl = "https://api.example.com";
     } else {
         self->baseUrl = url;
     }
 
     host->logMessage(host->hostData, OES_LOG_INFO,
-        "REST Connector инициализирован");
+        "REST Connector initialized");
     return OES_OK;
 }
 
 static void Shutdown(void* impl) {
-    // Закрыть соединения, освободить ресурсы
+    // Close connections, release resources
     auto* self = static_cast<MyConnectorImpl*>(impl);
     // ...
     (void)self;
@@ -413,7 +413,7 @@ static const OesPluginVTable g_vtable = {
     &GetMeta,
 };
 
-// ─── Обязательные экспорты ────────────────────────────────────────────────────
+// ─── Required exports ────────────────────────────────────────────────────────
 extern "C" {
 
 OES_EXPORT OesPlugin* OesCreatePlugin() {
@@ -435,130 +435,130 @@ OES_EXPORT void OesDestroyPlugin(OesPlugin* plugin) {
 
 ---
 
-## Версионирование и совместимость
+## Versioning and compatibility
 
-### Правила изменения версий
+### Versioning rules
 
-| Тип изменения | Действие | Совместимость |
+| Change type | Action | Compatibility |
 |---------------|---------|---------------|
-| Добавить новое поле в VTable | Инкремент MINOR | Старые плагины работают |
-| Изменить сигнатуру функции в VTable | Инкремент MAJOR | Все старые плагины сломаны |
-| Добавить новый тип плагина (OesPluginType) | Инкремент MINOR | Старые плагины работают |
-| Изменить формат OesPlugin структуры | Инкремент MAJOR | Все старые плагины сломаны |
-| Изменить реализацию плагина (не API) | Инкремент версии плагина | Ядро не затронуто |
+| Add a new VTable field | Bump MINOR | Old plugins still work |
+| Change a VTable function signature | Bump MAJOR | Every old plugin breaks |
+| Add a new plugin type (OesPluginType) | Bump MINOR | Old plugins still work |
+| Change the OesPlugin struct layout | Bump MAJOR | Every old plugin breaks |
+| Change plugin implementation (not API) | Bump plugin version | Core untouched |
 
-### Backward-compatible расширение VTable
+### Backward-compatible VTable extension
 
 ```cpp
-// oes_plugin_api_v2_1.h — MINOR расширение
-// Новые поля добавляются ТОЛЬКО в конец структуры
+// oes_plugin_api_v2_1.h — MINOR extension
+// New fields are added ONLY at the end of the struct
 typedef struct OesPluginVTable {
     // v2.0
     OesResult (*initialize)(void*, const OesHostContext*);
     void      (*shutdown)(void*);
     const OesPluginMeta* (*getMeta)(void*);
 
-    // v2.1 — новые поля в конце, указатели могут быть NULL для старых плагинов
+    // v2.1 — new fields at the end, pointers may be NULL for older plugins
     OesResult (*configure)(void*, const char* key, const char* value);
-    const char* (*getCapabilities)(void*);  // JSON-строка возможностей
+    const char* (*getCapabilities)(void*);  // JSON capability string
 } OesPluginVTable;
 
-// В ядре: безопасный вызов нового метода
+// In the core: safe call of the new method
 inline OesResult SafeConfigure(OesPlugin* p,
                                 const char* key, const char* value)
 {
-    if (p->vtable->configure)  // проверяем перед вызовом
+    if (p->vtable->configure)  // check before calling
         return p->vtable->configure(p->impl, key, value);
     return OES_ERROR_NOT_FOUND;
 }
 ```
 
-### Матрица совместимости
+### Compatibility matrix
 
 ```
-Ядро OES  │  Плагин v2.0  │  Плагин v2.1  │  Плагин v1.x  │  Плагин v3.x
+OES core  │  Plugin v2.0  │  Plugin v2.1  │  Plugin v1.x  │  Plugin v3.x
 ──────────┼───────────────┼───────────────┼───────────────┼──────────────
-  v2.0    │       ✅       │       ✅*      │       ❌       │       ❌
-  v2.1    │       ✅**     │       ✅       │       ❌       │       ❌
-  v3.0    │       ❌       │       ❌       │       ❌       │       ✅
+  v2.0    │       yes     │       yes*    │       no      │       no
+  v2.1    │       yes**   │       yes     │       no      │       no
+  v3.0    │       no      │       no      │       no      │       yes
 
-* Плагин v2.1 заполняет новые поля VTable (configure, getCapabilities).
-  Ядро v2.0 не знает о них — просто не вызывает, поля за концом структуры
-  для ядра невидимы. Плагин работает штатно.
+* Plugin v2.1 fills new VTable fields (configure, getCapabilities).
+  Core v2.0 doesn't know about them — it simply doesn't call them, fields
+  past the end of the struct are invisible to the core. Plugin works fine.
 
-** Ядро v2.1 вызывает новые методы только после проверки указателя на nullptr
-  (см. SafeConfigure выше). Плагин v2.0 имеет nullptr в новых полях VTable
-  (C-инициализация нулём), поэтому ядро корректно пропускает вызов.
-  ОТВЕТСТВЕННОСТЬ за проверку nullptr лежит на ЯДРЕ, а не на плагине.
+** Core v2.1 calls new methods only after a nullptr check on the pointer
+  (see SafeConfigure above). Plugin v2.0 has nullptr in the new VTable
+  fields (zero-initialized in C), so the core correctly skips the call.
+  RESPONSIBILITY for the nullptr check lies with the CORE, not the plugin.
 ```
 
 ---
 
-## Директория плагинов
+## Plugin directories
 
-### Структура файловой системы
+### File system layout
 
 ```
 %PROGRAMFILES%\OES\
 ├── oes.exe
 ├── oes_core.dll
-├── plugins\                       ← системные плагины
+├── plugins\                       ← system plugins
 │   ├── oes_firebird_connector.dll
 │   ├── oes_postgres_connector.dll
 │   ├── oes_sqlite_connector.dll
 │   └── oes_pdf_exporter.dll
 └── ...
 
-%APPDATA%\OES\plugins\            ← пользовательские плагины
+%APPDATA%\OES\plugins\            ← user plugins
     ├── my_custom_widget.dll
     └── rest_api_connector.dll
 ```
 
 ```cpp
-// Загрузка плагинов при старте приложения
+// Load plugins at app startup
 void OesApp::LoadPlugins() {
     OesHostContext host = CreateHostContext();
     m_pluginManager = std::make_unique<PluginManager>(host);
 
-    // 1. Системные плагины
+    // 1. System plugins
     wxString sysPluginsDir = wxStandardPaths::Get().GetPluginsDir()
                              + "/plugins";
     int sysLoaded = m_pluginManager->LoadDirectory(
         sysPluginsDir.ToStdString());
 
-    // 2. Пользовательские плагины (AppData)
+    // 2. User plugins (AppData)
     wxString userPluginsDir = wxStandardPaths::Get().GetUserDataDir()
                               + "/plugins";
     int userLoaded = m_pluginManager->LoadDirectory(
         userPluginsDir.ToStdString());
 
-    wxLogInfo("Плагины загружены: системных=%d, пользовательских=%d",
+    wxLogInfo("Plugins loaded: system=%d, user=%d",
               sysLoaded, userLoaded);
 }
 ```
 
 ---
 
-## Безопасность плагинов
+## Plugin security
 
-### Принципы
+### Principles
 
-1. **Плагины выполняются в том же процессе** — нет изоляции памяти. Сбой в плагине = краш всего приложения.
-2. **Доверяйте только подписанным плагинам** (для enterprise-развёртываний).
-3. **Ограничивайте API:** плагин получает только то, что ему нужно, через `OesHostContext`.
-4. **Никаких прямых указателей на внутренние структуры ядра** — только через OesHostContext callbacks.
+1. **Plugins run in the same process** — no memory isolation. A plugin crash = the whole app crashes.
+2. **Trust only signed plugins** (for enterprise deployments).
+3. **Limit the API:** the plugin only gets what it needs, through `OesHostContext`.
+4. **No direct pointers to internal core structures** — only through OesHostContext callbacks.
 
-### Подпись плагинов (Enterprise)
+### Plugin signing (Enterprise)
 
 ```cpp
-// Перед загрузкой плагина — проверить цифровую подпись
+// Before loading a plugin — verify the digital signature
 #ifdef OES_ENTERPRISE_PLUGIN_SIGNING
 bool PluginManager::IsPluginTrusted(const std::string& path) {
 #ifdef _WIN32
     return VerifyCodeSignature(
         std::wstring(path.begin(), path.end()));
 #else
-    // На Linux/macOS — проверка GPG подписи для .so файла
+    // On Linux/macOS — verify the GPG signature of the .so file
     return VerifyGpgSignature(path + ".sig", path,
                                OES_TRUSTED_PUBLIC_KEY);
 #endif
@@ -566,11 +566,11 @@ bool PluginManager::IsPluginTrusted(const std::string& path) {
 #endif
 ```
 
-### Обработка сбоев плагина
+### Handling plugin failures
 
 ```cpp
-// SEH-защита при вызове плагина (Windows)
-// Изолирует краш плагина от ядра
+// SEH protection around plugin calls (Windows)
+// Isolates a plugin crash from the core
 OesResult SafeCallPlugin(OesPlugin* plugin,
                           std::function<OesResult()> call)
 {
@@ -579,12 +579,12 @@ OesResult SafeCallPlugin(OesPlugin* plugin,
         return call();
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         DWORD code = GetExceptionCode();
-        wxLogError("Плагин '%s' вызвал исключение 0x%08X",
+        wxLogError("Plugin '%s' raised exception 0x%08X",
                    plugin->vtable->getMeta(plugin->impl)->id, code);
         return OES_ERROR;
     }
 #else
-    // На Linux — signal handler или setjmp/longjmp (ограниченно безопасно)
+    // On Linux — signal handler or setjmp/longjmp (limited safety)
     return call();
 #endif
 }
@@ -592,26 +592,26 @@ OesResult SafeCallPlugin(OesPlugin* plugin,
 
 ---
 
-## Чеклист разработчика плагина
+## Plugin developer checklist
 
-### Перед публикацией плагина:
+### Before publishing a plugin:
 
-- [ ] `abiMajor` совпадает с целевой версией ядра OES
-- [ ] Все `extern "C"` экспорты присутствуют: `OesCreatePlugin`, `OesDestroyPlugin`
-- [ ] Нет исключений C++, выходящих за границу DLL (всё ловится внутри)
-- [ ] `Shutdown()` корректно освобождает все ресурсы (RAII)
-- [ ] Не используются `std::string`, `std::vector` в публичном ABI — только `const char*`, примитивы
-- [ ] Плагин не хранит указатели на память ядра после `Shutdown()`
-- [ ] Тестирование на всех поддерживаемых платформах (Win/Linux/macOS)
-- [ ] Логи через `OesHostContext::logMessage`, не через `printf` / `std::cout`
-- [ ] Подпись DLL/SO для enterprise-дистрибуции
-- [ ] `licenseType` в метаданных соответствует реальной лицензии
-- [ ] Документация: описание, настройки (ключи `getSetting`), зависимости
+- [ ] `abiMajor` matches the target OES core version
+- [ ] All `extern "C"` exports present: `OesCreatePlugin`, `OesDestroyPlugin`
+- [ ] No C++ exceptions escape the DLL boundary (all caught inside)
+- [ ] `Shutdown()` releases every resource (RAII)
+- [ ] No `std::string`, `std::vector` in the public ABI — only `const char*`, primitives
+- [ ] Plugin doesn't keep pointers to core memory past `Shutdown()`
+- [ ] Tested on every supported platform (Win/Linux/macOS)
+- [ ] Logging via `OesHostContext::logMessage`, not `printf` / `std::cout`
+- [ ] DLL/SO signed for enterprise distribution
+- [ ] `licenseType` in metadata matches the actual license
+- [ ] Documentation: description, settings (`getSetting` keys), dependencies
 
-### Чеклист ядра при добавлении нового API:
+### Core checklist when adding a new API:
 
-- [ ] Новые поля VTable добавляются ТОЛЬКО в конец структуры
-- [ ] Инкремент MINOR версии ABI при добавлении, MAJOR при ломающих изменениях
-- [ ] Ядро проверяет `abiMajor` при загрузке и отказывает несовместимым плагинам
-- [ ] Новые методы VTable вызываются только после проверки на `nullptr`
-- [ ] CHANGELOG для публичного Plugin API обновлён
+- [ ] New VTable fields appended ONLY at the end of the struct
+- [ ] Bump MINOR ABI version on addition, MAJOR on breaking changes
+- [ ] Core verifies `abiMajor` at load and rejects incompatible plugins
+- [ ] New VTable methods called only after a `nullptr` check
+- [ ] Public Plugin API CHANGELOG updated

@@ -1,204 +1,204 @@
-# 01. Управление учётными данными — OES
+# 01. Credentials Management — OES
 
-> Самый важный документ. Утечка секрета = компрометация установок у клиентов и лицензионной инфраструктуры.
-
----
-
-## Типы секретов в OES
-
-### Ключи подключения к базам данных
-- **Firebird embedded** — мастер-пароль базы (`SYSDBA`), пароль базы приложения
-- **Firebird server** — хост, порт, пользователь, пароль (для серверного режима)
-- **PostgreSQL** — хост, порт, пользователь, пароль приложения
-- **SQLite** — путь к файлу (не пароль, но файл должен быть защищён правами)
-- **MySQL / ODBC** — строки подключения, пароли пользователей
-
-### Лицензионные ключи
-- **Серийный номер OES** — лицензионный ключ конечного пользователя
-- **Приватный ключ подписи лицензий** — RSA/ECDSA ключ для генерации лицензий на стороне вендора
-- **Публичный ключ проверки лицензий** — встроен в приложение (не секрет, но важен для целостности)
-- **Токен License Server API** — для валидации лицензий в онлайн-режиме
-
-### Ключи сборки и дистрибуции
-- **Code Signing Certificate** — сертификат Authenticode для подписи EXE/MSI/NSIS-инсталлятора
-- **Приватный ключ Code Signing** — хранить в HSM или зашифрованном хранилище
-- **Пароль PFX/P12** — для экспорта/импорта Code Signing сертификата
-- **GitHub Deploy Keys** — доступ к репозиторию с build-сервера (read-only)
-- **GitHub Actions Secrets** — CI/CD секреты для сборки и публикации
-
-### Ключи серверной инфраструктуры (daemon-режим)
-- **SSH ключи** — доступ к build-серверу и серверам развёртывания OES daemon
-- **Cloudflare API Token** — управление DNS для update/license серверов
-- **Telegram Bot Token** — уведомления о сборках и ошибках (опционально)
-
-### Конфигурационные секреты приложения
-- **Мастер-ключ шифрования конфигурации** — для шифрования файла `oes.conf` или реестра
-- **SMTP пароли** — если OES отправляет email-уведомления из daemon-режима
-- **S3/MinIO ключи** — для хранения бэкапов баз данных
+> The most important document. A leaked secret means compromise of client installations and licensing infrastructure.
 
 ---
 
-## Инструменты хранения
+## Secret types in OES
 
-| Инструмент | Для чего | Бесплатный |
+### Database connection keys
+- **Firebird embedded** — database master password (`SYSDBA`), application database password
+- **Firebird server** — host, port, user, password (for server mode)
+- **PostgreSQL** — host, port, user, application password
+- **SQLite** — file path (not a password, but the file must be protected by permissions)
+- **MySQL / ODBC** — connection strings, user passwords
+
+### License keys
+- **OES serial number** — end-user license key
+- **License signing private key** — RSA/ECDSA key for generating licenses on the vendor side
+- **License verification public key** — embedded in the application (not a secret, but important for integrity)
+- **License Server API token** — for license validation in online mode
+
+### Build and distribution keys
+- **Code Signing Certificate** — Authenticode certificate for signing EXE/MSI/NSIS installer
+- **Code Signing private key** — store in HSM or encrypted storage
+- **PFX/P12 password** — for export/import of the Code Signing certificate
+- **GitHub Deploy Keys** — repository access from the build server (read-only)
+- **GitHub Actions Secrets** — CI/CD secrets for building and publishing
+
+### Server infrastructure keys (daemon mode)
+- **SSH keys** — access to build server and OES daemon deployment servers
+- **Cloudflare API Token** — DNS management for update/license servers
+- **Telegram Bot Token** — notifications about builds and errors (optional)
+
+### Application configuration secrets
+- **Configuration master encryption key** — for encrypting the `oes.conf` file or the registry
+- **SMTP passwords** — if OES sends email notifications from daemon mode
+- **S3/MinIO keys** — for storing database backups
+
+---
+
+## Storage tools
+
+| Tool | Purpose | Free |
 |-----------|---------|-----------|
-| 1Password Teams | Командное хранение паролей, ключей, сертификатов | Нет ($4/мес/чел) |
-| Bitwarden | Альтернатива 1Password, self-hosted | Да (self-host) |
-| HashiCorp Vault | Программное хранение, API доступ (build-сервер) | Да (open-source) |
-| GitHub Secrets | CI/CD секреты (Code Signing, API токены) | Да |
-| SOPS + age | Шифрование файлов конфигурации в git | Да |
-| Windows Credential Manager | Локальное хранение на machine пользователя | Да (встроен) |
-| DPAPI (Windows) | Шифрование секретов приложением на уровне ОС | Да (встроен) |
-| pass (GPG) | Личные пароли девопса | Да |
+| 1Password Teams | Team storage of passwords, keys, certificates | No ($4/month/user) |
+| Bitwarden | 1Password alternative, self-hosted | Yes (self-host) |
+| HashiCorp Vault | Programmatic storage, API access (build server) | Yes (open-source) |
+| GitHub Secrets | CI/CD secrets (Code Signing, API tokens) | Yes |
+| SOPS + age | Encryption of configuration files in git | Yes |
+| Windows Credential Manager | Local storage on user's machine | Yes (built-in) |
+| DPAPI (Windows) | OS-level secret encryption by the application | Yes (built-in) |
+| pass (GPG) | DevOps personal passwords | Yes |
 
-### Когда что использовать
+### When to use what
 
 ```
-Командные пароли, DB-пароли, лицензионные ключи  → 1Password / Bitwarden
-CI/CD секреты (Code Signing, API токены)          → GitHub Secrets
-Конфигурация build-сервера в репозитории          → SOPS + age
-Секреты runtime на сервере (daemon-режим)         → HashiCorp Vault / переменные окружения
-Хранение паролей на машине пользователя           → Windows Credential Manager / DPAPI
-Личные пароли девопса                             → pass (GPG)
+Team passwords, DB passwords, license keys          -> 1Password / Bitwarden
+CI/CD secrets (Code Signing, API tokens)            -> GitHub Secrets
+Build server configuration in the repository        -> SOPS + age
+Runtime secrets on the server (daemon mode)         -> HashiCorp Vault / environment variables
+Password storage on user machines                   -> Windows Credential Manager / DPAPI
+DevOps personal passwords                           -> pass (GPG)
 ```
 
 ---
 
-## Процессы
+## Processes
 
-### Как выдать доступ новому сотруднику
+### Granting access to a new employee
 
 ```
-1. Создать аккаунт в 1Password / Bitwarden
-2. Добавить в нужные vault/коллекции (dev — НЕ production, НЕ лицензионные ключи)
-3. Сгенерировать персональный SSH ключ:
-   ssh-keygen -t ed25519 -C "имя@oes-team"
-4. Добавить публичный ключ на build-сервер:
+1. Create an account in 1Password / Bitwarden
+2. Add to required vaults/collections (dev only — NOT production, NOT license keys)
+3. Generate a personal SSH key:
+   ssh-keygen -t ed25519 -C "name@oes-team"
+4. Add the public key to the build server:
    ssh-copy-id -i ~/.ssh/id_ed25519.pub build-user@build-server
-5. Добавить в GitHub организацию с нужными правами
-6. Выдать доступ к Cloudflare (если нужно) с минимальными правами
-7. НЕ выдавать доступ к приватному ключу подписи лицензий (только CI/CD)
+5. Add to the GitHub organization with required permissions
+6. Grant Cloudflare access (if needed) with minimal permissions
+7. DO NOT grant access to the license signing private key (CI/CD only)
 ```
 
-**НИКОГДА:**
-- Не передавать лицензионные ключи клиентов через мессенджеры
-- Не хранить Code Signing сертификат на локальных машинах разработчиков
-- Не коммитить строки подключения к БД в исходный код
-- Не использовать общий SSH ключ на всю команду
+**NEVER:**
+- Send customer license keys via messengers
+- Store the Code Signing certificate on developer machines
+- Commit DB connection strings to source code
+- Use a shared SSH key for the whole team
 
-### Как передать SSH ключ
+### How to share an SSH key
 
 ```bash
-# Публичный ключ — можно передать открыто (Slack, email, GitHub)
+# Public key — can be shared openly (Slack, email, GitHub)
 cat ~/.ssh/id_ed25519.pub
 # ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... user@machine
 
-# Приватный ключ — НИКОГДА НЕ ПЕРЕДАВАТЬ
-# Каждый генерирует свой. Точка.
+# Private key — NEVER SHARE
+# Everyone generates their own. Period.
 ```
 
-Если нужен deploy key для build-сервера:
+If a deploy key is needed for the build server:
 ```bash
-# На build-сервере
+# On the build server
 ssh-keygen -t ed25519 -C "deploy@oes-build" -f ~/.ssh/deploy_key -N ""
-# Добавить публичный ключ в GitHub → Settings → Deploy Keys (read-only)
+# Add the public key to GitHub -> Settings -> Deploy Keys (read-only)
 cat ~/.ssh/deploy_key.pub
 ```
 
-### Как ротировать пароль базы данных
+### How to rotate a database password
 
 #### Firebird (embedded / server)
 
 ```bash
-# 1. Сгенерировать новый пароль
+# 1. Generate a new password
 NEW_PASS=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
-echo "Новый пароль: $NEW_PASS"
-# Сохранить в 1Password/Bitwarden
+echo "New password: $NEW_PASS"
+# Save in 1Password/Bitwarden
 
-# 2. Сменить пароль пользователя Firebird (server-режим)
-# Через isql-fb или утилиту gsec:
+# 2. Change the Firebird user password (server mode)
+# Via isql-fb or the gsec utility:
 gsec -user SYSDBA -pass masterkey -mo APP_USER -pw "$NEW_PASS"
 
-# 3. Для embedded Firebird — пароль хранится в зашифрованном конфиге OES
-# Обновить в файле конфигурации (см. шаблон ниже)
+# 3. For embedded Firebird — password is stored in OES encrypted config
+# Update in the configuration file (see template below)
 
-# 4. Обновить секрет в 1Password и GitHub Secrets
-# 5. Перезапустить OES daemon (если запущен как сервис)
+# 4. Update the secret in 1Password and GitHub Secrets
+# 5. Restart OES daemon (if running as a service)
 sc stop OESDaemon && sc start OESDaemon
-# или на Linux:
+# or on Linux:
 sudo systemctl restart oes-daemon
 ```
 
-#### PostgreSQL (если используется как backend)
+#### PostgreSQL (if used as a backend)
 
 ```bash
-# 1. Сгенерировать новый пароль
+# 1. Generate a new password
 NEW_PASS=$(openssl rand -base64 32)
 
-# 2. Сменить пароль в PostgreSQL
+# 2. Change the password in PostgreSQL
 sudo -u postgres psql -c "ALTER USER oes_user WITH PASSWORD '$NEW_PASS';"
 
-# 3. Обновить строку подключения в конфигурации OES
+# 3. Update the connection string in OES configuration
 # C:\ProgramData\OES\oes.conf (Windows)
 # /etc/oes/oes.conf (Linux daemon)
 
-# 4. Перезапустить OES daemon
+# 4. Restart OES daemon
 sc stop OESDaemon && sc start OESDaemon
 
-# 5. Обновить зашифрованный конфиг в репозитории (если используете SOPS)
+# 5. Update the encrypted config in the repository (if using SOPS)
 sops --encrypt oes.conf.production > oes.conf.production.enc
 git add oes.conf.production.enc && git commit -m "rotate db password"
 ```
 
-### Чеклист при увольнении сотрудника
+### Checklist when an employee leaves
 
 ```
-[ ] Удалить SSH ключ с build-сервера и всех серверов daemon
+[ ] Remove the SSH key from the build server and all daemon servers
     grep -r "user@machine" /home/*/.ssh/authorized_keys
     sed -i '/user@machine/d' /home/build-user/.ssh/authorized_keys
 
-[ ] Удалить из GitHub организации
-[ ] Удалить из 1Password / Bitwarden
-[ ] Удалить из Cloudflare
-[ ] Ротировать ВСЕ секреты, к которым был доступ
-    — Пароли БД (Firebird, PostgreSQL, MySQL)
-    — API токены (License Server, Cloudflare)
-    — Пароль Code Signing контейнера (если был доступ)
-[ ] Если был доступ к лицензионному приватному ключу — немедленно перевыпустить
-[ ] Удалить из Telegram-групп (мониторинг, алерты)
-[ ] Удалить с VPN (если есть)
-[ ] Проверить логи за последний день
-[ ] Задокументировать дату и что было отозвано
+[ ] Remove from the GitHub organization
+[ ] Remove from 1Password / Bitwarden
+[ ] Remove from Cloudflare
+[ ] Rotate ALL secrets the user had access to
+    - DB passwords (Firebird, PostgreSQL, MySQL)
+    - API tokens (License Server, Cloudflare)
+    - Code Signing container password (if access existed)
+[ ] If the user had access to the license private key — reissue it immediately
+[ ] Remove from Telegram groups (monitoring, alerts)
+[ ] Remove from VPN (if any)
+[ ] Review logs from the last day
+[ ] Document the date and what was revoked
 ```
 
-### Где хранить конфигурацию OES на рабочих машинах
+### Where to store OES configuration on work machines
 
 ```
-Windows (рекомендуется):
-  C:\ProgramData\OES\oes.conf      — конфиг сервиса/daemon (права SYSTEM)
-  C:\ProgramData\OES\license.key   — лицензионный ключ (права Administrators)
-  HKLM\Software\OES\               — реестр (для некритичных настроек)
+Windows (recommended):
+  C:\ProgramData\OES\oes.conf      - service/daemon config (SYSTEM permissions)
+  C:\ProgramData\OES\license.key   - license key (Administrators permissions)
+  HKLM\Software\OES\               - registry (for non-critical settings)
 
 macOS (Desktop):
-  ~/Library/Application Support/OES/oes.conf   — конфиг десктопного приложения
+  ~/Library/Application Support/OES/oes.conf   - desktop application config
   ~/Library/Application Support/OES/license.key
-  /etc/oes/oes.conf                             — конфиг daemon (chmod 600)
-  /var/lib/oes/                                 — данные daemon
-  /var/log/oes/                                 — логи daemon
+  /etc/oes/oes.conf                             - daemon config (chmod 600)
+  /var/lib/oes/                                 - daemon data
+  /var/log/oes/                                 - daemon logs
 
 Linux daemon:
-  /etc/oes/oes.conf                — конфиг daemon (chmod 600, владелец oes)
-  /var/lib/oes/                    — данные приложения
-  /var/log/oes/                    — логи
+  /etc/oes/oes.conf                - daemon config (chmod 600, owner oes)
+  /var/lib/oes/                    - application data
+  /var/log/oes/                    - logs
 
-Права доступа:
-  — oes.conf должен быть доступен ТОЛЬКО процессу OES
-  — НЕ в публичных директориях
-  — НЕ в git
+Access permissions:
+  - oes.conf must be accessible ONLY to the OES process
+  - NOT in public directories
+  - NOT in git
 ```
 
 ```cmd
-REM Windows — установить права только для SYSTEM и Administrators
+REM Windows — grant permissions only to SYSTEM and Administrators
 icacls "C:\ProgramData\OES\oes.conf" /inheritance:r
 icacls "C:\ProgramData\OES\oes.conf" /grant SYSTEM:(F)
 icacls "C:\ProgramData\OES\oes.conf" /grant Administrators:(F)
@@ -215,139 +215,139 @@ sudo chmod 600 /etc/oes/oes.conf
 sudo chown oes:oes /etc/oes/oes.conf
 sudo chmod 600 /etc/oes/oes.conf
 
-# macOS desktop (пользовательский конфиг)
+# macOS desktop (user config)
 chmod 600 ~/Library/Application\ Support/OES/oes.conf
 ```
 
-### Шаблон oes.conf.example (конфигурация без значений)
+### oes.conf.example template (configuration without values)
 
 ```ini
 ; === OES Configuration Template ===
-; Скопировать в oes.conf и заполнить значениями
-; НИКОГДА не коммитить oes.conf с реальными данными
+; Copy to oes.conf and fill in values
+; NEVER commit oes.conf with real data
 
 [Application]
 Mode=                       ; desktop | daemon | service
-LicenseKey=                 ; Лицензионный ключ (для встроенной проверки)
+LicenseKey=                 ; License key (for built-in verification)
 LicenseServerURL=           ; https://license.oes-vendor.com/api/v1/validate
 
 [Database.Primary]
 Engine=                     ; firebird | postgresql | sqlite | mysql
-Host=                       ; localhost (или IP для сервера)
+Host=                       ; localhost (or IP for server)
 Port=                       ; 3050 (Firebird) | 5432 (PostgreSQL) | 3306 (MySQL)
-Database=                   ; Путь к файлу .fdb или имя БД
-User=                       ; Пользователь БД
-Password=                   ; СГЕНЕРИРОВАННЫЙ_ПАРОЛЬ — хранить в 1Password
+Database=                   ; Path to .fdb file or DB name
+User=                       ; DB user
+Password=                   ; GENERATED_PASSWORD - keep in 1Password
 
 [Database.Firebird]
 EmbeddedMode=               ; true | false
-MasterPassword=             ; Мастер-пароль Firebird SYSDBA
+MasterPassword=             ; Firebird SYSDBA master password
 
 [Daemon]
-ListenHost=                 ; 127.0.0.1 (только локально) | 0.0.0.0
-ListenPort=                 ; 8765 (порт HTTP API daemon-режима)
-TLSCert=                    ; Путь к TLS сертификату
-TLSKey=                     ; Путь к TLS приватному ключу
+ListenHost=                 ; 127.0.0.1 (local only) | 0.0.0.0
+ListenPort=                 ; 8765 (daemon-mode HTTP API port)
+TLSCert=                    ; Path to TLS certificate
+TLSKey=                     ; Path to TLS private key
 
 [Updates]
 UpdateServerURL=            ; https://updates.oes-vendor.com/
-UpdateCheckToken=           ; Токен для аутентифицированных обновлений
+UpdateCheckToken=           ; Token for authenticated updates
 
 [Notifications]
 SMTPHost=                   ; smtp.example.com
 SMTPPort=                   ; 587
 SMTPUser=                   ;
 SMTPPassword=               ;
-TelegramBotToken=           ; Для уведомлений в daemon-режиме
+TelegramBotToken=           ; For notifications in daemon mode
 TelegramChatID=             ;
 
 [Backup]
-S3Endpoint=                 ; https://s3.amazonaws.com (опционально)
+S3Endpoint=                 ; https://s3.amazonaws.com (optional)
 S3Bucket=                   ;
 S3AccessKey=                ;
 S3SecretKey=                ;
 ```
 
-### Emergency: утечка секрета
+### Emergency: secret leak
 
-**Если секрет попал в публичный доступ (git, скриншот, лог):**
+**If a secret is exposed publicly (git, screenshot, log):**
 
 ```
-ШАГ 1: НЕМЕДЛЕННО ротировать скомпрометированный секрет
-        — Сменить пароль БД / отозвать API токен / пересоздать ключ
-        — Если скомпрометирован Code Signing сертификат — НЕМЕДЛЕННО
-          связаться с CA для отзыва и перевыпуска
-        — Если скомпрометирован приватный ключ лицензий — пересоздать ключевую
-          пару и выпустить обновление для всех клиентов
+STEP 1: IMMEDIATELY rotate the compromised secret
+        - Change DB password / revoke API token / regenerate key
+        - If the Code Signing certificate is compromised - IMMEDIATELY
+          contact the CA for revocation and reissue
+        - If the license private key is compromised - regenerate the key
+          pair and issue an update for all clients
 
-ШАГ 2: Обновить секрет везде где он используется
-        — oes.conf на всех серверах
-        — GitHub Secrets
-        — 1Password / Bitwarden
-        — CI/CD пайплайны
+STEP 2: Update the secret everywhere it is used
+        - oes.conf on all servers
+        - GitHub Secrets
+        - 1Password / Bitwarden
+        - CI/CD pipelines
 
-ШАГ 3: Проверить логи на несанкционированный доступ
-        — Логи Firebird / PostgreSQL — необычные подключения
-        — Логи License Server — массовые активации
-        — Логи OES daemon: /var/log/oes/daemon.log
+STEP 3: Check logs for unauthorized access
+        - Firebird / PostgreSQL logs - unusual connections
+        - License Server logs - mass activations
+        - OES daemon logs: /var/log/oes/daemon.log
 
-ШАГ 4: Удалить секрет из истории git (если попал в коммит)
-        # Использовать BFG Repo-Cleaner:
+STEP 4: Remove the secret from git history (if it was committed)
+        # Use BFG Repo-Cleaner:
         bfg --delete-files oes.conf
         git reflog expire --expire=now --all && git gc --prune=now --aggressive
         git push --force --all
-        # Уведомить всех членов команды о принудительном push
+        # Notify all team members about the force push
 
-ШАГ 5: Задокументировать инцидент
-        — Что утекло (пароль БД, лицензионный ключ, Code Signing?)
-        — Когда обнаружено
-        — Возможные затронутые клиенты
-        — Какие действия предприняты
-        — Меры для предотвращения повторения
+STEP 5: Document the incident
+        - What leaked (DB password, license key, Code Signing?)
+        - When discovered
+        - Potentially affected clients
+        - Actions taken
+        - Measures to prevent recurrence
 ```
 
 ---
 
-## SOPS + age (шифрование конфигурации в git)
+## SOPS + age (configuration encryption in git)
 
-### Установка
+### Installation
 
 ```bash
 # macOS
 brew install sops age
 
-# Ubuntu (build-сервер)
+# Ubuntu (build server)
 sudo apt install age
 SOPS_VERSION=3.8.1
 curl -LO https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64
 sudo mv sops-v${SOPS_VERSION}.linux.amd64 /usr/local/bin/sops
 sudo chmod +x /usr/local/bin/sops
 
-# Windows (build-машина)
+# Windows (build machine)
 choco install sops
-# или скачать бинарник с GitHub Releases
+# or download the binary from GitHub Releases
 ```
 
-### Генерация ключа
+### Key generation
 
 ```bash
-# Создать ключ age
+# Create an age key
 age-keygen -o key.txt
 # Public key: age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
 
-# Сохранить ключ в 1Password!
+# Save the key in 1Password!
 cat key.txt
 
-# На build-сервере — положить ключ:
+# On the build server - place the key:
 mkdir -p /root/.config/sops/age/
 nano /root/.config/sops/age/keys.txt
 chmod 600 /root/.config/sops/age/keys.txt
 ```
 
-### Конфигурация .sops.yaml
+### .sops.yaml configuration
 
 ```yaml
-# .sops.yaml в корне репозитория
+# .sops.yaml at the repository root
 creation_rules:
   - path_regex: oes\.conf\.production\.enc$
     age: >-
@@ -357,28 +357,28 @@ creation_rules:
       age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
 ```
 
-### Шифрование / расшифровка
+### Encryption / decryption
 
 ```bash
-# Шифрование конфигурационного файла
+# Encrypt a configuration file
 sops --encrypt oes.conf.production > oes.conf.production.enc
 
-# Расшифровка
+# Decrypt
 export SOPS_AGE_KEY_FILE=/root/.config/sops/age/keys.txt
 sops --decrypt oes.conf.production.enc > oes.conf.production
 
-# Редактирование зашифрованного файла (откроет в $EDITOR)
+# Edit an encrypted file (opens in $EDITOR)
 sops oes.conf.production.enc
 
-# Коммитим зашифрованный файл (безопасно хранить в git)
+# Commit the encrypted file (safe to keep in git)
 git add oes.conf.production.enc .sops.yaml
 git commit -m "update encrypted production config"
 ```
 
-### Использование в CI/CD (GitHub Actions)
+### Usage in CI/CD (GitHub Actions)
 
 ```yaml
-# В GitHub Secrets: SOPS_AGE_KEY (содержимое key.txt)
+# In GitHub Secrets: SOPS_AGE_KEY (contents of key.txt)
 - name: Decrypt OES config
   run: |
     mkdir -p /root/.config/sops/age/
@@ -388,14 +388,14 @@ git commit -m "update encrypted production config"
 
 ---
 
-## Code Signing (подпись инсталлятора)
+## Code Signing (installer signing)
 
-### Безопасное хранение сертификата в CI/CD
+### Securely storing the certificate in CI/CD
 
 ```bash
-# Никогда не хранить PFX-файл в репозитории!
-# GitHub Secrets: CODE_SIGN_PFX (base64 от .pfx файла)
-# GitHub Secrets: CODE_SIGN_PASSWORD (пароль от .pfx)
+# Never store the PFX file in the repository!
+# GitHub Secrets: CODE_SIGN_PFX (base64 of the .pfx file)
+# GitHub Secrets: CODE_SIGN_PASSWORD (.pfx password)
 ```
 
 ```yaml
@@ -405,10 +405,10 @@ git commit -m "update encrypted production config"
     CODE_SIGN_PFX: ${{ secrets.CODE_SIGN_PFX }}
     CODE_SIGN_PASSWORD: ${{ secrets.CODE_SIGN_PASSWORD }}
   run: |
-    # Декодировать PFX
+    # Decode PFX
     echo "$CODE_SIGN_PFX" | base64 -d > signing.pfx
 
-    # Подписать инсталлятор (signtool.exe)
+    # Sign the installer (signtool.exe)
     "C:\Program Files (x86)\Windows Kits\10\bin\x64\signtool.exe" sign `
       /f signing.pfx `
       /p "$CODE_SIGN_PASSWORD" `
@@ -416,29 +416,29 @@ git commit -m "update encrypted production config"
       /td sha256 /fd sha256 `
       OES-Setup.exe
 
-    # Удалить PFX после подписи
+    # Remove PFX after signing
     Remove-Item signing.pfx
 ```
 
 ---
 
-## Платформенное хранение секретов
+## Platform-specific secret storage
 
 ### macOS: Keychain
 
 ```bash
-# Сохранить пароль Firebird в macOS Keychain
+# Save Firebird password to macOS Keychain
 security add-generic-password \
   -a "oes-app" \
   -s "OES-Firebird-SYSDBA" \
-  -w "СГЕНЕРИРОВАННЫЙ_ПАРОЛЬ"
+  -w "GENERATED_PASSWORD"
 
-# Получить пароль из Keychain
+# Retrieve password from Keychain
 security find-generic-password -s "OES-Firebird-SYSDBA" -w
 ```
 
 ```cpp
-// В коде OES (macOS): чтение из Keychain через Security framework
+// In OES code (macOS): reading from Keychain via Security framework
 #include <Security/Security.h>
 
 wxString LoadFirebirdPasswordFromKeychain() {
@@ -464,24 +464,24 @@ wxString LoadFirebirdPasswordFromKeychain() {
 ### Linux: libsecret / gnome-keyring
 
 ```bash
-# Через secret-tool (libsecret)
+# Via secret-tool (libsecret)
 secret-tool store --label='OES Firebird Password' service oes-firebird username sysdba
 
-# Получить
+# Retrieve
 secret-tool lookup service oes-firebird username sysdba
 ```
 
-## Windows DPAPI (шифрование на уровне ОС)
+## Windows DPAPI (OS-level encryption)
 
-Для хранения паролей БД в desktop-режиме OES использует DPAPI — шифрование, привязанное к учётной записи Windows:
+For storing DB passwords in desktop OES mode, DPAPI is used — encryption tied to the Windows user account:
 
 ```cpp
-// Пример использования в C++ коде OES (Windows)
-// Шифрование строки подключения через CryptProtectData
+// Example usage in OES C++ code (Windows)
+// Encrypt the connection string via CryptProtectData
 #include <windows.h>
 #include <wincrypt.h>
 
-// Зашифровать секрет (только текущий пользователь может расшифровать)
+// Encrypt a secret (only the current user can decrypt)
 bool EncryptSecret(const std::wstring& plaintext, std::vector<BYTE>& encrypted) {
     DATA_BLOB input, output;
     input.pbData = (BYTE*)plaintext.data();
@@ -498,37 +498,37 @@ bool EncryptSecret(const std::wstring& plaintext, std::vector<BYTE>& encrypted) 
 
 ---
 
-## Генерация безопасных паролей
+## Generating secure passwords
 
 ```bash
-# Случайный пароль 32 символа
+# Random 32-character password
 openssl rand -base64 32
 
-# Только буквы и цифры (совместимо с Firebird)
+# Letters and digits only (Firebird-compatible)
 openssl rand -base64 48 | tr -dc 'a-zA-Z0-9' | head -c 24
 
-# UUID (для License Key генерации)
+# UUID (for License Key generation)
 uuidgen
 
 # PowerShell (Windows)
 [System.Web.Security.Membership]::GeneratePassword(24, 4)
-# или
+# or
 -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 24 | ForEach-Object {[char]$_})
 ```
 
 ---
 
-## Правила безопасности (закрепить в команде)
+## Security rules (enforce on the team)
 
-1. **Никогда** не коммитить oes.conf / строки подключения в git
-2. **Никогда** не передавать лицензионные ключи клиентов через мессенджеры
-3. **Никогда** не логировать пароли и строки подключения (ни в debug, ни в релизе)
-4. **Никогда** не хранить Code Signing сертификат на машинах разработчиков
-5. **Всегда** использовать oes.conf.example без значений в репозитории
-6. **Всегда** ротировать секреты при увольнении сотрудника
-7. **Всегда** использовать разные пароли для dev/staging/production БД
-8. **Всегда** шифровать бэкапы баз данных
-9. **Всегда** минимальные права пользователей БД (только нужные таблицы/схемы)
-10. **Регулярно** (раз в квартал) ротировать критичные секреты
-11. **Проверять** git diff перед коммитом — не попала ли строка подключения
-12. **Встраивать** только публичный ключ проверки лицензий, НИКОГДА не приватный
+1. **Never** commit oes.conf / connection strings to git
+2. **Never** send customer license keys via messengers
+3. **Never** log passwords or connection strings (neither in debug nor in release)
+4. **Never** store the Code Signing certificate on developer machines
+5. **Always** keep oes.conf.example without values in the repository
+6. **Always** rotate secrets when an employee leaves
+7. **Always** use different passwords for dev/staging/production DBs
+8. **Always** encrypt database backups
+9. **Always** grant minimal DB user permissions (only required tables/schemas)
+10. **Regularly** (once per quarter) rotate critical secrets
+11. **Check** git diff before committing — make sure no connection string slipped in
+12. **Embed** only the license verification public key, NEVER the private key

@@ -1,148 +1,148 @@
-# 08. Cloudflare — CDN и защита для инфраструктуры OES
+# 08. Cloudflare — CDN and protection for OES infrastructure
 
-> Cloudflare в контексте OES используется для:
-> - **Update Server** — CDN для дистрибуции релизов и обновлений OES
-> - **License Server** — защита endpoint'ов валидации лицензий
-> - **Портал вендора** — документация, marketing сайт
-> - **OES Daemon** — если публичный доступ к серверному режиму нужен
+> Cloudflare in the OES context is used for:
+> - **Update Server** — CDN for distributing OES releases and updates
+> - **License Server** — protecting license validation endpoints
+> - **Vendor portal** — documentation, marketing site
+> - **OES Daemon** — when public access to server mode is required
 
 ---
 
-## DNS настройка (инфраструктура OES-вендора)
+## DNS setup (OES vendor infrastructure)
 
-### Добавить домен
-
-```
-1. Cloudflare Dashboard → Add a Site → ввести oes-vendor.com
-2. Выбрать план (Free достаточно для большинства)
-3. Cloudflare покажет NS-серверы — сменить у регистратора
-4. Подождать 5-60 минут
-```
-
-### A-записи для инфраструктуры OES
+### Add the domain
 
 ```
-Тип    Имя                        Значение          Proxy   TTL
+1. Cloudflare Dashboard -> Add a Site -> enter oes-vendor.com
+2. Choose a plan (Free is enough for most cases)
+3. Cloudflare shows NS servers - change them at the registrar
+4. Wait 5-60 minutes
+```
+
+### A-records for OES infrastructure
+
+```
+Type   Name                       Value             Proxy   TTL
 A      oes-vendor.com             203.0.113.10      Proxied Auto
-A      updates.oes-vendor.com     203.0.113.10      Proxied Auto    ← Update Server
-A      license.oes-vendor.com     203.0.113.10      Proxied Auto    ← License Server
-A      portal.oes-vendor.com      203.0.113.11      Proxied Auto    ← Вендорный портал
-A      daemon.customer.com        203.0.113.20      Proxied Auto    ← OES Daemon (если публичный)
+A      updates.oes-vendor.com     203.0.113.10      Proxied Auto    <- Update Server
+A      license.oes-vendor.com     203.0.113.10      Proxied Auto    <- License Server
+A      portal.oes-vendor.com      203.0.113.11      Proxied Auto    <- Vendor portal
+A      daemon.customer.com        203.0.113.20      Proxied Auto    <- OES Daemon (if public)
 CNAME  www                        oes-vendor.com    Proxied Auto
 ```
 
-### Proxied vs DNS Only для OES
+### Proxied vs DNS Only for OES
 
 ```
-Proxied (оранжевое облако) — ИСПОЛЬЗОВАТЬ для:
-  — updates.oes-vendor.com (CDN, кэш больших файлов)
-  — license.oes-vendor.com (DDoS защита, rate limiting)
-  — portal.oes-vendor.com (сайт вендора)
+Proxied (orange cloud) - USE for:
+  - updates.oes-vendor.com (CDN, caching large files)
+  - license.oes-vendor.com (DDoS protection, rate limiting)
+  - portal.oes-vendor.com (vendor site)
 
-DNS Only (серое облако) — ИСПОЛЬЗОВАТЬ для:
-  — build-server.internal (SSH-доступ к build-серверу)
-  — Внутренние серверы, которые не должны идти через Cloudflare
-  — MX записи всегда DNS Only
+DNS Only (gray cloud) - USE for:
+  - build-server.internal (SSH access to the build server)
+  - Internal servers that should not go through Cloudflare
+  - MX records always DNS Only
 ```
 
 ---
 
 ## SSL/TLS
 
-### Full (Strict) — рекомендуется
+### Full (Strict) — recommended
 
 ```
-Cloudflare Dashboard → SSL/TLS → Overview → Full (Strict)
+Cloudflare Dashboard -> SSL/TLS -> Overview -> Full (Strict)
 ```
 
-### Origin Certificate для каждого сервера
+### Origin Certificate for each server
 
 ```bash
-# Для Update Server
-# SSL/TLS → Origin Server → Create Certificate
-# Выбрать: *.oes-vendor.com, oes-vendor.com
-# Срок: 15 лет
+# For Update Server
+# SSL/TLS -> Origin Server -> Create Certificate
+# Select: *.oes-vendor.com, oes-vendor.com
+# Validity: 15 years
 
 sudo mkdir -p /etc/ssl/cloudflare
-sudo nano /etc/ssl/cloudflare/cert.pem    # Вставить Origin Certificate
-sudo nano /etc/ssl/cloudflare/key.pem     # Вставить Private Key
+sudo nano /etc/ssl/cloudflare/cert.pem    # Paste Origin Certificate
+sudo nano /etc/ssl/cloudflare/key.pem     # Paste Private Key
 sudo chmod 600 /etc/ssl/cloudflare/key.pem
 sudo chmod 644 /etc/ssl/cloudflare/cert.pem
 ```
 
-### Настройки SSL
+### SSL settings
 
 ```
-SSL/TLS → Edge Certificates:
-  — Always Use HTTPS: ON
-  — Minimum TLS Version: TLS 1.2
-  — TLS 1.3: ON
-  — Automatic HTTPS Rewrites: ON
-  — HSTS: Enable (max-age: 6 months, includeSubDomains)
+SSL/TLS -> Edge Certificates:
+  - Always Use HTTPS: ON
+  - Minimum TLS Version: TLS 1.2
+  - TLS 1.3: ON
+  - Automatic HTTPS Rewrites: ON
+  - HSTS: Enable (max-age: 6 months, includeSubDomains)
 ```
 
 ---
 
-## Firewall Rules (WAF) для OES
+## Firewall Rules (WAF) for OES
 
-### Защита License Server
+### Protecting the License Server
 
 ```
-Security → WAF → Custom Rules → Create Rule
+Security -> WAF -> Custom Rules -> Create Rule
 
-Имя: Block License Brute Force Countries
-Выражение:
+Name: Block License Brute Force Countries
+Expression:
   (http.request.uri.path contains "/api/v1/license/" and
    ip.geoip.country in {"KP" "XX"})
-Действие: Block
+Action: Block
 
-Имя: License API Allowed Methods
-Выражение:
+Name: License API Allowed Methods
+Expression:
   (http.request.uri.path contains "/api/v1/license/" and
    not http.request.method in {"POST" "GET"})
-Действие: Block
+Action: Block
 
-Имя: License API Bot Protection
-Выражение:
+Name: License API Bot Protection
+Expression:
   (http.request.uri.path contains "/api/v1/license/" and
    cf.client.bot)
-Действие: Challenge
+Action: Challenge
 ```
 
-### Защита Update Server
+### Protecting the Update Server
 
 ```
-Имя: Update Server Allowed Methods
-Выражение:
+Name: Update Server Allowed Methods
+Expression:
   (http.host eq "updates.oes-vendor.com" and
    not http.request.method in {"GET" "HEAD"})
-Действие: Block
+Action: Block
 
-Имя: Block Update Server Hotlinking
-Выражение:
+Name: Block Update Server Hotlinking
+Expression:
   (http.host eq "updates.oes-vendor.com" and
    http.request.uri.path matches "^/releases/.*\.(exe|msi|zip|tar\.gz)$" and
    not http.referer contains "oes-vendor.com" and
    not http.referer eq "")
-Действие: Challenge
+Action: Challenge
 ```
 
-### Блокировка сканеров / ботов
+### Blocking scanners / bots
 
 ```
-Имя: Block Bad Bots
-Выражение:
+Name: Block Bad Bots
+Expression:
   (cf.client.bot) or
   (http.user_agent eq "") or
   (http.user_agent contains "sqlmap") or
   (http.user_agent contains "nikto")
-Действие: Block
+Action: Block
 ```
 
-### Разрешить только Cloudflare к серверу
+### Allow only Cloudflare to reach the server
 
 ```bash
-# UFW на Update Server / License Server — разрешить HTTP/HTTPS только от Cloudflare
+# UFW on Update Server / License Server - allow HTTP/HTTPS from Cloudflare only
 for ip in $(curl -s https://www.cloudflare.com/ips-v4); do
   sudo ufw allow from $ip to any port 80
   sudo ufw allow from $ip to any port 443
@@ -154,7 +154,7 @@ for ip in $(curl -s https://www.cloudflare.com/ips-v6); do
   sudo ufw allow from $ip to any port 443
 done
 
-# Удалить общие правила
+# Remove general rules
 sudo ufw delete allow 80/tcp
 sudo ufw delete allow 443/tcp
 
@@ -163,91 +163,91 @@ sudo ufw reload
 
 ---
 
-## Rate Limiting для OES
+## Rate Limiting for OES
 
 ```
-Security → WAF → Rate Limiting Rules → Create Rule
+Security -> WAF -> Rate Limiting Rules -> Create Rule
 
-Имя: License Validation Rate Limit
-Выражение:
+Name: License Validation Rate Limit
+Expression:
   (http.request.uri.path eq "/api/v1/license/validate")
-Характеристики: IP
-Период: 1 minute
-Лимит: 10 requests
-Действие: Block (длительность: 300 секунд)
-Комментарий: OES лицензии проверяются редко, 10/min достаточно
+Characteristics: IP
+Period: 1 minute
+Limit: 10 requests
+Action: Block (duration: 300 seconds)
+Comment: OES licenses are validated rarely; 10/min is enough
 
-Имя: License Activation Rate Limit
-Выражение:
+Name: License Activation Rate Limit
+Expression:
   (http.request.uri.path eq "/api/v1/license/activate")
-Характеристики: IP
-Период: 1 hour
-Лимит: 5 requests
-Действие: Block (длительность: 3600 секунд)
-Комментарий: Активаций должно быть мало
+Characteristics: IP
+Period: 1 hour
+Limit: 5 requests
+Action: Block (duration: 3600 seconds)
+Comment: Activations should be infrequent
 
-Имя: Update Check Rate Limit
-Выражение:
+Name: Update Check Rate Limit
+Expression:
   (http.request.uri.path eq "/api/v1/updates/check")
-Характеристики: IP
-Период: 1 hour
-Лимит: 30 requests
-Действие: Block (длительность: 300 секунд)
+Characteristics: IP
+Period: 1 hour
+Limit: 30 requests
+Action: Block (duration: 300 seconds)
 
-Имя: Release Download Rate Limit
-Выражение:
+Name: Release Download Rate Limit
+Expression:
   (http.request.uri.path matches "^/releases/.*\.(exe|msi|zip|tar\.gz)$")
-Характеристики: IP
-Период: 1 hour
-Лимит: 5 downloads
-Действие: Block (длительность: 3600 секунд)
+Characteristics: IP
+Period: 1 hour
+Limit: 5 downloads
+Action: Block (duration: 3600 seconds)
 ```
 
 ---
 
-## Caching для Update Server
+## Caching for Update Server
 
-### Cache Rules (рекомендуется)
+### Cache Rules (recommended)
 
 ```
-Caching → Cache Rules → Create Rule
+Caching -> Cache Rules -> Create Rule
 
-Имя: Cache OES Release Files
-Выражение:
+Name: Cache OES Release Files
+Expression:
   (http.host eq "updates.oes-vendor.com" and
    http.request.uri.path matches "^/releases/.*\.(exe|msi|zip|tar\.gz|sig|sha256)$")
-Действие:
+Action:
   Cache Status: Eligible for cache
-  Edge TTL: 30 days         ← Релизы не меняются
+  Edge TTL: 30 days         <- Releases do not change
   Browser TTL: 7 days
 
-Имя: Cache Update Manifest
-Выражение:
+Name: Cache Update Manifest
+Expression:
   (http.host eq "updates.oes-vendor.com" and
    http.request.uri.path eq "/api/v1/updates/manifest.json")
-Действие:
+Action:
   Cache Status: Eligible for cache
-  Edge TTL: 5 minutes       ← Манифест может меняться при выходе версии
+  Edge TTL: 5 minutes       <- Manifest may change with new version releases
   Browser TTL: 1 minute
 
-Имя: Bypass Cache for License API
-Выражение:
+Name: Bypass Cache for License API
+Expression:
   (http.host eq "license.oes-vendor.com")
-Действие:
-  Cache Status: Bypass cache  ← Лицензионные запросы не кэшировать никогда
+Action:
+  Cache Status: Bypass cache  <- Never cache license requests
 ```
 
 ---
 
 ## Redirect Rules
 
-### Редирект старых URL обновлений
+### Redirect old update URLs
 
 ```
-Rules → Redirect Rules → Create Rule
+Rules -> Redirect Rules -> Create Rule
 
-Имя: Legacy Update URL redirect
-Выражение:
+Name: Legacy Update URL redirect
+Expression:
   (http.host eq "updates.oes-vendor.com" and
    http.request.uri.path starts_with "/download/")
 URL Redirect:
@@ -261,53 +261,53 @@ URL Redirect:
 ## DDoS Protection
 
 ```
-Бесплатно на всех планах:
-  — L3/L4 DDoS Protection (автоматически)
-  — L7 DDoS Protection (автоматически)
+Free on all plans:
+  - L3/L4 DDoS Protection (automatic)
+  - L7 DDoS Protection (automatic)
 
-Security → Settings:
-  — Security Level: Medium
-  — Browser Integrity Check: ON
-  — для License Server: Security Level: High
+Security -> Settings:
+  - Security Level: Medium
+  - Browser Integrity Check: ON
+  - For License Server: Security Level: High
 
-При атаке на License Server:
-  1. Security → Settings → Under Attack Mode: ON
-  2. Это добавит JS challenge — OES клиент должен уметь обрабатывать (или bypass)
-  3. Или добавить правило WAF для разрешения запросов с OES User-Agent без challenge
+During an attack on the License Server:
+  1. Security -> Settings -> Under Attack Mode: ON
+  2. This adds a JS challenge - the OES client must handle it (or bypass)
+  3. Or add a WAF rule allowing requests with an OES User-Agent without a challenge
 
-Важно для OES: OES клиент (C++) делает HTTP запросы без браузера.
-JS challenge Cloudflare не пройдёт C++ HTTP клиент (libcurl).
-Использовать Rate Limiting вместо Under Attack Mode для API endpoint'ов.
+Important for OES: the OES client (C++) makes HTTP requests without a browser.
+A C++ HTTP client (libcurl) will not pass the Cloudflare JS challenge.
+Use Rate Limiting instead of Under Attack Mode for API endpoints.
 ```
 
 ---
 
-## API Cloudflare (автоматизация)
+## Cloudflare API (automation)
 
-### Настройка
+### Setup
 
 ```bash
-# Создать API токен: Profile → API Tokens → Create Token
-# Шаблон: Zone:DNS:Edit, Zone:Cache Purge:Purge, Zone:Zone:Read
+# Create an API token: Profile -> API Tokens -> Create Token
+# Template: Zone:DNS:Edit, Zone:Cache Purge:Purge, Zone:Zone:Read
 
-ZONE_ID="ваш_zone_id"     # Dashboard → домен → Overview → Zone ID
-CF_TOKEN="ваш_api_token"
+ZONE_ID="your_zone_id"     # Dashboard -> domain -> Overview -> Zone ID
+CF_TOKEN="your_api_token"
 ```
 
-### Purge Cache после выхода релиза OES
+### Purge cache after an OES release
 
 ```bash
 #!/bin/bash
 # /opt/scripts/purge-update-cache.sh
-# Запускать после публикации нового релиза OES
+# Run after publishing a new OES release
 
 CF_ZONE_ID="${CF_ZONE_ID}"
 CF_TOKEN="${CF_TOKEN}"
 VERSION="${1:-latest}"
 
-echo "Очистка кэша Cloudflare после релиза OES ${VERSION}..."
+echo "Purging Cloudflare cache after OES release ${VERSION}..."
 
-# Очистить манифест обновлений (чтобы клиенты увидели новый релиз)
+# Purge the update manifest (so clients see the new release)
 RESULT=$(curl -s -X POST \
   "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
   -H "Authorization: Bearer ${CF_TOKEN}" \
@@ -321,15 +321,15 @@ RESULT=$(curl -s -X POST \
 
 SUCCESS=$(echo "$RESULT" | jq -r '.success')
 if [ "$SUCCESS" = "true" ]; then
-  echo "Кэш манифеста очищен — клиенты увидят релиз ${VERSION}"
+  echo "Manifest cache purged - clients will see release ${VERSION}"
 else
-  echo "ОШИБКА очистки кэша: $(echo $RESULT | jq -r '.errors')"
+  echo "ERROR purging cache: $(echo $RESULT | jq -r '.errors')"
   exit 1
 fi
 ```
 
 ```bash
-# Интеграция в CI/CD (GitHub Actions)
+# CI/CD integration (GitHub Actions)
 # .github/workflows/release.yml
 - name: Purge Cloudflare cache after release
   env:
@@ -340,15 +340,15 @@ fi
     ./scripts/purge-update-cache.sh "${{ github.ref_name }}"
 ```
 
-### Управление DNS через API
+### Managing DNS via API
 
 ```bash
-# Список DNS записей
+# List DNS records
 curl -s "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
   -H "Authorization: Bearer ${CF_TOKEN}" | jq '.result[] | {name, type, content}'
 
-# Обновить IP update-сервера при смене хостинга
-RECORD_ID="id_записи_updates"
+# Update the update-server IP when hosting changes
+RECORD_ID="updates_record_id"
 NEW_IP="198.51.100.20"
 
 curl -X PUT "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records/${RECORD_ID}" \
@@ -365,20 +365,20 @@ curl -X PUT "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records/$
 
 ---
 
-## Cloudflare Workers (опционально)
+## Cloudflare Workers (optional)
 
-### Роутинг запросов по версии OES
+### Routing requests by OES version
 
 ```javascript
 // workers/oes-updates-router.js
-// Роутинг запросов к Update Server в зависимости от версии клиента
+// Route Update Server requests depending on the client version
 
 export default {
   async fetch(request) {
     const url = new URL(request.url);
     const clientVersion = request.headers.get('X-OES-Version') || '0.0.0';
 
-    // Перенаправить устаревшие клиенты на legacy API
+    // Redirect outdated clients to the legacy API
     const [major] = clientVersion.split('.').map(Number);
     if (major < 2) {
       url.pathname = '/legacy' + url.pathname;
@@ -392,12 +392,12 @@ export default {
 
 ```javascript
 // workers/license-geo-check.js
-// Блокировать активацию лицензий из запрещённых юрисдикций
+// Block license activations from prohibited jurisdictions
 
 export default {
   async fetch(request) {
     const country = request.cf?.country || 'XX';
-    const BLOCKED_COUNTRIES = ['KP', 'XX'];  // Северная Корея, неизвестные
+    const BLOCKED_COUNTRIES = ['KP', 'XX'];  // North Korea, unknown
 
     if (request.url.includes('/api/v1/license/activate') &&
         BLOCKED_COUNTRIES.includes(country)) {
@@ -416,75 +416,75 @@ export default {
 ```
 
 ```bash
-# Деплой Worker
-# ПРИМЕЧАНИЕ: wrangler — инструмент Cloudflare на Node.js. Node.js не является частью
-# стека OES (C++). Установить Node.js отдельно: https://nodejs.org/
+# Deploy a Worker
+# NOTE: wrangler is a Cloudflare tool that runs on Node.js. Node.js is not part of
+# the OES stack (C++). Install Node.js separately: https://nodejs.org/
 npm install -g wrangler
 wrangler login
 wrangler deploy workers/oes-updates-router.js --name oes-updates-router
 
-# Привязать к маршруту:
-# Workers Routes → updates.oes-vendor.com/* → oes-updates-router
+# Bind to a route:
+# Workers Routes -> updates.oes-vendor.com/* -> oes-updates-router
 ```
 
 ---
 
-## Аналитика для OES вендора
+## Analytics for the OES vendor
 
 ```
-Analytics → Traffic:
-  — Количество запросов к /api/v1/updates/check (частота проверок обновлений)
-  — Количество скачиваний из /releases/ (статистика загрузок)
-  — Количество запросов к /api/v1/license/validate (активность лицензий)
+Analytics -> Traffic:
+  - Number of requests to /api/v1/updates/check (update-check frequency)
+  - Number of downloads from /releases/ (download statistics)
+  - Number of requests to /api/v1/license/validate (license activity)
 
-Полезные метрики:
-  — Unique IP на /releases/... → приблизительное количество уникальных установок
-  — Ошибки 429 на License API → атаки или превышение лимитов
-  — Топ стран источников → geography base пользователей OES
+Useful metrics:
+  - Unique IPs on /releases/... -> approximate count of unique installations
+  - 429 errors on the License API -> attacks or rate-limit overruns
+  - Top source countries -> geographic base of OES users
 
 Security:
-  — Threats Blocked → DDos атаки на License/Update серверы
-  — Top Threat Countries
+  - Threats Blocked -> DDoS attacks against License/Update servers
+  - Top Threat Countries
 ```
 
 ---
 
-## Полезные настройки для OES инфраструктуры
+## Useful settings for OES infrastructure
 
 ```
-Speed → Optimization:
-  — Brotli: ON          ← сжатие ZIP с релизами (дополнительно к gzip)
-  — Early Hints: ON
-  — Rocket Loader: OFF  ← не нужен, нет web-приложения
+Speed -> Optimization:
+  - Brotli: ON          <- compress ZIPs with releases (additional to gzip)
+  - Early Hints: ON
+  - Rocket Loader: OFF  <- not needed, no web application
 
 Network:
-  — HTTP/2: ON
-  — HTTP/3 (QUIC): ON   ← OES клиент libcurl поддерживает HTTP/3
+  - HTTP/2: ON
+  - HTTP/3 (QUIC): ON   <- OES client (libcurl) supports HTTP/3
 
-Caching → Configuration:
-  — Caching Level: Standard (для update-сервера)
-  — Browser Cache TTL: Respect Existing Headers
+Caching -> Configuration:
+  - Caching Level: Standard (for the update server)
+  - Browser Cache TTL: Respect Existing Headers
 ```
 
 ---
 
-## Чеклист настройки Cloudflare для OES
+## Cloudflare setup checklist for OES
 
 ```
-[ ] Домен добавлен, NS делегированы
-[ ] A-записи для updates.oes-vendor.com и license.oes-vendor.com
+[ ] Domain added, NS delegated
+[ ] A-records for updates.oes-vendor.com and license.oes-vendor.com
 [ ] SSL/TLS: Full (Strict)
-[ ] Origin Certificates созданы и установлены на серверах
+[ ] Origin Certificates created and installed on servers
 [ ] Always Use HTTPS: ON
 [ ] Minimum TLS: 1.2
-[ ] WAF: защита License API (rate limit, bot protection)
-[ ] WAF: защита Update Server (hotlink protection, method check)
-[ ] Cache Rules: долгое кэширование релизов
-[ ] Cache Rules: короткий TTL манифеста обновлений
-[ ] Cache Rules: bypass для License API
-[ ] API Token создан (Zone:Cache Purge + DNS:Edit)
-[ ] Token сохранён в GitHub Secrets (CF_TOKEN, CF_ZONE_ID)
-[ ] Скрипт purge-cache после деплоя релиза настроен
-[ ] UFW на серверах: разрешить HTTP/HTTPS только от Cloudflare IP
-[ ] Аналитика: настроить отслеживание скачиваний и активаций
+[ ] WAF: License API protection (rate limit, bot protection)
+[ ] WAF: Update Server protection (hotlink protection, method check)
+[ ] Cache Rules: long cache TTL for releases
+[ ] Cache Rules: short TTL for update manifest
+[ ] Cache Rules: bypass for License API
+[ ] API Token created (Zone:Cache Purge + DNS:Edit)
+[ ] Token saved in GitHub Secrets (CF_TOKEN, CF_ZONE_ID)
+[ ] purge-cache script after release deploy configured
+[ ] UFW on servers: allow HTTP/HTTPS only from Cloudflare IPs
+[ ] Analytics: track downloads and activations
 ```

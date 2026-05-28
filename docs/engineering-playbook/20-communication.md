@@ -1,263 +1,263 @@
-# 20. Коммуникация
+# 20. Communication
 
-## Каналы коммуникации
+## Communication channels
 
-| Канал | Для чего |
+| Channel | What for |
 |-------|----------|
-| Telegram группа проекта | Ежедневная коммуникация, вопросы, обсуждения |
-| Telegram канал алертов | Автоматические уведомления: краш-репорты, сбои обновлений |
-| GitHub PR comments | Код-ревью, технические обсуждения |
-| Jira comments | Обсуждения по задачам |
-| Zoom / Google Meet | Планирование, ретро, демо, парное программирование |
-| Email | Формальные коммуникации, внешние контакты, лицензионные вопросы |
+| Project Telegram group | Daily communication, questions, discussions |
+| Alerts Telegram channel | Automatic notifications: crash reports, update failures |
+| GitHub PR comments | Code review, technical discussions |
+| Jira comments | Task-specific discussions |
+| Zoom / Google Meet | Planning, retro, demo, pair programming |
+| Email | Formal communication, external contacts, licensing questions |
 
 ## Async vs Sync
 
-### Async — по умолчанию
+### Async — default
 
-Telegram, Jira, PR comments — не ждём мгновенного ответа.
+Telegram, Jira, PR comments — don't expect an instant reply.
 
-- **Время ответа:** до конца рабочего дня
-- **Urgent:** в течение 1 часа (с @mention)
+- **Response time:** by end of business day
+- **Urgent:** within 1 hour (with @mention)
 
-Используем для:
-- Вопросы по задачам
-- Код-ревью
-- Обсуждение решений
-- Статусы задач
+Use for:
+- Task questions
+- Code review
+- Discussing decisions
+- Task status
 
-### Sync — по необходимости
+### Sync — when needed
 
-Zoom / Meet — планировать заранее, agenda обязательна.
+Zoom / Meet — schedule ahead, agenda required.
 
-Используем для:
-- Планирование спринта
-- Ретроспектива
-- Демо (показ возможностей десктопного приложения)
-- Парное программирование / отладка сложных C++ проблем
-- Обсуждение архитектурных решений (ABI, плагины, кросс-платформа)
-- P1/P2 инциденты (падение приложения у пользователей)
+Use for:
+- Sprint planning
+- Retrospective
+- Demo (showing the desktop app's capabilities)
+- Pair programming / debugging tough C++ problems
+- Discussion of architectural decisions (ABI, plugins, cross-platform)
+- P1/P2 incidents (app crash at customers)
 
-Правило: если вопрос можно решить в Telegram за 3-5 сообщений — не нужен Zoom.
+Rule: if the question can be resolved in Telegram in 3-5 messages — Zoom is not needed.
 
-## Стендапы
+## Standups
 
-### Формат
+### Format
 
-Три пункта:
-1. Что сделал вчера / с прошлого стендапа
-2. Что буду делать сегодня
-3. Блокеры — что мешает продвигаться
+Three items:
+1. What I did yesterday / since the last standup
+2. What I'll do today
+3. Blockers — what's stopping progress
 
-### Async стендап (команда <= 3 человека)
+### Async standup (team <= 3 people)
 
-Писать утром в Telegram группу проекта:
+Write in the morning into the project Telegram group:
 
 ```
 #standup
-1. Закончил реализацию экспорта в PDF для дизайнера (PR #112)
-2. Сегодня: исправление краша на wxGrid при пустом DataSet, тесты на Windows
-3. Блокер: нет тестовой машины с Windows 10 x86 — нужна помощь @qa
+1. Finished implementing PDF export for the designer (PR #112)
+2. Today: fix the crash in wxGrid on an empty DataSet, tests on Windows
+3. Blocker: no Windows 10 x86 test machine — need help @qa
 ```
 
-### Sync стендап (команда > 3 человек)
+### Sync standup (team > 3 people)
 
-- Zoom, 15 минут максимум
-- Каждый день в одно и то же время
-- Не уходить в обсуждения — детали после стендапа
+- Zoom, 15 minutes max
+- Every day at the same time
+- Don't drift into discussion — details after the standup
 
-## Правила Telegram
+## Telegram rules
 
-### Структура каналов
+### Channel structure
 
-- Один канал на проект (не плодить каналы)
-- Отдельный канал для алертов: краш-репорты от пользователей, ошибки автообновления (read-only, только боты)
+- One channel per project (don't proliferate channels)
+- Separate channel for alerts: crash reports from users, auto-update errors (read-only, bots only)
 
-### Теги
+### Tags
 
-Использовать теги для быстрого поиска:
-
-```
-#bug        — сообщение о баге
-#build      — информация о сборке / релизе дистрибутива
-#question   — вопрос к команде
-#review     — просьба о ревью
-#decision   — зафиксированное решение
-#incident   — инцидент (P1-P4)
-#crash      — краш-репорт или минидамп от пользователя
-```
-
-### Правила общения
-
-- Не отправлять код блоками больше 10 строк — дать ссылку на PR или файл
-- Urgent: @mention конкретного человека, не писать просто "привет, есть вопрос"
-- Не разбивать одну мысль на 10 сообщений — писать одним сообщением
-- Скриншоты / видео: когда описание словами не передаёт суть (особенно для UI-багов wxWidgets)
-
-### Формат urgent сообщений
+Use tags for quick search:
 
 ```
-@developer_name URGENT: Приложение падает при открытии проекта с Firebird
-Минидамп: \\share\crashes\oes_20260410_143200.dmp
-Стек: wxGrid::OnPaint → DataSource::Fetch → FBStatement::Execute
-Нужна помощь с диагностикой — воспроизводится у 3 клиентов
+#bug        — bug report
+#build      — build / distribution release info
+#question   — question to the team
+#review     — review request
+#decision   — recorded decision
+#incident   — incident (P1-P4)
+#crash      — user crash report or minidump
 ```
 
-Не urgent:
-```
-Привет
-Есть вопрос
-По задаче
-Когда будешь свободен?
-```
+### Messaging etiquette
 
-Правильно:
-```
-@developer_name Вопрос по задаче OES-456: как передаём NULL значения
-из Firebird в wxGrid — через wxVariant или отдельный флаг?
-Нужно для реализации редактора ячеек, не блокирует.
-```
+- Don't drop code blocks longer than 10 lines — link the PR or file
+- Urgent: @mention the specific person, don't just write "hi, got a question"
+- Don't split one thought into 10 messages — write it in one
+- Screenshots / video: when words don't carry the message (especially for wxWidgets UI bugs)
 
-## Протоколы встреч
-
-### Правило
-
-Каждая встреча длительнее 30 минут = протокол. Используем AI Protocolist для автоматического протоколирования.
-
-### Что фиксировать
-
-- Участники
-- Обсуждённые темы
-- Принятые решения
-- Назначенные задачи (кто, что, когда)
-- Открытые вопросы
-
-### Принцип
-
-> "Если решение не записано — его не существует."
-
-Устные договорённости не считаются. Любое решение, влияющее на проект, должно быть зафиксировано в протоколе встречи, Jira-тикете или документации.
-
-## Коммуникация в код-ревью
-
-### Принципы
-
-- **"Код, не автор"** — обсуждаем решение, не человека
-- Не переходить на личности
-- Конструктивная критика — предлагать альтернативу, не просто "плохо"
-- Хвалить хорошие решения — не только критиковать
-
-### Префиксы комментариев
+### Format for urgent messages
 
 ```
-issue: Здесь сырой указатель без проверки на nullptr — возможен краш.
-Нужно использовать wxASSERT или ранний возврат.
-→ Обязательно исправить. PR не мерджится пока не исправлено.
-
-suggestion: Можно заменить ручной цикл на std::transform, код станет
-короче и выразительнее.
-→ Рекомендация. На усмотрение автора.
-
-question: Почему здесь wxString вместо std::string? Есть ли
-причина использовать wxWidgets-тип в этом слое?
-→ Вопрос для понимания. Может быть хорошая причина.
-
-nit: Опечатка в имени метода: GetParrent → GetParent
-→ Мелочь. Исправить, если не сложно.
-
-praise: Отличная реализация connection pool для Firebird!
-Чистый RAII и понятный lifetime объектов.
-→ Положительный отзыв. Важно для мотивации.
+@developer_name URGENT: App crashes when opening a project with Firebird
+Minidump: \\share\crashes\oes_20260410_143200.dmp
+Stack: wxGrid::OnPaint → DataSource::Fetch → FBStatement::Execute
+Need help diagnosing — reproduces for 3 customers
 ```
 
-### Примеры хорошей и плохой коммуникации
+Not urgent:
+```
+Hi
+Got a question
+About a task
+When are you free?
+```
+
+Right:
+```
+@developer_name Question on OES-456: how do we pass NULL values
+from Firebird into wxGrid — via wxVariant or a separate flag?
+Need it for the cell editor, not blocking.
+```
+
+## Meeting minutes
+
+### Rule
+
+Every meeting longer than 30 minutes = minutes. Use AI Protocolist for automatic minute taking.
+
+### What to capture
+
+- Participants
+- Topics discussed
+- Decisions made
+- Action items (who, what, when)
+- Open questions
+
+### Principle
+
+> "If a decision isn't written down, it doesn't exist."
+
+Verbal agreements don't count. Any decision that affects the project must be captured in meeting minutes, a Jira ticket, or documentation.
+
+## Communication in code review
+
+### Principles
+
+- **"Code, not the author"** — discuss the solution, not the person
+- Don't make it personal
+- Constructive criticism — propose an alternative, not just "bad"
+- Praise good solutions — don't only critique
+
+### Comment prefixes
 
 ```
-# Плохо
-"Это неправильно"
-"Зачем так делать?"
-"Переделай"
+issue: A raw pointer here without a nullptr check — possible crash.
+Use wxASSERT or an early return.
+→ Must fix. PR won't merge until fixed.
 
-# Хорошо
-"issue: Этот запрос не использует параметризованные placeholders,
-возможна SQL-инъекция через Firebird DSQL. Нужно использовать
-ISC_STATUS массив и isc_dsql_execute2 с параметрами:
+suggestion: Can replace the manual loop with std::transform, code
+becomes shorter and more expressive.
+→ Recommendation. Author's call.
+
+question: Why wxString instead of std::string here? Is there
+a reason to use a wxWidgets type in this layer?
+→ Question for understanding. There may be a good reason.
+
+nit: Typo in a method name: GetParrent → GetParent
+→ Minor. Fix if easy.
+
+praise: Great connection pool implementation for Firebird!
+Clean RAII and clear object lifetime.
+→ Positive feedback. Important for motivation.
+```
+
+### Examples of good and bad communication
+
+```
+# Bad
+"This is wrong"
+"Why do this?"
+"Redo it"
+
+# Good
+"issue: This query doesn't use parameterized placeholders,
+SQL injection through Firebird DSQL is possible. Use
+ISC_STATUS array and isc_dsql_execute2 with parameters:
   stmt->SetParam(1, userId);
   stmt->Execute();"
 
-# Плохо
-"Не понимаю этот код"
+# Bad
+"I don't understand this code"
 
-# Хорошо
-"question: Можешь пояснить логику в строках 78-95?
-Не уверен, зачем двойная блокировка мьютекса при обновлении
-wxDataViewListCtrl — возможен дедлок?"
+# Good
+"question: Can you explain the logic in lines 78-95?
+Not sure why the double mutex lock when updating
+wxDataViewListCtrl — is a deadlock possible?"
 ```
 
-## Документирование решений
+## Decision documentation
 
-### Где что хранить
+### Where to store what
 
-| Тип решения | Где хранить |
+| Decision type | Where to store |
 |-------------|-------------|
-| Архитектурные решения | `docs/` в репозитории проекта или `CLAUDE.md` |
-| Процессные решения | Этот репозиторий (`engineering-playbook`) |
-| Решения по задачам | Jira-тикет или PR description |
-| Решения со встреч | Протокол встречи |
+| Architectural decisions | `docs/` in the project repo or `CLAUDE.md` |
+| Process decisions | This repository (`engineering-playbook`) |
+| Task-level decisions | Jira ticket or PR description |
+| Meeting decisions | Meeting minutes |
 
-### Правила
+### Rules
 
-1. **Не принимать важных решений в личных сообщениях.** Если решение принято в ЛС — перенести в общий канал или задокументировать.
+1. **Don't make important decisions in DMs.** If a decision was made privately — bring it into the common channel or document it.
 
-2. **Контекст решения.** Записывать не только ЧТО решили, но и ПОЧЕМУ:
+2. **Decision context.** Record not just WHAT was decided, but WHY:
    ```
-   #decision Используем wxString для всех текстовых полей UI, std::string
-   для внутренней логики и сетевого кода.
-   Причина: wxString корректно обрабатывает Unicode на всех платформах
-   (Windows / Linux / macOS), std::string — стандарт для бизнес-логики
-   и обмена с СУБД без wxWidgets-зависимостей.
+   #decision Use wxString for all UI text fields, std::string for
+   internal logic and network code.
+   Rationale: wxString handles Unicode correctly on all platforms
+   (Windows / Linux / macOS), std::string is the standard for business
+   logic and DBMS interaction without wxWidgets dependencies.
    ```
 
-3. **Архитектурные решения (ADR).** Для крупных решений — Architecture Decision Record:
+3. **Architectural decisions (ADR).** For major decisions — an Architecture Decision Record:
    ```markdown
-   # ADR-007: Реализация системы плагинов через DLL/SO загрузку
+   # ADR-007: Implement plugin system via DLL/SO loading
 
-   ## Статус
-   Принято (2026-03-15)
+   ## Status
+   Accepted (2026-03-15)
 
-   ## Контекст
-   OES должна поддерживать сторонние расширения (коннекторы СУБД,
-   экспортёры отчётов, кастомные виджеты) без перекомпиляции ядра.
+   ## Context
+   OES must support third-party extensions (DBMS connectors,
+   report exporters, custom widgets) without recompiling the core.
 
-   ## Решение
-   Загружаем плагины через wxDynamicLibrary. Каждый плагин экспортирует
-   extern "C" фабричную функцию CreatePlugin() и версию ABI.
+   ## Decision
+   Load plugins through wxDynamicLibrary. Every plugin exports an
+   extern "C" factory function CreatePlugin() and an ABI version.
 
-   ## Альтернативы
-   - Статическая линковка — невозможно обновлять плагины независимо
-   - COM/DCOM (Windows only) — нарушает кросс-платформенность
-   - Скриптовый движок (Lua/Python) — слишком медленно для UI-рендеринга
+   ## Alternatives
+   - Static linking — cannot update plugins independently
+   - COM/DCOM (Windows only) — breaks cross-platform
+   - Scripting engine (Lua/Python) — too slow for UI rendering
 
-   ## Последствия
-   - Нужен стабильный C ABI (extern "C" интерфейсы)
-   - Версионирование плагинов обязательно
-   - Плагины должны линковаться с той же версией CRT
+   ## Consequences
+   - Need a stable C ABI (extern "C" interfaces)
+   - Plugin versioning is mandatory
+   - Plugins must link against the same CRT version
    ```
 
-## Обратная связь
+## Feedback
 
-### Формат обратной связи
+### Feedback format
 
-- Конкретная, с примерами
-- Своевременная (не через месяц)
-- Баланс позитивной и конструктивной
-- Приватно для критики, публично для похвалы
+- Specific, with examples
+- Timely (not a month later)
+- Balance of positive and constructive
+- Private for critique, public for praise
 
-### Ретроспективы
+### Retrospectives
 
-Проводить каждые 2 недели (конец спринта):
-- Что было хорошо
-- Что можно улучшить
-- Action items (конкретные, с ответственными)
+Hold every 2 weeks (end of sprint):
+- What went well
+- What can be improved
+- Action items (specific, with owners)
 
-Формат: 30-45 минут, Zoom, все участники команды.
+Format: 30-45 minutes, Zoom, the whole team.

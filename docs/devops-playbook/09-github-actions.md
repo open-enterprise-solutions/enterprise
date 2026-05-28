@@ -1,10 +1,10 @@
-# 09. CI/CD с GitHub Actions
+# 09. CI/CD with GitHub Actions
 
-> Автоматизация для C++ проекта OES: сборка MSBuild/CMake, статический анализ cppcheck, тесты Google Test, упаковка инсталлятора NSIS/WiX, публикация артефактов, автоматизация релизов.
+> Automation for the OES C++ project: MSBuild/CMake builds, cppcheck static analysis, Google Test tests, NSIS/WiX installer packaging, artifact publishing, release automation.
 
 ---
 
-## Базовый CI workflow: сборка + анализ + тесты
+## Base CI workflow: build + analysis + tests
 
 ```yaml
 # .github/workflows/ci.yml
@@ -87,11 +87,11 @@ jobs:
 
 ---
 
-## CMake workflow (macOS и Linux; Windows — MSBuild)
+## CMake workflow (macOS and Linux; Windows uses MSBuild)
 
 ```yaml
 # .github/workflows/ci-cmake.yml
-name: CI (CMake — macOS/Linux)
+name: CI (CMake - macOS/Linux)
 
 on:
   pull_request:
@@ -122,7 +122,7 @@ jobs:
         with:
           submodules: recursive
 
-      # Windows: установить зависимости через vcpkg
+      # Windows: install dependencies via vcpkg
       - name: Setup vcpkg (Windows)
         if: runner.os == 'Windows'
         run: |
@@ -130,7 +130,7 @@ jobs:
           C:/vcpkg/bootstrap-vcpkg.bat
           C:/vcpkg/vcpkg install wxwidgets:x64-windows firebird:x64-windows
 
-      # macOS: установить зависимости через Homebrew
+      # macOS: install dependencies via Homebrew
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -140,7 +140,7 @@ jobs:
           brew install libpq sqlite mysql-client
           brew install cppcheck
 
-      # Linux: установить зависимости через apt + wxWidgets из исходников
+      # Linux: install dependencies via apt + wxWidgets from source
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -155,8 +155,8 @@ jobs:
             libgtk-3-dev libgl1-mesa-dev libglu1-mesa-dev \
             libpng-dev libjpeg-dev libtiff-dev libexpat1-dev
 
-      # wxWidgets 3.3.2 недоступен в apt Ubuntu 22.04/24.04 — собираем из исходников.
-      # Используем кэш чтобы не пересобирать при каждом запуске.
+      # wxWidgets 3.3.2 is not available in apt on Ubuntu 22.04/24.04 - build from source.
+      # Cache the build to avoid recompiling on every run.
       - name: Cache wxWidgets build
         id: wx-cache
         uses: actions/cache@v4
@@ -214,7 +214,7 @@ jobs:
 
 ---
 
-## Release workflow: сборка инсталлятора + публикация
+## Release workflow: installer build + publish
 
 ```yaml
 # .github/workflows/release.yml
@@ -264,7 +264,7 @@ jobs:
           .\bin\x64\Release\OES.Tests.exe --gtest_output=xml:test-results.xml
         continue-on-error: false
 
-      # Подписать бинарники (требует сертификат в Secrets)
+      # Sign binaries (requires certificate in Secrets)
       - name: Code sign binaries
         if: ${{ secrets.CODE_SIGN_CERT != '' }}
         run: |
@@ -283,7 +283,7 @@ jobs:
           }
           Remove-Item $pfxPath
 
-      # Собрать NSIS инсталлятор
+      # Build NSIS installer
       - name: Build NSIS installer
         run: |
           choco install nsis --no-progress -y
@@ -292,7 +292,7 @@ jobs:
             /DOUTDIR=dist `
             installer/oes-setup.nsi
 
-      # Альтернативно — WiX инсталлятор
+      # Alternative - WiX installer
       # - name: Build WiX installer
       #   run: |
       #     dotnet tool install --global wix
@@ -300,7 +300,7 @@ jobs:
       #       -d Version=${{ steps.version.outputs.version }} `
       #       -o dist/OES-${{ steps.version.outputs.version }}-Setup.msi
 
-      # Подписать инсталлятор
+      # Sign the installer
       - name: Sign installer
         if: ${{ secrets.CODE_SIGN_CERT != '' }}
         run: |
@@ -329,13 +329,13 @@ jobs:
           body: |
             ## Open Enterprise Solutions ${{ steps.version.outputs.version }}
             
-            ### Установка
-            1. Скачайте `OES-${{ steps.version.outputs.version }}-Setup.exe`
-            2. Проверьте SHA256: см. `SHA256SUMS.txt`
-            3. Запустите инсталлятор от имени администратора
+            ### Installation
+            1. Download `OES-${{ steps.version.outputs.version }}-Setup.exe`
+            2. Verify SHA256: see `SHA256SUMS.txt`
+            3. Run the installer as administrator
             
-            ### Изменения
-            _Список изменений см. в CHANGELOG.md_
+            ### Changes
+            _See CHANGELOG.md for the list of changes_
           files: |
             dist/OES-${{ steps.version.outputs.version }}-Setup.exe
             dist/SHA256SUMS.txt
@@ -346,8 +346,8 @@ jobs:
         if: always()
         run: |
           $status = "${{ job.status }}"
-          $emoji = if ($status -eq "success") { "✅" } else { "❌" }
-          $message = "$emoji Release OES ${{ steps.version.outputs.version }}`nСтатус: $status"
+          $emoji = if ($status -eq "success") { "[OK]" } else { "[FAIL]" }
+          $message = "$emoji Release OES ${{ steps.version.outputs.version }}`nStatus: $status"
           
           Invoke-RestMethod `
             -Uri "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" `
@@ -363,42 +363,42 @@ jobs:
 
 ## Self-hosted runner (Windows)
 
-### Установка на Windows-машине сборки
+### Installing on a Windows build machine
 
 ```powershell
-# Создать директорию для runner
+# Create the runner directory
 mkdir C:\actions-runner
 cd C:\actions-runner
 
-# Скачать runner (версию взять из GitHub: Settings → Actions → Runners → New)
+# Download the runner (version from GitHub: Settings -> Actions -> Runners -> New)
 Invoke-WebRequest -Uri "https://github.com/actions/runner/releases/download/v2.311.0/actions-runner-win-x64-2.311.0.zip" -OutFile "runner.zip"
 Expand-Archive -Path "runner.zip" -DestinationPath .
 
-# Настроить (токен из GitHub: Settings → Actions → Runners → New)
+# Configure (token from GitHub: Settings -> Actions -> Runners -> New)
 .\config.cmd `
   --url https://github.com/org/oes `
-  --token ТОКЕН_ИЗ_GITHUB `
+  --token TOKEN_FROM_GITHUB `
   --name "windows-build-machine" `
   --labels "self-hosted,windows,x64,msbuild" `
   --unattended
 
-# Установить как сервис Windows
+# Install as a Windows service
 .\svc.cmd install
 .\svc.cmd start
 .\svc.cmd status
 ```
 
-### Преимущества self-hosted для OES
+### Benefits of self-hosted for OES
 
 ```
-✅ Нет ограничения на время сборки (github-hosted = 6 часов max)
-✅ Локальный кэш зависимостей (wxWidgets, Firebird SDK)
-✅ Лицензированный Visual Studio уже установлен
-✅ Подписание кода с локальным HSM/USB-токеном
-✅ Нет оплаты за минуты Windows runner (они платные на github.com)
+- No build-time limit (github-hosted = 6 hours max)
+- Local dependency cache (wxWidgets, Firebird SDK)
+- Licensed Visual Studio already installed
+- Code signing with a local HSM / USB token
+- No billing for Windows runner minutes (paid on github.com)
 ```
 
-### Использование self-hosted runner в workflow
+### Using a self-hosted runner in a workflow
 
 ```yaml
 jobs:
@@ -415,10 +415,10 @@ jobs:
 
 ---
 
-## Кэширование зависимостей C++
+## Caching C++ dependencies
 
 ```yaml
-      # Кэш wxWidgets
+      # Cache wxWidgets
       - name: Cache wxWidgets
         uses: actions/cache@v4
         with:
@@ -426,14 +426,14 @@ jobs:
           key: wxwidgets-3.3.2-x64
           restore-keys: wxwidgets-3.3.2-
 
-      # Кэш Firebird SDK
+      # Cache Firebird SDK
       - name: Cache Firebird SDK
         uses: actions/cache@v4
         with:
           path: C:\Firebird
           key: firebird-sdk-4.0-x64
 
-      # Кэш vcpkg (если используется)
+      # Cache vcpkg (if used)
       - name: Cache vcpkg
         uses: actions/cache@v4
         with:
@@ -441,7 +441,7 @@ jobs:
           key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: vcpkg-${{ runner.os }}-
 
-      # Кэш компиляции (ccache для Linux, clcache для Windows)
+      # Compilation cache (ccache for Linux, clcache for Windows)
       - name: Cache clcache (Windows)
         uses: actions/cache@v4
         with:
@@ -452,29 +452,29 @@ jobs:
 
 ---
 
-## GitHub Secrets для OES
+## GitHub Secrets for OES
 
 ```
-Repository → Settings → Secrets and variables → Actions → New repository secret
+Repository -> Settings -> Secrets and variables -> Actions -> New repository secret
 
-Необходимые секреты:
-  CODE_SIGN_CERT          — сертификат подписи кода (base64 .pfx)
-  CODE_SIGN_PASSWORD      — пароль от сертификата
-  TELEGRAM_BOT_TOKEN      — Telegram Bot Token для уведомлений
-  TELEGRAM_CHAT_ID        — Telegram Chat ID команды
+Required secrets:
+  CODE_SIGN_CERT          - code signing certificate (base64 .pfx)
+  CODE_SIGN_PASSWORD      - certificate password
+  TELEGRAM_BOT_TOKEN      - Telegram Bot Token for notifications
+  TELEGRAM_CHAT_ID        - team Telegram Chat ID
 
-Для деплоя daemon/service:
-  DEPLOY_SSH_KEY          — SSH ключ для деплоя на Linux-сервер (daemon режим)
-  DEPLOY_SERVER_HOST      — хост сервера
-  DEPLOY_SERVER_USER      — пользователь для деплоя
+For daemon/service deploy:
+  DEPLOY_SSH_KEY          - SSH key for deploying to a Linux server (daemon mode)
+  DEPLOY_SERVER_HOST      - server host
+  DEPLOY_SERVER_USER      - deploy user
 
-Для обновлений:
-  UPDATE_SERVER_API_KEY   — ключ API сервера обновлений (если используется)
+For updates:
+  UPDATE_SERVER_API_KEY   - update server API key (if used)
 ```
 
 ---
 
-## Уведомления
+## Notifications
 
 ### Telegram (PowerShell)
 
@@ -483,11 +483,11 @@ Repository → Settings → Secrets and variables → Actions → New repository
         if: always()
         run: |
           $status = "${{ job.status }}"
-          $emoji = if ($status -eq "success") { "✅" } else { "❌" }
+          $emoji = if ($status -eq "success") { "[OK]" } else { "[FAIL]" }
           
           $body = @{
             chat_id = "${{ secrets.TELEGRAM_CHAT_ID }}"
-            text = "$emoji ${{ github.workflow }}`nБранч: ${{ github.ref_name }}`nКоммит: ${{ github.event.head_commit.message }}`nАвтор: ${{ github.actor }}"
+            text = "$emoji ${{ github.workflow }}`nBranch: ${{ github.ref_name }}`nCommit: ${{ github.event.head_commit.message }}`nAuthor: ${{ github.actor }}"
             parse_mode = "HTML"
           } | ConvertTo-Json
           
@@ -500,47 +500,47 @@ Repository → Settings → Secrets and variables → Actions → New repository
 
 ---
 
-## Пример полного pipeline для OES
+## Example of a full pipeline for OES
 
 ```
-Пуш в master/develop:
+Push to master/develop:
   1. Checkout + cache restore
   2. Windows: MSBuild enterprise.sln (Debug + Release, x64)
      macOS/Linux: CMake + Ninja (src/engine/backend/, src/engine/frontend/)
-  3. cppcheck (статический анализ src/engine/)
-  4. Google Test (unit-тесты)
+  3. cppcheck (static analysis of src/engine/)
+  4. Google Test (unit tests)
   5. Upload test results
 
-Тег v*.*.*:
-  1. Всё из CI pipeline
-  2. Code signing (бинарники — только Windows)
+Tag v*.*.*:
+  1. Everything from the CI pipeline
+  2. Code signing (binaries - Windows only)
   3. NSIS installer build (Windows)
   4. Sign installer
   5. SHA256 checksums
   6. GitHub Release + upload assets
-  7. Telegram уведомление команды
+  7. Telegram notification to the team
 
-PR (в ветку master или develop):
-  1. CI pipeline (быстрая проверка — все 3 платформы)
-  2. cppcheck report как комментарий к PR
-  3. Test results в PR status checks
+PR (to master or develop):
+  1. CI pipeline (fast check - all 3 platforms)
+  2. cppcheck report as a PR comment
+  3. Test results in PR status checks
 ```
 
-## Entry points проекта OES
+## OES project entry points
 
 ```
-src/engine/enterprise/mainApp.cpp  — основное desktop-приложение OES
-src/engine/designer/mainApp.cpp    — дизайнер форм и отчётов
-src/engine/daemon/daemon.cpp       — daemon/server режим (oesd)
+src/engine/enterprise/mainApp.cpp  - main OES desktop application
+src/engine/designer/mainApp.cpp    - form and report designer
+src/engine/daemon/daemon.cpp       - daemon/server mode (oesd)
 
-Ключевые классы:
-  ibDatabaseLayer                  — базовый слой работы с БД
-  ibDatabaseLayerFirebird          — Firebird backend
-  ibDatabaseLayerPostgres          — PostgreSQL backend
-  ibPreparedStatement              — параметризованные запросы
-  ibApplicationData                — данные приложения / сессия
-  ibApplicationData::AuthenticationAndSetUser()  — аутентификация
-  ibApplicationDataSessionUpdater  — обновление сессии
-  ibMetaDataConfiguration          — конфигурация метаданных
-  CreateAndUpdateTableDB()         — создание/обновление схемы БД
+Key classes:
+  ibDatabaseLayer                  - base DB layer
+  ibDatabaseLayerFirebird          - Firebird backend
+  ibDatabaseLayerPostgres          - PostgreSQL backend
+  ibPreparedStatement              - parameterized queries
+  ibApplicationData                - application data / session
+  ibApplicationData::AuthenticationAndSetUser()  - authentication
+  ibApplicationDataSessionUpdater  - session update
+  ibMetaDataConfiguration          - metadata configuration
+  CreateAndUpdateTableDB()         - create/update DB schema
 ```

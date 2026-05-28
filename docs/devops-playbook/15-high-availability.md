@@ -1,32 +1,32 @@
-# 15. High Availability и Failover
+# 15. High Availability and Failover
 
-## Уровни отказоустойчивости для OES
+## OES fault-tolerance levels
 
-| Уровень | Что включает | Downtime | Для кого |
+| Level | What it includes | Downtime | For whom |
 |---------|-------------|----------|----------|
-| **Desktop** | Встроенная Firebird, локальные бэкапы | нет (local) | Одиночный пользователь |
-| **Basic Server** | OES Daemon + Firebird Server, автоперезапуск, бэкапы | минуты | Малый офис, LAN deployment |
-| **Standard** | + PostgreSQL replica, failover, балансировка | секунды | Средний бизнес, несколько серверов |
-| **Enterprise** | + Multi-node, автоматический failover, geo-redundancy | ~0 | Крупные предприятия, SLA |
+| **Desktop** | Embedded Firebird, local backups | none (local) | Single user |
+| **Basic Server** | OES Daemon + Firebird Server, auto-restart, backups | minutes | Small office, LAN deployment |
+| **Standard** | + PostgreSQL replica, failover, load balancing | seconds | Medium business, multiple servers |
+| **Enterprise** | + Multi-node, automatic failover, geo-redundancy | ~0 | Large enterprises, SLA |
 
 ---
 
-## Desktop: надёжность локальной установки
+## Desktop: reliability of local installation
 
 ```
-Встроенный Firebird (Embedded):
-  — БД = один .fdb файл рядом с данными пользователя
-  — Нет сетевых зависимостей
-  — Защита: ежедневные бэкапы через gbak
-  — При повреждении: восстановить из бэкапа (< 10 мин)
+Firebird Embedded:
+  - DB = a single .fdb file next to the user's data
+  - No network dependencies
+  - Protection: daily gbak backups
+  - On corruption: restore from backup (< 10 min)
 ```
 
-### Автоматическое резервное копирование при запуске
+### Automatic backup at startup
 
 ```cpp
 // src/engine/enterprise/startup_backup.cpp
-// Создать быстрый бэкап при старте если предыдущий > 24 часов
-// Вызывается из ibApplicationData::AuthenticationAndSetUser() после успешного входа
+// Create a quick backup at startup if the previous one is > 24 hours old
+// Called from ibApplicationData::AuthenticationAndSetUser() after successful login
 
 void CreateStartupBackup(const wxString& dbPath) {
     wxString backupDir = GetAppDataPath() + wxFILE_SEP_PATH + "Backups";
@@ -36,42 +36,42 @@ void CreateStartupBackup(const wxString& dbPath) {
     wxString backupPath = backupDir + wxFILE_SEP_PATH +
         "oes_" + now.Format("%Y-%m-%d") + ".fbk";
     
-    // Проверить если бэкап за сегодня уже есть
+    // Skip if a backup for today already exists
     if (wxFileExists(backupPath)) return;
     
-    // Запустить gbak асинхронно (не блокировать запуск)
-    // Пароль заключается в кавычки на случай спецсимволов
+    // Run gbak asynchronously (do not block startup)
+    // Password is quoted in case of special characters
     wxString cmd = wxString::Format(
         "gbak -backup -user SYSDBA -password \"%s\" \"%s\" \"%s\"",
         wxGetenv("FB_PASSWORD"), dbPath, backupPath
     );
     
     wxExecute(cmd, wxEXEC_ASYNC);
-    wxLogMessage("Запущено резервное копирование: %s", backupPath);
+    wxLogMessage("Backup started: %s", backupPath);
 }
 ```
 
 ---
 
-## Basic Server: автоматический перезапуск
+## Basic Server: automatic restart
 
 ### Windows Service: Recovery Actions
 
 ```powershell
-# Настроить автовосстановление Windows Service OES
+# Configure auto-recovery for the OES Windows Service
 
 sc.exe failure OESDaemon `
     reset= 86400 `
     actions= restart/5000/restart/10000/restart/30000
-# restart через 5, 10, 30 секунд при падении
-# Сброс счётчика через 24 часа (86400 сек)
+# restart after 5, 10, 30 seconds on failure
+# Counter reset after 24 hours (86400 sec)
 
-# Или через PowerShell:
+# Or via PowerShell:
 $service = Get-WmiObject Win32_Service | Where-Object { $_.Name -eq "OESDaemon" }
-# (использовать sc.exe — проще и надёжнее)
+# (use sc.exe - simpler and more reliable)
 ```
 
-### Systemd: конфигурация автоперезапуска
+### Systemd: auto-restart configuration
 
 ```ini
 # /etc/systemd/system/oes-daemon.service
@@ -79,8 +79,8 @@ $service = Get-WmiObject Win32_Service | Where-Object { $_.Name -eq "OESDaemon" 
 Description=OES Enterprise Daemon
 After=network.target firebird3.0-guardian.service
 Wants=firebird3.0-guardian.service
-StartLimitIntervalSec=300        # окно ограничения запусков
-StartLimitBurst=5                # максимум 5 попыток за 5 минут
+StartLimitIntervalSec=300        # restart limit window
+StartLimitBurst=5                # max 5 attempts in 5 minutes
 
 [Service]
 Type=simple
@@ -88,12 +88,12 @@ User=oes
 Group=oes
 ExecStart=/opt/oes/bin/oesd --config /etc/oes/daemon.conf
 Restart=on-failure
-RestartSec=10s                   # ждать 10 сек перед перезапуском
+RestartSec=10s                   # wait 10 sec before restart
 TimeoutStopSec=30s
 KillMode=mixed
 KillSignal=SIGTERM
 
-# Watchdog (OES должен поддерживать sd_notify)
+# Watchdog (OES must support sd_notify)
 # WatchdogSec=60s
 
 [Install]
@@ -105,34 +105,34 @@ sudo systemctl daemon-reload
 sudo systemctl enable oes-daemon
 sudo systemctl start oes-daemon
 
-# Проверить конфигурацию автоперезапуска
+# Verify the auto-restart configuration
 sudo systemctl show oes-daemon | grep -E "Restart|StartLimit"
 ```
 
 ---
 
-## Standard: репликация и failover
+## Standard: replication and failover
 
 ### Firebird: Master + Standby (OES Server mode)
 
 ```
-Для Firebird Classic/Super Server (не Embedded):
+For Firebird Classic/Super Server (not Embedded):
 
-┌─────────────────┐   gbak + rsync    ┌─────────────────┐
-│  Firebird Master │ ──────────────→  │  Firebird Standby│
-│  (R/W активная) │                   │  (warm standby) │
-│  10.0.0.1:3050  │                   │  10.0.0.2:3050  │
-└─────────────────┘                   └─────────────────┘
-         ↑                                     ↑
++-----------------+   gbak + rsync    +-----------------+
+| Firebird Master | --------------->  | Firebird Standby|
+| (R/W active)    |                   | (warm standby)  |
+| 10.0.0.1:3050   |                   | 10.0.0.2:3050   |
++-----------------+                   +-----------------+
+         ^                                     ^
    OES clients                         Failover target
 ```
 
-**Стратегия репликации Firebird через gbak:**
+**Firebird replication strategy via gbak:**
 
 ```bash
 #!/bin/bash
 # scripts/firebird-sync.sh
-# Запускать каждые 15 минут для warm standby
+# Run every 15 minutes for a warm standby
 
 PRIMARY_HOST="10.0.0.1"
 PRIMARY_DB="/var/lib/oes/data/oes.fdb"
@@ -141,7 +141,7 @@ FB_USER="SYSDBA"
 FB_PASS="${FB_SYSDBA_PASSWORD}"
 TEMP_BACKUP="/tmp/oes_sync_$(date +%s).fbk"
 
-# Создать бэкап с primary
+# Create a backup from primary
 gbak \
     -backup \
     -user "$FB_USER" \
@@ -149,12 +149,12 @@ gbak \
     "${PRIMARY_HOST}:${PRIMARY_DB}" \
     "$TEMP_BACKUP"
 
-# Скопировать на standby (если запускается локально на standby)
-# Или использовать:
+# Copy to standby (if running locally on standby)
+# Or use:
 # gbak -backup "user:pass@primary:/path/db.fdb" /tmp/backup.fbk
 # gbak -restore /tmp/backup.fbk "user:pass@standby:/path/db.fdb" -replace_database
 
-# Восстановить на standby (заменить существующую)
+# Restore on standby (replace the existing one)
 gbak \
     -restore \
     -user "$FB_USER" \
@@ -164,27 +164,27 @@ gbak \
     "$STANDBY_DB"
 
 rm -f "$TEMP_BACKUP"
-echo "[$(date)] Синхронизация Firebird standby завершена"
+echo "[$(date)] Firebird standby sync completed"
 ```
 
 ```bash
-# Cron: каждые 15 минут
+# Cron: every 15 minutes
 */15 * * * * /opt/oes/scripts/firebird-sync.sh >> /var/log/oes/fb-sync.log 2>&1
 ```
 
-### PostgreSQL: Master + Replica (если используется)
+### PostgreSQL: Master + Replica (if used)
 
 ```
-┌─────────────┐   WAL streaming   ┌─────────────┐
-│   Master    │ ────────────────→ │   Replica   │
-│  (R/W)      │                   │  (R/O)      │
-│  10.0.0.1   │                   │  10.0.0.2   │
-└─────────────┘                   └─────────────┘
-       ↑
++-------------+   WAL streaming   +-------------+
+|   Master    | ----------------> |   Replica   |
+|  (R/W)      |                   |  (R/O)      |
+|  10.0.0.1   |                   |  10.0.0.2   |
++-------------+                   +-------------+
+       ^
    OES Daemon
 ```
 
-**Настройка PostgreSQL репликации:**
+**PostgreSQL replication setup:**
 
 ```conf
 # postgresql.conf (Master)
@@ -195,10 +195,10 @@ synchronous_commit = on
 ```
 
 ```bash
-# Создать пользователя репликации
+# Create a replication user
 sudo -u postgres psql -c "CREATE USER oes_replicator WITH REPLICATION PASSWORD 'strong-password';"
 
-# Начальная копия на Replica
+# Initial copy on Replica
 sudo systemctl stop postgresql
 sudo rm -rf /var/lib/postgresql/16/main/*
 sudo -u postgres pg_basebackup \
@@ -209,12 +209,12 @@ sudo -u postgres pg_basebackup \
 sudo -u postgres touch /var/lib/postgresql/16/main/standby.signal
 ```
 
-### Скрипт автоматического failover
+### Automatic failover script
 
 ```bash
 #!/bin/bash
 # scripts/oes-failover.sh
-# Переключиться на standby при недоступности primary
+# Switch to standby when primary becomes unreachable
 
 PRIMARY_HOST="10.0.0.1"
 STANDBY_HOST="10.0.0.2"
@@ -224,71 +224,71 @@ FAIL_COUNT=0
 MAX_FAILS=3
 
 check_primary() {
-    # Проверить доступность Firebird на primary
+    # Check Firebird availability on primary
     nc -z -w "$CHECK_TIMEOUT" "$PRIMARY_HOST" 3050 2>/dev/null
     return $?
 }
 
 promote_standby() {
-    echo "[$(date)] Переключение на standby: $STANDBY_HOST"
+    echo "[$(date)] Switching to standby: $STANDBY_HOST"
     
-    # Обновить конфигурацию OES daemon
+    # Update OES daemon configuration
     sed -i "s/Host=.*/Host=$STANDBY_HOST/" "$OES_CONFIG"
     
-    # Перезапустить OES daemon
+    # Restart OES daemon
     systemctl restart oes-daemon
     
-    # Уведомить команду
+    # Notify the team
     curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
         -d chat_id="$TELEGRAM_CHAT_ID" \
-        -d "text=FAILOVER: OES переключился на standby ($STANDBY_HOST). Primary ($PRIMARY_HOST) недоступен."
+        -d "text=FAILOVER: OES switched to standby ($STANDBY_HOST). Primary ($PRIMARY_HOST) unreachable."
     
-    echo "[$(date)] Failover завершён. OES теперь использует: $STANDBY_HOST"
+    echo "[$(date)] Failover complete. OES now uses: $STANDBY_HOST"
 }
 
-# Проверить primary
+# Check primary
 for i in $(seq 1 $MAX_FAILS); do
     if check_primary; then
         echo "[$(date)] Primary OK: $PRIMARY_HOST"
         exit 0
     fi
     FAIL_COUNT=$((FAIL_COUNT + 1))
-    echo "[$(date)] Попытка $FAIL_COUNT/$MAX_FAILS: $PRIMARY_HOST недоступен"
+    echo "[$(date)] Attempt $FAIL_COUNT/$MAX_FAILS: $PRIMARY_HOST unreachable"
     sleep 5
 done
 
-echo "[$(date)] Primary недоступен $MAX_FAILS раз подряд. Запуск failover."
+echo "[$(date)] Primary unreachable $MAX_FAILS times in a row. Initiating failover."
 promote_standby
 ```
 
 ---
 
-## Enterprise: Multi-node кластер
+## Enterprise: Multi-node cluster
 
-### Архитектура OES Multi-node
+### OES Multi-node architecture
 
 ```
-                    ┌──────────────────────┐
-                    │  Load Balancer / HAProxy │
-                    │  VIP: 10.0.0.100:4001   │
-                    └──────────┬───────────┘
-                               │
-              ┌────────────────┼────────────────┐
-              │                │                │
-        ┌─────▼─────┐    ┌────▼────┐    ┌──────▼─────┐
-        │  OES Node1 │    │ Node 2  │    │  OES Node3 │
-        │  Daemon    │    │ Daemon  │    │  Daemon    │
-        │  10.0.0.1  │    │10.0.0.2 │    │  10.0.0.3  │
-        └─────┬──────┘    └────┬────┘    └──────┬─────┘
-              │                │                │
-        ┌─────▼────────────────▼────────────────▼─────┐
-        │            Shared Storage (NFS / Ceph)       │
-        │         Firebird БД: /mnt/shared/oes.fdb     │
-        │      ИЛИ  PostgreSQL кластер (Patroni)       │
-        └──────────────────────────────────────────────┘
+                    +--------------------------+
+                    | Load Balancer / HAProxy  |
+                    | VIP: 10.0.0.100:4001     |
+                    +-----------+--------------+
+                                |
+              +-----------------+-----------------+
+              |                 |                 |
+        +-----v-----+    +------v------+    +----v-------+
+        | OES Node1 |    | OES Node 2  |    | OES Node3  |
+        | Daemon    |    | Daemon      |    | Daemon     |
+        | 10.0.0.1  |    | 10.0.0.2    |    | 10.0.0.3   |
+        +-----+-----+    +------+------+    +----+-------+
+              |                 |                 |
+        +-----v-----------------v-----------------v-----+
+        |            Shared Storage (NFS / Ceph)        |
+        |         Firebird DB: /mnt/shared/oes.fdb      |
+        |      OR  PostgreSQL cluster (Patroni)         |
+        +-----------------------------------------------+
 ```
 
-### HAProxy для балансировки OES Daemon
+### HAProxy for OES Daemon load balancing
 
 ```conf
 # /etc/haproxy/haproxy.cfg
@@ -320,28 +320,28 @@ backend oes_backends
 sudo systemctl enable haproxy
 sudo systemctl start haproxy
 
-# Статус
+# Status
 echo "show stat" | sudo socat /var/run/haproxy/admin.sock stdio | head -5
 ```
 
-### Keepalived: Floating IP для Active/Passive
+### Keepalived: Floating IP for Active/Passive
 
 ```
-Когда OES Daemon не поддерживает горизонтальное масштабирование
-(один процесс с exclusive lock на .fdb):
+When OES Daemon does not support horizontal scaling
+(single process with an exclusive lock on .fdb):
 
-┌─────────────────┐  VIP: 10.0.0.100  ┌─────────────────┐
-│  OES Primary    │←─────────────────→│  OES Secondary  │
-│  MASTER         │   keepalived       │  BACKUP         │
-│  10.0.0.1       │                    │  10.0.0.2       │
-│  (активен)      │                    │  (в ожидании)   │
-└─────────────────┘                    └─────────────────┘
++-----------------+  VIP: 10.0.0.100  +-----------------+
+| OES Primary     |<---------------->| OES Secondary    |
+| MASTER          |   keepalived      | BACKUP           |
+| 10.0.0.1        |                   | 10.0.0.2         |
+| (active)        |                   | (standby)        |
++-----------------+                   +-----------------+
 
-Primary упал → VIP переезжает на Secondary → клиенты переподключаются
+Primary fails -> VIP moves to Secondary -> clients reconnect
 ```
 
 ```conf
-# /etc/keepalived/keepalived.conf (Primary — MASTER)
+# /etc/keepalived/keepalived.conf (Primary - MASTER)
 vrrp_script check_oes {
     script "/usr/bin/systemctl is-active oes-daemon"
     interval 5
@@ -371,18 +371,18 @@ vrrp_instance OES_VI {
 ```
 
 ```bash
-# on-become-master.sh: запустить OES daemon
+# on-become-master.sh: start OES daemon
 #!/bin/bash
 systemctl start oes-daemon
-logger "Keepalived: стал MASTER, OES daemon запущен"
+logger "Keepalived: became MASTER, OES daemon started"
 
-# on-become-backup.sh: остановить OES daemon (exclusive lock на .fdb)
+# on-become-backup.sh: stop OES daemon (exclusive lock on .fdb)
 #!/bin/bash
 systemctl stop oes-daemon
-logger "Keepalived: стал BACKUP, OES daemon остановлен"
+logger "Keepalived: became BACKUP, OES daemon stopped"
 ```
 
-### Patroni для PostgreSQL (если используется)
+### Patroni for PostgreSQL (if used)
 
 ```yaml
 # patroni.yml (Node 1)
@@ -423,34 +423,34 @@ tags:
 ```
 
 ```bash
-# Статус кластера Patroni
+# Patroni cluster status
 patronictl -c /etc/patroni.yml list
 
-# Ручной failover
+# Manual failover
 patronictl -c /etc/patroni.yml failover oes-pg-cluster --master oes-pg-node1 --candidate oes-pg-node2
 
-# Переключение (плановое, с ожиданием репликации)
+# Switchover (planned, waits for replication)
 patronictl -c /etc/patroni.yml switchover oes-pg-cluster
 ```
 
 ---
 
-## Мониторинг HA
+## HA monitoring
 
-### Что мониторить
+### What to monitor
 
-| Метрика | Порог | Алерт |
+| Metric | Threshold | Alert |
 |---------|-------|-------|
-| OES Daemon не отвечает | 3 проверки | Critical |
-| Firebird sync lag | > 30 минут | Warning |
-| PostgreSQL replica lag | > 1 МБ WAL | Warning |
-| Keepalived state change | любое событие | Critical |
-| Firebird БД размер растёт аномально | > 10% в день | Warning |
-| Disk > 85% (под .fdb файлом) | порог | Critical |
-| RAM > 90% | порог | Critical |
-| OES Daemon restart | > 0 за 30 мин | Warning |
+| OES Daemon not responding | 3 checks | Critical |
+| Firebird sync lag | > 30 minutes | Warning |
+| PostgreSQL replica lag | > 1 MB WAL | Warning |
+| Keepalived state change | any event | Critical |
+| Firebird DB size growing abnormally | > 10% per day | Warning |
+| Disk > 85% (under .fdb file) | threshold | Critical |
+| RAM > 90% | threshold | Critical |
+| OES Daemon restart | > 0 in 30 min | Warning |
 
-### Health check скрипт
+### Health check script
 
 ```bash
 #!/bin/bash
@@ -474,7 +474,7 @@ check_service() {
     local name="$1"
     local svc="$2"
     if ! systemctl is-active --quiet "$svc"; then
-        ISSUES="${ISSUES}\nFAIL: Сервис $name остановлен"
+        ISSUES="${ISSUES}\nFAIL: Service $name is stopped"
     else
         echo "OK: $name"
     fi
@@ -486,13 +486,13 @@ check_disk_space() {
     local usage
     usage=$(df "$path" | tail -1 | awk '{print $5}' | tr -d '%')
     if [ "$usage" -gt "$threshold" ]; then
-        ISSUES="${ISSUES}\nWARN: Диск $path заполнен на ${usage}%"
+        ISSUES="${ISSUES}\nWARN: Disk $path is ${usage}% full"
     else
-        echo "OK: Диск $path (${usage}%)"
+        echo "OK: Disk $path (${usage}%)"
     fi
 }
 
-# === Проверки ===
+# === Checks ===
 check_service "OES Daemon" "oes-daemon"
 check_service "Firebird" "firebird"
 check_tcp "OES API" "localhost" "4001"
@@ -500,20 +500,20 @@ check_tcp "Firebird" "localhost" "3050"
 check_disk_space "/var/lib/oes" "85"
 check_disk_space "/" "90"
 
-# Проверить freshness бэкапа
+# Backup freshness check
 LATEST_BACKUP=$(find /var/backups/oes/firebird -name "*.fbk.gz" -type f -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
 if [ -n "$LATEST_BACKUP" ]; then
     AGE_HOURS=$(( ( $(date +%s) - ${LATEST_BACKUP%.*} ) / 3600 ))
     if [ "$AGE_HOURS" -gt 25 ]; then
-        ISSUES="${ISSUES}\nWARN: Последний бэкап ${AGE_HOURS}ч назад"
+        ISSUES="${ISSUES}\nWARN: Latest backup ${AGE_HOURS}h ago"
     else
-        echo "OK: Бэкап (${AGE_HOURS}ч назад)"
+        echo "OK: Backup (${AGE_HOURS}h ago)"
     fi
 fi
 
-# === Отправить алерт ===
+# === Send alert ===
 if [ -n "$ISSUES" ]; then
-    # Использовать $'...' синтаксис для корректного раскрытия \n в bash
+    # Use $'...' syntax for correct \n expansion in bash
     MSG=$'HA Alert ['"$HOSTNAME"$']:'"$ISSUES"
     echo -e "$MSG"
     curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
@@ -523,43 +523,43 @@ fi
 ```
 
 ```bash
-# Cron: каждые 5 минут
+# Cron: every 5 minutes
 */5 * * * * /opt/oes/scripts/ha-health-check.sh >> /var/log/oes/ha-health.log 2>&1
 ```
 
 ---
 
-## Чеклист по уровням
+## Checklists by level
 
-### Desktop (каждая инсталляция)
-- [ ] Ежедневное автоматическое резервное копирование Firebird (gbak)
-- [ ] Минимум 30 дней хранение локальных бэкапов
-- [ ] Копия бэкапов на внешний диск или NAS
-- [ ] Процедура восстановления задокументирована для пользователя
-- [ ] Crashpad инициализирован (сбор crash dumps)
+### Desktop (each installation)
+- [ ] Daily automatic Firebird backup (gbak)
+- [ ] At least 30 days of local backup retention
+- [ ] Copy of backups on external drive or NAS
+- [ ] Recovery procedure documented for the user
+- [ ] Crashpad initialized (crash dump collection)
 
-### Basic Server (OES в малом офисе)
-- [ ] Systemd/Windows Service с Restart=on-failure
-- [ ] Мониторинг сервиса (check-oes-service.sh в cron)
-- [ ] Алерты в Telegram при остановке
-- [ ] Ежедневные бэкапы Firebird на NAS/внешнее хранилище
-- [ ] Health check endpoint в OES Daemon (если поддерживается)
-- [ ] Тестирование восстановления из бэкапа ежемесячно
+### Basic Server (OES in a small office)
+- [ ] Systemd/Windows Service with Restart=on-failure
+- [ ] Service monitoring (check-oes-service.sh in cron)
+- [ ] Telegram alerts on stop
+- [ ] Daily Firebird backups to NAS / external storage
+- [ ] Health check endpoint in OES Daemon (if supported)
+- [ ] Backup restore test monthly
 
-### Standard (многопользовательский OES сервер)
-- [ ] Firebird warm standby (gbak sync каждые 15 мин)
-- [ ] PostgreSQL replica (если используется)
-- [ ] Скрипт автоматического failover
-- [ ] HAProxy или Keepalived (в зависимости от архитектуры OES)
-- [ ] Бэкапы offsite (NAS в другой локации)
-- [ ] Ротация бэкапов: 7d + 4w + 3m
-- [ ] Мониторинг lag репликации
+### Standard (multi-user OES server)
+- [ ] Firebird warm standby (gbak sync every 15 min)
+- [ ] PostgreSQL replica (if used)
+- [ ] Automatic failover script
+- [ ] HAProxy or Keepalived (depending on OES architecture)
+- [ ] Offsite backups (NAS at another location)
+- [ ] Backup rotation: 7d + 4w + 3m
+- [ ] Replication lag monitoring
 
-### Enterprise (критичная инфраструктура OES)
-- [ ] Patroni (PostgreSQL auto-failover) — если используется PostgreSQL
+### Enterprise (critical OES infrastructure)
+- [ ] Patroni (PostgreSQL auto-failover) - if PostgreSQL is used
 - [ ] Multi-node OES Daemon + Keepalived
-- [ ] Ceph или NFS для shared storage
-- [ ] Geo-redundancy (standby в другом ДЦ/офисе)
-- [ ] RTO < 5 минут, RPO < 15 минут
-- [ ] Disaster Recovery план задокументирован и протестирован
-- [ ] SLA определён и мониторится
+- [ ] Ceph or NFS for shared storage
+- [ ] Geo-redundancy (standby in another DC/office)
+- [ ] RTO < 5 minutes, RPO < 15 minutes
+- [ ] Disaster Recovery plan documented and tested
+- [ ] SLA defined and monitored

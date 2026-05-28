@@ -1,57 +1,57 @@
 # Engineering Playbook — Open Enterprise Solutions (OES)
 
-Корпоративные стандарты разработки для проекта **Open Enterprise Solutions** — кросс-платформенной low-code/no-code платформы на C++. Правила организации проектов, управления кодом, работы в команде и поддержания качества. Обязательны для всех участников команды и AI-агентов.
+Corporate development standards for **Open Enterprise Solutions** — a cross-platform low-code/no-code C++ platform. Rules for project organisation, code management, teamwork, and quality control. Mandatory for all team members and AI agents.
 
-**Стек:** C++17, wxWidgets 3.3.2, MSBuild / CMake, Firebird (основная СУБД), PostgreSQL, SQLite, MySQL, ODBC
+**Stack:** C++17, wxWidgets 3.3.2, MSBuild / CMake, Firebird (primary DBMS), PostgreSQL, SQLite, MySQL, ODBC
 
-**Лицензия:** LGPL 2.1
+**License:** LGPL 2.1
 
 ---
 
-## Оглавление
+## Table of Contents
 
-| # | Документ | Описание |
+| # | Document | Description |
 |---|----------|----------|
-| 01 | [Структура проектов](./01-project-structure.md) | Организация репозиториев, файловая структура C++ проекта, обязательные файлы |
-| 02 | [Git-воркфлоу](./02-git-workflow.md) | Ветки, коммиты, pull requests, теги релизов |
-| 03 | [Код-ревью](./03-code-review.md) | Процесс ревью C++ кода, чеклист, правила одобрения |
-| 04 | [Документация](./04-documentation.md) | Что документировать, где и как (Doxygen, ADR, CLAUDE.md) |
-| 05 | [Управление задачами](./05-task-management.md) | Создание, назначение и отслеживание задач в Jira |
-| 06 | [AI-агенты](./06-ai-agents.md) | Правила работы с AI-ассистентами (Claude, GitHub Copilot) |
-| 07 | [Безопасность](./07-security.md) | Секреты, доступы, SSH, защита build-серверов, code signing |
-| 08 | [Онбординг](./08-onboarding.md) | Чеклист для новых участников команды, настройка среды C++/wxWidgets |
-| 09 | [Окружения и сборка](./09-environments-deploy.md) | Local, staging, production — CMake конфигурации, сборка дистрибутива |
-| 10 | [Тестирование](./10-testing.md) | Unit, integration, UI-тесты — Google Test, когда и как |
-| 11 | [Лучшие практики C++](./11-best-practices.md) | C++17, wxWidgets, паттерны, RAII, memory safety, стандарты кода |
-| 12 | [Обновление зависимостей](./12-dependency-updates.md) | Процесс обновления wxWidgets, драйверов СУБД, сторонних библиотек |
-| 13 | [Мониторинг и логирование](./13-monitoring-logging.md) | Логирование wxLog, краш-репорты, health checks, алерты |
-| 14 | [Дизайн и вёрстка UI](./14-design-workflow.md) | wxWidgets UI guidelines, дизайн-система, доступность, HiDPI |
-| 15 | [Проектирование API](./15-api-design.md) | Внутренний C++ API, публичные заголовки, Plugin API, версионирование |
-| 16 | [База данных](./16-database.md) | Firebird, PostgreSQL, SQLite — схемы, миграции, бэкапы, multi-tenant |
-| 17 | [CI/CD](./17-ci-cd.md) | GitHub Actions, CMake сборка, автотесты, подпись и публикация дистрибутива |
-| 18 | [Инцидент-менеджмент](./18-incident-management.md) | P1-P4, анализ краш-дампов (WinDbg/GDB), ролбэк, постмортем |
-| 19 | [Производительность](./19-performance.md) | Профилирование C++, оптимизация wxWidgets, работа с большими наборами данных |
-| 20 | [Коммуникация](./20-communication.md) | Каналы, async/sync, стендапы, протоколы встреч, код-ревью коммуникация |
-| 21 | [Дистрибуция и отказоустойчивость](./21-infrastructure-resilience.md) | Installer (Inno Setup), автообновление, Windows minidumps, устойчивость подключений к БД |
-| 22 | [Система плагинов](./22-plugin-system.md) | C++ Plugin Architecture: DLL/SO загрузка, C ABI интерфейсы, версионирование, ABI-стабильность |
-| 23 | [Управление доступами](./23-access-management.md) | Матрица доступов, выдача/отзыв прав, code signing, ротация секретов |
-| 24 | [Комплаенс](./24-compliance.md) | LGPL 2.1, лицензирование зависимостей, GDPR для краш-репортов, лицензирование OES |
+| 01 | [Project structure](./01-project-structure.md) | Repository layout, C++ project file structure, mandatory files |
+| 02 | [Git workflow](./02-git-workflow.md) | Branches, commits, pull requests, release tags |
+| 03 | [Code review](./03-code-review.md) | C++ code review process, checklist, approval rules |
+| 04 | [Documentation](./04-documentation.md) | What to document, where, and how (Doxygen, ADR, CLAUDE.md) |
+| 05 | [Task management](./05-task-management.md) | Creating, assigning, and tracking tasks in Jira |
+| 06 | [AI agents](./06-ai-agents.md) | Rules for working with AI assistants (Claude, GitHub Copilot) |
+| 07 | [Security](./07-security.md) | Secrets, access, SSH, build server protection, code signing |
+| 08 | [Onboarding](./08-onboarding.md) | Checklist for new team members, C++/wxWidgets environment setup |
+| 09 | [Environments and build](./09-environments-deploy.md) | Local, staging, production — CMake configurations, distribution build |
+| 10 | [Testing](./10-testing.md) | Unit, integration, UI tests — Google Test, when and how |
+| 11 | [C++ best practices](./11-best-practices.md) | C++17, wxWidgets, patterns, RAII, memory safety, code standards |
+| 12 | [Dependency updates](./12-dependency-updates.md) | Process for updating wxWidgets, DB drivers, third-party libraries |
+| 13 | [Monitoring and logging](./13-monitoring-logging.md) | wxLog logging, crash reports, health checks, alerts |
+| 14 | [UI design and layout](./14-design-workflow.md) | wxWidgets UI guidelines, design system, accessibility, HiDPI |
+| 15 | [API design](./15-api-design.md) | Internal C++ API, public headers, Plugin API, versioning |
+| 16 | [Database](./16-database.md) | Firebird, PostgreSQL, SQLite — schemas, migrations, backups, multi-tenant |
+| 17 | [CI/CD](./17-ci-cd.md) | GitHub Actions, CMake builds, automated tests, signing, and distribution publishing |
+| 18 | [Incident management](./18-incident-management.md) | P1-P4, crash dump analysis (WinDbg/GDB), rollback, postmortem |
+| 19 | [Performance](./19-performance.md) | C++ profiling, wxWidgets optimization, working with large data sets |
+| 20 | [Communication](./20-communication.md) | Channels, async/sync, standups, meeting protocols, code review communication |
+| 21 | [Distribution and resilience](./21-infrastructure-resilience.md) | Installer (Inno Setup), auto-update, Windows minidumps, DB connection resilience |
+| 22 | [Plugin system](./22-plugin-system.md) | C++ Plugin Architecture: DLL/SO loading, C ABI interfaces, versioning, ABI stability |
+| 23 | [Access management](./23-access-management.md) | Access matrix, granting/revoking rights, code signing, secret rotation |
+| 24 | [Compliance](./24-compliance.md) | LGPL 2.1, dependency licensing, GDPR for crash reports, OES licensing |
 
 ---
 
-## Как пользоваться
+## How to use
 
-1. **Новый участник** — начните с [Онбординг](./08-onboarding.md), затем прочитайте все документы по порядку
-2. **Текущий участник** — используйте как справочник при вопросах о процессах и стандартах
-3. **AI-агент** — руководствуйтесь [AI-агенты](./06-ai-agents.md) и `CLAUDE.md` в корне репозитория OES
+1. **New team member** — start with [Onboarding](./08-onboarding.md), then read all documents in order
+2. **Current team member** — use as a reference for questions about processes and standards
+3. **AI agent** — follow [AI agents](./06-ai-agents.md) and `CLAUDE.md` in the root of the OES repository
 
-## Обновление стандартов
+## Updating the standards
 
-Стандарты — живой документ. Если процесс не работает или появилась лучшая практика:
-1. Создайте PR с изменениями в этот репозиторий (`docs/engineering-playbook/`)
-2. Обсудите изменение с командой (Telegram + PR comments)
-3. После одобрения — обновите `CLAUDE.md` в корне репозитория
+Standards are a living document. If a process doesn't work or a better practice emerges:
+1. Create a PR with changes in this repository (`docs/engineering-playbook/`)
+2. Discuss the change with the team (Telegram + PR comments)
+3. After approval — update `CLAUDE.md` in the root of the repository
 
-## О проекте
+## About the project
 
-**Open Enterprise Solutions (OES)** — кросс-платформенная enterprise low-code/no-code платформа, позволяющая создавать бизнес-приложения без написания кода. Написана на C++17 с использованием wxWidgets 3.3.2. Поддерживает Windows, Linux и macOS. Распространяется под лицензией LGPL 2.1.
+**Open Enterprise Solutions (OES)** is a cross-platform enterprise low-code/no-code platform that lets you build business applications without writing code. Written in C++17 with wxWidgets 3.3.2. Supports Windows, Linux, and macOS. Distributed under LGPL 2.1.

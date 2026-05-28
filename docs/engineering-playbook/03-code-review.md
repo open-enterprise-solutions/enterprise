@@ -1,215 +1,215 @@
-# 03. Код-ревью
+# 03. Code Review
 
-## Главный принцип
+## The main principle
 
-**Каждое изменение попадает в `develop` и `master` только через Pull Request.** Без исключений. Даже однострочный фикс, даже обновление CMakeLists.txt, даже правка комментария.
+**Every change reaches `develop` and `master` only through a Pull Request.** No exceptions. Even a one-line fix, even a CMakeLists.txt update, even a comment edit.
 
-Прямой push в `master` и `develop` запрещён на уровне настроек GitHub (branch protection rules).
+Direct push to `master` and `develop` is forbidden at the GitHub configuration level (branch protection rules).
 
 ---
 
-## Процесс ревью
+## Review process
 
 ```
-Автор создаёт PR
+Author creates the PR
     ↓
-Ревьюер получает уведомление
+Reviewer receives a notification
     ↓
-Ревьюер проверяет код (чеклист ниже)
+Reviewer checks the code (checklist below)
     ↓
-Ревьюер оставляет комментарии
+Reviewer leaves comments
     ↓
-Автор исправляет замечания
+Author addresses the comments
     ↓
-Ревьюер проверяет исправления
+Reviewer verifies the fixes
     ↓
-Approve → Squash Merge → Удаление ветки
+Approve → Squash Merge → Branch deletion
 ```
 
-### Сроки
+### Turnaround
 
-- **Обычные PR** — ревью в течение 1 рабочего дня
-- **Hotfix PR** — ревью в течение 2 часов
-- Если ревьюер не отвечает — напомнить в чате, при необходимости привлечь другого
-
----
-
-## Чеклист ревьюера
-
-Проверяйте каждый PR по этим пунктам:
-
-### 1. Работоспособность
-- Код компилируется без ошибок и предупреждений (Debug + Release, x64)
-- Нет runtime ошибок при тестировании описанного сценария
-- Edge cases обработаны (nullptr, пустые строки, некорректный ввод пользователя)
-- Корректно работает при потере соединения с БД
-
-### 2. Управление памятью и ресурсами
-- Нет сырых owning указателей (`new` без немедленного присвоения `unique_ptr`/`shared_ptr`)
-- Все ресурсы управляются через RAII (соединения с БД, файловые дескрипторы, GDI объекты)
-- Нет утечек ресурсов при исключениях (деструкторы и RAII-обёртки корректны)
-- `shared_ptr` используется только когда нужно разделённое владение, а не по умолчанию
-- Нет циклических `shared_ptr` зависимостей (использовать `weak_ptr`)
-
-### 3. Безопасность
-- Нет хардкод секретов (пароли, строки подключения к БД, API-ключи)
-- Входные данные валидируются перед использованием
-- SQL-запросы используют параметризацию — конкатенация строк SQL запрещена
-- Буферы фиксированного размера защищены от переполнения (предпочтительны `std::string`, `std::vector`)
-- Пользовательский ввод экранируется перед отображением
-
-### 4. Архитектура
-- Код в правильном месте (ядро, дизайнер, рантайм, GUI)
-- Нет дублирования логики (DRY)
-- Зависимости инжектируются через конструктор или интерфейсы, а не через глобальное состояние
-- Новые классы следуют существующим соглашениям проекта
-- GUI-код не содержит бизнес-логику, бизнес-логика не зависит от wxWidgets
-
-### 5. C++-специфика
-- Функции, не изменяющие состояние объекта, объявлены `const`
-- Конструкторы с одним параметром объявлены `explicit` (если это не конверсия по дизайну)
-- Перегруженные операторы реализованы корректно (правило пяти при необходимости)
-- Нет UB (uninitialized variables, signed overflow, out-of-bounds доступ)
-- `std::string` для строк (не `char[]` фиксированной длины без необходимости)
-- Range-based for loops и алгоритмы STL где уместно
-
-### 6. Тесты
-- Новая функциональность покрыта Google Test тестами
-- Тесты проходят (`ctest --output-on-failure`)
-- Тесты проверяют поведение (входные данные → ожидаемый результат), а не детали реализации
-- Тесты независимы друг от друга (нет shared state между тест-кейсами)
-
-### 7. Документация
-- Публичные методы классов задокументированы (Doxygen или минимальный комментарий)
-- CLAUDE.md обновлён если изменилась архитектура или структура модулей
-- Сложная бизнес-логика прокомментирована (почему, не что)
-- Workarounds объяснены с указанием причины и/или ссылки на issue
-
-### 8. База данных
-- SQL-запросы используют параметризацию (prepared statements)
-- Изменения схемы БД задокументированы и имеют миграционный скрипт
-- Транзакции используются там где нужна атомарность операций
-- Нет N+1 запросов в циклах
-- Индексы рассмотрены для новых WHERE/JOIN условий
-
-### 9. Производительность
-- Нет избыточных обращений к БД в цикле
-- Большие результаты запросов обрабатываются пагинированно или потоково
-- wxWidgets UI обновляется из главного потока (не из фоновых потоков напрямую)
-- Тяжёлые операции вынесены в фоновые потоки (с соответствующей синхронизацией)
-
-### 10. Качество кода
-- Понятные имена переменных, функций, классов (без сокращений типа `tmp`, `x`, `data`)
-- Функции небольшие, одна ответственность (до ~50 строк как ориентир)
-- Нет закомментированного кода
-- Нет отладочных `wxLogDebug` / `printf` без необходимости
-- Нет TODO без ссылки на задачу (`// TODO(#42): `)
-
-### 11. Совместимость и переносимость
-- Нет Windows-specific API где можно использовать кроссплатформенный аналог (wxWidgets, STL)
-- Нет предположений об абсолютных путях
-- Новые зависимости обоснованы (не добавлять библиотеку ради одной функции)
-- Изменения, ломающие API плагинов, задокументированы
+- **Regular PRs** — reviewed within 1 working day
+- **Hotfix PRs** — reviewed within 2 hours
+- If the reviewer doesn't respond — ping them in chat, and bring in someone else if needed
 
 ---
 
-## AI-код: повышенное внимание
+## Reviewer checklist
 
-Когда PR содержит код, написанный с помощью AI (Claude, ChatGPT), ревьюер должен быть **особенно внимателен** к следующим проблемам:
+Check every PR against these points:
 
-### Типичные ошибки AI в C++ коде
+### 1. Functionality
+- Code compiles without errors or warnings (Debug + Release, x64)
+- No runtime errors when testing the described scenario
+- Edge cases handled (nullptr, empty strings, invalid user input)
+- Works correctly when the DB connection is lost
 
-| Проблема | Пример | Как проверить |
+### 2. Memory and resource management
+- No raw owning pointers (`new` without immediate assignment to `unique_ptr`/`shared_ptr`)
+- All resources managed via RAII (DB connections, file descriptors, GDI objects)
+- No resource leaks on exceptions (destructors and RAII wrappers correct)
+- `shared_ptr` used only when shared ownership is required, not by default
+- No circular `shared_ptr` dependencies (use `weak_ptr`)
+
+### 3. Security
+- No hardcoded secrets (passwords, DB connection strings, API keys)
+- Input data is validated before use
+- SQL queries use parameterization — string concatenation in SQL is forbidden
+- Fixed-size buffers protected from overflow (prefer `std::string`, `std::vector`)
+- User input is escaped before display
+
+### 4. Architecture
+- Code is in the right place (core, designer, runtime, GUI)
+- No duplicated logic (DRY)
+- Dependencies are injected through the constructor or interfaces, not through global state
+- New classes follow existing project conventions
+- GUI code contains no business logic, business logic does not depend on wxWidgets
+
+### 5. C++ specifics
+- Functions that don't change object state are declared `const`
+- Single-parameter constructors are declared `explicit` (unless conversion is intentional)
+- Overloaded operators implemented correctly (rule of five when needed)
+- No UB (uninitialized variables, signed overflow, out-of-bounds access)
+- `std::string` for strings (not fixed-length `char[]` without a reason)
+- Range-based for loops and STL algorithms where appropriate
+
+### 6. Tests
+- New functionality is covered by Google Test tests
+- Tests pass (`ctest --output-on-failure`)
+- Tests check behaviour (inputs → expected result), not implementation details
+- Tests are independent (no shared state between test cases)
+
+### 7. Documentation
+- Public class methods are documented (Doxygen or a minimal comment)
+- CLAUDE.md updated when architecture or module layout changes
+- Complex business logic commented (why, not what)
+- Workarounds are explained with the reason and/or a link to an issue
+
+### 8. Database
+- SQL queries use parameterization (prepared statements)
+- DB schema changes are documented and have a migration script
+- Transactions are used where atomicity is needed
+- No N+1 queries in loops
+- Indexes considered for new WHERE/JOIN conditions
+
+### 9. Performance
+- No redundant DB calls inside loops
+- Large query results processed in pages or streams
+- wxWidgets UI is updated from the main thread (not directly from background threads)
+- Heavy operations moved to background threads (with proper synchronization)
+
+### 10. Code quality
+- Clear names for variables, functions, classes (no `tmp`, `x`, `data` style abbreviations)
+- Functions are small, single responsibility (around 50 lines as a guideline)
+- No commented-out code
+- No leftover debug `wxLogDebug` / `printf` without a reason
+- No TODO without a task link (`// TODO(#42): `)
+
+### 11. Compatibility and portability
+- No Windows-specific API where a cross-platform equivalent exists (wxWidgets, STL)
+- No assumptions about absolute paths
+- New dependencies are justified (don't add a library for one function)
+- Changes that break the plugin API are documented
+
+---
+
+## AI-generated code: extra scrutiny
+
+When a PR contains code written with the help of AI (Claude, ChatGPT), the reviewer should be **especially careful** about the following issues:
+
+### Typical AI errors in C++ code
+
+| Problem | Example | How to check |
 |----------|--------|---------------|
-| Несуществующие API | `std::filesystem::read_all_text()` — не существует | Проверить cppreference.com |
-| Устаревшие паттерны | `auto_ptr` вместо `unique_ptr`, `NULL` вместо `nullptr` | Сверить с C++17 стандартом |
-| Неправильная работа с памятью | `delete` вместо `delete[]` для массивов | Внимательный разбор кода |
-| wxWidgets API | Неверные сигнатуры методов, несуществующие классы | Проверить документацию wxWidgets 3.x |
-| Игнорирование thread-safety | Доступ к UI-компонентам из фонового потока | Найти все wxWidgets вызовы вне main thread |
-| Несуществующие OES-классы | `OesSafeQuery`, `OesDatabaseManager`, `OesTransaction` — не существуют в коде | Проверить реальные имена: ibPreparedStatement, ibDatabaseLayer, ibTransactionGuard |
-| Неверные OES-пути | `src/core/`, `src/gui/`, `src/designer/` — устаревшие пути | Реальные пути: `src/engine/backend/`, `src/engine/frontend/`, `src/engine/designer/` |
-| Конкатенация SQL вместо параметров | `"SELECT ... WHERE ID = " + id` вместо `SetParamInt(1, id)` | Проверить что используется ibPreparedStatement + SetParamString/SetParamInt |
-| Небезопасный C++ | Использование `reinterpret_cast` без необходимости, `const_cast` | Вопрос о причине каждого такого cast |
-| Галлюцинации в #include | Несуществующие заголовки, неправильные пути | Убедиться что заголовок реально существует в src/engine/ |
+| Non-existent APIs | `std::filesystem::read_all_text()` — does not exist | Check cppreference.com |
+| Outdated patterns | `auto_ptr` instead of `unique_ptr`, `NULL` instead of `nullptr` | Cross-check against the C++17 standard |
+| Wrong memory handling | `delete` instead of `delete[]` for arrays | Careful code review |
+| wxWidgets API | Incorrect method signatures, non-existent classes | Check wxWidgets 3.x documentation |
+| Thread-safety ignored | UI components accessed from a background thread | Find all wxWidgets calls outside the main thread |
+| Non-existent OES classes | `OesSafeQuery`, `OesDatabaseManager`, `OesTransaction` — don't exist in the code | Verify the real names: ibPreparedStatement, ibDatabaseLayer, ibTransactionGuard |
+| Wrong OES paths | `src/core/`, `src/gui/`, `src/designer/` — outdated paths | Real paths: `src/engine/backend/`, `src/engine/frontend/`, `src/engine/designer/` |
+| SQL concatenation instead of parameters | `"SELECT ... WHERE ID = " + id` instead of `SetParamInt(1, id)` | Verify ibPreparedStatement + SetParamString/SetParamInt is used |
+| Unsafe C++ | Use of `reinterpret_cast` without need, `const_cast` | Question every such cast |
+| Hallucinated `#include` | Non-existent headers, wrong paths | Make sure the header actually exists in src/engine/ |
 
-### Правило для ревью AI-кода
+### Rule for reviewing AI code
 
-> Если вы видите незнакомый API-вызов, метод класса или заголовочный файл — **проверьте в документации**, а не полагайтесь на то что "AI наверное знает". AI уверенно использует API, которых не существует.
+> If you see an unfamiliar API call, class method, or header — **check the documentation** instead of trusting that "AI probably knows". AI confidently uses APIs that don't exist.
 
 ---
 
-## Правила одобрения
+## Approval rules
 
-| Тип изменения | Необходимо approve | Кто ревьюит |
+| Change type | Approvals needed | Who reviews |
 |---------------|-------------------|-------------|
-| Обычная фича / фикс | 1 approve | Любой участник команды |
-| Изменения схемы БД / миграции | 2 approve | Тимлид + разработчик |
-| Изменения публичного API плагинов | 2 approve | Тимлид + разработчик |
-| Изменения системы сборки (CMake/MSBuild) | 2 approve | Тимлид + DevOps |
-| Деструктивные операции с данными | 2 approve | Тимлид обязателен |
-| Изменения CI/CD (.github/workflows) | 2 approve | Тимлид + DevOps |
+| Regular feature / fix | 1 approve | Any team member |
+| DB schema changes / migrations | 2 approve | Tech lead + developer |
+| Public plugin API changes | 2 approve | Tech lead + developer |
+| Build system changes (CMake/MSBuild) | 2 approve | Tech lead + DevOps |
+| Destructive operations on data | 2 approve | Tech lead required |
+| CI/CD changes (.github/workflows) | 2 approve | Tech lead + DevOps |
 
 ---
 
-## Этикет комментариев
+## Comment etiquette
 
-Чтобы автор PR понимал приоритет и характер замечания, используйте префиксы:
+So the PR author understands the priority and tone of each comment, use these prefixes:
 
-### `issue:` — Блокирующая проблема
-Мердж невозможен пока не исправлено.
-
-```
-issue: Здесь происходит утечка памяти — объект FirebirdQuery создаётся через new,
-но никогда не удаляется при выбросе исключения из Execute().
-Нужно обернуть в unique_ptr или использовать RAII-guard.
-```
-
-### `suggestion:` — Предложение по улучшению
-Рекомендуется исправить, но не блокирует мердж если автор объяснит почему нет.
+### `issue:` — Blocking problem
+Merge is impossible until fixed.
 
 ```
-suggestion: Этот SQL-запрос можно кэшировать как prepared statement —
-сейчас он компилируется при каждом вызове, что даст заметный overhead
-при частых вызовах в таблице с большим числом строк.
+issue: There's a memory leak here — the FirebirdQuery object is created via new
+but never deleted when Execute() throws.
+Wrap it in unique_ptr or use an RAII guard.
 ```
 
-### `nit:` — Мелочь
-Стилистика, форматирование, именование. Не блокирует мердж.
+### `suggestion:` — Improvement suggestion
+Recommended to fix, but doesn't block the merge if the author explains why not.
 
 ```
-nit: Переименовать `data` в `queryResult` — будет понятнее при чтении.
+suggestion: This SQL query can be cached as a prepared statement —
+it is currently compiled on every call, which causes noticeable overhead
+when called frequently against a large table.
 ```
 
-### `question:` — Вопрос
-Не замечание, а запрос на разъяснение.
+### `nit:` — Minor
+Style, formatting, naming. Doesn't block the merge.
 
 ```
-question: Почему здесь используется shared_ptr вместо unique_ptr?
-Есть ли несколько владельцев этого объекта или это по привычке?
+nit: Rename `data` to `queryResult` — easier to read.
 ```
 
-### `praise:` — Похвала
-Не забывайте отмечать хороший код. Это мотивирует.
+### `question:` — Question
+Not a comment but a request for clarification.
 
 ```
-praise: Отличное решение с RAII-обёрткой для транзакции!
-Теперь откат гарантирован даже при исключении — намного чище чем было.
+question: Why is shared_ptr used here instead of unique_ptr?
+Are there multiple owners of this object, or is it just out of habit?
+```
+
+### `praise:` — Praise
+Don't forget to call out good code. It motivates people.
+
+```
+praise: Nice solution with the RAII wrapper for the transaction!
+Rollback is now guaranteed even on an exception — much cleaner than before.
 ```
 
 ---
 
-## Как быть хорошим автором PR
+## How to be a good PR author
 
-1. **Маленькие PR** — до 400 строк изменений. Большие PR никто не ревьюит качественно
-2. **Описание** — объясните ЧТО и ЗАЧЕМ, не заставляйте ревьюера разгадывать
-3. **Self-review** — перед запросом ревью просмотрите свой PR сами, проверьте что собирается без предупреждений
-4. **Не спорьте на пустом месте** — если ревьюер прав, исправьте. Если не согласны — аргументируйте
-5. **Отвечайте на все комментарии** — даже если просто "fixed" или "agreed, done"
+1. **Small PRs** — up to 400 lines of changes. Nobody reviews big PRs carefully
+2. **Description** — explain WHAT and WHY, don't make the reviewer guess
+3. **Self-review** — before requesting review, look over your own PR, verify it builds with no warnings
+4. **Don't argue over nothing** — if the reviewer is right, fix it. If you disagree — make your case
+5. **Reply to every comment** — even just "fixed" or "agreed, done"
 
-## Как быть хорошим ревьюером
+## How to be a good reviewer
 
-1. **Будьте конструктивны** — вместо "это плохо" напишите "лучше сделать так: ..."
-2. **Предлагайте решения** — не только указывайте проблему, но и показывайте как исправить
-3. **Не блокируйте на мелочах** — nit-замечания не должны задерживать мердж
-4. **Быстро** — ревью не должно висеть дольше дня
-5. **Хвалите хороший код** — это создаёт правильную культуру в команде
+1. **Be constructive** — instead of "this is bad" write "it's better to do it like this: ..."
+2. **Propose solutions** — don't just point out a problem, show how to fix it
+3. **Don't block on trifles** — nit comments shouldn't delay the merge
+4. **Quickly** — a review shouldn't sit longer than a day
+5. **Praise good code** — it builds the right culture in the team

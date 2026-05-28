@@ -1,117 +1,117 @@
-# 13. Диагностика проблем (Troubleshooting)
+# 13. Troubleshooting
 
-> Быстрые чеклисты для C++ desktop приложения OES: crash dumps, отладочные символы, удалённая диагностика, типичные проблемы wxWidgets и Firebird.
+> Quick checklists for the OES C++ desktop application: crash dumps, debug symbols, remote diagnostics, common wxWidgets and Firebird issues.
 
 ---
 
-## Быстрые проверки: первым делом
+## Quick checks: where to start
 
-### Windows (приложение)
+### Windows (application)
 
 ```powershell
-# Запущен ли OES?
+# Is OES running?
 Get-Process -Name "oes" -ErrorAction SilentlyContinue
 
-# Проверить последние ошибки в Event Log
+# Check recent errors in the Event Log
 Get-EventLog -LogName Application -Source "OES*" -Newest 20 | Format-List
 
-# Crash dumps — есть ли свежие?
+# Crash dumps - any recent ones?
 Get-ChildItem "$env:APPDATA\OES\CrashReports\new\" -Filter "*.dmp" | Sort-Object LastWriteTime -Descending | Select-Object -First 5
 
-# Лог приложения
+# Application log
 Get-Content "$env:APPDATA\OES\Logs\oes.log" -Tail 50
 
-# Файл базы данных — доступен ли?
+# Database file - accessible?
 Test-Path "$env:APPDATA\OES\data\*.fdb"
 ```
 
-### macOS (приложение / daemon)
+### macOS (application / daemon)
 
 ```bash
-# Запущен ли OES?
+# Is OES running?
 pgrep -l oes
 
-# Статус daemon (launchd)
+# Daemon status (launchd)
 sudo launchctl list | grep oes
 
-# Логи daemon
+# Daemon logs
 tail -50 /var/log/oes/daemon.log
-# или через unified logging:
+# or via unified logging:
 log show --predicate 'process == "oes-daemon"' --last 1h
 
-# Файл базы данных
+# Database file
 ls -lh ~/Library/Application\ Support/OES/data/    # desktop
 ls -lh /var/lib/oes/data/                           # daemon
 
-# Процесс
+# Process
 ps aux | grep oes
 
-# Открытые файлы процессом
+# Files opened by the process
 sudo lsof -p $(pgrep oes-daemon) | head -30
 ```
 
-### Linux (daemon-режим)
+### Linux (daemon mode)
 
 ```bash
-# Статус сервиса
+# Service status
 sudo systemctl status oes-daemon
 
-# Последние логи (journald)
+# Recent logs (journald)
 sudo journalctl -u oes-daemon --since "1 hour ago" --no-pager
 
-# Логи приложения
+# Application logs
 tail -50 /var/log/oes/oes-daemon.log
 
-# Файл базы данных
+# Database file
 ls -lh /var/lib/oes/data/
 
-# Процесс
+# Process
 ps aux | grep oesd
 
-# Открытые файлы процессом
+# Files opened by the process
 sudo lsof -p $(pgrep oesd) | head -30
 
-# Использование памяти
+# Memory usage
 free -h
 cat /proc/$(pgrep oesd)/status | grep -E "VmRSS|VmPeak|Threads"
 ```
 
 ---
 
-## Анализ crash dump
+## Crash dump analysis
 
-### Открыть dump в Visual Studio
+### Open a dump in Visual Studio
 
 ```
-1. Открыть Visual Studio
-2. File → Open → File → выбрать .dmp файл
-3. VS автоматически определит тип дампа
-4. Нажать "Debug with Native Only"
-5. VS покажет стек вызовов на момент краша
+1. Open Visual Studio
+2. File -> Open -> File -> select the .dmp file
+3. VS detects the dump type automatically
+4. Click "Debug with Native Only"
+5. VS shows the call stack at the moment of the crash
 
-Для правильного анализа нужны .pdb файлы той же версии:
-  — Путь к символам: Tools → Options → Debugging → Symbols
-  — Добавить папку с .pdb файлами от нужной версии OES
+For correct analysis, .pdb files of the same version are needed:
+  - Symbol path: Tools -> Options -> Debugging -> Symbols
+  - Add the folder with .pdb files for the relevant OES version
 ```
 
-### Открыть dump через WinDbg
+### Open a dump in WinDbg
 
 ```
 windbg -z "C:\path\to\crash.dmp"
 
-Основные команды WinDbg:
-  .symfix                     — настроить символы Microsoft
-  .sympath+ C:\OES\symbols    — добавить свои символы
-  .reload                     — перезагрузить символы
-  !analyze -v                 — автоматический анализ краша
-  k                           — стек вызовов текущего потока
-  ~*k                         — стеки всех потоков
-  .ecxr; k                    — стек на момент исключения
-  lm                          — список загруженных модулей
-  !address                    — информация об адресах памяти
+Main WinDbg commands:
+  .symfix                     - configure Microsoft symbols
+  .sympath+ C:\OES\symbols    - add your own symbols
+  .reload                     - reload symbols
+  !analyze -v                 - automatic crash analysis
+  k                           - current thread call stack
+  ~*k                         - stacks of all threads
+  .ecxr; k                    - stack at the exception
+  lm                          - list of loaded modules
+  !address                    - memory address info
 ```
 
-### Автоматический анализ дампов (скрипт)
+### Automatic dump analysis (script)
 
 ```powershell
 # scripts\analyze-crashes.ps1
@@ -121,28 +121,28 @@ param(
     [string]$OutputDir = "C:\OES\CrashAnalysis"
 )
 
-# Требует установки Debugging Tools for Windows (WinDbg)
+# Requires Debugging Tools for Windows (WinDbg) installed
 $cdb = "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe"
 
 if (-not (Test-Path $cdb)) {
-    Write-Error "WinDbg не найден. Установите Windows SDK."
+    Write-Error "WinDbg not found. Install Windows SDK."
     exit 1
 }
 
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
 $dumps = Get-ChildItem -Path $DumpDir -Filter "*.dmp" -Recurse
-Write-Host "Найдено crash dumps: $($dumps.Count)"
+Write-Host "Crash dumps found: $($dumps.Count)"
 
 foreach ($dump in $dumps) {
     $reportFile = Join-Path $OutputDir "$($dump.BaseName)-analysis.txt"
     
     if (Test-Path $reportFile) {
-        Write-Host "  Пропуск (уже проанализирован): $($dump.Name)"
+        Write-Host "  Skip (already analyzed): $($dump.Name)"
         continue
     }
     
-    Write-Host "  Анализ: $($dump.Name)"
+    Write-Host "  Analyzing: $($dump.Name)"
     
     $symPath = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols;$SymbolsDir"
     
@@ -162,186 +162,186 @@ q
     & $cdb -z $dump.FullName -c "`$`$<$scriptFile" 2>&1 | Out-File $reportFile -Encoding UTF8
     Remove-Item $scriptFile
     
-    # Извлечь сводку
+    # Extract the summary
     $summary = Get-Content $reportFile | Select-String "EXCEPTION_CODE|FAILURE_BUCKET_ID|PROBABLE_CAUSE"
     Write-Host "    $($summary -join ' | ')"
 }
 
-Write-Host "`nАнализ завершён. Отчёты: $OutputDir"
+Write-Host "`nAnalysis complete. Reports: $OutputDir"
 ```
 
 ---
 
-## Типичные проблемы и решения
+## Common issues and solutions
 
-### Приложение не запускается (Windows)
+### Application does not start (Windows)
 
 ```powershell
-# 1. Проверить отсутствие DLL
-# Запустить из командной строки (НЕ двойным кликом) чтобы увидеть ошибку:
+# 1. Check for missing DLLs
+# Run from the command line (NOT double-click) to see the error:
 cd "C:\Program Files\OES"
 .\oes.exe
 
 # "The program can't start because VCRUNTIME140.dll is missing"
-# Решение: установить Visual C++ Redistributable
+# Fix: install Visual C++ Redistributable
 # https://aka.ms/vs/17/release/vc_redist.x64.exe
 
 # "The program can't start because fbclient.dll is missing"
-# Решение: проверить что Firebird установлен или fbclient.dll в папке с .exe
+# Fix: ensure Firebird is installed or fbclient.dll is in the .exe directory
 
-# 2. Проверить Event Viewer
+# 2. Check the Event Viewer
 Get-EventLog -LogName Application -EntryType Error -Newest 5 | Format-List Source, Message
 
-# 3. Procmon (Sysinternals) — посмотреть какой файл не найден
-# Фильтр: Process Name = oes.exe, Result = NAME NOT FOUND
+# 3. Procmon (Sysinternals) - see which file is missing
+# Filter: Process Name = oes.exe, Result = NAME NOT FOUND
 
-# 4. Dependencies (утилита) — анализ зависимостей .exe
+# 4. Dependencies (tool) - .exe dependency analysis
 # https://github.com/lucasg/Dependencies
 ```
 
-### Firebird: ошибки подключения
+### Firebird: connection errors
 
 ```
 "Unable to complete network request to host"
-  → Firebird сервер не запущен (если server mode)
-  → Проверить: net start FirebirdServerDefaultInstance
-  → Или: services.msc → Firebird Guardian
+  -> Firebird server is not running (server mode)
+  -> Check: net start FirebirdServerDefaultInstance
+  -> Or: services.msc -> Firebird Guardian
 
 "I/O error during read/write, file: <path>"
-  → Файл .fdb повреждён или на диске нет места
-  → gfix -validate: проверить целостность
-  → df -h (Linux) / dir (Windows): проверить место
+  -> The .fdb file is corrupted or the disk is full
+  -> gfix -validate: integrity check
+  -> df -h (Linux) / dir (Windows): check disk space
 
 "Lock time-out on wait transaction"
-  → Приложение не завершило транзакцию
-  → gfix -kill: завершить зависшие транзакции (осторожно!)
-  → Или подождать таймаут
+  -> The application did not commit a transaction
+  -> gfix -kill: terminate stuck transactions (careful!)
+  -> Or wait for the timeout
 
 "database file appears corrupt"
-  → КРИТИЧНО: запустить gfix -validate -full
-  → Восстановить из бэкапа если повреждение серьёзное
-  → gbak может восстановить часть данных
+  -> CRITICAL: run gfix -validate -full
+  -> Restore from backup if damage is severe
+  -> gbak may recover part of the data
 
 "connection rejected by remote interface"
-  → Неверный пользователь/пароль
-  → Убедиться что SYSDBA пароль правильный
+  -> Wrong user/password
+  -> Make sure the SYSDBA password is correct
 ```
 
 ```bash
-# Диагностика Firebird (Linux/macOS/Windows)
+# Firebird diagnostics (Linux/macOS/Windows)
 
-# Проверить целостность БД
+# DB integrity check
 gfix -user SYSDBA -password masterkey -validate -full /path/to/oes.fdb
 
-# Починить транзакции
+# Fix transactions
 gfix -user SYSDBA -password masterkey -sweep /path/to/oes.fdb
-gfix -user SYSDBA -password masterkey -mend /path/to/oes.fdb  # осторожно!
+gfix -user SYSDBA -password masterkey -mend /path/to/oes.fdb  # careful!
 
-# Статистика БД
+# DB statistics
 gstat -user SYSDBA -password masterkey -header /path/to/oes.fdb
 
-# Логи Firebird
+# Firebird logs
 # Windows: C:\Program Files\Firebird\firebird.log
 # macOS:   /usr/local/var/log/firebird.log  (Homebrew)
 # Linux:   /var/log/firebird/
 ```
 
-### wxWidgets: проблемы с UI
+### wxWidgets: UI issues
 
 ```cpp
-// === Зависание UI потока ===
-// ПРИЗНАК: интерфейс перестаёт реагировать на ввод
+// === UI thread hang ===
+// SYMPTOM: the UI stops responding to input
 
-// Проблема: долгая операция в UI потоке
+// Problem: long-running operation on the UI thread
 void OnButtonClick(wxCommandEvent&) {
-    // ПЛОХО: блокирует UI
-    LoadHugeDocument();  // занимает 5 секунд
+    // BAD: blocks the UI
+    LoadHugeDocument();  // takes 5 seconds
 }
 
-// Решение 1: wxThread
+// Fix 1: wxThread
 void OnButtonClick(wxCommandEvent&) {
     auto thread = new LoadDocumentThread(this, m_filePath);
     thread->Run();
-    // Прогресс через wxThreadEvent
+    // Progress via wxThreadEvent
 }
 
-// Решение 2: wxProgressDialog + wxYield
+// Fix 2: wxProgressDialog + wxYield
 void OnButtonClick(wxCommandEvent&) {
-    wxProgressDialog dlg("Загрузка...", "Обработка файла", 100, this);
+    wxProgressDialog dlg("Loading...", "Processing file", 100, this);
     for (int i = 0; i < 100; i++) {
         ProcessChunk(i);
         dlg.Update(i);
-        wxYield();  // обработать события UI
+        wxYield();  // process UI events
     }
 }
 
-// === Артефакты отрисовки ===
-// ПРИЗНАК: мерцание, некорректная прорисовка при изменении размера
+// === Drawing artifacts ===
+// SYMPTOM: flicker, incorrect redraw on resize
 
-// Решение: двойная буферизация
+// Fix: double buffering
 void OnPaint(wxPaintEvent&) {
-    wxAutoBufferedPaintDC dc(this);  // вместо wxPaintDC
-    // ... рисование
+    wxAutoBufferedPaintDC dc(this);  // instead of wxPaintDC
+    // ... drawing
 }
 ```
 
-### Утечки памяти: поиск и исправление
+### Memory leaks: detection and fixing
 
 ```
-Инструменты для поиска утечек памяти:
+Tools for memory leak detection:
 
-1. Visual Studio Diagnostic Tools (встроено):
-   Debug → Windows → Diagnostic Tools → Memory Usage
-   → Take Snapshot до и после операции
-   → Compare для поиска утечек
+1. Visual Studio Diagnostic Tools (built-in):
+   Debug -> Windows -> Diagnostic Tools -> Memory Usage
+   -> Take Snapshot before and after an operation
+   -> Compare to find leaks
 
 2. Application Verifier (Microsoft):
    appverif /enable Heaps /app oes.exe
-   Запустить oes.exe — сообщит об утечках при закрытии
+   Run oes.exe - it will report leaks on close
 
-3. Deleaker (коммерческий, интеграция с VS):
-   Показывает стек вызовов при выделении памяти
+3. Deleaker (commercial, VS integration):
+   Shows the call stack at allocation time
 
-4. AddressSanitizer (в Debug-сборке):
-   В vcxproj: <EnableASAN>true</EnableASAN>
-   Покажет heap overflow, use-after-free, double-free
+4. AddressSanitizer (in Debug build):
+   In vcxproj: <EnableASAN>true</EnableASAN>
+   Reports heap overflow, use-after-free, double-free
    
 5. valgrind (Linux):
    valgrind --leak-check=full --track-origins=yes ./oesd
 
-Типичные источники утечек в wxWidgets:
-  — wxString и wxArrayString в циклах (обычно не утечка, wxWidgets управляет)
-  — wxBitmap не освобождается при замене
-  — Дочерние окна созданные с new без родителя
-  — Обработчики событий не отписываются (wxEvtHandler::Unbind)
+Common leak sources in wxWidgets:
+  - wxString and wxArrayString in loops (usually not a leak, wxWidgets manages them)
+  - wxBitmap not released on replacement
+  - Child windows created with new without a parent
+  - Event handlers not unsubscribed (wxEvtHandler::Unbind)
 ```
 
 ---
 
-## Удалённая диагностика
+## Remote diagnostics
 
-### Сбор диагностической информации от пользователя
+### Collecting diagnostic info from a user
 
 ```powershell
 # scripts\collect-diagnostics.ps1
-# Запускать от имени пользователя с проблемой
+# Run as the user with the problem
 
 $outputDir = "$env:DESKTOP\OES-Diagnostics-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 
-Write-Host "Сбор диагностики OES..."
+Write-Host "Collecting OES diagnostics..."
 
-# Версия OES
+# OES version
 $oesExe = "C:\Program Files\OES\oes.exe"
 if (Test-Path $oesExe) {
     (Get-Item $oesExe).VersionInfo | Out-File "$outputDir\oes-version.txt"
 }
 
-# Логи приложения
+# Application logs
 Copy-Item "$env:APPDATA\OES\Logs\oes.log" "$outputDir\" -ErrorAction SilentlyContinue
 Copy-Item "$env:APPDATA\OES\Logs\oes.log.1" "$outputDir\" -ErrorAction SilentlyContinue
 
-# Crash dumps (только последние 3)
+# Crash dumps (only the latest 3)
 $crashDir = "$env:APPDATA\OES\CrashReports"
 if (Test-Path $crashDir) {
     Get-ChildItem $crashDir -Filter "*.dmp" -Recurse |
@@ -350,37 +350,37 @@ if (Test-Path $crashDir) {
         ForEach-Object { Copy-Item $_.FullName $outputDir\ }
 }
 
-# Системная информация
+# System information
 systeminfo | Out-File "$outputDir\systeminfo.txt"
 Get-EventLog -LogName Application -Source "OES*" -Newest 50 2>/dev/null |
     Format-List | Out-File "$outputDir\eventlog-oes.txt"
 
-# Событие из Application Log за последние 24ч
+# Application Log events from the last 24h
 Get-EventLog -LogName Application -EntryType Error,Warning -After (Get-Date).AddHours(-24) 2>/dev/null |
     Format-List | Out-File "$outputDir\eventlog-errors.txt"
 
-# Версии DLL
+# DLL versions
 Get-ChildItem "C:\Program Files\OES\" -Filter "*.dll" |
     ForEach-Object { $_.VersionInfo } |
     Select-Object FileName, FileVersion, ProductVersion |
     Out-File "$outputDir\dll-versions.txt"
 
-# Архивировать
+# Archive
 $zipFile = "$outputDir.zip"
 Compress-Archive -Path $outputDir -DestinationPath $zipFile
 Remove-Item $outputDir -Recurse
 
-Write-Host "Готово! Отправьте файл в поддержку: $zipFile"
+Write-Host "Done. Send the file to support: $zipFile"
 explorer.exe (Split-Path $zipFile)
 ```
 
-### Включить расширенное логирование
+### Enable verbose logging
 
 ```cpp
-// В коде OES: поддержка уровней логирования через аргументы командной строки
+// In OES code: support log levels via command-line arguments
 // oes.exe --log-level=debug --log-file=C:\temp\oes-verbose.log
 
-// Или через конфигурационный файл:
+// Or via the configuration file:
 // [Logging]
 // Level=debug       ; error, warning, info, debug, trace
 // File=oes.log
@@ -389,47 +389,47 @@ explorer.exe (Split-Path $zipFile)
 
 ---
 
-## OES daemon не отвечает
+## OES daemon does not respond
 
 ```bash
-# 1. Daemon работает?
+# 1. Is the daemon running?
 sudo systemctl status oes-daemon
 sudo ps aux | grep oesd
 
-# 2. Если не работает — последние логи перед падением
+# 2. If not running - last logs before the crash
 sudo journalctl -u oes-daemon --since "2 hours ago" --no-pager | tail -100
 
-# 3. Если завис (не отвечает, но process есть) — получить stack trace
-sudo kill -SIGUSR1 $(pgrep oesd)    # Если реализован в OES: вывести stack
-# или
+# 3. If hung (not responding but process exists) - get a stack trace
+sudo kill -SIGUSR1 $(pgrep oesd)    # If OES implements it: dump stack
+# or
 sudo gdb -p $(pgrep oesd) -ex "thread apply all bt" -ex "detach" -ex "quit"
 
-# 4. Нехватка файловых дескрипторов?
+# 4. File descriptor exhaustion?
 cat /proc/$(pgrep oesd)/limits | grep "open files"
 ls /proc/$(pgrep oesd)/fd | wc -l
 
-# 5. Нехватка памяти?
+# 5. Memory exhaustion?
 cat /proc/$(pgrep oesd)/status | grep VmRSS
 dmesg | grep -i "oom\|out of memory" | tail -10
 
-# 6. Принудительный дамп для анализа
-sudo kill -SIGABRT $(pgrep oesd)    # Создаст core dump (если ulimit настроен)
-# или настроить core dumps:
+# 6. Force a dump for analysis
+sudo kill -SIGABRT $(pgrep oesd)    # Creates a core dump (if ulimit is configured)
+# or configure core dumps:
 ulimit -c unlimited
 echo '/var/log/oes/core.%p' | sudo tee /proc/sys/kernel/core_pattern
 
-# 7. Перезапуск (последний вариант)
+# 7. Restart (last resort)
 sudo systemctl restart oes-daemon
 ```
 
 ---
 
-## Диагностика производительности
+## Performance diagnostics
 
 ```powershell
-# Windows: производительность OES
+# Windows: OES performance
 
-# CPU и память процесса в реальном времени
+# CPU and memory of the process in real time
 while ($true) {
     $p = Get-Process -Name "oes" -ErrorAction SilentlyContinue
     if ($p) {
@@ -438,120 +438,120 @@ while ($true) {
     Start-Sleep -Seconds 2
 }
 
-# Или через Perfmon (System Monitor):
+# Or via Perfmon (System Monitor):
 # Add counters: Process\% Processor Time\oes
 #               Process\Working Set\oes
-#               .NET CLR Memory\# Gen 2 Collections (если есть managed код)
+#               .NET CLR Memory\# Gen 2 Collections (if managed code is present)
 ```
 
 ```bash
-# Linux: производительность daemon
+# Linux: daemon performance
 
-# perf — CPU profiling (если доступен)
+# perf - CPU profiling (if available)
 sudo perf top -p $(pgrep oesd)
 
-# strace — системные вызовы (слишком медленно для production)
+# strace - system calls (too slow for production)
 sudo strace -p $(pgrep oesd) -e trace=file,network -f 2>&1 | tail -100
 
-# Мониторинг в реальном времени
+# Real-time monitoring
 watch -n 1 "cat /proc/$(pgrep oesd)/status | grep -E 'VmRSS|Threads|voluntary'"
 ```
 
 ---
 
-## Чеклист: что проверить первым
+## Checklist: what to check first
 
 ```
-При любой проблеме с OES — проверить в этом порядке:
+For any OES problem - check in this order:
 
-Desktop — Windows:
-  1. □ Свежие crash dumps? (%APPDATA%\OES\CrashReports\)
-  2. □ Лог приложения? (%APPDATA%\OES\Logs\oes.log)
-  3. □ Event Viewer (Application)? Ошибки с Source="OES*"
-  4. □ Место на диске? (Disk Management)
-  5. □ Антивирус не блокирует? (временно отключить для теста)
-  6. □ Файл .fdb доступен и не повреждён?
-  7. □ Нужные DLL присутствуют? (Dependencies утилита)
-  8. □ Версия приложения актуальна? (Help → About)
+Desktop - Windows:
+  1. [ ] Fresh crash dumps? (%APPDATA%\OES\CrashReports\)
+  2. [ ] Application log? (%APPDATA%\OES\Logs\oes.log)
+  3. [ ] Event Viewer (Application)? Errors with Source="OES*"
+  4. [ ] Disk space? (Disk Management)
+  5. [ ] Antivirus not blocking? (temporarily disable to test)
+  6. [ ] .fdb file accessible and not corrupted?
+  7. [ ] Required DLLs present? (Dependencies tool)
+  8. [ ] App version up to date? (Help -> About)
 
-Desktop — macOS:
-  1. □ Логи: ~/Library/Logs/OES/ или Console.app
-  2. □ Данные: ~/Library/Application Support/OES/data/*.fdb
-  3. □ Место на диске: df -h
-  4. □ Процесс: pgrep -la oes
-  5. □ Crash reports: ~/Library/Logs/DiagnosticReports/
+Desktop - macOS:
+  1. [ ] Logs: ~/Library/Logs/OES/ or Console.app
+  2. [ ] Data: ~/Library/Application Support/OES/data/*.fdb
+  3. [ ] Disk space: df -h
+  4. [ ] Process: pgrep -la oes
+  5. [ ] Crash reports: ~/Library/Logs/DiagnosticReports/
 
-Desktop — Linux:
-  1. □ Логи: ~/.local/share/oes/logs/oes.log
-  2. □ Данные: ~/.local/share/oes/data/*.fdb
-  3. □ Место: df -h
+Desktop - Linux:
+  1. [ ] Logs: ~/.local/share/oes/logs/oes.log
+  2. [ ] Data: ~/.local/share/oes/data/*.fdb
+  3. [ ] Disk space: df -h
 
 Daemon/Server (Linux):
-  1. □ sudo systemctl status oes-daemon
-  2. □ sudo journalctl -u oes-daemon --since "1h ago"
-  3. □ Диск не полный? (df -h)
-  4. □ Память не исчерпана? (free -h)
-  5. □ gfix -validate: целостность БД
-  6. □ Права на файлы БД? (ls -la /var/lib/oes/)
-  7. □ Firebird запущен? (sudo systemctl status firebird3.0-guardian)
-  8. □ Файрвол не блокирует порт? (sudo ufw status)
+  1. [ ] sudo systemctl status oes-daemon
+  2. [ ] sudo journalctl -u oes-daemon --since "1h ago"
+  3. [ ] Disk not full? (df -h)
+  4. [ ] Memory not exhausted? (free -h)
+  5. [ ] gfix -validate: DB integrity
+  6. [ ] DB file permissions? (ls -la /var/lib/oes/)
+  7. [ ] Firebird running? (sudo systemctl status firebird3.0-guardian)
+  8. [ ] Firewall not blocking the port? (sudo ufw status)
 
 Daemon/Server (macOS):
-  1. □ sudo launchctl list | grep oes
-  2. □ tail -50 /var/log/oes/daemon.log
-  3. □ df -h
-  4. □ Firebird: brew services list | grep firebird
+  1. [ ] sudo launchctl list | grep oes
+  2. [ ] tail -50 /var/log/oes/daemon.log
+  3. [ ] df -h
+  4. [ ] Firebird: brew services list | grep firebird
 ```
 
 ---
 
-## Полезные команды для OES
+## Useful OES commands
 
 ```powershell
 # Windows
 
-# Открыть папку логов
+# Open the log folder
 explorer "$env:APPDATA\OES\Logs"
 
-# Открыть папку с crash dumps
+# Open the crash dumps folder
 explorer "$env:APPDATA\OES\CrashReports"
 
-# Хвост лога в реальном времени
+# Tail the log in real time
 Get-Content "$env:APPDATA\OES\Logs\oes.log" -Wait -Tail 20
 
-# Размер БД пользователя
+# User DB size
 Get-ChildItem "$env:APPDATA\OES" -Filter "*.fdb" -Recurse |
     Select-Object Name, @{N='Size MB';E={[math]::Round($_.Length/1MB,1)}}
 
-# Проверить подпись установленных файлов
+# Verify the signatures of installed files
 Get-ChildItem "C:\Program Files\OES" -Filter "*.exe" |
     ForEach-Object { Get-AuthenticodeSignature $_.FullName } |
     Select-Object Path, Status, SignerCertificate
 
-# Версия Firebird client
+# Firebird client version
 (Get-Item "C:\Program Files\OES\fbclient.dll").VersionInfo | Select-Object FileVersion
 ```
 
 ```bash
 # Linux
 
-# Хвост лога daemon
+# Tail daemon log
 sudo journalctl -u oes-daemon -f
 
-# Размер БД
+# DB size
 du -sh /var/lib/oes/data/
 
-# Статистика Firebird БД
+# Firebird DB statistics
 gstat -user SYSDBA -password "$FB_SYSDBA_PASSWORD" \
     -header /var/lib/oes/data/oes.fdb
 
-# Количество активных транзакций
+# Active transaction count
 gstat -user SYSDBA -password "$FB_SYSDBA_PASSWORD" \
     -record /var/lib/oes/data/oes.fdb | grep "transactions"
 
-# Открытые соединения к Firebird
+# Open Firebird connections
 netstat -an | grep 3050  # Firebird default port
 
-# Количество потоков daemon
+# Daemon thread count
 cat /proc/$(pgrep oesd)/status | grep Threads
 ```

@@ -1,6 +1,6 @@
-# Archive — pre-LINQ session handoffs
+# Archive — collapsed session handoffs
 
-These session handoffs (2026-04-30 .. 2026-05-09) have been collapsed
+These session handoffs (2026-04-30 .. 2026-05-12) have been collapsed
 into topic docs. Index here for the date-curious; if you need the raw
 day-by-day chronology, it's in git history before the trim.
 
@@ -13,11 +13,13 @@ day-by-day chronology, it's in git history before the trim.
 | 2026-05-07 | FB BINARY(20) parent-ref bind + hierarchy scroll fix | `paging-design.md`, `firebird-driver-hardening.md` |
 | 2026-05-08 | gtest scaffold + datavgen.cpp split | `BUILD.md` (test target) |
 | 2026-05-09 | Paging regression sweep + cell-mode polish + lambda kickoff | `paging-design.md`, `lambda.md` |
+| 2026-05-10 | CES default + iterator refactor + shutdown deadlocks + lambda-eval guards | `lambda.md`, `linq.md` |
+| 2026-05-11 | LINQ JOIN / GROUP BY (terminal), closure capture Phase A+B, AOT cache iterations | `linq.md`, `closure-capture.md` |
+| 2026-05-12 | Closure Phase D/F (chain LINQ unlocked), 31-op chain surface, typed-tag specialise, `group ... into g` continuation | `linq.md`, `closure-capture.md` |
 
-Active arc (2026-05-10 .. current) kept as full handoffs:
-- `session-2026-05-10.md` — CES default + lambdas + iterator refactor + LINQ Phase 1
-- `session-2026-05-11.md` — LINQ JOIN/GROUP, closure capture Phase A/B, ibValue union
-- `session-2026-05-12.md` — closure Phase D/F, LINQ chain complete (31 ops), typed-tag specialise
+Active session-handoff: `session-2026-05-25.md` (audit-log subsystem
++ adjacent fixes — still recent, not yet migrated). Collapse into
+topic docs when audit-log arc is stable.
 
 Decisions to remember (cross-cutting):
 - **Persistence layer** for AOT (`SerializeAOT`/`DeserializeAOT`, `byteCodeAOT.cpp`) landed

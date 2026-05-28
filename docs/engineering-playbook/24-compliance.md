@@ -1,51 +1,51 @@
-# 24. Комплаенс: LGPL, лицензирование, обработка данных
+# 24. Compliance: LGPL, Licensing, Data Handling
 
-## Когда применимо
+## When it applies
 
-| Требование | Когда нужно |
+| Requirement | When needed |
 |------------|------------|
-| **LGPL 2.1** | Всегда — OES распространяется под LGPL 2.1 |
-| **Лицензии зависимостей** | При добавлении любой сторонней библиотеки |
-| **GDPR** | Если OES собирает, передаёт или хранит данные граждан ЕС (краш-репорты, телеметрия, cloud-функции) |
-| **Корпоративные политики клиентов** | При поставке enterprise-клиентам (SOC 2, ISO 27001, внутренние policy) |
-| **Экспортный контроль** | При поставке в определённые страны (EAR, ITAR — консультироваться с юристами) |
+| **LGPL 2.1** | Always — OES is distributed under LGPL 2.1 |
+| **Dependency licenses** | When adding any third-party library |
+| **GDPR** | When OES collects, transmits, or stores EU citizen data (crash reports, telemetry, cloud features) |
+| **Customer corporate policies** | When shipping to enterprise customers (SOC 2, ISO 27001, internal policy) |
+| **Export control** | When shipping to certain countries (EAR, ITAR — consult lawyers) |
 
 ---
 
-## LGPL 2.1 — наша лицензия
+## LGPL 2.1 — our license
 
-### Что означает LGPL 2.1 для OES
+### What LGPL 2.1 means for OES
 
-LGPL 2.1 (Lesser General Public License) позволяет:
-- Коммерческим продуктам **использовать** OES как библиотеку без обязательства открывать свой код
-- Встраивать OES в проприетарные системы при соблюдении условий
+LGPL 2.1 (Lesser General Public License) allows:
+- Commercial products to **use** OES as a library without being required to open their source
+- Embedding OES into proprietary systems under its terms
 
-Обязательства при распространении:
-- Предоставлять исходный код OES (или ссылку на него)
-- Не ограничивать пользователей в замене библиотеки OES на модифицированную версию
-- Сохранять уведомления об авторских правах
+Obligations when distributing:
+- Provide the OES source code (or a link to it)
+- Don't restrict users from replacing the OES library with a modified version
+- Preserve copyright notices
 
-### Что нельзя делать с кодом OES
+### What you cannot do with OES code
 
 ```
-❌ ЗАПРЕЩЕНО:
-- Менять лицензию OES с LGPL 2.1 на проприетарную
-- Вшивать OES статически в closed-source DLL так, чтобы
-  пользователь не мог заменить OES на свою версию
-- Удалять уведомления об авторских правах из исходного кода
-- Делать "tivoization" — ограничивать установку пользователем
-  модифицированной версии OES на том же устройстве
+NOT ALLOWED:
+- Change the OES license from LGPL 2.1 to proprietary
+- Statically embed OES into a closed-source DLL so the user
+  cannot replace OES with their version
+- Remove copyright notices from the source code
+- "tivoization" — preventing the user from installing
+  a modified OES on the same device
 
-✅ РАЗРЕШЕНО:
-- Использовать OES в коммерческих продуктах (dynamic linking)
-- Создавать плагины с любой лицензией (они не являются частью OES)
-- Модифицировать OES для внутреннего использования
-- Продавать продукты, использующие OES
+ALLOWED:
+- Use OES in commercial products (dynamic linking)
+- Create plugins under any license (they are not part of OES)
+- Modify OES for internal use
+- Sell products that use OES
 ```
 
-### Уведомления в исходном коде
+### Source code notices
 
-Каждый новый файл `.cpp` / `.h` должен начинаться с:
+Every new `.cpp` / `.h` file must start with:
 
 ```cpp
 /*
@@ -66,48 +66,48 @@ LGPL 2.1 (Lesser General Public License) позволяет:
 
 ---
 
-## Лицензирование зависимостей
+## Dependency licensing
 
-### Совместимость лицензий с LGPL 2.1
+### License compatibility with LGPL 2.1
 
-| Лицензия зависимости | Совместима? | Условия |
+| Dependency license | Compatible? | Conditions |
 |---------------------|------------|---------|
-| MIT | ✅ Да | Сохранить уведомление |
-| BSD 2/3-Clause | ✅ Да | Сохранить уведомление |
-| Apache 2.0 | ✅ Да | Уведомить о Patents |
-| LGPL 2.1 | ✅ Да | Наш случай (wxWidgets) |
-| LGPL 3.0 | ⚠️ С осторожностью | Может усилить требования (см. примечание ниже) |
-| GPL 2.0 | ❌ Нет | Сделает весь OES GPL |
-| GPL 3.0 | ❌ Нет | То же самое |
-| AGPL | ❌ Нет | Наиболее ограничительна |
-| Проприетарная | ⚠️ Консультация с юристами | Зависит от условий |
+| MIT | Yes | Preserve the notice |
+| BSD 2/3-Clause | Yes | Preserve the notice |
+| Apache 2.0 | Yes | Acknowledge patents |
+| LGPL 2.1 | Yes | Our case (wxWidgets) |
+| LGPL 3.0 | Caution | May tighten requirements (see note below) |
+| GPL 2.0 | No | Makes all of OES GPL |
+| GPL 3.0 | No | Same |
+| AGPL | No | Most restrictive |
+| Proprietary | Consult lawyers | Depends on the terms |
 
-> **Примечание о LGPL 3.0:** Включает требования против «тивоизации» (anti-tivoization, §6 GPL 3.0 через LGPL 3.0). Это означает, что если OES или зависимость под LGPL 3.0 распространяется на устройстве с аппаратными ограничениями (например, подписанная прошивка, запрещающая замену библиотеки), пользователь должен получить возможность установить модифицированную версию. Для десктопного Windows/Linux-приложения это требование обычно выполняется автоматически (DLL можно заменить), но требует проверки для embedded или OEM-поставок. Проконсультируйтесь с юристами при поставке на устройства с закрытой платформой.
+> **Note on LGPL 3.0:** It includes anti-tivoization requirements (§6 GPL 3.0 inherited through LGPL 3.0). That means if OES or an LGPL 3.0 dependency ships on a device with hardware restrictions (e.g. signed firmware that prevents replacing the library), the user must be able to install a modified version. For a desktop Windows/Linux application this is usually satisfied automatically (the DLL can be replaced), but it must be checked for embedded or OEM shipments. Consult lawyers when shipping to closed-platform devices.
 
-> **Предупреждение о MySQL Connector/C:** Версия под GPL 2.0 **несовместима с LGPL 2.1**. Динамическое или статическое связывание GPL-библиотеки с кодом OES распространит GPL на весь дистрибутив, что нарушит лицензию OES. Если требуется поддержка MySQL, используйте **коммерческую лицензию MySQL Connector** (OEM-лицензия Oracle) или замените на MariaDB Connector/C (LGPL 2.1). Проверьте текущую версию в THIRD_PARTY_LICENSES.md перед каждым релизом.
+> **MySQL Connector/C warning:** The GPL 2.0 version is **incompatible with LGPL 2.1**. Dynamically or statically linking a GPL library with OES code spreads GPL across the entire distribution, breaking the OES license. If MySQL support is needed, use the **commercial MySQL Connector license** (Oracle OEM license) or switch to MariaDB Connector/C (LGPL 2.1). Verify the current version in THIRD_PARTY_LICENSES.md before every release.
 
-### Аудит лицензий при добавлении зависимости
+### License audit when adding a dependency
 
 ```bash
-# Перед добавлением новой библиотеки — проверить её лицензию
-# Инструменты для автоматического аудита (примеры):
+# Before adding a new library — check its license
+# Automated audit tools (examples):
 
-# FOSSA (SaaS, автоматический анализ)
+# FOSSA (SaaS, automated analysis)
 # licensee (Ruby gem)
 # liccheck (Python)
 
-# Ручная проверка: всегда читать LICENSE файл в репозитории
+# Manual check: always read the LICENSE file in the repo
 
-# Добавить в THIRD_PARTY_LICENSES.md:
-# | Библиотека | Версия | Лицензия | URL |
+# Add an entry to THIRD_PARTY_LICENSES.md:
+# | Library | Version | License | URL |
 ```
 
-### Обязательные записи в THIRD_PARTY_LICENSES.md
+### Required entries in THIRD_PARTY_LICENSES.md
 
 ```markdown
-# Сторонние компоненты OES
+# OES third-party components
 
-| Компонент | Версия | Лицензия | URL |
+| Component | Version | License | URL |
 |-----------|--------|----------|-----|
 | wxWidgets | 3.3.2 | LGPL 2.1 with exceptions | https://wxwidgets.org |
 | Firebird | 4.0 | IDPL / LGPL | https://firebirdsql.org |
@@ -118,106 +118,106 @@ LGPL 2.1 (Lesser General Public License) позволяет:
 | libcurl | 8.6 | curl License (MIT-like) | https://curl.se |
 ```
 
-> При добавлении новой зависимости — обязательно обновить этот файл.
+> When adding a new dependency — update this file.
 
 ---
 
-## Краш-репорты и телеметрия — GDPR
+## Crash reports and telemetry — GDPR
 
-### Что попадает в краш-репорт
+### What ends up in a crash report
 
-Windows minidump может содержать:
-- Стек вызовов и адреса памяти
-- Содержимое регистров и части памяти процесса
-- **Потенциально**: куски данных из буферов приложения — имена файлов, пути, фрагменты документов
+A Windows minidump may contain:
+- Call stack and memory addresses
+- Register contents and parts of the process memory
+- **Potentially**: chunks of data from app buffers — file names, paths, document fragments
 
-Это может быть персональными данными по GDPR.
+This can be personal data under GDPR.
 
-### Требования к сбору краш-репортов
+### Requirements for collecting crash reports
 
-#### 1. Явное согласие пользователя
+#### 1. Explicit user consent
 
 ```cpp
-// При первом запуске — показать диалог согласия
+// On first run — show the consent dialog
 class FirstRunDialog : public wxDialog {
     void ShowCrashReportingConsent() {
-        // Текст должен чётко объяснять:
-        // - Что собирается (стек вызовов, системная информация)
-        // - Куда отправляется (crash.oes-platform.com)
-        // - Как используется (только для исправления ошибок)
-        // - Можно отказаться в Settings → Privacy
+        // The text must clearly explain:
+        // - What is collected (call stack, system info)
+        // - Where it is sent (crash.oes-platform.com)
+        // - How it is used (only to fix bugs)
+        // - You can opt out in Settings → Privacy
     }
 };
 
-// Сохранить решение пользователя
+// Save the user's choice
 void AppSettings::SetCrashReportingEnabled(bool enabled) {
     m_config->Write("/Privacy/CrashReporting", enabled);
 }
 ```
 
-#### 2. Что НЕЛЬЗЯ отправлять в краш-репорте
+#### 2. What you must NOT send in a crash report
 
 ```cpp
-// При отправке краш-репорта — фильтровать чувствительные данные
+// When sending a crash report — filter out sensitive data
 struct CrashReportPayload {
     std::string oesVersion;
     std::string osVersion;      // "Windows 11 x64"
     std::string cpuArch;        // "x86_64"
     uint64_t    ramMb;
-    std::string stackTrace;     // Только адреса + символы, не данные
+    std::string stackTrace;     // Addresses + symbols only, no data
     std::string exceptionCode;
 
-    // НЕ ВКЛЮЧАТЬ:
-    // - Имена файлов проектов (могут содержать PII клиентов)
-    // - Строки подключения к БД
-    // - Пути пользователя (%USERPROFILE%\...)
-    // - Содержимое документов/отчётов
+    // DO NOT INCLUDE:
+    // - Project file names (may carry customer PII)
+    // - DB connection strings
+    // - User paths (%USERPROFILE%\...)
+    // - Document/report content
 };
 ```
 
-#### 3. Анонимизация перед отправкой
+#### 3. Anonymize before sending
 
 ```cpp
 std::string AnonymizePath(const std::string& path) {
-    // Заменяем %USERPROFILE%\... на <USER_HOME>\...
-    // Заменяем %COMPUTERNAME% на <HOSTNAME>
-    // Оставляем только последнюю компоненту пути
+    // Replace %USERPROFILE%\... with <USER_HOME>\...
+    // Replace %COMPUTERNAME% with <HOSTNAME>
+    // Keep only the last path component
     std::regex userPath(R"(C:\\Users\\[^\\]+\\)");
     return std::regex_replace(path, userPath, "<USER_HOME>\\");
 }
 ```
 
-### GDPR чеклист для краш-репортов и телеметрии
+### GDPR checklist for crash reports and telemetry
 
-- [ ] Пользователь явно дал согласие (opt-in, не opt-out)
-- [ ] Можно отключить в настройках без деградации функциональности
-- [ ] Краш-репорт не содержит содержимого пользовательских документов
-- [ ] Пути файлов анонимизированы
-- [ ] Строки подключения к БД не попадают в дамп
-- [ ] Хранение краш-репортов: не более 90 дней
-- [ ] Политика конфиденциальности содержит раздел о краш-репортах
-- [ ] Сервер краш-репортов находится в ЕС или имеет Data Processing Agreement (если в США — SCCs)
+- [ ] User has explicitly consented (opt-in, not opt-out)
+- [ ] Can be disabled in settings without functionality loss
+- [ ] Crash report doesn't contain user document content
+- [ ] File paths anonymized
+- [ ] DB connection strings don't end up in the dump
+- [ ] Retention: no longer than 90 days
+- [ ] Privacy policy includes a section on crash reports
+- [ ] Crash report server is in the EU or has a Data Processing Agreement (if in the US — SCCs)
 
 ---
 
-## Лицензирование самого OES (коммерческие клиенты)
+## Licensing OES itself (commercial customers)
 
-### Модели лицензирования OES
+### OES licensing models
 
-| Тип | Описание | Ограничения |
+| Type | Description | Restrictions |
 |-----|---------|------------|
-| LGPL Open Source | Бесплатно, исходный код открыт | Нужно соблюдать LGPL |
-| OEM / Commercial | Коммерческая лицензия для встраивания | По договору |
-| SaaS / Cloud | Хостинг OES как сервиса | По договору |
-| Enterprise Support | Поддержка + обновления | По договору |
+| LGPL Open Source | Free, source open | Must follow LGPL |
+| OEM / Commercial | Commercial license for embedding | Per agreement |
+| SaaS / Cloud | Hosting OES as a service | Per agreement |
+| Enterprise Support | Support + updates | Per agreement |
 
-### Защита лицензионных ключей
+### Protecting license keys
 
 ```cpp
-// Лицензионные ключи — НЕ хранить в коде, НЕ логировать
-// Правильное хранение на стороне приложения:
+// License keys — never store in code, never log
+// Proper application-side storage:
 
-// Windows: DPAPI (CryptProtectData) для шифрования ключа на диске
+// Windows: DPAPI (CryptProtectData) to encrypt the key on disk
 // Linux/macOS: keyring / Keychain Services
 
 class LicenseStorage {
@@ -233,71 +233,71 @@ private:
 #endif
 };
 
-// В коде приложения — НИКОГДА:
-// wxLogMessage("License key: %s", licenseKey); // ❌
-// printf("Activating with key: %s\n", key);    // ❌
+// In app code — NEVER:
+// wxLogMessage("License key: %s", licenseKey); // forbidden
+// printf("Activating with key: %s\n", key);    // forbidden
 ```
 
-### Аудит использования (для enterprise)
+### Usage audit (for enterprise)
 
 ```cpp
-// Для enterprise-лицензий с ограничением числа пользователей:
-// - Журнал активаций хранится локально (не в облаке без согласия)
-// - Данные в журнале: machine ID (хэш), дата активации, версия
-// - НЕ хранить: имя пользователя, email, IP без явного согласия
+// For enterprise licenses with a user count cap:
+// - Activation log stored locally (not in the cloud without consent)
+// - Log data: machine ID (hash), activation date, version
+// - DO NOT store: user name, email, IP without explicit consent
 ```
 
 ---
 
-## AI-инструменты и комплаенс
+## AI tools and compliance
 
-### Правила использования AI при разработке OES
+### Rules for using AI during OES development
 
-1. **НЕ отправлять в AI**: код с реальными строками подключения к БД клиентов, лицензионные ключи, данные из production-дампов
-2. **НЕ использовать** реальные данные клиентов в промптах — маскировать или заменять на тестовые
-3. **AI-сгенерированный код** обязательно проверять на:
-   - Наличие hardcoded секретов
-   - Неправильную обработку NULL / ошибок (типичная проблема C++)
-   - Нарушение LGPL (если AI предлагает скопировать GPL-код)
-   - Buffer overflow и другие C++ memory safety проблемы
-4. **GitHub Copilot / аналоги**: проверять что сгенерированный код не является дословной копией GPL-лицензированного кода (риск лицензионного загрязнения)
+1. **Do NOT send to AI**: code with real customer DB connection strings, license keys, data from production dumps
+2. **Do NOT use** real customer data in prompts — mask or replace with test data
+3. **AI-generated code** must always be reviewed for:
+   - Hardcoded secrets
+   - Wrong NULL / error handling (a common C++ issue)
+   - LGPL violation (if AI suggests copying GPL code)
+   - Buffer overflow and other C++ memory safety issues
+4. **GitHub Copilot / similar**: verify that the generated code is not a verbatim copy of GPL-licensed code (risk of license contamination)
 
 ```
-# ❌ Плохой промпт
-"Вот строка подключения к Firebird клиента Рога и Копыта:
- firebird://SYSDBA:masterkey@192.168.1.50/C:\db\rogakopyta.fdb
- Помоги отладить запрос..."
+# Bad prompt
+"Here is the Firebird connection string for customer Acme Corp:
+ firebird://SYSDBA:masterkey@192.168.1.50/C:\db\acme.fdb
+ Help me debug a query..."
 
-# ✅ Хороший промпт
-"Есть Firebird DSQL запрос с подозрительным поведением при NULL:
+# Good prompt
+"There is a Firebird DSQL query that misbehaves with NULL:
  SELECT * FROM ORDERS WHERE CUSTOMER_ID = ? AND STATUS = ?
- Второй параметр иногда NULL — как правильно обработать?"
+ The second parameter is sometimes NULL — how do we handle it correctly?"
 ```
 
 ---
 
-## Документы комплаенса
+## Compliance documents
 
-| Документ | Что содержит | Где хранить |
+| Document | Contents | Where to store |
 |----------|-------------|-------------|
-| LICENSE | Полный текст LGPL 2.1 | Корень репозитория |
-| THIRD_PARTY_LICENSES.md | Все сторонние компоненты и их лицензии | Корень репозитория |
-| Privacy Policy | Политика конфиденциальности (краш-репорты, телеметрия) | Сайт + `docs/legal/` |
-| End User License Agreement (EULA) | Условия для коммерческих клиентов | `docs/legal/` |
-| Data Processing Agreement (DPA) | С клиентами, обрабатывающими данные ЕС | Юр. отдел |
-| Incident Response Plan | Что делать при утечке данных из краш-репортов | `docs/security/` |
+| LICENSE | Full LGPL 2.1 text | Repository root |
+| THIRD_PARTY_LICENSES.md | All third-party components and their licenses | Repository root |
+| Privacy Policy | Privacy policy (crash reports, telemetry) | Website + `docs/legal/` |
+| End User License Agreement (EULA) | Terms for commercial customers | `docs/legal/` |
+| Data Processing Agreement (DPA) | With customers processing EU data | Legal department |
+| Incident Response Plan | What to do on a crash report data leak | `docs/security/` |
 
 ---
 
-## Чеклист комплаенса при выпуске релиза
+## Compliance checklist when shipping a release
 
-- [ ] `THIRD_PARTY_LICENSES.md` обновлён (все новые зависимости добавлены)
-- [ ] Все новые `.cpp` / `.h` файлы содержат LGPL заголовок
-- [ ] Нет зависимостей с GPL/AGPL лицензиями в публичном дистрибутиве
-- [ ] Лицензионный ключ не логируется в Application Event Log / файлы логов
-- [ ] Краш-репорты: строки подключения к БД не попадают в дамп
-- [ ] Диалог согласия на краш-репорты присутствует при первом запуске
-- [ ] `LICENSE` файл включён в инсталлятор (Inno Setup: `Source: "LICENSE"; DestDir: "{app}"`)
-- [ ] Исходный код версии тегирован в git и доступен (требование LGPL)
-- [ ] Code signing сертификат не истёк
-- [ ] EULA / Privacy Policy обновлены если добавлена новая функциональность сбора данных
+- [ ] `THIRD_PARTY_LICENSES.md` updated (every new dependency listed)
+- [ ] Every new `.cpp` / `.h` file carries the LGPL header
+- [ ] No GPL/AGPL-licensed dependencies in the public distribution
+- [ ] License keys don't get logged into the Application Event Log / log files
+- [ ] Crash reports: DB connection strings don't end up in the dump
+- [ ] First-run crash report consent dialog present
+- [ ] `LICENSE` file shipped with the installer (Inno Setup: `Source: "LICENSE"; DestDir: "{app}"`)
+- [ ] Source code of the version is tagged in git and available (LGPL requirement)
+- [ ] Code signing certificate not expired
+- [ ] EULA / Privacy Policy updated if new data collection functionality was added

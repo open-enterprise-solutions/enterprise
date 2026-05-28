@@ -1,326 +1,326 @@
-# 18. Инцидент-менеджмент
+# 18. Incident Management
 
-## Определение инцидента
+## Definition of an incident
 
-Инцидент — ситуация, когда приложение OES не запускается, крашится, теряет данные или критично не работает у пользователей. Плановые обновления, баги в тестовой среде и косметические проблемы без влияния на данные инцидентами не являются.
+An incident is a situation where OES does not start, crashes, loses data, or critically misbehaves on user machines. Planned updates, bugs in test environments, and cosmetic issues without data impact are not incidents.
 
 ---
 
-## Уровни инцидентов
+## Incident severity
 
-| Уровень | Описание | Примеры | Время реакции |
+| Severity | Description | Examples | Response time |
 |---------|----------|---------|---------------|
-| **P1 Critical** | Приложение не запускается или теряет данные | Crash при запуске, потеря/повреждение БД, невозможность сохранить документ | 30 минут |
-| **P2 High** | Ключевой модуль не работает, есть обходное решение | Не открывается дизайнер, не генерируются отчёты, не подключается к серверу БД | 2 часа |
-| **P3 Medium** | Баг влияет на удобство работы, но не блокирует | Медленная загрузка данных, некорректный вывод в одном отчёте, ошибка в расчёте | 1 рабочий день |
-| **P4 Low** | Косметический баг, минимальное влияние | Опечатка в меню, некорректное выравнивание, неправильная иконка | Следующий спринт |
+| **P1 Critical** | App won't start or data is lost | Crash at startup, DB loss/corruption, cannot save document | 30 minutes |
+| **P2 High** | A key module is broken, workaround exists | Designer won't open, reports won't generate, DB server connection fails | 2 hours |
+| **P3 Medium** | Bug hurts usability but isn't blocking | Slow data loading, wrong output in one report, calculation error | 1 working day |
+| **P4 Low** | Cosmetic bug, minimal impact | Menu typo, misalignment, wrong icon | Next sprint |
 
 ---
 
-## Процесс реагирования
+## Response process
 
-### 1. Обнаружение
+### 1. Detection
 
-Инцидент может быть обнаружен:
-- Пользователем (обращение в поддержку, сообщение в чат команды)
-- Разработчиком при тестировании или ревью
-- Автоматически — через системный журнал Windows или crash dump
+An incident can be detected by:
+- A user (support contact, message in the team chat)
+- A developer during testing or review
+- Automatically — through the Windows Event Log or a crash dump
 
-### 2. Оповещение команды
-
-```
-Формат сообщения в Telegram/чат команды:
-
-ИНЦИДЕНТ P1: OES крашится при открытии документа
-Что: Access violation при открытии документа с секциями > 100
-Версия: OES 2.4.3
-ОС: Windows 10 Pro 22H2
-Когда: обнаружено в 10:15
-Кто смотрит: @developer_name
-Дамп: прикреплён / путь к .dmp файлу
-```
-
-### 3. Эскалация
+### 2. Team notification
 
 ```
-0-30 мин   → Разработчик диагностирует самостоятельно
-30-60 мин  → Эскалация тимлиду, подключается второй разработчик
-60+ мин    → Эскалация руководству (для P1)
-Потеря данных → Немедленная эскалация руководству + остановка работы с файлами
+Format of a message in Telegram / team chat:
+
+INCIDENT P1: OES crashes when opening a document
+What: Access violation when opening a document with sections > 100
+Version: OES 2.4.3
+OS: Windows 10 Pro 22H2
+When: detected at 10:15
+Who's on it: @developer_name
+Dump: attached / path to .dmp file
 ```
 
-### 4. Диагностика
-
-Порядок проверки для desktop-приложения:
+### 3. Escalation
 
 ```
-1. Версия приложения и ОС
-   — Меню Справка → О программе
+0-30 min   → Developer diagnoses on their own
+30-60 min  → Escalate to tech lead, bring in a second developer
+60+ min    → Escalate to management (for P1)
+Data loss  → Immediate escalation to management + halt file operations
+```
+
+### 4. Diagnostics
+
+Order of checks for a desktop application:
+
+```
+1. Application version and OS
+   — Help → About menu
    — winver, Windows 10/11?
 
 2. Crash dump
    — %APPDATA%\OES\logs\crash_YYYYMMDD_HHMMSS.dmp
-   — Открыть в WinDbg / Visual Studio: Debug → Open Dump File
+   — Open in WinDbg / Visual Studio: Debug → Open Dump File
 
-3. Лог-файл приложения
+3. Application log file
    — %APPDATA%\OES\logs\oes.log
-   — Найти последние строки перед инцидентом
+   — Find the last lines before the incident
 
-4. Состояние базы данных
-   — Firebird: gfix -validate -full -user SYSDBA -password masterkey путь_к_файлу.fdb
-   — Проверить целостность файла БД
-   — Посмотреть последние операции в логе
+4. Database state
+   — Firebird: gfix -validate -full -user SYSDBA -password masterkey path_to_file.fdb
+   — Check DB file integrity
+   — Inspect recent operations in the log
 
-5. Состояние системы
-   — Свободное место на диске
-   — Антивирус заблокировал файл?
-   — Права доступа к директории %APPDATA%\OES
+5. System state
+   — Free disk space
+   — Antivirus blocked a file?
+   — File system permissions on %APPDATA%\OES
 
-6. Воспроизведение
-   — Воспроизвести на чистой машине или VM
-   — Минимальные шаги для воспроизведения
+6. Reproduction
+   — Reproduce on a clean machine or VM
+   — Minimal reproduction steps
 ```
 
-### 5. Сбор диагностики от пользователя
+### 5. Collecting diagnostics from the user
 
 ```
-Попросить пользователя предоставить:
-1. Файл: %APPDATA%\OES\logs\oes.log
-2. Файл: %APPDATA%\OES\logs\crash_*.dmp (если есть)
-3. Версию приложения (Справка → О программе)
-4. Версию ОС и Visual C++ Redistributable
-5. Точные шаги для воспроизведения
-6. Скриншот или видео ошибки
+Ask the user to provide:
+1. File: %APPDATA%\OES\logs\oes.log
+2. File: %APPDATA%\OES\logs\crash_*.dmp (if any)
+3. App version (Help → About)
+4. OS version and Visual C++ Redistributable version
+5. Exact reproduction steps
+6. Screenshot or video of the error
 ```
 
-### 6. Откат к предыдущей версии
+### 6. Rollback to the previous version
 
-Если быстро починить не получается — развернуть предыдущий установщик:
+If a fast fix is impossible — deploy the previous installer:
 
 ```
-1. Остановить работу пользователя с проблемной версией
-2. Сделать резервную копию файлов пользователя:
+1. Stop the user from working with the broken version
+2. Back up the user's files:
    — %APPDATA%\OES\config\
-   — Файл БД (указан в настройках)
-3. Удалить текущую версию через "Программы и компоненты"
-4. Установить предыдущую версию из архива установщиков
-5. Проверить что предыдущая версия работает корректно
-6. Уведомить пользователя о восстановлении
+   — DB file (path from configuration)
+3. Uninstall the current version through "Programs and Features"
+4. Install the previous version from the installer archive
+5. Verify the previous version works
+6. Notify the user of recovery
 ```
 
-### 7. Уведомление о восстановлении
+### 7. Recovery notification
 
 ```
-RESOLVED: OES крашится при открытии документа
-Причина: переполнение буфера при секциях > 100 строк
-Решение: откат на версию 2.4.2
-Время простоя: 10:15 - 11:40
-Fix: будет в версии 2.4.4, ожидаемый срок: 2 дня
+RESOLVED: OES crashes when opening a document
+Cause: buffer overflow on sections > 100 rows
+Fix: rollback to version 2.4.2
+Downtime: 10:15 - 11:40
+Permanent fix: in version 2.4.4, ETA: 2 days
 ```
 
 ---
 
-## Анализ дампов (Crash Dump Analysis)
+## Crash dump analysis
 
-### WinDbg — быстрый анализ
+### WinDbg — quick analysis
 
 ```
-1. Открыть WinDbg (x64)
-2. File → Open Crash Dump → выбрать .dmp файл
-3. Загрузить символы (если есть .pdb):
+1. Open WinDbg (x64)
+2. File → Open Crash Dump → choose the .dmp file
+3. Load symbols (if .pdb is available):
    .sympath+ C:\OES\symbols\
    .reload
 
-4. Стек вызовов на момент краша:
+4. Call stack at the moment of the crash:
    !analyze -v
-   k         — стек текущего потока
-   ~*k       — стек всех потоков
+   k         — current thread stack
+   ~*k       — all threads stacks
 
-5. Найти причину:
-   — "Access violation" → нулевой указатель или выход за границы массива
-   — "Stack overflow"   → бесконечная рекурсия
-   — "Heap corruption"  → двойное освобождение или выход за границы буфера
+5. Identify the cause:
+   — "Access violation" → null pointer or out-of-bounds access
+   — "Stack overflow"   → infinite recursion
+   — "Heap corruption"  → double-free or buffer overflow
 ```
 
-### Visual Studio — открытие дампа
+### Visual Studio — opening a dump
 
 ```
-File → Open → File → выбрать .dmp
-Debug → Start Debugging (F5) — запустится на моменте краша
-Вкладки: Call Stack, Locals, Autos — анализ состояния
+File → Open → File → choose the .dmp
+Debug → Start Debugging (F5) — starts at the crash point
+Tabs: Call Stack, Locals, Autos — inspect state
 ```
 
-### Включение символов в release-сборке
+### Enabling symbols in release builds
 
 ```
-В проекте MSBuild (.vcxproj):
+In the MSBuild project (.vcxproj):
 Configuration Properties → Linker → Debugging:
   Generate Debug Info: Yes (/DEBUG)
   Generate Program Database File: $(OutDir)$(TargetName).pdb
 
-При релизе: хранить .pdb файлы в защищённом месте рядом с установщиком
-Символьный сервер: можно настроить локальный Symbol Server
+On release: keep .pdb files in a secure location next to the installer
+Symbol server: a local Symbol Server can be configured
 ```
 
 ---
 
-## Постмортем
+## Postmortems
 
-После каждого P1 и P2 инцидента — написать постмортем в течение 48 часов. Хранить в `docs/postmortems/`.
+After every P1 and P2 incident — write a postmortem within 48 hours. Keep them in `docs/postmortems/`.
 
-### Шаблон постмортема
+### Postmortem template
 
 ```markdown
-# Постмортем: [Краткое описание инцидента]
+# Postmortem: [Brief incident description]
 
-**Дата:** 2026-04-10
-**Уровень:** P1
-**Длительность:** 85 минут (10:15 - 11:40)
-**Версия OES:** 2.4.3
-**Автор:** Имя Фамилия
+**Date:** 2026-04-10
+**Severity:** P1
+**Duration:** 85 minutes (10:15 - 11:40)
+**OES version:** 2.4.3
+**Author:** Name Surname
 
-## Что случилось
+## What happened
 
-OES крашился с Access Violation при открытии документов,
-содержащих более 100 строк в секциях. У 3 пользователей не удалось
-продолжить работу.
+OES crashed with Access Violation when opening documents
+that contained more than 100 rows in sections. Three users were
+unable to continue working.
 
 ## Timeline
 
-- 10:10 — Выпущена версия 2.4.3 с новым рендерером секций
-- 10:15 — Пользователь сообщил об ошибке при открытии документа
-- 10:18 — Получен лог и дамп
-- 10:35 — Воспроизведено локально на документе с 120 строками
-- 10:50 — Локализована причина: выход за границы массива в SectionRenderer
-- 11:00 — Принято решение откатиться на 2.4.2
-- 11:20 — Пользователю установлена версия 2.4.2
-- 11:40 — Подтверждено что работает, инцидент закрыт
+- 10:10 — Released 2.4.3 with the new section renderer
+- 10:15 — User reported an error opening a document
+- 10:18 — Received log and dump
+- 10:35 — Reproduced locally on a document with 120 rows
+- 10:50 — Root cause located: array out-of-bounds in SectionRenderer
+- 11:00 — Decided to roll back to 2.4.2
+- 11:20 — Installed version 2.4.2 for the user
+- 11:40 — Confirmed working, incident closed
 
 ## Root Cause
 
-В `SectionRenderer::RenderRows()` размер буфера был выделен как
-`new wxString[100]` (захардкоженный лимит). При обработке документа
-с 120+ строками происходил выход за границы буфера → Access Violation.
+In `SectionRenderer::RenderRows()` the buffer size was allocated as
+`new wxString[100]` (a hardcoded limit). Processing a document with
+120+ rows caused a buffer overrun → Access Violation.
 
-Причина появления: рефакторинг метода в 2.4.3 с целью оптимизации,
-но жёсткий лимит не был убран из старого кода.
+How it slipped in: a 2.4.3 refactor for optimization, but the hard limit
+was not removed from the old code.
 
-## Что сделать, чтобы не повторилось
+## Prevent recurrence
 
-1. [ ] Заменить статический буфер на std::vector<wxString> — @developer — до 12.04
-2. [ ] Добавить интеграционный тест с документом > 100 строк — @developer — до 13.04
-3. [ ] Добавить Address Sanitizer в Debug-сборку CI — @developer — до 14.04
-4. [ ] Нагрузочное тестирование перед релизом (документы > 500 строк) — до 16.04
+1. [ ] Replace the static buffer with std::vector<wxString> — @developer — by 12.04
+2. [ ] Add an integration test with a document > 100 rows — @developer — by 13.04
+3. [ ] Enable Address Sanitizer in the Debug CI build — @developer — by 14.04
+4. [ ] Stress-test before release (documents > 500 rows) — by 16.04
 
-## Уроки
+## Lessons
 
-- Magic numbers в размерах буферов — антипаттерн, использовать std::vector
-- Интеграционные тесты нужны для граничных значений (1, 100, 1000 строк)
-- .pdb файлы для релизных сборок сократили время диагностики с часов до минут
+- Magic numbers in buffer sizes are an anti-pattern, use std::vector
+- Integration tests are needed for boundary values (1, 100, 1000 rows)
+- .pdb files for release builds cut diagnosis time from hours to minutes
 ```
 
-### Правила постмортема
+### Postmortem rules
 
-- Без обвинений — ищем системные причины, не виновных
-- Action items с конкретными ответственными и дедлайнами
-- Фокус на предотвращении — что изменить в процессах и коде
-- Хранить в `docs/postmortems/YYYYMMDD_description.md`
+- No blame — look for systemic causes, not culprits
+- Action items with specific owners and deadlines
+- Focus on prevention — what to change in processes and code
+- Store in `docs/postmortems/YYYYMMDD_description.md`
 
 ---
 
 ## Runbooks
 
-Для типичных инцидентов — документ "что делать". Хранить в `docs/runbooks/`.
+For common incidents — a "what to do" document. Keep them in `docs/runbooks/`.
 
-### Runbook: OES не запускается
+### Runbook: OES won't start
 
 ```markdown
-# OES не запускается
+# OES won't start
 
-## Симптомы
-- Окно не появляется
-- Иконка мелькает в панели задач и пропадает
-- Пользователь сообщает об ошибке при запуске
+## Symptoms
+- Window doesn't appear
+- Icon flashes in the taskbar and vanishes
+- User reports an error on startup
 
-## Диагностика
+## Diagnostics
 
-1. Проверить лог запуска:
+1. Check the startup log:
    %APPDATA%\OES\logs\oes.log
-   → Найти последние строки, сообщение об ошибке
+   → Find the last lines, the error message
 
-2. Проверить дамп:
+2. Check the dump:
    %APPDATA%\OES\logs\crash_*.dmp
-   → Открыть в WinDbg: !analyze -v
+   → Open in WinDbg: !analyze -v
 
-3. Проверить наличие VC Redistributable:
-   Панель управления → Программы → "Microsoft Visual C++ Redistributable"
-   → Нужен x64 2017 или новее
-   → Если нет: установить из папки дистрибутива OES\redist\
+3. Check the VC Redistributable:
+   Control Panel → Programs → "Microsoft Visual C++ Redistributable"
+   → Need x64 2017 or newer
+   → If missing: install from the OES\redist\ folder of the distribution
 
-4. Проверить целостность БД (если лог указывает на ошибку БД):
+4. Check DB integrity (if the log points to a DB error):
    Firebird:
-     gfix -validate -full -user SYSDBA -password masterkey путь_к_файлу.fdb
+     gfix -validate -full -user SYSDBA -password masterkey path_to_file.fdb
    SQLite:
-     sqlite3 путь_к_файлу.db "PRAGMA integrity_check;"
+     sqlite3 path_to_file.db "PRAGMA integrity_check;"
 
-5. Сбросить настройки (если всё остальное не помогло):
-   Переименовать %APPDATA%\OES\config\ в config.bak
-   Запустить OES — создаст конфигурацию по умолчанию
+5. Reset settings (when nothing else helps):
+   Rename %APPDATA%\OES\config\ to config.bak
+   Launch OES — it will create the default configuration
 
-## Эскалация
-Если пункты 1-5 не помогли → передать дамп + лог разработчику
+## Escalation
+If steps 1-5 did not help → forward the dump + log to a developer
 ```
 
-### Runbook: Повреждена база данных Firebird
+### Runbook: Firebird database is corrupt
 
 ```markdown
-# Повреждена база данных Firebird
+# Firebird database is corrupt
 
-## Симптомы
-- Ошибка "database file appears corrupt" в логе
-- Не открываются документы
-- OES зависает при подключении к БД
+## Symptoms
+- "database file appears corrupt" error in the log
+- Documents won't open
+- OES hangs when connecting to the DB
 
-## Шаги
+## Steps
 
-1. Остановить OES у всех пользователей (важно!)
-2. Сделать копию файла .fdb: xcopy original.fdb original.fdb.bak
-3. Проверить и исправить:
-   gfix -validate -full -mend путь\к\файлу.fdb -user SYSDBA -password masterkey
-4. Если gfix не помог — восстановить из бэкапа:
-   gbak -c путь\к\бэкапу.fbk путь\к\восстановленному.fdb -user SYSDBA -password masterkey
-5. Проверить целостность восстановленной БД:
-   gbak -b -v путь\к\восстановленному.fdb путь\к\verify.fbk -user SYSDBA -password masterkey
+1. Stop OES for every user (important!)
+2. Make a copy of the .fdb file: xcopy original.fdb original.fdb.bak
+3. Validate and repair:
+   gfix -validate -full -mend path\to\file.fdb -user SYSDBA -password masterkey
+4. If gfix didn't help — restore from backup:
+   gbak -c path\to\backup.fbk path\to\restored.fdb -user SYSDBA -password masterkey
+5. Verify integrity of the restored DB:
+   gbak -b -v path\to\restored.fdb path\to\verify.fbk -user SYSDBA -password masterkey
 
-## Контакты
-Разработчик: @developer (Telegram)
+## Contacts
+Developer: @developer (Telegram)
 ```
 
 ---
 
-## Мониторинг (для системных администраторов)
+## Monitoring (for system administrators)
 
-### Что мониторить на рабочих станциях с OES
+### What to monitor on OES workstations
 
-| Событие | Инструмент | Действие |
+| Event | Tool | Action |
 |---------|-----------|----------|
-| Crash dump появился | Windows Task Scheduler / скрипт | Оповестить разработчика |
-| Ошибки в логе OES | Задание по расписанию | Просмотреть ежедневно |
-| Объём файла БД растёт аномально | Мониторинг диска | Проверить наличие дублирования |
-| Файл БД не обновляется > 24ч | Скрипт проверки дат | Проверить запускается ли OES |
+| Crash dump appeared | Windows Task Scheduler / script | Notify the developer |
+| Errors in the OES log | Scheduled task | Review daily |
+| DB file size grows abnormally | Disk monitoring | Check for duplication |
+| DB file not updated > 24h | Date-check script | Verify OES is being launched |
 
-### Мониторинг дампов (Windows Event Log + скрипт)
+### Dump monitoring (Windows Event Log + script)
 
 ```powershell
-# check_crashes.ps1 — запускать по расписанию
+# check_crashes.ps1 — run on a schedule
 $dumpDir = "$env:APPDATA\OES\logs"
 $dumps = Get-ChildItem $dumpDir -Filter "crash_*.dmp" |
          Where-Object { $_.CreationTime -gt (Get-Date).AddDays(-1) }
 
 if ($dumps.Count -gt 0) {
-    $msg = "OES crash dump обнаружен на $env:COMPUTERNAME:`n"
+    $msg = "OES crash dump detected on $env:COMPUTERNAME:`n"
     $msg += ($dumps | Select-Object -ExpandProperty Name) -join "`n"
-    # Отправить уведомление (email, Teams, Telegram)
+    # Send a notification (email, Teams, Telegram)
     Write-EventLog -LogName Application -Source "OES Monitor" `
         -EventId 1001 -EntryType Warning -Message $msg
 }
@@ -328,26 +328,26 @@ if ($dumps.Count -gt 0) {
 
 ---
 
-## Чеклист реагирования на инцидент
+## Incident response checklist
 
-### При получении сообщения об ошибке
+### When receiving an error report
 
-- [ ] Определить уровень (P1-P4) по описанию
-- [ ] Назначить ответственного за диагностику
-- [ ] Запросить у пользователя: лог + дамп + шаги воспроизведения + версию
-- [ ] Попытаться воспроизвести локально
-- [ ] Уведомить команду о ходе диагностики
+- [ ] Determine the severity (P1-P4) from the description
+- [ ] Assign someone to diagnose
+- [ ] Ask the user for: log + dump + reproduction steps + version
+- [ ] Try to reproduce locally
+- [ ] Keep the team posted on diagnostics
 
-### При невозможности быстро починить
+### When a quick fix is impossible
 
-- [ ] Принять решение об откате версии
-- [ ] Помочь пользователю установить предыдущую версию
-- [ ] Убедиться, что данные пользователя не повреждены
-- [ ] Уведомить команду о статусе
+- [ ] Decide to roll back the version
+- [ ] Help the user install the previous version
+- [ ] Make sure user data is intact
+- [ ] Update the team on status
 
-### После закрытия инцидента
+### After incident closure
 
-- [ ] Написать постмортем (для P1 и P2)
-- [ ] Создать задачу с фиксом в трекере задач
-- [ ] Добавить тест для воспроизведения бага
-- [ ] Обновить runbook если диагностика выявила новые паттерны
+- [ ] Write a postmortem (for P1 and P2)
+- [ ] Open a fix task in the tracker
+- [ ] Add a test that reproduces the bug
+- [ ] Update the runbook if diagnostics revealed new patterns

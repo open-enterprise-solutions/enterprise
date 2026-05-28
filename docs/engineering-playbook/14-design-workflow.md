@@ -1,56 +1,56 @@
-# 14. Дизайн UI и пользовательский интерфейс
+# 14. UI Design and Workflow
 
-## Инструменты дизайна для wxWidgets
+## Design tools for wxWidgets
 
-### Когда использовать графические инструменты
+### When to use graphical tools
 
-| Сценарий | Инструмент |
+| Scenario | Tool |
 |----------|-----------|
-| Прототип нового диалога / окна | wxFormBuilder или ручной эскиз |
-| Сложная компоновка с вложенными Sizer'ами | wxFormBuilder (генерирует C++ код) |
-| Таблицы и гриды данных | wxGrid + ручная настройка |
-| Дизайн кастомного виджета | Эскиз на бумаге / Figma для концепции |
-| Отчёты и печатные формы | Дизайнер отчётов OES (встроенный) |
+| Prototype of a new dialog / window | wxFormBuilder or hand sketch |
+| Complex layout with nested sizers | wxFormBuilder (emits C++ code) |
+| Data tables and grids | wxGrid + manual tweaks |
+| Custom widget design | Sketch on paper / Figma for concept |
+| Reports and printed forms | OES report designer (built-in) |
 
-**Правило:** для стандартных диалогов — wxFormBuilder. Для сложных пользовательских виджетов — сначала эскиз + обсуждение, затем код.
+**Rule:** for standard dialogs — wxFormBuilder. For complex custom widgets — sketch first, discuss, then code.
 
 ---
 
-## Дизайн-система OES
+## OES design system
 
-### Принципы
+### Principles
 
-1. **Нативность** — UI должен выглядеть нативно на целевой платформе. Не имитировать стили других ОС.
-2. **Консистентность** — одинаковые отступы, размеры шрифтов, поведение кнопок во всём приложении.
-3. **Доступность** — поддержка клавиатурной навигации, корректные Tab-порядки, метки для всех контролов.
-4. **Производительность** — виджеты создаются один раз, обновляется только содержимое (не пересоздание).
+1. **Native look** — UI must look native on the target platform. Don't imitate other OS styles.
+2. **Consistency** — same margins, font sizes, button behaviour throughout the app.
+3. **Accessibility** — keyboard navigation support, correct Tab order, labels for every control.
+4. **Performance** — widgets are created once, only the content is updated (no recreation).
 
-### Токены дизайна (C++ константы)
+### Design tokens (C++ constants)
 
 ```cpp
-// ui_constants.h — единое место для всех визуальных констант
+// ui_constants.h — single place for all visual constants
 
 namespace OesUI
 {
-    // Отступы
+    // Margins
     constexpr int MARGIN_SMALL  =  4;
     constexpr int MARGIN_NORMAL =  8;
     constexpr int MARGIN_LARGE  = 16;
     constexpr int PADDING_DIALOG = 12;
 
-    // Размеры кнопок
-    // Примечание: constexpr wxSize требует wxWidgets 3.2+.
-    // При использовании более ранних версий замените constexpr на const.
+    // Button sizes
+    // Note: constexpr wxSize requires wxWidgets 3.2+.
+    // If using an earlier version replace constexpr with const.
     constexpr wxSize BTN_SIZE_NORMAL  { 90, 28 };
     constexpr wxSize BTN_SIZE_WIDE    { 120, 28 };
     constexpr wxSize BTN_SIZE_ICON    { 28, 28 };
 
-    // Минимальные размеры диалогов
+    // Minimum dialog sizes
     constexpr wxSize DLG_MIN_SMALL    { 320, 200 };
     constexpr wxSize DLG_MIN_NORMAL   { 480, 320 };
     constexpr wxSize DLG_MIN_LARGE    { 640, 480 };
 
-    // Шрифты
+    // Fonts
     inline wxFont GetMonoFont(int ptSize = 9)
     {
         return wxFont(ptSize, wxFONTFAMILY_TELETYPE,
@@ -65,7 +65,7 @@ namespace OesUI
         return f;
     }
 
-    // Цвета (используем системные цвета где возможно)
+    // Colours (use system colours where possible)
     inline wxColour GetErrorColour()   { return wxColour(200, 50, 50);   }
     inline wxColour GetWarningColour() { return wxColour(200, 130, 0);   }
     inline wxColour GetSuccessColour() { return wxColour(40, 140, 60);   }
@@ -77,30 +77,30 @@ namespace OesUI
 }
 ```
 
-### Типографика
+### Typography
 
-| Применение | Настройка |
+| Usage | Setting |
 |-----------|-----------|
-| Основной текст | `wxSYS_DEFAULT_GUI_FONT` (системный) |
-| Заголовки диалогов | системный шрифт + `wxFONTWEIGHT_BOLD` |
-| Код, SQL, скрипты | `wxFONTFAMILY_TELETYPE`, pt 9 |
-| Метки колонок таблиц | системный шрифт + `wxFONTWEIGHT_BOLD` |
-| Подсказки / мелкий текст | системный шрифт - 1pt |
+| Body text | `wxSYS_DEFAULT_GUI_FONT` (system) |
+| Dialog titles | system font + `wxFONTWEIGHT_BOLD` |
+| Code, SQL, scripts | `wxFONTFAMILY_TELETYPE`, pt 9 |
+| Table column labels | system font + `wxFONTWEIGHT_BOLD` |
+| Hints / small text | system font - 1pt |
 
 ---
 
-## Компоновка (Layout)
+## Layout
 
-### Обязательное использование Sizer'ов
+### Mandatory use of sizers
 
-**Никогда** не устанавливать абсолютные позиции виджетов (`wxPoint`, `wxSize` в конструкторе). Всегда использовать Sizer'ы — это обеспечивает корректное масштабирование при разных DPI и размерах шрифта.
+**Never** use absolute widget positions (`wxPoint`, `wxSize` in the constructor). Always use sizers — that's what makes layouts scale correctly across different DPIs and font sizes.
 
 ```cpp
-// Правильно — через Sizer
+// Right — through a sizer
 wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
 wxBoxSizer* formSizer = new wxBoxSizer(wxHORIZONTAL);
-formSizer->Add(new wxStaticText(this, wxID_ANY, "Наименование:"),
+formSizer->Add(new wxStaticText(this, wxID_ANY, "Name:"),
                0, wxALIGN_CENTER_VERTICAL | wxRIGHT, OesUI::MARGIN_NORMAL);
 formSizer->Add(m_nameCtrl, 1, wxEXPAND);
 
@@ -110,14 +110,14 @@ mainSizer->Add(CreateButtonSizer(wxOK | wxCANCEL),
 
 SetSizerAndFit(mainSizer);
 
-// Неправильно — абсолютное позиционирование
+// Wrong — absolute positioning
 m_nameCtrl = new wxTextCtrl(this, wxID_ANY, "", wxPoint(100, 20), wxSize(200, 24));
 ```
 
-### Стандартная структура диалога
+### Standard dialog structure
 
 ```cpp
-// Шаблон диалога OES
+// OES dialog template
 class OesExampleDialog : public wxDialog
 {
 public:
@@ -137,13 +137,13 @@ private:
     {
         wxBoxSizer* root = new wxBoxSizer(wxVERTICAL);
 
-        // Контентная область
+        // Content area
         wxPanel* content = new wxPanel(this);
         wxBoxSizer* cs = new wxBoxSizer(wxVERTICAL);
-        // ... добавить контролы в cs
+        // ... add controls into cs
         content->SetSizer(cs);
 
-        // Разделитель + кнопки
+        // Separator + buttons
         root->Add(content, 1, wxEXPAND | wxALL, OesUI::PADDING_DIALOG);
         root->Add(new wxStaticLine(this), 0, wxEXPAND | wxLEFT | wxRIGHT,
                   OesUI::PADDING_DIALOG);
@@ -168,13 +168,13 @@ private:
 
 ---
 
-## Стандартные паттерны UI
+## Standard UI patterns
 
-> **Примечание по i18n:** строковые литералы в примерах ниже написаны напрямую для наглядности.
-> В production-коде все отображаемые пользователю строки должны быть обёрнуты в `_()`:
-> `wxMessageBox(_("Поле 'Наименование' обязательно для заполнения."), ...)`.
+> **i18n note:** the string literals in the examples below are written inline for clarity.
+> In production code every user-visible string must be wrapped in `_()`:
+> `wxMessageBox(_("The 'Name' field is required."), ...)`.
 
-### Формы с валидацией
+### Forms with validation
 
 ```cpp
 bool OesDocumentDialog::Validate()
@@ -182,16 +182,16 @@ bool OesDocumentDialog::Validate()
     wxString name = m_nameCtrl->GetValue().Trim();
     if (name.IsEmpty())
     {
-        wxMessageBox("Поле 'Наименование' обязательно для заполнения.",
-                     "Ошибка", wxOK | wxICON_WARNING, this);
+        wxMessageBox("The 'Name' field is required.",
+                     "Error", wxOK | wxICON_WARNING, this);
         m_nameCtrl->SetFocus();
         return false;
     }
 
     if (name.Length() > 255)
     {
-        wxMessageBox("Наименование не должно превышать 255 символов.",
-                     "Ошибка", wxOK | wxICON_WARNING, this);
+        wxMessageBox("Name must not exceed 255 characters.",
+                     "Error", wxOK | wxICON_WARNING, this);
         m_nameCtrl->SetFocus();
         return false;
     }
@@ -200,15 +200,15 @@ bool OesDocumentDialog::Validate()
 }
 ```
 
-### Длительные операции: wxProgressDialog
+### Long-running operations: wxProgressDialog
 
 ```cpp
 void OesReportView::ExportToFile(const wxString& path)
 {
     wxProgressDialog progress(
-        "Экспорт",
-        "Подготовка данных...",
-        100,  // максимум
+        "Export",
+        "Preparing data...",
+        100,  // max
         this,
         wxPD_APP_MODAL | wxPD_AUTO_HIDE | wxPD_ELAPSED_TIME | wxPD_CAN_ABORT
     );
@@ -216,20 +216,20 @@ void OesReportView::ExportToFile(const wxString& path)
     for (size_t i = 0; i < m_rows.size(); ++i)
     {
         if (!progress.Update((int)(i * 100 / m_rows.size()),
-                wxString::Format("Строка %d из %d...", (int)(i+1), (int)m_rows.size())))
+                wxString::Format("Row %d of %d...", (int)(i+1), (int)m_rows.size())))
         {
-            // Пользователь нажал Отмена
+            // The user pressed Cancel
             break;
         }
-        // ... запись строки
+        // ... write the row
     }
 }
 ```
 
-### Таблицы (wxGrid)
+### Tables (wxGrid)
 
 ```cpp
-// Настройка внешнего вида грида
+// Configure the grid's look
 void OesDataGrid::ApplyStyle()
 {
     SetDefaultCellFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
@@ -241,26 +241,26 @@ void OesDataGrid::ApplyStyle()
     EnableGridLines(true);
     SetGridLineColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW));
 
-    // Чередование цветов строк
+    // Alternating row colours
     SetDefaultCellBackgroundColour(
         wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
-    // Чётные строки — лёгкая подсветка через wxGridCellAttr
+    // Even rows — subtle highlight via wxGridCellAttr
 }
 ```
 
-### Контекстное меню
+### Context menu
 
 ```cpp
 void OesListPanel::OnContextMenu(wxContextMenuEvent& event)
 {
     wxMenu menu;
-    menu.Append(ID_OPEN,   "Открыть\tEnter");
-    menu.Append(ID_EDIT,   "Редактировать\tF2");
+    menu.Append(ID_OPEN,   "Open\tEnter");
+    menu.Append(ID_EDIT,   "Edit\tF2");
     menu.AppendSeparator();
-    menu.Append(ID_DELETE, "Удалить\tDel");
-    menu.Append(ID_EXPORT, "Экспортировать...");
+    menu.Append(ID_DELETE, "Delete\tDel");
+    menu.Append(ID_EXPORT, "Export...");
 
-    // Блокировать пункты если нет выбора
+    // Disable items when nothing is selected
     if (m_list->GetSelectedItemCount() == 0)
     {
         menu.Enable(ID_OPEN,   false);
@@ -275,79 +275,79 @@ void OesListPanel::OnContextMenu(wxContextMenuEvent& event)
 
 ---
 
-## Доступность (Accessibility)
+## Accessibility
 
-### Обязательные требования
+### Required
 
-- **Tab-порядок**: все интерактивные контролы доступны с клавиатуры. Порядок обхода — слева направо, сверху вниз.
-- **Метки**: каждый `wxTextCtrl`, `wxComboBox`, `wxSpinCtrl` должен иметь ассоциированный `wxStaticText` (создаётся через `wxStaticText` + Sizer или через `wxWindow::SetLabel`).
-- **Горячие клавиши**: для часто используемых действий назначить акселераторы (`wxAcceleratorTable` или `&` в тексте меню).
-- **Подсказки**: `SetToolTip()` для кнопок-иконок и неочевидных элементов.
-- **Сообщения об ошибках**: использовать `wxMessageBox` с `wxICON_WARNING` или `wxICON_ERROR`; не скрывать ошибки молча.
+- **Tab order**: every interactive control must be reachable from the keyboard. Order — left to right, top to bottom.
+- **Labels**: every `wxTextCtrl`, `wxComboBox`, `wxSpinCtrl` must have an associated `wxStaticText` (via `wxStaticText` + sizer or `wxWindow::SetLabel`).
+- **Hotkeys**: for frequent actions, assign accelerators (`wxAcceleratorTable` or `&` in the menu text).
+- **Tooltips**: `SetToolTip()` for icon buttons and non-obvious elements.
+- **Error messages**: use `wxMessageBox` with `wxICON_WARNING` or `wxICON_ERROR`; don't swallow errors silently.
 
 ```cpp
-// Правильно — метка ассоциирована с полем ввода
-wxStaticText* lblName = new wxStaticText(this, wxID_ANY, "&Наименование:");
+// Right — the label is associated with the input
+wxStaticText* lblName = new wxStaticText(this, wxID_ANY, "&Name:");
 m_nameCtrl = new wxTextCtrl(this, wxID_ANY);
-m_nameCtrl->SetToolTip("Введите наименование документа (до 255 символов)");
+m_nameCtrl->SetToolTip("Enter the document name (up to 255 characters)");
 
-// Подсказки для кнопок-иконок
-m_btnAdd->SetToolTip("Добавить запись (Ins)");
-m_btnDel->SetToolTip("Удалить выбранное (Del)");
+// Tooltips for icon buttons
+m_btnAdd->SetToolTip("Add record (Ins)");
+m_btnDel->SetToolTip("Delete selected (Del)");
 ```
 
-### Tab-порядок
+### Tab order
 
-wxWidgets автоматически использует порядок создания виджетов как Tab-порядок. Создавать контролы в логическом порядке: поле 1, поле 2, ..., OK, Cancel.
+wxWidgets automatically uses the widget creation order as the Tab order. Create controls in logical order: field 1, field 2, ..., OK, Cancel.
 
 ---
 
-## AI и генерация UI-кода
+## AI and UI code generation
 
-### Когда AI помогает в разработке wxWidgets UI
+### When AI helps with wxWidgets UI
 
-| Задача | Использование AI |
+| Task | AI usage |
 |--------|-----------------|
-| Генерация шаблона диалога | Описать структуру — AI генерирует каркас |
-| Настройка wxGrid | Попросить готовый пример с нужными колонками |
-| Реализация сортировки/фильтрации в списке | Алгоритмы + wxListCtrl или wxGrid |
-| Написание обработчиков событий | AI генерирует по описанию действия |
+| Generate a dialog skeleton | Describe the structure — AI emits the scaffold |
+| Configure wxGrid | Request a ready example with the required columns |
+| Implement sort/filter in a list | Algorithms + wxListCtrl or wxGrid |
+| Write event handlers | AI generates from a description |
 
-### Правила переноса AI-кода
+### Rules for porting AI code
 
-**Обязательно проверить:**
-- Все константы отступов заменены на `OesUI::MARGIN_*`
-- Нет абсолютного позиционирования — только Sizer'ы
-- Шрифты не захардкожены — используются `wxSystemSettings` или `OesUI::Get*Font()`
-- Цвета используют системные `wxSYS_COLOUR_*` или константы из `OesUI`
-- Event IDs объявлены в enum модуля, не как magic numbers
-- Нет утечек памяти: wx-объекты переданы родителю или добавлены в Sizer (который управляет памятью)
+**Must verify:**
+- All margin constants replaced with `OesUI::MARGIN_*`
+- No absolute positioning — sizers only
+- Fonts are not hardcoded — use `wxSystemSettings` or `OesUI::Get*Font()`
+- Colours use system `wxSYS_COLOUR_*` or constants from `OesUI`
+- Event IDs declared in the module's enum, not as magic numbers
+- No memory leaks: wx objects either have a parent or are added to a sizer (which owns them)
 
-**Чеклист после переноса AI-кода:**
-- [ ] Диалог корректно масштабируется при изменении размера
-- [ ] Tab-порядок логичен
-- [ ] Все кнопки-иконки имеют подсказки
-- [ ] Валидация данных перед `EndModal(wxID_OK)`
-- [ ] Сборка без предупреждений компилятора
-- [ ] Проверка на разных системных шрифтах и DPI
+**Checklist after porting AI code:**
+- [ ] Dialog scales correctly when resized
+- [ ] Tab order is logical
+- [ ] All icon buttons have tooltips
+- [ ] Validation happens before `EndModal(wxID_OK)`
+- [ ] Build with no compiler warnings
+- [ ] Verified across different system fonts and DPIs
 
 ---
 
 ## wxFormBuilder
 
-### Рабочий процесс
+### Workflow
 
-1. Создать макет в wxFormBuilder
-2. Задать все имена переменных в соответствии с конвенцией проекта (`m_nameCtrl`, `m_listGrid`)
-3. Экспортировать как `.cpp`/`.h` пару (`form_generated.cpp`, `form_generated.h`)
-4. Создать наследника, никогда не редактировать сгенерированный файл вручную
-5. Всю бизнес-логику реализовывать в наследнике
+1. Create the layout in wxFormBuilder
+2. Set all variable names per the project convention (`m_nameCtrl`, `m_listGrid`)
+3. Export as a `.cpp`/`.h` pair (`form_generated.cpp`, `form_generated.h`)
+4. Create a derived class; never hand-edit the generated file
+5. Implement all business logic in the derived class
 
 ```cpp
-// form_generated.h — НЕ редактировать
+// form_generated.h — do NOT edit
 class OesDocumentFormBase : public wxDialog { ... };
 
-// document_dialog.h — только бизнес-логика
+// document_dialog.h — business logic only
 class OesDocumentDialog : public OesDocumentFormBase
 {
 public:
@@ -363,27 +363,27 @@ private:
 };
 ```
 
-### Соглашения именования в wxFormBuilder
+### Naming conventions in wxFormBuilder
 
-| Элемент | Шаблон | Пример |
+| Element | Pattern | Example |
 |---------|--------|--------|
-| Класс формы | `Oes<Name>FormBase` | `OesDocumentFormBase` |
+| Form class | `Oes<Name>FormBase` | `OesDocumentFormBase` |
 | TextCtrl | `m_<name>Ctrl` | `m_titleCtrl` |
 | ComboBox | `m_<name>Combo` | `m_statusCombo` |
 | Grid | `m_<name>Grid` | `m_itemsGrid` |
 | Button | `m_btn<Action>` | `m_btnAdd`, `m_btnOK` |
 | CheckBox | `m_chk<Name>` | `m_chkActive` |
-| StaticText (метка) | `m_lbl<Name>` | `m_lblTitle` |
+| StaticText (label) | `m_lbl<Name>` | `m_lblTitle` |
 
 ---
 
-## Чеклист UI перед сдачей
+## UI checklist before handoff
 
-- [ ] Диалог открывается и закрывается без утечек памяти (запустить под Dr. Memory)
-- [ ] Корректное поведение при минимальном размере окна
-- [ ] Tab-порядок проверен (прохождение по Tab через все контролы)
-- [ ] Горячие клавиши работают (Enter = OK, Escape = Cancel)
-- [ ] Сообщения об ошибках понятны пользователю
-- [ ] Длинные операции показывают прогресс (wxProgressDialog)
-- [ ] Нет захардкоженных русских строк в C++ коде — только через `_()` или ресурсы (готовность к i18n)
-- [ ] Внешний вид проверен на Windows 10/11 с разными темами (светлая/тёмная)
+- [ ] Dialog opens and closes without memory leaks (verified under Dr. Memory)
+- [ ] Behaves correctly at the minimum window size
+- [ ] Tab order checked (Tab traversal covers every control)
+- [ ] Hotkeys work (Enter = OK, Escape = Cancel)
+- [ ] Error messages are clear to the user
+- [ ] Long-running operations show progress (wxProgressDialog)
+- [ ] No hardcoded Russian strings in C++ code — only through `_()` or resources (i18n-ready)
+- [ ] Appearance verified on Windows 10/11 with different themes (light/dark)

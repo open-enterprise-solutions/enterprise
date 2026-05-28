@@ -1,31 +1,31 @@
-# 11. Лучшие практики
+# 11. Best Practices
 
-## C++17 — стандарт проекта
+## C++17 — the project standard
 
-### Компилятор — предупреждения как ошибки
+### Compiler — warnings as errors
 
 ```cmake
 # CMakeLists.txt
 if(MSVC)
     target_compile_options(oes PRIVATE
-        /W4         # Высокий уровень предупреждений
-        /WX         # Предупреждения как ошибки
+        /W4         # High warning level
+        /WX         # Warnings as errors
         /std:c++17  # C++17
-        /permissive- # Строгое соответствие стандарту
+        /permissive- # Strict standard conformance
     )
 else()
     target_compile_options(oes PRIVATE
         -Wall -Wextra -Wpedantic
-        -Werror                # Предупреждения как ошибки
+        -Werror                # Warnings as errors
         -std=c++17
-        -Wno-unused-parameter  # wxWidgets генерирует такие предупреждения
+        -Wno-unused-parameter  # wxWidgets generates these warnings
     )
 endif()
 ```
 
-### Флаги компилятора в Visual Studio
+### Compiler flags in Visual Studio
 
-В `*.vcxproj` или через Property Sheets:
+In `*.vcxproj` or via Property Sheets:
 ```xml
 <ClCompile>
   <WarningLevel>Level4</WarningLevel>
@@ -37,88 +37,88 @@ endif()
 
 ---
 
-## Управление памятью
+## Memory management
 
-### RAII — основной принцип
+### RAII — the core principle
 
-Ресурс (память, файл, соединение с БД, мьютекс) должен захватываться в конструкторе и освобождаться в деструкторе. Никаких голых `new`/`delete` в бизнес-логике.
+Resources (memory, files, DB connections, mutexes) must be acquired in the constructor and released in the destructor. No bare `new`/`delete` in business logic.
 
 ```cpp
-// ПЛОХО — голый new/delete, утечки при исключениях
+// BAD — bare new/delete, leaks on exceptions
 class ReportGenerator {
     Document* m_doc;
 public:
     ReportGenerator() : m_doc(new Document()) {}
-    ~ReportGenerator() { delete m_doc; }  // Не вызовется при исключении в конструкторе!
+    ~ReportGenerator() { delete m_doc; }  // Won't run if constructor throws!
 
     void generate() {
         Image* img = new Image("logo.png");
-        renderPage(img);   // Если бросит исключение — утечка img
+        renderPage(img);   // If it throws — img leaks
         delete img;
     }
 };
 
-// ХОРОШО — RAII через умные указатели
+// GOOD — RAII through smart pointers
 class ReportGenerator {
     std::unique_ptr<Document> m_doc;
 public:
     ReportGenerator() : m_doc(std::make_unique<Document>()) {}
-    // Деструктор генерируется автоматически
+    // Destructor generated automatically
 
     void generate() {
         auto img = std::make_unique<Image>("logo.png");
         renderPage(*img);
-        // img автоматически удалится при выходе из scope
+        // img is destroyed automatically when leaving scope
     }
 };
 ```
 
-### Умные указатели — правило выбора
+### Smart pointers — selection rule
 
 ```cpp
-// std::unique_ptr — единственный владелец (по умолчанию)
+// std::unique_ptr — single owner (default)
 std::unique_ptr<DatabaseConnection> conn = createConnection();
 
-// std::shared_ptr — разделяемое владение (только если действительно нужно)
+// std::shared_ptr — shared ownership (only when truly required)
 std::shared_ptr<Configuration> config = Configuration::load();
-// Передаётся нескольким сервисам:
+// Passed to multiple services:
 UserService userSvc(config);
 ReportService reportSvc(config);
 
-// std::weak_ptr — наблюдатель без владения (избегает циклических ссылок)
+// std::weak_ptr — observer without ownership (avoids cycles)
 
-// ПЛОХО — если дочерний узел держит shared_ptr на родителя,
-// а родитель держит shared_ptr на дочерний — образуется цикл,
-// и оба объекта никогда не будут освобождены.
+// BAD — if a child holds a shared_ptr to its parent
+// and the parent holds a shared_ptr to the child — a cycle forms,
+// and neither object is ever freed.
 class NodeBad {
-    std::shared_ptr<Node> m_parent;  // циклическая ссылка!
+    std::shared_ptr<Node> m_parent;  // cyclic reference!
 };
 
-// ХОРОШО — weak_ptr не увеличивает счётчик ссылок,
-// поэтому цикл не образуется и память освобождается корректно.
+// GOOD — weak_ptr does not increment the reference count,
+// so no cycle forms and memory is freed correctly.
 class Node {
-    std::weak_ptr<Node> m_parent;    // наблюдатель без владения
+    std::weak_ptr<Node> m_parent;    // observer without ownership
 };
 
-// Сырые указатели — ТОЛЬКО для не-владеющих ссылок
-void processDocument(Document* doc) {  // OK — не владеет
-    // doc — временная ссылка, lifetime управляется вызывающей стороной
+// Raw pointers — ONLY for non-owning references
+void processDocument(Document* doc) {  // OK — does not own
+    // doc — temporary reference, lifetime managed by the caller
 }
 ```
 
-### Никаких `new` вне фабрик и make_*
+### No `new` outside factories and make_*
 
 ```cpp
-// ПЛОХО — голый new в бизнес-логике
+// BAD — bare new in business logic
 ibDatabaseLayer* db = new ibDatabaseLayerFirebird();
 m_services.push_back(new UserService(db));
 
-// ХОРОШО
+// GOOD
 auto db = std::make_unique<ibDatabaseLayerFirebird>();
 m_services.push_back(std::make_unique<UserService>(db.get()));
 
-// ХОРОШО — фабричная функция для создания ibDatabaseLayer нужного типа
-// (ibApplicationData в appData.cpp выполняет эту роль в реальном коде)
+// GOOD — factory function that creates an ibDatabaseLayer of the right type
+// (ibApplicationData in appData.cpp plays this role in the real code)
 std::unique_ptr<ibDatabaseLayer> createDatabase(DatabaseType type) {
     switch (type) {
         case DatabaseType::Firebird:   return std::make_unique<ibDatabaseLayerFirebird>();
@@ -131,64 +131,64 @@ std::unique_ptr<ibDatabaseLayer> createDatabase(DatabaseType type) {
 
 ---
 
-## Обработка ошибок
+## Error handling
 
-### Пустые блоки catch — ЗАПРЕЩЕНЫ
+### Empty catch blocks — FORBIDDEN
 
 ```cpp
-// ПЛОХО — ошибка проглочена (частая проблема в OES)
+// BAD — error swallowed (common issue in OES)
 try {
     m_dbLayer->connect(config);
 } catch (...) {
-    // пусто
+    // empty
 }
 
-// ХОРОШО — минимум: логировать и пробросить
+// GOOD — minimum: log and rethrow
 try {
     m_dbLayer->connect(config);
 } catch (const DatabaseException& e) {
     wxLogError("Database connection failed: %s", e.what());
-    throw;  // или обработать и вернуть false
+    throw;  // or handle and return false
 } catch (const std::exception& e) {
     wxLogError("Unexpected error during DB connect: %s", e.what());
     throw;
 }
 
-// ХОРОШО — если нужно поглотить (редкий случай)
+// GOOD — when you really must swallow (rare case)
 try {
-    // Некритичная операция (например, запись в лог)
+    // Non-critical operation (e.g. log flush)
     m_logger->flush();
 } catch (const std::exception& e) {
-    // Намеренно игнорируем: логирование не должно ронять приложение
-    // ВАЖНО: оставить комментарий почему ignore допустим
-    (void)e;  // Явно показываем что переменная намеренно не используется
+    // Intentionally ignored: logging must not bring down the app
+    // IMPORTANT: leave a comment explaining why ignore is acceptable
+    (void)e;  // Explicitly mark the variable as intentionally unused
 }
 ```
 
-### Исключения vs коды возврата
+### Exceptions vs return codes
 
 ```cpp
-// Исключения — для исключительных ситуаций (не ожидаемые ошибки)
-// Коды возврата — для ожидаемых исходов
+// Exceptions — for exceptional situations (unexpected errors)
+// Return codes — for expected outcomes
 
-// ХОРОШО — исключение для неожиданного провала
+// GOOD — exception for an unexpected failure
 DatabaseConnection openConnection(const Config& config) {
-    // Соединение ДОЛЖНО открыться, иначе это ошибка программы/конфига
+    // The connection MUST open, otherwise it's a program/config bug
     if (!connect(config.host, config.port)) {
         throw DatabaseException("Cannot connect to " + config.host);
     }
     return DatabaseConnection{...};
 }
 
-// ХОРОШО — std::optional для "может не найти"
+// GOOD — std::optional for "may not be found"
 std::optional<User> findUserByEmail(const std::string& email) {
-    // Пользователь может не существовать — это нормально
+    // A user may not exist — that's normal
     auto result = m_db->query("SELECT ...", {email});
     if (result.isEmpty()) return std::nullopt;
     return User::fromRow(result.firstRow());
 }
 
-// ХОРОШО — bool для "успех/неуспех" простых операций
+// GOOD — bool for "success/failure" of simple operations
 bool saveDocument(const Document& doc) {
     try {
         m_db->execute("UPDATE ...", doc.toParams());
@@ -200,62 +200,61 @@ bool saveDocument(const Document& doc) {
 }
 ```
 
-### Иерархия исключений OES
+### OES exception hierarchy
 
-OES использует собственную иерархию исключений с префиксом `ib`:
+OES uses its own exception hierarchy with the `ib` prefix:
 
 ```cpp
-// Реальные исключения OES (src/engine/backend/)
+// Real OES exceptions (src/engine/backend/)
 
-// ibBackendCoreException — базовое исключение движка
-// Бросается при ошибках компилятора, БД, метаданных
+// ibBackendCoreException — engine base exception
+// Thrown on compiler, DB, metadata errors
 try {
     ibPreparedStatement* stmt = db->PrepareStatement(sql);
     stmt->SetParamInt(1, id);
     stmt->RunQuery();
 } catch (const ibBackendCoreException& e) {
     wxLogError("Backend error: %s", e.what());
-    // ibBackendCoreException содержит код и описание ошибки
+    // ibBackendCoreException carries an error code and description
 }
 
-// ibBackendInterruptException — прерывание выполнения скрипта
-// Бросается при принудительной остановке ibProcUnit (интерпретатора байткода)
+// ibBackendInterruptException — script execution interrupted
+// Thrown when ibProcUnit (the bytecode interpreter) is forcibly stopped
 try {
     procUnit->Execute(byteCode);
 } catch (const ibBackendInterruptException&) {
-    // Пользователь нажал "Стоп" или timeout — не ошибка программы
+    // User pressed "Stop" or hit a timeout — not a program error
     wxLogMessage("Script execution interrupted by user");
 }
 
-// Для новых модулей допустимо добавлять специализированные исключения
-// на базе ibBackendCoreException
+// New modules may add specialized exceptions derived from ibBackendCoreException
 ```
 
 ---
 
-## Логирование
+## Logging
 
-### wxLog — структурированное логирование
+### wxLog — structured logging
 
 ```cpp
-// ПЛОХО — std::cout в production коде
+// BAD — std::cout in production code
 std::cout << "User logged in: " << username << std::endl;
 printf("Error: %s\n", error.c_str());
 
-// ХОРОШО — wxLog
+// GOOD — wxLog
 wxLogMessage("User logged in: %s", username);     // INFO
 wxLogWarning("Slow query (%ldms): %s", ms, sql);  // WARNING
 wxLogError("Failed to save document: %s", err);   // ERROR
 
-// Для отладочной информации (только в Debug сборке)
+// For debug information (Debug build only)
 wxLogDebug("Processing record id=%ld, type=%s", id, type);
 ```
 
-### Уровни логирования
+### Log levels
 
 ```cpp
-// src/engine/backend/utils/logger.h  (или аналогичный путь)
-// Используем wxLog с настраиваемым уровнем
+// src/engine/backend/utils/logger.h  (or similar path)
+// We use wxLog with a configurable level
 
 // config.ini:
 // [app]
@@ -265,10 +264,10 @@ wxLogDebug("Processing record id=%ld, type=%s", id, type);
 class AppLogger {
 public:
     static void Configure(const wxString& level, const wxString& logFile) {
-        // Настроить wxLogStderr + wxLogFile
+        // Configure wxLogStderr + wxLogFile
         auto* fileLog = new wxLogFile(logFile);
-        // SetActiveTarget() возвращает предыдущий активный логгер —
-        // его нужно удалить вручную, чтобы не было утечки памяти.
+        // SetActiveTarget() returns the previously active logger —
+        // it must be deleted manually to avoid a memory leak.
         delete wxLog::SetActiveTarget(fileLog);
 
         if (level == "debug") {
@@ -282,59 +281,59 @@ public:
 };
 ```
 
-### Что логировать обязательно
+### What must be logged
 
 ```cpp
-// Запуск и остановка приложения
+// Application start and stop
 wxLogMessage("[STARTUP] OES v%s starting", OES_VERSION_STRING);
 wxLogMessage("[SHUTDOWN] OES stopping, uptime=%lds", uptime);
 
-// Подключение к БД
+// DB connection
 wxLogMessage("[DB] Connected to %s:%d database '%s'",
     config.host, config.port, config.database);
 wxLogError("[DB] Connection failed: %s", error);
 
-// Попытки входа (audit log)
+// Login attempts (audit log)
 wxLogMessage("[AUDIT] Login %s for user '%s' from %s",
     success ? "SUCCESS" : "FAILED", username, hostname);
 
-// Изменения данных (audit log)
+// Data changes (audit log)
 wxLogMessage("[AUDIT] %s record id=%ld in table '%s' by user '%s'",
     operation, recordId, tableName, currentUser);
 
-// Критические ошибки
+// Critical errors
 wxLogError("[CRITICAL] Unexpected exception: %s\nStack: %s",
     e.what(), stackTrace);
 ```
 
 ---
 
-## Архитектура модулей
+## Module architecture
 
-### Разделение ответственности
+### Separation of concerns
 
 ```cpp
-// ПЛОХО — один класс делает всё
+// BAD — one class does everything
 class MainWindow {
     void onSaveButtonClick() {
-        // Формирует SQL прямо здесь
+        // Builds SQL right here
         wxString sql = "UPDATE users SET name = '" + m_nameEdit->GetValue() + "'";
-        // Выполняет запрос
+        // Executes the query
         m_db->Execute(sql);
-        // Отправляет email
+        // Sends an email
         sendEmail("admin@company.com", "Record saved");
-        // Обновляет статусбар
+        // Updates the status bar
         m_statusBar->SetStatusText("Saved");
     }
 };
 
-// ХОРОШО — разделение: UI / Service / Repository
+// GOOD — separated: UI / Service / Repository
 class UserService {
 public:
     void saveUser(const UserData& data) {
-        validate(data);               // Валидация — здесь
-        m_userRepo->save(data);       // Сохранение — в репозитории
-        m_auditLog->recordSave(data); // Аудит — в отдельном сервисе
+        validate(data);               // Validation — here
+        m_userRepo->save(data);       // Persistence — in the repository
+        m_auditLog->recordSave(data); // Audit — in a separate service
     }
 private:
     std::unique_ptr<IUserRepository> m_userRepo;
@@ -351,87 +350,87 @@ class MainWindow {
 };
 ```
 
-### Интерфейсы (абстрактные классы) для зависимостей
+### Interfaces (abstract classes) for dependencies
 
 ```cpp
-// OES использует ibDatabaseLayer как абстрактный базовый класс
+// OES uses ibDatabaseLayer as the abstract base class
 // (src/engine/backend/databaseLayer/databaseLayer.h)
 //
-// Конкретные реализации:
-//   ibDatabaseLayerFirebird  — Firebird (основная СУБД)
+// Concrete implementations:
+//   ibDatabaseLayerFirebird  — Firebird (primary DBMS)
 //   ibDatabaseLayerPostgres  — PostgreSQL
-//   ibDatabaseLayerSQLite    — SQLite (встроенная БД)
+//   ibDatabaseLayerSQLite    — SQLite (embedded DB)
 //   ibDatabaseLayerMySQL     — MySQL
-//   ibDatabaseLayerODBC      — ODBC (универсальный драйвер)
+//   ibDatabaseLayerODBC      — ODBC (universal driver)
 //
-// Полиморфизм: код работает с ibDatabaseLayer* не зная о конкретной СУБД
+// Polymorphism: code works with ibDatabaseLayer* without knowing the concrete DBMS
 
-// Зависимость через конструктор (Dependency Injection)
-// ibApplicationData (appData.cpp) создаёт ibDatabaseLayer нужного типа
-// и передаёт его в остальные компоненты
+// Dependency through the constructor (Dependency Injection)
+// ibApplicationData (appData.cpp) creates an ibDatabaseLayer of the right type
+// and passes it to the rest of the components
 class ibValueMetaObject {
 public:
     explicit ibValueMetaObject(ibDatabaseLayer* db)
         : m_db(db) {}
 protected:
-    ibDatabaseLayer* m_db;  // не владеет — lifetime управляется ibApplicationData
+    ibDatabaseLayer* m_db;  // does not own — lifetime managed by ibApplicationData
 };
 
-// Пример создания через ibApplicationData
+// Example creation through ibApplicationData
 // ibApplicationData* appData = ibApplicationData::Get();
 // ibDatabaseLayer* db = appData->GetDatabaseLayer();
 ```
 
 ---
 
-## Структура проекта
+## Project structure
 
-### Именование файлов и классов
+### File and class naming
 
-| Что | Стиль | Пример |
+| What | Style | Example |
 |-----|-------|--------|
-| Файлы `.cpp`/`.h` | PascalCase | `DatabaseLayer.cpp`, `UserService.h` |
-| Классы | PascalCase | `DatabaseLayer`, `ReportGenerator` |
-| Методы | camelCase | `connectToDatabase()`, `getUserById()` |
-| Переменные члены | `m_` prefix + camelCase | `m_dbLayer`, `m_userName` |
-| Статические члены | `s_` prefix + camelCase | `s_instance`, `s_logger` |
-| Константы (compile-time) | UPPER\_SNAKE\_CASE | `MAX_RETRY_COUNT`, `DEFAULT_PORT` |
-| Перечисления (enum class) | PascalCase + PascalCase values | `DatabaseType::Firebird` |
-| Namespace | snake\_case | `oes::database`, `oes::ui` |
-| Макросы | UPPER\_SNAKE\_CASE | `OES_VERSION_STRING` |
-| Таблицы и поля БД | UPPER\_SNAKE\_CASE | `USER_PROFILES`, `CREATED_AT` |
+| Files `.cpp`/`.h` | PascalCase | `DatabaseLayer.cpp`, `UserService.h` |
+| Classes | PascalCase | `DatabaseLayer`, `ReportGenerator` |
+| Methods | camelCase | `connectToDatabase()`, `getUserById()` |
+| Member variables | `m_` prefix + camelCase | `m_dbLayer`, `m_userName` |
+| Static members | `s_` prefix + camelCase | `s_instance`, `s_logger` |
+| Constants (compile-time) | UPPER\_SNAKE\_CASE | `MAX_RETRY_COUNT`, `DEFAULT_PORT` |
+| Enums (enum class) | PascalCase + PascalCase values | `DatabaseType::Firebird` |
+| Namespaces | snake\_case | `oes::database`, `oes::ui` |
+| Macros | UPPER\_SNAKE\_CASE | `OES_VERSION_STRING` |
+| DB tables and columns | UPPER\_SNAKE\_CASE | `USER_PROFILES`, `CREATED_AT` |
 
-### Размер файлов и классов
+### File and class size
 
-- **Максимум ~500 строк** на файл `.cpp`. Если больше — разбивайте
-- Один класс на файл (исключение: небольшие вспомогательные классы)
-- Один ответственный за один файл: `.h` объявляет, `.cpp` определяет
+- **Maximum ~500 lines** per `.cpp` file. Larger — split it
+- One class per file (exception: small helper classes)
+- One responsibility per file: `.h` declares, `.cpp` defines
 
-### Заголовочные файлы
+### Headers
 
 ```cpp
-// ХОРОШО — защита от повторного включения
+// GOOD — re-inclusion guard
 #pragma once
 
-// Или классические include guards
+// Or classic include guards
 #ifndef OES_DATABASE_LAYER_H
 #define OES_DATABASE_LAYER_H
 // ...
 #endif
 
-// Порядок includes в .cpp файле:
-// 1. Собственный .h файл
+// Include order inside a .cpp file:
+// 1. The class's own .h
 #include "DatabaseLayer.h"
 
-// 2. Заголовки из того же проекта
+// 2. Headers from the same project
 #include "core/Exceptions.h"
 #include "utils/Logger.h"
 
-// 3. Сторонние библиотеки
+// 3. Third-party libraries
 #include <wx/wx.h>
 #include <ibase.h>     // Firebird
 
-// 4. Стандартная библиотека
+// 4. Standard library
 #include <memory>
 #include <string>
 #include <vector>
@@ -439,41 +438,41 @@ protected:
 
 ---
 
-## Работа с базой данных
+## Database
 
-### Параметризованные запросы — всегда
+### Parameterized queries — always
 
 ```cpp
-// ПЛОХО — конкатенация строк (SQL-инъекция)
+// BAD — string concatenation (SQL injection)
 wxString sql = wxString::Format(
     "SELECT * FROM DOCUMENTS WHERE TITLE = '%s' AND USER_ID = %d",
     title, userId
 );
 m_db->Execute(sql);
 
-// ХОРОШО — ibPreparedStatement с SetParamString/SetParamInt (OES-способ)
-// ibDatabaseLayer* m_db — поле класса, инициализировано через ibApplicationData
+// GOOD — ibPreparedStatement with SetParamString/SetParamInt (the OES way)
+// ibDatabaseLayer* m_db — class field initialized through ibApplicationData
 ibPreparedStatement* stmt = m_db->PrepareStatement(
     "SELECT * FROM DOCUMENTS WHERE TITLE = ? AND USER_ID = ?"
 );
 stmt->SetParamString(1, title);
 stmt->SetParamInt(2, userId);
 ibDatabaseResultSet* rs = stmt->RunQuery();
-// Обработать rs, затем освободить
+// Process rs, then release it
 ```
 
-### Транзакции через RAII
+### Transactions through RAII
 
-OES предоставляет `ibTransactionGuard` (объявлен в `commonObject.h`) — RAII-обёртку для транзакций:
+OES provides `ibTransactionGuard` (declared in `commonObject.h`) — an RAII transaction wrapper:
 
 ```cpp
-// ХОРОШО — ibTransactionGuard: автоматический rollback при выходе из scope
-// ibTransactionGuard tx(db) — начинает транзакцию
-// tx.Commit()               — фиксирует транзакцию
-// ~ibTransactionGuard()     — откатывает если Commit() не был вызван
+// GOOD — ibTransactionGuard: automatic rollback on scope exit
+// ibTransactionGuard tx(db) — starts a transaction
+// tx.Commit()               — commits the transaction
+// ~ibTransactionGuard()     — rolls back if Commit() was not called
 
 void transferData(ibDatabaseLayer* db, int fromId, int toId, int amount) {
-    ibTransactionGuard tx(db);  // Начало транзакции
+    ibTransactionGuard tx(db);  // Begin transaction
 
     ibPreparedStatement* stmt1 = db->PrepareStatement(
         "UPDATE ACCOUNTS SET BALANCE = BALANCE - ? WHERE ID = ?");
@@ -487,30 +486,30 @@ void transferData(ibDatabaseLayer* db, int fromId, int toId, int amount) {
     stmt2->SetParamInt(2, toId);
     stmt2->RunQuery();
 
-    tx.Commit();  // Если не вызван (исключение) — автоматический rollback
+    tx.Commit();  // If not called (exception) — automatic rollback
 }
 ```
 
-### Миграции базы данных
+### Database migrations
 
-Все изменения схемы — только через версионированные SQL-скрипты:
+All schema changes — only through versioned SQL scripts:
 
 ```
 db/
 ├── schema/
-│   └── initial_schema.sql      — Начальная схема
+│   └── initial_schema.sql      — Initial schema
 └── migrations/
-    ├── v1.0.0_to_v1.1.0.sql    — Миграции нумеруются по версиям
+    ├── v1.0.0_to_v1.1.0.sql    — Migrations numbered by version
     ├── v1.1.0_to_v1.2.0.sql
-    └── README.md               — Как применять миграции
+    └── README.md               — How to apply migrations
 ```
 
-**НИКОГДА** не менять схему вручную в production без скрипта миграции.
+**NEVER** modify the schema manually in production without a migration script.
 
-### Индексы для производительности
+### Indexes for performance
 
 ```sql
--- Добавлять индексы для полей в WHERE, JOIN, ORDER BY
+-- Add indexes for columns used in WHERE, JOIN, ORDER BY
 CREATE INDEX IDX_DOCUMENTS_USER_ID ON DOCUMENTS(USER_ID);
 CREATE INDEX IDX_DOCUMENTS_CREATED_AT ON DOCUMENTS(CREATED_AT DESC);
 CREATE INDEX IDX_DOCUMENTS_STATUS_DATE ON DOCUMENTS(STATUS, CREATED_AT);
@@ -518,158 +517,158 @@ CREATE INDEX IDX_DOCUMENTS_STATUS_DATE ON DOCUMENTS(STATUS, CREATED_AT);
 
 ---
 
-## Многопоточность
+## Multithreading
 
-### wxWidgets и UI thread
+### wxWidgets and the UI thread
 
 ```cpp
-// wxWidgets — UI работает только в главном потоке
-// Из фонового потока НЕЛЬЗЯ трогать UI!
+// wxWidgets — UI must be touched only from the main thread
+// You CANNOT touch UI from a background thread!
 
-// ПЛОХО — обновление UI из фонового потока
+// BAD — UI update from a background thread
 void BackgroundWorker::run() {
-    // ... длинная операция ...
-    m_progressBar->SetValue(50);  // CRASH или UB!
+    // ... long operation ...
+    m_progressBar->SetValue(50);  // CRASH or UB!
 }
 
-// ХОРОШО — отправить событие в главный поток
+// GOOD — post an event to the main thread
 void BackgroundWorker::run() {
-    // ... длинная операция ...
+    // ... long operation ...
     wxQueueEvent(m_mainWindow, new ProgressEvent(50));
 }
 
-// Или через wxCallAfter (проще)
+// Or via wxCallAfter (simpler)
 void BackgroundWorker::run() {
-    // ... длинная операция ...
+    // ... long operation ...
     wxCallAfter([this]() {
-        m_progressBar->SetValue(50);  // Безопасно — выполнится в UI thread
+        m_progressBar->SetValue(50);  // Safe — runs in the UI thread
     });
 }
 ```
 
-### Мьютексы через RAII
+### Mutexes through RAII
 
 ```cpp
-// ХОРОШО — std::lock_guard, не ручной unlock
+// GOOD — std::lock_guard, no manual unlock
 std::mutex m_dataMutex;
 std::vector<Record> m_records;
 
 void addRecord(const Record& record) {
     std::lock_guard<std::mutex> lock(m_dataMutex);
     m_records.push_back(record);
-    // lock автоматически освобождается при выходе из scope
+    // lock is released automatically on scope exit
 }
 
-// Для shared_mutex (много читателей, один писатель)
+// For shared_mutex (many readers, one writer)
 std::shared_mutex m_configMutex;
 
 std::string readConfig(const std::string& key) {
-    std::shared_lock lock(m_configMutex);  // Разделяемая блокировка
+    std::shared_lock lock(m_configMutex);  // Shared lock
     return m_config.at(key);
 }
 
 void writeConfig(const std::string& key, const std::string& value) {
-    std::unique_lock lock(m_configMutex);  // Эксклюзивная блокировка
+    std::unique_lock lock(m_configMutex);  // Exclusive lock
     m_config[key] = value;
 }
 ```
 
 ---
 
-## wxWidgets — специфика
+## wxWidgets — specifics
 
-### Строки: wxString и std::string
+### Strings: wxString and std::string
 
 ```cpp
-// wxString — для UI (отображение, диалоги, файловые пути)
-// std::string — для бизнес-логики, БД, сети
+// wxString — for UI (display, dialogs, file paths)
+// std::string — for business logic, DB, network
 
-// Конвертация
+// Conversion
 wxString wxStr = wxString::FromUTF8(stdStr);
 std::string stdStr = wxStr.ToUTF8().data();
 
-// ХОРОШО — явная конвертация в граничных точках
+// GOOD — explicit conversion at boundaries
 void DocumentService::save(const Document& doc) {
-    // Конвертировать wxString → std::string при передаче в БД
+    // Convert wxString → std::string when passing to the DB
     std::string title = doc.getTitle().ToUTF8().data();
     m_db->Execute("UPDATE DOCS SET TITLE = ?", {title});
 }
 ```
 
-### Управление памятью wxWidgets-объектов
+### Memory management for wxWidgets objects
 
 ```cpp
-// wxWidgets управляет памятью дочерних виджетов самостоятельно
-// НЕ удалять вручную виджеты, добавленные в parent!
+// wxWidgets manages the memory of child widgets itself
+// Do NOT manually delete widgets that were added to a parent!
 
 wxFrame* frame = new wxFrame(nullptr, wxID_ANY, "OES");
 wxButton* btn = new wxButton(frame, wxID_OK, "OK");
-// btn будет удалён автоматически когда frame уничтожится
+// btn will be destroyed automatically when frame is destroyed
 
-// ПЛОХО
-delete btn;  // UB — wxWidgets уже удалит его
+// BAD
+delete btn;  // UB — wxWidgets will delete it
 
-// Исключение: объекты без parent удаляем сами
+// Exception: objects without a parent must be deleted ourselves
 wxBitmap* bmp = new wxBitmap("logo.png");
-// ... используем ...
-delete bmp;  // OK — нет parent, наша ответственность
-// Или лучше:
-wxBitmap bmp("logo.png");  // На стеке, если возможно
+// ... use ...
+delete bmp;  // OK — no parent, our responsibility
+// Or better:
+wxBitmap bmp("logo.png");  // On the stack when possible
 ```
 
 ---
 
-## Производительность
+## Performance
 
-### Избегайте лишних копий
+### Avoid unnecessary copies
 
 ```cpp
-// ПЛОХО — копирует строку при каждом вызове
+// BAD — copies the string on each call
 void processTitle(wxString title) { /* ... */ }
 
-// ХОРОШО — константная ссылка
+// GOOD — const reference
 void processTitle(const wxString& title) { /* ... */ }
 
-// ХОРОШО — move для передачи владения
+// GOOD — move to transfer ownership
 void setTitle(wxString title) {
-    m_title = std::move(title);  // Перемещение вместо копирования
+    m_title = std::move(title);  // Move instead of copy
 }
 ```
 
-### Пагинация при загрузке больших наборов данных
+### Pagination when loading large result sets
 
 ```cpp
-// ПЛОХО — загружает все записи в память
+// BAD — loads every row into memory
 auto allRecords = m_db->Execute("SELECT * FROM DOCUMENTS");
-// Может вернуть миллионы записей!
+// May return millions of rows!
 
-// ХОРОШО — пагинация (Firebird синтаксис)
+// GOOD — pagination (Firebird syntax)
 auto page = m_db->Execute(
     "SELECT FIRST ? SKIP ? * FROM DOCUMENTS ORDER BY CREATED_AT DESC",
     {std::to_string(pageSize), std::to_string(offset)}
 );
 
-// Или ROWS ... TO ... (Firebird)
+// Or ROWS ... TO ... (Firebird)
 auto page = m_db->Execute(
     "SELECT * FROM DOCUMENTS ORDER BY CREATED_AT DESC ROWS ? TO ?",
     {std::to_string(startRow), std::to_string(endRow)}
 );
 ```
 
-### Профилирование медленных запросов
+### Profiling slow queries
 
 ```cpp
-// Логировать медленные запросы
-// OesScopeTimer — предложенная утилита (не реализована в кодовой базе).
-// До добавления используйте следующий inline-паттерн:
+// Log slow queries
+// OesScopeTimer — a proposed utility (not implemented in the codebase).
+// Until it's added, use the inline pattern below:
 class TimedQuery {
 public:
     TimedQuery(ibDatabaseLayer* db, const wxString& sql,
                long thresholdMs = 1000)
         : m_start(std::chrono::steady_clock::now())
         , m_sql(sql) {
-        // Использовать ibPreparedStatement + SetParamString/SetParamInt
-        // для передачи параметров (не конкатенировать их в sql!)
+        // Use ibPreparedStatement + SetParamString/SetParamInt
+        // to pass parameters (do not concatenate them into sql!)
         m_stmt = db->PrepareStatement(sql);
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - m_start
@@ -688,15 +687,15 @@ private:
 
 ---
 
-## Чеклист для каждого PR
+## Per-PR checklist
 
-- [ ] Нет голых `new`/`delete` — используются умные указатели
-- [ ] Нет пустых блоков `catch`
-- [ ] SQL-запросы используют параметры, не конкатенацию
-- [ ] Пароли и чувствительные данные не в логах
-- [ ] Нет `strcpy`/`sprintf` без проверки длины буфера
-- [ ] Новые методы с правильной обработкой ошибок
-- [ ] Ресурсы освобождаются через RAII
-- [ ] Обновления UI происходят только в главном потоке (wxWidgets)
-- [ ] cppcheck не выдаёт новых предупреждений
-- [ ] Компилятор собирает без предупреждений (`/W4` или `-Wall -Wextra`)
+- [ ] No bare `new`/`delete` — smart pointers are used
+- [ ] No empty `catch` blocks
+- [ ] SQL queries use parameters, not concatenation
+- [ ] Passwords and sensitive data are not in logs
+- [ ] No `strcpy`/`sprintf` without buffer length checks
+- [ ] New methods have correct error handling
+- [ ] Resources are released through RAII
+- [ ] UI updates happen only on the main thread (wxWidgets)
+- [ ] cppcheck shows no new warnings
+- [ ] Compiler builds with no warnings (`/W4` or `-Wall -Wextra`)

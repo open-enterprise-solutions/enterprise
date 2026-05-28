@@ -1,8 +1,8 @@
-# 02. Git-воркфлоу
+# 02. Git Workflow
 
-## Модель ветвления
+## Branching model
 
-Мы используем упрощённую модель Git Flow с двумя основными ветками и короткоживущими фича-ветками.
+We use a simplified Git Flow with two main branches and short-lived feature branches.
 
 ```
 master (production / stable release)
@@ -14,35 +14,35 @@ master (production / stable release)
  │    ├── fix/firebird-connection-leak
  │    └── hotfix/critical-crash-on-open
  │
- └── hotfix/security-patch (прямо от master, в критических случаях)
+ └── hotfix/security-patch (directly from master, in critical cases)
 ```
 
-### Основные ветки
+### Main branches
 
-| Ветка | Назначение | Деплой | Защита |
+| Branch | Purpose | Deploy | Protection |
 |-------|-----------|--------|--------|
-| `master` | Стабильный код, релизные теги | Production сборка | Protected: нет прямых push, только merge из develop |
-| `develop` | Интеграционная ветка | CI сборка + тесты | Protected: нет прямых push, только merge из feature/* |
+| `master` | Stable code, release tags | Production build | Protected: no direct push, only merge from develop |
+| `develop` | Integration branch | CI build + tests | Protected: no direct push, only merge from feature/* |
 
-### Рабочие ветки
+### Working branches
 
-| Тип | Формат | Создаётся от | Мерджится в | Пример |
+| Type | Format | Branched from | Merged into | Example |
 |-----|--------|-------------|-------------|--------|
-| `feature/*` | feature/описание | develop | develop | `feature/add-grid-sorting` |
-| `fix/*` | fix/описание | develop | develop | `fix/firebird-null-pointer` |
-| `hotfix/*` | hotfix/описание | master | master + develop | `hotfix/crash-on-report-open` |
-| `refactor/*` | refactor/описание | develop | develop | `refactor/database-layer-cleanup` |
-| `chore/*` | chore/описание | develop | develop | `chore/migrate-to-cmake` |
+| `feature/*` | feature/description | develop | develop | `feature/add-grid-sorting` |
+| `fix/*` | fix/description | develop | develop | `fix/firebird-null-pointer` |
+| `hotfix/*` | hotfix/description | master | master + develop | `hotfix/crash-on-report-open` |
+| `refactor/*` | refactor/description | develop | develop | `refactor/database-layer-cleanup` |
+| `chore/*` | chore/description | develop | develop | `chore/migrate-to-cmake` |
 
-### Именование веток
+### Branch naming
 
-Правила:
-- **Только lowercase**
-- **Kebab-case** (слова через дефис)
-- **Описательно** — из названия понятно, что делает ветка
-- **Английский язык**
+Rules:
+- **Lowercase only**
+- **Kebab-case** (words separated by dashes)
+- **Descriptive** — the name makes the branch's purpose obvious
+- **English**
 
-Хорошо:
+Good:
 ```
 feature/form-designer-grid-snap
 fix/firebird-transaction-rollback
@@ -51,50 +51,50 @@ refactor/extract-query-builder
 chore/add-gtest-framework
 ```
 
-Плохо:
+Bad:
 ```
-feature/task-123          — непонятно что делает
-fix_something             — подчёркивание вместо дефиса
-Feature/NewForm           — не lowercase
-my-branch                 — нет типа, непонятно
+feature/task-123          — unclear what it does
+fix_something             — underscore instead of dash
+Feature/NewForm           — not lowercase
+my-branch                 — no type, unclear
 ```
 
 ---
 
-## Формат коммитов
+## Commit format
 
-### Конвенция
+### Convention
 
 ```
-type: краткое описание на английском
+type: short description in English
 ```
 
-### Типы коммитов
+### Commit types
 
-| Тип | Когда использовать | Пример |
+| Type | When to use | Example |
 |-----|--------------------|--------|
-| `feat` | Новая функциональность | `feat: add undo/redo support in form designer` |
-| `fix` | Исправление бага | `fix: resolve null pointer in firebird connection pool` |
-| `refactor` | Рефакторинг (без изменения поведения) | `refactor: extract query builder into separate class` |
-| `docs` | Документация | `docs: update build instructions for CMake` |
-| `style` | Форматирование (без изменения логики) | `style: fix indentation in databaseLayer.cpp` |
-| `test` | Тесты | `test: add unit tests for ibDatabaseLayerFirebird` |
-| `chore` | Рутина (зависимости, конфиги, сборка) | `chore: add CMakeLists.txt for core module` |
-| `perf` | Оптимизация производительности | `perf: cache prepared statements in query executor` |
-| `build` | Изменения системы сборки | `build: migrate database module to CMake` |
+| `feat` | New functionality | `feat: add undo/redo support in form designer` |
+| `fix` | Bug fix | `fix: resolve null pointer in firebird connection pool` |
+| `refactor` | Refactoring (no behaviour change) | `refactor: extract query builder into separate class` |
+| `docs` | Documentation | `docs: update build instructions for CMake` |
+| `style` | Formatting (no logic change) | `style: fix indentation in databaseLayer.cpp` |
+| `test` | Tests | `test: add unit tests for ibDatabaseLayerFirebird` |
+| `chore` | Routine (dependencies, configs, build) | `chore: add CMakeLists.txt for core module` |
+| `perf` | Performance optimization | `perf: cache prepared statements in query executor` |
+| `build` | Build system changes | `build: migrate database module to CMake` |
 
-### Правила
+### Rules
 
-1. **Язык коммитов: English** — всегда, без исключений
-2. **Первая буква после типа — строчная**: `feat: add ...`, не `feat: Add ...`
-3. **Без точки в конце**: `feat: add grid control`, не `feat: add grid control.`
-4. **Императивное наклонение**: `add`, `fix`, `update`, не `added`, `fixed`, `updated`
-5. **Краткость**: до 72 символов в первой строке
-6. **БЕЗ строк Co-Authored-By от AI** — мы не указываем AI как соавторов
+1. **Commit language: English** — always, no exceptions
+2. **First letter after the type is lowercase**: `feat: add ...`, not `feat: Add ...`
+3. **No trailing period**: `feat: add grid control`, not `feat: add grid control.`
+4. **Imperative mood**: `add`, `fix`, `update`, not `added`, `fixed`, `updated`
+5. **Concise**: up to 72 characters in the first line
+6. **NO Co-Authored-By lines from AI** — we don't list AI as co-authors
 
-### Тело коммита (опционально)
+### Commit body (optional)
 
-Если нужно объяснение — добавьте тело через пустую строку:
+If you need an explanation — add a body after a blank line:
 
 ```
 fix: resolve memory leak in Firebird connection pool
@@ -106,102 +106,102 @@ an exception. Wrapped connection acquisition in RAII guard
 Closes #87
 ```
 
-### Что НЕ допускается
+### What is NOT allowed
 
 ```bash
-# Плохие коммиты:
-"fix"                                    — непонятно что
-"WIP"                                    — не коммитьте незавершённое
-"fixed stuff"                            — неинформативно
-"feat: add feature"                      — тавтология
-"update"                                 — что обновлено?
-"Co-Authored-By: Claude <...>"           — запрещено
-"fix: Исправлен краш при открытии"      — русский язык
+# Bad commits:
+"fix"                                    — unclear what
+"WIP"                                    — don't commit work in progress
+"fixed stuff"                            — uninformative
+"feat: add feature"                      — tautology
+"update"                                 — what was updated?
+"Co-Authored-By: Claude <...>"           — forbidden
+"fix: Исправлен краш при открытии"      — Russian language
 ```
 
 ---
 
 ## Pull Requests
 
-### Создание PR
+### Creating a PR
 
-1. **Всегда из рабочей ветки в `develop`** (кроме hotfix → master)
-2. **Описание обязательно** — что сделано, зачем, как проверить
-3. **Один PR = одна задача/фича** — не комбинируйте несвязанные изменения
+1. **Always from a working branch into `develop`** (except hotfix → master)
+2. **Description is mandatory** — what was done, why, how to verify
+3. **One PR = one task/feature** — don't combine unrelated changes
 
-### Шаблон PR
+### PR template
 
 ```markdown
 ## What
-Краткое описание изменений (1-2 предложения).
+Brief description of changes (1-2 sentences).
 
 ## Why
-Зачем нужны эти изменения (ссылка на задачу/issue).
+Why these changes are needed (link to task/issue).
 
 ## How to test
-1. Собрать проект в конфигурации Debug (x64)
-2. Открыть форму с [описание]
-3. Выполнить [действие]
-4. Ожидаемый результат: [описание]
+1. Build the project in Debug (x64) configuration
+2. Open a form with [description]
+3. Perform [action]
+4. Expected result: [description]
 
 ## Screenshots (if UI changes)
-До/После скриншоты если изменился интерфейс.
+Before/after screenshots if the UI changed.
 
 ## Checklist
-- [ ] Код компилируется без ошибок и предупреждений (Debug + Release, x64)
-- [ ] Тесты проходят (ctest)
-- [ ] Нет утечек памяти (проверено Valgrind/Dr.Memory или ASAN)
-- [ ] Нет сырых owning указателей (new без smart pointer)
-- [ ] Конфиги с credentials не попали в коммит
-- [ ] CLAUDE.md обновлён если изменилась архитектура
+- [ ] Code compiles without errors or warnings (Debug + Release, x64)
+- [ ] Tests pass (ctest)
+- [ ] No memory leaks (checked with Valgrind/Dr.Memory or ASAN)
+- [ ] No raw owning pointers (new without smart pointer)
+- [ ] Configs with credentials did not end up in the commit
+- [ ] CLAUDE.md updated if architecture changed
 ```
 
-### Процесс мерджа
+### Merge process
 
-1. Автор создаёт PR
-2. Ревьюер проверяет (см. [03-code-review.md](./03-code-review.md))
-3. Автор исправляет замечания
-4. Ревьюер одобряет (Approve)
-5. **Squash merge** — все коммиты из ветки сжимаются в один
-6. **Удаление ветки** после мерджа — автоматически или вручную
+1. Author creates the PR
+2. Reviewer reviews (see [03-code-review.md](./03-code-review.md))
+3. Author addresses comments
+4. Reviewer approves (Approve)
+5. **Squash merge** — all commits from the branch are squashed into one
+6. **Delete the branch** after merge — automatically or manually
 
-### Почему squash merge
+### Why squash merge
 
-- Чистая история в `develop` и `master`
-- Каждый коммит в основных ветках = одна завершённая фича/фикс
-- Легко откатить одним `git revert`
+- Clean history in `develop` and `master`
+- Each commit on main branches = one finished feature/fix
+- Easy to roll back with a single `git revert`
 
-Настройка в GitHub: Settings → General → Pull Requests → Allow squash merging (только)
+GitHub configuration: Settings → General → Pull Requests → Allow squash merging (only)
 
 ---
 
-## Процесс релиза
+## Release process
 
-### Develop → Master (релиз)
+### Develop → Master (release)
 
 ```
-1. Убедиться что develop стабилен (CI зелёный, тесты проходят)
-2. Проверить Release сборку вручную на чистой машине
-3. Создать PR: develop → master
-4. Описание: список изменений с прошлого релиза (CHANGELOG)
-5. Ревью и approve
-6. Merge (обычный merge, не squash — сохраняем историю)
-7. Создать тег: vX.Y.Z
-8. Собрать инсталлятор и загрузить в GitHub Releases
+1. Make sure develop is stable (CI green, tests pass)
+2. Verify the Release build manually on a clean machine
+3. Create PR: develop → master
+4. Description: list of changes since the previous release (CHANGELOG)
+5. Review and approve
+6. Merge (regular merge, not squash — preserve history)
+7. Create the tag: vX.Y.Z
+8. Build the installer and upload to GitHub Releases
 ```
 
-### Версионирование (Semantic Versioning)
+### Versioning (Semantic Versioning)
 
 ```
 vMAJOR.MINOR.PATCH
 
-v1.0.0 — первый стабильный релиз
-v1.1.0 — новые фичи (backwards compatible)
-v1.1.1 — багфиксы
-v2.0.0 — breaking changes (изменение публичного API плагинов)
+v1.0.0 — first stable release
+v1.1.0 — new features (backwards compatible)
+v1.1.1 — bug fixes
+v2.0.0 — breaking changes (public plugin API change)
 ```
 
-### Создание тега
+### Creating a tag
 
 ```bash
 git checkout master
@@ -212,61 +212,61 @@ git push origin v1.2.0
 
 ---
 
-## Hotfix процесс
+## Hotfix process
 
-Для критических багов в production, которые нельзя ждать:
+For critical production bugs that can't wait:
 
 ```
-1. Создать ветку hotfix/описание от master
-2. Исправить баг
+1. Create a hotfix/description branch from master
+2. Fix the bug
 3. PR: hotfix → master
-4. После мерджа в master — создать PR: master → develop (чтобы фикс попал в develop)
-5. Собрать hotfix-релиз
-6. Создать тег vX.Y.Z+1
+4. After merging into master — create PR: master → develop (so the fix lands in develop)
+5. Build the hotfix release
+6. Create the tag vX.Y.Z+1
 ```
 
 ---
 
-## Запрещённые действия
+## Forbidden actions
 
-### Категорически запрещено:
+### Strictly forbidden:
 
-| Действие | Почему |
+| Action | Why |
 |----------|--------|
-| `git push --force` в master или develop | Ломает историю для всей команды |
-| Коммит файлов с credentials (пароли БД, API-ключи) | Утечка секретов |
-| Коммит бинарных артефактов сборки (`.obj`, `.exe`, `.dll`) | Огромный размер, не нужны в git |
-| Коммит `build/` и `Debug/`/`Release/` директорий | Build artifacts не хранятся в git |
-| Прямой push в master или develop | Обход код-ревью |
-| Коммит `.vs/` директории Visual Studio | Локальные IDE-настройки |
+| `git push --force` to master or develop | Breaks history for the whole team |
+| Committing files with credentials (DB passwords, API keys) | Leaks secrets |
+| Committing build binaries (`.obj`, `.exe`, `.dll`) | Huge size, not needed in git |
+| Committing `build/` and `Debug/`/`Release/` directories | Build artifacts don't belong in git |
+| Direct push to master or develop | Bypasses code review |
+| Committing the `.vs/` Visual Studio directory | Local IDE settings |
 
-### Как защитить ветки в GitHub
+### How to protect branches in GitHub
 
 Settings → Branches → Branch protection rules:
 
-Для `master`:
+For `master`:
 - Require pull request reviews (1 approval)
 - Require status checks to pass (CI build + tests)
 - Do not allow force pushes
 - Do not allow deletions
 
-Для `develop`:
+For `develop`:
 - Require pull request reviews (1 approval)
 - Do not allow force pushes
 
 ---
 
-## Типичный рабочий день
+## A typical working day
 
 ```bash
-# 1. Начало работы: обновить develop
+# 1. Start: update develop
 git checkout develop
 git pull origin develop
 
-# 2. Создать ветку для задачи
+# 2. Create a branch for the task
 git checkout -b feature/add-report-export-pdf
 
-# 3. Работать, коммитить (небольшими логическими шагами)
+# 3. Work, commit (in small logical steps)
 git add src/engine/backend/report/ibValueReportExporterPdf.h
 git add src/engine/backend/report/ibValueReportExporterPdf.cpp
 git commit -m "feat: add PDF report exporter class skeleton"
@@ -274,54 +274,54 @@ git commit -m "feat: add PDF report exporter class skeleton"
 git add src/engine/backend/metaCollection/partial/commonObjectQuery.cpp
 git commit -m "feat: integrate PDF exporter into report metadata query"
 
-# 4. Пушнуть ветку
+# 4. Push the branch
 git push -u origin feature/add-report-export-pdf
 
-# 5. Создать PR в GitHub: feature/add-report-export-pdf → develop
+# 5. Create a PR on GitHub: feature/add-report-export-pdf → develop
 
-# 6. После ревью и approve — squash merge в develop
+# 6. After review and approve — squash merge into develop
 
-# 7. Локально обновить develop
+# 7. Update develop locally
 git checkout develop
 git pull origin develop
 
-# 8. Удалить локальную ветку
+# 8. Delete the local branch
 git branch -d feature/add-report-export-pdf
 ```
 
 ---
 
-## Решение конфликтов
+## Resolving conflicts
 
-Если ваша ветка конфликтует с `develop`:
+If your branch conflicts with `develop`:
 
 ```bash
-# Вариант 1: Rebase (предпочтительно для маленьких веток)
+# Option 1: Rebase (preferred for small branches)
 git checkout feature/my-branch
 git fetch origin
 git rebase origin/develop
-# Решить конфликты в файлах .h/.cpp
+# Resolve conflicts in .h/.cpp files
 git add .
 git rebase --continue
-git push --force-with-lease  # force-with-lease, не --force!
+git push --force-with-lease  # force-with-lease, not --force!
 
-# Вариант 2: Merge develop в ветку (для больших веток)
+# Option 2: Merge develop into the branch (for large branches)
 git checkout feature/my-branch
 git fetch origin
 git merge origin/develop
-# Решить конфликты
+# Resolve conflicts
 git add .
 git commit -m "chore: merge develop into feature branch"
 git push
 ```
 
-**Важно:** `--force-with-lease` безопаснее чем `--force` — он проверяет, что никто не пушил в ветку после вас.
+**Important:** `--force-with-lease` is safer than `--force` — it checks that nobody else pushed to the branch after you.
 
-### Конфликты в .vcxproj / CMakeLists.txt
+### Conflicts in .vcxproj / CMakeLists.txt
 
-Конфликты в файлах проекта Visual Studio (`.vcxproj`) случаются часто при параллельной работе. Правило:
+Conflicts in Visual Studio project files (`.vcxproj`) happen often when working in parallel. Rule:
 
-1. Открыть конфликтующий `.vcxproj` в текстовом редакторе
-2. В секции `<ItemGroup>` принять **оба** набора файлов (взять изменения из обеих сторон)
-3. Отсортировать записи в алфавитном порядке для минимизации будущих конфликтов
-4. Для CMakeLists.txt — аналогично: добавить все файлы из обеих сторон
+1. Open the conflicting `.vcxproj` in a text editor
+2. In the `<ItemGroup>` section accept **both** sets of files (take changes from both sides)
+3. Sort entries alphabetically to minimize future conflicts
+4. For CMakeLists.txt — same approach: add all files from both sides

@@ -1,86 +1,86 @@
-# 06. AI-агенты
+# 06. AI Agents
 
-## Философия
+## Philosophy
 
-AI (Claude Code, Claude Desktop, ChatGPT) — это **партнёр по разработке**, а не автономный разработчик. AI пишет черновик, человек доводит до продакшн-качества. AI ускоряет работу, но не заменяет инженерное мышление.
+AI (Claude Code, Claude Desktop, ChatGPT) is a **development partner**, not an autonomous developer. AI writes a draft, a human takes it to production quality. AI speeds up work but doesn't replace engineering judgement.
 
-Мы активно используем AI в повседневной работе и считаем это конкурентным преимуществом. Но у этого подхода есть чёткие правила.
+We use AI heavily in day-to-day work and consider it a competitive advantage. But this approach comes with clear rules.
 
 ---
 
-## 10 правил работы с AI
+## 10 rules for working with AI
 
-### 1. Человек всегда ревьюит код AI
+### 1. A human always reviews AI code
 
-Никакой AI-код не попадает в `develop` или `master` без ревью человеком. AI галлюцинирует — уверенно использует несуществующие API, создаёт логические ошибки, игнорирует контекст проекта. Человек — последний рубеж перед продакшном.
+No AI code reaches `develop` or `master` without human review. AI hallucinates — it confidently uses non-existent APIs, produces logic errors, ignores the project context. The human is the last line of defence before production.
 
-**Практика:** Прежде чем коммитить AI-код, прочитайте каждую строку. Не просто "выглядит нормально", а реально проверьте: существуют ли заголовочные файлы? Правильная ли логика управления памятью? Нет ли UB?
+**Practice:** Before committing AI code, read every line. Not just "looks OK" — actually verify: do those headers exist? Is the memory-management logic right? Any UB?
 
-### 2. Не доверять слепо — проверять API, логику, управление памятью
+### 2. Don't trust blindly — verify APIs, logic, memory management
 
-Типичные ошибки AI в C++ коде, которые нужно ловить:
+Typical AI mistakes in C++ code to catch:
 
 ```cpp
-// AI может написать несуществующий API:
-std::string::trim();                    // Не существует в стандарте
-std::filesystem::read_all_text(path);   // Не существует
+// AI may invoke non-existent APIs:
+std::string::trim();                    // Does not exist in the standard
+std::filesystem::read_all_text(path);   // Does not exist
 
-// AI может написать небезопасный код:
+// AI may write unsafe code:
 std::string query = "SELECT * FROM users WHERE id = " + userId; // SQL injection!
 char buf[256]; strcpy(buf, userInput.c_str());                  // Buffer overflow!
 
-// AI может использовать устаревшие паттерны:
-std::auto_ptr<MyClass> ptr(new MyClass());  // auto_ptr удалён в C++17
-if (ptr == NULL) ...                         // Использовать nullptr
+// AI may use outdated patterns:
+std::auto_ptr<MyClass> ptr(new MyClass());  // auto_ptr removed in C++17
+if (ptr == NULL) ...                         // Use nullptr
 
-// AI может ошибиться с wxWidgets API:
-wxGrid::SetCellValue(row, col, value);      // Неверная сигнатура
-wxString::Format("%s", str);                // Ошибка: %s требует const char*, не wxString
-                                            // Правильно: wxString::Format("%s", str.c_str())
-                                            // или используйте wxString::Format("%ls", str.wc_str())
+// AI may get the wxWidgets API wrong:
+wxGrid::SetCellValue(row, col, value);      // Wrong signature
+wxString::Format("%s", str);                // Error: %s expects const char*, not wxString
+                                            // Correct: wxString::Format("%s", str.c_str())
+                                            // or use wxString::Format("%ls", str.wc_str())
 ```
 
-**Практика:** Если видите незнакомый метод или класс — откройте cppreference.com или документацию wxWidgets и проверьте. AI очень уверенно "врёт".
+**Practice:** If you see an unfamiliar method or class — open cppreference.com or the wxWidgets docs and verify. AI lies very confidently.
 
-### 3. AI не коммитит напрямую — человек создаёт коммит
+### 3. AI does not commit directly — a human creates the commit
 
-AI-инструменты (Claude Code) умеют создавать коммиты. Мы этим **не пользуемся**. Человек всегда:
-1. Просматривает изменения (`git diff`)
-2. Решает что включить в коммит
-3. Пишет осмысленное сообщение
-4. Создаёт коммит сам
+AI tools (Claude Code) can create commits. We **do not use** that. A human always:
+1. Reviews the changes (`git diff`)
+2. Decides what to include in the commit
+3. Writes a meaningful message
+4. Creates the commit themselves
 
-Исключение: AI может предложить текст коммита, но человек его проверяет и создаёт коммит.
+Exception: AI may suggest a commit message, but a human verifies it and creates the commit.
 
-### 4. Без Co-Authored-By в коммитах
+### 4. No Co-Authored-By in commits
 
-Мы **не указываем AI как соавтора** в коммитах. Никаких строк вроде:
+We **do not list AI as a co-author** in commits. No lines like:
 ```
 Co-Authored-By: Claude <noreply@anthropic.com>
 Co-Authored-By: ChatGPT <noreply@openai.com>
 ```
 
-Причины:
-- Ответственность за код несёт человек, не AI
-- Засоряет историю git
-- Не несёт полезной информации
+Reasons:
+- Responsibility for the code lies with the human, not the AI
+- It clutters git history
+- It carries no useful information
 
-### 5. CLAUDE.md — главный файл контекста
+### 5. CLAUDE.md — the main context file
 
-CLAUDE.md — самый важный файл для работы с AI. Обновляйте его при:
-- Добавлении нового модуля или подсистемы
-- Изменении структуры проекта
-- Новых бизнес-правилах
-- Изменении команд сборки
-- Новых зависимостях или конфигурационных файлах
+CLAUDE.md is the most important file for working with AI. Update it when:
+- Adding a new module or subsystem
+- Project structure changes
+- New business rules appear
+- Build commands change
+- New dependencies or configuration files
 
-Хороший CLAUDE.md экономит 15-30 минут на каждой сессии с AI. Плохой (или отсутствующий) — заставляет повторно объяснять контекст каждый раз.
+A good CLAUDE.md saves 15-30 minutes per AI session. A bad one (or its absence) forces you to re-explain context every time.
 
-Структура CLAUDE.md описана в [01-project-structure.md](./01-project-structure.md).
+CLAUDE.md structure is described in [01-project-structure.md](./01-project-structure.md).
 
-### 6. .claude.json — MCP подключения
+### 6. .claude.json — MCP connections
 
-Файл `.claude.json` позволяет Claude Code подключаться к внешним сервисам через MCP (Model Context Protocol):
+The `.claude.json` file lets Claude Code connect to external services through MCP (Model Context Protocol):
 
 ```json
 {
@@ -100,241 +100,241 @@ CLAUDE.md — самый важный файл для работы с AI. Обн
 }
 ```
 
-Это даёт AI доступ к:
-- Файловой системе проекта (для навигации по коду)
-- GitHub API (для работы с issues, PR)
+This gives AI access to:
+- The project file system (for code navigation)
+- The GitHub API (for working with issues, PRs)
 
-**Важно:** Если `.claude.json` содержит реальные credentials — добавьте в `.gitignore`. Можно коммитить `.claude.json.example` без реальных токенов.
+**Important:** If `.claude.json` contains real credentials — add it to `.gitignore`. You can commit a `.claude.json.example` without real tokens.
 
-### 7. Специализированные агенты
+### 7. Specialized agents
 
-В CLAUDE.md можно определить "роли" для AI — специализированные промпты для конкретных задач:
+In CLAUDE.md you can define "roles" for AI — specialized prompts for specific tasks:
 
 ```markdown
 ## AI Agents
 
 ### Security Scanner
-Проверь код на уязвимости: SQL-инъекции (конкатенация строк в SQL),
-переполнения буферов (небезопасные функции strcpy/sprintf),
-хардкод credentials, незащищённый доступ к файлам.
+Check code for vulnerabilities: SQL injection (string concatenation in SQL),
+buffer overflows (unsafe strcpy/sprintf), hardcoded credentials,
+unsafe file access.
 
 ### Code Reviewer
-Проверь PR на соответствие стандартам C++17:
-- Нет raw owning pointers (new без smart pointer)
-- Все ресурсы управляются через RAII
-- const-correctness (методы без побочных эффектов объявлены const)
-- explicit для конструкторов с одним параметром
-- Используй чеклист из 03-code-review.md
+Check the PR against C++17 standards:
+- No raw owning pointers (new without smart pointer)
+- All resources managed via RAII
+- const-correctness (methods with no side effects declared const)
+- explicit for single-parameter constructors
+- Use the checklist from 03-code-review.md
 
 ### Test Writer (Google Test)
-Напиши тесты для указанного класса/метода.
-Используй Google Test (gtest/gtest.h).
-Структура: TEST(ClassName, MethodName_Condition_ExpectedResult).
-Тестируй публичный интерфейс, изолируй зависимости через mock-объекты.
-Для DB-кода: MockDatabaseLayer наследует ibDatabaseLayer, мокируй PrepareStatement.
-Параметризованные запросы: SetParamString/SetParamInt — НЕ конкатенация строк.
+Write tests for the given class/method.
+Use Google Test (gtest/gtest.h).
+Naming: TEST(ClassName, MethodName_Condition_ExpectedResult).
+Test the public interface, isolate dependencies via mock objects.
+For DB code: MockDatabaseLayer extends ibDatabaseLayer, mock PrepareStatement.
+Parameterized queries: SetParamString/SetParamInt — NOT string concatenation.
 
 ### CMake Writer
-Сгенерируй CMakeLists.txt для указанного модуля.
-Требования: C++17, target-based подход (target_sources, target_include_directories),
-совместимость с Visual Studio 2017+ и GCC 9+.
+Generate a CMakeLists.txt for the given module.
+Requirements: C++17, target-based approach (target_sources, target_include_directories),
+compatible with Visual Studio 2017+ and GCC 9+.
 ```
 
-### 8. AI говорит по-русски с командой, код на English
+### 8. AI talks to the team in Russian, code is in English
 
-| Контекст | Язык |
+| Context | Language |
 |----------|------|
-| Обсуждение задачи с AI | Russian |
-| Код, написанный AI | English |
-| Комментарии в коде от AI | English |
-| Коммиты | English |
-| Документация (README, CLAUDE.md) | English |
+| Discussing a task with AI | Russian |
+| Code written by AI | English |
+| Code comments by AI | English |
+| Commits | English |
+| Documentation (README, CLAUDE.md) | English |
 
-Промпты AI можно писать на русском — AI понимает и отвечает на том же языке. Но весь код и техническая документация — только English.
+AI prompts can be written in Russian — AI understands and replies in the same language. But all code and technical documentation — English only.
 
-### 9. Промпты для AI должны быть конкретными
+### 9. AI prompts must be specific
 
-Плохой промпт:
+Bad prompt:
 ```
-Добавь экспорт в PDF
-```
-
-Хороший промпт:
-```
-Создай класс ibValueReportExporterPdf для экспорта отчётов в PDF в OES Enterprise:
-- Файл: src/engine/backend/report/ibValueReportExporterPdf.h + .cpp
-- Зависимость: libharu (hpdf.h) — уже подключена в проекте
-- Метод: bool Export(ibDatabaseLayer* db, int reportMetaId, const wxString& filePath)
-- RAII: unique_ptr для внутренних ресурсов
-- Параметризованные запросы: ibPreparedStatement + SetParamString/SetParamInt
-- Транзакции: ibTransactionGuard (RAII rollback)
-- Обработка ошибок: бросать ibBackendCoreException при ошибке libharu или БД
-- Нет C++ namespace (исторический стиль проекта, префикс ib)
-
-Текущая структура: src/engine/backend/metaCollection/partial/commonObjectQuery.cpp
-содержит CreateAndUpdateTableDB(). C++17, компилятор MSVC 2017+.
+Add PDF export
 ```
 
-**Правило:** Чем больше контекста в промпте, тем лучше результат. Не экономьте на описании.
+Good prompt:
+```
+Create an ibValueReportExporterPdf class for exporting reports to PDF in OES Enterprise:
+- File: src/engine/backend/report/ibValueReportExporterPdf.h + .cpp
+- Dependency: libharu (hpdf.h) — already linked in the project
+- Method: bool Export(ibDatabaseLayer* db, int reportMetaId, const wxString& filePath)
+- RAII: unique_ptr for internal resources
+- Parameterized queries: ibPreparedStatement + SetParamString/SetParamInt
+- Transactions: ibTransactionGuard (RAII rollback)
+- Error handling: throw ibBackendCoreException on libharu or DB error
+- No C++ namespace (historical project style, ib prefix)
 
-### 10. Результат AI — черновик, не финальная версия
+Current layout: src/engine/backend/metaCollection/partial/commonObjectQuery.cpp
+contains CreateAndUpdateTableDB(). C++17, MSVC 2017+ compiler.
+```
 
-AI-код — это отправная точка. После получения результата от AI:
+**Rule:** the more context in the prompt, the better the result. Don't skimp on description.
 
-1. **Прочитайте** весь код, не бегло, а внимательно
-2. **Проверьте** заголовочные файлы (реально ли они существуют?) и API-вызовы
-3. **Скомпилируйте** — убедитесь что компилируется без предупреждений
-4. **Запустите** — убедитесь что работает на реальных данных
-5. **Доработайте** — адаптируйте под специфику проекта
-6. **Удалите лишнее** — AI часто добавляет ненужные комментарии и избыточный код
+### 10. AI output is a draft, not the final version
+
+AI code is a starting point. After getting a result from the AI:
+
+1. **Read** the entire code, carefully, not skimming
+2. **Verify** header files (do they actually exist?) and API calls
+3. **Build** — make sure it compiles without warnings
+4. **Run** — make sure it works on real data
+5. **Refine** — adapt it to the specifics of the project
+6. **Trim** — AI often adds unnecessary comments and redundant code
 
 ---
 
-## Паттерны использования AI
+## Patterns for using AI
 
-### Scaffolding: AI создаёт скелет, человек доводит
+### Scaffolding: AI creates the skeleton, a human finishes it
 
-Лучший способ использовать AI — для создания начальной структуры:
-
-```
-Промпт: "Создай скелет нового типа метаобъекта для OES:
-- src/engine/backend/metaCollection/ — новый класс ibValueMetaObjectReport
-- Базовый класс: ibValueMetaObject (аналогично ibValueMetaObjectCatalog)
-- Методы: CreateAndUpdateTableDB() — создание/обновление таблицы в БД
-- Параметризованные запросы через ibPreparedStatement + SetParamString/SetParamInt
-- Транзакции через ibTransactionGuard (RAII rollback)
-- Исключения: ibBackendCoreException при ошибках БД"
-```
-
-AI быстро создаст структуру. Человек затем:
-- Проверяет совместимость с ibDatabaseLayer API (реальные сигнатуры методов)
-- Проверяет что ibPreparedStatement::SetParamString/SetParamInt существуют
-- Добавляет реальную логику работы с метаданными
-- Пишет unit-тесты с MockDatabaseLayer
-- Проверяет что ibTransactionGuard корректно вызывается
-
-### Code Review: AI как первый ревьюер
-
-Перед отправкой PR на ревью человеку — попросите AI проверить:
+The best way to use AI is to create initial structure:
 
 ```
-Промпт: "Проверь этот C++ код на:
-1. Утечки памяти и ресурсов (RAII, smart pointers)
-2. Потенциальные UB (uninitialized variables, out-of-bounds, null deref)
-3. SQL injection и другие уязвимости
-4. Нарушения const-correctness
-5. Соответствие C++17 (нет устаревших конструкций)"
+Prompt: "Create a skeleton for a new OES meta-object type:
+- src/engine/backend/metaCollection/ — new class ibValueMetaObjectReport
+- Base class: ibValueMetaObject (similar to ibValueMetaObjectCatalog)
+- Methods: CreateAndUpdateTableDB() — create/update the DB table
+- Parameterized queries via ibPreparedStatement + SetParamString/SetParamInt
+- Transactions via ibTransactionGuard (RAII rollback)
+- Exceptions: ibBackendCoreException on DB errors"
 ```
 
-AI хорошо находит очевидные проблемы и экономит время ревьюера-человека.
+AI quickly produces the structure. The human then:
+- Verifies compatibility with the ibDatabaseLayer API (real method signatures)
+- Verifies that ibPreparedStatement::SetParamString/SetParamInt exist
+- Adds the real metadata logic
+- Writes unit tests with MockDatabaseLayer
+- Verifies that ibTransactionGuard is invoked correctly
 
-### Debugging: AI анализирует ошибку, предлагает решения
+### Code Review: AI as the first reviewer
 
-```
-Промпт: "Access Violation в ReportRenderer::RenderRow() при пустом датасете.
-Стектрейс: [стектрейс из Visual Studio].
-Вот код метода: [код].
-Вот класс ReportDocument (датасет): [код].
-Что не так и как исправить?"
-```
-
-AI хорошо анализирует ошибки, особенно если предоставить достаточно контекста (стектрейс, код, тип СУБД).
-
-### Написание тестов: AI генерирует, человек проверяет
+Before sending the PR to a human reviewer — ask the AI to check:
 
 ```
-Промпт: "Напиши Google Test для ibDatabaseLayerFirebird:
-- Тест на успешный SELECT через ibPreparedStatement + SetParamString/SetParamInt
-- Тест на параметризованный запрос (защита от SQL injection)
-- Тест на ошибку при некорректном SQL (ожидаем ibBackendCoreException)
-- Тест на поведение при потере соединения
-- Транзакции через ibTransactionGuard (проверить rollback при отсутствии Commit)
-Используй MockDatabaseLayer (mock ibDatabaseLayer) для unit-тестов.
-Для integration-тестов — реальный ibDatabaseLayerFirebird с тестовой БД."
+Prompt: "Review this C++ code for:
+1. Memory and resource leaks (RAII, smart pointers)
+2. Potential UB (uninitialized variables, out-of-bounds, null deref)
+3. SQL injection and other vulnerabilities
+4. const-correctness violations
+5. C++17 compliance (no outdated constructs)"
 ```
 
-### Refactoring: AI предлагает улучшения, человек одобряет
+AI finds obvious problems well and saves the human reviewer time.
+
+### Debugging: AI analyzes the error and suggests fixes
 
 ```
-Промпт: "commonObjectQuery.cpp вырос до 800 строк. Предложи как его разбить
-на несколько классов, сохраняя текущий интерфейс (ibDatabaseLayer + ibPreparedStatement).
-Покажи план рефакторинга по шагам с названиями новых классов.
-Обрати внимание: транзакции через ibTransactionGuard, запросы через SetParamString/SetParamInt."
+Prompt: "Access Violation in ReportRenderer::RenderRow() with an empty dataset.
+Stack trace: [stack trace from Visual Studio].
+Here's the method code: [code].
+Here's the ReportDocument class (dataset): [code].
+What's wrong and how to fix?"
 ```
 
-AI предлагает архитектуру, человек оценивает и принимает решение.
+AI analyzes errors well, especially when given enough context (stack trace, code, DBMS type).
 
-### CMake миграция: AI помогает с синтаксисом
+### Writing tests: AI generates, a human verifies
 
 ```
-Промпт: "Конвертируй эту секцию .vcxproj в CMakeLists.txt:
-[содержимое ItemGroup из .vcxproj]
-Требования: C++17, MSVC 2017+, target-based CMake, совместимо с vcpkg."
+Prompt: "Write Google Test cases for ibDatabaseLayerFirebird:
+- A test for a successful SELECT via ibPreparedStatement + SetParamString/SetParamInt
+- A test for parameterized query (protection against SQL injection)
+- A test for an error on invalid SQL (expect ibBackendCoreException)
+- A test for behaviour on connection loss
+- Transactions via ibTransactionGuard (verify rollback when Commit is not called)
+Use MockDatabaseLayer (mock ibDatabaseLayer) for unit tests.
+For integration tests — a real ibDatabaseLayerFirebird with a test DB."
+```
+
+### Refactoring: AI suggests improvements, a human approves
+
+```
+Prompt: "commonObjectQuery.cpp grew to 800 lines. Propose how to split it
+into several classes while preserving the current interface (ibDatabaseLayer + ibPreparedStatement).
+Show a step-by-step refactoring plan with names of the new classes.
+Note: transactions via ibTransactionGuard, queries via SetParamString/SetParamInt."
+```
+
+AI proposes an architecture, a human evaluates and decides.
+
+### CMake migration: AI helps with the syntax
+
+```
+Prompt: "Convert this .vcxproj section into CMakeLists.txt:
+[ItemGroup content from .vcxproj]
+Requirements: C++17, MSVC 2017+, target-based CMake, compatible with vcpkg."
 ```
 
 ---
 
-## Безопасность данных при работе с AI
+## Data security when working with AI
 
-### Категорически запрещено отправлять в AI:
+### Strictly forbidden to send to AI:
 
-| Данные | Пример | Что делать |
+| Data | Example | What to do |
 |--------|--------|------------|
-| Строки подключения к БД | `SYSDBA:masterkey@server/database.fdb` | Замените на `<DB_CONNECTION_STRING>` |
-| API ключи и токены | GitHub token, лицензионные ключи | Замените на `<REDACTED>` |
-| Персональные данные из БД | Имена, email, телефоны реальных пользователей | Замените на фейковые данные |
-| Содержимое config.ini | Реальные пароли и хосты | Используйте config.ini.example |
-| SSH ключи | Содержимое ~/.ssh/ | Никогда |
+| DB connection strings | `SYSDBA:masterkey@server/database.fdb` | Replace with `<DB_CONNECTION_STRING>` |
+| API keys and tokens | GitHub token, license keys | Replace with `<REDACTED>` |
+| Personal data from the DB | Real user names, emails, phone numbers | Replace with fake data |
+| Contents of config.ini | Real passwords and hosts | Use config.ini.example |
+| SSH keys | Contents of ~/.ssh/ | Never |
 
-### Правила работы с данными
+### Data handling rules
 
-1. **Маскируйте конфиденциальные данные перед отправкой в AI:**
+1. **Mask sensitive data before sending to AI:**
 ```
-# Плохо:
-"Ошибка соединения: host=192.168.1.100 user=admin password=secret123"
+# Bad:
+"Connection error: host=192.168.1.100 user=admin password=secret123"
 
-# Хорошо:
-"Ошибка соединения с Firebird, конфиг: host=<HOST> user=<USER>"
-```
-
-2. **Используйте фейковые данные в примерах:**
-```
-# Плохо:
-"Вот config.ini: Password=MyRealPassword123"
-
-# Хорошо:
-"Вот структура config.ini (значения заменены): Password=<your-password>"
+# Good:
+"Firebird connection error, config: host=<HOST> user=<USER>"
 ```
 
-3. **Не используйте production БД через MCP:**
-`.claude.json` должен указывать только на **локальную** БД разработки, никогда на production.
+2. **Use fake data in examples:**
+```
+# Bad:
+"Here's config.ini: Password=MyRealPassword123"
+
+# Good:
+"Here's the config.ini structure (values replaced): Password=<your-password>"
+```
+
+3. **Don't use production DBs through MCP:**
+`.claude.json` should point only to a **local** development DB, never to production.
 
 ---
 
-## Настройка рабочего окружения для AI
+## Setting up the AI working environment
 
 ### Claude Code CLI
 
 ```bash
-# Предварительное требование: Node.js 18+
-# Скачать с https://nodejs.org/ (рекомендуется LTS-версия)
-# Проверить установку:
-node --version   # должно быть v18.0.0 или выше
+# Prerequisite: Node.js 18+
+# Download from https://nodejs.org/ (LTS recommended)
+# Verify installation:
+node --version   # must be v18.0.0 or newer
 npm --version
 
-# Установка
+# Install
 npm install -g @anthropic-ai/claude-code
 
-# Запуск в проекте
+# Run in the project
 cd /path/to/enterprise
 claude
 
-# Claude автоматически прочитает CLAUDE.md и .claude.json
+# Claude automatically reads CLAUDE.md and .claude.json
 ```
 
 ### Claude Desktop
 
-Добавьте MCP серверы в `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) или `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+Add MCP servers to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ```json
 {
@@ -354,16 +354,16 @@ claude
 }
 ```
 
-### Общие правила для AI-инструментов
+### General rules for AI tools
 
-1. Начинайте сессию с контекста (CLAUDE.md читается автоматически в Claude Code)
-2. Один промпт — одна задача (не просите AI сделать 10 вещей сразу)
-3. Проверяйте результат перед следующим промптом
-4. Если AI ушёл не туда — остановите и переформулируйте задачу
-5. Сохраняйте удачные промпты в `docs/ai-prompts/` для повторного использования
-6. При работе с незнакомым API (wxWidgets, Firebird IBPP) — всегда указывайте AI проверять актуальную документацию
+1. Start the session with context (CLAUDE.md is read automatically in Claude Code)
+2. One prompt — one task (don't ask the AI to do 10 things at once)
+3. Verify the result before the next prompt
+4. If the AI goes off-track — stop and rephrase the task
+5. Save good prompts in `docs/ai-prompts/` for reuse
+6. When working with an unfamiliar API (wxWidgets, Firebird IBPP) — always tell the AI to check the current documentation
 
-### Запуск сборки — только по команде
+### Running builds — only on command
 
 The AI MUST NOT run a build (`msbuild`, `cmake --build`, any compile command) on its own to verify edits. This includes:
 

@@ -1,29 +1,29 @@
-# 07. Безопасность
+# 07. Security
 
-## Главное правило
+## The main rule
 
-> **Если сомневаешься — это небезопасно.** Лучше перестраховаться, чем объяснять клиентам почему утекли их данные.
+> **If in doubt — assume it's insecure.** Better to over-protect than to explain to customers why their data leaked.
 
 ---
 
-## Секреты и credentials
+## Secrets and credentials
 
-### НИКОГДА не коммитить
+### NEVER commit
 
-| Что | Примеры |
+| What | Examples |
 |-----|---------|
-| Файлы конфигурации с паролями | `config.ini`, `settings.cfg`, `*.conf` с реальными данными |
-| Ключи и сертификаты | `*.pem`, `*.key`, `*.crt`, `*.p12`, `*.pfx` |
-| SSH ключи | `id_rsa`, `id_ed25519` |
-| Строки подключения к БД | DSN с логином/паролем |
-| Пароли | Любые пароли в любом виде (включая хардкод в .cpp/.h) |
-| Дампы БД | `*.sql`, `*.fdb`, `*.fbk` с реальными данными |
-| Лицензионные ключи | Серийные номера, коды активации |
+| Configuration files with passwords | `config.ini`, `settings.cfg`, `*.conf` with real data |
+| Keys and certificates | `*.pem`, `*.key`, `*.crt`, `*.p12`, `*.pfx` |
+| SSH keys | `id_rsa`, `id_ed25519` |
+| DB connection strings | DSN with login/password |
+| Passwords | Any password in any form (including hardcoded in .cpp/.h) |
+| DB dumps | `*.sql`, `*.fdb`, `*.fbk` with real data |
+| License keys | Serial numbers, activation codes |
 
-### .gitignore — обязательный минимум
+### .gitignore — required minimum
 
 ```gitignore
-# Файлы конфигурации с реальными данными — НИКОГДА в git
+# Configuration files with real data — NEVER in git
 config.ini
 settings.ini
 *.local.ini
@@ -81,37 +81,37 @@ tmp/
 ipch/
 ```
 
-### Что делать если секрет попал в git
+### What to do if a secret ended up in git
 
-Паника обоснована. Действуйте немедленно:
+Panic is justified. Act immediately:
 
-1. **Ротация секрета** — измените скомпрометированный пароль/ключ/строку подключения ПРЯМО СЕЙЧАС
-2. **Удаление из истории** (если репозиторий публичный):
+1. **Rotate the secret** — change the compromised password/key/connection string RIGHT NOW
+2. **Remove from history** (if the repo is public):
 ```bash
-# Установите git-filter-repo
+# Install git-filter-repo
 pip install git-filter-repo
 
-# Удалите файл из всей истории
+# Remove the file from all history
 git filter-repo --path config.ini --invert-paths
 
-# Force push (единственный допустимый случай)
+# Force push (the only acceptable case)
 git push --force --all
 ```
-3. **Проверка** — убедитесь что секрет недоступен ни в одном коммите
-4. **Уведомление** — сообщите команде о компрометации
+3. **Verify** — make sure the secret is not present in any commit
+4. **Notify** — inform the team about the compromise
 
-**Важно:** Даже если вы удалите файл обычным `git rm`, он останется в истории git. Используйте `git filter-repo` для полного удаления.
+**Important:** Even if you delete the file with a regular `git rm`, it stays in git history. Use `git filter-repo` for full removal.
 
 ---
 
-## Хранение конфигурации и секретов
+## Storing configuration and secrets
 
-### Конфигурационные файлы
+### Configuration files
 
-OES читает параметры подключения к БД и настройки приложения из INI-подобных файлов. Основной принцип: файл с реальными данными — вне git, шаблон — в git.
+OES reads DB connection parameters and application settings from INI-like files. The main principle: the file with real data is outside git, the template is in git.
 
 ```ini
-; config.ini.example — в git (шаблон без реальных значений)
+; config.ini.example — in git (template without real values)
 [database]
 type=firebird
 host=localhost
@@ -125,20 +125,20 @@ log_level=info
 ```
 
 ```bash
-# Права доступа на файл конфигурации (Linux/macOS)
+# Permissions on the config file (Linux/macOS)
 chmod 600 config.ini
 
-# Проверить
+# Verify
 ls -la config.ini
 # -rw------- 1 deploy deploy 512 Jan 15 10:30 config.ini
 ```
 
-### Переменные окружения как альтернатива
+### Environment variables as an alternative
 
-Для CI/CD и контейнеризованных сред используйте переменные окружения:
+For CI/CD and containerized environments use environment variables:
 
 ```cpp
-// Чтение секретов из переменных окружения
+// Reading secrets from environment variables
 #include <cstdlib>
 #include <stdexcept>
 
@@ -152,80 +152,80 @@ std::string getRequiredEnv(const char* name) {
     return value;
 }
 
-// Использование
+// Usage
 std::string dbPassword = getRequiredEnv("OES_DB_PASSWORD");
 ```
 
-### Иерархия конфигурационных файлов
+### Configuration file hierarchy
 
-| Файл | Среда | В git? |
+| File | Environment | In git? |
 |------|-------|--------|
-| `config.ini.example` | Шаблон | Да |
-| `config.ini` | Локальная разработка | Нет |
-| `config.staging.ini` | Staging сервер | Нет |
-| `config.production.ini` | Production | Нет |
+| `config.ini.example` | Template | Yes |
+| `config.ini` | Local development | No |
+| `config.staging.ini` | Staging server | No |
+| `config.production.ini` | Production | No |
 
-### Генерация случайных паролей
+### Generating random passwords
 
 ```bash
-# Пароль БД (24 символа)
+# DB password (24 characters)
 openssl rand -base64 24
 
-# Ключ шифрования (32 байта hex)
+# Encryption key (32 bytes hex)
 openssl rand -hex 32
 ```
 
-### Ротация секретов
+### Secret rotation
 
-- **Скомпрометированные пароли** — менять немедленно (в течение часа)
-- **Плановая ротация** — раз в квартал для критичных паролей БД
-- **При увольнении сотрудника** — менять все пароли, к которым он имел доступ
+- **Compromised passwords** — rotate immediately (within an hour)
+- **Scheduled rotation** — once per quarter for critical DB passwords
+- **When an employee leaves** — rotate every password they had access to
 
 ---
 
-## SSH доступ к серверам
+## SSH access to servers
 
-### Только ключи, никогда пароли
+### Keys only, never passwords
 
 ```bash
-# На сервере: отключить аутентификацию по паролю
+# On the server: disable password authentication
 # /etc/ssh/sshd_config
 PasswordAuthentication no
 PubkeyAuthentication yes
 PermitRootLogin no
 ```
 
-### Каждый участник — свой ключ
+### Each participant — their own key
 
 ```bash
-# Создание ключа (на своей машине)
+# Create a key (on your own machine)
 ssh-keygen -t ed25519 -C "name@company.com"
 
-# Добавить публичный ключ на сервер
+# Add the public key to the server
 ssh-copy-id -i ~/.ssh/id_ed25519.pub user@server
 ```
 
-### Deploy keys для CI/CD
+### Deploy keys for CI/CD
 
 ```bash
-# На сервере: создать deploy key
+# On the server: create a deploy key
 ssh-keygen -t ed25519 -f ~/.ssh/deploy_key -N "" -C "deploy@oes-server"
 
-# Добавить в GitHub: Settings → Deploy keys → Add deploy key
-# Важно: НЕ ставить "Allow write access" (read-only)
+# Add to GitHub: Settings → Deploy keys → Add deploy key
+# Important: do NOT enable "Allow write access" (read-only)
 ```
 
 ---
 
-## Защита серверов
+## Server hardening
 
-### Базовая настройка каждого сервера
+### Baseline configuration for every server
 
 ```bash
-# 1. Обновление системы
+# 1. System updates
 sudo apt update && sudo apt upgrade -y
 
-# 2. Установить fail2ban
+# 2. Install fail2ban
 sudo apt install fail2ban -y
 sudo systemctl enable fail2ban
 
@@ -237,70 +237,70 @@ maxretry = 5
 bantime = 3600
 findtime = 600
 
-# 3. Настроить UFW
+# 3. Configure UFW
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow 22/tcp    # SSH
-sudo ufw allow 80/tcp    # HTTP (если нужен)
+sudo ufw allow 80/tcp    # HTTP (if needed)
 sudo ufw enable
 
-# 4. НЕ открывать порты БД (3050 Firebird, 5432 PostgreSQL) наружу
+# 4. Do NOT expose DB ports (3050 Firebird, 5432 PostgreSQL) to the outside
 ```
 
-### Что НЕ делать на серверах
+### What NOT to do on servers
 
-- Не работать от root (создать deploy пользователя)
-- Не открывать порты Firebird (3050), PostgreSQL (5432) наружу
-- Не хранить бэкапы на том же сервере
-- Не использовать слабые пароли для БД
-- Не оставлять тестовые учётные записи SYSDBA с паролем по умолчанию (`masterkey`)
+- Don't work as root (create a deploy user)
+- Don't expose Firebird (3050) or PostgreSQL (5432) ports externally
+- Don't keep backups on the same server
+- Don't use weak DB passwords
+- Don't leave default SYSDBA test accounts with the default password (`masterkey`)
 
 ---
 
-## База данных
+## Database
 
-### НИКОГДА не использовать SYSDBA в приложении
+### NEVER use SYSDBA in the application
 
 ```sql
--- Firebird: создать отдельного пользователя для приложения
--- (через isql или IBExpert)
+-- Firebird: create a dedicated user for the application
+-- (via isql or IBExpert)
 CREATE USER OES_APP PASSWORD 'strong_random_password';
 GRANT ALL ON TABLE users TO OES_APP;
 GRANT ALL ON TABLE documents TO OES_APP;
--- Не давать права на системные таблицы RDB$...
+-- Do not grant rights on the RDB$... system tables
 ```
 
 ```sql
--- PostgreSQL: отдельный пользователь
+-- PostgreSQL: separate user
 CREATE USER oes_app WITH PASSWORD 'strong_random_password';
 CREATE DATABASE oes_prod OWNER oes_app;
 GRANT ALL PRIVILEGES ON DATABASE oes_prod TO oes_app;
--- НЕ давать SUPERUSER права
+-- Do NOT grant SUPERUSER
 ```
 
-### Параметризованные запросы — ОБЯЗАТЕЛЬНО
+### Parameterized queries — MANDATORY
 
-**Это критичная проблема в OES.** Конкатенация строк в SQL-запросах — SQL-инъекция.
+**This is a critical issue in OES.** String concatenation in SQL is SQL injection.
 
 ```cpp
-// ПЛОХО — SQL-инъекция (текущая практика, требует исправления)
+// BAD — SQL injection (current practice, needs fixing)
 wxString sql = wxString::Format(
     "SELECT * FROM users WHERE login = '%s' AND password = '%s'",
     login, password
 );
 query->ExecQuery(sql);
 
-// ХОРОШО — ibPreparedStatement с SetParamString/SetParamInt (OES-способ)
-// ibDatabaseLayer* db — получен через ibApplicationData или передан в конструктор
+// GOOD — ibPreparedStatement with SetParamString/SetParamInt (the OES way)
+// ibDatabaseLayer* db — obtained through ibApplicationData or passed in the constructor
 ibPreparedStatement* stmt = db->PrepareStatement(
     "SELECT * FROM USERS WHERE LOGIN = ? AND PASSWORD = ?"
 );
 stmt->SetParamString(1, login);
 stmt->SetParamString(2, hashedPassword);
 ibDatabaseResultSet* rs = stmt->RunQuery();
-// rs обрабатывается и освобождается через RAII или явно
+// rs is processed and released through RAII or explicitly
 
-// ХОРОШО — SetParamInt для числовых параметров
+// GOOD — SetParamInt for numeric parameters
 ibPreparedStatement* stmtById = db->PrepareStatement(
     "SELECT * FROM USERS WHERE USER_ID = ?"
 );
@@ -308,7 +308,7 @@ stmtById->SetParamInt(1, userId);
 ```
 
 ```cpp
-// ХОРОШО — PostgreSQL через libpq (параметризованные запросы)
+// GOOD — PostgreSQL via libpq (parameterized queries)
 const char* paramValues[2] = { loginStr.c_str(), hashedPwd.c_str() };
 PGresult* res = PQexecParams(
     conn,
@@ -322,20 +322,20 @@ PGresult* res = PQexecParams(
 );
 ```
 
-### Хеширование паролей — переход с MD5 на bcrypt/Argon2
+### Password hashing — migrating from MD5 to bcrypt/Argon2
 
-**Текущая проблема:** OES использует MD5 для хеширования паролей. MD5 давно считается небезопасным.
+**Current issue:** OES uses MD5 for password hashing. MD5 has long been considered insecure.
 
-**Плановый переход:**
+**Migration plan:**
 
-> **Примечание:** libsodium является **запланированной** зависимостью OES и ещё не добавлена в проект. Перед использованием кода ниже необходимо добавить libsodium в систему сборки (vcpkg: `vcpkg install libsodium`).
+> **Note:** libsodium is a **planned** OES dependency and has not yet been added to the project. Before using the code below it must be added to the build system (vcpkg: `vcpkg install libsodium`).
 
 ```cpp
-// ПЛОХО — текущая практика (MD5)
+// BAD — current practice (MD5)
 // wxString hash = MD5(password);
 
-// ХОРОШО — bcrypt через OpenSSL или библиотеку bcrypt
-// Вариант 1: libsodium (рекомендуется, планируется к добавлению)
+// GOOD — bcrypt via OpenSSL or a bcrypt library
+// Option 1: libsodium (recommended, planned to be added)
 #include <sodium.h>
 
 std::string hashPassword(const std::string& password) {
@@ -355,87 +355,87 @@ bool verifyPassword(const std::string& password, const std::string& hash) {
 }
 ```
 
-**Миграция существующих MD5 паролей:**
-1. При следующем входе пользователя проверить MD5 (legacy path)
-2. Если совпадает — сохранить новый bcrypt хеш
-3. После истечения срока — принудительная смена пароля
+**Migrating existing MD5 passwords:**
+1. On the next user login, verify with MD5 (legacy path)
+2. If it matches — store the new bcrypt hash
+3. After a grace period — force a password reset
 
-### Бэкапы Firebird
+### Firebird backups
 
 ```bash
 #!/bin/bash
-# Ежедневный бэкап Firebird (gbak)
+# Daily Firebird backup (gbak)
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 gbak -backup -user SYSDBA -password "$SYSDBA_PASSWORD" \
     /path/to/oes.fdb \
     /backups/oes_${TIMESTAMP}.fbk
 
-# Компрессия
+# Compression
 gzip /backups/oes_${TIMESTAMP}.fbk
 
-# Удалить бэкапы старше 30 дней
+# Delete backups older than 30 days
 find /backups -name "*.fbk.gz" -mtime +30 -delete
 
-# Cron (каждый день в 3:00)
+# Cron (every day at 03:00)
 # 0 3 * * * /opt/scripts/backup-db.sh
 ```
 
 ---
 
-## Безопасность C++-кода
+## C++ code security
 
-### Переполнение буфера — основная угроза
+### Buffer overflow — the main threat
 
 ```cpp
-// ПЛОХО — фиксированный буфер, нет проверки длины
+// BAD — fixed buffer, no length check
 char buf[256];
-strcpy(buf, userInput);    // Переполнение буфера!
-sprintf(buf, userInput);   // Уязвимость форматной строки!
+strcpy(buf, userInput);    // Buffer overflow!
+sprintf(buf, userInput);   // Format string vulnerability!
 
-// ХОРОШО — std::string, std::vector
-std::string buf = userInput;  // Автоматическое управление памятью
+// GOOD — std::string, std::vector
+std::string buf = userInput;  // Automatic memory management
 
-// ХОРОШО — если нужен C-буфер
+// GOOD — if a C buffer is required
 char buf[256];
 strncpy(buf, userInput, sizeof(buf) - 1);
-buf[sizeof(buf) - 1] = '\0';  // Гарантия нуль-терминатора
+buf[sizeof(buf) - 1] = '\0';  // Guarantee null terminator
 ```
 
-### RAII и умные указатели вместо сырых
+### RAII and smart pointers instead of raw ones
 
 ```cpp
-// ПЛОХО — утечки памяти и исключения без RAII
+// BAD — memory leaks and exceptions without RAII
 void loadDocument() {
     Document* doc = new Document();
-    doc->load(path);   // Если бросит исключение — утечка!
+    doc->load(path);   // If it throws — leak!
     processDoc(doc);
-    delete doc;        // Если processDoc бросит исключение — утечка!
+    delete doc;        // If processDoc throws — leak!
 }
 
-// ХОРОШО — RAII через умные указатели
+// GOOD — RAII through smart pointers
 void loadDocument() {
     auto doc = std::make_unique<Document>();
     doc->load(path);
     processDoc(*doc);
-    // doc автоматически удалится при выходе из scope
+    // doc is destroyed automatically when leaving scope
 }
 
-// ХОРОШО — shared_ptr для разделяемого владения
+// GOOD — shared_ptr for shared ownership
 std::shared_ptr<DatabaseConnection> conn = getConnection();
 ```
 
-### Проверка входных данных
+### Input validation
 
 ```cpp
-// Валидация всех пользовательских вводов
+// Validate every user input
 bool validateInput(const wxString& input, size_t maxLen = 1024) {
     if (input.empty()) return false;
     if (input.length() > maxLen) return false;
-    // Проверка на недопустимые символы (если применимо)
+    // Check for disallowed characters (if applicable)
     return true;
 }
 
-// Валидация числовых параметров
+// Validate numeric parameters
 int parsePort(const wxString& portStr) {
     long port;
     if (!portStr.ToLong(&port) || port < 1 || port > 65535) {
@@ -445,22 +445,22 @@ int parsePort(const wxString& portStr) {
 }
 ```
 
-### Пустые блоки catch — ЗАПРЕЩЕНЫ
+### Empty catch blocks — FORBIDDEN
 
 ```cpp
-// ПЛОХО — скрывает ошибки (частая проблема в OES)
+// BAD — hides errors (common problem in OES)
 try {
     connectToDatabase();
 } catch (...) {
-    // пусто — ошибка проглочена!
+    // empty — error swallowed!
 }
 
-// ХОРОШО — логировать минимум
+// GOOD — log at minimum
 try {
     connectToDatabase();
 } catch (const std::exception& e) {
     wxLogError("Database connection failed: %s", e.what());
-    throw;  // или корректная обработка
+    throw;  // or handle properly
 } catch (...) {
     wxLogError("Database connection failed: unknown error");
     throw;
@@ -469,39 +469,39 @@ try {
 
 ---
 
-## Статический анализ и инструменты безопасности
+## Static analysis and security tooling
 
 ### cppcheck
 
 ```bash
-# Установка
+# Install
 sudo apt install cppcheck   # Linux
 winget install Cppcheck     # Windows
 
-# Базовый анализ
+# Basic analysis
 cppcheck --enable=all --std=c++17 src/
 
-# Анализ с подавлением ложных срабатываний
+# Analysis with false-positive suppression
 cppcheck --enable=all --std=c++17 \
     --suppress=missingIncludeSystem \
     --suppress=unmatchedSuppression \
     --error-exitcode=1 \
     src/
 
-# Генерация XML-отчёта
+# XML report
 cppcheck --enable=all --xml src/ 2> cppcheck-report.xml
 ```
 
 ### clang-tidy
 
 ```bash
-# Установка (через LLVM)
+# Install (via LLVM)
 sudo apt install clang-tidy
 
-# Запуск на файле
+# Run on a file
 clang-tidy src/engine/backend/databaseLayer/databaseLayer.cpp -- -std=c++17 -Isrc/
 
-# .clang-tidy конфигурация (в корне проекта)
+# .clang-tidy configuration (in the project root)
 cat > .clang-tidy << 'EOF'
 Checks: >
   clang-diagnostic-*,
@@ -518,10 +518,10 @@ HeaderFilterRegex: '.*'
 EOF
 ```
 
-### Sanitizers (при сборке Debug/Test)
+### Sanitizers (in Debug/Test builds)
 
 ```cmake
-# CMakeLists.txt — AddressSanitizer для выявления memory corruption
+# CMakeLists.txt — AddressSanitizer for detecting memory corruption
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_options(oes PRIVATE
         -fsanitize=address,undefined
@@ -534,58 +534,58 @@ endif()
 ```
 
 ```bash
-# Запуск с AddressSanitizer
+# Run with AddressSanitizer
 ASAN_OPTIONS=detect_leaks=1 ./oes_debug
 
-# Запуск с UndefinedBehaviorSanitizer
+# Run with UndefinedBehaviorSanitizer
 UBSAN_OPTIONS=print_stacktrace=1 ./oes_debug
 
-# Запуск с ThreadSanitizer (проверка гонок данных)
+# Run with ThreadSanitizer (data race detection)
 ./oes_tsan
 ```
 
 ---
 
-## OWASP Top 10 — адаптация для desktop C++
+## OWASP Top 10 — adapted for desktop C++
 
-### 1. SQL Injection (критично для OES)
+### 1. SQL Injection (critical for OES)
 
-Конкатенация строк в SQL-запросах — главная уязвимость. Все строки подключения к БД и формирование запросов должны использовать параметры (см. раздел «База данных» выше).
+String concatenation in SQL queries is the main vulnerability. Every DB connection string and query construction must use parameters (see the "Database" section above).
 
-### 2. Небезопасное хранение данных
+### 2. Insecure data storage
 
 ```cpp
-// ПЛОХО — пароли в логах
+// BAD — passwords in logs
 wxLogMessage("Connecting as user %s with password %s", user, password);
 
-// ХОРОШО — никаких паролей в логах
+// GOOD — no passwords in logs
 wxLogMessage("Connecting as user %s", user);
 
-// ПЛОХО — пароли в памяти как plain text дольше необходимого
+// BAD — passwords sit in memory as plain text longer than necessary
 std::string password = getPassword();
-// ... использовать password ...
-// password остаётся в памяти и может быть считана из core dump
+// ... use password ...
+// password remains in memory and may be read from a core dump
 
-// ХОРОШО — очистить память после использования
+// GOOD — wipe memory after use
 std::string password = getPassword();
-// ... использовать password ...
+// ... use password ...
 std::fill(password.begin(), password.end(), '\0');
 password.clear();
 ```
 
-### 3. Использование компонентов с известными уязвимостями
+### 3. Using components with known vulnerabilities
 
-- Регулярно обновляйте wxWidgets, IBPP, OpenSSL, zlib и другие зависимости
-- Подпишитесь на CVE-уведомления для используемых библиотек
-- Используйте только актуальные версии с поддержкой безопасности
+- Regularly update wxWidgets, IBPP, OpenSSL, zlib, and other dependencies
+- Subscribe to CVE notifications for the libraries you use
+- Use only versions still receiving security support
 
-### 4. Небезопасная десериализация
+### 4. Insecure deserialization
 
 ```cpp
-// При чтении данных из файлов/сети — всегда валидировать
+// When reading data from files/network — always validate
 bool loadConfig(const wxString& path) {
-    // Проверить что файл не слишком большой (защита от zip-bomb)
-    // wxFileName::GetSize() не является методом экземпляра — используйте wxFile::Length()
+    // Check the file isn't too large (zip-bomb protection)
+    // wxFileName::GetSize() is not an instance method — use wxFile::Length()
     wxFile file(path);
     if (!file.IsOpened() || file.Length() > MAX_CONFIG_SIZE) {
         wxLogError("Config file too large or inaccessible: %s", path);
@@ -593,24 +593,24 @@ bool loadConfig(const wxString& path) {
     }
     file.Close();
 
-    // Валидировать все прочитанные значения
+    // Validate all values read
     wxFileConfig config(wxEmptyString, wxEmptyString, path);
     wxString host = config.Read("database/host", "localhost");
-    // Проверить host на допустимые символы (только hostname/IP)
+    // Validate host for allowed characters (hostname/IP only)
     // ...
 }
 ```
 
-### 5. Недостаточное логирование
+### 5. Insufficient logging
 
 ```cpp
-// Логировать все попытки входа (успешные и неуспешные)
+// Log all login attempts (successful and failed)
 void onLoginAttempt(const wxString& user, bool success) {
     wxLogMessage("[AUDIT] Login %s for user '%s'",
         success ? "SUCCESS" : "FAILED", user);
 }
 
-// Логировать изменения критичных данных
+// Log changes to critical data
 void onRecordDeleted(const wxString& table, long id, const wxString& user) {
     wxLogMessage("[AUDIT] DELETE from %s, id=%ld, by user '%s'",
         table, id, user);
@@ -619,14 +619,14 @@ void onRecordDeleted(const wxString& table, long id, const wxString& user) {
 
 ---
 
-## Чеклист безопасности для каждого PR
+## Security checklist for every PR
 
-- [ ] Нет хардкод паролей/строк подключения в коде
-- [ ] Входные данные валидируются перед использованием
-- [ ] SQL-запросы используют параметры, не конкатенацию строк
-- [ ] Пустые блоки catch заменены логированием
-- [ ] Нет новых вызовов `strcpy`/`sprintf` без проверок длины
-- [ ] Новые указатели используют `std::unique_ptr`/`std::shared_ptr`
-- [ ] Пароли не попадают в логи
-- [ ] Новые конфигурационные параметры добавлены в `config.ini.example`
-- [ ] cppcheck не выдаёт новых предупреждений
+- [ ] No hardcoded passwords/connection strings in code
+- [ ] Input data is validated before use
+- [ ] SQL queries use parameters, not string concatenation
+- [ ] Empty catch blocks replaced with logging
+- [ ] No new `strcpy`/`sprintf` calls without length checks
+- [ ] New pointers use `std::unique_ptr`/`std::shared_ptr`
+- [ ] Passwords don't end up in logs
+- [ ] New configuration parameters added to `config.ini.example`
+- [ ] cppcheck shows no new warnings

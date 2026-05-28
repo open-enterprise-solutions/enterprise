@@ -1,95 +1,95 @@
-# 12. Обновление зависимостей
+# 12. Dependency Updates
 
-## Зачем обновлять
+## Why update
 
-- **Безопасность** — уязвимости в библиотеках закрываются патчами (OpenSSL CVE — реальная угроза)
-- **Совместимость** — устаревшие библиотеки перестают работать с новыми ОС/компиляторами
-- **Производительность** — новые версии часто быстрее
-- **Функциональность** — новые возможности wxWidgets, исправленные баги
-- **Поддержка** — EOL версии не получают фиксов безопасности
+- **Security** — library vulnerabilities are patched (OpenSSL CVEs are a real threat)
+- **Compatibility** — outdated libraries stop working with new OSes/compilers
+- **Performance** — new versions are often faster
+- **Features** — new wxWidgets capabilities, fixed bugs
+- **Support** — EOL versions don't receive security fixes
 
-Чем дольше откладываете обновление, тем больнее оно будет. Регулярные маленькие обновления лучше, чем одно огромное раз в год.
+The longer you delay an update, the more painful it gets. Regular small updates beat one massive one once a year.
 
 ---
 
-## Периодичность
+## Cadence
 
-| Действие | Частота | Кто |
+| Action | Frequency | Who |
 |----------|---------|-----|
-| Проверка CVE для используемых библиотек | Раз в неделю (или в CI) | Автоматически / разработчик |
-| Проверка новых версий зависимостей | Раз в 2 недели | Разработчик |
-| Обновление patch-версий (исправления багов) | Раз в месяц | Разработчик |
-| Обновление minor-версий (новые фичи) | Раз в квартал | Разработчик |
-| Обновление major-версий (breaking changes) | По необходимости | Тимлид + разработчик |
-| Обновление Visual Studio / компилятора | При выходе обновления безопасности | Тимлид |
-| Обновление Windows SDK | По необходимости | Тимлид |
+| Check CVEs for libraries in use | Weekly (or in CI) | Automated / developer |
+| Check for new dependency versions | Every 2 weeks | Developer |
+| Patch updates (bug fixes) | Monthly | Developer |
+| Minor updates (new features) | Quarterly | Developer |
+| Major updates (breaking changes) | As needed | Tech lead + developer |
+| Update Visual Studio / compiler | When a security update is released | Tech lead |
+| Update Windows SDK | As needed | Tech lead |
 
 ---
 
-## Зависимости OES
+## OES dependencies
 
-### Ключевые библиотеки
+### Key libraries
 
-| Библиотека | Текущее назначение | Как обновлять |
+| Library | Current role | How to update |
 |------------|-------------------|---------------|
-| **wxWidgets** | GUI фреймворк | Вручную, см. ниже |
-| **IBPP** | Firebird C++ API | Вручную из репозитория IBPP |
-| **OpenSSL** | Криптография | vcpkg или вручную |
-| **zlib** | Сжатие | vcpkg или вручную |
-| **libpq** | PostgreSQL клиент | vcpkg или вместе с PostgreSQL |
-| **SQLite** | Встраиваемая БД | amalgamation файл с sqlite.org |
-| **Google Test** | Тестирование | vcpkg или FetchContent |
-| **nlohmann/json** | JSON (если используется) | vcpkg или single header |
+| **wxWidgets** | GUI framework | Manually, see below |
+| **IBPP** | Firebird C++ API | Manually from the IBPP repository |
+| **OpenSSL** | Cryptography | vcpkg or manually |
+| **zlib** | Compression | vcpkg or manually |
+| **libpq** | PostgreSQL client | vcpkg or along with PostgreSQL |
+| **SQLite** | Embedded DB | amalgamation file from sqlite.org |
+| **Google Test** | Testing | vcpkg or FetchContent |
+| **nlohmann/json** | JSON (if used) | vcpkg or single header |
 
-### Где хранятся зависимости
+### Where dependencies live
 
 ```
 third-party/
-├── IBPP/           — Firebird C++ API (исходники, собираем сами)
-├── wxWidgets/      — wxWidgets (символическая ссылка или submodule)
+├── IBPP/           — Firebird C++ API (sources, built ourselves)
+├── wxWidgets/      — wxWidgets (symlink or submodule)
 └── sqlite/         — SQLite amalgamation (sqlite3.c + sqlite3.h)
 
-# Через vcpkg (рекомендуется для новых зависимостей)
-vcpkg.json          — Манифест зависимостей (если перешли на vcpkg)
+# Through vcpkg (recommended for new dependencies)
+vcpkg.json          — Dependency manifest (if we've moved to vcpkg)
 ```
 
 ---
 
-## Инструменты проверки
+## Verification tools
 
-### OSV Scanner — проверка CVE
+### OSV Scanner — CVE checks
 
 ```bash
-# Установка (Go required)
+# Install (Go required)
 go install github.com/google/osv-scanner/cmd/osv-scanner@latest
 
-# Сканировать зависимости
-# ВНИМАНИЕ: osv-scanner не распознаёт vcpkg.json как lockfile-формат.
-# Используйте --sbom с CycloneDX/SPDX SBOM (можно сгенерировать через vcpkg export --json):
+# Scan dependencies
+# NOTE: osv-scanner does not recognize vcpkg.json as a lockfile format.
+# Use --sbom with a CycloneDX/SPDX SBOM (generated via vcpkg export --json):
 osv-scanner --sbom sbom.json .
 
-# Или сканировать весь каталог (OSV найдёт то, что умеет):
+# Or scan the whole directory (OSV detects what it can):
 osv-scanner .
 
-# Или через GitHub Actions (см. ниже)
+# Or through GitHub Actions (see below)
 ```
 
-### vcpkg — управление зависимостями
+### vcpkg — dependency management
 
 ```bash
-# Показать установленные пакеты
+# Show installed packages
 vcpkg list
 
-# Показать доступные обновления (без применения)
-vcpkg upgrade               # только показывает список устаревших пакетов
+# Show available upgrades (without applying)
+vcpkg upgrade               # only lists outdated packages
 
-# Применить обновления (ВНИМАНИЕ: реально обновляет пакеты)
-vcpkg upgrade --no-dry-run  # --no-dry-run ПРИМЕНЯЕТ обновления, а не только показывает!
+# Apply upgrades (NOTE: actually updates packages)
+vcpkg upgrade --no-dry-run  # --no-dry-run APPLIES upgrades, not just lists them!
 
-# Проверить конкретный пакет
+# Check a specific package
 vcpkg search openssl
 
-# Пример vcpkg.json (манифест)
+# Example vcpkg.json (manifest)
 {
     "name": "oes",
     "version": "1.2.0",
@@ -103,7 +103,7 @@ vcpkg search openssl
 }
 ```
 
-### Ручная проверка новых версий
+### Manual check for new versions
 
 ```bash
 # wxWidgets
@@ -121,9 +121,9 @@ vcpkg search openssl
 
 ---
 
-## Процесс обновления
+## Update process
 
-### Шаг 1: Создать ветку
+### Step 1: Create a branch
 
 ```bash
 git checkout master
@@ -131,101 +131,101 @@ git pull origin master
 git checkout -b chore/update-deps-2026-03
 ```
 
-### Шаг 2: Проверить CVE уязвимости
+### Step 2: Check for CVE vulnerabilities
 
 ```bash
 # OSV Scanner
 osv-scanner --lockfile vcpkg.json .
 
-# Или проверить вручную через NVD (National Vulnerability Database)
+# Or check NVD (National Vulnerability Database) manually
 # https://nvd.nist.gov/vuln/search
-# Поиск по: wxwidgets, openssl, sqlite, firebird
+# Search for: wxwidgets, openssl, sqlite, firebird
 
-# Проверить GitHub Security Advisories для используемых библиотек
+# Check GitHub Security Advisories for the libraries you use
 ```
 
-### Шаг 3: Проверить что устарело
+### Step 3: Check what's outdated
 
 ```bash
-# vcpkg — показать список устаревших пакетов (без применения)
+# vcpkg — list outdated packages (without applying)
 vcpkg upgrade
 
-# Вручную сверить версии в third-party/ с GitHub releases:
+# Manually compare versions in third-party/ with GitHub releases:
 # wxWidgets:  https://github.com/wxWidgets/wxWidgets/releases
 # SQLite:     https://sqlite.org/changes.html
 # OpenSSL:    https://github.com/openssl/openssl/releases
 ```
 
-Классифицируйте обновления:
+Classify the updates:
 
-| Тип обновления | Пример | Риск | Действие |
+| Update type | Example | Risk | Action |
 |----------------|--------|------|----------|
-| **Patch** (x.y.Z) | wxWidgets 3.3.2 → 3.3.3 | Низкий | Обновлять смело |
-| **Minor** (x.Y.0) | wxWidgets 3.3.2 → 3.4.0 | Средний | Обновлять, проверить changelog |
-| **Major** (X.0.0) | wxWidgets 3.x → 4.0 | Высокий | Отдельная задача, тщательное тестирование |
+| **Patch** (x.y.Z) | wxWidgets 3.3.2 → 3.3.3 | Low | Update freely |
+| **Minor** (x.Y.0) | wxWidgets 3.3.2 → 3.4.0 | Medium | Update, read changelog |
+| **Major** (X.0.0) | wxWidgets 3.x → 4.0 | High | Separate task, thorough testing |
 
-### Шаг 4: Обновить patch/minor зависимости
+### Step 4: Apply patch/minor updates
 
 ```bash
-# Через vcpkg — применить обновления
-# ВНИМАНИЕ: vcpkg install НЕ обновляет уже установленные пакеты;
-# для обновления используйте vcpkg upgrade --no-dry-run
+# Through vcpkg — apply upgrades
+# NOTE: vcpkg install does NOT update already-installed packages;
+# use vcpkg upgrade --no-dry-run to update them
 vcpkg upgrade --no-dry-run
 
-# Вручную — пример обновления SQLite amalgamation
-# 1. Скачать новую версию с https://sqlite.org/download.html
-# 2. Заменить third-party/sqlite/sqlite3.c и sqlite3.h
-# 3. Обновить VERSION файл или комментарий в файле
+# Manual — example for updating the SQLite amalgamation
+# 1. Download the new version from https://sqlite.org/download.html
+# 2. Replace third-party/sqlite/sqlite3.c and sqlite3.h
+# 3. Update the VERSION file or the comment inside the file
 
-# Вручную — пример обновления OpenSSL через vcpkg
+# Manual — example for updating OpenSSL via vcpkg
 vcpkg install openssl:x64-windows
 
-# Проверить что всё собирается
+# Make sure everything builds
 msbuild enterprise.sln /p:Configuration=Debug /p:Platform=x64 /m
 
-# Запустить тесты
+# Run tests
 ctest --test-dir build -C Debug --output-on-failure
 ```
 
-### Шаг 5: Мажорные обновления — по одному
+### Step 5: Major updates — one at a time
 
 ```bash
-# Обновить ОДНУ зависимость
-# Пример: обновление wxWidgets до новой minor версии
+# Update ONE dependency
+# Example: updating wxWidgets to a new minor version
 
-# 1. Скачать новую версию wxWidgets
+# 1. Download the new wxWidgets release
 # https://github.com/wxWidgets/wxWidgets/releases
 
-# 2. Пересобрать wxWidgets
+# 2. Rebuild wxWidgets
 cd third-party/wxWidgets-3.4.0
 ./configure --enable-debug --with-gtk=3  # Linux
 
-# Windows — используйте MSBuild через директорию build/msw/:
-# (./configure НЕ работает на Windows без MSYS2/Cygwin)
+# Windows — use MSBuild via the build/msw/ directory:
+# (./configure does NOT work on Windows without MSYS2/Cygwin)
 # cd build\msw\
 # msbuild wx_vc17.sln /p:Configuration=DLL Debug /p:Platform=x64 /m
 
-# 3. Пересобрать OES
+# 3. Rebuild OES
 msbuild enterprise.sln /p:Configuration=Debug /p:Platform=x64 /m
 
-# 4. Исправить breaking changes (если есть)
-# Проверить wxWidgets Migration Guide
+# 4. Fix breaking changes (if any)
+# Check the wxWidgets Migration Guide
 
-# 5. Запустить тесты
+# 5. Run tests
 ctest --test-dir build --output-on-failure
 
-# 6. Ручное тестирование — все основные функции!
-# - Запустить приложение
-# - Открыть несколько форм
-# - Проверить designer
-# - Проверить подключение к Firebird
+# 6. Manual testing — every major feature!
+# - Run the app
+# - Open several forms
+# - Verify the designer
+# - Verify Firebird connection
 
-# Если всё ок — следующая зависимость
+# If everything's good — next dependency
 ```
 
-**Почему по одному:** Если обновить всё сразу и что-то сломается — непонятно какая библиотека виновата. По одному — сразу видно причину.
+**Why one at a time:** if you upgrade everything at once and something breaks — you don't know which library is at fault. One at a time — the cause is obvious immediately.
 
-### Шаг 6: Создать PR
+### Step 6: Open the PR
 
 ```bash
 git add third-party/sqlite/sqlite3.c third-party/sqlite/sqlite3.h
@@ -234,7 +234,7 @@ git commit -m "chore: update dependencies (March 2026)"
 git push -u origin chore/update-deps-2026-03
 ```
 
-Описание PR:
+PR description:
 
 ```markdown
 ## What
@@ -265,105 +265,105 @@ None.
 
 ---
 
-## Мажорные обновления фреймворков
+## Major framework upgrades
 
-Обновление wxWidgets, Firebird, Visual Studio или Windows SDK — это **отдельная задача**, не часть ежемесячного обновления.
+Upgrading wxWidgets, Firebird, Visual Studio, or the Windows SDK is **a separate task**, not part of the monthly update.
 
-### Процесс
+### Process
 
-1. **Создать задачу** в трекере: "Upgrade wxWidgets from 3.3 to 4.0"
-2. **Изучить changelog и migration guide** — что изменилось, что ломается
-3. **Создать ветку** `chore/upgrade-wxwidgets-4`
-4. **Обновить** по официальному migration guide
-5. **Исправить все compilation errors и warnings**
-6. **Тесты** — все должны проходить
-7. **Ручное тестирование** — полный обход основных функций
-8. **PR** с подробным описанием что изменилось и что нужно проверить
-9. **Staging** — задеплоить и протестировать на staging стенде
-10. **Release** — только после полного тестирования
+1. **Create a task** in the tracker: "Upgrade wxWidgets from 3.3 to 4.0"
+2. **Read the changelog and migration guide** — what changed, what breaks
+3. **Create a branch** `chore/upgrade-wxwidgets-4`
+4. **Migrate** following the official migration guide
+5. **Fix all compilation errors and warnings**
+6. **Tests** — all must pass
+7. **Manual testing** — walk through every major feature
+8. **PR** with a detailed description of changes and verification steps
+9. **Staging** — deploy and test on staging
+10. **Release** — only after full testing
 
-### Пример: обновление wxWidgets 3.3 → 3.4
+### Example: upgrading wxWidgets 3.3 → 3.4
 
 ```bash
-# 1. Скачать wxWidgets 3.4.0
+# 1. Download wxWidgets 3.4.0
 # https://github.com/wxWidgets/wxWidgets/releases
 
-# 2. Изучить migration guide:
+# 2. Read the migration guide:
 # https://docs.wxwidgets.org/latest/overview_changes.html
 
-# 3. Обновить путь в проекте
-# OES.vcxproj: изменить WX_DIR = third-party\wxWidgets-3.3.2
-#          на: WX_DIR = third-party\wxWidgets-3.4.0
+# 3. Update the path in the project
+# OES.vcxproj: change WX_DIR = third-party\wxWidgets-3.3.2
+#         to:  WX_DIR = third-party\wxWidgets-3.4.0
 
-# 4. Пересобрать
+# 4. Rebuild
 msbuild enterprise.sln /p:Configuration=Debug /p:Platform=x64 /m
-# Исправить все ошибки и предупреждения
+# Fix all errors and warnings
 
-# 5. Тесты
+# 5. Tests
 ctest --test-dir build -C Debug --output-on-failure
 
-# 6. Ручное тестирование (чеклист)
-# [ ] Главное окно открывается
-# [ ] Все диалоги открываются корректно
-# [ ] wxGrid работает (таблицы данных)
-# [ ] Designer работает
-# [ ] Файловые диалоги работают
-# [ ] DnD (drag-and-drop) работает
-# [ ] Печать работает
-# [ ] Unicode отображается корректно
+# 6. Manual testing (checklist)
+# [ ] Main window opens
+# [ ] All dialogs open correctly
+# [ ] wxGrid works (data tables)
+# [ ] Designer works
+# [ ] File dialogs work
+# [ ] DnD (drag-and-drop) works
+# [ ] Printing works
+# [ ] Unicode renders correctly
 ```
 
-### Обновление Firebird клиента (fbclient.dll)
+### Upgrading the Firebird client (fbclient.dll)
 
 ```bash
-# При обновлении Firebird сервера у клиентов:
-# 1. Проверить совместимость fbclient.dll версии с IBPP
-# 2. Проверить совместимость wire protocol с новой версией сервера
-# 3. Обновить fbclient.dll в дистрибутиве
+# When upgrading the Firebird server on customer machines:
+# 1. Check fbclient.dll compatibility with IBPP
+# 2. Check wire protocol compatibility with the new server version
+# 3. Update fbclient.dll in the distribution
 
-# ВАЖНО: fbclient.dll должна соответствовать версии Firebird сервера
-# Firebird 4.0 server + Firebird 3.0 fbclient.dll — может работать, но не гарантировано
+# IMPORTANT: fbclient.dll must match the Firebird server version
+# Firebird 4.0 server + Firebird 3.0 fbclient.dll — may work, but not guaranteed
 ```
 
 ---
 
-## Фиксация версий для критичных зависимостей
+## Pinning critical dependency versions
 
 ```json
-// vcpkg.json — фиксировать минимальные версии для критичных библиотек
+// vcpkg.json — pin minimum versions for critical libraries
 {
     "name": "oes",
-    "builtin-baseline": "a14b7c3d...",  // SHA коммита vcpkg — обязательно для воспроизводимых сборок
+    "builtin-baseline": "a14b7c3d...",  // vcpkg commit SHA — required for reproducible builds
     "dependencies": [
         {
             "name": "wxwidgets",
-            "version>=": "3.3.2"    // Минимальная версия
+            "version>=": "3.3.2"    // Minimum version
         },
         {
             "name": "openssl",
-            "version>=": "3.2.1"    // Минимум с исправлением CVE-2024-XXXX
+            "version>=": "3.2.1"    // Minimum with CVE-2024-XXXX fix
         },
         {
-            "name": "gtest"         // Без фиксации — подходит любая
+            "name": "gtest"         // No pinning — any version works
         }
     ]
 }
 ```
 
-**Когда фиксировать точную версию (не `>=`):**
-- При известной несовместимости с более новой версией
-- При критичной зависимости от конкретного поведения API
-- В производственном релизе (для воспроизводимых сборок)
+**When to pin an exact version (not `>=`):**
+- Known incompatibility with a newer version
+- Critical dependence on specific API behaviour
+- Production releases (for reproducible builds)
 
-**Когда `>=` допустимо:**
-- Инструменты разработки (Google Test, clang-tidy)
-- Утилитарные библиотеки без ABI-ломающих изменений
+**When `>=` is acceptable:**
+- Development tools (Google Test, clang-tidy)
+- Utility libraries without ABI-breaking changes
 
 ---
 
-## Безопасность зависимостей
+## Dependency security
 
-### Проверка CVE в CI
+### CVE checks in CI
 
 ```yaml
 # .github/workflows/security-audit.yml
@@ -371,7 +371,7 @@ name: Security Audit
 
 on:
   schedule:
-    - cron: '0 9 * * 1'  # Каждый понедельник в 9:00
+    - cron: '0 9 * * 1'  # Every Monday at 09:00
   push:
     branches: [master, dev]
 
@@ -390,33 +390,33 @@ jobs:
 
       - name: Check for known vulnerable versions
         run: |
-          # Проверить критичные библиотеки вручную
+          # Check critical libraries manually
           OPENSSL_VERSION=$(grep '"version"' vcpkg.json | grep openssl | grep -oP '"\d+\.\d+\.\d+"')
           echo "OpenSSL version in vcpkg.json: $OPENSSL_VERSION"
-          # Добавить логику проверки против известных CVE
+          # Add CVE check logic
 ```
 
-### Если обнаружена критическая уязвимость
+### When a critical vulnerability is found
 
-1. **Немедленно** создать ветку `fix/security-deps-CVE-XXXX`
-2. Обновить уязвимую библиотеку до исправленной версии
+1. **Immediately** create a branch `fix/security-deps-CVE-XXXX`
+2. Upgrade the vulnerable library to the fixed version
 3. `msbuild && ctest`
-4. PR → ревью → мердж → новый release patch-версии
-5. Уведомить клиентов о необходимости обновления
-6. **Не ждать** ежемесячного обновления!
+4. PR → review → merge → new patch release
+5. Notify customers about the required upgrade
+6. **Don't wait** for the monthly update!
 
-### Проверка цифровых подписей загружаемых библиотек
+### Verifying digital signatures of downloaded libraries
 
 ```powershell
-# Windows: проверить подпись бинарного файла библиотеки
+# Windows: verify the signature of a library binary
 Get-AuthenticodeSignature "third-party\sqlite\sqlite3.dll"
-# Status должен быть Valid
+# Status must be Valid
 
-# Для загружаемых архивов — проверить SHA256
-# Сайты библиотек публикуют хеши для проверки:
+# For downloaded archives — verify SHA256
+# Library sites publish hashes for verification:
 
-# Пример: проверка SQLite amalgamation
-$expectedHash = "abc123..."  # Хеш с официального сайта
+# Example: verifying the SQLite amalgamation
+$expectedHash = "abc123..."  # Hash from the official site
 $actualHash = (Get-FileHash "sqlite-amalgamation-3450100.zip" -Algorithm SHA256).Hash
 if ($expectedHash -ne $actualHash) {
     throw "SECURITY: Hash mismatch for SQLite download!"
@@ -425,76 +425,76 @@ if ($expectedHash -ne $actualHash) {
 
 ---
 
-## Visual Studio и Windows SDK
+## Visual Studio and Windows SDK
 
-### Обновление Visual Studio
+### Updating Visual Studio
 
 ```
-При выходе обновлений безопасности MSVC:
+When an MSVC security update is released:
 1. Help → Check for Updates → Update Visual Studio
-2. После обновления: пересобрать проект
-3. Проверить что нет новых предупреждений компилятора
-4. Прогнать тесты: ctest --output-on-failure
-5. Обновить .github/workflows/ если изменилась версия toolset:
-   msbuild-version: 'latest'  или указать конкретную
+2. After the update: rebuild the project
+3. Check there are no new compiler warnings
+4. Run tests: ctest --output-on-failure
+5. Update .github/workflows/ if the toolset version changed:
+   msbuild-version: 'latest'  or pin a specific one
 ```
 
-### Обновление Windows SDK
+### Updating the Windows SDK
 
 ```xml
-<!-- OES.vcxproj — версия Windows SDK -->
+<!-- OES.vcxproj — Windows SDK version -->
 <WindowsTargetPlatformVersion>10.0.22621.0</WindowsTargetPlatformVersion>
 
-<!-- При обновлении SDK — изменить на новую версию -->
-<!-- Проверить в: Project Properties → General → Windows SDK Version -->
+<!-- When upgrading the SDK — change to the new version -->
+<!-- Verify in: Project Properties → General → Windows SDK Version -->
 ```
 
 ---
 
-## Lock файлы
+## Lock files
 
-### vcpkg-lock.json ВСЕГДА коммитить
+### vcpkg-lock.json — ALWAYS commit it
 
 ```bash
-# В .gitignore НЕ должно быть:
-# vcpkg-lock.json   ← НЕПРАВИЛЬНО!
+# .gitignore must NOT contain:
+# vcpkg-lock.json   ← WRONG!
 
-# vcpkg-lock.json ОБЯЗАТЕЛЬНО коммитится
+# vcpkg-lock.json MUST be committed
 git add vcpkg.json vcpkg-lock.json
 ```
 
-**Почему:**
-- Гарантирует одинаковые версии у всех разработчиков
-- Гарантирует воспроизводимые сборки в CI/CD
-- Без lock файла `vcpkg install` может установить разные версии
+**Why:**
+- Guarantees identical versions across all developers
+- Guarantees reproducible builds in CI/CD
+- Without a lock file `vcpkg install` may install different versions
 
-### third-party/ в git или нет?
+### third-party/ in git or not?
 
 ```
-# Текущий подход OES: часть зависимостей в third-party/ в git
-# Преимущества: воспроизводимые сборки без дополнительного ПО
-# Недостатки: большой размер репозитория
+# Current OES approach: some dependencies live in third-party/ in git
+# Pros: reproducible builds without extra software
+# Cons: large repo size
 
-# Рекомендация: использовать git submodules или vcpkg для крупных зависимостей
-# и оставить в third-party/ только небольшие header-only библиотеки
+# Recommendation: use git submodules or vcpkg for large dependencies
+# and keep only small header-only libraries in third-party/
 
-# SQLite amalgamation (два файла) — OK держать в git
-# wxWidgets (тысячи файлов) — лучше git submodule или vcpkg
+# SQLite amalgamation (two files) — fine to keep in git
+# wxWidgets (thousands of files) — better as a git submodule or vcpkg
 ```
 
 ---
 
-## Чеклист обновления
+## Update checklist
 
-- [ ] Создана ветка `chore/update-deps-YYYY-MM`
-- [ ] CVE проверка выполнена (osv-scanner или вручную)
-- [ ] Зависимости с уязвимостями обновлены в первую очередь
-- [ ] Patch/minor обновления применены
-- [ ] `msbuild Debug x64` — собирается без ошибок и предупреждений
-- [ ] `msbuild Release x64` — собирается без ошибок
-- [ ] `ctest` — все тесты проходят
-- [ ] Ручная проверка основных функций (если обновляли UI библиотеки)
-- [ ] Major обновления — отдельными коммитами (если есть)
-- [ ] `vcpkg-lock.json` или аналог закоммичен
-- [ ] PR создан с описанием что обновлено и какие CVE закрыты
-- [ ] Протестировано на staging после мерджа
+- [ ] Branch `chore/update-deps-YYYY-MM` created
+- [ ] CVE scan done (osv-scanner or manual)
+- [ ] Vulnerable dependencies updated first
+- [ ] Patch/minor updates applied
+- [ ] `msbuild Debug x64` — builds without errors or warnings
+- [ ] `msbuild Release x64` — builds without errors
+- [ ] `ctest` — all tests pass
+- [ ] Manual check of core features (when UI libraries were updated)
+- [ ] Major updates split into separate commits (if any)
+- [ ] `vcpkg-lock.json` or equivalent committed
+- [ ] PR created with a description of what was updated and which CVEs closed
+- [ ] Tested on staging after merge

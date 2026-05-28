@@ -1,38 +1,38 @@
-# 05. Docker — контейнеризация для OES
+# 05. Docker — containerization for OES
 
-> Docker в контексте OES используется преимущественно для:
-> 1. **Build-контейнеров** — воспроизводимая сборка C++/wxWidgets в CI/CD
-> 2. **Dev-окружения** — поднять PostgreSQL, Firebird, вспомогательные сервисы локально
-> 3. **OES Daemon** — опционально, для серверного (headless) режима на Linux
+> In the OES context, Docker is used primarily for:
+> 1. **Build containers** — reproducible C++/wxWidgets builds in CI/CD
+> 2. **Dev environment** — running PostgreSQL, Firebird, and helper services locally
+> 3. **OES Daemon** — optionally, for server (headless) mode on Linux
 
-> Desktop-режим OES (wxWidgets GUI) контейнеризации не подлежит.
+> OES desktop mode (wxWidgets GUI) is not suitable for containerization.
 
 ---
 
-## Dockerfile: C++ Build образ (OES компилятор)
+## Dockerfile: C++ build image (OES compiler)
 
 ```dockerfile
 # Dockerfile.build
-# Образ для воспроизводимой сборки OES на Linux (C++17 + wxWidgets)
+# Image for reproducible OES builds on Linux (C++17 + wxWidgets)
 
 FROM ubuntu:22.04 AS base
 
-# Отключить интерактивные диалоги apt
+# Disable interactive apt prompts
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
 
-# Базовые инструменты
+# Base tools
 RUN apt-get update && apt-get install -y \
-    # Компиляторы
+    # Compilers
     gcc-13 g++-13 \
-    # Сборка
+    # Build
     cmake ninja-build make \
     pkg-config \
     # VCS
     git \
-    # Утилиты
+    # Utilities
     curl wget unzip \
-    # wxWidgets зависимости (GTK3 для headless daemon, без GUI)
+    # wxWidgets dependencies (GTK3 for headless daemon, no GUI)
     libgtk-3-dev \
     libgl1-mesa-dev \
     libglu1-mesa-dev \
@@ -51,11 +51,11 @@ RUN apt-get update && apt-get install -y \
     libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Задать gcc-13 как дефолтный
+# Set gcc-13 as the default
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100 && \
     update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100
 
-# --- Собрать wxWidgets из исходников ---
+# --- Build wxWidgets from source ---
 FROM base AS wxwidgets-builder
 
 ARG WX_VERSION=3.3.2
@@ -64,7 +64,8 @@ WORKDIR /opt/wxwidgets-src
 RUN curl -fsSL https://github.com/wxWidgets/wxWidgets/releases/download/v${WX_VERSION}/wxWidgets-${WX_VERSION}.tar.bz2 \
     | tar xj --strip-components=1
 
-# Для daemon-режима (headless): GTK3 backend без дисплея (не использовать --disable-gui с --with-gtk=3)
+# For daemon (headless) mode: GTK3 backend without a display
+# (do not combine --disable-gui with --with-gtk=3)
 RUN mkdir build-release && cd build-release && \
     ../configure \
       --enable-unicode \
@@ -76,29 +77,29 @@ RUN mkdir build-release && cd build-release && \
     make install && \
     ldconfig
 
-# --- Финальный build-образ ---
+# --- Final build image ---
 FROM base AS builder
 
-# Скопировать собранный wxWidgets
+# Copy the built wxWidgets
 COPY --from=wxwidgets-builder /usr/local /usr/local
 RUN ldconfig
 
-# Настройка рабочей директории
+# Configure the working directory
 WORKDIR /workspace
 
-# Метаданные образа
+# Image metadata
 LABEL org.opencontainers.image.description="OES C++ build environment"
 LABEL org.opencontainers.image.source="https://github.com/org/oes-enterprise"
 ```
 
-Использование build-образа:
+Using the build image:
 ```bash
-# Собрать образ
+# Build the image
 docker build -f Dockerfile.build -t oes-builder:latest .
 docker build -f Dockerfile.build -t oes-builder:wx3.3.2 \
   --build-arg WX_VERSION=3.3.2 .
 
-# Скомпилировать OES внутри контейнера
+# Compile OES inside the container
 docker run --rm \
   -v $(pwd):/workspace \
   -v oes-build-cache:/workspace/build \
@@ -111,13 +112,13 @@ docker run --rm \
 
 ---
 
-## Dockerfile: OES Daemon (production образ)
+## Dockerfile: OES Daemon (production image)
 
 ```dockerfile
 # Dockerfile.daemon
-# Многоэтапная сборка: compile → minimal runtime image
+# Multi-stage build: compile -> minimal runtime image
 
-# === Этап 1: Компиляция ===
+# === Stage 1: Compilation ===
 FROM ghcr.io/org/oes-builder:latest AS compiler
 
 WORKDIR /src
@@ -132,12 +133,12 @@ RUN mkdir -p build/release && cd build/release && \
       -DOES_BUILD_DESKTOP=OFF && \
     ninja -j$(nproc) oes-daemon
 
-# === Этап 2: Runtime образ (минимальный) ===
+# === Stage 2: Runtime image (minimal) ===
 FROM ubuntu:22.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Только runtime зависимости (не dev-пакеты)
+# Runtime dependencies only (no dev packages)
 RUN apt-get update && apt-get install -y \
     libfbclient2 \
     libpq5 \
@@ -149,19 +150,19 @@ RUN apt-get update && apt-get install -y \
     libgtk-3-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Безопасность: не запускать от root
+# Security: do not run as root
 RUN groupadd --system --gid 1001 oes && \
     useradd --system --uid 1001 --gid oes --home /var/lib/oes oes
 
-# Директории
+# Directories
 RUN mkdir -p /opt/oes /var/lib/oes /var/log/oes /etc/oes && \
     chown -R oes:oes /var/lib/oes /var/log/oes
 
-# Скопировать daemon бинарник
+# Copy the daemon binary
 COPY --from=compiler --chown=oes:oes /src/build/release/bin/oes-daemon /opt/oes/oes-daemon
 RUN chmod 755 /opt/oes/oes-daemon
 
-# Конфиг по умолчанию (будет перезаписан mount-ом или env)
+# Default config (will be overridden by a mount or env)
 COPY --chown=oes:oes config/oes.conf.docker /etc/oes/oes.conf
 
 USER oes
@@ -202,7 +203,7 @@ cmake-build-*/
 *.gdb
 *.log
 
-# Конфиги с секретами
+# Configs with secrets
 oes.conf
 oes.conf.production
 *.conf.enc
@@ -211,12 +212,12 @@ oes.conf.production
 *.pfx
 *.p12
 
-# Документация
+# Documentation
 docs/
 *.md
 !README.md
 
-# Тесты (не нужны в production образе)
+# Tests (not needed in the production image)
 tests/
 test/
 *_test.cpp
@@ -225,17 +226,17 @@ test/
 
 ---
 
-## docker-compose: Dev-окружение (базы данных)
+## docker-compose: dev environment (databases)
 
 ```yaml
 # docker-compose.dev.yml
-# Инфраструктура для разработки OES: базы данных без приложения
-# Само приложение запускается нативно (Visual Studio / CLion)
+# Infrastructure for OES development: databases without the application
+# The application itself runs natively (Visual Studio / CLion)
 
 version: '3.8'
 
 services:
-  # === PostgreSQL (основной или альтернативный backend) ===
+  # === PostgreSQL (primary or alternative backend) ===
   postgres:
     image: postgres:16-alpine
     container_name: oes-dev-postgres
@@ -255,7 +256,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # === Firebird Server (альтернатива embedded для dev) ===
+  # === Firebird Server (alternative to embedded for dev) ===
   firebird:
     image: jacobalberty/firebird:v4.0
     container_name: oes-dev-firebird
@@ -275,7 +276,7 @@ services:
       timeout: 10s
       retries: 5
 
-  # === MySQL (если тестируем MySQL backend) ===
+  # === MySQL (if testing the MySQL backend) ===
   mysql:
     image: mysql:8.0
     container_name: oes-dev-mysql
@@ -296,7 +297,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # === Adminer — web UI для всех баз ===
+  # === Adminer - web UI for all databases ===
   adminer:
     image: adminer:latest
     container_name: oes-dev-adminer
@@ -316,16 +317,16 @@ volumes:
 ```
 
 ```bash
-# Поднять dev-базы
+# Bring up dev databases
 docker compose -f docker-compose.dev.yml up -d
 
-# Поднять только PostgreSQL
+# Bring up only PostgreSQL
 docker compose -f docker-compose.dev.yml up -d postgres
 
-# Остановить
+# Stop
 docker compose -f docker-compose.dev.yml down
 
-# Удалить данные (полный сброс)
+# Remove data (full reset)
 docker compose -f docker-compose.dev.yml down -v
 ```
 
@@ -346,11 +347,11 @@ services:
     ports:
       - "8765:8765"
     volumes:
-      # Конфигурация (монтировать, не встраивать в образ)
+      # Configuration (mount, do not bake into the image)
       - /etc/oes/oes.conf:/etc/oes/oes.conf:ro
-      # Данные (базы, загруженные файлы)
+      # Data (databases, uploaded files)
       - oes_data:/var/lib/oes
-      # Логи
+      # Logs
       - /var/log/oes:/var/log/oes
     environment:
       - OES_LOG_LEVEL=info
@@ -384,7 +385,7 @@ services:
       retries: 5
     networks:
       - oes-network
-    # НЕ публикуем порт наружу — доступ только из docker network
+    # Do NOT publish the port externally - access only from the docker network
 
   # === Nginx (TLS termination) ===
   nginx:
@@ -420,10 +421,10 @@ networks:
 ## GitHub Container Registry (ghcr.io)
 
 ```bash
-# Авторизоваться
+# Log in
 echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 
-# Собрать и запушить build-образ (редко меняется)
+# Build and push the build image (rarely changes)
 docker build -f Dockerfile.build \
   -t ghcr.io/org/oes-builder:wx3.3.2 \
   -t ghcr.io/org/oes-builder:latest \
@@ -431,8 +432,8 @@ docker build -f Dockerfile.build \
 docker push ghcr.io/org/oes-builder:wx3.3.2
 docker push ghcr.io/org/oes-builder:latest
 
-# Собрать и запушить daemon образ (при каждом релизе)
-VERSION=$(git describe --tags --abbrev=0)  # например: v1.2.3
+# Build and push the daemon image (per release)
+VERSION=$(git describe --tags --abbrev=0)  # e.g.: v1.2.3
 COMMIT=$(git rev-parse --short HEAD)
 
 docker build -f Dockerfile.daemon \
@@ -444,14 +445,14 @@ docker push ghcr.io/org/oes-daemon:${VERSION}
 docker push ghcr.io/org/oes-daemon:${COMMIT}
 docker push ghcr.io/org/oes-daemon:latest
 
-# На сервере — обновить
+# On the server - update
 docker pull ghcr.io/org/oes-daemon:latest
 OES_VERSION=latest docker compose up -d oes-daemon
 ```
 
 ---
 
-## GitHub Actions: CI сборка в контейнере
+## GitHub Actions: CI build in a container
 
 ```yaml
 # .github/workflows/build.yml
@@ -459,7 +460,7 @@ name: Build OES
 
 on:
   push:
-    branches: [master, develop]   # master = production, develop = интеграция
+    branches: [master, develop]   # master = production, develop = integration
   pull_request:
 
 jobs:
@@ -498,56 +499,56 @@ jobs:
 
 ---
 
-## Полезные команды
+## Useful commands
 
 ```bash
-# === Сборка ===
-docker compose build                          # Собрать все
-docker compose build --no-cache oes-daemon    # Без кэша
-docker compose build oes-daemon               # Только daemon
+# === Build ===
+docker compose build                          # Build everything
+docker compose build --no-cache oes-daemon    # No cache
+docker compose build oes-daemon               # Daemon only
 
-# === Запуск ===
-docker compose up -d                          # Запустить в фоне
-docker compose up -d --build                  # Пересобрать и запустить
+# === Run ===
+docker compose up -d                          # Start in background
+docker compose up -d --build                  # Rebuild and start
 
-# === Статус ===
-docker compose ps                             # Статус контейнеров
-docker compose logs -f oes-daemon             # Логи в реальном времени
-docker compose logs --tail=100 oes-daemon     # Последние 100 строк
+# === Status ===
+docker compose ps                             # Container status
+docker compose logs -f oes-daemon             # Logs in real time
+docker compose logs --tail=100 oes-daemon     # Last 100 lines
 
-# === Остановка ===
-docker compose down                           # Остановить
-docker compose down -v                        # Остановить + удалить volumes
+# === Stop ===
+docker compose down                           # Stop
+docker compose down -v                        # Stop + remove volumes
 
-# === Отладка ===
-docker compose exec oes-daemon bash           # Shell внутрь контейнера
+# === Debugging ===
+docker compose exec oes-daemon bash           # Shell into the container
 docker compose exec postgres psql -U oes_user -d oes_db
 
-# === Очистка ===
-docker system prune -f                        # Удалить неиспользуемые ресурсы
-docker image prune -a -f                      # Удалить все неиспользуемые образы
-docker volume prune -f                        # Удалить неиспользуемые volumes
+# === Cleanup ===
+docker system prune -f                        # Remove unused resources
+docker image prune -a -f                      # Remove all unused images
+docker volume prune -f                        # Remove unused volumes
 ```
 
 ---
 
-## Когда Docker vs нативная установка для OES
+## When Docker vs native install for OES
 
 ```
-Docker НЕ подходит для:
-  — Desktop режим (wxWidgets GUI — нельзя контейнеризировать без X11/Wayland)
-  — Windows-native OES с Firebird embedded (сложная интеграция)
-  — Инсталлятор OES (NSIS/WiX — только нативно на Windows)
+Docker is NOT suitable for:
+  - Desktop mode (wxWidgets GUI - cannot be containerized without X11/Wayland)
+  - Windows-native OES with Firebird embedded (complex integration)
+  - OES installer (NSIS/WiX - only native on Windows)
 
-Docker ПОДХОДИТ для:
-  — C++ build environment (воспроизводимая сборка в CI/CD)
-  — OES Daemon (headless, Linux, серверный режим)
-  — Dev-окружение (PostgreSQL, Firebird Server, MySQL для разработчиков)
-  — License Server и Update Server вендора
+Docker IS suitable for:
+  - C++ build environment (reproducible builds in CI/CD)
+  - OES Daemon (headless, Linux, server mode)
+  - Dev environment (PostgreSQL, Firebird Server, MySQL for developers)
+  - Vendor License Server and Update Server
 
-Рекомендация для OES:
-  — Build-контейнер в CI/CD (GitHub Actions) — ВСЕГДА
-  — Dev базы данных через docker-compose.dev.yml — ВСЕГДА
-  — OES Daemon в production — по желанию (Docker или systemd — оба хороши)
-  — Desktop клиент — нативная установка (NSIS/WiX инсталлятор)
+Recommendation for OES:
+  - Build container in CI/CD (GitHub Actions) - ALWAYS
+  - Dev databases via docker-compose.dev.yml - ALWAYS
+  - OES Daemon in production - optional (Docker or systemd are both fine)
+  - Desktop client - native installation (NSIS/WiX installer)
 ```

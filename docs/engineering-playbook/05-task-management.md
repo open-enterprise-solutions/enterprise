@@ -1,63 +1,63 @@
-# 05. Управление задачами
+# 05. Task Management
 
-## Трекер задач
+## Task tracker
 
-Каждый проект использует **один** трекер задач. Выбор зависит от проекта:
+Every project uses **one** task tracker. The choice depends on the project:
 
-| Трекер | Когда использовать |
+| Tracker | When to use |
 |--------|--------------------|
-| **GitHub Issues** | Основной трекер для OES. Технические задачи рядом с кодом, интеграция с PR |
-| **Jira** | Для проектов с полноценным Scrum, спринтами и story points |
-| **Linear** | Альтернатива Jira для команд предпочитающих минимализм |
+| **GitHub Issues** | Primary tracker for OES. Technical tasks next to the code, integrated with PRs |
+| **Jira** | For projects with full Scrum, sprints, and story points |
+| **Linear** | A Jira alternative for teams that prefer minimalism |
 
-### GitHub Issues — основной трекер
+### GitHub Issues — primary tracker
 
-**Структура задач в GitHub Issues:**
-- **Milestones:** крупные релизы / направления работ (v1.1.0, CMake Migration, Google Test Integration)
-- **Labels:** тип задачи, приоритет, компонент
-- **Assignees:** ответственный разработчик
+**Task structure in GitHub Issues:**
+- **Milestones:** major releases / work streams (v1.1.0, CMake Migration, Google Test Integration)
+- **Labels:** task type, priority, component
+- **Assignees:** responsible developer
 
-**Связь Issues → GitHub:**
-- Ветка содержит номер задачи: `feature/42-pdf-export`
-- PR title содержит ссылку: `feat: add PDF export (#42)`
-- В описании PR: `Closes #42` — GitHub автоматически закроет issue при мердже
+**Linking Issues → GitHub:**
+- Branch name contains the task number: `feature/42-pdf-export`
+- PR title contains a link: `feat: add PDF export (#42)`
+- In the PR description: `Closes #42` — GitHub automatically closes the issue on merge
 
-**Правило:** один проект = один трекер. Не размазывайте задачи по нескольким инструментам. Все участники проекта должны знать, где искать задачи.
+**Rule:** one project = one tracker. Don't spread tasks across multiple tools. Every team member should know where to look for tasks.
 
 ---
 
-## Жизненный цикл задачи
+## Task lifecycle
 
 ```
 Backlog → To Do → In Progress → Review → Done
 ```
 
-### Статусы
+### Statuses
 
-| Статус | Значение | Кто переводит |
+| Status | Meaning | Who moves it |
 |--------|----------|---------------|
-| **Backlog** | Задача создана, но не запланирована | Автор задачи |
-| **To Do** | Запланирована на текущую неделю/спринт | Тимлид |
-| **In Progress** | Разработчик работает над задачей | Разработчик (берёт задачу) |
-| **Review** | PR создан, ждёт ревью | Разработчик (создаёт PR) |
-| **Done** | PR смерджен, задача выполнена | Ревьюер (после мерджа) |
+| **Backlog** | Task created but not planned | Task author |
+| **To Do** | Planned for the current week/sprint | Tech lead |
+| **In Progress** | Developer is working on the task | Developer (picks up the task) |
+| **Review** | PR created, waiting for review | Developer (creates the PR) |
+| **Done** | PR merged, task complete | Reviewer (after merge) |
 
-### Правила перехода
+### Transition rules
 
-- Разработчик берёт задачу из **To Do** → переводит в **In Progress**
-- Не больше **2 задач In Progress** на одного разработчика одновременно
-- Если задача заблокирована — пометить лейблом `blocked` с описанием причины
-- Задача считается **Done** только когда PR смерджен (не когда код написан)
+- Developer takes a task from **To Do** → moves it to **In Progress**
+- No more than **2 tasks In Progress** per developer at the same time
+- If a task is blocked — mark it with the `blocked` label and explain why
+- A task is considered **Done** only when the PR is merged (not when the code is written)
 
 ---
 
-## Формат задачи
+## Task format
 
-### Заголовок
+### Title
 
-Формат: **глагол + объект**
+Format: **verb + object**
 
-Хорошо:
+Good:
 ```
 Add undo/redo support in form designer
 Fix null pointer crash when opening report with empty dataset
@@ -66,32 +66,32 @@ Refactor database layer to support connection pooling
 Migrate core module build system to CMake
 ```
 
-Плохо:
+Bad:
 ```
-Registration          — нет глагола, неясно что делать
-Bug fix               — не описывает проблему
-New feature           — не описывает что за фича
-Task #42              — бессмысленное название
-Crash                 — нет контекста
+Registration          — no verb, unclear what to do
+Bug fix               — doesn't describe the problem
+New feature           — doesn't describe the feature
+Task #42              — meaningless title
+Crash                 — no context
 ```
 
-### Тело задачи
+### Body
 
 ```markdown
 ## Description
-При открытии отчёта, в датасете которого нет ни одной записи, приложение
-падает с Access Violation в `ReportRenderer::RenderRow()`. Происходит при
-любом типе СУБД (Firebird, PostgreSQL).
+When opening a report whose dataset has no records, the application
+crashes with an Access Violation in `ReportRenderer::RenderRow()`. Happens
+with any DBMS (Firebird, PostgreSQL).
 
 ## Expected behavior
-Отчёт должен открываться и отображать пустую страницу с заголовком,
-но без строк данных.
+The report should open and show an empty page with a header,
+but no data rows.
 
 ## Steps to reproduce
-1. Открыть любой отчёт
-2. Убедиться что датасет пустой (нет ни одной записи)
-3. Нажать "Просмотр отчёта"
-4. Наблюдается: Access Violation crash
+1. Open any report
+2. Make sure the dataset is empty (no records)
+3. Click "Preview report"
+4. Observed: Access Violation crash
 
 ## Environment
 - OS: Windows 10 x64
@@ -99,42 +99,42 @@ Crash                 — нет контекста
 - Database: Firebird 4.0.1
 
 ## Acceptance criteria
-- [ ] Отчёт открывается без краша при пустом датасете
-- [ ] Отображается корректная пустая страница
-- [ ] Добавлен unit-тест в tests/unit/runtime/ для этого сценария
-- [ ] Нет регрессий в остальных тестах
+- [ ] Report opens without crashing on an empty dataset
+- [ ] Correct empty page is displayed
+- [ ] Unit test added in tests/unit/runtime/ for this scenario
+- [ ] No regressions in other tests
 
-## Technical notes (опционально)
-Возможная причина: `ReportRenderer::RenderRow()` обращается к `m_dataset[0]`
-без проверки `m_dataset.empty()`. Проверить `ReportRenderer.cpp` ~строка 234.
+## Technical notes (optional)
+Likely cause: `ReportRenderer::RenderRow()` accesses `m_dataset[0]`
+without checking `m_dataset.empty()`. Check `ReportRenderer.cpp` around line 234.
 ```
 
 ---
 
-## Связь задача → ветка → PR
+## Task → branch → PR linking
 
-Каждая задача должна быть связана с веткой и PR:
+Every task must be linked to a branch and PR:
 
 ```
-Задача #42: "Add PDF export for reports"
+Task #42: "Add PDF export for reports"
     ↓
-Ветка: feature/42-pdf-export
+Branch: feature/42-pdf-export
     ↓
 PR: "feat: add PDF export for reports (#42)" → Closes #42
 ```
 
-### Как связать
+### How to link
 
-В описании PR используйте ключевые слова:
+In the PR description use the keywords:
 ```
 Closes #42
 Fixes #42
 Resolves #42
 ```
 
-GitHub автоматически закроет issue при мердже PR.
+GitHub automatically closes the issue when the PR is merged.
 
-В имени ветки добавляйте номер задачи:
+Include the task number in the branch name:
 ```
 feature/42-add-pdf-export
 fix/108-null-pointer-empty-dataset
@@ -143,47 +143,47 @@ chore/55-migrate-core-to-cmake
 
 ---
 
-## Приоритеты
+## Priorities
 
-| Приоритет | Значение | SLA (время реакции) | Пример |
+| Priority | Meaning | SLA (response time) | Example |
 |-----------|----------|---------------------|--------|
-| **Critical** | Краш у клиента, потеря данных, невозможно работать | Немедленно | Access violation при старте, потеря документов |
-| **High** | Важная функциональность сломана, обходного пути нет | В течение дня | Невозможно сохранить форму, отчёт не генерируется |
-| **Medium** | Функциональность работает с ограничениями | В текущем спринте | Медленная загрузка больших отчётов |
-| **Low** | Косметика, улучшения, tech debt | Когда будет время | Иконка отображается со сдвигом на HiDPI |
+| **Critical** | Customer crash, data loss, work blocked | Immediately | Access violation on startup, document loss |
+| **High** | Important functionality broken, no workaround | Within a day | Cannot save a form, report won't generate |
+| **Medium** | Functionality works with limitations | Within the current sprint | Slow loading of large reports |
+| **Low** | Cosmetics, improvements, tech debt | When there's time | Icon misaligned on HiDPI |
 
-### Правила приоритизации
+### Prioritization rules
 
-1. **Critical** и **High** — берутся в работу без ожидания следующего спринта
-2. **Medium** — планируются на текущую или следующую неделю
-3. **Low** — делаются когда нет задач выше приоритетом
-4. Тимлид расставляет приоритеты, разработчик может предложить изменение с аргументацией
+1. **Critical** and **High** — picked up without waiting for the next sprint
+2. **Medium** — scheduled for the current or next week
+3. **Low** — done when there are no higher-priority tasks
+4. The tech lead sets priorities, a developer may propose a change with reasoning
 
 ---
 
-## Лейблы / теги
+## Labels / tags
 
-Используйте лейблы для быстрой фильтрации:
+Use labels for quick filtering:
 
-| Лейбл | Цвет | Значение |
+| Label | Color | Meaning |
 |-------|------|----------|
-| `bug` | Красный | Баг в существующей функциональности |
-| `feature` | Зелёный | Новая функциональность |
-| `enhancement` | Голубой | Улучшение существующего |
-| `refactor` | Жёлтый | Рефакторинг без изменения поведения |
-| `docs` | Серый | Документация |
-| `security` | Тёмно-красный | Вопросы безопасности |
-| `blocked` | Оранжевый | Задача заблокирована |
-| `good first issue` | Фиолетовый | Подходит для нового участника |
-| `build` | Светло-серый | Система сборки (CMake, MSBuild, CI) |
-| `database` | Тёмно-синий | Работа с СУБД или схемой |
-| `performance` | Светло-оранжевый | Проблемы производительности |
+| `bug` | Red | Bug in existing functionality |
+| `feature` | Green | New functionality |
+| `enhancement` | Light blue | Improvement to existing functionality |
+| `refactor` | Yellow | Refactoring without behaviour change |
+| `docs` | Gray | Documentation |
+| `security` | Dark red | Security issue |
+| `blocked` | Orange | Task is blocked |
+| `good first issue` | Purple | Suitable for a new contributor |
+| `build` | Light gray | Build system (CMake, MSBuild, CI) |
+| `database` | Dark blue | Working with DBMS or schema |
+| `performance` | Light orange | Performance issues |
 
 ---
 
-## Milestones — планирование релизов
+## Milestones — release planning
 
-Milestones в GitHub соответствуют версиям продукта:
+GitHub milestones correspond to product versions:
 
 ```
 Milestone: v1.2.0
@@ -198,31 +198,31 @@ Issues:
   #59 Add connection retry logic
 ```
 
-Каждый новый issue должен быть привязан к milestone или помечен как Backlog.
+Every new issue must be attached to a milestone or marked as Backlog.
 
 ---
 
-## AI и задачи
+## AI and tasks
 
-### AI может создавать задачи
+### AI can create tasks
 
-Claude Code и другие AI-ассистенты могут создавать задачи (через GitHub Issues API или MCP). Это полезно когда AI находит баг или видит улучшение в процессе работы.
+Claude Code and other AI assistants can create tasks (through the GitHub Issues API or MCP). Useful when the AI spots a bug or sees an improvement during work.
 
-**Но:** AI-созданная задача — это **черновик**. Человек должен:
-1. Проверить релевантность задачи
-2. Уточнить описание и критерии приёмки
-3. Выставить приоритет
-4. Привязать к milestone или спринту
+**However:** an AI-created task is a **draft**. A human must:
+1. Check the task is relevant
+2. Refine the description and acceptance criteria
+3. Assign a priority
+4. Attach it to a milestone or sprint
 
-### AI как помощник при декомпозиции
+### AI as a decomposition assistant
 
-AI хорошо помогает разбить большую задачу на подзадачи:
+AI is good at breaking down a large task into subtasks:
 
 ```
-Промпт: "Разбей задачу 'Integrate Google Test into OES build system' на подзадачи.
-Проект: C++17, MSBuild + CMake transition, на данный момент тестов нет."
+Prompt: "Break down the task 'Integrate Google Test into OES build system' into subtasks.
+Project: C++17, MSBuild + CMake transition, currently no tests."
 
-AI предложит:
+AI suggests:
 1. Add Google Test as git submodule or vcpkg dependency
 2. Create CMakeLists.txt for tests/ directory
 3. Set up test runner configuration (CTest)
@@ -233,15 +233,15 @@ AI предложит:
 8. Document how to run tests locally in README
 ```
 
-Человек проверяет, корректирует, создаёт задачи.
+The human verifies, corrects, and creates the tasks.
 
-### AI как помощник при написании acceptance criteria
+### AI as a helper writing acceptance criteria
 
 ```
-Промпт: "Напиши acceptance criteria для задачи:
+Prompt: "Write acceptance criteria for the task:
 'Fix crash when opening report with empty dataset in ReportRenderer'"
 
-AI предложит:
+AI suggests:
 - [ ] No crash (Access Violation) when dataset has zero rows
 - [ ] Empty report displays header/footer but no data rows
 - [ ] No crash with NULL dataset pointer
@@ -253,28 +253,28 @@ AI предложит:
 
 ---
 
-## Ретроспектива задач
+## Task retrospective
 
-Раз в 2 недели (или в конце спринта/milestone):
-1. Посмотреть что было сделано (Done)
-2. Что застряло и почему (Blocked, долго в Review)
-3. Что не успели (осталось в To Do / In Progress)
-4. Что можно улучшить в процессе
+Every 2 weeks (or at the end of a sprint/milestone):
+1. Review what was completed (Done)
+2. What got stuck and why (Blocked, sitting in Review for a long time)
+3. What didn't fit (left in To Do / In Progress)
+4. What can be improved in the process
 
-Цель — не обвинять, а улучшать процесс. Если задачи постоянно не успевают — значит планируем слишком много или задачи слишком крупные.
+The goal is not to assign blame, but to improve the process. If tasks regularly slip — we're planning too much or tasks are too large.
 
 ---
 
-## Работа с техническим долгом
+## Handling technical debt
 
-Технический долг — отдельная категория задач. Правила:
+Technical debt is a separate task category. Rules:
 
-1. **Фиксируйте** — при обнаружении создайте issue с лейблом `refactor` или `enhancement`
-2. **Не игнорируйте** — Tech debt накапливается и замедляет разработку
-3. **Планируйте** — выделяйте 10-20% каждого спринта на tech debt
-4. **Не рефакторите молча** — рефакторинг идёт через PR и ревью как любой другой код
+1. **Record it** — when you spot something, create an issue with the `refactor` or `enhancement` label
+2. **Don't ignore it** — tech debt accumulates and slows down development
+3. **Plan for it** — allocate 10-20% of each sprint to tech debt
+4. **Don't refactor silently** — refactoring goes through a PR and review like any other code
 
-Примеры задач tech debt для OES:
+Examples of OES tech debt tasks:
 ```
 refactor: Replace raw owning pointers in ibDatabaseLayer subclasses with unique_ptr
 chore: Migrate designer module from MSBuild to CMake

@@ -1,24 +1,24 @@
-# 16. База данных
+# 16. Database
 
-## Стек
+## Stack
 
-| Компонент | Описание |
+| Component | Description |
 |-----------|----------|
-| **Firebird** | Основная СУБД (встраиваемая + серверная) |
-| **PostgreSQL** | Поддерживаемая СУБД для корпоративных установок |
-| **SQLite** | Поддерживаемая СУБД для локальных/автономных установок |
-| **MySQL / ODBC** | Дополнительные поддерживаемые источники |
-| **ibDatabaseLayer** | Собственный абстрактный слой доступа к данным |
-| **ibPreparedStatement** | Параметризованные запросы (обязательно для всех операций с данными) |
-| **ibResultSet** | Итерация по результатам запроса |
+| **Firebird** | Primary DBMS (embedded + server) |
+| **PostgreSQL** | Supported DBMS for enterprise installations |
+| **SQLite** | Supported DBMS for local/offline installations |
+| **MySQL / ODBC** | Additional supported sources |
+| **ibDatabaseLayer** | Custom abstract data-access layer |
+| **ibPreparedStatement** | Parameterized queries (mandatory for all data operations) |
+| **ibResultSet** | Iteration over query results |
 
 ---
 
-## Абстрактный слой доступа к данным
+## Abstract data-access layer
 
-### Принцип: никакого прямого SQL без абстракции
+### Principle: no direct SQL without the abstraction
 
-Весь код работает через интерфейс `ibDatabaseLayer`. Конкретная СУБД подключается через фабрику — остальной код не знает о типе базы.
+All code goes through the `ibDatabaseLayer` interface. The concrete DBMS is wired in via a factory — the rest of the code doesn't know which DB is in use.
 
 ```cpp
 // database_factory.h
@@ -31,16 +31,16 @@ struct DbConnectionParams
 {
     DbDriver  driver   = DbDriver::Firebird;
     wxString  host     = "localhost";
-    int       port     = 0;        // 0 = дефолтный порт драйвера
-    wxString  database;            // путь к файлу или имя БД
+    int       port     = 0;        // 0 = driver default port
+    wxString  database;            // file path or DB name
     wxString  user;
     wxString  password;
-    int       poolSize = 1;        // для однопользовательского приложения = 1
+    int       poolSize = 1;        // single-user app = 1
 
     wxString BuildDSN() const;
 };
 
-// Создаёт нужный драйвер
+// Creates the required driver
 std::unique_ptr<ibDatabaseLayer> CreateDatabaseLayer(const DbConnectionParams& params);
 ```
 
@@ -75,7 +75,7 @@ std::unique_ptr<ibDatabaseLayer> CreateDatabaseLayer(const DbConnectionParams& p
             return std::make_unique<OdbcDatabaseLayer>(p.BuildDSN());
 
         default:
-            wxLogError("[Database] Неизвестный драйвер БД");
+            wxLogError("[Database] Unknown DB driver");
             return nullptr;
     }
 }
@@ -83,12 +83,12 @@ std::unique_ptr<ibDatabaseLayer> CreateDatabaseLayer(const DbConnectionParams& p
 
 ---
 
-## Управление соединениями
+## Connection management
 
 ### Connection Manager
 
 ```cpp
-// src/engine/backend/appData.h (фрагмент — управление соединением)
+// src/engine/backend/appData.h (excerpt — connection management)
 class ibApplicationData
 {
 public:
@@ -97,11 +97,11 @@ public:
     bool  Open(const DbConnectionParams& params);
     void  Close();
     bool  IsOpen() const;
-    bool  Ping();   // SELECT 1 — проверка живости соединения
+    bool  Ping();   // SELECT 1 — connection liveness check
 
-    ibDatabaseLayer* Get();    // не-владеющий указатель
+    ibDatabaseLayer* Get();    // non-owning pointer
 
-    // Reconnect при потере соединения
+    // Reconnect on connection loss
     bool EnsureConnected();
 
 private:
@@ -113,29 +113,29 @@ private:
 ```
 
 ```cpp
-// src/engine/backend/appData.cpp (фрагмент)
+// src/engine/backend/appData.cpp (excerpt)
 bool ibApplicationData::Open(const DbConnectionParams& params)
 {
     m_params = params;
-    wxLogMessage("[Database] Открытие соединения | driver=%d host=%s db=%s",
+    wxLogMessage("[Database] Opening connection | driver=%d host=%s db=%s",
         (int)params.driver, params.host, params.database);
 
     m_db = CreateDatabaseLayer(params);
     if (!m_db)
     {
-        wxLogError("[Database] Не удалось создать драйвер БД");
+        wxLogError("[Database] Failed to create DB driver");
         return false;
     }
 
     if (!m_db->IsOpen())
     {
-        wxLogError("[Database] Ошибка открытия соединения: %s",
+        wxLogError("[Database] Connection open error: %s",
             m_db->GetErrorMessage());
         return false;
     }
 
     m_isOpen = true;
-    wxLogMessage("[Database] Соединение открыто");
+    wxLogMessage("[Database] Connection opened");
     return true;
 }
 
@@ -145,7 +145,7 @@ bool ibApplicationData::EnsureConnected()
 
     if (!Ping())
     {
-        wxLogWarning("[Database] Соединение потеряно, переподключение...");
+        wxLogWarning("[Database] Connection lost, reconnecting...");
         Close();
         return Open(m_params);
     }
@@ -154,9 +154,9 @@ bool ibApplicationData::EnsureConnected()
 
 bool ibApplicationData::Ping()
 {
-    // Используем IsOpen() + универсальный запрос SELECT 1,
-    // чтобы не привязываться к Firebird-специфичной таблице RDB$DATABASE.
-    // SELECT 1 поддерживается всеми СУБД: Firebird, PostgreSQL, SQLite, MySQL.
+    // Use IsOpen() + a portable SELECT 1 query
+    // so we don't depend on the Firebird-specific RDB$DATABASE table.
+    // SELECT 1 is supported by every DBMS: Firebird, PostgreSQL, SQLite, MySQL.
     if (!m_db || !m_db->IsOpen()) return false;
     try
     {
@@ -170,12 +170,12 @@ bool ibApplicationData::Ping()
 
 ---
 
-## Параметризованные запросы (обязательно)
+## Parameterized queries (mandatory)
 
-### Никогда не конкатенировать SQL с пользовательскими данными
+### Never concatenate SQL with user data
 
 ```cpp
-// ПРАВИЛЬНО — ibPreparedStatement
+// RIGHT — ibPreparedStatement
 bool OesDocumentRepository::FindByName(const wxString& name,
                                         std::vector<DocumentInfo>& out,
                                         wxString& err)
@@ -192,7 +192,7 @@ bool OesDocumentRepository::FindByName(const wxString& name,
     if (!stmt)
     {
         err = db->GetErrorMessage();
-        wxLogError("[Database] Ошибка подготовки запроса | context=FindByName error=%s", err);
+        wxLogError("[Database] Prepare error | context=FindByName error=%s", err);
         return false;
     }
 
@@ -202,7 +202,7 @@ bool OesDocumentRepository::FindByName(const wxString& name,
     if (!rs)
     {
         err = db->GetErrorMessage();
-        wxLogError("[Database] Ошибка выполнения запроса | context=FindByName error=%s", err);
+        wxLogError("[Database] Execute error | context=FindByName error=%s", err);
         stmt->Close();
         return false;
     }
@@ -222,16 +222,16 @@ bool OesDocumentRepository::FindByName(const wxString& name,
     return true;
 }
 
-// НЕПРАВИЛЬНО — SQL-инъекция!
+// WRONG — SQL injection!
 wxString sql = wxString::Format(
-    "SELECT * FROM documents WHERE name = '%s'", name);  // ОПАСНО
+    "SELECT * FROM documents WHERE name = '%s'", name);  // DANGEROUS
 db->RunQuery(sql);
 ```
 
-### RAII-обёртка для автоматического закрытия
+### RAII wrapper for automatic cleanup
 
 ```cpp
-// Вспомогательный класс для исключения утечек
+// Helper class to prevent leaks
 class OesResultSetGuard
 {
 public:
@@ -264,7 +264,7 @@ private:
     ibPreparedStatement* m_stmt;
 };
 
-// Использование
+// Usage
 bool OesDocumentRepository::GetById(int id, DocumentData& out, wxString& err)
 {
     ibDatabaseLayer* db = ibApplicationData::Instance().Get();
@@ -285,7 +285,7 @@ bool OesDocumentRepository::GetById(int id, DocumentData& out, wxString& err)
 
     if (!rs->Next())
     {
-        err = wxString::Format("Документ id=%d не найден", id);
+        err = wxString::Format("Document id=%d not found", id);
         return false;
     }
 
@@ -299,12 +299,12 @@ bool OesDocumentRepository::GetById(int id, DocumentData& out, wxString& err)
 
 ---
 
-## Транзакции
+## Transactions
 
-### Всегда использовать транзакции для связанных операций
+### Always use transactions for related operations
 
 ```cpp
-// RAII-обёртка для транзакций
+// RAII transaction wrapper
 class ibTransactionGuard
 {
 public:
@@ -318,8 +318,8 @@ public:
     {
         if (!m_committed)
         {
-            m_db->RollBack();  // ibDatabaseLayer API: RollBack() (с заглавной B)
-            wxLogWarning("[Database] Транзакция откачена (rollback при выходе из scope)");
+            m_db->RollBack();  // ibDatabaseLayer API: RollBack() (capital B)
+            wxLogWarning("[Database] Transaction rolled back (rollback on scope exit)");
         }
     }
 
@@ -334,7 +334,7 @@ private:
     bool             m_committed;
 };
 
-// Использование — автоматический rollback при исключении или раннем выходе
+// Usage — automatic rollback on exception or early exit
 OperationResult OesDocumentRepository::CreateWithSections(
     const DocumentData& doc,
     const std::vector<SectionData>& sections,
@@ -343,7 +343,7 @@ OperationResult OesDocumentRepository::CreateWithSections(
     ibDatabaseLayer* db = ibApplicationData::Instance().Get();
     ibTransactionGuard txn(db);
 
-    // Вставить документ
+    // Insert document
     OesStatementGuard stmtDoc(db->PrepareStatement(
         "INSERT INTO documents (name, status) VALUES (?, ?) "
         "RETURNING id"));
@@ -360,14 +360,14 @@ OperationResult OesDocumentRepository::CreateWithSections(
     rsDoc->Next();
     outDocId = rsDoc->GetResultInt("id");
 
-    // Вставить секции
+    // Insert sections
     for (const auto& section : sections)
     {
         OesStatementGuard stmtSec(db->PrepareStatement(
             "INSERT INTO document_sections (doc_id, title, content) "
             "VALUES (?, ?, ?)"));
         if (!stmtSec.ok())
-            return OperationResult::Fail(db->GetErrorMessage());  // txn откатится
+            return OperationResult::Fail(db->GetErrorMessage());  // txn rolls back
 
         stmtSec->SetParamInt(1, outDocId);
         stmtSec->SetParamString(2, section.title);
@@ -378,7 +378,7 @@ OperationResult OesDocumentRepository::CreateWithSections(
     }
 
     txn.Commit();
-    wxLogMessage("[Database] Документ создан | id=%d sections=%d",
+    wxLogMessage("[Database] Document created | id=%d sections=%d",
         outDocId, (int)sections.size());
     return OperationResult::Success();
 }
@@ -386,31 +386,31 @@ OperationResult OesDocumentRepository::CreateWithSections(
 
 ---
 
-## Соглашения по именованию
+## Naming conventions
 
-### Таблицы: snake_case, множественное число
+### Tables: snake_case, plural
 
 ```
-documents           (не Document, не tbl_document)
-document_sections   (не DocumentSection)
-report_templates    (не ReportTemplate)
-user_settings       (не UserSetting)
+documents           (not Document, not tbl_document)
+document_sections   (not DocumentSection)
+report_templates    (not ReportTemplate)
+user_settings       (not UserSetting)
 ```
 
-### Колонки: snake_case
+### Columns: snake_case
 
 ```
 created_at       is_deleted       doc_type_id
 updated_at       share_token      parent_id
 ```
 
-### Первичные ключи
+### Primary keys
 
-Для Firebird — INTEGER с последовательностью (sequence):
+For Firebird — INTEGER with a sequence:
 
 ```sql
--- Firebird 3.0+: используйте CREATE SEQUENCE (стандартный синтаксис SQL)
--- CREATE GENERATOR — устаревший синоним, поддерживается для обратной совместимости
+-- Firebird 3.0+: use CREATE SEQUENCE (standard SQL syntax)
+-- CREATE GENERATOR is a deprecated synonym, kept for backward compatibility
 CREATE SEQUENCE gen_documents_id;
 
 CREATE TABLE documents (
@@ -424,7 +424,7 @@ CREATE TABLE documents (
 );
 ```
 
-Для PostgreSQL — SERIAL или IDENTITY:
+For PostgreSQL — SERIAL or IDENTITY:
 
 ```sql
 CREATE TABLE documents (
@@ -437,28 +437,28 @@ CREATE TABLE documents (
 );
 ```
 
-### Обязательные поля в каждой таблице
+### Required columns in every table
 
 ```
-id          — первичный ключ
-created_at  — дата создания (автоматически)
-updated_at  — дата изменения (обновлять в UPDATE-триггере или приложении)
-is_deleted  — мягкое удаление (не DELETE физически)
+id          — primary key
+created_at  — creation timestamp (automatic)
+updated_at  — modification timestamp (updated in an UPDATE trigger or by the app)
+is_deleted  — soft delete (never DELETE physically)
 ```
 
 ---
 
-## Миграции
+## Migrations
 
-### Правила
+### Rules
 
-1. **НИКОГДА** не менять схему БД вручную в production
-2. Все изменения схемы — через SQL-скрипты миграций в `db/migrations/`
-3. Формат имени: `YYYYMMDD_NNN_description.sql`
-4. Каждый скрипт содержит раздел `-- UP` и `-- DOWN`
-5. Перед деструктивными миграциями — бэкап
+1. **NEVER** modify the DB schema manually in production
+2. All schema changes — through migration SQL scripts in `db/migrations/`
+3. Naming format: `YYYYMMDD_NNN_description.sql`
+4. Every script has an `-- UP` and a `-- DOWN` section
+5. Before destructive migrations — back up
 
-### Структура папки миграций
+### Migration folder layout
 
 ```
 db/
@@ -470,14 +470,14 @@ db/
 ├── seeds/
 │   ├── initial_data.sql
 │   └── demo_data.sql
-└── schema_version.sql    — текущая версия схемы
+└── schema_version.sql    — current schema version
 ```
 
-### Пример скрипта миграции
+### Example migration script
 
 ```sql
 -- 20260310_003_add_share_token.sql
--- Description: Добавить поле share_token в таблицу documents
+-- Description: Add share_token column to the documents table
 
 -- =====================
 -- UP
@@ -500,7 +500,7 @@ UPDATE schema_version SET version = '20260310_003', applied_at = CURRENT_TIMESTA
 -- UPDATE schema_version SET version = '20260201_002', applied_at = CURRENT_TIMESTAMP;
 ```
 
-### Менеджер версий схемы
+### Schema version manager
 
 ```cpp
 class OesMigrationManager
@@ -512,18 +512,19 @@ public:
     bool ApplyMigration(const wxString& scriptPath);
 
     /**
-     * @brief Применяет все незаявленные миграции из каталога.
+     * @brief Applies every pending migration in the directory.
      *
-     * Алгоритм:
-     * 1. Вызывает EnsureVersionTable() — создаёт таблицу schema_version, если не существует.
-     * 2. Читает список уже применённых версий через GetAppliedVersions().
-     * 3. Сканирует migrationsDir на наличие файлов *.sql, отсортированных по имени (YYYYMMDD_NNN_).
-     * 4. Для каждого файла, отсутствующего в списке применённых, вызывает ApplyMigration().
-     * 5. ApplyMigration() выполняет скрипт в транзакции и фиксирует версию в schema_version.
-     * 6. При ошибке применения — откатывает транзакцию и возвращает false (остальные не применяются).
+     * Algorithm:
+     * 1. Calls EnsureVersionTable() — creates schema_version if it doesn't exist.
+     * 2. Reads the list of already applied versions via GetAppliedVersions().
+     * 3. Scans migrationsDir for *.sql files, sorted by name (YYYYMMDD_NNN_).
+     * 4. For every file not in the applied list, calls ApplyMigration().
+     * 5. ApplyMigration() runs the script in a transaction and records the version
+     *    in schema_version.
+     * 6. On error — rolls back the transaction and returns false (remaining are not applied).
      *
-     * @param migrationsDir Путь к каталогу с SQL-скриптами миграций.
-     * @return true если все ожидающие миграции применены успешно, false при первой ошибке.
+     * @param migrationsDir Path to the directory with migration SQL scripts.
+     * @return true if every pending migration was applied successfully, false on the first error.
      */
     bool ApplyAllPending(const wxString& migrationsDir);
 
@@ -535,54 +536,54 @@ private:
 };
 ```
 
-### Двухэтапное удаление колонок
+### Two-phase column removal
 
 ```
-Этап 1: Код перестаёт использовать колонку → деплой версии N
-Этап 2: Миграция удаляет колонку        → деплой версии N+1
+Phase 1: code stops using the column → deploy version N
+Phase 2: migration drops the column   → deploy version N+1
 ```
 
 ---
 
-## Индексы
+## Indexes
 
-### Где обязательно ставить индексы
+### Where indexes are required
 
 ```sql
--- Внешние ключи
+-- Foreign keys
 CREATE INDEX idx_document_sections_doc_id ON document_sections (doc_id);
 CREATE INDEX idx_documents_doc_type_id    ON documents (doc_type_id);
 
--- Поля для фильтрации
+-- Columns used for filtering
 CREATE INDEX idx_documents_status      ON documents (status);
 CREATE INDEX idx_documents_is_deleted  ON documents (is_deleted);
 
--- Поля для сортировки (часто используемые)
+-- Columns used for sorting (frequently)
 CREATE INDEX idx_documents_created_at  ON documents (created_at DESC);
 
--- Уникальные значения
+-- Unique values
 CREATE UNIQUE INDEX idx_documents_share_token ON documents (share_token);
 ```
 
-### Что не делать с индексами
+### What NOT to do with indexes
 
-- Не ставить индекс на каждую колонку: каждый INDEX замедляет INSERT/UPDATE
-- Не создавать составные индексы без анализа реальных запросов
-- Периодически проверять использование индексов через PLAN-анализ
+- Don't index every column: each INDEX slows down INSERT/UPDATE
+- Don't create composite indexes without analyzing real queries
+- Periodically check index usage through PLAN analysis
 
 ---
 
-## Резервное копирование
+## Backups
 
 ### Firebird
 
 ```batch
-REM ежедневный бэкап (Windows Task Scheduler)
+REM daily backup (Windows Task Scheduler)
 gbak -b -user SYSDBA -password masterkey ^
   localhost:C:\OES\data\oes.fdb ^
   C:\OES\backups\oes-%date:~-4,4%%date:~-7,2%%date:~-10,2%.fbk
 
-REM восстановление
+REM restore
 gbak -c -user SYSDBA -password masterkey ^
   C:\OES\backups\oes-20260310.fbk ^
   localhost:C:\OES\data\oes_restored.fdb
@@ -591,19 +592,19 @@ gbak -c -user SYSDBA -password masterkey ^
 ### PostgreSQL
 
 ```bash
-# Ежедневный бэкап
+# Daily backup
 pg_dump -U oesuser oes_db | gzip > /backups/oes-$(date +%Y%m%d).sql.gz
 
-# Восстановление
+# Restore
 gunzip < /backups/oes-20260310.sql.gz | psql -U oesuser oes_db
 ```
 
 ### SQLite
 
 ```cpp
-// Для SQLite — простое копирование файла (при закрытой БД).
-// Реализован как метод ibApplicationData, так как требует доступа
-// к m_params для повторного открытия соединения после копирования.
+// For SQLite — just copy the file (while the DB is closed).
+// Implemented as an ibApplicationData method because it needs access
+// to m_params to reopen the connection after copying.
 void ibApplicationData::BackupSqliteDb(const wxString& backupDir)
 {
     wxString dbPath = m_params.database;
@@ -614,43 +615,43 @@ void ibApplicationData::BackupSqliteDb(const wxString& backupDir)
 
     wxCopyFile(dbPath, dest);
 
-    Open(m_params);  // повторно открыть соединение с теми же параметрами
-    wxLogMessage("[Database] Бэкап SQLite создан: %s", dest);
+    Open(m_params);  // reopen with the same parameters
+    wxLogMessage("[Database] SQLite backup created: %s", dest);
 }
 ```
 
-Добавьте `void BackupSqliteDb(const wxString& backupDir);` в объявление класса `ibApplicationData` (см. заголовок выше).
+Add `void BackupSqliteDb(const wxString& backupDir);` to the `ibApplicationData` class declaration (see the header above).
 
 ---
 
-## Чего НЕ делать
+## What NOT to do
 
-| Запрещено | Почему | Альтернатива |
+| Forbidden | Why | Alternative |
 |-----------|--------|-------------|
-| Конкатенировать SQL с данными пользователя | SQL-инъекция | `ibPreparedStatement` с параметрами |
-| `SELECT *` в производственном коде | Лишние данные, скрытые зависимости | Перечислять нужные колонки явно |
-| Хранить файлы в БД | Раздувает базу, медленные бэкапы | Хранить файлы в файловой системе, в БД — путь |
-| Физическое удаление без мягкого | Невозможно восстановить | `is_deleted = 1` + периодическая архивация |
-| Изменение типа колонки без проверки | Потеря данных | Новая колонка + миграция данных + удаление старой |
-| Прямой ALTER TABLE в production | Нет истории, нет отката | SQL-скрипт миграции |
-| Открытый пароль к БД в коде | Безопасность | Конфигурационный файл с ограниченным доступом |
+| Concatenate SQL with user data | SQL injection | `ibPreparedStatement` with parameters |
+| `SELECT *` in production code | Extra data, hidden dependencies | List the columns you need explicitly |
+| Store files in the DB | Bloats the DB, slow backups | Store files on disk, only the path in the DB |
+| Physical delete instead of soft delete | Cannot recover | `is_deleted = 1` + periodic archive |
+| Change a column type without checks | Data loss | New column + data migration + drop the old one |
+| Direct ALTER TABLE in production | No history, no rollback | Migration SQL script |
+| Plain-text DB password in code | Security | Configuration file with restricted access |
 
 ---
 
-## Чеклист базы данных
+## Database checklist
 
-### Перед релизом
+### Before release
 
-- [ ] Все новые запросы используют `ibPreparedStatement`
-- [ ] Нет конкатенации SQL с пользовательскими данными
-- [ ] Написаны скрипты миграций для новых таблиц и колонок
-- [ ] Миграции протестированы на staging
-- [ ] Новые внешние ключи имеют индексы
-- [ ] Транзакции используются для связанных INSERT/UPDATE
+- [ ] All new queries use `ibPreparedStatement`
+- [ ] No SQL concatenation with user data
+- [ ] Migration scripts written for new tables and columns
+- [ ] Migrations tested on staging
+- [ ] New foreign keys have indexes
+- [ ] Transactions used for related INSERT/UPDATE
 
-### Периодически
+### Periodically
 
-- [ ] Проверить slow query log — запросы > 1 сек
-- [ ] Проанализировать PLAN для тяжёлых запросов
-- [ ] Убедиться, что бэкапы создаются и доступны для восстановления
-- [ ] Очистить устаревшие записи (is_deleted = 1 старше N дней)
+- [ ] Review the slow query log — queries > 1 sec
+- [ ] Analyze PLAN for heavy queries
+- [ ] Verify that backups are being created and restorable
+- [ ] Purge obsolete rows (is_deleted = 1 older than N days)

@@ -1,56 +1,56 @@
-# 02. Настройка сервера с нуля — OES
+# 02. Server Setup from Scratch — OES
 
-> Ubuntu 22.04/24.04 LTS или macOS 13+ → production-ready сервер/рабочая станция для сборки OES и/или развёртывания OES daemon.
+> Ubuntu 22.04/24.04 LTS or macOS 13+ -> production-ready server/workstation for OES builds and/or OES daemon deployment.
 
-В OES сервер используется в двух ролях:
-- **Build Server** — компиляция C++/wxWidgets, сборка инсталлятора, CI/CD
-- **OES Daemon Server** — запуск OES в режиме сервиса (headless, HTTP API для тонких клиентов)
+In OES the server is used in two roles:
+- **Build Server** — C++/wxWidgets compilation, installer build, CI/CD
+- **OES Daemon Server** — running OES in service mode (headless, HTTP API for thin clients)
 
 ---
 
-## 1. Первый вход
+## 1. First login
 
 ```bash
-# Подключиться по SSH (провайдер даёт root пароль)
+# Connect via SSH (provider gives the root password)
 ssh root@203.0.113.10
 
-# Сменить пароль root
+# Change the root password
 passwd
-# Ввести новый сложный пароль (сохранить в 1Password)
+# Enter a new strong password (save in 1Password)
 ```
 
-## 2. Создать пользователя
+## 2. Create a user
 
 ```bash
-# Для build-сервера
+# For the build server
 adduser build-user
 usermod -aG sudo build-user
 
-# Для сервера с OES daemon — отдельный непривилегированный пользователь
+# For the OES daemon server — a separate unprivileged user
 adduser oes
-# НЕ давать sudo (принцип минимальных привилегий)
+# Do NOT grant sudo (principle of least privilege)
 
-# Проверить
+# Verify
 su - build-user
 sudo whoami
 # root
 ```
 
-## 3. SSH: ключ + отключить пароль
+## 3. SSH: key + disable password
 
 ```bash
-# На ЛОКАЛЬНОЙ машине — скопировать ключ на сервер
+# On the LOCAL machine — copy the key to the server
 ssh-copy-id -i ~/.ssh/id_ed25519.pub build-user@203.0.113.10
 
-# Проверить вход по ключу (без пароля)
+# Test key-based login (without password)
 ssh build-user@203.0.113.10
 
-# На СЕРВЕРЕ — отключить вход по паролю
+# On the SERVER — disable password login
 sudo nano /etc/ssh/sshd_config
 ```
 
 ```
-# /etc/ssh/sshd_config — изменить:
+# /etc/ssh/sshd_config — change:
 PermitRootLogin no
 PasswordAuthentication no
 PubkeyAuthentication yes
@@ -60,12 +60,12 @@ AllowUsers build-user
 ```
 
 ```bash
-# Проверить конфиг и перезапустить
+# Validate the config and restart
 sudo sshd -t
 sudo systemctl restart sshd
 
-# ВАЖНО: НЕ закрывать текущую сессию!
-# Открыть НОВЫЙ терминал и проверить вход:
+# IMPORTANT: do NOT close the current session!
+# Open a NEW terminal and verify login:
 ssh build-user@203.0.113.10
 ```
 
@@ -101,37 +101,37 @@ sudo systemctl start fail2ban
 sudo fail2ban-client status sshd
 ```
 
-## 5. UFW (файрвол)
+## 5. UFW (firewall)
 
 ```bash
-# Настроить правила ДО включения
+# Configure rules BEFORE enabling
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow 22/tcp      # SSH
 
-# Если сервер — OES daemon (HTTP API):
-sudo ufw allow 8765/tcp    # OES HTTP API (порт из oes.conf)
-# ИЛИ только через nginx reverse proxy:
+# If the server runs an OES daemon (HTTP API):
+sudo ufw allow 8765/tcp    # OES HTTP API (port from oes.conf)
+# OR only via nginx reverse proxy:
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 
-# Включить
+# Enable
 sudo ufw enable
-# Подтвердить: y
+# Confirm: y
 
-# Проверить
+# Verify
 sudo ufw status verbose
 ```
 
-> Если OES daemon доступен только через nginx, порт 8765 НЕ открывать наружу — только nginx проксирует к нему локально.
+> If the OES daemon is only reachable via nginx, do NOT open port 8765 externally — only nginx proxies to it locally.
 
-## 6. Обновление системы
+## 6. System updates
 
 ```bash
-# Обновить все пакеты
+# Update all packages
 sudo apt update && sudo apt upgrade -y
 
-# Установить базовые утилиты
+# Install base utilities
 sudo apt install -y \
   curl wget git htop iotop \
   build-essential cmake ninja-build \
@@ -143,10 +143,10 @@ sudo apt install -y \
   logrotate \
   pkg-config
 
-# Автообновления безопасности
+# Automatic security updates
 sudo apt install -y unattended-upgrades
 sudo dpkg-reconfigure -plow unattended-upgrades
-# Выбрать "Yes"
+# Select "Yes"
 
 sudo nano /etc/apt/apt.conf.d/50unattended-upgrades
 ```
@@ -159,57 +159,57 @@ Unattended-Upgrade::Automatic-Reboot "false";
 Unattended-Upgrade::Mail "admin@oes-team.com";
 ```
 
-## 7. Инструменты C++ сборки (Build Server)
+## 7. C++ build tools (Build Server)
 
 ### Linux (Ubuntu 22.04/24.04)
 
 ```bash
-# GCC (последняя стабильная версия)
+# GCC (latest stable version)
 sudo apt install -y gcc-13 g++-13
 sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100
 sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100
 
-# Проверить
+# Verify
 gcc --version   # gcc 13.x
 g++ --version
 
-# CMake (>= 3.25 для современных фич)
+# CMake (>= 3.25 for modern features)
 sudo apt install -y cmake
 cmake --version
-# Если версия старая — установить из Kitware репозитория:
+# If the version is too old — install from the Kitware repo:
 # https://apt.kitware.com/
 
-# Ninja (быстрый build system)
+# Ninja (fast build system)
 sudo apt install -y ninja-build
 
-# LLVM/Clang (опционально, для статического анализа)
+# LLVM/Clang (optional, for static analysis)
 sudo apt install -y clang clang-tidy clang-format
 ```
 
 ### macOS (Homebrew)
 
 ```bash
-# Homebrew (если не установлен)
+# Homebrew (if not installed)
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# Компиляторы и инструменты сборки
+# Compilers and build tools
 brew install gcc cmake ninja pkg-config
 
-# Проверить
+# Verify
 gcc --version
 cmake --version   # >= 3.25
 
-# Clang уже установлен через Xcode Command Line Tools:
+# Clang is already installed via Xcode Command Line Tools:
 xcode-select --install
 clang --version
 ```
 
-## 8. wxWidgets зависимости (Build Server)
+## 8. wxWidgets dependencies (Build Server)
 
 ### Linux (Ubuntu 22.04/24.04)
 
 ```bash
-# Зависимости для сборки wxWidgets 3.3.x под Linux (GTK)
+# Dependencies for building wxWidgets 3.3.x on Linux (GTK)
 sudo apt install -y \
   libgtk-3-dev \
   libgl1-mesa-dev \
@@ -223,7 +223,7 @@ sudo apt install -y \
   libssl-dev \
   zlib1g-dev
 
-# Собрать wxWidgets из исходников (если нет пакета нужной версии)
+# Build wxWidgets from source (if no package of required version)
 WX_VERSION=3.3.2
 cd /opt
 sudo wget https://github.com/wxWidgets/wxWidgets/releases/download/v${WX_VERSION}/wxWidgets-${WX_VERSION}.tar.bz2
@@ -235,75 +235,75 @@ sudo make -j$(nproc)
 sudo make install
 sudo ldconfig
 
-# Проверить
+# Verify
 wx-config --version
 ```
 
 ### macOS (Homebrew)
 
 ```bash
-# wxWidgets 3.3.x через Homebrew (использует Cocoa backend)
+# wxWidgets 3.3.x via Homebrew (uses the Cocoa backend)
 brew install wxwidgets
 
-# Проверить
+# Verify
 wx-config --version
 wx-config --cxxflags
 ```
 
-## 9. Firebird зависимости (Build Server / Daemon Server)
+## 9. Firebird dependencies (Build Server / Daemon Server)
 
 ### Linux (Ubuntu 22.04/24.04)
 
 ```bash
-# Firebird клиент и dev-пакеты
+# Firebird client and dev packages
 sudo apt install -y firebird3.0-dev libfbclient2
 
-# Для OES daemon — Firebird server (если не embedded)
+# For OES daemon — Firebird server (if not embedded)
 sudo apt install -y firebird3.0-server
 
-# Firebird embedded — поставляется вместе с OES, не требует установки системного пакета
-# (libfbembed.so идёт в bundle с приложением)
+# Firebird embedded — shipped with OES, no system package required
+# (libfbembed.so is bundled with the application)
 
-# Проверить
+# Verify
 isql-fb -z
 ```
 
 ### macOS (Homebrew)
 
 ```bash
-# Firebird через Homebrew (клиент + сервер)
+# Firebird via Homebrew (client + server)
 brew install firebird
 
-# Запустить Firebird сервер (если нужен серверный режим)
+# Start Firebird server (if server mode is needed)
 brew services start firebird
 
-# Проверить
+# Verify
 isql-fb -z
-# Или напрямую:
+# Or directly:
 /usr/local/opt/firebird/bin/isql -z
 ```
 
-## 10. PostgreSQL клиент и сервер
+## 10. PostgreSQL client and server
 
 ```bash
-# PostgreSQL (если используется как backend для OES)
+# PostgreSQL (if used as the OES backend)
 sudo apt install -y postgresql postgresql-contrib libpq-dev
 
-# Проверить статус
+# Check status
 sudo systemctl status postgresql
 sudo systemctl enable postgresql
 
-# Создать пользователя и базу для OES
+# Create a user and database for OES
 sudo -u postgres psql
 ```
 
 ```sql
--- В psql:
-CREATE USER oes_user WITH PASSWORD 'СГЕНЕРИРОВАННЫЙ_ПАРОЛЬ';
+-- In psql:
+CREATE USER oes_user WITH PASSWORD 'GENERATED_PASSWORD';
 CREATE DATABASE oes_db OWNER oes_user;
 GRANT ALL PRIVILEGES ON DATABASE oes_db TO oes_user;
 
--- Подключиться и настроить
+-- Connect and configure
 \c oes_db
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -311,37 +311,37 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 ```
 
 ```bash
-# Проверить подключение
+# Verify connection
 psql -U oes_user -d oes_db -h localhost
 ```
 
-## 11. Развёртывание OES Daemon
+## 11. OES Daemon deployment
 
 ```bash
-# Создать директории
+# Create directories
 sudo mkdir -p /opt/oes
 sudo mkdir -p /var/lib/oes/databases
 sudo mkdir -p /var/log/oes
 sudo mkdir -p /etc/oes
 
-# Скопировать бинарник (из артефакта сборки)
+# Copy the binary (from a build artifact)
 # scp build-user@build-server:/artifacts/oes-daemon /opt/oes/oes-daemon
-# или через скрипт деплоя
+# or via a deploy script
 
-# Установить права
+# Set permissions
 sudo chown -R oes:oes /opt/oes
 sudo chown -R oes:oes /var/lib/oes
 sudo chown -R oes:oes /var/log/oes
 sudo chmod 755 /opt/oes/oes-daemon
 
-# Конфигурация
+# Configuration
 sudo cp /path/to/oes.conf.example /etc/oes/oes.conf
 sudo nano /etc/oes/oes.conf
 sudo chown oes:oes /etc/oes/oes.conf
 sudo chmod 600 /etc/oes/oes.conf
 ```
 
-## 12. OES как systemd сервис (Linux Daemon)
+## 12. OES as a systemd service (Linux Daemon)
 
 ```bash
 sudo nano /etc/systemd/system/oes-daemon.service
@@ -365,7 +365,7 @@ RestartSec=10
 StandardOutput=append:/var/log/oes/daemon.log
 StandardError=append:/var/log/oes/daemon-error.log
 
-# Безопасность
+# Security
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
@@ -378,22 +378,22 @@ WantedBy=multi-user.target
 ```
 
 ```bash
-# Активировать
+# Activate
 sudo systemctl daemon-reload
 sudo systemctl enable oes-daemon
 sudo systemctl start oes-daemon
 
-# Проверить
+# Verify
 sudo systemctl status oes-daemon
 sudo journalctl -u oes-daemon -f
 ```
 
-## 13. Nginx (reverse proxy для OES Daemon)
+## 13. Nginx (reverse proxy for OES Daemon)
 
 ```bash
 sudo apt install -y nginx
 
-# Конфиг для OES daemon
+# Config for OES daemon
 sudo nano /etc/nginx/sites-available/oes-daemon
 ```
 
@@ -430,42 +430,42 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-## 14. SSL сертификат
+## 14. SSL certificate
 
-### Вариант A: Cloudflare (рекомендуется для update/license серверов)
+### Option A: Cloudflare (recommended for update/license servers)
 
 ```bash
-# В Cloudflare Dashboard:
-# SSL/TLS → Origin Server → Create Certificate
-# Скопировать сертификат и ключ
+# In the Cloudflare Dashboard:
+# SSL/TLS -> Origin Server -> Create Certificate
+# Copy the certificate and key
 
 sudo mkdir -p /etc/ssl/cloudflare
-sudo nano /etc/ssl/cloudflare/cert.pem    # Вставить сертификат
-sudo nano /etc/ssl/cloudflare/key.pem     # Вставить приватный ключ
+sudo nano /etc/ssl/cloudflare/cert.pem    # Paste the certificate
+sudo nano /etc/ssl/cloudflare/key.pem     # Paste the private key
 sudo chmod 600 /etc/ssl/cloudflare/key.pem
 ```
 
-### Вариант B: Certbot (Let's Encrypt)
+### Option B: Certbot (Let's Encrypt)
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d oes.example.com
 
-# Автообновление
+# Auto-renewal
 sudo certbot renew --dry-run
 ```
 
-## 15. Клонирование репозитория OES на build-сервер
+## 15. Cloning the OES repository on the build server
 
 ```bash
-# Создать SSH ключ для build-сервера (deploy key)
+# Create an SSH key for the build server (deploy key)
 ssh-keygen -t ed25519 -C "deploy@oes-build" -f ~/.ssh/deploy_key -N ""
 
-# Добавить публичный ключ в GitHub:
-# Repository → Settings → Deploy Keys → Add (read-only)
+# Add the public key to GitHub:
+# Repository -> Settings -> Deploy Keys -> Add (read-only)
 cat ~/.ssh/deploy_key.pub
 
-# Настроить SSH для GitHub
+# Configure SSH for GitHub
 nano ~/.ssh/config
 ```
 
@@ -477,23 +477,23 @@ Host github.com
 ```
 
 ```bash
-# Linux / macOS — клонировать проект
+# Linux / macOS — clone the project
 sudo mkdir -p /opt/build
 sudo chown build-user:build-user /opt/build
 git clone git@github.com:org/enterprise.git /opt/build/enterprise
 cd /opt/build/enterprise
-git checkout master   # основная ветка production
-# git checkout develop  # ветка интеграции
+git checkout master   # main production branch
+# git checkout develop  # integration branch
 ```
 
-## 16. Сборка OES на build-сервере
+## 16. Building OES on the build server
 
 ### Linux / macOS (CMake + Ninja)
 
 ```bash
 cd /opt/build/enterprise
 
-# Генерация CMake
+# CMake generation
 mkdir -p build/release && cd build/release
 cmake ../.. \
   -G Ninja \
@@ -502,26 +502,26 @@ cmake ../.. \
   -DwxWidgets_ROOT=/usr/local \
   -DOES_BUILD_DAEMON=ON
 
-# Сборка
+# Build
 ninja -j$(nproc)
 
-# Артефакты
+# Artifacts
 ls -la bin/
-# oes-enterprise   — основное desktop-приложение (src/engine/enterprise/mainApp.cpp)
-# oes-designer     — дизайнер (src/engine/designer/mainApp.cpp)
-# oes-daemon       — daemon/service бинарник (src/engine/daemon/daemon.cpp)
+# oes-enterprise   — main desktop application (src/engine/enterprise/mainApp.cpp)
+# oes-designer     — designer (src/engine/designer/mainApp.cpp)
+# oes-daemon       — daemon/service binary (src/engine/daemon/daemon.cpp)
 ```
 
 ### Windows (MSBuild)
 
 ```powershell
-# В Developer Command Prompt / PowerShell с MSBuild в PATH
+# In Developer Command Prompt / PowerShell with MSBuild on PATH
 cd C:\build\enterprise
 msbuild enterprise.sln /p:Configuration=Release /p:Platform=x64 /m
-# Артефакты: bin\x64\Release\
+# Artifacts: bin\x64\Release\
 ```
 
-## 17. Скрипт деплоя OES Daemon
+## 17. OES Daemon deploy script
 
 ```bash
 #!/bin/bash
@@ -533,32 +533,32 @@ BUILD_ARTIFACT="/opt/build/oes-enterprise/build/release/bin/oes-daemon"
 DEPLOY_DIR="/opt/oes"
 SERVICE_NAME="oes-daemon"
 
-echo "=== Деплой OES Daemon ==="
+echo "=== OES Daemon deploy ==="
 
-# Скопировать новый бинарник
-echo "Копирование бинарника..."
+# Copy the new binary
+echo "Copying binary..."
 scp ${BUILD_SERVER}:${BUILD_ARTIFACT} /tmp/oes-daemon-new
 
-# Остановить сервис
-echo "Остановка сервиса..."
+# Stop the service
+echo "Stopping service..."
 sudo systemctl stop ${SERVICE_NAME}
 
-# Заменить бинарник
+# Replace the binary
 sudo mv /tmp/oes-daemon-new ${DEPLOY_DIR}/oes-daemon
 sudo chown oes:oes ${DEPLOY_DIR}/oes-daemon
 sudo chmod 755 ${DEPLOY_DIR}/oes-daemon
 
-# Запустить сервис
-echo "Запуск сервиса..."
+# Start the service
+echo "Starting service..."
 sudo systemctl start ${SERVICE_NAME}
 
-# Проверить здоровье
+# Health check
 sleep 3
 if sudo systemctl is-active --quiet ${SERVICE_NAME}; then
-  echo "=== Деплой завершён успешно ==="
+  echo "=== Deploy completed successfully ==="
   sudo systemctl status ${SERVICE_NAME} --no-pager
 else
-  echo "ОШИБКА: сервис не запустился!"
+  echo "ERROR: service failed to start!"
   sudo journalctl -u ${SERVICE_NAME} --lines 30 --no-pager
   exit 1
 fi
@@ -568,32 +568,32 @@ fi
 chmod +x /opt/scripts/deploy-oes-daemon.sh
 ```
 
-## 18. Swap файл (если мало RAM)
+## 18. Swap file (if RAM is limited)
 
 ```bash
-# Для серверов с 2-4 GB RAM (C++ компиляция требовательна к памяти)
+# For servers with 2-4 GB RAM (C++ compilation is memory-intensive)
 sudo fallocate -l 4G /swapfile
 sudo chmod 600 /swapfile
 sudo mkswap /swapfile
 sudo swapon /swapfile
 
-# Сделать постоянным
+# Make persistent
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
-# Настроить swappiness
+# Tune swappiness
 echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 
-# Проверить
+# Verify
 free -h
 ```
 
-> Компиляция C++ проектов требует значительно больше RAM, чем Node.js/Python. Для build-сервера рекомендуется минимум 8 GB RAM, для daemon-сервера — 2 GB.
+> C++ project compilation requires significantly more RAM than Node.js/Python. For a build server, at least 8 GB RAM is recommended; for a daemon server, 2 GB.
 
-## 19. Логротация
+## 19. Log rotation
 
 ```bash
-# Логи OES daemon
+# OES daemon logs
 sudo nano /etc/logrotate.d/oes-daemon
 ```
 
@@ -613,7 +613,7 @@ sudo nano /etc/logrotate.d/oes-daemon
 ```
 
 ```bash
-# Логи сборки (build-сервер)
+# Build logs (build server)
 sudo nano /etc/logrotate.d/oes-build
 ```
 
@@ -630,48 +630,48 @@ sudo nano /etc/logrotate.d/oes-build
 
 ---
 
-## Финальный чеклист
+## Final checklist
 
 ### Build Server
 
 ```
-[ ] Пользователь build-user создан
-[ ] SSH ключ добавлен, вход по паролю отключён
-[ ] Root login отключён
-[ ] fail2ban работает
-[ ] UFW включён (только 22)
-[ ] Автообновления настроены
-[ ] GCC 13+ / Clang установлены
-[ ] CMake 3.25+ установлен
-[ ] Ninja установлен
-[ ] wxWidgets 3.3.x собран / установлен
-[ ] Firebird dev-пакеты установлены
-[ ] PostgreSQL dev-пакеты установлены
-[ ] Репозиторий склонирован
-[ ] Тестовая сборка прошла успешно
-[ ] Swap файл (если нужен, мин. 4GB для C++ сборки)
-[ ] Логротация настроена
+[ ] User build-user created
+[ ] SSH key added, password login disabled
+[ ] Root login disabled
+[ ] fail2ban running
+[ ] UFW enabled (port 22 only)
+[ ] Automatic updates configured
+[ ] GCC 13+ / Clang installed
+[ ] CMake 3.25+ installed
+[ ] Ninja installed
+[ ] wxWidgets 3.3.x built / installed
+[ ] Firebird dev packages installed
+[ ] PostgreSQL dev packages installed
+[ ] Repository cloned
+[ ] Test build successful
+[ ] Swap file (if needed, min. 4GB for C++ builds)
+[ ] Log rotation configured
 ```
 
 ### Daemon Server
 
 ```
-[ ] Пользователь oes создан (без sudo)
-[ ] SSH ключ для build-user добавлен, вход по паролю отключён
-[ ] Root login отключён
-[ ] fail2ban работает
-[ ] UFW включён (22, 443 или 8765)
-[ ] Автообновления настроены
-[ ] Firebird / PostgreSQL установлены и настроены
-[ ] Директории OES созданы с правильными правами
-[ ] oes.conf создан и защищён (chmod 600)
-[ ] OES daemon скомпилирован и размещён в /opt/oes/
-[ ] systemd unit создан и включён
-[ ] OES daemon запущен и работает
-[ ] Nginx настроен как reverse proxy (если нужен)
-[ ] SSL сертификат настроен
-[ ] Swap файл (если нужен)
-[ ] Логротация настроена
-[ ] Бэкапы настроены
-[ ] Мониторинг настроен
+[ ] User oes created (no sudo)
+[ ] SSH key for build-user added, password login disabled
+[ ] Root login disabled
+[ ] fail2ban running
+[ ] UFW enabled (22, 443 or 8765)
+[ ] Automatic updates configured
+[ ] Firebird / PostgreSQL installed and configured
+[ ] OES directories created with correct permissions
+[ ] oes.conf created and protected (chmod 600)
+[ ] OES daemon compiled and placed in /opt/oes/
+[ ] systemd unit created and enabled
+[ ] OES daemon running and operational
+[ ] Nginx configured as reverse proxy (if needed)
+[ ] SSL certificate configured
+[ ] Swap file (if needed)
+[ ] Log rotation configured
+[ ] Backups configured
+[ ] Monitoring configured
 ```

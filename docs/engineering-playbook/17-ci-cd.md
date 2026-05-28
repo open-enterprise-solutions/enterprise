@@ -1,22 +1,22 @@
 # 17. CI/CD
 
-## Стек
+## Stack
 
-| Компонент | Назначение |
+| Component | Purpose |
 |-----------|-----------|
-| **GitHub Actions** | CI: сборка, статический анализ, тесты |
-| **MSBuild** | Сборка под Windows (Visual Studio 2017+) |
-| **CMake** | Кросс-платформенная сборка (переходный период) |
-| **cppcheck** | Статический анализ C++ |
-| **Google Test (gtest)** | Юнит-тесты |
-| **Dr. Memory / Valgrind** | Проверка утечек памяти (опционально в CI) |
-| **Inno Setup** | Сборка установщика Windows |
+| **GitHub Actions** | CI: build, static analysis, tests |
+| **MSBuild** | Windows build (Visual Studio 2017+) |
+| **CMake** | Cross-platform build (transitional period) |
+| **cppcheck** | C++ static analysis |
+| **Google Test (gtest)** | Unit tests |
+| **Dr. Memory / Valgrind** | Memory leak detection (optional in CI) |
+| **Inno Setup** | Windows installer build |
 
 ---
 
 ## Workflow: PR Check
 
-На каждый pull request автоматически запускается проверка — сборка и тесты:
+Every pull request triggers an automatic check — build and tests:
 
 ```yaml
 # .github/workflows/pr-check.yml
@@ -94,7 +94,7 @@ jobs:
 
 ---
 
-## Workflow: PR Check (CMake — кросс-платформенный)
+## Workflow: PR Check (CMake — cross-platform)
 
 ```yaml
 # .github/workflows/pr-check-cmake.yml
@@ -133,7 +133,7 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure
 
   build-linux:
-    name: Linux / CMake (кросс-платформенная проверка)
+    name: Linux / CMake (cross-platform check)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -202,7 +202,7 @@ jobs:
 
 ## Workflow: Release Build (Windows)
 
-При мердже в `master` — сборка release-артефакта и установщика:
+On merge into `master` — build the release artifact and the installer:
 
 ```yaml
 # .github/workflows/release.yml
@@ -214,14 +214,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Версия релиза (например: 2.5.1)'
+        description: 'Release version (e.g. 2.5.1)'
         required: true
 
 jobs:
   build:
     name: Build Release
     runs-on: windows-2022
-    environment: production   # требует ручного approve
+    environment: production   # requires manual approval
 
     steps:
       - uses: actions/checkout@v4
@@ -234,7 +234,7 @@ jobs:
           $ver = "${{ github.event.inputs.version }}"
           if (-not $ver) { $ver = (Get-Content VERSION).Trim() }
           echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
-          echo "Версия сборки: $ver"
+          echo "Build version: $ver"
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
@@ -281,29 +281,29 @@ jobs:
 
 ## Quality Gates
 
-PR не мерджится, если:
+A PR cannot be merged if:
 
-- **Build fails** — код не компилируется
-- **Tests fail** — юнит-тесты не прошли
-- **cppcheck errors** — критические предупреждения анализатора
-- **Test coverage падает** — (если настроен coverage gate)
+- **Build fails** — code does not compile
+- **Tests fail** — unit tests did not pass
+- **cppcheck errors** — critical analyzer warnings
+- **Test coverage drops** — (if a coverage gate is configured)
 
-Настройка в GitHub: Settings → Branches → Branch protection rules:
+Configuration in GitHub: Settings → Branches → Branch protection rules:
 
 ```
 Branch name pattern: master
-☑ Require status checks to pass before merging
+[x] Require status checks to pass before merging
   - Build & Test (Windows / MSBuild)        [required]
   - Windows / CMake                         [required]
-  - Linux / CMake (кросс-платформенная)     [required]
-☑ Require pull request reviews before merging
+  - Linux / CMake (cross-platform)          [required]
+[x] Require pull request reviews before merging
   - Required approving reviews: 1
-☑ Require branches to be up to date before merging
+[x] Require branches to be up to date before merging
 ```
 
 ---
 
-## Структура тестов (Google Test)
+## Test layout (Google Test)
 
 ```
 tests/
@@ -321,7 +321,7 @@ tests/
 └── main_test.cpp
 ```
 
-### Пример теста
+### Example test
 
 ```cpp
 // tests/database/test_document_repository.cpp
@@ -358,7 +358,7 @@ TEST_F(DocumentRepositoryTest, GetById_ReturnsDocument_WhenExists)
 
 TEST_F(DocumentRepositoryTest, GetById_ReturnsFalse_WhenNotFound)
 {
-    m_mockDb->SetNextResult({});  // пустой результат
+    m_mockDb->SetNextResult({});  // empty result
 
     DocumentData doc;
     wxString err;
@@ -371,12 +371,12 @@ TEST_F(DocumentRepositoryTest, GetById_ReturnsFalse_WhenNotFound)
 TEST_F(DocumentRepositoryTest, Create_UsesParameterizedStatement)
 {
     DocumentData data;
-    data.name   = "New Doc'; DROP TABLE documents; --";  // SQL-инъекция попытка
+    data.name   = "New Doc'; DROP TABLE documents; --";  // SQL injection attempt
     data.status = "draft";
     int newId = 0;
     wxString err;
 
-    // Mock проверяет, что запрос параметризован, не конкатенирован
+    // Mock verifies the query is parameterized, not concatenated
     m_mockDb->SetNextInsertId(42);
     auto result = m_repo->Create(data, newId);
 
@@ -388,9 +388,9 @@ TEST_F(DocumentRepositoryTest, Create_UsesParameterizedStatement)
 
 ---
 
-## vcpkg манифест (vcpkg.json)
+## vcpkg manifest (vcpkg.json)
 
-Зафиксируйте версии зависимостей vcpkg через манифест — это обеспечивает воспроизводимые сборки на Windows и используется как ключ кэша в CI:
+Pin dependency versions in the vcpkg manifest — that guarantees reproducible builds on Windows and serves as the cache key in CI:
 
 ```json
 {
@@ -409,32 +409,32 @@ TEST_F(DocumentRepositoryTest, Create_UsesParameterizedStatement)
 }
 ```
 
-Файл `vcpkg.json` размещается в корне репозитория. При наличии манифеста `vcpkg install` (без аргументов) устанавливает именно эти версии.
+`vcpkg.json` sits at the repository root. With a manifest present, `vcpkg install` (no arguments) installs exactly these versions.
 
 ---
 
-## CMake структура проекта
+## CMake project layout
 
 ```cmake
-# CMakeLists.txt (корень)
+# CMakeLists.txt (root)
 cmake_minimum_required(VERSION 3.22)
 project(OES VERSION 2.5.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Опции сборки
-option(OES_BUILD_TESTS "Собирать тесты" OFF)
+# Build options
+option(OES_BUILD_TESTS "Build tests" OFF)
 option(OES_ENABLE_ASAN "Address Sanitizer (Debug)" OFF)
 
-# Зависимости
+# Dependencies
 find_package(wxWidgets 3.3 REQUIRED COMPONENTS core base adv)
 include(${wxWidgets_USE_FILE})
 
-# Основная цель
+# Main target
 add_subdirectory(src)
 
-# Тесты
+# Tests
 if(OES_BUILD_TESTS)
     enable_testing()
     find_package(GTest REQUIRED)
@@ -444,10 +444,10 @@ endif()
 
 ---
 
-## Кэширование в CI
+## CI caching
 
 ```yaml
-# Кэш vcpkg (медленная установка зависимостей)
+# vcpkg cache (slow dependency install)
 - name: Cache vcpkg
   uses: actions/cache@v4
   with:
@@ -458,7 +458,7 @@ endif()
     restore-keys: |
       vcpkg-${{ runner.os }}-
 
-# Кэш CMake build directory
+# CMake build cache
 - name: Cache CMake
   uses: actions/cache@v4
   with:
@@ -471,21 +471,21 @@ endif()
 
 ## Secrets
 
-Хранить в GitHub: Settings → Secrets and variables → Actions:
+Stored in GitHub: Settings → Secrets and variables → Actions:
 
 ```
-CODE_SIGN_CERTIFICATE   — PFX-сертификат для подписи (base64)
-CODE_SIGN_PASSWORD      — Пароль к сертификату
-INNO_SETUP_KEY          — Лицензионный ключ Inno Setup (если commercial)
-TELEGRAM_BOT_TOKEN      — Для уведомлений о сборке
-TELEGRAM_CHAT_ID        — ID чата команды
+CODE_SIGN_CERTIFICATE   — PFX signing certificate (base64)
+CODE_SIGN_PASSWORD      — Certificate password
+INNO_SETUP_KEY          — Inno Setup license key (if commercial)
+TELEGRAM_BOT_TOKEN      — For build notifications
+TELEGRAM_CHAT_ID        — Team chat ID
 ```
 
-Никогда не коммитить сертификаты, `.pfx` файлы, лицензии прямо в репозиторий.
+Never commit certificates, `.pfx` files, or licenses directly into the repository.
 
 ---
 
-## Уведомления о сборке
+## Build notifications
 
 ```yaml
 - name: Notify Telegram on failure
@@ -495,11 +495,11 @@ TELEGRAM_CHAT_ID        — ID чата команды
     to: ${{ secrets.TELEGRAM_CHAT_ID }}
     token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
     message: |
-      СБОРКА УПАЛА: ${{ github.repository }}
-      Ветка: ${{ github.ref_name }}
-      Коммит: ${{ github.event.head_commit.message }}
-      Автор: ${{ github.actor }}
-      Лог: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      BUILD FAILED: ${{ github.repository }}
+      Branch: ${{ github.ref_name }}
+      Commit: ${{ github.event.head_commit.message }}
+      Author: ${{ github.actor }}
+      Log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 - name: Notify Telegram on release
   if: success() && github.ref == 'refs/heads/master'
@@ -508,23 +508,23 @@ TELEGRAM_CHAT_ID        — ID чата команды
     to: ${{ secrets.TELEGRAM_CHAT_ID }}
     token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
     message: |
-      РЕЛИЗ СОБРАН: OES v${{ steps.version.outputs.VERSION }}
-      Артефакт доступен в GitHub Releases
+      RELEASE BUILT: OES v${{ steps.version.outputs.VERSION }}
+      Artifact available in GitHub Releases
 ```
 
 ---
 
-## Подписание установщика
+## Signing the installer
 
 ```yaml
 - name: Sign installer
   if: github.ref == 'refs/heads/master'
   run: |
-    # Расшифровать сертификат из secret
+    # Decode the certificate from the secret
     $certBytes = [Convert]::FromBase64String("${{ secrets.CODE_SIGN_CERTIFICATE }}")
     [IO.File]::WriteAllBytes("signing.pfx", $certBytes)
 
-    # Подписать
+    # Sign
     & "C:\Program Files (x86)\Windows Kits\10\bin\x64\signtool.exe" sign `
       /f signing.pfx `
       /p "${{ secrets.CODE_SIGN_PASSWORD }}" `
@@ -532,17 +532,17 @@ TELEGRAM_CHAT_ID        — ID чата команды
       /fd sha256 `
       "installer\Output\OES_Setup_*.exe"
 
-    # Удалить сертификат
+    # Remove the certificate
     Remove-Item signing.pfx
 ```
 
 ---
 
-## Чеклист перед мерджем в master
+## Checklist before merge into master
 
-1. Все проверки CI зелёные (build, tests, cppcheck)
-2. Code review от минимум одного разработчика
-3. Новый функционал покрыт тестами
-4. Файл `CHANGELOG.md` или `VERSION` обновлён
-5. Нет закомментированного кода и debug-вывода (`printf`, `wxLogDebug` не для release)
-6. Миграции БД включены в PR (если есть изменения схемы)
+1. All CI checks green (build, tests, cppcheck)
+2. Code review from at least one developer
+3. New functionality is covered by tests
+4. `CHANGELOG.md` or `VERSION` updated
+5. No commented-out code and no debug output (`printf`, `wxLogDebug` not for release)
+6. DB migrations included in the PR (if there are schema changes)

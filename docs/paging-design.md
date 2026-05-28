@@ -11,6 +11,17 @@ during the 2026-05-05 session.
 The GUI must not stall on scroll, must not double-fetch, must support lazy tree
 expansion, and must remain coherent when filter / sort / view-mode change.
 
+## Table of contents
+
+1. [Current state](#1-current-state)
+2. [Known issues](#2-known-issues)
+3. [Target design](#3-target-design)
+4. [Migration plan](#4-migration-plan)
+5. [Open questions / pre-work](#5-open-questions--pre-work)
+6. [Out of scope](#6-out-of-scope)
+7. [Files touched (planned)](#7-files-touched-planned)
+8. [Evolved architecture — universal `Get*Fetch` (2026-05-05)](#8-evolved-architecture--universal-getfetch-2026-05-05)
+
 ## 1. Current state
 
 ### Backend (where data lives)

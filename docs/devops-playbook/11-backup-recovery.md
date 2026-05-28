@@ -1,49 +1,49 @@
-# 11. Бэкапы и восстановление
+# 11. Backups and recovery
 
-> Стратегия 3-2-1 для OES: защита данных пользователей, баз данных Firebird/PostgreSQL, конфигурационных файлов. Disaster recovery для desktop и daemon-режима.
+> 3-2-1 strategy for OES: protecting user data, Firebird/PostgreSQL databases, configuration files. Disaster recovery for desktop and daemon modes.
 
 ---
 
-## Стратегия 3-2-1 для OES
+## 3-2-1 strategy for OES
 
 ```
-3 копии данных:
-  1. Оригинал (рабочая БД / файлы проекта пользователя)
-  2. Локальный бэкап (на той же машине или локальном сервере)
-  3. Удалённый бэкап (сетевой диск, NAS, облако)
+3 copies of data:
+  1. Original (working DB / user project files)
+  2. Local backup (on the same machine or local server)
+  3. Remote backup (network drive, NAS, cloud)
 
-2 разных носителя:
-  — HDD/SSD машины пользователя или сервера
-  — NAS / внешний диск / S3-совместимое хранилище
+2 different media:
+  - HDD/SSD on the user's machine or server
+  - NAS / external drive / S3-compatible storage
 
-1 копия offsite:
-  — Другая физическая локация или облачный сервис
+1 offsite copy:
+  - Another physical location or a cloud service
 
-Что бэкапить в OES:
-  — Базы данных Firebird (.fdb файлы) — КРИТИЧНО
-  — Базы данных PostgreSQL — КРИТИЧНО (если используется)
-  — SQLite файлы проектов — КРИТИЧНО
-  — Конфигурационные файлы:
-      Windows:  %APPDATA%\OES\ и C:\ProgramData\OES\
+What to back up in OES:
+  - Firebird databases (.fdb files) - CRITICAL
+  - PostgreSQL databases - CRITICAL (if used)
+  - SQLite project files - CRITICAL
+  - Configuration files:
+      Windows:  %APPDATA%\OES\ and C:\ProgramData\OES\
       macOS:    ~/Library/Application Support/OES/  (desktop)
                 /etc/oes/                            (daemon)
-      Linux:    /etc/oes/ и /var/lib/oes/
-  — Лицензионные ключи и сертификаты
-  — Пользовательские шаблоны и настройки
+      Linux:    /etc/oes/ and /var/lib/oes/
+  - License keys and certificates
+  - User templates and settings
 ```
 
 ---
 
-## Firebird бэкапы
+## Firebird backups
 
-### gbak — стандартный инструмент бэкапа Firebird
+### gbak — standard Firebird backup tool
 
 ```bash
 #!/bin/bash
 # scripts/backup-firebird.sh
 set -euo pipefail
 
-# === Конфигурация ===
+# === Configuration ===
 FB_DB="/var/lib/oes/data/oes.fdb"
 FB_USER="SYSDBA"
 FB_PASSWORD="${FB_SYSDBA_PASSWORD:-masterkey}"
@@ -57,9 +57,9 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"; }
 
 mkdir -p "$BACKUP_DIR"
 
-log "Начало бэкапа Firebird: $FB_DB"
+log "Starting Firebird backup: $FB_DB"
 
-# Бэкап через gbak (portable format — переносимый между версиями)
+# Backup via gbak (portable format - portable between versions)
 gbak \
     -backup \
     -user "$FB_USER" \
@@ -70,16 +70,16 @@ gbak \
     "$BACKUP_FILE"
 
 BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
-log "Бэкап создан: $BACKUP_FILE ($BACKUP_SIZE)"
+log "Backup created: $BACKUP_FILE ($BACKUP_SIZE)"
 
-# === Сжать бэкап ===
+# === Compress the backup ===
 gzip "$BACKUP_FILE"
 BACKUP_FILE="${BACKUP_FILE}.gz"
-log "Сжат: $BACKUP_FILE"
+log "Compressed: $BACKUP_FILE"
 
-# === Проверить целостность бэкапа ===
-# gbak не имеет флага -verify. Проверяем через тестовое восстановление + gfix -v -full.
-log "Проверка целостности бэкапа (тестовое восстановление)..."
+# === Verify backup integrity ===
+# gbak has no -verify flag. Verify via test restore + gfix -v -full.
+log "Verifying backup integrity (test restore)..."
 VERIFY_DB="/tmp/oes_verify_${DATE}.fdb"
 TEMP_FBK="${BACKUP_FILE%.gz}"
 
@@ -95,69 +95,69 @@ gbak \
 RESTORE_RC=$?
 
 if [ $RESTORE_RC -eq 0 ] && [ -f "$VERIFY_DB" ]; then
-    # Дополнительная проверка структуры восстановленной БД
+    # Additional structural check of the restored DB
     gfix \
         -user "$FB_USER" \
         -password "$FB_PASSWORD" \
         -v -full \
         "$VERIFY_DB" 2>&1
     if [ $? -eq 0 ]; then
-        log "Проверка целостности: OK"
+        log "Integrity check: OK"
     else
-        log "ПРЕДУПРЕЖДЕНИЕ: gfix обнаружил проблемы в восстановленной БД"
+        log "WARNING: gfix found issues in the restored DB"
     fi
     rm -f "$TEMP_FBK" "$VERIFY_DB"
 else
-    log "ОШИБКА: бэкап повреждён (gbak -restore завершился с кодом $RESTORE_RC)!"
+    log "ERROR: backup corrupted (gbak -restore exited with code $RESTORE_RC)!"
     rm -f "$TEMP_FBK" "$VERIFY_DB"
     curl -s -X POST \
         "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
         -d "chat_id=${TELEGRAM_CHAT_ID}" \
-        -d "text=КРИТИЧНО: Бэкап Firebird OES повреждён: $BACKUP_FILE"
+        -d "text=CRITICAL: OES Firebird backup corrupted: $BACKUP_FILE"
     exit 1
 fi
 
-# === Удалить старые локальные бэкапы ===
+# === Remove old local backups ===
 find "$BACKUP_DIR" -name "*.fbk.gz" -mtime +$RETENTION_DAYS -delete
-log "Удалены локальные бэкапы старше ${RETENTION_DAYS} дней"
+log "Removed local backups older than ${RETENTION_DAYS} days"
 
-# === Копировать на сетевое хранилище (опционально) ===
+# === Copy to network storage (optional) ===
 if [ -n "${BACKUP_REMOTE_PATH:-}" ]; then
     rsync -az "$BACKUP_FILE" "${BACKUP_REMOTE_PATH}/"
-    log "Скопирован на: $BACKUP_REMOTE_PATH"
+    log "Copied to: $BACKUP_REMOTE_PATH"
 fi
 
-log "Бэкап завершён успешно"
+log "Backup completed successfully"
 ```
 
-### Cron для Firebird бэкапов
+### Cron for Firebird backups
 
 ```bash
-# Редактировать от пользователя oes или root:
+# Edit as oes user or root:
 crontab -e
 
-# Полный бэкап каждый день в 02:00
-0 2 * * * FB_SYSDBA_PASSWORD="пароль" TELEGRAM_BOT_TOKEN="token" TELEGRAM_CHAT_ID="chatid" /opt/oes/scripts/backup-firebird.sh
+# Full backup daily at 02:00
+0 2 * * * FB_SYSDBA_PASSWORD="password" TELEGRAM_BOT_TOKEN="token" TELEGRAM_CHAT_ID="chatid" /opt/oes/scripts/backup-firebird.sh
 
-# Бэкап каждые 6 часов для критичных данных
-0 */6 * * * FB_SYSDBA_PASSWORD="пароль" /opt/oes/scripts/backup-firebird.sh
+# Backup every 6 hours for critical data
+0 */6 * * * FB_SYSDBA_PASSWORD="password" /opt/oes/scripts/backup-firebird.sh
 ```
 
-### Восстановление Firebird
+### Restoring Firebird
 
 ```bash
-# === Полное восстановление из gbak ===
+# === Full restore from gbak ===
 
-# 1. Остановить OES daemon
+# 1. Stop OES daemon
 sudo systemctl stop oes-daemon
 
-# 2. Переименовать текущую БД (на случай если понадобится)
+# 2. Rename the current DB (in case it is needed)
 sudo mv /var/lib/oes/data/oes.fdb /var/lib/oes/data/oes.fdb.broken
 
-# 3. Разжать бэкап
+# 3. Decompress the backup
 gunzip -c /var/backups/oes/firebird/oes_2025-01-15.fbk.gz > /tmp/oes_restore.fbk
 
-# 4. Восстановить
+# 4. Restore
 gbak \
     -restore \
     -user SYSDBA \
@@ -165,19 +165,19 @@ gbak \
     /tmp/oes_restore.fbk \
     /var/lib/oes/data/oes.fdb
 
-# 5. Установить права
+# 5. Set permissions
 chown oes:oes /var/lib/oes/data/oes.fdb
 chmod 600 /var/lib/oes/data/oes.fdb
 
-# 6. Запустить
+# 6. Start
 sudo systemctl start oes-daemon
 
-# 7. Проверить
+# 7. Verify
 gfix -user SYSDBA -password "$FB_SYSDBA_PASSWORD" -validate /var/lib/oes/data/oes.fdb
 rm -f /tmp/oes_restore.fbk
 ```
 
-### Windows: Firebird бэкап через PowerShell
+### Windows: Firebird backup via PowerShell
 
 ```powershell
 # scripts\backup-firebird.ps1
@@ -192,12 +192,12 @@ param(
 $date = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
 $backupFile = Join-Path $BackupDir "oes_$date.fbk"
 
-# Создать директорию
+# Create directory
 New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
 
-Write-Host "Бэкап Firebird: $DbPath"
+Write-Host "Backing up Firebird: $DbPath"
 
-# gbak обычно в C:\Program Files\Firebird\Firebird_X_X\bin\
+# gbak is usually at C:\Program Files\Firebird\Firebird_X_X\bin\
 $gbak = "C:\Program Files\Firebird\Firebird_4_0\bin\gbak.exe"
 
 & $gbak `
@@ -209,24 +209,24 @@ $gbak = "C:\Program Files\Firebird\Firebird_4_0\bin\gbak.exe"
     $backupFile
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "gbak завершился с ошибкой $LASTEXITCODE"
+    Write-Error "gbak failed with $LASTEXITCODE"
     exit 1
 }
 
-# Сжать
+# Compress
 Compress-Archive -Path $backupFile -DestinationPath "$backupFile.zip" -CompressionLevel Optimal
 Remove-Item $backupFile
-Write-Host "Создан бэкап: $backupFile.zip ($(((Get-Item "$backupFile.zip").Length / 1MB).ToString('F1')) МБ)"
+Write-Host "Backup created: $backupFile.zip ($(((Get-Item "$backupFile.zip").Length / 1MB).ToString('F1')) MB)"
 
-# Удалить старые
+# Remove old backups
 Get-ChildItem -Path $BackupDir -Filter "*.fbk.zip" |
     Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$RetentionDays) } |
     Remove-Item
-Write-Host "Очистка старых бэкапов завершена"
+Write-Host "Old backup cleanup completed"
 ```
 
 ```powershell
-# Задача в Task Scheduler:
+# Task Scheduler entry:
 $action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
     -Argument "-NonInteractive -File C:\Scripts\backup-firebird.ps1"
@@ -244,7 +244,7 @@ Register-ScheduledTask `
 
 ---
 
-## PostgreSQL бэкапы (если используется в OES)
+## PostgreSQL backups (if used in OES)
 
 ```bash
 #!/bin/bash
@@ -261,7 +261,7 @@ BACKUP_FILE="${BACKUP_DIR}/${DB_NAME}_${DATE}.dump"
 
 mkdir -p "$BACKUP_DIR"
 
-echo "[$(date)] Бэкап PostgreSQL $DB_NAME"
+echo "[$(date)] PostgreSQL backup $DB_NAME"
 
 PGPASSWORD="${PG_PASSWORD}" pg_dump \
     -h "$DB_HOST" \
@@ -272,25 +272,25 @@ PGPASSWORD="${PG_PASSWORD}" pg_dump \
     --no-owner \
     -f "$BACKUP_FILE"
 
-# Проверить целостность
+# Integrity check
 pg_restore --list "$BACKUP_FILE" > /dev/null
-echo "[$(date)] Бэкап OK: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
+echo "[$(date)] Backup OK: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
 
-# Удалить старые
+# Remove old backups
 find "$BACKUP_DIR" -name "*.dump" -mtime +$RETENTION_DAYS -delete
 ```
 
-### Восстановление PostgreSQL
+### PostgreSQL restore
 
 ```bash
-# 1. Остановить OES daemon
+# 1. Stop OES daemon
 sudo systemctl stop oes-daemon
 
-# 2. Пересоздать БД
+# 2. Recreate the DB
 sudo -u postgres psql -c "DROP DATABASE IF EXISTS oes_db;"
 sudo -u postgres psql -c "CREATE DATABASE oes_db OWNER oes_user;"
 
-# 3. Восстановить
+# 3. Restore
 pg_restore \
     -h localhost \
     -U oes_user \
@@ -299,15 +299,15 @@ pg_restore \
     --verbose \
     /var/backups/oes/postgresql/oes_db_2025-01-15.dump
 
-# 4. Запустить
+# 4. Start
 sudo systemctl start oes-daemon
 ```
 
 ---
 
-## Бэкап пользовательских данных и конфигураций
+## Backing up user data and configurations
 
-### Конфигурация daemon
+### Daemon configuration
 
 ```bash
 #!/bin/bash
@@ -318,28 +318,28 @@ DATE=$(date +%Y-%m-%d)
 
 mkdir -p "$BACKUP_DIR"
 
-# Конфигурационные файлы
+# Configuration files
 tar czf "${BACKUP_DIR}/oes-config_${DATE}.tar.gz" \
     /etc/oes/ \
     /var/lib/oes/templates/ \
     --exclude='*.tmp'
 
-# Лицензионные файлы (если хранятся на сервере)
+# License files (if stored on the server)
 if [ -d "/var/lib/oes/licenses" ]; then
     cp -r /var/lib/oes/licenses "${BACKUP_DIR}/licenses_${DATE}"
 fi
 
-echo "[$(date)] Конфигурация OES заархивирована: ${BACKUP_DIR}/oes-config_${DATE}.tar.gz"
+echo "[$(date)] OES configuration archived: ${BACKUP_DIR}/oes-config_${DATE}.tar.gz"
 
-# Хранить 90 дней
+# Keep for 90 days
 find "$BACKUP_DIR" -name "*.tar.gz" -mtime +90 -delete
 ```
 
-### Windows: бэкап конфигурации пользователя
+### Windows: user config backup
 
 ```powershell
 # scripts\backup-user-config.ps1
-# Запускать при выходе из приложения или по расписанию
+# Run on application exit or on a schedule
 
 $appData = "$env:APPDATA\OES"
 $backupDir = "$env:USERPROFILE\Documents\OES-Backups\Config"
@@ -348,7 +348,7 @@ $backupFile = Join-Path $backupDir "oes-config_$date.zip"
 
 New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
 
-# Архивировать конфигурацию
+# Archive the configuration
 Compress-Archive -Path @(
     "$appData\*.ini",
     "$appData\*.conf",
@@ -356,9 +356,9 @@ Compress-Archive -Path @(
     "$appData\settings\"
 ) -DestinationPath $backupFile -Force
 
-Write-Host "Конфигурация сохранена: $backupFile"
+Write-Host "Configuration saved: $backupFile"
 
-# Хранить последние 10 бэкапов
+# Keep the last 10 backups
 Get-ChildItem -Path $backupDir -Filter "oes-config_*.zip" |
     Sort-Object LastWriteTime -Descending |
     Select-Object -Skip 10 |
@@ -367,7 +367,7 @@ Get-ChildItem -Path $backupDir -Filter "oes-config_*.zip" |
 
 ---
 
-## Тестирование бэкапов (ежемесячно!)
+## Backup testing (monthly!)
 
 ```bash
 #!/bin/bash
@@ -379,19 +379,19 @@ ERRORS=""
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG"; }
 
-# === Тест 1: Firebird бэкап ===
-log "Тест Firebird бэкапа..."
+# === Test 1: Firebird backup ===
+log "Testing Firebird backup..."
 LATEST_FB=$(ls -t /var/backups/oes/firebird/*.fbk.gz 2>/dev/null | head -1)
 
 if [ -z "$LATEST_FB" ]; then
-    ERRORS="${ERRORS}\n- Нет бэкапов Firebird"
+    ERRORS="${ERRORS}\n- No Firebird backups"
 else
-    # Проверить что файл не повреждён (можно разжать)
+    # Verify the file is not corrupted (can be decompressed)
     if gunzip -t "$LATEST_FB" 2>/dev/null; then
         SIZE=$(du -h "$LATEST_FB" | cut -f1)
         log "Firebird OK: $LATEST_FB ($SIZE)"
         
-        # Попытаться восстановить в тестовую БД
+        # Attempt restore into a test DB
         TEMP_FBK="/tmp/test_restore.fbk"
         TEMP_FDB="/tmp/test_restore.fdb"
         gunzip -c "$LATEST_FB" > "$TEMP_FBK"
@@ -404,57 +404,57 @@ else
             "$TEMP_FDB" 2>/dev/null
         
         if [ $? -eq 0 ] && [ -f "$TEMP_FDB" ]; then
-            log "Firebird RESTORE тест: OK"
+            log "Firebird RESTORE test: OK"
         else
-            ERRORS="${ERRORS}\n- Firebird: ошибка тестового восстановления"
+            ERRORS="${ERRORS}\n- Firebird: test restore error"
         fi
         
         rm -f "$TEMP_FBK" "$TEMP_FDB"
     else
-        ERRORS="${ERRORS}\n- Firebird: бэкап повреждён ($LATEST_FB)"
+        ERRORS="${ERRORS}\n- Firebird: backup corrupted ($LATEST_FB)"
     fi
 fi
 
-# === Тест 2: PostgreSQL бэкап (если используется) ===
+# === Test 2: PostgreSQL backup (if used) ===
 if ls /var/backups/oes/postgresql/*.dump 2>/dev/null | head -1 | grep -q .; then
-    log "Тест PostgreSQL бэкапа..."
+    log "Testing PostgreSQL backup..."
     LATEST_PG=$(ls -t /var/backups/oes/postgresql/*.dump 2>/dev/null | head -1)
     
     if pg_restore --list "$LATEST_PG" > /dev/null 2>&1; then
         SIZE=$(du -h "$LATEST_PG" | cut -f1)
         log "PostgreSQL OK: $LATEST_PG ($SIZE)"
     else
-        ERRORS="${ERRORS}\n- PostgreSQL: бэкап повреждён"
+        ERRORS="${ERRORS}\n- PostgreSQL: backup corrupted"
     fi
 fi
 
-# === Тест 3: Конфигурационный бэкап ===
-log "Тест бэкапа конфигурации..."
+# === Test 3: Configuration backup ===
+log "Testing configuration backup..."
 LATEST_CFG=$(ls -t /var/backups/oes/config/*.tar.gz 2>/dev/null | head -1)
 if [ -n "$LATEST_CFG" ]; then
     if tar tzf "$LATEST_CFG" > /dev/null 2>&1; then
-        log "Конфигурация OK: $LATEST_CFG"
+        log "Configuration OK: $LATEST_CFG"
     else
-        ERRORS="${ERRORS}\n- Конфигурация: архив повреждён"
+        ERRORS="${ERRORS}\n- Configuration: archive corrupted"
     fi
 else
-    ERRORS="${ERRORS}\n- Нет бэкапов конфигурации"
+    ERRORS="${ERRORS}\n- No configuration backups"
 fi
 
-# === Результат ===
+# === Result ===
 if [ -z "$ERRORS" ]; then
-    log "Все тесты бэкапов пройдены"
+    log "All backup tests passed"
 else
-    log "ОШИБКИ:${ERRORS}"
+    log "ERRORS:${ERRORS}"
     curl -s -X POST \
         "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
         -d "chat_id=${TELEGRAM_CHAT_ID}" \
-        -d "text=КРИТИЧНО: Тест бэкапов OES провалился: $ERRORS"
+        -d "text=CRITICAL: OES backup test failed: $ERRORS"
 fi
 ```
 
 ```bash
-# Cron: первое число каждого месяца в 04:00
+# Cron: 1st day of each month at 04:00
 0 4 1 * * /opt/oes/scripts/test-backup.sh
 ```
 
@@ -462,112 +462,112 @@ fi
 
 ## Disaster Recovery Plan
 
-### Сценарий: повреждение базы данных Firebird
+### Scenario: Firebird database corruption
 
 ```
-ШАГ 1: Диагностика (5 мин)
-  — gfix -validate: определить степень повреждения
-  — Проверить дату последнего успешного бэкапа
-  — Оценить потерю данных (разница между бэкапом и сейчас)
+STEP 1: Diagnosis (5 min)
+  - gfix -validate: determine the extent of damage
+  - Check the date of the last successful backup
+  - Estimate data loss (difference between backup and now)
 
-ШАГ 2: Остановить сервис (1 мин)
-  sudo systemctl stop oes-daemon   # или остановить приложение
-  # НЕ пытаться ничего записывать в повреждённую БД!
+STEP 2: Stop the service (1 min)
+  sudo systemctl stop oes-daemon   # or stop the application
+  # Do NOT attempt to write anything to a corrupted DB!
 
-ШАГ 3: Восстановление из последнего бэкапа (10-20 мин)
-  — Найти последний чистый бэкап:
+STEP 3: Restore from the last backup (10-20 min)
+  - Find the last clean backup:
     ls -lt /var/backups/oes/firebird/
   
-  — Восстановить:
-    gunzip -c /var/backups/oes/firebird/oes_ДАТА.fbk.gz > /tmp/restore.fbk
+  - Restore:
+    gunzip -c /var/backups/oes/firebird/oes_DATE.fbk.gz > /tmp/restore.fbk
     gbak -restore -user SYSDBA -password PASS /tmp/restore.fbk /var/lib/oes/data/oes.fdb
   
-  — Проверить:
+  - Verify:
     gfix -user SYSDBA -password PASS -validate /var/lib/oes/data/oes.fdb
 
-ШАГ 4: Запуск (2 мин)
+STEP 4: Start (2 min)
   sudo systemctl start oes-daemon
 
-ШАГ 5: Проверка (5 мин)
-  — Проверить открытие ключевых документов
-  — Проверить логи на ошибки
-  — Уведомить пользователей о потенциальной потере данных
+STEP 5: Verification (5 min)
+  - Verify opening key documents
+  - Check logs for errors
+  - Notify users about potential data loss
 
-ИТОГО: 20-35 минут
-Потеря данных: данные с момента последнего бэкапа (до 6 часов)
+TOTAL: 20-35 minutes
+Data loss: data since the last backup (up to 6 hours)
 ```
 
-### Сценарий: переустановка Windows (desktop-режим)
+### Scenario: Windows reinstall (desktop mode)
 
 ```
-ШАГ 1: Перед переустановкой (профилактика)
-  — Экспортировать конфигурацию OES (меню → Файл → Экспорт настроек)
-  — Скопировать %APPDATA%\OES\ на внешний диск
-  — Скопировать файлы проектов (.fdb, .sqlite)
-  — Сохранить лицензионный ключ
+STEP 1: Before reinstall (prevention)
+  - Export OES configuration (menu -> File -> Export settings)
+  - Copy %APPDATA%\OES\ to an external drive
+  - Copy project files (.fdb, .sqlite)
+  - Save the license key
 
-ШАГ 2: Восстановление на новой системе
-  — Установить OES (скачать инсталлятор с GitHub Releases)
-  — Скопировать %APPDATA%\OES\ с резервного диска
-  — Скопировать файлы проектов
-  — Ввести лицензионный ключ
-  — Импортировать настройки (Файл → Импорт настроек)
+STEP 2: Restore on the new system
+  - Install OES (download the installer from GitHub Releases)
+  - Copy %APPDATA%\OES\ from the backup drive
+  - Copy project files
+  - Enter the license key
+  - Import settings (File -> Import settings)
 
-ИТОГО: 15-30 минут
+TOTAL: 15-30 minutes
 ```
 
-### Сценарий: полная потеря сервера (daemon-режим)
+### Scenario: full server loss (daemon mode)
 
 ```
-ШАГ 1: Новый сервер / ВМ (10 мин)
-  — Развернуть Ubuntu 22.04 LTS
-  — Или восстановить снапшот ВМ
+STEP 1: New server / VM (10 min)
+  - Deploy Ubuntu 22.04 LTS
+  - Or restore a VM snapshot
 
-ШАГ 2: Установить OES daemon (15 мин)
-  — Следовать руководству по установке
-  — Установить Firebird Server
-  — Настроить /etc/oes/daemon.conf
+STEP 2: Install OES daemon (15 min)
+  - Follow the installation guide
+  - Install Firebird Server
+  - Configure /etc/oes/daemon.conf
 
-ШАГ 3: Восстановить данные (15-30 мин)
-  — Firebird БД:
+STEP 3: Restore data (15-30 min)
+  - Firebird DB:
     rsync user@backup:/backups/oes/firebird/LATEST.fbk.gz /tmp/
     gunzip /tmp/LATEST.fbk.gz
     gbak -restore -user SYSDBA -password PASS /tmp/LATEST.fbk /var/lib/oes/data/oes.fdb
   
-  — Конфигурация:
-    tar xzf /backup/oes-config_ДАТА.tar.gz -C /
+  - Configuration:
+    tar xzf /backup/oes-config_DATE.tar.gz -C /
 
-ШАГ 4: Запустить и проверить (5 мин)
+STEP 4: Start and verify (5 min)
   sudo systemctl start oes-daemon
   sudo systemctl status oes-daemon
 
-ИТОГО: 40-60 минут
+TOTAL: 40-60 minutes
 ```
 
 ---
 
-## Сводная таблица бэкапов OES
+## OES backup summary table
 
 ```
-Что                    | Частота    | Хранение (лок.) | Где хранить
------------------------|-----------|-----------------|-------------------
-Firebird БД (gbak)     | 6ч / 24ч  | 30 дней         | /var/backups + NAS
-PostgreSQL (pg_dump)   | 6ч / 24ч  | 30 дней         | /var/backups + NAS
-SQLite файлы проектов  | при изм.  | 30 дней         | Рядом с файлом
-Конфигурация /etc/oes  | при изм.  | 90 дней         | /var/backups + NAS
-Лицензии               | при изм.  | бессрочно       | Несколько локаций
-%APPDATA%\OES\ / ~/Library/Application Support/OES/ | 24ч | 30 дней | Внешний диск/NAS
-Тест бэкапов           | месяц     | —               | —
+What                   | Frequency | Retention (local) | Where to store
+-----------------------|-----------|-------------------|-------------------
+Firebird DB (gbak)     | 6h / 24h  | 30 days           | /var/backups + NAS
+PostgreSQL (pg_dump)   | 6h / 24h  | 30 days           | /var/backups + NAS
+SQLite project files   | on change | 30 days           | Next to the file
+Configuration /etc/oes | on change | 90 days           | /var/backups + NAS
+Licenses               | on change | indefinite        | Multiple locations
+%APPDATA%\OES\ / ~/Library/Application Support/OES/ | 24h | 30 days | External drive/NAS
+Backup test            | monthly   | -                 | -
 ```
 
 ---
 
-## Мониторинг свежести бэкапов
+## Backup freshness monitoring
 
 ```bash
 #!/bin/bash
 # scripts/check-backup-freshness.sh
-# Запускать каждый час
+# Run hourly
 
 BACKUP_DIR="/var/backups/oes/firebird"
 MAX_AGE_HOURS=25
@@ -575,15 +575,15 @@ MAX_AGE_HOURS=25
 LATEST=$(find "$BACKUP_DIR" -name "*.fbk.gz" -type f -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
 
 if [ -z "$LATEST" ]; then
-    MSG="КРИТИЧНО: Нет бэкапов Firebird в $BACKUP_DIR"
+    MSG="CRITICAL: No Firebird backups in $BACKUP_DIR"
 else
     AGE_SECONDS=$(echo "$(date +%s) - ${LATEST%.*}" | bc)
     AGE_HOURS=$((AGE_SECONDS / 3600))
     
     if [ "$AGE_HOURS" -gt "$MAX_AGE_HOURS" ]; then
-        MSG="ПРЕДУПРЕЖДЕНИЕ: Последний бэкап Firebird ${AGE_HOURS}ч назад (макс: ${MAX_AGE_HOURS}ч)"
+        MSG="WARNING: Last Firebird backup ${AGE_HOURS}h ago (max: ${MAX_AGE_HOURS}h)"
     else
-        exit 0  # Всё OK
+        exit 0  # All good
     fi
 fi
 

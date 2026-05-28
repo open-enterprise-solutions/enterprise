@@ -1,39 +1,39 @@
-# 10. Тестирование
+# 10. Testing
 
-## Философия
+## Philosophy
 
-Тесты — это не бюрократия, а защита от регрессий. OES исторически не имел тестов — это риск при каждом рефакторинге. Мы вводим тестирование постепенно, начиная с критичной бизнес-логики. Один хороший тест важнее десяти формальных.
+Tests are not bureaucracy — they protect against regressions. OES historically had no tests, which is a risk during every refactor. We introduce testing gradually, starting with critical business logic. One good test is worth more than ten formal ones.
 
-**Стратегия:** новый код — покрывается тестами сразу. Старый код — покрывается тестами при рефакторинге или при исправлении багов.
+**Strategy:** new code — covered by tests right away. Old code — covered when it's refactored or when a bug is fixed.
 
 ---
 
-## Уровни тестирования
+## Test levels
 
 ```
           ┌─────────────────┐
-          │   System / E2E   │  Мало тестов, медленные, дорогие
-          │  (ручное или     │  (пока — только ручное тестирование)
-          │  автоматизация)  │
+          │   System / E2E   │  Few tests, slow, expensive
+          │  (manual or      │  (currently — manual testing only)
+          │  automation)     │
           ├─────────────────┤
-          │  Integration     │  Средне тестов, средняя скорость
-          │  (Google Test +  │  (тесты с реальной SQLite/Firebird)
-          │   реальная БД)   │
+          │  Integration     │  Mid count, mid speed
+          │  (Google Test +  │  (tests against real SQLite/Firebird)
+          │   real DB)       │
           ├─────────────────┤
-          │    Unit          │  Много тестов, быстрые, дешёвые
-          │  (Google Test +  │  (изолированная логика, моки через
+          │    Unit          │  Many tests, fast, cheap
+          │  (Google Test +  │  (isolated logic, mocks via
           │   Google Mock)   │   Google Mock)
           └─────────────────┘
 ```
 
 ---
 
-## Инструменты
+## Tools
 
-### Google Test и Google Mock
+### Google Test and Google Mock
 
 ```cmake
-# CMakeLists.txt — подключение Google Test
+# CMakeLists.txt — wire up Google Test
 find_package(GTest REQUIRED)
 
 add_executable(oes_tests
@@ -46,23 +46,23 @@ target_link_libraries(oes_tests
     PRIVATE
         GTest::gtest_main
         GTest::gmock
-        oes_backend     # src/engine/backend/ — ibDatabaseLayer, ibCompileCode и др.
-        oes_frontend    # src/engine/frontend/ — ibValueForm и др.
+        oes_backend     # src/engine/backend/ — ibDatabaseLayer, ibCompileCode, etc.
+        oes_frontend    # src/engine/frontend/ — ibValueForm, etc.
 )
 
-# Интеграция с CTest
+# CTest integration
 include(GoogleTest)
 gtest_discover_tests(oes_tests)
 ```
 
-### vcpkg для Google Test
+### vcpkg for Google Test
 
 ```bash
-# Установка через vcpkg
+# Installing via vcpkg
 vcpkg install gtest:x64-windows
 vcpkg install gtest:x64-linux
 
-# Или через CMake FetchContent (без vcpkg)
+# Or via CMake FetchContent (no vcpkg)
 include(FetchContent)
 FetchContent_Declare(
     googletest
@@ -71,44 +71,44 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(googletest)
 ```
 
-### CTest для запуска тестов
+### CTest for running tests
 
 ```bash
-# Сборка и запуск всех тестов
+# Build and run all tests
 cmake --build build --config Debug
 ctest --test-dir build -C Debug --output-on-failure
 
-# Запуск с фильтром
+# Run with a filter
 ctest --test-dir build -R "DBQueryBuilder"
 
-# Запуск с параллелизмом
+# Run in parallel
 ctest --test-dir build -j4 --output-on-failure
 
-# Детальный вывод
+# Verbose output
 ctest --test-dir build -V
 ```
 
 ---
 
-## Unit тесты
+## Unit tests
 
-Тестируют **один** класс/функцию в изоляции от зависимостей.
+Test **one** class/function in isolation from its dependencies.
 
-**Что тестировать:**
-- Бизнес-логика (расчёты, правила, трансформации)
-- Утилитарные классы
-- Парсеры и форматтеры
-- Строители запросов (QueryBuilder)
-- Логика валидации
+**What to test:**
+- Business logic (calculations, rules, transformations)
+- Utility classes
+- Parsers and formatters
+- Query builders
+- Validation logic
 
-### Структура тестового файла
+### Test file structure
 
 ```cpp
 // tests/unit/test_discount_calculator.cpp
 #include <gtest/gtest.h>
 #include "core/DiscountCalculator.h"
 
-// Фикстура (общий setUp для группы тестов)
+// Fixture (shared setUp for a test group)
 class DiscountCalculatorTest : public ::testing::Test {
 protected:
     void SetUp() override {
@@ -118,17 +118,17 @@ protected:
     std::unique_ptr<DiscountCalculator> calculator;
 };
 
-// Тест: позитивный сценарий
+// Test: happy path
 TEST_F(DiscountCalculatorTest, ApplyPercentDiscount) {
     // Arrange
-    Money price{10000};           // 100.00 руб
+    Money price{10000};           // 100.00 RUB
     Discount discount{15, DiscountType::Percent};
 
     // Act
     Money result = calculator->apply(price, discount);
 
     // Assert
-    EXPECT_EQ(result.cents(), 8500);  // 85.00 руб
+    EXPECT_EQ(result.cents(), 8500);  // 85.00 RUB
 }
 
 TEST_F(DiscountCalculatorTest, ApplyFixedDiscount) {
@@ -142,21 +142,21 @@ TEST_F(DiscountCalculatorTest, ApplyFixedDiscount) {
 
 TEST_F(DiscountCalculatorTest, DiscountCannotProduceNegativeTotal) {
     Money price{1000};
-    Discount discount{5000, DiscountType::Fixed};  // Больше цены
+    Discount discount{5000, DiscountType::Fixed};  // Bigger than the price
 
     Money result = calculator->apply(price, discount);
 
-    EXPECT_EQ(result.cents(), 0);  // Минимум 0, не отрицательный
+    EXPECT_EQ(result.cents(), 0);  // Min 0, not negative
 }
 
 TEST_F(DiscountCalculatorTest, ThrowsOnInvalidDiscountType) {
     Money price{10000};
-    Discount discount{10, static_cast<DiscountType>(999)};  // Невалидный тип
+    Discount discount{10, static_cast<DiscountType>(999)};  // Invalid type
 
     EXPECT_THROW(calculator->apply(price, discount), std::invalid_argument);
 }
 
-// Параметризованные тесты
+// Parameterized tests
 class DiscountBoundaryTest : public ::testing::TestWithParam<
     std::tuple<int, int, int>>  // price, discountPct, expected
 {};
@@ -171,21 +171,21 @@ INSTANTIATE_TEST_SUITE_P(
     DiscountBoundaryValues,
     DiscountBoundaryTest,
     ::testing::Values(
-        std::make_tuple(10000, 0,   10000),  // 0% скидка
-        std::make_tuple(10000, 100, 0),      // 100% скидка
-        std::make_tuple(10000, 50,  5000),   // 50% скидка
-        std::make_tuple(1,     10,  0)       // Округление вниз до 0
+        std::make_tuple(10000, 0,   10000),  // 0% discount
+        std::make_tuple(10000, 100, 0),      // 100% discount
+        std::make_tuple(10000, 50,  5000),   // 50% discount
+        std::make_tuple(1,     10,  0)       // Rounding down to 0
     )
 );
 ```
 
-### Google Mock для изоляции зависимостей
+### Google Mock to isolate dependencies
 
 ```cpp
 // tests/mocks/MockDatabaseLayer.h
 // ibDatabaseLayer (src/engine/backend/databaseLayer/databaseLayer.h) —
-// абстрактный базовый класс для всех СУБД-бэкендов OES.
-// Мокируем его для изоляции бизнес-логики от реальной БД.
+// the abstract base class for every OES DB backend.
+// We mock it to isolate business logic from the real DB.
 #include <gmock/gmock.h>
 #include "engine/backend/databaseLayer/databaseLayer.h"
 
@@ -215,9 +215,9 @@ using ::testing::_;
 using ::testing::HasSubstr;
 using ::testing::Not;
 
-// UserService — пример сервиса, использующего ibDatabaseLayer через MockDatabaseLayer.
-// MockDatabaseLayer мокирует ibDatabaseLayer::PrepareStatement().
-// MockPreparedStatement мокирует ibPreparedStatement.
+// UserService — example service that uses ibDatabaseLayer through MockDatabaseLayer.
+// MockDatabaseLayer mocks ibDatabaseLayer::PrepareStatement().
+// MockPreparedStatement mocks ibPreparedStatement.
 
 class UserServiceTest : public ::testing::Test {
 protected:
@@ -231,7 +231,7 @@ protected:
 };
 
 TEST_F(UserServiceTest, FindUserByIdReturnsUser) {
-    // Настроить ожидание: PrepareStatement + SetParamInt + RunQuery
+    // Set expectation: PrepareStatement + SetParamInt + RunQuery
     auto mockStmt = std::make_unique<MockPreparedStatement>();
     auto mockRs   = std::make_unique<MockDatabaseResultSet>();
 
@@ -257,7 +257,7 @@ TEST_F(UserServiceTest, FindUserByIdReturnsNulloptIfNotFound) {
     auto mockStmt = std::make_unique<MockPreparedStatement>();
     auto mockRs   = std::make_unique<MockDatabaseResultSet>();
 
-    EXPECT_CALL(*mockRs, Next()).WillOnce(Return(false));  // 0 строк
+    EXPECT_CALL(*mockRs, Next()).WillOnce(Return(false));  // 0 rows
     EXPECT_CALL(*mockStmt, SetParamInt(1, 999));
     EXPECT_CALL(*mockStmt, RunQuery()).WillOnce(Return(mockRs.get()));
     EXPECT_CALL(*mockDb, PrepareStatement(_)).WillOnce(Return(mockStmt.get()));
@@ -268,13 +268,13 @@ TEST_F(UserServiceTest, FindUserByIdReturnsNulloptIfNotFound) {
 }
 
 TEST_F(UserServiceTest, SqlQueryDoesNotContainRawPassword) {
-    // Безопасность: пароль передаётся через SetParamString, не конкатенируется в SQL
+    // Security: the password is passed via SetParamString, not concatenated into SQL
     auto mockStmt = std::make_unique<MockPreparedStatement>();
     auto mockRs   = std::make_unique<MockDatabaseResultSet>();
     wxString capturedSql;
 
     EXPECT_CALL(*mockRs, Next()).WillRepeatedly(Return(false));
-    // Ожидаем SetParamString — пароль НЕ должен попасть в SQL-строку
+    // Expect SetParamString — password must NOT appear in the SQL text
     EXPECT_CALL(*mockStmt, SetParamString(2, _));
     EXPECT_CALL(*mockStmt, RunQuery()).WillOnce(Return(mockRs.get()));
     EXPECT_CALL(*mockDb, PrepareStatement(::testing::SaveArg<0>(&capturedSql)))
@@ -282,43 +282,43 @@ TEST_F(UserServiceTest, SqlQueryDoesNotContainRawPassword) {
 
     service->authenticate("user@test.com", "mypassword");
 
-    // SQL не должен содержать пароль в явном виде
+    // SQL must not contain the password verbatim
     EXPECT_THAT(capturedSql.ToStdString(), Not(HasSubstr("mypassword")));
 }
 ```
 
 ---
 
-## Integration тесты
+## Integration tests
 
-Тестируют **взаимодействие с реальной БД** — полный цикл: создание/чтение/обновление/удаление данных.
+Test **interactions with a real DB** — the full cycle: create/read/update/delete.
 
-**Что тестировать:**
-- CRUD операции через DBLayer
-- Транзакции и откаты
-- Применение схемы (миграции)
-- Производительность запросов
+**What to test:**
+- CRUD operations through DBLayer
+- Transactions and rollbacks
+- Schema application (migrations)
+- Query performance
 
-### Пример интеграционного теста с Firebird
+### Example integration test with Firebird
 
 ```cpp
 // tests/integration/test_firebird_crud.cpp
 #include <gtest/gtest.h>
 #include "engine/backend/databaseLayer/firebird/databaseLayerFirebird.h"
-#include "TestDbConfig.h"  // TestDbConfig::Get() — конфиг тестовой БД
+#include "TestDbConfig.h"  // TestDbConfig::Get() — test DB config
 
-// Фикстура с реальным подключением к БД
+// Fixture with a real DB connection
 class FirebirdCrudTest : public ::testing::Test {
 protected:
     static void SetUpTestSuite() {
-        // Создать тестовую БД один раз для всего suite
-        // ibDatabaseLayerFirebird — конкретная реализация ibDatabaseLayer для Firebird
+        // Create the test DB once for the whole suite
+        // ibDatabaseLayerFirebird — concrete ibDatabaseLayer implementation for Firebird
         s_db = std::make_shared<ibDatabaseLayerFirebird>();
         ASSERT_TRUE(s_db->Open(TestDbConfig::GetPath(),
                                TestDbConfig::GetUser(),
                                TestDbConfig::GetPassword()));
-        // RECREATE TABLE — Firebird-эквивалент "DROP IF EXISTS + CREATE"
-        // (Firebird не поддерживает CREATE TABLE IF NOT EXISTS)
+        // RECREATE TABLE — Firebird-equivalent of "DROP IF EXISTS + CREATE"
+        // (Firebird does not support CREATE TABLE IF NOT EXISTS)
         ASSERT_TRUE(s_db->Execute(R"(
             RECREATE TABLE TEST_USERS (
                 ID INTEGER NOT NULL PRIMARY KEY,
@@ -329,12 +329,12 @@ protected:
     }
 
     static void TearDownTestSuite() {
-        s_db->Execute("DROP TABLE TEST_USERS");  // Firebird: нет IF EXISTS для DROP TABLE
+        s_db->Execute("DROP TABLE TEST_USERS");  // Firebird: no IF EXISTS for DROP TABLE
         s_db->Disconnect();
     }
 
     void SetUp() override {
-        // Очистить данные перед каждым тестом
+        // Clean up data before each test
         s_db->Execute("DELETE FROM TEST_USERS");
     }
 
@@ -367,7 +367,7 @@ TEST_F(FirebirdCrudTest, InsertAndSelectRecord) {
 }
 
 TEST_F(FirebirdCrudTest, TransactionRollbackOnError) {
-    // ibTransactionGuard — RAII, откатывает при выходе без Commit()
+    // ibTransactionGuard — RAII, rolls back on scope exit without Commit()
     {
         ibTransactionGuard tx(s_db.get());
 
@@ -378,10 +378,10 @@ TEST_F(FirebirdCrudTest, TransactionRollbackOnError) {
         stmt->SetParamString(2, "first@test.com");
         stmt->RunQuery();
 
-        // tx уничтожается без Commit() — автоматический rollback
+        // tx is destroyed without Commit() — automatic rollback
     }
 
-    // Убедиться что запись не вставлена
+    // Confirm the row is not inserted
     ibPreparedStatement* countStmt = s_db->PrepareStatement(
         "SELECT COUNT(*) FROM TEST_USERS"
     );
@@ -391,7 +391,7 @@ TEST_F(FirebirdCrudTest, TransactionRollbackOnError) {
 }
 
 TEST_F(FirebirdCrudTest, ParametrizedQueryPreventsInjection) {
-    // Попытка SQL-инъекции через параметр
+    // Attempt SQL injection through a parameter
     wxString maliciousInput = "'; DROP TABLE TEST_USERS; --";
 
     ibPreparedStatement* stmt = s_db->PrepareStatement(
@@ -400,11 +400,11 @@ TEST_F(FirebirdCrudTest, ParametrizedQueryPreventsInjection) {
     stmt->SetParamString(1, maliciousInput);
     ibDatabaseResultSet* rs = stmt->RunQuery();
 
-    // Запрос должен выполниться успешно (не найти записей, не упасть)
+    // The query must succeed (no rows found, no crash)
     ASSERT_TRUE(rs != nullptr);
-    EXPECT_FALSE(rs->Next());  // 0 строк — инъекция не сработала
+    EXPECT_FALSE(rs->Next());  // 0 rows — injection did not work
 
-    // Таблица должна существовать
+    // The table must still exist
     ibPreparedStatement* checkStmt = s_db->PrepareStatement(
         "SELECT COUNT(*) FROM TEST_USERS"
     );
@@ -413,7 +413,7 @@ TEST_F(FirebirdCrudTest, ParametrizedQueryPreventsInjection) {
 }
 ```
 
-### Конфигурация тестовой БД
+### Test DB configuration
 
 ```cpp
 // tests/TestDbConfig.h
@@ -422,7 +422,7 @@ TEST_F(FirebirdCrudTest, ParametrizedQueryPreventsInjection) {
 #include <cstdlib>
 #include <string>
 
-// Платформо-зависимый путь к тестовой БД по умолчанию:
+// Platform-dependent default path to the test DB:
 #ifdef _WIN32
 #   define TEST_DB_DEFAULT_PATH "C:\\Temp\\oes_test.fdb"
 #else
@@ -433,13 +433,13 @@ class TestDbConfig {
 public:
     static DatabaseConfig Get() {
         DatabaseConfig config;
-        // Берём из переменных окружения (для CI/CD) или используем defaults
+        // Read from env vars (for CI/CD) or fall back to defaults
         config.type = DatabaseType::Firebird;
         config.host = getEnvOrDefault("TEST_DB_HOST", "localhost");
         config.port = std::stoi(getEnvOrDefault("TEST_DB_PORT", "3050"));
         config.database = getEnvOrDefault(
             "TEST_DB_PATH",
-            TEST_DB_DEFAULT_PATH  // определяется через #ifdef _WIN32 выше
+            TEST_DB_DEFAULT_PATH  // defined via #ifdef _WIN32 above
         );
         config.user = getEnvOrDefault("TEST_DB_USER", "SYSDBA");
         config.password = getEnvOrDefault("TEST_DB_PASSWORD", "masterkey");
@@ -456,61 +456,61 @@ private:
 
 ---
 
-## Когда тестировать обязательно
+## When testing is mandatory
 
-| Область | Обязательно тестировать | Почему |
+| Area | Must be tested | Why |
 |---------|------------------------|--------|
-| SQL-запросы | Параметризация, правильность WHERE | Безопасность + корректность |
-| Бизнес-логика | Расчёты, правила, трансформации | Ошибки стоят денег |
-| Парсинг данных | XML, JSON, форматы файлов | Crash при невалидных данных |
-| Авторизация | Проверка прав доступа | Безопасность |
-| Миграции | Применение и откат схемы | Потеря данных невосполнима |
-| Критичные пути | Открытие документа, сохранение | Базовая функциональность |
+| SQL queries | Parameterization, correctness of WHERE | Security + correctness |
+| Business logic | Calculations, rules, transformations | Errors cost money |
+| Data parsing | XML, JSON, file formats | Crash on invalid data |
+| Authorization | Permission checks | Security |
+| Migrations | Schema apply and rollback | Data loss is irreversible |
+| Critical paths | Opening a document, saving | Core functionality |
 
-## Когда можно пропустить
+## When you can skip it
 
-| Область | Можно не тестировать сейчас | Почему |
+| Area | Can be skipped for now | Why |
 |---------|-----------------------------|--------|
-| wxWidgets UI | Рендеринг диалогов, wxGrid | Визуально проверяется |
-| Конфиги | Чтение INI файлов | Проверяется при запуске |
-| Тривиальные геттеры/сеттеры | `getName()`, `setName()` | Нет логики |
-| Сгенерированный код | Designer-сгенерированные формы | Проверяется интеграционно |
+| wxWidgets UI | Dialog rendering, wxGrid | Verified visually |
+| Configs | Reading INI files | Verified at startup |
+| Trivial getters/setters | `getName()`, `setName()` | No logic |
+| Generated code | Designer-generated forms | Verified by integration tests |
 
 ---
 
-## Test-first: для багфиксов
+## Test-first: for bug fixes
 
-Для каждого бага сначала пишем тест, воспроизводящий проблему:
+For every bug, write a test that reproduces the problem first:
 
 ```cpp
-// 1. Написать тест, который ПАДАЕТ (воспроизводит баг)
+// 1. Write a test that FAILS (reproduces the bug)
 TEST_F(OrderServiceTest, PromoCodeAppliedToTotalNotSubtotal) {
-    // Баг: промокод применялся к subtotal, игнорируя доставку
+    // Bug: promo code was applied to subtotal, ignoring shipping
     Order order;
-    order.setSubtotal(10000);  // 100 руб
-    order.setShipping(500);    // 5 руб
+    order.setSubtotal(10000);  // 100 RUB
+    order.setShipping(500);    // 5 RUB
     // total = 10500
 
-    PromoCode promo{"SALE15", 15};  // 15% скидка
+    PromoCode promo{"SALE15", 15};  // 15% discount
 
-    // Тест падает — баг найден
+    // Test fails — bug found
     order.applyPromoCode(promo);
-    EXPECT_EQ(order.getTotal(), 8925);  // 15% от 10500 = 1575, итого 8925
+    EXPECT_EQ(order.getTotal(), 8925);  // 15% of 10500 = 1575, total 8925
 }
 
-// 2. Исправить код, чтобы тест ПРОШЁЛ
+// 2. Fix the code so the test PASSES
 
-// 3. Убедиться что другие тесты не сломались
+// 3. Make sure other tests didn't break
 // ctest --test-dir build --output-on-failure
 
-// 4. Коммит: "fix: apply promo code to order total including shipping"
+// 4. Commit: "fix: apply promo code to order total including shipping"
 ```
 
-Этот подход гарантирует, что баг не вернётся в будущем.
+This approach ensures the bug does not return in the future.
 
 ---
 
-## CI: тесты на каждый PR
+## CI: tests on every PR
 
 ### GitHub Actions
 
@@ -573,11 +573,11 @@ jobs:
 
       - name: Configure Firebird for CI
         run: |
-          # Установить пароль SYSDBA (по умолчанию после установки пакета он случайный)
+          # Set SYSDBA password (random by default after package install)
           sudo systemctl start firebird3.0
           echo "masterkey" | sudo /usr/bin/gsec -user SYSDBA -password masterkey \
             -modify SYSDBA -pw masterkey || true
-          # Разрешить TCP-соединения (необходимо для ibDatabaseLayer)
+          # Allow TCP connections (needed for ibDatabaseLayer)
           sudo sed -i 's/#RemoteServicePort/RemoteServicePort/' /etc/firebird/3.0/firebird.conf || true
           sudo systemctl restart firebird3.0
 
@@ -599,59 +599,59 @@ jobs:
           TEST_DB_PASSWORD: masterkey
 ```
 
-### Правило: PR не мерджится если тесты падают
+### Rule: a PR is not merged if tests fail
 
-В настройках GitHub: Settings → Branches → Branch protection rules:
+In GitHub settings: Settings → Branches → Branch protection rules:
 - Require status checks to pass before merging
-- Выбрать checks "Tests / test-windows" и "Tests / test-linux"
+- Select the checks "Tests / test-windows" and "Tests / test-linux"
 
 ---
 
-## AI пишет тесты
+## AI writes tests
 
-AI хорошо подходит для генерации тестов, но человек должен проверить:
+AI is a good fit for generating tests, but a human must verify:
 
-### Что AI делает хорошо
+### What AI does well
 
-- Генерирует boilerplate (SetUp, TearDown, MOCK_METHOD)
-- Покрывает стандартные сценарии (success, error, validation)
-- Создаёт структуру TEST_F/TEST
+- Generates boilerplate (SetUp, TearDown, MOCK_METHOD)
+- Covers standard scenarios (success, error, validation)
+- Builds the TEST_F/TEST structure
 
-### Что человек проверяет
+### What the human verifies
 
-1. **Edge cases** — AI часто пропускает граничные случаи:
-   - Пустые строки, nullptr, нулевые значения
-   - Максимальные значения (INTEGER overflow)
-   - Многопоточные сценарии
-   - Ошибки подключения к БД
+1. **Edge cases** — AI often misses boundary cases:
+   - Empty strings, nullptr, zero values
+   - Maximum values (INTEGER overflow)
+   - Multithreaded scenarios
+   - DB connection errors
 
-2. **Реальная проверка** — тест действительно проверяет поведение:
+2. **Real verification** — the test actually checks behaviour:
 ```cpp
-// ПЛОХОЙ тест — проверяет что Mock вызван, а не результат
+// BAD test — checks that the Mock was called, not the result
 TEST_F(UserServiceTest, BadTest) {
     auto mockStmt = std::make_unique<MockPreparedStatement>();
     EXPECT_CALL(*mockDb, PrepareStatement(_)).Times(1).WillOnce(Return(mockStmt.get()));
     service->findById(42);
-    // Этот тест НИЧЕГО не проверяет о возвращаемом значении!
+    // This test checks NOTHING about the return value!
 }
 
-// ХОРОШИЙ тест — проверяет поведение
+// GOOD test — checks behaviour
 TEST_F(UserServiceTest, GoodTest) {
     auto mockStmt = std::make_unique<MockPreparedStatement>();
     auto mockRs   = std::make_unique<MockDatabaseResultSet>();
-    EXPECT_CALL(*mockRs, Next()).WillOnce(Return(false));  // 0 строк — пустой результат
+    EXPECT_CALL(*mockRs, Next()).WillOnce(Return(false));  // 0 rows — empty result
     EXPECT_CALL(*mockStmt, RunQuery()).WillOnce(Return(mockRs.get()));
     EXPECT_CALL(*mockDb, PrepareStatement(_)).WillOnce(Return(mockStmt.get()));
 
     auto user = service->findById(999);
-    EXPECT_FALSE(user.has_value());  // Проверяем что вернулось
+    EXPECT_FALSE(user.has_value());  // Verify what was returned
 }
 ```
 
-3. **Моки корректны** — AI может создать mock который всегда возвращает успех:
+3. **Mocks are correct** — AI may produce a mock that always returns success:
 ```cpp
-// Нужно проверить что есть тесты на ошибочные сценарии
-// ibBackendCoreException — реальное исключение OES для ошибок движка/БД
+// Make sure there are tests for failure scenarios
+// ibBackendCoreException — the real OES exception for engine/DB errors
 EXPECT_CALL(*mockDb, PrepareStatement(_))
     .WillOnce(Throw(ibBackendCoreException("Connection lost")));
 
@@ -662,56 +662,56 @@ EXPECT_THROW(service->findById(1), ibBackendCoreException);
 
 ## Naming convention
 
-### Структура тестов
+### Test structure
 
 ```cpp
-// Что тестируем (класс или модуль)
+// What we're testing (class or module)
 class DiscountCalculatorTest : public ::testing::Test { };
 
-// Имя теста: MethodName_Scenario_ExpectedBehavior
+// Test name: MethodName_Scenario_ExpectedBehavior
 TEST_F(DiscountCalculatorTest, Apply_PercentDiscount_ReturnsCorrectAmount) { }
 TEST_F(DiscountCalculatorTest, Apply_ZeroDiscount_ReturnOriginalPrice) { }
 TEST_F(DiscountCalculatorTest, Apply_DiscountExceedsPrice_ReturnsZero) { }
 TEST_F(DiscountCalculatorTest, Apply_InvalidDiscountType_ThrowsException) { }
 
-// Или: should_ExpectedBehavior_when_Scenario (тоже допустимо)
+// Or: should_ExpectedBehavior_when_Scenario (also acceptable)
 TEST_F(DiscountCalculatorTest, ShouldReturnZero_WhenDiscountExceedsPrice) { }
 ```
 
-### Правила именования
+### Naming rules
 
-- Класс фикстуры: `<TestedClass>Test`
-- Имя теста: описывает поведение, не реализацию
-- Язык тестов: **English**
-- Используйте `ASSERT_*` если продолжение теста бессмысленно при провале
-- Используйте `EXPECT_*` если нужно продолжить проверки
+- Fixture class: `<TestedClass>Test`
+- Test name: describes behaviour, not implementation
+- Test language: **English**
+- Use `ASSERT_*` if continuing the test makes no sense on failure
+- Use `EXPECT_*` if you want to keep checking
 
-### Файлы тестов
+### Test files
 
 ```
 tests/
 ├── unit/
-│   ├── test_discount_calculator.cpp    ← тестирует DiscountCalculator
-│   ├── test_query_builder.cpp          ← тестирует QueryBuilder
-│   ├── test_config_parser.cpp          ← тестирует ConfigParser
-│   └── test_report_formatter.cpp       ← тестирует ReportFormatter
+│   ├── test_discount_calculator.cpp    ← tests DiscountCalculator
+│   ├── test_query_builder.cpp          ← tests QueryBuilder
+│   ├── test_config_parser.cpp          ← tests ConfigParser
+│   └── test_report_formatter.cpp       ← tests ReportFormatter
 ├── integration/
-│   ├── test_firebird_crud.cpp          ← CRUD через реальный Firebird
-│   ├── test_postgresql_crud.cpp        ← CRUD через реальный PostgreSQL
-│   └── test_sqlite_crud.cpp            ← CRUD через реальный SQLite
+│   ├── test_firebird_crud.cpp          ← CRUD through real Firebird
+│   ├── test_postgresql_crud.cpp        ← CRUD through real PostgreSQL
+│   └── test_sqlite_crud.cpp            ← CRUD through real SQLite
 ├── mocks/
 │   ├── MockDatabaseLayer.h
 │   └── MockConfigProvider.h
 └── helpers/
-    ├── TestDbConfig.h                  ← Конфигурация тестовой БД
-    └── TestDataFactory.h               ← Фабрики тестовых объектов
+    ├── TestDbConfig.h                  ← test DB configuration
+    └── TestDataFactory.h               ← test object factories
 ```
 
 ---
 
-## Полезные утилиты для тестов
+## Helpful utilities for tests
 
-### Фабрики тестовых данных
+### Test data factories
 
 ```cpp
 // tests/helpers/TestDataFactory.h
@@ -756,7 +756,7 @@ inline Order CreateTestOrder(int id = 1) {
 ```
 
 ```cpp
-// Использование в тесте
+// Using in a test
 TEST_F(OrderServiceTest, ApplyVipDiscount) {
     auto user = TestFactory::CreateTestUser(1, "vip@test.com");
     user.setRole(UserRole::VIP);
@@ -764,34 +764,34 @@ TEST_F(OrderServiceTest, ApplyVipDiscount) {
     auto product = TestFactory::CreateTestProduct(1, "Premium", 10000);
 
     auto price = service->calculatePriceForUser(product, user);
-    EXPECT_EQ(price.cents(), 8000);  // 20% VIP скидка
+    EXPECT_EQ(price.cents(), 8000);  // 20% VIP discount
 }
 ```
 
-### Кастомные матчеры
+### Custom matchers
 
 ```cpp
 // tests/matchers/DatabaseMatchers.h
 #include <gmock/gmock.h>
 
-// Матчер: SQL содержит параметр, не конкатенацию
+// Matcher: SQL uses a parameter, not concatenation
 MATCHER_P(SqlUsesParameter, paramPlaceholder,
           "SQL query uses parameterized placeholder") {
     return arg.find(paramPlaceholder) != std::string::npos &&
-           arg.find("'" ) == std::string::npos;  // Нет литеральных строк в SQL
+           arg.find("'" ) == std::string::npos;  // No literal strings in SQL
 }
 
-// Использование
+// Usage
 EXPECT_CALL(*mockDb, Execute(SqlUsesParameter("?"), _))
     .Times(1);
 ```
 
 ---
 
-## Покрытие кода (Code Coverage)
+## Code coverage
 
 ```cmake
-# CMakeLists.txt — включить coverage для Debug сборки
+# CMakeLists.txt — enable coverage for the Debug build
 if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(oes_tests PRIVATE --coverage -fprofile-arcs -ftest-coverage)
     target_link_options(oes_tests PRIVATE --coverage)
@@ -799,38 +799,38 @@ endif()
 ```
 
 ```bash
-# Генерация отчёта покрытия (Linux, gcov + lcov)
+# Generate a coverage report (Linux, gcov + lcov)
 cmake --build build --config Debug
 ctest --test-dir build
 
-# Собрать данные покрытия
+# Collect coverage data
 lcov --capture --directory build --output-file coverage.info
 lcov --remove coverage.info '/usr/*' 'tests/*' --output-file coverage.info
 
-# HTML отчёт
+# HTML report
 genhtml coverage.info --output-directory coverage_html
-# Открыть coverage_html/index.html в браузере
+# Open coverage_html/index.html in a browser
 ```
 
-#### Покрытие на Windows (OpenCppCoverage + MSVC)
+#### Coverage on Windows (OpenCppCoverage + MSVC)
 
-На Windows gcov/lcov недоступны. Используйте **OpenCppCoverage** — бесплатный инструмент с поддержкой MSVC и Visual Studio.
+On Windows gcov/lcov aren't available. Use **OpenCppCoverage** — a free tool with MSVC and Visual Studio support.
 
 ```powershell
-# Установка через Chocolatey
+# Install via Chocolatey
 choco install opencppcoverage -y
 
-# Запуск тестов с замером покрытия
+# Run tests with coverage instrumentation
 OpenCppCoverage.exe `
     --sources src\ `
     --excluded_sources tests\ `
     --export_type html:coverage_html `
     -- ctest.exe --test-dir build -C Debug --output-on-failure
 
-# Открыть coverage_html\index.html
+# Open coverage_html\index.html
 ```
 
-В GitHub Actions (Windows runner):
+In GitHub Actions (Windows runner):
 ```yaml
 - name: Coverage (Windows)
   run: |
@@ -843,7 +843,7 @@ OpenCppCoverage.exe `
     files: coverage.xml
 ```
 
-**Цели по покрытию:**
-- Бизнес-логика (core/) — минимум 70%
-- DBLayer — минимум 60%
-- UI (wxWidgets) — не тестируем автоматически
+**Coverage targets:**
+- Business logic (core/) — at least 70%
+- DBLayer — at least 60%
+- UI (wxWidgets) — not tested automatically

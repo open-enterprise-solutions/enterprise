@@ -1,35 +1,35 @@
-# 09. Окружения и деплой
+# 09. Environments and Deployment
 
-## Три окружения
+## Three environments
 
-| Окружение | Ветка | Назначение |
+| Environment | Branch | Purpose |
 |-----------|-------|-----------|
-| **Local** | любая | Разработка и отладка на рабочей машине |
-| **Staging** | `dev` или `release/*` | Тестирование релиза перед выдачей клиенту |
-| **Production** | `master` | Релиз у клиентов (установщик, дистрибутив) |
+| **Local** | any | Development and debugging on the work machine |
+| **Staging** | `dev` or `release/*` | Testing a release before delivery to a customer |
+| **Production** | `master` | Release to customers (installer, distribution) |
 
-### Принцип
+### Principle
 
-Код проходит путь: **Local → Staging → Production**. Новая версия не выпускается клиентам без проверки на staging-стенде.
+Code travels: **Local → Staging → Production**. A new version is not delivered to customers without verification on the staging environment.
 
-В отличие от веб-сервисов, «деплой» OES — это сборка установщика и его распространение (через GitHub Releases, общий диск, или прямую передачу клиенту). Серверная часть — только СУБД (Firebird/PostgreSQL), которую клиент разворачивает самостоятельно или с помощью команды поддержки.
+Unlike a web service, OES "deployment" is the build of an installer and its distribution (via GitHub Releases, a shared drive, or direct delivery to the customer). The server side is just the DBMS (Firebird/PostgreSQL), which the customer deploys themselves or with help from the support team.
 
 ---
 
-## Конфигурация окружений
+## Environment configuration
 
-### Конфигурационные файлы
+### Configuration files
 
-| Файл | Назначение | В git? |
+| File | Purpose | In git? |
 |------|-----------|--------|
-| `config.ini.example` | Шаблон со всеми параметрами (без реальных значений) | Да |
-| `config.ini` | Реальная конфигурация для текущей среды | Нет |
-| `config.debug.ini` | Переопределения для локальной отладки (например, более подробный уровень логирования, тестовая БД); загружается поверх `config.ini` только в Debug-сборке | Нет |
+| `config.ini.example` | Template with all parameters (no real values) | Yes |
+| `config.ini` | Real configuration for the current environment | No |
+| `config.debug.ini` | Overrides for local debugging (e.g. more verbose log level, test DB); loaded on top of `config.ini` only in Debug builds | No |
 
-### Разница между средами
+### Differences between environments
 
 ```ini
-; config.ini (локальная разработка)
+; config.ini (local development)
 [app]
 environment=development
 log_level=debug
@@ -44,7 +44,7 @@ database=C:\OES\dev\oes_dev.fdb
 user=SYSDBA
 password=masterkey
 
-; config.ini (staging — тестовый стенд)
+; config.ini (staging — test stand)
 [app]
 environment=staging
 log_level=debug
@@ -59,7 +59,7 @@ database=D:\Databases\oes_staging.fdb
 user=OES_APP
 password=<staging_password>
 
-; config.ini (production — у клиента)
+; config.ini (production — at the customer)
 [app]
 environment=production
 log_level=info
@@ -75,104 +75,104 @@ user=OES_APP
 password=<client_password>
 ```
 
-### Правило: config.ini.example ВСЕГДА актуален
+### Rule: config.ini.example is ALWAYS up to date
 
-При добавлении новой конфигурационной опции:
-1. Добавить в `config.ini.example` с комментарием
-2. Добавить в свой `config.ini`
-3. Сообщить команде (и обновить staging/production конфиги)
-4. Обновить CLAUDE.md если параметр важен для понимания проекта
+When adding a new configuration option:
+1. Add it to `config.ini.example` with a comment
+2. Add it to your own `config.ini`
+3. Tell the team (and update staging/production configs)
+4. Update CLAUDE.md if the parameter matters for understanding the project
 
 ---
 
-## Локальная разработка
+## Local development
 
-### Установка зависимостей (Windows)
+### Installing dependencies (Windows)
 
-OES не использует менеджер пакетов автоматически. Зависимости устанавливаются вручную или через vcpkg:
+OES does not auto-use a package manager. Dependencies are installed manually or through vcpkg:
 
 ```powershell
-# Через vcpkg (рекомендуется для новых зависимостей)
+# Through vcpkg (recommended for new dependencies)
 vcpkg install wxwidgets:x64-windows
 vcpkg install gtest:x64-windows
-vcpkg install libpq:x64-windows    # PostgreSQL клиент
+vcpkg install libpq:x64-windows    # PostgreSQL client
 vcpkg install sqlite3:x64-windows
 
-# Интеграция с Visual Studio
+# Integration with Visual Studio
 vcpkg integrate install
 ```
 
-Firebird и IBPP устанавливаются отдельно (см. документацию Firebird и `third-party/IBPP/`).
+Firebird and IBPP are installed separately (see Firebird docs and `third-party/IBPP/`).
 
-### Запуск локально
+### Running locally
 
 ```powershell
-# 1. Убедиться что Firebird запущен
+# 1. Make sure Firebird is running
 sc query FirebirdServerDefaultInstance
-# Если не запущен:
+# If not running:
 sc start FirebirdServerDefaultInstance
 
-# 2. Создать тестовую БД (если ещё нет)
+# 2. Create a test DB (if not yet created)
 isql-fb -user SYSDBA -password masterkey
 # CREATE DATABASE 'C:\OES\dev\oes_dev.fdb' PAGE_SIZE 16384 DEFAULT CHARACTER SET UTF8;
 # EXIT;
 
-# 3. Собрать проект
+# 3. Build the project
 msbuild enterprise.sln /p:Configuration=Debug /p:Platform=x64 /m
 
-# 4. Запустить
+# 4. Run
 .\x64\Debug\OES.exe
 ```
 
-### Почему нет Docker для локальной разработки
+### Why no Docker for local development
 
-OES — это desktop-приложение, использующее wxWidgets GUI. Docker не подходит для разработки GUI-приложений. Для локальной разработки:
-- Сервер Firebird устанавливается нативно
-- Приложение собирается и запускается напрямую через Visual Studio (Windows) или CMake (macOS/Linux)
-- Отладка через MSVC (Windows) или LLDB/GDB (macOS/Linux)
+OES is a desktop application that uses a wxWidgets GUI. Docker is not suitable for GUI development. For local development:
+- Firebird server is installed natively
+- The application is built and launched directly through Visual Studio (Windows) or CMake (macOS/Linux)
+- Debug through MSVC (Windows) or LLDB/GDB (macOS/Linux)
 
-**Поддерживаемые платформы:**
-- **Windows** — основная платформа, сборка через `enterprise.sln` (MSBuild/Visual Studio 2017+)
-- **macOS / Linux** — цель кросс-платформенного развития; сборка через CMake (создаётся отдельно)
+**Supported platforms:**
+- **Windows** — primary platform, build via `enterprise.sln` (MSBuild/Visual Studio 2017+)
+- **macOS / Linux** — cross-platform development target; build via CMake (created separately)
 
-Для кросс-платформенной разработки (macOS/Linux) используется нативная установка зависимостей через пакетный менеджер дистрибутива.
+For cross-platform development (macOS/Linux) dependencies are installed natively through the distro's package manager.
 
 ---
 
 ## Staging
 
-### Что такое staging для OES
+### What staging means for OES
 
-Staging — это тестовый стенд, максимально приближённый к реальной среде клиента:
-- Отдельная машина (физическая или виртуальная) с Windows
-- Отдельная БД Firebird с близкой к production схемой
-- Тестовые данные (не реальные клиентские!)
-- Release-сборка (не Debug)
+Staging is a test stand that mirrors the real customer environment as closely as possible:
+- A separate machine (physical or VM) with Windows
+- A separate Firebird DB with a schema close to production
+- Test data (not real customer data!)
+- Release build (not Debug)
 
-### Деплой на staging
+### Deploying to staging
 
-**Ручной деплой на staging-машину:**
+**Manual deploy to the staging machine:**
 
 ```powershell
-# 1. Собрать Release версию
+# 1. Build the Release version
 msbuild enterprise.sln /p:Configuration=Release /p:Platform=x64 /m
 
-# 2. Собрать установщик (NSIS или WiX)
+# 2. Build the installer (NSIS or WiX)
 # scripts/build-installer.ps1
 .\scripts\build-installer.ps1 -Version "1.2.3"
 
-# 3. Скопировать установщик на staging машину
-# (через общую папку, sftp, или вручную)
+# 3. Copy the installer to the staging machine
+# (via shared folder, sftp, or manually)
 Copy-Item ".\dist\OES-1.2.3-setup.exe" "\\staging-server\deploy\"
 
-# 4. На staging машине: запустить установщик
+# 4. On the staging machine: run the installer
 # \\staging-server\deploy\OES-1.2.3-setup.exe /S
 
-# 5. Запустить smoke-тесты
-# ... проверить основные функции вручную ...
+# 5. Run smoke tests
+# ... manually verify core features ...
 ```
 
-**Через GitHub Actions (автоматический билд, см. 17-ci-cd.md):**
+**Via GitHub Actions (automatic build, see 17-ci-cd.md):**
 
 ```yaml
 # .github/workflows/build-staging.yml
@@ -191,7 +191,7 @@ jobs:
 
       - name: Build Release
         run: msbuild enterprise.sln /p:Configuration=Release /p:Platform=x64 /m
-        # enterprise.sln — основная система сборки OES (Windows/MSBuild)
+        # enterprise.sln — the primary OES build system (Windows/MSBuild)
 
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
@@ -206,84 +206,84 @@ jobs:
           path: dist/OES-*-setup.exe
 ```
 
-### Проверка после деплоя на staging
+### Checks after staging deploy
 
-- [ ] Установщик устанавливается без ошибок
-- [ ] Приложение запускается
-- [ ] Подключение к БД Firebird успешно
-- [ ] Основные функции работают (открытие форм, дизайнер)
-- [ ] Логи в C:\ProgramData\OES\logs\ без критических ошибок
-- [ ] Схема БД соответствует ожидаемой (миграции применены)
-- [ ] Производительность приемлема (нет видимых тормозов)
+- [ ] Installer installs without errors
+- [ ] Application starts
+- [ ] Firebird DB connection succeeds
+- [ ] Core features work (opening forms, designer)
+- [ ] Logs in C:\ProgramData\OES\logs\ contain no critical errors
+- [ ] DB schema matches expectations (migrations applied)
+- [ ] Performance is acceptable (no visible lag)
 
 ---
 
 ## Production
 
-### Деплой в production (выпуск релиза)
+### Production deploy (releasing)
 
-Production-деплой для OES — это публикация нового релиза, который устанавливается у клиентов.
+A production deploy for OES means publishing a new release that is installed on customer machines.
 
-**Процесс:**
+**Process:**
 
 ```bash
-# 1. На GitHub: создать PR dev → master (или release → master)
-# 2. Описать что входит в релиз (changelog)
-# 3. Получить approve от тимлида
+# 1. On GitHub: create a PR dev → master (or release → master)
+# 2. Describe what's in the release (changelog)
+# 3. Get tech lead approval
 # 4. Merge
 
-# 5. Создать тег версии
-git tag -a v1.2.0 -m "Release v1.2.0: описание изменений"
+# 5. Create the version tag
+git tag -a v1.2.0 -m "Release v1.2.0: change description"
 git push origin v1.2.0
 ```
 
 ```powershell
-# 6. Собрать финальный Release
+# 6. Build the final Release
 msbuild enterprise.sln /p:Configuration=Release /p:Platform=x64 /m
 
-# 7. Прогнать полный набор тестов
+# 7. Run the full test suite
 ctest --test-dir build -C Release --output-on-failure
 
-# 8. Собрать подписанный установщик
-# (требует code signing certificate)
+# 8. Build the signed installer
+# (requires a code signing certificate)
 .\scripts\build-installer.ps1 -Version "1.2.0" -Sign
 
-# 9. Загрузить на GitHub Releases
+# 9. Upload to GitHub Releases
 gh release create v1.2.0 `
     --title "OES v1.2.0" `
     --notes-file CHANGELOG.md `
     dist/OES-1.2.0-setup.exe
 
-# 10. Уведомить клиентов / команду поддержки
+# 10. Notify customers / support team
 ```
 
-### Миграции базы данных
+### Database migrations
 
-При обновлении схемы БД нужно предоставить скрипты миграции:
+When updating the DB schema you must provide migration scripts:
 
 ```
 db/migrations/
-├── v1.1.0_to_v1.2.0.sql    — SQL-скрипт миграции
-└── v1.1.0_to_v1.2.0.sh     — Скрипт применения миграции
+├── v1.1.0_to_v1.2.0.sql    — SQL migration script
+└── v1.1.0_to_v1.2.0.sh     — Script that applies the migration
 ```
 
 ```sql
 -- db/migrations/v1.1.0_to_v1.2.0.sql
--- Миграция: добавить поле email в таблицу users
--- Автор: Ivan Petrov
--- Дата: 2026-03-15
+-- Migration: add the email field to the users table
+-- Author: Ivan Petrov
+-- Date: 2026-03-15
 
 ALTER TABLE USERS ADD EMAIL VARCHAR(255);
 CREATE INDEX IDX_USERS_EMAIL ON USERS(EMAIL);
 
--- Обновить версию схемы
+-- Update schema version
 UPDATE DB_VERSION SET VERSION = '1.2.0', UPDATED_AT = CURRENT_TIMESTAMP;
 ```
 
 ```bash
 #!/bin/bash
 # db/migrations/v1.1.0_to_v1.2.0.sh
-# Применить через isql-fb
+# Apply through isql-fb
 
 isql-fb -user "$DB_USER" -password "$DB_PASSWORD" \
     "$DB_HOST:$DB_PATH" \
@@ -292,9 +292,9 @@ isql-fb -user "$DB_USER" -password "$DB_PASSWORD" \
 echo "Migration v1.1.0 → v1.2.0 applied successfully"
 ```
 
-**Важно:** Перед применением миграции — создать бэкап БД!
+**Important:** Before applying a migration — back up the DB!
 
-### Важно: бэкап перед обновлением у клиента
+### Important: back up before upgrading at the customer
 
 ```powershell
 # scripts/pre-upgrade-backup.ps1
@@ -306,10 +306,10 @@ param(
 $timestamp = Get-Date -Format "yyyyMMdd_HHmm"
 $backupFile = Join-Path $BackupDir "oes_pre_upgrade_${timestamp}.fbk"
 
-# Создать директорию если не существует
+# Create the directory if it doesn't exist
 New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
 
-# Бэкап через gbak
+# Backup via gbak
 & gbak -backup -user SYSDBA -password $env:SYSDBA_PASSWORD `
     "localhost:$DbPath" $backupFile
 
@@ -318,35 +318,35 @@ Write-Host "Backup created: $backupFile"
 
 ---
 
-## Структура дистрибутива
+## Distribution layout
 
-### Типичная организация файлов в дистрибутиве OES
+### Typical file layout in the OES distribution
 
 ```
-OES-1.2.0-setup.exe         — Установщик (NSIS/WiX)
-    ↓ устанавливает в:
+OES-1.2.0-setup.exe         — Installer (NSIS/WiX)
+    ↓ installs into:
 C:\Program Files\OES\
-├── OES.exe                 — Основное приложение
-├── config.ini.example      — Шаблон конфигурации
+├── OES.exe                 — Main application
+├── config.ini.example      — Configuration template
 ├── wxbase33u_vc_custom.dll — wxWidgets runtime
-├── fbclient.dll            — Firebird клиент
-├── plugins\               — Плагины и расширения
+├── fbclient.dll            — Firebird client
+├── plugins\               — Plugins and extensions
 │   ├── db_firebird.dll
 │   ├── db_postgresql.dll
 │   └── db_sqlite.dll
-└── resources\              — Иконки, переводы
+└── resources\              — Icons, translations
     ├── i18n\
     └── icons\
 
-C:\ProgramData\OES\         — Данные приложения (не в Program Files)
-├── config.ini              — Рабочая конфигурация
-├── oes.fdb                 — БД Firebird (если embedded)
+C:\ProgramData\OES\         — Application data (not in Program Files)
+├── config.ini              — Working configuration
+├── oes.fdb                 — Firebird DB (if embedded)
 ├── logs\
 │   └── oes.log
-└── backups\                — Автоматические бэкапы
+└── backups\                — Automatic backups
 ```
 
-### Скрипт сборки установщика
+### Installer build script
 
 ```powershell
 # scripts/build-installer.ps1
@@ -357,15 +357,15 @@ param(
 
 Write-Host "Building OES installer v$Version"
 
-# 1. Проверить что Release собран
+# 1. Make sure Release is built
 if (-not (Test-Path "x64\Release\OES.exe")) {
     throw "Release build not found. Run MSBuild first."
 }
 
-# 2. Собрать NSIS installer
+# 2. Build the NSIS installer
 & makensis /DVERSION=$Version installer\oes-setup.nsi
 
-# 3. Подписать (если запрошено)
+# 3. Sign (if requested)
 if ($Sign) {
     $cert = Get-Item "Cert:\CurrentUser\My\<THUMBPRINT>"
     Set-AuthenticodeSignature -FilePath "dist\OES-$Version-setup.exe" -Certificate $cert
@@ -376,34 +376,34 @@ Write-Host "Installer created: dist\OES-$Version-setup.exe"
 
 ---
 
-## Откат
+## Rollback
 
-### Если новая версия сломала что-то у клиента
+### If a new version breaks something at the customer
 
-OES — desktop-приложение. Откат означает установку предыдущей версии.
+OES is a desktop app. Rollback means installing the previous version.
 
 ```powershell
-# 1. Восстановить предыдущий установщик из GitHub Releases
+# 1. Restore the previous installer from GitHub Releases
 gh release download v1.1.0 --pattern "*.exe" --dir ./rollback/
 
-# 2. Сохранить конфиг клиента (если изменился при обновлении)
+# 2. Save the customer's config (if it changed during the upgrade)
 Copy-Item "C:\Program Files\OES\config.ini" "C:\Temp\config_backup.ini"
 
-# 3. Удалить новую версию
-# Панель управления → Программы → OES → Удалить
+# 3. Uninstall the new version
+# Control Panel → Programs → OES → Uninstall
 
-# 4. Установить предыдущую версию
+# 4. Install the previous version
 .\rollback\OES-1.1.0-setup.exe
 
-# 5. Восстановить конфиг
+# 5. Restore the config
 Copy-Item "C:\Temp\config_backup.ini" "C:\Program Files\OES\config.ini"
 ```
 
-### Откат миграции БД
+### DB migration rollback
 
 ```bash
-# Перед миграцией ОБЯЗАТЕЛЬНО делать бэкап (см. выше)
-# Откат — восстановление из бэкапа
+# Before migration ALWAYS take a backup (see above)
+# Rollback — restore from backup
 
 gbak -restore -user SYSDBA -password "$PASSWORD" \
     /backups/oes_pre_upgrade_20260315.fbk \
@@ -414,39 +414,39 @@ echo "Database restored from backup"
 
 ---
 
-## Мониторинг и логирование
+## Monitoring and logging
 
-### Логи OES
+### OES logs
 
 ```cpp
-// OES пишет логи через wxLog
+// OES writes logs through wxLog
 wxLogMessage("Application started, version %s", OES_VERSION);
 wxLogWarning("Database query took %ldms (threshold: %ldms)", elapsed, threshold);
 wxLogError("Failed to connect to database: %s", error.c_str());
 
-// Файл лога: C:\ProgramData\OES\logs\oes.log (production)
-//            ./oes_debug.log (development)
+// Log file: C:\ProgramData\OES\logs\oes.log (production)
+//           ./oes_debug.log (development)
 ```
 
-### Проверка здоровья при запуске
+### Startup health check
 
 ```cpp
-// src/engine/enterprise/mainApp.cpp (точка входа enterprise)
-// src/engine/designer/mainApp.cpp   (точка входа designer)
+// src/engine/enterprise/mainApp.cpp (enterprise entry point)
+// src/engine/designer/mainApp.cpp   (designer entry point)
 //
-// ibApplicationData (appData.cpp) — отвечает за инициализацию приложения:
-//   - AuthenticationAndSetUser() — авторизация пользователя
-//   - Подключение к ibDatabaseLayer нужного типа (Firebird/Postgres/etc.)
-//   - Загрузка метаданных через ibValueMetaObjectCatalog / ibValueMetaObjectDocument
+// ibApplicationData (appData.cpp) — handles application initialization:
+//   - AuthenticationAndSetUser() — user authentication
+//   - Connection to the ibDatabaseLayer of the required type (Firebird/Postgres/etc.)
+//   - Metadata loading through ibValueMetaObjectCatalog / ibValueMetaObjectDocument
 
 bool OESApp::OnInit() {
-    // 1. Проверить конфигурацию
+    // 1. Validate the configuration
     if (!m_config->IsValid()) {
         wxLogFatalError("Invalid configuration. Check config.ini");
         return false;
     }
 
-    // 2. Инициализировать ibApplicationData и подключиться к БД
+    // 2. Initialize ibApplicationData and connect to the DB
     ibApplicationData* appData = ibApplicationData::Get();
     if (!appData->Connect(m_config)) {
         wxMessageBox(
@@ -458,7 +458,7 @@ bool OESApp::OnInit() {
         return false;
     }
 
-    // 3. Авторизация пользователя
+    // 3. User authentication
     if (!appData->AuthenticationAndSetUser(user, password)) {
         wxLogWarning("Authentication failed.");
         return false;
@@ -469,21 +469,21 @@ bool OESApp::OnInit() {
 }
 ```
 
-### Что мониторить у клиентов
+### What to monitor at customers
 
 ```
-Регулярно проверять (при наличии удалённого доступа):
-- C:\ProgramData\OES\logs\oes.log — нет ли критических ошибок?
-- Размер .fdb файла — не заканчивается ли место на диске?
-- Производительность запросов (из лога при DEBUG-уровне)
-- Наличие свежих бэкапов в C:\ProgramData\OES\backups\
+Check regularly (when remote access is available):
+- C:\ProgramData\OES\logs\oes.log — any critical errors?
+- Size of the .fdb file — running out of disk space?
+- Query performance (from the log at DEBUG level)
+- Presence of fresh backups in C:\ProgramData\OES\backups\
 ```
 
-### Простой скрипт мониторинга логов
+### Simple log monitoring script
 
 ```powershell
 # scripts/check-logs.ps1
-# Найти критические ошибки в логе за последние 24 часа
+# Find critical errors in the log for the last 24 hours
 
 $logFile = "C:\ProgramData\OES\logs\oes.log"
 $yesterday = (Get-Date).AddDays(-1)
@@ -507,22 +507,22 @@ else {
 
 ---
 
-## Версионирование
+## Versioning
 
-### Схема версий
+### Versioning scheme
 
-OES использует **Semantic Versioning**: `MAJOR.MINOR.PATCH`
+OES uses **Semantic Versioning**: `MAJOR.MINOR.PATCH`
 
-| Тип | Пример | Когда |
+| Type | Example | When |
 |-----|--------|-------|
-| **PATCH** | 1.2.0 → 1.2.1 | Баг-фиксы, без изменений схемы БД |
-| **MINOR** | 1.2.0 → 1.3.0 | Новые функции, обратно совместимые изменения схемы |
-| **MAJOR** | 1.2.0 → 2.0.0 | Breaking changes, несовместимые изменения схемы |
+| **PATCH** | 1.2.0 → 1.2.1 | Bug fixes, no DB schema changes |
+| **MINOR** | 1.2.0 → 1.3.0 | New features, backward-compatible schema changes |
+| **MAJOR** | 1.2.0 → 2.0.0 | Breaking changes, incompatible schema changes |
 
-### Версия в коде
+### Version in code
 
 ```cpp
-// src/engine/backend/version.h  (или аналогичный файл в backend/)
+// src/engine/backend/version.h  (or equivalent file in backend/)
 #pragma once
 
 #define OES_VERSION_MAJOR 1
@@ -535,20 +535,19 @@ OES использует **Semantic Versioning**: `MAJOR.MINOR.PATCH`
 
 ### Changelog
 
-Перед каждым релизом обновлять `CHANGELOG.md`:
+Before every release, update `CHANGELOG.md`:
 
 ```markdown
 ## [1.2.0] - 2026-03-15
 
 ### Added
-- Поддержка PostgreSQL 16
-- Новый тип компонента: DateRangePicker
+- PostgreSQL 16 support
+- New component type: DateRangePicker
 
 ### Fixed
-- Исправлен crash при открытии дизайнера на Windows 11
-- Исправлена SQL-инъекция в модуле отчётов
+- Fixed crash when opening designer on Windows 11
+- Fixed SQL injection in the reports module
 
 ### Security
-- Обновлён OpenSSL до 3.2.1 (CVE-2024-XXXX)
+- Updated OpenSSL to 3.2.1 (CVE-2024-XXXX)
 ```
-

@@ -106,6 +106,19 @@ The pure data layer (help corpus + lookup) must work headless so the
 web frontend (wfrontend.dll) gets the same hover/click help as the
 desktop designer.
 
+## Table of contents
+
+1. [Current state](#1-current-state)
+2. [Help entry — data model](#2-help-entry--data-model)
+3. [Backend — help corpus subsystem](#3-backend--help-corpus-subsystem)
+4. [Help corpus generation pipeline](#4-help-corpus-generation-pipeline)
+5. [Frontend — Desktop sidebar pane](#5-frontend--desktop-sidebar-pane)
+6. [Frontend — Web (wfrontend.dll)](#6-frontend--web-wfrontenddll)
+7. [Phasing](#7-phasing)
+8. [Resolved decisions + remaining open questions](#8-resolved-decisions--remaining-open-questions)
+9. [Reusable open-source components](#9-reusable-open-source-components)
+10. [Non-goals (for this iteration)](#10-non-goals-for-this-iteration)
+
 ## 1. Current state
 
 ### What already exists

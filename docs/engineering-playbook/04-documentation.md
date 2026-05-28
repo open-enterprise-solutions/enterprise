@@ -1,30 +1,30 @@
-# 04. Документация
+# 04. Documentation
 
-## Принцип
+## Principle
 
-Документация — это часть продукта. Код без документации — это технический долг. Если ты не задокументировал, считай что не сделал.
+Documentation is part of the product. Code without documentation is technical debt. If you didn't document it, consider it not done.
 
 ---
 
-## Языковая политика
+## Language policy
 
-| Что | Язык | Почему |
+| What | Language | Why |
 |-----|------|--------|
-| Код (переменные, функции, классы) | English | Стандарт индустрии |
-| Комментарии в коде | English | Читается вместе с кодом |
-| Коммиты | English | Единый формат |
-| README.md, CLAUDE.md | English | Для AI-агентов и совместимости |
-| Техническая документация (docs/) | English | Для AI-агентов |
-| Пользовательский контент (UI тексты, справка) | Russian | Аудитория проекта |
-| Внутренние обсуждения (Issues, PR описания) | Russian / English | По договорённости в команде |
+| Code (variables, functions, classes) | English | Industry standard |
+| Code comments | English | Read together with the code |
+| Commits | English | Single format |
+| README.md, CLAUDE.md | English | For AI agents and compatibility |
+| Technical documentation (docs/) | English | For AI agents |
+| User-facing content (UI text, help) | Russian | Project audience |
+| Internal discussions (Issues, PR descriptions) | Russian / English | Per team agreement |
 
 ---
 
-## README.md — в каждом репозитории
+## README.md — in every repository
 
-README.md — первое, что видит человек (или AI) при открытии проекта. Он должен ответить на три вопроса: **что это**, **как собрать**, **как запустить**.
+README.md is the first thing a person (or AI) sees when opening a project. It must answer three questions: **what is it**, **how to build it**, **how to run it**.
 
-### Обязательные секции
+### Mandatory sections
 
 ```markdown
 # OES Enterprise
@@ -101,42 +101,42 @@ See `config.ini.example` for all required settings.
 
 ---
 
-## CLAUDE.md — контекст для AI-агентов
+## CLAUDE.md — context for AI agents
 
-CLAUDE.md — самый важный файл для эффективной работы с AI-ассистентами. Это "мозг" проекта, который позволяет Claude Code (и другим AI) мгновенно понять контекст.
+CLAUDE.md is the most important file for working effectively with AI assistants. It's the project's "brain" that lets Claude Code (and other AI tools) understand the context immediately.
 
-### Зачем нужен CLAUDE.md
+### Why CLAUDE.md is needed
 
-Без CLAUDE.md каждая новая сессия с AI начинается с нуля — AI не знает структуру проекта, бизнес-правила, конвенции. CLAUDE.md решает эту проблему: AI читает его первым и сразу понимает контекст.
+Without CLAUDE.md, every new AI session starts from scratch — the AI doesn't know the project structure, business rules, or conventions. CLAUDE.md solves this: the AI reads it first and immediately understands the context.
 
-### Когда обновлять CLAUDE.md
+### When to update CLAUDE.md
 
-- Добавлен новый модуль или подсистема
-- Изменилась структура проекта
-- Новые бизнес-правила или архитектурные решения
-- Изменены команды сборки или запуска
-- Появились новые зависимости или конфигурационные файлы
-- Изменились соглашения кодирования
+- A new module or subsystem is added
+- Project structure changed
+- New business rules or architectural decisions
+- Build or run commands changed
+- New dependencies or configuration files appeared
+- Coding conventions changed
 
-Полная структура CLAUDE.md описана в [01-project-structure.md](./01-project-structure.md).
+The full CLAUDE.md structure is described in [01-project-structure.md](./01-project-structure.md).
 
-> **Примечание: MCP-серверы** (описанные в разделе `.claude.json` в 01-project-structure.md) не применимы для стандартной сборки OES. Это локальный инструмент для разработчиков, использующих Claude Code. CI/CD и серверная сборка не зависят от MCP-конфигурации.
+> **Note: MCP servers** (described in the `.claude.json` section of 01-project-structure.md) don't apply to the standard OES build. This is a local tool for developers using Claude Code. CI/CD and server builds do not depend on MCP configuration.
 
 ---
 
-## config.ini.example — шаблон конфигурации
+## config.ini.example — configuration template
 
-В C++ проекте нет `.env` файлов — конфигурация хранится в `config.ini` (или аналоге).
+A C++ project does not have `.env` files — configuration lives in `config.ini` (or an equivalent).
 
-### Правила
+### Rules
 
-1. **Все настройки** — каждая настройка из `config.ini` должна быть в `config.ini.example`
-2. **С описаниями** — комментарий над каждой секцией или ключом
-3. **Без реальных значений** — пароли и строки подключения оставляем пустыми
-4. **Значения по умолчанию** — для нечувствительных настроек можно указать
-5. **Коммитится в git** — это шаблон, не секрет
+1. **All settings** — every setting from `config.ini` must appear in `config.ini.example`
+2. **With descriptions** — a comment above each section or key
+3. **No real values** — leave passwords and connection strings empty
+4. **Default values** — can be specified for non-sensitive settings
+5. **Committed to git** — it's a template, not a secret
 
-### Пример
+### Example
 
 ```ini
 ; OES Enterprise Configuration Template
@@ -189,20 +189,20 @@ Disabled=
 
 ---
 
-## Doxygen — документация публичного API
+## Doxygen — public API documentation
 
-Публичные методы и классы документируются в формате Doxygen.
+Public methods and classes are documented in Doxygen format.
 
-### Настройка Doxygen
+### Doxygen setup
 
-Файл `Doxyfile` хранится в корне репозитория. Генерация документации:
+The `Doxyfile` lives at the root of the repository. To generate documentation:
 
 ```bash
 doxygen Doxyfile
-# Документация генерируется в docs/api/html/
+# Documentation is generated into docs/api/html/
 ```
 
-### Документирование классов
+### Documenting classes
 
 ```cpp
 /**
@@ -239,7 +239,7 @@ public:
 };
 ```
 
-### Документирование методов
+### Documenting methods
 
 ```cpp
 /**
@@ -257,56 +257,56 @@ public:
 int CalculateDiscount(int originalPrice, SubscriptionTier tier) const;
 ```
 
-### Когда комментировать (обычные комментарии)
+### When to add a regular comment
 
 ```cpp
-// Good: объясняет ПОЧЕМУ, а не ЧТО
+// Good: explains WHY, not WHAT
 // Price stored in kopecks to avoid floating-point rounding issues.
 int priceInKopecks = static_cast<int>(priceInRubles * 100.0 + 0.5);
 
-// Good: workaround с объяснением
+// Good: workaround with an explanation
 // wxGrid requires ProcessPendingEvents() before changing column count,
 // otherwise column headers get out of sync. wxWidgets bug #12345.
 wxGetApp().ProcessPendingEvents();
 grid->SetColCount(newCount);
 
-// Good: TODO с ссылкой на задачу
+// Good: TODO with a task link
 // TODO(#142): Extract into separate thread when wxWidgets task system is available
 DoHeavyOperation();
 
-// Bad: очевидный комментарий
+// Bad: obvious comment
 // Get document by id
 auto doc = repository->FindById(id);
 
-// Bad: закомментированный код
+// Bad: commented-out code
 // int oldValue = GetValue();
 // SetValue(newValue);
 ```
 
 ---
 
-## Архитектурные решения (ADR)
+## Architecture Decision Records (ADR)
 
-### Структура docs/
+### docs/ structure
 
 ```
 docs/
-├── engineering-playbook/    — Стандарты разработки (этот каталог)
+├── engineering-playbook/    — Development standards (this directory)
 ├── architecture/
-│   ├── overview.md          — Общая архитектура системы
+│   ├── overview.md          — System architecture overview
 │   ├── adr/                 — Architecture Decision Records
 │   │   ├── 001-wxwidgets-gui.md
 │   │   ├── 002-firebird-primary-db.md
 │   │   ├── 003-plugin-interface.md
 │   │   └── 004-cmake-migration.md
-│   └── diagrams/            — Схемы и диаграммы (PNG, SVG, draw.io)
+│   └── diagrams/            — Diagrams (PNG, SVG, draw.io)
 │       ├── system-overview.png
 │       └── database-layer.png
-└── api/                     — Документация публичных API
-    └── plugin-api.md        — API для разработчиков плагинов
+└── api/                     — Public API documentation
+    └── plugin-api.md        — API for plugin developers
 ```
 
-### Формат ADR (Architecture Decision Record)
+### ADR format (Architecture Decision Record)
 
 ```markdown
 # ADR-004: Migrate build system from MSBuild to CMake
@@ -339,46 +339,46 @@ CMake chosen because:
 
 ---
 
-## Confluence (для больших проектов)
+## Confluence (for larger projects)
 
-### Когда нужен Confluence
+### When Confluence is needed
 
-| Размер проекта | Подход к документации |
+| Project size | Documentation approach |
 |---------------|----------------------|
-| Маленький (1-3 разработчика) | README.md + CLAUDE.md + docs/ в репо — достаточно |
-| Средний (4-8 человек) | + GitHub Wiki для процессов и инструкций |
-| Большой (8+ человек, несколько команд) | + **Confluence** как база знаний |
+| Small (1-3 developers) | README.md + CLAUDE.md + docs/ in the repo — enough |
+| Medium (4-8 people) | + GitHub Wiki for processes and instructions |
+| Large (8+ people, multiple teams) | + **Confluence** as a knowledge base |
 
-**Confluence нужен когда:**
-- Есть не-технические участники (менеджеры, клиент) — им не удобно читать .md на GitHub
-- Нужна структурированная база знаний с поиском по всем проектам
-- Документы требуют обсуждения (комментарии, @mentions)
-- Есть визуальный контент (диаграммы, скриншоты, видео-туториалы)
+**Confluence is needed when:**
+- There are non-technical participants (managers, clients) — they find `.md` on GitHub inconvenient
+- A structured, searchable knowledge base across multiple projects is needed
+- Documents require discussion (comments, @mentions)
+- There is visual content (diagrams, screenshots, video tutorials)
 
-### Что живёт в Confluence, а что в коде
+### What lives in Confluence vs in the code
 
-| Документ | Confluence | Репозиторий |
+| Document | Confluence | Repository |
 |----------|-----------|-------------|
-| Бизнес-требования, PRD | ✅ | — |
-| Архитектурные решения (ADR) | ✅ обсуждение | ✅ финальная версия в docs/ |
-| API для разработчиков плагинов | ✅ обзор + примеры | ✅ Doxygen (авто) |
-| README, CLAUDE.md | — | ✅ всегда |
-| Runbooks (что делать при инциденте) | ✅ с картинками | — |
-| Онбординг | ✅ с видео | ✅ чеклист |
-| Release notes | ✅ для менеджмента | ✅ git tags |
-| Код-стандарты (этот каталог) | — | ✅ engineering-playbook |
-| Пользовательская документация | ✅ или отдельный репо | — |
+| Business requirements, PRD | yes | — |
+| Architectural decisions (ADR) | yes — discussion | yes — final version in docs/ |
+| Plugin developer API | yes — overview + examples | yes — Doxygen (auto) |
+| README, CLAUDE.md | — | yes — always |
+| Runbooks (what to do during an incident) | yes — with pictures | — |
+| Onboarding | yes — with video | yes — checklist |
+| Release notes | yes — for management | yes — git tags |
+| Code standards (this directory) | — | yes — engineering-playbook |
+| User documentation | yes — or a separate repo | — |
 
 ---
 
-## Практики документирования кода
+## Practices for documenting code
 
-### Заголовочные файлы (.h) — интерфейс
+### Header files (.h) — the interface
 
-Заголовочный файл — это **контракт**. Он должен содержать:
-- Doxygen-комментарии для публичных методов и классов
-- Краткое описание назначения класса в начале файла
-- `#pragma once` или include guards
+A header file is a **contract**. It must contain:
+- Doxygen comments for public methods and classes
+- A brief description of the class purpose at the top of the file
+- `#pragma once` or include guards
 
 ```cpp
 #pragma once

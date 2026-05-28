@@ -1,52 +1,52 @@
-# 12. Харденинг (Security Hardening)
+# 12. Security Hardening
 
-> Безопасность C++ desktop-приложения OES: подписание кода, защищённый канал обновлений, предотвращение DLL hijacking, ASLR/DEP, безопасное программирование на C++.
+> Security for the OES C++ desktop application: code signing, secure update channel, DLL hijacking prevention, ASLR/DEP, secure C++ programming.
 
 ---
 
-## Подписание кода (Code Signing)
+## Code Signing
 
-### Почему это важно для OES
-
-```
-Без подписания кода:
-  — Windows SmartScreen блокирует инсталлятор ("Unknown Publisher")
-  — Антивирусы срабатывают ложно на неподписанные бинарники
-  — Пользователи видят страшное предупреждение UAC
-  — Невозможно проверить целостность после загрузки
-
-С подписанием:
-  — Инсталлятор устанавливается без предупреждений
-  — Пользователи видят имя "Tetracode" в диалоге UAC
-  — Антивирусы доверяют подписанным файлам
-  — Возможна проверка цепочки доверия
-```
-
-### Получение и использование сертификата
+### Why it matters for OES
 
 ```
-Поставщики EV Code Signing сертификатов:
-  — Sectigo (бывший Comodo)
-  — DigiCert
-  — GlobalSign
+Without code signing:
+  - Windows SmartScreen blocks the installer ("Unknown Publisher")
+  - Antiviruses falsely flag unsigned binaries
+  - Users see a scary UAC warning
+  - It is impossible to verify integrity after download
 
-Стоимость: ~$300-500/год (EV) или ~$100-200/год (OV)
-EV рекомендуется: сразу получает высокий рейтинг у Microsoft SmartScreen
+With signing:
+  - The installer runs without warnings
+  - Users see the "Tetracode" name in the UAC dialog
+  - Antiviruses trust signed files
+  - The trust chain can be verified
 ```
 
-### Подписание в CI/CD (GitHub Actions)
+### Obtaining and using a certificate
+
+```
+EV Code Signing certificate providers:
+  - Sectigo (formerly Comodo)
+  - DigiCert
+  - GlobalSign
+
+Cost: ~$300-500/year (EV) or ~$100-200/year (OV)
+EV is recommended: immediately gets a high Microsoft SmartScreen reputation
+```
+
+### Signing in CI/CD (GitHub Actions)
 
 ```yaml
-# Сохранить сертификат как base64 в GitHub Secrets
-# В терминале: certutil -encode codesign.pfx codesign_b64.txt
+# Store the certificate as base64 in GitHub Secrets
+# In the terminal: certutil -encode codesign.pfx codesign_b64.txt
 
       - name: Sign binaries
         run: |
-          # Восстановить сертификат
+          # Restore the certificate
           $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.CODE_SIGN_CERT }}")
           [System.IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", $pfxBytes)
           
-          # Подписать все .exe и .dll
+          # Sign all .exe and .dll
           $files = Get-ChildItem -Path .\bin\x64\Release -Include "*.exe","*.dll" -Recurse
           foreach ($f in $files) {
               signtool sign `
@@ -59,7 +59,7 @@ EV рекомендуется: сразу получает высокий рей
               Write-Host "Signed: $($f.Name)"
           }
           
-          # Подписать инсталлятор
+          # Sign the installer
           signtool sign `
               /f "$env:TEMP\cert.pfx" `
               /p "${{ secrets.CODE_SIGN_PASSWORD }}" `
@@ -68,20 +68,20 @@ EV рекомендуется: сразу получает высокий рей
               /fd sha256 `
               .\dist\OES-Setup.exe
           
-          # Удалить сертификат из диска
+          # Remove the certificate from disk
           Remove-Item "$env:TEMP\cert.pfx"
 ```
 
-### Проверка подписи
+### Verifying the signature
 
 ```powershell
-# Проверить подпись файла
+# Verify the file signature
 Get-AuthenticodeSignature ".\OES-Setup.exe" | Format-List
 
-# Или через signtool
+# Or via signtool
 signtool verify /pa /v ".\OES-Setup.exe"
 
-# Ожидаемый вывод:
+# Expected output:
 # SignerCertificate: Tetracode Dev
 # Status: Valid
 # TimeStamperCertificate: Sectigo RSA Time Stamping CA
@@ -89,76 +89,76 @@ signtool verify /pa /v ".\OES-Setup.exe"
 
 ---
 
-## Защита от DLL Hijacking
+## DLL Hijacking protection
 
-### Что это и почему важно для wxWidgets-приложений
+### What it is and why it matters for wxWidgets applications
 
 ```
-DLL Hijacking: злоумышленник подкладывает вредоносную DLL в директорию
-рядом с приложением. Windows загружает её вместо системной.
+DLL hijacking: an attacker plants a malicious DLL in the directory next
+to the application. Windows loads it instead of the system one.
 
-Особенно актуально для OES потому что:
-  — wxWidgets и Firebird client поставляются как DLL рядом с .exe
-  — Инсталлятор копирует DLL в C:\Program Files\OES\
-  — Если директория доступна на запись — уязвимость
+Especially relevant for OES because:
+  - wxWidgets and the Firebird client ship as DLLs next to the .exe
+  - The installer copies DLLs into C:\Program Files\OES\
+  - If the directory is writable - a vulnerability exists
 ```
 
-### Меры защиты
+### Mitigations
 
 ```cpp
-// 1. Устанавливать безопасный DLL search order в WinMain
-// До любых LoadLibrary() вызовов!
+// 1. Set a secure DLL search order in WinMain
+// Before any LoadLibrary() calls!
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR lpCmd, int nCmdShow) {
-    // Отключить текущую директорию из DLL search path
-    // (только в Win8+, но всё равно полезно)
+    // Remove the current directory from the DLL search path
+    // (Win8+ only, but useful nonetheless)
     SetDllDirectoryW(L"");
     
-    // Загружать только из System32
+    // Load only from System32
     // SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32);
-    // ОСТОРОЖНО: может сломать загрузку wxWidgets/Firebird DLL
-    // Использовать LOAD_LIBRARY_SEARCH_DEFAULT_DIRS если нужны локальные DLL
+    // CAUTION: may break loading of wxWidgets/Firebird DLLs
+    // Use LOAD_LIBRARY_SEARCH_DEFAULT_DIRS if local DLLs are needed
     SetDefaultDllDirectories(
         LOAD_LIBRARY_SEARCH_APPLICATION_DIR |
         LOAD_LIBRARY_SEARCH_SYSTEM32
     );
     
-    // Дальше инициализация wxWidgets
+    // Continue with wxWidgets initialization
     // ...
 }
 ```
 
 ```nsis
-; NSIS: установить правильные права на директорию установки
-; Program Files защищены Windows — стандартные пути безопасны
-; НЕ устанавливать в %APPDATA% или %TEMP%
+; NSIS: set correct permissions on the install directory
+; Program Files is Windows-protected - standard paths are safe
+; Do NOT install into %APPDATA% or %TEMP%
 
 Section "Main"
     SetOutPath "$PROGRAMFILES64\OES"
-    ; Только SYSTEM и Administrators имеют права записи
-    ; Обычные пользователи — только чтение
+    ; Only SYSTEM and Administrators have write permissions
+    ; Regular users - read-only
 SectionEnd
 ```
 
-### Проверка уязвимости к DLL Hijacking
+### Testing for DLL hijacking vulnerability
 
 ```powershell
-# Procmon (Sysinternals) — проверить загрузку DLL
-# Фильтр: Process Name = "oes.exe" AND Operation = "CreateFile" AND Result = "NAME NOT FOUND"
-# Если DLL ищется в директории, доступной на запись — уязвимость
+# Procmon (Sysinternals) - inspect DLL loading
+# Filter: Process Name = "oes.exe" AND Operation = "CreateFile" AND Result = "NAME NOT FOUND"
+# If a DLL is searched in a writable directory - vulnerability
 
-# Автоматическая проверка через Robber или similar tools:
+# Automated check via Robber or similar tools:
 # https://github.com/MojtabaTajik/Robber
 ```
 
 ---
 
-## ASLR, DEP и другие защитные механизмы
+## ASLR, DEP and other defenses
 
-### MSBuild: включить защиту
+### MSBuild: enabling protection
 
 ```xml
-<!-- В .vcxproj или через Project Properties -->
+<!-- In .vcxproj or via Project Properties -->
 <PropertyGroup>
   <!-- DEP (Data Execution Prevention) / NX bit -->
   <EnableDEP>true</EnableDEP>
@@ -166,44 +166,44 @@ SectionEnd
   <!-- ASLR (Address Space Layout Randomization) -->
   <RandomizedBaseAddress>true</RandomizedBaseAddress>
   
-  <!-- SafeSEH — защита обработчиков исключений (x86 only) -->
+  <!-- SafeSEH - protected exception handlers (x86 only) -->
   <SafeSEH>true</SafeSEH>
   
-  <!-- Control Flow Guard (CFG) — защита от ROP-атак -->
+  <!-- Control Flow Guard (CFG) - protection against ROP attacks -->
   <ControlFlowGuard>Guard</ControlFlowGuard>
   
-  <!-- Отключить инкрементальную линковку в Release
-       (инкрементальная линковка ослабляет ASLR) -->
+  <!-- Disable incremental linking in Release
+       (incremental linking weakens ASLR) -->
   <LinkIncremental>false</LinkIncremental>
 </PropertyGroup>
 
 <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
   <Link>
-    <!-- /NXCOMPAT — включить DEP -->
+    <!-- /NXCOMPAT - enable DEP -->
     <DataExecutionPrevention>true</DataExecutionPrevention>
-    <!-- /DYNAMICBASE — включить ASLR -->
+    <!-- /DYNAMICBASE - enable ASLR -->
     <RandomizedBaseAddress>true</RandomizedBaseAddress>
-    <!-- /HIGHENTROPYVA — High Entropy ASLR (64-bit) -->
+    <!-- /HIGHENTROPYVA - High Entropy ASLR (64-bit) -->
     <HighEntropyVA>true</HighEntropyVA>
-    <!-- /GUARD:CF — Control Flow Guard -->
+    <!-- /GUARD:CF - Control Flow Guard -->
     <CfGuard>true</CfGuard>
   </Link>
 </ItemDefinitionGroup>
 ```
 
-### Проверка включённых защит
+### Verifying enabled protections
 
 ```powershell
-# dumpbin (из Visual Studio)
-# Флаги защиты отображаются как строки в разделе DLL characteristics
+# dumpbin (from Visual Studio)
+# Protection flags appear as strings in the DLL characteristics section
 dumpbin /headers oes.exe | findstr /i "NX compatible"
 dumpbin /headers oes.exe | findstr /i "dynamic base"
 dumpbin /headers oes.exe | findstr /i "Guard"
 
-# Или PowerShell через Get-PEHeader (утилита):
+# Or via PowerShell Get-PEHeader (utility):
 # https://github.com/mattifestation/PEAnalysis
 
-# Ожидаемый вывод в dumpbin /headers:
+# Expected output in dumpbin /headers:
 #                    NX compatible         - compatible with data execution prevention
 #                    Dynamic base          - DLL can move (ASLR)
 #                    Guard                 - Control Flow Guard
@@ -211,19 +211,19 @@ dumpbin /headers oes.exe | findstr /i "Guard"
 
 ---
 
-## Защищённый канал обновлений
+## Secure update channel
 
-### Принципы безопасных обновлений OES
+### Principles of secure OES updates
 
 ```
-1. Загрузка только по HTTPS
-2. Проверка подписи обновления перед установкой
-3. Проверка SHA256 хэша
-4. Версионирование: не откатываться на старые версии без явного подтверждения
-5. Обновления только от официального сервера (pinning)
+1. Download over HTTPS only
+2. Verify the update signature before installing
+3. Verify SHA256 hash
+4. Versioning: do not downgrade without explicit confirmation
+5. Updates only from the official server (pinning)
 ```
 
-### Реализация проверки обновлений
+### Update check implementation
 
 ```cpp
 // src/updater.cpp
@@ -235,23 +235,23 @@ struct UpdateInfo {
     wxString version;
     wxString downloadUrl;
     wxString sha256Hash;
-    wxString signature;       // Подпись метаданных
+    wxString signature;       // Metadata signature
 };
 
 class SecureUpdater {
 public:
-    // Проверить наличие обновлений
+    // Check for an update
     // URL: https://updates.example.com/oes/latest.json
     static bool CheckForUpdate(UpdateInfo& info) {
         wxHTTP http;
         http.SetHeader(wxT("User-Agent"), wxT("OES/" OES_VERSION_STRING));
         
-        // ТОЛЬКО HTTPS
-        // В production: использовать WinHTTP или libcurl с проверкой сертификата
-        // wxHTTP не проверяет SSL — использовать WinHTTP API напрямую
+        // HTTPS ONLY
+        // In production: use WinHTTP or libcurl with certificate verification
+        // wxHTTP does not verify SSL - use the WinHTTP API directly
         
-        // ... получить latest.json
-        // Пример содержимого:
+        // ... fetch latest.json
+        // Example contents:
         // {
         //   "version": "1.5.0",
         //   "url": "https://github.com/org/oes/releases/download/v1.5.0/OES-1.5.0-Setup.exe",
@@ -262,7 +262,7 @@ public:
         return true;
     }
     
-    // Проверить SHA256 скачанного файла
+    // Verify SHA256 of the downloaded file
     static bool VerifyFileHash(const wxString& filePath, const wxString& expectedHash) {
         wxFile file(filePath);
         if (!file.IsOpened()) return false;
@@ -279,7 +279,7 @@ public:
         unsigned char hash[SHA256_DIGEST_LENGTH];
         SHA256_Final(hash, &sha256);
         
-        // Преобразовать в hex
+        // Convert to hex
         wxString actualHash;
         for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
             actualHash += wxString::Format(wxT("%02x"), hash[i]);
@@ -288,9 +288,9 @@ public:
         return actualHash.IsSameAs(expectedHash, false);  // case-insensitive
     }
     
-    // Проверить подпись перед запуском инсталлятора
+    // Verify the signature before launching the installer
     static bool VerifyInstallerSignature(const wxString& filePath) {
-        // Windows: использовать WinVerifyTrust API
+        // Windows: use the WinVerifyTrust API
         WINTRUST_FILE_INFO fileInfo = {};
         fileInfo.cbStruct = sizeof(fileInfo);
         fileInfo.pcwszFilePath = filePath.wc_str();
@@ -306,7 +306,7 @@ public:
         GUID guidAction = WINTRUST_ACTION_GENERIC_VERIFY_V2;
         LONG result = WinVerifyTrust(NULL, &guidAction, &trustData);
         
-        // Освободить ресурсы
+        // Release resources
         trustData.dwStateAction = WTD_STATEACTION_CLOSE;
         WinVerifyTrust(NULL, &guidAction, &trustData);
         
@@ -317,12 +317,12 @@ public:
 
 ---
 
-## Безопасное хранение данных
+## Secure data storage
 
-### Лицензионные ключи
+### License keys
 
 ```cpp
-// Хранить в Windows Credential Manager, НЕ в реестре или файле открытым текстом
+// Store in Windows Credential Manager, NOT in the registry or a plaintext file
 
 #include <wincred.h>
 #pragma comment(lib, "Credui.lib")
@@ -358,18 +358,18 @@ public:
 };
 ```
 
-### Пароли подключения к БД
+### DB connection passwords
 
 ```cpp
-// Пароли к PostgreSQL/MySQL хранить зашифрованными
-// Использовать Windows DPAPI (Data Protection API)
+// Store PostgreSQL/MySQL passwords encrypted
+// Use Windows DPAPI (Data Protection API)
 
 #include <wincrypt.h>
 #pragma comment(lib, "Crypt32.lib")
 
 class SecureConfig {
 public:
-    // Зашифровать строку через DPAPI (привязывается к текущему пользователю)
+    // Encrypt a string via DPAPI (bound to the current user)
     static wxString EncryptString(const wxString& plainText) {
         std::string utf8 = plainText.ToUTF8().data();
         
@@ -413,44 +413,44 @@ public:
 
 ---
 
-## Безопасное программирование на C++
+## Secure C++ programming
 
-### Правила для OES кодовой базы
+### Rules for the OES codebase
 
 ```cpp
-// === 1. НИКОГДА не использовать небезопасные функции ===
+// === 1. NEVER use unsafe functions ===
 
-// Плохо:
+// Bad:
 char buf[256];
-strcpy(buf, userInput);     // нет проверки размера
+strcpy(buf, userInput);     // no size check
 sprintf(buf, userInput);    // format string attack
-gets(buf);                  // нет проверки размера
+gets(buf);                  // no size check
 
-// Хорошо:
-wxString safe = wxString::FromUTF8(userInput);  // wxWidgets управляет памятью
-// Или если нужен char*:
+// Good:
+wxString safe = wxString::FromUTF8(userInput);  // wxWidgets manages memory
+// Or if a char* is needed:
 strncpy_s(buf, sizeof(buf), userInput, _TRUNCATE);
 snprintf(buf, sizeof(buf), "%s", userInput);
 
-// === 2. SQL Injection — параметризованные запросы ===
+// === 2. SQL Injection - parameterized queries ===
 
-// Плохо:
+// Bad:
 wxString query = "SELECT * FROM users WHERE name = '" + userName + "'";
 
-// Хорошо (Firebird):
+// Good (Firebird):
 wxString query = "SELECT * FROM users WHERE name = ?";
-// Передать userName как параметр через IBPP или IDBC
+// Pass userName as a parameter via IBPP or IDBC
 
-// === 3. Проверка входных данных ===
+// === 3. Input validation ===
 bool ValidateUserInput(const wxString& input, size_t maxLen = 1024) {
     if (input.IsEmpty() || input.Len() > maxLen) return false;
-    // Проверить допустимые символы для конкретного поля
+    // Check allowed characters for the specific field
     return true;
 }
 
-// === 4. Не хранить чувствительные данные в plain text ===
-// Использовать SecureConfig::EncryptString() (см. выше)
-// Обнулять строки после использования:
+// === 4. Do not store sensitive data in plaintext ===
+// Use SecureConfig::EncryptString() (see above)
+// Zero out strings after use:
 void SecureClear(std::string& s) {
     if (!s.empty()) {
         SecureZeroMemory(&s[0], s.size());
@@ -459,77 +459,77 @@ void SecureClear(std::string& s) {
 }
 ```
 
-### Предотвращение утечек памяти
+### Preventing memory leaks
 
 ```cpp
-// Использовать RAII и умные указатели
+// Use RAII and smart pointers
 #include <memory>
 
-// Плохо:
+// Bad:
 Widget* w = new Widget();
-// ... если исключение — утечка!
+// ... if an exception is thrown - leak!
 
-// Хорошо:
+// Good:
 auto w = std::make_unique<Widget>();
-// Автоматически освобождается
+// Released automatically
 
-// Для wxWidgets объектов — они управляются фреймворком
-// wxWindow::Destroy() вместо delete для окон
+// For wxWidgets objects - they are managed by the framework
+// wxWindow::Destroy() instead of delete for windows
 ```
 
 ---
 
-## Харденинг сервера (daemon-режим)
+## Server hardening (daemon mode)
 
-### Запуск daemon с минимальными правами (Linux)
+### Run daemon with minimal privileges (Linux)
 
 ```bash
-# Создать отдельного пользователя для OES daemon
+# Create a separate user for the OES daemon
 sudo useradd --system --no-create-home --shell /bin/false oes
 
-# Права на директории
+# Directory permissions
 sudo mkdir -p /var/lib/oes /var/log/oes /etc/oes
 sudo chown oes:oes /var/lib/oes /var/log/oes
 sudo chmod 750 /var/lib/oes /var/log/oes
-sudo chmod 755 /etc/oes  # Конфигурация читается всеми, пишется root
+sudo chmod 755 /etc/oes  # Config readable by all, written by root
 
-# Firebird БД — только oes может читать/писать
+# Firebird DB - only oes can read/write
 sudo chmod 600 /var/lib/oes/data/oes.fdb
 sudo chown oes:oes /var/lib/oes/data/oes.fdb
 ```
 
-### Windows: запуск сервиса с минимальными правами
+### Windows: run service with minimal privileges
 
 ```powershell
-# Создать учётную запись сервиса (Managed Service Account)
+# Create a service account (Managed Service Account)
 New-ADServiceAccount -Name "OESDaemon" -Enabled $true
 
-# Или использовать встроенный аккаунт "Network Service" / "Local Service"
-# вместо LocalSystem (LocalSystem = все права = плохо)
+# Or use the built-in "Network Service" / "Local Service" account
+# instead of LocalSystem (LocalSystem = all permissions = bad)
 
 sc.exe config OESDaemon obj= "NT SERVICE\OESDaemon" password= ""
 
-# Дать только необходимые права через Group Policy или secedit
-# SeServiceLogonRight — право запускаться как сервис
+# Grant only required rights via Group Policy or secedit
+# SeServiceLogonRight - permission to log on as a service
 ```
 
-### Файрвол для daemon-порта
+### Firewall for the daemon port
 
 ```bash
-# Linux (ufw): разрешить только необходимые порты
+# Linux (ufw): allow only required ports
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 
-# OES daemon порт (например 4001)
-sudo ufw allow from 192.168.0.0/16 to any port 4001  # только LAN
-sudo ufw deny 4001  # заблокировать внешний доступ
+# OES daemon port (e.g. 4001)
+sudo ufw allow from 192.168.0.0/16 to any port 4001  # LAN only
+sudo ufw deny 4001  # block external access
 
 sudo ufw enable
 ```
 
 ```bash
-# macOS (pf): ограничить порт OES daemon
-# Добавить в /etc/pf.conf:
+# macOS (pf): restrict the OES daemon port
+# Add to /etc/pf.conf:
 # block in on en0 proto tcp to any port 4001
 # pass in on en0 proto tcp from 192.168.0.0/16 to any port 4001
 sudo pfctl -f /etc/pf.conf
@@ -537,7 +537,7 @@ sudo pfctl -e
 ```
 
 ```cmd
-REM Windows (netsh): разрешить только из локальной сети
+REM Windows (netsh): allow only from the local network
 netsh advfirewall firewall add rule ^
   name="OES Daemon" protocol=TCP dir=in localport=4001 ^
   remoteip=192.168.0.0/16 action=allow
@@ -548,17 +548,17 @@ netsh advfirewall firewall add rule ^
 
 ---
 
-## Сканирование уязвимостей
+## Vulnerability scanning
 
-### cppcheck — статический анализ
+### cppcheck — static analysis
 
 ```bash
-# Установка:
+# Installation:
 # Windows:  choco install cppcheck
 # macOS:    brew install cppcheck
 # Linux:    sudo apt install -y cppcheck
 
-# Локальный запуск (все платформы)
+# Local run (all platforms)
 cppcheck \
     --enable=all \
     --suppress=missingIncludeSystem \
@@ -569,25 +569,25 @@ cppcheck \
     --xml-version=2 \
     src/engine/ 2> cppcheck-report.xml
 
-# HTML отчёт
+# HTML report
 cppcheck-htmlreport \
     --file=cppcheck-report.xml \
     --report-dir=cppcheck-html \
     --source-dir=.
 ```
 
-### Проверка зависимостей на уязвимости
+### Checking dependencies for vulnerabilities
 
 ```bash
-# Если используется vcpkg
+# If vcpkg is used
 vcpkg audit
 
-# Для C++ проектов: osv-scanner — сканирование зависимостей на CVE
-# (dotnet list package --vulnerable не применимо к C++ проектам)
-# Установить: https://google.github.io/osv-scanner/
+# For C++ projects: osv-scanner - scans dependencies for CVEs
+# (dotnet list package --vulnerable does not apply to C++ projects)
+# Install: https://google.github.io/osv-scanner/
 osv-scanner --lockfile vcpkg.json .
 
-# OWASP Dependency Check для C++ (через сканирование бинарников)
+# OWASP Dependency Check for C++ (via binary scanning)
 dependency-check \
     --project "OES" \
     --scan ./bin/x64/Release/ \
@@ -597,42 +597,42 @@ dependency-check \
 
 ---
 
-## Чеклист харденинга OES
+## OES hardening checklist
 
 ```
-Подписание кода:
-  [ ] EV Code Signing сертификат получен
-  [ ] Все .exe и .dll подписываются в CI/CD pipeline
-  [ ] Инсталлятор NSIS/WiX подписан
-  [ ] Timestamp добавлен к подписи (для долгосрочной валидности)
-  [ ] Подпись проверяется перед установкой обновлений
+Code signing:
+  [ ] EV Code Signing certificate obtained
+  [ ] All .exe and .dll signed in the CI/CD pipeline
+  [ ] NSIS/WiX installer signed
+  [ ] Timestamp added to the signature (for long-term validity)
+  [ ] Signature verified before installing updates
 
-Защита бинарников:
-  [ ] ASLR включён (/DYNAMICBASE + /HIGHENTROPYVA)
-  [ ] DEP включён (/NXCOMPAT)
-  [ ] Control Flow Guard включён (/GUARD:CF)
-  [ ] SafeSEH включён (для x86 сборок)
-  [ ] DLL search order защищён (SetDefaultDllDirectories)
+Binary protection:
+  [ ] ASLR enabled (/DYNAMICBASE + /HIGHENTROPYVA)
+  [ ] DEP enabled (/NXCOMPAT)
+  [ ] Control Flow Guard enabled (/GUARD:CF)
+  [ ] SafeSEH enabled (for x86 builds)
+  [ ] DLL search order protected (SetDefaultDllDirectories)
 
-Обновления:
-  [ ] Обновления загружаются только по HTTPS
-  [ ] SHA256 хэш проверяется перед установкой
-  [ ] Подпись инсталлятора проверяется (WinVerifyTrust)
+Updates:
+  [ ] Updates downloaded over HTTPS only
+  [ ] SHA256 hash verified before install
+  [ ] Installer signature verified (WinVerifyTrust)
 
-Хранение данных:
-  [ ] Лицензионные ключи в Windows Credential Manager
-  [ ] Пароли БД зашифрованы через DPAPI
-  [ ] Нет паролей в реестре в открытом виде
+Data storage:
+  [ ] License keys in Windows Credential Manager
+  [ ] DB passwords encrypted via DPAPI
+  [ ] No plaintext passwords in the registry
 
-Безопасное программирование:
-  [ ] cppcheck в CI/CD pipeline (без warnings)
-  [ ] Нет strcpy/gets/sprintf без проверки размера
-  [ ] Параметризованные запросы к БД
-  [ ] Входные данные валидируются
+Secure programming:
+  [ ] cppcheck in the CI/CD pipeline (no warnings)
+  [ ] No strcpy/gets/sprintf without size checks
+  [ ] Parameterized DB queries
+  [ ] Inputs validated
 
 Daemon/Server:
-  [ ] Запуск от непривилегированного пользователя
-  [ ] Минимально необходимые права
-  [ ] Файрвол: только необходимые порты
-  [ ] Конфигурационные файлы с паролями: chmod 600
+  [ ] Runs as an unprivileged user
+  [ ] Only the minimum required permissions
+  [ ] Firewall: only required ports
+  [ ] Config files with passwords: chmod 600
 ```

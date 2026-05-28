@@ -1,145 +1,145 @@
-# 01. Структура проекта
+# 01. Project Structure
 
-## Организация репозиториев
+## Repository organization
 
-Все проекты хранятся в **одной GitHub организации** с разграничением доступа через **Teams**.
+All projects live in a **single GitHub organization** with access control via **Teams**.
 
-<!-- TODO: вставить ссылку на организацию -->
+<!-- TODO: insert link to organization -->
 
-### Структура организации
+### Organization structure
 
 ```
 Organization (GitHub Org)
 │
-├── Teams (управление доступом):
-│   ├── oes-core          — доступ к основным репозиториям платформы
-│   ├── oes-plugins       — доступ к репозиториям плагинов и расширений
-│   ├── devops            — доступ ко всем репозиториям
-│   └── management        — read-only ко всему
+├── Teams (access management):
+│   ├── oes-core          — access to core platform repositories
+│   ├── oes-plugins       — access to plugin and extension repositories
+│   ├── devops            — access to all repositories
+│   └── management        — read-only across all
 │
-├── Репозитории платформы OES:
-│   ├── enterprise        — Основной репозиторий C++ платформы (этот)
-│   ├── oes-plugins       — Репозиторий плагинов и расширений
-│   └── oes-docs          — Пользовательская документация
+├── OES platform repositories:
+│   ├── enterprise        — main C++ platform repository (this one)
+│   ├── oes-plugins       — plugin and extension repository
+│   └── oes-docs          — user-facing documentation
 │
-├── Общие:
-│   ├── engineering-playbook — Этот каталог (стандарты разработки)
-│   └── shared-cmake         — Общие CMake модули и toolchain-файлы
+├── Shared:
+│   ├── engineering-playbook — this directory (development standards)
+│   └── shared-cmake         — shared CMake modules and toolchain files
 ```
 
-### Teams и права доступа
+### Teams and access rights
 
-| Team | Свои repos | Чужие repos | Shared repos | Роль |
+| Team | Own repos | Other repos | Shared repos | Role |
 |------|-----------|-------------|--------------|------|
-| oes-core | Write | — | Read | Разработчики ядра платформы |
-| oes-plugins | — | Write | Read | Разработчики плагинов |
-| devops | Admin | Admin | Admin | Инфраструктура, CI/CD |
-| management | Read | Read | Read | Менеджмент, обзор |
+| oes-core | Write | — | Read | Platform core developers |
+| oes-plugins | — | Write | Read | Plugin developers |
+| devops | Admin | Admin | Admin | Infrastructure, CI/CD |
+| management | Read | Read | Read | Management, overview |
 
-**Преимущества Teams:**
-- Человек видит только репозитории своей команды
-- Права настраиваются на уровне команды, не на каждый репо
-- Легко добавлять/удалять людей
-- Audit log на уровне организации
-- Отдельные секреты и deploy keys по команде
+**Advantages of Teams:**
+- A person only sees their team's repositories
+- Permissions are configured at the team level, not per repo
+- Easy to add/remove people
+- Audit log at the organization level
+- Separate secrets and deploy keys per team
 
-### Принцип: один продукт = один репозиторий
+### Principle: one product = one repository
 
-Каждый самостоятельный компонент или расширение платформы живёт в отдельном репозитории. Это упрощает сборку, управление доступом и CI/CD.
+Each independent component or extension of the platform lives in a separate repository. This simplifies builds, access management, and CI/CD.
 
-**Именование репозиториев:** `kebab-case`, описательно, с префиксом проекта при необходимости.
+**Repository naming:** `kebab-case`, descriptive, with a project prefix where needed.
 
 ```
-oes-enterprise         — не "OESCore" или "oes_enterprise"
-oes-plugin-reporting   — не "ReportingPlugin"
-engineering-playbook   — не "DevGuidelines"
+oes-enterprise         — not "OESCore" or "oes_enterprise"
+oes-plugin-reporting   — not "ReportingPlugin"
+engineering-playbook   — not "DevGuidelines"
 ```
 
 ---
 
-## Стандартная структура файлов проекта
+## Standard project file layout
 
-### Монолитный C++ репозиторий (текущая структура)
+### Monolithic C++ repository (current structure)
 
-OES Enterprise — монолитный десктопный продукт. Всё живёт в одном репозитории.
+OES Enterprise is a monolithic desktop product. Everything lives in one repository.
 
 ```
 enterprise/
-├── src/                          — Исходный код
-│   └── engine/                   — Движок платформы
-│       ├── backend/              — Ядро платформы (бизнес-логика, компилятор, БД)
-│       │   ├── appData.cpp       — ibApplicationData: авторизация, сессия (AuthenticationAndSetUser())
-│       │   ├── appDataQuery.cpp  — Запросы сессий и пользователей
-│       │   ├── metadataConfiguration.cpp — Управление конфигурацией метаданных
-│       │   ├── compiler/         — Встроенный скриптовый движок
+├── src/                          — Source code
+│   └── engine/                   — Platform engine
+│       ├── backend/              — Platform core (business logic, compiler, DB)
+│       │   ├── appData.cpp       — ibApplicationData: authentication, session (AuthenticationAndSetUser())
+│       │   ├── appDataQuery.cpp  — Session and user queries
+│       │   ├── metadataConfiguration.cpp — Metadata configuration management
+│       │   ├── compiler/         — Built-in script engine
 │       │   │   ├── compileCode.cpp  — ibCompileCode, ibTranslateCode
-│       │   │   ├── procUnit.cpp     — ibProcUnit: интерпретатор байткода
+│       │   │   ├── procUnit.cpp     — ibProcUnit: bytecode interpreter
 │       │   │   └── value.h          — ibValue, ibNumber (ttmath 128-bit), ibValueTypes
-│       │   ├── databaseLayer/    — Абстракция над СУБД
-│       │   │   ├── databaseLayer.h        — ibDatabaseLayer (базовый класс)
+│       │   ├── databaseLayer/    — DBMS abstraction
+│       │   │   ├── databaseLayer.h        — ibDatabaseLayer (base class)
 │       │   │   ├── firebird/              — ibDatabaseLayerFirebird
 │       │   │   ├── postgres/              — ibDatabaseLayerPostgres
 │       │   │   ├── sqlite/                — ibDatabaseLayerSQLite
 │       │   │   ├── mysql/                 — ibDatabaseLayerMySQL
 │       │   │   └── odbc/                  — ibDatabaseLayerODBC
-│       │   ├── metaCollection/   — Метаданные объектов
+│       │   ├── metaCollection/   — Object metadata
 │       │   │   └── partial/
-│       │   │       └── commonObjectQuery.cpp — CRUD запросы, CreateAndUpdateTableDB()
+│       │   │       └── commonObjectQuery.cpp — CRUD queries, CreateAndUpdateTableDB()
 │       │   └── debugger/
 │       │       └── debugServer.cpp  — ibDebuggerServer
-│       ├── frontend/             — UI компоненты (wxWidgets)
+│       ├── frontend/             — UI components (wxWidgets)
 │       │   └── visualView/
 │       │       └── ctrl/         — ibValueForm, ibValueFrame, ibValueTextCtrl,
 │       │                           ibValueButton, ibValueModelTableBox
-│       ├── designer/             — Low-code дизайнер форм и отчётов
-│       │   └── mainApp.cpp       — Точка входа дизайнера
-│       └── enterprise/           — Среда исполнения (runtime)
-│           └── mainApp.cpp       — Точка входа приложения
-├── tests/                        — Google Test тесты
-│   ├── unit/                     — Юнит-тесты (зеркалируют структуру src/)
+│       ├── designer/             — Low-code form and report designer
+│       │   └── mainApp.cpp       — Designer entry point
+│       └── enterprise/           — Runtime environment
+│           └── mainApp.cpp       — Application entry point
+├── tests/                        — Google Test tests
+│   ├── unit/                     — Unit tests (mirror src/ structure)
 │   │   ├── backend/
 │   │   ├── designer/
 │   │   └── frontend/
-│   └── integration/              — Интеграционные тесты
-├── docs/                         — Документация
-│   ├── engineering-playbook/     — Стандарты разработки (этот каталог)
-│   ├── architecture/             — Архитектурные описания
+│   └── integration/              — Integration tests
+├── docs/                         — Documentation
+│   ├── engineering-playbook/     — Development standards (this directory)
+│   ├── architecture/             — Architectural descriptions
 │   │   ├── overview.md
 │   │   └── adr/                  — Architecture Decision Records
-│   └── api/                      — API публичных интерфейсов
-├── cmake/                        — CMake модули и вспомогательные скрипты
+│   └── api/                      — Public API documentation
+├── cmake/                        — CMake modules and helper scripts
 │   ├── FindFirebird.cmake
 │   ├── FindwxWidgets.cmake
 │   └── CompilerOptions.cmake
-├── scripts/                      — Скрипты автоматизации (сборка, деплой)
-│   ├── build.ps1                 — PowerShell сборка для Windows
-│   └── package.ps1               — Упаковка дистрибутива
-├── third_party/                  — Вендоренные зависимости (если не через vcpkg/conan)
-├── resources/                    — Ресурсы приложения
+├── scripts/                      — Automation scripts (build, deploy)
+│   ├── build.ps1                 — PowerShell build for Windows
+│   └── package.ps1               — Distribution packaging
+├── third_party/                  — Vendored dependencies (if not via vcpkg/conan)
+├── resources/                    — Application resources
 │   ├── icons/
-│   ├── strings/                  — Строки локализации
-│   └── templates/                — Шаблоны
+│   ├── strings/                  — Localization strings
+│   └── templates/                — Templates
 ├── .github/
 │   ├── workflows/                — GitHub Actions CI/CD
 │   │   ├── build.yml
 │   │   └── test.yml
 │   └── PULL_REQUEST_TEMPLATE.md
-├── CMakeLists.txt                — Корневой CMake (macOS/Linux; Windows использует MSBuild)
-├── enterprise.sln                — Visual Studio Solution (основная система сборки, Windows)
+├── CMakeLists.txt                — Root CMake (macOS/Linux; Windows uses MSBuild)
+├── enterprise.sln                — Visual Studio Solution (primary build system, Windows)
 ├── .gitignore
 ├── CLAUDE.md
 ├── .claude.json
 └── README.md
 ```
 
-### Организация заголовочных и исходных файлов
+### Organization of header and source files
 
-В C++ каждый логический модуль состоит из пары `.h` / `.cpp`. Внутри подсистемы:
+In C++ each logical module consists of a `.h` / `.cpp` pair. Within a subsystem:
 
 ```
 src/engine/backend/databaseLayer/
-├── databaseLayer.h          — ibDatabaseLayer (базовый класс), ibPreparedStatement, ibDatabaseResultSet
-├── databaseLayer.cpp        — реализация
+├── databaseLayer.h          — ibDatabaseLayer (base class), ibPreparedStatement, ibDatabaseResultSet
+├── databaseLayer.cpp        — implementation
 ├── firebird/
 │   ├── databaseLayerFirebird.h   — ibDatabaseLayerFirebird
 │   └── databaseLayerFirebird.cpp
@@ -148,17 +148,17 @@ src/engine/backend/databaseLayer/
     └── databaseLayerPostgres.cpp
 ```
 
-**Правило:** заголовочный файл содержит **интерфейс** (объявления), `.cpp` — **реализацию**. Определения в заголовках допустимы только для шаблонов и `inline`-функций.
+**Rule:** the header contains the **interface** (declarations), the `.cpp` the **implementation**. Definitions in headers are only allowed for templates and `inline` functions.
 
 ---
 
-## Обязательные файлы
+## Mandatory files
 
-Каждый репозиторий **обязан** содержать:
+Every repository **must** contain:
 
 ### 1. README.md
 
-Описание проекта, как собрать, как запустить. Подробнее в [04-documentation.md](./04-documentation.md).
+Project description, how to build, how to run. Details in [04-documentation.md](./04-documentation.md).
 
 ```markdown
 # OES Enterprise
@@ -175,21 +175,21 @@ Cross-platform enterprise low-code/no-code platform for building business applic
 
 ## Prerequisites
 
-- Visual Studio 2017+ (с Desktop C++ workload)
-- wxWidgets 3.3.2 (собранные библиотеки)
-- Firebird 4.x (для разработки с локальной БД)
-- CMake 3.20+ (для новой системы сборки)
+- Visual Studio 2017+ (with Desktop C++ workload)
+- wxWidgets 3.3.2 (built libraries)
+- Firebird 4.x (for development with a local DB)
+- CMake 3.20+ (for the new build system)
 
 ## Building
 
-### MSBuild (текущий способ)
+### MSBuild (current path)
 ```
-Открыть enterprise.sln в Visual Studio
-Выбрать конфигурацию Debug или Release
+Open enterprise.sln in Visual Studio
+Choose Debug or Release configuration
 Build → Build Solution (Ctrl+Shift+B)
 ```
 
-### CMake (переходная цель)
+### CMake (transitional target)
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
@@ -207,105 +207,105 @@ Brief overview of key directories.
 
 ### 2. CLAUDE.md
 
-Файл контекста для AI-агентов (Claude Code, Claude Desktop). Это самый важный файл для эффективной работы с AI — он заменяет часы объяснений при каждой новой сессии.
+Context file for AI agents (Claude Code, Claude Desktop). This is the single most important file for working effectively with AI — it replaces hours of explanations at the start of every new session.
 
-**Структура CLAUDE.md:**
+**CLAUDE.md structure:**
 
 ```markdown
 # CLAUDE.md — OES Enterprise
 
 ## Project Overview
-Open Enterprise Solutions (OES) — C++ cross-platform low-code/no-code платформа
-для создания бизнес-приложений. Позволяет конечным пользователям проектировать
-формы, отчёты и бизнес-логику без написания кода.
+Open Enterprise Solutions (OES) — a C++ cross-platform low-code/no-code platform
+for building business applications. Lets end users design forms, reports,
+and business logic without writing code.
 
 ## Tech Stack
 - Language: C++17
 - GUI: wxWidgets 3.3.2
 - Build: MSBuild (VS 2017+), transitioning to CMake 3.20+
 - Databases: Firebird 4.x (primary), PostgreSQL, SQLite, MySQL, ODBC
-- Tests: Google Test (вводится)
-- CI/CD: GitHub Actions (вводится)
+- Tests: Google Test (being introduced)
+- CI/CD: GitHub Actions (being introduced)
 - Platform: Windows primary, cross-platform goal
 - License: LGPL 2.1
 
 ## Project Structure
-- src/engine/backend/           — ядро платформы, компилятор, абстракция БД
+- src/engine/backend/           — platform core, compiler, DB abstraction
   - compiler/compileCode.cpp    — ibCompileCode, ibTranslateCode
-  - compiler/procUnit.cpp       — ibProcUnit (интерпретатор байткода)
+  - compiler/procUnit.cpp       — ibProcUnit (bytecode interpreter)
   - compiler/value.h            — ibValue, ibNumber (ttmath 128-bit), ibValueTypes
-  - appData.cpp                 — ibApplicationData (авторизация, AuthenticationAndSetUser())
-  - appDataQuery.cpp            — запросы сессий и пользователей
-  - databaseLayer/              — ibDatabaseLayer + драйверы Firebird/Postgres/SQLite/MySQL/ODBC
+  - appData.cpp                 — ibApplicationData (authentication, AuthenticationAndSetUser())
+  - appDataQuery.cpp            — session and user queries
+  - databaseLayer/              — ibDatabaseLayer + Firebird/Postgres/SQLite/MySQL/ODBC drivers
   - metaCollection/partial/commonObjectQuery.cpp — CRUD, CreateAndUpdateTableDB()
-  - metadataConfiguration.cpp   — управление конфигурацией
+  - metadataConfiguration.cpp   — configuration management
   - debugger/debugServer.cpp    — ibDebuggerServer
-- src/engine/frontend/          — wxWidgets UI компоненты
+- src/engine/frontend/          — wxWidgets UI components
   - visualView/ctrl/            — ibValueForm, ibValueFrame, ibValueTextCtrl,
                                   ibValueButton, ibValueModelTableBox
-- src/engine/designer/          — визуальный дизайнер форм и отчётов
-  - mainApp.cpp                 — точка входа дизайнера
-- src/engine/enterprise/        — среда исполнения (runtime)
-  - mainApp.cpp                 — точка входа приложения
+- src/engine/designer/          — visual form and report designer
+  - mainApp.cpp                 — designer entry point
+- src/engine/enterprise/        — runtime environment
+  - mainApp.cpp                 — application entry point
 - tests/                        — Google Test (unit + integration)
-- docs/                         — документация, ADR, playbook
+- docs/                         — documentation, ADR, playbook
 
 ## Key Patterns
-- RAII для всех ресурсов: ibTransactionGuard (транзакции), файловые дескрипторы, GDI объекты
-- std::unique_ptr / std::shared_ptr — без сырых owning указателей
-- ibPreparedStatement с SetParamString/SetParamInt — параметризованные запросы
-- Паттерн Observer через wxWidgets events
-- ibApplicationData — Application-level singleton (авторизация, сессия)
-- ibBackendCoreException / ibBackendInterruptException — иерархия исключений
+- RAII for all resources: ibTransactionGuard (transactions), file descriptors, GDI objects
+- std::unique_ptr / std::shared_ptr — no raw owning pointers
+- ibPreparedStatement with SetParamString/SetParamInt — parameterized queries
+- Observer pattern via wxWidgets events
+- ibApplicationData — application-level singleton (authentication, session)
+- ibBackendCoreException / ibBackendInterruptException — exception hierarchy
 
 ## Build Commands
 ```bash
-# MSBuild (Windows — основная система сборки)
+# MSBuild (Windows — primary build system)
 msbuild enterprise.sln /p:Configuration=Debug /p:Platform=x64
 
-# CMake (macOS/Linux — создаётся отдельно)
+# CMake (macOS/Linux — built separately)
 cmake -B build -DCMAKE_BUILD_TYPE=Debug -DwxWidgets_ROOT_DIR=/usr/local
 cmake --build build --config Debug
 
-# Запуск тестов
+# Run tests
 ctest --test-dir build --output-on-failure
 ```
 
 ## Database
-- Первичная СУБД: Firebird 4.x
-- Базовый класс: ibDatabaseLayer; реализации ibDatabaseLayerFirebird, ibDatabaseLayerPostgres и др.
-- Параметризованные запросы обязательны: ibPreparedStatement + SetParamString/SetParamInt — конкатенация SQL запрещена
-- Транзакции через ibTransactionGuard (RAII-обёртка, commonObject.h)
-- Схема обновляется через CreateAndUpdateTableDB() в commonObjectQuery.cpp
+- Primary DBMS: Firebird 4.x
+- Base class: ibDatabaseLayer; implementations ibDatabaseLayerFirebird, ibDatabaseLayerPostgres, etc.
+- Parameterized queries are mandatory: ibPreparedStatement + SetParamString/SetParamInt — SQL concatenation is forbidden
+- Transactions through ibTransactionGuard (RAII wrapper, commonObject.h)
+- Schema is updated via CreateAndUpdateTableDB() in commonObjectQuery.cpp
 
 ## Business Rules
-- Документы нельзя удалять физически, только помечать удалёнными
-- Все операции с БД логируются
-- Плагины загружаются из каталога plugins/ рядом с exe
+- Documents cannot be physically deleted, only marked as deleted
+- All DB operations are logged
+- Plugins are loaded from the plugins/ directory next to the exe
 
 ## Current State
-Переход с MSBuild на CMake. Внедрение Google Test. Настройка GitHub Actions CI.
-Известный технический долг: [ссылка на issues]
+Migration from MSBuild to CMake. Adoption of Google Test. Setting up GitHub Actions CI.
+Known technical debt: [link to issues]
 
 ## Conventions
-- Коммиты: type: description (на English)
-- Ветки: feature/*, fix/*, hotfix/*
-- Классы: PascalCase, методы: camelCase, константы: UPPER_SNAKE_CASE
-- Файлы: lowercase camelCase для классов OES (databaseLayer.h, compileCode.cpp), lowercase для утилит
+- Commits: type: description (in English)
+- Branches: feature/*, fix/*, hotfix/*
+- Classes: PascalCase, methods: camelCase, constants: UPPER_SNAKE_CASE
+- Files: lowercase camelCase for OES classes (databaseLayer.h, compileCode.cpp), lowercase for utilities
 - Namespace: oes::core, oes::designer, oes::runtime
 
 ## Do NOT
-- Не использовать сырые owning указатели (new без немедленного присвоения smart ptr)
-- Не использовать исключения в деструкторах
-- Не смешивать кириллицу в идентификаторах кода
-- Не хардкодить пути к файлам или строки подключения к БД
-- Не коммитить .env и конфиги с реальными credentials
-- Не отключать warnings компилятора без комментария почему
+- Do not use raw owning pointers (new without immediate assignment to a smart ptr)
+- Do not use exceptions in destructors
+- Do not mix Cyrillic into code identifiers
+- Do not hardcode file paths or database connection strings
+- Do not commit .env files or configs with real credentials
+- Do not disable compiler warnings without a comment explaining why
 ```
 
 ### 3. .claude.json
 
-Конфигурация для Claude Code — MCP (Model Context Protocol) подключения и настройки.
+Configuration for Claude Code — MCP (Model Context Protocol) connections and settings.
 
 ```json
 {
@@ -325,11 +325,11 @@ ctest --test-dir build --output-on-failure
 }
 ```
 
-**Важно:** `.claude.json` может содержать токены для локальной работы. Добавьте его в `.gitignore` если в нём есть реальные credentials. Шаблон без credentials можно коммитить как `.claude.json.example`.
+**Important:** `.claude.json` may contain tokens for local work. Add it to `.gitignore` if it has real credentials. A template without credentials can be committed as `.claude.json.example`.
 
 ### 4. .gitignore
 
-Стандартный `.gitignore` для C++ проектов на Visual Studio + CMake:
+Standard `.gitignore` for C++ projects on Visual Studio + CMake:
 
 ```gitignore
 # Visual Studio
@@ -402,71 +402,71 @@ local.config
 
 ---
 
-## Именование файлов и директорий
+## File and directory naming
 
-**Классы и заголовки:** в OES используется префикс `ib` (IntelBase) без PascalCase-разделения. Имя файла соответствует имени класса:
+**Classes and headers:** OES uses an `ib` prefix (IntelBase) without PascalCase separation. The file name matches the class name:
 ```
-databaseLayer.h / databaseLayer.cpp         — ibDatabaseLayer (базовый класс)
+databaseLayer.h / databaseLayer.cpp         — ibDatabaseLayer (base class)
 databaseLayerFirebird.h / .cpp              — ibDatabaseLayerFirebird
 compileCode.h / compileCode.cpp             — ibCompileCode, ibTranslateCode
 value.h                                     — ibValue, ibValueTypes enum
 ```
 
-**Утилиты и helpers:** `snake_case` или `camelCase` (консистентно в рамках модуля).
+**Utilities and helpers:** `snake_case` or `camelCase` (be consistent within a module).
 ```
 string_utils.h
 date_helpers.cpp
 ```
 
-**Директории:** `lowercase` или `kebab-case`.
+**Directories:** `lowercase` or `kebab-case`.
 ```
 src/core/database/
 src/gui/controls/
 docs/engineering-playbook/
 ```
 
-**Плохо:**
+**Bad:**
 ```
-Src/Core/Database/     — заглавные буквы в директориях
-databasemanager.h      — не отражает имя класса
-DB_Manager.h           — смешение стилей
+Src/Core/Database/     — uppercase letters in directories
+databasemanager.h      — does not reflect the class name
+DB_Manager.h           — mixed styles
 ```
 
 ---
 
-## Создание нового модуля — чеклист
+## Creating a new module — checklist
 
-1. Создать директорию в `src/engine/backend/` (бэкенд) или `src/engine/frontend/` (UI) по смыслу
-2. Определить интерфейс через чисто виртуальный класс (например `INotification.h`) — если модуль расширяем
-3. Реализовать класс `Notification.h` / `Notification.cpp`
-4. Добавить в `CMakeLists.txt` (macOS/Linux) или `enterprise.sln`-проект (Windows/MSBuild) соответствующие файлы
-5. Добавить юнит-тесты в `tests/unit/backend/notifications/` (или `frontend/`)
-6. Обновить `CLAUDE.md` — добавить описание нового модуля
-7. Создать `config.ini.example` (или обновить существующий) если модуль вводит новые конфигурационные параметры
-8. Первый коммит: `feat: add notifications module skeleton`
-9. При изменении публичного интерфейса — обновить `docs/architecture/`
+1. Create a directory in `src/engine/backend/` (backend) or `src/engine/frontend/` (UI) depending on purpose
+2. Define the interface through a pure virtual class (e.g. `INotification.h`) — if the module is extensible
+3. Implement the `Notification.h` / `Notification.cpp` class
+4. Add the new files to `CMakeLists.txt` (macOS/Linux) or the `enterprise.sln` project (Windows/MSBuild)
+5. Add unit tests in `tests/unit/backend/notifications/` (or `frontend/`)
+6. Update `CLAUDE.md` — add a description of the new module
+7. Create `config.ini.example` (or update the existing one) if the module introduces new configuration parameters
+8. First commit: `feat: add notifications module skeleton`
+9. When public interface changes — update `docs/architecture/`
 
 ---
 
-## Namespace-конвенция
+## Namespace convention
 
-Классы OES используют префикс `ib` (IntelBase) и не обёрнуты в C++ namespace. Это историческое соглашение проекта:
+OES classes use the `ib` (IntelBase) prefix and are not wrapped in a C++ namespace. This is a historical project convention:
 
 ```cpp
-// Реальные классы платформы — префикс ib, без namespace
+// Real platform classes — ib prefix, no namespace
 class ibDatabaseLayer { ... };        // src/engine/backend/databaseLayer/
 class ibApplicationData { ... };      // src/engine/backend/appData.cpp
 class ibCompileCode { ... };          // src/engine/backend/compiler/
 class ibValueForm { ... };            // src/engine/frontend/visualView/ctrl/
-class ibTransactionGuard { ... };     // src/engine/backend/ (RAII для транзакций)
+class ibTransactionGuard { ... };     // src/engine/backend/ (RAII for transactions)
 class ibPreparedStatement { ... };    // src/engine/backend/databaseLayer/
 ```
 
-Для новых тестовых и вспомогательных модулей допустимо использовать namespace `oes`:
+For new test and helper modules, the `oes` namespace is acceptable:
 ```cpp
 namespace oes::tests {
-    // тестовые фабрики, хелперы
+    // test factories, helpers
 }
 ```
 
-Сторонние библиотеки (wxWidgets, Google Test) используются как есть.
+Third-party libraries (wxWidgets, Google Test) are used as-is.

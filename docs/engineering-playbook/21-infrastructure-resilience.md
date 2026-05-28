@@ -1,43 +1,43 @@
-# 21. Дистрибуция, обновления и отказоустойчивость
+# 21. Distribution, Updates, and Resilience
 
-## Сборка и дистрибуция
+## Build and distribution
 
-### Целевые платформы
+### Target platforms
 
-| Платформа | Формат дистрибутива | Инструмент сборки |
+| Platform | Distribution format | Build tool |
 |-----------|--------------------|--------------------|
 | Windows (x64) | Inno Setup Installer (.exe) | MSBuild + Inno Setup |
 | Linux (x64) | AppImage / .deb / .rpm | CMake + CPack |
 | macOS (x64 / ARM64) | .dmg / .pkg | CMake + CPack |
 
-### Матрица конфигураций сборки
+### Build configuration matrix
 
-| Конфигурация | Назначение | Оптимизации |
+| Configuration | Purpose | Optimizations |
 |-------------|-----------|-------------|
-| Debug | Локальная разработка | Нет, полные символы отладки |
-| Release | Production-сборки | /O2 (MSVC) / -O2 (GCC/Clang), без отладочных символов |
-| RelWithDebInfo | Для crash-репортов | /O2 + PDB / -O2 + DWARF, символы отдельно |
+| Debug | Local development | None, full debug symbols |
+| Release | Production builds | /O2 (MSVC) / -O2 (GCC/Clang), no debug symbols |
+| RelWithDebInfo | For crash reports | /O2 + PDB / -O2 + DWARF, symbols separate |
 
-**Правило:** все публичные релизы собираются в `RelWithDebInfo`. Символы (PDB / DWARF) сохраняются в защищённом хранилище и используются только для разбора краш-дампов.
+**Rule:** every public release is built in `RelWithDebInfo`. Symbols (PDB / DWARF) are stored in secure storage and used only for crash dump analysis.
 
-### CMake / MSBuild — базовая структура
+### CMake / MSBuild — basic structure
 
 ```cmake
-# CMakeLists.txt (корень)
+# CMakeLists.txt (root)
 cmake_minimum_required(VERSION 3.22)
 project(OES VERSION 2.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Версия приложения (из git tag или вручную)
+# Application version (from git tag or manual)
 configure_file(src/version.h.in src/version.h @ONLY)
 
 # wxWidgets
 find_package(wxWidgets 3.3.2 REQUIRED COMPONENTS core base aui adv)
 include(${wxWidgets_USE_FILE})
 
-# Основной исполняемый файл
+# Main executable
 add_executable(oes WIN32
     src/main.cpp
     src/app.cpp
@@ -63,27 +63,27 @@ set(CPACK_PACKAGE_VENDOR "OES Team")
 
 ---
 
-## Механизм автоматического обновления
+## Automatic update mechanism
 
-### Архитектура
+### Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  OES Приложение (клиент)                                 │
+│  OES Application (client)                                │
 │                                                          │
-│  UpdateChecker (фоновый поток)                           │
+│  UpdateChecker (background thread)                       │
 │    ↓  HTTP GET /api/updates/check?version=2.0.0&os=win   │
 │  Update Server (HTTPS)                                   │
 │    ↓  JSON: { "latest": "2.1.0", "url": "...", ... }     │
-│  Диалог уведомления пользователю                         │
-│    ↓  Пользователь подтверждает                          │
-│  Загрузка инсталлятора (с проверкой SHA-256)             │
+│  Notification dialog to the user                         │
+│    ↓  User confirms                                      │
+│  Installer download (with SHA-256 check)                 │
 │    ↓                                                     │
-│  Запуск инсталлятора → закрытие приложения               │
+│  Run installer → close the application                   │
 └──────────────────────────────────────────────────────────┘
 ```
 
-### Реализация проверки обновлений
+### Update check implementation
 
 ```cpp
 // update_checker.h
@@ -94,17 +94,17 @@ set(CPACK_PACKAGE_VENDOR "OES Team")
 struct UpdateInfo {
     std::string version;      // "2.1.0"
     std::string downloadUrl;
-    std::string sha256;       // hex-строка
+    std::string sha256;       // hex string
     std::string releaseNotes;
-    bool        isMandatory;  // принудительное обновление
+    bool        isMandatory;  // forced update
 };
 
 class UpdateChecker {
 public:
-    // Запустить проверку в фоновом потоке wxThread
+    // Run the check in a background wxThread
     void CheckAsync(std::function<void(const UpdateInfo&)> onUpdateAvailable);
 
-    // Скачать и проверить целостность
+    // Download and verify integrity
     bool DownloadAndVerify(const UpdateInfo& info, const std::string& destPath);
 
 private:
@@ -118,15 +118,15 @@ private:
 ```
 
 ```cpp
-// update_checker.cpp (схема реализации)
+// update_checker.cpp (implementation outline)
 //
-// ВАЖНО: std::thread().detach() опасен — поток продолжает выполняться
-// после уничтожения объекта UpdateChecker, что может привести к use-after-free
-// (обращение к this после деструктора). Вместо detach используйте:
-//   - wxThread (wxTHREAD_DETACHED) — управляется wxWidgets, безопасно удаляет себя
-//   - joinable std::thread, хранимый как член класса (join в деструкторе)
+// IMPORTANT: std::thread().detach() is dangerous — the thread keeps running
+// after the UpdateChecker object is destroyed, leading to use-after-free
+// (accessing this after the destructor). Instead of detach use:
+//   - wxThread (wxTHREAD_DETACHED) — wxWidgets manages it, deletes itself safely
+//   - joinable std::thread held as a class member (joined in the destructor)
 //
-// Рекомендуемый вариант: wxThread (уже используется в OesReportGeneratorThread)
+// Recommended option: wxThread (already used in OesReportGeneratorThread)
 
 class UpdateCheckerThread : public wxThread
 {
@@ -145,11 +145,11 @@ protected:
             + "?version=" + OES_VERSION_STRING
             + "&os=" + m_owner->GetPlatformString();
 
-        // HTTP GET через wxHTTP или libcurl
+        // HTTP GET via wxHTTP or libcurl
         // ...
 
-        // Парсинг JSON-ответа
-        // Если version > current → вызываем callback в главном потоке
+        // Parse the JSON response
+        // If version > current → invoke callback on the main thread
         // wxTheApp->CallAfter([cb = m_cb, info]() { cb(info); });
         return 0;
     }
@@ -162,17 +162,17 @@ private:
 void UpdateChecker::CheckAsync(
     std::function<void(const UpdateInfo&)> onUpdateAvailable)
 {
-    // wxTHREAD_DETACHED — wxWidgets удаляет объект потока по завершении
+    // wxTHREAD_DETACHED — wxWidgets deletes the thread object on completion
     auto* thread = new UpdateCheckerThread(this, onUpdateAvailable);
     if (thread->Run() != wxTHREAD_NO_ERROR)
     {
         delete thread;
-        wxLogWarning("[UpdateChecker] Не удалось запустить поток проверки обновлений");
+        wxLogWarning("[UpdateChecker] Failed to start update check thread");
     }
 }
 ```
 
-### Формат ответа сервера обновлений
+### Update server response format
 
 ```json
 {
@@ -184,21 +184,21 @@ void UpdateChecker::CheckAsync(
     "release_date": "2026-04-01",
     "mandatory": false,
     "release_notes_url": "https://oes-platform.com/changelog/2.1.0",
-    "release_notes": "Исправлен краш при работе с большими таблицами Firebird..."
+    "release_notes": "Fixed crash when working with large Firebird tables..."
 }
 ```
 
-### Проверка цифровой подписи инсталлятора
+### Installer digital signature verification
 
-**Windows:** инсталлятор должен быть подписан code signing сертификатом.
+**Windows:** the installer must be signed with a code signing certificate.
 
 ```bash
-# Проверка перед запуском (в коде приложения через WinAPI)
-# WinVerifyTrust() — проверяет Authenticode подпись
+# Verify before launching (in app code via WinAPI)
+# WinVerifyTrust() — verifies the Authenticode signature
 ```
 
 ```cpp
-// Упрощённая проверка подписи на Windows
+// Simplified signature verification on Windows
 #ifdef _WIN32
 #include <wintrust.h>
 #include <softpub.h>
@@ -226,29 +226,29 @@ bool VerifyCodeSignature(const std::wstring& filePath) {
 
 ---
 
-## Сбор краш-репортов (Windows Minidumps)
+## Crash reports (Windows Minidumps)
 
-### Обзор
+### Overview
 
-При падении OES на Windows система создаёт minidump-файл (`.dmp`) — снимок стека вызовов, регистров и части памяти на момент краша. Это основной инструмент диагностики проблем у пользователей.
+When OES crashes on Windows the system creates a minidump file (`.dmp`) — a snapshot of the call stack, registers, and part of the memory at the time of the crash. It's the primary tool for diagnosing user-side issues.
 
-### Уровни защиты от крашей
+### Crash defense layers
 
 ```
-Уровень 1: Vectored Exception Handler
-├── Перехватывает ACCESS_VIOLATION, STACK_OVERFLOW и др.
-├── Записывает minidump
-└── Показывает диалог пользователю + предлагает отправить репорт
+Layer 1: Vectored Exception Handler
+├── Catches ACCESS_VIOLATION, STACK_OVERFLOW, etc.
+├── Writes a minidump
+└── Shows a dialog to the user + offers to send the report
 
-Уровень 2: Structured Exception Handling (SEH) в критических путях
-├── Обёртки вокруг операций с БД, файлами, плагинами
-└── Fallback логика при ошибках драйверов
+Layer 2: Structured Exception Handling (SEH) on critical paths
+├── Wrappers around DB, file, and plugin operations
+└── Fallback logic on driver errors
 
-Уровень 3: wxApp::OnUnhandledException()
-└── Последний рубеж для C++ исключений wxWidgets
+Layer 3: wxApp::OnUnhandledException()
+└── Last resort for wxWidgets C++ exceptions
 ```
 
-### Реализация crash handler (Windows)
+### Crash handler implementation (Windows)
 
 ```cpp
 // crash_handler.h
@@ -285,7 +285,7 @@ private:
 std::wstring CrashHandler::s_reportDir;
 
 void CrashHandler::Install() {
-    // Получить AppData\Local\OES\CrashReports
+    // Obtain AppData\Local\OES\CrashReports
     wchar_t appData[MAX_PATH];
     SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appData);
     s_reportDir = std::wstring(appData) + L"\\OES\\CrashReports";
@@ -297,7 +297,7 @@ void CrashHandler::Install() {
 LONG WINAPI CrashHandler::UnhandledExceptionFilter(
     EXCEPTION_POINTERS* exceptionInfo)
 {
-    // Сформировать имя файла с timestamp
+    // Build the filename with a timestamp
     time_t t = time(nullptr);
     wchar_t dumpName[256];
     swprintf_s(dumpName, L"oes_%lld.dmp", (long long)t);
@@ -305,11 +305,11 @@ LONG WINAPI CrashHandler::UnhandledExceptionFilter(
 
     WriteMiniDump(exceptionInfo, dumpPath);
 
-    // Показать диалог (без рекурсии — напрямую через WinAPI)
+    // Show a dialog (no recursion — straight through WinAPI)
     MessageBoxW(nullptr,
-        L"Open Enterprise Solutions завершился с ошибкой.\n"
-        L"Отчёт о сбое сохранён. Пожалуйста, отправьте его разработчикам.",
-        L"Ошибка приложения",
+        L"Open Enterprise Solutions has crashed.\n"
+        L"A crash report has been saved. Please send it to the developers.",
+        L"Application error",
         MB_OK | MB_ICONERROR);
 
     return EXCEPTION_EXECUTE_HANDLER;
@@ -346,57 +346,57 @@ bool CrashHandler::WriteMiniDump(EXCEPTION_POINTERS* exceptionInfo,
 #endif
 ```
 
-### Анализ minidump
+### Minidump analysis
 
 ```bash
-# WinDbg / cdb (с символами PDB)
+# WinDbg / cdb (with PDB symbols)
 cdb -z crash_20260410_143200.dmp
-# Команды:
+# Commands:
 # .sympath srv*c:\symbols*https://msdl.microsoft.com/download/symbols
 # .sympath+ C:\OES\Symbols\2.0.0
 # !analyze -v
-# k        ← стек вызовов
-# ~*k      ← стеки всех потоков
+# k        ← call stack
+# ~*k      ← stacks of all threads
 
-# Или через Visual Studio:
-# File → Open → Crash Dump → открыть .dmp
-# "Debug with Native Only" → автоматически загружает символы
+# Or via Visual Studio:
+# File → Open → Crash Dump → open the .dmp
+# "Debug with Native Only" → loads symbols automatically
 ```
 
 ### Linux — core dumps
 
 ```bash
-# Включить core dumps
+# Enable core dumps
 ulimit -c unlimited
 # /proc/sys/kernel/core_pattern = /var/crash/core-%e-%p-%t
 
-# Установить лимит для production
+# Set the limit for production
 # /etc/security/limits.conf:
 # oes_user soft core unlimited
 
-# Анализ с GDB
+# Analyze with GDB
 gdb /usr/bin/oes /var/crash/core-oes-12345-1712345678
 # (gdb) bt       ← backtrace
-# (gdb) thread apply all bt  ← все потоки
+# (gdb) thread apply all bt  ← all threads
 ```
 
-### Отправка краш-репортов
+### Sending crash reports
 
 ```cpp
-// Диалог отправки репорта
+// Report submission dialog
 class CrashReportDialog : public wxDialog {
 public:
     CrashReportDialog(const wxString& dumpPath)
-        : wxDialog(nullptr, wxID_ANY, "Отправить отчёт о сбое",
+        : wxDialog(nullptr, wxID_ANY, "Send crash report",
                    wxDefaultPosition, wxSize(500, 320))
     {
-        // Показываем путь к дампу, комментарий пользователя,
-        // кнопки "Отправить" / "Не отправлять"
+        // Show the dump path, user comment,
+        // "Send" / "Don't send" buttons
     }
 
     void OnSend(wxCommandEvent&) {
-        // Загружаем .dmp + лог + комментарий на сервер
-        // через multipart/form-data (libcurl или wxHTTP)
+        // Upload .dmp + log + comment to the server
+        // via multipart/form-data (libcurl or wxHTTP)
         // POST https://crashes.oes-platform.com/api/v1/report
     }
 };
@@ -404,28 +404,28 @@ public:
 
 ---
 
-## Отказоустойчивость подключений к базам данных
+## Database connection resilience
 
-### Уровни защиты
+### Defense layers
 
 ```
-Уровень 1: Connection Pool
-├── Минимальный пул соединений (2-5 для десктопа)
-├── Периодический heartbeat SELECT 1 (ibDatabaseLayer)
-└── Ленивое переподключение при обнаружении разрыва
+Layer 1: Connection Pool
+├── Minimum connection pool (2-5 for desktop)
+├── Periodic SELECT 1 heartbeat (ibDatabaseLayer)
+└── Lazy reconnect when a break is detected
 
-Уровень 2: Retry-логика
-├── Автоматический retry (3 попытки с exponential backoff)
-├── Отличие временных ошибок от фатальных
-└── Уведомление UI только при окончательном сбое
+Layer 2: Retry logic
+├── Automatic retry (3 attempts with exponential backoff)
+├── Distinguishing transient errors from fatal ones
+└── Notify UI only on final failure
 
-Уровень 3: Graceful degradation
-├── Кэш последних данных в памяти при потере связи
-├── Read-only режим при недоступности master-БД
-└── Диалог повторного подключения без потери данных
+Layer 3: Graceful degradation
+├── Cache last data in memory when connectivity is lost
+├── Read-only mode when the master DB is unavailable
+└── Reconnect dialog without data loss
 ```
 
-### Реализация retry-логики
+### Retry logic implementation
 
 ```cpp
 // db_connection.h
@@ -437,7 +437,7 @@ public:
 
 class DatabaseConnection {
 public:
-    // Выполнить операцию с автоматическим retry
+    // Execute an operation with automatic retry
     template<typename Func>
     auto ExecuteWithRetry(Func&& func,
                           int maxRetries = 3,
@@ -456,7 +456,7 @@ public:
                 std::this_thread::sleep_for(
                     std::chrono::milliseconds(delayMs));
             }
-            // DatabaseFatalError и прочие — не ловим, пробрасываем
+            // DatabaseFatalError and others — not caught, rethrown
         }
     }
 
@@ -465,14 +465,14 @@ public:
 
 private:
     void EnsureConnected();
-    bool Ping();  // SELECT 1 через ibDatabaseLayer (работает для Firebird, PostgreSQL, SQLite)
+    bool Ping();  // SELECT 1 through ibDatabaseLayer (works for Firebird, PostgreSQL, SQLite)
 };
 ```
 
-### Обработка потери связи с Firebird
+### Handling Firebird connection loss
 
 ```cpp
-// Пример использования в слое данных
+// Example usage in the data layer
 std::vector<Record> DataLayer::GetRecords(int projectId) {
     return m_db.ExecuteWithRetry([&]() {
         FBStatement stmt(m_db,
@@ -482,7 +482,7 @@ std::vector<Record> DataLayer::GetRecords(int projectId) {
     });
 }
 
-// В UI-слое — обработка окончательных ошибок
+// In the UI layer — handling final errors
 void MainFrame::OnLoadData(wxCommandEvent&) {
     try {
         auto records = m_dataLayer->GetRecords(m_currentProjectId);
@@ -490,18 +490,18 @@ void MainFrame::OnLoadData(wxCommandEvent&) {
     } catch (const DatabaseFatalError& e) {
         wxMessageBox(
             wxString::Format(
-                "Не удалось подключиться к базе данных:\n%s\n\n"
-                "Проверьте настройки подключения.",
+                "Failed to connect to the database:\n%s\n\n"
+                "Check the connection settings.",
                 e.what()),
-            "Ошибка БД", wxOK | wxICON_ERROR);
+            "DB error", wxOK | wxICON_ERROR);
     }
 }
 ```
 
-### Настройки подключения с повторным подключением
+### Connection settings with reconnect
 
 ```ini
-; oes.ini — настройки соединения
+; oes.ini — connection settings
 [Database]
 Type=Firebird
 Host=localhost
@@ -517,28 +517,28 @@ HeartbeatIntervalSec=60
 
 ---
 
-## Резервное копирование данных пользователя
+## User data backup
 
-### Стратегия 3-2-1 для настольного приложения
+### 3-2-1 strategy for a desktop application
 
-- **3** копии: оригинал БД + локальный бэкап + удалённый (если настроено)
-- **2** носителя: основной диск + внешний/сетевой
-- **1** offsite: опциональная синхронизация с сервером компании
+- **3** copies: original DB + local backup + remote (if configured)
+- **2** media: main disk + external/network
+- **1** offsite: optional sync with the company server
 
-### Автоматический локальный бэкап (Firebird gbak)
+### Automatic local backup (Firebird gbak)
 
 ```cpp
 // backup_manager.h
 class BackupManager {
 public:
-    // Запускается при запуске приложения и по расписанию
+    // Runs at app startup and on a schedule
     void ScheduleDailyBackup();
 
-    // Создать бэкап через gbak (Firebird utility)
+    // Creates a backup using gbak (Firebird utility)
     bool CreateFirebirdBackup(const std::string& dbPath,
                                const std::string& backupDir);
 
-    // Ротация: оставить последние N бэкапов
+    // Rotation: keep the last N backups
     void RotateBackups(const std::string& backupDir,
                        int keepCount = 7);
 };
@@ -556,12 +556,12 @@ bool BackupManager::CreateFirebirdBackup(
     std::string backupFile = backupDir + "/oes_backup_"
         + timestamp + ".fbk";
 
-    // Вызов gbak через wxExecute
-    // ПРИМЕЧАНИЕ: режим "-service service_mgr" использует Services API Firebird
-    // и требует запущенного сервера Firebird (не работает с Embedded-сборкой).
-    // Для встроенного (Embedded) режима используйте прямое подключение к файлу:
-    //   gbak -backup -user SYSDBA -password masterkey путь_к_файлу.fdb бэкап.fbk
-    // Для серверного режима через Services API:
+    // Call gbak through wxExecute
+    // NOTE: the "-service service_mgr" mode uses the Firebird Services API
+    // and requires a running Firebird server (won't work with Embedded builds).
+    // For embedded mode use a direct file connection:
+    //   gbak -backup -user SYSDBA -password masterkey path_to_file.fdb backup.fbk
+    // For server mode through the Services API:
     //   gbak -backup -service service_mgr -user SYSDBA -password masterkey ...
     wxString cmd = wxString::Format(
         "gbak -backup -user SYSDBA -password masterkey %s %s",
@@ -572,22 +572,22 @@ bool BackupManager::CreateFirebirdBackup(
 }
 ```
 
-### Что и как часто бэкапить
+### What to back up and how often
 
-| Что | Как часто | Где хранить | Хранить |
+| What | How often | Where to store | Retention |
 |-----|-----------|-------------|---------|
-| Firebird (.fdb) | При старте + раз в сутки | AppData\OES\Backups | 7 дней |
-| SQLite (.db) | При изменении | Рядом с файлом | 5 версий |
-| Конфигурация (.ini) | При изменении | AppData\OES\Config | Бессрочно |
-| Лицензионные ключи | При регистрации | AppData\OES\License | Бессрочно |
-| Шаблоны/проекты | По запросу | Путь по выбору пользователя | По выбору |
+| Firebird (.fdb) | On startup + once a day | AppData\OES\Backups | 7 days |
+| SQLite (.db) | On change | Next to the file | 5 versions |
+| Configuration (.ini) | On change | AppData\OES\Config | Indefinite |
+| License keys | On registration | AppData\OES\License | Indefinite |
+| Templates/projects | On request | User-selected path | User's call |
 
-### Тестирование бэкапов
+### Backup testing
 
-**Правило: бэкап, который не тестировался — не бэкап.**
+**Rule: a backup that hasn't been tested isn't a backup.**
 
 ```bash
-# Проверка восстановления из fbk (Firebird)
+# Verify restore from fbk (Firebird)
 gbak -restore -replace oes_backup_20260410.fbk /tmp/test_restore.fdb
 isql /tmp/test_restore.fdb -user SYSDBA -pass masterkey \
   -e "SELECT COUNT(*) FROM PROJECTS;"
@@ -597,14 +597,14 @@ isql /tmp/test_restore.fdb -user SYSDBA -pass masterkey \
 
 ## Installer (Windows — Inno Setup)
 
-Инструмент сборки установщика — **Inno Setup** (согласуется с файлом 17-ci-cd.md).
-Скрипт располагается в `installer\setup.iss`, собирается командой:
+The installer build tool — **Inno Setup** (consistent with 17-ci-cd.md).
+The script lives in `installer\setup.iss` and is built with:
 
 ```
 iscc /DAppVersion=2.0.0 installer\setup.iss
 ```
 
-### Базовая структура Inno Setup скрипта
+### Basic Inno Setup script structure
 
 ```iss
 ; installer\setup.iss
@@ -627,10 +627,10 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 
 [Files]
-; Основные файлы приложения
+; Main application files
 Source: "release\*"; DestDir: "{app}"; Flags: recursesubdirs
 
-; Visual C++ Redistributable (устанавливается тихо, если ещё не установлен)
+; Visual C++ Redistributable (installed silently if not already present)
 Source: "redist\vcredist_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]
@@ -638,44 +638,44 @@ Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{commondesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 
 [Run]
-; Установить VC++ Redistributable перед запуском приложения
+; Install VC++ Redistributable before launching the application
 Filename: "{tmp}\vcredist_x64.exe"; Parameters: "/quiet /norestart"; \
-  StatusMsg: "Установка Visual C++ Redistributable..."; \
+  StatusMsg: "Installing Visual C++ Redistributable..."; \
   Flags: waituntilterminated
 
-; Предложить запустить приложение после установки
-Filename: "{app}\{#AppExeName}"; Description: "Запустить {#AppName}"; \
+; Offer to launch the application after install
+Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName}"; \
   Flags: nowait postinstall skipifsilent
 
 [Code]
-// Опциональная проверка .NET / VC++ перед установкой
+// Optional .NET / VC++ check before installation
 procedure InitializeWizard();
 begin
-  // Дополнительные проверки при необходимости
+  // Additional checks if needed
 end;
 ```
 
 ---
 
-## Чеклист дистрибуции и отказоустойчивости
+## Distribution and resilience checklist
 
-### Минимум (каждый релиз):
-- [ ] Собирается в RelWithDebInfo с отдельными символами (PDB/DWARF)
-- [ ] Символы сохранены в защищённом хранилище для данной версии
-- [ ] CrashHandler установлен при старте приложения (Windows)
-- [ ] Проверка целостности инсталлятора (SHA-256 на сайте)
-- [ ] Инсталлятор подписан code signing сертификатом (Windows)
-- [ ] Автоматический локальный бэкап данных при старте
-- [ ] Retry-логика для подключения к БД
-- [ ] Диалог уведомления о доступном обновлении
-- [ ] Версия приложения отображается в About + вшита в ресурсы
+### Minimum (every release):
+- [ ] Built in RelWithDebInfo with separate symbols (PDB/DWARF)
+- [ ] Symbols stored in secure storage for this version
+- [ ] CrashHandler installed at app startup (Windows)
+- [ ] Installer integrity verification (SHA-256 on the site)
+- [ ] Installer signed with a code signing certificate (Windows)
+- [ ] Automatic local data backup on startup
+- [ ] Retry logic for DB connections
+- [ ] Notification dialog for available updates
+- [ ] App version shown in About + embedded in resources
 
-### Продвинутый (критичные развёртывания):
-- [ ] Автоматическая отправка краш-репортов (с согласия пользователя)
-- [ ] Сервер мониторинга краш-репортов (crash.oes-platform.com)
-- [ ] Принудительные обновления при критических уязвимостях
-- [ ] Rollback-механизм (предыдущий инсталлятор сохраняется)
-- [ ] Тихая установка для корпоративного развёртывания (SCCM/MSI)
-- [ ] Ежемесячное тестирование восстановления из бэкапа
-- [ ] Runbook для каждого типа инцидента
-- [ ] Дежурства при крупных релизах
+### Advanced (critical deployments):
+- [ ] Automatic crash report submission (with user consent)
+- [ ] Crash report monitoring server (crash.oes-platform.com)
+- [ ] Forced updates on critical vulnerabilities
+- [ ] Rollback mechanism (previous installer retained)
+- [ ] Silent install for corporate deployment (SCCM/MSI)
+- [ ] Monthly backup restore testing
+- [ ] Runbook for every type of incident
+- [ ] On-call rota for major releases
