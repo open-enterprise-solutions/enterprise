@@ -358,14 +358,16 @@ void ibConnectionPool::Shutdown()
 	for (auto& e : m_entries) {
 		if (e.conn) {
 			e.conn->m_holder = nullptr;
-			if (e.conn->IsOpen())
-				e.conn->Close();
+			try { if (e.conn->IsOpen()) e.conn->Close(); }
+			catch (...) { /* swallowed: shutdown-time Close failures (e.g. Firebird isc_io_error on already-disconnected DB) must not propagate from this destructor-style path — see ~ibApplicationData → Shutdown chain; an unhandled throw here lands in std::terminate during process exit. */ }
 		}
 	}
 	m_entries.clear();
 
-	if (m_source && m_source->IsOpen())
-		m_source->Close();
+	if (m_source && m_source->IsOpen()) {
+		try { m_source->Close(); }
+		catch (...) { /* swallowed: same rationale as the pool loop above — source close failure on shutdown is unrecoverable and never worth aborting the process for. */ }
+	}
 	m_source.reset();
 
 	m_cv.notify_all();

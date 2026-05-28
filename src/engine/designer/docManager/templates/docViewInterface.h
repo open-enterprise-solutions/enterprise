@@ -15,7 +15,7 @@ public:
 	ibInterfaceEditView() : ibMetaView() {}
 
 	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
-	virtual void OnUpdate(wxView* sender, wxObject* hint) override;
+	virtual void OnUpdate(ibView* sender, wxObject* hint) override;
 	virtual void OnDraw(wxDC* dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
@@ -26,13 +26,13 @@ private:
 };
 
 // ----------------------------------------------------------------------------
-// ITextDocument: wxDocument and wxTextCtrl married
+// ibTextDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-class ibInterfacibDocument : public ibMetaDocument
+class ibInterfaceDocument : public ibMetaDocument
 {
 public:
-	ibInterfacibDocument() : ibMetaDocument() { m_childDoc = false; }
+	ibInterfaceDocument() : ibMetaDocument() { m_childDoc = false; }
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
 
@@ -44,18 +44,18 @@ protected:
 	virtual bool DoSaveDocument(const wxString& filename) override;
 	virtual bool DoOpenDocument(const wxString& filename) override;
 
-	wxDECLARE_NO_COPY_CLASS(ibInterfacibDocument);
-	wxDECLARE_ABSTRACT_CLASS(ibInterfacibDocument);
+	wxDECLARE_NO_COPY_CLASS(ibInterfaceDocument);
+	wxDECLARE_ABSTRACT_CLASS(ibInterfaceDocument);
 };
 
 // ----------------------------------------------------------------------------
 // A very simple text document class
 // ----------------------------------------------------------------------------
 
-class ibInterfaceEditDocument : public ibInterfacibDocument
+class ibInterfaceEditDocument : public ibInterfaceDocument
 {
 public:
-	ibInterfaceEditDocument() : ibInterfacibDocument() { }
+	ibInterfaceEditDocument() : ibInterfaceDocument() { }
 
 	wxDECLARE_NO_COPY_CLASS(ibInterfaceEditDocument);
 	wxDECLARE_DYNAMIC_CLASS(ibInterfaceEditDocument);

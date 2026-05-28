@@ -185,7 +185,7 @@ int ibOutputWindow::GetCurrentLine() const
 	return y;
 }
 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 #include "backend/metadataConfiguration.h"
 
 void ibOutputWindow::OnDoubleClick(wxMouseEvent& event)
@@ -212,7 +212,7 @@ void ibOutputWindow::OnDoubleClick(wxMouseEvent& event)
 
 				if (foundedDoc == nullptr) {
 					foundedDoc = dynamic_cast<ibMetaDataDocument*>(
-						docManager->CreateDocument(code.m_fileName, wxDOC_SILENT)
+						docManager->CreateDocument(code.m_fileName, ibDOC_SILENT)
 						);
 				}
 

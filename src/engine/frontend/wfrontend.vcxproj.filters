@@ -30,8 +30,8 @@
     <ClCompile Include="visualView\visualHostClient.cpp">       <Filter>visualView</Filter></ClCompile>
     <ClCompile Include="visualView\visualHostClientDocView.cpp"><Filter>visualView</Filter></ClCompile>
     <ClCompile Include="visualView\controlEnum.cpp">            <Filter>visualView</Filter></ClCompile>
+    <ClCompile Include="docView\docManager.cpp">                <Filter>docView</Filter></ClCompile>
     <ClCompile Include="docView\docView.cpp">                   <Filter>docView</Filter></ClCompile>
-    <ClCompile Include="docView\docViewCmd.cpp">                <Filter>docView</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\control.cpp">           <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\controlProperty.cpp">   <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\typeControl.cpp">       <Filter>visualView\ctrl</Filter></ClCompile>

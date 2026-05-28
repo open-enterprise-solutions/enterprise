@@ -9,8 +9,8 @@ void ibVisualEditorNotebook::CreateVisualEditor(ibMetaDocument* document, wxWind
 {
 	wxAuiNotebook::AddPage(m_visualEditor, _("Designer"), false, wxArtProvider::GetBitmapBundle(wxART_DESIGNER_PAGE, wxART_DOC_FORM));
 	wxAuiNotebook::AddPage(m_codeEditor, _("Code"), false, wxArtProvider::GetBitmapBundle(wxART_CODE_PAGE, wxART_DOC_FORM));
-	m_visualEditor->SetReadOnly(flags == wxDOC_READONLY);
-	m_codeEditor->SetReadOnly(flags == wxDOC_READONLY);
+	m_visualEditor->SetReadOnly(flags == ibDOC_READONLY);
+	m_codeEditor->SetReadOnly(flags == ibDOC_READONLY);
 	wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
 
 	wxAuiNotebook::Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &ibVisualEditorNotebook::OnPageChanged, this);

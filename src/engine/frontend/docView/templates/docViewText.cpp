@@ -5,24 +5,24 @@
 // ibTextEditView implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibTextEditView, ibMetaView);
+wxIMPLEMENT_DYNAMIC_CLASS(ibTextEditView, ibView);
 
-wxBEGIN_EVENT_TABLE(ibTextEditView, ibMetaView)
+wxBEGIN_EVENT_TABLE(ibTextEditView, ibView)
 EVT_MENU(wxID_COPY, ibTextEditView::OnCopy)
 EVT_MENU(wxID_PASTE, ibTextEditView::OnPaste)
 EVT_MENU(wxID_SELECTALL, ibTextEditView::OnSelectAll)
 wxEND_EVENT_TABLE()
 
-bool ibTextEditView::OnCreate(ibMetaDocument* doc, long flags)
+bool ibTextEditView::OnCreate(ibDocument* doc, long flags)
 {
 	m_textEditor = new ibTextEditor(doc, m_viewFrame, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
 
 	m_textEditor->SetEditorSettings(mainFrame->GetEditorSettings());
 	m_textEditor->SetFontColorSettings(mainFrame->GetFontColorSettings());
 
-	m_textEditor->SetReadOnly(flags == wxDOC_READONLY);
+	m_textEditor->SetReadOnly(flags == ibDOC_READONLY);
 
-	return ibMetaView::OnCreate(doc, flags);
+	return ibView::OnCreate(doc, flags);
 }
 
 void ibTextEditView::OnDraw(wxDC* WXUNUSED(dc))
@@ -39,7 +39,7 @@ bool ibTextEditView::OnClose(bool deleteWindow)
 		SetFrame(nullptr);
 	}
 
-	if (ibMetaView::OnClose(deleteWindow)) {
+	if (ibView::OnClose(deleteWindow)) {
 
 		m_textEditor->Freeze();
 
@@ -95,12 +95,12 @@ void ibTextEditView::OnFind(wxFindDialogEvent& event)
 }
 
 // ----------------------------------------------------------------------------
-// ITextDocument: wxDocument and wxTextCtrl married
+// ibTextDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_CLASS(ITextDocument, ibMetaDocument);
+wxIMPLEMENT_CLASS(ibTextDocument, ibDocument);
 
-wxCommandProcessor* ITextDocument::OnCreateCommandProcessor()
+wxCommandProcessor* ibTextDocument::OnCreateCommandProcessor()
 {
 	ibTextCommandProcessor* commandProcessor = new ibTextCommandProcessor(GetTextCtrl());
 	commandProcessor->SetEditMenu(mainFrame->GetDefaultMenu(wxID_EDIT));
@@ -108,21 +108,21 @@ wxCommandProcessor* ITextDocument::OnCreateCommandProcessor()
 	return commandProcessor;
 }
 
-ibTextEditor* ITextDocument::GetTextCtrl() const
+ibTextEditor* ibTextDocument::GetTextCtrl() const
 {
-	wxView* view = GetFirstView();
+	ibView* view = GetFirstView();
 	return view ? wxDynamicCast(view, ibTextEditView)->GetText() : nullptr;
 }
 
 // ----------------------------------------------------------------------------
-// ibTextFilibDocument implementation
+// ibTextFileDocument implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibTextFilibDocument, ITextDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibTextFileDocument, ibTextDocument);
 
-bool ibTextFilibDocument::OnCreate(const wxString& path, long flags)
+bool ibTextFileDocument::OnCreate(const wxString& path, long flags)
 {
-	if (!ibMetaDocument::OnCreate(path, flags))
+	if (!ibDocument::OnCreate(path, flags))
 		return false;
 
 	return true;
@@ -130,12 +130,12 @@ bool ibTextFilibDocument::OnCreate(const wxString& path, long flags)
 
 // Since text windows have their own method for saving to/loading from files,
 // we override DoSave/OpenDocument instead of Save/LoadObject
-bool ibTextFilibDocument::DoSaveDocument(const wxString& filename)
+bool ibTextFileDocument::DoSaveDocument(const wxString& filename)
 {
 	return GetTextCtrl()->SaveFile(filename);
 }
 
-bool ibTextFilibDocument::DoOpenDocument(const wxString& filename)
+bool ibTextFileDocument::DoOpenDocument(const wxString& filename)
 {
 	if (!GetTextCtrl()->LoadFile(filename))
 		return false;

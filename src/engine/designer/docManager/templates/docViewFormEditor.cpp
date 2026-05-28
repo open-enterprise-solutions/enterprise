@@ -99,12 +99,12 @@ wxMenuBar* ibFormEditView::CreateMenuBar() const
 }
 #endif 
 
-void ibFormEditView::OnActivateView(bool activate, wxView* activeView, wxView* deactiveView)
+void ibFormEditView::OnActivateView(bool activate, ibView* activeView, ibView* deactiveView)
 {
 	if (activate) m_visualNotebook->ActivateEditor();
 }
 
-void ibFormEditView::OnUpdate(wxView* sender, wxObject* hint)
+void ibFormEditView::OnUpdate(ibView* sender, wxObject* hint)
 {
 	if (m_visualNotebook != nullptr)
 		m_visualNotebook->RefreshEditor();
@@ -240,7 +240,7 @@ void ibFormEditView::OnMenuEvent(wxCommandEvent& event)
 }
 
 // ----------------------------------------------------------------------------
-// ibModulibDocument: wxDocument and wxTextCtrl married
+// ibModuleDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
 wxIMPLEMENT_CLASS(ibFormDocument, ibMetaDocument);
@@ -309,13 +309,13 @@ bool ibFormDocument::Save()
 }
 
 // ----------------------------------------------------------------------------
-// ibTextFilibDocument implementation
+// ibTextFileDocument implementation
 // ----------------------------------------------------------------------------
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibFormEditDocument, ibFormDocument);
 
 ibVisualEditorNotebook* ibFormEditDocument::GetVisualNotebook() const
 {
-	wxView* view = GetFirstView();
+	ibView* view = GetFirstView();
 	return view ? wxDynamicCast(view, ibFormEditView)->GetVisualNotebook() : nullptr;
 }

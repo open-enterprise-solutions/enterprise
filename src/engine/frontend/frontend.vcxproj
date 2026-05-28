@@ -22,7 +22,6 @@
     <ClCompile Include="artProvider\artProvider.cpp" />
     <ClCompile Include="docView\docManager.cpp" />
     <ClCompile Include="docView\docView.cpp" />
-    <ClCompile Include="docView\docViewCmd.cpp" />
     <ClCompile Include="docView\templates\docViewAuditLog.cpp" />
     <ClCompile Include="docView\templates\docViewHelp.cpp" />
     <ClCompile Include="docView\templates\docViewSpreadsheet.cpp" />

@@ -42,7 +42,7 @@ bool ibCodeEditorPrintout::OnBeginDocument(int startPage, int endPage) {
 	return true;
 }
 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 
 void ibCodeEditorPrintout::GetPageInfo(int *minPage, int *maxPage, int *selPageFrom, int *selPageTo) {
 

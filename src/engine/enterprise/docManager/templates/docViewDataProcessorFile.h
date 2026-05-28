@@ -20,12 +20,12 @@ protected:
 	wxDECLARE_DYNAMIC_CLASS(ibDataProcessorEditView);
 };
 
-class ibDataProcessorFilibDocument : public ibMetaDataDocument {
+class ibDataProcessorFileDocument : public ibMetaDataDocument {
 	ibMetaDataDataProcessor* m_metaData;
 public:
 
-	ibDataProcessorFilibDocument() : ibMetaDataDocument() {}
-	virtual ~ibDataProcessorFilibDocument() { 
+	ibDataProcessorFileDocument() : ibMetaDataDocument() {}
+	virtual ~ibDataProcessorFileDocument() { 
 		/*wxDELETE(m_metaData);*/
 	}
 
@@ -71,8 +71,8 @@ protected:
 	virtual bool DoOpenDocument(const wxString& filename) override;
 	virtual bool DoSaveDocument(const wxString& filename) override;
 
-	wxDECLARE_NO_COPY_CLASS(ibDataProcessorFilibDocument);
-	wxDECLARE_DYNAMIC_CLASS(ibDataProcessorFilibDocument);
+	wxDECLARE_NO_COPY_CLASS(ibDataProcessorFileDocument);
+	wxDECLARE_DYNAMIC_CLASS(ibDataProcessorFileDocument);
 };
 
 #endif 

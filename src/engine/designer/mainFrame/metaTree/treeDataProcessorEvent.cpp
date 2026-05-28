@@ -190,7 +190,7 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnPasteItem(wxCommandEvent& e
 	event.Skip();
 }
 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 #include "frontend/mainFrame/mainFrameChild.h"
 
 void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnSetFocus(wxFocusEvent& event)
@@ -201,7 +201,7 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnSetFocus(wxFocusEvent& even
 	else if (event.GetEventType() == wxEVT_KILL_FOCUS) {
 		const ibAuiDocChildFrame* child =
 			static_cast<ibAuiDocChildFrame*>(mainFrame->GetActiveChild());
-		wxView* view = child ? child->GetView() : docManager->GetAnyUsableView();
+		ibView* view = child ? child->GetView() : docManager->GetAnyUsableView();
 		if (view != nullptr && view != docManager->GetCurrentView())
 			view->Activate(true);
 		docManager->ActivateView(view);

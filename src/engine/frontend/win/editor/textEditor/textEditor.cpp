@@ -9,7 +9,7 @@ inline wxColour GetInverse(const wxColour& color)
 	return wxColour(r ^ 0xFF, g ^ 0xFF, b ^ 0xFF);
 }
 
-ibTextEditor::ibTextEditor(ibMetaDocument* document, wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style, const wxString& name)
+ibTextEditor::ibTextEditor(ibDocument* document, wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style, const wxString& name)
 	: wxStyledTextCtrl(parent, id, pos, size, style, name), m_document(document)
 {
 	//Set margin cursor

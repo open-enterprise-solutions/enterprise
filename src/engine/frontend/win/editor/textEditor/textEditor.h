@@ -36,23 +36,25 @@ private:
 class ibTextEditor : public wxStyledTextCtrl {
 public:
 
-	ibTextEditor(class ibMetaDocument *doc, wxWindow* parent, wxWindowID id = wxID_ANY,
+	ibTextEditor(class ibDocument *doc, wxWindow* parent, wxWindowID id = wxID_ANY,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize, long style = 0,
 		const wxString& name = wxSTCNameStr);
 
-	//Editor setting 
+	//Editor setting
 	void SetEditorSettings(const ibEditorSettings& settings);
-	
-	//Font setting 
+
+	//Font setting
 	void SetFontColorSettings(const ibFontColorSettings& settings);
 
 private:
 
 	void OnTextChange(wxCommandEvent& event);
 
-	//document 
-	ibMetaDocument* m_document;
+	//document — owning doc is just a back-link for SetModify on text change;
+	// downgraded from ibMetaDocument* to ibDocument* after Text/Help docs
+	// were decoupled from the metadata-bound base.
+	ibDocument* m_document;
 };
 
 

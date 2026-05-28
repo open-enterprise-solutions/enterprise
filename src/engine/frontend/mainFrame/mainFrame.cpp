@@ -12,7 +12,7 @@
 #include "frontend/session/guiSession.h"
 
 //common 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 #include "frontend/mainFrame/objinspect/objinspect.h"
 
 #include "frontend/win/theme/luna_tabart.h"
@@ -69,7 +69,7 @@ ibFrontendDocMDIFrame::ibFrontendDocMDIFrame(const wxString& title,
 	const wxPoint& pos,
 	const wxSize& size,
 	long style,
-	const wxString& strName) : wxDocParentFrameAnyBase(this),
+	const wxString& strName) : ibDocParentFrameAnyBase(this),
 	m_objectInspector(nullptr), m_docToolbar(nullptr), m_mainFrameToolbar(nullptr),
 	m_callRaiseFrame(false), m_callUpdateFrameManager(false)
 {
@@ -112,10 +112,15 @@ bool ibFrontendDocMDIFrame::Create(const wxString& title,
 	return true;
 }
 
-ibFrontendWindow* ibFrontendDocMDIFrame::CreateChildFrame(ibMetaView* view, const wxPoint& pos, const wxSize& size, long style)
+ibFrontendWindow* ibFrontendDocMDIFrame::CreateChildFrame(ibView* view, const wxPoint& pos, const wxSize& size, long style)
 {
-	// create a child valueForm of appropriate class for the current mode
-	ibMetaDocument* document = view->GetDocument();
+	// create a child valueForm of appropriate class for the current mode.
+	// Parameter and back-ref type relaxed from ibMetaView*/ibMetaDocument*
+	// to ibView*/ibDocument* so the factory can serve plain (non-meta)
+	// documents too — required after AuditLog / Text / Help were rebased
+	// off the meta hierarchy. The child-frame ctors already accept the
+	// base ibDocument*.
+	ibDocument* document = view->GetDocument();
 
 	if ((style & wxCREATE_SDI_FRAME) != 0) {
 

@@ -297,7 +297,7 @@ void ibMetadataTree::ibMetaTreeCtrl::OnPasteItem(wxCommandEvent& event)
 	event.Skip();
 }
 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 #include "frontend/mainFrame/mainFrameChild.h"
 
 void ibMetadataTree::ibMetaTreeCtrl::OnSetFocus(wxFocusEvent& event)
@@ -306,7 +306,7 @@ void ibMetadataTree::ibMetaTreeCtrl::OnSetFocus(wxFocusEvent& event)
 
 		const wxTreeItemId& item = GetSelection();
 
-		wxView* view = docManager->GetCurrentView();
+		ibView* view = docManager->GetCurrentView();
 		if (m_ownerTree->m_docParent == nullptr &&
 			m_metaView != view) {
 			if (view != nullptr) view->Activate(false);
@@ -325,14 +325,14 @@ void ibMetadataTree::ibMetaTreeCtrl::OnSetFocus(wxFocusEvent& event)
 			const ibAuiDocChildFrame* focus_child_win =
 				static_cast<ibAuiDocChildFrame*>(mainFrame->GetActiveChild());
 
-			wxView* view = focus_child_win ? focus_child_win->GetView() : docManager->GetAnyUsableView();
+			ibView* view = focus_child_win ? focus_child_win->GetView() : docManager->GetAnyUsableView();
 			// Do NOT gate this on `m_metaView == docManager->GetCurrentView()`:
 			// when the user opens a doc directly from the tree (double-click on
 			// a metadata item), the new doc becomes the current view before
 			// KILL_FOCUS fires. That guard then skipped re-activation, leaving
 			// the toolbar and menu of the newly-opened doc disabled (the tree's
 			// SET_FOCUS path had already cleared them via view->Activate(false)).
-			// wxDocManager::ActivateView(v, false) is a no-op when v is not the
+			// ibDocManager::ActivateView(v, false) is a no-op when v is not the
 			// current view, so unconditionally calling it is safe.
 			if (m_ownerTree->m_docParent == nullptr &&
 				m_metaView != view) {

@@ -199,7 +199,7 @@ private:
 		public:
 
 			ibMatadataTreeView(ibMetaTreeCtrl* tree) : m_ownerTree(tree) {}
-			virtual void OnActivateView(bool activate, wxView* activeView, wxView* deactiveView) override;
+			virtual void OnActivateView(bool activate, ibView* activeView, ibView* deactiveView) override;
 
 		private:
 			ibMetaTreeCtrl* m_ownerTree;

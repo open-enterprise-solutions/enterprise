@@ -14,7 +14,7 @@ public:
 	ibReportEditView() : ibMetaView() {}
 
 	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
-	virtual void OnActivateView(bool activate, wxView* activeView, wxView* deactiveView) override;
+	virtual void OnActivateView(bool activate, ibView* activeView, ibView* deactiveView) override;
 	virtual void OnDraw(wxDC* dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
@@ -27,7 +27,7 @@ protected:
 
 static int s_defaultReportNameCounter = 1;
 
-class ibReportFilibDocument : public ibMetaDataDocument {
+class ibReportFileDocument : public ibMetaDataDocument {
 	ibMetaDataReport* m_metaData;
 public:
 
@@ -40,8 +40,8 @@ public:
 		return wxNullIcon;
 	}
 
-	ibReportFilibDocument() : ibMetaDataDocument() { m_childDoc = false; }
-	virtual ~ibReportFilibDocument() { 
+	ibReportFileDocument() : ibMetaDataDocument() { m_childDoc = false; }
+	virtual ~ibReportFileDocument() { 
 		wxDELETE(m_metaData); 
 	}
 
@@ -95,8 +95,8 @@ protected:
 	virtual bool DoOpenDocument(const wxString& filename) override;
 	virtual bool DoSaveDocument(const wxString& filename) override;
 
-	wxDECLARE_NO_COPY_CLASS(ibReportFilibDocument);
-	wxDECLARE_DYNAMIC_CLASS(ibReportFilibDocument);
+	wxDECLARE_NO_COPY_CLASS(ibReportFileDocument);
+	wxDECLARE_DYNAMIC_CLASS(ibReportFileDocument);
 };
 
 #endif 

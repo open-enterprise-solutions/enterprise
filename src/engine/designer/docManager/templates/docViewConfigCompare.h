@@ -29,7 +29,7 @@ class wxChoice;
 class ibDataViewCtrl;
 class ibDataViewEvent;
 
-class ibConfigCompareDocument : public ibMetaDocument {
+class ibConfigCompareDocument : public ibDocument {
 public:
 	ibConfigCompareDocument();
 
@@ -60,8 +60,6 @@ protected:
 	bool DoSaveDocument(const wxString&) override { return true; }
 	bool DoOpenDocument(const wxString&) override { return true; }
 
-	ibMetaView* DoCreateView() override;
-
 private:
 	class ibValueMetaObject* m_leftRoot  = nullptr;
 	class ibValueMetaObject* m_rightRoot = nullptr;
@@ -76,12 +74,12 @@ private:
 	wxDECLARE_DYNAMIC_CLASS(ibConfigCompareDocument);
 };
 
-class ibConfigCompareView : public ibMetaView {
+class ibConfigCompareView : public ibView {
 public:
-	ibConfigCompareView() : ibMetaView() {}
+	ibConfigCompareView() : ibView() {}
 
-	bool OnCreate(ibMetaDocument* doc, long flags) override;
-	void OnUpdate(wxView* sender, wxObject* hint) override;
+	bool OnCreate(ibDocument* doc, long flags) override;
+	void OnUpdate(ibView* sender, wxObject* hint) override;
 	void OnDraw(wxDC* dc) override;
 	bool OnClose(bool deleteWindow = true) override;
 

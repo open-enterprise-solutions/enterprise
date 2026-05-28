@@ -4,9 +4,9 @@
 #include <wx/listctrl.h>
 #include <wx/statline.h>
 
-struct CChoiceTemplateItem
+struct ibChoiceTemplateItem
 {
-	wxDocTemplate* m_template;
+	ibDocTemplate* m_template;
 	wxString m_description;
 	wxIcon m_icon;
 };
@@ -17,14 +17,14 @@ class ibDialogChoiceTemplate : public wxDialog {
 
 		long m_index;
 
-		wxDocTemplate* m_template;
+		ibDocTemplate* m_template;
 		wxString m_description;
 		wxIcon m_icon;
 	};
 
 public:
 
-	wxDocTemplate* GetSelectionData() const
+	ibDocTemplate* GetSelectionData() const
 	{
 		const long selected = m_listChoice->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
 		if (selected != -1) {
@@ -39,7 +39,7 @@ public:
 		return nullptr;
 	}
 
-	ibDialogChoiceTemplate(const wxVector<CChoiceTemplateItem>& choices) :
+	ibDialogChoiceTemplate(const wxVector<ibChoiceTemplateItem>& choices) :
 		wxDialog(NULL, wxID_ANY, _("Select document type"), wxDefaultPosition, wxSize(250, 225), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 	{
 		wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
@@ -93,7 +93,7 @@ private:
 		event.Skip();
 	}
 
-	void AppendTemplate(wxDocTemplate* docTemplate, const wxString& description, const wxIcon& icon) {
+	void AppendTemplate(ibDocTemplate* docTemplate, const wxString& description, const wxIcon& icon) {
 
 		const int index = m_listChoice->InsertItem(m_listChoice->GetItemCount(), description, m_imageList->Add(icon));
 

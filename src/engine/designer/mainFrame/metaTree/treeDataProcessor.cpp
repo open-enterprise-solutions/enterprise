@@ -108,7 +108,7 @@ ibDataProcessorTree::ibDataProcessorTree(ibMetaDocument* docParent, wxWindow* pa
 
 	bSizerMain->Add(sbSizerTree, 1, wxEXPAND, FromDIP(5));
 
-	ibMetaDataDataProcessor* metaData = ((ibDataProcessorFilibDocument*)docParent)->GetMetaData();
+	ibMetaDataDataProcessor* metaData = ((ibDataProcessorFileDocument*)docParent)->GetMetaData();
 	ibValueMetaObjectDataProcessor* commonMeta = metaData->GetDataProcessor();
 	const ibValueMetaObjectModule *moduleMeta = commonMeta->GetObjectModule();
 
@@ -279,7 +279,7 @@ ibDataProcessorTree::ibDataProcessorTreeCtrl::ibDataProcessorTreeCtrl(wxWindow* 
 	SetDoubleBuffered(true);
 }
 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 
 ibDataProcessorTree::ibDataProcessorTreeCtrl::~ibDataProcessorTreeCtrl()
 {

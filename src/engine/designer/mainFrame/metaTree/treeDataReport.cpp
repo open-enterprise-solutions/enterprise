@@ -108,7 +108,7 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 
 	bSizerMain->Add(sbSizerTree, 1, wxEXPAND, FromDIP(5));
 
-	ibMetaDataReport* metaData = ((ibReportFilibDocument*)docParent)->GetMetaData();
+	ibMetaDataReport* metaData = ((ibReportFileDocument*)docParent)->GetMetaData();
 	ibValueMetaObjectReport* commonMeta = metaData->GetReport();
 	const ibValueMetaObjectModule* moduleMeta = commonMeta->GetObjectModule();
 
@@ -286,7 +286,7 @@ ibDataReportTree::ibDataReportTreeCtrl::ibDataReportTreeCtrl(wxWindow* parentWnd
 	SetDoubleBuffered(true);
 }
 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 
 ibDataReportTree::ibDataReportTreeCtrl::~ibDataReportTreeCtrl()
 {

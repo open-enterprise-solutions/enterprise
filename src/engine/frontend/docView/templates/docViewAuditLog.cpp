@@ -212,12 +212,12 @@ void ibAuditLogModel::GetValue(wxVariant& val,
 //   ibAuditLogDocument
 // ============================================================
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibAuditLogDocument, ibMetaDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibAuditLogDocument, ibDocument);
 
-ibAuditLogDocument::ibAuditLogDocument() : ibMetaDocument()
+ibAuditLogDocument::ibAuditLogDocument() : ibDocument()
 {
-	// Top-level tool tab — not a child of another document.
-	m_childDoc = false;
+	// ibDocument default ctor already leaves m_documentParent null, so
+	// IsChildDocument() returns false — no flag to set.
 
 	if (appData != nullptr && appData->GetLogger() != nullptr) {
 		m_reader = std::make_unique<ibLoggerReader>(
@@ -225,21 +225,16 @@ ibAuditLogDocument::ibAuditLogDocument() : ibMetaDocument()
 	}
 }
 
-ibMetaView* ibAuditLogDocument::DoCreateView()
-{
-	return new ibAuditLogView();
-}
-
 // ============================================================
 //   ibAuditLogView
 // ============================================================
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibAuditLogView, ibMetaView);
+wxIMPLEMENT_DYNAMIC_CLASS(ibAuditLogView, ibView);
 
-wxBEGIN_EVENT_TABLE(ibAuditLogView, ibMetaView)
+wxBEGIN_EVENT_TABLE(ibAuditLogView, ibView)
 wxEND_EVENT_TABLE()
 
-bool ibAuditLogView::OnCreate(ibMetaDocument* doc, long flags)
+bool ibAuditLogView::OnCreate(ibDocument* doc, long flags)
 {
 	m_auditDoc = dynamic_cast<ibAuditLogDocument*>(doc);
 
@@ -254,7 +249,7 @@ bool ibAuditLogView::OnCreate(ibMetaDocument* doc, long flags)
 
 	// Initial fetch happens via the dataview ctrl driving GetFirstFetch
 	// off AssociateModel inside BuildLayout — no extra trigger needed.
-	return ibMetaView::OnCreate(doc, flags);
+	return ibView::OnCreate(doc, flags);
 }
 
 void ibAuditLogView::BuildLayout(wxWindow* parent)
@@ -490,7 +485,7 @@ void ibAuditLogView::OnTimer(wxTimerEvent&)
 	Reload();
 }
 
-void ibAuditLogView::OnUpdate(wxView* /*sender*/, wxObject* /*hint*/)
+void ibAuditLogView::OnUpdate(ibView* /*sender*/, wxObject* /*hint*/)
 {
 	// UpdateAllViews fires on doc mutation. The journal is read-only;
 	// any external refresh request just re-runs the query.
@@ -513,5 +508,5 @@ bool ibAuditLogView::OnClose(bool deleteWindow)
 		}
 	}
 
-	return ibMetaView::OnClose(deleteWindow);
+	return ibView::OnClose(deleteWindow);
 }

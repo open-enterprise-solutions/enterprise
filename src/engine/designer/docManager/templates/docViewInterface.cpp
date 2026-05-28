@@ -14,13 +14,13 @@ wxEND_EVENT_TABLE()
 bool ibInterfaceEditView::OnCreate(ibMetaDocument* doc, long flags)
 {
 	m_interfaceEditor = new ibInterfaceEditor(m_viewFrame, wxID_ANY, doc->GetMetaObject());
-	m_interfaceEditor->SetReadOnly(flags == wxDOC_READONLY);
+	m_interfaceEditor->SetReadOnly(flags == ibDOC_READONLY);
 
 	m_interfaceEditor->RefreshInterface();
 	return ibMetaView::OnCreate(doc, flags);
 }
 
-void ibInterfaceEditView::OnUpdate(wxView* sender, wxObject* hint)
+void ibInterfaceEditView::OnUpdate(ibView* sender, wxObject* hint)
 {
 	if (m_interfaceEditor != nullptr) 
 		m_interfaceEditor->RefreshInterface();	
@@ -54,12 +54,12 @@ bool ibInterfaceEditView::OnClose(bool deleteWindow)
 }
 
 // ----------------------------------------------------------------------------
-// ibInterfacibDocument: wxDocument and wxGrid married
+// ibInterfaceDocument: ibDocument and wxGrid married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_CLASS(ibInterfacibDocument, ibMetaDocument);
+wxIMPLEMENT_CLASS(ibInterfaceDocument, ibMetaDocument);
 
-bool ibInterfacibDocument::OnCreate(const wxString& path, long flags)
+bool ibInterfaceDocument::OnCreate(const wxString& path, long flags)
 {
 	if (!ibMetaDocument::OnCreate(path, flags))
 		return false;
@@ -69,22 +69,22 @@ bool ibInterfacibDocument::OnCreate(const wxString& path, long flags)
 
 // Since text windows have their own method for saving to/loading from files,
 // we override DoSave/OpenDocument instead of Save/LoadObject
-bool ibInterfacibDocument::DoSaveDocument(const wxString& filename)
+bool ibInterfaceDocument::DoSaveDocument(const wxString& filename)
 {
 	return true;
 }
 
-bool ibInterfacibDocument::DoOpenDocument(const wxString& filename)
+bool ibInterfaceDocument::DoOpenDocument(const wxString& filename)
 {
 	return true;
 }
 
-bool ibInterfacibDocument::IsModified() const
+bool ibInterfaceDocument::IsModified() const
 {
 	return ibMetaDocument::IsModified();
 }
 
-void ibInterfacibDocument::Modify(bool modified)
+void ibInterfaceDocument::Modify(bool modified)
 {
 	ibMetaDocument::Modify(modified);
 }

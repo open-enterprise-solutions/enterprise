@@ -351,7 +351,7 @@ void ibWebApplication::OnExit()
 	// path stops and deletes them. No separate app-level teardown.
 
 	// Close every still-open tab on the WORKER thread. DeleteAllViews
-	// runs wxView::Close → ibFormVisualEditView::OnClose → potentially
+	// runs ibView::Close → ibFormVisualEditView::OnClose → potentially
 	// ibValueForm::CloseDocForm, which fires `beforeClose`/`onClose`
 	// scripts through ibProcUnit. procUnit is session-thread-only; doing
 	// it on the HTTP thread (the one that reached OnExit via

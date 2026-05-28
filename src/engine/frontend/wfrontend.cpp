@@ -1741,7 +1741,7 @@ std::string SessionInfoFromSession(ibWebSession* s)
 					}
 					t["formName"] = name;
 					// Modified state: desktop renders a '*' prefix in the
-					// tab label when wxDocument::IsModified() is true; the
+					// tab label when ibDocument::IsModified() is true; the
 					// form's m_formModified mirrors that.
 					t["modified"] = form->IsModified();
 				}

@@ -15,19 +15,22 @@
 // → control re-fetches from page 0.
 
 // docView.h must come first — it pulls in wx/app.h + wx/docview.h, which
-// fully define wxString. backend/clsid.h uses wxString in its inline
-// helpers; including it before wx is set up triggers wxArgNormalizer
-// specialization errors in strvararg.h.
+// fully define wxString. backend/logger/loggerReader.h uses wxString in
+// its inline helpers; including it before wx is set up triggers
+// wxArgNormalizer specialization errors in strvararg.h.
 #include "frontend/docView/docView.h"
 
-#include "backend/clsid.h"
 #include "backend/logger/loggerReader.h"
 #include "frontend/win/ctrls/dataview/dataview.h"
 
 #include <memory>
 #include <vector>
 
-const ibClassID g_toolAuditLogCLSID = string_to_clsid("TL_ALOG");
+// Registration journal does not carry a metaobject — it is a standalone
+// tool tab. After the ibDocManager collapse it is rebased to the plain
+// wx-fork ibDocument/ibView pair instead of ibMetaDocument/ibMetaView,
+// registered via a plain ibDocTemplate (no CLSID key) in
+// ibDocManager::RegisterDefaultTemplates.
 
 class wxAuiToolBar;
 class wxDatePickerCtrl;
@@ -131,29 +134,20 @@ private:
 	ibLogFilter     m_baseFilter;
 };
 
-class FRONTEND_API ibAuditLogDocument : public ibMetaDocument {
+class FRONTEND_API ibAuditLogDocument : public ibDocument {
 public:
 	ibAuditLogDocument();
 
 	ibLoggerReader* GetReader() const { return m_reader.get(); }
 
 	// The journal is read-only — never prompts on close, never tracks
-	// dirty state. m_metaObject is intentionally nullptr; the base
-	// ibMetaDocument falls through to wxDocument's flag-based modified
-	// tracking in that branch, so we override explicitly.
+	// dirty state.
 	bool IsModified() const override { return false; }
 	void Modify(bool) override {}
 
 protected:
 	bool DoSaveDocument(const wxString&) override { return true; }
 	bool DoOpenDocument(const wxString&) override { return true; }
-
-	// Bypass the template-lookup path — we register the template with
-	// the doc manager only so wxDocument internals find one when they
-	// look (m_documentTemplate isn't allowed to be null). DoCreateView
-	// returns the concrete view directly so we don't depend on the
-	// template's view class info.
-	ibMetaView* DoCreateView() override;
 
 private:
 	std::unique_ptr<ibLoggerReader> m_reader;
@@ -162,12 +156,12 @@ private:
 	wxDECLARE_DYNAMIC_CLASS(ibAuditLogDocument);
 };
 
-class FRONTEND_API ibAuditLogView : public ibMetaView {
+class FRONTEND_API ibAuditLogView : public ibView {
 public:
-	ibAuditLogView() : ibMetaView() {}
+	ibAuditLogView() : ibView() {}
 
-	bool OnCreate(ibMetaDocument* doc, long flags) override;
-	void OnUpdate(wxView* sender, wxObject* hint) override;
+	bool OnCreate(ibDocument* doc, long flags) override;
+	void OnUpdate(ibView* sender, wxObject* hint) override;
 	void OnDraw(wxDC* dc) override;
 	bool OnClose(bool deleteWindow = true) override;
 

@@ -29,12 +29,12 @@ bool ibReportEditView::OnClose(bool deleteWindow)
 }
 
 // ----------------------------------------------------------------------------
-// ITextDocument: wxDocument and wxTextCtrl married
+// ibTextDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibReportFilibDocument, ibMetaDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibReportFileDocument, ibMetaDocument);
 
-bool ibReportFilibDocument::OnCreate(const wxString& path, long flags)
+bool ibReportFileDocument::OnCreate(const wxString& path, long flags)
 {
 	/*if (!ibMetaDocument::OnCreate(path, flags))
 		return false;*/
@@ -45,18 +45,18 @@ bool ibReportFilibDocument::OnCreate(const wxString& path, long flags)
 
 #include "frontend/mainFrame/objinspect/objinspect.h"
 
-bool ibReportFilibDocument::OnCloseDocument()
+bool ibReportFileDocument::OnCloseDocument()
 {
 	if (!m_metaData->CloseDatabase(forceCloseFlag)) {
 		return false;
 	}
 
-	return wxDocument::OnCloseDocument();
+	return ibDocument::OnCloseDocument();
 }
 
 // Since text windows have their own method for saving to/loading from files,
 // we override DoSave/OpenDocument instead of Save/LoadObject
-bool ibReportFilibDocument::DoOpenDocument(const wxString& filename)
+bool ibReportFileDocument::DoOpenDocument(const wxString& filename)
 {
 	if (!m_metaData->LoadFromFile(filename))
 		return false;
@@ -65,7 +65,7 @@ bool ibReportFilibDocument::DoOpenDocument(const wxString& filename)
 	return false;
 }
 
-bool ibReportFilibDocument::DoSaveDocument(const wxString& filename)
+bool ibReportFileDocument::DoSaveDocument(const wxString& filename)
 {
 	/*if (!m_metaData->SaveToFile(filename))
 		return false;*/
@@ -73,12 +73,12 @@ bool ibReportFilibDocument::DoSaveDocument(const wxString& filename)
 	return true;
 }
 
-bool ibReportFilibDocument::IsModified() const
+bool ibReportFileDocument::IsModified() const
 {
 	return ibMetaDocument::IsModified();
 }
 
-void ibReportFilibDocument::Modify(bool modified)
+void ibReportFileDocument::Modify(bool modified)
 {
 	ibMetaDocument::Modify(modified);
 }

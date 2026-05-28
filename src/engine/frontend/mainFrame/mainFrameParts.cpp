@@ -51,7 +51,7 @@ void ibFrontendDocMDIFrame::ShowInspector()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 
 void ibFrontendDocMDIFrame::ActivateView(ibMetaView* view, bool activate) {
 
@@ -174,8 +174,8 @@ ibMetaData* ibFrontendDocMDIFrame::FindMetadataByPath(const wxString& strFileNam
 ibBackendValueForm* ibFrontendDocMDIFrame::ActiveWindow() const {
 
 	if (ibFrontendDocMDIFrame::GetFrame() != nullptr) {
-		wxDocChildFrameAnyBase* activeChild =
-			dynamic_cast<wxDocChildFrameAnyBase*>(ibFrontendDocMDIFrame::GetActiveChild());
+		ibDocChildFrameAnyBase* activeChild =
+			dynamic_cast<ibDocChildFrameAnyBase*>(ibFrontendDocMDIFrame::GetActiveChild());
 		if (activeChild != nullptr) {
 			ibFormVisualDocument* const ownerFormDoc = dynamic_cast<ibFormVisualDocument*>(activeChild->GetDocument());
 			if (ownerFormDoc != nullptr) {

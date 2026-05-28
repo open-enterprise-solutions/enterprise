@@ -27,7 +27,7 @@ ibFrontendDocMDIFrameEnterprise::ibFrontendDocMDIFrameEnterprise(const wxString&
 	ibFrontendDocMDIFrame(title, pos, size),
 	m_outputWindow(new ibOutputWindow(this, wxID_ANY))
 {
-	m_docManager = new ibMetaDocManagerEnterprise;
+	m_docManager = new ibDocManagerEnterprise;
 }
 
 ibFrontendDocMDIFrameEnterprise::~ibFrontendDocMDIFrameEnterprise()

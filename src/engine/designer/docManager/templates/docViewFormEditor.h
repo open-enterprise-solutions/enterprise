@@ -32,8 +32,8 @@ public:
 	virtual wxPrintout* OnCreatePrintout() override;
 	virtual void OnCreateToolbar(wxAuiToolBar* toolbar) override;
 	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
-	virtual void OnActivateView(bool activate, wxView* activeView, wxView* deactiveView) override;
-	virtual void OnUpdate(wxView* sender, wxObject* hint) override;
+	virtual void OnActivateView(bool activate, ibView* activeView, ibView* deactiveView) override;
+	virtual void OnUpdate(ibView* sender, wxObject* hint) override;
 	virtual void OnDraw(wxDC* dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
@@ -63,13 +63,13 @@ private:
 };
 
 // ----------------------------------------------------------------------------
-// ITextDocument: wxDocument and wxTextCtrl married
+// ibTextDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-class ibFormDocument : public ibValueModulibDocument {
+class ibFormDocument : public ibValueModuleDocument {
 public:
 
-	ibFormDocument() : ibValueModulibDocument() {}
+	ibFormDocument() : ibValueModuleDocument() {}
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
 	virtual bool OnOpenDocument(const wxString& filename) override;

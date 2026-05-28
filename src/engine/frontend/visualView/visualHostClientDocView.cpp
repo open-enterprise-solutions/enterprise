@@ -65,11 +65,12 @@ bool ibFormVisualDocument::OnCloseDocument()
 	if (m_valueForm != nullptr)
 		m_valueForm->m_formModified = false;
 
-	wxDocManager* documentManager = GetDocumentManager();
+	ibDocManager* documentManager = GetDocumentManager();
 
 	// When the parent document closes, its children must be closed as well as
-	// they can't exist without the parent.
-	ibMetaDocument const* documentParent = m_documentParent;
+	// they can't exist without the parent. Base's m_documentParent is now
+	// ibDocument* — downcast to ibMetaDocument* for metadata-typed access.
+	ibMetaDocument const* documentParent = static_cast<ibMetaDocument const*>(m_documentParent);
 
 	if (documentManager != nullptr && documentParent != nullptr)
 		documentManager->ActivateView(documentParent->GetFirstView());
@@ -136,9 +137,12 @@ bool ibFormVisualDocument::Save()
 	return true;
 }
 
-void ibFormVisualDocument::SetDocParent(ibMetaDocument* docParent)
+void ibFormVisualDocument::SetDocParent(ibDocument* docParent)
 {
-	ibMetaDocument::SetDocParent(docParent);
+	// Base's SetDocParent now lives on ibDocument (step-4 collapse); the
+	// adapter no longer overrides it. Forward to base, then run the
+	// form-side cleanup if we're detaching.
+	ibDocument::SetDocParent(docParent);
 
 	if (docParent == nullptr &&
 		(m_valueForm != nullptr && m_valueForm->m_controlOwner != nullptr)) {
@@ -374,7 +378,7 @@ bool ibFormVisualEditView::OnCreate(ibMetaDocument* doc, long flags)
 	return ibMetaView::OnCreate(doc, flags);
 }
 
-void ibFormVisualEditView::OnUpdate(wxView* sender, wxObject* hint)
+void ibFormVisualEditView::OnUpdate(ibView* sender, wxObject* hint)
 {
 	if (m_visualHost != nullptr)
 		m_visualHost->UpdateForm();
@@ -408,7 +412,7 @@ bool ibFormVisualEditView::OnClose(bool deleteWindow)
 	//	Activate(false);
 
 #ifndef OES_USE_WEB
-	// GetFrame() returns a wxWindow (the wxDocChildFrame hosting this
+	// GetFrame() returns a wxWindow (the ibDocChildFrame hosting this
 	// view on desktop). On web the view's "frame" is an ibWebDocChildFrame
 	// living in ibWebFrame's tab vector — its lifetime is managed by
 	// the session's tab close path, not by the view. So no Destroy here.

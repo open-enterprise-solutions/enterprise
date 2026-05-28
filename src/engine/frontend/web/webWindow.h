@@ -91,7 +91,19 @@ public:
 	virtual void Enable(bool enable = true) { m_enabled = enable; }
 
 	virtual bool IsShown() const { return m_shown; }
-	virtual void Show(bool show = true) { m_shown = show; }
+	// Return bool to match wxWindow::Show contract — `if (win->Show(x))`
+	// is a valid idiom used in shared code (ibView::ShowFrame).
+	virtual bool Show(bool show = true) { m_shown = show; return true; }
+
+	// Doc/view shims — fork of wxWidgets' doc/view subsystem calls these
+	// on the "associated window" (ibDocChildFrameAnyBase::m_win) which on
+	// web is an ibWebWindow*. No-op stubs so ibDocChildFrameAny<T,P>
+	// template instantiates cleanly with <ibWebMDIChildFrame, ibWebWindow>.
+	// Behavioral wiring (e.g. defer-mark for tab close on Destroy) is
+	// step 3 of the fork plan (see ibDocView.h header notes).
+	virtual void Raise() {}
+	virtual bool Destroy() { delete this; return true; }
+	virtual bool Close(bool /*force*/ = false) { return true; }
 
 	// Visual style properties pushed from ibValueWindow::UpdateWindow.
 	// Emitted as optional JSON fields (only when set to a non-default

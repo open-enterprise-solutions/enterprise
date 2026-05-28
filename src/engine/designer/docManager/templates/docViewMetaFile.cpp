@@ -14,7 +14,7 @@ bool ibMetadataEditView::OnCreate(ibMetaDocument* doc, long flags)
 	return ibMetaView::OnCreate(doc, flags);
 }
 
-void ibMetadataEditView::OnActivateView(bool activate, wxView* activeView, wxView* deactiveView)
+void ibMetadataEditView::OnActivateView(bool activate, ibView* activeView, ibView* deactiveView)
 {
 	if (activate) m_metaTree->ActivateTree();
 }
@@ -49,7 +49,7 @@ bool ibMetadataEditView::OnClose(bool deleteWindow)
 }
 
 // ----------------------------------------------------------------------------
-// ITextDocument: wxDocument and wxTextCtrl married
+// ibTextDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
 #include "frontend/mainFrame/mainFrame.h"
@@ -74,17 +74,17 @@ bool ibMetadataBrowserDocument::OnCloseDocument()
 
 ibMetadataTree* ibMetadataBrowserDocument::GetMetaTree() const
 {
-	wxView* view = GetFirstView();
+	ibView* view = GetFirstView();
 	return view ? wxDynamicCast(view, ibMetadataEditView)->GetMetaTree() : nullptr;
 }
 
 // ----------------------------------------------------------------------------
-// ITextDocument: wxDocument and wxTextCtrl married
+// ibTextDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibMetadataFilibDocument, ibMetaDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibMetadataFileDocument, ibMetaDocument);
 
-bool ibMetadataFilibDocument::OnCreate(const wxString& path, long flags)
+bool ibMetadataFileDocument::OnCreate(const wxString& path, long flags)
 {
 	m_metaData = new ibMetaDataConfigurationFile();
 
@@ -96,7 +96,7 @@ bool ibMetadataFilibDocument::OnCreate(const wxString& path, long flags)
 
 // Since text windows have their own method for saving to/loading from files,
 // we override DoSave/OpenDocument instead of Save/LoadObject
-bool ibMetadataFilibDocument::DoOpenDocument(const wxString& filename)
+bool ibMetadataFileDocument::DoOpenDocument(const wxString& filename)
 {
 	if (!m_metaData->LoadConfigFromFile(filename))
 		return false;
@@ -107,7 +107,7 @@ bool ibMetadataFilibDocument::DoOpenDocument(const wxString& filename)
 	return m_metaData->RunDatabase(onlyLoadFlag);
 }
 
-bool ibMetadataFilibDocument::OnCloseDocument()
+bool ibMetadataFileDocument::OnCloseDocument()
 {
 	if (!m_metaData->CloseDatabase(forceCloseFlag)) {
 		return false;
@@ -117,7 +117,7 @@ bool ibMetadataFilibDocument::OnCloseDocument()
 	return true;
 }
 
-bool ibMetadataFilibDocument::DoSaveDocument(const wxString& filename)
+bool ibMetadataFileDocument::DoSaveDocument(const wxString& filename)
 {
 	/*if (!m_metaData->SaveToFile(filename))
 		return false;*/
@@ -125,11 +125,11 @@ bool ibMetadataFilibDocument::DoSaveDocument(const wxString& filename)
 	return true;
 }
 
-bool ibMetadataFilibDocument::IsModified() const
+bool ibMetadataFileDocument::IsModified() const
 {
 	return false;
 }
 
-void ibMetadataFilibDocument::Modify(bool modified)
+void ibMetadataFileDocument::Modify(bool modified)
 {
 }

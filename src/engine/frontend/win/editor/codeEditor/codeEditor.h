@@ -27,7 +27,7 @@ class ibMetaDocument;
 class ibReaderMemory;
 
 // Forwards wxCommandProcessor's undo/redo stack to the underlying
-// wxStyledTextCtrl — STC owns its own undo buffer, but wxDocument
+// wxStyledTextCtrl — STC owns its own undo buffer, but ibDocument
 // expects a wxCommandProcessor on the document side.
 class ibModuleCommandProcessor : public wxCommandProcessor {
 	wxStyledTextCtrl* m_codeEditor = nullptr;

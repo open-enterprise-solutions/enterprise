@@ -41,14 +41,14 @@ bool ibModuleEditView::OnCreate(ibMetaDocument* doc, long flags)
 	m_codeEditor = new ibCodeEditorDesigner(doc, m_viewFrame, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
 
-	m_codeEditor->SetReadOnly(flags == wxDOC_READONLY);
+	m_codeEditor->SetReadOnly(flags == ibDOC_READONLY);
 	m_codeEditor->SetSTCFocus(true);
 
 	return ibMetaView::OnCreate(doc, flags)
 		&& m_codeEditor->LoadModule();
 }
 
-void ibModuleEditView::OnActivateView(bool activate, wxView* activeView, wxView* deactiveView)
+void ibModuleEditView::OnActivateView(bool activate, ibView* activeView, ibView* deactiveView)
 {
 	if (activate) m_codeEditor->ActivateEditor();
 }
@@ -58,7 +58,7 @@ void ibModuleEditView::OnDraw(wxDC* WXUNUSED(dc))
 	// nothing to do here, wxTextCtrl draws itself
 }
 
-void ibModuleEditView::OnUpdate(wxView* sender, wxObject* hint)
+void ibModuleEditView::OnUpdate(ibView* sender, wxObject* hint)
 {
 	if (m_codeEditor != nullptr)
 		m_codeEditor->RefreshEditor();
@@ -168,12 +168,12 @@ void ibModuleEditView::OnMenuEvent(wxCommandEvent& event)
 }
 
 // ----------------------------------------------------------------------------
-// ibModulibDocument: wxDocument and wxTextCtrl married
+// ibModuleDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_CLASS(ibModulibDocument, ibMetaDocument);
+wxIMPLEMENT_CLASS(ibModuleDocument, ibMetaDocument);
 
-bool ibModulibDocument::OnCreate(const wxString& path, long flags)
+bool ibModuleDocument::OnCreate(const wxString& path, long flags)
 {
 	if (!ibMetaDocument::OnCreate(path, flags))
 		return false;
@@ -181,22 +181,22 @@ bool ibModulibDocument::OnCreate(const wxString& path, long flags)
 	return true;
 }
 
-bool ibModulibDocument::OnOpenDocument(const wxString& filename)
+bool ibModuleDocument::OnOpenDocument(const wxString& filename)
 {
 	return ibMetaDocument::OnOpenDocument(filename);
 }
 
-bool ibModulibDocument::OnSaveDocument(const wxString& filename)
+bool ibModuleDocument::OnSaveDocument(const wxString& filename)
 {
 	return GetCodeEditor()->SaveModule();
 }
 
-bool ibModulibDocument::OnSaveModified()
+bool ibModuleDocument::OnSaveModified()
 {
 	return ibMetaDocument::OnSaveModified();
 }
 
-bool ibModulibDocument::OnCloseDocument()
+bool ibModuleDocument::OnCloseDocument()
 {
 	ibCodeEditor* codeEditor = GetCodeEditor();
 	if (codeEditor != nullptr &&
@@ -207,7 +207,7 @@ bool ibModulibDocument::OnCloseDocument()
 	return ibMetaDocument::OnCloseDocument();
 }
 
-wxCommandProcessor* ibModulibDocument::OnCreateCommandProcessor()
+wxCommandProcessor* ibModuleDocument::OnCreateCommandProcessor()
 {
 	ibModuleCommandProcessor* commandProcessor = new ibModuleCommandProcessor(GetCodeEditor());
 	commandProcessor->SetEditMenu(mainFrame->GetDefaultMenu(wxID_EDIT));
@@ -217,12 +217,12 @@ wxCommandProcessor* ibModulibDocument::OnCreateCommandProcessor()
 
 // Since text windows have their own method for saving to/loading from files,
 // we override DoSave/OpenDocument instead of Save/LoadObject
-bool ibModulibDocument::DoSaveDocument(const wxString& filename)
+bool ibModuleDocument::DoSaveDocument(const wxString& filename)
 {
 	return GetCodeEditor()->SaveFile(filename);
 }
 
-bool ibModulibDocument::DoOpenDocument(const wxString& filename)
+bool ibModuleDocument::DoOpenDocument(const wxString& filename)
 {
 	if (!GetCodeEditor()->LoadFile(filename))
 		return false;
@@ -230,18 +230,18 @@ bool ibModulibDocument::DoOpenDocument(const wxString& filename)
 	return true;
 }
 
-bool ibModulibDocument::IsModified() const
+bool ibModuleDocument::IsModified() const
 {
 	//wxStyledTextCtrl* wnd = GetCodeEditor();
 	return ibMetaDocument::IsModified();// || (wnd && wnd->IsModified());
 }
 
-void ibModulibDocument::Modify(bool modified)
+void ibModuleDocument::Modify(bool modified)
 {
 	ibMetaDocument::Modify(modified);
 }
 
-bool ibModulibDocument::Save()
+bool ibModuleDocument::Save()
 {
 	ibCodeEditor* codeEditor = GetCodeEditor();
 	if (codeEditor != nullptr &&
@@ -253,14 +253,14 @@ bool ibModulibDocument::Save()
 }
 
 // ----------------------------------------------------------------------------
-// ibTextFilibDocument implementation
+// ibTextFileDocument implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibModuleEditDocument, ibModulibDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibModuleEditDocument, ibModuleDocument);
 
 ibCodeEditor* ibModuleEditDocument::GetCodeEditor() const
 {
-	wxView* view = GetFirstView();
+	ibView* view = GetFirstView();
 	return view ? wxDynamicCast(view, ibModuleEditView)->GetCodeEditor() : nullptr;
 }
 

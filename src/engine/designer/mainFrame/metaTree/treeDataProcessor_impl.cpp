@@ -5,7 +5,7 @@
 
 #include "treeDataProcessor.h"
 #include "frontend/mainFrame/mainFrame.h"
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 #include "backend/appData.h"
 
 #define	objectFormsName _("Forms")
@@ -501,7 +501,12 @@ void ibDataProcessorTree::ActivateTree()
 void ibDataProcessorTree::ClearTree()
 {
 	for (auto& doc : docManager->GetDocumentsVector()) {
+		// docManager->GetDocumentsVector() now mixes ibMetaDocument
+		// instances (Catalog/Document/Form editors) with plain ibDocument
+		// (AuditLog, Text, Help) after step-4b decoupling. Skip non-meta
+		// docs — they have no metaobject to compare against this tree.
 		const ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
+		if (metaDoc == nullptr) continue;
 		const ibValueMetaObject* metaObject = metaDoc->GetMetaObject();
 		if (metaObject != nullptr && this == metaObject->GetMetaDataTree()) {
 			doc->DeleteAllViews();

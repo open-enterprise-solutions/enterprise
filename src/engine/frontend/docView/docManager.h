@@ -1,184 +1,145 @@
-#ifndef _REPORT_MANAGER_H__
-#define _REPORT_MANAGER_H__
+#ifndef _DOC_MANAGER_H__
+#define _DOC_MANAGER_H__
 
-#include "docView.h"
+/////////////////////////////////////////////////////////////////////////////
+// Name:        frontend/docView/docManager.h
+// Purpose:     OES doc-manager extension types.
+//
+//   ibDocManager itself is declared in docView.h next to the wx-fork base
+//   it inherits from; the meta-template API (AddDocTemplate(ibClassID,…),
+//   OpenForm, FindMetaTemplate, …) is part of that class declaration.
+//
+//   This header is the home of additional types that complement
+//   ibDocManager but don't belong in the wx-fork header — currently the
+//   ibMetaDocTemplate class. Includers that only need ibDocManager* and
+//   the wx-fork base can stay on docView.h; pull in docManager.h when you
+//   need the full ibMetaDocTemplate definition (icon / CLSID accessors).
+//
+//   Implementation lives in docManager.cpp (cross-build with desktop /
+//   web-stub split via OES_USE_WEB).
+/////////////////////////////////////////////////////////////////////////////
 
-#define docManager ibMetaDocManager::GetDocumentManager()
+#include "frontend/docView/docView.h"
 
-#include <wx/fdrepdlg.h>
+// ----------------------------------------------------------------------------
+// ibDocTemplate — the wx-fork base template type. Implements the path/ext
+// keyed file-template path used by ibDocManager::CreateDocument. Moved out
+// of docView.h alongside its meta-template subclass so the fork header
+// stays focused on ibDocument / ibView / ibDocManager.
+// ----------------------------------------------------------------------------
 
-// Document template flags
-enum
+class FRONTEND_API ibDocTemplate: public wxObject
 {
-	wxTEMPLATE_ONLY_OPEN = 4,
-	wxTEMPLATE_SAVE_AS_FILE = 8
-};
 
-class FRONTEND_API ibMetaDocManager : public wxDocManager {
-
-	class ibMetaDocTemplate : public wxDocTemplate {
-	public:
-		// Associate document and view types. They're for identifying what view is
-		// associated with what template/document type
-		ibMetaDocTemplate(wxDocManager* manager,
-			const wxString& descr,
-			const wxString& filter,
-			const wxString& dir,
-			const wxString& ext,
-			const wxString& docTypeName,
-			const wxString& viewTypeName,
-			wxClassInfo* docClassInfo = nullptr,
-			wxClassInfo* viewClassInfo = nullptr,
-			long flags = wxDEFAULT_TEMPLATE_FLAGS) : wxDocTemplate(manager,
-				descr,
-				filter,
-				dir,
-				ext,
-				docTypeName,
-				viewTypeName,
-				docClassInfo,
-				viewClassInfo,
-				flags)
-		{
-		}
-
-		// Helper method for CreateDocument; also allows you to do your own document
-		// creation
-		virtual bool InitDocument(wxDocument* doc,
-			const wxString& path,
-			long flags = 0);
-	};
-
-	struct ibMetaDocManagerItem {
-		ibClassID m_clsid;
-		wxString m_className;
-		wxString m_classDescr;
-		ibGuid m_guidTemplate;
-		ibMetaDocTemplate* m_docTemplate;
-		wxIcon m_classIcon;
-	};
-
-	std::vector <ibMetaDocManagerItem> m_templateVector;
-
-	wxFindReplaceData m_findData;
-	wxFindReplaceDialog* m_findDialog;
-
-private:
-
-	ibMetaDocument* OpenForm(ibValueMetaObject* metaObject, ibMetaDocument* docParent, long flags);
-
-	// Handlers for common user commands
-	void OnFileClose(wxCommandEvent& event);
-	void OnFileCloseAll(wxCommandEvent& event);
-	void OnFileNew(wxCommandEvent& event);
-	void OnFileOpen(wxCommandEvent& event);
-	void OnFileRevert(wxCommandEvent& event);
-	void OnFileSave(wxCommandEvent& event);
-	void OnFileSaveAs(wxCommandEvent& event);
-	void OnMRUFile(wxCommandEvent& event);
-#if wxUSE_PRINTING_ARCHITECTURE
-	void OnPrint(wxCommandEvent& event);
-	void OnPreview(wxCommandEvent& event);
-	void OnPageSetup(wxCommandEvent& event);
-#endif // wxUSE_PRINTING_ARCHITECTURE
-	void OnUndo(wxCommandEvent& event);
-	void OnRedo(wxCommandEvent& event);
-
-	// Handlers for UI update commands
-	void OnUpdateFileOpen(wxUpdateUIEvent& event);
-	void OnUpdateDisableIfNoDoc(wxUpdateUIEvent& event);
-	void OnUpdateFileRevert(wxUpdateUIEvent& event);
-	void OnUpdateFileNew(wxUpdateUIEvent& event);
-	void OnUpdateFileSave(wxUpdateUIEvent& event);
-	void OnUpdateFileSaveAs(wxUpdateUIEvent& event);
-	void OnUpdateUndo(wxUpdateUIEvent& event);
-	void OnUpdateRedo(wxUpdateUIEvent& event);
-
-	void OnUpdateSaveMetadata(wxUpdateUIEvent& event);
-
-	//find dialog
-	void OnFindDialog(wxCommandEvent& event);
-	void OnFind(wxFindDialogEvent& event);
-	void OnFindClose(wxFindDialogEvent& event);
+friend class FRONTEND_API ibDocManager;
 
 public:
+	ibDocTemplate(ibDocManager *manager,
+	              const wxString& descr,
+	              const wxString& filter,
+	              const wxString& dir,
+	              const wxString& ext,
+	              const wxString& docTypeName,
+	              const wxString& viewTypeName,
+	              wxClassInfo *docClassInfo = nullptr,
+	              wxClassInfo *viewClassInfo = nullptr,
+	              long flags = ibDEFAULT_TEMPLATE_FLAGS);
 
-	template <typename T, typename... Args>
-	T* CreateDocument(Args&&... args) const {
-		wxDocTemplate* docTemplate = FindTemplateByDocClassInfo(CLASSINFO(T));
-		if (docTemplate != nullptr) {
-			T* doc = new T(std::forward<Args>(args)...);
-			doc->SetDocumentTemplate(docTemplate);
-			return doc;
-		}
-		return nullptr;
-	}
+	virtual ~ibDocTemplate();
 
-	static ibMetaDocument* OpenFormMDI(ibValueMetaObject* metaObject, long flags = wxDOC_NEW);
-	static ibMetaDocument* OpenFormMDI(ibValueMetaObject* metaObject, ibMetaDocument* docParent, long flags = wxDOC_NEW);
+	virtual ibDocument *CreateDocument(const wxString& path, long flags = 0);
+	virtual ibView *CreateView(ibDocument *doc, long flags = 0);
 
-	// Get the current document manager
-	static ibMetaDocManager* GetDocumentManager() {
-		return dynamic_cast<ibMetaDocManager*>(sm_docManager);
-	}
+	virtual bool InitDocument(ibDocument* doc,
+	                          const wxString& path,
+	                          long flags = 0);
 
-	ibMetaDocManager();
-	virtual ~ibMetaDocManager();
+	wxString GetDefaultExtension() const { return m_defaultExt; }
+	wxString GetDescription() const { return m_description; }
+	wxString GetDirectory() const { return m_directory; }
+	ibDocManager *GetDocumentManager() const { return m_documentManager; }
+	void SetDocumentManager(ibDocManager *manager)
+		{ m_documentManager = manager; }
+	wxString GetFileFilter() const { return m_fileFilter; }
+	long GetFlags() const { return m_flags; }
+	virtual wxString GetViewName() const { return m_viewTypeName; }
+	virtual wxString GetDocumentName() const { return m_docTypeName; }
 
-	void AddDocTemplate(const ibPictureID& id, const wxString& descr,
-		const wxString& filter,
-		const wxString& dir,
-		const wxString& ext,
-		const wxString& docTypeName,
-		const wxString& viewTypeName,
-		wxClassInfo* docClassInfo,
-		wxClassInfo* viewClassInfo,
-		long flags = wxTEMPLATE_VISIBLE
-	);
+	void SetFileFilter(const wxString& filter) { m_fileFilter = filter; }
+	void SetDirectory(const wxString& dir) { m_directory = dir; }
+	void SetDescription(const wxString& descr) { m_description = descr; }
+	void SetDefaultExtension(const wxString& ext) { m_defaultExt = ext; }
+	void SetFlags(long flags) { m_flags = flags; }
 
-	void AddDocTemplate(const ibPictureID& id, const wxString& descr,
-		const wxString& filter,
-		const wxString& ext,
-		const wxString& docTypeName,
-		const wxString& viewTypeName,
-		wxClassInfo* docClassInfo,
-		wxClassInfo* viewClassInfo,
-		long flags = wxTEMPLATE_VISIBLE
-	);
+	bool IsVisible() const { return (m_flags & ibTEMPLATE_VISIBLE) != 0; }
 
-	void AddDocTemplate(const ibClassID& id,
-		const wxString& descr,
-		const wxString& filter,
-		const wxString& ext,
-		wxClassInfo* docClassInfo,
-		wxClassInfo* viewClassInfo
-	);
+	wxClassInfo* GetDocClassInfo() const { return m_docClassInfo; }
+	wxClassInfo* GetViewClassInfo() const { return m_viewClassInfo; }
 
-	void AddDocTemplate(const ibClassID& id,
-		wxClassInfo* docClassInfo,
-		wxClassInfo* viewClassInfo
-	);
-
-	ibMetaDocument* GetCurrentDocument() const;
-
-	virtual wxDocument* CreateDocument(const wxString& pathOrig, long flags) override;
-	virtual wxDocTemplate* SelectDocumentPath(wxDocTemplate** templates,
-		int noTemplates, wxString& path, long flags, bool save = false) override;
-	virtual wxDocTemplate* SelectDocumentType(wxDocTemplate** templates,
-		int noTemplates, bool sort = false) override;
-
-	wxDocTemplate* FindTemplateByDocClassInfo(const wxClassInfo* classInfo) const;
-
-	bool CloseDocument(wxDocument* doc, bool force = false);
-	bool CloseDocuments(bool force);
-	bool Clear(bool force);
+	virtual bool FileMatchesTemplate(const wxString& path);
 
 protected:
+	long              m_flags;
+	wxString          m_fileFilter;
+	wxString          m_directory;
+	wxString          m_description;
+	wxString          m_defaultExt;
+	wxString          m_docTypeName;
+	wxString          m_viewTypeName;
+	ibDocManager*     m_documentManager;
 
-	wxDECLARE_DYNAMIC_CLASS(ibMetaDocManager);
-	wxDECLARE_NO_COPY_CLASS(ibMetaDocManager);
+	wxClassInfo*      m_docClassInfo;
+	wxClassInfo*      m_viewClassInfo;
 
-	wxDECLARE_EVENT_TABLE();
+	virtual ibDocument *DoCreateDocument();
+	virtual ibView *DoCreateView();
+
+private:
+	wxDECLARE_CLASS(ibDocTemplate);
+	wxDECLARE_NO_COPY_CLASS(ibDocTemplate);
 };
 
-#endif
+// ----------------------------------------------------------------------------
+// ibMetaDocTemplate — metadata-aware template subclass.
+//
+// Holds the OES-side keying that the wx-style file template doesn't have:
+// the metaobject CLSID, a per-template GUID, and the icon shown in the
+// "Choose template" dialog. Registered through the ibDocManager::AddDocTemplate
+// overloads that take ibClassID / ibPictureID instead of a plain wxClassInfo.
+// Lives in the same m_templates list as plain ibDocTemplate; lookups by CLSID
+// iterate that list and dynamic_cast to ibMetaDocTemplate*.
+// ----------------------------------------------------------------------------
+
+class FRONTEND_API ibMetaDocTemplate : public ibDocTemplate
+{
+public:
+	ibMetaDocTemplate(ibDocManager* manager,
+	                  const wxString& descr,
+	                  const wxString& filter,
+	                  const wxString& dir,
+	                  const wxString& ext,
+	                  const wxString& docTypeName,
+	                  const wxString& viewTypeName,
+	                  wxClassInfo* docClassInfo = nullptr,
+	                  wxClassInfo* viewClassInfo = nullptr,
+	                  long flags = ibDEFAULT_TEMPLATE_FLAGS);
+
+	virtual bool InitDocument(ibDocument* doc,
+	                          const wxString& path,
+	                          long flags = 0) override;
+
+	const ibClassID& GetClassID()      const { return m_clsid; }
+	void             SetClassID(const ibClassID& clsid) { m_clsid = clsid; }
+
+	const ibGuid&    GetGuidTemplate() const { return m_guidTemplate; }
+
+	const wxIcon&    GetClassIcon()    const { return m_classIcon; }
+	void             SetClassIcon(const wxIcon& icon) { m_classIcon = icon; }
+
+protected:
+	ibClassID m_clsid;
+	ibGuid    m_guidTemplate;
+	wxIcon    m_classIcon;
+};
+
+#endif // _DOC_MANAGER_H__

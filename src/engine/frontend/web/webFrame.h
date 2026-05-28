@@ -29,6 +29,7 @@
 #include <wx/gdicmn.h>   // wxPoint, wxSize
 
 class ibBackendValueForm;
+class ibView;
 class ibMetaView;
 class ibWebDocChildFrame;
 
@@ -158,7 +159,7 @@ public:
 	// DoCreateView. Builds an ibWebDocChildFrame, hands it to the
 	// current session's ibWebFrame via AdoptTab, and returns it as
 	// ibFrontendWindow* so the signature matches desktop.
-	static ibFrontendWindow* CreateChildFrame(ibMetaView* view,
+	static ibFrontendWindow* CreateChildFrame(ibView* view,
 		const wxPoint& pos  = wxDefaultPosition,
 		const wxSize&  size = wxDefaultSize,
 		long           style = 0);

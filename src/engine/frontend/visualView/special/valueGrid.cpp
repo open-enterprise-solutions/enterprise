@@ -75,7 +75,7 @@ bool CValueGrid::ShowGrid(const wxString &sTitle)
 	CMDIDocChildFrame *subvalueFrame = new CMDIDocChildFrame(m_document, view.get(), CDocMDIFrame::GetFrame(), wxID_ANY, sTitle, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE);
 	subvalueFrame->SetExtraStyle(wxWS_EX_BLOCK_EVENTS);
 
-	if (view->OnCreate(m_document, wxDOC_NEW)) { view->ShowFrame(); }
+	if (view->OnCreate(m_document, ibDOC_NEW)) { view->ShowFrame(); }
 	return view.release() != NULL;
 }
 

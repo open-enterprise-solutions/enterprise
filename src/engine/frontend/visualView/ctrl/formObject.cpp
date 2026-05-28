@@ -6,7 +6,7 @@
 #include "form.h"
 #include "backend/appData.h"
 #include "backend/metaData.h"
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 #include "backend/srcExplorer.h"
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/session/session.h"
@@ -580,7 +580,7 @@ bool ibValueForm::CloseForm(bool force)
 
 	if (ownerDocForm != nullptr) {
 #ifdef OES_USE_WEB
-		// Defer the wxDocument::DeleteAllViews — it would delete the
+		// Defer the ibDocument::DeleteAllViews — it would delete the
 		// view, host, AND every control (including the toolbar that
 		// just fired the OnTool we're in). Mark the tab; the
 		// session's Dispatch epilogue drains pending closes AFTER
@@ -590,7 +590,7 @@ bool ibValueForm::CloseForm(bool force)
 		}
 		return true;
 #else
-		// Same hazard on desktop — wxDocument::DeleteAllViews deletes
+		// Same hazard on desktop — ibDocument::DeleteAllViews deletes
 		// the view (a wxEvtHandler) plus every control synchronously.
 		// If CloseForm was invoked from within the toolbar's tool
 		// event (Save-and-close command), control returns to

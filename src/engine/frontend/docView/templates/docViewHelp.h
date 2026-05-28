@@ -11,12 +11,12 @@
 #include <wx/fdrepdlg.h>
 
 // The view using a standard wxTextCtrl to show its contents
-class FRONTEND_API ibHelpEditView : public ibMetaView {
+class FRONTEND_API ibHelpEditView : public ibView {
 public:
-	
-	ibHelpEditView() : ibMetaView(), m_textEditor(nullptr) {}
 
-	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
+	ibHelpEditView() : ibView(), m_textEditor(nullptr) {}
+
+	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnDraw(wxDC* dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
@@ -39,12 +39,14 @@ private:
 };
 
 // ----------------------------------------------------------------------------
-// ibHelpDocument: wxDocument and wxTextCtrl married
+// ibHelpDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
+// metaModuleObject.h is included for g_metaCommonModuleCLSID (icon lookup
+// only — not for metadata binding; ibHelpDocument is a plain file document).
 #include "backend/metaCollection/metaModuleObject.h"
 
-class FRONTEND_API ibHelpDocument : public ibMetaDocument
+class FRONTEND_API ibHelpDocument : public ibDocument
 {
 public:
 
@@ -52,7 +54,7 @@ public:
 		return ibBackendPicture::GetPictureAsIcon(g_metaCommonModuleCLSID);
 	}
 
-	ibHelpDocument() : ibMetaDocument() { m_childDoc = false; }
+	ibHelpDocument() : ibDocument() {}
 
 	virtual wxCommandProcessor* OnCreateCommandProcessor() override;
 	virtual ibTextEditor* GetTextCtrl() const;
@@ -66,11 +68,11 @@ protected:
 // A very simple text document class
 // ----------------------------------------------------------------------------
 
-class FRONTEND_API ibHelpFilibDocument : public ibHelpDocument
+class FRONTEND_API ibHelpFileDocument : public ibHelpDocument
 {
 public:
 	
-	ibHelpFilibDocument() : ibHelpDocument(), m_loadFromFile(false) {}
+	ibHelpFileDocument() : ibHelpDocument(), m_loadFromFile(false) {}
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
 	virtual bool OnNewDocument() override {
@@ -100,8 +102,8 @@ protected:
 
 	bool m_loadFromFile;
 
-	wxDECLARE_NO_COPY_CLASS(ibHelpFilibDocument);
-	wxDECLARE_DYNAMIC_CLASS(ibHelpFilibDocument);
+	wxDECLARE_NO_COPY_CLASS(ibHelpFileDocument);
+	wxDECLARE_DYNAMIC_CLASS(ibHelpFileDocument);
 };
 
 #endif

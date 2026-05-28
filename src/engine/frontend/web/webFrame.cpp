@@ -228,18 +228,20 @@ void ibWebFrame::AdoptTab(std::unique_ptr<ibWebDocChildFrame> tab, ibValueForm* 
 }
 
 ibFrontendWindow* ibWebFrame::CreateChildFrame(
-	ibMetaView* view,
+	ibView* view,
 	const wxPoint& /*pos*/,
 	const wxSize&  /*size*/,
 	long           /*style*/)
 {
 	// Web-side static factory — mirror of the desktop
-	// ibFrontendDocMDIFrame::CreateChildFrame. Works with any
-	// ibMetaDocument subclass (form, tabular, text, report …),
-	// not just ibFormVisualDocument. Title comes from the doc's
-	// GetTitle(); any per-type-specific wiring (e.g. ibValueForm
-	// tracking for ActiveWindow() on form tabs) happens in a
-	// narrow downcast below, leaving non-form docs untouched.
+	// ibFrontendDocMDIFrame::CreateChildFrame. Works with any ibDocument
+	// subclass (form, tabular, text, report, audit log …), not just
+	// ibFormVisualDocument. Title comes from the doc's GetTitle(); any
+	// per-type-specific wiring (e.g. ibValueForm tracking for
+	// ActiveWindow() on form tabs) happens in a narrow downcast below,
+	// leaving non-form docs untouched. Param type relaxed from
+	// ibMetaView*/ibMetaDocument* to ibView*/ibDocument* after AuditLog /
+	// Text / Help were rebased off the meta hierarchy.
 	if (view == nullptr) return nullptr;
 
 	// Per-tab session is pinned by the worker loop's ibSessionScope; its
@@ -249,7 +251,7 @@ ibFrontendWindow* ibWebFrame::CreateChildFrame(
 		? dynamic_cast<ibWebFrame*>(session->GetFrame()) : nullptr;
 	if (webFrame == nullptr) return nullptr;
 
-	ibMetaDocument* doc = view->GetDocument();
+	ibDocument* doc = view->GetDocument();
 	// doc->GetTitle() is still empty at this stage — the doc was just
 	// constructed and its title is set by ibFormVisualDocument::OnCreate,
 	// which the caller invokes AFTER CreateChildFrame. Pull the title
@@ -270,7 +272,7 @@ ibFrontendWindow* ibWebFrame::CreateChildFrame(
 
 	// Wire the view's web-frame back-pointer so ibMetaView::ShowFrame
 	// can reach this tab and flip its shown/active state. Desktop gets
-	// the same effect via wxView::SetFrame (done by wxDocChildFrame
+	// the same effect via ibView::SetFrame (done by ibDocChildFrame
 	// ctor); web plumbs it explicitly here.
 	view->SetWebFrame(raw);
 
@@ -331,7 +333,7 @@ void ibWebFrame::DrainPendingCloses()
 				<< " doc=" << (void*)visualDoc << std::endl;
 			// Now — outside any control's event handler — we can safely
 			// destroy the view, which cascades into host and all its
-			// child controls (toolbar, tools, textctrl etc.). wxDocument's
+			// child controls (toolbar, tools, textctrl etc.). ibDocument's
 			// DeleteAllViews contract also deletes the doc itself when
 			// the last view goes, so m_tabs[i]->m_doc becomes dangling
 			// (tab dtor nulls it, doesn't delete).

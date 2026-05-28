@@ -1,76 +1,254 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
-//	Description : report manager 
+//	Description : OES doc-manager wiring — bodies that the collapsed
+//	              ibDocManager class (declared in docView.h) needs on top of
+//	              the wx-fork base in docView.cpp. The file lives in both
+//	              frontend (desktop) and wfrontend (web) builds; the few
+//	              desktop-specific bodies (Find/Replace dialog parented on
+//	              the AUI mainFrame) are reduced to stubs under OES_USE_WEB.
 ////////////////////////////////////////////////////////////////////////////
 
-#include <wx/except.h>
-#include <wx/docview.h>
-#include <wx/cmdproc.h>
-#include <wx/config.h>
+#include "frontend/docView/docManager.h"  // also brings docView.h transitively
 
-#if wxUSE_PRINTING_ARCHITECTURE
-#include <wx/paper.h>
-#endif // wxUSE_PRINTING_ARCHITECTURE
+#include "frontend/win/dlgs/choiceTemplate.h"
+#include "backend/backend_picture.h"
+#include "backend/metadataConfiguration.h"
+#include "backend/moduleManager/moduleManager.h"
 
-#include "docManager.h"
-
-//common templates
+#ifndef OES_USE_WEB
+// Shared default templates registered through RegisterDefaultTemplates() —
+// desktop only, since the editor TUs aren't linked into wfrontend.dll.
 #include "frontend/docView/templates/docViewText.h"
 #include "frontend/docView/templates/docViewSpreadsheet.h"
 #include "frontend/docView/templates/docViewHelp.h"
 #include "frontend/docView/templates/docViewAuditLog.h"
+#endif
 
-#include "backend/metadataConfiguration.h"
+#ifndef OES_USE_WEB
+// Desktop-only: Find/Replace dialog parents the wxFindReplaceDialog against
+// the AUI MDI frame singleton. mainFrame.h pulls in ibFrontendDocMDIFrame
+// + AUI + objectInspector — none of which exist on wfrontend.dll. Also the
+// home of ibFrontendDocMDIFrame::CreateChildFrame used below to wire
+// m_viewFrame on every view going through the template path.
+#include "frontend/mainFrame/mainFrame.h"
+#else
+// Web-side counterpart of CreateChildFrame, called from the template path.
+#include "frontend/web/webFrame.h"
+#endif
 
-wxBEGIN_EVENT_TABLE(ibMetaDocManager, wxDocManager)
+#if wxUSE_DOC_VIEW_ARCHITECTURE
 
-EVT_MENU(wxID_OPEN, ibMetaDocManager::OnFileOpen)
-EVT_MENU(wxID_CLOSE, ibMetaDocManager::OnFileClose)
-EVT_MENU(wxID_CLOSE_ALL, ibMetaDocManager::OnFileCloseAll)
-EVT_MENU(wxID_REVERT, ibMetaDocManager::OnFileRevert)
-EVT_MENU(wxID_NEW, ibMetaDocManager::OnFileNew)
-EVT_MENU(wxID_SAVE, ibMetaDocManager::OnFileSave)
-EVT_MENU(wxID_SAVEAS, ibMetaDocManager::OnFileSaveAs)
-EVT_MENU(wxID_UNDO, ibMetaDocManager::OnUndo)
-EVT_MENU(wxID_REDO, ibMetaDocManager::OnRedo)
+#include <wx/tokenzr.h>
+#include <wx/filename.h>
+#include <wx/scopeguard.h>
+#include <memory>
 
-// We don't know in advance how many items can there be in the MRU files
-// list so set up OnMRUFile() as a handler for all menu events and do the
-// check for the id of the menu item clicked inside it.
-EVT_MENU(wxID_ANY, ibMetaDocManager::OnMRUFile)
+wxIMPLEMENT_ABSTRACT_CLASS(ibDocTemplate, wxObject);
 
-EVT_UPDATE_UI(wxID_OPEN, ibMetaDocManager::OnUpdateFileOpen)
-EVT_UPDATE_UI(wxID_CLOSE, ibMetaDocManager::OnUpdateDisableIfNoDoc)
-EVT_UPDATE_UI(wxID_CLOSE_ALL, ibMetaDocManager::OnUpdateDisableIfNoDoc)
-EVT_UPDATE_UI(wxID_REVERT, ibMetaDocManager::OnUpdateFileRevert)
-EVT_UPDATE_UI(wxID_NEW, ibMetaDocManager::OnUpdateFileNew)
-EVT_UPDATE_UI(wxID_SAVE, ibMetaDocManager::OnUpdateFileSave)
-EVT_UPDATE_UI(wxID_SAVEAS, ibMetaDocManager::OnUpdateFileSaveAs)
-EVT_UPDATE_UI(wxID_UNDO, ibMetaDocManager::OnUpdateUndo)
-EVT_UPDATE_UI(wxID_REDO, ibMetaDocManager::OnUpdateRedo)
+namespace
+{
 
-#if wxUSE_PRINTING_ARCHITECTURE
-EVT_MENU(wxID_PRINT, ibMetaDocManager::OnPrint)
-EVT_MENU(wxID_PREVIEW, ibMetaDocManager::OnPreview)
-EVT_MENU(wxID_PRINT_SETUP, ibMetaDocManager::OnPageSetup)
+// Extracted from wx/src/common/docview.cpp's anonymous-namespace helper; used
+// by ibDocTemplate::FileMatchesTemplate. Kept private to this TU so it
+// doesn't leak through docManager.h.
+wxString FindExtension(const wxString& path)
+{
+	wxString ext;
+	wxFileName::SplitPath(path, nullptr, nullptr, &ext);
 
-EVT_UPDATE_UI(wxID_PRINT, ibMetaDocManager::OnUpdateDisableIfNoDoc)
-EVT_UPDATE_UI(wxID_PREVIEW, ibMetaDocManager::OnUpdateDisableIfNoDoc)
-// NB: we keep "Print setup" menu item always enabled as it can be used
-//     even without an active document
-#endif // wxUSE_PRINTING_ARCHITECTURE
+	// VZ: extensions are considered not case sensitive — is this really a good
+	//     idea?
+	return ext.MakeLower();
+}
 
-EVT_MENU(wxID_FIND, ibMetaDocManager::OnFindDialog)
+} // namespace
 
-wxEND_EVENT_TABLE()
+// ----------------------------------------------------------------------------
+// ibDocTemplate (wx-fork base)
+// ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibMetaDocManager, wxDocManager);
+ibDocTemplate::ibDocTemplate(ibDocManager *manager,
+                             const wxString& descr,
+                             const wxString& filter,
+                             const wxString& dir,
+                             const wxString& ext,
+                             const wxString& docTypeName,
+                             const wxString& viewTypeName,
+                             wxClassInfo *docClassInfo,
+                             wxClassInfo *viewClassInfo,
+                             long flags)
+	: m_fileFilter(filter)
+	, m_directory(dir)
+	, m_description(descr)
+	, m_defaultExt(ext)
+	, m_docTypeName(docTypeName)
+	, m_viewTypeName(viewTypeName)
+{
+	m_documentManager = manager;
+	m_flags = flags;
+	m_documentManager->AssociateTemplate(this);
 
-//****************************************************************
-//*                           ibMetaDocManager					 *
-//****************************************************************
+	m_docClassInfo = docClassInfo;
+	m_viewClassInfo = viewClassInfo;
+}
 
-bool ibMetaDocManager::ibMetaDocTemplate::InitDocument(wxDocument* doc, const wxString& path, long flags)
+ibDocTemplate::~ibDocTemplate()
+{
+	m_documentManager->DisassociateTemplate(this);
+}
+
+// Tries to dynamically construct an object of the right class.
+ibDocument *ibDocTemplate::CreateDocument(const wxString& path, long flags)
+{
+	// InitDocument() is supposed to delete the document object if its
+	// initialization fails so don't use unique_ptr<> here: this is fragile
+	// but unavoidable because the default implementation uses CreateView()
+	// which may -- or not -- create a ibView and if it does create it and its
+	// initialization fails then the view destructor will delete the document
+	// (via RemoveView()) and as we can't distinguish between the two cases we
+	// just have to assume that it always deletes it in case of failure
+	ibDocument * const doc = DoCreateDocument();
+
+	return doc && InitDocument(doc, path, flags) ? doc : nullptr;
+}
+
+bool
+ibDocTemplate::InitDocument(ibDocument* doc, const wxString& path, long flags)
+{
+	wxScopeGuard guard = wxMakeGuard([&, this]()
+	{
+		// The document may be already destroyed, this happens if its view
+		// creation fails as then the view being created is destroyed
+		// triggering the destruction of the document as this first view is
+		// also the last one. However if OnCreate() fails for any reason other
+		// than view creation failure, the document is still alive and we need
+		// to clean it up ourselves to avoid having a zombie document.
+		if (GetDocumentManager()->GetDocuments().Member(doc))
+			doc->DeleteAllViews();
+	});
+
+	doc->SetFilename(path);
+	doc->SetDocumentTemplate(this);
+	GetDocumentManager()->AddDocument(doc);
+	doc->SetCommandProcessor(doc->OnCreateCommandProcessor());
+
+	if (!doc->OnCreate(path, flags))
+		return false;
+
+	guard.Dismiss();
+
+	return true;
+}
+
+ibView *ibDocTemplate::CreateView(ibDocument *doc, long flags)
+{
+	std::unique_ptr<ibView> view(DoCreateView());
+	if (!view)
+		return nullptr;
+
+	view->SetDocument(doc);
+
+	// Child-frame creation — lifted up from ibMetaDocument::OnCreate so any
+	// document going through the template path (AuditLog, Text, Help, …)
+	// gets m_viewFrame populated BEFORE view->OnCreate runs. Otherwise
+	// views that build their layout against m_viewFrame would crash on a
+	// null parent. The meta path bypasses this CreateView entirely (its
+	// own OnCreate calls CreateChildFrame itself), so there is no double
+	// creation.
+#ifdef OES_USE_WEB
+	ibWebFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, 0);
+#else
+	bool createModal = false;
+	for (wxWindow* window : wxTopLevelWindows) {
+		if (window->IsKindOf(CLASSINFO(wxDialog))) {
+			if (((wxDialog*)window)->IsModal()) {
+				createModal = true;
+				break;
+			}
+		}
+	}
+
+	long style = wxDEFAULT_FRAME_STYLE;
+	if (createModal) style |= wxCREATE_SDI_FRAME;
+
+	ibFrontendDocMDIFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, style);
+#endif
+
+	if (!view->OnCreate(doc, flags))
+		return nullptr;
+
+	// Reveal the frame now that the view has built its content. Desktop
+	// shows the ibAuiDocChildFrame; web flips the tab's shown state via
+	// the per-view m_webFrame back-pointer.
+	view->ShowFrame();
+
+	return view.release();
+}
+
+// The default (very primitive) format detection: check is the extension is
+// that of the template
+bool ibDocTemplate::FileMatchesTemplate(const wxString& path)
+{
+	wxStringTokenizer parser(GetFileFilter(), wxT(";"));
+	wxString anything = wxT("*");
+	while (parser.HasMoreTokens())
+	{
+		wxString filter = parser.GetNextToken();
+		wxString filterExt = FindExtension(filter);
+		if (filter.IsSameAs(anything) ||
+		    filterExt.IsSameAs(anything) ||
+		    filterExt.IsSameAs(FindExtension(path)))
+			return true;
+	}
+	return GetDefaultExtension().IsSameAs(FindExtension(path));
+}
+
+ibDocument *ibDocTemplate::DoCreateDocument()
+{
+	if (!m_docClassInfo)
+		return nullptr;
+
+	return static_cast<ibDocument *>(m_docClassInfo->CreateObject());
+}
+
+ibView *ibDocTemplate::DoCreateView()
+{
+	if (!m_viewClassInfo)
+		return nullptr;
+
+	return static_cast<ibView *>(m_viewClassInfo->CreateObject());
+}
+
+ibDocTemplateVector ibDocManager::GetTemplatesVector() const
+{
+	return m_templates.AsVector<ibDocTemplate*>();
+}
+
+// ----------------------------------------------------------------------------
+// ibMetaDocTemplate — plain C++ class, no wxRTTI registration (templates are
+// constructed directly through AddDocTemplate, never via dynamic factory).
+// ----------------------------------------------------------------------------
+
+ibMetaDocTemplate::ibMetaDocTemplate(ibDocManager* manager,
+                                     const wxString& descr,
+                                     const wxString& filter,
+                                     const wxString& dir,
+                                     const wxString& ext,
+                                     const wxString& docTypeName,
+                                     const wxString& viewTypeName,
+                                     wxClassInfo* docClassInfo,
+                                     wxClassInfo* viewClassInfo,
+                                     long flags)
+	: ibDocTemplate(manager, descr, filter, dir, ext,
+	                docTypeName, viewTypeName,
+	                docClassInfo, viewClassInfo, flags)
+	, m_guidTemplate(wxNewUniqueGuid)
+{
+	// m_clsid stays default-constructed; SetClassID populates it for
+	// metadata-keyed templates registered through AddDocTemplate(ibClassID,...).
+}
+
+bool ibMetaDocTemplate::InitDocument(ibDocument* doc, const wxString& path, long flags)
 {
 	wxTRY
 	{
@@ -83,823 +261,319 @@ bool ibMetaDocManager::ibMetaDocTemplate::InitDocument(wxDocument* doc, const wx
 			return true;
 		}
 
-		// The document may be already destroyed, this happens if its view
-		// creation fails as then the view being created is destroyed
-		// triggering the destruction of the document as this first view is
-		// also the last one. However if OnCreate() fails for any reason other
-		// than view creation failure, the document is still alive and we need
-		// to clean it up ourselves to avoid having a zombie document.
+		// OnCreate failed: the document may already have been destroyed by
+		// view-creation failure (its first view's death takes the document
+		// with it). If it survived, tear down its views explicitly so a
+		// zombie document doesn't linger in m_docs.
 		if (GetDocumentManager()->GetDocuments().Member(doc))
 			doc->DeleteAllViews();
 
 		return false;
 	}
-		wxCATCH_ALL(
-			if (GetDocumentManager()->GetDocuments().Member(doc))
-				doc->DeleteAllViews(); throw;
-				)
+	wxCATCH_ALL(
+		if (GetDocumentManager()->GetDocuments().Member(doc))
+			doc->DeleteAllViews();
+		throw;
+	)
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////
+// ----------------------------------------------------------------------------
+// ibDocManager — OES extensions
+// ----------------------------------------------------------------------------
 
-ibMetaDocManager::ibMetaDocManager()
-	: wxDocManager(), m_findDialog(nullptr)
+void ibDocManager::RegisterDefaultTemplates()
 {
+#ifndef OES_USE_WEB
+	// Body is desktop-only because the editor view classes
+	// (ibTextEditView, ibSpreadsheetEditView, ibHelpEditView,
+	// ibAuditLogView) are not compiled into wfrontend.dll — their
+	// CLASSINFO references would fail to link there. Web doesn't
+	// present a "Choose template" dialog so the registration is a
+	// no-op on that build.
+
+	// Text / Spreadsheet / Help — meta-bound templates keyed by CLSID.
 	AddDocTemplate(g_metaModuleCLSID,
-		_("Text document"), wxT("*.txt;*.text"), wxT("txt;text"), _("Text Doc"), _("Text View"), CLASSINFO(ibTextFilibDocument), CLASSINFO(ibTextEditView), wxTEMPLATE_VISIBLE);
+		_("Text document"), wxT("*.txt;*.text"), wxT("txt;text"),
+		_("Text Doc"), _("Text View"),
+		CLASSINFO(ibTextFileDocument), CLASSINFO(ibTextEditView),
+		ibTEMPLATE_VISIBLE);
 
 	AddDocTemplate(g_metaTemplateCLSID,
-		_("Spreadsheet document"), wxT("*.oxl"), wxT("oxl"), _("Spreadsheet Doc"), _("Spreadsheet View"), CLASSINFO(ibSpreadsheetFileDocument), CLASSINFO(ibSpreadsheetEditView), wxTEMPLATE_VISIBLE);
+		_("Spreadsheet document"), wxT("*.oxl"), wxT("oxl"),
+		_("Spreadsheet Doc"), _("Spreadsheet View"),
+		CLASSINFO(ibSpreadsheetFileDocument), CLASSINFO(ibSpreadsheetEditView),
+		ibTEMPLATE_VISIBLE);
 
 	AddDocTemplate(g_metaInterfaceCLSID,
-		_("Help document"), wxT("*.hle"), wxT("hle"), _("Help Doc"), _("Help View"), CLASSINFO(ibHelpFilibDocument), CLASSINFO(ibHelpEditView), wxTEMPLATE_INVISIBLE);
+		_("Help document"), wxT("*.hle"), wxT("hle"),
+		_("Help Doc"), _("Help View"),
+		CLASSINFO(ibHelpFileDocument), CLASSINFO(ibHelpEditView),
+		ibTEMPLATE_INVISIBLE);
 
-	// Tools — invisible templates (not exposed via File → New). Opened
-	// directly through CreateDocument<T>() from the menu handlers.
-	AddDocTemplate(g_toolAuditLogCLSID,
-		CLASSINFO(ibAuditLogDocument), CLASSINFO(ibAuditLogView));
-
-#if wxUSE_PRINTING_ARCHITECTURE
-
-	// initialize print data and setup
-	wxPrintData printData;
-
-	wxPrintPaperType* paper = wxThePrintPaperDatabase->FindPaperType(wxPAPER_A4);
-
-	printData.SetPaperId(paper->GetId());
-	printData.SetPaperSize(paper->GetSize());
-	printData.SetOrientation(wxPORTRAIT);
-
-	// copy over initial paper size from print record
-	m_pageSetupDialogData.SetPrintData(printData);
-
-#endif // wxUSE_PRINTING_ARCHITECTURE
+	// Registration journal — plain ibDocTemplate (no CLSID, no
+	// metaobject). Invisible to File→New; reached through
+	// CreateDocument<ibAuditLogDocument>() from the AuditLog menu
+	// handler in both Designer and Enterprise, which resolves via
+	// FindTemplateByDocClassInfo over m_templates. The ctor itself
+	// calls AssociateTemplate(this).
+	new ibDocTemplate(this,
+		_("Registration journal"),
+		wxEmptyString, wxEmptyString, wxEmptyString,
+		_("Audit Log Doc"), _("Audit Log View"),
+		CLASSINFO(ibAuditLogDocument), CLASSINFO(ibAuditLogView),
+		ibTEMPLATE_INVISIBLE);
+#endif
 }
 
-ibMetaDocManager::~ibMetaDocManager()
+void ibDocManager::OnFindDialog(wxCommandEvent& WXUNUSED(event))
 {
-	wxDELETE(m_findDialog);
-}
-
-void ibMetaDocManager::OnFileClose(wxCommandEvent& WXUNUSED(event))
-{
-	ibMetaDocument* doc = GetCurrentDocument();
-	if (doc) {
-		CloseDocument(doc);
-	}
-}
-
-void ibMetaDocManager::OnFileCloseAll(wxCommandEvent& WXUNUSED(event))
-{
-	CloseDocuments(false);
-}
-
-void ibMetaDocManager::OnFileNew(wxCommandEvent& WXUNUSED(event))
-{
-	CreateNewDocument();
-}
-
-void ibMetaDocManager::OnFileOpen(wxCommandEvent& WXUNUSED(event))
-{
-	if (!CreateDocument(wxT(""), 0)) 
-		OnOpenFileFailure();	
-}
-
-void ibMetaDocManager::OnFileRevert(wxCommandEvent& WXUNUSED(event))
-{
-	ibMetaDocument* doc = GetCurrentDocument();
-	if (!doc)
-		return;
-	doc->Revert();
-}
-
-void ibMetaDocManager::OnFileSave(wxCommandEvent& WXUNUSED(event))
-{
-	ibMetaDocument* doc = GetCurrentDocument();
-
-	if (!doc) {
-
-		if (activeMetaData != nullptr && activeMetaData->IsModified())
-			activeMetaData->SaveDatabase();
-
-		return;
-	}
-
-	doc->Save();
-}
-
-void ibMetaDocManager::OnFileSaveAs(wxCommandEvent& WXUNUSED(event))
-{
-	ibMetaDocument* doc = GetCurrentDocument();
-	if (!doc)
-		return;
-	doc->SaveAs();
-}
-
-void ibMetaDocManager::OnMRUFile(wxCommandEvent& event)
-{
-	if (m_fileHistory) {
-		// Check if the id is in the range assigned to MRU list entries.
-		const int id = event.GetId();
-		if (id >= wxID_FILE1 &&
-			id < wxID_FILE1 + static_cast<int>(m_fileHistory->GetCount()))
-		{
-			DoOpenMRUFile(id - wxID_FILE1);
-			// Don't skip the event below.
-			return;
-		}
-	}
-
-	event.Skip();
-}
-
-#if wxUSE_PRINTING_ARCHITECTURE
-
-void ibMetaDocManager::OnPrint(wxCommandEvent& event)
-{
-	wxDocManager::OnPrint(event);
-}
-
-void ibMetaDocManager::OnPreview(wxCommandEvent& event)
-{
-	wxDocManager::OnPreview(event);
-}
-
-void ibMetaDocManager::OnPageSetup(wxCommandEvent& event)
-{
-	wxDocManager::OnPageSetup(event);
-}
-
-#endif // wxUSE_PRINTING_ARCHITECTURE
-
-void ibMetaDocManager::OnUndo(wxCommandEvent& event)
-{
-	wxCommandProcessor* const cmdproc = GetCurrentCommandProcessor();
-	if (!cmdproc) {
-		event.Skip();
-		return;
-	}
-
-	cmdproc->Undo();
-}
-
-void ibMetaDocManager::OnRedo(wxCommandEvent& event)
-{
-	wxCommandProcessor* const cmdproc = GetCurrentCommandProcessor();
-	if (!cmdproc) {
-		event.Skip();
-		return;
-	}
-
-	cmdproc->Redo();
-}
-
-#include "frontend/mainFrame/mainFrame.h"
-
-void ibMetaDocManager::OnFindDialog(wxCommandEvent& event)
-{
-	if (nullptr == m_findDialog)
-	{
+#ifndef OES_USE_WEB
+	if (m_findDialog == nullptr) {
 		m_findDialog = new wxFindReplaceDialog(mainFrame, &m_findData, _("Find"));
 		m_findDialog->Centre(wxCENTRE_ON_SCREEN | wxBOTH);
 
-		m_findDialog->Bind(wxEVT_FIND, &ibMetaDocManager::OnFind, this);
-		m_findDialog->Bind(wxEVT_FIND_NEXT, &ibMetaDocManager::OnFind, this);
-		m_findDialog->Bind(wxEVT_FIND_CLOSE, &ibMetaDocManager::OnFindClose, this);
+		m_findDialog->Bind(wxEVT_FIND,       &ibDocManager::OnFind,      this);
+		m_findDialog->Bind(wxEVT_FIND_NEXT,  &ibDocManager::OnFind,      this);
+		m_findDialog->Bind(wxEVT_FIND_CLOSE, &ibDocManager::OnFindClose, this);
 	}
 
 	m_findDialog->Show(true);
+#else
+	// Web stub: no Find menu binding on web; the EVT_MENU(wxID_FIND) row in
+	// the base event table stays harmlessly inactive.
+#endif
 }
 
-void ibMetaDocManager::OnFindClose(wxFindDialogEvent& event)
+void ibDocManager::OnFindClose(wxFindDialogEvent& WXUNUSED(event))
 {
-	m_findDialog->Unbind(wxEVT_FIND, &ibMetaDocManager::OnFind, this);
-	m_findDialog->Unbind(wxEVT_FIND_NEXT, &ibMetaDocManager::OnFind, this);
-	m_findDialog->Unbind(wxEVT_FIND_CLOSE, &ibMetaDocManager::OnFindClose, this);
+#ifndef OES_USE_WEB
+	m_findDialog->Unbind(wxEVT_FIND,       &ibDocManager::OnFind,      this);
+	m_findDialog->Unbind(wxEVT_FIND_NEXT,  &ibDocManager::OnFind,      this);
+	m_findDialog->Unbind(wxEVT_FIND_CLOSE, &ibDocManager::OnFindClose, this);
 
 	m_findDialog->Destroy();
 	m_findDialog = nullptr;
+#endif
 }
 
-void ibMetaDocManager::OnFind(wxFindDialogEvent& event)
+void ibDocManager::OnFind(wxFindDialogEvent& event)
 {
-	ibMetaDocument* currDocument = GetCurrentDocument();
+#ifndef OES_USE_WEB
+	ibMetaDocument* currDocument = GetCurrentMetaDocument();
 	if (currDocument != nullptr) {
-		wxView* firstView = currDocument->GetFirstView();
+		ibView* firstView = currDocument->GetFirstView();
 		if (firstView != nullptr) {
 			event.StopPropagation();
 			event.SetClientData(m_findDialog);
 			firstView->ProcessEvent(event);
 		}
 	}
-}
-
-// Handlers for UI update commands
-
-void ibMetaDocManager::OnUpdateFileOpen(wxUpdateUIEvent& event)
-{
-	// CreateDocument() (which is called from OnFileOpen) may succeed
-	// only when there is at least a template:
-	event.Enable(GetTemplates().GetCount() > 0);
-}
-
-void ibMetaDocManager::OnUpdateDisableIfNoDoc(wxUpdateUIEvent& event)
-{
-	event.Enable(GetCurrentDocument() != nullptr);
-}
-
-void ibMetaDocManager::OnUpdateFileRevert(wxUpdateUIEvent& event)
-{
-	ibMetaDocument* doc = GetCurrentDocument();
-	event.Enable(doc && doc->IsModified() && doc->GetDocumentSaved());
-}
-
-void ibMetaDocManager::OnUpdateFileNew(wxUpdateUIEvent& event)
-{
-	// CreateDocument() (which is called from OnFileNew) may succeed
-	// only when there is at least a template:
-	event.Enable(GetTemplates().GetCount() > 0);
-}
-
-void ibMetaDocManager::OnUpdateFileSave(wxUpdateUIEvent& event)
-{
-	ibMetaDocument* const doc = GetCurrentDocument();
-	event.Enable(
-		(doc && !doc->AlreadySaved()) ||
-		(doc == nullptr && (activeMetaData != nullptr && activeMetaData->IsModified()))
-	);
-}
-
-void ibMetaDocManager::OnUpdateFileSaveAs(wxUpdateUIEvent& event)
-{
-	ibMetaDocument* const doc = GetCurrentDocument();
-	wxDocTemplate* const docTemplate = doc != nullptr ?
-		doc->GetDocumentTemplate() : nullptr;
-
-	bool enable_save_as = doc && !doc->IsChildDocument();
-
-	if (docTemplate != nullptr &&
-		(docTemplate->GetFlags() & wxTEMPLATE_SAVE_AS_FILE) != 0)
-		enable_save_as = true;
-
-	event.Enable(enable_save_as);
-}
-
-void ibMetaDocManager::OnUpdateUndo(wxUpdateUIEvent& event)
-{
-	wxCommandProcessor* const cmdproc = GetCurrentCommandProcessor();
-	if (!cmdproc) {
-		// If we don't have any document at all, the menu item should really be
-		// disabled.
-		if (!GetCurrentDocument())
-			event.Enable(false);
-		else // But if we do have it, it might handle wxID_UNDO on its own
-			event.Skip();
-		return;
-	}
-	event.Enable(cmdproc->CanUndo());
-	cmdproc->SetMenuStrings();
-}
-
-void ibMetaDocManager::OnUpdateRedo(wxUpdateUIEvent& event)
-{
-	wxCommandProcessor* const cmdproc = GetCurrentCommandProcessor();
-	if (!cmdproc) {
-		// Use same logic as in OnUpdateUndo() above.
-		if (!GetCurrentDocument())
-			event.Enable(false);
-		else
-			event.Skip();
-		return;
-	}
-	event.Enable(cmdproc->CanRedo());
-	cmdproc->SetMenuStrings();
-}
-
-void ibMetaDocManager::OnUpdateSaveMetadata(wxUpdateUIEvent& event)
-{
-	event.Enable(activeMetaData != nullptr && activeMetaData->IsModified());
-}
-
-wxDocument* ibMetaDocManager::CreateDocument(const wxString& pathOrig, long flags)
-{
-	// this ought to be const but SelectDocumentType/Path() are not
-	// const-correct and can't be changed as, being virtual, this risks
-	// breaking user code overriding them
-	wxDocTemplateVector templates;  //(GetVisibleTemplates(m_templates));
-
-	for (auto docTempl : m_templateVector)
-	{
-		if (!docTempl.m_docTemplate->IsVisible())
-			continue;
-
-		templates.push_back(docTempl.m_docTemplate);
-	}
-
-	const size_t numTemplates = templates.size();
-	if (!numTemplates) {
-		// no templates can be used, can't create document
-		return nullptr;
-	}
-
-	// normally user should select the template to use but wxDOC_SILENT flag we
-	// choose one ourselves
-	wxString path = pathOrig;   // may be modified below
-	wxDocTemplate* temp;
-	if (flags & wxDOC_SILENT) {
-		wxASSERT_MSG(!path.empty(),
-			"using empty path with wxDOC_SILENT doesn't make sense");
-
-		temp = FindTemplateForPath(path);
-		if (!temp) {
-			wxLogWarning(_("The format of file '%s' couldn't be determined."),
-				path);
-		}
-	}
-	else {// not silent, ask the user
-		// for the new file we need just the template, for an existing one we
-		// need the template and the path, unless it's already specified
-		if ((flags & wxDOC_NEW) || !path.empty())
-			temp = SelectDocumentType(&templates[0], numTemplates);
-		else
-			temp = SelectDocumentPath(&templates[0], numTemplates, path, flags);
-	}
-
-	if (!temp)
-		return nullptr;
-
-	// check whether the document with this path is already opened
-	if (!path.empty()) {
-		wxDocument* const doc = FindDocumentByPath(path);
-
-		if (doc) {
-			// file already open, just activate it and return
-			doc->Activate();
-			return doc;
-		}
-	}
-
-	// no, we need to create a new document
-
-
-	// if we've reached the max number of docs, close the first one.
-	if ((int)GetDocuments().GetCount() >= m_maxDocsOpen)
-	{
-		if (!CloseDocument((wxDocument*)GetDocuments().GetFirst()->GetData()))
-		{
-			// can't open the new document if closing the old one failed
-			return nullptr;
-		}
-	}
-
-	// do create and initialize the new document finally
-	wxDocument* const docNew = temp->CreateDocument(path, flags);
-	if (!docNew)
-		return nullptr;
-
-	docNew->SetDocumentName(temp->GetDocumentName());
-
-	wxTRY
-	{
-		// call the appropriate function depending on whether we're creating a
-		// new file or opening an existing one
-		if (!(flags & wxDOC_NEW ? docNew->OnNewDocument()
-								 : docNew->OnOpenDocument(path)))
-		{
-			docNew->DeleteAllViews();
-			return nullptr;
-		}
-	}
-	wxCATCH_ALL(docNew->DeleteAllViews(); throw; )
-
-		// add the successfully opened file to MRU, but only if we're going to be
-		// able to reopen it successfully later which requires the template for
-		// this document to be retrievable from the file extension
-		if (!(flags & wxDOC_NEW) && temp->FileMatchesTemplate(path))
-			AddFileToHistory(path);
-
-	// at least under Mac (where views are top level windows) it seems to be
-	// necessary to manually activate the new document to bring it to the
-	// forefront -- and it shouldn't hurt doing this under the other platforms
-	//docNew->Activate();
-
-	return docNew;
-}
-
-wxDocTemplate* ibMetaDocManager::SelectDocumentPath(wxDocTemplate** templates, int noTemplates, wxString& path, long flags, bool save)
-{
-#ifdef wxHAS_MULTIPLE_FILEDLG_FILTERS
-	wxString descrBuf;
-
-	for (int i = 0; i < noTemplates; i++)
-	{
-		if (templates[i]->IsVisible())
-		{
-			if (!descrBuf.empty())
-				descrBuf << wxT(";");
-
-			descrBuf << templates[i]->GetFileFilter();
-		}
-	}
-
-	descrBuf = _("OES files (") + descrBuf + wxT(") |");
-
-	for (int i = 0; i < noTemplates; i++)
-	{
-		if (templates[i]->IsVisible())
-		{
-			descrBuf << templates[i]->GetFileFilter() << wxT(";");
-		}
-	}
-
-	for (int i = 0; i < noTemplates; i++)
-	{
-		if (templates[i]->IsVisible())
-		{
-			// add a '|' to separate this filter from the previous one
-			if (!descrBuf.empty())
-				descrBuf << wxT('|');
-
-			descrBuf << templates[i]->GetDescription()
-				<< wxT(" (") << templates[i]->GetFileFilter() << wxT(") |")
-				<< templates[i]->GetFileFilter();
-		}
-	}
-#else
-	wxString descrBuf = wxT("*.*");
-	wxUnusedVar(noTemplates);
 #endif
-
-	int FilterIndex = -1;
-
-	wxString pathTmp = wxFileSelectorEx(_("Open File"),
-		GetLastDirectory(),
-		wxEmptyString,
-		&FilterIndex,
-		descrBuf,
-		wxFD_OPEN | wxFD_FILE_MUST_EXIST);
-
-	wxDocTemplate* theTemplate = nullptr;
-	if (!pathTmp.empty())
-	{
-		if (!wxFileExists(pathTmp))
-		{
-			wxString msgTitle;
-			if (!wxTheApp->GetAppDisplayName().empty())
-				msgTitle = wxTheApp->GetAppDisplayName();
-			else
-				msgTitle = wxString(_("File error"));
-
-			wxMessageBox(_("Sorry, could not open this file."),
-				msgTitle,
-				wxOK | wxICON_EXCLAMATION | wxCENTRE);
-
-			path.clear();
-			return nullptr;
-		}
-
-		SetLastDirectory(wxPathOnly(pathTmp));
-
-		path = pathTmp;
-
-		// first choose the template using the extension, if this fails (i.e.
-		// wxFileSelectorEx() didn't fill it), then use the path
-		if (FilterIndex != -1)
-		{
-			theTemplate = templates[FilterIndex];
-			if (theTemplate)
-			{
-				// But don't use this template if it doesn't match the path as
-				// can happen if the user specified the extension explicitly
-				// but didn't bother changing the filter.
-				if (!theTemplate->FileMatchesTemplate(path))
-					theTemplate = nullptr;
-			}
-		}
-
-		if (!theTemplate)
-			theTemplate = FindTemplateForPath(path);
-		if (!theTemplate)
-		{
-			// Since we do not add files with non-default extensions to the
-			// file history this can only happen if the application changes the
-			// allowed templates in runtime.
-			wxMessageBox(_("Sorry, the format for this file is unknown."),
-				_("Open File"),
-				wxOK | wxICON_EXCLAMATION | wxCENTRE);
-		}
-	}
-	else
-	{
-		path.clear();
-	}
-
-	return theTemplate;
 }
 
-#include "frontend/win/dlgs/choiceTemplate.h"
-
-wxDocTemplate* ibMetaDocManager::SelectDocumentType(wxDocTemplate** templates, int noTemplates, bool sort)
+ibMetaDocument* ibDocManager::GetCurrentMetaDocument() const
 {
-	int i;
-	int n = 0;
-
-	wxVector<CChoiceTemplateItem> choices;
-
-	for (i = 0; i < noTemplates; i++)
-	{
-		if (templates[i]->GetFlags() == wxTEMPLATE_VISIBLE)
-		{
-			int j;
-			bool want = true;
-
-			for (j = 0; j < n; j++)
-			{
-				//filter out NOT unique documents + view combinations
-				if (templates[i]->GetDocumentName() == choices[j].m_template->GetDocumentName() &&
-					templates[i]->GetViewName() == choices[j].m_template->GetViewName()
-					)
-					want = false;
-			}
-
-			if (want)
-			{
-				wxDocTemplate* docTemplate = templates[i];
-				auto iterator = std::find_if(m_templateVector.begin(), m_templateVector.end(),
-					[docTemplate](const ibMetaDocManagerItem& value) { return value.m_docTemplate == docTemplate; });
-
-				if (iterator != m_templateVector.end())
-				{
-					CChoiceTemplateItem entry;
-
-					entry.m_template = docTemplate;
-					entry.m_description = docTemplate->GetDescription();
-					entry.m_icon = iterator->m_classIcon;
-
-					choices.push_back(entry);
-				}
-
-				n++;
-			}
-		}
-	}  // for
-
-	if (sort)
-	{
-		// ascending sort
-		// Yes, this will be slow, but template lists
-		// are typically short.
-		std::sort(choices.begin(), choices.end(),
-			[](const CChoiceTemplateItem& item1, const CChoiceTemplateItem& item2) {
-				return item1.m_description < item2.m_description; });
-	}
-
-	wxDocTemplate* theTemplate = NULL;
-
-	switch (n)
-	{
-	case 0:
-		// no visible templates, hence nothing to choose from
-		theTemplate = nullptr;
-		break;
-
-	case 1:
-		// don't propose the user to choose if he has no choice
-		theTemplate = choices[0].m_template;
-		break;
-
-	default:
-
-		// propose the user to choose one of several
-		ibDialogChoiceTemplate dlg(choices);
-		theTemplate = dlg.ShowModal() == wxID_OK ?
-			dlg.GetSelectionData() : NULL;
-	}
-
-	return theTemplate;
+	return dynamic_cast<ibMetaDocument*>(GetCurrentDocument());
 }
 
-wxDocTemplate* ibMetaDocManager::FindTemplateByDocClassInfo(const wxClassInfo* classInfo) const
+// ----------------------------------------------------------------------------
+// AddDocTemplate — meta-template registrations (cross-build; always reachable
+// via the AssociateTemplate base path, just iterates the same m_templates).
+// ----------------------------------------------------------------------------
+
+void ibDocManager::AddDocTemplate(const ibPictureID& id,
+                                  const wxString& descr,
+                                  const wxString& filter,
+                                  const wxString& dir,
+                                  const wxString& ext,
+                                  const wxString& docTypeName,
+                                  const wxString& viewTypeName,
+                                  wxClassInfo* docClassInfo,
+                                  wxClassInfo* viewClassInfo,
+                                  long flags)
 {
-	auto iterator = std::find_if(m_templateVector.begin(), m_templateVector.end(),
-		[classInfo](const auto& value) {
-			return value.m_docTemplate != nullptr &&
-				classInfo == value.m_docTemplate->GetDocClassInfo();
-		}
-	);
+	auto* docTemplate = new ibMetaDocTemplate(
+		this, descr, filter, dir, ext, docTypeName, viewTypeName,
+		docClassInfo, viewClassInfo, flags);
 
-	if (iterator != m_templateVector.end())
-		return iterator->m_docTemplate;
+	docTemplate->SetClassIcon(ibBackendPicture::GetPictureAsIcon(id));
 
+	AssociateTemplate(docTemplate);
+}
+
+void ibDocManager::AddDocTemplate(const ibPictureID& id,
+                                  const wxString& descr,
+                                  const wxString& filter,
+                                  const wxString& ext,
+                                  const wxString& docTypeName,
+                                  const wxString& viewTypeName,
+                                  wxClassInfo* docClassInfo,
+                                  wxClassInfo* viewClassInfo,
+                                  long flags)
+{
+	AddDocTemplate(id, descr, filter, wxEmptyString, ext,
+	               docTypeName, viewTypeName,
+	               docClassInfo, viewClassInfo, flags);
+}
+
+void ibDocManager::AddDocTemplate(const ibClassID& clsid,
+                                  const wxString& descr,
+                                  const wxString& filter,
+                                  const wxString& ext,
+                                  wxClassInfo* docClassInfo,
+                                  wxClassInfo* viewClassInfo)
+{
+	// Tools / advanced-object templates: not exposed via File→New
+	// (always INVISIBLE); SAVE_AS_FILE only when the template can produce
+	// a stand-alone file.
+	auto* docTemplate = new ibMetaDocTemplate(
+		this, descr, filter, wxEmptyString, ext,
+		wxEmptyString, wxEmptyString,
+		docClassInfo, viewClassInfo,
+		ibTEMPLATE_INVISIBLE | (!ext.IsEmpty() ? ibTEMPLATE_SAVE_AS_FILE : 0));
+
+	docTemplate->SetClassID(clsid);
+	docTemplate->SetClassIcon(ibBackendPicture::GetPictureAsIcon(clsid));
+
+	AssociateTemplate(docTemplate);
+}
+
+void ibDocManager::AddDocTemplate(const ibClassID& clsid,
+                                  wxClassInfo* docClassInfo,
+                                  wxClassInfo* viewClassInfo)
+{
+	AddDocTemplate(clsid,
+	               wxEmptyString, wxEmptyString, wxEmptyString,
+	               docClassInfo, viewClassInfo);
+}
+
+ibMetaDocTemplate* ibDocManager::FindMetaTemplate(const ibClassID& clsid) const
+{
+	for (wxList::compatibility_iterator node = m_templates.GetFirst();
+	     node != nullptr; node = node->GetNext())
+	{
+		auto* mt = dynamic_cast<ibMetaDocTemplate*>(
+			static_cast<ibDocTemplate*>(node->GetData()));
+		if (mt != nullptr && mt->GetClassID() == clsid)
+			return mt;
+	}
 	return nullptr;
 }
 
-void ibMetaDocManager::AddDocTemplate(
-	const ibPictureID& id,
-	const wxString& descr,
-	const wxString& filter,
-	const wxString& dir,
-	const wxString& ext,
-	const wxString& docTypeName,
-	const wxString& viewTypeName,
-	wxClassInfo* docClassInfo, wxClassInfo* viewClassInfo,
-	long flags)
+ibDocTemplate* ibDocManager::FindTemplateByDocClassInfo(const wxClassInfo* classInfo) const
 {
-	ibMetaDocManagerItem entry;
-
-	entry.m_className = docTypeName;
-	entry.m_classDescr = descr;
-	entry.m_docTemplate = new ibMetaDocTemplate(
-		this,
-		descr,
-		filter,
-		dir,
-		ext,
-		docTypeName,
-		viewTypeName,
-		docClassInfo,
-		viewClassInfo,
-		flags
-	);
-
-	entry.m_guidTemplate = wxNewUniqueGuid;
-	entry.m_classIcon = ibBackendPicture::GetPictureAsIcon(id);
-
-	m_templateVector.emplace_back(std::move(entry));
+	for (wxList::compatibility_iterator node = m_templates.GetFirst();
+	     node != nullptr; node = node->GetNext())
+	{
+		auto* t = static_cast<ibDocTemplate*>(node->GetData());
+		if (t != nullptr && t->GetDocClassInfo() == classInfo)
+			return t;
+	}
+	return nullptr;
 }
 
-void ibMetaDocManager::AddDocTemplate(const ibPictureID& id,
-	const wxString& descr,
-	const wxString& filter,
-	const wxString& ext,
-	const wxString& docTypeName,
-	const wxString& viewTypeName,
-	wxClassInfo* docClassInfo,
-	wxClassInfo* viewClassInfo,
-	long flags)
-{
-	AddDocTemplate(id,
-		descr, filter, wxEmptyString, ext, docTypeName, viewTypeName, docClassInfo, viewClassInfo, flags);
-}
+// ----------------------------------------------------------------------------
+// OpenForm / OpenFormMDI — metadata-driven open entry points. Cross-build:
+// desktop calls them from the tree/menu handlers; web doesn't call them
+// (sessions own their tabs through ibWebFrame::m_tabs, not the manager).
+// ----------------------------------------------------------------------------
 
-void ibMetaDocManager::AddDocTemplate(const ibClassID& clsid,
-	const wxString& descr,
-	const wxString& filter,
-	const wxString& ext,
-	wxClassInfo* docClassInfo,
-	wxClassInfo* viewClassInfo)
-{
-	ibMetaDocManagerItem entry;
-
-	entry.m_clsid = clsid;
-	entry.m_docTemplate = new ibMetaDocTemplate(
-		this,
-		descr,
-		filter,
-		wxEmptyString,
-		ext,
-		wxEmptyString,
-		wxEmptyString,
-		docClassInfo,
-		viewClassInfo,
-		wxTEMPLATE_INVISIBLE | (!ext.IsEmpty() ? wxTEMPLATE_SAVE_AS_FILE : 0)
-	);
-
-	entry.m_guidTemplate = wxNewUniqueGuid;
-	entry.m_classIcon = ibBackendPicture::GetPictureAsIcon(clsid);
-
-	m_templateVector.push_back(std::move(entry));
-}
-
-void ibMetaDocManager::AddDocTemplate(const ibClassID& id,
-	wxClassInfo* docClassInfo,
-	wxClassInfo* viewClassInfo)
-{
-	AddDocTemplate(id,
-		wxEmptyString, wxEmptyString, wxEmptyString, docClassInfo, viewClassInfo);
-}
-
-ibMetaDocument* ibMetaDocManager::GetCurrentDocument() const
-{
-	return dynamic_cast<ibMetaDocument*>(wxDocManager::GetCurrentDocument());
-}
-
-#include "backend/metaCollection/metaObject.h"
-
-ibMetaDocument* ibMetaDocManager::OpenFormMDI(ibValueMetaObject* metaObject, long flags)
+ibMetaDocument* ibDocManager::OpenFormMDI(ibValueMetaObject* metaObject, long flags)
 {
 	return docManager->OpenForm(metaObject, nullptr, flags);
 }
 
-ibMetaDocument* ibMetaDocManager::OpenFormMDI(ibValueMetaObject* metaObject, ibMetaDocument* docParent, long flags)
+ibMetaDocument* ibDocManager::OpenFormMDI(ibValueMetaObject* metaObject,
+                                          ibMetaDocument* docParent, long flags)
 {
 	return docManager->OpenForm(metaObject, docParent, flags);
 }
 
-ibMetaDocument* ibMetaDocManager::OpenForm(ibValueMetaObject* metaObject, ibMetaDocument* docParent, long flags)
+ibMetaDocument* ibDocManager::OpenForm(ibValueMetaObject* metaObject,
+                                       ibMetaDocument* docParent, long flags)
 {
-	for (auto currTemplate : m_templateVector) {
+	ibMetaDocTemplate* docTemplate = FindMetaTemplate(metaObject->GetClassType());
+	if (docTemplate == nullptr)
+		return nullptr;
 
-		if (currTemplate.m_clsid == metaObject->GetClassType()) {
+	wxClassInfo* docClassInfo = docTemplate->GetDocClassInfo();
+	wxASSERT(docClassInfo);
 
-			ibMetaDocTemplate* docTemplate = currTemplate.m_docTemplate;
-			wxASSERT(docTemplate);
-			wxClassInfo* docClassInfo = docTemplate->GetDocClassInfo();
-			wxASSERT(docClassInfo);
-			ibMetaDocument* newDocument = wxDynamicCast(
-				docClassInfo->CreateObject(), ibMetaDocument
-			);
+	auto* newDocument = wxDynamicCast(docClassInfo->CreateObject(), ibMetaDocument);
+	wxASSERT(newDocument);
 
-			wxASSERT(newDocument);
+	if (docParent != nullptr)
+		newDocument->SetDocParent(docParent);
 
-			if (docParent != nullptr) {
-				newDocument->SetDocParent(docParent);
-			}
+	try {
+		newDocument->SetTitle(metaObject->GetModuleName());
+		newDocument->SetFilename(metaObject->GetDocPath());
+		newDocument->SetDocumentTemplate(docTemplate);
+		newDocument->SetMetaObject(metaObject);
 
-			try {
+		// Owned documents (those with a parent) are managed by the parent,
+		// not the global doc list — adding them here would double-delete on
+		// close.
+		if (docParent == nullptr)
+			AddDocument(newDocument);
 
-				newDocument->SetTitle(metaObject->GetModuleName());
-				newDocument->SetFilename(metaObject->GetDocPath());
-				newDocument->SetDocumentTemplate(docTemplate);
-				newDocument->SetMetaObject(metaObject);
+		newDocument->SetIcon(metaObject->GetIcon());
 
-				//if doc has parent - special delete!
-				if (docParent == nullptr) {
-					wxDocManager::AddDocument(newDocument);
-				}
-
-				newDocument->SetIcon(metaObject->GetIcon());
-
-				if (newDocument->OnCreate(metaObject->GetModuleName(), flags | wxDOC_NEW)) {
-					newDocument->SetCommandProcessor(newDocument->OnCreateCommandProcessor());
-					return newDocument;
-				}
-
-				// The document may be already destroyed, this happens if its view
-				// creation fails as then the view being created is destroyed
-				// triggering the destruction of the document as this first view is
-				// also the last one. However if OnCreate() fails for any reason other
-				// than view creation failure, the document is still alive and we need
-				// to clean it up ourselves to avoid having a zombie document.
-				newDocument->DeleteAllViews();
-				return nullptr;
-			}
-			catch (...) {
-				wxLogError(wxT("OpenForm: failed to create document view"));
-				if (ibMetaDocManager::GetDocuments().Member(newDocument)) {
-					newDocument->DeleteAllViews();
-				}
-			}
-			return nullptr;
+		if (newDocument->OnCreate(metaObject->GetModuleName(), flags | ibDOC_NEW)) {
+			newDocument->SetCommandProcessor(newDocument->OnCreateCommandProcessor());
+			return newDocument;
 		}
-	}
 
+		newDocument->DeleteAllViews();
+		return nullptr;
+	}
+	catch (...) {
+		wxLogError(wxT("OpenForm: failed to create document view"));
+		if (GetDocuments().Member(newDocument))
+			newDocument->DeleteAllViews();
+	}
 	return nullptr;
 }
 
-bool ibMetaDocManager::CloseDocument(wxDocument* doc, bool force)
+// ----------------------------------------------------------------------------
+// ibMetaView — desktop-only activation wiring. Moved here from the former
+// docViewCmd.cpp so all the OES wiring with web-side stubs lives in one file.
+// ----------------------------------------------------------------------------
+
+void ibMetaView::OnActivateView(bool activate, ibView* activeView, ibView* deactiveView)
 {
-	if (!doc->Close() && !force)
-		return false;
-	// To really force the document to close, we must ensure that it isn't
-	// modified, otherwise it would ask the user about whether it should be
-	// destroyed (again, it had been already done by Close() above) and might
-	// not destroy it at all, while we must do it here.
-	doc->Modify(false);
-	// Implicitly deletes the document when
-	// the last view is deleted
-	doc->DeleteAllViews();
-	wxASSERT(!m_docs.Member(doc));
-	return true;
+#ifndef OES_USE_WEB
+	// objectInspector is a designer-side panel tracking the "currently
+	// selected" meta object. Web has no equivalent panel; the session's
+	// active form is already tracked on ibWebFrame::m_activeTab.
+	if (activate)
+		objectInspector->SelectObject(GetDocument() ? GetDocument()->GetMetaObject() : nullptr);
+#else
+	(void)activate; (void)activeView; (void)deactiveView;
+#endif
 }
 
-bool ibMetaDocManager::CloseDocuments(bool force)
+void ibMetaView::Activate(bool activate)
 {
-	wxList::compatibility_iterator node = m_docs.GetFirst();
-	while (node) {
-		ibMetaDocument* doc = (ibMetaDocument*)node->GetData();
-		wxList::compatibility_iterator next = node->GetNext();
-		if (!CloseDocument(doc, force))
-			return false;
-		// This assumes that documents are not connected in
-		// any way, i.e. deleting one document does NOT
-		// delete another.
-		node = next;
+#ifndef OES_USE_WEB
+	// Local name shadows the `docManager` macro deliberately — picks the
+	// view's owning manager first, falls back to the singleton.
+	ibDocManager* const mgr = m_viewDocument != nullptr ?
+		m_viewDocument->GetDocumentManager() : ibDocManager::GetDocumentManager();
+
+	if (mgr != nullptr && ibFrontendDocMDIFrame::GetFrame()) {
+		mainFrame->ActivateView(this, activate);
+		OnActivateView(activate, this, mgr->GetCurrentView());
+		mgr->ActivateView(this, activate);
 	}
-	return true;
+
+	if (activate) wxLogDebug("! <debug> activate view %s", ibMetaView::GetViewName());
+	else wxLogDebug("! <debug> deactivate view %s", ibMetaView::GetViewName());
+#else
+	// Web: activation is driven from ibWebFrame::SetActiveTab directly
+	// on the session's tab list — no docManager round-trip needed.
+	(void)activate;
+#endif
 }
 
-bool ibMetaDocManager::Clear(bool force)
-{
-	if (!CloseDocuments(force))
-		return false;
-	m_currentView = nullptr;
-	wxList::compatibility_iterator node = m_templates.GetFirst();
-	while (node) {
-		ibMetaDocTemplate* templ = (ibMetaDocTemplate*)node->GetData();
-		wxList::compatibility_iterator next = node->GetNext();
-		delete templ;
-		node = next;
-	}
-	return true;
-}
+#endif // wxUSE_DOC_VIEW_ARCHITECTURE

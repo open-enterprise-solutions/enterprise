@@ -40,7 +40,7 @@ ibFrontendDocMDIFrameDesigner::ibFrontendDocMDIFrameDesigner(const wxString& tit
 	m_stackWindow(new ibStackWindow(this, wxID_ANY)),
 	m_watchWindow(new ibWatchWindow(this, wxID_ANY))
 {
-	m_docManager = new ibMetaDocManagerDesigner;
+	m_docManager = new ibDocManagerDesigner;
 }
 
 ibFrontendDocMDIFrameDesigner::~ibFrontendDocMDIFrameDesigner()

@@ -199,7 +199,7 @@ void ibFrontendDocMDIFrameDesigner::OnOpenConfiguration(wxCommandEvent& event)
 		newDocument->SetFilename(metaObject->GetDocPath());
 		newDocument->SetMetaObject(metaObject);
 
-		if (newDocument->OnCreate(metaObject->GetModuleName(), wxDOC_NEW)) {
+		if (newDocument->OnCreate(metaObject->GetModuleName(), ibDOC_NEW)) {
 			newDocument->SetCommandProcessor(newDocument->OnCreateCommandProcessor());
 			//newDocument->UpdateAllViews();
 		}
@@ -702,7 +702,7 @@ void ibFrontendDocMDIFrameDesigner::OnActiveUsers(wxCommandEvent& event)
 	dlg->Show();
 }
 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 #include "frontend/docView/templates/docViewAuditLog.h"
 #include "backend/picturePredefined.h"
 
@@ -710,7 +710,7 @@ void ibFrontendDocMDIFrameDesigner::OnAuditLog(wxCommandEvent& event)
 {
 	// Open the journal as an MDI tab via the docview system (replaces
 	// the historical modal ibDialogAuditLog). See the matching enterprise
-	// handler — same template/CLSID, registered in ibMetaDocManager's ctor.
+	// handler — same template/CLSID, registered in ibDocManagerDesigner's ctor.
 	if (docManager != nullptr) {
 		ibAuditLogDocument* doc = docManager->CreateDocument<ibAuditLogDocument>();
 		if (doc != nullptr) {

@@ -10,7 +10,7 @@ bool ibReportEditView::OnCreate(ibMetaDocument* doc, long flags)
 	return ibMetaView::OnCreate(doc, flags);
 }
 
-void ibReportEditView::OnActivateView(bool activate, wxView* activeView, wxView* deactiveView)
+void ibReportEditView::OnActivateView(bool activate, ibView* activeView, ibView* deactiveView)
 {
 	if (activate) m_metaTree->ActivateTree();
 }
@@ -43,9 +43,9 @@ bool ibReportEditView::OnClose(bool deleteWindow)
 	return false;
 }
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibReportFilibDocument, ibMetaDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibReportFileDocument, ibMetaDocument);
 
-bool ibReportFilibDocument::OnCreate(const wxString& path, long flags)
+bool ibReportFileDocument::OnCreate(const wxString& path, long flags)
 {
 	m_metaData = new ibMetaDataReport();
 	if (!ibMetaDocument::OnCreate(path, flags))
@@ -55,7 +55,7 @@ bool ibReportFilibDocument::OnCreate(const wxString& path, long flags)
 
 #include "frontend/mainFrame/mainFrame.h"
 
-bool ibReportFilibDocument::OnCloseDocument()
+bool ibReportFileDocument::OnCloseDocument()
 {
 	if (!m_metaData->CloseDatabase(forceCloseFlag)) {
 		return false;
@@ -67,7 +67,7 @@ bool ibReportFilibDocument::OnCloseDocument()
 
 // Since text windows have their own method for saving to/loading from files,
 // we override DoSave/OpenDocument instead of Save/LoadObject
-bool ibReportFilibDocument::DoOpenDocument(const wxString& filename)
+bool ibReportFileDocument::DoOpenDocument(const wxString& filename)
 {
 	if (!m_metaData->LoadFromFile(filename))
 		return false;
@@ -78,7 +78,7 @@ bool ibReportFilibDocument::DoOpenDocument(const wxString& filename)
 	return true;
 }
 
-bool ibReportFilibDocument::DoSaveDocument(const wxString& filename)
+bool ibReportFileDocument::DoSaveDocument(const wxString& filename)
 {
 	if (!GetMetaTree()->Save())
 		return false;
@@ -89,18 +89,18 @@ bool ibReportFilibDocument::DoSaveDocument(const wxString& filename)
 	return true;
 }
 
-bool ibReportFilibDocument::IsModified() const
+bool ibReportFileDocument::IsModified() const
 {
 	return ibMetaDocument::IsModified();
 }
 
-void ibReportFilibDocument::Modify(bool modified)
+void ibReportFileDocument::Modify(bool modified)
 {
 	ibMetaDocument::Modify(modified);
 }
 
-ibDataReportTree* ibReportFilibDocument::GetMetaTree() const
+ibDataReportTree* ibReportFileDocument::GetMetaTree() const
 {
-	wxView* view = GetFirstView();
+	ibView* view = GetFirstView();
 	return view ? wxDynamicCast(view, ibReportEditView)->GetMetaTree() : nullptr;
 }

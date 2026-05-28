@@ -243,6 +243,7 @@ Drill into these only when the task touches the specific area.
 | Distribution (Firebird mesh / shara) | `docs/firebird-mesh-driver.md` |
 | Lists / trees / paging | `docs/paging-design.md` |
 | Forms architecture | `docs/backend-frontend-split.md`, `docs/ARCHITECTURE.md` §Form System |
+| Doc/View subsystem (desktop + web fork) | `docs/docview-fork.md` |
 | UI palette / colours | `docs/ui-palette.md` |
 | Web frontend | `docs/web/` |
 | Accounting registers (WIP) | `docs/register-totals-strategy.md` |

@@ -11,7 +11,7 @@ public:
 	ibMetadataEditView() : ibMetaView() {}
 
 	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
-	virtual void OnActivateView(bool activate, wxView* activeView, wxView* deactiveView) override;
+	virtual void OnActivateView(bool activate, ibView* activeView, ibView* deactiveView) override;
 	virtual void OnDraw(wxDC* dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
@@ -25,7 +25,7 @@ protected:
 };
 
 // ----------------------------------------------------------------------------
-// ibMetadataDocument: wxDocument and wxTextCtrl married
+// ibMetadataDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
 class ibMetadataBrowserDocument : public ibMetaDocument {
@@ -63,7 +63,7 @@ protected:
 	wxDECLARE_DYNAMIC_CLASS(ibMetadataBrowserDocument);
 };
 
-class ibMetadataFilibDocument : public ibMetadataBrowserDocument {
+class ibMetadataFileDocument : public ibMetadataBrowserDocument {
 
 	virtual ibMetaView* DoCreateView() {
 		return ibMetaDocument::DoCreateView();
@@ -71,8 +71,8 @@ class ibMetadataFilibDocument : public ibMetadataBrowserDocument {
 
 public:
 
-	ibMetadataFilibDocument() : ibMetadataBrowserDocument() {}
-	virtual ~ibMetadataFilibDocument() { wxDELETE(m_metaData); }
+	ibMetadataFileDocument() : ibMetadataBrowserDocument() {}
+	virtual ~ibMetadataFileDocument() { wxDELETE(m_metaData); }
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
 	virtual bool OnCloseDocument() override;
@@ -85,8 +85,8 @@ protected:
 	virtual bool DoOpenDocument(const wxString& filename) override;
 	virtual bool DoSaveDocument(const wxString& filename) override;
 
-	wxDECLARE_NO_COPY_CLASS(ibMetadataFilibDocument);
-	wxDECLARE_DYNAMIC_CLASS(ibMetadataFilibDocument);
+	wxDECLARE_NO_COPY_CLASS(ibMetadataFileDocument);
+	wxDECLARE_DYNAMIC_CLASS(ibMetadataFileDocument);
 };
 
 

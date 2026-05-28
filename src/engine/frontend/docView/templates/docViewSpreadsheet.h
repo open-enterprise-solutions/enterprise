@@ -19,7 +19,7 @@ public:
 #endif 
 
 	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
-	virtual void OnActivateView(bool activate, wxView* activeView, wxView* deactiveView) override;
+	virtual void OnActivateView(bool activate, ibView* activeView, ibView* deactiveView) override;
 	virtual void OnDraw(wxDC* dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
@@ -43,7 +43,7 @@ private:
 };
 
 // ----------------------------------------------------------------------------
-// ITextDocument: wxDocument and wxTextCtrl married
+// ibTextDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
 #include "backend/metaCollection/metaSpreadsheetObject.h"

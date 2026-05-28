@@ -13,9 +13,9 @@ public:
 	ibModuleEditView() : ibMetaView(), m_codeEditor(nullptr) {}
 
 	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
-	virtual void OnActivateView(bool activate, wxView* activeView, wxView* deactiveView) override;
+	virtual void OnActivateView(bool activate, ibView* activeView, ibView* deactiveView) override;
 	virtual void OnDraw(wxDC* dc) override;
-	virtual void OnUpdate(wxView* sender, wxObject* hint = nullptr) override;
+	virtual void OnUpdate(ibView* sender, wxObject* hint = nullptr) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
 	virtual wxPrintout* OnCreatePrintout() override;
@@ -41,13 +41,13 @@ protected:
 };
 
 // ----------------------------------------------------------------------------
-// ITextDocument: wxDocument and wxTextCtrl married
+// ibTextDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-class ibModulibDocument : public ibValueModulibDocument {
+class ibModuleDocument : public ibValueModuleDocument {
 public:
 
-	ibModulibDocument() : ibValueModulibDocument() {}
+	ibModuleDocument() : ibValueModuleDocument() {}
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
 	virtual bool OnOpenDocument(const wxString& filename) override;
@@ -68,17 +68,17 @@ protected:
 	virtual bool DoSaveDocument(const wxString& filename) override;
 	virtual bool DoOpenDocument(const wxString& filename) override;
 
-	wxDECLARE_NO_COPY_CLASS(ibModulibDocument);
-	wxDECLARE_ABSTRACT_CLASS(ibModulibDocument);
+	wxDECLARE_NO_COPY_CLASS(ibModuleDocument);
+	wxDECLARE_ABSTRACT_CLASS(ibModuleDocument);
 };
 
 // ----------------------------------------------------------------------------
 // A very simple text document class
 // ----------------------------------------------------------------------------
 
-class ibModuleEditDocument : public ibModulibDocument {
+class ibModuleEditDocument : public ibModuleDocument {
 public:
-	ibModuleEditDocument() : ibModulibDocument() {}
+	ibModuleEditDocument() : ibModuleDocument() {}
 
 	virtual ibCodeEditor* GetCodeEditor() const override;
 

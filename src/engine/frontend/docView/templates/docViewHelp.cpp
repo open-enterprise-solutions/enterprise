@@ -5,24 +5,24 @@
 // ibHelpEditView implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibHelpEditView, ibMetaView);
+wxIMPLEMENT_DYNAMIC_CLASS(ibHelpEditView, ibView);
 
-wxBEGIN_EVENT_TABLE(ibHelpEditView, ibMetaView)
+wxBEGIN_EVENT_TABLE(ibHelpEditView, ibView)
 EVT_MENU(wxID_COPY, ibHelpEditView::OnCopy)
 EVT_MENU(wxID_PASTE, ibHelpEditView::OnPaste)
 EVT_MENU(wxID_SELECTALL, ibHelpEditView::OnSelectAll)
 wxEND_EVENT_TABLE()
 
-bool ibHelpEditView::OnCreate(ibMetaDocument* doc, long flags)
+bool ibHelpEditView::OnCreate(ibDocument* doc, long flags)
 {
 	m_textEditor = new ibTextEditor(doc, m_viewFrame, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
 
 	m_textEditor->SetEditorSettings(mainFrame->GetEditorSettings());
 	m_textEditor->SetFontColorSettings(mainFrame->GetFontColorSettings());
 
-	m_textEditor->SetReadOnly(flags == wxDOC_READONLY);
+	m_textEditor->SetReadOnly(flags == ibDOC_READONLY);
 
-	return ibMetaView::OnCreate(doc, flags);
+	return ibView::OnCreate(doc, flags);
 }
 
 void ibHelpEditView::OnDraw(wxDC* WXUNUSED(dc))
@@ -39,7 +39,7 @@ bool ibHelpEditView::OnClose(bool deleteWindow)
 		SetFrame(nullptr);
 	}
 
-	if (ibMetaView::OnClose(deleteWindow)) {
+	if (ibView::OnClose(deleteWindow)) {
 		
 		m_textEditor->Freeze();
 		
@@ -95,10 +95,10 @@ void ibHelpEditView::OnFind(wxFindDialogEvent& event)
 }
 
 // ----------------------------------------------------------------------------
-// ibHelpDocument: wxDocument and wxTextCtrl married
+// ibHelpDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_CLASS(ibHelpDocument, ibMetaDocument);
+wxIMPLEMENT_CLASS(ibHelpDocument, ibDocument);
 
 wxCommandProcessor* ibHelpDocument::OnCreateCommandProcessor()
 {
@@ -110,19 +110,19 @@ wxCommandProcessor* ibHelpDocument::OnCreateCommandProcessor()
 
 ibTextEditor* ibHelpDocument::GetTextCtrl() const
 {
-	wxView* view = GetFirstView();
+	ibView* view = GetFirstView();
 	return view ? wxDynamicCast(view, ibHelpEditView)->GetText() : nullptr;
 }
 
 // ----------------------------------------------------------------------------
-// ibHelpFilibDocument implementation
+// ibHelpFileDocument implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibHelpFilibDocument, ibHelpDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibHelpFileDocument, ibHelpDocument);
 
-bool ibHelpFilibDocument::OnCreate(const wxString& path, long flags)
+bool ibHelpFileDocument::OnCreate(const wxString& path, long flags)
 {
-	if (!ibMetaDocument::OnCreate(path, flags))
+	if (!ibDocument::OnCreate(path, flags))
 		return false;
 
 	return true;
@@ -130,12 +130,12 @@ bool ibHelpFilibDocument::OnCreate(const wxString& path, long flags)
 
 // Since text windows have their own method for saving to/loading from files,
 // we override DoSave/OpenDocument instead of Save/LoadObject
-bool ibHelpFilibDocument::DoSaveDocument(const wxString& filename)
+bool ibHelpFileDocument::DoSaveDocument(const wxString& filename)
 {
 	return GetTextCtrl()->SaveFile(filename);
 }
 
-bool ibHelpFilibDocument::DoOpenDocument(const wxString& filename)
+bool ibHelpFileDocument::DoOpenDocument(const wxString& filename)
 {
 	if (!GetTextCtrl()->LoadFile(filename))
 		return false;

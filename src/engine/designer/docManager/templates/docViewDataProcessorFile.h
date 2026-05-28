@@ -14,7 +14,7 @@ public:
 	ibDataProcessorEditView() : ibMetaView() {}
 
 	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
-	virtual void OnActivateView(bool activate, wxView* activeView, wxView* deactiveView) override;
+	virtual void OnActivateView(bool activate, ibView* activeView, ibView* deactiveView) override;
 	virtual void OnDraw(wxDC* dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
@@ -27,7 +27,7 @@ protected:
 
 static int s_defaultDataProcessorNameCounter = 1;
 
-class ibDataProcessorFilibDocument : public ibMetaDataDocument {
+class ibDataProcessorFileDocument : public ibMetaDataDocument {
 	ibMetaDataDataProcessor* m_metaData;
 public:
 
@@ -40,8 +40,8 @@ public:
 		return wxNullIcon;
 	}
 
-	ibDataProcessorFilibDocument() : ibMetaDataDocument() { m_childDoc = false; }
-	virtual ~ibDataProcessorFilibDocument() {
+	ibDataProcessorFileDocument() : ibMetaDataDocument() { m_childDoc = false; }
+	virtual ~ibDataProcessorFileDocument() {
 		wxDELETE(m_metaData);
 	}
 
@@ -95,8 +95,8 @@ protected:
 	virtual bool DoOpenDocument(const wxString& filename) override;
 	virtual bool DoSaveDocument(const wxString& filename) override;
 
-	wxDECLARE_NO_COPY_CLASS(ibDataProcessorFilibDocument);
-	wxDECLARE_DYNAMIC_CLASS(ibDataProcessorFilibDocument);
+	wxDECLARE_NO_COPY_CLASS(ibDataProcessorFileDocument);
+	wxDECLARE_DYNAMIC_CLASS(ibDataProcessorFileDocument);
 };
 
 #endif 

@@ -67,9 +67,6 @@
     <ClCompile Include="win\dlgs\about.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
-    <ClCompile Include="docView\docViewCmd.cpp">
-      <Filter>docView</Filter>
-    </ClCompile>
     <ClCompile Include="docView\docView.cpp">
       <Filter>docView</Filter>
     </ClCompile>
@@ -1042,9 +1039,6 @@
     <ClInclude Include="win\dlgs\about.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
-    <ClInclude Include="docView\docManager.h">
-      <Filter>docView</Filter>
-    </ClInclude>
     <ClInclude Include="docView\docView.h">
       <Filter>docView</Filter>
     </ClInclude>
@@ -1763,6 +1757,9 @@
     </ClInclude>
     <ClInclude Include="win\dlgs\lineInput\lineInput.h">
       <Filter>win\dlgs\lineInput</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\docManager.h">
+      <Filter>docView</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

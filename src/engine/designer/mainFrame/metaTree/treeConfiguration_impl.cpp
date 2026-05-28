@@ -5,7 +5,7 @@
 
 #include "treeConfiguration.h"
 #include "frontend/mainFrame/objinspect/objinspect.h"
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 #include "backend/appData.h"
 #include "backend/appEnv.h"
 
@@ -91,7 +91,7 @@ bool ibMetaDataTree::OpenFormMDI(ibValueMetaObject* obj)
 	ibMetaDocument* foundedDoc = GetDocument(obj);
 	//not found in the list of existing ones
 	if (foundedDoc == nullptr) {
-		foundedDoc = docManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? wxDOC_READONLY : wxDOC_NEW);
+		foundedDoc = docManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? ibDOC_READONLY : ibDOC_NEW);
 		//So there was no suitable template!
 		if (foundedDoc != nullptr)
 			return true;
@@ -111,7 +111,7 @@ bool ibMetaDataTree::OpenFormMDI(ibValueMetaObject* obj, ibBackendMetaDocument*&
 
 	//not found in the list of existing ones
 	if (foundedDoc == nullptr) {
-		foundedDoc = docManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? wxDOC_READONLY : wxDOC_NEW);
+		foundedDoc = docManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? ibDOC_READONLY : ibDOC_NEW);
 		//So there was no suitable template!
 		if (foundedDoc != nullptr) {
 			doc = foundedDoc;
@@ -181,9 +181,9 @@ void ibMetaDataTree::EditModule(const ibGuid& moduleName, int lineNumber, bool s
 
 	//not found in the list of existing ones
 	if (foundedDoc == nullptr)
-		foundedDoc = docManager->OpenFormMDI(metaObject, m_docParent, m_bReadOnly ? wxDOC_READONLY : wxDOC_NEW);
+		foundedDoc = docManager->OpenFormMDI(metaObject, m_docParent, m_bReadOnly ? ibDOC_READONLY : ibDOC_NEW);
 
-	ibValueModulibDocument* moduleDoc = static_cast<ibValueModulibDocument*>(foundedDoc);
+	ibValueModuleDocument* moduleDoc = static_cast<ibValueModuleDocument*>(foundedDoc);
 	if (moduleDoc != nullptr) moduleDoc->SetCurrentLine(lineNumber, setRunLine);
 }
 
@@ -1516,7 +1516,12 @@ void ibMetadataTree::ActivateTree()
 void ibMetadataTree::ClearTree()
 {
 	for (auto& doc : docManager->GetDocumentsVector()) {
+		// docManager->GetDocumentsVector() now mixes ibMetaDocument
+		// instances (Catalog/Document/Form editors) with plain ibDocument
+		// (AuditLog, Text, Help) after step-4b decoupling. Skip non-meta
+		// docs — they have no metaobject to compare against this tree.
 		const ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
+		if (metaDoc == nullptr) continue;
 		const ibValueMetaObject* metaObject = metaDoc->GetMetaObject();
 		if (metaObject != nullptr && this == metaObject->GetMetaDataTree()) {
 			doc->DeleteAllViews();

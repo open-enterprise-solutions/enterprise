@@ -1,4 +1,5 @@
 #include "docViewSpreadsheet.h"
+#include "frontend/docView/docManager.h"   // full ibDocTemplate type
 #include "frontend/mainFrame/mainFrame.h"
 
 enum
@@ -72,7 +73,7 @@ wxEND_EVENT_TABLE()
 bool ibSpreadsheetEditView::OnCreate(ibMetaDocument* doc, long flags)
 {
 	m_gridEditor = new ibGridEditor(doc, m_viewFrame, wxID_ANY);
-	m_gridEditor->EnableEditing(flags != wxDOC_READONLY);
+	m_gridEditor->EnableEditing(flags != ibDOC_READONLY);
 	m_gridEditor->EnableGridArea(doc->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>());
 
 	return ibMetaView::OnCreate(doc, flags);
@@ -171,7 +172,7 @@ wxMenuBar* ibSpreadsheetEditView::CreateMenuBar() const
 }
 #endif 
 
-void ibSpreadsheetEditView::OnActivateView(bool activate, wxView* activeView, wxView* deactiveView)
+void ibSpreadsheetEditView::OnActivateView(bool activate, ibView* activeView, ibView* deactiveView)
 {
 	if (activate) m_gridEditor->ActivateEditor();
 }
@@ -360,7 +361,7 @@ void ibSpreadsheetEditView::OnMenuEvent(wxCommandEvent& event)
 }
 
 // ----------------------------------------------------------------------------
-// ibSpreadsheetDocument: wxDocument and wxGrid married
+// ibSpreadsheetDocument: ibDocument and wxGrid married
 // ----------------------------------------------------------------------------
 
 wxIMPLEMENT_ABSTRACT_CLASS(ibSpreadsheetDocument, ibMetaDocument);
@@ -375,12 +376,12 @@ wxCommandProcessor* ibSpreadsheetDocument::OnCreateCommandProcessor()
 
 ibGridEditor* ibSpreadsheetDocument::GetGridCtrl() const
 {
-	wxView* view = GetFirstView();
+	ibView* view = GetFirstView();
 	return view ? wxDynamicCast(view, ibSpreadsheetEditView)->GetGridCtrl() : nullptr;
 }
 
 // ----------------------------------------------------------------------------
-// ibSpreadsheetFileDocument: wxDocument and wxGrid married
+// ibSpreadsheetFileDocument: ibDocument and wxGrid married
 // ----------------------------------------------------------------------------
 
 bool ibSpreadsheetFileDocument::OnCreate(const wxString& path, long flags)
@@ -410,7 +411,7 @@ bool ibSpreadsheetFileDocument::DoSaveDocument(const wxString& filename)
 }
 
 // ----------------------------------------------------------------------------
-// ibSpreadsheetEditDocument: wxDocument and wxGrid married
+// ibSpreadsheetEditDocument: ibDocument and wxGrid married
 // ----------------------------------------------------------------------------
 
 bool ibSpreadsheetEditDocument::OnCreate(const wxString& path, long flags)
@@ -427,7 +428,7 @@ bool ibSpreadsheetEditDocument::OnCreate(const wxString& path, long flags)
 
 bool ibSpreadsheetEditDocument::SaveAs()
 {
-	wxDocTemplate* docTemplate = GetDocumentTemplate();
+	ibDocTemplate* docTemplate = GetDocumentTemplate();
 	if (!docTemplate)
 		return false;
 
@@ -448,7 +449,7 @@ bool ibSpreadsheetEditDocument::SaveAs()
 			node = docTemplate->GetDocumentManager()->GetTemplates().GetFirst();
 		while (node)
 		{
-			wxDocTemplate* t = (wxDocTemplate*)node->GetData();
+			ibDocTemplate* t = (ibDocTemplate*)node->GetData();
 
 			if (t->IsVisible() && t != docTemplate &&
 				t->GetViewClassInfo() == docTemplate->GetViewClassInfo() &&

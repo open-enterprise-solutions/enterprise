@@ -14,13 +14,13 @@ wxEND_EVENT_TABLE()
 bool ibRoleEditView::OnCreate(ibMetaDocument* doc, long flags)
 {
 	m_roleEditor = new ibRoleEditor(m_viewFrame, wxID_ANY, doc->GetMetaObject());
-	m_roleEditor->SetReadOnly(flags == wxDOC_READONLY);
+	m_roleEditor->SetReadOnly(flags == ibDOC_READONLY);
 	
 	m_roleEditor->RefreshRole();	
 	return ibMetaView::OnCreate(doc, flags);
 }
 
-void ibRoleEditView::OnUpdate(wxView* sender, wxObject* hint)
+void ibRoleEditView::OnUpdate(ibView* sender, wxObject* hint)
 {
 	if (m_roleEditor != nullptr) 
 		m_roleEditor->RefreshRole();	
@@ -54,12 +54,12 @@ bool ibRoleEditView::OnClose(bool deleteWindow)
 }
 
 // ----------------------------------------------------------------------------
-// CGridDocument: wxDocument and wxGrid married
+// CGridDocument: ibDocument and wxGrid married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_CLASS(ibRolibDocument, ibMetaDocument);
+wxIMPLEMENT_CLASS(ibRoleDocument, ibMetaDocument);
 
-bool ibRolibDocument::OnCreate(const wxString& path, long flags)
+bool ibRoleDocument::OnCreate(const wxString& path, long flags)
 {
 	if (!ibMetaDocument::OnCreate(path, flags))
 		return false;
@@ -68,22 +68,22 @@ bool ibRolibDocument::OnCreate(const wxString& path, long flags)
 
 // Since text windows have their own method for saving to/loading from files,
 // we override DoSave/OpenDocument instead of Save/LoadObject
-bool ibRolibDocument::DoSaveDocument(const wxString& filename)
+bool ibRoleDocument::DoSaveDocument(const wxString& filename)
 {
 	return true;
 }
 
-bool ibRolibDocument::DoOpenDocument(const wxString& filename)
+bool ibRoleDocument::DoOpenDocument(const wxString& filename)
 {
 	return true;
 }
 
-bool ibRolibDocument::IsModified() const
+bool ibRoleDocument::IsModified() const
 {
 	return ibMetaDocument::IsModified();
 }
 
-void ibRolibDocument::Modify(bool modified)
+void ibRoleDocument::Modify(bool modified)
 {
 	ibMetaDocument::Modify(modified);
 }

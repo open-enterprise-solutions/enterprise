@@ -20,12 +20,10 @@
 //   ibConfigCompareDocument
 // ============================================================
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibConfigCompareDocument, ibMetaDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibConfigCompareDocument, ibDocument);
 
-ibConfigCompareDocument::ibConfigCompareDocument() : ibMetaDocument()
+ibConfigCompareDocument::ibConfigCompareDocument() : ibDocument()
 {
-	// Top-level tool tab — not a child of another document.
-	m_childDoc = false;
 }
 
 void ibConfigCompareDocument::Configure(
@@ -52,18 +50,13 @@ void ibConfigCompareDocument::Configure(
 	SetTitle(wxString::Format(_("Compare: %s <-> %s"), leftLabel, rightLabel));
 }
 
-ibMetaView* ibConfigCompareDocument::DoCreateView()
-{
-	return new ibConfigCompareView();
-}
-
 // ============================================================
 //   ibConfigCompareView
 // ============================================================
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibConfigCompareView, ibMetaView);
+wxIMPLEMENT_DYNAMIC_CLASS(ibConfigCompareView, ibView);
 
-bool ibConfigCompareView::OnCreate(ibMetaDocument* doc, long flags)
+bool ibConfigCompareView::OnCreate(ibDocument* doc, long flags)
 {
 	m_compareDoc = dynamic_cast<ibConfigCompareDocument*>(doc);
 	if (m_compareDoc == nullptr) return false;
@@ -81,7 +74,7 @@ bool ibConfigCompareView::OnCreate(ibMetaDocument* doc, long flags)
 		if (rootItem.IsOk()) m_dataView->Expand(rootItem);
 	});
 
-	return ibMetaView::OnCreate(doc, flags);
+	return ibView::OnCreate(doc, flags);
 }
 
 void ibConfigCompareView::BuildLayout(wxWindow* parent)
@@ -546,7 +539,7 @@ ibValueMetaObject* ibConfigCompareView::FindTargetParent(
 	return nullptr;
 }
 
-void ibConfigCompareView::OnUpdate(wxView* /*sender*/, wxObject* /*hint*/)
+void ibConfigCompareView::OnUpdate(ibView* /*sender*/, wxObject* /*hint*/)
 {
 	// Model is immutable for the doc's lifetime — no per-update refresh
 	// needed beyond the initial expand in OnCreate.
@@ -566,5 +559,5 @@ bool ibConfigCompareView::OnClose(bool deleteWindow)
 		}
 	}
 
-	return ibMetaView::OnClose(deleteWindow);
+	return ibView::OnClose(deleteWindow);
 }

@@ -20,12 +20,12 @@ protected:
 	wxDECLARE_DYNAMIC_CLASS(ibReportEditView);
 };
 
-class ibReportFilibDocument : public ibMetaDataDocument {
+class ibReportFileDocument : public ibMetaDataDocument {
 	ibMetaDataReport* m_metaData;
 public:
 
-	ibReportFilibDocument() : ibMetaDataDocument() {}
-	virtual ~ibReportFilibDocument() { 
+	ibReportFileDocument() : ibMetaDataDocument() {}
+	virtual ~ibReportFileDocument() { 
 		/*wxDELETE(m_metaData);*/ 
 	}
 
@@ -71,8 +71,8 @@ protected:
 	virtual bool DoOpenDocument(const wxString& filename) override;
 	virtual bool DoSaveDocument(const wxString& filename) override;
 
-	wxDECLARE_NO_COPY_CLASS(ibReportFilibDocument);
-	wxDECLARE_DYNAMIC_CLASS(ibReportFilibDocument);
+	wxDECLARE_NO_COPY_CLASS(ibReportFileDocument);
+	wxDECLARE_DYNAMIC_CLASS(ibReportFileDocument);
 };
 
 #endif 

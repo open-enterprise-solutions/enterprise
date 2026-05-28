@@ -11,7 +11,7 @@
 #include "frontend/win/dlgs/activeUser.h"
 #include "frontend/win/dlgs/about.h"
 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 #include "frontend/docView/templates/docViewAuditLog.h"
 #include "backend/picturePredefined.h"
 
@@ -43,8 +43,9 @@ void ibFrontendDocMDIFrameEnterprise::OnAuditLog(wxCommandEvent& event)
 {
 	// Open the journal as an MDI tab via the docview system (replaces
 	// the historical modal ibDialogAuditLog). The template is registered
-	// in ibMetaDocManager's ctor with g_toolAuditLogCLSID — invisible to
-	// File → New, reachable only through CreateDocument<T>() here.
+	// in ibDocManagerEnterprise's ctor (via the base AddDocTemplate that
+	// builds an ibMetaDocTemplate with g_toolAuditLogCLSID) — invisible
+	// to File → New, reachable only through CreateDocument<T>() here.
 	if (docManager != nullptr) {
 		ibAuditLogDocument* doc = docManager->CreateDocument<ibAuditLogDocument>();
 		if (doc != nullptr) {

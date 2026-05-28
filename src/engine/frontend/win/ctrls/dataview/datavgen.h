@@ -907,7 +907,7 @@ public:
 	// freshly-fetched row via ibDataViewObject::IsEqualTo and restore
 	// focus.  Public-but-internal: do NOT call with a non-default
 	// preferSelection from outside the ctrl until the post-Save focus path
-	// teardown AV (latent in wxDocChildFrameAny m_childView/m_childDocument)
+	// teardown AV (latent in ibDocChildFrameAny m_childView/m_childDocument)
 	// is closed.
 	void SchedulePagedRefresh(const ibDataViewItem& preferSelection = ibDataViewItem());
 

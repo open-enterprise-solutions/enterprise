@@ -242,7 +242,7 @@ ibMetadataTree::ibMetaTreeCtrl::ibMetaTreeCtrl(ibMetadataTree* parent)
 	SetDoubleBuffered(true);
 }
 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 
 ibMetadataTree::ibMetaTreeCtrl::~ibMetaTreeCtrl()
 {
@@ -258,7 +258,7 @@ ibMetadataTree::ibMetaTreeCtrl::~ibMetaTreeCtrl()
 
 #include "frontend/mainFrame/mainFrame.h"
 
-void ibMetadataTree::ibMetaTreeCtrl::ibMatadataTreeView::OnActivateView(bool activate, wxView* activeView, wxView* deactiveView)
+void ibMetadataTree::ibMetaTreeCtrl::ibMatadataTreeView::OnActivateView(bool activate, ibView* activeView, ibView* deactiveView)
 {
 	if (activate) {
 		const wxTreeItemId& item = m_ownerTree->GetSelection();

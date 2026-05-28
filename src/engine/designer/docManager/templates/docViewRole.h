@@ -14,7 +14,7 @@ public:
 	ibRoleEditView() : ibMetaView() {}
 
 	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
-	virtual void OnUpdate(wxView* sender, wxObject* hint) override;
+	virtual void OnUpdate(ibView* sender, wxObject* hint) override;
 	virtual void OnDraw(wxDC* dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
@@ -25,13 +25,13 @@ private:
 };
 
 // ----------------------------------------------------------------------------
-// ITextDocument: wxDocument and wxTextCtrl married
+// ibTextDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-class ibRolibDocument : public ibMetaDocument
+class ibRoleDocument : public ibMetaDocument
 {
 public:
-	ibRolibDocument() : ibMetaDocument() { /*m_childDoc = false;*/ }
+	ibRoleDocument() : ibMetaDocument() { /*m_childDoc = false;*/ }
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
 
@@ -43,18 +43,18 @@ protected:
 	virtual bool DoSaveDocument(const wxString& filename) override;
 	virtual bool DoOpenDocument(const wxString& filename) override;
 
-	wxDECLARE_NO_COPY_CLASS(ibRolibDocument);
-	wxDECLARE_ABSTRACT_CLASS(ibRolibDocument);
+	wxDECLARE_NO_COPY_CLASS(ibRoleDocument);
+	wxDECLARE_ABSTRACT_CLASS(ibRoleDocument);
 };
 
 // ----------------------------------------------------------------------------
 // A very simple text document class
 // ----------------------------------------------------------------------------
 
-class ibRoleEditDocument : public ibRolibDocument
+class ibRoleEditDocument : public ibRoleDocument
 {
 public:
-	ibRoleEditDocument() : ibRolibDocument() { }
+	ibRoleEditDocument() : ibRoleDocument() { }
 
 	wxDECLARE_NO_COPY_CLASS(ibRoleEditDocument);
 	wxDECLARE_DYNAMIC_CLASS(ibRoleEditDocument);

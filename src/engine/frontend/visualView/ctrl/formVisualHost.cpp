@@ -51,7 +51,7 @@ wxString ibValueForm::GetControlTitle() const
 
 //////////////////////////////////////////////////////////////
 
-#include "frontend/docView/docManager.h"
+#include "frontend/docView/docView.h"
 
 bool ibValueForm::CreateDocForm(ibMetaDocument* docParent, bool createContext)
 {
@@ -119,7 +119,7 @@ bool ibValueForm::CreateDocForm(ibMetaDocument* docParent, bool createContext)
 	}
 #ifndef OES_USE_WEB
 	else if (docParent == nullptr) {
-		// docManager is the desktop-wide ibMetaDocManager singleton;
+		// docManager is the desktop-wide ibDocManager singleton;
 		// wfrontend.dll doesn't construct one. Web sessions keep the
 		// document alive through ibWebFrame::m_tabs ownership, not
 		// through a manager's document list.

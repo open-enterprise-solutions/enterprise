@@ -158,8 +158,8 @@
     <ClCompile Include="visualView\visualHostClient.cpp" />
     <ClCompile Include="visualView\visualHostClientDocView.cpp" />
     <ClCompile Include="visualView\controlEnum.cpp" />
+    <ClCompile Include="docView\docManager.cpp" />
     <ClCompile Include="docView\docView.cpp" />
-    <ClCompile Include="docView\docViewCmd.cpp" />
     <ClCompile Include="visualView\ctrl\control.cpp" />
     <ClCompile Include="visualView\ctrl\controlProperty.cpp" />
     <ClCompile Include="visualView\ctrl\typeControl.cpp" />
