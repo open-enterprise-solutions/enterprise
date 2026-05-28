@@ -1,8 +1,9 @@
-# Eval / scoped bindings refactor — landed 2026-05-02
+# Eval / scoped bindings refactor
 
-Cross-bc resolver fully unified onto bc-side vector storage with
-kind discriminator. Tests 1-7 from this doc's original second-pass
-plan pass on `fb_test251` (Debug | x86 build).
+> **Status:** LANDED 2026-05-02. Cross-bc resolver unified onto
+> bc-side vector storage with kind discriminator. Tests 1-7 from the
+> original second-pass plan pass on `fb_test251` (Debug|x86).
+> Follow-up candidates documented at end-of-doc.
 
 ## Final architecture
 

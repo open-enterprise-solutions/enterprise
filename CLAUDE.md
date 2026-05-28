@@ -35,6 +35,7 @@ enterprise/
 ├── ConfigurationDefs.props  # Per-configuration preprocessor defines
 ├── CLAUDE.md                # This file
 ├── docs/
+│   ├── ai-context.md         # READ FIRST if you are an AI generating metadata / scripts
 │   ├── ARCHITECTURE.md
 │   ├── BUILD.md
 │   ├── ui-palette.md         # Interior-design palette — source of truth for UI colours

@@ -1,4 +1,9 @@
-# Firebird driver hardening — 2026-04-30
+# Firebird driver hardening
+
+> **Status:** LANDED 2026-04-30, shipped in v1.3.0 (2026-05-12). No
+> known regressions on FB 5.0 embedded; metadata-driven Apply paths
+> exercise the changed code in desktop / wenterprise-server smoke
+> runs. Three follow-ups parked (see end-of-doc).
 
 Audit and fix pass on `ibDatabaseLayerFirebird` and the supporting
 `firebird*` files for embedded FB 5.0 deployment. The driver was

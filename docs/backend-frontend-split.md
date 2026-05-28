@@ -1,5 +1,12 @@
 # Backend / frontend DLL split — architecture review
 
+> **Status:** REVIEW / OBSERVATION (not a refactor arc). Describes the
+> current backend / frontend interface (`ibBackendDocFrame` +
+> siblings), lists known design smells, and points at the refactors
+> that would pay off later. No active implementation; pick up when
+> a third frontend (mobile / native) or the compute-server tiering
+> plan creates concrete pressure.
+
 This doc reviews the mechanism that keeps `backend.dll` UI-agnostic
 while letting `frontend.dll` (desktop wx) or `wfrontend.dll` (web,
 `OES_USE_WEB`) provide the concrete UI. The linchpin is

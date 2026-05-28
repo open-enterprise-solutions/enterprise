@@ -1,5 +1,12 @@
 # Syntax helper — interactive language reference panel
 
+> **Status:** LANDED (partial) 2026-05-26 — backend corpus + designer
+> panel + editor look-up + pack-on-build. Deferred: editor margin
+> `...` marker (Phase 1.3 nice-to-have), `helpEditor.exe` standalone
+> utility, per-configuration corpus (Phase 5), web HTTP endpoints
+> (Phase 6), help editor + review gate (Phase 7), skeleton generator
+> + LLM fill + validation gate (Phase 2). Full breakdown below.
+
 ## Implementation status (2026-05-26)
 
 First port from `feature/syntax-helper` (upstream branch) landed on

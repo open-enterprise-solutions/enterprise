@@ -1,4 +1,9 @@
-# Const-meta refactor (landed 2026-05-04)
+# Const-meta refactor
+
+> **Status:** LANDED 2026-05-04. 133 files modified, full solution
+> builds clean Debug|Win32, smoke-tested. 13 legitimate `const_cast`s
+> remain (documented below); one backdoor (`ibMetaData::Find*` family)
+> deferred — tracked in `next-session-metadata-const.md`.
 
 ## What
 

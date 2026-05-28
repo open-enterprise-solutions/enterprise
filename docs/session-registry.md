@@ -1,5 +1,12 @@
 # Session registry refactor — full picture
 
+> **Status:** LANDED (partial) — 19 of ~22 commits shipped 2026-04-20.
+> Remaining: concrete `TryProbeRowLock` for MySQL / MSSQL, snapshot
+> SELECT reading new columns into `ibSessionSnapshot` accessors,
+> singleton `m_userInfo` / `m_sessionRawPassword` removal, designer
+> exclusive-policy verification under two concurrent designers. Full
+> list in §"What remains".
+
 Full reference for the session-registry refactor (2026-04-20). Covers the architecture, what landed in which step, every gotcha discovered, and what remains.
 
 ## Goal
