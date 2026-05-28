@@ -6,7 +6,7 @@ This file gives an AI assistant (Claude Code or similar) the context needed to w
 
 ## What This Project Is
 
-**Open Enterprise Solutions (OES)** is a C++17 cross-platform low-code enterprise application platform, conceptually similar to 1C:Enterprise. It lets developers define business applications through metadata (object types, forms, modules) and a built-in scripting language, without writing low-level code.
+**Open Enterprise Solutions (OES)** is a C++17 cross-platform low-code enterprise application platform. It lets developers define business applications through metadata (object types, forms, modules) and a built-in scripting language, without writing low-level code.
 
 The runtime executes compiled bytecode, renders forms through wxWidgets, and stores all application data in a relational database (Firebird by default).
 

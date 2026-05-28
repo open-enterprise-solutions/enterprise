@@ -15,13 +15,12 @@
 ## 1. What this project is
 
 **Open Enterprise Solutions (OES)** — a C++17 cross-platform low-code
-enterprise application platform. Conceptually similar to 1C:Enterprise:
-developers define business applications through **metadata** (object
-types, forms, modules) and a built-in **scripting language**, not by
-writing low-level code. The runtime executes compiled bytecode, renders
-forms through wxWidgets, and stores all application data in a relational
-database (Firebird embedded by default; PostgreSQL / SQLite / MySQL /
-ODBC also supported).
+enterprise application platform. Developers define business
+applications through **metadata** (object types, forms, modules) and a
+built-in **scripting language**, not by writing low-level code. The
+runtime executes compiled bytecode, renders forms through wxWidgets,
+and stores all application data in a relational database (Firebird
+embedded by default; PostgreSQL / SQLite / MySQL / ODBC also supported).
 
 ---
 
@@ -199,31 +198,31 @@ sample exports under `examples/`.
 
 ---
 
-## 6. 1C ⇄ OES translation cheat-sheet
+## 6. Concept glossary
 
-For developers (or LLMs) carrying 1C habits, the mental mapping:
+Mapping common ERP / business-application concepts to their OES form:
 
-| 1C term (RU) | OES equivalent | Notes |
+| Concept | OES equivalent | Notes |
 |---|---|---|
-| Справочник | Catalog | Identical semantics |
-| Документ | Document | Identical; supports posting via `RecorderRef` |
-| Регистр сведений | InformationRegister | Same dimensions / resources / periodicity |
-| Регистр накопления | AccumulationRegister | Same; balance vs turnover modes |
-| Регистр бухгалтерии | AccountingRegister | Same double-entry model |
-| План счетов | ChartOfAccounts | Same; binds to ChartOfCharacteristicTypes |
-| План видов характеристик | ChartOfCharacteristicTypes | Same subconto-type role |
-| Перечисление | Enumeration | Same |
-| Константа | Constant | Same |
-| Обработка | DataProcessor | Same |
-| Отчёт | Report | Same |
-| Объект.Записать() | object.Write() | Identical semantics; record-locks enforced |
-| Движения.Хозрасчётный.Добавить() | document.RecordSets.Hozraschetnyi.Add() | (AccountingRegister WIP; see register-totals-strategy.md) |
-| Запрос (built-in query language) | LINQ block / chain syntax | `from ... where ... select` |
-| ПКО / РКО (recorder docs) | Documents with `OnPosting` script | Same pattern |
-| Дата документа | document.Date | `ibDateTime` type |
-| СКД (data-composition system) | — | Not yet present; reports are hand-written today |
-| Управляемые формы | Form / VisualHost (single form layer) | OES has one form model, not two |
-| Тонкий / толстый клиент | Web frontend / Desktop frontend | Two parallel DLLs (`wfrontend.dll` / `frontend.dll`) |
+| Reference list / lookup table | Catalog | Hierarchical or flat; predefined items supported |
+| Business transaction document | Document | Posting via `OnPosting` handler |
+| Periodic dimensioned fact table | InformationRegister | Dimensions / resources / optional periodicity |
+| Quantitative balance ledger | AccumulationRegister | Balance vs turnover modes |
+| Double-entry bookkeeping ledger | AccountingRegister | Account + characteristic-type bindings |
+| Chart of accounts | ChartOfAccounts | Binds to ChartOfCharacteristicTypes |
+| Analytical-dimension type catalog | ChartOfCharacteristicTypes | Per-account dimension definitions |
+| Fixed-value enum | Enumeration | Closed set; no runtime add |
+| Singleton config value | Constant | One row, one value, typed |
+| Interactive utility / batch tool | DataProcessor | Forms + script, no persisted business data |
+| Read-only analytical output | Report | Form + LINQ / register query |
+| Save an object | `object.Write()` | Record-locks enforced; see `docs/record-locks.md` |
+| Add an accounting movement | `document.RecordSets.<RegisterName>.Add()` | AccountingRegister WIP; see `register-totals-strategy.md` |
+| Built-in query language | LINQ block / chain syntax | `from ... where ... select`; see `docs/linq.md` |
+| Document posting handler | `OnPosting` script in Document module | Writes register movements |
+| Document date | `document.Date` | `ibDateTime` type |
+| Data-composition / pivot system | — | Not present; reports are hand-written today |
+| Form model | Form / VisualHost | Single form layer; same form runs in Desktop and Web |
+| Client tier | Desktop frontend / Web frontend | Two parallel DLLs (`frontend.dll` / `wfrontend.dll`) |
 
 ---
 
