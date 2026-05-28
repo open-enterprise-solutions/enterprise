@@ -1,19 +1,53 @@
 # Record-object Write/Delete scaffold refactor
 
-> **Status:** proposal (2026-05-24). Nothing implemented. Roadmap doc
-> only — point of return for when the work gets scheduled.
+> **Status:** **LANDED 2026-05-25 in commit `fc4efa55`** (Phase A +
+> Phase B together — the original "wait for record-locks to settle"
+> caveat dropped, both arcs landed back-to-back). Build clean
+> Debug|x86, smoke-validated on Catalog / Document (new + edit,
+> repost, parallel-write version conflict) + the 3 register kinds.
 >
-> **Why now (as a doc).** The 2026-05-24 record-locks arc surfaced
-> the duplication acutely — adding one line of `LockAndCheckDataVersion()`
-> / `LockByKeys()` / inline-lock had to happen in 15 places almost
-> identically, and the next safety/audit/log addition will pay the
-> same cost. The cost compounds with every cross-cutting change.
+> What actually shipped vs the proposal below:
 >
-> **Why not now (the work itself).** Write is the hottest data path
-> in OES. Doing this refactor on top of the not-yet-settled
-> record-locks landing would conflate two concerns and double the
-> blast radius. Wait for record-locks to mature (~1-2 weeks of
-> production observation), then schedule this as a focused arc.
+> - **Phase A (Begin*/Commit*Scope helpers)** — landed as
+>   `RefQuery` + `RecordSetQuery` extraction. Pre/post Write boilerplate
+>   (designer-skip, scope/access guard, TX begin, lock+version check,
+>   commit + notify + clear-modified) lives once.
+> - **Phase B (template-method on bases)** — `WriteObject` /
+>   `DeleteObject` defined on `ibValueRecordDataObjectHierarchyRef`;
+>   `WriteRecordSet` / `DeleteRecordSet` on `ibValueRecordSetObject`.
+>   6 leaves inherit verbatim (Catalog / ChartOfAccounts /
+>   ChartOfCharacteristicTypes + 3 register kinds).
+> - **Document (the outlier)** — promoted to a new intermediate
+>   `ibValueRecordDataObjectRecorderRef` ("ref with movements")
+>   between Ref and Document. Posting state machine + register
+>   cascade + SetDeletionMark-with-un-post live on this intermediate;
+>   Document itself collapses to leaf hooks. Late-bind
+>   `InitRegisterRecords()` in leaf ctor body avoids
+>   pure-virtual-in-base-ctor on register `CreateRecordSet`.
+> - **ShowFormValue / GetFormValue** — hoisted to
+>   `ibValueRecordDataObject`. 6 leaves reduced to
+>   `GetCurrentObjectFormID()` hook. Constant / InformationRegister
+>   keep their own (manager/key-object form acquisition is
+>   structurally different).
+> - **Subclass-list trap closed structurally** —
+>   `FillArrayObjectByPredefinedAttribute` switched from destructive
+>   assign to an additive chain. The "DataVersion declared on base
+>   but missing from subclass list" bug class is now extinct, not
+>   just patched. See [[reference-predefined-attr-subclass-lists]] —
+>   memory note remains as historical record.
+> - **`SetDefaultProcedure` hooks** — 6 common hooks hoisted into
+>   `MutableRef` ctor. Document keeps its 3-arg `BeforeWrite` +
+>   `Posting` / `UndoPosting` / `SetNewNumber`.
+>
+> The proposal text below is preserved as historical record — useful
+> when reading the actual diff against `fc4efa55`'s parent.
+>
+> **Original rationale (kept for reference):** The 2026-05-24
+> record-locks arc surfaced the duplication acutely — adding one line
+> of `LockAndCheckDataVersion()` / `LockByKeys()` / inline-lock had to
+> happen in 15 places almost identically. The next safety / audit /
+> log addition would have paid the same cost; this refactor cuts that
+> cost to one site.
 
 ---
 

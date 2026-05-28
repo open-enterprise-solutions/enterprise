@@ -1,16 +1,30 @@
-# Record-object audit — as-is snapshot 2026-05-25
+# Record-object audit — pre-refactor snapshot 2026-05-25
 
-> **Companion to** [`record-object-refactor.md`](record-object-refactor.md)
-> (which is the *to-be* proposal). This doc is the *as-is* — what the
-> code looks like right now, after the record-locks arc landed. Use
-> as the empirical baseline before scheduling the refactor.
+> **⚠ Pre-refactor snapshot.** This document captures the state of
+> Write/Delete duplication that existed **immediately before** the
+> consolidation landed. The refactor itself shipped on the same day
+> in commit `fc4efa55` — see
+> [`record-object-refactor.md`](record-object-refactor.md) for the
+> landed status. The "15 scaffolds" inventory in Part 1 below is
+> **no longer accurate** — there are now 2 base scaffolds
+> (`HierarchyRef::WriteObject/DeleteObject` and
+> `RecordSetObject::WriteRecordSet/DeleteRecordSet`) plus Document's
+> own state machine on the new `RecorderRef` intermediate.
 >
-> **Convergence target** (user observation 2026-05-25): the
-> consolidation belongs on **`ibValueRecordDataObject`** (runtime side)
-> + **`ibValueMetaObjectRecordData`** (meta side). These are the two
+> This file is preserved as the empirical baseline that motivated the
+> refactor — useful when reviewing the diff against `fc4efa55`'s
+> parent. Do NOT use it as a guide to current code.
+>
+> **Convergence target** (user observation 2026-05-25, **realised in
+> `fc4efa55`**): the consolidation belongs on
+> **`ibValueRecordDataObject`** (runtime side) +
+> **`ibValueMetaObjectRecordData`** (meta side). These are the two
 > bases through which the 4 ref-objects already pass; the registers
-> live in a parallel `ibValueRecordSetObject` + `ibValueMetaObject
-> RegisterData` pair that should follow the same shape.
+> live in a parallel `ibValueRecordSetObject` +
+> `ibValueMetaObjectRegisterData` pair that follows the same shape.
+> Document landed on a new intermediate
+> `ibValueRecordDataObjectRecorderRef` rather than absorbing its
+> state machine into the universal scaffold.
 
 ---
 
