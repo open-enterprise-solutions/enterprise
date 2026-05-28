@@ -1,6 +1,6 @@
 # Archive — collapsed session handoffs
 
-These session handoffs (2026-04-30 .. 2026-05-12) have been collapsed
+These session handoffs (2026-04-30 .. 2026-05-25) have been collapsed
 into topic docs. Index here for the date-curious; if you need the raw
 day-by-day chronology, it's in git history before the trim.
 
@@ -16,10 +16,11 @@ day-by-day chronology, it's in git history before the trim.
 | 2026-05-10 | CES default + iterator refactor + shutdown deadlocks + lambda-eval guards | `lambda.md`, `linq.md` |
 | 2026-05-11 | LINQ JOIN / GROUP BY (terminal), closure capture Phase A+B, AOT cache iterations | `linq.md`, `closure-capture.md` |
 | 2026-05-12 | Closure Phase D/F (chain LINQ unlocked), 31-op chain surface, typed-tag specialise, `group ... into g` continuation | `linq.md`, `closure-capture.md` |
+| 2026-05-25 | Audit-log subsystem (`backend/logger/` + viewer dialog + 5 adjacent fixes) | `audit-log.md` |
 
-Active session-handoff: `session-2026-05-25.md` (audit-log subsystem
-+ adjacent fixes — still recent, not yet migrated). Collapse into
-topic docs when audit-log arc is stable.
+No active session-handoffs at the moment. Future arcs that survive
+into the next session land as `session-YYYY-MM-DD.md`; collapse into
+a topic doc and add a row above once the work is stable.
 
 Decisions to remember (cross-cutting):
 - **Persistence layer** for AOT (`SerializeAOT`/`DeserializeAOT`, `byteCodeAOT.cpp`) landed
