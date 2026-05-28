@@ -479,8 +479,19 @@ void ibValueModelTableBox::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxpar
 	if (dataViewCtrl != nullptr) {
 
 		ibDataViewModel* dataViewOldModel = dataViewCtrl->GetModel();
-		ibDataViewModel* dataViewNewModel = m_tableModel != nullptr ?
-			m_tableModel->GetDataViewModel() : nullptr;
+		// Designer = compile + intellisense only.  Form-editor preview
+		// must not associate the runtime data model with the control —
+		// AssociateModel arms PagedBootstrap, which would issue SQL
+		// against a metadata table that doesn't exist yet (new Catalog /
+		// Document being designed) or that the Designer session has no
+		// runtime to query against.  Columns in designer are rendered
+		// from child ibValueModelTableBoxColumn controls (see
+		// CreateColumnCollection's own DesignerMode gate); header /
+		// footer dimensions below operate on dataViewCtrl directly, no
+		// model needed.
+		ibDataViewModel* dataViewNewModel =
+			(m_tableModel != nullptr && !appData->DesignerMode())
+			? m_tableModel->GetDataViewModel() : nullptr;
 
 		if (dataViewNewModel != dataViewOldModel) {
 			// Fresh control attaching to an existing model (form rebuild
