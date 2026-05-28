@@ -72,9 +72,6 @@
     <ClCompile Include="mainFrame\output\outputWindow.cpp">
       <Filter>mainFrame\output</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\configCompare\configCompareDialog.cpp">
-      <Filter>mainFrame\configCompare</Filter>
-    </ClCompile>
     <ClCompile Include="mainFrame\configCompare\configCompareModel.cpp">
       <Filter>mainFrame\configCompare</Filter>
     </ClCompile>
@@ -112,6 +109,9 @@
       <Filter>docManager\templates</Filter>
     </ClCompile>
     <ClCompile Include="docManager\templates\docViewRole.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\docViewConfigCompare.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\metatree\treeDataProcessor.cpp">
@@ -186,9 +186,6 @@
     <ClInclude Include="mainFrame\output\outputWindow.h">
       <Filter>mainFrame\output</Filter>
     </ClInclude>
-    <ClInclude Include="mainFrame\configCompare\configCompareDialog.h">
-      <Filter>mainFrame\configCompare</Filter>
-    </ClInclude>
     <ClInclude Include="mainFrame\configCompare\configCompareModel.h">
       <Filter>mainFrame\configCompare</Filter>
     </ClInclude>
@@ -226,6 +223,9 @@
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewRole.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewConfigCompare.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="mainFrame\metatree\treeDataProcessor.h">

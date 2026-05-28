@@ -10,7 +10,7 @@
 #include "backend/debugger/debugClient.h"
 #include "backend/session/sessionRegistry.h"
 
-#include "mainFrame/configCompare/configCompareDialog.h"
+#include "docManager/templates/docViewConfigCompare.h"
 
 #include <wx/filename.h>
 
@@ -482,9 +482,12 @@ void ibFrontendDocMDIFrameDesigner::OnConfiguration(wxCommandEvent& event)
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
 			return;
 
-		ibMetaDataConfigurationFile other;
+		// Heap-allocate the transient config so it lives for the doc's
+		// lifetime (the historical wxDialog version used a stack object
+		// because ShowModal blocked here; an MDI tab can't rely on that).
+		auto otherHolder = std::make_shared<ibMetaDataConfigurationFile>();
 		const wxString otherPath = openFileDialog.GetPath();
-		if (!other.LoadConfigFromFile(otherPath)) {
+		if (!otherHolder->LoadConfigFromFile(otherPath)) {
 			wxMessageBox(_("Failed to load configuration file."),
 				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 			return;
@@ -492,24 +495,29 @@ void ibFrontendDocMDIFrameDesigner::OnConfiguration(wxCommandEvent& event)
 
 		const wxString otherLabel = wxFileName(otherPath).GetFullName();
 
-		ibDialogConfigCompare cmpDlg(this,
-			activeMetaData->GetCommonMetaObject(),
-			other.GetCommonMetaObject(),
-			_("Current"),
-			otherLabel);
-
-		// Push direction (current → file) writes back here so the
-		// .mcf reflects merge results. The lambda captures `other`
-		// + `otherPath` by reference; the dialog is modal so both
-		// remain valid for the callback's lifetime.
-		cmpDlg.SetRightSaveCallback([&other, otherPath]() {
-			return other.SaveConfigToFile(otherPath);
-		});
-
-		// Apply (wxID_OK) means activeMetaData was mutated — rebuild
-		// the designer's metadata tree so the user sees the result.
-		if (cmpDlg.ShowModal() == wxID_OK)
-			m_metaWindow->Load();
+		if (docManager != nullptr) {
+			auto* doc = docManager->CreateDocument<ibConfigCompareDocument>();
+			if (doc != nullptr) {
+				doc->Configure(
+					activeMetaData->GetCommonMetaObject(),
+					otherHolder->GetCommonMetaObject(),
+					_("Current"),
+					otherLabel,
+					[otherHolder, otherPath]() {
+						return otherHolder->SaveConfigToFile(otherPath);
+					},
+					[this]() {
+						// Pull mutation lands on activeMetaData — rebuild
+						// the designer's metadata tree so the user sees the
+						// merged state.
+						if (m_metaWindow != nullptr)
+							m_metaWindow->Load();
+					});
+				docManager->AddDocument(doc);
+				if (!doc->OnCreate(wxEmptyString, 0))
+					doc->DeleteAllViews();
+			}
+		}
 	}
 	else if (wxID_DESIGNER_CONFIGURATION_COMPARE_DB == event.GetId())
 	{
@@ -527,20 +535,29 @@ void ibFrontendDocMDIFrameDesigner::OnConfiguration(wxCommandEvent& event)
 			return;
 		}
 
-		ibDialogConfigCompare cmpDlg(this,
-			storage->GetCommonMetaObject(),
-			storage->GetConfiguration()->GetCommonMetaObject(),
-			_("Current"),
-			_("Database"));
-
 		// Right side is the DB baseline — Push direction would mean
-		// "write current's changes into the DB config in memory".
-		// That mutation never gets persisted unless the user runs
-		// "Update database configuration" afterwards, so don't expose
-		// Push here (no save callback → dialog hides Push).
-
-		if (cmpDlg.ShowModal() == wxID_OK)
-			m_metaWindow->Load();
+		// "write current's changes into the DB config in memory". That
+		// mutation never gets persisted unless the user runs "Update
+		// database configuration" afterwards, so we don't expose Push
+		// here (no save callback → view hides the Push entry).
+		if (docManager != nullptr) {
+			auto* doc = docManager->CreateDocument<ibConfigCompareDocument>();
+			if (doc != nullptr) {
+				doc->Configure(
+					storage->GetCommonMetaObject(),
+					storage->GetConfiguration()->GetCommonMetaObject(),
+					_("Current"),
+					_("Database"),
+					/*rightSaveCallback*/ {},
+					[this]() {
+						if (m_metaWindow != nullptr)
+							m_metaWindow->Load();
+					});
+				docManager->AddDocument(doc);
+				if (!doc->OnCreate(wxEmptyString, 0))
+					doc->DeleteAllViews();
+			}
+		}
 	}
 	else if (wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES == event.GetId())
 	{
@@ -559,33 +576,38 @@ void ibFrontendDocMDIFrameDesigner::OnConfiguration(wxCommandEvent& event)
 		if (dlgB.ShowModal() == wxID_CANCEL)
 			return;
 
-		ibMetaDataConfigurationFile fileA;
-		ibMetaDataConfigurationFile fileB;
+		// Heap-allocate both transient configs so they survive the doc's
+		// lifetime (MDI tab is non-modal — can't rely on stack scope).
+		auto fileA = std::make_shared<ibMetaDataConfigurationFile>();
+		auto fileB = std::make_shared<ibMetaDataConfigurationFile>();
 		const wxString pathA = dlgA.GetPath();
 		const wxString pathB = dlgB.GetPath();
-		if (!fileA.LoadConfigFromFile(pathA) || !fileB.LoadConfigFromFile(pathB)) {
+		if (!fileA->LoadConfigFromFile(pathA) || !fileB->LoadConfigFromFile(pathB)) {
 			wxMessageBox(_("Failed to load one of the configuration files."),
 				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 			return;
 		}
 
-		ibDialogConfigCompare cmpDlg(this,
-			fileA.GetCommonMetaObject(),
-			fileB.GetCommonMetaObject(),
-			wxFileName(pathA).GetFullName(),
-			wxFileName(pathB).GetFullName());
-
-		// Both sides are files — wire save callbacks so Push and Pull
-		// both persist. Pull writes back into A (the "current" side),
-		// Push into B. Since activeMetaData isn't involved, we expose
-		// a left-side save callback too.
-		cmpDlg.SetRightSaveCallback([&fileB, pathB]() {
-			return fileB.SaveConfigToFile(pathB);
-		});
-		// Left save isn't part of the dialog API yet — Pull mutations
-		// to fileA would need a separate save step. V2 enhancement.
-
-		cmpDlg.ShowModal();
+		// activeMetaData isn't involved — Pull mutations to fileA would
+		// need a separate save step. V2 enhancement; current behaviour
+		// matches the historical dialog (no left-save callback).
+		if (docManager != nullptr) {
+			auto* doc = docManager->CreateDocument<ibConfigCompareDocument>();
+			if (doc != nullptr) {
+				doc->Configure(
+					fileA->GetCommonMetaObject(),
+					fileB->GetCommonMetaObject(),
+					wxFileName(pathA).GetFullName(),
+					wxFileName(pathB).GetFullName(),
+					[fileB, pathB]() {
+						return fileB->SaveConfigToFile(pathB);
+					},
+					/*appliedCallback*/ {});
+				docManager->AddDocument(doc);
+				if (!doc->OnCreate(wxEmptyString, 0))
+					doc->DeleteAllViews();
+			}
+		}
 	}
 }
 
@@ -680,12 +702,25 @@ void ibFrontendDocMDIFrameDesigner::OnActiveUsers(wxCommandEvent& event)
 	dlg->Show();
 }
 
-#include "frontend/win/dlgs/auditLog.h"
+#include "frontend/docView/docManager.h"
+#include "frontend/docView/templates/docViewAuditLog.h"
+#include "backend/picturePredefined.h"
 
 void ibFrontendDocMDIFrameDesigner::OnAuditLog(wxCommandEvent& event)
 {
-	ibWindowPtr<ibDialogAuditLog> dlg(new ibDialogAuditLog(this, wxID_ANY));
-	dlg->Show();
+	// Open the journal as an MDI tab via the docview system (replaces
+	// the historical modal ibDialogAuditLog). See the matching enterprise
+	// handler — same template/CLSID, registered in ibMetaDocManager's ctor.
+	if (docManager != nullptr) {
+		ibAuditLogDocument* doc = docManager->CreateDocument<ibAuditLogDocument>();
+		if (doc != nullptr) {
+			doc->SetTitle(_("Registration journal"));
+			doc->SetIcon(ibBackendPicture::GetPictureAsIcon(g_picUserActiveCLSID));
+			docManager->AddDocument(doc);
+			if (!doc->OnCreate(wxEmptyString, 0))
+				doc->DeleteAllViews();
+		}
+	}
 }
 
 #include "frontend/win/dlgs/connectionDB.h"

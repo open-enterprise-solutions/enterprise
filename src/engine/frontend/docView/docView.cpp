@@ -92,7 +92,7 @@ bool ibMetaDocument::OnCreate(const wxString& path, long flags)
 	view->SetDocument(this);
 
 	// Shared doc/view pipeline: spawn the child-frame for this view.
-	// Desktop hits ibFrontendDocMDIFrame (CAuiDocChildFrame inside an
+	// Desktop hits ibFrontendDocMDIFrame (ibAuiDocChildFrame inside an
 	// AUI MDI parent); web hits ibWebFrame (ibWebDocChildFrame parked
 	// in the session's m_tabs). Both sides have matching static factory
 	// signatures so only the class-qualifier differs.
@@ -134,7 +134,7 @@ bool ibMetaDocument::OnCreate(const wxString& path, long flags)
 	}
 #endif
 	// Unified ShowFrame — the explicit "make it visible" trigger.
-	// Desktop: reveals the CAuiDocChildFrame. Web: base is a no-op
+	// Desktop: reveals the ibAuiDocChildFrame. Web: base is a no-op
 	// (m_viewFrame is null), subclasses may override to activate
 	// the owning tab.
 	view->ShowFrame();

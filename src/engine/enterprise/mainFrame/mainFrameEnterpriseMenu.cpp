@@ -90,6 +90,7 @@ void ibFrontendDocMDIFrameEnterprise::InitializeDefaultMenu()
 	if (activeMetaData->AccessRight_ActiveUsers()) {
 		m_menuAdministration = new wxMenu;
 		m_menuAdministration->Append(wxID_ENTERPRISE_ACTIVE_USERS, _("Active users"));
+		m_menuAdministration->AppendSeparator();
 		m_menuAdministration->Append(wxID_ENTERPRISE_AUDIT_LOG,    _("Registration journal"));
 		m_frameMenuBar->Append(m_menuAdministration, _("Administration"));
 	}

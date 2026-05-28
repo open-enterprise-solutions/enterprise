@@ -2,10 +2,10 @@
 #define __WEB_CHILD_FRAME_H__
 
 // Two-layer mirror of mainFrame/mainFrameChild.h's
-// CAuiMDIChildFrame / CAuiDocChildFrame:
+// CAuiMDIChildFrame / ibAuiDocChildFrame:
 //
 //   Desktop: wxAuiMDIChildFrame  -> CAuiMDIChildFrame
-//            wxDocChildFrameAny  -> CAuiDocChildFrame
+//            wxDocChildFrameAny  -> ibAuiDocChildFrame
 //                                   (holds wxDocument*+wxView* + wxDocManager*)
 //
 //   Web:     ibWebWindow         -> ibWebMDIChildFrame   (a tab node in the
@@ -17,7 +17,7 @@
 // wxFrame's native-window API into the base, which ibWebWindow doesn't
 // have. The Doc/View pointers are plumbed by hand instead; destructor
 // drops the view first, then removes the document from its docManager
-// (same order CAuiDocChildFrame uses).
+// (same order ibAuiDocChildFrame uses).
 
 #include <memory>
 
@@ -56,7 +56,7 @@ private:
 };
 
 // Doc-aware child frame — owns the Document / View / Host triad for
-// one open form. Destruction follows CAuiDocChildFrame's order:
+// one open form. Destruction follows ibAuiDocChildFrame's order:
 // activate-off + delete the view, then unregister + delete the
 // document via its manager (if any).
 class ibWebDocChildFrame : public ibWebMDIChildFrame {

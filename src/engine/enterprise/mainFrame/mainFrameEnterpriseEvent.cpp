@@ -9,8 +9,11 @@
 #include "win/dlg/enterpriseOption.h"
 
 #include "frontend/win/dlgs/activeUser.h"
-#include "frontend/win/dlgs/auditLog.h"
 #include "frontend/win/dlgs/about.h"
+
+#include "frontend/docView/docManager.h"
+#include "frontend/docView/templates/docViewAuditLog.h"
+#include "backend/picturePredefined.h"
 
 void ibFrontendDocMDIFrameEnterprise::OnClickAllOperation(wxCommandEvent& event)
 {
@@ -38,8 +41,20 @@ void ibFrontendDocMDIFrameEnterprise::OnActiveUsers(wxCommandEvent& event)
 
 void ibFrontendDocMDIFrameEnterprise::OnAuditLog(wxCommandEvent& event)
 {
-	ibDialogAuditLog* dlg = new ibDialogAuditLog(this, wxID_ANY);
-	dlg->Show();
+	// Open the journal as an MDI tab via the docview system (replaces
+	// the historical modal ibDialogAuditLog). The template is registered
+	// in ibMetaDocManager's ctor with g_toolAuditLogCLSID — invisible to
+	// File → New, reachable only through CreateDocument<T>() here.
+	if (docManager != nullptr) {
+		ibAuditLogDocument* doc = docManager->CreateDocument<ibAuditLogDocument>();
+		if (doc != nullptr) {
+			doc->SetTitle(_("Registration journal"));
+			doc->SetIcon(ibBackendPicture::GetPictureAsIcon(g_picUserActiveCLSID));
+			docManager->AddDocument(doc);
+			if (!doc->OnCreate(wxEmptyString, 0))
+				doc->DeleteAllViews();
+		}
+	}
 
 	event.Skip();
 }

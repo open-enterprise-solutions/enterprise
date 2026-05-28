@@ -203,8 +203,8 @@ void ibDataReportTree::ibDataReportTreeCtrl::OnSetFocus(wxFocusEvent& event)
 		docManager->ActivateView(m_metaView);
 	}
 	else if (event.GetEventType() == wxEVT_KILL_FOCUS) {
-		const CAuiDocChildFrame* child =
-			static_cast<CAuiDocChildFrame*>(mainFrame->GetActiveChild());
+		const ibAuiDocChildFrame* child =
+			static_cast<ibAuiDocChildFrame*>(mainFrame->GetActiveChild());
 		wxView* view = child ? child->GetView() : docManager->GetAnyUsableView();
 		if (view != nullptr && view != docManager->GetCurrentView())
 			view->Activate(true);

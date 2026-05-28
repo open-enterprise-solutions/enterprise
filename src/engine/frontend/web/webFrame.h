@@ -217,7 +217,7 @@ private:
 
 	// One entry per open form. Each child frame owns its doc/view/host
 	// triad; closing a tab = erase from the vector = dtor chain releases
-	// host, then view, then document (mirrors CAuiDocChildFrame order).
+	// host, then view, then document (mirrors ibAuiDocChildFrame order).
 	std::vector<std::unique_ptr<ibWebDocChildFrame>> m_tabs;
 	std::size_t                                      m_activeTab = 0;
 

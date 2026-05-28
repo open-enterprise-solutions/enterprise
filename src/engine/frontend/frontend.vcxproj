@@ -23,6 +23,7 @@
     <ClCompile Include="docView\docManager.cpp" />
     <ClCompile Include="docView\docView.cpp" />
     <ClCompile Include="docView\docViewCmd.cpp" />
+    <ClCompile Include="docView\templates\docViewAuditLog.cpp" />
     <ClCompile Include="docView\templates\docViewHelp.cpp" />
     <ClCompile Include="docView\templates\docViewSpreadsheet.cpp" />
     <ClCompile Include="docView\templates\docViewText.cpp" />
@@ -306,7 +307,6 @@
     <ClCompile Include="win\ctrls\treelistctrl.cpp" />
     <ClCompile Include="win\dlgs\about.cpp" />
     <ClCompile Include="win\dlgs\activeUser.cpp" />
-    <ClCompile Include="win\dlgs\auditLog.cpp" />
     <ClCompile Include="win\dlgs\applyChange.cpp" />
     <ClCompile Include="session\guiSession.cpp" />
     <ClCompile Include="session\workerPoolGUI.cpp" />
@@ -351,6 +351,7 @@
     <ClInclude Include="artProvider\private\picturePredefined.h" />
     <ClInclude Include="docView\docManager.h" />
     <ClInclude Include="docView\docView.h" />
+    <ClInclude Include="docView\templates\docViewAuditLog.h" />
     <ClInclude Include="docView\templates\docViewHelp.h" />
     <ClInclude Include="docView\templates\docViewSpreadsheet.h" />
     <ClInclude Include="docView\templates\docViewText.h" />
@@ -573,7 +574,6 @@
     <ClInclude Include="win\ctrls\treelistctrl.h" />
     <ClInclude Include="win\dlgs\about.h" />
     <ClInclude Include="win\dlgs\activeUser.h" />
-    <ClInclude Include="win\dlgs\auditLog.h" />
     <ClInclude Include="win\dlgs\applyChange.h" />
     <ClInclude Include="session\guiSession.h" />
     <ClInclude Include="session\workerPoolGUI.h" />

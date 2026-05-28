@@ -14,10 +14,11 @@
 
 #include "docManager.h"
 
-//common templates 
+//common templates
 #include "frontend/docView/templates/docViewText.h"
 #include "frontend/docView/templates/docViewSpreadsheet.h"
 #include "frontend/docView/templates/docViewHelp.h"
+#include "frontend/docView/templates/docViewAuditLog.h"
 
 #include "backend/metadataConfiguration.h"
 
@@ -112,6 +113,11 @@ ibMetaDocManager::ibMetaDocManager()
 
 	AddDocTemplate(g_metaInterfaceCLSID,
 		_("Help document"), wxT("*.hle"), wxT("hle"), _("Help Doc"), _("Help View"), CLASSINFO(ibHelpFilibDocument), CLASSINFO(ibHelpEditView), wxTEMPLATE_INVISIBLE);
+
+	// Tools — invisible templates (not exposed via File → New). Opened
+	// directly through CreateDocument<T>() from the menu handlers.
+	AddDocTemplate(g_toolAuditLogCLSID,
+		CLASSINFO(ibAuditLogDocument), CLASSINFO(ibAuditLogView));
 
 #if wxUSE_PRINTING_ARCHITECTURE
 

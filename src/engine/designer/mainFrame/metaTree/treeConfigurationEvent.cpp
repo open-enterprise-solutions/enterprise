@@ -322,8 +322,8 @@ void ibMetadataTree::ibMetaTreeCtrl::OnSetFocus(wxFocusEvent& event)
 
 		if (focus_win == nullptr) {
 
-			const CAuiDocChildFrame* focus_child_win =
-				static_cast<CAuiDocChildFrame*>(mainFrame->GetActiveChild());
+			const ibAuiDocChildFrame* focus_child_win =
+				static_cast<ibAuiDocChildFrame*>(mainFrame->GetActiveChild());
 
 			wxView* view = focus_child_win ? focus_child_win->GetView() : docManager->GetAnyUsableView();
 			// Do NOT gate this on `m_metaView == docManager->GetCurrentView()`:

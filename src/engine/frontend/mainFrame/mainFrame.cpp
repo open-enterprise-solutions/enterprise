@@ -129,15 +129,21 @@ ibFrontendWindow* ibFrontendDocMDIFrame::CreateChildFrame(ibMetaView* view, cons
 			}
 		}
 
+		wxIcon docIcon = document->GetIcon();
+
 		ibDialogDocChildFrame* subframe = new ibDialogDocChildFrame(document, view, parent, wxID_ANY, document->GetTitle(), pos, size, style & ~wxCREATE_SDI_FRAME);
-		subframe->SetIcon(document->GetIcon());
+		if (docIcon.IsOk())
+			subframe->SetIcon(docIcon);
 		subframe->SetExtraStyle(wxWS_EX_BLOCK_EVENTS);
 		subframe->Center();
 		return subframe;
 	}
 
-	CAuiDocChildFrame* subframe = new CAuiDocChildFrame(document, view, s_instance, wxID_ANY, document->GetTitle(), pos, size, style);
-	subframe->SetIcon(document->GetIcon());
+	wxIcon docIcon = document->GetIcon();
+
+	ibAuiDocChildFrame* subframe = new ibAuiDocChildFrame(document, view, s_instance, wxID_ANY, document->GetTitle(), pos, size, style);
+	if (docIcon.IsOk())
+		subframe->SetIcon(docIcon);
 	subframe->SetExtraStyle(wxWS_EX_BLOCK_EVENTS);
 	return subframe;
 }

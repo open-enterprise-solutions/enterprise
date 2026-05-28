@@ -12,6 +12,7 @@
 #include "templates/docViewFormEditor.h"
 #include "templates/docViewInterface.h"
 #include "templates/docViewRole.h"
+#include "templates/docViewConfigCompare.h"
 
 //files
 #include "templates/docViewdataProcessorFile.h"
@@ -39,6 +40,10 @@ ibMetaDocManagerDesigner::ibMetaDocManagerDesigner()
 
 	AddDocTemplate(g_metaInterfaceCLSID, CLASSINFO(ibInterfaceEditDocument), CLASSINFO(ibInterfaceEditView));
 	AddDocTemplate(g_metaRoleCLSID, CLASSINFO(ibRoleEditDocument), CLASSINFO(ibRoleEditView));
+
+	// Tools — invisible template, opened through CreateDocument<T>().
+	AddDocTemplate(g_toolConfigCompareCLSID,
+		CLASSINFO(ibConfigCompareDocument), CLASSINFO(ibConfigCompareView));
 
 	//advanced object
 	AddDocTemplate(g_metaModuleCLSID, CLASSINFO(ibModuleEditDocument), CLASSINFO(ibModuleEditView));

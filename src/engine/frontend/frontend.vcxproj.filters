@@ -64,9 +64,6 @@
     <ClCompile Include="win\dlgs\activeUser.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
-    <ClCompile Include="win\dlgs\auditLog.cpp">
-      <Filter>win\dlgs</Filter>
-    </ClCompile>
     <ClCompile Include="win\dlgs\about.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
@@ -821,6 +818,9 @@
     <ClCompile Include="docView\templates\docViewHelp.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
+    <ClCompile Include="docView\templates\docViewAuditLog.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
     <ClCompile Include="win\editor\gridEditor\gridEditorDoc.cpp">
       <Filter>win\editor\gridEditor</Filter>
     </ClCompile>
@@ -1037,9 +1037,6 @@
       <Filter>session</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\activeUser.h">
-      <Filter>win\dlgs</Filter>
-    </ClInclude>
-    <ClInclude Include="win\dlgs\auditLog.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\about.h">
@@ -1615,6 +1612,9 @@
       <Filter>docView\templates</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\docViewHelp.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\docViewAuditLog.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\choiceTemplate.h">

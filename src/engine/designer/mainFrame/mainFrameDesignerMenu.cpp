@@ -154,14 +154,21 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 
 	m_menuConfiguration->AppendSeparator();
 
-	menuItem = m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_FILE, _("Compare with file..."));
+	// "Compare configurations" submenu — three entry points (file / DB
+	// baseline / two arbitrary files) grouped together so the parent
+	// Configuration menu stays compact.
+	wxMenu* menuCompare = new wxMenu;
+
+	menuItem = menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_FILE, _("With file..."));
 	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
 
-	menuItem = m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_DB, _("Compare with database configuration"));
+	menuItem = menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_DB, _("With database configuration"));
 	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
 
-	menuItem = m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES, _("Compare two files..."));
+	menuItem = menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES, _("Two files..."));
 	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
+
+	m_menuConfiguration->AppendSubMenu(menuCompare, _("Compare configurations"));
 
 	m_frameMenuBar->Append(m_menuConfiguration, _("Configuration"));
 	m_frameMenuBar->Append(m_menuDebug, _("Debug"));
@@ -172,6 +179,7 @@ void ibFrontendDocMDIFrameDesigner::InitializeDefaultMenu()
 	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
 	menuItem = m_menuAdministration->Append(wxID_APPLICATION_ACTIVE_USERS, _("Active users"));
 	menuItem->Enable(activeMetaData->AccessRight_ActiveUsers());
+	m_menuAdministration->AppendSeparator();
 	menuItem = m_menuAdministration->Append(wxID_APPLICATION_AUDIT_LOG, _("Registration journal"));
 	menuItem->Enable(activeMetaData->AccessRight_ActiveUsers());
 	m_menuAdministration->AppendSeparator();

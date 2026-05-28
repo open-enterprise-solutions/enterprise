@@ -71,7 +71,8 @@ public:
 					wxSystemSettings::GetMetric(wxSYS_SMALLICON_Y, this));
 
 				wxBitmap mdiChildIcon;
-				mdiChildIcon.CopyFromIcon(m_icons.GetIcon(sizeIcon));
+				if (m_icons.IsOk())
+					mdiChildIcon.CopyFromIcon(m_icons.GetIcon(sizeIcon));
 				pClientWindow->AddPage(this, m_title, m_activateOnCreate, mdiChildIcon);
 			}
 
@@ -145,15 +146,15 @@ public:
 	}
 };
 
-class FRONTEND_API CAuiDocChildFrame :
+class FRONTEND_API ibAuiDocChildFrame :
 	public wxDocChildFrameAny<CAuiMDIChildFrame, wxAuiMDIParentFrame> {
 public:
 
 	// default ctor, use Create after it
-	CAuiDocChildFrame() {}
+	ibAuiDocChildFrame() {}
 
 	// ctor for a valueForm showing the given view of the specified document
-	CAuiDocChildFrame(wxDocument* doc,
+	ibAuiDocChildFrame(wxDocument* doc,
 		wxView* view,
 		wxAuiMDIParentFrame* parent,
 		wxWindowID id,
@@ -167,7 +168,7 @@ public:
 	{
 	}
 
-	virtual ~CAuiDocChildFrame();
+	virtual ~ibAuiDocChildFrame();
 
 	bool Create(wxDocument* doc,
 		wxView* view,
@@ -315,8 +316,8 @@ private:
 
 	wxDocManager* m_docManager;
 
-	wxDECLARE_CLASS(CAuiDocChildFrame);
-	wxDECLARE_NO_COPY_CLASS(CAuiDocChildFrame);
+	wxDECLARE_CLASS(ibAuiDocChildFrame);
+	wxDECLARE_NO_COPY_CLASS(ibAuiDocChildFrame);
 };
 
 class FRONTEND_API ibDialogDocChildFrame :
