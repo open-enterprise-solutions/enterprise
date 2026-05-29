@@ -75,8 +75,7 @@ ibNumber ibValueSystemFunction::Log10(const ibValue& cValue)
 
 ibNumber ibValueSystemFunction::Ln(const ibValue& cValue)
 {
-	ibNumber fNumber = cValue.GetNumber();
-	return std::log(fNumber.ToDouble());
+	return cValue.GetNumber().Ln();   // high-precision exact-tier ln (was std::log → double)
 }
 
 ibValue ibValueSystemFunction::Max(ibValue** paParams, const long lSizeArray)
@@ -102,93 +101,92 @@ ibValue ibValueSystemFunction::Min(ibValue** paParams, const long lSizeArray)
 
 ibValue ibValueSystemFunction::Sqrt(const ibValue& cValue)
 {
+	// Was broken after the ttmath removal: ttmath's Sqrt() returned a status
+	// (0 = ok) and mutated in place, so `if (Sqrt() == 0) return fNumber;`
+	// made sense. The self-contained ibNumber::Sqrt() returns the *value*, so
+	// that guard threw "Incorrect argument" for every non-zero input. Now we
+	// reject only a negative argument (no real root) and return the root.
 	ibNumber fNumber = cValue.GetNumber();
-	if (fNumber.Sqrt() == 0)
-		return fNumber;
-
-	ibBackendCoreException::Error(_("Incorrect argument value for built-in function (Sqrt)"));
-	return ibValue();
+	if (fNumber.IsSign())
+		ibBackendCoreException::Error(_("Incorrect argument value for built-in function (Sqrt)"));
+	return ibValue(fNumber.Sqrt());
 }
 
 //---Строковые:
 int ibValueSystemFunction::StrLen(const ibValue& cValue)
 {
-	wxString stringValue = cValue.GetString();
-	return stringValue.Length();
+	ibString scratch;
+	return static_cast<int>(cValue.GetString(scratch).Length());
 }
 
 bool ibValueSystemFunction::IsBlankString(const ibValue& cValue)
 {
-	wxString stringValue = cValue.GetString();
-	stringValue.Trim(true);
-	stringValue.Trim(false);
-	return stringValue.IsEmpty();
+	ibString scratch;
+	return cValue.GetString(scratch).IsBlank();
 }
 
-wxString ibValueSystemFunction::TrimL(const ibValue& cValue)
+ibString ibValueSystemFunction::TrimL(const ibValue& cValue)
 {
-	wxString stringValue = cValue.GetString();
-	stringValue.Trim(false);
-	return stringValue;
+	ibString scratch;
+	return cValue.GetString(scratch).Trim(false);
 }
 
-wxString ibValueSystemFunction::TrimR(const ibValue& cValue)
+ibString ibValueSystemFunction::TrimR(const ibValue& cValue)
 {
-	wxString stringValue = cValue.GetString();
-	stringValue.Trim(true);
-	return stringValue;
+	ibString scratch;
+	return cValue.GetString(scratch).Trim(true);
 }
 
-wxString ibValueSystemFunction::TrimAll(const ibValue& cValue)
+ibString ibValueSystemFunction::TrimAll(const ibValue& cValue)
 {
-	wxString stringValue = cValue.GetString();
-	stringValue.Trim(true);
-	stringValue.Trim(false);
-	return stringValue;
+	ibString scratch;
+	return cValue.GetString(scratch).TrimAll();
 }
 
-wxString ibValueSystemFunction::Left(const ibValue& cValue, unsigned int nCount)
+ibString ibValueSystemFunction::Left(const ibValue& cValue, unsigned int nCount)
 {
-	wxString stringValue = cValue.GetString();
-	return stringValue.Left(nCount);
+	ibString scratch;
+	return cValue.GetString(scratch).Left(nCount);
 }
 
-wxString ibValueSystemFunction::Right(const ibValue& cValue, unsigned int nCount)
+ibString ibValueSystemFunction::Right(const ibValue& cValue, unsigned int nCount)
 {
-	wxString stringValue = cValue.GetString();
-	return stringValue.Right(nCount);
+	ibString scratch;
+	return cValue.GetString(scratch).Right(nCount);
 }
 
-wxString ibValueSystemFunction::Mid(const ibValue& cValue, unsigned int nFirst, unsigned int nCount)
+ibString ibValueSystemFunction::Mid(const ibValue& cValue, unsigned int nFirst, unsigned int nCount)
 {
-	wxString stringValue = cValue.GetString();
-	return stringValue.Mid(nFirst, nCount);
+	ibString scratch;
+	return cValue.GetString(scratch).Mid(nFirst, nCount);
 }
 
 unsigned int ibValueSystemFunction::Find(const ibValue& cValue, const ibValue& cValue2, unsigned int nStart)
 {
 	if (nStart < 1) nStart = 1;
-	wxString stringValue = cValue.GetString();
-	return stringValue.find(cValue2.GetString(), nStart - 1) + 1;
+	ibString s1, s2;
+	// npos + 1 wraps to 0 — same "not found → 0" contract as the old wxString.find path.
+	return static_cast<unsigned int>(cValue.GetString(s1).Find(cValue2.GetString(s2), nStart - 1) + 1);
 }
 
-wxString ibValueSystemFunction::StrReplace(const ibValue& cSource, const ibValue& cValue1, const ibValue& cValue2)
+ibString ibValueSystemFunction::StrReplace(const ibValue& cSource, const ibValue& cValue1, const ibValue& cValue2)
 {
-	wxString stringValue = cSource.GetString();
-	stringValue.Replace(cValue1.GetString(), cValue2.GetString());
-	return stringValue;
+	ibString sSrc, sFrom, sTo;
+	ibString result(cSource.GetString(sSrc));   // mutable copy of the source
+	result.Replace(cValue1.GetString(sFrom), cValue2.GetString(sTo));
+	return result;
 }
 
 int ibValueSystemFunction::StrCountOccur(const ibValue& cSource, const ibValue& cValue1)
 {
-	wxString stringValue = cSource.GetString();
-	return stringValue.find(cValue1.GetString());
+	ibString s1, s2;
+	return static_cast<int>(cSource.GetString(s1).Find(cValue1.GetString(s2)));
 }
 
 int ibValueSystemFunction::StrLineCount(const ibValue& cSource)
 {
-	wxString stringValue = cSource.GetString();
-	return stringValue.find('\n') + 1;
+	ibString scratch;
+	return static_cast<int>(cSource.GetString(scratch).Find(L'\n') + 1);
 }
 
 wxString ibValueSystemFunction::StrGetLine(const ibValue& cValue, unsigned int nLine)
@@ -240,18 +238,16 @@ wxString ibValueSystemFunction::StrGetLine(const ibValue& cValue, unsigned int n
 	}
 }
 
-wxString ibValueSystemFunction::Upper(const ibValue& cSource)
+ibString ibValueSystemFunction::Upper(const ibValue& cSource)
 {
-	wxString stringValue = cSource.GetString();
-	stringValue.MakeUpper();
-	return stringValue;
+	ibString scratch;
+	return cSource.GetString(scratch).Upper();
 }
 
-wxString ibValueSystemFunction::Lower(const ibValue& cSource)
+ibString ibValueSystemFunction::Lower(const ibValue& cSource)
 {
-	wxString stringValue = cSource.GetString();
-	stringValue.MakeLower();
-	return stringValue;
+	ibString scratch;
+	return cSource.GetString(scratch).Lower();
 }
 
 wxString ibValueSystemFunction::Chr(short nCode)
@@ -261,9 +257,10 @@ wxString ibValueSystemFunction::Chr(short nCode)
 
 short ibValueSystemFunction::Asc(const ibValue& cSource)
 {
-	wxString stringValue = cSource.GetString();
-	if (!stringValue.Length()) return 0;
-	return static_cast<wchar_t>(stringValue[0]);
+	ibString scratch;
+	const ibString& s = cSource.GetString(scratch);
+	if (s.IsEmpty()) return 0;
+	return static_cast<short>(s[0]);
 }
 
 wxString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLanguage)

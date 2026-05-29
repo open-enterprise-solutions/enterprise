@@ -380,7 +380,7 @@ wxString ibParserModule::ExpectIdentifier(bool strRealName)
 	}
 
 	if (strRealName)
-		return lex.m_valData.m_sData;
+		return lex.m_valData.GetString();
 	else
 		return lex.m_strData;
 }

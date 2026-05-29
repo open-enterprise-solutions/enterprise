@@ -339,6 +339,13 @@ void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString&
 	contextFunction->m_nStart = numFunction;
 	contextFunction->m_bContext = true;
 	contextFunction->m_bExport = true;
+	// The (name, compileContext) ctor wires the back-pointer but does NOT
+	// stamp m_bCodeRet (defaults false). Context methods have no compile
+	// finalize that runs IsReturnFunction(m_numReturn), so set it straight
+	// from hasRetVal here — otherwise every built-in function (TrimAll,
+	// Left, Right, ...) resolves as a procedure and using its result throws
+	// ERROR_USE_PROCEDURE_AS_FUNCTION.
+	contextFunction->m_bCodeRet = hasRetVal;
 
 	contextFunction->m_strContext = strContextVar; //variable for which the attribute is called
 

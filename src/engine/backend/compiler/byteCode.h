@@ -493,8 +493,10 @@ public:
 	// Format constants live in byteCodeAOT.cpp; bump
 	// kAOTFormatVersion when the layout changes — readers reject
 	// older blobs and fall back to recompile.
-	bool SerializeAOT(ibWriterMemory& writer) const;
-	bool DeserializeAOT(const ibReaderMemory& reader);
+	// Exported individually (the struct itself isn't BACKEND_API): the AOT
+	// cache API is the public seam tools / tests call across the DLL boundary.
+	BACKEND_API bool SerializeAOT(ibWriterMemory& writer) const;
+	BACKEND_API bool DeserializeAOT(const ibReaderMemory& reader);
 
 	// ----------------------------------------------------------------
 	// Process-wide bytecode registry — keyed by descriptor GUID

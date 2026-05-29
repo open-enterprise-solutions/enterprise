@@ -1,0 +1,47 @@
+// ============================================================================
+// Math smoke suite — 2026-05-29
+//
+// Validates the high-precision transcendentals restored on ibNumber's exact
+// decimal tier (ttmath removal had shortcut them to double). The KEY check is
+// PRECISION: results must carry MORE than double's ~16 significant digits.
+//
+// Also validates m_bCodeRet — Sqrt/Ln/Log10/Round are built-in functions
+// called here as values (the path that "Use procedure as function" broke).
+//
+// NOTE: Max()/Min() are intentionally NOT exercised here — they have a
+// pre-existing infinite-loop bug (the i++ sits inside the if, so a non-first
+// element that isn't the new extreme never advances i). Flagged separately;
+// calling Max(3,7,2) would HANG. Do not add it until that's fixed.
+// ============================================================================
+
+Message("=== Sqrt ===");
+Message(Sqrt(16));      // 4
+Message(Sqrt(0));       // 0
+Message(Sqrt(144));     // 12
+// Key: far beyond double. double sqrt(2) = 1.4142135623730951 (~16 digits).
+// Exact-tier must show ~30+ correct digits:
+Message(Sqrt(2));       // 1.4142135623730950488016887242097...
+Message(Sqrt(25.5));    // 5.0497524691810389766816929585348...
+                        //   (double's 5.0497524691810387 is only ~16-digit)
+
+Message("=== Ln  (also exercises Exp — Ln is Newton on exp(y)-x) ===");
+Message(Ln(1));         // 0
+// double ln(2) = 0.6931471805599453 (~16 digits). Exact-tier ~30+:
+Message(Ln(2));         // 0.69314718055994530941723212145818...
+
+Message("=== Log10 ===");
+Message(Log10(1000));   // 3
+Message(Log10(100));    // 2
+Message(Log10(1));      // 0
+
+Message("=== Round (half-away-from-zero) ===");
+Message(Round(3.14159, 2));   // 3.14
+Message(Round(2.5, 0));       // 3
+Message(Round(-2.5, 0));      // -3
+Message(Round(2.675, 2));     // 2.68
+
+Message("=== Sqrt round-trip (Sqrt(x)*Sqrt(x) == x) ===");
+var s = Sqrt(25.5);
+Message(s * s);         // 25.5  (to ~30 digits; tiny tail noise acceptable)
+
+Message("=== DONE ===");

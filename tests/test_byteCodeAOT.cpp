@@ -203,9 +203,9 @@ TEST(ByteCodeAOT, ListConstAllPrimitives) {
 	EXPECT_EQ(dst.m_listConst[5].m_typeClass, ibValueTypes::TYPE_NUMBER);
 	EXPECT_EQ(dst.m_listConst[5].m_fData, ibNumber(-1234567));
 	EXPECT_EQ(dst.m_listConst[6].m_typeClass, ibValueTypes::TYPE_STRING);
-	EXPECT_EQ(dst.m_listConst[6].m_sData,    wxT("hello"));
+	EXPECT_EQ(dst.m_listConst[6].GetString(), wxT("hello"));   // m_sData removed in Phase 2 (ibString)
 	EXPECT_EQ(dst.m_listConst[7].m_typeClass, ibValueTypes::TYPE_STRING);
-	EXPECT_TRUE(dst.m_listConst[7].m_sData.IsEmpty());
+	EXPECT_TRUE(dst.m_listConst[7].GetString().IsEmpty());
 	EXPECT_EQ(dst.m_listConst[8].m_typeClass, ibValueTypes::TYPE_DATE);
 	EXPECT_EQ(dst.m_listConst[8].m_dData,     (wxLongLong_t)1714639200);
 }
@@ -227,6 +227,86 @@ TEST(ByteCodeAOT, ListConstHighPrecisionNumber) {
 	EXPECT_EQ(dst.m_listConst[0].m_typeClass, ibValueTypes::TYPE_NUMBER);
 	EXPECT_EQ(dst.m_listConst[0].m_fData.ToString(),
 	          wxT("765.3456754567765443343"));
+}
+
+// ===========================================================================
+// ibValueTypes narrowed to `enum : unsigned char` (backend_core.h). The AOT
+// const-value format stores the type tag as ONE byte —
+//   writer: w.w_u8((uint8_t)v.m_typeClass)
+//   reader: v.SetType((ibValueTypes)r.r_u8())
+// (byteCodeAOT.cpp). These tests guard that the narrowing stayed
+// binary-compatible with bytecode persisted BEFORE the change: the wire is
+// still a single byte and every enumerator's integer value is frozen, so an
+// old cache's type bytes still decode to the same types.
+// ===========================================================================
+
+TEST(ByteCodeAOT, ValueTypeTagIsFrozenSingleByte) {
+	// The tag occupies one byte on the wire regardless of the enum's
+	// underlying type; the narrowing makes the in-memory slot match.
+	static_assert(sizeof(ibValueTypes) == 1,
+	              "ibValueTypes must stay 1 byte to match the AOT uint8_t wire tag");
+
+	// Frozen wire values. Changing any of these is a breaking AOT format
+	// change and MUST bump the format version — old caches encode these bytes.
+	static_assert((uint8_t)ibValueTypes::TYPE_EMPTY    == 0,   "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_BOOLEAN  == 1,   "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_NUMBER   == 2,   "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_DATE     == 3,   "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_STRING   == 4,   "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_NULL     == 5,   "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_REFFER   == 100, "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_VALUE    == 200, "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_ENUM     == 201, "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_OLE      == 202, "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_FUNCTION == 203, "wire tag drift");
+	static_assert((uint8_t)ibValueTypes::TYPE_ITERATOR == 204, "wire tag drift");
+
+	// Every enumerator survives the exact uint8_t encode/decode that the AOT
+	// writer/reader perform — including the high ones (>127), where a signed
+	// char would have wrapped to a negative and decoded to the wrong type.
+	const ibValueTypes all[] = {
+		ibValueTypes::TYPE_EMPTY,  ibValueTypes::TYPE_BOOLEAN,  ibValueTypes::TYPE_NUMBER,
+		ibValueTypes::TYPE_DATE,   ibValueTypes::TYPE_STRING,   ibValueTypes::TYPE_NULL,
+		ibValueTypes::TYPE_REFFER, ibValueTypes::TYPE_VALUE,    ibValueTypes::TYPE_ENUM,
+		ibValueTypes::TYPE_OLE,    ibValueTypes::TYPE_FUNCTION, ibValueTypes::TYPE_ITERATOR,
+	};
+	for (ibValueTypes t : all) {
+		const uint8_t       wire = (uint8_t)t;          // writer side
+		const ibValueTypes  back = (ibValueTypes)wire;  // reader side
+		EXPECT_EQ(back, t) << "tag byte " << (int)wire << " did not round-trip";
+	}
+}
+
+// Full SerializeAOT -> blob -> DeserializeAOT round-trip asserting the type
+// tag of every const-eligible value survives the single-byte encoding. This
+// is the end-to-end check behind the static guards above: it drives the real
+// WriteConstValue/ReadConstValue path, not just the cast.
+TEST(ByteCodeAOT, ConstTypeTagRoundTripsThroughAOT) {
+	ibByteCode src;
+	src.m_id      = MakeGuid(11);
+	src.m_version = MakeGuid(12);
+
+	// One const of each type that reaches the const pool, in tag order.
+	src.m_listConst.push_back(ibValue(ibValueTypes::TYPE_EMPTY));
+	src.m_listConst.push_back(ibValue(ibValueTypes::TYPE_NULL));
+	src.m_listConst.push_back(ibValue(true));
+	src.m_listConst.push_back(ibValue(7));
+	{
+		ibValue v(ibValueTypes::TYPE_DATE);
+		v.m_dData = (wxLongLong_t)1700000000;
+		src.m_listConst.push_back(v);
+	}
+	src.m_listConst.push_back(ibValue(wxString(wxT("ünïcödé"))));   // multibyte string payload
+
+	ibByteCode dst;
+	ASSERT_TRUE(RoundTrip(src, dst));
+	ASSERT_EQ(dst.m_listConst.size(), src.m_listConst.size());
+
+	for (size_t i = 0; i < src.m_listConst.size(); ++i)
+		EXPECT_EQ(dst.m_listConst[i].GetType(), src.m_listConst[i].GetType())
+			<< "const #" << i << " type tag changed across AOT round-trip";
+
+	EXPECT_EQ(dst.m_listConst[5].GetString(), wxString(wxT("ünïcödé")));
 }
 
 // ===========================================================================

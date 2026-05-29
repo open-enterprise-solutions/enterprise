@@ -25,6 +25,7 @@
 
 //databases
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
+#include "backend/databaseLayer/firebird/firebirdMaintenanceScheduler.h"
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/databaseLayer/connectionPool.h"
@@ -378,6 +379,19 @@ ibApplicationData::~ibApplicationData()
 	// order was chosen (see appData.h ownership block) so that every
 	// field's dtor finds its dependencies still alive.
 	//
+	// 0. Quiesce the Firebird maintenance scheduler FIRST. Its background
+	//    sweep/BR worker holds a raw ibInterfaceFirebird* captured at
+	//    firebirdDatabaseLayer::Open. If it survives into step 4 (pool
+	//    shutdown frees the FB driver + that interface) it dereferences
+	//    freed memory mid-Services-API poll → EIP=0xdddddddd in
+	//    WaitForServiceCompletion (crash dumps 2026-05-26 and -05-29).
+	//    Stop() now cancels + full-joins the worker (cancelToken plumbed
+	//    through the poll loop), so calling it here — while the interface
+	//    is still alive — is what actually closes the race. The atexit
+	//    Stop() in the scheduler stays as an idempotent backstop (this
+	//    call leaves it not-running, so atexit is a no-op).
+	ibFirebirdMaintenanceScheduler::Stop();
+
 	// 1. activeMetaData first — OnDestroy may save state, close compile
 	//    caches, run cascading detach; those paths still want db_query.
 	if (m_activeMetaData) m_activeMetaData->OnDestroy();

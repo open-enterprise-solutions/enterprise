@@ -12,9 +12,28 @@
 #include <gtest/gtest.h>
 
 #include "backend/compiler/compileCode.h"
+#include "backend/compiler/compileContext.h"   // CODE_VES / CODE_CES
 #include "backend/compiler/codeDef.h"
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
+
+// Every OES script source in this binary's compiling suites (CompilerTest /
+// LexerTest / ClosureCapture / CompilerAOT / RuntimeTest) is written in VES
+// (Function...EndFunction, If...Then...EndIf). The compiler's code style is a
+// PROCESS-GLOBAL (compileCode.cpp gs_codeStyle) that defaults to CODE_CES;
+// under CES the VES block-fence keywords (Then/Do/EndIf/EndFunction/...) are
+// filtered out (ibTranslateCode::IsAllowedKey) and these sources fail to parse.
+// Force VES once for the whole test binary so the suites are deterministic
+// regardless of test order or which tests --gtest_filter selects. (The global
+// env's SetUp runs even under a filter, so single-test runs get it too.)
+namespace {
+class VesCodeStyleEnvironment : public ::testing::Environment {
+public:
+	void SetUp() override { ibCompileCode::SetCodeStyle(CODE_VES); }
+};
+const ::testing::Environment* const g_vesCodeStyleEnv =
+	::testing::AddGlobalTestEnvironment(new VesCodeStyleEnvironment);
+} // namespace
 
 namespace {
 
@@ -34,6 +53,22 @@ size_t CountOpcode(const ibByteCode& bc, short oper) {
 	return n;
 }
 
+// Same, but type-tier agnostic. Opcodes are typed-specialized: a numeric /
+// string / date / boolean operand shifts the base opcode by k*TYPE_DELTA1
+// (codeDef.h, AddTypeSet). E.g. an If on a boolean condition emits
+// OPER_IF + TYPE_DELTA4, not bare OPER_IF. Strip the delta via % TYPE_DELTA1
+// (base opcodes are all < TYPE_DELTA1) so the base is matched in any tier.
+size_t CountOpcodeAnyType(const ibByteCode& bc, short baseOper) {
+	// NB: TYPE_DELTA1 expands to `1 * (OPER_END + 1)` WITHOUT outer parens, so
+	// `x % TYPE_DELTA1` would parse as `(x % 1) * (OPER_END+1)` == 0. Bind the
+	// value first so the modulo divides by the real tier stride (OPER_END+1).
+	const short delta1 = TYPE_DELTA1;
+	size_t n = 0;
+	for (const auto& u : bc.m_listCode)
+		if ((u.m_numOper % delta1) == baseOper) ++n;
+	return n;
+}
+
 } // namespace
 
 // ===========================================================================
@@ -46,7 +81,7 @@ TEST(LexerTest, EmptySourceProducesEndProgramOnly) {
 	ASSERT_TRUE(cc.PrepareLexem());
 	// At least the ENDPROGRAM sentinel — exact number depends on lexer
 	// implementation, but it must be non-empty.
-	EXPECT_GE(cc.m_listLexem.size(), 1u);
+	EXPECT_GE(cc.GetLexemCount(), 1u);
 }
 
 TEST(LexerTest, SimpleAssignmentTokenizes) {
@@ -54,14 +89,14 @@ TEST(LexerTest, SimpleAssignmentTokenizes) {
 	cc.Load(wxT("a = 1;"));
 	ASSERT_TRUE(cc.PrepareLexem());
 	// Identifier 'a', '=', number '1', ';', ENDPROGRAM — at least 5.
-	EXPECT_GE(cc.m_listLexem.size(), 4u);
+	EXPECT_GE(cc.GetLexemCount(), 4u);
 }
 
 TEST(LexerTest, StringLiteralLexes) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(wxT("s = \"hello\";"));
 	ASSERT_TRUE(cc.PrepareLexem());
-	EXPECT_GE(cc.m_listLexem.size(), 4u);
+	EXPECT_GE(cc.GetLexemCount(), 4u);
 }
 
 // ===========================================================================
@@ -183,8 +218,9 @@ TEST(CompilerTest, IfStatementEmitsBranch) {
 		wxT("  a = 1;\n")
 		wxT("EndIf;\n");
 	ASSERT_TRUE(TryCompile(cc, src));
-	// Conditional bytecode → at least one OPER_IF.
-	EXPECT_GE(CountOpcode(cc.m_cByteCode, OPER_IF), 1u);
+	// Conditional bytecode → at least one OPER_IF (typed-specialized for the
+	// boolean condition, so match any type tier).
+	EXPECT_GE(CountOpcodeAnyType(cc.m_cByteCode, OPER_IF), 1u);
 }
 
 TEST(CompilerTest, WhileLoopEmitsGoto) {
@@ -195,8 +231,8 @@ TEST(CompilerTest, WhileLoopEmitsGoto) {
 		wxT("  a = a + 1;\n")
 		wxT("EndDo;\n");
 	ASSERT_TRUE(TryCompile(cc, src));
-	EXPECT_GE(CountOpcode(cc.m_cByteCode, OPER_IF),   1u);
-	EXPECT_GE(CountOpcode(cc.m_cByteCode, OPER_GOTO), 1u);
+	EXPECT_GE(CountOpcodeAnyType(cc.m_cByteCode, OPER_IF),   1u);
+	EXPECT_GE(CountOpcodeAnyType(cc.m_cByteCode, OPER_GOTO), 1u);
 }
 
 TEST(CompilerTest, SyntaxErrorReturnsFalse) {
@@ -214,10 +250,13 @@ TEST(CompilerTest, SyntaxErrorReturnsFalse) {
 
 TEST(CompilerAOT, RealCompileOutputRoundTrips) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	// Var declaration + function declaration. NB: the parameter is named
+	// `delta`, not `by` — `By` is a reserved LINQ keyword (group/order ... by),
+	// so using it as an identifier fails to lex ("Identifier expected").
 	const wxString src =
 		wxT("var counter export;\n")
-		wxT("Function Increment(by)\n")
-		wxT("  counter = counter + by;\n")
+		wxT("Function Increment(delta)\n")
+		wxT("  counter = counter + delta;\n")
 		wxT("  Return counter;\n")
 		wxT("EndFunction\n");
 	ASSERT_TRUE(TryCompile(cc, src));

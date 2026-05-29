@@ -170,7 +170,7 @@ protected:
 
 	void GETKeyWord(int nKey);
 
-	// strRealName — return source-case string from m_valData.m_sData
+	// strRealName — return source-case string from m_valData (via GetString())
 	//   (otherwise the uppercase m_strData is returned).
 	// acceptKeyword — accept a KEYWORD lexem as if it were an identifier;
 	//   used in property-access positions (`obj.<X>`) where contextual

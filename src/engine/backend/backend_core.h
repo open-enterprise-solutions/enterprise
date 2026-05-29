@@ -11,7 +11,8 @@ extern BACKEND_API unsigned int GetBuildId();
 
 #include "guid.h"
 #include "clsid.h"
-#include "number.h"
+#include "fnumber.h"
+#include "fstring.h"
 #include "typeconv.h"
 #include "stringUtils.h"
 
@@ -45,7 +46,11 @@ typedef std::map<
 //*                                 Special enumeration                                     *
 //*******************************************************************************************
 
-enum ibValueTypes {
+// Underlying type fixed at 1 byte: the largest enumerator (TYPE_ITERATOR
+// = 204) fits in unsigned char, and the AOT wire format already narrows
+// m_typeClass to uint8_t (byteCodeAOT.cpp), so this is binary-compatible
+// with persisted bytecode. Shrinks the m_typeClass slot in every ibValue.
+enum ibValueTypes : unsigned char {
 
 	TYPE_EMPTY = 0,
 	TYPE_BOOLEAN = 1,

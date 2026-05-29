@@ -231,8 +231,7 @@ TEST(RuntimeTest, CallFunctionByName) {
 
 	ibValue ret;
 	ibValue arg(7);
-	ibValue* params[] = { &arg, nullptr };
-	EXPECT_TRUE(pu.CallAsFunc(wxT("Square"), ret, params, 1));
+	pu.CallAsFunc(wxT("Square"), ret, arg);   // variadic overload builds ppParams; throws on failure
 	EXPECT_EQ(ret.GetType(), ibValueTypes::TYPE_NUMBER);
 	EXPECT_EQ(ret.GetInteger(), 49);
 }
@@ -249,8 +248,7 @@ TEST(RuntimeTest, CallFunctionWithMultipleParams) {
 	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
 
 	ibValue ret, a(10), b(20), c(30);
-	ibValue* params[] = { &a, &b, &c, nullptr };
-	EXPECT_TRUE(pu.CallAsFunc(wxT("Add3"), ret, params, 3));
+	pu.CallAsFunc(wxT("Add3"), ret, a, b, c);
 	EXPECT_EQ(ret.GetInteger(), 60);
 }
 
@@ -269,8 +267,7 @@ TEST(RuntimeTest, RecursiveFactorial) {
 	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
 
 	ibValue ret, n(6);
-	ibValue* params[] = { &n, nullptr };
-	EXPECT_TRUE(pu.CallAsFunc(wxT("Fact"), ret, params, 1));
+	pu.CallAsFunc(wxT("Fact"), ret, n);
 	EXPECT_EQ(ret.GetInteger(), 720);
 }
 
@@ -281,21 +278,23 @@ TEST(RuntimeTest, RecursiveFactorial) {
 
 TEST(RuntimeTest, ModuleVariablePersistsAcrossCalls) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	// Valid VES module order: Var declaration, then Procedure declaration,
+	// then the module body operator. (A body statement before a declaration is
+	// rejected under VES — "Expected program operators".)
 	const wxString src =
 		wxT("var counter export;\n")
-		wxT("counter = 0;\n")
 		wxT("Procedure Bump() Export\n")
 		wxT("  counter = counter + 1;\n")
-		wxT("EndProcedure\n");
+		wxT("EndProcedure\n")
+		wxT("counter = 0;\n");
 	ASSERT_TRUE(TryCompile(cc, src));
 
 	ibProcUnit pu;
 	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
 
-	ibValue* params[] = { nullptr };
-	EXPECT_TRUE(pu.CallAsProc(wxT("Bump"), params, 0));
-	EXPECT_TRUE(pu.CallAsProc(wxT("Bump"), params, 0));
-	EXPECT_TRUE(pu.CallAsProc(wxT("Bump"), params, 0));
+	pu.CallAsProc(wxT("Bump"));
+	pu.CallAsProc(wxT("Bump"));
+	pu.CallAsProc(wxT("Bump"));
 
 	ibValue v;
 	ASSERT_TRUE(pu.GetPropVal(wxT("counter"), v));

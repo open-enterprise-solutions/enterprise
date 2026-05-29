@@ -1,0 +1,62 @@
+// ============================================================================
+// String-functions smoke suite — 2026-05-29
+//
+// Validates:
+//   1. Native-ibString runtime path (StrLen/Trim*/Left/Right/Mid/Find/
+//      StrReplace/Upper/Lower/Asc moved off the wxString-copy to ibString).
+//   2. The m_bCodeRet fix: EVERY Message(Func(...)) calls a built-in function
+//      AS A VALUE. Before today that threw "Use procedure as function" for
+//      TrimAll/Left/Right/Upper/... — if this whole file runs without that
+//      error, the fix holds.
+//   3. The coercion path of ibValue::GetString(scratch) — passing a number to
+//      a string function must coerce it (e.g. StrLen(12345) -> 5).
+//
+// Expected output is documented inline. Eyeball it.
+// ============================================================================
+
+Message("=== StrLen ===");
+Message(StrLen("hello"));          // 5
+Message(StrLen(""));               // 0
+Message(StrLen("привет"));         // 6   (Unicode chars, not bytes)
+Message(StrLen(12345));            // 5   (number coerced to "12345")
+
+Message("=== Upper / Lower ===");
+Message(Upper("Hello Мир"));       // HELLO МИР
+Message(Lower("Hello Мир"));       // hello мир
+
+Message("=== TrimL / TrimR / TrimAll ===");
+Message("[" + TrimL("  ab  ") + "]");    // [ab  ]
+Message("[" + TrimR("  ab  ") + "]");    // [  ab]
+Message("[" + TrimAll("  ab  ") + "]");  // [ab]
+Message("[" + TrimAll("     ") + "]");   // []   (all-blank -> empty)
+
+Message("=== IsBlankString ===");
+Message(IsBlankString("   "));     // True
+Message(IsBlankString("x"));       // False
+Message(IsBlankString(""));        // True
+
+Message("=== Left / Right ===");
+Message(Left("hello", 3));         // hel
+Message(Right("hello", 3));        // llo
+Message(Left("hi", 10));           // hi   (count > length -> whole string)
+
+Message("=== Mid ===");
+// Implementation is a straight pass-through to wxString::Mid(first, count),
+// i.e. 0-based. If the team expects 1-based ("hel"), that's a pre-existing
+// convention question — NOT introduced by today's native-ibString swap, which
+// preserved Mid(first,count) semantics exactly.
+Message(Mid("hello", 1, 3));       // ell   (0-based)
+
+Message("=== Find  (returns 1-based position, 0 = not found) ===");
+Message(Find("abcabc", "c", 1));   // 3
+Message(Find("abcabc", "z", 1));   // 0
+
+Message("=== StrReplace (replace-all) ===");
+Message(StrReplace("a.b.c.d", ".", "-"));   // a-b-c-d
+Message(StrReplace("xxx", "x", "yy"));      // yyyyyy
+
+Message("=== Chr / Asc ===");
+Message(Chr(65));                  // A
+Message(Asc("A"));                 // 65
+
+Message("=== DONE ===");

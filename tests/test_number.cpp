@@ -9,7 +9,7 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
-#include "backend/number.h"
+#include "backend/fnumber.h"
 
 #include <climits>
 #include <sstream>
@@ -370,6 +370,73 @@ TEST(NumberMath, SqrtApproxFour) {
     EXPECT_LT((s - ibNumber(4)).Abs(), ibNumber(wxString(wxT("0.01"))));
 }
 
+// --- High-precision transcendentals -----------------------------------------
+// Restored on the exact decimal tier after the ttmath removal had shortcut
+// Sqrt/Ln/Exp/Log/Pow to plain double. The known-constant checks use a 1e-18
+// tolerance: passing it means >18 correct digits, which double's ~15-16 could
+// never deliver — proof the result is no longer double-capped.
+
+TEST(NumberMath, SqrtTwoBeyondDouble) {
+    ibNumber s = ibNumber(2).Sqrt();
+    ibNumber known(wxString(wxT("1.4142135623730950488")));   // 19 digits after the point
+    EXPECT_LT((s - known).Abs(), ibNumber(wxString(wxT("1e-18"))));
+}
+
+TEST(NumberMath, SqrtSquaredRecoversInput) {
+    ibNumber s = ibNumber(2).Sqrt();
+    EXPECT_LT((s * s - ibNumber(2)).Abs(), ibNumber(wxString(wxT("1e-26"))));
+}
+
+TEST(NumberMath, SqrtPerfectSquareExact) {
+    EXPECT_EQ(ibNumber(144).Sqrt(), ibNumber(12));
+    EXPECT_EQ(ibNumber(0).Sqrt(),   ibNumber(0));
+}
+
+TEST(NumberMath, ExpOneIsEBeyondDouble) {
+    ibNumber e = ibNumber(1).Exp();
+    ibNumber known(wxString(wxT("2.7182818284590452353")));   // e, 19 digits after the point
+    EXPECT_LT((e - known).Abs(), ibNumber(wxString(wxT("1e-18"))));
+}
+
+TEST(NumberMath, ExpZeroIsOne) {
+    EXPECT_EQ(ibNumber(0).Exp(), ibNumber(1));
+}
+
+TEST(NumberMath, LnTwoBeyondDouble) {
+    ibNumber l = ibNumber(2).Ln();
+    ibNumber known(wxString(wxT("0.6931471805599453094")));   // ln 2, 19 digits after the point
+    EXPECT_LT((l - known).Abs(), ibNumber(wxString(wxT("1e-18"))));
+}
+
+TEST(NumberMath, LnOneIsZero) {
+    EXPECT_EQ(ibNumber(1).Ln(), ibNumber(0));
+}
+
+TEST(NumberMath, LnNonPositiveGuarded) {
+    EXPECT_EQ(ibNumber(0).Ln(),  ibNumber(0));
+    EXPECT_EQ(ibNumber(-5).Ln(), ibNumber(0));
+}
+
+TEST(NumberMath, ExpLnRoundTrip) {           // ln(exp(x)) == x
+    ibNumber x(wxString(wxT("12.345")));
+    EXPECT_LT((x.Exp().Ln() - x).Abs(), ibNumber(wxString(wxT("1e-22"))));
+}
+
+TEST(NumberMath, LnExpRoundTrip) {           // exp(ln(x)) == x
+    ibNumber x(wxString(wxT("3.5")));
+    EXPECT_LT((x.Ln().Exp() - x).Abs(), ibNumber(wxString(wxT("1e-22"))));
+}
+
+TEST(NumberMath, Log10OfThousandIsThree) {
+    EXPECT_LT((ibNumber(1000).Log(ibNumber(10)) - ibNumber(3)).Abs(),
+              ibNumber(wxString(wxT("1e-22"))));
+}
+
+TEST(NumberMath, PowHalfEqualsSqrt) {        // 2^0.5 == sqrt(2)
+    ibNumber p = ibNumber(2).Pow(ibNumber(wxString(wxT("0.5"))));
+    EXPECT_LT((p - ibNumber(2).Sqrt()).Abs(), ibNumber(wxString(wxT("1e-22"))));
+}
+
 TEST(NumberMath, AbsAndSign) {
     EXPECT_EQ(ibNumber(wxString(wxT("-7.5"))).Abs(),
               ibNumber(wxString(wxT("7.5"))));
@@ -387,9 +454,11 @@ TEST(NumberMath, AbsAndSign) {
 // Get/SetBuffer (binary serialisation)
 // ===========================================================================
 
-TEST(NumberBuffer, ZeroSize9) {
+TEST(NumberBuffer, ZeroEncodesEmpty) {
+    // Zero is encoded as an EMPTY buffer (compact zero-encoding, fnumber.cpp
+    // GetBuffer) — no 9-byte header; SetBuffer recovers zero from len == 0.
     wxMemoryBuffer blob = ibNumber().GetBuffer();
-    EXPECT_EQ(blob.GetDataLen(), 9u);
+    EXPECT_EQ(blob.GetDataLen(), 0u);
 }
 
 TEST(NumberBuffer, RoundTripZero) {
@@ -417,8 +486,12 @@ TEST(NumberBuffer, RoundTripFiftyDigits) {
 }
 
 TEST(NumberBuffer, NullPointerRejected) {
-    ibNumber b;
-    EXPECT_FALSE(b.SetBuffer(nullptr, 0));
+    ibNumber b(7);
+    // len == 0 is the compact zero-encoding: (any ptr, 0) -> zero, returns true.
+    EXPECT_TRUE(b.SetBuffer(nullptr, 0));
+    EXPECT_TRUE(b.IsZero());
+    // A non-zero length with a null pointer is malformed and must be rejected.
+    EXPECT_FALSE(b.SetBuffer(nullptr, 5));
 }
 
 TEST(NumberBuffer, OutParamReuseOverwrites) {

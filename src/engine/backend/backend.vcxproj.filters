@@ -306,7 +306,8 @@
     <ClInclude Include="stringUtils.h" />
     <ClInclude Include="typeconv.h" />
     <ClInclude Include="clsid.h" />
-    <ClInclude Include="number.h" />
+    <ClInclude Include="fnumber.h" />
+    <ClInclude Include="fstring.h" />
     <ClInclude Include="fileSystem\fs.h">
       <Filter>fileSystem</Filter>
     </ClInclude>
@@ -1537,7 +1538,7 @@
     </ClCompile>
     <ClCompile Include="tableInfo.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
-    <ClCompile Include="number.cpp" />
+    <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="compiler\value_res.cpp">
       <Filter>compiler</Filter>
     </ClCompile>

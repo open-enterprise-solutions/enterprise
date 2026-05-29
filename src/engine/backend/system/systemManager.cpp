@@ -252,8 +252,8 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enLeft: pvarRetValue = Left(*paParams[0], paParams[1]->GetInteger()); return true;
 		case enRight: pvarRetValue = Right(*paParams[0], paParams[1]->GetInteger()); return true;
 		case enMid: pvarRetValue = Mid(*paParams[0], paParams[1]->GetInteger(), lSizeArray > 1 ? paParams[2]->GetInteger() : 1); return true;
-		case enFind: pvarRetValue = Find(*paParams[0], paParams[1], lSizeArray > 1 ? paParams[2]->GetInteger() : 0); return true;
-		case enStrReplace: pvarRetValue = StrReplace(*paParams[0], paParams[1], paParams[2]); return true;
+		case enFind: pvarRetValue = Find(*paParams[0], *paParams[1], lSizeArray > 1 ? paParams[2]->GetInteger() : 0); return true;
+		case enStrReplace: pvarRetValue = StrReplace(*paParams[0], *paParams[1], *paParams[2]); return true;
 		case enStrCountOccur: pvarRetValue = StrCountOccur(*paParams[0], *paParams[1]); return true;
 		case enStrLineCount: pvarRetValue = StrLineCount(*paParams[0]); return true;
 		case enStrGetLine: pvarRetValue = StrGetLine(*paParams[0], paParams[1]->GetInteger()); return true;
@@ -326,11 +326,11 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enUserInterruptProcessing: UserInterruptProcessing(); return true;
 		case enAccessRight:
 			if (lSizeArray > 1)
-				pvarRetValue = AccessRight(paParams[0]->GetString(), paParams[1]);
+				pvarRetValue = AccessRight(paParams[0]->GetString(), *paParams[1]);
 			return lSizeArray > 1;
 		case enIsInRole:
 			if (lSizeArray > 0)
-				pvarRetValue = IsInRole(paParams[0]);
+				pvarRetValue = IsInRole(*paParams[0]);
 			return lSizeArray > 0;
 		case enGetCommonForm: pvarRetValue = GetCommonForm(
 			paParams[0]->GetString(),

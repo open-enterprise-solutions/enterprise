@@ -1788,7 +1788,7 @@ wxString ibPrecompileCode::ExpectIdentifier(bool realName)
 		return wxEmptyString;
 	}
 
-	if (realName) return lex.m_valData.m_sData;
+	if (realName) return lex.m_valData.GetString();
 	else return lex.m_strData;
 }
 

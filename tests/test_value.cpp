@@ -10,6 +10,23 @@
 #include "backend/compiler/value.h"
 
 // ===========================================================================
+// Footprint probe — reports the real sizeof on this build/platform.
+// Not an assertion (the number is informational); run the suite and read
+// the printed line. Used to measure the ibValue memory-reduction arc
+// (Phase 0 baseline → after each phase). See docs/value-audit.md.
+// ===========================================================================
+
+TEST(ValueTest, SizeofReport) {
+    RecordProperty("sizeof_ibValue", (int)sizeof(ibValue));
+    RecordProperty("sizeof_ibNumber", (int)sizeof(ibNumber));
+    RecordProperty("sizeof_wxString", (int)sizeof(wxString));
+    std::cout << "[ footprint ] sizeof(ibValue)="  << sizeof(ibValue)
+              << "  sizeof(ibNumber)=" << sizeof(ibNumber)
+              << "  sizeof(wxString)=" << sizeof(wxString) << std::endl;
+    SUCCEED();
+}
+
+// ===========================================================================
 // TYPE_BOOLEAN
 // ===========================================================================
 

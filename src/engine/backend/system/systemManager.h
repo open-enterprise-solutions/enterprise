@@ -33,19 +33,19 @@ public:
 	//--- Строки:
 	static int StrLen(const ibValue& cValue);
 	static bool IsBlankString(const ibValue& cValue);
-	static wxString TrimL(const ibValue& cValue);
-	static wxString TrimR(const ibValue& cValue);
-	static wxString TrimAll(const ibValue& cValue);
-	static wxString Left(const ibValue& cValue, unsigned int nCount);
-	static wxString Right(const ibValue& cValue, unsigned int nCount);
-	static wxString Mid(const ibValue& cValue, unsigned int nFirst, unsigned int nCount);
+	static ibString TrimL(const ibValue& cValue);
+	static ibString TrimR(const ibValue& cValue);
+	static ibString TrimAll(const ibValue& cValue);
+	static ibString Left(const ibValue& cValue, unsigned int nCount);
+	static ibString Right(const ibValue& cValue, unsigned int nCount);
+	static ibString Mid(const ibValue& cValue, unsigned int nFirst, unsigned int nCount);
 	static unsigned int Find(const ibValue& cValue, const ibValue& cValue2, unsigned int nStart);
-	static wxString StrReplace(const ibValue& cSource, const ibValue& cValue1, const ibValue& cValue2);
+	static ibString StrReplace(const ibValue& cSource, const ibValue& cValue1, const ibValue& cValue2);
 	static int StrCountOccur(const ibValue& cSource, const ibValue& cValue1);
 	static int StrLineCount(const ibValue& cSource);
 	static wxString StrGetLine(const ibValue& cValue, unsigned int nLine);
-	static wxString Upper(const ibValue& cSource);
-	static wxString Lower(const ibValue& cSource);
+	static ibString Upper(const ibValue& cSource);
+	static ibString Lower(const ibValue& cSource);
 	static wxString Chr(short nCode);
 	static short Asc(const ibValue& cSource);
 	static wxString TStr(const ibValue& cSource, const ibValue& cLanguage);

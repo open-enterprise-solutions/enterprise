@@ -1,4 +1,4 @@
-#include "backend/number.h"
+#include "backend/fnumber.h"
 
 #include "backend/fileSystem/fs.h" // ibReaderMemory / ibWriterMemory
 
@@ -977,36 +977,177 @@ ibNumber ibNumber::Pow(int n) const
 	return result;
 }
 
+// Working fractional precision carried through the transcendental series /
+// Newton iterations below. A small margin over operator/'s ~30 (kExtra)
+// fractional digits so intermediate rounding doesn't eat the reported tail.
+// These functions restore the high-precision Sqrt/Ln/Exp/Log/Pow that ttmath
+// used to provide and that the ttmath removal had shortcut to plain double.
+static constexpr int kTransWorkScale = 34;
+
 ibNumber ibNumber::Pow(const ibNumber& n) const
 {
 	int64_t k = 0;
-	if (n.ToInt(k) == 0 && k >= INT_MIN && k <= INT_MAX) {
-		return Pow(static_cast<int>(k));
+	// ToInt() TRUNCATES and returns 0 (== success) for any in-range value, so
+	// "conversion succeeded" is NOT "n is an integer" — e.g. 0.5 -> k=0, success.
+	// Without the equality guard, a fractional exponent fell into the integer
+	// path and 2^0.5 computed as 2^0 == 1. Require n to equal its truncation.
+	if (n.ToInt(k) == 0 && k >= INT_MIN && k <= INT_MAX && n == ibNumber(k)) {
+		return Pow(static_cast<int>(k));   // exact: repeated multiplication
 	}
-	// non-integer exponent — fall back to double
-	return ibNumber(std::pow(ToDouble(), n.ToDouble()));
+	// Non-integer exponent: x^n = exp(n * ln x), defined for x > 0. For the
+	// domain edges (x <= 0 with a fractional power — complex / undefined) keep
+	// the old double result rather than throw.
+	if (IsSign() || IsZero())
+		return ibNumber(std::pow(ToDouble(), n.ToDouble()));
+	return (n * Ln()).Exp();
 }
 
 ibNumber ibNumber::Sqrt() const
 {
-	return ibNumber(std::sqrt(ToDouble()));
+	// Negative has no real square root; the runtime wrapper
+	// (ibValueSystemFunction::Sqrt) rejects it before we get here.
+	// Defensive: 0 for negative / zero input.
+	if (IsSign() || IsZero())
+		return ibNumber();
+
+	// High-precision square root via the DIVISION-FREE Newton iteration for
+	// the reciprocal root:
+	//
+	//     y_{n+1} = y_n * (3 - N*y_n^2) / 2     ->  y -> 1/sqrt(N)
+	//     sqrt(N) = N * y
+	//
+	// Why not the plain Heron x<-(x+N/x)/2: that divides the SMALL dividend N
+	// (e.g. 25.5, a 2-3 digit mantissa) by the HIGH-PRECISION iterate x.
+	// operator/ inflates the dividend by a fixed kExtra(=30) digits, so once
+	// x carries more than ~30 significant digits the integer divmod collapses
+	// the quotient (eventually to 0), and Newton degenerates into halving x
+	// every step -> result = seed * 2^-iters (the sqrt(25.5) -> 5.4e-19 bug).
+	//
+	// This form only ever multiplies (exact, precision bounded by Round) and
+	// divides by the literal 2 (a 1-limb divisor — never the small/big-divisor
+	// trap). double seeds 1/sqrt(N) to ~15 digits; quadratic convergence then
+	// reaches the working scale in 1-3 steps.
+	double sd = std::sqrt(ToDouble());
+	if (!std::isfinite(sd) || sd <= 0.0)
+		sd = 1.0;   // input outside double's range — any positive seed converges
+	ibNumber y(1.0 / sd);
+
+	const ibNumber three(3), two(2);
+	ibNumber prev;
+	for (int i = 0; i < 64; ++i) {            // cap is a backstop; common case breaks in 1-3
+		ibNumber y2   = (y * y).Round(kTransWorkScale);            // y^2
+		ibNumber corr = (three - (*this) * y2).Round(kTransWorkScale); // 3 - N*y^2
+		ibNumber next = (y * corr / two).Round(kTransWorkScale);   // y*(3 - N*y^2)/2
+		if (next == y)            break;      // fixed point
+		if (next == prev) { y = next; break; }// precision-floor wobble — settle
+		prev = y;
+		y = next;
+	}
+	ibNumber result = ((*this) * y).Round(kTransWorkScale);   // sqrt(N) = N * (1/sqrt(N))
+
+	// Snap exact perfect squares. N*(1/sqrt(N)) lands a hair off the integer
+	// for a perfect square (1/sqrt(N) has no terminating decimal), e.g.
+	// sqrt(144) -> 11.9999...808. Round-and-verify via EXACT integer multiply
+	// makes it 12; a non-perfect square never passes (its root is irrational),
+	// so this never corrupts a genuine result.
+	ibNumber ri = result.Round(0);
+	if (ri * ri == *this)
+		return ri;
+	return result;
 }
 
 ibNumber ibNumber::Log(const ibNumber& base) const
 {
-	const double b = base.ToDouble();
-	if (b <= 0.0 || b == 1.0) return ibNumber();
-	return ibNumber(std::log(ToDouble()) / std::log(b));
+	// log_base(x) = ln(x) / ln(base). Domain: x > 0, base > 0 and != 1.
+	if (IsSign() || IsZero()) return ibNumber();
+	if (base.IsSign() || base.IsZero() || base == ibNumber(1)) return ibNumber();
+	ibNumber r = (Ln() / base.Ln()).Round(kTransWorkScale);
+
+	// Snap exact integer powers: the irrational ln-ratio otherwise lands a hair
+	// off (Log10(100) -> 1.9999...). Verify via EXACT integer Pow — only a true
+	// base^k == x passes, so a non-power result is left untouched.
+	int64_t k = 0;
+	ibNumber rk = r.Round(0);
+	if (rk.ToInt(k) == 0 && k >= INT_MIN && k <= INT_MAX && base.Pow(static_cast<int>(k)) == *this)
+		return rk;
+	return r;
 }
 
 ibNumber ibNumber::Ln() const
 {
-	return ibNumber(std::log(ToDouble()));
+	// Domain x > 0; non-positive → 0 (runtime wrappers guard / report).
+	if (IsSign() || IsZero()) return ibNumber();
+	if (*this == ibNumber(1)) return ibNumber();   // ln(1) = 0 exact
+
+	// Newton-Raphson for f(y) = exp(y) - x:  y <- y - 1 + x*exp(-y).
+	// Quadratic convergence near the root; reuses the high-precision Exp
+	// below as its primitive (no separate Taylor-for-ln machinery).
+	//
+	// Seed with the double logarithm (~15 correct digits → 1-2 steps to the
+	// working precision). For x outside double's range, seed from the decimal
+	// magnitude ≈ (intDigits - 1) * ln 10 so Newton still starts near the root.
+	double seed = std::log(ToDouble());
+	if (!std::isfinite(seed)) {
+		const wxString s = Abs().ToString();
+		const int dot = s.Find(wxT('.'));
+		const int intDigits = (dot == wxNOT_FOUND) ? static_cast<int>(s.length()) : dot;
+		seed = (intDigits - 1) * 2.302585092994046;   // (digits - 1) * ln(10)
+	}
+	ibNumber y(seed);
+
+	const ibNumber one(1);
+	ibNumber prev;
+	for (int i = 0; i < 64; ++i) {           // cap is a backstop; common case breaks in 1-2
+		ibNumber negY(y); negY.ChangeSign();
+		ibNumber next = (y + (*this) * negY.Exp() - one).Round(kTransWorkScale);
+		if (next == y) break;                // converged
+		if (next == prev) { y = next; break; }   // precision-floor wobble — settle
+		prev = y;
+		y = next;
+	}
+	return y.Round(kTransWorkScale);
 }
 
 ibNumber ibNumber::Exp() const
 {
-	return ibNumber(std::exp(ToDouble()));
+	if (IsZero()) return ibNumber(1);
+
+	// Out of the exact tier's representable range (|x| huge): exp would over/
+	// underflow ibNumber's ±32767 decimal exponent anyway — let double give
+	// the limiting value (inf → huge, -inf → 0).
+	const double mag = std::fabs(ToDouble());
+	if (!std::isfinite(mag) || mag > 75000.0)
+		return ibNumber(std::exp(ToDouble()));
+
+	// Argument reduction: exp(x) = exp(x / 2^n) ^ (2^n). Halve until the
+	// reduced argument's magnitude is < ~0.5 so the Taylor series converges
+	// in ~30 terms; square the partial result back n times afterwards.
+	int n = 0;
+	for (double m = mag; m > 0.5 && n < 4096; m *= 0.5) ++n;
+
+	const ibNumber two(2);
+	ibNumber r(*this);
+	for (int i = 0; i < n; ++i) r /= two;
+	r = r.Round(kTransWorkScale);
+
+	// Taylor: exp(r) = Σ r^k / k!  with term_k = term_{k-1} * r / k. Rounding
+	// each term to the working scale both bounds digit growth and provides the
+	// convergence test (term rounds to zero once below the working precision).
+	ibNumber sum(1), term(1);
+	for (int k = 1; k < 4096; ++k) {
+		term *= r;
+		term /= ibNumber(k);
+		term = term.Round(kTransWorkScale);
+		if (term.IsZero()) break;
+		sum += term;
+		sum = sum.Round(kTransWorkScale);
+	}
+
+	for (int i = 0; i < n; ++i) {            // undo the halving: square n times
+		sum *= sum;
+		sum = sum.Round(kTransWorkScale);
+	}
+	return sum.Round(kTransWorkScale);
 }
 
 ibNumber& ibNumber::operator%=(const ibNumber& rhs)

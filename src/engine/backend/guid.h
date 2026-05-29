@@ -103,7 +103,9 @@ private:
 	std::array<unsigned char, 16> _bytes;
 
 	// make the << operator a friend so it can access _bytes
-	friend std::ostream& operator<<(std::ostream& s, const ibGuid& guid);
+	// BACKEND_API: exported so consumers (tools / gtest diagnostics) can stream
+	// an ibGuid across the DLL boundary.
+	friend BACKEND_API std::ostream& operator<<(std::ostream& s, const ibGuid& guid);
 };
 
 #define wxNullGuid	ibGuid()

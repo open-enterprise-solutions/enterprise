@@ -1,6 +1,6 @@
 #ifndef _TYPECONV_H__
 #define _TYPECONV_H__
-#include "number.h"
+#include "fnumber.h"
 #include "fontcontainer.h"
 
 // macros para la conversión entre wxString <-> wxString

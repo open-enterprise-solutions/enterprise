@@ -185,7 +185,7 @@ bool WriteConstValue(ibWriterMemory& w, const ibValue& v) {
 		w.w_s64((int64_t)v.m_dData);
 		return true;
 	case ibValueTypes::TYPE_STRING:
-		w.w_stringZ(v.m_sData);
+		w.w_stringZ(v.GetString());
 		return true;
 	default:
 		return false; // TYPE_REFFER / TYPE_VALUE / TYPE_ENUM / TYPE_OLE
@@ -195,40 +195,53 @@ bool WriteConstValue(ibWriterMemory& w, const ibValue& v) {
 bool ReadConstValue(const ibReaderMemory& r, ibValue& v) {
 	const uint8_t tc = r.r_u8();
 	v.SetType((ibValueTypes)tc);
-	// Const-pool entries are compile-time literals — readonly by
-	// definition. Without this flag, runtime arg-binding on a literal
-	// arg falls through to the ref-binding branch (procUnit.cpp:828)
-	// and triggers "Attempt to write to a constant value" when the
-	// callee writes through the slot. Fresh-compile path sets this on
-	// every const it pushes; AOT format doesn't carry the bit (it's
-	// implicit for the whole list).
-	v.m_bReadOnly = true;
+
+	// Write the payload while the value is still mutable, THEN mark it
+	// readonly. Order matters since Phase 2: the string payload moved into
+	// the union and SetString() now Resets the value first to free the old
+	// ibString — and Reset() rejects writes to a readonly value. Setting the
+	// flag before SetString() therefore threw "Attempt to assign a value to a
+	// write-denied variable" for every string const (AOT cache load of any
+	// module with a string literal). The non-string cases write members
+	// directly and were unaffected, which is why only strings tripped it.
+	bool ok = true;
 	switch ((ibValueTypes)tc) {
 	case ibValueTypes::TYPE_EMPTY:
 	case ibValueTypes::TYPE_NULL:
-		return true;
+		break;
 	case ibValueTypes::TYPE_BOOLEAN:
 		v.m_bData = (r.r_u8() != 0);
-		return true;
+		break;
 	case ibValueTypes::TYPE_NUMBER: {
 		const uint32_t len = r.r_u32();
-		if (len > kAOTSanityMax) return false;
+		if (len > kAOTSanityMax) { ok = false; break; }
 		wxMemoryBuffer buf;
 		if (len > 0) {
 			r.r(buf.GetAppendBuf(len), (int)len);
 			buf.UngetAppendBuf(len);
 		}
-		return v.m_fData.SetBuffer(buf);
+		ok = v.m_fData.SetBuffer(buf);
+		break;
 	}
 	case ibValueTypes::TYPE_DATE:
 		v.m_dData = (wxLongLong_t)r.r_s64();
-		return true;
+		break;
 	case ibValueTypes::TYPE_STRING:
-		r.r_stringZ(v.m_sData);
-		return true;
+		v.SetString(r.r_stringZ());
+		break;
 	default:
-		return false;
+		ok = false;
+		break;
 	}
+
+	// Const-pool entries are compile-time literals — readonly by definition.
+	// Without this flag, runtime arg-binding on a literal arg falls through to
+	// the ref-binding branch (procUnit.cpp:828) and triggers "Attempt to write
+	// to a constant value" when the callee writes through the slot. Fresh-
+	// compile path sets this on every const it pushes; the AOT format doesn't
+	// carry the bit (it's implicit for the whole list).
+	v.m_bReadOnly = true;
+	return ok;
 }
 
 bool WriteVarInfo(ibWriterMemory& w, const ibByteCode::ibByteCodeVarInfo& v) {

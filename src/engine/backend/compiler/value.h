@@ -2,6 +2,7 @@
 #define __VALUE_H__
 
 #include <memory>
+#include <atomic>
 
 #include "backend/backend_core.h"
 #include "backend/compiler/typeCtor.h"
@@ -63,22 +64,27 @@ const ibClassID g_valueNullCLSID = string_to_clsid("VL_NULL");
 class BACKEND_API ibValue : public wxObject {
 	wxDECLARE_DYNAMIC_CLASS(ibValue);
 public:
-	bool m_bReadOnly;
 	//ATTRIBUTES:
-	ibValueTypes m_typeClass;
+	ibValueTypes m_typeClass;  // 1 byte (enum : unsigned char)
+	bool m_bReadOnly;          // 1 byte
+public:
 	union {
-		bool          m_bData;  //TYPE_BOOL
+		bool          m_bData;  //TYPE_BOOLEAN
 		wxLongLong_t  m_dData;  //TYPE_DATE
-		ibValue*      m_pRef;   //TYPE_REFFER
+		ibValue*      m_pRef;   //TYPE_REFFER (+ VALUE/ENUM/OLE/... aliased)
+		// TYPE_STRING — pooled heap ibString, nullptr = empty. A pointer (8)
+		// instead of an inline ~40-byte ibString, so a Number/Bool value no
+		// longer drags a string buffer (billions of values → big RAM win).
+		// SHARES the union (a value is one type at a time): valid ONLY when
+		// m_typeClass == TYPE_STRING. All access via GetString()/SetString();
+		// the lifetime lives in value.cpp. NEVER delete m_pStr unless
+		// STRING — otherwise it aliases m_pRef and you get the random-delete bug.
+		ibString*     m_pStr;
 	};
-	wxString m_sData;  //TYPE_STRING
-	// TYPE_NUMBER — outside the union. ibNumber is a conditional
-	// heap-owner (lazy-grow BigImpl), so its ctor/dtor/operator= must
-	// run on type transitions; in a union those calls are skipped and
-	// the m_pRef pointer in the lower 4 bytes gets reinterpreted as a
-	// BigImpl* on the next ibNumber::Clear(), which deletes random
-	// memory. Same rule that already keeps wxString out of the union.
-	// Costs +8 bytes per ibValue.
+	// TYPE_NUMBER — separate by-value. ibNumber is a conditional BigImpl*
+	// heap-owner, so its bytes must NEVER share union storage (sharing
+	// reinstates the random-delete bug). A pointer would save nothing (ibNumber
+	// is already 8 bytes) and only cost a heap alloc per number — stays inline.
 	ibNumber m_fData;
 public:
 
@@ -459,6 +465,7 @@ public:
 	ibValue(wchar_t* sParam); //string
 	ibValue(const wxStringImpl& sParam); //string
 	ibValue(const wxString& sParam); //string
+	ibValue(ibString&& sParam); //string — native move (runtime string functions)
 
 	//destructor:
 	virtual ~ibValue();
@@ -467,10 +474,10 @@ public:
 	void Reset();
 
 	//ref counter
-	void IncrRef() { wxAtomicInc(m_refCount); }
+	void IncrRef() { m_refCount.fetch_add(1, std::memory_order_relaxed); }
 	void DecrRef() {
-		wxASSERT_MSG(m_refCount > 0, "invalid ref data count");
-		if (!wxAtomicDec(m_refCount)) delete this;
+		wxASSERT_MSG(m_refCount.load(std::memory_order_relaxed) > 0, "invalid ref data count");
+		if (m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this;
 	}
 
 	//operators:
@@ -488,6 +495,7 @@ public:
 	void operator = (const wxDateTime& cParam);
 	void operator = (wxLongLong_t cParam);
 	void operator = (const wxString& cParam);
+	void operator = (ibString&& cParam);   // native string assign — moves into m_pStr, no wxString round-trip
 
 	void operator = (ibValueTypes cParam);
 	void operator = (ibBackendValue* pParam);
@@ -711,6 +719,7 @@ public:
 	virtual bool SetNumber(const wxString& strValue);
 	virtual bool SetDate(const wxString& strValue);
 	virtual bool SetString(const wxString& strValue);
+	virtual bool SetString(ibString&& strValue);   // native — steals the buffer, no wxString round-trip
 
 	virtual bool FindValue(const wxString& findData, std::vector<ibValue>& listValue) const;
 
@@ -747,6 +756,12 @@ public:
 
 	virtual ibNumber GetNumber() const;
 	virtual wxString GetString() const;
+	// Native-ibString overload for the runtime string functions. Zero-copy
+	// when the value is already TYPE_STRING (returns the stored buffer by
+	// const ref); otherwise coerces number/bool/date/ref via GetString()
+	// into `scratch` and returns that. The returned ref is valid for the
+	// value's lifetime (string case) or `scratch`'s (coerced case).
+	virtual const ibString& GetString(ibString& scratch) const;
 	virtual wxLongLong_t GetDate() const;
 
 	/////////////////////////////////////////////////////////////////////////
@@ -1019,10 +1034,16 @@ protected:
 	virtual bool DoSerialize(wxString& strValue) const;
 	virtual bool DoDeserialize(const wxString& strValue);
 #pragma endregion
-
 private:
-
-	unsigned int m_refCount;
+	// Placed next to the two 1-byte scalars on purpose: it fills the
+	// alignment hole that would otherwise precede the 8-byte payload
+	// union. Declared here rather than at the end of the class so the
+	// reverse-padding word at the tail is reclaimed. See docs/value-audit.md.
+	// std::atomic (not wxAtomicInt) — same 4 bytes, but a defined memory
+	// model; part of the incremental wxBase→std migration. Never copied /
+	// moved: ibValue's copy/move ctors value-init it to 0, Copy/Move only
+	// touch the payload.
+	std::atomic<unsigned int> m_refCount;
 };
 #include "backend/value_ptr.h"
 #include "backend/value_cast.h"

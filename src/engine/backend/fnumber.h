@@ -123,7 +123,15 @@ public:
 	ibNumber Round(int n) const;     // to n decimal places (n >= 0)
 	ibNumber Trunc() const;          // truncate fractional part toward zero
 
-	// Compat math (lossy through double for transcendental/non-integer ops).
+	// Transcendental / power math. Computed on the EXACT decimal tier (~30
+	// significant digits, matching operator/'s precision) — NOT through double:
+	//   Pow(int)   — exact, repeated multiplication.
+	//   Sqrt       — Newton-Raphson (Heron), double-seeded then refined.
+	//   Exp        — Taylor series + exp(x)=exp(x/2^n)^(2^n) argument reduction.
+	//   Ln         — Newton on f(y)=exp(y)-x (reuses Exp); double-seeded.
+	//   Log(base)  — Ln(x)/Ln(base).
+	//   Pow(frac)  — exp(n*ln x), x > 0.
+	// double is used only to SEED the iterations / for out-of-range fallbacks.
 	ibNumber Pow(int n) const;
 	ibNumber Pow(const ibNumber& n) const;
 	ibNumber Sqrt() const;

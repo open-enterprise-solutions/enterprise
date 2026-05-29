@@ -34,6 +34,10 @@
 
 namespace {
 
+// ibValueTableRow is now a nested type of ibValueModelTableBase; this alias
+// keeps the test body terse after the nesting refactor.
+using ibValueTableRow = ibValueModelTableBase::ibValueTableRow;
+
 // ---------------------------------------------------------------------------
 // Minimal test subclass.  ibValueModelRamTableBase has many pure virtuals
 // inherited from ibValueModel / ibDataViewModel / ibValueModelTableBase that
@@ -90,6 +94,16 @@ public:
 		auto* node = GetViewData<ibValueTableRow>(item);
 		if (node == nullptr) return false;
 		return node->SetValue(col, variant, /*notify*/false);
+	}
+
+	// === pure virtuals on ibTabularObject =========================
+	// Not exercised by BuildVisibleView / Get*Fetch / GetRow / mutation —
+	// the RAM table operates on rows directly, no source metaobject needed.
+	virtual const ibValueMetaObjectCompositeData* GetSourceMetaObject() const override {
+		return nullptr;
+	}
+	virtual ibClassID GetSourceClassType() const override {
+		return ibClassID();
 	}
 };
 

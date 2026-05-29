@@ -1,6 +1,8 @@
 #include "databaseStringConverter.h"
 
-static wxCriticalSection s_dbStringConverterCS;
+#include <mutex>
+
+static std::mutex s_dbStringConverterMtx;
 static wxCSConv g_def_encoding("UTF-8");
 
 // Default the encoding converter
@@ -21,7 +23,7 @@ void ibDatabaseStringConverter::SetEncoding(const wxCSConv* conv)
 {
 	if (conv != &g_def_encoding) {
 
-		wxCriticalSectionLocker enter(s_dbStringConverterCS);
+		std::lock_guard<std::mutex> enter(s_dbStringConverterMtx);
 
 		if (m_Encoding != nullptr)
 			wxDELETE(m_Encoding);

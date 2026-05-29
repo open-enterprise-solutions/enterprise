@@ -250,14 +250,8 @@ inline void CopyValue(ibValue& cValue1, ibValue& cValue2)
 		cValue1.SetValue(cValue2);
 		return;
 	}
-	else {//Reset
-		if (cValue1.m_pRef && cValue1.m_typeClass == ibValueTypes::TYPE_REFFER)
-			cValue1.m_pRef->DecrRef();
-
-		cValue1.m_typeClass = ibValueTypes::TYPE_EMPTY;
-		cValue1.m_sData = wxEmptyString;
-
-		cValue1.m_pRef = nullptr;
+	else {
+		cValue1.Reset();   // DecrRef ref / delete string buffer / → TYPE_EMPTY
 	}
 
 	if (cValue2.m_typeClass == ibValueTypes::TYPE_REFFER) {
@@ -278,7 +272,7 @@ inline void CopyValue(ibValue& cValue1, ibValue& cValue2)
 		cValue1.m_fData = cValue2.m_fData;
 		break;
 	case ibValueTypes::TYPE_STRING:
-		cValue1.m_sData = cValue2.m_sData;
+		cValue1.SetString(cValue2.GetString());
 		break;
 	case ibValueTypes::TYPE_DATE:
 		cValue1.m_dData = cValue2.m_dData;
@@ -328,7 +322,7 @@ inline void CopyValue(ibValue& cValue1, const ibValue& cValue2)
 		cValue1.m_fData = cValue2.m_fData;
 		break;
 	case ibValueTypes::TYPE_STRING:
-		cValue1.m_sData = cValue2.m_sData;
+		cValue1.SetString(cValue2.GetString());
 		break;
 	case ibValueTypes::TYPE_DATE:
 		cValue1.m_dData = cValue2.m_dData;
@@ -366,7 +360,7 @@ inline void MoveValue(ibValue&& cValue1, ibValue&& cValue2)
 		cValue1.m_fData = std::move(cValue2.m_fData);
 		break;
 	case ibValueTypes::TYPE_STRING:
-		cValue1.m_sData = std::move(cValue2.m_sData);
+		cValue1.SetString(cValue2.GetString());
 		break;
 	case ibValueTypes::TYPE_DATE:
 		cValue1.m_dData = std::move(cValue2.m_dData);

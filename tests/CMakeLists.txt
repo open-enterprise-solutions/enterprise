@@ -29,6 +29,8 @@ FetchContent_MakeAvailable(googletest)
 add_executable(oes_tests
     test_clsid.cpp
     test_value.cpp
+    test_string.cpp
+    bench_string.cpp
     test_number.cpp
     test_byteCodeAOT.cpp
     test_compiler.cpp
@@ -74,3 +76,41 @@ set_target_properties(oes_tests PROPERTIES
 # ---------------------------------------------------------------------------
 include(GoogleTest)
 gtest_discover_tests(oes_tests)
+
+# ---------------------------------------------------------------------------
+# Lightweight string-layer tests — ibString/fstring only.
+#
+# fstring.h + fstringPool.h are header-only and depend on nothing but wxBase,
+# so this target does NOT link (or recompile) backend.dll. Use it for fast
+# iteration on the string type — it builds in seconds even after touching core
+# backend headers:
+#
+#   cmake --build build --target oes_string_tests
+#   ./bin/oes_string_tests                                    # functional tests
+#   ./bin/oes_string_tests --gtest_also_run_disabled_tests \
+#       --gtest_filter=*IbStringBench*                        # benchmark
+# ---------------------------------------------------------------------------
+add_executable(oes_string_tests
+    test_string.cpp
+    bench_string.cpp
+)
+
+target_link_libraries(oes_string_tests
+    PRIVATE
+        wx::base
+        GTest::gtest
+        GTest::gtest_main
+)
+
+target_include_directories(oes_string_tests PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/engine"
+)
+
+set_target_properties(oes_string_tests PROPERTIES
+    CXX_STANDARD          17
+    CXX_STANDARD_REQUIRED ON
+    BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
+    INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
+)
+
+gtest_discover_tests(oes_string_tests)

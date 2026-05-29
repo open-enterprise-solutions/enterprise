@@ -183,6 +183,13 @@ struct ibCompileContext {
 			  m_strName(strFuncName),
 			  m_strContext(fn.m_strContext),
 			  m_bCodeRet(fn.m_bCodeRet),
+			  // Same class of bug as the context-method m_bCodeRet gap:
+			  // a default-false flag the reconstruction path must restore.
+			  // A cross-module call to an exported function whose body has
+			  // an inner lambda capturing locals needs OPER_CALL_CLOSURE;
+			  // dropping this here would emit a plain OPER_CALL and dangle
+			  // the capture (compileCode.cpp:1165 reads m_needsHeapFrame).
+			  m_needsHeapFrame(fn.m_needsHeapFrame),
 			  m_lVarCount(fn.m_lVarCount),
 			  m_nStart(fn.m_lCodeLine), m_nFinish(0), m_numLine(0)
 		{

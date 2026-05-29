@@ -507,7 +507,7 @@ wxString ibCompileCode::GETIdentifier(bool strRealName, bool acceptKeyword)
 	}
 
 	if (strRealName) {
-		return lex.m_valData.m_sData;
+		return lex.m_valData.GetString();
 	}
 
 	return lex.m_strData;
@@ -4166,7 +4166,15 @@ ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const wxSt
 	(void)GetFunction(callFunc->m_strName, foundedFunc);
 
 
-	if (foundedFunc != nullptr && m_strCurFuncName != callFunc->m_strName) {
+	// Case-insensitive: m_strCurFuncName holds the function's source-case name
+	// ("Fact"), callFunc->m_strName is upper-cased ("FACT"). A case-sensitive
+	// `!=` mis-classifies a self-call as a non-recursive call, takes the
+	// immediate PushCallFunction path, and emits OPER_CALL with the frame size
+	// (param3 = m_lVarCount) still 0 — the count isn't known until AFTER the
+	// body compiles (it includes the temps created during it). The whole point
+	// of deferring a self-call to m_listCallFunc is to resolve it at finalize
+	// once the count is settled, so the recursive frame is sized correctly.
+	if (foundedFunc != nullptr && !stringUtils::CompareString(m_strCurFuncName, callFunc->m_strName)) {
 
 		if (!PushCallFunction(callFunc))
 			return ibParamUnit();

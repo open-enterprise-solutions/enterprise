@@ -58,28 +58,28 @@ BACKEND_API const ibValue wxEmptyValue;
 //**********************************************************************
 
 ibValue::ibValue()
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_refCount(0), m_pRef(nullptr), m_bReadOnly(false)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_pRef(nullptr)
 {
 	DEBUG_VALUE_CREATE();
 }
 
 //copy constructor:
 ibValue::ibValue(const ibValue& varValue)
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_refCount(0), m_pRef(nullptr), m_bReadOnly(false)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_pRef(nullptr)
 {
 	Copy(varValue);
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(ibValue&& varValue)
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_refCount(0), m_pRef(nullptr), m_bReadOnly(false)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_pRef(nullptr)
 {
 	Move(std::move(varValue));
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(ibValue* pValue)
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_refCount(0), m_pRef(pValue), m_bReadOnly(false)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_pRef(pValue)
 {
 	if (m_pRef != nullptr) {
 		m_typeClass = ibValueTypes::TYPE_REFFER;
@@ -89,7 +89,7 @@ ibValue::ibValue(ibValue* pValue)
 }
 
 ibValue::ibValue(ibBackendValue* pParam)
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_refCount(0), m_pRef(pParam ? pParam->GetImplValueRef() : nullptr), m_bReadOnly(false)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_pRef(pParam ? pParam->GetImplValueRef() : nullptr)
 {
 	if (m_pRef != nullptr) {
 		m_typeClass = ibValueTypes::TYPE_REFFER;
@@ -99,7 +99,7 @@ ibValue::ibValue(ibBackendValue* pParam)
 }
 
 ibValue::ibValue(const wxDateTime& cParam)
-	: m_typeClass(ibValueTypes::TYPE_DATE), m_refCount(0), m_pRef(nullptr), m_bReadOnly(false)
+	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_refCount(0), m_pRef(nullptr)
 {
 	const wxLongLong& llData = cParam.GetValue();
 	m_dData = llData.GetValue();
@@ -107,7 +107,7 @@ ibValue::ibValue(const wxDateTime& cParam)
 }
 
 ibValue::ibValue(int nYear, int nMonth, int nDay, unsigned short nHour, unsigned short nMinute, unsigned short nSecond)
-	: m_typeClass(ibValueTypes::TYPE_DATE), m_refCount(0), m_pRef(nullptr), m_bReadOnly(false)
+	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_refCount(0), m_pRef(nullptr)
 {
 	wxDateTime dataVal(nDay, (wxDateTime::Month)(nMonth - 1), nYear, nHour, nMinute, nSecond);
 	if (dataVal.IsValid()) {
@@ -118,7 +118,7 @@ ibValue::ibValue(int nYear, int nMonth, int nDay, unsigned short nHour, unsigned
 }
 
 ibValue::ibValue(ibValueTypes type, bool readOnly)
-	: m_typeClass(type), m_refCount(0), m_pRef(nullptr), m_bReadOnly(readOnly)
+	: m_typeClass(type), m_bReadOnly(readOnly), m_refCount(0), m_pRef(nullptr)
 {
 	switch (type)
 	{
@@ -132,7 +132,7 @@ ibValue::ibValue(ibValueTypes type, bool readOnly)
 		m_dData = emptyDate;
 		break;
 	case TYPE_STRING:
-		m_sData.Clear();
+		delete m_pStr; m_pStr = nullptr;
 		break;
 	default:
 		m_pRef = nullptr;
@@ -145,7 +145,7 @@ ibValue::ibValue(ibValueTypes type, bool readOnly)
 //Constructors by types:
 #define CVALUE_BYTYPE(v_parclass, v_type, v_value) \
 ibValue::ibValue (v_parclass cParam) \
-    : m_typeClass(v_type), m_refCount(0), m_pRef(nullptr), m_bReadOnly(false) \
+    : m_typeClass(v_type), m_bReadOnly(false), m_refCount(0), m_pRef(nullptr) \
 {\
 	v_value = cParam;\
 	DEBUG_VALUE_CREATE();\
@@ -160,10 +160,36 @@ CVALUE_BYTYPE(const ibNumber&, ibValueTypes::TYPE_NUMBER, m_fData);
 
 CVALUE_BYTYPE(wxLongLong_t, ibValueTypes::TYPE_DATE, m_dData);
 
-CVALUE_BYTYPE(char*, ibValueTypes::TYPE_STRING, m_sData);
-CVALUE_BYTYPE(wchar_t*, ibValueTypes::TYPE_STRING, m_sData);
+// String ctors — m_pStr is a pooled-heap ibString, allocated only for a
+// non-empty string (empty stays nullptr = no allocation). char* keeps the
+// historical wxString(char*) conversion (NOT ibString's UTF-8 path).
+ibValue::ibValue(char* cParam)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_pRef(nullptr)
+{
+	if (cParam && *cParam) m_pStr = new ibString(wxString(cParam));
+	DEBUG_VALUE_CREATE();
+}
 
-CVALUE_BYTYPE(const wxString&, ibValueTypes::TYPE_STRING, m_sData);
+ibValue::ibValue(wchar_t* cParam)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_pRef(nullptr)
+{
+	if (cParam && *cParam) m_pStr = new ibString(cParam);
+	DEBUG_VALUE_CREATE();
+}
+
+ibValue::ibValue(const wxString& cParam)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_pRef(nullptr)
+{
+	if (!cParam.IsEmpty()) m_pStr = new ibString(cParam);
+	DEBUG_VALUE_CREATE();
+}
+
+ibValue::ibValue(ibString&& cParam)   // native — steals the buffer (runtime string functions)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_pRef(nullptr)
+{
+	if (!cParam.IsEmpty()) m_pStr = new ibString(std::move(cParam));
+	DEBUG_VALUE_CREATE();
+}
 
 #undef CVALUE_BYTYPE
 #undef CVALUE_BYTYPE_MOVE
@@ -172,6 +198,8 @@ ibValue::~ibValue()
 {
 	if (m_typeClass == ibValueTypes::TYPE_REFFER && m_pRef && m_pRef != this)
 		m_pRef->DecrRef();
+	else if (m_typeClass == ibValueTypes::TYPE_STRING)
+		delete m_pStr;   // ONLY if STRING — m_pStr aliases m_pRef in the union
 	DEBUG_VALUE_DELETE();
 }
 
@@ -181,6 +209,10 @@ void ibValue::Reset()
 
 	if (m_typeClass == ibValueTypes::TYPE_REFFER && m_pRef)
 		m_pRef->DecrRef();
+	else if (m_typeClass == ibValueTypes::TYPE_STRING) {
+		delete m_pStr;
+		m_pStr = nullptr;
+	}
 
 	m_typeClass = ibValueTypes::TYPE_EMPTY;
 	m_pRef = nullptr;
@@ -206,7 +238,7 @@ void ibValue::Copy(const ibValue& cOld)
 		m_fData = cOld.m_fData;
 		break;
 	case ibValueTypes::TYPE_STRING:
-		m_sData = cOld.m_sData;
+		m_pStr = cOld.m_pStr ? new ibString(*cOld.m_pStr) : nullptr;
 		break;
 	case ibValueTypes::TYPE_DATE:
 		m_dData = cOld.m_dData;
@@ -249,7 +281,7 @@ void ibValue::Move(ibValue&& cOld)
 		m_fData = std::move(cOld.m_fData);
 		break;
 	case ibValueTypes::TYPE_STRING:
-		m_sData = std::move(cOld.m_sData);
+		m_pStr = cOld.m_pStr; cOld.m_pStr = nullptr;   // steal the buffer
 		break;
 	case ibValueTypes::TYPE_DATE:
 		m_dData = std::move(cOld.m_dData);
@@ -362,7 +394,15 @@ void ibValue::operator = (const wxString& cParam)
 	Reset();
 
 	m_typeClass = ibValueTypes::TYPE_STRING;
-	m_sData = cParam;
+	if (!cParam.IsEmpty()) m_pStr = new ibString(cParam);   // empty → nullptr, no alloc
+}
+
+void ibValue::operator = (ibString&& cParam)
+{
+	Reset();
+
+	m_typeClass = ibValueTypes::TYPE_STRING;
+	if (!cParam.IsEmpty()) m_pStr = new ibString(std::move(cParam));   // steal buffer; empty → nullptr
 }
 
 void ibValue::operator = (const ibValue& cParam)
@@ -393,7 +433,7 @@ void ibValue::operator = (ibValueTypes type)
 		m_dData = emptyDate;
 		break;
 	case TYPE_STRING:
-		m_sData.clear();
+		delete m_pStr; m_pStr = nullptr;
 		break;
 	default:
 		m_pRef = nullptr;
@@ -518,7 +558,20 @@ bool ibValue::SetString(const wxString& strString)
 	Reset();
 
 	m_typeClass = ibValueTypes::TYPE_STRING;
-	m_sData = strString;
+	if (!strString.IsEmpty()) m_pStr = new ibString(strString);   // empty → nullptr
+
+	return true;
+}
+
+bool ibValue::SetString(ibString&& strString)
+{
+	if (m_bReadOnly && m_typeClass == ibValueTypes::TYPE_REFFER)
+		return m_pRef->SetString(strString.ToWxString());
+
+	Reset();
+
+	m_typeClass = ibValueTypes::TYPE_STRING;
+	if (!strString.IsEmpty()) m_pStr = new ibString(std::move(strString));   // steal buffer; empty → nullptr
 
 	return true;
 }
@@ -644,7 +697,7 @@ wxString ibValue::GetString() const
 	case ibValueTypes::TYPE_NUMBER:
 		return m_fData.ToString();
 	case ibValueTypes::TYPE_STRING:
-		return m_sData;
+		return m_pStr ? m_pStr->ToWxString() : wxString(wxEmptyString);
 	case ibValueTypes::TYPE_DATE: {
 		const wxDateTime& dateTime = wxLongLong(m_dData);
 		return dateTime.Format("%d.%m.%Y %H:%M:%S");
@@ -654,6 +707,17 @@ wxString ibValue::GetString() const
 	};
 
 	return GetClassName();
+}
+
+const ibString& ibValue::GetString(ibString& scratch) const
+{
+	if (m_typeClass == ibValueTypes::TYPE_STRING) {
+		if (m_pStr) return *m_pStr;            // zero-copy — the live buffer
+		static const ibString s_empty;         // empty string {STRING, null}
+		return s_empty;
+	}
+	scratch = GetString();                     // coerce number/bool/date/ref (one wxString→ibString)
+	return scratch;
 }
 
 wxLongLong_t ibValue::GetDate() const
@@ -669,16 +733,17 @@ wxLongLong_t ibValue::GetDate() const
 		return emptyDate;
 	}
 	case ibValueTypes::TYPE_STRING: {
+		const wxString sData = m_pStr ? m_pStr->ToWxString() : wxString();
 		wxDateTime dateTime;
-		if (dateTime.ParseFormat(m_sData, "%d.%m.%Y %H:%M:%S")) {
+		if (dateTime.ParseFormat(sData, "%d.%m.%Y %H:%M:%S")) {
 			const wxLongLong& llData = dateTime.GetValue();
 			return llData.GetValue();
 		}
-		else if (dateTime.ParseFormat(m_sData, "%Y%m%d%H%M%S")) {
+		else if (dateTime.ParseFormat(sData, "%Y%m%d%H%M%S")) {
 			const wxLongLong& llData = dateTime.GetValue();
 			return llData.GetValue();
 		}
-		else if (dateTime.ParseDateTime(m_sData)) {
+		else if (dateTime.ParseDateTime(sData)) {
 			const wxLongLong& llData = dateTime.GetValue();
 			return llData.GetValue();
 		}
@@ -764,7 +829,7 @@ bool ibValue::IsEmpty() const
 	case ibValueTypes::TYPE_DATE:
 		return m_dData == emptyDate;
 	case ibValueTypes::TYPE_STRING:
-		return m_sData.IsEmpty();
+		return m_pStr == nullptr || m_pStr->IsEmpty();
 	case ibValueTypes::TYPE_ENUM:
 	case ibValueTypes::TYPE_OLE:
 	case ibValueTypes::TYPE_VALUE:

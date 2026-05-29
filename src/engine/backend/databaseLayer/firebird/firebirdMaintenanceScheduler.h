@@ -26,8 +26,12 @@
 //     POSIX leaving the running server on a stale file. Followers
 //     don't touch the shared DB at all. Standalone single-process
 //     embedded is the only safe scheduler scope.
-//   - Stopped at process exit via atexit hook. Per-driver Close
-//     does NOT Stop — pool checkouts/checkins would constantly
+//   - Stopped deterministically in ibApplicationData teardown (step 0
+//     of ~ibApplicationData, BEFORE the connection pool frees the FB
+//     driver + the ibInterfaceFirebird* the worker holds). The atexit
+//     hook registered in Start() remains as an idempotent backstop —
+//     by the time it runs the scheduler is already stopped. Per-driver
+//     Close does NOT Stop — pool checkouts/checkins would constantly
 //     kill the scheduler.
 //
 // First-cut policy keeps clocks in memory — a process restart

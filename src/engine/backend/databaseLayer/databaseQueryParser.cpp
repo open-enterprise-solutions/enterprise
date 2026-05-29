@@ -16,14 +16,16 @@ bool IsEmptyQuery(const wxString& strQuery)
 	return true;
 }
 
-static wxCriticalSection m_csParseQueries;
-
 wxArrayString ParseQueries(const wxString& strQuery)
 {
-	wxCriticalSectionLocker enter(m_csParseQueries);
-
-	static wxArrayString arrString; arrString.Empty();
-	static wxString strRaw; static bool bInQuote = false;
+	// thread_local instead of a lock: each thread reuses its own buffer
+	// allocations across calls, so there's nothing shared to serialise
+	// (was a wxCriticalSection over shared statics). bInQuote is a plain
+	// local now — it's per-parse state, and the old static leaked it
+	// across calls on an unbalanced quote.
+	thread_local wxArrayString arrString; arrString.Empty();
+	thread_local wxString strRaw; strRaw.Clear();
+	bool bInQuote = false;
 
 	for (const auto& c : strQuery) {
 
@@ -43,7 +45,7 @@ wxArrayString ParseQueries(const wxString& strQuery)
 
 	if (!strRaw.IsEmpty()) {
 
-		static wxString str; str.Clear();
+		thread_local wxString str; str.Clear();
 		str << strRaw << wxT(";");
 		if (!IsEmptyQuery(str))
 			arrString.Add(str);

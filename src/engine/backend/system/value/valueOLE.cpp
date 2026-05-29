@@ -299,7 +299,7 @@ bool ibValueOLE::FromVariant(const VARIANT& oleVariant, ibValue& pvarRetValue) c
 	case VT_BSTR:
 	{
 		pvarRetValue.SetType(ibValueTypes::TYPE_STRING);
-		pvarRetValue.m_sData = wxConvertStringFromOle(oleVariant.bstrVal);
+		pvarRetValue.SetString(wxConvertStringFromOle(oleVariant.bstrVal));
 		return true;
 	}
 	case VT_DATE:

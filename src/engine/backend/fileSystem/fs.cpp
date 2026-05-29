@@ -1,6 +1,8 @@
 #include "fs.h"
 #include "lz/lzhuf.h"
 
+#include "backend/fstring.h"   // ibString — r_stringZ(ibString&)
+
 typedef unsigned char byte_t;
 
 //------------------------------------------------------------------------------------
@@ -315,6 +317,13 @@ void	ibReader::r_stringZ(wxString& dest) const
 	std::string destSrc = (char*)(m_data + m_pos);
 	m_pos += int(destSrc.size() + 1);
 	dest = wxString::FromUTF8(destSrc);
+}
+
+void	ibReader::r_stringZ(ibString& dest) const
+{
+	std::string destSrc = (char*)(m_data + m_pos);
+	m_pos += int(destSrc.size() + 1);
+	dest.SetUtf8(destSrc.data(), destSrc.size());   // native UTF-8 → wchar, no wxString
 }
 
 void	ibReader::skip_stringZ() const

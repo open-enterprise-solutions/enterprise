@@ -9,24 +9,26 @@
 #include "backend/backend_core.h"
 
 // ---------------------------------------------------------------------------
-// Roundtrip: string -> clsid -> string must recover the original (padded to 8)
+// FNV-1a hash contract. The legacy reversible 8-byte ASCII pack was replaced
+// by a one-way FNV-1a hash (clsid.h), so string -> clsid no longer round-trips:
+// clsid_to_string returns a hex form of the hash, NOT the original string.
+// These tests pin the current contract — determinism + the hex representation.
 // ---------------------------------------------------------------------------
 
-TEST(ClsidTest, RoundtripSevenCharString) {
+TEST(ClsidTest, HashIsDeterministic) {
     const wxString input = wxT("VL_NUMB");
     ibClassID id = string_to_clsid(input);
     EXPECT_NE(id, 0u);
-    wxString recovered = clsid_to_string(id);
-    // string_to_clsid pads shorter strings with spaces to 8 chars
-    EXPECT_TRUE(recovered.StartsWith(input));
+    EXPECT_EQ(id, string_to_clsid(input)); // same input -> same hash, every time
 }
 
-TEST(ClsidTest, RoundtripExactEightChars) {
+TEST(ClsidTest, ClsidToStringIsHexOfHash) {
     const wxString input = wxT("ABCDEFGH");
     ibClassID id = string_to_clsid(input);
     EXPECT_NE(id, 0u);
-    wxString recovered = clsid_to_string(id);
-    EXPECT_EQ(recovered, input);
+    // clsid_to_string is now a debug hex of the 64-bit hash, not an inverse.
+    EXPECT_EQ(clsid_to_string(id),
+              wxString::Format(wxT("0x%016llX"), static_cast<uint64_t>(id)));
 }
 
 // ---------------------------------------------------------------------------
@@ -61,13 +63,11 @@ TEST(ClsidTest, ZeroClsidProducesEmptyString) {
     EXPECT_EQ(clsid_to_string(0), wxEmptyString);
 }
 
-TEST(ClsidTest, SingleCharString) {
-    const wxString input = wxT("A");
-    ibClassID id = string_to_clsid(input);
+TEST(ClsidTest, SingleCharHashesNonZeroAndLengthSensitive) {
+    ibClassID id = string_to_clsid(wxT("A"));
     EXPECT_NE(id, 0u);
-    wxString recovered = clsid_to_string(id);
-    // First char must be 'A', rest padded with spaces
-    EXPECT_EQ(recovered[0], 'A');
+    // FNV-1a folds length in, so "A" and "AA" hash to different ids.
+    EXPECT_NE(id, string_to_clsid(wxT("AA")));
 }
 
 TEST(ClsidTest, DifferentStringsDifferentIds) {

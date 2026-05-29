@@ -264,8 +264,7 @@ inline void AddValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 		}
 	}
 	else {
-		cValue1.m_typeClass = ibValueTypes::TYPE_STRING;
-		cValue1.m_sData = cValue2.GetString() + cValue3.GetString();
+		cValue1.SetString(cValue2.GetString() + cValue3.GetString());
 	}
 }
 
@@ -628,7 +627,7 @@ start_label:
 				ibValue* pRetValue = &variable1;
 				ibRunContextSmall cRunContext(array2);
 				cRunContext.m_lParamCount = array2;
-				const wxString className = m_pByteCode->m_listConst[index2].m_sData;
+				const wxString className = m_pByteCode->m_listConst[index2].GetString();
 				//load parameters
 				for (long i = 0; i < cRunContext.m_lParamCount; i++) {
 					lCodeLine++;
@@ -650,7 +649,7 @@ start_label:
 			} break;
 			case OPER_SET_A:
 			{//setting attribute
-				const wxString& strPropName = m_pByteCode->m_listConst[index2].m_sData;
+				const wxString& strPropName = m_pByteCode->m_listConst[index2].GetString();
 				const long lPropNum = variable1.FindProp(strPropName);
 				if (lPropNum < 0) CheckAndError(variable1, strPropName);
 				if (!variable1.IsPropWritable(lPropNum)) ibBackendCoreException::Error(_("Object field not writable (%s)"), strPropName);
@@ -660,7 +659,7 @@ start_label:
 			{
 				ibValue* pRetValue = &variable1;
 				ibValue* pVariable2 = &variable2;
-				const wxString& strPropName = m_pByteCode->m_listConst[index3].m_sData;
+				const wxString& strPropName = m_pByteCode->m_listConst[index3].GetString();
 				const long lPropNum = variable2.FindProp(strPropName);
 				if (lPropNum < 0) CheckAndError(variable2, strPropName);
 				if (!variable2.IsPropReadable(lPropNum)) ibBackendCoreException::Error(_("Object field not readable (%s)"), strPropName);
@@ -685,7 +684,7 @@ start_label:
 				ibValue* pRetValue = &variable1;
 				ibValue* pVariable2 = &variable2;
 
-				const wxString& funcName = m_pByteCode->m_listConst[index3].m_sData;
+				const wxString& funcName = m_pByteCode->m_listConst[index3].GetString();
 				// Resolve method number on every call. Bytecode is a const
 				// template at runtime — no opcode-level cache patching.
 				// (The previous "cache" path stored resolved method # /
@@ -1179,8 +1178,8 @@ start_label:
 				break; //getting the array value
 			case OPER_IF + TYPE_DELTA1: if (cvariable1.m_fData.IsZero()) lCodeLine = index2 - 1; break;
 				//STRING
-			case OPER_ADD + TYPE_DELTA2: variable1.m_sData = cvariable2.m_sData + cvariable3.m_sData; break;
-			case OPER_LET + TYPE_DELTA2: variable1.m_sData = cvariable2.m_sData; break;
+			case OPER_ADD + TYPE_DELTA2: variable1.SetString(cvariable2.GetString() + cvariable3.GetString()); break;
+			case OPER_LET + TYPE_DELTA2: variable1.SetString(cvariable2.GetString()); break;
 			case OPER_SET_ARRAY + TYPE_DELTA2:
 				if (!SetArrayValue(variable1, cvariable2, GetValue(cvariable3)))
 					ibBackendCoreException::Error(_("Cannot set array value '%s'"), cvariable3.GetString());
@@ -1189,7 +1188,7 @@ start_label:
 				if (!GetArrayValue(variable1, variable2, cvariable3))
 					ibBackendCoreException::Error(_("Cannot get array value '%s'"), cvariable3.GetString());
 				break; //getting the array value
-			case OPER_IF + TYPE_DELTA2: if (cvariable1.m_sData.IsEmpty()) lCodeLine = index2 - 1; break;
+			case OPER_IF + TYPE_DELTA2: if (cvariable1.IsEmpty()) lCodeLine = index2 - 1; break;
 				//DATE
 			case OPER_ADD + TYPE_DELTA3: variable1.m_dData = cvariable2.m_dData + cvariable3.m_dData; break;
 			case OPER_SUB + TYPE_DELTA3: variable1.m_dData = cvariable2.m_dData - cvariable3.m_dData; break;
@@ -1613,7 +1612,13 @@ bool ibProcUnit::SetPropVal(const wxString& strPropName, const ibValue& varPropV
 
 bool ibProcUnit::GetPropVal(const long lPropNum, ibValue& pvarPropVal) //attribute value
 {
-	pvarPropVal = m_cCurContext.m_pRefLocVars[lPropNum];
+	// Dereference: copy the VALUE of the local-var slot. Assigning the bare
+	// ibValue* (operator=(ibValue*)) would make pvarPropVal a TYPE_REFFER to
+	// &m_pLocVars[lPropNum] — an element of the by-value local array, refcount
+	// 0. The caller's REFFER then DecrRefs it to 0 on destruction and runs
+	// `delete this` on a non-heap array element → heap corruption. All runtime
+	// access dereferences (locVariable macros); this must too.
+	pvarPropVal = *m_cCurContext.m_pRefLocVars[lPropNum];
 	return true;
 }
 
@@ -1621,7 +1626,7 @@ bool ibProcUnit::GetPropVal(const wxString& strPropName, ibValue& pvarPropVal) /
 {
 	const long lPropNum = FindProp(strPropName);
 	if (lPropNum != wxNOT_FOUND) {
-		pvarPropVal = m_cCurContext.m_pRefLocVars[lPropNum];
+		pvarPropVal = *m_cCurContext.m_pRefLocVars[lPropNum]; // value copy, not a REFFER to the array slot (see lPropNum overload)
 		return true;
 	}
 	return false;

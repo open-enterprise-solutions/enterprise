@@ -9,6 +9,8 @@
 #include "backend/backend.h"
 #include "backend/fileSystem/types.h"
 
+class ibString;   // backend/fstring.h — r_stringZ(ibString&) overload
+
 //------------------------------------------------------------------------------------
 // Write
 //------------------------------------------------------------------------------------
@@ -233,6 +235,7 @@ public:
 	void			r_stringZ(char* dest, u32 tgt_sz) const;
 	void			r_stringZ(std::string& dest) const;
 	void			r_stringZ(wxString& dest) const;
+	void			r_stringZ(ibString& dest) const;
 
 public:
 
