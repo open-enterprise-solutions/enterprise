@@ -10,12 +10,20 @@
 #include "backend/session/session.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibValueModuleManager::ibValueModuleUnit, ibValue);
+wxIMPLEMENT_DYNAMIC_CLASS(ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit, ibValueModuleManager::ibValueModuleUnit);
 
-ibValueModuleManager::ibValueModuleUnit::ibValueModuleUnit(ibValueModuleManager *moduleManager, ibValueMetaObjectModuleBase *moduleObject, bool managerModule) :
+// Lightweight (managerless) — what the designer compile cache builds for autocomplete.
+ibValueModuleManager::ibValueModuleUnit::ibValueModuleUnit(ibValueMetaObjectModuleBase *moduleObject, bool managerModule) :
 	ibValue(ibValueTypes::TYPE_VALUE, true), ibRuntimeModuleDataObject(new ibCompileCommonModule(moduleObject)),
 	m_methodHelper(new ibValueMethodHelper()),
-	m_moduleManager(moduleManager),
 	m_moduleObject(moduleObject)
+{
+}
+
+// Runtime — wires the owning manager into the parent chain (GetSession() walks).
+ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::ibValueRuntimeModuleUnit(ibValueModuleRuntimeManager *moduleManager, ibValueMetaObjectModuleBase *moduleObject, bool managerModule) :
+	ibValueModuleUnit(moduleObject, managerModule),
+	m_moduleManager(moduleManager)
 {
 	// Parent chain in the runtime tree — common module sits directly
 	// under its owning root module manager. Enables GetSession() walks
@@ -31,14 +39,15 @@ ibValueModuleManager::ibValueModuleUnit::~ibValueModuleUnit()
 #define objectManager wxT("Manager")
 
 //common module
-bool ibValueModuleManager::ibValueModuleUnit::CreateCommonModule()
+bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::CreateCommonModule()
 {
 	wxASSERT(m_moduleManager != nullptr);
 
-	// Parent already wired in ctor (SetParent(moduleManager)). Bind
-	// the module-scope "Manager" singleton that scripts reach via
-	// Manager.<method>() inside common modules.
-	BindContextVariable(objectManager, m_moduleManager->GetObjectManager());
+	// Parent already wired in ctor (SetParent(moduleManager)). Bind the
+	// module-scope "Manager" singleton that scripts reach via Manager.<method>()
+	// inside common modules — transparent scope container (name not an editor
+	// identifier, only its members surface).
+	BindScopeVariable(objectManager, m_moduleManager->GetObjectManager());
 
 	// Compile only — per-session ProcUnit comes from AttachRuntime.
 	try {
@@ -53,11 +62,11 @@ bool ibValueModuleManager::ibValueModuleUnit::CreateCommonModule()
 	return true;
 }
 
-bool ibValueModuleManager::ibValueModuleUnit::DestroyCommonModule()
+bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::DestroyCommonModule()
 {
 	wxASSERT(m_moduleManager != nullptr);
 
-	m_compileModule->RemoveVariable(objectManager);
+	UnbindVariable(objectManager);
 	m_compileModule->Reset();
 
 	m_procUnit.reset();

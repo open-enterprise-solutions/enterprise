@@ -57,6 +57,7 @@ void ibDatabaseErrorReporter::ThrowDatabaseException()
 	// per-driver override so admin logs see what the engine actually
 	// reported. Kind / native_code / sqlstate / message all travel on
 	// the exception; the catch site decides what to surface.
+
 	ibDatabaseLayerException::Throw(
 		ClassifyDatabaseError(m_nErrorCode),
 		m_nErrorCode,

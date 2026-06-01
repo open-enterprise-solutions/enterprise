@@ -272,11 +272,11 @@ void ibValueForm::InitializeForm(const ibValueMetaObjectFormBase* creator,
 		dynamic_cast<ibRuntimeModuleDataObject*>(srcObject);
 	ibRuntimeModuleDataObject* descParent = sourceDesc;
 	if (descParent == nullptr && creator != nullptr) {
-		ibSession* session = ibSession::Current();
-		if (session != nullptr) {
-			if (ibValueModuleManager* mm = session->GetManagerModule())
-				descParent = mm;
-		}
+		// No bound data object → parent under the metadata's module manager.
+		// Through the seam so the Designer (which has no runtime root mm) parents
+		// under its lightweight designer manager, same as every other edit-path
+		// object. Null-folds for sessionless / no-cache hosts.
+		descParent = ibSession::EditModuleManagerFor(creator->GetMetaData());
 	}
 	if (descParent != nullptr)
 		ibRuntimeModuleDataObject::SetParent(descParent);
@@ -726,24 +726,16 @@ void ibValueForm::RemoveControl(ibValueFrame* control)
 	ibValueFrame* parentControl = currentControl->GetParent();
 
 	if (parentControl->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
+		// The sizer-item wraps currentControl; removing the wrapper from its owner
+		// releases the owning handle, cascading down to currentControl.
 		ibValueFrame* parentOwner = parentControl->GetParent();
-		if (parentOwner != nullptr) {
+		if (parentOwner != nullptr)
 			parentOwner->RemoveChild(parentControl);
-		}
-		parentControl->SetParent(nullptr);
-		parentControl->RemoveChild(currentControl);
-		parentControl->DecrRef();
-
-		currentControl->SetParent(nullptr);
-		currentControl->DecrRef();
 	}
 	else {
 		ibValueFrame* parentOwner = currentControl->GetParent();
-		if (parentOwner != nullptr) {
-			parentOwner->RemoveChild(currentControl);
-		}
-		currentControl->SetParent(nullptr);
-		currentControl->DecrRef();
+		if (parentOwner != nullptr)
+			parentOwner->RemoveChild(currentControl); // owning handle releases → destroys
 	}
 
 	m_formCollectionControl->PrepareNames();
@@ -831,17 +823,6 @@ void ibValueForm::DetachIdleHandler(const wxString& procedureName)
 				timer->Stop();
 			if (timer)
 				timer->Unbind(wxEVT_TIMER, &ibValueForm::OnIdleHandler, this);
-		}
-	}
-}
-
-void ibValueForm::ClearRecursive(ibValueFrame* control)
-{
-	for (unsigned int idx = control->GetChildCount(); idx > 0; idx--) {
-		ibValueFrame* controlChild = control->GetChild(idx - 1);
-		ClearRecursive(controlChild);
-		if (controlChild != nullptr) {
-			controlChild->DecrRef();
 		}
 	}
 }

@@ -25,8 +25,8 @@ static inline bool IsCES() {
 
 ibPrecompileCode::ibPrecompileCode(ibValueMetaObjectModuleBase* moduleObject)
 	: ibTranslateCode(moduleObject ? moduleObject->GetFullName() : wxString(),
-	                  moduleObject ? moduleObject->GetDocPath()  : wxString()),
-	  m_moduleObject(moduleObject)
+		moduleObject ? moduleObject->GetDocPath() : wxString()),
+	m_moduleObject(moduleObject)
 {
 	// Wire the root context's back-pointer to this module once at
 	// construction. Used to live as a side effect inside GetContext()
@@ -96,16 +96,24 @@ void ibPrecompileCode::PrepareModuleData()
 	if (m_moduleObject) {
 		ibMetaData* metaData = m_moduleObject->GetMetaData();
 		wxASSERT(metaData);
-		ibSession* session = ibSession::Current();
-		ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
 		auto* cc = metaData ? metaData->GetCompileCache() : nullptr;
-		if (cc == nullptr || moduleManager == nullptr ||
-			!cc->FindCompileModule(m_moduleObject, contextVariable)) {
+		// Designer-owned module manager (held in the compile cache). Holds the
+		// "Manager" singleton + named context + its OWN compiled common-module
+		// units, independent of the runtime session managers.
+		ibValueModuleManagerDesigner* moduleManager = cc ? cc->GetModuleManager() : nullptr;
+		if (cc == nullptr || moduleManager == nullptr)
 			return;
-		}
+
+		// Resolve the module being edited to its compiled value. Common modules
+		// are indexed in the compile cache by their meta-object (AddCommonModule),
+		// so FindCompileModule resolves them too. No early return on null — the
+		// parent-context walk below self-gates.
+		cc->FindCompileModule(m_moduleObject, contextVariable);
 		for (auto pair : moduleManager->GetContextVariables()) {
 
-			ibValue* managerVariable = pair.second;
+			ibValue* managerVariable = pair.second.m_value;
+			if (managerVariable == nullptr)
+				continue;
 			managerVariable->PrepareNames();
 			for (unsigned int i = 0; i < managerVariable->GetNProps(); i++) {
 				const wxString& strAttributeName = managerVariable->GetPropName(i);
@@ -142,67 +150,75 @@ void ibPrecompileCode::PrepareModuleData()
 				GetContext()->m_functions[stringUtils::MakeUpper(strMethodName)] = pFunction;
 			}
 		}
-		unsigned int nNumberAttr = 0;
-		unsigned int nNumberFunc = 0;
-		for (auto module : moduleManager->GetCommonModules()) {
-			if (module->IsGlobalModule()) {
-				ibParserModule cParser;
-				if (cParser.ParseModule(module->GetModuleText())) {
-					for (auto code : cParser.GetAllContent()) {
-						if (code.m_eType == eExportVariable) {
-							wxString strAttributeName = code.m_name;
-							if (m_rootContext.FindVariable(strAttributeName))
-								continue;
-							//determine the m_number and type of the variable
-							ibPrecompileVariable variables;
-							variables.m_name = strAttributeName;
-							variables.m_realName = strAttributeName;
 
-							variables.m_number = nNumberAttr;
-							variables.m_isContext = true;
-							variables.m_isExport = true;
+		// Designer: global common modules come from the designer manager's own
+		// compiled-unit registry. Their exports are read by parsing the live text;
+		// m_valContext is the compiled unit (so chained autocomplete resolves).
+		{
+			unsigned int nNumberAttr = 0;
+			unsigned int nNumberFunc = 0;
+			for (auto& modulePtr : moduleManager->GetCommonModules()) {
+				if (modulePtr == nullptr || !modulePtr->IsGlobalModule())
+					continue;
+				{
+					ibParserModule cParser;
+					if (cParser.ParseModule(modulePtr->GetModuleText())) {
+						for (auto code : cParser.GetAllContent()) {
+							if (code.m_eType == eExportVariable) {
+								wxString strAttributeName = code.m_name;
+								if (m_rootContext.FindVariable(strAttributeName))
+									continue;
+								//determine the m_number and type of the variable
+								ibPrecompileVariable variables;
+								variables.m_name = strAttributeName;
+								variables.m_realName = strAttributeName;
 
-							variables.m_valContext = module;
+								variables.m_number = nNumberAttr;
+								variables.m_isContext = true;
+								variables.m_isExport = true;
 
-							GetContext()->m_variables[stringUtils::MakeUpper(strAttributeName)] = variables;	nNumberAttr++;
-						}
-						else if (code.m_eType == eExportProcedure) {
-							wxString strMethodName = code.m_name;
-							if (m_rootContext.FindFunction(strMethodName))
-								continue;
-							ibPrecompileContext* procContext = new ibPrecompileContext(GetContext());
-							procContext->SetModule(this);
-							procContext->m_returnKind = RETURN_PROCEDURE;
+								variables.m_valContext = modulePtr;
 
-							ibPrecompileFunction* pFunction = new ibPrecompileFunction(strMethodName, procContext);
-							pFunction->m_realName = strMethodName;
-							pFunction->m_shortDescription = code.m_shortDescription;
-							pFunction->m_isContext = true;
-							pFunction->m_isExport = true;
+								GetContext()->m_variables[stringUtils::MakeUpper(strAttributeName)] = variables;	nNumberAttr++;
+							}
+							else if (code.m_eType == eExportProcedure) {
+								wxString strMethodName = code.m_name;
+								if (m_rootContext.FindFunction(strMethodName))
+									continue;
+								ibPrecompileContext* procContext = new ibPrecompileContext(GetContext());
+								procContext->SetModule(this);
+								procContext->m_returnKind = RETURN_PROCEDURE;
 
-							pFunction->m_valContext = module;
+								ibPrecompileFunction* pFunction = new ibPrecompileFunction(strMethodName, procContext);
+								pFunction->m_realName = strMethodName;
+								pFunction->m_shortDescription = code.m_shortDescription;
+								pFunction->m_isContext = true;
+								pFunction->m_isExport = true;
 
-							// check for typing
-							GetContext()->m_functions[stringUtils::MakeUpper(strMethodName)] = pFunction; nNumberFunc++;
-						}
-						else if (code.m_eType == eExportFunction) {
-							wxString strMethodName = code.m_name;
-							if (m_rootContext.FindFunction(strMethodName)) continue;
+								pFunction->m_valContext = modulePtr;
 
-							ibPrecompileContext* procContext = new ibPrecompileContext(GetContext());
-							procContext->SetModule(this);
-							procContext->m_returnKind = RETURN_FUNCTION;
+								// check for typing
+								GetContext()->m_functions[stringUtils::MakeUpper(strMethodName)] = pFunction; nNumberFunc++;
+							}
+							else if (code.m_eType == eExportFunction) {
+								wxString strMethodName = code.m_name;
+								if (m_rootContext.FindFunction(strMethodName)) continue;
 
-							ibPrecompileFunction* pFunction = new ibPrecompileFunction(strMethodName, procContext);
-							pFunction->m_realName = strMethodName;
-							pFunction->m_shortDescription = code.m_shortDescription;
-							pFunction->m_isContext = true;
-							pFunction->m_isExport = true;
+								ibPrecompileContext* procContext = new ibPrecompileContext(GetContext());
+								procContext->SetModule(this);
+								procContext->m_returnKind = RETURN_FUNCTION;
 
-							pFunction->m_valContext = module;
+								ibPrecompileFunction* pFunction = new ibPrecompileFunction(strMethodName, procContext);
+								pFunction->m_realName = strMethodName;
+								pFunction->m_shortDescription = code.m_shortDescription;
+								pFunction->m_isContext = true;
+								pFunction->m_isExport = true;
 
-							// check for typing
-							GetContext()->m_functions[stringUtils::MakeUpper(strMethodName)] = pFunction; nNumberFunc++;
+								pFunction->m_valContext = modulePtr;
+
+								// check for typing
+								GetContext()->m_functions[stringUtils::MakeUpper(strMethodName)] = pFunction; nNumberFunc++;
+							}
 						}
 					}
 				}
@@ -216,12 +232,18 @@ void ibPrecompileCode::PrepareModuleData()
 		while (compileModule != nullptr) {
 
 			// Surface compile-side context bindings (ThisForm, ThisObject, …)
-			// — bound via BindContextVariable into the compile module's
-			// m_listContextValue. They aren't enumerated as props of any
-			// cached value (the self-named props are IsPropScoped-skipped),
-			// so without this loop the runtime compiler resolves them but
-			// IntelliSense doesn't see them.
+			// — bound via BindContextVariable on the edited module/form/object's
+			// own compile module. They aren't enumerated as props of any cached
+			// value (self-named props are IsPropScoped-skipped), so without this
+			// loop the runtime compiler resolves them but IntelliSense doesn't.
 			for (auto& kv : compileModule->m_listContextValue) {
+				// Transparent scope container (Manager / EnumManager /
+				// SystemManager): its NAME is not an identifier — only its
+				// members surface, via the GetContextVariables() pass above.
+				// ThisForm / ThisObject / export vars (m_scopeContext == false)
+				// keep their name visible here.
+				if (kv.second.m_scopeContext)
+					continue;
 				if (m_rootContext.FindVariable(kv.first))
 					continue;
 				ibPrecompileVariable variable;
@@ -229,16 +251,21 @@ void ibPrecompileCode::PrepareModuleData()
 				variable.m_realName = kv.first;
 				variable.m_isContext = true;
 				variable.m_isExport = true;
-				variable.m_valContext = kv.second;
+				variable.m_valContext = kv.second.m_value;
 				GetContext()->m_variables[stringUtils::MakeUpper(kv.first)] = variable;
 			}
 
 			const ibValueMetaObjectModuleBase* moduleObject = compileModule->GetObjectModule();
 			if (moduleObject != nullptr) {
 				ibMetaData* metaData = moduleObject->GetMetaData();
-				wxASSERT(metaData);
-				auto* cc = metaData->GetCompileCache();
-				if (cc && cc->FindCompileModule(moduleObject, pRefData)) {
+				auto* cc = metaData ? metaData->GetCompileCache() : nullptr;
+				// Skip the designer module manager: the compile cache also indexes it
+				// under the configuration module object, and the parent-walk reaches it
+				// here. Walking its props calls the manager's runtime accessors (null
+				// ProcUnit in Designer → access violation), and its globals are already
+				// surfaced via the GetContextVariables() pass above.
+				if (cc && cc->FindCompileModule(moduleObject, pRefData) &&
+					!dynamic_cast<ibValueModuleManager*>(pRefData)) {
 					//adding variables from context
 					for (long i = 0; i < pRefData->GetNProps(); i++) {
 						// Scope-local props (ThisObject / ThisForm /
@@ -543,14 +570,14 @@ void ibPrecompileCode::PrepareLexem(unsigned int line, int line_offset, const in
 	for (size_t i = 0; i < m_listLexem.size(); ++i) {
 
 		const bool atTriggerLine = m_listLexem[i].m_numLine >= line;
-		const bool atEndProgram  = m_listLexem[i].m_lexType == ENDPROGRAM;
+		const bool atEndProgram = m_listLexem[i].m_lexType == ENDPROGRAM;
 
 		if (!atTriggerLine && !atEndProgram)
 			continue;
 
 		if (i > 0) {
 			m_currentLine = m_listLexem[i - 1].m_numLine;
-			m_currentPos  = m_listLexem[i - 1].m_numString;
+			m_currentPos = m_listLexem[i - 1].m_numString;
 #ifdef UTF8_LEXEM_TRANSLATE
 			m_currentUtf8Pos = m_listLexem[i - 1].m_numUtf8String;
 #endif
@@ -761,11 +788,13 @@ bool ibPrecompileCode::Compile()
 	if (m_moduleObject != nullptr) {
 		ibMetaData* metaData = m_moduleObject->GetMetaData();
 		wxASSERT(metaData);
-		ibSession* session = ibSession::Current();
-		ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
+		auto* cc = metaData ? metaData->GetCompileCache() : nullptr;
+		ibValueModuleManager* moduleManager = cc ? cc->GetModuleManager() : nullptr;
 		if (moduleManager != nullptr) {
 			for (auto variable : moduleManager->GetGlobalVariables()) {
-				AddVariable(variable.first, variable.second);
+				if (variable.second == nullptr)
+					continue;
+				AddVariable(variable.first, *variable.second);
 			}
 		}
 	}
@@ -882,7 +911,8 @@ bool ibPrecompileCode::CompileFunction()
 	wxString csFuncName0;
 	if (isLambda) {
 		csFuncName0 = wxString::Format(wxT("<lambda@%d>"), numLine);
-	} else {
+	}
+	else {
 		csFuncName0 = ExpectIdentifier(true);
 	}
 	wxString funcName = stringUtils::MakeUpper(csFuncName0);
@@ -1033,7 +1063,7 @@ bool ibPrecompileCode::CompileDeclaration()
 			// captures the inferred type so subsequent `x.` autocomplete
 			// resolves the chain.
 			inferred = GetExpression();
-			hasInit  = true;
+			hasInit = true;
 		}
 
 		// Variable registration goes AFTER the initialiser parse so the
@@ -1074,9 +1104,9 @@ bool ibPrecompileCode::CompileBlock(bool allowSingleStmt)
 	// lacks that context kind, so we track it locally via parsedOne.
 	// Module-level body callsite passes allowSingleStmt=false — no `{`
 	// is expected there but the body is multi-statement.
-	bool bCompileBlock  = false;
+	bool bCompileBlock = false;
 	bool singleStmtMode = false;
-	bool parsedOne      = false;
+	bool parsedOne = false;
 	if (IsCES()) {
 		if (IsNextDelimeter('{')) {
 			ExpectDelimeter('{');
@@ -1494,7 +1524,7 @@ ibParamValue ibPrecompileCode::CompileLinqExpression()
 		if (realName.IsEmpty()) return;
 		m_activeContext->AddVariable(realName, wxEmptyString, false, false, ibValue());
 		introducedBindings.push_back(realName);
-	};
+		};
 
 	// ---- Outer from-clauses. At least one is required (caller ensured
 	//      KEY_FROM is next), and subsequent `from` chains additional
@@ -1523,122 +1553,124 @@ ibParamValue ibPrecompileCode::CompileLinqExpression()
 
 		switch (lex.m_numData) {
 
-			case KEY_WHERE:
-				ExpectKeyword(KEY_WHERE);
-				GetExpression();
-				break;
+		case KEY_WHERE:
+			ExpectKeyword(KEY_WHERE);
+			GetExpression();
+			break;
 
-			case KEY_VAR: {
-				// let-clause: `var <id> = <expr>` introduces a new
-				// binding (LET in C# LINQ; KEY_LET enum was retired,
-				// KEY_VAR reused per linq.md grammar).
-				ExpectKeyword(KEY_VAR);
-				const wxString letName = ExpectIdentifier(true);
-				if (IsNextDelimeter('=')) {
-					ExpectDelimeter('=');
+		case KEY_VAR: {
+			// let-clause: `var <id> = <expr>` introduces a new
+			// binding (LET in C# LINQ; KEY_LET enum was retired,
+			// KEY_VAR reused per linq.md grammar).
+			ExpectKeyword(KEY_VAR);
+			const wxString letName = ExpectIdentifier(true);
+			if (IsNextDelimeter('=')) {
+				ExpectDelimeter('=');
+				GetExpression();
+			}
+			registerBinding(letName);
+			break;
+		}
+
+		case KEY_SKIP:
+			ExpectKeyword(KEY_SKIP);
+			GetExpression();
+			break;
+
+		case KEY_TAKE:
+			ExpectKeyword(KEY_TAKE);
+			GetExpression();
+			break;
+
+		case KEY_ORDERBY:
+			ExpectKeyword(KEY_ORDERBY);
+			GetExpression();
+			if (IsNextKeyWord(KEY_ASCENDING))  ExpectKeyword(KEY_ASCENDING);
+			if (IsNextKeyWord(KEY_DESCENDING)) ExpectKeyword(KEY_DESCENDING);
+			break;
+
+		case KEY_JOIN: {
+			// `join <id> in <T> on <K1> equals <K2> [into <g>]`
+			ExpectKeyword(KEY_JOIN);
+			const wxString joinName = ExpectIdentifier(true);
+			if (IsNextKeyWord(KEY_IN)) ExpectKeyword(KEY_IN);
+			GetExpression();   // T
+			if (IsNextKeyWord(KEY_ON)) ExpectKeyword(KEY_ON);
+			GetExpression();   // K1
+			if (IsNextKeyWord(KEY_EQUALS)) ExpectKeyword(KEY_EQUALS);
+			GetExpression();   // K2
+			registerBinding(joinName);
+			if (IsNextKeyWord(KEY_INTO)) {
+				ExpectKeyword(KEY_INTO);
+				const wxString groupName = ExpectIdentifier(true);
+				registerBinding(groupName);
+			}
+			break;
+		}
+
+		case KEY_GROUP: {
+			// `group <X> by <K> [into <g>]`. Terminal when no `into`.
+			ExpectKeyword(KEY_GROUP);
+			GetExpression();   // X
+			if (IsNextKeyWord(KEY_BY)) ExpectKeyword(KEY_BY);
+			GetExpression();   // K
+			if (IsNextKeyWord(KEY_INTO)) {
+				ExpectKeyword(KEY_INTO);
+				const wxString groupName = ExpectIdentifier(true);
+				registerBinding(groupName);
+				// continue parsing the tail — `into g` is non-terminal
+			}
+			else {
+				sawSelectOrGroupTerminal = true;   // terminal group
+			}
+			break;
+		}
+
+		case KEY_SELECT: {
+			ExpectKeyword(KEY_SELECT);
+			if (IsNextDelimeter('{')) {
+				// Anonymous structure: `{ name = expr, name = expr }`
+				ExpectDelimeter('{');
+				while (m_cursor + 1 < (int)m_listLexem.size()
+					&& !IsNextDelimeter('}')) {
+					ExpectIdentifier(true);
+					if (IsNextDelimeter('=')) ExpectDelimeter('=');
 					GetExpression();
+					if (IsNextDelimeter(',')) ExpectDelimeter(',');
+					else break;
 				}
-				registerBinding(letName);
-				break;
+				if (IsNextDelimeter('}')) ExpectDelimeter('}');
 			}
-
-			case KEY_SKIP:
-				ExpectKeyword(KEY_SKIP);
+			else {
 				GetExpression();
-				break;
+			}
+			sawSelectOrGroupTerminal = true;
+			break;
+		}
 
-			case KEY_TAKE:
-				ExpectKeyword(KEY_TAKE);
+		case KEY_DISTINCT:
+			// Modifier on select — consume but don't terminate (in case
+			// distinct appears as the very last keyword without an
+			// explicit select).
+			ExpectKeyword(KEY_DISTINCT);
+			break;
+
+		case KEY_FROM: {
+			// Additional from-clause inside the tail (rare — usually
+			// at the start, but grammar allows it after where/let).
+			ExpectKeyword(KEY_FROM);
+			const wxString bindingName = ExpectIdentifier(true);
+			if (IsNextKeyWord(KEY_IN)) {
+				ExpectKeyword(KEY_IN);
 				GetExpression();
-				break;
-
-			case KEY_ORDERBY:
-				ExpectKeyword(KEY_ORDERBY);
-				GetExpression();
-				if (IsNextKeyWord(KEY_ASCENDING))  ExpectKeyword(KEY_ASCENDING);
-				if (IsNextKeyWord(KEY_DESCENDING)) ExpectKeyword(KEY_DESCENDING);
-				break;
-
-			case KEY_JOIN: {
-				// `join <id> in <T> on <K1> equals <K2> [into <g>]`
-				ExpectKeyword(KEY_JOIN);
-				const wxString joinName = ExpectIdentifier(true);
-				if (IsNextKeyWord(KEY_IN)) ExpectKeyword(KEY_IN);
-				GetExpression();   // T
-				if (IsNextKeyWord(KEY_ON)) ExpectKeyword(KEY_ON);
-				GetExpression();   // K1
-				if (IsNextKeyWord(KEY_EQUALS)) ExpectKeyword(KEY_EQUALS);
-				GetExpression();   // K2
-				registerBinding(joinName);
-				if (IsNextKeyWord(KEY_INTO)) {
-					ExpectKeyword(KEY_INTO);
-					const wxString groupName = ExpectIdentifier(true);
-					registerBinding(groupName);
-				}
-				break;
 			}
+			registerBinding(bindingName);
+			break;
+		}
 
-			case KEY_GROUP: {
-				// `group <X> by <K> [into <g>]`. Terminal when no `into`.
-				ExpectKeyword(KEY_GROUP);
-				GetExpression();   // X
-				if (IsNextKeyWord(KEY_BY)) ExpectKeyword(KEY_BY);
-				GetExpression();   // K
-				if (IsNextKeyWord(KEY_INTO)) {
-					ExpectKeyword(KEY_INTO);
-					const wxString groupName = ExpectIdentifier(true);
-					registerBinding(groupName);
-					// continue parsing the tail — `into g` is non-terminal
-				} else {
-					sawSelectOrGroupTerminal = true;   // terminal group
-				}
-				break;
-			}
-
-			case KEY_SELECT: {
-				ExpectKeyword(KEY_SELECT);
-				if (IsNextDelimeter('{')) {
-					// Anonymous structure: `{ name = expr, name = expr }`
-					ExpectDelimeter('{');
-					while (m_cursor + 1 < (int)m_listLexem.size()
-						&& !IsNextDelimeter('}')) {
-						ExpectIdentifier(true);
-						if (IsNextDelimeter('=')) ExpectDelimeter('=');
-						GetExpression();
-						if (IsNextDelimeter(',')) ExpectDelimeter(',');
-						else break;
-					}
-					if (IsNextDelimeter('}')) ExpectDelimeter('}');
-				} else {
-					GetExpression();
-				}
-				sawSelectOrGroupTerminal = true;
-				break;
-			}
-
-			case KEY_DISTINCT:
-				// Modifier on select — consume but don't terminate (in case
-				// distinct appears as the very last keyword without an
-				// explicit select).
-				ExpectKeyword(KEY_DISTINCT);
-				break;
-
-			case KEY_FROM: {
-				// Additional from-clause inside the tail (rare — usually
-				// at the start, but grammar allows it after where/let).
-				ExpectKeyword(KEY_FROM);
-				const wxString bindingName = ExpectIdentifier(true);
-				if (IsNextKeyWord(KEY_IN)) {
-					ExpectKeyword(KEY_IN);
-					GetExpression();
-				}
-				registerBinding(bindingName);
-				break;
-			}
-
-			default:
-				// Unknown keyword — bail to host parser.
-				goto done;
+		default:
+			// Unknown keyword — bail to host parser.
+			goto done;
 		}
 	}
 
@@ -1649,7 +1681,7 @@ done:
 	const int nEndPos = (m_cursor < (int)m_listLexem.size())
 		? m_listLexem[m_cursor].m_numString
 		: 0;
-	const bool caretInsideBlock = (nStartPos < (int)m_caretPos && nEndPos > (int)m_caretPos);
+	const bool caretInsideBlock = (nStartPos < (int)m_caretPos && nEndPos >(int)m_caretPos);
 	if (!caretInsideBlock) {
 		for (const wxString& name : introducedBindings)
 			m_activeContext->RemoveVariable(name);
@@ -1999,10 +2031,10 @@ ibParamValue ibPrecompileCode::GetExpression(int priority)
 			ExpectDelimeter(')');
 		}
 
-		ibValue** pRefLocVars = listParam.size() ? 
+		ibValue** pRefLocVars = listParam.size() ?
 			new ibValue * [listParam.size()] : nullptr;
-		
-		for (unsigned int i = 0; i < listParam.size(); i++) 
+
+		for (unsigned int i = 0; i < listParam.size(); i++)
 			pRefLocVars[i] = &listParam[i].m_paramObject;
 
 		try {
@@ -2013,9 +2045,9 @@ ibParamValue ibPrecompileCode::GetExpression(int priority)
 		catch (...) {
 		}
 
-		if (pRefLocVars != nullptr) 
+		if (pRefLocVars != nullptr)
 			wxDELETEA(pRefLocVars);
-	
+
 		return variable;
 	}
 	else if (lex.m_lexType == DELIMITER && lex.m_numData == '(')
@@ -2246,7 +2278,7 @@ ibParamValue ibPrecompileCode::GetCurrentIdentifier(int& isSet)
 
 			const long lMethodNum = valContext.FindMethod(name);
 			if (lMethodNum != wxNOT_FOUND && valContext.HasRetVal(lMethodNum)) {
-				
+
 				size_t paramCount = valContext.GetNParams(lMethodNum) > 0 ?
 					valContext.GetNParams(lMethodNum) : 1;
 				paramCount = listParam.size() > 0 ? listParam.size() : paramCount;
@@ -2264,12 +2296,12 @@ ibParamValue ibPrecompileCode::GetCurrentIdentifier(int& isSet)
 				}
 				catch (...) {
 				}
-				
+
 				SetVariable(variable.m_paramName, variable.m_paramObject);
 
 				for (unsigned int i = listParam.size(); i < paramCount; i++)
 					wxDELETE(pRefLocVars[i]);
-				
+
 				wxDELETEA(pRefLocVars);
 			}
 		}
@@ -2418,7 +2450,7 @@ loopLabel:
 				for (unsigned int i = 0; i < paramCount; i++) {
 					if (i < listParam.size())
 						pRefLocVars[i] = &listParam[i].m_paramObject;
-					else 
+					else
 						pRefLocVars[i] = new ibValue;
 				}
 
@@ -2484,7 +2516,7 @@ loopLabel:
 }//GetCurrentIdentifier
 
 /**
- *     
+ *
  */
 ibParamValue ibPrecompileCode::GetCallFunction(const wxString& name)
 {

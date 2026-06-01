@@ -59,7 +59,7 @@ private:
 	ibVisualEditorNotebook::ibVisualEditor* m_visualEditor;
 
 	ibValueFrame* m_parent = nullptr;
-	ibValueFrame* m_object = nullptr;
+	ibValuePtr<ibValueFrame> m_object; // owns the in-flight control (RAII +1/-1)
 	int m_pos;
 	ibValueFrame* m_oldSelected;
 	bool m_firstCreated;
@@ -91,7 +91,7 @@ private:
 	ibVisualEditorNotebook::ibVisualEditor* m_visualEditor;
 
 	ibValueFrame* m_parent = nullptr;
-	ibValueFrame* m_object = nullptr;
+	ibValuePtr<ibValueFrame> m_object; // owns the in-flight control (RAII +1/-1)
 	int m_oldPos;
 	ibValueFrame* m_oldSelected = nullptr;
 };
@@ -190,7 +190,7 @@ private:
 
 	// necesario para consultar/modificar el objeto "clipboard"
 	ibValueFrame* m_parent = nullptr;
-	ibValueFrame* m_object = nullptr;
+	ibValuePtr<ibValueFrame> m_object; // owns the in-flight control (RAII +1/-1)
 	int m_oldPos;
 	ibValueFrame* m_oldSelected = nullptr;
 
@@ -219,6 +219,10 @@ void ibVisualEditorExpandObjectCmd::DoRestore()
 ibVisualEditorInsertObjectCmd::ibVisualEditorInsertObjectCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibValueFrame* object, ibValueFrame* parent, int pos, bool firstCreated) : m_visualEditor(visualEditor),
 m_parent(parent), m_object(object), m_pos(pos), m_firstCreated(firstCreated)
 {
+	// m_object is an owning ibValuePtr: its member-init from `object` takes the
+	// reference that keeps the control alive while it lives detached in the undo
+	// stack (the RemoveChild below drops the parent's owning handle). The handle
+	// is released automatically when the command is destroyed.
 	m_oldSelected = visualEditor->GetSelectedObject();
 
 	if (m_parent) {
@@ -323,6 +327,9 @@ ibVisualEditorRemoveObjectCmd::ibVisualEditorRemoveObjectCmd(ibVisualEditorNoteb
 	m_parent = object->GetParent();
 	m_oldPos = m_parent->GetChildPosition(object);
 	m_oldSelected = visualEditor->GetSelectedObject();
+	// m_object is an owning ibValuePtr: assigning `object` takes the reference that
+	// keeps the control alive while it lives detached in the undo stack; released
+	// automatically when the command is destroyed.
 }
 
 ibVisualEditorRemoveObjectCmd::~ibVisualEditorRemoveObjectCmd()
@@ -575,6 +582,9 @@ ibVisualEditorCutObjectCmd::ibVisualEditorCutObjectCmd(ibVisualEditorNotebook::i
 	m_parent = object->GetParent();
 	m_oldPos = m_parent->GetChildPosition(object);
 	m_oldSelected = visualEditor->GetSelectedObject();
+	// m_object is an owning ibValuePtr: assigning `object` takes the reference that
+	// keeps the control alive while it lives detached (clipboard / undo stack);
+	// released automatically when the command is destroyed.
 }
 
 ibVisualEditorCutObjectCmd::~ibVisualEditorCutObjectCmd()
@@ -800,6 +810,12 @@ bool ibVisualEditorNotebook::ibVisualEditor::PasteObject(ibValueFrame* dstObject
 		if (clipboard == nullptr)
 			return false;
 
+		// Anchor the pasted subtree root across the detach/reparent dance below:
+		// under owning children a RemoveChild on a sole-owned node would destroy
+		// it. The `clipboard` variable is reassigned to sub/ancestor nodes later,
+		// but they all stay alive transitively through this root anchor.
+		ibValuePtr<ibValueFrame> clipboardKeep(clipboard);
+
 		// Remove parent/child relationship from clipboard object
 		ibValueFrame* clipParent = clipboard->GetParent();
 		if (clipParent) {
@@ -820,9 +836,11 @@ bool ibVisualEditorNotebook::ibVisualEditor::PasteObject(ibValueFrame* dstObject
 		}
 
 		ibValueFrame* obj = nullptr;
+		ibValuePtr<ibValueFrame> objKeep; // anchor obj across its detach below (owning children)
 		while (obj == nullptr) {
 			obj = m_valueForm->CreateObject(_STDSTR(clipboard->GetClassName()), parentObject);
 			if (obj != nullptr) {
+				objKeep = obj; // own before RemoveChild drops parentObject's handle
 				if (parentObject) {
 					obj->SetParent(nullptr);
 					parentObject->RemoveChild(obj);

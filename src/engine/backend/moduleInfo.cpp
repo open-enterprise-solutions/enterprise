@@ -63,29 +63,68 @@ void ibRuntimeModuleDataObject::InitializeRuntime()
 	}
 }
 
-void ibRuntimeModuleDataObject::BindContextVariable(const wxString& name, ibValue* value)
+ibCompileModule* ibRuntimeModuleDataObject::EnsureCompileModule()
 {
-	// Lazy-create m_compileModule on first BindContextVariable —
-	// subclass provides its meta-object via GetMetaObject() override.
+	// Lazy-create m_compileModule on first Bind… — subclass provides its
+	// meta-object via GetMetaForCompile() override.
 	if (m_compileModule == nullptr) {
 		if (const ibValueMetaObjectModuleBase* meta = GetMetaForCompile()) {
 			m_compileModule = new ibCompileModule(meta);
-			// Propagate parent's compile scope chain — SetParent can
-			// be called before BindContextVariable; we pick up the
-			// parent compile on creation.
+			// Propagate parent's compile scope chain — SetParent can be
+			// called before the first Bind…; pick up parent compile here.
 			if (m_parent != nullptr) {
 				if (ibCompileModule* parentCompile = m_parent->GetCompileModule())
 					m_compileModule->SetParent(parentCompile);
 			}
 		}
 	}
-	if (m_compileModule != nullptr)
-		m_compileModule->AddContextVariable(name, value);
-	// If the runtime binder is already built (post-Compile), forward
-	// the value into its slot table too — keeps compile-time staging
-	// and runtime binder in sync without subclass plumbing.
+	return m_compileModule;
+}
+
+// Named context variable — name VISIBLE in the editor (ThisObject / ThisForm).
+void ibRuntimeModuleDataObject::BindContextVariable(const wxString& name, ibValue* value)
+{
+	if (ibCompileModule* cm = EnsureCompileModule())
+		cm->AddContextVariable(name, value, /*scopeContext=*/false);
+	// If the runtime binder is already built (post-Compile), forward the
+	// value into its slot table too — keeps compile-time staging and runtime
+	// binder in sync without subclass plumbing.
 	if (m_binder != nullptr)
 		m_binder->SetVar(name, value);
+}
+
+// Transparent scope container — name NOT an identifier, members surface into
+// scope (Manager / EnumManager / SystemManager).
+void ibRuntimeModuleDataObject::BindScopeVariable(const wxString& name, ibValue* value)
+{
+	if (ibCompileModule* cm = EnsureCompileModule())
+		cm->AddContextVariable(name, value, /*scopeContext=*/true);
+	// Binder is name→value only; the scope flag is an editor-display concern
+	// with no runtime slot, so the runtime binding is identical to context.
+	if (m_binder != nullptr)
+		m_binder->SetVar(name, value);
+}
+
+// Export variable — name VISIBLE, stored in the extern map (global constants,
+// module-valued names).
+void ibRuntimeModuleDataObject::BindExportVariable(const wxString& name, ibValue* value)
+{
+	if (ibCompileModule* cm = EnsureCompileModule())
+		cm->AddVariable(name, value);
+	if (m_binder != nullptr)
+		m_binder->SetVar(name, value);
+}
+
+// Undo any Bind… for `name`. Does NOT lazy-create the compile module — there's
+// nothing to remove from a module that was never wired.
+void ibRuntimeModuleDataObject::UnbindVariable(const wxString& name)
+{
+	if (m_compileModule != nullptr)
+		m_compileModule->RemoveVariable(name);
+	// Binder has no slot-erase; nulling the slot unbinds the live value while
+	// leaving the bytecode-declared slot in place (re-bind via SetVar later).
+	if (m_binder != nullptr)
+		m_binder->SetVar(name, nullptr);
 }
 
 void ibRuntimeModuleDataObject::Run(bool delta)
@@ -203,8 +242,8 @@ bool ibRuntimeModuleDataObject::Compile()
 		m_binder->SetVar(kv.first, kv.second);
 	}
 	for (auto& kv : m_compileModule->m_listContextValue) {
-		if (kv.second) kv.second->PrepareNames();
-		m_binder->SetVar(kv.first, kv.second);
+		if (kv.second.m_value) kv.second.m_value->PrepareNames();
+		m_binder->SetVar(kv.first, kv.second.m_value);
 	}
 	return true;
 }

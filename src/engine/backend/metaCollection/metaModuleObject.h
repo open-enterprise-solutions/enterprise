@@ -36,13 +36,13 @@ public:
 
 	virtual ~ibPropertyInnerModule() {}
 
-	// get meta object 
+	// get meta object
 	T* GetMetaObject() const { return m_metaObject; }
 
-	// get meta object via pointer 
+	// get meta object via pointer
 	T* operator->() { return GetMetaObject(); }
 
-	//get property for grid 
+	//get property for grid
 	virtual wxObject* GetPGProperty() const {
 		if (ibPropertyModule::ms_propertyModule != nullptr)
 			return ibPropertyModule::ms_propertyModule(m_metaObject, m_propLabel, m_propName, m_propValue);

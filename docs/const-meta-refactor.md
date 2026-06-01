@@ -132,7 +132,7 @@ That's the floor reachable without going into `ibMetaData` Find* (see below).
 
 The XML/JSON configuration export/import code (added by another contributor)
 held 10 `const_cast`s on `GetObjectModule`/`GetManagerModule` returns. It
-didn't go through the canonical `Save/LoadDataFromBuffer` path, was not
+didn't go through the canonical `Dump/RestoreDataFromBuffer` path, was not
 covered by the binary serialization tests, and required cascading
 const-cast at every `SetModuleText` call site.
 

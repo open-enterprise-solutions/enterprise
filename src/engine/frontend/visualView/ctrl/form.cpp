@@ -52,11 +52,10 @@ ibValueForm::~ibValueForm()
 		timer->Unbind(wxEVT_TIMER, &ibValueForm::OnIdleHandler, this);
 	}
 
-	for (unsigned int idx = GetChildCount(); idx > 0; idx--) {
-		ibValueFrame* controlChild = GetChild(idx - 1);
-		ClearRecursive(controlChild);
-		if (controlChild != nullptr) controlChild->DecrRef();
-	}
+	// Child controls are released by the ibPropertyObjectHelper base cascade (and the
+	// m_formCollectionControl member). Control teardown no longer touches form state —
+	// SetOwnerForm just clears m_formOwner now (no m_listControl set to erase from), so
+	// the post-member-destruction order is safe; no explicit teardown needed here.
 
 	if (m_controlOwner != nullptr) m_controlOwner->ControlDecrRef();
 	if (m_sourceObject != nullptr) m_sourceObject->SourceDecrRef();
@@ -221,7 +220,7 @@ void ibValueForm::PrepareNames() const
 
 	ExportNamesToHelper(m_methodHelper, eProcUnit);
 
-	for (auto& control : m_listControl) {
+	for (auto control : GetControlList()) {
 		if (!control->HasValueInControl())
 			continue;
 
@@ -261,12 +260,13 @@ bool ibValueForm::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 	}
 	else if (lPropAlias == eAttribute) {
 		unsigned int id = m_methodHelper->GetPropData(lPropNum);
-		auto it = std::find_if(m_listControl.begin(), m_listControl.end(),
+		const std::vector<ibValueControl*> list = GetControlList();
+		auto it = std::find_if(list.begin(), list.end(),
 			[id](const ibValueFrame* control) {
 				return id == control->GetControlID();
 			}
 		);
-		if (it != m_listControl.end())
+		if (it != list.end())
 			return (*it)->SetControlValue(varPropVal);
 	}
 	return false;
@@ -316,12 +316,13 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	}
 	else if (lPropAlias == eAttribute) {
 		unsigned int id = m_methodHelper->GetPropData(lPropNum);
-		auto it = std::find_if(m_listControl.begin(), m_listControl.end(),
+		const std::vector<ibValueControl*> list = GetControlList();
+		auto it = std::find_if(list.begin(), list.end(),
 			[id](const ibValueFrame* control) {
 				return id == control->GetControlID();
 			}
 		);
-		if (it != m_listControl.end())
+		if (it != list.end())
 			return (*it)->GetControlValue(pvarPropVal);
 	}
 

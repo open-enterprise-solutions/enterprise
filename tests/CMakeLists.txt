@@ -37,11 +37,13 @@ add_executable(oes_tests
     test_runtime.cpp
     test_connectionPool.cpp
     test_session.cpp
+    test_module_manager_split.cpp
     test_pagingRamTable.cpp
     test_blobCompression.cpp
     test_firebirdLease.cpp
     test_logger.cpp
     test_dbTaxonomy.cpp
+    test_metadataSerialize.cpp
 )
 
 target_link_libraries(oes_tests

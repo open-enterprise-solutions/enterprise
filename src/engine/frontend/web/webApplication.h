@@ -33,7 +33,7 @@
 #include "backend/compiler/value.h"
 #include "backend/value_ptr.h"
 
-class ibValueModuleManagerConfiguration;
+class ibValueModuleManagerRuntimeConfiguration;
 class ibWebFrame;
 class ibSession;
 class ibWebClientSession;
@@ -56,7 +56,7 @@ public:
 	// webApplication.cpp (with moduleManager.h already included there)
 	// lets TUs that only need the class identity (formObject.cpp,
 	// webTimer.cpp) stop at a forward decl.
-	ibValueModuleManagerConfiguration* GetManagerModule() const;
+	ibValueModuleManagerRuntimeConfiguration* GetManagerModule() const;
 	ibWebFrame*                        GetFrame()         const { return m_frame; }
 
 	// Session context for this application. Set by the owning

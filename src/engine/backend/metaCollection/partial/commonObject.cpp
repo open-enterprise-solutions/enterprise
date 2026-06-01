@@ -1280,13 +1280,14 @@ void ibValueManagerDataObject::PrepareNames() const
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
 	wxASSERT(metaData);
 
-	ibSession* session = ibSession::Current();
-	const ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
-	wxASSERT(moduleManager);
-
 	m_methodHelper->ClearHelper();
 
-	ibValue* pRefData = moduleManager->FindCommonModule(GetManagerModule());
+	// Manager module's compiled unit — from the designer manager in the Designer,
+	// from the session root mm at runtime. FindCommonModule is virtual on the base.
+	ibValue* pRefData = nullptr;
+	if (auto* moduleManager = ibSession::EditModuleManagerFor(metaData))
+		pRefData = moduleManager->FindCommonModule(GetManagerModule());
+
 	if (pRefData != nullptr) {
 		// add methods from context
 		for (long idx = 0; idx < pRefData->GetNMethods(); idx++) {
@@ -1303,12 +1304,9 @@ bool ibValueManagerDataObject::CallAsProc(const long lMethodNum, ibValue** paPar
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
 	wxASSERT(metaData);
 
-	ibSession* session = ibSession::Current();
-	const ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
-	wxASSERT(moduleManager);
-
-	ibValue* pRefData =
-		moduleManager->FindCommonModule(GetManagerModule());
+	ibValue* pRefData = nullptr;
+	if (auto* moduleManager = ibSession::EditModuleManagerFor(metaData))
+		pRefData = moduleManager->FindCommonModule(GetManagerModule());
 
 	if (pRefData != nullptr)
 		return pRefData->CallAsProc(lMethodNum, paParams, lSizeArray);
@@ -1324,12 +1322,9 @@ bool ibValueManagerDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRe
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
 	wxASSERT(metaData);
 
-	ibSession* session = ibSession::Current();
-	const ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
-	wxASSERT(moduleManager);
-
-	ibValue* pRefData =
-		moduleManager->FindCommonModule(GetManagerModule());
+	ibValue* pRefData = nullptr;
+	if (auto* moduleManager = ibSession::EditModuleManagerFor(metaData))
+		pRefData = moduleManager->FindCommonModule(GetManagerModule());
 
 	if (pRefData != nullptr)
 		return pRefData->CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
@@ -1784,8 +1779,7 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 			return false;
 		}
 
-		ibSession* session = ibSession::Current();
-		const ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
+		ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
 		wxASSERT(moduleManager);
 
 		// Imperative: parent first, then lazy compile + runtime slot
@@ -1823,8 +1817,7 @@ bool ibValueRecordDataObjectExt::InitializeObject(ibValueRecordDataObjectExt* so
 	//}
 
 	if (!m_metaObject->IsExternalCreate()) {
-		ibSession* session = ibSession::Current();
-		const ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
+		ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
 		wxASSERT(moduleManager);
 
 		ibRuntimeModuleDataObject::SetParent(moduleManager);
@@ -1895,8 +1888,9 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 		return false;
 	}
 
-	ibSession* session = ibSession::Current();
-	ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
+	// Parent the object's compile module to the module manager whose context it
+	// should see — designer manager in the Designer, session root mm at runtime.
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
 	wxASSERT(moduleManager);
 
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
@@ -1951,8 +1945,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 
 bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* source, bool generate)
 {
-	ibSession* session = ibSession::Current();
-	const ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
 	wxASSERT(moduleManager);
 
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
@@ -1982,16 +1975,22 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 		// to the same value.
 		ibRuntimeModuleDataObject::SetParent(moduleManager);
 		Execute();
-		if (m_newObject && source != nullptr && !generate) {
-			ExecAsProc(wxT("OnCopy"), source->GetValue());
-		}
-		else if (m_newObject && source == nullptr) {
-			succes = Filling();
-		}
-		else if (generate) {
-			ibValuePtr<ibValueReferenceDataObject> refPtr(
-				source != nullptr ? source->GetReference() : nullptr);
-			succes = Filling(refPtr);
+		// OnCopy / Filling run user script with side effects. Skip them under a
+		// debugger watch/eval, the same way BeginWriteScope/BeginDeleteScope skip
+		// eval — evaluating a watch must not fire user handlers. (DesignerMode is
+		// already excluded by the enclosing guard.)
+		if (!ibBackendException::IsEvalMode()) {
+			if (m_newObject && source != nullptr && !generate) {
+				ExecAsProc(wxT("OnCopy"), source->GetValue());
+			}
+			else if (m_newObject && source == nullptr) {
+				succes = Filling();
+			}
+			else if (generate) {
+				ibValuePtr<ibValueReferenceDataObject> refPtr(
+					source != nullptr ? source->GetReference() : nullptr);
+				succes = Filling(refPtr);
+			}
 		}
 	}
 
@@ -3117,8 +3116,7 @@ bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* sour
 		return false;
 	}
 
-	ibSession* session = ibSession::Current();
-	const ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
 	wxASSERT(moduleManager);
 
 	ibRuntimeModuleDataObject::SetParent(moduleManager);

@@ -301,20 +301,19 @@ void ibApplicationData::WireSessionEvents()
 		if ((m_loadMetadataFlags & _app_start_create_debug_server_flag) != 0)
 			registry->EnableDebugForSession(s);
 		if (activeMetaData != nullptr) {
-			// Root mm is already allocated by ibSession::EnsureRoot — the
-			// registry calls it between OnFirstConnect (metadataCreate) and
-			// this listener. Here we drive cross-process metadata bring-up
-			// (RunDatabase once per process — fires OnBefore/After
-			// RunMetaObject which read session->mm and populate
-			// ibCompileValueCache + ibModuleStorage) and per-session
-			// compile + runtime start.
+			// Root mm is allocated by ibSession::EnsureRoot (called by the
+			// registry between OnFirstConnect and this listener) for runtime
+			// sessions; the Designer has no root mm (it uses the lightweight
+			// designer manager in the compile cache). Here we drive cross-process
+			// metadata bring-up (RunDatabase once per process — fires OnBefore/
+			// After RunMetaObject which populate ibCompileValueCache +
+			// ibModuleStorage) and per-session compile + runtime start.
 			if (!m_run_metadata) {
 				m_run_metadata = activeMetaData->RunDatabase();
 			}
-			// CompileRoot folds compile + AttachRuntime + lambda
-			// runtime wire-up. AttachRuntime self-gates by session
-			// kind (Enterprise / WebClient / Service execute; others
-			// no-op), so no explicit runMode check needed here.
+			// CompileRoot folds compile + AttachRuntime + lambda runtime wire-up.
+			// No-op when there's no root mm (Designer). AttachRuntime self-gates by
+			// session kind, so no explicit runMode check needed here.
 			s->CompileRoot();
 		}
 	});
@@ -1060,10 +1059,12 @@ bool ibApplicationData::LoadDatabase(const wxString& strFullPath)
 				fos.CopyTo(buffer.GetAppendBuf(fos.GetSize()), fos.GetSize());
 				buffer.SetDataLen(fos.GetSize());
 
+				// LoadConfigFromBuffer already RUNs the loaded tree (the
+				// ibMetaDataConfiguration override) — no separate RunDatabase
+				// here, that would be a double-run (asserts !m_configOpened).
 				if (!activeMetaData->LoadConfigFromBuffer(buffer))
 					return false;
 
-				activeMetaData->RunDatabase();
 				activeMetaData->SaveDatabase(saveConfigFlag);
 			}
 		}
@@ -1105,7 +1106,7 @@ bool ibApplicationData::LoadDatabase(const wxString& strFullPath)
 				fos.CopyTo(buffer.GetAppendBuf(fos.GetSize()), fos.GetSize());
 				buffer.SetDataLen(fos.GetSize());
 
-				if (!activeMetaData->LoadDataFromBuffer(buffer))
+				if (!activeMetaData->RestoreDataFromBuffer(buffer))
 					return false;
 			}
 		}
@@ -1151,7 +1152,7 @@ bool ibApplicationData::SaveDatabase(const wxString& strFullPath)
 	if (zip.PutNextEntry(wxT("data"))) {
 		//save data
 		wxMemoryBuffer bufferData;
-		if (!activeMetaData->SaveDataToBuffer(bufferData))
+		if (!activeMetaData->DumpDataToBuffer(bufferData))
 			return false;
 		// Wrap the content in an input stream to write it easily
 		wxMemoryInputStream contentStream(bufferData.GetData(), bufferData.GetDataLen());

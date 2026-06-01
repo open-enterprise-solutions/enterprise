@@ -12,8 +12,6 @@
 
 wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObject, ibValue);
 
-#define metaBlock 0x200222
-#define helpBlock 0x200224
 
 //*****************************************************************************************
 //*                                  MetaObject                                           *
@@ -82,139 +80,10 @@ m_methodHelper(new ibValueMethodHelper()), m_metaData(nullptr), m_metaFlags(meta
 
 ibValueMetaObject::~ibValueMetaObject()
 {
+	// Children are released by the ibPropertyObjectHelper base destructor (owning
+	// handles cascade down the subtree). The delete event (OnDeleteMetaObject) is
+	// a separate, preceding step. Here we only drop this node's own helpers.
 	wxDELETE(m_methodHelper);
-}
-
-bool ibValueMetaObject::LoadMeta(ibReaderMemory& dataReader)
-{
-	//Save meta version 
-	(void)dataReader.r_u32(); //reserved 
-
-	//Load unique guid 
-	wxString strGuid;
-	dataReader.r_stringZ(strGuid);
-	m_metaGuid = strGuid;
-
-	//Load meta id
-	m_metaId = dataReader.r_u32();
-
-	//Load standart fields
-	m_propertyName->LoadData(dataReader);
-	m_propertySynonym->LoadData(dataReader);
-	m_propertyComment->LoadData(dataReader);
-
-	//special info deleted 
-	if (dataReader.r_u8()) {
-		MarkAsDeleted();
-	}
-
-	//load interface 
-	if (!LoadInterface(dataReader))
-		return false;
-
-	//load roles 
-	if (!LoadRole(dataReader))
-		return false;
-
-	//load meta 
-	wxMemoryBuffer meta_buffer;
-	if (!dataReader.r_chunk(metaBlock, meta_buffer))
-		return false;
-
-	ibReaderMemory metaObjectReader(meta_buffer);
-	metaObjectReader.r_u32(); //reserved flags
-	if (!LoadData(metaObjectReader))
-		return false;
-
-	//load help 
-	wxMemoryBuffer help_buffer;
-	if (!dataReader.r_chunk(helpBlock, help_buffer))
-		return false;
-	
-	ibReaderMemory helpReader(help_buffer);
-	m_strHelpContent = helpReader.r_stringZ();
-	return true;
-}
-
-bool ibValueMetaObject::SaveMeta(ibWriterMemory& dataWritter)
-{
-	//save meta version 
-	dataWritter.w_u32(version_oes_last); //reserved 
-
-	//save unique guid
-	dataWritter.w_stringZ(m_metaGuid);
-
-	//save meta id 
-	dataWritter.w_u32(m_metaId);
-
-	//save standart fields
-	m_propertyName->SaveData(dataWritter);
-	m_propertySynonym->SaveData(dataWritter);
-	m_propertyComment->SaveData(dataWritter);
-
-	//special info deleted
-	dataWritter.w_u8(IsDeleted());
-
-	//save interface 
-	if (!SaveInterface(dataWritter))
-		return false;
-
-	//save roles 
-	if (!SaveRole(dataWritter))
-		return false;
-
-	//save meta 
-	ibWriterMemory metaObjectWritter;
-	metaObjectWritter.w_u32(0); //reserved flags
-	if (!SaveData(metaObjectWritter))
-		return false;
-
-	dataWritter.w_chunk(metaBlock, metaObjectWritter.buffer());
-
-	//save help 
-	ibWriterMemory helpWritter;
-	helpWritter.w_stringZ(m_strHelpContent);
-	dataWritter.w_chunk(helpBlock, helpWritter.buffer());
-	return true;
-}
-
-bool ibValueMetaObject::LoadMetaObject(ibMetaData* metaData, ibReaderMemory& dataReader)
-{
-	m_metaData = metaData;
-
-	if (!LoadMeta(dataReader))
-		return false;
-
-	if (!OnLoadMetaObject(metaData))
-		return false;
-
-	return true;
-}
-
-bool ibValueMetaObject::SaveMetaObject(ibMetaData* metaData, ibWriterMemory& dataWritter, int flags)
-{
-	bool saveToFile = (flags & saveToFileFlag) != 0;
-
-	if (m_metaData != metaData)
-		return false;
-
-	if (!SaveMeta(dataWritter))
-		return false;
-
-	if (!saveToFile &&
-		!OnSaveMetaObject(flags)) {
-		return false;
-	}
-
-	return true;
-}
-
-bool ibValueMetaObject::DeleteMetaObject(ibMetaData* metaData)
-{
-	if (m_metaData != metaData)
-		return false;
-
-	return DeleteData();
 }
 
 bool ibValueMetaObject::CreateMetaTable(ibMetaDataConfiguration* srcMetaData, int flags)
@@ -311,13 +180,16 @@ bool ibValueMetaObject::Init(ibValue** paParams, const long lSizeArray)
 
 	ibValueMetaObject* parent = nullptr;
 	if (paParams[0]->ConvertToValue(parent)) {
-		const ibClassID& clsid = GetClassType();
-		if (parent != nullptr) {
-			SetParent(parent);
-			parent->AddChild(this);
-		}
-		return parent != nullptr ?
-			parent->FilterChild(clsid) : true;
+		if (parent == nullptr)
+			return true;
+		// Check acceptance BEFORE attaching: with owning children a rejected node
+		// would already sit in the parent's vector when CreateObjectRef wxDELETEs
+		// it on Init failure → double free. Reject first, attach only if accepted.
+		if (!parent->FilterChild(GetClassType()))
+			return false;
+		SetParent(parent);
+		parent->AddChild(this);
+		return true;
 	}
 
 	return false;
@@ -427,7 +299,7 @@ bool ibValueMetaObject::CopyObject(ibWriterMemory& writer) const
 
 			ibWriterMemory writerChildMemory;
 
-			for (const auto object : copyObject->m_children) {
+			for (ibValueMetaObject* object : copyObject->m_children) {
 
 				if (!copyObject->FilterChild(object->GetClassType()))
 					continue;

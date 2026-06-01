@@ -1103,6 +1103,9 @@
     <ClCompile Include="metaCollection\metaObject.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\metaObjectSerialize.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\metaObjectMetadata.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>

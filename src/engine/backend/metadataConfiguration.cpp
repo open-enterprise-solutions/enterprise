@@ -18,6 +18,9 @@
 // subsystems (sessionRegistry / lockManager / ...).
 
 #include <fstream>
+#include <filesystem>
+
+#include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
 
 bool ibMetaDataConfigurationBase::LoadConfigFromFile(const wxString& strFileName)
 {
@@ -52,10 +55,41 @@ bool ibMetaDataConfigurationBase::SaveConfigToFile(const wxString& strFileName)
 	if (!SaveConfigToBuffer(buffer))
 		return false;
 
-	std::ofstream datafile;
-	datafile.open(strFileName.ToStdWstring(), std::ios::binary);
-	datafile.write(reinterpret_cast <char*> (buffer.GetData()), buffer.GetBufSize());
-	datafile.close();
+	// Atomic export (Step 5 single-commit model): build the full blob in a
+	// buffer, write it to a sibling temp file, then rename over the target. The
+	// rename is the one commit point — a failed or partial write never replaces
+	// a good existing config file. Temp sits next to the target so the rename
+	// stays on one filesystem (atomic). std::filesystem (C++17), no wx.
+	namespace fs = std::filesystem;
+	const fs::path dstPath(strFileName.ToStdWstring());
+	fs::path tmpPath = dstPath;
+	tmpPath += L".tmp";
+
+	{
+		std::ofstream datafile(tmpPath, std::ios::binary | std::ios::trunc);
+		if (!datafile.is_open())
+			return false;
+
+		datafile.write(reinterpret_cast<char*>(buffer.GetData()), buffer.GetBufSize());
+		datafile.flush();
+
+		const bool ok = datafile.good();
+		datafile.close();
+		if (!ok) {
+			std::error_code ec;
+			fs::remove(tmpPath, ec);
+			return false;
+		}
+	}
+
+	// fs::rename is the atomic commit (replaces the target on the same volume).
+	std::error_code ec;
+	fs::rename(tmpPath, dstPath, ec);
+	if (ec) {
+		std::error_code rmEc;
+		fs::remove(tmpPath, rmEc);
+		return false;
+	}
 
 	return true;
 }
@@ -80,7 +114,7 @@ m_commonObject(nullptr), m_configOpened(false)
 	}
 
 	m_commonObject->PrepareNames();
-	m_commonObject->IncrRef();
+	// m_commonObject is an ibValuePtr — the assignment above already holds the ref.
 
 	{
 		ibValue* ppParams[] = { m_commonObject };
@@ -97,7 +131,7 @@ m_commonObject(nullptr), m_configOpened(false)
 		}
 
 		commonLanguage->PrepareNames();
-		commonLanguage->IncrRef();
+		// owned by m_commonObject's child vector (AddChild inside Init) — no IncrRef
 
 		m_commonObject->SetLanguage(commonLanguage->GetMetaID());
 	}
@@ -110,13 +144,17 @@ ibMetaDataConfigurationFile::~ibMetaDataConfigurationFile()
 		wxASSERT_MSG(false, "ClearDatabase() == false");
 	}
 
-	//delete common metaObject
-	wxDELETE(m_commonObject);
+	// m_commonObject (ibValuePtr) releases the root automatically on destruction
+	// (DecrRef → cascade). For an unshared root that destroys it; a still-shared
+	// root (e.g. designer UI holding a ref) survives until the last holder drops.
 }
 
-
-
 ////////////////////////////////////////////////////////////////////
+
+ibValueMetaObjectConfiguration* ibMetaDataConfigurationFile::GetCommonMetaObject() const
+{
+	return m_commonObject; // ibValuePtr operator T* -> raw root
+}
 
 wxString ibMetaDataConfigurationFile::GetLangCode() const
 {
@@ -148,229 +186,107 @@ bool ibMetaDataConfigurationFile::IsFullAccess() const
 
 bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 {
+
 	wxASSERT(!m_configOpened);
 
 	if ((flags & loadConfigFlag) == 0)
 		ibCompileCode::SetCodeStyle(m_commonObject->GetCompileSyntax());
 
-	if (!m_commonObject->OnBeforeRunMetaObject(flags)) {
-		wxASSERT_MSG(false, "m_commonObject->OnBeforeRunMetaObject() == false");
+	// Create the lightweight DESIGNER module manager BEFORE RunSubtree — common
+	// modules register themselves into it from their OnBeforeRunMetaObject hook,
+	// which fires inside RunSubtree(true) below. If the manager didn't exist yet,
+	// they'd silently skip registration and the symmetric RemoveCommonModule on
+	// close would assert (empty registry). It binds to the CURRENT common
+	// metaobject; creating it once in the ctor would dangle across a config reload
+	// (the metaobject is freed/rebuilt). Designer-edit configuration only
+	// (ibMetaDataConfigurationStorage owns the compile cache); other modes leave
+	// GetCompileCache() null and skip.
+	if (auto* cc = GetCompileCache())
+		cc->SetModuleManager(new ibValueModuleManagerDesigner(this, GetCommonMetaObject()));
+
+	// RunSubtree fires OnBeforeRun/OnAfterRun on the root itself + every descendant
+	// (top-down). Just drive the two phases in order. On failure, unwind BOTH common-
+	// module registries the run phase fed — the designer manager and the module
+	// storage — since CloseDatabase won't run (m_configOpened stays false) and the
+	// next load rebuilds the tree out from under these registrations.
+	if (!m_commonObject->RunSubtree(flags, true)) {
+		if (auto* cc = GetCompileCache())
+			cc->SetModuleManager(nullptr);
+		GetModuleStorage()->Clear();
 		return false;
 	}
 
-	for (unsigned int idx = 0; idx < m_commonObject->GetChildCount(); idx++) {
-
-		auto child = m_commonObject->GetChild(idx);
-		if (!m_commonObject->FilterChild(child->GetClassType()))
-			continue;
-
-		if (child->IsDeleted())
-			continue;
-
-		if (!child->OnBeforeRunMetaObject(flags))
-			return false;
-
-		if (!RunChildMetadata(child, flags, true))
-			return false;
+	// Seed the editor's context (Manager + Catalogs/Documents/Enums + globals)
+	// AFTER RunSubtree(true) — the ctor-context factories register while the
+	// subtree runs, so CreateMainModule must run once they're available. Common-
+	// module registration already happened above (in OnBeforeRunMetaObject).
+	if (auto* cc = GetCompileCache()) {
+		if (auto* mgr = cc->GetModuleManager())
+			mgr->CreateMainModule();
 	}
 
-	// CreateMainModule (compile) is no longer fired from RunDatabase —
-	// orchestration moved to the caller (appData::LoadMetadata) so
-	// metadata stays a pure skeleton/factory and runtime ops sit on the
-	// session-mm side.
-
-	if (!m_commonObject->OnAfterRunMetaObject(flags)) {
-		wxASSERT_MSG(false, "m_commonObject->OnBeforeRunMetaObject() == false");
+	if (!m_commonObject->RunSubtree(flags, false))
 		return false;
-	}
 
-	for (unsigned int idx = 0; idx < m_commonObject->GetChildCount(); idx++) {
-
-		auto child = m_commonObject->GetChild(idx);
-		if (!m_commonObject->FilterChild(child->GetClassType()))
-			continue;
-
-		if (child->IsDeleted())
-			continue;
-
-		if (!child->OnAfterRunMetaObject(flags))
-			return false;
-
-		if (!RunChildMetadata(child, flags, false))
-			return false;
-	}
 	m_configOpened = true;
-	return true;
-}
-
-bool ibMetaDataConfigurationFile::RunChildMetadata(ibValueMetaObject* object, int flags, bool before)
-{
-	for (unsigned int idx = 0; idx < object->GetChildCount(); idx++) {
-
-		auto child = object->GetChild(idx);
-		if (!object->FilterChild(child->GetClassType()))
-			continue;
-
-		if (child->IsDeleted())
-			continue;
-
-		if (before && !child->OnBeforeRunMetaObject(flags))
-			return false;
-
-		if (!before && !child->OnAfterRunMetaObject(flags))
-			return false;
-
-		if (!RunChildMetadata(child, flags, before))
-			return false;
-	}
-
 	return true;
 }
 
 bool ibMetaDataConfigurationFile::CloseDatabase(int flags)
 {
+
 	wxASSERT(m_configOpened);
 
 	//if (!ExitMainModule((flags & forceCloseFlag) != 0))
 	//	return false;
 
-	for (unsigned int idx = 0; idx < m_commonObject->GetChildCount(); idx++) {
-
-		auto child = m_commonObject->GetChild(idx);
-		if (!m_commonObject->FilterChild(child->GetClassType()))
-			continue;
-
-		if (child->IsDeleted())
-			continue;
-
-		if (!child->OnBeforeCloseMetaObject())
-			return false;
-
-		if (!CloseChildMetadata(child, (flags & forceCloseFlag) != 0, true))
-			return false;
-	}
-
-	if (!m_commonObject->OnBeforeCloseMetaObject()) {
-		wxASSERT_MSG(false, "m_commonObject->OnAfterCloseMetaObject() == false");
+	// CloseSubtree closes every descendant then the root's own hook (bottom-up).
+	if (!m_commonObject->CloseSubtree(true))
 		return false;
+
+	// Symmetric to RunDatabase — tear down the designer manager AND release it.
+	// The metaobject it binds to is about to be reset/freed; dropping the manager
+	// now prevents a dangling reference (the next RunDatabase makes a fresh one).
+	if (auto* cc = GetCompileCache()) {
+		if (auto* mgr = cc->GetModuleManager())
+			mgr->DestroyMainModule();
+		cc->SetModuleManager(nullptr);   // ibValuePtr: releases (DecrRef → delete)
 	}
 
-	// DestroyMainModule moved to the caller (appData::Disconnect /
-	// UnloadMetadata) — symmetric with CreateMainModule that was hoisted
-	// out of RunDatabase.
-
-	for (unsigned int idx = 0; idx < m_commonObject->GetChildCount(); idx++) {
-
-		auto child = m_commonObject->GetChild(idx);
-		if (!m_commonObject->FilterChild(child->GetClassType()))
-			continue;
-
-		if (child->IsDeleted())
-			continue;
-
-		if (!child->OnAfterCloseMetaObject())
-			return false;
-
-		if (!CloseChildMetadata(child, (flags & forceCloseFlag) != 0, false))
-			return false;
-	}
-
-	if (!m_commonObject->OnAfterCloseMetaObject()) {
-		wxASSERT_MSG(false, "m_commonObject->OnAfterCloseMetaObject() == false");
+	if (!m_commonObject->CloseSubtree(false))
 		return false;
-	}
 
 	m_configOpened = false;
 	return true;
 }
 
-bool ibMetaDataConfigurationFile::CloseChildMetadata(ibValueMetaObject* object, int flags, bool before)
-{
-	for (unsigned int idx = 0; idx < object->GetChildCount(); idx++) {
-
-		auto child = object->GetChild(idx);
-		if (!object->FilterChild(child->GetClassType()))
-			continue;
-
-		if (child->IsDeleted())
-			continue;
-
-		if (before && !child->OnBeforeCloseMetaObject())
-			return false;
-
-		if (!before && !child->OnAfterCloseMetaObject())
-			return false;
-
-		if (!CloseChildMetadata(child, flags, before))
-			return false;
-	}
-
-	return true;
-}
-
 bool ibMetaDataConfigurationFile::ClearDatabase()
 {
-	for (unsigned int idx = 0; idx < m_commonObject->GetChildCount(); idx++) {
-
-		auto child = m_commonObject->GetChild(idx);
-		if (!m_commonObject->FilterChild(child->GetClassType()))
-			continue;
-
-		if (!child->OnDeleteMetaObject())
-			return false;
-
-		if (!ClearChildMetadata(child))
-			return false;
-
-		m_commonObject->RemoveChild(child);
-		idx--;
-	}
-
-	if (!m_commonObject->OnDeleteMetaObject()) {
-		wxASSERT_MSG(false, "m_commonObject->OnDeleteMetaObject() == false");
-		return false;
-	}
-
-	return true;
-}
-
-bool ibMetaDataConfigurationFile::ClearChildMetadata(ibValueMetaObject* object)
-{
-	for (unsigned int idx = 0; idx < object->GetChildCount(); idx++) {
-
-		auto child = object->GetChild(idx);
-		if (!object->FilterChild(child->GetClassType()))
-			continue;
-
-		if (!child->OnDeleteMetaObject())
-			return false;
-
-		if (!ClearChildMetadata(child))
-			return false;
-
-		object->RemoveChild(child);
-		idx--;
-	}
-
-	object->DecrRef();
+	// Full force-replace unload: just drop the tree — the owning child handles
+	// cascade the destruction down the subtree. No OnDeleteMetaObject cascade here:
+	// the metadata is wholly replaced, and the incoming config reconciles against
+	// the old one during the DDL update. (ibValueMetaObject::ClearSubtree can fire
+	// the delete events explicitly before a load, if a caller ever wants that.)
+	// keepPinned: the predefined configuration module is bound to the root for
+	// life — drop only the loaded tree, keep it so the metadata finder (and the
+	// debugger's EditModule) can still resolve it after reload.
+	m_commonObject->RemoveAllChildren(true);
 	return true;
 }
 
 bool ibMetaDataConfigurationFile::LoadConfigFromBuffer(const wxMemoryBuffer& buffer)
 {
-	//close data 
+	// Close the old tree's run-state first (unregisters its ctors). For the
+	// storage subclass this is virtual and also closes the saved baseline, which
+	// the post-load RunDatabase re-runs — leaving that orchestration intact. We
+	// do NOT pre-clear the tree: LoadCommonTree builds a fresh detached root and
+	// only swaps it in on success, so a failed load leaves the old tree's data
+	// in place (all-or-nothing) instead of wiping it up front.
 	if (IsConfigOpen()) {
 		if (!CloseDatabase(forceCloseFlag)) {
 			wxASSERT_MSG(false, "CloseDatabase() == false");
 			return false;
-
 		}
-	}
-
-	//clear data 
-	if (!ClearDatabase()) {
-		wxASSERT_MSG(false, "ClearDatabase() == false");
-		return false;
 	}
 
 	ibReaderMemory readerData(buffer.GetData(), buffer.GetBufSize());
@@ -378,42 +294,43 @@ bool ibMetaDataConfigurationFile::LoadConfigFromBuffer(const wxMemoryBuffer& buf
 	if (readerData.eof())
 		return false;
 
-	//Save header info 
-	if (!LoadHeader(readerData))
-		return false;
+	// Detached-root: on failure the live tree is untouched; on success the old
+	// root is swapped out and released inside LoadCommonTree.
+	return LoadCommonTree(g_metaCommonMetadataCLSID, readerData);
+}
 
-	//loading common metaData and child item
-	if (!LoadCommonMetadata(g_metaCommonMetadataCLSID, readerData)) {
-		//clear data 
-		if (!ClearDatabase()) {
-			wxASSERT_MSG(false, "ClearDatabase() == false");
+ibValueMetaObjectConfiguration* ibMetaDataConfigurationFile::BuildFreshRoot()
+{
+	// Same root setup the ctor gives m_commonObject — OnCreateMetaObject wires the
+	// configuration-module property + any predefined children — minus the default
+	// Language: LoadSubtree re-creates the serialized Language (and every top-level
+	// object) as it loads. Returned at refcount 0 — the caller's ibValuePtr adopts it.
+	auto* root = new ibValueMetaObjectConfiguration();
+	if (root->OnCreateMetaObject(this, newObjectFlag)) {
+		if (!root->OnLoadMetaObject(this)) {
+			wxASSERT_MSG(false, "BuildFreshRoot: OnLoadMetaObject() == false");
 		}
-		return false;
+	}
+	root->PrepareNames();
+	return root;
+}
+
+bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReaderMemory& readerData)
+{
+	// Header (sign + config guid) leads the tree blob in the same stream — read and
+	// validate it here so the common-tree blob stays self-describing (was the
+	// separate LoadHeader). Config keeps no version in the header (version lives in
+	// the common object's data).
+	{
+		std::shared_ptr<ibReaderMemory> headerReader(readerData.open_chunk(eHeaderBlock));
+		if (!headerReader)
+			return false;
+		if (headerReader->r_u64() != sign_metadata)
+			return false;
+		wxString metaGuid;
+		headerReader->r_stringZ(metaGuid);
 	}
 
-	return true;
-}
-
-bool ibMetaDataConfigurationFile::LoadHeader(ibReaderMemory& readerData)
-{
-	std::shared_ptr<ibReaderMemory> readerMemory(readerData.open_chunk(eHeaderBlock));
-
-	if (!readerMemory)
-		return false;
-
-	u64 metaSign = readerMemory->r_u64();
-
-	if (metaSign != sign_metadata)
-		return false;
-
-	wxString metaGuid;
-	readerMemory->r_stringZ(metaGuid);
-
-	return true;
-}
-
-bool ibMetaDataConfigurationFile::LoadCommonMetadata(const ibClassID& clsid, ibReaderMemory& readerData)
-{
 	std::shared_ptr<ibReaderMemory> readerMemory(readerData.open_chunk(clsid));
 
 	if (!readerMemory)
@@ -423,129 +340,28 @@ bool ibMetaDataConfigurationFile::LoadCommonMetadata(const ibClassID& clsid, ibR
 	std::shared_ptr <ibReaderMemory> readerMetaMemory(readerMemory->open_chunk_iterator(meta_id));
 
 	if (!readerMetaMemory)
-		return true;
+		return true; // empty config — keep the existing root
 
-	std::shared_ptr <ibReaderMemory>readerDataMemory(readerMetaMemory->open_chunk(eDataBlock));
-
-	//m_commonObject->SetReadOnly(!m_metaReadOnly);
-
-	if (!m_commonObject->LoadMetaObject(this, *readerDataMemory))
+	// Detached-root atomic swap: load into a freshly-built root, not the live one.
+	// LoadSubtree throws ibBackendException on a malformed/missing chunk or factory
+	// miss — on a throw the fresh root is discarded and m_commonObject is untouched
+	// (all-or-nothing). On success, swap it in and release the old root. The caller
+	// has already closed the old tree's run-state (or it was never run), so the
+	// DecrRef below can't leave dangling entries in m_factoryCtors.
+	ibValuePtr<ibValueMetaObjectConfiguration> fresh(BuildFreshRoot()); // adopt (refcount 0 -> 1)
+	if (!fresh)
 		return false;
-
-	std::shared_ptr <ibReaderMemory> readerChildMemory(readerMetaMemory->open_chunk(eChildBlock));
-
-	if (readerChildMemory) {
-		if (!LoadDatabase(clsid, *readerChildMemory, m_commonObject))
-			return false;
+	try {
+		fresh->LoadSubtree(*readerMetaMemory);
+	}
+	catch (const ibBackendException& err) {
+		return false; // fresh (ibValuePtr) discards the root automatically
 	}
 
-	return true;
-}
-
-bool ibMetaDataConfigurationFile::LoadDatabase(const ibClassID&, ibReaderMemory& readerData, ibValueMetaObject* object)
-{
-	ibClassID clsid = 0;
-	ibReaderMemory* prevReaderMemory = nullptr;
-
-	while (!readerData.eof())
-	{
-		ibReaderMemory* readerMemory = readerData.open_chunk_iterator(clsid, &*prevReaderMemory);
-
-		if (!readerMemory)
-			break;
-
-		u64 meta_id = 0;
-		ibReaderMemory* prevReaderMetaMemory = nullptr;
-
-		while (!readerMemory->eof())
-		{
-			ibReaderMemory* readerMetaMemory = readerMemory->open_chunk_iterator(meta_id, &*prevReaderMetaMemory);
-
-			if (!readerMetaMemory)
-				break;
-
-			wxASSERT(clsid != 0);
-
-			ibValueMetaObject* newMetaObject = nullptr;
-			ibValue* ppParams[] = { object };
-			try {
-				newMetaObject = ibValue::CreateAndConvertObjectRef<ibValueMetaObject>(clsid, ppParams, 1);
-				newMetaObject->IncrRef();
-			}
-			catch (...) {
-				return false;
-			}
-
-			std::shared_ptr <ibReaderMemory> readerChildMemory(readerMetaMemory->open_chunk(eChildBlock));
-			if (readerChildMemory) {
-				if (!LoadChildMetadata(clsid, *readerChildMemory, newMetaObject))
-					return false;
-			}
-
-			std::shared_ptr <ibReaderMemory>readerDataMemory(readerMetaMemory->open_chunk(eDataBlock));
-
-			if (!newMetaObject->LoadMetaObject(this, *readerDataMemory))
-				return false;
-
-			prevReaderMetaMemory = readerMetaMemory;
-		}
-
-		prevReaderMemory = readerMemory;
-	};
-
-	return true;
-}
-
-bool ibMetaDataConfigurationFile::LoadChildMetadata(const ibClassID&, ibReaderMemory& readerData, ibValueMetaObject* object)
-{
-	ibClassID clsid = 0;
-	ibReaderMemory* prevReaderMemory = nullptr;
-
-	while (!readerData.eof())
-	{
-		ibReaderMemory* readerMemory = readerData.open_chunk_iterator(clsid, &*prevReaderMemory);
-
-		if (!readerMemory)
-			break;
-
-		u64 meta_id = 0;
-		ibReaderMemory* prevReaderMetaMemory = nullptr;
-
-		while (!readerMemory->eof())
-		{
-			ibReaderMemory* readerMetaMemory = readerMemory->open_chunk_iterator(meta_id, &*prevReaderMetaMemory);
-
-			if (!readerMetaMemory)
-				break;
-
-			wxASSERT(clsid != 0);
-
-			ibValueMetaObject* newMetaObject = nullptr;
-			ibValue* ppParams[] = { object };
-			try {
-				newMetaObject = ibValue::CreateAndConvertObjectRef<ibValueMetaObject>(clsid, ppParams, 1);
-				newMetaObject->IncrRef();
-			}
-			catch (...) {
-				return false;
-			}
-
-			std::shared_ptr <ibReaderMemory> readerChildMemory(readerMetaMemory->open_chunk(eChildBlock));
-			if (readerChildMemory) {
-				if (!LoadChildMetadata(clsid, *readerChildMemory, newMetaObject))
-					return false;
-			}
-
-			std::shared_ptr <ibReaderMemory>readerDataMemory(readerMetaMemory->open_chunk(eDataBlock));
-			if (!newMetaObject->LoadMetaObject(this, *readerDataMemory))
-				return false;
-
-			prevReaderMetaMemory = readerMetaMemory;
-		}
-
-		prevReaderMemory = readerMemory;
-	}
-
+	// Swap: the ibValuePtr assignment releases the old root (DecrRef -> cascade) and
+	// IncrRefs the fresh one; the local `fresh` drops its own ref at scope exit, so
+	// m_commonObject ends as the sole owner. No manual refcount.
+	m_commonObject = fresh;
 	return true;
 }
 
@@ -678,6 +494,12 @@ ibMetaDataConfigurationStorage::ibMetaDataConfigurationStorage(ib::AppDataCtorTo
 	// metadata-collection callsites (Add/Find/RemoveCompileModule) gate
 	// on `if (auto* cc = metaData->GetCompileCache())` instead of the
 	// runtime-mode appData->DesignerMode() check.
+	// Designer-edit configuration → allocate an EMPTY compile-value cache. The
+	// designer module manager is NOT created here: it binds to the common
+	// metaobject, which is reset on every config reload, so a manager built once
+	// in the ctor would dangle. RunDatabase creates a fresh one (bound to the
+	// current metaobject); CloseDatabase tears it down. See the lifetime note in
+	// ibMetaDataConfigurationFile::RunDatabase.
 	m_compileCache = std::make_unique<ibCompileValueCache>();
 }
 
@@ -709,7 +531,7 @@ bool ibMetaDataConfigurationStorage::LoadDatabase(int flags)
 	return false;
 }
 
-bool ibMetaDataConfigurationStorage::LoadDataFromBuffer(const wxMemoryBuffer& buffer)
+bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer& buffer)
 {
 	ibReaderMemory reader(buffer);
 
@@ -733,7 +555,7 @@ bool ibMetaDataConfigurationStorage::LoadDataFromBuffer(const wxMemoryBuffer& bu
 				break;
 
 			ibValueMetaObject* metaValue = commonObject->FindAnyObjectByFilter<ibValueMetaObject, ibMetaID>(id);
-			if (metaValue != nullptr && !metaValue->LoadTableData(*readerMemory))
+			if (metaValue != nullptr && !metaValue->RestoreTable(*readerMemory))
 				return false;
 
 			prevReaderMemory = readerMemory;
@@ -751,24 +573,20 @@ bool ibMetaDataConfigurationStorage::LoadDataFromBuffer(const wxMemoryBuffer& bu
 	return true;
 }
 
-bool ibMetaDataConfigurationStorage::SaveConfigToBuffer(wxMemoryBuffer& buffer)
+bool ibMetaDataConfigurationFile::SaveConfigToBuffer(wxMemoryBuffer& buffer)
 {
 	//common data
 	ibWriterMemory writer;
 
-	//Save header info 
-	if (!SaveHeader(writer))
-		return false;
-
-	//Save common object
-	if (!SaveCommonMetadata(g_metaCommonMetadataCLSID, writer, saveToFileFlag))
+	//Save common object (header is written inside SaveCommonTree)
+	if (!SaveCommonTree(g_metaCommonMetadataCLSID, writer, saveToFileFlag))
 		return false;
 
 	buffer = writer.buffer();
 	return true;
 }
 
-bool ibMetaDataConfigurationStorage::SaveDataToBuffer(wxMemoryBuffer& buffer)
+bool ibMetaDataConfigurationStorage::DumpDataToBuffer(wxMemoryBuffer& buffer)
 {
 	ibWriterMemory writer;
 
@@ -785,7 +603,7 @@ bool ibMetaDataConfigurationStorage::SaveDataToBuffer(wxMemoryBuffer& buffer)
 			continue;
 
 		ibWriterMemory childWriter;
-		if (!child->SaveTableData(childWriter))
+		if (!child->DumpTable(childWriter))
 			return false;
 		writerData.w_chunk(child->GetMetaID(), childWriter.buffer());
 	}
@@ -801,153 +619,22 @@ bool ibMetaDataConfigurationStorage::SaveDataToBuffer(wxMemoryBuffer& buffer)
 	return true;
 }
 
-bool ibMetaDataConfigurationStorage::SaveHeader(ibWriterMemory& writerData)
+bool ibMetaDataConfigurationFile::SaveCommonTree(const ibClassID& clsid, ibWriterMemory& writerData, int flags)
 {
-	ibWriterMemory writerMemory;
-	writerMemory.w_u64(sign_metadata); //sign 
-	writerMemory.w_stringZ(m_commonObject->GetDocPath()); //guid conf 
-
-	writerData.w_chunk(eHeaderBlock, writerMemory.pointer(), writerMemory.size());
-	return true;
-}
-
-bool ibMetaDataConfigurationStorage::SaveCommonMetadata(const ibClassID& clsid, ibWriterMemory& writerData, int flags)
-{
-	//Save common object
-	ibWriterMemory writerMemory;
-
-	ibWriterMemory writerMetaMemory;
-	ibWriterMemory writerDataMemory;
-
-	if (!m_commonObject->SaveMetaObject(this, writerDataMemory, flags)) {
-		return false;
+	// Header (sign + config guid) leads the tree blob (was the separate SaveHeader).
+	{
+		ibWriterMemory headerWriter;
+		headerWriter.w_u64(sign_metadata); //sign
+		headerWriter.w_stringZ(m_commonObject->GetDocPath()); //guid conf
+		writerData.w_chunk(eHeaderBlock, headerWriter.pointer(), headerWriter.size());
 	}
 
-	writerMetaMemory.w_chunk(eDataBlock, writerDataMemory.pointer(), writerDataMemory.size());
-
-	ibWriterMemory writerChildMemory;
-
-	if (!SaveDatabase(clsid, writerChildMemory, flags))
-		return false;
-
-	writerMetaMemory.w_chunk(eChildBlock, writerChildMemory.pointer(), writerChildMemory.size());
-	writerMemory.w_chunk(m_commonObject->GetMetaID(), writerMetaMemory.pointer(), writerMetaMemory.size());
-
-	writerData.w_chunk(clsid, writerMemory.pointer(), writerMemory.size());
-	return true;
+	// The whole tree serialization is owned by the node (ibValueMetaObject::SaveSubtree).
+	return m_commonObject->SaveSubtree(clsid, writerData, flags);
 }
 
-bool ibMetaDataConfigurationStorage::SaveDatabase(const ibClassID&, ibWriterMemory& writerData, int flags)
+bool ibMetaDataConfigurationStorage::DeleteCommonTree(const ibClassID& clsid)
 {
-	bool saveToFile = (flags & saveToFileFlag) != 0;
-
-	for (unsigned int idx = 0; idx < m_commonObject->GetChildCount(); idx++) {
-
-		auto child = m_commonObject->GetChild(idx);
-		if (!m_commonObject->FilterChild(child->GetClassType()))
-			continue;
-		if (child->IsDeleted())
-			continue;
-		ibWriterMemory writerMemory;
-		ibWriterMemory writerMetaMemory;
-		ibWriterMemory writerDataMemory;
-		if (!child->SaveMetaObject(this, writerDataMemory, flags)) {
-			return false;
-		}
-		writerMetaMemory.w_chunk(eDataBlock, writerDataMemory.pointer(), writerDataMemory.size());
-		ibWriterMemory writerChildMemory;
-		if (!SaveChildMetadata(child->GetClassType(), writerChildMemory, child, flags)) {
-			return false;
-		}
-		writerMetaMemory.w_chunk(eChildBlock, writerChildMemory.pointer(), writerChildMemory.size());
-		writerMemory.w_chunk(child->GetMetaID(), writerMetaMemory.pointer(), writerMetaMemory.size());
-		writerData.w_chunk(child->GetClassType(), writerMemory.pointer(), writerMemory.size());
-	}
-
-	return true;
-}
-
-bool ibMetaDataConfigurationStorage::SaveChildMetadata(const ibClassID&, ibWriterMemory& writerData, ibValueMetaObject* object, int flags)
-{
-	bool saveToFile = (flags & saveToFileFlag) != 0;
-
-	for (unsigned int idx = 0; idx < object->GetChildCount(); idx++) {
-
-		auto child = object->GetChild(idx);
-		if (!object->FilterChild(child->GetClassType()))
-			continue;
-		if (child->IsDeleted())
-			continue;
-		ibWriterMemory writerMemory;
-		ibWriterMemory writerMetaMemory;
-		ibWriterMemory writerDataMemory;
-		if (!child->SaveMetaObject(this, writerDataMemory, flags)) {
-			return false;
-		}
-		writerMetaMemory.w_chunk(eDataBlock, writerDataMemory.pointer(), writerDataMemory.size());
-		ibWriterMemory writerChildMemory;
-		if (!SaveChildMetadata(child->GetClassType(), writerChildMemory, child, flags)) {
-			return false;
-		}
-		writerMetaMemory.w_chunk(eChildBlock, writerChildMemory.pointer(), writerChildMemory.size());
-		writerMemory.w_chunk(child->GetMetaID(), writerMetaMemory.pointer(), writerMetaMemory.size());
-		writerData.w_chunk(child->GetClassType(), writerMemory.pointer(), writerMemory.size());
-	}
-
-	return true;
-}
-
-bool ibMetaDataConfigurationStorage::DeleteCommonMetadata(const ibClassID& clsid)
-{
-	return DeleteMetadata(clsid);
-}
-
-bool ibMetaDataConfigurationStorage::DeleteMetadata(const ibClassID& clsid)
-{
-	for (unsigned int idx = 0; idx < m_commonObject->GetChildCount(); idx++) {
-
-		auto child = m_commonObject->GetChild(idx);
-		if (!m_commonObject->FilterChild(child->GetClassType()))
-			continue;
-
-		if (child->IsDeleted()) {
-			if (!child->DeleteMetaObject(this)) {
-				return false;
-			}
-		}
-		if (!DeleteChildMetadata(child->GetClassType(), child)) {
-			return false;
-		}
-		if (child->IsDeleted()) {
-			m_commonObject->RemoveChild(child);
-			child->DecrRef();
-		}
-	}
-
-	return true;
-}
-
-bool ibMetaDataConfigurationStorage::DeleteChildMetadata(const ibClassID& clsid, ibValueMetaObject* object)
-{
-	for (unsigned int idx = 0; idx < object->GetChildCount(); idx++) {
-
-		auto child = object->GetChild(idx);
-		if (!object->FilterChild(child->GetClassType()))
-			continue;
-
-		if (child->IsDeleted()) {
-			if (!child->DeleteMetaObject(this)) {
-				return false;
-			}
-		}
-		if (!DeleteChildMetadata(child->GetClassType(), child)) {
-			return false;
-		}
-		if (child->IsDeleted()) {
-			object->RemoveChild(child);
-			child->DecrRef();
-		}
-	}
-
-	return true;
+	// Deleted-node purge is owned by the node (ibValueMetaObject::DeleteSubtree).
+	return m_commonObject->DeleteSubtree();
 }

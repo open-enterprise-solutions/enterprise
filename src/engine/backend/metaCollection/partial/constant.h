@@ -63,9 +63,9 @@ public:
 	//process default query
 	int ProcessAttribute(const wxString& tableName, ibValueMetaObjectAttributeBase* srcAttr, ibValueMetaObjectAttributeBase* dstAttr);
 
-	// load & save config data 
-	virtual bool LoadTableData(const ibReaderMemory& reader);
-	virtual bool SaveTableData(ibWriterMemory& writer) const;
+	// dump & restore table data
+	virtual bool RestoreTable(const ibReaderMemory& reader);
+	virtual bool DumpTable(ibWriterMemory& writer) const;
 
 protected:
 

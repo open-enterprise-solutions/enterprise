@@ -143,7 +143,7 @@ ibSession* ibSessionRegistry::Find(const wxString& id)
 	return it != m_sessions.end() ? it->second.get() : nullptr;
 }
 
-ibSession* ibSessionRegistry::FindSessionByRoot(ibValueModuleManagerConfiguration* mm) const
+ibSession* ibSessionRegistry::FindSessionByRoot(ibValueModuleManagerRuntimeConfiguration* mm) const
 {
 	if (mm == nullptr) return nullptr;
 	std::shared_lock<std::shared_mutex> lock(m_ownMutex);

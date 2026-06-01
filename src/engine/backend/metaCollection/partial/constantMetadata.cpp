@@ -127,8 +127,13 @@ bool ibValueMetaObjectConstant::OnBeforeCloseMetaObject()
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
-		if (cc->RemoveCompileModule(m_propertyModule->GetMetaObject()))
-			return ibValueMetaObjectAttribute::OnAfterCloseMetaObject();
+		// Run the base BEFORE-close hook in the before phase, then drop the
+		// compile-cache entry — mirror of ibValueMetaObjectCatalog and the other
+		// business types. Was OnAfterCloseMetaObject (a pre-phase-split legacy
+		// copy/paste) which fired the after-hook + metaTree->CloseMetaObject in the
+		// before phase, then again in OnAfterCloseMetaObject — double close.
+		if (ibValueMetaObjectAttribute::OnBeforeCloseMetaObject())
+			return cc->RemoveCompileModule(m_propertyModule->GetMetaObject());
 
 		return false;
 	}

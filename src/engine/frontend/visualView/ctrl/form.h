@@ -240,7 +240,7 @@ public:
 
 		//Расширенные методы:
 		bool Property(const ibValue& varKeyValue, ibValue& cValueFound);
-		unsigned int Count() const { return m_formOwner->m_listControl.size(); }
+		unsigned int Count() const { return (unsigned int)m_formOwner->GetControlList().size(); }
 
 		//Работа с итераторами:
 		virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;
@@ -253,6 +253,12 @@ public:
 
 	ibValueFrame* CreateControl(const wxString& classControl, ibValueFrame* control = nullptr);
 	void RemoveControl(ibValueFrame* control);
+
+	// All controls owned by this form, derived by walking the control hierarchy
+	// (m_children), skipping sizer-items. Replaces the maintained m_listControl set
+	// (whose SetOwnerForm erase-bookkeeping was a teardown hazard). Cold path —
+	// script Controls collection + design-time name-conflict; the form tree is small.
+	std::vector<ibValueControl*> GetControlList() const;
 
 public:
 
@@ -325,8 +331,6 @@ public:
 
 private:
 
-	void ClearRecursive(ibValueFrame* control);
-
 	//doc event
 	bool CreateDocForm(ibMetaDocument* docParent, bool createContext = true);
 	void ActivateDocForm();
@@ -363,7 +367,6 @@ private:
 	ibControlFrame* m_controlOwner;
 	ibSourceDataObject* m_sourceObject;
 
-	std::set<ibValueControl*> m_listControl;
 	// ibFrontendTimer = wxTimer on desktop, ibWebTimer on web. Both
 	// inherit wxEvtHandler + produce wxTimerEvent where GetEventObject()
 	// returns the timer instance — so OnIdleHandler's lookup matches

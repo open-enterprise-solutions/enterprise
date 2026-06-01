@@ -26,13 +26,10 @@ ibValueControl::~ibValueControl()
 
 void ibValueControl::SetOwnerForm(ibValueForm* ownerForm)
 {
-	if (ownerForm && m_formOwner == nullptr) {
-		if (GetComponentType() != COMPONENT_TYPE_SIZERITEM)
-			ownerForm->m_listControl.emplace(this);
-	}
-	else if (!ownerForm && m_formOwner != nullptr) {
-		m_formOwner->m_listControl.erase(this);
-	}
+	// Just record the owner. The form derives its control list by walking the
+	// hierarchy (ibValueForm::GetControlList) — there is no maintained set, so this
+	// no longer touches the form. Removes the teardown hazard where ~ibValueControl
+	// erased from an already-destroyed m_listControl.
 	m_formOwner = ownerForm;
 }
 

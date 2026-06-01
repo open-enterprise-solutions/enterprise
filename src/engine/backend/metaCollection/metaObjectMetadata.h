@@ -118,9 +118,13 @@ protected:
 
 private:
 
-	bool FillRoleList(ibPropertyList* prop) {
+	// Shared body for the property-list fill callbacks below — they differ only
+	// by the metaobject CLSID they collect. The thin FillRoleList/FillLanguageList
+	// delegates are kept because they're referenced by member-function-pointer in
+	// the ibPropertyList property declarations.
+	bool FillListByClsid(ibPropertyList* prop, const ibClassID& clsid) {
 		std::vector<ibValueMetaObject*> array;
-		if (FillArrayObjectByFilter(array, { g_metaRoleCLSID })) {
+		if (FillArrayObjectByFilter(array, { clsid })) {
 			for (const auto child : array) {
 				prop->AppendItem(
 					child->GetName(),
@@ -133,20 +137,8 @@ private:
 		return false;
 	}
 
-	bool FillLanguageList(ibPropertyList* prop) {
-		std::vector<ibValueMetaObject*> array;
-		if (FillArrayObjectByFilter(array, { g_metaLanguageCLSID })) {
-			for (const auto child : array) {
-				prop->AppendItem(
-					child->GetName(),
-					child->GetMetaID(),
-					child->GetIcon(),
-					child);
-			}
-			return true;
-		}
-		return false;
-	}
+	bool FillRoleList(ibPropertyList* prop)     { return FillListByClsid(prop, g_metaRoleCLSID); }
+	bool FillLanguageList(ibPropertyList* prop) { return FillListByClsid(prop, g_metaLanguageCLSID); }
 
 	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyModuleConfiguration = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ConfigurationModule"), _("Configuration module"));
 

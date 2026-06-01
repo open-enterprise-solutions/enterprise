@@ -123,15 +123,17 @@ bool ibValueMetaObjectConfiguration::OnBeforeRunMetaObject(int flags)
 	if (!(*m_propertyModuleConfiguration)->OnBeforeRunMetaObject(flags))
 		return false;
 
-	ibSession* session = ibSession::Current();
-	ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
-	wxASSERT(moduleManager);
-
-	// Designer's compile-cache only exists on the edit configuration
-	// (ibMetaDataConfigurationStorage). Runtime configurations have null cache
-	// — skip silently; runtime mm holds modules elsewhere.
+	// Designer's compile-cache holds its OWN module manager (the mm the Designer lost
+	// when runtime moved into per-session managers). Register THAT under the config
+	// module — not the per-session runtime mm — so the editor reads common-module
+	// units + named context from a manager that tracks the current designer state,
+	// decoupled from session timing. Runtime configs have null cache → skip.
 	if (auto* cc = m_metaData->GetCompileCache()) {
-		if (!cc->AddCompileModule(m_propertyModuleConfiguration->GetMetaObject(), moduleManager))
+		// Register the designer holder under the config module so the editor reads
+		// the "Manager" singleton + named context from it. The holder is STARTED
+		// (CreateMainModule) by ibMetaDataConfigurationFile::RunDatabase, as the
+		// common module did historically — not here.
+		if (!cc->AddCompileModule(m_propertyModuleConfiguration->GetMetaObject(), cc->GetModuleManager()))
 			return false;
 	}
 
@@ -147,6 +149,8 @@ bool ibValueMetaObjectConfiguration::OnAfterCloseMetaObject()
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (!cc->RemoveCompileModule(m_propertyModuleConfiguration->GetMetaObject()))
 			return false;
+		// Holder teardown (DestroyMainModule) is driven by CloseDatabase, symmetric
+		// with the RunDatabase start — not here.
 	}
 
 	return ibValueMetaObject::OnAfterCloseMetaObject();

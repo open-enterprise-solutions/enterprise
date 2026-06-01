@@ -80,8 +80,8 @@ public:
 	virtual bool SaveConfigToBuffer(wxMemoryBuffer& buffer) { return true; }
 
 	//load/save config form buffer
-	virtual bool LoadDataFromBuffer(const wxMemoryBuffer& buffer) { return true; }
-	virtual bool SaveDataToBuffer(wxMemoryBuffer& buffer) { return true; }
+	virtual bool RestoreDataFromBuffer(const wxMemoryBuffer& buffer) { return true; }
+	virtual bool DumpDataToBuffer(wxMemoryBuffer& buffer) { return true; }
 
 	//get common metadata
 	virtual ibValueMetaObjectConfiguration* GetCommonMetaObject() const = 0;
@@ -168,43 +168,54 @@ public:
 
 	virtual bool ClearDatabase();
 
-	//load/save form file
+	//load/save config from buffer — config metadata seam shared by the file
+	// path (LoadConfigFromFile/SaveConfigToFile) and the binary path
+	// (appData::LoadDatabase/SaveDatabase). Both operate on m_commonObject,
+	// so they live at the File level; the data-buffer counterparts
+	// (Load/SaveDataFromBuffer) stay on Storage since they go through the
+	// saved baseline.
 	virtual bool LoadConfigFromBuffer(const wxMemoryBuffer& buffer);
+	virtual bool SaveConfigToBuffer(wxMemoryBuffer& buffer);
 
-	virtual ibValueMetaObjectConfiguration* GetCommonMetaObject() const { return m_commonObject; }
+	// Out-of-line: m_commonObject is an ibValuePtr; its operator T* downcast needs
+	// the full ibValueMetaObjectConfiguration, kept out of this header.
+	virtual ibValueMetaObjectConfiguration* GetCommonMetaObject() const override;
 
 	//get config type
 	virtual ibConfigType GetConfigType() const { return ibConfigType::ibConfigType_File; };
 
 protected:
 
-	//header loader/saver 
-	bool LoadHeader(ibReaderMemory& readerData);
+	//loader/saver/deleter: (header sign/guid read+written inside LoadCommonTree/SaveCommonTree)
+	bool LoadCommonTree(const ibClassID& clsid, ibReaderMemory& readerData);
+	bool SaveCommonTree(const ibClassID& clsid, ibWriterMemory& writerData, int flags = defaultFlag);
 
-	//loader/saver/deleter: 
-	bool LoadCommonMetadata(const ibClassID& clsid, ibReaderMemory& readerData);
-	bool LoadDatabase(const ibClassID& clsid, ibReaderMemory& readerData, ibValueMetaObject* object);
-	bool LoadChildMetadata(const ibClassID& clsid, ibReaderMemory& readerData, ibValueMetaObject* object);
-
-	//run/close recursively:
-	bool RunChildMetadata(ibValueMetaObject* object, int flags, bool before);
-	bool CloseChildMetadata(ibValueMetaObject* object, int flags, bool before);
-
-	//clear recursively:
-	bool ClearChildMetadata(ibValueMetaObject* object);
+	// Build a detached, initialized configuration root for the detached-root
+	// load swap (LoadCommonTree). Returned at refcount 0 — the caller's ibValuePtr
+	// adopts it. nullptr on failure.
+	ibValueMetaObjectConfiguration* BuildFreshRoot();
 
 protected:
 
 	bool m_configOpened;
 	wxString m_md5Hash;
-	//common meta object
-	ibValueMetaObjectConfiguration* m_commonObject;
+	//common meta object — owning handle (ibValuePtr): bind = IncrRef, rebind / dtor = DecrRef
+	ibValuePtr<ibValueMetaObjectConfiguration> m_commonObject;
 };
 
 class BACKEND_API ibMetaDataConfiguration : public ibMetaDataConfigurationFile {
 public:
-	virtual bool LoadConfigFromFile(const wxString& strFileName) {
-		if (ibMetaDataConfigurationFile::LoadConfigFromFile(strFileName)) {
+	// Single load seam for both entry points: file import funnels here
+	// (base LoadConfigFromFile -> LoadConfigFromBuffer) and direct binary
+	// load reaches it straight (appData::LoadDatabase -> LoadConfigFromBuffer).
+	// The File base does close + replace only; here we additionally RUN the
+	// freshly loaded tree so its per-type ctors register before any later DDL
+	// apply (otherwise GetTypeCtor misses reference/enum types during
+	// restructure -> bogus ALTER TABLE -> Firebird -607). Standalone file
+	// documents stay on the load-only base impl (ibMetaDataConfigurationFile)
+	// and run explicitly with onlyLoadFlag where needed.
+	virtual bool LoadConfigFromBuffer(const wxMemoryBuffer& buffer) override {
+		if (ibMetaDataConfigurationFile::LoadConfigFromBuffer(buffer)) {
 			Modify(true); //set modify for check metaData
 			return RunDatabase();
 		}
@@ -300,12 +311,11 @@ public:
 	//rollback to config db
 	virtual bool RollbackDatabase();
 
-	//save form file
-	virtual bool SaveConfigToBuffer(wxMemoryBuffer& buffer);
-
-	//load/save config form buffer
-	virtual bool LoadDataFromBuffer(const wxMemoryBuffer& buffer);
-	virtual bool SaveDataToBuffer(wxMemoryBuffer& buffer);
+	//load/save data form buffer (table rows + sequence — goes through the
+	// saved baseline, so it stays on Storage; config metadata seam lives on
+	// ibMetaDataConfigurationFile)
+	virtual bool RestoreDataFromBuffer(const wxMemoryBuffer& buffer);
+	virtual bool DumpDataToBuffer(wxMemoryBuffer& buffer);
 
 	// get config metaData 
 	virtual ibMetaDataConfiguration* GetConfiguration() const { return m_configMetadata; }
@@ -339,16 +349,8 @@ protected:
 	virtual bool OnInitialize(const int flag);
 	virtual bool OnDestroy();
 
-	//header saver 
-	bool SaveHeader(ibWriterMemory& writerData);
-
-	//loader/saver/deleter: 
-	bool SaveCommonMetadata(const ibClassID& clsid, ibWriterMemory& writerData, int flags = defaultFlag);
-	bool SaveDatabase(const ibClassID& clsid, ibWriterMemory& writerData, int flags = defaultFlag);
-	bool SaveChildMetadata(const ibClassID& clsid, ibWriterMemory& writerData, ibValueMetaObject* object, int flags = defaultFlag);
-	bool DeleteCommonMetadata(const ibClassID& clsid);
-	bool DeleteMetadata(const ibClassID& clsid);
-	bool DeleteChildMetadata(const ibClassID& clsid, ibValueMetaObject* object);
+	//deleter: deleted-node purge (SaveCommonTree moved down to File level)
+	bool DeleteCommonTree(const ibClassID& clsid);
 
 private:
 

@@ -57,9 +57,29 @@ ibSession::~ibSession()
 	ClearRoot();
 }
 
-ibValueModuleManagerConfiguration* ibSession::GetManagerModule() const
+ibValueModuleManagerRuntimeConfiguration* ibSession::GetManagerModule() const
 {
 	return m_root;   // ibValuePtr's implicit operator T*()
+}
+
+ibValueModuleManager* ibSession::GetEditModuleManager(const ibMetaData* metaData) const
+{
+	// Two roads off one seam, keyed on THIS session's kind (not the process-global
+	// appData->DesignerMode()): a Designer session has no per-session runtime root —
+	// it reads the lightweight designer manager from the metadata's compile cache.
+	// Every other kind (Enterprise / WebClient / Service / …) uses its root mm.
+	if (m_kind == ibSessionKind::Designer) {
+		if (auto* cc = metaData ? metaData->GetCompileCache() : nullptr)
+			return cc->GetModuleManager();
+		return nullptr;
+	}
+	return m_root;
+}
+
+ibValueModuleManager* ibSession::EditModuleManagerFor(const ibMetaData* metaData)
+{
+	ibSession* session = ibSession::Current();
+	return session ? session->GetEditModuleManager(metaData) : nullptr;
 }
 
 void ibSession::Close(bool force)
@@ -152,7 +172,7 @@ void ibSession::SetExclusive(bool on)
 	}
 }
 
-ibValueModuleManagerConfiguration* ibSession::CreateRoot(ibMetaDataConfigurationBase* metaData)
+ibValueModuleManagerRuntimeConfiguration* ibSession::CreateRoot(ibMetaDataConfigurationBase* metaData)
 {
 	// Per-session root mm — replaces the legacy ibMetaDataConfigurationFile
 	// process-singleton. Each session owns its own copy of the metadata
@@ -168,8 +188,8 @@ ibValueModuleManagerConfiguration* ibSession::CreateRoot(ibMetaDataConfiguration
 	if (commonMeta == nullptr)
 		return nullptr;
 
-	m_root = ibValuePtr<ibValueModuleManagerConfiguration>(
-		new ibValueModuleManagerConfiguration(metaData, commonMeta));
+	m_root = ibValuePtr<ibValueModuleManagerRuntimeConfiguration>(
+		new ibValueModuleManagerRuntimeConfiguration(metaData, commonMeta));
 
 	return m_root;
 }
@@ -259,6 +279,11 @@ void ibSession::EnsureRoot()
 	// without metadata don't fault.
 	if (m_root) return;
 	if (activeMetaData == nullptr) return;
+	// Designer never executes script — it has its own lightweight designer
+	// module manager in the compile cache (ibValueModuleManagerDesigner). No
+	// per-session runtime root mm is created; designer-path consumers read the
+	// manager module from the compile cache instead of session->GetManagerModule().
+	if (appData->DesignerMode()) return;
 	CreateRoot(activeMetaData);
 }
 

@@ -106,7 +106,7 @@ static void ReportFaultAddress(const char* label, DWORD code, void* addr)
 //
 // The helper has no C++ locals with destructors — SEH handlers can't unwind
 // C++ objects cleanly unless compiled with /EHa, and we rely on /EHsc.
-static bool StartMainModuleSafe(ibValueModuleManagerConfiguration* mgr)
+static bool StartMainModuleSafe(ibValueModuleManagerRuntimeConfiguration* mgr)
 {
 #if defined(_WIN32)
 	DWORD  code = 0;
@@ -126,7 +126,7 @@ static bool StartMainModuleSafe(ibValueModuleManagerConfiguration* mgr)
 #endif
 }
 
-static bool ExitMainModuleSafe(ibValueModuleManagerConfiguration* mgr)
+static bool ExitMainModuleSafe(ibValueModuleManagerRuntimeConfiguration* mgr)
 {
 #if defined(_WIN32)
 	DWORD  code = 0;
@@ -163,11 +163,11 @@ ibWebApplication::~ibWebApplication()
 		OnExit();
 }
 
-ibValueModuleManagerConfiguration* ibWebApplication::GetManagerModule() const
+ibValueModuleManagerRuntimeConfiguration* ibWebApplication::GetManagerModule() const
 {
 	// Per-session — runtime mm now lives on ibSession (formerly on
 	// metadata; that virtual is gone). Pull the current session's mm,
-	// which is already typed as ibValueModuleManagerConfiguration*.
+	// which is already typed as ibValueModuleManagerRuntimeConfiguration*.
 	ibSession* session = ibSession::Current();
 	return session ? session->GetManagerModule() : nullptr;
 }
@@ -210,7 +210,7 @@ bool ibWebApplication::OnInit()
 	// lives in metadata (compiled once at wfrontendInit). AttachRuntime
 	// ran in ibWebSession::Login right before OnInit, so session's
 	// m_procUnitMap is already populated.
-	ibValueModuleManagerConfiguration* sharedMgr = GetManagerModule();
+	ibValueModuleManagerRuntimeConfiguration* sharedMgr = GetManagerModule();
 	if (sharedMgr == nullptr) {
 		wxLogWarning(wxT("ibWebApplication::OnInit: no shared moduleManager"));
 		delete m_frame;

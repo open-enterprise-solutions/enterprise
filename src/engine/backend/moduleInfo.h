@@ -7,7 +7,7 @@
 #include <memory>
 
 // Marker interface for descriptors that terminate a runtime tree.
-// Today: ibValueModuleManagerConfiguration. Used by ibRuntimeModuleDataObject::GetRoot
+// Today: ibValueModuleManagerRuntimeConfiguration. Used by ibRuntimeModuleDataObject::GetRoot
 // parent walk to find "the root above this nested descriptor".
 class BACKEND_API ibRuntimeRoot {
 public:
@@ -49,16 +49,27 @@ public:
 	// ProcUnit at session end. No-op if already empty.
 	void ResetRuntime() { m_procUnit.reset(); }
 
-	// Bind (or rebind) a named context variable on this descriptor's
-	// compile module. The value is an ibValue that exposes its method
-	// table + attributes at compile time — both the "full object"
-	// case (ThisObject — record with data + methods, thisForm —
-	// controls + events) and the "methods-only" case (Manager — root
-	// or common-module singleton providing shared helpers). Lazy-
-	// creates m_compileModule from the descriptor's meta-object when
-	// it isn't wired yet — subclass code reads like a recipe:
-	// BindContextVariable → Compile → Run.
+	// Bind a value on this descriptor's compile module. The value is an
+	// ibValue that exposes its method table + attributes at compile time.
+	// Lazy-creates m_compileModule from the descriptor's meta-object when it
+	// isn't wired yet — subclass code reads like a recipe: Bind… → Compile → Run.
+	//
+	// Three flavours by editor-visibility / storage:
+	//   BindContextVariable — named context (m_listContextValue, name VISIBLE
+	//     in autocomplete): the "full object" self-handles ThisObject / ThisForm.
+	//   BindScopeVariable   — transparent scope container (m_listContextValue,
+	//     name NOT an identifier; only its members surface): Manager /
+	//     EnumManager / SystemManager. Replaces the old scopeContext=true flag.
+	//   BindExportVariable  — export variable (m_listExternValue, name VISIBLE):
+	//     global constants, common modules surfaced as module-valued names.
 	void BindContextVariable(const wxString& name, class ibValue* value);
+	void BindScopeVariable(const wxString& name, class ibValue* value);
+	void BindExportVariable(const wxString& name, class ibValue* value);
+
+	// Symmetric teardown for the Bind… family. RemoveVariable erases the name
+	// from BOTH the extern and context maps, so one Unbind undoes any flavour
+	// of bind. No-op when no compile module is wired yet.
+	void UnbindVariable(const wxString& name);
 
 	// Compile this descriptor's module. Skips in Designer mode (the
 	// designer only wants AST-level compile state for intellisense and
@@ -213,6 +224,11 @@ protected:
 			helper->AppendProp(v.m_strRealName, v, alias);
 		}
 	}
+
+	// Lazy-create m_compileModule from the descriptor's meta-object (shared by
+	// all Bind* entry points). Propagates the parent's compile scope chain.
+	// Returns nullptr when GetMetaForCompile() has nothing to compile against.
+	ibCompileModule* EnsureCompileModule();
 
 	ibCompileModule* m_compileModule;
 	// Descriptor owns its runtime slot. shared_ptr so a long-running

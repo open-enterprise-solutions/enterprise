@@ -473,10 +473,17 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 	if (!hasError && !SaveVirtualTable())
 		return false;
 
-	if (!hasError && clearTable)
-		ibValueModelRamTableBase::Clear();
-	else if (!clearTable)
-		m_selected = true;
+	if (!hasError) {
+		// m_selected drives IsEmpty()/IsNewObject(); it must reflect the persisted
+		// DB state, not whether the RAM table is currently populated. The old code
+		// only set it on the !clearTable branch, so a normal write-with-clear left a
+		// freshly-written set reporting empty/new. replace → exactly the rows just
+		// written; append → those plus whatever already existed.
+		const long savedRows = GetRowCount();
+		if (clearTable)
+			ibValueModelRamTableBase::Clear();
+		m_selected = (savedRows > 0) || (!replace && m_selected);
+	}
 
 	return !hasError;
 }
@@ -518,6 +525,7 @@ bool ibValueRecordSetObject::DeleteData()
 
 	statement->RunQuery();
 	db->CloseStatement(statement);
+	m_selected = false; // the record set no longer exists in the DB
 	return DeleteVirtualTable();
 }
 

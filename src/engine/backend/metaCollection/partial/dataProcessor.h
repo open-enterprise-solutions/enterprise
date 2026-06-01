@@ -157,7 +157,7 @@ protected:
 
 	friend class ibValue;
 	friend class ibValueMetaObjectDataProcessor;
-	friend class ibValueModuleManagerExternalDataProcessor;
+	friend class ibValueModuleRuntimeManagerExternalDataProcessor;
 };
 
 #endif

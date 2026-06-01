@@ -12,8 +12,8 @@ public:
 	ibMetaDataDataProcessor(ibMetaData* metaData, ibValueMetaObjectDataProcessor* srcDataProcessor = nullptr);
 	virtual ~ibMetaDataDataProcessor();
 
-	virtual ibValueMetaObjectDataProcessor* GetDataProcessor() const { return m_commonObject; }
-	virtual ibValueModuleManagerExternalDataProcessor* GetManagerModule() const { return m_moduleManager; }
+	virtual ibValueMetaObjectDataProcessor* GetDataProcessor() const; // out-of-line: m_commonObject is ibValuePtr
+	virtual ibValueModuleRuntimeManagerExternalDataProcessor* GetManagerModule() const { return m_moduleManager; }
 
 	virtual void SetVersion(const ibVersionID& version) { m_version = version; }
 	virtual ibVersionID GetVersion() const { return m_version; }
@@ -72,7 +72,7 @@ public:
 	bool LoadFromFile(const wxString& strFileName);
 	bool SaveToFile(const wxString& strFileName);
 
-	virtual ibValueMetaObject* GetCommonMetaObject() const {return m_commonObject;}
+	virtual ibValueMetaObject* GetCommonMetaObject() const; // out-of-line: m_commonObject is ibValuePtr
 
 	//start/exit module
 	virtual bool StartMainModule() { return m_moduleManager ? m_moduleManager->StartMainModule() : false; }
@@ -80,30 +80,22 @@ public:
 
 protected:
 
-	//header loader/saver 
-	bool LoadHeader(ibReaderMemory& readerData);
-	bool SaveHeader(ibWriterMemory& writerData);
+	//loader/saver/deleter: (header sign/version/guid read+written inside LoadCommonTree/SaveCommonTree)
+	bool LoadCommonTree(ibValueMetaObjectDataProcessor* root, const ibClassID& clsid, ibReaderMemory& readerData, bool resetId = false);
+	bool SaveCommonTree(const ibClassID& clsid, ibWriterMemory& writerData, int flags = defaultFlag);
+	bool DeleteCommonTree(const ibClassID& clsid);
 
-	//loader/saver/deleter: 
-	bool LoadCommonMetadata(const ibClassID& clsid, ibReaderMemory& readerData);
-	bool LoadChildMetadata(const ibClassID& clsid, ibReaderMemory& readerData, ibValueMetaObject* object);
-	bool SaveCommonMetadata(const ibClassID& clsid, ibWriterMemory& writerData, int flags = defaultFlag);
-	bool SaveChildMetadata(const ibClassID& clsid, ibWriterMemory& writerData, ibValueMetaObject* object, int flags = defaultFlag);
-	bool DeleteCommonMetadata(const ibClassID& clsid);
-	bool DeleteChildMetadata(const ibClassID& clsid, ibValueMetaObject* object);
-
-	//run/close recursively:
-	bool RunChildMetadata(ibValueMetaObject* object, int flags, bool before);
-	bool CloseChildMetadata(ibValueMetaObject* object, int flags, bool before);
-	bool ClearChildMetadata(ibValueMetaObject* object);
+	// Build a detached external-DP root for the start-from-file detached-root swap
+	// (LoadFromFile). nullptr on failure; otherwise refcount 1, caller owns it.
+	ibValueMetaObjectDataProcessor* BuildFreshRoot();
 
 private:
 
 	wxString m_fullPath;
 
 	ibMetaData* m_ownerMeta; //owner for saving/loading
-	ibValueModuleManagerExternalDataProcessor* m_moduleManager;
-	ibValueMetaObjectDataProcessor* m_commonObject; 	//common meta object
+	ibValuePtr<ibValueModuleRuntimeManagerExternalDataProcessor> m_moduleManager; // owning handle; dtor runs DestroyMainModule (RAII)
+	ibValuePtr<ibValueMetaObjectDataProcessor> m_commonObject; 	//common meta object — owning handle (ibValuePtr)
 	bool m_configOpened;
 
 	ibVersionID m_version;

@@ -294,10 +294,11 @@ bool ibValueMetaObjectForm::OnAfterRunMetaObject(int flags)
 
 		// Defer the actual form build — passing an eager CreateObjectForm
 		// result here would need session->m_root compiled, but CompileRoot
-		// only fires after RunDatabase finishes. The cache's overloaded
-		// AddCompileModule accepts an ibDeferredForm and materializes
-		// it on first FindCompileModule lookup.
-		return cc->AddCompileModule(this, ibDeferredForm(metaObject, this));
+		// only fires after RunDatabase finishes. The cache stores a builder
+		// and materializes it on first FindCompileModule lookup.
+		return cc->AddCompileModule(this, [deferred = ibDeferredForm(metaObject, this)]() -> ibValue* {
+			return deferred.Construct();
+		});
 	}
 
 	return ibValueMetaObjectFormBase::OnAfterRunMetaObject(flags);

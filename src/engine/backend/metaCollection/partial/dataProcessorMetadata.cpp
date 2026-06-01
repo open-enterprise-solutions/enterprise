@@ -275,7 +275,7 @@ void ibValueMetaObjectDataProcessor::OnRemoveMetaForm(ibValueMetaObjectFormBase*
 	if (metaForm->GetTypeForm() == ibValueMetaObjectDataProcessor::eFormDataProcessor
 		&& m_propertyDefFormObject->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormObject->SetValue(metaForm->GetMetaID());
+		m_propertyDefFormObject->SetValue(wxNOT_FOUND);
 	}
 }
 

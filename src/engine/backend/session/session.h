@@ -36,7 +36,7 @@
 #include <wx/string.h>
 
 class ibValueModuleManager;
-class ibValueModuleManagerConfiguration;
+class ibValueModuleManagerRuntimeConfiguration;
 class ibRuntimeModuleDataObject;
 class ibProcUnit;
 
@@ -242,7 +242,20 @@ public:
 	// the registry's NotifyAuthenticated phase right after Open() succeeds;
 	// stays nullptr for sessions that never run scripts (Designer,
 	// WebServer technical session, Launcher).
-	ibValueModuleManagerConfiguration* GetManagerModule() const;
+	ibValueModuleManagerRuntimeConfiguration* GetManagerModule() const;
+
+	// The module manager whose context (Manager / Catalogs / Documents / globals)
+	// an object/record/module compiled against `metaData` should parent to. One
+	// seam, two roads: Designer returns the lightweight designer manager held in
+	// `metaData`'s compile cache (no runtime root exists in the Designer); runtime
+	// returns this session's root mm. Callers that previously wrote
+	// `session->GetManagerModule()` + a DesignerMode branch use this instead.
+	// Out-of-line (session.cpp) — needs the complete designer type.
+	class ibValueModuleManager* GetEditModuleManager(const class ibMetaData* metaData) const;
+
+	// Convenience: resolve against ibSession::Current() (the common call shape at
+	// InitializeObject sites). Null-safe when there's no current session.
+	static class ibValueModuleManager* EditModuleManagerFor(const class ibMetaData* metaData);
 
 	// Create the session's root module manager. The configuration's
 	// commonMetaObject is taken directly from metaData (typed accessor —
@@ -251,7 +264,7 @@ public:
 	// ibValuePtr releases its ref (delete-if-last) after running
 	// DestroyMainModule on it. CompileRoot is separate so callers can
 	// register common modules in metadata's storage between the two.
-	ibValueModuleManagerConfiguration* CreateRoot(class ibMetaDataConfigurationBase* metaData);
+	ibValueModuleManagerRuntimeConfiguration* CreateRoot(class ibMetaDataConfigurationBase* metaData);
 
 	// Explicit close — fires OnDestroySession on the calling thread
 	// (main-thread wx frame teardown for GUI sessions) and submits
@@ -741,7 +754,7 @@ private:
 	// project convention for ibValue-derived types). Nested descriptors
 	// (common modules, object instances, forms) parent up through
 	// m_parent chain. See project_runtime_facade_plan.md.
-	ibValuePtr<ibValueModuleManagerConfiguration> m_root;
+	ibValuePtr<ibValueModuleManagerRuntimeConfiguration> m_root;
 
 	// Lambda executor — see GetLambdaRuntime() for semantics. Allocated
 	// in CreateRoot; SetParent(m_root's procUnit) is wired lazily on

@@ -171,7 +171,7 @@ public:
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
 	/// Check for the existence of a table by name
 	virtual bool TableExists(const wxString& table) = 0;
-	
+
 	/// Check for the existence of a view by name
 	virtual bool ViewExists(const wxString& view) = 0;
 	

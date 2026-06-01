@@ -158,7 +158,7 @@ public:
 protected:
 	friend class ibValue;
 	friend class ibValueMetaObjectReport;
-	friend class ibValueModuleManagerExternalReport;
+	friend class ibValueModuleRuntimeManagerExternalReport;
 };
 
 #endif

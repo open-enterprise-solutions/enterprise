@@ -425,9 +425,13 @@ int ibValueMetaObjectAttributeBase::ProcessAttribute(const wxString& tableName,
 					return retCode;
 			}
 			if (currentRef.size() > 0) {
+				// One of several allowed reference types was removed while others remain.
+				// Clear the field on rows that pointed to the removed type (mark _TYPE
+				// undefined) — mirrors the primitive-type removal branches above. A row
+				// DELETE here would wipe whole catalog/document records: silent data loss.
 				for (auto clsid : removedRef) {
 					wxString clsStr; clsStr << clsid;
-					retCode = db_query->RunQuery("DELETE FROM %s WHERE %s_RTRef = " + clsStr, tableName, fieldName);
+					retCode = db_query->RunQuery("UPDATE %s SET %s_TYPE = 0 WHERE %s_RTRef = " + clsStr, tableName, fieldName, fieldName);
 					if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 						return retCode;
 				}

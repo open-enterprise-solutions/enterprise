@@ -457,6 +457,7 @@
     <ClCompile Include="metaCollection\metaModuleObject_res.cpp" />
     <ClCompile Include="metaCollection\metaDiff.cpp" />
     <ClCompile Include="metaCollection\metaObject.cpp" />
+    <ClCompile Include="metaCollection\metaObjectSerialize.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadata.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadataEnum.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadataMenu.cpp" />

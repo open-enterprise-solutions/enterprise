@@ -175,12 +175,12 @@ void ibCompileCode::PrepareModuleData()
 		m_rootContext->AddVariable(contextValue.first, wxEmptyString, true, true);
 		bool scoped = false;
 		ibClassID clsid = 0;
-		if (contextValue.second) {
-			contextValue.second->PrepareNames();
-			clsid = contextValue.second->GetClassType();
-			const long selfPropIdx = contextValue.second->FindProp(contextValue.first);
+		if (contextValue.second.m_value) {
+			contextValue.second.m_value->PrepareNames();
+			clsid = contextValue.second.m_value->GetClassType();
+			const long selfPropIdx = contextValue.second.m_value->FindProp(contextValue.first);
 			if (selfPropIdx >= 0)
-				scoped = contextValue.second->IsPropScoped(selfPropIdx);
+				scoped = contextValue.second.m_value->IsPropScoped(selfPropIdx);
 		}
 		stampOnContext(contextValue.first, [&](ibCompileContext::ibVariable& v) {
 			v.m_clsid = clsid;
@@ -192,7 +192,7 @@ void ibCompileCode::PrepareModuleData()
 
 	for (auto& pair : m_listContextValue) {
 
-		ibValue* contextValue = pair.second;
+		ibValue* contextValue = pair.second.m_value;
 		wxASSERT(contextValue);
 		contextValue->PrepareNames();
 
@@ -582,7 +582,7 @@ void ibCompileCode::AddVariable(const wxString& strVarName, const ibValue& vObje
 		return;
 
 	// take into account external variables during compilation
-	m_listExternValue[strVarName] = vObject.m_typeClass == ibValueTypes::TYPE_REFFER
+	m_listExternValue[strVarName] = vObject.IsReference()
 		? vObject.GetRef() : const_cast<ibValue*>(&vObject);
 
 	//set the flag for recompilation
@@ -613,13 +613,15 @@ void ibCompileCode::AddVariable(const wxString& strVarName, ibValue* pValue)
  * Add the name and address of an external variable to a special array for later use
  */
 
-void ibCompileCode::AddContextVariable(const wxString& strVarName, const ibValue& vObject)
+void ibCompileCode::AddContextVariable(const wxString& strVarName, const ibValue& vObject, bool scopeContext)
 {
 	if (strVarName.IsEmpty())
 		return;
 
 	//adding variables from context
-	m_listContextValue[strVarName] = vObject.m_typeClass == ibValueTypes::TYPE_REFFER ? vObject.GetRef() : const_cast<ibValue*>(&vObject);
+	m_listContextValue[strVarName] = {
+		vObject.IsReference() ? vObject.GetRef() : const_cast<ibValue*>(&vObject),
+		scopeContext };  // {m_value, m_scopeContext}
 
 	//set the flag for recompilation
 	m_changedCode = true;
@@ -631,13 +633,13 @@ void ibCompileCode::AddContextVariable(const wxString& strVarName, const ibValue
  * Add the name and address of an external variable to a special array for later use
  */
 
-void ibCompileCode::AddContextVariable(const wxString& strVarName, ibValue* pValue)
+void ibCompileCode::AddContextVariable(const wxString& strVarName, ibValue* pValue, bool scopeContext)
 {
 	if (strVarName.IsEmpty())
 		return;
 
 	//adding variables from context
-	m_listContextValue[strVarName] = pValue;
+	m_listContextValue[strVarName] = { pValue, scopeContext };
 
 	//set the flag for recompilation
 	m_changedCode = true;

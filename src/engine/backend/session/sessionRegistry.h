@@ -172,7 +172,7 @@ public:
 	// which depends on AccessMode + thread-binding state). Returns nullptr
 	// when no live session in m_own owns this mm. Iterates m_own under
 	// m_ownMutex (shared lock).
-	ibSession* FindSessionByRoot(ibValueModuleManagerConfiguration* mm) const;
+	ibSession* FindSessionByRoot(ibValueModuleManagerRuntimeConfiguration* mm) const;
 
 	// Symmetric lookup by main-window pointer. Frame's own m_guiSession
 	// back-link is the cheap path; this is for backend code that has

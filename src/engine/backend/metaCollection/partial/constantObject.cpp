@@ -36,8 +36,7 @@ ibValueRecordDataObjectConstant* ibValueMetaObjectConstant::CreateRecordDataObje
 
 bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataObjectConstant* source)
 {
-	ibSession* session = ibSession::Current();
-	ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
 	wxASSERT(moduleManager);
 
 	// Descriptor parent first — subsequent BindVariable /

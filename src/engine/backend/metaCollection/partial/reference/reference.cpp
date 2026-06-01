@@ -33,7 +33,7 @@ void ibValueReferenceDataObject::PrepareRef(bool createData)
 				m_listObjectValue.insert_or_assign(object->GetMetaID(), object->CreateValue());
 			}
 		}
-		// table is collection values 
+		// table is collection values
 		for (const auto object : m_metaObject->GetTableArrayObject()) {
 			if (object->IsDeleted())
 				continue;

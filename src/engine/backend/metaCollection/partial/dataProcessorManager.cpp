@@ -74,7 +74,7 @@ bool ibValueManagerDataObjectExternalDataProcessor::CallAsFunc(const long lMetho
 	{
 		ibMetaDataDataProcessor* metaDataProcessor = new ibMetaDataDataProcessor();
 		if (metaDataProcessor->LoadFromFile(paParams[0]->GetString())) {
-			ibValueModuleManagerExternalDataProcessor* moduleManager = metaDataProcessor->GetManagerModule();
+			ibValueModuleRuntimeManagerExternalDataProcessor* moduleManager = metaDataProcessor->GetManagerModule();
 			pvarRetValue = moduleManager->GetObjectValue();
 			return true;
 		}

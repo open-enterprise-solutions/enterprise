@@ -8,35 +8,56 @@
 //////////////////////////////////////////////////////////////////////////////////
 #define thisObject wxT("ThisObject")
 //////////////////////////////////////////////////////////////////////////////////
-//  ibValueModuleManagerExternalDataProcessor
+//  ibValueModuleRuntimeManagerExternalDataProcessor
 //////////////////////////////////////////////////////////////////////////////////
 
-ibCompileModule* ibValueModuleManagerExternalDataProcessor::GetCompileModule() const
+// These delegate to the CONFIGURATION's module manager (an external DP inherits
+// the active config's context) — designer manager in the Designer, session root
+// mm at runtime. Resolved against the active config metadata, not the DP's own.
+ibCompileModule* ibValueModuleRuntimeManagerExternalDataProcessor::GetCompileModule() const
 {
-	ibSession* session = ibSession::Current();
-	ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
-	return moduleManager->GetCompileModule();
+	return moduleManager ? moduleManager->GetCompileModule() : nullptr;
 }
 
-std::shared_ptr<ibProcUnit> ibValueModuleManagerExternalDataProcessor::GetProcUnit() const
+std::shared_ptr<ibProcUnit> ibValueModuleRuntimeManagerExternalDataProcessor::GetProcUnit() const
 {
-	ibSession* session = ibSession::Current();
-	ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
-	return moduleManager->GetProcUnit();
+	return moduleManager ? moduleManager->GetProcUnit() : nullptr;
 }
 
-std::map<wxString, ibValue*>& ibValueModuleManagerExternalDataProcessor::GetContextVariables()
+std::map<wxString, ibContextVar>& ibValueModuleRuntimeManagerExternalDataProcessor::GetContextVariables()
 {
-	ibSession* session = ibSession::Current();
-	ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
+	// Returns a reference — no null fallback possible from the manager, so guard
+	// with a process-static empty map rather than dereferencing null in release
+	// (the sibling GetCompileModule/GetProcUnit return pointers and null-fold).
+	if (moduleManager == nullptr) {
+		static std::map<wxString, ibContextVar> s_empty;
+		return s_empty;
+	}
 	return moduleManager->GetContextVariables();
 }
 
-ibValueModuleManagerExternalDataProcessor::ibValueModuleManagerExternalDataProcessor(ibMetaData* metadata, ibValueMetaObjectDataProcessor* metaObject)
-	: ibValueModuleManager(appEnv::ActiveMetaData(), metaObject ? metaObject->GetObjectModule() : nullptr)
+std::map<wxString, ibValue*>& ibValueModuleRuntimeManagerExternalDataProcessor::GetGlobalVariables()
+{
+	// Same delegation as GetContextVariables: an external data processor's editor
+	// must see the configuration root's globals (Metadata + common modules
+	// surfaced as names), not its own extern map.
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
+	wxASSERT(moduleManager);
+	if (moduleManager == nullptr) {
+		static std::map<wxString, ibValue*> s_empty;
+		return s_empty;
+	}
+	return moduleManager->GetGlobalVariables();
+}
+
+ibValueModuleRuntimeManagerExternalDataProcessor::ibValueModuleRuntimeManagerExternalDataProcessor(ibMetaData* metadata, ibValueMetaObjectDataProcessor* metaObject)
+	: ibValueModuleRuntimeManager(appEnv::ActiveMetaData(), metaObject ? metaObject->GetObjectModule() : nullptr)
 {
 	m_objectValue = new ibValueRecordDataObjectDataProcessor(metaObject);
 	//set complile module 
@@ -50,21 +71,34 @@ ibValueModuleManagerExternalDataProcessor::ibValueModuleManagerExternalDataProce
 	}
 }
 
-ibValueModuleManagerExternalDataProcessor::~ibValueModuleManagerExternalDataProcessor()
+ibValueModuleRuntimeManagerExternalDataProcessor::~ibValueModuleRuntimeManagerExternalDataProcessor()
 {
+	// RAII protection: always tear down the runtime on release. Idempotent — guards
+	// on m_initialized, so it's a no-op if DestroyMainModule already ran and a
+	// cleanup if a caller (e.g. an ibValuePtr auto-release) skipped it.
+	DestroyMainModule();
+	if (m_objectValue) {
+		// m_objectValue BORROWS m_compileModule / m_procUnit from this manager (shared
+		// in the ctor, raw pointer). This manager's base dtor is about to wxDELETE
+		// m_compileModule, so the borrow must be cleared first or m_objectValue's dtor
+		// double-frees it. DestroyMainModule only clears it when m_initialized — a
+		// never-run manager (released by a detached-root swap) would skip that → the
+		// double free. Clear unconditionally here.
+		m_objectValue->m_compileModule = nullptr;
+		m_objectValue->m_procUnit = nullptr;
+	}
 	if (appData->DesignerMode()) {
 		//decrRef
 		m_objectValue->DecrRef();
 	}
 }
 
-bool ibValueModuleManagerExternalDataProcessor::CreateMainModule()
+bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 {
 	if (m_initialized)
 		return true;
 
-	ibSession* session = ibSession::Current();
-	ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
 
 	// Imperative pipeline — SetParent cascades compile+procUnit parents
@@ -111,7 +145,7 @@ bool ibValueModuleManagerExternalDataProcessor::CreateMainModule()
 	return true;
 }
 
-bool ibValueModuleManagerExternalDataProcessor::DestroyMainModule()
+bool ibValueModuleRuntimeManagerExternalDataProcessor::DestroyMainModule()
 {
 	if (!m_initialized)
 		return true;
@@ -124,19 +158,20 @@ bool ibValueModuleManagerExternalDataProcessor::DestroyMainModule()
 	m_objectValue->m_compileModule = nullptr;
 	m_objectValue->m_procUnit = nullptr;
 
-	//Setup common modules
+	//Setup common modules — best-effort: destroy every module even if one
+	//fails, so teardown never leaks the remainder; report the aggregate.
+	bool ok = true;
 	for (auto& moduleValue : m_listCommonModuleManager) {
-		if (!moduleValue->DestroyCommonModule()) {
-			return false;
-		}
+		if (!moduleValue->DestroyCommonModule())
+			ok = false;
 	}
 
 	m_initialized = false;
-	return true;
+	return ok;
 }
 
 //main module - initialize
-bool ibValueModuleManagerExternalDataProcessor::StartMainModule(bool force)
+bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(bool force)
 {
 	if (!m_initialized)
 		return false;
@@ -198,7 +233,7 @@ bool ibValueModuleManagerExternalDataProcessor::StartMainModule(bool force)
 }
 
 //main module - destroy
-bool ibValueModuleManagerExternalDataProcessor::ExitMainModule(bool force)
+bool ibValueModuleRuntimeManagerExternalDataProcessor::ExitMainModule(bool force)
 {
 	if (force)
 		return true;
@@ -210,35 +245,52 @@ bool ibValueModuleManagerExternalDataProcessor::ExitMainModule(bool force)
 }
 
 //////////////////////////////////////////////////////////////////////////////////
-//  ibValueModuleManagerExternalReport
+//  ibValueModuleRuntimeManagerExternalReport
 //////////////////////////////////////////////////////////////////////////////////
 
-ibCompileModule* ibValueModuleManagerExternalReport::GetCompileModule() const
+// Delegate to the CONFIGURATION's module manager — see the DataProcessor variant.
+ibCompileModule* ibValueModuleRuntimeManagerExternalReport::GetCompileModule() const
 {
-	ibSession* session = ibSession::Current();
-	ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
-	return moduleManager->GetCompileModule();
+	return moduleManager ? moduleManager->GetCompileModule() : nullptr;
 }
 
-std::shared_ptr<ibProcUnit> ibValueModuleManagerExternalReport::GetProcUnit() const
+std::shared_ptr<ibProcUnit> ibValueModuleRuntimeManagerExternalReport::GetProcUnit() const
 {
-	ibSession* session = ibSession::Current();
-	ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
-	return moduleManager->GetProcUnit();
+	return moduleManager ? moduleManager->GetProcUnit() : nullptr;
 }
 
-std::map<wxString, ibValue*>& ibValueModuleManagerExternalReport::GetContextVariables()
+std::map<wxString, ibContextVar>& ibValueModuleRuntimeManagerExternalReport::GetContextVariables()
 {
-	ibSession* session = ibSession::Current();
-	ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
+	// Returns a reference — no null fallback possible from the manager, so guard
+	// with a process-static empty map rather than dereferencing null in release
+	// (the sibling GetCompileModule/GetProcUnit return pointers and null-fold).
+	if (moduleManager == nullptr) {
+		static std::map<wxString, ibContextVar> s_empty;
+		return s_empty;
+	}
 	return moduleManager->GetContextVariables();
 }
 
-ibValueModuleManagerExternalReport::ibValueModuleManagerExternalReport(ibMetaData* metadata, ibValueMetaObjectReport* metaObject)
-	: ibValueModuleManager(appEnv::ActiveMetaData(), metaObject ? metaObject->GetObjectModule() : nullptr)
+std::map<wxString, ibValue*>& ibValueModuleRuntimeManagerExternalReport::GetGlobalVariables()
+{
+	// Delegate to the configuration root — see DataProcessor::GetGlobalVariables.
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
+	wxASSERT(moduleManager);
+	if (moduleManager == nullptr) {
+		static std::map<wxString, ibValue*> s_empty;
+		return s_empty;
+	}
+	return moduleManager->GetGlobalVariables();
+}
+
+ibValueModuleRuntimeManagerExternalReport::ibValueModuleRuntimeManagerExternalReport(ibMetaData* metadata, ibValueMetaObjectReport* metaObject)
+	: ibValueModuleRuntimeManager(appEnv::ActiveMetaData(), metaObject ? metaObject->GetObjectModule() : nullptr)
 {
 	m_objectValue = new ibValueRecordDataObjectReport(metaObject);
 	//set complile module 
@@ -252,21 +304,33 @@ ibValueModuleManagerExternalReport::ibValueModuleManagerExternalReport(ibMetaDat
 	}
 }
 
-ibValueModuleManagerExternalReport::~ibValueModuleManagerExternalReport()
+ibValueModuleRuntimeManagerExternalReport::~ibValueModuleRuntimeManagerExternalReport()
 {
+	// RAII protection: always tear down the runtime on release. Idempotent — guards
+	// on m_initialized (init sets it, DestroyMainModule clears it), so it's a no-op
+	// if already destroyed and a cleanup if a caller skipped it.
+	DestroyMainModule();
+	if (m_objectValue) {
+		// m_objectValue BORROWS m_compileModule / m_procUnit from this manager (shared
+		// in the ctor, raw pointer). The base dtor is about to wxDELETE m_compileModule,
+		// so clear the borrow first or m_objectValue's dtor double-frees it. A never-run
+		// manager (released by a detached-root swap) skips this in DestroyMainModule
+		// (m_initialized false) → the double free. Clear unconditionally here.
+		m_objectValue->m_compileModule = nullptr;
+		m_objectValue->m_procUnit = nullptr;
+	}
 	if (appData->DesignerMode()) {
 		//decrRef
 		m_objectValue->DecrRef();
 	}
 }
 
-bool ibValueModuleManagerExternalReport::CreateMainModule()
+bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 {
 	if (m_initialized)
 		return true;
 
-	ibSession* session = ibSession::Current();
-	ibValueModuleManager* moduleManager = session ? session->GetManagerModule() : nullptr;
+	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
 
 	// Imperative pipeline — see ExternalDataProcessor::CreateMainModule
@@ -306,7 +370,7 @@ bool ibValueModuleManagerExternalReport::CreateMainModule()
 	return true;
 }
 
-bool ibValueModuleManagerExternalReport::DestroyMainModule()
+bool ibValueModuleRuntimeManagerExternalReport::DestroyMainModule()
 {
 	if (!m_initialized)
 		return true;
@@ -319,20 +383,20 @@ bool ibValueModuleManagerExternalReport::DestroyMainModule()
 	m_objectValue->m_compileModule = nullptr;
 	m_objectValue->m_procUnit = nullptr;
 
-	//Setup common modules
+	//Setup common modules — best-effort: destroy every module even if one
+	//fails, so teardown never leaks the remainder; report the aggregate.
+	bool ok = true;
 	for (auto& moduleValue : m_listCommonModuleManager) {
-		if (!moduleValue->DestroyCommonModule()) {
-			if (!appData->DesignerMode())
-				return false;
-		}
+		if (!moduleValue->DestroyCommonModule())
+			ok = false;
 	}
 
 	m_initialized = false;
-	return true;
+	return ok;
 }
 
 //main module - initialize
-bool ibValueModuleManagerExternalReport::StartMainModule(bool force)
+bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(bool force)
 {
 	if (!m_initialized)
 		return false;
@@ -390,7 +454,7 @@ bool ibValueModuleManagerExternalReport::StartMainModule(bool force)
 }
 
 //main module - destroy
-bool ibValueModuleManagerExternalReport::ExitMainModule(bool force)
+bool ibValueModuleRuntimeManagerExternalReport::ExitMainModule(bool force)
 {
 	if (force)
 		return true;
@@ -402,10 +466,10 @@ bool ibValueModuleManagerExternalReport::ExitMainModule(bool force)
 }
 
 //****************************************************************************
-//*                      ibValueModuleManagerExternalDataProcessor                 *
+//*                      ibValueModuleRuntimeManagerExternalDataProcessor                 *
 //****************************************************************************
 
-void ibValueModuleManagerExternalDataProcessor::PrepareNames() const
+void ibValueModuleRuntimeManagerExternalDataProcessor::PrepareNames() const
 {
 	m_methodHelper->ClearHelper();
 	if (m_objectValue != nullptr) {
@@ -423,7 +487,7 @@ void ibValueModuleManagerExternalDataProcessor::PrepareNames() const
 	ExportNamesToHelper(m_methodHelper, eProcUnit);
 }
 
-bool ibValueModuleManagerExternalDataProcessor::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+bool ibValueModuleRuntimeManagerExternalDataProcessor::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	if (m_objectValue &&
 		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
@@ -435,7 +499,7 @@ bool ibValueModuleManagerExternalDataProcessor::CallAsFunc(const long lMethodNum
 	);
 }
 
-bool ibValueModuleManagerExternalDataProcessor::SetPropVal(const long lPropNum, const ibValue& varPropVal)
+bool ibValueModuleRuntimeManagerExternalDataProcessor::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
 	if (m_objectValue &&
 		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
@@ -449,7 +513,7 @@ bool ibValueModuleManagerExternalDataProcessor::SetPropVal(const long lPropNum, 
 	return false;
 }
 
-bool ibValueModuleManagerExternalDataProcessor::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+bool ibValueModuleRuntimeManagerExternalDataProcessor::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	if (m_objectValue &&
 		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
@@ -463,7 +527,7 @@ bool ibValueModuleManagerExternalDataProcessor::GetPropVal(const long lPropNum, 
 	return false;
 }
 
-long ibValueModuleManagerExternalDataProcessor::FindProp(const wxString& strName) const
+long ibValueModuleRuntimeManagerExternalDataProcessor::FindProp(const wxString& strName) const
 {
 	if (m_objectValue &&
 		m_objectValue->FindProp(strName) != wxNOT_FOUND) {
@@ -478,10 +542,10 @@ long ibValueModuleManagerExternalDataProcessor::FindProp(const wxString& strName
 }
 
 //****************************************************************************
-//*                      ibValueModuleManagerExternalReport		                 *
+//*                      ibValueModuleRuntimeManagerExternalReport		                 *
 //****************************************************************************
 
-void ibValueModuleManagerExternalReport::PrepareNames() const
+void ibValueModuleRuntimeManagerExternalReport::PrepareNames() const
 {
 	m_methodHelper->ClearHelper();
 	if (m_objectValue != nullptr) {
@@ -498,7 +562,7 @@ void ibValueModuleManagerExternalReport::PrepareNames() const
 	ExportNamesToHelper(m_methodHelper, eProcUnit);
 }
 
-bool ibValueModuleManagerExternalReport::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+bool ibValueModuleRuntimeManagerExternalReport::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	if (m_objectValue &&
 		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
@@ -510,7 +574,7 @@ bool ibValueModuleManagerExternalReport::CallAsFunc(const long lMethodNum, ibVal
 	);
 }
 
-bool ibValueModuleManagerExternalReport::SetPropVal(const long lPropNum, const ibValue& varPropVal)        //setting attribute
+bool ibValueModuleRuntimeManagerExternalReport::SetPropVal(const long lPropNum, const ibValue& varPropVal)        //setting attribute
 {
 	if (m_objectValue &&
 		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
@@ -524,7 +588,7 @@ bool ibValueModuleManagerExternalReport::SetPropVal(const long lPropNum, const i
 	return false;
 }
 
-bool ibValueModuleManagerExternalReport::GetPropVal(const long lPropNum, ibValue& pvarPropVal)                   //attribute value
+bool ibValueModuleRuntimeManagerExternalReport::GetPropVal(const long lPropNum, ibValue& pvarPropVal)                   //attribute value
 {
 	if (m_objectValue &&
 		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
@@ -538,7 +602,7 @@ bool ibValueModuleManagerExternalReport::GetPropVal(const long lPropNum, ibValue
 	return false;
 }
 
-long ibValueModuleManagerExternalReport::FindProp(const wxString& strName) const
+long ibValueModuleRuntimeManagerExternalReport::FindProp(const wxString& strName) const
 {
 	if (m_objectValue &&
 		m_objectValue->FindProp(strName) != wxNOT_FOUND) {
@@ -556,5 +620,5 @@ long ibValueModuleManagerExternalReport::FindProp(const wxString& strName) const
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueModuleManagerExternalDataProcessor, "ExternalDataProcessorModuleManager", string_to_clsid("SO_EDMM"));
-SYSTEM_TYPE_REGISTER(ibValueModuleManagerExternalReport, "ExternalReportModuleManager", string_to_clsid("SO_ERMM"));
+SYSTEM_TYPE_REGISTER(ibValueModuleRuntimeManagerExternalDataProcessor, "ExternalDataProcessorModuleManager", string_to_clsid("SO_EDMM"));
+SYSTEM_TYPE_REGISTER(ibValueModuleRuntimeManagerExternalReport, "ExternalReportModuleManager", string_to_clsid("SO_ERMM"));

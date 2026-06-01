@@ -713,9 +713,9 @@ public:
 	//get command section
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Combined; }
 
-	// load & save config data 
-	virtual bool LoadTableData(const ibReaderMemory& reader);
-	virtual bool SaveTableData(ibWriterMemory& writer) const;
+	// dump & restore table data
+	virtual bool RestoreTable(const ibReaderMemory& reader);
+	virtual bool DumpTable(ibWriterMemory& writer) const;
 
 protected:
 
@@ -1174,9 +1174,9 @@ public:
 	//special functions for DB 
 	virtual wxString GetTableNameDB() const;
 
-	// load & save config data 
-	virtual bool LoadTableData(const ibReaderMemory& reader);
-	virtual bool SaveTableData(ibWriterMemory& writer) const;
+	// dump & restore table data
+	virtual bool RestoreTable(const ibReaderMemory& reader);
+	virtual bool DumpTable(ibWriterMemory& writer) const;
 
 protected:
 

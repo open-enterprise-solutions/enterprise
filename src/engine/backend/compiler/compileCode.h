@@ -4,6 +4,16 @@
 #include "translateCode.h"
 #include "compileContext.h"
 
+// One entry in a module's context-variable map. scopeContext marks a
+// transparent container (Manager / EnumManager / SystemManager): its
+// methods flatten into the surrounding scope, and its OWN name is NOT an
+// identifier in the code editor. Default false — a bound value's name is
+// visible (ThisObject / ThisForm / export vars).
+struct ibContextVar {
+	ibValue* m_value = nullptr;
+	bool m_scopeContext = false;
+};
+
 //*******************************************************************
 //*							  Class: compiler                       *
 //*******************************************************************
@@ -50,8 +60,8 @@ public:
 	void AddVariable(const wxString& strName, const ibValue& value);	// support for external variables
 	void AddVariable(const wxString& strName, ibValue* pValue);		// support for external variables
 
-	void AddContextVariable(const wxString& strName, const ibValue& value);
-	void AddContextVariable(const wxString& strName, ibValue* pValue);
+	void AddContextVariable(const wxString& strName, const ibValue& value, bool scopeContext = false);
+	void AddContextVariable(const wxString& strName, ibValue* pValue, bool scopeContext = false);
 
 	void RemoveVariable(const wxString& strName);
 
@@ -108,7 +118,7 @@ public:
 	ibByteBinder CreateBinder(bool delta = true) {
 		ibByteBinder br = m_cByteCode.CreateBinder(delta);
 		for (auto& kv : m_listExternValue)  br.SetVar(kv.first, kv.second);
-		for (auto& kv : m_listContextValue) br.SetVar(kv.first, kv.second);
+		for (auto& kv : m_listContextValue) br.SetVar(kv.first, kv.second.m_value);
 		return br;
 	}
 
@@ -147,7 +157,7 @@ public:
 	std::map<wxString, ibValue*> m_listExternValue;
 
 	// matching context variables
-	std::map<wxString, ibValue*> m_listContextValue;
+	std::map<wxString, ibContextVar> m_listContextValue;
 
 protected:
 

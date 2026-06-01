@@ -123,7 +123,7 @@ bool ibValueMetaObjectConstant::CreateAndUpdateTableDB(ibMetaDataConfiguration* 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibValueMetaObjectConstant::LoadTableData(const ibReaderMemory& reader)
+bool ibValueMetaObjectConstant::RestoreTable(const ibReaderMemory& reader)
 {
 	wxString sqlText = "";
 
@@ -160,7 +160,7 @@ bool ibValueMetaObjectConstant::LoadTableData(const ibReaderMemory& reader)
 
 #include "backend/objCtor.h"
 
-bool ibValueMetaObjectConstant::SaveTableData(ibWriterMemory& writer) const
+bool ibValueMetaObjectConstant::DumpTable(ibWriterMemory& writer) const
 {
 	const wxString& fieldName = GetFieldNameDB();
 	ibDatabaseResultSet* dbResultSet =

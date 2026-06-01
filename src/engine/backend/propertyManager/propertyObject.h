@@ -16,6 +16,11 @@ class BACKEND_API ibEvent;
 
 class BACKEND_API ibMetaData;
 
+// owning smart pointer over ibValue-derived types (defined in value_ptr.h,
+// pulled in transitively via value.h at the bottom of this header). Forward
+// declared here so m_children can be a vector of owning handles.
+template <class T> class ibValuePtr;
+
 ///////////////////////////////////////////////////////////////////////////////
 
 #include "backend/fileSystem/fs.h"
@@ -312,6 +317,11 @@ public:
 	/// Gets the owner object
 	virtual ibPropertyObject* GetOwner() const { return nullptr; }
 
+	/// A child bound to its parent for life: a parent reset (RemoveAllChildren
+	/// with keepPinned) preserves it; only the parent's destruction drops it.
+	/// Default false; ibValueMetaObject pins predefined children.
+	virtual bool IsPinnedToParent() const { return false; }
+
 	/// Gets the metadata object
 	virtual ibMetaData* GetMetaData() const { return nullptr; }
 
@@ -402,21 +412,38 @@ private:
 template <typename T>
 class ibPropertyObjectHelper : public ibPropertyObject {
 	void RemovePropertyObject(const ibPropertyObject* obj) {
-		typename std::vector< propertyType* >::iterator it = m_children.begin();
-		while (it != m_children.end() && *it != obj) it++;
-		if (it != m_children.end()) m_children.erase(it);
+		typename vectorType::iterator it = m_children.begin();
+		// cast through the owning handle to the raw child, then to the
+		// ibPropertyObject base — m_children stores ibValue* internally, which is
+		// a sibling base of ibPropertyObject, so direct comparison is ill-formed.
+		while (it != m_children.end() &&
+			static_cast<const ibPropertyObject*>(static_cast<propertyType*>(*it)) != obj) it++;
+		if (it != m_children.end()) {
+			// Hold a ref across erase(): if this is the child's last owner, releasing
+			// it inside erase() runs the child's destructor, which calls back
+			// RemovePropertyObject(this) → a re-entrant erase on the vector we're
+			// already erasing from (UB). The local drops the ref only after erase()
+			// returns, by which point the re-entrant lookup finds nothing.
+			ibValuePtr<propertyType> dying(*it);
+			m_children.erase(it);
+		}
 	}
 protected:
 	ibPropertyObjectHelper() : m_parent(nullptr) {}
 public:
 
 	using propertyType = T;
-	using vectorType = std::vector<propertyType*>;
+	// Owning children: each handle holds a ref (IncrRef on AddChild, DecrRef on
+	// erase / clear / destruction). The container is the structural owner; the
+	// parent link (m_parent) stays a raw, non-owning back-pointer.
+	using vectorType = std::vector<ibValuePtr<propertyType>>;
 
 	virtual ~ibPropertyObjectHelper() {
 		// remove the reference in the parent
 		if (m_parent != nullptr) m_parent->RemovePropertyObject(this);
-		for (auto& child : m_children) child->SetParent(nullptr);
+		// Teardown reuses the canonical reset: orphan + release every child, the
+		// owning handles cascade destruction down the subtree.
+		RemoveAllChildren();
 	}
 
 	/// Gets the owner object
@@ -435,7 +462,8 @@ public:
 		if (m_parent == nullptr)
 			return 0;
 		unsigned int pos = 0;
-		while (pos < m_parent->GetChildCount() && m_parent->m_children[pos] != this)
+		while (pos < m_parent->GetChildCount() &&
+			static_cast<propertyType*>(m_parent->m_children[pos]) != this)
 			pos++;
 		return pos;
 	}
@@ -509,7 +537,10 @@ public:
 		if (pos == obj_pos)
 			return true;
 
-		// Procesamos el cambio de posición
+		// Procesamos el cambio de posición. Anchor a ref across remove→re-add:
+		// RemoveChild drops the owning handle, which would destroy a sole-owned
+		// child before AddChild can re-insert it.
+		ibValuePtr<propertyType> keep(obj);
 		RemoveChild(obj);
 		AddChild(pos, obj);
 		return true;
@@ -521,10 +552,39 @@ public:
 	void RemoveChild(propertyType* obj) { RemovePropertyObject(obj); }
 	void RemoveChild(unsigned int idx) {
 		assert(idx < m_children.size());
+		// Hold a ref across erase() — see RemovePropertyObject (re-entrant erase guard).
+		ibValuePtr<propertyType> dying(m_children[idx]);
 		m_children.erase(m_children.begin() + idx);
 	}
 
-	void RemoveAllChildren() { m_children.clear(); }
+	// Canonical "reset children". Orphan first so a child's destructor doesn't
+	// re-enter RemovePropertyObject on this vector mid-clear() (re-entrant erase =
+	// UB), then clear: the owning handles release and a last-ref child is destroyed,
+	// cascading destruction down its subtree. Used for reload-reset and teardown.
+	//
+	// keepPinned: preserve children bound to this parent for life
+	// (IsPinnedToParent — predefined attributes / inner modules on a reused root).
+	// A reload reset passes true so the predefined infrastructure created in the
+	// owner's ctor survives; teardown (destructor) passes false to drop everything.
+	void RemoveAllChildren(bool keepPinned = false) {
+		if (!keepPinned) {
+			for (auto& child : m_children) child->SetParent(nullptr);
+			m_children.clear();
+			return;
+		}
+		// Keep pinned children in place; orphan the rest first (so their dtors
+		// don't re-enter RemovePropertyObject), then release them via swap: the
+		// old vector holds every handle, dropping it destroys the last-ref
+		// non-pinned children while the pinned ones survive in m_children.
+		vectorType kept;
+		for (auto& child : m_children) {
+			if (child->IsPinnedToParent())
+				kept.emplace_back(child);
+			else
+				child->SetParent(nullptr);
+		}
+		m_children.swap(kept);
+	}
 
 	/**
 	* Obtiene un hijo del objeto.
@@ -562,11 +622,10 @@ public:
 	}
 
 	void DeleteRecursive() {
-		for (auto objChild : m_children) {
-			objChild->SetParent(nullptr);
-			objChild->DeleteRecursive();
-			wxDELETE(objChild);
-		}
+		// Owning children: clearing releases each handle, and the destructor of a
+		// last-ref child recurses this teardown down the subtree. No wxDELETE /
+		// explicit recursion — the cascade does it.
+		for (auto& objChild : m_children) objChild->SetParent(nullptr);
 		m_children.clear();
 	}
 

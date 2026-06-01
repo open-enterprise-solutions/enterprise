@@ -141,7 +141,7 @@ public:
 #pragma endregion 
 #pragma region __filter_h__
 
-	//predefined 
+	//predefined
 	template <typename _T1>
 	ibValueMetaObjectAttributeBase* FindPredefinedAttributeObjectByFilter(const _T1& id) const {
 		return FindObjectByFilter<ibValueMetaObjectAttributeBase>(id, { g_metaPredefinedAttributeCLSID });

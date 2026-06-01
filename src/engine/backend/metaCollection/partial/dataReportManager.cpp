@@ -77,7 +77,7 @@ bool ibValueManagerDataObjectExternalReport::CallAsFunc(const long lMethodNum, i
 	{
 		ibMetaDataReport* metaReport = new ibMetaDataReport();
 		if (metaReport->LoadFromFile(paParams[0]->GetString())) {
-			ibValueModuleManagerExternalReport* moduleManager = metaReport->GetManagerModule();
+			ibValueModuleRuntimeManagerExternalReport* moduleManager = metaReport->GetManagerModule();
 			pvarRetValue = moduleManager->GetObjectValue();
 			return true;
 		}

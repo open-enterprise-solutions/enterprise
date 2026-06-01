@@ -21,6 +21,11 @@
 
 #include <wx/artprov.h>
 #include <wx/tokenzr.h>
+// NOTE: load-bearing transitively — typeconv.h is pulled in via backend_core.h
+// across the backend, and this include is what currently provides wxPGProperty /
+// WXVARIANT to the backend property system (propertyObject.h, propertyNumber.h,
+// propertyEnum.h, propertyList.h) and wxFileName to wxFileName consumers. It can
+// only be dropped once propgrid is moved out of the backend property layer.
 #include <wx/propgrid/propgrid.h>
 
 namespace typeConv
@@ -534,20 +539,6 @@ namespace typeConv
 
 	inline wxString BoolToString(bool val) {
 		return val ? wxT("1") : wxT("0");
-	}
-
-	inline wxArrayString StringToArrayString(const wxString& str) {
-		//wxArrayString result = wxStringTokenize( str, wxT(";") );
-		wxArrayString result;
-
-		WX_PG_TOKENIZER2_BEGIN(str, wxT('"'))
-			result.Add(token);
-		WX_PG_TOKENIZER2_END()
-			return result;
-	}
-
-	inline wxString ArrayStringToString(const wxArrayString& arrayStr) {
-		return wxArrayStringProperty::ArrayStringToString(arrayStr, '"', 1);
 	}
 
 	inline void ParseBitmapWithResource(const wxString& value, wxString* image, wxString* source, wxSize* icoSize) {

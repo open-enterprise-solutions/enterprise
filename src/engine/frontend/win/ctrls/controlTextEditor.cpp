@@ -672,6 +672,12 @@ void ibControlTextEditor::OnLeftUp(wxMouseEvent& event)
 	const wxPoint p = event.GetPosition();
 	ButtonSlot* hit = HitTestButton(p);
 
+	// Reset the pressed state synchronously (while `this` is alive), but DEFER
+	// firing the button command via QueueEvent. The handler (Select/Open) can
+	// open a modal dialog and rebuild the form, destroying this control;
+	// dispatching synchronously here and then touching `this` again (the next
+	// fire() calls, Refresh) is a use-after-free. Queueing runs the command
+	// after OnLeftUp has fully unwound and `this` is off the stack.
 	auto fire = [&](ButtonSlot& b) {
 		if (!b.pressed) return;
 		const bool clicked = (hit == &b);
@@ -682,7 +688,7 @@ void ibControlTextEditor::OnLeftUp(wxMouseEvent& event)
 			if (b.eventType != wxEVT_CONTROL_BUTTON_CLEAR && m_text != nullptr)
 				ev.SetString(GetValue());
 			if (m_text != nullptr) m_text->SetFocus();
-			GetEventHandler()->ProcessEvent(ev);
+			GetEventHandler()->QueueEvent(ev.Clone());
 		}
 	};
 	fire(m_btnSelect);

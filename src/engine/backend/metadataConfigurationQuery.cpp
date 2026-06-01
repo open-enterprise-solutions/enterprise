@@ -65,12 +65,8 @@ bool ibMetaDataConfiguration::LoadDatabase(int flags)
 		if (metaReader.eof())
 			return false;
 
-		//check metadata 
-		if (!LoadHeader(metaReader))
-			return false;
-
-		//load metadata 
-		if (!LoadCommonMetadata(g_metaCommonMetadataCLSID, metaReader))
+		//load metadata (header is read inside LoadCommonTree)
+		if (!LoadCommonTree(g_metaCommonMetadataCLSID, metaReader))
 			return false;
 
 		m_configNew = false;
@@ -136,11 +132,20 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 	if (!db_query->IsActiveTransaction())
 		return false;
 
+
+	// Self-safeguard: a DDL exception (e.g. the FB driver throwing on a failed
+	// ALTER) below would otherwise skip OnAfterSaveDatabase, leaking the open
+	// transaction + the auto-acquired exclusive mode — the next apply then bails
+	// silently at the "transaction already active" guard ("metadata returned
+	// false", no text). Roll back + release here and rethrow so any caller
+	// (designer / codeRunner / daemon) still reports the error and the DB stays clean.
+	try {
+
 	//remove old tables (if need)
 	if ((flags & saveConfigFlag) != 0) {
 
 		//Delete common object
-		if (!DeleteCommonMetadata(g_metaCommonMetadataCLSID)) {
+		if (!DeleteCommonTree(g_metaCommonMetadataCLSID)) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 			db_query->RollBack(); return false;
 #else 
@@ -231,17 +236,8 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 	//common data
 	ibWriterMemory writerData;
 
-	//Save header info 
-	if (!SaveHeader(writerData)) {
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-		db_query->RollBack(); return false;
-#else 
-		return false;
-#endif
-	}
-
-	//Save common object
-	if (!SaveCommonMetadata(g_metaCommonMetadataCLSID, writerData, flags)) {
+	//Save common object (header is written inside SaveCommonTree)
+	if (!SaveCommonTree(g_metaCommonMetadataCLSID, writerData, flags)) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 		db_query->RollBack(); return false;
 #else 
@@ -264,8 +260,8 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 
 	if (prepStatement->RunQuery() == DATABASE_LAYER_QUERY_RESULT_ERROR) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-		db_query->RollBack();
-#else 
+		db_query->RollBack(); return false;
+#else
 		return false;
 #endif
 	}
@@ -293,6 +289,16 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 	}
 
 	return db_query->IsActiveTransaction();
+
+	}
+	catch (...) {
+#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
+		if (db_query->IsActiveTransaction())
+			db_query->RollBack();
+#endif
+		ibRestructureInfo::ReleaseAutoExclusive();
+		throw; // let the caller surface the backend error chain
+	}
 }
 
 bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flags)
@@ -416,8 +422,17 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 			db_query->Commit();
-#endif 
+#endif
 			Modify(false);
+
+			// One-time flag: the very first apply on a fresh DB runs the
+			// "create new database" path (DROP + recreate sys_const, full
+			// CreateMetaTable). Every later apply must be incremental. Clearing
+			// it here — after the config blob is committed — is what flips the
+			// next apply to configNew=0; otherwise every Update re-DROPs
+			// sys_const and a constant read mid-cycle hits its just-dropped
+			// column (FB -206 "column unknown FLDnnnn_TYPE").
+			m_configNew = false;
 		}
 		else {
 

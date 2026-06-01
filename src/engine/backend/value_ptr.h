@@ -4,15 +4,28 @@
 #include "backend_core.h"
 
 // ----------------------------------------------------------------------------
-// ibValuePtr: helper class to avoid memleaks because of missing calls
-//                  to ibValuePtr::DecrRef
+// ibValuePtr<T>: an owning, refcounted reference to an ibValue-derived T that
+// also gives typed access. It IS an ibValue — just like a plain ibValue it holds
+// its referent in m_pRef (TYPE_REFFER) and is traversed by the runtime as a
+// value — and on top it adds the typed view (operator-> / operator T*) and
+// manages the refcount: IncrRef on bind, DecrRef on rebind / destruction (the
+// latter via ~ibValue). Assigning a raw T* or another ibValuePtr rebinds the
+// reference, releasing the previous referent.
 // ----------------------------------------------------------------------------
 
 template <class T>
 class ibValuePtr : public ibValue {
 
-	inline void OnSetValueT(ibValue* ptr) {	
-		if (this != ptr && !m_bReadOnly) {
+	inline void OnSetValueT(ibValue* ptr) {
+		// Self-assignment guard: skip when already bound to the same referent.
+		// m_pRef is null-initialized (ibValue ctor) and, for an ibValuePtr, only
+		// ever holds a reffer, so comparing it directly is safe. The previous
+		// `this != ptr` compared the WRAPPER's address to the referent — it never
+		// caught a real self-assign, so `p = (T*)p` would Reset()→DecrRef the sole
+		// owner to 0 (destroying it) and then IncrRef the freed object: a
+		// use-after-free. Comparing the referent fixes that and also skips
+		// redundant DecrRef/IncrRef churn on a no-op rebind.
+		if (m_pRef != ptr && !m_bReadOnly) {
 			Reset();
 			if (ptr != nullptr) {
 				m_typeClass = ibValueTypes::TYPE_REFFER;

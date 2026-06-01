@@ -91,7 +91,7 @@ void ibValueModelTableBox::CreateColumnCollection(ibDataViewCtrl* dataViewCtrl)
 	wxASSERT(tc);
 
 	ibFormVisualDocument* visualDocument = m_formOwner->GetVisualDocument();
-	//clear all controls 
+	//detach wx widgets first (while the column controls are still alive)
 	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
 		ibValueFrame* childColumn = GetChild(idx);
 		wxASSERT(childColumn);
@@ -101,14 +101,9 @@ void ibValueModelTableBox::CreateColumnCollection(ibDataViewCtrl* dataViewCtrl)
 			wxASSERT(visualView);
 			visualView->RemoveControl(childColumn, this);
 		}
-
-		RemoveChild(childColumn);
-
-		childColumn->SetParent(nullptr);
-		childColumn->DecrRef();
 	}
 
-	//clear all children
+	//clear all children — owning handles release the column controls (cascade)
 	RemoveAllChildren();
 
 	//clear all old columns

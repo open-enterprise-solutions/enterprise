@@ -27,7 +27,7 @@
 // startup is cheap (login is rare) and eliminates the race class without
 // the full bytecode↔compileModule decoupling
 // (project_bytecode_compile_decoupling.md).
-bool ibValueModuleManagerConfiguration::BeforeStart()
+bool ibValueModuleManagerRuntimeConfiguration::BeforeStart()
 {
 	if (appData->DesignerMode())
 		return true;
@@ -53,7 +53,7 @@ bool ibValueModuleManagerConfiguration::BeforeStart()
 	}
 }
 
-void ibValueModuleManagerConfiguration::OnStart()
+void ibValueModuleManagerRuntimeConfiguration::OnStart()
 {
 	if (appData->DesignerMode())
 		return;
@@ -68,7 +68,7 @@ void ibValueModuleManagerConfiguration::OnStart()
 	}
 }
 
-bool ibValueModuleManagerConfiguration::BeforeExit()
+bool ibValueModuleManagerRuntimeConfiguration::BeforeExit()
 {
 	if (appData->DesignerMode())
 		return true;
@@ -86,7 +86,7 @@ bool ibValueModuleManagerConfiguration::BeforeExit()
 	}
 }
 
-void ibValueModuleManagerConfiguration::OnExit()
+void ibValueModuleManagerRuntimeConfiguration::OnExit()
 {
 	if (appData->DesignerMode())
 		return;

@@ -58,7 +58,10 @@ ibValueFrame* ibValueForm::NewObject(const ibClassID& clsid, ibValueFrame* contr
 		ibValue* ppParams[] = { this, controlParent, const_cast<ibValue*>(&generateId) };
 		try {
 			newControl = ibValue::CreateAndConvertObjectRef< ibValueFrame>(clsid, ppParams, 3);
-			newControl->IncrRef();
+			// A parented control is owned by the parent's vector (AddChild inside
+			// Init). A rootless control has no vector owner, so the caller takes
+			// ownership via this reference (e.g. an ibValuePtr member).
+			if (controlParent == nullptr) newControl->IncrRef();
 		}
 		catch (...) {
 			return nullptr;
@@ -108,9 +111,10 @@ void ibValueForm::ResolveNameConflict(ibValueFrame* control)
 
 				// comprobamos si hay conflicto
 				unsigned int index = 0; bool founded_name = false;
+				const std::vector<ibValueControl*> controlList = top->GetControlList();
 				do {
 
-					for (const auto valueControl : top->m_listControl) {
+					for (const auto valueControl : controlList) {
 
 						if (0 == valueControl->GetControlID())
 							continue;

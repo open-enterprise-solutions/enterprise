@@ -47,6 +47,7 @@ void ibMetaData::RegisterCtor(ibCtorMetaValueType* typeCtor)
 
 		typeCtor->CallEvent(ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_Register);
 
+
 		m_factoryCtors.emplace_back(typeCtor);
 		m_factoryCtorCountChanges++;
 	}
@@ -62,7 +63,11 @@ void ibMetaData::UnRegisterCtor(ibCtorMetaValueType*& typeCtor)
 		wxLogDebug("* Unregister class '%s' with clsid '%s:%llu' ", typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 
-		m_factoryCtors.erase(std::remove(m_factoryCtors.begin(), m_factoryCtors.end(), typeCtor));
+		// Full erase-remove — the old single-iterator erase(remove(...)) dropped only
+		// one position and left any shifted duplicate as a dangling pointer in the
+		// tail (then wxDELETE'd below). erase(remove(...), end()) removes the whole
+		// matched range.
+		m_factoryCtors.erase(std::remove(m_factoryCtors.begin(), m_factoryCtors.end(), typeCtor), m_factoryCtors.end());
 		m_factoryCtorCountChanges++;
 
 		wxDELETE(typeCtor);
@@ -209,8 +214,13 @@ std::vector<ibCtorMetaValueType*> ibMetaData::GetListCtorsByType() const
 	std::copy(m_factoryCtors.begin(), m_factoryCtors.end(), std::back_inserter(retVector));
 	std::sort(retVector.begin(), retVector.end(), [](const ibCtorMetaValueType* a, const ibCtorMetaValueType* b) {
 		const ibValueMetaObject* ma = a->GetMetaObject(); const ibValueMetaObject* mb = b->GetMetaObject();
-		return ma->GetName() > mb->GetName() &&
-			a->GetMetaTypeCtor() > b->GetMetaTypeCtor();
+		// Lexicographic strict-weak-ordering — name first, metaType as tiebreak. The
+		// old `name > name && metaType > metaType` conjunction is NOT a valid ordering
+		// (breaks antisymmetry/transitivity) → UB in std::sort / MSVC debug "invalid
+		// comparator" assert. Direction preserved (descending).
+		if (ma->GetName() != mb->GetName())
+			return ma->GetName() > mb->GetName();
+		return a->GetMetaTypeCtor() > b->GetMetaTypeCtor();
 		}
 	);
 
@@ -227,8 +237,10 @@ std::vector<ibCtorMetaValueType*> ibMetaData::GetListCtorsByType(const ibClassID
 	);
 	std::sort(retVector.begin(), retVector.end(), [](const ibCtorMetaValueType* a, const ibCtorMetaValueType* b) {
 		const ibValueMetaObject* ma = a->GetMetaObject(); const ibValueMetaObject* mb = b->GetMetaObject();
-		return ma->GetName() > mb->GetName() &&
-			a->GetMetaTypeCtor() > b->GetMetaTypeCtor();
+		// Lexicographic strict-weak-ordering (see GetListCtorsByType() above).
+		if (ma->GetName() != mb->GetName())
+			return ma->GetName() > mb->GetName();
+		return a->GetMetaTypeCtor() > b->GetMetaTypeCtor();
 		}
 	);
 	return retVector;
@@ -240,8 +252,10 @@ std::vector<ibCtorMetaValueType*> ibMetaData::GetListCtorsByType(ibCtorObjectMet
 	std::copy_if(m_factoryCtors.begin(), m_factoryCtors.end(), std::back_inserter(retVector), [refType](const ibCtorMetaValueType* t) { return refType == t->GetMetaTypeCtor(); });
 	std::sort(retVector.begin(), retVector.end(), [](const ibCtorMetaValueType* a, const ibCtorMetaValueType* b) {
 		const ibValueMetaObject* ma = a->GetMetaObject(); const ibValueMetaObject* mb = b->GetMetaObject();
-		return ma->GetName() > mb->GetName() &&
-			a->GetMetaTypeCtor() > b->GetMetaTypeCtor();
+		// Lexicographic strict-weak-ordering (see GetListCtorsByType() above).
+		if (ma->GetName() != mb->GetName())
+			return ma->GetName() > mb->GetName();
+		return a->GetMetaTypeCtor() > b->GetMetaTypeCtor();
 		}
 	);
 	return retVector;

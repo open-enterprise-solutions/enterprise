@@ -3,7 +3,7 @@
 //	Description : metadata-side DDL — schema build / migrate / serialize.
 //	              Pure metadata layer: Process* compares src/dst attribute
 //	              shapes, CreateAndUpdateTableDB emits CREATE / ALTER /
-//	              DROP, Load/SaveTableData round-trips data on metadata
+//	              DROP, Dump/RestoreTable round-trips row data on metadata
 //	              import / export. db_query (DDL channel), no ses_query.
 ////////////////////////////////////////////////////////////////////////////
 
@@ -76,6 +76,18 @@ int ibValueMetaObjectRecordDataMutableRef::ProcessTable(const wxString& tabularN
 		if (!srcTable->CompareObject(dstTable))
 			s_restructureInfo.AppendInfo(_("Changing tabular section ") + srcTable->GetFullName());
 
+		//attributes from dst no longer present in src → drop the column
+		//(mirrors the top-level object update path; without it a removed tabular
+		// attribute leaves an orphan column that is never dropped or altered)
+		for (const auto object : dstTable->GetGenericAttributeArrayObject()) {
+			if (srcTable->FindAnyAttributeObjectByFilter(object->GetGuid()) == nullptr) {
+				retCode = ProcessAttribute(tabularName, nullptr, object);
+				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
+					return retCode;
+			}
+		}
+
+		//attributes current → add new / alter changed
 		for (const auto object : srcTable->GetGenericAttributeArrayObject()) {
 			retCode = ProcessAttribute(tabularName,
 				object, dstTable->FindAnyAttributeObjectByFilter(object->GetGuid())
@@ -245,7 +257,7 @@ bool ibValueMetaObjectRecordDataMutableRef::CreateAndUpdateTableDB(ibMetaDataCon
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibValueMetaObjectRecordDataMutableRef::LoadTableData(const ibReaderMemory& reader)
+bool ibValueMetaObjectRecordDataMutableRef::RestoreTable(const ibReaderMemory& reader)
 {
 	wxMemoryBuffer objectBuffer;
 
@@ -426,7 +438,7 @@ bool ibValueMetaObjectRecordDataMutableRef::LoadTableData(const ibReaderMemory& 
 	return true;
 }
 
-bool ibValueMetaObjectRecordDataMutableRef::SaveTableData(ibWriterMemory& writer) const
+bool ibValueMetaObjectRecordDataMutableRef::DumpTable(ibWriterMemory& writer) const
 {
 	ibDatabaseResultSet* dbResultSet = db_query->RunQueryWithResults(wxT("SELECT * FROM %s"), GetTableNameDB());
 	if (dbResultSet == nullptr)
@@ -1144,7 +1156,10 @@ bool ibValueMetaObjectRegisterData::CreateAndUpdateTableDB(ibMetaDataConfigurati
 
 		s_restructureInfo.AppendInfo(_("Remove register ") + GetFullName());
 
-		retCode = db_query->RunQuery("DROP TABLE %s", tableName);
+		// Guard like the ref/enum delete paths: a register added and removed before
+		// any Apply has no physical table, and an unguarded DROP would abort the Apply.
+		if (db_query->TableExists(tableName))
+			retCode = db_query->RunQuery("DROP TABLE %s", tableName);
 	}
 
 	if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
@@ -1155,7 +1170,7 @@ bool ibValueMetaObjectRegisterData::CreateAndUpdateTableDB(ibMetaDataConfigurati
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibValueMetaObjectRegisterData::LoadTableData(const ibReaderMemory& reader)
+bool ibValueMetaObjectRegisterData::RestoreTable(const ibReaderMemory& reader)
 {
 	wxMemoryBuffer objectBuffer;
 
@@ -1229,7 +1244,7 @@ bool ibValueMetaObjectRegisterData::LoadTableData(const ibReaderMemory& reader)
 	return true;
 }
 
-bool ibValueMetaObjectRegisterData::SaveTableData(ibWriterMemory& writer) const
+bool ibValueMetaObjectRegisterData::DumpTable(ibWriterMemory& writer) const
 {
 	ibDatabaseResultSet* dbResultSet = db_query->RunQueryWithResults(wxT("SELECT * FROM %s"), GetTableNameDB());
 	if (dbResultSet == nullptr)

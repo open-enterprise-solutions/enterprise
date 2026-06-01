@@ -314,6 +314,8 @@ void ibFrontendDocMDIFrameDesigner::OnUpdateConfiguration(wxCommandEvent& event)
 		}
 	}
 	catch (const ibBackendException& e) {
+		// OnSaveDatabase self-rolls-back + releases exclusive on a thrown DDL error
+		// (see its try/catch), so here we only surface the message.
 		ShowBackendErrorChain(this, wxMessageBoxCaptionStr,
 			_("Configuration update was aborted by a backend error."),
 			e.GetErrorDescription());

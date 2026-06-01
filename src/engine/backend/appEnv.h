@@ -61,8 +61,8 @@ BACKEND_API ibLogger* Logger();
 //
 // External metadata (.epf DataProcessor files, .erf Report files, .obk
 // snapshots opened from disk) are NOT covered by this accessor — they
-// live as runtime nodes under ibValueModuleManagerExternalDataProcessor
-// / ibValueModuleManagerExternalReport on each open session, with their
+// live as runtime nodes under ibValueModuleRuntimeManagerExternalDataProcessor
+// / ibValueModuleRuntimeManagerExternalReport on each open session, with their
 // own per-instance ibMetaData. ActiveMetaData() is exclusively the
 // process-wide configuration that backs the running database.
 BACKEND_API ibMetaDataConfigurationBase* ActiveMetaData();

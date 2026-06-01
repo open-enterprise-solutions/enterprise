@@ -36,7 +36,10 @@ void ibValueManagerDataObjectAccumulationRegister::PrepareNames() const
 	m_methodHelper->AppendFunc(wxT("Turnovers"), 4, wxT("Turnovers(beginOfPeriod, endOfPeriod, filter...)"));
 	m_methodHelper->AppendFunc(wxT("Select"), wxT("Select()"));
 	m_methodHelper->AppendFunc(wxT("GetForm"), 3, wxT("GetForm(string, owner, guid)"));
-	m_methodHelper->AppendFunc(wxT("GetRecordForm"), 3, wxT("GetRecordForm(string, owner, guid)"));
+	// NOTE: no GetRecordForm here — accumulation register has no record form
+	// (the enum Func and CallAsFunc switch don't handle it). An extra AppendFunc
+	// shifted every later method's index off its enum case (GetListForm/GetTemplate
+	// misrouted). Method index == AppendFunc order, so this list must mirror enum Func.
 	m_methodHelper->AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(string, owner, guid)"));
 	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(string)"));
 }

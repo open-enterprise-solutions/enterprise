@@ -85,6 +85,7 @@ bool ibValueManagerDataObjectInformationRegister::CallAsFunc(const long lMethodN
 		pvarRetValue = lSizeArray > 1 ?
 			ibValueManagerDataObjectInformationRegister::SliceFirst(*paParams[0], *paParams[1])
 			: ibValueManagerDataObjectInformationRegister::SliceFirst(*paParams[0]);
+		return true;
 	case eSliceLast:
 		pvarRetValue = lSizeArray > 1 ?
 			ibValueManagerDataObjectInformationRegister::SliceLast(*paParams[0], *paParams[1])
