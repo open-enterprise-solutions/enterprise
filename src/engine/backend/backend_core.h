@@ -59,7 +59,10 @@ enum ibValueTypes : unsigned char {
 	TYPE_STRING = 4,
 	TYPE_NULL = 5,
 
-	TYPE_REFFER = 100, // object reference
+	TYPE_REFFER = 100, // object reference (owned: IncrRef/DecrRef, Reset may delete)
+	TYPE_CONST_REFFER = 101, // read-only reference to a NON-owned object (e.g. a
+	                         // const ibValueMetaObject* from the metadata tree).
+	                         // No ref-count, Reset never deletes it; mutation blocked.
 
 	TYPE_VALUE = 200, // value
 	TYPE_ENUM = 201, // enumeration

@@ -391,7 +391,7 @@ inline void CompareValueNE(ibValue& cValue1, const ibValue& cValue2, const ibVal
 
 #define CheckAndError(variable, name)\
 {\
- if(variable.m_typeClass!=ibValueTypes::TYPE_REFFER)\
+ if(!variable.IsReference())\
  ibBackendCoreException::Error(_("No attribute or method found '%s' - a variable is not an aggregate object"), name);\
  else\
  ibBackendCoreException::Error(_("Aggregate object field not found '%s'"), name);\
@@ -422,7 +422,7 @@ inline bool GetArrayValue(ibValue& cValue1, ibValue& cValue2, const ibValue& cVa
 inline ibValue GetValue(const ibValue& cValue1)
 {
 	if (cValue1.m_bReadOnly
-		&& cValue1.m_typeClass != ibValueTypes::TYPE_REFFER) {
+		&& !cValue1.IsReference()) {
 		ibValue cVal;
 		CopyValue(cVal, cValue1);
 		return cVal;
@@ -637,7 +637,7 @@ start_label:
 						// resolve) would throw on const slots before reaching
 						// the m_bReadOnly check, breaking const literal args
 						// like `New Foo(3, 5)`. Mirrors OPER_CALL_METHOD's pattern.
-						if (cvariable1.m_bReadOnly && cvariable1.m_typeClass != ibValueTypes::TYPE_REFFER) {
+						if (cvariable1.m_bReadOnly && !cvariable1.IsReference()) {
 							CopyValue(cRunContext.m_pLocVars[i], cvariable1);
 						}
 						else {
@@ -673,7 +673,7 @@ start_label:
 				if (m_pByteCode->m_bExpressionOnly && variable2.IsPropScoped(lPropNum))
 					ibBackendCoreException::Error(_("Object field is scope-local (%s)"), strPropName);
 				ibValue vRet; bool result = variable2.GetPropVal(lPropNum, vRet);
-				if (result && vRet.m_typeClass == ibValueTypes::TYPE_REFFER)
+				if (result && vRet.IsReference())
 					*pRetValue = vRet;
 				else if (result)
 					CopyValue(*pRetValue, vRet);
@@ -725,7 +725,7 @@ start_label:
 						CopyValue(cRunContext.m_pLocVars[i], m_pByteCode->m_listConst[index1]);
 					}
 					else if (index1 >= 0 && !pVariable2->GetParamDefValue(lMethodNum, i, *cRunContext.m_pRefLocVars[i])) {
-						if (cvariable1.m_bReadOnly && cvariable1.m_typeClass != ibValueTypes::TYPE_REFFER) {
+						if (cvariable1.m_bReadOnly && !cvariable1.IsReference()) {
 							CopyValue(cRunContext.m_pLocVars[i], cvariable1);
 						}
 						else {
@@ -783,7 +783,7 @@ start_label:
 						CopyValue(cRunContext.m_pLocVars[i], m_pByteCode->m_listConst[index1]);
 					}
 					else {
-						if (cvariable1.m_bReadOnly && cvariable1.m_typeClass != ibValueTypes::TYPE_REFFER) {
+						if (cvariable1.m_bReadOnly && !cvariable1.IsReference()) {
 							CopyValue(cRunContext.m_pLocVars[i], cvariable1);
 						}
 						else {

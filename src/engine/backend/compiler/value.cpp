@@ -213,6 +213,10 @@ void ibValue::Reset()
 		delete m_pStr;
 		m_pStr = nullptr;
 	}
+	// TYPE_CONST_REFFER: non-owned read-only view — only TYPE_REFFER is DecrRef'd
+	// above, so the const-ref's pointer is just dropped below (the metadata tree
+	// owns the object; we never ref-count or delete it). The const-ref never sets
+	// m_bReadOnly, so the write-denied guard above doesn't fire for it either.
 
 	m_typeClass = ibValueTypes::TYPE_EMPTY;
 	m_pRef = nullptr;
@@ -256,6 +260,11 @@ void ibValue::Copy(const ibValue& cOld)
 		m_pRef = cOld.m_pRef;
 		m_pRef->IncrRef();
 		break;
+	case ibValueTypes::TYPE_CONST_REFFER:
+		// weak, non-owning copy — NO IncrRef (the metadata tree owns the object).
+		// Object-write protection is by type (TYPE_CONST_REFFER), not m_bReadOnly.
+		m_pConstRef = cOld.m_pConstRef;
+		break;
 	default:
 		m_typeClass = ibValueTypes::TYPE_EMPTY;
 		break;
@@ -298,6 +307,11 @@ void ibValue::Move(ibValue&& cOld)
 	case ibValueTypes::TYPE_REFFER:
 		m_pRef = cOld.m_pRef;
 		m_pRef->IncrRef();
+		break;
+	case ibValueTypes::TYPE_CONST_REFFER:
+		// weak non-owning const ref — share the pointer, NO IncrRef. Object-write
+		// protection is by type (TYPE_CONST_REFFER), not m_bReadOnly.
+		m_pConstRef = cOld.m_pConstRef;
 		break;
 	default:
 		m_typeClass = ibValueTypes::TYPE_EMPTY;
@@ -469,6 +483,25 @@ void ibValue::operator = (ibValue* pValue)
 	}
 }
 
+void ibValue::operator = (const ibValue* pValue)
+{
+	// const source (const ibValueMetaObject* from GetMetaObject(), const-meta
+	// refactor) — store a NON-owning, read-only reference as TYPE_CONST_REFFER.
+	// Unlike operator=(ibValue*): NO IncrRef (we don't own the object — the
+	// metadata tree does) and Reset()/dtor must never delete it. m_bReadOnly
+	// blocks mutation through this value. Without this overload the const ptr
+	// fell through to operator=(bool) and the object became a Boolean.
+	if (this != pValue && !m_bReadOnly) {
+		Reset();
+		if (pValue != nullptr) {
+			m_typeClass = ibValueTypes::TYPE_CONST_REFFER;
+			m_pConstRef = pValue;
+			// No m_bReadOnly: the slot stays reassignable; object-write
+			// protection is by TYPE_CONST_REFFER (SetPropVal/SetType), not the flag.
+		}
+	}
+}
+
 void ibValue::SetValue(const ibValue& varValue)
 {
 	if (this == &varValue)
@@ -578,7 +611,7 @@ bool ibValue::SetString(ibString&& strString)
 
 bool ibValue::FindValue(const wxString& findData, std::vector<ibValue>& listValue) const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->FindValue(findData, listValue);
 
 	try {
@@ -650,6 +683,7 @@ bool ibValue::GetBoolean() const
 		return stringUtils::CompareString(wxT("True"), stringUtils::TrimAll(GetString()));
 	case ibValueTypes::TYPE_DATE:
 		return false;
+	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->GetBoolean();
 	}
@@ -677,6 +711,7 @@ ibNumber ibValue::GetNumber() const
 	}
 	case ibValueTypes::TYPE_DATE:
 		return m_dData / 1000;
+	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->GetNumber();
 	}
@@ -702,6 +737,7 @@ wxString ibValue::GetString() const
 		const wxDateTime& dateTime = wxLongLong(m_dData);
 		return dateTime.Format("%d.%m.%Y %H:%M:%S");
 	}
+	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef ? m_pRef->GetString() : wxString(wxEmptyString);
 	};
@@ -751,6 +787,7 @@ wxLongLong_t ibValue::GetDate() const
 	}
 	case ibValueTypes::TYPE_DATE:
 		return m_dData;
+	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->GetDate();
 	};
@@ -760,14 +797,18 @@ wxLongLong_t ibValue::GetDate() const
 
 ibValue* ibValue::GetRef() const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	// Resolve through both owned and const (non-owned) references — m_pRef and
+	// m_pConstRef alias the same union pointer, so the const object is reachable
+	// for read dispatch. The const-cast is inherent to GetRef's non-const return;
+	// write protection is enforced separately via m_bReadOnly, not here.
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetRef();
 	return const_cast<ibValue*>(this);
 }
 
 void ibValue::ShowValue()
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->ShowValue();
 }
 
@@ -836,6 +877,7 @@ bool ibValue::IsEmpty() const
 	case ibValueTypes::TYPE_FUNCTION:
 	case ibValueTypes::TYPE_ITERATOR:
 		return false;
+	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef ? m_pRef->IsEmpty() : true;
 	};
@@ -845,6 +887,13 @@ bool ibValue::IsEmpty() const
 
 void ibValue::SetType(ibValueTypes type)
 {
+	// Write path: a const reference must not retype the non-owned object.
+	// A plain (owned) reference still delegates — it may be a transparent
+	// read-only wrapper over a mutable object. The assert catches a future
+	// caller loudly in Debug; the Error keeps Release graceful.
+	wxASSERT_MSG(!IsConstReference(), wxT("SetType on a const reference (TYPE_CONST_REFFER)"));
+	if (m_typeClass == ibValueTypes::TYPE_CONST_REFFER)
+		ibBackendCoreException::Error(_("Attempt to change the type of a read-only (const) object"));
 	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
 		m_pRef->SetType(type);
 	else
@@ -853,7 +902,7 @@ void ibValue::SetType(ibValueTypes type)
 
 ibValueTypes ibValue::GetType() const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetType();
 	return m_typeClass;
 }
@@ -862,7 +911,7 @@ ibValueTypes ibValue::GetType() const
 
 wxString ibValue::GetClassName() const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetClassName();
 	const ibClassID& clsid = GetClassType();
 	if (clsid == 0) ibBackendCoreException::Error(_("Class not registered"));
@@ -871,7 +920,7 @@ wxString ibValue::GetClassName() const
 
 ibClassID ibValue::GetClassType() const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetClassType();
 	if (m_typeClass < ibValueTypes::TYPE_REFFER)
 		return ibValue::GetIDByVT(m_typeClass);
@@ -894,7 +943,7 @@ bool ibValue::SetAt(const ibValue& varKeyValue, const ibValue& varValue)
 
 bool ibValue::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 {
-	if (m_pRef && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef && IsReference())
 		return m_pRef->GetAt(varKeyValue, pvarValue);
 	const long lPropNum = FindProp(varKeyValue.GetString());
 	if (lPropNum != wxNOT_FOUND)
@@ -908,7 +957,7 @@ bool ibValue::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 
 std::shared_ptr<ibValueIteratorState> ibValue::CreateIterator()
 {
-	if (m_pRef && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef && IsReference())
 		return m_pRef->CreateIterator();
 	return nullptr;
 }
@@ -940,6 +989,7 @@ bool ibValue::CompareValueGT(const ibValue& cParam) const
 	case ibValueTypes::TYPE_FUNCTION:
 	case ibValueTypes::TYPE_ITERATOR:
 		return GetString() > cParam.GetString();
+	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->CompareValueGT(cParam);
 	};
@@ -970,6 +1020,7 @@ bool ibValue::CompareValueGE(const ibValue& cParam) const
 	case ibValueTypes::TYPE_FUNCTION:
 	case ibValueTypes::TYPE_ITERATOR:
 		return GetString() >= cParam.GetString();
+	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->CompareValueGE(cParam);
 	};
@@ -1000,6 +1051,7 @@ bool ibValue::CompareValueLS(const ibValue& cParam) const
 	case ibValueTypes::TYPE_FUNCTION:
 	case ibValueTypes::TYPE_ITERATOR:
 		return GetString() < cParam.GetString();
+	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->CompareValueLS(cParam);
 	};
@@ -1030,6 +1082,7 @@ bool ibValue::CompareValueLE(const ibValue& cParam) const
 	case ibValueTypes::TYPE_FUNCTION:
 	case ibValueTypes::TYPE_ITERATOR:
 		return GetString() <= cParam.GetString();
+	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->CompareValueLE(cParam);
 	};
@@ -1065,6 +1118,7 @@ bool ibValue::CompareValueEQ(const ibValue& cParam) const
 	case ibValueTypes::TYPE_ITERATOR:
 		return GetString() == cParam.GetString() &&
 			GetClassType() == cParam.GetClassType();
+	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->CompareValueEQ(cParam);
 	};
@@ -1100,6 +1154,7 @@ bool ibValue::CompareValueNE(const ibValue& cParam) const
 	case ibValueTypes::TYPE_ITERATOR:
 		return GetString() != cParam.GetString() ||
 			GetClassType() != cParam.GetClassType();
+	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->CompareValueNE(cParam);
 	};
@@ -1142,7 +1197,7 @@ const ibValue& ibValue::operator-(const ibValue& cParam)
 
 long ibValue::GetNProps() const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetNProps();
 	ibValueMethodHelper* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
@@ -1152,7 +1207,7 @@ long ibValue::GetNProps() const
 
 long ibValue::FindProp(const wxString& strPropName) const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->FindProp(strPropName);
 	ibValueMethodHelper* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
@@ -1162,7 +1217,7 @@ long ibValue::FindProp(const wxString& strPropName) const
 
 wxString ibValue::GetPropName(const long lPropNum) const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetPropName(lPropNum);
 	ibValueMethodHelper* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
@@ -1172,13 +1227,20 @@ wxString ibValue::GetPropName(const long lPropNum) const
 
 bool ibValue::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetPropVal(lPropNum, pvarPropVal);
 	return false;
 }
 
 bool ibValue::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
+	// Write path: a const reference must not mutate the non-owned object's field.
+	// A plain (owned) reference still delegates — it may be a transparent
+	// read-only wrapper over a mutable object. The assert catches a future
+	// caller loudly in Debug; the Error keeps Release graceful.
+	wxASSERT_MSG(!IsConstReference(), wxT("SetPropVal on a const reference (TYPE_CONST_REFFER)"));
+	if (m_typeClass == ibValueTypes::TYPE_CONST_REFFER)
+		ibBackendCoreException::Error(_("Attempt to write to a field of a read-only (const) object"));
 	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
 		return m_pRef->SetPropVal(lPropNum, varPropVal);
 	return false;
@@ -1186,7 +1248,7 @@ bool ibValue::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 
 bool ibValue::IsPropReadable(const long lPropNum) const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->IsPropReadable(lPropNum);
 	ibValueMethodHelper* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
@@ -1196,7 +1258,7 @@ bool ibValue::IsPropReadable(const long lPropNum) const
 
 bool ibValue::IsPropWritable(const long lPropNum) const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->IsPropWritable(lPropNum);
 	ibValueMethodHelper* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
@@ -1206,7 +1268,7 @@ bool ibValue::IsPropWritable(const long lPropNum) const
 
 bool ibValue::IsPropScoped(const long lPropNum) const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->IsPropScoped(lPropNum);
 	ibValueMethodHelper* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
@@ -1225,7 +1287,7 @@ long ibValue::ibValueMethodHelper::AppendProp(const wxString& strPropName, bool 
 
 long ibValue::GetNMethods() const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetNMethods();
 	ibValueMethodHelper* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
@@ -1238,7 +1300,7 @@ long ibValue::GetNMethods() const
 // reaching the OPER_CALL_METHOD path.
 long ibValue::FindMethod(const wxString& strMethodName) const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->FindMethod(strMethodName);
 	ibValueMethodHelper* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr) {
@@ -1250,7 +1312,7 @@ long ibValue::FindMethod(const wxString& strMethodName) const
 
 wxString ibValue::GetMethodName(const long lMethodNum) const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetMethodName(lMethodNum);
 	ibValueMethodHelper* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
@@ -1260,7 +1322,7 @@ wxString ibValue::GetMethodName(const long lMethodNum) const
 
 wxString ibValue::GetMethodHelper(const long lMethodNum) const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetMethodHelper(lMethodNum);
 	ibValueMethodHelper* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
@@ -1270,7 +1332,7 @@ wxString ibValue::GetMethodHelper(const long lMethodNum) const
 
 long ibValue::GetNParams(const long lMethodNum) const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetNParams(lMethodNum);
 	ibValueMethodHelper* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
@@ -1282,14 +1344,14 @@ bool ibValue::GetParamDefValue(const long lMethodNum,
 	const long lParamNum,
 	ibValue& pvarParamDefValue) const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetParamDefValue(lMethodNum, lParamNum, pvarParamDefValue);
 	return false;
 }
 
 bool ibValue::HasRetVal(const long lMethodNum) const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->HasRetVal(lMethodNum);
 	ibValueMethodHelper* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
@@ -1300,7 +1362,7 @@ bool ibValue::HasRetVal(const long lMethodNum) const
 bool ibValue::CallAsProc(const long lMethodNum,
 	ibValue** paParams, const long lSizeArray)
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->CallAsProc(lMethodNum, paParams, lSizeArray);
 	return false;
 }
@@ -1308,14 +1370,14 @@ bool ibValue::CallAsProc(const long lMethodNum,
 bool ibValue::CallAsFunc(const long lMethodNum,
 	ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 	return false;
 }
 
 void ibValue::PrepareNames() const
 {
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		m_pRef->PrepareNames();
 }
 
@@ -1324,7 +1386,7 @@ ibValue ibValue::GetValue(bool getThis) const
 {
 	if (getThis)
 		return const_cast<ibValue*>(this);  // legacy: returns this-as-pointer-via-converting-ctor
-	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetValue(true); // true - a sign of creating a new variable - a reference to an aggregate object
 	return *this;
 }

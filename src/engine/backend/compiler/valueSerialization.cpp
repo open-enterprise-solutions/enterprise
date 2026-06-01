@@ -2,7 +2,7 @@
 
 bool ibValue::DoSerialize(wxString& strValue) const
 {
-	if (m_typeClass == ibValueTypes::TYPE_REFFER)
+	if (IsReference() && m_pRef != nullptr)
 		return m_pRef->DoSerialize(strValue);
 
 	switch (m_typeClass) {

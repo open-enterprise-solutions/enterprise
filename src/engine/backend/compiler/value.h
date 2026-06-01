@@ -72,6 +72,11 @@ public:
 		bool          m_bData;  //TYPE_BOOLEAN
 		wxLongLong_t  m_dData;  //TYPE_DATE
 		ibValue*      m_pRef;   //TYPE_REFFER (+ VALUE/ENUM/OLE/... aliased)
+		// TYPE_CONST_REFFER — read-only view of a NON-owned object (const
+		// ibValueMetaObject* from the metadata tree). Aliases m_pRef in storage
+		// (same 8 bytes), but the const type documents intent and Reset()/dtor
+		// must NEVER ref-count or delete through it — the tree owns the object.
+		const ibValue* m_pConstRef;
 		// TYPE_STRING — pooled heap ibString, nullptr = empty. A pointer (8)
 		// instead of an inline ~40-byte ibString, so a Number/Bool value no
 		// longer drags a string buffer (billions of values → big RAM win).
@@ -500,6 +505,11 @@ public:
 	void operator = (ibValueTypes cParam);
 	void operator = (ibBackendValue* pParam);
 	void operator = (ibValue* pParam);
+	// const source (e.g. a const ibValueMetaObject* returned by GetMetaObject()):
+	// store a READ-ONLY reference — mutation through this value is blocked
+	// (m_bReadOnly). Without this overload `value = constPtr` silently picked
+	// operator=(bool) (const ptr → bool) and the object became a Boolean.
+	void operator = (const ibValue* pParam);
 
 	//Implementation of comparison operators:
 	bool operator > (const ibValue& cParam) const { return CompareValueGT(cParam); }
@@ -545,7 +555,7 @@ public:
 
 	//convert to value
 	template <typename T> inline bool ConvertToValue(T*& ptr) const {
-		if (m_typeClass == ibValueTypes::TYPE_REFFER) {
+		if (IsReference()) {
 			ibValue* non_const_value = GetRef();
 			ptr = dynamic_cast<T*>(non_const_value);
 			return ptr != nullptr;
@@ -555,6 +565,25 @@ public:
 			return ptr != nullptr;
 		}
 		return false;
+	}
+
+	// True for both an owned object reference (TYPE_REFFER) and a non-owned
+	// read-only reference (TYPE_CONST_REFFER). Read paths that resolve through
+	// the referenced object (GetRef / GetPMethods / method dispatch / ConvertTo)
+	// must treat both alike; only ownership (ref-count / delete) and write paths
+	// distinguish them. m_pRef and m_pConstRef alias the same union pointer.
+	inline bool IsReference() const {
+		return m_typeClass == ibValueTypes::TYPE_REFFER
+			|| m_typeClass == ibValueTypes::TYPE_CONST_REFFER;
+	}
+
+	// True only for the non-owned, read-only reference. Use to guard object-
+	// mutating delegates (SetType / SetPropVal): a const reference must never
+	// retype or write a field of the object it does not own. The union aliases
+	// const/non-const, so the compiler can't catch this — these runtime checks
+	// (+ a Debug wxASSERT) are the only protection.
+	inline bool IsConstReference() const {
+		return m_typeClass == ibValueTypes::TYPE_CONST_REFFER;
 	}
 
 public:
@@ -777,7 +806,7 @@ public:
 #pragma region attribute_support
 
 	virtual ibValueMethodHelper* GetPMethods() const {
-		return m_typeClass == ibValueTypes::TYPE_REFFER && m_pRef != nullptr ?
+		return IsReference() && m_pRef != nullptr ?
 			m_pRef->GetPMethods() : nullptr;
 	}
 

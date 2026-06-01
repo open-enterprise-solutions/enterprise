@@ -14,7 +14,7 @@ extern BACKEND_API void ThrowErrorTypeOperation(const wxString& fromType, wxClas
 template <typename T, typename U>
 static inline T* CastValue(U* ptr) {
 	if (ptr != nullptr) {
-		if (ptr->m_typeClass == ibValueTypes::TYPE_REFFER) {
+		if (ptr->IsReference()) {
 			T* cast_value = dynamic_cast<T*>(ptr->GetRef());
 			if (cast_value != nullptr) return cast_value;
 		}
@@ -36,7 +36,7 @@ template <typename T, typename U>
 static inline T* CastValue(const U* ptr) {
 
 	if (ptr != nullptr) {
-		if (ptr->m_typeClass == ibValueTypes::TYPE_REFFER) {
+		if (ptr->IsReference()) {
 			T* cast_value = dynamic_cast<T*>(ptr->GetRef());
 			if (cast_value != nullptr) return cast_value;
 		}

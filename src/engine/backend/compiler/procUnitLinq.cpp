@@ -1137,7 +1137,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 void ibValue::DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
                                   ibValue** args, long n)
 {
-	if (m_typeClass == ibValueTypes::TYPE_REFFER && m_pRef != nullptr && m_pRef != this) {
+	if (IsReference() && m_pRef != nullptr && m_pRef != this) {
 		m_pRef->DispatchLinqMethod(method, ret, args, n);
 		return;
 	}

@@ -206,3 +206,91 @@ TEST(ValueTest, SetTypeChangesType) {
     v.SetType(ibValueTypes::TYPE_STRING);
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
 }
+
+// ===========================================================================
+// TYPE_CONST_REFFER — non-owning, read-only reference (const-meta refactor).
+//
+// Guards the trap where `value = someConstPtr` (e.g. a const ibValueMetaObject*
+// from GetMetaObject()) silently bound to operator=(bool) — const ptr -> bool —
+// and turned the object into a Boolean. The new operator=(const ibValue*) stores
+// it as TYPE_CONST_REFFER: weak (no ref-count, Reset never deletes), read-only,
+// but read paths delegate to the object. See docs/value-const-reffer.md.
+// ===========================================================================
+
+namespace {
+// Minimal aggregate used as a const-ref target. Tracks its own destruction so a
+// test can assert the const-ref never deletes a non-owned object, and overrides
+// GetString so we can verify read delegation reaches the object.
+class ConstRefProbe : public ibValue {
+public:
+    explicit ConstRefProbe(bool* deletedFlag)
+        : ibValue(ibValueTypes::TYPE_VALUE, false), m_deleted(deletedFlag) {}
+    ~ConstRefProbe() override { if (m_deleted) *m_deleted = true; }
+    wxString GetString() const override { return wxT("PROBE"); }
+private:
+    bool* m_deleted;
+};
+} // namespace
+
+TEST(ValueConstRef, AssignConstPtrBindsReferenceNotBoolean) {
+    bool deleted = false;
+    ConstRefProbe probe(&deleted);
+    const ibValue* cp = &probe;
+    ibValue v;
+    v = cp;  // must pick operator=(const ibValue*), NOT operator=(bool)
+    // GetType() delegates through the reference, so check the slot's own kind.
+    EXPECT_TRUE(v.IsConstReference());
+    EXPECT_EQ(v.GetRef(), &probe);   // resolves to the object, not a Boolean
+}
+
+TEST(ValueConstRef, Predicates) {
+    bool deleted = false;
+    ConstRefProbe probe(&deleted);
+    ibValue v; v = static_cast<const ibValue*>(&probe);
+    EXPECT_TRUE(v.IsReference());
+    EXPECT_TRUE(v.IsConstReference());
+}
+
+TEST(ValueConstRef, ReadDelegatesToObject) {
+    bool deleted = false;
+    ConstRefProbe probe(&deleted);
+    ibValue v; v = static_cast<const ibValue*>(&probe);
+    EXPECT_EQ(v.GetRef(), &probe);                  // resolve reaches the object
+    EXPECT_TRUE(v.GetString() == wxT("PROBE"));     // read delegates through union
+}
+
+TEST(ValueConstRef, ResetDoesNotDeleteNonOwned) {
+    bool deleted = false;
+    ConstRefProbe* probe = new ConstRefProbe(&deleted);
+    {
+        ibValue v;
+        v = static_cast<const ibValue*>(probe);
+        v.Reset();                 // must NOT DecrRef/delete the non-owned object
+        EXPECT_FALSE(deleted);
+    }                              // ibValue dtor — also must not delete
+    EXPECT_FALSE(deleted);
+    delete probe;                  // we own it
+    EXPECT_TRUE(deleted);
+}
+
+TEST(ValueConstRef, SlotStaysReassignable) {
+    // Reset excludes TYPE_CONST_REFFER from the write-denied throw, so a slot
+    // holding a const-ref can be reassigned (unlike a true const literal).
+    bool deleted = false;
+    ConstRefProbe probe(&deleted);
+    ibValue v; v = static_cast<const ibValue*>(&probe);
+    ibValue n(42);
+    EXPECT_NO_THROW(v = n);
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_NUMBER);
+    EXPECT_FALSE(deleted);          // reassign didn't delete the non-owned object
+}
+
+TEST(ValueConstRef, CopyIsWeakAndReadOnly) {
+    bool deleted = false;
+    ConstRefProbe probe(&deleted);
+    ibValue v; v = static_cast<const ibValue*>(&probe);
+    ibValue copy(v);                // copy ctor → weak, no IncrRef
+    EXPECT_TRUE(copy.IsConstReference());
+    EXPECT_EQ(copy.GetRef(), &probe);
+    EXPECT_FALSE(deleted);
+}
