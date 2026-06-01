@@ -9,8 +9,7 @@
 
 class BACKEND_API ibValueMetaObjectAttributeBase :
 	public ibValueMetaObject, public ibBackendTypeConfigFactory {
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectAttributeBase);
-public:
+	public:
 
 	enum ibFieldTypes {
 		ibFieldTypes_Empty = 0,
@@ -204,8 +203,7 @@ protected:
 };
 
 class BACKEND_API ibValueMetaObjectAttribute : public ibValueMetaObjectAttributeBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectAttribute);
-public:
+	public:
 
 	ibValueMetaObjectAttribute(const ibValueTypes& valType = ibValueTypes::TYPE_STRING) :
 		ibValueMetaObjectAttributeBase()
@@ -252,7 +250,7 @@ private:
 };
 
 class BACKEND_API ibValueMetaObjectAttributePredefined : public ibValueMetaObjectAttributeBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectAttributePredefined);
+	public:
 private:
 
 	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode)

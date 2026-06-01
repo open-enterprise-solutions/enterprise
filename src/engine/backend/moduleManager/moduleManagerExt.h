@@ -6,7 +6,7 @@
 #include "backend/metaCollection/partial/dataReport.h"
 
 class BACKEND_API ibValueModuleRuntimeManagerExternalDataProcessor : public ibValueModuleRuntimeManager {
-public:
+	public:
 
 	virtual ibCompileModule* GetCompileModule() const;
 	virtual std::shared_ptr<ibProcUnit> GetProcUnit() const;
@@ -49,7 +49,7 @@ private:
 };
 
 class BACKEND_API ibValueModuleRuntimeManagerExternalReport : public ibValueModuleRuntimeManager {
-public:
+	public:
 
 	virtual ibCompileModule* GetCompileModule() const;
 	virtual std::shared_ptr<ibProcUnit> GetProcUnit() const;

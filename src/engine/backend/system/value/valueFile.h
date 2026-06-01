@@ -4,7 +4,7 @@
 #include "backend/compiler/value.h"
 
 class BACKEND_API ibValueFile : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueFile);
+	public:
 private:
 
 	enum Prop {

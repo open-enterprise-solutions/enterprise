@@ -19,7 +19,7 @@ const ibClassID g_controlNotebookPageCLSID = string_to_clsid("CT_NTPG");
 //********************************************************************************************
 
 class ibValueNotebook : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueNotebook);
+	public:
 
 public:
 
@@ -77,7 +77,7 @@ private:
 };
 
 class ibValueNotebookPage : public ibValueControl {
-	wxDECLARE_DYNAMIC_CLASS(ibValueNotebookPage);
+	public:
 
 public:
 

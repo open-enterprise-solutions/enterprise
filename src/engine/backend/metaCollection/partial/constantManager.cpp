@@ -5,7 +5,6 @@
 
 #include "constantManager.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueManagerDataObjectConstant, ibValue);
 
 #include "backend/metaData.h"
 #include "backend/objCtor.h"

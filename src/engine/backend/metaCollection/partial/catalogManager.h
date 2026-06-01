@@ -5,7 +5,7 @@
 
 class ibValueManagerDataObjectCatalog :
 	public ibValueManagerDataObjectPredefined {
-public:
+	public:
 
 	ibValueReferenceDataObject* FindByCode(const ibValue& vCode) const;
 	ibValueReferenceDataObject* FindByDescription(const ibValue& cParam) const;
@@ -24,7 +24,6 @@ public:
 protected:
 	const ibValueMetaObjectCatalog* m_metaObject;
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueManagerDataObjectCatalog);
 };
 
 #endif 

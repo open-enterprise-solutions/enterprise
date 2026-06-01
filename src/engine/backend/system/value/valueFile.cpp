@@ -6,7 +6,6 @@
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueFile, ibValue);
 
 ibValue::ibValueMethodHelper ibValueFile::m_methodHelper;
 

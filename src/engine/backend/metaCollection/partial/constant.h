@@ -7,8 +7,8 @@ class BACKEND_API ibValueRecordDataObjectConstant;
 
 class BACKEND_API ibValueMetaObjectConstant : 
 	public ibValueMetaObjectAttribute, public ibBackendCommandItem {
+	public:
 	
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectConstant);
 protected:
 	enum
 	{
@@ -108,6 +108,7 @@ private:
 
 class BACKEND_API ibValueRecordDataObjectConstant : public ibValue, public ibActionDataObject,
 	public ibSourceDataObject, public ibRuntimeModuleDataObject {
+	public:
 	virtual bool InitializeObject(const ibValueRecordDataObjectConstant* source = nullptr);
 protected:
 	enum helperAlias {

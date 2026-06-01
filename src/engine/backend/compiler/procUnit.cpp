@@ -436,10 +436,8 @@ inline ibValue GetValue(const ibValue& cValue1)
 // wxIMPLEMENT_DYNAMIC_CLASS + the CLSID statics + ibValueFunction's
 // out-of-line bits — stay in this TU.
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueIterator, ibValue);
 const ibClassID g_valueIterator = string_to_clsid("SO_ITER");
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueFunction, ibValue);
 const ibClassID g_valueFunction = string_to_clsid("VL_FUNC");
 
 // LINQ machinery — CallLambdaWithArg / CallLambdaWith2Args /
@@ -1814,6 +1812,15 @@ bool ibProcUnit::CompileExpression(ibRunContext* pRunContext, ibValue& pvarRetVa
 
 	cModule.m_cByteCode.m_listCode.push_back(code2);
 	cModule.m_cByteCode.m_lVarCount = cModule.m_rootContext->m_listVariable.size();
+
+	// Constants read-only — finalize sweep, mirrors ibCompileCode's normal
+	// finalize (compileCode.cpp). Must run here (after the eval pool is fully
+	// built), NOT at insertion: ibValue's move ctor drops m_bReadOnly
+	// (value.cpp:73), so a vector realloc would wipe an insert-time flag.
+	// Eval used to skip this entirely → a const arg read as writable and
+	// ResolveWrite hit DEF_VAR_CONST ("Attempt to write to a constant value").
+	for (auto& c : cModule.m_cByteCode.m_listConst)
+		c.m_bReadOnly = true;
 
 	//flag of compilation completion
 	cModule.m_cByteCode.m_bCompile = true;

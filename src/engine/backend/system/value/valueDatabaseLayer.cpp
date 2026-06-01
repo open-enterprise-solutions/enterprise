@@ -9,7 +9,6 @@
 #include "backend/session/session.h"
 
 //////////////////////////////////////////////////////////////////////
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueDatabaseLayer, ibValue);
 
 ibValue::ibValueMethodHelper ibValueDatabaseLayer::m_methodHelper;
 

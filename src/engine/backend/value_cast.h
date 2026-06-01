@@ -8,7 +8,7 @@
 //*************************************************************************************************************************************
 
 #if defined(_USE_CONTROL_VALUECAST)
-extern BACKEND_API void ThrowErrorTypeOperation(const wxString& fromType, wxClassInfo* clsInfo);
+extern BACKEND_API void ThrowErrorTypeOperation(const wxString& fromType, const std::type_info& typeInfo);
 #endif
 
 template <typename T, typename U>
@@ -26,7 +26,7 @@ static inline T* CastValue(U* ptr) {
 #if defined(_USE_CONTROL_VALUECAST)
 	ThrowErrorTypeOperation(
 		ptr ? ptr->GetClassName() : wxString(wxEmptyString),
-		CLASSINFO(T)
+		typeid(T)
 	);
 #endif
 	return nullptr;
@@ -48,7 +48,7 @@ static inline T* CastValue(const U* ptr) {
 #if defined(_USE_CONTROL_VALUECAST)
 		ThrowErrorTypeOperation(
 			ptr ? ptr->GetClassName() : wxString(wxEmptyString),
-			CLASSINFO(T)
+			typeid(T)
 		);
 #endif
 	}

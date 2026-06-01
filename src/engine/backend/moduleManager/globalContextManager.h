@@ -4,8 +4,7 @@
 #include "backend/metaData.h"
 
 class ibValueGlobalContextManager : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueGlobalContextManager);
-public:
+	public:
 
 	ibValueGlobalContextManager(ibMetaData* metaData = nullptr) : ibValue(ibValueTypes::TYPE_VALUE, true),
 		m_methodHelper(new ibValueMethodHelper()), m_metaData(metaData)

@@ -9,8 +9,7 @@ enum ibAccountingRecordType {
 #pragma region enumeration
 #include "backend/compiler/enumUnit.h"
 class ibValueEnumAccountingRegisterRecordType : public ibValueEnumeration<ibAccountingRecordType> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumAccountingRegisterRecordType);
-public:
+	public:
 	static ibValue CreateDefEnumValue() {
 		return ibValue::CreateEnumObject<ibValueEnumAccountingRegisterRecordType>(ibAccountingRecordType::eDebit);
 	}

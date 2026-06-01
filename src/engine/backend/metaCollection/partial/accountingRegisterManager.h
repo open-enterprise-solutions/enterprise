@@ -5,7 +5,7 @@
 
 class ibValueManagerDataObjectAccountingRegister :
 	public ibValueManagerDataObject {
-public:
+	public:
 
 	ibValue Balance(const ibValue& cPeriod, const ibValue& cAccount = ibValue(), const ibValue& cFilter = ibValue());
 	ibValue Turnovers(const ibValue& cBeginOfPeriod, const ibValue& cEndOfPeriod, const ibValue& cAccount = ibValue(), const ibValue& cFilter = ibValue());
@@ -24,7 +24,6 @@ public:
 protected:
 	const ibValueMetaObjectAccountingRegister* m_metaObject;
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueManagerDataObjectAccountingRegister);
 };
 
 #endif

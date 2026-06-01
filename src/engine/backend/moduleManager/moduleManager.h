@@ -23,6 +23,7 @@ class ibSession;
 
 class BACKEND_API ibValueModuleManager :
 	public ibRuntimeModuleDataObject, public ibValue {
+	public:
 protected:
 	enum helperAlias {
 		eProcUnit
@@ -31,7 +32,7 @@ public:
 
 	class BACKEND_API ibValueModuleUnit :
 		public ibRuntimeModuleDataObject, public ibValue {
-		wxDECLARE_DYNAMIC_CLASS(ibValueModuleUnit);
+	public:
 	protected:
 		enum helperAlias {
 			eProcUnit
@@ -122,7 +123,6 @@ public:
 
 	class BACKEND_API ibValueMetadataUnit :
 		public ibValue {
-		wxDECLARE_DYNAMIC_CLASS(ibValueMetadataUnit);
 	public:
 
 		ibValueMetadataUnit() {}
@@ -259,14 +259,13 @@ protected:
 
 class BACKEND_API ibValueModuleRuntimeManager :
 	public ibValueModuleManager {
-public:
+	public:
 
 	// Runtime variant — adds the owning module manager + per-runtime create/destroy.
 	// The lightweight base unit above is what the designer reads for autocomplete (no
 	// manager); this is what the runtime manager spawns for actual execution.
 	class BACKEND_API ibValueRuntimeModuleUnit :
 		public ibValueModuleManager::ibValueModuleUnit {
-		wxDECLARE_DYNAMIC_CLASS(ibValueRuntimeModuleUnit);
 	public:
 		ibValueRuntimeModuleUnit() {}
 		ibValueRuntimeModuleUnit(ibValueModuleRuntimeManager* moduleManager, ibValueMetaObjectModuleBase* moduleObject, bool managerModule = false);
@@ -349,6 +348,7 @@ protected:
 
 class BACKEND_API ibValueModuleManagerRuntimeConfiguration :
 	public ibValueModuleRuntimeManager, public ibRuntimeRoot {
+	public:
 	//system events:
 	bool BeforeStart();
 	void OnStart();
@@ -395,7 +395,7 @@ public:
 //*********************************************************************************************************
 
 class BACKEND_API ibValueModuleManagerDesigner : public ibValueModuleManager {
-public:
+	public:
 	// Configuration variant — takes the config common object and forwards its
 	// object module to the base (out-of-line: GetObjectModule needs the complete
 	// metaobject type).

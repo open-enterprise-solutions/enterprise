@@ -5,8 +5,7 @@
 #include "backend/backend_type.h"
 
 class BACKEND_API ibValueType : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueType);
-public:
+	public:
 
 	ibClassID GetOwnerTypeClass() const { return m_clsid; }
 	ibTypeDescription GetOwnerTypeDescription() const { return ibTypeDescription(GetOwnerTypeClass()); }
@@ -39,8 +38,7 @@ private:
 };
 
 class BACKEND_API ibValueQualifierNumber : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueQualifierNumber);
-public:
+	public:
 	ibQualifierNumber m_qNumber;
 public:
 
@@ -54,8 +52,7 @@ public:
 };
 
 class BACKEND_API ibValueQualifierDate : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueQualifierDate);
-public:
+	public:
 	ibQualifierDate m_qDate;
 public:
 
@@ -69,8 +66,7 @@ public:
 };
 
 class BACKEND_API ibValueQualifierString : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueQualifierString);
-public:
+	public:
 	ibQualifierString m_qString;
 public:
 
@@ -84,7 +80,6 @@ public:
 };
 
 class BACKEND_API ibValueTypeDescription : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS_NO_COPY(ibValueTypeDescription);
 private:
 	ibValueMethodHelper* m_methodHelper;
 public:

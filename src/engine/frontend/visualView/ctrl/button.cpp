@@ -7,7 +7,6 @@
 #include "frontend/win/ctrls/controlButton.h"
 #endif
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueButton, ibValueWindow)
 
 //****************************************************************************
 //*                              Button                                      *

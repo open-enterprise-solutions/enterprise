@@ -16,8 +16,7 @@ enum ibDocumentPostingMode {
 #include "backend/compiler/enumUnit.h"
 
 class ibValueEnumDocumentWriteMode : public ibValueEnumeration<ibDocumentWriteMode> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumPostingMode);
-public:
+	public:
 	ibValueEnumDocumentWriteMode() : ibValueEnumeration() {}
 	//ibValueEnumDocumentWriteMode(ibDocumentWriteMode mode) : ibValueEnumeration(mode) {}
 
@@ -28,8 +27,7 @@ public:
 	}
 };
 class ibValueEnumDocumentPostingMode : public ibValueEnumeration<ibDocumentPostingMode> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumDocumentPostingMode);
-public:
+	public:
 	ibValueEnumDocumentPostingMode() : ibValueEnumeration() {}
 	//ibValueEnumDocumentPostingMode(ibDocumentPostingMode mode) : ibValueEnumeration(mode) {}
 

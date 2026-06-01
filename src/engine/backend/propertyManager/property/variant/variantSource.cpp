@@ -111,7 +111,7 @@ ibValueMetaObjectAttributeBase* ibVariantDataSource::GetSourceAttributeObject() 
 		const ibValueMetaObjectCompositeData* genericObject = sourceObject->GetSourceMetaObject();
 		//wxASSERT(genericObject);
 		return genericObject != nullptr && genericObject->IsAllowed() ?
-			wxDynamicCast(genericObject->FindAnyObjectByFilter(m_dataSource), ibValueMetaObjectAttributeBase) : nullptr;
+			dynamic_cast<ibValueMetaObjectAttributeBase*>(genericObject->FindAnyObjectByFilter(m_dataSource)) : nullptr;
 	}
 
 	return nullptr;

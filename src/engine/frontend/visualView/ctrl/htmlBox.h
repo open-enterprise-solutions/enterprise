@@ -4,8 +4,7 @@
 #include <wx/html/htmlwin.h>
 
 class ibValueHTMLBox : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueHTMLBox);
-public:
+	public:
 
 	ibValueHTMLBox(); 
 

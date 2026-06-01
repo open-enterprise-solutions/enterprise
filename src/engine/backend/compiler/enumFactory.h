@@ -5,7 +5,7 @@
 
 //realization factory pattern 
 class ibValueEnumFactory : public ibValue {
-public:
+	public:
 
 	ibValueEnumFactory();
 	virtual ~ibValueEnumFactory();

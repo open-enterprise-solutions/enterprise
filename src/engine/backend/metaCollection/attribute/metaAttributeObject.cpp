@@ -8,10 +8,7 @@
 
 ////////////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObjectAttributeBase, ibValueMetaObject);
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectAttribute, ibValueMetaObjectAttributeBase);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectAttributePredefined, ibValueMetaObjectAttributeBase);
 
 //***********************************************************************
 //*                         Attributes                                  * 

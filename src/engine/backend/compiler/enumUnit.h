@@ -4,6 +4,7 @@
 #include "value.h"
 
 class BACKEND_API ibValueEnumerationWrapper : public ibValue {
+	public:
 	ibValueMethodHelper* m_methodHelper;
 public:
 
@@ -27,7 +28,7 @@ protected:
 
 template <typename valT>
 class ibValueEnumerationVariantBase : public ibValue {
-public:
+	public:
 
 	ibValueEnumerationVariantBase() : ibValue(ibValueTypes::TYPE_ENUM, true) {}
 
@@ -41,7 +42,7 @@ public:
 
 template <typename valT>
 class ibValueEnumerationBase : public ibValueEnumerationWrapper {
-public:
+	public:
 
 	ibValueEnumerationBase(bool createInstance = false) :
 		ibValueEnumerationWrapper(createInstance)
@@ -66,6 +67,7 @@ public:
 //default base class for all enumerations
 template <typename valT>
 class ibValueEnumeration : public ibValueEnumerationBase<valT> {
+	public:
 	std::map<valT, wxString> m_listEnumData, m_listEnumDesc;
 protected:
 

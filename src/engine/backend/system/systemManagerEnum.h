@@ -5,8 +5,7 @@
 #include "backend/compiler/enumUnit.h"
 
 class ibValuibStatusMessage : public ibValueEnumeration<ibStatusMessage> {
-	wxDECLARE_DYNAMIC_CLASS(ibValuibStatusMessage);
-public:
+	public:
 	ibValuibStatusMessage() : ibValueEnumeration() {}
 	//ibValuibStatusMessage(ibStatusMessage status) : ibValueEnumeration(status) {}
 
@@ -18,8 +17,7 @@ public:
 };
 
 class ibValuibQuestionMode : public ibValueEnumeration<ibQuestionMode> {
-	wxDECLARE_DYNAMIC_CLASS(ibValuibQuestionMode);
-public:
+	public:
 	ibValuibQuestionMode() : ibValueEnumeration() {}
 	//ibValuibQuestionMode(ibQuestionMode mode) : ibValueEnumeration(mode) {}
 
@@ -32,8 +30,7 @@ public:
 };
 
 class ibValuibQuestionReturnCode : public ibValueEnumeration<ibQuestionReturnCode> {
-	wxDECLARE_DYNAMIC_CLASS(ibValuibQuestionReturnCode);
-public:
+	public:
 	ibValuibQuestionReturnCode() : ibValueEnumeration() {}
 	//ibValuibQuestionReturnCode(ibQuestionReturnCode code) : ibValueEnumeration(code) {}
 
@@ -46,8 +43,7 @@ public:
 };
 
 class ibValuibRoundMode : public ibValueEnumeration<ibRoundMode> {
-	wxDECLARE_DYNAMIC_CLASS(ibValuibQuestionReturnCode);
-public:
+	public:
 	ibValuibRoundMode() : ibValueEnumeration() {}
 	//ibValuibRoundMode(ibRoundMode mode) : ibValueEnumeration(mode) {}
 
@@ -58,8 +54,7 @@ public:
 };
 
 class ibValueChars : public ibValueEnumeration<ibChars> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueChars);
-public:
+	public:
 	ibValueChars() : ibValueEnumeration() {}
 	//ibValueChars(ibChars c) : ibValueEnumeration(c) {}
 

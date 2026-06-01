@@ -6,8 +6,7 @@
 
 //picture support
 class BACKEND_API ibValuePicture : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValuePicture);
-public:
+	public:
 
 	ibValuePicture(const ibPictureDescription& pictureDesc = ibPictureDescription(0));
 	virtual bool Init(ibValue** paParams, const long lSizeArray);

@@ -4,7 +4,7 @@
 #include "metaObject.h"
 
 class BACKEND_API ibValueMetaObjectSpreadsheetBase : public ibValueMetaObject {
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectSpreadsheetBase);
+	public:
 protected:
 	enum
 	{
@@ -31,8 +31,7 @@ public:
 };
 
 class BACKEND_API ibValueMetaObjectSpreadsheet : public ibValueMetaObjectSpreadsheetBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectCommonSpreadsheet);
-public:
+	public:
 	//set spreadsheet code 
 	virtual void SetSpreadsheetDesc(const ibSpreadsheetDescription& spreadsheetDescription) { m_propertyTemplate->SetValue(spreadsheetDescription); }
 	virtual ibSpreadsheetDescription& GetSpreadsheetDesc() const { return m_propertyTemplate->GetValueAsSpreadsheetDesc(); }
@@ -45,8 +44,7 @@ private:
 };
 
 class BACKEND_API ibValueMetaObjectCommonSpreadsheet : public ibValueMetaObjectSpreadsheetBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectCommonSpreadsheet);
-public:
+	public:
 	//set spreadsheet code 
 	virtual void SetSpreadsheetDesc(const ibSpreadsheetDescription& spreadsheetDescription) { m_propertyTemplate->SetValue(spreadsheetDescription); }
 	virtual ibSpreadsheetDescription& GetSpreadsheetDesc() const { return m_propertyTemplate->GetValueAsSpreadsheetDesc(); }

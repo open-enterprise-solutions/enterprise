@@ -33,8 +33,7 @@
 // we returned via Break from a previous outer-loop iteration; the
 // cursor is stale and must be reset.
 class ibValueIterator : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueIterator);
-public:
+	public:
 	ibValueIterator()
 		: ibValue(ibValueTypes::TYPE_ITERATOR),
 		  m_hotFromNextIter(false) {}
@@ -84,8 +83,7 @@ extern BACKEND_API const ibClassID g_valueIterator;
 // ibByteFunction inside m_listFunc is owned by parentBc. The value
 // must not outlive the session that produced it.
 class ibValueFunction : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueFunction);
-public:
+	public:
 	ibValueFunction() : ibValue(ibValueTypes::TYPE_FUNCTION) {}
 
 	ibValueFunction(const ibByteCode* parentBc, long funcIndex)

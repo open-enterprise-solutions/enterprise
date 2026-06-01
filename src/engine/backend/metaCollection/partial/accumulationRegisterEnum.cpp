@@ -1,7 +1,5 @@
 #include "accumulationRegisterEnum.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumAccumulationRegisterType, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumAccumulationRegisterRecordType, ibValue);
 
 //***********************************************************************
 //*                       Register in runtime                           *

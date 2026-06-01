@@ -32,7 +32,7 @@ const ibClassID g_controlFormCLSID = string_to_clsid("CT_FRME");
 class FRONTEND_API ibValueForm :
 	public ibBackendValueForm, public ibValueFrame, public ibRuntimeModuleDataObject
 {
-	wxDECLARE_DYNAMIC_CLASS(ibValueForm);
+	public:
 
 private:
 
@@ -92,14 +92,14 @@ public:
 
 	template <typename retType>
 	inline retType* NewObject(const ibClassID& clsid, ibValueFrame* parentControl = nullptr, const ibValue& generateId = true) {
-		return wxDynamicCast(
-			NewObject(clsid, parentControl, generateId), retType);
+		return dynamic_cast<retType*>(
+			NewObject(clsid, parentControl, generateId));
 	}
 
 	template <typename retType>
 	inline retType* NewObject(const wxString& className, ibValueFrame* parentControl = nullptr, const ibValue& generateId = true) {
-		return wxDynamicCast(
-			NewObject(className, parentControl, generateId), retType);
+		return dynamic_cast<retType*>(
+			NewObject(className, parentControl, generateId));
 	}
 
 	/**
@@ -219,7 +219,6 @@ public:
 public:
 
 	class ibValueFormCollectionControl : public ibValue {
-		wxDECLARE_DYNAMIC_CLASS(ibValueFormCollectionControl);
 	public:
 		ibValueFormCollectionControl();
 		ibValueFormCollectionControl(ibValueForm* ownerFrame);

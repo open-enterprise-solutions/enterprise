@@ -4,8 +4,7 @@
 #include "metaObject.h"
 
 class BACKEND_API ibValueMetaObjectLanguage : public ibValueMetaObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectLanguage);
-public:
+	public:
 
 	wxString GetLangCode() const { return m_propertyCode->GetValueAsString(); }
 	void SetLangCode(const wxString& strCode) { m_propertyCode->SetValue(strCode); }

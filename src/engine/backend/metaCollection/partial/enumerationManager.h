@@ -5,7 +5,7 @@
 
 class ibValueManagerDataObjectEnumeration :
 	public ibValueManagerDataObject {
-public:
+	public:
 
 	ibValueManagerDataObjectEnumeration(const ibValueMetaObjectEnumeration* metaObject = nullptr) : m_metaObject(metaObject) {}
 	virtual ~ibValueManagerDataObjectEnumeration() {}
@@ -22,7 +22,6 @@ public:
 protected:
 	const ibValueMetaObjectEnumeration* m_metaObject;
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueManagerDataObjectEnumeration);
 };
 
 #endif 

@@ -6,7 +6,6 @@
 #include "frontend/win/ctrls/controlTextEditor.h"
 #endif
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueTextCtrl, ibValueWindow)
 
 //****************************************************************************
 
@@ -18,23 +17,23 @@ bool ibValueTextCtrl::GetChoiceForm(ibPropertyList* property)
 {
 	const ibMetaData* metaData = GetMetaData();
 	if (metaData != nullptr) {
-		ibValueMetaObjectRecordDataRef* metaObject = nullptr;
+		const ibValueMetaObjectRecordDataRef* metaObject = nullptr;
 		if (!m_propertySource->IsEmptyProperty()) {
 			const ibValueMetaObjectGenericData* metaObjectValue =
 				m_formOwner->GetMetaObject();
 			if (metaObjectValue != nullptr) {
-				const ibValueMetaObjectAttributeBase* attribute = wxDynamicCast(metaObjectValue->FindAnyObjectByFilter(m_propertySource->GetValueAsSource()), ibValueMetaObjectAttributeBase);
+				const ibValueMetaObjectAttributeBase* attribute = dynamic_cast<ibValueMetaObjectAttributeBase*>(metaObjectValue->FindAnyObjectByFilter(m_propertySource->GetValueAsSource()));
 				wxASSERT(attribute);
 				const ibCtorMetaValueType* so = metaData->GetTypeCtor(attribute->GetFirstClsid());
 				if (so != nullptr) {
-					metaObject = wxDynamicCast(so->GetMetaObject(), ibValueMetaObjectRecordDataRef);
+					metaObject = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
 				}
 			}
 		}
 		else {
 			const ibCtorMetaValueType* so = metaData->GetTypeCtor(ibTypeControlFactory::GetFirstClsid());
 			if (so != nullptr) {
-				metaObject = wxDynamicCast(so->GetMetaObject(), ibValueMetaObjectRecordDataRef);
+				metaObject = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
 			}
 		}
 

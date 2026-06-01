@@ -5,7 +5,7 @@
 
 class ibValueManagerDataObjectInformationRegister :
 	public ibValueManagerDataObject {
-public:
+	public:
 
 	ibValue Get(const ibValue& cFilter = ibValue());
 	ibValue Get(const ibValue& cPeriod, const ibValue& cFilter);
@@ -28,7 +28,6 @@ public:
 protected:
 	const ibValueMetaObjectInformationRegister* m_metaObject;
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueManagerDataObjectInformationRegister);
 };
 
 #endif 

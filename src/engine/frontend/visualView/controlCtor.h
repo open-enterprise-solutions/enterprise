@@ -8,8 +8,8 @@ class ibCtorControlTypeBase : public ibCtorValueTypeBase {
 	wxString m_classType;
 public:
 
-	ibCtorControlTypeBase(const wxString& className, const wxString& classType, wxClassInfo* classInfo, const ibClassID& clsid)
-		: ibCtorValueTypeBase(className, classInfo, clsid), m_classType(classType) {
+	ibCtorControlTypeBase(const wxString& className, const wxString& classType, const std::type_info& typeInfo, const ibClassID& clsid)
+		: ibCtorValueTypeBase(className, typeInfo, clsid), m_classType(classType) {
 	}
 
 	virtual wxString GetTypeControlName() const {
@@ -27,7 +27,7 @@ class ibCtorControlType : public ibCtorControlTypeBase {
 public:
 
 	ibCtorControlType(const wxString& className, const wxString& classType, const ibClassID& clsid)
-		: ibCtorControlTypeBase(className, classType, CLASSINFO(T), clsid) {
+		: ibCtorControlTypeBase(className, classType, typeid(T), clsid) {
 	}
 
 	virtual wxIcon GetClassIcon() const {

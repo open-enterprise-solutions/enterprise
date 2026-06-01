@@ -17,7 +17,6 @@
 #include <iostream>
 #endif
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueForm, ibValueFrame);
 
 //****************************************************************************
 //*                              Frame                                       *

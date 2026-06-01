@@ -6,12 +6,11 @@
 #include "globalContextManager.h"
 #include "backend/system/value/valueMap.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueGlobalContextManager, ibValue);
 
 #include "backend/objCtor.h"
 
 class ibValueGlobalContextStructureManager : public ibValueStructure {
-public:
+	public:
 
 	ibValueGlobalContextStructureManager() : m_clsid(0), m_metaData(nullptr) {}
 	ibValueGlobalContextStructureManager(const ibClassID& clsid, ibMetaData* metaData)
@@ -48,10 +47,8 @@ private:
 
 	ibClassID m_clsid;
 
-	wxDECLARE_DYNAMIC_CLASS(ibValueGlobalContextStructureManager);
 };
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueGlobalContextStructureManager, ibValue);
 
 enum
 {

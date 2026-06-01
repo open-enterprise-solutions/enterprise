@@ -8,7 +8,6 @@
 
 #include "backend/system/value/valueMap.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModuleManager::ibValueMetadataUnit, ibValue);
 
 ibValueModuleManager::ibValueMetadataUnit::ibValueMetadataUnit(ibMetaData* metaData) :
 	ibValue(ibValueTypes::TYPE_VALUE, true),

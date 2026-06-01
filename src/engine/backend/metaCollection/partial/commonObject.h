@@ -167,8 +167,7 @@ private:
 
 class BACKEND_API ibValueMetaObjectGenericData
 	: public ibValueMetaObjectCompositeData, public ibBackendCommandItem {
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectGenericData);
-public:
+	public:
 	friend class ibMetaData;
 public:
 
@@ -277,8 +276,8 @@ protected:
 
 class BACKEND_API ibValueMetaObjectRecordData
 	: public ibValueMetaObjectGenericData {
+	public:
 
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectRecordData);
 
 public:
 
@@ -419,8 +418,7 @@ enum ibObjectMode {
 
 //meta object with file
 class BACKEND_API ibValueMetaObjectRecordDataExt : public ibValueMetaObjectRecordData {
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectRecordDataExt);
-public:
+	public:
 
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return AccessRight_Use(); }
@@ -462,7 +460,7 @@ private:
 
 //meta object with reference 
 class BACKEND_API ibValueMetaObjectRecordDataRef : public ibValueMetaObjectRecordData {
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectRecordDataRef);
+	public:
 
 protected:
 	//ctor
@@ -566,7 +564,7 @@ protected:
 
 //meta object with reference - for enumeration
 class BACKEND_API ibValueMetaObjectRecordDataEnumRef : public ibValueMetaObjectRecordDataRef {
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectRecordDataEnumRef);
+	public:
 protected:
 
 	//ctor
@@ -663,7 +661,7 @@ public: \
 
 //meta object with reference and deletion mark
 class BACKEND_API ibValueMetaObjectRecordDataMutableRef : public ibValueMetaObjectRecordDataRef {
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectRecordDataMutableRef);
+	public:
 protected:
 	//ctor
 	ibValueMetaObjectRecordDataMutableRef();
@@ -768,8 +766,7 @@ protected:
 //meta object with reference and deletion mark and group/object type and predefined values
 class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	public ibValueMetaObjectRecordDataMutableRef {
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectRecordDataHierarchyMutableRef);
-public:
+	public:
 
 	class ibPredefinedValueObject : public ibDataViewObject {
 	public:
@@ -996,7 +993,7 @@ protected:
 //meta object with key   
 class BACKEND_API ibValueMetaObjectRegisterData :
 	public ibValueMetaObjectGenericData {
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectRegisterData);
+	public:
 protected:
 	ibValueMetaObjectRegisterData();
 	virtual ~ibValueMetaObjectRegisterData();
@@ -1323,7 +1320,7 @@ protected:
 #pragma region managers
 
 class BACKEND_API ibValueManagerObject : public ibValue {
-public:
+	public:
 
 	ibValueManagerObject() : ibValue(ibValueTypes::TYPE_VALUE, true) {}
 	virtual ~ibValueManagerObject() {}
@@ -1332,7 +1329,7 @@ public:
 };
 
 class BACKEND_API ibValueManagerDataObject : public ibValueManagerObject {
-public:
+	public:
 
 	ibValueManagerDataObject() : ibValueManagerObject(), m_methodHelper(new ibValueMethodHelper) {}
 	virtual ~ibValueManagerDataObject() { wxDELETE(m_methodHelper); }
@@ -1362,6 +1359,7 @@ protected:
 };
 
 class BACKEND_API ibValueManagerDataObjectPredefined : public ibValueManagerDataObject {
+	public:
 
 public:
 
@@ -1379,7 +1377,7 @@ public:
 #pragma region objects 
 class BACKEND_API ibValueRecordDataObject : public ibValue, public ibActionDataObject,
 	public ibSourceDataObject, public ibValueDataObject, public ibRuntimeModuleDataObject {
-	wxDECLARE_ABSTRACT_CLASS(ibValueRecordDataObject);
+	public:
 protected:
 	enum helperAlias {
 		eSystem,
@@ -1546,7 +1544,7 @@ protected:
 
 //Object with file
 class BACKEND_API ibValueRecordDataObjectExt : public ibValueRecordDataObject {
-	wxDECLARE_ABSTRACT_CLASS(ibValueRecordDataObjectExt);
+	public:
 protected:
 	//override copy constructor
 	ibValueRecordDataObjectExt(const ibValueMetaObjectRecordDataExt* metaObject);
@@ -1575,7 +1573,7 @@ protected:
 
 //Object with reference type 
 class BACKEND_API ibValueRecordDataObjectRef : public ibValueRecordDataObject {
-	wxDECLARE_ABSTRACT_CLASS(ibValueRecordDataObjectRef);
+	public:
 protected:
 
 	// Code generator. Allocates the next per-(meta_guid, prefix) sequence
@@ -1787,7 +1785,7 @@ public:
 
 //Object with reference type and group/object type
 class BACKEND_API ibValueRecordDataObjectHierarchyRef : public ibValueRecordDataObjectRef {
-	wxDECLARE_ABSTRACT_CLASS(ibValueRecordDataObjectHierarchyRef);
+	public:
 protected:
 	ibValueRecordDataObjectHierarchyRef(const ibValueMetaObjectRecordDataHierarchyMutableRef* metaObject, const ibGuid& objGuid, ibObjectMode objMode = ibObjectMode::OBJECT_ITEM);
 	ibValueRecordDataObjectHierarchyRef(const ibValueRecordDataObjectHierarchyRef& src);
@@ -1878,14 +1876,12 @@ protected:
 // specific bits (DeletionMark posting guard, DocumentPosted attribute
 // mutation, default DocDate fill) are hooks the concrete leaf overrides.
 class BACKEND_API ibValueRecordDataObjectRecorderRef : public ibValueRecordDataObjectRef {
-	wxDECLARE_ABSTRACT_CLASS(ibValueRecordDataObjectRecorderRef);
-public:
+	public:
 	// Per-recorder register holder. Iterates the leaf metaobject's
 	// RecordDescription, creates one ibValueRecordSetObject per
 	// declared register seeded with this recorder's reference, and
 	// fans Write/Delete across all of them.
 	class BACKEND_API ibRecorderRegister : public ibValue {
-		wxDECLARE_DYNAMIC_CLASS(ibRecorderRegister);
 	public:
 		void CreateRecordSet();
 		bool WriteRecordSet();
@@ -1980,8 +1976,7 @@ protected:
 //object with register type
 #pragma region registers
 class BACKEND_API ibValueRecordKeyObject : public ibValue {
-	wxDECLARE_ABSTRACT_CLASS(ibValueRecordKeyObject);
-public:
+	public:
 	ibValueRecordKeyObject(const ibValueMetaObjectRegisterData* metaObject);
 	virtual ~ibValueRecordKeyObject();
 
@@ -2042,8 +2037,7 @@ protected:
 };
 
 class BACKEND_API ibValueRecordSetObject : public ibValueModelRamTableBase, public ibRuntimeModuleDataObject {
-	wxDECLARE_ABSTRACT_CLASS(ibValueRecordSetObject);
-public:
+	public:
 
 	virtual ibValueModelColumnCollection* GetColumnCollection() const override { return m_recordColumnCollection; }
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) override {
@@ -2053,12 +2047,10 @@ public:
 	}
 
 	class ibValueRecordSetObjectRegisterColumnCollection : public ibValueModelTableBase::ibValueModelColumnCollection {
-		wxDECLARE_DYNAMIC_CLASS(ibValueRecordSetObjectRegisterColumnCollection);
 	public:
 
 		class ibValueRecordSetRegisterColumnInfo : public ibValueModelTableBase::ibValueModelColumnCollection::ibValueModelColumnInfo {
-			wxDECLARE_DYNAMIC_CLASS(ibValueRecordSetRegisterColumnInfo);
-		public:
+	public:
 
 			ibValueRecordSetRegisterColumnInfo();
 			ibValueRecordSetRegisterColumnInfo(ibValueMetaObjectAttributeBase* attribute);
@@ -2116,7 +2108,6 @@ public:
 	};
 
 	class ibValueRecordSetObjectRegisterReturnLine : public ibValueModelReturnLine {
-		wxDECLARE_DYNAMIC_CLASS(ibValueRecordSetObjectRegisterReturnLine);
 	public:
 
 		ibValueRecordSetObjectRegisterReturnLine(ibValueRecordSetObject* ownerTable = nullptr,
@@ -2148,11 +2139,9 @@ public:
 	};
 
 	class ibValueRecordSetObjectRegisterKeyValue : public ibValue {
-		wxDECLARE_DYNAMIC_CLASS(ibValueRecordSetObjectRegisterKeyValue);
 	public:
 		class ibValueRecordSetObjectRegisterKeyDescriptionValue : public ibValue {
-			wxDECLARE_DYNAMIC_CLASS(ibValueRecordSetObjectRegisterKeyDescriptionValue);
-		public:
+	public:
 
 			ibValueRecordSetObjectRegisterKeyDescriptionValue(ibValueRecordSetObject* recordSet = nullptr, const ibMetaID& id = wxNOT_FOUND);
 			virtual ~ibValueRecordSetObjectRegisterKeyDescriptionValue();
@@ -2411,7 +2400,7 @@ protected:
 
 class BACKEND_API ibValueRecordManagerObject : public ibValue,
 	public ibSourceDataObject, public ibActionDataObject {
-	wxDECLARE_ABSTRACT_CLASS(ibValueRecordManagerObject);
+	public:
 protected:
 	ibValueRecordManagerObject(const ibValueMetaObjectRegisterData* metaObject, const ibUniqueKeyPair& uniqueKey);
 	ibValueRecordManagerObject(const ibValueRecordManagerObject& source);

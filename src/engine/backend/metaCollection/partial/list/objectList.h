@@ -7,7 +7,7 @@
 //base list class 
 class BACKEND_API ibValueListDataObject : public ibValueModelTableBase,
 	public ibSourceDataObject {
-	wxDECLARE_ABSTRACT_CLASS(ibValueListDataObject);
+	public:
 protected:
 	enum Func {
 		enRefresh
@@ -37,11 +37,9 @@ public:
 	}
 
 	class ibValueDataObjectListColumnCollection : public ibValueModelTableBase::ibValueModelColumnCollection {
-		wxDECLARE_DYNAMIC_CLASS(ibValueDataObjectListColumnCollection);
 	public:
 		class ibValueDataObjectListColumnInfo : public ibValueModelTableBase::ibValueModelColumnCollection::ibValueModelColumnInfo {
-			wxDECLARE_DYNAMIC_CLASS(ibValueDataObjectListColumnInfo);
-		public:
+	public:
 
 			virtual unsigned int GetColumnID() const { return m_metaAttribute->GetMetaID(); }
 			virtual wxString GetColumnName() const { return m_metaAttribute->GetName(); }
@@ -95,7 +93,6 @@ public:
 	};
 
 	class ibValueDataObjectListReturnLine : public ibValueModelReturnLine {
-		wxDECLARE_DYNAMIC_CLASS(ibValueDataObjectListReturnLine);
 	public:
 
 		ibValueDataObjectListReturnLine(ibValueListDataObject* ownerTable = nullptr, const ibDataViewItem& line = ibDataViewItem(nullptr));
@@ -198,8 +195,7 @@ protected:
 
 // list enumeration 
 class BACKEND_API ibValueListDataObjectEnumRef : public ibValueListDataObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValueListDataObjectRef);
-public:
+	public:
 	struct ibValueTableEnumRow : public ibValueTableRow {
 		ibValueTableEnumRow(const ibGuid& guid) :
 			ibValueTableRow(), m_objGuid(guid) {
@@ -322,8 +318,7 @@ private:
 
 // list without parent  
 class BACKEND_API ibValueListDataObjectRef : public ibValueListDataObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValueListDataObjectRef);
-public:
+	public:
 	struct ibValueTableListRow : public ibValueTableRow {
 		ibValueTableListRow(const ibGuid& guid) :
 			ibValueTableRow(), m_objGuid(guid) {
@@ -453,8 +448,7 @@ private:
 
 // list register
 class BACKEND_API ibValueListRegisterObject : public ibValueListDataObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValueListRegisterObject);
-public:
+	public:
 	// Register row carries TWO maps:
 	//  * m_nodeKeys   — identity columns (recorder + line for HasRecorder
 	//                   registers, dimensions otherwise).  Stable PK for
@@ -591,7 +585,7 @@ private:
 //base tree class 
 class BACKEND_API ibValueModelTreeDataObject : public ibValueModelTreeBase,
 	public ibSourceDataObject {
-	wxDECLARE_ABSTRACT_CLASS(ibValueModelTreeDataObject);
+	public:
 protected:
 	enum Func {
 		enRefresh
@@ -609,11 +603,9 @@ private:
 public:
 
 	class ibValueDataObjectTreeColumnCollection : public ibValueModelTreeBase::ibValueModelColumnCollection {
-		wxDECLARE_DYNAMIC_CLASS(ibValueDataObjectTreeColumnCollection);
 	public:
 		class ibValueDataObjectTreeColumnInfo : public ibValueModelTreeBase::ibValueModelColumnCollection::ibValueModelColumnInfo {
-			wxDECLARE_DYNAMIC_CLASS(ibValueDataObjectTreeColumnInfo);
-		public:
+	public:
 
 			virtual unsigned int GetColumnID() const { return m_metaAttribute->GetMetaID(); }
 			virtual wxString GetColumnName() const { return m_metaAttribute->GetName(); }
@@ -667,7 +659,6 @@ public:
 	};
 
 	class ibValueDataObjectTreeReturnLine : public ibValueModelReturnLine {
-		wxDECLARE_DYNAMIC_CLASS(ibValueDataObjectTreeReturnLine);
 	public:
 
 		ibValueDataObjectTreeReturnLine(ibValueModelTreeDataObject* ownerTable = nullptr, const ibDataViewItem& line = ibDataViewItem(nullptr));
@@ -767,8 +758,7 @@ protected:
 
 // tree with parent or only parent 
 class BACKEND_API ibValueModelTreeDataObjectFolderRef : public ibValueModelTreeDataObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValueModelTreeDataObjectFolderRef);
-public:
+	public:
 
 	enum {
 		LIST_FOLDER,

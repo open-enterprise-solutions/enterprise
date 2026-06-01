@@ -4,8 +4,7 @@
 #include "commonObject.h"
 
 class ibValueMetaObjectReport : public ibValueMetaObjectRecordDataExt {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectReport);
-public:
+	public:
 	enum
 	{
 		ID_METATREE_OPEN_MODULE = 19000,
@@ -124,8 +123,7 @@ private:
 #define default_meta_id 10 //for reports
 
 class ibValueMetaObjectExternalReport : public ibValueMetaObjectReport {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectExternalReport);
-public:
+	public:
 	ibValueMetaObjectExternalReport() : ibValueMetaObjectReport() {
 		m_metaId = default_meta_id;
 	}
@@ -139,6 +137,7 @@ public:
 //********************************************************************************************
 
 class ibValueRecordDataObjectReport : public ibValueRecordDataObjectExt {
+	public:
 	ibValueRecordDataObjectReport(const ibValueRecordDataObjectReport& source);
 	ibValueRecordDataObjectReport(const ibValueMetaObjectReport* metaObject);
 public:

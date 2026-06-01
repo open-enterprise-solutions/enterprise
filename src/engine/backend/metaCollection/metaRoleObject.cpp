@@ -4,7 +4,6 @@
 //*                            RoleObject                               *
 //***********************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectRole, ibValueMetaObject);
 
 //***********************************************************************
 //*                           Metamodule                                *

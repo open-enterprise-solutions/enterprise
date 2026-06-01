@@ -6,8 +6,7 @@
 //Array support
 class BACKEND_API ibValueFont : public ibValue
 {
-	wxDECLARE_DYNAMIC_CLASS(ibValueFont);
-public:
+	public:
 	wxFont m_font;
 public:
 

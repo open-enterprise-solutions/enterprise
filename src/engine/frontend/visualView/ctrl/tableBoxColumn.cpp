@@ -10,7 +10,6 @@
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModelTableBoxColumn, ibValueControl);
 
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
@@ -24,7 +23,7 @@ bool ibValueModelTableBoxColumn::GetChoiceForm(ibPropertyList* property)
 {
 	const ibMetaData* metaData = GetMetaData();
 	if (metaData != nullptr) {
-		ibValueMetaObjectRecordDataRef* metaObjectRefValue = nullptr;
+		const ibValueMetaObjectRecordDataRef* metaObjectRefValue = nullptr;
 		if (!m_propertySource->IsEmptyProperty()) {
 
 			const ibValueMetaObjectGenericData* metaObjectValue =
@@ -34,27 +33,24 @@ bool ibValueModelTableBoxColumn::GetChoiceForm(ibPropertyList* property)
 				ibValueMetaObject* metaobject =
 					metaObjectValue->FindAnyObjectByFilter(m_propertySource->GetValueAsSource());
 
-				ibValueMetaObjectAttributeBase* attribute = wxDynamicCast(
-					metaobject, ibValueMetaObjectAttributeBase
-				);
+				ibValueMetaObjectAttributeBase* attribute = dynamic_cast<ibValueMetaObjectAttributeBase*>(metaobject);
 				if (attribute != nullptr) {
 
 					const ibCtorMetaValueType* so = metaData->GetTypeCtor(attribute->GetFirstClsid());
 					if (so != nullptr) {
-						metaObjectRefValue = wxDynamicCast(so->GetMetaObject(), ibValueMetaObjectRecordDataRef);
+						metaObjectRefValue = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
 					}
 				}
 				else
 				{
-					metaObjectRefValue = wxDynamicCast(
-						metaobject, ibValueMetaObjectRecordDataRef);
+					metaObjectRefValue = dynamic_cast<ibValueMetaObjectRecordDataRef*>(metaobject);
 				}
 			}
 		}
 		else {
 			const ibCtorMetaValueType* so = metaData->GetTypeCtor(ibTypeControlFactory::GetFirstClsid());
 			if (so != nullptr) {
-				metaObjectRefValue = wxDynamicCast(so->GetMetaObject(), ibValueMetaObjectRecordDataRef);
+				metaObjectRefValue = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
 			}
 		}
 

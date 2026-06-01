@@ -4,8 +4,7 @@
 #include "frame.h"
 
 class FRONTEND_API ibValueControl : public ibValueFrame {
-	wxDECLARE_ABSTRACT_CLASS(ibValueControl);
-public:
+	public:
 
 	ibValueControl();
 	virtual ~ibValueControl();

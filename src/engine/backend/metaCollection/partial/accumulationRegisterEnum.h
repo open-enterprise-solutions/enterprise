@@ -14,8 +14,7 @@ enum ibRecordType {
 #pragma region enumeration
 #include "backend/compiler/enumUnit.h"
 class ibValueEnumAccumulationRegisterType : public ibValueEnumeration<ibRegisterType> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumAccumulationRegisterType);
-public:
+	public:
 	ibValueEnumAccumulationRegisterType() : ibValueEnumeration() {}
 	//ibValueEnumAccumulationRegisterType(ibRegisterType mode) : ibValueEnumeration(mode) {}
 
@@ -25,8 +24,7 @@ public:
 	}
 };
 class ibValueEnumAccumulationRegisterRecordType : public ibValueEnumeration<ibRecordType> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumAccumulationRegisterRecordType);
-public:
+	public:
 	static ibValue CreateDefEnumValue() {
 		return ibValue::CreateEnumObject<ibValueEnumAccumulationRegisterRecordType>(ibRecordType::eExpense);
 	}

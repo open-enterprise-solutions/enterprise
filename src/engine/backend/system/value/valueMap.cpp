@@ -6,8 +6,6 @@
 #include "valueMap.h"
 #include "backend/backend_exception.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueContainer, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueStructure, ibValue);
 
 ibValue::ibValueMethodHelper ibValueContainer::ibValueReturnContainer::m_methodHelper;
 

@@ -6,7 +6,6 @@
 #include "valuePoint.h"
 
 //////////////////////////////////////////////////////////////////////
-wxIMPLEMENT_DYNAMIC_CLASS(ibValuePoint, ibValue);
 
 ibValue::ibValueMethodHelper ibValuePoint::m_methodHelper;
 

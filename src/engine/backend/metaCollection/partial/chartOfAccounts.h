@@ -12,7 +12,7 @@
 //********************************************************************************************
 
 class ibValueMetaObjectChartOfAccounts : public ibValueMetaObjectRecordDataHierarchyMutableRef {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectChartOfAccounts);
+	public:
 private:
 	enum
 	{
@@ -267,6 +267,7 @@ private:
 //********************************************************************************************
 
 class ibValueRecordDataObjectChartOfAccounts : public ibValueRecordDataObjectHierarchyRef {
+	public:
 	ibValueRecordDataObjectChartOfAccounts(const ibValueMetaObjectChartOfAccounts* metaObject, const ibGuid& objGuid = wxNullGuid, ibObjectMode objMode = ibObjectMode::OBJECT_ITEM);
 	ibValueRecordDataObjectChartOfAccounts(const ibValueRecordDataObjectChartOfAccounts& source);
 public:

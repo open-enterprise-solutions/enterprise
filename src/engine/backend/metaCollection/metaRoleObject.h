@@ -4,7 +4,7 @@
 #include "metaObject.h"
 
 class BACKEND_API ibValueMetaObjectRole : public ibValueMetaObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectRole);
+	public:
 protected:
 	enum
 	{

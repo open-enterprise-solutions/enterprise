@@ -4,7 +4,6 @@
 //*                            MetaObjectLanguage                       *
 //***********************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectLanguage, ibValueMetaObject);
 
 //***********************************************************************
 //*                           Metamodule                                *

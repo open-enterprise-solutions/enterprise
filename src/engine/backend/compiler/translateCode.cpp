@@ -1442,7 +1442,5 @@ public:
 	}
 	virtual void OnExit() {}
 private:
-	wxDECLARE_DYNAMIC_CLASS(wxOESKeywordModule);
 };
 
-wxIMPLEMENT_DYNAMIC_CLASS(wxOESKeywordModule, wxModule)

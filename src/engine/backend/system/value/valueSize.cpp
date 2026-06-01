@@ -6,7 +6,6 @@
 #include "valueSize.h"
 
 //////////////////////////////////////////////////////////////////////
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueSize, ibValue);
 
 ibValue::ibValueMethodHelper ibValueSize::m_methodHelper;
 

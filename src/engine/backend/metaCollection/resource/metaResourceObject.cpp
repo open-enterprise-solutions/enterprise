@@ -1,7 +1,6 @@
 #include "metaResourceObject.h"
 #include "backend/metadata.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectResource, ibValueMetaObjectAttribute);
 
 ibSelectorDataType ibValueMetaObjectResource::GetFilterDataType() const
 {

@@ -7,7 +7,6 @@
 #include "backend/metaData.h"
 #include "commonObject.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueManagerDataObjectAccountingRegister, ibValue);
 
 const ibValueMetaObjectCommonModule* ibValueManagerDataObjectAccountingRegister::GetManagerModule() const
 {

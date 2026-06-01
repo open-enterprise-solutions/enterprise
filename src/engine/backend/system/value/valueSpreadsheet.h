@@ -6,7 +6,7 @@
 
 class BACKEND_API ibValueSpreadsheetDocument :
 	public ibValue {
-public:
+	public:
 
 	wxObjectDataPtr<ibBackendSpreadsheetObject> GetSpreadsheetDocument() const { return m_spreadsheetDoc; }
 
@@ -35,14 +35,13 @@ public:
 private:
 	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadsheetDoc;
 	static ibValueMethodHelper m_methodHelper;
-	wxDECLARE_DYNAMIC_CLASS(ibValueSpreadsheetDocument);
 };
 
 #pragma region enumeration 
 #include "backend/compiler/enumUnit.h"
 class BACKEND_API ibValueEnumSpreadsheetOrient :
 	public ibValueEnumeration<ibSpreadsheetOrientation> {
-public:
+	public:
 
 	ibValueEnumSpreadsheetOrient() : ibValueEnumeration() {}
 
@@ -52,12 +51,11 @@ public:
 	}
 
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumSpreadsheetOrient);
 };
 
 class BACKEND_API ibValueEnumSpreadsheetHorizontalAlignment :
 	public ibValueEnumeration<ibSpreadsheetAlignmentHorz> {
-public:
+	public:
 
 	ibValueEnumSpreadsheetHorizontalAlignment() : ibValueEnumeration() {}
 
@@ -68,12 +66,11 @@ public:
 	}
 
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumSpreadsheetHorizontalAlignment);
 };
 
 class BACKEND_API ibValueEnumSpreadsheetVerticalAlignment :
 	public ibValueEnumeration<ibSpreadsheetAlignmentVert> {
-public:
+	public:
 
 	ibValueEnumSpreadsheetVerticalAlignment() : ibValueEnumeration() {}
 
@@ -84,12 +81,11 @@ public:
 	}
 
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumSpreadsheetVerticalAlignment);
 };
 
 class BACKEND_API ibValueEnumSpreadsheetFitMode :
 	public ibValueEnumeration<ibSpreadsheetFitMode> {
-public:
+	public:
 
 	ibValueEnumSpreadsheetFitMode() : ibValueEnumeration() {}
 
@@ -99,12 +95,11 @@ public:
 	}
 
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumSpreadsheetFitMode);
 };
 
 class BACKEND_API ibValueEnumSpreadsheetBorder :
 	public ibValueEnumeration<ibSpreadsheetPenStyle> {
-public:
+	public:
 
 	ibValueEnumSpreadsheetBorder() : ibValueEnumeration() {}
 
@@ -119,12 +114,11 @@ public:
 
 private:
 
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumSpreadsheetBorder);
 };
 
 class BACKEND_API ibValueEnumSpreadsheetFillType :
 	public ibValueEnumeration<ibSpreadsheetFillType> {
-public:
+	public:
 
 	ibValueEnumSpreadsheetFillType() : ibValueEnumeration() {}
 
@@ -136,13 +130,12 @@ public:
 
 private:
 
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumSpreadsheetFillType);
 };
 #pragma endregion 
 
 class BACKEND_API ibValueSpreadsheetDocumentArea :
 	public ibValue {
-public:
+	public:
 
 	ibValueSpreadsheetDocumentArea() : ibValue(ibValueTypes::TYPE_VALUE), m_row(-1), m_col(-1), m_spreadsheetDoc() {}
 	ibValueSpreadsheetDocumentArea(wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadsheetDoc, int row, int col) :
@@ -170,11 +163,11 @@ private:
 	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadsheetDoc;
 	static ibValueMethodHelper m_methodHelper;
 
-	wxDECLARE_DYNAMIC_CLASS(ibValueSpreadsheetDocumentArea);
 };
 
 class BACKEND_API ibValueSpreadsheetDocumentBorder :
 	public ibValue {
+	public:
 
 	enum
 	{
@@ -212,7 +205,6 @@ private:
 
 	static ibValueMethodHelper m_methodHelper;
 
-	wxDECLARE_DYNAMIC_CLASS(ibValueSpreadsheetDocumentBorder);
 };
 
 #endif 

@@ -16,8 +16,7 @@ enum ibSelectMode {
 #pragma region enumeration
 #include "backend/compiler/enumUnit.h"
 class ibValueEnumItemMode : public ibValueEnumeration<ibItemMode> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumItemMode);
-public:
+	public:
 	ibValueEnumItemMode() : ibValueEnumeration() {}
 	//ibValueEnumItemMode(const ibItemMode &mode) : ibValueEnumeration(mode) {}
 
@@ -28,8 +27,7 @@ public:
 	}
 };
 class ibValueEnumSelectMode : public ibValueEnumeration<ibSelectMode> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumSelectMode);
-public:
+	public:
 	ibValueEnumSelectMode() : ibValueEnumeration() {}
 	//ibValueEnumSelectMode(const ibSelectMode &mode) : ibValueEnumeration(mode) {}
 

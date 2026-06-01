@@ -8,7 +8,6 @@
 
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModelTable, ibValueModelRamTableBase);
 
 //////////////////////////////////////////////////////////////////////
 ibValue::ibValueMethodHelper ibValueModelTable::m_methodHelper;
@@ -140,7 +139,6 @@ bool ibValueModelTable::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 //               ibValueModelTableColumnCollection                        //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModelTable::ibValueModelTableColumnCollection, ibValueModelRamTableBase::ibValueModelColumnCollection);
 
 ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnCollection(ibValueModelTable* ownerTable) : ibValueModelColumnCollection(),
 m_ownerTable(ownerTable),
@@ -231,7 +229,6 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::GetAt(const ibValue& 
 //               ibValueModelTableColumnInfo                              //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo, ibValueModelRamTableBase::ibValueModelColumnCollection::ibValueModelColumnInfo);
 
 ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::ibValueModelTableColumnInfo() : ibValueModelColumnInfo() {
 }
@@ -248,7 +245,6 @@ ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInf
 //               ibValueModelTableReturnLine                              //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModelTable::ibValueModelTableReturnLine, ibValueModelRamTableBase::ibValueModelReturnLine);
 
 ibValueModelTable::ibValueModelTableReturnLine::ibValueModelTableReturnLine(ibValueModelTable* ownerTable, const ibDataViewItem& line) :
 	ibValueModelReturnLine(line), m_methodHelper(new ibValueMethodHelper()), m_ownerTable(ownerTable) {

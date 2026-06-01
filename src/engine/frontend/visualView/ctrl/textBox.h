@@ -5,8 +5,7 @@
 #include "frontend/win/editor/textEditor/textEditor.h"
 
 class ibValueTextBox : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueTextBox);
-public:
+	public:
 
 	ibValueTextBox();
 

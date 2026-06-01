@@ -3,8 +3,7 @@
 
 #include "backend/compiler/enumUnit.h"
 class ibValueEnumVersion : public ibValueEnumeration<ibProgramVersion> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumVersion);
-public:
+	public:
 
 	ibValueEnumVersion() : ibValueEnumeration<ibProgramVersion>() {}
 
@@ -15,8 +14,7 @@ public:
 };
 
 class ibValueEnumSyntax : public ibValueEnumeration<ibProgramSyntax> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumSyntax);
-public:
+	public:
 
 	ibValueEnumSyntax() : ibValueEnumeration<ibProgramSyntax>() {}
 

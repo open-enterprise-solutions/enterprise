@@ -7,7 +7,6 @@
 
 
 //////////////////////////////////////////////////////////////////////
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueForm::ibValueFormCollectionControl, ibValue);
 //////////////////////////////////////////////////////////////////////
 
 ibValueForm::ibValueFormCollectionControl::ibValueFormCollectionControl() : ibValue(ibValueTypes::TYPE_VALUE, true),

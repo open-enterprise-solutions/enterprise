@@ -7,15 +7,7 @@
 
 #include "backend/session/session.h"
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueModel, ibValue);
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueModel::ibValueModelColumnCollection, ibValue);
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo, ibValue);
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueModel::ibValueModelReturnLine, ibValue);
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueModelTableBase, ibValueModel);
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueModelRamTableBase, ibValueModelTableBase);
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueModelTreeBase, ibValueModel);
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueModelRamTreeBase, ibValueModelTreeBase);
 
 ibValueModel::ibValueModel()
 	: ibValue(ibValueTypes::TYPE_VALUE),

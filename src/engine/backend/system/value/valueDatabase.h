@@ -4,8 +4,7 @@
 #include "backend/compiler/value.h"
 
 class BACKEND_API ibValueDatabaseLayer : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueDatabaseLayer);
-public:
+	public:
 
 	ibValueDatabaseLayer();
 	virtual ~ibValueDatabaseLayer();
@@ -25,8 +24,7 @@ private:
 };
 
 class BACKEND_API ibValuePreparedStatement : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValuePreparedStatement);
-public:
+	public:
 
 	ibValuePreparedStatement(class ibPreparedStatement* preparedStatement = nullptr);
 	virtual ~ibValuePreparedStatement();
@@ -47,8 +45,7 @@ private:
 };
 
 class BACKEND_API ibValueResultSet : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueResultSet);
-public:
+	public:
 
 	ibValueResultSet(class ibDatabaseResultSet* resultSet = nullptr);
 	virtual ~ibValueResultSet();

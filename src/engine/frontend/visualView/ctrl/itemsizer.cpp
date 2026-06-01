@@ -4,7 +4,6 @@
 #include "frontend/visualView/pageWindow.h"
 #endif
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueSizerItem, ibValueSizer)
 
 #ifdef OES_USE_WEB
 #include "frontend/web/webSizer.h"
@@ -65,7 +64,7 @@ void ibValueSizerItem::OnCreated(wxObject* wxobject, ibFrontendWindow* /*wxparen
 		return;
 	}
 
-	ibValueSizerItem* obj = wxDynamicCast(object, ibValueSizerItem);
+	ibValueSizerItem* obj = dynamic_cast<ibValueSizerItem*>(object);
 	if (obj == nullptr) return;
 
 	ibSizerOps::SetChildParams(sizer, child,
@@ -91,7 +90,7 @@ void ibValueSizerItem::OnUpdated(wxObject* wxobject, ibFrontendWindow* /*wxparen
 		return;
 	}
 
-	ibValueSizerItem* obj = wxDynamicCast(object, ibValueSizerItem);
+	ibValueSizerItem* obj = dynamic_cast<ibValueSizerItem*>(object);
 	if (obj == nullptr) return;
 
 	// Find the item's position in the parent's child list. wxNOT_FOUND

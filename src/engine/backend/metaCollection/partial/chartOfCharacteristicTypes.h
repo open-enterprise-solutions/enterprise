@@ -11,7 +11,7 @@
 class ibValueMetaObjectChartOfCharacteristicTypes : 
 	public ibValueMetaObjectRecordDataHierarchyMutableRef, 
 	public ibBackendTypeConfigFactory {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectChartOfCharacteristicTypes);
+	public:
 private:
 	enum
 	{
@@ -223,6 +223,7 @@ private:
 //********************************************************************************************
 
 class ibValueRecordDataObjectChartOfCharacteristicTypes : public ibValueRecordDataObjectHierarchyRef {
+	public:
 	ibValueRecordDataObjectChartOfCharacteristicTypes(const ibValueMetaObjectChartOfCharacteristicTypes* metaObject, const ibGuid& objGuid = wxNullGuid, ibObjectMode objMode = ibObjectMode::OBJECT_ITEM);
 	ibValueRecordDataObjectChartOfCharacteristicTypes(const ibValueRecordDataObjectChartOfCharacteristicTypes& source);
 public:

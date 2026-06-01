@@ -6,7 +6,6 @@
 #include "valuePicture.h"
 
 //////////////////////////////////////////////////////////////////////
-wxIMPLEMENT_DYNAMIC_CLASS(ibValuePicture, ibValue);
 
 ibValuePicture::ibValuePicture(const ibPictureDescription& pictureDesc) :
 	ibValue(ibValueTypes::TYPE_VALUE), m_pictureDesc(pictureDesc)

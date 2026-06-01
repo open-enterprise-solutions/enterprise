@@ -9,8 +9,7 @@
 //********************************************************************************************
 
 class ibValueMetaObjectSubcontoKindsTable : public ibValueMetaObjectTableData {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectSubcontoKindsTable);
-public:
+	public:
 
 	ibValueMetaObjectSubcontoKindsTable(const wxString& name, const wxString& synonym, const wxString& comment = wxEmptyString);
 	ibValueMetaObjectSubcontoKindsTable();

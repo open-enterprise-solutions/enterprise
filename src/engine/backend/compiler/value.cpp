@@ -9,7 +9,6 @@
 #include <wx/datetime.h>
 #include <wx/longlong.h>
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValue, wxObject);
 
 //**********************************************************************
 //*                       Value implementation                         *

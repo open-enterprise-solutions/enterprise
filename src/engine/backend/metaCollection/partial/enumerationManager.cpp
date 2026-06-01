@@ -9,7 +9,6 @@
 #include "commonObject.h"
 #include "reference/reference.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueManagerDataObjectEnumeration, ibValue);
 
 const ibValueMetaObjectCommonModule* ibValueManagerDataObjectEnumeration::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
 

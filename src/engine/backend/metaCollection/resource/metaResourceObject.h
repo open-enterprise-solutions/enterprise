@@ -4,8 +4,7 @@
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 
 class BACKEND_API ibValueMetaObjectResource : public ibValueMetaObjectAttribute {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectResource);
-public:
+	public:
 
 	ibValueMetaObjectResource() : ibValueMetaObjectAttribute(ibValueTypes::TYPE_NUMBER) {
 	}

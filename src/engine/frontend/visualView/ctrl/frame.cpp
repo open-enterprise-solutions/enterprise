@@ -11,7 +11,6 @@
 #include <iostream>
 #endif
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueFrame, ibValue);
 
 //*************************************************************************
 //*                          ValueControl		                          *
@@ -44,7 +43,7 @@ wxString ibValueFrame::GetClassName() const
 wxString ibValueFrame::GetObjectTypeName() const
 {
 	const ibCtorControlTypeBase* typeCtor =
-		static_cast<const ibCtorControlTypeBase*>(ibValue::GetAvailableCtor(GetClassInfo()));
+		static_cast<const ibCtorControlTypeBase*>(ibValue::GetAvailableCtor(typeid(*this)));
 
 	if (typeCtor != nullptr)
 		return typeCtor->GetTypeControlName();

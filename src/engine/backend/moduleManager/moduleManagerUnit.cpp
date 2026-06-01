@@ -9,8 +9,6 @@
 #include "backend/appData.h"
 #include "backend/session/session.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModuleManager::ibValueModuleUnit, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit, ibValueModuleManager::ibValueModuleUnit);
 
 // Lightweight (managerless) — what the designer compile cache builds for autocomplete.
 ibValueModuleManager::ibValueModuleUnit::ibValueModuleUnit(ibValueMetaObjectModuleBase *moduleObject, bool managerModule) :

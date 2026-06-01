@@ -3,7 +3,6 @@
 #include "backend/appData.h"
 #include "backend/session/session.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValuePreparedStatement, ibValue);
 
 ibValue::ibValueMethodHelper ibValuePreparedStatement::m_methodHelper;
 

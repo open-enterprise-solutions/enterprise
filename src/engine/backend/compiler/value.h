@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <atomic>
+#include <typeinfo>
 
 #include "backend/backend_core.h"
 #include "backend/compiler/typeCtor.h"
@@ -61,8 +62,7 @@ const ibClassID g_valueStringCLSID = string_to_clsid("VL_STRI");
 const ibClassID g_valueNullCLSID = string_to_clsid("VL_NULL");
 
 //simple type date
-class BACKEND_API ibValue : public wxObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValue);
+class BACKEND_API ibValue {
 public:
 	//ATTRIBUTES:
 	ibValueTypes m_typeClass;  // 1 byte (enum : unsigned char)
@@ -605,8 +605,8 @@ public:
 	static ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) {
 		return CreateObjectRef(clsid, paParams, lSizeArray);
 	}
-	static ibValue CreateObject(const wxClassInfo* classInfo, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CreateObjectRef(classInfo, paParams, lSizeArray);
+	static ibValue CreateObject(const std::type_info& typeInfo, ibValue** paParams = nullptr, const long lSizeArray = 0) {
+		return CreateObjectRef(typeInfo, paParams, lSizeArray);
 	}
 	static ibValue CreateObject(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) {
 		return CreateObjectRef(className, paParams, lSizeArray);
@@ -618,11 +618,11 @@ public:
 
 	template<typename T>
 	static ibValue* CreateObjectRef(ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CreateObjectRef(CLASSINFO(T), paParams, lSizeArray);
+		return CreateObjectRef(typeid(T), paParams, lSizeArray);
 	}
 	static ibValue* CreateObjectRef(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0);
-	static ibValue* CreateObjectRef(const wxClassInfo* classInfo, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		const ibClassID& clsid = GetTypeIDByRef(classInfo);
+	static ibValue* CreateObjectRef(const std::type_info& typeInfo, ibValue** paParams = nullptr, const long lSizeArray = 0) {
+		const ibClassID& clsid = GetTypeIDByRef(typeInfo);
 		return CreateObjectRef(clsid, paParams, lSizeArray);
 	}
 	static ibValue* CreateObjectRef(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) {
@@ -636,15 +636,15 @@ public:
 
 	template<typename T>
 	static T* CreateAndConvertObjectRef(ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CastValue<T>(CreateObjectRef(CLASSINFO(T), paParams, lSizeArray));
+		return CastValue<T>(CreateObjectRef(typeid(T), paParams, lSizeArray));
 	}
 	template<class T = ibValue>
 	static T* CreateAndConvertObjectRef(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) {
 		return CastValue<T>(CreateObjectRef(clsid, paParams, lSizeArray));
 	}
 	template<class T = ibValue>
-	static T* CreateAndConvertObjectRef(const wxClassInfo* classInfo, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CastValue<T>(CreateObjectRef(classInfo, paParams, lSizeArray));
+	static T* CreateAndConvertObjectRef(const std::type_info& typeInfo, ibValue** paParams = nullptr, const long lSizeArray = 0) {
+		return CastValue<T>(CreateObjectRef(typeInfo, paParams, lSizeArray));
 	}
 	template<class T = ibValue>
 	static T* CreateAndConvertObjectRef(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) {
@@ -652,7 +652,7 @@ public:
 	}
 	template<typename T, typename... Args>
 	static T* CreateAndConvertObjectValueRef(Args&&... args) {
-		const ibClassID& clsid = ibValue::GetTypeIDByRef(CLASSINFO(T));
+		const ibClassID& clsid = ibValue::GetTypeIDByRef(typeid(T));
 		if (ibValue::IsRegisterCtor(clsid))
 			return CreateAndPrepareValueRef<T>(args...);
 		wxASSERT_MSG(false, "CreateAndConvertObjectValueRef ret null!");
@@ -680,7 +680,7 @@ public:
 	static bool IsRegisterCtor(const wxString& className, ibCtorObjectType objectType);
 	static bool IsRegisterCtor(const ibClassID& clsid);
 
-	static ibClassID GetTypeIDByRef(const wxClassInfo* classInfo);
+	static ibClassID GetTypeIDByRef(const std::type_info& typeInfo);
 	static ibClassID GetTypeIDByRef(const ibValue* objectRef);
 
 	static ibClassID GetIDObjectFromString(const wxString& className);
@@ -695,7 +695,7 @@ public:
 
 	static ibCtorAbstractType* GetAvailableCtor(const wxString& className);
 	static ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid);
-	static ibCtorAbstractType* GetAvailableCtor(const wxClassInfo* classInfo);
+	static ibCtorAbstractType* GetAvailableCtor(const std::type_info& typeInfo);
 
 	static std::vector<ibCtorAbstractType*> GetListCtorsByType(ibCtorObjectType objectType = ibCtorObjectType::ibCtorObjectType_object_value);
 

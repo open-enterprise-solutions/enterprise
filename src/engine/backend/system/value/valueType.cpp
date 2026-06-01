@@ -8,11 +8,6 @@
 
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueType, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueQualifierNumber, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueQualifierDate, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueQualifierString, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueTypeDescription, ibValue);
 
 //////////////////////////////////////////////////////////////////////
 

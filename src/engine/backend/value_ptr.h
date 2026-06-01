@@ -15,6 +15,7 @@
 
 template <class T>
 class ibValuePtr : public ibValue {
+	public:
 
 	inline void OnSetValueT(ibValue* ptr) {
 		// Self-assignment guard: skip when already bound to the same referent.

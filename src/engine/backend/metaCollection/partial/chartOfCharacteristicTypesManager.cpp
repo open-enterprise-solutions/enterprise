@@ -8,7 +8,6 @@
 
 #include "commonObject.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueManagerDataObjectChartOfCharacteristicTypes, ibValue);
 
 const ibValueMetaObjectCommonModule* ibValueManagerDataObjectChartOfCharacteristicTypes::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
 

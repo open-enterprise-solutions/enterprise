@@ -9,10 +9,6 @@
 #include "backend/metaCollection/partial/reference/reference.h"
 
 #include "backend/appData.h"
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueTabularSectionDataObjectBase, ibValueModelRamTableBase);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine, ibValueModelRamTableBase::ibValueModelReturnLine);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueTabularSectionDataObject, ibValueTabularSectionDataObjectBase);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueTabularSectionDataObjectRef, ibValueTabularSectionDataObjectBase);
 
 //////////////////////////////////////////////////////////////////////
 //               ibValueTabularSectionDataObjectBase                          //
@@ -387,7 +383,6 @@ wxString ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectRet
 //               ibValueTabularSectionDataObjectColumnCollection          //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection, ibValueModelRamTableBase::ibValueModelColumnCollection);
 
 ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::ibValueTabularSectionDataObjectColumnCollection() :
 	ibValueModelColumnCollection(),
@@ -439,7 +434,6 @@ bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnC
 //               ibValueTabularSectionColumnInfo                     //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::ibValueTabularSectionColumnInfo, ibValueModelRamTableBase::ibValueModelColumnCollection::ibValueModelColumnInfo);
 
 ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::ibValueTabularSectionColumnInfo::ibValueTabularSectionColumnInfo() :
 	ibValueModelColumnInfo(), m_metaAttribute(nullptr)

@@ -5,7 +5,7 @@
 
 class ibValueManagerDataObjectDataProcessor :
 	public ibValueManagerDataObject {
-public:
+	public:
 
 	ibValueManagerDataObjectDataProcessor(const ibValueMetaObjectDataProcessor* metaObject = nullptr) : m_metaObject(metaObject) {}
 	virtual ~ibValueManagerDataObjectDataProcessor() {}
@@ -19,12 +19,11 @@ public:
 protected:
 	const ibValueMetaObjectDataProcessor* m_metaObject;
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueManagerDataObjectDataProcessor);
 };
 
 class ibValueManagerDataObjectExternalDataProcessor :
 	public ibValueManagerObject {
-public:
+	public:
 
 	ibValueManagerDataObjectExternalDataProcessor() {}
 	virtual ~ibValueManagerDataObjectExternalDataProcessor() {}
@@ -41,7 +40,6 @@ public:
 protected:
 	static ibValueMethodHelper m_methodHelper;
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueManagerDataObjectExternalDataProcessor);
 };
 
 #endif 

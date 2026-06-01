@@ -5,7 +5,6 @@
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueNotebookPage, ibValueFrame);
 
 //***********************************************************************************
 //*                              ibValueNotebookPage                                 *

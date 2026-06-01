@@ -5,7 +5,6 @@
 
 #include "chartOfAccountsSubcontoTable.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectSubcontoKindsTable, ibValueMetaObjectTableData);
 
 ibValueMetaObjectSubcontoKindsTable::ibValueMetaObjectSubcontoKindsTable(const wxString& name, const wxString& synonym, const wxString& comment)
 	: ibValueMetaObjectTableData()

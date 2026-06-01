@@ -132,9 +132,9 @@ bool ibValue::IsRegisterCtor(const ibClassID& clsid)
 	return false;
 }
 
-ibClassID ibValue::GetTypeIDByRef(const wxClassInfo* classInfo)
+ibClassID ibValue::GetTypeIDByRef(const std::type_info& typeInfo)
 {
-	const ibCtorAbstractType* typeCtor = GetAvailableCtor(classInfo);
+	const ibCtorAbstractType* typeCtor = GetAvailableCtor(typeInfo);
 	wxASSERT(typeCtor);
 	return typeCtor != nullptr ?
 		typeCtor->GetClassType() : 0;
@@ -142,10 +142,11 @@ ibClassID ibValue::GetTypeIDByRef(const wxClassInfo* classInfo)
 
 ibClassID ibValue::GetTypeIDByRef(const ibValue* objectRef)
 {
-	// All "object-reference" tags resolve through wxClassInfo (the
-	// subclass's wxDECLARE_DYNAMIC_CLASS registration). Any tag NOT
-	// in this set falls through to objectRef->GetClassType() — which
-	// for primitive types returns the right id, but for unrecognized
+	// All "object-reference" tags resolve through the C++ type-id
+	// (typeid(*objectRef), matched against the registry's type_info key —
+	// the replacement for the old wxDECLARE_DYNAMIC_CLASS/wxClassInfo path).
+	// Any tag NOT in this set falls through to objectRef->GetClassType() —
+	// which for primitive types returns the right id, but for unrecognized
 	// reference-shaped tags causes infinite recursion through
 	// GetClassType ↔ GetTypeIDByRef. Add new TYPE_* here when adding
 	// to ibValueTypes enum.
@@ -156,11 +157,7 @@ ibClassID ibValue::GetTypeIDByRef(const ibValue* objectRef)
 		objectRef->m_typeClass != ibValueTypes::TYPE_ITERATOR) {
 		return objectRef->GetClassType();
 	}
-	const wxClassInfo* classInfo = objectRef->GetClassInfo();
-	wxASSERT(classInfo);
-	if (classInfo != nullptr)
-		return GetTypeIDByRef(classInfo);
-	return 0;
+	return GetTypeIDByRef(typeid(*objectRef));
 }
 
 ibClassID ibValue::GetIDObjectFromString(const wxString& className)
@@ -263,14 +260,14 @@ ibCtorAbstractType* ibValue::GetAvailableCtor(const ibClassID& clsid)
 	return nullptr;
 }
 
-ibCtorAbstractType* ibValue::GetAvailableCtor(const wxClassInfo* classInfo)
+ibCtorAbstractType* ibValue::GetAvailableCtor(const std::type_info& typeInfo)
 {
 	if (s_factoryCtors == nullptr)
 		return nullptr;
 	for (auto& typeCtor : *s_factoryCtors)
-		if (classInfo == typeCtor->GetClassInfo())
+		if (typeInfo == typeCtor->GetTypeInfo())
 			return typeCtor;
-	//ibBackendCoreException::Error("Object '%s' is not exist", classInfo->GetClassName());
+	//ibBackendCoreException::Error("Object '%s' is not exist", typeInfo.name());
 	return nullptr;
 }
 

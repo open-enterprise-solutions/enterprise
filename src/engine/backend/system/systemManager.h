@@ -12,6 +12,7 @@
 #include "backend/system/systemEnum.h"
 
 class BACKEND_API ibValueSystemFunction : public ibValue {
+	public:
 	static wxDateTime ms_workDate;
 public:
 

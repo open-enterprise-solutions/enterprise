@@ -12,11 +12,7 @@
 //*                           ModuleObject                              *
 //***********************************************************************
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObjectModuleBase, ibValueMetaObject);
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectModule, ibValueMetaObjectModuleBase);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectCommonModule, ibValueMetaObjectModuleBase);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectManagerModule, ibValueMetaObjectCommonModule);
 
 //***********************************************************************
 //*                           System metaData                           *

@@ -5,7 +5,6 @@
 
 #include "metaEnumObject.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectEnum, ibValueMetaObject)
 
 bool ibValueMetaObjectEnum::LoadData(ibReaderMemory &reader)
 {

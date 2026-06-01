@@ -9,7 +9,6 @@
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/databaseLayer/databaseLayer.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueReferenceDataObject, ibValue);
 
 //**********************************************************************************************
 //*                                     reference                                              *        

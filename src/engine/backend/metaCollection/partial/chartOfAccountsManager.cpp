@@ -7,7 +7,6 @@
 #include "backend/metaData.h"
 #include "commonObject.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueManagerDataObjectChartOfAccounts, ibValue);
 
 const ibValueMetaObjectCommonModule* ibValueManagerDataObjectChartOfAccounts::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
 

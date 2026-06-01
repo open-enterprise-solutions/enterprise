@@ -5,7 +5,7 @@
 
 class BACKEND_API ibValuePoint : public ibValue
 {
-	wxDECLARE_DYNAMIC_CLASS(ibValuePoint);
+	public:
 
 public:
 

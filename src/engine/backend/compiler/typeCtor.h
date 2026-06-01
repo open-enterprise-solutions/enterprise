@@ -2,6 +2,7 @@
 #define _TYPE_CTOR_H__
 
 #include "backend/clsid.h"      // ibClassID, ib_clsid_hash
+#include <typeinfo>             // std::type_info — Phase 3 pilot (typeid registry)
 
 class ibValue;
 class ibCtorAbstractType;
@@ -59,7 +60,13 @@ public:
 	virtual ~ibCtorAbstractType() {}
 
 	virtual wxString GetClassName() const = 0;
-	virtual wxClassInfo* GetClassInfo() const = 0;
+	// std::type_info replaces the former wxClassInfo* GetClassInfo() — it is the
+	// registry's runtime type key (matched against typeid(*liveValue)).
+	// Default = typeid(void) for ctors that carry no concrete C++ type
+	// (meta/control ctors that derive this base directly); their objects
+	// override GetClassType() and never reach the typeid resolution path.
+	// See docs/value-audit.md Phase 3.
+	virtual const std::type_info& GetTypeInfo() const { return typeid(void); }
 	virtual ibClassID GetClassType() const = 0;
 
 	virtual wxIcon GetClassIcon() const { return wxNullIcon; }
@@ -71,18 +78,18 @@ public:
 
 class ibCtorValueTypeBase : public ibCtorAbstractType {
 	wxString m_className;
-	wxClassInfo* m_classInfo;
+	const std::type_info* m_typeInfo;   // typeid(T) — registry runtime type key
 	ibClassID m_clsid;
 public:
 
 	virtual ~ibCtorValueTypeBase() {}
 
 	virtual wxString GetClassName() const { return m_className; }
-	virtual wxClassInfo* GetClassInfo() const { return m_classInfo; }
+	virtual const std::type_info& GetTypeInfo() const { return *m_typeInfo; }
 	virtual ibClassID GetClassType() const { return m_clsid; }
 
-	ibCtorValueTypeBase(const wxString& className, wxClassInfo* classInfo, const ibClassID& clsid)
-		: m_className(className), m_classInfo(classInfo), m_clsid(clsid) {
+	ibCtorValueTypeBase(const wxString& className, const std::type_info& typeInfo, const ibClassID& clsid)
+		: m_className(className), m_typeInfo(&typeInfo), m_clsid(clsid) {
 	}
 
 	virtual ibCtorObjectType GetObjectTypeCtor() const = 0;
@@ -92,8 +99,8 @@ public:
 class ibCtorSingleType : public ibCtorValueTypeBase {
 public:
 
-	ibCtorSingleType(const wxString& className, wxClassInfo* classInfo, const ibClassID& clsid)
-		: ibCtorValueTypeBase(className, classInfo, clsid)
+	ibCtorSingleType(const wxString& className, const std::type_info& typeInfo, const ibClassID& clsid)
+		: ibCtorValueTypeBase(className, typeInfo, clsid)
 	{
 	}
 
@@ -108,7 +115,7 @@ class ibCtorPrimitiveType : public ibCtorSingleType {
 public:
 
 	ibCtorPrimitiveType(const wxString& className, ibValueTypes valType, const ibClassID& clsid) :
-		ibCtorSingleType(className, CLASSINFO(T), clsid), m_valType(valType) {
+		ibCtorSingleType(className, typeid(T), clsid), m_valType(valType) {
 	}
 
 	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
@@ -139,7 +146,7 @@ class ibCtorValueType : public ibCtorValueTypeBase {
 public:
 
 	ibCtorValueType(const wxString& className, const ibClassID& clsid) :
-		ibCtorValueTypeBase(className, CLASSINFO(T), clsid) {
+		ibCtorValueTypeBase(className, typeid(T), clsid) {
 	}
 
 	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
@@ -169,7 +176,7 @@ class ibCtorSystemType : public ibCtorValueTypeBase {
 public:
 
 	ibCtorSystemType(const wxString& className, const ibClassID& clsid) :
-		ibCtorValueTypeBase(className, CLASSINFO(T), clsid) {
+		ibCtorValueTypeBase(className, typeid(T), clsid) {
 	}
 
 	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
@@ -198,7 +205,7 @@ class ibCtorEnumType : public ibCtorSingleType {
 
 public:
 	ibCtorEnumType(const wxString& className, const ibClassID& clsid) :
-		ibCtorSingleType(className, CLASSINFO(T), clsid) {
+		ibCtorSingleType(className, typeid(T), clsid) {
 	}
 
 	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
@@ -231,7 +238,7 @@ class ibCtorContextType : public ibCtorSingleType {
 	T* m_innerObject = nullptr;
 public:
 	ibCtorContextType(const wxString& className, const ibClassID& clsid) :
-		ibCtorSingleType(className, CLASSINFO(T), clsid) {
+		ibCtorSingleType(className, typeid(T), clsid) {
 	}
 
 	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }

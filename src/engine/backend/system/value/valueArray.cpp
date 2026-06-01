@@ -9,7 +9,6 @@
 #include "backend/compiler/procUnitValues.h"  // CopyValue / SetTypeNumber / SetTypeBoolean / IsHasValue
 
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueArray, ibValue);
 
 //////////////////////////////////////////////////////////////////////
 

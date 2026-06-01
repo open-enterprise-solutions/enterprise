@@ -4,7 +4,7 @@
 #include "backend/metaCollection/metaObjectComposite.h"
 
 class BACKEND_API ibValueMetaObjectTableData : public ibValueMetaObjectCompositeData {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectTableData);
+	public:
 
 public:
 

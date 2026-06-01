@@ -51,19 +51,18 @@ const ibClassID g_controlTableBoxColumnCLSID = string_to_clsid("CT_TBLC");
 
 class ibValueEnumTableBoxSelectionMode :
 	public ibValueEnumeration<ibDataViewSelectionMode> {
-public:
+	public:
 	ibValueEnumTableBoxSelectionMode() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
 		AddEnumeration(ibDataViewSelectionMode::ibDataViewSelectCell, wxT("SelectCell"), _("Select cell"));
 		AddEnumeration(ibDataViewSelectionMode::ibDataViewSelectRow, wxT("SelectRow"), _("Select row"));
 	}
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumTableBoxSelectionMode);
 };
 
 class ibValueEnumTableBoxViewMode :
 	public ibValueEnumeration<ibDataViewViewMode> {
-public:
+	public:
 	ibValueEnumTableBoxViewMode() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
 		AddEnumeration(ibDataViewViewMode::ibDataViewHierarchical, wxT("Hierarchical"), _("Hierarchical"));
@@ -71,13 +70,11 @@ public:
 		AddEnumeration(ibDataViewViewMode::ibDataViewList, wxT("List"), _("List"));
 	}
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumTableBoxViewMode);
 };
 
 class ibValueModelTableBox : public ibValueWindow,
 	public ibTypeControlFactory, public ibSourceObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValueModelTableBox);
-public:
+	public:
 
 	////////////////////////////////////////////////////////////////////////////////////////
 	void SetSource(const ibMetaID& id) { m_propertySource->SetValue(id); ibValueModelTableBox::RefreshModel(true); }
@@ -308,7 +305,7 @@ private:
 
 class ibValueModelTableBoxColumn : public ibValueControl,
 	public ibTypeControlFactory {
-	wxDECLARE_DYNAMIC_CLASS(ibValueModelTableBoxColumn);
+	public:
 protected:
 
 	bool GetChoiceForm(ibPropertyList* property);

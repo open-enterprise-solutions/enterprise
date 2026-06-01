@@ -4,7 +4,6 @@
 #include "frontend/web/webSizer.h"
 #endif
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueWrapSizer, ibValueSizer)
 
 //****************************************************************************
 //*                             WrapSizer                                    *

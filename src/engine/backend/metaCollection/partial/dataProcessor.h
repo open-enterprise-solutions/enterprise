@@ -4,8 +4,7 @@
 #include "commonObject.h"
 
 class ibValueMetaObjectDataProcessor : public ibValueMetaObjectRecordDataExt {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectDataProcessor);
-public:
+	public:
 
 	enum
 	{
@@ -121,8 +120,7 @@ private:
 #define default_meta_id 10 //for dataProcessors
 
 class ibValueMetaObjectExternalDataProcessor : public ibValueMetaObjectDataProcessor {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectExternalDataProcessor);
-public:
+	public:
 	ibValueMetaObjectExternalDataProcessor() : ibValueMetaObjectDataProcessor() {
 		m_metaId = default_meta_id;
 	}
@@ -136,6 +134,7 @@ public:
 //********************************************************************************************
 
 class ibValueRecordDataObjectDataProcessor : public ibValueRecordDataObjectExt {
+	public:
 	ibValueRecordDataObjectDataProcessor(const ibValueMetaObjectDataProcessor* metaObject);
 	ibValueRecordDataObjectDataProcessor(const ibValueRecordDataObjectDataProcessor& source);
 public:

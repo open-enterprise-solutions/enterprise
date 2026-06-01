@@ -70,7 +70,7 @@ class FRONTEND_API ibValueFrame : public ibValue,
 	public ibPropertyObjectHelper<ibValueFrame>,
 	public ibControlFrame,
 	public ibActionDataObject {
-	wxDECLARE_ABSTRACT_CLASS(ibValueFrame);
+	public:
 protected:
 
 	enum {
@@ -335,7 +335,6 @@ public:
 	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm) override {}
 
 	class ibValueEventContainer : public ibValue {
-		wxDECLARE_DYNAMIC_CLASS(ibValueEventContainer);
 	public:
 
 		ibValueEventContainer();

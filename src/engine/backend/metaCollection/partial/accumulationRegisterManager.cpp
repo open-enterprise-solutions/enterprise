@@ -8,7 +8,6 @@
 
 #include "commonObject.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueManagerDataObjectAccumulationRegister, ibValue);
 
 const ibValueMetaObjectCommonModule* ibValueManagerDataObjectAccumulationRegister::GetManagerModule() const
 {

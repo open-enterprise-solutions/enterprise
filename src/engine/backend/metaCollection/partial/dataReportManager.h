@@ -5,7 +5,7 @@
 
 class ibValueManagerDataObjectReport :
 	public ibValueManagerDataObject {
-public:
+	public:
 
 	ibValueManagerDataObjectReport(const ibValueMetaObjectReport* metaObject = nullptr) : m_metaObject(metaObject) {}
 	virtual ~ibValueManagerDataObjectReport() {}
@@ -19,12 +19,11 @@ public:
 protected:
 	const ibValueMetaObjectReport* m_metaObject;
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueManagerDataObjectReport);
 };
 
 class ibValueManagerDataObjectExternalReport :
 	public ibValueManagerObject {
-public:
+	public:
 
 	ibValueManagerDataObjectExternalReport() {}
 	virtual ~ibValueManagerDataObjectExternalReport() {}
@@ -42,7 +41,6 @@ public:
 protected:
 	static ibValueMethodHelper m_methodHelper;
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueManagerDataObjectExternalReport);
 };
 
 #endif 

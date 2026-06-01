@@ -5,7 +5,7 @@
 
 //Array support
 class BACKEND_API ibValueArray : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueArray);
+	public:
 private:
 	std::vector <ibValue> m_listValue;
 private:

@@ -4,8 +4,7 @@
 #include "window.h"
 
 class ibValueChartBox : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueChartBox);
-public:
+	public:
 
 	ibValueChartBox();
 

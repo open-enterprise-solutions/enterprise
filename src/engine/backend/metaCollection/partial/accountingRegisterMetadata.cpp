@@ -9,7 +9,6 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/moduleManager/moduleManager.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectAccountingRegister, ibValueMetaObjectRegisterData);
 
 ibValueMetaObjectAccountingRegister::ibValueMetaObjectAccountingRegister() : ibValueMetaObjectRegisterData()
 {

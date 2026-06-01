@@ -10,7 +10,7 @@
 //********************************************************************************************
 
 class ibValueMetaObjectDocument : public ibValueMetaObjectRecordDataMutableRef {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectDocument);
+	public:
 private:
 	enum
 	{
@@ -205,6 +205,7 @@ private:
 //********************************************************************************************
 
 class ibValueRecordDataObjectDocument : public ibValueRecordDataObjectRecorderRef {
+	public:
 protected:
 	ibValueRecordDataObjectDocument(const ibValueMetaObjectDocument* metaObject = nullptr, const ibGuid& guid = wxNullGuid);
 	ibValueRecordDataObjectDocument(const ibValueRecordDataObjectDocument& source);

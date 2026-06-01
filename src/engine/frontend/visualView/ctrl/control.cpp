@@ -6,7 +6,6 @@
 #include "control.h"
 #include "form.h"
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueControl, ibValueFrame)
 
 //*************************************************************************
 //*                          ValueControl		                          *

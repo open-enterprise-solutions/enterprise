@@ -30,7 +30,7 @@ protected:
 class BACKEND_API ibSourceDataObject;
 
 class BACKEND_API ibValueMetaObjectFormBase : public ibValueMetaObjectModuleBase {
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectFormBase);
+	public:
 private:
 
 	enum
@@ -93,7 +93,7 @@ protected:
 // -----------------------------------------------------------------------
 
 class BACKEND_API ibValueMetaObjectForm : public ibValueMetaObjectFormBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectForm);
+	public:
 
 public:
 
@@ -165,8 +165,7 @@ private:
 
 class BACKEND_API ibValueMetaObjectCommonForm :
 	public ibValueMetaObjectFormBase, public ibBackendCommandItem {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectCommonForm);
-public:
+	public:
 
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return AccessRight_Use(); }

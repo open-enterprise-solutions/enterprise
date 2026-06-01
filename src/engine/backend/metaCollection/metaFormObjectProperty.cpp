@@ -22,7 +22,7 @@ void ibValueMetaObjectForm::OnPropertyChanged(ibProperty* property, const wxVari
 {
 	if (property == m_properyFormType) {
 		if (auto* cc = m_metaData->GetCompileCache()) {
-			ibValueMetaObjectGenericData* metaObjectValue = wxDynamicCast(m_parent, ibValueMetaObjectGenericData);
+			ibValueMetaObjectGenericData* metaObjectValue = dynamic_cast<ibValueMetaObjectGenericData*>(m_parent);
 			wxASSERT(metaObjectValue);
 			if (auto* metaTree = m_metaData->GetMetaTree())
 				metaTree->CloseMetaObject(this);

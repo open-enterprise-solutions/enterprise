@@ -53,9 +53,7 @@
 
 ibFormID ibMetaDataTree::SelectFormType(ibValueMetaObjectForm* metaObject) const
 {
-	ibValueMetaObjectGenericData* parent = wxDynamicCast(
-		metaObject->GetParent(), ibValueMetaObjectGenericData
-	);
+	ibValueMetaObjectGenericData* parent = dynamic_cast<ibValueMetaObjectGenericData*>(metaObject->GetParent());
 
 	ibDialogSelectTypeForm dlg(parent, metaObject);
 	ibFormTypeList optList = parent->GetFormType();

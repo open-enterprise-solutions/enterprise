@@ -4,8 +4,7 @@
 #include "backend/metaCollection/metaObject.h"
 
 class BACKEND_API ibValueMetaObjectEnum : public ibValueMetaObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectEnum);
-public:
+	public:
 
 	ibGuid GetGuid() const {
 		return m_metaGuid;

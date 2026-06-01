@@ -10,7 +10,7 @@ const ibClassID g_valueTableCLSID = string_to_clsid("VL_TABL");
 
 //Table support
 class BACKEND_API ibValueModelTable : public ibValueModelRamTableBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueModelTable);
+	public:
 private:
 	// methods:
 	enum Func {
@@ -28,7 +28,7 @@ private:
 	};
 public:
 	class ibValueModelTableColumnCollection : public ibValueModelTableBase::ibValueModelColumnCollection {
-		wxDECLARE_DYNAMIC_CLASS(ibValueModelTableColumnCollection);
+	public:
 	private:
 		enum Func {
 			enAddColumn = 0,
@@ -37,7 +37,7 @@ public:
 	public:
 
 		class ibValueModelTableColumnInfo : public ibValueModelTableBase::ibValueModelColumnCollection::ibValueModelColumnInfo {
-			wxDECLARE_DYNAMIC_CLASS(ibValueModelTableColumnInfo);
+	public:
 		private:
 
 			unsigned int m_columnID;
@@ -156,7 +156,6 @@ public:
 	};
 
 	class ibValueModelTableReturnLine : public ibValueModelReturnLine {
-		wxDECLARE_DYNAMIC_CLASS(ibValueModelTableReturnLine);
 	public:
 
 		ibValueModelTableReturnLine(ibValueModelTable* ownerTable = nullptr, const ibDataViewItem& line = ibDataViewItem(nullptr));

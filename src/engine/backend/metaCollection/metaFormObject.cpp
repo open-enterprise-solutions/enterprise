@@ -55,7 +55,6 @@ bool ibBackendCommandItem::ShowFormByCommandType(ibInterfaceCommandType cmdType)
 // ibValueMetaObjectFormBase
 // -----------------------------------------------------------------------
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObjectFormBase, ibValueMetaObjectModule);
 
 //***********************************************************************
 //*                          common value object                        *
@@ -170,7 +169,6 @@ ibValueMetaObjectFormBase::ibValueMetaObjectFormBase(const wxString& name, const
 	SetDefaultProcedure(wxT("RefreshDisplay"), ibContentHelper::eProcedureHelper);
 }
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectForm, ibValueMetaObjectFormBase)
 
 //***********************************************************************
 //*                            Metaform                                 *
@@ -230,9 +228,7 @@ bool ibValueMetaObjectForm::OnCreateMetaObject(ibMetaData* metaData, int flags)
 
 	if ((flags & newObjectFlag) != 0) {
 
-		ibValueMetaObjectGenericData* metaObject = wxDynamicCast(
-			m_parent, ibValueMetaObjectGenericData
-		);
+		ibValueMetaObjectGenericData* metaObject = dynamic_cast<ibValueMetaObjectGenericData*>(m_parent);
 
 		wxASSERT(metaObject);
 
@@ -273,7 +269,7 @@ bool ibValueMetaObjectForm::OnSaveMetaObject(int flags)
 
 bool ibValueMetaObjectForm::OnDeleteMetaObject()
 {
-	ibValueMetaObjectGenericData* metaObject = wxDynamicCast(m_parent, ibValueMetaObjectGenericData);
+	ibValueMetaObjectGenericData* metaObject = dynamic_cast<ibValueMetaObjectGenericData*>(m_parent);
 	wxASSERT(metaObject);
 	metaObject->OnRemoveMetaForm(this);
 
@@ -289,7 +285,7 @@ bool ibValueMetaObjectForm::OnAfterRunMetaObject(int flags)
 {
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
-		ibValueMetaObjectGenericData* metaObject = wxDynamicCast(m_parent, ibValueMetaObjectGenericData);
+		ibValueMetaObjectGenericData* metaObject = dynamic_cast<ibValueMetaObjectGenericData*>(m_parent);
 		wxASSERT(metaObject);
 
 		// Defer the actual form build — passing an eager CreateObjectForm
@@ -324,7 +320,6 @@ bool ibValueMetaObjectForm::OnAfterCloseMetaObject()
 //*                           CommonFormObject metaData                 *
 //***********************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectCommonForm, ibValueMetaObjectFormBase)
 
 ibValueMetaObjectCommonForm::ibValueMetaObjectCommonForm(const wxString& name, const wxString& synonym, const wxString& comment) : ibValueMetaObjectFormBase(name, synonym, comment) {}
 

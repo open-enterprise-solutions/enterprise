@@ -5,11 +5,6 @@
 
 #include "systemManagerEnum.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValuibStatusMessage, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValuibQuestionMode, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValuibQuestionReturnCode, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValuibRoundMode, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueChars, ibValue);
 
 //add new enumeration
 ENUM_TYPE_REGISTER(ibValuibStatusMessage, "StatusMessage", string_to_clsid("EN_STMS"));

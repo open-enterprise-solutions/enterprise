@@ -15,10 +15,7 @@
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModelTableBox, ibValueWindow);
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumTableBoxSelectionMode, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumTableBoxViewMode, ibValue);
 
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
@@ -62,7 +59,7 @@ void ibValueModelTableBox::AddColumn()
 #ifndef OES_USE_WEB
 	wxASSERT(m_formOwner);
 
-	ibValueModelTableBoxColumn* columnTable = wxDynamicCast(m_formOwner->NewObject(g_controlTableBoxColumnCLSID, this), ibValueModelTableBoxColumn);
+	ibValueModelTableBoxColumn* columnTable = dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->NewObject(g_controlTableBoxColumnCLSID, this));
 	g_visualHostContext->InsertControl(columnTable, this);
 	if (m_tableModel != nullptr) {
 		ibValueModel::ibValueModelColumnCollection* columnData = m_tableModel->GetColumnCollection();
@@ -163,7 +160,7 @@ void ibValueModelTableBox::CreateTable(bool recreateModel) {
 
 		if (m_tableModel != nullptr) {
 			for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
-				ibValueModelTableBoxColumn* columnTable = wxDynamicCast(GetChild(idx), ibValueModelTableBoxColumn);
+				ibValueModelTableBoxColumn* columnTable = dynamic_cast<ibValueModelTableBoxColumn*>(GetChild(idx));
 				if (columnTable != nullptr) {
 					ibValueModel::ibValueModelColumnCollection* columnData = m_tableModel->GetColumnCollection();
 					wxASSERT(columnData);

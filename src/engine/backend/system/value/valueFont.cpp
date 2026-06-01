@@ -7,7 +7,6 @@
 
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueFont, ibValue);
 
 ibValue::ibValueMethodHelper ibValueFont::m_methodHelper;
 

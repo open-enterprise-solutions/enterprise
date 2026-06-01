@@ -19,7 +19,7 @@ class BACKEND_API ibValueRecordDataObjectRef;
 
 class BACKEND_API ibValueReferenceDataObject : public ibValue,
 	public ibValueDataObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValueReferenceDataObject);
+	public:
 private:
 	enum helperAlias {
 		eProperty,

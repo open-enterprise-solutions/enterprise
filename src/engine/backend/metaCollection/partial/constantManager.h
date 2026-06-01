@@ -5,7 +5,7 @@
 
 class ibValueManagerDataObjectConstant :
 	public ibValueManagerObject {
-public:
+	public:
 
 	ibValueManagerDataObjectConstant(ibValueMetaObjectConstant* metaConst = nullptr) : m_metaObject(metaConst) {}
 	virtual ~ibValueManagerDataObjectConstant() {}
@@ -31,7 +31,6 @@ protected:
 	const ibValueMetaObjectConstant* m_metaObject;
 	static ibValueMethodHelper m_methodHelper;
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueManagerDataObjectConstant);
 };
 
 

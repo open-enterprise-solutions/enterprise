@@ -8,7 +8,6 @@
 
 
 //////////////////////////////////////////////////////////////////////
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueColour, ibValue);
 
 ibValue::ibValueMethodHelper ibValueColour::m_methodHelper;
 

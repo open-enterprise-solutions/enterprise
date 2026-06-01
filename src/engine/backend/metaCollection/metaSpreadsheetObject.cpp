@@ -6,10 +6,7 @@
 #include "metaSpreadsheetObject.h"
 #include "backend/metaData.h"
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObjectSpreadsheetBase, ibValueMetaObject);
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectSpreadsheet, ibValueMetaObjectSpreadsheetBase);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectCommonSpreadsheet, ibValueMetaObjectSpreadsheetBase);
 
 //***********************************************************************
 //*                           read & save events                        *

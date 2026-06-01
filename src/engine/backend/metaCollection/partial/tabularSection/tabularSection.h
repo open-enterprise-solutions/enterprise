@@ -6,7 +6,7 @@
 #include "backend/metaCollection/table/metaTableObject.h"
 
 class BACKEND_API ibValueTabularSectionDataObjectBase : public ibValueModelRamTableBase {
-	wxDECLARE_ABSTRACT_CLASS(ibValueTabularSectionDataObjectBase);
+	public:
 private:
 
 	enum Func {
@@ -68,11 +68,9 @@ public:
 	}
 
 	class ibValueTabularSectionDataObjectColumnCollection : public ibValueModelTableBase::ibValueModelColumnCollection {
-		wxDECLARE_DYNAMIC_CLASS(ibValueTabularSectionDataObjectColumnCollection);
 	public:
 		class ibValueTabularSectionColumnInfo : public ibValueModelTableBase::ibValueModelColumnCollection::ibValueModelColumnInfo {
-			wxDECLARE_DYNAMIC_CLASS(ibValueTabularSectionColumnInfo);
-		public:
+	public:
 
 			virtual unsigned int GetColumnID() const { return m_metaAttribute->GetMetaID(); }
 			virtual wxString GetColumnName() const { return m_metaAttribute->GetName(); }
@@ -122,7 +120,6 @@ public:
 	};
 
 	class ibValueTabularSectionDataObjectReturnLine : public ibValueModelReturnLine {
-		wxDECLARE_DYNAMIC_CLASS(ibValueTabularSectionDataObjectReturnLine);
 	public:
 
 		ibValueTabularSectionDataObjectReturnLine(ibValueTabularSectionDataObjectBase* ownerTable = nullptr, const ibDataViewItem& line = ibDataViewItem(nullptr));
@@ -259,8 +256,7 @@ protected:
 };
 
 class BACKEND_API ibValueTabularSectionDataObject : public ibValueTabularSectionDataObjectBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueTabularSectionDataObject);
-public:
+	public:
 
 	ibValueTabularSectionDataObject();
 	ibValueTabularSectionDataObject(class ibValueRecordDataObject* recordObject, const ibValueMetaObjectTableData* tableObject);
@@ -268,8 +264,7 @@ public:
 };
 
 class BACKEND_API ibValueTabularSectionDataObjectRef : public ibValueTabularSectionDataObjectBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueTabularSectionDataObjectRef);
-public:
+	public:
 
 	bool IsReadAfter() const { return m_readAfter; }
 

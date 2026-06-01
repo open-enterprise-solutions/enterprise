@@ -1,6 +1,5 @@
 #include "metaDimensionObject.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectDimension, ibValueMetaObjectAttribute)
 
 //***********************************************************************
 //*                       Register in runtime                           *

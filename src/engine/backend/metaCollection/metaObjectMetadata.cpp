@@ -12,7 +12,6 @@
 //*                         metaData													  * 
 //*****************************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectConfiguration, ibValueMetaObject);
 
 //*****************************************************************************************
 //*                                  MetadataObject                                       *

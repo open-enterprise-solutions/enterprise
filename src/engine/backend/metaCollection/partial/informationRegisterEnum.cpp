@@ -1,7 +1,5 @@
 #include "informationRegisterEnum.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumPeriodicity, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumWriteRegisterMode, ibValue);
 
 //***********************************************************************
 //*                       Register in runtime                           *

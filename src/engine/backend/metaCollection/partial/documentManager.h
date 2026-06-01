@@ -5,7 +5,7 @@
 
 class ibValueManagerDataObjectDocument :
 	public ibValueManagerDataObject {
-public:
+	public:
 
 	ibValueReferenceDataObject* FindByNumber(const ibValue& vCode, const ibValue& vPeriod);
 	ibValueReferenceDataObject* EmptyRef();
@@ -22,7 +22,6 @@ public:
 protected:
 	const ibValueMetaObjectDocument* m_metaObject;
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueManagerDataObjectDocument);
 };
 
 #endif 

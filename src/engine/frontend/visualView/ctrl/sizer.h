@@ -4,8 +4,7 @@
 #include "control.h"
 
 class FRONTEND_API ibValueSizer : public ibValueControl {
-	wxDECLARE_ABSTRACT_CLASS(ibValueSizer);
-public:
+	public:
 
 	ibValueSizer() : ibValueControl() {}
 
@@ -48,8 +47,7 @@ namespace ibSizerOps {
 //////////////////////////////////////////////////////////////////////////////
 
 class FRONTEND_API ibValueSizerItem : public ibValueFrame {
-	wxDECLARE_DYNAMIC_CLASS(ibValueSizerItem);
-public:
+	public:
 
 	void SetProportion(int proportion) {
 		m_propertyProportion->SetValue(proportion);
@@ -142,8 +140,7 @@ private:
 //////////////////////////////////////////////////////////////////////////////
 
 class ibValueBoxSizer : public ibValueSizer {
-	wxDECLARE_DYNAMIC_CLASS(ibValueBoxSizer);
-public:
+	public:
 
 	ibValueBoxSizer();
 
@@ -168,8 +165,7 @@ private:
 #include <wx/wrapsizer.h>
 
 class ibValueWrapSizer : public ibValueSizer {
-	wxDECLARE_DYNAMIC_CLASS(ibValueWrapSizer);
-public:
+	public:
 
 	ibValueWrapSizer();
 
@@ -188,8 +184,7 @@ private:
 };
 
 class ibValueStaticBoxSizer : public ibValueSizer {
-	wxDECLARE_DYNAMIC_CLASS(ibValueStaticBoxSizer);
-public:
+	public:
 
 	ibValueStaticBoxSizer();
 
@@ -224,8 +219,7 @@ private:
 };
 
 class ibValueGridSizer : public ibValueSizer {
-	wxDECLARE_DYNAMIC_CLASS(ibValueGridSizer);
-public:
+	public:
 
 	ibValueGridSizer();
 

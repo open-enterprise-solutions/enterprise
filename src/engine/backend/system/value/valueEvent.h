@@ -5,8 +5,7 @@
 
 //event support
 class BACKEND_API ibValueEvent : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEvent);
-public:
+	public:
 
 	ibValueEvent();
 	ibValueEvent(const wxString &eventName);
@@ -21,8 +20,7 @@ protected:
 };
 
 class BACKEND_API ibValueActionEvent : public ibValueEvent {
-	wxDECLARE_DYNAMIC_CLASS(ibValueActionEvent);
-public:
+	public:
 	ibValueActionEvent();
 	ibValueActionEvent(const wxString& eventName, ibActionID eventId);
 private:

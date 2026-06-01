@@ -18,7 +18,6 @@ public:
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
-	virtual wxClassInfo* GetClassInfo() const;
 	virtual ibValue* CreateObject() const;
 	virtual const ibValueMetaObjectRecordDataHierarchyMutableRef* GetMetaObject() const { return m_metaObject; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_Characteristic; }

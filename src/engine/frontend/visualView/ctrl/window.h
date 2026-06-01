@@ -7,8 +7,7 @@
 #define FORM_ACTION 1
 
 class ibValueWindow : public ibValueControl {
-	wxDECLARE_ABSTRACT_CLASS(ibValueWindow);
-public:
+	public:
 
 	void EnableWindow(bool enable = true) const { m_propertyEnabled->SetValue(enable); }
 	void VisibleWindow(bool visible = true) const { m_propertyVisible->SetValue(visible); }

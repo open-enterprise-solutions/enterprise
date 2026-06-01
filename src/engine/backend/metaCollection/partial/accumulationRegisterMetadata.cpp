@@ -7,7 +7,6 @@
 //*                         metaData                                    * 
 //***********************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectAccumulationRegister, ibValueMetaObjectRegisterData);
 
 /////////////////////////////////////////////////////////////////////////
 

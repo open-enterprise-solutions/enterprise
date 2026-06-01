@@ -6,7 +6,6 @@
 #include "metaTableObject.h"
 #include "backend/metaData.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectTableData, ibValueMetaObjectCompositeData)
 
 //***********************************************************************
 //*                         Attributes                                  * 
@@ -101,7 +100,7 @@ bool ibValueMetaObjectTableData::OnBeforeRunMetaObject(int flags)
 {
 	if (!(*m_propertyNumberLine)->OnBeforeRunMetaObject(flags))
 		return false;
-	ibValueMetaObjectRecordData* metaObject = wxDynamicCast(GetParent(), ibValueMetaObjectRecordData);
+	ibValueMetaObjectRecordData* metaObject = dynamic_cast<ibValueMetaObjectRecordData*>(GetParent());
 	wxASSERT(metaObject);
 	if (metaObject != nullptr) {
 		registerTabularSection();
@@ -122,7 +121,7 @@ bool ibValueMetaObjectTableData::OnAfterCloseMetaObject()
 {
 	if (!(*m_propertyNumberLine)->OnAfterCloseMetaObject())
 		return false;
-	ibValueMetaObjectRecordData* metaObject = wxDynamicCast(GetParent(), ibValueMetaObjectRecordData);
+	ibValueMetaObjectRecordData* metaObject = dynamic_cast<ibValueMetaObjectRecordData*>(GetParent());
 	wxASSERT(metaObject);
 	if (metaObject != nullptr) {
 		unregisterTabularSection();

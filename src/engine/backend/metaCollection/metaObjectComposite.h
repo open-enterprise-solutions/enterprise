@@ -82,8 +82,7 @@ class ibCtorMetaValueType;
 
 class BACKEND_API ibValueMetaObjectCompositeData
 	: public ibValueMetaObject {
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectCompositeData);
-public:
+	public:
 
 	ibValueMetaObjectCompositeData(
 		const wxString& strName = wxEmptyString,

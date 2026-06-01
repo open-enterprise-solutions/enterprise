@@ -5,6 +5,7 @@
 
 class BACKEND_API ibValueOLE :
 	public ibValue {
+	public:
 	wxString m_objectName;
 #ifdef __WXMSW__
 	IDispatch* m_dispatch = nullptr;
@@ -114,8 +115,6 @@ public:
 		return false;
 	}
 
-protected:
-	wxDECLARE_DYNAMIC_CLASS_NO_COPY(ibValueOLE);
 };
 
 #endif 

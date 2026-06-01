@@ -8,7 +8,6 @@
 
 #include "commonObject.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueManagerDataObjectDocument, ibValue);
 
 const ibValueMetaObjectCommonModule* ibValueManagerDataObjectDocument::GetManagerModule() const
 {

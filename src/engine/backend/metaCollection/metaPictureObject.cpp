@@ -4,7 +4,6 @@
 //*                            IntrfaceObject                           *
 //***********************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectPicture, ibValueMetaObject);
 
 //***********************************************************************
 //*                           Metamodule                                *

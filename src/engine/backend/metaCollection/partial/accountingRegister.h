@@ -6,7 +6,7 @@
 #include "backend/propertyManager/property/propertyChartOfAccounts.h"
 
 class ibValueMetaObjectAccountingRegister : public ibValueMetaObjectRegisterData {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectAccountingRegister);
+	public:
 private:
 	enum
 	{
@@ -217,7 +217,7 @@ private:
 //********************************************************************************************
 
 class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
-public:
+	public:
 	ibValueRecordSetObjectAccountingRegister(const ibValueMetaObjectAccountingRegister* metaObject, const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) :
 		ibValueRecordSetObject(metaObject, uniqueKey) {}
 

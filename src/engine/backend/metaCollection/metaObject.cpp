@@ -10,7 +10,6 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObject, ibValue);
 
 
 //*****************************************************************************************

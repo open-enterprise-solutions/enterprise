@@ -4,7 +4,7 @@
 #include "backend/compiler/value.h"
 
 class BACKEND_API ibValueContainer : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueContainer);
+	public:
 private:
 	enum Func  {
 		enCount = 0,
@@ -29,6 +29,7 @@ public:
 public:
 
 	class BACKEND_API ibValueReturnContainer : public ibValue {
+	public:
 		
 		enum Prop {
 			enKey,
@@ -101,8 +102,7 @@ protected:
 
 // structure  
 class BACKEND_API ibValueStructure : public ibValueContainer {
-	wxDECLARE_DYNAMIC_CLASS(ibValueStructure);
-public:
+	public:
 
 	ibValueStructure() : ibValueContainer(false) {}
 	ibValueStructure(const std::map<wxString, ibValue>& structureValues) : ibValueContainer(true) {

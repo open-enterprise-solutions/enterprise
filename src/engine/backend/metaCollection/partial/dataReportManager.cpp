@@ -7,13 +7,11 @@
 #include "backend/metaData.h"
 #include "commonObject.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueManagerDataObjectReport, ibValue);
 
 const ibValueMetaObjectCommonModule* ibValueManagerDataObjectReport::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueManagerDataObjectExternalReport, ibValue);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 

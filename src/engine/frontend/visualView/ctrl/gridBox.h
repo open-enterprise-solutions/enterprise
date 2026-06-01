@@ -6,8 +6,7 @@
 #include "backend/system/value/valueSpreadsheet.h"
 
 class ibValueGridBox : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueGridBox);
-public:
+	public:
 
 	ibValueGridBox();
 

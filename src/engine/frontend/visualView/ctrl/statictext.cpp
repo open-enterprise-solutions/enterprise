@@ -7,7 +7,6 @@
 #include "frontend/win/ctrls/controlStaticText.h"
 #endif
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueStaticText, ibValueWindow)
 
 //****************************************************************************
 //*                              StaticText                                  *

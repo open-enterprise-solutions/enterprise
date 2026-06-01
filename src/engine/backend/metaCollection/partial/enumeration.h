@@ -4,7 +4,7 @@
 #include "commonObject.h"
 
 class ibValueMetaObjectEnumeration : public ibValueMetaObjectRecordDataEnumRef {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectEnumeration);
+	public:
 
 	enum
 	{

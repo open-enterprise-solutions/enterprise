@@ -126,7 +126,6 @@ wxString wxConvertStringFromOle(const BSTR& bStr)
 
 #endif 
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueOLE, ibValue);
 
 //*********************************************************************************************************************
 //*                                                      OLE Value                                                    *

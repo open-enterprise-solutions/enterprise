@@ -15,7 +15,7 @@
 ///////////////////////////////////////////////////////////////////////////
 
 class BACKEND_API ibValueMetaObjectConfiguration : public ibValueMetaObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectConfiguration);
+	public:
 
 	enum
 	{

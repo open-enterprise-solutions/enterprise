@@ -477,7 +477,7 @@ void ibDesignerWindow::DrawRectangle(wxDC& dc, const wxPoint& point, const wxSiz
 	int border = 0, flag = 0;
 
 	if (object->IsSubclassOf(wxT("sizerItem"))) {
-		ibValueSizerItem* sizerItem = wxDynamicCast(object->GetParent(), ibValueSizerItem);
+		ibValueSizerItem* sizerItem = dynamic_cast<ibValueSizerItem*>(object->GetParent());
 		if (sizerItem != nullptr) {
 			border = sizerItem->GetBorder(); flag = sizerItem->GetFlagBorder();
 		}

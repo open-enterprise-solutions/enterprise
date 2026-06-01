@@ -9,7 +9,7 @@ class ibCtorMetaType : public ibCtorValueTypeBase {
 
 public:
 
-	ibCtorMetaType(const wxString& className, const ibClassID& clsid) :ibCtorValueTypeBase(className, CLASSINFO(T), clsid) {}
+	ibCtorMetaType(const wxString& className, const ibClassID& clsid) :ibCtorValueTypeBase(className, typeid(T), clsid) {}
 
 	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_metadata; }

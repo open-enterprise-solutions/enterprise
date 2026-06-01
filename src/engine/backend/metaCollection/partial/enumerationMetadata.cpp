@@ -7,7 +7,6 @@
 #include "backend/metaData.h"
 #include "list/objectList.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectEnumeration, ibValueMetaObjectRecordDataEnumRef)
 
 //********************************************************************************************
 

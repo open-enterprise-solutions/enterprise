@@ -8,7 +8,6 @@
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectChartOfAccounts, ibValueMetaObjectRecordDataHierarchyMutableRef);
 
 ibValueMetaObjectChartOfAccounts::ibValueMetaObjectChartOfAccounts() : ibValueMetaObjectRecordDataHierarchyMutableRef()
 {

@@ -67,8 +67,7 @@ private:
 #pragma endregion
 
 class BACKEND_API ibValueMetaObjectModuleBase : public ibValueMetaObject {
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObjectModuleBase);
-public:
+	public:
 
 	ibValueMetaObjectModuleBase(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString)
 		: ibValueMetaObject(name, synonym, comment) {
@@ -140,8 +139,7 @@ private:
 };
 
 class BACKEND_API ibValueMetaObjectModule : public ibValueMetaObjectModuleBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectModule);
-public:
+	public:
 	ibValueMetaObjectModule(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString)
 		: ibValueMetaObjectModuleBase(name, synonym, comment)
 	{
@@ -164,7 +162,7 @@ private:
 };
 
 class BACKEND_API ibValueMetaObjectCommonModule : public ibValueMetaObjectModuleBase {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectCommonModule);
+	public:
 private:
 	enum
 	{
@@ -233,8 +231,7 @@ private:
 };
 
 class BACKEND_API ibValueMetaObjectManagerModule : public ibValueMetaObjectCommonModule {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectManagerModule);
-public:
+	public:
 	ibValueMetaObjectManagerModule(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString)
 		: ibValueMetaObjectCommonModule(name, synonym, comment)
 	{

@@ -118,8 +118,8 @@ class BACKEND_API ibValueMetaObject :
 
 	public ibPropertyObjectHelper<ibValueMetaObject>,
 	public ibAccessObject, public ibInterfaceObject {
+	public:
 
-	wxDECLARE_ABSTRACT_CLASS(ibValueMetaObject);
 
 public:
 

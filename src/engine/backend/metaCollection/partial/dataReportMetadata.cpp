@@ -9,8 +9,6 @@
 #include "backend/moduleManager/moduleManagerExt.h"
 #include "backend/session/session.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectReport, ibValueMetaObjectRecordDataExt)
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectExternalReport, ibValueMetaObjectReport)
 
 //********************************************************************************************
 //*                                      metaData                                            *

@@ -2,7 +2,6 @@
 #include "widgets.h"
 #include "backend/compiler/procUnit.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueSlider, ibValueWindow)
 
 //****************************************************************************
 //*                             Slider                                       *

@@ -6,7 +6,6 @@
 #include "frontend/web/webSizer.h"
 #endif
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueSizer, ibValueFrame)
 
 //*******************************************************************
 //*                            Control                              *

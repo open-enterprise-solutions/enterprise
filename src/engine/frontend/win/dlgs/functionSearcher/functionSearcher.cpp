@@ -140,9 +140,7 @@ void ibFunctionList::OnButtonOk(wxCommandEvent& event)
 			m_codeEditor->GotoLine(line.m_line - 1);
 		}
 		else {
-			ibValueMetaObjectModuleBase* metaModule = wxDynamicCast(
-				m_docModule->GetMetaObject(), ibValueMetaObjectModuleBase
-			);
+			ibValueMetaObjectModuleBase* metaModule = dynamic_cast<ibValueMetaObjectModuleBase*>(m_docModule->GetMetaObject());
 			wxASSERT(metaModule);
 			wxString procName = m_listProcedures->GetItemText(lSelectedItem);
 			std::vector<wxString> procArgs;

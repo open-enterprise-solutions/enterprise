@@ -4,7 +4,7 @@
 #include "backend/metaCollection/partial/commonObject.h"
 
 class BACKEND_API ibValueSelectorDataObject : public ibValue {
-public:
+	public:
 
 	ibValueSelectorDataObject();
 	virtual ~ibValueSelectorDataObject();
@@ -37,7 +37,7 @@ protected:
 
 class BACKEND_API ibValueSelectorRecordDataObject : public ibValueSelectorDataObject,
 	public ibValueDataObject {
-public:
+	public:
 
 	ibValueSelectorRecordDataObject(const ibValueMetaObjectRecordDataMutableRef* metaObject);
 
@@ -75,7 +75,7 @@ protected:
 
 class BACKEND_API ibValueSelectorRegisterDataObject :
 	public ibValueSelectorDataObject {
-public:
+	public:
 	ibValueSelectorRegisterDataObject(const ibValueMetaObjectRegisterData* metaObject);
 
 	virtual bool Next();

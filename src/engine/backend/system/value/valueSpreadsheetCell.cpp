@@ -1,7 +1,5 @@
 #include "valueSpreadsheet.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueSpreadsheetDocumentArea, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueSpreadsheetDocumentBorder, ibValue);
 
 ibValue::ibValueMethodHelper ibValueSpreadsheetDocumentArea::m_methodHelper;
 ibValue::ibValueMethodHelper ibValueSpreadsheetDocumentBorder::m_methodHelper;

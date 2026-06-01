@@ -10,14 +10,8 @@
 
 #include "backend/appData.h"
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueListDataObject, ibValueModelTableBase);
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueListDataObjectEnumRef, ibValueListDataObject);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueListDataObjectRef, ibValueListDataObject);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueListRegisterObject, ibValueListDataObject);
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueModelTreeDataObject, ibValueModelTreeBase);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModelTreeDataObjectFolderRef, ibValueModelTreeDataObject);
 
 ibValueListDataObject::ibValueListDataObject(const ibValueMetaObjectGenericData* metaObject, const ibFormID& formType, bool choiceMode) :
 	ibSourceDataObject(),
@@ -69,7 +63,6 @@ ibValueModelTreeDataObject::~ibValueModelTreeDataObject()
 //					  ibValueDataObjectListColumnCollection               //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueListDataObject::ibValueDataObjectListColumnCollection, ibValueModelTableBase::ibValueModelColumnCollection);
 
 ibValueListDataObject::ibValueDataObjectListColumnCollection::ibValueDataObjectListColumnCollection() :
 	ibValueModelColumnCollection(), m_methodHelper(nullptr), m_ownerTable(nullptr)
@@ -112,7 +105,6 @@ bool ibValueListDataObject::ibValueDataObjectListColumnCollection::GetAt(const i
 	return true;
 }
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection, ibValueModelTreeBase::ibValueModelColumnCollection);
 
 ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::ibValueDataObjectTreeColumnCollection() :
 	ibValueModelColumnCollection(), m_methodHelper(nullptr), m_ownerTable(nullptr)
@@ -158,7 +150,6 @@ bool ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::GetAt(co
 //							 ibValueDataObjectListColumnInfo              //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueListDataObject::ibValueDataObjectListColumnCollection::ibValueDataObjectListColumnInfo, ibValueModelTableBase::ibValueModelColumnCollection::ibValueModelColumnInfo);
 
 ibValueListDataObject::ibValueDataObjectListColumnCollection::ibValueDataObjectListColumnInfo::ibValueDataObjectListColumnInfo() :
 	ibValueModelColumnInfo(), m_metaAttribute(nullptr)
@@ -174,7 +165,6 @@ ibValueListDataObject::ibValueDataObjectListColumnCollection::ibValueDataObjectL
 {
 }
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::ibValueDataObjectTreeColumnInfo, ibValueModelTreeBase::ibValueModelColumnCollection::ibValueModelColumnInfo);
 
 ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::ibValueDataObjectTreeColumnInfo::ibValueDataObjectTreeColumnInfo() :
 	ibValueModelColumnInfo(), m_metaAttribute(nullptr)
@@ -194,7 +184,6 @@ ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::ibValueDataOb
 //					  ibValueDataObjectListReturnLine                     //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueListDataObject::ibValueDataObjectListReturnLine, ibValueModelTableBase::ibValueModelReturnLine);
 
 ibValueListDataObject::ibValueDataObjectListReturnLine::ibValueDataObjectListReturnLine(ibValueListDataObject* ownerTable, const ibDataViewItem& line) :
 	ibValueModelReturnLine(line), m_methodHelper(new ibValueMethodHelper()), m_ownerTable(ownerTable)
@@ -235,7 +224,6 @@ bool ibValueListDataObject::ibValueDataObjectListReturnLine::GetPropVal(const lo
 	return node->GetValue(id, pvarPropVal);
 }
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueModelTreeDataObject::ibValueDataObjectTreeReturnLine, ibValueModelTreeBase::ibValueModelReturnLine);
 
 ibValueModelTreeDataObject::ibValueDataObjectTreeReturnLine::ibValueDataObjectTreeReturnLine(ibValueModelTreeDataObject* ownerTable, const ibDataViewItem& line) :
 	ibValueModelReturnLine(line),

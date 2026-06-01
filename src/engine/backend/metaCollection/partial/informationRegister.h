@@ -5,7 +5,7 @@
 #include "informationRegisterEnum.h"
 
 class ibValueMetaObjectInformationRegister : public ibValueMetaObjectRegisterData {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectInformationRegister);
+	public:
 private:
 	enum
 	{
@@ -28,7 +28,6 @@ private:
 
 public:
 	class ibValueMetaObjectRecordManager : public ibValueMetaObject {
-		wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectRecordManager);
 	public:
 		ibValueMetaObjectRecordManager() : ibValueMetaObject() {}
 	};
@@ -233,6 +232,7 @@ private:
 //********************************************************************************************
 
 class ibValueRecordSetObjectInformationRegister : public ibValueRecordSetObject {
+	public:
 	ibValueRecordSetObjectInformationRegister(const ibValueMetaObjectInformationRegister* metaObject, const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) :
 		ibValueRecordSetObject(metaObject, uniqueKey) {
 	}
@@ -269,7 +269,7 @@ protected:
 };
 
 class ibValueRecordManagerObjectInformationRegister : public ibValueRecordManagerObject {
-public:
+	public:
 	ibValueRecordManagerObjectInformationRegister(const ibValueMetaObjectInformationRegister* metaObject, const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) :
 		ibValueRecordManagerObject(metaObject, uniqueKey)
 	{

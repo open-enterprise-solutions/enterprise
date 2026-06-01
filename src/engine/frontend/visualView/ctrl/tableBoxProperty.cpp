@@ -44,9 +44,7 @@ void ibValueModelTableBox::OnPropertyChanged(ibProperty* property, const wxVaria
 				if (metaObject != nullptr) {
 					for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
 						ibValueModelTableBoxColumn* tableBoxColumn =
-							wxDynamicCast(
-								m_formOwner->CreateControl(wxT("TableboxColumn"), this), ibValueModelTableBoxColumn
-							);
+							dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(wxT("TableboxColumn"), this));
 						wxASSERT(tableBoxColumn);
 						tableBoxColumn->SetControlName(GetControlName() + object->GetName());
 						tableBoxColumn->SetCaption(object->GetSynonym());

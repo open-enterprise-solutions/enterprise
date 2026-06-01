@@ -1,7 +1,5 @@
 #include "documentEnum.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumDocumentWriteMode, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumDocumentPostingMode, ibValue);
 
 //***********************************************************************
 //*                       Register in runtime                           *

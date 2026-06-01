@@ -5,7 +5,7 @@
 
 class ibValueManagerDataObjectAccumulationRegister :
 	public ibValueManagerDataObject {
-public:
+	public:
 
 	ibValue Balance(const ibValue& cPeriod, const ibValue& cFilter = ibValue());
 	ibValue Turnovers(const ibValue& cBeginOfPeriod, const ibValue& cEndOfPeriod, const ibValue& cFilter = ibValue());
@@ -22,7 +22,6 @@ public:
 protected:
 	const ibValueMetaObjectAccumulationRegister* m_metaObject;
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibValueManagerDataObjectAccumulationRegister);
 };
 
 #endif 

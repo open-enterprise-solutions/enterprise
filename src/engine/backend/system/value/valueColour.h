@@ -6,7 +6,7 @@
 //Array support
 class BACKEND_API ibValueColour : public ibValue
 {
-	wxDECLARE_DYNAMIC_CLASS(ibValueColour);
+	public:
 
 public:
 

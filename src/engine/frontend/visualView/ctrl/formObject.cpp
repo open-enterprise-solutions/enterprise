@@ -47,9 +47,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 		ibValue* prevSrcData = nullptr;
 
 		ibValueToolbar* mainToolBar =
-			wxDynamicCast(
-				ibValueForm::CreateControl(wxT("Toolbar")), ibValueToolbar
-			);
+			dynamic_cast<ibValueToolbar*>(ibValueForm::CreateControl(wxT("Toolbar")));
 
 		mainToolBar->SetControlName(wxT("MainToolbar"));
 		mainToolBar->SetActionSrc(FORM_ACTION);
@@ -68,9 +66,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 					ibValueForm::CreateControl(wxT("ToolSeparator"), mainToolBar);
 				}
 				ibValueToolBarItem* toolBarItem =
-					wxDynamicCast(
-						ibValueForm::CreateControl(wxT("Tool"), mainToolBar), ibValueToolBarItem
-					);
+					dynamic_cast<ibValueToolBarItem*>(ibValueForm::CreateControl(wxT("Tool"), mainToolBar));
 				toolBarItem->SetControlName(mainToolBar->GetControlName() + actionData.GetNameByID(action_id));
 				//toolBarItem->SetCaption(actionData.GetCaptionByID(action_id));
 				//toolBarItem->SetToolTip(actionData.GetCaptionByID(action_id));
@@ -86,9 +82,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 		if (sourceExplorer.IsTableSection()) {
 
 			mainTableBox =
-				wxDynamicCast(
-					ibValueForm::CreateControl(wxT("Tablebox")), ibValueModelTableBox
-				);
+				dynamic_cast<ibValueModelTableBox*>(ibValueForm::CreateControl(wxT("Tablebox")));
 
 			mainTableBox->SetControlName(sourceExplorer.GetSourceName());
 			mainTableBox->SetSource(sourceExplorer.GetSourceId());
@@ -100,9 +94,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 
 			if (sourceExplorer.IsTableSection()) {
 				ibValueModelTableBoxColumn* tableBoxColumn =
-					wxDynamicCast(
-						ibValueForm::CreateControl(wxT("TableboxColumn"), mainTableBox), ibValueModelTableBoxColumn
-					);
+					dynamic_cast<ibValueModelTableBoxColumn*>(ibValueForm::CreateControl(wxT("TableboxColumn"), mainTableBox));
 				tableBoxColumn->SetControlName(mainTableBox->GetControlName() + nextSourceExplorer.GetSourceName());
 				tableBoxColumn->SetVisibleColumn(nextSourceExplorer.IsVisible() || sourceExplorer.GetHelperCount() == 1);
 				tableBoxColumn->SetSource(nextSourceExplorer.GetSourceId());
@@ -114,16 +106,12 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 				if (nextSourceExplorer.IsTableSection()) {
 
 					ibValueToolbar* toolBar =
-						wxDynamicCast(
-							ibValueForm::CreateControl(wxT("Toolbar")), ibValueToolbar
-						);
+						dynamic_cast<ibValueToolbar*>(ibValueForm::CreateControl(wxT("Toolbar")));
 
 					toolBar->SetControlName(wxT("Toolbar") + nextSourceExplorer.GetSourceName());
 
 					ibValueModelTableBox* tableBox =
-						wxDynamicCast(
-							ibValueForm::CreateControl(wxT("Tablebox")), ibValueModelTableBox
-						);
+						dynamic_cast<ibValueModelTableBox*>(ibValueForm::CreateControl(wxT("Tablebox")));
 
 					tableBox->SetControlName(nextSourceExplorer.GetSourceName());
 					tableBox->SetSource(nextSourceExplorer.GetSourceId());
@@ -140,9 +128,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 								ibValueForm::CreateControl(wxT("ToolSeparator"), toolBar);
 							}
 							ibValueToolBarItem* toolBarItem =
-								wxDynamicCast(
-									ibValueForm::CreateControl(wxT("Tool"), toolBar), ibValueToolBarItem
-								);
+								dynamic_cast<ibValueToolBarItem*>(ibValueForm::CreateControl(wxT("Tool"), toolBar));
 							toolBarItem->SetControlName(toolBar->GetControlName() + actionData.GetNameByID(action_id));
 							//toolBarItem->SetCaption(actionData.GetCaptionByID(action_id));
 							//toolBarItem->SetToolTip(actionData.GetCaptionByID(action_id));
@@ -158,9 +144,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 						const ibSourceExplorer& colSourceExplorer = nextSourceExplorer.GetHelper(col);
 
 						ibValueModelTableBoxColumn* tableBoxColumn =
-							wxDynamicCast(
-								ibValueForm::CreateControl(wxT("TableboxColumn"), tableBox), ibValueModelTableBoxColumn
-							);
+							dynamic_cast<ibValueModelTableBoxColumn*>(ibValueForm::CreateControl(wxT("TableboxColumn"), tableBox));
 						tableBoxColumn->SetControlName(tableBox->GetControlName() + colSourceExplorer.GetSourceName());
 						//tableBoxColumn->SetCaption(colSourceExplorer.GetSourceSynonym());
 						tableBoxColumn->SetVisibleColumn(colSourceExplorer.IsVisible()
@@ -172,9 +156,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 					if (nextSourceExplorer.ContainType(ibValueTypes::TYPE_BOOLEAN)
 						&& nextSourceExplorer.GetClsidList().size() == 1) {
 						ibValueCheckbox* checkbox =
-							wxDynamicCast(
-								ibValueForm::CreateControl(wxT("Checkbox")), ibValueCheckbox
-							);
+							dynamic_cast<ibValueCheckbox*>(ibValueForm::CreateControl(wxT("Checkbox")));
 						checkbox->SetControlName(nextSourceExplorer.GetSourceName());
 						//checkbox->SetCaption(nextSourceExplorer.GetSourceSynonym());
 						checkbox->EnableWindow(nextSourceExplorer.IsEnabled());
@@ -192,9 +174,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 							selButton = true;
 
 						ibValueTextCtrl* textCtrl =
-							wxDynamicCast(
-								ibValueForm::CreateControl(wxT("Textctrl")), ibValueTextCtrl
-							);
+							dynamic_cast<ibValueTextCtrl*>(ibValueForm::CreateControl(wxT("Textctrl")));
 						textCtrl->SetControlName(nextSourceExplorer.GetSourceName());
 						//textCtrl->SetCaption(nextSourceExplorer.GetSourceSynonym());
 						textCtrl->EnableWindow(nextSourceExplorer.IsEnabled());
@@ -212,9 +192,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 	else {
 
 		ibValueToolbar* mainToolBar =
-			wxDynamicCast(
-				ibValueForm::CreateControl(wxT("Toolbar")), ibValueToolbar
-			);
+			dynamic_cast<ibValueToolbar*>(ibValueForm::CreateControl(wxT("Toolbar")));
 
 		mainToolBar->SetControlName(wxT("MainToolbar"));
 		mainToolBar->SetActionSrc(FORM_ACTION);
@@ -228,9 +206,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 
 			if (id != wxNOT_FOUND) {
 				ibValueToolBarItem* toolBarItem =
-					wxDynamicCast(
-						ibValueForm::CreateControl(wxT("Tool"), mainToolBar), ibValueToolBarItem
-					);
+					dynamic_cast<ibValueToolBarItem*>(ibValueForm::CreateControl(wxT("Tool"), mainToolBar));
 				toolBarItem->SetControlName(mainToolBar->GetControlName() + actionData.GetNameByID(id));
 				//toolBarItem->SetCaption(actionData.GetCaptionByID(id));
 				//toolBarItem->SetToolTip(actionData.GetCaptionByID(id));

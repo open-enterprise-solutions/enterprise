@@ -1073,8 +1073,13 @@ bool ibCompileCode::CompileModule()
 
 	// Mark constants read-only — constants are immutable post-compile;
 	// runtime writes through them would corrupt the constant pool.
-	// Done once at compile finalize so Execute doesn't have to mutate
-	// bytecode (bc is a const template at runtime).
+	// MUST be a finalize sweep, NOT stamped at insertion (GetConstString /
+	// FindConst): ibValue's move ctor resets m_bReadOnly to false
+	// (value.cpp:73), so a flag set on insert is wiped when a later
+	// emplace_back grows the vector and move-constructs the earlier entries.
+	// Only after the pool stops reallocating is the flag stable. The eval
+	// path (ibProcUnit::CompileExpression) carries its own copy of this
+	// sweep for the same reason — keep them in sync.
 	for (auto& c : m_cByteCode.m_listConst)
 		c.m_bReadOnly = true;
 

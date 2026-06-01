@@ -3,7 +3,6 @@
 #include "backend/appData.h"
 #include "backend/session/session.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueResultSet, ibValue);
 
 enum
 {

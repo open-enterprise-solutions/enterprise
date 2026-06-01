@@ -1487,7 +1487,7 @@ WFRONTEND_API std::string wfrontendInterfacesJSON()
 	};
 	nlohmann::json arr = nlohmann::json::array();
 	for (auto* obj0 : activeMetaData->GetAnyArrayObject(g_metaInterfaceCLSID)) {
-		auto* iface = wxDynamicCast(obj0, ibValueMetaObjectInterface);
+		auto* iface = dynamic_cast<ibValueMetaObjectInterface*>(obj0);
 		if (iface == nullptr || iface->IsDeleted()) continue;
 		if (!iface->AccessRight_Use()) continue;
 		nlohmann::json o;

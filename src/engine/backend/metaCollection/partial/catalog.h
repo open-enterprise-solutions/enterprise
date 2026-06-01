@@ -9,7 +9,7 @@
 //********************************************************************************************
 
 class ibValueMetaObjectCatalog : public ibValueMetaObjectRecordDataHierarchyMutableRef {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectCatalog);
+	public:
 private:
 	enum
 	{
@@ -240,6 +240,7 @@ private:
 //********************************************************************************************
 
 class ibValueRecordDataObjectCatalog : public ibValueRecordDataObjectHierarchyRef {
+	public:
 	ibValueRecordDataObjectCatalog(const ibValueMetaObjectCatalog* metaObject, const ibGuid& objGuid = wxNullGuid, ibObjectMode objMode = ibObjectMode::OBJECT_ITEM);
 	ibValueRecordDataObjectCatalog(const ibValueRecordDataObjectCatalog& source);
 public:

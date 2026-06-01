@@ -141,7 +141,7 @@ those must go through a constructed active member.
 | 0 | sizeof probe in test_value.cpp | none | landed |
 | 1 | F2 (narrow `ibValueTypes`, repack `m_refCount` — now `std::atomic`) | low | landed |
 | 2 | F1 tagged-union (`ibString*` in union) + F4 (Reset frees active) + F5 (encapsulate) | medium | **landed** |
-| 3 | F3 (drop wxObject / wxRTTI → CLSID registry), F6 (header split) | high blast radius | planned |
+| 3 | F3 (drop wxObject / wxRTTI → **typeid** registry) | high blast radius | **landed** (F6 header split still deferred) |
 
 **Verified (working tree):** the two script suites pass —
 `tests/scripts/test_string_suite.txt` (native string functions return as
@@ -231,3 +231,253 @@ through the existing `Reset`-then-set path (`LetValue` / `SetTypeNumber` in
 `procUnitValues.h` are the template). Typed-delta hot-path writes stay raw —
 their destination slot's active union member is type-stable, so no
 per-op branch.
+
+---
+
+## Phase 3 — drop `wxObject` / `wxRTTI` (final design: **typeid registry**)
+
+> **Status: LANDED.** `ibValue` no longer derives `wxObject`; the hand-rolled
+> wx-RTTI (originally MFC `CObject`/`DECLARE_DYNCREATE`/`CRuntimeClass`,
+> transliterated to `wxObject`/`wxDECLARE_DYNAMIC_CLASS`/`wxClassInfo` during the
+> MFC→wx port — see VTOOLS.RU 2002–2003 ancestry) is gone from the value tree.
+> Full solution builds clean Debug|x86 (all 11 projects: backend/frontend/
+> wfrontend + enterprise/designer/daemon/codeRunner/classChecker/launcher/
+> wenterprise-server/simplePlugin). This supersedes the earlier "per-class
+> `GetClassType()` macro / CRTP" sketch — see *Design path* below.
+>
+> **Execution notes / gotchas (for the next de-wx arc):**
+> - The `wxDECLARE_*_CLASS` macros expand starting with `public:`. Deleting them
+>   wholesale dropped that access specifier and sent the members after them into
+>   `private` (≈3500 C2248). Fix: re-insert `public:` after the opening brace of
+>   every ibValue-derived class (the macro was always first-in-class per wx
+>   convention). **Lesson: replace the macro with `public:`, don't just delete.**
+> - `wxDECLARE_DYNAMIC_CLASS_NO_COPY` / `_NO_ASSIGN` variants don't match a
+>   `..._CLASS\b` regex (suffix) — two survived (`ibValueOLE`,
+>   `ibValueTypeDescription`) and only surfaced at link time (their `wxIMPLEMENT`
+>   was removed, the `wxDECLARE` wasn't → unresolved `GetClassInfo`).
+> - `wxDynamicCast(x, T)` silently `const_cast`s; native `dynamic_cast<T*>`
+>   does not, and fails on a non-wxObject `T`. Frontend/designer had ~28 such
+>   casts on ibValue targets → rewritten to `dynamic_cast`, with
+>   const-correctness restored at the few `GetMetaObject()` (const) call sites
+>   (`const ibValueMetaObjectRecordDataRef*`, no `const_cast`).
+> - Incremental builds left **stale .obj** referencing the removed
+>   `GetClassInfo`/`GetTypeIDByRef(wxClassInfo*)` symbols — a clean Rebuild was
+>   needed to flush them before the real (2) link errors showed.
+>
+> **Follow-up (not done here):** the registry's three linear scans
+> (`GetAvailableCtor` by `type_info` / `clsid` / name) can become
+> `unordered_map<type_index|ibClassID|hash, ctor*>` for O(1) — the `clsid` index
+> is the hottest (`CreateObjectRef`/`IsRegisterCtor`/`GetVTByID`). The old
+> `wxClassInfo`-pointer scan never allowed this; the typeid swap opens it.
+
+### Where do we actually need RTTI?
+
+The whole `wxDECLARE_DYNAMIC_CLASS` apparatus (168 sites across 77 backend
+files) exists to answer exactly **one** question: *what is the type-id of this
+live value object?* There are only two runtime-type needs in the value system,
+and the C++ language already provides both for free:
+
+1. **Downcast** — "is this `ibValue*` really an `ibValueArray`? give me the
+   typed pointer." Served by `dynamic_cast` in `CastValue` (`value_cast.h:18`).
+   This already uses C++ RTTI, **not** wxRTTI — zero work, untouched.
+2. **Self-identity** — "what `clsid` is this live value?" Served by the
+   polymorphic `ibValue::GetClassType()` (`value.cpp:921`). For fixed value
+   classes it currently routes through `wxObject::GetClassInfo()` →
+   `wxClassInfo*` → registry. `wxClassInfo` is a **hand-rolled `std::type_info`**;
+   the compiler already emits a `std::type_info` per polymorphic class via the
+   vtable, so `typeid(*this)` is the exact drop-in.
+
+`GetClassType()` dispatches in three tiers (the structure is correct, not a
+wart):
+
+```cpp
+ibClassID ibValue::GetClassType() const {
+    if (m_pRef && IsReference())   return m_pRef->GetClassType();   // 1: reference → delegate
+    if (m_typeClass < TYPE_REFFER) return GetIDByVT(m_typeClass);   // 2: primitive → tag→id (no RTTI)
+    return GetTypeIDByRef(this);                                    // 3: object → type-id → registry
+}
+```
+
+- Tier 2 (primitives): `m_typeClass` switch (`GetIDByVT`). One C++ class
+  (`ibValue`) registered 6× with different clsids — not a per-class identity,
+  the tag *is* the identity. Untouched.
+- Tier 3 (objects): the only place a real C++ type-id is needed. Swap
+  `GetClassInfo()`→`typeid(*this)` **inside `GetTypeIDByRef`**; the registry
+  key changes `wxClassInfo*` → `std::type_info` (`type_index` for an O(1) map).
+- Category B (metaobjects: `ibValueRecordDataObject`, …) **override**
+  `GetClassType()` to return their metaobject-derived clsid (`O_<metaID>`,
+  `R_<metaID>`, … via `clsFactory`, `commonObject.cpp:1478`). One C++ class
+  ↔ many clsids, so `typeid` can't and shouldn't identify them — they never
+  reach Tier 3.
+
+### What gets thrown out vs what stays
+
+**Out (the entire hand-rolled wxRTTI surface):** `: public wxObject` on
+`ibValue`; all 168 `wxDECLARE_DYNAMIC_CLASS` / `wxIMPLEMENT_DYNAMIC_CLASS`;
+`wxClassInfo*` storage + `GetClassInfo()` overrides; `GetAvailableCtor(wxClassInfo*)`,
+`GetTypeIDByRef(wxClassInfo*)`, `CreateObjectRef(wxClassInfo*)`; `CLASSINFO(T)`
+and `wxDynamicCast` in the value family (~20 + ~7 backend sites → `typeid(T)` /
+`dynamic_cast`). The 168 macros are **deleted, not replaced** — `typeid` needs
+no declaration.
+
+**Stays (irreducible, both compiler built-ins, zero code):** `dynamic_cast`
+(downcast) and `typeid(*this)` (self-id, one line). **Not RTTI but stays:** the
+`clsid ↔ name ↔ factory` registry (a semantic OES type table, now keyed by
+`std::type_index`), `GetIDByVT` (primitive tag switch), Category B's own
+`GetClassType()`.
+
+Footprint: x64 ~48→~40, x86 40→36 (dead `wxObject::m_refData` gone); the vptr
+stays (`ibValue` has its own virtuals). The real win is structural — the
+universal base no longer depends on wxRTTI (a step in the backend wxBase→std
+goal), the `GetClassType ↔ GetClassInfo` recursion hazard is gone.
+
+### Design path — why not a per-class macro / CRTP / external lib
+
+The arc walked through and rejected several heavier designs:
+
+- **Per-class `IB_DECLARE_VALUE_RTTI` macro** (each class returns its own
+  clsid): works, but is an *insertion* into 168 sites and needs each class's
+  exact registration tag copied — a (closeable) clsid-drift risk. The
+  `typeid` path keeps the existing "registry resolves the mapping"
+  architecture and turns the 168-site migration into **deletions**.
+- **CRTP helper** (`ibValueRtti<Derived, Base>`): gives a free `using Self`,
+  fine for *new* leaf classes, but rewrites the inheritance line of every
+  class (layout-affecting) and needs a `Base` template param for the chains /
+  multiple-inheritance that pervade the tree (`ibValueModel : ibValue,
+  ibActionDataObject, ibTabularObject`). Strictly worse than a macro for the
+  retrofit; kept on the table only as optional ergonomics for new code.
+- **`royvandam/rtti`** (intrusive vptr type-id, FNV1a of the C++ type name):
+  its id is hashed from the *C++* name, but our `clsid` is hashed from the
+  *OES* name (`ib_clsid_hash("VL_ARR")`) and is **serialized to disk/DB** — we
+  can't change the wire id. It also pushes us off the free, MI-safe
+  `dynamic_cast` onto an intrusive walker that needs full base lists at every
+  node, and parses `__PRETTY_FUNCTION__` (MSVC `__FUNCSIG__` differs). Net
+  negative.
+- **`veselink1/refl-cpp`** (compile-time *member* reflection): solves a
+  different problem (serialization / property-table generation), has **no**
+  runtime "what type is this base pointer" mechanism at all. Irrelevant to
+  wxObject removal; parked as a speculative future for auto-generating
+  `PrepareNames()` (conflicts with F6 "don't un-nest", and the prop model is
+  not 1:1 with C++ fields).
+
+### Pilot (additive, non-breaking, self-validating)
+
+Rather than start by deleting macros, the pilot **proves the typeid path
+reproduces the wxClassInfo clsid for every live object**, with `wxObject` and
+all 168 macros left in place as a safety net:
+
+- `ibCtorValueTypeBase` gains a `const std::type_info* m_typeInfo` alongside
+  the existing `m_classInfo` (populated from `typeid(T)` in the ctor
+  templates); new `GetAvailableCtor(const std::type_info&)` in `valueFactory.cpp`.
+- `GetTypeIDByRef(const ibValue*)` (only caller: base `GetClassType`,
+  `value.cpp:927` — Category B never reaches it) computes the clsid **both**
+  ways under `#ifdef DEBUG` and `wxASSERT`s they match, logging any mismatch.
+- Build `Debug|x86`, run a session: if the assert never fires across the whole
+  value tree (`ibValueArray`/`ibValueMap`/Table/Enum/Function/Iterator/…),
+  `wxClassInfo` is proven redundant and the big-bang (delete macros, drop
+  `wxObject`, flip `GetTypeIDByRef` to the typeid value, retire the
+  `wxClassInfo` overloads) is mechanical cleanup.
+
+The big-bang is necessarily one commit (the moment `ibValue` stops being
+`wxObject`, every `wxDECLARE_DYNAMIC_CLASS` in the subtree fails to compile),
+so the dual-compute pilot is the de-risking step that precedes it.
+
+### ⚠️ ABI — `ibValue` layout changed (the headline cross-DLL fact)
+
+Dropping `wxObject` **changed `ibValue`'s binary layout**: the dead
+`wxObject::m_refData` pointer is gone, so the object shrinks by one pointer
+(−4 bytes x86 / −8 x64) and **every `ibValue` member offset shifts**
+(`[vptr][m_refData][m_typeClass…]` → `[vptr][m_typeClass…]`). This is a
+**binary-incompatible** change to the universal value type. Consequence:
+
+- **Every** TU / DLL / plugin that touches `ibValue` MUST be rebuilt against
+  the new header. A partial or incremental build, a stale `.obj`, or — the
+  trap that actually bit at landing — **a running OES process holding the
+  `bin\` DLLs locked so they can't be overwritten**, leaves a mix of old- and
+  new-layout binaries in one process.
+- The symptom of such a mismatch is **silent memory misread, not a crash or
+  link error**: `m_typeClass` / `m_pRef` are read at the wrong offset, so
+  `IsReference()` lies and a perfectly valid object reads as empty →
+  e.g. *"a variable is not an aggregate object"* at runtime for a call like
+  `ShowCommonForm(...)` whose context slot looked unbound. (This masqueraded
+  as a binder/module-manager regression; it was an ABI mismatch.)
+- **Landing procedure / lesson:** kill every running OES process (so nothing
+  locks `bin\…\*.dll`, incl. the vendored `_fb` Firebird plugins), do a full
+  clean `/t:Rebuild` (never trust incremental for a layout change — it leaves
+  stale objects), then run only the freshly-built binaries from `bin\Win32\Debug`.
+  In alpha this is free; once a stable plugin ABI is declared, this layout is
+  what gets frozen (one more reason to have removed `wxObject` *now*).
+
+### Build requirement — RTTI + cross-DLL typeinfo (secondary nuance)
+
+The value system now depends on C++ RTTI being enabled (`/GR` on MSVC,
+default `-frtti` on GCC/Clang) — `typeid(*this)` for self-id and `dynamic_cast`
+for downcasting. This is a non-issue on desktop (RTTI is only ever disabled in
+size-constrained embedded/game builds, which OES is not), but it is now a hard
+build invariant: **never build the value-using projects with `/GR-` /
+`-fno-rtti`.**
+
+Cross-module identity resolution differs by platform, and both are fine *as
+currently configured* — record this so a future cross-platform build doesn't
+trip on it:
+
+- **MSVC / Windows (primary):** `type_info::operator==` compares the decorated
+  name **by string** (cached), not by address. Cross-DLL `typeid` equality and
+  `dynamic_cast` work with **no export gymnastics** — robust, slightly slower on
+  a miss. Nothing to do.
+- **Itanium ABI / Linux+macOS (GCC/Clang, the CMake path):** `type_info`
+  equality is **by address**, and the dynamic linker merges typeinfo symbols
+  across `.so` via vague/weak linkage. If `ibValue` (or a value subclass that is
+  `dynamic_cast` across a library boundary) had its typeinfo hidden
+  (`-fvisibility=hidden` without export), you'd get a duplicate `type_info` per
+  `.so` → cross-boundary `dynamic_cast` / registry lookup silently returns
+  null. **Mitigation is already in place:** `ibValue` is exported via
+  `BACKEND_API` (dllexport / visibility=default), so its typeinfo travels
+  correctly — the same mechanism wx itself relies on for cross-`.so` types.
+  **Action:** when the CMake/Linux build is first exercised in anger, verify
+  the value base and any cross-`.so`-cast value classes are not hidden. This is
+  a general property of RTTI in shared libs (true before this change too), not a
+  regression — just the one thing to keep in view.
+
+---
+
+## Phase 4 — `ibNumber` into the union (analysed → **don't, by default**)
+
+The last reducible payload cost: `ibNumber m_fData` is a **separate by-value
+member** (8 B) carried by *every* value regardless of type — the one piece of
+the F1 "tagged union" that Phase 2 left out. Folding it **by value into the
+union** (`union { bool; date; ibValue*; ibString*; ibNumber }`) would take
+`ibValue` 32 → 24 (x86, −8). So the size win is real.
+
+**It is NOT a clean win, and it was already tried — large numbers gave UB.**
+`ibNumber` is 8 bytes with two tiers:
+
+- **immediate** (small numbers): tag+exp+mantissa packed in a `uint64` —
+  trivial, owns nothing, byte-copyable. In a union this is fine. (Small numbers
+  worked.)
+- **heap** (big numbers): those 8 bytes hold a pointer to a heap `BigImpl`. Now
+  the union member **owns a resource** → non-trivial. Without manual union
+  lifetime this is UB, and it **only manifests for big numbers** (the heap
+  tier): overwrite the union with another member without `~ibNumber()` → leak;
+  `Reset` treats the bytes as `m_pRef` and `delete`s the `BigImpl*` as an
+  `ibValue*` → random-delete corruption; copy-ctor byte-copies the union without
+  deep-copying `BigImpl` → double-free. **This is exactly why `ibNumber` was
+  pulled out to a separate member** (current layout).
+
+**Why `ibString*` survives the union but `ibNumber`-by-value does not:**
+`ibString*` is a *pointer* in the union — the heap object lives behind it, the
+union holds only an address (trivial to copy/null; type-guarded `delete`).
+`ibNumber` by value puts the **resource-owner's bytes** in the union, so the
+owned `BigImpl*` must be threaded through every union reinterpretation by hand
+(placement-new + explicit `~ibNumber()` + proper copy/move on **every** type
+transition: `Reset` / `Copy` / `Move` / `SetNumber` / `operator=`), with the
+hot arithmetic path writing into a slot that must hold a live-constructed
+`ibNumber`.
+
+**Verdict:** the 8-byte win is re-opening a **known-UB surface** that empirically
+bit at the heap tier. The current separate by-value member is the pragmatic,
+safe choice. Do Phase 4 **only** if 8 B/value is genuinely critical *and* you
+commit to the full C++11 non-trivial-union-member treatment focused on the heap
+tier — otherwise leave it. (Rejected the pointer variant `ibNumber*`-in-union
+outright: same 8 union bytes as by-value, zero size win, plus a heap alloc per
+number.)

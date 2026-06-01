@@ -743,8 +743,7 @@ private:
 // (q2 = q.Where(...); iterate both q and q2 interleaved) shares
 // upstream state and will misbehave — deferred to Phase 2.
 class ibValueQuery : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueQuery);
-public:
+	public:
 	ibValueQuery() : ibValue(ibValueTypes::TYPE_VALUE) {}
 
 	explicit ibValueQuery(std::shared_ptr<ibValueIteratorState> state)
@@ -764,7 +763,6 @@ private:
 	std::shared_ptr<ibValueIteratorState> m_state;
 };
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueQuery, ibValue);
 
 const ibClassID g_valueQuery = string_to_clsid("VL_QRY");
 

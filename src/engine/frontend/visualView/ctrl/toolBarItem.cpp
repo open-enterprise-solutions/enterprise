@@ -9,8 +9,6 @@
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueToolBarItem, ibValueControl);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueToolBarSeparator, ibValueControl);
 
 //***********************************************************************************
 //*                           ibValueToolBarItem                               *

@@ -5,7 +5,7 @@
 
 class ibValueOutput : public ibValue
 {
-public:
+	public:
 
 	ibValueOutput() :
 		ibValue(ibValueTypes::TYPE_VALUE, true), m_methodHelper(new ibValueMethodHelper) {

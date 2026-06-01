@@ -5,7 +5,6 @@
 #include "frontend/win/ctrls/controlCheckboxEditor.h"
 #endif
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueCheckbox, ibValueWindow)
 
 //****************************************************************************
 

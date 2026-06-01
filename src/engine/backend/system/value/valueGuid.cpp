@@ -5,7 +5,6 @@
 
 #include "valueGuid.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueGuid, ibValue);
 
 ibValueGuid::ibValueGuid() : ibValue(ibValueTypes::TYPE_VALUE, true), m_guid() {}
 

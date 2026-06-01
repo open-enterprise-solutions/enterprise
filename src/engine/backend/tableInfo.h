@@ -83,7 +83,7 @@ protected:
 //Common entity for tables, list, table trees 
 class BACKEND_API ibValueModel : public ibValue,
 	public ibActionDataObject, public ibTabularObject {
-	wxDECLARE_ABSTRACT_CLASS(ibValueModel);
+	public:
 
 	template <typename T>
 	class ibVariantDataValueImpl :
@@ -311,11 +311,9 @@ protected:
 public:
 
 	class BACKEND_API ibValueModelColumnCollection : public ibValue {
-		wxDECLARE_ABSTRACT_CLASS(ibValueModelColumnCollection);
 	public:
 		class ibValueModelColumnInfo : public ibValue {
-			wxDECLARE_ABSTRACT_CLASS(ibValueModelColumnInfo);
-		public:
+	public:
 
 			virtual unsigned int GetColumnID() const = 0;
 			virtual void SetColumnID(unsigned int col) {}
@@ -394,7 +392,6 @@ public:
 	};
 
 	class BACKEND_API ibValueModelReturnLine : public ibValue {
-		wxDECLARE_ABSTRACT_CLASS(ibValueModelReturnLine);
 	public:
 
 		ibDataViewItem GetLineItem() const { return m_lineItem; };
@@ -768,8 +765,7 @@ protected:
 
 //Table support
 class BACKEND_API ibValueModelTableBase : public ibValueModel {
-	wxDECLARE_ABSTRACT_CLASS(ibValueModelTableBase);
-public:
+	public:
 
 	struct ibValueTableRow : public ibDataViewObject {
 
@@ -1094,7 +1090,7 @@ public:
 // (Catalog list, Enum, Register) inherit directly from
 // ibValueModelTableBase and don't see the storage at all.
 class BACKEND_API ibValueModelRamTableBase : public ibValueModelTableBase {
-	wxDECLARE_ABSTRACT_CLASS(ibValueModelRamTableBase);
+	public:
 
 public:
 
@@ -1369,7 +1365,7 @@ protected:
 
 //Tree support
 class BACKEND_API ibValueModelTreeBase : public ibValueModel {
-	wxDECLARE_ABSTRACT_CLASS(ibValueModelTableBase);
+	public:
 
 
 	struct ibValueTreeNode : public ibDataViewObject {
@@ -1746,7 +1742,7 @@ public:
 // so DB-cursor concretes (FolderRef) inherit only the Get*Fetch and
 // notification primitives without paying for the m_root allocation.
 class BACKEND_API ibValueModelRamTreeBase : public ibValueModelTreeBase {
-	wxDECLARE_ABSTRACT_CLASS(ibValueModelRamTreeBase);
+	public:
 
 public:
 

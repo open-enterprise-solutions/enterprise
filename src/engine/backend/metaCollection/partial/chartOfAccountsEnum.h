@@ -10,8 +10,7 @@ enum ibAccountType {
 #pragma region enumeration
 #include "backend/compiler/enumUnit.h"
 class ibValueEnumAccountType : public ibValueEnumeration<ibAccountType> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumAccountType);
-public:
+	public:
 	static ibValue CreateDefEnumValue() {
 		return ibValue::CreateEnumObject<ibValueEnumAccountType>(ibAccountType::eActive);
 	}

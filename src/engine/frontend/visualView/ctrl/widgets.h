@@ -10,8 +10,7 @@
 #include <wx/button.h>
 
 class ibValueButton : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueButton);
-public:
+	public:
 
 	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }
 	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
@@ -55,8 +54,7 @@ private:
 #include <wx/stattext.h>
 
 class ibValueStaticText : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueStaticText);
-public:
+	public:
 
 	void SetCaption(const wxString& caption) { m_propertyTitle->SetValue(caption); }
 	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
@@ -88,8 +86,7 @@ protected:
 
 class ibValueTextCtrl : public ibValueWindow,
 	public ibTypeControlFactory {
-	wxDECLARE_DYNAMIC_CLASS(ibValueTextCtrl);
-public:
+	public:
 
 	////////////////////////////////////////////////////////////////////////////////////////
 	void SetSource(const ibMetaID& id) { m_propertySource->SetValue(id); }
@@ -233,8 +230,7 @@ private:
 #include <wx/combobox.h>
 
 class ibValueComboBox : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueComboBox);
-public:
+	public:
 
 	ibValueComboBox();
 
@@ -252,8 +248,7 @@ public:
 #include <wx/choice.h>
 
 class ibValueChoice : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueChoice);
-public:
+	public:
 
 	ibValueChoice();
 
@@ -271,7 +266,7 @@ public:
 #include <wx/listbox.h>
 
 class ibValueListBox : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueListBox);
+	public:
 
 public:
 
@@ -292,8 +287,7 @@ public:
 
 class ibValueCheckbox : public ibValueWindow,
 	public ibTypeControlFactory {
-	wxDECLARE_DYNAMIC_CLASS(ibValueCheckbox);
-public:
+	public:
 
 	////////////////////////////////////////////////////////////////////////////////////////
 	void SetSource(const ibMetaID& id) { m_propertySource->SetValue(id); }
@@ -391,8 +385,7 @@ private:
 #include <wx/radiobut.h>
 
 class ibValueRadioButton : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueRadioButton);
-public:
+	public:
 
 	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }
 	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
@@ -425,8 +418,7 @@ private:
 #include <wx/statline.h>
 
 class ibValueStaticLine : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueStaticLine);
-public:
+	public:
 
 	ibValueStaticLine();
 
@@ -453,8 +445,7 @@ private:
 #include <wx/slider.h>
 
 class ibValueSlider : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueSlider);
-public:
+	public:
 
 	ibValueSlider();
 
@@ -484,8 +475,7 @@ private:
 #include <wx/gauge.h>
 
 class ibValueGauge : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueGauge);
-public:
+	public:
 
 	ibValueGauge();
 

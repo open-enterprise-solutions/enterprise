@@ -3,7 +3,6 @@
 #include "frontend/web/webSizer.h"
 #endif
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueBoxSizer, ibValueSizer)
 
 //*******************************************************************
 //*                             BoxSizer                            *

@@ -440,10 +440,8 @@ public:
 	}
 	virtual void OnExit() {}
 private:
-	wxDECLARE_DYNAMIC_CLASS(wxOESRandModule);
 };
 
-wxIMPLEMENT_DYNAMIC_CLASS(wxOESRandModule, wxModule)
 
 //**********************************************************************
 //*                       Runtime register                             *

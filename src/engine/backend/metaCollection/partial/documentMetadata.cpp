@@ -8,12 +8,11 @@
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectDocument, ibValueMetaObjectRecordDataMutableRef);
 
 //********************************************************************************************
 
 class ibValueListDataObjectRefDocument : public ibValueListDataObjectRef {
-public:
+	public:
 	ibValueListDataObjectRefDocument(const ibValueMetaObjectDocument* metaObject = nullptr, const ibFormID& formType = wxNOT_FOUND, bool choiceMode = false) :
 		ibValueListDataObjectRef(metaObject, formType, choiceMode)
 	{

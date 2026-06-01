@@ -42,6 +42,7 @@ bool ibValueSpreadsheetDocumentBorder::GetPropVal(const long lPropNum, ibValue& 
 
 class ibValueSpreadsheetDocumentRange :
 	public ibValue {
+	public:
 
 	enum
 	{
@@ -95,11 +96,11 @@ private:
 
 	static ibValueMethodHelper m_methodHelper;
 
-	wxDECLARE_DYNAMIC_CLASS(ibValueSpreadsheetDocumentRange);
 };
 
 class ibValueSpreadsheetDocumentAreaCollection :
 	public ibValueStructure {
+	public:
 
 public:
 
@@ -123,10 +124,10 @@ public:
 private:
 
 	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadsheetDoc;
-	wxDECLARE_DYNAMIC_CLASS(ibValueSpreadsheetDocumentAreaCollection);
 };
 
 class ibValueSpreadsheetDocumentParameterCollection : public ibValue {
+	public:
 
 	enum
 	{
@@ -294,23 +295,12 @@ private:
 
 	wxObjectDataPtr<ibBackendSpreadsheetObject> m_spreadsheetDoc;
 	ibValueMethodHelper* m_methodHelper;
-	wxDECLARE_DYNAMIC_CLASS(ibValueSpreadsheetDocumentParameterCollection);
 };
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueSpreadsheetDocumentRange, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueSpreadsheetDocumentAreaCollection, ibValueStructure);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueSpreadsheetDocumentParameterCollection, ibValue);
 
 #pragma endregion
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueSpreadsheetDocument, ibValue);
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumSpreadsheetOrient, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumSpreadsheetHorizontalAlignment, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumSpreadsheetVerticalAlignment, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumSpreadsheetFitMode, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumSpreadsheetBorder, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEnumSpreadsheetFillType, ibValue);
 
 ibValue::ibValueMethodHelper ibValueSpreadsheetDocument::m_methodHelper;
 ibValue::ibValueMethodHelper ibValueSpreadsheetDocumentRange::m_methodHelper;

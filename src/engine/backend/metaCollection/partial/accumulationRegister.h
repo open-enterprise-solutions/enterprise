@@ -5,7 +5,7 @@
 #include "accumulationRegisterEnum.h"
 
 class ibValueMetaObjectAccumulationRegister : public ibValueMetaObjectRegisterData {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectAccumulationRegister);
+	public:
 private:
 	enum
 	{
@@ -197,7 +197,7 @@ private:
 //********************************************************************************************
 
 class ibValueRecordSetObjectAccumulationRegister : public ibValueRecordSetObject {
-public:
+	public:
 	ibValueRecordSetObjectAccumulationRegister(const ibValueMetaObjectAccumulationRegister* metaObject, const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) :
 		ibValueRecordSetObject(metaObject, uniqueKey)
 	{

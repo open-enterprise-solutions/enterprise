@@ -4,8 +4,7 @@
 #include "backend/compiler/value.h"
 
 class BACKEND_API ibValueSize : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueSize);
-public:
+	public:
 
 	ibValueSize();
 	ibValueSize(const wxSize& size);

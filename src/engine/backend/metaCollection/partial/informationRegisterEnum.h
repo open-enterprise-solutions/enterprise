@@ -15,8 +15,7 @@ enum ibPeriodicity {
 #pragma region enumeration
 #include "backend/compiler/enumUnit.h"
 class ibValueEnumPeriodicity : public ibValueEnumeration<ibPeriodicity> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumPeriodicity);
-public:
+	public:
 	ibValueEnumPeriodicity() : ibValueEnumeration() {}
 	//ibValueEnumPeriodicity(ibPeriodicity periodicity) : ibValueEnumeration(periodicity) {}
 
@@ -27,8 +26,7 @@ public:
 	}
 };
 class ibValueEnumWriteRegisterMode : public ibValueEnumeration<ibWriteRegisterMode> {
-	wxDECLARE_DYNAMIC_CLASS(ibValueEnumWriteRegisterMode);
-public:
+	public:
 	ibValueEnumWriteRegisterMode() : ibValueEnumeration() {}
 	//ibValueEnumWriteRegisterMode(ibWriteRegisterMode mode) : ibValueEnumeration(mode) {}
 

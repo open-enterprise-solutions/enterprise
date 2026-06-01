@@ -6,8 +6,6 @@
 #include "valueEvent.h"
 
 //////////////////////////////////////////////////////////////////////
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueEvent, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueActionEvent, ibValueEvent);
 
 ibValueEvent::ibValueEvent() :
 	ibValue(ibValueTypes::TYPE_VALUE), m_eventName(wxEmptyString)

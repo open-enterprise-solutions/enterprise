@@ -4,8 +4,7 @@
 #include "backend/compiler/value.h"
 
 class BACKEND_API ibValueGuid : public ibValue {
-	wxDECLARE_DYNAMIC_CLASS(ibValueGuid);
-public:
+	public:
 
 	operator ibGuid() const {
 		return m_guid;

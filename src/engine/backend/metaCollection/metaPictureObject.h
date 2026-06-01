@@ -4,8 +4,7 @@
 #include "metaObject.h"
 
 class BACKEND_API ibValueMetaObjectPicture : public ibValueMetaObject {
-	wxDECLARE_DYNAMIC_CLASS(ibValueMetaObjectPicture);
-public:
+	public:
 
 	wxBitmap GetValueAsBitmap() const { return m_propertyPicture->GetValueAsBitmap(); }
 

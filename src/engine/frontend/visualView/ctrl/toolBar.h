@@ -26,8 +26,7 @@ const ibClassID g_controlToolBarSeparatorCLSID = string_to_clsid("CT_TLIS");
 //********************************************************************************************
 
 class ibValueToolbar : public ibValueWindow {
-	wxDECLARE_DYNAMIC_CLASS(ibValueToolbar);
-public:
+	public:
 
 	void SetActionSrc(const ibFormID& action) { return m_actSource->SetValue(action); }
 	ibFormID GetActionSrc() const { return m_actSource->GetValueAsInteger(); }
@@ -108,7 +107,7 @@ private:
 #include "frontend/artProvider/null/null.xpm"
 
 class ibValueToolBarItem : public ibValueControl {
-	wxDECLARE_DYNAMIC_CLASS(ibValueToolBarItem);
+	public:
 
 public:
 
@@ -252,8 +251,7 @@ private:
 };
 
 class ibValueToolBarSeparator : public ibValueControl {
-	wxDECLARE_DYNAMIC_CLASS(ibValueToolBarSeparator);
-public:
+	public:
 
 	///////////////////////////////////////////////////////////////////////
 

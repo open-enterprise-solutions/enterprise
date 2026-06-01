@@ -16,15 +16,7 @@
 //*								 metaData                               * 
 //***********************************************************************
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObjectGenericData, ibValueMetaObjectCompositeData);
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObjectRegisterData, ibValueMetaObjectGenericData);
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObjectRecordData, ibValueMetaObjectGenericData);
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObjectRecordDataExt, ibValueMetaObjectRecordData);
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObjectRecordDataRef, ibValueMetaObjectRecordData);
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObjectRecordDataEnumRef, ibValueMetaObjectRecordDataRef);
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObjectRecordDataMutableRef, ibValueMetaObjectRecordDataRef);
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueMetaObjectRecordDataHierarchyMutableRef, ibValueMetaObjectRecordDataMutableRef);
 
 //***********************************************************************
 //*							ibValueMetaObjectGenericData				    *
@@ -1405,7 +1397,6 @@ bool ibValueManagerDataObjectPredefined::GetPropVal(const long lPropNum, ibValue
 //*                        ibValueRecordDataObject						*
 //***********************************************************************
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueRecordDataObject, ibValue);
 
 ibValueRecordDataObject::ibValueRecordDataObject(const ibGuid& objGuid, bool newObject) :
 	ibValue(ibValueTypes::TYPE_VALUE), ibValueDataObject(objGuid, newObject),
@@ -1745,7 +1736,6 @@ bool ibValueRecordDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRet
 //*                        ibValueRecordDataObjectExt							*           
 //***********************************************************************
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueRecordDataObjectExt, ibValueRecordDataObject);
 
 ibValueRecordDataObjectExt::ibValueRecordDataObjectExt(const ibValueMetaObjectRecordDataExt* metaObject) :
 	ibValueRecordDataObject(wxNewUniqueGuid, true), m_metaObject(metaObject)
@@ -1854,7 +1844,6 @@ ibValueRecordDataObjectExt* ibValueRecordDataObjectExt::CopyObjectValue()
 //*                        ibValueRecordDataObjectRef							*           
 //***********************************************************************
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueRecordDataObjectRef, ibValueRecordDataObject);
 
 ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueMetaObjectRecordDataMutableRef* metaObject, const ibGuid& objGuid) :
 	ibValueRecordDataObject(objGuid.isValid() ? objGuid : ibGuid::newGuid(GUID_TIME_BASED), !objGuid.isValid()),
@@ -2163,11 +2152,9 @@ ibValueReferenceDataObject* ibValueRecordDataObjectRef::GetReference() const
 //*                        ibValueRecordDataObjectHierarchyRef					*
 //***********************************************************************
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueRecordDataObjectHierarchyRef, ibValueRecordDataObjectRef);
 // Symmetric placeholder for the Document-flavour axis — see
 // commonObject.h for the rationale. Empty body; reflection registry
 // needs the wxIMPLEMENT so RTTI works the same as the Hierarchy side.
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueRecordDataObjectRecorderRef, ibValueRecordDataObjectRef);
 
 ibValueRecordDataObjectHierarchyRef::ibValueRecordDataObjectHierarchyRef(const ibValueMetaObjectRecordDataHierarchyMutableRef* metaObject, const ibGuid& objGuid, ibObjectMode objMode)
 	: ibValueRecordDataObjectRef(metaObject, objGuid), m_objMode(objMode)
@@ -2496,7 +2483,6 @@ bool ibValueRecordDataObjectHierarchyRef::DeleteObject()
 // Phase B-Recorder split. Leaf-metaobject access stays generic via
 // the GetRecordDescription virtual hook on RecorderRef.
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueRecordDataObjectRecorderRef::ibRecorderRegister, ibValue);
 
 void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::CreateRecordSet()
 {
@@ -2845,13 +2831,8 @@ bool ibValueRecordDataObjectRecorderRef::DeleteObject()
 //*						     metaData									*
 //***********************************************************************
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueRecordSetObject, ibValueModelRamTableBase);
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueRecordManagerObject, ibValue);
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibValueRecordKeyObject, ibValue);
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue, ibValue);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyDescriptionValue, ibValue);
 
 //***********************************************************************
 //*                      Record key & set								*
@@ -3407,7 +3388,6 @@ bool ibValueRecordSetObject::GetValueByMetaID(const ibDataViewItem& item, const 
 
 
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection, ibValueModelRamTableBase::ibValueModelColumnCollection);
 
 ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::ibValueRecordSetObjectRegisterColumnCollection() :
 	ibValueModelColumnCollection(),
@@ -3458,7 +3438,6 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::Get
 //					ibValueRecordSetRegisterColumnInfo               //
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::ibValueRecordSetRegisterColumnInfo, ibValueModelRamTableBase::ibValueModelColumnCollection::ibValueModelColumnInfo);
 
 ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::ibValueRecordSetRegisterColumnInfo::ibValueRecordSetRegisterColumnInfo() :
 	ibValueModelColumnInfo(), m_metaAttribute(nullptr)
@@ -3478,7 +3457,6 @@ ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::ibValueR
 //					 ibValueRecordSetObjectRegisterReturnLine					//
 //////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine, ibValueModelRamTableBase::ibValueModelReturnLine);
 
 ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::ibValueRecordSetObjectRegisterReturnLine(ibValueRecordSetObject* ownerTable, const ibDataViewItem& line)
 	: ibValueModelReturnLine(line), m_ownerTable(ownerTable), m_methodHelper(new ibValueMethodHelper())

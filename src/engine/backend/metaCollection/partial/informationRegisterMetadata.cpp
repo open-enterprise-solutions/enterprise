@@ -7,8 +7,6 @@
 //*                         metaData                                    * 
 //***********************************************************************
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectInformationRegister::ibValueMetaObjectRecordManager, ibValueMetaObject);
-wxIMPLEMENT_DYNAMIC_CLASS(ibValueMetaObjectInformationRegister, ibValueMetaObjectRegisterData);
 
 /////////////////////////////////////////////////////////////////////////
 
