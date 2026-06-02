@@ -37,7 +37,7 @@ public:
 
 protected:
 	bool m_newObject;
-	ibMetaValueArray m_listObjectValue;
+	ibRowMetaValues m_listObjectValue;
 	ibGuid m_objGuid;
 };
 

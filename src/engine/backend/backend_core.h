@@ -6,6 +6,7 @@
 #include <map>
 
 #include "backend.h"
+#include "rowValues.h"
 
 extern BACKEND_API unsigned int GetBuildId();
 
@@ -38,9 +39,12 @@ typedef int ibActionID;
 typedef unsigned wxLongLong_t ibPictureID;
 typedef unsigned int ibVersionID;
 
-typedef std::map<
-	ibMetaID, class BACKEND_API ibValue
-> ibMetaValueArray;
+// metaID -> ibValue set of one record object / table row.
+// ibRowValues (sorted vector) — same std::map API & sorted order, but one
+// allocation, contiguous lookup and no per-entry RB-node overhead. See rowValues.h.
+// (Alias only — ibValue is forward-declared inline; instantiated at member sites
+// where value.h is complete.)
+typedef ibRowValues<ibMetaID, class BACKEND_API ibValue> ibRowMetaValues;
 
 //*******************************************************************************************
 //*                                 Special enumeration                                     *

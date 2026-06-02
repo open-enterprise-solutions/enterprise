@@ -72,7 +72,7 @@ ibUniqueKeyPair::ibUniqueKeyPair() : ibUniqueKey(wxNewUniqueGuid)
 {
 }
 
-ibUniqueKeyPair::ibUniqueKeyPair(const ibMetaValueArray& keyValues)
+ibUniqueKeyPair::ibUniqueKeyPair(const ibRowMetaValues& keyValues)
 	: ibUniqueKey(wxNewUniqueGuid)
 	, m_keyValues(keyValues)
 {

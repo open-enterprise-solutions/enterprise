@@ -1071,7 +1071,7 @@ public:
 	// the metaID → ibValue map); these helpers are the canonical "make
 	// me a Pair from this register" entry points.
 	ibUniqueKeyPair CreateUniqueKeyPair() const {
-		ibMetaValueArray values;
+		ibRowMetaValues values;
 		for (const auto* attr : GetGenericDimensionArrayObject())
 			values.insert_or_assign(attr->GetMetaID(), attr->CreateValue());
 		return ibUniqueKeyPair(values);
@@ -1079,8 +1079,8 @@ public:
 
 	// Same, but the caller already has dimension values to copy in
 	// (filtered to dimensions actually owned by this register).
-	ibUniqueKeyPair CreateUniqueKeyPair(const ibMetaValueArray& keyValues) const {
-		ibMetaValueArray values;
+	ibUniqueKeyPair CreateUniqueKeyPair(const ibRowMetaValues& keyValues) const {
+		ibRowMetaValues values;
 		for (const auto* attr : GetGenericDimensionArrayObject()) {
 			const auto it = keyValues.find(attr->GetMetaID());
 			if (it != keyValues.end())
@@ -2032,7 +2032,7 @@ class BACKEND_API ibValueRecordKeyObject : public ibValue {
 
 protected:
 	const ibValueMetaObjectRegisterData* m_metaObject;
-	ibMetaValueArray m_keyValues;
+	ibRowMetaValues m_keyValues;
 	ibValueMethodHelper* m_methodHelper;
 };
 
@@ -2388,7 +2388,7 @@ protected:
 	bool m_objModified;
 	bool m_selected;
 
-	ibMetaValueArray m_keyValues;
+	ibRowMetaValues m_keyValues;
 
 	const ibValueMetaObjectRegisterData* m_metaObject;
 

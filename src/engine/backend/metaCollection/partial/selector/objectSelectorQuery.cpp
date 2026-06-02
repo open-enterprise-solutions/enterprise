@@ -93,7 +93,7 @@ void ibValueSelectorRegisterDataObject::Reset()
 		ibPreparedStatement* statement = ses_query->PrepareStatement("SELECT * FROM %s; ", m_metaObject->GetTableNameDB());
 		ibDatabaseResultSet* resultSet = statement->RunQueryWithResults();
 		while (resultSet->Next()) {
-			ibMetaValueArray keyRow;
+			ibRowMetaValues keyRow;
 			if (m_metaObject->HasRecorder()) {
 				ibValueMetaObjectAttributePredefined* attributeRecorder = m_metaObject->GetRegisterRecorder();
 				wxASSERT(attributeRecorder);
@@ -172,7 +172,7 @@ bool ibValueSelectorRegisterDataObject::Read()
 	if (resultSet->Next()) {
 		isLoaded = true;
 		//load attributes 
-		ibMetaValueArray keyTable, rowTable;
+		ibRowMetaValues keyTable, rowTable;
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
 			ibValueMetaObjectAttributeBase::GetValueAttribute(object, keyTable[object->GetMetaID()], resultSet);
 		for (const auto object : m_metaObject->GetGenericAttributeArrayObject())

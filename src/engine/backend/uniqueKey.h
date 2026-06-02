@@ -75,18 +75,18 @@ class BACKEND_API ibUniqueKeyPair : public ibUniqueKey {
 public:
 
 	ibUniqueKeyPair();
-	explicit ibUniqueKeyPair(const ibMetaValueArray& keyValues);
+	explicit ibUniqueKeyPair(const ibRowMetaValues& keyValues);
 	virtual ~ibUniqueKeyPair();
 
 	bool IsOk() const override;
 
-	const ibMetaValueArray& GetKeyValues() const { return m_keyValues; }
-	void SetKeyValues(const ibMetaValueArray& keys) { m_keyValues = keys; }
+	const ibRowMetaValues& GetKeyValues() const { return m_keyValues; }
+	void SetKeyValues(const ibRowMetaValues& keys) { m_keyValues = keys; }
 
 	bool FindKey(const ibMetaID& id) const;
 	ibValue GetKey(const ibMetaID& id) const;
 
-	operator ibMetaValueArray() const { return m_keyValues; }
+	operator ibRowMetaValues() const { return m_keyValues; }
 
 protected:
 
@@ -99,7 +99,7 @@ protected:
 
 private:
 
-	ibMetaValueArray m_keyValues;
+	ibRowMetaValues m_keyValues;
 };
 
 #define wxNullUniqueKey     ibUniqueKey()

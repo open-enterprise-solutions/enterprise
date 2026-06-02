@@ -801,7 +801,7 @@ class BACKEND_API ibValueModelTableBase : public ibValueModel {
 
 		/////////////////////////////////////////////////////////////////////////////
 
-		const ibMetaValueArray& GetTableValues() const { return m_nodeValues; }
+		const ibRowMetaValues& GetTableValues() const { return m_nodeValues; }
 
 		/////////////////////////////////////////////////////////////////////////////
 
@@ -936,7 +936,7 @@ class BACKEND_API ibValueModelTableBase : public ibValueModel {
 		friend class ibValueModelRamTableBase;
 	protected:
 		ibValueModelTableBase* m_valueTable;
-		ibMetaValueArray m_nodeValues;
+		ibRowMetaValues m_nodeValues;
 	};
 
 public:
@@ -1411,7 +1411,7 @@ class BACKEND_API ibValueModelTreeBase : public ibValueModel {
 
 		/////////////////////////////////////////////////////////////////////////////
 
-		const ibMetaValueArray& GetTableValues() const { return m_nodeValues; }
+		const ibRowMetaValues& GetTableValues() const { return m_nodeValues; }
 
 		/////////////////////////////////////////////////////////////////////////////
 
@@ -1569,7 +1569,7 @@ class BACKEND_API ibValueModelTreeBase : public ibValueModel {
 		std::vector<ibValueTreeNode*> m_children;
 	protected:
 		ibValueModelTreeBase* m_valueTree;
-		ibMetaValueArray m_nodeValues;
+		ibRowMetaValues m_nodeValues;
 	};
 
 public:

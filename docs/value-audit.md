@@ -264,11 +264,34 @@ per-op branch.
 >   `GetClassInfo`/`GetTypeIDByRef(wxClassInfo*)` symbols — a clean Rebuild was
 >   needed to flush them before the real (2) link errors showed.
 >
-> **Follow-up (not done here):** the registry's three linear scans
-> (`GetAvailableCtor` by `type_info` / `clsid` / name) can become
-> `unordered_map<type_index|ibClassID|hash, ctor*>` for O(1) — the `clsid` index
-> is the hottest (`CreateObjectRef`/`IsRegisterCtor`/`GetVTByID`). The old
-> `wxClassInfo`-pointer scan never allowed this; the typeid swap opens it.
+> **Follow-up — LANDED (2026-06-02): `ibCtorRegistry`.** The registry's linear
+> scans are gone. `backend/ctorRegistry.h` introduces a reusable templated
+> `ibCtorRegistry<T>` — single owner of the ctor pointers plus the lookup indices,
+> mutated only through `Register`/`Unregister` (so the indices cannot drift). The
+> **hot keys are O(1) hash indices** (`unordered_map<ibClassID, T*>` and
+> `unordered_map<type_index, T*>` — `clsid` for `CreateObjectRef`/`IsRegisterCtor`/
+> `GetVTByID`, `type_info` for live-object self-id in `GetClassType`). **Name
+> lookup stays linear on purpose** — it is compile-time / low-frequency and, being
+> case-insensitive, can't ride the case-sensitive `clsid` hash. Memory cost is one
+> extra small index (not the three-map sprawl first sketched). The value factory
+> (`valueFactory.cpp`) adopted it first; the per-metadata factories
+> (`ibMetaData` base + `ibMetaDataDataProcessor` + `ibMetaDataReport`, formerly raw
+> `std::find_if` over their own `m_factoryCtors` with an `activeMetaData` fallback)
+> reuse the same class — hot `clsid` O(1), the metadata-specific `(metaValue,
+> refType)` key kept linear via `ForEach`. This also **closes the Phase-3
+> constant-factor regression**: post-typeid `GetTypeIDByRef` had been an O(n)
+> *string* compare (MSVC `type_info::operator==` compares decorated names); it is
+> now an O(1) `type_index` hash — better than even the original `wxClassInfo`
+> pointer scan.
+>
+> **Also hardened (2026-06-02):** `GetTypeIDByRef(const ibValue*)` no longer
+> re-delegates to `objectRef->GetClassType()` for an unrecognised object tag (that
+> re-entered `GetClassType ↔ GetTypeIDByRef` → infinite recursion). The whitelist
+> is now a `switch`; the `default` is a loud `wxFAIL_MSG` + `return 0`. And the
+> `operator=(ibValueTypes)` leak/ineffective-null on a reused reffer/string slot
+> (see [[reference_value_settype_operator_trap]]) was closed at its two live call
+> sites (`metaAttributeObjectQuery.cpp`, `case ibFieldTypes_Null`) by switching to
+> `retValue = ibValue(ibValueTypes::TYPE_NULL)` (fresh ctor → proper release).
 
 ### Where do we actually need RTTI?
 
@@ -481,3 +504,47 @@ commit to the full C++11 non-trivial-union-member treatment focused on the heap
 tier — otherwise leave it. (Rejected the pointer variant `ibNumber*`-in-union
 outright: same 8 union bytes as by-value, zero size win, plus a heap alloc per
 number.)
+
+---
+
+## Adjacent — the per-object value store (`ibRowValues`, LANDED 2026-06-02)
+
+The footprint audit above is about a *single* `ibValue`. The next-order cost is the
+**container that holds many of them per object**: every record object and table row
+keeps its attribute values in `ibMetaValueArray` — historically
+`typedef std::map<ibMetaID, ibValue>` (red-black tree). That map sat on the single
+most-trodden runtime path: every `Object.Attribute` read/write goes
+`GetPropVal`/`SetPropVal` → `GetValueByMetaID`/`SetValueByMetaID` →
+`find(id)`/`at(id)`, and the same typedef also backs table-row columns
+(`tableInfo.h`), composite keys (`uniqueKey.h`) and selector rows.
+
+**Swap (drop-in behind the typedef):** `std::map` → `ibRowValues<Key,T>`
+(`backend/rowValues.h`) — a sorted `std::vector<pair<Key,T>>` with a
+std::map-compatible API (`find`/`at`/`[]`/`insert_or_assign`/`erase`/`count`/
+`begin..end`/`==`/`<`) and the **same sorted iteration order** (so serialization /
+unique-key order is unchanged). The alias is renamed `ibMetaValueArray` →
+**`ibRowMetaValues`** = `ibRowValues<ibMetaID, ibValue>` (`backend_core.h`). Zero
+call-site behavioural change; full Debug|x86 green + runtime-validated.
+
+Why it wins (same philosophy as the ibValue audit, one level up):
+- **Lookup:** same O(log n) but over **contiguous** memory (binary search, no
+  pointer chasing) — a row's keys often fit 1–2 cache lines. For the small n here
+  (≈5–50 attributes) a markedly better constant factor.
+- **Allocation:** **one** vector block per object instead of a heap node **per
+  attribute** — ~N× fewer malloc/free on every object load / query result.
+- **RAM:** drops the ~32-byte RB-node header per value (contiguous `pair` ≈ 48 B
+  vs map node ≈ 60 B + its own heap block) — ~30–40% less per attribute entry,
+  less heap fragmentation, across millions of loaded records / table rows.
+- **Especially visible in Debug** (MSVC): Debug punishes exactly what `std::map`
+  does most — per-node `new`/`delete` through the slow CRT debug heap, checked
+  iterators (`_ITERATOR_DEBUG_LEVEL=2`) validating every tree op, no inlining of
+  the RB-tree helpers. The Release gap is smaller (inlining + fast heap).
+
+Costs (documented in `rowValues.h`): mid-life insert is O(n) shift, but the key set
+is **fixed per type** (built once after `clear()`, then only value-updated — no
+hot-path inserts); `operator[]`/`insert` refs are invalidated by the next
+structural mutation (no call site borrows a ref across an insert); the iterator
+exposes a mutable key (nothing mutates it). API kept lowercase/std::map-shaped on
+purpose (range-for needs `begin`/`end`; it is used like a map) — see
+[[reference_flat_map_over_stdmap]]. Reusable sibling from the same arc:
+`ibCtorRegistry` (the type-ctor registry above).

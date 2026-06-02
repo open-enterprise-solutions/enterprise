@@ -79,7 +79,7 @@ class BACKEND_API ibValueSelectorRegisterDataObject :
 	ibValueSelectorRegisterDataObject(const ibValueMetaObjectRegisterData* metaObject);
 
 	virtual bool Next();
-	virtual ibValueRecordManagerObject* GetRecordManager(const ibMetaValueArray& keyValues) const;
+	virtual ibValueRecordManagerObject* GetRecordManager(const ibRowMetaValues& keyValues) const;
 
 	//get metaData from object 
 	virtual const ibValueMetaObjectRegisterData* GetMetaObject() const {
@@ -106,12 +106,12 @@ protected:
 
 	const ibValueMetaObjectRegisterData* m_metaObject;
 
-	ibMetaValueArray m_keyValues;
+	ibRowMetaValues m_keyValues;
 
-	std::vector <ibMetaValueArray> m_currentValues;
+	std::vector <ibRowMetaValues> m_currentValues;
 	std::map<
-		ibMetaValueArray,
-		ibMetaValueArray
+		ibRowMetaValues,
+		ibRowMetaValues
 	> m_listObjectValue;
 };
 

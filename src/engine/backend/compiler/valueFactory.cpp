@@ -5,8 +5,11 @@
 
 #include "value.h"
 #include "backend/backend_exception.h"
+#include "backend/ctorRegistry.h"
 
-static std::vector<ibCtorAbstractType*>* s_factoryCtors = nullptr;
+// Single owner of the registered value-ctors + the clsid / type_info / name
+// lookups. Hot keys (clsid, type_info) are O(1); name stays linear (see header).
+static ibCtorRegistry<ibCtorAbstractType>* s_registry = nullptr;
 static std::atomic<unsigned int> s_factoryCtorCountChanges = 0;
 
 //*******************************************************************************
@@ -43,7 +46,7 @@ ibValue* ibValue::CreateObjectRef(const ibClassID& clsid, ibValue** paParams, co
 
 void ibValue::RegisterCtor(ibCtorAbstractType* typeCtor)
 {
-	if (s_factoryCtors == nullptr) s_factoryCtors = new std::vector<ibCtorAbstractType*>;
+	if (s_registry == nullptr) s_registry = new ibCtorRegistry<ibCtorAbstractType>;
 
 	if (typeCtor != nullptr) {
 
@@ -62,7 +65,7 @@ void ibValue::RegisterCtor(ibCtorAbstractType* typeCtor)
 		s_factoryCtorCountChanges++;
 
 		typeCtor->CallEvent(ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_Register);
-		s_factoryCtors->emplace_back(typeCtor);
+		s_registry->Register(typeCtor);
 	}
 }
 
@@ -76,9 +79,7 @@ void ibValue::UnRegisterCtor(ibCtorAbstractType*& typeCtor)
 		if (wxTheApp != NULL)
 			wxLogDebug(wxT("* Unregister class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
-		s_factoryCtors->erase(
-			std::remove(s_factoryCtors->begin(), s_factoryCtors->end(), typeCtor)
-		);
+		s_registry->Unregister(typeCtor);
 
 		wxDELETE(typeCtor);
 		s_factoryCtorCountChanges++;
@@ -87,7 +88,7 @@ void ibValue::UnRegisterCtor(ibCtorAbstractType*& typeCtor)
 		ibBackendCoreException::Error(_("Object '%s' is not register"), typeCtor->GetClassName());
 	}
 
-	if (s_factoryCtors->size() == 0) wxDELETE(s_factoryCtors);
+	if (s_registry != nullptr && s_registry->IsEmpty()) wxDELETE(s_registry);
 }
 
 void ibValue::UnRegisterCtor(const wxString& className)
@@ -104,32 +105,24 @@ void ibValue::UnRegisterCtor(const wxString& className)
 
 bool ibValue::IsRegisterCtor(const wxString& className)
 {
-	if (s_factoryCtors == nullptr || className.IsEmpty())
+	if (s_registry == nullptr || className.IsEmpty())
 		return false;
-	for (auto& typeCtor : *s_factoryCtors)
-		if (stringUtils::CompareString(className, typeCtor->GetClassName()))
-			return true;
-	return false;
+	return s_registry->Find(className) != nullptr;
 }
 
 bool ibValue::IsRegisterCtor(const wxString& className, ibCtorObjectType objectType)
 {
-	if (s_factoryCtors == nullptr)
+	if (s_registry == nullptr)
 		return false;
-	for (auto& typeCtor : *s_factoryCtors)
-		if (stringUtils::CompareString(className, typeCtor->GetClassName()) && (objectType == typeCtor->GetObjectTypeCtor()))
-			return true;
-	return false;
+	// Names are unique (RegisterCtor rejects duplicates), so the single
+	// name-match is the one to check the object-type against.
+	const ibCtorAbstractType* typeCtor = s_registry->Find(className);
+	return typeCtor != nullptr && objectType == typeCtor->GetObjectTypeCtor();
 }
 
 bool ibValue::IsRegisterCtor(const ibClassID& clsid)
 {
-	if (s_factoryCtors == nullptr)
-		return false;
-	for (auto& typeCtor : *s_factoryCtors)
-		if (clsid == typeCtor->GetClassType())
-			return true;
-	return false;
+	return s_registry != nullptr && s_registry->Find(clsid) != nullptr;
 }
 
 ibClassID ibValue::GetTypeIDByRef(const std::type_info& typeInfo)
@@ -142,22 +135,30 @@ ibClassID ibValue::GetTypeIDByRef(const std::type_info& typeInfo)
 
 ibClassID ibValue::GetTypeIDByRef(const ibValue* objectRef)
 {
-	// All "object-reference" tags resolve through the C++ type-id
-	// (typeid(*objectRef), matched against the registry's type_info key —
-	// the replacement for the old wxDECLARE_DYNAMIC_CLASS/wxClassInfo path).
-	// Any tag NOT in this set falls through to objectRef->GetClassType() —
-	// which for primitive types returns the right id, but for unrecognized
-	// reference-shaped tags causes infinite recursion through
-	// GetClassType ↔ GetTypeIDByRef. Add new TYPE_* here when adding
-	// to ibValueTypes enum.
-	if (objectRef->m_typeClass != ibValueTypes::TYPE_VALUE &&
-		objectRef->m_typeClass != ibValueTypes::TYPE_OLE &&
-		objectRef->m_typeClass != ibValueTypes::TYPE_ENUM &&
-		objectRef->m_typeClass != ibValueTypes::TYPE_FUNCTION &&
-		objectRef->m_typeClass != ibValueTypes::TYPE_ITERATOR) {
-		return objectRef->GetClassType();
+	// The object-reference tags resolve through the C++ type-id (typeid(*objectRef),
+	// matched against the registry's type_info key — the replacement for the old
+	// wxDECLARE_DYNAMIC_CLASS / wxClassInfo path). This is the ONLY caller path: base
+	// GetClassType() reaches here exactly for a non-reference object tag (primitives
+	// went through GetIDByVT, references delegated to m_pRef, Category-B metaobjects
+	// override GetClassType and never arrive).
+	//
+	// A tag NOT in this set is a programming error — a new object-shaped ibValueTypes
+	// was added without extending this switch. We must NOT fall back to
+	// objectRef->GetClassType(): that re-enters GetTypeIDByRef and spins into infinite
+	// recursion. Fail loudly in Debug, return 0 (Release-safe) instead.
+	switch (objectRef->m_typeClass) {
+	case ibValueTypes::TYPE_VALUE:
+	case ibValueTypes::TYPE_OLE:
+	case ibValueTypes::TYPE_ENUM:
+	case ibValueTypes::TYPE_FUNCTION:
+	case ibValueTypes::TYPE_ITERATOR:
+		return GetTypeIDByRef(typeid(*objectRef));
+	default:
+		wxFAIL_MSG(wxString::Format(
+			wxT("GetTypeIDByRef: unhandled object tag %d — add it to the typeid switch"),
+			static_cast<int>(objectRef->m_typeClass)));
+		return 0;
 	}
-	return GetTypeIDByRef(typeid(*objectRef));
 }
 
 ibClassID ibValue::GetIDObjectFromString(const wxString& className)
@@ -182,17 +183,18 @@ wxString ibValue::GetNameObjectFromID(const ibClassID& clsid, bool upper)
 
 wxString ibValue::GetNameObjectFromVT(ibValueTypes valueType, bool upper)
 {
-	if (valueType > ibValueTypes::TYPE_REFFER)
+	if (valueType > ibValueTypes::TYPE_REFFER || s_registry == nullptr)
 		return wxEmptyString;
-	for (auto& typeCtor : *s_factoryCtors) {
+	wxString result;
+	s_registry->ForEach([&](ibCtorAbstractType* typeCtor) {
+		if (!result.IsEmpty())
+			return;
 		const ibCtorSingleType* simpleSingleObject = dynamic_cast<ibCtorSingleType*>(typeCtor);
 		if (simpleSingleObject != nullptr &&
-			valueType == simpleSingleObject->GetValueType()) {
-			return upper ? typeCtor->GetClassName().Upper() :
-				typeCtor->GetClassName();
-		}
-	}
-	return wxEmptyString;
+			valueType == simpleSingleObject->GetValueType())
+			result = upper ? typeCtor->GetClassName().Upper() : typeCtor->GetClassName();
+	});
+	return result;
 }
 
 ibValueTypes ibValue::GetVTByID(const ibClassID& clsid)
@@ -240,43 +242,26 @@ ibClassID ibValue::GetIDByVT(const ibValueTypes& valueType)
 
 ibCtorAbstractType* ibValue::GetAvailableCtor(const wxString& className)
 {
-	if (s_factoryCtors == nullptr)
-		return nullptr;
-	for (auto& typeCtor : *s_factoryCtors)
-		if (stringUtils::CompareString(className, typeCtor->GetClassName()))
-			return typeCtor;
-	//ibBackendCoreException::Error("Object '%s' is not exist", className);
-	return nullptr;
+	return s_registry != nullptr ? s_registry->Find(className) : nullptr;
 }
 
 ibCtorAbstractType* ibValue::GetAvailableCtor(const ibClassID& clsid)
 {
-	if (s_factoryCtors == nullptr)
-		return nullptr;
-	for (auto& typeCtor : *s_factoryCtors)
-		if (clsid == typeCtor->GetClassType())
-			return typeCtor;
-	//ibBackendCoreException::Error("Object id '%llu' is not exist", clsid);
-	return nullptr;
+	return s_registry != nullptr ? s_registry->Find(clsid) : nullptr;
 }
 
 ibCtorAbstractType* ibValue::GetAvailableCtor(const std::type_info& typeInfo)
 {
-	if (s_factoryCtors == nullptr)
-		return nullptr;
-	for (auto& typeCtor : *s_factoryCtors)
-		if (typeInfo == typeCtor->GetTypeInfo())
-			return typeCtor;
-	//ibBackendCoreException::Error("Object '%s' is not exist", typeInfo.name());
-	return nullptr;
+	return s_registry != nullptr ? s_registry->Find(typeInfo) : nullptr;
 }
 
 std::vector<ibCtorAbstractType*> ibValue::GetListCtorsByType(ibCtorObjectType objectType)
 {
 	std::vector<ibCtorAbstractType*> retVector;
-	std::copy_if(s_factoryCtors->begin(), s_factoryCtors->end(),
-		std::back_inserter(retVector), [objectType](ibCtorAbstractType* t) { return objectType == t->GetObjectTypeCtor(); }
-	);
+	if (s_registry != nullptr)
+		s_registry->ForEach([&](ibCtorAbstractType* t) {
+			if (objectType == t->GetObjectTypeCtor()) retVector.push_back(t);
+		});
 	std::sort(retVector.begin(), retVector.end(),
 		[](ibCtorAbstractType* a, ibCtorAbstractType* b) { return a->GetClassName() > b->GetClassName(); }
 	);

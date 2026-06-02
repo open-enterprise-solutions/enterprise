@@ -727,7 +727,7 @@ bool ibValueMetaObjectAttributeBase::GetValueAttribute(const wxString& fieldName
 		retValue = resultSet->GetResultString(fieldName);
 		return true;
 	case ibFieldTypes_Null:
-		retValue = ibValueTypes::TYPE_NULL;
+		retValue = ibValue(ibValueTypes::TYPE_NULL);   // fresh NULL — releases any prior reffer/string in the slot (operator=(ibValueTypes) would leak it)
 		return true;
 	case ibFieldTypes_Enum:
 	{
@@ -825,7 +825,7 @@ bool ibValueMetaObjectAttributeBase::GetValueAttribute(const wxString& fieldName
 	case ibFieldTypes_String:
 		return ibValueMetaObjectAttributeBase::GetValueAttribute(fieldName + wxT("_S"), ibFieldTypes_String, metaAttr, retValue, resultSet, createData);
 	case ibFieldTypes_Null:
-		retValue = ibValueTypes::TYPE_NULL;
+		retValue = ibValue(ibValueTypes::TYPE_NULL);   // fresh NULL — releases any prior reffer/string in the slot (operator=(ibValueTypes) would leak it)
 		return true;
 	case ibFieldTypes_Enum:
 		return ibValueMetaObjectAttributeBase::GetValueAttribute(fieldName + wxT("_E"), ibFieldTypes_Enum, metaAttr, retValue, resultSet, createData);

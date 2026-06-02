@@ -9,6 +9,7 @@
 
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/value_ptr.h"
+#include "backend/ctorRegistry.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 class BACKEND_API ibBackendMetadataTree;
@@ -430,8 +431,10 @@ protected:
 
 	bool m_metaModify;
 
-	//custom types
-	std::vector<ibCtorMetaValueType*> m_factoryCtors;
+	//custom types — clsid O(1); name / (metaValue,refType) linear (see ctorRegistry.h).
+	// type_info index stays empty here (ibCtorMetaValueType has no concrete typeid —
+	// metaobjects self-id via their own GetClassType() override, not typeid).
+	ibCtorRegistry<ibCtorMetaValueType> m_factoryCtors;
 	std::atomic<unsigned int> m_factoryCtorCountChanges = 0;
 
 	// Common-module skeleton — populated by descriptor's OnBeforeRunMetaObject

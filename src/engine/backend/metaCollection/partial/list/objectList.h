@@ -464,7 +464,7 @@ class BACKEND_API ibValueListRegisterObject : public ibValueListDataObject {
 		void AppendNodeValue(const ibMetaID& id, const ibValue& variant) { m_nodeKeys.insert_or_assign(id, variant); }
 		ibValue& AppendNodeValue(const ibMetaID& id) { return m_nodeKeys[id]; }
 
-		const ibMetaValueArray& GetNodeKeys() const { return m_nodeKeys; }
+		const ibRowMetaValues& GetNodeKeys() const { return m_nodeKeys; }
 
 		ibUniqueKeyPair GetUniquePairKey(const ibValueMetaObjectRegisterData* metaObject) const {
 			return metaObject->CreateUniqueKeyPair(m_nodeKeys);
@@ -483,7 +483,7 @@ class BACKEND_API ibValueListRegisterObject : public ibValueListDataObject {
 		}
 
 	private:
-		ibMetaValueArray m_nodeKeys;
+		ibRowMetaValues m_nodeKeys;
 	};
 public:
 

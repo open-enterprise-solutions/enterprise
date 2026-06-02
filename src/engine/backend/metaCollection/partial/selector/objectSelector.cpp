@@ -127,7 +127,7 @@ bool ibValueSelectorRegisterDataObject::Next()
 	return false;
 }
 
-ibValueRecordManagerObject* ibValueSelectorRegisterDataObject::GetRecordManager(const ibMetaValueArray& keyValues) const
+ibValueRecordManagerObject* ibValueSelectorRegisterDataObject::GetRecordManager(const ibRowMetaValues& keyValues) const
 {
 	if (appData->DesignerMode()) {
 		return m_metaObject->CreateRecordManagerObjectValue();

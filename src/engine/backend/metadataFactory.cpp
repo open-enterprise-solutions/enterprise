@@ -47,8 +47,7 @@ void ibMetaData::RegisterCtor(ibCtorMetaValueType* typeCtor)
 
 		typeCtor->CallEvent(ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_Register);
 
-
-		m_factoryCtors.emplace_back(typeCtor);
+		m_factoryCtors.Register(typeCtor);
 		m_factoryCtorCountChanges++;
 	}
 }
@@ -63,11 +62,9 @@ void ibMetaData::UnRegisterCtor(ibCtorMetaValueType*& typeCtor)
 		wxLogDebug("* Unregister class '%s' with clsid '%s:%llu' ", typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 
-		// Full erase-remove — the old single-iterator erase(remove(...)) dropped only
-		// one position and left any shifted duplicate as a dangling pointer in the
-		// tail (then wxDELETE'd below). erase(remove(...), end()) removes the whole
-		// matched range.
-		m_factoryCtors.erase(std::remove(m_factoryCtors.begin(), m_factoryCtors.end(), typeCtor), m_factoryCtors.end());
+		// Erase by clsid key (unique per ctor) — no dangling-tail hazard the old
+		// erase(remove(...)) had to guard against.
+		m_factoryCtors.Unregister(typeCtor);
 		m_factoryCtorCountChanges++;
 
 		wxDELETE(typeCtor);
@@ -92,9 +89,8 @@ bool ibMetaData::IsRegisterCtor(const wxString& className) const
 {
 	if (className.IsEmpty())
 		return false;
-	for (auto& typeCtor : m_factoryCtors)
-		if (stringUtils::CompareString(className, typeCtor->GetClassName()))
-			return true;
+	if (m_factoryCtors.Find(className) != nullptr)
+		return true;
 	return ibValue::IsRegisterCtor(className);
 }
 
@@ -102,9 +98,10 @@ bool ibMetaData::IsRegisterCtor(const wxString& className, ibCtorObjectType obje
 {
 	if (className.IsEmpty())
 		return false;
-	for (auto& typeCtor : m_factoryCtors)
-		if (stringUtils::CompareString(className, typeCtor->GetClassName()) && (objectType == typeCtor->GetObjectTypeCtor()))
-			return true;
+	// Names are unique within the factory, so the single name-match decides.
+	const ibCtorMetaValueType* typeCtor = m_factoryCtors.Find(className);
+	if (typeCtor != nullptr && objectType == typeCtor->GetObjectTypeCtor())
+		return true;
 	return ibValue::IsRegisterCtor(className, objectType);
 }
 
@@ -112,19 +109,18 @@ bool ibMetaData::IsRegisterCtor(const wxString& className, ibCtorObjectType obje
 {
 	if (className.IsEmpty())
 		return false;
-	for (auto& typeCtor : m_factoryCtors)
-		if (stringUtils::CompareString(className, typeCtor->GetClassName())
-			&& (ibCtorObjectType::ibCtorObjectType_object_meta_value == typeCtor->GetObjectTypeCtor()
-				&& refType == typeCtor->GetMetaTypeCtor()))
-			return true;
+	const ibCtorMetaValueType* typeCtor = m_factoryCtors.Find(className);
+	if (typeCtor != nullptr
+		&& ibCtorObjectType::ibCtorObjectType_object_meta_value == typeCtor->GetObjectTypeCtor()
+		&& refType == typeCtor->GetMetaTypeCtor())
+		return true;
 	return ibValue::IsRegisterCtor(className, objectType);
 }
 
 bool ibMetaData::IsRegisterCtor(const ibClassID& clsid) const
 {
-	for (auto& typeCtor : m_factoryCtors)
-		if (clsid == typeCtor->GetClassType())
-			return true;
+	if (m_factoryCtors.Find(clsid) != nullptr)
+		return true;
 	return ibValue::IsRegisterCtor(clsid);
 }
 
@@ -157,61 +153,59 @@ ibMetaID ibMetaData::GetVTByID(const ibClassID& clsid) const
 
 ibClassID ibMetaData::GetIDByVT(const ibMetaID& valueType, ibCtorObjectMetaType refType) const
 {
-	for (auto& typeCtor : m_factoryCtors) {
+	// (metaID, refType) key — metadata-specific, kept linear (not the hot clsid path).
+	ibClassID result = 0;   // RegisterCtor guarantees GetClassType() > 0, so 0 = not-found
+	m_factoryCtors.ForEach([&](const ibCtorMetaValueType* typeCtor) {
+		if (result != 0) return;
 		const ibValueMetaObject* metaValue = typeCtor->GetMetaObject();
 		wxASSERT(metaValue);
 		if (refType == typeCtor->GetMetaTypeCtor() && valueType == metaValue->GetMetaID())
-			return typeCtor->GetClassType();
-	}
+			result = typeCtor->GetClassType();
+	});
+	if (result != 0)
+		return result;
 	return ibValue::GetIDByVT(static_cast<ibValueTypes>(valueType));
 }
 
 ibCtorMetaValueType* ibMetaData::GetTypeCtor(const wxString& className) const
 {
-	for (auto& typeCtor : m_factoryCtors)
-		if (stringUtils::CompareString(className, typeCtor->GetClassName()))
-			return typeCtor;
-	return nullptr;
+	return m_factoryCtors.Find(className);   // linear by name (see ctorRegistry.h)
 }
 
 ibCtorMetaValueType* ibMetaData::GetTypeCtor(const ibClassID& clsid) const
 {
-	for (auto& typeCtor : m_factoryCtors)
-		if (clsid == typeCtor->GetClassType())
-			return typeCtor;
-	return nullptr;
+	return m_factoryCtors.Find(clsid);       // hot — O(1)
 }
 
 ibCtorMetaValueType* ibMetaData::GetTypeCtor(const ibValueMetaObject* metaValue, ibCtorObjectMetaType refType) const
 {
-	for (auto& typeCtor : m_factoryCtors)
-		if (refType == typeCtor->GetMetaTypeCtor() && metaValue == typeCtor->GetMetaObject())
-			return typeCtor;
-	return nullptr;
+	// (metaValue, refType) key — metadata-specific, kept linear.
+	ibCtorMetaValueType* result = nullptr;
+	m_factoryCtors.ForEach([&](ibCtorMetaValueType* typeCtor) {
+		if (result == nullptr && refType == typeCtor->GetMetaTypeCtor() && metaValue == typeCtor->GetMetaObject())
+			result = typeCtor;
+	});
+	return result;
 }
 
 ibCtorAbstractType* ibMetaData::GetAvailableCtor(const wxString& className) const
 {
-	for (auto& typeCtor : m_factoryCtors)
-		if (stringUtils::CompareString(className, typeCtor->GetClassName()))
-			return typeCtor;
-
+	if (ibCtorMetaValueType* typeCtor = m_factoryCtors.Find(className))
+		return typeCtor;
 	return ibValue::GetAvailableCtor(className);
 }
 
 ibCtorAbstractType* ibMetaData::GetAvailableCtor(const ibClassID& clsid) const
 {
-	for (auto& typeCtor : m_factoryCtors)
-		if (clsid == typeCtor->GetClassType())
-			return typeCtor;
-
+	if (ibCtorMetaValueType* typeCtor = m_factoryCtors.Find(clsid))
+		return typeCtor;
 	return ibValue::GetAvailableCtor(clsid);
 }
 
 std::vector<ibCtorMetaValueType*> ibMetaData::GetListCtorsByType() const
 {
 	std::vector<ibCtorMetaValueType*> retVector;
-	std::copy(m_factoryCtors.begin(), m_factoryCtors.end(), std::back_inserter(retVector));
+	m_factoryCtors.ForEach([&](ibCtorMetaValueType* t) { retVector.push_back(t); });
 	std::sort(retVector.begin(), retVector.end(), [](const ibCtorMetaValueType* a, const ibCtorMetaValueType* b) {
 		const ibValueMetaObject* ma = a->GetMetaObject(); const ibValueMetaObject* mb = b->GetMetaObject();
 		// Lexicographic strict-weak-ordering — name first, metaType as tiebreak. The
@@ -230,11 +224,13 @@ std::vector<ibCtorMetaValueType*> ibMetaData::GetListCtorsByType() const
 std::vector<ibCtorMetaValueType*> ibMetaData::GetListCtorsByType(const ibClassID& clsid, ibCtorObjectMetaType refType) const
 {
 	std::vector<ibCtorMetaValueType*> retVector;
-	std::copy_if(m_factoryCtors.begin(), m_factoryCtors.end(), std::back_inserter(retVector), [clsid, refType](ibCtorMetaValueType* t) {
+	// Note: clsid here is the metaObject's id (m->GetClassType()), NOT the ctor's —
+	// shared across refType variants, so it's a separate (non-unique) key kept linear.
+	m_factoryCtors.ForEach([&](ibCtorMetaValueType* t) {
 		const ibValueMetaObject* const m = t->GetMetaObject();
-		return refType == t->GetMetaTypeCtor() &&
-			clsid == m->GetClassType(); }
-	);
+		if (refType == t->GetMetaTypeCtor() && clsid == m->GetClassType())
+			retVector.push_back(t);
+	});
 	std::sort(retVector.begin(), retVector.end(), [](const ibCtorMetaValueType* a, const ibCtorMetaValueType* b) {
 		const ibValueMetaObject* ma = a->GetMetaObject(); const ibValueMetaObject* mb = b->GetMetaObject();
 		// Lexicographic strict-weak-ordering (see GetListCtorsByType() above).
@@ -249,7 +245,9 @@ std::vector<ibCtorMetaValueType*> ibMetaData::GetListCtorsByType(const ibClassID
 std::vector<ibCtorMetaValueType*> ibMetaData::GetListCtorsByType(ibCtorObjectMetaType refType) const
 {
 	std::vector<ibCtorMetaValueType*> retVector;
-	std::copy_if(m_factoryCtors.begin(), m_factoryCtors.end(), std::back_inserter(retVector), [refType](const ibCtorMetaValueType* t) { return refType == t->GetMetaTypeCtor(); });
+	m_factoryCtors.ForEach([&](ibCtorMetaValueType* t) {
+		if (refType == t->GetMetaTypeCtor()) retVector.push_back(t);
+	});
 	std::sort(retVector.begin(), retVector.end(), [](const ibCtorMetaValueType* a, const ibCtorMetaValueType* b) {
 		const ibValueMetaObject* ma = a->GetMetaObject(); const ibValueMetaObject* mb = b->GetMetaObject();
 		// Lexicographic strict-weak-ordering (see GetListCtorsByType() above).
