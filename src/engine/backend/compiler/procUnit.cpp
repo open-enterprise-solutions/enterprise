@@ -646,6 +646,7 @@ start_label:
 				CopyValue(*pRetValue, ibValue::CreateObject(className, cRunContext.m_lParamCount > 0 ? cRunContext.m_pRefLocVars : nullptr, cRunContext.m_lParamCount));
 			} break;
 			case OPER_SET_A:
+			case OPER_SET_SCOPE://writable member of a scope binding — identical parent+prop write
 			{//setting attribute
 				const wxString& strPropName = m_pByteCode->m_listConst[index2].GetString();
 				const long lPropNum = variable1.FindProp(strPropName);
@@ -654,6 +655,7 @@ start_label:
 				variable1.SetPropVal(lPropNum, GetValue(cvariable3));
 			} break;
 			case OPER_GET_A://get attribute
+			case OPER_GET_SCOPE://bare member of a scope binding — identical parent+prop resolve
 			{
 				ibValue* pRetValue = &variable1;
 				ibValue* pVariable2 = &variable2;
@@ -675,6 +677,25 @@ start_label:
 					*pRetValue = vRet;
 				else if (result)
 					CopyValue(*pRetValue, vRet);
+				break;
+			}
+			case OPER_GET_EXTERN://named binder handle (export) — value staged in the slot (m_param2)
+			case OPER_GET_CONTEXT://named binder handle (context: ThisObject/ThisForm) — same
+			{
+				// Lazy: the relaxed pre-flight leaves an unbound slot Undefined;
+				// copy the slot value out to the dest temp, preserving references
+				// so member access (`.X`) walks the live handle.
+				ibValue* pRetValue = &variable1;
+				if (variable2.IsReference())
+					*pRetValue = variable2;
+				else
+					CopyValue(*pRetValue, variable2);
+				break;
+			}
+			case OPER_SET_EXTERN://assign back to a named handle's slot (rare — handles are read-only)
+			case OPER_SET_CONTEXT:
+			{
+				CopyValue(variable1, GetValue(cvariable3));
 				break;
 			}
 			case OPER_CALL_METHOD://method call
@@ -1352,15 +1373,34 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 	// the binder's m_slots vector matches the entry's m_slotIndex
 	// (= runtime frame slot), so we copy 1:1 into m_pRefLocVars.
 	for (const auto& v : cByteCode.m_listVar) {
-		if (!v.IsBindRequired()) continue;
 		const size_t slot = static_cast<size_t>(v.m_slotIndex);
 		ibValue* val = (slot < bindings.size()) ? bindings[slot] : nullptr;
+		if (!v.IsBindRequired()) {
+			// Bound LOCAL (e.g. a constant's Value backed by &m_constValue): the
+			// binder seeded its slot — fill it, no required/type pre-flight. An
+			// ordinary unbound local leaves a null binding and keeps its frame
+			// default; ContextProp/Export carry no binder slot at all.
+			if (val != nullptr)
+				m_cCurContext.m_pRefLocVars[slot] = val;
+			continue;
+		}
 		if (val == nullptr) {
+			// EXPORT: present-or-not is fine — the slot stays Undefined and the
+			// OPER_GET_EXTERN handler copies it out lazily.
+			if (v.IsExternal()) continue;
+			// CONTEXT (ThisObject / ThisForm): a required, typed self-handle —
+			// it must be wired before the module runs.
 			ibBackendCoreException::Error(
 				_("Required binding not provided: '%s' (slot %zu)"),
 				v.m_strRealName, slot);
 		}
-		if (v.m_clsid != 0 && val->GetClassType() != v.m_clsid) {
+		// Type check only for CONTEXT bindings (ThisObject / ThisForm) — a stable,
+		// typed self-handle worth validating against the compile-time stamp (its
+		// VALUE mutates, hence lazy access, but its TYPE is fixed). EXPORT bindings
+		// (RegisterRecords / Filter / Controls / DataSource) are loose: present or
+		// not, this type or that — no difference to the script, so the check is
+		// pointless there.
+		if (v.IsContext() && v.m_clsid != 0 && val->GetClassType() != v.m_clsid) {
 			ibBackendCoreException::Error(
 				_("Binding type mismatch for '%s': expected clsid %u, got %u"),
 				v.m_strRealName,

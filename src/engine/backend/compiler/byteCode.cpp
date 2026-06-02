@@ -72,16 +72,24 @@ bool ibByteCode::ResolveAndVerifyDependencies()
 // ibByteBinder — per-execution binding session                       //
 ////////////////////////////////////////////////////////////////////////
 
-// m_slots is sized to (max m_slotIndex among External/Context entries) + 1
-// so SetVar / pre-flight indexing by slot is in-range. Local / ContextProp
-// entries are skipped — they're not "must-bind" and don't consume a slot
-// in the binder (Locals come from frame init, ContextProps go through
-// OPER_GET_A on parent).
+// m_slots is sized to (max m_slotIndex among bindable entries) + 1 so SetVar /
+// pre-flight indexing by slot is in-range. Bindable = External/Context (must-bind)
+// plus plain Local (a bound local like a constant's Value). ContextProp is skipped
+// — it goes through OPER_GET_A on parent, not a binder slot.
+//
+// Including ALL Local slots (not just bound ones) is REQUIRED, not cosmetic:
+// SetVar writes m_slots[slotIndex] with NO bounds check, and the bytecode var
+// info carries no "this local is bound" flag (the bind list lives in the compile
+// module, not the bc), so the binder cannot tell a bound local from an ordinary
+// one. Sizing to the max Local slot guarantees a bound local's SetVar is in-range.
+// The cost is a few extra null slots for ordinary locals — they are never SetVar'd
+// and the Execute pre-flight skips null. The vector is built once per Run, not per
+// call, so the frame-sized allocation is negligible.
 static size_t computeBinderSlotCount(const std::vector<ibByteCode::ibByteCodeVarInfo>& vars)
 {
 	long maxSlot = -1;
 	for (const auto& v : vars) {
-		if (!v.IsBindRequired()) continue;
+		if (!v.IsBindable()) continue;
 		if (v.m_slotIndex > maxSlot) maxSlot = v.m_slotIndex;
 	}
 	return static_cast<size_t>(maxSlot + 1);
@@ -97,13 +105,20 @@ ibByteBinder::ibByteBinder(const std::vector<ibByteCode::ibByteCodeVarInfo>& var
 void ibByteBinder::SetVar(const wxString& name, ibValue* value)
 {
 	for (const auto& v : m_vars) {
-		if (!v.IsBindRequired()) continue;
+		if (!v.IsBindable()) continue;
 		if (!stringUtils::CompareString(v.m_strRealName, name)) continue;
 		m_slots[v.m_slotIndex] = value;
 		return;
 	}
-	// Name not declared as External/Context — silently ignored. Caller
-	// may pass extras; the runtime only reads what bytecode declared.
+	// Name not declared as a bindable (External/Context/Local) — silently
+	// ignored. Caller may pass extras; the runtime only reads what bytecode
+	// declared.
+	//
+	// Matching a plain Local by name is safe despite being broader than the old
+	// External/Context-only match: var-table names are unique, and a bind name IS
+	// its table entry (Pass 1b registers "Value" as the Local), so there is no
+	// separate user local of the same name to collide with — SetVar only ever
+	// runs with controlled bind names ("Value" / "ThisObject" / "Controls" / …).
 }
 
 ////////////////////////////////////////////////////////////////////////

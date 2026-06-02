@@ -238,7 +238,7 @@ bool ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 	if (!appData->DesignerMode() && m_compileModule != nullptr) {
 		try {
 			InitializeRuntime();     // ensure root's ProcUnit exists
-			Run();                    // execute main module top-level
+			Run();                    // execute main module top-level (delta defaults true → runs the body)
 		}
 		catch (const ibBackendException& err) {
 			wxLogWarning(_("AttachRuntime main: %s"), err.GetErrorDescription());

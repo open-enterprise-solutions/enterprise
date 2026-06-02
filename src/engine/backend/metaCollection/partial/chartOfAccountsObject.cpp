@@ -76,7 +76,7 @@ void ibValueRecordDataObjectChartOfAccounts::PrepareNames() const
 	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
 	m_methodHelper->AppendProc(wxT("Lock"),   wxT("Lock()"));
 	m_methodHelper->AppendProc(wxT("Unlock"), wxT("Unlock()"));
-	m_methodHelper->AppendProp(wxT("ThisObject"), true, false, true, eThisObject, eSystem);
+	// ThisObject is bound (BindContextVariable in InitializeObject) — no manual AppendProp.
 	wxString objectName;
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (object->IsDeleted()) continue;
@@ -108,7 +108,6 @@ bool ibValueRecordDataObjectChartOfAccounts::GetPropVal(const long lPropNum, ibV
 		if (m_metaObject->IsDataReference(lPropData)) { pvarPropVal = GetReference(); return true; }
 		return GetValueByMetaID(lPropData, pvarPropVal);
 	}
-	else if (lPropAlias == eSystem) { switch (m_methodHelper->GetPropData(lPropNum)) { case eThisObject: pvarPropVal = GetValue(); return true; } }
 	return false;
 }
 

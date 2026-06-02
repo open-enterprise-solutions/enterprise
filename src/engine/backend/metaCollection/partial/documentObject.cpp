@@ -146,11 +146,6 @@ enum Func {
 	eUnlock
 };
 
-enum Prop {
-	eThisObject,
-	eRegisterRecords
-};
-
 void ibValueRecordDataObjectDocument::PrepareNames() const
 {
 	m_methodHelper->ClearHelper();
@@ -167,8 +162,10 @@ void ibValueRecordDataObjectDocument::PrepareNames() const
 	m_methodHelper->AppendProc(wxT("Lock"),   wxT("Lock()"));
 	m_methodHelper->AppendProc(wxT("Unlock"), wxT("Unlock()"));
 
-	m_methodHelper->AppendProp(wxT("ThisObject"), true, false, true, eThisObject, eSystem);
-	m_methodHelper->AppendProp(wxT("RegisterRecords"), true, false, true, eRegisterRecords, eSystem);
+	// No system props on the document helper: ThisObject (contextual) and
+	// RegisterRecords (exported) are BOUND in InitializeObject
+	// (BindContextVariable / BindExportVariable) — the single source for both the
+	// editor surface (compile module) and runtime (binder), like ThisForm.
 
 	//set object name 
 	wxString objectName;
@@ -204,6 +201,7 @@ void ibValueRecordDataObjectDocument::PrepareNames() const
 	}
 
 	ExportNamesToHelper(m_methodHelper, eProcUnit);
+	FillHelperFromBinds(m_methodHelper, eProcUnit);   // ThisObject.RegisterRecords
 
 	m_registerRecords->PrepareNames();
 }
@@ -231,10 +229,13 @@ bool ibValueRecordDataObjectDocument::GetPropVal(const long lPropNum, ibValue& p
 {
 	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
-		if (m_procUnit != nullptr) {
-			return m_procUnit->GetPropVal(
-				GetPropName(lPropNum), pvarPropVal
-			);
+		if (m_procUnit != nullptr &&
+			m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
+			return true;
+		// Bound handle (RegisterRecords) — live bind value directly (Designer/runtime).
+		if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
+			pvarPropVal = bound;
+			return true;
 		}
 	}
 	else if (lPropAlias == eProperty || lPropAlias == eTable) {
@@ -244,17 +245,6 @@ bool ibValueRecordDataObjectDocument::GetPropVal(const long lPropNum, ibValue& p
 			return true;
 		}
 		return GetValueByMetaID(lPropData, pvarPropVal);
-	}
-	else if (lPropAlias == eSystem) {
-		switch (m_methodHelper->GetPropData(lPropNum))
-		{
-		case eRegisterRecords:
-			pvarPropVal = m_registerRecords->GetValue();
-			return true;
-		case eThisObject:
-			pvarPropVal = GetValue();
-			return true;
-		}
 	}
 	return false;
 }

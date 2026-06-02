@@ -150,6 +150,10 @@ struct ibByteCode {
 		bool IsContextProp() const { return m_kind == ibVarKind::ContextProp; }
 		// "Required to bind" — runtime binder fills these slots.
 		bool IsBindRequired() const { return m_kind == ibVarKind::External || m_kind == ibVarKind::Context; }
+		// "Bindable" — the binder MAY seed this slot. Adds plain Local (a bound
+		// local like a constant's Value): not must-bind, no pre-flight checks,
+		// filled only when the binder actually carries a value for it.
+		bool IsBindable() const { return IsBindRequired() || m_kind == ibVarKind::Local; }
 		// "User frame var" — visible to debugger's locals view.
 		bool IsUserLocal()    const { return m_kind == ibVarKind::Local || m_kind == ibVarKind::Export; }
 

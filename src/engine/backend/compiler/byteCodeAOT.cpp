@@ -95,7 +95,14 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // integers, so a v9 reader loading a v10-written blob (or vice versa)
 // would dispatch the wrong handler on every post-shift opcode. Bump
 // rejects v9 → safe recompile + repopulate. Payload layout unchanged.
-constexpr uint16_t kAOTFormatVersion = 12; // CLSID encoding globally switched from 8-byte ASCII pack to FNV-1a 64 hash
+// v13 (2026-06-02): bind-kind access opcodes added before OPER_END
+// (OPER_GET/SET_EXTERN, OPER_GET/SET_SCOPE, OPER_GET/SET_CONTEXT). OPER_END
+// shifts +6, so TYPE_DELTA1 (= OPER_END+1) and every typed-op opcode
+// (oper + k*DELTA) shift in numeric value; ContextProp also now emits
+// OPER_GET_SCOPE/SET_SCOPE instead of OPER_GET_A/SET_A. v12 blobs persist raw
+// m_numOper integers → a v12 reader would dispatch the wrong handler on every
+// shifted opcode. Bump rejects v12 → safe recompile + repopulate.
+constexpr uint16_t kAOTFormatVersion = 13;
 constexpr uint16_t kAOTFlagPortable  = 0x0001;       // unused — host-endian today
 
 // Sentinel for an over-large collection — guards Deserialize against

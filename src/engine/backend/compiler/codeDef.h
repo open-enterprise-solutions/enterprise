@@ -124,6 +124,19 @@ enum { //instruction types
 	OPER_LFUNC,
 	OPER_ENDLFUNC,
 	OPER_CALL_LAMBDA,
+	// Bound-variable access by bind-kind — 1:1 with Bind{Context,Scope,Export}Variable.
+	// Resolve the bound value LAZILY at access (vs the eager binder pre-flight that
+	// pre-fills frame slots and rejects null — the "Required binding not provided"
+	// trap), and carry the kind explicitly so interpreter and designer dispatch on it.
+	//   EXTERN / CONTEXT — named handle (RegisterRecords / Filter / ThisObject / ...)
+	//   SCOPE            — bare member resolved through the scope-provider chain
+	// Operand layout mirrors OPER_GET_A / OPER_SET_A (see procUnit dispatch).
+	OPER_GET_EXTERN,
+	OPER_SET_EXTERN,
+	OPER_GET_SCOPE,
+	OPER_SET_SCOPE,
+	OPER_GET_CONTEXT,
+	OPER_SET_CONTEXT,
 	OPER_END,
 };
 

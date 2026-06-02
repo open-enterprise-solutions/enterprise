@@ -283,7 +283,9 @@ bool ibValueForm::InitializeFormModule()
 		// and pick up the parent's scope chain on creation. Run is
 		// Designer-guarded; Compile internally too. Session linkage
 		// flows through the parent chain (descriptor в†’ root в†’ session).
-		BindContextVariable(thisForm, this);
+		BindContextVariable(thisForm, this);                                          // contextual
+		BindExportVariable(wxT("Controls"), m_formCollectionControl);                 // exported
+		BindExportVariable(wxT("DataSource"), dynamic_cast<ibValue*>(m_sourceObject)); // exported — source set-once before this (InitializeForm); null (sourceless/designer) is fine since the pre-flight is lazy
 		InitializeRuntime();
 
 		try {

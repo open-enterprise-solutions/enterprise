@@ -560,6 +560,20 @@ protected:
 	ibPropertyCategory* m_categoryPresentation = ibPropertyObject::CreatePropertyCategory(wxT("Presentation"), _("Presentation"));
 	ibPropertyBoolean* m_propertyQuickChoice = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryPresentation, wxT("QuickChoice"), _("Quick choice"), false);
 	ibPropertyContainer<>* m_propertyAttributeReference = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("Reference"), _("Reference"), wxEmptyString, ibValue::GetIDByVT(ibValueTypes::TYPE_EMPTY)));
+
+protected:
+
+	// "Reference" is the predefined column declared at THIS level, so its push must
+	// live here. The whole reference subtree routes through
+	// ibValueMetaObjectRecordDataRef::FillArrayObjectByPredefinedAttribute —
+	// EnumRef overrides it, MutableRef (→ catalog / document / charts) calls it as
+	// parent. If only a leaf pushed Reference, MutableRef's parent call would
+	// resolve to a base without it and the whole subtree would silently drop
+	// "Reference" (the regression this fixes). See the additive-contract note below.
+	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
+		array.push_back(m_propertyAttributeReference->GetMetaObject());
+		return true;
+	}
 };
 
 //meta object with reference - for enumeration
@@ -1593,8 +1607,8 @@ public:
 
 	virtual ~ibValueRecordDataObjectRef();
 
-	bool InitializeObject(const ibGuid& copyGuid = wxNullGuid);
-	bool InitializeObject(ibValueRecordDataObjectRef* source, bool generate = false);
+	virtual bool InitializeObject(const ibGuid& copyGuid = wxNullGuid);
+	virtual bool InitializeObject(ibValueRecordDataObjectRef* source, bool generate = false);
 
 	virtual bool WriteObject() = 0;
 	virtual bool DeleteObject() = 0;
@@ -1923,6 +1937,12 @@ protected:
 public:
 	virtual ~ibValueRecordDataObjectRecorderRef();
 
+	// Recorder init — binds RegisterRecords (exported) before the base compiles,
+	// then delegates to the base (ThisObject bind + compile). Shared by all
+	// recorder / document-like objects; both creation paths need the bind.
+	virtual bool InitializeObject(const ibGuid& copyGuid = wxNullGuid) override;
+	virtual bool InitializeObject(ibValueRecordDataObjectRef* source, bool generate = false) override;
+
 	// Public helpers for register access from form scripts / Document
 	// subclass override paths.
 	void ClearRecordSet()  { wxASSERT(m_registerRecords); m_registerRecords->ClearRecordSet(); }
@@ -2247,6 +2267,17 @@ public:
 
 	//get metaData from object
 	virtual const ibValueMetaObjectRegisterData* GetMetaObject() const { return m_metaObject; }
+
+	// Lazy compile-module creation: the record-set compiles against the
+	// register's record-set (object) module. The base GetMetaForCompile reads
+	// through m_compileModule — circular (null at the first Bind…), so name the
+	// module directly; otherwise EnsureCompileModule never builds the compile
+	// module and the designer editor / OnTextChange sees GetCompileModule()==null.
+	virtual const class ibValueMetaObjectModuleBase* GetMetaForCompile() const override {
+		if (auto* m = GetMetaObject())
+			return m->GetObjectModule();
+		return nullptr;
+	}
 
 #pragma region _tabular_data_
 	//get metaData from object

@@ -62,9 +62,13 @@ public:
 	//     EnumManager / SystemManager. Replaces the old scopeContext=true flag.
 	//   BindExportVariable  — export variable (m_listExternValue, name VISIBLE):
 	//     global constants, common modules surfaced as module-valued names.
+	//   BindLocalVariable   — plain writable LOCAL (m_listLocalValue, kind=Local):
+	//     binder fills the frame slot at init, module reads/writes it as an ordinary
+	//     local — no required/type pre-flight, no member access. E.g. a constant's Value.
 	void BindContextVariable(const wxString& name, class ibValue* value);
 	void BindScopeVariable(const wxString& name, class ibValue* value);
 	void BindExportVariable(const wxString& name, class ibValue* value);
+	void BindLocalVariable(const wxString& name, class ibValue* value);
 
 	// Symmetric teardown for the Bind… family. RemoveVariable erases the name
 	// from BOTH the extern and context maps, so one Unbind undoes any flavour
@@ -83,9 +87,13 @@ public:
 	// initialization entry run at object/form creation, fires handlers
 	// registered at module scope. Skips in Designer mode (no execution
 	// ever) and when either side of the pair is absent. delta matches
-	// ibProcUnit::Execute's semantics — forms / constants pass true
-	// (preserve caller's stack state); record objects default to false.
-	void Run(bool delta = false);
+	// ibProcUnit::Execute's semantics: delta=true EXECUTES the module
+	// top-level body (the default — almost every descriptor wants its
+	// body to run on init: forms, constants, record objects). Pass false
+	// to register the module's functions WITHOUT running the body — only
+	// common modules do that (moduleManager.cpp), since a common module's
+	// top-level is just declarations.
+	void Run(bool delta = true);
 
 	// Low-level execute — unconditional (no Designer guard). Prefer
 	// Run() in subclass code; Execute() remains for compatibility and
@@ -97,11 +105,12 @@ public:
 	//     filled via SetVar). Preferred — descriptors fill bindings at
 	//     execution time, not at compile-time staging.
 	//   - Execute(delta): legacy fallback — builds binder from compile-
-	//     side maps (m_listExternValue / m_listContextValue) populated
-	//     by AddContextVariable at module init. Kept for paths that
-	//     haven't migrated to per-execute binding yet.
+	//     side maps (m_listExternValue / m_listContextValue /
+	//     m_listLocalValue) populated by the Bind*Variable calls at module
+	//     init. Kept for paths that haven't migrated to per-execute binding
+	//     yet. delta semantics as in Run() above.
 	void Execute(ibByteBinder& br);
-	void Execute(bool delta = false);
+	void Execute(bool delta = true);
 
 	ibRuntimeModuleDataObject();
 	ibRuntimeModuleDataObject(ibCompileModule* compileCode);
@@ -224,6 +233,23 @@ protected:
 			helper->AppendProp(v.m_strRealName, v, alias);
 		}
 	}
+
+	// Materialise this descriptor's EXPORT bindings (RegisterRecords / Filter /
+	// Controls / DataSource) into a value's method-helper, so member access
+	// (ThisObject.RegisterRecords / ThisForm.Controls) resolves through the same
+	// path as module exports: GetPropVal(alias=eProcUnit) → m_procUnit->
+	// GetPropVal(name) → the binder-filled frame slot. Reads the compile-module
+	// bind map (present in BOTH Designer and runtime) — unlike ExportNamesToHelper
+	// which reads bytecode (runtime only). Context binds (ThisObject / ThisForm
+	// themselves) are skipped: they're the handles, not members of themselves.
+	// Out-of-line — needs the complete ibCompileModule (only fwd-declared here).
+	void FillHelperFromBinds(ibValue::ibValueMethodHelper* helper, long alias) const;
+
+	// Live value of an EXPORT binding by name (the m_listExternValue entry —
+	// the same stable object/proxy BindExportVariable staged). Present in BOTH
+	// Designer and runtime, so it resolves ThisForm.Controls / ThisObject.
+	// RegisterRecords without a ProcUnit. Returns nullptr if not a bound name.
+	ibValue* GetBoundValue(const wxString& name) const;
 
 	// Lazy-create m_compileModule from the descriptor's meta-object (shared by
 	// all Bind* entry points). Propagates the parent's compile scope chain.

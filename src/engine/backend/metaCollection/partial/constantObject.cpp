@@ -44,6 +44,12 @@ bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataOb
 	// after-fact cascade needed.
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(wxT("ThisObject"), this);
+	// Constant's Value (Значение) is the module's own writable local — the
+	// binder seeds the frame slot with &m_constValue, so `Value` / `Value = …`
+	// inside the constant module read/write the backing member directly. No
+	// AppendProp + eSystem GetPropVal/SetPropVal round-trip. The address is
+	// stable (member); the value is filled by GetConstValue() just below.
+	BindLocalVariable(wxT("Value"), &m_constValue);
 
 	try {
 		m_constValue = GetConstValue();
@@ -209,10 +215,9 @@ bool ibValueRecordDataObjectConstant::GetValueByMetaID(const ibMetaID& id, ibVal
 void ibValueRecordDataObjectConstant::PrepareNames() const
 {
 	m_methodHelper->ClearHelper();
-	m_methodHelper->AppendProp(wxT("Value"),
-		true, true, eValue, eSystem
-	);
-
+	// "Value" is no longer a host prop — it's a bound LOCAL of the constant
+	// module (see BindLocalVariable in InitializeObject). Only the module's
+	// own exported names surface here.
 	ExportNamesToHelper(m_methodHelper, eProcUnit);
 }
 
@@ -226,10 +231,6 @@ bool ibValueRecordDataObjectConstant::SetPropVal(const long lPropNum, const ibVa
 			);
 		}
 	}
-	else if (lPropAlias == eSystem) {
-		m_constValue = varPropVal;
-		return true;
-	}
 	return false;
 }
 
@@ -241,14 +242,6 @@ bool ibValueRecordDataObjectConstant::GetPropVal(const long lPropNum, ibValue& p
 			return m_procUnit->GetPropVal(
 				GetPropName(lPropNum), pvarPropVal
 			);
-		}
-	}
-	else if (lPropAlias == eSystem) {
-		switch (m_methodHelper->GetPropData(lPropNum))
-		{
-		case eValue:
-			pvarPropVal = m_constValue;
-			return true;
 		}
 	}
 	return false;

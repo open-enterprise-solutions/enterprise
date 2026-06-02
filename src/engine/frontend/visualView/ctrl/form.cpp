@@ -187,12 +187,9 @@ void ibValueForm::PrepareNames() const
 	//default element
 	m_methodHelper->ClearHelper();
 
-	// ThisForm is a bc-internal self-prop (ThisForm of binding "ThisForm") —
-	// keep scoped so IntelliSense / debug-watch / eval don't surface it.
-	// Controls / DataSource are real form properties — must stay visible.
-	m_methodHelper->AppendProp(thisForm, true, false, true, eThisForm, eSystem);
-	m_methodHelper->AppendProp(wxT("Controls"), true, false, false, eControls, eSystem);
-	m_methodHelper->AppendProp(wxT("DataSource"), true, false, false, eDataSource, eSystem);
+	// ThisForm / Controls / DataSource are BOUND in formObject (context / export).
+	// The bind is the single source; surfacing to editor + runtime is the
+	// infrastructure's job — no manual AppendProp here.
 	m_methodHelper->AppendProp(wxT("Modified"), eModified, eSystem);
 	m_methodHelper->AppendProp(wxT("FormOwner"), eFormOwner, eSystem);
 	m_methodHelper->AppendProp(wxT("UniqueKey"), eUniqueKey, eSystem);
@@ -218,6 +215,7 @@ void ibValueForm::PrepareNames() const
 	}
 
 	ExportNamesToHelper(m_methodHelper, eProcUnit);
+	FillHelperFromBinds(m_methodHelper, eProcUnit);   // ThisForm.Controls / ThisForm.DataSource
 
 	for (auto control : GetControlList()) {
 		if (!control->HasValueInControl())
@@ -275,10 +273,14 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
-		if (m_procUnit != nullptr) {
-			return m_procUnit->GetPropVal(
-				GetPropName(lPropNum), pvarPropVal
-			);
+		if (m_procUnit != nullptr &&
+			m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
+			return true;
+		// Bound handle (Controls / DataSource) — resolve the live bind value
+		// directly. Works in the Designer (no ProcUnit) and as a runtime fallback.
+		if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
+			pvarPropVal = bound;
+			return true;
 		}
 	}
 	else if (lPropAlias == eProperty) {
@@ -287,15 +289,6 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	else if (lPropAlias == eSystem) {
 		switch (m_methodHelper->GetPropData(lPropNum))
 		{
-		case eThisForm:
-			pvarPropVal = GetValue();
-			return true;
-		case eControls:
-			pvarPropVal = m_formCollectionControl;
-			return true;
-		case eDataSource:
-			pvarPropVal = dynamic_cast<ibValue*>(m_sourceObject);
-			return true;
 		case eModified:
 			pvarPropVal = IsModified();
 			return true;

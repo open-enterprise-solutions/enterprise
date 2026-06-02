@@ -166,6 +166,14 @@ void ibCompileCode::PrepareModuleData()
 		});
 	}
 
+	// Pass 1b: local binds — plain frame locals (bExport=false, NO m_bExternal /
+	// m_bContext stamp → kind=Local). The binder fills the slot at runtime (no
+	// required/type pre-flight); the module reads/writes it as a normal local
+	// (e.g. a constant's Value backed by &m_constValue).
+	for (auto& localValue : m_listLocalValue) {
+		m_rootContext->AddVariable(localValue.first, wxEmptyString, false);
+	}
+
 	// Pass 2: context values — currently all self-referencing.
 	// Stamp scoped (per-instance "self" handles like ThisForm) and
 	// clsid onto the compile-context entry; the bc mirror then carries
@@ -212,8 +220,8 @@ void ibCompileCode::PrepareModuleData()
 				continue;
 			mainContext->PushVariable(propName, pair.first, i);
 			// Non-self per-instance handles (Controls / DataSource of
-			// ThisForm; RegisterRecords of ThisObject) — flag scoped
-			// from helper.
+			// ThisForm) — flag scoped from helper. (RegisterRecords of a
+			// document is EXPORTED, not scoped — see documentObject.cpp.)
 			if (contextValue->IsPropScoped(i)) {
 				auto pushed = std::find_if(mainContext->m_listVariable.begin(), mainContext->m_listVariable.end(),
 					[&propName](const auto& kv) { return stringUtils::CompareString(propName, kv.first); });
@@ -642,6 +650,18 @@ void ibCompileCode::AddContextVariable(const wxString& strVarName, ibValue* pVal
 	m_listContextValue[strVarName] = { pValue, scopeContext };
 
 	//set the flag for recompilation
+	m_changedCode = true;
+}
+
+// Bound LOCAL — the name resolves to a plain frame local (kind=Local), but the
+// binder fills its slot at init with pValue. The module body reads/writes it as a
+// normal local (e.g. a constant's Value, backed by &m_constValue).
+void ibCompileCode::AddLocalVariable(const wxString& strVarName, ibValue* pValue)
+{
+	if (strVarName.IsEmpty())
+		return;
+
+	m_listLocalValue[strVarName] = pValue;
 	m_changedCode = true;
 }
 
@@ -3589,37 +3609,60 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 	else { //this is a variable call
 		std::shared_ptr<ibCompileContext::ibVariable> foundedVar = nullptr; numIsSet = 1;
 
-		// Kind-aware identifier resolve. Three outcomes:
-		//   - ContextProp (Catalogs of Manager) — m_strContext set on the
-		//     resolved entry → emit OPER_GET_A / OPER_SET_A on the parent
-		//     binding + prop name const.
-		//   - bare binding (ThisForm) or regular var — fall through to
-		//     GetVariable's frame-slot emission (handles Local / Context
-		//     bindings uniformly via the compile-context's slot table).
-		//   - not found — GetVariable also covers the auto-add path.
-		const bool isContextProp =
-			m_rootContext->FindVariable(strRealName, foundedVar, true) &&
-			foundedVar && !foundedVar->m_strContext.IsEmpty();
+		// Kind-aware identifier resolve — promote the bind-kind to a dedicated
+		// access opcode (1:1 with Bind{Context,Scope,Export}Variable):
+		//   - ContextProp (Catalogs of a Manager scope) → OPER_GET_SCOPE /
+		//     OPER_SET_SCOPE on the parent (scope-provider) binding + member const.
+		//   - External binding (RegisterRecords / Filter / Controls / DataSource)
+		//     → OPER_GET_EXTERN / OPER_SET_EXTERN on the handle's slot.
+		//   - Context binding (ThisObject / ThisForm) → OPER_GET_CONTEXT /
+		//     OPER_SET_CONTEXT on the handle's slot.
+		//   - regular var / not found → GetVariable's frame-slot emission.
+		m_rootContext->FindVariable(strRealName, foundedVar, true);
+		const bool isScope   = foundedVar && !foundedVar->m_strContext.IsEmpty();
+		const bool isExtern  = foundedVar && foundedVar->m_strContext.IsEmpty() && foundedVar->m_bExternal;
+		const bool isContext = foundedVar && foundedVar->m_strContext.IsEmpty() && foundedVar->m_bContext && !foundedVar->m_bExternal;
 
-		if (isContextProp) {
+		if (isScope) {
 			ibByteUnit code;
 			AddLineInfo(code);
 			const int numConst = GetConstString(strRealName);
 			if (IsNextDelimeter('=') && numPrevSet == 1) {
 				GETDelimeter('='); numIsSet = 0;
-				code.m_numOper = OPER_SET_A;
-				code.m_param1 = context->GetVariable(foundedVar->m_strContext, true, false, true);//variable for which the attribute is called
-				code.m_param2.m_numIndex = numConst;//number of the called method from the list of encountered attributes and methods
+				code.m_numOper = OPER_SET_SCOPE;
+				code.m_param1 = context->GetVariable(foundedVar->m_strContext, true, false, true);//scope-provider binding
+				code.m_param2.m_numIndex = numConst;//member name const index
 				code.m_param3 = GetExpression(context);
 				m_cByteCode.m_listCode.emplace_back(std::move(code));
 				return variable;
 			}
 			else {
-				code.m_numOper = OPER_GET_A;
-				code.m_param2 = context->GetVariable(foundedVar->m_strContext, true, false, true);//variable for which the attribute is called
-				code.m_param3.m_numIndex = numConst;//number of the attribute to be called from the list of attributes and methods encountered
+				code.m_numOper = OPER_GET_SCOPE;
+				code.m_param2 = context->GetVariable(foundedVar->m_strContext, true, false, true);//scope-provider binding
+				code.m_param3.m_numIndex = numConst;//member name const index
 				variable = context->CreateVariable();
-				code.m_param1 = variable;// variable into which the value is returned
+				code.m_param1 = variable;// dest temp
+				m_cByteCode.m_listCode.emplace_back(std::move(code));
+			}
+		}
+		else if (isExtern || isContext) {
+			ibByteUnit code;
+			AddLineInfo(code);
+			const long getOp = isExtern ? OPER_GET_EXTERN : OPER_GET_CONTEXT;
+			const long setOp = isExtern ? OPER_SET_EXTERN : OPER_SET_CONTEXT;
+			if (IsNextDelimeter('=') && numPrevSet == 1) {
+				GETDelimeter('='); numIsSet = 0;
+				code.m_numOper = setOp;
+				code.m_param1 = context->GetVariable(strRealName, true, false);//handle slot
+				code.m_param3 = GetExpression(context);
+				m_cByteCode.m_listCode.emplace_back(std::move(code));
+				return variable;
+			}
+			else {
+				code.m_numOper = getOp;
+				code.m_param2 = context->GetVariable(strRealName, true, false);//handle slot
+				variable = context->CreateVariable();
+				code.m_param1 = variable;// dest temp
 				m_cByteCode.m_listCode.emplace_back(std::move(code));
 			}
 		}

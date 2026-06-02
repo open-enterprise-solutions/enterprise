@@ -1604,9 +1604,8 @@ void ibValueRecordDataObject::PrepareNames() const
 	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
 	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
 
-	m_methodHelper->AppendProp(thisObject,
-		true, false, eThisObject, eSystem
-	);
+	// ThisObject is bound (BindContextVariable in InitializeObject) — single
+	// source for editor + runtime; no manual AppendProp.
 
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
 	wxASSERT(metaObject);
@@ -1680,14 +1679,6 @@ bool ibValueRecordDataObject::GetPropVal(const long lPropNum, ibValue& pvarPropV
 		return GetValueByMetaID(
 			m_methodHelper->GetPropData(lPropNum), pvarPropVal
 		);
-	}
-	else if (lPropAlias == eSystem) {
-		switch (m_methodHelper->GetPropData(lPropNum))
-		{
-		case eThisObject:
-			pvarPropVal = GetValue();
-			return true;
-		}
 	}
 	return false;
 }
@@ -2634,6 +2625,27 @@ void ibValueRecordDataObjectRecorderRef::InitRegisterRecords()
 	m_registerRecords = new ibRecorderRegister(this);
 }
 
+// RegisterRecords — EXPORTED context variable, bound BEFORE the base compiles so
+// the module resolves it. SetParent first so the lazily-built compile module gets
+// the scope chain; the base re-SetParents (idempotent), binds ThisObject and
+// compiles. The bind is the single source for both designer (compile module only —
+// m_binder null) and runtime (binder). Shared by all recorder/document-like objects.
+bool ibValueRecordDataObjectRecorderRef::InitializeObject(const ibGuid& copyGuid)
+{
+	ibRuntimeModuleDataObject::SetParent(ibSession::EditModuleManagerFor(m_metaObject->GetMetaData()));
+	ibRecorderRegister* recordSet = m_registerRecords;
+	BindExportVariable(wxT("RegisterRecords"), recordSet);
+	return ibValueRecordDataObjectRef::InitializeObject(copyGuid);
+}
+
+bool ibValueRecordDataObjectRecorderRef::InitializeObject(ibValueRecordDataObjectRef* source, bool generate)
+{
+	ibRuntimeModuleDataObject::SetParent(ibSession::EditModuleManagerFor(m_metaObject->GetMetaData()));
+	ibRecorderRegister* recordSet = m_registerRecords;
+	BindExportVariable(wxT("RegisterRecords"), recordSet);
+	return ibValueRecordDataObjectRef::InitializeObject(source, generate);
+}
+
 bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMode, ibDocumentPostingMode postingMode)
 {
 	// Posting pre-guard: leaf-specific check (Document's DeletionMark
@@ -3101,7 +3113,8 @@ bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* sour
 	wxASSERT(moduleManager);
 
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
-	BindContextVariable(thisObject, this);
+	BindContextVariable(thisObject, this);                   // contextual
+	BindExportVariable(wxT("Filter"), m_recordSetKeyValue);  // exported — register filter/key
 
 	try {
 		Compile();

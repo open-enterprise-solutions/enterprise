@@ -27,12 +27,6 @@ enum func
 	eGetMetadataRecordSet,
 };
 
-enum prop
-{
-	eThisObject,
-	eFilter
-};
-
 //****************************************************************************
 //*                              Support methods                             *
 //****************************************************************************
@@ -52,8 +46,8 @@ void ibValueRecordSetObjectAccumulationRegister::PrepareNames() const
 	m_methodHelper->AppendFunc(wxT("Selected"), wxT("Selected()"));
 	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
 
-	m_methodHelper->AppendProp(wxT("ThisObject"), true, false, true, prop::eThisObject, wxNOT_FOUND);
-	m_methodHelper->AppendProp(wxT("Filter"), true, false, prop::eFilter, wxNOT_FOUND);
+	// ThisObject + Filter are bound in InitializeObject (context / export) —
+	// no manual prop AppendProp on the record-set helper.
 }
 
 bool ibValueRecordSetObjectAccumulationRegister::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -63,16 +57,6 @@ bool ibValueRecordSetObjectAccumulationRegister::SetPropVal(const long lPropNum,
 
 bool ibValueRecordSetObjectAccumulationRegister::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	switch (lPropNum)
-	{
-	case prop::eThisObject:
-		pvarPropVal = this;
-		return true;
-	case prop::eFilter:
-		pvarPropVal = m_recordSetKeyValue;
-		return true;
-	}
-
 	return false;
 }
 

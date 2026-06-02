@@ -81,6 +81,27 @@ ibCompileModule* ibRuntimeModuleDataObject::EnsureCompileModule()
 	return m_compileModule;
 }
 
+// See header. Append the EXPORT bindings as eProcUnit-aliased props so member
+// access (ThisForm.Controls / ThisObject.RegisterRecords) resolves them via the
+// descriptor's ProcUnit, exactly like ExportNamesToHelper does for module
+// exports. Context binds are the self-handles — skipped (no ThisForm.ThisForm).
+void ibRuntimeModuleDataObject::FillHelperFromBinds(ibValue::ibValueMethodHelper* helper, long alias) const
+{
+	if (helper == nullptr) return;
+	const ibCompileModule* cm = GetCompileModule();
+	if (cm == nullptr) return;
+	for (const auto& kv : cm->m_listExternValue)
+		helper->AppendProp(kv.first, wxNOT_FOUND, alias);
+}
+
+ibValue* ibRuntimeModuleDataObject::GetBoundValue(const wxString& name) const
+{
+	const ibCompileModule* cm = GetCompileModule();
+	if (cm == nullptr) return nullptr;
+	auto it = cm->m_listExternValue.find(name);
+	return (it != cm->m_listExternValue.end()) ? it->second : nullptr;
+}
+
 // Named context variable — name VISIBLE in the editor (ThisObject / ThisForm).
 void ibRuntimeModuleDataObject::BindContextVariable(const wxString& name, ibValue* value)
 {
@@ -111,6 +132,17 @@ void ibRuntimeModuleDataObject::BindExportVariable(const wxString& name, ibValue
 {
 	if (ibCompileModule* cm = EnsureCompileModule())
 		cm->AddVariable(name, value);
+	if (m_binder != nullptr)
+		m_binder->SetVar(name, value);
+}
+
+// Plain writable LOCAL — name resolves to an ordinary frame local (kind=Local),
+// but the binder seeds its slot with `value` at init. No required/type pre-flight,
+// no member access. E.g. a constant's Value backed by &m_constValue.
+void ibRuntimeModuleDataObject::BindLocalVariable(const wxString& name, ibValue* value)
+{
+	if (ibCompileModule* cm = EnsureCompileModule())
+		cm->AddLocalVariable(name, value);
 	if (m_binder != nullptr)
 		m_binder->SetVar(name, value);
 }
@@ -244,6 +276,13 @@ bool ibRuntimeModuleDataObject::Compile()
 	for (auto& kv : m_compileModule->m_listContextValue) {
 		if (kv.second.m_value) kv.second.m_value->PrepareNames();
 		m_binder->SetVar(kv.first, kv.second.m_value);
+	}
+	// Bound locals (e.g. a constant's Value backed by &m_constValue): plain
+	// writable frame slots — no PrepareNames (they're values, not surfaced
+	// objects). To the binder a local is indistinguishable from an external:
+	// both just seed a slot; IsBindable() unifies them in SetVar / pre-flight.
+	for (auto& kv : m_compileModule->m_listLocalValue) {
+		m_binder->SetVar(kv.first, kv.second);
 	}
 	return true;
 }

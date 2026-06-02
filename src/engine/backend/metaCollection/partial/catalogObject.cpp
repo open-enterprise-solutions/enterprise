@@ -134,7 +134,8 @@ void ibValueRecordDataObjectCatalog::PrepareNames() const
 	m_methodHelper->AppendProc(wxT("Lock"),   wxT("Lock()"));
 	m_methodHelper->AppendProc(wxT("Unlock"), wxT("Unlock()"));
 
-	m_methodHelper->AppendProp(wxT("ThisObject"), true, false, true, eThisObject, eSystem);
+	// ThisObject is bound (BindContextVariable in InitializeObject) — single
+	// source for editor + runtime; no manual AppendProp.
 
 	//set object name
 	wxString objectName;
@@ -208,14 +209,6 @@ bool ibValueRecordDataObjectCatalog::GetPropVal(const long lPropNum, ibValue& pv
 			return true;
 		}
 		return GetValueByMetaID(lPropData, pvarPropVal);
-	}
-	else if (lPropAlias == eSystem) {
-		switch (m_methodHelper->GetPropData(lPropNum))
-		{
-		case eThisObject:
-			pvarPropVal = GetValue();
-			return true;
-		}
 	}
 	return false;
 }

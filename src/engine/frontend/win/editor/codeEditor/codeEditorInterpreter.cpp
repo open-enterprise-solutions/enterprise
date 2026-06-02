@@ -228,8 +228,16 @@ void ibPrecompileCode::PrepareModuleData()
 
 	if (contextVariable != nullptr) {
 		ibValue* pRefData = nullptr;
-		ibCompileModule* compileModule = contextVariable->GetCompileModule();
-		while (compileModule != nullptr) {
+		// Walk the DESCRIPTOR parent chain — the compile-module parent link was
+		// dropped in the bytecode/compile-module decoupling; the descriptor link
+		// (ibRuntimeModuleDataObject::GetParent) is what remains. Take each
+		// descriptor's compile module. This is how an external DP/Report form reaches
+		// the host configuration's parent modules and their exports.
+		for (const ibRuntimeModuleDataObject* desc = contextVariable;
+			desc != nullptr; desc = desc->GetParent()) {
+			ibCompileModule* compileModule = desc->GetCompileModule();
+			if (compileModule == nullptr)
+				continue;
 
 			// Surface compile-side context bindings (ThisForm, ThisObject, …)
 			// — bound via BindContextVariable on the edited module/form/object's
@@ -255,6 +263,56 @@ void ibPrecompileCode::PrepareModuleData()
 				GetContext()->m_variables[stringUtils::MakeUpper(kv.first)] = variable;
 			}
 
+			// Surface export bindings (RegisterRecords, Filter, Controls,
+			// DataSource, …) bound via BindExportVariable. Like the context loop
+			// above they are no longer enumerated as helper props, so without
+			// this the runtime compiler resolves them but IntelliSense doesn't.
+			for (auto& kv : compileModule->m_listExternValue) {
+				if (m_rootContext.FindVariable(kv.first))
+					continue;
+				ibPrecompileVariable variable;
+				variable.m_name = kv.first;
+				variable.m_realName = kv.first;
+				variable.m_isContext = true;
+				variable.m_isExport = true;
+				variable.m_valContext = kv.second;
+				GetContext()->m_variables[stringUtils::MakeUpper(kv.first)] = variable;
+			}
+
+			// Surface LOCAL binds (e.g. a constant's Value, bound via
+			// BindLocalVariable) — only for the edited module itself
+			// (desc == contextVariable), never inherited from an ancestor: a local
+			// is the module's OWN slot, not an export visible to children.
+			//
+			// Modelled as a plain WRITABLE local (m_isContext / m_isExport = false)
+			// — `Value` is assignable inside the module (`Value = …`), so it must
+			// NOT be a read-only context handle. Its type for member autocomplete
+			// (`Value.` → the value type's methods) goes in m_valObject, exactly
+			// like a normally-declared local (see ibPrecompileContext::AddVariable).
+			//
+			// Stored via GetValue(), NOT a raw reference to &m_constValue. That
+			// pointer is an EMBEDDED member of a transient constant object: an
+			// owning reffer (operator=(ibValue*) IncrRef → DecrRef→delete) to it
+			// would free a non-heap address, and a const-reffer would dangle once
+			// the object is rebuilt before the editor map clears. GetValue() returns
+			// a self-contained, correctly-owned value per type — a deep COPY for
+			// primitives/strings (own heap buffer) and an IncrRef'd TYPE_REFFER for
+			// heap aggregates — so m_valObject's lifetime is decoupled from
+			// m_constValue. Move-assigned (operator=(ibValue&&)) into the slot.
+			if (desc == contextVariable) {
+				for (auto& kv : compileModule->m_listLocalValue) {
+					if (kv.second == nullptr || m_rootContext.FindVariable(kv.first))
+						continue;
+					ibPrecompileVariable variable;
+					variable.m_name = kv.first;
+					variable.m_realName = kv.first;
+					variable.m_isContext = false;
+					variable.m_isExport = false;
+					variable.m_valObject = kv.second->GetValue();
+					GetContext()->m_variables[stringUtils::MakeUpper(kv.first)] = variable;
+				}
+			}
+
 			const ibValueMetaObjectModuleBase* moduleObject = compileModule->GetObjectModule();
 			if (moduleObject != nullptr) {
 				ibMetaData* metaData = moduleObject->GetMetaData();
@@ -264,8 +322,7 @@ void ibPrecompileCode::PrepareModuleData()
 				// here. Walking its props calls the manager's runtime accessors (null
 				// ProcUnit in Designer → access violation), and its globals are already
 				// surfaced via the GetContextVariables() pass above.
-				if (cc && cc->FindCompileModule(moduleObject, pRefData) &&
-					!dynamic_cast<ibValueModuleManager*>(pRefData)) {
+				if (cc && cc->FindCompileModule(moduleObject, pRefData)) {
 					//adding variables from context
 					for (long i = 0; i < pRefData->GetNProps(); i++) {
 						// Scope-local props (ThisObject / ThisForm /
@@ -386,7 +443,6 @@ void ibPrecompileCode::PrepareModuleData()
 					}
 				}
 			}
-			compileModule = compileModule->GetParent();
 		}
 	}
 }
@@ -2342,6 +2398,15 @@ ibParamValue ibPrecompileCode::GetCurrentIdentifier(int& isSet)
 					}
 					catch (...) {
 					}
+					SetVariable(variable.m_paramName, variable.m_paramObject);
+				}
+				else {
+					// Self-referencing context handle (ThisObject / ThisForm /
+					// exported bind): the name is no longer a self-named prop of
+					// its own value — binds replaced the manual AppendProp, so
+					// FindProp misses. The variable's value IS the bound context
+					// value itself; use it directly so `ThisObject.` expands.
+					variable.m_paramObject = valContext;
 					SetVariable(variable.m_paramName, variable.m_paramObject);
 				}
 			}

@@ -63,6 +63,8 @@ public:
 	void AddContextVariable(const wxString& strName, const ibValue& value, bool scopeContext = false);
 	void AddContextVariable(const wxString& strName, ibValue* pValue, bool scopeContext = false);
 
+	void AddLocalVariable(const wxString& strName, ibValue* pValue);	// bound local — binder-filled frame slot
+
 	void RemoveVariable(const wxString& strName);
 
 	void SetParent(ibCompileCode* parent); // setting the parent module and prohibited max. ancestor
@@ -119,6 +121,7 @@ public:
 		ibByteBinder br = m_cByteCode.CreateBinder(delta);
 		for (auto& kv : m_listExternValue)  br.SetVar(kv.first, kv.second);
 		for (auto& kv : m_listContextValue) br.SetVar(kv.first, kv.second.m_value);
+		for (auto& kv : m_listLocalValue)   br.SetVar(kv.first, kv.second);
 		return br;
 	}
 
@@ -158,6 +161,12 @@ public:
 
 	// matching context variables
 	std::map<wxString, ibContextVar> m_listContextValue;
+
+	// bound LOCAL variables — registered as plain frame locals (kind=Local, NOT
+	// External/Context), the binder fills the slot at init; the module body reads/
+	// writes them as ordinary locals (e.g. a constant's Value). No required/type
+	// pre-flight, no kind opcode — a normal slot.
+	std::map<wxString, ibValue*> m_listLocalValue;
 
 protected:
 

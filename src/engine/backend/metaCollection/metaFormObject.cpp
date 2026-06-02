@@ -9,6 +9,7 @@
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/appData.h"
 #include "backend/backend_metatree.h"
+#include "backend/system/systemManager.h"
 
 // ibDeferredForm impl — defined here where ibValueMetaObjectGenericData
 // (parent's CreateObjectForm) and formWrapper are fully visible.
@@ -119,6 +120,14 @@ ibBackendValueForm* ibValueMetaObjectFormBase::CreateAndBuildForm(const ibValueM
 
 		try {
 			success = result->InitializeFormModule();
+		}
+		catch (const ibBackendException& err) {
+			// Surface it — don't let a form-module compile/run error or a missing
+			// required binding vanish (the old catch(...) made the form silently
+			// fail to open with no clue why).
+			ibValueSystemFunction::Message(err.GetErrorDescription(),
+				ibStatusMessage::ibStatusMessage_Error);
+			success = false;
 		}
 		catch (...) {
 			success = false;

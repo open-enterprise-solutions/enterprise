@@ -125,7 +125,7 @@ void ibValueRecordDataObjectChartOfCharacteristicTypes::PrepareNames() const
 	m_methodHelper->AppendProc(wxT("Lock"),   wxT("Lock()"));
 	m_methodHelper->AppendProc(wxT("Unlock"), wxT("Unlock()"));
 
-	m_methodHelper->AppendProp(wxT("ThisObject"), true, false, true, eThisObject, eSystem);
+	// ThisObject is bound (BindContextVariable in InitializeObject) — no manual AppendProp.
 
 	wxString objectName;
 
@@ -196,14 +196,6 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::GetPropVal(const long lP
 			return true;
 		}
 		return GetValueByMetaID(lPropData, pvarPropVal);
-	}
-	else if (lPropAlias == eSystem) {
-		switch (m_methodHelper->GetPropData(lPropNum))
-		{
-		case eThisObject:
-			pvarPropVal = GetValue();
-			return true;
-		}
 	}
 	return false;
 }
