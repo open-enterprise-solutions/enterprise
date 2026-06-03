@@ -159,4 +159,15 @@ protected:
 	friend class ibValueModuleRuntimeManagerExternalDataProcessor;
 };
 
+// External DP value object: regular DP behaviour + RAII ownership of the transient
+// external metadata container, dropped in ibExternalOwnerHelper's dtor. Embedded /
+// config DPs use the plain ibValueRecordDataObjectDataProcessor and never own meta.
+class ibValueRecordDataObjectExternalDataProcessor :
+	public ibValueRecordDataObjectDataProcessor,
+	public ibExternalOwnerHelper {
+public:
+	ibValueRecordDataObjectExternalDataProcessor(const ibValueMetaObjectDataProcessor* metaObject, ibMetaData* ownedMeta = nullptr)
+		: ibValueRecordDataObjectDataProcessor(metaObject), ibExternalOwnerHelper(ownedMeta) {}
+};
+
 #endif

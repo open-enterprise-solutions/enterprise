@@ -53,7 +53,7 @@ void ibFrontendDocMDIFrame::ShowInspector()
 
 #include "frontend/docView/docView.h"
 
-void ibFrontendDocMDIFrame::ActivateView(ibMetaView* view, bool activate) {
+void ibFrontendDocMDIFrame::ActivateView(ibView* view, bool activate) {
 
 	if (m_docToolbar != nullptr) {
 

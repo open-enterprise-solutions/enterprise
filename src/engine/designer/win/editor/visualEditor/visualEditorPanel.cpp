@@ -74,7 +74,7 @@ bool ibVisualEditorNotebook::ibVisualEditor::LoadForm()
 	if (creator == nullptr)
 		return false;
 
-	ibMetaData* metaData = creator->GetMetaData();
+	const ibMetaData* metaData = creator->GetMetaData();
 	wxASSERT(metaData);
 
 	auto* cc = metaData->GetCompileCache();

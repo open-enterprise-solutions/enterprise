@@ -255,7 +255,7 @@ int ibValueMetaObjectAttributeBase::ProcessAttribute(const wxString& tableName,
 	int retCode = 1;
 	//is null - create
 	if (dstAttr == nullptr) {
-		const wxString& fieldName = srcAttr->GetFieldNameDB(); bool createReference = false; ibMetaData* metaData = srcAttr->GetMetaData();
+		const wxString& fieldName = srcAttr->GetFieldNameDB(); bool createReference = false; const ibMetaData* metaData = srcAttr->GetMetaData();
 		retCode = db_query->RunQuery("ALTER TABLE %s ADD %s_TYPE %s DEFAULT 0 NOT NULL;", tableName, fieldName, "INTEGER");
 		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 			return retCode;
@@ -300,7 +300,7 @@ int ibValueMetaObjectAttributeBase::ProcessAttribute(const wxString& tableName,
 	else if (srcAttr != nullptr) {
 		if (srcAttr->GetTypeDesc() != dstAttr->GetTypeDesc()) {
 			const ibTypeDescription& srcTypeDesc = srcAttr->GetTypeDesc();
-			const wxString& fieldName = srcAttr->GetFieldNameDB(); std::set<ibClassID> createdRef, currentRef, removedRef; ibMetaData* metaData = srcAttr->GetMetaData();
+			const wxString& fieldName = srcAttr->GetFieldNameDB(); std::set<ibClassID> createdRef, currentRef, removedRef; const ibMetaData* metaData = srcAttr->GetMetaData();
 			for (auto clsid : srcTypeDesc.GetClsidList()) {
 				if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 					return retCode;
@@ -451,7 +451,7 @@ int ibValueMetaObjectAttributeBase::ProcessAttribute(const wxString& tableName,
 	}
 	//delete
 	else if (srcAttr == nullptr) {
-		const wxString& fieldName = dstAttr->GetFieldNameDB(); bool removeReference = false; ibMetaData* metaData = dstAttr->GetMetaData();
+		const wxString& fieldName = dstAttr->GetFieldNameDB(); bool removeReference = false; const ibMetaData* metaData = dstAttr->GetMetaData();
 		retCode = db_query->RunQuery("ALTER TABLE %s DROP %s_TYPE;", tableName, fieldName);
 		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 			return retCode;
@@ -760,7 +760,7 @@ bool ibValueMetaObjectAttributeBase::GetValueAttribute(const wxString& fieldName
 	}
 	case ibFieldTypes_Reference:
 	{
-		ibMetaData* metaData = metaAttr->GetMetaData();
+		const ibMetaData* metaData = metaAttr->GetMetaData();
 		wxASSERT(metaData);
 		const ibClassID& refType = resultSet->GetResultLong(fieldName + wxT("_RTRef"));
 

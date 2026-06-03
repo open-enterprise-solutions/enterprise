@@ -125,7 +125,7 @@ void ibValueSizerItem::OnUpdated(wxObject* wxobject, ibFrontendWindow* /*wxparen
 
 #include "backend/metaData.h"
 
-ibMetaData* ibValueSizerItem::GetMetaData() const
+const ibMetaData* ibValueSizerItem::GetMetaData() const
 {
 	const ibValueMetaObjectFormBase* metaFormObject = m_formOwner ?
 		m_formOwner->GetFormMetaObject() :

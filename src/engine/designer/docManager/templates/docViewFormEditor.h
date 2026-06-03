@@ -31,7 +31,7 @@ public:
 
 	virtual wxPrintout* OnCreatePrintout() override;
 	virtual void OnCreateToolbar(wxAuiToolBar* toolbar) override;
-	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
+	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnActivateView(bool activate, ibView* activeView, ibView* deactiveView) override;
 	virtual void OnUpdate(ibView* sender, wxObject* hint) override;
 	virtual void OnDraw(wxDC* dc) override;

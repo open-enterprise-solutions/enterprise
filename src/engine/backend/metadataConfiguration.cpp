@@ -151,9 +151,14 @@ ibMetaDataConfigurationFile::~ibMetaDataConfigurationFile()
 
 ////////////////////////////////////////////////////////////////////
 
-ibValueMetaObjectConfiguration* ibMetaDataConfigurationFile::GetCommonMetaObject() const
+const ibValueMetaObjectConfiguration* ibMetaDataConfigurationFile::GetCommonMetaObject() const
 {
 	return m_commonObject; // ibValuePtr operator T* -> raw root
+}
+
+ibValueMetaObjectConfiguration* ibMetaDataConfigurationFile::GetCommonMetaObject()
+{
+	return m_commonObject;
 }
 
 wxString ibMetaDataConfigurationFile::GetLangCode() const

@@ -73,7 +73,7 @@ ibValueTextCtrl::ibValueTextCtrl() :
 	m_propertyBG->SetValue(wxColour(255, 255, 255));
 }
 
-ibMetaData* ibValueTextCtrl::GetMetaData() const
+const ibMetaData* ibValueTextCtrl::GetMetaData() const
 {
 	return m_formOwner != nullptr ?
 		m_formOwner->GetMetaData() : nullptr;

@@ -553,7 +553,13 @@ void ibMetaView::OnActivateView(bool activate, ibView* activeView, ibView* deact
 #endif
 }
 
-void ibMetaView::Activate(bool activate)
+// ibView::Activate lives here (not in docView.cpp) because it reaches the
+// desktop main frame (mainFrame / ibFrontendDocMDIFrame), whose headers are
+// only pulled in on this side — same split as the rest of the metadata-aware
+// wiring. Lifted up from ibMetaView so the form view (a plain ibView since the
+// doc/view fork) also clears its activation on the main frame; otherwise the
+// reduced ibView path skipped mainFrame->ActivateView and deactivation stuck.
+void ibView::Activate(bool activate)
 {
 #ifndef OES_USE_WEB
 	// Local name shadows the `docManager` macro deliberately — picks the
@@ -567,8 +573,8 @@ void ibMetaView::Activate(bool activate)
 		mgr->ActivateView(this, activate);
 	}
 
-	if (activate) wxLogDebug("! <debug> activate view %s", ibMetaView::GetViewName());
-	else wxLogDebug("! <debug> deactivate view %s", ibMetaView::GetViewName());
+	if (activate) wxLogDebug("! <debug> activate view %s", GetViewName());
+	else wxLogDebug("! <debug> deactivate view %s", GetViewName());
 #else
 	// Web: activation is driven from ibWebFrame::SetActiveTab directly
 	// on the session's tab list — no docManager round-trip needed.

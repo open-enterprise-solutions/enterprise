@@ -27,7 +27,7 @@ void ibPGGenerationProperty::FillByClsid(const ibClassID& clsid)
 {
     const ibValueMetaObjectGenericData* metaGenericData = dynamic_cast<const ibValueMetaObjectGenericData*>(m_ownerProperty);
     if (metaGenericData != nullptr) {
-        ibMetaData* metaData = metaGenericData->GetMetaData();
+        const ibMetaData* metaData = metaGenericData->GetMetaData();
         wxASSERT(metaData);
         for (auto metaOwner : metaData->GetAnyArrayObject(clsid)) {
             m_choices.Add(metaOwner->GetName(), metaOwner->GetIcon(), metaOwner->GetMetaID());
@@ -87,7 +87,7 @@ wxPGEditorDialogAdapter* ibPGGenerationProperty::GetEditorDialog() const
             ibMetaID GetMetaID() const { return m_metaObject->GetMetaID(); }
         };
 
-        void FillByClsid(ibMetaData* metaData, const ibClassID& clsid,
+        void FillByClsid(const ibMetaData* metaData, const ibClassID& clsid,
             ibCheckTree* tc, ibVariantDataGeneration* data) {
 
             wxImageList* imageList = tc->GetImageList();
@@ -172,7 +172,7 @@ wxPGEditorDialogAdapter* ibPGGenerationProperty::GetEditorDialog() const
                 new wxImageList(icon_size, icon_size)
             );
 
-            ibMetaData* metaData = metaGenericData->GetMetaData();
+            const ibMetaData* metaData = metaGenericData->GetMetaData();
             wxASSERT(metaData);
             if (metaData != nullptr) {
                 FillByClsid(metaData, g_metaCatalogCLSID, tc, data);

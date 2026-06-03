@@ -138,7 +138,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 
 			const ibMetaID& dataSource = srcData != nullptr ? srcData->GetSource() : wxNOT_FOUND;
 
-			ibMetaData* metaData = typeFactory->GetMetaData();
+			const ibMetaData* metaData = typeFactory->GetMetaData();
 			if (metaData == nullptr) return false;
 
 			// launch editor dialog
@@ -303,7 +303,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 
 			const ibMetaID& dataSource = srcData != nullptr ? srcData->GetSource() : wxNOT_FOUND;
 
-			ibMetaData* metaData = typeFactory->GetMetaData();
+			const ibMetaData* metaData = typeFactory->GetMetaData();
 			if (metaData == nullptr) return false;
 			const ibSourceObject* typeSrc = typeFactory->GetSourceObject();
 			if (typeSrc == nullptr) return false;

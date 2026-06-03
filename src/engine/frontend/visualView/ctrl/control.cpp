@@ -32,7 +32,7 @@ void ibValueControl::SetOwnerForm(ibValueForm* ownerForm)
 	m_formOwner = ownerForm;
 }
 
-ibMetaData* ibValueControl::GetMetaData() const
+const ibMetaData* ibValueControl::GetMetaData() const
 {
 	const ibValueMetaObjectFormBase* metaFormObject = m_formOwner ?
 		m_formOwner->GetFormMetaObject() : nullptr;

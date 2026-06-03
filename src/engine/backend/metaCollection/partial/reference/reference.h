@@ -38,11 +38,11 @@ public:
 
 	virtual ~ibValueReferenceDataObject();
 
-	static ibValueReferenceDataObject* Create(ibMetaData* metaData, const ibMetaID& id, const ibGuid& objGuid = wxNullGuid);
+	static ibValueReferenceDataObject* Create(const ibMetaData* metaData, const ibMetaID& id, const ibGuid& objGuid = wxNullGuid);
 	static ibValueReferenceDataObject* Create(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid = wxNullGuid);
 
-	static ibValueReferenceDataObject* Create(ibMetaData* metaData, void* ptr);
-	static ibValueReferenceDataObject* CreateFromPtr(ibMetaData* metaData, void* ptr);
+	static ibValueReferenceDataObject* Create(const ibMetaData* metaData, void* ptr);
+	static ibValueReferenceDataObject* CreateFromPtr(const ibMetaData* metaData, void* ptr);
 	static ibValueReferenceDataObject* CreateFromResultSet(class ibDatabaseResultSet *rs, const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& refGuid);
 
 	//operator '>'

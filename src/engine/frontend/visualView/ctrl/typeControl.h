@@ -36,7 +36,7 @@ public:
 	static bool QuickChoice(ibControlFrame* ownerValue, const ibClassID& clsid, wxWindow* parent);
 	static void QuickChoice(ibControlFrame* controlValue, ibValue& newValue, wxWindow* parent, const wxString& strData);
 
-	static ibClassID ShowSelectType(ibMetaData* metadata, const ibTypeDescription& typeDescription);
+	static ibClassID ShowSelectType(const ibMetaData* metadata, const ibTypeDescription& typeDescription);
 
 	//////////////////////////////////////////////////
 

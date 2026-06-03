@@ -110,7 +110,7 @@ class ibValueModelTableBox : public ibValueWindow,
 	ibValueModel* GetModel() const { return m_tableModel; }
 
 	//get metaData
-	virtual ibMetaData* GetMetaData() const;
+	virtual const ibMetaData* GetMetaData() const;
 
 	//get type description 
 	virtual ibTypeDescription& GetTypeDesc() const {
@@ -380,7 +380,7 @@ public:
 	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }
 
 	//get metaData
-	virtual ibMetaData* GetMetaData() const;
+	virtual const ibMetaData* GetMetaData() const;
 
 	//get type description 
 	virtual ibTypeDescription& GetTypeDesc() const { return m_propertySource->GetValueAsTypeDesc(); }

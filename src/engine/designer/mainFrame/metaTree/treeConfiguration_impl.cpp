@@ -163,7 +163,7 @@ ibMetaDocument* ibMetaDataTree::GetDocument(ibValueMetaObject* obj) const
 
 void ibMetaDataTree::EditModule(const ibGuid& moduleName, int lineNumber, bool setRunLine)
 {
-	const ibMetaData* metaData = GetMetaData();
+	ibMetaData* metaData = GetMetaData();
 	if (metaData == nullptr)
 		return;
 

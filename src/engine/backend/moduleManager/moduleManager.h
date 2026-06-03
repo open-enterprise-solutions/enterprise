@@ -130,7 +130,8 @@ public:
 		virtual ~ibValueMetadataUnit();
 
 		//get common module
-		ibMetaData* GetMetaData() const { return m_metaData; }
+		const ibMetaData* GetMetaData() const { return m_metaData; }
+		ibMetaData* GetMetaData() { return m_metaData; }
 
 		//check is empty
 		virtual bool IsEmpty() const override { return false; }

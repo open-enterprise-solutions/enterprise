@@ -184,7 +184,8 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	virtual ibSelectMode GetSelectMode() const { return ibSelectMode::ibSelectMode_Items; }
 
 	//get metaData
-	virtual ibMetaData* GetMetaData() const { return m_metaData; }
+	virtual const ibMetaData* GetMetaData() const { return m_metaData; }
+	virtual ibMetaData* GetMetaData() { return m_metaData; }
 
 	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);

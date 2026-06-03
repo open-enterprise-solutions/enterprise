@@ -87,7 +87,7 @@ wxPGEditorDialogAdapter* ibPGOwnerProperty::GetEditorDialog() const
 			ibMetaID GetMetaID() const { return m_metaObject->GetMetaID(); }
 		};
 
-		void FillByClsid(ibMetaData* metaData, const ibClassID& clsid,
+		void FillByClsid(const ibMetaData* metaData, const ibClassID& clsid,
 			ibCheckTree* tc, ibVariantDataOwner* data) {
 
 			wxImageList* imageList = tc->GetImageList();
@@ -172,7 +172,7 @@ wxPGEditorDialogAdapter* ibPGOwnerProperty::GetEditorDialog() const
 				new wxImageList(icon_size, icon_size)
 			);
 
-			ibMetaData* metaData = metaGenericData->GetMetaData();
+			const ibMetaData* metaData = metaGenericData->GetMetaData();
 			wxASSERT(metaData);
 			if (metaData != nullptr) {
 				FillByClsid(metaData, g_metaCatalogCLSID, tc, data);

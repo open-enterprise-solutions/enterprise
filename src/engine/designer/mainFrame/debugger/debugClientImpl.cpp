@@ -106,7 +106,7 @@ void ibDebuggerClientBridgeDesigner::OnLeaveLoop(wxSocketClient* sock, const ibD
 		else if (!data.m_fileName.IsEmpty()) {
 			ibMetaDataDocument* foundedDoc = dynamic_cast<ibMetaDataDocument*>(docManager->FindDocumentByPath(data.m_fileName));
 			if (foundedDoc != nullptr) {
-				const ibMetaData* foundedMetadata = foundedDoc->GetMetaData();
+				ibMetaData* foundedMetadata = foundedDoc->GetMetaData();
 				wxASSERT(foundedMetadata);
 				const ibBackendMetadataTree* metaTree = foundedMetadata->GetMetaTree();
 				if (metaTree != nullptr) {
@@ -150,7 +150,7 @@ void ibDebuggerClientBridgeDesigner::OnAutoComplete(const ibDebugAutoCompleteDat
 		else if (!data.m_fileName.IsEmpty()) {
 			const ibMetaDataDocument* foundedDoc = dynamic_cast<ibMetaDataDocument*>(docManager->FindDocumentByPath(data.m_fileName));
 			if (foundedDoc != nullptr) {
-				const ibMetaData* metaData = foundedDoc->GetMetaData();
+				ibMetaData* metaData = foundedDoc->GetMetaData();
 				wxASSERT(metaData);
 				const ibBackendMetadataTree* metaTree = metaData->GetMetaTree();
 				if (metaTree != nullptr) {
@@ -187,7 +187,7 @@ void ibDebuggerClientBridgeDesigner::OnMessageFromServer(const ibDebugLineData& 
 					);
 			}
 			if (foundedDoc != nullptr) {
-				const ibMetaData* metaData = foundedDoc->GetMetaData();
+				ibMetaData* metaData = foundedDoc->GetMetaData();
 				wxASSERT(metaData);
 				ibBackendMetadataTree* metaTree = metaData->GetMetaTree();
 				wxASSERT(metaTree);
@@ -222,7 +222,7 @@ void ibDebuggerClientBridgeDesigner::OnSetToolTip(const ibDebugExpressionData& d
 				docManager->FindDocumentByPath(data.m_fileName)
 				);
 			if (foundedDoc != nullptr) {
-				const ibMetaData* metaData = foundedDoc->GetMetaData();
+				ibMetaData* metaData = foundedDoc->GetMetaData();
 				wxASSERT(metaData);
 				const ibBackendMetadataTree* metaTree = metaData->GetMetaTree();
 				if (metaTree != nullptr) {

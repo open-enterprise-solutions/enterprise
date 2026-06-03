@@ -148,7 +148,10 @@ public:
 	void SetHelpContent(const wxString& strHelpContent) { m_strHelpContent = strHelpContent; }
 
 	virtual void SetMetaData(ibMetaData* metaData) { m_metaData = metaData; }
-	virtual ibMetaData* GetMetaData() const override { return m_metaData; }
+	virtual const ibMetaData* GetMetaData() const override { return m_metaData; }
+	// Mutable accessor — metaobjects own a mutable m_metaData. Not an override:
+	// the factory root only declares the const capability (see backend_type.h).
+	virtual ibMetaData* GetMetaData() { return m_metaData; }
 
 	void ResetGuid();
 	void ResetId();

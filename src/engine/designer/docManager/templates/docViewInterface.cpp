@@ -11,13 +11,14 @@ wxEND_EVENT_TABLE()
 
 #include "win/editor/interfaceEditor/interfaceEditor.h"
 
-bool ibInterfaceEditView::OnCreate(ibMetaDocument* doc, long flags)
+bool ibInterfaceEditView::OnCreate(ibDocument* docBase, long flags)
 {
+	ibMetaDocument* doc = GetDocument();
 	m_interfaceEditor = new ibInterfaceEditor(m_viewFrame, wxID_ANY, doc->GetMetaObject());
 	m_interfaceEditor->SetReadOnly(flags == ibDOC_READONLY);
 
 	m_interfaceEditor->RefreshInterface();
-	return ibMetaView::OnCreate(doc, flags);
+	return ibView::OnCreate(docBase, flags);
 }
 
 void ibInterfaceEditView::OnUpdate(ibView* sender, wxObject* hint)

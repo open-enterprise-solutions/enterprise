@@ -259,7 +259,7 @@ std::shared_ptr<ibProcUnit> ibValueFrame::GetFormProcUnit() const
 #include "backend/objCtor.h"
 
 bool ibValueFrame::HasQuickChoice() const {
-	ibMetaData* metaData = GetMetaData();
+	const ibMetaData* metaData = GetMetaData();
 	if (metaData == nullptr)
 		return false;
 	ibValue selValue; GetControlValue(selValue);

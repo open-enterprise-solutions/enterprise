@@ -119,7 +119,7 @@ class ibValueTextCtrl : public ibValueWindow,
 	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }
 
 	//get metaData
-	virtual ibMetaData* GetMetaData() const;
+	virtual const ibMetaData* GetMetaData() const;
 
 	//get type description 
 	virtual ibTypeDescription& GetTypeDesc() const { return m_propertySource->GetValueAsTypeDesc(); }
@@ -311,7 +311,7 @@ class ibValueCheckbox : public ibValueWindow,
 	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }
 
 	//get metaData
-	virtual ibMetaData* GetMetaData() const;
+	virtual const ibMetaData* GetMetaData() const;
 
 	//get type description 
 	virtual ibTypeDescription& GetTypeDesc() const { return m_propertySource->GetValueAsTypeDesc(); }

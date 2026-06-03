@@ -6,9 +6,9 @@
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibReportEditView, ibMetaView);
 
-bool ibReportEditView::OnCreate(ibMetaDocument *doc, long flags)
+bool ibReportEditView::OnCreate(ibDocument *doc, long flags)
 {
-	return ibMetaView::OnCreate(doc, flags);
+	return ibView::OnCreate(doc, flags);
 }
 
 void ibReportEditView::OnDraw(wxDC *WXUNUSED(dc))

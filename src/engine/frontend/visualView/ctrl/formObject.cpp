@@ -431,7 +431,7 @@ void ibValueForm::RemoveControl(const ibValue& vControl)
 
 void ibValueForm::ShowForm(ibBackendMetaDocument* doc, bool createContext)
 {
-	ibMetaDocument* docParent = static_cast<ibMetaDocument *>(doc);
+	ibDocument* docParent = static_cast<ibMetaDocument*>(doc);
 
 	if (ibBackendException::IsEvalMode())
 		return;
@@ -620,14 +620,14 @@ bool ibValueForm::GenerateForm(ibValueRecordDataObjectRef* obj) const
 #else
 	const ibValueMetaObjectRecordDataMutableRef* metaObject = obj->GetMetaObject();
 	wxASSERT(metaObject);
-	ibMetaData* metaData = metaObject->GetMetaData();
+	const ibMetaData* metaData = metaObject->GetMetaData();
 	wxASSERT(metaData);
 
 	ibDialogGeneration* selectDataType = new ibDialogGeneration(metaData, metaObject->GetGenerationDescription());
 
 	ibMetaID sel_id = 0;
 	if (selectDataType->ShowModal(sel_id)) {
-		ibValueMetaObjectRecordDataMutableRef* meta = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataMutableRef>(sel_id);
+		const ibValueMetaObjectRecordDataMutableRef* meta = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataMutableRef>(sel_id);
 		if (meta != nullptr) {
 			ibValueRecordDataObjectRef* genObj = meta->CreateObjectValue(obj, true);
 			if (genObj != nullptr) {

@@ -686,7 +686,7 @@ enum prop {
 	eCurrentRow,
 };
 
-ibMetaData* ibValueModelTableBox::GetMetaData() const
+const ibMetaData* ibValueModelTableBox::GetMetaData() const
 {
 	return m_formOwner != nullptr ?
 		m_formOwner->GetMetaData() : nullptr;

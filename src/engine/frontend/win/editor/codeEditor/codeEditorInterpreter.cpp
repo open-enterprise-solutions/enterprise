@@ -315,7 +315,7 @@ void ibPrecompileCode::PrepareModuleData()
 
 			const ibValueMetaObjectModuleBase* moduleObject = compileModule->GetObjectModule();
 			if (moduleObject != nullptr) {
-				ibMetaData* metaData = moduleObject->GetMetaData();
+				const ibMetaData* metaData = moduleObject->GetMetaData();
 				auto* cc = metaData ? metaData->GetCompileCache() : nullptr;
 				// Skip the designer module manager: the compile cache also indexes it
 				// under the configuration module object, and the parent-walk reaches it

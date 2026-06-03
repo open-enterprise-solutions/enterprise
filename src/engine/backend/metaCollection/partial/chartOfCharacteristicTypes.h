@@ -109,7 +109,8 @@ protected:
 	virtual ibTypeDescription& GetTypeDesc() const { return m_propertyTypesOfCharacteristics->GetValueAsTypeDesc(); }
 
 	//get metadata
-	virtual ibMetaData* GetMetaData() const { return m_metaData; }
+	virtual const ibMetaData* GetMetaData() const { return m_metaData; }
+	virtual ibMetaData* GetMetaData() { return m_metaData; }
 
 	// Additive contract — chains to HierarchyMutableRef. ChartOfChar
 	// adds only its Type attribute on top of the inherited set.

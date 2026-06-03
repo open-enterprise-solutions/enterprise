@@ -160,7 +160,7 @@ public:
 	virtual const class ibValueMetaObjectModuleBase* GetMetaForCompile() const override;
 
 	//get metaData
-	virtual ibMetaData* GetMetaData() const;
+	virtual const ibMetaData* GetMetaData() const;
 
 	virtual ibValueForm* GetImplValueRef() const override {
 		return const_cast<ibValueForm*>(this);
@@ -331,7 +331,7 @@ public:
 private:
 
 	//doc event
-	bool CreateDocForm(ibMetaDocument* docParent, bool createContext = true);
+	bool CreateDocForm(ibDocument* docParent, bool createContext = true);
 	void ActivateDocForm();
 	void ChoiceDocForm(ibValue& vSelected);
 	void RefreshDocForm();

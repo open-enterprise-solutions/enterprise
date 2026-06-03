@@ -1055,7 +1055,7 @@ void ibCodeEditor::LoadFromKeyWord(const wxString& keyword)
 		if (m_document) {
 			const ibValueMetaObject* metaObject = m_document->GetMetaObject();
 			if (metaObject) {
-				ibMetaData* metaData = metaObject->GetMetaData();
+				const ibMetaData* metaData = metaObject->GetMetaData();
 				wxASSERT(metaData);
 
 				for (auto class_obj : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Object))
@@ -1076,7 +1076,7 @@ void ibCodeEditor::LoadFromKeyWord(const wxString& keyword)
 	{
 		const ibValueMetaObject* metaObject = m_document->GetMetaObject();
 		wxASSERT(metaObject);
-		ibMetaData* metaData = metaObject->GetMetaData();
+		const ibMetaData* metaData = metaObject->GetMetaData();
 		wxASSERT(metaData);
 
 		for (const auto object : metaData->GetAnyArrayObject(g_metaCommonFormCLSID))

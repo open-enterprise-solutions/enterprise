@@ -12,7 +12,7 @@ public:
 
 	ibModuleEditView() : ibMetaView(), m_codeEditor(nullptr) {}
 
-	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
+	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnActivateView(bool activate, ibView* activeView, ibView* deactiveView) override;
 	virtual void OnDraw(wxDC* dc) override;
 	virtual void OnUpdate(ibView* sender, wxObject* hint = nullptr) override;

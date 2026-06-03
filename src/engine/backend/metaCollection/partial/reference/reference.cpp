@@ -68,9 +68,9 @@ ibValueReferenceDataObject::~ibValueReferenceDataObject()
 	wxDELETE(m_methodHelper);
 }
 
-ibValueReferenceDataObject* ibValueReferenceDataObject::Create(ibMetaData* metaData, const ibMetaID& id, const ibGuid& objGuid)
+ibValueReferenceDataObject* ibValueReferenceDataObject::Create(const ibMetaData* metaData, const ibMetaID& id, const ibGuid& objGuid)
 {
-	ibValueMetaObjectRecordDataRef* metaObject = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataRef>(id);
+	const ibValueMetaObjectRecordDataRef* metaObject = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataRef>(id);
 	if (metaObject != nullptr) {
 		//auto& it = std::find_if(gs_references.begin(), gs_references.end(), [metaObject, objGuid](ibValueReferenceDataObject* ref) {
 		//	return metaObject == ref->GetMetaObject() && objGuid == ref->GetGuid(); }
@@ -98,11 +98,11 @@ ibValueReferenceDataObject* ibValueReferenceDataObject::Create(const ibValueMeta
 	return refData;
 }
 
-ibValueReferenceDataObject* ibValueReferenceDataObject::Create(ibMetaData* metaData, void* ptr)
+ibValueReferenceDataObject* ibValueReferenceDataObject::Create(const ibMetaData* metaData, void* ptr)
 {
 	ibReference* reference = static_cast<ibReference*>(ptr);
 	if (reference != nullptr) {
-		ibValueMetaObjectRecordDataRef* metaObject = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataRef>(reference->m_id);
+		const ibValueMetaObjectRecordDataRef* metaObject = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataRef>(reference->m_id);
 		if (metaObject != nullptr) {
 			//auto& it = std::find_if(gs_references.begin(), gs_references.end(), [metaObject, reference](ibValueReferenceDataObject* ref) {
 			//	return metaObject == ref->GetMetaObject() && ref->GetGuid() == reference->m_guid; }
@@ -115,11 +115,11 @@ ibValueReferenceDataObject* ibValueReferenceDataObject::Create(ibMetaData* metaD
 	return nullptr;
 }
 
-ibValueReferenceDataObject* ibValueReferenceDataObject::CreateFromPtr(ibMetaData* metaData, void* ptr)
+ibValueReferenceDataObject* ibValueReferenceDataObject::CreateFromPtr(const ibMetaData* metaData, void* ptr)
 {
 	ibReference* reference = static_cast<ibReference*>(ptr);
 	if (reference != nullptr) {
-		ibValueMetaObjectRecordDataRef* metaObject = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataRef>(reference->m_id);
+		const ibValueMetaObjectRecordDataRef* metaObject = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataRef>(reference->m_id);
 		if (metaObject != nullptr) {
 			//auto& it = std::find_if(gs_references.begin(), gs_references.end(), [metaObject, reference](ibValueReferenceDataObject* ref) {
 			//	return metaObject == ref->GetMetaObject() && ref->GetGuid() == reference->m_guid; }

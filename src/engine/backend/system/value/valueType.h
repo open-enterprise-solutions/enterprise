@@ -97,10 +97,10 @@ public:
 public:
 
 	static ibValue AdjustValue(const ibTypeDescription& typeDescription,
-		class ibMetaData* metaData = nullptr);
+		const class ibMetaData* metaData = nullptr);
 
 	static ibValue AdjustValue(const ibTypeDescription& typeDescription, const ibValue& varValue,
-		class ibMetaData* metaData = nullptr);
+		const class ibMetaData* metaData = nullptr);
 
 	ibValueTypeDescription();
 

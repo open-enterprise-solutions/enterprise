@@ -70,13 +70,14 @@ EVT_MENU(wxID_GROUP_COL, ibSpreadsheetEditView::OnMenuEvent)
 EVT_MENU(wxID_UNGROUP_COL, ibSpreadsheetEditView::OnMenuEvent)
 wxEND_EVENT_TABLE()
 
-bool ibSpreadsheetEditView::OnCreate(ibMetaDocument* doc, long flags)
+bool ibSpreadsheetEditView::OnCreate(ibDocument* docBase, long flags)
 {
+	ibMetaDocument* doc = GetDocument();
 	m_gridEditor = new ibGridEditor(doc, m_viewFrame, wxID_ANY);
 	m_gridEditor->EnableEditing(flags != ibDOC_READONLY);
 	m_gridEditor->EnableGridArea(doc->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>());
 
-	return ibMetaView::OnCreate(doc, flags);
+	return ibView::OnCreate(docBase, flags);
 }
 
 #if wxUSE_MENUS	

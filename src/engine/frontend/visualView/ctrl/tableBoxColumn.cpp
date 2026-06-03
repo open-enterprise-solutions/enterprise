@@ -78,7 +78,7 @@ ibValueModelTableBoxColumn::ibValueModelTableBoxColumn() :
 {
 }
 
-ibMetaData* ibValueModelTableBoxColumn::GetMetaData() const
+const ibMetaData* ibValueModelTableBoxColumn::GetMetaData() const
 {
 	return m_formOwner ?
 		m_formOwner->GetMetaData() : nullptr;

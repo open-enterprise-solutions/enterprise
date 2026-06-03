@@ -49,7 +49,7 @@ class FRONTEND_API ibValueControl : public ibValueFrame {
 	}
 
 	//get metaData
-	virtual ibMetaData* GetMetaData() const override;
+	virtual const ibMetaData* GetMetaData() const override;
 
 	/**
 	* Can delete object

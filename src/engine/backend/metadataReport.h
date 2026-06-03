@@ -72,7 +72,8 @@ public:
 	bool LoadFromFile(const wxString& strFileName);
 	bool SaveToFile(const wxString& strFileName);
 
-	virtual ibValueMetaObject* GetCommonMetaObject() const; // out-of-line: m_commonObject is ibValuePtr
+	virtual const ibValueMetaObject* GetCommonMetaObject() const; // out-of-line: m_commonObject is ibValuePtr
+	virtual ibValueMetaObject* GetCommonMetaObject();
 
 	//start/exit module
 	virtual bool StartMainModule() { return m_moduleManager ? m_moduleManager->StartMainModule() : false; }

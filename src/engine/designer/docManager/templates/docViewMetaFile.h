@@ -10,7 +10,7 @@ public:
 
 	ibMetadataEditView() : ibMetaView() {}
 
-	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
+	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnActivateView(bool activate, ibView* activeView, ibView* deactiveView) override;
 	virtual void OnDraw(wxDC* dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
@@ -30,8 +30,8 @@ protected:
 
 class ibMetadataBrowserDocument : public ibMetaDocument {
 	
-	virtual ibMetaView* DoCreateView() {
-		return new ibMetadataEditView(); 
+	virtual ibView* DoCreateView() {
+		return new ibMetadataEditView();
 	}
 
 public:
@@ -65,8 +65,10 @@ protected:
 
 class ibMetadataFileDocument : public ibMetadataBrowserDocument {
 
-	virtual ibMetaView* DoCreateView() {
-		return ibMetaDocument::DoCreateView();
+	virtual ibView* DoCreateView() {
+		// Bypass the parent's ibMetadataEditView override and use the default
+		// template-driven factory on ibDocument.
+		return ibDocument::DoCreateView();
 	}
 
 public:

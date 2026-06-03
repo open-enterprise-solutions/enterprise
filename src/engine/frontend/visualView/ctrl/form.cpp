@@ -121,7 +121,7 @@ bool ibValueForm::SaveData(ibWriterMemory& writer)
 //*                                   Other                                        *
 //**********************************************************************************
 
-ibMetaData* ibValueForm::GetMetaData() const
+const ibMetaData* ibValueForm::GetMetaData() const
 {
 	if (m_sourceObject != nullptr) {
 		const ibValueMetaObject* metaObject = m_sourceObject->GetSourceMetaObject();

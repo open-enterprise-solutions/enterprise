@@ -52,7 +52,7 @@ wxSize ibDynamicStaticText::DoGetBestClientSize() const { return wxDefaultSize; 
 // typeControl.cpp's ShowSelectType spawns it; never reached on web.
 // -----------------------------------------------------------------------------
 
-ibDialogSelectDataType::ibDialogSelectDataType(ibMetaData*, const std::vector<ibClassID>&) {}
+ibDialogSelectDataType::ibDialogSelectDataType(const ibMetaData*, const std::vector<ibClassID>&) {}
 ibDialogSelectDataType::~ibDialogSelectDataType() {}
 bool ibDialogSelectDataType::ShowModal(ibClassID&) { return false; }
 void ibDialogSelectDataType::OnListItemSelected(wxListEvent&) {}

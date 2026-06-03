@@ -59,9 +59,14 @@ std::map<wxString, ibValue*>& ibValueModuleRuntimeManagerExternalDataProcessor::
 ibValueModuleRuntimeManagerExternalDataProcessor::ibValueModuleRuntimeManagerExternalDataProcessor(ibMetaData* metadata, ibValueMetaObjectDataProcessor* metaObject)
 	: ibValueModuleRuntimeManager(appEnv::ActiveMetaData(), metaObject ? metaObject->GetObjectModule() : nullptr)
 {
-	m_objectValue = new ibValueRecordDataObjectDataProcessor(metaObject);
-	//set complile module 
-	//set proc unit 
+	// metadata is the owning container — LoadFromFile creates this manager and passes
+	// `this` (there is no bootstrap manager). In designer the value object never owns
+	// the metadata. No member access on metadata here → this TU needs no container
+	// header; the External value object's out-of-line dtor instantiates the drop elsewhere.
+	m_objectValue = new ibValueRecordDataObjectExternalDataProcessor(
+		metaObject, appData->DesignerMode() ? nullptr : metadata);
+	//set complile module
+	//set proc unit
 	m_objectValue->m_compileModule = m_compileModule;
 	m_objectValue->m_procUnit = m_procUnit;
 
@@ -292,9 +297,12 @@ std::map<wxString, ibValue*>& ibValueModuleRuntimeManagerExternalReport::GetGlob
 ibValueModuleRuntimeManagerExternalReport::ibValueModuleRuntimeManagerExternalReport(ibMetaData* metadata, ibValueMetaObjectReport* metaObject)
 	: ibValueModuleRuntimeManager(appEnv::ActiveMetaData(), metaObject ? metaObject->GetObjectModule() : nullptr)
 {
-	m_objectValue = new ibValueRecordDataObjectReport(metaObject);
-	//set complile module 
-	//set proc unit 
+	// See the data-processor manager above: metadata is the owning container (passed
+	// by LoadFromFile), never owned in designer. No member access here.
+	m_objectValue = new ibValueRecordDataObjectExternalReport(
+		metaObject, appData->DesignerMode() ? nullptr : metadata);
+	//set complile module
+	//set proc unit
 	m_objectValue->m_compileModule = m_compileModule;
 	m_objectValue->m_procUnit = m_procUnit;
 

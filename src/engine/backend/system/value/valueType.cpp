@@ -47,7 +47,7 @@ wxString ibValueType::GetString() const
 #include "backend/system/systemManager.h"
 
 ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescription,
-	ibMetaData* metaData)
+	const ibMetaData* metaData)
 {
 	if (!typeDescription.IsOk())
 		return wxEmptyValue;
@@ -69,7 +69,7 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 }
 
 ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescription, const ibValue& varValue,
-	ibMetaData* metaData)
+	const ibMetaData* metaData)
 {
 	if (!typeDescription.IsOk())
 		return varValue;

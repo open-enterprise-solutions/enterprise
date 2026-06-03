@@ -29,7 +29,7 @@ ibValueCheckbox::ibValueCheckbox() : ibValueWindow(), ibTypeControlFactory()//(i
 {
 }
 
-ibMetaData* ibValueCheckbox::GetMetaData() const
+const ibMetaData* ibValueCheckbox::GetMetaData() const
 {
 	return m_formOwner != nullptr ?
 		m_formOwner->GetMetaData() : nullptr;

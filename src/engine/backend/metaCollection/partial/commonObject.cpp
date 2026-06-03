@@ -1740,14 +1740,15 @@ ibValueRecordDataObjectExt::ibValueRecordDataObjectExt(const ibValueRecordDataOb
 
 ibValueRecordDataObjectExt::~ibValueRecordDataObjectExt()
 {
-	if (m_metaObject->IsExternalCreate()) {
-		if (!appData->DesignerMode()) {
-			ibMetaData* metaData = m_metaObject->GetMetaData();
-			if (!metaData->CloseDatabase(forceCloseFlag)) {
-				wxASSERT_MSG(false, "m_moduleManager->CloseDatabase() == false");
-			}
-			wxDELETE(metaData);
+}
+
+ibExternalOwnerHelper::~ibExternalOwnerHelper()
+{
+	if (m_externalMetadata != nullptr) {
+		if (!m_externalMetadata->CloseDatabase(forceCloseFlag)) {
+			wxASSERT_MSG(false, "external metadata CloseDatabase() == false");
 		}
+		wxDELETE(m_externalMetadata);
 	}
 }
 
@@ -1792,11 +1793,6 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 
 bool ibValueRecordDataObjectExt::InitializeObject(ibValueRecordDataObjectExt* source)
 {
-	//if (m_metaObject->AccessRight("use", appData->GetUserName()))
-	//{
-
-	//}
-
 	if (!m_metaObject->IsExternalCreate()) {
 		ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
 		wxASSERT(moduleManager);
@@ -2485,7 +2481,7 @@ void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::CreateRecordSet()
 	ibRecorderRegister::ClearRecordSet();
 
 	for (unsigned int idx = 0; idx < metaDesc->GetTypeCount(); idx++) {
-		ibValueMetaObjectRegisterData* metaObject = metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(metaDesc->GetByIdx(idx));
+		const ibValueMetaObjectRegisterData* metaObject = metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(metaDesc->GetByIdx(idx));
 		if (metaObject == nullptr || !metaObject->IsAllowed())
 			continue;
 		ibValueMetaObjectAttributePredefined* registerRecord = metaObject->GetRegisterRecorder();

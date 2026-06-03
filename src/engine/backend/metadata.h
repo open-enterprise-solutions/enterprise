@@ -160,7 +160,7 @@ private:
 ///////////////////////////////////////////////////////////////////////////////
 
 class BACKEND_API ibMetaData {
-	void DoGenerateNewID(ibMetaID& id, ibValueMetaObject* top) const;
+	void DoGenerateNewID(ibMetaID& id, const ibValueMetaObject* top) const;
 public:
 
 	ibMetaData() :
@@ -197,7 +197,8 @@ public:
 	virtual ibVersionID GetVersion() const = 0;
 
 	virtual wxString GetFileName() const { return wxEmptyString; }
-	virtual ibValueMetaObject* GetCommonMetaObject() const { return nullptr; }
+	virtual const ibValueMetaObject* GetCommonMetaObject() const { return nullptr; }
+	virtual ibValueMetaObject* GetCommonMetaObject() { return nullptr; }
 
 	//runtime support:
 	inline ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) const {
@@ -327,22 +328,40 @@ public:
 #pragma endregion
 #pragma region __filter_h__
 
-	//any
+	// Overload pair (Effective C++ Item 3): const this → const result, so the
+	// runtime (which reaches ibMetaData through a const handle) gets const
+	// meta-objects — they protect metadata from mutation exactly like the const
+	// ibMetaData handle does. non-const this → mutable, for designer /
+	// meta-internal edits. The protected FindObjectByFilter helper stays const
+	// and is shared by both; the const path just narrows its result.
 	template <typename _T1 = ibValueMetaObject, typename _T2>
-	_T1* FindAnyObjectByFilter(const _T2& id, const bool use_child_filter = false) const {
+	const _T1* FindAnyObjectByFilter(const _T2& id, const bool use_child_filter = false) const {
+		return FindObjectByFilter<_T2, ibValueMetaObject, _T1>(id, {}, use_child_filter);
+	}
+	template <typename _T1 = ibValueMetaObject, typename _T2>
+	_T1* FindAnyObjectByFilter(const _T2& id, const bool use_child_filter = false) {
 		return FindObjectByFilter<_T2, ibValueMetaObject, _T1>(id, {}, use_child_filter);
 	}
 
 	//any
 	template <typename _T1 = ibValueMetaObject, typename _T2>
-	_T1* FindAnyObjectByFilter(const _T2& id, const ibClassID& clsid, const bool use_child_filter = false) const {
+	const _T1* FindAnyObjectByFilter(const _T2& id, const ibClassID& clsid, const bool use_child_filter = false) const {
+		return FindObjectByFilter<_T2, ibValueMetaObject, _T1>(id, { clsid }, use_child_filter);
+	}
+	template <typename _T1 = ibValueMetaObject, typename _T2>
+	_T1* FindAnyObjectByFilter(const _T2& id, const ibClassID& clsid, const bool use_child_filter = false) {
 		return FindObjectByFilter<_T2, ibValueMetaObject, _T1>(id, { clsid }, use_child_filter);
 	}
 
 	//any
 	template <typename _T1 = ibValueMetaObject, typename _T2>
-	_T1* FindAnyObjectByFilter(const _T2& id,
+	const _T1* FindAnyObjectByFilter(const _T2& id,
 		const std::initializer_list<ibClassID> filter, const bool use_child_filter = false) const {
+		return FindObjectByFilter<_T2, ibValueMetaObject, ibValueMetaObject, _T1>(id, filter, use_child_filter);
+	}
+	template <typename _T1 = ibValueMetaObject, typename _T2>
+	_T1* FindAnyObjectByFilter(const _T2& id,
+		const std::initializer_list<ibClassID> filter, const bool use_child_filter = false) {
 		return FindObjectByFilter<_T2, ibValueMetaObject, ibValueMetaObject, _T1>(id, filter, use_child_filter);
 	}
 

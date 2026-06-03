@@ -272,3 +272,35 @@ model-level and transport-neutral; only the leaf differs — `wxAuiToolBar`
 + merged `wxMenuBar` on desktop, an HTML menu/toolbar on web when it
 reaches parity. Same generalisation seam as `ibFrontendWindow`: the
 contribution logic is shared, the rendering is per-transport.
+
+## Runtime form detached from the metadata hierarchy (2026-06-03)
+
+Fallout of the const-meta close: the runtime **form** doc/view no longer pretend
+to be metadata-editing nodes.
+
+- `ibFormVisualDocument : ibDocument` (was `ibMetaDataDocument`) and
+  `ibFormVisualEditView : ibView` (was `ibMetaView`). The form is runtime →
+  const-meta; it has its own const `GetMetaData()` accessor and is **not** bound
+  to the non-const `ibMetaDataDocument::GetMetaData()` contract that the designer
+  metaclass editors (`ibDataProcessorFileDocument`, `ibReportFileDocument`, …)
+  legitimately need.
+- **Creation pipeline lifted to `ibDocument`.** `ibDocument::OnCreate` now owns
+  the `DoCreateView()` → `SetDocument` → `CreateChildFrame` → `view->OnCreate(this)`
+  → web-tab-wire → `ShowFrame` sequence (was on `ibMetaDocument::OnCreate`).
+  `ibDocument::DoCreateView()` (protected virtual) defaults to the document
+  template's view class; **template-less** docs (the form) override it and build
+  the view directly — so a form needs no document template. Defined low in
+  docView.cpp where the child-frame headers are complete.
+- **One view-create signature.** Every view overrides
+  `OnCreate(ibDocument*, long)` (was `ibMetaView::OnCreate(ibMetaDocument*)`);
+  meta views take the typed doc via `GetDocument()` (encapsulated dynamic_cast),
+  not a hand-written downcast.
+- **View-level desktop wiring lifted to `ibView`** so the plain form view still
+  participates: `Activate` (full body in docManager.cpp — it reaches `mainFrame` /
+  `ibFrontendDocMDIFrame`; without it the form view skipped
+  `mainFrame->ActivateView` and deactivation stuck), `CreateMenuBar` /
+  `OnCreateToolbar` (no-op defaults — a runtime form contributes neither), and
+  `ibFrontendDocMDIFrame::ActivateView(ibView*)`.
+
+Rule that fell out: **what the form view needs, lift up into `ibView`; do not
+downcast back to `ibMetaView`.** See memory `docview-oncreate-pipeline`.

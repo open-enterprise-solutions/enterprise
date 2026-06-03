@@ -681,10 +681,10 @@ bool ibDocument::RemoveView(ibView *view)
     return true;
 }
 
-bool ibDocument::OnCreate(const wxString& WXUNUSED(path), long flags)
-{
-    return GetDocumentTemplate()->CreateView(this, flags) != nullptr;
-}
+// ibDocument::OnCreate + ibDocument::DoCreateView are defined lower in this file
+// (after the frontend child-frame / visual-host includes at ~line 2426), since the
+// view-creation pipeline needs ibFrontendDocMDIFrame / ibWebFrame / the web visual
+// host to be complete types.
 
 // Called after a view is added or removed.
 // The default implementation deletes the document if
@@ -917,14 +917,8 @@ bool ibView::Close(bool deleteWindow)
     return OnClose(deleteWindow);
 }
 
-void ibView::Activate(bool activate)
-{
-    if (GetDocument() && GetDocumentManager())
-    {
-        OnActivateView(activate, this, GetDocumentManager()->GetCurrentView());
-        GetDocumentManager()->ActivateView(this, activate);
-    }
-}
+// ibView::Activate is defined in docManager.cpp — it needs the desktop main
+// frame headers (mainFrame / ibFrontendDocMDIFrame) that live on that side.
 
 bool ibView::OnClose(bool WXUNUSED(deleteWindow))
 {
@@ -2450,12 +2444,17 @@ wxIMPLEMENT_CLASS(ibMetaView, ibView);
 //*                            Document implementation                         *
 //******************************************************************************
 
-ibMetaView* ibMetaDocument::DoCreateView()
+// Default view factory: pull the view class from the document template (the
+// wx-style path every templated doc uses). Template-less docs override this.
+ibView* ibDocument::DoCreateView()
 {
-	wxClassInfo* viewClassInfo = m_documentTemplate->GetViewClassInfo();
+	ibDocTemplate* docTemplate = GetDocumentTemplate();
+	if (docTemplate == nullptr)
+		return nullptr;
+	wxClassInfo* viewClassInfo = docTemplate->GetViewClassInfo();
 	if (viewClassInfo == nullptr)
 		return nullptr;
-	return static_cast<ibMetaView*>(viewClassInfo->CreateObject());
+	return static_cast<ibView*>(viewClassInfo->CreateObject());
 }
 
 wxString ibMetaDocument::GetModuleName() const
@@ -2477,12 +2476,17 @@ ibMetaDocument::ibMetaDocument(ibMetaDocument* docParent) :
 // no adapter-side work needed after the shadow-field cleanup.
 
 
-bool ibMetaDocument::OnCreate(const wxString& path, long flags)
+// Unified doc/view creation pipeline. Lifted up from ibMetaDocument so any
+// document — templated (meta editors, Text/Help/AuditLog) or template-less
+// (ibFormVisualDocument, which overrides DoCreateView) — gets a view + child
+// frame without needing a document template. Replaces the old one-liner that
+// delegated to ibDocTemplate::CreateView.
+bool ibDocument::OnCreate(const wxString& WXUNUSED(path), long flags)
 {
 	if (ibSession::IsCurrentForceExit())
 		return false;
 
-	wxScopedPtr<ibMetaView> view(DoCreateView());
+	wxScopedPtr<ibView> view(DoCreateView());
 	if (!view)
 		return false;
 

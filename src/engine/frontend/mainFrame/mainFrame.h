@@ -220,8 +220,8 @@ public:
 	bool IsShownInspector();
 	void ShowInspector();
 
-	// Activate view 
-	void ActivateView(ibMetaView* view, bool activate = true);
+	// Activate view
+	void ActivateView(ibView* view, bool activate = true);
 
 protected:
 

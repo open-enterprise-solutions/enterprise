@@ -2,12 +2,13 @@
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibReportEditView, ibMetaView);
 
-bool ibReportEditView::OnCreate(ibMetaDocument* doc, long flags)
+bool ibReportEditView::OnCreate(ibDocument* docBase, long flags)
 {
+	ibMetaDocument* doc = GetDocument();
 	m_metaTree = new ibDataReportTree(doc, m_viewFrame);
 	m_metaTree->SetReadOnly(false);
 
-	return ibMetaView::OnCreate(doc, flags);
+	return ibView::OnCreate(docBase, flags);
 }
 
 void ibReportEditView::OnActivateView(bool activate, ibView* activeView, ibView* deactiveView)

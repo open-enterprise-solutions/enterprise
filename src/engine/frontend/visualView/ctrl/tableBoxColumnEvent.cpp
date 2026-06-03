@@ -6,7 +6,7 @@
 
 bool ibValueModelTableBoxColumn::TextProcessing(wxTextCtrl* textCtrl, const wxString& strData)
 {
-	ibMetaData* metaData = GetMetaData();
+	const ibMetaData* metaData = GetMetaData();
 	wxASSERT(metaData);
 	ibValue selValue; GetControlValue(selValue);
 	const ibValue& newValue = metaData->CreateObject(selValue.GetClassType());

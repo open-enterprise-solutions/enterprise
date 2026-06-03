@@ -175,14 +175,14 @@ ibValue* ibCompileValueCache::FindParentCompileModuleRef(const ibValueMetaObject
 //ID's 
 ibMetaID ibMetaData::GenerateNewID() const
 {
-	ibValueMetaObject* commonObject = GetCommonMetaObject();
+	const ibValueMetaObject* commonObject = GetCommonMetaObject();
 	wxASSERT(commonObject);
 	ibMetaID id = commonObject->GetMetaID() + 1;
 	DoGenerateNewID(id, commonObject);
 	return id;
 }
 
-void ibMetaData::DoGenerateNewID(ibMetaID& id, ibValueMetaObject* top) const
+void ibMetaData::DoGenerateNewID(ibMetaID& id, const ibValueMetaObject* top) const
 {
 	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
 		ibValueMetaObject* child = top->GetChild(idx);

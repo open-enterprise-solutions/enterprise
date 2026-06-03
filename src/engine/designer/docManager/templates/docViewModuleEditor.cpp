@@ -36,15 +36,16 @@ EVT_MENU(wxID_DECREASE_INDENT, ibModuleEditView::OnMenuEvent)
 
 wxEND_EVENT_TABLE()
 
-bool ibModuleEditView::OnCreate(ibMetaDocument* doc, long flags)
+bool ibModuleEditView::OnCreate(ibDocument* docBase, long flags)
 {
+	ibMetaDocument* doc = GetDocument();
 	m_codeEditor = new ibCodeEditorDesigner(doc, m_viewFrame, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
 
 	m_codeEditor->SetReadOnly(flags == ibDOC_READONLY);
 	m_codeEditor->SetSTCFocus(true);
 
-	return ibMetaView::OnCreate(doc, flags)
+	return ibView::OnCreate(docBase, flags)
 		&& m_codeEditor->LoadModule();
 }
 

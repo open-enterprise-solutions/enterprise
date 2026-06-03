@@ -49,13 +49,13 @@ void ibVariantDataAttribute::DoSetFromMetaId(const ibMetaID& id)
 		const ibMetaData* metaData = m_ownerProperty->GetMetaData();
 		wxASSERT(metaData);
 
-		ibValueMetaObjectAttributeBase* attribute = metaData->FindAnyObjectByFilter<ibValueMetaObjectAttributeBase>(id, true);
+		const ibValueMetaObjectAttributeBase* attribute = metaData->FindAnyObjectByFilter<ibValueMetaObjectAttributeBase>(id, true);
 		if (attribute != nullptr && attribute->IsAllowed()) {
 			m_typeDesc.SetDefaultMetaType(attribute->GetTypeDesc());
 			return;
 		}
 
-		ibValueMetaObjectTableData* metaTable = metaData->FindAnyObjectByFilter<ibValueMetaObjectTableData>(id, true);
+		const ibValueMetaObjectTableData* metaTable = metaData->FindAnyObjectByFilter<ibValueMetaObjectTableData>(id, true);
 		if (metaTable != nullptr && metaTable->IsAllowed()) {
 			m_typeDesc.SetDefaultMetaType(metaTable->GetTypeDesc());
 			return;

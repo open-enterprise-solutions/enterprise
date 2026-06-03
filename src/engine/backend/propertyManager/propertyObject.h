@@ -323,7 +323,8 @@ public:
 	virtual bool IsPinnedToParent() const { return false; }
 
 	/// Gets the metadata object
-	virtual ibMetaData* GetMetaData() const { return nullptr; }
+	virtual const ibMetaData* GetMetaData() const { return nullptr; }
+	virtual ibMetaData* GetMetaData() { return nullptr; }
 
 	/**
 	* Obtiene la propiedad identificada por el nombre.

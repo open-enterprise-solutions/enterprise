@@ -360,7 +360,7 @@ wxPGEditorDialogAdapter* ibPGTypeProperty::GetEditorDialog() const
 			}
 		}
 
-		void FillByClsid(ibMetaData* metaData, const ibClassID& clsid,
+		void FillByClsid(const ibMetaData* metaData, const ibClassID& clsid,
 			ibCheckTree* tc, ibVariantDataAttribute* data, bool allowEdit) {
 
 			wxImageList* imageList = tc->GetImageList();
@@ -386,7 +386,7 @@ wxPGEditorDialogAdapter* ibPGTypeProperty::GetEditorDialog() const
 			}
 		}
 
-		void FillByClsid(ibSelectorDataType selectorDataType, ibMetaData* metaData, const ibClassID& clsid,
+		void FillByClsid(ibSelectorDataType selectorDataType, const ibMetaData* metaData, const ibClassID& clsid,
 			ibCheckTree* tc, ibVariantDataAttribute* data, bool allowEdit) {
 
 			wxImageList* imageList = tc->GetImageList();
@@ -774,7 +774,7 @@ wxPGEditorDialogAdapter* ibPGTypeProperty::GetEditorDialog() const
 			}
 			/////////////////////////////////////////////////
 
-			ibMetaData* metaData = typeFactory->GetMetaData();
+			const ibMetaData* metaData = typeFactory->GetMetaData();
 			wxASSERT(metaData);
 			if (metaData != nullptr) {
 				FillByClsid(selectorDataType, metaData, g_metaCatalogCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));

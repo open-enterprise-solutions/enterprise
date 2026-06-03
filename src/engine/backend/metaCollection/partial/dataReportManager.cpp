@@ -32,7 +32,7 @@ void ibValueManagerDataObjectReport::PrepareNames() const
 
 bool ibValueManagerDataObjectReport::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	ibMetaData* metaData = m_metaObject->GetMetaData();
+	const ibMetaData* metaData = m_metaObject->GetMetaData();
 	wxASSERT(metaData);
 
 	switch (lMethodNum)

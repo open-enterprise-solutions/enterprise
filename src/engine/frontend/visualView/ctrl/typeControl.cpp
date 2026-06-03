@@ -488,7 +488,7 @@ ibClassID ibTypeControlFactory::GetDataType() const
 
 #include "frontend/win/dlgs/selectData.h"
 
-ibClassID ibTypeControlFactory::ShowSelectType(ibMetaData* metaData, const ibTypeDescription& typeDescription)
+ibClassID ibTypeControlFactory::ShowSelectType(const ibMetaData* metaData, const ibTypeDescription& typeDescription)
 {
 	if (typeDescription.GetClsidCount() < 2) return typeDescription.GetFirstClsid();
 	

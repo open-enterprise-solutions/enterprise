@@ -11,13 +11,14 @@ wxEND_EVENT_TABLE()
 
 #include "win/editor/roleEditor/roleEditor.h"
 
-bool ibRoleEditView::OnCreate(ibMetaDocument* doc, long flags)
+bool ibRoleEditView::OnCreate(ibDocument* docBase, long flags)
 {
+	ibMetaDocument* doc = GetDocument();
 	m_roleEditor = new ibRoleEditor(m_viewFrame, wxID_ANY, doc->GetMetaObject());
 	m_roleEditor->SetReadOnly(flags == ibDOC_READONLY);
-	
-	m_roleEditor->RefreshRole();	
-	return ibMetaView::OnCreate(doc, flags);
+
+	m_roleEditor->RefreshRole();
+	return ibView::OnCreate(docBase, flags);
 }
 
 void ibRoleEditView::OnUpdate(ibView* sender, wxObject* hint)

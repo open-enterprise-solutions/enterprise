@@ -24,18 +24,17 @@ m_version(version_oes_last)
 	);
 
 	if (m_commonObject->OnCreateMetaObject(this, newObjectFlag)) {
-		m_moduleManager = new ibValueModuleRuntimeManagerExternalReport(this, m_commonObject);
-		// ibValuePtr holds the ref — no manual IncrRef.
+		// The module manager is a runtime concern (see BuildFreshRoot) — it is created
+		// only in LoadFromFile. No throwaway bootstrap manager here; m_moduleManager
+		// stays null until the file is loaded.
 		if (!m_commonObject->OnLoadMetaObject(this)) {
 			wxASSERT_MSG(false, "m_commonObject->OnLoadMetaObject() == false");
 		}
-		m_moduleManager->PrepareNames();
 	}
 
 	m_commonObject->PrepareNames();
 	// m_commonObject is an ibValuePtr — the assignment above already holds the ref.
 
-	wxASSERT(m_moduleManager);
 	m_ownerMeta = this;
 }
 
@@ -90,9 +89,14 @@ ibValueMetaObjectReport* ibMetaDataReport::GetReport() const
 	return m_commonObject; // ibValuePtr operator T*
 }
 
-ibValueMetaObject* ibMetaDataReport::GetCommonMetaObject() const
+const ibValueMetaObject* ibMetaDataReport::GetCommonMetaObject() const
 {
 	return m_commonObject; // ibValuePtr operator T* -> upcast to base
+}
+
+ibValueMetaObject* ibMetaDataReport::GetCommonMetaObject()
+{
+	return m_commonObject;
 }
 
 bool ibMetaDataReport::LoadDatabase()

@@ -99,7 +99,7 @@ class FRONTEND_API ibValueSizerItem : public ibValueFrame {
 	}
 
 	//get metadata
-	virtual ibMetaData* GetMetaData() const override;
+	virtual const ibMetaData* GetMetaData() const override;
 
 	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }
 	virtual void SetOwnerForm(ibValueForm* ownerForm) { m_formOwner = ownerForm; }

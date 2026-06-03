@@ -42,8 +42,9 @@ wxEND_EVENT_TABLE()
 
 static wxWindowID control_id = wxID_HIGHEST + 3000;
 
-bool ibFormEditView::OnCreate(ibMetaDocument* doc, long flags)
+bool ibFormEditView::OnCreate(ibDocument* docBase, long flags)
 {
+	ibMetaDocument* doc = GetDocument();
 	m_visualNotebook = new ibVisualEditorNotebook(doc, m_viewFrame, wxID_ANY, flags);
 
 	wxWindowID id = control_id;
@@ -65,7 +66,7 @@ bool ibFormEditView::OnCreate(ibMetaDocument* doc, long flags)
 		return false;
 
 	m_visualNotebook->RefreshEditor();
-	return ibMetaView::OnCreate(doc, flags);
+	return ibView::OnCreate(docBase, flags);
 }
 
 #if wxUSE_MENUS	

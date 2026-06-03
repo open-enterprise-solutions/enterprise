@@ -30,7 +30,7 @@ bool ibDialogSelectDataType::ShowModal(ibClassID& clsid)
 
 #define ICON_SIZE 16
 
-ibDialogSelectDataType::ibDialogSelectDataType(ibMetaData* metaData, const std::vector<ibClassID>& array) :
+ibDialogSelectDataType::ibDialogSelectDataType(const ibMetaData* metaData, const std::vector<ibClassID>& array) :
 	wxDialog(ibFrontendDocMDIFrame::GetFrame(), wxID_ANY, _("Select data type"), wxDefaultPosition, wxSize(315, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
 	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);

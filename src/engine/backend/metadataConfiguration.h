@@ -84,7 +84,8 @@ public:
 	virtual bool DumpDataToBuffer(wxMemoryBuffer& buffer) { return true; }
 
 	//get common metadata
-	virtual ibValueMetaObjectConfiguration* GetCommonMetaObject() const = 0;
+	virtual const ibValueMetaObjectConfiguration* GetCommonMetaObject() const = 0;
+	virtual ibValueMetaObjectConfiguration* GetCommonMetaObject() = 0;
 
 	// get config metadata in storage
 	virtual ibMetaDataConfigurationBase* GetConfiguration() const { return nullptr; }
@@ -179,7 +180,8 @@ public:
 
 	// Out-of-line: m_commonObject is an ibValuePtr; its operator T* downcast needs
 	// the full ibValueMetaObjectConfiguration, kept out of this header.
-	virtual ibValueMetaObjectConfiguration* GetCommonMetaObject() const override;
+	virtual const ibValueMetaObjectConfiguration* GetCommonMetaObject() const override;
+	virtual ibValueMetaObjectConfiguration* GetCommonMetaObject() override;
 
 	//get config type
 	virtual ibConfigType GetConfigType() const { return ibConfigType::ibConfigType_File; };

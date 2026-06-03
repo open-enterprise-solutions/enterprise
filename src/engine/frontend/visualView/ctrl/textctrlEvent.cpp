@@ -134,7 +134,7 @@ void ibValueTextCtrl::OnSelectButtonPressed(wxCommandEvent& event)
 		if (selValue.GetType() == ibValueTypes::TYPE_EMPTY) {
 			const ibClassID& clsid = GetDataType();
 			if (clsid != 0) {
-				ibMetaData* metaData = GetMetaData();
+				const ibMetaData* metaData = GetMetaData();
 				wxASSERT(metaData);
 				if (metaData->IsRegisterCtor(clsid)) {
 					SetControlValue(

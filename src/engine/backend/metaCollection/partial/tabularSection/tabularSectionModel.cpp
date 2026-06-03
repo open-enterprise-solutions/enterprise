@@ -41,7 +41,7 @@ bool ibValueTabularSectionDataObjectBase::SetValueByRow(const wxVariant& variant
 	if (node == nullptr) return false;
 
 	if (!m_metaTable->IsNumberLine(col)) {
-		ibMetaData* metaData = m_metaTable->GetMetaData();
+		const ibMetaData* metaData = m_metaTable->GetMetaData();
 		wxASSERT(metaData);
 		const bool hasCol = node->HasColumnValue(col);
 		

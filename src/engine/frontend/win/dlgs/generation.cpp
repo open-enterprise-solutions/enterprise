@@ -20,7 +20,7 @@ bool ibDialogGeneration::ShowModal(ibMetaID& id)
 
 #define ICON_SIZE 16
 
-ibDialogGeneration::ibDialogGeneration(ibMetaData* metaData, const ibMetaDescription& metaDesc) :
+ibDialogGeneration::ibDialogGeneration(const ibMetaData* metaData, const ibMetaDescription& metaDesc) :
 	wxDialog(ibFrontendDocMDIFrame::GetFrame(), wxID_ANY, _("Select generation"), wxDefaultPosition, wxSize(315, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), m_metaDesc(metaDesc)
 {
 	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);

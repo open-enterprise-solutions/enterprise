@@ -14,7 +14,7 @@ public:
 
 	ibInterfaceEditView() : ibMetaView() {}
 
-	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
+	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnUpdate(ibView* sender, wxObject* hint) override;
 	virtual void OnDraw(wxDC* dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;

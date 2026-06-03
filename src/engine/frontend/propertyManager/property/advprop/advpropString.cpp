@@ -175,7 +175,7 @@ bool wxTStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 		if (HasFlag(wxPGFlags::ReadOnly))
 			edStyle |= wxTE_READONLY;
 
-		ibMetaData* metaData = m_ownerProperty->GetMetaData();
+		const ibMetaData* metaData = m_ownerProperty->GetMetaData();
 		if (metaData != nullptr) {
 
 			wxBoxSizer* rowsizer = new wxBoxSizer(wxVERTICAL);
@@ -184,9 +184,11 @@ bool wxTStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 			ibBackendLocalization::CreateLocalizationArray(
 				m_value.GetString(), array);
 
-			ibMetaData* owner = nullptr;
-			metaData->GetOwner(owner);
-			if (owner == nullptr) { owner = metaData; }
+			// GetOwner's out-param is non-const (ibMetaData*&), so take it into a
+			// raw local; the owner we actually use downstream is read-only.
+			ibMetaData* ownerRaw = nullptr;
+			metaData->GetOwner(ownerRaw);
+			const ibMetaData* owner = ownerRaw ? ownerRaw : metaData;
 
 			auto arrayLanguage = owner->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID);
 			for (const auto language : arrayLanguage) {

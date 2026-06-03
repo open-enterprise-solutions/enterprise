@@ -186,3 +186,34 @@ FillArray/GetAny method — and on every sibling collection helper like
 
 First attempt cascaded to 4700+ compile errors. Reverted; tracked as
 follow-up in `next-session-metadata-const.md`.
+
+## Landing — backdoor closed (2026-06-03)
+
+The big-bang second attempt landed; full `Debug|x86` builds clean and the
+runtime (launcher → forms) is verified. The boundary is now const-correct:
+
+- **`GetMetaData()` — capability split, NOT a pure pair.** `ibBackendTypeConfigFactory`
+  (backend_type.h) declares **only** the const read accessor
+  `virtual const ibMetaData* GetMetaData() const = 0;`. The mutable overload
+  `virtual ibMetaData* GetMetaData()` is added **only** by classes that genuinely
+  own a mutable `ibMetaData` — the metaobjects (`metaObject.h`,
+  `metaAttributeObject.h`, `chartOfCharacteristicTypes.h`, `propertyObject.h`).
+  Runtime classes (forms / controls) take their metadata from a const source
+  (`GetSourceMetaObject()` is const) and so implement only the const accessor —
+  they physically cannot produce a mutable pointer without a `const_cast`.
+  NVI was rejected for exactly this reason: any single shared virtual would force
+  a `const_cast` in one of the wrappers. See memory `getmetadata-capability-split`.
+- **`FindAnyObjectByFilter<T>()` ×3** (by id / id+clsid / id+filter) — overload pair
+  (const → `const T*`, non-const → `T*`). metaData.h:338-365.
+- **`GetCommonMetaObject()`** — overload pair. metaData.h:200-201.
+- Runtime path `const meta → FindXxx → const T* → mutator()` is now a **compile
+  error**, no `const_cast` anywhere in the closure.
+
+### Still deferred — `GetAnyArrayObject<T>()`
+
+`GetAnyArrayObject<T>(...) const → std::vector<T*>` (metaData.h:306/314/322) still
+returns **non-const** element pointers from a const `ibMetaData`. A const metadata
+can therefore still hand out mutable metaobject pointers through it. Left deferred:
+pairing it means `vector<const T*>` and fixing every caller that iterates
+`for (auto x : meta->GetAnyArrayObject(...))` and touches `x` — a wide ripple with
+no current need. Tracked as the single remaining boundary hole.

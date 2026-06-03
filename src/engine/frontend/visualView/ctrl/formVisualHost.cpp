@@ -53,7 +53,7 @@ wxString ibValueForm::GetControlTitle() const
 
 #include "frontend/docView/docView.h"
 
-bool ibValueForm::CreateDocForm(ibMetaDocument* docParent, bool createContext)
+bool ibValueForm::CreateDocForm(ibDocument* docParent, bool createContext)
 {
 	ibFormVisualDocument* const visualFoundedDoc = GetVisualDocument();
 	if (visualFoundedDoc != nullptr) {

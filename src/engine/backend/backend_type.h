@@ -80,7 +80,20 @@ public:
 	virtual ibValue AdjustValue(const ibValue& varValue) const;
 
 	//get metadata
-	virtual class ibMetaData* GetMetaData() const = 0;
+	// The universal factory capability is READ-only: every type-factory can hand
+	// out a const ibMetaData*, so the container mutators (CreateMetaObject /
+	// RemoveMetaObject / RenameMetaObject / RegisterCtor) are a compile error
+	// from any base-factory path — runtime included.
+	//
+	// Mutable access is NOT universal: it is added (as a non-const overload) only
+	// by classes that genuinely own a mutable ibMetaData — the metaobjects
+	// (metaObject.h, metaAttributeObject.h, ...). Runtime classes such as forms /
+	// controls take their metadata from a const source (GetSourceMetaObject() is
+	// const) and therefore CANNOT produce a mutable pointer without a const_cast,
+	// so they must not be forced to implement a non-const overload here.
+	// Designer holds the metaobject non-const and resolves to its mutable overload
+	// automatically.
+	virtual const class ibMetaData* GetMetaData() const = 0;
 };
 
 //////////////////////////////////////////////////////////////

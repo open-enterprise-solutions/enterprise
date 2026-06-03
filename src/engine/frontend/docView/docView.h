@@ -72,6 +72,7 @@ class FRONTEND_API ibMetaDocTemplate;
 class FRONTEND_API ibDocManager;
 class FRONTEND_API ibMetaDocument;
 class ibDocChildFrameAnyBase;
+class WXDLLIMPEXP_FWD_AUI wxAuiToolBar;
 
 class BACKEND_API ibValue;
 class BACKEND_API ibValueMetaObject;
@@ -237,6 +238,12 @@ protected:
     virtual bool DoSaveDocument(const wxString& file);
     virtual bool DoOpenDocument(const wxString& file);
 
+    // View factory for the OnCreate pipeline. Default pulls the view class from
+    // the document template (the wx-style path used by every templated doc).
+    // Template-less docs (e.g. ibFormVisualDocument, created directly without a
+    // template) override this to construct their view explicitly.
+    virtual ibView* DoCreateView();
+
     wxString DoGetUserReadableName() const;
 
     // Promoted from private (was wxDocument's private slot) to protected so
@@ -280,6 +287,14 @@ public:
     virtual bool OnClose(bool deleteWindow);
 
     virtual void Activate(bool activate);
+
+    // Per-view menu bar / doc-toolbar contributions, consulted by the main
+    // frame's ActivateView. Defaults are empty: a plain view (e.g. the runtime
+    // form view) contributes neither. Metadata editor views override these.
+#if wxUSE_MENUS
+    virtual wxMenuBar* CreateMenuBar() const { return nullptr; }
+#endif // wxUSE_MENUS
+    virtual void OnCreateToolbar(wxAuiToolBar* toolbar) {}
 
     ibDocManager *GetDocumentManager() const
         { return m_viewDocument->GetDocumentManager(); }
@@ -981,10 +996,6 @@ public:
 		return GetMetaObject()->ConvertToType<T>();
 	}
 
-protected:
-	virtual ibMetaView* DoCreateView();
-public:
-
 	wxString GetModuleName() const;
 
 	ibMetaDocument(ibMetaDocument* docParent = nullptr);
@@ -994,7 +1005,9 @@ public:
 	// to ibMetaData::Modify. Skip OnSaveModified-gated delete-on-empty.
 	virtual void OnChangedViewList() override { if (m_documentViews.empty()) delete this; }
 
-	virtual bool OnCreate(const wxString& WXUNUSED(path), long flags) override;
+	// OnCreate pipeline (DoCreateView -> child-frame -> view->OnCreate) lives on
+	// ibDocument now; the DoCreateView default there pulls the view class from the
+	// document template, so meta docs need no override.
 
 	virtual bool OnSaveModified() override;
 	virtual bool OnSaveDocument(const wxString& filename) override;
@@ -1055,22 +1068,14 @@ public:
 		return dynamic_cast<ibMetaDocument*>(m_viewDocument);
 	}
 
-#if wxUSE_MENUS
-	virtual wxMenuBar* CreateMenuBar() const { return nullptr; }
-#endif // wxUSE_MENUS
-
-	// Called by valueFramework if created automatically by the default document
-	// manager class: gives view a chance to initialise
-	virtual bool OnCreate(ibMetaDocument* WXUNUSED(doc), long WXUNUSED(flags)) { return true; }
-	virtual void OnCreateToolbar(wxAuiToolBar* toolbar) {}
+	// OnCreate is the single ibView::OnCreate(ibDocument*, long) virtual — the
+	// unified ibDocument::OnCreate pipeline dispatches on it. Meta views that
+	// need the metadata-typed document downcast inside (or via GetDocument(),
+	// which already returns ibMetaDocument*).
 
 	virtual void OnActivateView(bool activate, ibView* activeView, ibView* deactiveView) override;
 
 	virtual void OnDraw(wxDC* dc) override {}
-
-	// A view's window can call this to notify the view it is (in)active.
-	// The function then notifies the document manager.
-	virtual void Activate(bool activate) override;
 };
 
 #endif // wxUSE_DOC_VIEW_ARCHITECTURE

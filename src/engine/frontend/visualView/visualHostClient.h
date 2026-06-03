@@ -111,7 +111,7 @@ protected:
 //* talk to these classes the same way regardless of build.                                   *
 //********************************************************************************************
 
-class FRONTEND_API ibFormVisualEditView : public ibMetaView {
+class FRONTEND_API ibFormVisualEditView : public ibView {
 public:
 
 	ibFormVisualEditView() : m_visualHost(nullptr) {}
@@ -119,9 +119,13 @@ public:
 
 	virtual wxPrintout* OnCreatePrintout() override;
 
-	virtual bool OnCreate(ibMetaDocument* doc, long flags) override;
+	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnUpdate(ibView* sender, wxObject* hint = nullptr) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
+
+	// ibView::OnDraw is pure; the form host paints itself (wxScrolledCanvas /
+	// ibWebWindow), the view has nothing to draw.
+	virtual void OnDraw(wxDC* WXUNUSED(dc)) override {}
 
 	virtual void OnClosingDocument() override;
 
@@ -138,13 +142,16 @@ public:
 	virtual bool CanRedo() const { return false; }
 };
 
-class FRONTEND_API ibFormVisualDocument : public ibMetaDataDocument {
+class FRONTEND_API ibFormVisualDocument : public ibDocument {
 public:
 
 	ibFormVisualDocument(ibValueForm* valueForm);
 	virtual ~ibFormVisualDocument();
 
-	virtual class ibMetaData* GetMetaData() const;
+	// Form doc is runtime → const-meta. It is NOT a metadata-editing docView
+	// (ibMetaDataDocument), so this is its own const accessor, not an override of
+	// that non-const contract. See visualHostClientDocView.cpp.
+	virtual const class ibMetaData* GetMetaData() const;
 
 	virtual bool IsVisualDemonstrationDoc() const { return false; }
 
@@ -193,7 +200,7 @@ public:
 	static bool UpdateFormUniqueKey(const ibUniqueKeyPair& guid);
 
 protected:
-	virtual ibMetaView* DoCreateView();
+	virtual ibView* DoCreateView() override;
 private:
 	ibValuePtr<ibValueForm> m_valueForm;
 };

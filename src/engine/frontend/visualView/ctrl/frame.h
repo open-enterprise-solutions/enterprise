@@ -204,7 +204,7 @@ public:
 	bool GetExpanded() const { return m_expanded; }
 
 	//get metaData
-	virtual ibMetaData* GetMetaData() const = 0;
+	virtual const ibMetaData* GetMetaData() const = 0;
 
 	/**
 	* Can delete object
