@@ -28,9 +28,6 @@ m_version(version_oes_last)
 	);
 
 	if (m_commonObject->OnCreateMetaObject(this, newObjectFlag)) {
-		// The module manager is a runtime concern (see BuildFreshRoot) — it is created
-		// only in LoadFromFile. No throwaway bootstrap manager here; m_moduleManager
-		// stays null until the file is loaded.
 		if (!m_commonObject->OnLoadMetaObject(this)) {
 			wxASSERT_MSG(false, "m_commonObject->OnLoadMetaObject() == false");
 		}
@@ -38,6 +35,14 @@ m_version(version_oes_last)
 
 	m_commonObject->PrepareNames();
 	// m_commonObject is an ibValuePtr — the assignment above already holds the ref.
+
+	// Runtime module manager for this external DP, on the prepared root. Built in
+	// the ctor so a freshly created (not-from-file) DP already has it — the
+	// designer "New data processor" path calls RunDatabase() directly, never
+	// through LoadFromFile (which would otherwise be the only place it's built).
+	// LoadFromFile rebuilds it on the swapped-in root.
+	m_moduleManager = new ibValueModuleRuntimeManagerExternalDataProcessor(this, m_commonObject);
+	m_moduleManager->PrepareNames();
 
 	m_ownerMeta = this;
 }
