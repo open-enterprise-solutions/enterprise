@@ -9,6 +9,9 @@
 #include "backend/metaCollection/metaFormObject.h"
 
 #include <algorithm>
+#include <cwctype>
+#include <string>
+#include <unordered_set>
 
 //**************************************************************************************************
 //*                                       ibModuleStorage                                          *
@@ -253,47 +256,45 @@ ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsid, ibValueM
 
 wxString ibMetaData::GetNewName(const ibClassID& clsid, ibValueMetaObject* parent, const wxString& strPrefix, bool forConstructor)
 {
-	unsigned int countRec = forConstructor ?
-		0 : 1;
-
-	wxString currPrefix = strPrefix.Length() > 0 ?
+	const wxString currPrefix = strPrefix.Length() > 0 ?
 		strPrefix : wxT("newItem");
 
-	wxString newName = forConstructor ?
-		wxString::Format(wxT("%s"), currPrefix) :
-		wxString::Format(wxT("%s%d"), currPrefix, countRec);
+	// Normalise to upper case, matching stringUtils::CompareString's
+	// case-insensitive semantics, so set lookups are exact comparisons.
+	const auto toKey = [](const wxString& name) {
+		std::wstring key = name.ToStdWstring();
+		std::transform(key.begin(), key.end(), key.begin(), ::towupper);
+		return key;
+	};
 
-	while (forConstructor ||
-		countRec > 0) {
+	// Collect the sibling names already taken by objects of this class
+	// once, so each candidate is probed in O(1). The old loop rescanned
+	// every child for each candidate suffix — O(children * candidates)
+	// per call. FilterChild(clsid) is invariant here (every surviving
+	// child has class == clsid), so it is hoisted out of the scan.
+	std::unordered_set<std::wstring> takenNames;
+	if (parent != nullptr && parent->FilterChild(clsid)) {
 
-		bool foundedName = false;
+		for (unsigned int idx = 0; idx < parent->GetChildCount(); idx++) {
 
-		if (parent != nullptr) {
+			auto child = parent->GetChild(idx);
+			if (clsid != child->GetClassType())
+				continue;
+			if (child->IsDeleted())
+				continue;
 
-			for (unsigned int idx = 0; idx < parent->GetChildCount(); idx++) {
-
-				auto child = parent->GetChild(idx);
-				if (clsid != child->GetClassType())
-					continue;
-
-				if (!parent->FilterChild(child->GetClassType()))
-					continue;
-
-				if (child->IsDeleted())
-					continue;
-
-				if (stringUtils::CompareString(newName, child->GetName())) {
-					foundedName = true;
-					break;
-				}
-			}
+			takenNames.insert(toKey(child->GetName()));
 		}
-
-		if (!foundedName)
-			break;
-
-		newName = wxString::Format(wxT("%s%d"), currPrefix, ++countRec);
 	}
+
+	// forConstructor allows the bare prefix as the first candidate;
+	// otherwise numbering starts at 1.
+	unsigned int countRec = forConstructor ? 0 : 1;
+	wxString newName = forConstructor ?
+		currPrefix : wxString::Format(wxT("%s%d"), currPrefix, countRec);
+
+	while (takenNames.count(toKey(newName)) > 0)
+		newName = wxString::Format(wxT("%s%d"), currPrefix, ++countRec);
 
 	return newName;
 }

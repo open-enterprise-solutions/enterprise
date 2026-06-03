@@ -1,6 +1,11 @@
 ﻿#include "form.h"
 #include "frontend/visualView/ctrl/sizer.h"
 
+#include <algorithm>
+#include <cwctype>
+#include <string>
+#include <unordered_set>
+
 inline wxString GetClassType(const wxString& className)
 {
 	const ibCtorControlTypeBase* objectSingle =
@@ -75,76 +80,67 @@ ibValueFrame* ibValueForm::NewObject(const ibClassID& clsid, ibValueFrame* contr
 
 void ibValueForm::ResolveNameConflict(ibValueFrame* control)
 {
-	class ibResolveNameConflict {
+	if (control->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
+		return;
 
-	public:
+	// Derive the base name: the original control name with any trailing
+	// digits stripped, so "Button3" reuses the base "Button".
+	wxString strOriginalName;
 
-		static void BuildNameSet(ibValueFrame* control, ibValueForm* top) {
+	if (control->GetControlNameAsString(strOriginalName)) {
 
-			if (control->GetComponentType() != COMPONENT_TYPE_SIZERITEM) {
-
-				// Save the original name for use later.
-				wxString strOriginalName, strControlName;
-
-				if (control->GetControlNameAsString(strOriginalName)) {
-
-					if (!strOriginalName.IsEmpty()) {
-						size_t length = strOriginalName.length();
-						while (length >= 0 && stringUtils::IsDigit(strOriginalName[--length]));
-						strOriginalName = strOriginalName.Left(length + 1);
-					}
-					else {
-						const ibValueFrame* parentControl = control->GetParent();
-						if (parentControl != nullptr && g_controlToolBarItemCLSID == control->GetClassType()) {
-							strOriginalName = parentControl->GetControlName() + control->GetClassName();
-						}
-						else if (parentControl != nullptr && g_controlToolBarSeparatorCLSID == control->GetClassType()) {
-							strOriginalName = parentControl->GetControlName() + control->GetClassName();
-						}
-						else {
-							strOriginalName = control->GetClassName();
-						}
-					}
-				}
-
-				wxString strGenerateName = strOriginalName; // The name that gets incremented.
-
-				// comprobamos si hay conflicto
-				unsigned int index = 0; bool founded_name = false;
-				const std::vector<ibValueControl*> controlList = top->GetControlList();
-				do {
-
-					for (const auto valueControl : controlList) {
-
-						if (0 == valueControl->GetControlID())
-							continue;
-						if (control == valueControl)
-							continue;
-						if (!valueControl->GetControlNameAsString(strControlName))
-							continue;
-
-						if (stringUtils::CompareString(strGenerateName, strControlName)) {
-							founded_name = true;
-							break;
-						}
-
-						founded_name = false;
-					}
-
-					if (founded_name) {
-						strGenerateName = wxString::Format(wxT("%s%i"),
-							strOriginalName, ++index);
-					}
-
-				} while (founded_name);
-
-				control->SetControlName(strGenerateName);
+		if (!strOriginalName.IsEmpty()) {
+			size_t length = strOriginalName.length();
+			while (length > 0 && stringUtils::IsDigit(strOriginalName[length - 1]))
+				--length;
+			strOriginalName = strOriginalName.Left(length);
+		}
+		else {
+			const ibValueFrame* parentControl = control->GetParent();
+			if (parentControl != nullptr &&
+				(g_controlToolBarItemCLSID == control->GetClassType() ||
+					g_controlToolBarSeparatorCLSID == control->GetClassType())) {
+				strOriginalName = parentControl->GetControlName() + control->GetClassName();
 			}
-		};
+			else {
+				strOriginalName = control->GetClassName();
+			}
+		}
+	}
+
+	// Normalise to upper case, matching stringUtils::CompareString's
+	// case-insensitive semantics, so set lookups are exact comparisons.
+	const auto toKey = [](const wxString& name) {
+		std::wstring key = name.ToStdWstring();
+		std::transform(key.begin(), key.end(), key.begin(), ::towupper);
+		return key;
 	};
 
-	// el nombre no puede estar repetido dentro del mismo form
-	ibResolveNameConflict::BuildNameSet(control, control->GetOwnerForm());
+	// Collect the names already taken by the other controls once, so each
+	// candidate is probed in O(1). The old do/while rescanned the whole
+	// control list for every candidate index — O(controls * candidates)
+	// per call and O(N^3) when laying out N like-named controls.
+	std::unordered_set<std::wstring> takenNames;
+	wxString strControlName;
+	for (const auto valueControl : control->GetOwnerForm()->GetControlList()) {
+
+		if (0 == valueControl->GetControlID())
+			continue;
+		if (control == valueControl)
+			continue;
+		if (!valueControl->GetControlNameAsString(strControlName))
+			continue;
+
+		takenNames.insert(toKey(strControlName));
+	}
+
+	// el nombre no puede estar repetido dentro del mismo form: bump the
+	// numeric suffix until the candidate is free.
+	wxString strGenerateName = strOriginalName;
+	for (unsigned int index = 0; takenNames.count(toKey(strGenerateName)) > 0; )
+		strGenerateName = wxString::Format(wxT("%s%i"), strOriginalName, ++index);
+
+	control->SetControlName(strGenerateName);
 }
 
 ibValueFrame* ibValueForm::CreateObject(const wxString& className, ibValueFrame* controlParent)
