@@ -14,6 +14,15 @@ public:
 	virtual ~ibRuntimeRoot() = default;
 };
 
+// Canonical helper alias for a descriptor's script-exported names (module exports
+// + bound exports). ONE value across all descriptor classes, so the generic export
+// autobind (ibRuntimeModuleDataObject::ExportThunk) can append under it without
+// knowing each class's per-enum numbering. Distinct from the small per-class
+// aliases (eSystem/eProperty/eTable = 0/1/2); a migrated class sets its own
+// `eProcUnit = g_aliasExport` so existing dispatch (`alias == eProcUnit`) routes
+// the thunk's entries unchanged.
+constexpr long g_aliasExport = 1000;
+
 class BACKEND_API ibRuntimeModuleDataObject {
 public:
 
@@ -112,8 +121,15 @@ public:
 	void Execute(ibByteBinder& br);
 	void Execute(bool delta = true);
 
-	ibRuntimeModuleDataObject();
-	ibRuntimeModuleDataObject(ibCompileModule* compileCode);
+	// The ONLY ctor — a descriptor is always built by its owning value, which passes
+	// its already-constructed helper + itself (and, for the module manager, an eager
+	// compile module). Registering the export surface as the helper's TAIL here makes
+	// it impossible to construct a descriptor without wiring its exports "in the
+	// descriptor", and after the value's own fixed methods (stable CallAsFunc indices).
+	// No default / compile-module-only ctor: those would silently skip the export wiring.
+	ibRuntimeModuleDataObject(ibValue::ibMemberTable& helper, const ibValue* owner,
+		ibCompileModule* compileCode = nullptr)
+		: m_compileModule(compileCode) { helper.BindTail(&ExportThunk, owner); }
 	virtual ~ibRuntimeModuleDataObject();
 
 	// Module-object currently wired in m_compileModule. Thin post-
@@ -214,7 +230,25 @@ protected:
 	// not-yet-compiled descriptor). Helper is read through GetProcUnit()
 	// to pin the shared_ptr alive for the duration — same pattern as
 	// ExecAsProc / ExecAsFunc above.
-	void ExportNamesToHelper(ibValue::ibValueMethodHelper* helper, long alias) const {
+	// Free name-binder thunk: surface THIS descriptor's bytecode exports + staged
+	// context binds (ThisForm.Controls / DataSource / ...) onto the owning value's
+	// helper under g_aliasExport. A descriptor value binds it in its ctor —
+	// `m_members.Bind(&ibRuntimeModuleDataObject::ExportThunk, this)` — so NO per-class
+	// filler does this by hand ("autobind in the descriptor"). This is the ONLY place
+	// the descriptor's own names are surfaced — a form/record contributor must NOT call
+	// ExportNamesToHelper / FillHelperFromBinds itself (those make an UNGUARDED virtual
+	// GetCompileModule() on `this`; here the cross-cast to the descriptor sibling is
+	// dynamic_cast-guarded, so a half-constructed / torn-down object degrades to "no
+	// names" instead of calling through a null vtable slot). Diamond-free → ibValue is
+	// polymorphic, the sibling cross-cast is well-defined.
+	static void ExportThunk(ibValue::ibMemberTable& helper, const ibValue* ctx) {
+		if (const auto* desc = dynamic_cast<const ibRuntimeModuleDataObject*>(ctx)) {
+			desc->ExportNamesToHelper(&helper, g_aliasExport);
+			desc->FillHelperFromBinds(&helper, g_aliasExport);
+		}
+	}
+
+	void ExportNamesToHelper(ibValue::ibMemberTable* helper, long alias) const {
 		if (helper == nullptr) return;
 		const auto pu = GetProcUnit();
 		if (!pu) return;
@@ -243,7 +277,7 @@ protected:
 	// which reads bytecode (runtime only). Context binds (ThisObject / ThisForm
 	// themselves) are skipped: they're the handles, not members of themselves.
 	// Out-of-line — needs the complete ibCompileModule (only fwd-declared here).
-	void FillHelperFromBinds(ibValue::ibValueMethodHelper* helper, long alias) const;
+	void FillHelperFromBinds(ibValue::ibMemberTable* helper, long alias) const;
 
 	// Live value of an EXPORT binding by name (the m_listExternValue entry —
 	// the same stable object/proxy BindExportVariable staged). Present in BOTH

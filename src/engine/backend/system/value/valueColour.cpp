@@ -9,15 +9,13 @@
 
 //////////////////////////////////////////////////////////////////////
 
-ibValue::ibValueMethodHelper ibValueColour::m_methodHelper;
-
 ibValueColour::ibValueColour() :
-	ibValue(ibValueTypes::TYPE_VALUE), m_colour()
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_colour()
 {
 }
 
 ibValueColour::ibValueColour(const wxColour& colour) :
-	ibValue(ibValueTypes::TYPE_VALUE), m_colour(colour)
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_colour(colour)
 {
 }
 
@@ -45,13 +43,11 @@ enum
 	enColorBlue
 };
 
-void ibValueColour::PrepareNames() const
+void ibValueColour_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	m_methodHelper.ClearHelper();
-
-	m_methodHelper.AppendProp(wxT("Red"));
-	m_methodHelper.AppendProp(wxT("Green"));
-	m_methodHelper.AppendProp(wxT("Blue"));
+	helper.AppendProp(wxT("Red"));
+	helper.AppendProp(wxT("Green"));
+	helper.AppendProp(wxT("Blue"));
 }
 
 bool ibValueColour::SetPropVal(const long lPropNum, const ibValue& varPropVal)

@@ -36,20 +36,18 @@ enum func
 //*                              Support methods                             *
 //****************************************************************************
 
-void ibValueRecordSetObjectAccountingRegister::PrepareNames() const
+void ibValueRecordSetObjectAccountingRegister::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
-	m_methodHelper->AppendFunc(wxT("Add"), wxT("Add()"));
-	m_methodHelper->AppendFunc(wxT("Count"), wxT("Count()"));
-	m_methodHelper->AppendFunc(wxT("Clear"), wxT("Clear()"));
-	m_methodHelper->AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
-	m_methodHelper->AppendFunc(wxT("Load"), 1, wxT("Load(value: table)"));
-	m_methodHelper->AppendFunc(wxT("Unload"), wxT("Unload()"));
-	m_methodHelper->AppendFunc(wxT("Modified"), wxT("Modified()"));
-	m_methodHelper->AppendFunc(wxT("Read"), wxT("Read()"));
-	m_methodHelper->AppendFunc(wxT("Selected"), wxT("Selected()"));
-	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	helper.AppendFunc(wxT("Add"), wxT("Add()"));
+	helper.AppendFunc(wxT("Count"), wxT("Count()"));
+	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
+	helper.AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
+	helper.AppendFunc(wxT("Load"), 1, wxT("Load(value: table)"));
+	helper.AppendFunc(wxT("Unload"), wxT("Unload()"));
+	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
+	helper.AppendFunc(wxT("Read"), wxT("Read()"));
+	helper.AppendFunc(wxT("Selected"), wxT("Selected()"));
+	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
 
 	// ThisObject + Filter are bound in InitializeObject (context / export) —
 	// no manual prop AppendProp on the record-set helper.

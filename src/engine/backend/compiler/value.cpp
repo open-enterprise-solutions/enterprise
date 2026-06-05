@@ -1198,7 +1198,7 @@ long ibValue::GetNProps() const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetNProps();
-	ibValueMethodHelper* const methodHelper = GetPMethods();
+	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
 		return methodHelper->GetNProps();
 	return 0;
@@ -1208,7 +1208,7 @@ long ibValue::FindProp(const wxString& strPropName) const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->FindProp(strPropName);
-	ibValueMethodHelper* const methodHelper = GetPMethods();
+	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
 		return methodHelper->FindProp(strPropName);
 	return wxNOT_FOUND;
@@ -1218,7 +1218,7 @@ wxString ibValue::GetPropName(const long lPropNum) const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetPropName(lPropNum);
-	ibValueMethodHelper* const methodHelper = GetPMethods();
+	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
 		return methodHelper->GetPropName(lPropNum);
 	return wxEmptyString;
@@ -1249,7 +1249,7 @@ bool ibValue::IsPropReadable(const long lPropNum) const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->IsPropReadable(lPropNum);
-	ibValueMethodHelper* const methodHelper = GetPMethods();
+	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
 		return methodHelper->IsPropReadable(lPropNum);
 	return true;
@@ -1259,7 +1259,7 @@ bool ibValue::IsPropWritable(const long lPropNum) const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->IsPropWritable(lPropNum);
-	ibValueMethodHelper* const methodHelper = GetPMethods();
+	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
 		return methodHelper->IsPropWritable(lPropNum);
 	return true;
@@ -1269,13 +1269,13 @@ bool ibValue::IsPropScoped(const long lPropNum) const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->IsPropScoped(lPropNum);
-	ibValueMethodHelper* const methodHelper = GetPMethods();
+	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
 		return methodHelper->IsPropScoped(lPropNum);
 	return false;
 }
 
-long ibValue::ibValueMethodHelper::AppendProp(const wxString& strPropName, bool readable, bool writable, bool scoped, const long lPropNum, const long lPropAlias)
+long ibValue::ibMemberTable::AppendProp(const wxString& strPropName, bool readable, bool writable, bool scoped, const long lPropNum, const long lPropAlias)
 {
 	const unsigned int flags =
 		(readable ? eProp_Readable : 0u) |
@@ -1288,7 +1288,7 @@ long ibValue::GetNMethods() const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetNMethods();
-	ibValueMethodHelper* const methodHelper = GetPMethods();
+	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
 		return methodHelper->GetNMethods();
 	return 0;
@@ -1301,7 +1301,7 @@ long ibValue::FindMethod(const wxString& strMethodName) const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->FindMethod(strMethodName);
-	ibValueMethodHelper* const methodHelper = GetPMethods();
+	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr) {
 		const long n = methodHelper->FindMethod(strMethodName);
 		if (n >= 0) return n;
@@ -1313,7 +1313,7 @@ wxString ibValue::GetMethodName(const long lMethodNum) const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetMethodName(lMethodNum);
-	ibValueMethodHelper* const methodHelper = GetPMethods();
+	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
 		return methodHelper->GetMethodName(lMethodNum);
 	return wxEmptyString;
@@ -1323,7 +1323,7 @@ wxString ibValue::GetMethodHelper(const long lMethodNum) const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetMethodHelper(lMethodNum);
-	ibValueMethodHelper* const methodHelper = GetPMethods();
+	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
 		return methodHelper->GetMethodHelper(lMethodNum);
 	return wxEmptyString;
@@ -1333,7 +1333,7 @@ long ibValue::GetNParams(const long lMethodNum) const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetNParams(lMethodNum);
-	ibValueMethodHelper* const methodHelper = GetPMethods();
+	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
 		return methodHelper->GetNParams(lMethodNum);
 	return 0;
@@ -1352,7 +1352,7 @@ bool ibValue::HasRetVal(const long lMethodNum) const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->HasRetVal(lMethodNum);
-	ibValueMethodHelper* const methodHelper = GetPMethods();
+	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
 		return methodHelper->HasRetVal(lMethodNum);
 	return false;
@@ -1374,10 +1374,27 @@ bool ibValue::CallAsFunc(const long lMethodNum,
 	return false;
 }
 
-void ibValue::PrepareNames() const
+// Out-of-line: a member contributor (ibNameFiller) is called on the owning value,
+// which must be complete here. Free contributors get (helper, ctx); member
+// contributors are dispatched as (value->*fn)(helper).
+void ibValue::ibMemberTable::Build()
 {
-	if (m_pRef != nullptr && IsReference())
-		m_pRef->PrepareNames();
+	if (!HasBinders())
+		return;
+	ClearHelper();
+	const auto run = [this](const ibBoundNames& b) {
+		if (b.m_freeFn != nullptr)
+			b.m_freeFn(*this, b.m_ctx);
+		else if (b.m_memberFn != nullptr)
+			(b.m_ctx->*b.m_memberFn)(*this);
+	};
+	for (const auto& b : m_binders)
+		if (!b.m_tail) run(b);
+	for (const auto& b : m_binders)
+		if (b.m_tail) run(b);   // module exports last — keeps fixed-method indices stable
+	// Release — pairs with the acquire load in EnsureBuilt(), so any thread that sees
+	// kBuilt (fast path or the wait loop) also sees every m_props/m_methods write above.
+	m_buildState.store(kBuilt, std::memory_order_release);
 }
 
 //get the current value (relevant for aggregate objects or dialog objects)

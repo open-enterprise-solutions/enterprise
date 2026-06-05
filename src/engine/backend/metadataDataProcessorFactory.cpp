@@ -21,7 +21,7 @@ ibValue* ibMetaDataDataProcessor::CreateObjectRef(const ibClassID& clsid, ibValu
 			wxDELETE(newObject);
 			ibBackendCoreException::Error(_("Error initializing object '%s'"), typeCtor->GetClassName());
 		}
-		newObject->PrepareNames();
+		// Name surface builds lazily on first GetPMethods() — no eager populate.
 		return newObject;
 	}
 

@@ -116,7 +116,6 @@ public:
 
 		ibValueTabularSectionDataObjectBase* m_ownerTable;
 		std::map<ibMetaID, ibValuePtr<ibValueTabularSectionColumnInfo>> m_listColumnInfo;
-		ibValueMethodHelper* m_methodHelper;
 	};
 
 	class ibValueTabularSectionDataObjectReturnLine : public ibValueModelReturnLine {
@@ -126,17 +125,13 @@ public:
 		virtual ~ibValueTabularSectionDataObjectReturnLine();
 
 		virtual ibValueModelTableBase* GetOwnerModel() const { return m_ownerTable; }
-		virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-			//PrepareNames(); 
-			return m_methodHelper;
-		}
 
-		virtual void PrepareNames() const;
+		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal); //setting attribute
 		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal); //attribute value
 
-		//Get ref class 
+		//Get ref class
 		virtual ibClassID GetClassType() const;
 
 		virtual wxString GetClassName() const;
@@ -145,7 +140,6 @@ public:
 		friend class ibValueTabularSectionDataObjectBase;
 	private:
 		ibValueTabularSectionDataObjectBase* m_ownerTable;
-		ibValueMethodHelper* m_methodHelper;
 	};
 
 	const ibValueMetaObjectTableData* GetMetaObject() const { return m_metaTable; }
@@ -164,13 +158,15 @@ public:
 	ibValueTabularSectionDataObjectBase() :
 		m_objectValue(nullptr), m_metaTable(nullptr),
 		m_recordColumnCollection(nullptr),
-		m_methodHelper(nullptr), m_readOnly(false) {
+		m_readOnly(false) {
+		m_members.Bind(this, &ibValueTabularSectionDataObjectBase::FillMembers);
 	}
 
 	ibValueTabularSectionDataObjectBase(ibValueDataObject* objectValue, const ibValueMetaObjectTableData* tableObject, bool readOnly = false) :
 		m_objectValue(objectValue), m_metaTable(tableObject),
 		m_recordColumnCollection(ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectColumnCollection>(this)),
-		m_methodHelper(new ibValueMethodHelper()), m_readOnly(readOnly) {
+		m_readOnly(readOnly) {
+		m_members.Bind(this, &ibValueTabularSectionDataObjectBase::FillMembers);
 		for (const auto object : tableObject->GetGenericAttributeArrayObject()) {
 			m_filterRow.AppendFilter(
 				object->GetMetaID(),
@@ -184,7 +180,7 @@ public:
 		}
 	}
 
-	virtual ~ibValueTabularSectionDataObjectBase() { wxDELETE(m_methodHelper); }
+	virtual ~ibValueTabularSectionDataObjectBase() {}
 
 	virtual void GetValueByRow(wxVariant& variant,
 		const ibDataViewItem& row, unsigned int col) const override;
@@ -220,12 +216,7 @@ public:
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
-		return m_methodHelper;
-	}
-
-	virtual void PrepareNames() const;                             // this method is automatically called to initialize attribute and method names
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       // method call
 
 	//array
@@ -252,7 +243,6 @@ protected:
 
 	ibValueDataObject* m_objectValue;
 	ibValuePtr<ibValueTabularSectionDataObjectColumnCollection> m_recordColumnCollection;
-	ibValueMethodHelper* m_methodHelper;
 };
 
 class BACKEND_API ibValueTabularSectionDataObject : public ibValueTabularSectionDataObjectBase {

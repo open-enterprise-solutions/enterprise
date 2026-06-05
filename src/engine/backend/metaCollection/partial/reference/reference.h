@@ -17,7 +17,7 @@ class BACKEND_API ibValueRecordDataObjectRef;
 
 //********************************************************************************************
 
-class BACKEND_API ibValueReferenceDataObject : public ibValue,
+class BACKEND_API ibValueReferenceDataObject : public ibValueDynamicMembers,
 	public ibValueDataObject {
 	public:
 private:
@@ -26,7 +26,9 @@ private:
 		eTable
 	};
 private:
-	ibValueReferenceDataObject() : ibValue(ibValueTypes::TYPE_VALUE, true), m_initializedRef(false) {}
+	ibValueReferenceDataObject() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_initializedRef(false) {
+		m_members.Bind(this, &ibValueReferenceDataObject::FillMembers);
+	}
 	ibValueReferenceDataObject(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid = wxNullGuid);
 public:
 
@@ -130,11 +132,7 @@ public:
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
-		return m_methodHelper;
-	}
-	virtual void PrepareNames() const;
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	//****************************************************************************
 	//*                              Override attribute                          *
@@ -164,7 +162,6 @@ protected:
 
 	bool m_initializedRef;
 
-	ibValueMethodHelper* m_methodHelper;
 	const ibValueMetaObjectRecordDataRef* m_metaObject;
 	ibReference* m_reference_impl;
 

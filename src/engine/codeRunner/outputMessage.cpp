@@ -1,10 +1,9 @@
 #include "outputMessage.h"
 #include "mainApp.h"
 
-void ibValueOutput::PrepareNames() const
+void ibValueOutput::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-	m_methodHelper->AppendFunc(wxT("Message"), 1, "Message(str : string)");
+	helper.AppendFunc(wxT("Message"), 1, "Message(str : string)");
 }
 
 bool ibValueOutput::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)

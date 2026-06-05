@@ -19,7 +19,7 @@ class ibValueTextBox : public ibValueWindow {
 	virtual wxPrintout* CreatePrintout() const;
 
 	//methods & attributes
-	virtual void PrepareNames() const;                         // this method is automatically called to initialize attribute and method names.
+	// No own name surface — the base ibValueFrame::FillMembers covers it.
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value

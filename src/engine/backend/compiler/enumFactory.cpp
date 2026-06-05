@@ -11,22 +11,18 @@
 //*********************************************************************************************************
 
 ibValueEnumFactory::ibValueEnumFactory() :
-	ibValue(ibValueTypes::TYPE_VALUE, true), m_methodHelper(new ibValueMethodHelper())
+	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true)
 {
-	for (auto &ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_enum)) {
-		m_methodHelper->AppendProp(ctor->GetClassName());
-	}
+	m_members.Bind(this, &ibValueEnumFactory::FillMembers);
 }
 
 ibValueEnumFactory::~ibValueEnumFactory() {
-	wxDELETE(m_methodHelper);
 }
 
-void ibValueEnumFactory::PrepareNames() const
+void ibValueEnumFactory::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
 	for (auto& ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_enum)) {
-		m_methodHelper->AppendProp(ctor->GetClassName());
+		helper.AppendProp(ctor->GetClassName());
 	}
 }
 

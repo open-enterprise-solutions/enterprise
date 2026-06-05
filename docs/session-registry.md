@@ -226,6 +226,29 @@ Concrete `HoldRowLocks` / `TryProbeRowLock` impls — FB only so far. On other d
 
 **Note:** the web cookie value is currently a separate 32-hex random from `wfrontend.cpp::newSessionId()`, not equal to the ibSession guid. Legacy behaviour. Future: hand out the ibGuid directly in the cookie — single id across all layers.
 
+### 10. Debugger parked-session eval UAF (2026-06-05)
+
+Watch / tooltip / **expand `thisForm`** / autocomplete evals run on the **debug-server
+connection thread**, but `ibRunContext` lives on the **worker thread's** `Execute`
+stack. The old pattern `if (ms_debugServer->IsDebugLooped()) Evaluate(ibSession::
+CurrentRunContext(), …)` was a cross-thread TOCTOU: `IsDebugLooped()` reads the
+**server-global** `m_bDebugLoop` (sticky-true — Continue clears only the per-session
+`dbg->m_debugLoop`), while `CurrentRunContext()` reads the **per-session**
+`dbg->m_runContext`. When the worker resumed (Continue/Step/Cancel/destroy) and unwound
+its frame mid-eval, `ibProcUnit::Evaluate` dereferenced a freed `ibRunContext` at
+`pRunContext->m_listEval` → `0xdddddddd` AV.
+
+**Fix** (`debugServer.cpp`): file-local `EvalInParkedSession()` locks `dbg->m_mutex`,
+gates on the **per-session** `dbg->m_debugLoop`, reads `dbg->m_runContext`, and runs
+`Evaluate` **under the lock**. `DoDebugLoop`'s leave block (and `SetStack`) take the same
+mutex to stamp `m_debugLoop=false` + null `m_runContext`. Invariant: an eval either
+acquires first (the worker blocks on the teardown lock until the eval finishes against a
+still-live frame, then unwinds) or acquires after (sees `m_debugLoop==false` → skips).
+`ibSession::CurrentRunContext()` had no other callers and was removed. Same-thread script
+`Eval()`/`Execute()` (systemManagerFunc.cpp) use own-stack `GetCurrentRunContext()` — not
+racy. Latent since the worker-pool / per-session-debug model (eval thread ≠ execution
+thread); surfaced under heavy debugger use.
+
 ## What landed (commit list)
 
 1. **Skeleton rename** — `ibSessionContext → ibSession`, `SessionManager → ibSessionRegistry` (18 files).

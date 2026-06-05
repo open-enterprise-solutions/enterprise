@@ -57,7 +57,7 @@ void ibGUISession::AttachFrame(ibFrontendDocMDIFrame* frame)
 		if (target != sessSelf) return;
 		if (wxTheApp == nullptr) return;
 		wxTheApp->CallAfter([]() {
-			wxMessageBox(_("Session reloaded by an administrator. The application will close — please re-open it from the launcher."),
+			wxMessageBox(_("Session reloaded by an administrator. The application will close - please re-open it from the launcher."),
 				wxTheApp->GetAppDisplayName(), wxOK | wxICON_INFORMATION);
 			if (auto* frame = ibFrontendDocMDIFrame::GetFrame())
 				frame->Close(true);

@@ -23,11 +23,17 @@
 //****************************************************************************
 
 ibValueForm::ibValueForm(const ibValueMetaObjectFormBase* creator, ibControlFrame* ownerControl,
-	ibSourceDataObject* srcObject, const ibUniqueKey& formGuid) : ibValueFrame(), ibRuntimeModuleDataObject(),
+	ibSourceDataObject* srcObject, const ibUniqueKey& formGuid) : ibValueFrame(),
+	ibRuntimeModuleDataObject(m_members, this),
 	m_controlOwner(nullptr), m_sourceObject(nullptr), m_metaFormObject(nullptr),
 	m_formCollectionControl(ibValue::CreateAndPrepareValueRef<ibValueFormCollectionControl>(this)),
 	m_formType(defaultFormType), m_closeOnChoice(true), m_closeOnOwnerClose(true), m_formModified(false)
 {
+	// Frame surface (properties + Events) comes from ibValueFrame::FillMembers, bound
+	// by the base ctor. The form ADDS its own members on top (FillFormMembers); module
+	// exports autobind as the helper's tail (ibRuntimeModuleDataObject ctor).
+	m_members.Bind(this, &ibValueForm::FillFormMembers);
+
 	//init default params
 	ibValueForm::InitializeForm(creator, ownerControl, srcObject, formGuid);
 
@@ -182,68 +188,60 @@ enum Func
 	enNotifyChoice,
 };
 
-void ibValueForm::PrepareNames() const
+void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 {
-	//default element
-	m_methodHelper->ClearHelper();
-
+	// Properties (eProperty) + Events come from ibValueFrame::FillMembers (base bind).
+	// Here the form adds only its OWN members.
 	// ThisForm / Controls / DataSource are BOUND in formObject (context / export).
 	// The bind is the single source; surfacing to editor + runtime is the
 	// infrastructure's job — no manual AppendProp here.
-	m_methodHelper->AppendProp(wxT("Modified"), eModified, eSystem);
-	m_methodHelper->AppendProp(wxT("FormOwner"), eFormOwner, eSystem);
-	m_methodHelper->AppendProp(wxT("UniqueKey"), eUniqueKey, eSystem);
+	helper.AppendProp(wxT("Modified"), eModified, eSystem);
+	helper.AppendProp(wxT("FormOwner"), eFormOwner, eSystem);
+	helper.AppendProp(wxT("UniqueKey"), eUniqueKey, eSystem);
 
-	m_methodHelper->AppendProp(wxT("CloseOnChoice"), eCloseOnChoice, eSystem);
-	m_methodHelper->AppendProp(wxT("CloseOnOwnerClose"), eCloseOnOwnerClose, eSystem);
+	helper.AppendProp(wxT("CloseOnChoice"), eCloseOnChoice, eSystem);
+	helper.AppendProp(wxT("CloseOnOwnerClose"), eCloseOnOwnerClose, eSystem);
 
-	m_methodHelper->AppendProc(wxT("Show"), wxT("Show()"));
-	m_methodHelper->AppendProc(wxT("Activate"), wxT("Activate()"));
-	m_methodHelper->AppendProc(wxT("Update"), wxT("Update()"));
-	m_methodHelper->AppendProc(wxT("Close"), wxT("Close()"));
-	m_methodHelper->AppendFunc(wxT("IsShown"), wxT("IsShown()"));
-	m_methodHelper->AppendProc(wxT("AttachIdleHandler"), 3, wxT("AttachIdleHandler(procedureName : string, interval : number, single : boolean)"));
-	m_methodHelper->AppendProc(wxT("DetachIdleHandler"), 1, wxT("DetachIdleHandler(procedureName : string)"));
-	m_methodHelper->AppendProc(wxT("NotifyChoice"), 1, wxT("NotifyChoice(value)"));
+	helper.AppendProc(wxT("Show"), wxT("Show()"));
+	helper.AppendProc(wxT("Activate"), wxT("Activate()"));
+	helper.AppendProc(wxT("Update"), wxT("Update()"));
+	helper.AppendProc(wxT("Close"), wxT("Close()"));
+	helper.AppendFunc(wxT("IsShown"), wxT("IsShown()"));
+	helper.AppendProc(wxT("AttachIdleHandler"), 3, wxT("AttachIdleHandler(procedureName : string, interval : number, single : boolean)"));
+	helper.AppendProc(wxT("DetachIdleHandler"), 1, wxT("DetachIdleHandler(procedureName : string)"));
+	helper.AppendProc(wxT("NotifyChoice"), 1, wxT("NotifyChoice(value)"));
 
-	//from property 
-	for (unsigned int idx = 0; idx < ibPropertyObject::GetPropertyCount(); idx++) {
-		ibProperty* property = ibPropertyObject::GetProperty(idx);
-		if (property == nullptr)
-			continue;
-		m_methodHelper->AppendProp(property->GetName(), idx, eProperty);
-	}
-
-	ExportNamesToHelper(m_methodHelper, eProcUnit);
-	FillHelperFromBinds(m_methodHelper, eProcUnit);   // ThisForm.Controls / ThisForm.DataSource
+	// Module exports AND the context binds (ThisForm.Controls / DataSource) are
+	// surfaced as the helper's tail by the descriptor's ExportThunk (autobind under
+	// eProcUnit == g_aliasExport) — NOT here. Doing it manually made an unguarded
+	// virtual GetCompileModule() on a possibly half-alive `this` (crash on teardown /
+	// debugger-thread lazy build); the descriptor thunk is dynamic_cast-guarded.
 
 	for (auto control : GetControlList()) {
 		if (!control->HasValueInControl())
 			continue;
 
-		m_methodHelper->AppendProp(
+		helper.AppendProp(
 			control->GetControlName(),
 			control->GetControlID(),
 			eAttribute
 		);
 	}
-
-	m_formCollectionControl->PrepareNames();
 }
 
 bool ibValueForm::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
 		if (m_procUnit != nullptr) {
 			return m_procUnit->SetPropVal(GetPropName(lPropNum), varPropVal);
 		}
 	}
-	else if (lPropAlias == eProperty) {
+	else if (lPropAlias == eProperty || lPropAlias == eEvent) {
 		return ibValueFrame::SetPropVal(lPropNum, varPropVal);
 	}
 	else if (lPropAlias == eSystem) {
-		switch (m_methodHelper->GetPropData(lPropNum)) {
+		switch (m_members.GetPropData(lPropNum)) {
 		case eModified:
 			Modify(varPropVal.GetBoolean());
 			return true;
@@ -256,7 +254,7 @@ bool ibValueForm::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 		}
 	}
 	else if (lPropAlias == eAttribute) {
-		unsigned int id = m_methodHelper->GetPropData(lPropNum);
+		unsigned int id = m_members.GetPropData(lPropNum);
 		const std::vector<ibValueControl*> list = GetControlList();
 		auto it = std::find_if(list.begin(), list.end(),
 			[id](const ibValueFrame* control) {
@@ -271,7 +269,7 @@ bool ibValueForm::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 
 bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
 		if (m_procUnit != nullptr &&
 			m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
@@ -283,11 +281,12 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 			return true;
 		}
 	}
-	else if (lPropAlias == eProperty) {
+	else if (lPropAlias == eProperty || lPropAlias == eEvent) {
+		// Properties + the Events container come from ibValueFrame's surface.
 		return ibValueFrame::GetPropVal(lPropNum, pvarPropVal);
 	}
 	else if (lPropAlias == eSystem) {
-		switch (m_methodHelper->GetPropData(lPropNum))
+		switch (m_members.GetPropData(lPropNum))
 		{
 		case eModified:
 			pvarPropVal = IsModified();
@@ -307,7 +306,7 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 		}
 	}
 	else if (lPropAlias == eAttribute) {
-		unsigned int id = m_methodHelper->GetPropData(lPropNum);
+		unsigned int id = m_members.GetPropData(lPropNum);
 		const std::vector<ibValueControl*> list = GetControlList();
 		auto it = std::find_if(list.begin(), list.end(),
 			[id](const ibValueFrame* control) {

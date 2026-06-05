@@ -12,8 +12,8 @@
 
 // Lightweight (managerless) — what the designer compile cache builds for autocomplete.
 ibValueModuleManager::ibValueModuleUnit::ibValueModuleUnit(ibValueMetaObjectModuleBase *moduleObject, bool managerModule) :
-	ibValue(ibValueTypes::TYPE_VALUE, true), ibRuntimeModuleDataObject(new ibCompileCommonModule(moduleObject)),
-	m_methodHelper(new ibValueMethodHelper()),
+	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
+	ibRuntimeModuleDataObject(m_members, this, new ibCompileCommonModule(moduleObject)),
 	m_moduleObject(moduleObject)
 {
 }
@@ -31,7 +31,6 @@ ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::ibValueRuntimeModuleUnit(
 
 ibValueModuleManager::ibValueModuleUnit::~ibValueModuleUnit()
 {
-	wxDELETE(m_methodHelper);
 }
 
 #define objectManager wxT("Manager")
@@ -56,7 +55,9 @@ bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::CreateCommonModule()
 		return false;
 	};
 
-	ibValueModuleUnit::PrepareNames();
+	// Exports changed after Compile — mark the surface stale so the next access
+	// rebuilds it (descriptor export tail) from the fresh compile module.
+	m_members.Invalidate();
 	return true;
 }
 
@@ -69,13 +70,6 @@ bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::DestroyCommonModule(
 
 	m_procUnit.reset();
 	return true;
-}
-
-void ibValueModuleManager::ibValueModuleUnit::PrepareNames() const
-{
-	m_methodHelper->ClearHelper();
-
-	ExportNamesToHelper(m_methodHelper, eProcUnit);
 }
 
 bool ibValueModuleManager::ibValueModuleUnit::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)

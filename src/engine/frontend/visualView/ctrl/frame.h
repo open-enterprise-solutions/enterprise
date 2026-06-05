@@ -1,4 +1,4 @@
-﻿#ifndef _BASE__FRAME__H__
+#ifndef _BASE__FRAME__H__
 #define _BASE__FRAME__H__
 
 #include <wx/wx.h>
@@ -35,7 +35,7 @@ class FRONTEND_API ibVisualHostClient;
 // Default foreground / background for designer-created form controls,
 // toolbars, dataviews, dialogs. Aligned with interior palette: deep
 // dusty blue text on cream content surface. Was Windows-blue accent
-// (#0078D7) + light off-white grey (#EBEBF1) — both clashed with the
+// (#0078D7) + light off-white grey (#EBEBF1) - both clashed with the
 // powder-blue + cream + terracotta palette.
 #define wxDefaultStypeFGColour wxColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
 #define wxDefaultStypeBGColour wxColour(0xFA, 0xF7, 0xF0)  // #FAF7F0 cream content
@@ -66,7 +66,7 @@ public:
 	virtual void ChoiceProcessing(ibValue& vSelected) = 0;
 };
 
-class FRONTEND_API ibValueFrame : public ibValue,
+class FRONTEND_API ibValueFrame : public ibValueDynamicMembers,
 	public ibPropertyObjectHelper<ibValueFrame>,
 	public ibControlFrame,
 	public ibActionDataObject {
@@ -130,14 +130,14 @@ public:
 	virtual ibFormID GetControlID() const { return m_controlId; }
 
 	// If the id was never populated (typed-factory controls, demo
-	// forms, etc.), synthesise one via GenerateNewID — analogue of
+	// forms, etc.), synthesise one via GenerateNewID - analogue of
 	// wxID_ANY on desktop. Idempotent after first call: once
 	// m_controlId is non-zero, returns it unchanged. Lets web
 	// Create() rely on a stable id without each caller repeating the
 	// if-then-generate dance.
 	//
 	// Falls back to leaving m_controlId == 0 when there is no owner
-	// form (synthetic /demo trees, detached controls) — in that case
+	// form (synthetic /demo trees, detached controls) - in that case
 	// the ibWebWindow ctor's own auto-id counter kicks in and the
 	// node is at least uniquely addressable even though it's not
 	// findable through form->FindControlByID.
@@ -233,7 +233,7 @@ public:
 	* @param wxobject The object which was just created.
 	* @param wxparent The wxWidgets parent - the wxObject that the created object was added to.
 	*/
-	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated) {};
+	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated) {};
 
 	/**
 	* Allows components to respond when selected in object tree.
@@ -334,19 +334,15 @@ public:
 	virtual ibActionCollection GetActionCollection(const ibFormID& formType) override { return ibActionCollection(); }
 	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm) override {}
 
-	class ibValueEventContainer : public ibValue {
+	class ibValueEventContainer : public ibValueDynamicMembers {
 	public:
 
 		ibValueEventContainer();
 		ibValueEventContainer(ibValueFrame* ownerEvent);
 		virtual ~ibValueEventContainer();
 
-		virtual ibValueMethodHelper* GetPMethods() const {  // get a reference to the class helper for parsing attribute and method names
-			//PrepareNames(); 
-			return m_methodHelper;
-		}
-
-		virtual void PrepareNames() const;                         // this method is automatically called to initialize attribute and method names.
+		// DoGetPMethods (protected) + by-value m_members come from ibValueDynamicMembers.
+		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
@@ -355,16 +351,15 @@ public:
 		virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue);
 		virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
 
-		//Расширенные методы:
+		//??????????? ??????:
 		bool Property(const ibValue& varKeyValue, ibValue& cValueFound);
 		unsigned int Count() const { return m_controlEvent->GetEventCount(); }
 
-		//Работа с итераторами:
+		//?????? ? ???????????:
 		virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;
 
 	private:
 		ibValueFrame* m_controlEvent;
-		ibValueMethodHelper* m_methodHelper;
 	};
 
 	virtual bool GetControlValue(ibValue& pvarControlVal) const { return false; }
@@ -402,15 +397,12 @@ public:
 	virtual void ControlIncrRef() { ibValue::IncrRef(); }
 	virtual void ControlDecrRef() { ibValue::DecrRef(); }
 
-	//methods 
-	virtual ibValueMethodHelper* GetPMethods() const {  // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
-		return m_methodHelper;
-	}
+	//methods
+	// DoGetPMethods (protected) + by-value m_members come from ibValueDynamicMembers.
+	// Derived controls bind their OWN FillMembers in their ctor (binders accumulate).
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
-	virtual void PrepareNames() const; // this method is automatically called to initialize attribute and method names.
-
-	//attributes 
+	//attributes
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
 
@@ -473,9 +465,6 @@ protected:
 	ibGuid				 m_controlGuid;
 
 	ibValuePtr<ibValueEventContainer> m_valEventContainer;
-
-	//object of methods 
-	ibValueMethodHelper* m_methodHelper;
 };
 
 #endif // !_BASE_H_

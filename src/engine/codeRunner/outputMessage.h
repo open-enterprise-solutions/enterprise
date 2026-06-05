@@ -3,38 +3,28 @@
 
 #include "backend/compiler/value.h"
 
-class ibValueOutput : public ibValue
+class ibValueOutput : public ibValueDynamicMembers
 {
 	public:
 
-	ibValueOutput() :
-		ibValue(ibValueTypes::TYPE_VALUE, true), m_methodHelper(new ibValueMethodHelper) {
+	ibValueOutput() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true) {
+		m_members.Bind(this, &ibValueOutput::FillMembers);
 	}
 
 	virtual ~ibValueOutput() {
-		wxDELETE(m_methodHelper);
 	}
 
 	//****************************************************************************
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
-		return m_methodHelper;
-	}
-
-	virtual void PrepareNames() const;
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 	//check is empty
 	virtual bool IsEmpty() const {
 		return false;
 	}
-
-protected:
-
-	ibValueMethodHelper* m_methodHelper;
 };
 
 #endif 

@@ -1,9 +1,6 @@
 #include "valueSpreadsheet.h"
 
 
-ibValue::ibValueMethodHelper ibValueSpreadsheetDocumentArea::m_methodHelper;
-ibValue::ibValueMethodHelper ibValueSpreadsheetDocumentBorder::m_methodHelper;
-
 enum
 {
 	eBackgroundColour,
@@ -25,25 +22,24 @@ enum
 	eValue
 };
 
-void ibValueSpreadsheetDocumentArea::PrepareNames() const
+void ibValueSpreadsheetDocumentArea::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper.ClearHelper();
-	m_methodHelper.AppendProp(wxT("BackgroundColour"));
-	m_methodHelper.AppendProp(wxT("TextColour"));
-	m_methodHelper.AppendProp(wxT("TextOrient"));
-	m_methodHelper.AppendProp(wxT("Font"));
-	m_methodHelper.AppendProp(wxT("AlignHorizontal"));
-	m_methodHelper.AppendProp(wxT("AlignVertical"));
+	helper.AppendProp(wxT("BackgroundColour"));
+	helper.AppendProp(wxT("TextColour"));
+	helper.AppendProp(wxT("TextOrient"));
+	helper.AppendProp(wxT("Font"));
+	helper.AppendProp(wxT("AlignHorizontal"));
+	helper.AppendProp(wxT("AlignVertical"));
 
-	m_methodHelper.AppendProp(wxT("BorderLeft"));
-	m_methodHelper.AppendProp(wxT("BorderRight"));
-	m_methodHelper.AppendProp(wxT("BorderTop"));
-	m_methodHelper.AppendProp(wxT("BorderBottom"));
+	helper.AppendProp(wxT("BorderLeft"));
+	helper.AppendProp(wxT("BorderRight"));
+	helper.AppendProp(wxT("BorderTop"));
+	helper.AppendProp(wxT("BorderBottom"));
 
-	m_methodHelper.AppendProp(wxT("Size"));
-	m_methodHelper.AppendProp(wxT("ReadOnly"));
+	helper.AppendProp(wxT("Size"));
+	helper.AppendProp(wxT("ReadOnly"));
 
-	m_methodHelper.AppendProp(wxT("Value"));
+	helper.AppendProp(wxT("Value"));
 }
 
 #include "valueFont.h"

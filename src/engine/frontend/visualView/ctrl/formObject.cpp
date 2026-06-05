@@ -298,7 +298,7 @@ bool ibValueForm::InitializeFormModule()
 			return false;
 		}
 
-		PrepareNames();
+		InvalidateNames();
 	}
 
 #pragma region _control_guard_
@@ -675,9 +675,12 @@ ibValueFrame* ibValueForm::CreateControl(const wxString& clsControl, ibValueFram
 		}
 	}
 
-	m_formCollectionControl->PrepareNames();
+	// Control added → both the form's own attribute surface (FillMembers loops
+	// GetControlList) and the Controls collection's surface are stale.
+	InvalidateNames();
+	m_formCollectionControl->InvalidateNames();
 
-	//return value 
+	//return value
 	if (newControl->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
 		return newControl->GetChild(0);
 
@@ -716,7 +719,9 @@ void ibValueForm::RemoveControl(ibValueFrame* control)
 			parentOwner->RemoveChild(currentControl); // owning handle releases → destroys
 	}
 
-	m_formCollectionControl->PrepareNames();
+	// Control removed → form attribute surface + Controls collection surface stale.
+	InvalidateNames();
+	m_formCollectionControl->InvalidateNames();
 }
 
 void ibValueForm::OnIdleHandler(wxTimerEvent& event)

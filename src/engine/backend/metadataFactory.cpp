@@ -24,7 +24,7 @@ ibValue* ibMetaData::CreateObjectRef(const ibClassID& clsid, ibValue** paParams,
 			return nullptr;
 		}
 
-		newObject->PrepareNames();
+		// Name surface builds lazily on first GetPMethods() — no eager populate.
 		return newObject;
 	}
 

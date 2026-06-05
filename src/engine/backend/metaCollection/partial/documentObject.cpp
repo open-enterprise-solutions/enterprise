@@ -24,12 +24,14 @@ ibValueRecordDataObjectDocument::ibValueRecordDataObjectDocument(const ibValueMe
 	// RecorderRef ctor, so the virtual GetRecordDescription dispatches
 	// to Document's override (see RecorderRef::InitRegisterRecords docs).
 	InitRegisterRecords();
+	m_members.Bind(this, &ibValueRecordDataObjectDocument::FillMethods);
 }
 
 ibValueRecordDataObjectDocument::ibValueRecordDataObjectDocument(const ibValueRecordDataObjectDocument& source) :
 	ibValueRecordDataObjectRecorderRef(source)
 {
 	InitRegisterRecords();
+	m_members.Bind(this, &ibValueRecordDataObjectDocument::FillMethods);
 }
 
 ibValueRecordDataObjectDocument::~ibValueRecordDataObjectDocument()
@@ -146,69 +148,26 @@ enum Func {
 	eUnlock
 };
 
-void ibValueRecordDataObjectDocument::PrepareNames() const
+void ibValueRecordDataObjectDocument::FillMethods(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
-	m_methodHelper->AppendFunc(wxT("IsNew"), wxT("IsNew()"));
-	m_methodHelper->AppendFunc(wxT("Copy"), wxT("Copy()"));
-	m_methodHelper->AppendFunc(wxT("Fill"), 1, wxT("Fill(object : any)"));
-	m_methodHelper->AppendFunc(wxT("Write"), 2, wxT("Write(writeMode : writeMode, postingMode : postingMode)"));
-	m_methodHelper->AppendFunc(wxT("Delete"), wxT("Delete()"));
-	m_methodHelper->AppendFunc(wxT("Modified"), wxT("Modified()"));
-	m_methodHelper->AppendFunc(wxT("GetFormObject"), 2, wxT("GetFormObject(name : string, owner : any)"));
-	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
-	m_methodHelper->AppendProc(wxT("Lock"),   wxT("Lock()"));
-	m_methodHelper->AppendProc(wxT("Unlock"), wxT("Unlock()"));
-
-	// No system props on the document helper: ThisObject (contextual) and
-	// RegisterRecords (exported) are BOUND in InitializeObject
-	// (BindContextVariable / BindExportVariable) — the single source for both the
-	// editor surface (compile module) and runtime (binder), like ThisForm.
-
-	//set object name 
-	wxString objectName;
-
-	//fill custom attributes 
-	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		if (object->IsDeleted())
-			continue;
-		if (!object->GetObjectNameAsString(objectName))
-			continue;
-		m_methodHelper->AppendProp(
-			objectName,
-			true,
-			!m_metaObject->IsDataReference(object->GetMetaID()),
-			object->GetMetaID(),
-			eProperty
-		);
-	}
-
-	//fill custom tables 
-	for (const auto object : m_metaObject->GetTableArrayObject()) {
-		if (object->IsDeleted())
-			continue;
-		if (!object->GetObjectNameAsString(objectName))
-			continue;
-		m_methodHelper->AppendProp(
-			objectName,
-			true,
-			false,
-			object->GetMetaID(),
-			eTable
-		);
-	}
-
-	ExportNamesToHelper(m_methodHelper, eProcUnit);
-	FillHelperFromBinds(m_methodHelper, eProcUnit);   // ThisObject.RegisterRecords
-
-	m_registerRecords->PrepareNames();
+	// Document's own methods; the data members come from the base FillDataMembers.
+	// Order is load-bearing — CallAsFunc switches on the method index (eIsNew = 0 …).
+	helper.AppendFunc(wxT("IsNew"), wxT("IsNew()"));
+	helper.AppendFunc(wxT("Copy"), wxT("Copy()"));
+	helper.AppendFunc(wxT("Fill"), 1, wxT("Fill(object : any)"));
+	helper.AppendFunc(wxT("Write"), 2, wxT("Write(writeMode : writeMode, postingMode : postingMode)"));
+	helper.AppendFunc(wxT("Delete"), wxT("Delete()"));
+	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
+	helper.AppendFunc(wxT("GetFormObject"), 2, wxT("GetFormObject(name : string, owner : any)"));
+	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
+	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	helper.AppendProc(wxT("Lock"),   wxT("Lock()"));
+	helper.AppendProc(wxT("Unlock"), wxT("Unlock()"));
 }
 
 bool ibValueRecordDataObjectDocument::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
 		if (m_procUnit != nullptr) {
 			return m_procUnit->SetPropVal(
@@ -218,7 +177,7 @@ bool ibValueRecordDataObjectDocument::SetPropVal(const long lPropNum, const ibVa
 	}
 	else if (lPropAlias == eProperty) {
 		return SetValueByMetaID(
-			m_methodHelper->GetPropData(lPropNum),
+			m_members.GetPropData(lPropNum),
 			varPropVal
 		);
 	}
@@ -227,7 +186,7 @@ bool ibValueRecordDataObjectDocument::SetPropVal(const long lPropNum, const ibVa
 
 bool ibValueRecordDataObjectDocument::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
 		if (m_procUnit != nullptr &&
 			m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
@@ -239,7 +198,7 @@ bool ibValueRecordDataObjectDocument::GetPropVal(const long lPropNum, ibValue& p
 		}
 	}
 	else if (lPropAlias == eProperty || lPropAlias == eTable) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (m_metaObject->IsDataReference(lPropData)) {
 			pvarPropVal = GetReference();
 			return true;

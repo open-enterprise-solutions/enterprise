@@ -29,23 +29,21 @@ enum {
 	eGetTemplate,
 };
 
-void ibValueManagerDataObjectInformationRegister::PrepareNames() const
+void ibValueManagerDataObjectInformationRegister::FillManagerMethods(ibMemberTable& helper) const
 {
-	ibValueManagerDataObject::PrepareNames();
-
-	m_methodHelper->AppendFunc(wxT("CreateRecordSet"), wxT("CreateRecordSet()"));
-	m_methodHelper->AppendFunc(wxT("CreateRecordManager"), wxT("CreateRecordManager()"));
-	m_methodHelper->AppendFunc(wxT("CreateRecordKey"), wxT("CreateRecordKey()"));
-	m_methodHelper->AppendFunc(wxT("Get"), 1, wxT("Get(Filter...)"));
-	m_methodHelper->AppendFunc(wxT("GetFirst"), 3, wxT("GetFirst(beginOfPeriod, filter...)"));
-	m_methodHelper->AppendFunc(wxT("GetLast"), 2, wxT("GetLast(endOfPeriod, filter...)"));
-	m_methodHelper->AppendFunc(wxT("SliceFirst"), 2, wxT("SliceFirst(beginOfPeriod, filter...)"));
-	m_methodHelper->AppendFunc(wxT("SliceLast"), 2, wxT("SliceLast(endOfPeriod, filter...)"));
-	m_methodHelper->AppendFunc(wxT("Select"), wxT("Select()"));
-	m_methodHelper->AppendFunc(wxT("GetForm"), 3, wxT("GetForm(string, owner, guid)"));
-	m_methodHelper->AppendFunc(wxT("GetRecordForm"), 3, wxT("GetRecordForm(string, owner, guid)"));
-	m_methodHelper->AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(string, owner, guid)"));
-	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(string)"));
+	helper.AppendFunc(wxT("CreateRecordSet"), wxT("CreateRecordSet()"));
+	helper.AppendFunc(wxT("CreateRecordManager"), wxT("CreateRecordManager()"));
+	helper.AppendFunc(wxT("CreateRecordKey"), wxT("CreateRecordKey()"));
+	helper.AppendFunc(wxT("Get"), 1, wxT("Get(Filter...)"));
+	helper.AppendFunc(wxT("GetFirst"), 3, wxT("GetFirst(beginOfPeriod, filter...)"));
+	helper.AppendFunc(wxT("GetLast"), 2, wxT("GetLast(endOfPeriod, filter...)"));
+	helper.AppendFunc(wxT("SliceFirst"), 2, wxT("SliceFirst(beginOfPeriod, filter...)"));
+	helper.AppendFunc(wxT("SliceLast"), 2, wxT("SliceLast(endOfPeriod, filter...)"));
+	helper.AppendFunc(wxT("Select"), wxT("Select()"));
+	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(string, owner, guid)"));
+	helper.AppendFunc(wxT("GetRecordForm"), 3, wxT("GetRecordForm(string, owner, guid)"));
+	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(string, owner, guid)"));
+	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(string)"));
 }
 
 #include "selector/objectSelector.h"

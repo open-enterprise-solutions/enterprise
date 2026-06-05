@@ -69,9 +69,10 @@ bool ibValueMetaObject::BuildNewName()
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-ibValueMetaObject::ibValueMetaObject(const wxString& strName, const wxString& synonym, const wxString& comment) : ibValue(ibValueTypes::TYPE_VALUE, true),
-m_methodHelper(new ibValueMethodHelper()), m_metaData(nullptr), m_metaFlags(metaDefaultFlag), m_metaId(0)
+ibValueMetaObject::ibValueMetaObject(const wxString& strName, const wxString& synonym, const wxString& comment) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
+m_metaData(nullptr), m_metaFlags(metaDefaultFlag), m_metaId(0)
 {
+	m_members.Bind(this, &ibValueMetaObject::FillMembers);
 	m_propertyName->SetValue(strName);
 	m_propertySynonym->SetValue(synonym);
 	m_propertyComment->SetValue(comment);
@@ -81,8 +82,7 @@ ibValueMetaObject::~ibValueMetaObject()
 {
 	// Children are released by the ibPropertyObjectHelper base destructor (owning
 	// handles cascade down the subtree). The delete event (OnDeleteMetaObject) is
-	// a separate, preceding step. Here we only drop this node's own helpers.
-	wxDELETE(m_methodHelper);
+	// a separate, preceding step.
 }
 
 bool ibValueMetaObject::CreateMetaTable(ibMetaDataConfiguration* srcMetaData, int flags)
@@ -493,14 +493,12 @@ wxString ibValueMetaObject::GetFileName() const
 //*                              Support methods                             *
 //****************************************************************************
 
-void ibValueMetaObject::PrepareNames() const
+void ibValueMetaObject::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
 	for (unsigned idx = 0; idx < ibPropertyObject::GetPropertyCount(); idx++) {
 		ibProperty* property = ibPropertyObject::GetProperty(idx);
 		if (property == nullptr) continue;
-		m_methodHelper->AppendProp(property->GetName(), true, false, idx);
+		helper.AppendProp(property->GetName(), true, false, idx);
 	}
 }
 
@@ -557,7 +555,7 @@ void ibRestructureInfo::RequireExclusiveForDDL()
 
 	ibBackendCoreException::Error(
 		_("Structure (DDL) changes require exclusive mode. Other sessions "
-		  "are connected — disconnect them and try again. "
+		  "are connected - disconnect them and try again. "
 		  "Code-only changes (modules, forms) can be saved without it."));
 }
 

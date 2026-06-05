@@ -1,4 +1,4 @@
-﻿#ifndef __CONSTANTS_H__
+#ifndef __CONSTANTS_H__
 #define __CONSTANTS_H__
 
 #include "backend/metaCollection/partial/commonObject.h"
@@ -106,14 +106,14 @@ private:
 
 #include "backend/moduleInfo.h"
 
-class BACKEND_API ibValueRecordDataObjectConstant : public ibValue, public ibActionDataObject,
+class BACKEND_API ibValueRecordDataObjectConstant : public ibValueDynamicMembers, public ibActionDataObject,
 	public ibSourceDataObject, public ibRuntimeModuleDataObject {
 	public:
 	virtual bool InitializeObject(const ibValueRecordDataObjectConstant* source = nullptr);
 protected:
 	enum helperAlias {
 		eSystem,
-		eProcUnit
+		eProcUnit = g_aliasExport   // module exports go through the descriptor autobind
 	};
 	enum helperProp {
 		eValue
@@ -124,12 +124,8 @@ protected:
 	ibValueRecordDataObjectConstant(const ibValueMetaObjectConstant* metaObject);
 	ibValueRecordDataObjectConstant(const ibValueRecordDataObjectConstant& source);
 
-	//standart override 
-	virtual ibValueMethodHelper* GetPMethods() const final { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
-		return m_methodHelper;
-	}
-
+	// Helper + NVI DoGetPMethods come from ibValueDynamicMembers; the surface is
+	// supplied by FillMembers, bound in the ctor.
 public:
 
 	virtual ~ibValueRecordDataObjectConstant();
@@ -143,8 +139,8 @@ public:
 	ibValue GetConstValue() const;
 	bool SetConstValue(const ibValue& cValue);
 
-	//standart override 
-	virtual void PrepareNames() const;
+	// Name surface = only the constant module's exported names, surfaced by the
+	// descriptor autobind (ExportThunk bound in the ctor). No own filler needed.
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
@@ -196,7 +192,7 @@ public:
 	virtual ibUniqueKey GetGuid() const { return m_metaObject->GetGuid(); }
 	virtual bool SaveModify() override { return SetConstValue(m_constValue); }
 
-	// Constants are single-row "global" — lock keyed by namespace path
+	// Constants are single-row "global" - lock keyed by namespace path
 	// only, no per-key sub-identifier. Soft-lock UX same as ref-objects:
 	// form opens silent on conflict, Write re-throws if persistent.
 	bool TryAcquireFormLock(ibLockMode mode = ibLockMode::Exclusive) override;
@@ -226,7 +222,6 @@ protected:
 
 	bool m_objModified;
 
-	ibValueMethodHelper* m_methodHelper;
 	const ibValueMetaObjectConstant* m_metaObject;
 	ibValue m_constValue;
 

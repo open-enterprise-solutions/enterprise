@@ -151,7 +151,6 @@ enterprise/
         ├── launcher/         # Launcher (connection chooser)
         ├── daemon/           # Background service
         ├── codeRunner/       # Script runner
-        ├── classChecker/     # Static metadata checker
         └── simplePlugin/     # Example plugin
 ```
 

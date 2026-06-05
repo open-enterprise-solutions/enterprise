@@ -8,7 +8,7 @@ static const ibPluginInfo s_info = {
     IB_PLUGIN_ABI_VERSION,
     "simplePlugin",
     "1.0.0",
-    "Example OES plugin — exports the ABI and logs on init.",
+    "Example OES plugin - exports the ABI and logs on init.",
     "Open Enterprise Solutions"
 };
 

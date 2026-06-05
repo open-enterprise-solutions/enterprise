@@ -71,26 +71,26 @@ bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataOb
 	};
 	Run(true);
 
-	PrepareNames();
 	//is Ok
 	return true;
 }
 
 ibValueRecordDataObjectConstant::ibValueRecordDataObjectConstant(const ibValueMetaObjectConstant* metaObject)
-	: m_metaObject(metaObject), m_objModified(false), m_methodHelper(new ibValueMethodHelper())
+	: ibValueDynamicMembers(ibValueTypes::TYPE_EMPTY), ibRuntimeModuleDataObject(m_members, this),
+	m_metaObject(metaObject), m_objModified(false)
 {
 	InitializeObject();
 }
 
 ibValueRecordDataObjectConstant::ibValueRecordDataObjectConstant(const ibValueRecordDataObjectConstant& source)
-	: m_metaObject(source.m_metaObject), m_objModified(false), m_methodHelper(new ibValueMethodHelper())
+	: ibValueDynamicMembers(ibValueTypes::TYPE_EMPTY), ibRuntimeModuleDataObject(m_members, this),
+	m_metaObject(source.m_metaObject), m_objModified(false)
 {
 	InitializeObject(&source);
 }
 
 ibValueRecordDataObjectConstant::~ibValueRecordDataObjectConstant()
 {
-	wxDELETE(m_methodHelper);
 }
 
 ibBackendValueForm* ibValueRecordDataObjectConstant::GetForm() const
@@ -212,18 +212,9 @@ bool ibValueRecordDataObjectConstant::GetValueByMetaID(const ibMetaID& id, ibVal
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void ibValueRecordDataObjectConstant::PrepareNames() const
-{
-	m_methodHelper->ClearHelper();
-	// "Value" is no longer a host prop — it's a bound LOCAL of the constant
-	// module (see BindLocalVariable in InitializeObject). Only the module's
-	// own exported names surface here.
-	ExportNamesToHelper(m_methodHelper, eProcUnit);
-}
-
 bool ibValueRecordDataObjectConstant::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
 		if (m_procUnit != nullptr) {
 			return m_procUnit->SetPropVal(
@@ -236,7 +227,7 @@ bool ibValueRecordDataObjectConstant::SetPropVal(const long lPropNum, const ibVa
 
 bool ibValueRecordDataObjectConstant::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
 		if (m_procUnit != nullptr) {
 			return m_procUnit->GetPropVal(

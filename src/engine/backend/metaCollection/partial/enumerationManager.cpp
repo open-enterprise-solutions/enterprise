@@ -19,19 +19,17 @@ enum Func {
 	eGetTemplate,
 };
 
-void ibValueManagerDataObjectEnumeration::PrepareNames() const
+void ibValueManagerDataObjectEnumeration::FillManagerMethods(ibMemberTable& helper) const
 {
-	ibValueManagerDataObject::PrepareNames();
+	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(wxT("GetSelectForm"), 3, wxT("GetSelectForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
 
-	m_methodHelper->AppendFunc(wxT("GetForm"), 3, wxT("GetForm(name : string, owner : any, id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(name : string, owner : any, id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetSelectForm"), 3, wxT("GetSelectForm(name : string, owner : any, id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-
-	//fill custom attributes 
+	//fill custom attributes
 	for (auto object : m_metaObject->GetEnumObjectArray()) {
 
-		m_methodHelper->AppendProp(
+		helper.AppendProp(
 			object->GetName(),
 			true, false,
 			object->GetMetaID(),
@@ -51,7 +49,7 @@ bool ibValueManagerDataObjectEnumeration::SetPropVal(const long lPropNum, ibValu
 bool ibValueManagerDataObjectEnumeration::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	const ibValueMetaObject* valueObject =
-		m_metaObject->FindEnumObjectByFilter<ibMetaID>(m_methodHelper->GetPropData(lPropNum));
+		m_metaObject->FindEnumObjectByFilter<ibMetaID>(m_members.GetPropData(lPropNum));
 
 	if (valueObject == nullptr)
 		return false;

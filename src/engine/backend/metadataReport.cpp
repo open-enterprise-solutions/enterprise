@@ -29,7 +29,7 @@ m_version(version_oes_last)
 		}
 	}
 
-	m_commonObject->PrepareNames();
+	m_commonObject->InvalidateNames();
 	// m_commonObject is an ibValuePtr — the assignment above already holds the ref.
 
 	// Runtime module manager for this external report, on the prepared root. Built
@@ -37,7 +37,7 @@ m_version(version_oes_last)
 	// designer "New report" path calls RunDatabase() directly, never through
 	// LoadFromFile. LoadFromFile rebuilds it on the swapped-in root.
 	m_moduleManager = new ibValueModuleRuntimeManagerExternalReport(this, m_commonObject);
-	m_moduleManager->PrepareNames();
+	m_moduleManager->InvalidateNames();
 
 	m_ownerMeta = this;
 }
@@ -65,7 +65,7 @@ m_version(version_oes_last)
 
 	// m_commonObject (ibValuePtr) holds the member ref; for the inner case AddChild
 	// added the parent's own ref separately.
-	m_commonObject->PrepareNames();
+	m_commonObject->InvalidateNames();
 
 	m_ownerMeta = metaData;
 }
@@ -236,7 +236,7 @@ ibValueMetaObjectReport* ibMetaDataReport::BuildFreshRoot()
 	if (!root->OnLoadMetaObject(this)) {
 		wxASSERT_MSG(false, "BuildFreshRoot: OnLoadMetaObject() == false");
 	}
-	root->PrepareNames();
+	root->InvalidateNames();
 	return root;
 }
 
@@ -301,7 +301,7 @@ bool ibMetaDataReport::LoadFromFile(const wxString& strFileName)
 	m_commonObject = fresh; // ibValuePtr: release old root (DecrRef -> cascade), adopt fresh
 
 	m_moduleManager = new ibValueModuleRuntimeManagerExternalReport(this, m_commonObject);
-	m_moduleManager->PrepareNames();
+	m_moduleManager->InvalidateNames();
 
 	return LoadDatabase();
 }

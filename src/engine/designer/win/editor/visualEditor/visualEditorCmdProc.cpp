@@ -292,7 +292,7 @@ void ibVisualEditorInsertObjectCmd::DoExecute()
 	visualEditor->CreateControl(m_object, nullptr, m_firstCreated);
 
 	ibValueForm* valueForm = visualEditor->GetValueForm();
-	if (valueForm != nullptr) valueForm->PrepareNames();
+	if (valueForm != nullptr) valueForm->InvalidateNames();
 
 	//select object
 	m_visualEditor->SelectObject(obj, false, false);
@@ -314,7 +314,7 @@ void ibVisualEditorInsertObjectCmd::DoRestore()
 	ResetId();
 
 	ibValueForm* valueForm = visualEditor->GetValueForm();
-	if (valueForm != nullptr) valueForm->PrepareNames();
+	if (valueForm != nullptr) valueForm->InvalidateNames();
 
 	m_visualEditor->SelectObject(m_oldSelected);
 }
@@ -380,7 +380,7 @@ void ibVisualEditorRemoveObjectCmd::RemoveObject()
 	ResetId();
 
 	ibValueForm* valueForm = visualEditor->GetValueForm();
-	if (valueForm != nullptr) valueForm->PrepareNames();
+	if (valueForm != nullptr) valueForm->InvalidateNames();
 }
 
 void ibVisualEditorRemoveObjectCmd::DoExecute()
@@ -435,7 +435,7 @@ void ibVisualEditorRemoveObjectCmd::DoRestore()
 	visualEditor->CreateControl(m_object);
 
 	ibValueForm* valueForm = visualEditor->GetValueForm();
-	if (valueForm != nullptr) valueForm->PrepareNames();
+	if (valueForm != nullptr) valueForm->InvalidateNames();
 }
 
 //-----------------------------------------------------------------------------

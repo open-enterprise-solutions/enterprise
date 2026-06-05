@@ -4,6 +4,9 @@
 #include <memory>
 #include <atomic>
 #include <typeinfo>
+#include <unordered_map>
+#include <mutex>
+#include <thread>
 
 #include "backend/backend_core.h"
 #include "backend/compiler/typeCtor.h"
@@ -93,12 +96,12 @@ public:
 	ibNumber m_fData;
 public:
 
-	class BACKEND_API ibValueMethodHelper {
+	class BACKEND_API ibMemberTable {
 
 		//List of keywords that cannot be variable and function names
-		struct ibValueMethodHelperConstructor {
+		struct ibMemberTableConstructor {
 
-			ibValueMethodHelperConstructor(const wxString& strHelper, const long paramCount, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableConstructor(const wxString& strHelper, const long paramCount, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_strHelper(strHelper), m_paramCount(paramCount), m_lAlias(lPropAlias), m_lData(lData)
 			{
 			}
@@ -122,12 +125,12 @@ public:
 			eProp_Scoped   = 1u << 2,
 		};
 
-		struct ibValueMethodHelperProperty {
+		struct ibMemberTableProperty {
 
 			// Flag-based ctor — primary entry point. Use for new
 			// callsites and any prop that needs eProp_Scoped or other
 			// non-readable/writable bits.
-			ibValueMethodHelperProperty(const wxString& strPropName, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableProperty(const wxString& strPropName, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_fieldName(strPropName), m_flags(flags), m_lAlias(lPropAlias), m_lData(lData)
 			{
 			}
@@ -136,7 +139,7 @@ public:
 			// into the flags word so existing AppendProp(bool, bool,
 			// ...) overloads keep working without touching every
 			// callsite. Old props default to non-scoped.
-			ibValueMethodHelperProperty(const wxString& strPropName, bool readable, bool writable, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableProperty(const wxString& strPropName, bool readable, bool writable, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_fieldName(strPropName),
 				  m_flags((readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u)),
 				  m_lAlias(lPropAlias), m_lData(lData)
@@ -146,7 +149,7 @@ public:
 			// 3-bool ctor — same as legacy plus an explicit `scoped`
 			// argument. Readable for callsites that prefer bool args
 			// over OR'd flag literals (ThisObject / ThisForm / etc).
-			ibValueMethodHelperProperty(const wxString& strPropName, bool readable, bool writable, bool scoped, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableProperty(const wxString& strPropName, bool readable, bool writable, bool scoped, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_fieldName(strPropName),
 				  m_flags((readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u) | (scoped ? eProp_Scoped : 0u)),
 				  m_lAlias(lPropAlias), m_lData(lData)
@@ -169,15 +172,15 @@ public:
 			eMethod_Scoped    = 1u << 1,   // bc-local — invisible to children
 		};
 
-		struct ibValueMethodHelperMethod {
+		struct ibMemberTableMethod {
 
-			ibValueMethodHelperMethod(const wxString& strMethodName, const wxString& strHelper, const long paramCount, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableMethod(const wxString& strMethodName, const wxString& strHelper, const long paramCount, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_fieldName(strMethodName), m_strHelper(strHelper), m_paramCount(paramCount), m_flags(flags), m_lAlias(lPropAlias), m_lData(lData)
 			{
 			}
 
 			// Legacy ctor — convert hasRet bool into the flags word.
-			ibValueMethodHelperMethod(const wxString& strMethodName, const wxString& strHelper, const long paramCount, bool hasRet, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableMethod(const wxString& strMethodName, const wxString& strHelper, const long paramCount, bool hasRet, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_fieldName(strMethodName), m_strHelper(strHelper), m_paramCount(paramCount),
 				  m_flags(hasRet ? eMethod_HasReturn : 0u), m_lAlias(lPropAlias), m_lData(lData)
 			{
@@ -193,19 +196,271 @@ public:
 			long m_lAlias, m_lData;
 		};
 
-		// constructors & props & methods
-		std::vector<ibValueMethodHelperConstructor> m_constructorHelper; // tree of constructor names
-		std::vector<ibValueMethodHelperProperty> m_propHelper; // tree of attribute names
-		std::vector<ibValueMethodHelperMethod> m_methodHelper; // tree of method names
+		// props & methods (the built surface). Constructors (a value may surface
+		// SEVERAL) hang off a lazily-allocated vector: only a few value TYPES expose
+		// ctors at all (TypeDescription / File / Array), so every per-instance helper
+		// carries just the null pointer — not an empty vector header.
+		std::unique_ptr<std::vector<ibMemberTableConstructor>> m_ctors;
+		std::vector<ibMemberTableProperty> m_props; // tree of attribute names
+		std::vector<ibMemberTableMethod> m_methods; // tree of method names
+
+		// ---- bind-based population (push) -------------------------------
+		// A contributor appends THIS owner's names into the helper. `ctx` is the
+		// owning value (the record / aggregate that holds this helper), or
+		// nullptr for type-static names. It is typed `const ibValue*`, not a raw
+		// void*, on purpose: the owner is ALWAYS at least an ibValue, and a typed
+		// pointer lets a contributor downcast with a plain static_cast that the
+		// compiler offsets correctly across multiple-inheritance bases — a void*
+		// round-trip would lose that adjustment. A plain comparable (fn, ctx)
+		// pair — the wxEvtHandler::Bind idea hand-rolled: no std::function /
+		// template instantiation in this hot, everywhere-included header, and
+		// identity comparison gives BindOnce dedup + Unbind for free.
+	public:
+		// Two contributor flavours share one binder list:
+		//  - ibNameBinder: a FREE function (type-invariant surfaces built once via
+		//    Shared<>), gets the helper + a ctx pointer.
+		//  - ibNameFiller: a const MEMBER function of the owning value (per-instance
+		//    dynamic surfaces). Build() calls it ON the value, so the contributor
+		//    runs with a fully-typed `this` — no ctx cast. Bound through the member
+		//    Bind() template below and stored type-erased as a pointer-to-member of
+		//    the ibValue base; the hierarchy is diamond-free so the derived->base
+		//    pmf cast is unambiguous. This is the ibPropertyValueFunctor /
+		//    `(handler->*m_funcHandler)()` idea without a per-binder heap functor.
+		using ibNameBinder = void(*)(ibMemberTable& helper, const ibValue* ctx);
+		using ibNameFiller = void (ibValue::*)(ibMemberTable& helper) const;
+	private:
+		struct ibBoundNames {
+			const ibValue* m_ctx = nullptr;     // free-fn ctx, or the member-fn target value
+			ibNameBinder   m_freeFn = nullptr;  // exactly one of m_freeFn / m_memberFn is set
+			ibNameFiller   m_memberFn = nullptr;
+			bool           m_tail = false;      // run AFTER all non-tail binders (module exports must
+			                                    // follow the class's fixed methods so index-based
+			                                    // CallAsFunc dispatch keeps IsNew=0…); set by BindTail.
+			bool operator==(const ibBoundNames& o) const {
+				return m_ctx == o.m_ctx && m_freeFn == o.m_freeFn && m_memberFn == o.m_memberFn && m_tail == o.m_tail;
+			}
+		};
+		// Contributors, invoked by Build() in bind order — EXCEPT tail-flagged ones,
+		// which Build() runs last (a descriptor's module exports). Folding the tail in
+		// here drops a whole inline ibBoundNames field from every helper.
+		std::vector<ibBoundNames> m_binders;
+		// Build state. A rebuild may be triggered SEQUENTIALLY by any thread (the owner
+		// in normal runtime; the debugger inspecting cross-thread), but NEVER in PARALLEL
+		// for the same helper — two threads clearing+appending m_props/m_methods at once
+		// corrupts them. One atomic byte gives a lock-free claim: CAS Stale->Building wins
+		// the right to Build(); a loser just waits for the winner's cache (it must not
+		// race a second Build()). No mutex object → zero per-instance footprint, no global
+		// serialization. acquire/release: seeing Built implies all the build's writes are
+		// visible. Steady state (already Built) is a single relaxed-ish load — no cost.
+		enum BuildState : uint8_t { kStale = 0, kBuilding = 1, kBuilt = 2 };
+		std::atomic<uint8_t> m_buildState{ kStale };
+
+		// Lazy name->index acceleration for FindProp / FindMethod (the runtime
+		// hot path — every Obj.Attr / obj.Method() resolves a name). Keyed on
+		// the upper-cased name (lookup is case-insensitive, matching
+		// CompareString); value = the FIRST matching vector index, so the result
+		// is identical to the old linear "first wins" scan. Used only when the
+		// surface is large enough to pay (kFindIndexMin); rebuilt lazily on the
+		// first lookup after a structural change. An empty map allocates nothing,
+		// so a small or never-searched helper costs zero.
+		static constexpr size_t kFindIndexMin = 12;
+		// Both name->index maps + their dirty flags live in ONE heap node, allocated
+		// lazily only when a surface first crosses kFindIndexMin. The common case (a
+		// small or never-searched helper) carries just this null pointer — not two
+		// inline std::unordered_map objects (~80 B in Debug). emplace = keep first
+		// (lowest index), identical to the old linear "first wins" scan.
+		struct FindIndex {
+			std::unordered_map<std::wstring, long> prop;
+			std::unordered_map<std::wstring, long> method;
+			bool propDirty = true;
+			bool methodDirty = true;
+		};
+		mutable std::unique_ptr<FindIndex> m_findIndex;
+
+		void MarkPropDirty()   const { if (m_findIndex) m_findIndex->propDirty = true; }
+		void MarkMethodDirty() const { if (m_findIndex) m_findIndex->methodDirty = true; }
+
+		// Allocate-on-demand + rebuild-if-stale; callers gate on size >= kFindIndexMin.
+		const std::unordered_map<std::wstring, long>& PropIndex() const {
+			if (!m_findIndex) m_findIndex = std::make_unique<FindIndex>();
+			if (m_findIndex->propDirty) {
+				m_findIndex->prop.clear();
+				m_findIndex->prop.reserve(m_props.size());
+				for (long i = 0; i < (long)m_props.size(); ++i)
+					m_findIndex->prop.emplace(m_props[i].m_fieldName.Upper().ToStdWstring(), i);
+				m_findIndex->propDirty = false;
+			}
+			return m_findIndex->prop;
+		}
+		const std::unordered_map<std::wstring, long>& MethodIndex() const {
+			if (!m_findIndex) m_findIndex = std::make_unique<FindIndex>();
+			if (m_findIndex->methodDirty) {
+				m_findIndex->method.clear();
+				m_findIndex->method.reserve(m_methods.size());
+				for (long i = 0; i < (long)m_methods.size(); ++i)
+					m_findIndex->method.emplace(m_methods[i].m_fieldName.Upper().ToStdWstring(), i);
+				m_findIndex->methodDirty = false;
+			}
+			return m_findIndex->method;
+		}
 
 	public:
 
-		ibValueMethodHelper() {}
+		ibMemberTable() {}
 
+	private:
+		// Internal — Build() resets the surface before re-running the binders. Not
+		// public: nothing outside rebuilds by hand anymore (PrepareNames is gone).
 		void ClearHelper() {
-			m_constructorHelper.clear();
-			m_propHelper.clear();
-			m_methodHelper.clear();
+			m_ctors.reset();
+			m_props.clear();
+			m_methods.clear();
+			MarkPropDirty(); MarkMethodDirty();
+		}
+	public:
+
+		// ---- bind API ---------------------------------------------------
+		// Free contributor (type-invariant / Shared). Idempotent BindOnce lets a
+		// base and a derived each register their own with no guard flag.
+		void Bind(ibNameBinder fn, const ibValue* ctx = nullptr) {
+			m_binders.push_back(ibBoundNames{ ctx, fn, nullptr });
+			m_buildState = kStale;
+		}
+		void BindOnce(ibNameBinder fn, const ibValue* ctx = nullptr) {
+			const ibBoundNames b{ ctx, fn, nullptr };
+			for (const auto& e : m_binders) if (e == b) return;
+			m_binders.push_back(b);
+			m_buildState = kStale;
+		}
+		void Unbind(ibNameBinder fn, const ibValue* ctx = nullptr) {
+			const ibBoundNames b{ ctx, fn, nullptr };
+			m_binders.erase(std::remove(m_binders.begin(), m_binders.end(), b), m_binders.end());
+			m_buildState = kStale;
+		}
+		// Member contributor: a const method of the owning value. `obj` is the
+		// value (typically `this` in its ctor); Build() runs (obj->*fn)(helper),
+		// so the contributor sees the fully-typed instance. A class may bind several
+		// fillers — they run in bind order, accumulating the surface.
+		// The method's class M may be a BASE of the object's class C — a derived ctor
+		// binding a base-defined filler (e.g. Ext binding ibValueRecordDataObject's
+		// FillBaseMethods) deduces C=Ext, M=base; both upcast to ibValue uniformly.
+		//
+		// PROJECT INVARIANT — ibValue MUST be the FIRST base (offset 0) of any class
+		// that member-binds. Reason: the pmf is type-erased to void(ibValue::*), and on
+		// MSVC `ibValue::*` is a single-inheritance pmf (4 bytes, NO this-adjustment
+		// slot — ibValue has no bases). Casting a multiple-inheritance pmf to it DROPS
+		// the MI this-adjustment, so if ibValue sat at a non-zero offset, Build() would
+		// invoke the filler with `this` pointing at the ibValue sub-object instead of
+		// the real object → reads members at wrong offsets → garbage / crash. Keep the
+		// ibValue-holding base (ibValueDynamicMembers / ibValueStaticMembers, or
+		// ibValueFrame which carries them) FIRST in the base list. ibValueForm hit this
+		// exactly (ibBackendValueForm was first) and was reordered ibValueFrame-first.
+		// The wxASSERT below catches any future violator on its first bind.
+		template<class C, class M>
+		void Bind(const C* obj, void (M::*fn)(ibMemberTable&) const) {
+			static_assert(std::is_base_of<M, C>::value || std::is_same<M, C>::value,
+				"Bind: the filler's class must be the object's class or a base of it");
+			wxASSERT_MSG(static_cast<const void*>(static_cast<const ibValue*>(obj)) == static_cast<const void*>(obj),
+				wxT("ibValue must be the FIRST base (offset 0) of a member-binding class — see PROJECT INVARIANT above; make the ibValue-holding base first"));
+			m_binders.push_back(ibBoundNames{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) });
+			m_buildState = kStale;
+		}
+		template<class C, class M>
+		void Unbind(const C* obj, void (M::*fn)(ibMemberTable&) const) {
+			const ibBoundNames b{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) };
+			m_binders.erase(std::remove(m_binders.begin(), m_binders.end(), b), m_binders.end());
+			m_buildState = kStale;
+		}
+		// Tail contributor — Build() runs it AFTER every non-tail binder, so its entries
+		// land at the END of the surface regardless of bind order. Used for a
+		// descriptor's module exports: they must follow the class's fixed methods
+		// (index-based CallAsFunc). Set by the ibRuntimeModuleDataObject ctor. Only one
+		// tail is expected; replace any existing one so a re-bind stays idempotent.
+		void BindTail(ibNameBinder fn, const ibValue* ctx = nullptr) {
+			m_binders.erase(std::remove_if(m_binders.begin(), m_binders.end(),
+				[](const ibBoundNames& b) { return b.m_tail; }), m_binders.end());
+			m_binders.push_back(ibBoundNames{ ctx, fn, nullptr, /*tail=*/true });
+			m_buildState = kStale;
+		}
+		bool HasBinders() const {
+			return !m_binders.empty();
+		}
+		// Rebuild the name surface from the bound contributors, in bind order.
+		// No-op when nothing is bound, so it is SAFE on a helper still populated
+		// the old way (a PrepareNames() override + Append*). Defined out-of-line —
+		// a member-contributor call needs the complete ibValue.
+		void Build();
+		// Lazy trigger for GetPMethods(): no-op once built or when nothing is bound.
+		// Lock-free claim — exactly one thread builds; a concurrent caller (debugger)
+		// waits for that build instead of starting a second one on the same cache.
+		void EnsureBuilt() {
+			if (!HasBinders()) return;
+			if (m_buildState.load(std::memory_order_acquire) == kBuilt) return;
+			uint8_t expected = kStale;
+			if (m_buildState.compare_exchange_strong(expected, kBuilding,
+					std::memory_order_acq_rel, std::memory_order_acquire)) {
+				try {
+					Build();   // sets kBuilt (release) at its end
+				}
+				catch (...) {
+					// Don't get stuck in kBuilding — let a later access retry the build.
+					m_buildState.store(kStale, std::memory_order_release);
+					throw;
+				}
+			} else {
+				// Another thread already claimed the build — wait for it to finish
+				// (kBuilt) or fail (kStale); never start a second Build() on the same
+				// cache. Virtually never taken: a helper has a single owner thread, and
+				// a debugger inspects only while the debuggee is frozen (not mid-Build).
+				while (m_buildState.load(std::memory_order_acquire) == kBuilding)
+					std::this_thread::yield();
+			}
+		}
+		// Mark the surface stale (mutating values — e.g. Map keys); the next
+		// EnsureBuilt() rebuilds from the binders.
+		void Invalidate() { m_buildState.store(kStale, std::memory_order_release); }
+		bool IsBuilt() const { return m_buildState.load(std::memory_order_acquire) == kBuilt; }
+
+		// Reusable SHARED helper for a TYPE-INVARIANT name surface: one helper
+		// per distinct contributor, built once and thread-safely (function-local
+		// static init) — no per-class static member / magic-static boilerplate.
+		// A static-shape value's DoGetPMethods() is then one line:
+		//     return ibMemberTable::Shared<&BindXxxNames>();
+		// Only for shapes that DON'T depend on the instance (ctx is nullptr);
+		// per-metaobject / mutating values keep their own per-instance helper.
+		template<ibNameBinder Binder>
+		static ibMemberTable* Shared() {
+			static ibMemberTable s;
+			static const bool once = [] { s.Bind(Binder); s.Build(); return true; }();
+			(void)once;
+			return &s;
+		}
+
+		// Tier-2: SHARED helper per OWNER (e.g. one per metaobject) — for a shape
+		// that is stable per owner but DIFFERS between owners and has MANY instances
+		// per owner (record objects: shape = metaobject). Built once per owner key,
+		// cached, thread-safe (worker pool). Contributor gets ctx = the owner key.
+		// unordered_map element refs are rehash-stable, so the returned pointer stays
+		// valid while other threads insert. Call InvalidateSharedByOwner() on config
+		// reload (metaobjects rebuilt → stale keys / address-reuse) — it bumps a
+		// generation that lazily clears every per-Binder cache.
+		static std::atomic<unsigned>& OwnerGeneration() { static std::atomic<unsigned> g{ 0 }; return g; }
+		static void InvalidateSharedByOwner() { OwnerGeneration().fetch_add(1, std::memory_order_relaxed); }
+
+		template<ibNameBinder Binder>
+		static ibMemberTable* SharedByOwner(const ibValue* owner) {
+			static std::unordered_map<const ibValue*, ibMemberTable> s_byOwner;
+			static unsigned s_gen = 0;
+			static std::mutex s_mtx;
+			std::lock_guard<std::mutex> lk(s_mtx);
+			const unsigned g = OwnerGeneration().load(std::memory_order_relaxed);
+			if (s_gen != g) { s_byOwner.clear(); s_gen = g; }
+			ibMemberTable& h = s_byOwner[owner];
+			if (!h.IsBuilt()) {       // build under the lock → no race with the NVI wrapper's EnsureBuilt
+				h.BindOnce(Binder, owner);
+				h.Build();
+			}
+			return &h;
 		}
 
 		inline long AppendConstructor(const wxString& strHelper) { return AppendConstructor(0, strHelper, wxNOT_FOUND, wxNOT_FOUND); }
@@ -214,41 +469,39 @@ public:
 		inline long AppendConstructor(const long paramCount, const wxString& strHelper) { return AppendConstructor(paramCount, strHelper, wxNOT_FOUND, wxNOT_FOUND); }
 
 		inline long AppendConstructor(const long paramCount, const wxString& strHelper, const long lCtorNum, const long lCtorAlias) {
-
-			//auto iterator = std::find_if(m_constructorHelper.begin(), m_constructorHelper.end(),
-			//	[strHelper](const auto& f) { return stringUtils::CompareString(f.m_strHelper, strHelper); });
-			//if (iterator != m_constructorHelper.end())
-			//	return std::distance(m_constructorHelper.begin(), iterator);
-
-			m_constructorHelper.emplace_back(strHelper, paramCount, lCtorAlias, lCtorNum);
-			return m_constructorHelper.size();
+			if (!m_ctors) m_ctors = std::make_unique<std::vector<ibMemberTableConstructor>>();
+			m_ctors->emplace_back(strHelper, paramCount, lCtorAlias, lCtorNum);
+			return m_ctors->size();
 		}
 
-		void CopyConstructor(const ibValueMethodHelper* src, const long lCtorNum) {
+		void CopyConstructor(const ibMemberTable* src, const long lCtorNum) {
 			if (lCtorNum < src->GetNConstructors()) {
-				m_constructorHelper.push_back(src->m_constructorHelper[lCtorNum]);
+				if (!m_ctors) m_ctors = std::make_unique<std::vector<ibMemberTableConstructor>>();
+				m_ctors->push_back((*src->m_ctors)[lCtorNum]);
 			}
 		}
 
 		wxString GetConstructorHelper(const long lCtorNum) const {
-			if (lCtorNum > GetNConstructors())
+			if (lCtorNum < 0 || lCtorNum >= GetNConstructors())
 				return wxEmptyString;
-			return m_constructorHelper[lCtorNum].m_strHelper;
+			return (*m_ctors)[lCtorNum].m_strHelper;
 		}
 
 		long GetConstructorAlias(const long lCtorNum) const {
-			if (lCtorNum > GetNConstructors())
+			if (lCtorNum < 0 || lCtorNum >= GetNConstructors())
 				return wxNOT_FOUND;
-			return m_constructorHelper[lCtorNum].m_lAlias;
+			return (*m_ctors)[lCtorNum].m_lAlias;
 		}
 
 		long GetConstructorData(const long lCtorNum) const {
-			if (lCtorNum > GetNConstructors())
+			if (lCtorNum < 0 || lCtorNum >= GetNConstructors())
 				return wxNOT_FOUND;
-			return m_constructorHelper[lCtorNum].m_lData;
+			return (*m_ctors)[lCtorNum].m_lData;
 		}
 
-		const long int GetNConstructors() const noexcept { return m_constructorHelper.size(); }
+		// Constructor names are surfaced by only a handful of static (Shared) values
+		// (TypeDescription / File / Array); every per-instance helper leaves m_ctors null.
+		const long int GetNConstructors() const noexcept { return m_ctors ? (long)m_ctors->size() : 0; }
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -274,64 +527,72 @@ public:
 		// (or | eProp_Scoped for bc-local entries like ThisObject).
 		inline long AppendProp(const wxString& strPropName, unsigned int flags, const long lPropNum, const long lPropAlias) {
 
-			//auto iterator = std::find_if(m_propHelper.begin(), m_propHelper.end(),
+			//auto iterator = std::find_if(m_props.begin(), m_props.end(),
 			//	[strPropName](const auto& f) { return stringUtils::CompareString(f.m_fieldName, strPropName); });
-			//if (iterator != m_propHelper.end())
-			//	return std::distance(m_propHelper.begin(), iterator);
+			//if (iterator != m_props.end())
+			//	return std::distance(m_props.begin(), iterator);
 
-			m_propHelper.emplace_back(strPropName, flags, lPropAlias, lPropNum);
-			return m_propHelper.size();
+			m_props.emplace_back(strPropName, flags, lPropAlias, lPropNum);
+			MarkPropDirty();
+			return m_props.size();
 		}
 
-		void CopyProp(const ibValueMethodHelper* src, const long lPropNum) {
+		void CopyProp(const ibMemberTable* src, const long lPropNum) {
 			if (lPropNum < src->GetNProps()) {
-				m_propHelper.push_back(src->m_propHelper[lPropNum]);
+				m_props.push_back(src->m_props[lPropNum]);
+				MarkPropDirty();
 			}
 		}
 
 		void RemoveProp(const wxString& strPropName) {
-			m_methodHelper.erase(
-				std::remove_if(m_methodHelper.begin(), m_methodHelper.end(), [strPropName](const auto& f) {
-					return stringUtils::CompareString(f.m_fieldName, strPropName); }), m_methodHelper.end());
+			m_props.erase(
+				std::remove_if(m_props.begin(), m_props.end(), [&strPropName](const auto& f) {
+					return stringUtils::CompareString(f.m_fieldName, strPropName); }), m_props.end());
+			MarkPropDirty();
 		}
 
 		long FindProp(const wxString& strPropName) const {
-			auto iterator = std::find_if(m_propHelper.begin(), m_propHelper.end(),
-				[strPropName](const auto& f) { return stringUtils::CompareString(f.m_fieldName, strPropName); }
+			if (m_props.size() >= kFindIndexMin) {
+				const auto& idx = PropIndex();
+				const auto it = idx.find(strPropName.Upper().ToStdWstring());
+				return it != idx.end() ? it->second : wxNOT_FOUND;
+			}
+			auto iterator = std::find_if(m_props.begin(), m_props.end(),
+				[&strPropName](const auto& f) { return stringUtils::CompareString(f.m_fieldName, strPropName); }
 			);
-			if (iterator != m_propHelper.end())
-				return std::distance(m_propHelper.begin(), iterator);
+			if (iterator != m_props.end())
+				return (long)std::distance(m_props.begin(), iterator);
 			return wxNOT_FOUND;
 		}
 
 		wxString GetPropName(const long lPropNum) const {
-			if (lPropNum > GetNProps())
+			if (lPropNum < 0 || lPropNum >= GetNProps())
 				return wxEmptyString;
-			return m_propHelper[lPropNum].m_fieldName;
+			return m_props[lPropNum].m_fieldName;
 		}
 
 		long GetPropAlias(const long lPropNum) const {
-			if (lPropNum > GetNProps())
+			if (lPropNum < 0 || lPropNum >= GetNProps())
 				return wxNOT_FOUND;
-			return m_propHelper[lPropNum].m_lAlias;
+			return m_props[lPropNum].m_lAlias;
 		}
 
 		long GetPropData(const long lPropNum) const {
-			if (lPropNum > GetNProps())
+			if (lPropNum < 0 || lPropNum >= GetNProps())
 				return wxNOT_FOUND;
-			return m_propHelper[lPropNum].m_lData;
+			return m_props[lPropNum].m_lData;
 		}
 
 		virtual bool IsPropReadable(const long lPropNum) const {
-			if (lPropNum > GetNProps())
+			if (lPropNum < 0 || lPropNum >= GetNProps())
 				return false;
-			return m_propHelper[lPropNum].IsReadable();
+			return m_props[lPropNum].IsReadable();
 		}
 
 		virtual bool IsPropWritable(const long lPropNum) const {
-			if (lPropNum > GetNProps())
+			if (lPropNum < 0 || lPropNum >= GetNProps())
 				return false;
-			return m_propHelper[lPropNum].IsWritable();
+			return m_props[lPropNum].IsWritable();
 		}
 
 		// Scope-local props (ThisObject / ThisForm / similar) must
@@ -339,12 +600,12 @@ public:
 		// reads this and stamps ibCompileContext::ibVariable::m_bScoped
 		// on the freshly pushed entry.
 		virtual bool IsPropScoped(const long lPropNum) const {
-			if (lPropNum > GetNProps())
+			if (lPropNum < 0 || lPropNum >= GetNProps())
 				return false;
-			return m_propHelper[lPropNum].IsScoped();
+			return m_props[lPropNum].IsScoped();
 		}
 
-		const long GetNProps() const noexcept { return m_propHelper.size(); }
+		const long GetNProps() const noexcept { return m_props.size(); }
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -368,81 +629,89 @@ public:
 
 		inline long AppendMethod(const wxString& strMethodName, const wxString& strHelper, const long paramCount, bool hasRet, const long lMethodNum, const long lMethodAlias) {
 
-			//auto iterator = std::find_if(m_methodHelper.begin(), m_methodHelper.end(),
+			//auto iterator = std::find_if(m_methods.begin(), m_methods.end(),
 			//	[strMethodName](const auto& f) { return stringUtils::CompareString(f.m_fieldName, strMethodName); });
-			//if (iterator != m_methodHelper.end())
-			//	return std::distance(m_methodHelper.begin(), iterator);
+			//if (iterator != m_methods.end())
+			//	return std::distance(m_methods.begin(), iterator);
 
-			m_methodHelper.emplace_back(strMethodName, strHelper, paramCount, hasRet, lMethodAlias, lMethodNum);
-			return m_methodHelper.size();
+			m_methods.emplace_back(strMethodName, strHelper, paramCount, hasRet, lMethodAlias, lMethodNum);
+			MarkMethodDirty();
+			return m_methods.size();
 		}
 
-		void CopyMethod(const ibValueMethodHelper* src, const long lMethodNum) {
+		void CopyMethod(const ibMemberTable* src, const long lMethodNum) {
 			if (lMethodNum < src->GetNMethods()) {
-				m_methodHelper.push_back(src->m_methodHelper[lMethodNum]);
+				m_methods.push_back(src->m_methods[lMethodNum]);
+				MarkMethodDirty();
 			}
 		}
 
 		void RemoveMethod(const wxString& strMethodName) {
-			m_methodHelper.erase(
-				std::remove_if(m_methodHelper.begin(), m_methodHelper.end(), [strMethodName](const auto& f) {
-					return stringUtils::CompareString(f.m_fieldName, strMethodName); }), m_methodHelper.end());
+			m_methods.erase(
+				std::remove_if(m_methods.begin(), m_methods.end(), [&strMethodName](const auto& f) {
+					return stringUtils::CompareString(f.m_fieldName, strMethodName); }), m_methods.end());
+			MarkMethodDirty();
 		}
 
 		long FindMethod(const wxString& strMethodName) const {
-			auto iterator = std::find_if(m_methodHelper.begin(), m_methodHelper.end(), [strMethodName](const auto& f) {
+			if (m_methods.size() >= kFindIndexMin) {
+				const auto& idx = MethodIndex();
+				const auto it = idx.find(strMethodName.Upper().ToStdWstring());
+				return it != idx.end() ? it->second : wxNOT_FOUND;
+			}
+			auto iterator = std::find_if(m_methods.begin(), m_methods.end(), [&strMethodName](const auto& f) {
 				return stringUtils::CompareString(f.m_fieldName, strMethodName); });
 
-			if (iterator != m_methodHelper.end())
-				return std::distance(m_methodHelper.begin(), iterator);
+			if (iterator != m_methods.end())
+				return (long)std::distance(m_methods.begin(), iterator);
 			return wxNOT_FOUND;
 		}
 
 		wxString GetMethodName(const long lMethodNum) const {
-			if (lMethodNum > GetNMethods())
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
 				return wxEmptyString;
-			return m_methodHelper[lMethodNum].m_fieldName;
+			return m_methods[lMethodNum].m_fieldName;
 		}
 
 		wxString GetMethodHelper(const long lMethodNum) const {
-			if (lMethodNum > GetNMethods())
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
 				return wxEmptyString;
-			return m_methodHelper[lMethodNum].m_strHelper;
+			return m_methods[lMethodNum].m_strHelper;
 		}
 
 		long GetMethodAlias(const long lMethodNum) const {
-			if (lMethodNum > GetNMethods())
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
 				return wxNOT_FOUND;
-			return m_methodHelper[lMethodNum].m_lAlias;
+			return m_methods[lMethodNum].m_lAlias;
 		}
 
 		long GetMethodData(const long lMethodNum) const {
-			if (lMethodNum > GetNMethods())
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
 				return wxNOT_FOUND;
-			return m_methodHelper[lMethodNum].m_lData;
+			return m_methods[lMethodNum].m_lData;
 		}
 
 		bool HasRetVal(const long lMethodNum) const {
-			if (lMethodNum > GetNMethods())
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
 				return true;
-			return m_methodHelper[lMethodNum].HasReturn();
+			return m_methods[lMethodNum].HasReturn();
 		}
 
 		// Scope-local method (bc-local — invisible to children
 		// through cross-bc resolution). Symmetric with IsPropScoped.
 		bool IsMethodScoped(const long lMethodNum) const {
-			if (lMethodNum > GetNMethods())
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
 				return false;
-			return m_methodHelper[lMethodNum].IsScoped();
+			return m_methods[lMethodNum].IsScoped();
 		}
 
 		long GetNParams(const long lMethodNum) const {
-			if (lMethodNum > GetNMethods())
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
 				return wxNOT_FOUND;
-			return m_methodHelper[lMethodNum].m_paramCount;
+			return m_methods[lMethodNum].m_paramCount;
 		}
 
-		const long GetNMethods() const noexcept { return m_methodHelper.size(); }
+		const long GetNMethods() const noexcept { return m_methods.size(); }
 	};
 
 public:
@@ -591,11 +860,9 @@ public:
 	//runtime support:
 	template<typename T, typename... Args>
 	static T* CreateAndPrepareValueRef(Args&&... args) {
-		T* created_value = ::new T(std::forward<Args>(args)...);
-		if (created_value == nullptr)
-			return nullptr;
-		created_value->PrepareNames();
-		return created_value;
+		// The name surface is bind-driven and built lazily by GetPMethods() on first
+		// access — no eager population at creation (was created_value->PrepareNames()).
+		return ::new T(std::forward<Args>(args)...);
 	}
 
 	template<typename T>
@@ -805,13 +1072,40 @@ public:
 
 #pragma region attribute_support
 
-	virtual ibValueMethodHelper* GetPMethods() const {
-		return IsReference() && m_pRef != nullptr ?
-			m_pRef->GetPMethods() : nullptr;
+	// NVI: the single public entry — non-virtual. Everyone calls this; it
+	// resolves the per-class helper, lazily builds it, and returns it, so a
+	// caller can never get an unbuilt helper. Replaces the per-override
+	// EnsureBuilt boilerplate — build lives in ONE place (EnsureMethods).
+	ibMemberTable* GetPMethods() const { return EnsureMethods(DoGetPMethods()); }
+
+	// Mark the name surface stale after a STRUCTURAL change (a control added to a
+	// form, a module re-registered, …). The next GetPMethods() rebuilds it from the
+	// bound contributors. No-op for values with no helper. (Replaces the old
+	// PrepareNames() forced rebuild — most creation-time calls are gone, since
+	// GetPMethods() already builds lazily on first access.)
+	void InvalidateNames() const {
+		if (ibMemberTable* helper = DoGetPMethods())
+			helper->Invalidate();
 	}
 
-	//collect 
-	virtual void PrepareNames() const;
+protected:
+	// Raw per-class helper getter — THE virtual, overridden by value subclasses
+	// (each returns its own helper; no build). For a reference, delegate to the
+	// referenced object's raw getter; GetPMethods() above does the build.
+	virtual ibMemberTable* DoGetPMethods() const {
+		return IsReference() && m_pRef != nullptr ?
+			m_pRef->DoGetPMethods() : nullptr;
+	}
+
+private:
+	// Lazy build, in ONE place. Static — no `this`, just acts on the passed
+	// helper. `h` is non-const, so EnsureBuilt() needs no const_cast.
+	static ibMemberTable* EnsureMethods(ibMemberTable* h) {
+		if (h != nullptr) h->EnsureBuilt();
+		return h;
+	}
+
+public:
 
 	/// Returns number of component properties
 	/**
@@ -1074,6 +1368,50 @@ private:
 	// touch the payload.
 	std::atomic<unsigned int> m_refCount;
 };
+
+// ---------------------------------------------------------------------------
+// Aggregate-value bases (NVI). ibValue itself stays BARE for primitives
+// (Number / String / Boolean / Date / Guid — no methods/props; the inherited
+// DoGetPMethods() returns nullptr, zero helper machinery). Values that DO have
+// a name surface inherit one of the two bases below, so DoGetPMethods is
+// PROTECTED by construction (no public raw-getter override anywhere) and the
+// helper lifetime / wiring lives in one place. The hierarchy is diamond-free by
+// design — capability mixins never derive ibValue — so replacing a class's
+// `ibValue` base slot with one of these introduces ibValue exactly once.
+// ---------------------------------------------------------------------------
+
+// PER-INSTANCE dynamic values (records, Map keys, ResultSet columns, table rows):
+// own the helper BY VALUE (auto create/destroy, no new/wxDELETE), built lazily by
+// the NVI wrapper. A descendant supplies its name surface by binding one or more
+// of its own const member fillers in its ctor —
+// `m_members.Bind(this, &Class::FillXxx)` — and calls m_members.Invalidate()
+// when it mutates. Several fillers accumulate in bind order, so a class can split
+// its surface (e.g. methods + data members) and a derived class can add to or
+// replace the base's (Unbind the base filler first to replace).
+class BACKEND_API ibValueDynamicMembers : public ibValue {
+public:
+	ibValueDynamicMembers(ibValueTypes type = ibValueTypes::TYPE_VALUE, bool readOnly = false) : ibValue(type, readOnly) {}
+protected:
+	mutable ibMemberTable m_members;
+	virtual ibMemberTable* DoGetPMethods() const override { return &m_members; }
+	// Each concrete value binds its own contributor(s) in its ctor:
+	//   m_members.Bind(this, &Self::FillMembers);
+	// Binders accumulate in Build(); compose by also binding the base contributor.
+	// Module exports autobind as the helper's tail in the ibRuntimeModuleDataObject ctor.
+};
+
+// TYPE-INVARIANT values (Array, Point, File, ...): NO per-instance helper — one
+// shared helper per contributor via Shared<Binder>(), built once. Descendants
+// just inherit ibValueStaticMembers<&BindXxx> (BindXxx must be a free/static
+// function — the deriving class is incomplete in its own base clause).
+template<ibValue::ibMemberTable::ibNameBinder Binder>
+class ibValueStaticMembers : public ibValue {
+public:
+	ibValueStaticMembers(ibValueTypes type = ibValueTypes::TYPE_VALUE, bool readOnly = false) : ibValue(type, readOnly) {}
+protected:
+	virtual ibMemberTable* DoGetPMethods() const override { return ibMemberTable::Shared<Binder>(); }
+};
+
 #include "backend/value_ptr.h"
 #include "backend/value_cast.h"
 

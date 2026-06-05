@@ -240,8 +240,8 @@ per-op branch.
 > wx-RTTI (originally MFC `CObject`/`DECLARE_DYNCREATE`/`CRuntimeClass`,
 > transliterated to `wxObject`/`wxDECLARE_DYNAMIC_CLASS`/`wxClassInfo` during the
 > MFC→wx port — see VTOOLS.RU 2002–2003 ancestry) is gone from the value tree.
-> Full solution builds clean Debug|x86 (all 11 projects: backend/frontend/
-> wfrontend + enterprise/designer/daemon/codeRunner/classChecker/launcher/
+> Full solution builds clean Debug|x86 (all 10 projects: backend/frontend/
+> wfrontend + enterprise/designer/daemon/codeRunner/launcher/
 > wenterprise-server/simplePlugin). This supersedes the earlier "per-class
 > `GetClassType()` macro / CRTP" sketch — see *Design path* below.
 >

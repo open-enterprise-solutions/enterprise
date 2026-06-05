@@ -449,14 +449,6 @@ ibBackendDocFrame* ibSession::CurrentFrame()
 	return s != nullptr ? s->GetFrame() : nullptr;
 }
 
-ibRunContext* ibSession::CurrentRunContext()
-{
-	if (ibSession* s = Current())
-		if (auto* dbg = s->Debug())
-			return dbg->m_runContext;
-	return nullptr;
-}
-
 ibProcUnitState* ibSession::GetPUState()
 {
 	if (ibSession* s = Current())

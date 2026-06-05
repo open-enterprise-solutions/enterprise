@@ -19,29 +19,20 @@
 //*********************************************************************************************************
 
 ibValueModuleManager::ibValueModuleManager(ibMetaData* metadata, const ibValueMetaObjectModule* obj) :
-	ibValue(ibValueTypes::TYPE_VALUE), ibRuntimeModuleDataObject(new ibCompileModule(obj)),
+	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
+	ibRuntimeModuleDataObject(m_members, this, new ibCompileModule(obj)),
 	m_objectManager(new ibValueGlobalContextManager(metadata)),
-	m_metaManager(new ibValueMetadataUnit(metadata)),
-	m_methodHelper(new ibValueMethodHelper())
+	m_metaManager(new ibValueMetadataUnit(metadata))
 {
 	// "Metadata" global — bound straight into the compile module's extern map
 	// (the single source for globals; m_metaManager owns the value). m_compileModule
-	// is live here (created in the ibRuntimeModuleDataObject base ctor above).
+	// is live here (created in the ibRuntimeModuleDataObject base ctor above). The name
+	// surface (module exports) autobinds as the helper's tail in that descriptor ctor.
 	BindExportVariable(objectMetadataManager, m_metaManager);
 }
 
 ibValueModuleManager::~ibValueModuleManager()
 {
-	wxDELETE(m_methodHelper);
-}
-
-void ibValueModuleManager::PrepareNames() const
-{
-	m_methodHelper->ClearHelper();
-	ExportNamesToHelper(m_methodHelper, eProcUnit);
-
-	m_objectManager->PrepareNames();
-	m_metaManager->PrepareNames();
 }
 
 bool ibValueModuleManager::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
@@ -195,15 +186,6 @@ bool ibValueModuleRuntimeManager::RuntimeUnregisterCommonModule(ibValueMetaObjec
 	return true;
 }
 
-void ibValueModuleRuntimeManager::PrepareNames() const
-{
-	ibValueModuleManager::PrepareNames();
-
-	for (auto& module : m_listCommonModuleManager) {
-		module->PrepareNames();
-	}
-}
-
 //**********************************************************************
 //*          Per-session runtime (compile / runtime split)             *
 //**********************************************************************
@@ -272,14 +254,17 @@ bool ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 		}
 	}
 
-	// LOAD-BEARING — do not drop. The compile-time PrepareNames (inside
+	// LOAD-BEARING — do not drop. The compile-time helper build (inside
 	// CreateCommonModule) ran BEFORE this AttachRuntime, i.e. with no per-session
 	// ProcUnit yet, so each common module's method-helper exported an empty/partial
 	// name set. Symptom: a bound common module resolves as a non-aggregate at
-	// runtime ("'<method>' - a variable is not an aggregate object"). Re-export here,
-	// now that InitializeRuntime/Run above have wired every module's ProcUnit, so the
-	// helpers carry the real exported methods/attributes.
-	PrepareNames();
+	// runtime ("'<method>' - a variable is not an aggregate object"). Invalidate this
+	// manager AND every common module so the next name resolution rebuilds (descriptor
+	// export tail) now that InitializeRuntime/Run above wired every module's ProcUnit.
+	m_members.Invalidate();
+	for (auto& module : m_listCommonModuleManager) {
+		module->InvalidateNames();
+	}
 	return true;
 }
 
@@ -518,11 +503,10 @@ bool ibValueModuleManagerDesigner::CreateMainModule()
 	// No unit compilation here — see AddCommonModule. The editor parses common
 	// modules' text for exports; the designer never executes script.
 
-	// Export the helper name tables now that the context is seeded — the editor's
-	// first pass reads GetContextVariables() and calls PrepareNames() per value, but
-	// the manager's own helper (and m_objectManager / m_metaManager) need exporting
-	// here so names resolve on the very first autocomplete after load.
-	PrepareNames();
+	// Invalidate the manager's name surface now that the context is seeded, so the
+	// very first autocomplete after load rebuilds it (descriptor export tail). The
+	// child holders (m_objectManager / m_metaManager) build lazily on their own access.
+	m_members.Invalidate();
 
 	m_populated = true;
 	return true;
@@ -630,15 +614,6 @@ bool ibValueModuleManagerDesigner::RemoveCommonModule(ibValueMetaObjectCommonMod
 	}
 
 	return true;
-}
-
-void ibValueModuleManagerDesigner::PrepareNames() const
-{
-	ibValueModuleManager::PrepareNames();
-
-	for (auto& module : m_listCommonModule) {
-		module->PrepareNames();
-	}
 }
 
 //**********************************************************************

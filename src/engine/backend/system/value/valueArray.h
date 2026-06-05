@@ -4,7 +4,11 @@
 #include "backend/compiler/value.h"
 
 //Array support
-class BACKEND_API ibValueArray : public ibValue {
+// Type-invariant contributor — free function (external linkage) so it can be a
+// template non-type arg in the base clause below (the class is incomplete here).
+void ibValueArray_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+
+class BACKEND_API ibValueArray : public ibValueStaticMembers<&ibValueArray_BindNames> {
 	public:
 private:
 	std::vector <ibValue> m_listValue;
@@ -38,11 +42,11 @@ private:
 public:
 
 	ibValueArray() :
-		ibValue(ibValueTypes::TYPE_VALUE) {
+		ibValueStaticMembers(ibValueTypes::TYPE_VALUE) {
 	}
 
 	ibValueArray(const std::vector <ibValue>& arr) :
-		ibValue(ibValueTypes::TYPE_VALUE, true), m_listValue(arr) {
+		ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_listValue(arr) {
 	}
 
 	virtual ~ibValueArray() {
@@ -59,14 +63,7 @@ public:
 
 public:
 
-	//Attribute -> String key
-	//working with array as an aggregate object
-	static ibValueMethodHelper m_methodHelper;
-
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		return &m_methodHelper;
-	}
-	virtual void PrepareNames() const;                         // this method is automatically called to initialize attribute and method names.
+	// DoGetPMethods (protected) + Shared<&ibValueArray_BindNames> come from the base.
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       //method call
 
 	// LINQ virtual-dispatch override. Intercepts hot operators that

@@ -75,11 +75,6 @@ bool ibValueTextBox::SaveData(ibWriterMemory& writer)
 
 //***********************************************************************************
 
-void ibValueTextBox::PrepareNames() const
-{
-	ibValueFrame::PrepareNames();
-}
-
 bool ibValueTextBox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
 	return ibValueFrame::SetPropVal(lPropNum, varPropVal);

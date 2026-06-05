@@ -27,6 +27,7 @@ enum prop {
 
 ibValueCheckbox::ibValueCheckbox() : ibValueWindow(), ibTypeControlFactory()//(ibValueTypes::TYPE_BOOLEAN)
 {
+	m_members.Bind(this, &ibValueCheckbox::FillControlMembers);
 }
 
 const ibMetaData* ibValueCheckbox::GetMetaData() const
@@ -35,18 +36,16 @@ const ibMetaData* ibValueCheckbox::GetMetaData() const
 		m_formOwner->GetMetaData() : nullptr;
 }
 
-void ibValueCheckbox::PrepareNames() const
+void ibValueCheckbox::FillControlMembers(ibMemberTable& helper) const
 {
-	ibValueFrame::PrepareNames();
-
-	m_methodHelper->AppendProp(wxT("Value"), eControlValue, eControl);
+	helper.AppendProp(wxT("Value"), eControlValue, eControl);
 }
 
 bool ibValueCheckbox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum); bool refreshColumn = false;
+	const long lPropAlias = m_members.GetPropAlias(lPropNum); bool refreshColumn = false;
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eControlValue) {
 			SetControlValue(varPropVal);
 		}
@@ -57,9 +56,9 @@ bool ibValueCheckbox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 
 bool ibValueCheckbox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eControlValue) {
 			return GetControlValue(pvarPropVal);
 		}

@@ -9,21 +9,21 @@
 //////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////
 
-ibValueForm::ibValueFormCollectionControl::ibValueFormCollectionControl() : ibValue(ibValueTypes::TYPE_VALUE, true),
-m_formOwner(nullptr), m_methodHelper(nullptr)
+ibValueForm::ibValueFormCollectionControl::ibValueFormCollectionControl() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
+m_formOwner(nullptr)
 {
 }
 
-ibValueForm::ibValueFormCollectionControl::ibValueFormCollectionControl(ibValueForm* ownerFrame) : ibValue(ibValueTypes::TYPE_VALUE, true),
-m_formOwner(ownerFrame), m_methodHelper(new ibValueMethodHelper())
+ibValueForm::ibValueFormCollectionControl::ibValueFormCollectionControl(ibValueForm* ownerFrame) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
+m_formOwner(ownerFrame)
 {
+	m_members.Bind(this, &ibValueFormCollectionControl::FillMembers);
 }
 
 #include "backend/system/value/valueMap.h"
 
 ibValueForm::ibValueFormCollectionControl::~ibValueFormCollectionControl()
 {
-	wxDELETE(m_methodHelper);
 }
 
 // Walk the control hierarchy (m_children), collecting controls and skipping
@@ -117,15 +117,13 @@ enum
 	enControlCount
 };
 
-void ibValueForm::ibValueFormCollectionControl::PrepareNames() const
+void ibValueForm::ibValueFormCollectionControl::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
-	m_methodHelper->AppendFunc(wxT("CreateControl"), 2, wxT("CreateControl(typeControl : type, parentElement : frame)"));
-	m_methodHelper->AppendFunc(wxT("FindControl"), 1, wxT("FindControl(controlName : string)"));
-	m_methodHelper->AppendProc(wxT("RemoveControl"), 1, wxT("RemoveControl(controlElement : frame)"));
-	m_methodHelper->AppendFunc(wxT("Property"), 2, wxT("Property(key : string, valueFound : frame)"));
-	m_methodHelper->AppendFunc(wxT("Count"), wxT("Count()"));
+	helper.AppendFunc(wxT("CreateControl"), 2, wxT("CreateControl(typeControl : type, parentElement : frame)"));
+	helper.AppendFunc(wxT("FindControl"), 1, wxT("FindControl(controlName : string)"));
+	helper.AppendProc(wxT("RemoveControl"), 1, wxT("RemoveControl(controlElement : frame)"));
+	helper.AppendFunc(wxT("Property"), 2, wxT("Property(key : string, valueFound : frame)"));
+	helper.AppendFunc(wxT("Count"), wxT("Count()"));
 
 	wxString controlName;
 
@@ -134,7 +132,7 @@ void ibValueForm::ibValueFormCollectionControl::PrepareNames() const
 		if (!control->GetControlNameAsString(controlName))
 			continue;
 
-		m_methodHelper->AppendProp(
+		helper.AppendProp(
 			controlName,
 			true,
 			false,
@@ -147,7 +145,7 @@ bool ibValueForm::ibValueFormCollectionControl::GetPropVal(const long lPropNum, 
 {
 	wxASSERT(m_formOwner);
 	pvarPropVal = m_formOwner->FindControlByID(
-		m_methodHelper->GetPropData(lPropNum)
+		m_members.GetPropData(lPropNum)
 	);
 	return !pvarPropVal.IsEmpty();
 }

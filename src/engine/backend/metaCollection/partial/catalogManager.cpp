@@ -31,20 +31,21 @@ enum Func {
 	eEmptyRef
 };
 
-void ibValueManagerDataObjectCatalog::PrepareNames() const
+void ibValueManagerDataObjectCatalog::FillManagerMethods(ibMemberTable& helper) const
 {
-	ibValueManagerDataObjectPredefined::PrepareNames();
-
-	m_methodHelper->AppendFunc(wxT("CreateElement"), wxT("CreateElement()"));
-	m_methodHelper->AppendFunc(wxT("CreateGroup"), wxT("CreateGroup()"));
-	m_methodHelper->AppendFunc(wxT("Select"), wxT("Select()"));
-	m_methodHelper->AppendFunc(wxT("FindByCode"), 1, wxT("FindByCode(code : string)"));
-	m_methodHelper->AppendFunc(wxT("FindByDescription"), 1, wxT("FindByDescription(descr : string)"));
-	m_methodHelper->AppendFunc(wxT("GetForm"), 3, wxT("GetForm(name : string, owner : any, id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(name : string, owner : any, id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetSelectForm"), 3, wxT("GetSelectForm(name : string, owner : any, id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	m_methodHelper->AppendFunc(wxT("EmptyRef"), wxT("EmptyRef()"));
+	// Composes after FillMembers (common-module methods) + FillPredefined (props),
+	// bound earlier in the ctor chain. Order is load-bearing — CallAsFunc switches
+	// on the method index (eCreateElement = 0 …, relative to these appends).
+	helper.AppendFunc(wxT("CreateElement"), wxT("CreateElement()"));
+	helper.AppendFunc(wxT("CreateGroup"), wxT("CreateGroup()"));
+	helper.AppendFunc(wxT("Select"), wxT("Select()"));
+	helper.AppendFunc(wxT("FindByCode"), 1, wxT("FindByCode(code : string)"));
+	helper.AppendFunc(wxT("FindByDescription"), 1, wxT("FindByDescription(descr : string)"));
+	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(wxT("GetSelectForm"), 3, wxT("GetSelectForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
+	helper.AppendFunc(wxT("EmptyRef"), wxT("EmptyRef()"));
 }
 
 #include "selector/objectSelector.h"

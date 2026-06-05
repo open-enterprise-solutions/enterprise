@@ -279,6 +279,8 @@ m_tableModel(nullptr), m_tableCurrentLine(nullptr),
 m_dataViewCreated(false), m_dataViewSelected(false),
 m_need_calculate_pos(false)
 {
+	m_members.Bind(this, &ibValueModelTableBox::FillControlMembers);
+
 	m_propertySource->SetValue(ibTypeDescription(g_valueTableCLSID));
 
 	//set default params
@@ -692,19 +694,17 @@ const ibMetaData* ibValueModelTableBox::GetMetaData() const
 		m_formOwner->GetMetaData() : nullptr;
 }
 
-void ibValueModelTableBox::PrepareNames() const
+void ibValueModelTableBox::FillControlMembers(ibMemberTable& helper) const
 {
-	ibValueFrame::PrepareNames();
-
-	m_methodHelper->AppendProp(wxT("Value"), eTableValue, eControl);
-	m_methodHelper->AppendProp(wxT("CurrentRow"), eCurrentRow, eControl);
+	helper.AppendProp(wxT("Value"), eTableValue, eControl);
+	helper.AppendProp(wxT("CurrentRow"), eCurrentRow, eControl);
 }
 
 bool ibValueModelTableBox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum); bool refreshColumn = false;
+	const long lPropAlias = m_members.GetPropAlias(lPropNum); bool refreshColumn = false;
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eTableValue) {
 			m_tableModel = varPropVal.ConvertToType<ibValueModelTableBase>();
 			m_tableCurrentLine.Reset();
@@ -735,9 +735,9 @@ bool ibValueModelTableBox::SetPropVal(const long lPropNum, const ibValue& varPro
 
 bool ibValueModelTableBox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eTableValue) {
 			pvarPropVal = m_tableModel;
 			return true;

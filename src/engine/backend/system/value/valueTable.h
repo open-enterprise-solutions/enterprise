@@ -130,19 +130,13 @@ public:
 
 		virtual unsigned int GetColumnCount() const { return m_listColumnInfo.size(); }
 
-		virtual ibValueMethodHelper* GetPMethods() const {
-			//PrepareNames();
-			return m_methodHelper;
-		}
-
-		virtual void PrepareNames() const;
-
+		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 		//WORK AS AN AGGREGATE OBJECT
 		virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);
 		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
-		//array support 
+		//array support
 		virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue);
 		virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
 
@@ -152,7 +146,6 @@ public:
 
 		ibValueModelTable* m_ownerTable;
 		std::vector<ibValuePtr<ibValueModelTableColumnInfo>> m_listColumnInfo;
-		ibValueMethodHelper* m_methodHelper;
 	};
 
 	class ibValueModelTableReturnLine : public ibValueModelReturnLine {
@@ -163,19 +156,13 @@ public:
 
 		virtual ibValueModelTableBase* GetOwnerModel() const { return m_ownerTable; }
 
-		virtual ibValueMethodHelper* GetPMethods() const {
-			//PrepareNames();
-			return m_methodHelper;
-		}
-
-		virtual void PrepareNames() const; // this method is automatically called to initialize attribute and method names.
+		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal); //setting attribute
 		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal); //attribute value
 
 	private:
 		ibValueModelTable* m_ownerTable;
-		ibValueMethodHelper* m_methodHelper;
 	};
 
 public:
@@ -234,12 +221,7 @@ public:
 	//check is empty
 	virtual bool IsEmpty() const { return GetRowCount() == 0; }
 
-	virtual ibValueMethodHelper* GetPMethods() const {  // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames();
-		return &m_methodHelper;
-	}
-
-	virtual void PrepareNames() const; // this method is automatically called to initialize attribute and method names.
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal); // attribute value
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       // method call
@@ -282,7 +264,6 @@ public:
 private:
 
 	ibValuePtr<ibValueModelTableColumnCollection> m_tableColumnCollection;
-	static ibValueMethodHelper m_methodHelper;
 };
 
 #endif

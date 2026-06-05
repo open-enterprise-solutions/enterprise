@@ -20,7 +20,7 @@ class ibValueGridBox : public ibValueWindow {
 	virtual wxPrintout* CreatePrintout() const;
 
 	//methods & attributes
-	virtual void PrepareNames() const;                         // this method is automatically called to initialize attribute and method names.
+	void FillControlMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value

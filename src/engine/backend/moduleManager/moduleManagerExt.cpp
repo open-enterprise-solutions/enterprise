@@ -74,6 +74,10 @@ ibValueModuleRuntimeManagerExternalDataProcessor::ibValueModuleRuntimeManagerExt
 		//incrRef
 		m_objectValue->IncrRef();
 	}
+
+	// Surface = the external object value's methods/props (copied below), then module
+	// exports as the helper's tail (descriptor autobind in the base ctor).
+	m_members.Bind(this, &ibValueModuleRuntimeManagerExternalDataProcessor::FillMembers);
 }
 
 ibValueModuleRuntimeManagerExternalDataProcessor::~ibValueModuleRuntimeManagerExternalDataProcessor()
@@ -310,6 +314,10 @@ ibValueModuleRuntimeManagerExternalReport::ibValueModuleRuntimeManagerExternalRe
 		//incrRef
 		m_objectValue->IncrRef();
 	}
+
+	// Surface = the external object value's methods/props (copied below), then module
+	// exports as the helper's tail (descriptor autobind in the base ctor).
+	m_members.Bind(this, &ibValueModuleRuntimeManagerExternalReport::FillMembers);
 }
 
 ibValueModuleRuntimeManagerExternalReport::~ibValueModuleRuntimeManagerExternalReport()
@@ -477,22 +485,20 @@ bool ibValueModuleRuntimeManagerExternalReport::ExitMainModule(bool force)
 //*                      ibValueModuleRuntimeManagerExternalDataProcessor                 *
 //****************************************************************************
 
-void ibValueModuleRuntimeManagerExternalDataProcessor::PrepareNames() const
+void ibValueModuleRuntimeManagerExternalDataProcessor::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
+	// Copy the external object value's surface; the module exports are appended after
+	// these (the helper's tail, autobound by the ibRuntimeModuleDataObject ctor).
 	if (m_objectValue != nullptr) {
-		m_objectValue->PrepareNames();
-		ibValueMethodHelper* methodHelper = m_objectValue->GetPMethods();
+		ibMemberTable* methodHelper = m_objectValue->GetPMethods();
 		wxASSERT(methodHelper);
 		for (long idx = 0; idx < methodHelper->GetNMethods(); idx++) {
-			m_methodHelper->CopyMethod(methodHelper, idx);
+			helper.CopyMethod(methodHelper, idx);
 		}
 		for (long idx = 0; idx < methodHelper->GetNProps(); idx++) {
-			m_methodHelper->CopyProp(methodHelper, idx);
+			helper.CopyProp(methodHelper, idx);
 		}
 	}
-
-	ExportNamesToHelper(m_methodHelper, eProcUnit);
 }
 
 bool ibValueModuleRuntimeManagerExternalDataProcessor::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -553,21 +559,20 @@ long ibValueModuleRuntimeManagerExternalDataProcessor::FindProp(const wxString& 
 //*                      ibValueModuleRuntimeManagerExternalReport		                 *
 //****************************************************************************
 
-void ibValueModuleRuntimeManagerExternalReport::PrepareNames() const
+void ibValueModuleRuntimeManagerExternalReport::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
+	// Copy the external object value's surface; the module exports are appended after
+	// these (the helper's tail, autobound by the ibRuntimeModuleDataObject ctor).
 	if (m_objectValue != nullptr) {
-		m_objectValue->PrepareNames();
-		ibValueMethodHelper* methodHelper = m_objectValue->GetPMethods();
+		ibMemberTable* methodHelper = m_objectValue->GetPMethods();
 		wxASSERT(methodHelper);
 		for (long idx = 0; idx < methodHelper->GetNMethods(); idx++) {
-			m_methodHelper->CopyMethod(methodHelper, idx);
+			helper.CopyMethod(methodHelper, idx);
 		}
 		for (long idx = 0; idx < methodHelper->GetNProps(); idx++) {
-			m_methodHelper->CopyProp(methodHelper, idx);
+			helper.CopyProp(methodHelper, idx);
 		}
 	}
-	ExportNamesToHelper(m_methodHelper, eProcUnit);
 }
 
 bool ibValueModuleRuntimeManagerExternalReport::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)

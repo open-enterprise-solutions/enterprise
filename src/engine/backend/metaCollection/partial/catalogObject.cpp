@@ -20,11 +20,13 @@
 ibValueRecordDataObjectCatalog::ibValueRecordDataObjectCatalog(const ibValueMetaObjectCatalog* metaObject, const ibGuid& objGuid, ibObjectMode objMode) :
 	ibValueRecordDataObjectHierarchyRef(metaObject, objGuid, objMode)
 {
+	m_members.Bind(this, &ibValueRecordDataObjectCatalog::FillMethods);
 }
 
 ibValueRecordDataObjectCatalog::ibValueRecordDataObjectCatalog(const ibValueRecordDataObjectCatalog& source) :
 	ibValueRecordDataObjectHierarchyRef(source)
 {
+	m_members.Bind(this, &ibValueRecordDataObjectCatalog::FillMethods);
 }
 
 ibSourceExplorer ibValueRecordDataObjectCatalog::GetSourceExplorer() const
@@ -118,63 +120,27 @@ enum Func {
 //*                              Support methods                             *
 //****************************************************************************
 
-void ibValueRecordDataObjectCatalog::PrepareNames() const
+void ibValueRecordDataObjectCatalog::FillMethods(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
-	m_methodHelper->AppendFunc(wxT("IsNew"), wxT("IsNew()"));
-	m_methodHelper->AppendFunc(wxT("Copy"), wxT("Copy()"));
-	m_methodHelper->AppendFunc(wxT("Fill"), 1, wxT("Fill(object)"));
-	m_methodHelper->AppendFunc(wxT("Write"), wxT("Write()"));
-	m_methodHelper->AppendFunc(wxT("Delete"), wxT("Delete()"));
-	m_methodHelper->AppendFunc(wxT("Modified"), wxT("Modified()"));
-	m_methodHelper->AppendFunc(wxT("GetFormObject"), 3, wxT("GetFormObject(name : string, owner : any , id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
-	m_methodHelper->AppendProc(wxT("Lock"),   wxT("Lock()"));
-	m_methodHelper->AppendProc(wxT("Unlock"), wxT("Unlock()"));
-
-	// ThisObject is bound (BindContextVariable in InitializeObject) — single
-	// source for editor + runtime; no manual AppendProp.
-
-	//set object name
-	wxString objectName;
-
-	//fill custom attributes 
-	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		if (object->IsDeleted())
-			continue;
-		if (!object->GetObjectNameAsString(objectName))
-			continue;
-		m_methodHelper->AppendProp(
-			objectName,
-			true,
-			!m_metaObject->IsDataReference(object->GetMetaID()),
-			object->GetMetaID(),
-			eProperty
-		);
-	}
-
-	//fill custom tables 
-	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
-		if (object->IsDeleted())
-			continue;
-		if (!object->GetObjectNameAsString(objectName))
-			continue;
-		m_methodHelper->AppendProp(
-			objectName,
-			true,
-			false,
-			object->GetMetaID(),
-			eTable
-		);
-	}
-	ExportNamesToHelper(m_methodHelper, eProcUnit);
+	// Catalog's own methods. The data members (attributes / tabular sections /
+	// module exports) come from the base FillDataMembers. Order is load-bearing —
+	// CallAsFunc switches on the method index (enIsNew = 0 …).
+	helper.AppendFunc(wxT("IsNew"), wxT("IsNew()"));
+	helper.AppendFunc(wxT("Copy"), wxT("Copy()"));
+	helper.AppendFunc(wxT("Fill"), 1, wxT("Fill(object)"));
+	helper.AppendFunc(wxT("Write"), wxT("Write()"));
+	helper.AppendFunc(wxT("Delete"), wxT("Delete()"));
+	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
+	helper.AppendFunc(wxT("GetFormObject"), 3, wxT("GetFormObject(name : string, owner : any , id : guid)"));
+	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
+	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	helper.AppendProc(wxT("Lock"),   wxT("Lock()"));
+	helper.AppendProc(wxT("Unlock"), wxT("Unlock()"));
 }
 
 bool ibValueRecordDataObjectCatalog::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
 		if (m_procUnit != nullptr) {
 			return m_procUnit->SetPropVal(
@@ -184,7 +150,7 @@ bool ibValueRecordDataObjectCatalog::SetPropVal(const long lPropNum, const ibVal
 	}
 	else if (lPropAlias == eProperty) {
 		return SetValueByMetaID(
-			m_methodHelper->GetPropData(lPropNum),
+			m_members.GetPropData(lPropNum),
 			varPropVal
 		);
 	}
@@ -194,7 +160,7 @@ bool ibValueRecordDataObjectCatalog::SetPropVal(const long lPropNum, const ibVal
 
 bool ibValueRecordDataObjectCatalog::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
 		if (m_procUnit != nullptr) {
 			return m_procUnit->GetPropVal(
@@ -203,7 +169,7 @@ bool ibValueRecordDataObjectCatalog::GetPropVal(const long lPropNum, ibValue& pv
 		}
 	}
 	else if (lPropAlias == eProperty || lPropAlias == eTable) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (m_metaObject->IsDataReference(lPropData)) {
 			pvarPropVal = GetReference();
 			return true;

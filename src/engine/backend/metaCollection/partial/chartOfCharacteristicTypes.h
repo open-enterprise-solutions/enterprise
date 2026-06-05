@@ -241,7 +241,8 @@ public:
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual void PrepareNames() const;
+	// Own methods (data members come from the base FillDataMembers); bound in the ctor.
+	void FillMethods(ibMemberTable& helper) const;
 
 	//****************************************************************************
 	//*                              Override attribute                          *

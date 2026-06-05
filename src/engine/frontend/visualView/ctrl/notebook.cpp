@@ -25,6 +25,7 @@ void ibValueNotebook::AddNotebookPage()
 
 ibValueNotebook::ibValueNotebook() : ibValueWindow(), m_activePage(nullptr)
 {
+	m_members.Bind(this, &ibValueNotebook::FillControlMembers);
 	//set default params
 	//m_minimum_size = wxSize(300, 100);
 }
@@ -125,12 +126,10 @@ enum Func {
 	enActivePage
 };
 
-void ibValueNotebook::PrepareNames() const // this method is automatically called to initialize attribute and method names.
+void ibValueNotebook::FillControlMembers(ibMemberTable& helper) const
 {
-	ibValueFrame::PrepareNames();
-
-	m_methodHelper->AppendFunc(wxT("Pages"), wxT("Pages()"));
-	m_methodHelper->AppendFunc(wxT("ActivePage"), wxT("ActivePage()"));
+	helper.AppendFunc(wxT("Pages"), wxT("Pages()"));
+	helper.AppendFunc(wxT("ActivePage"), wxT("ActivePage()"));
 }
 
 #include "backend/system/value/valueMap.h"

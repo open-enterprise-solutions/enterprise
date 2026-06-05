@@ -10,14 +10,13 @@
 
 
 ibValueModuleManager::ibValueMetadataUnit::ibValueMetadataUnit(ibMetaData* metaData) :
-	ibValue(ibValueTypes::TYPE_VALUE, true),
-	m_methodHelper(new ibValueMethodHelper()), m_metaData(metaData)
+	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_metaData(metaData)
 {
+	m_members.Bind(this, &ibValueMetadataUnit::FillMembers);
 }
 
 ibValueModuleManager::ibValueMetadataUnit::~ibValueMetadataUnit()
 {
-	wxDELETE(m_methodHelper);
 }
 
 enum
@@ -38,23 +37,22 @@ enum
 	enAccountingRegisters,
 };
 
-void ibValueModuleManager::ibValueMetadataUnit::PrepareNames() const
+void ibValueModuleManager::ibValueMetadataUnit::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-	m_methodHelper->AppendProp("CommonModules", true, false, g_metaCommonModuleCLSID);
-	m_methodHelper->AppendProp("CommonForms", true, false, g_metaCommonFormCLSID);
-	m_methodHelper->AppendProp("CommonTemplates", true, false, g_metaCommonTemplateCLSID);
-	m_methodHelper->AppendProp("Constants", true, false, g_metaConstantCLSID);
-	m_methodHelper->AppendProp("Catalogs", true, false, g_metaCatalogCLSID);
-	m_methodHelper->AppendProp("Documents", true, false, g_metaDocumentCLSID);
-	m_methodHelper->AppendProp("Enumerations", true, false, g_metaEnumerationCLSID);
-	m_methodHelper->AppendProp("DataProcessors", true, false, g_metaDataProcessorCLSID);
-	m_methodHelper->AppendProp("Reports", true, false, g_metaReportCLSID);
-	m_methodHelper->AppendProp("InformationRegisters", true, false, g_metaInformationRegisterCLSID);
-	m_methodHelper->AppendProp("AccumulationRegisters", true, false, g_metaAccumulationRegisterCLSID);
-	m_methodHelper->AppendProp("ChartsOfCharacteristicTypes", true, false, g_metaChartOfCharacteristicTypesCLSID);
-	m_methodHelper->AppendProp("ChartsOfAccounts", true, false, g_metaChartOfAccountsCLSID);
-	m_methodHelper->AppendProp("AccountingRegisters", true, false, g_metaAccountingRegisterCLSID);
+	helper.AppendProp("CommonModules", true, false, g_metaCommonModuleCLSID);
+	helper.AppendProp("CommonForms", true, false, g_metaCommonFormCLSID);
+	helper.AppendProp("CommonTemplates", true, false, g_metaCommonTemplateCLSID);
+	helper.AppendProp("Constants", true, false, g_metaConstantCLSID);
+	helper.AppendProp("Catalogs", true, false, g_metaCatalogCLSID);
+	helper.AppendProp("Documents", true, false, g_metaDocumentCLSID);
+	helper.AppendProp("Enumerations", true, false, g_metaEnumerationCLSID);
+	helper.AppendProp("DataProcessors", true, false, g_metaDataProcessorCLSID);
+	helper.AppendProp("Reports", true, false, g_metaReportCLSID);
+	helper.AppendProp("InformationRegisters", true, false, g_metaInformationRegisterCLSID);
+	helper.AppendProp("AccumulationRegisters", true, false, g_metaAccumulationRegisterCLSID);
+	helper.AppendProp("ChartsOfCharacteristicTypes", true, false, g_metaChartOfCharacteristicTypesCLSID);
+	helper.AppendProp("ChartsOfAccounts", true, false, g_metaChartOfAccountsCLSID);
+	helper.AppendProp("AccountingRegisters", true, false, g_metaAccountingRegisterCLSID);
 }
 
 //****************************************************************************

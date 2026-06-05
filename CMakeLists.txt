@@ -300,7 +300,6 @@ endif()
 #   designer      — executable      (GUI subsystem)
 #   launcher      — executable      (GUI subsystem)
 #   codeRunner    — executable      (GUI subsystem)
-#   classChecker  — executable      (GUI subsystem)
 #   simplePlugin  — SHARED library  (plugin example)
 # ---------------------------------------------------------------------------
 
@@ -311,7 +310,6 @@ add_subdirectory("${OES_ENGINE_DIR}/enterprise")
 add_subdirectory("${OES_ENGINE_DIR}/designer")
 add_subdirectory("${OES_ENGINE_DIR}/launcher")
 add_subdirectory("${OES_ENGINE_DIR}/codeRunner")
-add_subdirectory("${OES_ENGINE_DIR}/classChecker")
 add_subdirectory("${OES_ENGINE_DIR}/simplePlugin")
 
 # ---------------------------------------------------------------------------

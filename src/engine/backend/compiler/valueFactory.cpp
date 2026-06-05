@@ -33,7 +33,7 @@ ibValue* ibValue::CreateObjectRef(const ibClassID& clsid, ibValue** paParams, co
 				wxDELETE(created_value);
 				ibBackendCoreException::Error(_("Error initializing object '%s'"), typeCtor->GetClassName());
 			}
-			created_value->PrepareNames();
+			// Name surface builds lazily on first GetPMethods() — no eager populate.
 		}
 		return created_value;
 	}

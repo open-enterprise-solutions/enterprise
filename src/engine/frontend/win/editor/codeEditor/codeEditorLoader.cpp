@@ -934,7 +934,7 @@ void ibCodeEditor::LoadCallTip()
 				const ibCtorAbstractType* objectValueAbstract =
 					ibValue::GetAvailableCtor(expression);
 				ibValue* newObject = objectValueAbstract->CreateObject();
-				ibValue::ibValueMethodHelper* methodHelper = newObject->GetPMethods();
+				ibValue::ibMemberTable* methodHelper = newObject->GetPMethods();
 				if (methodHelper != nullptr) {
 					for (long idx = 0; idx < methodHelper->GetNConstructors(); idx++) {
 						sDescription = methodHelper->GetConstructorHelper(idx);

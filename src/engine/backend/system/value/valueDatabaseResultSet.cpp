@@ -10,29 +10,27 @@ enum
 };
 
 ibValueResultSet::ibValueResultSet(ibDatabaseResultSet* resultSet)
-	: ibValue(ibValueTypes::TYPE_VALUE), m_resultSet(resultSet), m_methodHelper(new ibValueMethodHelper)
+	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_resultSet(resultSet)
 {
+	m_members.Bind(this, &ibValueResultSet::FillMembers);
 }
 
 ibValueResultSet::~ibValueResultSet()
 {
 	if (m_resultSet != nullptr)
 		ses_query->CloseResultSet(m_resultSet);
-
-	wxDELETE(m_methodHelper);
 }
 
-void ibValueResultSet::PrepareNames() const
+void ibValueResultSet::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-	m_methodHelper->AppendFunc(wxT("Next"), wxT("Next()"));
+	helper.AppendFunc(wxT("Next"), wxT("Next()"));
 
 	if (m_resultSet != nullptr) {
 		ibResultSetMetaData* resultSetMetaData = m_resultSet->GetMetaData();
 		if (resultSetMetaData == nullptr)
 			return;
 		for (int idx = 1; idx <= resultSetMetaData->GetColumnCount(); idx++)
-			m_methodHelper->AppendProp(resultSetMetaData->GetColumnName(idx), true, false, idx);
+			helper.AppendProp(resultSetMetaData->GetColumnName(idx), true, false, idx);
 	}
 }
 
@@ -46,7 +44,7 @@ bool ibValueResultSet::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	ibResultSetMetaData* resultSetMetaData = m_resultSet->GetMetaData();
 	if (resultSetMetaData != nullptr) {
 
-		const int columnFld = m_methodHelper->GetPropData(lPropNum);
+		const int columnFld = m_members.GetPropData(lPropNum);
 		const int columnType = resultSetMetaData->GetColumnType(columnFld);
 		
 		if (columnType == ibResultSetMetaData::COLUMN_NULL)

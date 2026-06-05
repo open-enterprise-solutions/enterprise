@@ -101,7 +101,7 @@ void ibFrameCodeRunner::OnMenuAbout(wxCommandEvent&)
 	wxAboutDialogInfo info;
 	info.SetName(_("OES Code Runner"));
 	info.SetVersion(wxT("1.0"));
-	info.SetDescription(_("Standalone OES script runner — write and execute scripts without metadata."));
+	info.SetDescription(_("Standalone OES script runner - write and execute scripts without metadata."));
 	info.SetCopyright(wxT("(C) Open Enterprise Solutions"));
 	wxAboutBox(info, this);
 }

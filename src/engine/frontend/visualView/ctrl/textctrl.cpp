@@ -69,6 +69,7 @@ enum prop {
 ibValueTextCtrl::ibValueTextCtrl() :
 	ibValueWindow(), ibTypeControlFactory(), m_textModified(false)
 {
+	m_members.Bind(this, &ibValueTextCtrl::FillControlMembers);
 	//set default params
 	m_propertyBG->SetValue(wxColour(255, 255, 255));
 }
@@ -79,18 +80,16 @@ const ibMetaData* ibValueTextCtrl::GetMetaData() const
 		m_formOwner->GetMetaData() : nullptr;
 }
 
-void ibValueTextCtrl::PrepareNames() const
+void ibValueTextCtrl::FillControlMembers(ibMemberTable& helper) const
 {
-	ibValueFrame::PrepareNames();
-
-	m_methodHelper->AppendProp(wxT("Value"), eControlValue, eControl);
+	helper.AppendProp(wxT("Value"), eControlValue, eControl);
 }
 
 bool ibValueTextCtrl::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum); bool refreshColumn = false;
+	const long lPropAlias = m_members.GetPropAlias(lPropNum); bool refreshColumn = false;
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eControlValue) {
 			SetControlValue(varPropVal);
 		}
@@ -101,9 +100,9 @@ bool ibValueTextCtrl::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 
 bool ibValueTextCtrl::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eControlValue) {
 			return GetControlValue(pvarPropVal);
 		}

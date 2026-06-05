@@ -336,6 +336,12 @@ public:
 		return array;
 	}
 
+	// True for an attribute that holds the object's own reference (read-only in the
+	// value surface). Only reference metaobjects have one; default false lets the
+	// shared record data filler stay type-agnostic (ibValueRecordDataObjectRef
+	// overrides with the real test).
+	virtual bool IsDataReference(const ibMetaID& /*id*/) const { return false; }
+
 #pragma endregion
 
 #pragma region __array_h__
@@ -469,7 +475,7 @@ protected:
 public:
 
 	virtual ibValueMetaObjectAttributePredefined* GetDataReference() const { return m_propertyAttributeReference->GetMetaObject(); }
-	virtual bool IsDataReference(const ibMetaID& id) const { return id == (*m_propertyAttributeReference)->GetMetaID(); }
+	virtual bool IsDataReference(const ibMetaID& id) const override { return id == (*m_propertyAttributeReference)->GetMetaID(); }
 
 	virtual bool HasQuickChoice() const {
 		return m_propertyQuickChoice->GetValueAsBoolean();
@@ -1333,10 +1339,10 @@ protected:
 //manager with meta object
 #pragma region managers
 
-class BACKEND_API ibValueManagerObject : public ibValue {
+class BACKEND_API ibValueManagerObject : public ibValueDynamicMembers {
 	public:
 
-	ibValueManagerObject() : ibValue(ibValueTypes::TYPE_VALUE, true) {}
+	ibValueManagerObject() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true) {}
 	virtual ~ibValueManagerObject() {}
 
 	virtual const ibValueMetaObject* GetMetaObject() const = 0;
@@ -1345,41 +1351,35 @@ class BACKEND_API ibValueManagerObject : public ibValue {
 class BACKEND_API ibValueManagerDataObject : public ibValueManagerObject {
 	public:
 
-	ibValueManagerDataObject() : ibValueManagerObject(), m_methodHelper(new ibValueMethodHelper) {}
-	virtual ~ibValueManagerDataObject() { wxDELETE(m_methodHelper); }
+	// Helper + NVI DoGetPMethods come from ibValueDynamicMembers. The surface is
+	// composed from member fillers bound along the ctor chain: this base contributes
+	// the manager module's methods (FillMembers / CopyMethod); subclasses add their own.
+	ibValueManagerDataObject() : ibValueManagerObject() { m_members.Bind(this, &ibValueManagerDataObject::FillMembers); }
+	virtual ~ibValueManagerDataObject() {}
 
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const = 0;
 	virtual const ibValueMetaObjectGenericData*  GetMetaObject()    const = 0;
 
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
-		return m_methodHelper;
-	}
-
-	virtual void PrepareNames() const;                         // this method is automatically called to initialize attribute and method names.
+	void FillMembers(ibMemberTable& helper) const;       // manager-module methods (was PrepareNames)
 
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);//method call
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);//method call
 
-	//Get ref class 
+	//Get ref class
 	virtual ibClassID GetClassType() const;
 
 	virtual wxString GetClassName() const;
 	virtual wxString GetString() const;
-
-protected:
-	//methods 
-	ibValueMethodHelper* m_methodHelper;
 };
 
 class BACKEND_API ibValueManagerDataObjectPredefined : public ibValueManagerDataObject {
 	public:
 
-public:
+	ibValueManagerDataObjectPredefined() { m_members.Bind(this, &ibValueManagerDataObjectPredefined::FillPredefined); }
 
 	virtual const ibValueMetaObjectRecordDataHierarchyMutableRef* GetMetaObject() const = 0;
 
-	virtual void PrepareNames() const; // this method is automatically called to initialize attribute and method names.
+	void FillPredefined(ibMemberTable& helper) const;    // predefined-value props (composes onto FillMembers)
 
 	virtual bool SetPropVal(const long lPropNum, ibValue& varPropVal);        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
@@ -1389,7 +1389,7 @@ public:
 
 //object with metaobject 
 #pragma region objects 
-class BACKEND_API ibValueRecordDataObject : public ibValue, public ibActionDataObject,
+class BACKEND_API ibValueRecordDataObject : public ibValueDynamicMembers, public ibActionDataObject,
 	public ibSourceDataObject, public ibValueDataObject, public ibRuntimeModuleDataObject {
 	public:
 protected:
@@ -1397,7 +1397,7 @@ protected:
 		eSystem,
 		eProperty,
 		eTable,
-		eProcUnit
+		eProcUnit = g_aliasExport   // module exports go through the descriptor autobind
 	};
 	enum helperProp {
 		eThisObject
@@ -1412,11 +1412,9 @@ protected:
 	ibValueRecordDataObject(const ibGuid& objGuid, bool newObject);
 	ibValueRecordDataObject(const ibValueRecordDataObject& source);
 
-	//standart override 
-	virtual ibValueMethodHelper* GetPMethods() const final { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
-		return m_methodHelper;
-	}
+	// Helper lives in ibValueDynamicMembers (by-value m_members); the NVI
+	// DoGetPMethods/GetPMethods + lazy Build() come from the base. The name
+	// surface is supplied by ReflectMembers, bound per-instance in the ctor.
 public:
 	virtual ~ibValueRecordDataObject();
 
@@ -1437,8 +1435,19 @@ public:
 
 	virtual ibValueRecordDataObject* CopyObjectValue() = 0;
 
-	//standart override
-	virtual void PrepareNames() const override;
+	// Composed name surface (replaces the old monolithic PrepareNames). The surface
+	// is split so the common part lives once on the base and each leaf adds only its
+	// own methods (methods and props are separate helper vectors, so bind order
+	// across them never shifts a method's dispatch index):
+	//  - FillDataMembers — the metaobject's attributes (eProperty) + tabular sections
+	//    (eTable) + data-object module exports (eProcUnit). Bound by the base ctor,
+	//    shared by every leaf. Attribute writability follows IsDataReference.
+	//  - FillBaseMethods — the three fixed methods (GetFormObject/GetTemplate/
+	//    GetMetadata) for leaves with no API of their own (DataProcessor, Report);
+	//    they bind this. Leaves with their own method set (Catalog, Document, …)
+	//    bind their own FillMethods instead.
+	void FillDataMembers(ibMemberTable& helper) const;
+	void FillBaseMethods(ibMemberTable& helper) const;
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
@@ -1543,7 +1552,9 @@ public:
 			unsigned int m_pos = 0;
 			bool m_started = false;
 		};
-		const unsigned int n = m_methodHelper != nullptr ? m_methodHelper->GetNProps() : 0;
+		// GetPMethods() lazily builds the surface (the iterator may be the first
+		// access), then reports the property count.
+		const unsigned int n = GetPMethods()->GetNProps();
 		return std::make_shared<State>(this, n);
 	}
 
@@ -1552,8 +1563,6 @@ protected:
 protected:
 	friend class ibMetaData;
 	friend class ibValueMetaObjectRecordData;
-protected:
-	ibValueMethodHelper* m_methodHelper;
 };
 
 //Object with file
@@ -1911,7 +1920,7 @@ class BACKEND_API ibValueRecordDataObjectRecorderRef : public ibValueRecordDataO
 	// RecordDescription, creates one ibValueRecordSetObject per
 	// declared register seeded with this recorder's reference, and
 	// fans Write/Delete across all of them.
-	class BACKEND_API ibRecorderRegister : public ibValue {
+	class BACKEND_API ibRecorderRegister : public ibValueDynamicMembers {
 	public:
 		void CreateRecordSet();
 		bool WriteRecordSet();
@@ -1922,8 +1931,7 @@ class BACKEND_API ibValueRecordDataObjectRecorderRef : public ibValueRecordDataO
 		ibRecorderRegister(ibValueRecordDataObjectRecorderRef* recorder = nullptr);
 		virtual ~ibRecorderRegister();
 
-		virtual ibValueMethodHelper* GetPMethods() const { return m_methodHelper; }
-		virtual void PrepareNames() const;
+		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
@@ -1934,7 +1942,6 @@ class BACKEND_API ibValueRecordDataObjectRecorderRef : public ibValueRecordDataO
 	private:
 		ibValueRecordDataObjectRecorderRef* m_recorder;
 		std::map<ibMetaID, ibValuePtr<ibValueRecordSetObject>> m_records;
-		ibValueMethodHelper* m_methodHelper;
 	};
 
 protected:
@@ -2011,18 +2018,14 @@ protected:
 
 //object with register type
 #pragma region registers
-class BACKEND_API ibValueRecordKeyObject : public ibValue {
+class BACKEND_API ibValueRecordKeyObject : public ibValueDynamicMembers {
 	public:
 	ibValueRecordKeyObject(const ibValueMetaObjectRegisterData* metaObject);
 	virtual ~ibValueRecordKeyObject();
 
-	//standart override
-	virtual ibValueMethodHelper* GetPMethods() const override { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames();
-		return m_methodHelper;
-	}
-
-	virtual void PrepareNames() const override;
+	// Helper + NVI DoGetPMethods come from ibValueDynamicMembers; FillMembers
+	// (bound in the ctor) supplies the surface.
+	void FillMembers(ibMemberTable& helper) const;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;
@@ -2062,14 +2065,13 @@ class BACKEND_API ibValueRecordKeyObject : public ibValue {
 			unsigned int m_pos = 0;
 			bool m_started = false;
 		};
-		const unsigned int n = m_methodHelper != nullptr ? m_methodHelper->GetNProps() : 0;
+		const unsigned int n = GetPMethods()->GetNProps();
 		return std::make_shared<State>(this, n);
 	}
 
 protected:
 	const ibValueMetaObjectRegisterData* m_metaObject;
 	ibRowMetaValues m_keyValues;
-	ibValueMethodHelper* m_methodHelper;
 };
 
 class BACKEND_API ibValueRecordSetObject : public ibValueModelRamTableBase, public ibRuntimeModuleDataObject {
@@ -2140,7 +2142,6 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelRamTableBase, publ
 	protected:
 		ibValueRecordSetObject* m_ownerTable;
 		std::map<ibMetaID, ibValuePtr<ibValueRecordSetRegisterColumnInfo>> m_listColumnInfo;
-		ibValueMethodHelper* m_methodHelper;
 	};
 
 	class ibValueRecordSetObjectRegisterReturnLine : public ibValueModelReturnLine {
@@ -2152,17 +2153,12 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelRamTableBase, publ
 
 		virtual ibValueModelTableBase* GetOwnerModel() const { return m_ownerTable; }
 
-		virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-			//PrepareNames(); 
-			return m_methodHelper;
-		}
-
-		virtual void PrepareNames() const;
+		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal); //setting attribute
 		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal); //attribute value
 
-		//Get ref class 
+		//Get ref class
 		virtual ibClassID GetClassType() const;
 
 		virtual wxString GetClassName() const;
@@ -2171,12 +2167,11 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelRamTableBase, publ
 		friend class ibValueRecordSetObject;
 	private:
 		ibValueRecordSetObject* m_ownerTable;
-		ibValueMethodHelper* m_methodHelper;
 	};
 
-	class ibValueRecordSetObjectRegisterKeyValue : public ibValue {
+	class ibValueRecordSetObjectRegisterKeyValue : public ibValueDynamicMembers {
 	public:
-		class ibValueRecordSetObjectRegisterKeyDescriptionValue : public ibValue {
+		class ibValueRecordSetObjectRegisterKeyDescriptionValue : public ibValueDynamicMembers {
 	public:
 
 			ibValueRecordSetObjectRegisterKeyDescriptionValue(ibValueRecordSetObject* recordSet = nullptr, const ibMetaID& id = wxNOT_FOUND);
@@ -2188,12 +2183,7 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelRamTableBase, publ
 			//*                              Support methods                             *
 			//****************************************************************************
 
-			virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-				//PrepareNames(); 
-				return m_methodHelper;
-			}
-
-			virtual void PrepareNames() const;                             // this method is automatically called to initialize attribute and method names
+			void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 			virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       // method call
 
 			virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);//setting attribute
@@ -2201,7 +2191,6 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelRamTableBase, publ
 
 		protected:
 			ibMetaID m_metaId;
-			ibValueMethodHelper* m_methodHelper;
 			ibValueRecordSetObject* m_recordSet;
 		};
 	public:
@@ -2215,12 +2204,7 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelRamTableBase, publ
 		//*                              Support methods                             *
 		//****************************************************************************
 
-		virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-			//PrepareNames(); 
-			return m_methodHelper;
-		}
-
-		virtual void PrepareNames() const;                             // this method is automatically called to initialize attribute and method names
+		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       // method call
 
 		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);//setting attribute
@@ -2228,7 +2212,6 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelRamTableBase, publ
 
 	protected:
 		ibValueRecordSetObject* m_recordSet;
-		ibValueMethodHelper* m_methodHelper;
 	};
 
 protected:
@@ -2259,11 +2242,8 @@ public:
 	bool Selected() const { return m_selected; }
 	void Read() { ReadData(); }
 
-	//standart override
-	virtual ibValueMethodHelper* GetPMethods() const override { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames();
-		return m_methodHelper;
-	}
+	// Helper + NVI DoGetPMethods come from ibValueDynamicMembers (via the table
+	// chain root). The module-export surface autobinds in the descriptor ctor.
 
 	//counter
 	virtual void SourceIncrRef() { ibValue::IncrRef(); }
@@ -2442,10 +2422,9 @@ protected:
 	ibValuePtr<ibValueRecordSetObjectRegisterColumnCollection> m_recordColumnCollection;
 	ibValuePtr<ibValueRecordSetObjectRegisterKeyValue> m_recordSetKeyValue;
 
-	ibValueMethodHelper* m_methodHelper;
 };
 
-class BACKEND_API ibValueRecordManagerObject : public ibValue,
+class BACKEND_API ibValueRecordManagerObject : public ibValueDynamicMembers,
 	public ibSourceDataObject, public ibActionDataObject {
 	public:
 protected:
@@ -2478,11 +2457,8 @@ public:
 	//copy new object
 	virtual ibValueRecordManagerObject* CopyRegisterValue();
 
-	//standart override
-	virtual ibValueMethodHelper* GetPMethods() const override { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames();
-		return m_methodHelper;
-	}
+	// Helper + NVI DoGetPMethods come from ibValueDynamicMembers; leaves bind their
+	// own fillers. (PrepareNames is gone.)
 
 	//counter
 	virtual void SourceIncrRef() override { ibValue::IncrRef(); }
@@ -2567,7 +2543,7 @@ public:
 			unsigned int m_pos = 0;
 			bool m_started = false;
 		};
-		const unsigned int n = m_methodHelper != nullptr ? m_methodHelper->GetNProps() : 0;
+		const unsigned int n = GetPMethods()->GetNProps();
 		return std::make_shared<State>(this, n);
 	}
 
@@ -2590,8 +2566,6 @@ protected:
 
 	ibValuePtr<ibValueRecordSetObject> m_recordSet;
 	ibValuePtr<ibValueModelTableBase::ibValueModelReturnLine> m_recordLine;
-
-	ibValueMethodHelper* m_methodHelper;
 };
 #pragma endregion
 

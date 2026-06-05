@@ -3,33 +3,26 @@
 
 #include "backend/metaData.h"
 
-class ibValueGlobalContextManager : public ibValue {
+class ibValueGlobalContextManager : public ibValueDynamicMembers {
 	public:
 
-	ibValueGlobalContextManager(ibMetaData* metaData = nullptr) : ibValue(ibValueTypes::TYPE_VALUE, true),
-		m_methodHelper(new ibValueMethodHelper()), m_metaData(metaData)
+	ibValueGlobalContextManager(ibMetaData* metaData = nullptr) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
+		m_metaData(metaData)
 	{
+		m_members.Bind(this, &ibValueGlobalContextManager::FillMembers);
 	}
 
-	virtual ~ibValueGlobalContextManager() { wxDELETE(m_methodHelper); }
+	virtual ~ibValueGlobalContextManager() {}
 
-	virtual ibValueMethodHelper* GetPMethods() const {
-		//PrepareNames();  
-		return m_methodHelper;
-	}
-
-	virtual void PrepareNames() const;
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	//attributes
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
 
 protected:
 
-	//metaData 
+	//metaData
 	ibMetaData* m_metaData;
-
-	//methods 
-	ibValueMethodHelper* m_methodHelper;
 };
 
 #endif 

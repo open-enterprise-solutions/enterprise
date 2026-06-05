@@ -48,7 +48,7 @@ responsibility. Concrete overrides:
   returns false, so a failed CLI auth on the web path fails hard.
   Real web auth comes from the browser via `POST /login`, so this
   path is essentially never taken in practice.
-- **Headless** (daemon / codeRunner / classChecker): no override —
+- **Headless** (daemon / codeRunner): no override —
   base returns false. CLI credentials must be correct; failure
   exits cleanly.
 

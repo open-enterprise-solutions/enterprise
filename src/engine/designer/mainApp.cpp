@@ -136,7 +136,7 @@ int ibAppDesigner::DoOnRun()
 				if (!combined.IsEmpty()) combined += wxT("\n--\n");
 				combined += chain[i];
 			}
-			wxMessageBox(combined, _("OES Designer — startup error"),
+			wxMessageBox(combined, _("OES Designer - startup error"),
 				wxOK | wxICON_ERROR);
 		}
 		return 1;

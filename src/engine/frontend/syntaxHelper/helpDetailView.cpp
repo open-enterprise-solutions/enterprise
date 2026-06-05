@@ -1,4 +1,4 @@
-﻿/////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
 // ibHelpDetailView — wxHtmlWindow rendering structured entry HTML.
 //
 // wxHtmlWindow understands a deliberately small HTML subset (a near-HTML 3.2
@@ -347,7 +347,7 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) const {
 		html += wxT("<table border=\"0\" cellspacing=\"0\" cellpadding=\"6\" "
 		             "bgcolor=\"#fef3c7\" width=\"100%\"><tr><td>"
 		             "<font color=\"#92400e\" size=\"2\"><i>");
-		html += EscapeHtml(_("Draft — this entry awaits editorial review."));
+		html += EscapeHtml(_("Draft - this entry awaits editorial review."));
 		html += wxT("</i></font></td></tr></table>");
 	}
 

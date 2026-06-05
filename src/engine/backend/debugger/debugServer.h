@@ -145,7 +145,11 @@ public:
 	void EnterDebugger(ibRunContext* runContext, const struct ibByteUnit& byteCode, long& numPrevLine);
 	void SendErrorToClient(const wxString& strFileName, const wxString& strDocPath, unsigned int numLine, const wxString& strErrorMessage);
 
-	bool IsDebugLooped() const { return m_bDebugLoop.load(std::memory_order_acquire); }
+	// "Is the debug-thread-current session parked in DoDebugLoop?" Resolves
+	// the per-session m_debugLoop via ibSession::Current() (body in .cpp —
+	// the header only forward-declares ibSession). Advisory fast-path for the
+	// command handlers; EvalInParkedSession re-checks authoritatively.
+	bool IsDebugLooped() const;
 
 protected:
 
@@ -155,16 +159,13 @@ protected:
 
 	void ResetDebugger() {
 
-		m_runContext = nullptr;
 		m_bUseDebug = false;
-		m_bDebugLoop = false;
-		m_debugLoopCV.notify_all();
 
-		// Drain every per-session debug loop too — without this a wes
-		// process with several tabs paused at breakpoints stays parked
-		// after the designer disconnects, because each session has its
-		// own CV and m_debugLoopCV above only wakes the legacy global
-		// waiter (kept as a safety mirror).
+		// Drain every per-session debug loop — flips each session's
+		// m_debugLoop off and kicks its CV so parked script threads
+		// (including sibling wes tabs) return from DoDebugLoop. This is
+		// the sole drain path now that the server-global loop flag/CV
+		// are gone.
 		WakeAllDebugSessions();
 
 		ClearCollectionBreakpoint();
@@ -179,8 +180,11 @@ protected:
 	inline void DoDebugLoop(const wxString& strDocPath, const wxString& strModuleName, int numLine, ibRunContext* runContext);
 
 	//special functions:
-	inline void SendExpressions();
-	inline void SendLocalVariables();
+	// Both take the parked frame explicitly — sourced from the per-session
+	// dbg->m_runContext at the call site (worker owns it in DoDebugLoop; the
+	// SetStack handler resolves + holds dbg->m_mutex). No server-global mirror.
+	inline void SendExpressions(ibRunContext* runContext);
+	inline void SendLocalVariables(ibRunContext* runContext);
 	inline void SendStack();
 
 	//commands:
@@ -193,7 +197,6 @@ private:
 
 	std::atomic<bool> m_bUseDebug;
 	std::atomic<bool> m_bDoLoop;
-	std::atomic<bool> m_bDebugLoop;
 	std::atomic<bool> m_bDebugStopLine;
 
 	unsigned int m_numCurrentNumberStopContext;
@@ -206,15 +209,9 @@ private:
 	std::map <unsigned int, wxString> m_listExpression;
 #endif
 
-	// CV/mutex must outlive the worker thread so its final notify_all is safe.
-	// Declared BEFORE m_socketConnectionThread so destruction order puts thread first.
-	std::mutex m_debugLoopMutex;
-	std::condition_variable m_debugLoopCV;
-
 	wxCriticalSection m_clearBreakpointsCS;
 
 	ibDebuggerServerConnection* m_socketConnectionThread;
-	ibRunContext* m_runContext;
 
 	friend class ibBackendException;
 };

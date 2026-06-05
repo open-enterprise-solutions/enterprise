@@ -10,13 +10,13 @@ class ibValueManagerDataObjectDocument :
 	ibValueReferenceDataObject* FindByNumber(const ibValue& vCode, const ibValue& vPeriod);
 	ibValueReferenceDataObject* EmptyRef();
 
-	ibValueManagerDataObjectDocument(const ibValueMetaObjectDocument* metaObject = nullptr) : m_metaObject(metaObject) {}
+	ibValueManagerDataObjectDocument(const ibValueMetaObjectDocument* metaObject = nullptr) : m_metaObject(metaObject) { m_members.Bind(this, &ibValueManagerDataObjectDocument::FillManagerMethods); }
 	virtual ~ibValueManagerDataObjectDocument() {}
 
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const;
 	virtual const ibValueMetaObjectDocument* GetMetaObject() const { return m_metaObject; }
 
-	virtual void PrepareNames() const; // this method is automatically called to initialize attribute and method names.
+	void FillManagerMethods(ibMemberTable& helper) const;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);//method call
 
 protected:

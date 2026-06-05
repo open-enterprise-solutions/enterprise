@@ -104,14 +104,21 @@ aggregates — so it is safe either way.
 heap objects — do not need the `GetValue()` treatment); an embedded/transient member
 (especially a primitive) → copy via `GetValue()`.
 
-## What `PrepareNames` keeps
+## Module exports (the part `PrepareNames` used to own)
 
-`PrepareNames` still exists and still runs `ExportNamesToHelper(eProcUnit)` for a module's
-own exported procedures/functions. Only the hand-rolled handle/special-prop `AppendProp`
-calls moved to binds.
+`PrepareNames` itself is **gone** (removed by the value name-surface arc — see
+[`preparenames-bind-arc.md`](preparenames-bind-arc.md)). The piece it used to own — a
+module surfacing its own exported procedures/functions — is now `ExportNamesToHelper(…,
+g_aliasExport)` on `ibRuntimeModuleDataObject`, run as a **descriptor tail-bind**
+(`ExportThunk` in `moduleInfo.h`, which surfaces both bytecode exports and context binds).
+The hand-rolled handle/special-prop `AppendProp` calls became per-class `FillMembers`
+binds.
 
 ## See also
 
+- [`preparenames-bind-arc.md`](preparenames-bind-arc.md) — the value name-surface arc
+  (`ibMemberTable`, the two Members bases) and the **`ibValue`-must-be-first-base**
+  invariant (MSVC drops the MI this-adjustment when erasing a member pmf to `ibValue::*`).
 - [`runtime-facade.md`](runtime-facade.md) — step 11, the binder factory + per-descriptor
   `m_binder`.
 - [`value-const-reffer.md`](value-const-reffer.md) — `TYPE_CONST_REFFER` semantics behind

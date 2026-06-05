@@ -4,15 +4,14 @@
 #include "backend/compiler/value.h"
 
 class BACKEND_API ibValueOLE :
-	public ibValue {
+	public ibValueDynamicMembers {
 	public:
 	wxString m_objectName;
 #ifdef __WXMSW__
 	IDispatch* m_dispatch = nullptr;
 	IStream* m_streamDispatch = nullptr;
 	IDispatch* m_currentDispatch = nullptr;
-#endif 
-	ibValueMethodHelper* m_methodHelper;
+#endif
 #ifdef __WXMSW__
 	CLSID m_clsId;
 #endif
@@ -47,11 +46,7 @@ public:
 	}
 #endif
 
-	virtual ibValueMethodHelper* GetPMethods() const {
-		return m_methodHelper;
-	}
-
-	virtual void PrepareNames() const;
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	virtual long FindMethod(const wxString& strMethodName) const;
 	virtual long FindProp(const wxString& strPropName) const;

@@ -229,7 +229,10 @@ public:
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual void PrepareNames() const;
+	// Document's own methods (bound in the ctor). Data members come from the base
+	// FillDataMembers. ThisObject.RegisterRecords is surfaced by the descriptor's
+	// ExportThunk tail-bind (moduleInfo.h), not by a contributor here.
+	void FillMethods(ibMemberTable& helper) const;
 
 	//****************************************************************************
 	//*                              Override attribute                          *

@@ -127,7 +127,6 @@ bin\
       launcher.exe
       daemon.exe
       codeRunner.exe
-      classChecker.exe
       simplePlugin.dll
   Win64\
     ...
@@ -203,7 +202,6 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DOES_USE_POSTGRESQL=ON
 | launcher | executable | Builds |
 | daemon | executable | Builds |
 | codeRunner | executable | Builds |
-| classChecker | executable | Builds |
 | simplePlugin | shared lib | Builds |
 
 ### macOS-specific Notes

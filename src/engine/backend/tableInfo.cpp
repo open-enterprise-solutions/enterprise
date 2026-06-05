@@ -10,7 +10,7 @@
 
 
 ibValueModel::ibValueModel()
-	: ibValue(ibValueTypes::TYPE_VALUE),
+	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
 	m_modelProvider(nullptr)
 {
 	m_modelProvider = new ibDataViewModelProviderImpl(this);
@@ -236,13 +236,13 @@ bool ibValueModel::ShowViewMode()
 ///////////////////////////////////////////////////////////////////////////////////////
 
 ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::ibValueModelColumnInfo() :
-	ibValue(ibValueTypes::TYPE_VALUE, true), m_methodHelper(new ibValueMethodHelper())
+	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true)
 {
+	m_members.Bind(this, &ibValueModelColumnInfo::FillMembers);
 }
 
 ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::~ibValueModelColumnInfo()
 {
-	wxDELETE(m_methodHelper);
 }
 
 enum Prop {
@@ -252,14 +252,12 @@ enum Prop {
 	enColumnWidth
 };
 
-void ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::PrepareNames() const
+void ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
-	m_methodHelper->AppendProp(wxT("Name"));
-	m_methodHelper->AppendProp(wxT("Types"));
-	m_methodHelper->AppendProp(wxT("Caption"));
-	m_methodHelper->AppendProp(wxT("Width"));
+	helper.AppendProp(wxT("Name"));
+	helper.AppendProp(wxT("Types"));
+	helper.AppendProp(wxT("Caption"));
+	helper.AppendProp(wxT("Width"));
 }
 
 bool ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::GetPropVal(const long lPropNum, ibValue& pvarPropVal)

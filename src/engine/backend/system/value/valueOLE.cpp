@@ -466,20 +466,21 @@ IDispatch* ibValueOLE::DoCreateInstance()
 #endif 
 
 #ifdef __WXMSW__
-ibValueOLE::ibValueOLE() : ibValue(ibValueTypes::TYPE_OLE),
+ibValueOLE::ibValueOLE() : ibValueDynamicMembers(ibValueTypes::TYPE_OLE),
 m_clsId({ 0 }), m_dispatch(nullptr), m_currentDispatch(nullptr),
-m_methodHelper(new ibValueMethodHelper()), m_objectName(wxEmptyString)
+m_objectName(wxEmptyString)
 {
+	m_members.Bind(this, &ibValueOLE::FillMembers);
 }
 
-ibValueOLE::ibValueOLE(const CLSID& clsId, IDispatch* dispatch, const wxString& objectName) : ibValue(ibValueTypes::TYPE_OLE),
+ibValueOLE::ibValueOLE(const CLSID& clsId, IDispatch* dispatch, const wxString& objectName) : ibValueDynamicMembers(ibValueTypes::TYPE_OLE),
 m_clsId(clsId), m_dispatch(dispatch), m_currentDispatch(nullptr),
-m_methodHelper(new ibValueMethodHelper()), m_objectName(objectName)
+m_objectName(objectName)
 {
+	m_members.Bind(this, &ibValueOLE::FillMembers);
 	if (m_dispatch != nullptr) {
 		m_dispatch->AddRef();
 	}
-	PrepareNames();
 	if (createStreamForDispatch) {
 		if (m_dispatch != nullptr) {
 			HRESULT hr =
@@ -499,8 +500,10 @@ m_methodHelper(new ibValueMethodHelper()), m_objectName(objectName)
 	}
 }
 #else 
-ibValueOLE::ibValueOLE() : ibValue(ibValueTypes::TYPE_OLE), m_methodHelper(new ibValueMethodHelper()), m_objectName(wxEmptyString) {}
-#endif 
+ibValueOLE::ibValueOLE() : ibValueDynamicMembers(ibValueTypes::TYPE_OLE), m_objectName(wxEmptyString) {
+	m_members.Bind(this, &ibValueOLE::FillMembers);
+}
+#endif
 
 ibValueOLE::~ibValueOLE()
 {
@@ -510,8 +513,7 @@ ibValueOLE::~ibValueOLE()
 		m_dispatch->Release();
 		m_dispatch = nullptr;
 	}
-#endif 
-	wxDELETE(m_methodHelper);
+#endif
 }
 
 bool ibValueOLE::Init(ibValue** paParams, const long lSizeArray)
@@ -556,7 +558,7 @@ bool ibValueOLE::Create(const wxString& strOleName)
 		return false;
 	}
 	m_dispatch = DoCreateInstance();
-	PrepareNames();
+	InvalidateNames();   // COM surface depends on the freshly created dispatch
 	if (createStreamForDispatch) {
 		if (m_dispatch != nullptr) {
 			HRESULT hr =
@@ -584,10 +586,9 @@ bool ibValueOLE::Create(const wxString& strOleName)
 #endif
 }
 
-void ibValueOLE::PrepareNames() const
+void ibValueOLE::FillMembers(ibMemberTable& helper) const
 {
 #ifdef __WXMSW__
-	m_methodHelper->ClearHelper();
 	if (m_dispatch == nullptr)
 		return;
 	unsigned int count = 0;
@@ -682,7 +683,7 @@ void ibValueOLE::PrepareNames() const
 				}
 				methodHelper += wxT(")");
 				if (funcInfo->invkind == INVOKE_FUNC) {
-					m_methodHelper->AppendFunc(
+					helper.AppendFunc(
 						strMethodName,
 						funcInfo->cParams,
 						methodHelper,
@@ -690,7 +691,7 @@ void ibValueOLE::PrepareNames() const
 					);
 				}
 				else if (funcInfo->invkind == INVOKE_PROPERTYGET) {
-					m_methodHelper->AppendProp(
+					helper.AppendProp(
 						strMethodName,
 						funcInfo->memid
 					);

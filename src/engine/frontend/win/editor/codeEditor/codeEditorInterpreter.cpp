@@ -114,7 +114,7 @@ void ibPrecompileCode::PrepareModuleData()
 			ibValue* managerVariable = pair.second.m_value;
 			if (managerVariable == nullptr)
 				continue;
-			managerVariable->PrepareNames();
+			managerVariable->InvalidateNames();
 			for (unsigned int i = 0; i < managerVariable->GetNProps(); i++) {
 				const wxString& strAttributeName = managerVariable->GetPropName(i);
 				//determine the m_number and type of the variable

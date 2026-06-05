@@ -100,7 +100,7 @@ ibValueSpreadsheetDocument* ibValueMetaObjectGenericData::GetTemplate(const wxSt
 		ibValueSpreadsheetDocument* valueSpreadsheetDocument =
 			new ibValueSpreadsheetDocument(creator->GetSpreadsheetDesc());
 
-		valueSpreadsheetDocument->PrepareNames();
+		valueSpreadsheetDocument->InvalidateNames();
 		return valueSpreadsheetDocument;
 	}
 
@@ -1264,15 +1264,16 @@ ibValueRecordManagerObject* ibValueMetaObjectRegisterData::CopyRecordManagerObje
 //*                        ibValueManagerDataObject						*
 //***********************************************************************
 
-void ibValueManagerDataObject::PrepareNames() const
+// Manager-module methods. TODO(arc): CopyMethod duplicates the common module's
+// method table into this helper — a known wart; better would be to surface the
+// common module's exports directly (its own descriptor), not copy them.
+void ibValueManagerDataObject::FillMembers(ibMemberTable& helper) const
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
 	wxASSERT(valueMetaObject);
 
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
 	wxASSERT(metaData);
-
-	m_methodHelper->ClearHelper();
 
 	// Manager module's compiled unit — from the designer manager in the Designer,
 	// from the session root mm at runtime. FindCommonModule is virtual on the base.
@@ -1283,7 +1284,7 @@ void ibValueManagerDataObject::PrepareNames() const
 	if (pRefData != nullptr) {
 		// add methods from context
 		for (long idx = 0; idx < pRefData->GetNMethods(); idx++) {
-			m_methodHelper->CopyMethod(pRefData->GetPMethods(), idx);
+			helper.CopyMethod(pRefData->GetPMethods(), idx);
 		}
 	}
 }
@@ -1362,16 +1363,16 @@ wxString ibValueManagerDataObject::GetString() const
 //***********************************************************************
 
 
-void ibValueManagerDataObjectPredefined::PrepareNames() const
+// Predefined-value props. Composes ONTO FillMembers (both bound along the ctor
+// chain), so no base call here — Build() runs FillMembers first, then this.
+void ibValueManagerDataObjectPredefined::FillPredefined(ibMemberTable& helper) const
 {
 	const ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObject = GetMetaObject();
 	wxASSERT(valueMetaObject);
 
-	ibValueManagerDataObject::PrepareNames();
-
-	//fill custom values 
+	//fill custom values
 	for (const auto object : valueMetaObject->GetPredefinedValueArray()) {
-		m_methodHelper->AppendProp(object->GetPredefinedName(), true, false);
+		helper.AppendProp(object->GetPredefinedName(), true, false);
 	}
 }
 
@@ -1386,7 +1387,7 @@ bool ibValueManagerDataObjectPredefined::GetPropVal(const long lPropNum, ibValue
 	wxASSERT(valueMetaObject);
 
 	const auto& predefinedValue =
-		valueMetaObject->FindPredefinedValue(m_methodHelper->GetPropName(lPropNum));
+		valueMetaObject->FindPredefinedValue(m_members.GetPropName(lPropNum));
 	if (predefinedValue == nullptr)
 		return false;
 	pvarPropVal = ibValueReferenceDataObject::Create(valueMetaObject, predefinedValue->GetPredefinedGuid());
@@ -1399,20 +1400,23 @@ bool ibValueManagerDataObjectPredefined::GetPropVal(const long lPropNum, ibValue
 
 
 ibValueRecordDataObject::ibValueRecordDataObject(const ibGuid& objGuid, bool newObject) :
-	ibValue(ibValueTypes::TYPE_VALUE), ibValueDataObject(objGuid, newObject),
-	m_methodHelper(new ibValueMethodHelper())
+	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), ibValueDataObject(objGuid, newObject),
+	ibRuntimeModuleDataObject(m_members, this)
 {
+	// Common data surface for every record leaf; leaves add their own methods. Module
+	// exports autobind in the ibRuntimeModuleDataObject ctor (as the helper's tail).
+	m_members.Bind(this, &ibValueRecordDataObject::FillDataMembers);
 }
 
 ibValueRecordDataObject::ibValueRecordDataObject(const ibValueRecordDataObject& source) :
-	ibValue(ibValueTypes::TYPE_VALUE), ibValueDataObject(wxNewUniqueGuid, true),
-	m_methodHelper(new ibValueMethodHelper())
+	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), ibValueDataObject(wxNewUniqueGuid, true),
+	ibRuntimeModuleDataObject(m_members, this)
 {
+	m_members.Bind(this, &ibValueRecordDataObject::FillDataMembers);
 }
 
 ibValueRecordDataObject::~ibValueRecordDataObject()
 {
-	wxDELETE(m_methodHelper);
 }
 
 ibBackendValueForm* ibValueRecordDataObject::GetForm() const
@@ -1596,59 +1600,64 @@ void ibValueRecordDataObject::PrepareEmptyObject()
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void ibValueRecordDataObject::PrepareNames() const
+// Fixed methods for leaves with no API of their own (DataProcessor, Report); they
+// bind this. Leaves with their own method set bind their own FillMethods instead.
+void ibValueRecordDataObject::FillBaseMethods(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
+	helper.AppendFunc(wxT("GetFormObject"), 2, wxT("GetFormObject(name : string, owner : any)"));
+	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
+	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+}
 
-	m_methodHelper->AppendFunc(wxT("GetFormObject"), 2, wxT("GetFormObject(name : string, owner : any)"));
-	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
-
-	// ThisObject is bound (BindContextVariable in InitializeObject) — single
-	// source for editor + runtime; no manual AppendProp.
-
+// Shared data surface bound by the base ctor: the metaobject's attributes
+// (eProperty) + tabular sections (eTable) + data-object module exports (eProcUnit).
+// Attribute writability follows IsDataReference (a self-reference attribute is
+// read-only; default false for non-reference metaobjects). ThisObject is bound via
+// BindContextVariable in InitializeObject — no manual AppendProp.
+void ibValueRecordDataObject::FillDataMembers(ibMemberTable& helper) const
+{
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
 	wxASSERT(metaObject);
+	if (metaObject == nullptr)
+		return;
 
-	if (metaObject != nullptr) {
+	wxString objectName;
 
-		wxString objectName;
-
-		//fill custom attributes 
-		for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
-			if (object->IsDeleted())
-				continue;
-			if (!object->GetObjectNameAsString(objectName))
-				continue;
-			m_methodHelper->AppendProp(
-				objectName,
-				object->GetMetaID(),
-				eProperty
-			);
-		}
-
-		//fill custom tables 
-		for (const auto object : metaObject->GetGenericTableArrayObject()) {
-			if (object->IsDeleted())
-				continue;
-			if (!object->GetObjectNameAsString(objectName))
-				continue;
-			m_methodHelper->AppendProp(
-				objectName,
-				true,
-				false,
-				object->GetMetaID(),
-				eTable
-			);
-		}
+	//fill custom attributes
+	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
+		if (object->IsDeleted())
+			continue;
+		if (!object->GetObjectNameAsString(objectName))
+			continue;
+		helper.AppendProp(
+			objectName,
+			true,
+			!metaObject->IsDataReference(object->GetMetaID()),
+			object->GetMetaID(),
+			eProperty
+		);
 	}
 
-	ExportNamesToHelper(m_methodHelper, eProcUnit);
+	//fill custom tables
+	for (const auto object : metaObject->GetGenericTableArrayObject()) {
+		if (object->IsDeleted())
+			continue;
+		if (!object->GetObjectNameAsString(objectName))
+			continue;
+		helper.AppendProp(
+			objectName,
+			true,
+			false,
+			object->GetMetaID(),
+			eTable
+		);
+	}
+	// Module exports surface via the descriptor autobind (ExportThunk), not here.
 }
 
 bool ibValueRecordDataObject::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
 		if (m_procUnit != nullptr) {
 			return m_procUnit->SetPropVal(
@@ -1658,7 +1667,7 @@ bool ibValueRecordDataObject::SetPropVal(const long lPropNum, const ibValue& var
 	}
 	else if (lPropAlias == eProperty) {
 		return SetValueByMetaID(
-			m_methodHelper->GetPropData(lPropNum),
+			m_members.GetPropData(lPropNum),
 			varPropVal
 		);
 	}
@@ -1667,7 +1676,7 @@ bool ibValueRecordDataObject::SetPropVal(const long lPropNum, const ibValue& var
 
 bool ibValueRecordDataObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProcUnit) {
 		if (m_procUnit != nullptr) {
 			return m_procUnit->GetPropVal(
@@ -1677,7 +1686,7 @@ bool ibValueRecordDataObject::GetPropVal(const long lPropNum, ibValue& pvarPropV
 	}
 	else if (lPropAlias == eProperty || lPropAlias == eTable) {
 		return GetValueByMetaID(
-			m_methodHelper->GetPropData(lPropNum), pvarPropVal
+			m_members.GetPropData(lPropNum), pvarPropVal
 		);
 	}
 	return false;
@@ -1685,7 +1694,7 @@ bool ibValueRecordDataObject::GetPropVal(const long lPropNum, ibValue& pvarPropV
 
 bool ibValueRecordDataObject::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
-	const long lMethodAlias = m_methodHelper->GetPropAlias(lMethodNum);
+	const long lMethodAlias = m_members.GetPropAlias(lMethodNum);
 	if (lMethodAlias == eProcUnit) {
 		return ibRuntimeModuleDataObject::ExecAsProc(
 			GetMethodName(lMethodNum), paParams, lSizeArray
@@ -1697,7 +1706,7 @@ bool ibValueRecordDataObject::CallAsProc(const long lMethodNum, ibValue** paPara
 
 bool ibValueRecordDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	const long lMethodAlias = m_methodHelper->GetPropAlias(lMethodNum);
+	const long lMethodAlias = m_members.GetPropAlias(lMethodNum);
 	if (lMethodAlias == eProcUnit) {
 		return ibRuntimeModuleDataObject::ExecAsFunc(
 			GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
@@ -1731,11 +1740,15 @@ bool ibValueRecordDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRet
 ibValueRecordDataObjectExt::ibValueRecordDataObjectExt(const ibValueMetaObjectRecordDataExt* metaObject) :
 	ibValueRecordDataObject(wxNewUniqueGuid, true), m_metaObject(metaObject)
 {
+	// External data objects (DataProcessor / Report) expose only the fixed methods;
+	// the data members come from the base FillDataMembers.
+	m_members.Bind(this, &ibValueRecordDataObject::FillBaseMethods);
 }
 
 ibValueRecordDataObjectExt::ibValueRecordDataObjectExt(const ibValueRecordDataObjectExt& source) :
 	ibValueRecordDataObject(source), m_metaObject(source.m_metaObject)
 {
+	m_members.Bind(this, &ibValueRecordDataObject::FillBaseMethods);
 }
 
 ibValueRecordDataObjectExt::~ibValueRecordDataObjectExt()
@@ -1785,7 +1798,7 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 	if (!m_metaObject->IsExternalCreate())
 		Run();
 
-	PrepareNames();
+	InvalidateNames();
 
 	//is Ok
 	return true;
@@ -1816,7 +1829,7 @@ bool ibValueRecordDataObjectExt::InitializeObject(ibValueRecordDataObjectExt* so
 	if (!m_metaObject->IsExternalCreate())
 		Run();
 
-	PrepareNames();
+	InvalidateNames();
 
 	//is Ok
 	return true;
@@ -1913,7 +1926,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 		}
 	}
 
-	PrepareNames();
+	InvalidateNames();
 
 	//is Ok
 	return succes;
@@ -1970,7 +1983,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 		}
 	}
 
-	PrepareNames();
+	InvalidateNames();
 
 	//is Ok
 	return succes;
@@ -2491,7 +2504,7 @@ void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::CreateRecordSet()
 		m_records.insert_or_assign(metaObject->GetMetaID(), recordSet);
 	}
 
-	PrepareNames();
+	InvalidateNames();
 }
 
 bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::WriteRecordSet()
@@ -2540,29 +2553,28 @@ void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::RefreshRecordSet()
 }
 
 ibValueRecordDataObjectRecorderRef::ibRecorderRegister::ibRecorderRegister(ibValueRecordDataObjectRecorderRef* recorder) :
-	ibValue(ibValueTypes::TYPE_VALUE), m_recorder(recorder), m_methodHelper(new ibValueMethodHelper())
+	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_recorder(recorder)
 {
+	m_members.Bind(this, &ibRecorderRegister::FillMembers);
 	ibRecorderRegister::CreateRecordSet();
 }
 
 ibValueRecordDataObjectRecorderRef::ibRecorderRegister::~ibRecorderRegister()
 {
 	ibRecorderRegister::ClearRecordSet();
-	wxDELETE(m_methodHelper);
 }
 
 namespace { enum { enWriteRegister = 0 }; }
 
-void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::PrepareNames() const
+void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-	m_methodHelper->AppendFunc(wxT("Write"), wxT("Write()"));
+	helper.AppendFunc(wxT("Write"), wxT("Write()"));
 	for (auto& pair : m_records) {
 		ibValueRecordSetObject* record = pair.second;
 		wxASSERT(record);
 		const ibValueMetaObjectRegisterData* metaObject = record->GetMetaObject();
 		wxASSERT(metaObject);
-		m_methodHelper->AppendProp(metaObject->GetName(), true, false, pair.first);
+		helper.AppendProp(metaObject->GetName(), true, false, pair.first);
 	}
 }
 
@@ -2573,7 +2585,7 @@ bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::SetPropVal(const lo
 
 bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	auto it = m_records.find(m_methodHelper->GetPropData(lPropNum));
+	auto it = m_records.find(m_members.GetPropData(lPropNum));
 	if (it != m_records.end()) {
 		pvarPropVal = it->second;
 		return true;
@@ -2850,14 +2862,14 @@ bool ibValueRecordDataObjectRecorderRef::DeleteObject()
 //						  ibValueRecordKeyObject							//
 //////////////////////////////////////////////////////////////////////
 
-ibValueRecordKeyObject::ibValueRecordKeyObject(const ibValueMetaObjectRegisterData* metaObject) : ibValue(ibValueTypes::TYPE_VALUE),
-m_metaObject(metaObject), m_methodHelper(new ibValueMethodHelper())
+ibValueRecordKeyObject::ibValueRecordKeyObject(const ibValueMetaObjectRegisterData* metaObject) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
+m_metaObject(metaObject)
 {
+	m_members.Bind(this, &ibValueRecordKeyObject::FillMembers);
 }
 
 ibValueRecordKeyObject::~ibValueRecordKeyObject()
 {
-	wxDELETE(m_methodHelper);
 }
 
 bool ibValueRecordKeyObject::IsEmpty() const
@@ -2921,7 +2933,7 @@ bool ibValueRecordManagerObject::InitializeObject(const ibValueRecordManagerObje
 		PrepareEmptyObject(source);
 	}
 
-	PrepareNames();
+	InvalidateNames();
 
 	//is Ok
 	return true;
@@ -2945,7 +2957,7 @@ bool ibValueRecordManagerObject::InitializeObject(const ibUniqueKeyPair& key)
 		PrepareEmptyObject(nullptr);
 	}
 
-	PrepareNames();
+	InvalidateNames();
 
 	//is Ok
 	return true;
@@ -2956,15 +2968,15 @@ ibValueRecordManagerObject* ibValueRecordManagerObject::CopyRegisterValue()
 	return m_metaObject->CreateRecordManagerObjectValue(this);
 }
 
-ibValueRecordManagerObject::ibValueRecordManagerObject(const ibValueMetaObjectRegisterData* metaObject, const ibUniqueKeyPair& uniqueKey) : ibValue(ibValueTypes::TYPE_VALUE),
-m_metaObject(metaObject), m_methodHelper(new ibValueMethodHelper()),
+ibValueRecordManagerObject::ibValueRecordManagerObject(const ibValueMetaObjectRegisterData* metaObject, const ibUniqueKeyPair& uniqueKey) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
+m_metaObject(metaObject),
 m_recordSet(m_metaObject->CreateRecordSetObjectValue(uniqueKey, false)), m_recordLine(nullptr),
 m_objGuid(uniqueKey)
 {
 }
 
-ibValueRecordManagerObject::ibValueRecordManagerObject(const ibValueRecordManagerObject& source) : ibValue(ibValueTypes::TYPE_VALUE),
-m_metaObject(source.m_metaObject), m_methodHelper(new ibValueMethodHelper()),
+ibValueRecordManagerObject::ibValueRecordManagerObject(const ibValueRecordManagerObject& source) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
+m_metaObject(source.m_metaObject),
 m_recordSet(m_metaObject->CreateRecordSetObjectValue(source.m_recordSet, false)), m_recordLine(nullptr),
 m_objGuid(source.m_metaObject->CreateUniqueKeyPair())
 {
@@ -2972,7 +2984,6 @@ m_objGuid(source.m_metaObject->CreateUniqueKeyPair())
 
 ibValueRecordManagerObject::~ibValueRecordManagerObject()
 {
-	wxDELETE(m_methodHelper);
 }
 
 ibBackendValueForm* ibValueRecordManagerObject::GetForm() const
@@ -3141,7 +3152,7 @@ bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* sour
 		Execute();
 	}
 
-	PrepareNames();
+	InvalidateNames();
 
 	//is Ok
 	return true;
@@ -3157,16 +3168,16 @@ ibValueRecordSetObject* ibValueRecordSetObject::CopyRegisterValue()
 ///////////////////////////////////////////////////////////////////////////////////
 
 ibValueRecordSetObject::ibValueRecordSetObject(const ibValueMetaObjectRegisterData* metaObject, const ibUniqueKeyPair& uniqueKey) : ibValueModelRamTableBase(),
+ibRuntimeModuleDataObject(m_members, this),
 m_recordColumnCollection(ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterColumnCollection>(this)), m_recordSetKeyValue(ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterKeyValue>(this)),
-m_metaObject(metaObject), m_keyValues(uniqueKey.IsOk() ? uniqueKey : metaObject->CreateUniqueKeyPair()), m_objModified(false), m_selected(false),
-m_methodHelper(new ibValueMethodHelper())
+m_metaObject(metaObject), m_keyValues(uniqueKey.IsOk() ? uniqueKey : metaObject->CreateUniqueKeyPair()), m_objModified(false), m_selected(false)
 {
 }
 
 ibValueRecordSetObject::ibValueRecordSetObject(const ibValueRecordSetObject& source) : ibValueModelRamTableBase(),
+ibRuntimeModuleDataObject(m_members, this),
 m_recordColumnCollection(ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterColumnCollection>(this)), m_recordSetKeyValue(ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterKeyValue>(this)),
-m_metaObject(source.m_metaObject), m_keyValues(source.m_keyValues), m_objModified(true), m_selected(false),
-m_methodHelper(new ibValueMethodHelper())
+m_metaObject(source.m_metaObject), m_keyValues(source.m_keyValues), m_objModified(true), m_selected(false)
 {
 	for (long row = 0; row < source.GetRowCount(); row++) {
 		ibValueTableRow* node = source.GetViewData<ibValueTableRow>(source.GetItem(row));
@@ -3177,7 +3188,6 @@ m_methodHelper(new ibValueMethodHelper())
 
 ibValueRecordSetObject::~ibValueRecordSetObject()
 {
-	wxDELETE(m_methodHelper);
 }
 
 
@@ -3339,7 +3349,7 @@ ibValueModelTableBase* ibValueRecordSetObject::SaveDataToTable() const
 		);
 		newColInfo->SetColumnID(colInfo->GetColumnID());
 	}
-	valueTable->PrepareNames();
+	valueTable->InvalidateNames();
 	for (long row = 0; row < GetRowCount(); row++) {
 		const ibDataViewItem& srcItem = GetItem(row);
 		const ibDataViewItem& dstItem = valueTable->GetItem(valueTable->AppendRow());
@@ -3400,15 +3410,13 @@ bool ibValueRecordSetObject::GetValueByMetaID(const ibDataViewItem& item, const 
 
 ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::ibValueRecordSetObjectRegisterColumnCollection() :
 	ibValueModelColumnCollection(),
-	m_ownerTable(nullptr),
-	m_methodHelper(nullptr)
+	m_ownerTable(nullptr)
 {
 }
 
 ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::ibValueRecordSetObjectRegisterColumnCollection(ibValueRecordSetObject* ownerTable) :
 	ibValueModelColumnCollection(),
-	m_ownerTable(ownerTable),
-	m_methodHelper(new ibValueMethodHelper())
+	m_ownerTable(ownerTable)
 {
 	const ibValueMetaObjectGenericData* metaObject = m_ownerTable->GetMetaObject();
 	wxASSERT(metaObject);
@@ -3421,7 +3429,6 @@ ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::ibValueR
 
 ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::~ibValueRecordSetObjectRegisterColumnCollection()
 {
-	wxDELETE(m_methodHelper);
 }
 
 bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0
@@ -3468,19 +3475,17 @@ ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::ibValueR
 
 
 ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::ibValueRecordSetObjectRegisterReturnLine(ibValueRecordSetObject* ownerTable, const ibDataViewItem& line)
-	: ibValueModelReturnLine(line), m_ownerTable(ownerTable), m_methodHelper(new ibValueMethodHelper())
+	: ibValueModelReturnLine(line), m_ownerTable(ownerTable)
 {
+	m_members.Bind(this, &ibValueRecordSetObjectRegisterReturnLine::FillMembers);
 }
 
 ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::~ibValueRecordSetObjectRegisterReturnLine()
 {
-	wxDELETE(m_methodHelper);
 }
 
-void ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::PrepareNames() const
+void ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
 	const ibValueMetaObjectGenericData* metaObject = m_ownerTable->GetMetaObject();
 	if (metaObject != nullptr) {
 		wxString objectName;
@@ -3489,7 +3494,7 @@ void ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::PrepareNa
 				continue;
 			if (!object->GetObjectNameAsString(objectName))
 				continue;
-			m_methodHelper->AppendProp(
+			helper.AppendProp(
 				objectName,
 				object->GetMetaID()
 			);
@@ -3501,28 +3506,28 @@ void ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::PrepareNa
 //				       ibValueRecordSetObjectRegisterKeyValue					//
 //////////////////////////////////////////////////////////////////////
 
-ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyValue(ibValueRecordSetObject* recordSet) : ibValue(ibValueTypes::TYPE_VALUE, true),
-m_methodHelper(new ibValueMethodHelper()), m_recordSet(recordSet)
+ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyValue(ibValueRecordSetObject* recordSet) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
+m_recordSet(recordSet)
 {
+	m_members.Bind(this, &ibValueRecordSetObjectRegisterKeyValue::FillMembers);
 }
 
 ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::~ibValueRecordSetObjectRegisterKeyValue()
 {
-	wxDELETE(m_methodHelper);
 }
 
 //////////////////////////////////////////////////////////////////////
 //						ibValueRecordSetObjectRegisterKeyDescriptionValue		//
 //////////////////////////////////////////////////////////////////////
 
-ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyDescriptionValue::ibValueRecordSetObjectRegisterKeyDescriptionValue(ibValueRecordSetObject* recordSet, const ibMetaID& id) : ibValue(ibValueTypes::TYPE_VALUE),
-m_methodHelper(new ibValueMethodHelper()), m_recordSet(recordSet), m_metaId(id)
+ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyDescriptionValue::ibValueRecordSetObjectRegisterKeyDescriptionValue(ibValueRecordSetObject* recordSet, const ibMetaID& id) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
+m_recordSet(recordSet), m_metaId(id)
 {
+	m_members.Bind(this, &ibValueRecordSetObjectRegisterKeyDescriptionValue::FillMembers);
 }
 
 ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyDescriptionValue::~ibValueRecordSetObjectRegisterKeyDescriptionValue()
 {
-	wxDELETE(m_methodHelper);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -3587,7 +3592,7 @@ bool ibValueRecordKeyObject::GetPropVal(const long lPropNum, ibValue& pvarPropVa
 
 bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const ibMetaID& id = m_methodHelper->GetPropData(lPropNum);
+	const ibMetaID& id = m_members.GetPropData(lPropNum);
 	if (id != wxNOT_FOUND)
 		return SetValueByMetaID(id, varPropVal);
 	return false;
@@ -3595,7 +3600,7 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::SetPropVa
 
 bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const ibMetaID& id = m_methodHelper->GetPropData(lPropNum);
+	const ibMetaID& id = m_members.GetPropData(lPropNum);
 	if (id != wxNOT_FOUND) {
 		return GetValueByMetaID(id, pvarPropVal);
 	}
@@ -3646,7 +3651,7 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::SetPropVal(
 
 bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const ibMetaID& id = m_methodHelper->GetPropData(lPropNum);
+	const ibMetaID& id = m_members.GetPropData(lPropNum);
 	if (id != wxNOT_FOUND) {
 		pvarPropVal = ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterKeyDescriptionValue>(m_recordSet, id);
 		return true;
@@ -3658,21 +3663,20 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::GetPropVal(
 //*                              Support methods                             *
 //****************************************************************************
 
-void ibValueRecordKeyObject::PrepareNames() const
+void ibValueRecordKeyObject::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-	m_methodHelper->AppendFunc(wxT("IsEmpty"), wxT("IsEmpty()"));
-	m_methodHelper->AppendFunc(wxT("Metadata"), wxT("Metadata()"));
+	helper.AppendFunc(wxT("IsEmpty"), wxT("IsEmpty()"));
+	helper.AppendFunc(wxT("Metadata"), wxT("Metadata()"));
 
 	wxString objectName;
 
-	//fill custom attributes 
+	//fill custom attributes
 	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (object->IsDeleted())
 			continue;
 		if (!object->GetObjectNameAsString(objectName))
 			continue;
-		m_methodHelper->AppendProp(
+		helper.AppendProp(
 			objectName,
 			object->GetMetaID()
 		);
@@ -3681,10 +3685,8 @@ void ibValueRecordKeyObject::PrepareNames() const
 
 //////////////////////////////////////////////////////////////
 
-void ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::PrepareNames() const
+void ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
 	const ibValueMetaObjectRegisterData* metaObject = m_recordSet->GetMetaObject();
 	if (metaObject != nullptr) {
 		wxString objectName;
@@ -3693,7 +3695,7 @@ void ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::PrepareName
 				continue;
 			if (!object->GetObjectNameAsString(objectName))
 				continue;
-			m_methodHelper->AppendProp(
+			helper.AppendProp(
 				objectName,
 				object->GetMetaID()
 			);
@@ -3703,13 +3705,12 @@ void ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::PrepareName
 
 //////////////////////////////////////////////////////////////
 
-void ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyDescriptionValue::PrepareNames() const
+void ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyDescriptionValue::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-	m_methodHelper->AppendFunc(wxT("Set"), 1, wxT("Set(value: any)"));
+	helper.AppendFunc(wxT("Set"), 1, wxT("Set(value: any)"));
 
-	m_methodHelper->AppendProp(wxT("Value"), m_metaId);
-	m_methodHelper->AppendProp(wxT("Use"));
+	helper.AppendProp(wxT("Value"), m_metaId);
+	helper.AppendProp(wxT("Use"));
 }
 
 enum Prop

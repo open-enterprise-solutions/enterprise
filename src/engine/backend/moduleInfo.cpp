@@ -9,16 +9,8 @@
 #include "backend/compiler/cache/byteCodeCache.h"              // AOT cache Load / Save
 #include "backend/metaCollection/metaModuleObject.h"  // ibValueMetaObjectModuleBase full type for GetGuid/GetClassType
 
-ibRuntimeModuleDataObject::ibRuntimeModuleDataObject() :
-	m_compileModule(nullptr)
-{
-}
-
-ibRuntimeModuleDataObject::ibRuntimeModuleDataObject(ibCompileModule* compileCode) :
-	m_compileModule(compileCode)
-{
-}
-
+// The single ctor is inline in moduleInfo.h (it must reference ExportThunk +
+// BindTail). Only the dtor lives out-of-line.
 ibRuntimeModuleDataObject::~ibRuntimeModuleDataObject()
 {
 	// Drop this descriptor's bytecode from the process-wide registry
@@ -85,7 +77,7 @@ ibCompileModule* ibRuntimeModuleDataObject::EnsureCompileModule()
 // access (ThisForm.Controls / ThisObject.RegisterRecords) resolves them via the
 // descriptor's ProcUnit, exactly like ExportNamesToHelper does for module
 // exports. Context binds are the self-handles — skipped (no ThisForm.ThisForm).
-void ibRuntimeModuleDataObject::FillHelperFromBinds(ibValue::ibValueMethodHelper* helper, long alias) const
+void ibRuntimeModuleDataObject::FillHelperFromBinds(ibValue::ibMemberTable* helper, long alias) const
 {
 	if (helper == nullptr) return;
 	const ibCompileModule* cm = GetCompileModule();
@@ -270,11 +262,11 @@ bool ibRuntimeModuleDataObject::Compile()
 	// and covers both arms cheaply.
 	m_binder = std::make_unique<ibByteBinder>(bc.m_listVar);
 	for (auto& kv : m_compileModule->m_listExternValue) {
-		if (kv.second) kv.second->PrepareNames();
+		if (kv.second) kv.second->InvalidateNames();
 		m_binder->SetVar(kv.first, kv.second);
 	}
 	for (auto& kv : m_compileModule->m_listContextValue) {
-		if (kv.second.m_value) kv.second.m_value->PrepareNames();
+		if (kv.second.m_value) kv.second.m_value->InvalidateNames();
 		m_binder->SetVar(kv.first, kv.second.m_value);
 	}
 	// Bound locals (e.g. a constant's Value backed by &m_constValue): plain

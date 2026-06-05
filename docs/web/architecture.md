@@ -124,7 +124,7 @@ status).
 Lifecycle: `Init(primary, maxSize=32)` at `CreateFile` /
 `ServerAppDataEnv` time, `Shutdown` at `DestroyAppDataEnv`. Clones
 are allocated lazily on first `Checkout` so a single-threaded run
-(designer, classChecker) opens zero extra FB handles. A
+(designer) opens zero extra FB handles. A
 `shared_ptr`'s custom deleter re-parks the clone on the pool's idle
 list when the last borrower drops it.
 

@@ -3,7 +3,9 @@
 
 #include "backend/compiler/value.h"
 
-class BACKEND_API ibValueFile : public ibValue {
+void ibValueFile_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+
+class BACKEND_API ibValueFile : public ibValueStaticMembers<&ibValueFile_BindNames> {
 	public:
 private:
 
@@ -30,13 +32,7 @@ private:
 
 public:
 
-	// these methods need to be overridden in your aggregate objects:
-	virtual ibValueMethodHelper* GetPMethods() const { 
-		//PrepareNames();
-		return &m_methodHelper; 
-	}
-
-	virtual void PrepareNames() const;// this method is automatically called to initialize attribute and method names.
+	// DoGetPMethods (protected) + Shared<&ibValueFile_BindNames> come from the base.
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);//method call
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue &varValue);//setting attribute
@@ -51,8 +47,7 @@ public:
 	virtual bool Init(ibValue **paParams, const long lSizeArray);
 
 private:
-	wxString m_fileName; 
-	static ibValueMethodHelper m_methodHelper;
+	wxString m_fileName;
 };
 
 #endif 

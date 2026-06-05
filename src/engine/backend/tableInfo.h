@@ -81,7 +81,7 @@ protected:
 };
 
 //Common entity for tables, list, table trees 
-class BACKEND_API ibValueModel : public ibValue,
+class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 	public ibActionDataObject, public ibTabularObject {
 	public:
 
@@ -310,9 +310,9 @@ protected:
 
 public:
 
-	class BACKEND_API ibValueModelColumnCollection : public ibValue {
+	class BACKEND_API ibValueModelColumnCollection : public ibValueDynamicMembers {
 	public:
-		class ibValueModelColumnInfo : public ibValue {
+		class ibValueModelColumnInfo : public ibValueDynamicMembers {
 	public:
 
 			virtual unsigned int GetColumnID() const = 0;
@@ -334,16 +334,8 @@ public:
 			ibValueModelColumnInfo();
 			virtual ~ibValueModelColumnInfo();
 
-			virtual ibValueMethodHelper* GetPMethods() const {
-				//PrepareNames();
-				return m_methodHelper;
-			}
-
-			virtual void PrepareNames() const;
+			void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 			virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
-
-		protected:
-			ibValueMethodHelper* m_methodHelper;
 		};
 	public:
 
@@ -365,7 +357,7 @@ public:
 		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const = 0;
 		virtual unsigned int GetColumnCount() const = 0;
 
-		ibValueModelColumnCollection() : ibValue(ibValueTypes::TYPE_VALUE, true) {}
+		ibValueModelColumnCollection() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true) {}
 		virtual ~ibValueModelColumnCollection() {}
 
 		//Working with iterators
@@ -391,12 +383,12 @@ public:
 		}
 	};
 
-	class BACKEND_API ibValueModelReturnLine : public ibValue {
+	class BACKEND_API ibValueModelReturnLine : public ibValueDynamicMembers {
 	public:
 
 		ibDataViewItem GetLineItem() const { return m_lineItem; };
 
-		ibValueModelReturnLine(const ibDataViewItem& lineItem) : ibValue(ibValueTypes::TYPE_VALUE, true), m_lineItem(lineItem) {
+		ibValueModelReturnLine(const ibDataViewItem& lineItem) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_lineItem(lineItem) {
 			wxRefCounter* refCounter = static_cast<wxRefCounter*>(m_lineItem.GetID());
 			if (refCounter != nullptr)
 				refCounter->IncRef();

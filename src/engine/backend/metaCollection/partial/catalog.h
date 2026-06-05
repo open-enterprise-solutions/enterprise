@@ -258,7 +258,9 @@ public:
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual void PrepareNames() const;
+	// Catalog's own methods (the data members come from the base FillDataMembers).
+	// Bound in the ctor; run lazily by Build().
+	void FillMethods(ibMemberTable& helper) const;
 
 	//****************************************************************************
 	//*                              Override attribute                          *

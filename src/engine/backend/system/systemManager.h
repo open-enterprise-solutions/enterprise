@@ -11,7 +11,9 @@
 
 #include "backend/system/systemEnum.h"
 
-class BACKEND_API ibValueSystemFunction : public ibValue {
+void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+
+class BACKEND_API ibValueSystemFunction : public ibValueStaticMembers<&ibValueSystemFunction_BindNames> {
 	public:
 	static wxDateTime ms_workDate;
 public:
@@ -131,23 +133,17 @@ public:
 public:
 
 	ibValueSystemFunction() :
-		ibValue(ibValueTypes::TYPE_VALUE, true), m_methodHelper(new ibValueMethodHelper) {
+		ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true) {
 	}
 
 	virtual ~ibValueSystemFunction() {
-		wxDELETE(m_methodHelper);
 	}
 
 	//****************************************************************************
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual ibValueMethodHelper* GetPMethods() const {
-		//PrepareNames();
-		return m_methodHelper;
-	}
-
-	virtual void PrepareNames() const;
+	// DoGetPMethods (protected) + Shared<&ibValueSystemFunction_BindNames> come from the base.
 
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);
@@ -156,10 +152,6 @@ public:
 	virtual bool IsEmpty() const {
 		return false;
 	}
-
-protected:
-
-	ibValueMethodHelper* m_methodHelper;
 };
 
 #endif

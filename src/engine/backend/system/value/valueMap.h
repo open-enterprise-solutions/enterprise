@@ -3,7 +3,7 @@
 
 #include "backend/compiler/value.h"
 
-class BACKEND_API ibValueContainer : public ibValue {
+class BACKEND_API ibValueContainer : public ibValueDynamicMembers {
 	public:
 private:
 	enum Func  {
@@ -28,34 +28,28 @@ public:
 
 public:
 
-	class BACKEND_API ibValueReturnContainer : public ibValue {
+	class BACKEND_API ibValueReturnContainer : public ibValueDynamicMembers {
 	public:
-		
+
 		enum Prop {
 			enKey,
 			enValue
 		};
-		
+
 		ibValue m_key;
 		ibValue m_value;
-	
-		static ibValueMethodHelper m_methodHelper;
 
 	public:
 
-		ibValueReturnContainer() : ibValue(ibValueTypes::TYPE_VALUE, true) { 
-			PrepareNames(); 
-		}
-		
-		ibValueReturnContainer(const ibValue& key, ibValue& value) : ibValue(ibValueTypes::TYPE_VALUE, true), m_key(key), m_value(value) { 
-			PrepareNames();
+		ibValueReturnContainer() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true) {
+			m_members.Bind(this, &ibValueReturnContainer::FillMembers);
 		}
 
-		virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-			//PrepareNames(); 
-			return &m_methodHelper;
+		ibValueReturnContainer(const ibValue& key, ibValue& value) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_key(key), m_value(value) {
+			m_members.Bind(this, &ibValueReturnContainer::FillMembers);
 		}
-		virtual void PrepareNames() const;
+
+		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 		virtual bool SetPropVal(const long lPropNum, ibValue& cValue);        //setting attribute
 		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
@@ -72,11 +66,11 @@ public:
 	virtual bool SetPropVal(const long lPropNum, const ibValue& cValue);        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
 
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
-		return m_methodHelper;
-	}
-	virtual void PrepareNames() const;                         // this method is automatically called to initialize attribute and method names.
+	// Per-instance dynamic surface (keys mutate at runtime). Bound in the ctor
+	// with ctx=this; built lazily by the NVI wrapper; Invalidate() on mutation.
+	static void BindContainerNames(ibMemberTable& helper, const ibValue* ctx);
+	// DoGetPMethods (protected) + the by-value helper come from ibValueDynamicMembers.
+
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       //method call
 
 	//Расширенные методы:
@@ -84,14 +78,12 @@ public:
 	virtual void Delete(const ibValue& varKeyValue);
 	virtual bool Property(const ibValue& varKeyValue, ibValue& cValueFound);
 	unsigned int Count() const { return m_containerValues.size(); }
-	void Clear() { m_containerValues.clear(); }
+	void Clear() { m_containerValues.clear(); m_members.Invalidate(); }
 
 	//Работа с итераторами:
 	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;
 
 protected:
-
-	ibValueMethodHelper* m_methodHelper;
 
 	struct ContainerComparator {
 		bool operator()(const ibValue& lhs, const ibValue& rhs) const;
@@ -106,8 +98,8 @@ class BACKEND_API ibValueStructure : public ibValueContainer {
 
 	ibValueStructure() : ibValueContainer(false) {}
 	ibValueStructure(const std::map<wxString, ibValue>& structureValues) : ibValueContainer(true) {
-		for (auto& strBVal : structureValues) m_containerValues.insert_or_assign(strBVal.first, strBVal.second); 
-		PrepareNames();
+		for (auto& strBVal : structureValues) m_containerValues.insert_or_assign(strBVal.first, strBVal.second);
+		m_members.Invalidate();
 	}
 
 	ibValueStructure(bool readOnly) : ibValueContainer(readOnly) {}

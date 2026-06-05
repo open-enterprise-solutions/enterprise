@@ -350,7 +350,7 @@ void ibConfigCompareView::OnApplyMerge(wxCommandEvent& WXUNUSED(event))
 
 	if (!pull && !m_compareDoc->GetRightSaveCallback()) {
 		wxMessageBox(
-			_("Push direction has no save target — open the other "
+			_("Push direction has no save target - open the other "
 			  "configuration from a writable source first."),
 			_("Merge"), wxOK | wxICON_WARNING, m_viewFrame);
 		return;

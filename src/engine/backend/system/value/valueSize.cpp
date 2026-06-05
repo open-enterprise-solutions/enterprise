@@ -7,13 +7,11 @@
 
 //////////////////////////////////////////////////////////////////////
 
-ibValue::ibValueMethodHelper ibValueSize::m_methodHelper;
-
-ibValueSize::ibValueSize() : ibValue(ibValueTypes::TYPE_VALUE), m_size(wxDefaultSize)
+ibValueSize::ibValueSize() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_size(wxDefaultSize)
 {
 }
 
-ibValueSize::ibValueSize(const wxSize& size) : ibValue(ibValueTypes::TYPE_VALUE), m_size(size)
+ibValueSize::ibValueSize(const wxSize& size) : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_size(size)
 {
 }
 
@@ -36,12 +34,10 @@ enum
 	eHeight
 };
 
-void ibValueSize::PrepareNames() const
+void ibValueSize_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	m_methodHelper.ClearHelper();
-
-	m_methodHelper.AppendProp(wxT("Width"));
-	m_methodHelper.AppendProp(wxT("Height"));
+	helper.AppendProp(wxT("Width"));
+	helper.AppendProp(wxT("Height"));
 }
 
 bool ibValueSize::SetPropVal(const long lPropNum, const ibValue& varPropVal)

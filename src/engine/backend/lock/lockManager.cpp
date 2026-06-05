@@ -103,7 +103,7 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 	ibConnectionScope scope(&m_lockHolder);
 	if (!scope || !scope->IsOpen()) {
 		ibBackendCoreException::Error(
-			_("ibLockManager::Acquire — database is not open."));
+			_("ibLockManager::Acquire - database is not open."));
 	}
 
 	ibDatabaseLayer::ibTxOptions txOpts;

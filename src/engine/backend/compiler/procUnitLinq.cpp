@@ -1020,7 +1020,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			if (count == 0 && method == M::Single)
 				ibBackendCoreException::Error(_("LINQ: Single() on empty sequence"));
 			if (count > 1)
-				ibBackendCoreException::Error(_("LINQ: Single() — sequence contains more than one element"));
+				ibBackendCoreException::Error(_("LINQ: Single() - sequence contains more than one element"));
 			CopyValue(ret, count == 1 ? first : ibValue());
 			break;
 		}
@@ -1038,7 +1038,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			const long idx = (long)args[0]->GetNumber().ToInt64();
 			if (idx < 0) {
 				if (method == M::ElementAt)
-					ibBackendCoreException::Error(_("LINQ: ElementAt — negative index"));
+					ibBackendCoreException::Error(_("LINQ: ElementAt - negative index"));
 				CopyValue(ret, ibValue());
 				break;
 			}
@@ -1050,7 +1050,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 				++pos;
 			}
 			if (!found && method == M::ElementAt)
-				ibBackendCoreException::Error(_("LINQ: ElementAt — index out of range"));
+				ibBackendCoreException::Error(_("LINQ: ElementAt - index out of range"));
 			CopyValue(ret, found ? current : ibValue());
 			break;
 		}

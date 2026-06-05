@@ -8,13 +8,11 @@
 //////////////////////////////////////////////////////////////////////
 
 
-ibValue::ibValueMethodHelper ibValueFont::m_methodHelper;
-
-ibValueFont::ibValueFont() : ibValue(ibValueTypes::TYPE_VALUE), m_font()
+ibValueFont::ibValueFont() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_font()
 {
 }
 
-ibValueFont::ibValueFont(const wxFont& font) : ibValue(ibValueTypes::TYPE_VALUE), m_font(font)
+ibValueFont::ibValueFont(const wxFont& font) : ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_font(font)
 {
 }
 
@@ -47,16 +45,14 @@ enum
 	eFace
 };
 
-void ibValueFont::PrepareNames() const
+void ibValueFont_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	m_methodHelper.ClearHelper();
-
-	m_methodHelper.AppendProp(wxT("Size"));
-	m_methodHelper.AppendProp(wxT("Family"));
-	m_methodHelper.AppendProp(wxT("Style"));
-	m_methodHelper.AppendProp(wxT("Weight"));
-	m_methodHelper.AppendProp(wxT("Underlined"));
-	m_methodHelper.AppendProp(wxT("Face"));
+	helper.AppendProp(wxT("Size"));
+	helper.AppendProp(wxT("Family"));
+	helper.AppendProp(wxT("Style"));
+	helper.AppendProp(wxT("Weight"));
+	helper.AppendProp(wxT("Underlined"));
+	helper.AppendProp(wxT("Face"));
 }
 
 bool ibValueFont::SetPropVal(const long lPropNum, const ibValue& varPropVal)

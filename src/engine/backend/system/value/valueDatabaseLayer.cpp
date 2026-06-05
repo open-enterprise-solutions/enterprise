@@ -10,8 +10,6 @@
 
 //////////////////////////////////////////////////////////////////////
 
-ibValue::ibValueMethodHelper ibValueDatabaseLayer::m_methodHelper;
-
 enum
 {
 	ePrepareStatement,
@@ -20,7 +18,7 @@ enum
 };
 
 ibValueDatabaseLayer::ibValueDatabaseLayer() :
-	ibValue(ibValueTypes::TYPE_VALUE)
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE)
 {
 }
 
@@ -28,13 +26,11 @@ ibValueDatabaseLayer::~ibValueDatabaseLayer()
 {
 }
 
-void ibValueDatabaseLayer::PrepareNames() const
+void ibValueDatabaseLayer_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	m_methodHelper.ClearHelper();
-
-	m_methodHelper.AppendFunc(wxT("PrepareStatement"), 1, wxT("PrepareStatement(string: query, ...)"));
-	m_methodHelper.AppendFunc(wxT("RunQuery"), 1, wxT("RunQuery(string: query, ...)"));
-	m_methodHelper.AppendFunc(wxT("RunQueryWithResults"), 1, wxT("RunQueryWithResults(string: query, ...)"));
+	helper.AppendFunc(wxT("PrepareStatement"), 1, wxT("PrepareStatement(string: query, ...)"));
+	helper.AppendFunc(wxT("RunQuery"), 1, wxT("RunQuery(string: query, ...)"));
+	helper.AppendFunc(wxT("RunQueryWithResults"), 1, wxT("RunQueryWithResults(string: query, ...)"));
 }
 
 #include "backend/backend_exception.h"

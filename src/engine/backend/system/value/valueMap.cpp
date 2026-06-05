@@ -7,8 +7,6 @@
 #include "backend/backend_exception.h"
 
 
-ibValue::ibValueMethodHelper ibValueContainer::ibValueReturnContainer::m_methodHelper;
-
 bool ibValueContainer::ContainerComparator::operator() (const ibValue& lhs, const ibValue& rhs) const {
 	if (lhs.GetType() == ibValueTypes::TYPE_STRING
 		&& rhs.GetType() == ibValueTypes::TYPE_STRING) {
@@ -23,11 +21,10 @@ bool ibValueContainer::ContainerComparator::operator() (const ibValue& lhs, cons
 //*                          ibValueReturnMap                           *
 //**********************************************************************
 
-void ibValueContainer::ibValueReturnContainer::PrepareNames() const
+void ibValueContainer::ibValueReturnContainer::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper.ClearHelper();
-	m_methodHelper.AppendProp(wxT("Key"));
-	m_methodHelper.AppendProp(wxT("Value"));
+	helper.AppendProp(wxT("Key"));
+	helper.AppendProp(wxT("Value"));
 }
 
 bool ibValueContainer::ibValueReturnContainer::SetPropVal(const long lPropNum, ibValue& cValue)
@@ -54,41 +51,44 @@ bool ibValueContainer::ibValueReturnContainer::GetPropVal(const long lPropNum, i
 //*                            ibValueContainer                         *
 //**********************************************************************
 
-ibValueContainer::ibValueContainer() : ibValue(ibValueTypes::TYPE_VALUE), m_methodHelper(new ibValueMethodHelper) {}
+ibValueContainer::ibValueContainer() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE) {
+	m_members.Bind(&BindContainerNames, this);
+}
 
-ibValueContainer::ibValueContainer(const std::map<ibValue, ibValue>& containerValues) : ibValue(ibValueTypes::TYPE_VALUE, true), m_methodHelper(new ibValueMethodHelper) {
+ibValueContainer::ibValueContainer(const std::map<ibValue, ibValue>& containerValues) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true) {
+	m_members.Bind(&BindContainerNames, this);
 	for (auto& cntVal : containerValues) {
 		m_containerValues.insert_or_assign(cntVal.first, cntVal.second);
 	}
-	PrepareNames();
 }
 
-ibValueContainer::ibValueContainer(bool readOnly) : ibValue(ibValueTypes::TYPE_VALUE, readOnly), m_methodHelper(new ibValueMethodHelper) {
+ibValueContainer::ibValueContainer(bool readOnly) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, readOnly) {
+	m_members.Bind(&BindContainerNames, this);
 }
 
 ibValueContainer::~ibValueContainer() {
 	m_containerValues.clear();
-	wxDELETE(m_methodHelper);
 }
 
 //������ � �������� ��� � ���������� ��������
 //������������ ��������� ������
-void ibValueContainer::PrepareNames() const
+void ibValueContainer::BindContainerNames(ibMemberTable& helper, const ibValue* ctx)
 {
-	m_methodHelper->ClearHelper();
-	m_methodHelper->AppendFunc(wxT("Count"), wxT("Count()"));
-	m_methodHelper->AppendFunc(wxT("Property"), 2, wxT("Property(key : any, valueFound : any)"));
+	const ibValueContainer* self = static_cast<const ibValueContainer*>(ctx);
 
-	if (!m_bReadOnly) {
-		m_methodHelper->AppendFunc(wxT("Clear"), wxT("Clear()"));
-		m_methodHelper->AppendFunc(wxT("Delete"), 1, wxT("Delete(key : any)"));
-		m_methodHelper->AppendFunc(wxT("Insert"), 2, wxT("Insert(key : any, value : any)"));
+	helper.AppendFunc(wxT("Count"), wxT("Count()"));
+	helper.AppendFunc(wxT("Property"), 2, wxT("Property(key : any, valueFound : any)"));
+
+	if (!self->m_bReadOnly) {
+		helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
+		helper.AppendFunc(wxT("Delete"), 1, wxT("Delete(key : any)"));
+		helper.AppendFunc(wxT("Insert"), 2, wxT("Insert(key : any, value : any)"));
 	}
 
-	for (auto keyValue : m_containerValues) {
+	for (auto keyValue : self->m_containerValues) {
 		const ibValue& cValKey = keyValue.first;
 		if (!cValKey.IsEmpty()) {
-			m_methodHelper->AppendProp(cValKey.GetString());
+			helper.AppendProp(cValKey.GetString());
 		}
 	}
 }
@@ -136,7 +136,7 @@ bool ibValueContainer::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, 
 
 void ibValueContainer::Delete(const ibValue& varKeyValue)
 {
-	if (m_methodHelper != nullptr) m_methodHelper->RemoveProp(varKeyValue.GetString());
+	m_members.Invalidate();
 	m_containerValues.erase(varKeyValue);
 }
 
@@ -150,7 +150,7 @@ void ibValueContainer::Insert(const ibValue& varKeyValue, const ibValue& cValue)
 			ibBackendCoreException::Error(_("Key '%s' is already using!"), varKeyValue.GetString());
 		return;
 	}
-	if (m_methodHelper != nullptr) m_methodHelper->AppendProp(varKeyValue.GetString());
+	m_members.Invalidate();
 	m_containerValues.insert_or_assign(varKeyValue, cValue);
 }
 

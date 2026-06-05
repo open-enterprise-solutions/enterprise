@@ -235,9 +235,11 @@ class ibValueRecordSetObjectInformationRegister : public ibValueRecordSetObject 
 	public:
 	ibValueRecordSetObjectInformationRegister(const ibValueMetaObjectInformationRegister* metaObject, const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) :
 		ibValueRecordSetObject(metaObject, uniqueKey) {
+		m_members.Bind(this, &ibValueRecordSetObjectInformationRegister::FillMembers);
 	}
 	ibValueRecordSetObjectInformationRegister(const ibValueRecordSetObjectInformationRegister& source) :
 		ibValueRecordSetObject(source) {
+		m_members.Bind(this, &ibValueRecordSetObjectInformationRegister::FillMembers);
 	}
 public:
 
@@ -253,7 +255,7 @@ public:
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual void PrepareNames() const;
+	void FillMembers(ibMemberTable& helper) const;
 
 	//****************************************************************************
 	//*                              Override attribute                          *
@@ -273,10 +275,12 @@ class ibValueRecordManagerObjectInformationRegister : public ibValueRecordManage
 	ibValueRecordManagerObjectInformationRegister(const ibValueMetaObjectInformationRegister* metaObject, const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) :
 		ibValueRecordManagerObject(metaObject, uniqueKey)
 	{
+		m_members.Bind(this, &ibValueRecordManagerObjectInformationRegister::FillMembers);
 	}
 	ibValueRecordManagerObjectInformationRegister(const ibValueRecordManagerObjectInformationRegister& source) :
 		ibValueRecordManagerObject(source)
 	{
+		m_members.Bind(this, &ibValueRecordManagerObjectInformationRegister::FillMembers);
 	}
 	virtual ibValueRecordManagerObject* CopyRegister(bool showValue = false) {
 		ibValueRecordManagerObject* objectRef = CopyRegisterValue();
@@ -291,7 +295,7 @@ class ibValueRecordManagerObjectInformationRegister : public ibValueRecordManage
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual void PrepareNames() const;
+	void FillMembers(ibMemberTable& helper) const;
 
 	//****************************************************************************
 	//*                              Override attribute                          *

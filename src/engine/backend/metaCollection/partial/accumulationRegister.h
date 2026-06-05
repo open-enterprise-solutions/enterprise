@@ -201,11 +201,13 @@ class ibValueRecordSetObjectAccumulationRegister : public ibValueRecordSetObject
 	ibValueRecordSetObjectAccumulationRegister(const ibValueMetaObjectAccumulationRegister* metaObject, const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) :
 		ibValueRecordSetObject(metaObject, uniqueKey)
 	{
+		m_members.Bind(this, &ibValueRecordSetObjectAccumulationRegister::FillMembers);
 	}
 
 	ibValueRecordSetObjectAccumulationRegister(const ibValueRecordSetObjectAccumulationRegister& source) :
 		ibValueRecordSetObject(source)
 	{
+		m_members.Bind(this, &ibValueRecordSetObjectAccumulationRegister::FillMembers);
 	}
 
 	// WriteRecordSet / DeleteRecordSet inherited from
@@ -220,7 +222,7 @@ class ibValueRecordSetObjectAccumulationRegister : public ibValueRecordSetObject
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	virtual void PrepareNames() const;
+	void FillMembers(ibMemberTable& helper) const;
 
 	//****************************************************************************
 	//*                              Override attribute                          *

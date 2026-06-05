@@ -40,7 +40,8 @@ bool ibValueForm::LoadForm(const wxMemoryBuffer& formData)
 		}
 	}
 
-	ibValueForm::PrepareNames();
+	// Controls loaded from memory → the form's attribute surface is stale.
+	InvalidateNames();
 	return true;
 }
 

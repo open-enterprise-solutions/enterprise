@@ -12,8 +12,6 @@
 
 //////////////////////////////////////////////////////////////////////
 
-ibValue::ibValueMethodHelper ibValueArray::m_methodHelper;
-
 bool ibValueArray::Init()
 {
 	return true;
@@ -44,32 +42,32 @@ void ibValueArray::CheckIndex(unsigned int index) const //array index must start
 
 //working with an array as an aggregate object
 //listing string keys
-void ibValueArray::PrepareNames() const
+// Type-invariant contributor (Shared<>). Build() Clear()s first; ctx unused.
+void ibValueArray_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	m_methodHelper.ClearHelper();
-	m_methodHelper.AppendConstructor(1, wxT("Array(num : number)"));
+	helper.AppendConstructor(1, wxT("Array(num : number)"));
 
-	m_methodHelper.AppendFunc(wxT("Add"), 1, wxT("Add(value : any)"));
-	m_methodHelper.AppendFunc(wxT("Insert"), 2, wxT("Insert(index, value : any)"));
+	helper.AppendFunc(wxT("Add"), 1, wxT("Add(value : any)"));
+	helper.AppendFunc(wxT("Insert"), 2, wxT("Insert(index, value : any)"));
 
-	m_methodHelper.AppendFunc(wxT("Count"), wxT("Count()"));
-	m_methodHelper.AppendFunc(wxT("Find"), 1, wxT("Find(value : any)"));
-	m_methodHelper.AppendFunc(wxT("Clear"), wxT("Clear()"));
-	m_methodHelper.AppendFunc(wxT("Get"), 1, wxT("Get(index)"));
-	m_methodHelper.AppendFunc(wxT("Set"), 2, wxT("Set(index, value : any)"));
-	m_methodHelper.AppendFunc(wxT("Remove"), 1, wxT("Remove(index : number)"));
-	m_methodHelper.AppendFunc(wxT("Contains"), 1, wxT("Contains(value : any)"));
-	m_methodHelper.AppendFunc(wxT("Sort"), 1, wxT("Sort(descending : bool)"));
-	m_methodHelper.AppendFunc(wxT("SortByKeys"), 2, wxT("SortByKeys(keys : Array, descending : bool)"));
+	helper.AppendFunc(wxT("Count"), wxT("Count()"));
+	helper.AppendFunc(wxT("Find"), 1, wxT("Find(value : any)"));
+	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
+	helper.AppendFunc(wxT("Get"), 1, wxT("Get(index)"));
+	helper.AppendFunc(wxT("Set"), 2, wxT("Set(index, value : any)"));
+	helper.AppendFunc(wxT("Remove"), 1, wxT("Remove(index : number)"));
+	helper.AppendFunc(wxT("Contains"), 1, wxT("Contains(value : any)"));
+	helper.AppendFunc(wxT("Sort"), 1, wxT("Sort(descending : bool)"));
+	helper.AppendFunc(wxT("SortByKeys"), 2, wxT("SortByKeys(keys : Array, descending : bool)"));
 
 	// Aggregations — no-arg form operates element-wise via ibValue
 	// arithmetic / comparison; optional selector lambda projects
 	// each element through λ(x) → numeric before accumulation.
 	// Empty array returns TYPE_EMPTY.
-	m_methodHelper.AppendFunc(wxT("Sum"),     1, wxT("Sum(selector? : Function)"));
-	m_methodHelper.AppendFunc(wxT("Min"),     1, wxT("Min(selector? : Function)"));
-	m_methodHelper.AppendFunc(wxT("Max"),     1, wxT("Max(selector? : Function)"));
-	m_methodHelper.AppendFunc(wxT("Average"), 1, wxT("Average(selector? : Function)"));
+	helper.AppendFunc(wxT("Sum"),     1, wxT("Sum(selector? : Function)"));
+	helper.AppendFunc(wxT("Min"),     1, wxT("Min(selector? : Function)"));
+	helper.AppendFunc(wxT("Max"),     1, wxT("Max(selector? : Function)"));
+	helper.AppendFunc(wxT("Average"), 1, wxT("Average(selector? : Function)"));
 }
 
 bool ibValueArray::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -221,7 +219,7 @@ void ibValueArray::DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
 			const long idx = (long)args[0]->GetNumber().ToInt64();
 			if (idx < 0 || idx >= (long)m_listValue.size()) {
 				if (method == M::ElementAt)
-					ibBackendCoreException::Error(_("LINQ: ElementAt — index out of range"));
+					ibBackendCoreException::Error(_("LINQ: ElementAt - index out of range"));
 				CopyValue(ret, ibValue());
 				return;
 			}

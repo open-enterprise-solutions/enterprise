@@ -11,14 +11,15 @@
 
 //////////////////////////////////////////////////////////////////////
 
-ibValueFrame::ibValueEventContainer::ibValueEventContainer() : ibValue(ibValueTypes::TYPE_VALUE, true),
-m_controlEvent(nullptr), m_methodHelper(nullptr)
+ibValueFrame::ibValueEventContainer::ibValueEventContainer() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
+m_controlEvent(nullptr)
 {
 }
 
-ibValueFrame::ibValueEventContainer::ibValueEventContainer(ibValueFrame* controlEvent) : ibValue(ibValueTypes::TYPE_VALUE, true),
-m_controlEvent(controlEvent), m_methodHelper(new ibValueMethodHelper())
+ibValueFrame::ibValueEventContainer::ibValueEventContainer(ibValueFrame* controlEvent) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
+m_controlEvent(controlEvent)
 {
+	m_members.Bind(this, &ibValueEventContainer::FillMembers);
 }
 
 #include "backend/system/value/valueMap.h"
@@ -26,8 +27,6 @@ m_controlEvent(controlEvent), m_methodHelper(new ibValueMethodHelper())
 
 ibValueFrame::ibValueEventContainer::~ibValueEventContainer()
 {
-	if (m_methodHelper)
-		delete m_methodHelper;
 }
 
 std::shared_ptr<ibValueIteratorState> ibValueFrame::ibValueEventContainer::CreateIterator()
@@ -113,18 +112,16 @@ enum
 	enControlCount
 };
 
-void ibValueFrame::ibValueEventContainer::PrepareNames() const
+void ibValueFrame::ibValueEventContainer::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
-	m_methodHelper->AppendFunc(wxT("Property"), 2, wxT("Property(key : string, valueFound : event)"));
-	m_methodHelper->AppendFunc(wxT("Count"), wxT("Count()"));
+	helper.AppendFunc(wxT("Property"), 2, wxT("Property(key : string, valueFound : event)"));
+	helper.AppendFunc(wxT("Count"), wxT("Count()"));
 
 	for (unsigned int idx = 0; idx < m_controlEvent->GetEventCount(); idx++) {
 		ibEvent* event = m_controlEvent->GetEvent(idx);
 		if (event == nullptr)
 			continue;
-		m_methodHelper->AppendProp(event->GetName());
+		helper.AppendProp(event->GetName());
 	}
 }
 

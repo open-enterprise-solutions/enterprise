@@ -9,9 +9,10 @@
 //*                                 Value Notebook                                  *
 //***********************************************************************************
 
-ibValueGridBox::ibValueGridBox() : ibValueWindow(), 
+ibValueGridBox::ibValueGridBox() : ibValueWindow(),
 m_valueSpreadsheet(ibValue::CreateAndPrepareValueRef<ibValueSpreadsheetDocument>())
 {
+	m_members.Bind(this, &ibValueGridBox::FillControlMembers);
 	//set default params
 	m_propertyMinSize->SetValue(wxSize(150, 50));
 }
@@ -89,18 +90,16 @@ enum prop {
 	eGridValue,
 };
 
-void ibValueGridBox::PrepareNames() const
+void ibValueGridBox::FillControlMembers(ibMemberTable& helper) const
 {
-	ibValueFrame::PrepareNames();
-
-	m_methodHelper->AppendProp(wxT("Value"), eGridValue, eControl);
+	helper.AppendProp(wxT("Value"), eGridValue, eControl);
 }
 
 bool ibValueGridBox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum); bool refreshColumn = false;
+	const long lPropAlias = m_members.GetPropAlias(lPropNum); bool refreshColumn = false;
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eGridValue) {
 			ibGridEditor* gridWindow = dynamic_cast<ibGridEditor*>(GetWxObject());
 			m_valueSpreadsheet = varPropVal.ConvertToType<ibValueSpreadsheetDocument>();
@@ -113,9 +112,9 @@ bool ibValueGridBox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 
 bool ibValueGridBox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eControl) {
-		const long lPropData = m_methodHelper->GetPropData(lPropNum);
+		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eGridValue) {
 			pvarPropVal = m_valueSpreadsheet;
 			return true;

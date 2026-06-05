@@ -21,8 +21,7 @@ class ibValueGlobalContextStructureManager : public ibValueStructure {
 			if (so == nullptr)
 				continue;
 			ibValuePtr<ibValue> createdValue(so->CreateObject());
-			if (createdValue != nullptr)
-				createdValue->PrepareNames();
+			// Name surface builds lazily on first GetPMethods() — no eager populate.
 			ibValueStructure::Insert(object->GetName(), createdValue);
 		}
 	}
@@ -67,23 +66,21 @@ enum
 	enAccountingRegisters
 };
 
-void ibValueGlobalContextManager::PrepareNames() const
+void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
-	m_methodHelper->AppendProp(wxT("Constants"));
-	m_methodHelper->AppendProp(wxT("Catalogs"));
-	m_methodHelper->AppendProp(wxT("Documents"));
-	m_methodHelper->AppendProp(wxT("Enumerations"));
-	m_methodHelper->AppendProp(wxT("DataProcessors"));
-	m_methodHelper->AppendProp(wxT("ExternalDataProcessors"));
-	m_methodHelper->AppendProp(wxT("Reports"));
-	m_methodHelper->AppendProp(wxT("ExternalReports"));
-	m_methodHelper->AppendProp(wxT("InformationRegisters"));
-	m_methodHelper->AppendProp(wxT("AccumulationRegisters"));
-	m_methodHelper->AppendProp(wxT("ChartsOfCharacteristicTypes"));
-	m_methodHelper->AppendProp(wxT("ChartsOfAccounts"));
-	m_methodHelper->AppendProp(wxT("AccountingRegisters"));
+	helper.AppendProp(wxT("Constants"));
+	helper.AppendProp(wxT("Catalogs"));
+	helper.AppendProp(wxT("Documents"));
+	helper.AppendProp(wxT("Enumerations"));
+	helper.AppendProp(wxT("DataProcessors"));
+	helper.AppendProp(wxT("ExternalDataProcessors"));
+	helper.AppendProp(wxT("Reports"));
+	helper.AppendProp(wxT("ExternalReports"));
+	helper.AppendProp(wxT("InformationRegisters"));
+	helper.AppendProp(wxT("AccumulationRegisters"));
+	helper.AppendProp(wxT("ChartsOfCharacteristicTypes"));
+	helper.AppendProp(wxT("ChartsOfAccounts"));
+	helper.AppendProp(wxT("AccountingRegisters"));
 }
 
 #include "backend/metaCollection/partial/dataProcessorManager.h"

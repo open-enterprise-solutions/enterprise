@@ -119,28 +119,16 @@ ibSessionRegistry::~ibSessionRegistry()
 	Stop();
 }
 
-// --- Legacy Phase-2 API ---------------------------------------------------
-
-ibSession* ibSessionRegistry::Create(const wxString& id, ibRunMode runMode)
-{
-	std::lock_guard<std::mutex> lock(m_mutex);
-	auto s = std::make_unique<ibSession>(id, SessionKindFromRunMode(runMode));
-	ibSession* raw = s.get();
-	m_sessions[id] = std::move(s);
-	return raw;
-}
-
-void ibSessionRegistry::Destroy(const wxString& id)
-{
-	std::lock_guard<std::mutex> lock(m_mutex);
-	m_sessions.erase(id);
-}
-
 ibSession* ibSessionRegistry::Find(const wxString& id)
 {
-	std::lock_guard<std::mutex> lock(m_mutex);
-	auto it = m_sessions.find(id);
-	return it != m_sessions.end() ? it->second.get() : nullptr;
+	// Lookup by session id in m_own — the live ownership map keyed by
+	// GetId(), populated through the normal Connect / worker-pool flow. The
+	// designer echoes GetId() back as the debug sid, so this resolves
+	// Continue / Step / Pause targets and the web "session paused?" query
+	// (wfrontendSessionPaused).
+	std::shared_lock<std::shared_mutex> lock(m_ownMutex);
+	auto it = m_own.find(id);
+	return it != m_own.end() ? it->second.get() : nullptr;
 }
 
 ibSession* ibSessionRegistry::FindSessionByRoot(ibValueModuleManagerRuntimeConfiguration* mm) const
@@ -165,22 +153,6 @@ ibSession* ibSessionRegistry::FindSessionByFrame(ibBackendDocFrame* frame) const
 			return s;
 	}
 	return nullptr;
-}
-
-std::vector<wxString> ibSessionRegistry::List() const
-{
-	std::lock_guard<std::mutex> lock(m_mutex);
-	std::vector<wxString> ids;
-	ids.reserve(m_sessions.size());
-	for (const auto& kv : m_sessions)
-		ids.push_back(kv.first);
-	return ids;
-}
-
-std::size_t ibSessionRegistry::Count() const
-{
-	std::lock_guard<std::mutex> lock(m_mutex);
-	return m_sessions.size();
 }
 
 bool ibSessionRegistry::HasClients() const

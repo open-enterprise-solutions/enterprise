@@ -184,7 +184,7 @@ void ibCompileCode::PrepareModuleData()
 		bool scoped = false;
 		ibClassID clsid = 0;
 		if (contextValue.second.m_value) {
-			contextValue.second.m_value->PrepareNames();
+			contextValue.second.m_value->InvalidateNames();
 			clsid = contextValue.second.m_value->GetClassType();
 			const long selfPropIdx = contextValue.second.m_value->FindProp(contextValue.first);
 			if (selfPropIdx >= 0)
@@ -202,7 +202,7 @@ void ibCompileCode::PrepareModuleData()
 
 		ibValue* contextValue = pair.second.m_value;
 		wxASSERT(contextValue);
-		contextValue->PrepareNames();
+		contextValue->InvalidateNames();
 
 		// adding variables from context
 		for (unsigned int i = 0; i < contextValue->GetNProps(); i++) {

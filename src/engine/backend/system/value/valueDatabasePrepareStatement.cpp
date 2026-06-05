@@ -4,8 +4,6 @@
 #include "backend/session/session.h"
 
 
-ibValue::ibValueMethodHelper ibValuePreparedStatement::m_methodHelper;
-
 enum
 {
 	eSetParam,
@@ -14,7 +12,7 @@ enum
 };
 
 ibValuePreparedStatement::ibValuePreparedStatement(ibPreparedStatement* preparedStatement) :
-	ibValue(ibValueTypes::TYPE_VALUE), m_preparedStatement(preparedStatement)
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_preparedStatement(preparedStatement)
 {
 }
 
@@ -24,13 +22,12 @@ ibValuePreparedStatement::~ibValuePreparedStatement()
 		ses_query->CloseStatement(m_preparedStatement);
 }
 
-void ibValuePreparedStatement::PrepareNames() const
+void ibValuePreparedStatement_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	m_methodHelper.ClearHelper();
-	m_methodHelper.AppendProc(wxT("SetParam"), 2, wxT("SetParam(number: position, any: value)"));
+	helper.AppendProc(wxT("SetParam"), 2, wxT("SetParam(number: position, any: value)"));
 
-	m_methodHelper.AppendFunc(wxT("RunQuery"), 1, wxT("RunQuery()"));
-	m_methodHelper.AppendFunc(wxT("RunQueryWithResults"), 1, wxT("RunQueryWithResults()"));
+	helper.AppendFunc(wxT("RunQuery"), 1, wxT("RunQuery()"));
+	helper.AppendFunc(wxT("RunQueryWithResults"), 1, wxT("RunQueryWithResults()"));
 }
 
 #include "backend/backend_exception.h"

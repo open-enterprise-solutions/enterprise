@@ -146,7 +146,7 @@ static std::size_t PickConnectionMinIdle(ibRunMode runMode)
 	switch (runMode) {
 	case eWEB_ENTERPRISE_MODE: return 4;
 	case eSERVICE_MODE:        return 2;
-	default:                   return 2;   // designer / enterprise / launcher / classChecker
+	default:                   return 2;   // designer / enterprise / launcher
 	}
 }
 
@@ -170,7 +170,7 @@ ibApplicationData::ibApplicationData(ibRunMode runMode) :
 	m_locale_lang(wxLanguage::wxLANGUAGE_UNKNOWN)
 {
 	// Pick the session access mode from runMode — every Single-session
-	// app (enterprise/designer/daemon/codeRunner/classChecker) gets
+	// app (enterprise/designer/daemon/codeRunner) gets
 	// Single, the web server (wes) gets Server (per-tab + system fallback).
 	// Apps no longer need to call SetAccessMode themselves.
 	//

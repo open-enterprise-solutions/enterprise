@@ -33,8 +33,9 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalDataProcessor : public ibVa
 	//exit common module
 	virtual bool ExitMainModule(bool force = false);
 
-	// this method is automatically called to initialize attribute and method names.
-	virtual void PrepareNames() const;
+	// Copies the external object value's surface; module exports follow as the
+	// helper's tail (descriptor autobind). Bound in the ctor (was PrepareNames).
+	void FillMembers(ibMemberTable& helper) const;
 
 	//method call
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
@@ -76,8 +77,9 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalReport : public ibValueModu
 	//exit common module
 	virtual bool ExitMainModule(bool force = false);
 
-	// this method is automatically called to initialize attribute and method names.
-	virtual void PrepareNames() const;
+	// Copies the external object value's surface; module exports follow as the
+	// helper's tail (descriptor autobind). Bound in the ctor (was PrepareNames).
+	void FillMembers(ibMemberTable& helper) const;
 
 	//method call
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);

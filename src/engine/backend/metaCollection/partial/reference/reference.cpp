@@ -47,13 +47,13 @@ void ibValueReferenceDataObject::PrepareRef(bool createData)
 	if (createData) {
 		m_initializedRef = true;
 	}
-
-	PrepareNames();
+	// Name surface is lazy (FillMembers built on first GetPMethods).
 }
 
-ibValueReferenceDataObject::ibValueReferenceDataObject(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid) : ibValue(ibValueTypes::TYPE_VALUE, true), ibValueDataObject(objGuid, !objGuid.isValid()),
-m_metaObject(metaObject), m_methodHelper(new ibValueMethodHelper()), m_initializedRef(false), m_reference_impl(nullptr), m_foundedRef(false)
+ibValueReferenceDataObject::ibValueReferenceDataObject(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), ibValueDataObject(objGuid, !objGuid.isValid()),
+m_metaObject(metaObject), m_initializedRef(false), m_reference_impl(nullptr), m_foundedRef(false)
 {
+	m_members.Bind(this, &ibValueReferenceDataObject::FillMembers);
 	m_reference_impl = new ibReference(m_metaObject->GetMetaID(), m_objGuid);
 	//gs_references.emplace_back(this);
 }
@@ -65,7 +65,6 @@ ibValueReferenceDataObject::~ibValueReferenceDataObject()
 	//	std::remove_if(gs_references.begin(), gs_references.end(),
 	//		[this](ibValueReferenceDataObject* ref) { return ref == this;}), gs_references.end()
 	//);
-	wxDELETE(m_methodHelper);
 }
 
 ibValueReferenceDataObject* ibValueReferenceDataObject::Create(const ibMetaData* metaData, const ibMetaID& id, const ibGuid& objGuid)
@@ -262,27 +261,25 @@ enum Func {
 	enGetGuid
 };
 
-void ibValueReferenceDataObject::PrepareNames() const
+void ibValueReferenceDataObject::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
 	if (m_metaObject->ConvertToValue(metaObject)) {
 
-		m_methodHelper->AppendFunc(wxT("IsEmpty"), wxT("IsEmpty()"));
-		m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
-		m_methodHelper->AppendFunc(wxT("GetObject"), wxT("GetObject()"));
-		m_methodHelper->AppendFunc(wxT("GetGuid"), wxT("GetGuid()"));
+		helper.AppendFunc(wxT("IsEmpty"), wxT("IsEmpty()"));
+		helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+		helper.AppendFunc(wxT("GetObject"), wxT("GetObject()"));
+		helper.AppendFunc(wxT("GetGuid"), wxT("GetGuid()"));
 
 		wxString objectName;
 
-		//fill custom attributes 
+		//fill custom attributes
 		for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
 			if (object->IsDeleted())
 				continue;
 			if (!object->GetObjectNameAsString(objectName))
 				continue;
-			m_methodHelper->AppendProp(
+			helper.AppendProp(
 				objectName,
 				true,
 				false,
@@ -291,13 +288,13 @@ void ibValueReferenceDataObject::PrepareNames() const
 			);
 		}
 
-		//fill custom tables 
+		//fill custom tables
 		for (const auto object : metaObject->GetTableArrayObject()) {
 			if (object->IsDeleted())
 				continue;
 			if (!object->GetObjectNameAsString(objectName))
 				continue;
-			m_methodHelper->AppendProp(
+			helper.AppendProp(
 				objectName,
 				true,
 				false,
@@ -307,8 +304,8 @@ void ibValueReferenceDataObject::PrepareNames() const
 		}
 	}
 	else {
-		m_methodHelper->AppendFunc(wxT("IsEmpty"), wxT("IsEmpty()"));
-		m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+		helper.AppendFunc(wxT("IsEmpty"), wxT("IsEmpty()"));
+		helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
 	}
 }
 
@@ -319,9 +316,9 @@ bool ibValueReferenceDataObject::SetPropVal(const long lPropNum, const ibValue& 
 
 bool ibValueReferenceDataObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	ibValueReferenceDataObject::PrepareRef();
-	const ibMetaID& id = m_methodHelper->GetPropData(lPropNum);
+	const ibMetaID& id = m_members.GetPropData(lPropNum);
 	if (!m_metaObject->IsDataReference(id)) {
 		if (lPropAlias == eTable && !GetValueByMetaID(id, pvarPropVal)) {
 			m_listObjectValue.insert_or_assign(id,

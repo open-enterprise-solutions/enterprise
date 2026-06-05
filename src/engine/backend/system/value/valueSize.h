@@ -3,7 +3,9 @@
 
 #include "backend/compiler/value.h"
 
-class BACKEND_API ibValueSize : public ibValue {
+void ibValueSize_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+
+class BACKEND_API ibValueSize : public ibValueStaticMembers<&ibValueSize_BindNames> {
 	public:
 
 	ibValueSize();
@@ -19,16 +21,9 @@ class BACKEND_API ibValueSize : public ibValue {
 		return m_size == wxDefaultSize;
 	}
 
-	static ibValueMethodHelper m_methodHelper;
-
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
-
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
-		return &m_methodHelper;
-	}
-	virtual void PrepareNames() const; // this method is automatically called to initialize attribute and method names.
+	// DoGetPMethods (protected) + Shared<&ibValueSize_BindNames> come from the base.
 
 	operator wxSize() const { return m_size; }
 

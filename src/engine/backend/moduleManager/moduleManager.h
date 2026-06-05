@@ -22,24 +22,25 @@ class ibSession;
 //*********************************************************************************************************
 
 class BACKEND_API ibValueModuleManager :
-	public ibRuntimeModuleDataObject, public ibValue {
+	public ibValueDynamicMembers, public ibRuntimeModuleDataObject {
 	public:
 protected:
 	enum helperAlias {
-		eProcUnit
+		eProcUnit = g_aliasExport   // module exports go through the descriptor autobind
 	};
 public:
 
 	class BACKEND_API ibValueModuleUnit :
-		public ibRuntimeModuleDataObject, public ibValue {
+		public ibValueDynamicMembers, public ibRuntimeModuleDataObject {
 	public:
 	protected:
 		enum helperAlias {
-			eProcUnit
+			eProcUnit = g_aliasExport   // module exports go through the descriptor autobind
 		};
 	public:
 
-		ibValueModuleUnit() {}
+		// No default ctor — the ibRuntimeModuleDataObject base requires the owning
+		// value's helper + a compile module (no default descriptor ctor exists).
 		ibValueModuleUnit(ibValueMetaObjectModuleBase* moduleObject, bool managerModule = false);
 		virtual ~ibValueModuleUnit();
 
@@ -71,14 +72,9 @@ public:
 
 		//WORK AS AN AGGREGATE OBJECT
 
-		// these methods need to be overridden in your aggregate objects:
-		virtual ibValueMethodHelper* GetPMethods() const override { // get a reference to the class helper for parsing attribute and method names
-			//PrepareNames();
-			return m_methodHelper;
-		}
-
-		// this method is automatically called to initialize attribute and method names.
-		virtual void PrepareNames() const override;
+		// Name surface = the module's exports, autobound as the helper's tail by the
+		// ibRuntimeModuleDataObject ctor (DoGetPMethods + by-value m_members come
+		// from ibValueDynamicMembers). No FillMembers — exports are the whole surface.
 
 		//method call
 		virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
@@ -117,12 +113,10 @@ public:
 
 	protected:
 		ibValueMetaObjectModuleBase* m_moduleObject;
-	private:
-		ibValueMethodHelper* m_methodHelper;
 	};
 
 	class BACKEND_API ibValueMetadataUnit :
-		public ibValue {
+		public ibValueDynamicMembers {
 	public:
 
 		ibValueMetadataUnit() {}
@@ -157,13 +151,8 @@ public:
 			return false;
 		}
 
-		// these methods need to be overridden in your aggregate objects:
-		virtual ibValueMethodHelper* GetPMethods() const override {
-			//PrepareNames();
-			return m_methodHelper;
-		}
-
-		virtual void PrepareNames() const override; // this method is automatically called to initialize attribute and method names.
+		// DoGetPMethods (protected) + by-value m_members come from ibValueDynamicMembers.
+		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 		//****************************************************************************
 		//*                              Override attribute                          *
@@ -174,7 +163,6 @@ public:
 
 	private:
 		ibMetaData* m_metaData;
-		ibValueMethodHelper* m_methodHelper;
 	};
 
 protected:
@@ -186,14 +174,9 @@ public:
 
 	virtual ~ibValueModuleManager();
 
-	// these methods need to be overridden in your aggregate objects:
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames();
-		return m_methodHelper;
-	}
-
-	// this method is automatically called to initialize attribute and method names.
-	virtual void PrepareNames() const;
+	// Name surface = the module's exports, autobound as the helper's tail by the
+	// ibRuntimeModuleDataObject ctor (DoGetPMethods + by-value m_members come
+	// from ibValueDynamicMembers). No FillMembers — exports are the whole surface.
 
 	//method call
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);
@@ -246,8 +229,6 @@ protected:
 	friend class ibMetaDataDataProcessor;
 
 	friend class ibValueModuleUnit;
-
-	ibValueMethodHelper* m_methodHelper;
 };
 
 //*********************************************************************************************************
@@ -268,7 +249,6 @@ class BACKEND_API ibValueModuleRuntimeManager :
 	class BACKEND_API ibValueRuntimeModuleUnit :
 		public ibValueModuleManager::ibValueModuleUnit {
 	public:
-		ibValueRuntimeModuleUnit() {}
 		ibValueRuntimeModuleUnit(ibValueModuleRuntimeManager* moduleManager, ibValueMetaObjectModuleBase* moduleObject, bool managerModule = false);
 
 		//initalize common module
@@ -299,9 +279,6 @@ public:
 
 	//exit common module
 	virtual bool ExitMainModule(bool force = false) = 0;
-
-	// this method is automatically called to initialize attribute and method names.
-	virtual void PrepareNames() const override;
 
 	// common modules — runtime-side mutation API. Metadata's
 	// AddCommonModule/RenameCommonModule/RemoveCommonModule forwards
@@ -427,8 +404,6 @@ class BACKEND_API ibValueModuleManagerDesigner : public ibValueModuleManager {
 	ibValueModuleUnit* FindCommonModule(const ibValueMetaObjectCommonModule* commonModule) const override;
 
 	std::vector<ibValuePtr<ibValueModuleUnit>>& GetCommonModules() { return m_listCommonModule; }
-
-	void PrepareNames() const override;
 
 	// External DP/Report holder delegates its globals to the configuration root
 	// so the external module's editor sees the root's globals (Metadata + common

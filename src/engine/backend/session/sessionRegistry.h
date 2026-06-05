@@ -157,13 +157,9 @@ public:
 	// This keeps a single coordinator pattern: subsystems do not own
 	// their own global state, they exist only because appData is alive.
 
-	// ---- Legacy direct API ----
-	// Imperative create-and-go shortcuts, retained for in-process callers
-	// that don't go through the Submit-based Connect(req) flow (test
-	// harnesses, low-level wiring). New code should use Connect(req) +
-	// ibSessionTicket so registry policies and the auth state machine fire.
-	ibSession* Create(const wxString& id, ibRunMode runMode);
-	void       Destroy(const wxString& id);
+	// Lookup a live session by its id (GetId()) in m_own. Resolves debugger
+	// per-session routing (Continue / Step / Pause sid) and the web
+	// "session paused?" query. Shared lock on m_ownMutex.
 	ibSession* Find(const wxString& id);
 
 	// Reverse lookup — find the session in m_own whose root module-manager
@@ -179,9 +175,6 @@ public:
 	// the frame pointer but no direct field on it (e.g. cross-DLL hooks).
 	// Iterates m_own comparing s->GetFrame() == frame.
 	ibSession* FindSessionByFrame(class ibBackendDocFrame* frame) const;
-
-	std::vector<wxString> List() const;
-	std::size_t              Count() const;
 
 	// Does the registered server session (m_currentServer) currently have
 	// any client attached? Server-shutdown logic uses this to decline
@@ -553,12 +546,6 @@ private:
 	// first successful drain. Attribute removed accordingly; callers
 	// must not assume the call never returns.
 	void Die(const wxString& why);
-
-	// --- storage (thread-owned; only ThreadBody touches after Start) ---
-	// Until queue-based Add lands, m_sessions is written by Create/Destroy
-	// under m_mutex — classic Phase 2 layout.
-	mutable std::mutex                                           m_mutex;
-	std::unordered_map<wxString, std::unique_ptr<ibSession>>     m_sessions;
 
 	// --- queue-based ownership (populated by ProcessAdd) ---
 	// shared_ptr — ticket co-owns. When ProcessRemove erases the map

@@ -79,19 +79,14 @@ public:
 	operator ibQualifierString() const { return m_qString; }
 };
 
-class BACKEND_API ibValueTypeDescription : public ibValue {
-private:
-	ibValueMethodHelper* m_methodHelper;
+void ibValueTypeDescription_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+
+class BACKEND_API ibValueTypeDescription : public ibValueStaticMembers<&ibValueTypeDescription_BindNames> {
 public:
 	ibTypeDescription m_typeDesc;
 public:
 
-	// these methods need to be overridden in your aggregate objects:
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
-		return m_methodHelper;
-	}
-	virtual void PrepareNames() const;
+	// DoGetPMethods (protected) + Shared<&ibValueTypeDescription_BindNames> come from the base.
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 public:

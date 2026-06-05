@@ -7,29 +7,28 @@
 //////////////////////////////////////////////////////////////////////
 
 
-ibValue::ibValueMethodHelper ibValueFile::m_methodHelper;
-
-void ibValueFile::PrepareNames() const
+void ibValueFile_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	m_methodHelper.AppendConstructor(1, wxT("File(path : string)"));
+	helper.AppendConstructor(1, wxT("File(path : string)"));
 
-	m_methodHelper.AppendProp(wxT("BaseName"));
-	m_methodHelper.AppendProp(wxT("Extension"));
-	m_methodHelper.AppendProp(wxT("FullName"));
-	m_methodHelper.AppendProp(wxT("Name"));
-	m_methodHelper.AppendProp(wxT("Path"));
+	helper.AppendProp(wxT("BaseName"));
+	helper.AppendProp(wxT("Extension"));
+	helper.AppendProp(wxT("FullName"));
+	helper.AppendProp(wxT("Name"));
+	helper.AppendProp(wxT("Path"));
 
-	m_methodHelper.AppendFunc(wxT("Exist"), wxT("Exist()"));
-	//m_methodHelper.AppendMethod(wxT("GetHidden"), wxT("GetHidden()"));
-	m_methodHelper.AppendFunc(wxT("GetModificationTime"), wxT("GetModificationTime()"));
-	m_methodHelper.AppendFunc(wxT("GetReadOnly"), wxT("GetReadOnly()"));
-	m_methodHelper.AppendFunc(wxT("IsDirectory"), wxT("IsDirectory()"));
-	m_methodHelper.AppendFunc(wxT("IsFile"), wxT("IsFile()"));
-	//m_methodHelper.AppendMethod("SetHidden", "SetHidden(bool)");
-	//m_methodHelper.AppendMethod("SetModificationTime", "SetModificationTime(date)");
-	//m_methodHelper.AppendMethod("SetReadOnly", "SetReadOnly(bool)");
-	m_methodHelper.AppendFunc(wxT("Size"), wxT("Size()"));
+	helper.AppendFunc(wxT("Exist"), wxT("Exist()"));
+	//helper.AppendMethod(wxT("GetHidden"), wxT("GetHidden()"));
+	helper.AppendFunc(wxT("GetModificationTime"), wxT("GetModificationTime()"));
+	helper.AppendFunc(wxT("GetReadOnly"), wxT("GetReadOnly()"));
+	helper.AppendFunc(wxT("IsDirectory"), wxT("IsDirectory()"));
+	helper.AppendFunc(wxT("IsFile"), wxT("IsFile()"));
+	//helper.AppendMethod("SetHidden", "SetHidden(bool)");
+	//helper.AppendMethod("SetModificationTime", "SetModificationTime(date)");
+	//helper.AppendMethod("SetReadOnly", "SetReadOnly(bool)");
+	helper.AppendFunc(wxT("Size"), wxT("Size()"));
 }
+
 
 #include "backend/appData.h"
 
@@ -97,7 +96,7 @@ bool ibValueFile::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	return false;
 }
 
-ibValueFile::ibValueFile() : ibValue(ibValueTypes::TYPE_VALUE)
+ibValueFile::ibValueFile() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE)
 {
 }
 

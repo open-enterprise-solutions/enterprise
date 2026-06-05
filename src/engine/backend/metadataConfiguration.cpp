@@ -113,7 +113,7 @@ m_commonObject(nullptr), m_configOpened(false)
 		}
 	}
 
-	m_commonObject->PrepareNames();
+	m_commonObject->InvalidateNames();
 	// m_commonObject is an ibValuePtr — the assignment above already holds the ref.
 
 	{
@@ -130,7 +130,7 @@ m_commonObject(nullptr), m_configOpened(false)
 			commonLanguage->SetName(wxT("English"));
 		}
 
-		commonLanguage->PrepareNames();
+		commonLanguage->InvalidateNames();
 		// owned by m_commonObject's child vector (AddChild inside Init) — no IncrRef
 
 		m_commonObject->SetLanguage(commonLanguage->GetMetaID());
@@ -316,7 +316,7 @@ ibValueMetaObjectConfiguration* ibMetaDataConfigurationFile::BuildFreshRoot()
 			wxASSERT_MSG(false, "BuildFreshRoot: OnLoadMetaObject() == false");
 		}
 	}
-	root->PrepareNames();
+	root->InvalidateNames();
 	return root;
 }
 

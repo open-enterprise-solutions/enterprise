@@ -256,7 +256,7 @@ Drill into these only when the task touches the specific area.
 Before declaring "done", verify your generated configuration:
 
 ```
-1. classChecker.exe <config-path>
+1. Load the config (designer.exe / enterprise.exe)
      — metadata consistency: bindings resolve, no orphan refs,
        attribute types valid, predefined-attribute subclass lists
        are additive.
@@ -316,6 +316,6 @@ When the architect reviews your generated PR, they look for:
 
 > **You are extending a low-code ERP through metadata and script.
 > Generate metadata XML/JSON and OES scripts in CES (preferred) or
-> VES; never touch C++; verify with classChecker + codeRunner;
+> VES; never touch C++; verify with codeRunner;
 > surface anything that needs C++ change or schema migration to the
 > architect.**

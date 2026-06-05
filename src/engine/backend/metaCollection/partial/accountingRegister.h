@@ -219,10 +219,10 @@ private:
 class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 	public:
 	ibValueRecordSetObjectAccountingRegister(const ibValueMetaObjectAccountingRegister* metaObject, const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) :
-		ibValueRecordSetObject(metaObject, uniqueKey) {}
+		ibValueRecordSetObject(metaObject, uniqueKey) { m_members.Bind(this, &ibValueRecordSetObjectAccountingRegister::FillMembers); }
 
 	ibValueRecordSetObjectAccountingRegister(const ibValueRecordSetObjectAccountingRegister& source) :
-		ibValueRecordSetObject(source) {}
+		ibValueRecordSetObject(source) { m_members.Bind(this, &ibValueRecordSetObjectAccountingRegister::FillMembers); }
 
 	// WriteRecordSet / DeleteRecordSet inherited from
 	// ibValueRecordSetObject (Phase B template-method).
@@ -230,7 +230,7 @@ class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 	virtual bool SaveVirtualTable();
 	virtual bool DeleteVirtualTable();
 
-	virtual void PrepareNames() const;
+	void FillMembers(ibMemberTable& helper) const;
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);

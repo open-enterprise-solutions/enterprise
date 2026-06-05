@@ -1,9 +1,9 @@
-﻿#ifndef _SELECTOR_H__
+#ifndef _SELECTOR_H__
 #define _SELECTOR_H__
 
 #include "backend/metaCollection/partial/commonObject.h"
 
-class BACKEND_API ibValueSelectorDataObject : public ibValue {
+class BACKEND_API ibValueSelectorDataObject : public ibValueDynamicMembers {
 	public:
 
 	ibValueSelectorDataObject();
@@ -30,9 +30,6 @@ protected:
 
 	virtual void Reset() = 0;
 	virtual bool Read() = 0;
-
-protected:
-	ibValueMethodHelper* m_methodHelper;
 };
 
 class BACKEND_API ibValueSelectorRecordDataObject : public ibValueSelectorDataObject,
@@ -49,11 +46,7 @@ class BACKEND_API ibValueSelectorRecordDataObject : public ibValueSelectorDataOb
 		return m_metaObject;
 	}
 
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
-		return m_methodHelper;
-	}
-	virtual void PrepareNames() const;                         // this method is automatically called to initialize attribute and method names.
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);//method call
 
 	//attribute
@@ -86,11 +79,7 @@ class BACKEND_API ibValueSelectorRegisterDataObject :
 		return m_metaObject;
 	}
 
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names
-		//PrepareNames(); 
-		return m_methodHelper;
-	}
-	virtual void PrepareNames() const;                         // this method is automatically called to initialize attribute and method names.
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);//method call
 
 	//attribute

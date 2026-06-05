@@ -3,16 +3,13 @@
 
 #include "value.h"
 
-class BACKEND_API ibValueEnumerationWrapper : public ibValue {
-	public:
-	ibValueMethodHelper* m_methodHelper;
+class BACKEND_API ibValueEnumerationWrapper : public ibValueDynamicMembers {
 public:
 
 	ibValueEnumerationWrapper(bool createInstance = false);
 	virtual ~ibValueEnumerationWrapper();
 
-	virtual ibValueMethodHelper* GetPMethods() const { return m_methodHelper; }
-	virtual void PrepareNames() const;
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	virtual ibValue* GetEnumVariantValue() const = 0;
 	virtual wxString GetClassName() const = 0;
@@ -228,9 +225,11 @@ public:
 		return nullptr;
 	}
 
-	//initialize enumeration 
+	//initialize enumeration
 	void InitializeEnumeration() {
-		this->PrepareNames();
+		// Names surface lazily from FillMembers (Build on first GetPMethods);
+		// m_listEnumStr is already populated by AddEnumeration above.
+		this->m_members.Invalidate();
 	}
 
 	void InitializeEnumeration(const valT& v) {

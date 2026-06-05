@@ -12,13 +12,15 @@ class ibValueManagerDataObjectCatalog :
 
 	ibValueReferenceDataObject* EmptyRef() const;
 
-	ibValueManagerDataObjectCatalog(const ibValueMetaObjectCatalog* metaObject = nullptr) : m_metaObject(metaObject) {}
+	ibValueManagerDataObjectCatalog(const ibValueMetaObjectCatalog* metaObject = nullptr) : m_metaObject(metaObject) {
+		m_members.Bind(this, &ibValueManagerDataObjectCatalog::FillManagerMethods);
+	}
 	virtual ~ibValueManagerDataObjectCatalog() {}
 
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const;
 	virtual const ibValueMetaObjectCatalog* GetMetaObject() const { return m_metaObject; }
 
-	virtual void PrepareNames() const; // this method is automatically called to initialize attribute and method names.
+	void FillManagerMethods(ibMemberTable& helper) const;  // composes onto FillMembers + FillPredefined
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);//method call
 
 protected:

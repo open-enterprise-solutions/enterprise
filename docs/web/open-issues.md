@@ -104,7 +104,7 @@ Phase 2 plan and the 2026-04-20 refinement diff.
 - `ibApplicationData::StartSession` → `registry.EnableSysSessionOwnership(true)` + `Start()` + `Connect(req)` + `Attach()` (+ `ibSession::OnShowAuthenticate` virtual override on `ibGUISession` for the GUI dialog fallback, re-Attach with dialog-filled creds).
 - `CloseSession` → drop `m_mainTicket` (dtor submits Remove@Urgent), drop `m_mainThreadScope`. `Disconnect` ends with `registry.Stop()`.
 - `ibApplicationDataSessionUpdater` class + all `Job_*` / `VerifySessionUpdater` / `ClearLostSessionUpdater` impl **deleted** from `appData.h` and `appDataQuery.cpp` (~370 lines removed).
-- Full solution builds (backend / frontend / wfrontend / enterprise / designer / launcher / daemon / codeRunner / classChecker / simplePlugin, Debug|Win32).
+- Full solution builds (backend / frontend / wfrontend / enterprise / designer / launcher / daemon / codeRunner / simplePlugin, Debug|Win32).
 - Still TODO after cutover: `DesignerExclusivePolicy` (port `VerifySessionUpdater` veto semantics into an `ibSessionPolicy`); per-driver `noWait` plumbing for PG/MySQL/MSSQL; extract `m_userInfo / m_sessionGuid / m_sessionRawPassword` out of singleton into `ibSession` proper (closes `project_web_session_bug.md`).
 
 **Landed 2026-04-20 — Ticket + Connect(req) + state machine:**

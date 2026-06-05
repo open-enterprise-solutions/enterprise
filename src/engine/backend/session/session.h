@@ -170,7 +170,7 @@ public:
 
 	// Main UI frame this session owns. Read-only contract for backend
 	// code (CurrentFrame() lookups, script-side CreateNewForm, etc.).
-	// Default null — frameless sessions (daemon, codeRunner, classChecker,
+	// Default null — frameless sessions (daemon, codeRunner,
 	// future compute server, WebServer technical row) have no UI and never
 	// override. Sessions that own a frame (ibGUISession with
 	// ibFrontendDocMDIFrame, ibWebClientSession with ibWebFrame) carry
@@ -522,8 +522,7 @@ public:
 	// session is created.
 	//
 	//   Single — the process runs exactly one session for its entire life
-	//            (designer.exe, enterprise.exe, daemon.exe, codeRunner.exe,
-	//            classChecker.exe). Current() returns the lone session
+	//            (designer.exe, enterprise.exe, daemon.exe, codeRunner.exe). Current() returns the lone session
 	//            regardless of the calling thread; bindings are recorded
 	//            for diagnostics but lookup ignores them.
 	//
@@ -579,18 +578,6 @@ public:
 	// Null when no scope is active or when the scoped session is
 	// frameless (web-server, headless, codeRunner).
 	static ibBackendDocFrame* CurrentFrame();
-
-	// Convenience: debug runContext of the currently-scoped session.
-	// On a debug-server worker thread Current() redirects to the
-	// session parked at a breakpoint; on a script worker thread it's
-	// the session that hit the breakpoint and is now in DoDebugLoop.
-	// Either way this returns that session's per-session debug
-	// runContext (set by DoDebugLoop). Used by debug command handlers
-	// (Eval, ExpandExpression, EvalToolTip, EvalAutocomplete) instead
-	// of the legacy process-level ibDebuggerServer::m_runContext slot.
-	// Null when no session is parked or when the session has no debug
-	// state attached.
-	static ibRunContext* CurrentRunContext();
 
 	// Convenience: whether the currently-scoped session has been
 	// force-exited. Returns false when no session is bound. Drop-in

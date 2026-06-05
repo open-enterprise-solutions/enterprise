@@ -190,49 +190,45 @@ enum recordSet
 //*                              Support methods                             *
 //****************************************************************************
 
-void ibValueRecordSetObjectInformationRegister::PrepareNames() const
+void ibValueRecordSetObjectInformationRegister::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
-
-	m_methodHelper->AppendFunc(wxT("Add"), wxT("Add()"));
-	m_methodHelper->AppendFunc(wxT("Count"), wxT("Count()"));
-	m_methodHelper->AppendFunc(wxT("Clear"), wxT("Clear()"));
-	m_methodHelper->AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
-	m_methodHelper->AppendFunc(wxT("Load"), 1, wxT("Load(value : any table)"));
-	m_methodHelper->AppendFunc(wxT("Unload"), wxT("Unload()"));
-	m_methodHelper->AppendFunc(wxT("Modified"), wxT("Modified()"));
-	m_methodHelper->AppendFunc(wxT("Read"), wxT("Read()"));
-	m_methodHelper->AppendFunc(wxT("Selected"), wxT("Selected()"));
-	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
+	helper.AppendFunc(wxT("Add"), wxT("Add()"));
+	helper.AppendFunc(wxT("Count"), wxT("Count()"));
+	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
+	helper.AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
+	helper.AppendFunc(wxT("Load"), 1, wxT("Load(value : any table)"));
+	helper.AppendFunc(wxT("Unload"), wxT("Unload()"));
+	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
+	helper.AppendFunc(wxT("Read"), wxT("Read()"));
+	helper.AppendFunc(wxT("Selected"), wxT("Selected()"));
+	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
 
 	// ThisObject + Filter are bound in InitializeObject (context / export) —
 	// no manual prop AppendProp on the record-set helper.
 }
 
-void ibValueRecordManagerObjectInformationRegister::PrepareNames() const
+void ibValueRecordManagerObjectInformationRegister::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
+	helper.AppendFunc(wxT("Copy"), wxT("Copy()"));
+	helper.AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
+	helper.AppendFunc(wxT("Delete"), wxT("Delete()"));
+	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
+	helper.AppendFunc(wxT("Read"), wxT("Read()"));
+	helper.AppendFunc(wxT("Selected"), wxT("Selected()"));
+	helper.AppendFunc(wxT("GetFormRecord"), 3, wxT("GetFormRecord(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
+	helper.AppendFunc(wxT("GetMetadata"), wxT("getMetadata()"));
 
-	m_methodHelper->AppendFunc(wxT("Copy"), wxT("Copy()"));
-	m_methodHelper->AppendFunc(wxT("Write"), 1, wxT("Write(replace : boolean)"));
-	m_methodHelper->AppendFunc(wxT("Delete"), wxT("Delete()"));
-	m_methodHelper->AppendFunc(wxT("Modified"), wxT("Modified()"));
-	m_methodHelper->AppendFunc(wxT("Read"), wxT("Read()"));
-	m_methodHelper->AppendFunc(wxT("Selected"), wxT("Selected()"));
-	m_methodHelper->AppendFunc(wxT("GetFormRecord"), 3, wxT("GetFormRecord(name : string, owner : any, id : guid)"));
-	m_methodHelper->AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	m_methodHelper->AppendFunc(wxT("GetMetadata"), wxT("getMetadata()"));
-
-	//set object name 
+	//set object name
 	wxString objectName;
 
-	//fill custom object 
+	//fill custom object
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (object->IsDeleted())
 			continue;
 		if (!object->GetObjectNameAsString(objectName))
 			continue;
-		m_methodHelper->AppendProp(
+		helper.AppendProp(
 			objectName,
 			object->GetMetaID()
 		);
@@ -242,14 +238,14 @@ void ibValueRecordManagerObjectInformationRegister::PrepareNames() const
 bool ibValueRecordManagerObjectInformationRegister::SetPropVal(const long lPropNum, const ibValue& varPropVal)       //setting attribute
 {
 	return SetValueByMetaID(
-		m_methodHelper->GetPropData(lPropNum), varPropVal
+		m_members.GetPropData(lPropNum), varPropVal
 	);
 }
 
 bool ibValueRecordManagerObjectInformationRegister::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	return GetValueByMetaID(
-		m_methodHelper->GetPropData(lPropNum), pvarPropVal
+		m_members.GetPropData(lPropNum), pvarPropVal
 	);
 }
 

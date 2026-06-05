@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : ibValueRecordDataObjectRef — instance Read / Save /
 //	              Delete on the runtime-data side. Routes through
@@ -515,7 +515,7 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	const int driver = db->GetDatabaseLayerType();
 	if (driver != DATABASELAYER_FIREBIRD && driver != DATABASELAYER_POSTGRESQL)
 		ibBackendCoreException::Error(_("GenerateNextIdentifier requires Firebird or PostgreSQL"
-			" — atomic UPDATE...RETURNING is not portable to other backends."));
+			" - atomic UPDATE...RETURNING is not portable to other backends."));
 
 	// Period bucket — parking value for now; per-type periodicity (catalog
 	// vs document) is a future feature.

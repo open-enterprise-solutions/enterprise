@@ -126,7 +126,7 @@ int ibAppEnterprise::DoOnRun()
 	}
 	else {
 		wxMessageBox(
-			_("Cannot start enterprise.exe — no infobase specified.\n\n"
+			_("Cannot start enterprise.exe - no infobase specified.\n\n"
 			  "Provide one of:\n"
 			  "  --file=<path>          (Firebird embedded / SQLite file)\n"
 			  "  --server=<host> --db=<name> [--dbport=…] [--user=…] [--password=…]\n\n"
@@ -149,7 +149,7 @@ int ibAppEnterprise::DoOnRun()
 				if (!combined.IsEmpty()) combined += wxT("\n--\n");
 				combined += chain[i];
 			}
-			wxMessageBox(combined, _("OES Enterprise — startup error"),
+			wxMessageBox(combined, _("OES Enterprise - startup error"),
 				wxOK | wxICON_ERROR);
 		}
 		return 1;

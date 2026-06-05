@@ -16,16 +16,15 @@
 //*                          ValueControl		                          *
 //*************************************************************************
 
-ibValueFrame::ibValueFrame() : ibValue(ibValueTypes::TYPE_VALUE),
-m_methodHelper(new ibValueMethodHelper()),
+ibValueFrame::ibValueFrame() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
 m_valEventContainer(ibValue::CreateAndPrepareValueRef<ibValueEventContainer>(this)),
 m_controlId(0), m_controlGuid(ibGuid::newGuid())
 {
+	m_members.Bind(this, &ibValueFrame::FillMembers);
 }
 
 ibValueFrame::~ibValueFrame()
 {
-	wxDELETE(m_methodHelper);
 }
 
 wxString ibValueFrame::GetClassName() const
@@ -353,9 +352,8 @@ wxObject* ibValueFrame::GetWxObject() const
 //*                              Support methods                             *
 //****************************************************************************
 
-void ibValueFrame::PrepareNames() const
+void ibValueFrame::FillMembers(ibMemberTable& helper) const
 {
-	m_methodHelper->ClearHelper();
 	{
 		wxString propertyName;
 		for (unsigned int idx = 0; idx < ibPropertyObject::GetPropertyCount(); idx++) {
@@ -363,9 +361,9 @@ void ibValueFrame::PrepareNames() const
 			if (property == nullptr)
 				continue;
 			property->GetName(propertyName);
-			m_methodHelper->AppendProp(propertyName, idx, eProperty);
+			helper.AppendProp(propertyName, idx, eProperty);
 		}
-		//if we have sizerItem then call him  
+		//if we have sizerItem then call him
 		ibValueFrame* sizeritem = GetParent();
 		if (sizeritem != nullptr && sizeritem->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 			for (unsigned int idx = 0; idx < sizeritem->GetPropertyCount(); idx++) {
@@ -373,21 +371,19 @@ void ibValueFrame::PrepareNames() const
 				if (property == nullptr)
 					continue;
 				property->GetName(propertyName);
-				m_methodHelper->AppendProp(propertyName, idx, eSizerItem);
+				helper.AppendProp(propertyName, idx, eSizerItem);
 			}
 		}
 	}
 
-	m_methodHelper->AppendProp(wxT("Events"), true, false, 0, eEvent);
-
-	if (m_valEventContainer != nullptr) m_valEventContainer->PrepareNames();
+	helper.AppendProp(wxT("Events"), true, false, 0, eEvent);
 }
 
 bool ibValueFrame::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eProperty) {
-		unsigned int idx = m_methodHelper->GetPropData(lPropNum);
+		unsigned int idx = m_members.GetPropData(lPropNum);
 		ibProperty* property = GetPropertyByIndex(idx);
 		if (property != nullptr)
 			property->SetDataValue(varPropVal);
@@ -448,13 +444,13 @@ bool ibValueFrame::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 
 bool ibValueFrame::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_methodHelper->GetPropAlias(lPropNum);
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eSizerItem) {
 		//if we have sizerItem then call him savepropery 
 		ibValueFrame* sizerItem = GetParent();
 		if (sizerItem != nullptr &&
 			sizerItem->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-			unsigned int idx = m_methodHelper->GetPropData(lPropNum);
+			unsigned int idx = m_members.GetPropData(lPropNum);
 			ibProperty* property = sizerItem->GetPropertyByIndex(idx);
 			if (property != nullptr)
 				return property->GetDataValue(pvarPropVal);
@@ -466,7 +462,7 @@ bool ibValueFrame::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 		return true;
 	}
 	else {
-		unsigned int idx = m_methodHelper->GetPropData(lPropNum);
+		unsigned int idx = m_members.GetPropData(lPropNum);
 		ibProperty* property = GetPropertyByIndex(idx);
 		if (property != nullptr)
 			return property->GetDataValue(pvarPropVal);

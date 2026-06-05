@@ -50,7 +50,6 @@ enterprise/
         ├── launcher/        # launcher.exe  (connection chooser)
         ├── daemon/          # daemon.exe    (background service)
         ├── codeRunner/      # codeRunner.exe
-        ├── classChecker/    # classChecker.exe
         └── simplePlugin/    # simplePlugin.dll (example)
 ```
 

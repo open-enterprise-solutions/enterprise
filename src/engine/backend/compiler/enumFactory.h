@@ -4,25 +4,17 @@
 #include "value.h"
 
 //realization factory pattern 
-class ibValueEnumFactory : public ibValue {
+class ibValueEnumFactory : public ibValueDynamicMembers {
 	public:
 
 	ibValueEnumFactory();
 	virtual ~ibValueEnumFactory();
 
-	// these methods need to be overridden in your aggregate objects:
-	virtual ibValueMethodHelper* GetPMethods() const { // get a reference to the class helper for parsing attribute and method names	
-		//PrepareNames(); 
-		return m_methodHelper; 
-	}
+	// Surface = the registered enum classes; rebuilt from the global ctor registry
+	// each Build(). Bound in the ctor. (Helper + DoGetPMethods come from the base.)
+	void FillMembers(ibMemberTable& helper) const;
 
-	virtual void PrepareNames() const; // this method is automatically called to initialize attribute and method names.
-
-	// this method is automatically called to initialize attribute and method names.
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
-
-protected:
-	ibValueMethodHelper *m_methodHelper;
 };
 
 #endif 

@@ -89,8 +89,8 @@ has no equivalent.
 
 ## What works
 
-- **backend.dll is truly UI-free.** `daemon.exe`, `codeRunner.exe`,
-  `classChecker.exe` link backend without dragging in wx. The
+- **backend.dll is truly UI-free.** `daemon.exe` and `codeRunner.exe`
+  link backend without dragging in wx. The
   pattern has proven itself over years of desktop operation.
 - **Swapping frontend is cheap.** `wfrontend.dll` replacing
   `frontend.dll` was possible largely because this interface was

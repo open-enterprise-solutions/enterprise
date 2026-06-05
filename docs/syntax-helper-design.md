@@ -43,7 +43,7 @@ stays out of this PR.
 | 5 | Per-configuration corpus tier (`appData->GetConfigCacheDir()/help/<locale>/`) for metadata-driven entries (Catalog/Document attributes & methods) | Needs configuration-save hook + per-config rebuild trigger; out of scope until first user complains the platform corpus misses their custom Catalog attribute |
 | 6 | Web HTTP endpoints `/api/help/{tree,entry/<id>,resolve,search}` on wenterprise-server | wfrontend has no consumer yet (no React shell touching it); deferred until web client UI work picks up the corpus |
 | 7 | Help editor: `reviewed: true` flip workflow + Designer-side review gate | Same blocker as 1.4 — needs the editor tool first |
-| 2 | Skeleton generator + LLM fill + validation gate | Current corpus is hand-authored; tooling lands when content scales past manual editing. Original design proposed Python; user prefers C++ (e.g. `classChecker --dump-help` + gtest validation) — no Python in repo |
+| 2 | Skeleton generator + LLM fill + validation gate | Current corpus is hand-authored; tooling lands when content scales past manual editing. Original design proposed Python; user prefers C++ (e.g. `a help-registry dump CLI` + gtest validation) — no Python in repo |
 | - | Tests — no `test_help*.cpp` in the port (none in upstream either). Smoke is manual. | gtest fixtures pending; corpus-load unit test plus resolver fixtures would be ~150 lines |
 | - | Content quality — `global_functions.json` is skeleton-only (`reviewed: false`, empty description / parameters / return / example); `keywords.json` + `primitive_types.json` are populated and `reviewed: true` | Phase 2 generator + LLM fill remains the cost driver; current state ships with usable keywords + types and stubs for functions |
 | - | `wxLogMessage` debug noise in `wxZipInputStream` parsing path (left for now to ease zip-format diagnosis); strip after smoke validation stabilises | Diagnostic value during current shake-out |
@@ -623,7 +623,7 @@ Hand-writing ~85 functions + ~200 metadata properties + 58 keywords
 pipeline:
 
 1. **Skeleton generator** — Python `tools/help-skeleton.py` consumes
-   a JSON dump exported by a new in-binary `classChecker --dump-help`
+   a JSON dump exported by a new in-binary `a help-registry dump CLI`
    subcommand. The dump tool walks `s_listKeyWord`,
    `ibValueSystemFunction::PrepareNames()`, and each
    `ibValueMetaObject*` subtype's `PrepareNames()`. JSON-via-CLI keeps
@@ -906,7 +906,7 @@ Ship in independently-mergeable slices. Dependency chain explicit:
    Procedure, three keywords). **Precondition for all other phases.**
 
 2. **Phase 2 — Skeleton generator + validation gate.** Python
-   tooling. `classChecker --dump-help` subcommand emits the registry
+   tooling. `a help-registry dump CLI` subcommand emits the registry
    JSON. `tools/help-skeleton.py` builds bucket skeletons.
    `tools/help-validate.py` runs in CI on every PR touching `data/help/`.
    Validation gate ships BEFORE LLM-filled content so no

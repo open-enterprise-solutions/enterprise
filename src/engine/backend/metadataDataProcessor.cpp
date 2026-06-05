@@ -33,7 +33,7 @@ m_version(version_oes_last)
 		}
 	}
 
-	m_commonObject->PrepareNames();
+	m_commonObject->InvalidateNames();
 	// m_commonObject is an ibValuePtr — the assignment above already holds the ref.
 
 	// Runtime module manager for this external DP, on the prepared root. Built in
@@ -42,7 +42,7 @@ m_version(version_oes_last)
 	// through LoadFromFile (which would otherwise be the only place it's built).
 	// LoadFromFile rebuilds it on the swapped-in root.
 	m_moduleManager = new ibValueModuleRuntimeManagerExternalDataProcessor(this, m_commonObject);
-	m_moduleManager->PrepareNames();
+	m_moduleManager->InvalidateNames();
 
 	m_ownerMeta = this;
 }
@@ -68,7 +68,7 @@ m_version(version_oes_last)
 		}
 	}
 
-	m_commonObject->PrepareNames();
+	m_commonObject->InvalidateNames();
 	// m_commonObject (ibValuePtr) holds the member ref; for the inner case AddChild
 	// added the parent's own ref separately.
 
@@ -242,7 +242,7 @@ ibValueMetaObjectDataProcessor* ibMetaDataDataProcessor::BuildFreshRoot()
 	if (!root->OnLoadMetaObject(this)) {
 		wxASSERT_MSG(false, "BuildFreshRoot: OnLoadMetaObject() == false");
 	}
-	root->PrepareNames();
+	root->InvalidateNames();
 	return root;
 }
 
@@ -308,7 +308,7 @@ bool ibMetaDataDataProcessor::LoadFromFile(const wxString& strFileName)
 	m_commonObject = fresh; // ibValuePtr: release old root (DecrRef -> cascade), adopt fresh
 
 	m_moduleManager = new ibValueModuleRuntimeManagerExternalDataProcessor(this, m_commonObject);
-	m_moduleManager->PrepareNames();
+	m_moduleManager->InvalidateNames();
 
 	return LoadDatabase();
 }
