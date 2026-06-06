@@ -3969,7 +3969,6 @@ void ibDataViewCtrl::Init()
 	m_footerAreaWin = NULL;
 
 	m_colsDirty = false;
-	m_calcScrollPending = false;
 
 	m_allowMultiColumnSort = false;
 
@@ -4461,8 +4460,7 @@ void ibDataViewCtrl::CalcWindowSizes()
 		// Update the last column size to take all the available space. Note that
 		// this must be done after calling Layout() to update m_tableAreaWin size.
 
-		// Scroll-rate rationale (the rate is actually applied later, in
-		// OnInternalIdle, once m_calcScrollPending fires).  AdjustScrollbars()
+		// Scroll-rate rationale.  AdjustScrollbars()
 		// derives the scrollbar range as virtualSize / pixelsPerLine, so
 		// with a 0 rate it emits range == 0 and NO scrollbar appears even when
 		// the virtual width overflows the client.  The x-rate was previously
@@ -4479,12 +4477,18 @@ void ibDataViewCtrl::CalcWindowSizes()
 		// up spuriously — e.g. the small designer tablebox preview where any
 		// content overflows the tiny rows area.  Vertical stays owned by
 		// RecalculateDisplay (non-paged) / the lying paged scrollbar (paged).
+		// Apply synchronously, NOT deferred to idle.  Deferring the scrollbar
+		// geometry to OnInternalIdle crashed / glitched designer column-add and
+		// resize: the deferred AdjustScrollbars ran a tick later, after the
+		// column array / control state had already moved on.  Set ONLY the
+		// x-rate; preserve the current y-rate (see rationale above).
+		int curXUnit = 0, curYUnit = 0;
+		GetScrollPixelsPerUnit(&curXUnit, &curYUnit);
+		const int wantXUnit = FromDIP(10);
+		if (curXUnit != wantXUnit)
+			SetScrollRate(wantXUnit, curYUnit);
 		UpdateColumnSizes();
-		// Defer the scrollbar geometry (scroll rate + AdjustScrollbars) to the
-		// next OnInternalIdle so it runs ONCE after the form-open resize storm
-		// settles, instead of flashing the scrollbar at every intermediate size
-		// while the list form is still opening.  Applied in OnInternalIdle().
-		m_calcScrollPending = true;
+		AdjustScrollbars();
 
 		// We must redraw the headers if their height changed. Normally this
 		// shouldn't happen as the control shouldn't let itself be resized beneath
@@ -5518,24 +5522,6 @@ void ibDataViewCtrl::OnInternalIdle()
 	{
 		RecalculateDisplay();
 		m_dirty = false;
-	}
-
-	// Apply deferred scrollbar geometry from CalcWindowSizes() exactly once,
-	// after the form-open resize storm has settled.  Establish the horizontal
-	// scroll rate (x) while preserving the vertical (y) rate, then run
-	// AdjustScrollbars().  Doing this here, instead of inside CalcWindowSizes()
-	// on every intermediate OnSize, stops the scrollbar from flashing while a
-	// list form is still opening.  Cheap/idempotent if RecalculateDisplay above
-	// already adjusted the scrollbars this pass.
-	if (m_calcScrollPending)
-	{
-		m_calcScrollPending = false;
-		int curXUnit = 0, curYUnit = 0;
-		GetScrollPixelsPerUnit(&curXUnit, &curYUnit);
-		const int wantXUnit = FromDIP(10);
-		if (curXUnit != wantXUnit)
-			SetScrollRate(wantXUnit, curYUnit);
-		AdjustScrollbars();
 	}
 
 	// External seed-chain hook FIRST — runs before PagedBootstrap so
