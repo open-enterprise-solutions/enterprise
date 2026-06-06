@@ -14,10 +14,10 @@
 
 class ibMetaView;
 
-#define mainFrame            		 (ibFrontendDocMDIFrame::GetFrame())
-#define mainFrameCreate(frame)       (ibFrontendDocMDIFrame::InitFrame(new frame))
-#define mainFrameShow()				 (ibFrontendDocMDIFrame::ShowFrame())
-#define mainFrameDestroy()  		 (ibFrontendDocMDIFrame::DestroyFrame())
+#define mainFrame            		 (ibFrontendMainFrame::GetFrame())
+#define mainFrameCreate(frame)       (ibFrontendMainFrame::InitFrame(new frame))
+#define mainFrameShow()				 (ibFrontendMainFrame::ShowFrame())
+#define mainFrameDestroy()  		 (ibFrontendMainFrame::DestroyFrame())
 
 #include "objinspect/objinspect.h"
 
@@ -34,7 +34,7 @@ class ibMetaView;
 #define wxAUI_DEFAULT_COLOUR wxColour(41, 57, 85) 
 #define wxAUI_WHITE_COLOUR wxColour(255, 255, 255) 
 
-class FRONTEND_API ibFrontendDocMDIFrame :
+class FRONTEND_API ibFrontendMainFrame :
 	public ibBackendDocFrame, public wxAuiMDIParentFrame,
 	public ibDocParentFrameAnyBase {
 public:
@@ -137,7 +137,7 @@ public:
 	void UpdateManager() {
 		if (!m_callUpdateFrameManager) {
 			m_callUpdateFrameManager = true;
-			CallAfter(&ibFrontendDocMDIFrame::UpdateFrameManager);
+			CallAfter(&ibFrontendMainFrame::UpdateFrameManager);
 		}
 	}
 
@@ -172,7 +172,7 @@ protected:
 	// (Designer / Launcher / WebServer). Called from Show().
 	bool EnsureRuntime();
 
-	ibFrontendDocMDIFrame(const wxString& title,
+	ibFrontendMainFrame(const wxString& title,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_FRAME_STYLE,
@@ -186,7 +186,7 @@ protected:
 
 public:
 
-	virtual ~ibFrontendDocMDIFrame();
+	virtual ~ibFrontendMainFrame();
 
 	// Returns ibFrontendWindow* (typedef → wxWindow on desktop,
 	// ibWebWindow on web) so the signature reads the same across
@@ -202,10 +202,10 @@ public:
 		return nullptr;
 	}
 
-	static ibFrontendDocMDIFrame* GetFrame() { return s_instance; }
+	static ibFrontendMainFrame* GetFrame() { return s_instance; }
 
 	// Force the static appData instance to Init()
-	static void InitFrame(ibFrontendDocMDIFrame* mf);
+	static void InitFrame(ibFrontendMainFrame* mf);
 	static bool ShowFrame();
 
 	static void DestroyFrame();
@@ -243,7 +243,7 @@ protected:
 		void Refresh() { Repaint(); }
 	};
 
-	static ibFrontendDocMDIFrame* s_instance;
+	static ibFrontendMainFrame* s_instance;
 
 	// Bound at Initialize(). Drives AllowRun/AllowClose and any
 	// session-aware UI actions. Raw pointer — session outlives frame
@@ -286,7 +286,7 @@ public:
 		const wxString& name = wxStatusBarNameStr)
 		: wxStatusBar(parent, id, style, name)
 	{
-		// Light dusty status bar — sits between the powder-blue MDI
+		// Light dusty status bar — sits between the powder-blue
 		// workspace and the cream content panes; deep-blue text reads
 		// cleanly. Matches the interior-design palette (see
 		// luna_dockart.cpp).

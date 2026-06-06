@@ -3,8 +3,8 @@
 
 // ibGUISession — desktop GUI session base. Owns the main frame instance
 // for the duration of the session. Concrete derived classes live in the
-// exe'шки that carry their specific frame class (ibFrontendDocMDIFrameEnterprise
-// in enterprise.exe, ibFrontendDocMDIFrameDesigner in designer.exe) and
+// exe'шки that carry their specific frame class (ibFrontendMainFrameEnterprise
+// in enterprise.exe, ibFrontendMainFrameDesigner in designer.exe) and
 // override OnCreateSession() to `new` that concrete frame + call AttachFrame.
 //
 // ibGUISession itself is concrete-able but useless without an override —
@@ -16,7 +16,7 @@
 #include "frontend/frontend.h"
 #include "backend/session/session.h"
 
-class ibFrontendDocMDIFrame;
+class ibFrontendMainFrame;
 
 class FRONTEND_API ibGUISession : public ibSession {
 public:
@@ -34,13 +34,13 @@ public:
 	// Typed accessor — returns the concrete frontend frame, not the
 	// backend abstraction. Non-const for wx widget mutators (menus,
 	// toolbars, Show). Still nullptr when unattached.
-	ibFrontendDocMDIFrame* GetFrontendFrame() const { return m_frame; }
+	ibFrontendMainFrame* GetFrontendFrame() const { return m_frame; }
 
-	// Derived OnCreateSession calls this right after `new ibFrontendDocMDIFrameXxx`
+	// Derived OnCreateSession calls this right after `new ibFrontendMainFrameXxx`
 	// to take ownership + wire the back-link on the frame + register the
-	// singleton (ibFrontendDocMDIFrame::InitFrame) so legacy callers of
+	// singleton (ibFrontendMainFrame::InitFrame) so legacy callers of
 	// backend_mainFrame / GetFrame() keep resolving the same instance.
-	void AttachFrame(ibFrontendDocMDIFrame* frame);
+	void AttachFrame(ibFrontendMainFrame* frame);
 
 	// Main-thread teardown — called from ibApplicationData::CloseSession.
 	// Clears the back-link first so any closure-handlers that fire during
@@ -55,11 +55,11 @@ public:
 	// frameless sessions just return true (no-op success).
 	bool ShowFrame() override;
 
-	// Reverse of AttachFrame: called from ~ibFrontendDocMDIFrame when wx
+	// Reverse of AttachFrame: called from ~ibFrontendMainFrame when wx
 	// destroys the frame before the session (graceful wxApp exit — top-level
 	// frames die before OnExit runs). Without this, OnDestroySession would
 	// dereference a freed wxFrame.
-	void DetachFrame(ibFrontendDocMDIFrame* frame) { if (m_frame == frame) m_frame = nullptr; }
+	void DetachFrame(ibFrontendMainFrame* frame) { if (m_frame == frame) m_frame = nullptr; }
 
 	// Shared interactive-auth implementation for designer + enterprise:
 	// shows the standalone ibDialogAuthentication (via ibPromptAuthenticationDialog),
@@ -78,7 +78,7 @@ protected:
 	// but doesn't delete (wx widgets must be destroyed on the main thread,
 	// and ~ibGUISession can run on the registry worker thread via the last
 	// shared_ptr drop in force-exit paths).
-	ibFrontendDocMDIFrame* m_frame = nullptr;
+	ibFrontendMainFrame* m_frame = nullptr;
 };
 
 #endif

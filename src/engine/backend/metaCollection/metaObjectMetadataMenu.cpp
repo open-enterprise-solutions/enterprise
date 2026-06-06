@@ -20,5 +20,5 @@ void ibValueMetaObjectConfiguration::ProcessCommand(unsigned int id)
 	wxASSERT(metaTree);
 
 	if (id == ID_METATREE_OPEN_INIT_MODULE)
-		metaTree->OpenFormMDI(m_propertyModuleConfiguration->GetMetaObject());
+		metaTree->OpenObjectForm(m_propertyModuleConfiguration->GetMetaObject());
 }

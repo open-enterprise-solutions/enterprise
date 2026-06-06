@@ -17,7 +17,7 @@
 //     │
 //   wfrontendShutdown()                         // at process exit
 //
-// Real per-session state (appData-scoped module manager, MDI frame,
+// Real per-session state (appData-scoped module manager, main frame,
 // ibProcUnit, etc.) will be plugged in in follow-up steps. For now
 // the session id is just a random token and the manager keeps
 // bookkeeping in memory.
@@ -127,7 +127,7 @@ WFRONTEND_API std::string wfrontendMenuJSON();
 //                          the oes_session cookie.
 //   Login(id, user, pw)  — authenticate the given session. On success
 //                          the session spins up its ibWebApplication
-//                          (MDI frame + CreateMainModule) and is ready
+//                          (main frame + CreateMainModule) and is ready
 //                          to serve form requests.
 //   SessionExists/Destroy/Count — bookkeeping.
 WFRONTEND_API std::string wfrontendCreateSession();

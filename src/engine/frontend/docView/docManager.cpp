@@ -26,9 +26,9 @@
 
 #ifndef OES_USE_WEB
 // Desktop-only: Find/Replace dialog parents the wxFindReplaceDialog against
-// the AUI MDI frame singleton. mainFrame.h pulls in ibFrontendDocMDIFrame
+// the main frame singleton. mainFrame.h pulls in ibFrontendMainFrame
 // + AUI + objectInspector — none of which exist on wfrontend.dll. Also the
-// home of ibFrontendDocMDIFrame::CreateChildFrame used below to wire
+// home of ibFrontendMainFrame::CreateChildFrame used below to wire
 // m_viewFrame on every view going through the template path.
 #include "frontend/mainFrame/mainFrame.h"
 #else
@@ -171,7 +171,7 @@ ibView *ibDocTemplate::CreateView(ibDocument *doc, long flags)
 	long style = wxDEFAULT_FRAME_STYLE;
 	if (createModal) style |= wxCREATE_SDI_FRAME;
 
-	ibFrontendDocMDIFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, style);
+	ibFrontendMainFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, style);
 #endif
 
 	if (!view->OnCreate(doc, flags))
@@ -473,17 +473,17 @@ ibDocTemplate* ibDocManager::FindTemplateByDocClassInfo(const wxClassInfo* class
 }
 
 // ----------------------------------------------------------------------------
-// OpenForm / OpenFormMDI — metadata-driven open entry points. Cross-build:
+// OpenForm / OpenObjectForm — metadata-driven open entry points. Cross-build:
 // desktop calls them from the tree/menu handlers; web doesn't call them
 // (sessions own their tabs through ibWebFrame::m_tabs, not the manager).
 // ----------------------------------------------------------------------------
 
-ibMetaDocument* ibDocManager::OpenFormMDI(ibValueMetaObject* metaObject, long flags)
+ibMetaDocument* ibDocManager::OpenObjectForm(ibValueMetaObject* metaObject, long flags)
 {
 	return docManager->OpenForm(metaObject, nullptr, flags);
 }
 
-ibMetaDocument* ibDocManager::OpenFormMDI(ibValueMetaObject* metaObject,
+ibMetaDocument* ibDocManager::OpenObjectForm(ibValueMetaObject* metaObject,
                                           ibMetaDocument* docParent, long flags)
 {
 	return docManager->OpenForm(metaObject, docParent, flags);
@@ -554,7 +554,7 @@ void ibMetaView::OnActivateView(bool activate, ibView* activeView, ibView* deact
 }
 
 // ibView::Activate lives here (not in docView.cpp) because it reaches the
-// desktop main frame (mainFrame / ibFrontendDocMDIFrame), whose headers are
+// desktop main frame (mainFrame / ibFrontendMainFrame), whose headers are
 // only pulled in on this side — same split as the rest of the metadata-aware
 // wiring. Lifted up from ibMetaView so the form view (a plain ibView since the
 // doc/view fork) also clears its activation on the main frame; otherwise the
@@ -567,7 +567,7 @@ void ibView::Activate(bool activate)
 	ibDocManager* const mgr = m_viewDocument != nullptr ?
 		m_viewDocument->GetDocumentManager() : ibDocManager::GetDocumentManager();
 
-	if (mgr != nullptr && ibFrontendDocMDIFrame::GetFrame()) {
+	if (mgr != nullptr && ibFrontendMainFrame::GetFrame()) {
 		mainFrame->ActivateView(this, activate);
 		OnActivateView(activate, this, mgr->GetCurrentView());
 		mgr->ActivateView(this, activate);

@@ -84,12 +84,12 @@ void ibMetaDataTree::Modify(bool modify)
 	}
 }
 
-bool ibMetaDataTree::OpenFormMDI(ibValueMetaObject* obj)
+bool ibMetaDataTree::OpenObjectForm(ibValueMetaObject* obj)
 {
 	ibMetaDocument* foundedDoc = GetDocument(obj);
 	//not found in the list of existing ones
 	if (foundedDoc == nullptr) {
-		foundedDoc = docManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? ibDOC_READONLY : ibDOC_NEW);
+		foundedDoc = docManager->OpenObjectForm(obj, m_docParent, m_bReadOnly ? ibDOC_READONLY : ibDOC_NEW);
 		//So there was no suitable template!
 		if (foundedDoc != nullptr)
 			return true;
@@ -103,13 +103,13 @@ bool ibMetaDataTree::OpenFormMDI(ibValueMetaObject* obj)
 	return false;
 }
 
-bool ibMetaDataTree::OpenFormMDI(ibValueMetaObject* obj, ibBackendMetaDocument*& doc)
+bool ibMetaDataTree::OpenObjectForm(ibValueMetaObject* obj, ibBackendMetaDocument*& doc)
 {
 	ibMetaDocument* foundedDoc = GetDocument(obj);
 
 	//not found in the list of existing ones
 	if (foundedDoc == nullptr) {
-		foundedDoc = docManager->OpenFormMDI(obj, m_docParent, m_bReadOnly ? ibDOC_READONLY : ibDOC_NEW);
+		foundedDoc = docManager->OpenObjectForm(obj, m_docParent, m_bReadOnly ? ibDOC_READONLY : ibDOC_NEW);
 		//So there was no suitable template!
 		if (foundedDoc != nullptr) {
 			doc = foundedDoc;
@@ -126,7 +126,7 @@ bool ibMetaDataTree::OpenFormMDI(ibValueMetaObject* obj, ibBackendMetaDocument*&
 	return false;
 }
 
-bool ibMetaDataTree::CloseFormMDI(ibValueMetaObject* obj)
+bool ibMetaDataTree::CloseObjectForm(ibValueMetaObject* obj)
 {
 	ibMetaDocument* foundedDoc = GetDocument(obj);
 
@@ -179,7 +179,7 @@ void ibMetaDataTree::EditModule(const ibGuid& moduleName, int lineNumber, bool s
 
 	//not found in the list of existing ones
 	if (foundedDoc == nullptr)
-		foundedDoc = docManager->OpenFormMDI(metaObject, m_docParent, m_bReadOnly ? ibDOC_READONLY : ibDOC_NEW);
+		foundedDoc = docManager->OpenObjectForm(metaObject, m_docParent, m_bReadOnly ? ibDOC_READONLY : ibDOC_NEW);
 
 	ibValueModuleDocument* moduleDoc = static_cast<ibValueModuleDocument*>(foundedDoc);
 	if (moduleDoc != nullptr) moduleDoc->SetCurrentLine(lineNumber, setRunLine);
@@ -195,7 +195,7 @@ void ibMetadataTree::ActivateItem(const wxTreeItemId& item)
 	if (currObject == nullptr)
 		return;
 
-	OpenFormMDI(currObject);
+	OpenObjectForm(currObject);
 }
 
 ibValueMetaObject* ibMetadataTree::NewItem(const ibClassID& clsid, ibValueMetaObject* parent, bool runObject)
@@ -218,7 +218,7 @@ ibValueMetaObject* ibMetadataTree::CreateItem(bool showValue)
 	if (createdObject != nullptr) {
 
 		ibPropertyObject* oldSelection = objectInspector->GetSelectedObject();
-		if (showValue) { OpenFormMDI(createdObject); }
+		if (showValue) { OpenObjectForm(createdObject); }
 		UpdateToolbar(createdObject,
 			FillItem(createdObject, item, oldSelection == objectInspector->GetSelectedObject(), false));
 	}
@@ -301,7 +301,7 @@ void ibMetadataTree::EditItem()
 	if (!m_currObject)
 		return;
 
-	OpenFormMDI(m_currObject);
+	OpenObjectForm(m_currObject);
 }
 
 void ibMetadataTree::RemoveItem()

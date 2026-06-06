@@ -90,14 +90,14 @@ bool ibAppEnterprise::OnCmdLineParsed(wxCmdLineParser& parser)
 // here (not in a dedicated header) because only this exe ever needs it.
 // OnCreateSession runs on the main thread after the registry has Added
 // the session; it instantiates the exe-specific frame class — the only
-// place where `ibFrontendDocMDIFrameEnterprise` is visible, since the
+// place where `ibFrontendMainFrameEnterprise` is visible, since the
 // concrete frame type is not exported to frontend.dll.
 class ibEnterpriseSession : public ibGUISession {
 public:
 	using ibGUISession::ibGUISession;
 
 	bool OnCreateSession() override {
-		AttachFrame(new ibFrontendDocMDIFrameEnterprise);
+		AttachFrame(new ibFrontendMainFrameEnterprise);
 		return m_frame != nullptr;
 	}
 };

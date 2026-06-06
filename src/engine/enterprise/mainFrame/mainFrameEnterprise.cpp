@@ -8,11 +8,11 @@
 
 ///////////////////////////////////////////////////////////////////
 
-ibFrontendDocMDIFrameEnterprise* ibFrontendDocMDIFrameEnterprise::GetFrame() {
-	ibFrontendDocMDIFrame* instance = ibFrontendDocMDIFrame::GetFrame();
+ibFrontendMainFrameEnterprise* ibFrontendMainFrameEnterprise::GetFrame() {
+	ibFrontendMainFrame* instance = ibFrontendMainFrame::GetFrame();
 	if (instance != nullptr) {
-		ibFrontendDocMDIFrameEnterprise* enterprise_instance =
-			dynamic_cast<ibFrontendDocMDIFrameEnterprise*>(instance);
+		ibFrontendMainFrameEnterprise* enterprise_instance =
+			dynamic_cast<ibFrontendMainFrameEnterprise*>(instance);
 		wxASSERT(enterprise_instance);
 		return enterprise_instance;
 	}
@@ -21,16 +21,16 @@ ibFrontendDocMDIFrameEnterprise* ibFrontendDocMDIFrameEnterprise::GetFrame() {
 
 ///////////////////////////////////////////////////////////////////
 
-ibFrontendDocMDIFrameEnterprise::ibFrontendDocMDIFrameEnterprise(const wxString& title,
+ibFrontendMainFrameEnterprise::ibFrontendMainFrameEnterprise(const wxString& title,
 	const wxPoint& pos,
 	const wxSize& size) :
-	ibFrontendDocMDIFrame(title, pos, size),
+	ibFrontendMainFrame(title, pos, size),
 	m_outputWindow(new ibOutputWindow(this, wxID_ANY))
 {
 	m_docManager = new ibDocManagerEnterprise;
 }
 
-ibFrontendDocMDIFrameEnterprise::~ibFrontendDocMDIFrameEnterprise()
+ibFrontendMainFrameEnterprise::~ibFrontendMainFrameEnterprise()
 {
 	wxDELETE(m_docManager);
 }
@@ -41,7 +41,7 @@ ibFrontendDocMDIFrameEnterprise::~ibFrontendDocMDIFrameEnterprise()
 #include "backend/appData.h"
 #include "backend/session/sessionRegistry.h"
 
-void ibFrontendDocMDIFrameEnterprise::BackendError(const wxString& strFileName, const wxString& strDocPath, const long currLine, const wxString& strErrorMessage) const
+void ibFrontendMainFrameEnterprise::BackendError(const wxString& strFileName, const wxString& strDocPath, const long currLine, const wxString& strErrorMessage) const
 {
 	//open error dialog
 	std::shared_ptr<ibDialogError> errDlg(new ibDialogError(mainFrame, wxID_ANY));
@@ -78,14 +78,14 @@ void ibFrontendDocMDIFrameEnterprise::BackendError(const wxString& strFileName, 
 	}
 }
 
-void ibFrontendDocMDIFrameEnterprise::CreateGUI()
+void ibFrontendMainFrameEnterprise::CreateGUI()
 {
 	CreateWideGui();
 }
 
-bool ibFrontendDocMDIFrameEnterprise::Show(bool show)
+bool ibFrontendMainFrameEnterprise::Show(bool show)
 {
-	bool ret = ibFrontendDocMDIFrame::Show(show);
+	bool ret = ibFrontendMainFrame::Show(show);
 	if (ret) {
 		if (!outputWindow->IsEmpty()) {
 			outputWindow->SetFocus();
@@ -102,7 +102,7 @@ bool ibFrontendDocMDIFrameEnterprise::Show(bool show)
 #include "backend/session/session.h"
 #include "backend/moduleManager/moduleManager.h"
 
-bool ibFrontendDocMDIFrameEnterprise::AllowRun() const
+bool ibFrontendMainFrameEnterprise::AllowRun() const
 {
 	// StartMainModule fires BeforeStart / OnStart on the session's
 	// root. BeforeStart veto returns false → frame show blocked.
@@ -113,7 +113,7 @@ bool ibFrontendDocMDIFrameEnterprise::AllowRun() const
 	return false;
 }
 
-bool ibFrontendDocMDIFrameEnterprise::AllowClose() const
+bool ibFrontendMainFrameEnterprise::AllowClose() const
 {
 	// ExitMainModule fires BeforeExit / OnExit. BeforeExit veto blocks
 	// close (user sees "cancelled by script" banner / modal).

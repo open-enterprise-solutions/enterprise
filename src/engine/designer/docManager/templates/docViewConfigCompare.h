@@ -1,7 +1,7 @@
 #ifndef _DOCVIEW_CONFIG_COMPARE_H__
 #define _DOCVIEW_CONFIG_COMPARE_H__
 
-// Configuration Compare/Merge — doc/view tab inside the designer MDI
+// Configuration Compare/Merge — doc/view tab inside the designer shell
 // shell. Replaces the historical ibDialogConfigCompare (modal wxDialog)
 // so multiple comparisons can stay open at once (e.g. compare-with-DB
 // AND compare-with-file side by side). Document holds the walker

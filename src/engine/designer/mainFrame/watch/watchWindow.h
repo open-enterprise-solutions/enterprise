@@ -84,7 +84,7 @@ public:
 
 private:
 
-	friend class ibFrontendDocMDIFrameDesigner;
+	friend class ibFrontendMainFrameDesigner;
 
 	/**
 	 * Creates a blank entry at the end of the list (for easily adding new items)

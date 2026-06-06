@@ -110,7 +110,7 @@ body{margin:0;font:14px/1.4 system-ui,sans-serif;display:flex;
 .tab.active{background:#fff;color:#000;border-color:#bbb;top:0;
   box-shadow:0 -1px 0 #fff inset;z-index:1}
 /* Icon sits on the LEFT of the title (horizontal flow) — matches the
-   way Chrome / VS Code / desktop wxAUI render their MDI tabs. No icon
+   way Chrome / VS Code / desktop wxAUI render their tabs. No icon
    → the row collapses to text only without a layout shift. */
 .tab-body{display:flex;flex-direction:row;align-items:center;
   gap:6px;min-width:0;cursor:pointer}
@@ -120,7 +120,7 @@ body{margin:0;font:14px/1.4 system-ui,sans-serif;display:flex;
   max-width:200px;cursor:pointer;line-height:1.2}
 /* Active tab title: bold so the current pane is obvious even at a
    glance. Modified gains a leading '*' on top of that (same sentinel
-   desktop MDI uses to flag unsaved state). */
+   desktop uses to flag unsaved state). */
 .tab.active .tab-title{font-weight:700}
 .tab.modified .tab-title{font-weight:700}
 .tab.modified .tab-title::before{content:'* '}
@@ -1291,7 +1291,7 @@ async function refreshTabs(){
   (info.tabs||[]).filter(t=>{ const k=(t.index|0); if(seen.has(k)) return false; seen.add(k); return true; }).forEach((t,i)=>{
     const el=document.createElement('div');
     el.className='tab'+(i===info.activeTab?' active':'')+(t.modified?' modified':'');
-    // Column-wrap: icon on top, title below. Matches MDI convention
+    // Column-wrap: icon on top, title below. Matches desktop tab convention
     // (wxAuiMDIChildFrame paints icon then caption). No icon → column
     // collapses to text-only, no layout jump.
     const body=document.createElement('span');

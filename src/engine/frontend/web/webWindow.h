@@ -98,7 +98,7 @@ public:
 	// Doc/view shims — fork of wxWidgets' doc/view subsystem calls these
 	// on the "associated window" (ibDocChildFrameAnyBase::m_win) which on
 	// web is an ibWebWindow*. No-op stubs so ibDocChildFrameAny<T,P>
-	// template instantiates cleanly with <ibWebMDIChildFrame, ibWebWindow>.
+	// template instantiates cleanly with <ibWebChildFrame, ibWebWindow>.
 	// Behavioral wiring (e.g. defer-mark for tab close on Destroy) is
 	// step 3 of the fork plan (see ibDocView.h header notes).
 	virtual void Raise() {}

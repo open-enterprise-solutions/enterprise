@@ -1,7 +1,7 @@
 #ifndef _DOCVIEW_AUDIT_LOG_H__
 #define _DOCVIEW_AUDIT_LOG_H__
 
-// Registration journal — doc/view tab inside the MDI shell.
+// Registration journal — doc/view tab inside the shell.
 // Replaces the historical ibDialogAuditLog (modal wxDialog) so the
 // admin can keep the journal open alongside form editors. Data side
 // (ibLoggerReader) lives on the document; UI side (filter strip +

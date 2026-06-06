@@ -24,7 +24,7 @@ void ibValueMetaObjectChartOfAccounts::ProcessCommand(unsigned int id)
 {
 	ibBackendMetadataTree* metaTree = m_metaData->GetMetaTree();
 	wxASSERT(metaTree);
-	if (id == ID_METATREE_OPEN_MODULE) metaTree->OpenFormMDI(m_propertyObjectModule->GetMetaObject());
-	else if (id == ID_METATREE_OPEN_MANAGER) metaTree->OpenFormMDI(m_propertyManagerModule->GetMetaObject());
+	if (id == ID_METATREE_OPEN_MODULE) metaTree->OpenObjectForm(m_propertyObjectModule->GetMetaObject());
+	else if (id == ID_METATREE_OPEN_MANAGER) metaTree->OpenObjectForm(m_propertyManagerModule->GetMetaObject());
 	else if (id == ID_METATREE_EDIT_PREDEFINED) metaTree->EditPredefinedValues(this);
 }

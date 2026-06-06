@@ -21,5 +21,5 @@ void ibValueMetaObjectConstant::ProcessCommand(unsigned int id)
 	wxASSERT(metaTree);
 
 	if (id == ID_METATREE_OPEN_CONSTANT_MANAGER)
-		metaTree->OpenFormMDI(m_propertyModule->GetMetaObject());
+		metaTree->OpenObjectForm(m_propertyModule->GetMetaObject());
 }

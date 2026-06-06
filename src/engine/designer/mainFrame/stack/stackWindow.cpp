@@ -178,7 +178,7 @@ void ibStackWindow::ClearAndCreate()
 
 ibStackWindow* ibStackWindow::GetStackWindow()
 {
-	if (ibFrontendDocMDIFrame::GetFrame())
+	if (ibFrontendMainFrame::GetFrame())
 		return mainFrame->GetStackWindow();
 	return nullptr; 
 }

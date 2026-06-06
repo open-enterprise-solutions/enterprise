@@ -893,7 +893,7 @@ wxEND_EVENT_TABLE()
 
 //////////////////////////////////////////////////////////////////////////////
 
-void ibFrontendDocMDIFrameEnterprise::CreateSubSystem()
+void ibFrontendMainFrameEnterprise::CreateSubSystem()
 {
 	bool hasInterface = false;
 

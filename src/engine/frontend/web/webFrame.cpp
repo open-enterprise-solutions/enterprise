@@ -189,7 +189,7 @@ ibBackendValueForm* ibWebFrame::CreateNewForm(
 {
 	std::cerr << "[tabs] CreateNewForm creator=" << (void*)creator
 		<< " tabs_before=" << m_tabs.size() << std::endl;
-	// Low-level factory, mirror of desktop ibFrontendDocMDIFrame::
+	// Low-level factory, mirror of desktop ibFrontendMainFrame::
 	// CreateNewForm: just allocates the ibValueForm ref, no LoadFormData
 	// / BuildForm. ibValueMetaObjectFormBase::CreateAndBuildForm calls
 	// ibBackendValueForm::CreateNewForm which lands here — if we
@@ -234,7 +234,7 @@ ibFrontendWindow* ibWebFrame::CreateChildFrame(
 	long           /*style*/)
 {
 	// Web-side static factory — mirror of the desktop
-	// ibFrontendDocMDIFrame::CreateChildFrame. Works with any ibDocument
+	// ibFrontendMainFrame::CreateChildFrame. Works with any ibDocument
 	// subclass (form, tabular, text, report, audit log …), not just
 	// ibFormVisualDocument. Title comes from the doc's GetTitle(); any
 	// per-type-specific wiring (e.g. ibValueForm tracking for

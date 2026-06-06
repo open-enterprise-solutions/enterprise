@@ -15,5 +15,5 @@ void ibValueMetaObjectRole::ProcessCommand(unsigned int id)
 	wxASSERT(metaTree);
 
 	if (id == ID_METATREE_OPEN_ROLE)
-		metaTree->OpenFormMDI(this);
+		metaTree->OpenObjectForm(this);
 }

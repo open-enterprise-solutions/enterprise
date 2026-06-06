@@ -49,7 +49,7 @@ void ibPGHyperLinkProperty::OnSetValue()
 					ibMetaData* metaData = metaObject->GetMetaData();
 					if (metaData != nullptr) {
 						ibBackendMetadataTree* metaTree = metaData->GetMetaTree();
-						if (metaTree != nullptr) metaTree->OpenFormMDI(metaObject);
+						if (metaTree != nullptr) metaTree->OpenObjectForm(metaObject);
 					}
 				}
 			);

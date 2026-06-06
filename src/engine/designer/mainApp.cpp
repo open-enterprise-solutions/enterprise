@@ -86,7 +86,7 @@ bool ibAppDesigner::OnCmdLineParsed(wxCmdLineParser& parser)
 //////////////////////////////////////////////////////////////////////////////////
 
 // ibDesignerSession — concrete GUI session for designer.exe. OnCreateSession
-// instantiates the exe-specific frame class (ibFrontendDocMDIFrameDesigner),
+// instantiates the exe-specific frame class (ibFrontendMainFrameDesigner),
 // which is not exported to frontend.dll. Declared here so designer.exe owns
 // its own concrete session type.
 class ibDesignerSession : public ibGUISession {
@@ -94,7 +94,7 @@ public:
 	using ibGUISession::ibGUISession;
 
 	bool OnCreateSession() override {
-		AttachFrame(new ibFrontendDocMDIFrameDesigner);
+		AttachFrame(new ibFrontendMainFrameDesigner);
 		return m_frame != nullptr;
 	}
 };

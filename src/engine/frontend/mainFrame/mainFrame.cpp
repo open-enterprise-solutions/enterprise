@@ -22,9 +22,9 @@
 //*                                 mainFrame                                       *
 //***********************************************************************************
 
-ibFrontendDocMDIFrame* ibFrontendDocMDIFrame::s_instance = nullptr;
+ibFrontendMainFrame* ibFrontendMainFrame::s_instance = nullptr;
 
-void ibFrontendDocMDIFrame::InitFrame(ibFrontendDocMDIFrame* frame)
+void ibFrontendMainFrame::InitFrame(ibFrontendMainFrame* frame)
 {
 	if (s_instance == nullptr && frame != nullptr) {
 		s_instance = frame;
@@ -32,7 +32,7 @@ void ibFrontendDocMDIFrame::InitFrame(ibFrontendDocMDIFrame* frame)
 	}
 }
 
-bool ibFrontendDocMDIFrame::ShowFrame()
+bool ibFrontendMainFrame::ShowFrame()
 {
 	if (s_instance != nullptr && !s_instance->IsShown() && !ibSession::IsCurrentForceExit()) {
 
@@ -54,7 +54,7 @@ bool ibFrontendDocMDIFrame::ShowFrame()
 	return false;
 }
 
-void ibFrontendDocMDIFrame::DestroyFrame()
+void ibFrontendMainFrame::DestroyFrame()
 {
 	if (s_instance != nullptr) {
 		s_instance->Destroy();
@@ -65,7 +65,7 @@ void ibFrontendDocMDIFrame::DestroyFrame()
 //*                                 Constructor                                     *
 //***********************************************************************************
 
-ibFrontendDocMDIFrame::ibFrontendDocMDIFrame(const wxString& title,
+ibFrontendMainFrame::ibFrontendMainFrame(const wxString& title,
 	const wxPoint& pos,
 	const wxSize& size,
 	long style,
@@ -78,7 +78,7 @@ ibFrontendDocMDIFrame::ibFrontendDocMDIFrame(const wxString& title,
 
 #include "backend/compiler/value.h"
 
-bool ibFrontendDocMDIFrame::Create(const wxString& title,
+bool ibFrontendMainFrame::Create(const wxString& title,
 	const wxPoint& pos,
 	const wxSize& size,
 	long style,
@@ -89,8 +89,8 @@ bool ibFrontendDocMDIFrame::Create(const wxString& title,
 
 	m_docManager = nullptr;
 
-	this->Bind(wxEVT_MENU, &ibFrontendDocMDIFrame::OnExit, this, wxID_EXIT);
-	this->Bind(wxEVT_CLOSE_WINDOW, &ibFrontendDocMDIFrame::OnCloseWindow, this);
+	this->Bind(wxEVT_MENU, &ibFrontendMainFrame::OnExit, this, wxID_EXIT);
+	this->Bind(wxEVT_CLOSE_WINDOW, &ibFrontendMainFrame::OnCloseWindow, this);
 
 	this->SetArtProvider(new wxAuiLunaTabArt());
 
@@ -112,7 +112,7 @@ bool ibFrontendDocMDIFrame::Create(const wxString& title,
 	return true;
 }
 
-ibFrontendWindow* ibFrontendDocMDIFrame::CreateChildFrame(ibView* view, const wxPoint& pos, const wxSize& size, long style)
+ibFrontendWindow* ibFrontendMainFrame::CreateChildFrame(ibView* view, const wxPoint& pos, const wxSize& size, long style)
 {
 	// create a child valueForm of appropriate class for the current mode.
 	// Parameter and back-ref type relaxed from ibMetaView*/ibMetaDocument*
@@ -153,7 +153,7 @@ ibFrontendWindow* ibFrontendDocMDIFrame::CreateChildFrame(ibView* view, const wx
 	return subframe;
 }
 
-void ibFrontendDocMDIFrame::RefreshFrame()
+void ibFrontendMainFrame::RefreshFrame()
 {
 	if (m_docManager != nullptr) {
 		for (auto& doc : m_docManager->GetDocumentsVector())
@@ -163,12 +163,12 @@ void ibFrontendDocMDIFrame::RefreshFrame()
 	Refresh();
 }
 
-void ibFrontendDocMDIFrame::RaiseFrame()
+void ibFrontendMainFrame::RaiseFrame()
 {
-	if (!m_callRaiseFrame && ibFrontendDocMDIFrame::IsFocusable()) {
+	if (!m_callRaiseFrame && ibFrontendMainFrame::IsFocusable()) {
 		CallAfter([&]() {
 			if (!ibSession::IsCurrentForceExit())
-				ibFrontendDocMDIFrame::Raise();
+				ibFrontendMainFrame::Raise();
 			m_callRaiseFrame = false;
 			}
 		);
@@ -177,7 +177,7 @@ void ibFrontendDocMDIFrame::RaiseFrame()
 }
 
 #if wxUSE_MENUS
-void ibFrontendDocMDIFrame::SetMenuBar(wxMenuBar* pMenuBar)
+void ibFrontendMainFrame::SetMenuBar(wxMenuBar* pMenuBar)
 {
 	if (m_pMyMenuBar == nullptr) {
 
@@ -192,7 +192,7 @@ void ibFrontendDocMDIFrame::SetMenuBar(wxMenuBar* pMenuBar)
 }
 #endif // wxUSE_MENUS
 
-wxAuiMDIClientWindow* ibFrontendDocMDIFrame::OnCreateClient()
+wxAuiMDIClientWindow* ibFrontendMainFrame::OnCreateClient()
 {
 	class wxAuiMDIClientWindowImpl : public wxAuiMDIClientWindow {
 	public:
@@ -204,7 +204,7 @@ wxAuiMDIClientWindow* ibFrontendDocMDIFrame::OnCreateClient()
 			SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_APPWORKSPACE));
 			SetBackgroundStyle(wxBG_STYLE_SYSTEM);
 #else
-			// Powder-blue MDI workspace — interior-design dominant
+			// Powder-blue workspace — interior-design dominant
 			// chrome tone (the "walls" of the application). Forms /
 			// docs sit on this as a calm cool backdrop. The historical
 			// dark-navy AppWorkspace would otherwise leak through, so
@@ -245,7 +245,7 @@ wxAuiMDIClientWindow* ibFrontendDocMDIFrame::OnCreateClient()
 }
 
 // bring window to front
-void ibFrontendDocMDIFrame::Raise()
+void ibFrontendMainFrame::Raise()
 {
 #if __WXMSW__
 	// Simulate a key press
@@ -256,7 +256,7 @@ void ibFrontendDocMDIFrame::Raise()
 	wxAuiMDIParentFrame::Raise();
 }
 
-bool ibFrontendDocMDIFrame::Destroy()
+bool ibFrontendMainFrame::Destroy()
 {
 	wxAuiMDIClientWindow* client_window = GetClientWindow();
 	wxCHECK_MSG(client_window, false, wxS("Missing MDI Client Window"));
@@ -279,7 +279,7 @@ bool ibFrontendDocMDIFrame::Destroy()
 		wxAuiMDIParentFrame::Destroy();
 }
 
-ibFrontendDocMDIFrame::~ibFrontendDocMDIFrame()
+ibFrontendMainFrame::~ibFrontendMainFrame()
 {
 	if (s_instance == this) s_instance = nullptr;
 
@@ -291,7 +291,7 @@ ibFrontendDocMDIFrame::~ibFrontendDocMDIFrame()
 	m_mgr.UnInit();
 }
 
-void ibFrontendDocMDIFrame::UpdateFrameManager()
+void ibFrontendMainFrame::UpdateFrameManager()
 {
 	unsigned int view_count = 0;
 
@@ -320,12 +320,12 @@ void ibFrontendDocMDIFrame::UpdateFrameManager()
 //*                                    System                                    *
 //********************************************************************************
 
-void ibFrontendDocMDIFrame::OnExit(wxCommandEvent& WXUNUSED(event))
+void ibFrontendMainFrame::OnExit(wxCommandEvent& WXUNUSED(event))
 {
 	this->Close();
 }
 
-void ibFrontendDocMDIFrame::OnCloseWindow(wxCloseEvent& event)
+void ibFrontendMainFrame::OnCloseWindow(wxCloseEvent& event)
 {
 	bool allowClose = event.CanVeto() ? AllowClose() : true;
 	// The user decided not to close finally, abort.

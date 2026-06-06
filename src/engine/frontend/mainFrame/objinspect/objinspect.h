@@ -304,7 +304,7 @@ private:
 		}
 	}
 
-	friend class ibFrontendDocMDIFrame;
+	friend class ibFrontendMainFrame;
 
 	wxPropertyGridManager* CreatePropertyGridManager(wxWindow* parent, wxWindowID id) const;
 

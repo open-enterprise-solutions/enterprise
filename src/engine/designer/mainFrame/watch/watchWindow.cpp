@@ -45,7 +45,7 @@ ibWatchWindow::ibWatchWindow(wxWindow* parent, wxWindowID winid)
 
 ibWatchWindow* ibWatchWindow::GetWatchWindow()
 {
-	if (ibFrontendDocMDIFrameDesigner::GetFrame())
+	if (ibFrontendMainFrameDesigner::GetFrame())
 		return mainFrame->GetWatchWindow();
 	return nullptr;
 }

@@ -5,7 +5,7 @@
 //
 // Owns everything that must be isolated between concurrent web users:
 // the module manager's main-module instance, the ibProcUnit bytecode
-// interpreter, the logical MDI frame holding "open" documents, and any
+// interpreter, the logical main frame holding "open" documents, and any
 // session-scoped variables. The metadata itself (compiled modules,
 // form descriptors, catalog schemas, ...) lives on the singleton
 // activeMetaData and is shared across sessions.
@@ -41,7 +41,7 @@ public:
 	//   Login()   — called after the user authenticates (POST /login or
 	//               auto-login when sys_user is empty). Sets the user
 	//               identity, then spins up the ibWebApplication which
-	//               builds the MDI frame and calls CreateMainModule.
+	//               builds the main frame and calls CreateMainModule.
 	//   OnExit()  — tears the runtime down.
 	bool OnInit();
 	bool Login(const wxString& user, const wxString& password);

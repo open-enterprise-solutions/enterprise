@@ -136,7 +136,7 @@ ibCodeEditor::ibCodeEditor(ibMetaDocument* document, wxWindow* parent, wxWindowI
 		// Walk parent chain firing wxEVT_MENU at every wxWindow until
 		// one handles. wxStyledTextCtrl's PopupMenu does not always
 		// propagate through wxAUI / wxAuiDocMDIFrame parents to the
-		// outermost MDI host where the host Bind() lives.
+		// outermost host where the host Bind() lives.
 		wxCommandEvent up(wxEVT_MENU, wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
 		up.SetEventObject(this);
 		for (wxWindow* p = GetParent(); p != nullptr; p = p->GetParent()) {

@@ -23,7 +23,7 @@ class ibOutputWindow : public wxStyledTextCtrl {
 	/**
 	* Constructor.
 	*/
-	ibOutputWindow(class FRONTEND_API ibFrontendDocMDIFrame* parent, wxWindowID winid);
+	ibOutputWindow(class FRONTEND_API ibFrontendMainFrame* parent, wxWindowID winid);
 
 private:
 
@@ -99,7 +99,7 @@ public:
 
 private:
 
-	friend class ibFrontendDocMDIFrameDesigner;
+	friend class ibFrontendMainFrameDesigner;
 
 	/**
 	 * Outputs text using the passed in text attribute. This method will only

@@ -8,12 +8,12 @@
 
 #include "frontend/frontend.h"
 
-class FRONTEND_API ibAuiMDIChildFrame :
+class FRONTEND_API ibAuiChildFrame :
 	public wxAuiMDIChildFrame {
 public:
 
-	ibAuiMDIChildFrame() : wxAuiMDIChildFrame() {}
-	ibAuiMDIChildFrame(wxAuiMDIParentFrame* parent,
+	ibAuiChildFrame() : wxAuiMDIChildFrame() {}
+	ibAuiChildFrame(wxAuiMDIParentFrame* parent,
 		wxWindowID winid,
 		const wxString& title,
 		const wxPoint& pos = wxDefaultPosition,
@@ -24,7 +24,7 @@ public:
 		wxAuiMDIChildFrame(parent, winid, title, pos, size, style, name) {
 	}
 
-	virtual ~ibAuiMDIChildFrame() {}
+	virtual ~ibAuiChildFrame() {}
 
 	bool Create(wxAuiMDIParentFrame* parent,
 		wxWindowID id,
@@ -148,7 +148,7 @@ public:
 };
 
 class FRONTEND_API ibAuiDocChildFrame :
-	public ibDocChildFrameAny<ibAuiMDIChildFrame, wxAuiMDIParentFrame> {
+	public ibDocChildFrameAny<ibAuiChildFrame, wxAuiMDIParentFrame> {
 public:
 
 	// default ctor, use Create after it

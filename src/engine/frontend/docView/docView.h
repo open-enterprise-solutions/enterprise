@@ -472,7 +472,7 @@ public:
     // with the same m_templates list as plain file templates. Lookups
     // by CLSID iterate m_templates and dynamic_cast.
     //
-    // OpenForm / OpenFormMDI are the entry points for "open this
+    // OpenForm / OpenObjectForm are the entry points for "open this
     // metaobject" — distinct from CreateDocument (file/path-based).
     // ------------------------------------------------------------------
 
@@ -508,9 +508,9 @@ public:
                         wxClassInfo* docClassInfo,
                         wxClassInfo* viewClassInfo);
 
-    static ibMetaDocument* OpenFormMDI(ibValueMetaObject* metaObject,
+    static ibMetaDocument* OpenObjectForm(ibValueMetaObject* metaObject,
                                        long flags = ibDOC_NEW);
-    static ibMetaDocument* OpenFormMDI(ibValueMetaObject* metaObject,
+    static ibMetaDocument* OpenObjectForm(ibValueMetaObject* metaObject,
                                        ibMetaDocument* docParent,
                                        long flags = ibDOC_NEW);
 
@@ -731,7 +731,7 @@ private:
 };
 
 // Default child frame: desktop-only convenience subclass (TBase = wxFrame).
-// Web uses ibDocChildFrameAny<ibWebMDIChildFrame, ibWebWindow> directly.
+// Web uses ibDocChildFrameAny<ibWebChildFrame, ibWebWindow> directly.
 
 #ifndef OES_USE_WEB
 
@@ -784,7 +784,7 @@ private:
 // ibDocParentFrame and related.
 //
 // `ibDocParentFrameAnyBase` mixin is available on BOTH builds — both
-// ibFrontendDocMDIFrame (desktop) and ibWebFrame (web) inherit it to get
+// ibFrontendMainFrame (desktop) and ibWebFrame (web) inherit it to get
 // the `m_docManager` slot plus `TryProcessEvent` event-forwarding helper.
 //
 // `ibDocParentFrameAny<BaseFrame>` template + concrete `ibDocParentFrame`

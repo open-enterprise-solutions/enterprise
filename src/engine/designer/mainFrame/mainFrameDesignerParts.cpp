@@ -8,7 +8,7 @@
 
 #include "frontend/artProvider/artProvider.h"
 
-void ibFrontendDocMDIFrameDesigner::CreateWideGui()
+void ibFrontendMainFrameDesigner::CreateWideGui()
 {
 	m_mainFrameToolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
 	m_mainFrameToolbar->SetToolBitmapSize(wxSize(16, 16));
@@ -73,7 +73,7 @@ void ibFrontendDocMDIFrameDesigner::CreateWideGui()
 #include "frontend/win/ctrls/floatingNotebook.h"
 #include "frontend/win/theme/luna_tabart.h"
 
-void ibFrontendDocMDIFrameDesigner::CreateBottomPane()
+void ibFrontendMainFrameDesigner::CreateBottomPane()
 {
 	if (m_mgr.GetPane(wxAUI_PANE_BOTTOM).IsOk())
 		return;
@@ -108,7 +108,7 @@ void ibFrontendDocMDIFrameDesigner::CreateBottomPane()
 	m_mgr.AddPane(auiNotebook, paneInfo);
 }
 
-void ibFrontendDocMDIFrameDesigner::CreateMetadataPane()
+void ibFrontendMainFrameDesigner::CreateMetadataPane()
 {
 	if (m_mgr.GetPane(wxAUI_PANE_METADATA).IsOk())
 		return;
@@ -126,7 +126,7 @@ void ibFrontendDocMDIFrameDesigner::CreateMetadataPane()
 	m_mgr.AddPane(m_metaWindow, paneInfo);
 }
 
-void ibFrontendDocMDIFrameDesigner::UpdateEditorOptions()
+void ibFrontendMainFrameDesigner::UpdateEditorOptions()
 {
 	for (auto& doc : m_docManager->GetDocumentsVector())
 		doc->UpdateAllViews();
@@ -150,7 +150,7 @@ void ibFrontendDocMDIFrameDesigner::UpdateEditorOptions()
 #include "backend/syntaxHelper/helpResolver.h"
 #include "backend/syntaxHelper/helpEntry.h"
 
-void ibFrontendDocMDIFrameDesigner::EnsureHelpPane()
+void ibFrontendMainFrameDesigner::EnsureHelpPane()
 {
 	if (m_mgr.GetPane(wxAUI_PANE_HELP).IsOk()) return;
 
@@ -176,7 +176,7 @@ void ibFrontendDocMDIFrameDesigner::EnsureHelpPane()
 	// without it, just doesn't remember position across sessions.
 }
 
-void ibFrontendDocMDIFrameDesigner::ToggleHelpPane()
+void ibFrontendMainFrameDesigner::ToggleHelpPane()
 {
 	const bool firstCreate = !m_mgr.GetPane(wxAUI_PANE_HELP).IsOk();
 	EnsureHelpPane();
@@ -189,7 +189,7 @@ void ibFrontendDocMDIFrameDesigner::ToggleHelpPane()
 	m_mgr.Update();
 }
 
-void ibFrontendDocMDIFrameDesigner::OpenHelpForCursor()
+void ibFrontendMainFrameDesigner::OpenHelpForCursor()
 {
 	EnsureHelpPane();
 	wxAuiPaneInfo& pane = m_mgr.GetPane(wxAUI_PANE_HELP);

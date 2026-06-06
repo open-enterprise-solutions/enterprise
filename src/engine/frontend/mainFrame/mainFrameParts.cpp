@@ -6,7 +6,7 @@
 #include "mainFrame.h"
 #include "frontend/mainFrame/objinspect/objinspect.h"
 
-void ibFrontendDocMDIFrame::CreatePropertyPane()
+void ibFrontendMainFrame::CreatePropertyPane()
 {
 	if (m_mgr.GetPane(wxAUI_PANE_PROPERTY).IsOk())
 		return;
@@ -29,14 +29,14 @@ void ibFrontendDocMDIFrame::CreatePropertyPane()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibFrontendDocMDIFrame::IsShownInspector()
+bool ibFrontendMainFrame::IsShownInspector()
 {
 	const wxAuiPaneInfo propertyPane = m_mgr.GetPane(wxAUI_PANE_PROPERTY);
 	if (!propertyPane.IsOk()) return false;
 	return propertyPane.IsShown();
 }
 
-void ibFrontendDocMDIFrame::ShowInspector()
+void ibFrontendMainFrame::ShowInspector()
 {
 	wxAuiPaneInfo& propertyPane = m_mgr.GetPane(wxAUI_PANE_PROPERTY);
 	if (!propertyPane.IsOk())
@@ -53,7 +53,7 @@ void ibFrontendDocMDIFrame::ShowInspector()
 
 #include "frontend/docView/docView.h"
 
-void ibFrontendDocMDIFrame::ActivateView(ibView* view, bool activate) {
+void ibFrontendMainFrame::ActivateView(ibView* view, bool activate) {
 
 	if (m_docToolbar != nullptr) {
 
@@ -124,7 +124,7 @@ void ibFrontendDocMDIFrame::ActivateView(ibView* view, bool activate) {
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/metadataConfiguration.h"
 
-bool ibFrontendDocMDIFrame::Initialize(ibSession* session)
+bool ibFrontendMainFrame::Initialize(ibSession* session)
 {
 	// Bind-only. Runtime start deferred to Show() → EnsureRuntime() so
 	// activeMetaData is guaranteed populated (LoadMetadata runs between
@@ -133,7 +133,7 @@ bool ibFrontendDocMDIFrame::Initialize(ibSession* session)
 	return m_session != nullptr;
 }
 
-bool ibFrontendDocMDIFrame::EnsureRuntime()
+bool ibFrontendMainFrame::EnsureRuntime()
 {
 	if (m_session == nullptr || activeMetaData == nullptr)
 		return false;
@@ -158,7 +158,7 @@ bool ibFrontendDocMDIFrame::EnsureRuntime()
 	return true;
 }
 
-ibMetaData* ibFrontendDocMDIFrame::FindMetadataByPath(const wxString& strFileName) const
+ibMetaData* ibFrontendMainFrame::FindMetadataByPath(const wxString& strFileName) const
 {
 	ibMetaDataDocument* const foundedDoc = dynamic_cast<ibMetaDataDocument*>(docManager->FindDocumentByPath(strFileName));
 	if (foundedDoc != nullptr)
@@ -171,11 +171,11 @@ ibMetaData* ibFrontendDocMDIFrame::FindMetadataByPath(const wxString& strFileNam
 #include "frontend/visualView/visualHostClient.h"
 
 // Form support
-ibBackendValueForm* ibFrontendDocMDIFrame::ActiveWindow() const {
+ibBackendValueForm* ibFrontendMainFrame::ActiveWindow() const {
 
-	if (ibFrontendDocMDIFrame::GetFrame() != nullptr) {
+	if (ibFrontendMainFrame::GetFrame() != nullptr) {
 		ibDocChildFrameAnyBase* activeChild =
-			dynamic_cast<ibDocChildFrameAnyBase*>(ibFrontendDocMDIFrame::GetActiveChild());
+			dynamic_cast<ibDocChildFrameAnyBase*>(ibFrontendMainFrame::GetActiveChild());
 		if (activeChild != nullptr) {
 			ibFormVisualDocument* const ownerFormDoc = dynamic_cast<ibFormVisualDocument*>(activeChild->GetDocument());
 			if (ownerFormDoc != nullptr) {
@@ -187,7 +187,7 @@ ibBackendValueForm* ibFrontendDocMDIFrame::ActiveWindow() const {
 	return nullptr;
 }
 
-ibBackendValueForm* ibFrontendDocMDIFrame::CreateNewForm(const ibValueMetaObjectFormBase* creator, ibBackendControlFrame* backendControl, ibSourceDataObject* srcObject, const ibUniqueKey& formGuid)
+ibBackendValueForm* ibFrontendMainFrame::CreateNewForm(const ibValueMetaObjectFormBase* creator, ibBackendControlFrame* backendControl, ibSourceDataObject* srcObject, const ibUniqueKey& formGuid)
 {
 	ibControlFrame* ownerControl = dynamic_cast<ibControlFrame*>(backendControl);
 	wxASSERT(!(backendControl == nullptr && ownerControl != nullptr));
@@ -197,32 +197,32 @@ ibBackendValueForm* ibFrontendDocMDIFrame::CreateNewForm(const ibValueMetaObject
 	return ibValue::CreateAndPrepareValueRef<ibValueForm>(creator, ownerControl, srcObject, formGuid);
 }
 
-ibUniqueKey ibFrontendDocMDIFrame::CreateFormUniqueKey(const ibBackendControlFrame* ownerControl, const ibSourceDataObject* sourceObject, const ibUniqueKey& formGuid)
+ibUniqueKey ibFrontendMainFrame::CreateFormUniqueKey(const ibBackendControlFrame* ownerControl, const ibSourceDataObject* sourceObject, const ibUniqueKey& formGuid)
 {
 	return ibFormVisualDocument::CreateFormUniqueKey(ownerControl, sourceObject, formGuid);
 }
 
-ibBackendValueForm* ibFrontendDocMDIFrame::FindFormByUniqueKey(const ibBackendControlFrame* ownerControl, const ibSourceDataObject* sourceObject, const ibUniqueKey& formGuid)
+ibBackendValueForm* ibFrontendMainFrame::FindFormByUniqueKey(const ibBackendControlFrame* ownerControl, const ibSourceDataObject* sourceObject, const ibUniqueKey& formGuid)
 {
 	return ibFormVisualDocument::FindFormByUniqueKey(ownerControl, sourceObject, formGuid);
 }
 
-ibBackendValueForm* ibFrontendDocMDIFrame::FindFormByUniqueKey(const ibUniqueKey& guid)
+ibBackendValueForm* ibFrontendMainFrame::FindFormByUniqueKey(const ibUniqueKey& guid)
 {
 	return ibFormVisualDocument::FindFormByUniqueKey(guid);
 }
 
-ibBackendValueForm* ibFrontendDocMDIFrame::FindFormByControlUniqueKey(const ibUniqueKey& guid)
+ibBackendValueForm* ibFrontendMainFrame::FindFormByControlUniqueKey(const ibUniqueKey& guid)
 {
 	return ibFormVisualDocument::FindFormByControlUniqueKey(guid);
 }
 
-ibBackendValueForm* ibFrontendDocMDIFrame::FindFormBySourceUniqueKey(const ibUniqueKey& guid)
+ibBackendValueForm* ibFrontendMainFrame::FindFormBySourceUniqueKey(const ibUniqueKey& guid)
 {
 	return ibFormVisualDocument::FindFormBySourceUniqueKey(guid);
 }
 
-bool ibFrontendDocMDIFrame::UpdateFormUniqueKey(const ibUniqueKeyPair& guid)
+bool ibFrontendMainFrame::UpdateFormUniqueKey(const ibUniqueKeyPair& guid)
 {
 	return ibFormVisualDocument::UpdateFormUniqueKey(guid);
 }
@@ -230,7 +230,7 @@ bool ibFrontendDocMDIFrame::UpdateFormUniqueKey(const ibUniqueKeyPair& guid)
 #include "frontend/docView/templates/docViewSpreadsheet.h"
 
 // Grid support
-bool ibFrontendDocMDIFrame::ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument)
+bool ibFrontendMainFrame::ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument)
 {
 	class ibSpreadsheetMemoryDocument :
 		public ibSpreadsheetFileDocument {
@@ -276,7 +276,7 @@ bool ibFrontendDocMDIFrame::ShowSpreadsheetDocument(const wxString& strTitle, wx
 
 #include "frontend/win/editor/gridEditor/gridPrintout.h"
 
-bool ibFrontendDocMDIFrame::PrintSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, bool showPrintDlg)
+bool ibFrontendMainFrame::PrintSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, bool showPrintDlg)
 {
 	wxScopedPtr<ibGridEditorPrintout> printout(new ibGridEditorPrintout(doc));
 
@@ -291,7 +291,7 @@ bool ibFrontendDocMDIFrame::PrintSpreadsheetDocument(const wxObjectDataPtr<ibBac
 
 #pragma endregion 
 
-ibPropertyObject* ibFrontendDocMDIFrame::GetProperty() const
+ibPropertyObject* ibFrontendMainFrame::GetProperty() const
 {
 	if (m_objectInspector != nullptr)
 		return m_objectInspector->GetSelectedObject();
@@ -299,7 +299,7 @@ ibPropertyObject* ibFrontendDocMDIFrame::GetProperty() const
 	return nullptr;
 }
 
-bool ibFrontendDocMDIFrame::SetProperty(ibPropertyObject* prop)
+bool ibFrontendMainFrame::SetProperty(ibPropertyObject* prop)
 {
 	if (m_objectInspector != nullptr) {
 		m_objectInspector->SelectObject(prop);

@@ -32,7 +32,7 @@ wxEND_EVENT_TABLE()
 #define DEF_LINENUMBER_ID 0
 #define DEF_IMAGE_ID 1
 
-ibOutputWindow::ibOutputWindow(class ibFrontendDocMDIFrame* parent, wxWindowID winid)
+ibOutputWindow::ibOutputWindow(class ibFrontendMainFrame* parent, wxWindowID winid)
 	: wxStyledTextCtrl(parent, winid, wxDefaultPosition, wxDefaultSize)
 {
 	// initialize styles
@@ -64,7 +64,7 @@ ibOutputWindow::ibOutputWindow(class ibFrontendDocMDIFrame* parent, wxWindowID w
 
 ibOutputWindow* ibOutputWindow::GetOutputWindow()
 {
-	if (ibFrontendDocMDIFrameEnterprise::GetFrame())
+	if (ibFrontendMainFrameEnterprise::GetFrame())
 		return mainFrame->GetOutputWindow();
 	return nullptr;
 }

@@ -2,21 +2,21 @@
 #define __WEB_CHILD_FRAME_H__
 
 // Two-layer mirror of mainFrame/mainFrameChild.h's
-// ibAuiMDIChildFrame / ibAuiDocChildFrame:
+// ibAuiChildFrame / ibAuiDocChildFrame:
 //
-//   Desktop: wxAuiMDIChildFrame  -> ibAuiMDIChildFrame
+//   Desktop: wxAuiMDIChildFrame  -> ibAuiChildFrame
 //            ibDocChildFrameAny  -> ibAuiDocChildFrame
 //                                   (holds ibDocument*+ibView* + ibDocManager*)
 //
-//   Web:     ibWebWindow         -> ibWebMDIChildFrame   (a tab node in the
+//   Web:     ibWebWindow         -> ibWebChildFrame   (a tab node in the
 //                                                          session's JSON tree)
-//            ibWebMDIChildFrame  -> ibWebDocChildFrame   (adds doc+view+host
+//            ibWebChildFrame  -> ibWebDocChildFrame   (adds doc+view+host
 //                                                          ownership)
 //
-// ibWebMDIChildFrame exposes the same contract that ibDocChildFrameAny<>
+// ibWebChildFrame exposes the same contract that ibDocChildFrameAny<>
 // template expects from its ChildFrame parameter — default ctor, Create
 // signature, OnActivate stub, Destroy/Raise/Close (added on ibWebWindow).
-// This means `ibDocChildFrameAny<ibWebMDIChildFrame, ibWebWindow>` is now
+// This means `ibDocChildFrameAny<ibWebChildFrame, ibWebWindow>` is now
 // a valid instantiation; the historical "can't reuse template" comment
 // (and the hand-rolled doc/view plumbing below) is the legacy form kept
 // until ibWebDocChildFrame is migrated onto the template.
@@ -36,14 +36,14 @@ class ibVisualHostClient;
 // One "tab" in ibWebFrame's tab strip. Lives as a child ibWebWindow
 // directly under the frame, so the session JSON renders it as a page
 // container holding the form's control subtree.
-class ibWebMDIChildFrame : public ibWebWindow {
+class ibWebChildFrame : public ibWebWindow {
 public:
 	// Default ctor — required for ibDocChildFrameAny<>'s default ctor
 	// path (template inherits ChildFrame and forwards to its default).
-	ibWebMDIChildFrame() = default;
+	ibWebChildFrame() = default;
 
-	ibWebMDIChildFrame(ibWebWindow* parent, const wxString& title);
-	virtual ~ibWebMDIChildFrame() override = default;
+	ibWebChildFrame(ibWebWindow* parent, const wxString& title);
+	virtual ~ibWebChildFrame() override = default;
 
 	virtual wxString GetControlType() const override { return wxT("mdiChild"); }
 
@@ -98,12 +98,12 @@ private:
 // ~ibDocChildFrameAnyBase runs (which would otherwise call
 // m_childView->SetDocChildFrame(nullptr) on a dangling pointer).
 class ibWebDocChildFrame
-	: public ibDocChildFrameAny<ibWebMDIChildFrame, ibWebWindow>
+	: public ibDocChildFrameAny<ibWebChildFrame, ibWebWindow>
 {
 public:
 	ibWebDocChildFrame(ibDocument* doc, ibView* view,
 		ibWebWindow* parent, const wxString& title)
-		: ibDocChildFrameAny<ibWebMDIChildFrame, ibWebWindow>(
+		: ibDocChildFrameAny<ibWebChildFrame, ibWebWindow>(
 			doc, view, parent, wxID_ANY, title)
 	{
 	}

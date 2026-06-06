@@ -47,7 +47,7 @@
 // ottoman). Cool framing + warm content + warm focal point — same idea
 // designers use to give a room both calm and energy.
 //   cream     #FAF7F0  — editor / tree / lists (content surfaces)
-//   powder    #B8C9D4  — MDI workspace + dock + panel frames (walls)
+//   powder    #B8C9D4  — workspace + dock + panel frames (walls)
 //   light     #C8D6DF  — tab strip + status bar (lighter chrome)
 //   inactive  #D8E2EB  — inactive caption bar (palest chrome)
 //   sofa      #5A7B95  — active caption top (saturated dusty blue)

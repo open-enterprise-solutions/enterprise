@@ -14,7 +14,7 @@ class ibStackWindow : public wxPanel {
 	wxListCtrl* m_treeCtrl;
 private:
 	ibStackWindow(wxWindow* parent, int id = wxID_ANY);
-	friend class ibFrontendDocMDIFrameDesigner;
+	friend class ibFrontendMainFrameDesigner;
 public:
 
 	virtual ~ibStackWindow();

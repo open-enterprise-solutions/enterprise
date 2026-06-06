@@ -22,7 +22,7 @@ void ibValueMetaObjectDataProcessor::ProcessCommand(unsigned int id)
 	wxASSERT(metaTree);
 
 	if (id == ID_METATREE_OPEN_MODULE)
-		metaTree->OpenFormMDI(m_propertyObjectModule->GetMetaObject());
+		metaTree->OpenObjectForm(m_propertyObjectModule->GetMetaObject());
 	else if (id == ID_METATREE_OPEN_MANAGER)
-		metaTree->OpenFormMDI(m_propertyManagerModule->GetMetaObject());
+		metaTree->OpenObjectForm(m_propertyManagerModule->GetMetaObject());
 }

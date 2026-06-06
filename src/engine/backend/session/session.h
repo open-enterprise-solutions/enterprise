@@ -173,7 +173,7 @@ public:
 	// Default null — frameless sessions (daemon, codeRunner,
 	// future compute server, WebServer technical row) have no UI and never
 	// override. Sessions that own a frame (ibGUISession with
-	// ibFrontendDocMDIFrame, ibWebClientSession with ibWebFrame) carry
+	// ibFrontendMainFrame, ibWebClientSession with ibWebFrame) carry
 	// their own typed storage and override GetFrame to expose it.
 	virtual ibBackendDocFrame* GetFrame() const { return nullptr; }
 

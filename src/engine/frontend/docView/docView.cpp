@@ -683,7 +683,7 @@ bool ibDocument::RemoveView(ibView *view)
 
 // ibDocument::OnCreate + ibDocument::DoCreateView are defined lower in this file
 // (after the frontend child-frame / visual-host includes at ~line 2426), since the
-// view-creation pipeline needs ibFrontendDocMDIFrame / ibWebFrame / the web visual
+// view-creation pipeline needs ibFrontendMainFrame / ibWebFrame / the web visual
 // host to be complete types.
 
 // Called after a view is added or removed.
@@ -918,7 +918,7 @@ bool ibView::Close(bool deleteWindow)
 }
 
 // ibView::Activate is defined in docManager.cpp — it needs the desktop main
-// frame headers (mainFrame / ibFrontendDocMDIFrame) that live on that side.
+// frame headers (mainFrame / ibFrontendMainFrame) that live on that side.
 
 bool ibView::OnClose(bool WXUNUSED(deleteWindow))
 {
@@ -2166,7 +2166,7 @@ bool ibDocChildFrameAnyBase::CloseView(wxCloseEvent& event)
 // ----------------------------------------------------------------------------
 // ibDocParentFrameAnyBase
 //
-// Mixin used by both desktop (ibFrontendDocMDIFrame) and web (ibWebFrame)
+// Mixin used by both desktop (ibFrontendMainFrame) and web (ibWebFrame)
 // to gain a doc-manager slot + event-forwarding helper. The concrete
 // template `ibDocParentFrameAny<TBase>` is desktop-only and not used by
 // the web frame.
@@ -2493,7 +2493,7 @@ bool ibDocument::OnCreate(const wxString& WXUNUSED(path), long flags)
 	view->SetDocument(this);
 
 	// Shared doc/view pipeline: spawn the child-frame for this view.
-	// Desktop hits ibFrontendDocMDIFrame (ibAuiDocChildFrame inside an
+	// Desktop hits ibFrontendMainFrame (ibAuiDocChildFrame inside an
 	// AUI MDI parent); web hits ibWebFrame (ibWebDocChildFrame parked
 	// in the session's m_tabs). Both sides have matching static factory
 	// signatures so only the class-qualifier differs.
@@ -2513,7 +2513,7 @@ bool ibDocument::OnCreate(const wxString& WXUNUSED(path), long flags)
 	long style = wxDEFAULT_FRAME_STYLE;
 	if (createModal) style = style | wxCREATE_SDI_FRAME;
 
-	ibFrontendDocMDIFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, style);
+	ibFrontendMainFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, style);
 #endif
 
 	if (!view->OnCreate(this, flags))

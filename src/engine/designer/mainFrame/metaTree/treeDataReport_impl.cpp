@@ -26,7 +26,7 @@ void ibDataReportTree::ActivateItem(const wxTreeItemId& item)
 	if (!m_currObject)
 		return;
 
-	OpenFormMDI(m_currObject);
+	OpenObjectForm(m_currObject);
 }
 
 ibValueMetaObject* ibDataReportTree::NewItem(const ibClassID& clsid, ibValueMetaObject* parent, bool rubObject)
@@ -48,7 +48,7 @@ ibValueMetaObject* ibDataReportTree::CreateItem(bool showValue)
 
 		ibPropertyObject* prev_selected = objectInspector->GetSelectedObject();
 
-		if (showValue) { OpenFormMDI(createdObject); }
+		if (showValue) { OpenObjectForm(createdObject); }
 		UpdateToolbar(createdObject, FillItem(createdObject, item,
 			prev_selected == objectInspector->GetSelectedObject(), false));
 		for (auto& doc : docManager->GetDocumentsVector()) {
@@ -116,7 +116,7 @@ void ibDataReportTree::EditItem()
 	if (!m_currObject)
 		return;
 
-	OpenFormMDI(m_currObject);
+	OpenObjectForm(m_currObject);
 }
 
 void ibDataReportTree::RemoveItem()

@@ -51,7 +51,7 @@ void ibObjectInspector::SavePosition()
 
 ibObjectInspector* ibObjectInspector::GetObjectInspector()
 {
-	return ibFrontendDocMDIFrame::GetObjectInspector();
+	return ibFrontendMainFrame::GetObjectInspector();
 }
 
 #include "frontend/visualView/formdefs.h"

@@ -10,7 +10,7 @@
 //*                                Hotkey support                                *
 //********************************************************************************
 
-void ibFrontendDocMDIFrameEnterprise::SetDefaultHotKeys()
+void ibFrontendMainFrameEnterprise::SetDefaultHotKeys()
 {
 	// Setup the hotkeys.
 	m_keyBinder.SetShortcut(wxID_NEW, wxT("Ctrl+N"));
@@ -31,7 +31,7 @@ void ibFrontendDocMDIFrameEnterprise::SetDefaultHotKeys()
 //*                                Default menu                                  *
 //********************************************************************************
 
-void ibFrontendDocMDIFrameEnterprise::InitializeDefaultMenu()
+void ibFrontendMainFrameEnterprise::InitializeDefaultMenu()
 {
 	m_frameMenuBar = new wxMenuBar;
 
@@ -107,11 +107,11 @@ void ibFrontendDocMDIFrameEnterprise::InitializeDefaultMenu()
 
 	SetDefaultHotKeys();
 
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameEnterprise::OnClickAllOperation, this, wxID_ENTERPRISE_ALL_OPERATIONS);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameEnterprise::OnToolsSettings, this, wxID_ENTERPRISE_SETTING);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameEnterprise::OnActiveUsers, this, wxID_ENTERPRISE_ACTIVE_USERS);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameEnterprise::OnAuditLog, this, wxID_ENTERPRISE_AUDIT_LOG);
-	Bind(wxEVT_MENU, &ibFrontendDocMDIFrameEnterprise::OnAbout, this, wxID_ENTERPRISE_ABOUT);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameEnterprise::OnClickAllOperation, this, wxID_ENTERPRISE_ALL_OPERATIONS);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameEnterprise::OnToolsSettings, this, wxID_ENTERPRISE_SETTING);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameEnterprise::OnActiveUsers, this, wxID_ENTERPRISE_ACTIVE_USERS);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameEnterprise::OnAuditLog, this, wxID_ENTERPRISE_AUDIT_LOG);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameEnterprise::OnAbout, this, wxID_ENTERPRISE_ABOUT);
 
 	m_keyBinder.UpdateWindow(this);
 	m_keyBinder.UpdateMenuBar(mb);

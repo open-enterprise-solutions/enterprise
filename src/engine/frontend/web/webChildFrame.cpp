@@ -2,7 +2,7 @@
 
 #include "visualView/visualHostClient.h"
 
-ibWebMDIChildFrame::ibWebMDIChildFrame(ibWebWindow* parent, const wxString& title)
+ibWebChildFrame::ibWebChildFrame(ibWebWindow* parent, const wxString& title)
 {
 	SetLabel(title);
 	if (parent != nullptr)

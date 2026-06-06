@@ -24,9 +24,9 @@ public:
 	virtual void Modify(bool modify) = 0;
 	virtual void EditModule(const ibGuid& moduleName, int lineNumber, bool setRunLine = true) = 0;
 
-	virtual bool OpenFormMDI(ibValueMetaObject* obj) = 0;
-	virtual bool OpenFormMDI(ibValueMetaObject* obj, ibBackendMetaDocument*& foundedDoc) = 0;
-	virtual bool CloseFormMDI(ibValueMetaObject* obj) = 0;
+	virtual bool OpenObjectForm(ibValueMetaObject* obj) = 0;
+	virtual bool OpenObjectForm(ibValueMetaObject* obj, ibBackendMetaDocument*& foundedDoc) = 0;
+	virtual bool CloseObjectForm(ibValueMetaObject* obj) = 0;
 
 #pragma region __predefined_values_h__
 	virtual void EditPredefinedValues(class ibValueMetaObjectRecordDataHierarchyMutableRef* obj) = 0;

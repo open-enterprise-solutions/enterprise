@@ -65,7 +65,7 @@ public:
 	virtual ibFrontendWindow* GetBackgroundWindow() const override
 	{ return const_cast<ibVisualHostClient*>(this); }
 
-	// MDI-tab lifecycle verbs. Body is identical on both builds — forward
+	// tab lifecycle verbs. Body is identical on both builds — forward
 	// to the owned ibValueForm. The web null guard is also safe on
 	// desktop (m_valueForm is always set there, short-circuits out), so
 	// one inline covers both instead of a .cpp + header split.
@@ -79,7 +79,7 @@ public:
 #endif
 
 protected:
-	// SetCaption: desktop pushes to ibDocument->SetTitle (drives the MDI
+	// SetCaption: desktop pushes to ibDocument->SetTitle (drives the
 	// tab label); web pushes to the owning ibWebDocChildFrame (the tab
 	// node in the session's ibWebWindow tree) so /session reports the
 	// new title. SetOrientation: desktop mutates the host's root

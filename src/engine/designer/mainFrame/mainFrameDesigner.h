@@ -62,18 +62,18 @@ enum {
 	wxID_APPLICATION_CONNECTION,
 };
 
-#define mainFrame	(ibFrontendDocMDIFrameDesigner::GetFrame())
+#define mainFrame	(ibFrontendMainFrameDesigner::GetFrame())
 
-class ibFrontendDocMDIFrameDesigner : public ibFrontendDocMDIFrame {
+class ibFrontendMainFrameDesigner : public ibFrontendMainFrame {
 public:
 
-	static ibFrontendDocMDIFrameDesigner* GetFrame();
+	static ibFrontendMainFrameDesigner* GetFrame();
 
-	ibFrontendDocMDIFrameDesigner(const wxString& title = _("Designer"),
+	ibFrontendMainFrameDesigner(const wxString& title = _("Designer"),
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize);
 
-	virtual ~ibFrontendDocMDIFrameDesigner();
+	virtual ~ibFrontendMainFrameDesigner();
 
 	void Message(const wxString& strMessage, ibStatusMessage status) { m_outputWindow->SharedOutput(strMessage, status); }
 	void ClearMessage() { m_outputWindow->ClearAll(); }

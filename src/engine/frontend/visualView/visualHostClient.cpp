@@ -47,7 +47,7 @@ void ibVisualHostClient::SetOrientation(int orient)
 }
 
 #else  // !OES_USE_WEB
-// Desktop-only implementation: wxScrolledCanvas-hosted form, MDI tab,
+// Desktop-only implementation: wxScrolledCanvas-hosted form, tab,
 // wxDocView Doc/View machinery.
 
 ibVisualHostClient::ibVisualHostClient(ibFormVisualDocument* document, ibValueForm* valueForm, ibFrontendWindow* parent) :

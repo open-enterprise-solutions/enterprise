@@ -230,7 +230,7 @@ void wxAuiLunaTabArt::UpdateColoursFromSystem()
 
 	// Tab strip background — light dusty blue (#C8D6DF). Cooler than
 	// the cream active-tab interior (#FAF7F0), warmer than the deeper
-	// powder-blue MDI workspace. Reads as a soft transition band
+	// powder-blue workspace. Reads as a soft transition band
 	// between the chrome and the document.
 	wxColor baseColour = wxColour(0xC8, 0xD6, 0xDF);
 

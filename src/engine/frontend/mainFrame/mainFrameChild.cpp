@@ -14,7 +14,7 @@ ibAuiDocChildFrame::~ibAuiDocChildFrame()
 {
 	wxAuiMDIParentFrame* pParentFrame = GetMDIParentFrame();
 
-	if (pParentFrame && ibFrontendDocMDIFrame::GetFrame()) {
+	if (pParentFrame && ibFrontendMainFrame::GetFrame()) {
 		if (pParentFrame->GetActiveChild() == this) {
 			pParentFrame->SetActiveChild(nullptr);
 			pParentFrame->SetChildMenuBar(nullptr);

@@ -177,7 +177,7 @@ void ibLocalWindow::ClearAndCreate()
 
 ibLocalWindow* ibLocalWindow::GetLocalWindow()
 {
-	if (ibFrontendDocMDIFrameDesigner::GetFrame())
+	if (ibFrontendMainFrameDesigner::GetFrame())
 		return mainFrame->GetLocalWindow();
 	return nullptr; 
 }

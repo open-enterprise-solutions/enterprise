@@ -26,7 +26,7 @@ void ibDataProcessorTree::ActivateItem(const wxTreeItemId& item)
 	if (currObject == nullptr)
 		return;
 
-	OpenFormMDI(currObject);
+	OpenObjectForm(currObject);
 }
 
 ibValueMetaObject* ibDataProcessorTree::NewItem(const ibClassID& clsid, ibValueMetaObject* parent, bool runObject)
@@ -48,7 +48,7 @@ ibValueMetaObject* ibDataProcessorTree::CreateItem(bool showValue)
 
 		ibPropertyObject* prev_selected = objectInspector->GetSelectedObject();
 
-		if (showValue) { OpenFormMDI(createdObject); }
+		if (showValue) { OpenObjectForm(createdObject); }
 		UpdateToolbar(createdObject, FillItem(createdObject, item,
 			prev_selected == objectInspector->GetSelectedObject(), false));
 		for (auto& doc : docManager->GetDocumentsVector()) {
@@ -114,7 +114,7 @@ void ibDataProcessorTree::EditItem()
 	if (!m_currObject)
 		return;
 
-	OpenFormMDI(m_currObject);
+	OpenObjectForm(m_currObject);
 }
 
 void ibDataProcessorTree::RemoveItem()

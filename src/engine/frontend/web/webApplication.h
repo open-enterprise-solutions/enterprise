@@ -6,7 +6,7 @@
 // Owns everything that must be isolated between concurrent sessions:
 // the session-scoped module manager (with its own compiled bytecode,
 // ibProcUnit, common modules and context variables) and — in future
-// steps — the logical MDI frame with open documents.
+// steps — the logical main frame with open documents.
 //
 // Lifecycle mirrors wxApp: OnInit() stands the per-session runtime up
 // (think BeforeRun + RunDatabase in desktop mode), OnExit() tears it

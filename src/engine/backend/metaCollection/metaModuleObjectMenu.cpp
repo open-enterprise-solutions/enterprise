@@ -20,5 +20,5 @@ void ibValueMetaObjectCommonModule::ProcessCommand(unsigned int id)
 	wxASSERT(metaTree);
 
 	if (id == ID_METATREE_OPEN_MODULE)
-		metaTree->OpenFormMDI(this);
+		metaTree->OpenObjectForm(this);
 }

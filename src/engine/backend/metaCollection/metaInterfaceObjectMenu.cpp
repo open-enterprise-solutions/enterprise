@@ -15,5 +15,5 @@ void ibValueMetaObjectInterface::ProcessCommand(unsigned int id)
 	wxASSERT(metaTree);
 
 	if (id == ID_METATREE_OPEN_INTERFACE)
-		metaTree->OpenFormMDI(this);
+		metaTree->OpenObjectForm(this);
 }

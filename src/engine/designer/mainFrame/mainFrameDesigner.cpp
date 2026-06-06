@@ -16,11 +16,11 @@
 
 ///////////////////////////////////////////////////////////////////
 
-ibFrontendDocMDIFrameDesigner* ibFrontendDocMDIFrameDesigner::GetFrame() {
-	ibFrontendDocMDIFrame* instance = ibFrontendDocMDIFrame::GetFrame();
+ibFrontendMainFrameDesigner* ibFrontendMainFrameDesigner::GetFrame() {
+	ibFrontendMainFrame* instance = ibFrontendMainFrame::GetFrame();
 	if (instance != nullptr) {
-		ibFrontendDocMDIFrameDesigner* designer_instance =
-			dynamic_cast<ibFrontendDocMDIFrameDesigner*>(instance);
+		ibFrontendMainFrameDesigner* designer_instance =
+			dynamic_cast<ibFrontendMainFrameDesigner*>(instance);
 		wxASSERT(designer_instance);
 		return designer_instance;
 	}
@@ -29,9 +29,9 @@ ibFrontendDocMDIFrameDesigner* ibFrontendDocMDIFrameDesigner::GetFrame() {
 
 ///////////////////////////////////////////////////////////////////
 
-ibFrontendDocMDIFrameDesigner::ibFrontendDocMDIFrameDesigner(const wxString& title,
+ibFrontendMainFrameDesigner::ibFrontendMainFrameDesigner(const wxString& title,
 	const wxPoint& pos,
-	const wxSize& size) : ibFrontendDocMDIFrame(title, pos, size),
+	const wxSize& size) : ibFrontendMainFrame(title, pos, size),
 
 	m_metaWindow(nullptr),
 
@@ -43,19 +43,19 @@ ibFrontendDocMDIFrameDesigner::ibFrontendDocMDIFrameDesigner(const wxString& tit
 	m_docManager = new ibDocManagerDesigner;
 }
 
-ibFrontendDocMDIFrameDesigner::~ibFrontendDocMDIFrameDesigner()
+ibFrontendMainFrameDesigner::~ibFrontendMainFrameDesigner()
 {
 	wxDELETE(m_docManager);
 }
 
-void ibFrontendDocMDIFrameDesigner::CreateGUI()
+void ibFrontendMainFrameDesigner::CreateGUI()
 {
 	CreateWideGui();
 }
 
 static bool s_setModify = false, s_modified = false;
 
-void ibFrontendDocMDIFrameDesigner::Modify(bool modify)
+void ibFrontendMainFrameDesigner::Modify(bool modify)
 {
 	wxAuiPaneInfo& paneInfo = m_mgr.GetPane(wxAUI_PANE_METADATA);
 
@@ -88,12 +88,12 @@ void ibFrontendDocMDIFrameDesigner::Modify(bool modify)
 	}
 }
 
-bool ibFrontendDocMDIFrameDesigner::IsModified() const
+bool ibFrontendMainFrameDesigner::IsModified() const
 {
 	return s_modified;
 }
 
-void ibFrontendDocMDIFrameDesigner::LoadOptions()
+void ibFrontendMainFrameDesigner::LoadOptions()
 {
 	// Disable logging since it's ok if the options file is not there.
 	wxLogNull logNo;
@@ -147,7 +147,7 @@ void ibFrontendDocMDIFrameDesigner::LoadOptions()
 	UpdateEditorOptions();
 }
 
-void ibFrontendDocMDIFrameDesigner::SaveOptions()
+void ibFrontendMainFrameDesigner::SaveOptions()
 {
 	// Disable logging since it's ok if the options file saving isn't successful.
 	wxLogNull logNo;
@@ -177,7 +177,7 @@ void ibFrontendDocMDIFrameDesigner::SaveOptions()
 }
 
 #pragma region debugger 
-void ibFrontendDocMDIFrameDesigner::Debugger_OnSessionStart()
+void ibFrontendMainFrameDesigner::Debugger_OnSessionStart()
 {
 	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_STEP_INTO, true);
 	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_STEP_OVER, true);
@@ -187,7 +187,7 @@ void ibFrontendDocMDIFrameDesigner::Debugger_OnSessionStart()
 	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_NEXT_POINT, false);
 }
 
-void ibFrontendDocMDIFrameDesigner::Debugger_OnSessionEnd()
+void ibFrontendMainFrameDesigner::Debugger_OnSessionEnd()
 {
 	if (!debugClient->HasConnections()) {
 		m_menuDebug->Enable(wxID_DESIGNER_DEBUG_STEP_INTO, false);
@@ -199,25 +199,25 @@ void ibFrontendDocMDIFrameDesigner::Debugger_OnSessionEnd()
 	}
 }
 
-void ibFrontendDocMDIFrameDesigner::Debugger_OnEnterLoop()
+void ibFrontendMainFrameDesigner::Debugger_OnEnterLoop()
 {
 	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_PAUSE, false);
 	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_NEXT_POINT, true);
 }
 
-void ibFrontendDocMDIFrameDesigner::Debugger_OnLeaveLoop()
+void ibFrontendMainFrameDesigner::Debugger_OnLeaveLoop()
 {
 	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_PAUSE, true);
 	m_menuDebug->Enable(wxID_DESIGNER_DEBUG_NEXT_POINT, false);
 }
 #pragma endregion 
 
-bool ibFrontendDocMDIFrameDesigner::Show(bool show)
+bool ibFrontendMainFrameDesigner::Show(bool show)
 {
 	if (show && !m_metaWindow->Load())
 		return false;
 
-	bool ret = ibFrontendDocMDIFrame::Show(show);
+	bool ret = ibFrontendMainFrame::Show(show);
 	if (ret) {
 		if (!outputWindow->IsEmpty()) {
 			outputWindow->SetFocus();
@@ -232,14 +232,14 @@ bool ibFrontendDocMDIFrameDesigner::Show(bool show)
 
 #include "backend/metadataConfiguration.h"
 
-bool ibFrontendDocMDIFrameDesigner::AllowRun() const
+bool ibFrontendMainFrameDesigner::AllowRun() const
 {
 	// Designer is compile-only — no session runtime, no BeforeStart /
 	// OnStart script events. Always allow frame show.
 	return true;
 }
 
-bool ibFrontendDocMDIFrameDesigner::AllowClose() const
+bool ibFrontendMainFrameDesigner::AllowClose() const
 {
 	// Unsaved-config confirmation is a designer-only concern; no
 	// BeforeExit / OnExit script events (no runtime to fire them on).
