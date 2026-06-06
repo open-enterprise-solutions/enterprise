@@ -31,7 +31,7 @@ ibValueMetaObjectFormBase* ibValueMetaObjectAccountingRegister::GetDefaultFormBy
 ibBackendValueForm* ibValueMetaObjectAccountingRegister::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(strFormName, eFormList, ownerControl,
-		ibValue::CreateAndPrepareValueRef<ibValueListRegisterObject>(this, eFormList), formGuid);
+		new ibValueListRegisterObject(this, eFormList), formGuid);
 }
 #pragma endregion
 
@@ -261,7 +261,7 @@ void ibValueMetaObjectAccountingRegister::OnRemoveMetaForm(ibValueMetaObjectForm
 
 ibValueManagerDataObject* ibValueMetaObjectAccountingRegister::CreateManagerDataObjectValue() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueManagerDataObjectAccountingRegister>(this);
+	return new ibValueManagerDataObjectAccountingRegister(this);
 }
 
 ibValueRecordSetObject* ibValueMetaObjectAccountingRegister::CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey) const
@@ -269,16 +269,16 @@ ibValueRecordSetObject* ibValueMetaObjectAccountingRegister::CreateRecordSetObje
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		ibValueRecordSetObject* pDataRef = nullptr;
 		if (!cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef))
-			return ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectAccountingRegister>(this, uniqueKey);
+			return new ibValueRecordSetObjectAccountingRegister(this, uniqueKey);
 		return pDataRef;
 	}
-	return ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectAccountingRegister>(this, uniqueKey);
+	return new ibValueRecordSetObjectAccountingRegister(this, uniqueKey);
 }
 
 ibSourceDataObject* ibValueMetaObjectAccountingRegister::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
 {
 	switch (metaObject->GetTypeForm()) {
-	case eFormList: return ibValue::CreateAndPrepareValueRef<ibValueListRegisterObject>(this, metaObject->GetTypeForm());
+	case eFormList: return new ibValueListRegisterObject(this, metaObject->GetTypeForm());
 	}
 	return nullptr;
 }

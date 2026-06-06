@@ -28,7 +28,7 @@ bool ibValueSpreadsheetDocumentBorder::GetPropVal(const long lPropNum, ibValue& 
 		pvarPropVal = ibValue::CreateEnumObject<ibValueEnumSpreadsheetBorder>(m_style);
 		return true;
 	case enPropColour:
-		pvarPropVal = ibValue::CreateAndPrepareValueRef<ibValueColour>(m_colour);
+		pvarPropVal = new ibValueColour(m_colour);
 		return true;
 	case enPropWidth:
 		pvarPropVal = m_width;
@@ -110,7 +110,7 @@ public:
 			if (area == nullptr)
 				continue;
 			ibValueStructure::Insert(area->m_label,
-				ibValue::CreateAndPrepareValueRef<ibValueSpreadsheetDocumentRange>(area->m_label, area->m_start, area->m_end));
+				new ibValueSpreadsheetDocumentRange(area->m_label, area->m_start, area->m_end));
 		}
 	}
 
@@ -386,10 +386,10 @@ bool ibValueSpreadsheetDocument::GetPropVal(const long lPropNum, ibValue& pvarPr
 		pvarPropVal = m_spreadsheetDoc->GetRowFreeze();
 		return true;
 	case eAreas:
-		pvarPropVal = ibValue::CreateAndPrepareValueRef<ibValueSpreadsheetDocumentAreaCollection>(m_spreadsheetDoc);
+		pvarPropVal = new ibValueSpreadsheetDocumentAreaCollection(m_spreadsheetDoc);
 		return true;
 	case eParameters:
-		pvarPropVal = ibValue::CreateAndPrepareValueRef<ibValueSpreadsheetDocumentParameterCollection>(m_spreadsheetDoc);
+		pvarPropVal = new ibValueSpreadsheetDocumentParameterCollection(m_spreadsheetDoc);
 		return true;
 	case eReadOnly:
 		pvarPropVal = !m_spreadsheetDoc->IsEditable();
@@ -415,7 +415,7 @@ bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvar
 			paParams[0]->GetInteger(), lSizeArray > 1 ? paParams[1]->GetInteger() : 0);
 
 		if (cell != nullptr) {
-			pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueSpreadsheetDocumentArea>(
+			pvarRetValue = new ibValueSpreadsheetDocumentArea(
 				m_spreadsheetDoc, paParams[0]->GetInteger(), lSizeArray > 1 ? paParams[1]->GetInteger() : 0);
 			return true;
 		}
@@ -430,7 +430,7 @@ bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvar
 		else if (paParams[1]->GetInteger() > m_spreadsheetDoc->GetNumberCols())
 			return false;
 
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueSpreadsheetDocument>(m_spreadsheetDoc->GetArea(
+		pvarRetValue = new ibValueSpreadsheetDocument(m_spreadsheetDoc->GetArea(
 			paParams[0]->GetInteger(), paParams[1]->GetInteger(), lSizeArray > 2 ? paParams[2]->GetInteger() : -1, lSizeArray > 3 ? paParams[3]->GetInteger() : -1));
 
 		return true;
@@ -447,7 +447,7 @@ bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvar
 			if (!r)
 				return false;
 
-			pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueSpreadsheetDocument>(m_spreadsheetDoc->GetAreaByName(r->m_label, c ? c->m_label : wxT("")));
+			pvarRetValue = new ibValueSpreadsheetDocument(m_spreadsheetDoc->GetAreaByName(r->m_label, c ? c->m_label : wxT("")));
 			return true;
 		}
 
@@ -457,7 +457,7 @@ bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvar
 		if (!r)
 			return false;
 
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueSpreadsheetDocument>(m_spreadsheetDoc->GetAreaByName(
+		pvarRetValue = new ibValueSpreadsheetDocument(m_spreadsheetDoc->GetAreaByName(
 			r->m_label, c ? c->m_label : wxT("")));
 
 		return true;

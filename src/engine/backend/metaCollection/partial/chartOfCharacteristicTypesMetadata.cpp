@@ -57,7 +57,7 @@ ibValueMetaObjectFormBase* ibValueMetaObjectChartOfCharacteristicTypes::GetDefau
 
 ibValueManagerDataObject* ibValueMetaObjectChartOfCharacteristicTypes::CreateManagerDataObjectValue() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueManagerDataObjectChartOfCharacteristicTypes>(this);
+	return new ibValueManagerDataObjectChartOfCharacteristicTypes(this);
 }
 
 #include "backend/appData.h"
@@ -67,11 +67,11 @@ ibValueRecordDataObjectHierarchyRef* ibValueMetaObjectChartOfCharacteristicTypes
 	ibValueRecordDataObjectChartOfCharacteristicTypes* pDataRef = nullptr;
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (!cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef)) {
-			return ibValue::CreateAndPrepareValueRef<ibValueRecordDataObjectChartOfCharacteristicTypes>(this, guid, mode);
+			return new ibValueRecordDataObjectChartOfCharacteristicTypes(this, guid, mode);
 		}
 	}
 	else {
-		pDataRef = ibValue::CreateAndPrepareValueRef<ibValueRecordDataObjectChartOfCharacteristicTypes>(this, guid, mode);
+		pDataRef = new ibValueRecordDataObjectChartOfCharacteristicTypes(this, guid, mode);
 	}
 
 	return pDataRef;
@@ -86,11 +86,11 @@ ibSourceDataObject* ibValueMetaObjectChartOfCharacteristicTypes::CreateSourceObj
 	case eFormFolder:
 		return CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
 	case eFormList:
-		return ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER);
+		return new ibValueModelTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER);
 	case eFormSelect:
-		return ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER, true);
+		return new ibValueModelTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER, true);
 	case eFormFolderSelect:
-		return ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true);
+		return new ibValueModelTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true);
 	}
 
 	return nullptr;
@@ -122,7 +122,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetListForm(con
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormList,
-		ownerControl, ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, ibValueMetaObjectChartOfCharacteristicTypes::eFormList, ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER),
+		ownerControl, new ibValueModelTreeDataObjectFolderRef(this, ibValueMetaObjectChartOfCharacteristicTypes::eFormList, ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER),
 		formGuid
 	);
 }
@@ -132,7 +132,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetSelectForm(c
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormSelect,
-		ownerControl, ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, ibValueMetaObjectChartOfCharacteristicTypes::eFormSelect, ibValueModelTreeDataObjectFolderRef::LIST_ITEM, true),
+		ownerControl, new ibValueModelTreeDataObjectFolderRef(this, ibValueMetaObjectChartOfCharacteristicTypes::eFormSelect, ibValueModelTreeDataObjectFolderRef::LIST_ITEM, true),
 		formGuid
 	);
 }
@@ -142,7 +142,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetFolderSelect
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormFolderSelect,
-		ownerControl, ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, ibValueMetaObjectChartOfCharacteristicTypes::eFormFolderSelect, ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true),
+		ownerControl, new ibValueModelTreeDataObjectFolderRef(this, ibValueMetaObjectChartOfCharacteristicTypes::eFormFolderSelect, ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true),
 		formGuid
 	);
 }

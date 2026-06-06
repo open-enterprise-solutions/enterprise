@@ -38,7 +38,7 @@ ibValueMetaObjectFormBase* ibValueMetaObjectChartOfAccounts::GetDefaultFormByID(
 
 ibValueManagerDataObject* ibValueMetaObjectChartOfAccounts::CreateManagerDataObjectValue() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueManagerDataObjectChartOfAccounts>(this);
+	return new ibValueManagerDataObjectChartOfAccounts(this);
 }
 
 #include "backend/appData.h"
@@ -48,10 +48,10 @@ ibValueRecordDataObjectHierarchyRef* ibValueMetaObjectChartOfAccounts::CreateObj
 	ibValueRecordDataObjectChartOfAccounts* pDataRef = nullptr;
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (!cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef))
-			return ibValue::CreateAndPrepareValueRef<ibValueRecordDataObjectChartOfAccounts>(this, guid, mode);
+			return new ibValueRecordDataObjectChartOfAccounts(this, guid, mode);
 	}
 	else {
-		pDataRef = ibValue::CreateAndPrepareValueRef<ibValueRecordDataObjectChartOfAccounts>(this, guid, mode);
+		pDataRef = new ibValueRecordDataObjectChartOfAccounts(this, guid, mode);
 	}
 	return pDataRef;
 }
@@ -62,9 +62,9 @@ ibSourceDataObject* ibValueMetaObjectChartOfAccounts::CreateSourceObject(const i
 	{
 	case eFormObject: return CreateObjectValue(ibObjectMode::OBJECT_ITEM);
 	case eFormFolder: return CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
-	case eFormList: return ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER);
-	case eFormSelect: return ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER, true);
-	case eFormFolderSelect: return ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true);
+	case eFormList: return new ibValueModelTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER);
+	case eFormSelect: return new ibValueModelTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER, true);
+	case eFormFolderSelect: return new ibValueModelTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true);
 	}
 	return nullptr;
 }
@@ -83,19 +83,19 @@ ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetFolderForm(const wxStri
 ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	return CreateAndBuildForm(strFormName, eFormList, ownerControl,
-		ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, eFormList, ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER), formGuid);
+		new ibValueModelTreeDataObjectFolderRef(this, eFormList, ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER), formGuid);
 }
 
 ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	return CreateAndBuildForm(strFormName, eFormSelect, ownerControl,
-		ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, eFormSelect, ibValueModelTreeDataObjectFolderRef::LIST_ITEM, true), formGuid);
+		new ibValueModelTreeDataObjectFolderRef(this, eFormSelect, ibValueModelTreeDataObjectFolderRef::LIST_ITEM, true), formGuid);
 }
 
 ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetFolderSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	return CreateAndBuildForm(strFormName, eFormFolderSelect, ownerControl,
-		ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(this, eFormFolderSelect, ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true), formGuid);
+		new ibValueModelTreeDataObjectFolderRef(this, eFormFolderSelect, ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true), formGuid);
 }
 #pragma endregion
 

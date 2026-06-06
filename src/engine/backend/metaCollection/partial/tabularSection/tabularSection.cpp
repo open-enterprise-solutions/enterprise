@@ -41,7 +41,7 @@ bool ibValueTabularSectionDataObjectBase::GetAt(const ibValue& varKeyValue, ibVa
 		return false;
 	}
 
-	pvarValue = ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectReturnLine>(this, GetItem(index));
+	pvarValue = new ibValueTabularSectionDataObjectReturnLine(this, GetItem(index));
 	return true;
 }
 
@@ -138,7 +138,7 @@ bool ibValueTabularSectionDataObjectBase::CallAsFunc(const long lMethodNum, ibVa
 	switch (lMethodData)
 	{
 	case enAddValue:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectReturnLine>(this, GetItem(AppendRow()));
+		pvarRetValue = new ibValueTabularSectionDataObjectReturnLine(this, GetItem(AppendRow()));
 		return true;
 	case enFind: {
 		const ibDataViewItem& item = FindRowValue(*paParams[0], paParams[1]->GetString());
@@ -253,7 +253,7 @@ bool ibValueTabularSectionDataObjectBase::LoadDataFromTable(ibValueModelTableBas
 
 ibValueModelTableBase* ibValueTabularSectionDataObjectBase::SaveDataToTable() const
 {
-	ibValueModelTable* valueTable = ibValue::CreateAndPrepareValueRef<ibValueModelTable>();
+	ibValueModelTable* valueTable = new ibValueModelTable();
 	ibValueModelColumnCollection* colData = valueTable->GetColumnCollection();
 	for (unsigned int idx = 0; idx < m_recordColumnCollection->GetColumnCount() - 1; idx++) {
 		ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = m_recordColumnCollection->GetColumnInfo(idx);
@@ -398,7 +398,7 @@ ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollec
 		if (metaTable->IsNumberLine(object->GetMetaID()))
 			continue;
 		m_listColumnInfo.insert_or_assign(object->GetMetaID(),
-			ibValue::CreateAndPrepareValueRef<ibValueTabularSectionColumnInfo>(object)
+			new ibValueTabularSectionColumnInfo(object)
 		);
 	}
 }

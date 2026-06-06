@@ -70,7 +70,7 @@ bool ibValueSelectorRecordDataObject::Read()
 				object, m_listObjectValue[object->GetMetaID()], resultSet);
 		}
 		for (const auto object : m_metaObject->GetTableArrayObject()) {
-			ibValueTabularSectionDataObjectRef* tabularSection = ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectRef>(this, object);
+			ibValueTabularSectionDataObjectRef* tabularSection = new ibValueTabularSectionDataObjectRef(this, object);
 			if (!tabularSection->LoadData(m_objGuid))
 				isLoaded = false;
 			m_listObjectValue.insert_or_assign(object->GetMetaID(), tabularSection);

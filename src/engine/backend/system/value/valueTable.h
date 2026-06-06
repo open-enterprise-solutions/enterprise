@@ -91,7 +91,7 @@ public:
 			}
 
 			return m_listColumnInfo.emplace_back(
-				ibValue::CreateAndPrepareValueRef<ibValueModelTableColumnInfo>(max_id + 1, colName, typeData, caption, width));
+				new ibValueModelTableColumnInfo(max_id + 1, colName, typeData, caption, width));
 		}
 
 		const ibTypeDescription GetColumnType(unsigned int col) const {
@@ -176,7 +176,7 @@ public:
 	virtual ibValueModelTableReturnLine* GetRowAt(const long& line) {
 		if (line > GetRowCount())
 			return nullptr;
-		return ibValue::CreateAndPrepareValueRef<ibValueModelTableReturnLine>(this, GetItem(line));
+		return new ibValueModelTableReturnLine(this, GetItem(line));
 	}
 
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) {
@@ -238,7 +238,7 @@ public:
 	void EditRow();
 	void DeleteRow();
 
-	ibValueModelTable* Clone() { return ibValue::CreateAndPrepareValueRef<ibValueModelTable>(*this); }
+	ibValueModelTable* Clone() { return new ibValueModelTable(*this); }
 	unsigned int Count() { return GetRowCount(); }
 	void Clear();
 
@@ -258,7 +258,7 @@ public:
 	// in batches. GetEmptyRow yields the typed skeleton for the
 	// IntelliSense type hint that the iterator state surfaces.
 	virtual ibValue GetEmptyRow() override {
-		return ibValue::CreateAndPrepareValueRef<ibValueModelTableReturnLine>(this, ibDataViewItem(nullptr));
+		return new ibValueModelTableReturnLine(this, ibDataViewItem(nullptr));
 	}
 
 private:

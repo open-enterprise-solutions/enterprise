@@ -233,7 +233,7 @@ public:
 	}
 	template<typename T, typename... Args>
 	inline T* CreateAndConvertObjectValueRef(Args&&... args) const {
-		T* created_value = ibValue::CreateAndPrepareValueRef<T>(args...);
+		T* created_value = new T(args...);
 		if (!IsRegisterCtor(created_value->GetClassType())) {
 			wxDELETE(created_value);
 			wxASSERT_MSG(false, "CreateAndConvertObjectValueRef ret null!");

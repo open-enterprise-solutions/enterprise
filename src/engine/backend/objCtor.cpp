@@ -12,7 +12,7 @@
 //reference class
 ibValue* ibCtorMetaValueTypeReference::CreateObject() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueReferenceDataObject>(m_metaObject);
+	return ibValueReferenceDataObject::Create(m_metaObject);
 }
 
 //list class
@@ -22,18 +22,18 @@ ibValue* ibCtorMetaValueTypeReferenceList::CreateObject() const
 	ibValueMetaObjectRecordDataEnumRef* enumRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(folderRef)) {
-		return ibValue::CreateAndPrepareValueRef<ibValueModelTreeDataObjectFolderRef>(folderRef);
+		return new ibValueModelTreeDataObjectFolderRef(folderRef);
 	}
 	else if (m_metaObject->ConvertToValue(enumRef)) {
-		return ibValue::CreateAndPrepareValueRef<ibValueListDataObjectEnumRef>(enumRef);
+		return new ibValueListDataObjectEnumRef(enumRef);
 	}
 
-	return ibValue::CreateAndPrepareValueRef<ibValueListDataObjectRef>((ibValueMetaObjectRecordDataMutableRef*)m_metaObject);
+	return new ibValueListDataObjectRef((ibValueMetaObjectRecordDataMutableRef*)m_metaObject);
 }
 
 ibValue* ibCtorMetaValueTypeRegisterList::CreateObject() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueListRegisterObject>(m_metaObject);
+	return new ibValueListRegisterObject(m_metaObject);
 }
 
 //object class

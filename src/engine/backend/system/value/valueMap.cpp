@@ -175,14 +175,14 @@ std::shared_ptr<ibValueIteratorState> ibValueContainer::CreateIterator()
 			if (m_it == m_map.end()) return false;
 			ibValue valueCopy = m_it->second;
 			current = ibValue(static_cast<ibValue*>(
-				ibValue::CreateAndPrepareValueRef<ibValueReturnContainer>(
+				new ibValueReturnContainer(
 					m_it->first, valueCopy)));
 			return true;
 		}
 		void Reset() override { m_it = m_map.begin(); m_started = false; }
 		bool PeekSample(ibValue& current) const override {
 			current = ibValue(static_cast<ibValue*>(
-				ibValue::CreateAndPrepareValueRef<ibValueReturnContainer>()));
+				new ibValueReturnContainer()));
 			return true;
 		}
 	private:

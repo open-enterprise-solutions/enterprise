@@ -10,7 +10,7 @@
 //***********************************************************************************
 
 ibValueGridBox::ibValueGridBox() : ibValueWindow(),
-m_valueSpreadsheet(ibValue::CreateAndPrepareValueRef<ibValueSpreadsheetDocument>())
+m_valueSpreadsheet(new ibValueSpreadsheetDocument())
 {
 	m_members.Bind(this, &ibValueGridBox::FillControlMembers);
 	//set default params

@@ -48,11 +48,11 @@ bool ibValuePreparedStatement::CallAsFunc(const long lMethodNum, ibValue& pvarRe
 				ibBackendCoreException::Error(ibBackendCoreException::GetLastError());
 				return false;
 			}
-			pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueResultSet>(resultSet);
+			pvarRetValue = new ibValueResultSet(resultSet);
 			return true;
 		}
 
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueResultSet>();
+		pvarRetValue = new ibValueResultSet();
 		return true;
 	}
 

@@ -50,7 +50,7 @@ bool ibValueManagerDataObjectAccountingRegister::CallAsFunc(const long lMethodNu
 		pvarRetValue = m_metaObject->CreateRecordSetObjectValue();
 		return true;
 	case eCreateRecordKey:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueRecordKeyObject>(m_metaObject);
+		pvarRetValue = new ibValueRecordKeyObject(m_metaObject);
 		return true;
 	case eBalance:
 		pvarRetValue = lSizeArray > 2 ?
@@ -76,7 +76,7 @@ bool ibValueManagerDataObjectAccountingRegister::CallAsFunc(const long lMethodNu
 			BalanceAndTurnovers(*paParams[0], *paParams[1]);
 		return true;
 	case eSelect:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueSelectorRegisterDataObject>(m_metaObject);
+		pvarRetValue = new ibValueSelectorRegisterDataObject(m_metaObject);
 		return true;
 	case eGetForm:
 	{

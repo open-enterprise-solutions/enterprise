@@ -61,14 +61,14 @@ std::shared_ptr<ibValueIteratorState> ibValueForm::ibValueFormCollectionControl:
 			if (m_it == m_list.end()) return false;
 			ibValue controlValue(*m_it);
 			current = ibValue(static_cast<ibValue*>(
-				ibValue::CreateAndPrepareValueRef<ibValueContainer::ibValueReturnContainer>(
+				new ibValueContainer::ibValueReturnContainer(
 					(*m_it)->GetControlName(), controlValue)));
 			return true;
 		}
 		void Reset() override { m_it = m_list.begin(); m_started = false; }
 		bool PeekSample(ibValue& current) const override {
 			current = ibValue(static_cast<ibValue*>(
-				ibValue::CreateAndPrepareValueRef<ibValueContainer::ibValueReturnContainer>()));
+				new ibValueContainer::ibValueReturnContainer()));
 			return true;
 		}
 	private:

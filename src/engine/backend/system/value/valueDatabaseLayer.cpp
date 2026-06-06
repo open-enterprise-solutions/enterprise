@@ -46,11 +46,11 @@ bool ibValueDatabaseLayer::CallAsFunc(const long lMethodNum, ibValue& pvarRetVal
 				ibBackendCoreException::Error(ibBackendCoreException::GetLastError());
 				return false;
 			}
-			pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValuePreparedStatement>(preparedStatement);
+			pvarRetValue = new ibValuePreparedStatement(preparedStatement);
 			return true;
 		}
 
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValuePreparedStatement>();
+		pvarRetValue = new ibValuePreparedStatement();
 		return true;
 	}
 	else if (lMethodNum == eRunQuery)
@@ -68,11 +68,11 @@ bool ibValueDatabaseLayer::CallAsFunc(const long lMethodNum, ibValue& pvarRetVal
 				ibBackendCoreException::Error(ses_query->GetErrorMessage());
 				return false;
 			}
-			pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueResultSet>(resultSet);
+			pvarRetValue = new ibValueResultSet(resultSet);
 			return true;
 		}
 
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueResultSet>();
+		pvarRetValue = new ibValueResultSet();
 		return true;
 	}
 

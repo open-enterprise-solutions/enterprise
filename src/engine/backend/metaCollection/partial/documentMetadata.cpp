@@ -69,7 +69,7 @@ ibValueMetaObjectFormBase* ibValueMetaObjectDocument::GetDefaultFormByID(const i
 
 ibValueManagerDataObject* ibValueMetaObjectDocument::CreateManagerDataObjectValue() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueManagerDataObjectDocument>(this);
+	return new ibValueManagerDataObjectDocument(this);
 }
 
 #include "backend/appData.h"
@@ -79,10 +79,10 @@ ibValueRecordDataObjectRef* ibValueMetaObjectDocument::CreateObjectRefValue(cons
 	ibValueRecordDataObjectDocument* pDataRef = nullptr;
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (!cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef))
-			return ibValue::CreateAndPrepareValueRef<ibValueRecordDataObjectDocument>(this, objGuid);
+			return new ibValueRecordDataObjectDocument(this, objGuid);
 	}
 	else {
-		pDataRef = ibValue::CreateAndPrepareValueRef<ibValueRecordDataObjectDocument>(this, objGuid);
+		pDataRef = new ibValueRecordDataObjectDocument(this, objGuid);
 	}
 
 	return pDataRef;
@@ -94,10 +94,10 @@ ibSourceDataObject* ibValueMetaObjectDocument::CreateSourceObject(const ibValueM
 	{
 	case eFormObject: return CreateObjectValue(); break;
 	case eFormList:
-		return ibValue::CreateAndPrepareValueRef<ibValueListDataObjectRefDocument>(this, metaObject->GetTypeForm());
+		return new ibValueListDataObjectRefDocument(this, metaObject->GetTypeForm());
 		break;
 	case eFormSelect:
-		return ibValue::CreateAndPrepareValueRef<ibValueListDataObjectRefDocument>(this, metaObject->GetTypeForm(), true);
+		return new ibValueListDataObjectRefDocument(this, metaObject->GetTypeForm(), true);
 		break;
 	}
 
@@ -120,7 +120,7 @@ ibBackendValueForm* ibValueMetaObjectDocument::GetListForm(const wxString& strFo
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectDocument::eFormList,
-		ownerControl, ibValue::CreateAndPrepareValueRef<ibValueListDataObjectRefDocument>(this, ibValueMetaObjectDocument::eFormList),
+		ownerControl, new ibValueListDataObjectRefDocument(this, ibValueMetaObjectDocument::eFormList),
 		formGuid
 	);
 }
@@ -130,7 +130,7 @@ ibBackendValueForm* ibValueMetaObjectDocument::GetSelectForm(const wxString& str
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectDocument::eFormSelect,
-		ownerControl, ibValue::CreateAndPrepareValueRef<ibValueListDataObjectRefDocument>(this, ibValueMetaObjectDocument::eFormSelect, true),
+		ownerControl, new ibValueListDataObjectRefDocument(this, ibValueMetaObjectDocument::eFormSelect, true),
 		formGuid
 	);
 }

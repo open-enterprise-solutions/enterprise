@@ -66,7 +66,7 @@ bool ibValueModuleManager::ibValueMetadataUnit::SetPropVal(const long lPropNum, 
 
 bool ibValueModuleManager::ibValueMetadataUnit::GetPropVal(const long lPropNum, ibValue& pvarPropVal)//attribute value
 {
-	ibValueStructure* valStruct = ibValue::CreateAndPrepareValueRef<ibValueStructure>();
+	ibValueStructure* valStruct = new ibValueStructure();
 	switch (lPropNum)
 	{
 	case enCommonModules: {

@@ -19,7 +19,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Balance(const ibValue& cPe
 	else if (ses_query == nullptr)
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	ibValueModelTable* retTable = ibValue::CreateAndPrepareValueRef<ibValueModelTable>();
+	ibValueModelTable* retTable = new ibValueModelTable();
 	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
 	for (auto dimension : m_metaObject->GetDimensionArrayObject()) {
@@ -190,7 +190,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Turnovers(const ibValue& c
 	else if (ses_query == nullptr)
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	ibValueModelTable* retTable = ibValue::CreateAndPrepareValueRef<ibValueModelTable>();
+	ibValueModelTable* retTable = new ibValueModelTable();
 	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
 	for (auto dimension : m_metaObject->GetDimensionArrayObject()) {

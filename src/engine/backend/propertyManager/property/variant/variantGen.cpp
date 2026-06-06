@@ -25,7 +25,7 @@ wxString ibVariantDataGeneration::MakeString() const
 
 ibValue ibVariantDataGeneration::GetDataValue() const
 {
-	ibValueArray* valueArr = ibValue::CreateAndPrepareValueRef<ibValueArray>();
+	ibValueArray* valueArr = new ibValueArray();
 	const ibMetaData* metaData = m_ownerProperty->GetMetaData();
 	if (metaData != nullptr) {
 		for (unsigned int idx = 0; idx < m_metaDesc.GetTypeCount(); idx++) { valueArr->Add(metaData->FindAnyObjectByFilter(m_metaDesc.GetByIdx(idx))); }

@@ -269,7 +269,7 @@ bool ibValueRecordSetObjectInformationRegister::CallAsFunc(const long lMethodNum
 	switch (lMethodNum)
 	{
 	case recordSet::enAdd:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterReturnLine>(this, GetItem(AppendRow()));
+		pvarRetValue = new ibValueRecordSetObjectRegisterReturnLine(this, GetItem(AppendRow()));
 		return true;
 	case recordSet::enCount:
 		pvarRetValue = (unsigned int)GetRowCount();

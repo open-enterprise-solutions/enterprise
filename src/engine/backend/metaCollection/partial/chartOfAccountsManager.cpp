@@ -52,7 +52,7 @@ bool ibValueManagerDataObjectChartOfAccounts::CallAsFunc(const long lMethodNum, 
 	{
 	case eCreateElement: pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_ITEM); return true;
 	case eCreateGroup: pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_FOLDER); return true;
-	case eSelect: pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueSelectorRecordDataObject>(m_metaObject); return true;
+	case eSelect: pvarRetValue = new ibValueSelectorRecordDataObject(m_metaObject); return true;
 	case eFindByCode: pvarRetValue = FindByCode(*paParams[0]); return true;
 	case eFindByDescription: pvarRetValue = FindByDescription(*paParams[0]); return true;
 	case eGetForm: {

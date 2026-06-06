@@ -509,7 +509,7 @@ void ibValueSystemFunction::Alert(const wxString& strMessage) //Alert
 ibValue ibValueSystemFunction::Question(const wxString& strMessage, ibQuestionMode mode)//Question
 {
 	if (ibBackendException::IsEvalMode()) {
-		return ibValue::CreateAndPrepareValueRef<ibValuibQuestionReturnCode>();
+		return new ibValuibQuestionReturnCode();
 	}
 
 	int wndStyle = 0;
@@ -532,7 +532,7 @@ ibValue ibValueSystemFunction::Question(const wxString& strMessage, ibQuestionMo
 		? frame->ShowModalMessage(strMessage, _("Question"), wndStyle | wxICON_QUESTION)
 		: wxCANCEL;
 
-	ibValuibQuestionReturnCode* retValue = ibValue::CreateAndPrepareValueRef<ibValuibQuestionReturnCode>();
+	ibValuibQuestionReturnCode* retValue = new ibValuibQuestionReturnCode();
 	switch (retCode) {
 	case wxOK:
 		retValue->InitializeEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_OK);
@@ -789,12 +789,12 @@ ibValue ibValueSystemFunction::Type(const ibValue& cTypeName)
 	if (!activeMetaData->IsRegisterCtor(strTypeName))
 		ibBackendCoreException::Error(_("Type not found '%s'"), strTypeName);
 
-	return ibValue::CreateAndPrepareValueRef<ibValueType>(strTypeName);
+	return new ibValueType(strTypeName);
 }
 
 ibValue ibValueSystemFunction::TypeOf(const ibValue& cData)
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueType>(cData);
+	return new ibValueType(cData);
 }
 
 int ibValueSystemFunction::Rand()
@@ -952,7 +952,7 @@ ibValue ibValueSystemFunction::GetCommonTemplate(const wxString& strTemplateName
 			activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectCommonSpreadsheet>(strTemplateName, g_metaCommonTemplateCLSID);
 
 		if (creator != nullptr)
-			return ibValue::CreateAndPrepareValueRef<ibValueSpreadsheetDocument>(creator->GetSpreadsheetDesc());
+			return new ibValueSpreadsheetDocument(creator->GetSpreadsheetDesc());
 	}
 
 	ibBackendCoreException::Error(_("Common template not found '%s'"), strTemplateName);

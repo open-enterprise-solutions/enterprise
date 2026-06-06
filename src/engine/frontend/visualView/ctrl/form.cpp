@@ -26,7 +26,7 @@ ibValueForm::ibValueForm(const ibValueMetaObjectFormBase* creator, ibControlFram
 	ibSourceDataObject* srcObject, const ibUniqueKey& formGuid) : ibValueFrame(),
 	ibRuntimeModuleDataObject(m_members, this),
 	m_controlOwner(nullptr), m_sourceObject(nullptr), m_metaFormObject(nullptr),
-	m_formCollectionControl(ibValue::CreateAndPrepareValueRef<ibValueFormCollectionControl>(this)),
+	m_formCollectionControl(new ibValueFormCollectionControl(this)),
 	m_formType(defaultFormType), m_closeOnChoice(true), m_closeOnOwnerClose(true), m_formModified(false)
 {
 	// Frame surface (properties + Events) comes from ibValueFrame::FillMembers, bound
@@ -295,7 +295,7 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 			pvarPropVal = dynamic_cast<ibValue*>(m_controlOwner);
 			return true;
 		case eUniqueKey:
-			pvarPropVal = ibValue::CreateAndPrepareValueRef<ibValueGuid>(m_formKey);
+			pvarPropVal = new ibValueGuid(m_formKey);
 			return true;
 		case eCloseOnChoice:
 			pvarPropVal = m_closeOnChoice;

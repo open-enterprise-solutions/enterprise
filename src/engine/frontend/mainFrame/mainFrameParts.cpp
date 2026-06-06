@@ -194,7 +194,7 @@ ibBackendValueForm* ibFrontendMainFrame::CreateNewForm(const ibValueMetaObjectFo
 	// Parent descriptor wiring happens inside ibValueForm's ctor — it
 	// already receives ownerControl; for the UI path (null owner) it
 	// falls back to backend_mainFrame->GetSession()->GetManagerModule().
-	return ibValue::CreateAndPrepareValueRef<ibValueForm>(creator, ownerControl, srcObject, formGuid);
+	return new ibValueForm(creator, ownerControl, srcObject, formGuid);
 }
 
 ibUniqueKey ibFrontendMainFrame::CreateFormUniqueKey(const ibBackendControlFrame* ownerControl, const ibSourceDataObject* sourceObject, const ibUniqueKey& formGuid)

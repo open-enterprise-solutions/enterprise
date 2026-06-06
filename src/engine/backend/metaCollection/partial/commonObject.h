@@ -2081,7 +2081,7 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelRamTableBase, publ
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) override {
 		if (!line.IsOk())
 			return nullptr;
-		return ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterReturnLine>(this, line);
+		return new ibValueRecordSetObjectRegisterReturnLine(this, line);
 	}
 
 	class ibValueRecordSetObjectRegisterColumnCollection : public ibValueModelTableBase::ibValueModelColumnCollection {
@@ -2333,7 +2333,7 @@ public:
 	// BuildVisibleView). GetEmptyRow yields the typed skeleton that
 	// the iterator state surfaces as IntelliSense type hint.
 	virtual ibValue GetEmptyRow() override {
-		return ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterReturnLine>(this, ibDataViewItem());
+		return new ibValueRecordSetObjectRegisterReturnLine(this, ibDataViewItem());
 	}
 
 protected:

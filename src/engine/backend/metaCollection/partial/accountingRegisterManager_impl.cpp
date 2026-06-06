@@ -19,7 +19,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 	else if (ses_query == nullptr)
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	ibValueModelTable* retTable = ibValue::CreateAndPrepareValueRef<ibValueModelTable>();
+	ibValueModelTable* retTable = new ibValueModelTable();
 	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
 
@@ -328,7 +328,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 	else if (ses_query == nullptr)
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	ibValueModelTable* retTable = ibValue::CreateAndPrepareValueRef<ibValueModelTable>();
+	ibValueModelTable* retTable = new ibValueModelTable();
 	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
 
@@ -658,7 +658,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::DrCrTurnovers(const ibValue&
 	else if (ses_query == nullptr)
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	ibValueModelTable* retTable = ibValue::CreateAndPrepareValueRef<ibValueModelTable>();
+	ibValueModelTable* retTable = new ibValueModelTable();
 	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
 
@@ -958,7 +958,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	else if (ses_query == nullptr)
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	ibValueModelTable* retTable = ibValue::CreateAndPrepareValueRef<ibValueModelTable>();
+	ibValueModelTable* retTable = new ibValueModelTable();
 	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
 

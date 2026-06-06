@@ -857,14 +857,6 @@ public:
 
 public:
 
-	//runtime support:
-	template<typename T, typename... Args>
-	static T* CreateAndPrepareValueRef(Args&&... args) {
-		// The name surface is bind-driven and built lazily by GetPMethods() on first
-		// access — no eager population at creation (was created_value->PrepareNames()).
-		return ::new T(std::forward<Args>(args)...);
-	}
-
 	template<typename T>
 	static ibValue CreateObject(ibValue** paParams = nullptr, const long lSizeArray = 0) {
 		return CreateObjectRef<T>(paParams, lSizeArray);
@@ -921,7 +913,7 @@ public:
 	static T* CreateAndConvertObjectValueRef(Args&&... args) {
 		const ibClassID& clsid = ibValue::GetTypeIDByRef(typeid(T));
 		if (ibValue::IsRegisterCtor(clsid))
-			return CreateAndPrepareValueRef<T>(args...);
+			return new T(args...);
 		wxASSERT_MSG(false, "CreateAndConvertObjectValueRef ret null!");
 		return nullptr;
 	}

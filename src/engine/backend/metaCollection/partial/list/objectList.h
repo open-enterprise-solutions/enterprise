@@ -19,7 +19,7 @@ private:
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) override {
 		if (!line.IsOk())
 			return nullptr;
-		return ibValue::CreateAndPrepareValueRef<ibValueDataObjectListReturnLine>(this, line);
+		return new ibValueDataObjectListReturnLine(this, line);
 	}
 
 public:
@@ -578,7 +578,7 @@ private:
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) {
 		if (!line.IsOk())
 			return nullptr;
-		return ibValue::CreateAndPrepareValueRef<ibValueDataObjectTreeReturnLine>(this, line);
+		return new ibValueDataObjectTreeReturnLine(this, line);
 	}
 
 public:

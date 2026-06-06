@@ -39,7 +39,7 @@ public:
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) {
 		if (!line.IsOk())
 			return nullptr;
-		return ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectReturnLine>(this, line);
+		return new ibValueTabularSectionDataObjectReturnLine(this, line);
 	}
 
 	virtual bool HasDefaultCompare() const override { return false; }
@@ -164,7 +164,7 @@ public:
 
 	ibValueTabularSectionDataObjectBase(ibValueDataObject* objectValue, const ibValueMetaObjectTableData* tableObject, bool readOnly = false) :
 		m_objectValue(objectValue), m_metaTable(tableObject),
-		m_recordColumnCollection(ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectColumnCollection>(this)),
+		m_recordColumnCollection(new ibValueTabularSectionDataObjectColumnCollection(this)),
 		m_readOnly(readOnly) {
 		m_members.Bind(this, &ibValueTabularSectionDataObjectBase::FillMembers);
 		for (const auto object : tableObject->GetGenericAttributeArrayObject()) {
@@ -232,7 +232,7 @@ public:
 	// → BuildVisibleView for filter+sort consistency with the GUI).
 	// GetEmptyRow yields the typed skeleton for IntelliSense type hint.
 	virtual ibValue GetEmptyRow() override {
-		return ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectReturnLine>(this, ibDataViewItem(nullptr));
+		return new ibValueTabularSectionDataObjectReturnLine(this, ibDataViewItem(nullptr));
 	}
 
 protected:

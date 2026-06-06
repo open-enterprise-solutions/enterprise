@@ -37,7 +37,7 @@ void ibValueReferenceDataObject::PrepareRef(bool createData)
 			if (object->IsDeleted())
 				continue;
 			m_listObjectValue.insert_or_assign(object->GetMetaID(),
-				ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectRef>(this, object));
+				new ibValueTabularSectionDataObjectRef(this, object));
 		}
 	}
 	else if (ibValueReferenceDataObject::ReadData(createData)) {
@@ -164,7 +164,7 @@ ibValueReferenceDataObject* ibValueReferenceDataObject::CreateFromResultSet(ibDa
 			continue;
 		refData->m_listObjectValue.insert_or_assign(
 			object->GetMetaID(),
-			ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectRef>(refData, object, true)
+			new ibValueTabularSectionDataObjectRef(refData, object, true)
 		);
 	}
 
@@ -322,7 +322,7 @@ bool ibValueReferenceDataObject::GetPropVal(const long lPropNum, ibValue& pvarPr
 	if (!m_metaObject->IsDataReference(id)) {
 		if (lPropAlias == eTable && !GetValueByMetaID(id, pvarPropVal)) {
 			m_listObjectValue.insert_or_assign(id,
-				ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectRef>(this, m_metaObject->FindTableObjectByFilter(id), !m_newObject)
+				new ibValueTabularSectionDataObjectRef(this, m_metaObject->FindTableObjectByFilter(id), !m_newObject)
 			);
 		}
 		if (lPropAlias == eTable && GetValueByMetaID(id, pvarPropVal)) {
@@ -365,7 +365,7 @@ bool ibValueReferenceDataObject::CallAsFunc(const long lMethodNum, ibValue& pvar
 		pvarRetValue = GetObject();
 		return true;
 	case enGetGuid:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueGuid>(m_objGuid);
+		pvarRetValue = new ibValueGuid(m_objGuid);
 		return true;
 	}
 

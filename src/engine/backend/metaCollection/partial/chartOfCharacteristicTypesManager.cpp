@@ -58,7 +58,7 @@ bool ibValueManagerDataObjectChartOfCharacteristicTypes::CallAsFunc(const long l
 		pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
 		return true;
 	case eSelect:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueSelectorRecordDataObject>(m_metaObject);
+		pvarRetValue = new ibValueSelectorRecordDataObject(m_metaObject);
 		return true;
 	case eFindByCode:
 		pvarRetValue = FindByCode(*paParams[0]);

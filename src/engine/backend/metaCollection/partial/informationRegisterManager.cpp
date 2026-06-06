@@ -59,7 +59,7 @@ bool ibValueManagerDataObjectInformationRegister::CallAsFunc(const long lMethodN
 		pvarRetValue = m_metaObject->CreateRecordManagerObjectValue();
 		return true;
 	case eCreateRecordKey:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueRecordKeyObject>(m_metaObject);
+		pvarRetValue = new ibValueRecordKeyObject(m_metaObject);
 		return true;
 	case eGet:
 		pvarRetValue = lSizeArray > 1 ?
@@ -89,7 +89,7 @@ bool ibValueManagerDataObjectInformationRegister::CallAsFunc(const long lMethodN
 			: ibValueManagerDataObjectInformationRegister::SliceLast(*paParams[0]);
 		return true;
 	case eSelect:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueSelectorRegisterDataObject>(m_metaObject);
+		pvarRetValue = new ibValueSelectorRegisterDataObject(m_metaObject);
 		return true;
 	case eGetForm:
 	{

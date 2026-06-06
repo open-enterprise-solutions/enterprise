@@ -201,7 +201,7 @@ ibBackendValueForm* ibWebFrame::CreateNewForm(
 	// Parent descriptor wiring happens inside ibValueForm — it has
 	// ownerControl + access to backend_mainFrame for the UI fallback.
 	ibControlFrame* ownerControl = dynamic_cast<ibControlFrame*>(backendControl);
-	return ibValue::CreateAndPrepareValueRef<ibValueForm>(
+	return new ibValueForm(
 		creator, ownerControl, srcObject, formGuid);
 }
 

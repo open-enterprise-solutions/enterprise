@@ -37,7 +37,7 @@ ibBackendValueForm* ibValueMetaObjectAccumulationRegister::GetListForm(const wxS
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectAccumulationRegister::eFormList,
-		ownerControl, ibValue::CreateAndPrepareValueRef<ibValueListRegisterObject>(this, ibValueMetaObjectAccumulationRegister::eFormList),
+		ownerControl, new ibValueListRegisterObject(this, ibValueMetaObjectAccumulationRegister::eFormList),
 		formGuid
 	);
 }
@@ -274,7 +274,7 @@ void ibValueMetaObjectAccumulationRegister::OnRemoveMetaForm(ibValueMetaObjectFo
 
 ibValueManagerDataObject* ibValueMetaObjectAccumulationRegister::CreateManagerDataObjectValue() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueManagerDataObjectAccumulationRegister>(this);
+	return new ibValueManagerDataObjectAccumulationRegister(this);
 }
 
 ibValueRecordSetObject* ibValueMetaObjectAccumulationRegister::CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey) const
@@ -282,11 +282,11 @@ ibValueRecordSetObject* ibValueMetaObjectAccumulationRegister::CreateRecordSetOb
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		ibValueRecordSetObject* pDataRef = nullptr;
 		if (!cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef)) {
-			return ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectAccumulationRegister>(this, uniqueKey);
+			return new ibValueRecordSetObjectAccumulationRegister(this, uniqueKey);
 		}
 		return pDataRef;
 	}
-	return ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectAccumulationRegister>(this, uniqueKey);
+	return new ibValueRecordSetObjectAccumulationRegister(this, uniqueKey);
 }
 
 ibSourceDataObject* ibValueMetaObjectAccumulationRegister::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
@@ -294,7 +294,7 @@ ibSourceDataObject* ibValueMetaObjectAccumulationRegister::CreateSourceObject(co
 	switch (metaObject->GetTypeForm())
 	{
 	case eFormList:
-		return ibValue::CreateAndPrepareValueRef<ibValueListRegisterObject>(this, metaObject->GetTypeForm());
+		return new ibValueListRegisterObject(this, metaObject->GetTypeForm());
 	}
 
 	return nullptr;

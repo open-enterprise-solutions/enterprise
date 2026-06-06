@@ -86,7 +86,7 @@ bool ibValueFrame::ibValueEventContainer::GetAt(const ibValue& varKeyValue, ibVa
 	//wxString eventValue = event->GetValue();
 	//if (eventValue.IsEmpty())
 	//	return false;
-	//pvarValue = ibValue::CreateAndPrepareValueRef<ibValueEvent>(eventValue);
+	//pvarValue = new ibValueEvent(eventValue);
 	//return true;
 	return event->GetDataValue(pvarValue);
 }
@@ -98,7 +98,7 @@ bool ibValueFrame::ibValueEventContainer::Property(const ibValue& varKeyValue, i
 		ibEvent* event = m_controlEvent->GetEvent(idx);
 		if (event == nullptr) continue;
 		if (stringUtils::CompareString(key, event->GetName())) {
-			//cValueFound = ibValue::CreateAndPrepareValueRef<ibValueEvent>(event->GetName());
+			//cValueFound = new ibValueEvent(event->GetName());
 			//return true;
 			return event->GetDataValue(cValueFound);
 		}
@@ -152,7 +152,7 @@ bool ibValueFrame::ibValueEventContainer::GetPropVal(const long lPropNum, ibValu
 
 	const wxString& eventValue = event->GetValue();
 	if (eventValue.IsEmpty()) return true;
-	//pvarPropVal = ibValue::CreateAndPrepareValueRef<ibValueEvent>(eventValue);
+	//pvarPropVal = new ibValueEvent(eventValue);
 	return event->GetDataValue(pvarPropVal);
 }
 

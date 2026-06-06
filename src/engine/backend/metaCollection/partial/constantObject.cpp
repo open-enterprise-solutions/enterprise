@@ -21,10 +21,10 @@ ibValueRecordDataObjectConstant* ibValueMetaObjectConstant::CreateRecordDataObje
 	ibValueRecordDataObjectConstant* pDataRef = nullptr;
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (!cc->FindCompileModule(m_propertyModule->GetMetaObject(), pDataRef))
-			return ibValue::CreateAndPrepareValueRef<ibValueRecordDataObjectConstant>(this);
+			return new ibValueRecordDataObjectConstant(this);
 	}
 	else {
-		pDataRef = ibValue::CreateAndPrepareValueRef<ibValueRecordDataObjectConstant>(this);
+		pDataRef = new ibValueRecordDataObjectConstant(this);
 	}
 
 	return pDataRef;

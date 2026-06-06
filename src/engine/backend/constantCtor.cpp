@@ -15,5 +15,5 @@ ibValue* ibCtorMetaValueTypeConstantObject::CreateObject() const
 //const-manager class
 ibValue* ibCtorMetaValueTypeConstantManager::CreateObject() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueManagerDataObjectConstant>(m_metaObject);
+	return new ibValueManagerDataObjectConstant(m_metaObject);
 }

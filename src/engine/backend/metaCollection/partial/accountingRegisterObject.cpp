@@ -68,7 +68,7 @@ bool ibValueRecordSetObjectAccountingRegister::CallAsFunc(const long lMethodNum,
 	switch (lMethodNum)
 	{
 	case func::eAdd:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterReturnLine>(this, GetItem(AppendRow()));
+		pvarRetValue = new ibValueRecordSetObjectRegisterReturnLine(this, GetItem(AppendRow()));
 		return true;
 	case func::eCount:
 		pvarRetValue = (unsigned int)GetRowCount();

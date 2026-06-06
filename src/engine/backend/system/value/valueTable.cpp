@@ -28,7 +28,7 @@ ibDataViewItem ibValueModelTable::FindRowValue(const ibValue& varValue, const wx
 }
 
 ibValueModelTable::ibValueModelTable() : ibValueModelRamTableBase(),
-m_tableColumnCollection(ibValue::CreateAndPrepareValueRef<ibValueModelTableColumnCollection>(this))
+m_tableColumnCollection(new ibValueModelTableColumnCollection(this))
 {
 	m_members.Bind(this, &ibValueModelTable::FillMembers);
 }
@@ -126,7 +126,7 @@ bool ibValueModelTable::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 		ibBackendCoreException::Error(_("Array index out of bounds"));
 		return false;
 	}
-	pvarValue = ibValue::CreateAndPrepareValueRef<ibValueModelTableReturnLine>(this, GetItem(index));
+	pvarValue = new ibValueModelTableReturnLine(this, GetItem(index));
 	return true;
 }
 

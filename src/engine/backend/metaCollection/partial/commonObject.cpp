@@ -1171,7 +1171,7 @@ bool ibValueMetaObjectRegisterData::OnAfterCloseMetaObject()
 
 ibValueRecordKeyObject* ibValueMetaObjectRegisterData::CreateRecordKeyObjectValue() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueRecordKeyObject>(this);
+	return new ibValueRecordKeyObject(this);
 }
 
 ibValueRecordSetObject* ibValueMetaObjectRegisterData::CreateRecordSetObjectValue(bool needInitialize) const
@@ -1594,7 +1594,7 @@ void ibValueRecordDataObject::PrepareEmptyObject()
 	for (const auto object : metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
-		m_listObjectValue.insert_or_assign(object->GetMetaID(), ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObject>(this, object));
+		m_listObjectValue.insert_or_assign(object->GetMetaID(), new ibValueTabularSectionDataObject(this, object));
 	}
 }
 
@@ -2103,7 +2103,7 @@ void ibValueRecordDataObjectRef::PrepareEmptyObject()
 	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
-		m_listObjectValue.insert_or_assign(object->GetMetaID(), ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectRef>(this, object));
+		m_listObjectValue.insert_or_assign(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
 	}
 	m_objModified = true;
 }
@@ -2130,7 +2130,7 @@ void ibValueRecordDataObjectRef::PrepareEmptyObject(const ibValueRecordDataObjec
 	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
-		ibValueTabularSectionDataObjectRef* tableSection = ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectRef>(this, object);
+		ibValueTabularSectionDataObjectRef* tableSection = new ibValueTabularSectionDataObjectRef(this, object);
 		if (tableSection->LoadDataFromTable(source->GetTableByMetaID(object->GetMetaID())))
 			m_listObjectValue.insert_or_assign(object->GetMetaID(), tableSection);
 		else
@@ -2303,7 +2303,7 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject()
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
 			if (tableUse == ibItemMode::ibItemMode_Item ||
 				tableUse == ibItemMode::ibItemMode_Folder_Item) {
-				m_listObjectValue.insert_or_assign(object->GetMetaID(), ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectRef>(this, object));
+				m_listObjectValue.insert_or_assign(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
 			}
 			else {
 				m_listObjectValue.insert_or_assign(object->GetMetaID(), ibValueTypes::TYPE_NULL);
@@ -2312,7 +2312,7 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject()
 		else {
 			if (tableUse == ibItemMode::ibItemMode_Folder ||
 				tableUse == ibItemMode::ibItemMode_Folder_Item) {
-				m_listObjectValue.insert_or_assign(object->GetMetaID(), ibValue::CreateAndPrepareValueRef<ibValueTabularSectionDataObjectRef>(this, object));
+				m_listObjectValue.insert_or_assign(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
 			}
 			else {
 				m_listObjectValue.insert_or_assign(object->GetMetaID(), ibValueTypes::TYPE_NULL);
@@ -2355,7 +2355,7 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject(const ibValueRecord
 		ibValueMetaObjectTableData* metaTable = nullptr; ibItemMode tableUse = ibItemMode::ibItemMode_Folder_Item;
 		if (object->ConvertToValue(metaTable))
 			tableUse = metaTable->GetTableUse();
-		ibValueTabularSectionDataObjectRef* tableSection = ibValue::CreateAndPrepareValueRef <ibValueTabularSectionDataObjectRef>(this, object);
+		ibValueTabularSectionDataObjectRef* tableSection = new ibValueTabularSectionDataObjectRef(this, object);
 		if (tableSection->LoadDataFromTable(source->GetTableByMetaID(object->GetMetaID())))
 			m_listObjectValue.insert_or_assign(object->GetMetaID(), tableSection);
 		else
@@ -3077,7 +3077,7 @@ void ibValueRecordManagerObject::PrepareEmptyObject(const ibValueRecordManagerOb
 	m_recordLine = nullptr;
 
 	if (source == nullptr) {
-		m_recordLine = ibValue::CreateAndPrepareValueRef<ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine>(
+		m_recordLine = new ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine(
 			m_recordSet,
 			m_recordSet->GetItem(
 				m_recordSet->AppendRow()
@@ -3169,14 +3169,14 @@ ibValueRecordSetObject* ibValueRecordSetObject::CopyRegisterValue()
 
 ibValueRecordSetObject::ibValueRecordSetObject(const ibValueMetaObjectRegisterData* metaObject, const ibUniqueKeyPair& uniqueKey) : ibValueModelRamTableBase(),
 ibRuntimeModuleDataObject(m_members, this),
-m_recordColumnCollection(ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterColumnCollection>(this)), m_recordSetKeyValue(ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterKeyValue>(this)),
+m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this)), m_recordSetKeyValue(new ibValueRecordSetObjectRegisterKeyValue(this)),
 m_metaObject(metaObject), m_keyValues(uniqueKey.IsOk() ? uniqueKey : metaObject->CreateUniqueKeyPair()), m_objModified(false), m_selected(false)
 {
 }
 
 ibValueRecordSetObject::ibValueRecordSetObject(const ibValueRecordSetObject& source) : ibValueModelRamTableBase(),
 ibRuntimeModuleDataObject(m_members, this),
-m_recordColumnCollection(ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterColumnCollection>(this)), m_recordSetKeyValue(ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterKeyValue>(this)),
+m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this)), m_recordSetKeyValue(new ibValueRecordSetObjectRegisterKeyValue(this)),
 m_metaObject(source.m_metaObject), m_keyValues(source.m_keyValues), m_objModified(true), m_selected(false)
 {
 	for (long row = 0; row < source.GetRowCount(); row++) {
@@ -3276,7 +3276,7 @@ bool ibValueRecordSetObject::GetAt(const ibValue& varKeyValue, ibValue& pvarValu
 		ibBackendCoreException::Error(_("Array index out of bounds"));
 		return false;
 	}
-	pvarValue = ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterReturnLine>(this, GetItem(index));
+	pvarValue = new ibValueRecordSetObjectRegisterReturnLine(this, GetItem(index));
 	return true;
 }
 
@@ -3423,7 +3423,7 @@ ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::ibValueR
 
 	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
 		m_listColumnInfo.insert_or_assign(object->GetMetaID(),
-			ibValue::CreateAndPrepareValueRef<ibValueRecordSetRegisterColumnInfo>(object));
+			new ibValueRecordSetRegisterColumnInfo(object));
 	}
 }
 
@@ -3653,7 +3653,7 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::GetPropVal(
 {
 	const ibMetaID& id = m_members.GetPropData(lPropNum);
 	if (id != wxNOT_FOUND) {
-		pvarPropVal = ibValue::CreateAndPrepareValueRef<ibValueRecordSetObjectRegisterKeyDescriptionValue>(m_recordSet, id);
+		pvarPropVal = new ibValueRecordSetObjectRegisterKeyDescriptionValue(m_recordSet, id);
 		return true;
 	}
 	return false;

@@ -140,7 +140,7 @@ bool ibValueNotebook::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, i
 	{
 	case enPages:
 	{
-		ibValueStructure* structurePage = ibValue::CreateAndPrepareValueRef<ibValueStructure>(true);
+		ibValueStructure* structurePage = new ibValueStructure(true);
 		for (unsigned int i = 0; i < GetChildCount(); i++) {
 			ibValueNotebookPage* notebookPage = dynamic_cast<ibValueNotebookPage*>(GetChild(i));
 			if (notebookPage) {

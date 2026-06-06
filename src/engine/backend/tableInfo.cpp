@@ -268,7 +268,7 @@ bool ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::GetProp
 		pvarPropVal = GetColumnName();
 		return true;
 	case enColumnTypes:
-		pvarPropVal = ibValue::CreateAndPrepareValueRef<ibValueTypeDescription>(GetColumnType());
+		pvarPropVal = new ibValueTypeDescription(GetColumnType());
 		return true;
 	case enColumnCaption:
 		pvarPropVal = GetColumnCaption();

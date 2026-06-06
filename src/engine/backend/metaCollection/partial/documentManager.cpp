@@ -56,7 +56,7 @@ bool ibValueManagerDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue
 		pvarRetValue = m_metaObject->CreateObjectValue();
 		return true;
 	case eSelect:
-		pvarRetValue = ibValue::CreateAndPrepareValueRef<ibValueSelectorRecordDataObject>(m_metaObject);
+		pvarRetValue = new ibValueSelectorRecordDataObject(m_metaObject);
 		return true;
 	case eFindByNumber:
 	{

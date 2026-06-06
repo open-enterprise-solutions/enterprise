@@ -35,7 +35,7 @@ ibValueMetaObjectFormBase* ibValueMetaObjectDataProcessor::GetDefaultFormByID(co
 
 ibValueManagerDataObject* ibValueMetaObjectDataProcessor::CreateManagerDataObjectValue() const
 {
-	return ibValue::CreateAndPrepareValueRef<ibValueManagerDataObjectDataProcessor>(this);
+	return new ibValueManagerDataObjectDataProcessor(this);
 }
 
 #include "backend/appData.h"
@@ -56,7 +56,7 @@ ibValueRecordDataObjectExt* ibValueMetaObjectDataProcessor::CreateObjectExtValue
 		if (cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef))
 			return pDataRef;
 	}
-	return ibValue::CreateAndPrepareValueRef<ibValueRecordDataObjectDataProcessor>(this);
+	return new ibValueRecordDataObjectDataProcessor(this);
 }
 
 ibSourceDataObject* ibValueMetaObjectDataProcessor::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const

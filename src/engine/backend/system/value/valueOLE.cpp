@@ -358,7 +358,7 @@ ibValue ibValueOLE::FromVariantArray(SAFEARRAY* psa) const
 		aDims[i].cElements = nMax;//-nMin+1;
 	}
 
-	ibValue cRet = ibValue::CreateAndPrepareValueRef<ibValueArray>();
+	ibValue cRet = new ibValueArray();
 	AddFromArray(cRet, aPos, psa, aDims, nDim - 1);
 
 	delete[]aPos;

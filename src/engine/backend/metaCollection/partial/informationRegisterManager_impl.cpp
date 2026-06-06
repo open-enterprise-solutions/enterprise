@@ -19,7 +19,7 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cFilter)
 	else if (ses_query == nullptr)
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	ibValueModelTable* retTable = ibValue::CreateAndPrepareValueRef<ibValueModelTable>();
+	ibValueModelTable* retTable = new ibValueModelTable();
 	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
@@ -91,7 +91,7 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cPeriod,
 	else if (ses_query == nullptr)
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	ibValueModelTable* retTable = ibValue::CreateAndPrepareValueRef<ibValueModelTable>();
+	ibValueModelTable* retTable = new ibValueModelTable();
 	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
@@ -168,7 +168,7 @@ ibValue ibValueManagerDataObjectInformationRegister::GetFirst(const ibValue& cPe
 	else if (ses_query == nullptr)
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	ibValueStructure* retTable = ibValue::CreateAndPrepareValueRef<ibValueStructure>();
+	ibValueStructure* retTable = new ibValueStructure();
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		retTable->SetAt(object->GetName(), ibValue());
 	}
@@ -347,7 +347,7 @@ ibValue ibValueManagerDataObjectInformationRegister::GetLast(const ibValue& cPer
 	else if (ses_query == nullptr)
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	ibValueStructure* retTable = ibValue::CreateAndPrepareValueRef<ibValueStructure>();
+	ibValueStructure* retTable = new ibValueStructure();
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		retTable->SetAt(object->GetName(), ibValue());
 	}
@@ -526,7 +526,7 @@ ibValue ibValueManagerDataObjectInformationRegister::SliceFirst(const ibValue& c
 	else if (ses_query == nullptr)
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	ibValueModelTable* retTable = ibValue::CreateAndPrepareValueRef<ibValueModelTable>();
+	ibValueModelTable* retTable = new ibValueModelTable();
 	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
@@ -716,7 +716,7 @@ ibValue ibValueManagerDataObjectInformationRegister::SliceLast(const ibValue& cP
 	else if (ses_query == nullptr)
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	ibValueModelTable* retTable = ibValue::CreateAndPrepareValueRef<ibValueModelTable>();
+	ibValueModelTable* retTable = new ibValueModelTable();
 	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
 	wxASSERT(colCollection);
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {

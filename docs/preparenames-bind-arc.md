@@ -290,10 +290,20 @@ PrepareNames calls. The only survivors:
   valueFileDialog) — still carry `static CMethodHelper m_methodHelper` + their own
   `PrepareNames()`, but they are NOT in any vcxproj (same dead-legacy hierarchy as
   CDocMDIFrame; user: "уже давно нет"). Left untouched.
-- **Misnomer**: the canonical factory `ibValue::CreateAndPrepareValueRef<T>` still
-  carries "Prepare" in its name, but its body is just `::new T(...)` (no prepare).
-  Renaming it is a separate hundreds-of-callsite churn — NOT part of this arc's
-  functional closure. Tracked as optional cosmetic cleanup.
+- **Factory eliminated (2026-06-06).** `ibValue::CreateAndPrepareValueRef<T>` existed
+  only to call `PrepareNames()` at creation; with PrepareNames gone its body was just
+  `::new T(...)`. The whole factory is now removed (193 call sites across 59 files):
+  - Most sites → plain `new T(...)` (public ctors).
+  - `ibValueReferenceDataObject` → its own static `Create()` factory (does `new` +
+    `PrepareRef`), the intended construction path.
+  - `ibValueRecordDataObjectConstant` / `ibValueRecordDataObjectDocument` had
+    protected ctors (factory-only via `friend class ibValue`) — these were just an
+    inconsistency vs Catalog's `CreateObjectRefValue` (already `new`), so their ctors
+    were made public.
+  - The two generic `CreateAndConvertObjectValueRef<T>` wrappers (value.h / metaData.h)
+    → `new T(...)`. ibValue's is friend-safe for any T; ibMetaData's generic path has
+    no explicit-`<T>` callers (carries only public value types: Font/Colour/Size/…).
+  No more `CreateAndPrepareValueRef` / `NewValueRef` anywhere.
 
 The functional arc is **closed**. Original migration inventory kept below for history:
 

@@ -250,9 +250,9 @@ ibValue ibValueTypeDescription::AdjustValue(const ibValue& varValue) const
 
 ibValue ibValueTypeDescription::Types() const
 {
-	ibValueArray* arr = ibValue::CreateAndPrepareValueRef<ibValueArray>();
+	ibValueArray* arr = new ibValueArray();
 	for (auto clsid : m_typeDesc.m_listTypeClass)
-		arr->Add(ibValue::CreateAndPrepareValueRef<ibValueType>(clsid));
+		arr->Add(new ibValueType(clsid));
 	return arr;
 }
 

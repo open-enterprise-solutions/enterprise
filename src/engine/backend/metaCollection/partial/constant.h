@@ -118,7 +118,7 @@ protected:
 	enum helperProp {
 		eValue
 	};
-protected:
+public:
 
 	//override copy constructor
 	ibValueRecordDataObjectConstant(const ibValueMetaObjectConstant* metaObject);
