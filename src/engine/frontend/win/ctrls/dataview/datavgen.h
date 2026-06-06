@@ -1316,6 +1316,13 @@ private:
 	int                         m_lineHeight;
 	bool                        m_dirty;
 
+	// Anti-flicker: CalcWindowSizes() (OnSize) sets this instead of touching
+	// the scrollbars directly, so the actual SetScrollRate/AdjustScrollbars
+	// happens once in OnInternalIdle() after the form-open resize storm has
+	// settled — otherwise the scrollbar pops up at every intermediate size
+	// while the list form is still opening.
+	bool                        m_calcScrollPending;
+
 	ibDataViewColumn* m_currentCol;
 	unsigned int                m_currentRow;
 	wxSelectionStore            m_selection;

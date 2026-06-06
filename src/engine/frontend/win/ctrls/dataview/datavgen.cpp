@@ -3777,6 +3777,12 @@ void ibDataViewCtrl::UpdateColumnSizes()
 		if (availableWidth < wxMax(lastCol->GetMinWidth(),
 			lastCol->WXGetSpecifiedWidth()))
 		{
+			// The remaining space can't hold the last column at its minimum
+			// width — content overflows the viewport. Publish the real total
+			// width so the horizontal scrollbar appears; a bare return would
+			// leave a stale virtual width (possibly 0 from an earlier "fits"
+			// pass) and hide the scrollbar even though there's content to scroll.
+			m_tableAreaWin->SetVirtualSize(colswidth, m_tableAreaWin->GetVirtualSize().y);
 			return;
 		}
 
@@ -3817,6 +3823,18 @@ wxEND_EVENT_TABLE()
 
 void ibDataViewCtrl::OnScrollEvent(wxScrollWinEvent& event)
 {
+	// Horizontal scrolling (column overflow) is plain wxScrollHelper
+	// territory — pass it straight through to the default handler.  The
+	// paged 3-state lying-scrollbar logic below is VERTICAL-only; before
+	// the orientation guard it also caught horizontal events, so a paged
+	// model swallowed the horizontal thumb drag (THUMBRELEASE returns
+	// without event.Skip()) and mis-routed horizontal line/page events
+	// into vertical PagedFetch — which is exactly why column scroll broke
+	// once the custom scrollbar landed.
+	if (event.GetOrientation() != wxVERTICAL) {
+		event.Skip();
+		return;
+	}
 	ibDataViewModel* model = GetModel();
 	if (model != nullptr && model->IsPagedModel() && m_tableAreaWin != nullptr) {
 		const int  countPerPage = GetCountPerPage();
@@ -3951,6 +3969,7 @@ void ibDataViewCtrl::Init()
 	m_footerAreaWin = NULL;
 
 	m_colsDirty = false;
+	m_calcScrollPending = false;
 
 	m_allowMultiColumnSort = false;
 
@@ -4442,8 +4461,30 @@ void ibDataViewCtrl::CalcWindowSizes()
 		// Update the last column size to take all the available space. Note that
 		// this must be done after calling Layout() to update m_tableAreaWin size.
 
+		// Scroll-rate rationale (the rate is actually applied later, in
+		// OnInternalIdle, once m_calcScrollPending fires).  AdjustScrollbars()
+		// derives the scrollbar range as virtualSize / pixelsPerLine, so
+		// with a 0 rate it emits range == 0 and NO scrollbar appears even when
+		// the virtual width overflows the client.  The x-rate was previously
+		// only set by RecalculateDisplay(), which fires on m_dirty — for a
+		// non-paged control (e.g. a document-form tablebox) that seldom runs
+		// after the first layout, so every resize went through CalcWindowSizes
+		// → AdjustScrollbars() with a stale 0 x-rate and the horizontal
+		// scrollbar never showed despite overflowing columns.  (Diagnosed:
+		// virtX=1647 vs clientX=611, yet SetScrollbar range=0.)
+		//
+		// Set ONLY the x-rate; preserve the current y-rate.  Forcing a y-rate
+		// here would enable the vertical scrollbar for controls that never had
+		// one (y-rate stays 0 until RecalculateDisplay sets it), making it pop
+		// up spuriously — e.g. the small designer tablebox preview where any
+		// content overflows the tiny rows area.  Vertical stays owned by
+		// RecalculateDisplay (non-paged) / the lying paged scrollbar (paged).
 		UpdateColumnSizes();
-		AdjustScrollbars();
+		// Defer the scrollbar geometry (scroll rate + AdjustScrollbars) to the
+		// next OnInternalIdle so it runs ONCE after the form-open resize storm
+		// settles, instead of flashing the scrollbar at every intermediate size
+		// while the list form is still opening.  Applied in OnInternalIdle().
+		m_calcScrollPending = true;
 
 		// We must redraw the headers if their height changed. Normally this
 		// shouldn't happen as the control shouldn't let itself be resized beneath
@@ -5477,6 +5518,24 @@ void ibDataViewCtrl::OnInternalIdle()
 	{
 		RecalculateDisplay();
 		m_dirty = false;
+	}
+
+	// Apply deferred scrollbar geometry from CalcWindowSizes() exactly once,
+	// after the form-open resize storm has settled.  Establish the horizontal
+	// scroll rate (x) while preserving the vertical (y) rate, then run
+	// AdjustScrollbars().  Doing this here, instead of inside CalcWindowSizes()
+	// on every intermediate OnSize, stops the scrollbar from flashing while a
+	// list form is still opening.  Cheap/idempotent if RecalculateDisplay above
+	// already adjusted the scrollbars this pass.
+	if (m_calcScrollPending)
+	{
+		m_calcScrollPending = false;
+		int curXUnit = 0, curYUnit = 0;
+		GetScrollPixelsPerUnit(&curXUnit, &curYUnit);
+		const int wantXUnit = FromDIP(10);
+		if (curXUnit != wantXUnit)
+			SetScrollRate(wantXUnit, curYUnit);
+		AdjustScrollbars();
 	}
 
 	// External seed-chain hook FIRST — runs before PagedBootstrap so

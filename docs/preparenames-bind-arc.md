@@ -280,7 +280,22 @@ Whole-file clean (no DoGetPMethods / PrepareNames / pointer-helper left):
 - **reference.{h,cpp}**, **tabularSection.{h,cpp}** (Base + ReturnLine + ColumnCollection).
 - **enumUnit**, **enumFactory**, **codeRunner/outputMessage**, **globalContextManager**.
 
-## TODO — remaining old-path classes, then remove PrepareNames
+## CLOSED (verified 2026-06-06)
+
+`ibValue::PrepareNames` (the virtual) is **gone**; all LIVE classes migrated to the
+two Members bases + `FillMembers`/`Shared<Binder>` (including list/objectList.h and
+selector/objectSelector.h — the list below is historical). `valueFactory.cpp` has no
+PrepareNames calls. The only survivors:
+- **Dead CValue dialogs** (valueGrid / valueColourDialog / valueFontDialog /
+  valueFileDialog) — still carry `static CMethodHelper m_methodHelper` + their own
+  `PrepareNames()`, but they are NOT in any vcxproj (same dead-legacy hierarchy as
+  CDocMDIFrame; user: "уже давно нет"). Left untouched.
+- **Misnomer**: the canonical factory `ibValue::CreateAndPrepareValueRef<T>` still
+  carries "Prepare" in its name, but its body is just `::new T(...)` (no prepare).
+  Renaming it is a separate hundreds-of-callsite churn — NOT part of this arc's
+  functional closure. Tracked as optional cosmetic cleanup.
+
+The functional arc is **closed**. Original migration inventory kept below for history:
 
 Still to migrate (each derives an already-Dynamic root → own helper is dead, just
 drop DoGetPMethods + own member, PrepareNames→FillMembers bound in ctor, dispatch ->→.):
