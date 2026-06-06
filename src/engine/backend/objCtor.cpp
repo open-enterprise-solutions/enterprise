@@ -12,7 +12,7 @@
 //reference class
 ibValue* ibCtorMetaValueTypeReference::CreateObject() const
 {
-	return ibValueReferenceDataObject::Create(m_metaObject);
+	return ibValueReferenceDataObject::CreateRaw(m_metaObject);
 }
 
 //list class

@@ -97,6 +97,13 @@ ibValueReferenceDataObject* ibValueReferenceDataObject::Create(const ibValueMeta
 	return refData;
 }
 
+ibValueReferenceDataObject* ibValueReferenceDataObject::CreateRaw(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid)
+{
+	// Construct without PrepareRef (deferred to first use): the value-ctor
+	// registry path can't prepare eagerly without recursing. See header note.
+	return new ibValueReferenceDataObject(metaObject, objGuid);
+}
+
 ibValueReferenceDataObject* ibValueReferenceDataObject::Create(const ibMetaData* metaData, void* ptr)
 {
 	ibReference* reference = static_cast<ibReference*>(ptr);

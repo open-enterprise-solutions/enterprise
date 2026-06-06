@@ -43,6 +43,14 @@ public:
 	static ibValueReferenceDataObject* Create(const ibMetaData* metaData, const ibMetaID& id, const ibGuid& objGuid = wxNullGuid);
 	static ibValueReferenceDataObject* Create(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid = wxNullGuid);
 
+	// Like Create(metaObject, guid) but WITHOUT the PrepareRef call. The
+	// value-ctor registry path (ibCtorMetaValueTypeReference::CreateObject)
+	// must use this: PrepareRef there recurses — it materialises the
+	// reference's attribute values, one of which is itself a reference,
+	// re-entering CreateObject -> stack overflow. PrepareRef runs later, on
+	// first real use. (Member, so it reaches the private ctor.)
+	static ibValueReferenceDataObject* CreateRaw(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid = wxNullGuid);
+
 	static ibValueReferenceDataObject* Create(const ibMetaData* metaData, void* ptr);
 	static ibValueReferenceDataObject* CreateFromPtr(const ibMetaData* metaData, void* ptr);
 	static ibValueReferenceDataObject* CreateFromResultSet(class ibDatabaseResultSet *rs, const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& refGuid);
