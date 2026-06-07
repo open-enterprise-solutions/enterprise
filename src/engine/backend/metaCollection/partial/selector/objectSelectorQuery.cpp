@@ -2,9 +2,9 @@
 
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 
-#include "backend/databaseLayer/databaseLayer.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"
+#include "backend/query/dataQueryBuilder.h"   // L3 door — selector reads / scans
 
 /////////////////////////////////////////////////////////////////////////
 
@@ -13,15 +13,14 @@ void ibValueSelectorRecordDataObject::Reset()
 	m_objGuid.reset(); m_newObject = false;
 	if (!appData->DesignerMode()) {
 		m_currentValues.clear();
-		ibPreparedStatement* statement = ses_query->PrepareStatement("SELECT uuid FROM %s ORDER BY CAST(uuid AS VARCHAR(36)); ", m_metaObject->GetTableNameDB());
-		ibDatabaseResultSet* resultSet = statement->RunQueryWithResults();
-		while (resultSet->Next()) {
-			m_currentValues.push_back(
-				resultSet->GetResultString(guidName)
-			);
-		};
-		ses_query->CloseResultSet(resultSet);
-		ses_query->CloseStatement(statement);
+		// Full key scan through the L3 door — row keys from the L3 selection.
+		ibDataQueryBuilder q;
+		q.From(m_metaObject->GetQueryable());
+		ibReadPageRequest page;
+		page.m_count = 0;   // unbounded
+		ibDataQueryResult selection = q.Select(page);
+		while (selection.Next())
+			m_currentValues.push_back(selection.GetGuidString());
 	}
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
 		if (!appData->DesignerMode()) {
@@ -48,39 +47,30 @@ bool ibValueSelectorRecordDataObject::Read()
 
 	m_listObjectValue.clear();
 
-	ibPreparedStatement* statement = nullptr;
-	if (ses_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
-		statement = ses_query->PrepareStatement("SELECT * FROM %s WHERE uuid = '%s' LIMIT 1; ", m_metaObject->GetTableNameDB(), m_objGuid.str());
-	else
-		statement = ses_query->PrepareStatement("SELECT FIRST 1 * FROM %s WHERE uuid = '%s'; ", m_metaObject->GetTableNameDB(), m_objGuid.str());
-
-	if (statement == nullptr)
-		return false;
-	bool isLoaded = false;
-	ibDatabaseResultSet* resultSet = statement->RunQueryWithResults();
-	if (resultSet->Next()) {
-
-		m_listObjectValue.insert_or_assign(m_metaObject->GetMetaID(), ibValueReferenceDataObject::CreateFromResultSet(resultSet, m_metaObject, m_objGuid));
-
-		//load attributes 
-		for (const auto object : m_metaObject->GetAttributeArrayObject()) {
-			if (m_metaObject->IsDataReference(object->GetMetaID()))
-				continue;
-			ibValueMetaObjectAttributeBase::GetValueAttribute(
-				object, m_listObjectValue[object->GetMetaID()], resultSet);
+	// Read the row by key through the L3 door; every value (incl. the self
+	// reference) comes from the L3 selection as a ready ibValue — no raw result.
+	try {
+		ibDataQueryBuilder q;
+		q.From(m_metaObject->GetQueryable()).WhereKey(m_objGuid);
+		ibReadPageRequest page;
+		page.m_count = 1;
+		ibDataQueryResult selection = q.Select(page);
+		if (selection.Next()) {
+			m_listObjectValue.insert_or_assign(m_metaObject->GetMetaID(),
+				selection.GetValue(m_metaObject->GetDataReference()));
+			for (const auto object : m_metaObject->GetAttributeArrayObject())
+				if (!m_metaObject->IsDataReference(object->GetMetaID()))
+					m_listObjectValue[object->GetMetaID()] = selection.GetValue(object);
+			for (const auto object : m_metaObject->GetTableArrayObject()) {
+				ibValueTabularSectionDataObjectRef* tabularSection = new ibValueTabularSectionDataObjectRef(this, object);
+				tabularSection->LoadData(m_objGuid);
+				m_listObjectValue.insert_or_assign(object->GetMetaID(), tabularSection);
+			}
+			return true;
 		}
-		for (const auto object : m_metaObject->GetTableArrayObject()) {
-			ibValueTabularSectionDataObjectRef* tabularSection = new ibValueTabularSectionDataObjectRef(this, object);
-			if (!tabularSection->LoadData(m_objGuid))
-				isLoaded = false;
-			m_listObjectValue.insert_or_assign(object->GetMetaID(), tabularSection);
-		}
-
-		isLoaded = true;
 	}
-	ses_query->CloseResultSet(resultSet);
-	ses_query->CloseStatement(statement);
-	return isLoaded;
+	catch (...) {}
+	return false;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -90,27 +80,28 @@ void ibValueSelectorRegisterDataObject::Reset()
 	m_keyValues.clear();
 	if (!appData->DesignerMode()) {
 		m_currentValues.clear();
-		ibPreparedStatement* statement = ses_query->PrepareStatement("SELECT * FROM %s; ", m_metaObject->GetTableNameDB());
-		ibDatabaseResultSet* resultSet = statement->RunQueryWithResults();
-		while (resultSet->Next()) {
+		// Full scan through the L3 door; key columns come from the L3 selection.
+		ibDataQueryBuilder q;
+		q.From(m_metaObject->GetQueryable());
+		ibReadPageRequest page;
+		page.m_count = 0;   // unbounded
+		ibDataQueryResult selection = q.Select(page);
+		while (selection.Next()) {
 			ibRowMetaValues keyRow;
 			if (m_metaObject->HasRecorder()) {
 				ibValueMetaObjectAttributePredefined* attributeRecorder = m_metaObject->GetRegisterRecorder();
 				wxASSERT(attributeRecorder);
-				ibValueMetaObjectAttributeBase::GetValueAttribute(attributeRecorder, keyRow[attributeRecorder->GetMetaID()], resultSet);
+				keyRow[attributeRecorder->GetMetaID()] = selection.GetValue(attributeRecorder);
 				ibValueMetaObjectAttributePredefined* attributeNumberLine = m_metaObject->GetRegisterLineNumber();
 				wxASSERT(attributeNumberLine);
-				ibValueMetaObjectAttributeBase::GetValueAttribute(attributeNumberLine, keyRow[attributeNumberLine->GetMetaID()], resultSet);
+				keyRow[attributeNumberLine->GetMetaID()] = selection.GetValue(attributeNumberLine);
 			}
 			else {
-				for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
-					ibValueMetaObjectAttributeBase::GetValueAttribute(object, keyRow[object->GetMetaID()], resultSet);
-				}
+				for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
+					keyRow[object->GetMetaID()] = selection.GetValue(object);
 			}
 			m_currentValues.push_back(keyRow);
-		};
-		ses_query->CloseResultSet(resultSet);
-		ses_query->CloseStatement(statement);
+		}
 	}
 }
 
@@ -119,67 +110,32 @@ bool ibValueSelectorRegisterDataObject::Read()
 	if (m_keyValues.empty())
 		return false;
 
-	m_listObjectValue.clear(); 
-	
-	int position = 1;
-	
-	wxString queryText = ""; bool isLoaded = false;
+	m_listObjectValue.clear();
 
-	if (ses_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
-		queryText = "SELECT * FROM " + m_metaObject->GetTableNameDB() + " LIMIT 1"; bool firstWhere = true;
-		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
-			if (firstWhere) {
-				queryText = queryText + " WHERE ";
-			}
-			queryText = queryText +
-				(firstWhere ? " " : " AND ") + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(object);
-			if (firstWhere) {
-				firstWhere = false;
-			}
-		}
-	}
-	else {
-		queryText = "SELECT FIRST 1 * FROM " + m_metaObject->GetTableNameDB(); bool firstWhere = true;
-		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
-			if (firstWhere) {
-				queryText = queryText + " WHERE ";
-			}
-			queryText = queryText +
-				(firstWhere ? " " : " AND ") + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(object);
-			if (firstWhere) {
-				firstWhere = false;
-			}
-		}
-		queryText += " LIMIT 1 ";
-	}
-
-	ibPreparedStatement* statement = ses_query->PrepareStatement(queryText);
-
-	if (statement == nullptr)
-		return false;
-
-	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
-		ibValueMetaObjectAttributeBase::SetValueAttribute(
-			object,
-			m_keyValues.at(object->GetMetaID()),
-			statement,
-			position
-		);
-	}
-
-	ibDatabaseResultSet* resultSet = statement->RunQueryWithResults();
-
-	if (resultSet->Next()) {
-		isLoaded = true;
-		//load attributes 
-		ibRowMetaValues keyTable, rowTable;
+	// Composite-key read through the L3 door: each dimension is an Eq condition,
+	// decomposed inside L3 across ALL its physical fields (the FB FIRST / others
+	// LIMIT fork, the GetCompositeSQLFieldName concat and the positional binding
+	// all move into the door). Values come from the L3 selection (GetValue) — no
+	// raw result set, no prepared statement at this call site.
+	try {
+		ibDataQueryBuilder q;
+		q.From(m_metaObject->GetQueryable());
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
-			ibValueMetaObjectAttributeBase::GetValueAttribute(object, keyTable[object->GetMetaID()], resultSet);
-		for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
-			ibValueMetaObjectAttributeBase::GetValueAttribute(object, rowTable[object->GetMetaID()], resultSet);
-		m_listObjectValue.insert_or_assign(keyTable, rowTable);
+			q.Where(object, ibComparisonType::ibComparisonType_Equal,
+				m_keyValues.at(object->GetMetaID()));
+		ibReadPageRequest page;
+		page.m_count = 1;
+		ibDataQueryResult selection = q.Select(page);
+		if (selection.Next()) {
+			ibRowMetaValues keyTable, rowTable;
+			for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
+				keyTable[object->GetMetaID()] = selection.GetValue(object);
+			for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
+				rowTable[object->GetMetaID()] = selection.GetValue(object);
+			m_listObjectValue.insert_or_assign(keyTable, rowTable);
+			return true;
+		}
 	}
-	ses_query->CloseResultSet(resultSet);
-	ses_query->CloseStatement(statement);
-	return isLoaded;
+	catch (...) {}
+	return false;
 }

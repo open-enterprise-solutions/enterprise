@@ -9,9 +9,19 @@
 #include "backend/compiler/byteCode.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseResultSet.h"
-#include "backend/databaseLayer/preparedStatement.h"
+#include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door: descriptor pilot
 #include "backend/fileSystem/fs.h"
 #include "backend/guid.h"
+
+// Descriptor (ibRuntimeModuleDataObject) AOT-cache DAO, migrated onto the L2
+// query door. The default-ctor ibDatabaseQueryBuilder resolves to
+// ibConnectionPool::CurrentHolder() — the SAME pool entry the `db_query` macro
+// routes through (connectionScope.h) — so this runs on the same connection it
+// used to. The blob rides as an ibConstBlob (bound via SetParamBlob, never
+// inlined); UPSERT stays DELETE-then-INSERT (uniform across drivers). A passive
+// scope (pool not up) makes Execute throw NoConnection, which the surrounding
+// try/catch turns into a cache miss → recompile — the same graceful degradation
+// as the old `db_query == nullptr` guard. See docs/query-language-arc.md §17.
 
 bool ibByteCodeCache::Save(const ibByteCode& bc)
 {
@@ -28,38 +38,21 @@ bool ibByteCodeCache::Save(const ibByteCode& bc)
 	const wxString descIdStr = bc.m_id;
 	const wxString bcVerStr  = bc.m_version;
 
-	// UPSERT via DELETE-then-INSERT — uniform across drivers (FB has
-	// no ON CONFLICT; SQLite/PG do but emulating per-driver dialect
-	// here would be more code than the round-trip saving). Both
-	// statements run on the same db_query connection, so no isolation
-	// concern beyond the calling thread's own work.
-	{
-		ibStatementGuard del(db_query,
-			db_query->PrepareStatement(
-				wxT("DELETE FROM %s WHERE descriptor_id = ?;"),
-				bytecode_cache_table));
-		if (!del) return false;
-		del->SetParamString(1, descIdStr);
-		try { del->RunQuery(); }
-		catch (...) { return false; }
+	// UPSERT via DELETE-then-INSERT (uniform across drivers; FB has no ON
+	// CONFLICT). Both statements run on one builder = one CurrentHolder
+	// connection, so there is no cross-connection isolation concern.
+	try {
+		ibDatabaseQueryBuilder q;
+		q.Execute(ibDelete(bytecode_cache_table,
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("descriptor_id")), ibConst(ibValue(descIdStr)))));
+		q.Execute(ibInsert(bytecode_cache_table, {
+			{ wxT("descriptor_id"),    ibConst(ibValue(descIdStr)) },
+			{ wxT("bytecode_version"), ibConst(ibValue(bcVerStr)) },
+			{ wxT("bc_blob"),          ibConstBlob(blob.GetData(),
+			                                       static_cast<size_t>(blob.GetDataLen())) },
+		}));
 	}
-	{
-		ibStatementGuard ins(db_query,
-			db_query->PrepareStatement(
-				wxT("INSERT INTO %s (descriptor_id, bytecode_version, bc_blob) ")
-				wxT("VALUES (?, ?, ?);"),
-				bytecode_cache_table));
-		if (!ins) return false;
-		ins->SetParamString(1, descIdStr);
-		ins->SetParamString(2, bcVerStr);
-		// SetParamBlob(int, const wxMemoryBuffer&) is a no-op default
-		// in ibPreparedStatement; the (void*, long) overload is the
-		// one drivers actually implement.
-		ins->SetParamBlob  (3, blob.GetData(),
-		                    static_cast<long>(blob.GetDataLen()));
-		try { ins->RunQuery(); }
-		catch (...) { return false; }
-	}
+	catch (...) { return false; }
 	return true;
 }
 
@@ -70,29 +63,31 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId)
 
 	wxASSERT(descId.isValid());
 
-	ibStatementGuard sel(db_query,
-		db_query->PrepareStatement(
-			wxT("SELECT bc_blob FROM %s WHERE descriptor_id = ?;"),
-			bytecode_cache_table));
-	if (!sel) return false;
-	sel->SetParamString(1, wxString(descId));
+	try {
+		// SELECT bc_blob FROM <t> WHERE descriptor_id = <descId>
+		ibDatabaseQueryBuilder q;
+		ibQueryIR ir(
+			ibProject(
+				ibFilter(
+					ibScan(bytecode_cache_table),
+					ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("descriptor_id")),
+					        ibConst(ibValue(wxString(descId))))),
+				{ { ibCol(wxT("bc_blob")), wxEmptyString } }));
 
-	ibDatabaseResultSet* rs = nullptr;
-	try { rs = sel->RunQueryWithResults(); }
-	catch (...) { return false; }
-	if (rs == nullptr) return false;
-
-	bool ok = false;
-	if (rs->Next()) {
-		wxMemoryBuffer blob;
-		rs->GetResultBlob(1, blob);
-		if (blob.GetDataLen() > 0) {
-			ibReaderMemory reader(blob);
-			ok = outBc.DeserializeAOT(reader);
+		ibQueryResult res = q.ExecuteIR(ir);   // RAII: closes cursor + statement
+		if (res.Next()) {
+			if (ibDatabaseResultSet* rs = res.RawResultSet()) {
+				wxMemoryBuffer blob;
+				rs->GetResultBlob(1, blob);
+				if (blob.GetDataLen() > 0) {
+					ibReaderMemory reader(blob);
+					return outBc.DeserializeAOT(reader);
+				}
+			}
 		}
 	}
-	sel->CloseResultSet(rs);
-	return ok;
+	catch (...) { return false; }
+	return false;
 }
 
 void ibByteCodeCache::Invalidate(const ibGuid& descId)
@@ -102,13 +97,12 @@ void ibByteCodeCache::Invalidate(const ibGuid& descId)
 
 	wxASSERT(descId.isValid());
 
-	ibStatementGuard del(db_query,
-		db_query->PrepareStatement(
-			wxT("DELETE FROM %s WHERE descriptor_id = ?;"),
-			bytecode_cache_table));
-	if (!del) return;
-	del->SetParamString(1, wxString(descId));
-	try { del->RunQuery(); }
+	try {
+		ibDatabaseQueryBuilder q;
+		q.Execute(ibDelete(bytecode_cache_table,
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("descriptor_id")),
+			        ibConst(ibValue(wxString(descId))))));
+	}
 	catch (...) { /* best-effort — Invalidate is hygiene, not correctness */ }
 }
 
@@ -116,6 +110,9 @@ void ibByteCodeCache::InvalidateAll()
 {
 	if (db_query == nullptr) return;
 	if (!db_query->TableExists(bytecode_cache_table)) return;
-	try { db_query->RunQuery(wxT("DELETE FROM %s;"), bytecode_cache_table); }
+	try {
+		ibDatabaseQueryBuilder q;
+		q.Execute(ibDelete(bytecode_cache_table));   // no WHERE = all rows
+	}
 	catch (...) { /* best-effort */ }
 }

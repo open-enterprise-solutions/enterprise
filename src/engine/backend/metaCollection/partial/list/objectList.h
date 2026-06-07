@@ -4,7 +4,11 @@
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 
-//base list class 
+#include <memory>
+
+struct ibRenderedPageCache;   // backend/query/dataQueryBuilder.h — build-once page cache
+
+//base list class
 class BACKEND_API ibValueListDataObject : public ibValueModelTableBase,
 	public ibSourceDataObject {
 	public:
@@ -184,9 +188,15 @@ public:
 protected:
 	ibGuid m_objGuid;
 	ibValuePtr<ibValueDataObjectListColumnCollection> m_recordColumnCollection;
+
+	// Build-once page-query cache (Lever 1 / docs §20): the L3 door reuses the
+	// resolved identity sort + rendered SQL across scroll ticks, rebinding only
+	// the anchor. Self-invalidating by signature; lazily created on first Fetch.
+	// Lives here so it persists with the model. Flat-list Fetch path only.
+	mutable std::shared_ptr<ibRenderedPageCache> m_pageCache;
 };
 
-// list enumeration 
+// list enumeration
 class BACKEND_API ibValueListDataObjectEnumRef : public ibValueListDataObject {
 	public:
 	struct ibValueTableEnumRow : public ibValueTableRow {
@@ -475,6 +485,12 @@ public:
 	virtual bool UseStandartCommand() const { return !m_metaObject->HasRecorder(); }
 
 	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const wxString& colName = wxEmptyString) const;
+
+	// Effective cursor order = enabled user sort ++ the register's identity tail
+	// (recorder+line / period?+dimensions), via the L3 door. The keyset anchor is
+	// built by iterating this so its per-column values line up with the order the
+	// door's anchor predicate binds them.
+	std::vector<ibQuerySortItem> EffectiveSortOrder() const;
 
 	//Constructor
 	ibValueListRegisterObject(const ibValueMetaObjectRegisterData* metaObject = nullptr, const ibFormID& formType = wxNOT_FOUND);

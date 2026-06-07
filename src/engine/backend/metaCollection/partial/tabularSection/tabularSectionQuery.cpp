@@ -5,12 +5,28 @@
 
 #include "tabularSection.h"
 
-#include "backend/session/session.h"
-
-#include "backend/databaseLayer/databaseLayer.h"
-#include "backend/databaseLayer/databaseErrorCodes.h"
-
 #include "backend/metaCollection/partial/commonObject.h"
+#include "backend/query/dataQueryBuilder.h"            // L3 — read door + WriteRow write core (no L2 at this call site)
+
+// --- vended queryable — thin adapter forwarding to the tabular meta's methods ---
+// The tabular section is uuid-keyed (1 parent -> N lines), ordered by line number.
+// The adapter is parent-agnostic — the parent uuid is a query filter (WhereKey at
+// read time) — so the persistent meta vends it via the common GetQueryable() interface
+// and a transient (data-processor / report) parent simply never queries it.
+const ibValueMetaObjectAttributeBase* ibTabularQueryable::ResolveAttribute(const wxString& name) const { return m_meta->FindAnyAttributeObjectByFilter(name); }
+const ibValueMetaObjectAttributeBase* ibTabularQueryable::ResolveAttribute(const ibMetaID& id) const { return m_meta->FindAnyAttributeObjectByFilter(id); }
+wxString ibTabularQueryable::GetQueryTableName() const { return m_meta->GetTableNameDB(); }
+ibMetaID ibTabularQueryable::GetQueryMetaID() const { return m_meta->GetMetaID(); }
+wxString ibTabularQueryable::GetRowKeyColumn() const { return wxT("uuid"); }
+std::vector<ibQuerySortItem> ibTabularQueryable::GetIdentitySort() const { return { ibQuerySortItem{ m_meta->GetNumberLine(), true } }; }
+bool ibTabularQueryable::IsReferenceAttribute(const ibMetaID& /*id*/) const { return false; }
+wxString ibTabularQueryable::MaterializeRowKey(ibDatabaseResultSet* /*rs*/) const { return wxEmptyString; }
+ibValue ibTabularQueryable::MaterializeAttribute(const ibValueMetaObjectAttributeBase* attr, ibDatabaseResultSet* rs) const {
+	ibValue v;
+	ibValueMetaObjectAttributeBase::GetValueAttribute(attr, v, rs);
+	return v;
+}
+
 bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool createData)
 {
 	if (m_objectValue->IsNewObject() && !srcGuid.isValid()) {
@@ -18,37 +34,29 @@ bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool cr
 		return false;
 	}
 
-	const auto db = ses_query;
 	ibValueModelRamTableBase::Clear();
-	const ibValueMetaObjectRecordData* metaObject = m_objectValue->GetMetaObject();
-	wxASSERT(metaObject);
-	const wxString& tableName = m_metaTable->GetTableNameDB();
-	
-	ibStatementGuard sel(db, db->PrepareStatement("SELECT * FROM " + tableName + " WHERE uuid = ?;"));
-	if (!sel) return false;
-	sel->SetParamString(1, srcGuid.str());
-	ibDatabaseResultSet* resultSet = sel->RunQueryWithResults();
-	if (resultSet == nullptr)
-		return false;
-	long loadedRow = 0;
-	while (resultSet->Next()) {
-		ibValueTableRow* rowData = new ibValueTableRow();
-		for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
-			if (m_metaTable->IsNumberLine(object->GetMetaID()))
-				continue;
-			ibValue& slot = rowData->AppendTableValue(object->GetMetaID());
-			const wxString fldName = object->GetFieldNameDB();
-			const int dbType = resultSet->GetResultInt(fldName + wxT("_TYPE"));
-			const wxString dbStr = resultSet->GetResultString(fldName + wxT("_S"));
-			ibValueMetaObjectAttributeBase::GetValueAttribute(object, slot, resultSet, createData);
-			
-		}
-		ibValueModelRamTableBase::Append(rowData, !ibBackendException::IsEvalMode());
-		++loadedRow;
-	}
-	
 
-	db->CloseResultSet(resultSet);
+	// Read every line for the parent uuid through the L3 door. The persistent
+	// data-object supplies the queryable view (uuid key + line-number order); the
+	// values come from the L3 selection (GetValue) — no L2 builder, no raw result
+	// set at this call site.
+	try {
+		ibDataQueryBuilder q;
+		q.From(m_metaTable->GetQueryable()).WhereKey(srcGuid);   // WHERE uuid = srcGuid, ORDER BY line number
+		ibReadPageRequest page;
+		page.m_count = 0;   // all lines
+		ibDataQueryResult selection = q.Select(page);
+		while (selection.Next()) {
+			ibValueTableRow* rowData = new ibValueTableRow();
+			for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
+				if (m_metaTable->IsNumberLine(object->GetMetaID()))
+					continue;
+				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object);
+			}
+			ibValueModelRamTableBase::Append(rowData, !ibBackendException::IsEvalMode());
+		}
+	}
+	catch (...) { return false; }
 
 	m_readAfter = true;
 	return true;
@@ -90,101 +98,28 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 	if (!ibValueTabularSectionDataObjectRef::DeleteData())
 		return false;
 
-	const auto db = ses_query;
-	ibValueMetaObjectAttributePredefined* numLine = m_metaTable->GetNumberLine();
-	wxASSERT(numLine);
-	const ibValueMetaObjectRecordData* metaObject = m_objectValue->GetMetaObject();
-	wxASSERT(metaObject);
-	ibReference* reference_impl = new ibReference(metaObject->GetMetaID(), m_objectValue->GetGuid());
+	const wxString tableName = m_metaTable->GetTableNameDB();
 
-	const wxString& tableName = m_metaTable->GetTableNameDB();
-	wxString queryText = "INSERT INTO " + tableName + " (";
-	queryText += "uuid";
-	for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
-		queryText = queryText + ", " + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
-	}
-	queryText += ") VALUES (?";
-	for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
-		unsigned int fieldCount = ibValueMetaObjectAttributeBase::GetSQLFieldCount(object);
-		for (unsigned int i = 0; i < fieldCount; i++) {
-			queryText += ", ?";
-		}
-	}
-	queryText += ");";
-
-	
-
-	ibStatementGuard statement(db, db->PrepareStatement(queryText));
-	if (!statement) {
-		delete reference_impl;
-		return false;
-	}
-
+	// Tabular section = plain INSERT per line (DeleteData above cleared the old
+	// rows) through the L3 write core. uuid is the 1->1 key column (the parent
+	// object); the attributes are the 1->N data columns. No fields, no positions.
 	ibNumber numberLine = 1;
-	for (long row = 0; row < GetRowCount(); row++) {
-		if (hasError)
-			break;
-		int position = 2;
-		statement->SetParamString(1, m_objectValue->GetGuid());
-		ibValueTableRow* rowNode = GetViewData<ibValueTableRow>(GetItem(row));
-		
+	for (long row = 0; row < GetRowCount() && !hasError; row++) {
+		std::vector<std::pair<const ibValueMetaObjectAttributeBase*, ibValue>> assignments;
 		for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
-			const int posBefore = position;
 			if (!m_metaTable->IsNumberLine(object->GetMetaID())) {
 				ibValueTableRow* node = GetViewData<ibValueTableRow>(GetItem(row));
 				wxASSERT(node);
-				const ibValue& v = node->GetTableValue(object->GetMetaID());
-				
-				ibValueMetaObjectAttributeBase::SetValueAttribute(
-					object,
-					v,
-					statement.get(),
-					position
-				);
+				assignments.emplace_back(object, node->GetTableValue(object->GetMetaID()));
 			}
 			else {
-				
-				ibValueMetaObjectAttributeBase::SetValueAttribute(
-					object,
-					numberLine++,
-					statement.get(),
-					position
-				);
-			}
-			
-		}
-
-		hasError = statement->RunQuery() == DATABASE_LAYER_QUERY_RESULT_ERROR;
-		
-	}
-
-	// Post-INSERT verification: read back what FB actually has for this uuid.
-	{
-		ibStatementGuard sel(db, db->PrepareStatement(
-			"SELECT * FROM " + tableName + " WHERE uuid = ?;"));
-		if (sel) {
-			sel->SetParamString(1, m_objectValue->GetGuid());
-			ibDatabaseResultSet* rs = sel->RunQueryWithResults();
-			if (rs != nullptr) {
-				long verifyRow = 0;
-				while (rs->Next()) {
-					for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
-						if (m_metaTable->IsNumberLine(object->GetMetaID()))
-							continue;
-						const wxString fldName = object->GetFieldNameDB();
-						const int dbType = rs->GetResultInt(fldName + wxT("_TYPE"));
-						const wxString dbStr = rs->GetResultString(fldName + wxT("_S"));
-						
-					}
-					++verifyRow;
-				}
-				db->CloseResultSet(rs);
+				assignments.emplace_back(object, ibValue(numberLine++));
 			}
 		}
+		hasError = !ibDataQueryBuilder::WriteRow(ibDataQueryBuilder::WriteKind::Insert, tableName,
+			wxT("uuid"), ibValue(m_objectValue->GetGuid()), assignments);
 	}
 
-	delete reference_impl;
-	
 	return !hasError;
 }
 
@@ -193,14 +128,8 @@ bool ibValueTabularSectionDataObjectRef::DeleteData()
 	if (m_readOnly || m_objectValue->IsNewObject())
 		return true;
 
-	const auto db = ses_query;
-	const ibValueMetaObjectRecordData* metaObject = m_objectValue->GetMetaObject();
-	wxASSERT(metaObject);
-	const wxString& tableName = m_metaTable->GetTableNameDB();
-	ibStatementGuard del(db, db->PrepareStatement("DELETE FROM " + tableName + " WHERE uuid = ?;"));
-	if (del) {
-		del->SetParamString(1, m_objectValue->GetGuid());
-		del->RunQuery();
-	}
+	// DELETE ... WHERE uuid = <parent guid> through the L3 core (uuid = 1->1 key).
+	ibDataQueryBuilder::WriteRow(ibDataQueryBuilder::WriteKind::Delete, m_metaTable->GetTableNameDB(),
+		wxT("uuid"), ibValue(m_objectValue->GetGuid()), {});
 	return true;
 }

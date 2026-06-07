@@ -4,11 +4,12 @@
 #include "backend/metaCollection/metaObject.h"
 #include "backend/backend_type.h"
 #include "backend/objCtorDefs.h"
+#include "backend/query/queryColumn.h"   // ibBackendQueryColumn — an attribute IS a query column
 
 #include "metaAttributeObjectEnum.h"
 
 class BACKEND_API ibValueMetaObjectAttributeBase :
-	public ibValueMetaObject, public ibBackendTypeConfigFactory {
+	public ibValueMetaObject, public ibBackendTypeConfigFactory, public ibBackendQueryColumn {
 	public:
 
 	enum ibFieldTypes {
@@ -174,7 +175,18 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 
 	virtual wxString GetFieldNameDB() const { return wxString::Format(wxT("fld%i"), m_metaId); }
 
-	//get sql type for db 
+	// --- ibBackendQueryColumn: an attribute IS a query column ------------
+	// GetTypeDesc() is the column's typed accessor — but it is ALSO declared by the
+	// other base (ibBackendTypeFactory). Re-declaring it here as one pure virtual
+	// makes a single overrider for BOTH bases and resolves the otherwise-ambiguous
+	// name (C2385); each concrete attribute supplies the body, reused as-is.
+	// GetName likewise resolves the ambiguity between ibValueMetaObject::GetName and
+	// the column's.
+	virtual ibTypeDescription& GetTypeDesc() const override = 0;
+	virtual wxString GetName() const override         { return ibValueMetaObject::GetName(); }
+	virtual wxString GetPhysicalName() const override { return GetFieldNameDB(); }
+
+	//get sql type for db
 	virtual wxString GetSQLTypeObject(const ibClassID& clsid) const;
 
 	//check if attribute is fill 

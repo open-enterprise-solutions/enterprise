@@ -25,6 +25,98 @@
 #include "databaseResultSet.h"
 #include "preparedStatement.h"
 
+// ==========================================================================
+// ibDialectDictionary — the per-DBMS "dictionary" that closes all dialect
+// difference (docs/query-language-arc.md §6). The dialect is an L1 driver
+// DESCRIPTOR — each driver self-describes its SQL via GetDialect() below — so it
+// lives here, with the driver interface (moved from the former dialectDictionary.h).
+// Level 2 stays DBMS-indifferent: ONE generic renderer walks the ibQueryIR and, at
+// every divergence point, consults this dictionary. Adding a DBMS = a new dictionary,
+// not an edit to L2.
+// ==========================================================================
+
+// Parameter placeholder style (bound positionally; 1-based, matching SetParam*).
+enum class ibParamStyle
+{
+	QuestionMark,   // ?     — Firebird, SQLite, ODBC, MySQL
+	DollarN,        // $1    — PostgreSQL
+	Colon           // :p1   — Oracle-style named
+};
+
+// Row-limit / offset form.
+enum class ibPagination
+{
+	FirstSkip,      // SELECT FIRST n SKIP m ...   — Firebird
+	LimitOffset,    // ... LIMIT n OFFSET m        — PostgreSQL, SQLite, MySQL
+	OffsetFetch,    // ... OFFSET m ROWS FETCH NEXT n ROWS ONLY  — MSSQL / ANSI
+	Top             // SELECT TOP n ...            — MSSQL (legacy)
+};
+
+// Boolean literal spelling.
+enum class ibBoolForm
+{
+	TrueFalse,      // TRUE / FALSE   — PostgreSQL
+	OneZero,        // 1 / 0          — SQLite, MySQL
+	Smallint        // 1 / 0 stored as SMALLINT — Firebird (no native boolean pre-3)
+};
+
+// Optional capabilities the renderer queries before choosing a form.
+struct ibSqlFeatures
+{
+	bool m_window        = false;   // SUM() OVER (...)
+	bool m_cte           = false;   // WITH ... AS (...)
+	bool m_fullOuterJoin = false;
+	bool m_iLike         = false;   // case-insensitive LIKE
+};
+
+struct ibDialectDictionary
+{
+	// --- declarative facts (close the large majority of divergence) -------
+
+	ibParamStyle m_paramStyle = ibParamStyle::QuestionMark;
+	ibPagination m_pagination = ibPagination::LimitOffset;
+	ibBoolForm   m_boolForm   = ibBoolForm::TrueFalse;
+
+	// DROP INDEX divergence: MySQL needs "DROP INDEX <name> ON <table>"; FB / PG /
+	// SQLite take just "DROP INDEX <name>". Default = standalone (no table).
+	bool m_dropIndexNeedsTable = false;
+
+	// UPSERT (INSERT-or-update by PK) as a TEMPLATE the renderer fills. Placeholders:
+	//   {table} {columns} {values} {keys} {update}
+	// {update} = the conflict-update body: m_upsertUpdateItem per non-key column,
+	// comma-joined. Firebird's MATCHING needs no update body (empty item). Default =
+	// PG / SQLite ON CONFLICT.
+	wxString m_upsertTemplate   = wxT("INSERT INTO {table} ({columns}) VALUES ({values}) ON CONFLICT ({keys}) DO UPDATE SET {update}");
+	wxString m_upsertUpdateItem = wxT("{col} = excluded.{col}");
+
+	// Identifier quoting — <open><name><close>. Default = NONE (bare identifiers, and
+	// avoids Firebird turning quoted names case-sensitive). Opt-in: set to "\"" (ANSI).
+	wxString m_identQuoteOpen;
+	wxString m_identQuoteClose;
+
+	ibSqlFeatures m_features;
+
+	// --- type map (DDL): canonical column type -> dialect SQL type --------
+	// Parameterised types are printf patterns the renderer fills. BLOB vs BYTEA,
+	// DATE vs TIMESTAMP, boolean-as-SMALLINT live here.
+	wxString m_typeBoolean       = wxT("BOOLEAN");
+	wxString m_typeInteger       = wxT("INTEGER");
+	wxString m_typeDate          = wxT("TIMESTAMP");
+	wxString m_typeBlob          = wxT("BLOB");
+	wxString m_typeGuid          = wxT("CHAR(36)");
+	wxString m_typeStringPattern = wxT("VARCHAR(%d)");
+	wxString m_typeNumberPattern = wxT("DECIMAL(%d,%d)");
+
+	// ALTER COLUMN (type change) as a TEMPLATE — {table} {column} {type}. Default =
+	// PG / Firebird "ALTER COLUMN c TYPE t"; MySQL "MODIFY COLUMN c t"; SQLite leaves
+	// it EMPTY (no in-place type change) so the renderer THROWS rather than emulate.
+	wxString m_alterColumnTemplate = wxT("ALTER TABLE {table} ALTER COLUMN {column} TYPE {type}");
+
+	// --- behaviour slots (the small tail data cannot express) -------------
+	// Reserved for emulation rewrites (FULL OUTER -> LEFT UNION RIGHT, window ->
+	// correlated subquery) as strategy callbacks, so L2 still reads only the dictionary.
+};
+
 WX_DECLARE_HASH_SET(ibDatabaseResultSet*, wxPointerHash, wxPointerEqual, DatabaseResultSetHashSet);
 WX_DECLARE_HASH_SET(ibPreparedStatement*, wxPointerHash, wxPointerEqual, DatabaseStatementHashSet);
 
@@ -253,6 +345,14 @@ public:
 #endif
 
 	virtual int GetDatabaseLayerType() const = 0;
+
+	// The SQL dialect this driver speaks (placeholder style, pagination, type
+	// map, feature flags). L2 (ibDatabaseQueryBuilder / ibQueryRenderer) reads
+	// this instead of branching on GetDatabaseLayerType() — there is no
+	// "is this PG or FB" check anywhere. PURE virtual: every concrete driver
+	// owns its dialect (typically a static singleton it returns by reference);
+	// ODBC returns a default-constructed ANSI dictionary.
+	virtual const ibDialectDictionary& GetDialect() const = 0;
 
 	// Best-effort reconnect when an external cluster event has
 	// invalidated this connection — currently triggered by the FB

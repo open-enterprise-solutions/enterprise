@@ -4,7 +4,6 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "objectList.h"
-#include "registerSqlBuilder.h"
 #include "backend/srcExplorer.h"
 #include "backend/system/systemManager.h"
 
@@ -900,7 +899,8 @@ ibDataViewItem ibValueListRegisterObject::FindRowValue(const ibValue& varValue, 
 				pRefData->GetValueByMetaID(dim->GetMetaID()));
 	}
 	// Effective sort columns → m_nodeValues (read by BuildRegisterAnchor).
-	for (const auto& c : ibRegisterSqlBuilder::EffectiveOrder(m_metaObject, m_sortOrder)) {
+	for (const auto& c : EffectiveSortOrder()) {
+		if (c.m_attr == nullptr) continue;
 		ibValue v;
 		if (pRefData->GetValueByMetaID(c.m_attr->GetMetaID(), v))
 			stub->AppendTableValue(c.m_attr->GetMetaID(), v);

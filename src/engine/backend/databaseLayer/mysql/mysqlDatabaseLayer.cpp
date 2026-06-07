@@ -11,6 +11,36 @@
 
 #include <wx/tokenzr.h>
 
+// MySQL SQL dialect — owned by the driver (static definition + virtual access).
+const ibDialectDictionary& ibDatabaseLayerMySQL::Dialect()
+{
+	static const ibDialectDictionary s_dialect = [] {
+		ibDialectDictionary d;
+		d.m_paramStyle  = ibParamStyle::QuestionMark;
+		d.m_pagination  = ibPagination::LimitOffset;
+		d.m_boolForm    = ibBoolForm::OneZero;
+		d.m_dropIndexNeedsTable = true;               // DROP INDEX <name> ON <table>
+		d.m_alterColumnTemplate = wxT("ALTER TABLE {table} MODIFY COLUMN {column} {type}");
+		// ON DUPLICATE KEY UPDATE c = VALUES(c)
+		d.m_upsertTemplate   = wxT("INSERT INTO {table} ({columns}) VALUES ({values}) ON DUPLICATE KEY UPDATE {update}");
+		d.m_upsertUpdateItem = wxT("{col} = VALUES({col})");
+		d.m_features.m_window = true;                 // MySQL 8+
+		// type map
+		d.m_typeBoolean = wxT("TINYINT");
+		d.m_typeInteger = wxT("INT");
+		d.m_typeDate    = wxT("DATETIME");
+		d.m_typeBlob    = wxT("LONGBLOB");
+		d.m_typeGuid    = wxT("CHAR(36)");
+		return d;
+	}();
+	return s_dialect;
+}
+
+const ibDialectDictionary& ibDatabaseLayerMySQL::GetDialect() const
+{
+	return Dialect();
+}
+
 // ctor
 ibDatabaseLayerMySQL::ibDatabaseLayerMySQL()
 	: ibDatabaseLayer()

@@ -35,3 +35,9 @@ void ibDatabaseLayerException::Throw(Kind kind, int nativeCode,
 {
 	throw ibDatabaseLayerException(kind, nativeCode, sqlState, msg);
 }
+
+void ibBackendQueryException::Throw(Kind kind, const wxString& message)
+{
+	// Thrown by value, caught by const reference (project convention).
+	throw ibBackendQueryException(kind, message);
+}

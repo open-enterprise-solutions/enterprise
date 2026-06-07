@@ -15,6 +15,10 @@
 
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
+#include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject (materialisation)
+#include "backend/databaseLayer/databaseResultSet.h"              // GetResultString
+#include "backend/objCtor.h"                                      // ibCtorMetaValueType (reference-target resolution)
+#include "backend/metaData.h"                                     // ibMetaData::GetTypeCtor
 
 wxString ibValueMetaObjectRecordDataRef::GetTableNameDB() const
 {
@@ -126,8 +130,11 @@ bool ibValueMetaObjectRecordDataMutableRef::CreateAndUpdateTableDB(ibMetaDataCon
 		for (const auto object : GetPredefinedAttributeArrayObject()) {
 			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 				return false;
-			if (ibValueMetaObjectRecordDataRef::IsDataReference(object->GetMetaID()))
-				continue;
+			// The data-reference (self-reference) predefined attribute now gets a real
+			// column: its _RRRef stores the row's own ibReference[guid][metaID], byte-
+			// identical to any reference TO this row — so a dot-walk JOIN matches
+			// source.fldX_RRRef = target.<selfref>_RRRef. (Reads still synthesise the
+			// reference value from uuid; this column is write-for-join.)
 			retCode = ProcessAttribute(tableName,
 				object, nullptr);
 		}
@@ -1272,5 +1279,99 @@ bool ibValueMetaObjectRegisterData::DumpTable(ibWriterMemory& writer) const
 
 	db_query->CloseResultSet(dbResultSet);
 	return true;
+}
+
+// --- vended queryables — the L3 navigation LIVES here, not on the metaobject ---
+// The metaobject vends one of these (a stable member) via GetQueryable() and provides
+// only primitives (FindObjectByFilter / GetTableNameDB / IsDataReference / guidName);
+// the queryable owns the query-interface logic, reaching the concrete leaf through the
+// metaobject's virtual primitives. (decouple §22.4e)
+
+// catalog / document / charts / enums — identity = the row-key column (guidName);
+// the reference attribute is the row's own key.
+const ibValueMetaObjectAttributeBase* ibRecordQueryable::ResolveAttribute(const wxString& name) const {
+	return m_meta->FindObjectByFilter<ibValueMetaObjectAttributeBase>(name, { g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID });
+}
+const ibValueMetaObjectAttributeBase* ibRecordQueryable::ResolveAttribute(const ibMetaID& id) const {
+	return m_meta->FindObjectByFilter<ibValueMetaObjectAttributeBase>(id, { g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID });
+}
+wxString ibRecordQueryable::GetQueryTableName() const { return m_meta->GetTableNameDB(); }
+ibMetaID ibRecordQueryable::GetQueryMetaID() const { return m_meta->GetMetaID(); }
+wxString ibRecordQueryable::GetRowKeyColumn() const { return guidName; }
+std::vector<ibQuerySortItem> ibRecordQueryable::GetIdentitySort() const { return { ibQuerySortItem{ nullptr, true } }; }
+bool ibRecordQueryable::IsReferenceAttribute(const ibMetaID& id) const { return m_meta->IsDataReference(id); }
+wxString ibRecordQueryable::GetReferenceKeyColumn() const {
+	// The self-reference _RRRef column (ibReference[guid][metaID] blob) the row now
+	// stores — a dot-walk binds a reference attribute to this catalog/document on it:
+	// source.<ref>_RRRef = target.<dataref>_RRRef, byte-identical.
+	const ibValueMetaObjectAttributeBase* refAttr = m_meta->GetDataReference();
+	if (refAttr == nullptr)
+		return wxString();
+	for (auto& field : ibValueMetaObjectAttributeBase::GetSQLFieldData(refAttr))
+		if (field.m_type == ibValueMetaObjectAttributeBase::ibFieldTypes_Reference)
+			return field.m_field.m_fieldRefName.m_fieldRefName;
+	return wxString();
+}
+const ibBackendQueryable* ibRecordQueryable::ResolveReferenceTarget(const ibBackendQueryColumn* refColumn) const {
+	// Resolve a single-target reference COLUMN to the queryable of the object it points
+	// at. Works off the column's type (its class id) + this metaobject's metadata — the
+	// column need not be a metaobject attribute (an L3 source may be a temp table), only
+	// a typed reference column. Null if polymorphic / non-reference / no target queryable.
+	if (refColumn == nullptr)
+		return nullptr;
+	const ibTypeDescription& td = refColumn->GetTypeDesc();
+	if (td.GetClsidList().size() != 1)
+		return nullptr;
+	const ibMetaData* metaData = m_meta->GetMetaData();
+	if (metaData == nullptr)
+		return nullptr;
+	const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(td.GetFirstClsid());
+	if (ctor == nullptr || ctor->GetMetaTypeCtor() != ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)
+		return nullptr;
+	const ibBackendQueryableHolder* holder = dynamic_cast<const ibBackendQueryableHolder*>(ctor->GetMetaObject());
+	return holder != nullptr ? holder->GetQueryable() : nullptr;
+}
+wxString ibRecordQueryable::MaterializeRowKey(ibDatabaseResultSet* rs) const {
+	return rs != nullptr ? rs->GetResultString(guidName) : wxString();
+}
+ibValue ibRecordQueryable::MaterializeAttribute(const ibValueMetaObjectAttributeBase* attr, ibDatabaseResultSet* rs) const {
+	if (rs == nullptr)
+		return ibValue();
+	// The reference attribute yields the row's own reference object.
+	if (m_meta->IsDataReference(attr->GetMetaID())) {
+		ibGuid guid = rs->GetResultString(guidName);
+		return ibValue(ibValueReferenceDataObject::CreateFromResultSet(rs, m_meta, guid));
+	}
+	ibValue v;
+	ibValueMetaObjectAttributeBase::GetValueAttribute(attr, v, rs);
+	return v;
+}
+
+// registers — no single row-key; composite identity (recorder+line / period?+dims),
+// carried as real attributes; the consumer assembles the row identity. No reference.
+const ibValueMetaObjectAttributeBase* ibRegisterDataQueryable::ResolveAttribute(const wxString& name) const { return m_meta->FindAnyAttributeObjectByFilter(name); }
+const ibValueMetaObjectAttributeBase* ibRegisterDataQueryable::ResolveAttribute(const ibMetaID& id) const { return m_meta->FindAnyAttributeObjectByFilter(id); }
+wxString ibRegisterDataQueryable::GetQueryTableName() const { return m_meta->GetTableNameDB(); }
+ibMetaID ibRegisterDataQueryable::GetQueryMetaID() const { return m_meta->GetMetaID(); }
+wxString ibRegisterDataQueryable::GetRowKeyColumn() const { return wxEmptyString; }
+bool ibRegisterDataQueryable::IsReferenceAttribute(const ibMetaID& /*id*/) const { return false; }
+std::vector<ibQuerySortItem> ibRegisterDataQueryable::GetIdentitySort() const {
+	std::vector<ibQuerySortItem> ret;
+	if (m_meta->HasRecorder()) {
+		ret.push_back({ m_meta->GetRegisterRecorder(), true });
+		ret.push_back({ m_meta->GetRegisterLineNumber(), true });
+		return ret;
+	}
+	if (m_meta->HasPeriod())
+		ret.push_back({ m_meta->GetRegisterPeriod(), true });
+	for (auto* dim : m_meta->GetGenericDimensionArrayObject())
+		ret.push_back({ dim, true });
+	return ret;
+}
+wxString ibRegisterDataQueryable::MaterializeRowKey(ibDatabaseResultSet* /*rs*/) const { return wxEmptyString; }
+ibValue ibRegisterDataQueryable::MaterializeAttribute(const ibValueMetaObjectAttributeBase* attr, ibDatabaseResultSet* rs) const {
+	ibValue v;
+	ibValueMetaObjectAttributeBase::GetValueAttribute(attr, v, rs);
+	return v;
 }
 

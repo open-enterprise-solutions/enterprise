@@ -3,6 +3,7 @@
 
 #include "commonObject.h"
 #include "informationRegisterEnum.h"
+#include "backend/query/computedRegisterQueryable.h"   // shared base for the slice / balance / turnover virtual tables
 
 class ibValueMetaObjectInformationRegister : public ibValueMetaObjectRegisterData {
 	public:
@@ -75,11 +76,11 @@ public:
 	//has record manager 
 	virtual bool HasRecordManager() const { return GetWriteRegisterMode() == ibWriteRegisterMode::eIndependent; }
 
-	//has recorder and period 
+	//has recorder and period
 	virtual bool HasPeriod() const { return GetPeriodicity() != ibPeriodicity::eNonPeriodic; }
 	virtual bool HasRecorder() const { return GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder; }
 
-	//get module object in compose object 
+	//get module object in compose object
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyObjectModule->GetMetaObject(); }
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
 
@@ -221,10 +222,71 @@ private:
 	ibPropertyEnum<ibValueEnumPeriodicity>* m_propertyPeriodicity = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumPeriodicity>>(m_categoryData, wxT("Periodicity"), _("Periodicity"), ibPeriodicity::eNonPeriodic);
 	ibPropertyEnum<ibValueEnumWriteRegisterMode>* m_propertyWriteMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumWriteRegisterMode>>(m_categoryData, wxT("WriteMode"), _("Write mode"), ibWriteRegisterMode::eIndependent);
 
+	// THE one place the period-slice is computed — the register's OWN SQL knowledge
+	// (table / dimensions / the MAX/MIN self-join). The slice companion queryable
+	// (ibSliceQueryable, a friend) calls it through m_reg; the period bound
+	// parameterises it: last = MAX / "<=", first = MIN / ">=". Returns the slice table.
+	ibValue ComputeSlice(const ibValue& cPeriod, const ibValue& cFilter,
+	                     const wxString& aggregateFn, const wxString& compareOp) const;
+
+	friend class ibSliceQueryable;
 	friend class ibValueRecordSetObjectInformationRegister;
 	friend class ibValueRecordManagerObjectInformationRegister;
 
 	friend class ibMetaData;
+};
+
+//********************************************************************************************
+//*    Slice companion queryables — call-scoped relations handed to L3 via From()             *
+//********************************************************************************************
+// A slice is a SELF-CONTAINED, call-scoped relation: its own filters — the as-of
+// PERIOD and the dimension FILTER — ride in the CONSTRUCTOR ("the filter before the
+// Where"). You construct one, hand it to From(), and L3 reads it like any source
+// (filter further, join it) — it never learns the rows are computed in RAM. The slice
+// returns the register's REAL records, so the eight navigation methods forward to the
+// register; the only degree of freedom is the period bound (last = MAX / "<=", first =
+// MIN / ">="), fixed by the two derived types. The compute itself is the register's own
+// ComputeSlice. A slice does NOT persist on the register — it lives for the one call
+// that built it. See docs/query-language-arc.md §22.4d.
+
+// base — shared slice logic; abstract (the period bound is the derived's job). The
+// RAM-virtual-table plumbing + the register-forwarding navigation live in the shared
+// ibComputedRegisterQueryable base; the slice adds the period bound + ComputeRows.
+class BACKEND_API ibSliceQueryable : public ibComputedRegisterQueryable<ibValueMetaObjectInformationRegister> {
+public:
+	ibSliceQueryable(const ibValueMetaObjectInformationRegister* reg,
+	                 const ibValue& period = ibValue(), const ibValue& filter = ibValue())
+		: ibComputedRegisterQueryable(reg), m_period(period), m_filter(filter) {}
+
+	virtual wxString AggregateFn() const = 0;   // "MAX" (last) / "MIN" (first)
+	virtual wxString CompareOp()   const = 0;   // "<="  (last) / ">="  (first)
+
+	// the slice's rows — computed from the ctor filters through the register's ComputeSlice.
+	virtual ibValue ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
+
+protected:
+	ibValue m_period;   // as-of date (the "filter before Where")
+	ibValue m_filter;   // dimension-name -> value structure
+};
+
+// last slice — most recent record on or before the date.
+class BACKEND_API ibSliceLastQueryable : public ibSliceQueryable {
+public:
+	ibSliceLastQueryable(const ibValueMetaObjectInformationRegister* reg,
+	                     const ibValue& period = ibValue(), const ibValue& filter = ibValue())
+		: ibSliceQueryable(reg, period, filter) {}
+	virtual wxString AggregateFn() const override { return wxT("MAX"); }
+	virtual wxString CompareOp()   const override { return wxT("<="); }
+};
+
+// first slice — earliest record on or after the date.
+class BACKEND_API ibSliceFirstQueryable : public ibSliceQueryable {
+public:
+	ibSliceFirstQueryable(const ibValueMetaObjectInformationRegister* reg,
+	                      const ibValue& period = ibValue(), const ibValue& filter = ibValue())
+		: ibSliceQueryable(reg, period, filter) {}
+	virtual wxString AggregateFn() const override { return wxT("MIN"); }
+	virtual wxString CompareOp()   const override { return wxT(">="); }
 };
 
 //********************************************************************************************

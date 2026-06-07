@@ -6,6 +6,37 @@
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/databaseLayer/databaseLayerException.h"
 
+// The PostgreSQL SQL dialect lives WITH its driver — no central factory, no
+// type-switch. Static so a test (or anyone) can read it WITHOUT constructing
+// the driver (no libpq); the virtual GetDialect() just exposes it to L2.
+// Cached singleton (built once, immutable), returned by reference — zero cost.
+const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
+{
+	static const ibDialectDictionary s_dialect = [] {
+		ibDialectDictionary d;
+		d.m_paramStyle = ibParamStyle::DollarN;       // $1, $2, ...
+		d.m_pagination = ibPagination::LimitOffset;
+		d.m_boolForm   = ibBoolForm::TrueFalse;
+		d.m_features.m_window        = true;
+		d.m_features.m_cte           = true;
+		d.m_features.m_fullOuterJoin = true;
+		d.m_features.m_iLike         = true;
+		// type map
+		d.m_typeBoolean       = wxT("BOOLEAN");
+		d.m_typeDate          = wxT("TIMESTAMP");
+		d.m_typeBlob          = wxT("BYTEA");
+		d.m_typeGuid          = wxT("UUID");
+		d.m_typeNumberPattern = wxT("NUMERIC(%d,%d)");
+		return d;
+	}();
+	return s_dialect;
+}
+
+const ibDialectDictionary& ibDatabaseLayerPostgres::GetDialect() const
+{
+	return Dialect();
+}
+
 // ctor
 ibDatabaseLayerPostgres::ibDatabaseLayerPostgres()
 	: ibDatabaseLayer(), m_pDatabase(nullptr)

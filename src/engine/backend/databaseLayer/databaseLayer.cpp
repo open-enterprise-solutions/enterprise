@@ -17,6 +17,9 @@ ibDatabaseLayer::~ibDatabaseLayer()
 	CloseStatements();
 }
 
+// GetDialect() is pure virtual — each concrete driver owns its dialect
+// (see <driver>/<driver>DatabaseLayer.cpp::Dialect; ODBC returns the ANSI default).
+
 // --- Transaction wrappers (Option A: nested-safe counter layer) ------------
 //
 // See databaseLayer.h for the semantics. Drivers override the Do* methods;

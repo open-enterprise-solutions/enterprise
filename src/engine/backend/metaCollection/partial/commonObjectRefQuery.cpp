@@ -19,7 +19,9 @@
 #include "backend/logger/logger.h"
 
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
+#include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
+#include "backend/query/dataQueryBuilder.h"      // L3 door — record read / write / delete via the universal entry
 
 #include "backend/system/systemManager.h"
 #include "backend/backend_exception.h"
@@ -33,32 +35,27 @@ bool ibValueRecordDataObjectRef::ReadData()
 
 bool ibValueRecordDataObjectRef::ReadData(const ibGuid& srcGuid)
 {
-	const auto db = ses_query;   // session-bound conn; throws if no active session
-
 	if (m_newObject && !srcGuid.isValid())
 		return false;
 	wxASSERT(m_metaObject);
-	const wxString tableName = m_metaObject->GetTableNameDB();
 
-	// No TableExists probe — table is created at metadata-apply time and
-	// is a hard precondition for any descriptor data op. PrepareStatement
-	// returns null on missing-table; we treat that as no data.
-	const wxString sql = (db->GetDatabaseLayerType() == DATABASELAYER_FIREBIRD)
-		? wxString("SELECT FIRST 1 * FROM " + tableName + " WHERE uuid = ?;")
-		: wxString("SELECT * FROM " + tableName + " WHERE uuid = ? LIMIT 1;");
-	ibStatementGuard st(db, db->PrepareStatement(sql));
-	if (!st) return false;
-	st->SetParamString(1, srcGuid.str());
-	ibDatabaseResultSet* resultSet = st->RunQueryWithResults();
-	if (resultSet == nullptr) return false;
+	// (half-)L3 read: load the row by its OWN key through the universal door.
+	// The dialect FIRST/LIMIT fork is closed by L2; the default door pulls the
+	// session holder, so this still joins any open document-save TX (the old
+	// ses_query path). No TableExists probe — the table is a hard precondition.
+	ibDataQueryBuilder readQuery;
+	readQuery.From(m_metaObject->GetQueryable()).WhereKey(srcGuid);
+	ibReadPageRequest page;
+	page.m_count = 1;
+
 	bool succes = false;
-	if (resultSet->Next()) {
+	ibDataQueryResult selection = readQuery.Select(page);
+	if (selection.Next()) {
 		succes = true;
 		//load other attributes
 		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-			if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-				ibValueMetaObjectAttributeBase::GetValueAttribute(object, m_listObjectValue[object->GetMetaID()], resultSet);
-			}
+			if (!m_metaObject->IsDataReference(object->GetMetaID()))
+				m_listObjectValue[object->GetMetaID()] = selection.GetValue(object);
 		}
 		for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 			ibValueTabularSectionDataObjectRef* tabularSection = new ibValueTabularSectionDataObjectRef(this, object);
@@ -66,7 +63,7 @@ bool ibValueRecordDataObjectRef::ReadData(const ibGuid& srcGuid)
 			m_listObjectValue.insert_or_assign(object->GetMetaID(), tabularSection);
 		}
 	}
-	db->CloseResultSet(resultSet);
+	// selection's destructor closes the cursor + statement (RAII).
 
 	// Capture DataVersion at Read time — the Write/Delete path's
 	// LockAndCheckDataVersion compares this against the row's current
@@ -282,8 +279,6 @@ void ibValueRecordDataObjectRef::CommitDeleteScope(ibConnectionScope& scope,
 
 bool ibValueRecordDataObjectRef::SaveData()
 {
-	const auto db = ses_query;
-
 	//check fill attributes — find() so the probe doesn't auto-insert
 	//an empty value into m_listObjectValue.
 	bool fillCheck = true;
@@ -302,70 +297,34 @@ bool ibValueRecordDataObjectRef::SaveData()
 	if (!fillCheck)
 		return false;
 
-	// UPSERT main row in one statement — replaces the previous DELETE +
-	// INSERT pair (the outer DeleteData also cascade-DELETEd tabular
-	// sections, but tabularSection->SaveData below already does its own
-	// DELETE+INSERT, so the cascade was redundant work). Saves 1 main-row
-	// RT plus N redundant tabular-DELETE RTs per save.
-	const bool isFB = (db->GetDatabaseLayerType() == DATABASELAYER_FIREBIRD);
-	const wxString& tableName = m_metaObject->GetTableNameDB();
-
-	// Collect column names once — reused by UPSERT clauses below.
-	wxString cols = "uuid";
-	wxString placeholders = "?";
-	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		if (m_metaObject->IsDataReference(object->GetMetaID()))
-			continue;
-		cols += ", " + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
-		const unsigned int fieldCount = ibValueMetaObjectAttributeBase::GetSQLFieldCount(object);
-		for (unsigned int i = 0; i < fieldCount; i++)
-			placeholders += ", ?";
-	}
-
-	wxString queryText;
-	if (isFB) {
-		// UPDATE OR INSERT — FB rewrites the row in place if PK matches.
-		queryText = "UPDATE OR INSERT INTO " + tableName + " (" + cols
-		          + ") VALUES (" + placeholders + ") MATCHING (uuid);";
-	} else {
-		// PG ON CONFLICT — assign every non-uuid column from EXCLUDED.
-		// GetExcludeSQLFieldName(attr) emits "<col>=excluded.<col>" for
-		// every sub-column of the attribute; reuse the same helper used
-		// by SetConstValue.
-		wxString assignments;
-		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-			if (m_metaObject->IsDataReference(object->GetMetaID()))
-				continue;
-			if (!assignments.empty()) assignments += ", ";
-			assignments += ibValueMetaObjectAttributeBase::GetExcludeSQLFieldName(object);
-		}
-		queryText = "INSERT INTO " + tableName + " (" + cols
-		          + ") VALUES (" + placeholders
-		          + ") ON CONFLICT (uuid) DO UPDATE SET " + assignments + ";";
-	}
-
-	ibStatementGuard statement(db, db->PrepareStatement(queryText));
-	if (!statement)
-		return false;
-
 	m_objGuid = m_reference_impl->m_guid;
-	statement->SetParamString(1, m_objGuid.str());
 
-	int position = 2;
-
+	// UPSERT the main row through the L3 door — BY ATTRIBUTE, no statement, no
+	// columns, no positions visible here: From(meta) + SetValue(attr, value)* +
+	// Upsert(rowKey). The door decomposes each attribute into its physical
+	// columns and binds positionally into a hidden L2 statement; the per-DBMS
+	// UPSERT spelling is closed by the dialect template. The write goes through
+	// the session holder, so it joins the outer document-save TX.
+	ibDataQueryBuilder writer;
+	writer.From(m_metaObject->GetQueryable());
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		if (m_metaObject->IsDataReference(object->GetMetaID()))
-			continue;
-		ibValueMetaObjectAttributeBase::SetValueAttribute(
-			object,
-			m_listObjectValue.at(object->GetMetaID()),
-			statement.get(),
-			position
-		);
+		ibValue value;
+		if (m_metaObject->IsDataReference(object->GetMetaID())) {
+			// The row's OWN reference, written in the SAME binary form (_RTRef +
+			// _RRRef = ibReference[guid][metaID]) as any reference TO this row. That
+			// byte-identity is what makes a dot-walk JOIN equate
+			// source.fldX_RRRef = target.<selfref>_RRRef. CreateRaw skips PrepareRef
+			// (we only need the reference identity bytes, not materialised members).
+			value = ibValue(ibValueReferenceDataObject::CreateRaw(m_metaObject, m_objGuid));
+		}
+		else {
+			const auto it = m_listObjectValue.find(object->GetMetaID());
+			if (it != m_listObjectValue.end())
+				value = it->second;
+		}
+		writer.SetValue(object, value);
 	}
-
-	bool hasError =
-		statement->RunQuery() == DATABASE_LAYER_QUERY_RESULT_ERROR;
+	bool hasError = !writer.Upsert(m_objGuid);
 
 	//table parts
 	if (!hasError) {
@@ -393,11 +352,8 @@ bool ibValueRecordDataObjectRef::SaveData()
 
 bool ibValueRecordDataObjectRef::DeleteData()
 {
-	const auto db = ses_query;
-
 	if (m_newObject)
 		return true;
-	const wxString& tableName = m_metaObject->GetTableNameDB();
 	//table parts
 	for (const auto object : m_metaObject->GetTableArrayObject()) {
 		ibValueTabularSectionDataObjectBase* tabularSection = nullptr;
@@ -409,11 +365,9 @@ bool ibValueRecordDataObjectRef::DeleteData()
 			return false;
 
 	}
-	ibStatementGuard del(db, db->PrepareStatement("DELETE FROM " + tableName + " WHERE uuid = ?;"));
-	if (del) {
-		del->SetParamString(1, m_objGuid.str());
-		del->RunQuery();
-	}
+	// Delete the main row through the L3 door — by key, no statement / L2 visible.
+	// Best-effort like the prior path (it ignored the result).
+	ibDataQueryBuilder().From(m_metaObject->GetQueryable()).DeleteByKey(m_objGuid);
 	return true;
 }
 

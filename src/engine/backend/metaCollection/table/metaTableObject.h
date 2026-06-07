@@ -2,11 +2,38 @@
 #define __META_TABLE_H__
 
 #include "backend/metaCollection/metaObjectComposite.h"
+#include "backend/query/queryable.h"
 
-class BACKEND_API ibValueMetaObjectTableData : public ibValueMetaObjectCompositeData {
+// ibTabularQueryable — the L3 queryable for a tabular section (uuid-keyed, line-number
+// ordered). The tabular metaobject VENDS this adapter via the common GetQueryable()
+// interface — same as catalog / document / register / constant. The adapter is
+// parent-agnostic (the parent uuid is a query filter, supplied via WhereKey at read
+// time), so a transient (data-processor / report) parent simply never queries it.
+class ibValueMetaObjectTableData;
+class BACKEND_API ibTabularQueryable : public ibBackendQueryable {
+public:
+	explicit ibTabularQueryable(const ibValueMetaObjectTableData* meta) : m_meta(meta) {}
+	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const wxString& name) const override;
+	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const ibMetaID& id) const override;
+	virtual wxString GetQueryTableName() const override;
+	virtual ibMetaID GetQueryMetaID() const override;
+	virtual wxString GetRowKeyColumn() const override;
+	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;
+	virtual bool IsReferenceAttribute(const ibMetaID& id) const override;
+	virtual wxString MaterializeRowKey(ibDatabaseResultSet* rs) const override;
+	virtual ibValue MaterializeAttribute(const ibValueMetaObjectAttributeBase* attr, ibDatabaseResultSet* rs) const override;
+private:
+	const ibValueMetaObjectTableData* m_meta;
+};
+
+class BACKEND_API ibValueMetaObjectTableData : public ibValueMetaObjectCompositeData, public ibBackendQueryableHolder {
 	public:
 
 public:
+
+	// the metaobject VENDS its queryable (a stable member) — the common interface.
+	virtual const ibBackendQueryable* GetQueryable() const override { return &m_queryable; }
+
 
 	ibItemMode GetTableUse() const { return m_propertyUse->GetValueAsEnum(); }
 
@@ -124,6 +151,9 @@ private:
 	ibPropertyCategory* m_categoryGroup = ibPropertyObject::CreatePropertyCategory(wxT("Group"), _("Group"));
 	ibPropertyEnum<ibValueEnumItemMode>* m_propertyUse = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumItemMode>>(m_categoryGroup, wxT("ItemMode"), _("Item mode"), ibItemMode::ibItemMode_Item);
 	ibPropertyContainer<>* m_propertyNumberLine = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryGroup, ibValueMetaObjectCompositeData::CreateNumber(wxT("NumberLine"), _("N"), wxEmptyString, 6, 0));
+
+	// the vended queryable — stable for this tabular section's life (see GetQueryable()).
+	ibTabularQueryable m_queryable{ this };
 };
 
 #endif

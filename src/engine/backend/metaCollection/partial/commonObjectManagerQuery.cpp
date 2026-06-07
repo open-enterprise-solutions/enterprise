@@ -11,63 +11,33 @@
 
 #include "backend/appData.h"
 #include "backend/session/session.h"
-#include "backend/databaseLayer/connectionPool.h"
-#include "backend/databaseLayer/databaseErrorCodes.h"
 
-#include "backend/metaCollection/attribute/metaAttributeObject.h"
+#include "backend/query/dataQueryBuilder.h"   // L3 door — composite-key existence probe
 
 #include "backend/system/systemManager.h"
 
 bool ibValueRecordManagerObject::ExistData()
 {
-	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
-
-	if (!scope || !scope->IsOpen())
-		ibBackendCoreException::Error(_("Database is not open!"));
-
 	bool success = false;
 
 	if (m_recordLine != nullptr) {
-
-		scope.SafeBeginTransaction();
-
-		wxString tableName = m_metaObject->GetTableNameDB(); int position = 1;
-		wxString queryText = "SELECT * FROM " + tableName; bool firstWhere = true;
-
-		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
-			if (firstWhere) {
-				queryText = queryText + " WHERE ";
-			}
-			queryText = queryText +
-				(firstWhere ? " " : " AND ") + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(object);
-			if (firstWhere) {
-				firstWhere = false;
-			}
-		}
-
-		ibPreparedStatement* statement = scope->PrepareStatement(queryText);
-
-		if (statement != nullptr) {
+		// Composite-key existence probe through the L3 door: each dimension is an
+		// Eq condition, decomposed inside L3 across all its physical fields. The
+		// manual scope / transaction / statement and the GetCompositeSQLFieldName
+		// concat are gone — the door owns the borrow and the binding.
+		try {
+			ibDataQueryBuilder q;
+			q.From(m_metaObject->GetQueryable());
 			for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 				ibValue retValue; m_recordLine->GetValueByMetaID(object->GetMetaID(), retValue);
-				ibValueMetaObjectAttributeBase::SetValueAttribute(
-					object,
-					retValue,
-					statement,
-					position
-				);
+				q.Where(object, ibComparisonType::ibComparisonType_Equal, retValue);
 			}
-
-			ibDatabaseResultSet* resultSet = statement->RunQueryWithResults();
-			if (resultSet != nullptr) {
-				success = resultSet->Next();
-				scope->CloseResultSet(resultSet);
-			}
-
-			scope->CloseStatement(statement);
+			ibReadPageRequest page;
+			page.m_count = 1;
+			ibDataQueryResult selection = q.Select(page);
+			success = selection.Next();
 		}
-
-		scope.SafeCommitTransaction();
+		catch (...) {}
 	}
 
 	return success;

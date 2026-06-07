@@ -8,66 +8,45 @@
 #include "backend/session/session.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
+#include "backend/query/dataQueryBuilder.h"   // L3 door — FindBy* via WhereLike
 
-ibValueReferenceDataObject* ibValueManagerDataObjectCatalog::FindByCode(const ibValue& cParam) const 
+namespace {
+// Shared FindBy*: locate the first row whose `attribute LIKE pattern` and return
+// its reference. Routes through the L3 door (the FB FIRST / others LIMIT fork is
+// closed by L2; the value rides as a bound Const). Empty reference on no match.
+ibValueReferenceDataObject* FindByAttributeLike(const ibValueMetaObjectRecordDataMutableRef* meta,
+                                                ibValueMetaObjectAttributePredefined* attr,
+                                                const ibValue& cParam)
 {
-	if (!appData->DesignerMode()) {
-
-		const auto db = ses_query;
-
-		if (!cParam.IsEmpty()) {
-			const wxString tableName = m_metaObject->GetTableNameDB();
-			ibValueMetaObjectAttributePredefined* attributeCode = m_metaObject->GetDataCode();
-			wxASSERT(attributeCode);
-			const wxString sqlQuery = (db->GetDatabaseLayerType() == DATABASELAYER_FIREBIRD)
-				? "SELECT FIRST 1 uuid FROM %s WHERE " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attributeCode, "LIKE")
-				: "SELECT uuid FROM %s WHERE " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attributeCode, "LIKE") + " LIMIT 1";
-			ibStatementGuard statement(db, db->PrepareStatement(sqlQuery, tableName));
-			if (!statement)
-				return ibValueReferenceDataObject::Create(m_metaObject);
-			int position = 1;
-			ibValueMetaObjectAttributeBase::SetValueAttribute(attributeCode, attributeCode->AdjustValue(cParam), statement.get(), position);
-			ibValueReferenceDataObject* foundedReference = nullptr;
-			if (ibDatabaseResultSet* rs = statement->RunQueryWithResults()) {
-				if (rs->Next()) {
-					const ibGuid& foundedGuid = rs->GetResultString(guidName);
-					if (foundedGuid.isValid()) foundedReference = ibValueReferenceDataObject::Create(m_metaObject, foundedGuid);
-				}
-				db->CloseResultSet(rs);
-			}
-			if (foundedReference != nullptr) return foundedReference;
+	if (attr == nullptr || cParam.IsEmpty())
+		return ibValueReferenceDataObject::Create(meta);
+	try {
+		ibDataQueryBuilder q;
+		q.From(meta->GetQueryable()).WhereLike(attr, attr->AdjustValue(cParam));
+		ibReadPageRequest page;
+		page.m_count = 1;
+		ibDataQueryResult sel = q.Select(page);
+		if (sel.Next()) {
+			const ibGuid foundedGuid = sel.GetGuidString();
+			if (foundedGuid.isValid())
+				return ibValueReferenceDataObject::Create(meta, foundedGuid);
 		}
 	}
-	return ibValueReferenceDataObject::Create(m_metaObject);
+	catch (...) { /* fall through to an empty reference */ }
+	return ibValueReferenceDataObject::Create(meta);
+}
+} // namespace
+
+ibValueReferenceDataObject* ibValueManagerDataObjectCatalog::FindByCode(const ibValue& cParam) const
+{
+	if (appData->DesignerMode())
+		return ibValueReferenceDataObject::Create(m_metaObject);
+	return FindByAttributeLike(m_metaObject, m_metaObject->GetDataCode(), cParam);
 }
 
 ibValueReferenceDataObject* ibValueManagerDataObjectCatalog::FindByDescription(const ibValue& cParam) const
 {
-	if (!appData->DesignerMode()) {
-
-		const auto db = ses_query;
-
-		if (!cParam.IsEmpty()) {
-			const wxString tableName = m_metaObject->GetTableNameDB();
-			ibValueMetaObjectAttributePredefined* attributeDescription = m_metaObject->GetDataDescription();
-			wxASSERT(attributeDescription);
-			const wxString sqlQuery = (db->GetDatabaseLayerType() == DATABASELAYER_FIREBIRD)
-				? "SELECT FIRST 1 uuid FROM %s WHERE " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attributeDescription, "LIKE")
-				: "SELECT uuid FROM %s WHERE " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attributeDescription, "LIKE") + " LIMIT 1";
-			ibStatementGuard statement(db, db->PrepareStatement(sqlQuery, tableName));
-			if (!statement) return ibValueReferenceDataObject::Create(m_metaObject);
-			int position = 1;
-			ibValueMetaObjectAttributeBase::SetValueAttribute(attributeDescription, attributeDescription->AdjustValue(cParam), statement.get(), position);
-			ibValueReferenceDataObject* foundedReference = nullptr;
-			if (ibDatabaseResultSet* rs = statement->RunQueryWithResults()) {
-				if (rs->Next()) {
-					const ibGuid& foundedGuid = rs->GetResultString(guidName);
-					if (foundedGuid.isValid()) foundedReference = ibValueReferenceDataObject::Create(m_metaObject, foundedGuid);
-				}
-				db->CloseResultSet(rs);
-			}
-			if (foundedReference != nullptr) return foundedReference;
-		}
-	}	
-	return ibValueReferenceDataObject::Create(m_metaObject);
+	if (appData->DesignerMode())
+		return ibValueReferenceDataObject::Create(m_metaObject);
+	return FindByAttributeLike(m_metaObject, m_metaObject->GetDataDescription(), cParam);
 }

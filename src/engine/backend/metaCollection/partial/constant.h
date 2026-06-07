@@ -5,10 +5,40 @@
 
 class BACKEND_API ibValueRecordDataObjectConstant;
 
-class BACKEND_API ibValueMetaObjectConstant : 
-	public ibValueMetaObjectAttribute, public ibBackendCommandItem {
+// ibConstantQueryable — the L3 queryable for a constant (its single-row sys_const
+// table). The constant no longer IS a queryable; it VENDS this adapter (a stable
+// member), which forwards to the constant's own query methods. The constant is still
+// a COLUMN (via ibValueMetaObjectAttribute); only the table face moved out.
+class ibValueMetaObjectConstant;
+class BACKEND_API ibConstantQueryable : public ibBackendQueryable {
+public:
+	explicit ibConstantQueryable(const ibValueMetaObjectConstant* meta) : m_meta(meta) {}
+	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const wxString& name) const override;
+	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const ibMetaID& id) const override;
+	virtual wxString GetQueryTableName() const override;
+	virtual ibMetaID GetQueryMetaID() const override;
+	virtual wxString GetRowKeyColumn() const override;
+	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;
+	virtual bool IsReferenceAttribute(const ibMetaID& id) const override;
+	virtual wxString MaterializeRowKey(ibDatabaseResultSet* rs) const override;
+	virtual ibValue MaterializeAttribute(const ibValueMetaObjectAttributeBase* attr, ibDatabaseResultSet* rs) const override;
+private:
+	const ibValueMetaObjectConstant* m_meta;
+};
+
+class BACKEND_API ibValueMetaObjectConstant :
+	public ibValueMetaObjectAttribute, public ibBackendCommandItem, public ibBackendQueryableHolder {
 	public:
-	
+
+	// A constant is BOTH a column (via ibValueMetaObjectAttribute -> the value lives as
+	// one column of the shared single-row sys_const) AND, through its vended queryable,
+	// that one-row table. The constant VENDS the queryable; ibConstantQueryable (a
+	// friend) owns the table navigation, from the constant's primitives (GetName /
+	// GetMetaID / GetTableNameDB). So From(constant->GetQueryable()) reads the one row.
+	virtual const ibBackendQueryable* GetQueryable() const override { return &m_queryable; }
+	friend class ibConstantQueryable;
+
+
 protected:
 	enum
 	{
@@ -94,6 +124,9 @@ protected:
 private:
 
 	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("RecordModule"), _("Record module"));
+
+	// the vended queryable — stable for this constant's life (see GetQueryable()).
+	ibConstantQueryable m_queryable{ this };
 
 #pragma region role 
 	ibRole* m_roleRead = ibValueMetaObject::CreateRole(wxT("Read"), _("Read"));

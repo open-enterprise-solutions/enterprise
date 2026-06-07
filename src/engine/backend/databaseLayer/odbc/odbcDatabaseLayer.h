@@ -82,6 +82,14 @@ public:
 		return DATABASELAYER_ODBC;
 	}
 
+	// ODBC fronts many backends — the dialect is the default-constructed ANSI
+	// baseline (? params, LIMIT/OFFSET). This is the home of the generic default.
+	static const ibDialectDictionary& Dialect() {
+		static const ibDialectDictionary s_dialect;   // default ctor = ANSI baseline
+		return s_dialect;
+	}
+	virtual const ibDialectDictionary& GetDialect() const override { return Dialect(); }
+
 	static bool IsAvailable();
 
 	// SQLSTATE-based classification — ODBC's standard error identifier

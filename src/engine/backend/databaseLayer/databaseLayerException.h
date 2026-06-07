@@ -113,4 +113,30 @@ private:
 	wxString m_sqlState;
 };
 
+// ibBackendQueryException — an L2-side (query-layer) failure, categorically
+// distinct from a DBMS fault (ibBackendDatabaseException above). The exception
+// TYPE names the tier (docs/query-language-arc.md §10): catch this and you know
+// the fault is in OUR translation / lifecycle, not in the database. It
+// deliberately does NOT derive from the database-exception family, so it never
+// inherits DB retry semantics (§12) — it sits beside it under ibBackendException.
+class BACKEND_API ibBackendQueryException : public ibBackendException {
+public:
+	enum class Kind {
+		TranslationFailure,  // could not render / prepare the IR as SQL for this dialect
+		UnsupportedNode,     // an IR node with no dialect form and no fallback
+		NoConnection,        // L2 could not obtain a connection from the holder
+		PoolExhausted,       // §12 line 3 — leak / saturation (carries pool attribution later)
+	};
+
+	Kind GetKind() const { return m_kind; }
+
+	[[noreturn]] static void Throw(Kind kind, const wxString& message);
+
+private:
+	ibBackendQueryException(Kind kind, const wxString& msg)
+		: ibBackendException(msg), m_kind(kind) {}
+
+	Kind m_kind;
+};
+
 #endif // __DATABASE_LAYER_EXCEPTION_H__

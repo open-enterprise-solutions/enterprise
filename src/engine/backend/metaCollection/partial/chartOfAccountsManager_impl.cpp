@@ -8,73 +8,44 @@
 #include "backend/session/session.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
+#include "backend/query/dataQueryBuilder.h"   // L3 door — FindBy* via WhereLike
+
+namespace {
+// First row whose `attribute LIKE pattern`, as a reference (empty on no match).
+// Routes through the L3 door; FB FIRST / others LIMIT fork closed by L2.
+ibValueReferenceDataObject* FindByAttributeLike(const ibValueMetaObjectRecordDataMutableRef* meta,
+                                                ibValueMetaObjectAttributePredefined* attr,
+                                                const ibValue& cParam)
+{
+	if (attr == nullptr || cParam.IsEmpty())
+		return ibValueReferenceDataObject::Create(meta);
+	try {
+		ibDataQueryBuilder q;
+		q.From(meta->GetQueryable()).WhereLike(attr, attr->AdjustValue(cParam));
+		ibReadPageRequest page;
+		page.m_count = 1;
+		ibDataQueryResult sel = q.Select(page);
+		if (sel.Next()) {
+			const ibGuid foundedGuid = sel.GetGuidString();
+			if (foundedGuid.isValid())
+				return ibValueReferenceDataObject::Create(meta, foundedGuid);
+		}
+	}
+	catch (...) { /* fall through to an empty reference */ }
+	return ibValueReferenceDataObject::Create(meta);
+}
+} // namespace
 
 ibValueReferenceDataObject* ibValueManagerDataObjectChartOfAccounts::FindByCode(const ibValue& cParam) const
 {
-	if (!appData->DesignerMode()) {
-		if (ses_query != nullptr && !ses_query->IsOpen()) ibBackendCoreException::Error(_("Database is not open!"));
-		else if (ses_query == nullptr) ibBackendCoreException::Error(_("Database is not open!"));
-		if (!cParam.IsEmpty()) {
-			const wxString& tableName = m_metaObject->GetTableNameDB();
-			if (ses_query->TableExists(tableName)) {
-				ibValueMetaObjectAttributePredefined* attributeCode = m_metaObject->GetDataCode();
-				wxASSERT(attributeCode);
-				wxString sqlQuery = "";
-				if (ses_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
-					sqlQuery = "SELECT uuid FROM %s WHERE " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attributeCode, "LIKE") + " LIMIT 1";
-				else
-					sqlQuery = "SELECT FIRST 1 uuid FROM %s WHERE " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attributeCode, "LIKE");
-				ibPreparedStatement* statement = ses_query->PrepareStatement(sqlQuery, tableName);
-				if (statement == nullptr) return ibValueReferenceDataObject::Create(m_metaObject);
-				int position = 1;
-				ibValueMetaObjectAttributeBase::SetValueAttribute(attributeCode, attributeCode->AdjustValue(cParam), statement, position);
-				ibValueReferenceDataObject* foundedReference = nullptr;
-				ibDatabaseResultSet* databaseResultSet = statement->RunQueryWithResults();
-				wxASSERT(databaseResultSet);
-				if (databaseResultSet->Next()) {
-					const ibGuid& foundedGuid = databaseResultSet->GetResultString(guidName);
-					if (foundedGuid.isValid()) foundedReference = ibValueReferenceDataObject::Create(m_metaObject, foundedGuid);
-				}
-				ses_query->CloseResultSet(databaseResultSet);
-				ses_query->CloseStatement(statement);
-				if (foundedReference != nullptr) return foundedReference;
-			}
-		}
-	}
-	return ibValueReferenceDataObject::Create(m_metaObject);
+	if (appData->DesignerMode())
+		return ibValueReferenceDataObject::Create(m_metaObject);
+	return FindByAttributeLike(m_metaObject, m_metaObject->GetDataCode(), cParam);
 }
 
 ibValueReferenceDataObject* ibValueManagerDataObjectChartOfAccounts::FindByDescription(const ibValue& cParam) const
 {
-	if (!appData->DesignerMode()) {
-		if (ses_query != nullptr && !ses_query->IsOpen()) ibBackendCoreException::Error(_("Database is not open!"));
-		else if (ses_query == nullptr) ibBackendCoreException::Error(_("Database is not open!"));
-		if (!cParam.IsEmpty()) {
-			const wxString tableName = m_metaObject->GetTableNameDB();
-			if (ses_query->TableExists(tableName)) {
-				ibValueMetaObjectAttributePredefined* attributeDescription = m_metaObject->GetDataDescription();
-				wxASSERT(attributeDescription);
-				wxString sqlQuery = "";
-				if (ses_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
-					sqlQuery = "SELECT uuid FROM %s WHERE " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attributeDescription, "LIKE") + " LIMIT 1";
-				else
-					sqlQuery = "SELECT FIRST 1 uuid FROM %s WHERE " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(attributeDescription, "LIKE");
-				ibPreparedStatement* statement = ses_query->PrepareStatement(sqlQuery, tableName);
-				if (statement == nullptr) return ibValueReferenceDataObject::Create(m_metaObject);
-				int position = 1;
-				ibValueMetaObjectAttributeBase::SetValueAttribute(attributeDescription, attributeDescription->AdjustValue(cParam), statement, position);
-				ibValueReferenceDataObject* foundedReference = nullptr;
-				ibDatabaseResultSet* databaseResultSet = statement->RunQueryWithResults();
-				wxASSERT(databaseResultSet);
-				if (databaseResultSet->Next()) {
-					const ibGuid& foundedGuid = databaseResultSet->GetResultString(guidName);
-					if (foundedGuid.isValid()) foundedReference = ibValueReferenceDataObject::Create(m_metaObject, foundedGuid);
-				}
-				ses_query->CloseResultSet(databaseResultSet);
-				ses_query->CloseStatement(statement);
-				if (foundedReference != nullptr) return foundedReference;
-			}
-		}
-	}
-	return ibValueReferenceDataObject::Create(m_metaObject);
+	if (appData->DesignerMode())
+		return ibValueReferenceDataObject::Create(m_metaObject);
+	return FindByAttributeLike(m_metaObject, m_metaObject->GetDataDescription(), cParam);
 }

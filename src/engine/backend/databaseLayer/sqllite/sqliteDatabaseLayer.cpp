@@ -11,6 +11,31 @@
 #include <wx/tokenzr.h>
 #include <wx/filename.h>
 
+// SQLite SQL dialect — owned by the driver (static definition + virtual access).
+const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
+{
+	static const ibDialectDictionary s_dialect = [] {
+		ibDialectDictionary d;
+		d.m_paramStyle = ibParamStyle::QuestionMark;
+		d.m_pagination = ibPagination::LimitOffset;  // LIMIT n OFFSET m
+		d.m_boolForm   = ibBoolForm::OneZero;
+		d.m_features.m_window = true;                 // SQLite 3.25+
+		d.m_alterColumnTemplate = wxEmptyString;      // no in-place type change -> renderer throws
+		// type map (SQLite is dynamically typed; these set column affinity)
+		d.m_typeBoolean = wxT("INTEGER");
+		d.m_typeDate    = wxT("TEXT");
+		d.m_typeBlob    = wxT("BLOB");
+		d.m_typeGuid    = wxT("TEXT");
+		return d;
+	}();
+	return s_dialect;
+}
+
+const ibDialectDictionary& ibDatabaseLayerSQLite::GetDialect() const
+{
+	return Dialect();
+}
+
 // ctor()
 ibDatabaseLayerSQLite::ibDatabaseLayerSQLite()
 	: ibDatabaseLayer()

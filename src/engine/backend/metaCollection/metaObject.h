@@ -326,7 +326,7 @@ public:
 	virtual bool RestoreTable(const ibReaderMemory& reader) { return true; }
 	virtual bool DumpTable(ibWriterMemory& writer) const { return true; }
 
-	//events: 
+	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
 	virtual bool OnLoadMetaObject(ibMetaData* metaData);
 	virtual bool OnSaveMetaObject(int flags) { return true; }

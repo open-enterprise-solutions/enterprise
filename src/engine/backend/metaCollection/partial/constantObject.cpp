@@ -12,6 +12,23 @@
 #include "backend/session/session.h"
 #include "backend/lock/lockManager.h"
 
+// --- vended queryable — the constant's single-row (sys_const) table navigation ---
+// The constant is the queryable's only column AND its one-row table; resolution by
+// name / id yields the constant itself (m_meta), the value comes via GetValueAttribute.
+const ibValueMetaObjectAttributeBase* ibConstantQueryable::ResolveAttribute(const wxString& name) const { return name == m_meta->GetName() ? m_meta : nullptr; }
+const ibValueMetaObjectAttributeBase* ibConstantQueryable::ResolveAttribute(const ibMetaID& id) const { return id == m_meta->GetMetaID() ? m_meta : nullptr; }
+wxString ibConstantQueryable::GetQueryTableName() const { return m_meta->GetTableNameDB(); }
+ibMetaID ibConstantQueryable::GetQueryMetaID() const { return m_meta->GetMetaID(); }
+wxString ibConstantQueryable::GetRowKeyColumn() const { return wxEmptyString; }
+std::vector<ibQuerySortItem> ibConstantQueryable::GetIdentitySort() const { return {}; }
+bool ibConstantQueryable::IsReferenceAttribute(const ibMetaID& /*id*/) const { return false; }
+wxString ibConstantQueryable::MaterializeRowKey(ibDatabaseResultSet* /*rs*/) const { return wxEmptyString; }
+ibValue ibConstantQueryable::MaterializeAttribute(const ibValueMetaObjectAttributeBase* attr, ibDatabaseResultSet* rs) const {
+	ibValue v;
+	ibValueMetaObjectAttributeBase::GetValueAttribute(attr, v, rs);
+	return v;
+}
+
 //***********************************************************************
 //*                           constant value                            *
 //***********************************************************************
@@ -240,7 +257,8 @@ bool ibValueRecordDataObjectConstant::GetPropVal(const long lPropNum, ibValue& p
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "backend/databaseLayer/databaseLayer.h"
+#include "backend/databaseLayer/databaseLayer.h"            // GetConstValue: single-row read (constant is not an ibBackendQueryable)
+#include "backend/query/dataQueryBuilder.h"                 // SetConstValue: L3 write core (UPSERT the singleton row)
 
 ibValue ibValueRecordDataObjectConstant::GetConstValue() const
 {
@@ -259,25 +277,23 @@ ibValue ibValueRecordDataObjectConstant::GetConstValue() const
 		}
 
 		const wxString& tableName = m_metaObject->GetTableNameDB();
-		const wxString& fieldName = m_metaObject->GetFieldNameDB();
 		if (db_query->TableExists(tableName)) {
-			ibDatabaseResultSet* resultSet = nullptr;
-			if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
-				resultSet = db_query->RunQueryWithResults("SELECT %s FROM %s LIMIT 1", ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject), tableName);
-			else
-				resultSet = db_query->RunQueryWithResults("SELECT FIRST 1 %s FROM %s", ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject), tableName);
-			if (resultSet == nullptr)
-				return ret;
-			if (resultSet->Next()) {
-				if (ibValueMetaObjectAttributeBase::GetValueAttribute(m_metaObject, ret, resultSet))
-					ret = m_metaObject->AdjustValue(ret);
+			// Read the single sys_const row through the L3 door — the constant IS the
+			// queryable (its table) AND the column (its value). The FB FIRST / others
+			// LIMIT fork and the raw field concat are gone; the value comes from the
+			// L3 selection (GetValue), then AdjustValue as before.
+			try {
+				ibDataQueryBuilder q;
+				q.From(m_metaObject->GetQueryable());
+				ibReadPageRequest page;
+				page.m_count = 1;
+				ibDataQueryResult selection = q.Select(page);
+				if (selection.Next())
+					ret = m_metaObject->AdjustValue(selection.GetValue(m_metaObject));
 				else
 					ret = m_metaObject->CreateValue();
 			}
-			else {
-				ret = m_metaObject->CreateValue();
-			}
-			db_query->CloseResultSet(resultSet);
+			catch (...) {}
 		}
 	}
 	else {
@@ -372,33 +388,13 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 		return false;
 	}
 
-	wxString sqlText;
-	const bool isFB = (scope->GetDatabaseLayerType() == DATABASELAYER_FIREBIRD);
-	if (isFB) {
-		sqlText = "UPDATE OR INSERT INTO %s (%s, RECORD_KEY) VALUES(";
-		for (unsigned int i = 0; i < ibValueMetaObjectAttributeBase::GetSQLFieldCount(m_metaObject); ++i)
-			sqlText += "?,";
-		sqlText += "'6') MATCHING(RECORD_KEY);";
-	} else {
-		sqlText = "INSERT INTO %s (%s, RECORD_KEY) VALUES(";
-		for (unsigned int i = 0; i < ibValueMetaObjectAttributeBase::GetSQLFieldCount(m_metaObject); ++i)
-			sqlText += "?,";
-		sqlText += "'6') ON CONFLICT (RECORD_KEY) DO UPDATE SET "
-		         + ibValueMetaObjectAttributeBase::GetExcludeSQLFieldName(m_metaObject) + ";";
-	}
-
-	ibStatementGuard statement(scope.get(), scope->PrepareStatement(
-		sqlText, tableName, ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject)));
-	if (!statement) {
-		rollback();
-		return false;
-	}
-
-	int position = 1;
-	ibValueMetaObjectAttributeBase::SetValueAttribute(
-		m_metaObject, m_constValue, statement.get(), position);
-
-	if (statement->RunQuery() == DATABASE_LAYER_QUERY_RESULT_ERROR) {
+	// UPSERT the singleton row through the L3 write core. RECORD_KEY is the 1->1
+	// key column (constant value '6', matched on); the constant metaobject is itself
+	// the 1->N data attribute. The FB MATCHING / PG ON CONFLICT fork and the manual
+	// '?,'-counting are gone — the dialect closes the UPSERT spelling. WriteRow runs
+	// on the session holder, so it joins the TX that already holds this row's lock.
+	if (!ibDataQueryBuilder::WriteRow(ibDataQueryBuilder::WriteKind::Upsert, tableName,
+		wxT("RECORD_KEY"), ibValue(wxT("6")), { { m_metaObject, m_constValue } })) {
 		rollback();
 		ibBackendCoreException::Error(_("Failed to write object in db!"));
 		return false;

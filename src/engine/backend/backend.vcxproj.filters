@@ -463,9 +463,6 @@
     <ClInclude Include="metaCollection\partial\list\listSqlBuilder.h">
       <Filter>metaCollection\partial\list</Filter>
     </ClInclude>
-    <ClInclude Include="metaCollection\partial\list\registerSqlBuilder.h">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClInclude>
     <ClInclude Include="metaCollection\partial\reference\reference.h">
       <Filter>metaCollection\partial\reference</Filter>
     </ClInclude>
@@ -1431,9 +1428,6 @@
       <Filter>metaCollection\partial\list</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\list\listSqlBuilder.cpp">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\list\registerSqlBuilder.cpp">
       <Filter>metaCollection\partial\list</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\list\objectListAction.cpp">

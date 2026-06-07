@@ -87,6 +87,9 @@ public:
 		return DATABASELAYER_FIREBIRD;
 	}
 
+	static const ibDialectDictionary& Dialect();                       // FB dialect (no instance needed)
+	virtual const ibDialectDictionary& GetDialect() const override;    // polymorphic access for L2
+
 	// FB-specific: route to `ReconnectIfLeaderChanged()` so callers
 	// holding long-lived connections (session registry's heartbeat /
 	// snapshot jobs) can recover after a leader handoff without

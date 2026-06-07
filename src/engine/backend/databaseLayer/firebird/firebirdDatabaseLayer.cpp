@@ -20,6 +20,37 @@
 #include <wx/tokenzr.h>
 #include <wx/regex.h>
 
+// Firebird SQL dialect — owned by the driver. Static holds the definition (a
+// test reads it without constructing the driver); virtual GetDialect() exposes
+// it to L2. No central factory, no type-switch.
+const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
+{
+	static const ibDialectDictionary s_dialect = [] {
+		ibDialectDictionary d;
+		d.m_paramStyle  = ibParamStyle::QuestionMark;
+		d.m_pagination  = ibPagination::FirstSkip;    // SELECT FIRST n SKIP m
+		d.m_boolForm    = ibBoolForm::Smallint;       // no native boolean pre-FB3
+		// UPDATE OR INSERT … MATCHING (pk) — no separate update body.
+		d.m_upsertTemplate   = wxT("UPDATE OR INSERT INTO {table} ({columns}) VALUES ({values}) MATCHING ({keys})");
+		d.m_upsertUpdateItem = wxEmptyString;
+		d.m_features.m_window = true;                 // FB3+
+		// type map
+		d.m_typeBoolean       = wxT("SMALLINT");
+		d.m_typeDate          = wxT("TIMESTAMP");
+		d.m_typeBlob          = wxT("BLOB");
+		d.m_typeGuid          = wxT("CHAR(36)");
+		// NUMERIC holds a wider range than DECIMAL (INT128-backed) — matches ibNumber.
+		d.m_typeNumberPattern = wxT("NUMERIC(%d,%d)");
+		return d;
+	}();
+	return s_dialect;
+}
+
+const ibDialectDictionary& ibDatabaseLayerFirebird::GetDialect() const
+{
+	return Dialect();
+}
+
 // ctor()
 ibDatabaseLayerFirebird::ibDatabaseLayerFirebird()
 	: ibDatabaseLayer()

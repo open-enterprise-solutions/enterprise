@@ -8,7 +8,7 @@
 #include "backend/session/session.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
-#include "backend/databaseLayer/databaseLayer.h"
+#include "backend/query/dataQueryBuilder.h"   // L3 door — reference read by key / scan
 
 
 bool ibValueReferenceDataObject::ReadData(bool createData)
@@ -16,36 +16,23 @@ bool ibValueReferenceDataObject::ReadData(bool createData)
 	if (m_metaObject == nullptr || !m_objGuid.isValid())
 		return false;
 
-	// Cache the conn locally — every ses_query call Acquires a fresh
-	// shared_ptr; multiple ses_query->X(...) in one function would each
-	// route through Checkout and pin a different pool entry, leaving rs
-	// orphaned on a conn that the next Close runs on the wrong handle.
-	const auto db = ses_query;
-	const wxString& tableName = m_metaObject->GetTableNameDB();
-
-	if (db->TableExists(tableName)) {
-		ibDatabaseResultSet* resultSet = (db->GetDatabaseLayerType() == DATABASELAYER_FIREBIRD)
-			? db->RunQueryWithResults("SELECT FIRST 1 * FROM %s WHERE uuid = '%s';", tableName, m_objGuid.str())
-			: db->RunQueryWithResults("SELECT * FROM %s WHERE uuid = '%s' LIMIT 1;", tableName, m_objGuid.str());
-		if (resultSet == nullptr)
-			return false;
-		bool readRef = false;
-		if (resultSet->Next()) {
-			for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					ibValueMetaObjectAttributeBase::GetValueAttribute(
-						object,
-						m_listObjectValue[object->GetMetaID()],
-						resultSet,
-						createData
-					);
-				}
-			}
-			readRef = true;
+	// Load the row by its own key through the L3 door — the FB FIRST / others
+	// LIMIT fork and the raw-concat '%s' guid (injection-shaped) are gone. Values
+	// come from the L3 selection (GetValue), not the raw result set.
+	try {
+		ibDataQueryBuilder q;
+		q.From(m_metaObject->GetQueryable()).WhereKey(m_objGuid);
+		ibReadPageRequest page;
+		page.m_count = 1;
+		ibDataQueryResult selection = q.Select(page);
+		if (selection.Next()) {
+			for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
+				if (!m_metaObject->IsDataReference(object->GetMetaID()))
+					m_listObjectValue[object->GetMetaID()] = selection.GetValue(object);
+			return true;
 		}
-		db->CloseResultSet(resultSet);
-		return readRef;
 	}
+	catch (...) {}
 	return false;
 }
 
@@ -55,25 +42,19 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 		bool ReadValues() {
 			if (m_metaObject == nullptr || m_newObject)
 				return false;
-			const auto db = ses_query;
-			const wxString& tableName = m_metaObject->GetTableNameDB();
-			if (db->TableExists(tableName)) {
-				ibDatabaseResultSet* resultSet = (db->GetDatabaseLayerType() == DATABASELAYER_FIREBIRD)
-					? db->RunQueryWithResults("SELECT FIRST 1 * FROM " + tableName + " WHERE uuid = '" + m_objGuid.str() + "';")
-					: db->RunQueryWithResults("SELECT * FROM " + tableName + " WHERE uuid = '" + m_objGuid.str() + "' LIMIT 1;");
-				if (!resultSet)
-					return false;
-				if (resultSet->Next()) {
-					for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-						if (m_metaObject->IsDataReference(object->GetMetaID()))
-							continue;
-						ibValueMetaObjectAttributeBase::GetValueAttribute(object, m_listObjectValue[object->GetMetaID()], resultSet);
-					}
-				}
-				db->CloseResultSet(resultSet);
+			try {
+				ibDataQueryBuilder q;
+				q.From(m_metaObject->GetQueryable()).WhereKey(m_objGuid);
+				ibReadPageRequest page;
+				page.m_count = 1;
+				ibDataQueryResult selection = q.Select(page);
+				if (selection.Next())
+					for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
+						if (!m_metaObject->IsDataReference(object->GetMetaID()))
+							m_listObjectValue[object->GetMetaID()] = selection.GetValue(object);
 				return true;
 			}
-			return false;
+			catch (...) { return false; }
 		}
 		const ibValueMetaObjectRecordDataRef* m_metaObject;
 	private:
@@ -106,24 +87,22 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 			return m_metaObject;
 		}
 	};
-	const auto db = ses_query;
-	const wxString& tableName = m_metaObject->GetTableNameDB();
-	if (db->TableExists(tableName)) {
-		ibDatabaseResultSet* resultSet = db->RunQueryWithResults("SELECT * FROM %s ORDER BY uuid; ", tableName);
-		if (resultSet == nullptr)
-			return false;
-		while (resultSet->Next()) {
-			const ibGuid& currentGuid = resultSet->GetResultString(guidName);
-			if (ibValueDataObjectComparator::CompareValue(findData, m_metaObject, currentGuid)) {
-				listValue.push_back(
-					ibValueReferenceDataObject::Create(m_metaObject, currentGuid)
-				);
-			}
+	// Full scan ordered by key through the door (count <= 0 = unbounded); each
+	// row's text is compared by the nested comparator.
+	try {
+		ibDataQueryBuilder q;
+		q.From(m_metaObject->GetQueryable());
+		ibReadPageRequest page;
+		page.m_count = 0;   // no limit — full scan
+		ibDataQueryResult selection = q.Select(page);
+		while (selection.Next()) {
+			const ibGuid currentGuid = selection.GetGuidString();
+			if (ibValueDataObjectComparator::CompareValue(findData, m_metaObject, currentGuid))
+				listValue.push_back(ibValueReferenceDataObject::Create(m_metaObject, currentGuid));
 		}
-		std::sort(listValue.begin(), listValue.end(), [](const ibValue& a, const ibValue& b) { return a.GetString() < b.GetString(); });
-		db->CloseResultSet(resultSet);
+		std::sort(listValue.begin(), listValue.end(),
+			[](const ibValue& a, const ibValue& b) { return a.GetString() < b.GetString(); });
 		return listValue.size() > 0;
 	}
-
-	return false;
+	catch (...) { return false; }
 }

@@ -89,6 +89,9 @@ public:
 		return DATABASELAYER_MYSQL;
 	}
 
+	static const ibDialectDictionary& Dialect();                       // MySQL dialect (no instance needed)
+	virtual const ibDialectDictionary& GetDialect() const override;    // polymorphic access for L2
+
 	static int TranslateErrorCode(int nCode);
 	static bool IsAvailable();
 

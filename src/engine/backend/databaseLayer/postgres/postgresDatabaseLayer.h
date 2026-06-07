@@ -92,6 +92,12 @@ public:
 		return DATABASELAYER_POSTGRESQL;
 	}
 
+	// PG SQL dialect. Static holds the definition (a test reads it without
+	// constructing the driver — no libpq). The virtual GetDialect() is the
+	// polymorphic access point L2 uses (conn->GetDialect()).
+	static const ibDialectDictionary& Dialect();
+	virtual const ibDialectDictionary& GetDialect() const override;
+
 	static int TranslateErrorCode(int nCode);
 	static bool IsAvailable();
 

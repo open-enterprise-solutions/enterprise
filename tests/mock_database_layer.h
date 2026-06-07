@@ -26,6 +26,10 @@ public:
     wxArrayString GetViews() override                       { return {}; }
     wxArrayString GetColumns(const wxString&) override      { return {}; }
     int  GetDatabaseLayerType() const override              { return 0; }
+    const ibDialectDictionary& GetDialect() const override {
+        static const ibDialectDictionary s_dialect;   // default ctor = ANSI baseline
+        return s_dialect;
+    }
 
     int                  DoRunQuery(const wxString&, bool) override            { return 0; }
     ibDatabaseResultSet* DoRunQueryWithResults(const wxString&) override       { return nullptr; }

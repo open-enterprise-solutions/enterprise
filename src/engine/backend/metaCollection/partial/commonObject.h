@@ -46,6 +46,10 @@
 #include "backend/valueInfo.h"
 #include "backend/tableInfo.h"
 
+// L3 data-navigation interface — ibValueMetaObjectRecordDataRef and
+// ibValueMetaObjectRegisterData implement it so the query builder is family-blind.
+#include "backend/query/queryable.h"
+
 //********************************************************************************************
 //*                                     Defines                                              *
 //********************************************************************************************
@@ -464,8 +468,31 @@ private:
 #pragma endregion
 };
 
-//meta object with reference 
-class BACKEND_API ibValueMetaObjectRecordDataRef : public ibValueMetaObjectRecordData {
+// ibRecordQueryable — the L3 queryable for the catalog / document / charts / enums
+// family. The metaobject no longer IS a queryable; it VENDS this adapter (a stable
+// member), which forwards navigation to the metaobject's own query methods — so the
+// concrete leaf (catalog / document / …) behaviour comes through virtual dispatch.
+class ibValueMetaObjectRecordDataRef;
+class BACKEND_API ibRecordQueryable : public ibBackendQueryable {
+public:
+	explicit ibRecordQueryable(const ibValueMetaObjectRecordDataRef* meta) : m_meta(meta) {}
+	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const wxString& name) const override;
+	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const ibMetaID& id) const override;
+	virtual wxString GetQueryTableName() const override;
+	virtual ibMetaID GetQueryMetaID() const override;
+	virtual wxString GetRowKeyColumn() const override;
+	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;
+	virtual bool IsReferenceAttribute(const ibMetaID& id) const override;
+	virtual wxString GetReferenceKeyColumn() const override;
+	virtual const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryColumn* refColumn) const override;
+	virtual wxString MaterializeRowKey(ibDatabaseResultSet* rs) const override;
+	virtual ibValue MaterializeAttribute(const ibValueMetaObjectAttributeBase* attr, ibDatabaseResultSet* rs) const override;
+private:
+	const ibValueMetaObjectRecordDataRef* m_meta;
+};
+
+//meta object with reference
+class BACKEND_API ibValueMetaObjectRecordDataRef : public ibValueMetaObjectRecordData, public ibBackendQueryableHolder {
 	public:
 
 protected:
@@ -473,6 +500,13 @@ protected:
 	ibValueMetaObjectRecordDataRef();
 	virtual ~ibValueMetaObjectRecordDataRef();
 public:
+
+	// The metaobject VENDS its queryable; it does NOT navigate itself. ibRecordQueryable
+	// (a friend) owns the navigation, built from this metaobject's primitives
+	// (FindObjectByFilter / GetTableNameDB / IsDataReference / guidName). L4 and the door
+	// read through GetQueryable().
+	virtual const ibBackendQueryable* GetQueryable() const override { return &m_queryable; }
+	friend class ibRecordQueryable;
 
 	virtual ibValueMetaObjectAttributePredefined* GetDataReference() const { return m_propertyAttributeReference->GetMetaObject(); }
 	virtual bool IsDataReference(const ibMetaID& id) const override { return id == (*m_propertyAttributeReference)->GetMetaID(); }
@@ -566,6 +600,9 @@ protected:
 	ibPropertyCategory* m_categoryPresentation = ibPropertyObject::CreatePropertyCategory(wxT("Presentation"), _("Presentation"));
 	ibPropertyBoolean* m_propertyQuickChoice = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryPresentation, wxT("QuickChoice"), _("Quick choice"), false);
 	ibPropertyContainer<>* m_propertyAttributeReference = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("Reference"), _("Reference"), wxEmptyString, ibValue::GetIDByVT(ibValueTypes::TYPE_EMPTY)));
+
+	// the vended queryable — stable for this metaobject's life (see GetQueryable()).
+	ibRecordQueryable m_queryable{ this };
 
 protected:
 
@@ -1010,14 +1047,41 @@ protected:
 	std::vector<wxObjectDataPtr<ibPredefinedValueObject>> m_predefinedObjectVector;
 };
 
-//meta object with key   
+// ibRegisterDataQueryable — the L3 queryable for the register family (its main
+// "records" relation). The register no longer IS a queryable; it VENDS this adapter,
+// which forwards navigation to the register's own query methods. (Slices are separate
+// transient queryables; this is the persistent main one.)
+class BACKEND_API ibRegisterDataQueryable : public ibBackendQueryable {
+public:
+	explicit ibRegisterDataQueryable(const ibValueMetaObjectRegisterData* meta) : m_meta(meta) {}
+	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const wxString& name) const override;
+	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const ibMetaID& id) const override;
+	virtual wxString GetQueryTableName() const override;
+	virtual ibMetaID GetQueryMetaID() const override;
+	virtual wxString GetRowKeyColumn() const override;
+	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;
+	virtual bool IsReferenceAttribute(const ibMetaID& id) const override;
+	virtual wxString MaterializeRowKey(ibDatabaseResultSet* rs) const override;
+	virtual ibValue MaterializeAttribute(const ibValueMetaObjectAttributeBase* attr, ibDatabaseResultSet* rs) const override;
+private:
+	const ibValueMetaObjectRegisterData* m_meta;
+};
+
+//meta object with key
 class BACKEND_API ibValueMetaObjectRegisterData :
-	public ibValueMetaObjectGenericData {
+	public ibValueMetaObjectGenericData, public ibBackendQueryableHolder {
 	public:
 protected:
 	ibValueMetaObjectRegisterData();
 	virtual ~ibValueMetaObjectRegisterData();
 public:
+
+	// The metaobject VENDS its main queryable; it does NOT navigate itself.
+	// ibRegisterDataQueryable (a friend) owns the navigation, from this register's
+	// primitives (FindAnyAttributeObjectByFilter / GetTableNameDB / HasRecorder /
+	// HasPeriod / GetRegister* / GetGenericDimensionArrayObject). Slices are separate.
+	virtual const ibBackendQueryable* GetQueryable() const override { return &m_queryable; }
+	friend class ibRegisterDataQueryable;
 
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return AccessRight_Read(); }
@@ -1250,6 +1314,9 @@ protected:
 	ibPropertyContainer<>* m_propertyAttributePeriod = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("Period"), _("Period"), wxEmptyString, ibDateFractions::ibDateFractions_DateTime, true));
 	ibPropertyContainer<>* m_propertyAttributeRecorder = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Recorder"), _("Recorder"), wxEmptyString));
 	ibPropertyContainer<>* m_propertyAttributeLineNumber = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateNumber(wxT("LineNumber"), _("Line number"), wxEmptyString, 15, 0));
+
+	// the vended main queryable — stable for this register's life (see GetQueryable()).
+	ibRegisterDataQueryable m_queryable{ this };
 
 	// Read/Write/Delete role triplet emitted by IB_DECLARE_RWD_ROLE_TRIPLET
 	// above (in the public access region).

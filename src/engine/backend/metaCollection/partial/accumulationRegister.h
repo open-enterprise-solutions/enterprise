@@ -3,6 +3,7 @@
 
 #include "commonObject.h"
 #include "accumulationRegisterEnum.h"
+#include "backend/query/computedRegisterQueryable.h"   // shared base for the balance / turnover virtual tables
 
 class ibValueMetaObjectAccumulationRegister : public ibValueMetaObjectRegisterData {
 	public:
@@ -59,6 +60,16 @@ public:
 	wxString GetRegisterTableNameDB() const {
 		return GetRegisterTableNameDB(GetRegisterType());
 	}
+
+	///////////////////////////////////////////////////////////////////
+
+	// Balance / turnover compute — the register's OWN aggregate-query knowledge (the
+	// signed SUM over the movement table, built as L2 IR). The balance / turnover
+	// companion queryables (friends) call these through m_reg; each returns a RAM table
+	// the L3 door reads. Mirrors the information register's ComputeSlice. Period bound:
+	// balance = as-of "<="; turnover = [begin, end].
+	ibValue ComputeBalance(const ibValue& cPeriod, const ibValue& cFilter) const;
+	ibValue ComputeTurnover(const ibValue& cBegin, const ibValue& cEnd, const ibValue& cFilter) const;
 
 	///////////////////////////////////////////////////////////////////
 
@@ -189,7 +200,46 @@ private:
 
 	ibPropertyContainer<>* m_propertyAttributibRecordType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("RecordType"), _("Record type"), wxEmptyString, g_enumRecordTypeCLSID, false, ibValueEnumAccumulationRegisterRecordType::CreateDefEnumValue()));
 
+	friend class ibBalanceQueryable;
+	friend class ibTurnoverQueryable;
+
 	friend class ibMetaData;
+};
+
+//********************************************************************************************
+//*  Balance / turnover companion queryables — call-scoped RAM virtual tables                *
+//********************************************************************************************
+// Mirrors the information-register slice (see ibSliceQueryable): the as-of PERIOD
+// (balance) or the [begin, end] RANGE (turnover) plus the dimension FILTER ride in the
+// CONSTRUCTOR. You hand one to From() and L3 reads it like any source — it never learns
+// the rows are computed in RAM. The compute itself is the register's own ComputeBalance /
+// ComputeTurnover; the RAM-virtual-table plumbing + the register-forwarding navigation
+// live in the shared ibComputedRegisterQueryable base. Call-scoped — not persisted.
+
+// balance — resource balances as of a date.
+class BACKEND_API ibBalanceQueryable : public ibComputedRegisterQueryable<ibValueMetaObjectAccumulationRegister> {
+public:
+	ibBalanceQueryable(const ibValueMetaObjectAccumulationRegister* reg,
+	                   const ibValue& period = ibValue(), const ibValue& filter = ibValue())
+		: ibComputedRegisterQueryable(reg), m_period(period), m_filter(filter) {}
+	virtual ibValue ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
+private:
+	ibValue m_period;   // as-of date
+	ibValue m_filter;   // dimension-name -> value structure
+};
+
+// turnover — resource turnovers (and receipts / expenses) over [begin, end].
+class BACKEND_API ibTurnoverQueryable : public ibComputedRegisterQueryable<ibValueMetaObjectAccumulationRegister> {
+public:
+	ibTurnoverQueryable(const ibValueMetaObjectAccumulationRegister* reg,
+	                    const ibValue& begin = ibValue(), const ibValue& end = ibValue(),
+	                    const ibValue& filter = ibValue())
+		: ibComputedRegisterQueryable(reg), m_begin(begin), m_end(end), m_filter(filter) {}
+	virtual ibValue ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
+private:
+	ibValue m_begin;
+	ibValue m_end;
+	ibValue m_filter;
 };
 
 //********************************************************************************************

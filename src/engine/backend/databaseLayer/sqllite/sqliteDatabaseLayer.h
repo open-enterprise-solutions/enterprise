@@ -60,6 +60,9 @@ public:
 		return DATABASELAYER_SQLLITE;
 	}
 
+	static const ibDialectDictionary& Dialect();                       // SQLite dialect (no instance needed)
+	virtual const ibDialectDictionary& GetDialect() const override;    // polymorphic access for L2
+
 	static int TranslateErrorCode(int nCode);
 
 	// SQLite has no SQLSTATE — classification reads its single-int

@@ -83,6 +83,7 @@
     <ClInclude Include="databaseLayer\databaseErrorReporter.h" />
     <ClInclude Include="databaseLayer\connectionPool.h" />
     <ClInclude Include="databaseLayer\connectionScope.h" />
+    <ClInclude Include="databaseLayer\databaseQueryBuilder.h" />
     <ClInclude Include="databaseLayer\databaseLayer.h" />
     <ClInclude Include="databaseLayer\databaseLayerDef.h" />
     <ClInclude Include="databaseLayer\databaseLayerException.h" />
@@ -209,8 +210,8 @@
     <ClInclude Include="metaCollection\partial\informationRegister.h" />
     <ClInclude Include="metaCollection\partial\informationRegisterEnum.h" />
     <ClInclude Include="metaCollection\partial\informationRegisterManager.h" />
-    <ClInclude Include="metaCollection\partial\list\listSqlBuilder.h" />
-    <ClInclude Include="metaCollection\partial\list\registerSqlBuilder.h" />
+    <ClInclude Include="query\queryable.h" />
+    <ClInclude Include="query\dataQueryBuilder.h" />
     <ClInclude Include="metaCollection\partial\list\objectList.h" />
     <ClInclude Include="metaCollection\partial\commonObject.h" />
     <ClInclude Include="metaCollection\partial\reference\reference.h" />
@@ -370,6 +371,7 @@
     <ClCompile Include="compiler\value_res.cpp" />
     <ClCompile Include="databaseLayer\connectionPool.cpp" />
     <ClCompile Include="databaseLayer\connectionScope.cpp" />
+    <ClCompile Include="databaseLayer\databaseQueryBuilder.cpp" />
     <ClCompile Include="databaseLayer\databaseErrorReporter.cpp" />
     <ClCompile Include="databaseLayer\databaseLayer.cpp" />
     <ClCompile Include="databaseLayer\databaseLayerException.cpp" />
@@ -554,8 +556,7 @@
     <ClCompile Include="metaCollection\partial\informationRegisterMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterObject.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterQuery.cpp" />
-    <ClCompile Include="metaCollection\partial\list\listSqlBuilder.cpp" />
-    <ClCompile Include="metaCollection\partial\list\registerSqlBuilder.cpp" />
+    <ClCompile Include="query\dataQueryBuilder.cpp" />
     <ClCompile Include="metaCollection\partial\list\objectList.cpp" />
     <ClCompile Include="metaCollection\partial\list\objectListAction.cpp" />
     <ClCompile Include="metaCollection\partial\list\objectListModel.cpp" />
