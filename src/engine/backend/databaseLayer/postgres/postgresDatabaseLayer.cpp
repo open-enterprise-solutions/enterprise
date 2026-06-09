@@ -37,6 +37,29 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::GetDialect() const
 	return Dialect();
 }
 
+// PostgreSQL is the FIRST (and primary) DB temp-table target — ad-hoc `CREATE TEMPORARY TABLE` of
+// any shape per query. Strategy = AdHocCreate; lifetime is explicit (the manager DROPs via its
+// pinning scope, deterministic, no dependency on commit timing — so m_autoDrops=false, no ON
+// COMMIT clause). Its mere PRESENCE flips PG off the RAM floor onto the temp path. (docs/temp-db.md)
+const ibTempTableDialect& ibDatabaseLayerPostgres::TempDialect()
+{
+	static const ibTempTableDialect s_temp = [] {
+		ibTempTableDialect t;
+		t.m_strategy      = ibTempTableDialect::Strategy::AdHocCreate;
+		t.m_createPrefix  = wxT("CREATE TEMPORARY TABLE");
+		t.m_onCommitClause = wxEmptyString;     // session-scoped; the manager drops it explicitly
+		t.m_autoDrops     = false;              // explicit DROP via the pinning scope (RAII, leak-free)
+		t.m_dropPrefix    = wxT("DROP TABLE");
+		return t;
+	}();
+	return s_temp;
+}
+
+const ibTempTableDialect* ibDatabaseLayerPostgres::GetTempTableDialect() const
+{
+	return &TempDialect();
+}
+
 // ctor
 ibDatabaseLayerPostgres::ibDatabaseLayerPostgres()
 	: ibDatabaseLayer(), m_pDatabase(nullptr)

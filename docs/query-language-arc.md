@@ -46,6 +46,43 @@
 >   round-trip) with role-columns = the **totals-table** arc; the accounting register (subconto
 >   unfinished); running the golden tests on the CMake side.
 >
+> ### Update 2026-06-09 — write-door + reference-as-key (landed, FB-validated)
+>
+> - **Fluent write door** — descriptors write/delete through the same door, mirroring L2:
+>   `From(queryable).SetValue(col,value)*.Insert()/Upsert()/Delete()`; terminals take no
+>   args. `WriteRow`/`ForKey`/guid-in-terminal removed. `ibRawDBColumn` (typed static
+>   factories `String/Number/Binary/Date/Boolean`) = a direct physical column the provider
+>   binds raw (vs attribute decomposition), dispatched on `IsRawColumn()`.
+> - **Key model = one authority.** `GetRowKeyColumn` / `IsReferenceAttribute` /
+>   `GetReferenceKeyColumn` **removed**. `GetPrimaryKeyColumns()` owns the UPSERT match +
+>   dot-walk self-reference (record → data-reference `_RRRef`, register → composite,
+>   constant → `RECORD_KEY`); `GetIdentitySort()` owns the read keyset as **real columns**
+>   (catalog uuid, no null sentinel). uuid is a rudiment (PK + read/DELETE key) coexisting
+>   with `_RRRef` as two link keys until cleaned. (DDL `_RRRef` unique index ships on
+>   createMetaTable only — existing tables need a migration step.)
+> - **`ibDataResultSource`** (renamed from `ibMetaResultSource`) — backing-blind result;
+>   `GetGuidString` removed (the row guid reads as the uuid identity column). The DB result
+>   source + provider extracted to `query/dbTableProvider.{h,cpp}`; `ibComputedRegister
+>   Queryable` moved into `queryable.h`. Version-lock read moved onto the door (record-locks).
+> - **Column-based lowering (LANDED).** Value materialisation + binding are now fully
+>   column-based: `ibDbTableProvider::GetValueColumn` / `SetValueColumn` assemble / decompose off
+>   the column's `GetTypeDesc()` + a metadata context (`ibBackendQueryable::GetMetaData()`, threaded
+>   through the result source / write spec) for reference & enum reconstruction — **no static_cast
+>   to `ibValueMetaObjectAttributeBase`** anywhere in the provider. The physical field spread
+>   (`WriteFieldsOf`: TYPE + per-contained-primitive + `_RTRef/_RRRef`) is computed straight from
+>   the type descriptor, no attribute roundtrip. Thin `Set/GetValueAttribute` adapters (attribute IS
+>   a column, metaData = `attr->GetMetaData()`) forward to the core for register-lowering callers.
+> - **Temp-DB foundation (LAID 2026-06-09).** The capability seam for DB temporary tables is in:
+>   `ibTempTableDialect` + `ibDatabaseLayer::GetTempTableDialect()` (nullable — **presence = the
+>   capability**, `nullptr` ⇒ RAM floor). Temp tables are the **optimisation layer** (materialise
+>   an intermediate so the DBMS optimiser gets real cardinality), and source-agnostic
+>   L3 makes a temp table just an ordinary DB source, so the read path is reused and a runtime
+>   failure transparently falls back to RAM. Manager / adapter / planner / per-driver dialects
+>   pending — full design contract in [temp-db.md](temp-db.md).
+> - **Still open:** the DDL migration gap above (existing tables need the `_RRRef` unique index);
+>   balances/turnovers as DB-backed virtual tables (totals-table arc); the accounting register
+>   (subconto); cross-DBMS validation beyond Firebird; the L4 text-query parser.
+>
 > Design history + open decisions remain in [§15](#15-open-decisions); the per-section
 > design (§4–§22) is preserved as the rationale this converged from.
 
@@ -910,16 +947,30 @@ The contract digests a metaobject and emits everything needed to build a query:
 - `ResolveAttribute(name | id)` — digest an attribute reference by string (L4
   text) or metaID (L3) into the resolved attribute; null = "no such requisite",
   which is also how L3 validates a name against the metadata tree.
-- `GetQueryTableName` / `GetQueryMetaID` / `GetRowKeyColumn` — physical layout.
+- `GetQueryTableName` / `GetQueryMetaID` — physical layout.
 - `GetIdentitySort()` — the identity / keyset-tiebreaker columns as query-native
-  sort items. **This is the unification:** catalog returns the row-key sentinel
-  (`{ attr = nullptr }` → `guidName`); a register returns its real identity
-  attributes (recorder+line, or period?+dimensions). L3 appends them to the user
-  sort (`ibMetaQueryBuilder::EffectiveSort`, deduped by metaID) → one uniform
-  total order, **no catalog-vs-register fork** in the keyset code.
-- `IsReferenceAttribute`, `MaterializeRowKey`, `MaterializeAttribute` — the
-  metaobject materialises its own row (catalog: guidName + reference
-  reconstruction; register: composite identity assembled by the consumer).
+  sort items, **all REAL columns** (no null sentinel): catalog returns `{ uuid }`,
+  a register its real identity attributes (recorder+line, or period?+dimensions),
+  a tabular section `{ line number }`. L3 appends them to the user sort
+  (`EffectiveSort`, deduped by column pointer) → one uniform total order, **no
+  catalog-vs-register fork** in the keyset code. The provider reads a single-key
+  source's row-key field off the unique tail (`RowKeyField` =
+  `GetIdentitySort().back()`); the uuid is a **rudiment** kept as this read keyset
+  + DELETE-by-key column until it is cleaned.
+- `GetPrimaryKeyColumns()` — the **ONE key authority** for the write UPSERT match
+  AND the dot-walk self-reference. A record returns its `{ data-reference }` (the
+  row's own `_RRRef` reference blob — unique; the provider reads its Reference field
+  for the join, all its fields for the match — `_RTRef` is constant for a
+  monomorphic self-reference, so the match is effectively on the unique `_RRRef`); a
+  register its composite (recorder+line+period / period+dimensions); a constant
+  `{ RECORD_KEY }`. There is **no** `GetRowKeyColumn` / `IsReferenceAttribute` /
+  `GetReferenceKeyColumn` — all three are derived from this single authority. uuid +
+  `_RRRef` coexist as two link keys until uuid is cleaned. (provider helpers:
+  `RowKeyField`, `ReferenceFieldOf`, `SelfReferenceField`.)
+- Value / reference materialisation lives in the DB provider (`GetValueAttribute`),
+  which static_casts a column to the metaobject attribute — **guarded by
+  `IsRawColumn()`**, because a raw column (a `ibRawDBColumn` parent-uuid / row-key
+  filter) is not an attribute (an unguarded cast crashes — see record-locks).
 - `HasVirtualTables` / `GetVirtualTables` — L3 learns whether a metaobject has
   derived selections (catalog: none; registers: balances / turnovers / slices).
   Descriptor population follows as each virtual table is wired.
@@ -981,10 +1032,10 @@ tabular ×2, constant) pass the L3 enum.
 
 `ibMetaQueryResult::Raw()` (the transitional raw cursor) is **removed**. Its last
 users were the catalog tree-fetch (`BuildTreeRowFromResultSet`); they became
-`BuildTreeRowFromSelection`, reading through `GetGuidString()` / `GetValue(attr)` /
-`GetValue(GetDataReference())` (the data-reference materialises to the row's own
-reference object). The public surface of `ibMetaQueryResult` now names no L2 result
-set.
+`BuildTreeRowFromSelection`, reading through `GetValue(attr)` and the row guid via
+the uuid identity column (`GetValue(GetIdentitySort().back().m_col)`; the former
+`GetGuidString()` special accessor is gone — the row-key is read as a column like
+any other). The public surface of `ibMetaQueryResult` now names no L2 result set.
 
 ### 21.4 Header purity — the L3 header includes no L2
 
@@ -1296,8 +1347,9 @@ metaID:
   source = the Quantity resource)`.
 
 The shared interface carries only name / physical / type / role. The metaID-keyed
-logic (`IsReferenceAttribute`, identity dedup, `ContainMetaType`) is **attribute**
-machinery and lives in the **DB provider**, never on the column.
+logic (the self-reference key via `GetPrimaryKeyColumns`, identity dedup,
+`ContainMetaType`) is **attribute** machinery and lives in the **DB provider**,
+never on the column (no per-column primary-key / reference flag).
 
 **Resolution, not downcast.** A condition / sort references a column (by handle or
 name); each provider **resolves** it through *its own* queryable — the DB queryable

@@ -3,7 +3,7 @@
 
 #include "commonObject.h"
 #include "informationRegisterEnum.h"
-#include "backend/query/computedRegisterQueryable.h"   // shared base for the slice / balance / turnover virtual tables
+#include "backend/query/queryable.h"   // ibComputedRegisterQueryable<TReg> — shared base for the slice / balance / turnover virtual tables
 
 class ibValueMetaObjectInformationRegister : public ibValueMetaObjectRegisterData {
 	public:
@@ -226,8 +226,8 @@ private:
 	// (table / dimensions / the MAX/MIN self-join). The slice companion queryable
 	// (ibSliceQueryable, a friend) calls it through m_reg; the period bound
 	// parameterises it: last = MAX / "<=", first = MIN / ">=". Returns the slice table.
-	ibValue ComputeSlice(const ibValue& cPeriod, const ibValue& cFilter,
-	                     const wxString& aggregateFn, const wxString& compareOp) const;
+	ibQueryRamTable ComputeSlice(const ibValue& cPeriod, const ibValue& cFilter,
+	                             const wxString& aggregateFn, const wxString& compareOp) const;
 
 	friend class ibSliceQueryable;
 	friend class ibValueRecordSetObjectInformationRegister;
@@ -262,7 +262,7 @@ public:
 	virtual wxString CompareOp()   const = 0;   // "<="  (last) / ">="  (first)
 
 	// the slice's rows — computed from the ctor filters through the register's ComputeSlice.
-	virtual ibValue ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
+	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
 
 protected:
 	ibValue m_period;   // as-of date (the "filter before Where")

@@ -19,8 +19,9 @@ void ibValueSelectorRecordDataObject::Reset()
 		ibReadPageRequest page;
 		page.m_count = 0;   // unbounded
 		ibDataQueryResult selection = q.Select(page);
+		const ibBackendQueryColumn* keyCol = m_metaObject->GetQueryable()->GetIdentitySort().back().m_col;   // uuid identity column
 		while (selection.Next())
-			m_currentValues.push_back(selection.GetGuidString());
+			m_currentValues.push_back(selection.GetValue(keyCol).GetString());
 	}
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
 		if (!appData->DesignerMode()) {

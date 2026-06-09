@@ -13,15 +13,12 @@ class ibValueMetaObjectConstant;
 class BACKEND_API ibConstantQueryable : public ibBackendQueryable {
 public:
 	explicit ibConstantQueryable(const ibValueMetaObjectConstant* meta) : m_meta(meta) {}
-	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const wxString& name) const override;
-	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const ibMetaID& id) const override;
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // the constant IS its one column
 	virtual wxString GetQueryTableName() const override;
 	virtual ibMetaID GetQueryMetaID() const override;
-	virtual wxString GetRowKeyColumn() const override;
+	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
 	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;
-	virtual bool IsReferenceAttribute(const ibMetaID& id) const override;
-	virtual wxString MaterializeRowKey(ibDatabaseResultSet* rs) const override;
-	virtual ibValue MaterializeAttribute(const ibValueMetaObjectAttributeBase* attr, ibDatabaseResultSet* rs) const override;
+	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // { RECORD_KEY } — the single-row UPSERT match
 private:
 	const ibValueMetaObjectConstant* m_meta;
 };

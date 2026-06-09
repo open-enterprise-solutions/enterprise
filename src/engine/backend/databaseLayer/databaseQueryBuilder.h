@@ -439,6 +439,10 @@ struct ibQueryIR
 {
 	ibQueryRelPtr m_root;
 
+	// Pessimistic read-for-update: the renderer appends the dialect's row-lock clause
+	// (m_rowLockSuffix) to the TOP-level SELECT. Used by the register set lock. (docs/record-locks.md)
+	bool m_lockForUpdate = false;
+
 	ibQueryIR() = default;
 	explicit ibQueryIR(ibQueryRelPtr root) : m_root(std::move(root)) {}
 };
@@ -696,7 +700,9 @@ private:
 	wxString RenderColumn(const ibDdlColumn& col);      // "<name> <sqltype> [PRIMARY KEY|NOT NULL]"
 	wxString MapType(const ibColumnType& type) const;   // canonical type -> dialect SQL type (via dictionary)
 
-	const ibDialectDictionary& m_dialect;
+	ibDialectDictionary m_dialect;             // BY VALUE — a renderer built from a dialect TEMPORARY
+	                                           // (`ibQueryRenderer r(FbDialect()); … r.RenderDDL()`) outlives it;
+	                                           // a reference member would dangle. The dictionary is small + copyable.
 	ibRenderedQuery            m_out;          // accumulates during a Render() call
 	int                        m_paramPos = 0; // running 1-based placeholder count
 };
@@ -725,6 +731,19 @@ public:
 	// by name). A NULL column yields a TYPE_NULL value.
 	ibValue GetValue(int column);
 	ibValue GetValue(const wxString& name);
+
+	// Typed field reads by name — the dialect-NORMALISED form of the row's physical fields
+	// (the "same shape as L1, minus the dialect"). The provider's value-assembly reads the
+	// physical _N/_S/_RRRef columns through THESE, so it never touches the raw L1 result set
+	// (RawResultSet is an L2 leak). Delegate to the borrowed driver cursor.
+	wxString    GetResultString(const wxString& name);
+	int         GetResultInt(const wxString& name);
+	long long   GetResultLong(const wxString& name);
+	bool        GetResultBool(const wxString& name);
+	wxDateTime  GetResultDate(const wxString& name);
+	double      GetResultDouble(const wxString& name);
+	ibNumber    GetResultNumber(const wxString& name);
+	void*       GetResultBlob(const wxString& name, wxMemoryBuffer& buffer);
 
 	int      ColumnCount();
 	wxString ColumnName(int column);

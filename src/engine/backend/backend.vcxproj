@@ -212,6 +212,9 @@
     <ClInclude Include="metaCollection\partial\informationRegisterManager.h" />
     <ClInclude Include="query\queryable.h" />
     <ClInclude Include="query\dataQueryBuilder.h" />
+    <ClInclude Include="query\queryProvider.h" />
+    <ClInclude Include="query\dbTableProvider.h" />
+    <ClInclude Include="query\queryRamTable.h" />
     <ClInclude Include="metaCollection\partial\list\objectList.h" />
     <ClInclude Include="metaCollection\partial\commonObject.h" />
     <ClInclude Include="metaCollection\partial\reference\reference.h" />
@@ -557,6 +560,8 @@
     <ClCompile Include="metaCollection\partial\informationRegisterObject.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterQuery.cpp" />
     <ClCompile Include="query\dataQueryBuilder.cpp" />
+    <ClCompile Include="query\queryProvider.cpp" />
+    <ClCompile Include="query\dbTableProvider.cpp" />
     <ClCompile Include="metaCollection\partial\list\objectList.cpp" />
     <ClCompile Include="metaCollection\partial\list\objectListAction.cpp" />
     <ClCompile Include="metaCollection\partial\list\objectListModel.cpp" />

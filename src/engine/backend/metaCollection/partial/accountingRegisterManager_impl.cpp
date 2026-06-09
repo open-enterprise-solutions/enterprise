@@ -5,12 +5,15 @@
 
 #include "accountingRegister.h"
 #include "accountingRegisterManager.h"
+// (accounting retrieval is commented out — non-functional, pending its migration to L2;
+//  no ibDbTableProvider / ibQueryResult usage remains in compiled code here.)
 
 #include "backend/system/value/valueMap.h"
 #include "backend/system/value/valueTable.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"
+#include "backend/query/dbTableProvider.h"   // ibDbTableProvider::SetValueAttribute — DB write decomposition
 
 ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeriod, const ibValue& cAccount, const ibValue& cFilter)
 {
@@ -247,6 +250,9 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 
 	sqlQuery += ") AS T1";
 
+#if 0   // accounting NON-FUNCTIONAL — the whole DB execution (raw L1 statement + bind + run) is
+        // disabled pending the register's migration to the L3 write/read door. Returns the empty
+        // retTable. (docs/query-language-arc.md — accounting is the last raw-L1 holdout.)
 	// Prepare and bind parameters
 	ibPreparedStatement* statement = ses_query->PrepareStatement(sqlQuery);
 
@@ -255,15 +261,15 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 
 	int position = 1;
 
-	ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterActive(), true, statement, position); //active = true
-	ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cPeriod.GetDate(), statement, position);
+	ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterActive(), true, statement, position); //active = true
+	ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cPeriod.GetDate(), statement, position);
 
 	if (hasAccountFilter) {
-		ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterAccount(), cAccount, statement, position);
+		ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterAccount(), cAccount, statement, position);
 	}
 
 	for (auto& filter : selFilter) {
-		ibValueMetaObjectAttributeBase::SetValueAttribute(filter.first, filter.second, statement, position);
+		ibDbTableProvider::SetValueAttribute(filter.first, filter.second, statement, position);
 	}
 
 	ibDatabaseResultSet* resultSet = statement->RunQueryWithResults();
@@ -273,50 +279,13 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 
 	while (resultSet->Next()) {
 		ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
-		wxASSERT(retLine);
-
-		// Read Account
-		{
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(m_metaObject->GetRegisterAccount(), retVal, resultSet))
-				retLine->SetAt(m_metaObject->GetRegisterAccount()->GetName(), retVal);
-		}
-
-		// Read Subconto 1-3
-		{
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(m_metaObject->GetRegisterSubconto1(), retVal, resultSet))
-				retLine->SetAt(m_metaObject->GetRegisterSubconto1()->GetName(), retVal);
-		}
-		{
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(m_metaObject->GetRegisterSubconto2(), retVal, resultSet))
-				retLine->SetAt(m_metaObject->GetRegisterSubconto2()->GetName(), retVal);
-		}
-		{
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(m_metaObject->GetRegisterSubconto3(), retVal, resultSet))
-				retLine->SetAt(m_metaObject->GetRegisterSubconto3()->GetName(), retVal);
-		}
-
-		// Read dimensions
-		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(object, retVal, resultSet))
-				retLine->SetAt(object->GetName(), retVal);
-		}
-
-		// Read resource balances
-		for (const auto object : m_metaObject->GetResourceArrayObject()) {
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(object->GetFieldNameDB() + "_N_Balance_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retVal, resultSet))
-				retLine->SetAt(object->GetName() + "_Balance", retVal);
-		}
+		// ... value reads via ibDbTableProvider::GetValueAttribute (disabled) ...
 		wxDELETE(retLine);
 	}
 
 	ses_query->CloseResultSet(resultSet);
 	ses_query->CloseStatement(statement);
+#endif
 
 	return retTable;
 }
@@ -572,6 +541,8 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 
 	sqlQuery += ") AS T1";
 
+#if 0   // accounting NON-FUNCTIONAL — DB execution disabled pending the register's migration to
+        // the L3 door. Returns the empty retTable. (docs/query-language-arc.md.)
 	// Prepare and bind parameters
 	ibPreparedStatement* statement = ses_query->PrepareStatement(sqlQuery);
 
@@ -580,16 +551,16 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 
 	int position = 1;
 
-	ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterActive(), true, statement, position); //active = true
-	ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cBeginOfPeriod.GetDate(), statement, position);
-	ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cEndOfPeriod.GetDate(), statement, position);
+	ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterActive(), true, statement, position); //active = true
+	ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cBeginOfPeriod.GetDate(), statement, position);
+	ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cEndOfPeriod.GetDate(), statement, position);
 
 	if (hasAccountFilter) {
-		ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterAccount(), cAccount, statement, position);
+		ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterAccount(), cAccount, statement, position);
 	}
 
 	for (auto& filter : selFilter) {
-		ibValueMetaObjectAttributeBase::SetValueAttribute(filter.first, filter.second, statement, position);
+		ibDbTableProvider::SetValueAttribute(filter.first, filter.second, statement, position);
 	}
 
 	ibDatabaseResultSet* resultSet = statement->RunQueryWithResults();
@@ -598,55 +569,14 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 		return retTable;
 
 	while (resultSet->Next()) {
-
 		ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
-		wxASSERT(retLine);
-
-		// Read Account
-		{
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(m_metaObject->GetRegisterAccount(), retVal, resultSet))
-				retLine->SetAt(m_metaObject->GetRegisterAccount()->GetName(), retVal);
-		}
-
-		// Read Subconto 1-3
-		{
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(m_metaObject->GetRegisterSubconto1(), retVal, resultSet))
-				retLine->SetAt(m_metaObject->GetRegisterSubconto1()->GetName(), retVal);
-		}
-		{
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(m_metaObject->GetRegisterSubconto2(), retVal, resultSet))
-				retLine->SetAt(m_metaObject->GetRegisterSubconto2()->GetName(), retVal);
-		}
-		{
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(m_metaObject->GetRegisterSubconto3(), retVal, resultSet))
-				retLine->SetAt(m_metaObject->GetRegisterSubconto3()->GetName(), retVal);
-		}
-
-		// Read dimensions
-		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-			ibValue retValue;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(object, retValue, resultSet))
-				retLine->SetAt(object->GetName(), retValue);
-		}
-
-		// Read resource turnovers
-		for (const auto object : m_metaObject->GetResourceArrayObject()) {
-			ibValue retValueDr;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(object->GetFieldNameDB() + "_N_TurnoverDr_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retValueDr, resultSet))
-				retLine->SetAt(object->GetName() + "_TurnoverDr", retValueDr);
-			ibValue retValueCr;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(object->GetFieldNameDB() + "_N_TurnoverCr_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retValueCr, resultSet))
-				retLine->SetAt(object->GetName() + "_TurnoverCr", retValueCr);
-		}
+		// ... value reads via ibDbTableProvider::GetValueAttribute (disabled) ...
 		wxDELETE(retLine);
 	}
 
 	ses_query->CloseResultSet(resultSet);
 	ses_query->CloseStatement(statement);
+#endif
 
 	return retTable;
 }
@@ -887,6 +817,8 @@ ibValue ibValueManagerDataObjectAccountingRegister::DrCrTurnovers(const ibValue&
 		firstHaving = false;
 	}
 
+#if 0   // accounting NON-FUNCTIONAL — DB execution disabled pending the register's migration to
+        // the L3 door. Returns the empty retTable. (docs/query-language-arc.md.)
 	// Prepare and bind parameters
 	ibPreparedStatement* statement = ses_query->PrepareStatement(sqlQuery);
 
@@ -896,21 +828,21 @@ ibValue ibValueManagerDataObjectAccountingRegister::DrCrTurnovers(const ibValue&
 	int position = 1;
 
 	// dr.Active = true, cr.Active = true
-	ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterActive(), true, statement, position);
-	ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterActive(), true, statement, position);
+	ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterActive(), true, statement, position);
+	ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterActive(), true, statement, position);
 
 	// Period range
-	ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cBeginOfPeriod.GetDate(), statement, position);
-	ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cEndOfPeriod.GetDate(), statement, position);
+	ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cBeginOfPeriod.GetDate(), statement, position);
+	ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cEndOfPeriod.GetDate(), statement, position);
 
 	// Account filter
 	if (hasAccountFilter) {
-		ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterAccount(), cAccount, statement, position);
+		ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterAccount(), cAccount, statement, position);
 	}
 
 	// Dimension filters
 	for (auto& filter : selFilter) {
-		ibValueMetaObjectAttributeBase::SetValueAttribute(filter.first, filter.second, statement, position);
+		ibDbTableProvider::SetValueAttribute(filter.first, filter.second, statement, position);
 	}
 
 	ibDatabaseResultSet* resultSet = statement->RunQueryWithResults();
@@ -920,33 +852,13 @@ ibValue ibValueManagerDataObjectAccountingRegister::DrCrTurnovers(const ibValue&
 
 	while (resultSet->Next()) {
 		ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
-		wxASSERT(retLine);
-
-		// Read AccountDr - aliased to "AccountDr" prefix, compatible with GetValueAttribute(fieldName, metaAttr, ...)
-		{
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(wxT("AccountDr"), m_metaObject->GetRegisterAccount(), retVal, resultSet))
-				retLine->SetAt(wxT("AccountDr"), retVal);
-		}
-
-		// Read AccountCr - aliased to "AccountCr" prefix
-		{
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(wxT("AccountCr"), m_metaObject->GetRegisterAccount(), retVal, resultSet))
-				retLine->SetAt(wxT("AccountCr"), retVal);
-		}
-
-		// Read resource amounts
-		for (const auto object : m_metaObject->GetResourceArrayObject()) {
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(object->GetFieldNameDB() + "_N_Amount_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retVal, resultSet))
-				retLine->SetAt(object->GetName() + "_Amount", retVal);
-		}
+		// ... value reads via ibDbTableProvider::GetValueAttribute (disabled) ...
 		wxDELETE(retLine);
 	}
 
 	ses_query->CloseResultSet(resultSet);
 	ses_query->CloseStatement(statement);
+#endif
 
 	return retTable;
 }
@@ -1377,6 +1289,8 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 		firstHaving = false;
 	}
 
+#if 0   // accounting NON-FUNCTIONAL — DB execution disabled pending the register's migration to
+        // the L3 door. Returns the empty retTable. (docs/query-language-arc.md.)
 	// Prepare and bind parameters
 	ibPreparedStatement* statement = ses_query->PrepareStatement(outerQuery);
 
@@ -1386,28 +1300,28 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	int position = 1;
 
 	// Opening balance subquery parameters
-	ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterActive(), true, statement, position); //active = true
-	ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cBeginOfPeriod.GetDate(), statement, position); // Period < begin
+	ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterActive(), true, statement, position); //active = true
+	ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cBeginOfPeriod.GetDate(), statement, position); // Period < begin
 
 	if (hasAccountFilter) {
-		ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterAccount(), cAccount, statement, position);
+		ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterAccount(), cAccount, statement, position);
 	}
 
 	for (auto& filter : selFilter) {
-		ibValueMetaObjectAttributeBase::SetValueAttribute(filter.first, filter.second, statement, position);
+		ibDbTableProvider::SetValueAttribute(filter.first, filter.second, statement, position);
 	}
 
 	// Turnovers subquery parameters
-	ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterActive(), true, statement, position); //active = true
-	ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cBeginOfPeriod.GetDate(), statement, position); // Period >= begin
-	ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cEndOfPeriod.GetDate(), statement, position); // Period <= end
+	ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterActive(), true, statement, position); //active = true
+	ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cBeginOfPeriod.GetDate(), statement, position); // Period >= begin
+	ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterPeriod(), cEndOfPeriod.GetDate(), statement, position); // Period <= end
 
 	if (hasAccountFilter) {
-		ibValueMetaObjectAttributeBase::SetValueAttribute(m_metaObject->GetRegisterAccount(), cAccount, statement, position);
+		ibDbTableProvider::SetValueAttribute(m_metaObject->GetRegisterAccount(), cAccount, statement, position);
 	}
 
 	for (auto& filter : selFilter) {
-		ibValueMetaObjectAttributeBase::SetValueAttribute(filter.first, filter.second, statement, position);
+		ibDbTableProvider::SetValueAttribute(filter.first, filter.second, statement, position);
 	}
 
 	ibDatabaseResultSet* resultSet = statement->RunQueryWithResults();
@@ -1417,62 +1331,13 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 
 	while (resultSet->Next()) {
 		ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
-		wxASSERT(retLine);
-
-		// Read Account
-		{
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(m_metaObject->GetRegisterAccount(), retVal, resultSet))
-				retLine->SetAt(m_metaObject->GetRegisterAccount()->GetName(), retVal);
-		}
-
-		// Read Subconto 1-3
-		{
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(m_metaObject->GetRegisterSubconto1(), retVal, resultSet))
-				retLine->SetAt(m_metaObject->GetRegisterSubconto1()->GetName(), retVal);
-		}
-		{
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(m_metaObject->GetRegisterSubconto2(), retVal, resultSet))
-				retLine->SetAt(m_metaObject->GetRegisterSubconto2()->GetName(), retVal);
-		}
-		{
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(m_metaObject->GetRegisterSubconto3(), retVal, resultSet))
-				retLine->SetAt(m_metaObject->GetRegisterSubconto3()->GetName(), retVal);
-		}
-
-		// Read dimensions
-		for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-			ibValue retVal;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(object, retVal, resultSet))
-				retLine->SetAt(object->GetName(), retVal);
-		}
-
-		// Read resource values
-		for (const auto object : m_metaObject->GetResourceArrayObject()) {
-			ibValue retValOpening;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(object->GetFieldNameDB() + "_N_OpeningBalance_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retValOpening, resultSet))
-				retLine->SetAt(object->GetName() + "_OpeningBalance", retValOpening);
-
-			ibValue retValDr;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(object->GetFieldNameDB() + "_N_TurnoverDr_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retValDr, resultSet))
-				retLine->SetAt(object->GetName() + "_TurnoverDr", retValDr);
-
-			ibValue retValCr;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(object->GetFieldNameDB() + "_N_TurnoverCr_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retValCr, resultSet))
-				retLine->SetAt(object->GetName() + "_TurnoverCr", retValCr);
-
-			ibValue retValClosing;
-			if (ibValueMetaObjectAttributeBase::GetValueAttribute(object->GetFieldNameDB() + "_N_ClosingBalance_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retValClosing, resultSet))
-				retLine->SetAt(object->GetName() + "_ClosingBalance", retValClosing);
-		}
+		// ... value reads via ibDbTableProvider::GetValueAttribute (disabled) ...
 		wxDELETE(retLine);
 	}
 
 	ses_query->CloseResultSet(resultSet);
 	ses_query->CloseStatement(statement);
+#endif
 
 	return retTable;
 }

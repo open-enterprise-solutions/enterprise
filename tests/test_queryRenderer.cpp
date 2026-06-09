@@ -11,7 +11,9 @@
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#include "backend/databaseLayer/mysql/mysqlDatabaseLayer.h"
+#ifdef OES_USE_MYSQL
+#include "backend/databaseLayer/mysql/mysqlDatabaseLayer.h"   // MySQL dialect — only when the driver is built
+#endif
 #include "backend/databaseLayer/databaseLayerException.h"   // ibBackendQueryException (AlterColumn-on-SQLite throw)
 
 namespace {
@@ -38,7 +40,9 @@ std::string Sql(const ibRenderedQuery& r) { return r.m_sql.ToStdString(); }
 ibDialectDictionary PgDialect()     { return ibDatabaseLayerPostgres::Dialect(); }
 ibDialectDictionary FbDialect()     { return ibDatabaseLayerFirebird::Dialect(); }
 ibDialectDictionary SqliteDialect() { return ibDatabaseLayerSQLite::Dialect(); }
+#ifdef OES_USE_MYSQL
 ibDialectDictionary MysqlDialect()  { return ibDatabaseLayerMySQL::Dialect(); }
+#endif
 
 } // namespace
 
@@ -410,8 +414,10 @@ TEST(QueryDdlRenderer, DropIndex_StandaloneVsMysqlOnTable)
 {
 	EXPECT_EQ(ibQueryRenderer(SqliteDialect()).RenderDDL(ibDropIndex(wxT("Reference9_INDEX"), wxT("Reference9"))).ToStdString(),
 		"DROP INDEX Reference9_INDEX");
+#ifdef OES_USE_MYSQL
 	EXPECT_EQ(ibQueryRenderer(MysqlDialect()).RenderDDL(ibDropIndex(wxT("Reference9_INDEX"), wxT("Reference9"))).ToStdString(),
 		"DROP INDEX Reference9_INDEX ON Reference9");
+#endif
 }
 
 // ALTER COLUMN (type change): PG/FB use ALTER COLUMN ... TYPE, MySQL MODIFY COLUMN;
@@ -421,8 +427,10 @@ TEST(QueryDdlRenderer, AlterColumn_TemplateShape)
 	ibDdlColumn c{ wxT("flag_B"), ibTypeBoolean(), false, false };
 	EXPECT_EQ(ibQueryRenderer(PgDialect()).RenderDDL(ibAlterColumn(wxT("Reg7"), c)).ToStdString(),
 		"ALTER TABLE Reg7 ALTER COLUMN flag_B TYPE BOOLEAN");
+#ifdef OES_USE_MYSQL
 	EXPECT_EQ(ibQueryRenderer(MysqlDialect()).RenderDDL(ibAlterColumn(wxT("Reg7"), c)).ToStdString(),
 		"ALTER TABLE Reg7 MODIFY COLUMN flag_B TINYINT");
+#endif
 }
 
 TEST(QueryDdlRenderer, AlterColumn_SqliteThrows)

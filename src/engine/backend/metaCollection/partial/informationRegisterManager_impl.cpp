@@ -12,6 +12,7 @@
 #include "backend/appData.h"
 #include "backend/session/session.h"
 #include "backend/query/dataQueryBuilder.h"   // L3 door — From(slice) + Select materialises the slice through L3
+#include "backend/query/dbTableProvider.h"    // ibDbTableProvider::GetValueAttribute — the DB value-assembly
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 — structured IR for the slice self-join (ComputeSlice)
 #include "backend/databaseLayer/databaseResultSet.h"      // raw result set for slice materialisation
 #include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFieldsOf / ibRegCompositeIR (shared lowering)
@@ -199,7 +200,7 @@ ibValue ibValueManagerDataObjectInformationRegister::SliceFirst(const ibValue& c
 // through m_reg, so BOTH the runtime (the manager's Slice* / Get*) and the L3 door
 // (ComputeRows, when it materialises a query) reach this one compute — no parallel
 // paths. The period bound is the only difference: last = MAX / "<=", first = MIN / ">=".
-ibValue ibValueMetaObjectInformationRegister::ComputeSlice(
+ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 	const ibValue& cPeriod, const ibValue& cFilter,
 	const wxString& aggregateFn, const wxString& compareOp) const
 {
@@ -210,18 +211,11 @@ ibValue ibValueMetaObjectInformationRegister::ComputeSlice(
 	else if (ses_query == nullptr)
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	ibValueModelTable* retTable = new ibValueModelTable();
-	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
-	wxASSERT(colCollection);
-	for (const auto object : meta->GetGenericAttributeArrayObject()) {
-		ibValueModelTable::ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo =
-			colCollection->AddColumn(
-				object->GetName(),
-				object->GetTypeDesc(),
-				object->GetSynonym()
-			);
-		colInfo->SetColumnID(object->GetMetaID());
-	}
+	// L3's own table (no runtime ibValueModelTable) — keyed by metaID; the script egress
+	// (SelectionToTable) rebuilds the runtime table from the selection + metadata.
+	ibQueryRamTable retTable;
+	for (const auto object : meta->GetGenericAttributeArrayObject())
+		retTable.AddColumn(object->GetMetaID(), object->GetName(), object->GetTypeDesc());
 
 	if (meta->GetPeriodicity() != ibPeriodicity::eNonPeriodic ||
 		meta->GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder) {
@@ -318,16 +312,12 @@ ibValue ibValueMetaObjectInformationRegister::ComputeSlice(
 		try {
 			ibQueryResult rs = ibDatabaseQueryBuilder().ExecuteIR(l3.Build());
 			while (rs.Next()) {
-				ibDatabaseResultSet* raw = rs.RawResultSet();
-				if (raw == nullptr) break;
-				ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
-				wxASSERT(retLine);
+				const long retRow = retTable.AppendRow();
 				for (const auto object : meta->GetGenericAttributeArrayObject()) {
 					ibValue retValue;
-					if (ibValueMetaObjectAttributeBase::GetValueAttribute(object, retValue, raw))
-						retLine->SetValueByMetaID(object->GetMetaID(), retValue);
+					if (ibDbTableProvider::GetValueAttribute(object, retValue, rs))
+						retTable.SetCell(retRow, object->GetMetaID(), retValue);
 				}
-				wxDELETE(retLine);
 			}
 		}
 		catch (...) {}
@@ -352,7 +342,7 @@ ibValue ibValueManagerDataObjectInformationRegister::SliceLast(const ibValue& cP
 // manager's Slice* / Get*, which construct a configured slice and From() it) and a
 // materialised query / JOIN reach that one place. All navigation forwards to the register.
 
-ibValue ibSliceQueryable::ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const
+ibQueryRamTable ibSliceQueryable::ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const
 {
 	// The slice's own scoping (period + dimension filter) rode in the ctor; build the
 	// table from it. Extra door conditions (a further Where on the slice) compose on

@@ -140,10 +140,6 @@ public:
 		return node->GetValue(id, pvarMetaVal);
 	}
 
-	virtual bool GetValueAttribute(const ibValueMetaObjectAttributeBase* metaAttr, ibValue& retValue, class ibDatabaseResultSet* resultSet, bool createData = true) {
-		return ibValueMetaObjectAttributeBase::GetValueAttribute(metaAttr, retValue, resultSet, createData);
-	}
-
 	//ctor
 	ibValueListDataObject(const ibValueMetaObjectGenericData* metaObject = nullptr, const ibFormID& formType = wxNOT_FOUND, bool choiceMode = false);
 	virtual ~ibValueListDataObject();

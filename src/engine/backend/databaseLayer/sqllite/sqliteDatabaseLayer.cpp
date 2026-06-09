@@ -21,6 +21,7 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 		d.m_boolForm   = ibBoolForm::OneZero;
 		d.m_features.m_window = true;                 // SQLite 3.25+
 		d.m_alterColumnTemplate = wxEmptyString;      // no in-place type change -> renderer throws
+		d.m_rowLockSuffix = wxEmptyString;            // SQLite locks the whole DB per TX — no row FOR UPDATE
 		// type map (SQLite is dynamically typed; these set column affinity)
 		d.m_typeBoolean = wxT("INTEGER");
 		d.m_typeDate    = wxT("TEXT");

@@ -1,5 +1,21 @@
 # Record-write protection — DB row locks + DataVersion
 
+> **Update 2026-06-09 — `LockAndCheckDataVersion` moved onto the L3 door.**
+> The hand-rolled `ReadDataVersionForUpdate` (raw `SELECT <DataVersion> FROM <tbl>
+> WHERE uuid = ? <RowLockHint>` + `GetResultString`) is **gone**. The version-lock
+> read is now one L3 selection:
+> `From(record).Where(ibRawDBColumn::String("uuid"), guid)` with
+> `ibReadPageRequest::m_lockForUpdate = true` — the renderer appends the dialect
+> `m_rowLockSuffix` (== the per-driver `RowLockHint()`), and the door runs on the
+> session holder (the SAME connection as the open `BeginWriteScope` TX), so the lock
+> is held to commit. The version reads through `sel.GetValue(dvAttr)`.
+> **Why it had to move:** DataVersion's SQL field name is the *composite*
+> `<fld>_TYPE,<fld>_S` (type tag + string), so the old raw `GetResultString(that)`
+> looked up a column literally named with a comma → "field not found" at runtime.
+> The provider's attribute assembly (`GetValueAttribute`, TYPE+S) is the only correct
+> read. Validated on FB (`SELECT … WHERE uuid=? ORDER BY uuid WITH LOCK` is accepted —
+> FB permits `ORDER BY` with `WITH LOCK`). Part of the reference-as-key arc.
+>
 > **Status:** **LANDED** 2026-05-24, smoke-validated on Debug|x86
 > (two enterprise.exe sessions editing the same Catalog item —
 > second Save throws ibBackendLockException::VersionChanged, dialog

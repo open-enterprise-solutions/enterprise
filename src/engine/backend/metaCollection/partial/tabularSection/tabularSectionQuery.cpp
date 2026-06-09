@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : tabular sections
 ////////////////////////////////////////////////////////////////////////////
@@ -6,26 +6,22 @@
 #include "tabularSection.h"
 
 #include "backend/metaCollection/partial/commonObject.h"
-#include "backend/query/dataQueryBuilder.h"            // L3 — read door + WriteRow write core (no L2 at this call site)
+#include "backend/query/dataQueryBuilder.h"            // L3 — read + write door (From/SetValue/Where/Insert/Delete) + ibRawDBColumn
 
 // --- vended queryable — thin adapter forwarding to the tabular meta's methods ---
 // The tabular section is uuid-keyed (1 parent -> N lines), ordered by line number.
 // The adapter is parent-agnostic — the parent uuid is a query filter (WhereKey at
 // read time) — so the persistent meta vends it via the common GetQueryable() interface
 // and a transient (data-processor / report) parent simply never queries it.
-const ibValueMetaObjectAttributeBase* ibTabularQueryable::ResolveAttribute(const wxString& name) const { return m_meta->FindAnyAttributeObjectByFilter(name); }
-const ibValueMetaObjectAttributeBase* ibTabularQueryable::ResolveAttribute(const ibMetaID& id) const { return m_meta->FindAnyAttributeObjectByFilter(id); }
+const ibBackendQueryColumn* ibTabularQueryable::ResolveColumnByName(const wxString& name) const { return m_meta->FindAnyAttributeObjectByFilter(name); }
 wxString ibTabularQueryable::GetQueryTableName() const { return m_meta->GetTableNameDB(); }
 ibMetaID ibTabularQueryable::GetQueryMetaID() const { return m_meta->GetMetaID(); }
-wxString ibTabularQueryable::GetRowKeyColumn() const { return wxT("uuid"); }
+const ibMetaData* ibTabularQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
+// Identity tail = line number (rows of one parent are ordered + uniquely keyed by it). The PARENT
+// uuid is NOT the identity tail — it is a plain query filter (Where on the raw "uuid" column at
+// read/delete time), so the tabular section has no GetPrimaryKeyColumns (it INSERTs, never upserts).
 std::vector<ibQuerySortItem> ibTabularQueryable::GetIdentitySort() const { return { ibQuerySortItem{ m_meta->GetNumberLine(), true } }; }
-bool ibTabularQueryable::IsReferenceAttribute(const ibMetaID& /*id*/) const { return false; }
-wxString ibTabularQueryable::MaterializeRowKey(ibDatabaseResultSet* /*rs*/) const { return wxEmptyString; }
-ibValue ibTabularQueryable::MaterializeAttribute(const ibValueMetaObjectAttributeBase* attr, ibDatabaseResultSet* rs) const {
-	ibValue v;
-	ibValueMetaObjectAttributeBase::GetValueAttribute(attr, v, rs);
-	return v;
-}
+// (value materialisation moved to the DB provider's static get-helper.)
 
 bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool createData)
 {
@@ -42,7 +38,9 @@ bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool cr
 	// set at this call site.
 	try {
 		ibDataQueryBuilder q;
-		q.From(m_metaTable->GetQueryable()).WhereKey(srcGuid);   // WHERE uuid = srcGuid, ORDER BY line number
+		// WHERE uuid = srcGuid (the parent filter is a plain raw-column condition, NOT a row-key
+		// sentinel — the tabular identity tail is the line number), ORDER BY line number.
+		q.From(m_metaTable->GetQueryable()).Where(ibRawDBColumn::String(wxT("uuid")), ibValue(wxString(srcGuid)));
 		ibReadPageRequest page;
 		page.m_count = 0;   // all lines
 		ibDataQueryResult selection = q.Select(page);
@@ -98,26 +96,25 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 	if (!ibValueTabularSectionDataObjectRef::DeleteData())
 		return false;
 
-	const wxString tableName = m_metaTable->GetTableNameDB();
-
-	// Tabular section = plain INSERT per line (DeleteData above cleared the old
-	// rows) through the L3 write core. uuid is the 1->1 key column (the parent
-	// object); the attributes are the 1->N data columns. No fields, no positions.
+	// Tabular section = plain INSERT per line (DeleteData above cleared the old rows) through
+	// the L3 write door. uuid is the parent's row-key — a RAW primary string column (no
+	// translation); the attributes are the metadata data columns. No fields, no positions.
 	ibNumber numberLine = 1;
 	for (long row = 0; row < GetRowCount() && !hasError; row++) {
-		std::vector<std::pair<const ibValueMetaObjectAttributeBase*, ibValue>> assignments;
+		ibDataQueryBuilder q;
+		q.From(m_metaTable->GetQueryable())
+		 .SetValue(ibRawDBColumn::String(wxT("uuid")), ibValue(m_objectValue->GetGuid()));
 		for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
 			if (!m_metaTable->IsNumberLine(object->GetMetaID())) {
 				ibValueTableRow* node = GetViewData<ibValueTableRow>(GetItem(row));
 				wxASSERT(node);
-				assignments.emplace_back(object, node->GetTableValue(object->GetMetaID()));
+				q.SetValue(object, node->GetTableValue(object->GetMetaID()));
 			}
 			else {
-				assignments.emplace_back(object, ibValue(numberLine++));
+				q.SetValue(object, ibValue(numberLine++));
 			}
 		}
-		hasError = !ibDataQueryBuilder::WriteRow(ibDataQueryBuilder::WriteKind::Insert, tableName,
-			wxT("uuid"), ibValue(m_objectValue->GetGuid()), assignments);
+		hasError = !q.Insert();
 	}
 
 	return !hasError;
@@ -128,8 +125,10 @@ bool ibValueTabularSectionDataObjectRef::DeleteData()
 	if (m_readOnly || m_objectValue->IsNewObject())
 		return true;
 
-	// DELETE ... WHERE uuid = <parent guid> through the L3 core (uuid = 1->1 key).
-	ibDataQueryBuilder::WriteRow(ibDataQueryBuilder::WriteKind::Delete, m_metaTable->GetTableNameDB(),
-		wxT("uuid"), ibValue(m_objectValue->GetGuid()), {});
+	// DELETE ... WHERE uuid = <parent guid> through the L3 write door (uuid = raw row-key).
+	ibDataQueryBuilder()
+		.From(m_metaTable->GetQueryable())
+		.Where(ibRawDBColumn::String(wxT("uuid")), ibValue(m_objectValue->GetGuid()))
+		.Delete();
 	return true;
 }

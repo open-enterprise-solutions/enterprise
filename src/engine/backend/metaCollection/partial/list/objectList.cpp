@@ -898,12 +898,15 @@ ibDataViewItem ibValueListRegisterObject::FindRowValue(const ibValue& varValue, 
 			stub->AppendNodeValue(dim->GetMetaID(),
 				pRefData->GetValueByMetaID(dim->GetMetaID()));
 	}
-	// Effective sort columns → m_nodeValues (read by BuildRegisterAnchor).
+	// Effective sort columns → m_nodeValues (read by BuildRegisterAnchor). The sort item
+	// carries a COLUMN, and a column self-describes its read key (GetModelID == the metaID
+	// for an attribute column) — no ResolveAttribute, no downcast.
 	for (const auto& c : EffectiveSortOrder()) {
-		if (c.m_attr == nullptr) continue;
+		if (c.m_col == nullptr) continue;
+		const ibMetaID metaID = c.m_col->GetModelID();
 		ibValue v;
-		if (pRefData->GetValueByMetaID(c.m_attr->GetMetaID(), v))
-			stub->AppendTableValue(c.m_attr->GetMetaID(), v);
+		if (pRefData->GetValueByMetaID(metaID, v))
+			stub->AppendTableValue(metaID, v);
 	}
 
 	ibDataViewItem item(stub);   // IncRef → 2

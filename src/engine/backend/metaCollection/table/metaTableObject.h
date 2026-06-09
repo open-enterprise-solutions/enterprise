@@ -13,15 +13,11 @@ class ibValueMetaObjectTableData;
 class BACKEND_API ibTabularQueryable : public ibBackendQueryable {
 public:
 	explicit ibTabularQueryable(const ibValueMetaObjectTableData* meta) : m_meta(meta) {}
-	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const wxString& name) const override;
-	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const ibMetaID& id) const override;
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column
 	virtual wxString GetQueryTableName() const override;
 	virtual ibMetaID GetQueryMetaID() const override;
-	virtual wxString GetRowKeyColumn() const override;
-	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;
-	virtual bool IsReferenceAttribute(const ibMetaID& id) const override;
-	virtual wxString MaterializeRowKey(ibDatabaseResultSet* rs) const override;
-	virtual ibValue MaterializeAttribute(const ibValueMetaObjectAttributeBase* attr, ibDatabaseResultSet* rs) const override;
+	virtual const ibMetaData* GetMetaData() const override;                  // metadata context for column-based value reads
+	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;   // { line number } — parent uuid is a plain filter
 private:
 	const ibValueMetaObjectTableData* m_meta;
 };

@@ -473,20 +473,20 @@ private:
 // member), which forwards navigation to the metaobject's own query methods — so the
 // concrete leaf (catalog / document / …) behaviour comes through virtual dispatch.
 class ibValueMetaObjectRecordDataRef;
+// A record source — a DB-family L3 queryable. It names NO attribute / L1: it returns its
+// own COLUMNS (which happen to be metaobject attributes), and the DB provider does the
+// physical materialisation by static_cast'ing those columns back to the attribute.
 class BACKEND_API ibRecordQueryable : public ibBackendQueryable {
 public:
 	explicit ibRecordQueryable(const ibValueMetaObjectRecordDataRef* meta) : m_meta(meta) {}
-	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const wxString& name) const override;
-	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const ibMetaID& id) const override;
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column
+	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;   // all attributes (SELECT *)
 	virtual wxString GetQueryTableName() const override;
 	virtual ibMetaID GetQueryMetaID() const override;
-	virtual wxString GetRowKeyColumn() const override;
-	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;
-	virtual bool IsReferenceAttribute(const ibMetaID& id) const override;
-	virtual wxString GetReferenceKeyColumn() const override;
+	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
+	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;       // { uuid } — real column
+	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // { data-reference } — key authority
 	virtual const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryColumn* refColumn) const override;
-	virtual wxString MaterializeRowKey(ibDatabaseResultSet* rs) const override;
-	virtual ibValue MaterializeAttribute(const ibValueMetaObjectAttributeBase* attr, ibDatabaseResultSet* rs) const override;
 private:
 	const ibValueMetaObjectRecordDataRef* m_meta;
 };
@@ -1054,15 +1054,12 @@ protected:
 class BACKEND_API ibRegisterDataQueryable : public ibBackendQueryable {
 public:
 	explicit ibRegisterDataQueryable(const ibValueMetaObjectRegisterData* meta) : m_meta(meta) {}
-	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const wxString& name) const override;
-	virtual const ibValueMetaObjectAttributeBase* ResolveAttribute(const ibMetaID& id) const override;
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column
 	virtual wxString GetQueryTableName() const override;
 	virtual ibMetaID GetQueryMetaID() const override;
-	virtual wxString GetRowKeyColumn() const override;
+	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
 	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;
-	virtual bool IsReferenceAttribute(const ibMetaID& id) const override;
-	virtual wxString MaterializeRowKey(ibDatabaseResultSet* rs) const override;
-	virtual ibValue MaterializeAttribute(const ibValueMetaObjectAttributeBase* attr, ibDatabaseResultSet* rs) const override;
+	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // recorder+line+period / period+dims
 private:
 	const ibValueMetaObjectRegisterData* m_meta;
 };
@@ -1097,6 +1094,9 @@ public:
 	bool IsRegisterRecorder(const ibMetaID& id) const { return id == (*m_propertyAttributeRecorder)->GetMetaID(); }
 	ibValueMetaObjectAttributePredefined* GetRegisterLineNumber() const { return m_propertyAttributeLineNumber->GetMetaObject(); }
 	bool IsRegisterLineNumber(const ibMetaID& id) const { return id == (*m_propertyAttributeLineNumber)->GetMetaID(); }
+
+	// (The register's uniqueness key — recorder+line+period / period+dimensions — is vended by
+	// its queryable, ibRegisterDataQueryable::GetPrimaryKeyColumns, not a per-attribute flag.)
 
 	///////////////////////////////////////////////////////////////////
 

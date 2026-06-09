@@ -18,6 +18,8 @@
 
 #include "backend/typeDescription.h"    // ibTypeDescription (the column's L3 type)
 
+#include <vector>
+
 class BACKEND_API ibBackendQueryColumn
 {
 public:
@@ -35,6 +37,79 @@ public:
 	// This is the SAME accessor the attribute already exposes, so an attribute
 	// implements it for free — no separate method, no copy.
 	virtual ibTypeDescription& GetTypeDesc() const = 0;
+
+	// The column's id WITHIN its source/model — the key its source reads a value by.
+	// For a DB / attribute column this IS the metaID; for a computed / temp column it
+	// is the source's own internal unique id ("source id") — whatever the queryable
+	// keys its rows by. The point: each column self-describes its read key, so a model
+	// (RAM) read is GetValueByMetaID(col->GetModelID()) with NO attribute resolution —
+	// and a non-metaobject temp column fits the same shape. UNIQUE PER COLUMN (a
+	// resource's Balance vs Turnover have distinct model ids, though one metaID).
+	virtual ibMetaID GetModelID() const = 0;
+
+	// The column's PHYSICAL SQL fields — the multi-column split a DB lowering needs (a
+	// composite / variant / reference column expands to several: _B / _N / _D / _S / _E /
+	// _RRRef). This is the column-based replacement for resolving back to an attribute and
+	// calling its GetSQLFieldData: the DB IR builder asks the COLUMN for its fields (sort /
+	// group-by), no ResolveAttribute. The attribute metaobject OVERRIDES this authoritatively
+	// (its own field machinery — byte-identical to the former path); the light default here
+	// is the bare physical name (a single untyped field), enough for a plain temp column.
+	// Value materialization / binding (reference reconstruction) still needs metadata context
+	// and stays on the queryable. (docs/query-language-arc.md §22.4b)
+	virtual std::vector<wxString> GetSQLFields() const { return std::vector<wxString>{ GetPhysicalName() }; }
+
+	// (No per-column primary-key flag: a source's uniqueness key is owned by the QUERYABLE —
+	// ibBackendQueryable::GetPrimaryKeyColumns is the ONE authority for both the write UPSERT
+	// match AND the auto-join self-reference key (a record's data-reference); the uuid read keyset
+	// is GetIdentitySort. The column stays a pure typed descriptor. docs/query-language-arc.md §22.1)
+
+	// Is this a RAW (direct) physical column — addressed by its concrete field name with NO
+	// metadata translation (no TYPE/_N/_S/_RRRef expansion, no SetValueAttribute decomposition)?
+	// A metadata attribute returns false (it IS translated); ibRawDBColumn returns true. The
+	// provider uses this to decide: bind the value straight (raw) vs decompose it (attribute).
+	// (docs/query-language-arc.md §22)
+	virtual bool IsRawColumn() const { return false; }
+};
+
+// ==========================================================================
+// ibRawDBColumn — a DIRECT physical column: a concrete db field named AS-IS, no metadata
+// behind it and no translation. Lets the door address a real column straight (the row-key
+// uuid; a balance's computed qty_balance) through the SAME ibBackendQueryColumn interface as
+// a metadata attribute. The PHYSICAL TYPE is carried by the column itself (its RawType), so
+// the provider binds it with no value-type guessing — use the typed factories below.
+// Slicing-safe — all state is on this base, so the door takes one by ref and owns a copy.
+// The uniqueness key is the queryable's concern, not the column's. (docs §22)
+// ==========================================================================
+class BACKEND_API ibRawDBColumn : public ibBackendQueryColumn
+{
+public:
+	// How the provider binds the raw value — fixed by the concrete factory, not the value.
+	enum class RawType { String, Number, Binary, Date, Boolean };
+
+	ibRawDBColumn(const wxString& field, RawType type)
+		: m_field(field), m_type(type) {}
+
+	wxString              GetName()         const override { return m_field; }
+	wxString              GetPhysicalName() const override { return m_field; }
+	ibTypeDescription&    GetTypeDesc()     const override { return m_typeDesc; }   // interface returns a non-const ref
+	ibMetaID              GetModelID()      const override { return 0; }            // no model — raw field
+	std::vector<wxString> GetSQLFields()    const override { return std::vector<wxString>{ m_field }; }
+	bool                  IsRawColumn()     const override { return true; }
+
+	RawType               GetRawType()      const { return m_type; }   // the provider's bind selector
+
+	// Convenience makers — read cleaner than naming the enum at the call site, with no extra
+	// type to maintain (these are static factories, not subclasses).
+	static ibRawDBColumn String (const wxString& field) { return ibRawDBColumn(field, RawType::String);  }
+	static ibRawDBColumn Number (const wxString& field) { return ibRawDBColumn(field, RawType::Number);  }
+	static ibRawDBColumn Binary (const wxString& field) { return ibRawDBColumn(field, RawType::Binary);  }
+	static ibRawDBColumn Date   (const wxString& field) { return ibRawDBColumn(field, RawType::Date);    }
+	static ibRawDBColumn Boolean(const wxString& field) { return ibRawDBColumn(field, RawType::Boolean); }
+
+private:
+	wxString                  m_field;
+	RawType                   m_type;
+	mutable ibTypeDescription m_typeDesc;   // mutable: GetTypeDesc() is const but returns a non-const ref
 };
 
 #endif

@@ -9,6 +9,7 @@
 
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
+#include "backend/query/dbTableProvider.h"   // ibDbTableProvider::SetValueAttribute — the DB write decomposition
 
 // All physical fields of an attribute (the TYPE tag + per-type fields; a reference
 // expands to _RTRef + _RRRef), in the order SetValueAttribute binds them.
@@ -51,7 +52,7 @@ inline ibQueryExprPtr ibRegCompositeIR(const ibValueMetaObjectAttributeBase* a, 
 
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 	int pos = 1;
-	ibValueMetaObjectAttributeBase::SetValueAttribute(a, v, &capture, pos);
+	ibDbTableProvider::SetValueAttribute(a, v, &capture, pos);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 
 	ibQueryExprPtr pred;

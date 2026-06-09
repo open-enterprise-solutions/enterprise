@@ -2,6 +2,7 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/appData.h"
+#include "backend/query/dbTableProvider.h"   // ibDbTableProvider::SetValueAttribute — DB write decomposition
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -306,7 +307,7 @@ bool ibValueRecordSetObjectAccumulationRegister::SaveVirtualTable()
 
 		int position = 1;
 
-		ibValueMetaObjectAttributeBase::SetValueAttribute(
+		ibDbTableProvider::SetValueAttribute(
 			attributePeriod,
 			objectValue.at(attributePeriod->GetMetaID()),
 			statement,
@@ -316,7 +317,7 @@ bool ibValueRecordSetObjectAccumulationRegister::SaveVirtualTable()
 		for (const auto object : metaObject->GetDimensionArrayObject()) {
 			auto foundedKey = m_keyValues.find(attribute->GetMetaID());
 			if (foundedKey != m_keyValues.end()) {
-				ibValueMetaObjectAttributeBase::SetValueAttribute(
+				ibDbTableProvider::SetValueAttribute(
 					attribute,
 					foundedKey->second,
 					statement,
@@ -324,7 +325,7 @@ bool ibValueRecordSetObjectAccumulationRegister::SaveVirtualTable()
 				);
 			}
 			else {
-				ibValueMetaObjectAttributeBase::SetValueAttribute(
+				ibDbTableProvider::SetValueAttribute(
 					attribute,
 					objectValue.at(attribute->GetMetaID()),
 					statement,
@@ -375,7 +376,7 @@ bool ibValueRecordSetObjectAccumulationRegister::DeleteVirtualTable()
 	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
 		if (!ibValueRecordSetObject::FindKeyValue(attribute->GetMetaID()))
 			continue;
-		ibValueMetaObjectAttributeBase::SetValueAttribute(
+		ibDbTableProvider::SetValueAttribute(
 			attribute,
 			m_keyValues.at(attribute->GetMetaID()),
 			statement,

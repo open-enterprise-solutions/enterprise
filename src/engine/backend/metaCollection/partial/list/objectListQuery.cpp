@@ -93,8 +93,9 @@ ibValueListDataObjectEnumRef::Fetch(const ibFetchRequest<ibGuid>& req) const
 	ibValueMetaObjectAttributePredefined* metaOrder     = m_metaObject->GetDataOrder();
 
 	ibDataQueryResult selection = readQuery.Select(page);
+	const ibBackendQueryColumn* keyCol = m_metaObject->GetQueryable()->GetIdentitySort().back().m_col;   // uuid identity column
 	while (selection.Next()) {
-		ibGuid enumGuid = selection.GetGuidString();
+		ibGuid enumGuid = selection.GetValue(keyCol).GetString();
 		ibValueTableEnumRow* row = new ibValueTableEnumRow(enumGuid);
 		row->AppendTableValue(metaReference->GetMetaID(), selection.GetValue(metaReference));
 		row->AppendTableValue(
@@ -218,10 +219,8 @@ ibValueListDataObjectRef::Fetch(const ibFetchRequest<ibGuid>& req) const
 	sig << wxT("|S");
 	for (const auto& s : m_sortOrder.m_sorts) {
 		if (!s.m_sortEnable) continue;
-		const bool isRef = m_metaObject->IsDataReference(s.m_sortModel);
-		readQuery.OrderBy(isRef ? nullptr
-		                        : m_metaObject->FindAnyAttributeObjectByFilter(s.m_sortModel),
-		                  s.m_sortAscending);
+		if (m_metaObject->IsDataReference(s.m_sortModel)) continue;   // the uuid identity tail already orders by the row's own reference
+		readQuery.OrderBy(m_metaObject->FindAnyAttributeObjectByFilter(s.m_sortModel), s.m_sortAscending);
 		sig << wxT(";") << s.m_sortModel << (s.m_sortAscending ? wxT("+") : wxT("-"));
 	}
 
@@ -244,9 +243,10 @@ ibValueListDataObjectRef::Fetch(const ibFetchRequest<ibGuid>& req) const
 	ibDataQueryResult selection = cacheable
 		? readQuery.Select(page, *m_pageCache, sig)
 		: readQuery.Select(page);
+	const ibBackendQueryColumn* keyCol = m_metaObject->GetQueryable()->GetIdentitySort().back().m_col;   // uuid identity column
 	while (selection.Next()) {
 		ibValueTableListRow* row =
-			new ibValueTableListRow(selection.GetGuidString());
+			new ibValueTableListRow(selection.GetValue(keyCol).GetString());
 		for (auto& attr : vecAttr) {
 			if (m_metaObject->IsDataReference(attr->GetMetaID()))
 				continue;
@@ -488,8 +488,8 @@ ibFetchAnchor<ibUniqueKeyPair> BuildRegisterAnchor(
 		// in the cursor predicate). IsEqualTo on the fresh batch matches by
 		// m_nodeKeys, so missing sort values don't affect identity restoration.
 		ibValue v;
-		if (c.m_attr != nullptr)
-			row->GetValue(c.m_attr->GetMetaID(), v);
+		if (c.m_col != nullptr)
+			row->GetValue(c.m_col->GetModelID(), v);   // column self-describes its metaID — no ResolveAttribute
 		a.m_sortValues.push_back(v);
 	}
 	return a;
@@ -636,10 +636,11 @@ BuildTreeRowFromSelection(
 	const auto& vec_attr  = meta->GetGenericAttributeArrayObject();
 
 	const ibValue isFolderVal = sel.GetValue(metaIsFolder);
+	const ibBackendQueryColumn* keyCol = meta->GetQueryable()->GetIdentitySort().back().m_col;   // uuid identity column
 
 	auto* row = new ibValueModelTreeDataObjectFolderRef::ibValueTreeListNode(
 		nullptr,
-		sel.GetGuidString(),
+		sel.GetValue(keyCol).GetString(),
 		const_cast<ibValueModelTreeDataObjectFolderRef*>(owner),
 		isFolderVal.GetBoolean());
 	for (auto& attribute : vec_attr) {
@@ -803,10 +804,8 @@ ibValueModelTreeDataObjectFolderRef::FetchWithDirection(
 	}
 	for (const auto& s : m_sortOrder.m_sorts) {
 		if (!s.m_sortEnable) continue;
-		const bool isRef = m_metaObject->IsDataReference(s.m_sortModel);
-		readQuery.OrderBy(isRef ? nullptr
-		                        : m_metaObject->FindAnyAttributeObjectByFilter(s.m_sortModel),
-		                  s.m_sortAscending);
+		if (m_metaObject->IsDataReference(s.m_sortModel)) continue;   // the uuid identity tail already orders by the row's own reference
+		readQuery.OrderBy(m_metaObject->FindAnyAttributeObjectByFilter(s.m_sortModel), s.m_sortAscending);
 	}
 
 	ibReadPageRequest page;
@@ -917,10 +916,8 @@ ibValueModelTreeDataObjectFolderRef::GetPrevFetch(const ibTreeFetchArgs& args) c
 	}
 	for (const auto& s : m_sortOrder.m_sorts) {
 		if (!s.m_sortEnable) continue;
-		const bool isRef = m_metaObject->IsDataReference(s.m_sortModel);
-		readQuery.OrderBy(isRef ? nullptr
-		                        : m_metaObject->FindAnyAttributeObjectByFilter(s.m_sortModel),
-		                  s.m_sortAscending);
+		if (m_metaObject->IsDataReference(s.m_sortModel)) continue;   // the uuid identity tail already orders by the row's own reference
+		readQuery.OrderBy(m_metaObject->FindAnyAttributeObjectByFilter(s.m_sortModel), s.m_sortAscending);
 	}
 
 	ibReadPageRequest page;

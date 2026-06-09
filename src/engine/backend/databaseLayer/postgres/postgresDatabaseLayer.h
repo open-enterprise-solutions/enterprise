@@ -98,6 +98,11 @@ public:
 	static const ibDialectDictionary& Dialect();
 	virtual const ibDialectDictionary& GetDialect() const override;
 
+	// PG DB temp-table facts (the first real temp target — ad-hoc CREATE TEMPORARY TABLE). Presence
+	// of this (vs the base nullptr) flips PG onto the temp path; FB stays on RAM. (docs/temp-db.md)
+	static const ibTempTableDialect& TempDialect();
+	virtual const ibTempTableDialect* GetTempTableDialect() const override;
+
 	static int TranslateErrorCode(int nCode);
 	static bool IsAvailable();
 

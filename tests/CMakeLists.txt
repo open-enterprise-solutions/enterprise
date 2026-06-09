@@ -47,6 +47,7 @@ add_executable(oes_tests
     test_queryRenderer.cpp
     test_queryLifecycle.cpp
     test_queryBuilderShowcase.cpp
+    test_queryTotals.cpp
 )
 
 target_link_libraries(oes_tests
@@ -119,3 +120,36 @@ set_target_properties(oes_string_tests PROPERTIES
 )
 
 gtest_discover_tests(oes_string_tests)
+
+# ---------------------------------------------------------------------------
+# Standalone ИТОГИ-tree test — backend + gtest only, no other test TUs (so it
+# links even when an optional driver, e.g. MySQL, is OFF and a sibling test TU
+# references it). Pure RAM fold, no DB:
+#   cmake --build build --target oes_query_totals_test --config Debug
+#   ./bin/oes_query_totals_test
+# ---------------------------------------------------------------------------
+add_executable(oes_query_totals_test test_queryTotals.cpp)
+
+target_link_libraries(oes_query_totals_test
+    PRIVATE
+        backend
+        GTest::gtest
+        GTest::gtest_main
+)
+
+target_compile_definitions(oes_query_totals_test PRIVATE OES_TESTING)
+
+target_include_directories(oes_query_totals_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_SOURCE_DIR}/src/engine"
+    "${CMAKE_SOURCE_DIR}/src/engine/backend"
+)
+
+set_target_properties(oes_query_totals_test PROPERTIES
+    CXX_STANDARD          17
+    CXX_STANDARD_REQUIRED ON
+    BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
+    INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
+)
+
+gtest_discover_tests(oes_query_totals_test)

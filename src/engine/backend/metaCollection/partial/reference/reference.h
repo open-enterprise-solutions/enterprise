@@ -53,7 +53,6 @@ public:
 
 	static ibValueReferenceDataObject* Create(const ibMetaData* metaData, void* ptr);
 	static ibValueReferenceDataObject* CreateFromPtr(const ibMetaData* metaData, void* ptr);
-	static ibValueReferenceDataObject* CreateFromResultSet(class ibDatabaseResultSet *rs, const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& refGuid);
 
 	//operator '>'
 	virtual bool CompareValueGT(const ibValue& cParam) const {

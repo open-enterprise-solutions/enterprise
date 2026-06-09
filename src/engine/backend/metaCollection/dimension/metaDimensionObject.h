@@ -6,6 +6,7 @@
 class BACKEND_API ibValueMetaObjectDimension : public ibValueMetaObjectAttribute {
 	public:
 
+
 	//support icons
 	virtual wxIcon GetIcon() const;
 	static wxIcon GetIconGroup();

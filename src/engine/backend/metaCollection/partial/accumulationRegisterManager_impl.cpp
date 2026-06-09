@@ -12,6 +12,7 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"        // L2 — structured IR for balance / turnover aggregates
 #include "backend/databaseLayer/databaseResultSet.h"           // raw result set for materialisation
 #include "backend/query/dataQueryBuilder.h"                     // L3 door — From(balance/turnover queryable).Select()
+#include "backend/query/dbTableProvider.h"                      // ibDbTableProvider::GetValueAttribute — the DB value-assembly
 #include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFieldsOf / ibRegValueField / ibRegCompositeIR
 #include "backend/appData.h"
 #include "backend/session/session.h"
@@ -22,15 +23,18 @@
 // to L3 via ComputeRows. Mirrors ibValueMetaObjectInformationRegister::ComputeSlice.
 // ============================================================================
 
-ibValue ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibValue& cPeriod, const ibValue& cFilter) const
+ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibValue& cPeriod, const ibValue& cFilter) const
 {
-	ibValueModelTable* retTable = new ibValueModelTable();
-	ibValueModelTable::ibValueModelColumnCollection* cols = retTable->GetColumnCollection();
-	wxASSERT(cols);
+	// L3's own table (no runtime ibValueModelTable). Dimensions keyed by metaID (so a
+	// composed read can reach them by Value(col)); the derived _Balance columns by a
+	// synthetic id, read by name. The script egress (SelectionToBalanceTable) rebuilds the
+	// runtime table from the selection by name.
+	ibQueryRamTable retTable;
 	for (const auto dimension : GetDimensionArrayObject())
-		cols->AddColumn(dimension->GetName(), dimension->GetTypeDesc(), dimension->GetSynonym());
+		retTable.AddColumn(dimension->GetMetaID(), dimension->GetName(), dimension->GetTypeDesc());
+	ibMetaID derivedId = 0x40000000u;
 	for (const auto object : GetResourceArrayObject())
-		cols->AddColumn(object->GetName() + "_Balance", object->GetTypeDesc(), object->GetSynonym() + " " + _("Balance"));
+		retTable.AddColumn(derivedId++, object->GetName() + "_Balance", object->GetTypeDesc());
 
 	if (GetRegisterType() != ibRegisterType::eBalances)
 		return retTable;   // a turnover-only register carries no balances
@@ -83,21 +87,17 @@ ibValue ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibValue& cPe
 	try {
 		ibQueryResult rs = ibDatabaseQueryBuilder().ExecuteIR(q.Build());
 		while (rs.Next()) {
-			ibDatabaseResultSet* raw = rs.RawResultSet();
-			if (raw == nullptr) break;
-			ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
-			wxASSERT(retLine);
+			const long retRow = retTable.AppendRow();
 			for (const auto object : GetDimensionArrayObject()) {
 				ibValue retVal;
-				if (ibValueMetaObjectAttributeBase::GetValueAttribute(object, retVal, raw))
-					retLine->SetAt(object->GetName(), retVal);
+				if (ibDbTableProvider::GetValueAttribute(object, retVal, rs))
+					retTable.SetByName(retRow, object->GetName(), retVal);
 			}
 			for (const auto object : GetResourceArrayObject()) {
 				ibValue retVal;
-				if (ibValueMetaObjectAttributeBase::GetValueAttribute(object->GetFieldNameDB() + "_N_Balance_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retVal, raw))
-					retLine->SetAt(object->GetName() + "_Balance", retVal);
+				if (ibDbTableProvider::GetValueAttribute(object->GetFieldNameDB() + "_N_Balance_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retVal, rs))
+					retTable.SetByName(retRow, object->GetName() + "_Balance", retVal);
 			}
-			wxDELETE(retLine);
 		}
 	}
 	catch (...) {}
@@ -110,8 +110,8 @@ ibValue ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibValue& cPe
 // ibComputedRegisterQueryable base); ComputeRows pulls the RAM table from the register's
 // compute (the filters baked into the ctor).
 // ============================================================================
-ibValue ibBalanceQueryable::ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const { return m_reg->ComputeBalance(m_period, m_filter); }
-ibValue ibTurnoverQueryable::ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const { return m_reg->ComputeTurnover(m_begin, m_end, m_filter); }
+ibQueryRamTable ibBalanceQueryable::ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const { return m_reg->ComputeBalance(m_period, m_filter); }
+ibQueryRamTable ibTurnoverQueryable::ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const { return m_reg->ComputeTurnover(m_begin, m_end, m_filter); }
 
 // SelectionToBalanceTable — materialise the balance selection (dimensions + the derived
 // resource-balance columns, all read from the RAM source by output name) into the table
@@ -150,20 +150,21 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Balance(const ibValue& cPe
 	return SelectionToBalanceTable(selection, m_metaObject);
 }
 
-ibValue ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibValue& cBegin, const ibValue& cEnd, const ibValue& cFilter) const
+ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibValue& cBegin, const ibValue& cEnd, const ibValue& cFilter) const
 {
 	const bool withSign = (GetRegisterType() == ibRegisterType::eBalances);
 
-	ibValueModelTable* retTable = new ibValueModelTable();
-	ibValueModelTable::ibValueModelColumnCollection* cols = retTable->GetColumnCollection();
-	wxASSERT(cols);
+	// L3's own table (no runtime type): dimensions keyed by metaID, derived turnover /
+	// receipt / expense columns by a synthetic id, all read by name downstream.
+	ibQueryRamTable retTable;
 	for (const auto dimension : GetDimensionArrayObject())
-		cols->AddColumn(dimension->GetName(), dimension->GetTypeDesc(), dimension->GetSynonym());
+		retTable.AddColumn(dimension->GetMetaID(), dimension->GetName(), dimension->GetTypeDesc());
+	ibMetaID derivedId = 0x40000000u;
 	for (const auto object : GetResourceArrayObject()) {
-		cols->AddColumn(object->GetName() + wxT("_Turnover"), object->GetTypeDesc(), object->GetSynonym() + " " + _("Turnover"));
+		retTable.AddColumn(derivedId++, object->GetName() + wxT("_Turnover"), object->GetTypeDesc());
 		if (withSign) {
-			cols->AddColumn(object->GetName() + wxT("_Receipt"), object->GetTypeDesc(), object->GetSynonym() + " " + _("Receipt"));
-			cols->AddColumn(object->GetName() + wxT("_Expense"), object->GetTypeDesc(), object->GetSynonym() + " " + _("Expense"));
+			retTable.AddColumn(derivedId++, object->GetName() + wxT("_Receipt"), object->GetTypeDesc());
+			retTable.AddColumn(derivedId++, object->GetName() + wxT("_Expense"), object->GetTypeDesc());
 		}
 	}
 
@@ -235,29 +236,25 @@ ibValue ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibValue& cB
 	try {
 		ibQueryResult rs = ibDatabaseQueryBuilder().ExecuteIR(q.Build());
 		while (rs.Next()) {
-			ibDatabaseResultSet* raw = rs.RawResultSet();
-			if (raw == nullptr) break;
-			ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
-			wxASSERT(retLine);
+			const long retRow = retTable.AppendRow();
 			for (const auto object : GetDimensionArrayObject()) {
 				ibValue retValue;
-				if (ibValueMetaObjectAttributeBase::GetValueAttribute(object, retValue, raw))
-					retLine->SetAt(object->GetName(), retValue);
+				if (ibDbTableProvider::GetValueAttribute(object, retValue, rs))
+					retTable.SetByName(retRow, object->GetName(), retValue);
 			}
 			for (const auto object : GetResourceArrayObject()) {
 				ibValue retValue;
-				if (ibValueMetaObjectAttributeBase::GetValueAttribute(object->GetFieldNameDB() + "_N_Turnover_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retValue, raw))
-					retLine->SetAt(object->GetName() + "_Turnover", retValue);
+				if (ibDbTableProvider::GetValueAttribute(object->GetFieldNameDB() + "_N_Turnover_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retValue, rs))
+					retTable.SetByName(retRow, object->GetName() + "_Turnover", retValue);
 				if (withSign) {
 					ibValue retValue1;
-					if (ibValueMetaObjectAttributeBase::GetValueAttribute(object->GetFieldNameDB() + "_N_Receipt_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retValue1, raw))
-						retLine->SetAt(object->GetName() + "_Receipt", retValue1);
+					if (ibDbTableProvider::GetValueAttribute(object->GetFieldNameDB() + "_N_Receipt_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retValue1, rs))
+						retTable.SetByName(retRow, object->GetName() + "_Receipt", retValue1);
 					ibValue retValue2;
-					if (ibValueMetaObjectAttributeBase::GetValueAttribute(object->GetFieldNameDB() + "_N_Expense_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retValue2, raw))
-						retLine->SetAt(object->GetName() + "_Expense", retValue2);
+					if (ibDbTableProvider::GetValueAttribute(object->GetFieldNameDB() + "_N_Expense_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retValue2, rs))
+						retTable.SetByName(retRow, object->GetName() + "_Expense", retValue2);
 				}
 			}
-			wxDELETE(retLine);
 		}
 	}
 	catch (...) {}

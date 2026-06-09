@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : constants - db
 ////////////////////////////////////////////////////////////////////////////
@@ -15,19 +15,17 @@
 // --- vended queryable — the constant's single-row (sys_const) table navigation ---
 // The constant is the queryable's only column AND its one-row table; resolution by
 // name / id yields the constant itself (m_meta), the value comes via GetValueAttribute.
-const ibValueMetaObjectAttributeBase* ibConstantQueryable::ResolveAttribute(const wxString& name) const { return name == m_meta->GetName() ? m_meta : nullptr; }
-const ibValueMetaObjectAttributeBase* ibConstantQueryable::ResolveAttribute(const ibMetaID& id) const { return id == m_meta->GetMetaID() ? m_meta : nullptr; }
+const ibBackendQueryColumn* ibConstantQueryable::ResolveColumnByName(const wxString& name) const { return name == m_meta->GetName() ? m_meta : nullptr; }   // the constant IS its one column
 wxString ibConstantQueryable::GetQueryTableName() const { return m_meta->GetTableNameDB(); }
 ibMetaID ibConstantQueryable::GetQueryMetaID() const { return m_meta->GetMetaID(); }
-wxString ibConstantQueryable::GetRowKeyColumn() const { return wxEmptyString; }
-std::vector<ibQuerySortItem> ibConstantQueryable::GetIdentitySort() const { return {}; }
-bool ibConstantQueryable::IsReferenceAttribute(const ibMetaID& /*id*/) const { return false; }
-wxString ibConstantQueryable::MaterializeRowKey(ibDatabaseResultSet* /*rs*/) const { return wxEmptyString; }
-ibValue ibConstantQueryable::MaterializeAttribute(const ibValueMetaObjectAttributeBase* attr, ibDatabaseResultSet* rs) const {
-	ibValue v;
-	ibValueMetaObjectAttributeBase::GetValueAttribute(attr, v, rs);
-	return v;
+const ibMetaData* ibConstantQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
+std::vector<ibQuerySortItem> ibConstantQueryable::GetIdentitySort() const { return {}; }   // single row — no keyset
+std::vector<const ibBackendQueryColumn*> ibConstantQueryable::GetPrimaryKeyColumns() const {
+	// The single-row sys_const key (UPSERT match) — a RAW column, no metadata translation.
+	static const ibRawDBColumn s_recordKey(wxT("RECORD_KEY"), ibRawDBColumn::RawType::String);
+	return { &s_recordKey };
 }
+// (value materialisation moved to ibDbTableProvider — the queryable names no attribute / L1.)
 
 //***********************************************************************
 //*                           constant value                            *
@@ -388,13 +386,16 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 		return false;
 	}
 
-	// UPSERT the singleton row through the L3 write core. RECORD_KEY is the 1->1
-	// key column (constant value '6', matched on); the constant metaobject is itself
-	// the 1->N data attribute. The FB MATCHING / PG ON CONFLICT fork and the manual
-	// '?,'-counting are gone — the dialect closes the UPSERT spelling. WriteRow runs
-	// on the session holder, so it joins the TX that already holds this row's lock.
-	if (!ibDataQueryBuilder::WriteRow(ibDataQueryBuilder::WriteKind::Upsert, tableName,
-		wxT("RECORD_KEY"), ibValue(wxT("6")), { { m_metaObject, m_constValue } })) {
+	// UPSERT the singleton row through the L3 write door. RECORD_KEY is the row-key — a RAW
+	// primary string column (constant value '6', matched on); the constant metaobject is
+	// itself the data attribute (a column). The FB MATCHING / PG ON CONFLICT fork and the
+	// manual '?,'-counting are gone — the dialect closes the UPSERT spelling. The door runs on
+	// the session holder, so it joins the TX that already holds this row's lock.
+	if (!ibDataQueryBuilder()
+		.From(m_metaObject->GetQueryable())
+		.SetValue(ibRawDBColumn::String(wxT("RECORD_KEY")), ibValue(wxT("6")))   // raw primary -> MATCHING
+		.SetValue(m_metaObject, m_constValue)                                          // data attribute
+		.Upsert()) {
 		rollback();
 		ibBackendCoreException::Error(_("Failed to write object in db!"));
 		return false;

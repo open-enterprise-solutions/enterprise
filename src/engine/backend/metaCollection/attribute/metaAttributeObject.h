@@ -8,6 +8,9 @@
 
 #include "metaAttributeObjectEnum.h"
 
+class ibDatabaseResultSet;   // L1 cursor — only named as a pointer in GetBinaryData below
+class ibPreparedStatement;   // L1 prepared statement — only named as a pointer in SetBinaryData below
+
 class BACKEND_API ibValueMetaObjectAttributeBase :
 	public ibValueMetaObject, public ibBackendTypeConfigFactory, public ibBackendQueryColumn {
 	public:
@@ -131,14 +134,9 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	//process default query
 	static int ProcessAttribute(const wxString& tableName, const ibValueMetaObjectAttributeBase* srcAttr, const ibValueMetaObjectAttributeBase* dstAttr);
 
-	//set value attribute 
-	static void SetValueAttribute(const ibValueMetaObjectAttributeBase* attribute, const ibValue& cValue, class ibPreparedStatement* statement, int& position);
-	static void SetValueAttribute(const ibValueMetaObjectAttributeBase* attribute, const ibValue& cValue, class ibPreparedStatement* statement);
-
-	//get value from attribute
-	static bool GetValueAttribute(const wxString& fieldName, const ibFieldTypes& fldType, const ibValueMetaObjectAttributeBase* metaAttr, ibValue& retValue, class ibDatabaseResultSet* resultSet, bool createData = true);
-	static bool GetValueAttribute(const wxString& fieldName, const ibValueMetaObjectAttributeBase* attribute, ibValue& retValue, class ibDatabaseResultSet* resultSet, bool createData = true);
-	static bool GetValueAttribute(const ibValueMetaObjectAttributeBase* attribute, ibValue& retValue, class ibDatabaseResultSet* resultSet, bool createData = true);
+	// (Value assembly from / binding to a DB row moved to ibDbTableProvider::GetValueAttribute /
+	// ::SetValueAttribute — it is a DB provider concern, not the metadata attribute's. See
+	// query/dbTableProvider.h.)
 
 	//store value 
 	static void SetBinaryData(const ibValueMetaObjectAttributeBase* metaAttr, const ibReaderMemory& reader, ibPreparedStatement* statement,
@@ -185,6 +183,21 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	virtual ibTypeDescription& GetTypeDesc() const override = 0;
 	virtual wxString GetName() const override         { return ibValueMetaObject::GetName(); }
 	virtual wxString GetPhysicalName() const override { return GetFieldNameDB(); }
+	// The column's model/read id — for a DB attribute it IS the metaID (RAM tables key
+	// their rows by it; the DB path keys its fields off the same id via GetFieldNameDB).
+	virtual ibMetaID GetModelID() const override      { return GetMetaID(); }
+
+	// Authoritative physical-field list — the attribute's OWN field machinery, so the DB
+	// IR builder (sort / group-by) reads it straight off the column with no ResolveAttribute,
+	// byte-identical to the former GetSQLFieldData path it replaced.
+	virtual std::vector<wxString> GetSQLFields() const override {
+		std::vector<wxString> out;
+		for (auto& field : GetSQLFieldData(this))
+			out.push_back(field.m_type == ibFieldTypes_Reference
+			              ? field.m_field.m_fieldRefName.m_fieldRefName
+			              : field.m_field.m_fieldName);
+		return out;
+	}
 
 	//get sql type for db
 	virtual wxString GetSQLTypeObject(const ibClassID& clsid) const;

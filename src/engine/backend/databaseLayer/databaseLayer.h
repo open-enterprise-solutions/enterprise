@@ -112,9 +112,55 @@ struct ibDialectDictionary
 	// it EMPTY (no in-place type change) so the renderer THROWS rather than emulate.
 	wxString m_alterColumnTemplate = wxT("ALTER TABLE {table} ALTER COLUMN {column} TYPE {type}");
 
+	// Row-lock clause APPENDED to a top-level SELECT for a pessimistic read-for-update (the
+	// register set lock). Default = PG / MySQL " FOR UPDATE"; Firebird overrides to " WITH
+	// LOCK"; SQLite leaves it EMPTY (it locks the whole DB per transaction — the open TX IS
+	// the lock, there is no row-level FOR UPDATE). Rendered after ORDER BY / LIMIT.
+	// (docs/record-locks.md)
+	wxString m_rowLockSuffix = wxT(" FOR UPDATE");
+
 	// --- behaviour slots (the small tail data cannot express) -------------
 	// Reserved for emulation rewrites (FULL OUTER -> LEFT UNION RIGHT, window ->
 	// correlated subquery) as strategy callbacks, so L2 still reads only the dictionary.
+};
+
+// ==========================================================================
+// ibTempTableDialect — the per-driver facts for materialising an intermediate into a DB
+// TEMPORARY table: the developer-driven optimisation lever — give the DBMS optimiser a real,
+// cardinality-bearing materialised set instead of a mis-estimated subquery. Vended SEPARATELY and
+// NULLABLE (ibDatabaseLayer::GetTempTableDialect):
+// its **presence IS the capability**. A driver that returns nullptr has no DB temp tables, so L3
+// materialises the intermediate in RAM (ibQueryComposer). That RAM path is the always-works
+// FLOOR and also the runtime INSURANCE: if a present-dialect CREATE/INSERT fails at runtime (no
+// DDL right, read-only replica, FB GTT pool not provisioned, temp-space out), the planner falls
+// back to RAM rather than erroring — the fast path is opportunistic, correctness always lands.
+//
+// PURE DECLARATIVE FACTS + a strategy DISCRIMINATOR. The behavioural fork (ad-hoc create vs FB's
+// pre-declared GTT pool) is captured here only as the m_strategy enum (data); the actual
+// control-flow fork lives in the temp-table MANAGER that reads it — never as `if(driver)` in
+// this struct. Keeping that line is what preserves "dictionary = facts, behaviour elsewhere".
+// (docs/query-language-arc.md — temp-db foundation)
+// ==========================================================================
+struct ibTempTableDialect
+{
+	//   AdHocCreate     : CREATE a fresh temp table per query, INSERT, DROP / auto-drop
+	//                     (SQLite / PostgreSQL / MySQL / MSSQL — any-shape, on the fly).
+	//   PreDeclaredPool : grab a typed GLOBAL TEMPORARY TABLE from a schema-declared pool, INSERT,
+	//                     ON COMMIT clears the private rows (Firebird — GTTs are fixed-shape schema
+	//                     objects, NOT ad-hoc; arbitrary-shape intermediates need a generic pool or
+	//                     fall back to RAM).
+	enum class Strategy { AdHocCreate, PreDeclaredPool };
+	Strategy m_strategy = Strategy::AdHocCreate;
+
+	// CREATE prefix (ad-hoc) — the manager appends " <name> (<cols>)" + m_onCommitClause.
+	wxString m_createPrefix   = wxT("CREATE TEMPORARY TABLE");
+	// Clause appended after the column list: PG " ON COMMIT DROP"; FB GTT " ON COMMIT DELETE ROWS";
+	// SQLite / MySQL empty (connection-scoped, auto-dropped on disconnect).
+	wxString m_onCommitClause;
+	// Does the temp table drop itself at session / commit end? false => the manager emits DROP.
+	bool     m_autoDrops      = true;
+	// DROP statement prefix (used only when !m_autoDrops) — the manager appends the name.
+	wxString m_dropPrefix     = wxT("DROP TABLE");
 };
 
 WX_DECLARE_HASH_SET(ibDatabaseResultSet*, wxPointerHash, wxPointerEqual, DatabaseResultSetHashSet);
@@ -353,6 +399,17 @@ public:
 	// owns its dialect (typically a static singleton it returns by reference);
 	// ODBC returns a default-constructed ANSI dictionary.
 	virtual const ibDialectDictionary& GetDialect() const = 0;
+
+	// The driver's TEMP-TABLE facts, or nullptr if it has no DB temporary tables. PRESENCE = the
+	// capability: nullptr => L3 materialises an intermediate in RAM (ibQueryComposer — the
+	// always-works floor + runtime insurance). A driver lights up DB temp tables (and thus
+	// server-side push-down of a materialised intermediate — the optimisation lever) by
+	// overriding this to vend its ibTempTableDialect. NOT pure: drivers inherit nullptr (=> RAM)
+	// until each implements it, so the feature lands additively, driver by driver. Paradox by
+	// design: Firebird (fixed-shape GTTs, embedded/small deployments) will typically stay on RAM,
+	// while PostgreSQL / SQLite (ad-hoc any-shape temp) carry the temp-table path — capability
+	// lands where the data scale needs it. (docs/query-language-arc.md — temp-db foundation)
+	virtual const ibTempTableDialect* GetTempTableDialect() const { return nullptr; }
 
 	// Best-effort reconnect when an external cluster event has
 	// invalidated this connection — currently triggered by the FB

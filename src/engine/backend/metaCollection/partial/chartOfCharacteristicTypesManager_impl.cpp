@@ -27,7 +27,7 @@ ibValueReferenceDataObject* FindByAttributeLike(const ibValueMetaObjectRecordDat
 		page.m_count = 1;
 		ibDataQueryResult sel = q.Select(page);
 		if (sel.Next()) {
-			const ibGuid foundedGuid = sel.GetGuidString();
+			const ibGuid foundedGuid = sel.GetValue(meta->GetQueryable()->GetIdentitySort().back().m_col).GetString();   // uuid identity column
 			if (foundedGuid.isValid())
 				return ibValueReferenceDataObject::Create(meta, foundedGuid);
 		}

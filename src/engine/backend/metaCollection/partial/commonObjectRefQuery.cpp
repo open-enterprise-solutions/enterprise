@@ -100,7 +100,6 @@ bool ibValueRecordDataObjectRef::TryAcquireFormLock(ibLockMode mode)
 
 bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 {
-	const auto db = ses_query;
 	const auto dvAttr = m_metaObject != nullptr ? m_metaObject->GetDataVersion() : nullptr;
 
 	// No DataVersion attribute declared on this metaobject (shouldn't
@@ -116,36 +115,24 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 	// prior version to compare. The bump still fires below so the
 	// freshly-inserted row carries a valid initial stamp.
 	if (!m_newObject && !m_loadedDataVersion.IsEmpty()) {
-		const wxString hint = db->RowLockHint();
-		const wxString dvCols = ibValueMetaObjectAttributeBase::GetSQLFieldName(dvAttr);
-		const wxString tableName = m_metaObject->GetTableNameDB();
+		// Row lock + current-version read in ONE L3 selection: From(record).Where(uuid) with the
+		// page FOR-UPDATE flag (the dialect appends its RowLockHint via m_rowLockSuffix). Runs on
+		// the session holder — the SAME connection as the open write-scope TX — so the lock is held
+		// until commit. The version reads through GetValue(dvAttr), which assembles the attribute
+		// from its physical fields. DataVersion is NOT a single column: its SQL field name is the
+		// COMPOSITE "<fld>_TYPE,<fld>_S" (type tag + string data), so the former raw
+		// GetResultString(that) failed "field not found" — the provider's attribute assembly is the
+		// only correct read. (docs/record-locks.md)
+		ibDataQueryBuilder q;
+		q.From(m_metaObject->GetQueryable())
+		 .Where(ibRawDBColumn::String(wxT("uuid")), ibValue(wxString(m_objGuid)));
+		ibReadPageRequest page;
+		page.m_count         = 1;
+		page.m_lockForUpdate = true;
+		ibDataQueryResult sel = q.Select(page);
 
-		// One round-trip — takes the row lock and reads the current
-		// DataVersion in the same query. Mirrors what ReadData does
-		// for the load path; reuses GetValueAttribute for parsing so
-		// any future type-discriminator change lands in one place.
-		const wxString sql = wxString::Format(
-			wxT("SELECT %s FROM %s WHERE uuid = ? %s;"),
-			dvCols, tableName, hint);
-
-		ibStatementGuard st(db, db->PrepareStatement(sql));
-		if (!st)
-			ibBackendCoreException::Error(_("Failed to prepare write-lock query"));
-		st->SetParamString(1, m_objGuid.str());
-
-		ibDatabaseResultSet* rs = st->RunQueryWithResults();
-		if (rs == nullptr)
-			ibBackendCoreException::Error(_("Failed to acquire write lock on row"));
-
-		wxString dbVer;
-		bool rowFound = false;
-		if (rs->Next()) {
-			rowFound = true;
-			ibValue dvValue;
-			ibValueMetaObjectAttributeBase::GetValueAttribute(dvAttr, dvValue, rs);
-			dbVer = dvValue.GetString();
-		}
-		db->CloseResultSet(rs);
+		const bool rowFound = sel.Next();
+		const wxString dbVer = rowFound ? sel.GetValue(dvAttr).GetString() : wxString();
 
 		// Row disappeared between our load and write — somebody else
 		// committed a DELETE. Treat as a version conflict for UX
@@ -299,14 +286,16 @@ bool ibValueRecordDataObjectRef::SaveData()
 
 	m_objGuid = m_reference_impl->m_guid;
 
-	// UPSERT the main row through the L3 door — BY ATTRIBUTE, no statement, no
-	// columns, no positions visible here: From(meta) + SetValue(attr, value)* +
-	// Upsert(rowKey). The door decomposes each attribute into its physical
-	// columns and binds positionally into a hidden L2 statement; the per-DBMS
-	// UPSERT spelling is closed by the dialect template. The write goes through
-	// the session holder, so it joins the outer document-save TX.
+	// UPSERT the main row through the L3 door — BY COLUMN, no statement, no positions visible
+	// here: From(meta) + SetValue(col, value)* + Upsert(). uuid is the row-key — a RAW primary
+	// string column (the guid bound straight, no translation); the attributes are metadata
+	// columns. The provider decomposes each attribute into its physical columns and binds into
+	// a hidden L2 statement; the per-DBMS UPSERT spelling is closed by the dialect template;
+	// the match key is the queryable's row-key (uuid). The write goes through the session
+	// holder, so it joins the outer document-save TX.
 	ibDataQueryBuilder writer;
-	writer.From(m_metaObject->GetQueryable());
+	writer.From(m_metaObject->GetQueryable())
+	      .SetValue(ibRawDBColumn::String(wxT("uuid")), ibValue(m_objGuid));   // row-key value
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		ibValue value;
 		if (m_metaObject->IsDataReference(object->GetMetaID())) {
@@ -324,7 +313,7 @@ bool ibValueRecordDataObjectRef::SaveData()
 		}
 		writer.SetValue(object, value);
 	}
-	bool hasError = !writer.Upsert(m_objGuid);
+	bool hasError = !writer.Upsert();
 
 	//table parts
 	if (!hasError) {
@@ -365,9 +354,12 @@ bool ibValueRecordDataObjectRef::DeleteData()
 			return false;
 
 	}
-	// Delete the main row through the L3 door — by key, no statement / L2 visible.
+	// Delete the main row through the L3 door — WHERE uuid = <guid>, no statement / L2 visible.
 	// Best-effort like the prior path (it ignored the result).
-	ibDataQueryBuilder().From(m_metaObject->GetQueryable()).DeleteByKey(m_objGuid);
+	ibDataQueryBuilder()
+		.From(m_metaObject->GetQueryable())
+		.Where(ibRawDBColumn::String(wxT("uuid")), ibValue(m_objGuid))
+		.Delete();
 	return true;
 }
 

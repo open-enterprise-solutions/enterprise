@@ -95,8 +95,9 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 		ibReadPageRequest page;
 		page.m_count = 0;   // no limit — full scan
 		ibDataQueryResult selection = q.Select(page);
+		const ibBackendQueryColumn* keyCol = m_metaObject->GetQueryable()->GetIdentitySort().back().m_col;   // uuid identity column
 		while (selection.Next()) {
-			const ibGuid currentGuid = selection.GetGuidString();
+			const ibGuid currentGuid = selection.GetValue(keyCol).GetString();
 			if (ibValueDataObjectComparator::CompareValue(findData, m_metaObject, currentGuid))
 				listValue.push_back(ibValueReferenceDataObject::Create(m_metaObject, currentGuid));
 		}

@@ -403,6 +403,17 @@ ibValue ibQueryResult::GetValue(const wxString& name)
 	return GetValue(col);  // NB: assumes metadata column ids are 1-based (matches GetResult*)
 }
 
+// Typed field reads by name — delegate to the borrowed driver cursor (the dialect-normalised
+// physical field). The provider's value-assembly reads through these, never the raw L1 cursor.
+wxString   ibQueryResult::GetResultString(const wxString& name)                  { return m_rs != nullptr ? m_rs->GetResultString(name)        : wxString(); }
+int        ibQueryResult::GetResultInt(const wxString& name)                     { return m_rs != nullptr ? m_rs->GetResultInt(name)           : 0; }
+long long  ibQueryResult::GetResultLong(const wxString& name)                    { return m_rs != nullptr ? m_rs->GetResultLong(name)          : 0; }
+bool       ibQueryResult::GetResultBool(const wxString& name)                    { return m_rs != nullptr ? m_rs->GetResultBool(name)          : false; }
+wxDateTime ibQueryResult::GetResultDate(const wxString& name)                    { return m_rs != nullptr ? m_rs->GetResultDate(name)          : wxDateTime(); }
+double     ibQueryResult::GetResultDouble(const wxString& name)                  { return m_rs != nullptr ? m_rs->GetResultDouble(name)        : 0.0; }
+ibNumber   ibQueryResult::GetResultNumber(const wxString& name)                  { return m_rs != nullptr ? m_rs->GetResultNumber(name)        : ibNumber(); }
+void*      ibQueryResult::GetResultBlob(const wxString& name, wxMemoryBuffer& b) { return m_rs != nullptr ? m_rs->GetResultBlob(name, b)       : nullptr; }
+
 // ==========================================================================
 // ibQueryRenderer (merged from queryRenderer.cpp)
 // ==========================================================================
@@ -411,6 +422,10 @@ ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 	m_out = ibRenderedQuery{};
 	m_paramPos = 0;
 	m_out.m_sql = RenderSelect(ir.m_root.get());
+	// Pessimistic row lock — appended to the TOP-level SELECT only (subqueries render through
+	// RenderSelect above and must NOT carry it). The dialect owns the clause + its emptiness.
+	if (ir.m_lockForUpdate && !m_dialect.m_rowLockSuffix.empty())
+		m_out.m_sql += m_dialect.m_rowLockSuffix;
 	return m_out;
 }
 

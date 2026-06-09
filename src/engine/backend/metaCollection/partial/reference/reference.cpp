@@ -141,44 +141,6 @@ ibValueReferenceDataObject* ibValueReferenceDataObject::CreateFromPtr(const ibMe
 	return nullptr;
 }
 
-ibValueReferenceDataObject* ibValueReferenceDataObject::CreateFromResultSet(ibDatabaseResultSet* rs, const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& refGuid)
-{
-	//auto& it = std::find_if(gs_references.begin(), gs_references.end(), [metaObject, refGuid](ibValueReferenceDataObject* ref) {
-	//	return metaObject == ref->GetMetaObject() && refGuid == ref->GetGuid(); }
-	//);
-	//if (it != gs_references.end())
-	//	return *it;
-
-	ibValueReferenceDataObject* refData = new ibValueReferenceDataObject(metaObject, refGuid);
-
-	//load attributes 
-	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
-		if (object->IsDeleted())
-			continue;
-		if (metaObject->IsDataReference(object->GetMetaID()))
-			continue;
-		ibValueMetaObjectAttributeBase::GetValueAttribute(
-			object,
-			refData->m_listObjectValue[object->GetMetaID()],
-			rs,
-			false
-		);
-	}
-
-	// table is collection values 
-	for (const auto object : metaObject->GetTableArrayObject()) {
-		if (object->IsDeleted())
-			continue;
-		refData->m_listObjectValue.insert_or_assign(
-			object->GetMetaID(),
-			new ibValueTabularSectionDataObjectRef(refData, object, true)
-		);
-	}
-
-	refData->m_foundedRef = true;
-	return refData;
-}
-
 bool ibValueReferenceDataObject::SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal)
 {
 	return false;
