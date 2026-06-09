@@ -146,7 +146,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Balance(const ibValue& cPe
 		ibBackendCoreException::Error(_("Database is not open!"));
 
 	ibBalanceQueryable balance(m_metaObject, cPeriod, cFilter);
-	ibDataQueryResult selection = ibDataQueryBuilder().From(&balance).Select(ibReadPageRequest{});
+	ibDataQueryResult selection = ibDataQueryBuilder().From(&balance).Execute(ibReadPageRequest{});
 	return SelectionToBalanceTable(selection, m_metaObject);
 }
 
@@ -304,6 +304,6 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Turnovers(const ibValue& c
 		ibBackendCoreException::Error(_("Database is not open!"));
 
 	ibTurnoverQueryable turnover(m_metaObject, cBeginOfPeriod, cEndOfPeriod, cFilter);
-	ibDataQueryResult selection = ibDataQueryBuilder().From(&turnover).Select(ibReadPageRequest{});
+	ibDataQueryResult selection = ibDataQueryBuilder().From(&turnover).Execute(ibReadPageRequest{});
 	return SelectionToTurnoverTable(selection, m_metaObject);
 }

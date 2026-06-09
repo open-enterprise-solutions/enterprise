@@ -1238,6 +1238,46 @@ result walker.
 L3's engine is therefore two stages: **compose** provider-relations into a base
 relation, then **shape** it (aggregate / totals-by / hierarchy) into the result.
 
+#### 22.1b LANDED — Selection / Selector engine (2026-06-09, experimental, pre-build)
+
+The result-shaping tier above is implemented as a **two-step, two-axis** model. The query
+returns RAW data; a separate Selector walks it.
+
+```cpp
+ibDataQueryResult result = q.Execute(req);          // raw selection (snapshot inside)
+ibSelector        s      = result.Select(kind);     // a Selector: HOW to walk
+while (s.Next()) {                                   // cursor — pre-order
+    s.GetValue(col);   // value on a leaf / SUBTOTAL on a group node (in-place column)
+    s.Level();         // depth (0 = root); s.HasChildren(); s.GetTotal(col) = grand total
+    ibSelector sub = s.Select(kind);                 // sub-selection of the CURRENT node (recurse)
+}
+```
+
+- **Two axes.** `ibSelectKind` (traversal): `Direct` (rows as-is) / `ByGroups` (by levels) /
+  `ByGroupsHierarchy` (levels + dimension hierarchy). `ibDimensionKind` (a TotalBy field unfold):
+  `Elements` / `Hierarchy` / `HierarchyOnly`. Axis 1 is the `Select(kind)` argument; axis 2 lives on
+  each `TotalBy(field, dim)`.
+- **Door verbs.** `Group()` / `Totals()` switch the aggregate context (a common GroupBy set and a
+  common TotalBy set — a level has no own aggregates); `TotalBy(field, dim)` adds a dimension level
+  (levels apply IN ORDER); `Sum/Min/Max/Avg/Count(col)`; `Distinct()` → `SELECT DISTINCT`.
+- **Aggregate IN-PLACE.** A subtotal is written into the aggregate's OWN column — `GetValue(col)` is
+  the row value on a leaf and the subtotal on a group; `GetTotal(col)` is the grand total. `COUNT(*)`
+  uses a synthetic receiver read by `GetColumn(alias)`. A column missing at a level reads as `NULL`.
+- **One snapshot.** Subtotals roll from the SAME snapshot the door stamped (Select list + aggregate
+  inputs + TotalBy fields) — never a second query, so detail and total cannot skew.
+- **Fold engines** (`ibQueryComposer`): `BuildTotalsTree` (multi-level grouping), `BuildHierarchyTree`
+  (a catalog's OWN row-keyed hierarchy: row = node, parent-ref), `BuildReferenceHierarchy` (a single
+  cross-catalog reference dimension), and the GENERAL value-keyed combiner `BuildDimensionTree`
+  (N levels in order; a `Hierarchy` level unfolds the field's target-catalog parent-map — read
+  through the door — and the next level recurses inside each value). `GetParentColumn()` on the
+  queryable vends the parent attribute. The DB push-down stays `GROUP BY ROLLUP` (`ExecuteRollupTotals`).
+- **Lazy navigation.** `s.Select()` (no fold needed) re-Executes one node's direct children with the
+  inherited filter — the recursion `selection -> sub-selection`. A plain hierarchical list (no totals)
+  needs only this; subtotals are the only reason to materialise a whole snapshot.
+- **Types.** Raw rows = `ibQueryRamTable` (a flat array); the folded tree = `ibSelectorTree`
+  (`querySelectorTree.h`); the cursor/traversal = `ibSelector` (`querySelector.h`). Mirror into a
+  runtime tree model via `ibValueModelRamTreeBase::PopulateFromTree`.
+
 ### 22.2 The interface (proposed)
 
 ```cpp

@@ -43,7 +43,7 @@ bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool cr
 		q.From(m_metaTable->GetQueryable()).Where(ibRawDBColumn::String(wxT("uuid")), ibValue(wxString(srcGuid)));
 		ibReadPageRequest page;
 		page.m_count = 0;   // all lines
-		ibDataQueryResult selection = q.Select(page);
+		ibDataQueryResult selection = q.Execute(page);
 		while (selection.Next()) {
 			ibValueTableRow* rowData = new ibValueTableRow();
 			for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {

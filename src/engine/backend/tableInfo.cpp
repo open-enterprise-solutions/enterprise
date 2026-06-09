@@ -6,6 +6,35 @@
 #include "tableInfo.h"
 
 #include "backend/session/session.h"
+#include "backend/query/querySelectorTree.h"   // ibSelectorTree — PopulateFromTree mirror source
+
+namespace {
+	// Recursively mirror an L3 Selector-tree subtree under `dst`. No per-node notification —
+	// PopulateFromTree fires one reset after the whole tree is in place.
+	void MirrorQueryNodes(ibValueModelTreeBase::ibValueTreeNode* dst,
+		const ibSelectorTree::Node& src)
+	{
+		for (const auto& childPtr : src.m_children) {
+			const ibSelectorTree::Node& s = *childPtr;
+			ibValueModelTreeBase::ibValueTreeNode* node = dst->AddChildNode();
+			for (const auto& kv : s.m_values)
+				node->AppendTableValue(kv.first, kv.second);
+			MirrorQueryNodes(node, s);
+		}
+	}
+}
+
+void ibValueModelRamTreeBase::PopulateFromTree(const ibSelectorTree& tree, bool notify)
+{
+	Clear(/*notify*/ false);                  // drop the old children silently
+	MirrorQueryNodes(m_root, tree.Root());    // mirror the whole Node tree in one shot
+	if (notify && m_modelProvider != nullptr) {
+		// Full-shape change — the paged tree rebuilds on Before/AfterReset (see the
+		// HasDefaultCompare note in tableInfo.h); the control re-fetches via GetFirstFetch.
+		m_modelProvider->BeforeReset();
+		m_modelProvider->AfterReset();
+	}
+}
 
 
 

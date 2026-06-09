@@ -32,7 +32,7 @@ ibValueReferenceDataObject* ibValueManagerDataObjectDocument::FindByNumber(const
 
 		ibReadPageRequest page;
 		page.m_count = 1;
-		ibDataQueryResult sel = q.Select(page);
+		ibDataQueryResult sel = q.Execute(page);
 		if (sel.Next()) {
 			const ibGuid foundedGuid = sel.GetValue(m_metaObject->GetQueryable()->GetIdentitySort().back().m_col).GetString();   // uuid identity column
 			if (foundedGuid.isValid())

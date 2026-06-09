@@ -25,6 +25,9 @@ const ibDialectDictionary& ibDatabaseLayerMySQL::Dialect()
 		d.m_upsertTemplate   = wxT("INSERT INTO {table} ({columns}) VALUES ({values}) ON DUPLICATE KEY UPDATE {update}");
 		d.m_upsertUpdateItem = wxT("{col} = VALUES({col})");
 		d.m_features.m_window = true;                 // MySQL 8+
+		d.m_features.m_rollup = true;                 // GROUP BY <keys> WITH ROLLUP (MySQL spelling)
+		d.m_rollupPrefix      = wxEmptyString;
+		d.m_rollupSuffix      = wxT(" WITH ROLLUP");
 		// type map
 		d.m_typeBoolean = wxT("TINYINT");
 		d.m_typeInteger = wxT("INT");

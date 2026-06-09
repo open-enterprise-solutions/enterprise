@@ -92,7 +92,7 @@ ibValueListDataObjectEnumRef::Fetch(const ibFetchRequest<ibGuid>& req) const
 	ibValueMetaObjectAttributePredefined* metaReference = m_metaObject->GetDataReference();
 	ibValueMetaObjectAttributePredefined* metaOrder     = m_metaObject->GetDataOrder();
 
-	ibDataQueryResult selection = readQuery.Select(page);
+	ibDataQueryResult selection = readQuery.Execute(page);
 	const ibBackendQueryColumn* keyCol = m_metaObject->GetQueryable()->GetIdentitySort().back().m_col;   // uuid identity column
 	while (selection.Next()) {
 		ibGuid enumGuid = selection.GetValue(keyCol).GetString();
@@ -241,8 +241,8 @@ ibValueListDataObjectRef::Fetch(const ibFetchRequest<ibGuid>& req) const
 
 	if (!m_pageCache) m_pageCache = ibDataQueryBuilder::NewPageCache();
 	ibDataQueryResult selection = cacheable
-		? readQuery.Select(page, *m_pageCache, sig)
-		: readQuery.Select(page);
+		? readQuery.Execute(page, *m_pageCache, sig)
+		: readQuery.Execute(page);
 	const ibBackendQueryColumn* keyCol = m_metaObject->GetQueryable()->GetIdentitySort().back().m_col;   // uuid identity column
 	while (selection.Next()) {
 		ibValueTableListRow* row =
@@ -441,8 +441,8 @@ ibValueListRegisterObject::Fetch(const ibFetchRequest<ibUniqueKeyPair>& req) con
 
 	if (!m_pageCache) m_pageCache = ibDataQueryBuilder::NewPageCache();
 	ibDataQueryResult selection = cacheable
-		? readQuery.Select(page, *m_pageCache, sig)
-		: readQuery.Select(page);
+		? readQuery.Execute(page, *m_pageCache, sig)
+		: readQuery.Execute(page);
 	while (selection.Next()) {
 		ibValueTableKeyRow* row = new ibValueTableKeyRow;
 		if (m_metaObject->HasRecorder()) {
@@ -585,7 +585,7 @@ ibValueModelTreeDataObjectFolderRef::GetAncestorChain(const ibGuid& fromGuid) co
 		ibReadPageRequest page;
 		page.m_count = 1;
 		ibDataQueryResult sel =
-			ibDataQueryBuilder().From(m_metaObject->GetQueryable()).WhereKey(current).Select(page);
+			ibDataQueryBuilder().From(m_metaObject->GetQueryable()).WhereKey(current).Execute(page);
 
 		ibGuid parentGuid;
 		if (sel.Next()) {
@@ -667,7 +667,7 @@ ibValueModelTreeDataObjectFolderRef::LoadRowsByGuids(const std::vector<ibGuid>& 
 	ibReadPageRequest page;
 	page.m_count = static_cast<int>(guids.size());
 	ibDataQueryResult sel =
-		ibDataQueryBuilder().From(m_metaObject->GetQueryable()).WhereKeyIn(guids).Select(page);
+		ibDataQueryBuilder().From(m_metaObject->GetQueryable()).WhereKeyIn(guids).Execute(page);
 
 	// Build a guid → row* map; reorder to match input.
 	std::unordered_map<wxString, ibValueTreeListNode*> byGuid;
@@ -823,7 +823,7 @@ ibValueModelTreeDataObjectFolderRef::FetchWithDirection(
 		page.m_anchorSortValues = anchorSortValues;
 	}
 
-	ibDataQueryResult selection = readQuery.Select(page);
+	ibDataQueryResult selection = readQuery.Execute(page);
 	while (selection.Next()) {
 		if (static_cast<int>(resp.m_rows.size()) > args.m_count) break;
 		resp.m_rows.push_back(BuildTreeRowFromSelection(selection, this, m_metaObject));
@@ -935,7 +935,7 @@ ibValueModelTreeDataObjectFolderRef::GetPrevFetch(const ibTreeFetchArgs& args) c
 		page.m_anchorSortValues = anchorSortValues;
 	}
 
-	ibDataQueryResult selection = readQuery.Select(page);
+	ibDataQueryResult selection = readQuery.Execute(page);
 	while (selection.Next()) {
 		if (static_cast<int>(resp.m_rows.size()) > args.m_count) break;
 		resp.m_rows.push_back(BuildTreeRowFromSelection(selection, this, m_metaObject));

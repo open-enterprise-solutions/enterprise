@@ -131,7 +131,14 @@ ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const ibBackendQueryColumn* col)
 ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
 	const ibBackendQueryColumn* col, const wxString& alias)
 {
-	m_aggregates.push_back(AggregateItem{ fn, col, alias });
+	// Route to the current context: Totals() → the TotalBy common set, else the GroupBy set.
+	(m_aggInTotals ? m_totalAggregates : m_aggregates).push_back(AggregateItem{ fn, col, alias });
+	return *this;
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::TotalBy(const ibBackendQueryColumn* col, ibDimensionKind dim)
+{
+	if (col != nullptr) m_totals.push_back(ibTotalLevel{ col, dim });
 	return *this;
 }
 
@@ -228,22 +235,54 @@ ibDataQuerySpec ibDataQueryBuilder::BuildSpec() const
 	spec.m_writeValues = &m_writeValues;
 	spec.m_dotWalks    = &m_dotWalks;
 	spec.m_selectCols  = &m_selectCols;
+	spec.m_distinct    = m_distinct;
 	return spec;
 }
 
 // The door runs the query through the COMPOSER (the tree executor) — never a concrete
 // provider. For a single source the composer delegates to that source's provider;
 // multi-source (Join / Union) it orchestrates. The door is blind to which.
-ibDataQueryResult ibDataQueryBuilder::Select(const ibReadPageRequest& req) const
+// Columns a later result.Select(mode) must drain into the snapshot = the Select() output list +
+// the aggregate inputs + the TotalBy dimension fields (deduped). The door knows them all; it stamps
+// them on the result so a fold reads exactly what it needs from one snapshot.
+std::vector<const ibBackendQueryColumn*> ibDataQueryBuilder::MaterialiseColumns() const
 {
-	return ibQueryComposer::ExecuteRead(BuildSpec(), req);
+	std::vector<const ibBackendQueryColumn*> cols;
+	auto add = [&](const ibBackendQueryColumn* c) {
+		if (c == nullptr) return;
+		for (const ibBackendQueryColumn* e : cols) if (e == c) return;
+		cols.push_back(c);
+	};
+	for (const auto& sc : m_selectCols)              add(sc.first);
+	for (const AggregateItem& a : m_aggregates)       add(a.m_col);
+	for (const AggregateItem& a : m_totalAggregates)  add(a.m_col);   // totals aggregates roll from the snapshot
+	for (const ibTotalLevel&  t : m_totals)           add(t.m_col);   // TotalBy dimension fields
+	return cols;
 }
 
-ibDataQueryResult ibDataQueryBuilder::Select(const ibReadPageRequest& req,
+// Stamp the materialise-columns + the totals config (TotalBy levels + common totals aggregates) so
+// result.Select(kind) folds automatically from one snapshot.
+void ibDataQueryBuilder::StampResult(ibDataQueryResult& r) const
+{
+	r.SetMaterialiseColumns(MaterialiseColumns());
+	r.SetTotals(m_totals, m_totalAggregates);
+	r.SetSource(m_holder, m_queryable, m_selectCols, m_conditions);   // lazy sub-selections + ref-dimension resolution
+}
+
+ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req) const
+{
+	ibDataQueryResult r = ibQueryComposer::ExecuteRead(BuildSpec(), req);
+	StampResult(r);
+	return r;
+}
+
+ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req,
                                              ibRenderedPageCache& cache,
                                              const wxString& signature) const
 {
-	return ibQueryComposer::ExecuteReadCached(BuildSpec(), req, cache, signature);
+	ibDataQueryResult r = ibQueryComposer::ExecuteReadCached(BuildSpec(), req, cache, signature);
+	StampResult(r);
+	return r;
 }
 
 ibDataQueryResult ibDataQueryBuilder::SelectAggregate() const
@@ -251,7 +290,7 @@ ibDataQueryResult ibDataQueryBuilder::SelectAggregate() const
 	return ibQueryComposer::ExecuteAggregate(BuildSpec());
 }
 
-ibQueryRamTable ibDataQueryBuilder::SelectTotals() const
+ibSelectorTree ibDataQueryBuilder::SelectTotals() const
 {
 	return ibQueryComposer::ExecuteTotals(BuildSpec());
 }

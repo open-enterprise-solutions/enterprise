@@ -18,11 +18,14 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryProvider.h"                                            // ibBackendQueryProvider / ibComputedProvider (+ dataQueryBuilder.h, queryable.h)
-#include "queryRamTable.h"                                            // ibQueryRamTable — L3's raw ИТОГИ tree (names no runtime type but ibValue)
+#include "queryRamTable.h"                                            // ibQueryRamTable — L3's raw flat snapshot (names no runtime type but ibValue)
+#include "querySelector.h"                                            // ibSelector — result.Select(mode) hands the drained snapshot to it
 #include "dbTableProvider.h"                                          // ibDbTableProvider (vended by GetProvider) + ibRenderedPageCache (NewPageCache)
 #include "resultSource.h"                                             // ibDataResultSource — the backing ibRamTableResultSource derives
+#include "tempTableManager.h"                                         // ibTempTableManager — promote a computed leaf to a DB temp table (+ ibDbTempTableQueryable)
 
 #include <map>                                                        // dot-walk join dedup + col->attr cache
+#include <functional>                                                 // std::function — reference-hierarchy parent chain-up
 #include <stdexcept>                                                  // guard for the not-yet-built multi-source composition path
 #include <algorithm>                                                  // stable_sort — RAM ORDER BY over a composed result
 
@@ -109,7 +112,7 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 	}
 
 	ibReadPageRequest page; page.m_count = 0;   // all rows
-	ibDataQueryResult sel = q.Select(page);
+	ibDataQueryResult sel = q.Execute(page);
 	while (sel.Next()) {
 		const long r = t.AppendRow();
 		for (const ibBackendQueryColumn* col : m_columns)
@@ -231,7 +234,7 @@ ibQueryRamTable MaterialiseLeafToRam(const ibBackendQueryable* leaf, ibDatabaseC
 		else                q.Where(c.m_col, c.m_comparison, c.m_value);
 	}
 	ibReadPageRequest page; page.m_count = 0;   // every matching row
-	ibDataQueryResult sel = q.Select(page);     // reads through the cursor — never names a runtime table
+	ibDataQueryResult sel = q.Execute(page);     // reads through the cursor — never names a runtime table
 	while (sel.Next()) {
 		const long r = t.AppendRow();
 		for (const ibBackendQueryColumn* col : cols)
@@ -346,22 +349,50 @@ std::vector<const ibBackendQueryColumn*> ReferencedColumns(const ibDataQuerySpec
 	return cols;
 }
 
-// Materialise ANY node to a RAM table keyed by GetModelID, carrying the referenced
-// columns its leaves provide. Source -> read the leaf; Join -> recurse both sides and
-// nested-loop on (onLeft = onRight). N-way left-deep falls out of the recursion. (§22.1)
-ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const ibBackendQueryColumn*>& refCols,
-                                const ibDataQuerySpec& spec)
+// Mutually-recursive with RamUnion (a Union may nest inside a Join subtree and vice-versa).
+ibQueryRamTable RamUnion(const ibDataQuerySpec& spec, const ibQueryNode* unionNode,
+                         const std::vector<const ibBackendQueryColumn*>& outCols);
+
+// Resolve a column NAME within a subtree's leaves -> the leaf's own same-named column (the first
+// found). Lets a UNION branch that is itself a Join / nested Union align its output columns by name,
+// just like a Source branch. (docs §22.1b)
+const ibBackendQueryColumn* ResolveInSubtree(const ibQueryNode* node, const wxString& name)
 {
+	if (node == nullptr) return nullptr;
+	if (node->m_kind == ibQueryNode::Kind::Source)
+		return node->m_queryable != nullptr ? node->m_queryable->ResolveColumnByName(name) : nullptr;
+	if (node->m_kind == ibQueryNode::Kind::Join) {
+		if (const ibBackendQueryColumn* c = ResolveInSubtree(node->m_left.get(), name)) return c;
+		return ResolveInSubtree(node->m_right.get(), name);
+	}
+	for (const auto& p : node->m_parts)
+		if (const ibBackendQueryColumn* c = ResolveInSubtree(p.get(), name)) return c;
+	return nullptr;
+}
+
+// Materialise ANY node to a RAM table keyed by GetModelID, carrying the referenced columns its leaves
+// provide. Source -> read the leaf; Join -> recurse + nested-loop; UNION -> RamUnion (a union nested
+// inside a join). N-way left-deep falls out of the recursion. `condsByName` routes leaf conditions by
+// NAME (a UNION branch) vs by column OWNERSHIP (a plain join). (§22.1)
+ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const ibBackendQueryColumn*>& refCols,
+                                const ibDataQuerySpec& spec, bool condsByName = false)
+{
+	if (node->m_kind == ibQueryNode::Kind::Union)
+		return RamUnion(spec, node, refCols);   // a UNION nested inside a JOIN subtree
+
 	if (node->m_kind == ibQueryNode::Kind::Source) {
 		std::vector<const ibBackendQueryColumn*> mine;
 		for (const ibBackendQueryColumn* c : refCols)
 			if (node->m_queryable->OwnsColumn(c)) mine.push_back(c);
-		return MaterialiseLeaf(node->m_queryable, spec.m_holder, LeafConditions(spec, node->m_queryable), mine);
+		const std::vector<ibQueryCondition> conds = condsByName
+			? LeafConditionsByName(spec, node->m_queryable)
+			: LeafConditions(spec, node->m_queryable);
+		return MaterialiseLeaf(node->m_queryable, spec.m_holder, conds, mine);
 	}
 
 	// Join: recurse, then nested-loop. Output = refCols this subtree provides.
-	const ibQueryRamTable TL = MaterialiseNode(node->m_left.get(),  refCols, spec);
-	const ibQueryRamTable TR = MaterialiseNode(node->m_right.get(), refCols, spec);
+	const ibQueryRamTable TL = MaterialiseNode(node->m_left.get(),  refCols, spec, condsByName);
+	const ibQueryRamTable TR = MaterialiseNode(node->m_right.get(), refCols, spec, condsByName);
 
 	std::vector<const ibBackendQueryColumn*> outCols;     // provided cols, with their side
 	std::vector<bool> fromLeft;
@@ -415,13 +446,12 @@ ibDataQueryResult ProjectToAliases(const ibQueryRamTable& TC, const ibDataQueryS
 	return ibDataQueryResult(std::move(TO), spec.m_queryable);
 }
 
-// RAM UNION — vertical stack: each branch supplies the shared output columns BY NAME
-// (heterogeneous branches, e.g. catalog ∪ temp, each with its own same-named column), rows
-// concatenate. A branch missing an output column yields NULL for it. Returns a RAM-backed
-// selection; read via GetColumn(alias). Every GLOBAL Where condition is applied to EVERY
-// branch BY NAME (LeafConditionsByName) — a branch missing the named column drops that one
-// condition. (A condition scoped to ONE branch needs the door to carry an alias-qualified
-// Where — a follow-up that wants door/spec API, not this engine.) (docs §22.1b)
+// RAM UNION — vertical stack: each branch (a Source, OR a nested Join / Union subtree) supplies the
+// shared output columns BY NAME (heterogeneous branches, e.g. catalog ∪ temp ∪ a join), rows
+// concatenate. A branch missing an output column yields NULL for it. Every GLOBAL Where condition is
+// applied to EVERY branch BY NAME (condsByName) — a branch missing the named column drops that one
+// condition. (A condition scoped to ONE branch needs the door to carry an alias-qualified Where — a
+// door/spec surface feature, not this engine.) (docs §22.1b)
 ibQueryRamTable RamUnion(const ibDataQuerySpec& spec, const ibQueryNode* unionNode,
                          const std::vector<const ibBackendQueryColumn*>& outCols)
 {
@@ -431,19 +461,21 @@ ibQueryRamTable RamUnion(const ibDataQuerySpec& spec, const ibQueryNode* unionNo
 
 	for (const auto& partPtr : unionNode->m_parts) {
 		const ibQueryNode* part = partPtr.get();
-		const ibBackendQueryable* q = (part != nullptr) ? part->m_queryable : nullptr;
-		if (q == nullptr) continue;
+		if (part == nullptr) continue;
 
-		// Resolve each output column to THIS branch's same-named column (null = absent).
-		std::vector<const ibBackendQueryColumn*> branchCols;
-		std::vector<const ibBackendQueryColumn*> toRead;
+		// Resolve each output column to THIS branch's same-named column (in its leaves — a Join /
+		// nested-Union branch resolves through ResolveInSubtree, a Source branch through its queryable).
+		std::vector<const ibBackendQueryColumn*> branchCols;     // per outCol (null = absent here)
+		std::vector<const ibBackendQueryColumn*> refForBranch;   // the present ones — what to materialise
 		for (const ibBackendQueryColumn* c : outCols) {
-			const ibBackendQueryColumn* bc = q->ResolveColumnByName(c->GetName());
+			const ibBackendQueryColumn* bc = ResolveInSubtree(part, c->GetName());
 			branchCols.push_back(bc);
-			if (bc != nullptr) toRead.push_back(bc);
+			if (bc != nullptr) refForBranch.push_back(bc);
 		}
+		CollectJoinKeys(part, refForBranch);   // a Join branch must also carry its own join keys (else JoinRamTables can't match)
 
-		const ibQueryRamTable TP = MaterialiseLeaf(q, spec.m_holder, LeafConditionsByName(spec, q), toRead);
+		// Materialise the whole branch subtree (Source / Join / nested Union), conditions BY NAME.
+		const ibQueryRamTable TP = MaterialiseNode(part, refForBranch, spec, /*condsByName*/true);
 		ibQueryComposer::AppendUnionBranch(TO, TP, outCols, branchCols);
 	}
 	return TO;
@@ -512,6 +544,91 @@ ibValue AggregateOne(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRa
 	}
 }
 
+// Receiver id for a COUNT(*) aggregate (no source column): a synthetic id far from any real metaID,
+// keyed by the aggregate's position, read back by GetColumn(alias). Column aggregates roll in-place.
+const ibMetaID kAggSyntheticBase = 0x40000000u;
+
+// Roll the aggregates over `rows` and write each onto the node: a COLUMN aggregate IN-PLACE into its
+// own column (a.m_col) — so it reads as the row value on a leaf and the SUBTOTAL on a group node
+// (GetValue(col)); a COUNT(*) into its synthetic receiver (read by GetColumn(alias)).
+void ApplyAggregates(ibSelectorTree::Node& node, const ibQueryRamTable& TC, const std::vector<long>& rows,
+                     const std::vector<ibDataQueryBuilder::AggregateItem>& aggs)
+{
+	for (size_t i = 0; i < aggs.size(); ++i) {
+		const ibDataQueryBuilder::AggregateItem& a = aggs[i];
+		const ibMetaID id = (a.m_col != nullptr) ? a.m_col->GetModelID() : (kAggSyntheticBase + static_cast<ibMetaID>(i));
+		node.m_values[id] = AggregateOne(a, TC, rows);
+	}
+}
+
+// Add the synthetic receiver COLUMNS for COUNT(*) aggregates to a tree (column aggregates need none —
+// their own column is already present). Read back by GetColumn(alias).
+void AddSyntheticAggColumns(ibSelectorTree& tree, const std::vector<ibDataQueryBuilder::AggregateItem>& aggs)
+{
+	for (size_t i = 0; i < aggs.size(); ++i)
+		if (aggs[i].m_col == nullptr)
+			tree.AddColumn(kAggSyntheticBase + static_cast<ibMetaID>(i), aggs[i].m_alias, ibTypeDescription());
+}
+
+// Identity key of a cell for hierarchy linking. A REFERENCE keys by its _RRRef bytes (NOT its display
+// string): a row's OWN data-reference and a parent-ref pointing AT it carry the same _RRRef, so the
+// child's parentKey matches the parent's rowKey on identity, not on name. Any other value keys by its
+// string. (docs/query-language-arc.md §22.1b)
+wxString CellKey(const ibValue& v)
+{
+	// Stable identity key for grouping / hierarchy linking, naming NO runtime type — L3 speaks only
+	// ibValue. A REFERENCE keys by its underlying object's ADDRESS (GetRef): two cells pointing at the
+	// same row share it, the display string does not, so a child's parent-ref matches the parent's
+	// row-ref. ANY OTHER value keys by its string — so the engine works for non-metadata sources
+	// (temp tables, plain columns) too.
+	if (v.IsReference())
+		if (const ibValue* ref = v.GetRef())
+			return wxString::Format(wxT("@%llx"), static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(ref)));
+	return v.GetString();
+}
+
+// Context for the recursive hierarchy fold (invariant across the recursion).
+struct HierBuildCtx {
+	const ibQueryRamTable*                               detail;
+	const ibBackendQueryColumn*                          rowKeyCol;
+	const std::map<wxString, std::vector<long>>*         childrenOf;
+	const std::vector<ibDataQueryBuilder::AggregateItem>* aggregates;
+	ibDimensionKind                                      mode;
+	std::vector<bool>*                                  visited;   // cycle guard (malformed parent-ref)
+};
+
+// Attach the subtree rooted at detail-row `rowIdx` under `parent`; returns the subtree's detail-row
+// indices (for the parent's subtotal). Sets the node's values (the row copied), m_hasChildren (from
+// the data — its key appears as a parent), and a subtotal rolled over the WHOLE subtree (aggregated
+// from raw leaves -> COUNT/AVG correct). HierarchyOnly omits a leaf element but still counts it.
+std::vector<long> AttachHierNode(const HierBuildCtx& ctx, ibSelectorTree::Node* parent, long rowIdx, int level)
+{
+	if (rowIdx < 0 || rowIdx >= static_cast<long>(ctx.visited->size()) || (*ctx.visited)[static_cast<size_t>(rowIdx)])
+		return {};                                   // cycle / out of range -> stop
+	(*ctx.visited)[static_cast<size_t>(rowIdx)] = true;
+
+	const wxString key = CellKey(ctx.detail->GetCell(rowIdx, ctx.rowKeyCol->GetModelID()));
+	const auto cit = ctx.childrenOf->find(key);
+	const bool hasKids = (cit != ctx.childrenOf->end() && !cit->second.empty());
+
+	if (ctx.mode == ibDimensionKind::HierarchyOnly && !hasKids)
+		return { rowIdx };                           // a leaf element: not a node, but counts upward
+
+	ibSelectorTree::Node* node = parent->AddChild(level);
+	for (const ibQueryRamColumn& col : ctx.detail->Columns())
+		node->m_values[col.m_id] = ctx.detail->GetCell(rowIdx, col.m_id);
+	node->m_hasChildren = hasKids;
+
+	std::vector<long> subtreeRows = { rowIdx };
+	if (hasKids)
+		for (long childIdx : cit->second) {
+			std::vector<long> kids = AttachHierNode(ctx, node, childIdx, level + 1);
+			subtreeRows.insert(subtreeRows.end(), kids.begin(), kids.end());
+		}
+	ApplyAggregates(*node, *ctx.detail, subtreeRows, *ctx.aggregates);
+	return subtreeRows;
+}
+
 // RAM GROUP BY over a composed combined table: bucket rows by the group keys, fold the
 // aggregates per bucket. Group columns ride keyed by GetModelID (read via GetValue);
 // aggregate columns are named by their alias (read via GetColumn(alias)).
@@ -560,14 +677,13 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 // Multi-level totals fold (hierarchical totals): a node holds the aggregates over its rows; recurse a
 // subtotal node per distinct value of groupFields[level], carrying the group-key path
 // down. Root (level 0) = grand total. (docs/query-language-arc.md §22.1b)
-void FoldTotals(ibQueryRamTable::Node& node, const ibQueryRamTable& TC, const std::vector<long>& rows,
+void FoldTotals(ibSelectorTree::Node& node, const ibQueryRamTable& TC, const std::vector<long>& rows,
                 const std::vector<const ibBackendQueryColumn*>& groupFields,
                 const std::vector<ibDataQueryBuilder::AggregateItem>& aggs, size_t level,
-                unsigned int aggBaseId, const std::map<ibMetaID, ibValue>& keys)
+                const std::map<ibMetaID, ibValue>& keys)
 {
 	node.m_values = keys;
-	for (size_t a = 0; a < aggs.size(); ++a)
-		node.m_values[static_cast<ibMetaID>(aggBaseId + a)] = AggregateOne(aggs[a], TC, rows);
+	ApplyAggregates(node, TC, rows, aggs);   // subtotals IN-PLACE in each aggregate's own column
 	if (level >= groupFields.size())
 		return;
 
@@ -581,11 +697,161 @@ void FoldTotals(ibQueryRamTable::Node& node, const ibQueryRamTable& TC, const st
 		buckets[k].push_back(i);
 	}
 	for (const wxString& k : order) {
-		ibQueryRamTable::Node* child = node.AddChild(static_cast<int>(level) + 1);
+		ibSelectorTree::Node* child = node.AddChild(static_cast<int>(level) + 1);
 		std::map<ibMetaID, ibValue> childKeys = keys;
 		childKeys[groupFields[level]->GetModelID()] = keyVal[k];
-		FoldTotals(*child, TC, buckets[k], groupFields, aggs, level + 1, aggBaseId, childKeys);
+		FoldTotals(*child, TC, buckets[k], groupFields, aggs, level + 1, childKeys);
 	}
+	node.m_hasChildren = !node.m_children.empty();   // eager build -> has children == populated
+}
+
+// Promote a (computed-leaf ⋈ DB-leaf) join to server-side: materialise the COMPUTED leaf (register
+// slice / balance / subquery / temp) into a DB temp table, then the join is DB⋈DB and the co-located
+// fast path runs it in ONE SQL — instead of materialising BOTH leaves to RAM and stitching in C++.
+// The computed leaf's columns are REMAPPED onto the temp table's same-named raw columns (conditions /
+// sorts / select list / join key). Emits the rebuilt query state into the caller's buffers (which must
+// outlive the spec2 use) and returns the manager (keeps the temp table alive across the read); null =
+// not this shape / no temp capability / a runtime failure / an unresolved remap -> the caller stays on
+// the RAM composer. (docs/temp-db.md §8 — the server-side push-down)
+std::unique_ptr<ibTempTableManager> PromoteComputedLeaf(
+	const ibDataQuerySpec& spec,
+	std::shared_ptr<ibQueryNode>& outRoot,
+	std::vector<ibQueryCondition>& outConds,
+	std::vector<ibQuerySortItem>& outSorts,
+	std::vector<std::pair<const ibBackendQueryColumn*, wxString>>& outSelects,
+	std::vector<const ibBackendQueryColumn*>& outGroupBy,
+	std::vector<ibDataQueryBuilder::AggregateItem>& outAggregates,
+	std::vector<ibDataQueryBuilder::HavingItem>& outHaving,
+	const ibBackendQueryable*& outPrimary)
+{
+	const ibQueryNode* root = spec.m_root;
+	if (root == nullptr || root->m_kind != ibQueryNode::Kind::Join)
+		return nullptr;
+	const ibQueryNode* nL = root->m_left.get();
+	const ibQueryNode* nR = root->m_right.get();
+	if (nL == nullptr || nR == nullptr ||
+	    nL->m_kind != ibQueryNode::Kind::Source || nR->m_kind != ibQueryNode::Kind::Source)
+		return nullptr;
+	const ibBackendQueryable* qL = nL->m_queryable;
+	const ibBackendQueryable* qR = nR->m_queryable;
+	if (qL == nullptr || qR == nullptr)                                  return nullptr;
+	if (root->m_joinKind != ibQueryJoinKind::Inner)                      return nullptr;
+	if (root->m_onLeft == nullptr || root->m_onRight == nullptr)         return nullptr;   // explicit keys only
+	if (!spec.m_dotWalks->empty() || !spec.m_keyIn->empty())             return nullptr;
+
+	// Exactly ONE computed leaf + one real DB leaf (both-DB is the plain co-located path; both-computed
+	// is out of scope — neither is SQL-joinable).
+	const bool lRam = qL->IsComputedInRam();
+	const bool rRam = qR->IsComputedInRam();
+	if (lRam == rRam)
+		return nullptr;
+	const ibBackendQueryable* computed = lRam ? qL : qR;
+
+	// (The temp now stores columns in the metadata storage format — WriteFieldsOf spread filled via
+	// SetValueColumn — so reference / enum / variant values round-trip from a temp exactly like from a
+	// real table, for KEYS and OUTPUTS alike. No output-type guard needed.)
+
+	// Materialise the computed leaf (its ctor filters are baked in; the door conditions IT owns are
+	// pushed down as compute filters) into a DB temp table.
+	std::vector<ibQueryCondition> computedConds;
+	for (const ibQueryCondition& c : *spec.m_conditions)
+		if (c.m_col != nullptr && computed->OwnsColumn(c.m_col)) computedConds.push_back(c);
+	ibQueryRamTable rows = computed->ComputeRows(computedConds);
+
+	// SHOULD (temp-db.md §7): a SMALL intermediate is not worth the CREATE+INSERT round-trips — keep it
+	// in RAM regardless of capability. The CAN check (dialect presence + the runtime probe) is inside
+	// Materialise; this is the size lever, the same threshold the RAM-composer planner uses.
+	if (rows.RowCount() < kTempTableMinRows)
+		return nullptr;
+
+	std::unique_ptr<ibTempTableManager> mgr =
+		ibTempTableManager::Materialise(spec.m_holder, rows, computed->GetMetaData());
+	if (!mgr)
+		return nullptr;
+	const ibDbTempTableQueryable* temp = mgr->Queryable();
+
+	// Remap a referenced column: a computed-leaf column -> the temp queryable's same-named raw column;
+	// a DB-leaf column unchanged. A computed column with no temp counterpart fails the promote (-> RAM).
+	bool remapOk = true;
+	auto remap = [&](const ibBackendQueryColumn* col) -> const ibBackendQueryColumn* {
+		if (col == nullptr)               return nullptr;
+		if (!computed->OwnsColumn(col))   return col;
+		const ibBackendQueryColumn* t = temp->ResolveColumnByName(col->GetName());
+		if (t == nullptr) remapOk = false;
+		return t;
+	};
+
+	outConds.clear();
+	for (const ibQueryCondition& c : *spec.m_conditions) { ibQueryCondition nc = c; nc.m_col = remap(c.m_col); outConds.push_back(nc); }
+	outSorts.clear();
+	for (const ibQuerySortItem& s : *spec.m_sorts)       { ibQuerySortItem ns = s; ns.m_col = remap(s.m_col); outSorts.push_back(ns); }
+	outSelects.clear();
+	for (const auto& sc : *spec.m_selectCols)            outSelects.push_back({ remap(sc.first), sc.second });
+
+	// Aggregate terminal columns too (empty for a plain read) — so the same promote serves the
+	// computed⋈DB totals path (the aggregate caller wires spec2 at these; the read caller ignores them).
+	outGroupBy.clear();
+	for (const ibBackendQueryColumn* g : *spec.m_groupBy)          outGroupBy.push_back(remap(g));
+	outAggregates.clear();
+	for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) { ibDataQueryBuilder::AggregateItem na = a; na.m_col = remap(a.m_col); outAggregates.push_back(na); }
+	outHaving.clear();
+	for (const ibDataQueryBuilder::HavingItem& h : *spec.m_having)        { ibDataQueryBuilder::HavingItem nh = h; nh.m_col = remap(h.m_col); outHaving.push_back(nh); }
+
+	// Swapped tree: the computed Source node -> a temp Source node; the DB node stays; keys remapped.
+	std::shared_ptr<ibQueryNode> tempNode = ibQueryNode::Source(temp);
+	outRoot = std::make_shared<ibQueryNode>();
+	outRoot->m_kind     = ibQueryNode::Kind::Join;
+	outRoot->m_joinKind = ibQueryJoinKind::Inner;
+	outRoot->m_left     = lRam ? tempNode : root->m_left;
+	outRoot->m_right    = rRam ? tempNode : root->m_right;
+	outRoot->m_onLeft   = remap(root->m_onLeft);
+	outRoot->m_onRight  = remap(root->m_onRight);
+	outPrimary = (spec.m_queryable == computed) ? static_cast<const ibBackendQueryable*>(temp) : spec.m_queryable;
+
+	if (!remapOk)
+		return nullptr;   // a referenced computed column had no temp counterpart -> RAM (mgr drops here)
+	return mgr;
+}
+
+// Promote the COMPUTED branches of a UNION to DB temp tables, so the whole union runs server-side. A
+// UNION resolves each branch's columns BY NAME (the temp's columns keep the source names), so no
+// remap is needed — only the branch's queryable is swapped for its temp. Returns the managers (keep
+// the temps alive) + the rebuilt union root in `outRoot`; an EMPTY vector means "not promoted" (no
+// computed branch, an unsupported shape, a small set, or no temp capability) -> the caller stays on
+// RamUnion. (docs/temp-db.md)
+std::vector<std::unique_ptr<ibTempTableManager>> PromoteUnionBranches(const ibDataQuerySpec& spec,
+                                                                      std::shared_ptr<ibQueryNode>& outRoot)
+{
+	std::vector<std::unique_ptr<ibTempTableManager>> mgrs;
+	const ibQueryNode* root = spec.m_root;
+	if (root == nullptr || root->m_kind != ibQueryNode::Kind::Union || root->m_parts.empty())
+		return mgrs;
+
+	std::shared_ptr<ibQueryNode> newRoot = std::make_shared<ibQueryNode>();
+	newRoot->m_kind = ibQueryNode::Kind::Union;
+	bool anyComputed = false;
+	for (const auto& part : root->m_parts) {
+		const ibQueryNode* p = part.get();
+		if (p == nullptr || p->m_kind != ibQueryNode::Kind::Source || p->m_queryable == nullptr)
+			return {};   // unsupported branch shape -> RAM
+		if (p->m_queryable->IsComputedInRam()) {
+			anyComputed = true;
+			ibQueryRamTable rows = p->m_queryable->ComputeRows(std::vector<ibQueryCondition>{});   // ctor filters baked in
+			if (rows.RowCount() < kTempTableMinRows) return {};   // small set -> RAM
+			std::unique_ptr<ibTempTableManager> mgr =
+				ibTempTableManager::Materialise(spec.m_holder, rows, p->m_queryable->GetMetaData());
+			if (!mgr) return {};   // no temp capability / failure -> RAM
+			newRoot->m_parts.push_back(ibQueryNode::Source(mgr->Queryable()));
+			mgrs.push_back(std::move(mgr));
+		}
+		else {
+			newRoot->m_parts.push_back(part);   // a real DB branch — unchanged
+		}
+	}
+	if (!anyComputed)
+		return {};   // all branches already DB -> the plain CanColocateUnion path handles it
+	outRoot = newRoot;
+	return mgrs;
 }
 
 // Compose a multi-source tree, in RAM. JOIN of any depth (N-way left-deep) on explicit
@@ -595,6 +861,58 @@ ibDataQueryResult ComposeMultiSource(const ibDataQuerySpec& spec, const ibReadPa
 	const ibQueryNode* root = spec.m_root;
 	if (root == nullptr)
 		RamCompositionNotYet();
+
+	// Fast path: a 2-leaf inner join of two real DB tables on scalar keys, scalar outputs — run
+	// the WHOLE join + cross-table filter in ONE server-side SELECT (the DBMS does the work, only
+	// the projected scalars transit). Anything outside this shape falls through to the RAM compose
+	// below (materialise each leaf, stitch in C++). (docs/query-language-arc.md §22.1a)
+	if (ibDbTableProvider::CanColocateJoin(spec))
+		return ibDbTableProvider::ExecuteColocatedJoin(spec, page);
+
+	// (computed ⋈ DB): materialise the computed leaf into a DB temp table, remap its columns onto the
+	// temp, and run the now-DB⋈DB join SERVER-SIDE. The buffers + manager live for this block, so the
+	// temp table is alive across ExecuteColocatedJoin (whose result is RAM-backed); on any miss the
+	// manager drops and we fall through to the RAM compose. (docs/temp-db.md §8)
+	{
+		std::shared_ptr<ibQueryNode>  pRoot;
+		std::vector<ibQueryCondition> pConds;
+		std::vector<ibQuerySortItem>  pSorts;
+		std::vector<std::pair<const ibBackendQueryColumn*, wxString>> pSelects;
+		std::vector<const ibBackendQueryColumn*>            pGroupBy;    // empty for a read — unused here
+		std::vector<ibDataQueryBuilder::AggregateItem>      pAggs;
+		std::vector<ibDataQueryBuilder::HavingItem>         pHaving;
+		const ibBackendQueryable*     pPrimary = nullptr;
+		if (std::unique_ptr<ibTempTableManager> mgr =
+		        PromoteComputedLeaf(spec, pRoot, pConds, pSorts, pSelects, pGroupBy, pAggs, pHaving, pPrimary)) {
+			ibDataQuerySpec spec2 = spec;
+			spec2.m_root       = pRoot.get();
+			spec2.m_conditions = &pConds;
+			spec2.m_sorts      = &pSorts;
+			spec2.m_selectCols = &pSelects;
+			spec2.m_queryable  = pPrimary;
+			if (ibDbTableProvider::CanColocateJoin(spec2))
+				return ibDbTableProvider::ExecuteColocatedJoin(spec2, page);
+			// not co-locatable after the swap -> mgr drops the temp, fall through to RAM
+		}
+	}
+
+	// UNION of real DB tables -> one server-side UNION ALL (scalar outputs). Else the RAM stack.
+	if (ibDbTableProvider::CanColocateUnion(spec))
+		return ibDbTableProvider::ExecuteColocatedUnion(spec, page);
+
+	// Mixed UNION (some branch computed): materialise the computed branches to DB temp tables and run
+	// the whole union server-side. The managers (temps) live for this block, across ExecuteColocatedUnion
+	// (whose result is RAM-backed); on a miss they drop and we fall to RamUnion.
+	if (root->m_kind == ibQueryNode::Kind::Union) {
+		std::shared_ptr<ibQueryNode> uRoot;
+		std::vector<std::unique_ptr<ibTempTableManager>> uMgrs = PromoteUnionBranches(spec, uRoot);
+		if (!uMgrs.empty() && uRoot) {
+			ibDataQuerySpec spec2 = spec;
+			spec2.m_root = uRoot.get();
+			if (ibDbTableProvider::CanColocateUnion(spec2))
+				return ibDbTableProvider::ExecuteColocatedUnion(spec2, page);
+		}
+	}
 
 	const bool ok = (root->m_kind == ibQueryNode::Kind::Union && !root->m_parts.empty()) ||
 	                (root->m_kind == ibQueryNode::Kind::Join && AllJoinsHaveKeys(root));
@@ -625,6 +943,40 @@ ibDataQueryResult ibQueryComposer::ExecuteAggregate(const ibDataQuerySpec& spec)
 	if (IsSingleSource(spec))
 		return spec.m_queryable->GetProvider().ExecuteAggregate(spec);
 
+	// Fast path: a 2-leaf inner join of two real DB tables, scalar group keys / aggregate inputs —
+	// run the JOIN + GROUP BY + aggregates in ONE server-side SELECT instead of materialising both
+	// leaves to RAM and folding in C++ below. (docs/query-language-arc.md §22.1a)
+	if (ibDbTableProvider::CanColocateAggregate(spec))
+		return ibDbTableProvider::ExecuteColocatedAggregate(spec);
+
+	// (computed ⋈ DB) totals: materialise the computed leaf into a DB temp table, remap its columns
+	// (group keys / aggregate inputs / having / join key) onto the temp, and run JOIN + GROUP BY
+	// SERVER-SIDE. Same promote as the read path; on a miss the temp drops and we RAM-fold below.
+	{
+		std::shared_ptr<ibQueryNode>  pRoot;
+		std::vector<ibQueryCondition> pConds;
+		std::vector<ibQuerySortItem>  pSorts;
+		std::vector<std::pair<const ibBackendQueryColumn*, wxString>> pSelects;
+		std::vector<const ibBackendQueryColumn*>            pGroupBy;
+		std::vector<ibDataQueryBuilder::AggregateItem>      pAggs;
+		std::vector<ibDataQueryBuilder::HavingItem>         pHaving;
+		const ibBackendQueryable*     pPrimary = nullptr;
+		if (std::unique_ptr<ibTempTableManager> mgr =
+		        PromoteComputedLeaf(spec, pRoot, pConds, pSorts, pSelects, pGroupBy, pAggs, pHaving, pPrimary)) {
+			ibDataQuerySpec spec2 = spec;
+			spec2.m_root       = pRoot.get();
+			spec2.m_conditions = &pConds;
+			spec2.m_sorts      = &pSorts;
+			spec2.m_groupBy    = &pGroupBy;
+			spec2.m_aggregates = &pAggs;
+			spec2.m_having     = &pHaving;
+			spec2.m_queryable  = pPrimary;
+			if (ibDbTableProvider::CanColocateAggregate(spec2))
+				return ibDbTableProvider::ExecuteColocatedAggregate(spec2);
+			// not co-locatable after the swap -> mgr drops the temp, fall through to RAM
+		}
+	}
+
 	// Aggregate OVER a composed result: compose the leaves (carrying group / aggregate /
 	// key / Where columns) into a RAM table, then GROUP BY in RAM.
 	const ibQueryNode* root = spec.m_root;
@@ -637,11 +989,11 @@ ibDataQueryResult ibQueryComposer::ExecuteAggregate(const ibDataQuerySpec& spec)
 	return RamAggregate(Compose(spec, AggregateRefCols(spec)), spec);
 }
 
-// ИТОГИ fold over a combined row set -> a RAW totals TREE (L3's own ibQueryRamTable). L3
+// totals fold over a combined row set -> a RAW totals TREE (L3's own ibQueryRamTable). L3
 // stops here — flat-vs-hierarchical rendering is the runtime's call. Group columns keyed by
 // GetModelID; aggregates by a synthetic id (read by alias). Grand total = the root (level
 // 0). Pure (no DB) — exposed so the fold is unit-testable directly. (docs §22.1b)
-ibQueryRamTable ibQueryComposer::BuildTotalsTree(const ibQueryRamTable& detail,
+ibSelectorTree ibQueryComposer::BuildTotalsTree(const ibQueryRamTable& detail,
 		const std::vector<const ibBackendQueryColumn*>& groupFields,
 		const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates)
 {
@@ -649,17 +1001,324 @@ ibQueryRamTable ibQueryComposer::BuildTotalsTree(const ibQueryRamTable& detail,
 	std::vector<long> all; all.reserve(static_cast<size_t>(n));
 	for (long i = 0; i < n; ++i) all.push_back(i);
 
-	ibQueryRamTable tree;
+	ibSelectorTree tree;
 	for (const ibBackendQueryColumn* g : groupFields)
 		tree.AddColumn(g->GetModelID(), g->GetName(), g->GetTypeDesc());
-	const unsigned int aggBaseId = 0x40000000u;
-	for (size_t a = 0; a < aggregates.size(); ++a) {
-		const ibDataQueryBuilder::AggregateItem& ai = aggregates[a];
-		tree.AddColumn(static_cast<ibMetaID>(aggBaseId + a), ai.m_alias,
-		               ai.m_col != nullptr ? ai.m_col->GetTypeDesc() : ibTypeDescription());
-	}
-	FoldTotals(tree.Root(), detail, all, groupFields, aggregates, 0, aggBaseId, {});
+	for (const ibDataQueryBuilder::AggregateItem& a : aggregates)   // aggregate column = its OWN source column
+		if (a.m_col != nullptr) tree.AddColumn(a.m_col->GetModelID(), a.m_col->GetName(), a.m_col->GetTypeDesc());
+	AddSyntheticAggColumns(tree, aggregates);                       // + COUNT(*) receivers
+	FoldTotals(tree.Root(), detail, all, groupFields, aggregates, 0, {});
 	return tree;   // raw — the runtime decides flat vs. hierarchical
+}
+
+// RECURSIVE hierarchy fold (parent-ref). From a WHOLE materialised detail table -> the Node tree the
+// runtime already consumes. The sibling of BuildTotalsTree (fixed columns); here the grouping is by a
+// row's parent-ref recursively, unbounded depth. m_hasChildren comes from the data; each node's
+// subtotal rolls over its subtree. `mode` = the placement (Elements / Hierarchy / HierarchyOnly).
+ibSelectorTree ibQueryComposer::BuildHierarchyTree(const ibQueryRamTable& detail,
+		const ibBackendQueryColumn* rowKeyCol, const ibBackendQueryColumn* parentKeyCol,
+		const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates, ibDimensionKind mode)
+{
+	ibSelectorTree tree;
+	for (const ibQueryRamColumn& col : detail.Columns())   // aggregates roll IN-PLACE into their own columns
+		tree.AddColumn(col.m_id, col.m_name, col.m_type);
+	AddSyntheticAggColumns(tree, aggregates);              // + COUNT(*) receivers
+
+	const long n = detail.RowCount();
+
+	// Elements: every row as a leaf NODE under the root, in order, no nesting. A grand total (if
+	// aggregates) on the root. (The tree carries no flat rows — a leaf is a one-level node.)
+	if (mode == ibDimensionKind::Elements) {
+		std::vector<long> all; all.reserve(static_cast<size_t>(n));
+		for (long r = 0; r < n; ++r) {
+			ibSelectorTree::Node* leaf = tree.Root().AddChild(1);
+			for (const ibQueryRamColumn& col : detail.Columns())
+				leaf->m_values[col.m_id] = detail.GetCell(r, col.m_id);
+			all.push_back(r);
+		}
+		ApplyAggregates(tree.Root(), detail, all, aggregates);   // grand total in-place
+		tree.Root().m_hasChildren = !tree.Root().m_children.empty();
+		return tree;
+	}
+
+	// Recursive nest by parent-ref: index children by parent key, identify roots (no / unknown parent).
+	std::map<wxString, std::vector<long>> childrenOf;
+	std::map<wxString, long>              keyToRow;
+	for (long r = 0; r < n; ++r) {
+		keyToRow[CellKey(detail.GetCell(r, rowKeyCol->GetModelID()))] = r;
+		childrenOf[CellKey(detail.GetCell(r, parentKeyCol->GetModelID()))].push_back(r);
+	}
+	std::vector<long> roots;
+	for (long r = 0; r < n; ++r) {
+		const wxString pk = CellKey(detail.GetCell(r, parentKeyCol->GetModelID()));
+		if (pk.empty() || keyToRow.find(pk) == keyToRow.end()) roots.push_back(r);
+	}
+
+	std::vector<bool> visited(static_cast<size_t>(n), false);
+	HierBuildCtx ctx{ &detail, rowKeyCol, &childrenOf, &aggregates, mode, &visited };
+	std::vector<long> allRows;
+	for (long rootIdx : roots) {
+		std::vector<long> rows = AttachHierNode(ctx, &tree.Root(), rootIdx, 1);
+		allRows.insert(allRows.end(), rows.begin(), rows.end());
+	}
+	tree.Root().m_hasChildren = !tree.Root().m_children.empty();
+	ApplyAggregates(tree.Root(), detail, allRows, aggregates);   // grand total in-place
+	return tree;
+}
+
+namespace {
+
+// Context for the recursive reference-value hierarchy fold (invariant across the recursion).
+struct RefHierCtx {
+	const ibQueryRamTable*                                detail;
+	const ibBackendQueryColumn*                           refCol;
+	const std::map<wxString, std::vector<long>>*          rowsByVal;    // value-key -> snapshot rows with that value
+	const std::map<wxString, std::vector<wxString>>*      childrenOf;   // value-key -> child value-keys (target parent-map)
+	const std::map<wxString, ibValue>*                    valOf;        // value-key -> the ibValue (node display)
+	const std::vector<ibDataQueryBuilder::AggregateItem>* aggregates;
+	ibDimensionKind                                       dim;
+};
+
+// Attach the value-subtree rooted at `valueKey` under `parent`; returns the subtree's snapshot rows
+// (for the parent's subtotal). A node = one target-catalog value (folder), carrying the rows whose
+// refCol == this value + (recursively) descendant values' rows. Cycle-guarded.
+std::vector<long> AttachRefNode(const RefHierCtx& ctx, ibSelectorTree::Node* parent, const wxString& valueKey,
+                                int level, std::map<wxString, char>& visited)
+{
+	if (valueKey.empty() || visited[valueKey]) return {};
+	visited[valueKey] = 1;
+
+	const auto cit = ctx.childrenOf->find(valueKey);
+	const bool hasKids = (cit != ctx.childrenOf->end() && !cit->second.empty());
+
+	ibSelectorTree::Node* node = parent->AddChild(level);
+	const auto vit = ctx.valOf->find(valueKey);
+	if (vit != ctx.valOf->end()) node->m_values[ctx.refCol->GetModelID()] = vit->second;
+
+	std::vector<long> ownRows;
+	const auto rit = ctx.rowsByVal->find(valueKey);
+	if (rit != ctx.rowsByVal->end()) ownRows = rit->second;   // this value's own rows
+
+	std::vector<long> subtree = ownRows;
+	if (hasKids)
+		for (const wxString& childKey : cit->second) {
+			std::vector<long> kr = AttachRefNode(ctx, node, childKey, level + 1, visited);
+			subtree.insert(subtree.end(), kr.begin(), kr.end());
+		}
+	// Hierarchy: the value's own detail rows hang under it as leaf elements; HierarchyOnly omits them
+	// (folders only). Either way the subtotal counts them.
+	if (ctx.dim == ibDimensionKind::Hierarchy)
+		for (long r : ownRows) {
+			ibSelectorTree::Node* leaf = node->AddChild(level + 1);
+			for (const ibQueryRamColumn& col : ctx.detail->Columns())
+				leaf->m_values[col.m_id] = ctx.detail->GetCell(r, col.m_id);
+		}
+	node->m_hasChildren = hasKids || (ctx.dim == ibDimensionKind::Hierarchy && !ownRows.empty());
+	ApplyAggregates(*node, *ctx.detail, subtree, *ctx.aggregates);   // subtotal over the value-subtree, in-place
+	return subtree;
+}
+
+} // namespace
+
+ibSelectorTree ibQueryComposer::BuildReferenceHierarchy(const ibQueryRamTable& snapshot,
+		const ibBackendQueryColumn* refCol, const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
+		ibDatabaseConnectionHolder* holder, const ibBackendQueryable* source, ibDimensionKind dim)
+{
+	// Resolve the target catalog of the reference field + its hierarchy keys.
+	const ibBackendQueryable* target = (source != nullptr) ? source->ResolveReferenceTarget(refCol) : nullptr;
+	const ibBackendQueryColumn* tRowKey = (target != nullptr && !target->GetPrimaryKeyColumns().empty())
+	                                       ? target->GetPrimaryKeyColumns().front() : nullptr;
+	const ibBackendQueryColumn* tParent = (target != nullptr) ? target->GetParentColumn() : nullptr;
+
+	// No target / no holder / no parent column → flat group by the value (degrade, not crash).
+	if (target == nullptr || holder == nullptr || tRowKey == nullptr || tParent == nullptr)
+		return BuildTotalsTree(snapshot, { refCol }, aggregates);
+
+	// Materialise the target's parent-map (value-key -> parent value-key) through the door.
+	std::map<wxString, wxString> parentOf;
+	{
+		ibDataQueryBuilder q(holder);
+		q.From(source->ResolveReferenceTarget(refCol)).Select(tRowKey, wxEmptyString).Select(tParent, wxEmptyString);
+		ibSelector ts = q.Execute(ibReadPageRequest{}).Select(ibSelectKind::Direct);
+		while (ts.Next())
+			parentOf[CellKey(ts.GetValue(tRowKey))] = CellKey(ts.GetValue(tParent));
+	}
+
+	// Index the snapshot rows by the refCol value; build the value->children map from parentOf.
+	ibSelectorTree tree;
+	for (const ibQueryRamColumn& col : snapshot.Columns())
+		tree.AddColumn(col.m_id, col.m_name, col.m_type);
+	AddSyntheticAggColumns(tree, aggregates);              // + COUNT(*) receivers
+
+	std::map<wxString, std::vector<long>> rowsByVal;
+	std::map<wxString, ibValue>           valOf;
+	const long n = snapshot.RowCount();
+	for (long r = 0; r < n; ++r) {
+		const ibValue v = snapshot.GetCell(r, refCol->GetModelID());
+		const wxString k = CellKey(v);
+		rowsByVal[k].push_back(r);
+		valOf[k] = v;
+	}
+	std::map<wxString, std::vector<wxString>> childrenOf;   // among VALUES PRESENT (+ their ancestors)
+	std::map<wxString, char> seen;
+	std::function<void(const wxString&)> chainUp = [&](const wxString& key) {
+		if (key.empty() || seen[key]) return;
+		seen[key] = 1;
+		const auto pit = parentOf.find(key);
+		const wxString par = (pit != parentOf.end()) ? pit->second : wxString();
+		childrenOf[par].push_back(key);   // par empty => a root
+		chainUp(par);
+	};
+	for (const auto& kv : rowsByVal) chainUp(kv.first);
+
+	RefHierCtx ctx{ &snapshot, refCol, &rowsByVal, &childrenOf, &valOf, &aggregates, dim };
+	std::map<wxString, char> visited;
+	std::vector<long> allRows;
+	const auto rit = childrenOf.find(wxString());   // roots = values whose parent is empty/unknown
+	if (rit != childrenOf.end())
+		for (const wxString& rootKey : rit->second) {
+			std::vector<long> rows = AttachRefNode(ctx, &tree.Root(), rootKey, 1, visited);
+			allRows.insert(allRows.end(), rows.begin(), rows.end());
+		}
+	tree.Root().m_hasChildren = !tree.Root().m_children.empty();
+	ApplyAggregates(tree.Root(), snapshot, allRows, aggregates);   // grand total in-place
+	return tree;
+}
+
+// === GENERAL multi-level dimension combiner =================================================
+namespace {
+
+struct DimCtx {
+	const ibQueryRamTable*                                snapshot;
+	const std::vector<ibTotalLevel>*                      levels;
+	const std::vector<ibDataQueryBuilder::AggregateItem>* aggregates;
+	ibDatabaseConnectionHolder*                           holder;
+	const ibBackendQueryable*                             source;
+};
+
+// Parent-map (value-key -> parent value-key) for a level field: the target catalog of the reference
+// field (cross), or the source itself when the field is the source's OWN parent column (self). Read
+// through the door. Empty when there is no hierarchy target / no holder.
+std::map<wxString, wxString> ParentMapForField(const DimCtx& ctx, const ibBackendQueryColumn* field)
+{
+	std::map<wxString, wxString> pm;
+	const ibBackendQueryable* target = (ctx.source != nullptr) ? ctx.source->ResolveReferenceTarget(field) : nullptr;
+	if (target == nullptr && ctx.source != nullptr && field == ctx.source->GetParentColumn())
+		target = ctx.source;
+	if (target == nullptr || ctx.holder == nullptr) return pm;
+	const std::vector<const ibBackendQueryColumn*> keys = target->GetPrimaryKeyColumns();
+	const ibBackendQueryColumn* rk = keys.empty() ? nullptr : keys.front();
+	const ibBackendQueryColumn* pk = target->GetParentColumn();
+	if (rk == nullptr || pk == nullptr) return pm;
+	ibDataQueryBuilder q(ctx.holder);
+	q.From(target).Select(rk, wxEmptyString).Select(pk, wxEmptyString);
+	ibSelector ts = q.Execute(ibReadPageRequest{}).Select(ibSelectKind::Direct);
+	while (ts.Next())
+		pm[CellKey(ts.GetValue(rk))] = CellKey(ts.GetValue(pk));
+	return pm;
+}
+
+void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vector<long>& rows, size_t levelIdx);
+
+// Attach one value of a Hierarchy level under `parent`: sub-values (hierarchy depth) + the NEXT level
+// inside this value's own rows (Hierarchy only). Returns the value-subtree's rows (for the subtotal).
+std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent, size_t levelIdx,
+	const wxString& valueKey,
+	const std::map<wxString, std::vector<long>>& byVal, const std::map<wxString, ibValue>& valOf,
+	const std::map<wxString, std::vector<wxString>>& childrenOf, std::map<wxString, char>& visited)
+{
+	if (valueKey.empty() || visited[valueKey]) return {};
+	visited[valueKey] = 1;
+	const ibTotalLevel& level = (*ctx.levels)[levelIdx];
+
+	ibSelectorTree::Node* node = parent->AddChild(parent->m_level + 1);
+	const auto vit = valOf.find(valueKey);
+	if (vit != valOf.end()) node->m_values[level.m_col->GetModelID()] = vit->second;
+
+	std::vector<long> ownRows;
+	const auto rit = byVal.find(valueKey);
+	if (rit != byVal.end()) ownRows = rit->second;
+
+	std::vector<long> subtree = ownRows;
+	const auto cit = childrenOf.find(valueKey);          // sub-values (deeper in the catalog hierarchy)
+	if (cit != childrenOf.end())
+		for (const wxString& childKey : cit->second) {
+			std::vector<long> kr = AttachDimValue(ctx, node, levelIdx, childKey, byVal, valOf, childrenOf, visited);
+			subtree.insert(subtree.end(), kr.begin(), kr.end());
+		}
+	FoldDimLevel(ctx, node, ownRows, levelIdx + 1);      // next level inside this value's own rows
+	node->m_hasChildren = !node->m_children.empty();
+	ApplyAggregates(*node, *ctx.snapshot, subtree, *ctx.aggregates);
+	return subtree;
+}
+
+// Fold `rows` at `levelIdx` under `node`: group by the level field, then either flat groups (Elements)
+// or the field's reference hierarchy (Hierarchy/HierarchyOnly). Recurses the next level inside.
+void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vector<long>& rows, size_t levelIdx)
+{
+	if (levelIdx >= ctx.levels->size()) return;          // leaf level reached
+	const ibTotalLevel& level = (*ctx.levels)[levelIdx];
+
+	std::map<wxString, std::vector<long>> byVal;
+	std::map<wxString, ibValue>           valOf;
+	std::vector<wxString>                 order;
+	for (long r : rows) {
+		const ibValue v = ctx.snapshot->GetCell(r, level.m_col->GetModelID());
+		const wxString k = CellKey(v);
+		if (byVal.find(k) == byVal.end()) { order.push_back(k); valOf[k] = v; }
+		byVal[k].push_back(r);
+	}
+
+	if (level.m_dim == ibDimensionKind::Elements) {
+		for (const wxString& k : order) {
+			ibSelectorTree::Node* child = node->AddChild(node->m_level + 1);
+			child->m_values[level.m_col->GetModelID()] = valOf[k];
+			FoldDimLevel(ctx, child, byVal[k], levelIdx + 1);   // next level inside
+			child->m_hasChildren = !child->m_children.empty();
+			ApplyAggregates(*child, *ctx.snapshot, byVal[k], *ctx.aggregates);
+		}
+		return;
+	}
+
+	// Hierarchy / HierarchyOnly — arrange the values into the catalog's parent-ref tree.
+	const std::map<wxString, wxString> parentOf = ParentMapForField(ctx, level.m_col);
+	std::map<wxString, std::vector<wxString>> childrenOf;
+	std::map<wxString, char> seen;
+	std::function<void(const wxString&)> chainUp = [&](const wxString& key) {
+		if (key.empty() || seen[key]) return;
+		seen[key] = 1;
+		const auto pit = parentOf.find(key);
+		const wxString par = (pit != parentOf.end()) ? pit->second : wxString();
+		childrenOf[par].push_back(key);
+		chainUp(par);
+	};
+	for (const auto& kv : byVal) chainUp(kv.first);
+	std::map<wxString, char> visited;
+	const auto rit = childrenOf.find(wxString());
+	if (rit != childrenOf.end())
+		for (const wxString& rootKey : rit->second)
+			AttachDimValue(ctx, node, levelIdx, rootKey, byVal, valOf, childrenOf, visited);
+}
+
+} // namespace
+
+ibSelectorTree ibQueryComposer::BuildDimensionTree(const ibQueryRamTable& snapshot,
+		const std::vector<ibTotalLevel>& levels, const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
+		ibDatabaseConnectionHolder* holder, const ibBackendQueryable* source)
+{
+	ibSelectorTree tree;
+	for (const ibQueryRamColumn& col : snapshot.Columns())
+		tree.AddColumn(col.m_id, col.m_name, col.m_type);
+	AddSyntheticAggColumns(tree, aggregates);
+
+	std::vector<long> all; all.reserve(static_cast<size_t>(snapshot.RowCount()));
+	for (long r = 0; r < snapshot.RowCount(); ++r) all.push_back(r);
+
+	const DimCtx ctx{ &snapshot, &levels, &aggregates, holder, source };
+	FoldDimLevel(ctx, &tree.Root(), all, 0);
+	tree.Root().m_hasChildren = !tree.Root().m_children.empty();
+	ApplyAggregates(tree.Root(), snapshot, all, aggregates);   // grand total in-place
+	return tree;
 }
 
 // RAM inner join: nested-loop over (onLeft == onRight); each output column is read from
@@ -703,12 +1362,17 @@ void ibQueryComposer::AppendUnionBranch(ibQueryRamTable& out, const ibQueryRamTa
 	}
 }
 
-// ИТОГИ (hierarchical totals): fold the detail rows into a subtotal TREE. The group
+// totals (hierarchical totals): fold the detail rows into a subtotal TREE. The group
 // columns are the LEVELS (in order); the aggregates the sums folded at every level + the
 // grand total. Input = the single source materialised, or the composed multi-source
 // result. The tree lives in L3's own ibQueryRamTable. (docs/query-language-arc.md §22.1b)
-ibQueryRamTable ibQueryComposer::ExecuteTotals(const ibDataQuerySpec& spec)
+ibSelectorTree ibQueryComposer::ExecuteTotals(const ibDataQuerySpec& spec)
 {
+	// Push-down: a single-source totals on a ROLLUP-capable DBMS runs server-side (GROUP BY ROLLUP),
+	// the DBMS computing every subtotal level — only the aggregated rows transit, no raw detail.
+	if (IsSingleSource(spec) && ibDbTableProvider::CanPushRollupTotals(spec))
+		return ibDbTableProvider::ExecuteRollupTotals(spec);
+
 	ibQueryRamTable combined;
 	if (IsSingleSource(spec)) {
 		// Materialise the source's group + sum columns, unfiltered by page.
@@ -785,6 +1449,47 @@ bool     ibDataQueryResult::Next()                                              
 ibValue  ibDataQueryResult::GetValue(const ibBackendQueryColumn* col)            const { return m_source->Value(col); }
 ibValue  ibDataQueryResult::GetValue(const ibRawDBColumn& rawColumn)             const { return m_source->Value(&rawColumn); }
 ibValue  ibDataQueryResult::GetColumn(const wxString& alias)                     const { return m_source->Column(alias); }
+
+void ibDataQueryResult::SetMaterialiseColumns(std::vector<const ibBackendQueryColumn*> cols)
+{
+	m_matColumns = std::move(cols);
+}
+
+void ibDataQueryResult::SetTotals(std::vector<ibTotalLevel> levels, std::vector<ibAggregateItem> aggregates)
+{
+	m_totalLevels     = std::move(levels);
+	m_totalAggregates = std::move(aggregates);
+}
+
+void ibDataQueryResult::SetSource(ibDatabaseConnectionHolder* holder, const ibBackendQueryable* queryable,
+	std::vector<std::pair<const ibBackendQueryColumn*, wxString>> selectCols,
+	std::vector<ibQueryCondition> conditions)
+{
+	m_srcHolder     = holder;
+	m_srcQueryable  = queryable;
+	m_srcSelectCols = std::move(selectCols);
+	m_srcConditions = std::move(conditions);
+}
+
+// selection = result.Select(mode). Drain the cursor ONCE into a flat snapshot (the stamped
+// materialise-columns) and hand it to an ibSelector — which folds it per the mode (flat / hierarchy
+// / hierarchy-only) polymorphically; the caller sees one interface, never the backing or the form.
+ibSelector ibDataQueryResult::Select(ibSelectKind mode)
+{
+	ibQueryRamTable snapshot;
+	for (const ibBackendQueryColumn* c : m_matColumns)
+		if (c != nullptr) snapshot.AddColumn(c->GetModelID(), c->GetName(), c->GetTypeDesc());
+
+	while (Next()) {
+		const long r = snapshot.AppendRow();
+		for (const ibBackendQueryColumn* c : m_matColumns)
+			if (c != nullptr) snapshot.SetCell(r, c->GetModelID(), m_source->Value(c));
+	}
+	ibSelector s(std::move(snapshot), mode);
+	s.WithTotals(m_totalLevels, m_totalAggregates);                             // fold by the door's TotalBy config
+	s.WithSource(m_srcHolder, m_srcQueryable, m_srcSelectCols, m_srcConditions);  // enable lazy sub-selections
+	return s;
+}
 
 // Factory for the opaque build-once cache (defined where ibRenderedPageCache is
 // complete) — the list model owns the result via shared_ptr.

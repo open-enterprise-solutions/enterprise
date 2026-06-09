@@ -73,10 +73,10 @@ TEST(QueryTotals, HierarchicalSubtotalsTree)
 	sum.m_alias = wxT("total");
 	const std::vector<ibDataQueryBuilder::AggregateItem> aggs = { sum };
 
-	const ibQueryRamTable tree = ibQueryComposer::BuildTotalsTree(detail, groups, aggs);
+	const ibSelectorTree tree = ibQueryComposer::BuildTotalsTree(detail, groups, aggs);
 
-	const ibMetaID AGG0 = 0x40000000u;   // first aggregate's synthetic column id
-	const ibQueryRamTable::Node& root = tree.Root();
+	const ibMetaID AGG0 = AMOUNT;        // aggregate rolls IN-PLACE into its own column (amount)
+	const ibSelectorTree::Node& root = tree.Root();
 
 	// Grand total at the root (level 0), no group key.
 	EXPECT_EQ(root.m_level, 0);
@@ -84,24 +84,24 @@ TEST(QueryTotals, HierarchicalSubtotalsTree)
 	ASSERT_EQ(root.m_children.size(), 2u);   // North, South — first-seen order
 
 	// North subtree = 18, two products.
-	const ibQueryRamTable::Node& north = *root.m_children[0];
+	const ibSelectorTree::Node& north = *root.m_children[0];
 	EXPECT_EQ(north.m_level, 1);
 	EXPECT_EQ(north.m_values.at(REGION).GetString().ToStdString(), "North");
 	EXPECT_TRUE(NumEq(north.m_values.at(AGG0), 18));
 	ASSERT_EQ(north.m_children.size(), 2u);   // Apple, Pear
 
-	const ibQueryRamTable::Node& northApple = *north.m_children[0];
+	const ibSelectorTree::Node& northApple = *north.m_children[0];
 	EXPECT_EQ(northApple.m_level, 2);
 	EXPECT_EQ(northApple.m_values.at(PRODUCT).GetString().ToStdString(), "Apple");
 	EXPECT_TRUE(NumEq(northApple.m_values.at(AGG0), 15));   // 10 + 5
 	EXPECT_TRUE(northApple.m_children.empty());             // detail level — leaf
 
-	const ibQueryRamTable::Node& northPear = *north.m_children[1];
+	const ibSelectorTree::Node& northPear = *north.m_children[1];
 	EXPECT_EQ(northPear.m_values.at(PRODUCT).GetString().ToStdString(), "Pear");
 	EXPECT_TRUE(NumEq(northPear.m_values.at(AGG0), 3));
 
 	// South subtree = 7, one product.
-	const ibQueryRamTable::Node& south = *root.m_children[1];
+	const ibSelectorTree::Node& south = *root.m_children[1];
 	EXPECT_EQ(south.m_values.at(REGION).GetString().ToStdString(), "South");
 	EXPECT_TRUE(NumEq(south.m_values.at(AGG0), 7));
 	ASSERT_EQ(south.m_children.size(), 1u);
@@ -120,7 +120,7 @@ TEST(QueryTotals, GrandTotalOnlyWhenNoGroups)
 	ibDataQueryBuilder::AggregateItem sum;
 	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
 
-	const ibQueryRamTable tree = ibQueryComposer::BuildTotalsTree(detail, {}, { sum });
+	const ibSelectorTree tree = ibQueryComposer::BuildTotalsTree(detail, {}, { sum });
 
 	const ibMetaID AGG0 = 0x40000000u;
 	EXPECT_TRUE(NumEq(tree.Root().m_values.at(AGG0), 21));   // 4 + 6 + 11

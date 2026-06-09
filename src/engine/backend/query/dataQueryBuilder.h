@@ -37,7 +37,8 @@
 // only forward-declare it. So L3 callers include this without dragging in L2.
 
 #include "queryable.h"                                     // ibBackendQueryable, ibQueryCondition, ibQuerySortItem (L2-free)
-#include "queryRamTable.h"                                  // ibQueryRamTable — the raw ИТОГИ tree SelectTotals returns (L2-free)
+#include "queryRamTable.h"                                  // ibQueryRamTable — the raw flat snapshot Execute() returns (L2-free)
+#include "querySelectorTree.h"                              // ibSelectorTree — the folded node tree SelectTotals returns (L2-free)
 
 #include <vector>
 #include <utility>
@@ -47,8 +48,27 @@ class ibValueMetaObjectAttributeBase;
 class ibDatabaseConnectionHolder;
 class ibQueryResult;        // L2 cursor — consumed by the DB result source
 class ibDataResultSource;   // the selection's backing (DB scan OR RAM table) — pimpl, defined in the .cpp
+class ibSelector;           // the traversal a result hands out: result.Select(mode) — defined in querySelector.h
 struct ibRenderedPageCache; // build-once page cache — opaque; defined in the .cpp, created via NewPageCache()
 struct ibDataQuerySpec;     // the door's accumulated query as a value — defined below the class, read by the provider
+
+// === selection KINDS (two axes) + aggregate / totals PODs ====================================
+// At NAMESPACE scope (before ibDataQueryResult, which names them). ibDataQueryBuilder re-exposes the
+// aggregate PODs as nested aliases for back-compat (ibDataQueryBuilder::AggregateItem / AggregateFn).
+//
+// AXIS 1 — TRAVERSAL kind (Select(kind)): Direct (rows as-is) / ByGroups (by levels) /
+//   ByGroupsHierarchy (by levels + dimension hierarchy).
+enum class ibSelectKind { Direct, ByGroups, ByGroupsHierarchy };
+// AXIS 2 — DIMENSION kind (TotalBy field): Elements / Hierarchy / HierarchyOnly — how a reference
+//   field unfolds (folders).
+enum class ibDimensionKind { Elements, Hierarchy, HierarchyOnly };
+
+enum class ibAggregateFn { Sum, Count, Min, Max, Avg };
+// One output aggregate (.Sum/.Count…): rolls IN-PLACE into m_col (alias vestigial, used only by the
+// flat SelectAggregate path). m_col null = COUNT(*).
+struct ibAggregateItem { ibAggregateFn m_fn; const ibBackendQueryColumn* m_col; wxString m_alias; };
+// One TotalBy dimension level — the field to roll up by + how it unfolds. Levels apply IN ORDER.
+struct ibTotalLevel    { const ibBackendQueryColumn* m_col; ibDimensionKind m_dim; };
 
 // A dot-walk select column — a reference-navigation PATH of query columns + the
 // output alias the leaf is projected under. The path's non-leaf segments are single-
@@ -123,12 +143,49 @@ public:
 	// alias) that have no source column. Group columns still read via GetValue(col).
 	ibValue GetColumn(const wxString& alias) const;
 
+	// TRAVERSAL — selection = result.Select(mode). Drains the cursor ONCE into a flat snapshot
+	// (the materialise-columns the door stamped) and hands it to an ibSelector, which decides HOW to
+	// walk it per the mode — flat / hierarchy / hierarchy-only — polymorphically; the caller sees one
+	// interface, never which. Configure the fold on the returned Selector (ByParentRef / ByGroups /
+	// Aggregating). Consumes the result (the cursor is drained). Defined where ibSelector is complete.
+	// (docs/query-language-arc.md §22.1b)
+	ibSelector Select(ibSelectKind kind = ibSelectKind::Direct);
+
+	// The door stamps the columns a later Select(mode) must materialise (its Select() output list +
+	// aggregate inputs) — so the snapshot carries exactly what the fold reads. No-op for the working
+	// fetch path (it consumes Next()/GetValue() directly and never calls Select(mode)).
+	void SetMaterialiseColumns(std::vector<const ibBackendQueryColumn*> cols);
+
+	// The door also stamps the totals config — the TotalBy dimension levels (in order) + the common
+	// totals aggregate set — so result.Select(kind) folds by them automatically (no manual fold on
+	// the Selector). (docs/query-language-arc.md §22.1b)
+	void SetTotals(std::vector<ibTotalLevel> levels, std::vector<ibAggregateItem> aggregates);
+
+	// The stamped totals config — read by result.Select(kind) to configure the Selector's fold.
+	const std::vector<ibTotalLevel>&    TotalLevels()     const { return m_totalLevels; }
+	const std::vector<ibAggregateItem>& TotalAggregates() const { return m_totalAggregates; }
+
+	// The door also stamps the SOURCE (holder + queryable + select list + filter) so the Selector can
+	// run LAZY sub-selections (selection.Select() re-Executes a node's children) and resolve a
+	// reference-dimension's catalog hierarchy. (docs/query-language-arc.md §22.1b)
+	void SetSource(ibDatabaseConnectionHolder* holder, const ibBackendQueryable* queryable,
+		std::vector<std::pair<const ibBackendQueryColumn*, wxString>> selectCols,
+		std::vector<ibQueryCondition> conditions);
+
 private:
 	// The backing — a physical DB scan OR a computed RAM table, behind one
 	// interface. The selection NEVER branches on which: it forwards to the source.
 	// DB and RAM stay fully separate (two source classes in the .cpp), and no
 	// consumer — not even this class — learns the backing. (docs §22.4d)
 	std::unique_ptr<ibDataResultSource> m_source;
+	std::vector<const ibBackendQueryColumn*> m_matColumns;   // columns a Select(mode) drains into the snapshot
+	std::vector<ibTotalLevel>    m_totalLevels;              // totals dimensions (stamped by the door)
+	std::vector<ibAggregateItem> m_totalAggregates;          // common totals aggregate set
+	// source recipe (for lazy sub-selections + reference-dimension resolution)
+	ibDatabaseConnectionHolder*  m_srcHolder    = nullptr;
+	const ibBackendQueryable*    m_srcQueryable = nullptr;
+	std::vector<std::pair<const ibBackendQueryColumn*, wxString>> m_srcSelectCols;
+	std::vector<ibQueryCondition> m_srcConditions;
 };
 
 // ibRenderedPageCache — build-once cache for a repeated page query (one scroll
@@ -142,6 +199,8 @@ private:
 // L3 join kind — the door's own (NOT L2's ibQueryJoinType; the door is L2-blind).
 enum class ibQueryJoinKind { Inner, Left };
 
+// (ibSelectKind / ibDimensionKind — defined at namespace scope above, before ibDataQueryResult.)
+
 // ==========================================================================
 // ibQueryNode — the L3 relational TREE the door builds and the composer executes.
 // A query is NOT a single source: it is a tree of heterogeneous sources combined
@@ -149,7 +208,7 @@ enum class ibQueryJoinKind { Inner, Left };
 // (catalog / temp table / register slice / external) that vends its own provider;
 // the composer realizes the tree over those per-leaf providers (co-locate into one
 // SQL where possible, else materialise + stitch). Union-ready by shape — that is
-// the whole point (FROM справочник, FROM временной таблицы, then ОБЪЕДИНИТЬ).
+// the whole point (FROM catalog, FROM temp table, then UNION).
 // (docs/query-language-arc.md §22.1)
 // ==========================================================================
 struct ibQueryNode
@@ -219,12 +278,12 @@ public:
 	ibDataQueryBuilder& WhereCompare(const ibBackendQueryColumn* col,
 	                                 ibQueryFilterOp op, const ibValue& value);               // col <op> value (ordered: <=, <, >, >=, LIKE)
 	ibDataQueryBuilder& OrderBy(const ibBackendQueryColumn* col, bool ascending);            // col (null = row-key) -> sort
-	ibDataQueryBuilder& GroupBy(const ibBackendQueryColumn* col);                            // grouping key (reports / ИТОГИ)
+	ibDataQueryBuilder& GroupBy(const ibBackendQueryColumn* col);                            // grouping key (reports / totals)
 
 	// --- dot-walk select columns (reference navigation) ------------------
 	// Add an output column that walks a reference PATH and reads a leaf attribute on
-	// the related object: SelectPath({Производитель, Наименование}, "prod_name") auto-
-	// joins the producer catalog and projects its Наименование AS prod_name. The path
+	// the related object: SelectPath({Producer, Name}, "prod_name") auto-
+	// joins the producer catalog and projects its Name AS prod_name. The path
 	// is resolved attributes — every NON-leaf segment is a single-target reference
 	// attribute (the door resolves its target queryable and joins on the self-reference
 	// column); the leaf is read on the final target. Read it back with GetColumn(alias).
@@ -233,21 +292,15 @@ public:
 	ibDataQueryBuilder& SelectPath(const std::vector<const ibBackendQueryColumn*>& path,
 	                               const wxString& alias);
 
-	// --- aggregation (ИТОГИ / totals) ------------------------------------
-	// GroupBy(attr)* + an aggregate per output column. When any group key is set,
-	// Select lowers to a GROUP BY query: the group attributes are the group columns
-	// (read back through GetValue(attr)); each aggregate becomes SUM/COUNT/… AS alias
-	// (read back through GetColumn(alias)). attr = null for Count -> COUNT(*).
-	enum class AggregateFn { Sum, Count, Min, Max, Avg };
+	// --- aggregation (totals / totals) ------------------------------------
+	// AggregateFn / AggregateItem / ibTotalLevel are defined at namespace scope (above, before
+	// ibDataQueryResult). Re-exposed here as nested aliases for back-compat: callers and the SPEC
+	// keep naming ibDataQueryBuilder::AggregateItem / ::AggregateFn. (attr = null for Count -> COUNT(*).)
+	using AggregateFn   = ibAggregateFn;
+	using AggregateItem = ibAggregateItem;
+	using ibTotalLevel  = ::ibTotalLevel;
 
-	// One output aggregate column (.Aggregate / .Sum / .Count …) and one HAVING
-	// predicate. Public so the query SPEC (ibDataQuerySpec) and the provider can name
-	// them — the provider, not the door, lowers them to SQL.
-	struct AggregateItem {
-		AggregateFn                 m_fn;
-		const ibBackendQueryColumn* m_col;   // null = COUNT(*)
-		wxString                    m_alias;
-	};
+	// HAVING — post-aggregation predicate (stays nested; only the door + provider name it).
 	struct HavingItem {
 		AggregateFn                 m_fn;
 		const ibBackendQueryColumn* m_col;   // null = COUNT(*)
@@ -261,6 +314,26 @@ public:
 	ibDataQueryBuilder& Max  (const ibBackendQueryColumn* col, const wxString& alias) { return Aggregate(AggregateFn::Max,   col,     alias); }
 	ibDataQueryBuilder& Avg  (const ibBackendQueryColumn* col, const wxString& alias) { return Aggregate(AggregateFn::Avg,   col,     alias); }
 	ibDataQueryBuilder& Count(const wxString& alias)                                  { return Aggregate(AggregateFn::Count, nullptr, alias); }
+
+	// In-place overloads — the aggregate rolls INTO its own column (no alias). Routed to the CURRENT
+	// aggregate context (Group() = the GroupBy set / Totals() = the TotalBy set).
+	ibDataQueryBuilder& Sum  (const ibBackendQueryColumn* col) { return Aggregate(AggregateFn::Sum,   col, wxEmptyString); }
+	ibDataQueryBuilder& Min  (const ibBackendQueryColumn* col) { return Aggregate(AggregateFn::Min,   col, wxEmptyString); }
+	ibDataQueryBuilder& Max  (const ibBackendQueryColumn* col) { return Aggregate(AggregateFn::Max,   col, wxEmptyString); }
+	ibDataQueryBuilder& Avg  (const ibBackendQueryColumn* col) { return Aggregate(AggregateFn::Avg,   col, wxEmptyString); }
+	ibDataQueryBuilder& Count(const ibBackendQueryColumn* col) { return Aggregate(AggregateFn::Count, col, wxEmptyString); }
+
+	// --- totals structure: two aggregate CONTEXTS + dimension levels ----------
+	// Group()  switches subsequent .Sum/.Count… into the GROUPBY common aggregate set;
+	// Totals() switches them into the TOTALBY common aggregate set. Each set is COMMON across its
+	// levels — a level has no own aggregates. (docs/query-language-arc.md §22.1b)
+	ibDataQueryBuilder& Group()  { m_aggInTotals = false; return *this; }
+	ibDataQueryBuilder& Totals() { m_aggInTotals = true;  return *this; }
+
+	// SELECT DISTINCT — collapse duplicate output rows (SELECT DISTINCT). Applies to the read.
+	ibDataQueryBuilder& Distinct() { m_distinct = true; return *this; }
+	// One totals dimension level — the field to roll up by + how it unfolds. Levels apply IN ORDER.
+	ibDataQueryBuilder& TotalBy(const ibBackendQueryColumn* col, ibDimensionKind dim);
 
 	// HAVING — post-aggregation filter on an aggregate (HAVING SUM(qty) > 100). It
 	// references the aggregate EXPRESSION (portable), not the output alias. Several
@@ -308,13 +381,13 @@ public:
 	// runs, and returns the L3 selection (ibDataQueryResult) whose dtor releases
 	// the reservation. For a read query, run + open collapse here (no L2 cursor
 	// leaks out). Move-only result.
-	[[nodiscard]] ibDataQueryResult Select(const ibReadPageRequest& request) const;
+	[[nodiscard]] ibDataQueryResult Execute(const ibReadPageRequest& request) const;
 
 	// Build-once overload: reuses `cache` when `signature` matches its last
 	// build, otherwise resolves identity + builds IR + renders and refills the
 	// cache. Only the external anchor is rebound per tick. `signature` MUST
 	// capture every SQL-determining input (the caller owns that contract).
-	[[nodiscard]] ibDataQueryResult Select(const ibReadPageRequest& request,
+	[[nodiscard]] ibDataQueryResult Execute(const ibReadPageRequest& request,
 	                                       ibRenderedPageCache& cache,
 	                                       const wxString& signature) const;
 
@@ -324,13 +397,13 @@ public:
 	// GetColumn(alias). Single-source = physical DB GROUP BY; multi-source = RAM.
 	[[nodiscard]] ibDataQueryResult SelectAggregate() const;
 
-	// Totals terminal (hierarchical totals) — returns the RAW totals TREE (ibQueryRamTable), NOT a
+	// Totals terminal (hierarchical totals) — returns the RAW totals TREE (ibSelectorTree), NOT a
 	// flat group set and NOT a paged cursor. The GroupBy() columns are the LEVELS in order
 	// (TOTALS field1, field2), Sum()/… the folded aggregates (BY sum1, sum2); the
 	// root is the grand total, each level a subtotal node. L3 stops at the tree —
 	// flat-vs-hierarchical rendering is the runtime's call (it walks Root()/Node and
 	// builds its own model; L3 names no runtime type but ibValue). (docs §22.1b)
-	[[nodiscard]] ibQueryRamTable SelectTotals() const;
+	[[nodiscard]] ibSelectorTree SelectTotals() const;
 
 	// --- introspection (a nested subquery reads its inner query's shape) -----
 	// The explicit Select(col, alias) output list (empty = SELECT *), and the PRIMARY
@@ -371,8 +444,12 @@ private:
 	std::vector<const ibBackendQueryColumn*> m_groupBy;   // .GroupBy()
 	std::vector<ibValue>          m_keyIn;          // .WhereKeyIn() — row-key IN (OR-of-equals)
 	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> m_writeValues;   // .SetValue() — write assignments (key + data columns)
-	std::vector<AggregateItem>    m_aggregates;     // .Aggregate() / .Sum() / .Count() …
+	std::vector<AggregateItem>    m_aggregates;     // .Group().Sum()… — GroupBy common aggregate set
 	std::vector<HavingItem>       m_having;         // .Having()
+	std::vector<ibTotalLevel>     m_totals;         // .TotalBy(field, dim) — totals dimensions, in order
+	std::vector<AggregateItem>    m_totalAggregates;// .Totals().Sum()… — TotalBy common aggregate set
+	bool                          m_aggInTotals = false;  // routing flag: .Aggregate → totals set when Totals() active
+	bool                          m_distinct    = false;  // .Distinct() — SELECT DISTINCT
 	std::vector<ibDotWalkColumn>  m_dotWalks;       // .SelectPath()
 	std::vector<std::pair<const ibBackendQueryColumn*, wxString>> m_selectCols;   // .Select(col, alias) — multi-source output list
 
@@ -387,6 +464,11 @@ private:
 	// view of refs). The door builds it per terminal and hands it to the vended
 	// provider — so the door names no L2 and the provider never reaches into the door.
 	ibDataQuerySpec BuildSpec() const;
+
+	// Columns a later result.Select(mode) drains into its snapshot (Select() list + agg inputs + TotalBy fields).
+	std::vector<const ibBackendQueryColumn*> MaterialiseColumns() const;
+	// Stamp the materialise-columns + totals config onto a freshly executed result.
+	void StampResult(ibDataQueryResult& r) const;
 };
 
 // ==========================================================================
@@ -411,6 +493,7 @@ struct ibDataQuerySpec
 	const std::vector<std::pair<const ibBackendQueryColumn*, ibValue>>* m_writeValues = nullptr;
 	const std::vector<ibDotWalkColumn>*             m_dotWalks    = nullptr;
 	const std::vector<std::pair<const ibBackendQueryColumn*, wxString>>* m_selectCols = nullptr;   // multi-source output list
+	bool                                            m_distinct    = false;   // .Distinct() — SELECT DISTINCT
 };
 
 #endif

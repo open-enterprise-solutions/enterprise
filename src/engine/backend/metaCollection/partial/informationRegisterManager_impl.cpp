@@ -54,7 +54,7 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cFilter)
 			q.Where(filter.first, ibComparisonType::ibComparisonType_Equal, filter.second);
 		ibReadPageRequest page;
 		page.m_count = 0;   // every matching record
-		ibDataQueryResult selection = q.Select(page);
+		ibDataQueryResult selection = q.Execute(page);
 		while (selection.Next()) {
 			ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
 			wxASSERT(retLine);
@@ -114,7 +114,7 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cPeriod,
 				q.Where(filter.first, ibComparisonType::ibComparisonType_Equal, filter.second);
 			ibReadPageRequest page;
 			page.m_count = 0;   // every matching record
-			ibDataQueryResult selection = q.Select(page);
+			ibDataQueryResult selection = q.Execute(page);
 			while (selection.Next()) {
 				ibValueModelTable::ibValueModelTableReturnLine* retLine = retTable->GetRowAt(retTable->AppendRow());
 				wxASSERT(retLine);
@@ -175,21 +175,21 @@ static ibValue SelectionToRecord(ibDataQueryResult& selection,
 ibValue ibValueManagerDataObjectInformationRegister::GetFirst(const ibValue& cPeriod, const ibValue& cFilter)
 {
 	ibSliceFirstQueryable slice(m_metaObject, cPeriod, cFilter);
-	ibDataQueryResult selection = ibDataQueryBuilder().From(&slice).Select(ibReadPageRequest{});
+	ibDataQueryResult selection = ibDataQueryBuilder().From(&slice).Execute(ibReadPageRequest{});
 	return SelectionToRecord(selection, m_metaObject);
 }
 
 ibValue ibValueManagerDataObjectInformationRegister::GetLast(const ibValue& cPeriod, const ibValue& cFilter)
 {
 	ibSliceLastQueryable slice(m_metaObject, cPeriod, cFilter);
-	ibDataQueryResult selection = ibDataQueryBuilder().From(&slice).Select(ibReadPageRequest{});
+	ibDataQueryResult selection = ibDataQueryBuilder().From(&slice).Execute(ibReadPageRequest{});
 	return SelectionToRecord(selection, m_metaObject);
 }
 
 ibValue ibValueManagerDataObjectInformationRegister::SliceFirst(const ibValue& cPeriod, const ibValue& cFilter)
 {
 	ibSliceFirstQueryable slice(m_metaObject, cPeriod, cFilter);
-	ibDataQueryResult selection = ibDataQueryBuilder().From(&slice).Select(ibReadPageRequest{});
+	ibDataQueryResult selection = ibDataQueryBuilder().From(&slice).Execute(ibReadPageRequest{});
 	return SelectionToTable(selection, m_metaObject);
 }
 
@@ -329,7 +329,7 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 ibValue ibValueManagerDataObjectInformationRegister::SliceLast(const ibValue& cPeriod, const ibValue& cFilter)
 {
 	ibSliceLastQueryable slice(m_metaObject, cPeriod, cFilter);
-	ibDataQueryResult selection = ibDataQueryBuilder().From(&slice).Select(ibReadPageRequest{});
+	ibDataQueryResult selection = ibDataQueryBuilder().From(&slice).Execute(ibReadPageRequest{});
 	return SelectionToTable(selection, m_metaObject);
 }
 

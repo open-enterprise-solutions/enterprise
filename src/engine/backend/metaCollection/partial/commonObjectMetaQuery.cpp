@@ -1252,6 +1252,12 @@ std::vector<const ibBackendQueryColumn*> ibRecordQueryable::GetPrimaryKeyColumns
 		return {};
 	return { refAttr };
 }
+const ibBackendQueryColumn* ibRecordQueryable::GetParentColumn() const {
+	// Only a HIERARCHICAL record (catalog / chart) has a parent attribute — the base ref does not.
+	if (auto* h = dynamic_cast<const ibValueMetaObjectRecordDataHierarchyMutableRef*>(m_meta))
+		return h->GetDataParent();   // the parent attribute (predefined) IS-A ibBackendQueryColumn
+	return nullptr;
+}
 const ibBackendQueryable* ibRecordQueryable::ResolveReferenceTarget(const ibBackendQueryColumn* refColumn) const {
 	// Resolve a single-target reference COLUMN to the queryable of the object it points
 	// at. Works off the column's type (its class id) + this metaobject's metadata — the

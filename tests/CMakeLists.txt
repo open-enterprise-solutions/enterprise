@@ -48,6 +48,8 @@ add_executable(oes_tests
     test_queryLifecycle.cpp
     test_queryBuilderShowcase.cpp
     test_queryTotals.cpp
+    test_queryL2.cpp
+    test_queryComposer.cpp
 )
 
 target_link_libraries(oes_tests

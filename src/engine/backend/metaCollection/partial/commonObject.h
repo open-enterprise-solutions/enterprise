@@ -487,6 +487,7 @@ public:
 	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;       // { uuid } — real column
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // { data-reference } — key authority
 	virtual const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryColumn* refColumn) const override;
+	virtual const ibBackendQueryColumn* GetParentColumn() const override;   // the parent attribute (hierarchy key)
 private:
 	const ibValueMetaObjectRecordDataRef* m_meta;
 };

@@ -17,6 +17,7 @@
 // See docs/query-language-arc.md §22.
 
 #include "dataQueryBuilder.h"   // ibDataQueryResult / ibReadPageRequest / ibDataQuerySpec / ibRenderedPageCache (all L2-free)
+#include "querySelectorTree.h"  // ibSelectorTree — the folded node tree the totals/hierarchy entries return
 
 // (ibDbTableProvider — the BIG DB provider + its static GET/WRITE template — lives in its own
 // L2-coupled dbTableProvider.h; this header stays deliberately L2-free.)
@@ -39,7 +40,7 @@ public:
 		return ExecuteRead(spec, page);
 	}
 
-	// Aggregated read (ИТОГИ / totals) — GROUP BY built from the spec's groupBy /
+	// Aggregated read (totals / totals) — GROUP BY built from the spec's groupBy /
 	// aggregates / having. NOT paged. Non-DB providers fall back to a plain read.
 	virtual ibDataQueryResult ExecuteAggregate(const ibDataQuerySpec& spec)
 	{
@@ -83,11 +84,42 @@ public:
 	static ibDataQueryResult ExecuteReadCached(const ibDataQuerySpec& spec, const ibReadPageRequest& page,
 	                                           ibRenderedPageCache& cache, const wxString& signature);
 	static ibDataQueryResult ExecuteAggregate(const ibDataQuerySpec& spec);
-	static ibQueryRamTable   ExecuteTotals(const ibDataQuerySpec& spec);   // ИТОГИ — raw hierarchical totals tree
-	// The ИТОГИ fold in isolation: detail rows -> subtotal tree. Pure (no DB) — unit-testable.
-	static ibQueryRamTable   BuildTotalsTree(const ibQueryRamTable& detail,
+	static ibSelectorTree    ExecuteTotals(const ibDataQuerySpec& spec);   // totals — raw hierarchical totals tree
+	// The totals fold in isolation: detail SNAPSHOT -> subtotal tree. Pure (no DB) — unit-testable.
+	static ibSelectorTree    BuildTotalsTree(const ibQueryRamTable& detail,
 	                                         const std::vector<const ibBackendQueryColumn*>& groupFields,
 	                                         const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates);
+	// RECURSIVE hierarchy fold (parent-ref, unbounded depth) — the sibling of BuildTotalsTree (fixed
+	// columns). From a WHOLE materialised detail SNAPSHOT: nests rows by parentKey == rowKey, sets each
+	// node's m_hasChildren from the data (its key appears as some row's parent), and rolls a subtotal
+	// over each node's subtree (correct for COUNT/AVG — aggregated from the raw leaves). `mode` is the
+	// placement: Elements (leaves only) / Hierarchy (folders + leaves) / HierarchyOnly (folders only).
+	// Pure (no DB) — unit-testable. (docs §22.1b)
+	static ibSelectorTree    BuildHierarchyTree(const ibQueryRamTable& detail,
+	                                             const ibBackendQueryColumn* rowKeyCol,
+	                                             const ibBackendQueryColumn* parentKeyCol,
+	                                             const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
+	                                             ibDimensionKind mode);
+	// Cross-catalog reference-dimension hierarchy: group the snapshot rows by `refCol`'s VALUE, then
+	// arrange the value groups into the TARGET catalog's parent-ref hierarchy. The parent of each value
+	// lives in the target catalog (not the snapshot) → materialised through the door from `source`'s
+	// ResolveReferenceTarget(refCol). Falls back to a flat group when no target / no holder. (docs §22.1b)
+	static ibSelectorTree    BuildReferenceHierarchy(const ibQueryRamTable& snapshot,
+	                                                  const ibBackendQueryColumn* refCol,
+	                                                  const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
+	                                                  ibDatabaseConnectionHolder* holder,
+	                                                  const ibBackendQueryable* source,
+	                                                  ibDimensionKind dim);
+	// GENERAL combiner: fold the snapshot by N TotalBy levels IN ORDER. Each level groups its rows by
+	// the level field; a Hierarchy/HierarchyOnly level also unfolds the field's reference hierarchy
+	// (target catalog parent-map, materialised through the door), and the NEXT level recurses inside
+	// each value's own rows. Subtotals roll in-place at every node. Value-keyed (each level groups by
+	// VALUE) — the catalog's OWN row-keyed hierarchy stays BuildHierarchyTree. (docs §22.1b)
+	static ibSelectorTree    BuildDimensionTree(const ibQueryRamTable& snapshot,
+	                                             const std::vector<ibTotalLevel>& levels,
+	                                             const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
+	                                             ibDatabaseConnectionHolder* holder,
+	                                             const ibBackendQueryable* source);
 	// Inner-join two materialised tables on (onLeft == onRight), emitting outCols (each
 	// tagged by side in fromLeft). The RAM JOIN core, pure (no DB) — unit-testable.
 	static ibQueryRamTable   JoinRamTables(const ibQueryRamTable& left, const ibQueryRamTable& right,

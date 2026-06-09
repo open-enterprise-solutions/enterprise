@@ -49,7 +49,7 @@ bool ibValueRecordDataObjectRef::ReadData(const ibGuid& srcGuid)
 	page.m_count = 1;
 
 	bool succes = false;
-	ibDataQueryResult selection = readQuery.Select(page);
+	ibDataQueryResult selection = readQuery.Execute(page);
 	if (selection.Next()) {
 		succes = true;
 		//load other attributes
@@ -129,7 +129,7 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 		ibReadPageRequest page;
 		page.m_count         = 1;
 		page.m_lockForUpdate = true;
-		ibDataQueryResult sel = q.Select(page);
+		ibDataQueryResult sel = q.Execute(page);
 
 		const bool rowFound = sel.Next();
 		const wxString dbVer = rowFound ? sel.GetValue(dvAttr).GetString() : wxString();

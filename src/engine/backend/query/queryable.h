@@ -158,6 +158,12 @@ public:
 	// metadata context); the door just chains the result. (docs §22 dot-walk)
 	virtual const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryColumn* refColumn) const { return nullptr; }
 
+	// The PARENT-reference column of a hierarchical record source (the parent attribute) — paired with
+	// GetPrimaryKeyColumns().front() (the self-reference) it gives the source's own parent-ref hierarchy.
+	// Null for a flat / non-record source. Used to unfold a TotalBy(refField, Hierarchy) dimension: the
+	// target catalog's parent-map is read through ITS GetParentColumn. (docs/query-language-arc.md §22.1b)
+	virtual const ibBackendQueryColumn* GetParentColumn() const { return nullptr; }
+
 	// Auto-join support (Join(b) without explicit columns) needs NO dedicated virtuals: the
 	// composer derives a null-key join from the COLUMNS — a referencing column (one whose
 	// ResolveReferenceTarget is the other source) on one side, matched to the other side's
@@ -209,8 +215,7 @@ public:
 // ==========================================================================
 // ibSubqueryQueryable — a SYSTEM queryable (built-in, not metaobject-backed, like the temp
 // table): a NESTED QUERY as a first-class source —
-//     From( (Выбрать * Из Имя) Как ВложенныйЗапрос )
-//     SELECT * FROM (SELECT * FROM name) AS subquery
+//     From( ibSubquery(inner), "sub" )  ->  SELECT * FROM (SELECT * FROM name) AS sub
 // The inner query is RUN and its rows materialised into an ibQueryRamTable, so the outer
 // query reads / filters / joins / unions / totals over it like any computed source. It is a
 // pure L3 construct — it names no attribute, no L1 cursor (it is a computed/RAM source, so

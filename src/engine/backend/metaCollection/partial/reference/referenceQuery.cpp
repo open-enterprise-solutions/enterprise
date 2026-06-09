@@ -24,7 +24,7 @@ bool ibValueReferenceDataObject::ReadData(bool createData)
 		q.From(m_metaObject->GetQueryable()).WhereKey(m_objGuid);
 		ibReadPageRequest page;
 		page.m_count = 1;
-		ibDataQueryResult selection = q.Select(page);
+		ibDataQueryResult selection = q.Execute(page);
 		if (selection.Next()) {
 			for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
 				if (!m_metaObject->IsDataReference(object->GetMetaID()))
@@ -47,7 +47,7 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 				q.From(m_metaObject->GetQueryable()).WhereKey(m_objGuid);
 				ibReadPageRequest page;
 				page.m_count = 1;
-				ibDataQueryResult selection = q.Select(page);
+				ibDataQueryResult selection = q.Execute(page);
 				if (selection.Next())
 					for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
 						if (!m_metaObject->IsDataReference(object->GetMetaID()))
@@ -94,7 +94,7 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 		q.From(m_metaObject->GetQueryable());
 		ibReadPageRequest page;
 		page.m_count = 0;   // no limit — full scan
-		ibDataQueryResult selection = q.Select(page);
+		ibDataQueryResult selection = q.Execute(page);
 		const ibBackendQueryColumn* keyCol = m_metaObject->GetQueryable()->GetIdentitySort().back().m_col;   // uuid identity column
 		while (selection.Next()) {
 			const ibGuid currentGuid = selection.GetValue(keyCol).GetString();

@@ -134,26 +134,27 @@ private:
 // The temp-table MANAGER creates + fills the table, then hands its name + the column descriptors
 // here; the queryable is a thin handle (the manager owns the DB lifetime via its pinning scope).
 //
-// Columns are RAW (ibRawDBColumn): a temp table holds the intermediate's primitives (keys,
-// numbers, a reference as its _RRRef blob) read STRAIGHT off the cursor by physical name + RawType
-// — no attribute spread. metaData rides for a later reference/enum reconstruction refinement; the
-// first cut is raw primitives. Read-only scan source: no keyset (GetIdentitySort {}), no write key.
-// (docs/temp-db.md)
+// Columns are METADATA-FORMAT (ibTempColumn — name + real type descriptor + source-id, NOT raw): the
+// temp table stores each column in the SAME physical spread a real table uses (TYPE + per-type data +
+// _RTRef/_RRRef), so the ordinary DB read (GetValueColumn over the spread + this queryable's metaData)
+// reconstructs reference / enum / variant values from a temp EXACTLY like from a real table — keys AND
+// outputs. The manager fills the spread via SetValueColumn. Read-only scan source: no keyset, no write
+// key. (docs/temp-db.md)
 // ==========================================================================
 class ibDbTempTableQueryable : public ibBackendQueryable
 {
 public:
-	ibDbTempTableQueryable(wxString tableName, std::vector<ibRawDBColumn> columns, const ibMetaData* metaData = nullptr)
+	ibDbTempTableQueryable(wxString tableName, std::vector<ibTempColumn> columns, const ibMetaData* metaData = nullptr)
 		: m_tableName(std::move(tableName)), m_columns(std::move(columns)), m_metaData(metaData) {}
 
 	wxString          GetQueryTableName() const override { return m_tableName; }
 	ibMetaID          GetQueryMetaID()    const override { return 0; }                 // not a metaobject
-	const ibMetaData* GetMetaData()       const override { return m_metaData; }
+	const ibMetaData* GetMetaData()       const override { return m_metaData; }        // reference / enum reconstruction context
 	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }       // scan source — no keyset
 
 	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override
 	{
-		for (const ibRawDBColumn& c : m_columns)
+		for (const ibTempColumn& c : m_columns)
 			if (c.GetName() == name) return &c;
 		return nullptr;
 	}
@@ -161,12 +162,12 @@ public:
 	{
 		std::vector<const ibBackendQueryColumn*> out;
 		out.reserve(m_columns.size());
-		for (const ibRawDBColumn& c : m_columns) out.push_back(&c);
+		for (const ibTempColumn& c : m_columns) out.push_back(&c);
 		return out;
 	}
 	bool OwnsColumn(const ibBackendQueryColumn* col) const override
 	{
-		for (const ibRawDBColumn& c : m_columns)
+		for (const ibTempColumn& c : m_columns)
 			if (&c == col) return true;
 		return false;
 	}
@@ -175,8 +176,8 @@ public:
 
 private:
 	wxString                  m_tableName;   // the real temp table name (the manager owns its DB lifetime)
-	std::vector<ibRawDBColumn> m_columns;    // raw physical columns, read straight by physical name + RawType
-	const ibMetaData*         m_metaData;    // reference / enum reconstruction context (later refinement)
+	std::vector<ibTempColumn> m_columns;     // metadata-format columns (real type), read via the DB spread
+	const ibMetaData*         m_metaData;    // reference / enum reconstruction context
 };
 
 #endif // __TEMP_TABLE_QUERYABLE_H__

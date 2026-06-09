@@ -34,7 +34,7 @@ bool ibValueRecordManagerObject::ExistData()
 			}
 			ibReadPageRequest page;
 			page.m_count = 1;
-			ibDataQueryResult selection = q.Select(page);
+			ibDataQueryResult selection = q.Execute(page);
 			success = selection.Next();
 		}
 		catch (...) {}

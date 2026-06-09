@@ -67,6 +67,7 @@ struct ibSqlFeatures
 	bool m_cte           = false;   // WITH ... AS (...)
 	bool m_fullOuterJoin = false;
 	bool m_iLike         = false;   // case-insensitive LIKE
+	bool m_rollup        = false;   // GROUP BY ROLLUP(...) — hierarchical subtotals server-side (FB 2.1+ / PG / MySQL8; NOT SQLite)
 };
 
 struct ibDialectDictionary
@@ -118,6 +119,12 @@ struct ibDialectDictionary
 	// the lock, there is no row-level FOR UPDATE). Rendered after ORDER BY / LIMIT.
 	// (docs/record-locks.md)
 	wxString m_rowLockSuffix = wxT(" FOR UPDATE");
+
+	// GROUP BY ROLLUP spelling (used only when m_features.m_rollup): the keys render between
+	// prefix and suffix. Standard (PG / FB): "GROUP BY ROLLUP(<keys>)". MySQL: prefix empty,
+	// suffix " WITH ROLLUP" -> "GROUP BY <keys> WITH ROLLUP". (docs/query-language-arc.md §22.1b)
+	wxString m_rollupPrefix = wxT("ROLLUP(");
+	wxString m_rollupSuffix = wxT(")");
 
 	// --- behaviour slots (the small tail data cannot express) -------------
 	// Reserved for emulation rewrites (FULL OUTER -> LEFT UNION RIGHT, window ->

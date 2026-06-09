@@ -52,7 +52,7 @@ bool ibValueRecordSetObject::LockByKeys()
 		ibReadPageRequest page;
 		page.m_count = 0;              // every matching line
 		page.m_lockForUpdate = true;   // pessimistic row lock (FOR UPDATE / WITH LOCK)
-		ibDataQueryResult selection = q.Select(page);
+		ibDataQueryResult selection = q.Execute(page);
 		while (selection.Next()) {}
 	}
 	catch (...) {
@@ -123,7 +123,7 @@ bool ibValueRecordSetObject::ExistData()
 		}
 		ibReadPageRequest page;
 		page.m_count = 1;
-		ibDataQueryResult selection = q.Select(page);
+		ibDataQueryResult selection = q.Execute(page);
 		return selection.Next();
 	}
 	catch (...) {}
@@ -176,7 +176,7 @@ bool ibValueRecordSetObject::ReadData(const ibUniqueKeyPair& key)
 		}
 		ibReadPageRequest page;
 		page.m_count = 0;   // every matching line
-		ibDataQueryResult selection = q.Select(page);
+		ibDataQueryResult selection = q.Execute(page);
 		while (selection.Next()) {
 			ibValueTableRow* rowData = new ibValueTableRow();
 			for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
@@ -208,7 +208,7 @@ bool ibValueRecordSetObject::ReadData()
 		}
 		ibReadPageRequest page;
 		page.m_count = 0;   // every matching line
-		ibDataQueryResult selection = q.Select(page);
+		ibDataQueryResult selection = q.Execute(page);
 		while (selection.Next()) {
 			ibValueTableRow* rowData = new ibValueTableRow();
 			for (const auto object : m_metaObject->GetGenericDimensionArrayObject())

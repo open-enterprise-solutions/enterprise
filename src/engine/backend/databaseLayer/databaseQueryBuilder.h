@@ -313,6 +313,12 @@ struct ibQueryRel
 	std::vector<ibQueryExprPtr> m_groupKeys;
 	ibQueryExprPtr              m_having;
 
+	// Aggregate: GROUP BY ROLLUP(keys) — the DBMS computes every subtotal LEVEL (each from raw
+	// detail, so correct for COUNT / AVG, unlike re-aggregating leaf sums) + a grand total in ONE
+	// pass. The renderer wraps the keys with the dialect's rollup prefix/suffix; only set by L3's
+	// totals push-down when the dialect advertises m_features.m_rollup. (docs/query-language-arc.md §22.1b)
+	bool m_rollup = false;
+
 	ibQuerySpan m_span;
 
 	explicit ibQueryRel(ibQueryRelKind kind) : m_kind(kind) {}
@@ -425,13 +431,15 @@ inline ibQueryRelPtr ibLimit(ibQueryRelPtr input, long count, long offset = 0)
 inline ibQueryRelPtr ibAggregate(ibQueryRelPtr input,
                                  std::vector<ibQueryProjItem> projection,
                                  std::vector<ibQueryExprPtr> groupKeys,
-                                 ibQueryExprPtr having = nullptr)
+                                 ibQueryExprPtr having = nullptr,
+                                 bool rollup = false)
 {
 	auto r = std::make_shared<ibQueryRel>(ibQueryRelKind::Aggregate);
 	r->m_input      = std::move(input);
 	r->m_projection = std::move(projection);
 	r->m_groupKeys  = std::move(groupKeys);
 	r->m_having     = std::move(having);
+	r->m_rollup     = rollup;
 	return r;
 }
 
@@ -508,6 +516,13 @@ struct ibDdlStatement
 	bool m_ifExists    = false;   // DropTable
 	bool m_ifNotExists = false;   // CreateTable
 
+	// CreateTable as a TEMPORARY table — the lexical bits come from the L1 ibTempTableDialect (the
+	// renderer stays a pure function of DDL + main dialect; the caller, the temp-table manager,
+	// supplies these from the driver's temp facts, so there is NO per-driver fork in the renderer).
+	bool     m_temporary    = false;   // emit m_createPrefix instead of "CREATE TABLE" + append m_createSuffix
+	wxString m_createPrefix;           // e.g. "CREATE TEMPORARY TABLE"
+	wxString m_createSuffix;           // appended after the column list, e.g. " ON COMMIT DROP" (empty = none)
+
 	explicit ibDdlStatement(ibDdlKind kind) : m_kind(kind) {}
 };
 
@@ -525,6 +540,21 @@ inline ibDdlStatement ibDropTable(const wxString& table, bool ifExists = false)
 	ibDdlStatement s(ibDdlKind::DropTable);
 	s.m_table     = table;
 	s.m_ifExists  = ifExists;
+	return s;
+}
+
+// CREATE a TEMPORARY table. The temp lexical bits (createPrefix / createSuffix) come from the L1
+// ibTempTableDialect, so this stays driver-agnostic — the temp-table manager fills them from the
+// connected driver's facts. (docs/temp-db.md)
+inline ibDdlStatement ibCreateTempTable(const wxString& table, std::vector<ibDdlColumn> columns,
+                                        const wxString& createPrefix, const wxString& createSuffix = wxEmptyString)
+{
+	ibDdlStatement s(ibDdlKind::CreateTable);
+	s.m_table        = table;
+	s.m_columns      = std::move(columns);
+	s.m_temporary    = true;
+	s.m_createPrefix = createPrefix;
+	s.m_createSuffix = createSuffix;
 	return s;
 }
 
@@ -603,6 +633,11 @@ struct ibDmlStatement
 
 	// Insert + Update + Upsert.
 	std::vector<ibDmlAssign> m_assignments;
+
+	// Insert ONLY — extra VALUES tuples for a multi-row INSERT: m_assignments is row 0 (it carries the
+	// column list), each m_extraRows[i] is one further row's values IN THE SAME COLUMN ORDER. Empty =
+	// a plain single-row INSERT. Used by the temp-table manager to bulk-fill in chunks. (docs/temp-db.md)
+	std::vector<std::vector<ibQueryExprPtr>> m_extraRows;
 
 	// Update + Delete (null = no WHERE — affects all rows).
 	ibQueryExprPtr m_where;

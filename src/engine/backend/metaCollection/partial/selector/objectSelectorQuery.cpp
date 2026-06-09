@@ -18,7 +18,7 @@ void ibValueSelectorRecordDataObject::Reset()
 		q.From(m_metaObject->GetQueryable());
 		ibReadPageRequest page;
 		page.m_count = 0;   // unbounded
-		ibDataQueryResult selection = q.Select(page);
+		ibDataQueryResult selection = q.Execute(page);
 		const ibBackendQueryColumn* keyCol = m_metaObject->GetQueryable()->GetIdentitySort().back().m_col;   // uuid identity column
 		while (selection.Next())
 			m_currentValues.push_back(selection.GetValue(keyCol).GetString());
@@ -55,7 +55,7 @@ bool ibValueSelectorRecordDataObject::Read()
 		q.From(m_metaObject->GetQueryable()).WhereKey(m_objGuid);
 		ibReadPageRequest page;
 		page.m_count = 1;
-		ibDataQueryResult selection = q.Select(page);
+		ibDataQueryResult selection = q.Execute(page);
 		if (selection.Next()) {
 			m_listObjectValue.insert_or_assign(m_metaObject->GetMetaID(),
 				selection.GetValue(m_metaObject->GetDataReference()));
@@ -86,7 +86,7 @@ void ibValueSelectorRegisterDataObject::Reset()
 		q.From(m_metaObject->GetQueryable());
 		ibReadPageRequest page;
 		page.m_count = 0;   // unbounded
-		ibDataQueryResult selection = q.Select(page);
+		ibDataQueryResult selection = q.Execute(page);
 		while (selection.Next()) {
 			ibRowMetaValues keyRow;
 			if (m_metaObject->HasRecorder()) {
@@ -126,7 +126,7 @@ bool ibValueSelectorRegisterDataObject::Read()
 				m_keyValues.at(object->GetMetaID()));
 		ibReadPageRequest page;
 		page.m_count = 1;
-		ibDataQueryResult selection = q.Select(page);
+		ibDataQueryResult selection = q.Execute(page);
 		if (selection.Next()) {
 			ibRowMetaValues keyTable, rowTable;
 			for (const auto object : m_metaObject->GetGenericDimensionArrayObject())

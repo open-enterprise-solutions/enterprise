@@ -285,7 +285,7 @@ ibValue ibValueRecordDataObjectConstant::GetConstValue() const
 				q.From(m_metaObject->GetQueryable());
 				ibReadPageRequest page;
 				page.m_count = 1;
-				ibDataQueryResult selection = q.Select(page);
+				ibDataQueryResult selection = q.Execute(page);
 				if (selection.Next())
 					ret = m_metaObject->AdjustValue(selection.GetValue(m_metaObject));
 				else

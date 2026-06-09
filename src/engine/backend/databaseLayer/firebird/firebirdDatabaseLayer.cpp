@@ -34,6 +34,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_upsertTemplate   = wxT("UPDATE OR INSERT INTO {table} ({columns}) VALUES ({values}) MATCHING ({keys})");
 		d.m_upsertUpdateItem = wxEmptyString;
 		d.m_features.m_window = true;                 // FB3+
+		d.m_features.m_rollup = true;                 // GROUP BY ROLLUP(...) — FB5 (vendored: security5.fdb)
 		// type map
 		d.m_typeBoolean       = wxT("SMALLINT");
 		d.m_typeDate          = wxT("TIMESTAMP");

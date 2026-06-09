@@ -450,7 +450,7 @@ wxString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
 	std::vector<ibQueryExprPtr>  groupKeys;
 	ibQueryExprPtr               having;
 	std::vector<ibQuerySortKey>  sortKeys;
-	bool hasLimit = false, distinct = false;
+	bool hasLimit = false, distinct = false, rollup = false;
 	long limitCount = -1, limitOffset = 0;
 
 	const ibQueryRel* node = root;
@@ -470,6 +470,7 @@ wxString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
 			if (projection.empty()) projection = node->m_projection;
 			if (groupKeys.empty())  groupKeys  = node->m_groupKeys;
 			if (!having)            having     = node->m_having;
+			rollup = rollup || node->m_rollup;
 			node = node->m_input.get();
 			break;
 		case ibQueryRelKind::Project:
@@ -539,10 +540,12 @@ wxString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
 	// plan stays in SQL-text order (HAVING params follow WHERE params).
 	if (!groupKeys.empty()) {
 		sql += wxT(" GROUP BY ");
+		if (rollup) sql += m_dialect.m_rollupPrefix;   // "ROLLUP(" (standard) / "" (MySQL WITH ROLLUP)
 		for (size_t i = 0; i < groupKeys.size(); ++i) {
 			if (i) sql += wxT(", ");
 			sql += RenderExpr(groupKeys[i]);
 		}
+		if (rollup) sql += m_dialect.m_rollupSuffix;   // ")" (standard) / " WITH ROLLUP" (MySQL)
 	}
 	if (having)
 		sql += wxT(" HAVING ") + RenderExpr(having);
@@ -767,7 +770,11 @@ wxString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 {
 	switch (ddl.m_kind) {
 	case ibDdlKind::CreateTable: {
-		wxString sql = wxT("CREATE TABLE ");
+		// A TEMPORARY table substitutes the driver's temp CREATE prefix (from the L1 temp dialect,
+		// supplied on the DDL) for "CREATE TABLE" and appends its suffix (ON COMMIT … / none).
+		wxString sql = (ddl.m_temporary && !ddl.m_createPrefix.empty())
+		             ? ddl.m_createPrefix + wxT(" ")
+		             : wxT("CREATE TABLE ");
 		if (ddl.m_ifNotExists) sql += wxT("IF NOT EXISTS ");
 		sql += QuoteIdent(ddl.m_table) + wxT(" (");
 		for (size_t i = 0; i < ddl.m_columns.size(); ++i) {
@@ -775,6 +782,8 @@ wxString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 			sql += RenderColumn(ddl.m_columns[i]);
 		}
 		sql += wxT(")");
+		if (ddl.m_temporary && !ddl.m_createSuffix.empty())
+			sql += ddl.m_createSuffix;
 		return sql;
 	}
 	case ibDdlKind::DropTable: {
@@ -875,6 +884,16 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 			sql += RenderExpr(dml.m_assignments[i].m_value);   // pushes a bind param
 		}
 		sql += wxT(")");
+		// Multi-row INSERT — each extra row appends ", (v0, v1, ...)" in the same column order; its
+		// binds push after the prior rows', so the plan stays in placeholder order.
+		for (const std::vector<ibQueryExprPtr>& row : dml.m_extraRows) {
+			sql += wxT(", (");
+			for (size_t i = 0; i < row.size(); ++i) {
+				if (i) sql += wxT(", ");
+				sql += RenderExpr(row[i]);
+			}
+			sql += wxT(")");
+		}
 		break;
 	}
 	case ibDmlKind::Update: {

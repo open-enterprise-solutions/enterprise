@@ -37,6 +37,39 @@ public:
 	ibDataQueryResult ExecuteAggregate(const ibDataQuerySpec& spec) override;
 	bool ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind) override;
 
+	// --- multi-source: co-located server-side JOIN (docs/query-language-arc.md §22.1a) -------
+	// CanColocateJoin — is the spec's relational tree an N-way INNER/LEFT join of DISTINCT real DB
+	// tables on resolvable (explicit OR reference-derived) single-field keys, every output column
+	// owned by a leaf? When true the whole join runs in ONE server-side SELECT (the DBMS does the
+	// join + the cross-table filter; reference / enum / variant outputs reconstruct via the full
+	// spread). Outside this shape (self-join, a computed/temp leaf, row-key conditions, dot-walk,
+	// key-in, an aggregate terminal) stays the composer's RAM path — a co-location FAST PATH, not a
+	// replacement. BACKEND_API on the gates so the routing decision is unit-testable across the DLL.
+	static BACKEND_API bool  CanColocateJoin(const ibDataQuerySpec& spec);
+	static ibDataQueryResult ExecuteColocatedJoin(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
+
+	// Co-located server-side AGGREGATE — the same join-tree gate, terminal = GroupBy()/Sum()/… : the
+	// JOIN + GROUP BY + aggregates run in ONE server-side SELECT (vs the composer's RAM fold). Group
+	// keys may be reference (grouped by the full spread); aggregate INPUTS stay scalar.
+	static BACKEND_API bool  CanColocateAggregate(const ibDataQuerySpec& spec);
+	static ibDataQueryResult ExecuteColocatedAggregate(const ibDataQuerySpec& spec);
+
+	// Co-located server-side UNION — the branches (each a real DB table) stack as a SQL UNION ALL of
+	// per-branch SELECTs (output columns resolved per branch by NAME, aligned by position); ORDER BY /
+	// LIMIT wrap the union in a subquery. Scalar outputs (the common catalog ∪ catalog list); a
+	// computed branch is handled by the composer's mixed-promote, not this gate.
+	static BACKEND_API bool  CanColocateUnion(const ibDataQuerySpec& spec);
+	static ibDataQueryResult ExecuteColocatedUnion(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
+
+	// Totals push-down via GROUP BY ROLLUP (docs/query-language-arc.md §22.1b). CanPushRollupTotals:
+	// a single-source DB queryable, scalar group keys / aggregate inputs, AND the connected dialect
+	// advertises ROLLUP. ExecuteRollupTotals then runs ONE GROUP BY ROLLUP(keys) + the aggregates +
+	// GROUPING(key) flags — the DBMS computes every subtotal level from raw detail (correct for
+	// COUNT / AVG) — and assembles the ibSelectorTree node tree from the result. Else the composer
+	// RAM-folds the detail. BACKEND_API for the unit test.
+	static BACKEND_API bool CanPushRollupTotals(const ibDataQuerySpec& spec);
+	static ibSelectorTree   ExecuteRollupTotals(const ibDataQuerySpec& spec);
+
 	// --- the DB GET data-access TEMPLATE — COLUMN-BASED. Reads the dialect-normalised typed
 	//     fields of an L2 result (ibQueryResult) for a query COLUMN and assembles the L3 ibValue
 	//     (primitive / enum / reference) off the column's type descriptor + the metadata context
@@ -56,6 +89,12 @@ public:
 	//     NEVER a raw L1 driver statement. Column-based: no attribute. (docs §22.4b)
 	static void SetValueColumn(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& cValue, ibQueryStatement* statement, int& position);
 	static void SetValueColumn(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& cValue, ibQueryStatement* statement);
+
+	// The physical fields a column decomposes to (TYPE + per-contained-primitive + _RTRef/_RRRef) — the
+	// SAME spread SetValueColumn binds and GetValueColumn reads. Exposed so the temp-table manager
+	// materialises an intermediate in the metadata storage FORMAT (so reference / enum reconstruct from
+	// a temp exactly like from a real table). A RAW column is its single field. (docs/temp-db.md)
+	static std::vector<wxString> WriteFieldsOf(const ibBackendQueryColumn* col, const ibMetaData* metaData);
 
 	// --- thin convenience adapters for callers that already hold the metaobject attribute (the
 	//     register lowering — recorder / period / dimension / resource attributes). The attribute

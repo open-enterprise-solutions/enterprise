@@ -12,6 +12,10 @@
 #include "backend/actionInfo.h"
 #include "backend/srcObject.h"
 
+// L3 Selector tree (folded from a flat snapshot) — mirrored into the RAM tree model by
+// ibValueModelRamTreeBase::PopulateFromTree. Full type only needed in tableInfo.cpp.
+class ibSelectorTree;
+
 ///////////////////////////////////////////////////////////////////////////////////
 #define defaultCountPerPage 100
 ///////////////////////////////////////////////////////////////////////////////////
@@ -530,6 +534,7 @@ public:
 	// through this single path; legacy CallRefreshModel / RefreshModel
 	// are gone.
 	void RefetchAll() {
+		BumpViewGeneration();   // filter change / explicit refetch -> the RAM visible-view rebuilds
 		if (m_modelProvider != nullptr) {
 			m_modelProvider->BeforeReset();
 			m_modelProvider->AfterReset();
@@ -548,6 +553,7 @@ public:
 			sd->m_sortAscending = ascending;
 			sd->m_sortEnable    = true;
 		}
+		BumpViewGeneration();   // sort change -> the RAM visible-view rebuilds
 		if (m_modelProvider != nullptr) {
 			m_modelProvider->BeforeReset();
 			m_modelProvider->AfterReset();
@@ -753,6 +759,14 @@ protected:
 
 	ibFilterRow m_filterRow;
 	ibSortOrder m_sortOrder;
+
+	// Monotonic change counter — bumped on any filter / sort / value / row mutation the model
+	// notifies the GUI of. The RAM visible-view cache (ibValueModelRamTableBase::BuildVisibleView)
+	// stamps the generation it built at and rebuilds only on a mismatch — so the cache is NEVER
+	// staler than the control (it invalidates exactly where the GUI is told the view changed).
+	// (docs/paging-design.md — BuildVisibleView caching)
+	uint32_t m_viewGeneration = 0;
+	void     BumpViewGeneration() { ++m_viewGeneration; }
 };
 
 //Table support
@@ -951,10 +965,12 @@ public:
 	// hook from anywhere a row mutation happens (Set / write-through
 	// from script).  No storage dependency, lives on the base.
 	void RowChanged(ibValueTableRow* item) {
+		BumpViewGeneration();   // a row's values changed -> the filtered/sorted view may differ
 		m_modelProvider->ItemChanged(ibDataViewItem(item));
 	}
 
 	void RowValueChanged(ibValueTableRow* item, unsigned int col) {
+		BumpViewGeneration();   // a cell changed -> filter membership / sort order may differ
 		m_modelProvider->ValueChanged(ibDataViewItem(item), col);
 	}
 
@@ -1107,6 +1123,7 @@ public:
 
 	void Clear(bool notify = true) {
 		if (m_nodeValues.empty()) return;
+		BumpViewGeneration();   // rows gone -> the cached view (now dangling pointers) must rebuild
 		if (notify) m_modelProvider->BeforeReset();
 		m_nodeValues.erase(std::remove_if(m_nodeValues.begin(), m_nodeValues.end(),
 			[](const auto& node) { node->m_valueTable = nullptr; node->DecRef(); return true; }),
@@ -1118,6 +1135,7 @@ public:
 	// from the model. Used after batch mutations that wxDVC's
 	// incremental sort tracking can't follow (paged backward Insert).
 	void NotifyReset() {
+		BumpViewGeneration();
 		if (m_modelProvider) {
 			m_modelProvider->BeforeReset();
 			m_modelProvider->AfterReset();
@@ -1128,6 +1146,7 @@ public:
 
 	void ClearRange(const unsigned long from, const unsigned long to, bool notify = true) {
 		if (from > m_nodeValues.size() || to > m_nodeValues.size()) return;
+		BumpViewGeneration();
 		for (auto iterator = m_nodeValues.begin() + from; iterator != m_nodeValues.begin() + to; iterator++) {
 			if (notify && !m_modelProvider->ItemDeleted(ibDataViewItem(nullptr), ibDataViewItem(*iterator)))
 				return;
@@ -1148,6 +1167,7 @@ public:
 	long Append(ibValueTableRow* child, bool notify = true) {
 		wxASSERT(child);
 
+		BumpViewGeneration();
 		child->m_valueTable = this;
 		m_nodeValues.emplace_back(child);
 
@@ -1163,6 +1183,7 @@ public:
 	long Insert(ibValueTableRow* child, unsigned int row, bool notify = true) {
 		wxASSERT(child);
 
+		BumpViewGeneration();
 		child->m_valueTable = this;
 		auto iterator = m_nodeValues.insert(m_nodeValues.begin() + row, child);
 
@@ -1178,6 +1199,7 @@ public:
 	bool Remove(ibValueTableRow*& child, bool notify = true) {
 		wxASSERT(child);
 
+		BumpViewGeneration();
 		auto iterator = std::find(
 			m_nodeValues.begin(),
 			m_nodeValues.end(), child
@@ -1201,6 +1223,7 @@ public:
 	}
 
 	void Sort(std::vector<ibSortModel>& paSort, bool notify = true) {
+		BumpViewGeneration();   // m_nodeValues reordered -> the cached view order is stale
 		if (notify) m_modelProvider->BeforeReset();
 		std::sort(m_nodeValues.begin(), m_nodeValues.end(),
 			[&paSort](const ibValueTableRow* a, const ibValueTableRow* b)
@@ -1250,6 +1273,12 @@ public:
 	// (typically << 1000 rows) so building the view per-fetch is
 	// cheap; cache + invalidation isn't worth the complexity.
 	std::vector<ibValueTableRow*> BuildVisibleView() const {
+		// Unchanged since the last build (no filter / sort / value / row mutation) -> reuse the
+		// cached view, skipping the per-row filter scan + the stable_sort. Invalidated by the
+		// generation counter, bumped on every change the model notifies the GUI of.
+		if (m_visibleViewGen == m_viewGeneration)
+			return m_visibleViewCache;
+
 		std::vector<ibValueTableRow*> view;
 		view.reserve(m_nodeValues.size());
 		ibValue scratch;
@@ -1284,6 +1313,8 @@ public:
 					return false;
 				});
 		}
+		m_visibleViewCache = view;          // stamp + cache; reused until the next change bumps m_viewGeneration
+		m_visibleViewGen   = m_viewGeneration;
 		return view;
 	}
 
@@ -1353,6 +1384,12 @@ public:
 
 protected:
 	std::vector<ibValueTableRow*> m_nodeValues;
+
+	// BuildVisibleView cache (docs/paging-design.md): the last filtered+sorted view + the
+	// generation it was built at. Mutable — BuildVisibleView is const but memoises. Initialised to
+	// a generation that can never match m_viewGeneration (0), so the first call always builds.
+	mutable std::vector<ibValueTableRow*> m_visibleViewCache;
+	mutable uint32_t                      m_visibleViewGen = static_cast<uint32_t>(-1);
 };
 
 //Tree support
@@ -1428,6 +1465,19 @@ class BACKEND_API ibValueModelTreeBase : public ibValueModel {
 				return false;
 			}
 			return true;
+		}
+
+		// Bulk-build helper: attach a fresh child node WITHOUT a per-node
+		// ItemAppended notification (the caller fires ONE reset after the whole
+		// tree is in place) and WITH the parent link set — plain Append leaves
+		// m_parent null, which would break upward navigation. Used by
+		// ibValueModelRamTreeBase::PopulateFromTree to mirror an L3
+		// ibQueryRamTable Node tree in one shot. (docs/query-language-arc.md §22.1b)
+		ibValueTreeNode* AddChildNode() {
+			ibValueTreeNode* child = new ibValueTreeNode(m_valueTree);
+			child->m_parent = this;
+			m_children.emplace_back(child);
+			return child;
 		}
 
 		bool Insert(ibValueTreeNode* child, unsigned int n, bool notify = true) {
@@ -1764,6 +1814,14 @@ public:
 	/////////////////////////////////////////////////////////
 
 	ibValueTreeNode* GetRoot() const { return m_root; }
+
+	// Mirror an L3 Selector tree (ibSelectorTree, folded from a flat snapshot — Execute() +
+	// ibSelector::Build) into this RAM tree in ONE shot: each Node -> an ibValueTreeNode carrying
+	// that Node's cell values, nested the same way. This is the EAGER backing — the Selector
+	// already produced the whole shape from one snapshot, so the per-parent fetch is replaced by a
+	// single tree mirror + one reset. Defined in tableInfo.cpp (needs the full ibSelectorTree).
+	// (docs/query-language-arc.md §22.1b)
+	void PopulateFromTree(const ibSelectorTree& tree, bool notify = true);
 
 	// helper methods to change the model
 	bool Delete(const ibDataViewItem& item, bool notify = true) {
