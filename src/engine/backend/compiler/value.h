@@ -1044,6 +1044,17 @@ public:
 
 	virtual ibNumber GetNumber() const;
 	virtual wxString GetString() const;
+
+	// Canonical IDENTITY key of the value — for grouping / hierarchy linking where the DISPLAY string
+	// is not the identity. A REFFER value is a wrapper whose m_pRef points at the real object, so the
+	// base DELEGATES through the reffer chain (like Init / method dispatch) to the target's GetHashKey
+	// — the referenced object overrides it (e.g. a reference keys by guid). A plain value keys by its
+	// string. Extend per type as needed. Used by the L3 selector engine, which speaks only ibValue.
+	virtual wxString GetHashKey() const {
+		if (IsReference() && m_pRef != nullptr)
+			return m_pRef->GetHashKey();
+		return GetString();
+	}
 	// Native-ibString overload for the runtime string functions. Zero-copy
 	// when the value is already TYPE_STRING (returns the stored buffer by
 	// const ref); otherwise coerces number/bool/date/ref via GetString()

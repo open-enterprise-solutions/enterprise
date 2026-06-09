@@ -1277,6 +1277,14 @@ while (s.Next()) {                                   // cursor — pre-order
 - **Types.** Raw rows = `ibQueryRamTable` (a flat array); the folded tree = `ibSelectorTree`
   (`querySelectorTree.h`); the cursor/traversal = `ibSelector` (`querySelector.h`). Mirror into a
   runtime tree model via `ibValueModelRamTreeBase::PopulateFromTree`.
+- **Identity key — `ibValue::GetHashKey()`.** Grouping / hierarchy linking needs a value's IDENTITY,
+  not its display string. `ibValue::GetHashKey()` (virtual) is that key: the base delegates through the
+  reffer chain to the target object, which overrides it (a reference keys by its **guid**, so two cells
+  pointing at the same row share a key — a child's parent-ref matches the parent's row-ref; the display
+  string does NOT, so two distinct rows with the same name no longer merge). A plain value keys by its
+  string; extend per type. The composer speaks only `ibValue` — no runtime type, no object address.
+  Used by the fold engines, by RAM `GROUP BY` (`RamAggregate` / `FoldTotals`), and as the RAM hash-join
+  key (`JoinRamTables`, O(n+m)). Future RAM `DISTINCT` / `UNION` dedup will key by it too.
 
 ### 22.2 The interface (proposed)
 

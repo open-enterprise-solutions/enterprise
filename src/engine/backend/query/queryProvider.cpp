@@ -576,15 +576,11 @@ void AddSyntheticAggColumns(ibSelectorTree& tree, const std::vector<ibDataQueryB
 // string. (docs/query-language-arc.md §22.1b)
 wxString CellKey(const ibValue& v)
 {
-	// Stable identity key for grouping / hierarchy linking, naming NO runtime type — L3 speaks only
-	// ibValue. A REFERENCE keys by its underlying object's ADDRESS (GetRef): two cells pointing at the
-	// same row share it, the display string does not, so a child's parent-ref matches the parent's
-	// row-ref. ANY OTHER value keys by its string — so the engine works for non-metadata sources
-	// (temp tables, plain columns) too.
-	if (v.IsReference())
-		if (const ibValue* ref = v.GetRef())
-			return wxString::Format(wxT("@%llx"), static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(ref)));
-	return v.GetString();
+	// Stable identity key for grouping / hierarchy linking — the value's own canonical key (a reference
+	// keys by guid, anything else by string). ibValue::GetHashKey owns this, so the composer names no
+	// runtime type and the key is identity-stable (not an object address). Works for non-metadata
+	// sources (temp tables, plain columns) too.
+	return v.GetHashKey();
 }
 
 // Context for the recursive hierarchy fold (invariant across the recursion).
@@ -641,7 +637,7 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 	for (long i = 0; i < rows; ++i) {
 		wxString key;
 		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
-			key += RamCell(TC, i, g).GetString() + wxT("\x1f");
+			key += RamCell(TC, i, g).GetHashKey() + wxT("\x1f");   // identity key — two refs with the same name don't merge
 		auto it = buckets.find(key);
 		if (it == buckets.end()) { buckets.emplace(key, std::vector<long>{ i }); keyOrder.push_back(key); }
 		else it->second.push_back(i);
@@ -692,7 +688,7 @@ void FoldTotals(ibSelectorTree::Node& node, const ibQueryRamTable& TC, const std
 	std::map<wxString, ibValue> keyVal;
 	for (long i : rows) {
 		const ibValue v = RamCell(TC, i, groupFields[level]);
-		const wxString k = v.GetString();
+		const wxString k = v.GetHashKey();   // identity key — refs group by guid, not display name
 		if (buckets.find(k) == buckets.end()) { order.push_back(k); keyVal[k] = v; }
 		buckets[k].push_back(i);
 	}
@@ -1331,12 +1327,19 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 	for (const ibBackendQueryColumn* c : outCols)
 		out.AddColumn(c->GetModelID(), c->GetName(), c->GetTypeDesc());
 
+	// Hash-join by the join key's IDENTITY key (GetHashKey — guid for refs): index the right side once,
+	// probe per left row. O(n+m) instead of O(n*m). Null join column -> empty key on both sides ->
+	// cartesian product (the prior keyL==keyR behaviour for a keyless join).
+	std::map<wxString, std::vector<long>> rightByKey;
+	for (long j = 0; j < right.RowCount(); ++j) {
+		const ibValue keyR = (onRight != nullptr) ? right.GetCell(j, onRight->GetModelID()) : ibValue();
+		rightByKey[keyR.GetHashKey()].push_back(j);
+	}
 	for (long i = 0; i < left.RowCount(); ++i) {
 		const ibValue keyL = (onLeft != nullptr) ? left.GetCell(i, onLeft->GetModelID()) : ibValue();
-		for (long j = 0; j < right.RowCount(); ++j) {
-			const ibValue keyR = (onRight != nullptr) ? right.GetCell(j, onRight->GetModelID()) : ibValue();
-			if (!(keyL == keyR))
-				continue;
+		const auto it = rightByKey.find(keyL.GetHashKey());
+		if (it == rightByKey.end()) continue;
+		for (const long j : it->second) {
 			const long r = out.AppendRow();
 			for (size_t k = 0; k < outCols.size(); ++k) {
 				const ibQueryRamTable& src = fromLeft[k] ? left : right;

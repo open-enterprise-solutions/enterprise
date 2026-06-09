@@ -36,6 +36,9 @@ public:
 		return m_reference_impl;
 	}
 
+	// Identity key by the target's guid (not the display string) — see ibValue::GetHashKey.
+	virtual wxString GetHashKey() const override { return wxString(GetGuid()); }
+
 	void PrepareRef(bool createData = true);
 
 	virtual ~ibValueReferenceDataObject();
