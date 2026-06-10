@@ -17,7 +17,9 @@
 // visible transitively via metaFormObject.h below.
 #include "backend/databaseLayer/connectionScope.h"
 
-//special object 
+#include "backend/query/queryableFactory.h"   // ibMetaSourceDescriptor (the L4 source descriptor field)
+
+//special object
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metaCollection/metaSpreadsheetObject.h"
@@ -487,6 +489,7 @@ public:
 	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;       // { uuid } — real column
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // { data-reference } — key authority
 	virtual const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryColumn* refColumn) const override;
+	virtual std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryColumn* refColumn) const override;   // composite: one per type
 	virtual const ibBackendQueryColumn* GetParentColumn() const override;   // the parent attribute (hierarchy key)
 private:
 	const ibValueMetaObjectRecordDataRef* m_meta;
@@ -506,7 +509,7 @@ public:
 	// (a friend) owns the navigation, built from this metaobject's primitives
 	// (FindObjectByFilter / GetTableNameDB / IsDataReference / guidName). L4 and the door
 	// read through GetQueryable().
-	virtual const ibBackendQueryable* GetQueryable() const override { return &m_queryable; }
+	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
 	friend class ibRecordQueryable;
 
 	virtual ibValueMetaObjectAttributePredefined* GetDataReference() const { return m_propertyAttributeReference->GetMetaObject(); }
@@ -602,8 +605,9 @@ protected:
 	ibPropertyBoolean* m_propertyQuickChoice = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryPresentation, wxT("QuickChoice"), _("Quick choice"), false);
 	ibPropertyContainer<>* m_propertyAttributeReference = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("Reference"), _("Reference"), wxEmptyString, ibValue::GetIDByVT(ibValueTypes::TYPE_EMPTY)));
 
-	// the vended queryable — stable for this metaobject's life (see GetQueryable()).
-	ibRecordQueryable m_queryable{ this };
+	// the L4 source descriptor — CONTAINS the vended queryable (stable for this metaobject's
+	// life) and is registered with the factory on run / close. GetQueryable() forwards to it.
+	ibMetaSourceDescriptor<ibRecordQueryable, ibValueMetaObjectRecordDataRef> m_queryable{ this };
 
 protected:
 
@@ -1078,8 +1082,12 @@ public:
 	// ibRegisterDataQueryable (a friend) owns the navigation, from this register's
 	// primitives (FindAnyAttributeObjectByFilter / GetTableNameDB / HasRecorder /
 	// HasPeriod / GetRegister* / GetGenericDimensionArrayObject). Slices are separate.
-	virtual const ibBackendQueryable* GetQueryable() const override { return &m_queryable; }
+	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
 	friend class ibRegisterDataQueryable;
+
+	// L4 query-source registration — the register IS a queryable holder; it passes `this`.
+	virtual bool OnAfterRunMetaObject(int flags) override;
+	virtual bool OnBeforeCloseMetaObject() override;
 
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return AccessRight_Read(); }
@@ -1316,8 +1324,12 @@ protected:
 	ibPropertyContainer<>* m_propertyAttributeRecorder = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Recorder"), _("Recorder"), wxEmptyString));
 	ibPropertyContainer<>* m_propertyAttributeLineNumber = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateNumber(wxT("LineNumber"), _("Line number"), wxEmptyString, 15, 0));
 
-	// the vended main queryable — stable for this register's life (see GetQueryable()).
-	ibRegisterDataQueryable m_queryable{ this };
+	// the BASE L4 source descriptor — CONTAINS the register's main (records) queryable and is
+	// registered with the factory on run / close; GetQueryable() forwards to it. The register
+	// ADDITIONALLY owns CUSTOM virtual-table descriptors (balances / turnovers / balances-and-
+	// turnovers / slices) registered alongside it on load — pending the companion queryables
+	// (docs §22.4, the totals-table arc).
+	ibMetaSourceDescriptor<ibRegisterDataQueryable, ibValueMetaObjectRegisterData> m_queryable{ this };
 
 	// Read/Write/Delete role triplet emitted by IB_DECLARE_RWD_ROLE_TRIPLET
 	// above (in the public access region).

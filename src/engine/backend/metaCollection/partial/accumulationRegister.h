@@ -5,6 +5,43 @@
 #include "accumulationRegisterEnum.h"
 #include "backend/query/queryable.h"   // ibComputedRegisterQueryable<TReg> — shared base for the balance / turnover virtual tables
 
+#include <memory>
+
+class ibValueMetaObjectAccumulationRegister;
+class ibBalanceQueryable;
+class ibTurnoverQueryable;
+
+// L4 virtual-table source descriptors for the accumulation register — balances (as-of period +
+// dimension filter) and turnovers (begin/end range + filter). Owned by the register as fields;
+// registered under "<Register>.Balance" / ".Turnovers". CreateQueryable BUILDS the call-scoped
+// companion from the params and OWNS it. Method bodies are inline at the BOTTOM of this header
+// (where the companions are complete).
+class ibAccumRegisterBalanceDescriptor : public ibQueryableSourceDescriptor
+{
+public:
+	explicit ibAccumRegisterBalanceDescriptor(ibValueMetaObjectAccumulationRegister* reg) : m_reg(reg) {}
+	~ibAccumRegisterBalanceDescriptor() override;
+	wxString GetNamespace() const override;
+	wxString GetName() const override;
+	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+private:
+	ibValueMetaObjectAccumulationRegister* m_reg;
+	std::unique_ptr<ibBalanceQueryable>    m_companion;
+};
+
+class ibAccumRegisterTurnoverDescriptor : public ibQueryableSourceDescriptor
+{
+public:
+	explicit ibAccumRegisterTurnoverDescriptor(ibValueMetaObjectAccumulationRegister* reg) : m_reg(reg) {}
+	~ibAccumRegisterTurnoverDescriptor() override;
+	wxString GetNamespace() const override;
+	wxString GetName() const override;
+	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+private:
+	ibValueMetaObjectAccumulationRegister* m_reg;
+	std::unique_ptr<ibTurnoverQueryable>   m_companion;
+};
+
 class ibValueMetaObjectAccumulationRegister : public ibValueMetaObjectRegisterData {
 	public:
 private:
@@ -204,6 +241,11 @@ private:
 	friend class ibTurnoverQueryable;
 
 	friend class ibMetaData;
+
+	// L4 custom virtual-table descriptors — registered alongside the base records descriptor on
+	// run, dropped on close. Reached as AccumulationRegister.<Name>.Balance / .Turnovers.
+	ibAccumRegisterBalanceDescriptor  m_balance { this };
+	ibAccumRegisterTurnoverDescriptor m_turnover{ this };
 };
 
 //********************************************************************************************
@@ -241,6 +283,49 @@ private:
 	ibValue m_end;
 	ibValue m_filter;
 };
+
+// --- L4 descriptor method bodies (the register + balance / turnover companions are complete) ---
+
+inline ibAccumRegisterBalanceDescriptor::~ibAccumRegisterBalanceDescriptor() = default;
+
+inline wxString ibAccumRegisterBalanceDescriptor::GetNamespace() const
+{
+	return ibValue::GetNameObjectFromID(m_reg->GetClassType());
+}
+
+inline wxString ibAccumRegisterBalanceDescriptor::GetName() const
+{
+	return m_reg->GetName() + wxT(".Balance");
+}
+
+inline const ibBackendQueryable* ibAccumRegisterBalanceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
+{
+	const ibValue period = (lSizeArray > 0 && paParams != nullptr && paParams[0] != nullptr) ? *paParams[0] : ibValue();
+	const ibValue filter = (lSizeArray > 1 && paParams != nullptr && paParams[1] != nullptr) ? *paParams[1] : ibValue();
+	m_companion = std::make_unique<ibBalanceQueryable>(m_reg, period, filter);
+	return m_companion.get();
+}
+
+inline ibAccumRegisterTurnoverDescriptor::~ibAccumRegisterTurnoverDescriptor() = default;
+
+inline wxString ibAccumRegisterTurnoverDescriptor::GetNamespace() const
+{
+	return ibValue::GetNameObjectFromID(m_reg->GetClassType());
+}
+
+inline wxString ibAccumRegisterTurnoverDescriptor::GetName() const
+{
+	return m_reg->GetName() + wxT(".Turnovers");
+}
+
+inline const ibBackendQueryable* ibAccumRegisterTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
+{
+	const ibValue begin  = (lSizeArray > 0 && paParams != nullptr && paParams[0] != nullptr) ? *paParams[0] : ibValue();
+	const ibValue end    = (lSizeArray > 1 && paParams != nullptr && paParams[1] != nullptr) ? *paParams[1] : ibValue();
+	const ibValue filter = (lSizeArray > 2 && paParams != nullptr && paParams[2] != nullptr) ? *paParams[2] : ibValue();
+	m_companion = std::make_unique<ibTurnoverQueryable>(m_reg, begin, end, filter);
+	return m_companion.get();
+}
 
 //********************************************************************************************
 //*                                      Object                                              *

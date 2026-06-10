@@ -32,7 +32,7 @@ class BACKEND_API ibValueMetaObjectConstant :
 	// that one-row table. The constant VENDS the queryable; ibConstantQueryable (a
 	// friend) owns the table navigation, from the constant's primitives (GetName /
 	// GetMetaID / GetTableNameDB). So From(constant->GetQueryable()) reads the one row.
-	virtual const ibBackendQueryable* GetQueryable() const override { return &m_queryable; }
+	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
 	friend class ibConstantQueryable;
 
 
@@ -122,8 +122,9 @@ private:
 
 	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("RecordModule"), _("Record module"));
 
-	// the vended queryable — stable for this constant's life (see GetQueryable()).
-	ibConstantQueryable m_queryable{ this };
+	// the L4 source descriptor — CONTAINS the vended queryable (stable for this constant's
+	// life) and is registered with the factory on run / close; GetQueryable() forwards to it.
+	ibMetaSourceDescriptor<ibConstantQueryable, ibValueMetaObjectConstant> m_queryable{ this };
 
 #pragma region role 
 	ibRole* m_roleRead = ibValueMetaObject::CreateRole(wxT("Read"), _("Read"));

@@ -61,6 +61,21 @@ ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable
 	return *this;
 }
 
+ibDataQueryBuilder& ibDataQueryBuilder::CrossJoin(const ibBackendQueryable* queryable, ibQueryJoinKind kind, const wxString& alias)
+{
+	// CROSS / ON TRUE — no join key, cartesian product. Built like a join but flagged m_cross so the
+	// composer takes the keyless RAM stitch (JoinRamTables already does cartesian on a null key) instead
+	// of trying to derive/require a key. Co-location is skipped (no single-field key).
+	auto node = std::make_shared<ibQueryNode>();
+	node->m_kind     = ibQueryNode::Kind::Join;
+	node->m_left     = m_root;
+	node->m_right    = ibQueryNode::Source(queryable, alias);
+	node->m_joinKind = kind;
+	node->m_cross    = true;
+	m_root = node;
+	return *this;
+}
+
 ibDataQueryBuilder& ibDataQueryBuilder::Union(const ibBackendQueryable* queryable, const wxString& alias)
 {
 	// Stack vertically: extend an existing Union, else wrap the prior root + the new part.
@@ -116,15 +131,77 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereLike(const ibBackendQueryColumn* co
 	return WhereCompare(col, ibQueryFilterOp::Like, pattern);
 }
 
+ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibQueryPredicatePtr& predicate)
+{
+	// Full boolean WHERE tree. AND-combine if the door is handed more than one (each Where(tree)
+	// adds a conjunct); the provider AND-folds it with the flat verb conditions / row-key filters.
+	if (!predicate)
+		return *this;
+	m_predicate = m_predicate
+		? ibQueryPredicate::Compose(ibQueryPredicateKind::And, m_predicate, predicate)
+		: predicate;
+	return *this;
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::Where(const std::vector<const ibBackendQueryColumn*>& path,
+	ibComparisonType comparison, const ibValue& value)
+{
+	if (path.empty())
+		return *this;
+	ibQueryCondition c;
+	c.m_col        = path.back();   // the leaf — carries the type for the provider's compare
+	c.m_comparison = comparison;
+	c.m_value      = value;
+	c.m_path       = path;
+	m_conditions.push_back(std::move(c));
+	return *this;
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::WhereCompare(const std::vector<const ibBackendQueryColumn*>& path,
+	ibQueryFilterOp op, const ibValue& value)
+{
+	if (path.empty())
+		return *this;
+	ibQueryCondition c;
+	c.m_col        = path.back();
+	c.m_value      = value;
+	c.m_explicitOp = true;
+	c.m_op         = op;
+	c.m_path       = path;
+	m_conditions.push_back(std::move(c));
+	return *this;
+}
+
 ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const ibBackendQueryColumn* col, bool ascending)
 {
 	m_sorts.push_back(ibQuerySortItem{ col, ascending });
 	return *this;
 }
 
+ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::vector<const ibBackendQueryColumn*>& path, bool ascending)
+{
+	if (path.empty())
+		return *this;
+	ibQuerySortItem s;
+	s.m_col       = path.back();
+	s.m_ascending = ascending;
+	s.m_path      = path;
+	m_sorts.push_back(std::move(s));
+	return *this;
+}
+
 ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const ibBackendQueryColumn* col)
 {
-	if (col) m_groupBy.push_back(col);
+	if (col) { m_groupBy.push_back(col); m_groupPaths.emplace_back(); }   // plain key — empty parallel path
+	return *this;
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::vector<const ibBackendQueryColumn*>& path)
+{
+	if (path.empty()) return *this;
+	if (path.size() == 1) return GroupBy(path.front());                  // not a dot-walk — plain key
+	m_groupBy.push_back(path.back());                                    // leaf is the grouped column
+	m_groupPaths.push_back(path);                                        // its reference path (provider joins it)
 	return *this;
 }
 
@@ -132,13 +209,42 @@ ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
 	const ibBackendQueryColumn* col, const wxString& alias)
 {
 	// Route to the current context: Totals() → the TotalBy common set, else the GroupBy set.
-	(m_aggInTotals ? m_totalAggregates : m_aggregates).push_back(AggregateItem{ fn, col, alias });
+	(m_aggInTotals ? m_totalAggregates : m_aggregates).push_back(AggregateItem{ fn, col, alias, {} });
+	return *this;
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
+	const std::vector<const ibBackendQueryColumn*>& path, const wxString& alias)
+{
+	if (path.empty()) return *this;
+	if (path.size() == 1) return Aggregate(fn, path.front(), alias);     // not a dot-walk — plain aggregate input
+	(m_aggInTotals ? m_totalAggregates : m_aggregates).push_back(AggregateItem{ fn, path.back(), alias, path });
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::TotalBy(const ibBackendQueryColumn* col, ibDimensionKind dim)
 {
 	if (col != nullptr) m_totals.push_back(ibTotalLevel{ col, dim });
+	return *this;
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::TotalBy(const std::vector<const ibBackendQueryColumn*>& path, ibDimensionKind dim)
+{
+	if (path.empty()) return *this;
+	if (path.size() == 1) return TotalBy(path.front(), dim);   // not a dot-walk — plain dimension column
+	// A dot-walk dimension without a synthetic column would project the leaf under its own physical name and
+	// CLASH with the main table on a self-reference (Parent.Code). The lowering must route through
+	// TotalByDotWalk with a synthetic column; reaching here with a raw path is a programming error.
+	wxASSERT_MSG(false, wxT("dot-walk TOTALS dimension must go through TotalByDotWalk (synthetic column)"));
+	return *this;
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::TotalByDotWalk(const std::vector<const ibBackendQueryColumn*>& path,
+	const ibBackendQueryColumn* dimCol, const wxString& alias, ibDimensionKind dim)
+{
+	if (path.size() < 2 || dimCol == nullptr) return *this;
+	m_dimWalks.push_back(ibDotWalkColumn{ path, alias });    // provider projects the leaf scalar AS `alias`
+	m_totals.push_back(ibTotalLevel{ dimCol, dim });         // fold groups by dimCol's OWN unique model id
 	return *this;
 }
 
@@ -161,6 +267,13 @@ ibDataQueryBuilder& ibDataQueryBuilder::Select(const ibBackendQueryColumn* col, 
 {
 	if (col != nullptr)
 		m_selectCols.emplace_back(col, alias);
+	return *this;
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::SelectExpr(const ibQueryColumnExprPtr& expr, const wxString& alias)
+{
+	if (expr != nullptr)
+		m_selectExprs.push_back(ibQueryColumnSelect{ expr, alias });
 	return *this;
 }
 
@@ -227,13 +340,17 @@ ibDataQuerySpec ibDataQueryBuilder::BuildSpec() const
 	spec.m_queryable   = m_queryable;       // current/primary source (single-source fast path)
 	spec.m_root        = m_root.get();      // the relational tree — the composer walks it
 	spec.m_conditions  = &m_conditions;
+	spec.m_predicate   = m_predicate;       // full boolean WHERE tree (null = none)
 	spec.m_keyIn       = &m_keyIn;
 	spec.m_sorts       = &m_sorts;
 	spec.m_groupBy     = &m_groupBy;
+	spec.m_groupPaths  = &m_groupPaths;
 	spec.m_aggregates  = &m_aggregates;
 	spec.m_having      = &m_having;
 	spec.m_writeValues = &m_writeValues;
 	spec.m_dotWalks    = &m_dotWalks;
+	spec.m_dimWalks    = &m_dimWalks;
+	spec.m_selectExprs = &m_selectExprs;
 	spec.m_selectCols  = &m_selectCols;
 	spec.m_distinct    = m_distinct;
 	return spec;

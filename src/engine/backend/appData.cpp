@@ -30,6 +30,8 @@
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/databaseLayer/connectionPool.h"
 
+#include "backend/query/queryableFactory.h"   // ibQueryableFactory (owned via GetQueryableFactory)
+
 // GetDatabaseLayer — trivial delegate. The actual priority chain
 // lives inside ibConnectionPool (TX > scope TL > primary). Kept here
 // so the db_query macro's target stays stable; legacy call sites
@@ -165,6 +167,7 @@ ibApplicationData::ibApplicationData(ibRunMode runMode) :
 	m_connectionPool(std::unique_ptr<ibConnectionPool>(new ibConnectionPool(ib::AppDataCtorToken{}))),
 	m_pluginManager(std::unique_ptr<ibPluginManager>(new ibPluginManager(ib::AppDataCtorToken{}))),
 	m_lockManager(std::unique_ptr<ibLockManager>(new ibLockManager(ib::AppDataCtorToken{}))),
+	m_queryableFactory(std::unique_ptr<ibQueryableFactory>(new ibQueryableFactory(ib::AppDataCtorToken{}))),
 	m_sessionRegistry(std::unique_ptr<ibSessionRegistry>(new ibSessionRegistry(ib::AppDataCtorToken{}, PickWorkerCount(runMode)))),
 	m_dbMode(ibDatabaseMode::eNONE),
 	m_locale_lang(wxLanguage::wxLANGUAGE_UNKNOWN)

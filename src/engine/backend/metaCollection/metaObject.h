@@ -336,8 +336,8 @@ public:
 	//for designer 
 	virtual bool OnReloadMetaObject() { return true; }
 
-	//module manager is started or exit 
-	//after and before for designer 
+	//module manager is started or exit
+	//after and before for designer
 	virtual bool OnBeforeRunMetaObject(int flags) { return true; }
 	virtual bool OnAfterRunMetaObject(int flags) { return true; }
 

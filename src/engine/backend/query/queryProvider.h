@@ -125,13 +125,20 @@ public:
 	static ibQueryRamTable   JoinRamTables(const ibQueryRamTable& left, const ibQueryRamTable& right,
 	                                       const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 	                                       const std::vector<const ibBackendQueryColumn*>& outCols,
-	                                       const std::vector<bool>& fromLeft);
+	                                       const std::vector<bool>& fromLeft,
+	                                       ibQueryJoinKind kind = ibQueryJoinKind::Inner);   // Inner / Left / Right / Full
 	// Append one UNION branch's rows to `out`: each output column is read from the branch's
 	// same-named column (branchCols, by position; null = absent -> NULL cell). The RAM UNION
 	// stacking core, pure (no DB) — unit-testable.
 	static void              AppendUnionBranch(ibQueryRamTable& out, const ibQueryRamTable& branch,
 	                                           const std::vector<const ibBackendQueryColumn*>& outCols,
 	                                           const std::vector<const ibBackendQueryColumn*>& branchCols);
+	// Keep only the rows of `src` that satisfy the boolean WHERE TREE (And/Or/Not/IsNull/Leaf) — the
+	// post-compose RAM filter for an OR / IS NULL spanning a non-co-located JOIN. Pure — unit-testable.
+	static ibQueryRamTable   FilterRows(const ibQueryRamTable& src, const ibQueryPredicate* predicate);
+	// Evaluate a computed output column (Column / Const / Arith / Case) against one composed row — the
+	// per-row eval for a computed column over a JOIN (single source pushes it to SQL). Pure — unit-testable.
+	static ibValue           EvalColumnExpr(const ibQueryColumnExpr* expr, const ibQueryRamTable& table, long row);
 	static bool ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind);
 };
 

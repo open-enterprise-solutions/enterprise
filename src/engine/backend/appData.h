@@ -21,6 +21,11 @@
 
 #define db_query  (ibApplicationData::GetDatabaseLayer())
 
+// Queryable-source factory — the L4 query engine resolves a source namespace
+// (Catalog / Document / a plugin / an external DB) to a queryable through it.
+// POINTER (nullptr pre-appData / post-appData), like GetLockManager; null-check it.
+#define query_sources (ibApplicationData::GetQueryableFactory())
+
 // Audit + trace logger. One per process, lifetime managed by
 // ibApplicationData. Resolves to nullptr before Init / after Destroy.
 #define ibLog     (ibApplicationData::GetLogger())
@@ -180,6 +185,15 @@ public:
 	// line in appData.cpp; the TL slots themselves live on
 	// ibConnectionPool (see connectionPool.h).
 	static std::shared_ptr<ibDatabaseLayer> GetDatabaseLayer();
+
+	// The L4 query-engine source factory (query/queryableFactory.h) — OWNED by appData,
+	// mirroring GetLockManager (nullptr pre-appData / post-appData; no static of its own).
+	// Its descriptor CONTENTS are registered on metadata open and dropped on close; the
+	// factory object lives with appData. Reached via the `query_sources` macro. Present
+	// even with no metadata (external sources still resolve).
+	static class ibQueryableFactory* GetQueryableFactory() {
+		return s_instance != nullptr ? s_instance->m_queryableFactory.get() : nullptr;
+	}
 
 	// Process-wide connection pool — the sole owner of every live
 	// ibDatabaseLayer. Pool holds the master (opened at Init) as
@@ -443,6 +457,11 @@ private:
 	// Long-held pessimistic lock coordinator (sys_lock table). No
 	// external dependencies on teardown.
 	std::unique_ptr<class ibLockManager> m_lockManager;
+
+	// L4 query-engine source factory (descriptors of how to create queryables).
+	// No external deps on teardown; its descriptor contents follow the metadata
+	// open/close lifecycle, the object itself lives with appData.
+	std::unique_ptr<class ibQueryableFactory> m_queryableFactory;
 
 	// Audit + trace logger. Owns its own SQLite handle (not the pool's).
 	// Built after the DB + connection pool are live; declared here so

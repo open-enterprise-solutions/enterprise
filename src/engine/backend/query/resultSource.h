@@ -19,6 +19,11 @@ public:
 	// has no row-key, so it yields empty). No separate GuidString accessor. (docs §22.4d)
 	virtual ibValue  Value(const ibBackendQueryColumn* col) const = 0;
 	virtual ibValue  Column(const wxString& alias)          const = 0;   // by output name (aggregates)
+	// Reconstruct a METADATA-OBJECT column (reference / enum / composite) from its field spread projected
+	// under `prefix` (a dot-walk leaf joined as <prefix>_TYPE/_RTRef/_RRRef/…). Reassembles the value the
+	// way a normal metadata column reads — vs Column(alias), which reads ONE scalar field. Default: a plain
+	// read by the prefix as alias (a RAM backing already holds the reassembled value under that name).
+	virtual ibValue  ColumnObject(const wxString& prefix, const ibBackendQueryColumn* /*col*/) const { return Column(prefix); }
 };
 
 #endif // __RESULT_SOURCE_H__

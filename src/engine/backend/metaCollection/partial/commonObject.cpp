@@ -10,6 +10,8 @@
 #include "backend/objCtor.h"
 #include "backend/session/session.h"
 
+#include "backend/query/queryableHooks.h"   // light L4 source registration hooks (no appData / factory include here)
+
 #include "backend/metaCollection/partial/reference/reference.h"
 
 //***********************************************************************
@@ -307,11 +309,19 @@ bool ibValueMetaObjectRecordDataRef::OnBeforeRunMetaObject(int flags)
 
 bool ibValueMetaObjectRecordDataRef::OnAfterRunMetaObject(int flags)
 {
-	return ibValueMetaObjectRecordData::OnAfterRunMetaObject(flags);
+	if (!ibValueMetaObjectRecordData::OnAfterRunMetaObject(flags))
+		return false;
+	// Register this record (catalog / document / charts / enum — subtypes chain up here) as
+	// an L4 query source: it OWNS its descriptor field m_sourceDescriptor. Check the flag
+	// BEFORE registering — skip the onlyLoadFlag (load-only) pass.
+	if (!(flags & onlyLoadFlag))
+		ibRegisterQueryableSource(&m_queryable);
+	return true;
 }
 
 bool ibValueMetaObjectRecordDataRef::OnBeforeCloseMetaObject()
 {
+	ibUnregisterQueryableSource(&m_queryable);
 	return ibValueMetaObjectRecordData::OnBeforeCloseMetaObject();
 }
 
@@ -1138,6 +1148,24 @@ bool ibValueMetaObjectRegisterData::OnBeforeRunMetaObject(int flags)
 	registerRecordManager();
 
 	return ibValueMetaObject::OnBeforeRunMetaObject(flags);
+}
+
+bool ibValueMetaObjectRegisterData::OnAfterRunMetaObject(int flags)
+{
+	if (!ibValueMetaObjectGenericData::OnAfterRunMetaObject(flags))
+		return false;
+	// The register OWNS its main (records) descriptor field. On load it ADDITIONALLY registers
+	// its balance / turnover / slice descriptors (separate parameterized descriptors — TODO),
+	// and drops them on unload. Check the flag BEFORE registering — skip the onlyLoadFlag pass.
+	if (!(flags & onlyLoadFlag))
+		ibRegisterQueryableSource(&m_queryable);
+	return true;
+}
+
+bool ibValueMetaObjectRegisterData::OnBeforeCloseMetaObject()
+{
+	ibUnregisterQueryableSource(&m_queryable);
+	return ibValueMetaObjectGenericData::OnBeforeCloseMetaObject();
 }
 
 bool ibValueMetaObjectRegisterData::OnAfterCloseMetaObject()

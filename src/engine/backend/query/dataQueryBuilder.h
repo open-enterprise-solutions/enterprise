@@ -58,7 +58,9 @@ struct ibDataQuerySpec;     // the door's accumulated query as a value — defin
 //
 // AXIS 1 — TRAVERSAL kind (Select(kind)): Direct (rows as-is) / ByGroups (by levels) /
 //   ByGroupsHierarchy (by levels + dimension hierarchy).
-enum class ibSelectKind { Direct, ByGroups, ByGroupsHierarchy };
+// Plain enum (implicitly numeric) with prefixed enumerators — the system-enum convention, so it can be
+// reflected to the runtime like the other 30+ enums (ibValueEnumeration needs the enum→number conversion).
+enum ibSelectKind { ibSelectKind_Direct, ibSelectKind_ByGroups, ibSelectKind_ByGroupsHierarchy };
 // AXIS 2 — DIMENSION kind (TotalBy field): Elements / Hierarchy / HierarchyOnly — how a reference
 //   field unfolds (folders).
 enum class ibDimensionKind { Elements, Hierarchy, HierarchyOnly };
@@ -66,7 +68,10 @@ enum class ibDimensionKind { Elements, Hierarchy, HierarchyOnly };
 enum class ibAggregateFn { Sum, Count, Min, Max, Avg };
 // One output aggregate (.Sum/.Count…): rolls IN-PLACE into m_col (alias vestigial, used only by the
 // flat SelectAggregate path). m_col null = COUNT(*).
-struct ibAggregateItem { ibAggregateFn m_fn; const ibBackendQueryColumn* m_col; wxString m_alias; };
+// m_path (non-empty) = the aggregate input is a reference DOT-WALK leaf (SUM(Producer.Weight)) — the
+// provider joins the path and qualifies m_col (== m_path.back()) by the join alias. Empty = plain column.
+struct ibAggregateItem { ibAggregateFn m_fn; const ibBackendQueryColumn* m_col; wxString m_alias;
+                         std::vector<const ibBackendQueryColumn*> m_path; };
 // One TotalBy dimension level — the field to roll up by + how it unfolds. Levels apply IN ORDER.
 struct ibTotalLevel    { const ibBackendQueryColumn* m_col; ibDimensionKind m_dim; };
 
@@ -143,13 +148,17 @@ public:
 	// alias) that have no source column. Group columns still read via GetValue(col).
 	ibValue GetColumn(const wxString& alias) const;
 
+	// A dot-walk leaf that is a reference / enum / composite — reassembled from its field spread projected
+	// under `prefix` (vs GetColumn, which reads one scalar field). An empty / broken ref reads as пусто.
+	ibValue GetColumnObject(const wxString& prefix, const ibBackendQueryColumn* col) const;
+
 	// TRAVERSAL — selection = result.Select(mode). Drains the cursor ONCE into a flat snapshot
 	// (the materialise-columns the door stamped) and hands it to an ibSelector, which decides HOW to
 	// walk it per the mode — flat / hierarchy / hierarchy-only — polymorphically; the caller sees one
 	// interface, never which. Configure the fold on the returned Selector (ByParentRef / ByGroups /
 	// Aggregating). Consumes the result (the cursor is drained). Defined where ibSelector is complete.
 	// (docs/query-language-arc.md §22.1b)
-	ibSelector Select(ibSelectKind kind = ibSelectKind::Direct);
+	ibSelector Select(ibSelectKind kind = ibSelectKind::ibSelectKind_Direct);
 
 	// The door stamps the columns a later Select(mode) must materialise (its Select() output list +
 	// aggregate inputs) — so the snapshot carries exactly what the fold reads. No-op for the working
@@ -197,7 +206,7 @@ private:
 // and creates it via ibDataQueryBuilder::NewPageCache(), never naming its layout.
 
 // L3 join kind — the door's own (NOT L2's ibQueryJoinType; the door is L2-blind).
-enum class ibQueryJoinKind { Inner, Left };
+enum class ibQueryJoinKind { Inner, Left, Right, Full };   // Right / Full -> RAM stitch only (co-located does Inner/Left)
 
 // (ibSelectKind / ibDimensionKind — defined at namespace scope above, before ibDataQueryResult.)
 
@@ -226,6 +235,7 @@ struct ibQueryNode
 	const ibBackendQueryColumn*  m_onLeft  = nullptr;  // explicit on-cols; both null = auto by reference (dot-walk style)
 	const ibBackendQueryColumn*  m_onRight = nullptr;
 	ibQueryJoinKind              m_joinKind = ibQueryJoinKind::Inner;
+	bool                         m_cross    = false;   // CROSS / ON TRUE — no keys, cartesian product (RAM only)
 
 	// --- Union (vertical): N branches of one shape ----------------------
 	std::vector<std::shared_ptr<ibQueryNode>> m_parts;
@@ -268,6 +278,9 @@ public:
 	                         const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,
 	                         const wxString& alias = wxEmptyString);                            // explicit on-columns
+	ibDataQueryBuilder& CrossJoin(const ibBackendQueryable* queryable,
+	                              ibQueryJoinKind kind = ibQueryJoinKind::Inner,
+	                              const wxString& alias = wxEmptyString);                        // CROSS / ON TRUE — cartesian
 	ibDataQueryBuilder& Union(const ibBackendQueryable* queryable, const wxString& alias = wxEmptyString); // stack vertically
 	ibDataQueryBuilder& Where(const ibBackendQueryColumn* col,
 	                          ibComparisonType comparison, const ibValue& value);            // condition -> predicate
@@ -277,8 +290,21 @@ public:
 	                              const ibValue& pattern);                                    // col LIKE pattern (FindByCode/Description)
 	ibDataQueryBuilder& WhereCompare(const ibBackendQueryColumn* col,
 	                                 ibQueryFilterOp op, const ibValue& value);               // col <op> value (ordered: <=, <, >, >=, LIKE)
+	// Full boolean WHERE — a predicate TREE (OR / NOT / IS NULL beyond the flat AND-fold of the
+	// verbs above). L4 builds it from its parsed WHERE; the provider lowers it to the L2 IR. AND-folded
+	// with any verb conditions / row-key filters. (docs/query-language-arc.md §23 — door Where via L2.)
+	ibDataQueryBuilder& Where(const ibQueryPredicatePtr& predicate);
+	// Reference DOT-WALK filter / compare — filter the LEAF attribute of a reference path
+	// (Producer.Region = value). The provider auto-joins the path (the same join SelectPath builds) and
+	// compares on the joined leaf. Single-source read path only. (docs §23 — dot-walk in WHERE.)
+	ibDataQueryBuilder& Where(const std::vector<const ibBackendQueryColumn*>& path,
+	                          ibComparisonType comparison, const ibValue& value);
+	ibDataQueryBuilder& WhereCompare(const std::vector<const ibBackendQueryColumn*>& path,
+	                                 ibQueryFilterOp op, const ibValue& value);
 	ibDataQueryBuilder& OrderBy(const ibBackendQueryColumn* col, bool ascending);            // col (null = row-key) -> sort
+	ibDataQueryBuilder& OrderBy(const std::vector<const ibBackendQueryColumn*>& path, bool ascending); // dot-walk leaf sort
 	ibDataQueryBuilder& GroupBy(const ibBackendQueryColumn* col);                            // grouping key (reports / totals)
+	ibDataQueryBuilder& GroupBy(const std::vector<const ibBackendQueryColumn*>& path);       // dot-walk grouping key (Producer.Region)
 
 	// --- dot-walk select columns (reference navigation) ------------------
 	// Add an output column that walks a reference PATH and reads a leaf attribute on
@@ -291,6 +317,11 @@ public:
 	// carry the self-reference join key). (docs/query-language-arc.md §22 dot-walk)
 	ibDataQueryBuilder& SelectPath(const std::vector<const ibBackendQueryColumn*>& path,
 	                               const wxString& alias);
+
+	// --- computed output column (arithmetic / CASE) ----------------------
+	// Project a COMPUTED expression (a * b, CASE …) under `alias`; read it back with GetColumn(alias).
+	// The provider lowers the L3 expression tree to the L2 IR. Single-source read. (docs §23 computed.)
+	ibDataQueryBuilder& SelectExpr(const ibQueryColumnExprPtr& expr, const wxString& alias);
 
 	// --- aggregation (totals / totals) ------------------------------------
 	// AggregateFn / AggregateItem / ibTotalLevel are defined at namespace scope (above, before
@@ -309,6 +340,9 @@ public:
 	};
 
 	ibDataQueryBuilder& Aggregate(AggregateFn fn, const ibBackendQueryColumn* col, const wxString& alias);
+	// Aggregate over a reference DOT-WALK leaf — SUM(Producer.Weight). The provider joins the path and
+	// qualifies the leaf by the join alias; read back by alias like any aggregate.
+	ibDataQueryBuilder& Aggregate(AggregateFn fn, const std::vector<const ibBackendQueryColumn*>& path, const wxString& alias);
 	ibDataQueryBuilder& Sum  (const ibBackendQueryColumn* col, const wxString& alias) { return Aggregate(AggregateFn::Sum,   col,     alias); }
 	ibDataQueryBuilder& Min  (const ibBackendQueryColumn* col, const wxString& alias) { return Aggregate(AggregateFn::Min,   col,     alias); }
 	ibDataQueryBuilder& Max  (const ibBackendQueryColumn* col, const wxString& alias) { return Aggregate(AggregateFn::Max,   col,     alias); }
@@ -334,6 +368,13 @@ public:
 	ibDataQueryBuilder& Distinct() { m_distinct = true; return *this; }
 	// One totals dimension level — the field to roll up by + how it unfolds. Levels apply IN ORDER.
 	ibDataQueryBuilder& TotalBy(const ibBackendQueryColumn* col, ibDimensionKind dim);
+	ibDataQueryBuilder& TotalBy(const std::vector<const ibBackendQueryColumn*>& path, ibDimensionKind dim);   // dot-walk dimension
+	// Dot-walk dimension with a caller-owned SYNTHETIC dimension column: the provider joins the path and
+	// projects the leaf's scalar value under `alias` (collision-free vs the main table), and the fold groups
+	// by `dimCol` (which reads that alias) under its OWN unique model id — so a self-referential dimension
+	// (Parent.Code) does not clash by metaID with the row's own attribute. The caller owns dimCol.
+	ibDataQueryBuilder& TotalByDotWalk(const std::vector<const ibBackendQueryColumn*>& path,
+		const ibBackendQueryColumn* dimCol, const wxString& alias, ibDimensionKind dim);
 
 	// HAVING — post-aggregation filter on an aggregate (HAVING SUM(qty) > 100). It
 	// references the aggregate EXPRESSION (portable), not the output alias. Several
@@ -440,8 +481,10 @@ private:
 	const ibBackendQueryable*    m_queryable = nullptr;  // .From() — the PRIMARY source (single-source fast path)
 	std::shared_ptr<ibQueryNode> m_root;            // the relational TREE (.From / .Join / .Union) — the composer executes it
 	std::vector<ibQueryCondition> m_conditions;     // .Where() (+ .WhereKey: null-attr = row-key)
+	ibQueryPredicatePtr           m_predicate;      // .Where(tree) — full boolean WHERE (OR/NOT/IS NULL); AND-folded with m_conditions
 	std::vector<ibQuerySortItem>  m_sorts;          // .OrderBy() — USER sort; identity tail appended in Select
 	std::vector<const ibBackendQueryColumn*> m_groupBy;   // .GroupBy()
+	std::vector<std::vector<const ibBackendQueryColumn*>> m_groupPaths;   // parallel to m_groupBy: dot-walk path (empty = plain column)
 	std::vector<ibValue>          m_keyIn;          // .WhereKeyIn() — row-key IN (OR-of-equals)
 	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> m_writeValues;   // .SetValue() — write assignments (key + data columns)
 	std::vector<AggregateItem>    m_aggregates;     // .Group().Sum()… — GroupBy common aggregate set
@@ -451,6 +494,10 @@ private:
 	bool                          m_aggInTotals = false;  // routing flag: .Aggregate → totals set when Totals() active
 	bool                          m_distinct    = false;  // .Distinct() — SELECT DISTINCT
 	std::vector<ibDotWalkColumn>  m_dotWalks;       // .SelectPath()
+	std::vector<ibDotWalkColumn>  m_dimWalks;       // .TotalByDotWalk() — a dot-walk TOTALS dimension: the provider
+	                                                //   joins the path and projects the leaf's SCALAR value under
+	                                                //   m_alias (distinct), read by a synthetic dimension column.
+	std::vector<ibQueryColumnSelect> m_selectExprs; // .SelectExpr() — computed output columns (arithmetic / CASE)
 	std::vector<std::pair<const ibBackendQueryColumn*, wxString>> m_selectCols;   // .Select(col, alias) — multi-source output list
 
 	// Raw (direct) columns the door was handed by value — owned here so the column pointers
@@ -485,13 +532,17 @@ struct ibDataQuerySpec
 	const ibBackendQueryable*                       m_queryable   = nullptr;   // the CURRENT source a leaf provider reads (single-source = the one source)
 	const ibQueryNode*                              m_root        = nullptr;   // the relational TREE — the composer walks it (null = pure single-source)
 	const std::vector<ibQueryCondition>*            m_conditions  = nullptr;
+	ibQueryPredicatePtr                             m_predicate;               // .Where(tree) — full boolean WHERE (null = none)
 	const std::vector<ibValue>*                     m_keyIn       = nullptr;
 	const std::vector<ibQuerySortItem>*             m_sorts       = nullptr;
 	const std::vector<const ibBackendQueryColumn*>* m_groupBy     = nullptr;
+	const std::vector<std::vector<const ibBackendQueryColumn*>>* m_groupPaths = nullptr;   // parallel to m_groupBy: dot-walk path per key (empty = plain)
 	const std::vector<ibDataQueryBuilder::AggregateItem>* m_aggregates = nullptr;
 	const std::vector<ibDataQueryBuilder::HavingItem>*    m_having     = nullptr;
 	const std::vector<std::pair<const ibBackendQueryColumn*, ibValue>>* m_writeValues = nullptr;
 	const std::vector<ibDotWalkColumn>*             m_dotWalks    = nullptr;
+	const std::vector<ibDotWalkColumn>*             m_dimWalks    = nullptr;   // dot-walk TOTALS dimensions
+	const std::vector<ibQueryColumnSelect>*         m_selectExprs = nullptr;   // computed output columns (arithmetic / CASE)
 	const std::vector<std::pair<const ibBackendQueryColumn*, wxString>>* m_selectCols = nullptr;   // multi-source output list
 	bool                                            m_distinct    = false;   // .Distinct() — SELECT DISTINCT
 };

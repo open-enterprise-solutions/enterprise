@@ -313,6 +313,7 @@ const ibBackendQueryColumn* ReferenceColumnTo(const ibBackendQueryable* from, co
 // Returns false when neither given nor derivable. (docs §22.1)
 bool ResolveJoinKeys(const ibQueryNode* join, const ibBackendQueryColumn*& onL, const ibBackendQueryColumn*& onR)
 {
+	if (join->m_cross) { onL = nullptr; onR = nullptr; return true; }   // CROSS / ON TRUE — valid keyless join (cartesian)
 	onL = join->m_onLeft; onR = join->m_onRight;
 	if (onL != nullptr && onR != nullptr) return true;
 	const ibBackendQueryable* qL = (join->m_left  && join->m_left->m_kind  == ibQueryNode::Kind::Source) ? join->m_left->m_queryable  : nullptr;
@@ -334,6 +335,147 @@ void CollectJoinKeys(const ibQueryNode* node, std::vector<const ibBackendQueryCo
 	CollectJoinKeys(node->m_left.get(),  out);
 	CollectJoinKeys(node->m_right.get(), out);
 }
+// --- boolean WHERE TREE over a composed (non-co-located) JOIN: a post-compose RAM filter ----------
+// A pure AND-of-simple WHERE rides m_conditions and is pushed per leaf; an OR / NOT / IS NULL that spans
+// leaves cannot be pushed, so it is evaluated against the materialised joined row here. Only PLAIN
+// (non-dot-walk) leaves filter in RAM — a dot-walk leaf would need a further join not in the composed
+// table. Each leaf column rides into the composed table via ReferencedColumns below.
+
+// SQL LIKE on a string cell — case-insensitive, '%' = any run, '_' = one char (no escape handling).
+bool RamLike(const wxString& s, const wxString& pat)
+{
+	const wxString S = s.Lower(), P = pat.Lower();
+	std::function<bool(size_t, size_t)> m = [&](size_t si, size_t pi) -> bool {
+		if (pi == P.size()) return si == S.size();
+		if (P[pi] == '%')   return m(si, pi + 1) || (si < S.size() && m(si + 1, pi));
+		if (si < S.size() && (P[pi] == '_' || P[pi] == S[si])) return m(si + 1, pi + 1);
+		return false;
+	};
+	return m(0, 0);
+}
+
+bool RamEvalLeaf(const ibQueryCondition& c, const ibQueryRamTable& t, long row)
+{
+	if (c.m_col == nullptr) return false;
+	const ibValue cell = t.GetCell(row, c.m_col->GetModelID());
+	if (c.m_explicitOp) {
+		switch (c.m_op) {
+			case ibQueryFilterOp::Less:         return cell.CompareValueLS(c.m_value);
+			case ibQueryFilterOp::LessEqual:    return cell.CompareValueLE(c.m_value);
+			case ibQueryFilterOp::Greater:      return cell.CompareValueGT(c.m_value);
+			case ibQueryFilterOp::GreaterEqual: return cell.CompareValueGE(c.m_value);
+			case ibQueryFilterOp::Like:         return RamLike(cell.GetString(), c.m_value.GetString());
+		}
+		return false;
+	}
+	const bool eq = cell.CompareValueEQ(c.m_value);
+	return c.m_comparison == ibComparisonType::ibComparisonType_NotEqual ? !eq : eq;
+}
+
+bool RamEvalPredicate(const ibQueryPredicate* p, const ibQueryRamTable& t, long row)
+{
+	if (p == nullptr) return true;
+	switch (p->m_kind) {
+		case ibQueryPredicateKind::Leaf: return RamEvalLeaf(p->m_leaf, t, row);
+		case ibQueryPredicateKind::And:  for (const auto& c : p->m_children) if (!RamEvalPredicate(c.get(), t, row)) return false; return true;
+		case ibQueryPredicateKind::Or:   for (const auto& c : p->m_children) if ( RamEvalPredicate(c.get(), t, row)) return true;  return false;
+		case ibQueryPredicateKind::Not:  return p->m_children.empty() ? true : !RamEvalPredicate(p->m_children.front().get(), t, row);
+		case ibQueryPredicateKind::IsNull: {
+			if (p->m_col == nullptr) return false;
+			const ibValue cell = t.GetCell(row, p->m_col->GetModelID());
+			const bool isNull = cell.GetType() == ibValueTypes::TYPE_NULL || cell.GetType() == ibValueTypes::TYPE_EMPTY;
+			return p->m_negated ? !isNull : isNull;
+		}
+	}
+	return true;
+}
+
+// RAM-filterable = every leaf is a PLAIN column (no dot-walk path). A dot-walk leaf needs a join the
+// composed table doesn't carry, so that case still errors (kept honest, not silently dropped).
+bool PredicateIsRamFilterable(const ibQueryPredicate* p)
+{
+	if (p == nullptr) return true;
+	switch (p->m_kind) {
+		case ibQueryPredicateKind::Leaf:   return p->m_leaf.m_path.empty() && p->m_leaf.m_col != nullptr;
+		case ibQueryPredicateKind::IsNull: return p->m_path.empty()        && p->m_col != nullptr;
+		case ibQueryPredicateKind::And:
+		case ibQueryPredicateKind::Or:     for (const auto& c : p->m_children) if (!PredicateIsRamFilterable(c.get())) return false; return true;
+		case ibQueryPredicateKind::Not:    return p->m_children.empty() || PredicateIsRamFilterable(p->m_children.front().get());
+	}
+	return false;
+}
+
+void GatherPredicateColumns(const ibQueryPredicate* p, const std::function<void(const ibBackendQueryColumn*)>& add)
+{
+	if (p == nullptr) return;
+	switch (p->m_kind) {
+		case ibQueryPredicateKind::Leaf:   add(p->m_leaf.m_col); break;
+		case ibQueryPredicateKind::IsNull: add(p->m_col);        break;
+		case ibQueryPredicateKind::And:
+		case ibQueryPredicateKind::Or:     for (const auto& c : p->m_children) GatherPredicateColumns(c.get(), add); break;
+		case ibQueryPredicateKind::Not:    if (!p->m_children.empty()) GatherPredicateColumns(p->m_children.front().get(), add); break;
+	}
+}
+
+// Keep only the rows that satisfy the boolean predicate (a fresh table — same columns).
+ibQueryRamTable RamFilter(const ibQueryRamTable& src, const ibQueryPredicate* pred)
+{
+	ibQueryRamTable out;
+	for (const ibQueryRamColumn& c : src.Columns()) out.AddColumn(c.m_id, c.m_name, c.m_type);
+	for (long r = 0; r < src.RowCount(); ++r) {
+		if (!RamEvalPredicate(pred, src, r)) continue;
+		const long nr = out.AppendRow();
+		for (const ibQueryRamColumn& c : src.Columns()) out.SetCell(nr, c.m_id, src.GetCell(r, c.m_id));
+	}
+	return out;
+}
+
+// --- computed output columns (arithmetic / CASE) over a composed (multi-source) JOIN ----------------
+// A computed column is SQL-pushed for a single source; over a JOIN the leaves materialise to RAM, so
+// the expression is evaluated per joined row here off the column-based AST (Column / Const / Arith /
+// Case — the CASE reuses the boolean predicate evaluator). Pure — unit-testable via EvalColumnExpr.
+ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRamTable& t, long row)
+{
+	if (e == nullptr) return ibValue();
+	switch (e->m_kind) {
+		case ibQueryColumnExprKind::Column: return e->m_col != nullptr ? t.GetCell(row, e->m_col->GetModelID()) : ibValue();
+		case ibQueryColumnExprKind::Const:  return e->m_const;
+		case ibQueryColumnExprKind::Arith: {
+			const ibNumber a = EvalColumnExprRow(e->m_lhs.get(), t, row).GetNumber();
+			const ibNumber b = EvalColumnExprRow(e->m_rhs.get(), t, row).GetNumber();
+			switch (e->m_arith) {
+				case ibQueryColumnArithOp::Add: return ibValue(a + b);
+				case ibQueryColumnArithOp::Sub: return ibValue(a - b);
+				case ibQueryColumnArithOp::Mul: return ibValue(a * b);
+				case ibQueryColumnArithOp::Div: return ibValue(b.IsZero() ? ibNumber() : a / b);   // guard /0 -> 0
+				case ibQueryColumnArithOp::Mod: return ibValue(b.IsZero() ? ibNumber() : a % b);
+			}
+			return ibValue();
+		}
+		case ibQueryColumnExprKind::Case: {
+			for (const auto& wt : e->m_cases)
+				if (RamEvalPredicate(wt.first.get(), t, row)) return EvalColumnExprRow(wt.second.get(), t, row);
+			return e->m_else ? EvalColumnExprRow(e->m_else.get(), t, row) : ibValue();
+		}
+	}
+	return ibValue();
+}
+
+// Every source column an expression reads (so it rides into the composed table).
+void GatherColumnExprColumns(const ibQueryColumnExpr* e, const std::function<void(const ibBackendQueryColumn*)>& add)
+{
+	if (e == nullptr) return;
+	switch (e->m_kind) {
+		case ibQueryColumnExprKind::Column: add(e->m_col); break;
+		case ibQueryColumnExprKind::Const:  break;
+		case ibQueryColumnExprKind::Arith:  GatherColumnExprColumns(e->m_lhs.get(), add); GatherColumnExprColumns(e->m_rhs.get(), add); break;
+		case ibQueryColumnExprKind::Case:
+			for (const auto& wt : e->m_cases) { GatherPredicateColumns(wt.first.get(), add); GatherColumnExprColumns(wt.second.get(), add); }
+			GatherColumnExprColumns(e->m_else.get(), add);
+			break;
+	}
+}
+
 std::vector<const ibBackendQueryColumn*> ReferencedColumns(const ibDataQuerySpec& spec)
 {
 	std::vector<const ibBackendQueryColumn*> cols;
@@ -345,6 +487,9 @@ std::vector<const ibBackendQueryColumn*> ReferencedColumns(const ibDataQuerySpec
 	for (const auto& s : *spec.m_selectCols)             add(s.first);
 	for (const ibQuerySortItem& s : *spec.m_sorts)       add(s.m_col);   // ORDER BY cols ride too (sorted post-compose)
 	for (const ibQueryCondition& c : *spec.m_conditions) add(c.m_col);
+	GatherPredicateColumns(spec.m_predicate.get(), add);   // a boolean WHERE-tree leaf rides too (RAM post-filter)
+	if (spec.m_selectExprs != nullptr)
+		for (const ibQueryColumnSelect& sc : *spec.m_selectExprs) GatherColumnExprColumns(sc.m_expr.get(), add);   // computed cols ride too
 	CollectJoinKeys(spec.m_root, cols);
 	return cols;
 }
@@ -404,7 +549,7 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 	const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
 	ResolveJoinKeys(node, onL, onR);   // explicit or derived (the tree was validated resolvable)
 
-	return ibQueryComposer::JoinRamTables(TL, TR, onL, onR, outCols, fromLeft);
+	return ibQueryComposer::JoinRamTables(TL, TR, onL, onR, outCols, fromLeft, node->m_joinKind);
 }
 
 // Finalise a GetModelID-keyed combined table into the result: ORDER BY (RAM stable
@@ -436,12 +581,22 @@ ibDataQueryResult ProjectToAliases(const ibQueryRamTable& TC, const ibDataQueryS
 		TO.AddColumn(seq, s.second, s.first->GetTypeDesc());   // output keyed by seq, named by alias
 		outIds.push_back(seq++);
 	}
+	// COMPUTED output columns (arithmetic / CASE over the JOIN) — evaluated per row off the AST below.
+	std::vector<ibMetaID> exprIds;
+	const std::vector<ibQueryColumnSelect> noExprs;
+	const std::vector<ibQueryColumnSelect>& exprs = spec.m_selectExprs != nullptr ? *spec.m_selectExprs : noExprs;
+	for (const ibQueryColumnSelect& sc : exprs) {
+		TO.AddColumn(seq, sc.m_alias, ibTypeDescription());
+		exprIds.push_back(seq++);
+	}
 	const long limit = (page.m_count > 0) ? page.m_count : rows;
 	for (long oi = 0; oi < rows && oi < limit; ++oi) {
 		const long i = order[static_cast<size_t>(oi)];
 		const long r = TO.AppendRow();
 		for (size_t k = 0; k < spec.m_selectCols->size(); ++k)
 			TO.SetCell(r, outIds[k], RamCell(TC, i, (*spec.m_selectCols)[k].first));
+		for (size_t k = 0; k < exprs.size(); ++k)
+			TO.SetCell(r, exprIds[k], EvalColumnExprRow(exprs[k].m_expr.get(), TC, i));
 	}
 	return ibDataQueryResult(std::move(TO), spec.m_queryable);
 }
@@ -915,7 +1070,19 @@ ibDataQueryResult ComposeMultiSource(const ibDataQuerySpec& spec, const ibReadPa
 	if (!ok)
 		RamCompositionNotYet();
 
-	return ProjectToAliases(Compose(spec, ReferencedColumns(spec)), spec, page);
+	// A boolean WHERE TREE (OR / NOT / IS NULL across leaves) cannot be pushed per leaf (each leaf
+	// materialises with its OWN flat conditions), so it is evaluated as a POST-COMPOSE RAM filter over
+	// the joined rows (its leaf columns ride into the composed table via ReferencedColumns). Only a
+	// dot-walk leaf inside such a tree still errors — it needs a join the composed table doesn't carry.
+	if (spec.m_predicate && !PredicateIsRamFilterable(spec.m_predicate.get()))
+		throw std::logic_error("ibQueryComposer: a DOT-WALK leaf inside a boolean WHERE (OR/NOT/IN/IS NULL) "
+		                       "across a non-co-located JOIN is not yet supported (keep the dot-walk filter "
+		                       "to an AND-of-comparisons, or use a co-locatable join)");
+
+	ibQueryRamTable composed = Compose(spec, ReferencedColumns(spec));
+	if (spec.m_predicate)
+		composed = RamFilter(composed, spec.m_predicate.get());
+	return ProjectToAliases(composed, spec, page);
 }
 } // namespace
 
@@ -1135,7 +1302,7 @@ ibSelectorTree ibQueryComposer::BuildReferenceHierarchy(const ibQueryRamTable& s
 	{
 		ibDataQueryBuilder q(holder);
 		q.From(source->ResolveReferenceTarget(refCol)).Select(tRowKey, wxEmptyString).Select(tParent, wxEmptyString);
-		ibSelector ts = q.Execute(ibReadPageRequest{}).Select(ibSelectKind::Direct);
+		ibSelector ts = q.Execute(ibReadPageRequest{}).Select(ibSelectKind::ibSelectKind_Direct);
 		while (ts.Next())
 			parentOf[CellKey(ts.GetValue(tRowKey))] = CellKey(ts.GetValue(tParent));
 	}
@@ -1208,7 +1375,7 @@ std::map<wxString, wxString> ParentMapForField(const DimCtx& ctx, const ibBacken
 	if (rk == nullptr || pk == nullptr) return pm;
 	ibDataQueryBuilder q(ctx.holder);
 	q.From(target).Select(rk, wxEmptyString).Select(pk, wxEmptyString);
-	ibSelector ts = q.Execute(ibReadPageRequest{}).Select(ibSelectKind::Direct);
+	ibSelector ts = q.Execute(ibReadPageRequest{}).Select(ibSelectKind::ibSelectKind_Direct);
 	while (ts.Next())
 		pm[CellKey(ts.GetValue(rk))] = CellKey(ts.GetValue(pk));
 	return pm;
@@ -1321,33 +1488,48 @@ ibSelectorTree ibQueryComposer::BuildDimensionTree(const ibQueryRamTable& snapsh
 // its tagged side. Keyed by GetModelID throughout. Pure — the multi-source JOIN core.
 ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, const ibQueryRamTable& right,
 		const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
-		const std::vector<const ibBackendQueryColumn*>& outCols, const std::vector<bool>& fromLeft)
+		const std::vector<const ibBackendQueryColumn*>& outCols, const std::vector<bool>& fromLeft,
+		ibQueryJoinKind kind)
 {
 	ibQueryRamTable out;
 	for (const ibBackendQueryColumn* c : outCols)
 		out.AddColumn(c->GetModelID(), c->GetName(), c->GetTypeDesc());
 
+	// Emit one output row from a (left row, right row) pair — a negative index = that side is absent
+	// (an OUTER join's unmatched row), so its columns yield NULL cells.
+	auto emit = [&](long li, long rj) {
+		const long r = out.AppendRow();
+		for (size_t k = 0; k < outCols.size(); ++k) {
+			const long srcRow = fromLeft[k] ? li : rj;
+			const ibQueryRamTable& src = fromLeft[k] ? left : right;
+			out.SetCell(r, outCols[k]->GetModelID(), srcRow >= 0 ? src.GetCell(srcRow, outCols[k]->GetModelID()) : ibValue());
+		}
+	};
+
 	// Hash-join by the join key's IDENTITY key (GetHashKey — guid for refs): index the right side once,
-	// probe per left row. O(n+m) instead of O(n*m). Null join column -> empty key on both sides ->
-	// cartesian product (the prior keyL==keyR behaviour for a keyless join).
+	// probe per left row. O(n+m). Null join column -> empty key on both sides -> cartesian (keyless cross).
+	// INNER: matched pairs only. LEFT/FULL: also unmatched-left (right NULL). RIGHT/FULL: also unmatched-right.
+	const bool keepLeft  = (kind == ibQueryJoinKind::Left  || kind == ibQueryJoinKind::Full);
+	const bool keepRight = (kind == ibQueryJoinKind::Right || kind == ibQueryJoinKind::Full);
+
 	std::map<wxString, std::vector<long>> rightByKey;
 	for (long j = 0; j < right.RowCount(); ++j) {
 		const ibValue keyR = (onRight != nullptr) ? right.GetCell(j, onRight->GetModelID()) : ibValue();
 		rightByKey[keyR.GetHashKey()].push_back(j);
 	}
+	std::vector<char> rightMatched(static_cast<size_t>(right.RowCount()), 0);
 	for (long i = 0; i < left.RowCount(); ++i) {
 		const ibValue keyL = (onLeft != nullptr) ? left.GetCell(i, onLeft->GetModelID()) : ibValue();
 		const auto it = rightByKey.find(keyL.GetHashKey());
-		if (it == rightByKey.end()) continue;
-		for (const long j : it->second) {
-			const long r = out.AppendRow();
-			for (size_t k = 0; k < outCols.size(); ++k) {
-				const ibQueryRamTable& src = fromLeft[k] ? left : right;
-				const long srcRow = fromLeft[k] ? i : j;
-				out.SetCell(r, outCols[k]->GetModelID(), src.GetCell(srcRow, outCols[k]->GetModelID()));
-			}
+		if (it == rightByKey.end()) {
+			if (keepLeft) emit(i, -1);   // unmatched left row (LEFT / FULL)
+			continue;
 		}
+		for (const long j : it->second) { emit(i, j); rightMatched[static_cast<size_t>(j)] = 1; }
 	}
+	if (keepRight)
+		for (long j = 0; j < right.RowCount(); ++j)
+			if (!rightMatched[static_cast<size_t>(j)]) emit(-1, j);   // unmatched right row (RIGHT / FULL)
 	return out;
 }
 
@@ -1363,6 +1545,16 @@ void ibQueryComposer::AppendUnionBranch(ibQueryRamTable& out, const ibQueryRamTa
 			out.SetCell(r, outCols[k]->GetModelID(),
 			            branchCols[k] != nullptr ? branch.GetCell(i, branchCols[k]->GetModelID()) : ibValue());
 	}
+}
+
+ibQueryRamTable ibQueryComposer::FilterRows(const ibQueryRamTable& src, const ibQueryPredicate* predicate)
+{
+	return RamFilter(src, predicate);   // the post-compose boolean-WHERE-tree filter (defined above)
+}
+
+ibValue ibQueryComposer::EvalColumnExpr(const ibQueryColumnExpr* expr, const ibQueryRamTable& table, long row)
+{
+	return EvalColumnExprRow(expr, table, row);   // the per-row computed-column evaluator (defined above)
 }
 
 // totals (hierarchical totals): fold the detail rows into a subtotal TREE. The group
@@ -1452,6 +1644,7 @@ bool     ibDataQueryResult::Next()                                              
 ibValue  ibDataQueryResult::GetValue(const ibBackendQueryColumn* col)            const { return m_source->Value(col); }
 ibValue  ibDataQueryResult::GetValue(const ibRawDBColumn& rawColumn)             const { return m_source->Value(&rawColumn); }
 ibValue  ibDataQueryResult::GetColumn(const wxString& alias)                     const { return m_source->Column(alias); }
+ibValue  ibDataQueryResult::GetColumnObject(const wxString& prefix, const ibBackendQueryColumn* col) const { return m_source->ColumnObject(prefix, col); }
 
 void ibDataQueryResult::SetMaterialiseColumns(std::vector<const ibBackendQueryColumn*> cols)
 {

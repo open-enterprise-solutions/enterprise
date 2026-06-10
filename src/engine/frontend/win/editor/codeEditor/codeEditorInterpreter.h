@@ -187,6 +187,11 @@ public:
 	void PrepareLexem(unsigned int line, int offsetLine, const int& str_length);
 #endif
 
+	// Post-lex pass: a keyword right after a member-access `.` is a MEMBER NAME, not a keyword
+	// (`q.Execute().Select()` — `Select` is the method, not the SELECT projection keyword). Retags
+	// such lexems IDENTIFIER so autocomplete chains through them and they are not highlighted as keywords.
+	void ReclassifyMemberKeywords();
+
 protected:
 
 	bool CompileFunction();

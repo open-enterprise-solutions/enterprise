@@ -2,6 +2,7 @@
 #include "list/objectList.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/moduleManager/moduleManager.h"
+#include "backend/query/queryableHooks.h"   // light L4 source registration hooks (balance / turnover descriptors)
 
 //***********************************************************************
 //*                         metaData                                    * 
@@ -192,6 +193,12 @@ bool ibValueMetaObjectAccumulationRegister::OnAfterRunMetaObject(int flags)
 	if (!(*m_propertyObjectModule)->OnAfterRunMetaObject(flags))
 		return false;
 
+	// Custom virtual-table descriptors (balances / turnovers). The base records descriptor is
+	// registered by ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Skip onlyLoadFlag.
+	if (!(flags & onlyLoadFlag)) {
+		ibRegisterQueryableSource(&m_balance);
+		ibRegisterQueryableSource(&m_turnover);
+	}
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
@@ -209,6 +216,9 @@ bool ibValueMetaObjectAccumulationRegister::OnAfterRunMetaObject(int flags)
 
 bool ibValueMetaObjectAccumulationRegister::OnBeforeCloseMetaObject()
 {
+	ibUnregisterQueryableSource(&m_balance);
+	ibUnregisterQueryableSource(&m_turnover);
+
 	if (!(*m_propertyAttributibRecordType)->OnBeforeCloseMetaObject())
 		return false;
 

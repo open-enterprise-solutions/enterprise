@@ -175,6 +175,118 @@ TEST(QueryComposerCore, AppendUnionBranch_MissingColumnIsNull)
 }
 
 // ===========================================================================
+// CROSS JOIN (ON TRUE) — JoinRamTables with a NULL key = cartesian product
+// ===========================================================================
+
+TEST(QueryComposerCore, JoinRamTables_NullKeyIsCartesian)
+{
+	const ibMetaID A = 1, B = 2;
+	TestCol a(wxT("a"), A), b(wxT("b"), B);
+
+	ibQueryRamTable left;  left.AddColumn(A, wxT("a"), kNoType);
+	for (long v : { 1, 2 }) { const long r = left.AppendRow(); left.SetCell(r, A, ibValue(ibNumber(v))); }
+
+	ibQueryRamTable right; right.AddColumn(B, wxT("b"), kNoType);
+	for (long v : { 10, 20, 30 }) { const long r = right.AppendRow(); right.SetCell(r, B, ibValue(ibNumber(v))); }
+
+	// null join keys -> every left row pairs with every right row (2 x 3 = 6).
+	const ibQueryRamTable out = ibQueryComposer::JoinRamTables(left, right, nullptr, nullptr, { &a, &b }, { true, false });
+	EXPECT_EQ(out.RowCount(), 6);
+}
+
+TEST(QueryComposerCore, JoinRamTables_OuterKinds)
+{
+	const ibMetaID LK = 1, LV = 2, RK = 4, RV = 3;
+	TestCol lk(wxT("lk"), LK), lv(wxT("lv"), LV), rk(wxT("rk"), RK), rv(wxT("rv"), RV);
+
+	ibQueryRamTable left;  left.AddColumn(LK, wxT("lk"), kNoType); left.AddColumn(LV, wxT("lv"), kNoType);
+	auto L = [&](long k, long v) { const long r = left.AppendRow();  left.SetCell(r, LK, ibValue(ibNumber(k))); left.SetCell(r, LV, ibValue(ibNumber(v))); };
+	L(1, 11); L(2, 12); L(3, 13);                       // keys 1,2,3
+
+	ibQueryRamTable right; right.AddColumn(RK, wxT("rk"), kNoType); right.AddColumn(RV, wxT("rv"), kNoType);
+	auto R = [&](long k, long v) { const long r = right.AppendRow(); right.SetCell(r, RK, ibValue(ibNumber(k))); right.SetCell(r, RV, ibValue(ibNumber(v))); };
+	R(2, 22); R(3, 23); R(4, 24);                       // keys 2,3,4  -> matched 2,3 ; left-only 1 ; right-only 4
+
+	const std::vector<const ibBackendQueryColumn*> outc = { &lv, &rv };
+	const std::vector<bool> side = { true, false };
+	using JK = ibQueryJoinKind;
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Inner).RowCount(), 2);   // 2,3
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Left ).RowCount(), 3);   // + left-only 1
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Right).RowCount(), 3);   // + right-only 4
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Full ).RowCount(), 4);   // + both
+}
+
+// ===========================================================================
+// RAM post-filter — FilterRows (boolean WHERE TREE over a composed JOIN: OR / NOT / IS NULL)
+// ===========================================================================
+
+TEST(QueryComposerCore, FilterRows_OrIsNullNot)
+{
+	const ibMetaID REGION = 1, QTY = 2;
+	TestCol region(wxT("region"), REGION), qty(wxT("qty"), QTY);
+
+	ibQueryRamTable t;
+	t.AddColumn(REGION, wxT("region"), kNoType);
+	t.AddColumn(QTY,    wxT("qty"),    kNoType);
+	auto row = [&](const wxString& reg, long q, bool regNull = false) {
+		const long r = t.AppendRow();
+		if (!regNull) t.SetCell(r, REGION, ibValue(reg));
+		t.SetCell(r, QTY, ibValue(ibNumber(q)));
+	};
+	row(wxT("North"), 10); row(wxT("South"), 5); row(wxT("East"), 7); row(wxT(""), 3, /*null*/ true);
+
+	auto eq = [&](const ibBackendQueryColumn* c, const wxString& v) {
+		ibQueryCondition cond; cond.m_col = c; cond.m_value = ibValue(v); return ibQueryPredicate::Leaf(cond);
+	};
+
+	// region = 'North' OR region = 'South'
+	const ibQueryRamTable f1 = ibQueryComposer::FilterRows(
+		t, ibQueryPredicate::Compose(ibQueryPredicateKind::Or, eq(&region, wxT("North")), eq(&region, wxT("South"))).get());
+	ASSERT_EQ(f1.RowCount(), 2);
+	EXPECT_EQ(f1.GetCell(0, REGION).GetString().ToStdString(), "North");
+	EXPECT_EQ(f1.GetCell(1, REGION).GetString().ToStdString(), "South");
+
+	// region IS NULL  -> only the unset-region row
+	const ibQueryRamTable f2 = ibQueryComposer::FilterRows(t, ibQueryPredicate::Null(&region, /*negated*/ false).get());
+	ASSERT_EQ(f2.RowCount(), 1);
+	EXPECT_EQ(f2.GetCell(0, QTY).GetString().ToStdString(), "3");
+
+	// NOT (region = 'North')  -> South, East, null-region row
+	const ibQueryRamTable f3 = ibQueryComposer::FilterRows(t, ibQueryPredicate::Not(eq(&region, wxT("North"))).get());
+	EXPECT_EQ(f3.RowCount(), 3);
+}
+
+// ===========================================================================
+// Computed column over a composed JOIN — EvalColumnExpr (arithmetic + CASE)
+// ===========================================================================
+
+TEST(QueryComposerCore, EvalColumnExpr_ArithAndCase)
+{
+	const ibMetaID QTY = 1, PRICE = 2;
+	TestCol qty(wxT("qty"), QTY), price(wxT("price"), PRICE);
+
+	ibQueryRamTable t;
+	t.AddColumn(QTY,   wxT("qty"),   kNoType);
+	t.AddColumn(PRICE, wxT("price"), kNoType);
+	const long r = t.AppendRow();
+	t.SetCell(r, QTY,   ibValue(ibNumber(4)));
+	t.SetCell(r, PRICE, ibValue(ibNumber(5)));
+
+	// qty * price = 20
+	const ibQueryColumnExprPtr mul = ibQueryColumnExpr::Arith(
+		ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(&qty), ibQueryColumnExpr::Col(&price));
+	EXPECT_EQ(ibQueryComposer::EvalColumnExpr(mul.get(), t, r).GetString().ToStdString(), "20");
+
+	// CASE WHEN qty > 3 THEN 'bulk' ELSE 'unit' END -> 'bulk'
+	ibQueryCondition gt; gt.m_col = &qty; gt.m_explicitOp = true; gt.m_op = ibQueryFilterOp::Greater; gt.m_value = ibValue(ibNumber(3));
+	auto caseE = std::make_shared<ibQueryColumnExpr>();
+	caseE->m_kind  = ibQueryColumnExprKind::Case;
+	caseE->m_cases = { { ibQueryPredicate::Leaf(gt), ibQueryColumnExpr::Const(ibValue(wxString(wxT("bulk")))) } };
+	caseE->m_else  = ibQueryColumnExpr::Const(ibValue(wxString(wxT("unit"))));
+	EXPECT_EQ(ibQueryComposer::EvalColumnExpr(caseE.get(), t, r).GetString().ToStdString(), "bulk");
+}
+
+// ===========================================================================
 // Routing gates — CanColocateJoin
 // ===========================================================================
 
@@ -292,19 +404,19 @@ TEST(QueryComposerGate, Aggregate_GroupBySum_Colocatable)
 
 namespace {
 
-const ibMetaID HKEY = 1, HPARENT = 2, HAMT = 3;
+const ibMetaID KEY_ID = 1, HPARENT = 2, HAMT = 3;
 const ibMetaID AGG0 = HAMT;          // aggregate rolls IN-PLACE into its own column (amount), not a synthetic id
 
 // F1(0) ─ E1(10), F2(0) ─ E2(5)      E3(7) top-level element
 ibQueryRamTable HierDetail()
 {
 	ibQueryRamTable d;
-	d.AddColumn(HKEY,    wxT("key"),    kNoType);
+	d.AddColumn(KEY_ID,    wxT("key"),    kNoType);
 	d.AddColumn(HPARENT, wxT("parent"), kNoType);
 	d.AddColumn(HAMT,    wxT("amount"), kNoType);
 	auto add = [&](const wxString& key, const wxString& parent, long amt) {
 		const long r = d.AppendRow();
-		d.SetCell(r, HKEY,    ibValue(key));
+		d.SetCell(r, KEY_ID,    ibValue(key));
 		d.SetCell(r, HPARENT, parent.IsEmpty() ? ibValue() : ibValue(parent));
 		d.SetCell(r, HAMT,    ibValue(ibNumber(amt)));
 	};
@@ -327,7 +439,7 @@ ibDataQueryBuilder::AggregateItem SumOf(const ibBackendQueryColumn* col)
 
 TEST(QueryHierarchy, Hierarchy_TreeSubtotalsHasChildren)
 {
-	TestCol keyCol(wxT("key"), HKEY), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
+	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
 	const ibQueryRamTable d = HierDetail();
 	const ibSelectorTree tree = ibQueryComposer::BuildHierarchyTree(
 		d, &keyCol, &parentCol, { SumOf(&amtCol) }, ibDimensionKind::Hierarchy);
@@ -337,7 +449,7 @@ TEST(QueryHierarchy, Hierarchy_TreeSubtotalsHasChildren)
 	EXPECT_EQ(root.m_values.at(AGG0).GetString().ToStdString(), "22");       // grand total 0+10+0+5+7
 
 	const ibSelectorTree::Node& f1 = *root.m_children[0];
-	EXPECT_EQ(f1.m_values.at(HKEY).GetString().ToStdString(), "1");
+	EXPECT_EQ(f1.m_values.at(KEY_ID).GetString().ToStdString(), "1");
 	EXPECT_TRUE(f1.m_hasChildren);
 	EXPECT_EQ(f1.m_values.at(AGG0).GetString().ToStdString(), "15");         // subtree subtotal
 	ASSERT_EQ(f1.m_children.size(), 2u);                                     // E1, F2
@@ -353,7 +465,7 @@ TEST(QueryHierarchy, Hierarchy_TreeSubtotalsHasChildren)
 
 TEST(QueryHierarchy, HierarchyOnly_FoldersOnly)
 {
-	TestCol keyCol(wxT("key"), HKEY), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
+	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
 	const ibQueryRamTable d = HierDetail();
 	const ibSelectorTree tree = ibQueryComposer::BuildHierarchyTree(
 		d, &keyCol, &parentCol, { SumOf(&amtCol) }, ibDimensionKind::HierarchyOnly);
@@ -370,7 +482,7 @@ TEST(QueryHierarchy, HierarchyOnly_FoldersOnly)
 
 TEST(QueryHierarchy, Elements_LeafNodesWithGrandTotal)
 {
-	TestCol keyCol(wxT("key"), HKEY), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
+	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
 	const ibQueryRamTable d = HierDetail();
 	const ibSelectorTree tree = ibQueryComposer::BuildHierarchyTree(
 		d, &keyCol, &parentCol, { SumOf(&amtCol) }, ibDimensionKind::Elements);
@@ -386,10 +498,10 @@ TEST(QueryHierarchy, Elements_LeafNodesWithGrandTotal)
 
 TEST(QuerySelector, Hierarchy_FoldsSnapshot_SubtotalsFromOneSnapshot)
 {
-	TestCol keyCol(wxT("key"), HKEY), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
+	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
 
 	// Snapshot moves INTO the Selector; the fold + traversal kind live on the Selector, not the query.
-	ibSelector sel(HierDetail(), ibSelectKind::ByGroupsHierarchy);
+	ibSelector sel(HierDetail(), ibSelectKind::ibSelectKind_ByGroupsHierarchy);
 	sel.ByParentRef(&keyCol, &parentCol).Aggregating({ SumOf(&amtCol) });
 	const ibSelectorTree tree = sel.Build();
 
@@ -405,9 +517,9 @@ TEST(QuerySelector, Hierarchy_FoldsSnapshot_SubtotalsFromOneSnapshot)
 // The live sub-selection (Выборка → под-Выборка) runs at runtime over a real holder.
 TEST(QuerySelector, Select_NoSource_EmptyAndNoDbHit)
 {
-	TestCol keyCol(wxT("key"), HKEY), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
+	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
 
-	ibSelector sel(HierDetail(), ibSelectKind::ByGroupsHierarchy);
+	ibSelector sel(HierDetail(), ibSelectKind::ibSelectKind_ByGroupsHierarchy);
 	sel.ByParentRef(&keyCol, &parentCol).Aggregating({ SumOf(&amtCol) });   // fold set, but NO WithSource
 
 	ASSERT_TRUE(sel.Next());                                                 // stand on the first node (F1)
@@ -420,8 +532,8 @@ TEST(QuerySelector, Select_NoSource_EmptyAndNoDbHit)
 // visit. One interface over flat-vs-tree (here: Hierarchy → folder then its subtree).
 TEST(QuerySelector, Iterate_PreOrderCursorWithLevels)
 {
-	TestCol keyCol(wxT("key"), HKEY), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
-	ibSelector sel(HierDetail(), ibSelectKind::ByGroupsHierarchy);
+	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
+	ibSelector sel(HierDetail(), ibSelectKind::ibSelectKind_ByGroupsHierarchy);
 	sel.ByParentRef(&keyCol, &parentCol).Aggregating({ SumOf(&amtCol) });
 
 	std::vector<std::string> keys;

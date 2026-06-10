@@ -28,7 +28,7 @@ class ibSelector
 {
 public:
 	// Takes OWNERSHIP of the snapshot (move-only). `kind` is the TRAVERSAL (AXIS 1), default Direct.
-	explicit ibSelector(ibQueryRamTable&& snapshot, ibSelectKind kind = ibSelectKind::Direct)
+	explicit ibSelector(ibQueryRamTable&& snapshot, ibSelectKind kind = ibSelectKind::ibSelectKind_Direct)
 		: m_snapshot(std::move(snapshot)), m_kind(kind) {}
 
 	// Fold by parent-ref (a reference dimension): rowKeyCol = the row's data-reference, parentKeyCol =
@@ -77,7 +77,7 @@ public:
 	//     the direct-config / unit-test path.
 	ibSelectorTree Build() const
 	{
-		if (m_kind == ibSelectKind::Direct)
+		if (m_kind == ibSelectKind::ibSelectKind_Direct)
 			return BuildFlat();
 
 		if (!m_totalLevels.empty()) {
@@ -165,7 +165,7 @@ public:
 	// fold/recipe, walked with the given `kind`. So `d = s.Select(kind); while (d.Next()) …` recurses
 	// the tree on demand — each sub-level its own query, Level() continuing DEEPER. Requires
 	// WithSource() + a parent-ref fold; empty Selector otherwise (no DB hit). Defined below.
-	ibSelector Select(ibSelectKind kind = ibSelectKind::Direct) const;
+	ibSelector Select(ibSelectKind kind = ibSelectKind::ibSelectKind_Direct) const;
 
 	const ibQueryRamTable& Snapshot() const { return m_snapshot; }
 	ibSelectKind           GetKind()  const { return m_kind; }

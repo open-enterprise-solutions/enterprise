@@ -629,6 +629,7 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 
 	wxString word;
 	unsigned int currPos = fromPos;
+	bool prevWasDot = false;   // last significant token was a member-access '.' (kept across whitespace)
 
 	while (!m_tc.IsEnd()) {
 #ifdef UTF8_LEXEM_TRANSLATE
@@ -639,7 +640,9 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 		if (m_tc.IsWord()) {
 			(void)m_tc.GetWord(word, false, true);
 			const short keyWord = ibTranslateCode::IsKeyWord(word);
-			if (keyWord != wxNOT_FOUND) {
+			// A keyword right after a member-access `.` is a MEMBER NAME, not a keyword
+			// (`q.Execute().Select()` — `Select` is the method): style it as a plain identifier.
+			if (keyWord != wxNOT_FOUND && !prevWasDot) {
 				if (word.Left(1) == '#') {
 					appendStyle(wxSTC_C_PREPROCESSOR);
 				}
@@ -650,6 +653,7 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 			else {
 				appendStyle(wxSTC_C_WORD);
 			}
+			prevWasDot = false;
 		}
 		else if (m_tc.IsNumber() || m_tc.IsString() || m_tc.IsDate()) {
 			if (m_tc.IsNumber()) {
@@ -664,10 +668,15 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 				(void)m_tc.GetDate();
 				appendStyle(wxSTC_C_OPERATOR);
 			}
+			prevWasDot = false;
 		}
 		else {
-			(void)m_tc.GetByte();
+			wxUniChar b;
+			(void)m_tc.GetByte(b);
 			appendStyle(wxSTC_C_IDENTIFIER);
+			// keep "after dot" across intervening whitespace, so `obj . Select` is handled too
+			if (b == '.')                                             prevWasDot = true;
+			else if (b != ' ' && b != '\t' && b != '\r' && b != '\n') prevWasDot = false;
 		}
 	}
 

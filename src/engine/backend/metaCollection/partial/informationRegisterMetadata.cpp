@@ -2,6 +2,7 @@
 #include "list/objectList.h"
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
+#include "backend/query/queryableHooks.h"   // light L4 source registration hooks (slice descriptors)
 
 //***********************************************************************
 //*                         metaData                                    * 
@@ -194,6 +195,13 @@ bool ibValueMetaObjectInformationRegister::OnAfterRunMetaObject(int flags)
 	if (!(*m_propertyManagerModule)->OnAfterRunMetaObject(flags))
 		return false;
 
+	// Custom virtual-table descriptors (slices). The base records descriptor is registered by
+	// ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Skip the onlyLoadFlag pass.
+	if (!(flags & onlyLoadFlag)) {
+		ibRegisterQueryableSource(&m_sliceLast);
+		ibRegisterQueryableSource(&m_sliceFirst);
+	}
+
 	if (!(*m_propertyObjectModule)->OnAfterRunMetaObject(flags))
 		return false;
 
@@ -217,6 +225,9 @@ bool ibValueMetaObjectInformationRegister::OnAfterRunMetaObject(int flags)
 
 bool ibValueMetaObjectInformationRegister::OnBeforeCloseMetaObject()
 {
+	ibUnregisterQueryableSource(&m_sliceLast);
+	ibUnregisterQueryableSource(&m_sliceFirst);
+
 	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject())
 		return false;
 

@@ -596,7 +596,22 @@ bool ibPrecompileCode::PrepareLexem()
 #endif // UTF8_LEXEM_TRANSLATE	
 
 	m_listLexem.emplace_back(std::move(m_current_lex));
+	ReclassifyMemberKeywords();
 	return true;
+}
+
+// A keyword that directly follows a member-access `.` names a MEMBER, not a keyword:
+// `q.Execute().Select()` — `Select` is the QueryResult method, not the SELECT projection keyword.
+// The original word already sits in m_valData, so retagging IDENTIFIER is enough — this both lets
+// autocomplete chain through the member and stops it being syntax-highlighted as a keyword.
+void ibPrecompileCode::ReclassifyMemberKeywords()
+{
+	for (size_t i = 1; i < m_listLexem.size(); ++i) {
+		const ibLexem& prev = m_listLexem[i - 1];
+		if (m_listLexem[i].m_lexType == KEYWORD
+			&& prev.m_lexType == DELIMITER && prev.m_numData == '.')
+			m_listLexem[i].m_lexType = IDENTIFIER;
+	}
 }
 
 #ifdef UTF8_LEXEM_TRANSLATE
@@ -830,6 +845,7 @@ void ibPrecompileCode::PrepareLexem(unsigned int line, int line_offset, const in
 	m_listLexem[lex_size].m_numUtf8String += pos_offset_utf8;
 #endif
 
+	ReclassifyMemberKeywords();
 }
 
 bool ibPrecompileCode::Compile()

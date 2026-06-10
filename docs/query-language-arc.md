@@ -4,7 +4,7 @@
 > L3 read + write + aggregation + dot-walk realized.** The lower sections (§4–§22) are the
 > design this converged from; the snapshot below is what is actually in the tree.
 >
-> **Last updated:** 2026-06-07.
+> **Last updated:** 2026-06-10.
 >
 > ### Landed snapshot (2026-06-07)
 >
@@ -81,7 +81,31 @@
 >   pending — full design contract in [temp-db.md](temp-db.md).
 > - **Still open:** the DDL migration gap above (existing tables need the `_RRRef` unique index);
 >   balances/turnovers as DB-backed virtual tables (totals-table arc); the accounting register
->   (subconto); cross-DBMS validation beyond Firebird; the L4 text-query parser.
+>   (subconto); cross-DBMS validation beyond Firebird.
+> - **L4-1 — text query language (in progress, §23):** the greenfield text-query front-end
+>   (lexer → parser → lowering → `Query`/`QueryResult` value objects) + a queryable-source
+>   factory on `appData`. Written, golden-tested on the front-end, pre-build. L4-2 (LINQ
+>   push-down) is designed as a seam only.
+>
+> ### Update 2026-06-10 — L4 dot-walk + aggregation crown (landed, FB-validated)
+>
+> The L4 read path matured well past first-run. Realized mechanism in **§23.8 / §23.9**:
+> - **Reference dot-walk** — the join chain extracted to a shared `ibRefJoinChain`; typed-empty
+>   (not SQL NULL) through an empty / broken reference; a **COMPOSITE reference at ANY segment**,
+>   resolved by a recursive branch-per-target walk with a peek optimisation — the headline case is a
+>   **register RECORDER (Регистратор)** of 15+ document types where the pulled field exists on one
+>   (one `LEFT JOIN`, not 15; `COALESCE` across the matching branch(es)). Wired into projection,
+>   WHERE (flat + boolean tree), and ORDER BY.
+> - **Aggregation over dot-walk** — single-source `GROUP BY Producer.Region` and `SUM(Producer.Weight)`
+>   via the same chain (`GroupBy(path)` / `Aggregate(fn, path, alias)`).
+> - **Hierarchical TOTALS BY dot-walk** — incl. a self-referential dimension (`Parent.Code`) and
+>   **computed / constant measures** (`SUM(1 AS test)`), both via **synthetic scalar columns** owned by
+>   the output schema (the metaID-keyed totals fold reads them like real resources).
+> - **Const CAST** — a bare projected constant is wrapped `CAST(? AS <type>)` (FB `-804` otherwise).
+> - JOIN kinds completed: INNER / LEFT / RIGHT / FULL / CROSS (`ON TRUE`).
+> - **Still open:** TOTALS over a JOIN / UNION (multi-source); a TOTALS BY a reference / composite
+>   dot-walk leaf (scalar today); a composite NON-scalar leaf beyond the last segment; arithmetic /
+>   CASE as an aggregate input (a dot-walk leaf input works); aggregate subqueries.
 >
 > Design history + open decisions remain in [§15](#15-open-decisions); the per-section
 > design (§4–§22) is preserved as the rationale this converged from.
@@ -1632,3 +1656,396 @@ protected primitives.
 - **Does `ibTempTableProvider` own a real temp table (driver `CREATE TEMP`) or a
   RAM-materialised set queried in C++?** Driver temp tables vary across the five
   backends; a RAM set sidesteps the dialect matrix but loses SQL-side filtering.
+
+---
+
+## 23. L4 — the text query language (L4-1) + the LINQ seam (L4-2)
+
+§14 named two L4 front-ends lowering into the one L3 path. **L4-1 — a text query
+language** is being built first (greenfield, simpler than LINQ, and it lays the
+foundation L4-2 reuses); **L4-2 — LINQ push-down** is designed here as a seam only.
+
+### 23.1 Decisions
+- **Syntax:** canonical English `SELECT/FROM/WHERE/JOIN/GROUP BY/ORDER BY/TOTALS`, but
+  keywords live in a **localizable table** (`query/queryKeywords.h`) — a UK/RU spelling
+  set is added later mapping the SAME `ibQueryKeyword` enum, so the grammar never
+  changes (mirrors VES/CES → one path). Metaobject / attribute names are taken verbatim
+  (often Cyrillic). The query keyword table is **separate** from the script lexer's
+  `s_listKeyWord`, so query keywords never collide with the script language.
+- **Parser:** a hand-written recursive-descent parser on the OES lexer idioms — **no new
+  dependency**. (hyrise/sql-parser was a grammar reference only; Flex/Bison + a new
+  dependency were rejected.)
+- **Runtime entry:** a `Query` value object — `New Query(text)`, `q.SetParameter(name,
+  value)`, `q.Execute()` — parsed once (AOT-cacheable), executed through the L3 door.
+
+### 23.2 The pipeline (all in `backend/query/`)
+```
+text ─▶ ibQueryLexer ─▶ tokens ─▶ ibQueryParser ─▶ ibQuerySelect AST
+                                                        │  (names unresolved)
+                              SetParameter values ──────┤
+                                                        ▼
+                              ibQueryLowering.Execute ─▶ ibDataQueryBuilder (L3 door) ─▶ ibDataQueryResult
+                                                        │   (names → queryable/columns)
+                                                        ▼
+              Query.Execute() ─▶ QueryResult ─▶ .Select() ─▶ QuerySelect ─▶ Next()/Select()(drill)/Next()…
+                                 (ibValueQueryResult)        (ibValueQuerySelect — flat cursor OR TOTALS tree)
+```
+| Module | File | Role |
+|---|---|---|
+| keywords | `queryKeywords.h` | localizable `ibQueryKeyword` table |
+| lexer | `queryLexer.{h,cpp}` | `ibQueryLexer : protected ibTranslateCode` — reuses the UTF-8 char primitives; own token stream + `&param` |
+| AST | `queryAst.h` | `ibQuerySelect` + expression tree (L2/L3-free) |
+| parser | `queryParser.{h,cpp}` | recursive descent; `OR<AND<NOT<compare` precedence |
+| lowering | `queryLowering.{h,cpp}` | names → queryable / columns (source via the **factory** `query_sources`, columns via `ResolveColumnByName`); AST verbs → door verbs; runs |
+| source factory | `queryableFactory.{h,cpp}` | `ibQueryableFactory` on `appData` — descriptors that CREATE a queryable per namespace (§23.6) |
+| runtime | `system/value/valueQuery.{h,cpp}` | `ibValueQueryExec` ("Query", `Execute`) → `ibValueQueryResult` ("QueryResult", `Select`) → `ibValueQuerySelect` ("QuerySelect" — the selection cursor, flat OR TOTALS): `Next`/`Reset`/`Field`/`HasChildren`/`Select`(drill)/`Total`/`Level` |
+
+> The C++ class is `ibValueQueryExec` — **`ibValueQuery` is already the LINQ
+> chain wrapper** (`compiler/procUnitLinq.cpp`). Script-visible names: `Query` /
+> `QueryResult` / `QuerySelector`.
+
+### 23.3 Grammar
+```
+select   := SELECT [DISTINCT] selList FROM source { join }
+            [WHERE predicate] [GROUP BY exprList [HAVING predicate]]
+            [ORDER BY orderList] [TOTALS aggregate {',' aggregate} BY totalDim {',' totalDim}]
+proj     := (aggregate | columnPath) [ [AS] alias ]
+aggregate:= (SUM|MIN|MAX|AVG) '(' columnPath ')' | COUNT '(' ('*'|columnPath) ')'
+predicate:= andE {OR andE};  andE := notE {AND notE};  notE := NOT notE | comparison
+comparison := primary [ cmpOp primary | [NOT] LIKE primary
+                      | [NOT] IN '(' … ')' | IS [NOT] NULL | [NOT] BETWEEN primary AND primary ]
+totalDim := columnPath [HIERARCHY | ELEMENTS]
+```
+`TOTALS … BY …` is the hierarchical-subtotals clause (1С `ИТОГИ … ПО …`): aggregates
+between `TOTALS` and `BY` roll in-place at each level, the `BY` list is the dimension
+levels in order → door `Totals().Sum(col).TotalBy(col, dim).SelectTotals()`. Distinct
+from flat `GROUP BY` (aggregates in `SELECT`, one row per group).
+
+### 23.4 Lowering — MVP subset vs. the door
+The parser accepts the full grammar; the lowering realizes the subset the L3 door can
+execute **today** and throws a clear "not yet supported" (with the source span) for the
+rest, growing as the door grows:
+- **Supported:** single source `Kind.Name` (catalog / document / register records),
+  projected columns + reference **dot-walk** (`SelectPath`), the **full boolean WHERE**
+  (`= <> < <= > >= LIKE BETWEEN` plus `OR / AND / NOT / IN / IS NULL` and their negations),
+  ORDER BY, DISTINCT, flat **GROUP BY + aggregates + HAVING** (ordered ops), a
+  **subquery source** (`FROM (SELECT …) AS s`, nested, via `ibSubqueryQueryable`), and
+  **JOIN** (`[INNER|LEFT|RIGHT|FULL] [OUTER] JOIN Kind.Name AS j ON a.x = j.y`, plus a CROSS join
+  via `ON TRUE`; auto-join by reference when `ON` is omitted). Full read (no `LIMIT`) via
+  `Execute(ibReadPageRequest{})` (`m_count<=0` = unbounded), streamed by `QueryResult.Next()`.
+  Reference **dot-walk** is realized across projection / WHERE / ORDER / GROUP BY / aggregate inputs,
+  including a COMPOSITE reference at any segment and the register RECORDER — see **§23.8 / §23.9**.
+  - **Register virtual tables resolve as sources** too — `FROM AccumulationRegister.Goods.Balance`
+    / `.Turnovers`, `FROM InformationRegister.Prices.SliceLast` — through the same factory
+    (the companion descriptor registers under the composite `Object.Table` name).
+    **Source-call args** carry the period / filter: `FROM …Goods.Balance(&Period, &Filter)` —
+    the parser collects them on `ibQuerySource.m_args`, the lowering evaluates them to `ibValue`
+    and hands them to the descriptor's `CreateQueryable(paParams, n)` (the companion copies them
+    by value). No args = default (empty) period / filter.
+  - **Multi-source column resolution.** A column is `alias.col` (the aliased source) or a bare
+    `col` (the first source that owns it, primary first). JOIN / subquery queries project plain
+    columns explicitly (`Select(col, alias)`); a single source reads them straight off the result.
+  - **WHERE is a predicate TREE, lowered through L2.** L4 builds an L3 `ibQueryPredicate`
+    tree (`queryable.h`: Leaf / And / Or / Not / IsNull; IN → `Or(Eq …)`, BETWEEN →
+    `And(>=, <=)`, the negations wrap in `Not`) and hands it to the door via
+    `ibDataQueryBuilder::Where(tree)`. The provider lowers the tree to the L2 IR
+    (`ibMetaIRBuilder::BuildPredicateExpr` → `ibBinOp(Or/And)` / `ibNot` / `ibIsNull`),
+    AND-folded with the flat verb conditions. So the door — not just L4 — now carries full
+    boolean WHERE; LINQ (L4-2) lowers through the same tree.
+- **Boolean WHERE with JOIN — co-located only.** `OR / NOT / IN / IS NULL` in a WHERE that has a
+  JOIN executes when the join **co-locates** to one server-side SELECT: the lowering routes a flat
+  AND-of-simple WHERE to the door's per-leaf verb conditions (works in both join paths) and a boolean
+  WHERE to the predicate tree (`Where(tree)`); the provider's `BuildColocatedPredicate` lowers the
+  tree per-leaf-qualified (`ColocatedOwner`, so an `OR` spanning two leaves is ONE server expression).
+  When the join can't co-locate (RAM stitch), a boolean WHERE **errors clearly** — the stitch
+  materialises each leaf with its own flat conditions, so a cross-leaf `OR` can't be pushed per leaf;
+  erroring (vs dropping an OR branch) keeps the result honest. A post-join RAM filter would lift it.
+- **Reference dot-walk in WHERE / ORDER BY** — `WHERE Producer.Region = &R`, `ORDER BY Producer.Name`
+  — reuses the L3 dot-walk crown: the same auto-join `SelectPath` builds (the `_RRRef` self-reference
+  LEFT-join chain, aliased `dw0/dw1…`, deduped by path prefix). The door gained `Where(path, …)` /
+  `WhereCompare(path, …)` / `OrderBy(path, …)` (the condition / sort carries `m_path`, the leaf in
+  `m_col`); `BuildPageIR` builds one join chain for projection + filter + sort paths and qualifies each
+  leaf by its join alias (filters via `BuildConditionExpr` on the target queryable, sorts inline in
+  effective order). **Single-source** — a multi-source (JOIN) dot-walk filter / sort errors clearly (the
+  composer has no per-leaf dot-walk join yet). A single-source AGGREGATE now DOES support dot-walk in
+  `GROUP BY` and aggregate inputs (`ExecuteAggregate`, **§23.9**); a dot-walk WHERE / ORDER stays on the
+  non-aggregate read path. Composite-at-any-segment + the register recorder: **§23.8**.
+  - **Dot-walk works inside a boolean WHERE too.** `WHERE Producer.Region = &R OR Producer.Kind = 3`
+    executes: the predicate-tree leaf (`ibQueryCondition`) carries `m_path`, and `BuildPageIR` lowers the
+    tree path-aware (`lowerTree`) — a path leaf joins via `resolvePath` and qualifies by its alias, a
+    plain leaf by `mainQual`, the OR folded over both as ONE server expression. An unresolvable path leaf
+    throws (never a dropped OR branch). Single-source non-aggregate only — same gate as the flat filter.
+  - **Dot-walk also in `IN` and `IS NULL`.** `Producer.Region IN (&A, &B)` (every Eq shares the path →
+    one join) and `Producer.Region IS NULL` (the `IsNull` tree node carries `m_path` too); the
+    provider's `lowerTree` resolves both via `resolvePath`.
+- **Parser is COMPLETE; the lowering realizes the executable subset.** The parser now accepts
+  **arithmetic** (`+ - * / %`, standard precedence), **CASE** (`CASE WHEN … THEN … ELSE … END`),
+  **UNION [ALL]**, and **IN (subquery)** — but the column-based L3 door does not execute computed
+  expressions or set operations yet, so the lowering throws a clear "parsed but not yet executed" for
+  these (they are an L3-expression-layer / composer-wiring concern, sibling to L4-2). The AST carries
+  them (`ibQueryExprKind::Arith` / `Case`, `ibQuerySelect::m_unions`, `In.m_subquery`) so the future
+  work — and LINQ — reuse the same tree.
+- **Hierarchical TOTALS EXECUTE — one unified selection.** `SELECT … TOTALS SUM(Qty) BY Warehouse,
+  Goods` runs: `ibQueryLowering::ExecuteTotals` builds the door's `Totals()`/`TotalBy()`/in-place
+  aggregates, reads ONE snapshot, and `result.Select(ByGroupsHierarchy)` folds it into a walkable
+  `ibSelector`. The crucial point (the user's): **a flat list and a TOTALS tree are the SAME selection
+  type** — `Query.Execute()` → a `QueryResult` (`ibValueQueryResult`); `res.Select()` → a `QuerySelect`
+  (`ibValueQuerySelect`), the walkable selection. A `QuerySelect` wraps the forward cursor for a plain
+  SELECT (dot-walk projections read by alias) OR the `ibSelector` for TOTALS, and the script walks
+  EITHER the same way: `Next()` / `Reset()`, output columns read DIRECTLY as attributes (`s.ColumnName`
+  — no `Field()`), `Level()` (a method — node depth), `HasChildren()`, `Select()`
+  (descend a node → a child `QuerySelect`, recursive), `Total(name)` (grand total). A flat list is just
+  a single-level selection. (docs §22.1b — one read, one snapshot; detail and subtotal cannot skew.)
+- **Computed columns EXECUTE — arithmetic & CASE in the projection.** `SELECT Qty * Price AS Total,
+  CASE WHEN Qty > 100 THEN 'bulk' ELSE 'unit' END AS Kind FROM …` runs: the lowering builds an L3
+  `ibQueryColumnExpr` tree (`queryable.h` — Column / Const / Arith / Case, WHEN reusing the predicate
+  tree), the door's `SelectExpr(expr, alias)` carries it, and the provider's `BuildColumnExpr`
+  (`dbTableProvider.cpp`) lowers it to the L2 IR (`ibBinOp` Add/Sub/Mul/Div/Mod, `ibCase`) and projects
+  it `AS alias` in `BuildPageIR`. Read back by alias. **Single-source non-aggregate** only (a JOIN /
+  aggregate computed column errors clearly); arithmetic / CASE in a WHERE / an aggregate argument still
+  errors (the predicate / aggregate take a column, not an expression — a later step).
+- **UNION EXECUTES.** `SELECT … UNION [ALL] SELECT …` runs: each branch's core is wrapped as an
+  `ibSubqueryQueryable` (`WrapSelectAsQueryable`), stacked with `From(b0).Union(b1)…`, and the composer
+  realizes the stack (RAM union today; columns matched BY NAME across branches). The trailing `ORDER BY`
+  applies to the whole. A branch may not use JOIN / TOTALS yet; UNION-vs-UNION-ALL dedup is a later step.
+- **IN (subquery) EXECUTES** — `WHERE x IN (SELECT y FROM …)` materialises the (uncorrelated) inner
+  SELECT's single column eagerly into a value list, then lowers as `Or(x = v …)` (the same path as a
+  literal IN list; dot-walk leaf supported). An empty result → a contradiction leaf (matches nothing);
+  `NOT IN ()` → everything. The inner runs once through a local `ibSubqueryQueryable`.
+- **Parsed but not yet executed (clear error):** arithmetic / CASE in a WHERE or an aggregate argument
+  (a reference dot-walk LEAF as an aggregate input now DOES execute — §23.9 — but an *expression* there
+  does not), and **aggregate subqueries** (`FROM (SELECT cat, SUM(x) AS s … GROUP BY cat)`). Access is
+  **SELECT-only** for user text (§14). The aggregate subquery is the one **provider-level** gap left —
+  `ibSubqueryQueryable` must expose the aggregate-alias columns (synthetic raw columns) + run
+  `SelectAggregate` in `ComputeRows` + a RAM post-filter for the outer's pushed-down conditions; the
+  door does not yet surface an aggregate's OUTPUT schema, so it wants a focused door + provider change.
+
+### 23.5 L4-2 — the LINQ seam (design only)
+- **Entry:** where a LINQ chain/block resolves its source (`procUnitLinq.cpp` /
+  `CompileLinqExpression`). If the source resolves to an `ibBackendQueryableHolder`
+  (a DB-backed metaobject), the translatable prefix is a push-down candidate.
+- **Reuse:** the translatable prefix (`Where/OrderBy/Take` whose lambda body is in a
+  recognizable subset) lowers through the **same** `ibDataQueryBuilder` via the **same**
+  expression lowering L4-1 builds (lambda body → an `ibQueryExpr`-shaped node →
+  door verb). This is the dual-compile path; the untranslatable tail and non-DB sources
+  stay on the current RAM pipeline, with the `ibDataQueryResult` wrapped as the
+  iterator-state feeding the residual. Translatability is decided at compile time.
+- Detailed design + code = a separate arc on a green L4-1.
+
+### 23.6 The queryable-source factory (`query/queryableFactory.h`)
+
+Source resolution is NOT a hard-coded `switch` in the lowering — it goes through a
+**factory of descriptions of how to create queryables**, owned by `ibApplicationData`
+(`GetQueryableFactory()`, the `query_sources` macro; nullptr pre/post-appData — same
+ownership pattern as `ibLockManager`, token-gated ctor). This is the source-agnostic
+federation seam (§22.0): the built-in metaobject families and any plugin / external-DB /
+temp source register here without touching the lowering.
+
+**The query language covers ONLY the relational metaclasses:** records with a data-reference
+(catalogs / documents / charts of characteristic types & accounts / enumerations), registers,
+and constants. Reports & data processors register no descriptor → a query against them simply
+fails to resolve.
+
+- **`ibQueryableSourceDescriptor`** — a source DESCRIPTION identified by `(namespace, name)`:
+  `GetNamespace()` / `GetName()` + `CreateQueryable(ibValue** params, long count)` which CREATES
+  the queryable from the params (the `ibValue::Init` idiom) — no separate `Init()` setup step.
+  The factory is a **non-owning** registry of descriptor pointers — `Register(descriptor*)` /
+  `Unregister(descriptor*)`; the descriptor is OWNED BY the metaobject.
+- **`ibMetaSourceDescriptor<TQueryable, TMeta>`** (the template, per metadata) — **REPLACES the
+  metaobject's former plain `ibXxxQueryable m_queryable{this}` field**: it CONTAINS the queryable
+  (built from the metaobject as before) AND carries the L4 source identity. The metaobject holds
+  ONE field — this descriptor — and `GetQueryable()` forwards to it (`m_queryable.GetQueryable()`);
+  `CreateQueryable` (the factory path) returns the same; `GetNamespace`/`GetName` come from the
+  metaobject.
+- **Base descriptor registration (wired):** the family base registers its descriptor field in
+  `OnAfterRunMetaObject` — `ibRegisterQueryableSource(&m_queryable)` (a light hook) after checking
+  `!(flags & onlyLoadFlag)` (the designer's saved baseline loads its objects load-only — skip) —
+  and `ibUnregisterQueryableSource(&m_queryable)` in `OnBeforeCloseMetaObject`. Wired in the
+  bases: `ibValueMetaObjectRecordDataRef` (catalogs / documents / charts / enums chain up here),
+  `ibValueMetaObjectRegisterData`, `ibValueMetaObjectConstant`, and **`ibValueMetaObjectTableData`
+  (tabular sections)** via the custom `ibTabularSourceDescriptor` — a tabular is a sub-object, so
+  its `(namespace, name)` is PARENT-QUALIFIED (`Document.Expense.Goods`); a transient parent
+  (report / data processor) yields an empty namespace, so it is never registered.
+- **Custom descriptors per concrete register (LANDED for information / accumulation)** — a register
+  ADDITIONALLY owns CUSTOM virtual-table descriptors registered at EACH CONCRETE register level
+  (each kind has different virtual tables): the **information register** owns
+  `ibInfoRegisterSliceDescriptor<ibSliceLastQueryable>` / `<ibSliceFirstQueryable>` (registered as
+  `<Register>.SliceLast` / `.SliceFirst`); the **accumulation register** owns
+  `ibAccumRegisterBalanceDescriptor` / `ibAccumRegisterTurnoverDescriptor` (`<Register>.Balance` /
+  `.Turnovers`). They are register FIELDS, registered in the concrete register's `OnAfterRun`
+  (alongside the base records descriptor) and dropped in `OnBeforeClose`. Reached as a 3-segment
+  source `AccumulationRegister.Goods.Balance` (the lowering joins segments[1..] into the name).
+  `CreateQueryable(paParams, count)` BUILDS the call-scoped companion (`ibBalanceQueryable` /
+  `ibSliceLastQueryable`) from the params (as-of period / [begin,end] range / dimension filter) and
+  OWNS it in a `unique_ptr` member (valid through the synchronous Execute, which materialises the
+  companion's RAM rows into the result). **Open:** parsing SOURCE ARGUMENTS in the text query
+  (`…Goods.Balance(&Period)`) — until then the companion builds with empty params; and the shared
+  descriptor's single-companion ownership is not safe for concurrent virtual-table queries (a
+  result-owned companion is the hardening). Accounting register: base records descriptor only so far.
+- **External sources register themselves separately** via `Register(descriptor*)` at their own
+  load path — independent of the metaobject lifecycle.
+
+### 23.7 Status (2026-06-10, BUILT + first runtime validation)
+> The dot-walk + aggregation/totals crown has since advanced well past this snapshot — its **realized
+> mechanism** is documented in **§23.8** (reference dot-walk: single / typed-empty / composite-at-any-
+> segment / register recorder) and **§23.9** (GROUP BY + aggregate inputs over dot-walk, TOTALS BY
+> dot-walk with synthetic columns, computed measures, the const CAST). This subsection is the original
+> first-build status, kept for the journey.
+
+**Builds GREEN** — a clean full-solution `Debug|x86` (`/t:Rebuild`) is green after two fixes the
+unbuilt arc had latent: (1) `queryableFactory.h` included `clsid.h` BEFORE wx (clsid.h uses
+`wxLongLong_t`/`wxString`) → it now leads with `backend/backend_core.h` (wx set up first); (2)
+`queryLowering.cpp` used `OutputColumn` unqualified in its anonymous namespace → a `using
+OutputColumn = ibQueryLowering::OutputColumn;`. NOTE on incremental builds: this arc touches widely
+included headers (`queryAst.h`, `queryable.h`, `dataQueryBuilder.h`) — an INCREMENTAL build leaves
+some DLL/exe TUs on the old struct layout → an ABI split at the DLL boundary (the symptom: the
+Designer did not list the `Query` type, and a runtime `New Query` mis-read). A **clean** rebuild
+fixes it; after one, the Designer registers `Query` and **`New Query("SELECT … FROM Catalog.X").Execute()`
+runs at runtime without crashing** — the first real end-to-end validation (parse → lower → door →
+provider → result).
+
+Tests: lexer + the L3 vocabulary (`tests/test_queryL4Lexer.cpp`, `test_queryL3Vocab.cpp` — predicate
+tree + column-expr factories) pass green. The L4 **parser** golden tests (`test_queryL4Parser.cpp`)
+parse correctly but the **x64 gtest harness** AVs in the destructor of a default `ibValue` embedded in
+`ibQueryExpr` (`ibQueryExpr::~ibQueryExpr` → `wxMemoryBuffer::DecRef`) — a harness-only quirk of that
+build (the x86 product builds the same AST nodes via `New Query` and destroys them cleanly; sibling
+tests `QueryTotals`/`QueryComposer` that hold backend-built `ibValue`s pass). So: parser LOGIC is
+proven by the runtime; the unit-test crash is a separate x64/gtest investigation, not a product bug.
+Registered in `backend.vcxproj` + the CMake test list.
+
+**Landed since the MVP write-up (still pre-build):**
+- **Full boolean WHERE on the L3 door, lowered through L2** — `ibQueryPredicate` tree
+  (`queryable.h`) + `ibDataQueryBuilder::Where(tree)` + `ibMetaIRBuilder::BuildPredicateExpr`
+  (`dbTableProvider.cpp`, shared per-leaf body `BuildConditionExpr`, combined via `BuildWhere`).
+  L4 builds the tree in `BuildWherePredicate` (`queryLowering.cpp`). `OR / NOT / IN / IS NULL`
+  + negations now execute — no longer a "not yet" error.
+- **Subquery source** `FROM (SELECT …) AS s` — parser (`ParseSource` / `ParseSelectStatement`),
+  lowering (`ResolveFrom` recursion + `PopulateBuilder` shared with the top level, wrapped in
+  `ibSubqueryQueryable`, owned for the Execute lifetime). Aggregate subqueries still error.
+- **JOIN** — `[INNER|LEFT] JOIN Kind.Name AS j ON a.x = j.y` (single-equality ON; the provider
+  qualifies each key by its owning leaf, so operand order is free) + auto-join by reference when
+  `ON` is omitted. The resolver went **multi-source**: `ibSourceBinding` list (1 = single source,
+  N = JOIN), `ResolveColumnSingle` / `ResolvePath` pick the source by alias prefix or by ownership.
+  JOIN / subquery queries project plain columns explicitly via `Select(col, alias)`; a single
+  source still reads them off the result column directly. JOIN WHERE lowers to the door's flat
+  verb conditions (`LowerFlatWhere`) — AND-chain of comparisons / LIKE / BETWEEN; the boolean
+  tree stays a single-source feature for now.
+- **Register virtual tables as a source** — `AccumulationRegister.X.Balance` / `.Turnovers`,
+  `InformationRegister.X.SliceLast` resolve through the factory (companion descriptor under the
+  composite name). **Source-call args** `…Balance(&Period, &Filter)` parse onto `ibQuerySource.m_args`
+  and lower to the descriptor's `CreateQueryable(paParams, n)` (companion copies by value); no args =
+  default period / filter.
+- **Boolean WHERE across a co-located JOIN** — `BuildColocatedPredicate` (`dbTableProvider.cpp`)
+  lowers the predicate tree per-leaf-qualified into the one server-side SELECT; the lowering routes a
+  flat AND-of-simple JOIN WHERE to the verb conditions and a boolean one to `Where(tree)`
+  (`IsFlatAndWhere`). The RAM-stitch composer path **errors** on a predicate tree it can't push per
+  leaf (`queryProvider.cpp`) — honest, not a silent under-filter.
+- **Reference dot-walk in WHERE / ORDER BY** — `ibQueryCondition` / `ibQuerySortItem` gained `m_path`;
+  the door gained `Where(path,…)` / `WhereCompare(path,…)` / `OrderBy(path,…)`. `BuildPageIR` factors a
+  `resolvePath` join-builder shared by projection + filter + sort (one `_RRRef` LEFT-join chain, prefix
+  deduped); path filters lower via `BuildConditionExpr` on the leaf's target queryable qualified by the
+  join alias, path sorts emit inline in effective order. `BuildFilterPredicate` / `BuildSortKeys` /
+  `BuildAnchorPredicate` skip `m_path` items (handled by `BuildPageIR`). Single-source non-aggregate
+  read only.
+- **Dot-walk inside a boolean WHERE** — the predicate-tree leaf (`ibQueryCondition`) carries `m_path`;
+  `BuildPageIR.lowerTree` (a recursive `std::function`) lowers the tree path-aware — a path leaf joins
+  via `resolvePath` + qualifies by alias, a plain leaf by `mainQual` — so `…Producer.Region = &R OR
+  Producer.Kind = 3` is one server-side SELECT. `PredicateHasPath` flags such a tree into the dot-walk
+  path; an unresolvable path leaf throws (no dropped OR branch). `IN` / `IS NULL` nodes stay plain.
+
+**Not yet built** — expect minor signature fixups on the first `Debug|x86`. Open wiring
+point: the metadata open/close hook → `RegisterBuiltins()` / `Clear()`.
+
+---
+
+### 23.8 Reference dot-walk — the realized resolution mechanism
+
+> This is the crown of the read path: `A.B.C` (a chain of reference attributes ending in a leaf
+> attribute) becomes a chain of `LEFT JOIN`s on the `_RRRef` self-reference, the leaf read off the
+> joined target. All of projection, `WHERE`, `ORDER BY`, `GROUP BY`, and aggregate arguments funnel
+> through ONE builder so the joins are built once and shared.
+
+**The join builder — `ibRefJoinChain` (`dbTableProvider.cpp`).** A small class extracted from
+`BuildPageIR` and shared with `ExecuteAggregate`, so the read and the aggregate resolve a path the SAME
+way (no duplication):
+- `Resolve(path, &alias, &target)` — walk the reference segments (all but the leaf), appending one
+  `LEFT JOIN <target> AS dwN ON owner.<ref>_RRRef = dwN.<selfRef>_RRRef` per segment, **deduped by path
+  prefix** (a prefix joined once is reused across projection / filter / sort). Returns the leaf's join
+  alias + its target queryable. Fails on a non-single-target (composite) segment.
+- `AddLeftJoin(table, leftQual, leftField, rightField)` — one raw (non-deduped) join, returns its alias;
+  used by the composite fork (below).
+- `From()` — the assembled FROM tree (handed to `q.From()` once, after all paths are resolved — the
+  builder MUTATES the tree, so it must run before From).
+
+**Typed-empty, not SQL NULL.** A dot-walk through an EMPTY or BROKEN reference does not match the LEFT
+JOIN → the joined column is SQL NULL. But a typed-empty reference has EMPTY attributes (the object-model
+rule `EmptyRef.Attr` = the attribute type's empty value), so a **scalar** leaf is wrapped
+`CASE WHEN <col> IS NULL THEN <typed-empty-const> ELSE <col> END` (the const is
+`ibValueTypeDescription::AdjustValue(leaf->GetTypeDesc())`). A **reference / enum / composite** leaf is
+projected as its FULL field spread (`<alias>_TYPE/_RTRef/_RRRef/…`) under the alias prefix and reassembled
+by `GetValueColumn` on read — a non-matching join leaves the fields null, which `GetValueColumn` reads as
+the type's typed empty on its own (and an untagged `_TYPE`=0, e.g. a data-reference, yields the column's
+typed empty — never UNDEFINED, and never reads a sub-field the column lacks).
+
+**Composite reference at ANY segment — the register RECORDER.** A composite (multi-type) reference points
+to N target types (a register's **Регистратор / recorder** is the headline case: 15+ document types). A
+field pulled through it (`SELECT Регистратор.SomeField`) commonly exists on only ONE type. The resolution
+is RECURSIVE (`pathCompositeScalarExpr` in `BuildPageIR`, mirrored by `ExecuteAggregate`):
+- Walk from the main table. A SINGLE-target ref → one `LEFT JOIN`, continue. A COMPOSITE ref → **FORK**:
+  one `LEFT JOIN` + a recursive tail per target type. Each segment is re-resolved BY NAME per branch (the
+  path columns were resolved against the *representative* first type at lowering — `ResolvePath` allows
+  composite at any segment).
+- Each branch contributes its RAW leaf field (NULL on a non-matching join); the whole is
+  `COALESCE(branch1, …, branchK, <typed-empty>)`. The `_RRRef` join key carries the target's metaID, so a
+  row matches AT MOST one branch's table → reads that branch's value, else the typed empty.
+- **PEEK optimisation:** a composite branch joins ONLY a target type that actually HAS the next attribute
+  (`tq->ResolveColumnByName(path[seg+1])`). So a field on 1 of 15 recorder types = ONE join, not 15.
+- `ibRecordQueryable::ResolveReferenceTargets` (`commonObjectMetaQuery.cpp`) supplies the target
+  queryables — it iterates the column's `GetTypeDesc().GetClsidList()` and keeps the Reference-kind
+  CLSIDs (a composite may mix `Catalog.A | String | Number` — only the reference alternatives produce
+  joins; a string / number / empty value matches none and falls to the typed empty).
+
+**Where it is wired.** PROJECTION (`SelectPath`, the `m_dotWalks` loop), flat `WHERE`
+(`COALESCE(...) <op> value`, op from `condOp`), the boolean predicate TREE leaf (`lowerTree`), and
+`ORDER BY` (the composite leaf's expr stored in `sortExpr`, single-target's alias in `sortAlias`). A
+PURE single-target path keeps the deduped `chain.Resolve` + `BuildConditionExpr` path; a composite scalar
+leaf takes the COALESCE expression; a composite NON-scalar (reference/enum) leaf stays the prior per-type
+single-field path (last ref only). Single-source READs and single-source AGGREGATES (§23.9) support
+dot-walk; a multi-source (JOIN) dot-walk filter / group is the open item.
+
+### 23.9 Aggregation, GROUP BY, and hierarchical TOTALS — over dot-walk
+
+**Single-source aggregate (`ExecuteAggregate`).** `SELECT Producer.Region, SUM(Qty) … GROUP BY
+Producer.Region` runs server-side: the door carries `GroupBy(path)` and `Aggregate(fn, path, alias)`
+(`m_groupPaths` parallel to `m_groupBy`; `AggregateItem.m_path`), and `ExecuteAggregate` joins each path
+through an `ibRefJoinChain` and qualifies the grouped / aggregated leaf by its join alias (a plain key /
+input qualifies by the main table once joins exist). A dot-walk group leaf is GROUPED + projected under
+its own physical name and read back by the leaf column (no `mainTable.*` in an aggregate → no self-ref
+collision). JOIN / multi-source dot-walk aggregates error clearly.
+
+**Hierarchical TOTALS BY dot-walk.** `… TOTALS SUM(Qty) BY Producer.Region` folds in RAM from one snapshot
+(`ExecuteTotals` → `result.Select(ByGroups…)`). The totals fold is **keyed by metaID** (the snapshot is
+built from the door's stamped materialise-columns by `GetModelID()`, read via `Value(col)`). Two things
+break that and are solved by **synthetic scalar columns** (`ibSyntheticScalarColumn` — a `ibRawDBColumn`
+with a unique id `≥ 0x50000000`, clear of real metaIDs and the COUNT(*) receivers at `0x40000000`):
+- A **self-referential dot-walk dimension** (`Parent.Code`) — the leaf shares a metaID with the row's own
+  attribute, and projecting it under the leaf's physical name COLLIDES with `mainTable.*`. So the provider
+  projects it under a DISTINCT alias (`dimN`) and the synthetic column reads that alias under its own
+  unique id; `TotalByDotWalk(path, dimCol, alias, dim)` carries it.
+- A **computed / constant measure** (`SUM(1 AS test)`, `SUM(a*b)`) — has no metaID. The door projects the
+  expression (`SelectExpr`) and the totals aggregate reads it through a synthetic measure column.
+
+The synthetic columns live in `OutputColumn.m_ownedCol` (the schema travels with the selection, so the
+result's stamped raw pointers stay valid through `Select()` even after the `ibDataQueryResult` is consumed).
+COUNT(*) and `SUM(<selected real column by alias>)` in TOTALS are also handled (alias-resolved, named for
+read-back).
+
+**Constants in SQL need a CAST.** A bare projected constant reaches the DB as an untyped placeholder
+(`SELECT ? AS x`) — Firebird (and other strict engines) reject it (`-804 Data type unknown`).
+`BuildColumnExpr`'s `Const` case wraps it `CAST(? AS <type>)` derived from the `ibValue`
+(`NUMERIC(18,6)` for numbers — a bare `NUMERIC` on FB is `NUMERIC(9,0)` and would truncate; `VARCHAR(n)` /
+`TIMESTAMP` / `BOOLEAN` otherwise). The cast-type spelling is FB/PG/MySQL-portable; a fully dialect-correct
+spelling (esp. SQLite date affinity) belongs in the L1 Dialect Dictionary — TODO.
+
+**Open (totals):** TOTALS over a JOIN / UNION (multi-source — two totals mechanisms + snapshot seq-keying),
+and a TOTALS BY a reference / composite dot-walk leaf (today scalar leaves only).

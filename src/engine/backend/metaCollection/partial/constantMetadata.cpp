@@ -5,6 +5,7 @@
 
 #include "constant.h"
 #include "backend/metaData.h"
+#include "backend/query/queryableHooks.h"   // light L4 source registration hooks (no appData / factory include here)
 
 #define objectModule wxT("objectModule")
 
@@ -106,6 +107,10 @@ bool ibValueMetaObjectConstant::OnAfterRunMetaObject(int flags)
 	if (!m_propertyModule->GetMetaObject()->OnAfterRunMetaObject(flags))
 		return false;
 
+	// Register the constant as an L4 query source (its descriptor field, holding the single-row
+	// sys_const queryable). Check the flag BEFORE registering — skip the onlyLoadFlag pass.
+	if (!(flags & onlyLoadFlag))
+		ibRegisterQueryableSource(&m_queryable);
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
@@ -120,6 +125,8 @@ bool ibValueMetaObjectConstant::OnAfterRunMetaObject(int flags)
 
 bool ibValueMetaObjectConstant::OnBeforeCloseMetaObject()
 {
+	ibUnregisterQueryableSource(&m_queryable);
+
 	if (!m_propertyModule->GetMetaObject()->OnBeforeCloseMetaObject())
 		return false;
 

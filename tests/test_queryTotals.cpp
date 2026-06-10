@@ -122,7 +122,7 @@ TEST(QueryTotals, GrandTotalOnlyWhenNoGroups)
 
 	const ibSelectorTree tree = ibQueryComposer::BuildTotalsTree(detail, {}, { sum });
 
-	const ibMetaID AGG0 = 0x40000000u;
+	const ibMetaID AGG0 = AMOUNT;   // SUM has a source column -> rolls IN-PLACE into it (not a synthetic key)
 	EXPECT_TRUE(NumEq(tree.Root().m_values.at(AGG0), 21));   // 4 + 6 + 11
 	EXPECT_TRUE(tree.Root().m_children.empty());
 }

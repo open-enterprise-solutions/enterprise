@@ -1277,6 +1277,29 @@ const ibBackendQueryable* ibRecordQueryable::ResolveReferenceTarget(const ibBack
 	const ibBackendQueryableHolder* holder = dynamic_cast<const ibBackendQueryableHolder*>(ctor->GetMetaObject());
 	return holder != nullptr ? holder->GetQueryable() : nullptr;
 }
+
+// ALL reference targets of a COLUMN — one queryable per reference type in the column's (possibly
+// composite) type. Mirrors the single-target resolver but loops the whole CLSID list: a composite
+// "Catalog.A or Catalog.B" yields both queryables; a non-reference alternative (a String) and a
+// target that vends no queryable are skipped. The composite dot-walk joins one table per entry.
+std::vector<const ibBackendQueryable*> ibRecordQueryable::ResolveReferenceTargets(const ibBackendQueryColumn* refColumn) const {
+	std::vector<const ibBackendQueryable*> targets;
+	if (refColumn == nullptr)
+		return targets;
+	const ibMetaData* metaData = m_meta->GetMetaData();
+	if (metaData == nullptr)
+		return targets;
+	for (const ibClassID& clsid : refColumn->GetTypeDesc().GetClsidList()) {
+		const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(clsid);
+		if (ctor == nullptr || ctor->GetMetaTypeCtor() != ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)
+			continue;   // a non-reference alternative of the composite type — contributes no join
+		const ibBackendQueryableHolder* holder = dynamic_cast<const ibBackendQueryableHolder*>(ctor->GetMetaObject());
+		if (holder != nullptr)
+			if (const ibBackendQueryable* q = holder->GetQueryable())
+				targets.push_back(q);
+	}
+	return targets;
+}
 // (Auto-join no longer needs dedicated self-reference / find-reference virtuals: the
 // composer derives the join keys from the columns — a referencing column resolved by
 // ResolveReferenceTarget, matched to the target's IsPrimaryKey column. The data-reference

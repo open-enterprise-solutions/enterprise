@@ -5,6 +5,32 @@
 #include "informationRegisterEnum.h"
 #include "backend/query/queryable.h"   // ibComputedRegisterQueryable<TReg> — shared base for the slice / balance / turnover virtual tables
 
+#include <memory>
+
+class ibValueMetaObjectInformationRegister;
+class ibSliceLastQueryable;
+class ibSliceFirstQueryable;
+
+// L4 virtual-table source descriptor for the information register's slices — templated on the
+// slice companion (ibSliceLastQueryable / ibSliceFirstQueryable). Owned by the register as a
+// field; registered under "<Register>.SliceLast" / ".SliceFirst". CreateQueryable BUILDS the
+// call-scoped companion from the params (as-of period, dimension filter) and OWNS it. Method
+// bodies are at the BOTTOM of this header (where the companions are complete).
+template <typename TSlice>
+class ibInfoRegisterSliceDescriptor : public ibQueryableSourceDescriptor
+{
+public:
+	ibInfoRegisterSliceDescriptor(ibValueMetaObjectInformationRegister* reg, const wxString& suffix)
+		: m_reg(reg), m_suffix(suffix) {}
+	wxString GetNamespace() const override;
+	wxString GetName() const override;
+	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+private:
+	ibValueMetaObjectInformationRegister* m_reg;
+	wxString                              m_suffix;
+	std::unique_ptr<TSlice>               m_companion;   // call-scoped, owned here
+};
+
 class ibValueMetaObjectInformationRegister : public ibValueMetaObjectRegisterData {
 	public:
 private:
@@ -234,6 +260,12 @@ private:
 	friend class ibValueRecordManagerObjectInformationRegister;
 
 	friend class ibMetaData;
+
+	// L4 custom virtual-table descriptors — registered alongside the base records descriptor
+	// (RegisterData::m_queryable) on run, dropped on close. Reached as Information
+	// Register.<Name>.SliceLast / .SliceFirst.
+	ibInfoRegisterSliceDescriptor<ibSliceLastQueryable>  m_sliceLast { this, wxT("SliceLast") };
+	ibInfoRegisterSliceDescriptor<ibSliceFirstQueryable> m_sliceFirst{ this, wxT("SliceFirst") };
 };
 
 //********************************************************************************************
@@ -288,6 +320,29 @@ public:
 	virtual wxString AggregateFn() const override { return wxT("MIN"); }
 	virtual wxString CompareOp()   const override { return wxT(">="); }
 };
+
+// ibInfoRegisterSliceDescriptor — method bodies (the register + slice companions are complete here).
+template <typename TSlice>
+wxString ibInfoRegisterSliceDescriptor<TSlice>::GetNamespace() const
+{
+	return ibValue::GetNameObjectFromID(m_reg->GetClassType());
+}
+
+template <typename TSlice>
+wxString ibInfoRegisterSliceDescriptor<TSlice>::GetName() const
+{
+	return m_reg->GetName() + wxT(".") + m_suffix;
+}
+
+template <typename TSlice>
+const ibBackendQueryable* ibInfoRegisterSliceDescriptor<TSlice>::CreateQueryable(ibValue** paParams, long lSizeArray)
+{
+	// build the call-scoped slice companion from the params (as-of period, dimension filter) and own it
+	const ibValue period = (lSizeArray > 0 && paParams != nullptr && paParams[0] != nullptr) ? *paParams[0] : ibValue();
+	const ibValue filter = (lSizeArray > 1 && paParams != nullptr && paParams[1] != nullptr) ? *paParams[1] : ibValue();
+	m_companion = std::make_unique<TSlice>(m_reg, period, filter);
+	return m_companion.get();
+}
 
 //********************************************************************************************
 //*                                      Object                                              *

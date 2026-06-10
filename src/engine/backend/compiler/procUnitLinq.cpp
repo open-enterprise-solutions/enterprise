@@ -766,7 +766,7 @@ private:
 
 const ibClassID g_valueQuery = string_to_clsid("VL_QRY");
 
-SYSTEM_TYPE_REGISTER(ibValueQuery, "Query", g_valueQuery);
+SYSTEM_TYPE_REGISTER(ibValueQuery, "LinqQuery", g_valueQuery);
 
 // LINQ dispatcher — reached via the OPER_CALL_LINQ handler in Execute,
 // which reads the ibLinqMethod enum id from m_param3.m_numIndex and
@@ -797,6 +797,20 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 	// for free.
 	std::shared_ptr<ibValueIteratorState> upstream = self->CreateIterator();
 	if (!upstream) {
+		// NOT a LINQ source — but the value may OWN a method of this name (a LINQ-operator name like
+		// Select / Where is not reserved: e.g. Query's QueryResult.Select() opens the selection). Resolve
+		// the operator's script NAME against the value's own members; if it has it, the `.Select(...)` was
+		// meant as that method, not a pipeline op — dispatch there. This is the context the caller asked
+		// for: a LINQ-chain Select stays LINQ, a Select on a value that defines one calls the value's.
+		wxString methodName;
+		for (const auto& info : ibValue::GetLinqMethodTable())
+			if (info.id == method) { methodName = info.name; break; }
+		const long ownNum = methodName.IsEmpty() ? -1 : self->FindMethod(methodName);
+		if (ownNum >= 0) {
+			if (self->HasRetVal(ownNum)) self->CallAsFunc(ownNum, ret, args, n);
+			else                         self->CallAsProc(ownNum, args, n);
+			return;
+		}
 		ibBackendCoreException::Error(_("LINQ: value is not iterable"));
 	}
 

@@ -56,7 +56,7 @@ enum class ibQueryFilterOp { Like, Less, LessEqual, Greater, GreaterEqual };
 
 struct ibQueryCondition
 {
-	const ibBackendQueryColumn* m_col        = nullptr;   // null = the row-key column
+	const ibBackendQueryColumn* m_col        = nullptr;   // null = the row-key column; with m_path = the path LEAF
 	ibComparisonType            m_comparison = ibComparisonType::ibComparisonType_Equal;
 	ibValue                     m_value;
 
@@ -65,14 +65,114 @@ struct ibQueryCondition
 	// Where(col, comparison, value) path leaves it false (Eq / Ne).
 	bool            m_explicitOp = false;
 	ibQueryFilterOp m_op         = ibQueryFilterOp::Like;
+
+	// Reference DOT-WALK: when non-empty, this condition filters the LEAF attribute of a reference
+	// path (Producer.Region -> {Producer, Region}). Every non-leaf segment is a single-target
+	// reference column the provider auto-joins (the SAME join SelectPath builds, deduped by prefix);
+	// the leaf (== m_col) is compared on the joined target. Empty = a plain column on the main source.
+	std::vector<const ibBackendQueryColumn*> m_path;
 };
 
 // A query-native ORDER BY item: a COLUMN (null = the row-identity / reference
-// sort, i.e. the queryable's row-key column) + direction.
+// sort, i.e. the queryable's row-key column) + direction. m_path (non-empty) sorts on the LEAF of a
+// reference dot-walk path (== m_col), joined like a dot-walk filter / projection.
 struct ibQuerySortItem
 {
-	const ibBackendQueryColumn* m_col       = nullptr;   // null = row-key (reference/PK) sort
+	const ibBackendQueryColumn* m_col       = nullptr;   // null = row-key (reference/PK) sort; with m_path = the path LEAF
 	bool                        m_ascending = true;
+	std::vector<const ibBackendQueryColumn*> m_path;     // reference dot-walk path (empty = plain column)
+};
+
+// ==========================================================================
+// ibQueryPredicate — an L3 WHERE predicate TREE (still L2-free: columns + values).
+// The flat ibQueryCondition list AND-folds; this tree adds OR / NOT / IS NULL so L4 can
+// express full boolean WHERE. The provider lowers it to the L2 IR (ibBinOp Or/And, ibNot,
+// ibIsNull) — L3 stays L2-blind. IN expands to Or(Eq …) and BETWEEN to And(>=, <=) at the
+// L4 lowering, so the tree needs no dedicated IN / BETWEEN node. (docs §23: door Where via L2.)
+// ==========================================================================
+enum class ibQueryPredicateKind { Leaf, And, Or, Not, IsNull };
+
+struct ibQueryPredicate;
+using ibQueryPredicatePtr = std::shared_ptr<ibQueryPredicate>;
+
+struct ibQueryPredicate
+{
+	ibQueryPredicateKind m_kind = ibQueryPredicateKind::Leaf;
+
+	ibQueryCondition            m_leaf;                 // Leaf — one col / op / value (Eq/Ne/ordered/LIKE)
+	const ibBackendQueryColumn* m_col     = nullptr;    // IsNull — the column (the path LEAF when m_path set)
+	bool                        m_negated = false;      // IsNull — IS NOT NULL
+	std::vector<const ibBackendQueryColumn*> m_path;    // IsNull — reference dot-walk path (empty = plain column)
+
+	std::vector<ibQueryPredicatePtr> m_children;        // And / Or (N) · Not (1)
+
+	static ibQueryPredicatePtr Leaf(const ibQueryCondition& cond) {
+		auto p = std::make_shared<ibQueryPredicate>();
+		p->m_kind = ibQueryPredicateKind::Leaf; p->m_leaf = cond; return p;
+	}
+	static ibQueryPredicatePtr Compose(ibQueryPredicateKind kind, ibQueryPredicatePtr a, ibQueryPredicatePtr b) {
+		auto p = std::make_shared<ibQueryPredicate>();
+		p->m_kind = kind; p->m_children = { a, b }; return p;
+	}
+	static ibQueryPredicatePtr Not(ibQueryPredicatePtr a) {
+		auto p = std::make_shared<ibQueryPredicate>();
+		p->m_kind = ibQueryPredicateKind::Not; p->m_children = { a }; return p;
+	}
+	static ibQueryPredicatePtr Null(const ibBackendQueryColumn* col, bool negated,
+	                                const std::vector<const ibBackendQueryColumn*>& path = {}) {
+		auto p = std::make_shared<ibQueryPredicate>();
+		p->m_kind = ibQueryPredicateKind::IsNull; p->m_col = col; p->m_negated = negated;
+		if (path.size() > 1) p->m_path = path;
+		return p;
+	}
+};
+
+// ==========================================================================
+// ibQueryColumnExpr — an L3 COMPUTED-COLUMN expression TREE (L2-free: columns + values + ops). A plain
+// projection is a single column; this lets a projection COMPUTE — arithmetic (a * b - c) and a searched
+// CASE (CASE WHEN <predicate> THEN <expr> … ELSE <expr> END). The provider lowers it to the L2 IR
+// (ibBinOp Add/Sub/Mul/Div/Mod, the L2 Case node) and projects it AS the output alias; the column-based
+// door stays L2-blind. WHEN conditions reuse the ibQueryPredicate tree. (docs §23 — computed columns.)
+// ==========================================================================
+enum class ibQueryColumnExprKind { Column, Const, Arith, Case };
+enum class ibQueryColumnArithOp  { Add, Sub, Mul, Div, Mod };
+
+struct ibQueryColumnExpr;
+using ibQueryColumnExprPtr = std::shared_ptr<ibQueryColumnExpr>;
+
+struct ibQueryColumnExpr
+{
+	ibQueryColumnExprKind       m_kind = ibQueryColumnExprKind::Column;
+
+	const ibBackendQueryColumn* m_col = nullptr;          // Column — the source column (its FIRST sql field)
+	ibValue                     m_const;                  // Const — a literal value
+
+	ibQueryColumnArithOp        m_arith = ibQueryColumnArithOp::Add;   // Arith
+	ibQueryColumnExprPtr        m_lhs, m_rhs;                          // Arith
+
+	// Case — searched WHEN(predicate) -> THEN(expr) pairs in order, + optional ELSE.
+	std::vector<std::pair<ibQueryPredicatePtr, ibQueryColumnExprPtr>> m_cases;
+	ibQueryColumnExprPtr        m_else;
+
+	static ibQueryColumnExprPtr Col(const ibBackendQueryColumn* col) {
+		auto e = std::make_shared<ibQueryColumnExpr>();
+		e->m_kind = ibQueryColumnExprKind::Column; e->m_col = col; return e;
+	}
+	static ibQueryColumnExprPtr Const(const ibValue& v) {
+		auto e = std::make_shared<ibQueryColumnExpr>();
+		e->m_kind = ibQueryColumnExprKind::Const; e->m_const = v; return e;
+	}
+	static ibQueryColumnExprPtr Arith(ibQueryColumnArithOp op, ibQueryColumnExprPtr a, ibQueryColumnExprPtr b) {
+		auto e = std::make_shared<ibQueryColumnExpr>();
+		e->m_kind = ibQueryColumnExprKind::Arith; e->m_arith = op; e->m_lhs = a; e->m_rhs = b; return e;
+	}
+};
+
+// One computed projection: an expression + its output alias (read back by GetColumn(alias)).
+struct ibQueryColumnSelect
+{
+	ibQueryColumnExprPtr m_expr;
+	wxString             m_alias;
 };
 
 // ==========================================================================
@@ -103,7 +203,13 @@ public:
 	// (which leaf a Where / join-key / output column belongs to). Default: the column
 	// resolves to one of OUR columns (by name). (docs §22.1)
 	virtual bool OwnsColumn(const ibBackendQueryColumn* col) const {
-		return col != nullptr && ResolveColumnByName(col->GetName()) != nullptr;
+		// Identity by model-id, NOT merely by name: two joined sources can each expose an attribute with
+		// the SAME name (e.g. "Reference"), and a name-only check would let BOTH claim the other's column —
+		// the RAM stitch would then read a foreign field off this leaf's own SELECT * (fld<id>_TYPE not
+		// found). The model-id (attribute metaID) is config-unique, so each column belongs to exactly one.
+		if (col == nullptr) return false;
+		const ibBackendQueryColumn* mine = ResolveColumnByName(col->GetName());
+		return mine != nullptr && mine->GetModelID() == col->GetModelID();
 	}
 
 	// ALL columns this source exposes — for SELECT * (a nested subquery over `From(src)`
@@ -157,6 +263,16 @@ public:
 	// target vends no queryable. Navigation lives on the queryable (it owns the
 	// metadata context); the door just chains the result. (docs §22 dot-walk)
 	virtual const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryColumn* refColumn) const { return nullptr; }
+
+	// ALL reference targets of a column — N for a COMPOSITE (multi-type) reference, 1 for a single
+	// reference, empty for a non-reference. The composite dot-walk joins one table per target and
+	// COALESCEs the leaf across them (the _RRRef[metaID] tag matches at most one). Default: wrap the
+	// single-target resolver, so non-record sources need not override. (docs §22 dot-walk)
+	virtual std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryColumn* refColumn) const {
+		const ibBackendQueryable* one = ResolveReferenceTarget(refColumn);
+		return one != nullptr ? std::vector<const ibBackendQueryable*>{ one }
+		                      : std::vector<const ibBackendQueryable*>{};
+	}
 
 	// The PARENT-reference column of a hierarchical record source (the parent attribute) — paired with
 	// GetPrimaryKeyColumns().front() (the self-reference) it gives the source's own parent-ref hierarchy.
