@@ -43,6 +43,7 @@ add_executable(oes_tests
     test_firebirdLease.cpp
     test_logger.cpp
     test_dbTaxonomy.cpp
+    test_gitService.cpp
     test_metadataSerialize.cpp
     test_queryRenderer.cpp
     test_queryLifecycle.cpp
