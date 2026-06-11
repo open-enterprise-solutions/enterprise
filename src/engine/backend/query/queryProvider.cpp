@@ -195,30 +195,20 @@ std::vector<ibQueryCondition> LeafConditionsByName(const ibDataQuerySpec& spec, 
 	return out;
 }
 
-// --- planner decision at the materialisation seam (temp-db foundation, docs/temp-db.md) -------
-// Below this many rows a DB temp table is not worth its CREATE+INSERT round-trips — a small
-// intermediate stays in RAM regardless of capability. Heuristic; tune against real numbers.
-const long kTempTableMinRows = 1000;
+// --- planner decision at the materialisation seam (temp-db foundation, docs/temp-db.md §7) ----
+// The temp decision splits in two, each owned where its inputs live:
+//   SHOULD — the size lever, HERE (WorthDbTemp): below the threshold a DB temp is not worth its
+//            CREATE+INSERT round-trips; a small intermediate stays in RAM regardless of capability.
+//            The promote sites call it with the EXACT materialised row count — real cost, no estimator.
+//   CAN    — capability by presence + the runtime probe + graceful fallback, inside
+//            ibTempTableManager::Materialise (returns null ⇒ the caller stays on RAM).
+const long kTempTableMinRows = 1000;   // heuristic; tune against real numbers
 
-// Where a materialised intermediate lands — RAM (the composer's always-works floor) or a DB TEMP
-// table (server-side join, the optimisation lever). DbTemp needs the driver to vend a
-// temp dialect (capability by PRESENCE) AND the set large enough to pay the round-trips; absence
-// OR small size ⇒ RAM. A DbTemp choice that fails at runtime falls back to RAM (handled at the
-// materialisation site). (docs/temp-db.md)
-enum class ibMaterialisation { Ram, DbTemp };
-
-ibMaterialisation ChooseMaterialisation(const ibTempTableDialect* tempDialect, long sizeHint)
-{
-	if (tempDialect == nullptr)                        return ibMaterialisation::Ram;   // no capability → floor
-	if (sizeHint >= 0 && sizeHint < kTempTableMinRows) return ibMaterialisation::Ram;   // too small → RAM cheaper
-	return ibMaterialisation::DbTemp;                                                   // CAN + worth it
-}
+bool WorthDbTemp(long rowCount) { return rowCount >= kTempTableMinRows; }
 
 // Materialisation SEAM — read a leaf through its OWN provider (single-source, its
 // conditions pushed down) and collect the needed columns into a RAM table, keyed by
-// GetModelID. The RAM impl; the planner-dispatched entry is MaterialiseLeaf below — the
-// tempdb path swaps in THERE (serialise into a real temp table, push the join server-side)
-// without touching the join. (docs/query-language-arc.md §22.1a, docs/temp-db.md)
+// GetModelID. (docs/query-language-arc.md §22.1a, docs/temp-db.md)
 ibQueryRamTable MaterialiseLeafToRam(const ibBackendQueryable* leaf, ibDatabaseConnectionHolder* holder,
                                      const std::vector<ibQueryCondition>& conds,
                                      const std::vector<const ibBackendQueryColumn*>& cols)
@@ -243,22 +233,18 @@ ibQueryRamTable MaterialiseLeafToRam(const ibBackendQueryable* leaf, ibDatabaseC
 	return t;
 }
 
-// Planner-dispatched leaf materialisation — the composer's join/union/totals go through HERE, not
-// straight to RAM. Consults ChooseMaterialisation and materialises accordingly. The DB-temp path
-// (serialise into a real temp table, return a server-side-joinable source, RAM fallback on
-// failure) lands with the temp-table manager/adapter; the temp dialect + a real size hint plug in
-// at this seam then. Until built it always resolves to RAM — the decision lives here so the
-// feature wires in without touching the join below. (docs/temp-db.md)
+// Leaf materialisation entry for the composer's join/union/totals. Deliberately RAM:
+// temping a leaf pays only when the JOIN itself goes server-side, and the server-side
+// promotions live ABOVE this level — PromoteComputedLeaf (computed ⋈ DB) and
+// PromoteUnionBranches, which gate on WorthDbTemp with the REAL row count and own the
+// temp manager (its Materialise carries the CAN-gate + the runtime fallback). A leaf
+// that reaches here is being stitched in RAM, where a DB temp gains nothing
+// (docs/temp-db.md §8). A new promotable RAM-stitch shape extends the promote family,
+// not this function.
 ibQueryRamTable MaterialiseLeaf(const ibBackendQueryable* leaf, ibDatabaseConnectionHolder* holder,
                                 const std::vector<ibQueryCondition>& conds,
                                 const std::vector<const ibBackendQueryColumn*>& cols)
 {
-	// TODO(temp-db): tempDialect = holder's GetTempTableDialect(); sizeHint from stats / a probe.
-	// On DbTemp the manager serialises into a temp table and the join goes server-side (with a RAM
-	// fallback on CREATE/INSERT failure). nullptr ⇒ no driver vends temp yet ⇒ RAM.
-	if (ChooseMaterialisation(/*tempDialect*/ nullptr, /*sizeHint*/ -1) == ibMaterialisation::DbTemp) {
-		// (DB-temp materialisation — pending the temp-table manager; falls through to RAM.)
-	}
 	return MaterialiseLeafToRam(leaf, holder, conds, cols);
 }
 
@@ -515,6 +501,114 @@ const ibBackendQueryColumn* ResolveInSubtree(const ibQueryNode* node, const wxSt
 	return nullptr;
 }
 
+ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const ibBackendQueryColumn*>& refCols,
+                                const ibDataQuerySpec& spec, bool condsByName);
+
+// --- Optimizer: smallest-first reorder of a pure-INNER join chain -----------------
+// Flatten a maximal subtree of INNER Join nodes into "units" (Source / Union /
+// non-inner / cross subtrees stay opaque, keeping their own order — Left/Right/Full
+// are order-sensitive) + one resolved ON pair per flattened Join node. Returns false
+// on an unresolvable key — the caller keeps the tree order.
+bool FlattenInnerChain(const ibQueryNode* node, std::vector<const ibQueryNode*>& units,
+                       std::vector<std::pair<const ibBackendQueryColumn*, const ibBackendQueryColumn*>>& keyPairs)
+{
+	if (node == nullptr) return false;
+	if (node->m_kind == ibQueryNode::Kind::Join
+		&& node->m_joinKind == ibQueryJoinKind::Inner && !node->m_cross) {
+		const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
+		if (!ResolveJoinKeys(node, onL, onR)) return false;
+		keyPairs.emplace_back(onL, onR);
+		return FlattenInnerChain(node->m_left.get(), units, keyPairs)
+		    && FlattenInnerChain(node->m_right.get(), units, keyPairs);
+	}
+	units.push_back(node);
+	return true;
+}
+
+// Materialise the units and re-join them smallest-first (PlanInnerJoinOrder over the
+// EXACT row counts — every unit is materialised anyway, so the cost input is real, not
+// estimated; the intermediates shrink). Inner joins commute/associate, so any connected
+// order returns the same row set; output order is unspecified here as everywhere in the
+// stitch (ProjectToAliases applies the explicit sorts). Returns false on any anomaly —
+// correctness never depends on the reorder, the caller falls back to the tree order.
+bool JoinUnitsSmallestFirst(const std::vector<const ibQueryNode*>& units,
+                            const std::vector<std::pair<const ibBackendQueryColumn*, const ibBackendQueryColumn*>>& keyPairs,
+                            const std::vector<const ibBackendQueryColumn*>& refCols,
+                            const ibDataQuerySpec& spec, bool condsByName,
+                            ibQueryRamTable& out)
+{
+	const size_t n = units.size();
+
+	// The needed column set = refCols + every flattened join key (defensive dedup —
+	// the callers already collect join keys into refCols).
+	std::vector<const ibBackendQueryColumn*> needed = refCols;
+	auto addNeeded = [&needed](const ibBackendQueryColumn* c) {
+		if (c == nullptr) return;
+		for (const ibBackendQueryColumn* k : needed)
+			if (k == c) return;
+		needed.push_back(c);
+	};
+	for (const auto& kp : keyPairs) { addNeeded(kp.first); addNeeded(kp.second); }
+
+	// Map every key endpoint to its owning unit -> the edge list for the planner.
+	std::vector<std::pair<size_t, size_t>> edges;
+	for (const auto& kp : keyPairs) {
+		size_t a = n, b = n;
+		for (size_t u = 0; u < n; ++u) {
+			if (a == n && SubtreeProvides(units[u], kp.first))  a = u;
+			if (b == n && SubtreeProvides(units[u], kp.second)) b = u;
+		}
+		if (a == n || b == n || a == b) return false;
+		edges.emplace_back(a, b);
+	}
+
+	// Materialise every unit — the exact cost input.
+	std::vector<ibQueryRamTable> tables;
+	tables.reserve(n);
+	std::vector<long> counts;
+	for (const ibQueryNode* u : units) {
+		tables.push_back(MaterialiseNode(u, needed, spec, condsByName));
+		counts.push_back(tables.back().RowCount());
+	}
+
+	const std::vector<size_t> order = ibQueryComposer::PlanInnerJoinOrder(counts, edges);
+	if (order.size() != n) return false;   // disconnected — tree order
+
+	std::vector<bool> inAccum(n, false);
+	inAccum[order[0]] = true;
+	out = std::move(tables[order[0]]);
+
+	for (size_t step = 1; step < n; ++step) {
+		const size_t next = order[step];
+
+		// The connecting edge: one endpoint already in the accumulated side, the other on `next`.
+		const ibBackendQueryColumn* onAccum = nullptr; const ibBackendQueryColumn* onNext = nullptr;
+		for (size_t e = 0; e < edges.size(); ++e) {
+			if (inAccum[edges[e].first]  && edges[e].second == next) { onAccum = keyPairs[e].first;  onNext = keyPairs[e].second; break; }
+			if (inAccum[edges[e].second] && edges[e].first  == next) { onAccum = keyPairs[e].second; onNext = keyPairs[e].first;  break; }
+		}
+		if (onAccum == nullptr || onNext == nullptr) return false;
+
+		// This step's output: every needed column the accumulated side or `next` provides.
+		std::vector<const ibBackendQueryColumn*> outCols;
+		std::vector<bool> fromLeft;
+		for (const ibBackendQueryColumn* c : needed) {
+			bool left = false, right = false;
+			for (size_t u = 0; u < n; ++u) {
+				if (!SubtreeProvides(units[u], c)) continue;
+				if (inAccum[u])      left = true;
+				else if (u == next)  right = true;
+			}
+			if (left)       { outCols.push_back(c); fromLeft.push_back(true);  }
+			else if (right) { outCols.push_back(c); fromLeft.push_back(false); }
+		}
+
+		out = ibQueryComposer::JoinRamTables(out, tables[next], onAccum, onNext, outCols, fromLeft, ibQueryJoinKind::Inner);
+		inAccum[next] = true;
+	}
+	return true;
+}
+
 // Materialise ANY node to a RAM table keyed by GetModelID, carrying the referenced columns its leaves
 // provide. Source -> read the leaf; Join -> recurse + nested-loop; UNION -> RamUnion (a union nested
 // inside a join). N-way left-deep falls out of the recursion. `condsByName` routes leaf conditions by
@@ -533,6 +627,19 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 			? LeafConditionsByName(spec, node->m_queryable)
 			: LeafConditions(spec, node->m_queryable);
 		return MaterialiseLeaf(node->m_queryable, spec.m_holder, conds, mine);
+	}
+
+	// Optimizer: a pure-INNER chain of 3+ units re-joins smallest-first with the EXACT
+	// materialised row counts (PlanInnerJoinOrder) — smaller intermediates for free.
+	// Any anomaly falls through to the tree order below; correctness never depends on it.
+	if (node->m_joinKind == ibQueryJoinKind::Inner && !node->m_cross) {
+		std::vector<const ibQueryNode*> units;
+		std::vector<std::pair<const ibBackendQueryColumn*, const ibBackendQueryColumn*>> keyPairs;
+		if (FlattenInnerChain(node, units, keyPairs) && units.size() >= 3) {
+			ibQueryRamTable reordered;
+			if (JoinUnitsSmallestFirst(units, keyPairs, refCols, spec, condsByName, reordered))
+				return reordered;
+		}
 	}
 
 	// Join: recurse, then nested-loop. Output = refCols this subtree provides.
@@ -909,10 +1016,8 @@ std::unique_ptr<ibTempTableManager> PromoteComputedLeaf(
 		if (c.m_col != nullptr && computed->OwnsColumn(c.m_col)) computedConds.push_back(c);
 	ibQueryRamTable rows = computed->ComputeRows(computedConds);
 
-	// SHOULD (temp-db.md §7): a SMALL intermediate is not worth the CREATE+INSERT round-trips — keep it
-	// in RAM regardless of capability. The CAN check (dialect presence + the runtime probe) is inside
-	// Materialise; this is the size lever, the same threshold the RAM-composer planner uses.
-	if (rows.RowCount() < kTempTableMinRows)
+	// SHOULD-gate (temp-db.md §7) with the exact materialised count; CAN lives in Materialise.
+	if (!WorthDbTemp(rows.RowCount()))
 		return nullptr;
 
 	std::unique_ptr<ibTempTableManager> mgr =
@@ -988,7 +1093,7 @@ std::vector<std::unique_ptr<ibTempTableManager>> PromoteUnionBranches(const ibDa
 		if (p->m_queryable->IsComputedInRam()) {
 			anyComputed = true;
 			ibQueryRamTable rows = p->m_queryable->ComputeRows(std::vector<ibQueryCondition>{});   // ctor filters baked in
-			if (rows.RowCount() < kTempTableMinRows) return {};   // small set -> RAM
+			if (!WorthDbTemp(rows.RowCount())) return {};   // SHOULD-gate: small set -> RAM
 			std::unique_ptr<ibTempTableManager> mgr =
 				ibTempTableManager::Materialise(spec.m_holder, rows, p->m_queryable->GetMetaData());
 			if (!mgr) return {};   // no temp capability / failure -> RAM
@@ -1482,6 +1587,48 @@ ibSelectorTree ibQueryComposer::BuildDimensionTree(const ibQueryRamTable& snapsh
 	tree.Root().m_hasChildren = !tree.Root().m_children.empty();
 	ApplyAggregates(tree.Root(), snapshot, all, aggregates);   // grand total in-place
 	return tree;
+}
+
+// Greedy smallest-first order for a flattened pure-INNER join chain (header doc).
+// Start = the smallest unit; each step joins the smallest unit edge-connected to the
+// already-joined prefix. Empty = disconnected (or a malformed edge) — caller keeps
+// the tree order. Pure — unit-testable.
+std::vector<size_t> ibQueryComposer::PlanInnerJoinOrder(const std::vector<long>& rowCounts,
+                                                        const std::vector<std::pair<size_t, size_t>>& edges)
+{
+	const size_t n = rowCounts.size();
+	std::vector<size_t> order;
+	if (n == 0) return order;
+
+	std::vector<std::vector<size_t>> adj(n);
+	for (const auto& e : edges) {
+		if (e.first >= n || e.second >= n || e.first == e.second) return {};
+		adj[e.first].push_back(e.second);
+		adj[e.second].push_back(e.first);
+	}
+
+	std::vector<bool> joined(n, false);
+	size_t start = 0;
+	for (size_t u = 1; u < n; ++u)
+		if (rowCounts[u] < rowCounts[start]) start = u;
+	joined[start] = true;
+	order.push_back(start);
+
+	while (order.size() < n) {
+		size_t best = n;
+		for (size_t u = 0; u < n; ++u) {
+			if (joined[u]) continue;
+			bool connected = false;
+			for (size_t v : adj[u])
+				if (joined[v]) { connected = true; break; }
+			if (!connected) continue;
+			if (best == n || rowCounts[u] < rowCounts[best]) best = u;
+		}
+		if (best == n) return {};   // disconnected graph
+		joined[best] = true;
+		order.push_back(best);
+	}
+	return order;
 }
 
 // RAM inner join: nested-loop over (onLeft == onRight); each output column is read from

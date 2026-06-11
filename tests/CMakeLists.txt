@@ -53,6 +53,7 @@ add_executable(oes_tests
     test_queryL3Vocab.cpp
     test_queryL4Lexer.cpp
     test_queryL4Parser.cpp
+    test_queryRewrite.cpp
     test_queryValueMembers.cpp
 )
 

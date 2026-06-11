@@ -555,3 +555,67 @@ TEST(QuerySelector, Iterate_PreOrderCursorWithLevels)
 	while (sel.Next()) ++again;
 	EXPECT_EQ(again, 5);
 }
+
+// ===========================================================================
+// PlanInnerJoinOrder — the smallest-first inner-chain planner (pure)
+// ===========================================================================
+
+TEST(QueryComposerPlan, Chain_StartsSmallest_GrowsByConnectivity)
+{
+	// A(1000) -e0- B(10) -e1- C(100): start at B; among the connected {A, C} pick C, then A.
+	const std::vector<long> counts = { 1000, 10, 100 };
+	const std::vector<std::pair<size_t, size_t>> edges = { { 0, 1 }, { 1, 2 } };
+	const std::vector<size_t> order = ibQueryComposer::PlanInnerJoinOrder(counts, edges);
+	ASSERT_EQ(order.size(), 3u);
+	EXPECT_EQ(order[0], 1u);
+	EXPECT_EQ(order[1], 2u);
+	EXPECT_EQ(order[2], 0u);
+}
+
+TEST(QueryComposerPlan, Star_ConnectivityBeatsSize)
+{
+	// Star centre A(1000), leaves B(5) / C(7): start B; only A is connected to {B} —
+	// the big centre joins before the small-but-disconnected C.
+	const std::vector<long> counts = { 1000, 5, 7 };
+	const std::vector<std::pair<size_t, size_t>> edges = { { 0, 1 }, { 0, 2 } };
+	const std::vector<size_t> order = ibQueryComposer::PlanInnerJoinOrder(counts, edges);
+	ASSERT_EQ(order.size(), 3u);
+	EXPECT_EQ(order[0], 1u);
+	EXPECT_EQ(order[1], 0u);
+	EXPECT_EQ(order[2], 2u);
+}
+
+TEST(QueryComposerPlan, Disconnected_ReturnsEmpty)
+{
+	// Three units, one edge — no connected order exists; caller must keep the tree order.
+	const std::vector<long> counts = { 10, 20, 30 };
+	const std::vector<std::pair<size_t, size_t>> edges = { { 0, 1 } };
+	EXPECT_TRUE(ibQueryComposer::PlanInnerJoinOrder(counts, edges).empty());
+}
+
+TEST(QueryComposerPlan, MalformedEdge_ReturnsEmpty)
+{
+	const std::vector<long> counts = { 10, 20 };
+	// self-loop and out-of-range are both rejected
+	EXPECT_TRUE(ibQueryComposer::PlanInnerJoinOrder(counts, { { 0, 0 } }).empty());
+	EXPECT_TRUE(ibQueryComposer::PlanInnerJoinOrder(counts, { { 0, 5 } }).empty());
+}
+
+TEST(QueryComposerPlan, SingleUnit_TrivialOrder)
+{
+	const std::vector<size_t> order = ibQueryComposer::PlanInnerJoinOrder({ 42 }, {});
+	ASSERT_EQ(order.size(), 1u);
+	EXPECT_EQ(order[0], 0u);
+}
+
+TEST(QueryComposerPlan, TieBreaks_AreDeterministic)
+{
+	// Equal counts: the first index wins each pick (stable, reproducible plans).
+	const std::vector<long> counts = { 50, 50, 50 };
+	const std::vector<std::pair<size_t, size_t>> edges = { { 0, 1 }, { 1, 2 } };
+	const std::vector<size_t> order = ibQueryComposer::PlanInnerJoinOrder(counts, edges);
+	ASSERT_EQ(order.size(), 3u);
+	EXPECT_EQ(order[0], 0u);
+	EXPECT_EQ(order[1], 1u);
+	EXPECT_EQ(order[2], 2u);
+}

@@ -4,6 +4,7 @@
 
 #include "queryLowering.h"
 
+#include "queryRewrite.h"                 // ibQueryRewrite — optimizer pass (AST -> AST)
 #include "queryable.h"                    // ibBackendQueryColumn / ibQueryFilterOp
 #include "queryableFactory.h"             // ibQueryableFactory — source-namespace resolution
 #include "backend/appData.h"              // ibApplicationData::GetQueryableFactory
@@ -772,10 +773,15 @@ ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<wxString, 
 // ibQueryLowering::Execute
 //////////////////////////////////////////////////////////////////////
 
-ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& ast,
+ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& astIn,
                                            const std::map<wxString, ibValue>& params,
                                            std::vector<OutputColumn>& outSchema)
 {
+	// Optimizer pass — negation normalization + FROM-subquery flattening. Works on a
+	// deep clone; the Query value object's cached parse is never mutated. (queryRewrite.h)
+	const ibQuerySelectPtr astOpt = ibQueryRewrite::Rewrite(astIn);
+	const ibQuerySelect& ast = *astOpt;
+
 	if (ast.m_hasTotals)
 		Fail(0, 0, _("hierarchical TOTALS execution goes through ExecuteTotals, not Execute"));
 
@@ -830,10 +836,15 @@ ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& ast,
 // ibQueryLowering::ExecuteTotals — hierarchical subtotals (ИТОГИ … ПО …)
 //////////////////////////////////////////////////////////////////////
 
-ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& ast,
+ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
                                                  const std::map<wxString, ibValue>& params,
                                                  std::vector<OutputColumn>& outSchema)
 {
+	// Same optimizer pass as Execute — the totals path benefits from a flattened FROM
+	// and a normalized WHERE the same way. (queryRewrite.h)
+	const ibQuerySelectPtr astOpt = ibQueryRewrite::Rewrite(astIn);
+	const ibQuerySelect& ast = *astOpt;
+
 	if (!ast.m_joins.empty() || !ast.m_unions.empty())
 		Fail(0, 0, _("TOTALS over a JOIN / UNION is not yet supported (use a single source)"));
 	if (ast.m_totalsBy.empty())

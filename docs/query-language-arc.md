@@ -107,6 +107,50 @@
 >   dot-walk leaf (scalar today); a composite NON-scalar leaf beyond the last segment; arithmetic /
 >   CASE as an aggregate input (a dot-walk leaf input works); aggregate subqueries.
 >
+> ### Update 2026-06-11 — L4 optimizer pass (landed, 420/420 green, runtime-validated)
+>
+> The optimizer ladder's first two rungs are in the tree. The stance stays: **no cost-based
+> optimizer of our own** — single-source tactics are delegated to the DBMS (temp-db.md §1);
+> OES optimizes only what the DBMS cannot see.
+>
+> - **AST rewrite pass** — `query/queryRewrite.{h,cpp}`, wired into BOTH lowering entries
+>   (`ibQueryLowering::Execute` / `ExecuteTotals`), so the text front-end now and LINQ
+>   push-down later inherit every rule. Pure AST → AST on a deep clone (the Query value
+>   object's cached parse is never mutated). Rules:
+>   - *Negation normalization* — `NOT` pushed down until absorbed: comparison inversion
+>     (`NOT (a = b)` → `a <> b`), double-NOT elimination, De Morgan, the negated-flag
+>     toggle on LIKE/IN/IS NULL/BETWEEN, truthy `NOT col` → `col = FALSE` (exact under
+>     typed-empty semantics). Payoff: a Not-free WHERE far more often passes
+>     `IsFlatAndWhere` → rides the door's verb conditions (the path that works across
+>     JOINs and the RAM stitch, where the predicate tree is still restricted).
+>   - *FROM-subquery flattening* — `FROM (SELECT … WHERE p) AS s WHERE q` merges into one
+>     SELECT (`WHERE q' AND p`, output names substituted back to inner paths; an aliased
+>     dot-walk projection re-expands). Conservative gates: plain inner projection only (no
+>     aggregates / DISTINCT / JOIN / UNION / TOTALS / ORDER BY), single-source outer, and a
+>     SCOPE GUARD — an outer reference to a column the subquery does not project keeps the
+>     wrapped path (and its honest resolution error) instead of silently legalizing
+>     against the real table. Nested levels collapse bottom-up.
+> - **Smallest-first join order in the RAM stitch** — `ibQueryComposer::PlanInnerJoinOrder`
+>   (pure, unit-testable) + `FlattenInnerChain` / `JoinUnitsSmallestFirst` in
+>   `queryProvider.cpp`: a pure-INNER chain of 3+ units re-joins greedily smallest-first
+>   using the EXACT materialised row counts (the units are materialised anyway — real
+>   costs, no estimator); intermediates shrink. Non-inner kinds (LEFT/RIGHT/FULL/CROSS)
+>   stay opaque order-preserving units; any anomaly falls back to the tree order —
+>   correctness never depends on the reorder.
+> - **Temp decision tidied** — the pre-manager `ChooseMaterialisation` seam retired; the
+>   decision is split where its inputs live: `WorthDbTemp(rowCount)` SHOULD-gate at the
+>   promote sites, the CAN-gate (presence + probe + fallback) inside
+>   `ibTempTableManager::Materialise` (temp-db.md §9 updated to the landed state).
+> - **Tests:** `test_queryRewrite.cpp` (16 — parse → rewrite → tree shape, incl. the
+>   original-AST-untouched guarantee) + `QueryComposerPlan` (6 — chain / star /
+>   disconnected / malformed / tie-break determinism). Full `oes_tests` 420/420; full
+>   `Debug|x86` clean; launcher + live queries validated. (The previously documented x64
+>   gtest AV in `QueryL4Parser` no longer reproduces — the suite is green.)
+> - **Next rungs (by need, not now):** DB-leaf cardinality estimates feed the planner's
+>   second argument once federation / 3+-source loads exist (wants the PG stand); further
+>   rewrite rules (IN → semi-join, unused-column pruning) are one function each in the
+>   existing pass.
+>
 > Design history + open decisions remain in [§15](#15-open-decisions); the per-section
 > design (§4–§22) is preserved as the rationale this converged from.
 

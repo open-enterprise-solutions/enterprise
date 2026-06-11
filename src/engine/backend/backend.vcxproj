@@ -221,6 +221,7 @@
     <ClInclude Include="query\queryAst.h" />
     <ClInclude Include="query\queryParser.h" />
     <ClInclude Include="query\queryLowering.h" />
+    <ClInclude Include="query\queryRewrite.h" />
     <ClInclude Include="query\queryableFactory.h" />
     <ClInclude Include="query\queryableHooks.h" />
     <ClInclude Include="system\value\valueQuery.h" />
@@ -572,6 +573,7 @@
     <ClCompile Include="query\queryLexer.cpp" />
     <ClCompile Include="query\queryParser.cpp" />
     <ClCompile Include="query\queryLowering.cpp" />
+    <ClCompile Include="query\queryRewrite.cpp" />
     <ClCompile Include="query\queryableFactory.cpp" />
     <ClCompile Include="system\value\valueQuery.cpp" />
     <ClCompile Include="query\queryProvider.cpp" />

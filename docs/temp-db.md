@@ -1,10 +1,14 @@
 # Temp-DB — DB temporary tables as the materialisation / optimisation layer
 
-> **Status (2026-06-09): FOUNDATION laid, feature pending.** The L1 capability seam is in
-> (`ibTempTableDialect` + `ibDatabaseLayer::GetTempTableDialect()` → `nullptr` by default).
-> Everything else below — the temp-table manager, the L3 source adapter, the planner decision,
-> the per-driver dialects, the Firebird GTT strategy — is design, not yet built. This doc is the
-> agreed contract those arcs build against. Builds on [reference-as-key](#) +
+> **Status (2026-06-11): CORE LANDED, PG live validation pending.** The capability seam, the
+> temp-table manager (`tempTableManager.{h,cpp}` — probe / CREATE+fill via L2 / RAII drop /
+> graceful RAM fallback), the DB-temp source adapter, the PostgreSQL dialect, and the
+> server-side join/union promotions (`PromoteComputedLeaf` / `PromoteUnionBranches` in
+> `queryProvider.cpp`, column remap incl. aggregates) are all in the tree. The decision is
+> split `WorthDbTemp` (SHOULD, size) + manager `Materialise` (CAN, presence/probe/fallback).
+> Still pending: a live PostgreSQL validation run (the dev FB never takes the temp path by
+> design), the L4 materialise-into-temp surface, and MySQL. §9 has the current table. This doc
+> is the agreed contract. Builds on [reference-as-key](#) +
 > [column-based lowering](query-language-arc.md) (L3 is source-agnostic, which is what makes all
 > of this nearly free).
 
@@ -139,14 +143,15 @@ like the L3 abstraction did, because it changes the compose flow. Do not lay it 
 | Piece | State |
 |---|---|
 | `ibTempTableDialect` + `GetTempTableDialect()` nullable seam (L1) | **laid** |
-| Planner decision — `ChooseMaterialisation` (presence + size threshold) + `MaterialiseLeaf` dispatch in `ibQueryComposer`; join/union/totals routed through it; always RAM until wired | **seam laid** |
-| `ibDbTempTableQueryable` — DB-temp source adapter (L3, sibling of the RAM `ibTempTableQueryable`); raw columns, inherits the DB provider, read-only scan | **laid** |
-| Temp-table manager — lifecycle (create/fill/drop), pin scope, fail-fast probe + cache, RAII unwind; wires `tempDialect`+`sizeHint` into `MaterialiseLeaf`, builds the temp via L2 DDL/DML, hands name+cols to `ibDbTempTableQueryable` | pending (the feature core) |
-| Per-driver dialects — **PostgreSQL first** (`AdHocCreate`, the primary target); MySQL later; Firebird stays `nullptr` (RAM); SQLite N/A (logs-only) | **PG laid** (scaffold; unused until the manager wires the fetch) |
-| **Server-side JOIN push-down** — the DB provider emitting a SQL `JOIN` to the temp table (today an explicit `.Join` goes through the RAM composer). The PREREQUISITE for temp tables to be worth anything — without it, materialising into a temp still RAM-joins. | pending (the hard part) |
-| L4 surface — a "materialise-into-temp" query construct + temp-table manager as the optimisation surface | pending (with L4) |
+| Planner decision — split in two, each owned where its inputs live: `WorthDbTemp(rowCount)` = the SHOULD size-gate (§7), called at the promote sites with the EXACT materialised row count; the CAN-gate (dialect presence + runtime probe + graceful fallback) inside `ibTempTableManager::Materialise`. The generic RAM-composer `MaterialiseLeaf` seam deliberately stays RAM — temping a RAM-stitched leaf gains nothing (§8); new promotable shapes extend the promote family. | **landed** |
+| `ibDbTempTableQueryable` — DB-temp source adapter (L3, sibling of the RAM `ibTempTableQueryable`); raw columns, inherits the DB provider, read-only scan | **landed** |
+| Temp-table manager (`tempTableManager.{h,cpp}`) — holder-anchored lifetime (pins the connection via an owned `ibConnectionScope`), runtime capability probe, CREATE + fill via L2 DDL/DML (columns in the metadata storage format — references/enums round-trip), RAII DROP, graceful RAM fallback (null on no-dialect / failure). Per-session probe CACHE still TODO (probes per Materialise today). | **landed** |
+| Per-driver dialects — **PostgreSQL** (`AdHocCreate`, explicit DROP via the pinning scope); MySQL later; Firebird stays `nullptr` (RAM); SQLite N/A (logs-only) | **PG landed** |
+| **Server-side JOIN push-down** — `PromoteComputedLeaf` (computed ⋈ DB: temp the computed side, remap columns incl. aggregates/having, rebuild the join tree → the join runs in the DBMS) and `PromoteUnionBranches` (computed UNION branches temped, the whole union server-side). Generic multi-way / DB⋈DB-cross-connection promotion = future (federation). | **landed (two shapes)** |
+| RAM-composer join ORDER — `ibQueryComposer::PlanInnerJoinOrder`: smallest-first reorder of pure-INNER chains (3+ units) with EXACT materialised counts; tree-order fallback on any anomaly | **landed** |
+| L4 surface — a "materialise-into-temp" query construct | pending (with L4) |
 
-Recommended order: **PostgreSQL dialect** (already laid as scaffold) + manager + planner wiring —
-prove the whole pipeline (presence → create → fill → server-side join → RAM fallback) **against a
-PostgreSQL instance** (the dev FB never takes the temp path, so PG is the validation stand) → MySQL
-→ L4 surface. Firebird stays on RAM (GTT-shape not worth it for small deployments).
+Remaining order: **prove the whole pipeline (presence → probe → create → fill → server-side join →
+RAM fallback) against a live PostgreSQL instance** (the dev FB never takes the temp path, so PG is
+the validation stand) → MySQL → L4 surface. Firebird stays on RAM (GTT-shape not worth it for small
+deployments).

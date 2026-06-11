@@ -127,6 +127,16 @@ public:
 	                                       const std::vector<const ibBackendQueryColumn*>& outCols,
 	                                       const std::vector<bool>& fromLeft,
 	                                       ibQueryJoinKind kind = ibQueryJoinKind::Inner);   // Inner / Left / Right / Full
+	// Greedy smallest-first join ORDER for a flattened pure-INNER chain. Inputs: each
+	// unit's EXACT materialised row count + the join edges (unit-index pairs, one per
+	// inner Join node). order[0] starts; every next unit is edge-connected to the
+	// joined prefix; among the connected candidates the smallest joins first — the
+	// cost-based decision with REAL costs (no estimator: the units are materialised
+	// anyway). Empty result = no connected order (the caller keeps the tree order).
+	// Inner joins commute/associate, so any connected order is semantics-preserving.
+	// Pure (no DB) — unit-testable. (docs/temp-db.md §7 — the same size lever)
+	static std::vector<size_t> PlanInnerJoinOrder(const std::vector<long>& rowCounts,
+	                                              const std::vector<std::pair<size_t, size_t>>& edges);
 	// Append one UNION branch's rows to `out`: each output column is read from the branch's
 	// same-named column (branchCols, by position; null = absent -> NULL cell). The RAM UNION
 	// stacking core, pure (no DB) — unit-testable.
