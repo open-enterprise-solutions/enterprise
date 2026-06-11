@@ -13,6 +13,7 @@
 
 #define objectManager wxT("Manager")
 #define objectMetadataManager wxT("Metadata")
+#define objectDataManager wxT("Data")
 
 //*********************************************************************************************************
 //*                          ibValueModuleManager — lightweight base                                    *
@@ -22,13 +23,18 @@ ibValueModuleManager::ibValueModuleManager(ibMetaData* metadata, const ibValueMe
 	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
 	ibRuntimeModuleDataObject(m_members, this, new ibCompileModule(obj)),
 	m_objectManager(new ibValueGlobalContextManager(metadata)),
-	m_metaManager(new ibValueMetadataUnit(metadata))
+	m_metaManager(new ibValueMetadataUnit(metadata)),
+	m_dataManager(new ibValueDataUnit(metadata))
 {
 	// "Metadata" global — bound straight into the compile module's extern map
 	// (the single source for globals; m_metaManager owns the value). m_compileModule
 	// is live here (created in the ibRuntimeModuleDataObject base ctor above). The name
 	// surface (module exports) autobinds as the helper's tail in that descriptor ctor.
 	BindExportVariable(objectMetadataManager, m_metaManager);
+	// "Data" global — the queryable-source mirror of "Metadata" (L4-2): same kind-
+	// namespace shape, leaves vend ibValueQueryable (lazy, inert — reading the value
+	// reads no data). Same ownership / binding pattern as m_metaManager.
+	BindExportVariable(objectDataManager, m_dataManager);
 }
 
 ibValueModuleManager::~ibValueModuleManager()
@@ -630,3 +636,4 @@ SYSTEM_TYPE_REGISTER(ibValueModuleManagerRuntimeConfiguration, "ConfigModuleMana
 SYSTEM_TYPE_REGISTER(ibValueModuleManager::ibValueModuleUnit, "ModuleUnit", string_to_clsid("SO_MODB"));
 SYSTEM_TYPE_REGISTER(ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit, "ModuleManager", string_to_clsid("SO_MODL"));
 SYSTEM_TYPE_REGISTER(ibValueModuleManager::ibValueMetadataUnit, "Metadata", string_to_clsid("SO_METD"));
+SYSTEM_TYPE_REGISTER(ibValueModuleManager::ibValueDataUnit, "Data", string_to_clsid("SO_DATA"));

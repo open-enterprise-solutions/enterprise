@@ -62,6 +62,21 @@ public:
 	static ibDataQueryResult ExecuteTotals(const ibQuerySelect& ast,
 	                                       const std::map<wxString, ibValue>& params,
 	                                       std::vector<OutputColumn>& outSchema);
+
+	// === L4-2 (LINQ pushdown) — recorded-lambda lowering against ONE source ===
+	// The lambda recorder (compiler/lambdaQueryAst.*) emits the same
+	// ibQueryAstExpr the text parser does; these wrap the file-local builders so
+	// the Queryable fold reuses them verbatim. `captured` maps the lambda's
+	// captured outer locals (Param nodes) to their values — the &parameter
+	// analogy. Both return EMPTY (null / {}) instead of throwing on anything
+	// untranslatable: the fold then falls back to RAM (bail-out, not an error).
+	static ibQueryPredicatePtr LowerLambdaPredicate(const ibBackendQueryable* source,
+	                                                const ibQueryAstExpr& expr,
+	                                                const std::map<wxString, ibValue>& captured);
+	// A pure column / dot-walk path lambda body (OrderBy / aggregate selectors).
+	static std::vector<const ibBackendQueryColumn*> LowerLambdaColumnPath(
+	                                                const ibBackendQueryable* source,
+	                                                const ibQueryAstExpr& expr);
 };
 
 #endif

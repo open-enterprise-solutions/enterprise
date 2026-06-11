@@ -310,6 +310,15 @@ struct ibByteCode {
 		// at depth=1 from an eval expression.
 		std::vector<ibByteCodeVarInfo> m_listLocals;
 
+		// L4-2 LINQ pushdown — the lambda body recorded as the L4 query AST
+		// (compiler/lambdaQueryAst.*), set ONLY for a single-parameter
+		// lambda whose body is a translatable single expression; null = the
+		// pipeline runs in RAM (the always-correct floor). Deliberately NOT
+		// serialised into the AOT cache: on a cache hit the AST is absent and
+		// the pushdown silently degrades to RAM — correctness is unaffected,
+		// so the AOT format needs no bump. (docs/query-language-arc.md §23.5)
+		std::shared_ptr<struct ibQueryAstExpr> m_lambdaExprAst;
+
 		ibByteFunction() = default;
 
 		// Construct from compile-side ibFunction. Templated to keep

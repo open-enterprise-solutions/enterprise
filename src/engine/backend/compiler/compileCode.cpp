@@ -5,6 +5,7 @@
 
 #include "compileCode.h"
 #include "codeDef.h"
+#include "lambdaQueryAst.h"   // L4-2 — lambda body -> L4 query AST (pushdown)
 
 #include "system/systemManager.h"
 #include "backend/guid.h"  // wxNewUniqueGuid for anonymous-lambda synthetic naming
@@ -1611,6 +1612,10 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 	// eager walk here: ctxs that nothing captures from stay unmarked
 	// regardless of how many lambdas they enclose.
 
+	// L4-2 pushdown — the body's lexeme span starts right after the signature
+	// (captured BEFORE EmitFunctionBody consumes it); the recorder re-reads
+	// exactly this span once the body has compiled (see below).
+	const size_t lambdaBodyFrom = m_numCurrentCompile + 1;
 
 	// Emit OPER_LFUNC + params + body + OPER_ENDLFUNC inline.
 	// EmitFunctionBody discriminates lambda vs named via
@@ -1652,6 +1657,18 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 	lfuncCode.m_param1 = target;
 	lfuncCode.m_param2.m_numIndex = endlfuncIp;
 	lfuncCode.m_param3.m_numIndex = funcIndex;
+
+	// L4-2 pushdown — record the just-compiled body as the L4 query AST when
+	// it is a single-parameter, single-expression lambda in the translatable
+	// subset (compiler/lambdaQueryAst.*). Null = the pipeline stays in
+	// RAM; the recorder never fails the compile. The span [lambdaBodyFrom,
+	// m_numCurrentCompile] covers everything EmitFunctionBody consumed,
+	// including the closing fence the recorder tolerates.
+	if (funcIndex >= 0 && createdFunction->m_listParam.size() == 1) {
+		m_cByteCode.m_listFunc[funcIndex].m_lambdaExprAst = ibBuildLambdaQueryAst(
+			m_listLexem, lambdaBodyFrom, m_numCurrentCompile + 1,
+			createdFunction->m_listParam[0].m_strName);
+	}
 
 	// NOTE: ibParamUnit::m_numIndex is wxLongLong_t (8 bytes) — cast to int
 	// for %d, otherwise variadic packs 8 bytes and the next arg (caller_ctx)

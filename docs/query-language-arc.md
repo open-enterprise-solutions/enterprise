@@ -4,7 +4,7 @@
 > L3 read + write + aggregation + dot-walk realized.** The lower sections (§4–§22) are the
 > design this converged from; the snapshot below is what is actually in the tree.
 >
-> **Last updated:** 2026-06-10.
+> **Last updated:** 2026-06-11.
 >
 > ### Landed snapshot (2026-06-07)
 >
@@ -212,6 +212,48 @@
 >   second argument once federation / 3+-source loads exist (wants the PG stand); further
 >   rewrite rules (IN → semi-join, unused-column pruning) are one function each in the
 >   existing pass.
+>
+> ### Update 2026-06-11 (3) — L4-2 LINQ push-down v1 (landed, 444/444, runtime-validated)
+>
+> The second front of L4 is in the tree: a lambda chain (and the block form) over a DB source
+> executes as SQL through the same L3 door the text language uses. The two parallel lines —
+> the RAM LINQ surface (`OPER_CALL_LINQ` + `DispatchLinqMethod`) and the backing-blind L3/L4
+> engine — met through a ~250-line adapter; none of the 31 RAM pipeline ops changed.
+> Realized mechanism in **§23.5**:
+>
+> - **Lambda recorder** (`compiler/lambdaQueryAst.{h,cpp}`) — at compile time the
+>   single-parameter lambda body's LEXEMES re-parse into a ready L4-1 `ibQueryAstExpr`
+>   (Column / Literal / Param / Arith / Compare / Logical / Not). Conservative bail-out:
+>   anything outside the subset records `null` → the RAM path (a false "translatable"
+>   would mean wrong rows). Logical operators are the `And`/`Or`/`Not` KEYWORDS in both
+>   code styles (`&&` / `||` do not exist in the language — a bare `|` is the lexer's
+>   string-continuation marker); paired compares (`<=`, `>=`, `<>`, `!=`, `==`) fuse only
+>   when source-adjacent.
+> - **AOT v14** — the recorded AST persists on `ibByteFunction` (presence byte + node
+>   payload, write-gated by `AstSerializable`, read-validated with a depth cap); an AOT
+>   cache hit KEEPS the push-down (a hit is the production norm, so the feature survives it).
+> - **`ibValueQueryable`** — inert by contract (no property/method surface; watch/`GetString`
+>   never executes); `DispatchLinqMethod` is the only entry. `Where` lowers the lambda AST
+>   through the SAME `BuildWherePredicate` the text language uses (captured outer locals =
+>   named Params resolved from the captured frames at dispatch); `OrderBy[Descending]` lowers
+>   a column path; `Take` min-folds; terminals `Count`/`Any`/`First[OrDefault]`/`ToArray`/
+>   `ToTable` execute through the door; ANY other op materialises the folded prefix and
+>   re-dispatches on the stock RAM machinery (the RAM floor). Each op clones the link —
+>   the chain is immutable. Rows: single-PK source → references; otherwise (registers,
+>   `Data.From`) a structure of columns — register iteration unlocked.
+> - **The `Data` global** — the queryable-source root, an exact mirror of the `Metadata`
+>   unit: nine queryable kind namespaces (`Data.Catalogs.X` …) vending leaves through
+>   `ibBackendQueryableHolder::GetQueryable()` — the SAME source registry the text language
+>   reads; `Data.From(valueTable)` wraps the existing `ibTempTableQueryable` (an in-memory
+>   table as a first-class source). Block LINQ `From s in Data.Catalogs.X select {…}`
+>   validated live.
+> - **`ToTable`** — a new pipeline terminal materialising a Queryable into a value table;
+>   a clear error on plain iterables.
+> - **Tests:** `test_lambdaRecorder.cpp` (16 — text → lexemes → AST shape + bail-outs, no DB).
+>   Full `oes_tests` 444/444; full `Debug|x86` clean; block-LINQ runtime smoke green.
+> - **Open (phase D):** golden parity RAM-vs-pushed. Deferred post-v1: manager-as-LINQ sugar
+>   (`Catalogs.X.Where(λ)` hitting the DB), source arguments in the text language, rooted
+>   `FROM Data.*`, plural factory aliases, `Metadata.*` as queryable relations.
 >
 > Design history + open decisions remain in [§15](#15-open-decisions); the per-section
 > design (§4–§22) is preserved as the rationale this converged from.
@@ -1768,8 +1810,8 @@ protected primitives.
 ## 23. L4 — the text query language (L4-1) + the LINQ seam (L4-2)
 
 §14 named two L4 front-ends lowering into the one L3 path. **L4-1 — a text query
-language** is being built first (greenfield, simpler than LINQ, and it lays the
-foundation L4-2 reuses); **L4-2 — LINQ push-down** is designed here as a seam only.
+language** was built first (greenfield, simpler than LINQ, and it lays the
+foundation L4-2 reuses); **L4-2 — LINQ push-down** landed on top of it (§23.5).
 
 ### 23.1 Decisions
 - **Syntax:** canonical English `SELECT/FROM/WHERE/JOIN/GROUP BY/ORDER BY/TOTALS`, but
@@ -1926,17 +1968,69 @@ rest, growing as the door grows:
   `SelectAggregate` in `ComputeRows` + a RAM post-filter for the outer's pushed-down conditions; the
   door does not yet surface an aggregate's OUTPUT schema, so it wants a focused door + provider change.
 
-### 23.5 L4-2 — the LINQ seam (design only)
-- **Entry:** where a LINQ chain/block resolves its source (`procUnitLinq.cpp` /
-  `CompileLinqExpression`). If the source resolves to an `ibBackendQueryableHolder`
-  (a DB-backed metaobject), the translatable prefix is a push-down candidate.
-- **Reuse:** the translatable prefix (`Where/OrderBy/Take` whose lambda body is in a
-  recognizable subset) lowers through the **same** `ibDataQueryBuilder` via the **same**
-  expression lowering L4-1 builds (lambda body → an `ibQueryExpr`-shaped node →
-  door verb). This is the dual-compile path; the untranslatable tail and non-DB sources
-  stay on the current RAM pipeline, with the `ibDataQueryResult` wrapped as the
-  iterator-state feeding the residual. Translatability is decided at compile time.
-- Detailed design + code = a separate arc on a green L4-1.
+### 23.5 L4-2 — LINQ push-down (**LANDED v1, 2026-06-11**)
+
+The seam became the second front. The pipeline, end to end:
+
+**Compile time — the lambda recorder** (`compiler/lambdaQueryAst.{h,cpp}`):
+`CompileLambdaExpression` (compileCode.cpp) remembers the lambda body's lexeme span; for a
+single-parameter lambda, `ibBuildLambdaQueryAst(lexems, from, to, rowParamName)` re-parses
+those lexemes into a ready **L4-1 `ibQueryAstExpr`** stored as
+`ibByteFunction::m_lambdaExprAst`. Grammar: `[ '{' ] Return expr [ ';' ] [ '}' | EndFunction ]`,
+expression subset = Column (the row parameter's member chain, real-cased via the lexeme's
+`m_valData`), Literal (incl. folded unary minus), Param (a captured outer identifier),
+Arith (`+ - * / %`), Compare (`< > <= >= = == <> !=` — pairs fuse only when source-adjacent),
+Logical (`And`/`Or` keywords — `&&`/`||` do not exist in the language; a bare `|` is the
+lexer's string-continuation marker), Not (`Not` keyword or CES `!`). **Conservative
+bail-out:** anything else — method calls, member access on a captured value, a bare row
+parameter, multiple statements — records `null` (a false "translatable" would mean wrong
+rows; `null` just means the RAM path).
+
+**AOT v14** (`byteCodeAOT.cpp`): the recorded AST serialises with the function (presence
+byte + recursive node payload). Writing is gated by `AstSerializable` (outside the subset →
+absent), reading validates node kinds and caps depth at 256 (failure = a clean cache miss).
+An AOT hit KEEPS the push-down — a hit is the production norm, so the feature survives it.
+
+**Lowering reuse** (`query/queryLowering.{h,cpp}`): public `LowerLambdaPredicate` /
+`LowerLambdaColumnPath` are thin wrappers over the SAME file-local `BuildWherePredicate` /
+`ResolvePath` the text language lowers through (sources = the one queryable, dot-walk allowed
+on a DB source only); any lowering error returns `nullptr` → RAM. Captured outer identifiers
+are Param nodes resolved BY NAME from the lambda's captured frames at dispatch time.
+
+**`ibValueQueryable`** (`system/value/valueQueryable.{h,cpp}`, CLSID `VL_QRBL`) — the value
+the chain flows through. Inert by contract: no property/method surface, watch / `GetString`
+NEVER executes (renders `"Queryable(source | ops)"`). `DispatchLinqMethod` is the only
+entry; every op clones the link (the chain is immutable, shared prefixes are safe):
+- **Folded into the door:** `Where` (lambda AST → predicate), `OrderBy[Descending]`
+  (column path), `Take` (min-fold).
+- **Terminals:** `Count` (door aggregate), `Any` (page-1 probe), `First`/`FirstOrDefault`,
+  `ToArray`, `ToTable` (a NEW pipeline method — materialises into a value table; a clear
+  error on plain iterables).
+- **Anything else** = `MaterialiseThenRam`: execute the folded prefix, wrap the rows in an
+  Array, re-dispatch the op on the stock RAM machinery — the RAM floor. The dual-compile
+  promise holds: translatable prefix server-side, residual in RAM.
+- **Row shape:** a single-column-PK source yields references; otherwise (registers,
+  `Data.From`) the row is a structure of the source's columns — register iteration unlocked.
+- `CreateIterator` streams pages (Foreach over a Queryable never materialises the set).
+
+**The `Data` global** (`moduleManager/moduleManagerDataUnit.cpp`) — the queryable-source
+root, the exact mirror of the `Metadata` unit: nine kind namespaces (`Constants`,
+`Catalogs`, `Documents`, `Enumerations`, `InformationRegisters`, `AccumulationRegisters`,
+`ChartsOfCharacteristicTypes`, `ChartsOfAccounts`, `AccountingRegisters`) vend
+`Name → Queryable` through `ibBackendQueryableHolder::GetQueryable()` — the SAME source
+registry the text language reads (one world). `Data.From(valueTable)` wraps the existing
+`ibTempTableQueryable`: an in-memory value table as a first-class source, joinable against
+DB sources through the composer/promotion machinery. Vending is lazy by contract — building
+the namespace reads nothing. Block LINQ `From s in Data.Catalogs.X select {…}` validated
+live.
+
+**Tests:** `tests/test_lambdaRecorder.cpp` — 16 cases, pure text → lexemes → AST shape +
+bail-outs (no DB, both code styles). Full suite 444/444; full `Debug|x86` clean.
+
+**Open — phase D:** golden parity RAM-vs-pushed (the same chain over `Data.X` and over a
+materialised array must agree row-for-row). **Deferred post-v1:** manager-as-LINQ sugar
+(`Catalogs.X.Where(λ)` delegating to the queryable), source arguments in the text language,
+rooted `FROM Data.*` + plural factory aliases, `Metadata.*` as queryable relations.
 
 ### 23.6 The queryable-source factory (`query/queryableFactory.h`)
 

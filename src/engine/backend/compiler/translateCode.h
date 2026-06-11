@@ -268,6 +268,7 @@ public:
 	virtual void Clear();
 	void ClearLexem() { m_listLexem.resize(0); } // resetting and free data to reuse an object
 	size_t GetLexemCount() const { return m_listLexem.size(); } // token count after PrepareLexem (diagnostics / tests)
+	const std::vector<ibLexem>& GetLexems() const { return m_listLexem; } // read-only lexem stream (lambda expr recorder / tests)
 
 	bool PrepareLexem();
 

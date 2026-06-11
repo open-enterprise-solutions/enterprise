@@ -1263,6 +1263,7 @@ public:
 		Aggregate,
 		WhereIndexed,
 		SelectIndexed,
+		ToTable,        // materialise into the built-in value table (data sources / Queryable)
 	};
 
 	// Method-table entry — enum id + script-side name + one-line help

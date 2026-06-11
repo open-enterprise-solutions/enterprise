@@ -165,6 +165,60 @@ public:
 		ibMetaData* m_metaData;
 	};
 
+	// "Data" global — the QUERYABLE-source mirror of "Metadata" (L4-2). The same
+	// member shape (kind namespaces -> a Name-keyed structure), but the leaves are
+	// ibValueQueryable values (the source the text query language reads through) —
+	// the QUERYABLE kinds only (records with a data-reference, registers,
+	// constants; no modules / forms / reports). Lazy by contract: vending a
+	// Queryable reads NOTHING. (moduleManagerDataUnit.cpp;
+	// docs/query-language-arc.md §23.5)
+	class BACKEND_API ibValueDataUnit :
+		public ibValueDynamicMembers {
+	public:
+
+		ibValueDataUnit() {}
+		ibValueDataUnit(ibMetaData* metaData);
+		virtual ~ibValueDataUnit();
+
+		const ibMetaData* GetMetaData() const { return m_metaData; }
+		ibMetaData* GetMetaData() { return m_metaData; }
+
+		//check is empty
+		virtual bool IsEmpty() const override { return false; }
+
+		//operator '=='
+		virtual bool CompareValueEQ(const ibValue& cParam) const override
+		{
+			ibValueDataUnit* compareData = dynamic_cast<ibValueDataUnit*>(cParam.GetRef());
+			if (compareData) {
+				return m_metaData == compareData->GetMetaData();
+			}
+			return false;
+		}
+
+		//operator '!='
+		virtual bool CompareValueNE(const ibValue& cParam) const override {
+			ibValueDataUnit* compareData = dynamic_cast<ibValueDataUnit*>(cParam.GetRef());
+			if (compareData) {
+				return m_metaData != compareData->GetMetaData();
+			}
+			return false;
+		}
+
+		void FillMembers(ibMemberTable& helper) const;   // bound in ctor
+
+		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;
+		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
+
+		// Data.From(valueTable) — wrap an in-memory value table as a Queryable
+		// source (LINQ over RAM, joinable with DB sources through the composer).
+		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
+		                        ibValue** paParams, const long lSizeArray) override;
+
+	private:
+		ibMetaData* m_metaData;
+	};
+
 protected:
 
 	//metaData and external variant
@@ -192,6 +246,7 @@ public:
 	//system object:
 	ibValue* GetObjectManager() const { return m_objectManager; }
 	ibValueMetadataUnit* GetMetaManager() const { return m_metaManager; }
+	ibValueDataUnit* GetDataManager() const { return m_dataManager; }
 
 	// Resolve a registered common module's compiled unit. Pure virtual — the
 	// runtime manager reads its per-session runtime registry, the designer holder
@@ -224,6 +279,9 @@ protected:
 
 	// global metamanager
 	ibValuePtr<ibValueMetadataUnit> m_metaManager;
+
+	// global data manager — the "Data" queryable-source root (L4-2)
+	ibValuePtr<ibValueDataUnit> m_dataManager;
 
 	friend class ibMetaDataConfiguration;
 	friend class ibMetaDataDataProcessor;

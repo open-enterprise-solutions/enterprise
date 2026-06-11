@@ -222,9 +222,11 @@
     <ClInclude Include="query\queryParser.h" />
     <ClInclude Include="query\queryLowering.h" />
     <ClInclude Include="query\queryRewrite.h" />
+    <ClInclude Include="compiler\lambdaQueryAst.h" />
     <ClInclude Include="query\queryableFactory.h" />
     <ClInclude Include="query\queryableHooks.h" />
     <ClInclude Include="system\value\valueQuery.h" />
+    <ClInclude Include="system\value\valueQueryable.h" />
     <ClInclude Include="metaCollection\partial\list\objectList.h" />
     <ClInclude Include="metaCollection\partial\commonObject.h" />
     <ClInclude Include="metaCollection\partial\reference\reference.h" />
@@ -574,8 +576,10 @@
     <ClCompile Include="query\queryParser.cpp" />
     <ClCompile Include="query\queryLowering.cpp" />
     <ClCompile Include="query\queryRewrite.cpp" />
+    <ClCompile Include="compiler\lambdaQueryAst.cpp" />
     <ClCompile Include="query\queryableFactory.cpp" />
     <ClCompile Include="system\value\valueQuery.cpp" />
+    <ClCompile Include="system\value\valueQueryable.cpp" />
     <ClCompile Include="query\queryProvider.cpp" />
     <ClCompile Include="query\dbTableProvider.cpp" />
     <ClCompile Include="query\tempTableManager.cpp" />
@@ -616,6 +620,7 @@
     <ClCompile Include="moduleManager\moduleManagerEvent.cpp" />
     <ClCompile Include="moduleManager\moduleManagerExt.cpp" />
     <ClCompile Include="moduleManager\moduleManagerMetadataUnit.cpp" />
+    <ClCompile Include="moduleManager\moduleManagerDataUnit.cpp" />
     <ClCompile Include="moduleManager\moduleManagerUnit.cpp" />
     <ClCompile Include="objCtor.cpp" />
     <ClCompile Include="picturePredefined.cpp" />

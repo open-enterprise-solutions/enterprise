@@ -851,6 +851,45 @@ ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<wxString, 
 } // namespace
 
 //////////////////////////////////////////////////////////////////////
+// L4-2 — recorded-lambda lowering (the Queryable fold reuses the same
+// file-local builders the text language lowers through). Bail = empty,
+// never a thrown user error: untranslatable folds fall back to RAM.
+//////////////////////////////////////////////////////////////////////
+
+ibQueryPredicatePtr ibQueryLowering::LowerLambdaPredicate(const ibBackendQueryable* source,
+                                                          const ibQueryAstExpr& expr,
+                                                          const std::map<wxString, ibValue>& captured)
+{
+	if (source == nullptr)
+		return nullptr;
+	const std::vector<ibSourceBinding> sources{ { wxEmptyString, source } };
+	try {
+		// Dot-walk leaves ride only on a physical single source (same gate as text).
+		return BuildWherePredicate(sources, expr, captured, /*allowDotWalk*/ !source->IsComputedInRam());
+	}
+	catch (...) {
+		return nullptr;   // resolution / subset failure -> the fold bails to RAM
+	}
+}
+
+std::vector<const ibBackendQueryColumn*> ibQueryLowering::LowerLambdaColumnPath(
+	const ibBackendQueryable* source, const ibQueryAstExpr& expr)
+{
+	if (source == nullptr || expr.m_kind != ibQueryAstExprKind::Column)
+		return {};
+	const std::vector<ibSourceBinding> sources{ { wxEmptyString, source } };
+	try {
+		std::vector<const ibBackendQueryColumn*> cols = ResolvePath(sources, expr);
+		if (cols.size() > 1 && source->IsComputedInRam())
+			return {};   // dot-walk needs a physical source
+		return cols;
+	}
+	catch (...) {
+		return {};
+	}
+}
+
+//////////////////////////////////////////////////////////////////////
 // ibQueryLowering::Execute
 //////////////////////////////////////////////////////////////////////
 

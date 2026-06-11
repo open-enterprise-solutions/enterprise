@@ -1134,6 +1134,13 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			break;
 		}
 
+		case M::ToTable:
+			// Meaningful only on a data source (Data.* / Queryable, which overrides the
+			// dispatch) — a plain RAM iterable has no column schema to materialise.
+			ibBackendCoreException::Error(
+				_("LINQ: ToTable is supported on data sources (Data.*) only"));
+			break;
+
 		default:
 			ibBackendCoreException::Error(
 				_("LINQ: unknown method index %ld"), realNum);
@@ -1203,6 +1210,7 @@ const std::vector<ibValue::ibLinqMethodInfo>& ibValue::GetLinqMethodTable() {
 		{ M::Aggregate,           L"Aggregate",           L"Fold via Aggregate(seed, λ(acc, elem) → acc)" },
 		{ M::WhereIndexed,        L"WhereIndexed",        L"Filter with index — λ(elem, index) → bool" },
 		{ M::SelectIndexed,       L"SelectIndexed",       L"Project with index — λ(elem, index) → newElem" },
+		{ M::ToTable,             L"ToTable",             L"Materialise a data source into a value table (Queryable)" },
 	};
 	return table;
 }
