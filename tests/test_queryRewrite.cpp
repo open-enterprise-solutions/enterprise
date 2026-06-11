@@ -212,3 +212,11 @@ TEST(QueryRewrite, OriginalAstUntouched)
 	EXPECT_TRUE(ast->m_from.m_subquery != nullptr);
 	EXPECT_EQ(ast->m_where->m_kind, ibQueryAstExprKind::Not);
 }
+
+TEST(QueryRewrite, NoFlatten_InnerTop)
+{
+	// TOP limits the inner rows; merging the subquery into the outer would lose the limit.
+	auto sel = ParseAndRewrite(
+		wxT("SELECT Code FROM (SELECT TOP 10 Code FROM Catalog.Products) AS s"));
+	EXPECT_TRUE(sel->m_from.m_subquery != nullptr);
+}

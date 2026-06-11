@@ -205,6 +205,7 @@ bool InnerIsFlattenable(const ibQuerySelect& inner)
 	if (!inner.m_joins.empty() || !inner.m_unions.empty() || inner.m_hasTotals) return false;
 	if (inner.m_distinct || !inner.m_groupBy.empty() || inner.m_having)         return false;
 	if (!inner.m_orderBy.empty())                                               return false;
+	if (inner.m_top > 0)                                                        return false;   // TOP limits the inner rows — merging would lose it
 	if (inner.m_selectAll) return true;
 	for (const ibQueryProjection& p : inner.m_projections) {
 		if (p.m_star) return false;

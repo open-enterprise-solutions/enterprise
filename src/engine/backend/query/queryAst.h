@@ -142,6 +142,13 @@ struct ibQuerySelect
 {
 	bool                           m_distinct = false;
 	bool                           m_selectAll = false;     // SELECT *
+	long                           m_top = 0;               // SELECT TOP n — row limit on THIS core (0 = none).
+	                                                        // On the first core of a UNION it limits the WHOLE
+	                                                        // union (like the trailing ORDER BY); on a later
+	                                                        // branch / a subquery it limits that branch.
+	bool                           m_unionAll = false;      // set on a BRANCH select: attached with UNION ALL
+	                                                        // (keep duplicates); plain UNION dedupes the
+	                                                        // accumulated rows at that operator (SQL semantics)
 	std::vector<ibQueryProjection> m_projections;           // empty + m_selectAll => SELECT *
 	ibQuerySource                  m_from;
 	std::vector<ibQueryAstJoin>       m_joins;

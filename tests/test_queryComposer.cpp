@@ -619,3 +619,54 @@ TEST(QueryComposerPlan, TieBreaks_AreDeterministic)
 	EXPECT_EQ(order[1], 1u);
 	EXPECT_EQ(order[2], 2u);
 }
+
+// ===========================================================================
+// DedupeRows — the RAM dedup core behind plain UNION (and a future RAM DISTINCT)
+// ===========================================================================
+
+TEST(QueryComposerCore, DedupeRows_KeepsFirstOccurrence_PreservesOrder)
+{
+	const ibMetaID C1 = 1, C2 = 2;
+	TestCol a(wxT("a"), C1), b(wxT("b"), C2);
+	const std::vector<const ibBackendQueryColumn*> cols = { &a, &b };
+
+	ibQueryRamTable t;
+	t.AddColumn(C1, wxT("a"), kNoType);
+	t.AddColumn(C2, wxT("b"), kNoType);
+	auto row = [&](const wxString& va, long vb) {
+		const long r = t.AppendRow();
+		t.SetCell(r, C1, ibValue(va));
+		t.SetCell(r, C2, ibValue(ibNumber(vb)));
+	};
+	row(wxT("x"), 1);
+	row(wxT("y"), 2);
+	row(wxT("x"), 1);   // duplicate of row 0
+	row(wxT("x"), 3);   // same a, different b — NOT a duplicate
+	row(wxT("y"), 2);   // duplicate of row 1
+
+	const ibQueryRamTable out = ibQueryComposer::DedupeRows(t, cols);
+	ASSERT_EQ(out.RowCount(), 3);
+	EXPECT_EQ(out.GetCell(0, C1).GetString(), wxT("x"));
+	EXPECT_EQ(out.GetCell(0, C2).GetInteger(), 1);
+	EXPECT_EQ(out.GetCell(1, C1).GetString(), wxT("y"));
+	EXPECT_EQ(out.GetCell(2, C2).GetInteger(), 3);
+}
+
+TEST(QueryComposerCore, DedupeRows_EmptyAndAllUnique)
+{
+	const ibMetaID C1 = 1;
+	TestCol a(wxT("a"), C1);
+	const std::vector<const ibBackendQueryColumn*> cols = { &a };
+
+	ibQueryRamTable empty;
+	empty.AddColumn(C1, wxT("a"), kNoType);
+	EXPECT_EQ(ibQueryComposer::DedupeRows(empty, cols).RowCount(), 0);
+
+	ibQueryRamTable uniq;
+	uniq.AddColumn(C1, wxT("a"), kNoType);
+	for (int i = 0; i < 4; ++i) {
+		const long r = uniq.AppendRow();
+		uniq.SetCell(r, C1, ibValue(ibNumber(i)));
+	}
+	EXPECT_EQ(ibQueryComposer::DedupeRows(uniq, cols).RowCount(), 4);
+}

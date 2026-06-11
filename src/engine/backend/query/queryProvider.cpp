@@ -28,12 +28,60 @@
 #include <functional>                                                 // std::function — reference-hierarchy parent chain-up
 #include <stdexcept>                                                  // guard for the not-yet-built multi-source composition path
 #include <algorithm>                                                  // stable_sort — RAM ORDER BY over a composed result
+#include <set>                                                        // DedupeRows — seen-row identity keys (plain UNION)
 
 // ibComputedProvider — the RAM-computed virtual table (register slice / balance /
-// turnover). Stateless: computes the rows from the spec, no physical scan, no L2.
-ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& /*req*/)
+// turnover / subquery). Stateless: computes the rows from the spec, no physical scan, no
+// L2. The flat conditions push into ComputeRows; the boolean predicate TREE, the ORDER BY
+// and the page row limit (TOP) apply on the materialised RAM rows HERE — without this they
+// would silently drop on a computed source.
+ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& req)
 {
-	return ibDataQueryResult(spec.m_queryable->ComputeRows(*spec.m_conditions), spec.m_queryable);
+	ibQueryRamTable rows = spec.m_queryable->ComputeRows(*spec.m_conditions);
+
+	if (spec.m_predicate)
+		rows = ibQueryComposer::FilterRows(rows, spec.m_predicate.get());
+
+	if (spec.m_sorts != nullptr && !spec.m_sorts->empty()) {
+		std::vector<long> order(static_cast<size_t>(rows.RowCount()));
+		for (long i = 0; i < rows.RowCount(); ++i) order[static_cast<size_t>(i)] = i;
+		std::stable_sort(order.begin(), order.end(), [&](long a, long b) {
+			for (const ibQuerySortItem& s : *spec.m_sorts) {
+				if (s.m_col == nullptr) continue;
+				const ibValue va = rows.GetCell(a, s.m_col->GetModelID());
+				const ibValue vb = rows.GetCell(b, s.m_col->GetModelID());
+				if (va == vb) continue;
+				const bool lt = (va < vb);
+				return s.m_ascending ? lt : !lt;
+			}
+			return false;
+		});
+		ibQueryRamTable sorted;
+		for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
+			if (c != nullptr) sorted.AddColumn(c->GetModelID(), c->GetName(), c->GetTypeDesc());
+		const long limit = (req.m_count > 0 && req.m_count < rows.RowCount()) ? req.m_count : rows.RowCount();
+		for (long oi = 0; oi < limit; ++oi) {
+			const long i = order[static_cast<size_t>(oi)];
+			const long r = sorted.AppendRow();
+			for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
+				if (c != nullptr) sorted.SetCell(r, c->GetModelID(), rows.GetCell(i, c->GetModelID()));
+		}
+		return ibDataQueryResult(std::move(sorted), spec.m_queryable);
+	}
+
+	if (req.m_count > 0 && req.m_count < rows.RowCount()) {
+		ibQueryRamTable limited;
+		for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
+			if (c != nullptr) limited.AddColumn(c->GetModelID(), c->GetName(), c->GetTypeDesc());
+		for (long i = 0; i < req.m_count; ++i) {
+			const long r = limited.AppendRow();
+			for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
+				if (c != nullptr) limited.SetCell(r, c->GetModelID(), rows.GetCell(i, c->GetModelID()));
+		}
+		return ibDataQueryResult(std::move(limited), spec.m_queryable);
+	}
+
+	return ibDataQueryResult(std::move(rows), spec.m_queryable);
 }
 
 // ==========================================================================
@@ -69,12 +117,71 @@ const ibBackendQueryColumn* ibBackendQueryable::ResolveColumnByName(const wxStri
 // ibSubqueryQueryable — a nested query as a source. It is a COMPUTED (RAM) source: the
 // inner query is RUN and its rows materialised into an ibQueryRamTable, so the outer query
 // reads / filters / joins it like any computed leaf. Columns = the inner explicit
-// Select(col, alias) list, else (SELECT *) the inner primary source's full column set. The
-// bodies live here (where ibDataQueryBuilder is complete). (docs §22 nested subquery)
+// Select(col, alias) list, else (SELECT *) the inner primary source's full column set; an
+// AGGREGATE inner exposes its GROUP BY keys + a synthetic numeric column per aggregate
+// alias. The bodies live here (where ibDataQueryBuilder is complete). (docs §22 / §23)
 // ==========================================================================
-ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner)
-	: m_inner(std::make_unique<ibDataQueryBuilder>(inner))
+
+// Synthetic output column of an AGGREGATE subquery (SUM(x) AS total): a raw numeric field
+// named by the aggregate alias, under its OWN unique model id (the RAM-table read key). The
+// id range is clear of real metaIDs, the COUNT(*) receivers (0x40000000) and the totals
+// synthetics (0x50000000).
+namespace {
+const ibMetaID kSubqueryAggColumnBase = 0x60000000u;
+
+class ibSubqueryAggColumn final : public ibRawDBColumn
 {
+public:
+	ibSubqueryAggColumn(const wxString& alias, ibMetaID id)
+		: ibRawDBColumn(alias, RawType::Number), m_id(id) {}
+	ibMetaID GetModelID() const override { return m_id; }
+private:
+	ibMetaID m_id;
+};
+
+// One pushed-down outer condition against a materialised RAM cell — the aggregate
+// subquery's post-filter (the condition references POST-aggregation output, HAVING
+// semantics, so it cannot ride the inner WHERE). LIKE translates % / _ to wx wildcards.
+bool MatchRamCondition(const ibValue& cell, const ibQueryCondition& c)
+{
+	if (c.m_explicitOp) {
+		switch (c.m_op) {
+		case ibQueryFilterOp::Like: {
+			wxString p = c.m_value.GetString();
+			p.Replace(wxT("%"), wxT("*"));
+			p.Replace(wxT("_"), wxT("?"));
+			return cell.GetString().Matches(p);
+		}
+		case ibQueryFilterOp::Less:         return cell < c.m_value;
+		case ibQueryFilterOp::LessEqual:    return cell < c.m_value || cell == c.m_value;
+		case ibQueryFilterOp::Greater:      return !(cell < c.m_value) && !(cell == c.m_value);
+		case ibQueryFilterOp::GreaterEqual: return !(cell < c.m_value);
+		}
+		return false;
+	}
+	const bool eq = (cell == c.m_value);
+	return c.m_comparison == ibComparisonType::ibComparisonType_Equal ? eq : !eq;
+}
+} // namespace
+
+ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long topCount)
+	: m_inner(std::make_unique<ibDataQueryBuilder>(inner)), m_top(topCount)
+{
+	const auto& aggs = m_inner->GetAggregates();
+	m_aggregate = !aggs.empty();
+	if (m_aggregate) {
+		// AGGREGATE shape: exposed columns = the GROUP BY keys (real columns, by name) + one
+		// owned synthetic numeric column per aggregate alias.
+		for (const ibBackendQueryColumn* g : m_inner->GetGroupBy())
+			if (g != nullptr) m_columns.push_back(g);
+		ibMetaID nextId = kSubqueryAggColumnBase;
+		for (const ibDataQueryBuilder::AggregateItem& a : aggs) {
+			auto col = std::make_shared<ibSubqueryAggColumn>(a.m_alias, nextId++);
+			m_ownedColumns.push_back(col);
+			m_columns.push_back(col.get());
+		}
+		return;
+	}
 	const auto& selectCols = m_inner->GetSelectColumns();
 	if (!selectCols.empty()) {
 		for (const auto& sc : selectCols)
@@ -95,12 +202,47 @@ ibBackendQueryProvider& ibSubqueryQueryable::GetProvider() const
 }
 
 // Run the inner query (with the outer's pushed-down conditions) and materialise its rows
-// into a RAM table keyed by column model-id — the same leaf-materialise recipe.
+// into a RAM table keyed by column model-id — the same leaf-materialise recipe. m_top > 0
+// limits the materialised rows (SELECT TOP n in the branch / subquery).
 ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondition>& extra) const
 {
 	ibQueryRamTable t;
 	for (const ibBackendQueryColumn* col : m_columns)
 		if (col != nullptr) t.AddColumn(col->GetModelID(), col->GetName(), col->GetTypeDesc());
+
+	if (m_aggregate) {
+		// AGGREGATE inner — run SelectAggregate; group keys read by column, aggregate aliases by
+		// name. The outer's pushed-down conditions reference POST-aggregation output (HAVING
+		// semantics), so they apply as a RAM post-filter here, never on the inner WHERE.
+		const std::vector<ibDataQueryBuilder::AggregateItem>& aggs = m_inner->GetAggregates();
+		const std::vector<const ibBackendQueryColumn*>&       groups = m_inner->GetGroupBy();
+
+		ibDataQueryResult sel = m_inner->SelectAggregate();
+		long emitted = 0;
+		std::vector<ibValue> rowVals(m_columns.size());
+		while (sel.Next()) {
+			size_t k = 0;
+			for (const ibBackendQueryColumn* g : groups)
+				rowVals[k++] = sel.GetValue(g);
+			for (const ibDataQueryBuilder::AggregateItem& a : aggs)
+				rowVals[k++] = sel.GetColumn(a.m_alias);
+
+			bool keep = true;
+			for (const ibQueryCondition& c : extra) {
+				if (c.m_col == nullptr) continue;
+				for (size_t i = 0; i < m_columns.size(); ++i)
+					if (m_columns[i] == c.m_col) { keep = MatchRamCondition(rowVals[i], c); break; }
+				if (!keep) break;
+			}
+			if (!keep) continue;
+
+			const long r = t.AppendRow();
+			for (size_t i = 0; i < m_columns.size(); ++i)
+				t.SetCell(r, m_columns[i]->GetModelID(), rowVals[i]);
+			if (m_top > 0 && ++emitted >= m_top) break;
+		}
+		return t;
+	}
 
 	// The subquery's exposed columns ARE the inner columns, so the outer's extra
 	// conditions apply straight onto a copy of the inner query.
@@ -111,7 +253,7 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 		else                q.Where(c.m_col, c.m_comparison, c.m_value);
 	}
 
-	ibReadPageRequest page; page.m_count = 0;   // all rows
+	ibReadPageRequest page; page.m_count = m_top;   // 0 = all rows; TOP n = the branch limit
 	ibDataQueryResult sel = q.Execute(page);
 	while (sel.Next()) {
 		const long r = t.AppendRow();
@@ -721,8 +863,8 @@ ibQueryRamTable RamUnion(const ibDataQuerySpec& spec, const ibQueryNode* unionNo
 	for (const ibBackendQueryColumn* c : outCols)
 		TO.AddColumn(c->GetModelID(), c->GetName(), c->GetTypeDesc());
 
-	for (const auto& partPtr : unionNode->m_parts) {
-		const ibQueryNode* part = partPtr.get();
+	for (size_t pi = 0; pi < unionNode->m_parts.size(); ++pi) {
+		const ibQueryNode* part = unionNode->m_parts[pi].get();
 		if (part == nullptr) continue;
 
 		// Resolve each output column to THIS branch's same-named column (in its leaves — a Join /
@@ -739,6 +881,13 @@ ibQueryRamTable RamUnion(const ibDataQuerySpec& spec, const ibQueryNode* unionNo
 		// Materialise the whole branch subtree (Source / Join / nested Union), conditions BY NAME.
 		const ibQueryRamTable TP = MaterialiseNode(part, refForBranch, spec, /*condsByName*/true);
 		ibQueryComposer::AppendUnionBranch(TO, TP, outCols, branchCols);
+
+		// Plain UNION (not ALL) dedupes the ACCUMULATED rows at its operator — SQL left-assoc
+		// semantics (A UNION B UNION ALL C dedupes after B, keeps C's duplicates). A missing
+		// flag (a node built before the flag existed) reads as ALL — the historic behaviour.
+		const bool keepDups = pi >= unionNode->m_partAll.size() || unionNode->m_partAll[pi];
+		if (pi > 0 && !keepDups)
+			TO = ibQueryComposer::DedupeRows(TO, outCols);
 	}
 	return TO;
 }
@@ -921,6 +1070,8 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 	}
 
 	for (const wxString& key : keyOrder) {
+		if (spec.m_topCount > 0 && TO.RowCount() >= spec.m_topCount)
+			break;   // SELECT TOP n + GROUP BY — cap the folded groups (first-seen order)
 		const std::vector<long>& idx = buckets[key];
 		const long r = TO.AppendRow();
 		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
@@ -1085,6 +1236,7 @@ std::vector<std::unique_ptr<ibTempTableManager>> PromoteUnionBranches(const ibDa
 
 	std::shared_ptr<ibQueryNode> newRoot = std::make_shared<ibQueryNode>();
 	newRoot->m_kind = ibQueryNode::Kind::Union;
+	newRoot->m_partAll = root->m_partAll;   // UNION-vs-ALL flags ride with the rebuilt parts
 	bool anyComputed = false;
 	for (const auto& part : root->m_parts) {
 		const ibQueryNode* p = part.get();
@@ -1190,6 +1342,15 @@ ibDataQueryResult ComposeMultiSource(const ibDataQuerySpec& spec, const ibReadPa
 	return ProjectToAliases(composed, spec, page);
 }
 } // namespace
+
+// Aggregated read over a COMPUTED source (a register slice / a subquery): compute the rows
+// (door conditions pushed as compute filters), then the RAM GROUP-BY fold. Without this
+// override the base default would return the RAW rows — silently dropping the aggregation.
+// HAVING is not folded on the RAM path (the lowering gates it).
+ibDataQueryResult ibComputedProvider::ExecuteAggregate(const ibDataQuerySpec& spec)
+{
+	return RamAggregate(spec.m_queryable->ComputeRows(*spec.m_conditions), spec);
+}
 
 ibDataQueryResult ibQueryComposer::ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& page)
 {
@@ -1692,6 +1853,30 @@ void ibQueryComposer::AppendUnionBranch(ibQueryRamTable& out, const ibQueryRamTa
 			out.SetCell(r, outCols[k]->GetModelID(),
 			            branchCols[k] != nullptr ? branch.GetCell(i, branchCols[k]->GetModelID()) : ibValue());
 	}
+}
+
+ibQueryRamTable ibQueryComposer::DedupeRows(const ibQueryRamTable& src,
+		const std::vector<const ibBackendQueryColumn*>& cols)
+{
+	// Row identity = the concatenated IDENTITY hash of every output cell (GetHashKey — a
+	// reference keys by guid, so two cells pointing at the same row match; display strings
+	// don't fool it). First occurrence wins; row order is preserved.
+	ibQueryRamTable out;
+	for (const ibBackendQueryColumn* c : cols)
+		out.AddColumn(c->GetModelID(), c->GetName(), c->GetTypeDesc());
+
+	std::set<wxString> seen;
+	for (long i = 0; i < src.RowCount(); ++i) {
+		wxString key;
+		for (const ibBackendQueryColumn* c : cols)
+			key += src.GetCell(i, c->GetModelID()).GetHashKey() + wxT("\x1f");
+		if (!seen.insert(key).second)
+			continue;
+		const long r = out.AppendRow();
+		for (const ibBackendQueryColumn* c : cols)
+			out.SetCell(r, c->GetModelID(), src.GetCell(i, c->GetModelID()));
+	}
+	return out;
 }
 
 ibQueryRamTable ibQueryComposer::FilterRows(const ibQueryRamTable& src, const ibQueryPredicate* predicate)

@@ -29,6 +29,7 @@ enum class ibQueryKeyword
 
 	// clauses / structure
 	Select, From, As, Where, Order, By, Asc, Desc, Group, Having, Distinct,
+	Top,   // SELECT TOP n — row-count limit on the SELECT core
 
 	// hierarchical TOTALS (subtotal rows per level + grand total — door SelectTotals)
 	Totals, Hierarchy, Elements,

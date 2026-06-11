@@ -89,6 +89,18 @@ ibQuerySelectPtr ibQueryParser::ParseSelectCore()
 	auto sel = std::make_shared<ibQuerySelect>();
 
 	ExpectKw(ibQueryKeyword::Select, wxT("SELECT"));
+
+	// SELECT TOP n — a positive integer literal row limit (before DISTINCT, T-SQL order).
+	if (AcceptKw(ibQueryKeyword::Top)) {
+		const ibQueryToken& n = Cur();
+		if (n.m_kind != ibQueryTokenKind::Number)
+			Fail(n, _("expected a number after TOP"));
+		sel->m_top = n.m_literal.GetInteger();
+		if (sel->m_top <= 0)
+			Fail(n, _("TOP expects a positive row count"));
+		++m_pos;
+	}
+
 	if (AcceptKw(ibQueryKeyword::Distinct)) sel->m_distinct = true;
 	ParseSelectList(*sel);
 
@@ -115,8 +127,10 @@ ibQuerySelectPtr ibQueryParser::ParseSelectStatement()
 	ibQuerySelectPtr sel = ParseSelectCore();
 
 	while (AcceptKw(ibQueryKeyword::Union)) {
-		AcceptKw(ibQueryKeyword::All);   // UNION ALL vs UNION — both stack today (RAM dedup is a later step)
-		sel->m_unions.push_back(ParseSelectCore());
+		const bool all = AcceptKw(ibQueryKeyword::All);   // UNION ALL keeps duplicates; plain UNION dedupes
+		ibQuerySelectPtr branch = ParseSelectCore();
+		branch->m_unionAll = all;
+		sel->m_unions.push_back(branch);
 	}
 
 	if (AcceptKw(ibQueryKeyword::Order)) {

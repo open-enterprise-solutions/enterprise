@@ -107,6 +107,68 @@
 >   dot-walk leaf (scalar today); a composite NON-scalar leaf beyond the last segment; arithmetic /
 >   CASE as an aggregate input (a dot-walk leaf input works); aggregate subqueries.
 >
+> ### Update 2026-06-11 (2) — L4 executable subset: TOP, computed WHERE / aggregate inputs,
+> ### aggregate subqueries, UNION dedup
+>
+> The "parsed but not yet executed" list shrank. Landed:
+>
+> - **`SELECT TOP n`** (keyword `Top`, 1С «ПЕРВЫЕ») — a row limit on the SELECT core. Lowering:
+>   single-source / JOIN reads ride the page request (`m_count`); a UNION's FIRST core limits the
+>   WHOLE union (like the trailing ORDER BY), a later branch's TOP limits that branch; a subquery's
+>   TOP limits its materialised rows (`ibSubqueryQueryable` ctor). TOP over aggregates / TOTALS
+>   errors clearly (the aggregate terminal is unpaged). The rewrite pass refuses to flatten a
+>   subquery carrying TOP (the limit would be lost).
+> - **Arithmetic / CASE in WHERE** — `WHERE Qty * Price > &V` executes: `ibQueryCondition::m_expr`
+>   (a computed lhs) + door verbs `WhereExpr` / `WhereExprCompare`; `BuildConditionExpr` lowers it
+>   FIRST (before the null-column row-key branch), so flat conditions, the boolean predicate tree
+>   AND the aggregate WHERE all inherit it. Single DB source only (gated: JOIN / computed source).
+> - **Arithmetic / CASE as an aggregate input** — `SUM(Qty * Price)` executes:
+>   `ibAggregateItem::m_expr` + an `Aggregate(fn, expr, alias)` door overload; `ExecuteAggregate`
+>   lowers the input via `BuildColumnExpr`. Same single-DB-source gate.
+> - **Aggregate subqueries** — `FROM (SELECT Cat, SUM(x) AS s … GROUP BY Cat)` executes:
+>   `ibSubqueryQueryable` detects the aggregate shape from the inner builder (new introspection
+>   `GetAggregates` / `GetGroupBy`), exposes the GROUP BY keys + one owned SYNTHETIC numeric column
+>   per aggregate alias (id range 0x60000000+), runs `SelectAggregate` in `ComputeRows`, and applies
+>   the outer's pushed-down conditions as a RAM POST-filter (they reference post-aggregation output —
+>   HAVING semantics, so they must not ride the inner WHERE). `IN (SELECT SUM(…) …)` works through the
+>   same wrapper.
+> - **UNION vs UNION ALL** — the per-branch flag rides end-to-end: AST `m_unionAll` → door
+>   `Union(q, alias, keepDuplicates)` → `ibQueryNode::m_partAll` → the RAM stack dedupes the
+>   ACCUMULATED rows at each plain-UNION operator (`ibQueryComposer::DedupeRows`, keyed by the
+>   identity hash `GetHashKey` of every output cell — pure, unit-tested; the same core a future RAM
+>   DISTINCT will use) and the co-located path emits SQL `UNION` vs `UNION ALL` natively (L2 had both
+>   spellings; the provider now picks per flag; `PromoteUnionBranches` carries the flags onto the
+>   rebuilt root). SQL left-assoc semantics: `A UNION B UNION ALL C` dedupes after B, keeps C's dups.
+> - **Computed-source hardening** — `ibComputedProvider::ExecuteRead` now applies the boolean
+>   predicate tree (RAM filter), ORDER BY (RAM stable sort) and the page limit on the materialised
+>   rows — previously all three silently dropped on a computed source (subquery / slice). A new
+>   `ibComputedProvider::ExecuteAggregate` override computes + RAM-folds (the base default silently
+>   returned RAW rows) — this is what makes `SELECT SUM(c) FROM (subquery)` correct. Dot-walk
+>   projections / filters / GROUP BY / aggregate inputs over a computed source now ERROR clearly
+>   (no DB join to ride) instead of mis-pushing the leaf as a plain column; HAVING over a computed
+>   source errors (the RAM fold does not apply HAVING).
+>
+> **Landed same day (follow-up):**
+> - **Paged aggregates** — `SELECT TOP n … GROUP BY` executes: door verb `Top(n)` → spec
+>   `m_topCount`; the single-source DB aggregate and the co-located join aggregate render the
+>   dialect `LIMIT`, the RAM fold (`RamAggregate` — computed sources and the multi-source stitch)
+>   truncates the folded groups (first-seen order).
+> - **Composite NON-scalar dot-walk leaf** — `SELECT Регистратор.Контрагент` (a composite at ANY
+>   segment, the leaf itself a reference / enum / composite) executes: the recursive branch walk
+>   (same fork + peek as the scalar case) collects the leaf occurrences, each branch contributes
+>   the leaf's FULL field spread, and the spreads merge PER SUFFIX with `COALESCE` under the alias
+>   prefix — `GetColumnObject` reassembles the object off the merged spread exactly like a
+>   single-target projection (a row matches at most one branch). Suffix alignment rides the
+>   representative (first) branch. The previous per-type single-field COALESCE — which the reader
+>   could not reassemble — is gone. A dot-walk WHERE / ORDER BY on such a leaf now THROWS
+>   (previously the condition / sort key silently DROPPED — wrong rows / wrong order).
+>
+> **Still open (the deep tail, each its own arc):** TOTALS over a JOIN / UNION (two totals mechanisms
+> + snapshot seq-keying), TOTALS BY a reference / composite dot-walk leaf (scalar today), UNION
+> branches carrying JOIN / TOTALS, RAM DISTINCT over the stitch (DedupeRows is ready — needs the
+> door wiring), and WHERE / ORDER on a composite non-scalar leaf (projection works; the predicate
+> needs per-branch DecomposeEquality OR-folded).
+>
 > ### Update 2026-06-11 — L4 optimizer pass (landed, 420/420 green, runtime-validated)
 >
 > The optimizer ladder's first two rungs are in the tree. The stance stays: **no cost-based

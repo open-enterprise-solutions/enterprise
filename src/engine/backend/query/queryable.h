@@ -71,6 +71,12 @@ struct ibQueryCondition
 	// reference column the provider auto-joins (the SAME join SelectPath builds, deduped by prefix);
 	// the leaf (== m_col) is compared on the joined target. Empty = a plain column on the main source.
 	std::vector<const ibBackendQueryColumn*> m_path;
+
+	// COMPUTED left-hand side (WHERE Qty * Price > value, a CASE …): when set, the provider lowers
+	// the expression via BuildColumnExpr and compares it to m_value — m_col stays null, m_path empty.
+	// Single-source DB reads / aggregates only (the lowering gates it); the RAM stitch and computed
+	// sources do not evaluate it. Declared after m_path so the flat struct stays POD-ordered.
+	std::shared_ptr<struct ibQueryColumnExpr> m_expr;
 };
 
 // A query-native ORDER BY item: a COLUMN (null = the row-identity / reference
@@ -343,7 +349,12 @@ public:
 class BACKEND_API ibSubqueryQueryable : public ibBackendQueryable
 {
 public:
-	explicit ibSubqueryQueryable(const ibDataQueryBuilder& inner);   // copies the inner query (owned)
+	// Copies the inner query (owned). topCount > 0 limits the materialised rows (SELECT TOP n in the
+	// branch / subquery text). An AGGREGATE inner query (GroupBy / aggregates) is detected from the
+	// builder: the exposed columns become its GROUP BY keys + one owned SYNTHETIC numeric column per
+	// aggregate alias, ComputeRows runs SelectAggregate, and the outer's pushed-down conditions apply
+	// as a RAM post-filter (they reference POST-aggregation output — HAVING semantics).
+	explicit ibSubqueryQueryable(const ibDataQueryBuilder& inner, long topCount = 0);
 	~ibSubqueryQueryable() override;                                 // out-of-line — unique_ptr of an incomplete type
 
 	const ibBackendQueryColumn* Column(const wxString& name) const {
@@ -371,7 +382,12 @@ public:
 
 private:
 	std::unique_ptr<ibDataQueryBuilder>      m_inner;     // the nested query (owned by value via the heap)
-	std::vector<const ibBackendQueryColumn*> m_columns;   // exposed columns (select list or SELECT *)
+	std::vector<const ibBackendQueryColumn*> m_columns;   // exposed columns (select list / SELECT * / group keys + agg aliases)
+	// AGGREGATE inner query support: owned synthetic columns for the aggregate aliases (raw numeric,
+	// unique model ids), the mode flag, and the optional row limit (SELECT TOP n in the branch).
+	std::vector<std::shared_ptr<ibBackendQueryColumn>> m_ownedColumns;
+	bool m_aggregate = false;
+	long m_top       = 0;
 };
 
 // ibBackendQueryColumn — the column counterpart, lives in queryColumn.h (included

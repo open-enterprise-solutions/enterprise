@@ -76,18 +76,22 @@ ibDataQueryBuilder& ibDataQueryBuilder::CrossJoin(const ibBackendQueryable* quer
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::Union(const ibBackendQueryable* queryable, const wxString& alias)
+ibDataQueryBuilder& ibDataQueryBuilder::Union(const ibBackendQueryable* queryable, const wxString& alias,
+                                              bool keepDuplicates)
 {
 	// Stack vertically: extend an existing Union, else wrap the prior root + the new part.
+	// m_partAll rides parallel to m_parts (parts[0] = true — no operator precedes the first branch).
 	auto rhs = ibQueryNode::Source(queryable, alias);
 	if (m_root && m_root->m_kind == ibQueryNode::Kind::Union) {
 		m_root->m_parts.push_back(rhs);
+		m_root->m_partAll.push_back(keepDuplicates);
 	}
 	else {
 		auto node = std::make_shared<ibQueryNode>();
 		node->m_kind = ibQueryNode::Kind::Union;
-		if (m_root) node->m_parts.push_back(m_root);
+		if (m_root) { node->m_parts.push_back(m_root); node->m_partAll.push_back(true); }
 		node->m_parts.push_back(rhs);
+		node->m_partAll.push_back(keepDuplicates);
 		m_root = node;
 	}
 	return *this;
@@ -129,6 +133,33 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereCompare(const ibBackendQueryColumn*
 ibDataQueryBuilder& ibDataQueryBuilder::WhereLike(const ibBackendQueryColumn* col, const ibValue& pattern)
 {
 	return WhereCompare(col, ibQueryFilterOp::Like, pattern);
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::WhereExpr(const ibQueryColumnExprPtr& expr,
+                                                  ibComparisonType comparison, const ibValue& value)
+{
+	if (!expr)
+		return *this;
+	ibQueryCondition c;
+	c.m_comparison = comparison;
+	c.m_value      = value;
+	c.m_expr       = expr;
+	m_conditions.push_back(std::move(c));
+	return *this;
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::WhereExprCompare(const ibQueryColumnExprPtr& expr,
+                                                         ibQueryFilterOp op, const ibValue& value)
+{
+	if (!expr)
+		return *this;
+	ibQueryCondition c;
+	c.m_value      = value;
+	c.m_explicitOp = true;
+	c.m_op         = op;
+	c.m_expr       = expr;
+	m_conditions.push_back(std::move(c));
+	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibQueryPredicatePtr& predicate)
@@ -219,6 +250,17 @@ ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
 	if (path.empty()) return *this;
 	if (path.size() == 1) return Aggregate(fn, path.front(), alias);     // not a dot-walk — plain aggregate input
 	(m_aggInTotals ? m_totalAggregates : m_aggregates).push_back(AggregateItem{ fn, path.back(), alias, path });
+	return *this;
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
+	const ibQueryColumnExprPtr& expr, const wxString& alias)
+{
+	// COMPUTED aggregate input — SUM(Qty * Price). The provider lowers m_expr via BuildColumnExpr.
+	if (!expr) return *this;
+	AggregateItem item{ fn, nullptr, alias, {} };
+	item.m_expr = expr;
+	(m_aggInTotals ? m_totalAggregates : m_aggregates).push_back(std::move(item));
 	return *this;
 }
 
@@ -353,6 +395,7 @@ ibDataQuerySpec ibDataQueryBuilder::BuildSpec() const
 	spec.m_selectExprs = &m_selectExprs;
 	spec.m_selectCols  = &m_selectCols;
 	spec.m_distinct    = m_distinct;
+	spec.m_topCount    = m_top;
 	return spec;
 }
 

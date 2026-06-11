@@ -267,3 +267,51 @@ TEST(QueryL4Parser, ModuloIsArithmetic)
 	ASSERT_EQ(e->m_kind, ibQueryAstExprKind::Arith);
 	EXPECT_EQ(e->m_arith, ibQueryArithOp::Mod);
 }
+
+// ===========================================================================
+// TOP n — row limit on the SELECT core (1С «ПЕРВЫЕ»)
+// ===========================================================================
+
+TEST(QueryL4Parser, TopN_ParsedOnCore)
+{
+	auto sel = Parse(wxT("SELECT TOP 10 Code FROM Catalog.Products ORDER BY Code"));
+	ASSERT_TRUE(sel != nullptr);
+	EXPECT_EQ(sel->m_top, 10);
+	ASSERT_EQ(sel->m_projections.size(), 1u);
+}
+
+TEST(QueryL4Parser, TopN_WithDistinct)
+{
+	auto sel = Parse(wxT("SELECT TOP 5 DISTINCT Code FROM Catalog.Products"));
+	EXPECT_EQ(sel->m_top, 5);
+	EXPECT_TRUE(sel->m_distinct);
+}
+
+TEST(QueryL4Parser, TopN_PerUnionBranch)
+{
+	auto sel = Parse(wxT("SELECT TOP 7 Code FROM Catalog.A UNION SELECT TOP 3 Code FROM Catalog.B"));
+	EXPECT_EQ(sel->m_top, 7);
+	ASSERT_EQ(sel->m_unions.size(), 1u);
+	EXPECT_EQ(sel->m_unions[0]->m_top, 3);
+}
+
+TEST(QueryL4Parser, TopN_InSubquery)
+{
+	auto sel = Parse(wxT("SELECT Code FROM (SELECT TOP 100 Code FROM Catalog.Products) AS s"));
+	EXPECT_EQ(sel->m_top, 0);
+	ASSERT_TRUE(sel->m_from.m_subquery != nullptr);
+	EXPECT_EQ(sel->m_from.m_subquery->m_top, 100);
+}
+
+// ===========================================================================
+// UNION vs UNION ALL — the per-branch keep-duplicates flag
+// ===========================================================================
+
+TEST(QueryL4Parser, UnionAll_FlagPerBranch)
+{
+	auto sel = Parse(
+		wxT("SELECT Code FROM Catalog.A UNION SELECT Code FROM Catalog.B UNION ALL SELECT Code FROM Catalog.C"));
+	ASSERT_EQ(sel->m_unions.size(), 2u);
+	EXPECT_FALSE(sel->m_unions[0]->m_unionAll);   // plain UNION — dedupes
+	EXPECT_TRUE(sel->m_unions[1]->m_unionAll);    // UNION ALL — keeps duplicates
+}

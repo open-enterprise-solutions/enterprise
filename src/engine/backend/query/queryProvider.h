@@ -65,6 +65,10 @@ class BACKEND_API ibComputedProvider : public ibBackendQueryProvider
 {
 public:
 	ibDataQueryResult ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& page) override;
+	// Aggregated read over a COMPUTED source — compute the rows, then the RAM GROUP-BY fold
+	// (the base default would silently return the RAW rows). Enables SELECT SUM(x) FROM (subquery)
+	// and aggregates over a register slice. HAVING is not folded on the RAM path (gated above).
+	ibDataQueryResult ExecuteAggregate(const ibDataQuerySpec& spec) override;
 };
 
 // ==========================================================================
@@ -143,6 +147,11 @@ public:
 	static void              AppendUnionBranch(ibQueryRamTable& out, const ibQueryRamTable& branch,
 	                                           const std::vector<const ibBackendQueryColumn*>& outCols,
 	                                           const std::vector<const ibBackendQueryColumn*>& branchCols);
+	// Drop duplicate rows, keyed by the IDENTITY hash (GetHashKey) of every `cols` cell — the RAM
+	// dedup core behind plain UNION (SQL semantics: dedupe the accumulated rows at each non-ALL
+	// operator) and a future RAM DISTINCT. First occurrence wins, order preserved. Pure — unit-testable.
+	static ibQueryRamTable   DedupeRows(const ibQueryRamTable& src,
+	                                    const std::vector<const ibBackendQueryColumn*>& cols);
 	// Keep only the rows of `src` that satisfy the boolean WHERE TREE (And/Or/Not/IsNull/Leaf) — the
 	// post-compose RAM filter for an OR / IS NULL spanning a non-co-located JOIN. Pure — unit-testable.
 	static ibQueryRamTable   FilterRows(const ibQueryRamTable& src, const ibQueryPredicate* predicate);

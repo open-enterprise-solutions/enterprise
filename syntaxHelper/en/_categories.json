@@ -10,6 +10,7 @@
     "primitive_types": "Primitive Types",
     "date": "Date",
     "linq": "LINQ — collection queries",
+    "query": "Data queries",
     "guide": "Guide"
   }
 }

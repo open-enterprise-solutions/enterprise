@@ -70,8 +70,11 @@ enum class ibAggregateFn { Sum, Count, Min, Max, Avg };
 // flat SelectAggregate path). m_col null = COUNT(*).
 // m_path (non-empty) = the aggregate input is a reference DOT-WALK leaf (SUM(Producer.Weight)) — the
 // provider joins the path and qualifies m_col (== m_path.back()) by the join alias. Empty = plain column.
+// m_expr (set) = the aggregate input is a COMPUTED expression (SUM(Qty * Price)) — the provider lowers
+// it via BuildColumnExpr; m_col stays null, m_path empty. Single-source DB aggregates only (gated).
 struct ibAggregateItem { ibAggregateFn m_fn; const ibBackendQueryColumn* m_col; wxString m_alias;
-                         std::vector<const ibBackendQueryColumn*> m_path; };
+                         std::vector<const ibBackendQueryColumn*> m_path;
+                         ibQueryColumnExprPtr m_expr; };
 // One TotalBy dimension level — the field to roll up by + how it unfolds. Levels apply IN ORDER.
 struct ibTotalLevel    { const ibBackendQueryColumn* m_col; ibDimensionKind m_dim; };
 
@@ -239,6 +242,10 @@ struct ibQueryNode
 
 	// --- Union (vertical): N branches of one shape ----------------------
 	std::vector<std::shared_ptr<ibQueryNode>> m_parts;
+	// Parallel to m_parts: true = this branch was attached with UNION ALL (keep duplicates).
+	// A plain-UNION branch (false) DEDUPES the accumulated rows at its operator — SQL semantics
+	// (left-assoc: A UNION B UNION ALL C dedupes after B, keeps C's duplicates). parts[0] = true.
+	std::vector<bool> m_partAll;
 
 	static std::shared_ptr<ibQueryNode> Source(const ibBackendQueryable* q, const wxString& alias = wxEmptyString) {
 		auto n = std::make_shared<ibQueryNode>();
@@ -281,7 +288,10 @@ public:
 	ibDataQueryBuilder& CrossJoin(const ibBackendQueryable* queryable,
 	                              ibQueryJoinKind kind = ibQueryJoinKind::Inner,
 	                              const wxString& alias = wxEmptyString);                        // CROSS / ON TRUE — cartesian
-	ibDataQueryBuilder& Union(const ibBackendQueryable* queryable, const wxString& alias = wxEmptyString); // stack vertically
+	// Union(b) stacks vertically. keepDuplicates = UNION ALL (default — the historic stack
+	// behaviour); false = plain UNION, deduplicating the accumulated rows at this operator.
+	ibDataQueryBuilder& Union(const ibBackendQueryable* queryable, const wxString& alias = wxEmptyString,
+	                          bool keepDuplicates = true);
 	ibDataQueryBuilder& Where(const ibBackendQueryColumn* col,
 	                          ibComparisonType comparison, const ibValue& value);            // condition -> predicate
 	ibDataQueryBuilder& Where(const ibBackendQueryColumn* col, const ibValue& value);        // 2-arg = equality (meta column)
@@ -294,6 +304,13 @@ public:
 	// verbs above). L4 builds it from its parsed WHERE; the provider lowers it to the L2 IR. AND-folded
 	// with any verb conditions / row-key filters. (docs/query-language-arc.md §23 — door Where via L2.)
 	ibDataQueryBuilder& Where(const ibQueryPredicatePtr& predicate);
+	// COMPUTED-expression WHERE — `expr <op> value` (WHERE Qty * Price > 100, a CASE …). The provider
+	// lowers the expression via BuildColumnExpr. Single-source DB reads / aggregates only (the L4
+	// lowering gates it: the RAM stitch and computed sources do not evaluate condition expressions).
+	ibDataQueryBuilder& WhereExpr(const ibQueryColumnExprPtr& expr,
+	                              ibComparisonType comparison, const ibValue& value);   // = / <>
+	ibDataQueryBuilder& WhereExprCompare(const ibQueryColumnExprPtr& expr,
+	                                     ibQueryFilterOp op, const ibValue& value);     // ordered / LIKE
 	// Reference DOT-WALK filter / compare — filter the LEAF attribute of a reference path
 	// (Producer.Region = value). The provider auto-joins the path (the same join SelectPath builds) and
 	// compares on the joined leaf. Single-source read path only. (docs §23 — dot-walk in WHERE.)
@@ -343,6 +360,9 @@ public:
 	// Aggregate over a reference DOT-WALK leaf — SUM(Producer.Weight). The provider joins the path and
 	// qualifies the leaf by the join alias; read back by alias like any aggregate.
 	ibDataQueryBuilder& Aggregate(AggregateFn fn, const std::vector<const ibBackendQueryColumn*>& path, const wxString& alias);
+	// Aggregate over a COMPUTED expression — SUM(Qty * Price). The provider lowers the input via
+	// BuildColumnExpr. Single-source DB aggregates only (gated at the L4 lowering).
+	ibDataQueryBuilder& Aggregate(AggregateFn fn, const ibQueryColumnExprPtr& expr, const wxString& alias);
 	ibDataQueryBuilder& Sum  (const ibBackendQueryColumn* col, const wxString& alias) { return Aggregate(AggregateFn::Sum,   col,     alias); }
 	ibDataQueryBuilder& Min  (const ibBackendQueryColumn* col, const wxString& alias) { return Aggregate(AggregateFn::Min,   col,     alias); }
 	ibDataQueryBuilder& Max  (const ibBackendQueryColumn* col, const wxString& alias) { return Aggregate(AggregateFn::Max,   col,     alias); }
@@ -366,6 +386,10 @@ public:
 
 	// SELECT DISTINCT — collapse duplicate output rows (SELECT DISTINCT). Applies to the read.
 	ibDataQueryBuilder& Distinct() { m_distinct = true; return *this; }
+	// Row limit for the AGGREGATE terminal (SELECT TOP n + GROUP BY): the DB path renders the
+	// dialect LIMIT, the RAM fold truncates after grouping. Plain reads ride the page request
+	// instead (ibReadPageRequest::m_count) — this is only for the unpaged SelectAggregate.
+	ibDataQueryBuilder& Top(long count) { m_top = count; return *this; }
 	// One totals dimension level — the field to roll up by + how it unfolds. Levels apply IN ORDER.
 	ibDataQueryBuilder& TotalBy(const ibBackendQueryColumn* col, ibDimensionKind dim);
 	ibDataQueryBuilder& TotalBy(const std::vector<const ibBackendQueryColumn*>& path, ibDimensionKind dim);   // dot-walk dimension
@@ -452,6 +476,11 @@ public:
 	// list when given, else the primary source's full column set. (docs §22 nested subquery)
 	const std::vector<std::pair<const ibBackendQueryColumn*, wxString>>& GetSelectColumns() const { return m_selectCols; }
 	const ibBackendQueryable* GetPrimarySource() const { return m_queryable; }
+	// Aggregate-shape introspection — an AGGREGATE subquery (FROM (SELECT …, SUM(x) … GROUP BY …))
+	// derives its exposed columns from these: the GROUP BY keys + one synthetic column per aggregate
+	// alias; its ComputeRows runs SelectAggregate instead of a plain read. (docs §23 — agg subquery)
+	const std::vector<AggregateItem>&                GetAggregates() const { return m_aggregates; }
+	const std::vector<const ibBackendQueryColumn*>&  GetGroupBy()    const { return m_groupBy; }
 
 	// Factory for the opaque build-once cache — the list model owns the result via
 	// shared_ptr. Defined in the .cpp where ibRenderedPageCache is complete, so
@@ -493,6 +522,7 @@ private:
 	std::vector<AggregateItem>    m_totalAggregates;// .Totals().Sum()… — TotalBy common aggregate set
 	bool                          m_aggInTotals = false;  // routing flag: .Aggregate → totals set when Totals() active
 	bool                          m_distinct    = false;  // .Distinct() — SELECT DISTINCT
+	long                          m_top         = 0;      // .Top() — aggregate-terminal row limit (0 = all groups)
 	std::vector<ibDotWalkColumn>  m_dotWalks;       // .SelectPath()
 	std::vector<ibDotWalkColumn>  m_dimWalks;       // .TotalByDotWalk() — a dot-walk TOTALS dimension: the provider
 	                                                //   joins the path and projects the leaf's SCALAR value under
@@ -545,6 +575,7 @@ struct ibDataQuerySpec
 	const std::vector<ibQueryColumnSelect>*         m_selectExprs = nullptr;   // computed output columns (arithmetic / CASE)
 	const std::vector<std::pair<const ibBackendQueryColumn*, wxString>>* m_selectCols = nullptr;   // multi-source output list
 	bool                                            m_distinct    = false;   // .Distinct() — SELECT DISTINCT
+	long                                            m_topCount    = 0;       // .Top() — aggregate-terminal row limit (0 = all groups)
 };
 
 #endif

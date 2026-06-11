@@ -27,6 +27,7 @@ static const ibQueryKeyWordEntry s_queryKeyWordsEN[] =
 	{ ibQueryKeyword::Group,    wxT("GROUP")    },
 	{ ibQueryKeyword::Having,   wxT("HAVING")   },
 	{ ibQueryKeyword::Distinct, wxT("DISTINCT") },
+	{ ibQueryKeyword::Top,      wxT("TOP")      },
 	{ ibQueryKeyword::Totals,   wxT("TOTALS")   },
 	{ ibQueryKeyword::Hierarchy,wxT("HIERARCHY")},
 	{ ibQueryKeyword::Elements, wxT("ELEMENTS") },

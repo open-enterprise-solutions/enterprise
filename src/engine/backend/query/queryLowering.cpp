@@ -225,6 +225,26 @@ ibQueryCondition CondOp(const std::vector<const ibBackendQueryColumn*>& path, ib
 std::vector<const ibBackendQueryColumn*> ResolveWhereTarget(const std::vector<ibSourceBinding>& sources,
                                                             const ibQueryAstExpr& e, bool allowDotWalk);   // defined below
 
+ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& sources,
+                                            const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params);   // defined below
+
+// Is this AST expression a COMPUTED WHERE / aggregate-input lhs (arithmetic or CASE)?
+bool IsComputedExprAst(const ibQueryAstExpr& e)
+{
+	return e.m_kind == ibQueryAstExprKind::Arith || e.m_kind == ibQueryAstExprKind::Case;
+}
+
+// Gate for a computed (arithmetic / CASE) condition lhs or aggregate input: the provider lowers
+// it server-side on a single DB source only — the RAM stitch and computed sources do not
+// evaluate condition expressions, and a silent drop would widen the filter (wrong rows).
+void GateComputedExpr(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& e)
+{
+	if (sources.size() > 1)
+		Fail(e.m_line, e.m_col, _("an arithmetic / CASE expression here is not yet supported over a JOIN"));
+	if (!sources.empty() && sources[0].m_q != nullptr && sources[0].m_q->IsComputedInRam())
+		Fail(e.m_line, e.m_col, _("an arithmetic / CASE expression here is not yet supported over a computed source (subquery / virtual table)"));
+}
+
 // Build the full boolean WHERE as an L3 predicate TREE (ibQueryPredicate). The door lowers it to
 // the L2 IR (OR/NOT/IS NULL all expressible there). IN expands to Or(Eq …), BETWEEN to And(>=, <=),
 // NOT IN / NOT BETWEEN / NOT LIKE wrap the positive form in Not — so the tree needs no dedicated node.
@@ -246,6 +266,23 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 		return ibQueryPredicate::Not(BuildWherePredicate(sources, *e.m_lhs, params, allowDotWalk));
 
 	case ibQueryAstExprKind::Compare: {
+		// COMPUTED lhs — `Qty * Price > value`, a CASE: the leaf carries the lowered expression
+		// (m_expr); the provider compares BuildColumnExpr(lhs) to the value. Gated single-source DB.
+		if (IsComputedExprAst(*e.m_lhs)) {
+			GateComputedExpr(sources, *e.m_lhs);
+			ibQueryCondition c;
+			c.m_value = EvalValue(*e.m_rhs, params);
+			c.m_expr  = BuildColumnExprFromAst(sources, *e.m_lhs, params);
+			switch (e.m_cmp) {
+			case ibQueryCompareOp::Eq:                                                            break;
+			case ibQueryCompareOp::Ne: c.m_comparison = ibComparisonType::ibComparisonType_NotEqual; break;
+			case ibQueryCompareOp::Lt: c.m_explicitOp = true; c.m_op = ibQueryFilterOp::Less;         break;
+			case ibQueryCompareOp::Le: c.m_explicitOp = true; c.m_op = ibQueryFilterOp::LessEqual;    break;
+			case ibQueryCompareOp::Gt: c.m_explicitOp = true; c.m_op = ibQueryFilterOp::Greater;      break;
+			case ibQueryCompareOp::Ge: c.m_explicitOp = true; c.m_op = ibQueryFilterOp::GreaterEqual; break;
+			}
+			return ibQueryPredicate::Leaf(c);
+		}
 		const std::vector<const ibBackendQueryColumn*> cols = ResolveWhereTarget(sources, *e.m_lhs, allowDotWalk);
 		const ibValue val = EvalValue(*e.m_rhs, params);
 		switch (e.m_cmp) {
@@ -369,6 +406,21 @@ void LowerFlatWhere(ibDataQueryBuilder& b, const std::vector<ibSourceBinding>& s
 		return;
 
 	case ibQueryAstExprKind::Compare: {
+		// COMPUTED lhs — route to the door's expression verbs (single DB source; gated).
+		if (IsComputedExprAst(*e.m_lhs)) {
+			GateComputedExpr(sources, *e.m_lhs);
+			const ibQueryColumnExprPtr lhs = BuildColumnExprFromAst(sources, *e.m_lhs, params);
+			const ibValue val = EvalValue(*e.m_rhs, params);
+			switch (e.m_cmp) {
+			case ibQueryCompareOp::Eq: b.WhereExpr(lhs, ibComparisonType::ibComparisonType_Equal,    val); break;
+			case ibQueryCompareOp::Ne: b.WhereExpr(lhs, ibComparisonType::ibComparisonType_NotEqual, val); break;
+			case ibQueryCompareOp::Lt: b.WhereExprCompare(lhs, ibQueryFilterOp::Less,         val); break;
+			case ibQueryCompareOp::Le: b.WhereExprCompare(lhs, ibQueryFilterOp::LessEqual,    val); break;
+			case ibQueryCompareOp::Gt: b.WhereExprCompare(lhs, ibQueryFilterOp::Greater,      val); break;
+			case ibQueryCompareOp::Ge: b.WhereExprCompare(lhs, ibQueryFilterOp::GreaterEqual, val); break;
+			}
+			return;
+		}
 		const std::vector<const ibBackendQueryColumn*> cols = ResolveWhereTarget(sources, *e.m_lhs, allowDotWalk);
 		const ibValue val = EvalValue(*e.m_rhs, params);
 		const bool walk = cols.size() > 1;
@@ -551,6 +603,11 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 {
 	const bool multiSource      = sources.size() > 1;
 	const bool explicitProjection = asSubquery || multiSource;
+	// A COMPUTED primary (subquery / virtual table) materialises in RAM — reference dot-walk
+	// joins and dot-walk aggregate inputs have no DB join to ride there; reject rather than
+	// push a path leaf as a plain column (silently wrong rows).
+	const bool computedPrimary  = sources.size() == 1 && sources[0].m_q != nullptr
+	                              && sources[0].m_q->IsComputedInRam();
 
 	bool aggregate = !ast.m_groupBy.empty();
 	for (const ibQueryProjection& p : ast.m_projections)
@@ -578,15 +635,19 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			oc.m_name = alias;
 
 			if (e.m_kind == ibQueryAstExprKind::Func) {
-				// Aggregate input: a plain column OR a reference dot-walk leaf (SUM(Producer.Weight)). The
-				// dot-walk path overload routes size-1 to the plain aggregate; the provider joins a longer path.
+				// Aggregate input: a plain column, a reference dot-walk leaf (SUM(Producer.Weight)), or a
+				// COMPUTED expression (SUM(Qty * Price) — the provider lowers it; single DB source, gated).
 				if (e.m_star) {
 					b.Aggregate(AggFn(e.m_func), (const ibBackendQueryColumn*)nullptr, alias);
 				}
+				else if (e.m_arg && IsComputedExprAst(*e.m_arg)) {
+					GateComputedExpr(sources, *e.m_arg);
+					b.Aggregate(AggFn(e.m_func), BuildColumnExprFromAst(sources, *e.m_arg, params), alias);
+				}
 				else {
 					const std::vector<const ibBackendQueryColumn*> argCols = ResolvePath(sources, *e.m_arg);
-					if (argCols.size() > 1 && multiSource)
-						Fail(e.m_line, e.m_col, _("a dot-walk aggregate input over a JOIN is not yet supported"));
+					if (argCols.size() > 1 && (multiSource || computedPrimary))
+						Fail(e.m_line, e.m_col, _("a dot-walk aggregate input over a JOIN / computed source is not yet supported"));
 					b.Aggregate(AggFn(e.m_func), argCols, alias);
 				}
 				oc.m_alias = alias;
@@ -611,6 +672,8 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 					oc.m_byAlias = true;
 				}
 				else {
+					if (computedPrimary)
+						Fail(e.m_line, e.m_col, _("a dot-walk projection over a computed source (subquery / virtual table) is not yet supported"));
 					b.SelectPath(pathCols, alias);
 					oc.m_alias = alias;
 					oc.m_byAlias = true;
@@ -632,6 +695,8 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				// AS the alias. Single-source non-aggregate only (the read path BuildPageIR projects it).
 				if (aggregate)   // single source -> SQL; JOIN -> composer RAM-eval; OVER aggregates only is unsupported
 					Fail(e.m_line, e.m_col, _("a computed column (arithmetic / CASE) over aggregates is not supported"));
+				if (computedPrimary)
+					Fail(e.m_line, e.m_col, _("a computed column (arithmetic / CASE) over a computed source (subquery / virtual table) is not yet supported"));
 				b.SelectExpr(BuildColumnExprFromAst(sources, e, params), alias);
 				oc.m_alias = alias;
 				oc.m_byAlias = true;
@@ -647,12 +712,17 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	// routes size-1 to a plain key; the provider joins a longer path (single source only — JOIN is A1).
 	for (const ibQueryAstExprPtr& g : ast.m_groupBy) {
 		const std::vector<const ibBackendQueryColumn*> gcols = ResolvePath(sources, *g);
-		if (gcols.size() > 1 && multiSource)
-			Fail(g->m_line, g->m_col, _("a dot-walk GROUP BY over a JOIN is not yet supported"));
+		if (gcols.size() > 1 && (multiSource || computedPrimary))
+			Fail(g->m_line, g->m_col, _("a dot-walk GROUP BY over a JOIN / computed source is not yet supported"));
 		b.GroupBy(gcols);
 	}
 
 	// HAVING — aggregate <op> value (ordered ops only; the door's filter-op set has no = / <>)
+	// Over a COMPUTED source the aggregate folds in RAM, which does not apply HAVING — reject
+	// rather than silently return unfiltered groups.
+	if (ast.m_having && sources.size() == 1 && sources[0].m_q != nullptr && sources[0].m_q->IsComputedInRam())
+		Fail(ast.m_having->m_line, ast.m_having->m_col,
+			_("HAVING over a computed source (subquery / virtual table) is not yet supported"));
 	if (ast.m_having) {
 		const ibQueryAstExpr& h = *ast.m_having;
 		if (h.m_kind != ibQueryAstExprKind::Compare || h.m_lhs->m_kind != ibQueryAstExprKind::Func)
@@ -671,9 +741,10 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 		b.Having(AggFn(f.m_func), col, op, val);
 	}
 
-	// Dot-walk in WHERE / ORDER is realizable only on a single-source, non-aggregate READ (the provider's
-	// BuildPageIR builds the reference join + qualifies the leaf). An aggregate / JOIN query rejects it.
-	const bool allowDotWalk = !aggregate && !multiSource;
+	// Dot-walk in WHERE / ORDER is realizable only on a single-source, non-aggregate, PHYSICAL READ
+	// (the provider's BuildPageIR builds the reference join + qualifies the leaf). An aggregate /
+	// JOIN / computed-source query rejects it (a computed source has no DB join to ride).
+	const bool allowDotWalk = !aggregate && !multiSource && !computedPrimary;
 
 	// WHERE — a FLAT AND-of-simple WHERE rides the door's verb conditions (plain columns + dot-walk
 	// leaves); a BOOLEAN WHERE (OR / NOT / IN / IS NULL) goes through the predicate tree. The tree
@@ -717,12 +788,15 @@ const ibBackendQueryable* WrapSelectAsQueryable(const ibQuerySelect& sel,
 
 	std::vector<OutputColumn> innerSchema;
 	const std::vector<ibSourceBinding> innerSources{ { sel.m_from.m_alias, qi } };
-	if (PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true))
-		Fail(0, 0, _("aggregate subqueries / UNION branches are not yet supported"));
+	// An AGGREGATE inner (GROUP BY / aggregate projections) is fine: the wrapper detects it from the
+	// builder, exposes the group keys + a synthetic column per aggregate alias, and ComputeRows runs
+	// SelectAggregate. The outer's pushed-down conditions post-filter the materialised rows.
+	PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true);
 
 	// ibSubqueryQueryable copies the inner door (shares its owned raw columns via shared_ptr), so the
 	// local 'inner' may die here — the copy is self-sufficient. The wrapper itself lives in 'owner'.
-	auto wrapped = std::unique_ptr<ibSubqueryQueryable>(new ibSubqueryQueryable(inner));
+	// sel.m_top (SELECT TOP n in the branch / subquery) limits the materialised rows.
+	auto wrapped = std::unique_ptr<ibSubqueryQueryable>(new ibSubqueryQueryable(inner, sel.m_top));
 	const ibBackendQueryable* result = wrapped.get();
 	owner.push_back(std::move(wrapped));
 	return result;
@@ -735,12 +809,15 @@ ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<wxString, 
                             std::vector<OutputColumn>& outSchema, ibSubqueryOwner& owner)
 {
 	// First branch = ast's CORE (strip the whole-union ORDER / TOTALS / the union list itself).
+	// Its TOP is stripped too: on the first core it means the WHOLE-union limit (like the trailing
+	// ORDER BY) and applies at the final Execute; a later branch's TOP limits that branch only.
 	ibQuerySelect core0 = ast;
 	core0.m_orderBy.clear();
 	core0.m_unions.clear();
 	core0.m_totalsBy.clear();
 	core0.m_totalsAggregates.clear();
 	core0.m_hasTotals = false;
+	core0.m_top = 0;
 
 	const ibBackendQueryable* b0 = WrapSelectAsQueryable(core0, params, owner);
 
@@ -756,15 +833,19 @@ ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<wxString, 
 		outSchema.push_back(oc);
 	}
 
+	// Each branch carries its UNION-vs-ALL flag: plain UNION dedupes the accumulated rows at its
+	// operator (SQL left-assoc semantics), UNION ALL keeps duplicates.
 	for (const std::shared_ptr<ibQuerySelect>& u : ast.m_unions)
-		b.Union(WrapSelectAsQueryable(*u, params, owner));
+		b.Union(WrapSelectAsQueryable(*u, params, owner), wxEmptyString, /*keepDuplicates*/ u->m_unionAll);
 
 	// ORDER BY on the whole union — resolve against the first branch's columns (by name).
 	const std::vector<ibSourceBinding> usrc{ { wxEmptyString, b0 } };
 	for (const ibQueryOrderItem& o : ast.m_orderBy)
 		b.OrderBy(ResolveColumnSingle(usrc, *o.m_expr), o.m_ascending);
 
-	return b.Execute(ibReadPageRequest{});
+	ibReadPageRequest page;
+	page.m_count = ast.m_top;   // TOP on the first core = the whole-union row limit (0 = all)
+	return b.Execute(page);
 }
 
 } // namespace
@@ -829,7 +910,17 @@ ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& astIn,
 
 	const bool aggregate = PopulateBuilder(ast, params, sources, b, outSchema, /*asSubquery*/false);
 
-	return aggregate ? b.SelectAggregate() : b.Execute(ibReadPageRequest{});
+	if (aggregate) {
+		// SELECT TOP n + GROUP BY — the door's aggregate-terminal row limit: the DB / co-located
+		// paths render the dialect LIMIT, the RAM fold truncates after grouping.
+		if (ast.m_top > 0)
+			b.Top(ast.m_top);
+		return b.SelectAggregate();
+	}
+
+	ibReadPageRequest page;
+	page.m_count = ast.m_top;   // SELECT TOP n -> the page row limit (0 = all rows)
+	return b.Execute(page);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -849,6 +940,8 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		Fail(0, 0, _("TOTALS over a JOIN / UNION is not yet supported (use a single source)"));
 	if (ast.m_totalsBy.empty())
 		Fail(0, 0, _("TOTALS needs at least one BY dimension"));
+	if (ast.m_top > 0)
+		Fail(0, 0, _("TOP with TOTALS is not yet supported (the subtotal tree is not row-limited)"));
 
 	ibSubqueryOwner owner;
 	const ibBackendQueryable* q = ResolveFrom(ast.m_from, params, owner);
