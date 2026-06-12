@@ -5,6 +5,10 @@
 
 #include "mainFrameDesigner.h"
 #include "backend/metaData.h"
+#include "backend/appData.h"
+#include "mainFrame/vcs/gitPanel.h"
+
+#include <wx/filename.h>
 
 #include "frontend/artProvider/artProvider.h"
 
@@ -53,6 +57,7 @@ void ibFrontendMainFrameDesigner::CreateWideGui()
 	m_mgr.AddPane(m_docToolbar, paneInfoDocTool);
 
 	CreateMetadataPane();
+	CreateGitPane();
 	CreatePropertyPane();
 	CreateBottomPane();
 
@@ -124,6 +129,33 @@ void ibFrontendMainFrameDesigner::CreateMetadataPane()
 	paneInfo.MinSize(250, 0);
 
 	m_mgr.AddPane(m_metaWindow, paneInfo);
+}
+
+void ibFrontendMainFrameDesigner::CreateGitPane()
+{
+	if (m_mgr.GetPane(wxT("gitPane")).IsOk())
+		return;
+
+	m_gitPanel = new ibGitPanel(this);
+
+	// Bind to the configuration working copy — the directory of the file-mode
+	// config/db path. In server mode there is no local working copy, so the
+	// pane simply shows "(no repository)".
+	if (appData != nullptr) {
+		const wxString file = appData->GetFile();
+		if (!file.empty())
+			m_gitPanel->SetWorkdir(wxFileName(file).GetPath());
+	}
+
+	wxAuiPaneInfo paneInfo;
+	paneInfo.Name(wxT("gitPane"));
+	paneInfo.Caption(_("Version control"));
+	paneInfo.Right();
+	paneInfo.MinSize(280, 0);
+	paneInfo.Float();
+	paneInfo.Hide();   // opens hidden; user reveals via the AUI pane list
+
+	m_mgr.AddPane(m_gitPanel, paneInfo);
 }
 
 void ibFrontendMainFrameDesigner::UpdateEditorOptions()

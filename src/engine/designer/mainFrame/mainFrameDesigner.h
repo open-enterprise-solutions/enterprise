@@ -117,6 +117,7 @@ protected:
 	void InitializeDefaultMenu();
 
 	virtual void CreateMetadataPane();
+	virtual void CreateGitPane();
 	virtual void CreateBottomPane();
 	virtual void CreateWideGui();
 
@@ -177,6 +178,7 @@ private:
 	class ibHelpPaneView* m_helpPane = nullptr;
 
 	ibMetadataTree* m_metaWindow;
+	class ibGitPanel* m_gitPanel = nullptr;
 
 	ibOutputWindow* m_outputWindow;
 	ibStackWindow* m_stackWindow;
