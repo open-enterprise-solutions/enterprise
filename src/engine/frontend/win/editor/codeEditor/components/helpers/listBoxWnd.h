@@ -14,10 +14,10 @@
 
 // The class is intended to look like a standard listbox (with an optional
 // icon). However, it needs to look like it has focus even when it doesn't.
-class ibListBox : public wxSystemThemedControl<wxVListBox>
+class ibCodeEditorListBox : public wxSystemThemedControl<wxVListBox>
 {
 public:
-	ibListBox(wxWindow*, ibListBoxVisualData*, int);
+	ibCodeEditorListBox(wxWindow*, ibListBoxVisualData*, int);
 
 	// wxWindow overrides
 	virtual bool AcceptsFocus() const override;

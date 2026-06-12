@@ -1,18 +1,18 @@
 #include "popupWnd.h"
 
 //----------------------------------------------------------------------
-// ibOESPopupBase and ibOESPopupWindow
+// ibCodeEditorPopupBase and ibCodeEditorPopupWindow
 
 #if wxUSE_POPUPWIN
 
-ibOESPopupBase::ibOESPopupBase(wxWindow* parent)
+ibCodeEditorPopupBase::ibCodeEditorPopupBase(wxWindow* parent)
 	: wxPopupWindow(parent, wxPU_CONTAINS_CONTROLS)
 {
 }
 
 #ifdef __WXGTK__
 
-ibOESPopupBase::~ibOESPopupBase()
+ibCodeEditorPopupBase::~ibCodeEditorPopupBase()
 {
 	wxRect rect = GetRect();
 	GetParent()->ScreenToClient(&(rect.x), &(rect.y));
@@ -22,7 +22,7 @@ ibOESPopupBase::~ibOESPopupBase()
 #elif defined(__WXMSW__)
 
 // Do not activate the window when it is shown.
-bool ibOESPopupBase::Show(bool show)
+bool ibCodeEditorPopupBase::Show(bool show)
 {
 	if (show) {
 		// Check if the window is changing from hidden to shown.
@@ -52,7 +52,7 @@ bool ibOESPopupBase::Show(bool show)
 }
 
 // Do not activate in response to mouse clicks on this window.
-bool ibOESPopupBase::MSWHandleMessage(WXLRESULT *res, WXUINT msg,
+bool ibCodeEditorPopupBase::MSWHandleMessage(WXLRESULT *res, WXUINT msg,
 	WXWPARAM wParam, WXLPARAM lParam)
 {
 	if (msg == WM_MOUSEACTIVATE)
@@ -68,7 +68,7 @@ bool ibOESPopupBase::MSWHandleMessage(WXLRESULT *res, WXUINT msg,
 
 #else
 
-ibOESPopupBase::ibOESPopupBase(wxWindow* parent)
+ibCodeEditorPopupBase::ibCodeEditorPopupBase(wxWindow* parent)
 	:wxFrame(parent, wxID_ANY, wxEmptyString,
 		wxDefaultPosition, wxDefaultSize,
 		wxFRAME_FLOAT_ON_PARENT | wxBORDER_NONE)
@@ -81,7 +81,7 @@ ibOESPopupBase::ibOESPopupBase(wxWindow* parent)
 #ifdef __WXMSW__
 
 // Use ShowWithoutActivating instead of show.
-bool ibOESPopupBase::Show(bool show) override
+bool ibCodeEditorPopupBase::Show(bool show) override
 {
 	if (show)
 	{
@@ -98,7 +98,7 @@ bool ibOESPopupBase::Show(bool show) override
 }
 
 // Do not activate in response to mouse clicks on this window.
-bool ibOESPopupBase::MSWHandleMessage(WXLRESULT *res, WXUINT msg,
+bool ibCodeEditorPopupBase::MSWHandleMessage(WXLRESULT *res, WXUINT msg,
 	WXWPARAM wParam, WXLPARAM lParam) override
 {
 	if (msg == WM_MOUSEACTIVATE)
@@ -112,7 +112,7 @@ bool ibOESPopupBase::MSWHandleMessage(WXLRESULT *res, WXUINT msg,
 
 #elif !wxOES_POPUP_IS_CUSTOM
 
-void ibOESPopupBase::ActivateParent()
+void ibCodeEditorPopupBase::ActivateParent()
 {
 	// Although we're a valueForm, we always want the parent to be active,
 	// so raise it whenever we get shown, focused, etc.
@@ -122,7 +122,7 @@ void ibOESPopupBase::ActivateParent()
 		valueForm->Raise();
 }
 
-bool ibOESPopupBase::Show(bool show)
+bool ibCodeEditorPopupBase::Show(bool show)
 {
 	bool rv = wxFrame::Show(show);
 	if (rv && show)
@@ -137,35 +137,35 @@ bool ibOESPopupBase::Show(bool show)
 
 #endif // __WXOSX_COCOA__
 
-ibOESPopupWindow::ibOESPopupWindow(wxWindow* parent)
-	: ibOESPopupBase(parent), m_lastKnownPosition(wxDefaultPosition)
+ibCodeEditorPopupWindow::ibCodeEditorPopupWindow(wxWindow* parent)
+	: ibCodeEditorPopupBase(parent), m_lastKnownPosition(wxDefaultPosition)
 {
 #if !wxOES_POPUP_IS_CUSTOM
-	Bind(wxEVT_SET_FOCUS, &ibOESPopupWindow::OnFocus, this);
+	Bind(wxEVT_SET_FOCUS, &ibCodeEditorPopupWindow::OnFocus, this);
 #endif
 
 	m_tlw = wxDynamicCast(wxGetTopLevelParent(parent), wxTopLevelWindow);
 	if (m_tlw)
 	{
-		m_tlw->Bind(wxEVT_MOVE, &ibOESPopupWindow::OnParentMove, this);
+		m_tlw->Bind(wxEVT_MOVE, &ibCodeEditorPopupWindow::OnParentMove, this);
 #if defined(__WXOSX_COCOA__) || (defined(__WXGTK__)&&!wxOES_POPUP_IS_FRAME)
-		m_tlw->Bind(wxEVT_ICONIZE, &ibOESPopupWindow::OnIconize, this);
+		m_tlw->Bind(wxEVT_ICONIZE, &ibCodeEditorPopupWindow::OnIconize, this);
 #endif
 	}
 }
 
-ibOESPopupWindow::~ibOESPopupWindow()
+ibCodeEditorPopupWindow::~ibCodeEditorPopupWindow()
 {
 	if (m_tlw)
 	{
-		m_tlw->Unbind(wxEVT_MOVE, &ibOESPopupWindow::OnParentMove, this);
+		m_tlw->Unbind(wxEVT_MOVE, &ibCodeEditorPopupWindow::OnParentMove, this);
 #if defined(__WXOSX_COCOA__) || (defined(__WXGTK__)&&!wxOES_POPUP_IS_FRAME)
-		m_tlw->Unbind(wxEVT_ICONIZE, &ibOESPopupWindow::OnIconize, this);
+		m_tlw->Unbind(wxEVT_ICONIZE, &ibCodeEditorPopupWindow::OnIconize, this);
 #endif
 	}
 }
 
-bool ibOESPopupWindow::Destroy()
+bool ibCodeEditorPopupWindow::Destroy()
 {
 #if defined(__WXOSX__) && wxOES_POPUP_IS_FRAME && !wxOES_POPUP_IS_CUSTOM
 	// The bottom edge of this window is not getting properly
@@ -182,12 +182,12 @@ bool ibOESPopupWindow::Destroy()
 	return true;
 }
 
-bool ibOESPopupWindow::AcceptsFocus() const
+bool ibCodeEditorPopupWindow::AcceptsFocus() const
 {
 	return false;
 }
 
-void ibOESPopupWindow::DoSetSize(int x, int y, int width, int height, int flags)
+void ibCodeEditorPopupWindow::DoSetSize(int x, int y, int width, int height, int flags)
 {
 	m_lastKnownPosition = wxPoint(x, y);
 
@@ -198,10 +198,10 @@ void ibOESPopupWindow::DoSetSize(int x, int y, int width, int height, int flags)
 	if (y != wxDefaultCoord)
 		GetParent()->ClientToScreen(nullptr, &y);
 
-	ibOESPopupBase::DoSetSize(x, y, width, height, flags);
+	ibCodeEditorPopupBase::DoSetSize(x, y, width, height, flags);
 }
 
-void ibOESPopupWindow::OnParentMove(wxMoveEvent& event)
+void ibCodeEditorPopupWindow::OnParentMove(wxMoveEvent& event)
 {
 	if (m_lastKnownPosition.IsFullySpecified())
 		SetPosition(m_lastKnownPosition);
@@ -210,14 +210,14 @@ void ibOESPopupWindow::OnParentMove(wxMoveEvent& event)
 
 #if defined(__WXOSX_COCOA__) || (defined(__WXGTK__) && !wxOES_POPUP_IS_FRAME)
 
-void ibOESPopupWindow::OnIconize(wxIconizeEvent& event)
+void ibCodeEditorPopupWindow::OnIconize(wxIconizeEvent& event)
 {
 	Show(!event.IsIconized());
 }
 
 #elif !wxOES_POPUP_IS_CUSTOM
 
-void ibOESPopupWindow::OnFocus(wxFocusEvent& event)
+void ibCodeEditorPopupWindow::OnFocus(wxFocusEvent& event)
 {
 #if wxOES_POPUP_IS_FRAME
 	ActivateParent();
@@ -229,10 +229,10 @@ void ibOESPopupWindow::OnFocus(wxFocusEvent& event)
 
 #endif // __WXOSX_COCOA__
 
-ibOESListBoxWin::ibOESListBoxWin(wxWindow* parent, ibListBoxVisualData *visualData, int h)
-	: ibOESPopupWindow(parent), m_visualData(visualData)
+ibCodeEditorListBoxWin::ibCodeEditorListBoxWin(wxWindow* parent, ibListBoxVisualData *visualData, int h)
+	: ibCodeEditorPopupWindow(parent), m_visualData(visualData)
 {
-	m_listBox = new ibListBox(this, m_visualData, h);
+	m_listBox = new ibCodeEditorListBox(this, m_visualData, h);
 
 	// Use the background of this window to form a valueForm around the listbox
 	// except on macos where the native Scintilla popup has no valueForm.
@@ -252,14 +252,14 @@ ibOESListBoxWin::ibOESListBoxWin(wxWindow* parent, ibListBoxVisualData *visualDa
 	// the colours used seem to be based on the background of the parent window.
 	// So manually paint this window to give it the border colour instead of
 	// setting the background colour.
-	Bind(wxEVT_PAINT, &ibOESListBoxWin::OnPaint, this);
+	Bind(wxEVT_PAINT, &ibCodeEditorListBoxWin::OnPaint, this);
 
 	SetBackgroundStyle(wxBG_STYLE_PAINT);
 
 	m_listBox->Clear();
 }
 
-void ibOESListBoxWin::OnPaint(wxPaintEvent& WXUNUSED(evt))
+void ibCodeEditorListBoxWin::OnPaint(wxPaintEvent& WXUNUSED(evt))
 {
 	wxPaintDC dc(this);
 	dc.SetBackground(m_visualData->GetBorderColour());

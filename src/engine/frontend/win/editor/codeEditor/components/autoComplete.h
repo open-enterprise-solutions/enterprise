@@ -80,7 +80,7 @@ private:
 
 	std::vector<ibKeywordElement> m_aKeywords;
 
-	ibOESListBoxWin*              m_listBoxWin       = nullptr;
+	ibCodeEditorListBoxWin*              m_listBoxWin       = nullptr;
 	ibListBoxVisualData*          m_visualData       = nullptr;
 	wxStyledTextCtrl*             m_owner            = nullptr;
 	wxEvtHandler*                 m_evtHandler       = nullptr;

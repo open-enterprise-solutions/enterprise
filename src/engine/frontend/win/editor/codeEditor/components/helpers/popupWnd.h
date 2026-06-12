@@ -8,7 +8,7 @@
 #include "listBoxVisualData.h"
 
 //----------------------------------------------------------------------
-// ibOESPopupWindow
+// ibCodeEditorPopupWindow
 
 #if defined(__WXOSX_COCOA__) || defined(__WXMSW__) || defined(__WXGTK__)
 #define wxOES_POPUP_IS_CUSTOM 1
@@ -16,18 +16,18 @@
 #define wxOES_POPUP_IS_CUSTOM 0
 #endif
 
-// Define the base class used for ibOESPopupWindow.
+// Define the base class used for ibCodeEditorPopupWindow.
 #if wxUSE_POPUPWIN
 
 #include <wx/popupwin.h>
 #define wxOES_POPUP_IS_FRAME 0
 
-class ibOESPopupBase : public wxPopupWindow
+class ibCodeEditorPopupBase : public wxPopupWindow
 {
 public:
-	ibOESPopupBase(wxWindow*);
+	ibCodeEditorPopupBase(wxWindow*);
 #ifdef __WXGTK__
-	virtual ~ibOESPopupBase();
+	virtual ~ibCodeEditorPopupBase();
 #elif defined(__WXMSW__)
 	virtual bool Show(bool show = true) override;
 	virtual bool MSWHandleMessage(WXLRESULT *result, WXUINT message,
@@ -41,10 +41,10 @@ public:
 #include <wx/valueForm.h>
 #define wxOES_POPUP_IS_FRAME 1
 
-class ibOESPopupBase :public wxFrame
+class ibCodeEditorPopupBase :public wxFrame
 {
 public:
-	ibOESPopupBase(wxWindow*);
+	ibCodeEditorPopupBase(wxWindow*);
 #ifdef __WXMSW__
 	virtual bool Show(bool show = true) override;
 	virtual bool MSWHandleMessage(WXLRESULT *result, WXUINT message,
@@ -58,11 +58,11 @@ public:
 
 #endif // __WXOSX_COCOA__
 
-class ibOESPopupWindow : public ibOESPopupBase
+class ibCodeEditorPopupWindow : public ibCodeEditorPopupBase
 {
 public:
-	ibOESPopupWindow(wxWindow*);
-	virtual ~ibOESPopupWindow();
+	ibCodeEditorPopupWindow(wxWindow*);
+	virtual ~ibCodeEditorPopupWindow();
 	virtual bool Destroy() override;
 	virtual bool AcceptsFocus() const override;
 
@@ -81,16 +81,16 @@ private:
 	wxWindow* m_tlw;
 };
 
-// A popup window to place the ibListBox upon
-class ibOESListBoxWin : public ibOESPopupWindow
+// A popup window to place the ibCodeEditorListBox upon
+class ibCodeEditorListBoxWin : public ibCodeEditorPopupWindow
 {
-	ibListBox *m_listBox;
+	ibCodeEditorListBox *m_listBox;
 
 
 public:
 
-	ibOESListBoxWin(wxWindow*, ibListBoxVisualData *, int);
-	ibListBox *GetListBox() const {
+	ibCodeEditorListBoxWin(wxWindow*, ibListBoxVisualData *, int);
+	ibCodeEditorListBox *GetListBox() const {
 		return m_listBox; 
 	}
 

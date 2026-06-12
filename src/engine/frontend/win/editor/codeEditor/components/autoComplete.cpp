@@ -39,7 +39,7 @@ void ibAutoComplete::Start(const wxString& currentWord,
 {
 	if (m_active) Cancel();
 
-	m_listBoxWin = new ibOESListBoxWin(m_owner, m_visualData, m_owner->TextHeight(m_owner->GetCurrentLine()));
+	m_listBoxWin = new ibCodeEditorListBoxWin(m_owner, m_visualData, m_owner->TextHeight(m_owner->GetCurrentLine()));
 
 	// Scale the dropdown box together with the editor's zoom so the
 	// listbox stays proportional to the font — at default zoom the box
@@ -56,7 +56,7 @@ void ibAutoComplete::Start(const wxString& currentWord,
 
 	m_currentWord = currentWord;
 
-	ibListBox* listBox = m_listBoxWin->GetListBox();
+	ibCodeEditorListBox* listBox = m_listBoxWin->GetListBox();
 
 	// Match the editor's currently displayed font size — STC stores the
 	// base font in StyleGetFont and renders it scaled by GetZoom(). Without
@@ -139,7 +139,7 @@ void ibAutoComplete::Show(const wxPoint& position)
 		Cancel(); return;
 	}
 
-	ibListBox* listBox = m_listBoxWin->GetListBox();
+	ibCodeEditorListBox* listBox = m_listBoxWin->GetListBox();
 
 	std::sort(m_aKeywords.begin(), m_aKeywords.end(),
 		[](ibKeywordElement a, ibKeywordElement b) {
@@ -276,7 +276,7 @@ void ibAutoComplete::OnSelection(wxCommandEvent& event)
 
 void ibAutoComplete::OnKeyDown(wxKeyEvent& event)
 {
-	ibListBox* listBox = m_listBoxWin->GetListBox();
+	ibCodeEditorListBox* listBox = m_listBoxWin->GetListBox();
 
 	switch (event.GetKeyCode())
 	{
@@ -292,7 +292,7 @@ void ibAutoComplete::OnKeyDown(wxKeyEvent& event)
 
 void ibAutoComplete::OnMouseMotion(wxMouseEvent& event)
 {
-	ibListBox* listBox = m_listBoxWin->GetListBox();
+	ibCodeEditorListBox* listBox = m_listBoxWin->GetListBox();
 	int currentRow = listBox->VirtualHitTest(event.GetY());
 	if (currentRow != wxNOT_FOUND) {
 		std::vector<ibKeywordElement>::iterator selectedKeyword = m_aKeywords.begin() + currentRow;

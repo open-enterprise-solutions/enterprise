@@ -344,6 +344,108 @@
     <ClCompile Include="win\theme\luna_dockart.cpp" />
     <ClCompile Include="win\theme\luna_tabart.cpp" />
     <ClCompile Include="win\theme\luna_toolbarart.cpp" />
+    <ClCompile Include="uikit\theme.cpp">
+      <ObjectFileName>$(IntDir)uikit_theme.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\inputConsumer.cpp">
+      <ObjectFileName>$(IntDir)uikit_inputConsumer.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\inputHandler.cpp">
+      <ObjectFileName>$(IntDir)uikit_inputHandler.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\controlRenderer.cpp">
+      <ObjectFileName>$(IntDir)uikit_controlRenderer.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\window.cpp">
+      <ObjectFileName>$(IntDir)uikit_window.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\theme\themeRenderer.cpp">
+      <ObjectFileName>$(IntDir)uikit_themeRenderer.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\theme\lunaTheme.cpp">
+      <ObjectFileName>$(IntDir)uikit_lunaTheme.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\control.cpp">
+      <ObjectFileName>$(IntDir)uikit_control.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\scrollBar.cpp">
+      <ObjectFileName>$(IntDir)uikit_scrollBar.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\scrollArrow.cpp">
+      <ObjectFileName>$(IntDir)uikit_scrollArrow.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\scrollThumb.cpp">
+      <ObjectFileName>$(IntDir)uikit_scrollThumb.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\anyButton.cpp">
+      <ObjectFileName>$(IntDir)uikit_anyButton.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\button.cpp">
+      <ObjectFileName>$(IntDir)uikit_button.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\staticText.cpp">
+      <ObjectFileName>$(IntDir)uikit_staticText.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\staticLine.cpp">
+      <ObjectFileName>$(IntDir)uikit_staticLine.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\checkBox.cpp">
+      <ObjectFileName>$(IntDir)uikit_checkBox.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\radioButton.cpp">
+      <ObjectFileName>$(IntDir)uikit_radioButton.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\gauge.cpp">
+      <ObjectFileName>$(IntDir)uikit_gauge.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\toggleButton.cpp">
+      <ObjectFileName>$(IntDir)uikit_toggleButton.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\textCtrl.cpp">
+      <ObjectFileName>$(IntDir)uikit_textCtrl.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\listBox.cpp">
+      <ObjectFileName>$(IntDir)uikit_listBox.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\choice.cpp">
+      <ObjectFileName>$(IntDir)uikit_choice.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\notebook.cpp">
+      <ObjectFileName>$(IntDir)uikit_notebook.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\toolBar.cpp">
+      <ObjectFileName>$(IntDir)uikit_toolBar.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\comboBox.cpp">
+      <ObjectFileName>$(IntDir)uikit_comboBox.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\spinButton.cpp">
+      <ObjectFileName>$(IntDir)uikit_spinButton.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\slider.cpp">
+      <ObjectFileName>$(IntDir)uikit_slider.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\menu.cpp">
+      <ObjectFileName>$(IntDir)uikit_menu.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\staticBox.cpp">
+      <ObjectFileName>$(IntDir)uikit_staticBox.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\staticBitmap.cpp">
+      <ObjectFileName>$(IntDir)uikit_staticBitmap.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\bmpButton.cpp">
+      <ObjectFileName>$(IntDir)uikit_bmpButton.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\checkListBox.cpp">
+      <ObjectFileName>$(IntDir)uikit_checkListBox.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\radioBox.cpp">
+      <ObjectFileName>$(IntDir)uikit_radioBox.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\treeCtrl.cpp">
+      <ObjectFileName>$(IntDir)uikit_treeCtrl.obj</ObjectFileName>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="artProvider\artProvider.h" />
@@ -781,4 +883,43 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <ItemGroup>
+    <ClInclude Include="uikit\colourScheme.h" />
+    <ClInclude Include="uikit\inputConsumer.h" />
+    <ClInclude Include="uikit\inputHandler.h" />
+    <ClInclude Include="uikit\menu.h" />
+    <ClInclude Include="uikit\menuItem.h" />
+    <ClInclude Include="uikit\renderer.h" />
+    <ClInclude Include="uikit\scrollTimer.h" />
+    <ClInclude Include="uikit\theme.h" />
+    <ClInclude Include="uikit\uikit.h" />
+    <ClInclude Include="uikit\window.h" />
+    <ClInclude Include="uikit\theme\themeRenderer.h" />
+    <ClInclude Include="uikit\ctrl\anyButton.h" />
+    <ClInclude Include="uikit\ctrl\bmpButton.h" />
+    <ClInclude Include="uikit\ctrl\button.h" />
+    <ClInclude Include="uikit\ctrl\checkBox.h" />
+    <ClInclude Include="uikit\ctrl\checkListBox.h" />
+    <ClInclude Include="uikit\ctrl\choice.h" />
+    <ClInclude Include="uikit\ctrl\comboBox.h" />
+    <ClInclude Include="uikit\ctrl\control.h" />
+    <ClInclude Include="uikit\ctrl\gauge.h" />
+    <ClInclude Include="uikit\ctrl\listBox.h" />
+    <ClInclude Include="uikit\ctrl\notebook.h" />
+    <ClInclude Include="uikit\ctrl\radioBox.h" />
+    <ClInclude Include="uikit\ctrl\radioButton.h" />
+    <ClInclude Include="uikit\ctrl\scrollArrow.h" />
+    <ClInclude Include="uikit\ctrl\scrollBar.h" />
+    <ClInclude Include="uikit\ctrl\scrollThumb.h" />
+    <ClInclude Include="uikit\ctrl\slider.h" />
+    <ClInclude Include="uikit\ctrl\spinButton.h" />
+    <ClInclude Include="uikit\ctrl\staticBitmap.h" />
+    <ClInclude Include="uikit\ctrl\staticBox.h" />
+    <ClInclude Include="uikit\ctrl\staticLine.h" />
+    <ClInclude Include="uikit\ctrl\staticText.h" />
+    <ClInclude Include="uikit\ctrl\textCtrl.h" />
+    <ClInclude Include="uikit\ctrl\toggleButton.h" />
+    <ClInclude Include="uikit\ctrl\toolBar.h" />
+    <ClInclude Include="uikit\ctrl\treeCtrl.h" />
+  </ItemGroup>
 </Project>
