@@ -12,6 +12,7 @@
 #include <wx/listctrl.h>
 #include <wx/button.h>
 #include <wx/stattext.h>
+#include <wx/choice.h>
 #include <memory>
 
 #include "backend/vcs/gitService.h"
@@ -23,7 +24,7 @@ public:
 	ibGitPanel(wxWindow* parent, const wxString& workdir = wxEmptyString);
 
 	void SetWorkdir(const wxString& workdir);
-	void RefreshStatus();   // re-run git status into the list
+	void RefreshStatus();   // re-run git status + branches + log
 
 private:
 	void BuildUI();
@@ -31,21 +32,27 @@ private:
 	void OnCommit(wxCommandEvent&);
 	void OnPush(wxCommandEvent&);
 	void OnPull(wxCommandEvent&);
+	void OnBranchSelected(wxCommandEvent&);   // switch to the chosen branch
+	void OnNewBranch(wxCommandEvent&);        // create + checkout a branch
+	void OnStatusActivated(wxListEvent&);     // double-click a file -> show its diff
 
+	void RefreshBranches();
+	void RefreshLog();
 	// Show a non-fatal git error (push rejected, not a repo, etc.) in the status bar line.
 	void ReportResult(const wxString& action, const ibGitResult& r);
-	void UpdateBranchLabel();
 
 	std::unique_ptr<ibGitService> m_git;   // null until a workdir is bound
 	wxString      m_workdir;
 
-	wxStaticText* m_branchLabel = nullptr;
-	wxListCtrl*   m_statusList  = nullptr;
-	wxButton*     m_btnRefresh  = nullptr;
-	wxButton*     m_btnCommit   = nullptr;
-	wxButton*     m_btnPush     = nullptr;
-	wxButton*     m_btnPull     = nullptr;
-	wxStaticText* m_info        = nullptr;   // last-action result line
+	wxChoice*     m_branchChoice = nullptr;
+	wxButton*     m_btnNewBranch = nullptr;
+	wxListCtrl*   m_statusList   = nullptr;
+	wxListCtrl*   m_logList      = nullptr;
+	wxButton*     m_btnRefresh   = nullptr;
+	wxButton*     m_btnCommit    = nullptr;
+	wxButton*     m_btnPush      = nullptr;
+	wxButton*     m_btnPull      = nullptr;
+	wxStaticText* m_info         = nullptr;   // last-action result line
 };
 
 #endif // _OES_DESIGNER_GIT_PANEL_H_
