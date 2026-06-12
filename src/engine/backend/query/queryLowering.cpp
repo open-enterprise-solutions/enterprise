@@ -897,6 +897,32 @@ ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& astIn,
                                            const std::map<wxString, ibValue>& params,
                                            std::vector<OutputColumn>& outSchema)
 {
+	return ExecuteImpl(astIn, params, outSchema, ibReadPageRequest{}, nullptr, wxEmptyString);
+}
+
+ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& astIn,
+                                           const std::map<wxString, ibValue>& params,
+                                           std::vector<OutputColumn>& outSchema,
+                                           const ibReadPageRequest& page)
+{
+	return ExecuteImpl(astIn, params, outSchema, page, nullptr, wxEmptyString);
+}
+
+ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& astIn,
+                                           const std::map<wxString, ibValue>& params,
+                                           std::vector<OutputColumn>& outSchema,
+                                           const ibReadPageRequest& page,
+                                           ibRenderedPageCache& cache, const wxString& signature)
+{
+	return ExecuteImpl(astIn, params, outSchema, page, &cache, signature);
+}
+
+ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
+                                               const std::map<wxString, ibValue>& params,
+                                               std::vector<OutputColumn>& outSchema,
+                                               const ibReadPageRequest& pageIn,
+                                               ibRenderedPageCache* cache, const wxString& signature)
+{
 	// Optimizer pass — negation normalization + FROM-subquery flattening. Works on a
 	// deep clone; the Query value object's cached parse is never mutated. (queryRewrite.h)
 	const ibQuerySelectPtr astOpt = ibQueryRewrite::Rewrite(astIn);
@@ -957,9 +983,13 @@ ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& astIn,
 		return b.SelectAggregate();
 	}
 
-	ibReadPageRequest page;
-	page.m_count = ast.m_top;   // SELECT TOP n -> the page row limit (0 = all rows)
-	return b.Execute(page);
+	// The external envelope drives the cursor; a `TOP n` in the text still caps the
+	// page — the smaller positive count wins (0 = unbounded on either side). With a
+	// caller-owned page cache the door reuses the rendered SQL, rebinding the anchor.
+	ibReadPageRequest page = pageIn;
+	if (ast.m_top > 0 && (page.m_count <= 0 || ast.m_top < page.m_count))
+		page.m_count = ast.m_top;
+	return cache != nullptr ? b.Execute(page, *cache, signature) : b.Execute(page);
 }
 
 //////////////////////////////////////////////////////////////////////

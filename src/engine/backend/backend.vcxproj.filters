@@ -460,9 +460,6 @@
     <ClInclude Include="metaCollection\partial\list\objectList.h">
       <Filter>metaCollection\partial\list</Filter>
     </ClInclude>
-    <ClInclude Include="metaCollection\partial\list\listSqlBuilder.h">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClInclude>
     <ClInclude Include="metaCollection\partial\reference\reference.h">
       <Filter>metaCollection\partial\reference</Filter>
     </ClInclude>
@@ -1427,9 +1424,6 @@
     <ClCompile Include="metaCollection\partial\list\objectList.cpp">
       <Filter>metaCollection\partial\list</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\list\listSqlBuilder.cpp">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClCompile>
     <ClCompile Include="metaCollection\partial\list\objectListAction.cpp">
       <Filter>metaCollection\partial\list</Filter>
     </ClCompile>
@@ -1777,6 +1771,9 @@
     <Filter Include="query">
       <UniqueIdentifier>{c2e2b453-0a2b-4f32-8d6b-1b22c4b9e201}</UniqueIdentifier>
     </Filter>
+    <Filter Include="composition">
+      <UniqueIdentifier>{8f4d2a17-6c3e-4b9a-a52d-7e90c41f55b2}</UniqueIdentifier>
+    </Filter>
     <Filter Include="debugger">
       <UniqueIdentifier>{e7188396-0035-47b0-b863-be1ec229b525}</UniqueIdentifier>
     </Filter>
@@ -2060,6 +2057,12 @@
     <ClCompile Include="query\queryableFactory.cpp">
       <Filter>query</Filter>
     </ClCompile>
+    <ClCompile Include="composition\dataComposer.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueComposer.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
     <ClCompile Include="system\value\valueQuery.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
@@ -2125,6 +2128,15 @@
     </ClInclude>
     <ClInclude Include="query\queryableHooks.h">
       <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\dataComposer.h">
+      <Filter>composition</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\listFetchDriver.h">
+      <Filter>composition</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueComposer.h">
+      <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueQuery.h">
       <Filter>system\value</Filter>

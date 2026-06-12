@@ -1824,9 +1824,16 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			q.From(mainTable);
 		}
 
-		if (req.m_parentFilter && !req.m_flatScan)
+		if (req.m_parentFilter && !req.m_flatScan) {
+			// The envelope carries the parent COLUMN (preferred); the physical field
+			// derives HERE — the field machinery is the provider's job, not the
+			// consumer's. The legacy physical name wins when explicitly set.
+			const wxString parentField = !req.m_parentRefField.IsEmpty()
+				? req.m_parentRefField
+				: ReferenceFieldOf(req.m_parentCol);
 			q.Where(ibMetaIRBuilder::BuildParentRefPredicate(
-				queryable, req.m_parentRefField, req.m_parentGuid, req.m_isTopLevel, mainQual));
+				queryable, parentField, req.m_parentGuid, req.m_isTopLevel, mainQual));
+		}
 
 		// WHERE = flat plain conditions  AND  the boolean tree  AND  the flat dot-walk conditions.
 		// hasDotWalk: the tree was lowered above (path-aware, treeWhere). Else: lower it here by mainQual.

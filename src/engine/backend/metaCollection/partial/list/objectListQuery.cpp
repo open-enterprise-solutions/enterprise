@@ -7,42 +7,11 @@
 #include "backend/appData.h"
 #include "backend/session/session.h"
 #include "backend/databaseLayer/databaseLayer.h"
-#include "backend/query/dataQueryBuilder.h"   // universal (half-)L3 read entry
+#include "backend/query/dataQueryBuilder.h"        // universal (half-)L3 read entry
+#include "backend/composition/listFetchDriver.h"   // L5 — the fetch driver (envelope in, rows out)
 
-namespace {
-
-// --- build-once page cache (Lever 1) signature helpers ---------------------
-// The signature must capture EVERY SQL-determining input so a stale render is
-// never reused. Filter values ride as Const (baked into the rendered plan), so
-// they are part of the signature; the anchor rides as an external Param, so it
-// is NOT. A value type the signature can't render losslessly (reference /
-// composite) disables caching for that fetch — correctness over speed.
-
-bool ValueSignable(const ibValue& v)
-{
-	switch (v.GetType()) {
-	case TYPE_BOOLEAN: case TYPE_NUMBER: case TYPE_DATE:
-	case TYPE_STRING:  case TYPE_NULL:   case TYPE_EMPTY:
-		return true;
-	default:
-		return false;   // reference / object — would alias in the signature
-	}
-}
-
-wxString ValueSig(const ibValue& v)
-{
-	switch (v.GetType()) {
-	case TYPE_BOOLEAN: return v.GetBoolean() ? wxT("B1") : wxT("B0");
-	case TYPE_NUMBER:  return wxT("N") + v.GetNumber().ToString();
-	case TYPE_DATE:    return wxT("D") + v.GetDateTime().GetValue().ToString();
-	case TYPE_STRING:  return wxT("S") + v.GetString();
-	default:           return wxT("_");
-	}
-}
-
-} // namespace
-
-
+// (The build-once page-cache signature helpers moved INTO the L5 composer —
+// dataComposer.cpp signs its rendered text + params + page shape itself.)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Single-batch Fetch for enums — CASE/WHEN parent-position order has no
@@ -61,6 +30,67 @@ static unsigned int AdoptAndCount(std::vector<TRow*>& rows, ibDataViewItemArray&
 	return n;
 }
 
+// L5 — translate the view-layer filter / sort rows into composer settings (the
+// user vocabulary; attribute NAMES pulled off the metadata, values travel as
+// auto-&parameters). Re-applied per fetch — the user mutates them between
+// scroll ticks.
+template <class TMeta>
+static void ApplyListFilters(ibDataComposer& composer, const TMeta* meta, const ibFilterRow& filters)
+{
+	for (const auto& f : filters.m_filters) {
+		if (!f.m_filterUse)
+			continue;
+		const auto* attr = meta->FindAnyAttributeObjectByFilter(f.m_filterModel);
+		if (attr == nullptr)
+			continue;
+		composer.Filter(attr->GetName(),
+			f.m_filterComparison == ibComparisonType_NotEqual ? wxT("<>") : wxT("="),
+			f.m_filterValue);
+	}
+}
+
+// Record (catalog / enum / folder) variant — reference sorts are skipped exactly
+// as on the door path: the uuid identity tail already orders by the row's own
+// reference.
+template <class TMeta>
+static void ApplyListSettings(ibDataComposer& composer, const TMeta* meta,
+                              const ibFilterRow& filters, const ibSortOrder* sorts)
+{
+	composer.ClearSettings();
+	ApplyListFilters(composer, meta, filters);
+	if (sorts == nullptr)
+		return;
+	for (const auto& s : sorts->m_sorts) {
+		if (!s.m_sortEnable)
+			continue;
+		if (meta->IsDataReference(s.m_sortModel))
+			continue;
+		const auto* attr = meta->FindAnyAttributeObjectByFilter(s.m_sortModel);
+		if (attr == nullptr)
+			continue;
+		composer.Sort(attr->GetName(), s.m_sortAscending);
+	}
+}
+
+// Register variant — no row reference exists, so every enabled sort renders;
+// the door appends the register's identity tail (recorder+line / period?+dims)
+// to the rendered ORDER BY, one source of truth (EffectiveSort).
+template <class TMeta>
+static void ApplyRegisterSettings(ibDataComposer& composer, const TMeta* meta,
+                                  const ibFilterRow& filters, const ibSortOrder& sorts)
+{
+	composer.ClearSettings();
+	ApplyListFilters(composer, meta, filters);
+	for (const auto& s : sorts.m_sorts) {
+		if (!s.m_sortEnable)
+			continue;
+		const auto* attr = meta->FindAnyAttributeObjectByFilter(s.m_sortModel);
+		if (attr == nullptr)
+			continue;
+		composer.Sort(attr->GetName(), s.m_sortAscending);
+	}
+}
+
 ibFetchResponse<ibGuid, ibValueListDataObjectEnumRef::ibValueTableEnumRow>
 ibValueListDataObjectEnumRef::Fetch(const ibFetchRequest<ibGuid>& req) const
 {
@@ -70,40 +100,39 @@ ibValueListDataObjectEnumRef::Fetch(const ibFetchRequest<ibGuid>& req) const
 	if (db == nullptr || !db->IsOpen())
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	const wxString& tableName = m_metaObject->GetTableNameDB();
-	const int       fetchN    = req.m_count > 0 ? req.m_count + 1 : 1024;
-
-	
-
-	// L3 read entry — filter via Where. The enum order is a METADATA concern
-	// (parent position), not a DB column, so we fetch unordered and sort in RAM
-	// below: a single batch (the whole fixed list), so no DB-side CASE/WHEN.
-	ibDataQueryBuilder readQuery;          // holder from the current session
-	readQuery.From(m_metaObject->GetQueryable());
-	for (const auto& f : m_filterRow.m_filters) {
-		if (!f.m_filterUse) continue;
-		readQuery.Where(m_metaObject->FindAnyAttributeObjectByFilter(f.m_filterModel),
-		                f.m_filterComparison, f.m_filterValue);
-	}
-
-	ibReadPageRequest page;
-	page.m_count = fetchN;
+	const int fetchN = req.m_count > 0 ? req.m_count + 1 : 1024;
 
 	ibValueMetaObjectAttributePredefined* metaReference = m_metaObject->GetDataReference();
 	ibValueMetaObjectAttributePredefined* metaOrder     = m_metaObject->GetDataOrder();
 
-	ibDataQueryResult selection = readQuery.Execute(page);
-	const ibBackendQueryColumn* keyCol = m_metaObject->GetQueryable()->GetIdentitySort().back().m_col;   // uuid identity column
-	while (selection.Next()) {
-		ibGuid enumGuid = selection.GetValue(keyCol).GetString();
+	// L5 — the composer's source was wired in the ctor; the settings are
+	// re-applied per fetch. The projection is the row's own reference only (it
+	// carries the guid key); the enum order is a METADATA concern (parent
+	// position), not a DB column, so the read is unordered and the RAM sort
+	// below stays.
+	ApplyListSettings(m_composer, m_metaObject, m_filterRow, nullptr);
+	m_composer.Select(metaReference->GetName());
+
+	ibReadPageRequest page;
+	page.m_count = fetchN;
+
+	ibListFetchDriver fetchDriver(page);
+	m_composer.Run(fetchDriver);
+
+	const ibMetaID refID = metaReference->GetMetaID();
+	for (ibListFetchDriver::Row& src : fetchDriver.Rows()) {
+		ibValue refVal = src.GetValue(refID);
+		auto* refObj = dynamic_cast<ibValueReferenceDataObject*>(refVal.GetRef());
+		if (refObj == nullptr)
+			continue;
+		const ibGuid enumGuid = refObj->GetGuid();
 		ibValueTableEnumRow* row = new ibValueTableEnumRow(enumGuid);
-		row->AppendTableValue(metaReference->GetMetaID(), selection.GetValue(metaReference));
+		row->AppendTableValue(refID, refVal);
 		row->AppendTableValue(
 			metaOrder->GetMetaID(),
 			m_metaObject->FindEnumObjectByFilter(enumGuid)->GetParentPosition());
 		resp.m_rows.push_back(row);
 	}
-	// selection's destructor closes the cursor + statement (RAII).
 
 	// Order by parent position (metadata) — only if a reference sort is enabled;
 	// its direction picks ASC/DESC. Was an SQL CASE/WHEN built from the same
@@ -188,41 +217,15 @@ ibValueListDataObjectRef::Fetch(const ibFetchRequest<ibGuid>& req) const
 
 	const int fetchN = req.m_count + 1;   // +1 probe row → hasMore.
 
-	// 1-2. (half-)L3 read model: generate L2 by substituting metadata names with
-	// physical names and run it over the session holder. The dialect fork and
-	// the manual positional binding are gone; the anchor rides as a Param so the
-	// SQL text is stable across scroll ticks (docs/query-language-arc.md §18).
-	// The dynamic-list layer translates its UI filter/sort into query-native
-	// conditions — ibFilterRow/ibSortOrder are NOT query types.
 	const bool hasAnchor = !req.m_anchor.m_empty;
 	const bool reverse   = (req.m_direction == ibFetchDirection::Backward);
 
-	// Build the query AND the build-once cache signature in one pass. The
-	// signature captures every SQL-determining input (filter fields/ops/values,
-	// sort, count, direction, anchor presence); a non-signable filter value
-	// disables caching (cacheable=false) for correctness.
-	ibDataQueryBuilder readQuery;   // holder pulled from the current session
-	readQuery.From(m_metaObject->GetQueryable());
-
-	wxString sig;
-	bool cacheable = true;
-	sig << wxT("c") << fetchN << wxT("d") << static_cast<int>(req.m_direction)
-	    << wxT("a") << (hasAnchor ? 1 : 0) << wxT("r") << (reverse ? 1 : 0) << wxT("|F");
-	for (const auto& f : m_filterRow.m_filters) {
-		if (!f.m_filterUse) continue;
-		readQuery.Where(m_metaObject->FindAnyAttributeObjectByFilter(f.m_filterModel),
-		                f.m_filterComparison, f.m_filterValue);
-		if (!ValueSignable(f.m_filterValue)) cacheable = false;
-		sig << wxT(";") << f.m_filterModel << wxT(":")
-		    << static_cast<int>(f.m_filterComparison) << wxT("=") << ValueSig(f.m_filterValue);
-	}
-	sig << wxT("|S");
-	for (const auto& s : m_sortOrder.m_sorts) {
-		if (!s.m_sortEnable) continue;
-		if (m_metaObject->IsDataReference(s.m_sortModel)) continue;   // the uuid identity tail already orders by the row's own reference
-		readQuery.OrderBy(m_metaObject->FindAnyAttributeObjectByFilter(s.m_sortModel), s.m_sortAscending);
-		sig << wxT(";") << s.m_sortModel << (s.m_sortAscending ? wxT("+") : wxT("-"));
-	}
+	// L5 — the composer's source was wired in the ctor; user filters / sorts are
+	// re-applied per fetch in the user vocabulary and RENDER into the query text.
+	// The build-once page cache (Lever 1) now lives INSIDE the composer: the
+	// signature is the rendered text + the page shape + the parameter values, and
+	// a scroll tick re-renders the same text — no re-parse, the anchor rebinds.
+	ApplyListSettings(m_composer, m_metaObject, m_filterRow, &m_sortOrder);
 
 	ibReadPageRequest page;
 	page.m_direction        = req.m_direction;
@@ -232,31 +235,30 @@ ibValueListDataObjectRef::Fetch(const ibFetchRequest<ibGuid>& req) const
 	page.m_count            = fetchN;
 	page.m_reverseSort      = reverse;
 
-	// 3. Open the L3 selection and materialise rows. The selection yields ready
-	// ibValue (the raw cursor is hidden inside it); its dtor releases the holder.
 	const std::vector<ibValueMetaObjectAttributeBase*>& vecAttr =
 		m_metaObject->GetGenericAttributeArrayObject();
 	ibValueMetaObjectAttributePredefined* metaReference =
 		m_metaObject->GetDataReference();
 
-	if (!m_pageCache) m_pageCache = ibDataQueryBuilder::NewPageCache();
-	ibDataQueryResult selection = cacheable
-		? readQuery.Execute(page, *m_pageCache, sig)
-		: readQuery.Execute(page);
-	const ibBackendQueryColumn* keyCol = m_metaObject->GetQueryable()->GetIdentitySort().back().m_col;   // uuid identity column
-	while (selection.Next()) {
-		ibValueTableListRow* row =
-			new ibValueTableListRow(selection.GetValue(keyCol).GetString());
+	ibListFetchDriver fetchDriver(page);
+	m_composer.Run(fetchDriver);
+
+	const ibMetaID refID = metaReference->GetMetaID();
+	for (ibListFetchDriver::Row& src : fetchDriver.Rows()) {
+		ibValue refVal = src.GetValue(refID);
+		auto* refObj = dynamic_cast<ibValueReferenceDataObject*>(refVal.GetRef());
+		if (refObj == nullptr)
+			continue;
+		ibValueTableListRow* row = new ibValueTableListRow(refObj->GetGuid());
 		for (auto& attr : vecAttr) {
 			if (m_metaObject->IsDataReference(attr->GetMetaID()))
 				continue;
-			row->AppendTableValue(attr->GetMetaID(), selection.GetValue(attr));
+			row->AppendTableValue(attr->GetMetaID(), src.GetValue(attr->GetMetaID()));
 		}
-		// The reference column goes through the same accessor.
-		row->AppendTableValue(metaReference->GetMetaID(), selection.GetValue(metaReference));
+		// The reference column rides the same map — it carried the key above.
+		row->AppendTableValue(refID, refVal);
 		resp.m_rows.push_back(row);
 	}
-	// selection's destructor closes the cursor + statement (RAII).
 
 	// 4. hasMore via the +1 probe row.
 	if (static_cast<int>(resp.m_rows.size()) > req.m_count) {
@@ -391,36 +393,15 @@ ibValueListRegisterObject::Fetch(const ibFetchRequest<ibUniqueKeyPair>& req) con
 
 	const int fetchN = req.m_count > 0 ? req.m_count + 1 : 8192;
 
-	// (half-)L3 read model: the register is queried through the SAME universal
-	// door as catalogs. The door appends the register's identity tail
-	// (recorder+line / period?+dimensions) to the user sort via GetIdentitySort,
-	// so the keyset has a total order; the anchor rides as a Param (stable SQL
-	// text across ticks → driver prepared-statement cache hits — L1-fast).
+	// L5 — the register is composed through the SAME rendered text path as the
+	// catalogs. The door appends the register's identity tail (recorder+line /
+	// period?+dimensions) to the rendered ORDER BY via GetIdentitySort, so the
+	// keyset has a total order; the anchor rides in the ENVELOPE and the
+	// composer's internal page cache keeps the SQL build-once across ticks.
 	const bool hasAnchor = !req.m_anchor.m_empty;
 	const bool reverse   = (req.m_direction == ibFetchDirection::Backward);
 
-	ibDataQueryBuilder readQuery;        // holder pulled from the current session
-	readQuery.From(m_metaObject->GetQueryable());
-
-	wxString sig;
-	bool cacheable = true;
-	sig << wxT("c") << fetchN << wxT("d") << static_cast<int>(req.m_direction)
-	    << wxT("a") << (hasAnchor ? 1 : 0) << wxT("r") << (reverse ? 1 : 0) << wxT("|F");
-	for (const auto& f : m_filterRow.m_filters) {
-		if (!f.m_filterUse) continue;
-		readQuery.Where(m_metaObject->FindAnyAttributeObjectByFilter(f.m_filterModel),
-		                f.m_filterComparison, f.m_filterValue);
-		if (!ValueSignable(f.m_filterValue)) cacheable = false;
-		sig << wxT(";") << f.m_filterModel << wxT(":")
-		    << static_cast<int>(f.m_filterComparison) << wxT("=") << ValueSig(f.m_filterValue);
-	}
-	sig << wxT("|S");
-	for (const auto& s : m_sortOrder.m_sorts) {
-		if (!s.m_sortEnable) continue;
-		readQuery.OrderBy(m_metaObject->FindAnyAttributeObjectByFilter(s.m_sortModel),
-		                  s.m_sortAscending);
-		sig << wxT(";") << s.m_sortModel << (s.m_sortAscending ? wxT("+") : wxT("-"));
-	}
+	ApplyRegisterSettings(m_composer, m_metaObject, m_filterRow, m_sortOrder);
 
 	ibReadPageRequest page;
 	page.m_direction        = req.m_direction;
@@ -439,25 +420,24 @@ ibValueListRegisterObject::Fetch(const ibFetchRequest<ibUniqueKeyPair>& req) con
 	const std::vector<ibValueMetaObjectAttributeBase*>& vecDim =
 		m_metaObject->GetGenericDimensionArrayObject();
 
-	if (!m_pageCache) m_pageCache = ibDataQueryBuilder::NewPageCache();
-	ibDataQueryResult selection = cacheable
-		? readQuery.Execute(page, *m_pageCache, sig)
-		: readQuery.Execute(page);
-	while (selection.Next()) {
+	ibListFetchDriver fetchDriver(page);
+	m_composer.Run(fetchDriver);
+
+	for (ibListFetchDriver::Row& src : fetchDriver.Rows()) {
 		ibValueTableKeyRow* row = new ibValueTableKeyRow;
 		if (m_metaObject->HasRecorder()) {
 			ibValueMetaObjectAttributePredefined* attrRecorder = m_metaObject->GetRegisterRecorder();
 			ibValueMetaObjectAttributePredefined* attrLine     = m_metaObject->GetRegisterLineNumber();
 			wxASSERT(attrRecorder && attrLine);
-			row->AppendNodeValue(attrRecorder->GetMetaID(), selection.GetValue(attrRecorder));
-			row->AppendNodeValue(attrLine->GetMetaID(),     selection.GetValue(attrLine));
+			row->AppendNodeValue(attrRecorder->GetMetaID(), src.GetValue(attrRecorder->GetMetaID()));
+			row->AppendNodeValue(attrLine->GetMetaID(),     src.GetValue(attrLine->GetMetaID()));
 		}
 		else {
 			for (auto& dim : vecDim)
-				row->AppendNodeValue(dim->GetMetaID(), selection.GetValue(dim));
+				row->AppendNodeValue(dim->GetMetaID(), src.GetValue(dim->GetMetaID()));
 		}
 		for (auto& attr : vecAttr)
-			row->AppendTableValue(attr->GetMetaID(), selection.GetValue(attr));
+			row->AppendTableValue(attr->GetMetaID(), src.GetValue(attr->GetMetaID()));
 		resp.m_rows.push_back(row);
 	}
 
@@ -651,6 +631,37 @@ BuildTreeRowFromSelection(
 	return row;
 }
 
+// L5 — the composer-path twin of BuildTreeRowFromSelection: the same node off a
+// fetch-driver row (values by attribute metaID). The row guid comes from the
+// data-reference column's VALUE (the uuid raw column is outside the query
+// language). Null when the reference cell did not materialise.
+static ibValueModelTreeDataObjectFolderRef::ibValueTreeListNode*
+BuildTreeRowFromComposed(
+	const ibListFetchDriver::Row& src,
+	const ibValueModelTreeDataObjectFolderRef* owner,
+	const ibValueMetaObjectRecordDataHierarchyMutableRef* meta)
+{
+	auto* metaIsFolder  = meta->GetDataIsFolder();
+	auto* metaReference = meta->GetDataReference();
+
+	ibValue refVal = src.GetValue(metaReference->GetMetaID());
+	auto* refObj = dynamic_cast<ibValueReferenceDataObject*>(refVal.GetRef());
+	if (refObj == nullptr)
+		return nullptr;
+
+	auto* row = new ibValueModelTreeDataObjectFolderRef::ibValueTreeListNode(
+		nullptr,
+		refObj->GetGuid(),
+		const_cast<ibValueModelTreeDataObjectFolderRef*>(owner),
+		src.GetValue(metaIsFolder->GetMetaID()).GetBoolean());
+	for (auto& attribute : meta->GetGenericAttributeArrayObject()) {
+		if (meta->IsDataReference(attribute->GetMetaID())) continue;
+		row->AppendTableValue(attribute->GetMetaID()) = src.GetValue(attribute->GetMetaID());
+	}
+	row->AppendTableValue(metaReference->GetMetaID(), refVal);
+	return row;
+}
+
 }  // namespace
 
 std::vector<ibValueModelTreeDataObjectFolderRef::ibValueTreeListNode*>
@@ -738,12 +749,12 @@ ibValueModelTreeDataObjectFolderRef::ibTreeFetchResponse
 ibValueModelTreeDataObjectFolderRef::FetchWithDirection(
 	const ibTreeFetchArgs& args, ibFetchDirection direction) const
 {
+	// ONE body for First / Next / Prev — the direction is just envelope state
+	// (Backward = inverse scan + the buffer reverses at the end); the query
+	// decides everything else itself.
 	ibTreeFetchResponse resp;
 	auto db = ses_query;
 	if (db == nullptr || !db->IsOpen()) return resp;
-
-	const wxString& tableName = m_metaObject->GetTableNameDB();
-	auto* metaParent          = m_metaObject->GetDataParent();
 
 	// Decode opaque ibDataViewItem → ibGuid + sort col values.  The
 	// composite cursor needs the anchor row's value at every enabled
@@ -772,185 +783,61 @@ ibValueModelTreeDataObjectFolderRef::FetchWithDirection(
 	};
 	const ibGuid parentGuid = extractGuid(args.m_parent);
 	const ibGuid anchorGuid = extractGuid(args.m_viewportAnchor);
-	const std::vector<ibValue> anchorSortValues =
-		extractSortValues(args.m_viewportAnchor);
 
-	// REFDATA column name for the parent ref attribute.
-	wxString refDataField;
-	for (auto& field : ibValueMetaObjectAttributeBase::GetSQLFieldData(metaParent)) {
-		if (field.m_type == ibValueMetaObjectAttributeBase::ibFieldTypes_Reference) {
-			refDataField = field.m_field.m_fieldRefName.m_fieldRefName;
-			break;
-		}
-	}
-	if (refDataField.IsEmpty()) return resp;
+	const bool backward  = (direction == ibFetchDirection::Backward);
+	const bool hasAnchor = anchorGuid.isValid();
+	const int  fetchN    = args.m_count > 0 ? args.m_count + 1 : 21;
 
-	const bool flatScan   = (args.m_parent == s_constIgnoreParent);
-	const bool isTopLevel = !parentGuid.isValid();
-	const bool hasAnchor  = anchorGuid.isValid();
-	const int  fetchN     = args.m_count > 0 ? args.m_count + 1 : 21;
+	// L5 — the composer's source was wired in the ctor; user filters / sorts are
+	// re-applied per fetch and RENDER into the query text. The hierarchy is a
+	// SCOPE on the fetch driver: the model hands the parent COLUMN + the node it
+	// browses, the provider derives the physical field — no field names here.
+	const ibBackendQueryColumn* parentCol = m_metaObject->GetQueryable()->GetParentColumn();
+	if (parentCol == nullptr) return resp;
 
-	// Build via the universal L3 read entry. The dynamic-list layer translates
-	// its filter/sort into query-native conditions; the hierarchy parent filter
-	// rides in the page request (the parent ref blob is built inside
-	// ibMetaIRBuilder::BuildParentRefPredicate — opaque to L2). The empty parent
-	// stays "top-level only"; flatScan drops the parent filter (whole-table walk).
-	ibDataQueryBuilder readQuery;          // holder from the current session
-	readQuery.From(m_metaObject->GetQueryable());
-	for (const auto& f : m_filterRow.m_filters) {
-		if (!f.m_filterUse) continue;
-		readQuery.Where(m_metaObject->FindAnyAttributeObjectByFilter(f.m_filterModel),
-		                f.m_filterComparison, f.m_filterValue);
-	}
-	for (const auto& s : m_sortOrder.m_sorts) {
-		if (!s.m_sortEnable) continue;
-		if (m_metaObject->IsDataReference(s.m_sortModel)) continue;   // the uuid identity tail already orders by the row's own reference
-		readQuery.OrderBy(m_metaObject->FindAnyAttributeObjectByFilter(s.m_sortModel), s.m_sortAscending);
-	}
+	ApplyListSettings(m_composer, m_metaObject, m_filterRow, &m_sortOrder);
 
 	ibReadPageRequest page;
-	page.m_direction      = direction;
-	page.m_count          = fetchN;
-	page.m_reverseSort    = false;            // tree order is not reversed by direction
-	page.m_parentFilter   = true;
-	page.m_parentRefField = refDataField;
-	page.m_parentGuid     = parentGuid;
-	page.m_isTopLevel     = isTopLevel;
-	page.m_flatScan       = flatScan;
-	page.m_hasAnchor      = hasAnchor;
+	page.m_direction   = direction;
+	page.m_count       = fetchN;
+	page.m_reverseSort = backward;            // inverse scan; the buffer reverses below
+	page.m_hasAnchor   = hasAnchor;
 	if (hasAnchor) {
 		page.m_anchorGuid       = wxString(anchorGuid);
-		page.m_anchorSortValues = anchorSortValues;
+		page.m_anchorSortValues = extractSortValues(args.m_viewportAnchor);
 	}
 
-	ibDataQueryResult selection = readQuery.Execute(page);
-	while (selection.Next()) {
+	ibListFetchDriver::ibTreeScope scope;
+	scope.m_parentCol  = parentCol;
+	scope.m_parentGuid = parentGuid;
+	scope.m_flatScan   = (args.m_parent == s_constIgnoreParent);
+
+	ibListFetchDriver fetchDriver(page, scope);
+	m_composer.Run(fetchDriver);
+	for (ibListFetchDriver::Row& src : fetchDriver.Rows()) {
 		if (static_cast<int>(resp.m_rows.size()) > args.m_count) break;
-		resp.m_rows.push_back(BuildTreeRowFromSelection(selection, this, m_metaObject));
+		ibValueTreeListNode* row = BuildTreeRowFromComposed(src, this, m_metaObject);
+		if (row != nullptr)
+			resp.m_rows.push_back(row);
 	}
-	// selection's destructor closes the cursor + statement (RAII).
-	
 
 	if (static_cast<int>(resp.m_rows.size()) > args.m_count) {
 		resp.m_hasMore = true;
 		delete resp.m_rows.back();
 		resp.m_rows.pop_back();
 	}
-	
+	if (backward)
+		std::reverse(resp.m_rows.begin(), resp.m_rows.end());
+
 	return resp;
 }
 
 ibValueModelTreeDataObjectFolderRef::ibTreeFetchResponse
 ibValueModelTreeDataObjectFolderRef::GetPrevFetch(const ibTreeFetchArgs& args) const
 {
-	ibTreeFetchResponse resp;
-	auto db = ses_query;
-	if (db == nullptr || !db->IsOpen()) return resp;
-
-	const wxString& tableName = m_metaObject->GetTableNameDB();
-	auto* metaParent          = m_metaObject->GetDataParent();
-
-	auto extractGuid = [this](const ibDataViewItem& item) -> ibGuid {
-		if (!item.IsOk()) return ibGuid();
-		auto* node = GetViewData<ibValueTreeListNode>(item);
-		return node ? node->GetGuid() : ibGuid();
-	};
-	auto extractSortValues = [this](const ibDataViewItem& item) -> std::vector<ibValue> {
-		std::vector<ibValue> out;
-		auto* node = GetViewData<ibValueTreeListNode>(item);
-		if (node == nullptr) return out;
-		for (const auto& s : m_sortOrder.m_sorts) {
-			if (!s.m_sortEnable) continue;
-			if (m_metaObject->IsDataReference(s.m_sortModel)) continue;
-			// Safe lookup: stub anchors may carry empty m_nodeValues;
-			// GetTableValue would throw out_of_range, GetValue
-			// gracefully leaves `v` empty.
-			ibValue v;
-			node->GetValue(s.m_sortModel, v);
-			out.push_back(v);
-		}
-		return out;
-	};
-	const ibGuid parentGuid = extractGuid(args.m_parent);
-	const ibGuid anchorGuid = extractGuid(args.m_viewportAnchor);
-	const std::vector<ibValue> anchorSortValues =
-		extractSortValues(args.m_viewportAnchor);
-
-	wxString refDataField;
-	for (auto& field : ibValueMetaObjectAttributeBase::GetSQLFieldData(metaParent)) {
-		if (field.m_type == ibValueMetaObjectAttributeBase::ibFieldTypes_Reference) {
-			refDataField = field.m_field.m_fieldRefName.m_fieldRefName;
-			break;
-		}
-	}
-	if (refDataField.IsEmpty()) return resp;
-
-	const bool flatScan   = (args.m_parent == s_constIgnoreParent);
-	const bool isTopLevel = !parentGuid.isValid();
-	const bool hasAnchor  = anchorGuid.isValid();
-	const int  fetchN     = args.m_count > 0 ? args.m_count + 1 : 21;
-
-	// SQL parent filter via 20-byte ibReference blob bind — see
-	// GetNextFetch above for the rationale.  Backward composite
-	// cursor: BuildAnchorPredicate with Backward walks rows BEFORE the
-	// anchor in display order; reverse=true on BuildOrderBy flips
-	// ASC↔DESC across all cols so the result set's leading edge is
-	// the rows immediately before anchor.  std::reverse below restores
-	// natural forward order before returning to the caller.
-	// Mirror GetNextFetch: ibMetaID half is ALWAYS the catalog's own
-	// metaID, even for top-level rows whose logical parent guid is
-	// zero.  Top-level rows are stored with {metaID, zero-guid} per
-	// the FB BINARY(20) reference convention, so binding {0, zero} as
-	// the WHERE parameter never matches and backward fetch silently
-	// returns 0 — visible to the user as "rows above viewport
-	// disappear after refresh" because the bootstrap-issued backward
-	// fetch can't load any predecessors of the saved-top anchor.
-	// Same universal L3 entry as GetNextFetch, but the backward walk scans in
-	// inverse sort order (reverseSort) and the buffer reverses the result below.
-	ibDataQueryBuilder readQuery;          // holder from the current session
-	readQuery.From(m_metaObject->GetQueryable());
-	for (const auto& f : m_filterRow.m_filters) {
-		if (!f.m_filterUse) continue;
-		readQuery.Where(m_metaObject->FindAnyAttributeObjectByFilter(f.m_filterModel),
-		                f.m_filterComparison, f.m_filterValue);
-	}
-	for (const auto& s : m_sortOrder.m_sorts) {
-		if (!s.m_sortEnable) continue;
-		if (m_metaObject->IsDataReference(s.m_sortModel)) continue;   // the uuid identity tail already orders by the row's own reference
-		readQuery.OrderBy(m_metaObject->FindAnyAttributeObjectByFilter(s.m_sortModel), s.m_sortAscending);
-	}
-
-	ibReadPageRequest page;
-	page.m_direction      = ibFetchDirection::Backward;
-	page.m_count          = fetchN;
-	page.m_reverseSort    = true;             // inverse scan; buffer reverses below
-	page.m_parentFilter   = true;
-	page.m_parentRefField = refDataField;
-	page.m_parentGuid     = parentGuid;
-	page.m_isTopLevel     = isTopLevel;
-	page.m_flatScan       = flatScan;
-	page.m_hasAnchor      = hasAnchor;
-	if (hasAnchor) {
-		page.m_anchorGuid       = wxString(anchorGuid);
-		page.m_anchorSortValues = anchorSortValues;
-	}
-
-	ibDataQueryResult selection = readQuery.Execute(page);
-	while (selection.Next()) {
-		if (static_cast<int>(resp.m_rows.size()) > args.m_count) break;
-		resp.m_rows.push_back(BuildTreeRowFromSelection(selection, this, m_metaObject));
-	}
-	// selection's destructor closes the cursor + statement (RAII).
-	
-
-	if (static_cast<int>(resp.m_rows.size()) > args.m_count) {
-		resp.m_hasMore = true;
-		delete resp.m_rows.back();
-		resp.m_rows.pop_back();
-	}
-	std::reverse(resp.m_rows.begin(), resp.m_rows.end());
-	
-	return resp;
+	// The backward page is just envelope state of the ONE fetch body —
+	// Backward sets the inverse scan there and reverses the buffer.
+	return FetchWithDirection(args, ibFetchDirection::Backward);
 }
 
 // Bridge typed Get*Fetch(ibTreeFetchArgs) to the universal virtual on

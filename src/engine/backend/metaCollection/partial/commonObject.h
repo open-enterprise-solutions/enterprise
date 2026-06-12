@@ -1060,6 +1060,7 @@ class BACKEND_API ibRegisterDataQueryable : public ibBackendQueryable {
 public:
 	explicit ibRegisterDataQueryable(const ibValueMetaObjectRegisterData* meta) : m_meta(meta) {}
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column
+	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;   // identity (recorder+line / period) ++ dims ++ generic attrs
 	virtual wxString GetQueryTableName() const override;
 	virtual ibMetaID GetQueryMetaID() const override;
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads

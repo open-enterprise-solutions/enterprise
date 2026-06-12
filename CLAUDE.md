@@ -40,6 +40,7 @@ enterprise/
 │   ├── BUILD.md
 │   ├── ui-palette.md         # Interior-design palette — source of truth for UI colours
 │   ├── uikit.md              # Custom-drawn UI engine (wxUniversal fork + Luna theme)
+│   ├── data-composer.md      # L5 — declarative composition over the query language
 │   └── configuration-compare.md  # Compare/Merge feature — walker, model, Apply paths
 └── src/
     ├── 3rdparty/wxWidgets/  # Submodule

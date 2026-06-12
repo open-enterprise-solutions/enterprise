@@ -225,6 +225,9 @@
     <ClInclude Include="compiler\lambdaQueryAst.h" />
     <ClInclude Include="query\queryableFactory.h" />
     <ClInclude Include="query\queryableHooks.h" />
+    <ClInclude Include="composition\dataComposer.h" />
+    <ClInclude Include="composition\listFetchDriver.h" />
+    <ClInclude Include="system\value\valueComposer.h" />
     <ClInclude Include="system\value\valueQuery.h" />
     <ClInclude Include="system\value\valueQueryable.h" />
     <ClInclude Include="metaCollection\partial\list\objectList.h" />
@@ -578,6 +581,8 @@
     <ClCompile Include="query\queryRewrite.cpp" />
     <ClCompile Include="compiler\lambdaQueryAst.cpp" />
     <ClCompile Include="query\queryableFactory.cpp" />
+    <ClCompile Include="composition\dataComposer.cpp" />
+    <ClCompile Include="system\value\valueComposer.cpp" />
     <ClCompile Include="system\value\valueQuery.cpp" />
     <ClCompile Include="system\value\valueQueryable.cpp" />
     <ClCompile Include="query\queryProvider.cpp" />

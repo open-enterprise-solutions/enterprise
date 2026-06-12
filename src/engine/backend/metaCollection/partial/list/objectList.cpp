@@ -27,6 +27,9 @@ ibValueListDataObject::ibValueListDataObject(const ibValueMetaObjectGenericData*
 			false
 		);
 	}
+	// L5 — wire the composer's source once: the list IS metaobject-bound, and the
+	// metaobject is its own language identity (Kind.Name). Settings come per fetch.
+	m_composer.FromSource(ibValue::GetNameObjectFromID(metaObject->GetClassType()), metaObject->GetName());
 }
 
 ibValueListDataObject::~ibValueListDataObject()
@@ -48,6 +51,8 @@ ibValueModelTreeDataObject::ibValueModelTreeDataObject(const ibValueMetaObjectGe
 			object->CreateValue()
 		);
 	}
+	// L5 — wire the composer's source once (see the list base ctor above).
+	m_composer.FromSource(ibValue::GetNameObjectFromID(metaObject->GetClassType()), metaObject->GetName());
 }
 
 ibValueModelTreeDataObject::~ibValueModelTreeDataObject()

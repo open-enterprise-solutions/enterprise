@@ -1311,6 +1311,16 @@ std::vector<const ibBackendQueryable*> ibRecordQueryable::ResolveReferenceTarget
 // registers — no single row-key; composite identity (recorder+line / period?+dims),
 // carried as real attributes; the consumer assembles the row identity. No reference.
 const ibBackendQueryColumn* ibRegisterDataQueryable::ResolveColumnByName(const wxString& name) const { return m_meta->FindAnyAttributeObjectByFilter(name); }
+std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetColumns() const {
+	// All generic attributes — the register's generic array ALREADY spans the
+	// predefineds (recorder / line / period), the dimensions, the resources and
+	// the plain attributes; each IS-A column. Mirrors ibRecordQueryable. Drives
+	// the L5 composer's default projection and SELECT * of a nested subquery.
+	std::vector<const ibBackendQueryColumn*> cols;
+	for (const ibValueMetaObjectAttributeBase* a : m_meta->GetGenericAttributeArrayObject())
+		cols.push_back(a);
+	return cols;
+}
 wxString ibRegisterDataQueryable::GetQueryTableName() const { return m_meta->GetTableNameDB(); }
 ibMetaID ibRegisterDataQueryable::GetQueryMetaID() const { return m_meta->GetMetaID(); }
 const ibMetaData* ibRegisterDataQueryable::GetMetaData() const { return m_meta->GetMetaData(); }

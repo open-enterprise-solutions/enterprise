@@ -3,10 +3,9 @@
 
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"
+#include "backend/composition/dataComposer.h"
 
 #include <memory>
-
-struct ibRenderedPageCache;   // backend/query/dataQueryBuilder.h — build-once page cache
 
 //base list class
 class BACKEND_API ibValueListDataObject : public ibValueModelTableBase,
@@ -185,11 +184,11 @@ protected:
 	ibGuid m_objGuid;
 	ibValuePtr<ibValueDataObjectListColumnCollection> m_recordColumnCollection;
 
-	// Build-once page-query cache (Lever 1 / docs §20): the L3 door reuses the
-	// resolved identity sort + rendered SQL across scroll ticks, rebinding only
-	// the anchor. Self-invalidating by signature; lazily created on first Fetch.
-	// Lives here so it persists with the model. Flat-list Fetch path only.
-	mutable std::shared_ptr<ibRenderedPageCache> m_pageCache;
+	// L5 — the list's data composer. The source is wired ONCE in the ctor (a
+	// list IS metaobject-bound); the settings (user filters / sorts) are
+	// re-applied per fetch; the fetch driver carries the page envelope. The
+	// build-once page cache (Lever 1) lives INSIDE the composer now.
+	mutable ibDataComposer m_composer;
 };
 
 // list enumeration
@@ -547,7 +546,7 @@ public:
 	// Cursor-paginated.  Effective ORDER BY = [user sorts] ++ [identity
 	// tail], so the anchor (ibUniqueKeyPair + sort values tuple) gives
 	// stable forward / backward cursoring even when the user has
-	// disabled every column-sort.  See registerSqlBuilder.{h,cpp}.
+	// disabled every column-sort.  See EffectiveSortOrder / the L5 fetch.
 	virtual Features GetFeatures() const override {
 		Features f;
 		f.flags |= Features::DbFetch | Features::Filters | Features::Sorting;
@@ -740,6 +739,10 @@ protected:
 
 	ibGuid m_objGuid;
 	ibValuePtr<ibValueDataObjectTreeColumnCollection> m_recordColumnCollection;
+
+	// L5 — the tree's data composer (see the list base above): source once in
+	// the ctor, settings per fetch, the envelope on the fetch driver.
+	mutable ibDataComposer m_composer;
 };
 
 // tree with parent or only parent 
@@ -955,9 +958,9 @@ public:
 	ibTreeFetchResponse GetPrevFetch(const ibTreeFetchArgs& args) const;
 
 private:
-	// Shared backend for GetFirstFetch (Reset = inclusive >=) and
-	// GetNextFetch (Forward = strict >).  GetPrevFetch keeps its own
-	// dedicated path because it reverses the ORDER BY.
+	// The ONE fetch body for First (Reset = inclusive >=) / Next (Forward =
+	// strict >) / Prev (Backward = inverse scan + buffer reverse) — the
+	// direction is envelope state, the composed query decides the rest.
 	ibTreeFetchResponse FetchWithDirection(const ibTreeFetchArgs& args,
 		ibFetchDirection direction) const;
 public:

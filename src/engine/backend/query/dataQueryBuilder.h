@@ -104,7 +104,10 @@ struct ibReadPageRequest
 
 	// --- hierarchy (tree) — optional -------------------------------------
 	bool      m_parentFilter = false;   // filter by parent reference (tree mode)
-	wxString  m_parentRefField;         // physical reference column
+	// The parent-ref COLUMN (preferred — the provider derives the physical field
+	// itself); m_parentRefField is the legacy physical name, used when set.
+	const ibBackendQueryColumn* m_parentCol = nullptr;
+	wxString  m_parentRefField;         // physical reference column (legacy seam)
 	ibGuid    m_parentGuid;             // parent row guid (empty/invalid + isTopLevel = top)
 	bool      m_isTopLevel  = false;    // top-level rows (empty parent)
 	bool      m_flatScan    = false;    // flat-list view of a tree: skip the parent filter

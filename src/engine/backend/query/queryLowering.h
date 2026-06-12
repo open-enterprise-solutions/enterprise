@@ -1,21 +1,25 @@
 #ifndef __QUERY_LOWERING_H__
 #define __QUERY_LOWERING_H__
 
-// L4-1 — lowering: parsed AST + parameter values -> the L3 door (ibDataQueryBuilder),
+// L4 — lowering: AST + parameter values -> the L3 door (ibDataQueryBuilder),
 // executed. This is the metadata layer §14 calls for: it resolves metaobject /
 // attribute NAMES against activeMetaData into queryables / columns, maps AST verbs
 // onto the door, runs it, and returns the selection plus an OUTPUT SCHEMA (what the
 // script sees) for the result wrapper. Runs at EXECUTE time (the &parameter values
 // must be known), so one parse feeds many executes.
 //
-// MVP subset (the L3 door's current capability): single source (Catalog/Document/
-// Register records), projected columns + reference dot-walk (SelectPath), WHERE as an
-// AND-chain of comparisons / LIKE / BETWEEN, ORDER BY, DISTINCT, and flat GROUP BY
-// aggregates. Constructs the door supports but the lowering does NOT yet map throw a
-// clear "not yet supported" with the source span: OR / IN / IS NULL / NOT in WHERE,
-// JOIN, virtual tables (.Balance/…), dot-walk in WHERE/ORDER, and hierarchical TOTALS
-// EXECUTION (the tree result wrapper is the next sub-step). As the door grows, this
-// grows with it — the parser already accepts the full grammar.
+// BOTH L4 front-ends lower through here: L4-1 (the text query language — the parser's
+// ibQuerySelect AST via Execute / ExecuteTotals) and L4-2 (LINQ push-down — the lambda
+// recorder's ibQueryAstExpr via LowerLambdaPredicate / LowerLambdaColumnPath, reusing
+// the same builders; bail = empty, the fold falls back to RAM). L5 (the data composer)
+// reaches it only THROUGH rendered L4-1 text — never as a third entry.
+//
+// The executable subset has long outgrown the MVP: full boolean WHERE (OR / IN /
+// IS NULL / NOT, predicate tree), JOIN / subquery sources / UNION, register virtual
+// tables with source args, dot-walk across projection / WHERE / ORDER / aggregates,
+// flat GROUP BY + HAVING, hierarchical TOTALS, TOP, and the optimizer rewrite pass.
+// The realized state lives in docs/query-language-arc.md §23.4 / §23.8 / §23.9 —
+// grow that doc, not this list.
 //
 // See docs/query-language-arc.md §14 / §22 / §23.
 
@@ -54,6 +58,36 @@ public:
 	static ibDataQueryResult Execute(const ibQuerySelect& ast,
 	                                 const std::map<wxString, ibValue>& params,
 	                                 std::vector<OutputColumn>& outSchema);
+
+	// The PAGED read — the same lowering with an external page ENVELOPE (anchor /
+	// direction / count) threaded into the door's terminal. This is how a paged
+	// consumer (the L5 list driver) cursors a query WITHOUT any grammar change; a
+	// `TOP n` in the text still caps the page (the smaller count wins). The envelope
+	// applies to the plain SELECT path only — an aggregate / UNION read ignores it
+	// (no row cursor to anchor).
+	static ibDataQueryResult Execute(const ibQuerySelect& ast,
+	                                 const std::map<wxString, ibValue>& params,
+	                                 std::vector<OutputColumn>& outSchema,
+	                                 const ibReadPageRequest& page);
+
+	// The paged read WITH the build-once page cache (Lever 1, docs §20): the door
+	// reuses the rendered SQL keyed by `signature`, rebinding only the anchor.
+	// The caller owns the cache and the signature (it must capture every
+	// SQL-determining input — the L5 composer signs its rendered text + params).
+	static ibDataQueryResult Execute(const ibQuerySelect& ast,
+	                                 const std::map<wxString, ibValue>& params,
+	                                 std::vector<OutputColumn>& outSchema,
+	                                 const ibReadPageRequest& page,
+	                                 ibRenderedPageCache& cache, const wxString& signature);
+
+private:
+	static ibDataQueryResult ExecuteImpl(const ibQuerySelect& ast,
+	                                     const std::map<wxString, ibValue>& params,
+	                                     std::vector<OutputColumn>& outSchema,
+	                                     const ibReadPageRequest& page,
+	                                     ibRenderedPageCache* cache, const wxString& signature);
+
+public:
 
 	// Hierarchical TOTALS read — builds the door's Totals()/TotalBy()/aggregates and runs ONE read,
 	// returning the result with the totals config STAMPED (the runtime's QueryResult.Select() folds it
