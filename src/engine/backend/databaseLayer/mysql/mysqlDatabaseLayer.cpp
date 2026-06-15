@@ -362,38 +362,6 @@ void ibDatabaseLayerMySQL::DoRollBack()
 
 // IsActiveTransaction inherits the base-class default (m_txDepth > 0).
 
-bool ibDatabaseLayerMySQL::TryProbeRowLock(const wxString& tableName,
-                                            const wxString& pkColumn,
-                                            const wxString& pkValue)
-{
-	// MySQL 8+ supports `SELECT ... FOR UPDATE NOWAIT`; older servers
-	// ignore the NOWAIT keyword but honour the session-level
-	// `innodb_lock_wait_timeout = 1` set inside BeginTransaction({noWait}).
-	// Either path turns a contended row into an exception within ~1s.
-	try { BeginTransaction({ /*.noWait=*/true }); }
-	catch (...) { return false; }
-
-	const wxString sql = wxT("SELECT ") + pkColumn + wxT(" FROM ")
-		+ tableName + wxT(" WHERE ") + pkColumn
-		+ wxT(" = ? FOR UPDATE NOWAIT");
-	ibPreparedStatement* stmt = DoPrepareStatement(sql);
-	bool gotLock = false;
-	if (stmt) {
-		stmt->SetParamString(1, pkValue);
-		try {
-			ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
-			if (rs) {
-				if (rs->Next()) gotLock = true;
-				rs->Close();
-				CloseResultSet(rs);
-			}
-		}
-		catch (...) { gotLock = false; }
-		CloseStatement(stmt);
-	}
-	try { RollBack(); } catch (...) { /* swallowed: TryProbeRowLock always rolls back so no lock survives — failure here means lock is gone anyway */ }
-	return gotLock;
-}
 
 // query database
 int ibDatabaseLayerMySQL::DoRunQuery(const wxString& strQuery, bool bParseQuery)

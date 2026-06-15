@@ -3,8 +3,7 @@
 #include "backend/query/schemaBuilder.h"                  // ibSchemaBuilder — Execute / RunOrDefer / barrier
 #include "backend/query/queryable.h"                      // ibBackendQueryable — GetQueryTableName / GetMetaData
 #include "backend/query/queryColumn.h"                    // ibBackendQueryColumn — GetTypeDesc / GetPhysicalName
-#include "backend/databaseLayer/databaseLayer.h"          // db_query (the type-removal data cleanups)
-#include "backend/appData.h"                              // db_query
+#include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — ibUpdate / ibDelete / Execute (the type-removal data cleanups)
 #include "backend/databaseLayer/databaseErrorCodes.h"     // DATABASE_LAYER_QUERY_RESULT_ERROR
 
 #include <set>
@@ -200,8 +199,10 @@ bool DescContainsClsid(const ibTypeDescription& td, const ibClassID& clsid)
 int ClearRowsOfType(const wxString& tableName, const wxString& fieldName, int typeTag)
 {
 	const wxString typeCol = fieldName + ibFieldSuffix(ibColumnRole::Discriminator);
-	return db_query->RunQuery(wxT("UPDATE ") + tableName + wxT(" SET ") + typeCol + wxT(" = 0 WHERE ")
-	                          + typeCol + wxString::Format(wxT(" = %i"), typeTag));
+	ibDatabaseQueryBuilder q;
+	return q.Execute(ibUpdate(tableName,
+		{ { typeCol, ibConst(ibValue(0)) } },
+		ibBinOp(ibQueryBinOp::Eq, ibCol(typeCol), ibConst(ibValue(typeTag)))));
 }
 
 } // namespace
@@ -293,9 +294,12 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 	if (!currentRef.empty()) {
 		const wxString typeCol = fieldName + ibFieldSuffix(ibColumnRole::Discriminator);
 		const wxString refCol  = fieldName + ibFieldSuffix(ibColumnRole::ReferenceType);
+		ibDatabaseQueryBuilder q;
 		for (auto clsid : removedRef) {
-			wxString clsStr; clsStr << clsid;
-			retCode = db_query->RunQuery(wxT("UPDATE ") + tableName + wxT(" SET ") + typeCol + wxT(" = 0 WHERE ") + refCol + wxT(" = ") + clsStr);
+			// clsid is a 64-bit ibClassID — bind through ibNumber, NOT ibValue(wxLongLong_t) (that ctor is Date).
+			retCode = q.Execute(ibUpdate(tableName,
+				{ { typeCol, ibConst(ibValue(0)) } },
+				ibBinOp(ibQueryBinOp::Eq, ibCol(refCol), ibConst(ibValue(ibNumber(clsid))))));
 			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
 				return retCode;
 		}

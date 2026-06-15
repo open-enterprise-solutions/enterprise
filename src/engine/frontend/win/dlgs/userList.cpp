@@ -1,5 +1,5 @@
 #include "userList.h"
-#include "backend/databaseLayer/databaseLayer.h"
+#include "backend/userInfo.h"   // sys_user DAO — the frontend reads/deletes users through the backend, not raw SQL
 #include "frontend/win/theme/luna_toolbarart.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/appData.h"
@@ -14,42 +14,32 @@ public:
 	ibUserListModel() { PrepareData(); }
 
 	void PrepareData() {
-		m_aUsersData.clear();
-		ibDatabaseResultSet* resultSet =
-			db_query->RunQueryWithResults("SELECT guid FROM %s;", user_table);
-		while (resultSet->Next()) {
-			m_aUsersData.push_back(
-				resultSet->GetResultString("guid")
-			);
-		}
-		resultSet->Close();
+		// One backend round-trip projects every row to a Brief; the cells then read from this cache
+		// instead of firing a SELECT per cell render (the old GetValueByRow hit the DB on every paint).
+		m_aUsersData = ibUserInfo::ListAll();
 		Reset(m_aUsersData.size());
 	}
 
 	void DeleteRow(const ibDataViewItem& item) {
 		unsigned int row = GetRow(item);
-		db_query->RunQuery("DELETE FROM %s WHERE guid = '%s';", user_table, m_aUsersData[row].str());
+		ibUserInfo::Delete(ibGuid(m_aUsersData[row].m_strUserGuid));
 		m_aUsersData.erase(m_aUsersData.begin() + row);
 	}
 
 	ibGuid GetGuidByRow(const ibDataViewItem& item) const {
-		return m_aUsersData.at(GetRow(item));
+		return ibGuid(m_aUsersData.at(GetRow(item)).m_strUserGuid);
 	}
 
 	// Implement base class pure virtual methods.
 	unsigned GetCount() const override { return m_aUsersData.size(); }
 
 	void GetValueByRow(wxVariant& val, unsigned row, unsigned col) const override {
-		ibDatabaseResultSet* resultSet = db_query->RunQueryWithResults("SELECT name, fullName FROM %s WHERE guid = '%s';", user_table, m_aUsersData[row].str());
-		if (resultSet->Next()) {
-			if (col == colUserName) {
-				val = resultSet->GetResultString("name");
-			}
-			else if (col == colUserFullName) {
-				val = resultSet->GetResultString("fullName");
-			}
-		}
-		resultSet->Close();
+		if (row >= m_aUsersData.size())
+			return;
+		if (col == colUserName)
+			val = m_aUsersData[row].m_strUserName;
+		else if (col == colUserFullName)
+			val = m_aUsersData[row].m_strUserFullName;
 	}
 
 	bool SetValueByRow(const wxVariant&, unsigned, unsigned) override {
@@ -57,7 +47,7 @@ public:
 	}
 
 private:
-	std::vector<ibGuid> m_aUsersData;
+	std::vector<ibUserInfo::Brief> m_aUsersData;
 };
 
 enum {

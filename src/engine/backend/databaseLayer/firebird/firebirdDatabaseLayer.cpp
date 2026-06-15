@@ -43,6 +43,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		// NUMERIC holds a wider range than DECIMAL (INT128-backed) — matches ibNumber.
 		d.m_typeNumberPattern = wxT("NUMERIC(%d,%d)");
 		d.m_rowLockSuffix     = wxT(" WITH LOCK");     // FB pessimistic row lock (not FOR UPDATE)
+		d.m_rowLockNoWaitSuffix = wxEmptyString;       // FB has no FOR UPDATE NOWAIT — noWait rides the TX (isc_tpb_nowait)
 		d.m_ddlCommitBeforeData = true;                // legacy isc_* API can't mix CREATE/ALTER + bound INSERT in one TX
 		return d;
 	}();
@@ -628,7 +629,7 @@ void ibDatabaseLayerFirebird::DoBeginTransaction(const ibTxOptions& opts)
 	// TPB layouts (read-committed / no-rec-version, the OES default).
 	// Wait vs nowait drives whether SELECT ... WITH LOCK contention
 	// blocks or surfaces immediately as a lock-conflict exception —
-	// TryProbeRowLock uses the latter.
+	// non-blocking acquires (ibTxOptions::noWait) use the latter.
 	//
 	//   ISOLATION_READ_UNCOMMITTED         = version3, write, wait,   read_committed, rec_version
 	//   ISOLATION_READ_COMMITTED           = version3, write, wait,   read_committed, no_rec_version
@@ -724,144 +725,6 @@ void ibDatabaseLayerFirebird::DoRollBack()
 // the counter on the base is the source of truth and matches the
 // drivers that don't have a native handle to probe.
 
-// --- Row-level pessimistic locks -----------------------------------------
-
-bool ibDatabaseLayerFirebird::HoldRowLocks(const wxString& tableName,
-                                          const wxString& pkColumn,
-                                          const std::vector<wxString>& pkValues)
-{
-	// Outer TX would hijack the row-lock semantics: BeginTransaction
-	// below only bumps the depth counter, the SELECT WITH LOCK then
-	// runs inside the caller's TX and the locks live until *that* TX
-	// commits — not until ReleaseRowLocks(). Refuse rather than silently
-	// produce wrong cluster-coordination behaviour.
-	if (IsActiveTransaction() && !m_rowLocksHeld)
-		return false;
-
-	// A previous hold must be committed before we stack a fresh one —
-	// otherwise two TXs would both target sys_session and their commits
-	// would interleave in unhelpful ways.
-	if (m_rowLocksHeld) {
-		try { Commit(); } catch (...) {
-			try { RollBack(); } catch (...) { /* swallowed: rollback after commit fail — TX state already lost, nothing else to do */ }
-		}
-		m_rowLocksHeld = false;
-	}
-
-	if (pkValues.empty()) return true;
-
-	try {
-		BeginTransaction();
-	}
-	catch (...) {
-		return false;
-	}
-
-	// Build the IN-list with placeholders so driver escapes values (guids
-	// are trusted, but use the same code path as the rest of sys_session).
-	wxString sql = wxT("SELECT ") + pkColumn + wxT(" FROM ") + tableName + wxT(" WHERE ") + pkColumn + wxT(" IN (");
-	for (std::size_t i = 0; i < pkValues.size(); ++i) {
-		if (i) sql += wxT(",");
-		sql += wxT("?");
-	}
-	sql += wxT(") WITH LOCK");
-
-	ibPreparedStatement* stmt = DoPrepareStatement(sql);
-	if (!stmt) {
-		try { RollBack(); } catch (...) { /* swallowed: rollback on prepare-fail path, TX may not even have started */ }
-		return false;
-	}
-
-	for (std::size_t i = 0; i < pkValues.size(); ++i)
-		stmt->SetParamString(int(i + 1), pkValues[i]);
-
-	int lockedCount = 0;
-	bool sqlOk = false;
-	try {
-		ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
-		if (rs) {
-			while (rs->Next()) ++lockedCount;
-			rs->Close();
-			CloseResultSet(rs);
-		}
-		sqlOk = true;
-	}
-	catch (...) {
-		sqlOk = false;
-	}
-	CloseStatement(stmt);
-
-	if (!sqlOk || lockedCount != int(pkValues.size())) {
-		try { RollBack(); } catch (...) { /* swallowed: rollback on partial-lock-acquisition fail; caller treats false as "no lock" */ }
-		return false;
-	}
-
-	m_rowLocksHeld = true;
-	return true;
-}
-
-void ibDatabaseLayerFirebird::ReleaseRowLocks()
-{
-	if (!m_rowLocksHeld) return;
-	try {
-		Commit();
-	}
-	catch (...) {
-		// Commit failed — TX may still be open and holding locks.
-		// Try a rollback so the cluster coordination row isn't left
-		// pinned by a dead-but-uncommitted TX of ours.
-		try { RollBack(); } catch (...) { /* swallowed: rollback after commit fail — TX state already lost, nothing left to do */ }
-	}
-	m_rowLocksHeld = false;
-}
-
-bool ibDatabaseLayerFirebird::TryProbeRowLock(const wxString& tableName,
-                                              const wxString& pkColumn,
-                                              const wxString& pkValue)
-{
-	// Probing inside an outer TX is meaningless: the inner Begin only
-	// bumps the depth counter, the SELECT WITH LOCK then runs in the
-	// caller's wait-mode TX and would block instead of failing fast.
-	// Caller would also poison its own TX on conflict. Refuse.
-	if (IsActiveTransaction())
-		return false;
-
-	// NOWAIT transaction so contention surfaces as an exception on
-	// RunQueryWithResults — no sit-and-wait.
-	try {
-		BeginTransaction({ /*.noWait=*/true });
-	}
-	catch (...) {
-		return false;
-	}
-
-	wxString sql = wxT("SELECT ") + pkColumn + wxT(" FROM ") + tableName + wxT(" WHERE ") + pkColumn + wxT(" = ? WITH LOCK");
-	ibPreparedStatement* stmt = DoPrepareStatement(sql);
-	bool gotLock = false;
-	if (stmt) {
-		stmt->SetParamString(1, pkValue);
-		try {
-			ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
-			if (rs) {
-				// Row exists AND we successfully took its lock → no other
-				// connection holds it (NOWAIT would have thrown otherwise).
-				if (rs->Next()) gotLock = true;
-				rs->Close();
-				CloseResultSet(rs);
-			}
-		}
-		catch (...) {
-			// Lock conflict (owner still alive on another connection) or
-			// transient DB error — either way, don't touch the row.
-			gotLock = false;
-		}
-		CloseStatement(stmt);
-	}
-
-	// Always release — probe must never keep a lock outliving the call.
-	try { RollBack(); } catch (...) { /* swallowed: TryProbeRowLock always rolls back so no lock survives — failure here means lock is gone anyway */ }
-	return gotLock;
-}
 
 // query database
 int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQuery)

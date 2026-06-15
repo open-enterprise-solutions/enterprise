@@ -1793,7 +1793,8 @@ protected:
 	//
 	// Two-layer defence (see docs/record-locks.md):
 	//   Layer 1 — issues `SELECT DataVersion FROM <tbl> WHERE uuid = ?
-	//             <RowLockHint>` inside the current TX. The driver-side
+	//             <FOR UPDATE>` inside the current TX (m_lockForUpdate; the dialect renders the
+	//             clause from m_rowLockSuffix). The driver-side
 	//             row-lock pins the row until the surrounding scope
 	//             Commit/Rollback fires; concurrent writers block (or
 	//             fail-fast under NOWAIT TX options).

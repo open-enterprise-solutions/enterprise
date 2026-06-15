@@ -8,6 +8,7 @@
 #include "backend/guid.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseLayer.h"
+#include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — q(&m_writeHolder) resolves to the holder's bound conn (write helpers); snapshot reads still raw
 #include "workerPool.h"
 #include "workerPoolHeadless.h"
 #include "backend/lock/lockManager.h"
@@ -277,14 +278,10 @@ void ibSessionRegistry::Start()
 	// heartbeat-on-lastActive model — see "HoldRowLocks self-deadlock"
 	// memory note. Frees a pool slot for productive use.
 	if (m_ownsSysSession) {
-		// Each conn through its own holder identity — write-channel
-		// and probe-channel are distinct so any future scope-binding
-		// (or diagnostics that key on holder address) sees two
-		// separate registry tags instead of one shared one. Sharing
-		// a holder would also mean a future BindScopeHolder for one
-		// conn would refuse to bind the other (first-bind-wins).
-		m_writeConn = m_writeHolder.AcquireFreeConnection();
-		m_probeConn = m_probeHolder.AcquireFreeConnection();
+		// EnsureConnection (not AcquireFreeConnection) BINDS the conn to its holder — so a query door
+		// opened with q(&m_writeHolder) resolves to exactly this conn via GetScopeConn. FB self-heal
+		// still acts on the same object after a leader handoff.
+		m_writeConn = m_writeHolder.EnsureConnection();
 	}
 
 	m_stop.store(false, std::memory_order_release);
@@ -404,11 +401,9 @@ void ibSessionRegistry::Stop()
 		}
 	}
 
-	// Drop pool checkouts. shared_ptr custom deleter on pool connections
-	// reparks them on the pool's idle list — no explicit pool-side
-	// Return call needed.
+	// Drop the pool checkout. shared_ptr custom deleter on pool connections
+	// reparks it on the pool's idle list — no explicit pool-side Return needed.
 	m_writeConn.reset();
-	m_probeConn.reset();
 }
 
 // --- Submit / Drain ------------------------------------------------------
@@ -838,12 +833,8 @@ std::shared_ptr<ibSession> ibSessionRegistry::GetActiveDebugTarget() const
 
 // --- Handlers ------------------------------------------------------------
 
-static bool InsertSessionRow(ibDatabaseLayer* db, const ibSession& s, const wxString& userName)
+static bool InsertSessionRow(ibDatabaseConnectionHolder& holder, const ibSession& s, const wxString& userName)
 {
-	if (db == nullptr) {
-		SESSION_LOG("[session INSERT] skip — db is null");
-		return false;
-	}
 	const ibSessionIdentity& id = s.Identity();
 
 	// Primary INSERT — core 6 columns present in every sys_session
@@ -854,23 +845,16 @@ static bool InsertSessionRow(ibDatabaseLayer* db, const ibSession& s, const wxSt
 	// INSERT would throw on unknown column and leave the session
 	// unregistered, which breaks Active Users listings across the
 	// cluster).
-	ibStatementGuard stmt(db,
-		db->PrepareStatement(
-			wxT("INSERT INTO %s (session, userName, application, started, lastActive, computer) ")
-			wxT("VALUES (?, ?, ?, ?, ?, ?);"),
-			session_table));
-	if (!stmt) {
-		SESSION_LOG("[session INSERT] PrepareStatement returned null");
-		return false;
-	}
-	stmt->SetParamString(1, s.GetId());
-	stmt->SetParamString(2, userName);
-	stmt->SetParamInt   (3, int(id.m_appMode));
-	stmt->SetParamDate  (4, id.m_started);
-	stmt->SetParamDate  (5, id.m_started);
-	stmt->SetParamString(6, id.m_computer);
+	ibDatabaseQueryBuilder q(&holder);   // resolves to the holder's bound conn (= m_writeConn) via GetScopeConn
 	try {
-		stmt->RunQuery();
+		q.Execute(ibInsert(session_table, {
+			{ wxT("session"),     ibConst(ibValue(s.GetId())) },
+			{ wxT("userName"),    ibConst(ibValue(userName)) },
+			{ wxT("application"), ibConst(ibValue(int(id.m_appMode))) },
+			{ wxT("started"),     ibConst(ibValue(id.m_started)) },
+			{ wxT("lastActive"),  ibConst(ibValue(id.m_started)) },
+			{ wxT("computer"),    ibConst(ibValue(id.m_computer)) },
+		}));
 		SESSION_LOG("[session INSERT] ok guid=" << s.GetId()
 		          << " user='" << (const char*)userName.ToUTF8().data() << "'"
 		          << " mode=" << int(id.m_appMode));
@@ -888,45 +872,37 @@ static bool InsertSessionRow(ibDatabaseLayer* db, const ibSession& s, const wxSt
 	// Best-effort population of extension columns — silently skipped
 	// when the schema pre-dates them. MigrateTableSession tries to
 	// add the columns on startup; this is the follow-up writer.
-	ibStatementGuard stmtExt(db,
-		db->PrepareStatement(
-			wxT("UPDATE %s SET pid = ?, address = ?, kind = ? WHERE session = ?;"),
-			session_table));
-	if (stmtExt) {
-		stmtExt->SetParamInt   (1, id.m_pid);
-		stmtExt->SetParamString(2, id.m_address);
-		stmtExt->SetParamInt   (3, int(s.GetKind()));
-		stmtExt->SetParamString(4, s.GetId());
-		try { stmtExt->RunQuery(); } catch (...) { /* legacy schema — fine */ }
-	}
+	try {
+		q.Execute(ibUpdate(session_table, {
+			{ wxT("pid"),     ibConst(ibValue(id.m_pid)) },
+			{ wxT("address"), ibConst(ibValue(id.m_address)) },
+			{ wxT("kind"),    ibConst(ibValue(int(s.GetKind()))) },
+		}, ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(s.GetId())))));
+	} catch (...) { /* legacy schema — fine */ }
 
 	return true;
 }
 
-static bool UpdateSessionUser(ibDatabaseLayer* db, const wxString& guidStr, const wxString& userName, const wxString& userGuid)
+static bool UpdateSessionUser(ibDatabaseConnectionHolder& holder, const wxString& guidStr, const wxString& userName, const wxString& userGuid)
 {
-	if (db == nullptr) return false;
-	ibStatementGuard stmt(db,
-		db->PrepareStatement(
-			wxT("UPDATE %s SET userName = ? WHERE session = ?;"),
-			session_table));
 	(void)userGuid;   // schema currently has no userGuid column — placeholder for when we add it
-	if (!stmt) return false;
-	stmt->SetParamString(1, userName);
-	stmt->SetParamString(2, guidStr);
-	try { stmt->RunQuery(); return true; } catch (...) { return false; }
+	try {
+		ibDatabaseQueryBuilder q(&holder);
+		q.Execute(ibUpdate(session_table,
+			{ { wxT("userName"), ibConst(ibValue(userName)) } },
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(guidStr)))));
+		return true;
+	} catch (...) { return false; }
 }
 
-static bool DeleteSessionRow(ibDatabaseLayer* db, const wxString& guidStr)
+static bool DeleteSessionRow(ibDatabaseConnectionHolder& holder, const wxString& guidStr)
 {
-	if (db == nullptr) return false;
-	ibStatementGuard stmt(db,
-		db->PrepareStatement(
-			wxT("DELETE FROM %s WHERE session = ?;"),
-			session_table));
-	if (!stmt) return false;
-	stmt->SetParamString(1, guidStr);
-	try { stmt->RunQuery(); return true; } catch (...) { return false; }
+	try {
+		ibDatabaseQueryBuilder q(&holder);
+		q.Execute(ibDelete(session_table,
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(guidStr)))));
+		return true;
+	} catch (...) { return false; }
 }
 
 void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
@@ -1032,7 +1008,7 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 	// JobSweepStale) as zombies.
 	if (m_ownsSysSession && m_writeConn) {
 		if (s.Identity().m_expectsAnonPhase) {
-			if (InsertSessionRow(m_writeConn.get(), s, /*userName=*/wxEmptyString)) {
+			if (InsertSessionRow(m_writeHolder, s, /*userName=*/wxEmptyString)) {
 				s.SetInserted(true);
 			}
 			// Failed INSERT doesn't veto Add — session goes Added with
@@ -1090,11 +1066,11 @@ void ibSessionRegistry::ProcessAttach(ibRegistryRequest& req)
 		const wxString guidStr = s.GetId();
 		if (s.Inserted()) {
 			// Was anonymous, now authenticated — update userName only.
-			UpdateSessionUser(m_writeConn.get(), guidStr, info.m_strUserName, info.m_strUserGuid);
+			UpdateSessionUser(m_writeHolder, guidStr, info.m_strUserName, info.m_strUserGuid);
 		} else {
 			// Creds-first path — Connect(req) with non-empty user skipped
 			// the anon-phase INSERT. Write the row now.
-			if (InsertSessionRow(m_writeConn.get(), s, info.m_strUserName))
+			if (InsertSessionRow(m_writeHolder, s, info.m_strUserName))
 				s.SetInserted(true);
 		}
 	}
@@ -1110,7 +1086,7 @@ void ibSessionRegistry::ProcessDetach(ibRegistryRequest& req)
 
 	if (m_ownsSysSession && m_writeConn && s.Inserted()) {
 		const wxString guidStr = s.GetId();
-		UpdateSessionUser(m_writeConn.get(), guidStr, wxEmptyString, wxEmptyString);
+		UpdateSessionUser(m_writeHolder, guidStr, wxEmptyString, wxEmptyString);
 	}
 
 	ibSessionIdentity id = s.Identity();
@@ -1181,7 +1157,7 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 
 	if (m_ownsSysSession && m_writeConn && s.Inserted()) {
 		const wxString guidStr = s.GetId();
-		DeleteSessionRow(m_writeConn.get(), guidStr);
+		DeleteSessionRow(m_writeHolder, guidStr);
 		s.SetInserted(false);
 	}
 
@@ -1243,14 +1219,12 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 	// up zombie rows anyway.
 	auto writeExclusiveColumn = [&](int value) {
 		if (!m_ownsSysSession || !m_writeConn || !s.Inserted()) return;
-		ibStatementGuard stmt(m_writeConn.get(),
-			m_writeConn->PrepareStatement(
-				wxT("UPDATE %s SET exclusive = ? WHERE session = ?;"),
-				session_table));
-		if (!stmt) return;
-		stmt->SetParamInt   (1, value);
-		stmt->SetParamString(2, s.GetId());
-		try { stmt->RunQuery(); } catch (...) { /* legacy schema — silent */ }
+		try {
+			ibDatabaseQueryBuilder q(&m_writeHolder);
+			q.Execute(ibUpdate(session_table,
+				{ { wxT("exclusive"), ibConst(ibValue(value)) } },
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(s.GetId())))));
+		} catch (...) { /* legacy schema — silent */ }
 	};
 
 	if (req.exclusiveOn) {
@@ -1368,14 +1342,12 @@ void ibSessionRegistry::ProcessSetActivity(ibRegistryRequest& req)
 	if (!req.session->Inserted()) return;   // nothing to update yet
 
 	const wxString guidStr = req.session->GetId();
-	ibStatementGuard stmt(m_writeConn.get(),
-		m_writeConn->PrepareStatement(
-			wxT("UPDATE %s SET currentActivity = ? WHERE session = ?;"),
-			session_table));
-	if (!stmt) return;
-	stmt->SetParamString(1, req.activity);
-	stmt->SetParamString(2, guidStr);
-	try { stmt->RunQuery(); } catch (...) { /* swallowed: SetActivity is a UI-state hint, not a correctness signal — a failed UPDATE just means peer dialogs show a stale label until the next tick */ }
+	try {
+		ibDatabaseQueryBuilder q(&m_writeHolder);
+		q.Execute(ibUpdate(session_table,
+			{ { wxT("currentActivity"), ibConst(ibValue(req.activity)) } },
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(guidStr)))));
+	} catch (...) { /* swallowed: SetActivity is a UI-state hint, not a correctness signal — a failed UPDATE just means peer dialogs show a stale label until the next tick */ }
 }
 
 // --- Periodic jobs (placeholders) ----------------------------------------
@@ -1417,8 +1389,6 @@ void ibSessionRegistry::JobSweepStale()
 	// docs/session-registry.md §4). Without HoldRowLocks the probe
 	// just succeeds on *every* row, making it useless for
 	// distinguishing alive from dead.
-	ibDatabaseLayer* writer = m_writeConn.get();
-
 	constexpr int kStaleCutoffSec = 10;   // 10× heartbeat interval — force-killed
 	                                      // owners disappear from Active Users
 	                                      // within ~10s of their last heartbeat
@@ -1428,20 +1398,16 @@ void ibSessionRegistry::JobSweepStale()
 
 	std::vector<wxString> zombies;
 	try {
-		ibStatementGuard stmt(writer,
-			writer->PrepareStatement(
-				wxT("SELECT session, lastActive FROM %s;"),
-				session_table));
-		if (!stmt) return;
-		ibResultSetGuard rs(writer, stmt->RunQueryWithResults());
-		if (!rs) return;
+		ibDatabaseQueryBuilder q(&m_writeHolder);
+		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(session_table),
+			{ { ibCol(wxT("session")), wxEmptyString }, { ibCol(wxT("lastActive")), wxEmptyString } })));
 
-		while (rs->Next()) {
-			const wxString guid = rs->GetResultString(wxT("session"));
+		while (rs.Next()) {
+			const wxString guid = rs.GetResultString(wxT("session"));
 			if (m_own.find(guid) != m_own.end())
 				continue;  // our own — heartbeat keeps lastActive fresh
 
-			const wxDateTime lastActive = rs->GetResultDate(wxT("lastActive"));
+			const wxDateTime lastActive = rs.GetResultDate(wxT("lastActive"));
 			if (lastActive.IsValid() && lastActive.IsEarlierThan(cutoff))
 				zombies.push_back(guid);
 		}
@@ -1455,7 +1421,7 @@ void ibSessionRegistry::JobSweepStale()
 		          << " zombie row(s) from sys_session");
 	}
 	for (const wxString& g : zombies) {
-		try { DeleteSessionRow(writer, g); } catch (...) { /* swallowed: per-row cleanup loop, keep going even if one row's DELETE fails (next sweep retries) */ }
+		try { DeleteSessionRow(m_writeHolder, g); } catch (...) { /* swallowed: per-row cleanup loop, keep going even if one row's DELETE fails (next sweep retries) */ }
 	}
 
 	// Cluster-wide sys_lock cleanup — drop any long-held lock rows
@@ -1494,19 +1460,15 @@ void ibSessionRegistry::JobHeartbeatOwn()
 	// m_writeConn would loop forever on the dead TCP socket to the
 	// previous leader's spawned firebird.exe.
 	try {
-		ibStatementGuard stmt(m_writeConn.get(),
-			m_writeConn->PrepareStatement(
-				wxT("UPDATE %s SET lastActive = ? WHERE session = ?;"),
-				session_table));
-		if (!stmt) return;
-
+		ibDatabaseQueryBuilder q(&m_writeHolder);
 		const wxDateTime now = wxDateTime::Now();
 		for (const auto& kv : m_own) {
 			if (!kv.second || !kv.second->Inserted()) continue;
 			try {
-				stmt->SetParamDate  (1, now);
-				stmt->SetParamString(2, wxString::FromUTF8(kv.first.c_str()));
-				stmt->RunQuery();
+				q.Execute(ibUpdate(session_table,
+					{ { wxT("lastActive"), ibConst(ibValue(now)) } },
+					ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")),
+					        ibConst(ibValue(wxString::FromUTF8(kv.first.c_str()))))));
 			}
 			catch (...) { /* transient — next tick retries */ }
 		}
@@ -1525,17 +1487,14 @@ void ibSessionRegistry::JobHeartbeatOwn()
 static bool WriteSessionSignal(const wxString& sessionGuid,
                                 const wxString& signalValue)
 {
-	if (db_query == nullptr) return false;
 	if (sessionGuid.IsEmpty()) return false;
 	try {
-		ibStatementGuard stmt(db_query,
-			db_query->PrepareStatement(
-				wxT("UPDATE %s SET signal = ? WHERE session = ?;"),
-				session_table));
-		if (!stmt) return false;
-		stmt->SetParamString(1, signalValue);
-		stmt->SetParamString(2, sessionGuid);
-		stmt->RunQuery();
+		// default-ctor builder = the global db_query channel (CurrentHolder) — the admin endpoint may
+		// be reached from a caller that never checked out a pool connection; a passive scope throws → false.
+		ibDatabaseQueryBuilder q;
+		q.Execute(ibUpdate(session_table,
+			{ { wxT("signal"), ibConst(ibValue(signalValue)) } },
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(sessionGuid)))));
 		return true;
 	} catch (...) {
 		return false;
@@ -1557,27 +1516,21 @@ void ibSessionRegistry::JobCheckSignal()
 	if (!m_ownsSysSession || !m_writeConn) return;
 	if (m_own.empty()) return;
 
-	ibDatabaseLayer* writer = m_writeConn.get();
-
-	// Read-phase: collect (guid, signal) for each own row. Done through
-	// a prepared SELECT because parameterised queries don't support
-	// IN (?, ?, ?) portably — one statement per row keeps the code
-	// portable at the cost of a few queries per tick.
+	// Read-phase: collect (guid, signal) for each own row — one L2 SELECT per own row
+	// (a handful per tick; parameterised IN isn't portable, so per-row stays simplest).
 	struct Pending { wxString guid; wxString signal; };
 	std::vector<Pending> pending;
+	ibDatabaseQueryBuilder q(&m_writeHolder);   // bound conn = m_writeConn; reused by the act-phase clear below
 	try {
-		ibStatementGuard stmt(writer,
-			writer->PrepareStatement(
-				wxT("SELECT signal FROM %s WHERE session = ?;"),
-				session_table));
-		if (!stmt) return;
 		for (const auto& kv : m_own) {
 			if (!kv.second || !kv.second->Inserted()) continue;
 			const wxString guid = wxString::FromUTF8(kv.first.c_str());
-			stmt->SetParamString(1, guid);
-			ibResultSetGuard rs(writer, stmt->RunQueryWithResults());
-			if (!rs || !rs->Next()) continue;
-			const wxString sig = rs->GetResultString(wxT("signal"));
+			ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(
+				ibFilter(ibScan(session_table),
+					ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(guid)))),
+				{ { ibCol(wxT("signal")), wxEmptyString } })));
+			if (!rs.Next()) continue;
+			const wxString sig = rs.GetResultString(wxT("signal"));
 			if (sig.IsEmpty()) continue;
 			pending.push_back({ guid, sig });
 		}
@@ -1585,21 +1538,9 @@ void ibSessionRegistry::JobCheckSignal()
 
 	if (pending.empty()) return;
 
-	// Act-phase: dispatch the signal, then clear the cell so the
-	// directive fires exactly once per admin write. PrepareStatement
-	// can throw on a dead connection during shutdown; null clearStmt
-	// after a failed prepare means the signal stays in DB and will
-	// be picked up next tick (or by a peer process) — acceptable
-	// for a one-shot kick / reload directive.
-	ibPreparedStatement* clearStmtRaw = nullptr;
-	try {
-		clearStmtRaw = writer->PrepareStatement(
-			wxT("UPDATE %s SET signal = NULL WHERE session = ?;"),
-			session_table);
-	}
-	catch (...) { /* dead connection — skip clear, signal stays */ }
-	ibStatementGuard clearStmt(writer, clearStmtRaw);
-
+	// Act-phase: dispatch the signal, then clear the cell so the directive fires exactly once
+	// per admin write. A failed clear (dead connection) leaves the signal in DB to be picked up
+	// next tick (or by a peer process) — acceptable for a one-shot kick / reload directive.
 	for (const auto& p : pending) {
 		SESSION_LOG("[session SIGNAL] guid=" << (const char*)p.guid.ToUTF8().data()
 		          << " value='" << (const char*)p.signal.ToUTF8().data() << "'");
@@ -1635,12 +1576,11 @@ void ibSessionRegistry::JobCheckSignal()
 		}
 		// Future: "refresh" → broadcast SSE prod to client.
 
-		if (clearStmt) {
-			try {
-				clearStmt->SetParamString(1, p.guid);
-				clearStmt->RunQuery();
-			} catch (...) { /* transient — retries next tick */ }
-		}
+		try {
+			q.Execute(ibUpdate(session_table,
+				{ { wxT("signal"), ibConst(ibValue()) } },   // clear (NULL/empty — read-phase treats both as "no signal")
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(p.guid)))));
+		} catch (...) { /* transient — retries next tick */ }
 	}
 }
 
@@ -1668,39 +1608,34 @@ void ibSessionRegistry::JobRefreshSnapshot()
 		// stays restricted to core columns so the query parses everywhere;
 		// kind is read best-effort (missing column would throw from some
 		// drivers mid-stream and abort the snapshot).
-		ibResultSetGuard rs(m_writeConn.get(),
-			m_writeConn->RunQueryWithResults(
-				wxT("SELECT userName, application, started, computer, session FROM %s ")
-				wxT("ORDER BY started, session;"),
-				session_table));
-		if (rs) {
-			while (rs->Next()) {
-				fresh->AppendSession(
-					static_cast<ibRunMode>(rs->GetResultInt("application")),
-					0,  // kind filled in below for legacy-schema safety
-					rs->GetResultDate  ("started"),
-					rs->GetResultString("userName"),
-					rs->GetResultString("computer"),
-					rs->GetResultString("session"));
-				++rowCount;
-			}
+		ibDatabaseQueryBuilder q(&m_writeHolder);
+		ibQueryResult rs = q.From(session_table)
+			.Select({ wxT("userName"), wxT("application"), wxT("started"), wxT("computer"), wxT("session") })
+			.OrderBy(wxT("started")).OrderBy(wxT("session"))
+			.Execute();
+		while (rs.Next()) {
+			fresh->AppendSession(
+				static_cast<ibRunMode>(rs.GetResultInt("application")),
+				0,  // kind filled in below for legacy-schema safety
+				rs.GetResultDate  ("started"),
+				rs.GetResultString("userName"),
+				rs.GetResultString("computer"),
+				rs.GetResultString("session"));
+			++rowCount;
 		}
 		// Second pass: augment with kind where the column exists. Wrapped
 		// in its own try/catch so a legacy schema missing `kind` doesn't
 		// torpedo the snapshot built above.
 		try {
-			ibResultSetGuard rsk(m_writeConn.get(),
-				m_writeConn->RunQueryWithResults(
-					wxT("SELECT session, kind FROM %s;"),
-					session_table));
-			if (rsk) {
-				std::unordered_map<wxString, int> kindBySession;
-				while (rsk->Next()) {
-					kindBySession[rsk->GetResultString("session")]
-						= rsk->GetResultInt("kind");
-				}
-				fresh->SetKindsFromMap(kindBySession);
+			ibDatabaseQueryBuilder qk(&m_writeHolder);
+			ibQueryResult rsk = qk.ExecuteIR(ibQueryIR(ibProject(ibScan(session_table),
+				{ { ibCol(wxT("session")), wxEmptyString }, { ibCol(wxT("kind")), wxEmptyString } })));
+			std::unordered_map<wxString, int> kindBySession;
+			while (rsk.Next()) {
+				kindBySession[rsk.GetResultString("session")]
+					= rsk.GetResultInt("kind");
 			}
+			fresh->SetKindsFromMap(kindBySession);
 		} catch (...) { /* legacy schema — fine, kinds stay 0 */ }
 
 		// Third pass: exclusive flag — same legacy-tolerant pattern as
@@ -1708,18 +1643,15 @@ void ibSessionRegistry::JobRefreshSnapshot()
 		// (default-constructed) which means cluster gates degrade
 		// gracefully to "no monopoly anywhere".
 		try {
-			ibResultSetGuard rsx(m_writeConn.get(),
-				m_writeConn->RunQueryWithResults(
-					wxT("SELECT session, exclusive FROM %s;"),
-					session_table));
-			if (rsx) {
-				std::unordered_map<wxString, bool> exclusiveBySession;
-				while (rsx->Next()) {
-					exclusiveBySession[rsx->GetResultString("session")]
-						= rsx->GetResultInt("exclusive") != 0;
-				}
-				fresh->SetExclusiveFromMap(exclusiveBySession);
+			ibDatabaseQueryBuilder qx(&m_writeHolder);
+			ibQueryResult rsx = qx.ExecuteIR(ibQueryIR(ibProject(ibScan(session_table),
+				{ { ibCol(wxT("session")), wxEmptyString }, { ibCol(wxT("exclusive")), wxEmptyString } })));
+			std::unordered_map<wxString, bool> exclusiveBySession;
+			while (rsx.Next()) {
+				exclusiveBySession[rsx.GetResultString("session")]
+					= rsx.GetResultInt("exclusive") != 0;
 			}
+			fresh->SetExclusiveFromMap(exclusiveBySession);
 		} catch (...) { /* legacy schema — fine, exclusive stays false */ }
 	}
 	catch (const ibBackendException& err) {
@@ -1781,12 +1713,6 @@ ibSessionSnapshot ibSessionRegistry::GetClusterSnapshot() const
 	return *m_snapshot;   // copy under read-lock
 }
 
-bool ibSessionRegistry::ProbeSessionRowLock(const wxString& sessionGuid)
-{
-	if (!m_probeConn) return false;   // policies get "assume alive" default
-	return m_probeConn->TryProbeRowLock(session_table, wxT("session"), sessionGuid);
-}
-
 // --- Thread body ---------------------------------------------------------
 
 void ibSessionRegistry::ThreadBody() noexcept
@@ -1795,9 +1721,8 @@ void ibSessionRegistry::ThreadBody() noexcept
 
 	using clock = std::chrono::steady_clock;
 	// Snapshot refresh runs at 1 Hz — cheap (one SELECT on sys_session).
-	// Sweep runs at 3 s — heavier (one SELECT + one TryProbeRowLock per
-	// cluster row that isn't ours) and its output (zombie DELETEs) is
-	// not time-critical for UI.
+	// Sweep runs at 3 s — heavier (one SELECT over the cluster + zombie-row
+	// DELETEs) and its output is not time-critical for UI.
 	constexpr auto kRefreshInterval = std::chrono::seconds(1);
 	constexpr auto kSweepInterval   = std::chrono::seconds(3);
 	auto nextRefresh = clock::now() + kRefreshInterval;

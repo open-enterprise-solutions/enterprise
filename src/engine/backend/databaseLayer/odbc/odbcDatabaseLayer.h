@@ -54,22 +54,11 @@ public:
 	// (DoBeginTransaction / DoCommit / DoRollBack) are protected —
 	// see below.
 
-	// Row-lock probe for ibSessionRegistry. MSSQL behind ODBC honours
-	// `SET LOCK_TIMEOUT 0` + `SELECT ... WITH (UPDLOCK, ROWLOCK)`;
-	// other ODBC backends usually ignore the timeout hint and just
-	// block — the registry avoids calling this on those.
-	virtual bool TryProbeRowLock(const wxString& tableName,
-		const wxString& pkColumn, const wxString& pkValue) override;
-
-	// Write-time row-lock dialect (see docs/record-locks.md). MSSQL
-	// behind ODBC takes the row lock via table hint
-	// "WITH (UPDLOCK, ROWLOCK)" placed after FROM <table>. Callers that
-	// build the SELECT need to place the hint inline (not at end of
-	// statement); a future helper on the layer can wrap that. NOWAIT
-	// is carried session-side via `SET LOCK_TIMEOUT 0` (ibTxOptions::
-	// noWait), so the SQL clause stays empty.
-	wxString RowLockHint() const override { return wxT("WITH (UPDLOCK, ROWLOCK)"); }
-	wxString NoWaitClause() const override { return wxEmptyString; }
+	// Row-lock dialect now lives in the dialect dictionary (default m_rowLockSuffix=" FOR UPDATE").
+	// NOTE: MSSQL's true row lock is the table hint "WITH (UPDLOCK, ROWLOCK)" placed AFTER FROM,
+	// which the suffix model can't express — so MSSQL/ODBC pessimistic row-locking is a known gap
+	// (the old virtual placed it as a suffix too, i.e. it was never correct here). NOWAIT rides
+	// SET LOCK_TIMEOUT 0 (ibTxOptions::noWait). See docs/record-locks.md.
 
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
 	virtual bool TableExists(const wxString& table);

@@ -4,9 +4,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "constant.h"
-#include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
-#include "backend/databaseLayer/databaseQueryBuilder.h"   // ibDatabaseQueryBuilder / ibQueryResult (L2 dump read)
+#include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — TableExists / Execute(DDL) / IsOpen, no raw ibDatabaseLayer
 #include "backend/metaData.h"
 
 #include "appData.h"
@@ -21,29 +20,31 @@ bool ibValueMetaObjectConstant::CreateConstantSQLTable()
 	RestructureWarning(_("Create constant table"));   // static facade -> the active config's ledger
 
 	//create constats
-	if (!db_query->TableExists(ibValueMetaObjectConstant::GetPhysicalTableName())) {
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(ibValueMetaObjectConstant::GetPhysicalTableName())) {
 
-		int retCode = db_query->RunQuery("CREATE TABLE %s (RECORD_KEY CHAR DEFAULT '6' PRIMARY KEY);", ibValueMetaObjectConstant::GetPhysicalTableName());
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
+		if (q.Execute(ibCreateTable(ibValueMetaObjectConstant::GetPhysicalTableName(), {
+				{ wxT("RECORD_KEY"), ibTypeChar(1), /*notNull*/false, /*pk*/true, wxT("'6'") },
+			})) == DATABASE_LAYER_QUERY_RESULT_ERROR)
 			return false;
 		// The single '6' key row is created on demand by the data restore's UPSERT (the L3-3 mover keys
 		// sys_const on its RECORD_KEY primary key) — no up-front seed row needed.
 	}
 
-	return db_query->IsOpen();
+	return q.IsOpen();
 }
 
 bool ibValueMetaObjectConstant::DeleteConstantSQLTable()
 {
 	//create constats
-	if (db_query->TableExists(ibValueMetaObjectConstant::GetPhysicalTableName())) {
+	ibDatabaseQueryBuilder q;
+	if (q.TableExists(ibValueMetaObjectConstant::GetPhysicalTableName())) {
 
-		int retCode = db_query->RunQuery("DROP TABLE %s;", ibValueMetaObjectConstant::GetPhysicalTableName());
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
+		if (q.Execute(ibDropTable(ibValueMetaObjectConstant::GetPhysicalTableName())) == DATABASE_LAYER_QUERY_RESULT_ERROR)
 			return false;
 	}
 
-	return db_query->IsOpen();
+	return q.IsOpen();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////

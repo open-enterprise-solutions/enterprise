@@ -63,21 +63,8 @@ public:
 	// Driver transaction primitives (DoBeginTransaction / DoCommit /
 	// DoRollBack) are protected — see below.
 
-	// Pessimistic row-lock probe for ibSessionRegistry's designer-
-	// exclusive policy. PG implementation: BEGIN → SELECT ... FOR
-	// UPDATE NOWAIT → ROLLBACK. NOWAIT makes the probe fail-fast when
-	// another connection holds the row, so a live owner surfaces as
-	// a caught exception instead of a blocked probe thread.
-	virtual bool TryProbeRowLock(const wxString& tableName,
-		const wxString& pkColumn, const wxString& pkValue) override;
-
-	// Write-time row-lock dialect (see docs/record-locks.md). PG locks
-	// rows via "SELECT ... FOR UPDATE"; appending "NOWAIT" raises
-	// SQLSTATE 55P03 (lock_not_available) instead of blocking. The
-	// Write path leaves NOWAIT off and waits at the driver's default
-	// lock_timeout; probe-style callers append it.
-	wxString RowLockHint() const override { return wxT("FOR UPDATE"); }
-	wxString NoWaitClause() const override { return wxT("NOWAIT"); }
+	// Row-lock dialect now lives in the dialect dictionary (default m_rowLockSuffix=" FOR UPDATE",
+	// m_rowLockNoWaitSuffix=" NOWAIT" → raises SQLSTATE 55P03 lock_not_available instead of blocking).
 
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
 	virtual bool DatabaseExists(const wxString& table);

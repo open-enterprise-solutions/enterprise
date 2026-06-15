@@ -8,7 +8,7 @@
 //          columnLayout.h, an L3 concept L2 never touches).
 // (Extracted from databaseQueryBuilder.h so the layout tier no longer pulls the whole L2 builder for a type.)
 
-#include "backend.h"
+#include "backend/backend.h"
 
 // The canonical column type — DBMS-neutral; the dialect dictionary's TYPE-MAP closes the per-DBMS forks
 // (BLOB vs BYTEA, DATE vs TIMESTAMP, boolean-as-SMALLINT).

@@ -2304,3 +2304,48 @@ The apply-change ledger reports `ibBackendQueryable::GetQueryName()` (the metaob
 
 The FB DDL/DML barrier (`DdlCreatedTables` / `DdlDeferredWrites`) moved from process-wide statics onto
 the connection holder (per-connection, resolved via the explicit holder or `ibConnectionPool::ThreadHolder`).
+
+## §24 — L1 bypass closed: raw SQL lifted onto the L2/L3 doors (landed 2026-06-16)
+
+The plumbing that reached *down* to raw driver SQL (`db_query->RunQuery` / `PrepareStatement` /
+`ibDatabaseResultSet`) now goes through the proper tier. This is **tier hygiene**, not a move "up":
+the tiers always existed; a lot of DAO/infra code skipped them. The dividing line is **does the data
+have a metaobject/queryable?** — yes → L3 (`ibDataQueryBuilder` over `GetQueryable()`); no (system
+table, DDL, structure) → **L2 is the ceiling** (the dialect-neutral door over physical tables).
+
+### Lifted to L2 (8 files pure-L2 — zero L1 includes)
+`debugClientQuery` (breakpoints), `constantMetadataQuery`, `appDataQuery`, `structureBatch`,
+`userInfo` (+ new `ibUserInfo::Delete`), `userList` (frontend → backend `ibUserInfo`, no raw SQL),
+`wfrontend` (meta-watch `sys_config` read), `constantObject` (RECORD_KEY row-lock + open/table-exists
+gate; its *value* read was already L3). ~13 hand-written dialect forks collapsed onto the dictionary.
+
+### L2 door additions
+- **Introspection** on `ibDatabaseQueryBuilder`: `TableExists` / `GetColumns` / `IsOpen` /
+  `IsActiveTransaction` (delegate to the borrowed connection) — lets a DAO stay on one door for its
+  whole job, gating a CREATE / reading a live column set / checking state without raw `ibDatabaseLayer`.
+- **`ibInsertSelect(table, columns, source)`** — `INSERT INTO t [(cols)] <SELECT …>`. The source is any
+  relation tree; empty `columns` = `INSERT INTO t SELECT …`. Standard SQL, no per-driver fork.
+- **NOWAIT lock-hint**: `ibQueryIR::m_lockNoWait` + dialect `m_rowLockNoWaitSuffix` (default `" NOWAIT"`,
+  FB/SQLite empty — their non-blocking acquire rides the TX `noWait`/TPB). `lockManager` and the constant
+  row-lock now express the pessimistic SELECT as `ir.m_lockForUpdate` / `m_lockNoWait`. The per-driver
+  `ibDatabaseLayer::RowLockHint()` / `NoWaitClause()` virtuals are **deleted** — the row-lock clause lives
+  solely on the dialect dictionary (`m_rowLockSuffix` / `m_rowLockNoWaitSuffix`). See record-locks.md.
+
+### Stays L1 by design (not leftover)
+Connection / transaction **lifecycle** legitimately lives below L2: `sessionRegistry` and `lockManager`
+keep `databaseLayer.h` for TYPES only (zero raw query code — `ibDatabaseConnectionHolder` /
+`EnsureConnection` / `ibTxOptions`); `metadataConfigurationQuery` keeps it for the save TX
+(RollBack / Begin / IsActive / Commit, owned by `ibSchemaBuilder` — cannot route through a query scope).
+`sessionRegistry`'s write path runs on `q(&m_writeHolder)`; its conn acquisition switched
+`AcquireFreeConnection` → **`EnsureConnection`** so the holder *binds* its connection and the door
+resolves to exactly `m_writeConn` (the registry's failover-managed handle).
+
+### Dead-code removed
+The whole pessimistic-row-lock-for-liveness legacy — `TryProbeRowLock` (virtual + 4 driver impls +
+registry `ProbeSessionRowLock` + **`m_probeConn`/`m_probeHolder`, i.e. one fewer held connection per
+process**) and `HoldRowLocks` / `ReleaseRowLocks` (virtuals + firebird impl + `m_rowLocksHeld`). All were
+replaced long ago by snapshot + heartbeat-on-`lastActive` liveness; only comments referenced them.
+
+### Remaining (by-demand)
+`UPDATE … RETURNING` (the FB/PG sequence counter) — needs a DML-with-result-set execution path + a
+dialect `RETURNING` clause. The accounting register read/write is the L3 lift target (still `#if 0`).

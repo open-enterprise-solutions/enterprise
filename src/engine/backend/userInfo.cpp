@@ -1,7 +1,7 @@
 #include "userInfo.h"
 
-#include "appData.h"   // db_query macro, user_table
-#include "databaseLayer/databaseLayer.h"
+#include "appData.h"   // user_table macro
+#include "databaseLayer/databaseQueryBuilder.h"   // L2 door — the whole sys_user DAO rides this (no raw ibDatabaseLayer / result set)
 #include "databaseLayer/databaseErrorCodes.h"
 #include "fileSystem/fs.h"
 #include "guid.h"
@@ -102,14 +102,14 @@ wxMemoryBuffer WriteLanguageChunk(const ibUserInfo& info)
 // Common: populate identity columns from a sys_user result row, then
 // crack open the binaryData blob into the same chunks Serialize/Deserialize
 // use. Caller has already advanced the cursor onto the row of interest.
-void FillFromRow(ibDatabaseResultSet* row, ibUserInfo& info)
+void FillFromRow(ibQueryResult& row, ibUserInfo& info)
 {
-	info.m_strUserGuid     = row->GetResultString(wxT("guid"));
-	info.m_strUserName     = row->GetResultString(wxT("name"));
-	info.m_strUserFullName = row->GetResultString(wxT("fullName"));
+	info.m_strUserGuid     = row.GetResultString(wxT("guid"));
+	info.m_strUserName     = row.GetResultString(wxT("name"));
+	info.m_strUserFullName = row.GetResultString(wxT("fullName"));
 
 	wxMemoryBuffer buffer;
-	row->GetResultBlob(wxT("binaryData"), buffer);
+	row.GetResultBlob(wxT("binaryData"), buffer);
 	ibReaderMemory reader(buffer);
 
 	wxMemoryBuffer chunk;
@@ -124,22 +124,31 @@ void FillFromRow(ibDatabaseResultSet* row, ibUserInfo& info)
 
 } // namespace
 
+// Project exactly the columns FillFromRow consumes — guid / name / fullName / binaryData.
+static ibQueryIR SysUserRowQuery(ibQueryExprPtr where)
+{
+	return ibQueryIR(ibProject(
+		where ? ibFilter(ibScan(user_table), where) : ibScan(user_table),
+		{ { ibCol(wxT("guid")),       wxEmptyString },
+		  { ibCol(wxT("name")),       wxEmptyString },
+		  { ibCol(wxT("fullName")),   wxEmptyString },
+		  { ibCol(wxT("binaryData")), wxEmptyString } }));
+}
+
 ibUserInfo ibUserInfo::Read(const ibGuid& userGuid)
 {
 	ibUserInfo info;
 	if (!userGuid.isValid())
 		return info;
 
-	ibStatementGuard stmt(db_query,
-		db_query->PrepareStatement(wxT("SELECT * FROM %s WHERE guid = ?;"), user_table));
-	if (stmt)
-		stmt->SetParamString(1, userGuid.str());
-
-	ibResultSetGuard result(db_query,
-		stmt ? stmt->RunQueryWithResults() : nullptr);
-
-	if (result && result->Next())
-		FillFromRow(result.get(), info);
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult result = q.ExecuteIR(SysUserRowQuery(
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("guid")), ibConst(ibValue(userGuid.str())))));
+		if (result.Next())
+			FillFromRow(result, info);
+	}
+	catch (...) { /* no table / passive scope — empty info */ }
 
 	return info;
 }
@@ -150,80 +159,89 @@ ibUserInfo ibUserInfo::Read(const wxString& userName)
 	if (userName.IsEmpty())
 		return info;
 
-	ibStatementGuard stmt(db_query,
-		db_query->PrepareStatement(wxT("SELECT * FROM %s WHERE name = ?;"), user_table));
-	if (stmt)
-		stmt->SetParamString(1, userName);
-
-	ibResultSetGuard result(db_query,
-		stmt ? stmt->RunQueryWithResults() : nullptr);
-
-	if (result && result->Next())
-		FillFromRow(result.get(), info);
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult result = q.ExecuteIR(SysUserRowQuery(
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("name")), ibConst(ibValue(userName)))));
+		if (result.Next())
+			FillFromRow(result, info);
+	}
+	catch (...) { /* no table / passive scope — empty info */ }
 
 	return info;
 }
 
 bool ibUserInfo::HasAny()
 {
-	ibResultSetGuard result(db_query,
-		db_query->RunQueryWithResults(wxT("SELECT name FROM %s;"), user_table));
-
-	if (!result) return false;
-	return result->Next();
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult result = q.ExecuteIR(
+			ibQueryIR(ibProject(ibScan(user_table), { { ibCol(wxT("name")), wxEmptyString } })));
+		return result.Next();
+	}
+	catch (...) { return false; }
 }
 
 std::vector<ibUserInfo::Brief> ibUserInfo::ListAll()
 {
-	ibResultSetGuard result(db_query,
-		db_query->RunQueryWithResults(wxT("SELECT guid, name, fullName FROM %s;"), user_table));
-
 	std::vector<Brief> list;
-	if (!result)
-		return list;
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult result = q.ExecuteIR(ibQueryIR(ibProject(ibScan(user_table),
+			{ { ibCol(wxT("guid")),     wxEmptyString },
+			  { ibCol(wxT("name")),     wxEmptyString },
+			  { ibCol(wxT("fullName")), wxEmptyString } })));
 
-	while (result->Next()) {
-		Brief entry;
-		entry.m_strUserGuid     = result->GetResultString(wxT("guid"));
-		entry.m_strUserName     = result->GetResultString(wxT("name"));
-		entry.m_strUserFullName = result->GetResultString(wxT("fullName"));
-		list.emplace_back(std::move(entry));
+		while (result.Next()) {
+			Brief entry;
+			entry.m_strUserGuid     = result.GetResultString(wxT("guid"));
+			entry.m_strUserName     = result.GetResultString(wxT("name"));
+			entry.m_strUserFullName = result.GetResultString(wxT("fullName"));
+			list.emplace_back(std::move(entry));
+		}
 	}
+	catch (...) { /* best-effort — empty list on failure */ }
 
 	return list;
 }
 
 bool ibUserInfo::Save(const ibUserInfo& info)
 {
-	// db_query routes through the process-wide singleton holder —
-	// the dedicated channel for DDL and infra-level writes that must
-	// stay out of any user session's TX.
-	ibStatementGuard stmt(db_query,
-		db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD
-			? db_query->PrepareStatement(
-				wxT("INSERT INTO %s (guid, name, fullName, changed, dataSize, binaryData) VALUES(?, ?, ?, ?, ?, ?) ON CONFLICT (guid) DO UPDATE SET guid = excluded.guid, name = excluded.name, fullName = excluded.fullName, changed = excluded.changed, dataSize = excluded.dataSize, binaryData = excluded.binaryData; "), user_table)
-			: db_query->PrepareStatement(
-				wxT("UPDATE OR INSERT INTO %s (guid, name, fullName, changed, dataSize, binaryData) VALUES(?, ?, ?, ?, ?, ?) MATCHING (guid);"), user_table)
-	);
-
-	if (!stmt)
-		return false;
-
-	stmt->SetParamString(1, info.m_strUserGuid);
-	stmt->SetParamString(2, info.m_strUserName);
-	stmt->SetParamString(3, info.m_strUserFullName);
-	stmt->SetParamDate  (4, wxDateTime::Now());
-
+	// The default-ctor builder resolves to CurrentHolder = the db_query channel's thread holder —
+	// the dedicated channel for infra-level writes that must stay out of any user session's TX
+	// (the pool never resolves a session holder here; session work passes its holder explicitly).
 	ibWriterMemory writer;
 	writer.w_chunk(eBlockPswd, WritePasswordChunk(info));
 	writer.w_chunk(eBlockRole, WriteRoleChunk    (info));
 	writer.w_chunk(eBlockLang, WriteLanguageChunk(info));
 
-	stmt->SetParamNumber(5, writer.size());
-	stmt->SetParamBlob  (6, writer.pointer(), writer.size());
+	// One UPSERT, match on guid — the door renders ON CONFLICT (PG/SQLite/MySQL) vs
+	// UPDATE OR INSERT … MATCHING (FB), so the per-driver fork is gone. The blob binds via ibConstBlob.
+	try {
+		ibDatabaseQueryBuilder q;
+		return q.Execute(ibUpsert(user_table, {
+			{ wxT("guid"),       ibConst(ibValue(info.m_strUserGuid)) },
+			{ wxT("name"),       ibConst(ibValue(info.m_strUserName)) },
+			{ wxT("fullName"),   ibConst(ibValue(info.m_strUserFullName)) },
+			{ wxT("changed"),    ibConst(ibValue(wxDateTime::Now())) },
+			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(writer.size()))) },
+			{ wxT("binaryData"), ibConstBlob(writer.pointer(), writer.size()) },
+		}, { wxT("guid") })) != DATABASE_LAYER_QUERY_RESULT_ERROR;
+	}
+	catch (...) { return false; }
+}
 
-	const int result = stmt->RunQuery();
-	return result != DATABASE_LAYER_QUERY_RESULT_ERROR;
+bool ibUserInfo::Delete(const ibGuid& userGuid)
+{
+	if (!userGuid.isValid())
+		return false;
+	try {
+		ibDatabaseQueryBuilder q;
+		return q.Execute(ibDelete(user_table,
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("guid")), ibConst(ibValue(userGuid.str())))))
+			!= DATABASE_LAYER_QUERY_RESULT_ERROR;
+	}
+	catch (...) { return false; }
 }
 
 void ibUserInfo::Serialize(ibWriterMemory& writer) const

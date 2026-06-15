@@ -66,6 +66,8 @@ struct BACKEND_API ibUserInfo {
 	static ibUserInfo Read(const ibGuid& userGuid);
 	static ibUserInfo Read(const wxString& userName);
 	static bool       Save(const ibUserInfo& info);
+	// Remove the sys_user row keyed by guid. True on success (or no-op miss).
+	static bool       Delete(const ibGuid& userGuid);
 
 	// Table-wide queries.
 	// HasAny  — `SELECT 1 FROM sys_user LIMIT 1` semantics; true on any row.

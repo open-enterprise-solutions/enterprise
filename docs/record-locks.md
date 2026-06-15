@@ -1,5 +1,18 @@
 # Record-write protection — DB row locks + DataVersion
 
+> **Update 2026-06-16 — row-lock clause unified onto the dialect dictionary; liveness-probe legacy removed.**
+> The per-driver `ibDatabaseLayer::RowLockHint()` / `NoWaitClause()` virtuals (and their 4 driver
+> overrides) are **deleted**. The row-lock clause now lives solely on the dialect dictionary:
+> `m_rowLockSuffix` (` FOR UPDATE` / FB ` WITH LOCK` / SQLite empty) plus the new
+> `m_rowLockNoWaitSuffix` (` NOWAIT` on PG/MySQL; empty on FB/SQLite — their non-blocking acquire rides
+> the TX `noWait`/TPB). A pessimistic SELECT is expressed at L2 as `ibQueryIR::m_lockForUpdate`
+> (+ `m_lockNoWait`); the renderer appends the dialect clause to the top-level SELECT. `ibLockManager`
+> and the Constant row-lock now go through this L2 path (where the old code referenced `RowLockHint()`
+> below, read "the dialect `m_rowLockSuffix`"). Separately, the **pessimistic-row-lock-for-liveness**
+> legacy — `TryProbeRowLock` and `HoldRowLocks` / `ReleaseRowLocks` (virtuals + firebird impl + the
+> registry probe connection) — is **removed**; cluster liveness has long been snapshot +
+> heartbeat-on-`lastActive`. (Part of the L1→L2 tier-hygiene arc — query-language-arc.md §24.)
+
 > **Update 2026-06-09 — `LockAndCheckDataVersion` moved onto the L3 door.**
 > The hand-rolled `ReadDataVersionForUpdate` (raw `SELECT <DataVersion> FROM <tbl>
 > WHERE uuid = ? <RowLockHint>` + `GetResultString`) is **gone**. The version-lock

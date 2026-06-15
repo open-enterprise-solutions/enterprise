@@ -274,14 +274,6 @@ public:
 	// m_ownsSysSession is false (the registry isn't reading the table).
 	ibSessionSnapshot GetClusterSnapshot() const;
 
-	// Policy-facing probe — wraps TryProbeRowLock on the registry's
-	// dedicated probe connection. Returns true when the row is NOT
-	// locked by anyone (zombie → safe to treat as dead). Only meaningful
-	// when `m_ownsSysSession` is true; returns false otherwise (we can't
-	// assert liveness without row-lock semantics, so policies should
-	// default to "assume alive" = veto-friendly).
-	bool ProbeSessionRowLock(const wxString& sessionGuid);
-
 	// ---- Policy chain ----
 	// Add a policy to the veto chain consulted by ProcessAdd. First veto
 	// wins; subsequent policies don't run. Registry takes ownership of
@@ -640,26 +632,16 @@ private:
 	// sys_session row I/O + pessimistic row locks.
 	bool                                                         m_ownsSysSession = false;
 
-	// Registry's connection-holder identities — one per persistent
-	// conn. Distinct identities so pool diagnostics can attribute an
-	// entry to the specific role (write vs probe) instead of one
-	// blanket "registry" tag. Both share the same class (the role
-	// distinction lives in the member name); subclassing per-role
-	// would only matter if the holders carried role-specific dtor
-	// behaviour, which they don't.
+	// Registry's connection-holder identity — a dedicated tag so pool diagnostics can attribute an
+	// entry to the registry's write channel rather than a blanket tag. (The probe channel was retired
+	// with the row-lock probe — liveness is heartbeat-based now.)
 	ibSessionRegistryConnectionHolder                            m_writeHolder;
-	ibSessionRegistryConnectionHolder                            m_probeHolder;
 
-	// Separate pool checkouts — write-conn executes INSERT / UPDATE /
-	// DELETE on sys_session + JobRefreshSnapshot SELECT; probe-conn
-	// runs `TryProbeRowLock` via its own NOWAIT TX so the probe doesn't
-	// contend with concurrent writes. Acquired via the matching
-	// holder's AcquireFreeConnection() on Start when m_ownsSysSession
-	// is true; nullptr otherwise. Liveness is heartbeat-based (see
-	// "HoldRowLocks self-deadlock" memory note), so the historical
-	// third "lock-conn" was retired.
+	// The registry's persistent write conn — INSERT / UPDATE / DELETE on sys_session +
+	// JobRefreshSnapshot SELECT. Bound to m_writeHolder via EnsureConnection() on Start when
+	// m_ownsSysSession is true; nullptr otherwise. Liveness is heartbeat-based (see "HoldRowLocks
+	// self-deadlock" memory note).
 	std::shared_ptr<ibDatabaseLayer>                             m_writeConn;
-	std::shared_ptr<ibDatabaseLayer>                             m_probeConn;
 
 	// --- submit queue + thread plumbing ---
 	std::thread                                  m_thread;

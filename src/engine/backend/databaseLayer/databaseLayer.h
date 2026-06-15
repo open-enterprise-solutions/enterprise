@@ -141,6 +141,13 @@ struct ibDialectDictionary
 	// (docs/record-locks.md)
 	wxString m_rowLockSuffix = wxT(" FOR UPDATE");
 
+	// Appended AFTER m_rowLockSuffix when the IR asks for a non-blocking acquire (ibQueryIR::
+	// m_lockNoWait). Default = PG / MySQL " NOWAIT" (=> " FOR UPDATE NOWAIT"). Firebird leaves it
+	// EMPTY — it has no FOR UPDATE NOWAIT; a non-blocking acquire is expressed by the transaction's
+	// own lock-timeout (ibTxOptions::noWait -> isc_tpb_nowait). SQLite empty (whole-DB lock).
+	// (docs/record-locks.md — unifies the old ibDatabaseLayer::NoWaitClause virtual onto the dictionary.)
+	wxString m_rowLockNoWaitSuffix = wxT(" NOWAIT");
+
 	// GROUP BY ROLLUP spelling (used only when m_features.m_rollup): the keys render between
 	// prefix and suffix. Standard (PG / FB): "GROUP BY ROLLUP(<keys>)". MySQL: prefix empty,
 	// suffix " WITH ROLLUP" -> "GROUP BY <keys> WITH ROLLUP". (docs/query-language-arc.md §22.1b)
@@ -230,9 +237,9 @@ public:
 	// unchanged.
 	//
 	// `noWait` — when true, row-lock contention raises a lock conflict
-	// immediately instead of blocking. Used by row-lock probes
-	// (TryProbeRowLock). On FB maps to `isc_tpb_nowait`; other drivers
-	// approximate via session-level lock_timeout settings or ignore.
+	// immediately instead of blocking. Used by non-blocking lock acquires
+	// (e.g. ibLockManager's NOWAIT path via ir.m_lockNoWait). On FB maps to
+	// `isc_tpb_nowait`; other drivers approximate via session-level lock_timeout or ignore.
 	//
 	// `readOnly` — caller promises this TX won't issue DML. The driver
 	// can then pick an isolation that doesn't acquire write-intent locks
@@ -451,73 +458,13 @@ public:
 	// true if a reattach happened.
 	virtual bool ReconnectIfStale() { return false; }
 
-	// ---- Row-level pessimistic locks (cluster-level session coordination) ----
-	//
-	// Used by ibSessionRegistry to hold / probe pessimistic locks on rows of
-	// sys_session. The lock is the source of truth for "owner process still
-	// alive" — when the connection that holds the lock drops, the DB engine
-	// rolls back its transaction and the lock is released, so peer processes
-	// see the row as free and can DELETE it as a zombie.
-	//
-	// Default implementations here return false / no-op — registry treats
-	// that as "not supported on this driver" and falls back to heartbeat-
-	// timestamp based liveness (fine for single-process SQLite).
-	//
-	// HoldRowLocks opens a dedicated transaction on THIS connection and
-	// locks each row identified by (tableName, pkColumn = pkValues[i])
-	// via the driver's pessimistic row lock (FB: SELECT ... WITH LOCK;
-	// PG/MySQL/MSSQL: SELECT ... FOR UPDATE). Transaction stays open
-	// until ReleaseRowLocks() commits. Calling again with a new set
-	// commits the prior TX before starting a fresh one. Returns true if
-	// every requested row was locked.
-	virtual bool HoldRowLocks(const wxString& tableName,
-	                          const wxString& pkColumn,
-	                          const std::vector<wxString>& pkValues) { (void)tableName; (void)pkColumn; (void)pkValues; return false; }
 
-	// Release the hold from HoldRowLocks (commits the internal TX). No-op
-	// if nothing is held. Always paired with HoldRowLocks.
-	virtual void ReleaseRowLocks() {}
-
-	// Non-blocking probe: try to take a short-term exclusive lock on
-	// (tableName, pkColumn = pkValue). Returns true if acquired —
-	// signalling that no other connection holds the row, so the caller
-	// may treat it as a zombie and DELETE it. The probe transaction is
-	// rolled back before return so no lock survives the call.
-	virtual bool TryProbeRowLock(const wxString& tableName,
-	                             const wxString& pkColumn,
-	                             const wxString& pkValue) { (void)tableName; (void)pkColumn; (void)pkValue; return false; }
-
-	// ---- Row-level pessimistic write lock for Write-time DataVersion check ----
-	//
-	// Used by the optimistic-concurrency Write protection: every
-	// mutable-ref WriteObject does a `SELECT DataVersion FROM <tbl>
-	// WHERE pk = ? <RowLockHint> <NoWaitClause>` inside its TX to pin
-	// the row, compares against the version loaded at Read, then
-	// updates. The two virtuals return the per-driver clause text.
-	// Default empty (SQLite: single-writer naturally, no hint).
-	//
-	// See docs/record-locks.md for the full design.
-
-	// SQL fragment appended to SELECT to take a row-level write lock
-	// for the rest of the current TX. Per-driver:
-	//   Firebird  : "WITH LOCK"
-	//   PostgreSQL: "FOR UPDATE"
-	//   MySQL     : "FOR UPDATE"
-	//   ODBC/MSSQL: "WITH (UPDLOCK, ROWLOCK)" — placed AFTER FROM,
-	//               not at end of statement (driver overrides whole
-	//               clause shape via its own AppendRowLockHint helper
-	//               where needed; default callers always append at end)
-	//   SQLite    : "" (single-writer)
-	virtual wxString RowLockHint() const { return wxEmptyString; }
-
-	// SQL fragment appended after RowLockHint() to make acquisition
-	// fail fast instead of waiting. Used for probe-style callers; the
-	// regular Write path doesn't use it (wait at the driver's default
-	// timeout — TPB-level on FB, session-level on MSSQL/MySQL).
-	//   PostgreSQL: "NOWAIT"
-	//   MySQL 8+  : "NOWAIT"
-	//   Other     : "" (NOWAIT carried via TX options where supported)
-	virtual wxString NoWaitClause() const { return wxEmptyString; }
+	// ---- Row-level pessimistic write lock ----
+	// The row-lock clause moved OFF per-driver virtuals onto the dialect dictionary
+	// (m_rowLockSuffix / m_rowLockNoWaitSuffix); the L2 door renders it from
+	// ibQueryIR::m_lockForUpdate / m_lockNoWait. The old RowLockHint() / NoWaitClause()
+	// virtuals are gone — their last callers (ibLockManager, the constant row-lock) now
+	// go through the door. See docs/record-locks.md.
 
 	/// Close all result set objects that have been generated but not yet closed
 	void CloseResultSets();

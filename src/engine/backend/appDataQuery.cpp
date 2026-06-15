@@ -1,6 +1,5 @@
 #include "appData.h"
-#include "backend/databaseLayer/databaseLayer.h"
-#include "backend/databaseLayer/databaseErrorCodes.h"
+#include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — DDL/DML + TableExists/GetColumns/IsOpen + typed row reads (no raw L1)
 #include "backend/databaseLayer/connectionPool.h"
 
 #include "backend/backend_exception.h"
@@ -14,102 +13,69 @@
 
 bool ibApplicationData::TableAlreadyCreated()
 {
-	return db_query->TableExists(user_table) &&
-		db_query->TableExists(session_table);
+	ibDatabaseQueryBuilder q;
+	return q.TableExists(user_table) &&
+		q.TableExists(session_table);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
 void ibApplicationData::CreateTableUser()
 {
-	if (!db_query->TableExists(user_table)) {
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
-			db_query->RunQuery("create table %s ("
-				"guid              VARCHAR(36)   NOT NULL PRIMARY KEY,"
-				"name              VARCHAR(64)  NOT NULL,"
-				"fullName          VARCHAR(128)  NOT NULL,"
-				"changed		   TIMESTAMP  NOT NULL,"
-				"dataSize          INTEGER       NOT NULL,"
-				"binaryData        BYTEA      NOT NULL);", user_table);
-		}
-		else {
-			db_query->RunQuery("create table %s ("
-				"guid              VARCHAR(36)   NOT NULL PRIMARY KEY,"
-				"name              VARCHAR(64)  NOT NULL,"
-				"fullName          VARCHAR(128)  NOT NULL,"
-				"changed		   TIMESTAMP  NOT NULL,"
-				"dataSize          INTEGER       NOT NULL,"
-				"binaryData        BLOB      NOT NULL);", user_table);
-		}
-		db_query->RunQuery("create index if not exists user_index on %s (guid, name);", user_table);
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(user_table)) {
+		// One CreateTable for every driver — the dialect TYPE-MAP renders binaryData's BLOB as
+		// BYTEA on PostgreSQL and BLOB everywhere else, so the old per-driver fork is gone.
+		q.Execute(ibCreateTable(user_table, {
+			{ wxT("guid"),       ibTypeString(36),  /*notNull*/false, /*pk*/true,  wxEmptyString },
+			{ wxT("name"),       ibTypeString(64),  /*notNull*/true,  /*pk*/false, wxEmptyString },
+			{ wxT("fullName"),   ibTypeString(128), /*notNull*/true,  /*pk*/false, wxEmptyString },
+			{ wxT("changed"),    ibTypeDate(),      /*notNull*/true,  /*pk*/false, wxEmptyString },
+			{ wxT("dataSize"),   ibTypeInteger(),   /*notNull*/true,  /*pk*/false, wxEmptyString },
+			{ wxT("binaryData"), ibTypeBlob(),      /*notNull*/true,  /*pk*/false, wxEmptyString },
+		}));
+		// The index rides with the just-created table, so the old "if not exists" was redundant
+		// (and let Firebird choke on that syntax) — a plain CREATE INDEX is correct here.
+		q.Execute(ibCreateIndex(user_table, wxT("user_index"), { wxT("guid"), wxT("name") }));
 	}
 }
 
 void ibApplicationData::CreateTableSession()
 {
-	if (!db_query->TableExists(session_table)) {
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(session_table)) {
 
-		db_query->RunQuery(wxT("create table %s ("
-			"session              VARCHAR(36) NOT NULL PRIMARY KEY,"
-			"userName             VARCHAR(64) NOT NULL,"
-			"application	   INTEGER  NOT NULL,"
-			"started		   TIMESTAMP  NOT NULL,"
-			"lastActive		   TIMESTAMP  NOT NULL,"
-			"computer          VARCHAR(128) NOT NULL,"
-			// --- session-registry extensions (2026-04-20) ---
-			// pid             = owner process id (for admin / kick / debugger attach)
-			// address         = "host:port" for web processes; "" for desktop
-			// currentActivity = last scripted/engine label ("idle", "running:OnStart", "reload", ...)
-			// exclusive       = 1 when this session holds process-wide monopoly mode; 0 otherwise.
-			//                   Cluster-aware exclusive gate reads this column from peer rows
-			//                   to block new Connects when another process is exclusive.
-			"pid               INTEGER,"
-			"address           VARCHAR(256),"
-			"currentActivity   VARCHAR(128),"
-			"exclusive         INTEGER);"),
-			session_table
-		);
-
-		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
-
-			db_query->RunQuery(
-				wxT("create index if not exists session_index_1 on %s (session, userName);"),
-				session_table
-			);
-
-			db_query->RunQuery(
-				wxT("create index if not exists session_index_2 on %s (session);"),
-				session_table
-			);
-
-			db_query->RunQuery(
-				wxT("create index if not exists session_index_3 on %s (lastActive);"),
-				session_table
-			);
-		}
-		else
-		{
-			db_query->RunQuery(
-				wxT("create index session_index_1 on %s (session, userName);"),
-				session_table
-			);
-
-			db_query->RunQuery(
-				wxT("create index session_index_2 on %s (session);"),
-				session_table
-			);
-
-			db_query->RunQuery(
-				wxT("create index session_index_3 on %s (lastActive);"),
-				session_table
-			);
-		}
+		// session-registry extensions (2026-04-20) are nullable so legacy rows stay valid:
+		//   pid             = owner process id (admin / kick / debugger attach)
+		//   address         = "host:port" for web processes; "" for desktop
+		//   currentActivity = last scripted/engine label ("idle", "running:OnStart", "reload", ...)
+		//   exclusive       = 1 when this session holds process-wide monopoly mode; 0 otherwise.
+		//                     Cluster-aware exclusive gate reads this column from peer rows to block
+		//                     new Connects when another process is exclusive.
+		q.Execute(ibCreateTable(session_table, {
+			{ wxT("session"),         ibTypeString(36),  false, true,  wxEmptyString },
+			{ wxT("userName"),        ibTypeString(64),  true,  false, wxEmptyString },
+			{ wxT("application"),     ibTypeInteger(),   true,  false, wxEmptyString },
+			{ wxT("started"),         ibTypeDate(),      true,  false, wxEmptyString },
+			{ wxT("lastActive"),      ibTypeDate(),      true,  false, wxEmptyString },
+			{ wxT("computer"),        ibTypeString(128), true,  false, wxEmptyString },
+			{ wxT("pid"),             ibTypeInteger(),   false, false, wxEmptyString },
+			{ wxT("address"),         ibTypeString(256), false, false, wxEmptyString },
+			{ wxT("currentActivity"), ibTypeString(128), false, false, wxEmptyString },
+			{ wxT("exclusive"),       ibTypeInteger(),   false, false, wxEmptyString },
+		}));
+		// Indexes ride with the just-created table — no "if not exists" (redundant here, and
+		// unsupported by Firebird), so the per-driver fork collapses to three plain CREATE INDEX.
+		q.Execute(ibCreateIndex(session_table, wxT("session_index_1"), { wxT("session"), wxT("userName") }));
+		q.Execute(ibCreateIndex(session_table, wxT("session_index_2"), { wxT("session") }));
+		q.Execute(ibCreateIndex(session_table, wxT("session_index_3"), { wxT("lastActive") }));
 	}
 }
 
 void ibApplicationData::CreateTableEvent()
 {
-	if (!db_query->TableExists(event_table)) {
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(event_table)) {
 	}
 }
 
@@ -121,45 +87,24 @@ void ibApplicationData::CreateTableEvent()
 // session-end cascade.
 void ibApplicationData::CreateTableLock()
 {
-	if (!db_query->TableExists(lock_table)) {
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(lock_table)) {
 
-		db_query->RunQuery(wxT("create table %s ("
-			"lockGuid         VARCHAR(36)  NOT NULL PRIMARY KEY,"
-			"sessionGuid      VARCHAR(36)  NOT NULL,"   // owner identity (session.GUID or custom holder)
-			"namespace        VARCHAR(128) NOT NULL,"   // e.g. \"Catalog.Products\"
-			"keyHash          VARCHAR(64)  NOT NULL,"   // SHA-256 hex of canonical key bytes
-			"keyData          VARCHAR(1024),"           // canonical human-readable key for conflict messages
-			"lockMode         INTEGER      NOT NULL,"   // 0=Shared, 1=Exclusive
-			"acquiredAt       TIMESTAMP    NOT NULL,"
-			"userName         VARCHAR(128),"            // holder's display name (snapshot at acquire)
-			"computer         VARCHAR(128));"),
-			lock_table
-		);
-
-		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
-
-			db_query->RunQuery(
-				wxT("create index if not exists lock_index_1 on %s (namespace, keyHash);"),
-				lock_table
-			);
-
-			db_query->RunQuery(
-				wxT("create index if not exists lock_index_2 on %s (sessionGuid);"),
-				lock_table
-			);
-		}
-		else
-		{
-			db_query->RunQuery(
-				wxT("create index lock_index_1 on %s (namespace, keyHash);"),
-				lock_table
-			);
-
-			db_query->RunQuery(
-				wxT("create index lock_index_2 on %s (sessionGuid);"),
-				lock_table
-			);
-		}
+		q.Execute(ibCreateTable(lock_table, {
+			{ wxT("lockGuid"),    ibTypeString(36),   false, true,  wxEmptyString },
+			{ wxT("sessionGuid"), ibTypeString(36),   true,  false, wxEmptyString },   // owner identity (session.GUID or custom holder)
+			{ wxT("namespace"),   ibTypeString(128),  true,  false, wxEmptyString },   // e.g. "Catalog.Products"
+			{ wxT("keyHash"),     ibTypeString(64),   true,  false, wxEmptyString },   // SHA-256 hex of canonical key bytes
+			{ wxT("keyData"),     ibTypeString(1024), false, false, wxEmptyString },   // canonical human-readable key for conflict messages
+			{ wxT("lockMode"),    ibTypeInteger(),    true,  false, wxEmptyString },   // 0=Shared, 1=Exclusive
+			{ wxT("acquiredAt"),  ibTypeDate(),       true,  false, wxEmptyString },
+			{ wxT("userName"),    ibTypeString(128),  false, false, wxEmptyString },   // holder's display name (snapshot at acquire)
+			{ wxT("computer"),    ibTypeString(128),  false, false, wxEmptyString },
+		}));
+		// Index on (namespace, keyHash) drives the per-acquire conflict-check; index on
+		// sessionGuid drives the session-end cascade. No per-driver fork — see CreateTableSession.
+		q.Execute(ibCreateIndex(lock_table, wxT("lock_index_1"), { wxT("namespace"), wxT("keyHash") }));
+		q.Execute(ibCreateIndex(lock_table, wxT("lock_index_2"), { wxT("sessionGuid") }));
 	}
 }
 
@@ -171,50 +116,36 @@ void ibApplicationData::CreateTableLock()
 // legacy rows stay valid until the next heartbeat rewrite.
 void ibApplicationData::MigrateTableSession()
 {
-	if (!db_query->TableExists(session_table))
+	ibDatabaseQueryBuilder qi;
+	if (!qi.TableExists(session_table))
 		return;
 
-	wxArrayString cols = db_query->GetColumns(session_table);
+	wxArrayString cols = qi.GetColumns(session_table);
 	auto has = [&](const wxString& col) {
 		for (std::size_t i = 0; i < cols.GetCount(); ++i)
 			if (cols[i].CmpNoCase(col) == 0) return true;
 		return false;
 	};
 
-	if (!has(wxT("pid"))) {
-		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD pid INTEGER"), session_table); }
-		catch (...) { /* best-effort — driver may not support this DDL */ }
-	}
-	if (!has(wxT("address"))) {
-		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD address VARCHAR(256)"), session_table); }
+	// Each ADD is best-effort and independent — a fresh builder per column so one driver's
+	// rejection (caught below) never poisons the next column's statement.
+	auto addColumn = [&](const wxString& name, ibColumnType type) {
+		try { ibDatabaseQueryBuilder q; q.Execute(ibAddColumn(session_table, { name, type, false, false, wxEmptyString })); }
 		catch (...) { /* swallowed: best-effort migration; driver may not support this DDL */ }
-	}
-	if (!has(wxT("currentActivity"))) {
-		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD currentActivity VARCHAR(128)"), session_table); }
-		catch (...) { /* swallowed: best-effort migration; driver may not support this DDL */ }
-	}
-	if (!has(wxT("kind"))) {
-		// ibSessionKind — session-level role (WebServer=5, WebClient=100,
-		// desktop kinds share numeric values with ibRunMode). Distinct
-		// from `application` which stores process-level ibRunMode.
-		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD kind INTEGER"), session_table); }
-		catch (...) { /* swallowed: best-effort migration; driver may not support this DDL */ }
-	}
-	if (!has(wxT("signal"))) {
-		// Admin → registry control channel. A non-empty value is picked
-		// up by the session's owning process on its next JobCheckSignal
-		// tick; the handler acts and clears the signal. "kick" is the
-		// first supported value — more (reload, refresh) may follow.
-		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD signal VARCHAR(32)"), session_table); }
-		catch (...) { /* swallowed: best-effort migration; driver may not support this DDL */ }
-	}
-	if (!has(wxT("exclusive"))) {
-		// Process-wide monopoly mode marker. 1 = this session holds
-		// exclusive; cluster-aware gate in ProcessAdd / ProcessSetExclusive
-		// reads peer rows to detect another process holding it.
-		try { db_query->RunQuery(wxT("ALTER TABLE %s ADD exclusive INTEGER"), session_table); }
-		catch (...) { /* swallowed: best-effort migration; driver may not support this DDL */ }
-	}
+	};
+
+	if (!has(wxT("pid")))             addColumn(wxT("pid"),             ibTypeInteger());
+	if (!has(wxT("address")))         addColumn(wxT("address"),         ibTypeString(256));
+	if (!has(wxT("currentActivity"))) addColumn(wxT("currentActivity"), ibTypeString(128));
+	// kind — ibSessionKind session-level role (WebServer=5, WebClient=100; desktop kinds share
+	// numeric values with ibRunMode). Distinct from `application` (process-level ibRunMode).
+	if (!has(wxT("kind")))            addColumn(wxT("kind"),            ibTypeInteger());
+	// signal — admin → registry control channel; picked up on the next JobCheckSignal tick, then
+	// cleared by the handler. "kick" is the first supported value (reload / refresh may follow).
+	if (!has(wxT("signal")))          addColumn(wxT("signal"),          ibTypeString(32));
+	// exclusive — process-wide monopoly marker; cluster-aware gate in ProcessAdd /
+	// ProcessSetExclusive reads peer rows to detect another process holding it.
+	if (!has(wxT("exclusive")))       addColumn(wxT("exclusive"),       ibTypeInteger());
 }
 
 // Bring up sys_bytecode_cache. Independent of the user/session/event
@@ -229,20 +160,18 @@ void ibApplicationData::MigrateTableSession()
 // is named.
 void ibApplicationData::MigrateTableBytecodeCache()
 {
-	if (db_query->TableExists(bytecode_cache_table))
+	ibDatabaseQueryBuilder q;
+	if (q.TableExists(bytecode_cache_table))
 		return;
 
-	const bool isPG =
-		db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL;
-	const wxString blobType = isPG ? wxT("BYTEA") : wxT("BLOB");
-
 	try {
-		db_query->RunQuery(
-			wxT("CREATE TABLE %s ("
-			    "descriptor_id     VARCHAR(36) NOT NULL PRIMARY KEY,"
-			    "bytecode_version  VARCHAR(36) NOT NULL,"
-			    "bc_blob           ") + blobType + wxT(" NOT NULL);"),
-			bytecode_cache_table);
+		// bc_blob's BLOB renders as BYTEA on PostgreSQL and BLOB on every other driver
+		// (Firebird embedded, SQLite, MySQL, ODBC) via the dialect TYPE-MAP — no fork here.
+		q.Execute(ibCreateTable(bytecode_cache_table, {
+			{ wxT("descriptor_id"),    ibTypeString(36), false, true,  wxEmptyString },
+			{ wxT("bytecode_version"), ibTypeString(36), true,  false, wxEmptyString },
+			{ wxT("bc_blob"),          ibTypeBlob(),     true,  false, wxEmptyString },
+		}));
 	}
 	catch (...) {
 		// Best-effort — DDL failure leaves Save / Load in their
@@ -252,10 +181,11 @@ void ibApplicationData::MigrateTableBytecodeCache()
 
 bool ibApplicationData::ClearTableUser()
 {
-	if (!db_query->TableExists(user_table))
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(user_table))
 		return false;
 
-	db_query->RunQuery(wxT("DELETE FROM %s;"), user_table);
+	q.Execute(ibDelete(user_table));   // no WHERE = all rows
 	return true;
 }
 
@@ -292,22 +222,24 @@ bool ibApplicationData::LoadUserInfoFromBuffer(wxMemoryBuffer& buffer)
 
 bool ibApplicationData::SaveUserInfoToBuffer(wxMemoryBuffer& buffer) const
 {
-	ibResultSetGuard result(db_query,
-		db_query->RunQueryWithResults(wxT("SELECT guid FROM %s;"), user_table));
+	// SELECT guid FROM sys_user
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryIR ir(ibProject(ibScan(user_table), { { ibCol(wxT("guid")), wxEmptyString } }));
+		ibQueryResult result = q.ExecuteIR(ir);
 
-	if (!result)
-		return false;
+		ibWriterMemory writer; unsigned int idx = 0;
 
-	ibWriterMemory writer; unsigned int idx = 0;
+		while (result.Next()) {
+			ibWriterMemory userWriter;
+			ibUserInfo::Read(ibGuid(result.GetResultString(wxT("guid"))))
+				.Serialize(userWriter);
+			writer.w_chunk(idx++, userWriter.buffer());
+		}
 
-	while (result->Next()) {
-		ibWriterMemory userWriter;
-		ibUserInfo::Read(ibGuid(result->GetResultString(wxT("guid"))))
-			.Serialize(userWriter);
-		writer.w_chunk(idx++, userWriter.buffer());
+		buffer = writer.buffer();
 	}
-
-	buffer = writer.buffer();
+	catch (...) { return false; }
 	return true;
 }
 

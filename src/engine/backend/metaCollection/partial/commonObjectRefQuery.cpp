@@ -116,7 +116,7 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 	// freshly-inserted row carries a valid initial stamp.
 	if (!m_newObject && !m_loadedDataVersion.IsEmpty()) {
 		// Row lock + current-version read in ONE L3 selection: From(record).Where(uuid) with the
-		// page FOR-UPDATE flag (the dialect appends its RowLockHint via m_rowLockSuffix). Runs on
+		// page FOR-UPDATE flag (the dialect appends its row-lock clause via m_rowLockSuffix). Runs on
 		// the session holder — the SAME connection as the open write-scope TX — so the lock is held
 		// until commit. The version reads through GetValue(dvAttr), which assembles the attribute
 		// from its physical fields. DataVersion is NOT a single column: its SQL field name is the

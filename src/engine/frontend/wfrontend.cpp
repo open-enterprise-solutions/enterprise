@@ -25,8 +25,7 @@
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/connectionHolder.h"
 #include "backend/databaseLayer/connectionPool.h"
-#include "backend/databaseLayer/databaseLayer.h"
-#include "backend/databaseLayer/databaseResultSet.h"
+#include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — the meta-watch sys_config read (ibQueryResult, no raw L1)
 #include "backend/lock/lockManager.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
@@ -395,18 +394,18 @@ private:
 		// (cheaper than Open + Clone every tick). Pool's IsBusy()
 		// guard keeps it exclusive while the result set is iterated.
 		static ibSingleConnectionHolder s_metaWatchHolder;
-		std::shared_ptr<ibDatabaseLayer> conn = s_metaWatchHolder.AcquireFreeConnection();
-		if (conn == nullptr) return;
 
 		wxString currentGuid;
 		try {
 			// The deployed config lives in sys_config (ibConfigType_Load);
 			// sys_config_save is the designer's draft. We only react to
 			// the deployed guid so draft edits don't evict live users.
-			ibResultSetGuard rs(conn,
-				conn->RunQueryWithResults(wxT("SELECT file_guid FROM sys_config; ")));
-			if (rs && rs->Next())
-				currentGuid = rs->GetResultString(wxT("file_guid"));
+			// Bind the L2 door to the dedicated meta-watch holder (acquire-use-release per tick).
+			ibDatabaseQueryBuilder q(&s_metaWatchHolder);
+			ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(wxT("sys_config")),
+				{ { ibCol(wxT("file_guid")), wxEmptyString } })));
+			if (rs.Next())
+				currentGuid = rs.GetResultString(wxT("file_guid"));
 		} catch (...) {
 			// Swallow — transient DB errors shouldn't kill the sweep.
 			// ibDatabaseLayerException is conditionally compiled so we

@@ -399,9 +399,8 @@ void ibDatabaseLayerPostgres::DoBeginTransaction(const ibTxOptions& opts)
 	// PG's NOWAIT behaviour is per-statement (`SELECT ... FOR UPDATE NOWAIT`)
 	// or session-level (`SET lock_timeout`). Inside a TX the cleanest knob
 	// is `SET LOCAL lock_timeout = 0` — applies only to this TX, reverts
-	// on commit/rollback. Used by ibSessionRegistry::TryProbeRowLock so
-	// the probe SELECT fails immediately with a lock-timeout exception
-	// rather than blocking.
+	// on commit/rollback. Lets a noWait transaction (ibTxOptions::noWait)
+	// fail immediately with a lock-timeout exception rather than blocking.
 	if (opts.noWait) {
 		try { DoRunQuery(wxT("SET LOCAL lock_timeout = 0"), false); }
 		catch (...) { /* best-effort — server without lock_timeout just waits */ }
@@ -419,39 +418,6 @@ void ibDatabaseLayerPostgres::DoRollBack()
 }
 
 // IsActiveTransaction inherits the base-class default (m_txDepth > 0).
-
-bool ibDatabaseLayerPostgres::TryProbeRowLock(const wxString& tableName,
-                                               const wxString& pkColumn,
-                                               const wxString& pkValue)
-{
-	// FOR UPDATE NOWAIT on Postgres fails immediately when the row is
-	// locked by another connection — exactly the signal the registry's
-	// probe wants. Wrap the SELECT in its own TX so the lock, if taken,
-	// dies with the ROLLBACK at the tail.
-	try { BeginTransaction({ /*.noWait=*/true }); }
-	catch (...) { return false; }
-
-	const wxString sql = wxT("SELECT ") + pkColumn + wxT(" FROM ")
-		+ tableName + wxT(" WHERE ") + pkColumn
-		+ wxT(" = ? FOR UPDATE NOWAIT");
-	ibPreparedStatement* stmt = DoPrepareStatement(sql);
-	bool gotLock = false;
-	if (stmt) {
-		stmt->SetParamString(1, pkValue);
-		try {
-			ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
-			if (rs) {
-				if (rs->Next()) gotLock = true;
-				rs->Close();
-				CloseResultSet(rs);
-			}
-		}
-		catch (...) { gotLock = false; }
-		CloseStatement(stmt);
-	}
-	try { RollBack(); } catch (...) { /* swallowed: TryProbeRowLock always rolls back so no lock survives — failure here means lock is gone anyway */ }
-	return gotLock;
-}
 
 // query database
 int ibDatabaseLayerPostgres::DoRunQuery(const wxString& strQuery, bool WXUNUSED(bParseQuery))

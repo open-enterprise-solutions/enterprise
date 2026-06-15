@@ -23,6 +23,7 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 		d.m_alterColumnTemplate = wxEmptyString;      // no in-place type change -> renderer throws
 		d.m_alterTableMultiClause = false;            // one ADD/DROP per ALTER — the structure builder splits batches
 		d.m_rowLockSuffix = wxEmptyString;            // SQLite locks the whole DB per TX — no row FOR UPDATE
+		d.m_rowLockNoWaitSuffix = wxEmptyString;      // (no row lock at all -> nothing to make non-blocking)
 		// type map (SQLite is dynamically typed; these set column affinity)
 		d.m_typeBoolean       = wxT("INTEGER");
 		d.m_typeBigInt        = wxT("INTEGER");   // SQLite INTEGER is 64-bit

@@ -321,39 +321,6 @@ void ibDatabaseLayerODBC::DoRollBack()
 
 // IsActiveTransaction inherits the base-class default (m_txDepth > 0).
 
-bool ibDatabaseLayerODBC::TryProbeRowLock(const wxString& tableName,
-                                           const wxString& pkColumn,
-                                           const wxString& pkValue)
-{
-	// Targets MSSQL (the common ODBC-reached backend). `SET LOCK_TIMEOUT 0`
-	// on the session turns blocking locks into immediate errors;
-	// `WITH (UPDLOCK, ROWLOCK)` asks MSSQL to take a row-level update
-	// lock for the SELECT. Combined, a held row surfaces as an
-	// exception instead of a blocked probe.
-	try { BeginTransaction({ /*.noWait=*/true }); }
-	catch (...) { return false; }
-
-	const wxString sql = wxT("SELECT ") + pkColumn + wxT(" FROM ")
-		+ tableName + wxT(" WITH (UPDLOCK, ROWLOCK) WHERE ")
-		+ pkColumn + wxT(" = ?");
-	ibPreparedStatement* stmt = DoPrepareStatement(sql);
-	bool gotLock = false;
-	if (stmt) {
-		stmt->SetParamString(1, pkValue);
-		try {
-			ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
-			if (rs) {
-				if (rs->Next()) gotLock = true;
-				rs->Close();
-				CloseResultSet(rs);
-			}
-		}
-		catch (...) { gotLock = false; }
-		CloseStatement(stmt);
-	}
-	try { RollBack(); } catch (...) { /* swallowed: TryProbeRowLock always rolls back so no lock survives — failure here means lock is gone anyway */ }
-	return gotLock;
-}
 
 int ibDatabaseLayerODBC::DoRunQuery(const wxString& strQuery, bool bParseQuery)
 {

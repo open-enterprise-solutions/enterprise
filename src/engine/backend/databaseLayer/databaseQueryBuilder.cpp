@@ -245,6 +245,30 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteRendered(const ibRenderedQuery& ren
 	return ibRunRendered(conn, rendered, externalParams);
 }
 
+bool ibDatabaseQueryBuilder::TableExists(const wxString& table)
+{
+	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
+	return conn ? conn->TableExists(table) : false;
+}
+
+wxArrayString ibDatabaseQueryBuilder::GetColumns(const wxString& table)
+{
+	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
+	return conn ? conn->GetColumns(table) : wxArrayString();
+}
+
+bool ibDatabaseQueryBuilder::IsOpen()
+{
+	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
+	return conn ? conn->IsOpen() : false;
+}
+
+bool ibDatabaseQueryBuilder::IsActiveTransaction()
+{
+	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
+	return conn ? conn->IsActiveTransaction() : false;
+}
+
 int ibDatabaseQueryBuilder::Execute(const ibDdlStatement& ddl)
 {
 	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
@@ -424,8 +448,11 @@ ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 	m_out.m_sql = RenderSelect(ir.m_root.get());
 	// Pessimistic row lock — appended to the TOP-level SELECT only (subqueries render through
 	// RenderSelect above and must NOT carry it). The dialect owns the clause + its emptiness.
-	if (ir.m_lockForUpdate && !m_dialect.m_rowLockSuffix.empty())
+	if (ir.m_lockForUpdate && !m_dialect.m_rowLockSuffix.empty()) {
 		m_out.m_sql += m_dialect.m_rowLockSuffix;
+		if (ir.m_lockNoWait)
+			m_out.m_sql += m_dialect.m_rowLockNoWaitSuffix;   // " NOWAIT" (PG/MySQL); empty on FB/SQLite
+	}
 	return m_out;
 }
 
@@ -900,6 +927,21 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 
 	switch (dml.m_kind) {
 	case ibDmlKind::Insert: {
+		// INSERT … SELECT — the row source is a relation tree (RenderSelect pushes any of its binds
+		// in placeholder order). Standard SQL, identical on every driver.
+		if (dml.m_selectSource) {
+			sql = wxT("INSERT INTO ") + QuoteIdent(dml.m_table);
+			if (!dml.m_insertColumns.empty()) {
+				sql += wxT(" (");
+				for (size_t i = 0; i < dml.m_insertColumns.size(); ++i) {
+					if (i) sql += wxT(", ");
+					sql += QuoteIdent(dml.m_insertColumns[i]);
+				}
+				sql += wxT(")");
+			}
+			sql += wxT(" ") + RenderSelect(dml.m_selectSource.get());
+			break;
+		}
 		sql = wxT("INSERT INTO ") + QuoteIdent(dml.m_table) + wxT(" (");
 		for (size_t i = 0; i < dml.m_assignments.size(); ++i) {
 			if (i) sql += wxT(", ");

@@ -2,6 +2,7 @@
 
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
+#include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door: dialect-neutral DDL/DML + typed row reads (kills the PG/FB forks below)
 
 #include "backend/utils/md5.hpp"
 #include "backend/appData.h"
@@ -52,22 +53,23 @@ bool ibMetaDataConfiguration::LoadDatabase(int flags)
 		}
 	}
 
-	// load config
-	ibDatabaseResultSet* resultSet = db_query->RunQueryWithResults("SELECT binary_data, file_guid FROM %s; ", GetCommonConfigTable(GetConfigType()));
-	if (resultSet == nullptr)
-		return false;
+	// load config: SELECT binary_data, file_guid FROM <config table>
+	ibDatabaseQueryBuilder q;
+	ibQueryIR ir(ibProject(ibScan(GetCommonConfigTable(GetConfigType())),
+		{ { ibCol(wxT("binary_data")), wxEmptyString }, { ibCol(wxT("file_guid")), wxEmptyString } }));
+	ibQueryResult result = q.ExecuteIR(ir);   // RAII: closes cursor + statement
 
-	//load metadata from DB 
-	if (resultSet->Next()) {
+	//load metadata from DB
+	if (result.Next()) {
 
-		//clear data 
+		//clear data
 		if (!ClearDatabase()) {
 			wxASSERT_MSG(false, "ClearDatabase() == false");
 			return false;
 		}
 
 		wxMemoryBuffer binaryData;
-		resultSet->GetResultBlob(wxT("binary_data"), binaryData);
+		result.GetResultBlob(wxT("binary_data"), binaryData);
 		ibReaderMemory metaReader(binaryData.GetData(), binaryData.GetBufSize());
 
 		//check is file empty
@@ -80,11 +82,10 @@ bool ibMetaDataConfiguration::LoadDatabase(int flags)
 
 		m_configNew = false;
 
-		m_metaGuid = resultSet->GetResultString(wxT("file_guid"));
+		m_metaGuid = result.GetResultString(wxT("file_guid"));
 		m_md5Hash = ibMD5::ComputeMd5(wxBase64Encode(binaryData.GetData(), binaryData.GetDataLen()));
 	}
 
-	db_query->CloseResultSet(resultSet);
 	return true;
 }
 
@@ -209,31 +210,17 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 #endif
 	}
 
-	ibPreparedStatement* prepStatement = nullptr;
-	if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD)
-		prepStatement = db_query->PrepareStatement("INSERT INTO %s (file_name, binary_data, file_guid) VALUES(?, ?, ?)"
-			"ON CONFLICT (file_name) DO UPDATE SET file_name = EXCLUDED.file_name, binary_data = EXCLUDED.binary_data, file_guid = EXCLUDED.file_guid; ", config_save_table);
-	else
-		prepStatement = db_query->PrepareStatement("UPDATE OR INSERT INTO %s (file_name, binary_data, file_guid) VALUES(?, ?, ?) MATCHING (file_name); ", config_save_table);
-
-	if (!prepStatement) return false;
-
-	prepStatement->SetParamString(1, config_name);
-	prepStatement->SetParamBlob(2, writerData.pointer(), writerData.size());
-	prepStatement->SetParamString(3, m_metaGuid.str());
-
-	if (prepStatement->RunQuery() == DATABASE_LAYER_QUERY_RESULT_ERROR) {
+	// One UPSERT — the L2 door renders ON CONFLICT (PG/SQLite/MySQL) vs UPDATE OR INSERT … MATCHING (FB)
+	// from the match key, so the per-driver fork is gone. The blob rides as ibConstBlob (bound, not inlined).
+	ibDatabaseQueryBuilder q_save;
+	if (q_save.Execute(ibUpsert(config_save_table, {
+			{ wxT("file_name"),   ibConst(ibValue(config_name)) },
+			{ wxT("binary_data"), ibConstBlob(writerData.pointer(), writerData.size()) },
+			{ wxT("file_guid"),   ibConst(ibValue(m_metaGuid.str())) },
+		}, { wxT("file_name") })) == DATABASE_LAYER_QUERY_RESULT_ERROR) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 		db_query->RollBack(); return false;
 #else
-		return false;
-#endif
-	}
-
-	if (!db_query->CloseStatement(prepStatement)) {
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-		db_query->RollBack(); return false;
-#else 
 		return false;
 #endif
 	}
@@ -244,10 +231,13 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 
 	if ((flags & saveConfigFlag) != 0) {
 
+		// Copy the just-saved config_save → config (whole-table). Both go through L2 — DELETE, then
+		// INSERT … SELECT (ibInsertSelect with an empty projection = SELECT *). Standard SQL, no fork.
 		bool hasError =
-			db_query->RunQuery("DELETE FROM %s;", config_table) == DATABASE_LAYER_QUERY_RESULT_ERROR;
+			q_save.Execute(ibDelete(config_table)) == DATABASE_LAYER_QUERY_RESULT_ERROR;
 		hasError = hasError ||
-			db_query->RunQuery("INSERT INTO %s SELECT * FROM %s;", config_table, config_save_table) == DATABASE_LAYER_QUERY_RESULT_ERROR;
+			q_save.Execute(ibInsertSelect(config_table, {}, ibProject(ibScan(config_save_table))))
+				== DATABASE_LAYER_QUERY_RESULT_ERROR;
 		if (hasError)
 			return false;
 	}
@@ -371,8 +361,12 @@ bool ibMetaDataConfigurationStorage::SaveDatabase(int flags)
 
 bool ibMetaDataConfigurationStorage::RollbackDatabase()
 {
-	bool hasError = db_query->RunQuery("DELETE FROM %s;", config_save_table) == DATABASE_LAYER_QUERY_RESULT_ERROR;
-	hasError = hasError || db_query->RunQuery("INSERT INTO %s SELECT * FROM %s;", config_save_table, config_table) == DATABASE_LAYER_QUERY_RESULT_ERROR;
+	// Restore config_save from config (the inverse of OnSaveDatabase's copy) — both through L2:
+	// DELETE, then INSERT … SELECT (ibInsertSelect, empty projection = SELECT *). Standard SQL, no fork.
+	ibDatabaseQueryBuilder q;
+	bool hasError = q.Execute(ibDelete(config_save_table)) == DATABASE_LAYER_QUERY_RESULT_ERROR;
+	hasError = hasError || q.Execute(ibInsertSelect(config_save_table, {}, ibProject(ibScan(config_table))))
+		== DATABASE_LAYER_QUERY_RESULT_ERROR;
 	if (hasError) return false;
 	//close data 
 	if (ibMetaDataConfiguration::IsConfigOpen()) {
@@ -404,43 +398,32 @@ bool ibMetaDataConfigurationStorage::TableAlreadyCreated()
 
 void ibMetaDataConfigurationStorage::CreateConfigTable() {
 
-	//db for enterprise - TODO
+	//db for enterprise
 	if (!db_query->TableExists(config_table)) {
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
-			db_query->RunQuery("CREATE TABLE %s ("
-				"file_name VARCHAR(128) NOT NULL PRIMARY KEY,"
-				"file_guid uuid NOT NULL,"
-				"binary_data BYTEA NOT NULL);", config_table);         	//size of binary medatadata
-		}
-		else
-		{
-			db_query->RunQuery("CREATE TABLE %s ("
-				"file_name VARCHAR(128) NOT NULL PRIMARY KEY,"
-				"file_guid VARCHAR(36) NOT NULL,"
-				"binary_data BLOB NOT NULL);", config_table);         	//size of binary medatadata
-		}
-
-		db_query->RunQuery("CREATE INDEX s_config_index ON %s (file_name);", config_table);
+		// file_guid is a GUID column: native UUID on PostgreSQL, CHAR(36) elsewhere — the dialect TYPE-MAP
+		// picks per driver, so the PG/non-PG fork is gone. binary_data: BYTEA on PG, BLOB elsewhere.
+		ibDatabaseQueryBuilder q;
+		q.Execute(ibCreateTable(config_table, {
+			{ wxT("file_name"),   ibTypeString(128), false, true,  wxEmptyString },
+			{ wxT("file_guid"),   ibTypeGuid(),      true,  false, wxEmptyString },
+			{ wxT("binary_data"), ibTypeBlob(),      true,  false, wxEmptyString },
+		}));
+		q.Execute(ibCreateIndex(config_table, wxT("s_config_index"), { wxT("file_name") }));
 	}
 }
 
 void ibMetaDataConfigurationStorage::CreateConfigSaveTable() {
 
-	//db for designer 
+	//db for designer
 	if (!db_query->TableExists(config_save_table)) {
-		if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {
-			db_query->RunQuery("CREATE TABLE %s ("
-				"file_name VARCHAR(128) NOT NULL PRIMARY KEY,"
-				"file_guid uuid NOT NULL,"
-				"binary_data BYTEA NOT NULL);", config_save_table);         	//size of binary medatadata
-		}
-		else {
-			db_query->RunQuery("CREATE TABLE %s ("
-				"file_name VARCHAR(128) NOT NULL PRIMARY KEY,"
-				"file_guid VARCHAR(36) NOT NULL,"
-				"binary_data BLOB NOT NULL);", config_save_table);         	//size of binary medatadata
-		}
-		db_query->RunQuery("CREATE INDEX s_config_save_index ON %s (file_name);", config_save_table);
+		// Same schema as config_table — GUID + blob columns resolve per driver via the dialect TYPE-MAP.
+		ibDatabaseQueryBuilder q;
+		q.Execute(ibCreateTable(config_save_table, {
+			{ wxT("file_name"),   ibTypeString(128), false, true,  wxEmptyString },
+			{ wxT("file_guid"),   ibTypeGuid(),      true,  false, wxEmptyString },
+			{ wxT("binary_data"), ibTypeBlob(),      true,  false, wxEmptyString },
+		}));
+		q.Execute(ibCreateIndex(config_save_table, wxT("s_config_save_index"), { wxT("file_name") }));
 	}
 }
 
@@ -450,27 +433,18 @@ void ibMetaDataConfigurationStorage::CreateConfigSequence()
 {
 	if (!db_query->TableExists(sequence_table)) {
 
-		db_query->RunQuery(wxT("create table %s ("
-			"interval		   INTEGER       NOT NULL,"
-			"meta_guid         VARCHAR(36)   NOT NULL,"
-			"prefix			   VARCHAR(24)   NOT NULL,"
-			"number			   INTEGER       NOT NULL,"
-			"primary key (interval, meta_guid, prefix));"),
-
-			sequence_table);
-
-		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
-			db_query->RunQuery(
-				wxT("create index if not exists sequence_index on %s (interval, meta_guid, prefix);"),
-				sequence_table
-			);
-		}
-		else {
-			db_query->RunQuery(
-				wxT("create index sequence_index on %s (interval, meta_guid, prefix);"),
-				sequence_table
-			);
-		}
+		// (interval, meta_guid, prefix) is the sequence identity. The L2 CreateTable renderer carries only
+		// inline single-column PRIMARY KEY, so the composite uniqueness rides as a UNIQUE index — which is
+		// also the UPSERT match target in LoadSequenceFromBuffer (and replaces the old separate index).
+		ibDatabaseQueryBuilder q;
+		q.Execute(ibCreateTable(sequence_table, {
+			{ wxT("interval"),  ibTypeInteger(),  true, false, wxEmptyString },
+			{ wxT("meta_guid"), ibTypeString(36), true, false, wxEmptyString },
+			{ wxT("prefix"),    ibTypeString(24), true, false, wxEmptyString },
+			{ wxT("number"),    ibTypeInteger(),  true, false, wxEmptyString },
+		}));
+		q.Execute(ibCreateIndex(sequence_table, wxT("sequence_index"),
+			{ wxT("interval"), wxT("meta_guid"), wxT("prefix") }, /*unique*/true));
 	}
 }
 
@@ -478,8 +452,10 @@ void ibMetaDataConfigurationStorage::CreateConfigSequence()
 
 void ibMetaDataConfigurationStorage::ResetSequence()
 {
-	if (db_query->TableExists(sequence_table))
-		db_query->RunQuery(wxT("delete from %s;"), sequence_table);
+	if (db_query->TableExists(sequence_table)) {
+		ibDatabaseQueryBuilder q;
+		q.Execute(ibDelete(sequence_table));
+	}
 }
 
 bool ibMetaDataConfigurationStorage::LoadSequenceFromBuffer(const ibReaderMemory& reader)
@@ -502,28 +478,15 @@ bool ibMetaDataConfigurationStorage::LoadSequenceFromBuffer(const ibReaderMemory
 		const wxString& strPrefix = seqReader->r_stringZ();
 		const int number = seqReader->r_u32();
 
-		if (db_query->GetDatabaseLayerType() != DATABASELAYER_FIREBIRD) {
-
-			db_query->RunQuery(
-				wxT("INSERT INTO %s (interval, meta_guid, prefix, number) VALUES (%s, '%s', '%s', %s) ON CONFLICT(interval, meta_guid, prefix) DO UPDATE SET interval = excluded.interval, meta_guid = excluded.meta_guid, prefix = excluded.prefix, number = excluded.number;"),
-				sequence_table,
-				stringUtils::IntToStr(interval),
-				strDocPath,
-				strPrefix, //prefix
-				stringUtils::IntToStr(number)
-			);
-		}
-		else {
-
-			db_query->RunQuery(
-				wxT("UPDATE OR INSERT INTO %s (interval, meta_guid, prefix, number) VALUES (%s, '%s', '%s', %s) MATCHING (interval, meta_guid, prefix);"),
-				sequence_table,
-				stringUtils::IntToStr(interval),
-				strDocPath,
-				strPrefix, //prefix
-				stringUtils::IntToStr(number)
-			);
-		}
+		// One UPSERT, values bound (not string-concatenated as before) — the door renders the
+		// ON CONFLICT / UPDATE OR INSERT … MATCHING fork from the match keys.
+		ibDatabaseQueryBuilder q;
+		q.Execute(ibUpsert(sequence_table, {
+			{ wxT("interval"),  ibConst(ibValue(interval)) },
+			{ wxT("meta_guid"), ibConst(ibValue(strDocPath)) },
+			{ wxT("prefix"),    ibConst(ibValue(strPrefix)) },
+			{ wxT("number"),    ibConst(ibValue(number)) },
+		}, { wxT("interval"), wxT("meta_guid"), wxT("prefix") }));
 
 		seqReaderPrev = seqReader;
 	};
@@ -536,24 +499,26 @@ bool ibMetaDataConfigurationStorage::SaveSequenceToBuffer(ibWriterMemory& writer
 	if (!db_query->TableExists(sequence_table))
 		return false;
 
-	// save sequence 
-	ibDatabaseResultSet* resultSet = db_query->RunQueryWithResults(wxT("select * FROM %s;"), sequence_table);
-
-	if (resultSet == nullptr)
-		return false;
+	// save sequence: SELECT interval, meta_guid, prefix, number FROM sequence_table
+	ibDatabaseQueryBuilder q;
+	ibQueryIR ir(ibProject(ibScan(sequence_table), {
+		{ ibCol(wxT("interval")),  wxEmptyString },
+		{ ibCol(wxT("meta_guid")), wxEmptyString },
+		{ ibCol(wxT("prefix")),    wxEmptyString },
+		{ ibCol(wxT("number")),    wxEmptyString },
+	}));
+	ibQueryResult result = q.ExecuteIR(ir);   // RAII: closes cursor + statement
 
 	int idx = 0;
 
-	while (resultSet->Next()) {
-
+	while (result.Next()) {
 		ibWriterMemory seqWriter;
-		seqWriter.w_u32(resultSet->GetResultInt(wxT("interval")));
-		seqWriter.w_stringZ(resultSet->GetResultString(wxT("meta_guid")));
-		seqWriter.w_stringZ(resultSet->GetResultString(wxT("prefix")));
-		seqWriter.w_u32(resultSet->GetResultInt(wxT("number")));
+		seqWriter.w_u32(result.GetResultInt(wxT("interval")));
+		seqWriter.w_stringZ(result.GetResultString(wxT("meta_guid")));
+		seqWriter.w_stringZ(result.GetResultString(wxT("prefix")));
+		seqWriter.w_u32(result.GetResultInt(wxT("number")));
 		writer.w_chunk(idx++, seqWriter.buffer());
 	}
 
-	resultSet->Close();
 	return true;
 }

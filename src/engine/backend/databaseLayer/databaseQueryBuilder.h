@@ -448,8 +448,11 @@ struct ibQueryIR
 	ibQueryRelPtr m_root;
 
 	// Pessimistic read-for-update: the renderer appends the dialect's row-lock clause
-	// (m_rowLockSuffix) to the TOP-level SELECT. Used by the register set lock. (docs/record-locks.md)
+	// (m_rowLockSuffix) to the TOP-level SELECT. Used by the register set lock + ibLockManager.
+	// m_lockNoWait additionally appends m_rowLockNoWaitSuffix (e.g. " NOWAIT") so a non-blocking
+	// acquire fails fast instead of queueing on a held row. (docs/record-locks.md)
 	bool m_lockForUpdate = false;
+	bool m_lockNoWait    = false;
 
 	ibQueryIR() = default;
 	explicit ibQueryIR(ibQueryRelPtr root) : m_root(std::move(root)) {}
@@ -651,6 +654,12 @@ struct ibDmlStatement
 	// implicit key; they are excluded from the UPDATE SET (the PK never changes).
 	std::vector<wxString> m_matchKeys;
 
+	// Insert ONLY — INSERT … SELECT. When set, the row source is this relation tree instead of a
+	// VALUES list (m_assignments is then ignored). m_insertColumns is the optional target column list
+	// (empty => `INSERT INTO t SELECT …`). Standard SQL on every driver — no dialect fork.
+	ibQueryRelPtr         m_selectSource;
+	std::vector<wxString> m_insertColumns;
+
 	explicit ibDmlStatement(ibDmlKind kind) : m_kind(kind) {}
 };
 
@@ -659,6 +668,18 @@ inline ibDmlStatement ibInsert(const wxString& table, std::vector<ibDmlAssign> a
 	ibDmlStatement s(ibDmlKind::Insert);
 	s.m_table       = table;
 	s.m_assignments = std::move(assignments);
+	return s;
+}
+
+// INSERT INTO <table> [(columns)] <SELECT …>. The source is any relation tree (ibScan / ibProject /
+// ibFilter / Join). Empty `columns` emits `INSERT INTO t SELECT …` (column-position match, same
+// contract as raw SQL). Standard SQL — rendered identically on all drivers.
+inline ibDmlStatement ibInsertSelect(const wxString& table, std::vector<wxString> columns, ibQueryRelPtr source)
+{
+	ibDmlStatement s(ibDmlKind::Insert);
+	s.m_table         = table;
+	s.m_insertColumns = std::move(columns);
+	s.m_selectSource  = std::move(source);
 	return s;
 }
 
@@ -883,6 +904,16 @@ public:
 	void BeginTransaction(const ibDatabaseLayer::ibTxOptions& opts = {}) { m_scope.SafeBeginTransaction(opts); }
 	void Commit()   { m_scope.SafeCommitTransaction(); }
 	void RollBack() { m_scope.SafeRollBackTransaction(); }
+
+	// --- connection / schema introspection --------------------------------
+	// Predicates that delegate to the borrowed connection, so a DAO can stay on this one L2 door
+	// for its whole job — gate a CREATE on TableExists, read a live column set, check open /
+	// in-transaction state — without reaching for the raw ibDatabaseLayer. A scope that holds no
+	// connection reports false / empty (these never throw — they are pre-flight checks).
+	bool          TableExists(const wxString& table);
+	wxArrayString GetColumns(const wxString& table);
+	bool          IsOpen();
+	bool          IsActiveTransaction();
 
 private:
 	// fluent state — assembled into an ibQueryIR by Build()

@@ -64,19 +64,9 @@ public:
 	// Driver transaction primitives (DoBeginTransaction / DoCommit /
 	// DoRollBack) are protected — see below.
 
-	// Row-lock probe — SESSION innodb_lock_wait_timeout=1 inside
-	// BeginTransaction(noWait) + SELECT ... FOR UPDATE. Surfaces a held
-	// row as an exception within ~1s instead of blocking the sweep.
-	virtual bool TryProbeRowLock(const wxString& tableName,
-		const wxString& pkColumn, const wxString& pkValue) override;
-
-	// Write-time row-lock dialect (see docs/record-locks.md). MySQL/
-	// InnoDB locks via "SELECT ... FOR UPDATE"; "NOWAIT" is honoured on
-	// MySQL 8+. Older versions ignore the keyword and rely on the
-	// session-level `innodb_lock_wait_timeout=1` already plumbed via
-	// ibTxOptions::noWait — both paths fail fast under contention.
-	wxString RowLockHint() const override { return wxT("FOR UPDATE"); }
-	wxString NoWaitClause() const override { return wxT("NOWAIT"); }
+	// Row-lock dialect now lives in the dialect dictionary (default m_rowLockSuffix=" FOR UPDATE",
+	// m_rowLockNoWaitSuffix=" NOWAIT"); NOWAIT is honoured on MySQL 8+, older rely on the
+	// session-level innodb_lock_wait_timeout=1 (ibTxOptions::noWait).
 
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
 	virtual bool TableExists(const wxString& table);

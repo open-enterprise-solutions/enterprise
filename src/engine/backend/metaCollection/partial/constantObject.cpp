@@ -255,7 +255,7 @@ bool ibValueRecordDataObjectConstant::GetPropVal(const long lPropNum, ibValue& p
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "backend/databaseLayer/databaseLayer.h"            // GetConstValue: single-row read (constant is not an ibBackendQueryable)
+#include "backend/databaseLayer/databaseQueryBuilder.h"     // L2 door — open/table-exists gate + the RECORD_KEY row-lock (ir.m_lockForUpdate); value read is L3 (ibDataQueryBuilder)
 #include "backend/query/dataQueryBuilder.h"                 // SetConstValue: L3 write core (UPSERT the singleton row)
 
 ibValue ibValueRecordDataObjectConstant::GetConstValue() const
@@ -264,9 +264,8 @@ ibValue ibValueRecordDataObjectConstant::GetConstValue() const
 
 	if (!appData->DesignerMode()) {
 
-		if (db_query != nullptr && !db_query->IsOpen())
-			ibBackendCoreException::Error(_("Database is not open!"));
-		else if (db_query == nullptr)
+		ibDatabaseQueryBuilder dbq;   // L2 door for the open / table-exists gate (no raw ibDatabaseLayer)
+		if (!dbq.IsOpen())
 			ibBackendCoreException::Error(_("Database is not open!"));
 
 		if (!m_metaObject->AccessRight_Read()) {
@@ -275,7 +274,7 @@ ibValue ibValueRecordDataObjectConstant::GetConstValue() const
 		}
 
 		const wxString& tableName = m_metaObject->GetPhysicalTableName();
-		if (db_query->TableExists(tableName)) {
+		if (dbq.TableExists(tableName)) {
 			// Read the single sys_const row through the L3 door — the constant IS the
 			// queryable (its table) AND the column (its value). The FB FIRST / others
 			// LIMIT fork and the raw field concat are gone; the value comes from the
@@ -342,23 +341,20 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 
 	scope.SafeBeginTransaction();
 
-	// Layer-1 DB row-lock on this constant's singleton row. Concurrent
-	// writes to different constants don't conflict (each constant has
-	// its own table); concurrent writes to THIS constant serialize on
-	// the RECORD_KEY='6' row via the driver's FOR UPDATE / WITH LOCK.
+	// DB row-lock on this constant's singleton row. Concurrent writes to different constants don't
+	// conflict (each constant has its own table); concurrent writes to THIS constant serialize on the
+	// RECORD_KEY='6' row via the dialect's row-lock clause (FOR UPDATE / WITH LOCK). The L2 door runs
+	// it on the session's bound conn — the SAME TX as the scope above — via q(session holder).
 	// See docs/record-locks.md.
 	{
-		const wxString hint = scope->RowLockHint();
-		const wxString lockSql = wxT("SELECT 1 FROM ") + tableName
-		                       + wxT(" WHERE RECORD_KEY = '6'")
-		                       + (hint.IsEmpty() ? wxString() : wxT(" ") + hint)
-		                       + wxT(";");
-		ibDatabaseResultSet* lockRs = scope->RunQueryWithResults(lockSql);
-		if (lockRs != nullptr) {
-			// Drain — only the lock side effect matters.
-			while (lockRs->Next()) {}
-			scope->CloseResultSet(lockRs);
-		}
+		ibDatabaseQueryBuilder q(ibSession::Current()->Holder());
+		ibQueryIR ir(ibProject(
+			ibFilter(ibScan(tableName),
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("RECORD_KEY")), ibConst(ibValue(wxString(wxT("6")))))),
+			{ { ibConst(ibValue(1)), wxEmptyString } }));   // SELECT 1 — only the row lock matters
+		ir.m_lockForUpdate = true;
+		ibQueryResult lockRs = q.ExecuteIR(ir);
+		while (lockRs.Next()) {}   // drain — only the lock side effect matters
 	}
 
 	auto rollback = [&]() {

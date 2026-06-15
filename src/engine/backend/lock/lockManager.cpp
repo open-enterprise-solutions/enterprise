@@ -6,7 +6,7 @@
 //
 //   1. Compute keyHash = SHA-256 of canonical serialization.
 //   2. SELECT sessionGuid, userName, lockMode FROM sys_lock
-//        WHERE namespace = ? AND keyHash = ?  <RowLockHint>
+//        WHERE namespace = ? AND keyHash = ?  <FOR UPDATE>   (ir.m_lockForUpdate; the dialect renders the clause)
 //      — DB row-lock pins the index entry for the rest of this TX so
 //      a concurrent acquire serialises behind us.
 //   3. For each result row:
@@ -28,7 +28,8 @@
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/connectionScope.h"
-#include "backend/databaseLayer/databaseLayer.h"
+#include "backend/databaseLayer/databaseLayer.h"            // ibTxOptions (the lock TX still rides the driver's tpb)
+#include "backend/databaseLayer/databaseQueryBuilder.h"     // L2 door — pessimistic SELECT via ir.m_lockForUpdate/m_lockNoWait
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/session/session.h"
 #include "backend/userInfo.h"
@@ -40,24 +41,6 @@ namespace {
 // Table name kept here so call sites don't drift. Mirrors the
 // session-registry's sys_session table naming.
 const wxString kSysLockTable = wxT("sys_lock");
-
-// Build the bulk-DELETE SQL for a list of lock guids. PG / FB / MySQL
-// / SQLite all accept "WHERE lockGuid IN ('a','b','c')" — keeps the
-// implementation portable without per-driver branching.
-wxString BuildDeleteByGuidsSQL(const std::vector<ibGuid>& guids)
-{
-	wxString sql = wxT("DELETE FROM ") + kSysLockTable + wxT(" WHERE lockGuid IN (");
-	bool first = true;
-	for (const auto& g : guids) {
-		if (!first) sql += wxT(",");
-		first = false;
-		// Wrap each guid in quotes — guids are well-formed
-		// hex+dashes, no escape concern.
-		sql += wxT("'") + g.str() + wxT("'");
-	}
-	sql += wxT(");");
-	return sql;
-}
 
 } // namespace
 
@@ -100,37 +83,22 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 	// caller's business TX (lock rows must be visible to other
 	// processes the moment Acquire returns, not when the caller
 	// eventually commits).
-	ibConnectionScope scope(&m_lockHolder);
-	if (!scope || !scope->IsOpen()) {
+	// The lock TX runs on the lock manager's own holder (out of the caller's business TX) — lock rows
+	// must be visible to peer processes the moment Acquire returns. One builder = one borrowed
+	// connection for the whole batch; its scope carries the TX and every statement below.
+	ibDatabaseQueryBuilder q(&m_lockHolder);
+	if (!q.IsOpen()) {
 		ibBackendCoreException::Error(
 			_("ibLockManager::Acquire - database is not open."));
 	}
 
 	ibDatabaseLayer::ibTxOptions txOpts;
 	txOpts.noWait = !opts.wait;
-	scope.SafeBeginTransaction(txOpts);
+	q.BeginTransaction(txOpts);
 
 	std::vector<ibGuid> acquired;
 
 	try {
-		const wxString hint     = scope->RowLockHint();
-		const wxString nowait   = (!opts.wait) ? scope->NoWaitClause() : wxString();
-		const wxString hintClause = (hint.IsEmpty()   ? wxString() : wxT(" ") + hint)
-		                          + (nowait.IsEmpty() ? wxString() : wxT(" ") + nowait);
-
-		const wxString selectSqlTpl = wxT("SELECT sessionGuid, userName, lockMode FROM ")
-		                            + kSysLockTable
-		                            + wxT(" WHERE namespace = ? AND keyHash = ?")
-		                            + hintClause + wxT(";");
-
-		const wxString insertSqlTpl = wxT("INSERT INTO ") + kSysLockTable
-		                            + wxT(" (lockGuid, sessionGuid, namespace, keyHash,")
-		                            + wxT(" keyData, lockMode, acquiredAt, userName, computer)")
-		                            + wxT(" VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);");
-
-		const wxString updateModeSqlTpl = wxT("UPDATE ") + kSysLockTable
-		                                + wxT(" SET lockMode = ? WHERE lockGuid = ?;");
-
 		const wxString ownerGuidStr = ownerGuid.str();
 		const wxDateTime nowUtc = wxDateTime::UNow();
 
@@ -141,57 +109,57 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 			const wxString& keyHash = item.KeyHash();
 			const wxString& keyData = item.KeyData();
 
-			// ---- Conflict check ----
-			ibStatementGuard selectSt(scope.get(),
-				scope->PrepareStatement(selectSqlTpl));
-			if (!selectSt) {
-				ibBackendCoreException::Error(
-					_("ibLockManager: failed to prepare lock-conflict query."));
-			}
-			selectSt->SetParamString(1, item.namespaceName);
-			selectSt->SetParamString(2, keyHash);
-			ibDatabaseResultSet* rs = selectSt->RunQueryWithResults();
-			if (rs == nullptr) {
-				ibBackendCoreException::Error(
-					_("ibLockManager: lock-conflict query returned no result set."));
-			}
-
+			// ---- Conflict check (pessimistic FOR UPDATE [NOWAIT] via the L2 lock-hint path) ----
 			bool       ownExisting = false;
 			ibGuid     ownExistingGuid;
 			ibLockMode ownExistingMode = ibLockMode::Shared;
 			bool       conflictHit = false;
 			wxString   conflictUser;
+			{
+				ibQueryIR ir(ibProject(
+					ibFilter(ibScan(kSysLockTable),
+						ibBinOp(ibQueryBinOp::And,
+							ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("namespace")), ibConst(ibValue(item.namespaceName))),
+							ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("keyHash")),   ibConst(ibValue(keyHash))))),
+					{ { ibCol(wxT("sessionGuid")), wxEmptyString },
+					  { ibCol(wxT("userName")),    wxEmptyString },
+					  { ibCol(wxT("lockMode")),    wxEmptyString } }));
+				ir.m_lockForUpdate = true;
+				ir.m_lockNoWait    = !opts.wait;   // non-blocking acquire fails fast on a held row
 
-			while (rs->Next()) {
-				const wxString otherSess  = rs->GetResultString(1);
-				const wxString otherUser  = rs->GetResultString(2);
-				const ibLockMode otherMode =
-					static_cast<ibLockMode>(rs->GetResultInt(3));
+				// The cursor must be released before the INSERT/UPDATE on the same connection, so it
+				// lives in this inner block (mirrors the old CloseResultSet placement).
+				ibQueryResult rs = q.ExecuteIR(ir);
+				while (rs.Next()) {
+					const wxString otherSess  = rs.GetResultString(wxT("sessionGuid"));
+					const wxString otherUser  = rs.GetResultString(wxT("userName"));
+					const ibLockMode otherMode =
+						static_cast<ibLockMode>(rs.GetResultInt(wxT("lockMode")));
 
-				if (otherSess.CmpNoCase(ownerGuidStr) == 0) {
-					// Re-entrant — track the first own row we find.
-					// (Same-session multiple rows shouldn't happen
-					// in practice — Acquire ensures at most one row
-					// per (session, namespace, keyHash).)
-					ownExisting     = true;
-					ownExistingMode = otherMode;
-					continue;
-				}
+					if (otherSess.CmpNoCase(ownerGuidStr) == 0) {
+						// Re-entrant — track the first own row we find.
+						// (Same-session multiple rows shouldn't happen
+						// in practice — Acquire ensures at most one row
+						// per (session, namespace, keyHash).)
+						ownExisting     = true;
+						ownExistingMode = otherMode;
+						continue;
+					}
 
-				// Other session — conflict iff either side is X.
-				if (otherMode == ibLockMode::Exclusive ||
-				    item.lockMode == ibLockMode::Exclusive)
-				{
-					conflictHit  = true;
-					conflictUser = otherUser;
-					break;
+					// Other session — conflict iff either side is X.
+					if (otherMode == ibLockMode::Exclusive ||
+					    item.lockMode == ibLockMode::Exclusive)
+					{
+						conflictHit  = true;
+						conflictUser = otherUser;
+						break;
+					}
 				}
 			}
-			scope->CloseResultSet(rs);
 
 			if (conflictHit) {
 				// Roll back any inserts we did earlier in this batch.
-				scope.SafeRollBackTransaction();
+				q.RollBack();
 				ibBackendLockException::LockConflictThrow(item.namespaceName, conflictUser);
 			}
 
@@ -201,49 +169,30 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 					// S → X upgrade in place. No new row added to
 					// the handle — caller already owns this lock,
 					// just at a higher level now.
-					ibStatementGuard updSt(scope.get(),
-						scope->PrepareStatement(updateModeSqlTpl));
-					if (updSt) {
-						updSt->SetParamInt(1, static_cast<int>(item.lockMode));
-						updSt->SetParamString(2, ownExistingGuid.str());
-						updSt->RunQuery();
-					}
+					q.Execute(ibUpdate(kSysLockTable,
+						{ { wxT("lockMode"), ibConst(ibValue(static_cast<int>(item.lockMode))) } },
+						ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("lockGuid")),
+						        ibConst(ibValue(ownExistingGuid.str())))));
 				}
 				// Same-mode or X→S → no-op.
 				continue;
 			}
 
-			// Fresh INSERT.
+			// Fresh INSERT. (acquiredAt is a TIMESTAMP column — bound as an ibValue date, not a string;
+			// keyData is the canonical human-readable key, stored as text — wide enough for typical keys.)
 			const ibGuid newGuid = wxNewUniqueGuid;
-			ibStatementGuard insSt(scope.get(),
-				scope->PrepareStatement(insertSqlTpl));
-			if (!insSt) {
-				scope.SafeRollBackTransaction();
-				ibBackendCoreException::Error(
-					_("ibLockManager: failed to prepare lock-insert query."));
-			}
-			insSt->SetParamString(1, newGuid.str());
-			insSt->SetParamString(2, ownerGuidStr);
-			insSt->SetParamString(3, item.namespaceName);
-			insSt->SetParamString(4, keyHash);
-
-			// keyData is the canonical human-readable representation
-			// (sorted by name). Stored as text — sys_lock.keyData
-			// VARCHAR is wide enough for typical keys; if a future
-			// register lock has hundreds of dim values, swap to BLOB.
-			insSt->SetParamString(5, keyData);
-			insSt->SetParamInt   (6, static_cast<int>(item.lockMode));
-			// TIMESTAMP column — use SetParamDate, not SetParamString.
-			// FB driver AV's on SetParamString for TIMESTAMP-typed
-			// columns (it tries to interpret the bytes as date raw
-			// data). Mirrors how sys_session binds its started /
-			// lastActive (sessionRegistry.cpp).
-			insSt->SetParamDate  (7, nowUtc);
-			insSt->SetParamString(8, ownerName);
-			insSt->SetParamString(9, ownerComputer);
-
-			if (insSt->RunQuery() == DATABASE_LAYER_QUERY_RESULT_ERROR) {
-				scope.SafeRollBackTransaction();
+			if (q.Execute(ibInsert(kSysLockTable, {
+					{ wxT("lockGuid"),    ibConst(ibValue(newGuid.str())) },
+					{ wxT("sessionGuid"), ibConst(ibValue(ownerGuidStr)) },
+					{ wxT("namespace"),   ibConst(ibValue(item.namespaceName)) },
+					{ wxT("keyHash"),     ibConst(ibValue(keyHash)) },
+					{ wxT("keyData"),     ibConst(ibValue(keyData)) },
+					{ wxT("lockMode"),    ibConst(ibValue(static_cast<int>(item.lockMode))) },
+					{ wxT("acquiredAt"),  ibConst(ibValue(nowUtc)) },
+					{ wxT("userName"),    ibConst(ibValue(ownerName)) },
+					{ wxT("computer"),    ibConst(ibValue(ownerComputer)) },
+				})) == DATABASE_LAYER_QUERY_RESULT_ERROR) {
+				q.RollBack();
 				ibBackendCoreException::Error(
 					_("ibLockManager: failed to insert sys_lock row."));
 			}
@@ -251,15 +200,14 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 		}
 	}
 	catch (const ibBackendException&) {
-		// SafeRollBack already fired in the throw paths above; this
-		// catches any other ibBackendException from the SQL helpers
-		// so we always rollback cleanly before propagating.
-		if (scope.HasActiveTransaction())
-			scope.SafeRollBackTransaction();
+		// RollBack already fired in the throw paths above; this catches any other
+		// ibBackendException from the SQL helpers so we always rollback before propagating.
+		if (q.IsActiveTransaction())
+			q.RollBack();
 		throw;
 	}
 
-	scope.SafeCommitTransaction();
+	q.Commit();
 
 	return ibLockHandle(std::move(acquired), ownerGuid);
 }
@@ -269,22 +217,26 @@ void ibLockManager::ReleaseRows(const std::vector<ibGuid>& lockGuids)
 	if (lockGuids.empty())
 		return;
 
-	ibConnectionScope scope(&m_lockHolder);
-	if (!scope || !scope->IsOpen())
+	ibDatabaseQueryBuilder q(&m_lockHolder);
+	if (!q.IsOpen())
 		return;  // best-effort — silent fail if DB closed (process shutdown)
 
-	scope.SafeBeginTransaction();
+	q.BeginTransaction();
 	try {
-		scope->RunQuery(BuildDeleteByGuidsSQL(lockGuids));
+		std::vector<ibQueryExprPtr> guids;
+		guids.reserve(lockGuids.size());
+		for (const auto& g : lockGuids)
+			guids.push_back(ibConst(ibValue(g.str())));
+		q.Execute(ibDelete(kSysLockTable, ibIn(ibCol(wxT("lockGuid")), std::move(guids))));
 	}
 	catch (const ibBackendException&) {
-		if (scope.HasActiveTransaction())
-			scope.SafeRollBackTransaction();
+		if (q.IsActiveTransaction())
+			q.RollBack();
 		// Swallow — Release is best-effort. Stale rows get cleaned
 		// up by the zombie sweep eventually.
 		return;
 	}
-	scope.SafeCommitTransaction();
+	q.Commit();
 }
 
 void ibLockManager::OnSessionEnd(const ibGuid& sessionGuid)
@@ -292,25 +244,21 @@ void ibLockManager::OnSessionEnd(const ibGuid& sessionGuid)
 	if (!sessionGuid.isValid())
 		return;
 
-	ibConnectionScope scope(&m_lockHolder);
-	if (!scope || !scope->IsOpen())
+	ibDatabaseQueryBuilder q(&m_lockHolder);
+	if (!q.IsOpen())
 		return;
 
-	scope.SafeBeginTransaction();
+	q.BeginTransaction();
 	try {
-		ibStatementGuard st(scope.get(), scope->PrepareStatement(
-			wxT("DELETE FROM ") + kSysLockTable + wxT(" WHERE sessionGuid = ?;")));
-		if (st) {
-			st->SetParamString(1, sessionGuid.str());
-			st->RunQuery();
-		}
+		q.Execute(ibDelete(kSysLockTable,
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("sessionGuid")), ibConst(ibValue(sessionGuid.str())))));
 	}
 	catch (const ibBackendException&) {
-		if (scope.HasActiveTransaction())
-			scope.SafeRollBackTransaction();
+		if (q.IsActiveTransaction())
+			q.RollBack();
 		return;
 	}
-	scope.SafeCommitTransaction();
+	q.Commit();
 }
 
 void ibLockManager::OnZombieSweep(const std::vector<ibGuid>& deadSessionGuids)
@@ -326,30 +274,34 @@ std::vector<ibLockSnapshotRow> ibLockManager::GetSnapshot() const
 {
 	std::vector<ibLockSnapshotRow> rows;
 
-	ibConnectionScope scope(&m_lockHolder);
-	if (!scope || !scope->IsOpen())
+	ibDatabaseQueryBuilder q(&m_lockHolder);
+	if (!q.IsOpen())
 		return rows;
 
-	// Read-only — no TX needed; default isolation gives us latest
-	// committed state from other processes.
-	ibDatabaseResultSet* rs = scope->RunQueryWithResults(
-		wxT("SELECT lockGuid, sessionGuid, namespace, keyData, lockMode,")
-		wxT(" acquiredAt, userName, computer FROM ") + kSysLockTable + wxT(";"));
-	if (rs == nullptr)
-		return rows;
-
-	while (rs->Next()) {
-		ibLockSnapshotRow r;
-		r.lockGuid      = ibGuid(rs->GetResultString(1));
-		r.sessionGuid   = ibGuid(rs->GetResultString(2));
-		r.namespaceName = rs->GetResultString(3);
-		r.keyData       = rs->GetResultString(4);
-		r.lockMode      = static_cast<ibLockMode>(rs->GetResultInt(5));
-		r.acquiredAt    = rs->GetResultDate(6);
-		r.userName      = rs->GetResultString(7);
-		r.computer      = rs->GetResultString(8);
-		rows.push_back(std::move(r));
+	// Read-only — no TX needed; default isolation gives us latest committed state from other processes.
+	try {
+		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(kSysLockTable),
+			{ { ibCol(wxT("lockGuid")),    wxEmptyString },
+			  { ibCol(wxT("sessionGuid")), wxEmptyString },
+			  { ibCol(wxT("namespace")),   wxEmptyString },
+			  { ibCol(wxT("keyData")),     wxEmptyString },
+			  { ibCol(wxT("lockMode")),    wxEmptyString },
+			  { ibCol(wxT("acquiredAt")),  wxEmptyString },
+			  { ibCol(wxT("userName")),    wxEmptyString },
+			  { ibCol(wxT("computer")),    wxEmptyString } })));
+		while (rs.Next()) {
+			ibLockSnapshotRow r;
+			r.lockGuid      = ibGuid(rs.GetResultString(wxT("lockGuid")));
+			r.sessionGuid   = ibGuid(rs.GetResultString(wxT("sessionGuid")));
+			r.namespaceName = rs.GetResultString(wxT("namespace"));
+			r.keyData       = rs.GetResultString(wxT("keyData"));
+			r.lockMode      = static_cast<ibLockMode>(rs.GetResultInt(wxT("lockMode")));
+			r.acquiredAt    = rs.GetResultDate(wxT("acquiredAt"));
+			r.userName      = rs.GetResultString(wxT("userName"));
+			r.computer      = rs.GetResultString(wxT("computer"));
+			rows.push_back(std::move(r));
+		}
 	}
-	scope->CloseResultSet(rs);
+	catch (...) { /* best-effort snapshot — empty/partial on failure */ }
 	return rows;
 }
