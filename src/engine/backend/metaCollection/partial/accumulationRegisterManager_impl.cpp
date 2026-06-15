@@ -48,7 +48,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 
 	// SUM(CASE WHEN recordType = 0 THEN -res ELSE res END) up to the period, grouped by
 	// the dimension key, kept non-zero. Values ride as bound Const.
-	const wxString table = GetTableNameDB();
+	const wxString table = GetPhysicalTableName();
 	const wxString recordTypeField = ibRegValueField(GetRegisterRecordType());
 	const ibQueryExprPtr zero = ibConst(ibValue(0.0));
 	auto balanceExpr = [&](const ibValueMetaObjectAttributeBase* res) -> ibQueryExprPtr {
@@ -95,7 +95,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 			}
 			for (const auto object : GetResourceArrayObject()) {
 				ibValue retVal;
-				if (ibDbTableProvider::GetValueAttribute(object->GetFieldNameDB() + "_N_Balance_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retVal, rs))
+				if (ibDbTableProvider::GetValueAttribute(object->GetPhysicalName() + "_N_Balance_", ibFieldTypes_Number, object, retVal, rs))
 					retTable.SetByName(retRow, object->GetName() + "_Balance", retVal);
 			}
 		}
@@ -178,7 +178,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	// For a balance register the record type signs the movement: turnover = SUM(±res),
 	// receipt = SUM(res WHEN type=0), expense = SUM(res WHEN type<>0); a pure turnover
 	// register has only the plain SUM. Kept non-zero. Values ride as bound Const.
-	const wxString table = GetTableNameDB();
+	const wxString table = GetPhysicalTableName();
 	const wxString recordTypeField = withSign ? ibRegValueField(GetRegisterRecordType()) : wxString();
 	const ibQueryExprPtr zero = ibConst(ibValue(0.0));
 	auto isReceipt = [&]() { return ibBinOp(ibQueryBinOp::Eq, ibCol(recordTypeField), zero); };
@@ -244,14 +244,14 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 			}
 			for (const auto object : GetResourceArrayObject()) {
 				ibValue retValue;
-				if (ibDbTableProvider::GetValueAttribute(object->GetFieldNameDB() + "_N_Turnover_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retValue, rs))
+				if (ibDbTableProvider::GetValueAttribute(object->GetPhysicalName() + "_N_Turnover_", ibFieldTypes_Number, object, retValue, rs))
 					retTable.SetByName(retRow, object->GetName() + "_Turnover", retValue);
 				if (withSign) {
 					ibValue retValue1;
-					if (ibDbTableProvider::GetValueAttribute(object->GetFieldNameDB() + "_N_Receipt_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retValue1, rs))
+					if (ibDbTableProvider::GetValueAttribute(object->GetPhysicalName() + "_N_Receipt_", ibFieldTypes_Number, object, retValue1, rs))
 						retTable.SetByName(retRow, object->GetName() + "_Receipt", retValue1);
 					ibValue retValue2;
-					if (ibDbTableProvider::GetValueAttribute(object->GetFieldNameDB() + "_N_Expense_", ibValueMetaObjectAttributeBase::ibFieldTypes_Number, object, retValue2, rs))
+					if (ibDbTableProvider::GetValueAttribute(object->GetPhysicalName() + "_N_Expense_", ibFieldTypes_Number, object, retValue2, rs))
 						retTable.SetByName(retRow, object->GetName() + "_Expense", retValue2);
 				}
 			}

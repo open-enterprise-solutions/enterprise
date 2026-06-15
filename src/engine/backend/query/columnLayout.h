@@ -1,0 +1,130 @@
+#ifndef __COLUMN_LAYOUT_H__
+#define __COLUMN_LAYOUT_H__
+
+// Column layout — the physical decomposition of ONE logical column, the single
+// authority shared by the read/write codec (L3-1, ibDbTableProvider) and the
+// schema/DDL door (L3-2). A composite / variant / reference attribute lowers to
+// several physical columns, each with a ROLE (_TYPE / _B / _N / _D / _S / _E /
+// _RTRef / _RRRef), a canonical TYPE (for DDL) and a DEFAULT. The field ORDER is
+// byte-identical to the historical GetSQLFieldData / WriteFieldsOf order —
+// LOAD-BEARING: the keyset anchor must match the first ORDER BY field.
+//
+// Pure descriptor: no transaction, no queryable, no cursor. It sits between L3
+// (the query door) and L2 (the render): it speaks L2's ibColumnType, and is fed
+// an L3 ibBackendQueryColumn plus the metadata context (for reference-type
+// detection). This is the one home for the "magic" column spread that used to be
+// duplicated across the attribute metaobject, the provider codec and the DDL
+// builder. (docs/query-language-arc.md §22.4b)
+
+#include "backend/databaseLayer/columnType.h"             // ibColumnType (shared canonical type — ibColumnSlot carries one)
+#include "backend/databaseLayer/databaseQueryBuilder.h"   // ibQueryStatement / ibQueryResult (L2) — the codec binds/reads through them
+#include "backend/query/queryColumn.h"                     // ibBackendQueryColumn
+
+class ibMetaData;
+class ibValue;             // codec currency — named only by reference in the codec signatures below
+class ibReaderMemory;      // binary-wire reader (fileSystem/fs.h) — dump/restore path
+class ibWriterMemory;      // binary-wire writer (fileSystem/fs.h)
+// ibQueryStatement / ibQueryResult are full types from databaseQueryBuilder.h (included above) — the
+// binary codec binds/reads through the L2 statement/cursor, not raw L1 (ibPreparedStatement/-ResultSet).
+
+// The role a physical field plays in a logical column's spread (an L3 layout concept — L2 never sees it).
+enum class ibColumnRole : uint8_t {
+	Raw,             // a raw physical column — its own single field, type carried by the column
+	Discriminator,   // _TYPE  — the variant type tag
+	Boolean,         // _B
+	Number,          // _N
+	Date,            // _D
+	String,          // _S
+	Enum,            // _E
+	ReferenceType,   // _RTRef — the reference target's clsid (BIGINT)
+	ReferenceId      // _RRRef — the reference value (guid + metaID blob)
+};
+
+// One physical field of a logical column (the layout decomposition unit).
+struct ibColumnSlot {
+	wxString     m_name;                       // physical column name (base + suffix)
+	ibColumnRole m_role    = ibColumnRole::Raw;
+	ibColumnType m_type;                       // canonical type for DDL (MapType -> dialect SQL)
+	wxString     m_default;                    // DEFAULT clause (e.g. "0"), empty = none
+	bool         m_notNull = false;
+};
+
+// The ONE role -> physical-suffix table. Every layer that names a composite column's physical fields
+// (the layout below, the read keyset anchor, the DDL builder, the attribute field machinery) spells the
+// suffix through this, so the lettering lives in exactly one map and can never disagree between writers.
+// Raw -> empty (the column is its own field, no suffix).
+BACKEND_API const wxString& ibFieldSuffix(ibColumnRole role);
+
+// The authority. Decompose a logical column into its physical fields, derived purely
+// from (physical name, type descriptor) + metadata context. Order: TYPE, B, N, D, S,
+// E, RTRef, RRRef — the same fixed order the write / read codec binds in. A raw column
+// = one slot as-is.
+BACKEND_API std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col,
+                                                           const ibMetaData* metaData);
+
+// The persisted _TYPE discriminator value a layout role stores (the ibFieldTypes tag — the wire
+// format, kept here in the tier, not on the attribute). Used to clear rows whose stored type was
+// just dropped. Returns ibFieldTypes_Empty for roles that carry no tag (Raw / Discriminator).
+BACKEND_API int ibPersistedTypeTag(ibColumnRole role);
+
+// Does this clsid lower to the reference pair (_RTRef/_RRRef)? The ONE reference-target check the
+// layout / codec / DDL diff share (typeCtor's meta-type is Reference) — no re-implementing it.
+BACKEND_API bool IsReferenceClsid(const ibClassID& clsid, const ibMetaData* metaData);
+
+// SQL fragment builders over a column's physical layout — the ONE source for the field
+// spellings the hand-written query/upsert SQL used to assemble per-attribute. All derive
+// from DescribeColumnLayout, so the field SET + ORDER match the read/write codec exactly.
+//   ColumnFieldNames        : the physical field NAMES in bind order (index columns / statement list)
+//   ColumnFieldList         : "f_TYPE,f_B,f_N,…"  (SELECT list; aggr wraps the N/D measures)
+//   ColumnComparePredicate  : "f_TYPE = ? AND f_B <cmp> ? AND …"  (WHERE by value)
+BACKEND_API std::vector<wxString> ColumnFieldNames(const ibBackendQueryColumn* col, const ibMetaData* metaData);
+BACKEND_API wxString       ColumnFieldList(const ibBackendQueryColumn* col, const ibMetaData* metaData, const wxString& aggr = wxEmptyString);
+BACKEND_API wxString       ColumnComparePredicate(const ibBackendQueryColumn* col, const ibMetaData* metaData, const wxString& cmp = wxT("="));
+
+
+// ==========================================================================
+// ibColumnCodec — the VALUE codec: the inverse pair that spreads an ibValue across a
+// column's physical fields (write) and reassembles it from a result cursor (read). The
+// SAME "magic" as the layout above, co-located here: a value bound by WriteValue lands in
+// exactly the fields DescribeColumnLayout creates, in the same order. STATIC (stateless) —
+// the read/write data door (L3-1) and the schema door's seed phase (L3-2, e.g. predefined
+// values) share ONE codec, so a write and its DDL can never disagree on the field shape.
+// This header stays light: the persisted variant tag (ibFieldTypes) is an implementation
+// detail of the .cpp, not exposed here. (docs/query-language-arc.md §22.4b)
+// ==========================================================================
+class BACKEND_API ibColumnCodec
+{
+public:
+	// WRITE — bind the value's TYPE tag + per-contained-type data + the reference pair into
+	// `statement` from `position` (1-based), advancing it. The physical order is exactly the
+	// one DescribeColumnLayout lays out. Binds into the L2 ibQueryStatement, never a raw L1
+	// statement. Column-based — no attribute.
+	static void WriteValue(const ibBackendQueryColumn* col, const ibMetaData* metaData,
+	                       const ibValue& value, ibQueryStatement* statement, int& position);
+	static void WriteValue(const ibBackendQueryColumn* col, const ibMetaData* metaData,
+	                       const ibValue& value, ibQueryStatement* statement);   // from position 1
+
+	// READ — reassemble the value off the column's physical fields in `result`. The col-only
+	// overload reads the column's own physical name; the fieldName overload reads a given base
+	// (a dot-walk alias prefix). Reference / enum reconstruction uses the metadata context.
+	static bool ReadValue(const ibBackendQueryColumn* col, const ibMetaData* metaData,
+	                      ibValue& retValue, ibQueryResult& result, bool createData = true);
+	static bool ReadValue(const wxString& fieldName, const ibBackendQueryColumn* col, const ibMetaData* metaData,
+	                      ibValue& retValue, ibQueryResult& result, bool createData = true);
+
+	// READ ONE physical field of a KNOWN variant type (the read leaf). `fieldType` is the persisted
+	// variant tag (ibValueMetaObjectAttributeBase::ibFieldTypes) passed as a plain int, so this
+	// header need not pull the heavy attribute header in. Used directly by callers that already
+	// know a field's type (a register reading a numeric balance/turnover column).
+	static bool ReadField(const wxString& fieldName, int fieldType, const ibBackendQueryColumn* col,
+	                      const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData = true);
+
+	// Does the column's type admit a reference value — its spread carries _RTRef/_RRRef?
+	static bool HasReference(const ibBackendQueryColumn* col, const ibMetaData* metaData);
+
+	// (The BINARY-WIRE codec — BinaryToStatement / BinaryFromResult — is the L3-3 dump / restore
+	//  PRIMITIVE; it lives with its consumer in query/dataMover.h (ibDataMover), not here. It reuses
+	//  this codec's HasReference + the shared spread driver, so the two stay byte-identical.)
+};
+
+#endif // !__COLUMN_LAYOUT_H__

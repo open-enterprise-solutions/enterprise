@@ -1133,9 +1133,6 @@
     <ClCompile Include="metaCollection\enumeration\metaEnumObject_res.cpp">
       <Filter>metaCollection\enumeration</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\informationRegisterQuery.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
     <ClCompile Include="metaCollection\partial\commonObject.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
@@ -1365,9 +1362,6 @@
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\documentObject.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\enumerationAction.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\enumerationManager.cpp">
@@ -1723,9 +1717,6 @@
     <ClCompile Include="propertyManager\property\propertyChartOfCharacteristicTypes.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataQuery.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
     <ClCompile Include="characteristicCtor.cpp" />
     <ClCompile Include="plugin\pluginManager.cpp">
       <Filter>plugin</Filter>
@@ -2075,12 +2066,33 @@
     <ClCompile Include="query\dbTableProvider.cpp">
       <Filter>query</Filter>
     </ClCompile>
+    <ClCompile Include="query\columnLayout.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\dataMover.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\schemaBuilder.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\structureBatch.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\schemaSnapshot.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\structureBuilder.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="query\tempTableManager.cpp">
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="moduleManager\moduleManagerDataUnit.cpp">
       <Filter>moduleManager</Filter>
     </ClCompile>
+    <ClInclude Include="databaseLayer\columnType.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
     <ClInclude Include="databaseLayer\databaseQueryBuilder.h">
       <Filter>databaseLayer</Filter>
     </ClInclude>
@@ -2094,6 +2106,27 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\dbTableProvider.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\columnLayout.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\columnSpread.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\dataMover.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\schemaBuilder.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\structureBatch.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\schemaSnapshot.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\structureBuilder.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\tempTableManager.h">

@@ -101,7 +101,7 @@ bool ibValueMetaObjectConfiguration::OnSaveMetaObject(int flags)
 	}
 
 	if (m_propertyDefLanguage->IsEmptyProperty()) {
-		s_restructureInfo.AppendError(_("! Doesn't have default language ") + GetFullName());
+		RestructureError(_("! Doesn't have default language ") + GetFullName());
 		return false;
 	}
 

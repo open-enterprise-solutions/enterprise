@@ -19,6 +19,9 @@
 #include "backend/backend.h"
 
 #include <memory>
+#include <set>
+#include <vector>
+#include <functional>
 
 class ibDatabaseLayer;
 
@@ -63,6 +66,20 @@ public:
 	// short — `auto scope = ibSession::Current()->OpenConnectionScope();`
 	// (via session façade).
 	class ibConnectionScope OpenConnectionScope();
+
+	// --- DDL/DML barrier state (the current restructuring save) -----------------------------------
+	// Tables CREATEd this save on a barrier dialect (Firebird), and the data writes DEFERRED past the
+	// DDL commit (FB can't populate a freshly-created table in the same transaction). The state lives
+	// here, not in process-wide statics, because the barrier is tied to THIS holder's connection /
+	// transaction — so the SEVERAL ibSchemaBuilder instances of one save (Reset / per-table Execute /
+	// Flush) share one home through the holder they run on. ibSchemaBuilder owns the logic; the holder
+	// only stores. (query/schemaBuilder.h)
+	std::set<wxString>&                 DdlCreatedTables()  { return m_ddlCreated; }
+	std::vector<std::function<bool()>>& DdlDeferredWrites() { return m_ddlDeferred; }
+
+private:
+	std::set<wxString>                 m_ddlCreated;
+	std::vector<std::function<bool()>> m_ddlDeferred;
 };
 
 // ibSingleConnectionHolder — generic empty holder. The OES runtime

@@ -83,6 +83,7 @@
     <ClInclude Include="databaseLayer\databaseErrorReporter.h" />
     <ClInclude Include="databaseLayer\connectionPool.h" />
     <ClInclude Include="databaseLayer\connectionScope.h" />
+    <ClInclude Include="databaseLayer\columnType.h" />
     <ClInclude Include="databaseLayer\databaseQueryBuilder.h" />
     <ClInclude Include="databaseLayer\databaseLayer.h" />
     <ClInclude Include="databaseLayer\databaseLayerDef.h" />
@@ -214,6 +215,13 @@
     <ClInclude Include="query\dataQueryBuilder.h" />
     <ClInclude Include="query\queryProvider.h" />
     <ClInclude Include="query\dbTableProvider.h" />
+    <ClInclude Include="query\columnLayout.h" />
+    <ClInclude Include="query\columnSpread.h" />
+    <ClInclude Include="query\dataMover.h" />
+    <ClInclude Include="query\schemaBuilder.h" />
+    <ClInclude Include="query\schemaSnapshot.h" />
+    <ClInclude Include="query\structureBatch.h" />
+    <ClInclude Include="query\structureBuilder.h" />
     <ClInclude Include="query\tempTableManager.h" />
     <ClInclude Include="query\queryRamTable.h" />
     <ClInclude Include="query\queryKeywords.h" />
@@ -362,7 +370,6 @@
     <ClCompile Include="compiler\byteCodeAOT.cpp" />
     <ClCompile Include="compiler\valueSerialization.cpp" />
     <ClCompile Include="constantCtor.cpp" />
-    <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataQuery.cpp" />
     <ClCompile Include="metadataSerialization.cpp" />
     <ClCompile Include="moduleManager\globalContextManager.cpp" />
     <ClCompile Include="spreadsheetDescription.cpp" />
@@ -559,7 +566,6 @@
     <ClCompile Include="metaCollection\partial\documentMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\documentMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\documentObject.cpp" />
-    <ClCompile Include="metaCollection\partial\enumerationAction.cpp" />
     <ClCompile Include="metaCollection\partial\enumerationManager.cpp" />
     <ClCompile Include="metaCollection\partial\enumerationMetadata.cpp" />
     <ClCompile Include="metaCollection\partial\enumerationMetadataMenu.cpp" />
@@ -573,7 +579,6 @@
     <ClCompile Include="metaCollection\partial\informationRegisterMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterObject.cpp" />
-    <ClCompile Include="metaCollection\partial\informationRegisterQuery.cpp" />
     <ClCompile Include="query\dataQueryBuilder.cpp" />
     <ClCompile Include="query\queryLexer.cpp" />
     <ClCompile Include="query\queryParser.cpp" />
@@ -587,6 +592,12 @@
     <ClCompile Include="system\value\valueQueryable.cpp" />
     <ClCompile Include="query\queryProvider.cpp" />
     <ClCompile Include="query\dbTableProvider.cpp" />
+    <ClCompile Include="query\columnLayout.cpp" />
+    <ClCompile Include="query\dataMover.cpp" />
+    <ClCompile Include="query\schemaBuilder.cpp" />
+    <ClCompile Include="query\schemaSnapshot.cpp" />
+    <ClCompile Include="query\structureBatch.cpp" />
+    <ClCompile Include="query\structureBuilder.cpp" />
     <ClCompile Include="query\tempTableManager.cpp" />
     <ClCompile Include="metaCollection\partial\list\objectList.cpp" />
     <ClCompile Include="metaCollection\partial\list\objectListAction.cpp" />

@@ -802,6 +802,19 @@ wxString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 		if (!ddl.m_columns.empty()) sql += QuoteIdent(ddl.m_columns[0].m_name);
 		return sql;
 	}
+	case ibDdlKind::AlterTable: {
+		// One ALTER folding every coalesced clause: ALTER TABLE t ADD c1, ADD c2, DROP COLUMN c3.
+		wxString sql = wxT("ALTER TABLE ") + QuoteIdent(ddl.m_table) + wxT(" ");
+		for (size_t i = 0; i < ddl.m_alterClauses.size(); ++i) {
+			if (i) sql += wxT(", ");
+			const ibAlterClause& clause = ddl.m_alterClauses[i];
+			if (clause.m_op == ibAlterOp::Add)
+				sql += wxT("ADD ") + RenderColumn(clause.m_column);
+			else
+				sql += wxT("DROP COLUMN ") + QuoteIdent(clause.m_column.m_name);
+		}
+		return sql;
+	}
 	case ibDdlKind::AlterColumn: {
 		// SQLite's (empty) template => throw: it cannot change a column type in place.
 		if (m_dialect.m_alterColumnTemplate.empty())
@@ -838,6 +851,7 @@ wxString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 wxString ibQueryRenderer::RenderColumn(const ibDdlColumn& col)
 {
 	wxString s = QuoteIdent(col.m_name) + wxT(" ") + MapType(col.m_type);
+	if (!col.m_default.empty()) s += wxT(" DEFAULT ") + col.m_default;   // before NOT NULL (e.g. "INTEGER DEFAULT 0 NOT NULL")
 	if (col.m_primaryKey)   s += wxT(" PRIMARY KEY");   // implies NOT NULL
 	else if (col.m_notNull) s += wxT(" NOT NULL");
 	return s;
@@ -848,11 +862,24 @@ wxString ibQueryRenderer::MapType(const ibColumnType& type) const
 	switch (type.m_kind) {
 	case ibCanonicalKind::Boolean: return m_dialect.m_typeBoolean;
 	case ibCanonicalKind::Integer: return m_dialect.m_typeInteger;
-	case ibCanonicalKind::Date:    return m_dialect.m_typeDate;
+	case ibCanonicalKind::BigInt:  return m_dialect.m_typeBigInt;
 	case ibCanonicalKind::Blob:    return m_dialect.m_typeBlob;
 	case ibCanonicalKind::Guid:    return m_dialect.m_typeGuid;
+	case ibCanonicalKind::Binary:
+		// PG's BYTEA carries no length — render the pattern verbatim when it has no %d.
+		return m_dialect.m_typeBinaryPattern.Contains(wxT("%"))
+		     ? wxString::Format(m_dialect.m_typeBinaryPattern, type.m_length > 0 ? type.m_length : 16)
+		     : m_dialect.m_typeBinaryPattern;
+	case ibCanonicalKind::Date:
+		switch (type.m_datePrec) {
+		case ibDatePrec::Date:     return m_dialect.m_typeDateOnly;
+		case ibDatePrec::Time:     return m_dialect.m_typeTime;
+		case ibDatePrec::DateTime: return m_dialect.m_typeDate;
+		}
+		return m_dialect.m_typeDate;
 	case ibCanonicalKind::String:
-		return wxString::Format(m_dialect.m_typeStringPattern, type.m_length > 0 ? type.m_length : 255);
+		return wxString::Format(type.m_fixed ? m_dialect.m_typeCharPattern : m_dialect.m_typeStringPattern,
+		                        type.m_length > 0 ? type.m_length : 255);
 	case ibCanonicalKind::Number:
 		return wxString::Format(m_dialect.m_typeNumberPattern,
 		                        type.m_precision > 0 ? type.m_precision : 18, type.m_scale);

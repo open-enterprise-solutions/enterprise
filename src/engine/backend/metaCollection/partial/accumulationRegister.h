@@ -110,11 +110,6 @@ public:
 
 	///////////////////////////////////////////////////////////////////
 
-	bool CreateAndUpdateBalancesTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags);
-	bool CreateAndUpdateTurnoverTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags);
-
-	///////////////////////////////////////////////////////////////////
-
 	ibValueMetaObjectAccumulationRegister();
 	virtual ~ibValueMetaObjectAccumulationRegister();
 
@@ -164,9 +159,6 @@ public:
 	//prepare menu for item
 	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
 	virtual void ProcessCommand(unsigned int id);
-
-	//create and update table 
-	virtual bool CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags);
 
 	/**
 	* Property events

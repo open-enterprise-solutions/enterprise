@@ -32,7 +32,7 @@ public:
 	wxString           GetName()         const override { return m_name; }
 	wxString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
-	ibMetaID           GetModelID()      const override { return m_id; }
+	ibMetaID           GetColumnId()      const override { return m_id; }
 private:
 	wxString                  m_name;
 	ibMetaID                  m_id;
@@ -52,7 +52,7 @@ public:
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
 
 	wxString GetQueryTableName() const override { return m_table; }
-	ibMetaID GetQueryMetaID()    const override { return m_metaId; }
+	ibMetaID GetQueryTableId()    const override { return m_metaId; }
 	bool     IsComputedInRam()   const override { return m_computed; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }

@@ -539,7 +539,7 @@ class ibSyntheticScalarColumn : public ibRawDBColumn
 public:
 	ibSyntheticScalarColumn(const wxString& alias, ibMetaID id, RawType type = RawType::Number)
 		: ibRawDBColumn(alias, type), m_id(id) {}
-	ibMetaID GetModelID() const override { return m_id; }
+	ibMetaID GetColumnId() const override { return m_id; }
 private:
 	ibMetaID m_id;
 };

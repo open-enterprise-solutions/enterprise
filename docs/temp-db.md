@@ -123,7 +123,7 @@ So `nullptr ⇒ RAM` is the floor; *not* `present ⇒ always temp`.
 A DB temp table is **not a new backing** — it is the **ordinary DB provider pointed at a temporary
 table**. Reading it back is reused 100% (`ibDbTempTableQueryable` inherits the DB provider, raw
 columns). Generating the temp `CREATE (…)` DDL from the intermediate's column set is trivial
-**because columns self-describe** (name + `GetTypeDesc` + `GetSQLFields`) after column-based lowering.
+**because columns self-describe** (name + `GetTypeDesc` + `GetValueFields`) after column-based lowering.
 
 But there is **one genuinely hard part**, and it must not be glossed: the **server-side JOIN
 push-down**. Today an explicit `.Join` across two sources goes through the **RAM composer**

@@ -8,6 +8,7 @@
 #include "backend/metadata.h"
 #include "backend/appData.h"
 #include "backend/appEnv.h"   // appEnv::ActiveMetaData accessor
+#include "backend/query/structureBuilder.h"   // ibStructureBuilder — the config-save structure subsystem (member)
 
 class ibDebuggerServer;
 class ibDebuggerClient;
@@ -65,9 +66,19 @@ public:
 
 	virtual ibGuid GetConfigGuid() const = 0;
 
-	// if storage save in db 
+	// if storage save in db
 	virtual bool IsConfigOpen() const { return false; }
 	virtual bool IsConfigSave() const { return true; }
+
+	// Restructure ledger — the record of REAL structural changes (CREATE/ALTER/DROP table, add/change/
+	// remove column + value row) from the config-save differ, plus metadata-validation warnings/errors.
+	// Lives on the CONFIGURATION: only a config restructures, an external data-processor / report never
+	// does. STATIC accessor that pulls the ACTIVE config's ledger, so this-less sites (static scaffold
+	// methods, the apply-change dialog) reach it without a metadata handle. (replaces s_restructureInfo.)
+	static ibRestructureInfo& GetRestructureInfo();
+private:
+	ibRestructureInfo m_restructureInfo;
+public:
 
 	virtual bool LoadDatabase(int flags = defaultFlag) { return true; }
 	virtual bool SaveDatabase(int flags = defaultFlag) { return true; }
@@ -361,6 +372,11 @@ private:
 	bool SaveSequenceToBuffer(ibWriterMemory& writer);
 
 	ibMetaDataConfiguration* m_configMetadata;
+
+	// The config-save STRUCTURE + SEED engine — METADATA-AGNOSTIC: it works only on snapshots this Storage
+	// hands it (built via ContributeTables on the edited config + the saved baseline). On save the Storage
+	// builds both snapshots and drives the builder's before/during/after events. (query/structureBuilder.h)
+	ibStructureBuilder m_structureBuilder;
 
 	// Designer-side debugger client. Same ownership pattern as
 	// m_debugServer on the base; cached pointer through

@@ -14,8 +14,9 @@
 // read time) — so the persistent meta vends it via the common GetQueryable() interface
 // and a transient (data-processor / report) parent simply never queries it.
 const ibBackendQueryColumn* ibTabularQueryable::ResolveColumnByName(const wxString& name) const { return m_meta->FindAnyAttributeObjectByFilter(name); }
-wxString ibTabularQueryable::GetQueryTableName() const { return m_meta->GetTableNameDB(); }
-ibMetaID ibTabularQueryable::GetQueryMetaID() const { return m_meta->GetMetaID(); }
+wxString ibTabularQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
+wxString ibTabularQueryable::GetQueryName()      const { return m_meta->GetName(); }
+ibMetaID ibTabularQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
 const ibMetaData* ibTabularQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
 // Identity tail = line number (rows of one parent are ordered + uniquely keyed by it). The PARENT
 // uuid is NOT the identity tail — it is a plain query filter (Where on the raw "uuid" column at

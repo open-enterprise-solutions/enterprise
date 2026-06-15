@@ -7,7 +7,7 @@
 
 bool ibValueMetaObjectConfiguration::ExecuteSystemSQLCommand()
 {
-	s_restructureInfo.AppendWarning("Execute system sql command");
+	RestructureWarning("Execute system sql command");   // static facade -> the active config's ledger
 
 	int retCode = DATABASE_LAYER_QUERY_RESULT_ERROR;
 	if (db_query->GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL) {

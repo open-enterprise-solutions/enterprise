@@ -31,7 +31,7 @@ ibDataComposer& ibDataComposer::FromSource(const ibBackendQueryable* queryable)
 	// downward (the rendered NAME does, and the lowering re-resolves it).
 	const ibMetaData* metaData = queryable != nullptr ? queryable->GetMetaData() : nullptr;
 	const ibValueMetaObject* meta = metaData != nullptr
-		? metaData->FindAnyObjectByFilter<ibValueMetaObject>(queryable->GetQueryMetaID())
+		? metaData->FindAnyObjectByFilter<ibValueMetaObject>(queryable->GetQueryTableId())
 		: nullptr;
 	if (meta == nullptr)
 		ibBackendCoreException::Error(_("Composer: the queryable carries no metadata identity"));

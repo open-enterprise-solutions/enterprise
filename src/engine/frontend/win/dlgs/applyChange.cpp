@@ -22,8 +22,8 @@ ibDialogApplyChange::ibDialogApplyChange(const ibRestructureInfo& info, wxWindow
 	//m_resultBox->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_INFOBK));
 	m_resultBox->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNHIGHLIGHT));
 
-	for (unsigned int idx = 0; idx < info.GetCount(); idx++) {
-		m_resultBox->Append(info.GetDescription(idx));
+	for (size_t idx = 0; idx < info.Count(); idx++) {
+		m_resultBox->Append(info.At(idx).descr);
 	}
 
 	windowSizer->Add(m_resultBox, 1, wxALL | wxEXPAND, FromDIP(5));

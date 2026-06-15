@@ -283,17 +283,4 @@ ibSourceDataObject* ibValueMetaObjectAccountingRegister::CreateSourceObject(cons
 	return nullptr;
 }
 
-bool ibValueMetaObjectAccountingRegister::CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags)
-{
-	return CreateAndUpdateRegisterTableDB(srcMetaData, srcMetaObject, flags);
-}
-
-bool ibValueMetaObjectAccountingRegister::CreateAndUpdateRegisterTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags)
-{
-	// Delegates to the base class which handles all predefined attributes
-	// (LineActive, Period, RecordType, Account, Subconto1-3, Recorder, LineNumber)
-	// via FillArrayObjectByPredefinedAttribute, plus user-defined dimensions and resources.
-	return ibValueMetaObjectRegisterData::CreateAndUpdateTableDB(srcMetaData, srcMetaObject, flags);
-}
-
 METADATA_TYPE_REGISTER(ibValueMetaObjectAccountingRegister, "AccountingRegister", g_metaAccountingRegisterCLSID);

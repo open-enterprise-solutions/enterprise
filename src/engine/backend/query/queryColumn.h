@@ -20,6 +20,25 @@
 
 #include <vector>
 
+// ibFieldTypes — the persisted VARIANT TAG stored in a composite column's _TYPE field: which of
+// the column's allowed types the row actually holds. The L3 column vocabulary, shared by the
+// layout tier, the value codec and the (forwarding) attribute. Moved here out of the heavy
+// attribute header so the tier can speak it without dragging the metadata class in.
+enum ibFieldTypes {
+	ibFieldTypes_Empty = 0,
+	ibFieldTypes_Boolean,
+	ibFieldTypes_Number,
+	ibFieldTypes_Date,
+	ibFieldTypes_String,
+	ibFieldTypes_Null,
+	ibFieldTypes_Enum,
+	ibFieldTypes_Reference,
+};
+
+// (ibSQLField — the structured "_TYPE + per-type field" projection — is REMOVED. Its analog is the
+//  column-layout tier: DescribeColumnLayout (slots) / ColumnFieldNames / ColumnFieldList. The enum
+//  ibFieldTypes above stays — it is the persisted _TYPE discriminator value, used by the codec.)
+
 class BACKEND_API ibBackendQueryColumn
 {
 public:
@@ -42,10 +61,10 @@ public:
 	// For a DB / attribute column this IS the metaID; for a computed / temp column it
 	// is the source's own internal unique id ("source id") — whatever the queryable
 	// keys its rows by. The point: each column self-describes its read key, so a model
-	// (RAM) read is GetValueByMetaID(col->GetModelID()) with NO attribute resolution —
+	// (RAM) read is GetValueByMetaID(col->GetColumnId()) with NO attribute resolution —
 	// and a non-metaobject temp column fits the same shape. UNIQUE PER COLUMN (a
 	// resource's Balance vs Turnover have distinct model ids, though one metaID).
-	virtual ibMetaID GetModelID() const = 0;
+	virtual ibMetaID GetColumnId() const = 0;
 
 	// The column's PHYSICAL SQL fields — the multi-column split a DB lowering needs (a
 	// composite / variant / reference column expands to several: _B / _N / _D / _S / _E /
@@ -56,7 +75,7 @@ public:
 	// is the bare physical name (a single untyped field), enough for a plain temp column.
 	// Value materialization / binding (reference reconstruction) still needs metadata context
 	// and stays on the queryable. (docs/query-language-arc.md §22.4b)
-	virtual std::vector<wxString> GetSQLFields() const { return std::vector<wxString>{ GetPhysicalName() }; }
+	virtual std::vector<wxString> GetValueFields() const { return std::vector<wxString>{ GetPhysicalName() }; }
 
 	// (No per-column primary-key flag: a source's uniqueness key is owned by the QUERYABLE —
 	// ibBackendQueryable::GetPrimaryKeyColumns is the ONE authority for both the write UPSERT
@@ -84,7 +103,10 @@ class BACKEND_API ibRawDBColumn : public ibBackendQueryColumn
 {
 public:
 	// How the provider binds the raw value — fixed by the concrete factory, not the value.
-	enum class RawType { String, Number, Binary, Date, Boolean };
+	// Reference is the FIXED reference-key binary (_RRRef = [guid 16][metaID 4], indexable); Blob is a
+	// VARIABLE-length blob (a register's rowData). Guid / Blob / Reference are the schema-scaffold types
+	// so the structure builder can create those columns through this same column interface, no ibDdlColumn.
+	enum class RawType { String, Number, Reference, Date, Boolean, Guid, Blob };
 
 	ibRawDBColumn(const wxString& field, RawType type)
 		: m_field(field), m_type(type) {}
@@ -92,19 +114,18 @@ public:
 	wxString              GetName()         const override { return m_field; }
 	wxString              GetPhysicalName() const override { return m_field; }
 	ibTypeDescription&    GetTypeDesc()     const override { return m_typeDesc; }   // interface returns a non-const ref
-	ibMetaID              GetModelID()      const override { return 0; }            // no model — raw field
-	std::vector<wxString> GetSQLFields()    const override { return std::vector<wxString>{ m_field }; }
+	ibMetaID              GetColumnId()      const override { return 0; }            // no model — raw field
+	std::vector<wxString> GetValueFields()    const override { return std::vector<wxString>{ m_field }; }
 	bool                  IsRawColumn()     const override { return true; }
 
 	RawType               GetRawType()      const { return m_type; }   // the provider's bind selector
 
 	// Convenience makers — read cleaner than naming the enum at the call site, with no extra
-	// type to maintain (these are static factories, not subclasses).
+	// type to maintain (these are static factories, not subclasses). Only the kinds actually
+	// scaffolded by ContributeTables / used by tests are kept; the rest were dead.
 	static ibRawDBColumn String (const wxString& field) { return ibRawDBColumn(field, RawType::String);  }
-	static ibRawDBColumn Number (const wxString& field) { return ibRawDBColumn(field, RawType::Number);  }
-	static ibRawDBColumn Binary (const wxString& field) { return ibRawDBColumn(field, RawType::Binary);  }
-	static ibRawDBColumn Date   (const wxString& field) { return ibRawDBColumn(field, RawType::Date);    }
-	static ibRawDBColumn Boolean(const wxString& field) { return ibRawDBColumn(field, RawType::Boolean); }
+	static ibRawDBColumn Guid   (const wxString& field) { return ibRawDBColumn(field, RawType::Guid);    }
+	static ibRawDBColumn Blob   (const wxString& field) { return ibRawDBColumn(field, RawType::Blob);    }
 
 private:
 	wxString                  m_field;

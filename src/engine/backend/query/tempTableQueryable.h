@@ -5,7 +5,7 @@
 // `From(временной таблицы)`. It is the proof that a queryable need not be a metaobject
 // (docs §22.0): its columns are generic (ibTempColumn — name + type + source-id, NO
 // attribute behind them), and it is read through the SAME door + RAM source as a
-// register slice — uniformly by GetModelID(), no attribute, no metaobject. It vends the
+// register slice — uniformly by GetColumnId(), no attribute, no metaobject. It vends the
 // computed provider (its rows are a RAM table it already holds); the composer joins /
 // unions it with native sources (catalog / register) like any other leaf. (docs §22.1)
 
@@ -16,7 +16,7 @@
 #include <vector>
 
 // A generic temp-table column — name + type + source-id. NO attribute behind it; the
-// source-id (GetModelID) is the key the RAM table stores the column's value at.
+// source-id (GetColumnId) is the key the RAM table stores the column's value at.
 class ibTempColumn : public ibBackendQueryColumn
 {
 public:
@@ -26,7 +26,7 @@ public:
 	wxString           GetName()         const override { return m_name; }
 	wxString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }   // interface returns a non-const ref
-	ibMetaID           GetModelID()      const override { return m_modelId; }
+	ibMetaID           GetColumnId()      const override { return m_modelId; }
 
 private:
 	wxString                  m_name;
@@ -39,7 +39,7 @@ class ibTempTableQueryable : public ibBackendQueryable
 public:
 	// Build from a pre-filled RAM table (an ibValue wrapping ibValueModelTable): derive
 	// the generic columns from its collection (name / id / type), each keyed by the SAME
-	// id the rows are stored at — so the RAM source reads every column by GetModelID().
+	// id the rows are stored at — so the RAM source reads every column by GetColumnId().
 	explicit ibTempTableQueryable(ibValue table) : m_table(std::move(table))
 	{
 		ibValueModelTable* rows = nullptr;
@@ -93,12 +93,12 @@ public:
 	}
 	// Convert the held runtime table into L3's own ibQueryRamTable at this ingest seam
 	// (this bridge is the one place a runtime table enters L3). Keyed by each column's
-	// source-id (GetModelID) — the RAM source then reads every column by id.
+	// source-id (GetColumnId) — the RAM source then reads every column by id.
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const override
 	{
 		ibQueryRamTable t;
 		for (const auto& c : m_columns)
-			t.AddColumn(c->GetModelID(), c->GetName(), c->GetTypeDesc());
+			t.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());
 		ibValueModelTable* rows = nullptr;
 		if (m_table.ConvertToValue(rows) && rows != nullptr) {
 			const long n = rows->GetRowCount();
@@ -106,8 +106,8 @@ public:
 				const long r = t.AppendRow();
 				for (const auto& c : m_columns) {
 					ibValue v;
-					rows->GetValueByMetaID(rows->GetItem(i), static_cast<unsigned int>(c->GetModelID()), v);
-					t.SetCell(r, c->GetModelID(), v);
+					rows->GetValueByMetaID(rows->GetItem(i), static_cast<unsigned int>(c->GetColumnId()), v);
+					t.SetCell(r, c->GetColumnId(), v);
 				}
 			}
 		}
@@ -118,7 +118,7 @@ public:
 	// (No attribute resolution / DB-row materialisation here — a temp source is computed
 	//  in RAM, so those concerns do not exist; the base interface names none of them.)
 	wxString GetQueryTableName() const override { return wxEmptyString; }
-	ibMetaID GetQueryMetaID()    const override { return 0; }
+	ibMetaID GetQueryTableId()    const override { return 0; }
 	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
 
 private:
@@ -148,7 +148,7 @@ public:
 		: m_tableName(std::move(tableName)), m_columns(std::move(columns)), m_metaData(metaData) {}
 
 	wxString          GetQueryTableName() const override { return m_tableName; }
-	ibMetaID          GetQueryMetaID()    const override { return 0; }                 // not a metaobject
+	ibMetaID          GetQueryTableId()    const override { return 0; }                 // not a metaobject
 	const ibMetaData* GetMetaData()       const override { return m_metaData; }        // reference / enum reconstruction context
 	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }       // scan source — no keyset
 

@@ -21,6 +21,8 @@
 #include <filesystem>
 
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
+#include "backend/query/schemaSnapshot.h"   // ibSchemaSnapshot / ibSchemaTable — ContributeTables drives data dump
+#include "backend/query/dataMover.h"         // ibDataMover::Dump / Restore (L3-3 row mover)
 
 bool ibMetaDataConfigurationBase::LoadConfigFromFile(const wxString& strFileName)
 {
@@ -548,26 +550,25 @@ bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer&
 		ibValueMetaObject* commonObject = m_configMetadata->GetCommonMetaObject();
 		wxASSERT(commonObject);
 
-		ibReaderMemory* prevReaderMemory = nullptr;
+		// The SAME ContributeTables snapshot the dump used — read each table's rows back by its metaID
+		// and RESTORE through the L3-3 mover (UPSERT / INSERT / external-UPDATE chosen off the structure).
+		ibSchemaSnapshot snapshot;
+		commonObject->ContributeTables(snapshot);
+
 		ibReaderMemory readerData(bufferData);
-
-		while (!readerData.eof()) {
-
-			u64 id = 0;
-
-			ibReaderMemory* readerMemory = readerData.open_chunk_iterator(id, prevReaderMemory);
-			if (!readerMemory)
-				break;
-
-			ibValueMetaObject* metaValue = commonObject->FindAnyObjectByFilter<ibValueMetaObject, ibMetaID>(id);
-			if (metaValue != nullptr && !metaValue->RestoreTable(*readerMemory))
-				return false;
-
-			prevReaderMemory = readerMemory;
-		};
+		for (const ibSchemaTable& table : snapshot.Tables()) {
+			if (table.m_columns.empty())   // a pure scaffold / seed table (an enum) — no data to move
+				continue;
+			wxMemoryBuffer tableBuffer;
+			if (readerData.r_chunk(table.m_id, tableBuffer)) {
+				ibReaderMemory rows(tableBuffer);
+				if (!ibDataMover::Restore(table, rows))
+					return false;
+			}
+		}
 	}
 
-	//sequence 
+	//sequence
 	wxMemoryBuffer bufferSequence;
 
 	if (reader.r_chunk(2, bufferSequence)) {
@@ -601,16 +602,18 @@ bool ibMetaDataConfigurationStorage::DumpDataToBuffer(wxMemoryBuffer& buffer)
 	ibValueMetaObject* commonObject = m_configMetadata->GetCommonMetaObject();
 	wxASSERT(commonObject);
 
-	for (unsigned int idx = 0; idx < commonObject->GetChildCount(); idx++) {
-
-		auto child = commonObject->GetChild(idx);
-		if (!commonObject->FilterChild(child->GetClassType()))
+	// ONE source of truth: the whole config's structure — the SAME ContributeTables snapshot the DDL
+	// differ consumes — drives the data dump too. Every declared table SELECTs its rows through the
+	// L3-3 mover, framed by the table's metaID (a pure scaffold / seed table, e.g. an enum, is skipped).
+	ibSchemaSnapshot snapshot;
+	commonObject->ContributeTables(snapshot);
+	for (const ibSchemaTable& table : snapshot.Tables()) {
+		if (table.m_columns.empty())
 			continue;
-
-		ibWriterMemory childWriter;
-		if (!child->DumpTable(childWriter))
+		ibWriterMemory tableWriter;
+		if (!ibDataMover::Dump(table, tableWriter))
 			return false;
-		writerData.w_chunk(child->GetMetaID(), childWriter.buffer());
+		writerData.w_chunk(table.m_id, tableWriter.buffer());
 	}
 
 	writer.w_chunk(1, writerData.buffer());

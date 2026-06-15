@@ -5,6 +5,7 @@
 
 #include "accountingRegister.h"
 #include "accountingRegisterManager.h"
+#include "backend/metaCollection/partial/registerQueryLowering.h"   // ibReg* — column-layout tier wrappers (no attribute SQL façade)
 // (accounting retrieval is commented out — non-functional, pending its migration to L2;
 //  no ibDbTableProvider / ibQueryResult usage remains in compiled code here.)
 
@@ -96,142 +97,95 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 	// Check if account filter is provided
 	bool hasAccountFilter = !cAccount.IsEmpty();
 
-	ibValueMetaObjectAttributeBase::ibSQLField sqlColPeriod =
-		ibValueMetaObjectAttributeBase::GetSQLFieldData(m_metaObject->GetRegisterPeriod());
-
 	// --- Outer SELECT ---
-	wxString sqlQuery = " SELECT "; bool firstSelect = true;
+	wxString sqlQuery = " SELECT ";
 
-	// Account field in outer select
-	{
-		ibValueMetaObjectAttributeBase::ibSQLField sqlAccount = ibValueMetaObjectAttributeBase::GetSQLFieldData(m_metaObject->GetRegisterAccount());
-		sqlQuery += sqlAccount.m_fieldTypeName;
-		for (auto dataType : sqlAccount.m_types) {
-			if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-				sqlQuery += "," + dataType.m_field.m_fieldName;
-			}
-			else {
-				sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefType;
-				sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefName;
-			}
-		}
-		firstSelect = false;
-	}
+	// Account + Subconto 1-3 + Dimensions: the full physical field list of each.
+	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
-	// Subconto 1-3 fields in outer select
-	{
-		ibValueMetaObjectAttributeBase* subcontoAttrs[] = {
-			m_metaObject->GetRegisterSubconto1(),
-			m_metaObject->GetRegisterSubconto2(),
-			m_metaObject->GetRegisterSubconto3()
-		};
-		for (auto subAttr : subcontoAttrs) {
-			ibValueMetaObjectAttributeBase::ibSQLField sqlSubconto = ibValueMetaObjectAttributeBase::GetSQLFieldData(subAttr);
-			sqlQuery += "," + sqlSubconto.m_fieldTypeName;
-			for (auto dataType : sqlSubconto.m_types) {
-				if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-					sqlQuery += "," + dataType.m_field.m_fieldName;
-				}
-				else {
-					sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefType;
-					sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefName;
-				}
-			}
-		}
-	}
+	ibValueMetaObjectAttributeBase* subcontoAttrs[] = {
+		m_metaObject->GetRegisterSubconto1(),
+		m_metaObject->GetRegisterSubconto2(),
+		m_metaObject->GetRegisterSubconto3()
+	};
+	for (auto subAttr : subcontoAttrs)
+		sqlQuery += "," + ibRegFieldList(subAttr);
 
-	// Dimension fields in outer select
-	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlDimension = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += "," + sqlDimension.m_fieldTypeName;
-		for (auto dataType : sqlDimension.m_types) {
-			if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-				sqlQuery += "," + dataType.m_field.m_fieldName;
-			}
-			else {
-				sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefType;
-				sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefName;
-			}
-		}
-	}
+	for (const auto object : m_metaObject->GetDimensionArrayObject())
+		sqlQuery += "," + ibRegFieldList(object);
 
-	// Resource balance fields in outer select
+	// Resource balance fields: the _TYPE tag + the value field aliased "_Balance_".
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += "," + sqlResource.m_fieldTypeName;
-		sqlQuery += "," + sqlResource.m_types[0].m_field.m_fieldName + "_Balance_";
+		sqlQuery += "," + ibRegTypeField(object);
+		sqlQuery += "," + ibRegValueField(object) + "_Balance_";
 	}
 
 	// --- Inner SELECT (subquery) ---
-	sqlQuery += " FROM ( SELECT "; firstSelect = true;
+	sqlQuery += " FROM ( SELECT ";
 
 	// Account in inner select
-	sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterAccount());
-	firstSelect = false;
+	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
 	// Subconto 1-3 in inner select
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
 
 	// Dimensions in inner select
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
+		sqlQuery += "," + ibRegFieldList(object);
 	}
 
-	// RecordType for CASE expression
-	ibValueMetaObjectAttributeBase::ibSQLField sqlColRecordType =
-		ibValueMetaObjectAttributeBase::GetSQLFieldData(m_metaObject->GetRegisterRecordType());
+	// RecordType value field for the CASE expression (Debit = 0.0).
+	const wxString recordTypeField = ibRegValueField(m_metaObject->GetRegisterRecordType());
 
 	// Resource aggregates: SUM(CASE WHEN RecordType=Debit(0) THEN Amount ELSE -Amount END)
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += "," + sqlResource.m_fieldTypeName + ", ";
-		sqlQuery += " CAST(SUM(CASE WHEN " + sqlColRecordType.m_types[0].m_field.m_fieldName + " = 0.0"
-			" THEN   " + sqlResource.m_types[0].m_field.m_fieldName + " "
-			" ELSE - " + sqlResource.m_types[0].m_field.m_fieldName + " END"
-			" ) AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_Balance_";
+		const wxString resourceField = ibRegValueField(object);
+		sqlQuery += "," + ibRegTypeField(object) + ", ";
+		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
+			" THEN   " + resourceField + " "
+			" ELSE - " + resourceField + " END"
+			" ) AS NUMERIC) AS " + resourceField + "_Balance_";
 	}
 
 	// FROM table
-	sqlQuery += " FROM " + m_metaObject->GetTableNameDB();
+	sqlQuery += " FROM " + m_metaObject->GetPhysicalTableName();
 
 	// WHERE clause
 	sqlQuery += " WHERE ";
-	sqlQuery += ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterActive());
-	sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterPeriod(), "<=");
+	sqlQuery += ibRegComposite(m_metaObject->GetRegisterActive());
+	sqlQuery += " AND " + ibRegComposite(m_metaObject->GetRegisterPeriod(), "<=");
 
 	// Account filter
 	if (hasAccountFilter) {
-		sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterAccount());
+		sqlQuery += " AND " + ibRegComposite(m_metaObject->GetRegisterAccount());
 	}
 
 	// Dimension filters
 	for (auto& filter : selFilter) {
-		sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(filter.first);
+		sqlQuery += " AND " + ibRegComposite(filter.first);
 	}
 
 	// GROUP BY
-	sqlQuery += " GROUP BY "; bool firstGroupBy = true;
+	sqlQuery += " GROUP BY ";
 
 	// Group by Account
-	sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterAccount());
-	firstGroupBy = false;
+	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
 	// Group by Subconto 1-3
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
 
 	// Group by dimensions
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
+		sqlQuery += "," + ibRegFieldList(object);
 	}
 
 	// Group by resource type names
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += "," + sqlResource.m_fieldTypeName;
+		sqlQuery += "," + ibRegTypeField(object);
 	}
 
 	// HAVING - filter out zero balances
@@ -240,10 +194,10 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
 		wxString orCase = (!firstHaving ? "OR (" : "");
 		wxString orCaseEnd = (!firstHaving ? ")" : "");
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += orCase + " CAST(SUM(CASE WHEN " + sqlColRecordType.m_types[0].m_field.m_fieldName + " = 0.0"
-			" THEN   " + sqlResource.m_types[0].m_field.m_fieldName + ""
-			" ELSE - " + sqlResource.m_types[0].m_field.m_fieldName + " END"
+		const wxString resourceField = ibRegValueField(object);
+		sqlQuery += orCase + " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
+			" THEN   " + resourceField + ""
+			" ELSE - " + resourceField + " END"
 			" ) AS NUMERIC) " + orCaseEnd + " <> 0.0";
 		firstHaving = false;
 	}
@@ -376,148 +330,101 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 	// Check if account filter is provided
 	bool hasAccountFilter = !cAccount.IsEmpty();
 
-	ibValueMetaObjectAttributeBase::ibSQLField sqlColPeriod =
-		ibValueMetaObjectAttributeBase::GetSQLFieldData(m_metaObject->GetRegisterPeriod());
-
 	// --- Outer SELECT ---
-	wxString sqlQuery = " SELECT "; bool firstSelect = true;
+	wxString sqlQuery = " SELECT ";
 
-	// Account field in outer select
-	{
-		ibValueMetaObjectAttributeBase::ibSQLField sqlAccount = ibValueMetaObjectAttributeBase::GetSQLFieldData(m_metaObject->GetRegisterAccount());
-		sqlQuery += sqlAccount.m_fieldTypeName;
-		for (auto dataType : sqlAccount.m_types) {
-			if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-				sqlQuery += "," + dataType.m_field.m_fieldName;
-			}
-			else {
-				sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefType;
-				sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefName;
-			}
-		}
-		firstSelect = false;
-	}
+	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
-	// Subconto 1-3 fields in outer select
-	{
-		ibValueMetaObjectAttributeBase* subcontoAttrs[] = {
-			m_metaObject->GetRegisterSubconto1(),
-			m_metaObject->GetRegisterSubconto2(),
-			m_metaObject->GetRegisterSubconto3()
-		};
-		for (auto subAttr : subcontoAttrs) {
-			ibValueMetaObjectAttributeBase::ibSQLField sqlSubconto = ibValueMetaObjectAttributeBase::GetSQLFieldData(subAttr);
-			sqlQuery += "," + sqlSubconto.m_fieldTypeName;
-			for (auto dataType : sqlSubconto.m_types) {
-				if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-					sqlQuery += "," + dataType.m_field.m_fieldName;
-				}
-				else {
-					sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefType;
-					sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefName;
-				}
-			}
-		}
-	}
+	ibValueMetaObjectAttributeBase* subcontoAttrs[] = {
+		m_metaObject->GetRegisterSubconto1(),
+		m_metaObject->GetRegisterSubconto2(),
+		m_metaObject->GetRegisterSubconto3()
+	};
+	for (auto subAttr : subcontoAttrs)
+		sqlQuery += "," + ibRegFieldList(subAttr);
 
-	// Dimension fields in outer select
-	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlDimension = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += "," + sqlDimension.m_fieldTypeName;
-		for (auto dataType : sqlDimension.m_types) {
-			if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-				sqlQuery += "," + dataType.m_field.m_fieldName;
-			}
-			else {
-				sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefType;
-				sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefName;
-			}
-		}
-	}
+	for (const auto object : m_metaObject->GetDimensionArrayObject())
+		sqlQuery += "," + ibRegFieldList(object);
 
-	// Resource TurnoverDr and TurnoverCr fields in outer select
+	// Resource TurnoverDr / TurnoverCr fields (the _TYPE tag + the value field's two aliases).
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += "," + sqlResource.m_fieldTypeName;
-		sqlQuery += "," + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverDr_";
-		sqlQuery += "," + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverCr_";
+		const wxString resourceField = ibRegValueField(object);
+		sqlQuery += "," + ibRegTypeField(object);
+		sqlQuery += "," + resourceField + "_TurnoverDr_";
+		sqlQuery += "," + resourceField + "_TurnoverCr_";
 	}
 
 	// --- Inner SELECT (subquery) ---
-	sqlQuery += " FROM ( SELECT "; firstSelect = true;
+	sqlQuery += " FROM ( SELECT ";
 
 	// Account in inner select
-	sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterAccount());
-	firstSelect = false;
+	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
 	// Subconto 1-3 in inner select
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
 
 	// Dimensions in inner select
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
+		sqlQuery += "," + ibRegFieldList(object);
 	}
 
-	// RecordType for CASE expression
-	ibValueMetaObjectAttributeBase::ibSQLField sqlColRecordType =
-		ibValueMetaObjectAttributeBase::GetSQLFieldData(m_metaObject->GetRegisterRecordType());
+	// RecordType value field for the CASE expression (Debit = 0.0).
+	const wxString recordTypeField = ibRegValueField(m_metaObject->GetRegisterRecordType());
 
-	// Resource aggregates: TurnoverDr = SUM(CASE RecordType=0(Debit) THEN Amount ELSE 0),
-	//                      TurnoverCr = SUM(CASE RecordType=1(Credit) THEN Amount ELSE 0)
+	// Resource aggregates: TurnoverDr = SUM(Debit amounts), TurnoverCr = SUM(Credit amounts).
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += "," + sqlResource.m_fieldTypeName + ", ";
-		sqlQuery += " CAST(SUM(CASE WHEN " + sqlColRecordType.m_types[0].m_field.m_fieldName + " = 0.0"
-			" THEN   " + sqlResource.m_types[0].m_field.m_fieldName + " "
+		const wxString resourceField = ibRegValueField(object);
+		sqlQuery += "," + ibRegTypeField(object) + ", ";
+		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
+			" THEN   " + resourceField + " "
 			" ELSE   0.0 END"
-			" ) AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverDr_,";
-		sqlQuery += " CAST(SUM(CASE WHEN " + sqlColRecordType.m_types[0].m_field.m_fieldName + " = 0.0"
+			" ) AS NUMERIC) AS " + resourceField + "_TurnoverDr_,";
+		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
 			" THEN   0.0 "
-			" ELSE   " + sqlResource.m_types[0].m_field.m_fieldName + " END"
-			" ) AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverCr_";
+			" ELSE   " + resourceField + " END"
+			" ) AS NUMERIC) AS " + resourceField + "_TurnoverCr_";
 	}
 
 	// FROM table
-	sqlQuery += " FROM " + m_metaObject->GetTableNameDB();
+	sqlQuery += " FROM " + m_metaObject->GetPhysicalTableName();
 
 	// WHERE clause
 	sqlQuery += " WHERE ";
-	sqlQuery += ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterActive());
-	sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterPeriod(), ">=");
-	sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterPeriod(), "<=");
+	sqlQuery += ibRegComposite(m_metaObject->GetRegisterActive());
+	sqlQuery += " AND " + ibRegComposite(m_metaObject->GetRegisterPeriod(), ">=");
+	sqlQuery += " AND " + ibRegComposite(m_metaObject->GetRegisterPeriod(), "<=");
 
 	// Account filter
 	if (hasAccountFilter) {
-		sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterAccount());
+		sqlQuery += " AND " + ibRegComposite(m_metaObject->GetRegisterAccount());
 	}
 
 	// Dimension filters
 	for (auto& filter : selFilter) {
-		sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(filter.first);
+		sqlQuery += " AND " + ibRegComposite(filter.first);
 	}
 
 	// GROUP BY
 	sqlQuery += " GROUP BY ";
 
 	// Group by Account
-	sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterAccount());
+	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
 	// Group by Subconto 1-3
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
 
 	// Group by dimensions
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
+		sqlQuery += "," + ibRegFieldList(object);
 	}
 
 	// Group by resource type names
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += "," + sqlResource.m_fieldTypeName;
+		sqlQuery += "," + ibRegTypeField(object);
 	}
 
 	// HAVING - filter out zero turnovers
@@ -526,15 +433,15 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
 		wxString orCase = (!firstHaving ? "OR (" : "");
 		wxString orCaseEnd = (!firstHaving ? ")" : "");
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
+		const wxString resourceField = ibRegValueField(object);
 		// TurnoverDr <> 0 OR TurnoverCr <> 0
-		sqlQuery += orCase + " CAST(SUM(CASE WHEN " + sqlColRecordType.m_types[0].m_field.m_fieldName + " = 0.0"
-			" THEN   " + sqlResource.m_types[0].m_field.m_fieldName + ""
+		sqlQuery += orCase + " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
+			" THEN   " + resourceField + ""
 			" ELSE   0.0 END"
 			" ) AS NUMERIC) " + orCaseEnd + " <> 0.0";
-		sqlQuery += " OR(CAST(SUM(CASE WHEN " + sqlColRecordType.m_types[0].m_field.m_fieldName + " = 0.0"
+		sqlQuery += " OR(CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
 			" THEN   0.0"
-			" ELSE   " + sqlResource.m_types[0].m_field.m_fieldName + " END"
+			" ELSE   " + resourceField + " END"
 			" ) AS NUMERIC)) <> 0.0";
 		firstHaving = false;
 	}
@@ -637,182 +544,63 @@ ibValue ibValueManagerDataObjectAccountingRegister::DrCrTurnovers(const ibValue&
 	// Check if account filter is provided
 	bool hasAccountFilter = !cAccount.IsEmpty();
 
-	// Get SQL field info for key columns
-	wxString accountFieldName = m_metaObject->GetRegisterAccount()->GetFieldNameDB();
-	ibValueMetaObjectAttributeBase::ibSQLField sqlColAccount =
-		ibValueMetaObjectAttributeBase::GetSQLFieldData(m_metaObject->GetRegisterAccount());
-	ibValueMetaObjectAttributeBase::ibSQLField sqlColRecordType =
-		ibValueMetaObjectAttributeBase::GetSQLFieldData(m_metaObject->GetRegisterRecordType());
-	ibValueMetaObjectAttributeBase::ibSQLField sqlColRecorder =
-		ibValueMetaObjectAttributeBase::GetSQLFieldData(m_metaObject->GetRegisterRecorder());
-	ibValueMetaObjectAttributeBase::ibSQLField sqlColLineNumber =
-		ibValueMetaObjectAttributeBase::GetSQLFieldData(m_metaObject->GetRegisterLineNumber());
-
-	// DrCrTurnovers: self-join on Recorder+LineNumber to pair debit and credit rows.
+	// DrCrTurnovers: self-join on Recorder to pair debit and credit rows.
 	// dr alias = debit side (RecordType=0), cr alias = credit side (RecordType=1).
-	//
-	// The outer SELECT wraps the inner self-join to produce column names
-	// compatible with GetValueAttribute (fieldName_TYPE, fieldName_N, fieldName_RTRef, etc.).
-	// AccountDr uses prefix "AccountDr" and AccountCr uses prefix "AccountCr".
+	// The outer SELECT aliases the account sub-columns to AccountDr<suffix> / AccountCr<suffix> so the
+	// result is GetValueAttribute-compatible.
+	wxString tableName = m_metaObject->GetPhysicalTableName();
+	ibValueMetaObjectAttributeBase* account = m_metaObject->GetRegisterAccount();
+	const wxString recordTypeField = ibRegValueField(m_metaObject->GetRegisterRecordType());
 
-	wxString tableName = m_metaObject->GetTableNameDB();
-
-	// --- Outer SELECT: aliases for GetValueAttribute compatibility ---
+	// --- Outer SELECT ---
 	wxString sqlQuery = " SELECT ";
-
-	// AccountDr fields: alias dr.Account sub-columns to AccountDr_TYPE, AccountDr_B, AccountDr_RTRef, AccountDr_RRRef etc.
-	{
-		sqlQuery += "dr." + sqlColAccount.m_fieldTypeName + " AS AccountDr_TYPE";
-		for (auto dataType : sqlColAccount.m_types) {
-			if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-				// e.g. fieldName_N -> AccountDr_N, fieldName_B -> AccountDr_B, etc.
-				wxString suffix = dataType.m_field.m_fieldName.Mid(accountFieldName.Len());
-				sqlQuery += ", dr." + dataType.m_field.m_fieldName + " AS AccountDr" + suffix;
-			}
-			else {
-				sqlQuery += ", dr." + dataType.m_field.m_fieldRefName.m_fieldRefType + " AS AccountDr_RTRef";
-				sqlQuery += ", dr." + dataType.m_field.m_fieldRefName.m_fieldRefName + " AS AccountDr_RRRef";
-			}
-		}
-	}
-
-	// AccountCr fields: alias cr.Account sub-columns to AccountCr_TYPE, AccountCr_N, AccountCr_RTRef, etc.
-	{
-		sqlQuery += ", cr." + sqlColAccount.m_fieldTypeName + " AS AccountCr_TYPE";
-		for (auto dataType : sqlColAccount.m_types) {
-			if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-				wxString suffix = dataType.m_field.m_fieldName.Mid(accountFieldName.Len());
-				sqlQuery += ", cr." + dataType.m_field.m_fieldName + " AS AccountCr" + suffix;
-			}
-			else {
-				sqlQuery += ", cr." + dataType.m_field.m_fieldRefName.m_fieldRefType + " AS AccountCr_RTRef";
-				sqlQuery += ", cr." + dataType.m_field.m_fieldRefName.m_fieldRefName + " AS AccountCr_RRRef";
-			}
-		}
-	}
+	sqlQuery += ibRegAliasedList(account, "dr", "AccountDr");
+	sqlQuery += ", " + ibRegAliasedList(account, "cr", "AccountCr");
 
 	// Resource amount aggregates: SUM(dr.Amount)
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += ", dr." + sqlResource.m_fieldTypeName;
-		sqlQuery += ", CAST(SUM(dr." + sqlResource.m_types[0].m_field.m_fieldName + ") AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_Amount_";
+		const wxString resourceField = ibRegValueField(object);
+		sqlQuery += ", dr." + ibRegTypeField(object);
+		sqlQuery += ", CAST(SUM(dr." + resourceField + ") AS NUMERIC) AS " + resourceField + "_Amount_";
 	}
 
-	// FROM with self-join
+	// FROM with self-join on Recorder
 	sqlQuery += " FROM " + tableName + " dr";
 	sqlQuery += " INNER JOIN " + tableName + " cr ON ";
-
-	// Join on Recorder
-	{
-		bool firstJoin = true;
-		for (auto dataType : sqlColRecorder.m_types) {
-			if (!firstJoin) sqlQuery += " AND ";
-			if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-				sqlQuery += "dr." + dataType.m_field.m_fieldName + " = cr." + dataType.m_field.m_fieldName;
-			}
-			else {
-				sqlQuery += "dr." + dataType.m_field.m_fieldRefName.m_fieldRefType + " = cr." + dataType.m_field.m_fieldRefName.m_fieldRefType;
-				sqlQuery += " AND dr." + dataType.m_field.m_fieldRefName.m_fieldRefName + " = cr." + dataType.m_field.m_fieldRefName.m_fieldRefName;
-			}
-			firstJoin = false;
-		}
-	}
+	sqlQuery += ibRegJoinEq(m_metaObject->GetRegisterRecorder(), "dr", "cr");
 
 	// WHERE clause
 	sqlQuery += " WHERE ";
+	sqlQuery += "dr." + recordTypeField + " = 0.0";        // dr = Debit
+	sqlQuery += " AND cr." + recordTypeField + " = 1.0";   // cr = Credit
 
-	// dr.RecordType = 0 (Debit)
-	sqlQuery += "dr." + sqlColRecordType.m_types[0].m_field.m_fieldName + " = 0.0";
+	const wxString activeField = ibRegValueField(m_metaObject->GetRegisterActive());
+	sqlQuery += " AND dr." + activeField + " = ?";
+	sqlQuery += " AND cr." + activeField + " = ?";
 
-	// cr.RecordType = 1 (Credit)
-	sqlQuery += " AND cr." + sqlColRecordType.m_types[0].m_field.m_fieldName + " = 1.0";
+	const wxString periodField = ibRegValueField(m_metaObject->GetRegisterPeriod());
+	sqlQuery += " AND dr." + periodField + " >= ?";
+	sqlQuery += " AND dr." + periodField + " <= ?";
 
-	// dr.Active = true AND cr.Active = true
-	ibValueMetaObjectAttributeBase::ibSQLField sqlColActive =
-		ibValueMetaObjectAttributeBase::GetSQLFieldData(m_metaObject->GetRegisterActive());
-	sqlQuery += " AND dr." + sqlColActive.m_types[0].m_field.m_fieldName + " = ?";
-	sqlQuery += " AND cr." + sqlColActive.m_types[0].m_field.m_fieldName + " = ?";
+	// Account / dimension filters on the debit side.
+	if (hasAccountFilter)
+		sqlQuery += " AND " + ibRegQualifiedEqParams(account, "dr");
+	for (auto& filter : selFilter)
+		sqlQuery += " AND " + ibRegQualifiedEqParams(filter.first, "dr");
 
-	// Period range: dr.Period >= ? AND dr.Period <= ?
-	ibValueMetaObjectAttributeBase::ibSQLField sqlColPeriod =
-		ibValueMetaObjectAttributeBase::GetSQLFieldData(m_metaObject->GetRegisterPeriod());
-	sqlQuery += " AND dr." + sqlColPeriod.m_types[0].m_field.m_fieldName + " >= ?";
-	sqlQuery += " AND dr." + sqlColPeriod.m_types[0].m_field.m_fieldName + " <= ?";
-
-	// Account filter on debit side (manually prefixed with dr. for self-join)
-	if (hasAccountFilter) {
-		sqlQuery += " AND dr." + sqlColAccount.m_fieldTypeName + " = ?";
-		for (auto dataType : sqlColAccount.m_types) {
-			if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-				sqlQuery += " AND dr." + dataType.m_field.m_fieldName + " = ?";
-			}
-			else {
-				sqlQuery += " AND dr." + dataType.m_field.m_fieldRefName.m_fieldRefType + " = ?";
-				sqlQuery += " AND dr." + dataType.m_field.m_fieldRefName.m_fieldRefName + " = ?";
-			}
-		}
-	}
-
-	// Dimension filters on debit side (manually prefixed with dr. for self-join)
-	for (auto& filter : selFilter) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlDim = ibValueMetaObjectAttributeBase::GetSQLFieldData(filter.first);
-		sqlQuery += " AND dr." + sqlDim.m_fieldTypeName + " = ?";
-		for (auto dataType : sqlDim.m_types) {
-			if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-				sqlQuery += " AND dr." + dataType.m_field.m_fieldName + " = ?";
-			}
-			else {
-				sqlQuery += " AND dr." + dataType.m_field.m_fieldRefName.m_fieldRefType + " = ?";
-				sqlQuery += " AND dr." + dataType.m_field.m_fieldRefName.m_fieldRefName + " = ?";
-			}
-		}
-	}
-
-	// GROUP BY AccountDr, AccountCr
+	// GROUP BY dr.Account, cr.Account, resource type names
 	sqlQuery += " GROUP BY ";
-
-	// Group by dr.Account fields
-	{
-		sqlQuery += "dr." + sqlColAccount.m_fieldTypeName;
-		for (auto dataType : sqlColAccount.m_types) {
-			if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-				sqlQuery += ", dr." + dataType.m_field.m_fieldName;
-			}
-			else {
-				sqlQuery += ", dr." + dataType.m_field.m_fieldRefName.m_fieldRefType;
-				sqlQuery += ", dr." + dataType.m_field.m_fieldRefName.m_fieldRefName;
-			}
-		}
-	}
-
-	// Group by cr.Account fields
-	{
-		sqlQuery += ", cr." + sqlColAccount.m_fieldTypeName;
-		for (auto dataType : sqlColAccount.m_types) {
-			if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-				sqlQuery += ", cr." + dataType.m_field.m_fieldName;
-			}
-			else {
-				sqlQuery += ", cr." + dataType.m_field.m_fieldRefName.m_fieldRefType;
-				sqlQuery += ", cr." + dataType.m_field.m_fieldRefName.m_fieldRefName;
-			}
-		}
-	}
-
-	// Group by resource type names
-	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += ", dr." + sqlResource.m_fieldTypeName;
-	}
+	sqlQuery += ibRegQualifiedList(account, "dr");
+	sqlQuery += ", " + ibRegQualifiedList(account, "cr");
+	for (const auto object : m_metaObject->GetResourceArrayObject())
+		sqlQuery += ", dr." + ibRegTypeField(object);
 
 	// HAVING - filter out zero amounts
 	sqlQuery += " HAVING "; bool firstHaving = true;
-
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
 		wxString orCase = (!firstHaving ? "OR (" : "");
 		wxString orCaseEnd = (!firstHaving ? ")" : "");
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += orCase + " CAST(SUM(dr." + sqlResource.m_types[0].m_field.m_fieldName
+		sqlQuery += orCase + " CAST(SUM(dr." + ibRegValueField(object)
 			+ ") AS NUMERIC) " + orCaseEnd + " <> 0.0";
 		firstHaving = false;
 	}
@@ -959,296 +747,204 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	// Check if account filter is provided
 	bool hasAccountFilter = !cAccount.IsEmpty();
 
-	// RecordType for CASE expression
-	ibValueMetaObjectAttributeBase::ibSQLField sqlColRecordType =
-		ibValueMetaObjectAttributeBase::GetSQLFieldData(m_metaObject->GetRegisterRecordType());
+	// RecordType value field for the CASE expressions (Debit = 0.0).
+	const wxString recordTypeField = ibRegValueField(m_metaObject->GetRegisterRecordType());
 
-	// Helper lambda to build grouping field names for Account + Subconto + Dimensions
-	// We use a UNION ALL of two subqueries:
-	//   1) Opening balance: all records with Period <= cBeginOfPeriod
-	//   2) Period turnovers: records with Period >= cBeginOfPeriod AND Period <= cEndOfPeriod
-	// Then the outer query combines them.
+	// UNION ALL of two subqueries — opening balance (Period < begin) and period turnovers — then the
+	// outer query sums them into OpeningBalance / TurnoverDr / TurnoverCr / ClosingBalance.
 
-	// --- Build the SQL ---
-	// Outer SELECT
-	wxString sqlQuery = " SELECT "; bool firstSelect = true;
+	// --- Outer SELECT ---
+	wxString sqlQuery = " SELECT ";
 
-	// Account field in outer select
-	{
-		ibValueMetaObjectAttributeBase::ibSQLField sqlAccount = ibValueMetaObjectAttributeBase::GetSQLFieldData(m_metaObject->GetRegisterAccount());
-		sqlQuery += sqlAccount.m_fieldTypeName;
-		for (auto dataType : sqlAccount.m_types) {
-			if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-				sqlQuery += "," + dataType.m_field.m_fieldName;
-			}
-			else {
-				sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefType;
-				sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefName;
-			}
-		}
-		firstSelect = false;
-	}
+	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
-	// Subconto 1-3 fields in outer select
-	{
-		ibValueMetaObjectAttributeBase* subcontoAttrs[] = {
-			m_metaObject->GetRegisterSubconto1(),
-			m_metaObject->GetRegisterSubconto2(),
-			m_metaObject->GetRegisterSubconto3()
-		};
-		for (auto subAttr : subcontoAttrs) {
-			ibValueMetaObjectAttributeBase::ibSQLField sqlSubconto = ibValueMetaObjectAttributeBase::GetSQLFieldData(subAttr);
-			sqlQuery += "," + sqlSubconto.m_fieldTypeName;
-			for (auto dataType : sqlSubconto.m_types) {
-				if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-					sqlQuery += "," + dataType.m_field.m_fieldName;
-				}
-				else {
-					sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefType;
-					sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefName;
-				}
-			}
-		}
-	}
+	ibValueMetaObjectAttributeBase* subcontoAttrs[] = {
+		m_metaObject->GetRegisterSubconto1(),
+		m_metaObject->GetRegisterSubconto2(),
+		m_metaObject->GetRegisterSubconto3()
+	};
+	for (auto subAttr : subcontoAttrs)
+		sqlQuery += "," + ibRegFieldList(subAttr);
 
-	// Dimension fields in outer select
-	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlDimension = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += "," + sqlDimension.m_fieldTypeName;
-		for (auto dataType : sqlDimension.m_types) {
-			if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-				sqlQuery += "," + dataType.m_field.m_fieldName;
-			}
-			else {
-				sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefType;
-				sqlQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefName;
-			}
-		}
-	}
+	for (const auto object : m_metaObject->GetDimensionArrayObject())
+		sqlQuery += "," + ibRegFieldList(object);
 
-	// Resource aggregated columns in outer select
+	// Resource aggregated columns (the _TYPE tag + the four aggregate aliases of the value field).
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += "," + sqlResource.m_fieldTypeName;
-		sqlQuery += "," + sqlResource.m_types[0].m_field.m_fieldName + "_OpeningBalance_";
-		sqlQuery += "," + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverDr_";
-		sqlQuery += "," + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverCr_";
-		sqlQuery += "," + sqlResource.m_types[0].m_field.m_fieldName + "_ClosingBalance_";
+		const wxString resourceField = ibRegValueField(object);
+		sqlQuery += "," + ibRegTypeField(object);
+		sqlQuery += "," + resourceField + "_OpeningBalance_";
+		sqlQuery += "," + resourceField + "_TurnoverDr_";
+		sqlQuery += "," + resourceField + "_TurnoverCr_";
+		sqlQuery += "," + resourceField + "_ClosingBalance_";
 	}
 
 	// --- Inner UNION ALL subquery ---
-	sqlQuery += " FROM ( SELECT "; firstSelect = true;
+	sqlQuery += " FROM ( SELECT ";
 
 	// Account in inner select
-	sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterAccount());
-	firstSelect = false;
+	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
 	// Subconto 1-3 in inner select
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
 
 	// Dimensions in inner select
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
+		sqlQuery += "," + ibRegFieldList(object);
 	}
 
 	// Resource aggregates for opening balance (records before period start)
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += "," + sqlResource.m_fieldTypeName + ", ";
+		const wxString resourceField = ibRegValueField(object);
+		sqlQuery += "," + ibRegTypeField(object) + ", ";
 
 		// OpeningBalance = SUM(CASE Debit THEN +Amount ELSE -Amount END)
-		sqlQuery += " CAST(SUM(CASE WHEN " + sqlColRecordType.m_types[0].m_field.m_fieldName + " = 0.0"
-			" THEN   " + sqlResource.m_types[0].m_field.m_fieldName + " "
-			" ELSE - " + sqlResource.m_types[0].m_field.m_fieldName + " END"
-			" ) AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_OpeningBalance_,";
+		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
+			" THEN   " + resourceField + " "
+			" ELSE - " + resourceField + " END"
+			" ) AS NUMERIC) AS " + resourceField + "_OpeningBalance_,";
 
 		// TurnoverDr = 0 (no turnovers in opening balance query)
-		sqlQuery += " CAST(0.0 AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverDr_,";
+		sqlQuery += " CAST(0.0 AS NUMERIC) AS " + resourceField + "_TurnoverDr_,";
 
 		// TurnoverCr = 0
-		sqlQuery += " CAST(0.0 AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverCr_,";
+		sqlQuery += " CAST(0.0 AS NUMERIC) AS " + resourceField + "_TurnoverCr_,";
 
 		// ClosingBalance = same as opening (will be summed with turnovers in outer query)
-		sqlQuery += " CAST(SUM(CASE WHEN " + sqlColRecordType.m_types[0].m_field.m_fieldName + " = 0.0"
-			" THEN   " + sqlResource.m_types[0].m_field.m_fieldName + " "
-			" ELSE - " + sqlResource.m_types[0].m_field.m_fieldName + " END"
-			" ) AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_ClosingBalance_";
+		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
+			" THEN   " + resourceField + " "
+			" ELSE - " + resourceField + " END"
+			" ) AS NUMERIC) AS " + resourceField + "_ClosingBalance_";
 	}
 
 	// FROM table - opening balance subquery
-	sqlQuery += " FROM " + m_metaObject->GetTableNameDB();
+	sqlQuery += " FROM " + m_metaObject->GetPhysicalTableName();
 	sqlQuery += " WHERE ";
-	sqlQuery += ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterActive());
-	sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterPeriod(), "<");
+	sqlQuery += ibRegComposite(m_metaObject->GetRegisterActive());
+	sqlQuery += " AND " + ibRegComposite(m_metaObject->GetRegisterPeriod(), "<");
 
 	if (hasAccountFilter) {
-		sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterAccount());
+		sqlQuery += " AND " + ibRegComposite(m_metaObject->GetRegisterAccount());
 	}
 
 	for (auto& filter : selFilter) {
-		sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(filter.first);
+		sqlQuery += " AND " + ibRegComposite(filter.first);
 	}
 
 	// GROUP BY for opening balance
 	sqlQuery += " GROUP BY ";
-	sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterAccount());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
+	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
 
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
+		sqlQuery += "," + ibRegFieldList(object);
 	}
 
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += "," + sqlResource.m_fieldTypeName;
+		const wxString resourceField = ibRegValueField(object);
+		sqlQuery += "," + ibRegTypeField(object);
 	}
 
 	// --- UNION ALL: turnovers subquery ---
-	sqlQuery += " UNION ALL SELECT "; firstSelect = true;
+	sqlQuery += " UNION ALL SELECT ";
 
 	// Account in turnovers inner select
-	sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterAccount());
-	firstSelect = false;
+	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
 	// Subconto 1-3 in turnovers inner select
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
 
 	// Dimensions in turnovers inner select
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
+		sqlQuery += "," + ibRegFieldList(object);
 	}
 
 	// Resource aggregates for turnovers
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += "," + sqlResource.m_fieldTypeName + ", ";
+		const wxString resourceField = ibRegValueField(object);
+		sqlQuery += "," + ibRegTypeField(object) + ", ";
 
 		// OpeningBalance = 0 (no opening balance in turnover query)
-		sqlQuery += " CAST(0.0 AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_OpeningBalance_,";
+		sqlQuery += " CAST(0.0 AS NUMERIC) AS " + resourceField + "_OpeningBalance_,";
 
 		// TurnoverDr = SUM(CASE RecordType=Debit THEN Amount ELSE 0 END)
-		sqlQuery += " CAST(SUM(CASE WHEN " + sqlColRecordType.m_types[0].m_field.m_fieldName + " = 0.0"
-			" THEN   " + sqlResource.m_types[0].m_field.m_fieldName + " "
+		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
+			" THEN   " + resourceField + " "
 			" ELSE   0.0 END"
-			" ) AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverDr_,";
+			" ) AS NUMERIC) AS " + resourceField + "_TurnoverDr_,";
 
 		// TurnoverCr = SUM(CASE RecordType=Credit THEN Amount ELSE 0 END)
-		sqlQuery += " CAST(SUM(CASE WHEN " + sqlColRecordType.m_types[0].m_field.m_fieldName + " = 0.0"
+		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
 			" THEN   0.0 "
-			" ELSE   " + sqlResource.m_types[0].m_field.m_fieldName + " END"
-			" ) AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverCr_,";
+			" ELSE   " + resourceField + " END"
+			" ) AS NUMERIC) AS " + resourceField + "_TurnoverCr_,";
 
 		// ClosingBalance = SUM(CASE Debit THEN +Amount ELSE -Amount END)
-		sqlQuery += " CAST(SUM(CASE WHEN " + sqlColRecordType.m_types[0].m_field.m_fieldName + " = 0.0"
-			" THEN   " + sqlResource.m_types[0].m_field.m_fieldName + " "
-			" ELSE - " + sqlResource.m_types[0].m_field.m_fieldName + " END"
-			" ) AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_ClosingBalance_";
+		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
+			" THEN   " + resourceField + " "
+			" ELSE - " + resourceField + " END"
+			" ) AS NUMERIC) AS " + resourceField + "_ClosingBalance_";
 	}
 
 	// FROM table - turnovers subquery
-	sqlQuery += " FROM " + m_metaObject->GetTableNameDB();
+	sqlQuery += " FROM " + m_metaObject->GetPhysicalTableName();
 	sqlQuery += " WHERE ";
-	sqlQuery += ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterActive());
-	sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterPeriod(), ">=");
-	sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterPeriod(), "<=");
+	sqlQuery += ibRegComposite(m_metaObject->GetRegisterActive());
+	sqlQuery += " AND " + ibRegComposite(m_metaObject->GetRegisterPeriod(), ">=");
+	sqlQuery += " AND " + ibRegComposite(m_metaObject->GetRegisterPeriod(), "<=");
 
 	if (hasAccountFilter) {
-		sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(m_metaObject->GetRegisterAccount());
+		sqlQuery += " AND " + ibRegComposite(m_metaObject->GetRegisterAccount());
 	}
 
 	for (auto& filter : selFilter) {
-		sqlQuery += " AND " + ibValueMetaObjectAttributeBase::GetCompositeSQLFieldName(filter.first);
+		sqlQuery += " AND " + ibRegComposite(filter.first);
 	}
 
 	// GROUP BY for turnovers
 	sqlQuery += " GROUP BY ";
-	sqlQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterAccount());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
+	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
 
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		sqlQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
+		sqlQuery += "," + ibRegFieldList(object);
 	}
 
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		sqlQuery += "," + sqlResource.m_fieldTypeName;
+		const wxString resourceField = ibRegValueField(object);
+		sqlQuery += "," + ibRegTypeField(object);
 	}
 
 	// Close UNION ALL, wrap in outer aggregation
 	sqlQuery += ") AS T_UNION";
 
 	// Now wrap everything in an outer SELECT that sums the UNION ALL results
-	wxString outerQuery = " SELECT "; firstSelect = true;
+	wxString outerQuery = " SELECT ";
 
-	// Account field
-	{
-		ibValueMetaObjectAttributeBase::ibSQLField sqlAccount = ibValueMetaObjectAttributeBase::GetSQLFieldData(m_metaObject->GetRegisterAccount());
-		outerQuery += sqlAccount.m_fieldTypeName;
-		for (auto dataType : sqlAccount.m_types) {
-			if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-				outerQuery += "," + dataType.m_field.m_fieldName;
-			}
-			else {
-				outerQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefType;
-				outerQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefName;
-			}
-		}
-		firstSelect = false;
-	}
+	outerQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
-	// Subconto 1-3
-	{
-		ibValueMetaObjectAttributeBase* subcontoAttrs[] = {
-			m_metaObject->GetRegisterSubconto1(),
-			m_metaObject->GetRegisterSubconto2(),
-			m_metaObject->GetRegisterSubconto3()
-		};
-		for (auto subAttr : subcontoAttrs) {
-			ibValueMetaObjectAttributeBase::ibSQLField sqlSubconto = ibValueMetaObjectAttributeBase::GetSQLFieldData(subAttr);
-			outerQuery += "," + sqlSubconto.m_fieldTypeName;
-			for (auto dataType : sqlSubconto.m_types) {
-				if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-					outerQuery += "," + dataType.m_field.m_fieldName;
-				}
-				else {
-					outerQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefType;
-					outerQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefName;
-				}
-			}
-		}
-	}
+	for (auto subAttr : subcontoAttrs)
+		outerQuery += "," + ibRegFieldList(subAttr);
 
-	// Dimensions
-	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlDimension = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		outerQuery += "," + sqlDimension.m_fieldTypeName;
-		for (auto dataType : sqlDimension.m_types) {
-			if (dataType.m_type != ibValueMetaObjectAttributeBase::ibFieldTypes::ibFieldTypes_Reference) {
-				outerQuery += "," + dataType.m_field.m_fieldName;
-			}
-			else {
-				outerQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefType;
-				outerQuery += "," + dataType.m_field.m_fieldRefName.m_fieldRefName;
-			}
-		}
-	}
+	for (const auto object : m_metaObject->GetDimensionArrayObject())
+		outerQuery += "," + ibRegFieldList(object);
 
 	// Resource SUM aggregates
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		outerQuery += "," + sqlResource.m_fieldTypeName;
-		outerQuery += ", CAST(SUM(" + sqlResource.m_types[0].m_field.m_fieldName + "_OpeningBalance_) AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_OpeningBalance_";
-		outerQuery += ", CAST(SUM(" + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverDr_) AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverDr_";
-		outerQuery += ", CAST(SUM(" + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverCr_) AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverCr_";
-		outerQuery += ", CAST(SUM(" + sqlResource.m_types[0].m_field.m_fieldName + "_ClosingBalance_) AS NUMERIC) AS " + sqlResource.m_types[0].m_field.m_fieldName + "_ClosingBalance_";
+		const wxString resourceField = ibRegValueField(object);
+		outerQuery += "," + ibRegTypeField(object);
+		outerQuery += ", CAST(SUM(" + resourceField + "_OpeningBalance_) AS NUMERIC) AS " + resourceField + "_OpeningBalance_";
+		outerQuery += ", CAST(SUM(" + resourceField + "_TurnoverDr_) AS NUMERIC) AS " + resourceField + "_TurnoverDr_";
+		outerQuery += ", CAST(SUM(" + resourceField + "_TurnoverCr_) AS NUMERIC) AS " + resourceField + "_TurnoverCr_";
+		outerQuery += ", CAST(SUM(" + resourceField + "_ClosingBalance_) AS NUMERIC) AS " + resourceField + "_ClosingBalance_";
 	}
 
 	outerQuery += " FROM (" + sqlQuery + ") AS T1";
@@ -1257,20 +953,20 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	outerQuery += " GROUP BY ";
 	bool firstOuterGroup = true;
 
-	outerQuery += ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterAccount());
+	outerQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 	firstOuterGroup = false;
 
-	outerQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto1());
-	outerQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto2());
-	outerQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(m_metaObject->GetRegisterSubconto3());
+	outerQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
+	outerQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
+	outerQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
 
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		outerQuery += "," + ibValueMetaObjectAttributeBase::GetSQLFieldName(object);
+		outerQuery += "," + ibRegFieldList(object);
 	}
 
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
-		outerQuery += "," + sqlResource.m_fieldTypeName;
+		const wxString resourceField = ibRegValueField(object);
+		outerQuery += "," + ibRegTypeField(object);
 	}
 
 	// HAVING - filter out rows where all values are zero
@@ -1279,12 +975,12 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
 		wxString orCase = (!firstHaving ? "OR (" : "");
 		wxString orCaseEnd = (!firstHaving ? ")" : "");
-		ibValueMetaObjectAttributeBase::ibSQLField sqlResource = ibValueMetaObjectAttributeBase::GetSQLFieldData(object);
+		const wxString resourceField = ibRegValueField(object);
 
-		outerQuery += orCase + " CAST(SUM(" + sqlResource.m_types[0].m_field.m_fieldName + "_OpeningBalance_) AS NUMERIC) " + orCaseEnd + " <> 0.0";
-		outerQuery += " OR(CAST(SUM(" + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverDr_) AS NUMERIC)) <> 0.0";
-		outerQuery += " OR(CAST(SUM(" + sqlResource.m_types[0].m_field.m_fieldName + "_TurnoverCr_) AS NUMERIC)) <> 0.0";
-		outerQuery += " OR(CAST(SUM(" + sqlResource.m_types[0].m_field.m_fieldName + "_ClosingBalance_) AS NUMERIC)) <> 0.0";
+		outerQuery += orCase + " CAST(SUM(" + resourceField + "_OpeningBalance_) AS NUMERIC) " + orCaseEnd + " <> 0.0";
+		outerQuery += " OR(CAST(SUM(" + resourceField + "_TurnoverDr_) AS NUMERIC)) <> 0.0";
+		outerQuery += " OR(CAST(SUM(" + resourceField + "_TurnoverCr_) AS NUMERIC)) <> 0.0";
+		outerQuery += " OR(CAST(SUM(" + resourceField + "_ClosingBalance_) AS NUMERIC)) <> 0.0";
 
 		firstHaving = false;
 	}

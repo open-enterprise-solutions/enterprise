@@ -134,7 +134,7 @@ bool ibValueMetaObjectInformationRegister::OnSaveMetaObject(int flags)
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 	if (GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder) {
 		if (!((*m_propertyAttributeRecorder)->GetClsidCount() > 0)) {
-			s_restructureInfo.AppendError(_("! Doesn't have any recorder ") + GetFullName());
+			RestructureError(_("! Doesn't have any recorder ") + GetFullName());
 			return false;
 		}
 	}

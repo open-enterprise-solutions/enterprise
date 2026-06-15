@@ -12,14 +12,12 @@
 #include "dbTableProvider.h"   // ibDbTableProvider + ibRenderedPageCache (+ queryProvider.h / databaseQueryBuilder.h / metaAttributeObject.h)
 #include "dataQueryBuilder.h"  // ibDataQueryBuilder::EffectiveSort / ibDataQueryResult / ibReadPageRequest / ibDataQuerySpec / ibDotWalkColumn
 #include "resultSource.h"      // ibDataResultSource — the selection backing ibDbResultSource derives
+#include "columnLayout.h"      // the column-layout tier: DescribeColumnLayout + ibColumnCodec (value codec) + HasReference
 
-#include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject (reference value assembly)
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/databaseLayer.h"
-#include "backend/valueInfo.h"                                    // ibReference (physical reference blob)
-#include "backend/metaData.h"                                     // ibMetaData::GetTypeCtor
-#include "backend/objCtor.h"                                      // ibCtorMetaValueType (reference-target resolution)
-#include "backend/appData.h"
+#include "backend/valueInfo.h"                                    // ibReference (physical reference blob, GetQueryTableId source)
+#include "backend/metaData.h"                                     // ibMetaData (threaded through reads/writes)
 #include "backend/system/value/valueType.h"                      // ibValueTypeDescription::AdjustValue (dot-walk typed empty)
 
 #include <map>          // dot-walk join dedup
@@ -86,9 +84,10 @@ wxString ReferenceFieldOf(const ibBackendQueryColumn* refKeyColumn)
 	const auto* attr = dynamic_cast<const ibValueMetaObjectAttributeBase*>(refKeyColumn);
 	if (attr == nullptr)
 		return wxString();
-	for (auto& field : ibValueMetaObjectAttributeBase::GetSQLFieldData(attr))
-		if (field.m_type == ibValueMetaObjectAttributeBase::ibFieldTypes_Reference)
-			return field.m_field.m_fieldRefName.m_fieldRefName;
+	// The reference's _RRRef field = the ReferenceId slot in the column's physical layout.
+	for (const ibColumnSlot& slot : DescribeColumnLayout(attr, attr->GetMetaData()))
+		if (slot.m_role == ibColumnRole::ReferenceId)
+			return slot.m_name;
 	return wxString();
 }
 
@@ -102,44 +101,12 @@ wxString SelfReferenceField(const ibBackendQueryable* queryable)
 	return keys.empty() ? wxString() : ReferenceFieldOf(keys.front());
 }
 
-// Does the column's type admit a REFERENCE value — i.e. its physical spread carries the
-// _RTRef/_RRRef reference fields. Column-based equivalent of the former
-// ibValueMetaObjectAttributeBase::ContainMetaType(Reference): a clsid in the column's type
-// descriptor whose ctor meta-type is Reference. Needs the metadata context (a non-metaobject
-// column / a source with no metadata yields false — it has no reference fields). (docs §22.4b)
-bool ColumnHasReference(const ibBackendQueryColumn* col, const ibMetaData* metaData)
-{
-	if (metaData == nullptr)
-		return false;
-	for (const auto& clsid : col->GetTypeDesc().GetClsidList()) {
-		const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(clsid);
-		if (typeCtor != nullptr && typeCtor->GetMetaTypeCtor() == ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)
-			return true;
-	}
-	return false;
-}
+// (The "does this column admit a reference value" check moved to the column-layout tier —
+//  ibColumnCodec::HasReference, query/columnLayout.h. Callers here use it directly.)
 
-// Physical fields a write column expands to — derived straight from (physical name, type
-// descriptor), the SAME spread GetSQLFieldName generates: TYPE + each contained primitive (B/N/D/
-// S/E) + the _RTRef/_RRRef reference pair, in SetValueColumn's bind order. A RAW column is its
-// single field as-is. No attribute — the layout IS a function of the column's type (uniform in
-// practice: 2 columns for a primitive attribute, 3 for a reference).
-std::vector<wxString> WriteFieldsOf(const ibBackendQueryColumn* col, const ibMetaData* metaData)
-{
-	if (col->IsRawColumn())
-		return std::vector<wxString>{ col->GetPhysicalName() };
-
-	const ibTypeDescription& td = col->GetTypeDesc();
-	const wxString f = col->GetPhysicalName();
-	std::vector<wxString> out{ f + wxT("_TYPE") };
-	if (td.ContainType(ibValueTypes::TYPE_BOOLEAN)) out.push_back(f + wxT("_B"));
-	if (td.ContainType(ibValueTypes::TYPE_NUMBER))  out.push_back(f + wxT("_N"));
-	if (td.ContainType(ibValueTypes::TYPE_DATE))    out.push_back(f + wxT("_D"));
-	if (td.ContainType(ibValueTypes::TYPE_STRING))  out.push_back(f + wxT("_S"));
-	if (td.ContainType(ibValueTypes::TYPE_ENUM))    out.push_back(f + wxT("_E"));
-	if (ColumnHasReference(col, metaData)) { out.push_back(f + wxT("_RTRef")); out.push_back(f + wxT("_RRRef")); }
-	return out;
-}
+// (WriteFieldsOf removed — it was byte-identical to ColumnFieldNames (columnLayout.h): both are the
+//  column's physical field names off the one layout authority, DescribeColumnLayout. Callers use
+//  ColumnFieldNames directly so there is a single field-name path, not two.)
 
 // ibCol with an optional table qualifier — bare when `qualifier` is empty (the
 // no-join path), qualified (table.col) when a dot-walk join is present.
@@ -170,10 +137,10 @@ ibQueryExprPtr OrFold(ibQueryExprPtr a, ibQueryExprPtr b)
 ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& value,
                                  const wxString& mainQual = wxEmptyString)
 {
-	std::vector<wxString> fields = WriteFieldsOf(col, metaData);
+	std::vector<wxString> fields = ColumnFieldNames(col, metaData);
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 	int position = 1;
-	ibDbTableProvider::SetValueColumn(col, metaData, value, &capture, position);
+	ibColumnCodec::WriteValue(col, metaData, value, &capture, position);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 
 	ibQueryExprPtr pred;
@@ -393,7 +360,7 @@ bool ScalarReadable(const ibBackendQueryColumn* col, const ColocatedLeaves& leav
 	if (col->IsRawColumn()) return true;
 	const ibBackendQueryable* q = ColocatedOwner(leaves, col);
 	const ibMetaData* m = q != nullptr ? q->GetMetaData() : nullptr;
-	if (ColumnHasReference(col, m))                                  return false;   // reference -> rehydration needed
+	if (ibColumnCodec::HasReference(col, m))                                  return false;   // reference -> rehydration needed
 	if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_ENUM))     return false;   // enum -> variant reconstruction
 	return true;
 }
@@ -424,7 +391,7 @@ bool SingleFieldJoinable(const ibBackendQueryColumn* col, const ColocatedLeaves&
 	if (td.ContainType(ibValueTypes::TYPE_DATE))    ++fields;
 	if (td.ContainType(ibValueTypes::TYPE_STRING))  ++fields;
 	if (td.ContainType(ibValueTypes::TYPE_ENUM))    ++fields;
-	if (ColumnHasReference(col, m))                 ++fields;
+	if (ibColumnCodec::HasReference(col, m))                 ++fields;
 	return fields == 1;
 }
 
@@ -506,7 +473,7 @@ ibQueryExprPtr BuildColocatedPredicate(const ibQueryPredicatePtr& p, const Coloc
 		if (owner == nullptr)
 			throw std::logic_error("ColocatedWhere: an IS NULL references no joined leaf column");
 		ibQueryExprPtr allNull;
-		for (const wxString& f : p->m_col->GetSQLFields())
+		for (const wxString& f : p->m_col->GetValueFields())
 			allNull = AndFold(allNull, ibIsNull(ibColQ(owner->GetQueryTableName(), f), false));
 		if (!allNull) return nullptr;
 		return p->m_negated ? ibNot(allNull) : allNull;
@@ -613,7 +580,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildPredicateExpr(const ibBackendQueryable* que
 		const ibBackendQueryColumn* col = predicate->m_col;
 		ibQueryExprPtr allNull;
 		if (col != nullptr) {
-			for (const wxString& f : col->GetSQLFields())
+			for (const wxString& f : col->GetValueFields())
 				allNull = AndFold(allNull, ibIsNull(ibColQ(mainQual, f), false));
 		}
 		if (!allNull)   // defensive: a column with no physical fields — no constraint
@@ -698,13 +665,13 @@ std::vector<ibQuerySortKey> ibMetaIRBuilder::BuildSortKeys(const ibBackendQuerya
 
 	// Every identity / user sort is a REAL column now (catalog's uuid included — no null
 	// sentinel, no row-key special pass). Each column self-describes its physical fields
-	// (GetSQLFields), so no ResolveAttribute: an attribute column returns its authoritative
+	// (GetValueFields), so no ResolveAttribute: an attribute column returns its authoritative
 	// field list, a temp / raw column its bare field. One uniform pass.
 	for (const ibQuerySortItem& s : sorts) {
 		if (s.m_col == nullptr) continue;
 		if (!s.m_path.empty()) continue;   // dot-walk sort — emitted inline by BuildPageIR (qualified by its join alias)
 		const bool asc = reverse ? !s.m_ascending : s.m_ascending;
-		for (const wxString& name : s.m_col->GetSQLFields()) {
+		for (const wxString& name : s.m_col->GetValueFields()) {
 			ibQuerySortKey k;
 			k.m_expr = ibColQ(mainQual, name);
 			k.m_dir  = asc ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
@@ -769,7 +736,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildParentRefPredicate(const ibBackendQueryable
                                                         bool isTopLevel,
                                                         const wxString& mainQual)
 {
-	ibReference ref{ queryable->GetQueryMetaID(), ibGuidImpl{} };
+	ibReference ref{ queryable->GetQueryTableId(), ibGuidImpl{} };
 	if (!isTopLevel) {
 		const auto& be = parentGuid.bytes();
 		auto* p = reinterpret_cast<unsigned char*>(&ref.m_guid);
@@ -928,7 +895,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteAggregate(const ibDataQuerySpec& spe
 			const std::vector<const ibBackendQueryColumn*>& path = (gi < groupPaths.size()) ? groupPaths[gi]
 			                                                      : std::vector<const ibBackendQueryColumn*>{};
 			const wxString qual = path.empty() ? mainQual : joinLeaf(path);   // dot-walk leaf -> join alias
-			for (const wxString& field : gcol->GetSQLFields()) {   // column self-describes its fields — no ResolveAttribute
+			for (const wxString& field : gcol->GetValueFields()) {   // column self-describes its fields — no ResolveAttribute
 				const ibQueryExprPtr gexpr = qualCol(qual, field);
 				q.GroupBy(gexpr);
 				projection.push_back(ibQueryProjItem{ gexpr, field });   // AS its physname -> GetValue(gcol) reads it back
@@ -1027,7 +994,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 			else {
 				const wxString prefix = wxString::Format(wxT("ocol%d"), oi);
 				const wxString base   = col->GetPhysicalName();
-				for (const wxString& f : WriteFieldsOf(col, meta))
+				for (const wxString& f : ColumnFieldNames(col, meta))
 					projection.push_back(ibQueryProjItem{ ibCol(qual, f), prefix + f.Mid(base.length()) });   // <field> AS <prefix><suffix>
 				plans.push_back({ col, sc.second, prefix, meta, false });
 			}
@@ -1057,15 +1024,15 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 
 		ibQueryRamTable out;
 		for (const OutPlan& p : plans)
-			out.AddColumn(p.col->GetModelID(), p.alias, p.col->GetTypeDesc());
+			out.AddColumn(p.col->GetColumnId(), p.alias, p.col->GetTypeDesc());
 
 		while (cursor.Next()) {
 			const long r = out.AppendRow();
 			for (const OutPlan& p : plans) {
 				ibValue v;
 				if (p.raw) v = ReadScalarByAlias(p.col, p.alias, cursor);
-				else       GetValueColumn(p.prefix, p.col, p.meta, v, cursor);   // reference/enum/variant reassembly
-				out.SetCell(r, p.col->GetModelID(), v);
+				else       ibColumnCodec::ReadValue(p.prefix, p.col, p.meta, v, cursor);   // reference/enum/variant reassembly
+				out.SetCell(r, p.col->GetColumnId(), v);
 			}
 		}
 		return ibDataQueryResult(std::move(out), spec.m_queryable);
@@ -1133,7 +1100,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 			else {
 				const wxString prefix = wxString::Format(wxT("gcol%d"), gi);
 				const wxString base   = g->GetPhysicalName();
-				for (const wxString& f : WriteFieldsOf(g, meta)) {
+				for (const wxString& f : ColumnFieldNames(g, meta)) {
 					const ibQueryExprPtr fexpr = ibCol(qual(g), f);
 					q.GroupBy(fexpr);
 					projection.push_back(ibQueryProjItem{ fexpr, prefix + f.Mid(base.length()) });
@@ -1168,7 +1135,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 		// scalar alias), aggregates keyed by a synthetic id far from any metaID (read by their alias).
 		ibQueryRamTable out;
 		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
-			out.AddColumn(g->GetModelID(), g->GetName(), g->GetTypeDesc());
+			out.AddColumn(g->GetColumnId(), g->GetName(), g->GetTypeDesc());
 		const ibMetaID aggBaseId = 0x40000000u;
 		{
 			ibMetaID aid = aggBaseId;
@@ -1181,8 +1148,8 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 			for (const GroupPlan& gp : groupPlans) {
 				ibValue v;
 				if (gp.scalar) v = ReadScalarByAlias(gp.col, gp.tag, cursor);
-				else           GetValueColumn(gp.tag, gp.col, gp.meta, v, cursor);   // reference / variant group key
-				out.SetCell(r, gp.col->GetModelID(), v);
+				else           ibColumnCodec::ReadValue(gp.tag, gp.col, gp.meta, v, cursor);   // reference / variant group key
+				out.SetCell(r, gp.col->GetColumnId(), v);
 			}
 			ibMetaID aid = aggBaseId;
 			for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
@@ -1289,11 +1256,11 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 
 		ibQueryRamTable out;
 		for (size_t i = 0; i < outs.size(); ++i)
-			out.AddColumn(outs[i].first->GetModelID(), outs[i].second, outs[i].first->GetTypeDesc());
+			out.AddColumn(outs[i].first->GetColumnId(), outs[i].second, outs[i].first->GetTypeDesc());
 		while (cursor.Next()) {
 			const long r = out.AppendRow();
 			for (size_t i = 0; i < outs.size(); ++i)
-				out.SetCell(r, outs[i].first->GetModelID(), ReadScalarByAlias(outs[i].first, uAlias(i), cursor));
+				out.SetCell(r, outs[i].first->GetColumnId(), ReadScalarByAlias(outs[i].first, uAlias(i), cursor));
 		}
 		return ibDataQueryResult(std::move(out), spec.m_queryable);
 	}
@@ -1394,9 +1361,9 @@ ibSelectorTree ibDbTableProvider::ExecuteRollupTotals(const ibDataQuerySpec& spe
 		// Assemble the tree. Columns = group cols + aggregates IN-PLACE in their own source columns.
 		ibSelectorTree tree;
 		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
-			tree.AddColumn(g->GetModelID(), g->GetName(), g->GetTypeDesc());
+			tree.AddColumn(g->GetColumnId(), g->GetName(), g->GetTypeDesc());
 		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)
-			if (a.m_col != nullptr) tree.AddColumn(a.m_col->GetModelID(), a.m_col->GetName(), a.m_col->GetTypeDesc());
+			if (a.m_col != nullptr) tree.AddColumn(a.m_col->GetColumnId(), a.m_col->GetName(), a.m_col->GetTypeDesc());
 
 		// Parent-before-child: process by level ascending (a level-L node's level-(L-1) parent must
 		// exist). The grand total (level 0) is the root.
@@ -1419,12 +1386,12 @@ ibSelectorTree ibDbTableProvider::ExecuteRollupTotals(const ibDataQuerySpec& spe
 				ibSelectorTree::Node* parent = (pit != nodes.end()) ? pit->second : &tree.Root();
 				node = parent->AddChild(rr.level);
 				for (int i = 0; i < rr.level; ++i)
-					node->m_values[(*spec.m_groupBy)[static_cast<size_t>(i)]->GetModelID()] = rr.groups[static_cast<size_t>(i)];
+					node->m_values[(*spec.m_groupBy)[static_cast<size_t>(i)]->GetColumnId()] = rr.groups[static_cast<size_t>(i)];
 				nodes[key] = node;
 			}
 			for (size_t i = 0; i < rr.aggs.size() && i < spec.m_aggregates->size(); ++i)
 				if (const ibBackendQueryColumn* ac = (*spec.m_aggregates)[i].m_col)
-					node->m_values[ac->GetModelID()] = rr.aggs[i];   // IN-PLACE in the aggregate's own column
+					node->m_values[ac->GetColumnId()] = rr.aggs[i];   // IN-PLACE in the aggregate's own column
 		}
 		return tree;
 	}
@@ -1437,15 +1404,17 @@ static void BindWriteValue(ibQueryStatement& stmt, const ibBackendQueryColumn* c
 {
 	if (col->IsRawColumn()) {
 		switch (static_cast<const ibRawDBColumn*>(col)->GetRawType()) {
-			case ibRawDBColumn::RawType::String:  stmt.SetParamString(pos++, v.GetString());  break;
-			case ibRawDBColumn::RawType::Number:  stmt.SetParamNumber(pos++, v.GetNumber());  break;
-			case ibRawDBColumn::RawType::Date:    stmt.SetParamDate  (pos++, v.GetDate());    break;
-			case ibRawDBColumn::RawType::Boolean: stmt.SetParamBool  (pos++, v.GetBoolean()); break;
-			case ibRawDBColumn::RawType::Binary:  stmt.SetParamString(pos++, v.GetString());  break;   // TODO: real blob bind
+			case ibRawDBColumn::RawType::String:    stmt.SetParamString(pos++, v.GetString());  break;
+			case ibRawDBColumn::RawType::Guid:      stmt.SetParamString(pos++, v.GetString());  break;
+			case ibRawDBColumn::RawType::Number:    stmt.SetParamNumber(pos++, v.GetNumber());  break;
+			case ibRawDBColumn::RawType::Date:      stmt.SetParamDate  (pos++, v.GetDate());    break;
+			case ibRawDBColumn::RawType::Boolean:   stmt.SetParamBool  (pos++, v.GetBoolean()); break;
+			case ibRawDBColumn::RawType::Reference: stmt.SetParamString(pos++, v.GetString());  break;   // TODO: real blob bind
+			case ibRawDBColumn::RawType::Blob:      stmt.SetParamString(pos++, v.GetString());  break;   // TODO: real blob bind
 		}
 		return;
 	}
-	ibDbTableProvider::SetValueColumn(col, metaData, v, &stmt, pos);
+	ibColumnCodec::WriteValue(col, metaData, v, &stmt, pos);
 }
 
 // The L2 write CORE — buried in the provider. Identity is the WHERE section (spec conditions):
@@ -1467,7 +1436,7 @@ bool ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 			std::vector<wxString> whereCols;
 			for (const ibQueryCondition& c : *spec.m_conditions) {
 				if (c.m_col == nullptr) { if (!keyColumn.empty()) whereCols.push_back(keyColumn); }
-				else for (const wxString& f : WriteFieldsOf(c.m_col, metaData)) whereCols.push_back(f);
+				else for (const wxString& f : ColumnFieldNames(c.m_col, metaData)) whereCols.push_back(f);
 			}
 			ibQueryStatement statement(ibQueryStatement::Kind::Delete, table, whereCols, {}, spec.m_holder);
 			int position = 1;
@@ -1485,7 +1454,7 @@ bool ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 
 		std::vector<wxString> columns;
 		for (const auto& wv : *spec.m_writeValues)
-			for (const wxString& f : WriteFieldsOf(wv.first, metaData)) columns.push_back(f);
+			for (const wxString& f : ColumnFieldNames(wv.first, metaData)) columns.push_back(f);
 
 		// UPSERT match keys = the source's uniqueness key, OWNED by the queryable through
 		// GetPrimaryKeyColumns: a record's data-reference (_RTRef+_RRRef — _RTRef is constant for
@@ -1496,7 +1465,7 @@ bool ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		std::vector<wxString> matchKeys;
 		if (kind == WriteKind::Upsert)
 			for (const ibBackendQueryColumn* col : spec.m_queryable->GetPrimaryKeyColumns())
-				for (const wxString& f : WriteFieldsOf(col, metaData)) matchKeys.push_back(f);
+				for (const wxString& f : ColumnFieldNames(col, metaData)) matchKeys.push_back(f);
 
 		ibQueryStatement statement(l2kind, table, columns, matchKeys, spec.m_holder);
 		int position = 1;
@@ -1642,7 +1611,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 						else {
 							const ibMetaData* meta = tq->GetMetaData();
 							const wxString    base = leaf->GetPhysicalName();
-							for (const wxString& f : WriteFieldsOf(leaf, meta))
+							for (const wxString& f : ColumnFieldNames(leaf, meta))
 								projection.push_back(ibQueryProjItem{ ibCol(a, f), dw.m_alias + f.Mid(base.length()) });
 						}
 						continue;
@@ -1697,7 +1666,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					std::vector<std::vector<wxString>> occFields;
 					occFields.reserve(occs.size());
 					for (const LeafOcc& o : occs)
-						occFields.push_back(WriteFieldsOf(o.m_col, o.m_q->GetMetaData()));
+						occFields.push_back(ColumnFieldNames(o.m_col, o.m_q->GetMetaData()));
 
 					const wxString repBase = occs.front().m_col->GetPhysicalName();
 					for (const wxString& repField : occFields.front()) {
@@ -1807,7 +1776,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					}
 					ibQueryExprPtr allNull;
 					if (p->m_col != nullptr)
-						for (const wxString& f : p->m_col->GetSQLFields())
+						for (const wxString& f : p->m_col->GetValueFields())
 							allNull = AndFold(allNull, ibIsNull(ibColQ(qual, f), false));
 					if (!allNull) return nullptr;
 					return p->m_negated ? ibNot(allNull) : allNull;
@@ -1871,7 +1840,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					q.AddSortKey(std::move(k));
 				}
 				else {
-					for (const wxString& name : s.m_col->GetSQLFields()) {
+					for (const wxString& name : s.m_col->GetValueFields()) {
 						ibQuerySortKey k;
 						k.m_expr = ibCol(mainQual, name);
 						k.m_dir  = asc ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
@@ -1911,379 +1880,24 @@ std::vector<ibValue> ibDbTableProvider::BuildExternal(const ibReadPageRequest& r
 		return params;
 	}
 
-void ibDbTableProvider::SetValueColumn(const ibBackendQueryColumn* col, const ibMetaData* metaData,
-	const ibValue& cValue, ibQueryStatement* statement, int& position)
-{
-	using A = ibValueMetaObjectAttributeBase;   // the ibFieldTypes_* tags are a class-scoped enum (no instance)
-	//write type & data
-	if (cValue.GetType() == ibValueTypes::TYPE_EMPTY) {
-
-		statement->SetParamInt(position++, A::ibFieldTypes_Empty); //TYPE
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_BOOLEAN))
-			statement->SetParamBool(position++, false); //DATA binary 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_NUMBER))
-			statement->SetParamNumber(position++, 0); //DATA number 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_DATE))
-			statement->SetParamDate(position++, emptyDate); //DATA date 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_STRING))
-			statement->SetParamString(position++, wxEmptyString); //DATA string 
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_ENUM))
-			statement->SetParamInt(position++, wxNOT_FOUND); //DATA enum 
-
-		if (ColumnHasReference(col, metaData)) {
-			statement->SetParamNumber(position++, 0); //TYPE REF
-			statement->SetParamNull(position++); //DATA REF
-		}
-	}
-	else if (cValue.GetType() == ibValueTypes::TYPE_BOOLEAN) {
-
-		statement->SetParamInt(position++, A::ibFieldTypes_Boolean); //TYPE
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_BOOLEAN))
-			statement->SetParamBool(position++, cValue.GetBoolean()); //DATA binary 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_NUMBER))
-			statement->SetParamNumber(position++, 0); //DATA number 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_DATE))
-			statement->SetParamDate(position++, emptyDate); //DATA date 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_STRING))
-			statement->SetParamString(position++, wxEmptyString); //DATA string 
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_ENUM))
-			statement->SetParamInt(position++, wxNOT_FOUND); //DATA enum 
-
-		if (ColumnHasReference(col, metaData)) {
-			statement->SetParamNumber(position++, 0); //TYPE REF
-			statement->SetParamNull(position++); //DATA REF
-		}
-	}
-	else if (cValue.GetType() == ibValueTypes::TYPE_NUMBER) {
-
-		statement->SetParamInt(position++, A::ibFieldTypes_Number); //TYPE
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_BOOLEAN))
-			statement->SetParamBool(position++, false); //DATA binary 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_NUMBER))
-			statement->SetParamNumber(position++, cValue.GetNumber()); //DATA number 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_DATE))
-			statement->SetParamDate(position++, emptyDate); //DATA date 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_STRING))
-			statement->SetParamString(position++, wxEmptyString); //DATA string 
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_ENUM))
-			statement->SetParamInt(position++, wxNOT_FOUND); //DATA enum 
-
-		if (ColumnHasReference(col, metaData)) {
-			statement->SetParamNumber(position++, 0); //TYPE REF
-			statement->SetParamNull(position++); //DATA REF
-		}
-	}
-	else if (cValue.GetType() == ibValueTypes::TYPE_DATE) {
-
-		statement->SetParamInt(position++, A::ibFieldTypes_Date); //TYPE
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_BOOLEAN))
-			statement->SetParamBool(position++, false); //DATA binary 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_NUMBER))
-			statement->SetParamNumber(position++, 0); //DATA number 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_DATE))
-			statement->SetParamDate(position++, cValue.GetDate()); //DATA date 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_STRING))
-			statement->SetParamString(position++, wxEmptyString); //DATA string 
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_ENUM))
-			statement->SetParamInt(position++, wxNOT_FOUND); //DATA enum 
-
-		if (ColumnHasReference(col, metaData)) {
-			statement->SetParamNumber(position++, 0); //TYPE REF
-			statement->SetParamNull(position++); //DATA REF
-		}
-	}
-	else if (cValue.GetType() == ibValueTypes::TYPE_STRING) {
-
-		statement->SetParamInt(position++, A::ibFieldTypes_String); //TYPE
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_BOOLEAN))
-			statement->SetParamBool(position++, false); //DATA binary 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_NUMBER))
-			statement->SetParamNumber(position++, 0); //DATA number 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_DATE))
-			statement->SetParamDate(position++, emptyDate); //DATA date 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_STRING))
-			statement->SetParamString(position++, cValue.GetString()); //DATA string 
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_ENUM))
-			statement->SetParamInt(position++, wxNOT_FOUND); //DATA enum 
-
-		if (ColumnHasReference(col, metaData)) {
-			statement->SetParamNumber(position++, 0); //TYPE REF
-			statement->SetParamNull(position++); //DATA REF
-		}
-	}
-	else if (cValue.GetType() == ibValueTypes::TYPE_NULL) {
-
-		statement->SetParamInt(position++, A::ibFieldTypes_Null); //TYPE
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_BOOLEAN))
-			statement->SetParamBool(position++, false); //DATA binary 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_NUMBER))
-			statement->SetParamNumber(position++, 0); //DATA number 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_DATE))
-			statement->SetParamDate(position++, emptyDate); //DATA date 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_STRING))
-			statement->SetParamString(position++, wxEmptyString); //DATA string 
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_ENUM))
-			statement->SetParamInt(position++, wxNOT_FOUND); //DATA enum 
-
-		if (ColumnHasReference(col, metaData)) {
-			statement->SetParamNumber(position++, 0); //TYPE REF
-			statement->SetParamNull(position++); //DATA REF
-		}
-	}
-	else if (cValue.GetType() == ibValueTypes::TYPE_ENUM) {
-
-		statement->SetParamInt(position++, A::ibFieldTypes_Enum); //TYPE
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_BOOLEAN))
-			statement->SetParamBool(position++, false); //DATA binary 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_NUMBER))
-			statement->SetParamNumber(position++, cValue.GetNumber()); //DATA number 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_DATE))
-			statement->SetParamDate(position++, emptyDate); //DATA date 	
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_STRING))
-			statement->SetParamString(position++, wxEmptyString); //DATA string 
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_ENUM))
-			statement->SetParamInt(position++, cValue.GetInteger()); //DATA enum 
-
-		if (ColumnHasReference(col, metaData)) {
-			statement->SetParamNumber(position++, 0); //TYPE REF
-			statement->SetParamNull(position++); //DATA REF
-		}
-	}
-	else {
-
-		statement->SetParamInt(position++, A::ibFieldTypes_Reference); //TYPE
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_BOOLEAN))
-			statement->SetParamBool(position++, false); //DATA binary 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_NUMBER))
-			statement->SetParamNumber(position++, 0); //DATA number 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_DATE))
-			statement->SetParamDate(position++, emptyDate); //DATA date 
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_STRING))
-			statement->SetParamString(position++, wxEmptyString); //DATA string 
-
-		if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_ENUM))
-			statement->SetParamInt(position++, wxNOT_FOUND); //DATA enum 
-
-		const ibClassID& clsid = cValue.GetClassType();
-		wxASSERT(clsid > 0);
-		wxASSERT(metaData);
-
-		const ibCtorMetaValueType* typeCtor = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
-		wxASSERT(typeCtor);
-
-		if (typeCtor != nullptr && typeCtor->GetMetaTypeCtor() == ibCtorObjectMetaType::ibCtorObjectMetaType_Reference) {
-			ibValueReferenceDataObject* refData = nullptr;
-			if (cValue.ConvertToValue(refData)) {
-				statement->SetParamNumber(position++, clsid); //TYPE REF
-				statement->SetParamBlob(position++, refData->GetReferenceData(), sizeof(ibReference)); //DATA REF
-			}
-			else {
-				statement->SetParamNumber(position++, 0); //TYPE REF
-				statement->SetParamNull(position++); //DATA REF
-			}
-		}
-		else {
-			statement->SetParamNumber(position++, 0); //TYPE REF
-			statement->SetParamNull(position++); //DATA REF
-		}
-	}
-}
-
-void ibDbTableProvider::SetValueColumn(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& cValue, ibQueryStatement* statement)
-{
-	int position = 1;
-	SetValueColumn(col, metaData, cValue, statement, position);
-}
-
-// Public forwarder to the file-local spread (so the temp-table manager reuses the EXACT field
-// derivation the DB write/read path uses — same TYPE/_N/_S/_RTRef/_RRRef layout).
-std::vector<wxString> ibDbTableProvider::WriteFieldsOf(const ibBackendQueryColumn* col, const ibMetaData* metaData)
-{
-	return ::WriteFieldsOf(col, metaData);
-}
-
-// --- attribute convenience adapters — the attribute IS a column, metaData is its own. ----------
+// --- attribute convenience adapters — the attribute IS a column, metaData is its own. The value
+//     codec lives on the column-layout tier (ibColumnCodec); these adapters just supply the
+//     attribute's own metaData. The plain SetValueColumn / GetValueColumn forwarders were inlined
+//     to ibColumnCodec::WriteValue / ReadValue at their call sites — no second name for the tier.
 void ibDbTableProvider::SetValueAttribute(const ibValueMetaObjectAttributeBase* attr, const ibValue& cValue, ibQueryStatement* statement, int& position)
 {
-	SetValueColumn(attr, attr->GetMetaData(), cValue, statement, position);
+	ibColumnCodec::WriteValue(attr, attr->GetMetaData(), cValue, statement, position);
 }
 
 bool ibDbTableProvider::GetValueAttribute(const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData)
 {
-	return GetValueColumn(attr, attr->GetMetaData(), retValue, result, createData);
+	return ibColumnCodec::ReadValue(attr, attr->GetMetaData(), retValue, result, createData);
 }
 
-bool ibDbTableProvider::GetValueAttribute(const wxString& fieldName, ibValueMetaObjectAttributeBase::ibFieldTypes fieldType,
+bool ibDbTableProvider::GetValueAttribute(const wxString& fieldName, ibFieldTypes fieldType,
 	const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData)
 {
-	return GetValueColumn(fieldName, fieldType, attr, attr->GetMetaData(), retValue, result, createData);
-}
-
-#include "backend/compiler/enumUnit.h"
-
-bool ibDbTableProvider::GetValueColumn(const wxString& fieldName,
-	ibValueMetaObjectAttributeBase::ibFieldTypes fieldType, const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
-{
-	using A = ibValueMetaObjectAttributeBase;
-	switch (fieldType)
-	{
-	case A::ibFieldTypes_Boolean:
-		retValue = result.GetResultBool(fieldName);
-		return true;
-	case A::ibFieldTypes_Number:
-		retValue = result.GetResultNumber(fieldName);
-		return true;
-	case A::ibFieldTypes_Date:
-		retValue = result.GetResultDate(fieldName);
-		return true;
-	case A::ibFieldTypes_String:
-		retValue = result.GetResultString(fieldName);
-		return true;
-	case A::ibFieldTypes_Null:
-		retValue = ibValue(ibValueTypes::TYPE_NULL);   // fresh NULL — releases any prior reffer/string in the slot (operator=(ibValueTypes) would leak it)
-		return true;
-	case A::ibFieldTypes_Enum:
-	{
-		wxASSERT(metaData);
-		// The enum ctor is keyed by the ENUM clsid — taken from the column's type descriptor (was
-		// the attribute's CreateValue().GetClassType()). The error fallback yields an empty value
-		// (the former typed default needed the attribute; an unreadable enum degrades to empty).
-		const ibClassID enumClsid = col->GetTypeDesc().GetFirstClsid();
-		const ibCtorAbstractType* so = metaData != nullptr ? metaData->GetAvailableCtor(enumClsid) : nullptr;
-
-		if (so != nullptr) {
-
-			ibValue enumVariant(result.GetResultInt(fieldName));
-			ibValue* ppParams[] = { &enumVariant };
-
-			try {
-				ibValuePtr<ibValueEnumerationWrapper> creator(
-					metaData->CreateAndConvertObjectRef<ibValueEnumerationWrapper>(so->GetClassName(), ppParams, 1));
-				retValue = creator->GetEnumVariantValue();
-			}
-			catch (...) {
-				retValue = ibValue();
-				return false;
-			}
-
-			return true;
-		}
-
-		retValue = ibValue();
-		return false;
-	}
-	case A::ibFieldTypes_Reference:
-	{
-		wxASSERT(metaData);
-		if (metaData == nullptr)
-			return false;
-		const ibClassID refType = static_cast<ibClassID>(result.GetResultLong(fieldName + wxT("_RTRef")));
-
-		wxMemoryBuffer bufferData;
-		result.GetResultBlob(fieldName + wxT("_RRRef"), bufferData);
-		if (!bufferData.IsEmpty()) {
-
-			if (createData) {
-
-				ibValuePtr<ibValueReferenceDataObject> created_reference(
-					ibValueReferenceDataObject::CreateFromPtr(metaData, bufferData.GetData()));
-
-				retValue = created_reference;
-				return created_reference != nullptr;
-			}
-
-			ibValuePtr<ibValueReferenceDataObject> created_reference(
-				ibValueReferenceDataObject::Create(metaData, bufferData.GetData()));
-
-			retValue = created_reference;
-			return created_reference != nullptr;
-		}
-		else if (refType > 0) {
-
-			const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(refType);
-			if (typeCtor != nullptr) {
-
-				const ibValueMetaObject* metaObject = typeCtor->GetMetaObject();
-				wxASSERT(metaObject);
-
-				ibValuePtr<ibValueReferenceDataObject> created_reference(
-					ibValueReferenceDataObject::Create(metaData, metaObject->GetMetaID()));
-
-				retValue = created_reference;
-				return created_reference != nullptr;
-			}
-
-			return false;
-		}
-
-		// Empty _RRRef and no refType — the reference is empty / its dot-walk join did not match: the
-		// column's TYPED EMPTY (пусто), not UNDEFINED.
-		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc()) : ibValue();
-		return true;
-	}
-	}
-
-	return false;
-}
-
-bool ibDbTableProvider::GetValueColumn(const wxString& fieldName,
-	const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
-{
-	using A = ibValueMetaObjectAttributeBase;
-	A::ibFieldTypes fieldType =
-		static_cast<A::ibFieldTypes>(result.GetResultInt(fieldName + wxT("_TYPE")));
-
-	switch (fieldType)
-	{
-	case A::ibFieldTypes_Boolean:
-		return ibDbTableProvider::GetValueColumn(fieldName + wxT("_B"), A::ibFieldTypes_Boolean, col, metaData, retValue, result, createData);
-	case A::ibFieldTypes_Number:
-		return ibDbTableProvider::GetValueColumn(fieldName + wxT("_N"), A::ibFieldTypes_Number, col, metaData, retValue, result, createData);
-	case A::ibFieldTypes_Date:
-		return ibDbTableProvider::GetValueColumn(fieldName + wxT("_D"), A::ibFieldTypes_Date, col, metaData, retValue, result, createData);
-	case A::ibFieldTypes_String:
-		return ibDbTableProvider::GetValueColumn(fieldName + wxT("_S"), A::ibFieldTypes_String, col, metaData, retValue, result, createData);
-	case A::ibFieldTypes_Null:
-		retValue = ibValue(ibValueTypes::TYPE_NULL);   // fresh NULL — releases any prior reffer/string in the slot (operator=(ibValueTypes) would leak it)
-		return true;
-	case A::ibFieldTypes_Enum:
-		return ibDbTableProvider::GetValueColumn(fieldName + wxT("_E"), A::ibFieldTypes_Enum, col, metaData, retValue, result, createData);
-	case A::ibFieldTypes_Reference:
-		return ibDbTableProvider::GetValueColumn(fieldName, A::ibFieldTypes_Reference, col, metaData, retValue, result, createData);
-	default:
-		// The stored TYPE tag is NULL / untagged (0): no value in this cell — a fresh row, or a dot-walk
-		// through an empty / broken reference whose LEFT JOIN did not match. Yield the COLUMN'S TYPED EMPTY
-		// (пусто), never UNDEFINED, and NEVER read a sub-field the column lacks (a number column has no
-		// _RRRef). A real reference value tags _TYPE = Reference and takes the case above.
-		// (docs/query-language-arc.md §22.4b — typed-empty dot-walk)
-		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc()) : ibValue();
-		return true;
-	}
-
-	return false;
-}
-
-bool ibDbTableProvider::GetValueColumn(const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
-{
-	return ibDbTableProvider::GetValueColumn(
-		col->GetPhysicalName(),
-		col, metaData, retValue, result, createData
-	);
+	return ibColumnCodec::ReadField(fieldName, static_cast<int>(fieldType), attr, attr->GetMetaData(), retValue, result, createData);
 }
 
 // ==========================================================================
@@ -2302,7 +1916,7 @@ ibValue ProviderReadColumn(const ibBackendQueryColumn* col, const ibMetaData* me
 	if (col == nullptr)
 		return ibValue();
 	ibValue v;
-	ibDbTableProvider::GetValueColumn(col, metaData, v, result);
+	ibColumnCodec::ReadValue(col, metaData, v, result);
 	return v;
 }
 
@@ -2325,11 +1939,13 @@ public:
 			// write side's BindWriteValue; this is how the row-key reads now — no GuidString.)
 			const wxString f = col->GetPhysicalName();
 			switch (static_cast<const ibRawDBColumn*>(col)->GetRawType()) {
-				case ibRawDBColumn::RawType::String:  return ibValue(m_cursor.GetResultString(f));
-				case ibRawDBColumn::RawType::Number:  return ibValue(m_cursor.GetResultNumber(f));
-				case ibRawDBColumn::RawType::Date:    return ibValue(m_cursor.GetResultDate(f));
-				case ibRawDBColumn::RawType::Boolean: return ibValue(m_cursor.GetResultBool(f));
-				case ibRawDBColumn::RawType::Binary:  return ibValue(m_cursor.GetResultString(f));   // TODO: real blob
+				case ibRawDBColumn::RawType::String:    return ibValue(m_cursor.GetResultString(f));
+				case ibRawDBColumn::RawType::Guid:      return ibValue(m_cursor.GetResultString(f));
+				case ibRawDBColumn::RawType::Number:    return ibValue(m_cursor.GetResultNumber(f));
+				case ibRawDBColumn::RawType::Date:      return ibValue(m_cursor.GetResultDate(f));
+				case ibRawDBColumn::RawType::Boolean:   return ibValue(m_cursor.GetResultBool(f));
+				case ibRawDBColumn::RawType::Reference: return ibValue(m_cursor.GetResultString(f));   // TODO: real blob
+				case ibRawDBColumn::RawType::Blob:      return ibValue(m_cursor.GetResultString(f));   // TODO: real blob
 			}
 			return ibValue();
 		}
@@ -2346,7 +1962,7 @@ public:
 		if (col == nullptr)
 			return ibValue();
 		ibValue v;
-		ibDbTableProvider::GetValueColumn(prefix, col, m_metaData, v, m_cursor);
+		ibColumnCodec::ReadValue(prefix, col, m_metaData, v, m_cursor);
 		return v;
 	}
 

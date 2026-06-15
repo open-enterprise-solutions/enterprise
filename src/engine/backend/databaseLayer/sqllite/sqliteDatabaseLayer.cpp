@@ -21,12 +21,17 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 		d.m_boolForm   = ibBoolForm::OneZero;
 		d.m_features.m_window = true;                 // SQLite 3.25+
 		d.m_alterColumnTemplate = wxEmptyString;      // no in-place type change -> renderer throws
+		d.m_alterTableMultiClause = false;            // one ADD/DROP per ALTER — the structure builder splits batches
 		d.m_rowLockSuffix = wxEmptyString;            // SQLite locks the whole DB per TX — no row FOR UPDATE
 		// type map (SQLite is dynamically typed; these set column affinity)
-		d.m_typeBoolean = wxT("INTEGER");
-		d.m_typeDate    = wxT("TEXT");
-		d.m_typeBlob    = wxT("BLOB");
-		d.m_typeGuid    = wxT("TEXT");
+		d.m_typeBoolean       = wxT("INTEGER");
+		d.m_typeBigInt        = wxT("INTEGER");   // SQLite INTEGER is 64-bit
+		d.m_typeDate          = wxT("TEXT");
+		d.m_typeDateOnly      = wxT("TEXT");
+		d.m_typeTime          = wxT("TEXT");
+		d.m_typeBlob          = wxT("BLOB");
+		d.m_typeBinaryPattern = wxT("BLOB");      // SQLite has no fixed-width binary
+		d.m_typeGuid          = wxT("TEXT");
 		return d;
 	}();
 	return s_dialect;

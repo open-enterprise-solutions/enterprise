@@ -90,7 +90,8 @@ enum metaObjectFlags {
 	pasteObjectFlag = 0x0200,
 };
 
-#define rt_ref_chunk 0x800060
+// (rt_ref_chunk — the reference-blob wire chunk id — moved to its only user, the L3-3 wire codec
+//  in query/dataMover.cpp.)
 
 //flags metaobject
 #define metaDeletedFlag 0x0001000
@@ -105,12 +106,7 @@ enum metaObjectFlags {
 
 #define metaDefaultFlag metaCanSaveFlag
 
-//flags save
-#define createMetaTable  0x0001000
-#define updateMetaTable	 0x0002000	
-#define deleteMetaTable	 0x0004000	
-
-#define repairMetaTable  0x0008000
+class ibSchemaSnapshot;   // structure snapshot — ContributeTables declares this object's tables into it
 
 class BACKEND_API ibValueMetaObject :
 
@@ -152,6 +148,13 @@ public:
 	// Mutable accessor - metaobjects own a mutable m_metaData. Not an override:
 	// the factory root only declares the const capability (see backend_type.h).
 	virtual ibMetaData* GetMetaData() { return m_metaData; }
+
+	// Restructure-ledger facade — one short call instead of the static ledger accessor at every save /
+	// validation site. STATIC (the ledger pulls the active config), so it works in this-less contexts too
+	// (the static scaffold methods). Defined in metaObject.cpp.
+	static void RestructureInfo   (const wxString& message);
+	static void RestructureWarning(const wxString& message);
+	static void RestructureError  (const wxString& message);
 
 	void ResetGuid();
 	void ResetId();
@@ -316,15 +319,12 @@ public:
 	bool RunSubtree(int flags, bool before);
 	bool CloseSubtree(bool before);
 
-	// save & delete object in DB
-	bool CreateMetaTable(ibMetaDataConfiguration* srcMetaData, int flags = createMetaTable);
-	bool UpdateMetaTable(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject);
-	bool DeleteMetaTable(ibMetaDataConfiguration* srcMetaData);
+	// (CreateMetaTable / UpdateMetaTable / DeleteMetaTable removed — structure DDL is the config-save
+	//  differ's job; see ContributeTables below (declares both structure and seed) + query/schemaSnapshot.h.)
 
-	// dump & restore table data (per-object rows: constant value, register
-	// records, etc. - distinct from metadata-tree (Load/SaveCommonTree))
-	virtual bool RestoreTable(const ibReaderMemory& reader) { return true; }
-	virtual bool DumpTable(ibWriterMemory& writer) const { return true; }
+	// (No per-object table-data dump / restore. Row data is moved off the config's ContributeTables
+	//  SNAPSHOT directly by the orchestrator (DumpDataToBuffer / RestoreDataFromBuffer) through the L3-3
+	//  mover — one source of truth, the same structure that drives the DDL. See query/dataMover.h.)
 
 	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
@@ -416,12 +416,26 @@ public:
 		return (m_metaFlags & metaPredefinedFlag) != 0;
 	}
 
+public:
+
+	// Declare this object's physical tables INTO a structure snapshot — the declarative replacement for
+	// CreateAndUpdateTableDB. The differ (DiffSnapshots) computes create/alter/drop from two snapshots;
+	// an object only declares "what I am now". (query/schemaSnapshot.h, docs/query-language-arc.md)
+	//
+	// Base = the CONTAINER behaviour: recurse into children, so the tree walks itself (SnapshotOf is one
+	// call on the common object). A TABLE-bearing object overrides to Add its table(s) — including nested
+	// tabular sections — and does NOT recurse (its children are attributes/forms, not tables). A non-table
+	// container (folder / common) keeps this default and just descends.
+	virtual void ContributeTables(ibSchemaSnapshot& out) const {
+		for (unsigned int i = 0; i < GetChildCount(); i++)
+			if (ibValueMetaObject* child = GetChild(i))
+				child->ContributeTables(out);
+	}
+
+
 protected:
 
-	//create and update table 
-	virtual bool CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags) { return true; }
-
-	//load & save metaData from DB 
+	//load & save metaData from DB
 	virtual bool LoadData(ibReaderMemory& reader) { return true; }
 	virtual bool SaveData(ibWriterMemory& writer) { return true; }
 	virtual bool DeleteData() { return true; }
@@ -648,7 +662,5 @@ protected:
 	ibPropertyString* m_propertyComment = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryCommon, wxT("Comment"), _("Comment"), _("Comment"), wxEmptyString);
 	ibPropertyCategory* m_categoryContext = ibPropertyObject::CreatePropertyCategory(wxT("Context"), _("Context"));
 };
-
-extern BACKEND_API ibRestructureInfo s_restructureInfo;
 
 #endif

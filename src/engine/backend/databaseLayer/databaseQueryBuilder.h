@@ -461,32 +461,9 @@ struct ibQueryIR
 // TIMESTAMP, boolean-as-SMALLINT).
 // ==========================================================================
 
-enum class ibCanonicalKind
-{
-	Boolean,
-	Integer,
-	Number,    // decimal(precision, scale)
-	String,    // varchar(length)
-	Date,
-	Blob,
-	Guid       // reference / unique id
-};
-
-struct ibColumnType
-{
-	ibCanonicalKind m_kind      = ibCanonicalKind::String;
-	int             m_length    = 0;   // String
-	int             m_precision = 0;   // Number
-	int             m_scale     = 0;   // Number
-};
-
-inline ibColumnType ibTypeBoolean()                 { ibColumnType t; t.m_kind = ibCanonicalKind::Boolean; return t; }
-inline ibColumnType ibTypeInteger()                 { ibColumnType t; t.m_kind = ibCanonicalKind::Integer; return t; }
-inline ibColumnType ibTypeNumber(int prec, int scl) { ibColumnType t; t.m_kind = ibCanonicalKind::Number; t.m_precision = prec; t.m_scale = scl; return t; }
-inline ibColumnType ibTypeString(int len)           { ibColumnType t; t.m_kind = ibCanonicalKind::String; t.m_length = len; return t; }
-inline ibColumnType ibTypeDate()                    { ibColumnType t; t.m_kind = ibCanonicalKind::Date; return t; }
-inline ibColumnType ibTypeBlob()                    { ibColumnType t; t.m_kind = ibCanonicalKind::Blob; return t; }
-inline ibColumnType ibTypeGuid()                    { ibColumnType t; t.m_kind = ibCanonicalKind::Guid; return t; }
+// The canonical column type + factories (ibColumnType / ibTypeNumber / …) live in a shared low-tier
+// vocabulary used by both L2 and the L3 layout tier. ibDdlColumn below carries an ibColumnType.
+#include "backend/databaseLayer/columnType.h"
 
 struct ibDdlColumn
 {
@@ -494,9 +471,22 @@ struct ibDdlColumn
 	ibColumnType m_type;
 	bool         m_notNull    = false;
 	bool         m_primaryKey = false;   // PRIMARY KEY implies NOT NULL
+	wxString     m_default;              // DEFAULT clause value (literal SQL), empty = none
 };
 
-enum class ibDdlKind { CreateTable, DropTable, AddColumn, DropColumn, AlterColumn, CreateIndex, DropIndex };
+// A single clause inside a batched ALTER TABLE. The structure builder coalesces consecutive
+// same-op column deltas of one table into one statement (`ALTER TABLE t ADD c1, ADD c2`) — far
+// fewer round-trips than one ALTER per column. Modify is NOT batched (its per-DBMS spelling is a
+// whole-statement template); it stays a standalone ibAlterColumn.
+enum class ibAlterOp { Add, Drop };
+
+struct ibAlterClause
+{
+	ibAlterOp   m_op;
+	ibDdlColumn m_column;   // Add: the full column; Drop: only m_column.m_name is used
+};
+
+enum class ibDdlKind { CreateTable, DropTable, AddColumn, DropColumn, AlterColumn, AlterTable, CreateIndex, DropIndex };
 
 struct ibDdlStatement
 {
@@ -507,6 +497,9 @@ struct ibDdlStatement
 	// CreateTable: all columns. AddColumn / DropColumn: one column (m_columns[0];
 	// DropColumn uses only its m_name).
 	std::vector<ibDdlColumn> m_columns;
+
+	// AlterTable: the coalesced column clauses, rendered as one multi-clause ALTER.
+	std::vector<ibAlterClause> m_alterClauses;
 
 	// CreateIndex / DropIndex.
 	wxString              m_indexName;
@@ -585,6 +578,17 @@ inline ibDdlStatement ibAlterColumn(const wxString& table, ibDdlColumn column)
 	ibDdlStatement s(ibDdlKind::AlterColumn);
 	s.m_table = table;
 	s.m_columns.push_back(std::move(column));
+	return s;
+}
+
+// ALTER TABLE <table> <clause>, <clause>, … — a batched column delta (ADD / DROP COLUMN folded into
+// one statement). The structure builder coalesces consecutive same-op clauses of one table into this;
+// dialects without multi-clause ALTER (SQLite) get one statement per clause from the builder instead.
+inline ibDdlStatement ibAlterTable(const wxString& table, std::vector<ibAlterClause> clauses)
+{
+	ibDdlStatement s(ibDdlKind::AlterTable);
+	s.m_table        = table;
+	s.m_alterClauses = std::move(clauses);
 	return s;
 }
 

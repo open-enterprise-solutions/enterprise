@@ -70,7 +70,7 @@ ibCompositionDriver — the passive output sink ("where the data goes"):
 - `FromSource(const ibBackendQueryable*)` — the typed face: holding a queryable
   IS the proof the source is queryable (a metaobject overload would not be —
   reports/processors vend none); the identity is recovered through
-  `GetMetaData() + GetQueryMetaID()`, read-only.
+  `GetMetaData() + GetQueryTableId()`, read-only.
 - `FromText(query)` — the author's verbatim L4-1 text, never edited. Settings
   over an author's text are not rendered yet (they error clearly); the next
   seam is the subquery wrap `SELECT … FROM (<text>) AS src WHERE …` — the
@@ -102,7 +102,7 @@ the **FolderRef tree**, and the **register** list. The pattern:
 - the PAGE ENVELOPE rides on **`ibListFetchDriver`**
   (`composition/listFetchDriver.h`) — a stack object built per `Get*Fetch`
   call: the envelope in (direction/anchor/count), meta-keyed rows out
-  (`map<metaID, ibValue>` off `OutputColumn::GetModelID()`).
+  (`map<metaID, ibValue>` off `OutputColumn::GetColumnId()`).
 - the tree passes an **`ibTreeScope`** (the parent COLUMN — the queryable's
   `GetParentColumn()` — plus the browsed node): the driver assembles the
   hierarchy envelope, and the PROVIDER derives the physical field

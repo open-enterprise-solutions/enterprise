@@ -16,8 +16,8 @@
 // The constant is the queryable's only column AND its one-row table; resolution by
 // name / id yields the constant itself (m_meta), the value comes via GetValueAttribute.
 const ibBackendQueryColumn* ibConstantQueryable::ResolveColumnByName(const wxString& name) const { return name == m_meta->GetName() ? m_meta : nullptr; }   // the constant IS its one column
-wxString ibConstantQueryable::GetQueryTableName() const { return m_meta->GetTableNameDB(); }
-ibMetaID ibConstantQueryable::GetQueryMetaID() const { return m_meta->GetMetaID(); }
+wxString ibConstantQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
+ibMetaID ibConstantQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
 const ibMetaData* ibConstantQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
 std::vector<ibQuerySortItem> ibConstantQueryable::GetIdentitySort() const { return {}; }   // single row — no keyset
 std::vector<const ibBackendQueryColumn*> ibConstantQueryable::GetPrimaryKeyColumns() const {
@@ -274,7 +274,7 @@ ibValue ibValueRecordDataObjectConstant::GetConstValue() const
 			return false;
 		}
 
-		const wxString& tableName = m_metaObject->GetTableNameDB();
+		const wxString& tableName = m_metaObject->GetPhysicalTableName();
 		if (db_query->TableExists(tableName)) {
 			// Read the single sys_const row through the L3 door — the constant IS the
 			// queryable (its table) AND the column (its value). The FB FIRST / others
@@ -337,7 +337,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 	if (!scope || !scope->IsOpen())
 		ibBackendCoreException::Error(_("Database is not open!"));
 
-	const wxString& tableName = m_metaObject->GetTableNameDB();
+	const wxString& tableName = m_metaObject->GetPhysicalTableName();
 	ibBackendValueForm* const valueForm = GetForm();
 
 	scope.SafeBeginTransaction();

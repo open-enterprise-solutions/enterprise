@@ -8,7 +8,7 @@
 //
 // L3 in one line: built from a HOLDER (to execute) + METADATA (to resolve), it
 // generates L2 BY SUBSTITUTING NAMES — metadata names become physical names:
-//     metaobject         -> physical table          (GetTableNameDB)
+//     metaobject         -> physical table          (GetPhysicalTableName)
 //     attribute (metaID)  -> physical SQL field(s)    (_N / _S / _R)
 //     reference / parent  -> guidName / _RRRef blob
 // A metadata predicate "attribute X = value" becomes the L2 IR

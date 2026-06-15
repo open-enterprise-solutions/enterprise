@@ -114,7 +114,7 @@ public:
 	// it via GetQueryable()). Holding a queryable IS the proof the source is
 	// queryable — a metaobject overload would not be (reports / data processors
 	// vend none). The language identity is recovered through the queryable's
-	// metadata context (GetMetaData + GetQueryMetaID -> the owning metaobject);
+	// metadata context (GetMetaData + GetQueryTableId -> the owning metaobject);
 	// READ-ONLY — the queryable is never handed to the door, only its NAME flows
 	// into the text. A virtual-table companion reports its register — name such a
 	// source explicitly via FromSource(ns, name).

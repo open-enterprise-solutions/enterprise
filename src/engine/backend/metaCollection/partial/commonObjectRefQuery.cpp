@@ -476,8 +476,8 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	// GetSQLFieldName() returns the composite "<fld>_TYPE,<fld>_<X>"
 	// shape used by SaveData; we want the raw per-type sub-column.
 	auto scanDataMax = [&]() -> ibNumber {
-		const wxString tableName = m_metaObject->GetTableNameDB();
-		const wxString fieldBase = attribute->GetFieldNameDB();
+		const wxString tableName = m_metaObject->GetPhysicalTableName();
+		const wxString fieldBase = attribute->GetPhysicalName();
 		ibNumber maxFound = 0;
 		if (attribute->ContainType(ibValueTypes::TYPE_NUMBER)) {
 			const wxString numField = fieldBase + wxT("_N");

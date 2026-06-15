@@ -13,7 +13,7 @@
 
 #include "tempTableManager.h"
 #include "queryRamTable.h"                                  // ibQueryRamTable / ibQueryRamColumn
-#include "dbTableProvider.h"                                // ibDbTableProvider::WriteFieldsOf / SetValueColumn (metadata-format fill)
+#include "columnLayout.h"                                   // ColumnFieldNames + ibColumnCodec::WriteValue — the column's physical field spread + codec
 #include "backend/databaseLayer/databaseQueryBuilder.h"    // ibDatabaseQueryBuilder + DDL/DML factories + ibQueryStatement (L2)
 
 #include <atomic>
@@ -24,30 +24,34 @@
 namespace {
 
 // The temp table stores every column in the METADATA STORAGE FORMAT (the same physical spread a real
-// table uses): one DDL column per WriteFieldsOf field, typed by suffix; the cell decomposed by the
+// table uses): one DDL column per ColumnFieldNames field, typed by suffix; the cell decomposed by the
 // SAME SetValueColumn the DB write path uses. So a temp row is byte-identical to a real-table row and
 // reference / enum / variant values round-trip (keys AND outputs) via GetValueColumn — no lossy form.
 
-// DDL type for one physical SPREAD field, keyed by its suffix:
-//   _RRRef -> blob ; _N -> number ; _D -> date ; _B -> boolean ; _S -> string ; _TYPE/_E/_RTRef -> integer.
-ibColumnType DdlTypeForField(const wxString& field)
+// DDL type for one physical SPREAD field, keyed by its layout ROLE (not by re-parsing the name suffix —
+// ibFieldSuffix already owns the role<->suffix lettering). Deliberately WIDE: the temp holds heterogeneous
+// RAM intermediates, so slack (blob ref-key, number(38,10), string(4000)) avoids truncation; the tags +
+// raw fall to integer. Output is identical to the former suffix parse.
+ibColumnType WidenForTemp(ibColumnRole role)
 {
-	if (field.EndsWith(wxT("_RRRef"))) return ibTypeBlob();
-	if (field.EndsWith(wxT("_N")))     return ibTypeNumber(38, 10);
-	if (field.EndsWith(wxT("_D")))     return ibTypeDate();
-	if (field.EndsWith(wxT("_B")))     return ibTypeBoolean();
-	if (field.EndsWith(wxT("_S")))     return ibTypeString(4000);
-	return ibTypeInteger();   // _TYPE / _E / _RTRef
+	switch (role) {
+	case ibColumnRole::ReferenceId: return ibTypeBlob();
+	case ibColumnRole::Number:      return ibTypeNumber(38, 10);
+	case ibColumnRole::Date:        return ibTypeDate();
+	case ibColumnRole::Boolean:     return ibTypeBoolean();
+	case ibColumnRole::String:      return ibTypeString(4000);
+	default:                        return ibTypeInteger();   // Discriminator / Enum / ReferenceType / Raw
+	}
 }
 
-// Decompose ONE cell into its per-field bound exprs (Const / Blob), in WriteFieldsOf order — REUSING
+// Decompose ONE cell into its per-field bound exprs (Const / Blob), in ColumnFieldNames order — REUSING
 // the DB write decomposition (a capture-only ibQueryStatement records each SetParam* as an IR node).
 std::vector<ibQueryExprPtr> DecomposeCell(const ibBackendQueryColumn* col, const ibMetaData* meta, const ibValue& cell)
 {
-	const std::vector<wxString> fields = ibDbTableProvider::WriteFieldsOf(col, meta);
+	const std::vector<wxString> fields = ColumnFieldNames(col, meta);
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 	int pos = 1;
-	ibDbTableProvider::SetValueColumn(col, meta, cell, &capture, pos);
+	ibColumnCodec::WriteValue(col, meta, cell, &capture, pos);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 	std::vector<ibQueryExprPtr> out;
 	out.reserve(fields.size());
@@ -121,17 +125,23 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 	const wxString tableName = wxString::Format(wxT("oes_tmp_%lu"), ++s_seq);
 
 	// Metadata-format columns: one ibTempColumn per logical column (real type), each EXPANDING to its
-	// physical spread (WriteFieldsOf) — that flattened field list drives BOTH the CREATE and the INSERT
-	// column order, so the temp mirrors a real table.
+	// physical spread via DescribeColumnLayout — the ONE authority for the field set, ORDER and role.
+	// That flattened slot list drives BOTH the CREATE (name + type-by-role) and the INSERT column order,
+	// so the temp mirrors a real table from a single source.
 	std::vector<ibTempColumn> tempCols;
 	tempCols.reserve(rows.Columns().size());
 	for (const ibQueryRamColumn& c : rows.Columns())
 		tempCols.emplace_back(c.m_name, c.m_type, c.m_id);
 
-	std::vector<wxString> allFields;   // flattened spread over all columns — the INSERT/CREATE column order
+	std::vector<ibColumnSlot> slots;   // flattened spread over all columns
 	for (const ibTempColumn& tc : tempCols)
-		for (const wxString& f : ibDbTableProvider::WriteFieldsOf(&tc, metaData))
-			allFields.push_back(f);
+		for (const ibColumnSlot& s : DescribeColumnLayout(&tc, metaData))
+			slots.push_back(s);
+
+	std::vector<wxString> allFields;   // slot names — the INSERT column order
+	allFields.reserve(slots.size());
+	for (const ibColumnSlot& s : slots)
+		allFields.push_back(s.m_name);
 
 	// Decompose a whole row into its flattened per-field bound exprs (column order = allFields).
 	auto buildRow = [&](long r) {
@@ -151,9 +161,9 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 	// (graceful RAM fallback — the fast path is opportunistic, correctness always lands).
 	try {
 		std::vector<ibDdlColumn> ddlCols;
-		ddlCols.reserve(allFields.size());
-		for (const wxString& f : allFields) {
-			ibDdlColumn dc; dc.m_name = f; dc.m_type = DdlTypeForField(f);
+		ddlCols.reserve(slots.size());
+		for (const ibColumnSlot& s : slots) {
+			ibDdlColumn dc; dc.m_name = s.m_name; dc.m_type = WidenForTemp(s.m_role);
 			ddlCols.push_back(std::move(dc));
 		}
 		ibDatabaseQueryBuilder qCreate(holder);

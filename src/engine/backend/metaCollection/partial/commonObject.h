@@ -484,7 +484,8 @@ public:
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;   // all attributes (SELECT *)
 	virtual wxString GetQueryTableName() const override;
-	virtual ibMetaID GetQueryMetaID() const override;
+	virtual wxString GetQueryName() const override;   // the metaobject's user-facing name (change ledger)
+	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
 	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;       // { uuid } — real column
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // { data-reference } — key authority
@@ -507,7 +508,7 @@ public:
 
 	// The metaobject VENDS its queryable; it does NOT navigate itself. ibRecordQueryable
 	// (a friend) owns the navigation, built from this metaobject's primitives
-	// (FindObjectByFilter / GetTableNameDB / IsDataReference / guidName). L4 and the door
+	// (FindObjectByFilter / GetPhysicalTableName / IsDataReference / guidName). L4 and the door
 	// read through GetQueryable().
 	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
 	friend class ibRecordQueryable;
@@ -573,7 +574,7 @@ public:
 	virtual wxString GetDataPresentation(const ibValueDataObject* objValue) const = 0;
 
 	//special functions for DB
-	virtual wxString GetTableNameDB() const;
+	virtual wxString GetPhysicalTableName() const;
 
 protected:
 
@@ -688,15 +689,12 @@ protected:
 	//searched array 
 	virtual bool FillArrayObjectBySearched(std::vector<ibValueMetaObjectAttributeBase*>& array) const { return true; }
 
-	//create and update table 
-	virtual bool CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags);
+	// Declare the enum table (uuid key) + its values as SEED rows (diffed by uuid: new -> insert, gone -> delete).
+	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
 
-	//load & save metaData from DB 
+	//load & save metaData from DB
 	virtual bool LoadData(ibReaderMemory& reader);
 	virtual bool SaveData(ibWriterMemory& writer);
-
-	//process default query
-	int ProcessEnumeration(const wxString& tableName, const ibValueMetaObjectEnum* srcEnum, const ibValueMetaObjectEnum* dstEnum);
 
 private:
 
@@ -773,9 +771,8 @@ public:
 	//get command section
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Combined; }
 
-	// dump & restore table data
-	virtual bool RestoreTable(const ibReaderMemory& reader);
-	virtual bool DumpTable(ibWriterMemory& writer) const;
+	// (no table-data dump / restore here — the orchestrator moves rows off the config's ContributeTables
+	//  snapshot through the L3-3 mover; this object only DECLARES its tables via ContributeTables.)
 
 protected:
 
@@ -801,16 +798,12 @@ protected:
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
 
-	//create and update table 
-	virtual bool CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags);
+	// Declare the record's main table + its tabular-section tables into the structure snapshot.
+	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
 
-	//load & save metaData from DB 
+	//load & save metaData from DB
 	virtual bool LoadData(ibReaderMemory& reader);
 	virtual bool SaveData(ibWriterMemory& writer);
-
-	//process default query
-	int ProcessAttribute(const wxString& tableName, const ibValueMetaObjectAttributeBase* srcAttr, const ibValueMetaObjectAttributeBase* dstAttr);
-	int ProcessTable(const wxString& tabularName, const ibValueMetaObjectTableData* srcTable, const ibValueMetaObjectTableData* dstTable);
 
 	//create empty object
 	virtual ibValueRecordDataObjectRef* CreateObjectRefValue(const ibGuid& objGuid = wxNullGuid) const = 0; //create object and read by guid
@@ -1001,8 +994,9 @@ protected:
 	*/
 	virtual void OnPropertyRefresh(class wxPropertyGridManager* pg, class wxPGProperty* pgProperty, ibProperty* property);
 
-	//create and update table 
-	virtual bool CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags);
+	// Declare the main table (via the base) + the predefined values as its SEED rows (cells keyed by
+	// column id; the builder diffs by uuid + cells).
+	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
 
 	//load & save metaData from DB 
 	virtual bool LoadData(ibReaderMemory& reader);
@@ -1038,9 +1032,6 @@ protected:
 		return true;
 	}
 
-	//process default query
-	int ProcessPredefinedValue(const wxString& tableName, const wxObjectDataPtr<ibPredefinedValueObject>& srcPredefined, const wxObjectDataPtr<ibPredefinedValueObject>& dstPredefined);
-
 	//create default attributes
 	ibPropertyContainer<>* m_propertyAttributePredefined = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("PredefinedName"), _("Predefined name"), wxEmptyString, 150, ibItemMode::ibItemMode_Folder_Item));
 	ibPropertyContainer<>* m_propertyAttributeCode = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("Code"), _("Code"), wxEmptyString, 8, true, ibItemMode::ibItemMode_Folder_Item));
@@ -1062,7 +1053,8 @@ public:
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;   // identity (recorder+line / period) ++ dims ++ generic attrs
 	virtual wxString GetQueryTableName() const override;
-	virtual ibMetaID GetQueryMetaID() const override;
+	virtual wxString GetQueryName() const override;   // the metaobject's user-facing name (change ledger)
+	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
 	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // recorder+line+period / period+dims
@@ -1081,7 +1073,7 @@ public:
 
 	// The metaobject VENDS its main queryable; it does NOT navigate itself.
 	// ibRegisterDataQueryable (a friend) owns the navigation, from this register's
-	// primitives (FindAnyAttributeObjectByFilter / GetTableNameDB / HasRecorder /
+	// primitives (FindAnyAttributeObjectByFilter / GetPhysicalTableName / HasRecorder /
 	// HasPeriod / GetRegister* / GetGenericDimensionArrayObject). Slices are separate.
 	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
 	friend class ibRegisterDataQueryable;
@@ -1262,19 +1254,15 @@ public:
 	virtual ibBackendValueForm* GetListForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const = 0;
 #pragma endregion 
 
-	//special functions for DB 
-	virtual wxString GetTableNameDB() const;
+	//special functions for DB
+	virtual wxString GetPhysicalTableName() const;
 
-	// dump & restore table data
-	virtual bool RestoreTable(const ibReaderMemory& reader);
-	virtual bool DumpTable(ibWriterMemory& writer) const;
+	// (no table-data dump / restore here — the orchestrator moves rows off the config's ContributeTables
+	//  snapshot through the L3-3 mover; this object only DECLARES its table via ContributeTables.)
 
 protected:
 
-	//update current record
-	bool UpdateCurrentRecords(const wxString& tableName, ibValueMetaObjectRegisterData* dst);
-
-	//get default form 
+	//get default form
 	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) {
 
 		//if (cmdType == ibInterfaceCommandType::ibInterfaceCommandType_Create)
@@ -1304,15 +1292,10 @@ protected:
 	virtual ibValueRecordSetObject* CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const = 0;
 	virtual ibValueRecordManagerObject* CreateRecordManagerObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const { return nullptr; }
 
-	//create and update table 
-	virtual bool CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags);
+	// Declare the register table (rowData blob + dimension/resource columns + the lookup index).
+	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
 
-	//process default query
-	int ProcessDimension(const wxString& tableName, const ibValueMetaObjectAttributeBase* srcAttr, const ibValueMetaObjectAttributeBase* dstAttr);
-	int ProcessResource(const wxString& tableName, const ibValueMetaObjectAttributeBase* srcAttr, const ibValueMetaObjectAttributeBase* dstAttr);
-	int ProcessAttribute(const wxString& tableName, const ibValueMetaObjectAttributeBase* srcAttr, const ibValueMetaObjectAttributeBase* dstAttr);
-
-	//load & save metaData from DB 
+	//load & save metaData from DB
 	virtual bool LoadData(ibReaderMemory& reader);
 	virtual bool SaveData(ibWriterMemory& writer);
 	virtual bool DeleteData() { return true; }

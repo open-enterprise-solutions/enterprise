@@ -8,141 +8,27 @@
 
 #include "metaAttributeObjectEnum.h"
 
-class ibDatabaseResultSet;   // L1 cursor — only named as a pointer in GetBinaryData below
-class ibPreparedStatement;   // L1 prepared statement — only named as a pointer in SetBinaryData below
+class ibQueryResult;         // L2 cursor — GetBinaryData reads through it (dump)
+class ibQueryStatement;      // L2 statement — SetBinaryData binds through it (restore); no raw L1 here
+class ibStructureBatch;      // per-table DDL/seed batch — ProcessAttribute pours its column DDL into it
 
 class BACKEND_API ibValueMetaObjectAttributeBase :
 	public ibValueMetaObject, public ibBackendTypeConfigFactory, public ibBackendQueryColumn {
 	public:
 
-	enum ibFieldTypes {
-		ibFieldTypes_Empty = 0,
-		ibFieldTypes_Boolean,
-		ibFieldTypes_Number,
-		ibFieldTypes_Date,
-		ibFieldTypes_String,
-		ibFieldTypes_Null,
-		ibFieldTypes_Enum,
-		ibFieldTypes_Reference,
-	};
+	// (The whole SQL-field façade — GetSQLFieldName / GetCompositeSQLFieldName / GetExcludeSQLFieldName /
+	//  GetSQLFieldCount / GetSQLFieldData, plus the ibFieldTypes / ibSQLField re-exports — is GONE. An
+	//  attribute is just an ibBackendQueryColumn; its physical fields come from the column-layout tier
+	//  (columnLayout.h: ColumnFieldList / ColumnFieldNames / ColumnComparePredicate / ibColumnCodec).
+	//  Register lowering uses the ibReg* helpers in registerQueryLowering.h.)
 
-	struct ibSQLField {
-
-		wxString m_fieldTypeName;
-		struct ibSQLData {
-			ibFieldTypes m_type;
-			struct ibData {
-				wxString m_fieldName;
-				struct ibRefData {
-					wxString m_fieldRefType;
-					wxString m_fieldRefName;
-					ibRefData() {
-					}
-					ibRefData(const wxString& fieldRefType, const wxString& fieldRefName)
-						: m_fieldRefType(fieldRefType), m_fieldRefName(fieldRefName) {
-					}
-					~ibRefData() {
-					}
-				} m_fieldRefName;
-
-				ibData()
-					: m_fieldName(wxEmptyString)
-				{
-				}
-
-				ibData(const wxString& fieldName)
-					: m_fieldName(fieldName) {
-				}
-
-				ibData(const wxString& fieldRefType, const wxString& fieldRefNam)
-					: m_fieldRefName(fieldRefType, fieldRefNam) {
-				}
-
-				~ibData() {
-				}
-
-			} m_field;
-
-			ibSQLData() : m_type(ibFieldTypes::ibFieldTypes_Empty)
-			{
-			}
-			ibSQLData(ibFieldTypes type) : m_type(type)
-			{
-			}
-			ibSQLData(ibFieldTypes type, const wxString& fieldName) : m_type(type), m_field(fieldName)
-			{
-			}
-			ibSQLData(ibFieldTypes type, const wxString& fieldRefType, const wxString& fieldRefName) : m_type(type), m_field(fieldRefType, fieldRefName)
-			{
-			}
-			ibSQLData(const ibSQLData& rhs) : m_type(rhs.m_type)
-			{
-				if (rhs.m_type != ibFieldTypes::ibFieldTypes_Reference) {
-					m_field.m_fieldName = rhs.m_field.m_fieldName;
-				}
-				else {
-					m_field.m_fieldRefName.m_fieldRefType = rhs.m_field.m_fieldRefName.m_fieldRefType;
-					m_field.m_fieldRefName.m_fieldRefName = rhs.m_field.m_fieldRefName.m_fieldRefName;
-				}
-			}
-			ibSQLData& operator=(const ibSQLData& rhs) {
-				m_type = rhs.m_type;
-				if (rhs.m_type != ibFieldTypes::ibFieldTypes_Reference) {
-					m_field.m_fieldName = rhs.m_field.m_fieldName;
-				}
-				else {
-					m_field.m_fieldRefName.m_fieldRefType = rhs.m_field.m_fieldRefName.m_fieldRefType;
-					m_field.m_fieldRefName.m_fieldRefName = rhs.m_field.m_fieldRefName.m_fieldRefName;
-				}
-				return *this;
-			}
-			~ibSQLData() {}
-		};
-
-		std::vector< ibSQLData> m_types;
-
-		ibSQLField(const wxString& fieldTypeName) : m_fieldTypeName(fieldTypeName) {
-		}
-
-		void AppendType(ibFieldTypes type) {
-			m_types.emplace_back(type);
-		}
-
-		void AppendType(ibFieldTypes type, const wxString& fieldName) {
-			m_types.emplace_back(type, fieldName);
-		}
-
-		void AppendType(ibFieldTypes type, const wxString& fieldRefType, const wxString& fieldRefName) {
-			m_types.emplace_back(type, fieldRefType, fieldRefName);
-		}
-
-		///////////////////////////////////////////////////////
-		auto begin() { return m_types.begin(); }
-		auto end() { return m_types.end(); }
-		///////////////////////////////////////////////////////
-	};
-
-	//get special filed data
-	static unsigned short GetSQLFieldCount(const ibValueMetaObjectAttributeBase* metaAttr);
-	static wxString GetSQLFieldName(const ibValueMetaObjectAttributeBase* metaAttr, const wxString& aggr = wxEmptyString);
-	static wxString GetCompositeSQLFieldName(const ibValueMetaObjectAttributeBase* metaAttr, const wxString& cmp = wxT("="));
-	static wxString GetExcludeSQLFieldName(const ibValueMetaObjectAttributeBase* metaAttr);
-
-	//get data sql
-	static ibSQLField GetSQLFieldData(const ibValueMetaObjectAttributeBase* metaAttr);
-
-	//process default query
-	static int ProcessAttribute(const wxString& tableName, const ibValueMetaObjectAttributeBase* srcAttr, const ibValueMetaObjectAttributeBase* dstAttr);
+	// (Column DDL — the type-set diff — moved OFF the attribute to the structure tier's free function
+	// DiffColumnInto(batch, srcCol, dstCol). An attribute is just a column; it does not own its DDL.)
 
 	// (Value assembly from / binding to a DB row moved to ibDbTableProvider::GetValueAttribute /
 	// ::SetValueAttribute — it is a DB provider concern, not the metadata attribute's. See
-	// query/dbTableProvider.h.)
-
-	//store value 
-	static void SetBinaryData(const ibValueMetaObjectAttributeBase* metaAttr, const ibReaderMemory& reader, ibPreparedStatement* statement,
-		int& position);
-	static void SetBinaryData(const ibValueMetaObjectAttributeBase* metaAttr, const ibReaderMemory& reader, ibPreparedStatement* statement);
-	static void GetBinaryData(const ibValueMetaObjectAttributeBase* metaAttr, ibWriterMemory& writer, ibDatabaseResultSet* resultSet);
+	// query/dbTableProvider.h. The binary dump/restore codec is ibDataMover::BinaryToStatement /
+	// ::BinaryFromResult (L3-3) — callers use the tier directly, no attribute forwarder.)
 
 	//contain type
 	bool ContainType(const ibValueTypes& valType) const;
@@ -171,8 +57,6 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 
 #pragma endregion
 
-	virtual wxString GetFieldNameDB() const { return wxString::Format(wxT("fld%i"), m_metaId); }
-
 	// --- ibBackendQueryColumn: an attribute IS a query column ------------
 	// GetTypeDesc() is the column's typed accessor — but it is ALSO declared by the
 	// other base (ibBackendTypeFactory). Re-declaring it here as one pure virtual
@@ -182,27 +66,17 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	// the column's.
 	virtual ibTypeDescription& GetTypeDesc() const override = 0;
 	virtual wxString GetName() const override         { return ibValueMetaObject::GetName(); }
-	virtual wxString GetPhysicalName() const override { return GetFieldNameDB(); }
+	virtual wxString GetPhysicalName() const override { return wxString::Format(wxT("fld%i"), m_metaId); }
 	// The column's model/read id — for a DB attribute it IS the metaID (RAM tables key
-	// their rows by it; the DB path keys its fields off the same id via GetFieldNameDB).
-	virtual ibMetaID GetModelID() const override      { return GetMetaID(); }
+	// their rows by it; the DB path keys its fields off the same id via GetPhysicalName).
+	virtual ibMetaID GetColumnId() const override      { return GetMetaID(); }
 
-	// Authoritative physical-field list — the attribute's OWN field machinery, so the DB
-	// IR builder (sort / group-by) reads it straight off the column with no ResolveAttribute,
-	// byte-identical to the former GetSQLFieldData path it replaced.
-	virtual std::vector<wxString> GetSQLFields() const override {
-		std::vector<wxString> out;
-		for (auto& field : GetSQLFieldData(this))
-			out.push_back(field.m_type == ibFieldTypes_Reference
-			              ? field.m_field.m_fieldRefName.m_fieldRefName
-			              : field.m_field.m_fieldName);
-		return out;
-	}
+	// Authoritative physical-field list — the data fields the DB IR builder (sort / group-by) reads
+	// straight off the column: the per-type primitives + the reference's _RRRef, skipping the _TYPE
+	// tag and the _RTRef. Defined in metaAttributeObjectQuery.cpp over the column-layout tier.
+	virtual std::vector<wxString> GetValueFields() const override;
 
-	//get sql type for db
-	virtual wxString GetSQLTypeObject(const ibClassID& clsid) const;
-
-	//check if attribute is fill 
+	//check if attribute is fill
 	virtual bool FillCheck() const = 0;
 
 	virtual ibItemMode GetItemMode() const { return ibItemMode::ibItemMode_Item; }

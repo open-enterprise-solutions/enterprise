@@ -146,7 +146,7 @@ bool ibValueMetaObjectEnumeration::OnSaveMetaObject(int flags)
 
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 	if (GetEnumObjectArray().size() == 0) {
-		s_restructureInfo.AppendError(_("! Doesn't have any enumeration ") + GetFullName());
+		RestructureError(_("! Doesn't have any enumeration ") + GetFullName());
 		return false;
 	}
 #endif 

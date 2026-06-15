@@ -323,13 +323,13 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 			if (c == nullptr) continue;
 			ibValueModelTable::ibValueModelColumnCollection::ibValueModelColumnInfo* tc =
 				tcols->AddColumn(c->GetName(), c->GetTypeDesc(), c->GetName());
-			tc->SetColumnID(c->GetModelID());
+			tc->SetColumnID(c->GetColumnId());
 		}
 		ibDataQueryResult sel = ExecuteAccumulated();
 		while (sel.Next()) {
 			ibValueModelTable::ibValueModelTableReturnLine* line = table->GetRowAt(table->AppendRow());
 			for (const ibBackendQueryColumn* c : cols)
-				if (c != nullptr) line->SetValueByMetaID(c->GetModelID(), sel.GetValue(c));
+				if (c != nullptr) line->SetValueByMetaID(c->GetColumnId(), sel.GetValue(c));
 			wxDELETE(line);
 		}
 		ret = table;

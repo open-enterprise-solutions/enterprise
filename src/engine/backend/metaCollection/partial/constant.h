@@ -4,6 +4,7 @@
 #include "backend/metaCollection/partial/commonObject.h"
 
 class BACKEND_API ibValueRecordDataObjectConstant;
+class ibStructureBatch;   // per-table DDL/seed batch — ProcessAttribute pours the value column into it
 
 // ibConstantQueryable — the L3 queryable for a constant (its single-row sys_const
 // table). The constant no longer IS a queryable; it VENDS this adapter (a stable
@@ -15,7 +16,7 @@ public:
 	explicit ibConstantQueryable(const ibValueMetaObjectConstant* meta) : m_meta(meta) {}
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // the constant IS its one column
 	virtual wxString GetQueryTableName() const override;
-	virtual ibMetaID GetQueryMetaID() const override;
+	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
 	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // { RECORD_KEY } — the single-row UPSERT match
@@ -31,7 +32,7 @@ class BACKEND_API ibValueMetaObjectConstant :
 	// one column of the shared single-row sys_const) AND, through its vended queryable,
 	// that one-row table. The constant VENDS the queryable; ibConstantQueryable (a
 	// friend) owns the table navigation, from the constant's primitives (GetName /
-	// GetMetaID / GetTableNameDB). So From(constant->GetQueryable()) reads the one row.
+	// GetMetaID / GetPhysicalTableName). So From(constant->GetQueryable()) reads the one row.
 	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
 	friend class ibConstantQueryable;
 
@@ -69,7 +70,7 @@ public:
 	virtual bool OnAfterCloseMetaObject();
 
 	//get table name
-	static wxString GetTableNameDB() { return wxT("sys_const"); }
+	static wxString GetPhysicalTableName() { return wxT("sys_const"); }
 
 	//get module object in compose object 
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyModule->GetMetaObject(); }
@@ -84,20 +85,15 @@ public:
 	static bool CreateConstantSQLTable();
 	static bool DeleteConstantSQLTable();
 
-	//get command section 
+	//get command section
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Create; }
 
-	//process default query
-	int ProcessAttribute(const wxString& tableName, ibValueMetaObjectAttributeBase* srcAttr, ibValueMetaObjectAttributeBase* dstAttr);
-
-	// dump & restore table data
-	virtual bool RestoreTable(const ibReaderMemory& reader);
-	virtual bool DumpTable(ibWriterMemory& writer) const;
+	// (no dump & restore override — sys_const is dumped generically off the snapshot, L3-3 EXTERNAL mode)
 
 protected:
 
-	//create and update table 
-	virtual bool CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags);
+	// Declare the constant table (RECORD_KEY scaffold + the value column = the constant itself).
+	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
 
 	//get default form 
 	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) {

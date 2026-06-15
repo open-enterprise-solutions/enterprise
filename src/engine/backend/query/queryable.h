@@ -215,7 +215,7 @@ public:
 		// found). The model-id (attribute metaID) is config-unique, so each column belongs to exactly one.
 		if (col == nullptr) return false;
 		const ibBackendQueryColumn* mine = ResolveColumnByName(col->GetName());
-		return mine != nullptr && mine->GetModelID() == col->GetModelID();
+		return mine != nullptr && mine->GetColumnId() == col->GetColumnId();
 	}
 
 	// ALL columns this source exposes — for SELECT * (a nested subquery over `From(src)`
@@ -243,8 +243,12 @@ public:
 	// --- physical layout -------------------------------------------------
 	// The real backing table for the main row scan.
 	virtual wxString GetQueryTableName() const = 0;
+	// The USER-facing name (as in the metadata tree, e.g. "Enumeration3") — for the restructure change
+	// ledger, NOT for SQL. A metaobject-backed source returns its metaobject's name; the default is the
+	// physical table name (a temp / computed source has no friendlier name).
+	virtual wxString GetQueryName() const { return GetQueryTableName(); }
 	// This queryable's metaID — the parent-reference blob (tree filter) needs it.
-	virtual ibMetaID GetQueryMetaID() const = 0;
+	virtual ibMetaID GetQueryTableId() const = 0;
 	// The metadata context the DB provider needs to reconstruct a column's value WITHOUT the
 	// attribute: a reference column rebuilds its ibValueReferenceDataObject from (clsid, blob) via
 	// metaData->GetTypeCtor, an enum its variant via metaData->Create*. A metaobject-backed source
@@ -377,7 +381,7 @@ public:
 
 	// trivial L3 surface for a non-metaobject (derived) source
 	wxString GetQueryTableName() const override { return wxEmptyString; }
-	ibMetaID GetQueryMetaID()    const override { return 0; }
+	ibMetaID GetQueryTableId()    const override { return 0; }
 	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
 
 private:
@@ -425,7 +429,8 @@ public:
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override { return m_reg->GetQueryable()->ResolveColumnByName(name); }
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_reg->GetQueryable()->GetColumns(); }
 	virtual wxString GetQueryTableName() const override { return m_reg->GetQueryable()->GetQueryTableName(); }
-	virtual ibMetaID GetQueryMetaID()    const override { return m_reg->GetQueryable()->GetQueryMetaID(); }
+	virtual wxString GetQueryName()       const override { return m_reg->GetQueryable()->GetQueryName(); }
+	virtual ibMetaID GetQueryTableId()    const override { return m_reg->GetQueryable()->GetQueryTableId(); }
 	virtual const ibMetaData* GetMetaData() const override { return m_reg->GetQueryable()->GetMetaData(); }
 	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override { return m_reg->GetQueryable()->GetIdentitySort(); }
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return m_reg->GetQueryable()->GetPrimaryKeyColumns(); }

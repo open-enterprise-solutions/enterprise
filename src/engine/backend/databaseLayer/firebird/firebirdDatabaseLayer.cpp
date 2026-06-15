@@ -43,6 +43,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		// NUMERIC holds a wider range than DECIMAL (INT128-backed) — matches ibNumber.
 		d.m_typeNumberPattern = wxT("NUMERIC(%d,%d)");
 		d.m_rowLockSuffix     = wxT(" WITH LOCK");     // FB pessimistic row lock (not FOR UPDATE)
+		d.m_ddlCommitBeforeData = true;                // legacy isc_* API can't mix CREATE/ALTER + bound INSERT in one TX
 		return d;
 	}();
 	return s_dialect;

@@ -5,12 +5,16 @@
 
 #include "metaObject.h"
 #include "backend/appData.h"
+#include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase::GetRestructureInfo (the static ledger accessor)
 
 #include "backend/metaData.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
-
+// Restructure-ledger facade — one call onto the active config's ledger (the static accessor).
+void ibValueMetaObject::RestructureInfo   (const wxString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendInfo(message);    }
+void ibValueMetaObject::RestructureWarning(const wxString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendWarning(message); }
+void ibValueMetaObject::RestructureError  (const wxString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendError(message);   }
 
 //*****************************************************************************************
 //*                                  MetaObject                                           *
@@ -85,20 +89,9 @@ ibValueMetaObject::~ibValueMetaObject()
 	// a separate, preceding step.
 }
 
-bool ibValueMetaObject::CreateMetaTable(ibMetaDataConfiguration* srcMetaData, int flags)
-{
-	return CreateAndUpdateTableDB(srcMetaData, nullptr, flags);
-}
-
-bool ibValueMetaObject::UpdateMetaTable(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject)
-{
-	return CreateAndUpdateTableDB(srcMetaData, srcMetaObject, updateMetaTable);
-}
-
-bool ibValueMetaObject::DeleteMetaTable(ibMetaDataConfiguration* srcMetaData)
-{
-	return CreateAndUpdateTableDB(srcMetaData, this, deleteMetaTable);
-}
+// (CreateMetaTable / UpdateMetaTable / DeleteMetaTable + CreateAndUpdateTableDB removed: structure DDL
+//  is now the config-save differ's job — a metaobject DECLARES its tables AND their seed rows via
+//  ContributeTables; ibStructureBuilder snapshots + diffs both structure and data. query/schemaSnapshot.h.)
 
 bool ibValueMetaObject::OnCreateMetaObject(ibMetaData* metaData, int flags)
 {
@@ -515,8 +508,6 @@ bool ibValueMetaObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	if (property != nullptr) return property->GetDataValue(pvarPropVal);
 	return false;
 }
-
-ibRestructureInfo s_restructureInfo;
 
 #include "backend/backend_exception.h"
 #include "backend/session/session.h"

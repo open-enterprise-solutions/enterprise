@@ -1119,7 +1119,7 @@ The contract digests a metaobject and emits everything needed to build a query:
 - `ResolveAttribute(name | id)` — digest an attribute reference by string (L4
   text) or metaID (L3) into the resolved attribute; null = "no such requisite",
   which is also how L3 validates a name against the metadata tree.
-- `GetQueryTableName` / `GetQueryMetaID` — physical layout.
+- `GetQueryTableName` / `GetQueryTableId` — physical layout.
 - `GetIdentitySort()` — the identity / keyset-tiebreaker columns as query-native
   sort items, **all REAL columns** (no null sentinel): catalog returns `{ uuid }`,
   a register its real identity attributes (recorder+line, or period?+dimensions),
@@ -1746,7 +1746,7 @@ The metaobject families stopped inheriting `ibBackendQueryable`. Instead they im
 a small **interface** `ibBackendQueryableHolder` (`virtual const ibBackendQueryable*
 GetQueryable() const = 0`) and **vend a queryable adapter held as a stable member**. The
 adapter — one per family, declared beside the metaobject — **owns the L3 navigation**;
-the metaobject keeps only **primitives** (`FindObjectByFilter` / `GetTableNameDB` /
+the metaobject keeps only **primitives** (`FindObjectByFilter` / `GetPhysicalTableName` /
 `IsDataReference` / `guidName`, register `HasRecorder` / `GetRegister*` / dimensions,
 constant `GetName`, tabular `GetNumberLine`). The adapter is a `friend` so it can reach
 protected primitives.
@@ -2225,7 +2225,7 @@ collision). JOIN / multi-source dot-walk aggregates error clearly.
 
 **Hierarchical TOTALS BY dot-walk.** `… TOTALS SUM(Qty) BY Producer.Region` folds in RAM from one snapshot
 (`ExecuteTotals` → `result.Select(ByGroups…)`). The totals fold is **keyed by metaID** (the snapshot is
-built from the door's stamped materialise-columns by `GetModelID()`, read via `Value(col)`). Two things
+built from the door's stamped materialise-columns by `GetColumnId()`, read via `Value(col)`). Two things
 break that and are solved by **synthetic scalar columns** (`ibSyntheticScalarColumn` — a `ibRawDBColumn`
 with a unique id `≥ 0x50000000`, clear of real metaIDs and the COUNT(*) receivers at `0x40000000`):
 - A **self-referential dot-walk dimension** (`Parent.Code`) — the leaf shares a metaID with the row's own
@@ -2249,3 +2249,58 @@ spelling (esp. SQLite date affinity) belongs in the L1 Dialect Dictionary — TO
 
 **Open (totals):** TOTALS over a JOIN / UNION (multi-source — two totals mechanisms + snapshot seq-keying),
 and a TOTALS BY a reference / composite dot-walk leaf (today scalar leaves only).
+
+---
+
+## §23 — One declaration drives DDL + data: the L3-3 data mover (landed 2026-06-15)
+
+The structure inversion is complete: a metaobject **declares** its physical schema once in
+`ContributeTables(ibSchemaSnapshot&)`, and that single declaration feeds **both** ends —
+- **L3-2** (`ibStructureBuilder` / `DiffSnapshots` / `ibSchemaBuilder`) generates / migrates the tables
+  and applies the seed, and
+- **L3-3** (`ibDataMover`, `query/dataMover.{h,cpp}`) dumps / restores the *rows*.
+
+No metaobject writes dump code any more. The per-object `DumpTable` / `RestoreTable` virtuals are **gone**;
+`ibMetaDataConfigurationStorage::DumpDataToBuffer` / `RestoreDataFromBuffer` build the whole config's
+`ContributeTables` snapshot and drive `ibDataMover::Dump` / `Restore` over every table, framed by the
+table's metaID. A table with no value columns (an enum: its values are SEED rows) is skipped.
+
+### Mode + key are READ OFF THE STRUCTURE
+`ibDataMover` takes a `const ibSchemaTable&` and resolves everything from it:
+- **key column** — the row-identity scaffold the structure declared (a `uuid` for catalogs / enums),
+  found as the scaffold covered by a UNIQUE index; **never hardcoded**. A register keys on floating
+  fields (recorder+line / dimensions) and has no unique scaffold → no key → plain INSERT (it also has
+  no seed). `sys_const` (External, single row) keys on its primary-key column (`RECORD_KEY`).
+- **mode** — UPSERT on a unique key (the mutable main record; sys_const), else INSERT (a section's
+  repeating owner uuid; a register).
+
+### Codec tier — one spread driver, shared
+`WriteValue` (value→statement) and `BinaryToStatement` (wire→statement) share one allocation-free
+role-driver `ibColumnSpread::DriveSpread` (`query/columnSpread.h`), walking the same load-bearing role
+order `DescribeColumnLayout` lays out — so the field SET and ORDER are byte-identical across the value
+codec, the wire codec and the DDL. The binary-wire codec (`Binary{To,From}*`) moved from `ibColumnCodec`
+to its L3-3 home `ibDataMover` (its only callers are the mover + the constant's single-cell dump).
+
+### Seed = a value table keyed by uuid
+`DiffSeedInto` / `WriteSeedRow` (schemaSnapshot.cpp) UPSERT a seed row matching on the table's declared
+unique **scaffold key (uuid)** — NOT the queryable's data-reference (a seed never sets it, and an enum
+table has no such column; matching on it raised `-206 FLDxxxx_TYPE does not belong`). A predefined
+catalog value's seed sets its **own data-reference** (`_RRRef` = [its guid][this metaID], guid == uuid)
+so the value is referenceable by its key AND each row has a UNIQUE `_RRRef` (no `_REF_UQ` collision on
+the NULL default). Predefined values are correctly non-deletable at runtime as a result.
+
+### Restructure ledger shows the user name
+The apply-change ledger reports `ibBackendQueryable::GetQueryName()` (the metaobject's name, e.g.
+`Enumeration3`), not the physical `ClassNNNN`.
+
+### Renames (this arc)
+| was | now | what it is |
+|---|---|---|
+| `GetModelID` | `GetColumnId` | a column's per-source read key (== metaID for an attribute) |
+| `GetSQLFields` | `GetValueFields` | a column's data-only physical fields (no `_TYPE`/`_RTRef`) |
+| `GetFieldNameDB` | `GetPhysicalName` | a column's physical field base name |
+| `GetTableNameDB` | `GetPhysicalTableName` | a metaobject's physical table name |
+| `GetQueryMetaID` | `GetQueryTableId` | a queryable's table/source metaID |
+
+The FB DDL/DML barrier (`DdlCreatedTables` / `DdlDeferredWrites`) moved from process-wide statics onto
+the connection holder (per-connection, resolved via the explicit holder or `ibConnectionPool::ThreadHolder`).

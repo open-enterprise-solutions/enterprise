@@ -11,6 +11,15 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 #include <wx/base64.h>
 //////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// The restructure ledger lives on the CONFIGURATION; this static pulls the ACTIVE config's instance, so
+// this-less callers (static scaffold methods, the apply dialog) reach it without a metadata handle.
+ibRestructureInfo& ibMetaDataConfigurationBase::GetRestructureInfo()
+{
+	return ibApplicationData::GetActiveMetaData()->m_restructureInfo;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
 #define config_table	  wxT("sys_config")
 #define config_save_table wxT("sys_config_save")
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -84,47 +93,24 @@ bool ibMetaDataConfiguration::LoadDatabase(int flags)
 //**************************************************************************************************
 
 #include "metaCollection/partial/constant.h"
+#include "backend/query/schemaSnapshot.h"   // ibSchemaSnapshot — the Storage builds it (ContributeTables) and hands it to the builder
 
 ////////////////////////////////////////////////////////////////////////////////
 
 bool ibMetaDataConfigurationStorage::OnBeforeSaveDatabase(int flags)
 {
-	if (db_query->IsActiveTransaction())
-		return false;
+	GetRestructureInfo().Clear();
 
-	s_restructureInfo.Clear();
-
-	// Apply-flow always touches DDL (CREATE/ALTER/DROP TABLE). Gate here once
-	// before opening the transaction — if exclusive isn't held, log the error
-	// to the restructure ledger and bail out. Designer's apply pipeline
-	// surfaces s_restructureInfo errors to the user. Code-only updates
-	// (modules, form layouts) don't reach this entry point, so they remain
-	// unblocked by exclusive mode.
-	//
-	// Catch ALL exception types — the gate may delegate to
-	// ibSessionRegistry::SetExclusive which has its own error paths (queue
-	// rejection, session-not-registered race during bootstrap). Letting
-	// any of those escape would crash enterprise.exe via wxApp's
-	// OnUnhandledException.
-	try {
-		ibRestructureInfo::RequireExclusiveForDDL();
-	} catch (const ibBackendException& e) {
-		s_restructureInfo.AppendError(e.GetErrorDescription());
-		return false;
-	} catch (const std::exception& e) {
-		s_restructureInfo.AppendError(wxString::FromUTF8(e.what()));
-		return false;
-	} catch (...) {
-		s_restructureInfo.AppendError(_("Unknown error acquiring exclusive mode"));
+	// The L3-2 builder OWNS the whole restructuring start: it acquires DB-wide exclusive (DDL monopoly),
+	// discards any leftover unfinished build (rolls back a straggling transaction), resets the per-save
+	// barrier, and OPENS the transaction on its connection. A failure (exclusive or begin) is recorded in
+	// the builder's change log, which we surface to the apply UI. Metadata no longer touches exclusive /
+	// BeginTransaction / the barrier here.
+	if (!m_structureBuilder.OnBeforeSave()) {
+		GetRestructureInfo().Absorb(m_structureBuilder.GetChanges());
 		return false;
 	}
-
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-	//begin transaction
-	db_query->BeginTransaction();
-#endif
-
-	return db_query->IsActiveTransaction();
+	return true;
 }
 
 bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
@@ -153,37 +139,16 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 #endif
 		}
 
-		ibValueMetaObject* commonObject = m_configMetadata->GetCommonMetaObject();
-		wxASSERT(commonObject);
-
-		for (unsigned int idx = 0; idx < commonObject->GetChildCount(); idx++) {
-
-			auto child = commonObject->GetChild(idx);
-			if (!commonObject->FilterChild(child->GetClassType()))
-				continue;
-			ibValueMetaObject* foundedMeta =
-				m_commonObject->FindAnyObjectByFilter(child->GetGuid());
-			if (foundedMeta == nullptr) {
-				bool ret = child->DeleteMetaTable(this);
-				if (!ret) {
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-					db_query->RollBack(); return false;
-#else 
-					return false;
-#endif
-				}
-			}
-		}
-
-		//delete tables sql
+		// System scaffold on a fresh database — the constant's SHARED sys_const table + the system tables.
+		// These are NOT metaobject tables, so they stay outside the snapshot differ.
 		if (m_configNew) {
 
-			s_restructureInfo.AppendInfo(_("Create new database"));
+			GetRestructureInfo().AppendInfo(_("Create new database"));
 
 			if (!ibValueMetaObjectConstant::DeleteConstantSQLTable()) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 				db_query->RollBack(); return false;
-#else 
+#else
 				return false;
 #endif
 			}
@@ -191,45 +156,44 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 			if (!ibValueMetaObjectConfiguration::ExecuteSystemSQLCommand()) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 				db_query->RollBack(); return false;
-#else 
+#else
 				return false;
 #endif
 			}
 
-			//create & update tables sql
 			if (!ibValueMetaObjectConstant::CreateConstantSQLTable()) {
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-				db_query->RollBack(); return false;
-#else 
-				return false;
-#endif
-			}
-		}
-
-		for (unsigned int idx = 0; idx < m_commonObject->GetChildCount(); idx++) {
-
-			auto child = m_commonObject->GetChild(idx);
-			if (!m_commonObject->FilterChild(child->GetClassType()))
-				continue;
-			ibValueMetaObject* foundedMeta =
-				commonObject->FindAnyObjectByFilter(child->GetGuid());
-			wxASSERT(child);
-			bool ret = true;
-
-			if (foundedMeta == nullptr) {
-				ret = child->CreateMetaTable(m_configMetadata);
-			}
-			else {
-				ret = child->UpdateMetaTable(m_configMetadata, foundedMeta);
-			}
-
-			if (!ret) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 				db_query->RollBack(); return false;
 #else
 				return false;
 #endif
 			}
+		}
+
+		// Structure + seed via the declarative differ. The Storage's only job is to BUILD the two snapshots
+		// (ContributeTables on the saved baseline m_configMetadata + the edited config `this`) and hand them
+		// to the metadata-agnostic builder; the builder computes and applies the delta. An object now only
+		// DECLARES its tables + value rows — no per-metaobject DeleteMetaTable / CreateMetaTable walk.
+		ibSchemaSnapshot target;
+		if (ibValueMetaObject* common = GetCommonMetaObject())
+			common->ContributeTables(target);
+		ibSchemaSnapshot baseline;
+		const bool hasBaseline = (m_configMetadata != nullptr && m_configMetadata->GetCommonMetaObject() != nullptr);
+		if (hasBaseline)
+			m_configMetadata->GetCommonMetaObject()->ContributeTables(baseline);
+
+		const int structRet = m_structureBuilder.OnSave(hasBaseline ? &baseline : nullptr, target);
+
+		// Extract what the builder changed into this metadata's ledger (so the apply-change dialog shows it
+		// alongside validation warnings/errors). The builder owns the delta; metadata just reads it out.
+		GetRestructureInfo().Absorb(m_structureBuilder.GetChanges());
+
+		if (structRet == DATABASE_LAYER_QUERY_RESULT_ERROR) {
+#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
+			db_query->RollBack(); return false;
+#else
+			return false;
+#endif
 		}
 	}
 
@@ -292,22 +256,17 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 
 	}
 	catch (...) {
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-		if (db_query->IsActiveTransaction())
-			db_query->RollBack();
-#endif
-		ibRestructureInfo::ReleaseAutoExclusive();
-		throw; // let the caller surface the backend error chain
+		// The exception skips OnAfterSaveDatabase, so close the build here through the builder — it rolls
+		// back its transaction AND releases the exclusive it took (its OnAfterSave's AutoRelease). Then
+		// rethrow so the caller surfaces the backend error chain.
+		m_structureBuilder.OnAfterSave(/*rollback*/ true);
+		throw;
 	}
 }
 
 bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flags)
 {
-	// Pair release for the auto-acquire in OnBeforeSaveDatabase. No-op if
-	// exclusive mode was held by the caller before the apply started.
-	struct AutoRelease {
-		~AutoRelease() { ibRestructureInfo::ReleaseAutoExclusive(); }
-	} autoRelease;
+	// (Exclusive release moved into the builder's OnAfterSave — it pairs the acquire in its OnBeforeSave.)
 
 	// DDL apply audit. saveConfigFlag = full apply (DDL + seed); without
 	// it the call is a metadata-only save (no schema change). Two events
@@ -321,133 +280,57 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 		             wxString::Format(wxT("flags=0x%X"), flags));
 	}
 
-	if (roolback) {
+	// The L3-2 builder OWNS the close of the restructuring transaction: rollback if asked, else commit the
+	// DDL + the blob written in OnSaveDatabase, and on Firebird flush the deferred seed rows in their own
+	// TX (the just-created tables are now durable). Metadata no longer touches Commit / RollBack here.
+	const int afterRet = m_structureBuilder.OnAfterSave(roolback);
+
+	if (roolback)
+		return afterRet != DATABASE_LAYER_QUERY_RESULT_ERROR;
+
+	if (afterRet == DATABASE_LAYER_QUERY_RESULT_ERROR)
+		return false;
+
+	// Metadata-side post-commit: reload the just-committed config in a FRESH transaction (the builder
+	// already committed the restructuring one).
+	if ((flags & saveConfigFlag) != 0) {
 
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-		if (db_query->IsActiveTransaction())
-			db_query->RollBack();
+		db_query->BeginTransaction();
 #endif
+		if (!m_configMetadata->LoadDatabase(onlyLoadFlag)) {
+#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
+			db_query->RollBack();
+#else
+			return false;
+#endif
+		}
 
-		return !db_query->IsActiveTransaction();
+		if (!m_configNew && !m_configMetadata->RunDatabase()) {
+#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
+			db_query->RollBack();
+#else
+			return false;
+#endif
+		}
+
+#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
+		db_query->Commit();
+#endif
+		Modify(false);
+
+		// One-time flag: the very first apply on a fresh DB runs the "create new database" path (DROP +
+		// recreate sys_const). Every later apply must be incremental. Clearing it here — after the config
+		// blob is committed — flips the next apply to configNew=0; otherwise every Update re-DROPs sys_const
+		// and a constant read mid-cycle hits its just-dropped column (FB -206 "column unknown FLDnnnn_TYPE").
+		m_configNew = false;
 	}
 	else {
-
-		if (!db_query->IsActiveTransaction())
-			return false;
-
-		if ((flags & saveConfigFlag) != 0) {
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-			// Two-phase apply on Firebird: DDL (the metadata-config write
-			// just done above + CreateMetaTable schema in OnBeforeSave) must
-			// commit before any seed INSERTs into freshly-created enum
-			// tables — FB's legacy isc_* API can't safely mix CREATE TABLE
-			// and prepared INSERT-with-bind in the same TX (metadata-cache
-			// race; INSERT silently drops rows or surfaces "table not
-			// exist" on prepare). After this commit, the seed phase runs
-			// in its own TX so a seed failure doesn't leave half-populated
-			// tables straddling auto-commit boundaries.
-			if (db_query->GetDatabaseLayerType() == DATABASELAYER_FIREBIRD) db_query->Commit();
-#endif
-
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-
-			if (db_query->GetDatabaseLayerType() == DATABASELAYER_FIREBIRD) {
-
-				ibRestructureInfo restructureInfo;
-
-				ibValueMetaObject* commonObject = m_configMetadata->GetCommonMetaObject();
-				wxASSERT(commonObject);
-
-				// Atomic seed phase wrapped in its own TX: a partial failure
-				// rolls back every UPSERT done so far instead of stranding
-				// rows committed by ProcessEnumeration's per-statement
-				// "quickie transactions" (which auto-commit each row).
-				db_query->BeginTransaction();
-
-				// Gate by foundedMeta==nullptr: only newly-introduced
-				// objects need this pass. The repairMetaTable flag has
-				// mixed semantics across types — for enum-refs it's
-				// data-seed (idempotent UPSERT, safe to re-run), but for
-				// constants it's deferred ALTER TABLE ADD COLUMN which is
-				// NOT idempotent on FB (would error on existing columns).
-				// Until we split the flag (seedMetaTable for data,
-				// repairMetaTable for schema), keep the original gate.
-				//
-				// TODO: split the flag and re-run a data-only seed pass
-				// unconditionally to self-heal tables that a prior Apply
-				// created but left empty (current edge case: total seed
-				// failure → empty table → metadata-reload sees
-				// foundedMeta != nullptr → never reseeded).
-				bool seedOk = true;
-				for (unsigned int idx = 0; idx < m_commonObject->GetChildCount(); idx++) {
-					auto child = m_commonObject->GetChild(idx);
-					if (!m_commonObject->FilterChild(child->GetClassType()))
-						continue;
-					ibValueMetaObject* foundedMeta =
-						commonObject->FindAnyObjectByFilter(child->GetGuid());
-					wxASSERT(child);
-					if (foundedMeta == nullptr) {
-						if (!child->CreateMetaTable(m_configMetadata, repairMetaTable)) {
-							seedOk = false;
-							break;
-						}
-					}
-				}
-				if (!seedOk) {
-					db_query->RollBack();
-					return false;
-				}
-				db_query->Commit();
-			}
-#endif
-
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-			if (db_query->GetDatabaseLayerType() == DATABASELAYER_FIREBIRD) db_query->BeginTransaction();
-#endif
-			if (!m_configMetadata->LoadDatabase(onlyLoadFlag)) {
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-				db_query->RollBack();
-#else 
-				return false;
-#endif
-			}
-
-			if (!m_configNew && !m_configMetadata->RunDatabase()) {
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-				db_query->RollBack();
-#else 
-				return false;
-#endif
-			}
-
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-			db_query->Commit();
-#endif
-			Modify(false);
-
-			// One-time flag: the very first apply on a fresh DB runs the
-			// "create new database" path (DROP + recreate sys_const, full
-			// CreateMetaTable). Every later apply must be incremental. Clearing
-			// it here — after the config blob is committed — is what flips the
-			// next apply to configNew=0; otherwise every Update re-DROPs
-			// sys_const and a constant read mid-cycle hits its just-dropped
-			// column (FB -206 "column unknown FLDnnnn_TYPE").
-			m_configNew = false;
-		}
-		else {
-
-			Modify(false);
-
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-			db_query->Commit();
-#endif 
-			Modify(true);
-		}
-
-		return !db_query->IsActiveTransaction();
+		Modify(false);
+		Modify(true);
 	}
 
-	return false;
+	return !db_query->IsActiveTransaction();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -457,64 +340,17 @@ bool ibMetaDataConfigurationStorage::ReCreateDatabase()
 	if (!m_configMetadata)
 		return false;
 
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-	db_query->BeginTransaction();
-#endif
+	// Full rebuild: the Storage builds the target snapshot and hands it to the builder, which OWNS the
+	// whole transaction — drop all of the config's tables, recreate + seed them all, commit (+ FB deferred-
+	// seed flush). Metadata only declares the schema and reads the change log out.
+	ibSchemaSnapshot target;
+	if (ibValueMetaObject* common = GetCommonMetaObject())
+		common->ContributeTables(target);
 
-	ibValueMetaObject* commonObject = m_configMetadata->GetCommonMetaObject();
-	wxASSERT(commonObject);
-
-	for (unsigned int idx = 0; idx < commonObject->GetChildCount(); idx++) {
-
-		auto child = commonObject->GetChild(idx);
-		if (!commonObject->FilterChild(child->GetClassType()))
-			continue;
-
-		ibValueMetaObject* foundedMeta =
-			m_commonObject->FindAnyObjectByFilter(child->GetGuid());
-
-		bool ret = child->DeleteMetaTable(this) &&
-			(foundedMeta != nullptr && foundedMeta->CreateMetaTable(this));
-
-		if (!ret) {
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-			db_query->RollBack(); return false;
-#else 
-			return false;
-#endif
-		}
-	}
-
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-	db_query->Commit();
-#endif
-
-	if (db_query->GetDatabaseLayerType() == DATABASELAYER_FIREBIRD) {
-
-		db_query->BeginTransaction();
-
-		for (unsigned int idx = 0; idx < commonObject->GetChildCount(); idx++) {
-
-			auto child = commonObject->GetChild(idx);
-			if (!commonObject->FilterChild(child->GetClassType()))
-				continue;
-
-			ibValueMetaObject* foundedMeta =
-				m_commonObject->FindAnyObjectByFilter(child->GetGuid());
-
-			bool ret = (foundedMeta != nullptr && foundedMeta->CreateMetaTable(this, repairMetaTable));
-
-			if (!ret) {
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-				db_query->RollBack(); return false;
-#else 
-				return false;
-#endif
-			}
-		}
-
-		db_query->Commit();
-	}
+	const int recreateRet = m_structureBuilder.Recreate(target);
+	GetRestructureInfo().Absorb(m_structureBuilder.GetChanges());
+	if (recreateRet == DATABASE_LAYER_QUERY_RESULT_ERROR)
+		return false;
 
 	ResetSequence();
 	return true;

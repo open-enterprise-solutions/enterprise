@@ -122,7 +122,7 @@ public:
 	{
 		const ibSelectorTree::Node* n = Current();
 		if (n == nullptr || col == nullptr) return ibValue(ibValueTypes::TYPE_NULL);
-		const auto it = n->m_values.find(col->GetModelID());
+		const auto it = n->m_values.find(col->GetColumnId());
 		return it != n->m_values.end() ? it->second : ibValue(ibValueTypes::TYPE_NULL);
 	}
 	ibValue GetColumn(const wxString& alias) const
@@ -146,7 +146,7 @@ public:
 	{
 		EnsureWalk();
 		if (col == nullptr) return ibValue(ibValueTypes::TYPE_NULL);
-		const auto it = m_walk->Root().m_values.find(col->GetModelID());
+		const auto it = m_walk->Root().m_values.find(col->GetColumnId());
 		return it != m_walk->Root().m_values.end() ? it->second : ibValue(ibValueTypes::TYPE_NULL);
 	}
 	ibValue GetTotalColumn(const wxString& alias) const
@@ -258,7 +258,7 @@ inline ibSelector ibSelector::Select(ibSelectKind kind) const
 {
 	const ibSelectorTree::Node* n = Current();
 	if (n == nullptr || m_rowKeyCol == nullptr) return ibSelector(ibQueryRamTable{}, kind);
-	const auto it = n->m_values.find(m_rowKeyCol->GetModelID());
+	const auto it = n->m_values.find(m_rowKeyCol->GetColumnId());
 	const ibValue key = (it != n->m_values.end()) ? it->second : ibValue();
 	return MakeChild(key, n->m_level + m_baseLevel, kind);          // children continue DEEPER
 }

@@ -282,7 +282,7 @@ void ibFrontendMainFrameDesigner::OnUpdateConfiguration(wxCommandEvent& event)
 		// stage one - save database
 		if (canSave && !activeMetaData->SaveDatabase()) {
 
-			for (const auto& entry : s_restructureInfo) {
+			for (const auto& entry : ibMetaDataConfigurationBase::GetRestructureInfo()) {
 				if (entry.type == ibRestructure::error)
 					outputWindow->OutputError(entry.descr);
 			}
@@ -299,7 +299,7 @@ void ibFrontendMainFrameDesigner::OnUpdateConfiguration(wxCommandEvent& event)
 			bool roolback = false, success = true;
 
 			if (activeMetaData->OnSaveDatabase(saveConfigFlag)) {
-				roolback = !ibDialogApplyChange::ShowApplyChange(s_restructureInfo, this);
+				roolback = !ibDialogApplyChange::ShowApplyChange(ibMetaDataConfigurationBase::GetRestructureInfo(), this);
 			}
 			else {
 				success = false;

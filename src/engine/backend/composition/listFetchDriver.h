@@ -8,7 +8,7 @@
 // A stack object built per fetch call: it CARRIES the page envelope in (the
 // model builds the ibReadPageRequest exactly as the door path did — anchor,
 // direction, the tree's parent filter) and ACCUMULATES meta-keyed rows out
-// (attribute metaID -> value, off OutputColumn::GetModelID()). The list model
+// (attribute metaID -> value, off OutputColumn::GetColumnId()). The list model
 // then converts the rows into its own row type — the row guid is pulled from
 // the data-reference column's VALUE (the uuid identity column is a raw DB
 // column outside the query language; the reference attribute is the named,
@@ -88,7 +88,7 @@ public:
 		for (size_t i = 0; i < m_schema.size() && i < values.size(); ++i) {
 			const ibBackendQueryColumn* col = m_schema[i].m_col;
 			if (col != nullptr)
-				row.m_values.emplace(col->GetModelID(), values[i]);
+				row.m_values.emplace(col->GetColumnId(), values[i]);
 		}
 		m_rows.push_back(std::move(row));
 	}

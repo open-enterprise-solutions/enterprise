@@ -72,9 +72,6 @@ public:
 		return m_propertyPeriodicity->GetValueAsEnum();
 	}
 
-	bool CreateAndUpdateSliceFirstTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags);
-	bool CreateAndUpdateSliceLastTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags);
-
 	//support icons
 	virtual wxIcon GetIcon() const;
 	static wxIcon GetIconGroup();
@@ -122,9 +119,6 @@ public:
 	//prepare menu for item
 	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
 	virtual void ProcessCommand(unsigned int id);
-
-	//create and update table 
-	virtual bool CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags);
 
 	/**
 	* Property events

@@ -469,7 +469,7 @@ ibFetchAnchor<ibUniqueKeyPair> BuildRegisterAnchor(
 		// m_nodeKeys, so missing sort values don't affect identity restoration.
 		ibValue v;
 		if (c.m_col != nullptr)
-			row->GetValue(c.m_col->GetModelID(), v);   // column self-describes its metaID — no ResolveAttribute
+			row->GetValue(c.m_col->GetColumnId(), v);   // column self-describes its metaID — no ResolveAttribute
 		a.m_sortValues.push_back(v);
 	}
 	return a;

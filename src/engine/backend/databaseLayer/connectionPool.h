@@ -123,6 +123,13 @@ public:
 	// Returns nullptr only when the pool is not initialised.
 	static std::shared_ptr<ibDatabaseLayer> GetDatabaseLayer();
 
+	// The db_query channel's per-thread holder identity — the connection-lifetime anchor for
+	// non-session (designer / CLI) db_query work. Each thread gets its own pool reservation key, so
+	// concurrent non-session calls run on independent connections. Exposed so a subsystem that owns
+	// per-save state keyed on the channel (the DDL/DML restructuring barrier in ibSchemaBuilder)
+	// resolves the SAME holder across the save when no explicit holder was given.
+	static ibDatabaseConnectionHolder* ThreadHolder();
+
 private:
 	// --- Internal API -------------------------------------------------------
 
@@ -133,13 +140,8 @@ private:
 	// `ibSession::Current()->OpenConnectionScope()`).
 	static ibDatabaseConnectionHolder* CurrentHolder();
 
-	// db_query channel — per-thread holder identity. Used internally by
-	// CurrentHolder; external explicit-channel access goes through
-	// `ibConnectionScope(ibConnectionPool::ThreadHolder())` if needed
-	// (currently no such caller). Each thread gets its own pool
-	// reservation key, so concurrent non-session db_query calls run on
-	// independent connections instead of serialising on a singleton.
-	static ibDatabaseConnectionHolder* ThreadHolder();
+	// (ThreadHolder moved to the public section above — the barrier in ibSchemaBuilder resolves the
+	//  db_query channel's holder through it; CurrentHolder still uses it internally.)
 
 	// Master connection accessor — the conn that the pool Clone()s
 	// from. Used as a fallback by GetDatabaseLayer.

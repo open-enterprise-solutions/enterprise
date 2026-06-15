@@ -29,7 +29,7 @@ public:
 	wxString           GetName()         const override { return m_name; }
 	wxString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
-	ibMetaID           GetModelID()      const override { return m_id; }
+	ibMetaID           GetColumnId()      const override { return m_id; }
 private:
 	wxString                  m_name;
 	ibMetaID                  m_id;
@@ -185,7 +185,7 @@ TEST(QueryCompose, UnionHeterogeneousBranches)
 
 	ibQueryRamTable out;
 	for (const ibBackendQueryColumn* c : outCols)
-		out.AddColumn(c->GetModelID(), c->GetName(), ibTypeDescription());
+		out.AddColumn(c->GetColumnId(), c->GetName(), ibTypeDescription());
 
 	// Branch A — full shape (its own column ids).
 	const ibMetaID A_CODE = 10, A_NAME = 11;

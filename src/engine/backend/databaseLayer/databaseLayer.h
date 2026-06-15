@@ -102,16 +102,37 @@ struct ibDialectDictionary
 	// DATE vs TIMESTAMP, boolean-as-SMALLINT live here.
 	wxString m_typeBoolean       = wxT("BOOLEAN");
 	wxString m_typeInteger       = wxT("INTEGER");
-	wxString m_typeDate          = wxT("TIMESTAMP");
+	wxString m_typeBigInt        = wxT("BIGINT");        // 64-bit integer (reference _RTRef = clsid)
+	wxString m_typeDate          = wxT("TIMESTAMP");     // DateTime fraction (date + time)
+	wxString m_typeDateOnly      = wxT("DATE");          // Date fraction (no time)
+	wxString m_typeTime          = wxT("TIME");          // Time fraction (no date)
 	wxString m_typeBlob          = wxT("BLOB");
 	wxString m_typeGuid          = wxT("CHAR(36)");
-	wxString m_typeStringPattern = wxT("VARCHAR(%d)");
+	wxString m_typeStringPattern = wxT("VARCHAR(%d)");   // variable-length string
+	wxString m_typeCharPattern   = wxT("CHAR(%d)");      // fixed-length string
+	wxString m_typeBinaryPattern = wxT("BINARY(%d)");    // fixed-length bytes (reference _RRRef = guid+metaID); indexable for = joins
 	wxString m_typeNumberPattern = wxT("DECIMAL(%d,%d)");
+
+	// DDL/DML transaction barrier. Some engines cannot safely populate a table
+	// (prepared INSERT/UPDATE with bind) in the SAME transaction that created or
+	// altered it: Firebird's legacy isc_* API races the metadata cache — seed rows
+	// are silently dropped or a prepare surfaces "table unknown". When TRUE, the
+	// schema door (L3-2) commits the DDL batch first and runs the data/seed phase on
+	// the commit event, in a fresh transaction. FALSE (PostgreSQL / MySQL / SQLite /
+	// ODBC) = DDL and DML coexist in one TX, no barrier needed. This is the
+	// declarative replacement for the scattered `if (driver == FIREBIRD) Commit()`
+	// forks in the metadata-save flow.
+	bool m_ddlCommitBeforeData = false;
 
 	// ALTER COLUMN (type change) as a TEMPLATE — {table} {column} {type}. Default =
 	// PG / Firebird "ALTER COLUMN c TYPE t"; MySQL "MODIFY COLUMN c t"; SQLite leaves
 	// it EMPTY (no in-place type change) so the renderer THROWS rather than emulate.
 	wxString m_alterColumnTemplate = wxT("ALTER TABLE {table} ALTER COLUMN {column} TYPE {type}");
+
+	// Multi-clause ALTER TABLE: "ALTER TABLE t ADD c1, ADD c2, DROP COLUMN c3" in one statement.
+	// FB / PG / MySQL accept it; SQLite does NOT (one ADD/DROP per ALTER), so the structure builder
+	// splits a batch into one statement per clause when this is false.
+	bool m_alterTableMultiClause = true;
 
 	// Row-lock clause APPENDED to a top-level SELECT for a pessimistic read-for-update (the
 	// register set lock). Default = PG / MySQL " FOR UPDATE"; Firebird overrides to " WITH

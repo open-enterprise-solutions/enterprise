@@ -48,8 +48,8 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, c
 		std::stable_sort(order.begin(), order.end(), [&](long a, long b) {
 			for (const ibQuerySortItem& s : *spec.m_sorts) {
 				if (s.m_col == nullptr) continue;
-				const ibValue va = rows.GetCell(a, s.m_col->GetModelID());
-				const ibValue vb = rows.GetCell(b, s.m_col->GetModelID());
+				const ibValue va = rows.GetCell(a, s.m_col->GetColumnId());
+				const ibValue vb = rows.GetCell(b, s.m_col->GetColumnId());
 				if (va == vb) continue;
 				const bool lt = (va < vb);
 				return s.m_ascending ? lt : !lt;
@@ -58,13 +58,13 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, c
 		});
 		ibQueryRamTable sorted;
 		for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
-			if (c != nullptr) sorted.AddColumn(c->GetModelID(), c->GetName(), c->GetTypeDesc());
+			if (c != nullptr) sorted.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());
 		const long limit = (req.m_count > 0 && req.m_count < rows.RowCount()) ? req.m_count : rows.RowCount();
 		for (long oi = 0; oi < limit; ++oi) {
 			const long i = order[static_cast<size_t>(oi)];
 			const long r = sorted.AppendRow();
 			for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
-				if (c != nullptr) sorted.SetCell(r, c->GetModelID(), rows.GetCell(i, c->GetModelID()));
+				if (c != nullptr) sorted.SetCell(r, c->GetColumnId(), rows.GetCell(i, c->GetColumnId()));
 		}
 		return ibDataQueryResult(std::move(sorted), spec.m_queryable);
 	}
@@ -72,11 +72,11 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, c
 	if (req.m_count > 0 && req.m_count < rows.RowCount()) {
 		ibQueryRamTable limited;
 		for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
-			if (c != nullptr) limited.AddColumn(c->GetModelID(), c->GetName(), c->GetTypeDesc());
+			if (c != nullptr) limited.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());
 		for (long i = 0; i < req.m_count; ++i) {
 			const long r = limited.AppendRow();
 			for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
-				if (c != nullptr) limited.SetCell(r, c->GetModelID(), rows.GetCell(i, c->GetModelID()));
+				if (c != nullptr) limited.SetCell(r, c->GetColumnId(), rows.GetCell(i, c->GetColumnId()));
 		}
 		return ibDataQueryResult(std::move(limited), spec.m_queryable);
 	}
@@ -134,7 +134,7 @@ class ibSubqueryAggColumn final : public ibRawDBColumn
 public:
 	ibSubqueryAggColumn(const wxString& alias, ibMetaID id)
 		: ibRawDBColumn(alias, RawType::Number), m_id(id) {}
-	ibMetaID GetModelID() const override { return m_id; }
+	ibMetaID GetColumnId() const override { return m_id; }
 private:
 	ibMetaID m_id;
 };
@@ -208,7 +208,7 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 {
 	ibQueryRamTable t;
 	for (const ibBackendQueryColumn* col : m_columns)
-		if (col != nullptr) t.AddColumn(col->GetModelID(), col->GetName(), col->GetTypeDesc());
+		if (col != nullptr) t.AddColumn(col->GetColumnId(), col->GetName(), col->GetTypeDesc());
 
 	if (m_aggregate) {
 		// AGGREGATE inner — run SelectAggregate; group keys read by column, aggregate aliases by
@@ -238,7 +238,7 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 
 			const long r = t.AppendRow();
 			for (size_t i = 0; i < m_columns.size(); ++i)
-				t.SetCell(r, m_columns[i]->GetModelID(), rowVals[i]);
+				t.SetCell(r, m_columns[i]->GetColumnId(), rowVals[i]);
 			if (m_top > 0 && ++emitted >= m_top) break;
 		}
 		return t;
@@ -258,7 +258,7 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 	while (sel.Next()) {
 		const long r = t.AppendRow();
 		for (const ibBackendQueryColumn* col : m_columns)
-			if (col != nullptr) t.SetCell(r, col->GetModelID(), sel.GetValue(col));
+			if (col != nullptr) t.SetCell(r, col->GetColumnId(), sel.GetValue(col));
 	}
 	return t;
 }
@@ -350,14 +350,14 @@ bool WorthDbTemp(long rowCount) { return rowCount >= kTempTableMinRows; }
 
 // Materialisation SEAM — read a leaf through its OWN provider (single-source, its
 // conditions pushed down) and collect the needed columns into a RAM table, keyed by
-// GetModelID. (docs/query-language-arc.md §22.1a, docs/temp-db.md)
+// GetColumnId. (docs/query-language-arc.md §22.1a, docs/temp-db.md)
 ibQueryRamTable MaterialiseLeafToRam(const ibBackendQueryable* leaf, ibDatabaseConnectionHolder* holder,
                                      const std::vector<ibQueryCondition>& conds,
                                      const std::vector<const ibBackendQueryColumn*>& cols)
 {
 	ibQueryRamTable t;
 	for (const ibBackendQueryColumn* col : cols)
-		t.AddColumn(col->GetModelID(), col->GetName(), col->GetTypeDesc());
+		t.AddColumn(col->GetColumnId(), col->GetName(), col->GetTypeDesc());
 
 	ibDataQueryBuilder q(holder);
 	q.From(leaf);
@@ -370,7 +370,7 @@ ibQueryRamTable MaterialiseLeafToRam(const ibBackendQueryable* leaf, ibDatabaseC
 	while (sel.Next()) {
 		const long r = t.AppendRow();
 		for (const ibBackendQueryColumn* col : cols)
-			t.SetCell(r, col->GetModelID(), sel.GetValue(col));
+			t.SetCell(r, col->GetColumnId(), sel.GetValue(col));
 	}
 	return t;
 }
@@ -393,7 +393,7 @@ ibQueryRamTable MaterialiseLeaf(const ibBackendQueryable* leaf, ibDatabaseConnec
 // One cell of a materialised RAM table at (row, column model-id).
 ibValue RamCell(const ibQueryRamTable& t, long row, const ibBackendQueryColumn* col)
 {
-	return col != nullptr ? t.GetCell(row, col->GetModelID()) : ibValue();
+	return col != nullptr ? t.GetCell(row, col->GetColumnId()) : ibValue();
 }
 
 // Source leaves of a subtree (depth-first) — for "which side provides a column".
@@ -485,7 +485,7 @@ bool RamLike(const wxString& s, const wxString& pat)
 bool RamEvalLeaf(const ibQueryCondition& c, const ibQueryRamTable& t, long row)
 {
 	if (c.m_col == nullptr) return false;
-	const ibValue cell = t.GetCell(row, c.m_col->GetModelID());
+	const ibValue cell = t.GetCell(row, c.m_col->GetColumnId());
 	if (c.m_explicitOp) {
 		switch (c.m_op) {
 			case ibQueryFilterOp::Less:         return cell.CompareValueLS(c.m_value);
@@ -510,7 +510,7 @@ bool RamEvalPredicate(const ibQueryPredicate* p, const ibQueryRamTable& t, long 
 		case ibQueryPredicateKind::Not:  return p->m_children.empty() ? true : !RamEvalPredicate(p->m_children.front().get(), t, row);
 		case ibQueryPredicateKind::IsNull: {
 			if (p->m_col == nullptr) return false;
-			const ibValue cell = t.GetCell(row, p->m_col->GetModelID());
+			const ibValue cell = t.GetCell(row, p->m_col->GetColumnId());
 			const bool isNull = cell.GetType() == ibValueTypes::TYPE_NULL || cell.GetType() == ibValueTypes::TYPE_EMPTY;
 			return p->m_negated ? !isNull : isNull;
 		}
@@ -566,7 +566,7 @@ ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRamTable& t, 
 {
 	if (e == nullptr) return ibValue();
 	switch (e->m_kind) {
-		case ibQueryColumnExprKind::Column: return e->m_col != nullptr ? t.GetCell(row, e->m_col->GetModelID()) : ibValue();
+		case ibQueryColumnExprKind::Column: return e->m_col != nullptr ? t.GetCell(row, e->m_col->GetColumnId()) : ibValue();
 		case ibQueryColumnExprKind::Const:  return e->m_const;
 		case ibQueryColumnExprKind::Arith: {
 			const ibNumber a = EvalColumnExprRow(e->m_lhs.get(), t, row).GetNumber();
@@ -751,7 +751,7 @@ bool JoinUnitsSmallestFirst(const std::vector<const ibQueryNode*>& units,
 	return true;
 }
 
-// Materialise ANY node to a RAM table keyed by GetModelID, carrying the referenced columns its leaves
+// Materialise ANY node to a RAM table keyed by GetColumnId, carrying the referenced columns its leaves
 // provide. Source -> read the leaf; Join -> recurse + nested-loop; UNION -> RamUnion (a union nested
 // inside a join). N-way left-deep falls out of the recursion. `condsByName` routes leaf conditions by
 // NAME (a UNION branch) vs by column OWNERSHIP (a plain join). (§22.1)
@@ -801,8 +801,8 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 	return ibQueryComposer::JoinRamTables(TL, TR, onL, onR, outCols, fromLeft, node->m_joinKind);
 }
 
-// Finalise a GetModelID-keyed combined table into the result: ORDER BY (RAM stable
-// sort over m_sorts, each key read by GetModelID), project the select-list (alias-keyed
+// Finalise a GetColumnId-keyed combined table into the result: ORDER BY (RAM stable
+// sort over m_sorts, each key read by GetColumnId), project the select-list (alias-keyed
 // output), and LIMIT to the page count. One finaliser for both JOIN and UNION.
 ibDataQueryResult ProjectToAliases(const ibQueryRamTable& TC, const ibDataQuerySpec& spec, const ibReadPageRequest& page)
 {
@@ -861,7 +861,7 @@ ibQueryRamTable RamUnion(const ibDataQuerySpec& spec, const ibQueryNode* unionNo
 {
 	ibQueryRamTable TO;
 	for (const ibBackendQueryColumn* c : outCols)
-		TO.AddColumn(c->GetModelID(), c->GetName(), c->GetTypeDesc());
+		TO.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());
 
 	for (size_t pi = 0; pi < unionNode->m_parts.size(); ++pi) {
 		const ibQueryNode* part = unionNode->m_parts[pi].get();
@@ -902,7 +902,7 @@ bool AllJoinsHaveKeys(const ibQueryNode* node)
 	       AllJoinsHaveKeys(node->m_left.get()) && AllJoinsHaveKeys(node->m_right.get());
 }
 
-// Build the GetModelID-keyed combined table for a multi-source tree carrying `refCols`.
+// Build the GetColumnId-keyed combined table for a multi-source tree carrying `refCols`.
 // JOIN -> recursive materialise; UNION -> branch concatenation. ONE entry for read AND
 // aggregate (they differ only by which columns they ask to carry).
 ibQueryRamTable Compose(const ibDataQuerySpec& spec, const std::vector<const ibBackendQueryColumn*>& refCols)
@@ -929,7 +929,7 @@ std::vector<const ibBackendQueryColumn*> AggregateRefCols(const ibDataQuerySpec&
 	return cols;
 }
 
-// One aggregate over the rows of a bucket (column read by GetModelID). COUNT and a null
+// One aggregate over the rows of a bucket (column read by GetColumnId). COUNT and a null
 // column => row count; SUM/AVG over the number value; MIN/MAX by ibValue compare.
 ibValue AggregateOne(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRamTable& TC, const std::vector<long>& idx)
 {
@@ -967,7 +967,7 @@ void ApplyAggregates(ibSelectorTree::Node& node, const ibQueryRamTable& TC, cons
 {
 	for (size_t i = 0; i < aggs.size(); ++i) {
 		const ibDataQueryBuilder::AggregateItem& a = aggs[i];
-		const ibMetaID id = (a.m_col != nullptr) ? a.m_col->GetModelID() : (kAggSyntheticBase + static_cast<ibMetaID>(i));
+		const ibMetaID id = (a.m_col != nullptr) ? a.m_col->GetColumnId() : (kAggSyntheticBase + static_cast<ibMetaID>(i));
 		node.m_values[id] = AggregateOne(a, TC, rows);
 	}
 }
@@ -1014,7 +1014,7 @@ std::vector<long> AttachHierNode(const HierBuildCtx& ctx, ibSelectorTree::Node* 
 		return {};                                   // cycle / out of range -> stop
 	(*ctx.visited)[static_cast<size_t>(rowIdx)] = true;
 
-	const wxString key = CellKey(ctx.detail->GetCell(rowIdx, ctx.rowKeyCol->GetModelID()));
+	const wxString key = CellKey(ctx.detail->GetCell(rowIdx, ctx.rowKeyCol->GetColumnId()));
 	const auto cit = ctx.childrenOf->find(key);
 	const bool hasKids = (cit != ctx.childrenOf->end() && !cit->second.empty());
 
@@ -1037,7 +1037,7 @@ std::vector<long> AttachHierNode(const HierBuildCtx& ctx, ibSelectorTree::Node* 
 }
 
 // RAM GROUP BY over a composed combined table: bucket rows by the group keys, fold the
-// aggregates per bucket. Group columns ride keyed by GetModelID (read via GetValue);
+// aggregates per bucket. Group columns ride keyed by GetColumnId (read via GetValue);
 // aggregate columns are named by their alias (read via GetColumn(alias)).
 ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec& spec)
 {
@@ -1061,7 +1061,7 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 
 	ibQueryRamTable TO;
 	for (const ibBackendQueryColumn* g : *spec.m_groupBy)
-		TO.AddColumn(g->GetModelID(), g->GetName(), g->GetTypeDesc());
+		TO.AddColumn(g->GetColumnId(), g->GetName(), g->GetTypeDesc());
 	const ibMetaID aggBaseId = 0x40000000u;             // far from any metaID — aggregates read by alias NAME
 	{
 		ibMetaID aggId = aggBaseId;
@@ -1075,7 +1075,7 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 		const std::vector<long>& idx = buckets[key];
 		const long r = TO.AppendRow();
 		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
-			TO.SetCell(r, g->GetModelID(), RamCell(TC, idx.front(), g));
+			TO.SetCell(r, g->GetColumnId(), RamCell(TC, idx.front(), g));
 		ibMetaID aId = aggBaseId;
 		for (const auto& a : *spec.m_aggregates)
 			TO.SetCell(r, aId++, AggregateOne(a, TC, idx));
@@ -1108,7 +1108,7 @@ void FoldTotals(ibSelectorTree::Node& node, const ibQueryRamTable& TC, const std
 	for (const wxString& k : order) {
 		ibSelectorTree::Node* child = node.AddChild(static_cast<int>(level) + 1);
 		std::map<ibMetaID, ibValue> childKeys = keys;
-		childKeys[groupFields[level]->GetModelID()] = keyVal[k];
+		childKeys[groupFields[level]->GetColumnId()] = keyVal[k];
 		FoldTotals(*child, TC, buckets[k], groupFields, aggs, level + 1, childKeys);
 	}
 	node.m_hasChildren = !node.m_children.empty();   // eager build -> has children == populated
@@ -1420,7 +1420,7 @@ ibDataQueryResult ibQueryComposer::ExecuteAggregate(const ibDataQuerySpec& spec)
 
 // totals fold over a combined row set -> a RAW totals TREE (L3's own ibQueryRamTable). L3
 // stops here — flat-vs-hierarchical rendering is the runtime's call. Group columns keyed by
-// GetModelID; aggregates by a synthetic id (read by alias). Grand total = the root (level
+// GetColumnId; aggregates by a synthetic id (read by alias). Grand total = the root (level
 // 0). Pure (no DB) — exposed so the fold is unit-testable directly. (docs §22.1b)
 ibSelectorTree ibQueryComposer::BuildTotalsTree(const ibQueryRamTable& detail,
 		const std::vector<const ibBackendQueryColumn*>& groupFields,
@@ -1432,9 +1432,9 @@ ibSelectorTree ibQueryComposer::BuildTotalsTree(const ibQueryRamTable& detail,
 
 	ibSelectorTree tree;
 	for (const ibBackendQueryColumn* g : groupFields)
-		tree.AddColumn(g->GetModelID(), g->GetName(), g->GetTypeDesc());
+		tree.AddColumn(g->GetColumnId(), g->GetName(), g->GetTypeDesc());
 	for (const ibDataQueryBuilder::AggregateItem& a : aggregates)   // aggregate column = its OWN source column
-		if (a.m_col != nullptr) tree.AddColumn(a.m_col->GetModelID(), a.m_col->GetName(), a.m_col->GetTypeDesc());
+		if (a.m_col != nullptr) tree.AddColumn(a.m_col->GetColumnId(), a.m_col->GetName(), a.m_col->GetTypeDesc());
 	AddSyntheticAggColumns(tree, aggregates);                       // + COUNT(*) receivers
 	FoldTotals(tree.Root(), detail, all, groupFields, aggregates, 0, {});
 	return tree;   // raw — the runtime decides flat vs. hierarchical
@@ -1474,12 +1474,12 @@ ibSelectorTree ibQueryComposer::BuildHierarchyTree(const ibQueryRamTable& detail
 	std::map<wxString, std::vector<long>> childrenOf;
 	std::map<wxString, long>              keyToRow;
 	for (long r = 0; r < n; ++r) {
-		keyToRow[CellKey(detail.GetCell(r, rowKeyCol->GetModelID()))] = r;
-		childrenOf[CellKey(detail.GetCell(r, parentKeyCol->GetModelID()))].push_back(r);
+		keyToRow[CellKey(detail.GetCell(r, rowKeyCol->GetColumnId()))] = r;
+		childrenOf[CellKey(detail.GetCell(r, parentKeyCol->GetColumnId()))].push_back(r);
 	}
 	std::vector<long> roots;
 	for (long r = 0; r < n; ++r) {
-		const wxString pk = CellKey(detail.GetCell(r, parentKeyCol->GetModelID()));
+		const wxString pk = CellKey(detail.GetCell(r, parentKeyCol->GetColumnId()));
 		if (pk.empty() || keyToRow.find(pk) == keyToRow.end()) roots.push_back(r);
 	}
 
@@ -1522,7 +1522,7 @@ std::vector<long> AttachRefNode(const RefHierCtx& ctx, ibSelectorTree::Node* par
 
 	ibSelectorTree::Node* node = parent->AddChild(level);
 	const auto vit = ctx.valOf->find(valueKey);
-	if (vit != ctx.valOf->end()) node->m_values[ctx.refCol->GetModelID()] = vit->second;
+	if (vit != ctx.valOf->end()) node->m_values[ctx.refCol->GetColumnId()] = vit->second;
 
 	std::vector<long> ownRows;
 	const auto rit = ctx.rowsByVal->find(valueKey);
@@ -1583,7 +1583,7 @@ ibSelectorTree ibQueryComposer::BuildReferenceHierarchy(const ibQueryRamTable& s
 	std::map<wxString, ibValue>           valOf;
 	const long n = snapshot.RowCount();
 	for (long r = 0; r < n; ++r) {
-		const ibValue v = snapshot.GetCell(r, refCol->GetModelID());
+		const ibValue v = snapshot.GetCell(r, refCol->GetColumnId());
 		const wxString k = CellKey(v);
 		rowsByVal[k].push_back(r);
 		valOf[k] = v;
@@ -1662,7 +1662,7 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 
 	ibSelectorTree::Node* node = parent->AddChild(parent->m_level + 1);
 	const auto vit = valOf.find(valueKey);
-	if (vit != valOf.end()) node->m_values[level.m_col->GetModelID()] = vit->second;
+	if (vit != valOf.end()) node->m_values[level.m_col->GetColumnId()] = vit->second;
 
 	std::vector<long> ownRows;
 	const auto rit = byVal.find(valueKey);
@@ -1692,7 +1692,7 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 	std::map<wxString, ibValue>           valOf;
 	std::vector<wxString>                 order;
 	for (long r : rows) {
-		const ibValue v = ctx.snapshot->GetCell(r, level.m_col->GetModelID());
+		const ibValue v = ctx.snapshot->GetCell(r, level.m_col->GetColumnId());
 		const wxString k = CellKey(v);
 		if (byVal.find(k) == byVal.end()) { order.push_back(k); valOf[k] = v; }
 		byVal[k].push_back(r);
@@ -1701,7 +1701,7 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 	if (level.m_dim == ibDimensionKind::Elements) {
 		for (const wxString& k : order) {
 			ibSelectorTree::Node* child = node->AddChild(node->m_level + 1);
-			child->m_values[level.m_col->GetModelID()] = valOf[k];
+			child->m_values[level.m_col->GetColumnId()] = valOf[k];
 			FoldDimLevel(ctx, child, byVal[k], levelIdx + 1);   // next level inside
 			child->m_hasChildren = !child->m_children.empty();
 			ApplyAggregates(*child, *ctx.snapshot, byVal[k], *ctx.aggregates);
@@ -1793,7 +1793,7 @@ std::vector<size_t> ibQueryComposer::PlanInnerJoinOrder(const std::vector<long>&
 }
 
 // RAM inner join: nested-loop over (onLeft == onRight); each output column is read from
-// its tagged side. Keyed by GetModelID throughout. Pure — the multi-source JOIN core.
+// its tagged side. Keyed by GetColumnId throughout. Pure — the multi-source JOIN core.
 ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, const ibQueryRamTable& right,
 		const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 		const std::vector<const ibBackendQueryColumn*>& outCols, const std::vector<bool>& fromLeft,
@@ -1801,7 +1801,7 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 {
 	ibQueryRamTable out;
 	for (const ibBackendQueryColumn* c : outCols)
-		out.AddColumn(c->GetModelID(), c->GetName(), c->GetTypeDesc());
+		out.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());
 
 	// Emit one output row from a (left row, right row) pair — a negative index = that side is absent
 	// (an OUTER join's unmatched row), so its columns yield NULL cells.
@@ -1810,7 +1810,7 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 		for (size_t k = 0; k < outCols.size(); ++k) {
 			const long srcRow = fromLeft[k] ? li : rj;
 			const ibQueryRamTable& src = fromLeft[k] ? left : right;
-			out.SetCell(r, outCols[k]->GetModelID(), srcRow >= 0 ? src.GetCell(srcRow, outCols[k]->GetModelID()) : ibValue());
+			out.SetCell(r, outCols[k]->GetColumnId(), srcRow >= 0 ? src.GetCell(srcRow, outCols[k]->GetColumnId()) : ibValue());
 		}
 	};
 
@@ -1822,12 +1822,12 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 
 	std::map<wxString, std::vector<long>> rightByKey;
 	for (long j = 0; j < right.RowCount(); ++j) {
-		const ibValue keyR = (onRight != nullptr) ? right.GetCell(j, onRight->GetModelID()) : ibValue();
+		const ibValue keyR = (onRight != nullptr) ? right.GetCell(j, onRight->GetColumnId()) : ibValue();
 		rightByKey[keyR.GetHashKey()].push_back(j);
 	}
 	std::vector<char> rightMatched(static_cast<size_t>(right.RowCount()), 0);
 	for (long i = 0; i < left.RowCount(); ++i) {
-		const ibValue keyL = (onLeft != nullptr) ? left.GetCell(i, onLeft->GetModelID()) : ibValue();
+		const ibValue keyL = (onLeft != nullptr) ? left.GetCell(i, onLeft->GetColumnId()) : ibValue();
 		const auto it = rightByKey.find(keyL.GetHashKey());
 		if (it == rightByKey.end()) {
 			if (keepLeft) emit(i, -1);   // unmatched left row (LEFT / FULL)
@@ -1850,8 +1850,8 @@ void ibQueryComposer::AppendUnionBranch(ibQueryRamTable& out, const ibQueryRamTa
 	for (long i = 0; i < branch.RowCount(); ++i) {
 		const long r = out.AppendRow();
 		for (size_t k = 0; k < outCols.size(); ++k)
-			out.SetCell(r, outCols[k]->GetModelID(),
-			            branchCols[k] != nullptr ? branch.GetCell(i, branchCols[k]->GetModelID()) : ibValue());
+			out.SetCell(r, outCols[k]->GetColumnId(),
+			            branchCols[k] != nullptr ? branch.GetCell(i, branchCols[k]->GetColumnId()) : ibValue());
 	}
 }
 
@@ -1863,18 +1863,18 @@ ibQueryRamTable ibQueryComposer::DedupeRows(const ibQueryRamTable& src,
 	// don't fool it). First occurrence wins; row order is preserved.
 	ibQueryRamTable out;
 	for (const ibBackendQueryColumn* c : cols)
-		out.AddColumn(c->GetModelID(), c->GetName(), c->GetTypeDesc());
+		out.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());
 
 	std::set<wxString> seen;
 	for (long i = 0; i < src.RowCount(); ++i) {
 		wxString key;
 		for (const ibBackendQueryColumn* c : cols)
-			key += src.GetCell(i, c->GetModelID()).GetHashKey() + wxT("\x1f");
+			key += src.GetCell(i, c->GetColumnId()).GetHashKey() + wxT("\x1f");
 		if (!seen.insert(key).second)
 			continue;
 		const long r = out.AppendRow();
 		for (const ibBackendQueryColumn* c : cols)
-			out.SetCell(r, c->GetModelID(), src.GetCell(i, c->GetModelID()));
+			out.SetCell(r, c->GetColumnId(), src.GetCell(i, c->GetColumnId()));
 	}
 	return out;
 }
@@ -1942,7 +1942,7 @@ public:
 	bool Next() override { return ++m_row < m_table.RowCount(); }
 
 	ibValue Value(const ibBackendQueryColumn* col) const override {
-		return (m_row >= 0 && col != nullptr) ? m_table.GetCell(m_row, col->GetModelID()) : ibValue();
+		return (m_row >= 0 && col != nullptr) ? m_table.GetCell(m_row, col->GetColumnId()) : ibValue();
 	}
 	ibValue Column(const wxString& alias) const override {
 		for (const ibQueryRamColumn& c : m_table.Columns())
@@ -2006,12 +2006,12 @@ ibSelector ibDataQueryResult::Select(ibSelectKind mode)
 {
 	ibQueryRamTable snapshot;
 	for (const ibBackendQueryColumn* c : m_matColumns)
-		if (c != nullptr) snapshot.AddColumn(c->GetModelID(), c->GetName(), c->GetTypeDesc());
+		if (c != nullptr) snapshot.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());
 
 	while (Next()) {
 		const long r = snapshot.AppendRow();
 		for (const ibBackendQueryColumn* c : m_matColumns)
-			if (c != nullptr) snapshot.SetCell(r, c->GetModelID(), m_source->Value(c));
+			if (c != nullptr) snapshot.SetCell(r, c->GetColumnId(), m_source->Value(c));
 	}
 	ibSelector s(std::move(snapshot), mode);
 	s.WithTotals(m_totalLevels, m_totalAggregates);                             // fold by the door's TotalBy config

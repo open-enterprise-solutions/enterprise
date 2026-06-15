@@ -56,6 +56,7 @@ add_executable(oes_tests
     test_queryRewrite.cpp
     test_lambdaRecorder.cpp
     test_queryValueMembers.cpp
+    test_columnCodec.cpp
 )
 
 target_link_libraries(oes_tests

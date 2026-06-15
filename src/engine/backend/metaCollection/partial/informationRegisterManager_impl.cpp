@@ -236,7 +236,7 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		// dimension key (agg over the period, GROUP BY the keys), self-joined back to the
 		// register table for the full record, then the dimension filter. Values ride as
 		// bound Const — the renderer binds them; no per-DBMS SQL, no manual positional bind.
-		const wxString table = meta->GetTableNameDB();
+		const wxString table = meta->GetPhysicalTableName();
 		const ibValueMetaObjectAttributeBase* periodAttr = meta->GetRegisterPeriod();
 
 		// Field-list + composite-predicate lowering are shared across register managers

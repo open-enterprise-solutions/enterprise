@@ -16,7 +16,8 @@ public:
 	explicit ibTabularQueryable(const ibValueMetaObjectTableData* meta) : m_meta(meta) {}
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column
 	virtual wxString GetQueryTableName() const override;
-	virtual ibMetaID GetQueryMetaID() const override;
+	virtual wxString GetQueryName() const override;   // the section's user-facing name (change ledger)
+	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;                  // metadata context for column-based value reads
 	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;   // { line number } — parent uuid is a plain filter
 private:
@@ -136,7 +137,7 @@ public:
 #pragma endregion 
 
 	//special functions for DB 
-	virtual wxString GetTableNameDB() const {
+	virtual wxString GetPhysicalTableName() const {
 		ibValueMetaObject* parentMeta = GetParent();
 		wxASSERT(parentMeta);
 		return wxString::Format(wxT("%s%i_VT%i"),

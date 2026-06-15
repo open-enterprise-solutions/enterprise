@@ -10,6 +10,7 @@
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/value_ptr.h"
 #include "backend/ctorRegistry.h"
+#include "backend/restructureInfo.h"   // ibRestructureInfo — per-metadata restructure ledger (member below)
 
 ///////////////////////////////////////////////////////////////////////////////
 class BACKEND_API ibBackendMetadataTree;
@@ -185,6 +186,10 @@ public:
 	// (`if (auto* cc = metaData->GetCompileCache())`) instead of querying
 	// appData->DesignerMode().
 	ibCompileValueCache* GetCompileCache() const { return m_compileCache.get(); }
+
+	// (The restructure ledger lives on ibMetaDataConfigurationBase, not here — only a CONFIGURATION
+	//  restructures; an external data-processor / report metadata never does. Reach it through the static
+	//  ibMetaDataConfigurationBase::GetRestructureInfo(), which pulls the ACTIVE config's ledger.)
 
 	virtual bool IsModified() const { return m_metaModify; }
 	virtual void Modify(bool modify = true) {

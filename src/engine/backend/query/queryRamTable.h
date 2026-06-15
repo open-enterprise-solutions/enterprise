@@ -15,7 +15,7 @@
 #include <map>
 #include <vector>
 
-// One column of the snapshot — keyed by its model id (the same GetModelID the rows use).
+// One column of the snapshot — keyed by its model id (the same GetColumnId the rows use).
 struct ibQueryRamColumn
 {
 	ibMetaID          m_id;

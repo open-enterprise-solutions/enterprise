@@ -26,6 +26,7 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_typeBoolean       = wxT("BOOLEAN");
 		d.m_typeDate          = wxT("TIMESTAMP");
 		d.m_typeBlob          = wxT("BYTEA");
+		d.m_typeBinaryPattern = wxT("BYTEA");     // PG has no fixed-width binary; BYTEA holds the _RRRef blob
 		d.m_typeGuid          = wxT("UUID");
 		d.m_typeNumberPattern = wxT("NUMERIC(%d,%d)");
 		return d;

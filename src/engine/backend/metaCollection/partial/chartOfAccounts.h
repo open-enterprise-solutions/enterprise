@@ -153,9 +153,6 @@ protected:
 	//create object data with meta form
 	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
 
-	//create and update table 
-	virtual bool CreateAndUpdateTableDB(ibMetaDataConfiguration* srcMetaData, ibValueMetaObject* srcMetaObject, int flags);
-
 	//load & save metaData from DB
 	virtual bool LoadData(ibReaderMemory& reader);
 	virtual bool SaveData(ibWriterMemory& writer);
