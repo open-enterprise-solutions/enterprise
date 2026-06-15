@@ -187,6 +187,23 @@ bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
 	return false;
 }
 
+// Best-effort removal of a maintenance temp file (.tmp.fbk / .tmp.new.fdb / .bak). After
+// isc_service_detach the embedded Firebird engine can still hold the backup file for a moment — it
+// closes its OS handle asynchronously — so an immediate delete races and fails with a sharing
+// violation (Win32 error 32). That is harmless: a leftover temp is reclaimed by the next cycle's
+// pre-clean. Retry a few times, then give up SILENTLY — wxLogNull suppresses wxRemoveFile's
+// wxLogSysError so a benign shutdown race never pops a modal "couldn't be removed" dialog.
+void TryRemoveTempFile(const wxString& path) {
+	if (!wxFileExists(path)) return;
+	wxLogNull noLog;
+	for (int attempt = 0; attempt < 5; ++attempt) {
+		if (wxRemoveFile(path) || !wxFileExists(path))
+			return;
+		std::this_thread::sleep_for(std::chrono::milliseconds(40));
+	}
+	// Still locked — leave it; the next RunBackupRestoreCycle pre-clean (or a manual sweep) gets it.
+}
+
 } // namespace
 
 ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunSweep(
@@ -277,8 +294,8 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 	const wxString rollbackPath = dbFn.GetFullPath() + wxT(".bak");
 
 	// Clean up any leftovers from a prior aborted cycle.
-	if (wxFileExists(backupPath))  wxRemoveFile(backupPath);
-	if (wxFileExists(restorePath)) wxRemoveFile(restorePath);
+	TryRemoveTempFile(backupPath);
+	TryRemoveTempFile(restorePath);
 
 	const auto svcUtf8 = svcTarget.utf8_str();
 	const size_t svcLen = strlen(svcUtf8.data());
@@ -319,7 +336,7 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 		iface->GetIscServiceDetach()(status, &svc);
 
 		if (!ok) {
-			if (wxFileExists(backupPath)) wxRemoveFile(backupPath);
+			TryRemoveTempFile(backupPath);
 			return Status::Timeout;
 		}
 	}
@@ -333,7 +350,7 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 				(unsigned short)svcLen, svcUtf8.data(),
 				&svc,
 				(unsigned short)attachSpb.size(), attachSpb.c_str()) != 0) {
-			if (wxFileExists(backupPath)) wxRemoveFile(backupPath);
+			TryRemoveTempFile(backupPath);
 			return Status::AttachFailed;
 		}
 
@@ -351,7 +368,7 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 				status, &svc, nullptr,
 				(unsigned short)spb.size(), spb.c_str()) != 0) {
 			iface->GetIscServiceDetach()(status, &svc);
-			if (wxFileExists(backupPath)) wxRemoveFile(backupPath);
+			TryRemoveTempFile(backupPath);
 			return Status::StartFailed;
 		}
 
@@ -360,8 +377,8 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 		iface->GetIscServiceDetach()(status, &svc);
 
 		if (!ok) {
-			if (wxFileExists(backupPath))  wxRemoveFile(backupPath);
-			if (wxFileExists(restorePath)) wxRemoveFile(restorePath);
+			TryRemoveTempFile(backupPath);
+			TryRemoveTempFile(restorePath);
 			return Status::RestoreFailed;
 		}
 	}
@@ -371,24 +388,23 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 	// single filesystem; cross-volume falls back to copy + delete
 	// which is not crash-safe — caller responsibility to keep the
 	// .fdb on a local disk for this operation.
-	if (wxFileExists(rollbackPath))
-		wxRemoveFile(rollbackPath);
+	TryRemoveTempFile(rollbackPath);
 	if (!wxRenameFile(databasePath, rollbackPath)) {
-		if (wxFileExists(backupPath))  wxRemoveFile(backupPath);
-		if (wxFileExists(restorePath)) wxRemoveFile(restorePath);
+		TryRemoveTempFile(backupPath);
+		TryRemoveTempFile(restorePath);
 		return Status::IOError;
 	}
 	if (!wxRenameFile(restorePath, databasePath)) {
 		// Rollback: original is still under .bak. Restore it.
 		wxRenameFile(rollbackPath, databasePath);
-		if (wxFileExists(backupPath))  wxRemoveFile(backupPath);
-		if (wxFileExists(restorePath)) wxRemoveFile(restorePath);
+		TryRemoveTempFile(backupPath);
+		TryRemoveTempFile(restorePath);
 		return Status::IOError;
 	}
 
 	// Success — drop the .bak and the intermediate .fbk.
-	if (wxFileExists(rollbackPath)) wxRemoveFile(rollbackPath);
-	if (wxFileExists(backupPath))   wxRemoveFile(backupPath);
+	TryRemoveTempFile(rollbackPath);
+	TryRemoveTempFile(backupPath);
 	return Status::Ok;
 }
 
