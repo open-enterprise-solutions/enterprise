@@ -258,6 +258,10 @@ private:
 	};
 	std::vector<ibConnectionEntry>  m_entries;
 	static constexpr std::chrono::seconds kIdleTimeout { 60 };
+	// Upper bound on how long Checkout() blocks when the pool is saturated
+	// (all m_maxSize connections busy). On expiry it throws instead of waiting
+	// forever, so a leaked / stuck borrower can't hang the worker thread.
+	static constexpr std::chrono::seconds kCheckoutTimeout { 30 };
 
 	std::size_t                     m_maxSize   = 0;
 	std::size_t                     m_minIdle   = 2;

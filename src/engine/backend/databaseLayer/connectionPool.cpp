@@ -1,6 +1,7 @@
 #include "connectionPool.h"
 
 #include "backend/appData.h"
+#include "backend/backend_exception.h"   // ibBackendCoreException on pool-exhaustion timeout
 #include "connectionHolder.h"
 #include "connectionScope.h"
 #include "databaseLayer.h"
@@ -376,6 +377,7 @@ void ibConnectionPool::Shutdown()
 std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout()
 {
 	std::unique_lock<std::mutex> lock(m_mutex);
+	const auto deadline = std::chrono::steady_clock::now() + kCheckoutTimeout;
 	while (true) {
 		if (m_shutdown || !m_source)
 			return nullptr;
@@ -417,8 +419,17 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout()
 			m_entries.push_back(std::move(e));
 			return WrapHandout(std::move(sp));
 		}
-		// Saturated — wait for a Return / ReleaseTx / Unbind / Shutdown.
-		m_cv.wait(lock);
+		// Saturated — every connection is busy and the pool is at m_maxSize.
+		// Wait BOUNDED for a Return / ReleaseTx / Unbind / Shutdown. If the
+		// deadline passes with the pool still full, fail loudly instead of
+		// blocking the worker thread forever (the old wait() had no timeout —
+		// a leaked or stuck borrower would hang the caller indefinitely).
+		if (std::chrono::steady_clock::now() >= deadline) {
+			ibBackendCoreException::Error(
+				_("Database connection pool exhausted: all %d connections are busy and none became free within %d s. Try again later or raise the pool size."),
+				(int)m_maxSize, (int)kCheckoutTimeout.count());
+		}
+		m_cv.wait_until(lock, deadline);
 	}
 }
 
