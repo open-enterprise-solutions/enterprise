@@ -338,7 +338,9 @@ public:
 	virtual std::vector<ibValueMetaObjectTableData*> GetGenericTableArrayObject(
 		std::vector<ibValueMetaObjectTableData*>& array) const {
 		FillArrayObjectByPredefinedTable(array);
-		FillArrayObjectByFilter<ibValueMetaObjectTableData>(array, { g_metaTableCLSID });
+		// both RAM (MD_TBL) and DB-backed reference (MD_TBLR) tabular sections — this is the runtime
+		// model-build path (records create a tabular data object per entry), so Ref tables must be here.
+		FillArrayObjectByFilter<ibValueMetaObjectTableData>(array, { g_metaTableCLSID, g_metaTableRefCLSID });
 		return array;
 	}
 
@@ -367,10 +369,10 @@ public:
 		return array;
 	}
 
-	//table
+	//table — both the RAM (MD_TBL) and DB-backed reference (MD_TBLR) variants, collected through the base pointer
 	std::vector<ibValueMetaObjectTableData*> GetTableArrayObject(
 		std::vector<ibValueMetaObjectTableData*> array = std::vector<ibValueMetaObjectTableData*>()) const {
-		FillArrayObjectByFilter<ibValueMetaObjectTableData>(array, { g_metaTableCLSID });
+		FillArrayObjectByFilter<ibValueMetaObjectTableData>(array, { g_metaTableCLSID, g_metaTableRefCLSID });
 		return array;
 	}
 
@@ -389,10 +391,10 @@ public:
 		return FindObjectByFilter<ibValueMetaObjectAttributeBase>(id, { g_metaAttributeCLSID });
 	}
 
-	//table
+	//table — RAM (MD_TBL) + DB-backed reference (MD_TBLR)
 	template <typename _T1>
 	ibValueMetaObjectTableData* FindTableObjectByFilter(const _T1& id) const {
-		return FindObjectByFilter<ibValueMetaObjectTableData>(id, { g_metaTableCLSID });
+		return FindObjectByFilter<ibValueMetaObjectTableData>(id, { g_metaTableCLSID, g_metaTableRefCLSID });
 	}
 
 #pragma endregion 
@@ -520,8 +522,17 @@ public:
 		return m_propertyQuickChoice->GetValueAsBoolean();
 	}
 
-	//get data selector 
+	//get data selector
 	virtual ibSelectorDataType GetFilterDataType() const { return ibSelectorDataType::ibSelectorDataType_reference; }
+
+	//reference owners persist their tabular sections to the DB — they take the MD_TBLR variant
+	//(processors/reports keep the RAM MD_TBL via the base RecordData::FilterChild).
+	virtual bool FilterChild(const ibClassID& clsid) const {
+		if (clsid == g_metaAttributeCLSID ||
+			clsid == g_metaTableRefCLSID)
+			return true;
+		return ibValueMetaObjectGenericData::FilterChild(clsid);
+	}
 
 	//meta events
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
@@ -529,8 +540,8 @@ public:
 	virtual bool OnSaveMetaObject(int flags);
 	virtual bool OnDeleteMetaObject();
 
-	//module manager is started or exit 
-	//after and before for designer 
+	//module manager is started or exit
+	//after and before for designer
 	virtual bool OnBeforeRunMetaObject(int flags);
 	virtual bool OnAfterRunMetaObject(int flags);
 
@@ -913,7 +924,7 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 
 	virtual bool FilterChild(const ibClassID& clsid) const {
 		if (clsid == g_metaAttributeCLSID ||
-			clsid == g_metaTableCLSID)
+			clsid == g_metaTableRefCLSID)
 			return true;
 		return ibValueMetaObjectGenericData::FilterChild(clsid);
 	}

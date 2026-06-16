@@ -37,6 +37,7 @@ const ibClassID g_metaTemplateCLSID = string_to_clsid("MD_TMPL");
 const ibClassID g_metaModuleCLSID = string_to_clsid("MD_MOD");
 const ibClassID g_metaManagerCLSID = string_to_clsid("MD_MNGR");
 const ibClassID g_metaTableCLSID = string_to_clsid("MD_TBL");
+const ibClassID g_metaTableRefCLSID = string_to_clsid("MD_TBLR");   // DB-backed tabular section (reference owner); MD_TBL stays RAM-only (processors/reports)
 const ibClassID g_metaSubcontoKindsTableCLSID = string_to_clsid("MD_SKTB");
 const ibClassID g_metaEnumCLSID = string_to_clsid("MD_ENUM");
 const ibClassID g_metaDimensionCLSID = string_to_clsid("MD_DMNT");
@@ -130,6 +131,17 @@ public:
 
 	wxString GetName() const { return m_propertyName->GetValueAsString(); }
 	void SetName(const wxString& strName) { m_propertyName->SetValue(strName); }
+
+	// Typed parent — the parent metaobject cast to parentType through CastValue (the value cast):
+	// a dynamic_cast that, with _USE_CONTROL_VALUECAST, RAISES immediately (ThrowErrorTypeOperation)
+	// on a wrong / absent parent instead of returning null. A child writes
+	// GetParentAsType<ibValueMetaObjectRecordData>() with no dynamic_cast + assert + null-check.
+	// Distinct name (not GetParent) — it doesn't hide the inherited plain GetParent(), so no
+	// using-declaration is needed. Parallels ibValue::ConvertToType<T>().
+	template <typename parentType>
+	parentType* GetParentAsType() const {
+		return CastValue<parentType>(GetParent());
+	}
 
 	virtual wxString GetSynonym() const {
 		return !m_propertySynonym->IsEmptyProperty() ?

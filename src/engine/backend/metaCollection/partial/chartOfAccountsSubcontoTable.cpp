@@ -4,6 +4,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "chartOfAccountsSubcontoTable.h"
+#include "backend/metaData.h"
+#include "backend/objCtor.h"   // tabular value-ctor register macros (registerTabularSection / _String)
 
 
 ibValueMetaObjectSubcontoKindsTable::ibValueMetaObjectSubcontoKindsTable(const wxString& name, const wxString& synonym, const wxString& comment)
@@ -80,6 +82,9 @@ bool ibValueMetaObjectSubcontoKindsTable::OnBeforeRunMetaObject(int flags)
 	if (!(*m_propertySubcontoKind)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertyOrder)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertySummaryOnly)->OnBeforeRunMetaObject(flags)) return false;
+	ibValueMetaObjectRecordData* metaObject = GetParentAsType<ibValueMetaObjectRecordData>();
+	registerTabularSection();
+	registerTabularSection_String();
 	return ibValueMetaObjectTableData::OnBeforeRunMetaObject(flags);
 }
 

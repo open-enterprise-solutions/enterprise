@@ -266,6 +266,23 @@ protected:
 #define unregisterTabularSection()\
 	m_metaData->UnRegisterCtor(generate_class_table_name(prefixTabSection))
 
+//tabular section reference class — the DB-backed tabular owner (ibValueMetaObjectTableDataRef).
+//Same classType/name keying as the RAM variant (one tabular is EITHER RAM or Ref, never both,
+//so the "T_<metaID>" key never collides); kept a distinct type so reference-specific behaviour
+//(future: CreateObject / primary-key columns) has a home. GetMetaTypeCtor stays TabularSection —
+//both variants resolve through ibCtorObjectMetaType_TabularSection.
+class ibCtorMetaValueTypeTabularSectionReference :
+	public ibCtorMetaValueTypeTabularSection {
+public:
+	ibCtorMetaValueTypeTabularSectionReference(ibValueMetaObjectRecordData* recordRef, ibValueMetaObjectTableData* recordTable)
+		: ibCtorMetaValueTypeTabularSection(recordRef, recordTable) {}
+};
+
+#define registerTabularSectionReference()\
+	m_metaData->RegisterCtor(new ibCtorMetaValueTypeTabularSectionReference(metaObject, this))
+#define unregisterTabularSectionReference()\
+	m_metaData->UnRegisterCtor(generate_class_table_name(prefixTabSection))
+
 //tabular section string class
 class ibCtorMetaValueTypeTabularSectionString :
 	public ibCtorMetaValueType {

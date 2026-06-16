@@ -216,24 +216,39 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 	// module registries the run phase fed — the designer manager and the module
 	// storage — since CloseDatabase won't run (m_configOpened stays false) and the
 	// next load rebuilds the tree out from under these registrations.
-	if (!m_commonObject->RunSubtree(flags, true)) {
+	//
+	// A metaobject may also RAISE during the cascade (e.g. a typed-parent mismatch from
+	// ibValueMetaObject::GetParentAsType — a malformed configuration). Treat that the same
+	// as a soft failure: unwind the registries, surface the message, and exit the config run
+	// (return false) so the caller (appData / OnAuthenticated) aborts bring-up cleanly instead
+	// of letting the exception escape onto the worker thread.
+	try {
+		if (!m_commonObject->RunSubtree(flags, true)) {
+			if (auto* cc = GetCompileCache())
+				cc->SetModuleManager(nullptr);
+			GetModuleStorage()->Clear();
+			return false;
+		}
+
+		// Seed the editor's context (Manager + Catalogs/Documents/Enums + globals)
+		// AFTER RunSubtree(true) — the ctor-context factories register while the
+		// subtree runs, so CreateMainModule must run once they're available. Common-
+		// module registration already happened above (in OnBeforeRunMetaObject).
+		if (auto* cc = GetCompileCache()) {
+			if (auto* mgr = cc->GetModuleManager())
+				mgr->CreateMainModule();
+		}
+
+		if (!m_commonObject->RunSubtree(flags, false))
+			return false;
+	}
+	catch (const ibBackendException& err) {
 		if (auto* cc = GetCompileCache())
 			cc->SetModuleManager(nullptr);
 		GetModuleStorage()->Clear();
+		wxLogError(err.GetErrorDescription());
 		return false;
 	}
-
-	// Seed the editor's context (Manager + Catalogs/Documents/Enums + globals)
-	// AFTER RunSubtree(true) — the ctor-context factories register while the
-	// subtree runs, so CreateMainModule must run once they're available. Common-
-	// module registration already happened above (in OnBeforeRunMetaObject).
-	if (auto* cc = GetCompileCache()) {
-		if (auto* mgr = cc->GetModuleManager())
-			mgr->CreateMainModule();
-	}
-
-	if (!m_commonObject->RunSubtree(flags, false))
-		return false;
 
 	m_configOpened = true;
 	return true;

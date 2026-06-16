@@ -234,7 +234,7 @@ wxTreeItemId ibMetadataTree::FillItem(ibValueMetaObject* metaItem, const wxTreeI
 	m_metaTreeCtrl->Freeze();
 
 	wxTreeItemId createdItem = nullptr;
-	if (metaItem->GetClassType() == g_metaTableCLSID) {
+	if (metaItem->GetClassType() == g_metaTableCLSID || metaItem->GetClassType() == g_metaTableRefCLSID) {
 		createdItem = AppendGroupItem(item, g_metaAttributeCLSID, metaItem);
 	}
 	else if (metaItem->GetClassType() == g_metaInterfaceCLSID) {
@@ -256,7 +256,7 @@ wxTreeItemId ibMetadataTree::FillItem(ibValueMetaObject* metaItem, const wxTreeI
 	else if (metaItem->GetClassType() == g_metaChartOfAccountsCLSID) AddCatalogItem(metaItem, createdItem);
 	else if (metaItem->GetClassType() == g_metaAccountingRegisterCLSID) AddAccumulationRegisterItem(metaItem, createdItem);
 
-	else if (metaItem->GetClassType() == g_metaTableCLSID) {
+	else if (metaItem->GetClassType() == g_metaTableCLSID || metaItem->GetClassType() == g_metaTableRefCLSID) {
 
 		ibValueMetaObjectTableData* metaItemRecord = metaItem->ConvertToType<ibValueMetaObjectTableData>();
 		wxASSERT(metaItemRecord);
@@ -877,7 +877,9 @@ void ibMetadataTree::AddCatalogItem(ibValueMetaObject* metaObject, const wxTreeI
 	}
 
 	//список табличных частей 
-	const wxTreeItemId& hTables = AppendGroupItem(hParentID, g_metaTableCLSID, objectTablesName);
+	// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
+	// DB-backed MD_TBLR; processors / reports are RAM, so MD_TBL. Set explicitly per object kind.
+	const wxTreeItemId& hTables = AppendGroupItem(hParentID, g_metaTableRefCLSID, objectTablesName);
 	for (auto metaTable : metaObjectValue->GetTableArrayObject()) {
 
 		if (metaTable->IsDeleted())
@@ -968,7 +970,9 @@ void ibMetadataTree::AddDocumentItem(ibValueMetaObject* metaObject, const wxTree
 	}
 
 	//список табличных частей 
-	const wxTreeItemId& hTables = AppendGroupItem(hParentID, g_metaTableCLSID, objectTablesName);
+	// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
+	// DB-backed MD_TBLR; processors / reports are RAM, so MD_TBL. Set explicitly per object kind.
+	const wxTreeItemId& hTables = AppendGroupItem(hParentID, g_metaTableRefCLSID, objectTablesName);
 	for (auto metaTable : metaObjectValue->GetTableArrayObject()) {
 
 		if (metaTable->IsDeleted())
@@ -1112,6 +1116,8 @@ void ibMetadataTree::AddDataProcessorItem(ibValueMetaObject* metaObject, const w
 	}
 
 	//список табличных частей 
+	// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
+	// DB-backed MD_TBLR; processors / reports are RAM, so MD_TBL. Set explicitly per object kind.
 	const wxTreeItemId& hTables = AppendGroupItem(hParentID, g_metaTableCLSID, objectTablesName);
 	for (auto metaTable : metaObjectValue->GetTableArrayObject()) {
 
@@ -1201,6 +1207,8 @@ void ibMetadataTree::AddReportItem(ibValueMetaObject* metaObject, const wxTreeIt
 	}
 
 	//список табличных частей 
+	// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
+	// DB-backed MD_TBLR; processors / reports are RAM, so MD_TBL. Set explicitly per object kind.
 	const wxTreeItemId& hTables = AppendGroupItem(hParentID, g_metaTableCLSID, objectTablesName);
 	for (auto metaTable : metaObjectValue->GetTableArrayObject()) {
 		if (metaTable->IsDeleted())

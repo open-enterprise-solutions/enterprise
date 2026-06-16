@@ -19,7 +19,7 @@
 //*                  ibTabularSourceDescriptor                          *
 //***********************************************************************
 
-ibTabularSourceDescriptor::ibTabularSourceDescriptor(ibValueMetaObjectTableData* meta)
+ibTabularSourceDescriptor::ibTabularSourceDescriptor(ibValueMetaObjectTableDataRef* meta)
 	: m_meta(meta), m_queryable(meta)
 {
 }
@@ -125,17 +125,12 @@ bool ibValueMetaObjectTableData::OnReloadMetaObject()
 	return false;
 }
 
+// Pure-virtual-with-body: the common run body every leaf chains to (number line + framework).
+// The value-ctor registration is each leaf's own job, done in its override before this call.
 bool ibValueMetaObjectTableData::OnBeforeRunMetaObject(int flags)
 {
 	if (!(*m_propertyNumberLine)->OnBeforeRunMetaObject(flags))
 		return false;
-	ibValueMetaObjectRecordData* metaObject = dynamic_cast<ibValueMetaObjectRecordData*>(GetParent());
-	wxASSERT(metaObject);
-	if (metaObject != nullptr) {
-		registerTabularSection();
-		registerTabularSection_String();
-	}
-
 	return ibValueMetaObject::OnBeforeRunMetaObject(flags);
 }
 
@@ -143,15 +138,11 @@ bool ibValueMetaObjectTableData::OnAfterRunMetaObject(int flags)
 {
 	if ((flags & newObjectFlag) != 0 || (flags & pasteObjectFlag) != 0)
 		OnReloadMetaObject();
-	// Register the tabular section as an L4 query source (parent-qualified "<Parent>.<Section>").
-	if (!(flags & onlyLoadFlag))
-		ibRegisterQueryableSource(&m_queryable);
 	return ibValueMetaObject::OnAfterRunMetaObject(flags);
 }
 
 bool ibValueMetaObjectTableData::OnBeforeCloseMetaObject()
 {
-	ibUnregisterQueryableSource(&m_queryable);
 	return ibValueMetaObject::OnBeforeCloseMetaObject();
 }
 
@@ -172,4 +163,65 @@ bool ibValueMetaObjectTableData::OnAfterCloseMetaObject()
 //*                       Register in runtime                           *
 //***********************************************************************
 
-METADATA_TYPE_REGISTER(ibValueMetaObjectTableData, "TabularSection", g_metaTableCLSID);
+//***********************************************************************
+//*                  ibValueMetaObjectTableDataRam                      *
+//***********************************************************************
+// RAM leaf — thin; all behaviour (attributes, plain value-ctor, null queryable) is the base
+// default. Only its factory identity (MD_TBL) is its own. The base itself is NOT registered.
+
+ibValueMetaObjectTableDataRam::ibValueMetaObjectTableDataRam() : ibValueMetaObjectTableData()
+{
+}
+
+ibValueMetaObjectTableDataRam::~ibValueMetaObjectTableDataRam()
+{
+}
+
+bool ibValueMetaObjectTableDataRam::OnBeforeRunMetaObject(int flags)
+{
+	ibValueMetaObjectRecordData* metaObject = GetParentAsType<ibValueMetaObjectRecordData>();
+	registerTabularSection();
+	registerTabularSection_String();
+	return ibValueMetaObjectTableData::OnBeforeRunMetaObject(flags);
+}
+
+METADATA_TYPE_REGISTER(ibValueMetaObjectTableDataRam, "TabularSection", g_metaTableCLSID);
+
+//***********************************************************************
+//*                  ibValueMetaObjectTableDataRef                      *
+//***********************************************************************
+
+ibValueMetaObjectTableDataRef::ibValueMetaObjectTableDataRef() : ibValueMetaObjectTableData()
+{
+}
+
+ibValueMetaObjectTableDataRef::~ibValueMetaObjectTableDataRef()
+{
+}
+
+bool ibValueMetaObjectTableDataRef::OnBeforeRunMetaObject(int flags)
+{
+	ibValueMetaObjectRecordData* metaObject = GetParentAsType<ibValueMetaObjectRecordData>();
+	registerTabularSectionReference();
+	registerTabularSection_String();
+	return ibValueMetaObjectTableData::OnBeforeRunMetaObject(flags);
+}
+
+bool ibValueMetaObjectTableDataRef::OnAfterRunMetaObject(int flags)
+{
+	// Register the tabular section as an L4 query source (parent-qualified "<Parent>.<Section>").
+	if (!(flags & onlyLoadFlag))
+		ibRegisterQueryableSource(&m_queryable);
+	return ibValueMetaObjectTableData::OnAfterRunMetaObject(flags);
+}
+
+bool ibValueMetaObjectTableDataRef::OnBeforeCloseMetaObject()
+{
+	ibUnregisterQueryableSource(&m_queryable);
+	return ibValueMetaObjectTableData::OnBeforeCloseMetaObject();
+}
+
+// Distinct registration name — the global ctor registry requires it (a duplicate name drops the
+// registration, so GetAvailableCtor(MD_TBLR) would return null and break AppendGroupItem). Short
+// "Ref" form (not "Reference") keeps the user-visible type name compact.
+METADATA_TYPE_REGISTER(ibValueMetaObjectTableDataRef, "TabularSectionRef", g_metaTableRefCLSID);
