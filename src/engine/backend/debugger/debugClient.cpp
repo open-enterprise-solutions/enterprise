@@ -22,6 +22,50 @@ wxCriticalSection ibDebuggerClient::ms_criticalSectionConnection2;
 wxCriticalSection ibDebuggerClient::ms_criticalSectionConnection3;
 ///////////////////////////////////////////////////////////////////////
 
+namespace {
+
+// Module maps (m_listBreakpoint / m_listOffsetBreakpoint) are keyed by module GUID, matched
+// case-insensitively via stringUtils::CompareString — so map::find can't be used. This is the
+// one lookup the methods here kept inlining. Returns the inner (line -> offset) map, or null.
+static std::map<unsigned int, int>* FindModuleLines(
+	std::map<wxString, std::map<unsigned int, int>>& modules, const wxString& guid)
+{
+	auto it = std::find_if(modules.begin(), modules.end(),
+		[&guid](const auto& pair) { return stringUtils::CompareString(pair.first, guid); });
+	return it != modules.end() ? &it->second : nullptr;
+}
+
+// Shift one module's (committedLine -> offset) entries by `line_offset` lines for an edit at editor
+// `line`. Each entry's CURRENT editor line is first + second.
+//   atLineStart        — the edit was at column 0 of `line` (the whole line moved), so an entry
+//                        sitting ON `line` shifts too; an edit later in the line leaves it in place.
+//   collapseCollisions — on insert, when a following entry now lands on the same editor line as the
+//                        one just shifted: true ERASES it (two breakpoints on one line collapse to
+//                        one), false shifts it too (two committed lines must both keep moving).
+static void ShiftLineMap(std::map<unsigned int, int>& lines, unsigned int line, int line_offset,
+                         bool atLineStart, bool collapseCollisions)
+{
+	auto it = lines.begin();
+	while (it != lines.end()) {
+
+		const unsigned int calc_line = it->first + it->second;
+
+		if (calc_line > line || (atLineStart && calc_line == line))
+			it->second += line_offset;
+
+		it = std::next(it);
+
+		while (line_offset > 0 && it != lines.end() && (it->first + it->second) == calc_line) {
+			if (collapseCollisions)
+				it = lines.erase(it);
+			else { it->second += line_offset; it = std::next(it); }
+		}
+	}
+}
+
+} // namespace
+///////////////////////////////////////////////////////////////////////
+
 ibDebuggerClient::ibDebuggerClient() :
 	m_activeSocket(nullptr),
 	m_adapter(new ibDebuggerClientAdapter),
@@ -93,77 +137,17 @@ void ibDebuggerClient::InitializeModule(const wxString& strModuleName, unsigned 
 	LoadBreakpointCollection(strModuleName);
 }
 
-void ibDebuggerClient::PatchModule(const wxString& strModuleName, unsigned int line, int line_offset)
+void ibDebuggerClient::PatchModule(const wxString& strModuleName, unsigned int line, int line_offset, bool atLineStart)
 {
-	auto breakpoint_iterator = std::find_if(m_listBreakpoint.begin(), m_listBreakpoint.end(),
-		[&strModuleName](const auto& pair) { return stringUtils::CompareString(pair.first, strModuleName); });
+	// Two maps shift the same way for this edit, differing only in collision handling:
+	// breakpoints collapse onto one line; the dense committed<->editor offset map keeps all lines.
+	if (auto* breakpoints = FindModuleLines(m_listBreakpoint, strModuleName))
+		ShiftLineMap(*breakpoints, line, line_offset, atLineStart, /*collapseCollisions*/ true);
 
-	if (breakpoint_iterator != m_listBreakpoint.end()) {
+	if (auto* offsets = FindModuleLines(m_listOffsetBreakpoint, strModuleName))
+		ShiftLineMap(*offsets, line, line_offset, atLineStart, /*collapseCollisions*/ false);
 
-		auto& list_breakpoint = breakpoint_iterator->second;
-		{
-			auto list_breakpoint_iterator = list_breakpoint.begin();
-			while (list_breakpoint_iterator != list_breakpoint.end()) {
-
-				const unsigned int calc_line = list_breakpoint_iterator->first + list_breakpoint_iterator->second;
-
-				if (calc_line > line)
-					list_breakpoint_iterator->second += line_offset;
-
-				list_breakpoint_iterator = std::next(list_breakpoint_iterator);
-
-				while (line_offset > 0 && list_breakpoint_iterator != list_breakpoint.end()) {
-					const unsigned int next_calc_line = list_breakpoint_iterator->first + list_breakpoint_iterator->second;
-					if (calc_line != next_calc_line)
-						break;
-					list_breakpoint_iterator = list_breakpoint.erase(list_breakpoint_iterator);
-				}
-			}
-		}
-	}
-
-	auto module_offset_iterator = std::find_if(m_listOffsetBreakpoint.begin(), m_listOffsetBreakpoint.end(),
-		[&strModuleName](const auto& pair) { return stringUtils::CompareString(pair.first, strModuleName); });
-
-	if (module_offset_iterator != m_listOffsetBreakpoint.end()) {
-
-		auto& list_module_offset = module_offset_iterator->second;
-		{
-			auto list_module_offset_iterator = list_module_offset.begin(); bool set_offset_value = false;
-			while (list_module_offset_iterator != list_module_offset.end()) {
-
-				const unsigned int calc_line = list_module_offset_iterator->first + list_module_offset_iterator->second;
-
-				if (calc_line > line || list_module_offset.size() == 1) {
-					list_module_offset_iterator->second += line_offset;
-					set_offset_value = true;
-				}
-
-				auto list_module_offset_iterator_start = list_module_offset_iterator;
-				auto list_module_offset_iterator_end = list_module_offset_iterator;
-
-				list_module_offset_iterator = std::next(list_module_offset_iterator);
-
-				while (line_offset > 0 && list_module_offset_iterator != list_module_offset.end()) {
-
-					const unsigned int next_calc_line = list_module_offset_iterator->first + list_module_offset_iterator->second;
-					if (calc_line != next_calc_line)
-						break;
-
-					list_module_offset_iterator->second += line_offset;
-
-					list_module_offset_iterator_end = list_module_offset_iterator;
-					list_module_offset_iterator = std::next(list_module_offset_iterator);
-				}
-			}
-
-			if (!set_offset_value && list_module_offset.size() > 0) {
-				list_module_offset_iterator = std::prev(list_module_offset.end());
-				list_module_offset_iterator->second += line_offset;
-			}
-		}
-	}
-
+	// Patch notification to the server — kept as-is (server-side handling lives there).
 	ibWriterMemory commandChannel;
 
 	commandChannel.w_u16(line_offset > 0 ? CommandId_PatchInsertLine : CommandId_PatchDeleteLine);
@@ -282,25 +266,24 @@ bool ibDebuggerClient::SaveAllBreakpoints()
 	return true;
 }
 
-bool ibDebuggerClient::ToggleBreakpoint(const wxString& strModuleName, unsigned int line)
+std::map<unsigned int, int>::iterator ibDebuggerClient::ResolveOriginalLine(
+	std::map<unsigned int, int>& list_module_offset, unsigned int line) const
 {
 	unsigned int startLine = line; int locOffsetPrev = 0, locOffsetCurr = 0;
-	std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
-
 	for (auto it = list_module_offset.begin(); it != list_module_offset.end(); it++) {
 		if (it->second < 0 && (int)it->first < -it->second) { locOffsetPrev = it->second; continue; }
 		locOffsetCurr = it->second;
 		if ((it->first + locOffsetPrev) <= line && (it->first + locOffsetCurr) >= line) { startLine = it->first; break; }
 		locOffsetPrev = it->second;
 	}
-	std::map<unsigned int, int>::iterator itOffset = list_module_offset.find(startLine);
-	if (itOffset != list_module_offset.end()) {
-		if (line != (itOffset->first + itOffset->second)) {
-			wxMessageBox(_("Cannot set breakpoint in unsaved copy!"));
-			return false;
-		}
-	}
-	else {
+	return list_module_offset.find(startLine);
+}
+
+bool ibDebuggerClient::ToggleBreakpoint(const wxString& strModuleName, unsigned int line)
+{
+	std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
+	std::map<unsigned int, int>::iterator itOffset = ResolveOriginalLine(list_module_offset, line);
+	if (itOffset == list_module_offset.end() || line != (itOffset->first + itOffset->second)) {
 		wxMessageBox(_("Cannot set breakpoint in unsaved copy!"));
 		return false;
 	}
@@ -327,19 +310,8 @@ bool ibDebuggerClient::ToggleBreakpoint(const wxString& strModuleName, unsigned 
 
 bool ibDebuggerClient::RemoveBreakpoint(const wxString& strModuleName, unsigned int line)
 {
-	unsigned int startLine = line; int locOffsetPrev = 0, locOffsetCurr = 0;
 	std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
-	for (auto it = list_module_offset.begin(); it != list_module_offset.end(); it++) {
-		if (it->second < 0 && (int)it->first < -it->second) {
-			locOffsetPrev = it->second; continue;
-		}
-		locOffsetCurr = it->second;
-		if ((it->first + locOffsetPrev) <= line && (it->first + locOffsetCurr) >= line) {
-			startLine = it->first; break;
-		}
-		locOffsetPrev = it->second;
-	}
-	std::map<unsigned int, int>::iterator itOffset = list_module_offset.find(startLine);
+	std::map<unsigned int, int>::iterator itOffset = ResolveOriginalLine(list_module_offset, line);
 	if (itOffset == list_module_offset.end())
 		return false;
 	std::map<unsigned int, int>& list_breakpoint = m_listBreakpoint[strModuleName];

@@ -29,14 +29,14 @@ void ibCodeEditorDesigner::OnEditDebugPoint(int line)
 	}
 }
 
-void ibCodeEditorDesigner::OnPatchModule(int line, int linesAdded)
+void ibCodeEditorDesigner::OnPatchModule(int line, int linesAdded, bool atLineStart)
 {
 	if (debugClient == nullptr || m_document == nullptr)
 		return;
 	ibValueMetaObjectModuleBase* moduleObject =
 		m_document->ConvertMetaObjectToType<ibValueMetaObjectModuleBase>();
 	if (moduleObject != nullptr)
-		debugClient->PatchModule(moduleObject->GetDocPath(), line, linesAdded);
+		debugClient->PatchModule(moduleObject->GetDocPath(), line, linesAdded, atLineStart);
 }
 
 void ibCodeEditorDesigner::OnEvaluateAutocomplete(const wxString& fileName,

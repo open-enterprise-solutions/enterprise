@@ -772,11 +772,18 @@ void ibCodeEditor::OnTextChange(wxStyledTextEvent& event)
 
 	if (event.m_linesAdded != 0) {
 
-		OnPatchModule(line, event.m_linesAdded);
+		// Was the edit at the very start (column 0) of `line`? Then the whole
+		// line's content moved by linesAdded, so a marker sitting ON `line`
+		// shifts too; an edit later in the line leaves `line` in place. Without
+		// this the breakpoint/exec-line wouldn't follow an Enter pressed at the
+		// line start (the original bug: BP on 10 + Enter → stays on 10).
+		const bool atLineStart = (event.GetPosition() == PositionFromLine(line));
+
+		OnPatchModule(line, event.m_linesAdded, atLineStart);
 
 		if (m_lineBreakpoint != wxNOT_FOUND) {
 			MarkerDeleteAll(ibCodeEditor::BreakLine);
-			if (line < m_lineBreakpoint)
+			if (line < m_lineBreakpoint || (atLineStart && line == m_lineBreakpoint))
 				m_lineBreakpoint += event.m_linesAdded;
 			MarkerAdd(m_lineBreakpoint, ibCodeEditor::BreakLine);
 		}

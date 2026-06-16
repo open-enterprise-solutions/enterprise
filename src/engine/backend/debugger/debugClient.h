@@ -268,9 +268,11 @@ public:
 	void Pause();
 	void Stop(bool kill);
 
-	//for breakpoints and offsets 
+	//for breakpoints and offsets
 	void InitializeModule(const wxString& strModuleName, unsigned int line_count);
-	void PatchModule(const wxString& strModuleName, unsigned int line, int line_offset);
+	// atLineStart: the edit was at column 0 of `line` (whole line moved), so an
+	// entry sitting ON `line` shifts too — fixes "Enter at line start" not moving a breakpoint.
+	void PatchModule(const wxString& strModuleName, unsigned int line, int line_offset, bool atLineStart);
 	bool SaveModule(const wxString& strModuleName, unsigned int line_count);
 	void RemoveModule(const wxString& strModuleName);
 
@@ -339,7 +341,14 @@ protected:
 	static bool TableAlreadyCreated();
 	static bool CreateBreakpointDatabase();
 
-	//db support 
+	// Resolve the offset-map entry for the original (committed) line that the
+	// editor line `line` currently maps to. Shared by Toggle/RemoveBreakpoint
+	// (the resolution loop was duplicated verbatim in both). Returns end() when
+	// `line` falls in an inserted, not-yet-committed region.
+	std::map<unsigned int, int>::iterator ResolveOriginalLine(
+		std::map<unsigned int, int>& list_module_offset, unsigned int line) const;
+
+	//db support
 	void LoadBreakpointCollection(const wxString& strModuleName);
 
 	bool ToggleBreakpointInDB(const wxString& strModuleName, unsigned int line);

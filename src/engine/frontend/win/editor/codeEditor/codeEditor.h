@@ -535,8 +535,10 @@ protected:
 	virtual void OnEditDebugPoint(int line) {}
 
 	// Multi-line edit (paste / cut) just shifted code by linesAdded
-	// at `line`. Override forwards the shift to debugClient->PatchModule.
-	virtual void OnPatchModule(int line, int linesAdded) {}
+	// at `line`. `atLineStart` = the edit happened at column 0 of `line`
+	// (the whole line moved), which decides whether a breakpoint sitting
+	// ON `line` shifts too. Override forwards the shift to debugClient->PatchModule.
+	virtual void OnPatchModule(int line, int linesAdded, bool atLineStart) {}
 
 	// Autocomplete / tooltip handlers want the debugger to evaluate
 	// an expression against the running session.
